@@ -8,3 +8,5 @@ boji
 *.test
 
 .local/sources/
+
+bench/harness/testdata/gates/

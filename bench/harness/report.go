@@ -96,7 +96,6 @@ func renderGates(b *strings.Builder, task string, rows []Row) (gateOK, full []Ro
 			gateOK = append(gateOK, r)
 		default:
 			fmt.Fprintf(b, "%s: FAIL %s\n", label, strings.Join(gates.Reasons, ", "))
-			full = append(full, r)
 		}
 	}
 	return gateOK, full
