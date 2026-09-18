@@ -1,0 +1,163 @@
+package main
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"os"
+	"time"
+
+	"boji/internal/judge/jev"
+	"boji/internal/judge/jev/wire/openrouter"
+	"boji/internal/judge/ledger"
+	"boji/internal/judge/policy"
+	"boji/internal/judge/state"
+	"boji/internal/konst"
+	"boji/internal/sys"
+	"boji/internal/transport"
+)
+
+type checkOpts struct {
+	command string
+	quiet   bool
+}
+
+func checkVerb(args []string, out, errOut io.Writer) int {
+	opts, err := parseCheckArgs(args)
+	if err != nil {
+		return checkFail(errOut, err)
+	}
+
+	catalogDir, err := sys.CatalogDir()
+	if err != nil {
+		return checkFail(errOut, err)
+	}
+	policyPath := sys.Join(catalogDir, "policy", "tool_gate@1.yaml")
+
+	key, err := jev.Key(".env")
+	if err != nil {
+		return checkFail(errOut, err)
+	}
+	wire, err := openrouter.New(openrouter.Config{
+		Key: key,
+		Transport: transport.Config{
+			AttemptTimeout: time.Duration(konst.JudgeTimeoutMillis) * time.Millisecond,
+			Retries:        konst.JudgeRetries,
+			Backoff:        time.Duration(konst.JudgeBackoffMillis) * time.Millisecond,
+			Concurrency:    1,
+		},
+	})
+	if err != nil {
+		return checkFail(errOut, err)
+	}
+	client, err := jev.NewClient(jev.Config{Wire: wire})
+	if err != nil {
+		return checkFail(errOut, err)
+	}
+
+	row, err := runCheck(context.Background(), client, policyPath, opts.command)
+	if err != nil {
+		return checkFail(errOut, err)
+	}
+	if !opts.quiet {
+		_, _ = fmt.Fprintf(out, "%s  %s\n", row.ID, colorVerdict(row.Verdict, isTerminalWriter(out)))
+	}
+	return exitOK
+}
+
+func checkFail(errOut io.Writer, err error) int {
+	_, _ = fmt.Fprintf(errOut, "boji check: %v\n", err)
+	return exitUsage
+}
+
+func parseCheckArgs(args []string) (checkOpts, error) {
+	var opts checkOpts
+	for _, arg := range args {
+		if arg == "--quiet" {
+			opts.quiet = true
+			continue
+		}
+		if opts.command != "" {
+			return checkOpts{}, fmt.Errorf("boji check takes one command, got %q and %q", opts.command, arg)
+		}
+		opts.command = arg
+	}
+	if opts.command == "" {
+		return checkOpts{}, errors.New("boji check needs a command")
+	}
+	return opts, nil
+}
+
+func runCheck(ctx context.Context, client *jev.Client, policyPath, command string) (ledger.Row, error) {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return ledger.Row{}, err
+	}
+	set, err := resolveCatalog("tool_gate@1")
+	if err != nil {
+		return ledger.Row{}, err
+	}
+	built, builderVersion, err := state.BuildToolGate(state.ToolGateInput{
+		Agent: "owner-shell",
+		Tool:  "bash",
+		Input: map[string]any{"command": command},
+		Cwd:   cwd,
+	})
+	if err != nil {
+		return ledger.Row{}, err
+	}
+	rawState := json.RawMessage(built)
+
+	decision, err := client.Ask(ctx, jev.Request{State: rawState, Questions: set.Questions})
+	if err != nil {
+		return ledger.Row{}, err
+	}
+
+	pol, err := policy.Load(policyPath)
+	if err != nil {
+		return ledger.Row{}, err
+	}
+	verdict, reason, err := policy.Decide(decision.Answers, pol)
+	if err != nil {
+		return ledger.Row{}, err
+	}
+
+	dir, err := ledger.Dir()
+	if err != nil {
+		return ledger.Row{}, err
+	}
+	hash, err := ledger.Hash(rawState)
+	if err != nil {
+		return ledger.Row{}, err
+	}
+	row := ledger.Row{
+		Point:         set.SetName,
+		Questions:     set.SetName,
+		Version:       set.QuestionsVersion,
+		Model:         openrouter.Alias,
+		StateHash:     hash,
+		StateBuilder:  builderVersion,
+		Answers:       toLedgerAnswers(set.QuestionsVersion, decision.Answers),
+		Verdict:       ledger.Verdict(verdict),
+		Policy:        pol.Name,
+		PolicyVersion: pol.PolicyVersion,
+		Reason: &ledger.Reason{
+			Question:   reason.Question,
+			Comparison: string(reason.Comparison),
+			Threshold:  reason.Threshold,
+			Value:      reason.Value,
+			DeadBand:   reason.DeadBand,
+			RelaxedBy:  reason.RelaxedBy,
+			Blocked:    reason.Blocked,
+			Ambiguous:  reason.Ambiguous,
+			Mode:       ledger.ModeShadow,
+		},
+		Build:     decision.Build,
+		LatencyMS: decision.Latency.Milliseconds(),
+		Cost:      decision.Usage.Cost,
+		RequestID: decision.RequestID,
+	}
+	return ledger.NewWriter(dir).Append(row)
+}

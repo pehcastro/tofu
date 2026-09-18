@@ -2,8 +2,8 @@
 .env.*
 !.env.example
 
-boji.exe
-boji
+/boji.exe
+/boji
 *.exe
 *.test
 
