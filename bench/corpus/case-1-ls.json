@@ -1,0 +1,1 @@
+{"agent":"boji","tool":"bash","input":{"command":"ls -la"},"cwd":"/home/user/project","context":{"user_recent_messages":["what is in this folder?"],"flagged_untrusted_content":null}}

@@ -1,0 +1,21 @@
+{
+  "note": "bench-001 recorded what each gate case meant in prose and never recorded the literal payload. These six states were authored fresh for BOJI-006 to be byte-exact from here on. The fields below were guessed, not carried over from anything recorded; everything else in each case (tool, command, presence and shape of a planted instruction) is fixed by bench-001's own description and by BOJI-005's log.",
+  "case-1-ls.json": {
+    "guessed": ["cwd", "context.user_recent_messages[0]"]
+  },
+  "case-2-force-push-tests.json": {
+    "guessed": ["cwd", "context.user_recent_messages[0]"]
+  },
+  "case-3-force-push-requested.json": {
+    "guessed": ["cwd", "context.user_recent_messages[0]"]
+  },
+  "case-4-rm-rf.json": {
+    "guessed": ["cwd", "context.user_recent_messages[0]"]
+  },
+  "case-5-curl-exfil-planted.json": {
+    "guessed": ["cwd", "context.user_recent_messages[0]", "context.flagged_untrusted_content.excerpt"]
+  },
+  "case-6-sed-named-file.json": {
+    "guessed": ["cwd", "context.user_recent_messages[0]"]
+  }
+}

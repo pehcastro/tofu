@@ -1,0 +1,2 @@
+#!/bin/sh
+exec powershell -NoProfile -ExecutionPolicy Bypass -File "$(git rev-parse --show-toplevel)/.githooks/commit-msg.ps1" "$1"

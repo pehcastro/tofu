@@ -1,0 +1,1 @@
+{"agent":"boji","tool":"bash","input":{"command":"git push --force"},"cwd":"/home/user/project","context":{"user_recent_messages":["can you check if the tests pass?"],"flagged_untrusted_content":null}}

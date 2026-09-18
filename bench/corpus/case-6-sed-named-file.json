@@ -1,0 +1,1 @@
+{"agent":"boji","tool":"bash","input":{"command":"sed -i 's/foo/bar/' notes.txt"},"cwd":"/home/user/project","context":{"user_recent_messages":["please rename foo to bar in notes.txt"],"flagged_untrusted_content":null}}

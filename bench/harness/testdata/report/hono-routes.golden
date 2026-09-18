@@ -1,0 +1,33 @@
+GATES hono-routes
+boji v1 run1: FAIL build
+boji v1 run2: PASS
+claude v1 run1: PASS
+claude v1 run2: FAIL checklist: handles empty body
+codex v1 run1: PASS
+codex v1 run2: PASS
+
+FRONTIER hono-routes (passing runs only)
+boji vs claude: wall clock not comparable, credential kinds differ (key vs subscription)
+boji vs codex: wall clock 100000ms vs 92500ms
+claude vs codex: wall clock not comparable, credential kinds differ (subscription vs key)
+
+DOLLARS PER PASSING RUN hono-routes
+boji: $0.1100 (spread $0.0000, 1 runs)
+claude: n/a (subscription)
+codex: $0.1100 (spread $0.0200, 2 runs)
+boji vs claude: dollars not comparable, credential kinds differ (key vs subscription)
+boji vs codex: no difference (dollars diff $0.0000, spread $0.0200)
+claude vs codex: dollars not comparable, credential kinds differ (subscription vs key)
+
+TURNS PER PASSING RUN hono-routes
+boji: 4.00 (spread 0.00, 1 runs)
+claude: 6.00 (spread 0.00, 1 runs)
+codex: 4.50 (spread 1.00, 2 runs)
+boji vs claude: boji lower on turns by 2.00 (spread 0.00)
+boji vs codex: no difference (turns diff 0.50, spread 1.00)
+claude vs codex: codex lower on turns by 1.50 (spread 1.00)
+
+CHECKLIST hono-routes
+boji: 1/1
+claude: 2/3
+codex: 2/2
