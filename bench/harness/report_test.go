@@ -29,7 +29,7 @@ func checklistFullPass() []ChecklistResult {
 	return []ChecklistResult{{Item: "returns 400 on missing field", Passed: true}}
 }
 
-func dollarsOf1(v float64) *float64 { return &v }
+func dollarPtr(v float64) *float64 { return &v }
 
 func routesFixture() []Row {
 	return []Row{
@@ -43,7 +43,7 @@ func routesFixture() []Row {
 			Arm: ArmBoji, Task: "hono-routes", Version: 1, Run: 2,
 			CredentialKind: CredentialKindKey,
 			WallClockMS:    100000,
-			Dollars:        dollarsOf1(0.11),
+			Dollars:        dollarPtr(0.11),
 			Turns:          4,
 			Gates:          gatesOK(),
 			Checklist:      checklistFullPass(),
@@ -71,7 +71,7 @@ func routesFixture() []Row {
 			Arm: ArmCodex, Task: "hono-routes", Version: 1, Run: 1,
 			CredentialKind: CredentialKindKey,
 			WallClockMS:    90000,
-			Dollars:        dollarsOf1(0.10),
+			Dollars:        dollarPtr(0.10),
 			Turns:          4,
 			Gates:          gatesOK(),
 			Checklist:      checklistFullPass(),
@@ -80,7 +80,7 @@ func routesFixture() []Row {
 			Arm: ArmCodex, Task: "hono-routes", Version: 1, Run: 2,
 			CredentialKind: CredentialKindKey,
 			WallClockMS:    95000,
-			Dollars:        dollarsOf1(0.12),
+			Dollars:        dollarPtr(0.12),
 			Turns:          5,
 			Gates:          gatesOK(),
 			Checklist:      checklistFullPass(),
@@ -148,10 +148,9 @@ func TestSubscriptionDollarsAreAbsentNotZero(t *testing.T) {
 }
 
 func TestNoWeightedScoreTotalOrPercentageInOutput(t *testing.T) {
-	out := Render(routesFixture())
+	out := strings.ToLower(Render(routesFixture()))
 
-	forbidden := []string{"score", "Score", "weighted", "Weighted", "total", "Total", "%"}
-	for _, word := range forbidden {
+	for _, word := range []string{"score", "weighted", "total", "%"} {
 		if strings.Contains(out, word) {
 			t.Fatalf("output contains forbidden term %q:\n%s", word, out)
 		}

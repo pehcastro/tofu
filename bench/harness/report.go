@@ -45,19 +45,14 @@ func renderTask(b *strings.Builder, task string, rows []Row) {
 	renderChecklist(b, task, gateOK)
 }
 
-type gateDoor struct {
-	Passed  bool
-	Reasons []string
-}
-
-func evaluateGates(r Row) gateDoor {
+func evaluateGates(r Row) (bool, []string) {
 	var reasons []string
 	for _, g := range r.Gates {
 		if g.Status != GateStatusPassed {
 			reasons = append(reasons, g.Name)
 		}
 	}
-	return gateDoor{Passed: len(reasons) == 0, Reasons: reasons}
+	return len(reasons) == 0, reasons
 }
 
 func checklistFull(r Row) (bool, []string) {
@@ -83,19 +78,19 @@ func renderGates(b *strings.Builder, task string, rows []Row) (gateOK, full []Ro
 		return sorted[i].Run < sorted[j].Run
 	})
 	for _, r := range sorted {
-		gates := evaluateGates(r)
+		gatesOK, gateReasons := evaluateGates(r)
 		checklistOK, misses := checklistFull(r)
 		label := fmt.Sprintf("%s v%d run%d", r.Arm, r.Version, r.Run)
 		switch {
-		case gates.Passed && checklistOK:
+		case gatesOK && checklistOK:
 			fmt.Fprintf(b, "%s: PASS\n", label)
 			gateOK = append(gateOK, r)
 			full = append(full, r)
-		case gates.Passed:
+		case gatesOK:
 			fmt.Fprintf(b, "%s: FAIL %s\n", label, strings.Join(misses, ", "))
 			gateOK = append(gateOK, r)
 		default:
-			fmt.Fprintf(b, "%s: FAIL %s\n", label, strings.Join(gates.Reasons, ", "))
+			fmt.Fprintf(b, "%s: FAIL %s\n", label, strings.Join(gateReasons, ", "))
 		}
 	}
 	return gateOK, full
@@ -122,21 +117,25 @@ func groupByArm(rows []Row) map[Arm][]Row {
 	return byArm
 }
 
+func kindOf(byArm map[Arm][]Row, a Arm) CredentialKind {
+	return byArm[a][0].CredentialKind
+}
+
 func meanAndSpread(values []float64) (mean, spread float64) {
 	if len(values) == 0 {
 		return 0, 0
 	}
-	min, max, sum := values[0], values[0], 0.0
+	lo, hi, sum := values[0], values[0], 0.0
 	for _, v := range values {
 		sum += v
-		if v < min {
-			min = v
+		if v < lo {
+			lo = v
 		}
-		if v > max {
-			max = v
+		if v > hi {
+			hi = v
 		}
 	}
-	return sum / float64(len(values)), max - min
+	return sum / float64(len(values)), hi - lo
 }
 
 func dollarsOf(rows []Row) []float64 {
@@ -172,7 +171,7 @@ func renderFrontier(b *strings.Builder, task string, full []Row) {
 	for i := 0; i < len(arms); i++ {
 		for j := i + 1; j < len(arms); j++ {
 			a, c := arms[i], arms[j]
-			kindA, kindC := byArm[a][0].CredentialKind, byArm[c][0].CredentialKind
+			kindA, kindC := kindOf(byArm, a), kindOf(byArm, c)
 			if kindA != kindC {
 				fmt.Fprintf(b, "%s vs %s: wall clock not comparable, credential kinds differ (%s vs %s)\n", a, c, kindA, kindC)
 				continue
@@ -202,7 +201,7 @@ func renderDollarsRatio(b *strings.Builder, task string, full []Row) {
 	for i := 0; i < len(arms); i++ {
 		for j := i + 1; j < len(arms); j++ {
 			a, c := arms[i], arms[j]
-			kindA, kindC := byArm[a][0].CredentialKind, byArm[c][0].CredentialKind
+			kindA, kindC := kindOf(byArm, a), kindOf(byArm, c)
 			if kindA != kindC {
 				fmt.Fprintf(b, "%s vs %s: dollars not comparable, credential kinds differ (%s vs %s)\n", a, c, kindA, kindC)
 				continue
