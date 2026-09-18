@@ -97,6 +97,43 @@ func TestFiltersOnPointVerdictDateAndVersion(t *testing.T) {
 	}
 }
 
+func TestReaderFiltersOnMode(t *testing.T) {
+	dir := t.TempDir()
+	writer := NewWriter(dir)
+	at := time.Date(2026, 9, 18, 9, 0, 0, 0, time.UTC)
+	for i := 0; i < 4; i++ {
+		row := sampleRow("tool_gate", VerdictAsk, at.Add(time.Duration(i)*time.Minute))
+		row.Reason = &Reason{Question: "risk", Comparison: "risk_ask_at", Mode: ModeShadow}
+		if _, err := writer.Append(row); err != nil {
+			t.Fatalf("Append shadow %d: %v", i, err)
+		}
+	}
+	for i := 0; i < 2; i++ {
+		row := sampleRow("tool_gate", VerdictDeny, at.Add(time.Duration(10+i)*time.Minute))
+		row.Reason = &Reason{Question: "risk", Comparison: "risk_deny_at", Mode: ModeEnforced}
+		if _, err := writer.Append(row); err != nil {
+			t.Fatalf("Append enforced %d: %v", i, err)
+		}
+	}
+	row := sampleRow("tool_gate", VerdictAsk, at.Add(20*time.Minute))
+	if _, err := writer.Append(row); err != nil {
+		t.Fatalf("Append no-reason: %v", err)
+	}
+
+	all, _ := readAll(t, dir, Filter{})
+	if len(all) != 7 {
+		t.Fatalf("7 rows written, read %d", len(all))
+	}
+	shadow, _ := readAll(t, dir, Filter{Mode: ModeShadow})
+	if len(shadow) != 4 {
+		t.Fatalf("shadow filter: got %d rows, want 4", len(shadow))
+	}
+	enforced, _ := readAll(t, dir, Filter{Mode: ModeEnforced})
+	if len(enforced) != 2 {
+		t.Fatalf("enforced filter: got %d rows, want 2", len(enforced))
+	}
+}
+
 func TestACorruptLineInTheMiddleIsReportedAndSkipped(t *testing.T) {
 	dir := t.TempDir()
 	writer := NewWriter(dir)

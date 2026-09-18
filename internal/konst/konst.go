@@ -27,3 +27,15 @@ const (
 
 	WhyBarWidthChars = 20
 )
+
+const (
+	TurnModelAlias           = "anthropic/claude-fable-5-1"
+	TurnAttemptTimeoutMillis = 30000
+	TurnRetries              = 1
+	TurnBackoffMillis        = 250
+	TurnMaxBackoffMillis     = 2000
+	TurnResultBytesCap       = 8192
+	TurnMaxSteps             = 40
+	TurnMaxCostUSD           = 1.00
+	TurnMaxWallClockMillis   = 300000
+)

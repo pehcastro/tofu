@@ -17,6 +17,7 @@ const lineCeiling = 1 << 20
 type Filter struct {
 	Point   string
 	Verdict Verdict
+	Mode    Mode
 	Version int
 	Since   time.Time
 	Until   time.Time
@@ -211,6 +212,9 @@ func (f Filter) match(row Row) bool {
 		return false
 	}
 	if f.Verdict != VerdictUnset && row.Verdict != f.Verdict {
+		return false
+	}
+	if f.Mode != ModeUnknown && row.Mode() != f.Mode {
 		return false
 	}
 	if f.Version != 0 && row.Version != f.Version {

@@ -10,7 +10,7 @@ import (
 	"boji/internal/sys"
 )
 
-const SchemaVersion = 3
+const SchemaVersion = 4
 
 const dayLayout = "2006-01-02"
 
@@ -133,6 +133,26 @@ func looksLikeScoreDist(dist []Slice) bool {
 	return true
 }
 
+type Mode string
+
+const (
+	ModeUnknown  Mode = ""
+	ModeShadow   Mode = "shadow"
+	ModeEnforced Mode = "enforced"
+)
+
+func (m Mode) String() string {
+	switch m {
+	case ModeUnknown:
+		return "unknown"
+	case ModeShadow:
+		return "shadow"
+	case ModeEnforced:
+		return "enforced"
+	}
+	panic("ledger: unknown mode " + string(m))
+}
+
 type Outcome struct {
 	At     time.Time `json:"at"`
 	Kind   string    `json:"kind"`
@@ -148,6 +168,7 @@ type Reason struct {
 	RelaxedBy  string  `json:"relaxed_by,omitempty"`
 	Blocked    bool    `json:"blocked,omitempty"`
 	Ambiguous  string  `json:"ambiguous,omitempty"`
+	Mode       Mode    `json:"mode,omitempty"`
 }
 
 type Row struct {
@@ -175,6 +196,13 @@ type Row struct {
 
 func (r Row) Day() string {
 	return r.At.UTC().Format(dayLayout)
+}
+
+func (r Row) Mode() Mode {
+	if r.Reason == nil {
+		return ModeUnknown
+	}
+	return r.Reason.Mode
 }
 
 func Dir() (string, error) {

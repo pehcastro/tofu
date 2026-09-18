@@ -1,12 +1,131 @@
 package harness
 
 import (
+	"os"
+	"os/exec"
+	"path/filepath"
 	"reflect"
 	"regexp"
 	"testing"
 )
 
 var testFuncPattern = regexp.MustCompile(`func Test\w+\(`)
+
+const okGo = `package main
+
+import "fmt"
+
+func main() {
+	fmt.Println("ok")
+}
+`
+
+const failGo = `package main
+
+import (
+	"fmt"
+	"os"
+)
+
+func main() {
+	fmt.Fprintln(os.Stderr, "boom")
+	os.Exit(1)
+}
+`
+
+const testAlpha = `package tests
+
+func TestAlpha(t *T) {}
+`
+
+const testBeta = `package tests
+
+func TestBeta(t *T) {}
+`
+
+const testGamma = `package tests
+
+func TestGamma(t *T) {}
+`
+
+func runGit(t *testing.T, dir string, args ...string) {
+	t.Helper()
+	cmd := exec.Command("git", args...)
+	cmd.Dir = dir
+	cmd.Env = append(os.Environ(),
+		"GIT_AUTHOR_NAME=bench fixture", "GIT_AUTHOR_EMAIL=bench@boji.local",
+		"GIT_COMMITTER_NAME=bench fixture", "GIT_COMMITTER_EMAIL=bench@boji.local")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git %v: %v\n%s", args, err, out)
+	}
+}
+
+func writeFiles(t *testing.T, dir string, files map[string]string) {
+	t.Helper()
+	for path, content := range files {
+		full := filepath.Join(dir, filepath.FromSlash(path))
+		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+			t.Fatalf("mkdir %s: %v", full, err)
+		}
+		if err := os.WriteFile(full, []byte(content), 0o644); err != nil {
+			t.Fatalf("write %s: %v", full, err)
+		}
+	}
+}
+
+func newRepo(t *testing.T, files map[string]string) string {
+	t.Helper()
+	dir := t.TempDir()
+	writeFiles(t, dir, files)
+	runGit(t, dir, "init", "-q")
+	runGit(t, dir, "add", "-A")
+	runGit(t, dir, "commit", "-q", "-m", "start")
+	runGit(t, dir, "tag", "start")
+	return dir
+}
+
+func baseFiles() map[string]string {
+	return map[string]string{
+		"ok.go":      okGo,
+		"fail.go":    failGo,
+		"tests/a.go": testAlpha,
+	}
+}
+
+func newRepoPass(t *testing.T) string {
+	t.Helper()
+	dir := newRepo(t, map[string]string{
+		"ok.go":      okGo,
+		"fail.go":    failGo,
+		"tests/a.go": testAlpha,
+		"tests/b.go": testBeta,
+		"notes.txt":  "a\nb\nc\n",
+	})
+	writeFiles(t, dir, map[string]string{
+		"notes.txt": "a\nx\nc\nd\n",
+		"extra.txt": "e\nf\n",
+	})
+	runGit(t, dir, "add", "-A")
+	runGit(t, dir, "commit", "-q", "-m", "second")
+	return dir
+}
+
+func newRepoDeletedTests(t *testing.T) string {
+	t.Helper()
+	dir := newRepo(t, map[string]string{
+		"ok.go":      okGo,
+		"fail.go":    failGo,
+		"tests/a.go": testAlpha,
+		"tests/b.go": testBeta,
+		"tests/c.go": testGamma,
+	})
+	if err := os.Remove(filepath.Join(dir, "tests", "c.go")); err != nil {
+		t.Fatalf("remove tests/c.go: %v", err)
+	}
+	runGit(t, dir, "add", "-A")
+	runGit(t, dir, "commit", "-q", "-m", "delete test c")
+	return dir
+}
 
 func findGate(t *testing.T, outcomes []GateOutcome, name string) GateOutcome {
 	t.Helper()
@@ -31,7 +150,7 @@ func taskFor(dir string, build, lint, test, checklist []string) Task {
 }
 
 func TestRunGates_AllPass(t *testing.T) {
-	task := taskFor("testdata/gates/repo_pass",
+	task := taskFor(newRepoPass(t),
 		[]string{"go", "run", "ok.go"},
 		[]string{"go", "run", "ok.go"},
 		[]string{"go", "run", "ok.go"},
@@ -51,22 +170,21 @@ func TestRunGates_EachGateFailsInTurn(t *testing.T) {
 
 	cases := []struct {
 		name     string
-		dir      string
 		build    []string
 		lint     []string
 		test     []string
 		checklst []string
 		gate     string
 	}{
-		{"build", "testdata/gates/repo_fail_build", fail, ok, ok, ok, "build"},
-		{"lint", "testdata/gates/repo_fail_lint", ok, fail, ok, ok, "lint"},
-		{"test", "testdata/gates/repo_fail_test", ok, ok, fail, ok, "test"},
-		{"checklist", "testdata/gates/repo_fail_checklist", ok, ok, ok, fail, "checklist: item a"},
+		{"build", fail, ok, ok, ok, "build"},
+		{"lint", ok, fail, ok, ok, "lint"},
+		{"test", ok, ok, fail, ok, "test"},
+		{"checklist", ok, ok, ok, fail, "checklist: item a"},
 	}
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			task := taskFor(c.dir, c.build, c.lint, c.test, c.checklst)
+			task := taskFor(newRepo(t, baseFiles()), c.build, c.lint, c.test, c.checklst)
 			outcomes := RunGates(task)
 			gate := findGate(t, outcomes, c.gate)
 			if gate.Status != GateStatusFailed {
@@ -81,7 +199,7 @@ func TestRunGates_EachGateFailsInTurn(t *testing.T) {
 }
 
 func TestTestGate_DeletedTestsFailsWithCounts(t *testing.T) {
-	task := taskFor("testdata/gates/repo_deleted_tests",
+	task := taskFor(newRepoDeletedTests(t),
 		[]string{"go", "run", "ok.go"},
 		[]string{"go", "run", "ok.go"},
 		[]string{"go", "run", "ok.go"},
@@ -99,7 +217,7 @@ func TestTestGate_DeletedTestsFailsWithCounts(t *testing.T) {
 }
 
 func TestCommandGate_MissingCommandIsCouldNotEvaluate(t *testing.T) {
-	outcome := runCommandGate("build", "testdata/gates/repo_missing_command", []string{"boji-bench-gate-missing-binary-xyz"})
+	outcome := runCommandGate("build", t.TempDir(), []string{"boji-bench-gate-missing-binary-xyz"})
 	if outcome.Status == GateStatusPassed {
 		t.Fatalf("missing command reported passed, must never be passed")
 	}
@@ -109,7 +227,7 @@ func TestCommandGate_MissingCommandIsCouldNotEvaluate(t *testing.T) {
 }
 
 func TestCommandGate_NoCommandDeclaredIsCouldNotEvaluate(t *testing.T) {
-	outcome := runCommandGate("checklist: undeclared", "testdata/gates/repo_pass", nil)
+	outcome := runCommandGate("checklist: undeclared", t.TempDir(), nil)
 	if outcome.Status != GateStatusCouldNotEvaluate {
 		t.Fatalf("got status %q, want could_not_evaluate", outcome.Status)
 	}
@@ -121,7 +239,7 @@ func runForArm(armLabel string, task Task) []GateOutcome {
 }
 
 func TestNoGateReadsArmName(t *testing.T) {
-	task := taskFor("testdata/gates/repo_pass",
+	task := taskFor(newRepo(t, baseFiles()),
 		[]string{"go", "run", "ok.go"},
 		[]string{"go", "run", "ok.go"},
 		[]string{"go", "run", "ok.go"},
@@ -137,7 +255,7 @@ func TestNoGateReadsArmName(t *testing.T) {
 }
 
 func TestDiffCostGate(t *testing.T) {
-	outcome, cost := RunDiffCostGate("testdata/gates/repo_pass", "start")
+	outcome, cost := RunDiffCostGate(newRepoPass(t), "start")
 	if outcome.Status != GateStatusPassed {
 		t.Fatalf("got status %q, reason %q", outcome.Status, outcome.Reason)
 	}
@@ -148,14 +266,14 @@ func TestDiffCostGate(t *testing.T) {
 }
 
 func TestDiffCostGate_BadStartCommitIsCouldNotEvaluate(t *testing.T) {
-	outcome, _ := RunDiffCostGate("testdata/gates/repo_pass", "not-a-real-commit")
+	outcome, _ := RunDiffCostGate(newRepo(t, baseFiles()), "not-a-real-commit")
 	if outcome.Status != GateStatusCouldNotEvaluate {
 		t.Fatalf("got status %q, want could_not_evaluate", outcome.Status)
 	}
 }
 
 func TestCountTestsInTree(t *testing.T) {
-	count, err := countTestsInTree("testdata/gates/repo_deleted_tests", "tests", testFuncPattern)
+	count, err := countTestsInTree(newRepoDeletedTests(t), "tests", testFuncPattern)
 	if err != nil {
 		t.Fatalf("countTestsInTree: %v", err)
 	}
@@ -165,7 +283,7 @@ func TestCountTestsInTree(t *testing.T) {
 }
 
 func TestCountTestsAtCommit(t *testing.T) {
-	count, err := countTestsAtCommit("testdata/gates/repo_deleted_tests", "start", "tests", testFuncPattern)
+	count, err := countTestsAtCommit(newRepoDeletedTests(t), "start", "tests", testFuncPattern)
 	if err != nil {
 		t.Fatalf("countTestsAtCommit: %v", err)
 	}

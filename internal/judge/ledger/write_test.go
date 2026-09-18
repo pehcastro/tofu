@@ -108,3 +108,21 @@ func TestBackfillRefusesAnOutcomeWithoutAKind(t *testing.T) {
 		t.Fatal("an outcome with no kind must fail, it got no error")
 	}
 }
+
+func TestAppendRefusesAnUnknownModeValue(t *testing.T) {
+	dir := t.TempDir()
+	row := sampleRow("tool_gate", VerdictDeny, time.Date(2026, 9, 18, 11, 0, 0, 0, time.UTC))
+	row.Reason = &Reason{Question: "risk", Comparison: "risk_deny_at", Threshold: 2.5, Value: 3.0, Mode: Mode("bogus")}
+	if _, err := NewWriter(dir).Append(row); err == nil {
+		t.Fatal("a row whose mode is neither shadow nor enforced must fail to append, it got no error")
+	}
+}
+
+func TestAppendRefusesAModeLeftUnset(t *testing.T) {
+	dir := t.TempDir()
+	row := sampleRow("tool_gate", VerdictDeny, time.Date(2026, 9, 18, 11, 0, 0, 0, time.UTC))
+	row.Reason = &Reason{Question: "risk", Comparison: "risk_deny_at", Threshold: 2.5, Value: 3.0}
+	if _, err := NewWriter(dir).Append(row); err == nil {
+		t.Fatal("a judged row must state shadow or enforced, an unset mode must fail to append")
+	}
+}

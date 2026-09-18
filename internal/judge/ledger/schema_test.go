@@ -6,8 +6,8 @@ import (
 )
 
 func TestSchemaBumpedForStateBuilder(t *testing.T) {
-	if SchemaVersion != 3 {
-		t.Fatalf("schema version = %d, want 3 after adding state_builder", SchemaVersion)
+	if SchemaVersion < 3 {
+		t.Fatalf("schema version = %d, want at least 3, state_builder was added at 3", SchemaVersion)
 	}
 }
 
@@ -30,17 +30,38 @@ func TestRowWrittenUnderOldSchemaStillReads(t *testing.T) {
 }
 
 func TestACurrentSchemaRowWithNoStateBuilderStillReads(t *testing.T) {
-	current := `{"id":"2026-09-18-bbcc","schema":3,"at":"2026-09-18T00:00:00Z","point":"tool_gate","questions":"tool_gate","version":1,"build":"jev-1.13.0","model":"~typesafe/jev-latest","state_hash":"deadbeef","answers":[],"verdict":"ask","latency_ms":10,"cost":0.0001,"request_id":"or-req-2"}`
+	current := `{"id":"2026-09-18-bbcc","schema":4,"at":"2026-09-18T00:00:00Z","point":"tool_gate","questions":"tool_gate","version":1,"build":"jev-1.13.0","model":"~typesafe/jev-latest","state_hash":"deadbeef","answers":[],"verdict":"ask","latency_ms":10,"cost":0.0001,"request_id":"or-req-2"}`
 
 	var row Row
 	if err := json.Unmarshal([]byte(current), &row); err != nil {
-		t.Fatalf("a schema-3 row with no state_builder key must still decode: %v", err)
+		t.Fatalf("a schema-4 row with no state_builder key must still decode: %v", err)
 	}
 	if row.Schema != SchemaVersion {
 		t.Fatalf("schema = %d, want the current schema %d", row.Schema, SchemaVersion)
 	}
 	if row.StateBuilder != "" {
 		t.Fatalf("state_builder = %q, want empty: this schema carries the field but nothing wrote it yet", row.StateBuilder)
+	}
+}
+
+func TestSchemaBumpedForMode(t *testing.T) {
+	if SchemaVersion != 4 {
+		t.Fatalf("schema version = %d, want 4 after adding mode", SchemaVersion)
+	}
+}
+
+func TestRowWrittenBeforeModeExistedReadsAsUnknownNotDefaulted(t *testing.T) {
+	old := `{"id":"2026-09-01-aabb","schema":3,"at":"2026-09-01T00:00:00Z","point":"tool_gate","questions":"tool_gate","version":1,"build":"jev-1.13.0","model":"~typesafe/jev-latest","state_hash":"deadbeef","answers":[],"verdict":"ask","reason":{"question":"risk","comparison":"risk_ask_at","threshold":2.0,"value":1.5},"latency_ms":10,"cost":0.0001,"request_id":"or-req-1"}`
+
+	var row Row
+	if err := json.Unmarshal([]byte(old), &row); err != nil {
+		t.Fatalf("a row written before mode existed must still decode: %v", err)
+	}
+	if row.Mode() != ModeUnknown {
+		t.Fatalf("mode = %v, want unknown: a row from before the field existed is not a shadow row", row.Mode())
+	}
+	if row.Mode() == ModeShadow {
+		t.Fatal("an absent mode must never read back as shadow")
 	}
 }
 

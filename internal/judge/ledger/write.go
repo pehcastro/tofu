@@ -30,6 +30,9 @@ func NewWriterWithClock(dir string, now func() time.Time) *Writer {
 }
 
 func (w *Writer) Append(row Row) (Row, error) {
+	if row.Reason != nil && row.Reason.Mode != ModeShadow && row.Reason.Mode != ModeEnforced {
+		return Row{}, fmt.Errorf("ledger: a written row's mode must be shadow or enforced, got %q", string(row.Reason.Mode))
+	}
 	if row.At.IsZero() {
 		row.At = w.now()
 	}
