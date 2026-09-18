@@ -7,4 +7,10 @@
 *.exe
 *.test
 
-.local/sources/
+.local
+CLAUDE.md
+.claude
+.playground
+.boji
+
+bench/harness/testdata/gates/
