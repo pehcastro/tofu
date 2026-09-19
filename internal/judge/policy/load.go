@@ -2,16 +2,84 @@ package policy
 
 import (
 	"fmt"
+	"io/fs"
 	"strconv"
 	"strings"
 
+	"boji/internal/judge/question"
 	"boji/internal/sys"
 )
 
+type Origin string
+
+const (
+	OriginProject Origin = "project"
+	OriginBinary  Origin = "binary"
+)
+
+func (o Origin) String() string {
+	switch o {
+	case OriginProject:
+		return "the project"
+	case OriginBinary:
+		return "the binary"
+	}
+	panic("policy: unknown origin " + string(o))
+}
+
+func LoadPoint(shipped fs.FS, ref string, set question.Set) (Policy, Origin, error) {
+	catalogDir, err := sys.CatalogDir()
+	if err != nil {
+		return Policy{}, "", err
+	}
+	name := ref + ".yaml"
+	path := sys.Join(catalogDir, "policy", name)
+	present, err := sys.Exists(path)
+	if err != nil {
+		return Policy{}, "", err
+	}
+	var pol Policy
+	origin := OriginBinary
+	if present {
+		origin = OriginProject
+		pol, err = Load(path)
+	} else {
+		pol, err = LoadFS(shipped, name)
+	}
+	if err != nil {
+		return Policy{}, "", fmt.Errorf("the policy %s from %s is unusable: %w", ref, origin, err)
+	}
+	findings := Lint(pol, set)
+	if len(findings) == 0 {
+		return pol, origin, nil
+	}
+	msgs := make([]string, len(findings))
+	for i, finding := range findings {
+		msgs[i] = finding.String()
+	}
+	return Policy{}, "", fmt.Errorf("the policy %s from %s fails its own lint: %s", ref, origin, strings.Join(msgs, "; "))
+}
+
+func LoadFS(shipped fs.FS, name string) (Policy, error) {
+	data, err := fs.ReadFile(shipped, name)
+	if err != nil {
+		return Policy{}, err
+	}
+	return parse(data, "catalog/policy/"+name)
+}
+
 func Load(path string) (Policy, error) {
+	data, err := sys.ReadFile(path)
+	if err != nil {
+		return Policy{}, err
+	}
+	return parse(data, path)
+}
+
+func parse(data []byte, path string) (Policy, error) {
 	pol := Policy{File: path}
 	inThresholds := false
-	err := scanKV(path, func(indent int, key, value string, line int) error {
+	err := scanBytes(data, path, func(indent int, key, value string, line int) error {
 		switch {
 		case indent == 0:
 			inThresholds = key == "thresholds"
@@ -43,6 +111,10 @@ func scanKV(path string, fn func(indent int, key, value string, line int) error)
 	if err != nil {
 		return err
 	}
+	return scanBytes(data, path, fn)
+}
+
+func scanBytes(data []byte, path string, fn func(indent int, key, value string, line int) error) error {
 	for i, raw := range strings.Split(strings.ReplaceAll(string(data), "\r\n", "\n"), "\n") {
 		line := i + 1
 		if strings.ContainsRune(raw, '\t') {

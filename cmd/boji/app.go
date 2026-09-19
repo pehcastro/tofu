@@ -16,7 +16,6 @@ import (
 
 	"boji/interface/tui"
 	"boji/interface/tui/frame"
-	"boji/internal/judge/jev"
 	"boji/internal/konst"
 	"boji/internal/llm"
 	"boji/internal/llm/cred"
@@ -48,7 +47,7 @@ func appVerb(in io.Reader, out, errOut io.Writer) int {
 		return exitVerdict
 	}
 	note := ""
-	if _, err := jev.Key(filepath.Join(dir, ".env")); err != nil {
+	if _, err := gateKey(); err != nil {
 		note = gateOffNote
 	}
 	if err := tui.Run(tui.Options{

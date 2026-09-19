@@ -5,13 +5,19 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
+	catalogpolicy "boji/catalog/policy"
+	"boji/catalog/questions"
 	"boji/internal/judge/jev"
 	jevwire "boji/internal/judge/jev/wire/openrouter"
 	"boji/internal/judge/ledger"
+	"boji/internal/judge/policy"
+	"boji/internal/judge/question"
 	"boji/internal/judge/state"
 	"boji/internal/konst"
+	"boji/internal/sys"
 	"boji/internal/transport"
 	"boji/internal/turn"
 )
@@ -34,7 +40,7 @@ func newToolGate(dir string) (*toolGate, error) {
 	if err != nil {
 		return nil, err
 	}
-	pol, err := resolvePolicy(runGatePoint, set)
+	pol, origin, err := gatePolicy()
 	if err != nil {
 		return nil, err
 	}
@@ -42,9 +48,13 @@ func newToolGate(dir string) (*toolGate, error) {
 	if err != nil {
 		return nil, err
 	}
-	set.Policy, set.Mode, set.ModeReason = &pol, resolution.Mode, resolution.Reason
+	set.Policy, set.Mode = &pol, resolution.Mode
+	set.ModeReason = fmt.Sprintf("the policy came from %s as %s", origin, pol.File)
+	if resolution.Reason != "" && !strings.Contains(resolution.Reason, pol.File) {
+		set.ModeReason += "; " + resolution.Reason
+	}
 
-	key, err := jev.Key(".env")
+	key, err := gateKey()
 	if err != nil {
 		return nil, err
 	}
@@ -66,6 +76,30 @@ func newToolGate(dir string) (*toolGate, error) {
 		return nil, err
 	}
 	return &toolGate{client: client, set: set, cwd: dir}, nil
+}
+
+func gatePolicy() (policy.Policy, policy.Origin, error) {
+	layers, err := question.DefaultLayers(questions.Files())
+	if err != nil {
+		return policy.Policy{}, "", err
+	}
+	set, _, err := question.Resolve(runGatePoint, layers)
+	if err != nil {
+		return policy.Policy{}, "", err
+	}
+	return policy.LoadPoint(catalogpolicy.Files(), runGatePoint, set)
+}
+
+func gateKey() (string, error) {
+	key, err := jev.Key(".env")
+	if err == nil {
+		return key, nil
+	}
+	home, homeErr := sys.HomeConfigDir()
+	if homeErr != nil {
+		return "", err
+	}
+	return jev.Key(sys.Join(home, ".env"))
 }
 
 func (g *toolGate) Decide(ctx context.Context, request turn.GateRequest) (turn.GateDecision, error) {
