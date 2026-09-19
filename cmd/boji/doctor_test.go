@@ -28,6 +28,7 @@ func mustAbs(t *testing.T, path string) string {
 
 func chdirTemp(t *testing.T) string {
 	t.Helper()
+	isolateHome(t)
 	wd, err := os.Getwd()
 	if err != nil {
 		t.Fatalf("getwd: %v", err)
@@ -287,4 +288,38 @@ func TestDoctorNeverPrintsTheKeyValue(t *testing.T) {
 			t.Fatalf("doctor printed the .env key value")
 		}
 	})
+}
+
+func TestDoctorReportsTheCredentialStateAndTheQuotaState(t *testing.T) {
+	chdirTemp(t)
+	t.Setenv(envVarName(), fakeSecret("env"))
+	out := &bytes.Buffer{}
+	if code := doctor(out); code != exitOK {
+		t.Fatalf("exit = %d, output %q", code, out.String())
+	}
+	printed := out.String()
+	if !strings.Contains(printed, "credential: none") {
+		t.Fatalf("no credential line in %q", printed)
+	}
+	if !strings.Contains(printed, "spend limit: boji sets none") {
+		t.Fatalf("no quota line in %q", printed)
+	}
+}
+
+func TestDoctorPrintsTheCredentialLineAfterTheLedgerLineAndBeforeThePolicyLines(t *testing.T) {
+	chdirTemp(t)
+	t.Setenv(envVarName(), fakeSecret("env"))
+	writePolicyFixture(t, "mode: shadow\n")
+	out := &bytes.Buffer{}
+	doctor(out)
+	printed := out.String()
+	ledgerAt := strings.Index(printed, "\nledger:")
+	credentialAt := strings.Index(printed, "\ncredential:")
+	policyAt := strings.Index(printed, "\npolicy ")
+	if ledgerAt < 0 || credentialAt < 0 || policyAt < 0 {
+		t.Fatalf("a line is missing from %q", printed)
+	}
+	if ledgerAt >= credentialAt || credentialAt >= policyAt {
+		t.Fatalf("the order is ledger %d, credential %d, policy %d", ledgerAt, credentialAt, policyAt)
+	}
 }

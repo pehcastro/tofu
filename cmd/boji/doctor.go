@@ -10,6 +10,7 @@ import (
 	"boji/internal/judge/jev"
 	"boji/internal/judge/ledger"
 	"boji/internal/judge/policy"
+	"boji/internal/llm/cred"
 	"boji/internal/sys"
 )
 
@@ -23,6 +24,10 @@ func doctor(out io.Writer) int {
 	_, _ = fmt.Fprintf(out, "catalog: %s\n", catalogState())
 	_, _ = fmt.Fprintf(out, "calibration: %s\n", calibrationState())
 	_, _ = fmt.Fprintf(out, "ledger: %s\n", ledgerState())
+	_, _ = fmt.Fprintf(out, "credential: %s\n", cred.DoctorState())
+	for _, line := range quotaDoctorLines(time.Now()) {
+		_, _ = fmt.Fprintln(out, line)
+	}
 	for _, line := range policyPointLines() {
 		_, _ = fmt.Fprintln(out, line)
 	}

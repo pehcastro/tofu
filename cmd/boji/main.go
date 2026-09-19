@@ -21,6 +21,8 @@ Usage:
 Verbs:
   version   print the version, the commit and the Go version
   doctor    report the environment and what is wrong with it
+  login     mint a subscription credential for a provider
+  usage     print every credential's quota windows and when each resets
   why       explain a ledger row, or the last one
   run       run one turn against a working directory
   judge     read a state and a question battery, print the answers
@@ -47,6 +49,10 @@ func run(args []string, in io.Reader, out io.Writer, errOut io.Writer) int {
 		return version(out)
 	case "doctor":
 		return doctor(out)
+	case "login":
+		return loginVerb(args[1:], in, out, errOut)
+	case "usage":
+		return usageVerb(args[1:], out, errOut)
 	case "why":
 		return whyVerb(args[1:], out, errOut, time.Now)
 	case "run":
