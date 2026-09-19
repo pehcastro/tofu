@@ -14,7 +14,18 @@ import (
 	"boji/internal/sys"
 )
 
-func doctor(out io.Writer) int {
+func doctor(out io.Writer, args ...string) int {
+	switch strings.Join(args, " ") {
+	case "":
+		return doctorEnvironment(out)
+	case "--imports":
+		return doctorImports(".", out)
+	}
+	_, _ = fmt.Fprintf(out, "boji doctor: unknown argument %q, the only flag is --imports\n", strings.Join(args, " "))
+	return exitUsage
+}
+
+func doctorEnvironment(out io.Writer) int {
 	_, _ = fmt.Fprintf(out, "go: %s\n", sys.GoVersion())
 	_, _ = fmt.Fprintf(out, "os: %s/%s\n", sys.OS(), sys.Arch())
 

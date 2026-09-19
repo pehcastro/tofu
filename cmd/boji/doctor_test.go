@@ -251,6 +251,25 @@ func TestDoctorReportsAPointEnforcedOnAValidLock(t *testing.T) {
 	}
 }
 
+func TestDoctorRejectsAnUnknownArgument(t *testing.T) {
+	out := &bytes.Buffer{}
+	code := doctor(out, "--credentials")
+	if code != exitUsage {
+		t.Fatalf("exit = %d, want %d, output %q", code, exitUsage, out.String())
+	}
+	if !strings.Contains(out.String(), `unknown argument "--credentials"`) {
+		t.Fatalf("output %q, want it to name the argument", out.String())
+	}
+}
+
+func TestDoctorSendsTheImportsFlagToTheImportCheck(t *testing.T) {
+	out := &bytes.Buffer{}
+	doctor(out, "--imports")
+	if !strings.HasPrefix(out.String(), "rule: ") {
+		t.Fatalf("output %q, want the import report rather than the environment report", out.String())
+	}
+}
+
 func TestKeyStatePanicsOnAnUnknownSource(t *testing.T) {
 	defer func() {
 		if recover() == nil {
