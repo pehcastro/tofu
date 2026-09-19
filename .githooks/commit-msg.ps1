@@ -37,8 +37,10 @@ foreach ($line in $body) {
     if ($line -match '(?i)^\s*(co-authored-by|signed-off-by|assisted-by|generated-by)\s*:') {
         Deny 'no attribution trailers. No agent, bot or harness is ever a co-author of this project.'
     }
-    if ($line -match '(?i)(claude|anthropic|copilot|cursor|chatgpt|openai)') {
-        Deny "a commit message names a tool: $($line.Trim())"
+    if ($line -match '(?i)\b(generated|written|authored|created|produced|assisted|helped|co-?authored|made)\b[^.]{0,40}\b(by|with|using)\b[^.]{0,20}\b(claude|anthropic|copilot|cursor|chatgpt|openai|an? (ai|agent|bot|llm|model))\b' -or
+        $line -match '(?i)\b(claude|anthropic|copilot|cursor|chatgpt|openai)\b[^.]{0,20}\b(wrote|generated|authored|made|helped|assisted)\b' -or
+        $line -match '(?i)\bwith\s+(claude|copilot|cursor|chatgpt)\s*$') {
+        Deny "a commit message credits a tool for the work: $($line.Trim())"
     }
     if ($line -match [char]0x2014) {
         Deny 'no em dash, anywhere in this project.'
