@@ -1,0 +1,9 @@
+{
+  "date": "2026-09-18",
+  "method": "sha256 of each tracked file's own sha256, path-sorted, concatenated and hashed again",
+  "command": "find . -type f ! -path './.git/*' | sort | xargs -I{} sha256sum {} | sha256sum",
+  "tree_hash": "a41550490a5c820d7efaa5edf4866db79a7e2de44dee672b6fded37bc7cec69e",
+  "trees": ["hono-claude", "hono-codex", "hono-boji"],
+  "files_per_tree": 5,
+  "note": "All three trees hashed identical on 2026-09-18 and again verified for BOJI-017. Re-run the command above per tree and compare against tree_hash before any arm run."
+}

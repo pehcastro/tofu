@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"boji/bench/harness/task"
 )
 
 const (
@@ -36,6 +38,7 @@ type Plan struct {
 	PromptPath string
 	Command    []string
 	Dir        string
+	WorkingDir string
 	Branch     string
 	Env        []string
 	Model      string
@@ -43,11 +46,11 @@ type Plan struct {
 }
 
 func PromptPath(root string, version int) string {
-	return filepath.Join(root, playgroundRoot, fmt.Sprintf("v%d.prompt.txt", version))
+	return task.Path(root, version, task.Prompt)
 }
 
 func CheckerPath(root string, version int) string {
-	return filepath.Join(root, playgroundRoot, fmt.Sprintf("v%d.check.ts", version))
+	return task.Path(root, version, task.Checker)
 }
 
 func ArmDir(root string, arm Arm, task string) string {
@@ -73,14 +76,15 @@ func BuildPlan(root string, arm Arm, task string, version int) (Plan, error) {
 	switch arm {
 	case ArmClaude:
 		plan.Model = claudeArmModel
+		plan.WorkingDir = dir
 		plan.Command = []string{
 			"claude", "-p", prompt,
 			"--model", claudeArmModel,
 			"--output-format", "json",
 			"--permission-mode", "bypassPermissions",
-			"--add-dir", dir,
+			"--safe-mode",
 		}
-		plan.Env = []string{"ANTHROPIC_API_KEY"}
+		plan.Env = []string{"the anthropic subscription credential claude auth already holds"}
 	case ArmCodex:
 		plan.Model = codexArmModel
 		plan.Command = []string{
@@ -90,7 +94,7 @@ func BuildPlan(root string, arm Arm, task string, version int) (Plan, error) {
 			"--sandbox", "workspace-write",
 			"-C", dir,
 		}
-		plan.Env = []string{"OPENAI_API_KEY"}
+		plan.Env = []string{"the chatgpt subscription credential codex login already holds"}
 	case ArmBoji:
 		plan.Model = bojiArmModel
 		plan.Command = []string{

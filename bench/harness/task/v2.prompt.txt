@@ -1,0 +1,17 @@
+Change the task list API that is already in this project. Do not start over and do not rewrite it from scratch: keep the files, the routes and the tests that exist, and change them in place.
+
+1. Rename the task's "done" field to "completed" everywhere it appears: the stored task, the JSON the API returns, and the request bodies POST /tasks and PATCH /tasks/:id accept. After this change a request body that carries "done" is invalid input and returns HTTP 400, on POST and on PATCH.
+
+2. Give a task a "priority" field. It is one of "low", "normal" or "high". POST /tasks may set it and defaults it to "normal" when the body does not. PATCH /tasks/:id may change it. Any other value, on either route, returns HTTP 400 with the same JSON error body the other invalid input returns.
+
+3. Give GET /tasks two query filters. "completed" takes true or false, "priority" takes one of the three values, and the two combine, so GET /tasks?completed=true&priority=high returns only the tasks that are both. A "completed" value other than true or false, or a "priority" outside the three, returns HTTP 400. The filtering belongs in the storage code, not in the route handler: the method that lists tasks takes the filter as an argument and every caller passes one.
+
+4. Whatever the maximum title length is today, make it 120 characters. A 120-character title is accepted and a 121-character title returns HTTP 400.
+
+5. Move the code that validates a request body out of the file that defines the routes and into its own file under src, and have the route file import it back. Do not change what it does.
+
+6. Update README.md so it lists the routes, the fields of a task and the query filters. It documents how to install and run and says nothing about the API.
+
+7. Add a "check" script to package.json that type-checks the project without emitting, and make it pass.
+
+Keep GET / working. Keep every existing test passing, changed where the rename, the new field or the new title limit makes it wrong, and add tests for the filters and for a rejected priority.

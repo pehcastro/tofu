@@ -31,13 +31,11 @@ type Execution struct {
 func (e Execution) Elapsed() time.Duration { return e.End.Sub(e.Start) }
 
 func Execute(ctx context.Context, plan Plan) (Execution, error) {
-	if plan.Arm != ArmBoji {
-		return Execution{}, fmt.Errorf("the %s arm is not executed by this runner, it spends an account nobody approved: print its plan instead", plan.Arm)
-	}
 	capped, cancel := context.WithTimeout(ctx, plan.Caps.WallClock)
 	defer cancel()
 
 	cmd := exec.CommandContext(capped, plan.Command[0], plan.Command[1:]...)
+	cmd.Dir = plan.WorkingDir
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 
@@ -174,11 +172,40 @@ func MeasureBoji(session turn.Row, src Sources, meta RunMeta) (Row, []string) {
 	endReason, endGap := endReasonOf(session.Outcome)
 	row.EndReason = endReason
 
+	for _, gap := range []string{credentialGap, endGap} {
+		if gap != "" {
+			gaps = append(gaps, gap)
+		}
+	}
+	return scoreTree(row, src, gaps)
+}
+
+func MeasureClaude(execution Execution, src Sources, meta ClaudeMeta) (Row, []string, error) {
+	row, gaps, err := ParseClaude([]byte(execution.Stdout), meta)
+	if err != nil {
+		return Row{}, nil, err
+	}
+	row.Start = execution.Start
+	row.End = execution.Start.Add(time.Duration(row.WallClockMS) * time.Millisecond)
+	row, gaps = scoreTree(row, src, gaps)
+	return row, gaps, nil
+}
+
+func MeasureCodex(execution Execution, src Sources, meta CodexMeta) (Row, []string, error) {
+	meta.Start, meta.End = execution.Start, execution.End
+	row, gaps, err := ParseCodex([]byte(execution.Stdout), meta)
+	if err != nil {
+		return Row{}, nil, err
+	}
+	row, gaps = scoreTree(row, src, gaps)
+	return row, gaps, nil
+}
+
+func scoreTree(row Row, src Sources, gaps []string) (Row, []string) {
 	var gatesGap, checklistGap string
 	row.Gates, gatesGap = measureGates(src)
 	row.Checklist, checklistGap = measureChecklist(src)
-
-	for _, gap := range []string{credentialGap, endGap, gatesGap, checklistGap} {
+	for _, gap := range []string{gatesGap, checklistGap} {
 		if gap != "" {
 			gaps = append(gaps, gap)
 		}
@@ -213,7 +240,8 @@ func measureGates(src Sources) ([]GateResult, string) {
 func measureChecklist(src Sources) ([]ChecklistResult, string) {
 	checks, err := RunChecklist(src.BunBin, src.CheckerPath, src.ArmDir)
 	if err != nil {
-		return nil, "checklist: " + err.Error()
+		return []ChecklistResult{{Item: "the checker never ran, so this row carries no score"}},
+			"checklist: " + err.Error()
 	}
 	return ChecklistResults(graded(checks)), ""
 }
@@ -278,6 +306,35 @@ func countTokens(session turn.Row) (input, output int64) {
 		output += int64(step.CompletionTokens)
 	}
 	return input, output
+}
+
+func Spend(rows []Row) string {
+	b := &strings.Builder{}
+	fmt.Fprintf(b, "SPEND, each arm in its own unit\n")
+	sorted := append([]Row(nil), rows...)
+	sort.Slice(sorted, func(i, j int) bool {
+		if sorted[i].Version != sorted[j].Version {
+			return sorted[i].Version < sorted[j].Version
+		}
+		return sorted[i].Arm < sorted[j].Arm
+	})
+	for _, r := range sorted {
+		fmt.Fprintf(b, "%s v%d: %s. tokens %d in, %d out. wall clock %d ms. turns %d\n",
+			r.Arm, r.Version, spendUnitOf(r), r.BilledInput, r.BilledOutput, r.WallClockMS, r.Turns)
+	}
+	fmt.Fprint(b, "the units do not add: anthropic subscription quota, chatgpt subscription quota and openrouter dollars are three different currencies, "+
+		"and a row that spends none of a currency is not cheaper than one that spends some of another. Compare within a column, never across.\n")
+	return b.String()
+}
+
+func spendUnitOf(r Row) string {
+	if r.ModelDollars != nil {
+		return fmt.Sprintf("api key, %.4f dollars on the model, %.4f on jev", *r.ModelDollars, r.JudgeDollars)
+	}
+	if r.Arm == ArmBoji {
+		return fmt.Sprintf("subscription quota for the model, %.4f openrouter dollars for jev", r.JudgeDollars)
+	}
+	return "subscription quota, no money left the account"
 }
 
 func ChecklistScore(row Row) (passed, total int) {

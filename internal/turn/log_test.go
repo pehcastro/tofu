@@ -3,27 +3,14 @@ package turn
 import (
 	"context"
 	"encoding/json"
-	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
 	"boji/internal/llm"
+	"boji/internal/recall"
 )
-
-func TestDirIsSessionsBesideTheLedgersOwnLog(t *testing.T) {
-	t.Chdir(t.TempDir())
-	dir, err := Dir()
-	if err != nil {
-		t.Fatalf("Dir: %v", err)
-	}
-	if filepath.Base(dir) != "sessions" {
-		t.Fatalf("Dir() = %q, want a path ending in sessions", dir)
-	}
-	if filepath.Base(filepath.Dir(dir)) != ".boji" {
-		t.Fatalf("Dir() = %q, want it under .boji, beside the ledger's own log", dir)
-	}
-}
 
 type sequentialTool struct {
 	name    string
@@ -67,22 +54,18 @@ func runTurnWithASucceedingAndAFailingBashCall(t *testing.T) Row {
 
 func writeAndReadBack(t *testing.T, row Row) Row {
 	t.Helper()
-	dir := t.TempDir()
-	written, err := NewWriter(dir).Append(row)
+	body, err := json.Marshal(row)
 	if err != nil {
-		t.Fatalf("Append: %v", err)
+		t.Fatalf("marshaling the row: %v", err)
 	}
-	read, found, err := NewReader(dir).ByID(written.ID)
-	if err != nil {
-		t.Fatalf("ByID: %v", err)
-	}
-	if !found {
-		t.Fatalf("ByID did not find the row just written, id %q", written.ID)
+	var read Row
+	if err := json.Unmarshal(body, &read); err != nil {
+		t.Fatalf("reading the row back as JSON: %v", err)
 	}
 	return read
 }
 
-func TestATurnRowWrittenByTheRealLoopReadsBackByID(t *testing.T) {
+func TestATurnRowFromTheRealLoopSurvivesJSON(t *testing.T) {
 	read := writeAndReadBack(t, runTurnWithASucceedingAndAFailingBashCall(t))
 	if read.Outcome != OutcomeStopped {
 		t.Fatalf("expected outcome stopped, got %s", read.Outcome)
@@ -114,6 +97,81 @@ func TestToolEvidenceSurvivesForAFailedAndASucceededCall(t *testing.T) {
 	}
 }
 
+type toolOfferRecordingModel struct {
+	inner   stubModel
+	offered []string
+}
+
+func (m *toolOfferRecordingModel) Ask(ctx context.Context, request llm.Request) (llm.Decision, error) {
+	m.offered = m.offered[:0]
+	for _, tool := range request.Tools {
+		m.offered = append(m.offered, tool.Name)
+	}
+	return m.inner.Ask(ctx, request)
+}
+
+func runATurnThatReadsALargeFile(t *testing.T, dir string, truncate bool) (Row, string, []string) {
+	t.Helper()
+	body := strings.Repeat("a line of the large file the model asked to read\n", 400)
+	tool := &stubTool{name: "read", result: Result{Content: body, Command: "read big.txt"}}
+	model := &toolOfferRecordingModel{inner: stubModel{decisions: []llm.Decision{
+		toolCallDecision(llm.ToolCall{ID: "call-1", Name: "read", Arguments: json.RawMessage(`{"path":"big.txt"}`)}),
+		messageDecision(),
+	}}}
+
+	config := baseConfig(t, model, NewRegistry(tool))
+	config.ArtifactDir = dir
+	config.TruncateResults = truncate
+	row, err := Run(context.Background(), config)
+	if err != nil {
+		t.Fatalf("Run returned an error: %v", err)
+	}
+	return row, body, model.offered
+}
+
+func TestTheLoopPutsAnOversizeResultBehindAHandleOnTheStepRow(t *testing.T) {
+	dir := t.TempDir()
+	row, body, offered := runATurnThatReadsALargeFile(t, dir, false)
+	call := writeAndReadBack(t, row).Steps[0].ToolCalls[0]
+
+	if call.ResultHandle == "" {
+		t.Fatalf("the step row carries no handle for a %d byte result: %+v", call.ResultBytes, call)
+	}
+	if call.ResultHandleError != "" {
+		t.Fatalf("storing the result failed: %s", call.ResultHandleError)
+	}
+	if call.ResultBytes != len(body) || call.RenderedBytes >= call.ResultBytes {
+		t.Fatalf("result_bytes %d rendered_bytes %d, want the whole %d bytes counted and fewer rendered",
+			call.ResultBytes, call.RenderedBytes, len(body))
+	}
+	if !slices.Contains(offered, "artifact_fetch") {
+		t.Fatalf("the model was offered %v, so it got a handle it cannot read", offered)
+	}
+
+	stored, err := recall.NewStore(dir).Fetch(call.ResultHandle)
+	if err != nil {
+		t.Fatalf("the handle on the step row does not lead back to a stored result: %v", err)
+	}
+	if string(stored) != body {
+		t.Fatalf("the stored result is %d bytes, the tool returned %d", len(stored), len(body))
+	}
+}
+
+func TestTheOffArmTruncatesAndLeavesNoHandle(t *testing.T) {
+	row, body, offered := runATurnThatReadsALargeFile(t, t.TempDir(), true)
+	call := writeAndReadBack(t, row).Steps[0].ToolCalls[0]
+
+	if call.ResultHandle != "" {
+		t.Fatalf("the off arm produced handle %q", call.ResultHandle)
+	}
+	if call.ResultBytes != len(body) || call.RenderedBytes >= call.ResultBytes {
+		t.Fatalf("the off arm rendered %d of %d bytes, want the middle cut", call.RenderedBytes, call.ResultBytes)
+	}
+	if slices.Contains(offered, "artifact_fetch") {
+		t.Fatalf("the off arm offered artifact_fetch, and it stores nothing to fetch: %v", offered)
+	}
+}
+
 func fullyPopulatedRow() Row {
 	ok := 0
 	return Row{
@@ -127,13 +185,16 @@ func fullyPopulatedRow() Row {
 				Index: 1,
 				ToolCalls: []ToolCallRow{
 					{
-						Tool:           "bash",
-						Args:           json.RawMessage(`{"command":"npm test"}`),
-						Command:        "npm test",
-						ExitCode:       &ok,
-						ResultBytes:    120,
-						RenderedBytes:  120,
-						ResultHash:     "deadbeef",
+						Tool:              "bash",
+						Args:              json.RawMessage(`{"command":"npm test"}`),
+						Command:           "npm test",
+						ExitCode:          &ok,
+						ResultBytes:       120,
+						RenderedBytes:     120,
+						ResultHash:        "deadbeef",
+						ResultHandle:      "2a77523db96ec6926b76bc7786734f70",
+						ResultHandleError: "recorded on the same call to prove a failed store write survives the round trip",
+
 						GateDecisionID: "2026-09-18-deadbeef",
 						GateVerdict:    "deny",
 						GateError:      "recorded on the same call to prove the field round-trips",

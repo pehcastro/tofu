@@ -5,11 +5,14 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
 
 	"boji/internal/llm"
+	"boji/internal/sys"
 	"boji/internal/transport"
 )
 
@@ -34,16 +37,18 @@ func (c Caps) exceeded(step int, elapsed time.Duration) (Outcome, bool) {
 }
 
 type Config struct {
-	Model          Model
-	Spend          Spend
-	Tools          Registry
-	Gate           Gate
-	Task           string
-	System         string
-	Caps           Caps
-	ResultBytesCap int
-	Now            func() time.Time
-	NewID          func() string
+	Model           Model
+	Spend           Spend
+	Tools           Registry
+	Gate            Gate
+	Task            string
+	System          string
+	Caps            Caps
+	ResultBytesCap  int
+	ArtifactDir     string
+	TruncateResults bool
+	Now             func() time.Time
+	NewID           func() string
 }
 
 func Run(ctx context.Context, config Config) (Row, error) {
@@ -58,6 +63,23 @@ func Run(ctx context.Context, config Config) (Row, error) {
 	}
 	if config.Spend != SpendSubscription && config.Spend != SpendAPIKey {
 		return Row{}, errors.New("turn: the row has to say which arm paid, subscription or api_key")
+	}
+	dir := config.ArtifactDir
+	if dir == "" {
+		state, err := sys.ProjectStateDir()
+		if err != nil {
+			return Row{}, err
+		}
+		dir = filepath.Join(state, "artifacts")
+	}
+	handles := !config.TruncateResults
+	artifacts, err := NewArtifacts(dir, handles)
+	if err != nil {
+		return Row{}, err
+	}
+	tools := config.Tools
+	if handles {
+		tools = NewRegistry(append(slices.Clone(tools.tools), artifacts.FetchTool())...)
 	}
 	now := config.Now
 	if now == nil {
@@ -86,7 +108,7 @@ func Run(ctx context.Context, config Config) (Row, error) {
 			return finish(outcome), nil
 		}
 
-		decision, err := config.Model.Ask(ctx, llm.Request{Messages: messages, Tools: config.Tools.Definitions()})
+		decision, err := config.Model.Ask(ctx, llm.Request{Messages: messages, Tools: tools.Definitions()})
 		if err != nil {
 			return finish(OutcomeError), err
 		}
@@ -130,7 +152,7 @@ func Run(ctx context.Context, config Config) (Row, error) {
 						row.DecisionIDs = append(row.DecisionIDs, gated.ID)
 					}
 				}
-				callRow, resultMessage := runToolCall(ctx, config.Tools, call, config.ResultBytesCap)
+				callRow, resultMessage := runToolCall(ctx, tools, call, config.ResultBytesCap, artifacts)
 				callRow.GateDecisionID, callRow.GateVerdict, callRow.GateError = gated.ID, gated.Verdict, gateErr
 				stepRow.ToolCalls = append(stepRow.ToolCalls, callRow)
 				messages = append(messages, resultMessage)
@@ -147,7 +169,7 @@ func Run(ctx context.Context, config Config) (Row, error) {
 	}
 }
 
-func runToolCall(ctx context.Context, tools Registry, call llm.ToolCall, resultBytesCap int) (ToolCallRow, llm.Message) {
+func runToolCall(ctx context.Context, tools Registry, call llm.ToolCall, resultBytesCap int, artifacts Artifacts) (ToolCallRow, llm.Message) {
 	started := time.Now()
 	tool, ok := tools.lookup(call.Name)
 	if !ok {
@@ -159,11 +181,7 @@ func runToolCall(ctx context.Context, tools Registry, call llm.ToolCall, resultB
 		return rejectedCall(call, started, err.Error())
 	}
 
-	rendered := result.Content
-	if len(rendered) > resultBytesCap {
-		head := resultBytesCap / 2
-		rendered = rendered[:head] + "\n...(truncated)...\n" + rendered[len(rendered)-(resultBytesCap-head):]
-	}
+	rendered, handle, storeErr := artifacts.Render(result.Content, resultBytesCap)
 	sum := sha256.Sum256([]byte(result.Content))
 	row := ToolCallRow{
 		Tool:          call.Name,
@@ -173,7 +191,11 @@ func runToolCall(ctx context.Context, tools Registry, call llm.ToolCall, resultB
 		ResultBytes:   len(result.Content),
 		RenderedBytes: len(rendered),
 		ResultHash:    hex.EncodeToString(sum[:]),
+		ResultHandle:  handle,
 		DurationMS:    time.Since(started).Milliseconds(),
+	}
+	if storeErr != nil {
+		row.ResultHandleError = storeErr.Error()
 	}
 	return row, llm.Message{Role: llm.RoleTool, ToolCallID: call.ID, Content: rendered}
 }

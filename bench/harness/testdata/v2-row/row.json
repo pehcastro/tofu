@@ -1,0 +1,150 @@
+{
+  "checklist_revision": "600160dee4654feba219765f57b30d3fcbb3bdee867d38a1610cc6b10f3b2de0",
+  "checker_revision": "f8c4c7a3016a9ab3635ebaa0d460aa61dae1efcbacbbb37a7910e6b68e18729a",
+  "prompt_revision": "d0045e282faac4cb40faad5af5c97a74ba3430b7f444e88a6ae3be9b2a497a60",
+  "arm_dir": ".playground/hono-boji",
+  "session_dir": "bench/harness/testdata/v2-session",
+  "gate_reasons": "first line only: the build gate prints the whole bundle and this file is read by a person",
+  "gaps": [
+    "no ledger rows matched the filter, so this row carries no jev decision, no jev cost and no jev timestamps",
+    "end reason: the turn ended on the decision cap, and harness.EndReason has no variant for that, so this row says turn_cap"
+  ],
+  "row": {
+    "arm": "boji",
+    "task": "hono",
+    "version": 2,
+    "run": 1,
+    "start": "2026-09-19T02:42:37.4996025-03:00",
+    "end": "2026-09-19T02:46:32.8806025-03:00",
+    "wall_clock_ms": 235381,
+    "model": "claude-opus-5",
+    "cli_version": "dev",
+    "credential_kind": "subscription",
+    "billed_input_tokens": 631362,
+    "billed_output_tokens": 17924,
+    "model_dollars": null,
+    "judge_dollars": 0,
+    "turns": 35,
+    "tool_calls": {
+      "read": 8,
+      "write": 10,
+      "edit": 0,
+      "search": 0,
+      "shell": 22,
+      "other": 0,
+      "failed": 8,
+      "retried": 0
+    },
+    "end_reason": "turn_cap",
+    "commit": "unknown",
+    "gates": [
+      {
+        "name": "install",
+        "status": "passed",
+        "reason": "bun install v1.3.14 (0d9b296a)"
+      },
+      {
+        "name": "build",
+        "status": "passed",
+        "reason": "// @bun"
+      },
+      {
+        "name": "test",
+        "status": "passed",
+        "reason": "52 tests, before 52 after 52"
+      },
+      {
+        "name": "lint",
+        "status": "passed",
+        "reason": ""
+      },
+      {
+        "name": "diff_cost",
+        "status": "passed",
+        "reason": "files 0, additions 0, deletions 0"
+      }
+    ],
+    "checklist": [
+      {
+        "item": "item 1",
+        "passed": true
+      },
+      {
+        "item": "item 2",
+        "passed": true
+      },
+      {
+        "item": "item 3",
+        "passed": true
+      },
+      {
+        "item": "item 4",
+        "passed": true
+      },
+      {
+        "item": "item 5",
+        "passed": true
+      },
+      {
+        "item": "item 6",
+        "passed": true
+      },
+      {
+        "item": "item 7",
+        "passed": true
+      },
+      {
+        "item": "item 8",
+        "passed": true
+      },
+      {
+        "item": "item 9",
+        "passed": true
+      },
+      {
+        "item": "item 10",
+        "passed": true
+      },
+      {
+        "item": "item 11",
+        "passed": true
+      },
+      {
+        "item": "item 12",
+        "passed": true
+      },
+      {
+        "item": "item 13",
+        "passed": true
+      },
+      {
+        "item": "item 14",
+        "passed": true
+      },
+      {
+        "item": "item 15",
+        "passed": true
+      },
+      {
+        "item": "item 16",
+        "passed": true
+      },
+      {
+        "item": "item 17",
+        "passed": true
+      },
+      {
+        "item": "item 18",
+        "passed": true
+      },
+      {
+        "item": "item 19",
+        "passed": true
+      },
+      {
+        "item": "item 20",
+        "passed": true
+      }
+    ]
+  }
+}

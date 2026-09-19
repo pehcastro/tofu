@@ -214,9 +214,11 @@ func wallClockOf(rows []Row) []float64 {
 }
 
 func turnsOf(rows []Row) []float64 {
-	values := make([]float64, len(rows))
-	for i, r := range rows {
-		values[i] = float64(r.Turns)
+	var values []float64
+	for _, r := range rows {
+		if r.Turns > 0 {
+			values = append(values, float64(r.Turns))
+		}
 	}
 	return values
 }
@@ -276,16 +278,31 @@ func renderTurnsRatio(b *strings.Builder, task string, full []Row) {
 	fmt.Fprintf(b, "\nTURNS PER PASSING RUN %s\n", task)
 	arms := sortedArms(full)
 	byArm := groupByArm(full)
-	mean, spread := map[Arm]float64{}, map[Arm]float64{}
+	mean, spread, measured := map[Arm]float64{}, map[Arm]float64{}, map[Arm]bool{}
 	for _, a := range arms {
-		rows := byArm[a]
-		m, s := meanAndSpread(turnsOf(rows))
-		mean[a], spread[a] = m, s
-		fmt.Fprintf(b, "%s: %.2f (spread %.2f, %d runs)\n", a, m, s, len(rows))
+		values := turnsOf(byArm[a])
+		if len(values) == 0 {
+			fmt.Fprintf(b, "%s: turns not recorded on any passing run, so this arm carries no turn measurement\n", a)
+			continue
+		}
+		m, s := meanAndSpread(values)
+		mean[a], spread[a], measured[a] = m, s, true
+		fmt.Fprintf(b, "%s: %.2f (spread %.2f, %d runs)\n", a, m, s, len(values))
 	}
 	for i := 0; i < len(arms); i++ {
 		for j := i + 1; j < len(arms); j++ {
 			a, c := arms[i], arms[j]
+			var missing []string
+			if !measured[a] {
+				missing = append(missing, string(a))
+			}
+			if !measured[c] {
+				missing = append(missing, string(c))
+			}
+			if len(missing) > 0 {
+				fmt.Fprintf(b, "%s vs %s: turns not comparable, %s recorded none\n", a, c, strings.Join(missing, " and "))
+				continue
+			}
 			compare(b, a, c, "turns", "%.2f", mean[a], mean[c], spread[a], spread[c])
 		}
 	}

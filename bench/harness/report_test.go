@@ -166,6 +166,41 @@ func TestDifferenceSmallerThanSpreadIsNoDifference(t *testing.T) {
 	}
 }
 
+func armWithNoTurnsRecorded() []Row {
+	return []Row{
+		{
+			Arm: ArmBoji, Task: "crashed-before-any-turn", Version: 2, Run: 1,
+			CredentialKind: CredentialKindSubscription,
+			WallClockMS:    30000,
+			Turns:          0,
+			Gates:          gatesOK(),
+			Checklist:      checklistFullPass(),
+		},
+		{
+			Arm: ArmClaude, Task: "crashed-before-any-turn", Version: 2, Run: 1,
+			CredentialKind: CredentialKindSubscription,
+			WallClockMS:    120000,
+			Turns:          14,
+			Gates:          gatesOK(),
+			Checklist:      checklistFullPass(),
+		},
+	}
+}
+
+func TestAnArmThatRecordedNoTurnsIsNotRanked(t *testing.T) {
+	out := Render(armWithNoTurnsRecorded())
+
+	if !strings.Contains(out, "boji: turns not recorded on any passing run") {
+		t.Fatalf("a row with zero turns rendered as a measurement:\n%s", out)
+	}
+	if !strings.Contains(out, "boji vs claude: turns not comparable, boji recorded none") {
+		t.Fatalf("missing the refusal to compare against an unmeasured arm:\n%s", out)
+	}
+	if strings.Contains(out, "lower on turns") {
+		t.Fatalf("an arm was ranked on turns it never recorded:\n%s", out)
+	}
+}
+
 func TestRealDifferenceIsReportedWithSpread(t *testing.T) {
 	out := Render(routesFixture())
 

@@ -1,0 +1,14 @@
+Build a REST API for a simple task list on top of this Hono server.
+
+Add these routes:
+- POST /tasks creates a task from a JSON body with a required, non-empty "title" field.
+- GET /tasks lists all tasks.
+- GET /tasks/:id fetches one task by id.
+- PATCH /tasks/:id updates a task's title and/or done flag.
+- DELETE /tasks/:id removes a task.
+
+Store tasks in memory, no database. Keep the existing GET / route working.
+
+On invalid input, return HTTP 400 with a JSON error body. On a task id that does not exist, return HTTP 404 with a JSON error body.
+
+Write tests for the routes, covering both the success and the error paths.

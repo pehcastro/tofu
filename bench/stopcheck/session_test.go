@@ -45,29 +45,40 @@ func TestEveryReadableRecordedStepCarriesAHandLabel(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ReadSessions: %v", err)
 	}
-	labels := Labels()
-	steps, empty := 0, 0
-	var unlabelled []string
+	labels, declared := Labels(), Unlabelled()
+	steps, empty, onPurpose := 0, 0, 0
 	for _, turn := range turns {
 		if len(turn.Steps) == 0 {
 			empty++
 		}
 		for _, step := range turn.Steps {
 			steps++
-			if _, ok := labels[stepKey(turn.ID, step.Index)]; !ok {
-				unlabelled = append(unlabelled, stepKey(turn.ID, step.Index))
+			key := stepKey(turn.ID, step.Index)
+			why, named := declared[key]
+			if _, labelled := labels[key]; labelled {
+				if named {
+					t.Errorf("%s carries a hand label and is also listed as deliberately unlabelled: %s", key, why)
+				}
+				continue
 			}
+			if !named {
+				t.Errorf("%s carries no hand label and is not listed in Unlabelled, so the battery would decide on it and count nothing", key)
+				continue
+			}
+			onPurpose++
+			delete(declared, key)
+			t.Logf("unlabelled on purpose: %s: %s", key, why)
 		}
 	}
-	t.Logf("%s holds %d readable turns, %d of them with no step, %d skipped files and %d steps in all",
-		sessionsDir, len(turns), empty, len(skipped), steps)
+	for key := range declared {
+		t.Errorf("%s is listed as deliberately unlabelled but no such step is in the corpus", key)
+	}
+	t.Logf("%s holds %d readable turns, %d of them with no step, %d skipped files and %d steps in all. hand labels: %d. unlabelled on purpose: %d",
+		sessionsDir, len(turns), empty, len(skipped), steps, steps-onPurpose, onPurpose)
 	for _, s := range skipped {
 		t.Logf("skipped %s: %s", s.File, s.Why)
 	}
 	if steps < 40 {
 		t.Fatalf("the recorded corpus holds %d steps and BOJI-079 asks for at least forty", steps)
-	}
-	if len(unlabelled) > 0 {
-		t.Fatalf("%d recorded steps carry no hand label, so the battery would decide on them and count nothing: %v", len(unlabelled), unlabelled)
 	}
 }

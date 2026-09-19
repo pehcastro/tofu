@@ -3,6 +3,9 @@ package stopcheck
 import (
 	"fmt"
 	"strings"
+
+	"boji/bench/report"
+	"boji/internal/judge/ledger"
 )
 
 type Agreement struct {
@@ -73,6 +76,7 @@ func Render(r Result) string {
 	fmt.Fprintf(&b, "# stop_check, the second decision point\n\n")
 	fmt.Fprintf(&b, "generated %s, jev build %s, questions stop_check@%d, policy mode %s (%s)\n\n",
 		r.GeneratedAt.UTC().Format("2006-01-02 15:04:05Z"), r.Build, r.Wording, r.Mode, r.ModeReason)
+	fmt.Fprintf(&b, "%s\n\n", report.CostUnitLine([]ledger.Unit{ledger.UnitMoney}))
 
 	fmt.Fprintf(&b, "## Which arm won\n\n")
 	fmt.Fprintf(&b, "%s\n\n%s\n%s\n\n", winner(cheap, typed), cheap.Line(), typed.Line())

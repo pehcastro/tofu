@@ -59,18 +59,21 @@ func (o *Outcome) UnmarshalJSON(data []byte) error {
 }
 
 type ToolCallRow struct {
-	Tool           string          `json:"tool"`
-	Args           json.RawMessage `json:"args,omitempty"`
-	Command        string          `json:"command,omitempty"`
-	ExitCode       *int            `json:"exit_code,omitempty"`
-	ResultBytes    int             `json:"result_bytes"`
-	RenderedBytes  int             `json:"rendered_bytes"`
-	ResultHash     string          `json:"result_hash,omitempty"`
-	GateDecisionID string          `json:"gate_decision_id,omitempty"`
-	GateVerdict    string          `json:"gate_verdict,omitempty"`
-	GateError      string          `json:"gate_error,omitempty"`
-	DurationMS     int64           `json:"duration_ms"`
-	Error          string          `json:"error,omitempty"`
+	Tool              string          `json:"tool"`
+	Args              json.RawMessage `json:"args,omitempty"`
+	Command           string          `json:"command,omitempty"`
+	ExitCode          *int            `json:"exit_code,omitempty"`
+	ResultBytes       int             `json:"result_bytes"`
+	RenderedBytes     int             `json:"rendered_bytes"`
+	ResultHash        string          `json:"result_hash,omitempty"`
+	ResultHandle      string          `json:"result_handle,omitempty"`
+	ResultHandleError string          `json:"result_handle_error,omitempty"`
+
+	GateDecisionID string `json:"gate_decision_id,omitempty"`
+	GateVerdict    string `json:"gate_verdict,omitempty"`
+	GateError      string `json:"gate_error,omitempty"`
+	DurationMS     int64  `json:"duration_ms"`
+	Error          string `json:"error,omitempty"`
 }
 
 type StepRow struct {
