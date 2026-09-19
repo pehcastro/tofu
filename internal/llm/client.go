@@ -20,20 +20,18 @@ type Wire interface {
 }
 
 type Decision struct {
-	Build       string
-	RequestID   string
-	TransportID string
-	Outcome     Outcome
-	Stop        string
-	Content     string
-	ToolCalls   []ToolCall
-	Refusal     string
-	Usage       Usage
-	ListCostUSD float64
-	Attempts    int
-	Latency     time.Duration
-	Bytes       int
-	Raw         []byte
+	Build            string
+	RequestID        string
+	TransportID      string
+	Outcome          Outcome
+	Stop             string
+	Content          string
+	ToolCalls        []ToolCall
+	Refusal          string
+	Usage            Usage
+	CacheReadTokens  int
+	CacheWriteTokens int
+	Warnings         []string
 }
 
 type Client struct {
@@ -48,8 +46,7 @@ func NewClient(wire Wire) (*Client, error) {
 }
 
 func (c *Client) Ask(ctx context.Context, request Request) (Decision, error) {
-	model := c.wire.Model()
-	body, err := request.Encode(model)
+	body, err := request.Encode(c.wire.Model())
 	if err != nil {
 		return Decision{}, err
 	}
@@ -72,9 +69,5 @@ func (c *Client) Ask(ctx context.Context, request Request) (Decision, error) {
 		ToolCalls:   response.ToolCalls,
 		Refusal:     response.Refusal,
 		Usage:       response.Usage,
-		Attempts:    raw.Attempts,
-		Latency:     raw.Latency,
-		Bytes:       len(body),
-		Raw:         response.Raw,
 	}, nil
 }

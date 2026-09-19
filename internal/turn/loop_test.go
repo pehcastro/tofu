@@ -15,6 +15,7 @@ func baseConfig(t *testing.T, model Model, tools Registry) Config {
 	t.Helper()
 	return Config{
 		Model:          model,
+		Spend:          SpendAPIKey,
 		Tools:          tools,
 		Task:           "say pong",
 		Caps:           Caps{MaxSteps: 10},

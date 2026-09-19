@@ -59,6 +59,7 @@ func TestLiveRunCompletesATrivialTask(t *testing.T) {
 
 	row, err := Run(context.Background(), Config{
 		Model: client,
+		Spend: SpendAPIKey,
 		Tools: NewRegistry(readTool, writeTool, bashTool),
 		Task: "Using the write tool, write a file named hello.txt containing exactly the text " +
 			"hello from boji and nothing else. After it is written, reply with a short " +

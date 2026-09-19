@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -12,28 +14,42 @@ import (
 	"time"
 
 	"boji/internal/judge/jev"
-	jevwire "boji/internal/judge/jev/wire/openrouter"
-	"boji/internal/judge/ledger"
-	"boji/internal/judge/state"
 	"boji/internal/konst"
 	"boji/internal/llm"
+	"boji/internal/llm/cred"
+	"boji/internal/llm/wire/anthropic"
 	"boji/internal/llm/wire/openrouter"
 	"boji/internal/sys"
 	"boji/internal/transport"
 	"boji/internal/turn"
 )
 
-const runGatePoint = "tool_gate@1"
+const (
+	wireSubscription = "anthropic"
+	wireKey          = "openrouter"
+)
 
 type runOpts struct {
 	dir          string
 	task         string
+	wire         string
 	dryRun       bool
 	noGate       bool
 	model        string
 	maxSteps     int
 	maxWallMS    int
 	maxDecisions int
+}
+
+func (o runOpts) modelID() string {
+	switch {
+	case o.model != "":
+		return o.model
+	case o.wire == wireKey:
+		return konst.TurnOpenRouterModel
+	default:
+		return konst.TurnAnthropicModel
+	}
 }
 
 func runVerb(args []string, out, errOut io.Writer) int {
@@ -48,62 +64,33 @@ func runVerb(args []string, out, errOut io.Writer) int {
 	}
 
 	if opts.dryRun {
-		request := llm.Request{
-			Messages: []llm.Message{{Role: llm.RoleUser, Content: opts.task}},
-			Tools:    tools.Definitions(),
-		}
-		body, err := request.Encode(opts.model)
+		body, err := dryRunBody(opts, tools)
 		if err != nil {
 			return runFail(errOut, err)
 		}
 		_, _ = fmt.Fprintln(out, string(body))
 		return exitOK
 	}
+	return runTurn(opts, tools, out, errOut)
+}
 
-	key, err := jev.Key(".env")
-	if err != nil {
-		return runFail(errOut, err)
+func runTurn(opts runOpts, tools turn.Registry, out, errOut io.Writer) int {
+	model, spend, store, err := runModel(opts)
+	if store != nil {
+		defer func() { _ = store.Close() }()
 	}
-	wire, err := openrouter.New(openrouter.Config{
-		Model: opts.model,
-		Key:   key,
-		Transport: transport.Config{
-			AttemptTimeout: time.Duration(konst.TurnAttemptTimeoutMillis) * time.Millisecond,
-			Retries:        konst.TurnRetries,
-			Backoff:        time.Duration(konst.TurnBackoffMillis) * time.Millisecond,
-			MaxBackoff:     time.Duration(konst.TurnMaxBackoffMillis) * time.Millisecond,
-			Concurrency:    1,
-		},
-	})
-	if err != nil {
-		return runFail(errOut, err)
-	}
-	client, err := llm.NewClient(wire)
 	if err != nil {
 		return runFail(errOut, err)
 	}
 
-	config := turn.Config{
-		Model: client,
-		Tools: tools,
-		Task:  opts.task,
-		Caps: turn.Caps{
-			MaxSteps:     opts.maxSteps,
-			MaxWallClock: time.Duration(opts.maxWallMS) * time.Millisecond,
-			MaxDecisions: opts.maxDecisions,
-		},
-		ResultBytesCap: konst.TurnResultBytesCap,
-	}
 	var gate *toolGate
 	if !opts.noGate {
-		gate, err = newToolGate(opts.dir)
-		if err != nil {
+		if gate, err = newToolGate(opts.dir); err != nil {
 			return runFail(errOut, err)
 		}
-		config.Gate = gate
 	}
 
-	row, runErr := turn.Run(context.Background(), config)
+	row, runErr := turn.Run(context.Background(), runConfig(opts, tools, model, spend, gate))
 	printRunRow(out, row)
 	if gate != nil {
 		_, _ = fmt.Fprintf(out, "gate decisions %d cost $%.6f mode %s\n", gate.decisions, gate.costUSD, gate.set.Mode)
@@ -117,88 +104,117 @@ func runVerb(args []string, out, errOut io.Writer) int {
 	return exitOK
 }
 
-type toolGate struct {
-	client    *jev.Client
-	set       battery
-	cwd       string
-	decisions int
-	costUSD   float64
+func runConfig(opts runOpts, tools turn.Registry, model turn.Model, spend turn.Spend, gate *toolGate) turn.Config {
+	config := turn.Config{
+		Model: model,
+		Spend: spend,
+		Tools: tools,
+		Task:  opts.task,
+		Caps: turn.Caps{
+			MaxSteps:     opts.maxSteps,
+			MaxWallClock: time.Duration(opts.maxWallMS) * time.Millisecond,
+			MaxDecisions: opts.maxDecisions,
+		},
+		ResultBytesCap: konst.TurnResultBytesCap,
+	}
+	if gate != nil {
+		config.Gate = gate
+	}
+	return config
 }
 
-func newToolGate(dir string) (*toolGate, error) {
-	set, err := resolveCatalog(runGatePoint)
-	if err != nil {
-		return nil, err
+func runModel(opts runOpts) (turn.Model, turn.Spend, *cred.Store, error) {
+	if opts.wire == wireKey {
+		model, err := keyModel(opts.modelID())
+		return model, turn.SpendAPIKey, nil, err
 	}
-	pol, err := resolvePolicy(runGatePoint, set)
-	if err != nil {
-		return nil, err
-	}
-	resolution, err := resolvePolicyMode(pol)
-	if err != nil {
-		return nil, err
-	}
-	set.Policy, set.Mode, set.ModeReason = &pol, resolution.Mode, resolution.Reason
+	model, store, err := subscriptionModel(opts.modelID())
+	return model, turn.SpendSubscription, store, err
+}
 
+func dryRunBody(opts runOpts, tools turn.Registry) ([]byte, error) {
+	if opts.wire == wireKey {
+		request := llm.Request{
+			Messages: []llm.Message{{Role: llm.RoleUser, Content: opts.task}},
+			Tools:    tools.Definitions(),
+		}
+		return request.Encode(opts.modelID())
+	}
+	request := anthropic.Request{
+		Model:    opts.modelID(),
+		Messages: []llm.Message{{Role: llm.RoleUser, Content: opts.task}},
+		Tools:    tools.Definitions(),
+	}
+	return request.Encode(true)
+}
+
+func keyModel(model string) (turn.Model, error) {
 	key, err := jev.Key(".env")
 	if err != nil {
 		return nil, err
 	}
-	wire, err := jevwire.New(jevwire.Config{
-		Key: key,
+	wire, err := openrouter.New(openrouter.Config{
+		Model: model,
+		Key:   key,
 		Transport: transport.Config{
-			AttemptTimeout: time.Duration(konst.JudgeTimeoutMillis) * time.Millisecond,
-			Retries:        konst.JudgeRetries,
-			Backoff:        time.Duration(konst.JudgeBackoffMillis) * time.Millisecond,
+			AttemptTimeout: time.Duration(konst.TurnAttemptTimeoutMillis) * time.Millisecond,
+			Retries:        konst.TurnRetries,
+			Backoff:        time.Duration(konst.TurnBackoffMillis) * time.Millisecond,
+			MaxBackoff:     time.Duration(konst.TurnMaxBackoffMillis) * time.Millisecond,
 			Concurrency:    1,
 		},
 	})
 	if err != nil {
 		return nil, err
 	}
-	client, err := jev.NewClient(jev.Config{Wire: wire})
-	if err != nil {
-		return nil, err
-	}
-	return &toolGate{client: client, set: set, cwd: dir}, nil
+	return llm.NewClient(wire)
 }
 
-func (g *toolGate) Decide(ctx context.Context, request turn.GateRequest) (turn.GateDecision, error) {
-	row, err := g.ask(ctx, request)
+func subscriptionModel(model string) (turn.Model, *cred.Store, error) {
+	spec, err := cred.Lookup(string(cred.Anthropic))
 	if err != nil {
-		return turn.GateDecision{Verdict: string(ledger.VerdictAsk)}, err
+		return nil, nil, err
 	}
-	return turn.GateDecision{ID: row.ID, Verdict: string(row.Verdict)}, nil
+	path, err := cred.Path()
+	if err != nil {
+		return nil, nil, err
+	}
+	store, err := cred.Open(path)
+	if err != nil {
+		return nil, nil, err
+	}
+	row, present, err := store.Row(cred.Anthropic)
+	if err != nil {
+		return nil, store, err
+	}
+	if !present {
+		return nil, store, errors.New("no anthropic subscription credential, run boji login anthropic")
+	}
+	session, err := sessionID()
+	if err != nil {
+		return nil, store, err
+	}
+	wire, err := anthropic.New(anthropic.Config{
+		Model:     model,
+		Token:     cred.NewManager(store, spec).Access,
+		SessionID: session,
+		AccountID: row.Credential.Identity.AccountID,
+	})
+	if err != nil {
+		return nil, store, err
+	}
+	return turn.Subscription{Wire: wire}, store, nil
 }
 
-func (g *toolGate) ask(ctx context.Context, request turn.GateRequest) (ledger.Row, error) {
-	var input map[string]any
-	if err := json.Unmarshal(request.Args, &input); err != nil {
-		return ledger.Row{}, fmt.Errorf("the %s call carries arguments the gate cannot read: %w", request.Tool, err)
+func sessionID() (string, error) {
+	var raw [16]byte
+	if _, err := rand.Read(raw[:]); err != nil {
+		return "", err
 	}
-	built, builder, err := state.BuildToolGate(state.ToolGateInput{
-		Agent:   "boji-run",
-		Tool:    request.Tool,
-		Input:   input,
-		Cwd:     g.cwd,
-		Context: state.ToolGateContext{UserRecentMessages: []string{request.Task}},
-	})
-	if err != nil {
-		return ledger.Row{}, err
-	}
-	builtState := json.RawMessage(built)
-	decision, err := g.client.Ask(ctx, jev.Request{State: builtState, Questions: g.set.Questions})
-	if err != nil {
-		return ledger.Row{}, err
-	}
-	g.decisions++
-	g.costUSD += decision.Usage.Cost
-	return appendRow(builtState, g.set, rowInput{
-		decision:     &decision,
-		answers:      toLedgerAnswers(g.set.QuestionsVersion, decision.Answers),
-		turnID:       request.TurnID,
-		stateBuilder: builder,
-	})
+	raw[6] = raw[6]&0x0f | 0x40
+	raw[8] = raw[8]&0x3f | 0x80
+	text := hex.EncodeToString(raw[:])
+	return text[:8] + "-" + text[8:12] + "-" + text[12:16] + "-" + text[16:20] + "-" + text[20:], nil
 }
 
 func buildRunTools(dir string) (turn.Registry, error) {
@@ -218,11 +234,21 @@ func buildRunTools(dir string) (turn.Registry, error) {
 }
 
 func printRunRow(out io.Writer, row turn.Row) {
-	_, _ = fmt.Fprintf(out, "turn %s outcome %s model %s cost $%.6f wall_clock_ms %d\n",
-		row.ID, row.Outcome, row.Model, row.TotalCostUSD, row.WallClockMS)
+	spend := "spend subscription quota, no money"
+	if row.Spend != turn.SpendSubscription {
+		spend = fmt.Sprintf("spend api key $%.6f", row.TotalCostUSD)
+	}
+	_, _ = fmt.Fprintf(out, "turn %s outcome %s model %s %s wall_clock_ms %d\n",
+		row.ID, row.Outcome, row.Model, spend, row.WallClockMS)
 	for _, step := range row.Steps {
+		_, _ = fmt.Fprintf(out, "step %d: stop_reason %s in %d out %d cache_read %d cache_write %d\n",
+			step.Index, step.StopReason, step.PromptTokens, step.CompletionTokens,
+			step.CacheReadTokens, step.CacheWriteTokens)
+		for _, warning := range step.Warnings {
+			_, _ = fmt.Fprintf(out, "step %d: warning %s\n", step.Index, warning)
+		}
 		if len(step.ToolCalls) == 0 {
-			_, _ = fmt.Fprintf(out, "step %d: assistant_text %q cost $%.6f\n", step.Index, step.AssistantText, step.CostUSD)
+			_, _ = fmt.Fprintf(out, "step %d: assistant_text %q\n", step.Index, step.AssistantText)
 			continue
 		}
 		for _, call := range step.ToolCalls {
@@ -230,9 +256,16 @@ func printRunRow(out io.Writer, row turn.Row) {
 			if call.ExitCode != nil {
 				exitCode = strconv.Itoa(*call.ExitCode)
 			}
-			_, _ = fmt.Fprintf(out, "step %d: tool_call tool=%s command=%q exit_code=%s error=%q cost $%.6f\n",
-				step.Index, call.Tool, call.Command, exitCode, call.Error, step.CostUSD)
+			_, _ = fmt.Fprintf(out, "step %d: tool_call tool=%s command=%q exit_code=%s gate=%s error=%q\n",
+				step.Index, call.Tool, call.Command, exitCode, call.GateVerdict, call.Error)
 		}
+	}
+}
+
+func wireDoctorLines() []string {
+	return []string{
+		"wire " + wireSubscription + ": the default, boji run spends the anthropic subscription quota and no money",
+		"wire " + wireKey + ": --wire openrouter spends the openrouter key, which is real money on the account that issued it",
 	}
 }
 
@@ -256,7 +289,7 @@ func runFail(errOut io.Writer, err error) int {
 
 func parseRunArgs(args []string) (runOpts, error) {
 	opts := runOpts{
-		model:        konst.TurnModelAlias,
+		wire:         wireSubscription,
 		maxSteps:     konst.TurnMaxSteps,
 		maxWallMS:    konst.TurnMaxWallClockMillis,
 		maxDecisions: konst.TurnMaxDecisions,
@@ -271,8 +304,12 @@ func parseRunArgs(args []string) (runOpts, error) {
 			opts.dryRun = true
 		case "--no-gate":
 			opts.noGate = true
+		case "--wire":
+			opts.wire, err = nextArg(args, &i, arg)
 		case "--model":
-			opts.model, err = nextArg(args, &i, arg)
+			if opts.model, err = nextArg(args, &i, arg); err == nil && strings.TrimSpace(opts.model) == "" {
+				err = errors.New("--model needs a model id")
+			}
 		case "--max-steps":
 			opts.maxSteps, err = nextInt(args, &i, arg)
 		case "--max-wall-clock-ms":
@@ -298,6 +335,9 @@ func parseRunArgs(args []string) (runOpts, error) {
 	}
 	if strings.TrimSpace(opts.task) == "" {
 		return runOpts{}, errors.New("boji run needs a task")
+	}
+	if opts.wire != wireSubscription && opts.wire != wireKey {
+		return runOpts{}, fmt.Errorf("--wire %q is neither %s nor %s", opts.wire, wireSubscription, wireKey)
 	}
 	return opts, nil
 }

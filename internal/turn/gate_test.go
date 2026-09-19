@@ -27,6 +27,7 @@ func (g *stubGate) Decide(_ context.Context, request GateRequest) (GateDecision,
 func gatedConfig(gate Gate, tool Tool, model Model) Config {
 	return Config{
 		Model:          model,
+		Spend:          SpendAPIKey,
 		Tools:          NewRegistry(tool),
 		Gate:           gate,
 		Task:           "write a file",

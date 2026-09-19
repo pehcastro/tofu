@@ -35,6 +35,7 @@ func (c Caps) exceeded(step int, elapsed time.Duration) (Outcome, bool) {
 
 type Config struct {
 	Model          Model
+	Spend          Spend
 	Tools          Registry
 	Gate           Gate
 	Task           string
@@ -55,6 +56,9 @@ func Run(ctx context.Context, config Config) (Row, error) {
 	if config.ResultBytesCap <= 0 {
 		return Row{}, errors.New("turn: no tool result byte cap")
 	}
+	if config.Spend != SpendSubscription && config.Spend != SpendAPIKey {
+		return Row{}, errors.New("turn: the row has to say which arm paid, subscription or api_key")
+	}
 	now := config.Now
 	if now == nil {
 		now = time.Now
@@ -65,7 +69,7 @@ func Run(ctx context.Context, config Config) (Row, error) {
 	}
 
 	start := now()
-	row := Row{ID: newID(), Schema: SchemaVersion, At: start, Task: config.Task}
+	row := Row{ID: newID(), Schema: SchemaVersion, At: start, Task: config.Task, Spend: config.Spend}
 	finish := func(outcome Outcome) Row {
 		row.Outcome = outcome
 		row.WallClockMS = now().Sub(start).Milliseconds()
@@ -92,9 +96,13 @@ func Run(ctx context.Context, config Config) (Row, error) {
 		stepRow := StepRow{
 			Index:            step,
 			AssistantText:    decision.Content,
+			StopReason:       decision.Stop,
 			PromptTokens:     decision.Usage.InputTokens,
 			CompletionTokens: decision.Usage.OutputTokens,
+			CacheReadTokens:  decision.CacheReadTokens,
+			CacheWriteTokens: decision.CacheWriteTokens,
 			CostUSD:          decision.Usage.Cost,
+			Warnings:         decision.Warnings,
 		}
 
 		switch decision.Outcome {

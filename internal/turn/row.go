@@ -77,10 +77,21 @@ type StepRow struct {
 	Index            int           `json:"index"`
 	ToolCalls        []ToolCallRow `json:"tool_calls,omitempty"`
 	AssistantText    string        `json:"assistant_text,omitempty"`
+	StopReason       string        `json:"stop_reason,omitempty"`
 	PromptTokens     int           `json:"prompt_tokens"`
 	CompletionTokens int           `json:"completion_tokens"`
+	CacheReadTokens  int           `json:"cache_read_tokens"`
+	CacheWriteTokens int           `json:"cache_write_tokens"`
 	CostUSD          float64       `json:"cost_usd"`
+	Warnings         []string      `json:"warnings,omitempty"`
 }
+
+type Spend string
+
+const (
+	SpendSubscription Spend = "subscription"
+	SpendAPIKey       Spend = "api_key"
+)
 
 type Row struct {
 	ID           string    `json:"id"`
@@ -88,6 +99,7 @@ type Row struct {
 	At           time.Time `json:"at"`
 	Task         string    `json:"task"`
 	Model        string    `json:"model"`
+	Spend        Spend     `json:"spend"`
 	Steps        []StepRow `json:"steps,omitempty"`
 	Outcome      Outcome   `json:"outcome"`
 	TotalCostUSD float64   `json:"total_cost_usd"`

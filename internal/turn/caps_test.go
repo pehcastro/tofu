@@ -31,6 +31,7 @@ func TestRunStopsAtTheStepCapAndRecordsIt(t *testing.T) {
 	model := alwaysToolCallModel(0, 10)
 	config := Config{
 		Model:          model,
+		Spend:          SpendAPIKey,
 		Tools:          NewRegistry(tool),
 		Task:           "loop forever",
 		Caps:           Caps{MaxSteps: 3},
@@ -62,6 +63,7 @@ func TestRunStopsAtTheWallClockCapAndRecordsIt(t *testing.T) {
 
 	config := Config{
 		Model:          model,
+		Spend:          SpendAPIKey,
 		Tools:          NewRegistry(tool),
 		Task:           "loop forever",
 		Caps:           Caps{MaxWallClock: 3 * time.Second},
@@ -87,6 +89,7 @@ func TestCapsAreEachIndependentlyOff(t *testing.T) {
 	model.decisions = append(model.decisions, messageDecision())
 	config := Config{
 		Model:          model,
+		Spend:          SpendAPIKey,
 		Tools:          NewRegistry(tool),
 		Task:           "no caps but the step cap",
 		Caps:           Caps{MaxSteps: 3},

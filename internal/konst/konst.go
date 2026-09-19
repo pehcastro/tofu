@@ -29,7 +29,9 @@ const (
 )
 
 const (
-	TurnModelAlias           = "anthropic/claude-fable-5-1"
+	TurnOpenRouterModel      = "anthropic/claude-opus-5"
+	TurnAnthropicModel       = "claude-opus-5"
+	TurnCodexModel           = "gpt-5.6-sol"
 	TurnAttemptTimeoutMillis = 30000
 	TurnRetries              = 1
 	TurnBackoffMillis        = 250
@@ -40,11 +42,3 @@ const (
 	TurnMaxWallClockMillis   = 300000
 )
 
-const (
-	ClaudeBin                = "claude"
-	ClaudeModelAlias         = "sonnet"
-	ClaudeWallClockMillis    = 300000
-	ClaudeProbeTimeoutMillis = 10000
-	ClaudeListBudgetUSD      = 1.00
-	ConnectorLineBytes       = 4 << 20
-)
