@@ -34,11 +34,13 @@ func (o judgeOutcome) output(kinds map[string]question.Kind) map[string]any {
 }
 
 type rowInput struct {
-	decision  *jev.Decision
-	replayOf  string
-	build     string
-	requestID string
-	answers   []ledger.Answer
+	decision     *jev.Decision
+	replayOf     string
+	build        string
+	requestID    string
+	answers      []ledger.Answer
+	turnID       string
+	stateBuilder string
 }
 
 func appendRow(state any, set battery, in rowInput) (ledger.Row, error) {
@@ -51,13 +53,15 @@ func appendRow(state any, set battery, in rowInput) (ledger.Row, error) {
 		return ledger.Row{}, err
 	}
 	row := ledger.Row{
-		Point:     set.SetName,
-		Questions: set.SetName,
-		Version:   set.QuestionsVersion,
-		Model:     openrouter.Alias,
-		StateHash: hash,
-		Answers:   in.answers,
-		ReplayOf:  in.replayOf,
+		Point:        set.SetName,
+		Questions:    set.SetName,
+		Version:      set.QuestionsVersion,
+		Model:        openrouter.Alias,
+		StateHash:    hash,
+		StateBuilder: in.stateBuilder,
+		Answers:      in.answers,
+		ReplayOf:     in.replayOf,
+		TurnID:       in.turnID,
 	}
 	if set.Policy != nil {
 		verdict, reason, err := policy.Decide(ledgerAnswersToJev(in.answers), *set.Policy)

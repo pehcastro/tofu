@@ -36,6 +36,16 @@ const (
 	TurnMaxBackoffMillis     = 2000
 	TurnResultBytesCap       = 8192
 	TurnMaxSteps             = 40
+	TurnMaxDecisions         = 40
 	TurnMaxCostUSD           = 1.00
 	TurnMaxWallClockMillis   = 300000
+)
+
+const (
+	ClaudeBin                = "claude"
+	ClaudeModelAlias         = "sonnet"
+	ClaudeWallClockMillis    = 300000
+	ClaudeProbeTimeoutMillis = 10000
+	ClaudeListBudgetUSD      = 1.00
+	ConnectorLineBytes       = 4 << 20
 )

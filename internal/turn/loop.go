@@ -21,6 +21,7 @@ type Caps struct {
 	MaxSteps     int
 	MaxCostUSD   float64
 	MaxWallClock time.Duration
+	MaxDecisions int
 }
 
 func (c Caps) exceeded(step int, spent float64, elapsed time.Duration) (Outcome, bool) {
@@ -39,6 +40,7 @@ func (c Caps) exceeded(step int, spent float64, elapsed time.Duration) (Outcome,
 type Config struct {
 	Model          Model
 	Tools          Registry
+	Gate           Gate
 	Task           string
 	System         string
 	Caps           Caps
@@ -67,25 +69,26 @@ func Run(ctx context.Context, config Config) (Row, error) {
 	}
 
 	start := now()
-	row := Row{ID: newID(), At: start, Task: config.Task}
+	row := Row{ID: newID(), Schema: SchemaVersion, At: start, Task: config.Task}
+	finish := func(outcome Outcome) Row {
+		row.Outcome = outcome
+		row.WallClockMS = now().Sub(start).Milliseconds()
+		return row
+	}
 	messages := []llm.Message{{Role: llm.RoleUser, Content: config.Task}}
 	if config.System != "" {
 		messages = append([]llm.Message{{Role: llm.RoleSystem, Content: config.System}}, messages...)
 	}
 
+	decisions := 0
 	for step := 1; ; step++ {
-		elapsed := now().Sub(start)
-		if outcome, capped := config.Caps.exceeded(step, row.TotalCostUSD, elapsed); capped {
-			row.Outcome = outcome
-			row.WallClockMS = elapsed.Milliseconds()
-			return row, nil
+		if outcome, capped := config.Caps.exceeded(step, row.TotalCostUSD, now().Sub(start)); capped {
+			return finish(outcome), nil
 		}
 
 		decision, err := config.Model.Ask(ctx, llm.Request{Messages: messages, Tools: config.Tools.Definitions()})
 		if err != nil {
-			row.Outcome = OutcomeError
-			row.WallClockMS = now().Sub(start).Milliseconds()
-			return row, err
+			return finish(OutcomeError), err
 		}
 		row.Model = decision.Build
 		row.TotalCostUSD += decision.Usage.Cost
@@ -101,14 +104,30 @@ func Run(ctx context.Context, config Config) (Row, error) {
 		switch decision.Outcome {
 		case llm.OutcomeMessage:
 			row.Steps = append(row.Steps, stepRow)
-			row.Outcome = OutcomeStopped
-			row.WallClockMS = now().Sub(start).Milliseconds()
-			return row, nil
+			return finish(OutcomeStopped), nil
 
 		case llm.OutcomeToolCalls:
 			messages = append(messages, llm.Message{Role: llm.RoleAssistant, ToolCalls: decision.ToolCalls})
 			for _, call := range decision.ToolCalls {
+				var gated GateDecision
+				var gateErr string
+				if config.Gate != nil {
+					if config.Caps.MaxDecisions > 0 && decisions >= config.Caps.MaxDecisions {
+						row.Steps = append(row.Steps, stepRow)
+						return finish(OutcomeDecisionCap), nil
+					}
+					decisions++
+					var err error
+					gated, err = config.Gate.Decide(ctx, GateRequest{TurnID: row.ID, Task: config.Task, Tool: call.Name, Args: call.Arguments})
+					if err != nil {
+						gateErr = err.Error()
+					}
+					if gated.ID != "" {
+						row.DecisionIDs = append(row.DecisionIDs, gated.ID)
+					}
+				}
 				callRow, resultMessage := runToolCall(ctx, config.Tools, call, config.ResultBytesCap)
+				callRow.GateDecisionID, callRow.GateVerdict, callRow.GateError = gated.ID, gated.Verdict, gateErr
 				stepRow.ToolCalls = append(stepRow.ToolCalls, callRow)
 				messages = append(messages, resultMessage)
 			}
@@ -116,9 +135,7 @@ func Run(ctx context.Context, config Config) (Row, error) {
 
 		case llm.OutcomeRefusal:
 			row.Steps = append(row.Steps, stepRow)
-			row.Outcome = OutcomeError
-			row.WallClockMS = now().Sub(start).Milliseconds()
-			return row, transport.Fail("turn.Run", transport.KindProvider, nil, "the model refused: %s", decision.Refusal)
+			return finish(OutcomeError), transport.Fail("turn.Run", transport.KindProvider, nil, "the model refused: %s", decision.Refusal)
 
 		default:
 			panic("turn: unknown model outcome")

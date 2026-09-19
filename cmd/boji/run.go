@@ -12,6 +12,9 @@ import (
 	"time"
 
 	"boji/internal/judge/jev"
+	jevwire "boji/internal/judge/jev/wire/openrouter"
+	"boji/internal/judge/ledger"
+	"boji/internal/judge/state"
 	"boji/internal/konst"
 	"boji/internal/llm"
 	"boji/internal/llm/wire/openrouter"
@@ -20,14 +23,18 @@ import (
 	"boji/internal/turn"
 )
 
+const runGatePoint = "tool_gate@1"
+
 type runOpts struct {
-	dir        string
-	task       string
-	dryRun     bool
-	model      string
-	maxSteps   int
-	maxCostUSD float64
-	maxWallMS  int
+	dir          string
+	task         string
+	dryRun       bool
+	noGate       bool
+	model        string
+	maxSteps     int
+	maxCostUSD   float64
+	maxWallMS    int
+	maxDecisions int
 }
 
 func runVerb(args []string, out, errOut io.Writer) int {
@@ -77,7 +84,7 @@ func runVerb(args []string, out, errOut io.Writer) int {
 		return runFail(errOut, err)
 	}
 
-	row, runErr := turn.Run(context.Background(), turn.Config{
+	config := turn.Config{
 		Model: client,
 		Tools: tools,
 		Task:  opts.task,
@@ -85,10 +92,24 @@ func runVerb(args []string, out, errOut io.Writer) int {
 			MaxSteps:     opts.maxSteps,
 			MaxCostUSD:   opts.maxCostUSD,
 			MaxWallClock: time.Duration(opts.maxWallMS) * time.Millisecond,
+			MaxDecisions: opts.maxDecisions,
 		},
 		ResultBytesCap: konst.TurnResultBytesCap,
-	})
+	}
+	var gate *toolGate
+	if !opts.noGate {
+		gate, err = newToolGate(opts.dir)
+		if err != nil {
+			return runFail(errOut, err)
+		}
+		config.Gate = gate
+	}
+
+	row, runErr := turn.Run(context.Background(), config)
 	printRunRow(out, row)
+	if gate != nil {
+		_, _ = fmt.Fprintf(out, "gate decisions %d cost $%.6f mode %s\n", gate.decisions, gate.costUSD, gate.set.Mode)
+	}
 	if writeErr := writeRunRow(row); writeErr != nil {
 		_, _ = fmt.Fprintf(errOut, "boji run: writing the turn row: %v\n", writeErr)
 	}
@@ -96,6 +117,90 @@ func runVerb(args []string, out, errOut io.Writer) int {
 		return runFail(errOut, runErr)
 	}
 	return exitOK
+}
+
+type toolGate struct {
+	client    *jev.Client
+	set       battery
+	cwd       string
+	decisions int
+	costUSD   float64
+}
+
+func newToolGate(dir string) (*toolGate, error) {
+	set, err := resolveCatalog(runGatePoint)
+	if err != nil {
+		return nil, err
+	}
+	pol, err := resolvePolicy(runGatePoint, set)
+	if err != nil {
+		return nil, err
+	}
+	resolution, err := resolvePolicyMode(pol)
+	if err != nil {
+		return nil, err
+	}
+	set.Policy, set.Mode, set.ModeReason = &pol, resolution.Mode, resolution.Reason
+
+	key, err := jev.Key(".env")
+	if err != nil {
+		return nil, err
+	}
+	wire, err := jevwire.New(jevwire.Config{
+		Key: key,
+		Transport: transport.Config{
+			AttemptTimeout: time.Duration(konst.JudgeTimeoutMillis) * time.Millisecond,
+			Retries:        konst.JudgeRetries,
+			Backoff:        time.Duration(konst.JudgeBackoffMillis) * time.Millisecond,
+			Concurrency:    1,
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+	client, err := jev.NewClient(jev.Config{Wire: wire})
+	if err != nil {
+		return nil, err
+	}
+	return &toolGate{client: client, set: set, cwd: dir}, nil
+}
+
+func (g *toolGate) Decide(ctx context.Context, request turn.GateRequest) (turn.GateDecision, error) {
+	row, err := g.ask(ctx, request)
+	if err != nil {
+		return turn.GateDecision{Verdict: string(ledger.VerdictAsk)}, err
+	}
+	return turn.GateDecision{ID: row.ID, Verdict: string(row.Verdict)}, nil
+}
+
+func (g *toolGate) ask(ctx context.Context, request turn.GateRequest) (ledger.Row, error) {
+	var input map[string]any
+	if err := json.Unmarshal(request.Args, &input); err != nil {
+		return ledger.Row{}, fmt.Errorf("the %s call carries arguments the gate cannot read: %w", request.Tool, err)
+	}
+	built, builder, err := state.BuildToolGate(state.ToolGateInput{
+		Agent:   "boji-run",
+		Tool:    request.Tool,
+		Input:   input,
+		Cwd:     g.cwd,
+		Context: state.ToolGateContext{UserRecentMessages: []string{request.Task}},
+	})
+	if err != nil {
+		return ledger.Row{}, err
+	}
+	builtState := json.RawMessage(built)
+	decision, err := g.client.Ask(ctx, jev.Request{State: builtState, Questions: g.set.Questions})
+	if err != nil {
+		return ledger.Row{}, err
+	}
+	g.decisions++
+	g.costUSD += decision.Usage.Cost
+	return appendRow(builtState, g.set, rowInput{
+		decision:     &decision,
+		answers:      toLedgerAnswers(g.set.QuestionsVersion, decision.Answers),
+		turnID:       request.TurnID,
+		stateBuilder: builder,
+	})
 }
 
 func buildRunTools(dir string) (turn.Registry, error) {
@@ -153,10 +258,11 @@ func runFail(errOut io.Writer, err error) int {
 
 func parseRunArgs(args []string) (runOpts, error) {
 	opts := runOpts{
-		model:      konst.TurnModelAlias,
-		maxSteps:   konst.TurnMaxSteps,
-		maxCostUSD: konst.TurnMaxCostUSD,
-		maxWallMS:  konst.TurnMaxWallClockMillis,
+		model:        konst.TurnModelAlias,
+		maxSteps:     konst.TurnMaxSteps,
+		maxCostUSD:   konst.TurnMaxCostUSD,
+		maxWallMS:    konst.TurnMaxWallClockMillis,
+		maxDecisions: konst.TurnMaxDecisions,
 	}
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
@@ -166,6 +272,8 @@ func parseRunArgs(args []string) (runOpts, error) {
 			opts.dir, err = nextArg(args, &i, arg)
 		case "--dry-run":
 			opts.dryRun = true
+		case "--no-gate":
+			opts.noGate = true
 		case "--model":
 			opts.model, err = nextArg(args, &i, arg)
 		case "--max-steps":
@@ -174,6 +282,8 @@ func parseRunArgs(args []string) (runOpts, error) {
 			opts.maxCostUSD, err = nextFloat(args, &i, arg)
 		case "--max-wall-clock-ms":
 			opts.maxWallMS, err = nextInt(args, &i, arg)
+		case "--max-decisions":
+			opts.maxDecisions, err = nextInt(args, &i, arg)
 		default:
 			switch {
 			case strings.HasPrefix(arg, "--"):

@@ -5,7 +5,32 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+
+	"boji/internal/konst"
 )
+
+func TestRunGatesByDefaultAndCapsItsDecisions(t *testing.T) {
+	opts, err := parseRunArgs([]string{"--dir", t.TempDir(), "a task"})
+	if err != nil {
+		t.Fatalf("parseRunArgs returned an error: %v", err)
+	}
+	if opts.noGate {
+		t.Fatal("expected the gate on unless --no-gate is given")
+	}
+	if opts.maxDecisions != konst.TurnMaxDecisions {
+		t.Fatalf("expected the decision cap to come from konst (%d), got %d", konst.TurnMaxDecisions, opts.maxDecisions)
+	}
+}
+
+func TestRunTakesTheOffArmAndASmallerDecisionCap(t *testing.T) {
+	opts, err := parseRunArgs([]string{"--dir", t.TempDir(), "--no-gate", "--max-decisions", "2", "a task"})
+	if err != nil {
+		t.Fatalf("parseRunArgs returned an error: %v", err)
+	}
+	if !opts.noGate || opts.maxDecisions != 2 {
+		t.Fatalf("expected the gate off and a cap of 2, got %+v", opts)
+	}
+}
 
 func TestRunVerbRequiresDirAndExitsUsage(t *testing.T) {
 	var out, errOut bytes.Buffer
