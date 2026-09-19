@@ -1,0 +1,34 @@
+{
+  "id": "turn-modern",
+  "schema": 1,
+  "task": "list the folder, then stop",
+  "model": "anthropic/claude-fable-5.1",
+  "steps": [
+    {
+      "index": 1,
+      "tool_calls": [
+        {
+          "tool": "bash",
+          "command": "ls -la",
+          "exit_code": 1,
+          "gate_decision_id": "2026-09-19-abc",
+          "duration_ms": 3
+        }
+      ],
+      "prompt_tokens": 100,
+      "completion_tokens": 10,
+      "cost_usd": 0.001
+    },
+    {
+      "index": 2,
+      "assistant_text": "the folder is empty",
+      "stop_reason": "end_turn",
+      "prompt_tokens": 120,
+      "completion_tokens": 8,
+      "cost_usd": 0.001
+    }
+  ],
+  "outcome": "stopped",
+  "total_cost_usd": 0.002,
+  "wall_clock_ms": 900
+}

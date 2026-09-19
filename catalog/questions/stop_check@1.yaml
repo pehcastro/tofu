@@ -1,0 +1,67 @@
+name: stop_check
+questions_version: 1
+
+state:
+  - task
+  - recent_steps
+  - budget
+
+questions:
+  stop_pressure:
+    type: score
+    instructions: >-
+      Judge how strongly the evidence says this turn should stop now rather than
+      take another step. Read the task the user gave and what the turn has
+      already done.
+    criteria:
+      - >-
+        Work the task asks for is plainly still undone and the turn is moving
+        toward it.
+      - >-
+        The turn is still working, though the latest step added little.
+      - >-
+        The task looks carried out, or the turn is going over ground it has
+        already covered.
+      - >-
+        Another step will produce nothing: the work is done and reported, the
+        turn is repeating itself, or it is waiting on something that will not
+        arrive.
+
+  stalled:
+    type: noul
+    instructions: >-
+      Is the turn stuck? Read `recent_steps` and judge whether the latest step
+      went over ground an earlier step already covered, failed the way an
+      earlier step failed, or produced nothing at all.
+    criteria:
+      true: >-
+        The latest step repeats earlier work, fails as an earlier step failed,
+        or is empty.
+      false: >-
+        The latest step moved the task forward.
+
+  work_remains:
+    type: noul
+    instructions: >-
+      Does `task` name work that `recent_steps` shows has not been carried out
+      yet? Judge the user's own words in `task`, not what the turn decided to do
+      instead.
+    criteria:
+      true: >-
+        Part of what the user asked for is still undone.
+      false: >-
+        Everything the user asked for has been carried out, or the task asks for
+        nothing further.
+
+  budget_exhausted:
+    type: noul
+    instructions: >-
+      Has the turn run out of the allowance the harness gave it? Read `budget`,
+      which the harness fills in for you: `budget.at_step_cap`,
+      `budget.at_decision_cap` and `budget.at_wall_clock_cap`.
+    criteria:
+      true: >-
+        A cap in `budget` is reached, so the harness will not run another step
+        whatever else is true.
+      false: >-
+        No cap in `budget` is reached.

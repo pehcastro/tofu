@@ -1,0 +1,27 @@
+{
+  "ID": "turn-legacy",
+  "Task": "create a file called hello.txt containing hello",
+  "Model": "anthropic/claude-fable-5.1",
+  "Steps": [
+    {
+      "Index": 1,
+      "ToolCalls": [
+        {
+          "Tool": "write",
+          "Command": "write hello.txt",
+          "ExitCode": null,
+          "ResultBytes": 26,
+          "DurationMS": 1,
+          "Error": ""
+        }
+      ],
+      "AssistantText": "",
+      "PromptTokens": 560,
+      "CompletionTokens": 72,
+      "CostUSD": 0.0092
+    }
+  ],
+  "Outcome": 1,
+  "TotalCostUSD": 0.0092,
+  "WallClockMS": 6539
+}
