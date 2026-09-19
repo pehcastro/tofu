@@ -68,6 +68,36 @@ func TestBuildPlanPassesThePromptTextNotItsPath(t *testing.T) {
 	}
 }
 
+func TestEveryArmPlanNamesItsModelSoTheComparisonIsLikeForLike(t *testing.T) {
+	root := repositoryRoot(t)
+	want := map[Arm]string{ArmClaude: claudeArmModel, ArmCodex: codexArmModel, ArmBoji: bojiArmModel}
+	for arm, model := range want {
+		plan, err := BuildPlan(root, arm, "hono", 1)
+		if err != nil {
+			t.Fatalf("%s: BuildPlan: %v", arm, err)
+		}
+		if plan.Model != model {
+			t.Errorf("%s: plan names model %q, want %q", arm, plan.Model, model)
+		}
+		named := false
+		for _, arg := range plan.Command {
+			if arg == model {
+				named = true
+			}
+		}
+		if !named {
+			t.Errorf("%s: the command does not pass %q, so the arm would run whatever its default is: %v", arm, model, plan.Command)
+		}
+		var buf bytes.Buffer
+		if err := Fprint(&buf, plan); err != nil {
+			t.Fatalf("%s: Fprint: %v", arm, err)
+		}
+		if !strings.Contains(buf.String(), "model: "+model) {
+			t.Errorf("%s: printed plan does not state its model, got %q", arm, buf.String())
+		}
+	}
+}
+
 func TestBuildPlanFailsWhenThePromptIsMissing(t *testing.T) {
 	if _, err := BuildPlan(t.TempDir(), ArmBoji, "hono", 1); err == nil {
 		t.Fatal("BuildPlan returned no error for a root with no prompt file")

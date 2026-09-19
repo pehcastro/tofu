@@ -24,7 +24,8 @@ func fullRow() Row {
 		CredentialKind: CredentialKindKey,
 		BilledInput:    14696,
 		BilledOutput:   44,
-		Dollars:        &dollars,
+		ModelDollars:   &dollars,
+		JudgeDollars:   0.000123,
 		Turns:          3,
 		ToolCalls:      ToolCalls{Read: 4, Write: 2, Edit: 1, Search: 1, Shell: 1, Other: 1, Failed: 1, Retried: 1},
 		EndReason:      EndReasonDone,
@@ -58,10 +59,10 @@ func TestRowRoundTripsThroughJSONWithoutLosingAField(t *testing.T) {
 	}
 	got.Start, got.End = want.Start, want.End
 
-	if got.Dollars == nil || *got.Dollars != *want.Dollars {
-		t.Fatalf("Dollars did not round trip: want %v got %v", *want.Dollars, got.Dollars)
+	if got.ModelDollars == nil || *got.ModelDollars != *want.ModelDollars {
+		t.Fatalf("ModelDollars did not round trip: want %v got %v", *want.ModelDollars, got.ModelDollars)
 	}
-	got.Dollars = want.Dollars
+	got.ModelDollars = want.ModelDollars
 
 	if !reflect.DeepEqual(want, got) {
 		t.Fatalf("row round trip lost a field:\nwant %+v\ngot  %+v", want, got)
@@ -71,26 +72,26 @@ func TestRowRoundTripsThroughJSONWithoutLosingAField(t *testing.T) {
 func TestSubscriptionDollarsAreNullNotZero(t *testing.T) {
 	subscription := fullRow()
 	subscription.CredentialKind = CredentialKindSubscription
-	subscription.Dollars = nil
+	subscription.ModelDollars = nil
 
 	zero := 0.0
 	key := fullRow()
-	key.Dollars = &zero
+	key.ModelDollars = &zero
 
 	subEncoded, err := json.Marshal(subscription)
 	if err != nil {
 		t.Fatalf("marshal subscription row: %v", err)
 	}
-	if !strings.Contains(string(subEncoded), `"dollars":null`) {
-		t.Fatalf("subscription row did not encode dollars as null: %s", subEncoded)
+	if !strings.Contains(string(subEncoded), `"model_dollars":null`) {
+		t.Fatalf("subscription row did not encode model dollars as null: %s", subEncoded)
 	}
 
 	keyEncoded, err := json.Marshal(key)
 	if err != nil {
 		t.Fatalf("marshal key row: %v", err)
 	}
-	if !strings.Contains(string(keyEncoded), `"dollars":0`) {
-		t.Fatalf("key row with a real zero spend did not encode dollars as 0: %s", keyEncoded)
+	if !strings.Contains(string(keyEncoded), `"model_dollars":0`) {
+		t.Fatalf("key row with a real zero spend did not encode model dollars as 0: %s", keyEncoded)
 	}
 
 	var decodedSub, decodedKey Row
@@ -101,14 +102,17 @@ func TestSubscriptionDollarsAreNullNotZero(t *testing.T) {
 		t.Fatalf("unmarshal key row: %v", err)
 	}
 
-	if decodedSub.Dollars != nil {
-		t.Fatalf("subscription row's dollars should decode to nil, got %v", *decodedSub.Dollars)
+	if decodedSub.ModelDollars != nil {
+		t.Fatalf("subscription row's model dollars should decode to nil, got %v", *decodedSub.ModelDollars)
 	}
-	if decodedKey.Dollars == nil {
+	if decodedSub.JudgeDollars != subscription.JudgeDollars {
+		t.Fatalf("a subscription run still spends the openrouter key on jev, and that number was lost: want %v got %v", subscription.JudgeDollars, decodedSub.JudgeDollars)
+	}
+	if decodedKey.ModelDollars == nil {
 		t.Fatal("key row's real zero spend decoded to nil, indistinguishable from a subscription arm")
 	}
-	if *decodedKey.Dollars != 0 {
-		t.Fatalf("key row's dollars should be 0, got %v", *decodedKey.Dollars)
+	if *decodedKey.ModelDollars != 0 {
+		t.Fatalf("key row's model dollars should be 0, got %v", *decodedKey.ModelDollars)
 	}
 }
 

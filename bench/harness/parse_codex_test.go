@@ -29,8 +29,8 @@ func TestParseCodexTurnsTheRecordedTranscriptIntoARow(t *testing.T) {
 	if row.EndReason != EndReasonCrash {
 		t.Errorf("EndReason = %q, want crash, this transcript is a real usage-limit error", row.EndReason)
 	}
-	if row.Dollars != nil {
-		t.Errorf("Dollars should be nil, this transcript never reports a cost, got %v", *row.Dollars)
+	if row.ModelDollars != nil {
+		t.Errorf("ModelDollars should be nil, this transcript never reports a cost, got %v", *row.ModelDollars)
 	}
 	if row.BilledInput != 0 || row.BilledOutput != 0 {
 		t.Errorf("billed tokens should be zero, no turn.completed event exists, got in=%d out=%d", row.BilledInput, row.BilledOutput)

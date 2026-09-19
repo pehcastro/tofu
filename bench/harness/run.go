@@ -84,6 +84,7 @@ func V1Gates(armDir, startCommit string) Task {
 		Dir:         armDir,
 		StartCommit: startCommit,
 		Build:       []string{"bun", "build", "src/index.ts", "--target=bun"},
+		Lint:        []string{"bun", "x", "tsc", "--noEmit", "--skipLibCheck"},
 		Test: TestGateCommand{
 			Command:    []string{"bun", "test"},
 			TestDirRel: "src",
@@ -155,14 +156,13 @@ func MeasureBoji(session turn.Row, src Sources, meta RunMeta) (Row, []string) {
 		row = Row{Arm: meta.Arm, Task: meta.Task, Version: meta.Version, Run: meta.Run, CLIVersion: meta.CLIVersion, CredentialKind: meta.CredentialKind, Commit: meta.Commit}
 		gaps = append(gaps, "jev ledger: "+err.Error())
 	}
-	gaps = dropGapsTheTurnRowFills(gaps)
 
-	judgeDollars := 0.0
-	if row.Dollars != nil {
-		judgeDollars = *row.Dollars
+	credential, credentialGap := credentialOfSpend(session.Spend)
+	if credential == CredentialKindKey {
+		modelDollars := session.TotalCostUSD
+		row.ModelDollars = &modelDollars
 	}
-	dollars := judgeDollars + session.TotalCostUSD
-	row.Dollars = &dollars
+	row.CredentialKind = credential
 	row.Model = session.Model
 	row.Start = session.At
 	row.End = session.At.Add(time.Duration(session.WallClockMS) * time.Millisecond)
@@ -173,20 +173,27 @@ func MeasureBoji(session turn.Row, src Sources, meta RunMeta) (Row, []string) {
 
 	endReason, endGap := endReasonOf(session.Outcome)
 	row.EndReason = endReason
-	if endGap != "" {
-		gaps = append(gaps, endGap)
-	}
 
 	var gatesGap, checklistGap string
 	row.Gates, gatesGap = measureGates(src)
-	if gatesGap != "" {
-		gaps = append(gaps, gatesGap)
-	}
 	row.Checklist, checklistGap = measureChecklist(src)
-	if checklistGap != "" {
-		gaps = append(gaps, checklistGap)
+
+	for _, gap := range []string{credentialGap, endGap, gatesGap, checklistGap} {
+		if gap != "" {
+			gaps = append(gaps, gap)
+		}
 	}
 	return row, gaps
+}
+
+func credentialOfSpend(spend turn.Spend) (CredentialKind, string) {
+	switch spend {
+	case turn.SpendSubscription:
+		return CredentialKindSubscription, ""
+	case turn.SpendAPIKey:
+		return CredentialKindKey, ""
+	}
+	return CredentialKindKey, fmt.Sprintf("credential kind: the turn row names its spend %q, which is neither subscription nor api_key, so this row says key and its dollars cannot be trusted", spend)
 }
 
 func measureGates(src Sources) ([]GateResult, string) {
@@ -223,24 +230,6 @@ func graded(checks []ChecklistCheck) []ChecklistCheck {
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Item < out[j].Item })
 	return out
-}
-
-var gapsTheTurnRowFills = []string{"turns:", "tool calls:", "billed input/output tokens:"}
-
-func dropGapsTheTurnRowFills(gaps []string) []string {
-	var kept []string
-	for _, gap := range gaps {
-		filled := false
-		for _, prefix := range gapsTheTurnRowFills {
-			if strings.HasPrefix(gap, prefix) {
-				filled = true
-			}
-		}
-		if !filled {
-			kept = append(kept, gap)
-		}
-	}
-	return kept
 }
 
 func endReasonOf(outcome turn.Outcome) (EndReason, string) {

@@ -71,7 +71,8 @@ type Row struct {
 	CredentialKind CredentialKind    `json:"credential_kind"`
 	BilledInput    int64             `json:"billed_input_tokens"`
 	BilledOutput   int64             `json:"billed_output_tokens"`
-	Dollars        *float64          `json:"dollars"`
+	ModelDollars   *float64          `json:"model_dollars"`
+	JudgeDollars   float64           `json:"judge_dollars"`
 	Turns          int64             `json:"turns"`
 	ToolCalls      ToolCalls         `json:"tool_calls"`
 	EndReason      EndReason         `json:"end_reason"`

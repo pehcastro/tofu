@@ -294,7 +294,7 @@ func benchHarness(out, errOut io.Writer, args []string) int {
 	}
 	meta := harness.RunMeta{
 		Arm: opts.arm, Task: opts.task, Version: opts.version, Run: opts.run,
-		CLIVersion: sys.Version(), CredentialKind: harness.CredentialKindKey, Commit: sys.BuildRevision(),
+		CLIVersion: sys.Version(), Commit: sys.BuildRevision(),
 	}
 
 	row, gaps := harness.MeasureBoji(session, sources, meta)
@@ -350,20 +350,21 @@ func renderHarnessRow(out io.Writer, row harness.Row, gaps []string, execution h
 		source = "offline, replayed from " + opts.transcript + ", no arm was executed and no model was called"
 	}
 	passed, total := harness.ChecklistScore(row)
-	dollars := 0.0
-	if row.Dollars != nil {
-		dollars = *row.Dollars
+	modelSpend := "subscription quota, no money, so there is no model dollar figure"
+	if row.ModelDollars != nil {
+		modelSpend = fmt.Sprintf("api key $%.6f", *row.ModelDollars)
 	}
 	caps := execution.Plan.Caps
 
 	_, _ = fmt.Fprintf(out, "\nROW %s %s v%d run%d\n", row.Arm, row.Task, row.Version, row.Run)
 	_, _ = fmt.Fprintf(out, "source: %s\n", source)
-	_, _ = fmt.Fprintf(out, "machine: %s. credential kind: %s. wire: %s. date: %s. commit: %s. cli: %s\n",
-		host, row.CredentialKind, openrouter.Name, row.Start.Format("2006-01-02"), row.Commit, row.CLIVersion)
-	_, _ = fmt.Fprintf(out, "model: %s. judge ledger: %s\n", row.Model, ledgerDir)
+	_, _ = fmt.Fprintf(out, "machine: %s. model credential kind: %s. date: %s. commit: %s. cli: %s\n",
+		host, row.CredentialKind, row.Start.Format("2006-01-02"), row.Commit, row.CLIVersion)
+	_, _ = fmt.Fprintf(out, "model: %s. judge wire: %s. judge ledger: %s\n", row.Model, openrouter.Name, ledgerDir)
 	_, _ = fmt.Fprintf(out, "checklist: %d/%d graded items\n", passed, total)
-	_, _ = fmt.Fprintf(out, "wall clock: %d ms. turns: %d. dollars: $%.6f. end reason: %s\n",
-		row.WallClockMS, row.Turns, dollars, row.EndReason)
+	_, _ = fmt.Fprintf(out, "model spend: %s. jev decisions: $%.6f on the openrouter key\n", modelSpend, row.JudgeDollars)
+	_, _ = fmt.Fprintf(out, "wall clock: %d ms. turns: %d. end reason: %s\n",
+		row.WallClockMS, row.Turns, row.EndReason)
 	_, _ = fmt.Fprintf(out, "tokens: %d in, %d out\n", row.BilledInput, row.BilledOutput)
 	_, _ = fmt.Fprintf(out, "tool calls: read %d, write %d, shell %d, other %d, failed %d\n",
 		row.ToolCalls.Read, row.ToolCalls.Write, row.ToolCalls.Shell, row.ToolCalls.Other, row.ToolCalls.Failed)

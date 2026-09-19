@@ -265,6 +265,25 @@ func TestDiffCostGate(t *testing.T) {
 	}
 }
 
+func TestDiffCostGateCountsFilesTheArmAddedWithoutCommittingThem(t *testing.T) {
+	dir := newRepo(t, baseFiles())
+	writeFiles(t, dir, map[string]string{
+		"ok.go":       okGo + "\n",
+		"brandnew.go": "package main\n\nfunc added() {}\n",
+	})
+
+	outcome, cost := RunDiffCostGate(dir, "start")
+	if outcome.Status != GateStatusPassed {
+		t.Fatalf("got status %q, reason %q", outcome.Status, outcome.Reason)
+	}
+	if cost.Files != 2 {
+		t.Errorf("Files = %d, want 2: an arm that never runs git commit still wrote brandnew.go, and a gate that only reads git diff prices its work at nothing", cost.Files)
+	}
+	if cost.Additions != 4 {
+		t.Errorf("Additions = %d, want 4: one blank line in ok.go and three in brandnew.go", cost.Additions)
+	}
+}
+
 func TestDiffCostGate_BadStartCommitIsCouldNotEvaluate(t *testing.T) {
 	outcome, _ := RunDiffCostGate(newRepo(t, baseFiles()), "not-a-real-commit")
 	if outcome.Status != GateStatusCouldNotEvaluate {

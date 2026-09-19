@@ -141,9 +141,17 @@ func meanAndSpread(values []float64) (mean, spread float64) {
 func dollarsOf(rows []Row) []float64 {
 	var values []float64
 	for _, r := range rows {
-		if r.Dollars != nil {
-			values = append(values, *r.Dollars)
+		if r.ModelDollars != nil {
+			values = append(values, *r.ModelDollars)
 		}
+	}
+	return values
+}
+
+func judgeDollarsOf(rows []Row) []float64 {
+	values := make([]float64, len(rows))
+	for i, r := range rows {
+		values[i] = r.JudgeDollars
 	}
 	return values
 }
@@ -190,13 +198,14 @@ func renderDollarsRatio(b *strings.Builder, task string, full []Row) {
 	mean, spread := map[Arm]float64{}, map[Arm]float64{}
 	for _, a := range arms {
 		rows := byArm[a]
+		judge, _ := meanAndSpread(judgeDollarsOf(rows))
 		if rows[0].CredentialKind == CredentialKindSubscription {
-			fmt.Fprintf(b, "%s: n/a (subscription)\n", a)
+			fmt.Fprintf(b, "%s: model n/a, spent as subscription quota. jev decisions $%.4f on the openrouter key\n", a, judge)
 			continue
 		}
 		m, s := meanAndSpread(dollarsOf(rows))
 		mean[a], spread[a] = m, s
-		fmt.Fprintf(b, "%s: $%.4f (spread $%.4f, %d runs)\n", a, m, s, len(rows))
+		fmt.Fprintf(b, "%s: model $%.4f (spread $%.4f, %d runs). jev decisions $%.4f\n", a, m, s, len(rows), judge)
 	}
 	for i := 0; i < len(arms); i++ {
 		for j := i + 1; j < len(arms); j++ {

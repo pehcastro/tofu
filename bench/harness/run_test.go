@@ -141,24 +141,29 @@ func TestMeasureBojiFillsTheRowFromAStoredTurnRowAndLedger(t *testing.T) {
 		ArmDir:      ArmDir(root, ArmBoji, "hono"),
 		BunBin:      "bun",
 		CheckerPath: CheckerPath(root, 1),
+		StartCommit: OwnStartCommit(ArmDir(root, ArmBoji, "hono")),
 	}
 	row, gaps := MeasureBoji(session, src, meta)
 
 	if row.Turns != int64(len(session.Steps)) {
 		t.Errorf("Turns = %d, want %d from the stored turn row", row.Turns, len(session.Steps))
 	}
-	if row.Dollars == nil {
-		t.Fatal("Dollars is nil, a key run always has a cost even when it is zero")
+	wantCredential, _ := credentialOfSpend(session.Spend)
+	if row.CredentialKind != wantCredential {
+		t.Errorf("CredentialKind = %q, the turn row names its spend %q and that is what decides it", row.CredentialKind, session.Spend)
 	}
-	if *row.Dollars < session.TotalCostUSD {
-		t.Errorf("Dollars %.6f is below the turn row's own cost %.6f, the judge ledger was not added", *row.Dollars, session.TotalCostUSD)
+	if row.CredentialKind == CredentialKindSubscription && row.ModelDollars != nil {
+		t.Errorf("a subscription run has no model dollar figure, got %v", *row.ModelDollars)
+	}
+	if row.CredentialKind == CredentialKindKey && (row.ModelDollars == nil || *row.ModelDollars != session.TotalCostUSD) {
+		t.Errorf("ModelDollars did not come from the turn row's own cost %.6f, got %v", session.TotalCostUSD, row.ModelDollars)
 	}
 	if _, total := ChecklistScore(row); total != gradedChecklistItems {
 		t.Errorf("checklist carried %d graded items, want %d", total, gradedChecklistItems)
 	}
 	for _, gap := range gaps {
-		if strings.HasPrefix(gap, "turns:") || strings.HasPrefix(gap, "tool calls:") {
-			t.Errorf("the turn row fills this gap and it was still reported: %s", gap)
+		if strings.HasPrefix(gap, "gates:") {
+			t.Errorf("the arm directory is its own git repository and the git gates still had no baseline: %s", gap)
 		}
 	}
 }

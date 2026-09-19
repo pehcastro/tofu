@@ -21,8 +21,11 @@ func TestParseBojiTurnsTheRecordedLedgerIntoARow(t *testing.T) {
 	if row.WallClockMS <= 0 {
 		t.Errorf("WallClockMS not positive: %d", row.WallClockMS)
 	}
-	if row.Dollars == nil || *row.Dollars <= 0 {
-		t.Errorf("Dollars not a positive value: %v", row.Dollars)
+	if row.JudgeDollars <= 0 {
+		t.Errorf("JudgeDollars not a positive value: %v", row.JudgeDollars)
+	}
+	if row.ModelDollars != nil {
+		t.Errorf("ParseBoji reads the jev ledger and knows nothing about the model's spend, got %v", *row.ModelDollars)
 	}
 	if row.Model != "typesafe/jev-latest" {
 		t.Errorf("Model = %q, want typesafe/jev-latest", row.Model)
@@ -31,17 +34,8 @@ func TestParseBojiTurnsTheRecordedLedgerIntoARow(t *testing.T) {
 		t.Errorf("Start/End should come from the ledger rows' own timestamps, got %v / %v", row.Start, row.End)
 	}
 
-	wantGaps := []string{"turns:", "tool calls:", "billed input/output tokens:"}
-	for _, want := range wantGaps {
-		found := false
-		for _, g := range gaps {
-			if strings.Contains(g, want) {
-				found = true
-			}
-		}
-		if !found {
-			t.Errorf("gaps did not name %q, got %v", want, gaps)
-		}
+	if len(gaps) != 0 {
+		t.Errorf("a ledger with matching rows leaves nothing for ParseBoji to report as a gap, got %v", gaps)
 	}
 }
 
@@ -51,8 +45,8 @@ func TestParseBojiNoMatchIsNamedNotGuessed(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ParseBoji: %v", err)
 	}
-	if row.Dollars != nil {
-		t.Errorf("no matching rows, Dollars should stay nil, got %v", *row.Dollars)
+	if row.JudgeDollars != 0 {
+		t.Errorf("no matching rows, JudgeDollars should stay zero, got %v", row.JudgeDollars)
 	}
 	found := false
 	for _, g := range gaps {

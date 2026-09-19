@@ -17,6 +17,12 @@ const (
 
 const playgroundRoot = ".playground"
 
+const (
+	claudeArmModel = "opus"
+	codexArmModel  = "gpt-5.6-sol"
+	bojiArmModel   = "claude-opus-5"
+)
+
 type Caps struct {
 	WallClock time.Duration
 	TurnCap   int
@@ -32,6 +38,7 @@ type Plan struct {
 	Dir        string
 	Branch     string
 	Env        []string
+	Model      string
 	Caps       Caps
 }
 
@@ -65,29 +72,35 @@ func BuildPlan(root string, arm Arm, task string, version int) (Plan, error) {
 
 	switch arm {
 	case ArmClaude:
+		plan.Model = claudeArmModel
 		plan.Command = []string{
 			"claude", "-p", prompt,
+			"--model", claudeArmModel,
 			"--output-format", "json",
 			"--permission-mode", "bypassPermissions",
 			"--add-dir", dir,
 		}
 		plan.Env = []string{"ANTHROPIC_API_KEY"}
 	case ArmCodex:
+		plan.Model = codexArmModel
 		plan.Command = []string{
 			"codex", "exec", prompt,
+			"-m", codexArmModel,
 			"--json",
 			"--sandbox", "workspace-write",
 			"-C", dir,
 		}
 		plan.Env = []string{"OPENAI_API_KEY"}
 	case ArmBoji:
+		plan.Model = bojiArmModel
 		plan.Command = []string{
 			"boji", "run", prompt,
 			"--dir", dir,
+			"--model", bojiArmModel,
 			"--max-wall-clock-ms", strconv.FormatInt(caps.WallClock.Milliseconds(), 10),
 			"--max-steps", strconv.Itoa(caps.TurnCap),
 		}
-		plan.Env = []string{"OPENROUTER_KEY"}
+		plan.Env = []string{"OPENROUTER_KEY for the jev gate, the anthropic subscription credential for the model"}
 	default:
 		panic("harness: unknown arm " + string(arm))
 	}
@@ -96,8 +109,8 @@ func BuildPlan(root string, arm Arm, task string, version int) (Plan, error) {
 
 func Fprint(w io.Writer, p Plan) error {
 	_, err := fmt.Fprintf(w,
-		"arm %s task %s version %d\ncommand: %s\ndir: %s\nbranch: %s\nprompt: %s\nenv: %s\ncaps, unset rather than measured, nobody has given a number: wall clock %s, turns %d\n\n",
-		p.Arm, p.Task, p.Version, Shell(p.Command), p.Dir, p.Branch, p.PromptPath, strings.Join(p.Env, ", "),
+		"arm %s task %s version %d\ncommand: %s\ndir: %s\nbranch: %s\nprompt: %s\nmodel: %s\nenv: %s\ncaps, unset rather than measured, nobody has given a number: wall clock %s, turns %d\n\n",
+		p.Arm, p.Task, p.Version, Shell(p.Command), p.Dir, p.Branch, p.PromptPath, p.Model, strings.Join(p.Env, ", "),
 		p.Caps.WallClock, p.Caps.TurnCap)
 	return err
 }

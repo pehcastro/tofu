@@ -39,8 +39,8 @@ func TestParseClaudeTurnsTheRecordedTranscriptIntoARow(t *testing.T) {
 	if row.Turns <= 0 {
 		t.Errorf("Turns not positive: %d", row.Turns)
 	}
-	if row.Dollars == nil || *row.Dollars <= 0 {
-		t.Errorf("Dollars not a positive value: %v", row.Dollars)
+	if row.ModelDollars == nil || *row.ModelDollars <= 0 {
+		t.Errorf("ModelDollars not a positive value: %v", row.ModelDollars)
 	}
 	if row.Model != "claude-haiku-4-5-20251001" {
 		t.Errorf("Model = %q, want claude-haiku-4-5-20251001", row.Model)
@@ -75,7 +75,7 @@ func TestParseClaudeSubscriptionDollarsAreNullEvenWhenTheTranscriptReportsACost(
 	if err != nil {
 		t.Fatalf("ParseClaude: %v", err)
 	}
-	if row.Dollars != nil {
-		t.Errorf("subscription row should have nil Dollars, got %v", *row.Dollars)
+	if row.ModelDollars != nil {
+		t.Errorf("subscription row should have nil ModelDollars, got %v", *row.ModelDollars)
 	}
 }

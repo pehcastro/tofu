@@ -19,13 +19,12 @@ func ParseBoji(dir string, filter ledger.Filter, meta BojiMeta) (Row, []string, 
 		Commit:         meta.Commit,
 	}
 
-	var dollars float64
 	var count int
 	var start, end time.Time
 
 	_, err := ledger.NewReader(dir).Each(filter, func(r ledger.Row) error {
 		count++
-		dollars += r.Cost
+		row.JudgeDollars += r.Cost
 		if row.Model == "" {
 			row.Model = r.Model
 		}
@@ -41,20 +40,13 @@ func ParseBoji(dir string, filter ledger.Filter, meta BojiMeta) (Row, []string, 
 		return Row{}, nil, err
 	}
 
-	gaps := []string{
-		"turns: internal/judge/ledger has no notion of turns yet, there is no loop until E4",
-		"tool calls: internal/judge/ledger has no notion of tool calls yet, there is no loop until E4",
-		"billed input/output tokens: ledger.Row carries Cost but not token counts",
-	}
+	var gaps []string
 	if count == 0 {
-		gaps = append(gaps, "no ledger rows matched the filter, the row below has nothing else to report")
+		gaps = append(gaps, "no ledger rows matched the filter, so this row carries no jev decision, no jev cost and no jev timestamps")
 		return row, gaps, nil
 	}
 
 	row.Start, row.End = start, end
 	row.WallClockMS = end.Sub(start).Milliseconds()
-	if meta.CredentialKind == CredentialKindKey {
-		row.Dollars = &dollars
-	}
 	return row, gaps, nil
 }

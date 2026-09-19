@@ -12,9 +12,9 @@ boji vs codex: wall clock 100000ms vs 92500ms
 claude vs codex: wall clock not comparable, credential kinds differ (subscription vs key)
 
 DOLLARS PER PASSING RUN hono-routes
-boji: $0.1100 (spread $0.0000, 1 runs)
-claude: n/a (subscription)
-codex: $0.1100 (spread $0.0200, 2 runs)
+boji: model $0.1100 (spread $0.0000, 1 runs). jev decisions $0.0000
+claude: model n/a, spent as subscription quota. jev decisions $0.0000 on the openrouter key
+codex: model $0.1100 (spread $0.0200, 2 runs). jev decisions $0.0000
 boji vs claude: dollars not comparable, credential kinds differ (key vs subscription)
 boji vs codex: no difference (dollars diff $0.0000, spread $0.0200)
 claude vs codex: dollars not comparable, credential kinds differ (subscription vs key)

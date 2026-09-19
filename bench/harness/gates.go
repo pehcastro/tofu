@@ -1,6 +1,7 @@
 package harness
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"os"
@@ -162,6 +163,29 @@ func RunDiffCostGate(dir, startCommit string) (GateOutcome, DiffCost) {
 			cost.Deletions += d
 		}
 	}
+
+	added, err := exec.Command("git", "-C", dir, "ls-files", "--others", "--exclude-standard").Output()
+	if err != nil {
+		return GateOutcome{Name: "diff_cost", Status: GateStatusCouldNotEvaluate, Reason: err.Error()}, DiffCost{}
+	}
+	var uncommitted []string
+	for _, line := range strings.Split(string(added), "\n") {
+		path := strings.TrimSpace(line)
+		if path == "" {
+			continue
+		}
+		body, err := os.ReadFile(filepath.Join(dir, filepath.FromSlash(path)))
+		if err != nil {
+			return GateOutcome{Name: "diff_cost", Status: GateStatusCouldNotEvaluate, Reason: err.Error()}, DiffCost{}
+		}
+		cost.Files++
+		cost.Additions += bytes.Count(body, []byte("\n"))
+		uncommitted = append(uncommitted, path)
+	}
+
 	reason := fmt.Sprintf("files %d, additions %d, deletions %d", cost.Files, cost.Additions, cost.Deletions)
+	if len(uncommitted) > 0 {
+		reason += ", never committed: " + strings.Join(uncommitted, " ")
+	}
 	return GateOutcome{Name: "diff_cost", Status: GateStatusPassed, Reason: reason}, cost
 }

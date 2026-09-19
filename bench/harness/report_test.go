@@ -43,7 +43,7 @@ func routesFixture() []Row {
 			Arm: ArmBoji, Task: "hono-routes", Version: 1, Run: 2,
 			CredentialKind: CredentialKindKey,
 			WallClockMS:    100000,
-			Dollars:        dollarPtr(0.11),
+			ModelDollars:   dollarPtr(0.11),
 			Turns:          4,
 			Gates:          gatesOK(),
 			Checklist:      checklistFullPass(),
@@ -71,7 +71,7 @@ func routesFixture() []Row {
 			Arm: ArmCodex, Task: "hono-routes", Version: 1, Run: 1,
 			CredentialKind: CredentialKindKey,
 			WallClockMS:    90000,
-			Dollars:        dollarPtr(0.10),
+			ModelDollars:   dollarPtr(0.10),
 			Turns:          4,
 			Gates:          gatesOK(),
 			Checklist:      checklistFullPass(),
@@ -80,7 +80,7 @@ func routesFixture() []Row {
 			Arm: ArmCodex, Task: "hono-routes", Version: 1, Run: 2,
 			CredentialKind: CredentialKindKey,
 			WallClockMS:    95000,
-			Dollars:        dollarPtr(0.12),
+			ModelDollars:   dollarPtr(0.12),
 			Turns:          5,
 			Gates:          gatesOK(),
 			Checklist:      checklistFullPass(),
@@ -113,7 +113,7 @@ func TestGateFailureExcludedButShown(t *testing.T) {
 	if !strings.Contains(out, "boji v1 run1: FAIL build") {
 		t.Fatalf("failing row missing from gates door:\n%s", out)
 	}
-	if !strings.Contains(out, "boji: $0.1100 (spread $0.0000, 1 runs)") {
+	if !strings.Contains(out, "boji: model $0.1100 (spread $0.0000, 1 runs)") {
 		t.Fatalf("failed run1 leaked into boji's dollars-per-passing-run figure, only run2 must count:\n%s", out)
 	}
 	if !strings.Contains(out, "boji: 4.00 (spread 0.00, 1 runs)") {
@@ -139,7 +139,7 @@ func TestMixingCredentialKindsRefusesDollars(t *testing.T) {
 func TestSubscriptionDollarsAreAbsentNotZero(t *testing.T) {
 	out := Render(routesFixture())
 
-	if !strings.Contains(out, "claude: n/a (subscription)") {
+	if !strings.Contains(out, "claude: model n/a, spent as subscription quota") {
 		t.Fatalf("subscription arm's dollars did not render as absent:\n%s", out)
 	}
 	if strings.Contains(out, "claude: $0.0000") {

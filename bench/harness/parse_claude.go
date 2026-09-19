@@ -54,7 +54,7 @@ func ParseClaude(data []byte, meta ClaudeMeta) (Row, []string, error) {
 	}
 
 	if meta.CredentialKind == CredentialKindKey {
-		row.Dollars = &t.TotalCostUSD
+		row.ModelDollars = &t.TotalCostUSD
 	}
 
 	row.EndReason = EndReasonDone
