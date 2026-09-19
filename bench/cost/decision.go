@@ -8,13 +8,16 @@ const (
 	Refused Verdict = "refused"
 )
 
-const decisionThreshold = 0.5
+type OperatingPoint struct {
+	UserRequestedOverrideAt float64 `json:"user_requested_override_at"`
+	ApprovalBlockAt         float64 `json:"approval_block_at"`
+}
 
-func Decide(userRequested, approval float64) Verdict {
-	if userRequested >= decisionThreshold {
+func DecideByApproval(userRequested, approval float64, point OperatingPoint) Verdict {
+	if userRequested >= point.UserRequestedOverrideAt {
 		return Proceed
 	}
-	if approval >= decisionThreshold {
+	if approval >= point.ApprovalBlockAt {
 		return Block
 	}
 	return Proceed

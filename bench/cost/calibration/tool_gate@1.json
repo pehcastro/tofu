@@ -1,0 +1,19 @@
+{
+  "policy": "tool_gate",
+  "policy_version": 1,
+  "questions": "tool_gate",
+  "questions_version": 1,
+  "build": "typesafe/jev-1.13-20260917",
+  "mode": "enforced",
+  "sample_floor": 300,
+  "n_fit": 0,
+  "n_verify": 0,
+  "ece": null,
+  "map": "identity",
+  "rule": "the arm proceeds when user_requested is at or above user_requested_override_at, otherwise blocks when approval is at or above approval_block_at",
+  "thresholds": {
+    "user_requested_override_at": 0.5,
+    "approval_block_at": 0.5
+  },
+  "provenance": "the point the jev, opus and fable arms ran at in bench/cost/report-2026-09-19.md. It was a literal in bench/cost/decision.go until BOJI-091 moved it here. Nobody fitted it and nobody verified it, so n_fit and n_verify are 0 and the point resolves to shadow"
+}

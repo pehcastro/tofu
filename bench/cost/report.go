@@ -49,31 +49,31 @@ func renderCorpus(b *strings.Builder, result Result) {
 }
 
 func renderOperatingPoint(b *strings.Builder, result Result) {
-	c := result.Calibration
-	b.WriteString("## The operating point every probabilistic arm ran at\n\n")
-	fmt.Fprintf(b, "Read from `%s`, not from code: user_requested_override_at %.2f, approval_block_at %.2f. %s\n\n",
-		calibrationFilePath, c.Point.UserRequestedOverrideAt, c.Point.ApprovalBlockAt, c.Rule)
+	p := result.Policy
+	b.WriteString("## The gate every probabilistic arm decided through\n\n")
+	fmt.Fprintf(b, "`%s`, loaded and linted by `policy.LintFile` and decided by `policy.Decide`, the same two calls the engine makes. The arm holds no decision rule of its own.\n\n", p.File)
+	fmt.Fprintf(b, "Thresholds: %s ask at %.2f and deny at %.2f, %s relaxes below %.2f, %s relaxes above %.2f, %s blocks at %.2f. allow is scored as proceed; ask and deny are both scored as block, because either one stops the call.\n\n",
+		p.RiskQuestion, p.Thresholds.RiskAskAt, p.Thresholds.RiskDenyAt,
+		p.ApprovalQuestion, p.Thresholds.ApprovalRelaxAt,
+		p.UserRequestedQuestion, p.Thresholds.UserRequestedRelaxAt,
+		p.FromUntrustedQuestion, p.Thresholds.FromUntrustedBlockAt)
 	reason := result.Resolution.Reason
 	if reason == "" {
 		reason = "the fit matches the build, the questions version and the sample floor"
 	}
-	fmt.Fprintf(b, "The file declares %s and resolves to %s: %s. It was fitted on %d cases and verified on %d. %s\n\n",
-		c.Mode, result.Resolution.Mode, reason, c.NFit, c.NVerify, c.Provenance)
+	fmt.Fprintf(b, "The policy declares %s and resolves to %s: %s. Nothing here was fitted, so every number in it is a person's choice and the sample floor of %d is unmet.\n\n",
+		p.Mode, result.Resolution.Mode, reason, p.SampleFloor)
+	fmt.Fprintf(b, "Raw answers for every arm and every case are in `bench/cost/%s`.\n\n", result.AnswersFile)
 }
 
 func renderHeadline(b *strings.Builder, result Result) {
-	h := result.Headline
 	b.WriteString("## Headline\n\n")
-	if h.HasRatio {
-		fmt.Fprintf(b, "Jev decides for $%.6f per correct decision. The %s arm decides for $%.6f, %.0f times Jev. Both sides are money on the same credential kind, so the ratio is defined and the division is legal.\n\n",
-			h.JevMoneyPerCorrect, h.FrontierArm, h.FrontierMoneyPerCorrect, h.Ratio)
-		return
-	}
-	fmt.Fprintf(b, "There is no ratio to report. Jev costs $%.6f of money per correct decision. The %s arm's cost is %s, so dividing one by the other would divide dollars by something that is not dollars.\n\n",
-		h.JevMoneyPerCorrect, h.FrontierArm, h.FrontierUnit)
-	fmt.Fprintf(b, "What survives the split is a comparison in a unit both arms report: %d billed input tokens per correct decision for jev against %d for %s, and the wall clock in the tables below. %s\n\n",
-		h.JevTokensPerCorrect, h.FrontierTokensPerCorrect, h.FrontierArm, ledger.UnitsDoNotAdd)
+	fmt.Fprintf(b, "Jev decides for $%.6f per correct decision, over %d billed input tokens per correct decision. %s\n\n",
+		result.JevMoneyPerCorrect, result.JevTokensPerCorrect, retiredFrontierArms)
+	fmt.Fprintf(b, "The two arms left beside it are free and deterministic: a regular expression over the probe string and a constant that always proceeds. They are the baselines that matter, because a typed decision that cannot beat a constant is not buying anything. %s\n\n", ledger.UnitsDoNotAdd)
 }
+
+const retiredFrontierArms = "There is no frontier arm and no ratio in this run. The opus and fable arms were retired on 2026-09-19: the OpenRouter key is scoped to Jev on the account side, and the project's rule is that a frontier comparison runs the vendor's own command line on the owner's subscription rather than paying per token through an API key. Their recorded numbers stand in report-2026-09-18.md and report-2026-09-19.md, which are unedited"
 
 func renderAgreement(b *strings.Builder, result Result) {
 	b.WriteString("## Agreement with the label\n\n")
@@ -131,14 +131,8 @@ func renderCostPerCorrect(b *strings.Builder, result Result) {
 func renderContextAvoided(b *strings.Builder, result Result) {
 	b.WriteString("## Context tokens avoided\n\n")
 	fmt.Fprintf(b, "Sum of billed input tokens across the jev arm's calls, the state plus the question set a planning model would otherwise have carried in its own context to make these decisions itself: %d tokens.\n\n", result.ContextTokensAvoided)
-	if result.FrontierUnit != ledger.UnitMoney {
-		fmt.Fprintf(b, "Those tokens carry no dollar figure in this run: the frontier arms' cost is %s, so there is no measured rate per token to multiply by, and this project has no price table to invent one from. The avoided quantity is %d tokens and stays in tokens.\n\n",
-			result.FrontierUnit, result.ContextTokensAvoided)
-		return
-	}
-	fmt.Fprintf(b, "Frontier rate, measured from this run's own %s and %s calls rather than a price table: $%.8f over %d billed input tokens combined = $%.10f per token.\n\n",
-		ModelOpus, ModelFable, result.FrontierRateFromMoney, result.FrontierRateFromTokens, result.FrontierRatePerToken)
-	fmt.Fprintf(b, "Arithmetic: %d tokens x $%.10f/token = $%.6f of money avoided at the frontier rate.\n\n", result.ContextTokensAvoided, result.FrontierRatePerToken, result.ContextDollarsAvoided)
+	fmt.Fprintf(b, "Those tokens carry no dollar figure. %s, so this run measures no frontier rate per token to multiply by, and this project has no price table to invent one from. The avoided quantity is %d tokens and stays in tokens.\n\n",
+		retiredFrontierArms, result.ContextTokensAvoided)
 }
 
 func renderDisagreements(b *strings.Builder, result Result) {
@@ -147,12 +141,16 @@ func renderDisagreements(b *strings.Builder, result Result) {
 		b.WriteString("No arm disagreed with its label on any case.\n\n")
 		return
 	}
-	b.WriteString("Every case an arm answered against its label, named. user_requested and approval are the two answers the decision reads; a refusal carries neither.\n\n")
-	b.WriteString("| Arm | Case | Answer | Label | Labelled by | user_requested | approval | The call |\n|---|---|---|---|---|---|---|---|\n")
+	fmt.Fprintf(b, "Every case an arm answered against its label, named. The four answers are the ones `%s` reads, and the comparison column names the threshold that decided; a refusal carries none of them.\n\n", result.Policy.File)
+	b.WriteString("| Arm | Case | Answer | Label | Labelled by | risk | approval | user_requested | from_untrusted | Decided by | The call |\n|---|---|---|---|---|---|---|---|---|---|---|\n")
 	for _, d := range result.Disagreements {
-		signals := fmt.Sprintf("%.2f | %.2f", d.UserRequested, d.Approval)
+		p := result.Policy
+		signals := fmt.Sprintf("%.2f | %.2f | %.2f | %.2f | %s at %.2f",
+			d.Answers[p.RiskQuestion].Score, d.Answers[p.ApprovalQuestion].Noul,
+			d.Answers[p.UserRequestedQuestion].Noul, d.Answers[p.FromUntrustedQuestion].Noul,
+			d.Reason.Comparison, d.Reason.Threshold)
 		if d.Answer == Refused {
-			signals = "refused | " + oneLine(d.Refusal)
+			signals = "refused | | | | " + oneLine(d.Refusal)
 		}
 		fmt.Fprintf(b, "| %s | %s | %s | %s | %s | %s | `%s` |\n",
 			d.Arm, d.Case, d.Answer, d.Label, d.LabelBy, signals, oneLine(d.Probe))

@@ -3,6 +3,8 @@ package cost
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 	"time"
 
 	benchapi "boji/bench/api"
@@ -13,19 +15,19 @@ import (
 )
 
 type CaseResult struct {
-	Case          string
-	ModelID       string
-	InputTokens   int
-	OutputTokens  int
-	Money         ledger.Money
-	List          ledger.ListPrice
-	LatencyMS     float64
-	UserRequested float64
-	Approval      float64
-	Verdict       Verdict
-	Label         Verdict
-	Correct       bool
-	Refusal       string
+	Case         string
+	ModelID      string
+	InputTokens  int
+	OutputTokens int
+	Money        ledger.Money
+	List         ledger.ListPrice
+	LatencyMS    float64
+	Answers      map[string]jev.Answer
+	Reason       policy.Reason
+	Verdict      Verdict
+	Label        Verdict
+	Correct      bool
+	Refusal      string
 }
 
 type ArmResult struct {
@@ -43,26 +45,15 @@ type ArmResult struct {
 }
 
 type Disagreement struct {
-	Arm           string
-	Case          string
-	Probe         string
-	LabelBy       corpus.Labeller
-	UserRequested float64
-	Approval      float64
-	Answer        Verdict
-	Label         Verdict
-	Refusal       string
-}
-
-type Headline struct {
-	FrontierArm              string
-	FrontierUnit             ledger.Unit
-	JevMoneyPerCorrect       ledger.Money
-	FrontierMoneyPerCorrect  ledger.Money
-	JevTokensPerCorrect      int
-	FrontierTokensPerCorrect int
-	Ratio                    float64
-	HasRatio                 bool
+	Arm     string
+	Case    string
+	Probe   string
+	LabelBy corpus.Labeller
+	Answers map[string]jev.Answer
+	Reason  policy.Reason
+	Answer  Verdict
+	Label   Verdict
+	Refusal string
 }
 
 type Pair struct {
@@ -89,24 +80,25 @@ type CorpusCount struct {
 }
 
 type Result struct {
-	GeneratedAt            time.Time
-	Corpus                 CorpusCount
-	Calibration            Calibration
-	Resolution             policy.Resolution
-	Arms                   []ArmResult
-	Pairs                  []Pair
-	Disagreements          []Disagreement
-	ContextTokensAvoided   int
-	ContextDollarsAvoided  ledger.Money
-	FrontierUnit           ledger.Unit
-	FrontierRatePerToken   float64
-	FrontierRateFromMoney  ledger.Money
-	FrontierRateFromTokens int
-	Total                  ledger.Spend
-	Headline               Headline
+	GeneratedAt          time.Time
+	Corpus               CorpusCount
+	Policy               policy.Policy
+	Resolution           policy.Resolution
+	AnswersFile          string
+	Arms                 []ArmResult
+	Pairs                []Pair
+	Disagreements        []Disagreement
+	ContextTokensAvoided int
+	JevMoneyPerCorrect   ledger.Money
+	JevTokensPerCorrect  int
+	Total                ledger.Spend
 }
 
 func Run(ctx context.Context, key string) (Result, error) {
+	root, err := os.Getwd()
+	if err != nil {
+		return Result{}, err
+	}
 	records, err := corpus.GateRecords()
 	if err != nil {
 		return Result{}, err
@@ -119,7 +111,7 @@ func Run(ctx context.Context, key string) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	calibration, resolution, err := GateCalibration()
+	pol, resolution, err := gatePolicy(root)
 	if err != nil {
 		return Result{}, err
 	}
@@ -137,23 +129,7 @@ func Run(ctx context.Context, key string) (Result, error) {
 		heldOut = append(heldOut, record)
 	}
 
-	jevArm, err := runJev(ctx, key, heldOut, battery, calibration.Point)
-	if err != nil {
-		return Result{}, err
-	}
-	opusArm, err := runModel(ctx, key, ModelOpus, heldOut, battery, calibration.Point)
-	if err != nil {
-		return Result{}, err
-	}
-	fableArm, err := runModel(ctx, key, ModelFable, heldOut, battery, calibration.Point)
-	if err != nil {
-		return Result{}, err
-	}
-	regexArm, err := runRegex(heldOut)
-	if err != nil {
-		return Result{}, err
-	}
-	floorArm, err := runAlwaysProceed(heldOut)
+	jevArm, err := runJev(ctx, key, heldOut, battery, pol)
 	if err != nil {
 		return Result{}, err
 	}
@@ -161,9 +137,14 @@ func Run(ctx context.Context, key string) (Result, error) {
 	result := Result{
 		GeneratedAt: time.Now(),
 		Corpus:      countCorpus(records, heldOut, split),
-		Calibration: calibration,
+		Policy:      pol,
 		Resolution:  resolution,
-		Arms:        []ArmResult{jevArm, regexArm, opusArm, fableArm, floorArm},
+		Arms:        []ArmResult{jevArm, runRegex(heldOut), runAlwaysProceed(heldOut)},
+	}
+	result.AnswersFile = answersFilename(result.GeneratedAt)
+	answersSource := fmt.Sprintf("the paid run of %s, decided through %s", result.GeneratedAt.Format(time.RFC3339), pol.File)
+	if err := writeAnswers(filepath.Join(root, "bench", "cost", result.AnswersFile), answerRows(result.Arms, pol, answersSource)); err != nil {
+		return Result{}, err
 	}
 	for _, arm := range result.Arms {
 		result.Total = result.Total.Plus(arm.Total)
@@ -175,7 +156,7 @@ func Run(ctx context.Context, key string) (Result, error) {
 			probe, _ := probeOf(record.State)
 			result.Disagreements = append(result.Disagreements, Disagreement{
 				Arm: arm.Arm, Case: c.Case, Probe: probe, LabelBy: record.LabelBy,
-				UserRequested: c.UserRequested, Approval: c.Approval,
+				Answers: c.Answers, Reason: c.Reason,
 				Answer: c.Verdict, Label: c.Label, Refusal: c.Refusal,
 			})
 		}
@@ -183,14 +164,10 @@ func Run(ctx context.Context, key string) (Result, error) {
 	result.Pairs = compare(result.Arms)
 
 	result.ContextTokensAvoided = jevArm.TotalInputTokens
-	result.FrontierUnit = opusArm.Unit
-	result.FrontierRateFromMoney = opusArm.Total.Money + fableArm.Total.Money
-	result.FrontierRateFromTokens = opusArm.TotalInputTokens + fableArm.TotalInputTokens
-	if result.FrontierUnit == ledger.UnitMoney && result.FrontierRateFromTokens > 0 {
-		result.FrontierRatePerToken = float64(result.FrontierRateFromMoney) / float64(result.FrontierRateFromTokens)
-		result.ContextDollarsAvoided = ledger.Money(float64(result.ContextTokensAvoided) * result.FrontierRatePerToken)
+	result.JevMoneyPerCorrect = jevArm.MoneyPerCorrect
+	if jevArm.CorrectCount > 0 {
+		result.JevTokensPerCorrect = jevArm.TotalInputTokens / jevArm.CorrectCount
 	}
-	result.Headline = headline(jevArm, opusArm)
 
 	return result, nil
 }
@@ -227,27 +204,7 @@ func countCorpus(records, heldOut []corpus.Record, split corpus.Split) CorpusCou
 	return count
 }
 
-func headline(jevArm, frontierArm ArmResult) Headline {
-	line := Headline{
-		FrontierArm:        frontierArm.Arm,
-		FrontierUnit:       frontierArm.Unit,
-		JevMoneyPerCorrect: jevArm.MoneyPerCorrect,
-	}
-	if jevArm.CorrectCount > 0 {
-		line.JevTokensPerCorrect = jevArm.TotalInputTokens / jevArm.CorrectCount
-	}
-	if frontierArm.CorrectCount > 0 {
-		line.FrontierTokensPerCorrect = frontierArm.TotalInputTokens / frontierArm.CorrectCount
-		line.FrontierMoneyPerCorrect = frontierArm.MoneyPerCorrect
-	}
-	if jevArm.Unit == ledger.UnitMoney && frontierArm.Unit == ledger.UnitMoney && jevArm.MoneyPerCorrect > 0 {
-		line.Ratio = float64(frontierArm.MoneyPerCorrect) / float64(jevArm.MoneyPerCorrect)
-		line.HasRatio = true
-	}
-	return line
-}
-
-func buildArm(name string, records []corpus.Record, ask func(corpus.Record) (CaseResult, error)) (ArmResult, error) {
+func buildArm(name string, records []corpus.Record, ask func(corpus.Record) (CaseResult, error)) ArmResult {
 	arm := ArmResult{Arm: name, Unit: ledger.UnitMoney}
 	for _, record := range records {
 		result, err := ask(record)
@@ -273,87 +230,61 @@ func buildArm(name string, records []corpus.Record, ask func(corpus.Record) (Cas
 		arm.MoneyPerCorrect = arm.Total.Money / ledger.Money(arm.CorrectCount)
 		arm.ListPerCorrect = arm.Total.List / ledger.ListPrice(arm.CorrectCount)
 	}
-	return arm, nil
+	return arm
 }
 
 func msSince(d time.Duration) float64 {
 	return float64(d) / float64(time.Millisecond)
 }
 
-func runJev(ctx context.Context, key string, records []corpus.Record, battery []jev.Question, point OperatingPoint) (ArmResult, error) {
+func runJev(ctx context.Context, key string, records []corpus.Record, battery []jev.Question, pol policy.Policy) (ArmResult, error) {
 	wire, err := benchapi.NewWire(key)
 	if err != nil {
 		return ArmResult{}, err
 	}
-	return buildArm("jev", records, func(record corpus.Record) (CaseResult, error) {
+	arm := buildArm("jev", records, func(record corpus.Record) (CaseResult, error) {
 		call := benchapi.Ask(ctx, wire, jev.Request{State: record.State, Questions: battery})
 		if call.Err != nil {
 			return CaseResult{}, call.Err
 		}
-		userRequested := call.Response.Answers["user_requested"].Noul
-		approval := call.Response.Answers["approval"].Noul
-		verdict := Decide(userRequested, approval, point)
+		verdict, reason, err := decide(call.Response.Answers, pol)
+		if err != nil {
+			return CaseResult{}, err
+		}
 		label := verdictOf(record.Label)
 		return CaseResult{
 			Case: record.ID, ModelID: call.Response.Build,
 			InputTokens: call.Response.Usage.InputTokens, OutputTokens: call.Response.Usage.OutputTokens,
 			Money: ledger.Money(call.Response.Usage.Cost), LatencyMS: msSince(call.Raw.Latency),
-			UserRequested: userRequested, Approval: approval, Verdict: verdict, Label: label, Correct: verdict == label,
-		}, nil
-	})
-}
-
-func runModel(ctx context.Context, key, model string, records []corpus.Record, battery []jev.Question, point OperatingPoint) (ArmResult, error) {
-	wire, err := NewModelWire(key, model)
-	if err != nil {
-		return ArmResult{}, err
-	}
-	name := "opus"
-	if model == ModelFable {
-		name = "fable"
-	}
-	return buildArm(name, records, func(record corpus.Record) (CaseResult, error) {
-		modelResult, err := wire.Ask(ctx, record.State, battery)
-		if err != nil {
-			return CaseResult{}, err
-		}
-		label := verdictOf(record.Label)
-		if modelResult.Refused {
-			return CaseResult{
-				Case: record.ID, ModelID: modelResult.Model,
-				InputTokens: modelResult.InputTokens, OutputTokens: modelResult.OutputTokens,
-				Money: ledger.Money(modelResult.Cost), LatencyMS: msSince(modelResult.Latency),
-				Verdict: Refused, Label: label, Correct: false, Refusal: modelResult.Refusal,
-			}, nil
-		}
-		verdict := Decide(modelResult.Answer.UserRequested, modelResult.Answer.Approval, point)
-		return CaseResult{
-			Case: record.ID, ModelID: modelResult.Model,
-			InputTokens: modelResult.InputTokens, OutputTokens: modelResult.OutputTokens,
-			Money: ledger.Money(modelResult.Cost), LatencyMS: msSince(modelResult.Latency),
-			UserRequested: modelResult.Answer.UserRequested, Approval: modelResult.Answer.Approval,
+			Answers: call.Response.Answers, Reason: reason,
 			Verdict: verdict, Label: label, Correct: verdict == label,
 		}, nil
 	})
+	return arm, nil
 }
 
-func runAlwaysProceed(records []corpus.Record) (ArmResult, error) {
+const (
+	modelRegex    = "regexp"
+	modelConstant = "constant"
+)
+
+func runAlwaysProceed(records []corpus.Record) ArmResult {
 	return buildArm("always-proceed", records, func(record corpus.Record) (CaseResult, error) {
 		label := verdictOf(record.Label)
 		return CaseResult{
-			Case: record.ID, ModelID: "constant",
+			Case: record.ID, ModelID: modelConstant,
 			Verdict: Proceed, Label: label, Correct: label == Proceed,
 		}, nil
 	})
 }
 
-func runRegex(records []corpus.Record) (ArmResult, error) {
+func runRegex(records []corpus.Record) ArmResult {
 	return buildArm("regex", records, func(record corpus.Record) (CaseResult, error) {
 		start := time.Now()
 		verdict := RegexDecide(probeOf(record.State))
 		label := verdictOf(record.Label)
 		return CaseResult{
-			Case: record.ID, ModelID: "regexp", LatencyMS: msSince(time.Since(start)),
+			Case: record.ID, ModelID: modelRegex, LatencyMS: msSince(time.Since(start)),
 			Verdict: verdict, Label: label, Correct: verdict == label,
 		}, nil
 	})

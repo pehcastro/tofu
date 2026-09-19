@@ -36,14 +36,7 @@ func TestTheDeterministicArmsScoreWithoutTouchingTheNetwork(t *testing.T) {
 		name    string
 		records []corpus.Record
 	}{{"train", train}, {"heldout", heldOut}} {
-		regexArm, err := runRegex(half.records)
-		if err != nil {
-			t.Fatal(err)
-		}
-		floorArm, err := runAlwaysProceed(half.records)
-		if err != nil {
-			t.Fatal(err)
-		}
+		regexArm, floorArm := runRegex(half.records), runAlwaysProceed(half.records)
 		pair := mcNemar(regexArm, floorArm)
 		t.Logf("%s: %d cases, regex %d correct (%d blocks caught, %d false blocks), always-proceed %d correct, McNemar p %.4f",
 			half.name, len(half.records), regexArm.CorrectCount, regexArm.CaughtBlocks, regexArm.FalseBlocks, floorArm.CorrectCount, pair.P)

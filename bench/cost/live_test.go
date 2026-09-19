@@ -13,12 +13,14 @@ import (
 	"boji/internal/judge/jev/wire/openrouter"
 )
 
+const repoRoot = "../.."
+
 func liveKey(t *testing.T, gate string) string {
 	t.Helper()
 	if os.Getenv(gate) != "1" {
 		t.Skipf("set %s=1 to spend money on the jev, opus and fable arms", gate)
 	}
-	key, err := jev.Key(filepath.Join("..", "..", ".env"))
+	key, err := jev.Key(filepath.Join(repoRoot, ".env"))
 	if err != nil {
 		t.Fatalf("no credential: %v", err)
 	}
@@ -46,27 +48,18 @@ func TestLiveProbeOverTheFirstHeldOutCases(t *testing.T) {
 	probe := heldOut[:count]
 
 	ctx := context.Background()
-	point := publishedPoint(t)
-	jevArm, err := runJev(ctx, key, probe, battery, point)
+	pol, _ := shippedGate(t)
+	jevArm, err := runJev(ctx, key, probe, battery, pol)
 	if err != nil {
 		t.Fatalf("the jev arm stopped: %v", err)
 	}
-	opusArm, err := runModel(ctx, key, ModelOpus, probe, battery, point)
-	if err != nil {
-		t.Fatalf("the opus arm stopped: %v", err)
-	}
-	fableArm, err := runModel(ctx, key, ModelFable, probe, battery, point)
-	if err != nil {
-		t.Fatalf("the fable arm stopped: %v", err)
-	}
-	for _, arm := range []ArmResult{jevArm, opusArm, fableArm} {
-		t.Logf("%s: %d calls, %d correct, %d input tokens, $%.6f, p50 %.0f ms, model %s",
-			arm.Arm, len(arm.Cases), arm.CorrectCount, arm.TotalInputTokens, arm.Total.Money, medianLatency(arm), modelOf(arm))
-	}
+	t.Logf("jev: %d calls, %d correct, %d input tokens, $%.6f, p50 %.0f ms, model %s",
+		len(jevArm.Cases), jevArm.CorrectCount, jevArm.TotalInputTokens, jevArm.Total.Money, medianLatency(jevArm), modelOf(jevArm))
 }
 
 func TestLiveEveryArmOverTheHeldOutHalf(t *testing.T) {
 	key := liveKey(t, "BOJI_LIVE_COST")
+	t.Chdir(repoRoot)
 	result, err := Run(context.Background(), key)
 	if err != nil {
 		t.Fatalf("the run stopped: %v", err)
@@ -81,7 +74,7 @@ func TestLiveEveryArmOverTheHeldOutHalf(t *testing.T) {
 		Wire:           openrouter.Name,
 		Date:           result.GeneratedAt.Format("2006-01-02"),
 	})
-	path := Filename(result.GeneratedAt)
+	path := filepath.Join("bench", "cost", Filename(result.GeneratedAt))
 	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
 		t.Fatalf("writing %s: %v", path, err)
 	}
@@ -92,5 +85,5 @@ func TestLiveEveryArmOverTheHeldOutHalf(t *testing.T) {
 	for _, pair := range result.Pairs {
 		t.Logf("%s vs %s: %+d, p %.4f, separated %v", pair.Left, pair.Right, pair.Difference, pair.P, pair.SeparatedAt05)
 	}
-	t.Logf("total spend $%.6f, wrote bench/cost/%s", result.Total.Money, path)
+	t.Logf("total spend $%.6f, wrote %s and bench/cost/%s", result.Total.Money, path, result.AnswersFile)
 }
