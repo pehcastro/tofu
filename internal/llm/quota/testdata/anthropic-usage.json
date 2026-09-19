@@ -1,0 +1,24 @@
+{
+  "five_hour": { "utilization": 17, "resets_at": "2026-06-03T12:30:00Z" },
+  "seven_day": { "utilization": 75, "resets_at": "2026-06-06T00:00:00Z" },
+  "limits": [
+    {
+      "kind": "weekly_all",
+      "group": "weekly",
+      "percent": 75,
+      "severity": "normal",
+      "resets_at": "2026-06-06T00:00:00Z",
+      "scope": null,
+      "is_active": true
+    },
+    {
+      "kind": "weekly_scoped",
+      "group": "weekly",
+      "percent": 100,
+      "severity": "high",
+      "resets_at": "2026-06-06T00:00:00Z",
+      "scope": { "model": { "display_name": "Fable", "id": null }, "surface": null },
+      "is_active": false
+    }
+  ]
+}

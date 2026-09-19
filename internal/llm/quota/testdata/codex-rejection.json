@@ -1,0 +1,9 @@
+{
+  "error": {
+    "type": "usage_limit_reached",
+    "code": "usage_limit_reached",
+    "message": "You have hit your usage limit.",
+    "plan_type": "Plus",
+    "resets_at": 1780405800
+  }
+}
