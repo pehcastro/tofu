@@ -11,9 +11,20 @@ import (
 var elideCatalog embed.FS
 
 type Config struct {
-	ElideAboveBytes int
-	HeadBytes       int
-	TailBytes       int
+	ElideAboveBytes        int
+	HeadBytes              int
+	TailBytes              int
+	BytesPerThousandTokens int
+	CompactFloorBytes      int
+}
+
+const (
+	conservativeBytesPerThousandTokens = 2000
+	conservativeCompactFloorBytes      = 256
+)
+
+func (c Config) Tokens(text string) int {
+	return len(text) * 1000 / c.BytesPerThousandTokens
 }
 
 func LoadConfig() (Config, error) {
@@ -43,12 +54,20 @@ func ParseConfig(data []byte) (Config, error) {
 		fields[key] = n
 	}
 	cfg := Config{
-		ElideAboveBytes: fields["elide_above_bytes"],
-		HeadBytes:       fields["head_bytes"],
-		TailBytes:       fields["tail_bytes"],
+		ElideAboveBytes:        fields["elide_above_bytes"],
+		HeadBytes:              fields["head_bytes"],
+		TailBytes:              fields["tail_bytes"],
+		BytesPerThousandTokens: fields["bytes_per_thousand_tokens"],
+		CompactFloorBytes:      fields["compact_floor_bytes"],
 	}
 	if cfg.ElideAboveBytes <= 0 {
 		return Config{}, fmt.Errorf("recall: elide catalog needs a positive elide_above_bytes")
+	}
+	if cfg.BytesPerThousandTokens <= 0 {
+		cfg.BytesPerThousandTokens = conservativeBytesPerThousandTokens
+	}
+	if cfg.CompactFloorBytes <= 0 {
+		cfg.CompactFloorBytes = conservativeCompactFloorBytes
 	}
 	return cfg, nil
 }
