@@ -1,0 +1,5 @@
+id: comments
+kind: structural
+checker: comments
+mode: shadow
+notes: parses go/ast through internal/sys.FileCommentViolations, the same function boji lint comments already runs

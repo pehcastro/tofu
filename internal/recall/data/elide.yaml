@@ -1,0 +1,3 @@
+elide_above_bytes: 4096
+head_bytes: 512
+tail_bytes: 512

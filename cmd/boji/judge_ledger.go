@@ -69,6 +69,9 @@ func appendRow(state any, set battery, in rowInput) (ledger.Row, error) {
 		row.Policy = set.Policy.Name
 		row.PolicyVersion = set.Policy.PolicyVersion
 		row.Reason = toLedgerReason(reason)
+		if set.ModeReason != "" {
+			row.Reason.ModeReason = &set.ModeReason
+		}
 	}
 	if in.decision != nil {
 		row.Build = in.decision.Build

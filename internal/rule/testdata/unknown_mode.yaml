@@ -1,0 +1,4 @@
+id: unknown_mode
+kind: structural
+checker: em_dash
+mode: sometimes

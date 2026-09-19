@@ -151,6 +151,97 @@ func TestJudgeRowRecordsResolvedModeNotDeclaredMode(t *testing.T) {
 	}
 }
 
+func TestJudgeRowCarriesTheSentenceResolveReturned(t *testing.T) {
+	dir := t.TempDir()
+	policyBody := readShippedFile(t, "catalog", "policy", "tool_gate@1.yaml")
+	questionsBody := readShippedFile(t, "catalog", "questions", "tool_gate@1.yaml")
+	set, err := resolveCatalog("tool_gate@1")
+	if err != nil {
+		t.Fatalf("resolveCatalog: %v", err)
+	}
+	t.Chdir(dir)
+	writeJudgePolicyFixture(t, policyBody, questionsBody, "enforced")
+	pol, err := resolvePolicy("tool_gate@1", set)
+	if err != nil {
+		t.Fatalf("resolvePolicy: %v", err)
+	}
+	res, err := resolvePolicyMode(pol)
+	if err != nil {
+		t.Fatalf("resolvePolicyMode: %v", err)
+	}
+	if res.Reason == "" {
+		t.Fatal("fixture setup: Resolve returned no sentence to compare against")
+	}
+	set.Policy = &pol
+	set.Mode = res.Mode
+	set.ModeReason = res.Reason
+
+	client, err := jev.NewClient(jev.Config{Wire: &stubWire{reply: denyReply}})
+	if err != nil {
+		t.Fatalf("client: %v", err)
+	}
+	req := jev.Request{State: map[string]string{"command": "rm -rf /"}, Questions: set.Questions}
+	if _, err := runJudge(context.Background(), client, req, set, true); err != nil {
+		t.Fatalf("runJudge: %v", err)
+	}
+
+	ledgerDir, err := ledger.Dir()
+	if err != nil {
+		t.Fatalf("ledger.Dir: %v", err)
+	}
+	var rows []ledger.Row
+	if _, err := ledger.NewReader(ledgerDir).Each(ledger.Filter{}, func(row ledger.Row) error {
+		rows = append(rows, row)
+		return nil
+	}); err != nil {
+		t.Fatalf("reading the ledger: %v", err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("rows = %+v", rows)
+	}
+	if rows[0].Reason == nil || rows[0].Reason.ModeReason == nil {
+		t.Fatalf("row carries no mode reason: %+v", rows[0].Reason)
+	}
+	if *rows[0].Reason.ModeReason != res.Reason {
+		t.Fatalf("row sentence = %q, want the sentence Resolve returned directly: %q", *rows[0].Reason.ModeReason, res.Reason)
+	}
+}
+
+func TestJudgeRowCarriesAnEmptyTurnIDRatherThanAMissingField(t *testing.T) {
+	t.Chdir(t.TempDir())
+	wire := &stubWire{reply: `{"model":"typesafe/jev-1.13-20260917","answers":{"approval":{"type":"noul","noul":0.11}},"usage":{"input_tokens":10,"output_tokens":2,"cost":0.00002},"id":"gen-stub-1","provider":"TypeSafe"}`}
+	client, err := jev.NewClient(jev.Config{Wire: wire})
+	if err != nil {
+		t.Fatalf("client: %v", err)
+	}
+	set := battery{SetName: "stub_battery", QuestionsVersion: 1, Kinds: map[string]question.Kind{"approval": question.KindNoul}}
+	req := jev.Request{
+		State:     map[string]string{"command": "ls -la"},
+		Questions: []jev.Question{{ID: "approval", Kind: jev.QuestionNoul, Instructions: "?", True: "t", False: "f"}},
+	}
+	if _, err := runJudge(context.Background(), client, req, set, true); err != nil {
+		t.Fatalf("runJudge: %v", err)
+	}
+
+	dir, err := ledger.Dir()
+	if err != nil {
+		t.Fatalf("ledger.Dir: %v", err)
+	}
+	var rows []ledger.Row
+	if _, err := ledger.NewReader(dir).Each(ledger.Filter{}, func(row ledger.Row) error {
+		rows = append(rows, row)
+		return nil
+	}); err != nil {
+		t.Fatalf("reading the ledger: %v", err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("rows = %+v", rows)
+	}
+	if rows[0].TurnID != "" {
+		t.Fatalf("row.TurnID = %q, want empty: this row was not made inside a turn", rows[0].TurnID)
+	}
+}
+
 func TestJudgeRejectsMalformedJSON(t *testing.T) {
 	var out, errOut bytes.Buffer
 	code := judgeVerb(nil, strings.NewReader("not json"), &out, &errOut)

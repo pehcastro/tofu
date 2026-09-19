@@ -66,6 +66,7 @@ func judgeVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 			return judgeFail(errOut, err)
 		}
 		set.Mode = res.Mode
+		set.ModeReason = res.Reason
 	}
 	jevRequest := jev.Request{State: input.State, Questions: set.Questions}
 

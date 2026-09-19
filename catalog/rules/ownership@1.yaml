@@ -1,0 +1,5 @@
+id: ownership
+kind: structural
+checker: ownership
+mode: shadow
+notes: wraps internal/crew.Matches, the ownership check crew already implements

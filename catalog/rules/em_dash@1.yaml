@@ -1,0 +1,5 @@
+id: em_dash
+kind: structural
+checker: em_dash
+mode: shadow
+notes: a literal U+2014 anywhere in the file, byte presence is the whole check

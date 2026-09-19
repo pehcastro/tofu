@@ -34,6 +34,7 @@ type battery struct {
 	QuestionsVersion int
 	Policy           *policy.Policy
 	Mode             policy.Mode
+	ModeReason       string
 }
 
 func resolveQuestions(input judgeInput) (battery, error) {
