@@ -6,20 +6,13 @@ import (
 	"testing"
 )
 
-func v2Dirs(t *testing.T) (string, string) {
-	t.Helper()
+func TestBothArmsOverTheV2MaintenanceSession(t *testing.T) {
 	sessions := filepath.Join("..", "harness", "testdata", "v2-session")
-	before := filepath.Join("..", "harness", "testdata", "v2-before")
 	entries, err := os.ReadDir(sessions)
 	if err != nil || len(entries) == 0 {
 		t.Skipf("no v2 session under %s", sessions)
 	}
-	return sessions, before
-}
-
-func TestBothArmsOverTheV2MaintenanceSession(t *testing.T) {
-	sessions, before := v2Dirs(t)
-	writes, turns, err := Load(sessions, before)
+	writes, turns, err := Load(sessions, filepath.Join("..", "harness", "testdata", "v2-before"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -41,5 +34,8 @@ func TestBothArmsOverTheV2MaintenanceSession(t *testing.T) {
 	t.Logf("%d writes, %d to a file that already existed, %d refused", len(rows), preexisting, refused)
 	if refused > 0 {
 		t.Errorf("the typed set still cannot express %d of %d writes", refused, len(rows))
+	}
+	if preexisting < 5 {
+		t.Errorf("v2 exists to record edits to code that already exists and holds %d", preexisting)
 	}
 }

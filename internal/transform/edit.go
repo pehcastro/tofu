@@ -1,6 +1,7 @@
 package transform
 
 import (
+	"errors"
 	"fmt"
 	"slices"
 	"strconv"
@@ -21,11 +22,12 @@ const (
 )
 
 type Edit struct {
-	Kind            Kind   `json:"kind"`
-	Anchor          string `json:"anchor,omitempty"`
-	Until           string `json:"until,omitempty"`
-	UntilOccurrence int    `json:"until_occurrence,omitempty"`
-	Text            string `json:"text"`
+	Kind             Kind   `json:"kind"`
+	Anchor           string `json:"anchor,omitempty"`
+	AnchorOccurrence int    `json:"anchor_occurrence,omitempty"`
+	Until            string `json:"until,omitempty"`
+	UntilOccurrence  int    `json:"until_occurrence,omitempty"`
+	Text             string `json:"text"`
 }
 
 type AnchorNotFound struct {
@@ -53,14 +55,15 @@ func (e AmbiguousAnchor) Error() string {
 }
 
 type OccurrenceOutOfRange struct {
+	Field  string
 	Anchor string
 	Wanted int
 	Found  int
 }
 
 func (e OccurrenceOutOfRange) Error() string {
-	return fmt.Sprintf("until %q was asked for occurrence %d and only %d follow the anchor",
-		e.Anchor, e.Wanted, e.Found)
+	return fmt.Sprintf("%s %q was asked for occurrence %d and the file holds %d",
+		e.Field, e.Anchor, e.Wanted, e.Found)
 }
 
 func trimLine(line string) string { return strings.TrimRight(line, "\r\n") }
@@ -75,27 +78,19 @@ func matchLines(lines []string, anchor string, from int) []int {
 	return found
 }
 
-func (e Edit) locate(lines []string) (int, int, error) {
-	start := matchLines(lines, e.Anchor, 0)
-	if len(start) == 0 {
-		return 0, 0, AnchorNotFound{Field: anchorField, Anchor: e.Anchor}
-	}
-	if len(start) > 1 {
-		return 0, 0, AmbiguousAnchor{Field: anchorField, Anchor: e.Anchor, Matches: start}
-	}
-	from := start[0] - 1
-	end := matchLines(lines, e.Until, from)
+func pick(lines []string, field, anchor string, occurrence, from int) (int, error) {
+	matches := matchLines(lines, anchor, from)
 	switch {
-	case len(end) == 0:
-		return 0, 0, AnchorNotFound{Field: untilField, Anchor: e.Until}
-	case e.UntilOccurrence > len(end):
-		return 0, 0, OccurrenceOutOfRange{Anchor: e.Until, Wanted: e.UntilOccurrence, Found: len(end)}
-	case e.UntilOccurrence > 0:
-		return from, end[e.UntilOccurrence-1] - 1, nil
-	case len(end) > 1:
-		return 0, 0, AmbiguousAnchor{Field: untilField, Anchor: e.Until, Matches: end}
+	case len(matches) == 0:
+		return 0, AnchorNotFound{Field: field, Anchor: anchor}
+	case occurrence > len(matches):
+		return 0, OccurrenceOutOfRange{Field: field, Anchor: anchor, Wanted: occurrence, Found: len(matches)}
+	case occurrence > 0:
+		return matches[occurrence-1] - 1, nil
+	case len(matches) > 1:
+		return 0, AmbiguousAnchor{Field: field, Anchor: anchor, Matches: matches}
 	}
-	return from, end[0] - 1, nil
+	return matches[0] - 1, nil
 }
 
 func (e Edit) On(before string) (string, error) {
@@ -106,7 +101,11 @@ func (e Edit) On(before string) (string, error) {
 		return e.Text + before, nil
 	case Replace:
 		lines := splitLines(before)
-		from, to, err := e.locate(lines)
+		from, err := pick(lines, anchorField, e.Anchor, e.AnchorOccurrence, 0)
+		if err != nil {
+			return "", err
+		}
+		to, err := pick(lines, untilField, e.Until, e.UntilOccurrence, from)
 		if err != nil {
 			return "", err
 		}
@@ -126,7 +125,7 @@ func Derive(before, after string) ([]Edit, error) {
 	}
 	old := splitLines(before)
 	var edits []Edit
-	for _, hunk := range Hunks(before, after) {
+	for _, hunk := range slices.Backward(Hunks(before, after)) {
 		added := strings.Join(hunk.Added, "")
 		if len(hunk.Removed) == 0 && hunk.BeforeStart == 0 {
 			edits = append(edits, Edit{Kind: Prepend, Text: added})
@@ -139,18 +138,24 @@ func Derive(before, after string) ([]Edit, error) {
 			edit.Text = old[from] + added
 		}
 		edit.Anchor, edit.Until = trimLine(old[from]), trimLine(old[to])
+		if matches := matchLines(old, edit.Anchor, 0); len(matches) > 1 {
+			edit.AnchorOccurrence = slices.Index(matches, from+1) + 1
+		}
 		if matches := matchLines(old, edit.Until, from); len(matches) > 1 {
 			edit.UntilOccurrence = slices.Index(matches, to+1) + 1
 		}
-		gotFrom, gotTo, err := edit.locate(old)
+		edits = append(edits, edit)
+	}
+	rebuilt := before
+	for _, edit := range edits {
+		next, err := edit.On(rebuilt)
 		if err != nil {
 			return nil, err
 		}
-		if gotFrom != from || gotTo != to {
-			return nil, fmt.Errorf("the anchors name lines %d to %d where the change is %d to %d",
-				gotFrom+1, gotTo+1, from+1, to+1)
-		}
-		edits = append(edits, edit)
+		rebuilt = next
+	}
+	if rebuilt != after {
+		return nil, errors.New("the derived edits do not rebuild the file they were derived from")
 	}
 	return edits, nil
 }

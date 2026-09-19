@@ -130,14 +130,14 @@ func TestReplaceAppliesToIndexAndThePreviewMatches(t *testing.T) {
 	if len(edits) != 3 {
 		t.Fatalf("derived %d edits from the recorded index.ts rewrite, wanted 3: %+v", len(edits), edits)
 	}
-	wantAnchors := []string{"import { Hono } from 'hono'", "const app = new Hono()", "app.get('/', (c) => {"}
+	lastHunkFirst := []string{"app.get('/', (c) => {", "const app = new Hono()", "import { Hono } from 'hono'"}
 	for i, edit := range edits {
-		if edit.Kind != Replace || edit.Anchor != wantAnchors[i] {
-			t.Fatalf("edit %d was %+v, wanted a %s anchored on %q", i+1, edit, Replace, wantAnchors[i])
+		if edit.Kind != Replace || edit.Anchor != lastHunkFirst[i] {
+			t.Fatalf("edit %d was %+v, wanted a %s anchored on %q", i+1, edit, Replace, lastHunkFirst[i])
 		}
 	}
-	if edits[2].Until != "" || edits[2].Text != "" {
-		t.Fatalf("the block deletion was %+v, wanted an empty text ending on the blank line", edits[2])
+	if edits[0].Until != "" || edits[0].Text != "" {
+		t.Fatalf("the block deletion was %+v, wanted an empty text ending on the blank line", edits[0])
 	}
 	applyAndCheckPreview(t, seed(t, "index.ts", before), "index.ts", edits, honoIndexAfter)
 }
@@ -152,6 +152,52 @@ func TestReplaceAppliesToPackageJSONAndThePreviewMatches(t *testing.T) {
 		t.Fatalf("derived %d edits from the recorded package.json rewrite, wanted 1: %+v", len(edits), edits)
 	}
 	applyAndCheckPreview(t, seed(t, "package.json", before), "package.json", edits, honoPackageAfter)
+}
+
+func TestAnInsertionAboveTheFirstLineAppliesAndThePreviewMatches(t *testing.T) {
+	before := readFixture(t, "index.ts")
+	after := "import 'dotenv/config'\n" + before
+	edits, err := Derive(before, after)
+	if err != nil {
+		t.Fatalf("Derive: %v", err)
+	}
+	if len(edits) != 1 || edits[0].Kind != Prepend || edits[0].Text != "import 'dotenv/config'\n" {
+		t.Fatalf("derived %+v, wanted one %s carrying the inserted line alone", edits, Prepend)
+	}
+	applyAndCheckPreview(t, seed(t, "index.ts", before), "index.ts", edits, after)
+}
+
+func TestADisambiguatedUntilSelectsTheIntendedOccurrence(t *testing.T) {
+	before := readFixture(t, "package.json")
+	edit := Edit{Kind: Replace, Anchor: "{", Until: "  },", Text: "{\n  \"private\": true,\n"}
+
+	_, err := Plan(seed(t, "package.json", before), "package.json", []Edit{edit})
+	var ambiguous AmbiguousAnchor
+	if !errors.As(err, &ambiguous) || ambiguous.Field != untilField {
+		t.Fatalf("a repeated until gave %v, wanted an AmbiguousAnchor on the %s", err, untilField)
+	}
+	if len(ambiguous.Matches) != 2 || ambiguous.Matches[0] != 4 || ambiguous.Matches[1] != 7 {
+		t.Fatalf("the candidates were %v, wanted lines 4 and 7", ambiguous.Matches)
+	}
+
+	wanted := map[int]string{
+		1: "{\n  \"private\": true,\n  \"dependencies\": {\n    \"hono\": \"^4.13.8\"\n  },\n" +
+			"  \"devDependencies\": {\n    \"@types/bun\": \"latest\"\n  }\n}\n",
+		2: "{\n  \"private\": true,\n  \"devDependencies\": {\n    \"@types/bun\": \"latest\"\n  }\n}\n",
+	}
+	for occurrence, want := range wanted {
+		chosen := edit
+		chosen.UntilOccurrence = occurrence
+		applyAndCheckPreview(t, seed(t, "package.json", before), "package.json", []Edit{chosen}, want)
+	}
+
+	beyond := edit
+	beyond.UntilOccurrence = 3
+	_, err = Plan(seed(t, "package.json", before), "package.json", []Edit{beyond})
+	var out OccurrenceOutOfRange
+	if !errors.As(err, &out) || out.Found != 2 {
+		t.Fatalf("a third occurrence of a line that appears twice gave %v", err)
+	}
 }
 
 func TestAmbiguousAnchorIsRefusedWithItsCandidatesNamed(t *testing.T) {

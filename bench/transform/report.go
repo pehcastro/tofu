@@ -29,11 +29,14 @@ func Report(rows []Row, fit Estimate, turns int) string {
 
 	fmt.Fprintf(out, "\n%-8s %4s %-16s %-14s %5s %6s %9s %9s %8s %8s\n",
 		"turn", "step", "path", "shape", "edits", "bytes", "write-out", "typed-out", "write-in", "typed-in")
-	var writeOut, typedOut, writeIn, typedIn int
+	var writeOut, typedOut, writeIn, typedIn, chargedOut, chargedIn int
 	for _, row := range rows {
 		shape := row.Shape
-		if !row.Expressible {
+		if row.Expressible {
+			chargedOut, chargedIn = chargedOut+fit.Tokens(row.TypedOut), chargedIn+fit.Tokens(row.TypedIn)
+		} else {
 			shape = "none"
+			chargedOut, chargedIn = chargedOut+fit.Tokens(row.WriteOut), chargedIn+fit.Tokens(row.WriteIn)
 		}
 		fmt.Fprintf(out, "%-8s %4d %-16s %-14s %5d %6d %9d %9d %8d %8d\n",
 			row.Session[len(row.Session)-6:], row.Step, row.Path, shape, row.Edits, len(row.Content),
@@ -60,8 +63,19 @@ func Report(rows []Row, fit Estimate, turns int) string {
 		refused++
 		fmt.Fprintf(list, "  %s step %d, %s: %s\n", row.Session, row.Step, row.Path, row.Why)
 	}
-	fmt.Fprintf(out, "\nThe typed set could not express %d of %d.\n", refused, len(rows))
+	fmt.Fprintf(out, "\nThe typed set could not express %d of %d, so coverage is %.0f%%.\n",
+		refused, len(rows), percent(len(rows)-refused, len(rows)))
 	out.WriteString(list.String())
+
+	verdict := "does not win"
+	if chargedOut < writeOut {
+		verdict = "wins"
+	}
+	fmt.Fprintf(out, "\nCharged, which is the reading that counts: a write the typed set refuses costs a full "+
+		"write, because a model holding only typed edits has to fall back to sending the file. On that reading "+
+		"the typed arm spends %d out and %d in against the write arm's %d and %d (%+.1f%% out), and the typed "+
+		"arm %s.\n",
+		chargedOut, chargedIn, writeOut, writeIn, percent(chargedOut-writeOut, writeOut), verdict)
 	return out.String()
 }
 
