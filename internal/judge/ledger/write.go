@@ -7,7 +7,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
+
+	"boji/internal/sys"
 )
 
 const logSuffix = ".jsonl"
@@ -15,6 +18,14 @@ const logSuffix = ".jsonl"
 const outcomeSuffix = ".outcome.jsonl"
 
 const idRandomBytes = 16
+
+const stateDirName = "states"
+
+const stateSuffix = ".json"
+
+const stateInlineCeiling = 4096
+
+const stateExcerptBytes = 512
 
 type Writer struct {
 	dir string
@@ -46,6 +57,9 @@ func (w *Writer) Append(row Row) (Row, error) {
 		}
 		row.ID = id
 	}
+	if err := w.elideState(&row); err != nil {
+		return Row{}, err
+	}
 	line, err := Canonical(row)
 	if err != nil {
 		return Row{}, err
@@ -54,6 +68,25 @@ func (w *Writer) Append(row Row) (Row, error) {
 		return Row{}, err
 	}
 	return row, nil
+}
+
+func (w *Writer) elideState(row *Row) error {
+	body := row.State
+	if len(body) <= stateInlineCeiling {
+		return nil
+	}
+	name := row.ID + stateSuffix
+	if err := sys.WriteFile(filepath.Join(w.dir, stateDirName, name), body, 0o644); err != nil {
+		return err
+	}
+	row.State = nil
+	row.StateElision = &StateElision{
+		Bytes: len(body),
+		Head:  strings.ToValidUTF8(string(body[:stateExcerptBytes]), ""),
+		Tail:  strings.ToValidUTF8(string(body[len(body)-stateExcerptBytes:]), ""),
+		File:  filepath.Join(stateDirName, name),
+	}
+	return nil
 }
 
 type outcomeRecord struct {

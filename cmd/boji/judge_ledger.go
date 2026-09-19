@@ -45,7 +45,7 @@ type rowInput struct {
 }
 
 func rowSkeleton(state any, set battery, in rowInput) (ledger.Row, error) {
-	hash, err := ledger.Hash(state)
+	body, err := ledger.Canonical(state)
 	if err != nil {
 		return ledger.Row{}, err
 	}
@@ -54,8 +54,9 @@ func rowSkeleton(state any, set battery, in rowInput) (ledger.Row, error) {
 		Questions:    set.SetName,
 		Version:      set.QuestionsVersion,
 		Model:        openrouter.Alias,
-		StateHash:    hash,
+		StateHash:    ledger.HashOf(body),
 		StateBuilder: in.stateBuilder,
+		State:        body,
 		Answers:      in.answers,
 		ReplayOf:     in.replayOf,
 		TurnID:       in.turnID,

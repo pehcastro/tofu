@@ -36,8 +36,8 @@ func TestACurrentSchemaRowWithNoStateBuilderStillReads(t *testing.T) {
 	if err := json.Unmarshal([]byte(current), &row); err != nil {
 		t.Fatalf("a schema-5 row with no state_builder key must still decode: %v", err)
 	}
-	if row.Schema != SchemaVersion {
-		t.Fatalf("schema = %d, want the current schema %d", row.Schema, SchemaVersion)
+	if row.Schema != 5 {
+		t.Fatalf("schema = %d, want 5, the value the row actually carried", row.Schema)
 	}
 	if row.StateBuilder != "" {
 		t.Fatalf("state_builder = %q, want empty: this schema carries the field but nothing wrote it yet", row.StateBuilder)
@@ -66,8 +66,8 @@ func TestRowWrittenBeforeModeExistedReadsAsUnknownNotDefaulted(t *testing.T) {
 }
 
 func TestSchemaBumpedForModeReasonAndTurnID(t *testing.T) {
-	if SchemaVersion != 5 {
-		t.Fatalf("schema version = %d, want 5 after adding mode_reason and turn_id", SchemaVersion)
+	if SchemaVersion < 5 {
+		t.Fatalf("schema version = %d, want at least 5, mode_reason and turn_id were added at 5", SchemaVersion)
 	}
 }
 

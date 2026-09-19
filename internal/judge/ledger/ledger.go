@@ -10,7 +10,11 @@ import (
 	"boji/internal/sys"
 )
 
-const SchemaVersion = 5
+const SchemaVersion = 6
+
+const StateBuilderSchema = 3
+
+const StateBodySchema = 6
 
 const dayLayout = "2006-01-02"
 
@@ -172,28 +176,37 @@ type Reason struct {
 	ModeReason *string `json:"mode_reason,omitempty"`
 }
 
+type StateElision struct {
+	Bytes int    `json:"bytes"`
+	Head  string `json:"head"`
+	Tail  string `json:"tail"`
+	File  string `json:"file"`
+}
+
 type Row struct {
-	ID            string    `json:"id"`
-	Schema        int       `json:"schema"`
-	At            time.Time `json:"at"`
-	Point         string    `json:"point"`
-	Questions     string    `json:"questions"`
-	Version       int       `json:"version"`
-	Build         string    `json:"build"`
-	Model         string    `json:"model"`
-	StateHash     string    `json:"state_hash"`
-	StateBuilder  string    `json:"state_builder,omitempty"`
-	Answers       []Answer  `json:"answers"`
-	Verdict       Verdict   `json:"verdict"`
-	Policy        string    `json:"policy,omitempty"`
-	PolicyVersion int       `json:"policy_version,omitempty"`
-	Reason        *Reason   `json:"reason,omitempty"`
-	LatencyMS     int64     `json:"latency_ms"`
-	Cost          float64   `json:"cost"`
-	RequestID     string    `json:"request_id"`
-	ReplayOf      string    `json:"replay_of,omitempty"`
-	Outcome       *Outcome  `json:"outcome,omitempty"`
-	TurnID        string    `json:"turn_id,omitempty"`
+	ID            string          `json:"id"`
+	Schema        int             `json:"schema"`
+	At            time.Time       `json:"at"`
+	Point         string          `json:"point"`
+	Questions     string          `json:"questions"`
+	Version       int             `json:"version"`
+	Build         string          `json:"build"`
+	Model         string          `json:"model"`
+	StateHash     string          `json:"state_hash"`
+	StateBuilder  string          `json:"state_builder,omitempty"`
+	State         json.RawMessage `json:"state,omitempty"`
+	StateElision  *StateElision   `json:"state_elision,omitempty"`
+	Answers       []Answer        `json:"answers"`
+	Verdict       Verdict         `json:"verdict"`
+	Policy        string          `json:"policy,omitempty"`
+	PolicyVersion int             `json:"policy_version,omitempty"`
+	Reason        *Reason         `json:"reason,omitempty"`
+	LatencyMS     int64           `json:"latency_ms"`
+	Cost          float64         `json:"cost"`
+	RequestID     string          `json:"request_id"`
+	ReplayOf      string          `json:"replay_of,omitempty"`
+	Outcome       *Outcome        `json:"outcome,omitempty"`
+	TurnID        string          `json:"turn_id,omitempty"`
 }
 
 func (r Row) Day() string {

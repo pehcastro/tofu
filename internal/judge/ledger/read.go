@@ -10,6 +10,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"boji/internal/sys"
 )
 
 const lineCeiling = 1 << 20
@@ -46,6 +48,13 @@ func NewReader(dir string) *Reader {
 }
 
 var errRowFound = errors.New("ledger: row found")
+
+func (r *Reader) State(row Row) (json.RawMessage, error) {
+	if row.StateElision == nil {
+		return row.State, nil
+	}
+	return sys.ReadFile(filepath.Join(r.dir, row.StateElision.File))
+}
 
 func (r *Reader) ByID(id string) (Row, bool, error) {
 	day, err := dayOfID(id)

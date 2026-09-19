@@ -33,8 +33,12 @@ func Hash(value any) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	sum := sha256.Sum256(canon)
-	return hex.EncodeToString(sum[:]), nil
+	return HashOf(canon), nil
+}
+
+func HashOf(canonical []byte) string {
+	sum := sha256.Sum256(canonical)
+	return hex.EncodeToString(sum[:])
 }
 
 func canonicalWrite(buf *bytes.Buffer, node any) error {
