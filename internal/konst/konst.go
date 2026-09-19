@@ -37,7 +37,6 @@ const (
 	TurnResultBytesCap       = 8192
 	TurnMaxSteps             = 40
 	TurnMaxDecisions         = 40
-	TurnMaxCostUSD           = 1.00
 	TurnMaxWallClockMillis   = 300000
 )
 

@@ -18,7 +18,6 @@ const (
 	Model           = "anthropic/claude-fable-5-1"
 	loopMaxSteps    = 5
 	cappedMaxSteps  = 1
-	runMaxCostUSD   = 0.10
 	runMaxWallClock = 60 * time.Second
 )
 
@@ -100,7 +99,6 @@ func runOne(ctx context.Context, client *llm.Client, task Task, armName string, 
 		Task:  task.Prompt,
 		Caps: iturn.Caps{
 			MaxSteps:     maxSteps,
-			MaxCostUSD:   runMaxCostUSD,
 			MaxWallClock: runMaxWallClock,
 		},
 		ResultBytesCap: 4096,

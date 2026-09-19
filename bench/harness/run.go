@@ -249,8 +249,8 @@ func endReasonOf(outcome turn.Outcome) (EndReason, string) {
 		return EndReasonDone, ""
 	case turn.OutcomeStepCap:
 		return EndReasonTurnCap, ""
-	case turn.OutcomeCostCap:
-		return EndReasonDollarCap, ""
+	case turn.OutcomeRetiredCostCap:
+		return EndReasonCrash, "end reason: this turn row was written when boji still had a cost cap, that cap is gone, and harness.EndReason has no variant for it, so this row says crash"
 	case turn.OutcomeWallClockCap:
 		return EndReasonWallClock, ""
 	case turn.OutcomeDecisionCap:

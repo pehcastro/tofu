@@ -367,8 +367,8 @@ func renderHarnessRow(out io.Writer, row harness.Row, gaps []string, execution h
 	_, _ = fmt.Fprintf(out, "tokens: %d in, %d out\n", row.BilledInput, row.BilledOutput)
 	_, _ = fmt.Fprintf(out, "tool calls: read %d, write %d, shell %d, other %d, failed %d\n",
 		row.ToolCalls.Read, row.ToolCalls.Write, row.ToolCalls.Shell, row.ToolCalls.Other, row.ToolCalls.Failed)
-	_, _ = fmt.Fprintf(out, "caps, unset rather than measured, nobody has given a number: wall clock %s, dollars $%.2f, turns %d\n",
-		caps.WallClock, caps.DollarCap, caps.TurnCap)
+	_, _ = fmt.Fprintf(out, "caps, unset rather than measured, nobody has given a number: wall clock %s, turns %d\n",
+		caps.WallClock, caps.TurnCap)
 	for _, gate := range row.Gates {
 		_, _ = fmt.Fprintf(out, "gate %s: %s %s\n", gate.Name, gate.Status, firstLine(gate.Reason))
 	}

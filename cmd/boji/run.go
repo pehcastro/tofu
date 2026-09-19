@@ -32,7 +32,6 @@ type runOpts struct {
 	noGate       bool
 	model        string
 	maxSteps     int
-	maxCostUSD   float64
 	maxWallMS    int
 	maxDecisions int
 }
@@ -90,7 +89,6 @@ func runVerb(args []string, out, errOut io.Writer) int {
 		Task:  opts.task,
 		Caps: turn.Caps{
 			MaxSteps:     opts.maxSteps,
-			MaxCostUSD:   opts.maxCostUSD,
 			MaxWallClock: time.Duration(opts.maxWallMS) * time.Millisecond,
 			MaxDecisions: opts.maxDecisions,
 		},
@@ -260,7 +258,6 @@ func parseRunArgs(args []string) (runOpts, error) {
 	opts := runOpts{
 		model:        konst.TurnModelAlias,
 		maxSteps:     konst.TurnMaxSteps,
-		maxCostUSD:   konst.TurnMaxCostUSD,
 		maxWallMS:    konst.TurnMaxWallClockMillis,
 		maxDecisions: konst.TurnMaxDecisions,
 	}
@@ -278,8 +275,6 @@ func parseRunArgs(args []string) (runOpts, error) {
 			opts.model, err = nextArg(args, &i, arg)
 		case "--max-steps":
 			opts.maxSteps, err = nextInt(args, &i, arg)
-		case "--max-cost":
-			opts.maxCostUSD, err = nextFloat(args, &i, arg)
 		case "--max-wall-clock-ms":
 			opts.maxWallMS, err = nextInt(args, &i, arg)
 		case "--max-decisions":
@@ -325,16 +320,4 @@ func nextInt(args []string, i *int, flag string) (int, error) {
 		return 0, fmt.Errorf("%s %q is not a number", flag, raw)
 	}
 	return n, nil
-}
-
-func nextFloat(args []string, i *int, flag string) (float64, error) {
-	raw, err := nextArg(args, i, flag)
-	if err != nil {
-		return 0, err
-	}
-	value, err := strconv.ParseFloat(raw, 64)
-	if err != nil {
-		return 0, fmt.Errorf("%s %q is not a number", flag, raw)
-	}
-	return value, nil
 }

@@ -14,7 +14,7 @@ const (
 	OutcomeUnset Outcome = iota
 	OutcomeStopped
 	OutcomeStepCap
-	OutcomeCostCap
+	OutcomeRetiredCostCap
 	OutcomeWallClockCap
 	OutcomeDecisionCap
 	OutcomeError
@@ -28,7 +28,7 @@ func (o Outcome) String() string {
 		return "stopped"
 	case OutcomeStepCap:
 		return "step_cap"
-	case OutcomeCostCap:
+	case OutcomeRetiredCostCap:
 		return "cost_cap"
 	case OutcomeWallClockCap:
 		return "wall_clock_cap"

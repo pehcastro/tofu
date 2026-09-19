@@ -3,6 +3,8 @@ package turn
 import (
 	"context"
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -44,32 +46,6 @@ func TestRunStopsAtTheStepCapAndRecordsIt(t *testing.T) {
 	}
 	if len(row.Steps) != 3 {
 		t.Fatalf("expected exactly 3 steps, got %d", len(row.Steps))
-	}
-}
-
-func TestRunStopsAtTheCostCapAndRecordsIt(t *testing.T) {
-	tool := &stubTool{name: "noop", result: Result{Content: "ok"}}
-	model := alwaysToolCallModel(1.0, 10)
-	config := Config{
-		Model:          model,
-		Tools:          NewRegistry(tool),
-		Task:           "loop forever",
-		Caps:           Caps{MaxCostUSD: 2.5},
-		ResultBytesCap: 4096,
-	}
-
-	row, err := Run(context.Background(), config)
-	if err != nil {
-		t.Fatalf("Run returned an error: %v", err)
-	}
-	if row.Outcome != OutcomeCostCap {
-		t.Fatalf("expected outcome cost_cap, got %s", row.Outcome)
-	}
-	if len(row.Steps) != 3 {
-		t.Fatalf("expected exactly 3 steps before the cap tripped, got %d", len(row.Steps))
-	}
-	if row.TotalCostUSD != 3.0 {
-		t.Fatalf("expected total cost 3.0, got %v", row.TotalCostUSD)
 	}
 }
 
@@ -122,6 +98,26 @@ func TestCapsAreEachIndependentlyOff(t *testing.T) {
 		t.Fatalf("Run returned an error: %v", err)
 	}
 	if row.Outcome != OutcomeStopped {
-		t.Fatalf("expected a cost of 200 with no cost cap to still reach stopped, got %s", row.Outcome)
+		t.Fatalf("expected a cost of 200 to stop nothing, got %s", row.Outcome)
+	}
+	if row.TotalCostUSD != 200 {
+		t.Fatalf("expected the cost to still be recorded, got %v", row.TotalCostUSD)
+	}
+}
+
+func TestARowWrittenUnderTheCostCapStillReads(t *testing.T) {
+	stored, err := os.ReadFile(filepath.Join("testdata", "row-written-under-the-cost-cap.json"))
+	if err != nil {
+		t.Fatalf("read the stored row: %v", err)
+	}
+	var row Row
+	if err := json.Unmarshal(stored, &row); err != nil {
+		t.Fatalf("a turn row stored when the cost cap existed no longer reads: %v", err)
+	}
+	if row.Outcome != OutcomeRetiredCostCap {
+		t.Fatalf("outcome = %s, want the retired cost cap", row.Outcome)
+	}
+	if len(row.Steps) == 0 || row.TotalCostUSD == 0 {
+		t.Fatalf("the rest of the stored row did not survive: %+v", row)
 	}
 }

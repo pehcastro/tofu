@@ -12,7 +12,6 @@ import (
 
 const (
 	defaultWallClockCap = 30 * time.Minute
-	defaultDollarCap    = 5.00
 	defaultTurnCap      = 40
 )
 
@@ -20,7 +19,6 @@ const playgroundRoot = ".playground"
 
 type Caps struct {
 	WallClock time.Duration
-	DollarCap float64
 	TurnCap   int
 }
 
@@ -58,7 +56,7 @@ func BuildPlan(root string, arm Arm, task string, version int) (Plan, error) {
 	prompt := strings.TrimSpace(string(raw))
 
 	dir := ArmDir(root, arm, task)
-	caps := Caps{WallClock: defaultWallClockCap, DollarCap: defaultDollarCap, TurnCap: defaultTurnCap}
+	caps := Caps{WallClock: defaultWallClockCap, TurnCap: defaultTurnCap}
 	plan := Plan{
 		Arm: arm, Task: task, Version: version,
 		Prompt: prompt, PromptPath: promptPath,
@@ -71,7 +69,6 @@ func BuildPlan(root string, arm Arm, task string, version int) (Plan, error) {
 			"claude", "-p", prompt,
 			"--output-format", "json",
 			"--permission-mode", "bypassPermissions",
-			"--max-budget-usd", fmt.Sprintf("%.2f", caps.DollarCap),
 			"--add-dir", dir,
 		}
 		plan.Env = []string{"ANTHROPIC_API_KEY"}
@@ -88,7 +85,6 @@ func BuildPlan(root string, arm Arm, task string, version int) (Plan, error) {
 			"boji", "run", prompt,
 			"--dir", dir,
 			"--max-wall-clock-ms", strconv.FormatInt(caps.WallClock.Milliseconds(), 10),
-			"--max-cost", fmt.Sprintf("%.2f", caps.DollarCap),
 			"--max-steps", strconv.Itoa(caps.TurnCap),
 		}
 		plan.Env = []string{"OPENROUTER_KEY"}
@@ -100,9 +96,9 @@ func BuildPlan(root string, arm Arm, task string, version int) (Plan, error) {
 
 func Fprint(w io.Writer, p Plan) error {
 	_, err := fmt.Fprintf(w,
-		"arm %s task %s version %d\ncommand: %s\ndir: %s\nbranch: %s\nprompt: %s\nenv: %s\ncaps: wall clock %s, dollar cap $%.2f, turn cap %d\n\n",
+		"arm %s task %s version %d\ncommand: %s\ndir: %s\nbranch: %s\nprompt: %s\nenv: %s\ncaps, unset rather than measured, nobody has given a number: wall clock %s, turns %d\n\n",
 		p.Arm, p.Task, p.Version, Shell(p.Command), p.Dir, p.Branch, p.PromptPath, strings.Join(p.Env, ", "),
-		p.Caps.WallClock, p.Caps.DollarCap, p.Caps.TurnCap)
+		p.Caps.WallClock, p.Caps.TurnCap)
 	return err
 }
 

@@ -111,3 +111,25 @@ func TestSubscriptionDollarsAreNullNotZero(t *testing.T) {
 		t.Fatalf("key row's dollars should be 0, got %v", *decodedKey.Dollars)
 	}
 }
+
+func TestARowStoredWithTheRetiredSpendEndReasonStillReads(t *testing.T) {
+	encoded, err := json.Marshal(fullRow())
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	stored := strings.Replace(string(encoded), `"end_reason":"done"`, `"end_reason":"dollar_cap"`, 1)
+	if stored == string(encoded) {
+		t.Fatal("the end reason is no longer stored under end_reason, this test is not reading what it claims")
+	}
+
+	var row Row
+	if err := json.Unmarshal([]byte(stored), &row); err != nil {
+		t.Fatalf("a harness row stored with the dollar cap end reason no longer reads: %v", err)
+	}
+	if row.EndReason != "dollar_cap" {
+		t.Fatalf("EndReason = %q, want the stored dollar_cap kept verbatim", row.EndReason)
+	}
+	if row.Turns != 3 || row.Model == "" {
+		t.Fatalf("the rest of the stored row did not survive: %+v", row)
+	}
+}

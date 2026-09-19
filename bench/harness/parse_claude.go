@@ -57,14 +57,10 @@ func ParseClaude(data []byte, meta ClaudeMeta) (Row, []string, error) {
 		row.Dollars = &t.TotalCostUSD
 	}
 
-	switch {
-	case t.Subtype == "success" && !t.IsError:
-		row.EndReason = EndReasonDone
-	case t.Subtype == "error_max_budget_usd":
-		row.EndReason = EndReasonDollarCap
-	default:
+	row.EndReason = EndReasonDone
+	if t.IsError || t.Subtype != "success" {
 		row.EndReason = EndReasonCrash
-		gaps = append(gaps, "end reason inferred from subtype \""+t.Subtype+"\", the mapping only covers success and error_max_budget_usd, seen so far")
+		gaps = append(gaps, "end reason inferred from subtype \""+t.Subtype+"\", the mapping only covers success, the only subtype seen so far")
 	}
 
 	gaps = append(gaps,

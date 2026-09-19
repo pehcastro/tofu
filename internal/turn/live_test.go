@@ -63,7 +63,7 @@ func TestLiveRunCompletesATrivialTask(t *testing.T) {
 		Task: "Using the write tool, write a file named hello.txt containing exactly the text " +
 			"hello from boji and nothing else. After it is written, reply with a short " +
 			"confirmation message in plain text and do not call any more tools.",
-		Caps:           Caps{MaxSteps: 5, MaxCostUSD: 0.05, MaxWallClock: 60 * time.Second},
+		Caps:           Caps{MaxSteps: 5, MaxWallClock: 60 * time.Second},
 		ResultBytesCap: 4096,
 	})
 	if err != nil {

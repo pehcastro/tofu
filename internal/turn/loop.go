@@ -19,17 +19,13 @@ type Model interface {
 
 type Caps struct {
 	MaxSteps     int
-	MaxCostUSD   float64
 	MaxWallClock time.Duration
 	MaxDecisions int
 }
 
-func (c Caps) exceeded(step int, spent float64, elapsed time.Duration) (Outcome, bool) {
+func (c Caps) exceeded(step int, elapsed time.Duration) (Outcome, bool) {
 	if c.MaxSteps > 0 && step > c.MaxSteps {
 		return OutcomeStepCap, true
-	}
-	if c.MaxCostUSD > 0 && spent >= c.MaxCostUSD {
-		return OutcomeCostCap, true
 	}
 	if c.MaxWallClock > 0 && elapsed >= c.MaxWallClock {
 		return OutcomeWallClockCap, true
@@ -82,7 +78,7 @@ func Run(ctx context.Context, config Config) (Row, error) {
 
 	decisions := 0
 	for step := 1; ; step++ {
-		if outcome, capped := config.Caps.exceeded(step, row.TotalCostUSD, now().Sub(start)); capped {
+		if outcome, capped := config.Caps.exceeded(step, now().Sub(start)); capped {
 			return finish(outcome), nil
 		}
 

@@ -11,7 +11,7 @@ import (
 	"testing"
 )
 
-func TestBuildPlanPrintsCommandDirEnvAndCapsForAllThreeArms(t *testing.T) {
+func TestBuildPlanPrintsCommandDirEnvAndUnsetCapsForAllThreeArms(t *testing.T) {
 	root := repositoryRoot(t)
 	for _, arm := range []Arm{ArmClaude, ArmCodex, ArmBoji} {
 		plan, err := BuildPlan(root, arm, "hono", 1)
@@ -32,8 +32,16 @@ func TestBuildPlanPrintsCommandDirEnvAndCapsForAllThreeArms(t *testing.T) {
 		if len(plan.Env) == 0 || !strings.Contains(out, plan.Env[0]) {
 			t.Errorf("%s: printed plan missing the environment, got %q", arm, out)
 		}
-		if !strings.Contains(out, "wall clock") || !strings.Contains(out, "dollar cap") || !strings.Contains(out, "turn cap") {
+		if !strings.Contains(out, "wall clock") || !strings.Contains(out, "turns") {
 			t.Errorf("%s: printed plan missing the caps, got %q", arm, out)
+		}
+		if !strings.Contains(out, "unset rather than measured") {
+			t.Errorf("%s: printed plan states its caps as though they were agreed, got %q", arm, out)
+		}
+		for _, banned := range []string{"dollar", "$", "budget"} {
+			if strings.Contains(out, banned) {
+				t.Errorf("%s: printed plan still carries %q, the spend cap is gone: %q", arm, banned, out)
+			}
 		}
 	}
 }

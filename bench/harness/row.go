@@ -32,7 +32,6 @@ type EndReason string
 const (
 	EndReasonDone      EndReason = "done"
 	EndReasonWallClock EndReason = "wall_clock_cap"
-	EndReasonDollarCap EndReason = "dollar_cap"
 	EndReasonTurnCap   EndReason = "turn_cap"
 	EndReasonCrash     EndReason = "crash"
 )

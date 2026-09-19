@@ -87,3 +87,11 @@ func TestRunVerbRejectsAMissingWorkingDirectory(t *testing.T) {
 		t.Fatalf("expected exit %d, got %d", exitUsage, code)
 	}
 }
+
+func TestRunRefusesTheRetiredCostCapFlag(t *testing.T) {
+	if _, err := parseRunArgs([]string{"--dir", t.TempDir(), "--max-cost", "1.00", "a task"}); err == nil {
+		t.Fatal("boji run accepted --max-cost, so the retired flag is being silently ignored rather than refused")
+	} else if !strings.Contains(err.Error(), "unknown argument") {
+		t.Fatalf("expected an unknown argument error, got %v", err)
+	}
+}
