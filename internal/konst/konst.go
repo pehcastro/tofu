@@ -37,5 +37,8 @@ const (
 	TurnMaxSteps             = 40
 	TurnMaxDecisions         = 40
 	TurnMaxWallClockMillis   = 300000
+
+	VerbMaxDepth      = 2
+	VerbTimeoutMillis = 120000
 )
 
