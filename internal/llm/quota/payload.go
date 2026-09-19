@@ -2,11 +2,39 @@ package quota
 
 import (
 	"encoding/json"
+	"math"
+	"strconv"
 	"strings"
 	"time"
 
 	"boji/internal/transport"
 )
+
+const (
+	fiveHourWindow   = "5h"
+	sevenDayWindow   = "7d"
+	percentFull      = 100
+	week             = 7 * 24 * time.Hour
+	fiveHours        = 5 * time.Hour
+	epochMillisFloor = 1e12
+)
+
+func windowID(duration time.Duration) string {
+	if duration >= 24*time.Hour {
+		return strconv.Itoa(int(math.Round(duration.Hours()/24))) + "d"
+	}
+	return strconv.Itoa(max(1, int(math.Round(duration.Hours())))) + "h"
+}
+
+func epochTime(seconds float64) time.Time {
+	if seconds <= 0 || math.IsNaN(seconds) || math.IsInf(seconds, 0) {
+		return time.Time{}
+	}
+	if seconds >= epochMillisFloor {
+		return time.UnixMilli(int64(seconds)).UTC()
+	}
+	return time.Unix(int64(seconds), 0).UTC()
+}
 
 type anthropicBucket struct {
 	Utilization *float64 `json:"utilization"`
@@ -36,7 +64,7 @@ func FromAnthropicUsage(body []byte, now time.Time) (Report, error) {
 		return Report{}, transport.Fail("quota.FromAnthropicUsage", transport.KindProvider, nil,
 			"the anthropic usage payload is not the shape this endpoint documents")
 	}
-	report := Report{Provider: Anthropic, Source: SourceEndpoint, FetchedAt: now}
+	report := Report{Provider: Anthropic, FetchedAt: now}
 	report.appendBucket(fiveHourWindow, fiveHours, payload.FiveHour)
 	report.appendBucket(sevenDayWindow, week, payload.SevenDay)
 	for _, limit := range payload.Limits {
@@ -128,7 +156,7 @@ func FromCodexUsage(body []byte, now time.Time) (Report, error) {
 		return Report{}, transport.Fail("quota.FromCodexUsage", transport.KindProvider, nil,
 			"the codex usage payload is not the shape this endpoint documents")
 	}
-	report := Report{Provider: Codex, Source: SourceEndpoint, Plan: payload.PlanType, FetchedAt: now}
+	report := Report{Provider: Codex, Plan: payload.PlanType, FetchedAt: now}
 	if payload.RateLimit == nil {
 		return report, nil
 	}

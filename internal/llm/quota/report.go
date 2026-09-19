@@ -65,7 +65,7 @@ func SpendLimitLine() string {
 }
 
 func (r Report) Lines(now time.Time) []string {
-	head := string(r.Provider) + ", read from the " + string(r.Source)
+	head := string(r.Provider) + ", read from the usage endpoint"
 	if r.Plan != "" {
 		head += ", plan " + r.Plan
 	}

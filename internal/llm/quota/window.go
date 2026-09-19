@@ -9,14 +9,6 @@ const (
 	Codex     Provider = "codex"
 )
 
-type Source string
-
-const (
-	SourceHeaders   Source = "response headers"
-	SourceEndpoint  Source = "usage endpoint"
-	SourceRejection Source = "quota rejection"
-)
-
 type State int
 
 const (
@@ -49,7 +41,6 @@ func (w Window) State() State {
 
 type Report struct {
 	Provider      Provider
-	Source        Source
 	Plan          string
 	Windows       []Window
 	LimitReached  bool
@@ -92,11 +83,4 @@ func (r Report) WaitUntil(now time.Time) (time.Time, bool) {
 		return time.Time{}, false
 	}
 	return latest, true
-}
-
-func ContextWindowTokens(catalogTokens, reportedTokens int) int {
-	if reportedTokens > catalogTokens {
-		return reportedTokens
-	}
-	return catalogTokens
 }

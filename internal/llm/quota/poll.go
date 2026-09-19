@@ -70,7 +70,7 @@ func (p *Poller) Poll(ctx context.Context, account Account) (Report, error) {
 	}
 	report, err := p.fetch(ctx, account)
 	if err != nil {
-		return Report{Provider: account.Provider, Source: SourceEndpoint, FetchedAt: p.now()}, err
+		return Report{Provider: account.Provider, FetchedAt: p.now()}, err
 	}
 	p.last[account.Provider] = p.now()
 	p.cached[account.Provider] = report

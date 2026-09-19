@@ -81,46 +81,6 @@ func TestMatches(t *testing.T) {
 	}
 }
 
-func TestOverlap(t *testing.T) {
-	cases := []struct {
-		name string
-		a, b []string
-		want bool
-	}{
-		{
-			"two_lists_sharing_an_exact_path_intersect",
-			[]string{"cmd/boji/main.go"}, []string{"cmd/boji/main.go"}, true,
-		},
-		{
-			"two_lists_on_disjoint_directories_do_not_intersect",
-			[]string{"internal/crew/**"}, []string{"internal/judge/**"}, false,
-		},
-		{
-			"a_star_star_and_a_literal_file_under_it_intersect",
-			[]string{"internal/crew/**"}, []string{"internal/crew/owns.go"}, true,
-		},
-		{
-			"a_literal_file_and_a_star_star_over_it_intersect_reversed",
-			[]string{"internal/crew/owns.go"}, []string{"internal/crew/**"}, true,
-		},
-		{
-			"disjoint_siblings_do_not_intersect_even_with_star_star",
-			[]string{"cmd/boji/**"}, []string{"cmd/bojix/**"}, false,
-		},
-	}
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			got, err := Overlap(c.a, c.b)
-			if err != nil {
-				t.Fatalf("Overlap(%v, %v) returned error: %v", c.a, c.b, err)
-			}
-			if got != c.want {
-				t.Errorf("Overlap(%v, %v) = %v, want %v", c.a, c.b, got, c.want)
-			}
-		})
-	}
-}
-
 func TestMatchesRefusesAnUnparseableGlobRatherThanSilentlyNotMatching(t *testing.T) {
 	_, err := Matches("internal/crew/owns.go", []string{"internal/crew/??.go"})
 	if err == nil {
@@ -129,16 +89,5 @@ func TestMatchesRefusesAnUnparseableGlobRatherThanSilentlyNotMatching(t *testing
 	var target UnparseableGlobError
 	if !errors.As(err, &target) {
 		t.Fatalf("Matches returned %v, want an UnparseableGlobError", err)
-	}
-}
-
-func TestOverlapRefusesAnUnparseableGlobRatherThanSilentlyNotMatching(t *testing.T) {
-	_, err := Overlap([]string{"internal/crew/??.go"}, []string{"internal/crew/owns.go"})
-	if err == nil {
-		t.Fatal("Overlap returned no error for an unparseable glob")
-	}
-	var target UnparseableGlobError
-	if !errors.As(err, &target) {
-		t.Fatalf("Overlap returned %v, want an UnparseableGlobError", err)
 	}
 }

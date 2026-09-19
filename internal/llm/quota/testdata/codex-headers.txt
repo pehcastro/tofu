@@ -1,5 +1,0 @@
-x-codex-primary-used-percent: 99
-x-codex-primary-window-minutes: 60
-x-codex-primary-reset-at: 1780405800
-x-codex-secondary-window-minutes: 10080
-x-codex-secondary-reset-at: 1780531200
