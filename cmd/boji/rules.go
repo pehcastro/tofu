@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"boji/internal/rule"
@@ -44,13 +45,13 @@ type ruleFireListing struct {
 }
 
 type ruleFireRecord struct {
-	RuleID     string    `json:"rule_id"`
-	Mode       string    `json:"mode"`
-	Target     string    `json:"target"`
-	Blocked    bool      `json:"blocked"`
+	ruleFireListing
 	Overridden bool      `json:"overridden"`
-	Findings   int       `json:"findings"`
 	At         time.Time `json:"at"`
+}
+
+func fireListing(f rule.Fire) ruleFireListing {
+	return ruleFireListing{RuleID: f.RuleID, Target: f.Target, Mode: f.Mode.String(), Blocked: f.Blocked, Findings: len(f.Findings)}
 }
 
 type ruleCheckReport struct {
@@ -268,15 +269,7 @@ func appendRuleFire(dir string, f rule.Fire) error {
 		return err
 	}
 	defer func() { _ = file.Close() }()
-	line, err := json.Marshal(ruleFireRecord{
-		RuleID:     f.RuleID,
-		Mode:       f.Mode.String(),
-		Target:     f.Target,
-		Blocked:    f.Blocked,
-		Overridden: f.Overridden,
-		Findings:   len(f.Findings),
-		At:         f.At,
-	})
+	line, err := json.Marshal(ruleFireRecord{ruleFireListing: fireListing(f), Overridden: f.Overridden, At: f.At})
 	if err != nil {
 		return err
 	}
@@ -294,7 +287,7 @@ func printRulesCheck(out io.Writer, fires []rule.Fire, overridden, blocked int) 
 func printRulesCheckJSON(out io.Writer, fires []rule.Fire, overridden, blocked int) error {
 	listing := make([]ruleFireListing, len(fires))
 	for i, f := range fires {
-		listing[i] = ruleFireListing{RuleID: f.RuleID, Target: f.Target, Mode: f.Mode.String(), Blocked: f.Blocked, Findings: len(f.Findings)}
+		listing[i] = fireListing(f)
 	}
 	body, err := json.Marshal(ruleCheckReport{Fires: listing, Overridden: overridden, Blocked: blocked})
 	if err != nil {
@@ -304,44 +297,49 @@ func printRulesCheckJSON(out io.Writer, fires []rule.Fire, overridden, blocked i
 	return err
 }
 
-func parseRulesListArgs(args []string) (rulesListOpts, error) {
-	var opts rulesListOpts
-	for i := 0; i < len(args); i++ {
-		arg := args[i]
-		switch arg {
-		case "--json":
-			opts.json = true
-		case "--catalog":
-			i++
-			if i >= len(args) {
-				return rulesListOpts{}, errors.New("--catalog needs a directory")
-			}
-			opts.catalog = args[i]
-		default:
-			return rulesListOpts{}, fmt.Errorf("unknown argument %q", arg)
-		}
-	}
-	return opts, nil
-}
-
-func parseRulesCheckArgs(args []string) (rulesCheckOpts, error) {
-	var opts rulesCheckOpts
+func parseRulesFlags(args []string) (catalog string, asJSON bool, rest []string, err error) {
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
 		switch {
 		case arg == "--json":
-			opts.json = true
+			asJSON = true
 		case arg == "--catalog":
 			i++
 			if i >= len(args) {
-				return rulesCheckOpts{}, errors.New("--catalog needs a directory")
+				return "", false, nil, errors.New("--catalog needs a directory")
 			}
-			opts.catalog = args[i]
-		case opts.path == "":
-			opts.path = arg
+			catalog = args[i]
+		case strings.HasPrefix(arg, "-"):
+			return "", false, nil, fmt.Errorf("unknown argument %q", arg)
 		default:
-			return rulesCheckOpts{}, fmt.Errorf("unknown argument %q", arg)
+			rest = append(rest, arg)
 		}
+	}
+	return catalog, asJSON, rest, nil
+}
+
+func parseRulesListArgs(args []string) (rulesListOpts, error) {
+	catalog, asJSON, rest, err := parseRulesFlags(args)
+	if err != nil {
+		return rulesListOpts{}, err
+	}
+	if len(rest) > 0 {
+		return rulesListOpts{}, fmt.Errorf("unknown argument %q", rest[0])
+	}
+	return rulesListOpts{catalog: catalog, json: asJSON}, nil
+}
+
+func parseRulesCheckArgs(args []string) (rulesCheckOpts, error) {
+	catalog, asJSON, rest, err := parseRulesFlags(args)
+	if err != nil {
+		return rulesCheckOpts{}, err
+	}
+	if len(rest) > 1 {
+		return rulesCheckOpts{}, fmt.Errorf("boji rules check takes one path, got %q and %q", rest[0], rest[1])
+	}
+	opts := rulesCheckOpts{catalog: catalog, json: asJSON}
+	if len(rest) == 1 {
+		opts.path = rest[0]
 	}
 	return opts, nil
 }

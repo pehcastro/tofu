@@ -18,14 +18,13 @@ func shippedRulesCatalogDir(t *testing.T) string {
 	return abs
 }
 
-func writeEmDashFixture(t *testing.T, dir, name string) string {
+func writeEmDashFixture(t *testing.T, dir, name string) {
 	t.Helper()
 	path := filepath.Join(dir, name)
 	content := "one line is fine\nthe other line breaks the rule" + string(rune(0x2014)) + "on purpose\n"
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		t.Fatalf("writing fixture: %v", err)
 	}
-	return path
 }
 
 func TestRulesListPrintsFourRules(t *testing.T) {
@@ -63,13 +62,14 @@ func TestRulesListJSON(t *testing.T) {
 }
 
 func TestRulesCheckShadowFireDoesNotChangeExitCode(t *testing.T) {
+	catalog := shippedRulesCatalogDir(t)
 	t.Chdir(t.TempDir())
 	dir := t.TempDir()
 	writeEmDashFixture(t, dir, "violation.md")
 
 	out := &bytes.Buffer{}
 	errOut := &bytes.Buffer{}
-	code := rulesCheckVerb([]string{dir, "--catalog", shippedRulesCatalogDir(t)}, out, errOut)
+	code := rulesCheckVerb([]string{dir, "--catalog", catalog}, out, errOut)
 	if code != exitOK {
 		t.Fatalf("exit code = %d, want %d (shadow never blocks), stderr %q, stdout %q", code, exitOK, errOut.String(), out.String())
 	}
@@ -81,14 +81,19 @@ func TestRulesCheckShadowFireDoesNotChangeExitCode(t *testing.T) {
 	}
 }
 
-func TestRulesCheckEnforcedFireExitsOne(t *testing.T) {
-	t.Chdir(t.TempDir())
-	scratchCatalog := t.TempDir()
+func writeEnforcedEmDashCatalog(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
 	enforcedRule := "id: em_dash\nkind: structural\nchecker: em_dash\nmode: enforced\n"
-	if err := os.WriteFile(filepath.Join(scratchCatalog, "em_dash@1.yaml"), []byte(enforcedRule), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "em_dash@1.yaml"), []byte(enforcedRule), 0o644); err != nil {
 		t.Fatalf("writing the scratch catalog: %v", err)
 	}
+	return dir
+}
 
+func TestRulesCheckEnforcedFireExitsOne(t *testing.T) {
+	t.Chdir(t.TempDir())
+	scratchCatalog := writeEnforcedEmDashCatalog(t)
 	violationDir := t.TempDir()
 	writeEmDashFixture(t, violationDir, "violation.md")
 
@@ -104,8 +109,14 @@ func TestRulesCheckEnforcedFireExitsOne(t *testing.T) {
 }
 
 func TestRulesCheckDoesNotPromoteTheShippedCatalog(t *testing.T) {
-	rules, err := readShippedRulesForTest(t)
-	if err != nil {
+	out := &bytes.Buffer{}
+	errOut := &bytes.Buffer{}
+	code := rulesListVerb([]string{"--catalog", shippedRulesCatalogDir(t), "--json"}, out, errOut)
+	if code != exitOK {
+		t.Fatalf("rulesListVerb: exit %d, stderr %q", code, errOut.String())
+	}
+	var rules []ruleListing
+	if err := json.Unmarshal(out.Bytes(), &rules); err != nil {
 		t.Fatalf("reading the shipped catalog: %v", err)
 	}
 	for _, r := range rules {
@@ -115,27 +126,9 @@ func TestRulesCheckDoesNotPromoteTheShippedCatalog(t *testing.T) {
 	}
 }
 
-func readShippedRulesForTest(t *testing.T) ([]ruleListing, error) {
-	t.Helper()
-	out := &bytes.Buffer{}
-	errOut := &bytes.Buffer{}
-	code := rulesListVerb([]string{"--catalog", shippedRulesCatalogDir(t), "--json"}, out, errOut)
-	if code != exitOK {
-		t.Fatalf("rulesListVerb: exit %d, stderr %q", code, errOut.String())
-	}
-	var listing []ruleListing
-	err := json.Unmarshal(out.Bytes(), &listing)
-	return listing, err
-}
-
 func TestRulesCheckOverrideRateIsReadable(t *testing.T) {
 	t.Chdir(t.TempDir())
-	scratchCatalog := t.TempDir()
-	enforcedRule := "id: em_dash\nkind: structural\nchecker: em_dash\nmode: enforced\n"
-	if err := os.WriteFile(filepath.Join(scratchCatalog, "em_dash@1.yaml"), []byte(enforcedRule), 0o644); err != nil {
-		t.Fatalf("writing the scratch catalog: %v", err)
-	}
-
+	scratchCatalog := writeEnforcedEmDashCatalog(t)
 	violationDir := t.TempDir()
 	writeEmDashFixture(t, violationDir, "one.md")
 	writeEmDashFixture(t, violationDir, "two.md")
@@ -152,13 +145,14 @@ func TestRulesCheckOverrideRateIsReadable(t *testing.T) {
 }
 
 func TestRulesCheckWritesTheFireWhereWhyCanFindIt(t *testing.T) {
+	catalog := shippedRulesCatalogDir(t)
 	t.Chdir(t.TempDir())
 	dir := t.TempDir()
 	writeEmDashFixture(t, dir, "violation.md")
 
 	out := &bytes.Buffer{}
 	errOut := &bytes.Buffer{}
-	if code := rulesCheckVerb([]string{dir, "--catalog", shippedRulesCatalogDir(t)}, out, errOut); code != exitOK {
+	if code := rulesCheckVerb([]string{dir, "--catalog", catalog}, out, errOut); code != exitOK {
 		t.Fatalf("rulesCheckVerb: exit %d, stderr %q", code, errOut.String())
 	}
 
