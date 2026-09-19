@@ -16,7 +16,6 @@ type stubWire struct {
 	body  []byte
 	calls int
 	reply string
-	err   error
 }
 
 func (s *stubWire) Caps() WireCaps { return s.caps }
@@ -25,9 +24,6 @@ func (s *stubWire) Model() string  { return "~typesafe/jev-latest" }
 func (s *stubWire) Post(ctx context.Context, body []byte) (Raw, error) {
 	s.calls++
 	s.body = body
-	if s.err != nil {
-		return Raw{}, s.err
-	}
 	return Raw{Body: []byte(s.reply), RequestID: "req-stub", Attempts: 1}, nil
 }
 
@@ -74,9 +70,6 @@ func TestAskReturnsTheBuildTheResponseReported(t *testing.T) {
 	}
 	if decision.TransportID != "req-stub" {
 		t.Fatalf("expected the transport id, got %q", decision.TransportID)
-	}
-	if decision.Usage.Cost != 0.000032592 {
-		t.Fatalf("expected the cost the wire reported, got %v", decision.Usage.Cost)
 	}
 	if decision.Answers["approval"].Noul != 0.11 {
 		t.Fatalf("expected the noul, got %v", decision.Answers["approval"].Noul)
@@ -130,59 +123,34 @@ func TestAskSendsARequestJustUnderTheByteCap(t *testing.T) {
 	}
 }
 
-func TestAskRejectsAnInvalidAnswerAndReleasesTheReservation(t *testing.T) {
+func TestAskRejectsAnInvalidAnswer(t *testing.T) {
 	wire := newStub(`{"model":"typesafe/jev-1.13-20260917",
  "answers":{
   "act":{"type":"choice","choice":"read","probabilities":{"read":0.6,"write":0.15,"ask":0.05},"confidence":0.75},
   "risk":{"type":"score","score":0,"probabilities":{"0":1,"1":0,"2":0,"3":0},"confidence":1},
   "approval":{"type":"noul","noul":0.11}},
  "usage":{"input_tokens":10,"output_tokens":1,"cost":0.0001},"id":"gen-1","provider":"TypeSafe"}`)
-	meter := NewSpendMeter(1)
-	client, err := NewClient(Config{Wire: wire, Meter: meter, ReservePerCall: 0.001})
+	client, err := NewClient(Config{Wire: wire})
 	if err != nil {
 		t.Fatalf("building the client: %v", err)
 	}
 	if _, err := client.Ask(context.Background(), battery()); transport.KindOf(err) != transport.KindInvalidAnswer {
 		t.Fatalf("expected kind invalid_answer, got %v", err)
 	}
-	if meter.Spent() != 0 {
-		t.Fatalf("expected nothing spent, got %v", meter.Spent())
-	}
-	if meter.Remaining() != 1 {
-		t.Fatalf("expected the reservation released, remaining is %v", meter.Remaining())
-	}
 }
 
-func TestAskSettlesTheRealCost(t *testing.T) {
-	wire := newStub(gateReply)
-	meter := NewSpendMeter(0.01)
-	client, err := NewClient(Config{Wire: wire, Meter: meter, ReservePerCall: 0.001})
+func TestAskRecordsTheReportedCostOnTheRow(t *testing.T) {
+	client, err := NewClient(Config{Wire: newStub(gateReply)})
 	if err != nil {
 		t.Fatalf("building the client: %v", err)
 	}
-	if _, err := client.Ask(context.Background(), battery()); err != nil {
+	decision, err := client.Ask(context.Background(), battery())
+	if err != nil {
 		t.Fatalf("asking: %v", err)
 	}
-	if meter.Spent() != 0.000032592 {
-		t.Fatalf("expected the reported cost, got %v", meter.Spent())
-	}
-}
-
-func TestAskStopsWhenTheBudgetIsGone(t *testing.T) {
-	wire := newStub(gateReply)
-	meter := NewSpendMeter(0.0005)
-	client, err := NewClient(Config{Wire: wire, Meter: meter, ReservePerCall: 0.001})
-	if err != nil {
-		t.Fatalf("building the client: %v", err)
-	}
-	_, err = client.Ask(context.Background(), battery())
-	if kind := transport.KindOf(err); kind != transport.KindBudget {
-		t.Fatalf("expected kind budget, got %v", err)
-	}
-	if !transport.KindOf(err).Fatal() {
-		t.Fatal("a budget failure must be fatal")
-	}
-	if wire.calls != 0 {
-		t.Fatalf("expected nothing to be sent, the wire saw %d calls", wire.calls)
+	t.Logf("build %s tokens %d/%d cost $%.9f", decision.Build,
+		decision.Usage.InputTokens, decision.Usage.OutputTokens, decision.Usage.Cost)
+	if decision.Usage.Cost != 0.000032592 {
+		t.Fatalf("expected the cost the wire reported, got %v", decision.Usage.Cost)
 	}
 }

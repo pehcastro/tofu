@@ -181,7 +181,7 @@ func TestClientOverTheWireRefusesAnOversizeRequest(t *testing.T) {
 	}
 }
 
-func liveClient(t *testing.T) (*Wire, *jev.Client, *jev.SpendMeter) {
+func liveClient(t *testing.T) (*Wire, *jev.Client) {
 	t.Helper()
 	if os.Getenv("BOJI_LIVE") != "1" {
 		t.Skip("set BOJI_LIVE=1 to call the real route")
@@ -196,16 +196,15 @@ func liveClient(t *testing.T) (*Wire, *jev.Client, *jev.SpendMeter) {
 	if err != nil {
 		t.Fatalf("building the wire: %v", err)
 	}
-	meter := jev.NewSpendMeter(0.01)
-	client, err := jev.NewClient(jev.Config{Wire: wire, Meter: meter, ReservePerCall: 0.001})
+	client, err := jev.NewClient(jev.Config{Wire: wire})
 	if err != nil {
 		t.Fatalf("building the client: %v", err)
 	}
-	return wire, client, meter
+	return wire, client
 }
 
 func TestLiveGate(t *testing.T) {
-	_, client, meter := liveClient(t)
+	_, client := liveClient(t)
 
 	start := time.Now()
 	decision, err := client.Ask(context.Background(), gateBattery())
@@ -234,7 +233,7 @@ func TestLiveGate(t *testing.T) {
 	t.Logf("build %s provider %s", decision.Build, decision.Provider)
 	t.Logf("request id %s transport id %s attempts %d", decision.RequestID, decision.TransportID, decision.Attempts)
 	t.Logf("cost $%.9f input %d tokens output %d tokens", decision.Usage.Cost, decision.Usage.InputTokens, decision.Usage.OutputTokens)
-	t.Logf("latency %d ms request %d bytes spent $%.9f", elapsed.Milliseconds(), decision.Bytes, meter.Spent())
+	t.Logf("latency %d ms request %d bytes cost $%.9f", elapsed.Milliseconds(), decision.Bytes, decision.Usage.Cost)
 
 	if decision.Build == Alias {
 		t.Fatal("the response reported the alias instead of a build id")
@@ -245,7 +244,7 @@ func TestLiveGate(t *testing.T) {
 }
 
 func TestLiveTokenEstimateAgainstTheBilledUsage(t *testing.T) {
-	wire, client, _ := liveClient(t)
+	wire, client := liveClient(t)
 
 	request := gateBattery()
 	body, err := request.Encode(wire.Model())
