@@ -18,6 +18,7 @@ const (
 	modelAttemptMillis = 30000
 	modelRetries       = 1
 	modelBackoffMillis = 500
+	modelMaxTokens     = 4096
 )
 
 const ModelOpus = "anthropic/claude-opus-5"
@@ -129,21 +130,23 @@ func (w *ModelWire) Ask(ctx context.Context, state any, battery []jev.Question) 
 	}
 
 	choice := wire.Choices[0]
+	unanswered := ModelResult{
+		Model:        wire.Model,
+		InputTokens:  wire.Usage.PromptTokens,
+		OutputTokens: wire.Usage.CompletionTokens,
+		Cost:         wire.Usage.Cost,
+		Latency:      response.Elapsed,
+		Refused:      true,
+	}
 	if choice.Message.Content == "" && (choice.Message.Refusal != "" || choice.FinishReason == "content_filter") {
-		return ModelResult{
-			Model:        wire.Model,
-			InputTokens:  wire.Usage.PromptTokens,
-			OutputTokens: wire.Usage.CompletionTokens,
-			Cost:         wire.Usage.Cost,
-			Latency:      response.Elapsed,
-			Refused:      true,
-			Refusal:      choice.Message.Refusal,
-		}, nil
+		unanswered.Refusal = choice.Message.Refusal
+		return unanswered, nil
 	}
 
 	var answer ModelAnswer
 	if err := json.Unmarshal([]byte(choice.Message.Content), &answer); err != nil {
-		return ModelResult{}, fmt.Errorf("bench/cost: %s did not answer with the requested shape: %w", w.model, err)
+		unanswered.Refusal = fmt.Sprintf("finish_reason %s, %d completion tokens, the body did not parse: %v", choice.FinishReason, wire.Usage.CompletionTokens, err)
+		return unanswered, nil
 	}
 
 	return ModelResult{
@@ -184,7 +187,8 @@ func encodeChatRequest(model string, state any, battery []jev.Question) ([]byte,
 				"schema": answerSchema,
 			},
 		},
-		"usage": map[string]any{"include": true},
+		"max_tokens": modelMaxTokens,
+		"usage":      map[string]any{"include": true},
 	}
 	body := &bytes.Buffer{}
 	if err := json.NewEncoder(body).Encode(request); err != nil {

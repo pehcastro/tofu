@@ -2,13 +2,14 @@ package cost
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"time"
 
 	benchapi "boji/bench/api"
+	"boji/bench/corpus"
 	"boji/internal/judge/jev"
 	"boji/internal/judge/ledger"
+	"boji/internal/judge/policy"
 )
 
 type CaseResult struct {
@@ -34,6 +35,9 @@ type ArmResult struct {
 	Total            ledger.Spend
 	TotalInputTokens int
 	CorrectCount     int
+	CaughtBlocks     int
+	FalseBlocks      int
+	Stopped          string
 	MoneyPerCorrect  ledger.Money
 	ListPerCorrect   ledger.ListPrice
 }
@@ -41,12 +45,12 @@ type ArmResult struct {
 type Disagreement struct {
 	Arm           string
 	Case          string
-	State         string
+	Probe         string
+	LabelBy       corpus.Labeller
 	UserRequested float64
 	Approval      float64
 	Answer        Verdict
 	Label         Verdict
-	LabelSource   string
 	Refusal       string
 }
 
@@ -61,11 +65,37 @@ type Headline struct {
 	HasRatio                 bool
 }
 
+type Pair struct {
+	Left          string
+	Right         string
+	LeftOnly      int
+	RightOnly     int
+	Difference    int
+	P             float64
+	SeparatedAt05 bool
+}
+
+type CorpusCount struct {
+	Cases        int
+	Recorded     int
+	Authored     int
+	OwnerLabels  int
+	AgentLabels  int
+	Blocks       int
+	HeldOut      int
+	HeldOutBlock int
+	SplitAt      string
+	SplitMethod  string
+}
+
 type Result struct {
 	GeneratedAt            time.Time
+	Corpus                 CorpusCount
+	Calibration            Calibration
+	Resolution             policy.Resolution
 	Arms                   []ArmResult
+	Pairs                  []Pair
 	Disagreements          []Disagreement
-	RegexMatchesLabel      []string
 	ContextTokensAvoided   int
 	ContextDollarsAvoided  ledger.Money
 	FrontierUnit           ledger.Unit
@@ -77,7 +107,11 @@ type Result struct {
 }
 
 func Run(ctx context.Context, key string) (Result, error) {
-	cases, err := benchapi.GateCases()
+	records, err := corpus.GateRecords()
+	if err != nil {
+		return Result{}, err
+	}
+	split, err := corpus.GateSplit()
 	if err != nil {
 		return Result{}, err
 	}
@@ -85,52 +119,68 @@ func Run(ctx context.Context, key string) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-
-	jevArm, err := runJev(ctx, key, cases, battery)
-	if err != nil {
-		return Result{}, err
-	}
-	opusArm, err := runModel(ctx, key, ModelOpus, cases, battery)
-	if err != nil {
-		return Result{}, err
-	}
-	fableArm, err := runModel(ctx, key, ModelFable, cases, battery)
-	if err != nil {
-		return Result{}, err
-	}
-	regexArm, err := runRegex(cases)
+	calibration, resolution, err := GateCalibration()
 	if err != nil {
 		return Result{}, err
 	}
 
-	states := make(map[string]string, len(cases))
-	for _, gateCase := range cases {
-		raw, err := json.Marshal(gateCase.State)
-		if err != nil {
-			return Result{}, fmt.Errorf("bench/cost: encoding %s for the report: %w", gateCase.Name, err)
+	byID := make(map[string]corpus.Record, len(records))
+	for _, record := range records {
+		byID[record.ID] = record
+	}
+	heldOut := make([]corpus.Record, 0, len(split.Heldout))
+	for _, id := range split.Heldout {
+		record, ok := byID[id]
+		if !ok {
+			return Result{}, fmt.Errorf("bench/cost: the split names %s and the corpus does not hold it", id)
 		}
-		states[gateCase.Name] = string(raw)
+		heldOut = append(heldOut, record)
+	}
+
+	jevArm, err := runJev(ctx, key, heldOut, battery, calibration.Point)
+	if err != nil {
+		return Result{}, err
+	}
+	opusArm, err := runModel(ctx, key, ModelOpus, heldOut, battery, calibration.Point)
+	if err != nil {
+		return Result{}, err
+	}
+	fableArm, err := runModel(ctx, key, ModelFable, heldOut, battery, calibration.Point)
+	if err != nil {
+		return Result{}, err
+	}
+	regexArm, err := runRegex(heldOut)
+	if err != nil {
+		return Result{}, err
+	}
+	floorArm, err := runAlwaysProceed(heldOut)
+	if err != nil {
+		return Result{}, err
 	}
 
 	result := Result{
 		GeneratedAt: time.Now(),
-		Arms:        []ArmResult{jevArm, regexArm, opusArm, fableArm},
+		Corpus:      countCorpus(records, heldOut, split),
+		Calibration: calibration,
+		Resolution:  resolution,
+		Arms:        []ArmResult{jevArm, regexArm, opusArm, fableArm, floorArm},
 	}
 	for _, arm := range result.Arms {
 		result.Total = result.Total.Plus(arm.Total)
 		for _, c := range arm.Cases {
-			if !c.Correct {
-				result.Disagreements = append(result.Disagreements, Disagreement{
-					Arm: arm.Arm, Case: c.Case, State: states[c.Case],
-					UserRequested: c.UserRequested, Approval: c.Approval,
-					Answer: c.Verdict, Label: c.Label, LabelSource: labelSource, Refusal: c.Refusal,
-				})
+			if c.Correct {
+				continue
 			}
-			if arm.Arm == "regex" && c.Correct {
-				result.RegexMatchesLabel = append(result.RegexMatchesLabel, c.Case)
-			}
+			record := byID[c.Case]
+			probe, _ := probeOf(record.State)
+			result.Disagreements = append(result.Disagreements, Disagreement{
+				Arm: arm.Arm, Case: c.Case, Probe: probe, LabelBy: record.LabelBy,
+				UserRequested: c.UserRequested, Approval: c.Approval,
+				Answer: c.Verdict, Label: c.Label, Refusal: c.Refusal,
+			})
 		}
 	}
+	result.Pairs = compare(result.Arms)
 
 	result.ContextTokensAvoided = jevArm.TotalInputTokens
 	result.FrontierUnit = opusArm.Unit
@@ -143,6 +193,38 @@ func Run(ctx context.Context, key string) (Result, error) {
 	result.Headline = headline(jevArm, opusArm)
 
 	return result, nil
+}
+
+func verdictOf(label corpus.Label) Verdict {
+	if label == corpus.Block {
+		return Block
+	}
+	return Proceed
+}
+
+func countCorpus(records, heldOut []corpus.Record, split corpus.Split) CorpusCount {
+	count := CorpusCount{Cases: len(records), HeldOut: len(heldOut), SplitAt: split.CreatedAt, SplitMethod: split.Method}
+	for _, record := range records {
+		if record.Recorded {
+			count.Recorded++
+		} else {
+			count.Authored++
+		}
+		if record.LabelBy == corpus.Owner {
+			count.OwnerLabels++
+		} else {
+			count.AgentLabels++
+		}
+		if record.Label == corpus.Block {
+			count.Blocks++
+		}
+	}
+	for _, record := range heldOut {
+		if record.Label == corpus.Block {
+			count.HeldOutBlock++
+		}
+	}
+	return count
 }
 
 func headline(jevArm, frontierArm ArmResult) Headline {
@@ -165,22 +247,26 @@ func headline(jevArm, frontierArm ArmResult) Headline {
 	return line
 }
 
-func buildArm(name string, unit ledger.Unit, cases []benchapi.GateCase, ask func(benchapi.GateCase) (CaseResult, error)) (ArmResult, error) {
-	arm := ArmResult{Arm: name, Unit: unit}
-	for _, gateCase := range cases {
-		result, err := ask(gateCase)
+func buildArm(name string, records []corpus.Record, ask func(corpus.Record) (CaseResult, error)) (ArmResult, error) {
+	arm := ArmResult{Arm: name, Unit: ledger.UnitMoney}
+	for _, record := range records {
+		result, err := ask(record)
 		if err != nil {
-			return ArmResult{}, fmt.Errorf("%s arm, case %s: %w", name, gateCase.Name, err)
+			arm.Stopped = fmt.Sprintf("stopped at case %s: %v", record.ID, err)
+			break
 		}
 		arm.Cases = append(arm.Cases, result)
 		arm.Total.Money += result.Money
 		arm.Total.List += result.List
-		if unit == ledger.UnitUnpriced {
-			arm.Total.UnpricedCalls++
-		}
 		arm.TotalInputTokens += result.InputTokens
 		if result.Correct {
 			arm.CorrectCount++
+		}
+		if result.Verdict == Block && result.Label == Block {
+			arm.CaughtBlocks++
+		}
+		if result.Verdict == Block && result.Label == Proceed {
+			arm.FalseBlocks++
 		}
 	}
 	if arm.CorrectCount > 0 {
@@ -194,22 +280,22 @@ func msSince(d time.Duration) float64 {
 	return float64(d) / float64(time.Millisecond)
 }
 
-func runJev(ctx context.Context, key string, cases []benchapi.GateCase, battery []jev.Question) (ArmResult, error) {
+func runJev(ctx context.Context, key string, records []corpus.Record, battery []jev.Question, point OperatingPoint) (ArmResult, error) {
 	wire, err := benchapi.NewWire(key)
 	if err != nil {
 		return ArmResult{}, err
 	}
-	return buildArm("jev", ledger.UnitMoney, cases, func(gateCase benchapi.GateCase) (CaseResult, error) {
-		call := benchapi.Ask(ctx, wire, jev.Request{State: gateCase.State, Questions: battery})
+	return buildArm("jev", records, func(record corpus.Record) (CaseResult, error) {
+		call := benchapi.Ask(ctx, wire, jev.Request{State: record.State, Questions: battery})
 		if call.Err != nil {
 			return CaseResult{}, call.Err
 		}
 		userRequested := call.Response.Answers["user_requested"].Noul
 		approval := call.Response.Answers["approval"].Noul
-		verdict := Decide(userRequested, approval)
-		label := Labels[gateCase.Name].Verdict
+		verdict := Decide(userRequested, approval, point)
+		label := verdictOf(record.Label)
 		return CaseResult{
-			Case: gateCase.Name, ModelID: call.Response.Build,
+			Case: record.ID, ModelID: call.Response.Build,
 			InputTokens: call.Response.Usage.InputTokens, OutputTokens: call.Response.Usage.OutputTokens,
 			Money: ledger.Money(call.Response.Usage.Cost), LatencyMS: msSince(call.Raw.Latency),
 			UserRequested: userRequested, Approval: approval, Verdict: verdict, Label: label, Correct: verdict == label,
@@ -217,7 +303,7 @@ func runJev(ctx context.Context, key string, cases []benchapi.GateCase, battery 
 	})
 }
 
-func runModel(ctx context.Context, key, model string, cases []benchapi.GateCase, battery []jev.Question) (ArmResult, error) {
+func runModel(ctx context.Context, key, model string, records []corpus.Record, battery []jev.Question, point OperatingPoint) (ArmResult, error) {
 	wire, err := NewModelWire(key, model)
 	if err != nil {
 		return ArmResult{}, err
@@ -226,23 +312,23 @@ func runModel(ctx context.Context, key, model string, cases []benchapi.GateCase,
 	if model == ModelFable {
 		name = "fable"
 	}
-	return buildArm(name, ledger.UnitMoney, cases, func(gateCase benchapi.GateCase) (CaseResult, error) {
-		modelResult, err := wire.Ask(ctx, gateCase.State, battery)
+	return buildArm(name, records, func(record corpus.Record) (CaseResult, error) {
+		modelResult, err := wire.Ask(ctx, record.State, battery)
 		if err != nil {
 			return CaseResult{}, err
 		}
-		label := Labels[gateCase.Name].Verdict
+		label := verdictOf(record.Label)
 		if modelResult.Refused {
 			return CaseResult{
-				Case: gateCase.Name, ModelID: modelResult.Model,
+				Case: record.ID, ModelID: modelResult.Model,
 				InputTokens: modelResult.InputTokens, OutputTokens: modelResult.OutputTokens,
 				Money: ledger.Money(modelResult.Cost), LatencyMS: msSince(modelResult.Latency),
 				Verdict: Refused, Label: label, Correct: false, Refusal: modelResult.Refusal,
 			}, nil
 		}
-		verdict := Decide(modelResult.Answer.UserRequested, modelResult.Answer.Approval)
+		verdict := Decide(modelResult.Answer.UserRequested, modelResult.Answer.Approval, point)
 		return CaseResult{
-			Case: gateCase.Name, ModelID: modelResult.Model,
+			Case: record.ID, ModelID: modelResult.Model,
 			InputTokens: modelResult.InputTokens, OutputTokens: modelResult.OutputTokens,
 			Money: ledger.Money(modelResult.Cost), LatencyMS: msSince(modelResult.Latency),
 			UserRequested: modelResult.Answer.UserRequested, Approval: modelResult.Answer.Approval,
@@ -251,13 +337,23 @@ func runModel(ctx context.Context, key, model string, cases []benchapi.GateCase,
 	})
 }
 
-func runRegex(cases []benchapi.GateCase) (ArmResult, error) {
-	return buildArm("regex", ledger.UnitMoney, cases, func(gateCase benchapi.GateCase) (CaseResult, error) {
-		start := time.Now()
-		verdict := RegexDecide(extractCommand(gateCase.State), extractUserMessage(gateCase.State))
-		label := Labels[gateCase.Name].Verdict
+func runAlwaysProceed(records []corpus.Record) (ArmResult, error) {
+	return buildArm("always-proceed", records, func(record corpus.Record) (CaseResult, error) {
+		label := verdictOf(record.Label)
 		return CaseResult{
-			Case: gateCase.Name, ModelID: "regexp", LatencyMS: msSince(time.Since(start)),
+			Case: record.ID, ModelID: "constant",
+			Verdict: Proceed, Label: label, Correct: label == Proceed,
+		}, nil
+	})
+}
+
+func runRegex(records []corpus.Record) (ArmResult, error) {
+	return buildArm("regex", records, func(record corpus.Record) (CaseResult, error) {
+		start := time.Now()
+		verdict := RegexDecide(probeOf(record.State))
+		label := verdictOf(record.Label)
+		return CaseResult{
+			Case: record.ID, ModelID: "regexp", LatencyMS: msSince(time.Since(start)),
 			Verdict: verdict, Label: label, Correct: verdict == label,
 		}, nil
 	})

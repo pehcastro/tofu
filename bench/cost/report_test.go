@@ -29,7 +29,7 @@ func (r recordedArm) build() ArmResult {
 	arm := ArmResult{Arm: r.name, Unit: ledger.UnitMoney, CorrectCount: len(r.cases),
 		Total: ledger.Spend{Money: r.total}, MoneyPerCorrect: r.perCorrect}
 	for _, c := range r.cases {
-		label := Labels[c.name].Verdict
+		label := Proceed
 		arm.Cases = append(arm.Cases, CaseResult{
 			Case: c.name, ModelID: r.model, InputTokens: c.input, OutputTokens: r.outputTokens,
 			Money: c.money, LatencyMS: c.millis, Verdict: label, Label: label, Correct: true,
@@ -84,8 +84,14 @@ func recordedResult(frontierUnit ledger.Unit) Result {
 		frontier = onASubscription(frontier)
 	}
 	result := Result{
-		GeneratedAt:            time.Date(2026, 9, 18, 0, 0, 0, 0, time.UTC),
+		GeneratedAt: time.Date(2026, 9, 18, 0, 0, 0, 0, time.UTC),
+		Corpus: CorpusCount{
+			Cases: 178, Recorded: 172, Authored: 6, OwnerLabels: 6, AgentLabels: 172,
+			Blocks: 12, HeldOut: 6, HeldOutBlock: 0,
+			SplitAt: "2026-09-19T00:00:00-03:00", SplitMethod: "stratified on label",
+		},
 		Arms:                   []ArmResult{jev, frontier},
+		Pairs:                  compare([]ArmResult{jev, frontier}),
 		ContextTokensAvoided:   jev.TotalInputTokens,
 		FrontierUnit:           frontier.Unit,
 		FrontierRateFromMoney:  frontier.Total.Money,
@@ -113,6 +119,9 @@ func TestBothMeteredArmsKeepTheHeadlineRatio(t *testing.T) {
 		"Jev decides for $0.000041 per correct decision. The opus arm decides for $0.005351, 131 times Jev.",
 		"| jev | money | 6/6 | $0.000245 |  | 0 | $0.000041 |  |",
 		"| $0.032350 | $0.000000 | 0 |",
+		"178 cases: 172 recorded from a real run, 6 authored",
+		"6 carry the owner's label, 172 carry an agent's reading",
+		"No pair separates. The set cannot tell these arms apart at this size.",
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("the rendered report is missing %q", want)
