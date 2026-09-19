@@ -29,6 +29,7 @@ func writeFixtureLedger(t *testing.T, dir string, decide ...func(*ledger.Row)) (
 		Build:     "typesafe/jev-1.13-20260917",
 		Model:     "~typesafe/jev-latest",
 		StateHash: "b1620c36",
+		State:     []byte(`{"agent":"boji","input":{"command":"ls"},"tool":"bash"}`),
 		Answers: []ledger.Answer{
 			{Question: "approval", Wording: 1, Kind: ledger.AnswerNoul, Noul: 0.06},
 			{Question: "risk", Wording: 1, Kind: ledger.AnswerScore, Score: 0, Dist: []ledger.Slice{
@@ -53,6 +54,7 @@ func writeFixtureLedger(t *testing.T, dir string, decide ...func(*ledger.Row)) (
 		Model:         "~typesafe/jev-latest",
 		StateHash:     stored.StateHash,
 		StateBuilder:  stored.StateBuilder,
+		State:         stored.State,
 		Answers:       stored.Answers,
 		Build:         stored.Build,
 		RequestID:     stored.RequestID,
@@ -227,11 +229,12 @@ func TestWhyJSONParsesAndCarriesEveryStoredField(t *testing.T) {
 		t.Fatalf("--json output does not parse: %v\n%s", err, out.String())
 	}
 
+	writtenOnlyWhenTheStateIsElided := map[string]bool{"state_elision": true}
 	rowType := reflect.TypeOf(ledger.Row{})
 	for i := 0; i < rowType.NumField(); i++ {
 		tag := rowType.Field(i).Tag.Get("json")
 		name := strings.Split(tag, ",")[0]
-		if name == "" || name == "-" {
+		if name == "" || name == "-" || writtenOnlyWhenTheStateIsElided[name] {
 			continue
 		}
 		if _, ok := fields[name]; !ok {
@@ -281,10 +284,10 @@ func TestWhyStateBuilderReadsDifferentlyForAnOldSchemaRowAndAnUnadoptedWriter(t 
 	}
 
 	unadoptedText, oldText := unadoptedOut.String(), oldOut.String()
-	if !strings.Contains(unadoptedText, "state absent, writer has not adopted the state builder") {
+	if !strings.Contains(unadoptedText, "builder absent, writer has not adopted the state builder") {
 		t.Fatalf("a current-schema row with no state builder must say the writer has not adopted it, got:\n%s", unadoptedText)
 	}
-	if !strings.Contains(oldText, "state absent, schema 2 predates the state builder") {
+	if !strings.Contains(oldText, "builder absent, schema 2 predates the state builder") {
 		t.Fatalf("an old-schema row must say its schema predates the state builder, got:\n%s", oldText)
 	}
 	t.Logf("current schema, empty state builder:\n%s", unadoptedText)
@@ -397,4 +400,235 @@ func TestWhyMakesNoNetworkCall(t *testing.T) {
 	if out.Len() == 0 {
 		t.Fatal("boji why produced no output despite a fixture ledger")
 	}
+}
+
+func TestWhyPrintsTheStateTheBuilderProduced(t *testing.T) {
+	t.Chdir(t.TempDir())
+	dir, err := ledger.Dir()
+	if err != nil {
+		t.Fatalf("Dir: %v", err)
+	}
+	body := `{"agent":"boji-run","context":{"user_recent_messages":["can you check if the tests pass?"]},"cwd":"/home/user/project","input":{"command":"git push --force"},"tool":"bash"}`
+	original, _ := writeFixtureLedger(t, dir, func(r *ledger.Row) {
+		r.StateBuilder = "tool_gate.5e17bb5c"
+		r.State = []byte(body)
+	})
+
+	var out, errOut bytes.Buffer
+	if code := whyVerb([]string{original.ID}, &out, &errOut, time.Now); code != exitOK {
+		t.Fatalf("exit = %d, stderr %s", code, errOut.String())
+	}
+	text := out.String()
+	if !strings.Contains(text, body) {
+		t.Fatalf("boji why did not print the state the builder produced, got:\n%s", text)
+	}
+	if !strings.Contains(text, "git push --force") {
+		t.Fatalf("the command the decision was about is missing, got:\n%s", text)
+	}
+	t.Logf("boji why on a row carrying its state:\n%s", text)
+}
+
+func TestWhyOnAnElidedRowSaysWhereTheWholeStateIs(t *testing.T) {
+	t.Chdir(t.TempDir())
+	dir, err := ledger.Dir()
+	if err != nil {
+		t.Fatalf("Dir: %v", err)
+	}
+	body := `{"command":"` + strings.Repeat("x", 8*1024) + `","tool":"bash"}`
+	original, _ := writeFixtureLedger(t, dir, func(r *ledger.Row) {
+		r.State = []byte(body)
+	})
+	if original.StateElision == nil {
+		t.Fatalf("a %d byte state was not elided", len(body))
+	}
+
+	var out, errOut bytes.Buffer
+	if code := whyVerb([]string{original.ID}, &out, &errOut, time.Now); code != exitOK {
+		t.Fatalf("exit = %d, stderr %s", code, errOut.String())
+	}
+	text := out.String()
+	if strings.Contains(text, body) {
+		t.Fatalf("the whole elided state was printed anyway, got %d characters", len(text))
+	}
+	for _, want := range []string{"too large for a row", original.StateElision.File, original.StateElision.Head} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("the elision line is missing %q, got:\n%s", want, text)
+		}
+	}
+	t.Logf("boji why on an elided row:\n%s", text)
+}
+
+func TestWhyOnARowFromBeforeTheStateBodyDoesNotFail(t *testing.T) {
+	t.Chdir(t.TempDir())
+	dir, err := ledger.Dir()
+	if err != nil {
+		t.Fatalf("Dir: %v", err)
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	old := `{"id":"2026-09-19-b51afec433d77bfbf5390199529615b5","schema":5,"at":"2026-09-19T00:07:22.063Z","point":"tool_gate","questions":"tool_gate","version":1,"build":"typesafe/jev-1.13-20260917","model":"~typesafe/jev-latest","state_hash":"f732f4b8","state_builder":"tool_gate.5e17bb5c","answers":[{"kind":"noul","noul":0.09,"question":"approval","wording":1}],"verdict":"allow","latency_ms":655,"cost":3.7884e-05,"request_id":"gen-dec-stub"}`
+	if err := os.WriteFile(filepath.Join(dir, "2026-09-19.jsonl"), []byte(old+"\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	var out, errOut bytes.Buffer
+	if code := whyVerb([]string{"2026-09-19-b51afec433d77bfbf5390199529615b5"}, &out, &errOut, time.Now); code != exitOK {
+		t.Fatalf("exit = %d, stderr %s", code, errOut.String())
+	}
+	text := out.String()
+	if !strings.Contains(text, "predates the state body") {
+		t.Fatalf("a row from before the state body must say so, got:\n%s", text)
+	}
+	if !strings.Contains(text, "approval") || !strings.Contains(text, "ALLOW") {
+		t.Fatalf("the rest of the row must still print, got:\n%s", text)
+	}
+	t.Logf("boji why on a row written before this change:\n%s", text)
+}
+
+func TestWhySeparatesARowThatPredatesTheStateBodyFromOneThatSimplyHasNone(t *testing.T) {
+	t.Chdir(t.TempDir())
+	dir, err := ledger.Dir()
+	if err != nil {
+		t.Fatalf("Dir: %v", err)
+	}
+	current, _ := writeFixtureLedger(t, dir, func(r *ledger.Row) {
+		r.State = nil
+	})
+
+	var out, errOut bytes.Buffer
+	if code := whyVerb([]string{current.ID}, &out, &errOut, time.Now); code != exitOK {
+		t.Fatalf("exit = %d, stderr %s", code, errOut.String())
+	}
+	text := out.String()
+	if strings.Contains(text, "predates") {
+		t.Fatalf("a row on the current schema with no state must not claim to predate the field, got:\n%s", text)
+	}
+	if !strings.Contains(text, "carries no state body") {
+		t.Fatalf("a current-schema row with no state must say so plainly, got:\n%s", text)
+	}
+}
+
+func TestWhySaysAuthorityCouldNotRelaxADenyAndNamesTheQuestion(t *testing.T) {
+	shipped, err := filepath.Abs(filepath.Join("..", "..", "catalog", "policy", "tool_gate@1.yaml"))
+	if err != nil {
+		t.Fatalf("Abs: %v", err)
+	}
+	policyBody, err := os.ReadFile(shipped)
+	if err != nil {
+		t.Fatalf("reading the shipped policy: %v", err)
+	}
+	root := t.TempDir()
+	planted := filepath.Join(root, "catalog", "policy", "tool_gate@1.yaml")
+	if err := os.MkdirAll(filepath.Dir(planted), 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	if err := os.WriteFile(planted, policyBody, 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	t.Chdir(root)
+
+	dir, err := ledger.Dir()
+	if err != nil {
+		t.Fatalf("Dir: %v", err)
+	}
+	blocked, _ := writeFixtureLedger(t, dir, func(r *ledger.Row) {
+		r.Verdict = ledger.VerdictDeny
+		r.Policy = "tool_gate"
+		r.PolicyVersion = 1
+		r.Answers = append(r.Answers,
+			ledger.Answer{Question: "from_untrusted", Wording: 1, Kind: ledger.AnswerNoul, Noul: 0.97},
+			ledger.Answer{Question: "user_requested", Wording: 1, Kind: ledger.AnswerNoul, Noul: 0.02})
+		r.Reason = &ledger.Reason{Question: "risk", Comparison: "risk_deny_at", Threshold: 2.5, Value: 2.99, Blocked: true, Mode: ledger.ModeShadow}
+	})
+	plain, _ := writeFixtureLedger(t, dir, func(r *ledger.Row) {
+		r.Verdict = ledger.VerdictDeny
+		r.Policy = "tool_gate"
+		r.PolicyVersion = 1
+		r.Reason = &ledger.Reason{Question: "risk", Comparison: "risk_deny_at", Threshold: 2.5, Value: 2.99, Mode: ledger.ModeShadow}
+	})
+
+	var out, errOut bytes.Buffer
+	if code := whyVerb([]string{blocked.ID}, &out, &errOut, time.Now); code != exitOK {
+		t.Fatalf("exit = %d, stderr %s", code, errOut.String())
+	}
+	text := out.String()
+	if !strings.Contains(text, "authority  from_untrusted 0.97") {
+		t.Fatalf("a deny authority could not relax must name from_untrusted and its value, got:\n%s", text)
+	}
+	if !strings.Contains(text, "nothing could relax this DENY") {
+		t.Fatalf("the blocked deny must say nothing could relax it, got:\n%s", text)
+	}
+
+	var plainOut, plainErr bytes.Buffer
+	if code := whyVerb([]string{plain.ID}, &plainOut, &plainErr, time.Now); code != exitOK {
+		t.Fatalf("exit = %d, stderr %s", code, plainErr.String())
+	}
+	if strings.Contains(plainOut.String(), "authority") {
+		t.Fatalf("a deny nothing tried to relax must print no authority line, got:\n%s", plainOut.String())
+	}
+	t.Logf("boji why on a deny authority could not relax:\n%s", text)
+	t.Logf("boji why on a deny nothing tried to relax:\n%s", plainOut.String())
+}
+
+func TestWhyNamesTheQuestionThatRelaxedAVerdict(t *testing.T) {
+	t.Chdir(t.TempDir())
+	dir, err := ledger.Dir()
+	if err != nil {
+		t.Fatalf("Dir: %v", err)
+	}
+	relaxed, _ := writeFixtureLedger(t, dir, func(r *ledger.Row) {
+		r.Verdict = ledger.VerdictAsk
+		r.Policy = "tool_gate"
+		r.PolicyVersion = 1
+		r.Answers = append(r.Answers,
+			ledger.Answer{Question: "from_untrusted", Wording: 1, Kind: ledger.AnswerNoul, Noul: 0.02},
+			ledger.Answer{Question: "user_requested", Wording: 1, Kind: ledger.AnswerNoul, Noul: 0.95})
+		r.Reason = &ledger.Reason{Question: "risk", Comparison: "risk_deny_at", Threshold: 2.5, Value: 2.99, RelaxedBy: "user_requested", Mode: ledger.ModeShadow}
+	})
+
+	var out, errOut bytes.Buffer
+	if code := whyVerb([]string{relaxed.ID}, &out, &errOut, time.Now); code != exitOK {
+		t.Fatalf("exit = %d, stderr %s", code, errOut.String())
+	}
+	text := out.String()
+	if !strings.Contains(text, "authority  user_requested 0.95 relaxed the verdict to ASK") {
+		t.Fatalf("a relaxed verdict must name the question that relaxed it, got:\n%s", text)
+	}
+	t.Logf("boji why on a verdict authority relaxed:\n%s", text)
+}
+
+func TestWhyStateFetchesAnElidedBodyAndTheRowPointsAtIt(t *testing.T) {
+	t.Chdir(t.TempDir())
+	dir, err := ledger.Dir()
+	if err != nil {
+		t.Fatalf("Dir: %v", err)
+	}
+	body := `{"agent":"boji","input":{"command":"grep -r ` + strings.Repeat("a", 6*1024) + ` ."},"tool":"bash"}`
+	row, _ := writeFixtureLedger(t, dir, func(r *ledger.Row) { r.State = []byte(body) })
+	if row.StateElision == nil {
+		t.Fatalf("a %d byte state was not elided", len(body))
+	}
+
+	var text, textErr bytes.Buffer
+	if code := whyVerb([]string{row.ID}, &text, &textErr, time.Now); code != exitOK {
+		t.Fatalf("exit = %d, stderr %s", code, textErr.String())
+	}
+	whole := filepath.Join(dir, row.StateElision.File)
+	if !strings.Contains(text.String(), whole) {
+		t.Fatalf("the elision line must name the whole path %s, got:\n%s", whole, text.String())
+	}
+	if !strings.Contains(text.String(), "boji why "+row.ID+" --state") {
+		t.Fatalf("the elision line must say how to read the rest, got:\n%s", text.String())
+	}
+
+	var fetched, fetchedErr bytes.Buffer
+	if code := whyVerb([]string{row.ID, "--state"}, &fetched, &fetchedErr, time.Now); code != exitOK {
+		t.Fatalf("exit = %d, stderr %s", code, fetchedErr.String())
+	}
+	if strings.TrimSpace(fetched.String()) != body {
+		t.Fatalf("--state must print the whole elided body, got %d bytes:\n%.200s", fetched.Len(), fetched.String())
+	}
+	t.Logf("boji why on an elided row:\n%s", text.String())
+	t.Logf("boji why --state printed %d bytes, head: %.120s", fetched.Len(), fetched.String())
 }

@@ -5,11 +5,14 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
 
 	"boji/internal/judge/ledger"
+	"boji/internal/judge/policy"
+	"boji/internal/sys"
 )
 
 type whyOpts struct {
@@ -18,6 +21,7 @@ type whyOpts struct {
 	count int
 	point string
 	json  bool
+	state bool
 }
 
 type notFoundError struct {
@@ -30,9 +34,11 @@ func (e notFoundError) Error() string {
 }
 
 type whyRow struct {
-	queried  ledger.Row
-	chain    ledger.Row
-	isReplay bool
+	queried   ledger.Row
+	chain     ledger.Row
+	isReplay  bool
+	blockedBy string
+	statePath string
 }
 
 func whyVerb(args []string, out, errOut io.Writer, now func() time.Time) int {
@@ -51,12 +57,30 @@ func whyVerb(args []string, out, errOut io.Writer, now func() time.Time) int {
 		return whyFail(errOut, err)
 	}
 
+	if opts.state {
+		for _, row := range rows {
+			body, err := reader.State(row)
+			if err != nil {
+				return whyFail(errOut, err)
+			}
+			if len(body) == 0 {
+				return whyFail(errOut, fmt.Errorf("row %s carries no state body", row.ID))
+			}
+			_, _ = fmt.Fprintln(out, string(body))
+		}
+		return exitOK
+	}
+
 	color := isTerminalWriter(out)
 	moment := now()
 	for i, row := range rows {
 		wr, err := loadChain(reader, row, dir)
 		if err != nil {
 			return whyFail(errOut, err)
+		}
+		wr.blockedBy = blockingQuestion(wr.chain)
+		if e := wr.chain.StateElision; e != nil {
+			wr.statePath = filepath.Join(dir, e.File)
 		}
 		precedent, err := findPrecedent(reader, wr.chain)
 		if err != nil {
@@ -122,6 +146,8 @@ func parseWhyArgs(args []string) (whyOpts, error) {
 			opts.point = args[i]
 		case arg == "--json":
 			opts.json = true
+		case arg == "--state":
+			opts.state = true
 		case strings.HasPrefix(arg, "-"):
 			return whyOpts{}, fmt.Errorf("unknown argument %q", arg)
 		default:
@@ -140,7 +166,25 @@ func parseWhyArgs(args []string) (whyOpts, error) {
 	if opts.point != "" && !opts.last {
 		return whyOpts{}, errors.New("--point only makes sense with --last")
 	}
+	if opts.state && opts.json {
+		return whyOpts{}, errors.New("--state prints the state body alone, --json prints the row, not both")
+	}
 	return opts, nil
+}
+
+func blockingQuestion(row ledger.Row) string {
+	if row.Reason == nil || !row.Reason.Blocked || row.Policy == "" {
+		return ""
+	}
+	catalog, err := sys.CatalogDir()
+	if err != nil {
+		return ""
+	}
+	pol, err := policy.Load(filepath.Join(catalog, "policy", fmt.Sprintf("%s@%d.yaml", row.Policy, row.PolicyVersion)))
+	if err != nil {
+		return ""
+	}
+	return pol.FromUntrustedQuestion
 }
 
 func whyRows(reader *ledger.Reader, dir string, opts whyOpts) ([]ledger.Row, error) {

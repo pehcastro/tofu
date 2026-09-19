@@ -18,14 +18,14 @@ func printWhy(out io.Writer, wr whyRow, now time.Time, color bool, precedent *le
 		_, _ = fmt.Fprintf(out, "%s is a replay of %s, recorded %s ago\n\n", wr.queried.ID, wr.chain.ID, agoString(now.Sub(wr.queried.At)))
 	}
 	row := wr.chain
-	state := row.StateBuilder
-	if state == "" {
-		state = "absent, writer has not adopted the state builder"
-		if row.Schema < ledger.SchemaVersion {
-			state = fmt.Sprintf("absent, schema %d predates the state builder", row.Schema)
+	builder := row.StateBuilder
+	if builder == "" {
+		builder = "absent, writer has not adopted the state builder"
+		if row.Schema < ledger.StateBuilderSchema {
+			builder = fmt.Sprintf("absent, schema %d predates the state builder", row.Schema)
 		}
 	}
-	_, _ = fmt.Fprintf(out, "%s  %s  %s@v%d  state %s  %s ago\n", row.Point, row.Build, row.Questions, row.Version, state, agoString(now.Sub(row.At)))
+	_, _ = fmt.Fprintf(out, "%s  %s  %s@v%d  builder %s  %s ago\n", row.Point, row.Build, row.Questions, row.Version, builder, agoString(now.Sub(row.At)))
 	for _, answer := range row.Answers {
 		printAnswer(out, answer)
 	}
@@ -34,10 +34,28 @@ func printWhy(out io.Writer, wr whyRow, now time.Time, color bool, precedent *le
 		_, _ = fmt.Fprintf(out, "  verdict  %s\n", colorVerdict(row.Verdict, color))
 	}
 	printThreshold(out, row)
+	printAuthority(out, row, wr.blockedBy)
 	printMode(out, row)
+	printState(out, row, wr.statePath)
 	if precedent != nil {
 		_, _ = fmt.Fprintf(out, "  nearest precedent (exact state match)  %s, %s ago\n", precedent.ID, agoString(now.Sub(precedent.At)))
 	}
+}
+
+func printState(out io.Writer, row ledger.Row, statePath string) {
+	if e := row.StateElision; e != nil {
+		_, _ = fmt.Fprintf(out, "  state      %d bytes, too large for a row, whole body in %s\n    head     %s\n    tail     %s\n    whole    boji why %s --state\n", e.Bytes, statePath, e.Head, e.Tail, row.ID)
+		return
+	}
+	if len(row.State) == 0 {
+		absence := "absent: this row is schema " + strconv.Itoa(row.Schema) + " and carries no state body"
+		if row.Schema < ledger.StateBodySchema {
+			absence = fmt.Sprintf("absent: this row is schema %d and predates the state body, which rows carry from schema %d onward", row.Schema, ledger.StateBodySchema)
+		}
+		_, _ = fmt.Fprintf(out, "  state      %s\n", absence)
+		return
+	}
+	_, _ = fmt.Fprintf(out, "  state      %d bytes\n    %s\n", len(row.State), row.State)
 }
 
 func printThreshold(out io.Writer, row ledger.Row) {
@@ -54,6 +72,39 @@ func printThreshold(out io.Writer, row ledger.Row) {
 	if r.Ambiguous != "" {
 		_, _ = fmt.Fprintf(out, "  ambiguous  %s sat inside the dead band of its threshold\n", r.Ambiguous)
 	}
+}
+
+func printAuthority(out io.Writer, row ledger.Row, blockedBy string) {
+	r := row.Reason
+	if r == nil {
+		return
+	}
+	if r.Blocked {
+		if blockedBy == "" {
+			blockedBy = fmt.Sprintf("the from-untrusted question of %s@%d, which this catalog cannot name", row.Policy, row.PolicyVersion)
+		}
+		_, _ = fmt.Fprintf(out, "  authority  %s is at or inside its block threshold, so nothing could relax this %s\n", questionWithValue(row, blockedBy), verdictNoun(row.Verdict))
+		return
+	}
+	if r.RelaxedBy != "" {
+		_, _ = fmt.Fprintf(out, "  authority  %s relaxed the verdict to %s\n", questionWithValue(row, r.RelaxedBy), verdictNoun(row.Verdict))
+	}
+}
+
+func questionWithValue(row ledger.Row, question string) string {
+	for _, answer := range row.Answers {
+		if answer.Question == question && answer.Kind == ledger.AnswerNoul {
+			return fmt.Sprintf("%s %.2f", question, answer.Noul)
+		}
+	}
+	return question
+}
+
+func verdictNoun(v ledger.Verdict) string {
+	if v == ledger.VerdictUnset {
+		return "verdict"
+	}
+	return strings.ToUpper(string(v))
 }
 
 func printMode(out io.Writer, row ledger.Row) {
