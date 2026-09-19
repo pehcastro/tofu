@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"boji/internal/judge/ledger"
+	"boji/internal/transport"
 )
 
 func writeFixtureLedger(t *testing.T, dir string, decide ...func(*ledger.Row)) (original, replay ledger.Row) {
@@ -288,6 +289,38 @@ func TestWhyStateBuilderReadsDifferentlyForAnOldSchemaRowAndAnUnadoptedWriter(t 
 	}
 	t.Logf("current schema, empty state builder:\n%s", unadoptedText)
 	t.Logf("old schema, empty state builder:\n%s", oldText)
+}
+
+func TestWhyOnAFallbackRowSaysTheTypedDecisionWasNotMade(t *testing.T) {
+	reader, _ := replayTestReader(t)
+	row := gateFallbackRow(t, reader, stubJevWire{err: transport.Fail("stub", transport.KindTimeout, nil, "no answer in 2.5 s")})
+
+	var out, errOut bytes.Buffer
+	if code := whyVerb([]string{row.ID}, &out, &errOut, time.Now); code != exitOK {
+		t.Fatalf("exit = %d, stderr %s", code, errOut.String())
+	}
+	text := out.String()
+	if !strings.Contains(text, "the typed decision was not made") {
+		t.Fatalf("a fallback row must say the decision was not made, got:\n%s", text)
+	}
+	if strings.Contains(text, " vs ") {
+		t.Fatalf("a fallback row must print no threshold comparison, got:\n%s", text)
+	}
+
+	var jsonOut, jsonErr bytes.Buffer
+	if code := whyVerb([]string{row.ID, "--json"}, &jsonOut, &jsonErr, time.Now); code != exitOK {
+		t.Fatalf("exit = %d, stderr %s", code, jsonErr.String())
+	}
+	var fields map[string]any
+	if err := json.Unmarshal(jsonOut.Bytes(), &fields); err != nil {
+		t.Fatalf("--json output does not parse: %v\n%s", err, jsonOut.String())
+	}
+	threshold, ok := fields["threshold"].(map[string]any)
+	if !ok || threshold["present"] != false {
+		t.Fatalf("--json claims a threshold was compared: %s", jsonOut.String())
+	}
+	t.Logf("boji why %s:\n%s", row.ID, text)
+	t.Logf("boji why %s --json:\n%s", row.ID, jsonOut.String())
 }
 
 func TestWhyNeedsAnIDOrLast(t *testing.T) {

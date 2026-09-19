@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"boji/internal/judge/ledger"
+	"boji/internal/judge/policy"
 	"boji/internal/konst"
 )
 
@@ -43,6 +44,10 @@ func printThreshold(out io.Writer, row ledger.Row) {
 	r := row.Reason
 	if r == nil {
 		_, _ = fmt.Fprintln(out, "  threshold  absent: no policy or calibration lock yet, waiting on E3")
+		return
+	}
+	if policy.IsUnavailable(r.Comparison) {
+		_, _ = fmt.Fprintf(out, "  threshold  not compared: the typed decision was not made (%s)\n", r.Comparison)
 		return
 	}
 	_, _ = fmt.Fprintf(out, "  threshold  %s %.2f vs %s %.2f  (%s@v%d)\n", r.Question, r.Value, r.Comparison, r.Threshold, row.Policy, row.PolicyVersion)
@@ -134,6 +139,9 @@ func thresholdJSON(row ledger.Row) map[string]any {
 	r := row.Reason
 	if r == nil {
 		return map[string]any{"present": false, "note": "no policy or calibration lock yet, waiting on E3"}
+	}
+	if policy.IsUnavailable(r.Comparison) {
+		return map[string]any{"present": false, "note": "the typed decision was not made", "unavailable": r.Comparison}
 	}
 	out := map[string]any{
 		"present":        true,

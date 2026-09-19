@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"sort"
 
 	"boji/internal/judge/jev"
@@ -43,16 +44,12 @@ type rowInput struct {
 	stateBuilder string
 }
 
-func appendRow(state any, set battery, in rowInput) (ledger.Row, error) {
-	dir, err := ledger.Dir()
-	if err != nil {
-		return ledger.Row{}, err
-	}
+func rowSkeleton(state any, set battery, in rowInput) (ledger.Row, error) {
 	hash, err := ledger.Hash(state)
 	if err != nil {
 		return ledger.Row{}, err
 	}
-	row := ledger.Row{
+	return ledger.Row{
 		Point:        set.SetName,
 		Questions:    set.SetName,
 		Version:      set.QuestionsVersion,
@@ -62,6 +59,17 @@ func appendRow(state any, set battery, in rowInput) (ledger.Row, error) {
 		Answers:      in.answers,
 		ReplayOf:     in.replayOf,
 		TurnID:       in.turnID,
+	}, nil
+}
+
+func appendRow(state any, set battery, in rowInput) (ledger.Row, error) {
+	dir, err := ledger.Dir()
+	if err != nil {
+		return ledger.Row{}, err
+	}
+	row, err := rowSkeleton(state, set, in)
+	if err != nil {
+		return ledger.Row{}, err
 	}
 	if set.Policy != nil {
 		verdict, reason, err := policy.Decide(ledgerAnswersToJev(in.answers), *set.Policy)
@@ -89,6 +97,27 @@ func appendRow(state any, set battery, in rowInput) (ledger.Row, error) {
 	return ledger.NewWriter(dir).Append(row)
 }
 
+func appendFallbackRow(state json.RawMessage, set battery, in rowInput, cause error) (ledger.Row, error) {
+	if set.Policy == nil {
+		return ledger.Row{}, cause
+	}
+	dir, err := ledger.Dir()
+	if err != nil {
+		return ledger.Row{}, err
+	}
+	row, err := rowSkeleton(state, set, in)
+	if err != nil {
+		return ledger.Row{}, err
+	}
+	fallback := policy.DecideUnavailable(cause, state)
+	sentence := fallback.Sentence()
+	row.Verdict = toLedgerVerdict(fallback.Verdict)
+	row.Policy, row.PolicyVersion = set.Policy.Name, set.Policy.PolicyVersion
+	row.Reason = toLedgerReason(fallback.Reason(*set.Policy, set.Mode))
+	row.Reason.ModeReason = &sentence
+	return ledger.NewWriter(dir).Append(row)
+}
+
 type judgeAsker struct {
 	client   *jev.Client
 	request  jev.Request
@@ -101,7 +130,7 @@ type judgeAsker struct {
 func (a *judgeAsker) Ask(ctx context.Context, _ ledger.Request) (ledger.Entry, error) {
 	decision, err := a.client.Ask(ctx, a.request)
 	if err != nil {
-		return ledger.Entry{}, err
+		return ledger.Entry{}, a.recordUnavailable(err)
 	}
 	a.decision = decision
 	answers := toLedgerAnswers(a.wording, decision.Answers)
@@ -113,25 +142,31 @@ func (a *judgeAsker) Ask(ctx context.Context, _ ledger.Request) (ledger.Entry, e
 	return ledger.Entry{RowID: row.ID, Build: decision.Build, RequestID: decision.RequestID, Answers: answers}, nil
 }
 
+func (a *judgeAsker) recordUnavailable(cause error) error {
+	state, err := json.Marshal(a.request.State)
+	if err != nil {
+		return cause
+	}
+	if _, err := appendFallbackRow(state, a.set, rowInput{}, cause); err != nil {
+		return err
+	}
+	return cause
+}
+
 func runJudge(ctx context.Context, client *jev.Client, req jev.Request, set battery, noCache bool) (judgeOutcome, error) {
+	asker := &judgeAsker{client: client, request: req, wording: set.QuestionsVersion, set: set}
 	if noCache {
-		decision, err := client.Ask(ctx, req)
+		entry, err := asker.Ask(ctx, ledger.Request{})
 		if err != nil {
 			return judgeOutcome{}, err
 		}
-		answers := toLedgerAnswers(set.QuestionsVersion, decision.Answers)
-		row, err := appendRow(req.State, set, rowInput{decision: &decision, answers: answers})
-		if err != nil {
-			return judgeOutcome{}, err
-		}
-		return judgeOutcome{decision: decision, fresh: true, answers: answers, verdict: row.Verdict, mode: set.Mode}, nil
+		return judgeOutcome{answers: entry.Answers, fresh: true, decision: asker.decision, verdict: asker.verdict, mode: set.Mode}, nil
 	}
 
 	cacheDir, err := ledger.CacheDir()
 	if err != nil {
 		return judgeOutcome{}, err
 	}
-	asker := &judgeAsker{client: client, request: req, wording: set.QuestionsVersion, set: set}
 	ledgerReq := ledger.Request{State: req.State, Questions: set.SetName, Model: openrouter.Alias, Version: set.QuestionsVersion}
 	entry, hit, err := ledger.NewCache(cacheDir).Resolve(ctx, ledgerReq, asker)
 	if err != nil {

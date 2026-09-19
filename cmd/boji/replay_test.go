@@ -2,14 +2,19 @@ package main
 
 import (
 	"bytes"
+	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"boji/internal/judge/jev"
 	"boji/internal/judge/ledger"
 	"boji/internal/judge/policy"
+	"boji/internal/transport"
+	"boji/internal/turn"
 )
 
 const replayTestPolicyBody = `name: replay_test
@@ -99,6 +104,115 @@ func replayTestReader(t *testing.T) (*ledger.Reader, *ledger.Writer) {
 		t.Fatalf("ledger.Dir: %v", err)
 	}
 	return ledger.NewReader(dir), ledger.NewWriter(dir)
+}
+
+type stubJevWire struct {
+	body []byte
+	err  error
+}
+
+func (s stubJevWire) Caps() jev.WireCaps { return jev.WireCaps{Name: "stub"} }
+
+func (s stubJevWire) Model() string { return "~typesafe/jev-latest" }
+
+func (s stubJevWire) Post(context.Context, []byte) (jev.Raw, error) {
+	if s.err != nil {
+		return jev.Raw{}, s.err
+	}
+	return jev.Raw{Body: s.body, RequestID: "stub-1", Attempts: 1}, nil
+}
+
+func gateFallbackRow(t *testing.T, reader *ledger.Reader, wire stubJevWire) ledger.Row {
+	t.Helper()
+	client, err := jev.NewClient(jev.Config{Wire: wire})
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+	pol := writeReplayPolicyFixture(t)
+	gate := &toolGate{
+		client: client,
+		cwd:    t.TempDir(),
+		set: battery{
+			SetName:          "tool_gate",
+			QuestionsVersion: 1,
+			Questions:        []jev.Question{{ID: "risk", Kind: jev.QuestionNoul, Instructions: "how risky is this call", True: "risky", False: "safe"}},
+			Policy:           &pol,
+			Mode:             policy.ModeShadow,
+		},
+	}
+	decision, err := gate.Decide(context.Background(), turn.GateRequest{
+		TurnID: "turn-1",
+		Task:   "tidy the scratch directory",
+		Tool:   "bash",
+		Args:   json.RawMessage(`{"command":"rm -rf /tmp/scratch"}`),
+	})
+	if err != nil {
+		t.Fatalf("the gate returned an error instead of a row: %v", err)
+	}
+	if decision.Verdict != string(ledger.VerdictAsk) {
+		t.Fatalf("verdict = %q, want ask", decision.Verdict)
+	}
+	row, ok, err := reader.ByID(decision.ID)
+	if err != nil || !ok {
+		t.Fatalf("ByID %s: ok=%v err=%v", decision.ID, ok, err)
+	}
+	return row
+}
+
+func TestTheGateWritesARowForEveryUnavailableReason(t *testing.T) {
+	cases := []struct {
+		name string
+		wire stubJevWire
+		want string
+	}{
+		{name: "timeout", wire: stubJevWire{err: transport.Fail("stub", transport.KindTimeout, nil, "no answer in 2.5 s")}, want: "unavailable_timeout"},
+		{name: "refusal", wire: stubJevWire{err: transport.Fail("stub", transport.KindAuth, nil, "the key was rejected")}, want: "unavailable_refused"},
+		{name: "rate limit", wire: stubJevWire{err: transport.Fail("stub", transport.KindRateLimit, nil, "429")}, want: "unavailable_rate_limit"},
+		{name: "transport failure", wire: stubJevWire{err: transport.Fail("stub", transport.KindProvider, nil, "no such host")}, want: "unavailable_transport"},
+		{name: "malformed answer", wire: stubJevWire{body: []byte(`{"model":"jev-2026-09-18","answers":{}}`)}, want: "unavailable_malformed_answer"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			reader, _ := replayTestReader(t)
+			row := gateFallbackRow(t, reader, c.wire)
+			if row.Reason.Comparison != c.want {
+				t.Fatalf("comparison = %q, want %q", row.Reason.Comparison, c.want)
+			}
+			if row.Verdict != ledger.VerdictAsk {
+				t.Fatalf("verdict = %s, want ask", row.Verdict)
+			}
+			if len(row.Answers) != 0 {
+				t.Fatalf("the row carries %d answers, an unavailable decision has none", len(row.Answers))
+			}
+			if row.TurnID != "turn-1" || row.StateBuilder == "" {
+				t.Fatalf("the row lost its turn or its state builder: turn %q builder %q", row.TurnID, row.StateBuilder)
+			}
+		})
+	}
+}
+
+func TestReplaySweepsPastRowsWhereTheTypedDecisionWasNotMade(t *testing.T) {
+	reader, writer := replayTestReader(t)
+	pol := writeReplayPolicyFixture(t)
+	writeReplayFixtureRow(t, writer, pol, replayFixtureAnswers(2), "")
+	gateFallbackRow(t, reader, stubJevWire{err: transport.Fail("stub", transport.KindTimeout, nil, "no answer in 2.5 s")})
+
+	result, err := runReplay(reader, ledger.Filter{Point: "tool_gate"}, map[string]float64{"risk_deny_at": 1.9})
+	if err != nil {
+		t.Fatalf("runReplay over a ledger holding one unavailable row: %v", err)
+	}
+	if result.read != 2 || result.rescored != 1 || result.unavailable != 1 {
+		t.Fatalf("read=%d rescored=%d unavailable=%d, want 2/1/1", result.read, result.rescored, result.unavailable)
+	}
+
+	var out, errOut bytes.Buffer
+	if code := replayVerb([]string{"--point", "tool_gate"}, &out, &errOut, time.Now); code != exitOK {
+		t.Fatalf("exit = %d, want %d, stderr %s", code, exitOK, errOut.String())
+	}
+	if !strings.Contains(out.String(), "1 unavailable") {
+		t.Fatalf("the report does not count the unavailable row: %s", out.String())
+	}
+	t.Logf("boji replay --point tool_gate:\n%s", out.String())
 }
 
 func TestReplayIdentityAtCurrentThresholdsChangesNothing(t *testing.T) {

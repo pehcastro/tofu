@@ -40,10 +40,11 @@ type replayChange struct {
 }
 
 type replayResult struct {
-	read     int
-	rescored int
-	skipped  int
-	changes  []replayChange
+	read        int
+	rescored    int
+	skipped     int
+	unavailable int
+	changes     []replayChange
 }
 
 func replayVerb(args []string, out, errOut io.Writer, now func() time.Time) int {
@@ -163,6 +164,10 @@ func runReplay(reader *ledger.Reader, filter ledger.Filter, sets map[string]floa
 	policies := map[string]policy.Policy{}
 	_, err := reader.Each(filter, func(row ledger.Row) error {
 		result.read++
+		if row.Reason != nil && policy.IsUnavailable(row.Reason.Comparison) {
+			result.unavailable++
+			return nil
+		}
 		if row.Policy == "" {
 			result.skipped++
 			return nil
@@ -222,8 +227,8 @@ func withOverrides(t policy.Thresholds, sets map[string]float64) policy.Threshol
 }
 
 func printReplay(out io.Writer, result replayResult, elapsed time.Duration, verbose bool) {
-	_, _ = fmt.Fprintf(out, "  %d rows read, %d rescored, %d skipped for having no policy    0 API calls, %s\n",
-		result.read, result.rescored, result.skipped, elapsed.Round(time.Millisecond))
+	_, _ = fmt.Fprintf(out, "  %d rows read, %d rescored, %d skipped for having no policy, %d unavailable: the typed decision was never made    0 API calls, %s\n",
+		result.read, result.rescored, result.skipped, result.unavailable, elapsed.Round(time.Millisecond))
 	_, _ = fmt.Fprintf(out, "  verdict changes: %d\n\n", len(result.changes))
 
 	for _, t := range replayTransitions(result.changes) {
