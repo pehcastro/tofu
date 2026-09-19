@@ -1,0 +1,4 @@
+id: claude-opus-5
+provider: anthropic
+window: 5h, 7d
+use: default

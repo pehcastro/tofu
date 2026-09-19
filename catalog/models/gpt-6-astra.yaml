@@ -1,0 +1,5 @@
+id: gpt-6-astra
+provider: codex
+window: 5h, 7d
+use: excluded
+reason: the owner on 2026-09-19, not fable or astra for now, those are not cheap. A current preference recorded as data, not a permanent rule

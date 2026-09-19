@@ -1,0 +1,5 @@
+id: gpt-5.5
+provider: codex
+window: 5h, 7d
+use: excluded
+reason: a previous generation the account still serves, superseded by gpt-5.6-sol

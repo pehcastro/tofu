@@ -1,0 +1,5 @@
+id: claude-sonnet-4-5-20250929
+provider: anthropic
+window: 5h, 7d
+use: excluded
+reason: a previous generation the account still serves, superseded by claude-opus-5 and claude-sonnet-5
