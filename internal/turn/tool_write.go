@@ -12,11 +12,11 @@ import (
 const writePerm = 0o644
 
 type WriteTool struct {
-	root string
+	root Root
 }
 
 func NewWriteTool(root string) (*WriteTool, error) {
-	resolved, err := resolveRoot(root)
+	resolved, err := NewRoot(root)
 	if err != nil {
 		return nil, err
 	}
@@ -50,7 +50,7 @@ func (t *WriteTool) Run(_ context.Context, raw json.RawMessage) (Result, error) 
 	if err := json.Unmarshal(raw, &args); err != nil {
 		return Result{}, fmt.Errorf("write: arguments are not the expected shape: %w", err)
 	}
-	resolved, err := confine(t.root, args.Path)
+	resolved, err := t.root.Resolve(args.Path)
 	if err != nil {
 		return Result{}, fmt.Errorf("write: %w", err)
 	}

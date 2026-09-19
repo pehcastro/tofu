@@ -6,22 +6,28 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
-	"runtime"
 	"strings"
 
 	"boji/internal/llm"
 )
 
 type BashTool struct {
-	root string
+	root  Root
+	shell string
 }
 
 func NewBashTool(root string) (*BashTool, error) {
-	resolved, err := resolveRoot(root)
+	resolved, err := NewRoot(root)
 	if err != nil {
 		return nil, err
 	}
-	return &BashTool{root: resolved}, nil
+	for _, posix := range []string{"sh", "bash"} {
+		shell, lookErr := exec.LookPath(posix)
+		if lookErr == nil {
+			return &BashTool{root: resolved, shell: shell}, nil
+		}
+	}
+	return nil, errors.New("bash: no sh or bash on PATH, and cmd.exe is not a substitute: it mangles every quoted argument and understands none of the posix syntax this tool advertises")
 }
 
 func (t *BashTool) Name() string { return "bash" }
@@ -29,7 +35,7 @@ func (t *BashTool) Name() string { return "bash" }
 func (t *BashTool) Definition() llm.Tool {
 	return llm.Tool{
 		Name:        "bash",
-		Description: "runs a shell command with its working directory pinned to the turn's working directory",
+		Description: "runs a posix shell command with its working directory pinned to the turn's working directory",
 		Parameters: map[string]any{
 			"type":       "object",
 			"properties": map[string]any{"command": map[string]any{"type": "string"}},
@@ -51,9 +57,8 @@ func (t *BashTool) Run(ctx context.Context, raw json.RawMessage) (Result, error)
 		return Result{}, errors.New("bash: command is required")
 	}
 
-	shell, flag := shellFor(runtime.GOOS)
-	cmd := exec.CommandContext(ctx, shell, flag, args.Command)
-	cmd.Dir = t.root
+	cmd := exec.CommandContext(ctx, t.shell, "-c", args.Command)
+	cmd.Dir = string(t.root)
 
 	output, runErr := cmd.CombinedOutput()
 	if cmd.ProcessState == nil {
@@ -61,11 +66,4 @@ func (t *BashTool) Run(ctx context.Context, raw json.RawMessage) (Result, error)
 	}
 	code := cmd.ProcessState.ExitCode()
 	return Result{Content: string(output), Command: args.Command, ExitCode: &code}, nil
-}
-
-func shellFor(goos string) (string, string) {
-	if goos == "windows" {
-		return "cmd", "/C"
-	}
-	return "sh", "-c"
 }

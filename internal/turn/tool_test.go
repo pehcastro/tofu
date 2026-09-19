@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 )
@@ -83,9 +82,6 @@ func TestWriteToolWritesInsideTheRootAndRefusesOutsideIt(t *testing.T) {
 }
 
 func TestBashToolRunsWithItsWorkingDirectoryPinnedToTheRoot(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("pwd-shaped check is posix shell shaped")
-	}
 	root := t.TempDir()
 	tool, err := NewBashTool(root)
 	if err != nil {
@@ -99,8 +95,10 @@ func TestBashToolRunsWithItsWorkingDirectoryPinnedToTheRoot(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolving the fixture root: %v", err)
 	}
-	if strings.TrimSpace(result.Content) != resolvedRoot {
-		t.Fatalf("pwd reported %q, wanted %q", strings.TrimSpace(result.Content), resolvedRoot)
+	reported := filepath.ToSlash(strings.TrimSpace(result.Content))
+	wantTail := filepath.ToSlash(filepath.Join(filepath.Base(filepath.Dir(resolvedRoot)), filepath.Base(resolvedRoot)))
+	if !strings.HasSuffix(reported, wantTail) {
+		t.Fatalf("pwd reported %q, wanted a path ending %q: the shell is msys and reports a posix path for the same directory", reported, wantTail)
 	}
 }
 
@@ -110,11 +108,7 @@ func TestBashToolRecordsTheExitCode(t *testing.T) {
 	if err != nil {
 		t.Fatalf("building the tool: %v", err)
 	}
-	command := `exit 7`
-	if runtime.GOOS == "windows" {
-		command = "exit /B 7"
-	}
-	result, err := tool.Run(context.Background(), json.RawMessage(`{"command":"`+command+`"}`))
+	result, err := tool.Run(context.Background(), json.RawMessage(`{"command":"exit 7"}`))
 	if err != nil {
 		t.Fatalf("running the tool: %v", err)
 	}

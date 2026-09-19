@@ -85,9 +85,5 @@ func (r Root) Resolve(requested string) (string, error) {
 	return cleaned, nil
 }
 
-func resolveRoot(dir string) (string, error) {
-	root, err := NewRoot(dir)
-	return string(root), err
-}
 
 func confine(root, requested string) (string, error) { return Root(root).Resolve(requested) }
