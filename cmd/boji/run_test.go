@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -79,6 +80,54 @@ func TestRunVerbDryRunPrintsTheRequestAndMakesNoCall(t *testing.T) {
 	}
 	if _, ok := body["tools"]; !ok {
 		t.Fatalf("expected the request to carry the tool definitions, got %v", body)
+	}
+}
+
+func toolNames(t *testing.T, set string) []string {
+	t.Helper()
+	built, err := buildRunTools(t.TempDir(), set)
+	if err != nil {
+		t.Fatalf("buildRunTools %s: %v", set, err)
+	}
+	var named []string
+	for _, definition := range built.Definitions() {
+		named = append(named, definition.Name)
+	}
+	return named
+}
+
+func TestTheDefaultToolSetAddsGlobGrepAndEditAndTheOffArmIsTheOriginalThree(t *testing.T) {
+	full := toolNames(t, toolSetFull)
+	for _, wanted := range []string{"read", "write", "bash", "glob", "grep", "edit"} {
+		if !slices.Contains(full, wanted) {
+			t.Fatalf("the default tool set is missing %s, it offers %v", wanted, full)
+		}
+	}
+	three := toolNames(t, toolSetThree)
+	if !slices.Equal(three, []string{"read", "write", "bash"}) {
+		t.Fatalf("the off arm must be the three tools the recorded runs had, it offers %v", three)
+	}
+}
+
+func TestEachArmIsToldOnlyAboutTheToolsItHas(t *testing.T) {
+	full, three := runSystem(toolSetFull), runSystem(toolSetThree)
+	for _, named := range []string{"glob", "grep", "edit"} {
+		if !strings.Contains(full, named) {
+			t.Fatalf("the default arm is not told it has %s, and a tool a model is not told about is not offered: %q", named, full)
+		}
+		if strings.Contains(three, named) {
+			t.Fatalf("the off arm is told about %s, which it does not have: %q", named, three)
+		}
+	}
+}
+
+func TestRunRefusesAToolSetItDoesNotHave(t *testing.T) {
+	if _, err := parseRunArgs([]string{"--dir", t.TempDir(), "--tools", "some", "a task"}); err == nil {
+		t.Fatal("expected an unknown tool set to be refused rather than silently defaulted")
+	}
+	opts, err := parseRunArgs([]string{"--dir", t.TempDir(), "--tools", toolSetThree, "a task"})
+	if err != nil || opts.toolSet != toolSetThree {
+		t.Fatalf("expected the three-tool arm to parse, got %+v and %v", opts, err)
 	}
 }
 
@@ -268,7 +317,7 @@ func TestRunRecordsADenyAuthorityCannotRelaxAndStillRunsTheStep(t *testing.T) {
 	if err != nil {
 		t.Fatalf("newToolGate: %v", err)
 	}
-	tools, err := buildRunTools(dir)
+	registry, err := buildRunTools(dir, toolSetFull)
 	if err != nil {
 		t.Fatalf("buildRunTools: %v", err)
 	}
@@ -286,7 +335,7 @@ func TestRunRecordsADenyAuthorityCannotRelaxAndStillRunsTheStep(t *testing.T) {
 		{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "done"},
 	}}
 
-	row, err := turn.Run(context.Background(), runConfig(opts, tools, model, turn.SpendSubscription, gate))
+	row, err := turn.Run(context.Background(), runConfig(opts, registry, model, turn.SpendSubscription, gate))
 	if err != nil {
 		t.Fatalf("turn.Run: %v", err)
 	}

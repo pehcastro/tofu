@@ -25,7 +25,7 @@ Verbs:
   usage     print every credential's quota windows and when each resets
   models    list the models each subscription serves, and why one is excluded
   why       explain a ledger row, or the last one
-  run       run one turn against a working directory
+  run       work a task in a directory until it is done
   judge     read a state and a question battery, print the answers
   check     run the tool gate on a shell command, in shadow, and log it
   label     attach an outcome to a ledger row, by id or the last one

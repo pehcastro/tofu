@@ -50,13 +50,15 @@ func (r Registry) Definitions() []llm.Tool {
 	return defs
 }
 
-func resolveRoot(root string) (string, error) {
-	if root == "" {
+type Root string
+
+func NewRoot(dir string) (Root, error) {
+	if dir == "" {
 		return "", errors.New("turn: a tool needs a working directory")
 	}
-	abs, err := filepath.Abs(root)
+	abs, err := filepath.Abs(dir)
 	if err != nil {
-		return "", fmt.Errorf("turn: working directory %q: %w", root, err)
+		return "", fmt.Errorf("turn: working directory %q: %w", dir, err)
 	}
 	info, err := os.Stat(abs)
 	if err != nil {
@@ -65,20 +67,27 @@ func resolveRoot(root string) (string, error) {
 	if !info.IsDir() {
 		return "", fmt.Errorf("turn: working directory %q is not a directory", abs)
 	}
-	return abs, nil
+	return Root(abs), nil
 }
 
-func confine(root, requested string) (string, error) {
+func (r Root) Resolve(requested string) (string, error) {
 	if strings.TrimSpace(requested) == "" {
 		return "", errors.New("path is required")
 	}
 	if filepath.IsAbs(requested) {
 		return "", fmt.Errorf("path %q must be relative to the turn's working directory", requested)
 	}
-	cleaned := filepath.Clean(filepath.Join(root, requested))
-	rel, err := filepath.Rel(root, cleaned)
+	cleaned := filepath.Clean(filepath.Join(string(r), requested))
+	rel, err := filepath.Rel(string(r), cleaned)
 	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
 		return "", fmt.Errorf("path %q escapes the turn's working directory", requested)
 	}
 	return cleaned, nil
 }
+
+func resolveRoot(dir string) (string, error) {
+	root, err := NewRoot(dir)
+	return string(root), err
+}
+
+func confine(root, requested string) (string, error) { return Root(root).Resolve(requested) }

@@ -25,12 +25,16 @@ import (
 	"boji/internal/sys"
 	"boji/internal/transport"
 	"boji/internal/turn"
+	"boji/internal/turn/tools"
 )
 
 const (
 	wireSubscription = "anthropic"
 	wireCodex        = "codex"
 	wireKey          = "openrouter"
+
+	toolSetFull  = "full"
+	toolSetThree = "three"
 
 	openRouterDefaultModel = "anthropic/claude-opus-5"
 )
@@ -42,6 +46,7 @@ type runOpts struct {
 	dryRun       bool
 	noGate       bool
 	model        string
+	toolSet      string
 	maxSteps     int
 	maxWallMS    int
 	maxDecisions int
@@ -65,23 +70,23 @@ func runVerb(args []string, out, errOut io.Writer) int {
 		return runFail(errOut, err)
 	}
 
-	tools, err := buildRunTools(opts.dir)
+	registry, err := buildRunTools(opts.dir, opts.toolSet)
 	if err != nil {
 		return runFail(errOut, err)
 	}
 
 	if opts.dryRun {
-		body, err := dryRunBody(opts, selected.ID, tools)
+		body, err := dryRunBody(opts, selected.ID, registry)
 		if err != nil {
 			return runFail(errOut, err)
 		}
 		_, _ = fmt.Fprintln(out, string(body))
 		return exitOK
 	}
-	return runTurn(opts, selected, tools, out, errOut)
+	return runTurn(opts, selected, registry, out, errOut)
 }
 
-func runTurn(opts runOpts, selected models.Model, tools turn.Registry, out, errOut io.Writer) int {
+func runTurn(opts runOpts, selected models.Model, registry turn.Registry, out, errOut io.Writer) int {
 	model, spend, store, err := runModel(opts, selected.ID)
 	if store != nil {
 		defer func() { _ = store.Close() }()
@@ -97,7 +102,7 @@ func runTurn(opts runOpts, selected models.Model, tools turn.Registry, out, errO
 		}
 	}
 
-	row, runErr := turn.Run(context.Background(), runConfig(opts, tools, model, spend, gate))
+	row, runErr := turn.Run(context.Background(), runConfig(opts, registry, model, spend, gate))
 	printRunRow(out, row, selected)
 	if gate != nil {
 		_, _ = fmt.Fprintf(out, "gate decisions %d cost $%.6f mode %s\n", gate.decisions, gate.costUSD, gate.set.Mode)
@@ -111,12 +116,13 @@ func runTurn(opts runOpts, selected models.Model, tools turn.Registry, out, errO
 	return exitOK
 }
 
-func runConfig(opts runOpts, tools turn.Registry, model turn.Model, spend turn.Spend, gate *toolGate) turn.Config {
+func runConfig(opts runOpts, registry turn.Registry, model turn.Model, spend turn.Spend, gate *toolGate) turn.Config {
 	config := turn.Config{
 		Model: model,
 		Spend: spend,
-		Tools: tools,
-		Task:  opts.task,
+		Tools: registry,
+		Task:   opts.task,
+		System: runSystem(opts.toolSet),
 		Caps: turn.Caps{
 			MaxSteps:     opts.maxSteps,
 			MaxWallClock: time.Duration(opts.maxWallMS) * time.Millisecond,
@@ -143,15 +149,15 @@ func runModel(opts runOpts, model string) (turn.Model, turn.Spend, *cred.Store, 
 	return client, turn.SpendSubscription, store, err
 }
 
-func dryRunBody(opts runOpts, model string, tools turn.Registry) ([]byte, error) {
+func dryRunBody(opts runOpts, model string, registry turn.Registry) ([]byte, error) {
 	messages := []llm.Message{{Role: llm.RoleUser, Content: opts.task}}
 	switch opts.wire {
 	case wireKey:
-		return llm.Request{Messages: messages, Tools: tools.Definitions()}.Encode(model)
+		return llm.Request{Messages: messages, Tools: registry.Definitions()}.Encode(model)
 	case wireCodex:
-		return codex.Request{Model: model, Messages: messages, Tools: tools.Definitions()}.Encode(nil)
+		return codex.Request{Model: model, Messages: messages, Tools: registry.Definitions()}.Encode(nil)
 	}
-	return anthropic.Request{Model: model, Messages: messages, Tools: tools.Definitions()}.Encode(true)
+	return anthropic.Request{Model: model, Messages: messages, Tools: registry.Definitions()}.Encode(true)
 }
 
 func keyModel(model string) (turn.Model, error) {
@@ -308,20 +314,40 @@ func sessionID() (string, error) {
 	return text[:8] + "-" + text[8:12] + "-" + text[12:16] + "-" + text[16:20] + "-" + text[20:], nil
 }
 
-func buildRunTools(dir string) (turn.Registry, error) {
-	readTool, err := turn.NewReadTool(dir)
-	if err != nil {
+const everyToolIsRelativeToTheWorkingDirectory = "you are working inside one directory. every path you name is relative to it and nothing above it exists. "
+
+func runSystem(set string) string {
+	if set == toolSetThree {
+		return everyToolIsRelativeToTheWorkingDirectory +
+			"read reads a whole file, write creates one or replaces it whole, and bash runs anything else, " +
+			"including finding a file, searching text and changing part of a file."
+	}
+	return everyToolIsRelativeToTheWorkingDirectory +
+		"prefer the tool that does the thing over a shell command that imitates it: " +
+		"glob finds files by name, grep searches their text, read reads one whole, " +
+		"edit replaces one exact stretch of text inside one, and write creates one or replaces it whole. " +
+		"bash is for the project's own commands, its package manager, its build and its tests, " +
+		"and for nothing one of those tools already does. " +
+		"never write a throwaway script to change a file: that is what edit is."
+}
+
+func buildRunTools(dir, set string) (turn.Registry, error) {
+	readTool, readErr := turn.NewReadTool(dir)
+	writeTool, writeErr := turn.NewWriteTool(dir)
+	bashTool, bashErr := turn.NewBashTool(dir)
+	if err := cmp.Or(readErr, writeErr, bashErr); err != nil {
 		return turn.Registry{}, err
 	}
-	writeTool, err := turn.NewWriteTool(dir)
-	if err != nil {
+	if set == toolSetThree {
+		return turn.NewRegistry(readTool, writeTool, bashTool), nil
+	}
+	globTool, globErr := tools.NewGlob(dir)
+	grepTool, grepErr := tools.NewGrep(dir)
+	editTool, editErr := tools.NewEdit(dir)
+	if err := cmp.Or(globErr, grepErr, editErr); err != nil {
 		return turn.Registry{}, err
 	}
-	bashTool, err := turn.NewBashTool(dir)
-	if err != nil {
-		return turn.Registry{}, err
-	}
-	return turn.NewRegistry(readTool, writeTool, bashTool), nil
+	return turn.NewRegistry(readTool, writeTool, bashTool, globTool, grepTool, editTool), nil
 }
 
 func printRunRow(out io.Writer, row turn.Row, selected models.Model) {
@@ -382,6 +408,7 @@ func runFail(errOut io.Writer, err error) int {
 func parseRunArgs(args []string) (runOpts, error) {
 	opts := runOpts{
 		wire:         wireSubscription,
+		toolSet:      toolSetFull,
 		maxSteps:     konst.TurnMaxSteps,
 		maxWallMS:    konst.TurnMaxWallClockMillis,
 		maxDecisions: konst.TurnMaxDecisions,
@@ -398,6 +425,8 @@ func parseRunArgs(args []string) (runOpts, error) {
 			opts.noGate = true
 		case "--wire":
 			opts.wire, err = nextArg(args, &i, arg)
+		case "--tools":
+			opts.toolSet, err = nextArg(args, &i, arg)
 		case "--model":
 			if opts.model, err = nextArg(args, &i, arg); err == nil && strings.TrimSpace(opts.model) == "" {
 				err = errors.New("--model needs a model id")
@@ -433,6 +462,12 @@ func parseRunArgs(args []string) (runOpts, error) {
 	default:
 		return runOpts{}, fmt.Errorf("--wire %q is none of %s, %s and %s",
 			opts.wire, wireSubscription, wireCodex, wireKey)
+	}
+	switch opts.toolSet {
+	case toolSetFull, toolSetThree:
+	default:
+		return runOpts{}, fmt.Errorf("--tools %q is neither %s nor %s, the arm that offers read, write and bash alone",
+			opts.toolSet, toolSetFull, toolSetThree)
 	}
 	return opts, nil
 }
