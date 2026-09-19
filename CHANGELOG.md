@@ -8,6 +8,25 @@ Until 1.0.0 the minor number carries breaking changes, which is what 0.x means.
 
 ## Unreleased
 
+The gate. The turn asks a typed question before it acts, and the answer is written down beside the step that caused it.
+
+### Added
+
+- `boji run` asks the tool gate battery before every tool call and records the answer. The decision row names the turn and the turn row names the decision, so either one leads to the other
+- `boji run --no-gate` is the arm that turns the gate off, and `--max-decisions` caps the spend. A turn that reaches the cap ends with its own outcome rather than continuing quietly
+- `boji rules list` and `boji rules check [path]` run the rules in the catalog over a tree and print every fire with its mode, whether it blocked, and the override rate. `--catalog <dir>` points at a scratch catalog, so an enforced mode can be tried without touching the one that ships
+- a rule may declare an exception in its own file. `em_dash` declares `except: quoted`, so an em dash inside a fence, an indented block, a backtick span or a double-quoted span is the author quoting rather than the author writing
+- a turn session file carries a schema version, and a decision row carries the turn it came from
+
+### Changed
+
+- the three copies of the percentile arithmetic under `bench/` are one package, `bench/stat`. The three were identical, so no published figure moved
+
+### Fixed
+
+- a turn session file never recorded its schema version, so every one written before today reads as schema 0 against version 1
+- `boji judge` never recorded which state builder made its state, so `boji why` said the writer had not adopted it. Every row from `boji check` had it and no row from `boji judge` did
+
 ## 0.2.0 - 2026-09-18
 
 The record. Every decision can be explained and re-scored without asking the model again.
