@@ -33,6 +33,7 @@ func printWhy(out io.Writer, wr whyRow, now time.Time, color bool, precedent *le
 		_, _ = fmt.Fprintf(out, "  verdict  %s\n", colorVerdict(row.Verdict, color))
 	}
 	printThreshold(out, row)
+	printMode(out, row)
 	if precedent != nil {
 		_, _ = fmt.Fprintf(out, "  nearest precedent (exact state match)  %s, %s ago\n", precedent.ID, agoString(now.Sub(precedent.At)))
 	}
@@ -48,6 +49,18 @@ func printThreshold(out io.Writer, row ledger.Row) {
 	if r.Ambiguous != "" {
 		_, _ = fmt.Fprintf(out, "  ambiguous  %s sat inside the dead band of its threshold\n", r.Ambiguous)
 	}
+}
+
+func printMode(out io.Writer, row ledger.Row) {
+	r := row.Reason
+	if r == nil || r.Mode == ledger.ModeUnknown {
+		return
+	}
+	sentence := fmt.Sprintf("%s@%d: %s", row.Policy, row.PolicyVersion, r.Mode)
+	if r.ModeReason != nil && *r.ModeReason != "" {
+		sentence += ", " + *r.ModeReason
+	}
+	_, _ = fmt.Fprintf(out, "  mode       %s\n", sentence)
 }
 
 func printAnswer(out io.Writer, answer ledger.Answer) {

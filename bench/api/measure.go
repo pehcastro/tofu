@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"boji/bench/stat"
 	"boji/internal/judge/jev"
 )
 
@@ -67,10 +68,10 @@ func Run(ctx context.Context, wire jev.Wire) (Result, error) {
 			result.GateCases = append(result.GateCases, GateCaseResult{Name: gateCase.Name, Answers: answers, LatencyMS: latencyMS})
 		}
 	}
-	min, max := spread(gateLatencies)
-	result.GateMedianMS = median(gateLatencies)
-	result.GateP95MS = percentile(gateLatencies, 95)
-	result.GateP99MS = percentile(gateLatencies, 99)
+	min, max := stat.Spread(gateLatencies)
+	result.GateMedianMS = stat.Median(gateLatencies)
+	result.GateP95MS = stat.Percentile(gateLatencies, 95)
+	result.GateP99MS = stat.Percentile(gateLatencies, 99)
 	result.GateMinMS = min
 	result.GateMaxMS = max
 	result.GateSampleCount = len(gateLatencies)

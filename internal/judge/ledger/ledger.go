@@ -10,7 +10,7 @@ import (
 	"boji/internal/sys"
 )
 
-const SchemaVersion = 4
+const SchemaVersion = 5
 
 const dayLayout = "2006-01-02"
 
@@ -169,6 +169,7 @@ type Reason struct {
 	Blocked    bool    `json:"blocked,omitempty"`
 	Ambiguous  string  `json:"ambiguous,omitempty"`
 	Mode       Mode    `json:"mode,omitempty"`
+	ModeReason *string `json:"mode_reason,omitempty"`
 }
 
 type Row struct {
@@ -192,6 +193,7 @@ type Row struct {
 	RequestID     string    `json:"request_id"`
 	ReplayOf      string    `json:"replay_of,omitempty"`
 	Outcome       *Outcome  `json:"outcome,omitempty"`
+	TurnID        string    `json:"turn_id,omitempty"`
 }
 
 func (r Row) Day() string {

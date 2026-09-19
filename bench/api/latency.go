@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"boji/bench/stat"
 	"boji/internal/judge/jev"
 )
 
@@ -40,13 +41,13 @@ func LatencyByStateSize(ctx context.Context, wire jev.Wire, fixtures []SizeFixtu
 			build = call.Response.Build
 			cost += call.Response.Usage.Cost
 		}
-		min, max := spread(latencies)
+		min, max := stat.Spread(latencies)
 		results = append(results, SizeLatency{
 			Label:       fixture.Label,
 			Runs:        runsPerSize,
-			MedianMS:    median(latencies),
-			P95MS:       percentile(latencies, 95),
-			P99MS:       percentile(latencies, 99),
+			MedianMS:    stat.Median(latencies),
+			P95MS:       stat.Percentile(latencies, 95),
+			P99MS:       stat.Percentile(latencies, 99),
 			MinMS:       min,
 			MaxMS:       max,
 			BilledInput: billed,
@@ -77,7 +78,7 @@ func LatencyByQuestionCount(ctx context.Context, wire jev.Wire, state any, count
 			}
 			latencies = append(latencies, float64(call.Raw.Latency)/float64(time.Millisecond))
 		}
-		results = append(results, CountLatency{Count: count, Runs: runsPerCount, MedianMS: median(latencies)})
+		results = append(results, CountLatency{Count: count, Runs: runsPerCount, MedianMS: stat.Median(latencies)})
 	}
 	return results, calls, nil
 }

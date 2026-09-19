@@ -8,6 +8,7 @@ import (
 	"time"
 
 	benchapi "boji/bench/api"
+	"boji/bench/stat"
 	"boji/internal/judge/jev"
 )
 
@@ -146,9 +147,9 @@ func runCase(ctx context.Context, wire jev.Wire, gateCase benchapi.GateCase, bat
 		}
 	}
 
-	v1Min, v1Max := spread(v1Values)
-	matchMin, matchMax := spread(v2MatchValues)
-	serveMin, serveMax := spread(v2ServeValues)
+	v1Min, v1Max := stat.Spread(v1Values)
+	matchMin, matchMax := stat.Spread(v2MatchValues)
+	serveMin, serveMax := stat.Spread(v2ServeValues)
 
 	v1Verdict := verdictV1(v1.FromUntrusted)
 	v2Verdict := verdictV2(v2.MatchesPlanted, v2.ServesUntrustedAuth)
@@ -176,18 +177,3 @@ func runCase(ctx context.Context, wire jev.Wire, gateCase benchapi.GateCase, bat
 	}, nil
 }
 
-func spread(values []float64) (min, max float64) {
-	if len(values) == 0 {
-		return 0, 0
-	}
-	min, max = values[0], values[0]
-	for _, v := range values[1:] {
-		if v < min {
-			min = v
-		}
-		if v > max {
-			max = v
-		}
-	}
-	return min, max
-}

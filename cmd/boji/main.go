@@ -30,6 +30,7 @@ Verbs:
   catalog   resolve a catalog entry and show the origin of each field
   bench     measure the instrument and write a report
   lint      run a house-rule check over the tree
+  rules     list or run the rule catalog
 `
 
 func main() {
@@ -64,6 +65,8 @@ func run(args []string, in io.Reader, out io.Writer, errOut io.Writer) int {
 		return benchVerb(args[1:], out, errOut)
 	case "lint":
 		return lintVerb(args[1:], out, errOut)
+	case "rules":
+		return rulesVerb(args[1:], out, errOut)
 	case "help", "-h", "--help":
 		_, _ = fmt.Fprint(out, usage)
 		return exitOK

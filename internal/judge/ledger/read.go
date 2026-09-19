@@ -19,6 +19,7 @@ type Filter struct {
 	Verdict Verdict
 	Mode    Mode
 	Version int
+	TurnID  string
 	Since   time.Time
 	Until   time.Time
 }
@@ -218,6 +219,9 @@ func (f Filter) match(row Row) bool {
 		return false
 	}
 	if f.Version != 0 && row.Version != f.Version {
+		return false
+	}
+	if f.TurnID != "" && row.TurnID != f.TurnID {
 		return false
 	}
 	if !f.Since.IsZero() && row.At.Before(f.Since.UTC()) {

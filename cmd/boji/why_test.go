@@ -60,6 +60,7 @@ func writeFixtureLedger(t *testing.T, dir string, decide ...func(*ledger.Row)) (
 		Policy:        stored.Policy,
 		PolicyVersion: stored.PolicyVersion,
 		Reason:        stored.Reason,
+		TurnID:        stored.TurnID,
 	})
 	if err != nil {
 		t.Fatalf("Append replay: %v", err)
@@ -197,12 +198,18 @@ func TestWhyJSONParsesAndCarriesEveryStoredField(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Dir: %v", err)
 	}
+	modeReason := "declared shadow in catalog/policy/tool_gate@1.yaml"
 	_, replay := writeFixtureLedger(t, dir, func(r *ledger.Row) {
 		r.Verdict = ledger.VerdictAllow
 		r.Policy = "tool_gate"
 		r.PolicyVersion = 1
-		r.Reason = &ledger.Reason{Question: "risk", Comparison: "risk_ask_at", Threshold: 1.5, Value: 0, Mode: ledger.ModeShadow}
+		r.Reason = &ledger.Reason{
+			Question: "risk", Comparison: "risk_ask_at", Threshold: 1.5, Value: 0,
+			DeadBand: true, RelaxedBy: "user_requested", Blocked: true, Ambiguous: "user_requested",
+			Mode: ledger.ModeShadow, ModeReason: &modeReason,
+		}
 		r.StateBuilder = "tool_gate.9f3a21c4"
+		r.TurnID = "turn-7"
 	})
 	if err := ledger.NewWriter(dir).Backfill(replay.ID, ledger.Outcome{Kind: "reverted", Detail: "test"}); err != nil {
 		t.Fatalf("Backfill: %v", err)
@@ -228,6 +235,22 @@ func TestWhyJSONParsesAndCarriesEveryStoredField(t *testing.T) {
 		}
 		if _, ok := fields[name]; !ok {
 			t.Errorf("the row carries field %q, --json dropped it: %s", name, out.String())
+		}
+	}
+
+	reason, ok := fields["reason"].(map[string]any)
+	if !ok {
+		t.Fatalf("the row carries a reason, --json dropped it: %s", out.String())
+	}
+	reasonType := reflect.TypeOf(ledger.Reason{})
+	for i := 0; i < reasonType.NumField(); i++ {
+		tag := reasonType.Field(i).Tag.Get("json")
+		name := strings.Split(tag, ",")[0]
+		if name == "" || name == "-" {
+			continue
+		}
+		if _, ok := reason[name]; !ok {
+			t.Errorf("the reason carries field %q, --json dropped it: %s", name, out.String())
 		}
 	}
 	t.Logf("boji why %s --json:\n%s", replay.ID, out.String())

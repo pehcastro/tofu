@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"boji/bench/stat"
 	"boji/internal/judge/jev"
 )
 
@@ -35,7 +36,7 @@ func RerunAgreement(ctx context.Context, wire jev.Wire, battery []jev.Question, 
 	results := make([]RerunQuestion, 0, len(battery))
 	for _, question := range battery {
 		v := values[question.ID]
-		min, max := spread(v)
+		min, max := stat.Spread(v)
 		results = append(results, RerunQuestion{
 			ID:       question.ID,
 			Values:   v,

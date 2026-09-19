@@ -11,6 +11,7 @@ import (
 	benchapi "boji/bench/api"
 	benchcost "boji/bench/cost"
 	"boji/bench/report"
+	benchturn "boji/bench/turn"
 	benchwording "boji/bench/wording"
 	"boji/internal/judge/jev"
 	"boji/internal/judge/jev/wire/openrouter"
@@ -35,6 +36,8 @@ func benchVerb(args []string, out, errOut io.Writer) int {
 		return benchCost(out, errOut, offline)
 	case "wording":
 		return benchWording(out, errOut, offline)
+	case "turn":
+		return benchTurn(out, errOut, offline)
 	}
 	return benchFail(errOut, "bench", fmt.Errorf("unknown target %q", target))
 }
@@ -124,6 +127,35 @@ func benchWording(out, errOut io.Writer, offline bool) int {
 	path := "bench/wording/" + benchwording.Filename(result.GeneratedAt)
 	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
 		return benchFail(errOut, "wording", err)
+	}
+
+	_, _ = fmt.Fprint(out, body)
+	return exitOK
+}
+
+func benchTurn(out, errOut io.Writer, offline bool) int {
+	if offline {
+		_, _ = fmt.Fprintln(out, "boji bench turn: skipped, --offline was set, no network call was made")
+		return exitOK
+	}
+
+	key, err := jev.Key(".env")
+	if err != nil {
+		return benchFail(errOut, "turn", err)
+	}
+	result, err := benchturn.Run(context.Background(), key)
+	if err != nil {
+		return benchFail(errOut, "turn", err)
+	}
+
+	body := benchturn.Render(result, benchConditions(result.GeneratedAt))
+
+	if err := os.MkdirAll("bench/turn", 0o755); err != nil {
+		return benchFail(errOut, "turn", err)
+	}
+	path := "bench/turn/" + benchturn.Filename(result.GeneratedAt)
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		return benchFail(errOut, "turn", err)
 	}
 
 	_, _ = fmt.Fprint(out, body)

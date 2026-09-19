@@ -134,6 +134,46 @@ func TestReaderFiltersOnMode(t *testing.T) {
 	}
 }
 
+func TestReaderFiltersOnTurnID(t *testing.T) {
+	dir := t.TempDir()
+	writer := NewWriter(dir)
+	at := time.Date(2026, 9, 18, 9, 0, 0, 0, time.UTC)
+	for i := 0; i < 3; i++ {
+		row := sampleRow("tool_gate", VerdictAsk, at.Add(time.Duration(i)*time.Minute))
+		row.TurnID = "turn-a"
+		if _, err := writer.Append(row); err != nil {
+			t.Fatalf("Append turn-a %d: %v", i, err)
+		}
+	}
+	row := sampleRow("tool_gate", VerdictAsk, at.Add(10*time.Minute))
+	row.TurnID = "turn-b"
+	if _, err := writer.Append(row); err != nil {
+		t.Fatalf("Append turn-b: %v", err)
+	}
+	row = sampleRow("tool_gate", VerdictAsk, at.Add(20*time.Minute))
+	if _, err := writer.Append(row); err != nil {
+		t.Fatalf("Append no-turn: %v", err)
+	}
+
+	all, _ := readAll(t, dir, Filter{})
+	if len(all) != 5 {
+		t.Fatalf("5 rows written, read %d", len(all))
+	}
+	turnA, _ := readAll(t, dir, Filter{TurnID: "turn-a"})
+	if len(turnA) != 3 {
+		t.Fatalf("turn-a filter: got %d rows, want 3", len(turnA))
+	}
+	for _, row := range turnA {
+		if row.TurnID != "turn-a" {
+			t.Fatalf("filter returned a row with turn_id %q, want turn-a", row.TurnID)
+		}
+	}
+	turnB, _ := readAll(t, dir, Filter{TurnID: "turn-b"})
+	if len(turnB) != 1 {
+		t.Fatalf("turn-b filter: got %d rows, want 1", len(turnB))
+	}
+}
+
 func TestACorruptLineInTheMiddleIsReportedAndSkipped(t *testing.T) {
 	dir := t.TempDir()
 	writer := NewWriter(dir)
