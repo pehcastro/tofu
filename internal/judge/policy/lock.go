@@ -18,16 +18,28 @@ type Lock struct {
 	VerifiedAt       time.Time
 	NFit             int
 	NVerify          int
+	Thresholds       Thresholds
+	PinsThresholds   bool
 	File             string
 }
 
 func LoadLock(path string) (Lock, error) {
 	lock := Lock{File: path}
+	inThresholds := false
 	err := scanKV(path, func(indent int, key, value string, line int) error {
-		if indent != 0 {
+		switch {
+		case indent == 0:
+			inThresholds = key == "thresholds"
+			if inThresholds {
+				lock.PinsThresholds = true
+				return nil
+			}
+			return lock.setField(key, value, path, line)
+		case inThresholds:
+			return lock.Thresholds.setField(key, value, path, line)
+		default:
 			return fmt.Errorf("%s:%d: an indent where a top-level key was expected", path, line)
 		}
-		return lock.setField(key, value, path, line)
 	})
 	if err != nil {
 		return Lock{}, err
@@ -36,6 +48,13 @@ func LoadLock(path string) (Lock, error) {
 		return Lock{}, fmt.Errorf("%s: the lock names no policy", path)
 	}
 	return lock, nil
+}
+
+func (l Lock) Pinned(pol Policy) Policy {
+	if l.PinsThresholds {
+		pol.Thresholds = l.Thresholds
+	}
+	return pol
 }
 
 func (l *Lock) setField(key, value, path string, line int) error {
