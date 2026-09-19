@@ -2,9 +2,58 @@ package harness
 
 import (
 	"fmt"
+	"os"
 	"sort"
 	"strings"
+	"time"
+
+	"boji/internal/judge/jev/wire/openrouter"
 )
+
+func Detail(row Row, gaps []string, execution Execution, ledgerDir string) string {
+	host, err := os.Hostname()
+	if err != nil {
+		host = "unknown"
+	}
+	passed, total := ChecklistScore(row)
+	modelSpend := "subscription quota, no money, so there is no model dollar figure"
+	if row.ModelDollars != nil {
+		modelSpend = fmt.Sprintf("api key $%.6f", *row.ModelDollars)
+	}
+
+	b := &strings.Builder{}
+	fmt.Fprintf(b, "ROW %s %s v%d run%d\n", row.Arm, row.Task, row.Version, row.Run)
+	fmt.Fprintf(b, "source: live, %s of wall clock in the runner, exit code %d, runner end reason %s\n",
+		execution.Elapsed().Round(time.Millisecond), execution.ExitCode, execution.EndReason)
+	fmt.Fprintf(b, "machine: %s. model credential kind: %s. date: %s. commit: %s. cli: %s\n",
+		host, row.CredentialKind, row.Start.Format("2006-01-02"), row.Commit, row.CLIVersion)
+	fmt.Fprintf(b, "model: %s. judge wire: %s. judge ledger: %s\n", row.Model, openrouter.Name, ledgerDir)
+	fmt.Fprintf(b, "checklist: %d/%d graded items\n", passed, total)
+	fmt.Fprintf(b, "model spend: %s. jev decisions: $%.6f on the openrouter key\n", modelSpend, row.JudgeDollars)
+	fmt.Fprintf(b, "wall clock: %d ms. turns: %d. end reason: %s\n", row.WallClockMS, row.Turns, row.EndReason)
+	fmt.Fprintf(b, "tokens: %d in, %d out\n", row.BilledInput, row.BilledOutput)
+	fmt.Fprintf(b, "tool calls: read %d, write %d, shell %d, other %d, failed %d\n",
+		row.ToolCalls.Read, row.ToolCalls.Write, row.ToolCalls.Shell, row.ToolCalls.Other, row.ToolCalls.Failed)
+	fmt.Fprintf(b, "caps: wall clock %s, turns %d\n", execution.Plan.Caps.WallClock, execution.Plan.Caps.TurnCap)
+	for _, gate := range row.Gates {
+		fmt.Fprintf(b, "gate %s: %s %s\n", gate.Name, gate.Status, firstLine(gate.Reason))
+	}
+	for _, item := range row.Checklist {
+		fmt.Fprintf(b, "checklist %s: %t\n", item.Item, item.Passed)
+	}
+	for _, gap := range gaps {
+		fmt.Fprintf(b, "gap: %s\n", gap)
+	}
+	return b.String()
+}
+
+func firstLine(text string) string {
+	line, _, _ := strings.Cut(strings.TrimSpace(text), "\n")
+	if len(line) > 160 {
+		return line[:160] + " ..."
+	}
+	return line
+}
 
 func Render(rows []Row) string {
 	var b strings.Builder

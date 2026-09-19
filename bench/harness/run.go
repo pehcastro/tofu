@@ -79,7 +79,7 @@ type Sources struct {
 
 var testCasePattern = regexp.MustCompile(`\b(?:test|it)\s*\(`)
 
-func V1Gates(armDir, startCommit string) Task {
+func TaskGates(armDir, startCommit string) Task {
 	return Task{
 		Dir:         armDir,
 		StartCommit: startCommit,
@@ -198,7 +198,7 @@ func credentialOfSpend(spend turn.Spend) (CredentialKind, string) {
 
 func measureGates(src Sources) ([]GateResult, string) {
 	outcomes := []GateOutcome{runCommandGate("install", src.ArmDir, []string{"bun", "install"})}
-	outcomes = append(outcomes, RunGates(V1Gates(src.ArmDir, src.StartCommit))...)
+	outcomes = append(outcomes, RunGates(TaskGates(src.ArmDir, src.StartCommit))...)
 
 	results := make([]GateResult, 0, len(outcomes))
 	for _, o := range outcomes {
@@ -218,12 +218,10 @@ func measureChecklist(src Sources) ([]ChecklistResult, string) {
 	return ChecklistResults(graded(checks)), ""
 }
 
-const recordedChecklistItem = 11
-
 func graded(checks []ChecklistCheck) []ChecklistCheck {
 	out := make([]ChecklistCheck, 0, len(checks))
 	for _, c := range checks {
-		if c.Item == recordedChecklistItem {
+		if c.Status == ChecklistCheckRecorded {
 			continue
 		}
 		out = append(out, c)

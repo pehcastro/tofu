@@ -1,0 +1,13 @@
+{
+  "what": "the boji arm's v1 result, copied out of .playground/hono-boji before the v2 arm ran over it",
+  "why": "v2 is maintenance, so every write it makes needs a before, and the playground repository holds v1 only as uncommitted working tree on branch v1",
+  "copied": "2026-09-19",
+  "source": ".playground/hono-boji",
+  "excluded": ["bun.lock", "node_modules", ".git"],
+  "method": "sha256 of each tracked file's own sha256, path-sorted, concatenated and hashed again",
+  "command": "find . -type f | sort | xargs sha256sum | sha256sum",
+  "tree_hash_without_provenance": "614cf3b8e996f7d76e880d6426de1defff988b0721dcc3448e7208889522af9f",
+  "lines": {"src/app.ts": 122, "src/store.ts": 68, "src/app.test.ts": 304, "src/index.ts": 5, "package.json": 12, "README.md": 11, "tsconfig.json": 7, ".gitignore": 2},
+  "v2_checker_floor": "4 of 20 on this tree, items 1 to 4",
+  "note": "the playground tree is not committed on branch v1 and an agent may not run a mutating git command, so this copy is the only preserved v1 result besides .playground/hono-boji-run0, which is an earlier and shorter run"
+}

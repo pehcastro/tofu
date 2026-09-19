@@ -56,15 +56,24 @@ func TestExecuteReportsAnOrdinaryFailureAsACrashNotTheCap(t *testing.T) {
 	}
 }
 
+var benchedVersions = []int{1, 2}
+
 func TestExecuteRefusesTheClaudeAndCodexArms(t *testing.T) {
 	root := repositoryRoot(t)
-	for _, arm := range []Arm{ArmClaude, ArmCodex} {
-		plan, err := BuildPlan(root, arm, "hono", 1)
-		if err != nil {
-			t.Fatalf("%s: BuildPlan: %v", arm, err)
-		}
-		if _, err := Execute(context.Background(), plan); err == nil {
-			t.Fatalf("%s: Execute returned no error, the runner must never spend that account", arm)
+	for _, version := range benchedVersions {
+		for _, arm := range []Arm{ArmClaude, ArmCodex} {
+			plan, err := BuildPlan(root, arm, "hono", version)
+			if err != nil {
+				t.Fatalf("%s v%d: BuildPlan: %v", arm, version, err)
+			}
+			printed := &strings.Builder{}
+			if err := Fprint(printed, plan); err != nil {
+				t.Fatalf("%s v%d: Fprint: %v", arm, version, err)
+			}
+			t.Logf("\n%s", printed.String())
+			if _, err := Execute(context.Background(), plan); err == nil {
+				t.Fatalf("%s v%d: Execute returned no error, the runner must never spend that account", arm, version)
+			}
 		}
 	}
 }
@@ -80,12 +89,14 @@ func TestExecuteStartsNoProcessForTheClaudeAndCodexArms(t *testing.T) {
 	}
 	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
 
-	for _, arm := range []Arm{ArmClaude, ArmCodex} {
-		plan, err := BuildPlan(root, arm, "hono", 1)
-		if err != nil {
-			t.Fatalf("%s: BuildPlan: %v", arm, err)
+	for _, version := range benchedVersions {
+		for _, arm := range []Arm{ArmClaude, ArmCodex} {
+			plan, err := BuildPlan(root, arm, "hono", version)
+			if err != nil {
+				t.Fatalf("%s v%d: BuildPlan: %v", arm, version, err)
+			}
+			_, _ = Execute(context.Background(), plan)
 		}
-		_, _ = Execute(context.Background(), plan)
 	}
 	if _, err := os.Stat(marker); err == nil {
 		t.Fatal("a sentinel executable ran: Execute started a real process for an arm it must refuse")
@@ -172,6 +183,21 @@ const (
 	harnessTestdataDir   = "bench/harness/testdata/boji-1"
 	gradedChecklistItems = 19
 )
+
+func TestGradedDropsARecordedItemByItsStatusAndNotByItsNumber(t *testing.T) {
+	checks := []ChecklistCheck{
+		{Item: 11, Status: ChecklistCheckPassed},
+		{Item: 14, Status: ChecklistCheckRecorded},
+		{Item: 20, Status: ChecklistCheckFailed},
+	}
+	kept := graded(checks)
+	if len(kept) != 2 {
+		t.Fatalf("graded kept %d of %d checks, want 2", len(kept), len(checks))
+	}
+	if kept[0].Item != 11 || kept[1].Item != 20 {
+		t.Fatalf("graded kept items %d and %d, want 11 and 20: v1 numbered its recorded item 11 and v2 does not, so the number cannot decide this", kept[0].Item, kept[1].Item)
+	}
+}
 
 func repositoryRoot(t *testing.T) string {
 	t.Helper()

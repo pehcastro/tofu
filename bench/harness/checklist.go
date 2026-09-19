@@ -47,9 +47,9 @@ func RunChecklist(bunBin, checkerPath, armDir string) ([]ChecklistCheck, error) 
 	if err := cmd.Run(); err != nil {
 		var exitErr *exec.ExitError
 		if errors.As(err, &exitErr) {
-			return nil, fmt.Errorf("v1 checker exited nonzero: %s", stderr.String())
+			return nil, fmt.Errorf("%s exited nonzero: %s", checkerPath, stderr.String())
 		}
-		return nil, fmt.Errorf("v1 checker did not run: %w", err)
+		return nil, fmt.Errorf("%s did not run: %w", checkerPath, err)
 	}
 	return parseChecklistOutput(stdout.Bytes())
 }
@@ -70,7 +70,7 @@ func parseChecklistOutput(out []byte) ([]ChecklistCheck, error) {
 		}
 		var parsed checklistLine
 		if err := json.Unmarshal(line, &parsed); err != nil {
-			return nil, fmt.Errorf("v1 checker line %q: %w", line, err)
+			return nil, fmt.Errorf("checker line %q: %w", line, err)
 		}
 		var itemNumber int
 		if err := json.Unmarshal(parsed.Item, &itemNumber); err != nil {
@@ -83,7 +83,7 @@ func parseChecklistOutput(out []byte) ([]ChecklistCheck, error) {
 		})
 	}
 	if err := scanner.Err(); err != nil {
-		return nil, fmt.Errorf("reading v1 checker output: %w", err)
+		return nil, fmt.Errorf("reading checker output: %w", err)
 	}
 	return checks, nil
 }
