@@ -12,7 +12,9 @@ require modernc.org/sqlite v1.59.0
 require (
 	4d63.com/gocheckcompilerdirectives v1.3.0 // indirect
 	4d63.com/gochecknoglobals v0.2.2 // indirect
-	charm.land/lipgloss/v2 v2.0.3 // indirect
+	charm.land/bubbles/v2 v2.2.1 // indirect
+	charm.land/bubbletea/v2 v2.0.9 // indirect
+	charm.land/lipgloss/v2 v2.0.6 // indirect
 	codeberg.org/chavacava/garif v0.2.0 // indirect
 	codeberg.org/polyfloyd/go-errorlint v1.9.0 // indirect
 	dev.gaijin.team/go/exhaustruct/v4 v4.0.0 // indirect
@@ -39,6 +41,7 @@ require (
 	github.com/alingse/nilnesserr v0.2.0 // indirect
 	github.com/ashanbrown/forbidigo/v2 v2.3.1 // indirect
 	github.com/ashanbrown/makezero/v2 v2.2.1 // indirect
+	github.com/atotto/clipboard v0.1.4 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/bkielbasa/cyclop v1.2.3 // indirect
 	github.com/blizzy78/varnamelen v0.8.0 // indirect
@@ -53,8 +56,8 @@ require (
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/charithe/durationcheck v0.0.11 // indirect
 	github.com/charmbracelet/colorprofile v0.4.3 // indirect
-	github.com/charmbracelet/ultraviolet v0.0.0-20251205161215-1948445e3318 // indirect
-	github.com/charmbracelet/x/ansi v0.11.7 // indirect
+	github.com/charmbracelet/ultraviolet v0.0.0-20260811164956-006e29f97886 // indirect
+	github.com/charmbracelet/x/ansi v0.11.8 // indirect
 	github.com/charmbracelet/x/term v0.2.2 // indirect
 	github.com/charmbracelet/x/termios v0.1.1 // indirect
 	github.com/charmbracelet/x/windows v0.2.2 // indirect
@@ -130,7 +133,7 @@ require (
 	github.com/ldez/tagliatelle v0.7.2 // indirect
 	github.com/ldez/usetesting v0.5.0 // indirect
 	github.com/leonklingele/grouper v1.1.2 // indirect
-	github.com/lucasb-eyer/go-colorful v1.4.0 // indirect
+	github.com/lucasb-eyer/go-colorful v1.4.1 // indirect
 	github.com/macabu/inamedparam v0.2.0 // indirect
 	github.com/magiconair/properties v1.8.6 // indirect
 	github.com/manuelarte/embeddedstructfieldcheck v0.4.0 // indirect
@@ -140,7 +143,7 @@ require (
 	github.com/matoous/godox v1.1.0 // indirect
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.24 // indirect
-	github.com/mattn/go-runewidth v0.0.23 // indirect
+	github.com/mattn/go-runewidth v0.0.27 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.1 // indirect
 	github.com/mgechev/revive v1.15.0 // indirect
 	github.com/mitchellh/go-homedir v1.1.0 // indirect

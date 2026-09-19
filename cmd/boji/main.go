@@ -16,6 +16,7 @@ const (
 const usage = `boji is a coding agent harness.
 
 Usage:
+  boji                    start the app in this directory
   boji <verb> [arguments]
 
 Verbs:
@@ -41,8 +42,7 @@ func main() {
 
 func run(args []string, in io.Reader, out io.Writer, errOut io.Writer) int {
 	if len(args) == 0 {
-		_, _ = fmt.Fprint(errOut, usage)
-		return exitUsage
+		return appVerb(in, out, errOut)
 	}
 	switch args[0] {
 	case "version":
