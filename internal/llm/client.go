@@ -24,10 +24,12 @@ type Decision struct {
 	RequestID   string
 	TransportID string
 	Outcome     Outcome
+	Stop        string
 	Content     string
 	ToolCalls   []ToolCall
 	Refusal     string
 	Usage       Usage
+	ListCostUSD float64
 	Attempts    int
 	Latency     time.Duration
 	Bytes       int
