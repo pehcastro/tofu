@@ -176,4 +176,3 @@ func runCase(ctx context.Context, wire jev.Wire, gateCase benchapi.GateCase, bat
 		},
 	}, nil
 }
-

@@ -12,8 +12,12 @@ import (
 )
 
 func TestBuildPlanPrintsCommandDirEnvAndCapsForAllThreeArms(t *testing.T) {
+	root := repositoryRoot(t)
 	for _, arm := range []Arm{ArmClaude, ArmCodex, ArmBoji} {
-		plan := BuildPlan(arm, "hono", 1)
+		plan, err := BuildPlan(root, arm, "hono", 1)
+		if err != nil {
+			t.Fatalf("%s: BuildPlan: %v", arm, err)
+		}
 		var buf bytes.Buffer
 		if err := Fprint(&buf, plan); err != nil {
 			t.Fatalf("%s: Fprint: %v", arm, err)
@@ -34,6 +38,34 @@ func TestBuildPlanPrintsCommandDirEnvAndCapsForAllThreeArms(t *testing.T) {
 	}
 }
 
+func TestBuildPlanPassesThePromptTextNotItsPath(t *testing.T) {
+	root := repositoryRoot(t)
+	raw, err := os.ReadFile(PromptPath(root, 1))
+	if err != nil {
+		t.Fatalf("read the v1 prompt: %v", err)
+	}
+	want := strings.TrimSpace(string(raw))
+
+	plan, err := BuildPlan(root, ArmBoji, "hono", 1)
+	if err != nil {
+		t.Fatalf("BuildPlan: %v", err)
+	}
+	if plan.Command[2] != want {
+		t.Errorf("the positional argument is %q, want the prompt text itself", plan.Command[2])
+	}
+	for _, arg := range plan.Command {
+		if strings.HasSuffix(arg, ".prompt.txt") {
+			t.Errorf("the command still carries a prompt file path %q, boji run takes the task as a string", arg)
+		}
+	}
+}
+
+func TestBuildPlanFailsWhenThePromptIsMissing(t *testing.T) {
+	if _, err := BuildPlan(t.TempDir(), ArmBoji, "hono", 1); err == nil {
+		t.Fatal("BuildPlan returned no error for a root with no prompt file")
+	}
+}
+
 func TestBuildPlanFileNeverImportsOSExec(t *testing.T) {
 	fset := token.NewFileSet()
 	file, err := parser.ParseFile(fset, "plan.go", nil, parser.ImportsOnly)
@@ -51,6 +83,7 @@ func TestBuildPlanStartsNoProcessForAnyArm(t *testing.T) {
 	if runtime.GOOS != "windows" {
 		t.Skip("sentinel scripts here are written for Windows PATHEXT resolution")
 	}
+	root := repositoryRoot(t)
 	dir := t.TempDir()
 	marker := filepath.Join(dir, "marker.txt")
 	script := "@echo ran > \"" + marker + "\"\r\n"
@@ -59,14 +92,13 @@ func TestBuildPlanStartsNoProcessForAnyArm(t *testing.T) {
 			t.Fatalf("write sentinel %s: %v", name, err)
 		}
 	}
-	oldPath := os.Getenv("PATH")
-	if err := os.Setenv("PATH", dir+string(os.PathListSeparator)+oldPath); err != nil {
-		t.Fatalf("set PATH: %v", err)
-	}
-	defer func() { _ = os.Setenv("PATH", oldPath) }()
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
 
 	for _, arm := range []Arm{ArmClaude, ArmCodex, ArmBoji} {
-		plan := BuildPlan(arm, "hono", 1)
+		plan, err := BuildPlan(root, arm, "hono", 1)
+		if err != nil {
+			t.Fatalf("%s: BuildPlan: %v", arm, err)
+		}
 		var buf bytes.Buffer
 		if err := Fprint(&buf, plan); err != nil {
 			t.Fatalf("%s: Fprint: %v", arm, err)
