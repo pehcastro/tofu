@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cmp"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
@@ -17,7 +18,9 @@ import (
 	"boji/internal/konst"
 	"boji/internal/llm"
 	"boji/internal/llm/cred"
+	"boji/internal/llm/models"
 	"boji/internal/llm/wire/anthropic"
+	"boji/internal/llm/wire/codex"
 	"boji/internal/llm/wire/openrouter"
 	"boji/internal/sys"
 	"boji/internal/transport"
@@ -26,7 +29,10 @@ import (
 
 const (
 	wireSubscription = "anthropic"
+	wireCodex        = "codex"
 	wireKey          = "openrouter"
+
+	openRouterDefaultModel = "anthropic/claude-opus-5"
 )
 
 type runOpts struct {
@@ -41,19 +47,20 @@ type runOpts struct {
 	maxDecisions int
 }
 
-func (o runOpts) modelID() string {
-	switch {
-	case o.model != "":
-		return o.model
-	case o.wire == wireKey:
-		return konst.TurnOpenRouterModel
-	default:
-		return konst.TurnAnthropicModel
+func chooseModel(opts runOpts) (models.Model, error) {
+	if opts.wire == wireKey {
+		return models.Model{ID: cmp.Or(opts.model, openRouterDefaultModel)}, nil
 	}
+	return selectModel(opts.wire, opts.model)
 }
 
 func runVerb(args []string, out, errOut io.Writer) int {
 	opts, err := parseRunArgs(args)
+	if err != nil {
+		return runFail(errOut, err)
+	}
+
+	selected, err := chooseModel(opts)
 	if err != nil {
 		return runFail(errOut, err)
 	}
@@ -64,18 +71,18 @@ func runVerb(args []string, out, errOut io.Writer) int {
 	}
 
 	if opts.dryRun {
-		body, err := dryRunBody(opts, tools)
+		body, err := dryRunBody(opts, selected.ID, tools)
 		if err != nil {
 			return runFail(errOut, err)
 		}
 		_, _ = fmt.Fprintln(out, string(body))
 		return exitOK
 	}
-	return runTurn(opts, tools, out, errOut)
+	return runTurn(opts, selected, tools, out, errOut)
 }
 
-func runTurn(opts runOpts, tools turn.Registry, out, errOut io.Writer) int {
-	model, spend, store, err := runModel(opts)
+func runTurn(opts runOpts, selected models.Model, tools turn.Registry, out, errOut io.Writer) int {
+	model, spend, store, err := runModel(opts, selected.ID)
 	if store != nil {
 		defer func() { _ = store.Close() }()
 	}
@@ -91,7 +98,7 @@ func runTurn(opts runOpts, tools turn.Registry, out, errOut io.Writer) int {
 	}
 
 	row, runErr := turn.Run(context.Background(), runConfig(opts, tools, model, spend, gate))
-	printRunRow(out, row)
+	printRunRow(out, row, selected)
 	if gate != nil {
 		_, _ = fmt.Fprintf(out, "gate decisions %d cost $%.6f mode %s\n", gate.decisions, gate.costUSD, gate.set.Mode)
 	}
@@ -123,29 +130,28 @@ func runConfig(opts runOpts, tools turn.Registry, model turn.Model, spend turn.S
 	return config
 }
 
-func runModel(opts runOpts) (turn.Model, turn.Spend, *cred.Store, error) {
-	if opts.wire == wireKey {
-		model, err := keyModel(opts.modelID())
-		return model, turn.SpendAPIKey, nil, err
+func runModel(opts runOpts, model string) (turn.Model, turn.Spend, *cred.Store, error) {
+	switch opts.wire {
+	case wireKey:
+		client, err := keyModel(model)
+		return client, turn.SpendAPIKey, nil, err
+	case wireCodex:
+		client, store, err := codexModel(model)
+		return client, turn.SpendSubscription, store, err
 	}
-	model, store, err := subscriptionModel(opts.modelID())
-	return model, turn.SpendSubscription, store, err
+	client, store, err := subscriptionModel(model)
+	return client, turn.SpendSubscription, store, err
 }
 
-func dryRunBody(opts runOpts, tools turn.Registry) ([]byte, error) {
-	if opts.wire == wireKey {
-		request := llm.Request{
-			Messages: []llm.Message{{Role: llm.RoleUser, Content: opts.task}},
-			Tools:    tools.Definitions(),
-		}
-		return request.Encode(opts.modelID())
+func dryRunBody(opts runOpts, model string, tools turn.Registry) ([]byte, error) {
+	messages := []llm.Message{{Role: llm.RoleUser, Content: opts.task}}
+	switch opts.wire {
+	case wireKey:
+		return llm.Request{Messages: messages, Tools: tools.Definitions()}.Encode(model)
+	case wireCodex:
+		return codex.Request{Model: model, Messages: messages, Tools: tools.Definitions()}.Encode(nil)
 	}
-	request := anthropic.Request{
-		Model:    opts.modelID(),
-		Messages: []llm.Message{{Role: llm.RoleUser, Content: opts.task}},
-		Tools:    tools.Definitions(),
-	}
-	return request.Encode(true)
+	return anthropic.Request{Model: model, Messages: messages, Tools: tools.Definitions()}.Encode(true)
 }
 
 func keyModel(model string) (turn.Model, error) {
@@ -170,25 +176,33 @@ func keyModel(model string) (turn.Model, error) {
 	return llm.NewClient(wire)
 }
 
-func subscriptionModel(model string) (turn.Model, *cred.Store, error) {
-	spec, err := cred.Lookup(string(cred.Anthropic))
+func subscriptionCredential(provider cred.Provider) (func(context.Context) (string, error), string, *cred.Store, error) {
+	spec, err := cred.Lookup(string(provider))
 	if err != nil {
-		return nil, nil, err
+		return nil, "", nil, err
 	}
 	path, err := cred.Path()
 	if err != nil {
-		return nil, nil, err
+		return nil, "", nil, err
 	}
 	store, err := cred.Open(path)
 	if err != nil {
-		return nil, nil, err
+		return nil, "", nil, err
 	}
-	row, present, err := store.Row(cred.Anthropic)
+	row, present, err := store.Row(provider)
 	if err != nil {
-		return nil, store, err
+		return nil, "", store, err
 	}
 	if !present {
-		return nil, store, errors.New("no anthropic subscription credential, run boji login anthropic")
+		return nil, "", store, fmt.Errorf("no %s subscription credential, run boji login %s", provider, provider)
+	}
+	return cred.NewManager(store, spec).Access, row.Credential.Identity.AccountID, store, nil
+}
+
+func subscriptionModel(model string) (turn.Model, *cred.Store, error) {
+	token, accountID, store, err := subscriptionCredential(cred.Anthropic)
+	if err != nil {
+		return nil, store, err
 	}
 	session, err := sessionID()
 	if err != nil {
@@ -196,14 +210,91 @@ func subscriptionModel(model string) (turn.Model, *cred.Store, error) {
 	}
 	wire, err := anthropic.New(anthropic.Config{
 		Model:     model,
-		Token:     cred.NewManager(store, spec).Access,
+		Token:     token,
 		SessionID: session,
-		AccountID: row.Credential.Identity.AccountID,
+		AccountID: accountID,
 	})
 	if err != nil {
 		return nil, store, err
 	}
 	return turn.Subscription{Wire: wire}, store, nil
+}
+
+func codexModel(model string) (turn.Model, *cred.Store, error) {
+	token, _, store, err := subscriptionCredential(cred.Codex)
+	if err != nil {
+		return nil, store, err
+	}
+	session, err := sessionID()
+	if err != nil {
+		return nil, store, err
+	}
+	wire, err := codex.New(codex.Config{
+		Model:          model,
+		Token:          token,
+		InstallationID: session,
+		SessionID:      session,
+	})
+	if err != nil {
+		return nil, store, err
+	}
+	return codexTurn{wire: wire}, store, nil
+}
+
+type codexTurn struct {
+	wire *codex.Wire
+}
+
+func (c codexTurn) Ask(ctx context.Context, request llm.Request) (llm.Decision, error) {
+	var instructions []string
+	messages := make([]llm.Message, 0, len(request.Messages))
+	for _, message := range request.Messages {
+		if message.Role == llm.RoleSystem {
+			instructions = append(instructions, message.Content)
+			continue
+		}
+		messages = append(messages, message)
+	}
+
+	result, _, err := c.wire.Ask(ctx, codex.Request{
+		Instructions: strings.Join(instructions, "\n\n"),
+		Messages:     messages,
+		Tools:        request.Tools,
+	})
+	if err != nil {
+		return llm.Decision{}, err
+	}
+
+	decision := llm.Decision{
+		Build:           result.Model,
+		RequestID:       result.ID,
+		Outcome:         codexOutcome(result),
+		Stop:            result.StopReason,
+		Content:         result.Content,
+		ToolCalls:       result.ToolCalls,
+		Usage:           llm.Usage{InputTokens: result.Usage.Input, OutputTokens: result.Usage.Output},
+		CacheReadTokens: result.Usage.CacheRead,
+		Warnings:        result.Warnings,
+	}
+	if decision.Outcome == llm.OutcomeRefusal {
+		decision.Refusal = cmp.Or(result.Refusal, result.StopReason)
+	}
+	return decision, nil
+}
+
+func codexOutcome(result codex.Result) llm.Outcome {
+	switch result.Stop {
+	case codex.StopError:
+		return llm.OutcomeRefusal
+	case codex.StopLength:
+		return llm.OutcomeMessage
+	case codex.StopToolUse, codex.StopEnd, codex.StopUnknown:
+		if len(result.ToolCalls) > 0 {
+			return llm.OutcomeToolCalls
+		}
+		return llm.OutcomeMessage
+	}
+	panic("boji run: unknown codex stop")
 }
 
 func sessionID() (string, error) {
@@ -233,13 +324,13 @@ func buildRunTools(dir string) (turn.Registry, error) {
 	return turn.NewRegistry(readTool, writeTool, bashTool), nil
 }
 
-func printRunRow(out io.Writer, row turn.Row) {
-	spend := "spend subscription quota, no money"
+func printRunRow(out io.Writer, row turn.Row, selected models.Model) {
+	spend := "spend subscription windows " + selected.WindowText() + ", no money"
 	if row.Spend != turn.SpendSubscription {
 		spend = fmt.Sprintf("spend api key $%.6f", row.TotalCostUSD)
 	}
-	_, _ = fmt.Fprintf(out, "turn %s outcome %s model %s %s wall_clock_ms %d\n",
-		row.ID, row.Outcome, row.Model, spend, row.WallClockMS)
+	_, _ = fmt.Fprintf(out, "turn %s outcome %s model %s asked_as %s %s wall_clock_ms %d\n",
+		row.ID, row.Outcome, row.Model, selected.ID, spend, row.WallClockMS)
 	for _, step := range row.Steps {
 		_, _ = fmt.Fprintf(out, "step %d: stop_reason %s in %d out %d cache_read %d cache_write %d\n",
 			step.Index, step.StopReason, step.PromptTokens, step.CompletionTokens,
@@ -265,6 +356,7 @@ func printRunRow(out io.Writer, row turn.Row) {
 func wireDoctorLines() []string {
 	return []string{
 		"wire " + wireSubscription + ": the default, boji run spends the anthropic subscription quota and no money",
+		"wire " + wireCodex + ": --wire codex spends the chatgpt subscription quota and no money",
 		"wire " + wireKey + ": --wire openrouter spends the openrouter key, which is real money on the account that issued it",
 	}
 }
@@ -336,8 +428,11 @@ func parseRunArgs(args []string) (runOpts, error) {
 	if strings.TrimSpace(opts.task) == "" {
 		return runOpts{}, errors.New("boji run needs a task")
 	}
-	if opts.wire != wireSubscription && opts.wire != wireKey {
-		return runOpts{}, fmt.Errorf("--wire %q is neither %s nor %s", opts.wire, wireSubscription, wireKey)
+	switch opts.wire {
+	case wireSubscription, wireCodex, wireKey:
+	default:
+		return runOpts{}, fmt.Errorf("--wire %q is none of %s, %s and %s",
+			opts.wire, wireSubscription, wireCodex, wireKey)
 	}
 	return opts, nil
 }

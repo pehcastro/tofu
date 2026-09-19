@@ -23,6 +23,7 @@ Verbs:
   doctor    report the environment and what is wrong with it
   login     mint a subscription credential for a provider
   usage     print every credential's quota windows and when each resets
+  models    list the models each subscription serves, and why one is excluded
   why       explain a ledger row, or the last one
   run       run one turn against a working directory
   judge     read a state and a question battery, print the answers
@@ -30,7 +31,6 @@ Verbs:
   label     attach an outcome to a ledger row, by id or the last one
   replay    re-score ledger rows against changed thresholds, no network
   catalog   resolve a catalog entry and show the origin of each field
-  bench     measure the instrument and write a report
   lint      run a house-rule check over the tree
   rules     list or run the rule catalog
 `
@@ -48,11 +48,13 @@ func run(args []string, in io.Reader, out io.Writer, errOut io.Writer) int {
 	case "version":
 		return version(out)
 	case "doctor":
-		return doctor(out)
+		return doctor(out, args[1:]...)
 	case "login":
 		return loginVerb(args[1:], in, out, errOut)
 	case "usage":
 		return usageVerb(args[1:], out, errOut)
+	case "models":
+		return modelsVerb(args[1:], out, errOut)
 	case "why":
 		return whyVerb(args[1:], out, errOut, time.Now)
 	case "run":
@@ -67,8 +69,6 @@ func run(args []string, in io.Reader, out io.Writer, errOut io.Writer) int {
 		return replayVerb(args[1:], out, errOut, time.Now)
 	case "catalog":
 		return catalogVerb(args[1:], out, errOut)
-	case "bench":
-		return benchVerb(args[1:], out, errOut)
 	case "lint":
 		return lintVerb(args[1:], out, errOut)
 	case "rules":

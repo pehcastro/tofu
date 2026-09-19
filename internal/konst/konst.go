@@ -29,9 +29,6 @@ const (
 )
 
 const (
-	TurnOpenRouterModel      = "anthropic/claude-opus-5"
-	TurnAnthropicModel       = "claude-opus-5"
-	TurnCodexModel           = "gpt-5.6-sol"
 	TurnAttemptTimeoutMillis = 30000
 	TurnRetries              = 1
 	TurnBackoffMillis        = 250
