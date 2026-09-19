@@ -33,12 +33,28 @@ func (m Mode) String() string {
 	panic("rule: unknown mode " + string(m))
 }
 
+type Exception string
+
+const (
+	ExceptionNone   Exception = ""
+	ExceptionQuoted Exception = "quoted"
+)
+
+func (e Exception) valid() bool {
+	switch e {
+	case ExceptionNone, ExceptionQuoted:
+		return true
+	}
+	return false
+}
+
 type Rule struct {
 	ID           string
 	Kind         Kind
 	Checker      string
 	Mode         Mode
 	ModeDeclared bool
+	Except       Exception
 	Notes        string
 	File         string
 }

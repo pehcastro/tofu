@@ -2,4 +2,5 @@ id: em_dash
 kind: structural
 checker: em_dash
 mode: shadow
-notes: a literal U+2014 anywhere in the file, byte presence is the whole check
+except: quoted
+notes: a literal U+2014 outside a quotation, where a markdown fence, an indented block and a backtick span are quotations and a blockquote is not

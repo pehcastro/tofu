@@ -62,6 +62,12 @@ func (r *Rule) setField(key, value, path string, line int) error {
 		}
 		r.Mode = m
 		r.ModeDeclared = true
+	case "except":
+		e := Exception(value)
+		if !e.valid() {
+			return fmt.Errorf("%s:%d: except is %q, found %q", path, line, ExceptionQuoted, value)
+		}
+		r.Except = e
 	case "notes":
 		r.Notes = value
 	default:

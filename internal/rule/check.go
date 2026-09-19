@@ -10,7 +10,7 @@ import (
 
 const emDashRune = rune(0x2014)
 
-type Checker func(Artifact) ([]Finding, error)
+type Checker func(Rule, Artifact) ([]Finding, error)
 
 func Builtins() map[string]Checker {
 	return map[string]Checker{
@@ -21,7 +21,7 @@ func Builtins() map[string]Checker {
 	}
 }
 
-func checkComments(a Artifact) ([]Finding, error) {
+func checkComments(_ Rule, a Artifact) ([]Finding, error) {
 	gf, ok := a.(GoFile)
 	if !ok {
 		return nil, artifactMismatch("go_file", a)
@@ -37,7 +37,7 @@ func checkComments(a Artifact) ([]Finding, error) {
 	return findings, nil
 }
 
-func checkEmDash(a Artifact) ([]Finding, error) {
+func checkEmDash(r Rule, a Artifact) ([]Finding, error) {
 	tf, ok := a.(TextFile)
 	if !ok {
 		return nil, artifactMismatch("text_file", a)
@@ -46,16 +46,21 @@ func checkEmDash(a Artifact) ([]Finding, error) {
 	if err != nil {
 		return nil, err
 	}
+	lines := strings.Split(strings.ReplaceAll(string(data), "\r\n", "\n"), "\n")
+	searched := lines
+	if r.Except == ExceptionQuoted {
+		searched = withoutQuotations(tf.Path, lines)
+	}
 	var findings []Finding
-	for i, line := range strings.Split(string(data), "\n") {
+	for i, line := range searched {
 		if strings.ContainsRune(line, emDashRune) {
-			findings = append(findings, Finding{Target: fmt.Sprintf("%s:%d", tf.Path, i+1), Detail: line})
+			findings = append(findings, Finding{Target: fmt.Sprintf("%s:%d", tf.Path, i+1), Detail: lines[i]})
 		}
 	}
 	return findings, nil
 }
 
-func checkOwnership(a Artifact) ([]Finding, error) {
+func checkOwnership(_ Rule, a Artifact) ([]Finding, error) {
 	ow, ok := a.(OwnsWrite)
 	if !ok {
 		return nil, artifactMismatch("owns_write", a)
@@ -70,7 +75,7 @@ func checkOwnership(a Artifact) ([]Finding, error) {
 	return []Finding{{Target: ow.Path, Detail: "not covered by " + strings.Join(ow.Owns, ", ")}}, nil
 }
 
-func checkNoWorktree(a Artifact) ([]Finding, error) {
+func checkNoWorktree(_ Rule, a Artifact) ([]Finding, error) {
 	sc, ok := a.(ShellCommand)
 	if !ok {
 		return nil, artifactMismatch("shell_command", a)
