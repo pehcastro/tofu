@@ -21,6 +21,11 @@ The gate. The turn asks a typed question before it acts, and the answer is writt
 ### Changed
 
 - the three copies of the percentile arithmetic under `bench/` are one package, `bench/stat`. The three were identical, so no published figure moved
+- the boji arm of `bench harness` no longer measures whichever binary invoked it. It builds `./cmd/boji` and measures that, or measures the one named by `--boji <path>`
+
+### Removed
+
+- `boji bench` is gone, with its five targets. The measurement lives in its own binary, built from `bench/cmd`, so an edit under `bench/` cannot break `boji login`, `boji why` or any other verb. Run `go run ./bench/cmd <target>` from the repository root, or build it once with `go build -o bench ./bench/cmd`. `boji bench api` becomes `bench api`, and `cost`, `wording`, `turn` and `harness` follow the same way. Every flag is unchanged and the reports are byte for byte what they were
 
 ### Fixed
 
