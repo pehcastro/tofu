@@ -172,7 +172,7 @@ func runVerb(args []string, out, errOut io.Writer) int {
 		return runFail(errOut, err)
 	}
 
-	built, err := buildRunTools(opts.dir, opts.toolSet)
+	built, _, err := buildRunTools(opts.dir, opts.toolSet)
 	if err != nil {
 		return runFail(errOut, err)
 	}
@@ -548,20 +548,20 @@ func runSystem(opts runOpts) string {
 		"and returns what the child did rather than its transcript: use it when a piece of the task is separable and its paths do not overlap another child's."
 }
 
-func buildRunTools(dir, set string) ([]turn.Tool, error) {
+func buildRunTools(dir, set string) ([]turn.Tool, *tools.Plan, error) {
 	readTool, readErr := turn.NewReadTool(dir)
 	writeTool, writeErr := turn.NewWriteTool(dir)
 	bashTool, bashErr := turn.NewBashTool(dir)
 	if err := cmp.Or(readErr, writeErr, bashErr); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	checked, checkErr := tools.Checked(dir, []turn.Tool{bashTool})
 	if checkErr != nil {
-		return nil, checkErr
+		return nil, nil, checkErr
 	}
 	shell := checked[0]
 	if set == toolSetThree {
-		return tools.NewMemo().Wrap([]turn.Tool{readTool, writeTool, shell}), nil
+		return tools.NewMemo().Wrap([]turn.Tool{readTool, writeTool, shell}), nil, nil
 	}
 	globTool, globErr := tools.NewGlob(dir)
 	grepTool, grepErr := tools.NewGrep(dir)
@@ -571,14 +571,15 @@ func buildRunTools(dir, set string) ([]turn.Tool, error) {
 	projectTool, projectErr := tools.NewProject(dir)
 	verbTools, verbErr := tools.NewVerbs(dir)
 	if err := cmp.Or(globErr, grepErr, searchErr, symbolsErr, editErr, projectErr, verbErr); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	webTools, webErr := buildWebTools()
 	if webErr != nil {
-		return nil, webErr
+		return nil, nil, webErr
 	}
-	full := append([]turn.Tool{readTool, writeTool, shell, projectTool, globTool, grepTool, searchTool, symbolsTool, editTool}, verbTools...)
-	return tools.NewMemo().Wrap(append(full, webTools...)), nil
+	plan := tools.NewPlan()
+	full := append([]turn.Tool{readTool, writeTool, shell, plan, projectTool, globTool, grepTool, searchTool, symbolsTool, editTool}, verbTools...)
+	return tools.NewMemo().Wrap(append(full, webTools...)), plan, nil
 }
 
 func buildWebTools() ([]turn.Tool, error) {

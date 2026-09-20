@@ -43,6 +43,7 @@ const (
 	EventResumed
 	EventSteered
 	EventRequesting
+	EventPlan
 )
 
 type Event struct {
@@ -61,6 +62,7 @@ type Event struct {
 	Context   frame.Context
 	Children  []crew.Child
 	Diff      string
+	Plan      []session.PlanItem
 	Created   string
 	Agent     string
 }
@@ -70,7 +72,7 @@ func (e Event) snapshot() bool {
 	case EventContext, EventForkStart, EventForkEnd, EventCrew:
 		return true
 	case EventText, EventTextDelta, EventToolCall, EventToolResult, EventNote, EventFailure, EventStats, EventDone,
-		EventDecision, EventGateOff, EventAwaitPerson, EventResumed, EventSteered, EventRequesting:
+		EventDecision, EventGateOff, EventAwaitPerson, EventResumed, EventSteered, EventRequesting, EventPlan:
 		return false
 	}
 	panic("tui: unknown event kind")
@@ -633,6 +635,8 @@ func (a *App) absorb(event Event) {
 	case EventCrew:
 		a.crew.Children, a.view.Children, a.edits.Children = event.Children, event.Children, event.Children
 		a.status.Agents = a.crew.Running()
+	case EventPlan:
+		a.view.SetPlan(event.Plan)
 	case EventAwaitPerson:
 		a.view.Await()
 	case EventResumed:

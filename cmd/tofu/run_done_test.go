@@ -272,7 +272,7 @@ func spawnOneChild(t *testing.T, review turn.DoneReview, decisions []llm.Decisio
 	dir := t.TempDir()
 	opts := armOpts(t)
 	opts.dir, opts.task, opts.gateArm = dir, "hand the note to a child", gateOff
-	built, err := buildRunTools(dir, opts.toolSet)
+	built, _, err := buildRunTools(dir, opts.toolSet)
 	if err != nil {
 		t.Fatalf("buildRunTools: %v", err)
 	}

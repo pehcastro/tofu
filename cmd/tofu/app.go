@@ -443,7 +443,7 @@ func (s *appSession) run(ctx context.Context, wire, task string, emit func(tui.E
 		fail(err)
 		return
 	}
-	built, builtErr := buildRunTools(s.dir, opts.toolSet)
+	built, plan, builtErr := buildRunTools(s.dir, opts.toolSet)
 	sessions, sessionsErr := sessionstore.Open()
 	if err := cmp.Or(builtErr, sessionsErr); err != nil {
 		fail(err)
@@ -487,6 +487,7 @@ func (s *appSession) run(ctx context.Context, wire, task string, emit func(tui.E
 	}
 	watch.spawner = spawner
 	config.Step = func(step turn.StepRow) {
+		emit(tui.Event{Kind: tui.EventPlan, Plan: statedPlan(plan.Items())})
 		if step.Occupancy == nil {
 			return
 		}
@@ -539,6 +540,28 @@ func doneWords(outcome turn.Outcome) string {
 		return "stopped at a cap this build no longer sets, after"
 	}
 	panic("tofu: unknown outcome " + outcome.String())
+}
+
+func statedPlan(items []tools.PlanItem) []session.PlanItem {
+	drawn := make([]session.PlanItem, 0, len(items))
+	for _, item := range items {
+		drawn = append(drawn, session.PlanItem{Phase: item.Phase, Text: item.Text, State: drawnPlanState(item.State)})
+	}
+	return drawn
+}
+
+func drawnPlanState(state tools.PlanState) session.PlanState {
+	switch state {
+	case tools.PlanPending:
+		return session.PlanPending
+	case tools.PlanRunning:
+		return session.PlanRunning
+	case tools.PlanDone:
+		return session.PlanDone
+	case tools.PlanDropped:
+		return session.PlanDropped
+	}
+	panic("tofu: unknown plan item state " + string(state))
 }
 
 func gateDecision(tool string, gated turn.GateDecision) session.Decision {

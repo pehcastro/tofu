@@ -110,6 +110,7 @@ type Model struct {
 	intent    string
 	shown     time.Time
 	prose     Prose
+	plan      []PlanItem
 	entries   []Entry
 	composer  textarea.Model
 	width     int
@@ -333,7 +334,7 @@ func (m *Model) ToggleOpen() { m.open = !m.open }
 
 func (m *Model) Start() {
 	at := m.now()
-	m.Busy, m.Stopping, m.began = true, false, at
+	m.Busy, m.Stopping, m.began, m.plan = true, false, at, nil
 	m.waited, m.phase, m.intent, m.shown = 0, requesting, "", at
 	m.requested, m.answered = at, time.Time{}
 }
@@ -360,14 +361,14 @@ func (m *Model) Stop() {
 
 func (m *Model) View() string {
 	m.settle()
-	rows := m.transcriptRows()
+	plan, rows := m.feed()
 	tail, scrollable := m.tailAnchor(rows)
 	from := tail
 	if scrollable && !m.following {
 		from = m.top
 	}
-	lines := m.linesFrom(from, rows)
-	for len(lines) < rows {
+	lines := slices.Concat(m.linesFrom(from, rows), plan)
+	for len(lines) < rows+len(plan) {
 		lines = append([]string{""}, lines...)
 	}
 	footer := append([]string{strings.Join(lines, "\n")}, m.activityLines()...)

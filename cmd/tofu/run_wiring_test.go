@@ -55,7 +55,7 @@ func TestASecondIdenticalReadInOneTurnNeverReachesTheTool(t *testing.T) {
 	}
 	opts := armOpts(t)
 	opts.dir, opts.task = dir, "read the note twice"
-	built, err := buildRunTools(dir, opts.toolSet)
+	built, _, err := buildRunTools(dir, opts.toolSet)
 	if err != nil {
 		t.Fatalf("buildRunTools: %v", err)
 	}
@@ -99,7 +99,7 @@ func TestASecondIdenticalReadInOneTurnNeverReachesTheTool(t *testing.T) {
 
 func ranTool(t *testing.T, dir, name, args string) turn.Result {
 	t.Helper()
-	built, err := buildRunTools(dir, toolSetFull)
+	built, _, err := buildRunTools(dir, toolSetFull)
 	if err != nil {
 		t.Fatalf("buildRunTools: %v", err)
 	}
@@ -190,7 +190,7 @@ func TestARunAtATwentyThousandCeilingCompactsAndTheRecordSaysWhatItDropped(t *te
 	if err := os.WriteFile(filepath.Join(dir, "big.txt"), []byte(strings.Repeat("x", 20000)), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	built, err := buildRunTools(dir, opts.toolSet)
+	built, _, err := buildRunTools(dir, opts.toolSet)
 	if err != nil {
 		t.Fatalf("buildRunTools: %v", err)
 	}
@@ -307,7 +307,7 @@ func TestAModelWithNoRecordedWindowCompactsAtTheOperatingCeiling(t *testing.T) {
 		}})
 	}
 	decisions = append(decisions, llm.Decision{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "read it all"})
-	built, err := buildRunTools(dir, opts.toolSet)
+	built, _, err := buildRunTools(dir, opts.toolSet)
 	if err != nil {
 		t.Fatalf("buildRunTools: %v", err)
 	}
@@ -353,7 +353,7 @@ func TestTheSpawnToolIsGivenTheSessionStoreBeforeTheTurnStarts(t *testing.T) {
 	t.Chdir(dir)
 	opts := armOpts(t)
 	opts.dir, opts.task = dir, "hand the work to a child"
-	built, err := buildRunTools(dir, opts.toolSet)
+	built, _, err := buildRunTools(dir, opts.toolSet)
 	if err != nil {
 		t.Fatalf("buildRunTools: %v", err)
 	}
@@ -421,7 +421,7 @@ func TestWithNoSearchKeyStoredTheTurnIsGivenFetchAndNoWebSearch(t *testing.T) {
 func TestAProjectCarryingNoWebCatalogStillBuildsItsTools(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
-	built, err := buildRunTools(dir, toolSetFull)
+	built, _, err := buildRunTools(dir, toolSetFull)
 	if err != nil {
 		t.Fatalf("a project carrying no web catalog could not build its tools: %v", err)
 	}
@@ -450,7 +450,7 @@ func TestAChildLeavesItsRecordWhileTheParentsTurnIsStillRunning(t *testing.T) {
 	t.Chdir(dir)
 	opts := armOpts(t)
 	opts.dir, opts.task, opts.turnID = dir, "hand the work to a child", "turn-parent"
-	built, err := buildRunTools(dir, opts.toolSet)
+	built, _, err := buildRunTools(dir, opts.toolSet)
 	if err != nil {
 		t.Fatalf("buildRunTools: %v", err)
 	}

@@ -107,7 +107,7 @@ func armOpts(t *testing.T, args ...string) runOpts {
 
 func toolNames(t *testing.T, opts runOpts) []string {
 	t.Helper()
-	built, err := buildRunTools(opts.dir, opts.toolSet)
+	built, _, err := buildRunTools(opts.dir, opts.toolSet)
 	if err != nil {
 		t.Fatalf("buildRunTools %s: %v", opts.toolSet, err)
 	}
@@ -314,7 +314,7 @@ func TestAChildRunsOnADifferentSubscriptionFromItsParent(t *testing.T) {
 			{Build: "gpt-5.6-sol-20260101", Outcome: llm.OutcomeMessage, Content: "the child did it"},
 		}},
 	}
-	built, err := buildRunTools(dir, opts.toolSet)
+	built, _, err := buildRunTools(dir, opts.toolSet)
 	if err != nil {
 		t.Fatalf("buildRunTools: %v", err)
 	}
@@ -456,7 +456,7 @@ func TestTheParentTurnRowNamesTheChildItSpawnedAndCarriesItsRowAndCost(t *testin
 	t.Chdir(dir)
 	opts := armOpts(t)
 	opts.dir, opts.task = dir, "write the note and hand the reading to a child"
-	built, err := buildRunTools(dir, opts.toolSet)
+	built, _, err := buildRunTools(dir, opts.toolSet)
 	if err != nil {
 		t.Fatalf("buildRunTools: %v", err)
 	}
@@ -516,7 +516,7 @@ func TestRunRecordsADenyAuthorityCannotRelaxAndStillRunsTheStep(t *testing.T) {
 	if err != nil {
 		t.Fatalf("newToolGate: %v", err)
 	}
-	registry, err := buildRunTools(dir, toolSetFull)
+	registry, _, err := buildRunTools(dir, toolSetFull)
 	if err != nil {
 		t.Fatalf("buildRunTools: %v", err)
 	}

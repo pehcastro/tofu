@@ -307,6 +307,27 @@ func BenchmarkSessionViewWithTheActivityBlock(b *testing.B) {
 	}
 }
 
+func benchPlan() []session.PlanItem {
+	return []session.PlanItem{
+		{Phase: "read", Text: "read the gate and the record shape", State: session.PlanDone},
+		{Phase: "write", Text: "write the plan tool", State: session.PlanRunning},
+		{Phase: "write", Text: "draw the plan in the session view", State: session.PlanPending},
+		{Phase: "check", Text: "measure the frame against the budget", State: session.PlanPending},
+	}
+}
+
+func BenchmarkSessionViewWithAPlan(b *testing.B) {
+	built := benchApp()
+	built.Update(app.Event{Kind: app.EventPlan, Plan: benchPlan()})
+	if !strings.Contains(built.View().Content, "write the plan tool") {
+		b.Fatal("the bench is not measuring a frame carrying the plan")
+	}
+	b.ReportAllocs()
+	for b.Loop() {
+		_ = built.View()
+	}
+}
+
 func BenchmarkSessionViewWithTheCommandMenuOpen(b *testing.B) {
 	built := benchApp()
 	for _, letter := range "/se" {

@@ -50,7 +50,7 @@ func registry(t *testing.T, root string) turn.Registry {
 			t.Fatalf("building the tools: %v", err)
 		}
 	}
-	return turn.NewRegistry(globTool, grepTool, editTool, symbolsTool)
+	return turn.NewRegistry(globTool, grepTool, editTool, symbolsTool, tools.NewPlan())
 }
 
 func runCalls(t *testing.T, root string, bytesCap int, truncate bool, calls ...llm.ToolCall) turn.Row {

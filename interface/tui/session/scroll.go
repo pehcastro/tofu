@@ -103,7 +103,7 @@ func (m Model) move(at anchor, lines int) anchor {
 }
 
 func (m *Model) Scroll(key string) bool {
-	rows := m.transcriptRows()
+	_, rows := m.feed()
 	tail, scrollable := m.tailAnchor(rows)
 	if !scrollable {
 		return false
