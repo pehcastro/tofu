@@ -37,6 +37,8 @@ func (s *scan) segment(segment []string) {
 	for i := 0; i < len(segment); i++ {
 		token := segment[i]
 		switch {
+		case token == ">&" || token == ">>&":
+			i++
 		case token == ">" || token == ">>":
 			i++
 			if i >= len(segment) {
@@ -71,6 +73,19 @@ func (s *scan) segment(segment []string) {
 	case "cp", "mv", "install", "rsync":
 		if len(operands) > 0 {
 			s.sink(operands[len(operands)-1])
+		}
+	case "git":
+		subcommand := ""
+		for _, operand := range operands {
+			if !strings.Contains(operand, "=") {
+				subcommand = operand
+				break
+			}
+		}
+		switch subcommand {
+		case "status", "log", "diff", "show", "blame", "describe", "grep", "rev-parse", "ls-files", "shortlog":
+		default:
+			s.unresolved = true
 		}
 	case "python", "python3", "py", "node", "ruby", "perl", "php", "pwsh", "powershell", "sh", "bash", "zsh":
 		for _, arg := range args[1:] {
@@ -248,10 +263,19 @@ func tokens(command string) []string {
 		case c == ' ' || c == '\t' || c == '\r':
 			flush()
 		case c == '>' || c == '<' || c == '&' || c == '|' || c == ';' || c == '\n':
+			redirect := c == '>' || c == '<'
+			pending := current.String()
+			if redirect && pending != "" && strings.Trim(pending, "0123456789") == "" {
+				current.Reset()
+			}
 			flush()
 			run := string(c)
 			for i+1 < len(runes) && runes[i+1] == c {
 				run += string(c)
+				i++
+			}
+			if redirect && i+1 < len(runes) && runes[i+1] == '&' {
+				run += "&"
 				i++
 			}
 			out = append(out, run)

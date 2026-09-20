@@ -1,6 +1,7 @@
 package state
 
 import (
+	"slices"
 	"strings"
 	"testing"
 )
@@ -50,13 +51,33 @@ func TestTargetsOfRecordedCases(t *testing.T) {
 
 func TestTargetsOfSaysUnknownWhenTheRecordedCommandWasCutShort(t *testing.T) {
 	cases := gateCases(t)
-	for _, id := range []string{"tx-082", "tx-122", "tx-128", "tx-004"} {
+	for _, id := range []string{"tx-004", "tx-040", "tx-082", "tx-121", "tx-122", "tx-127", "tx-128"} {
 		one, ok := cases[id]
 		if !ok {
 			t.Fatalf("%s is not in the gate corpus", id)
 		}
-		got := TargetsOf(recordedInput(t, one))
-		if got.Determination != TargetUnknown {
+		in := recordedInput(t, one)
+		if !in.InputTruncated {
+			t.Errorf("%s: the recorded command is whole, so it is not evidence about a command cut short", id)
+		}
+		if got := TargetsOf(in); got.Determination != TargetUnknown {
+			t.Errorf("%s: determination = %q, want %q", id, got.Determination, TargetUnknown)
+		}
+	}
+}
+
+func TestTargetsOfSaysUnknownWhenAnInterpreterRunsAScriptTheHarnessCannotRead(t *testing.T) {
+	cases := gateCases(t)
+	for _, id := range []string{"tx-027", "tx-146"} {
+		one, ok := cases[id]
+		if !ok {
+			t.Fatalf("%s is not in the gate corpus", id)
+		}
+		in := recordedInput(t, one)
+		if in.InputTruncated {
+			t.Errorf("%s: the recorded command is cut short, so it proves nothing about an interpreter", id)
+		}
+		if got := TargetsOf(in); got.Determination != TargetUnknown {
 			t.Errorf("%s: determination = %q, want %q", id, got.Determination, TargetUnknown)
 		}
 	}
@@ -83,6 +104,45 @@ func TestTargetsOfReadsNoWrite(t *testing.T) {
 	got := TargetsOf(ToolGateInput{Tool: "bash", Input: map[string]any{"command": "go test ./internal/judge/... -count=1"}, Cwd: "/repo", ProjectDir: "/repo"})
 	if got.Determination != NoWriteFound {
 		t.Fatalf("determination = %q, want %q, targets %+v", got.Determination, NoWriteFound, got.Targets)
+	}
+}
+
+func TestTargetsOfReadsAFileDescriptorRedirectAsNoFileAtAll(t *testing.T) {
+	for _, want := range []struct {
+		command       string
+		determination Determination
+		targets       []string
+	}{
+		{`go build ./... 2>&1 | head -2`, NoWriteFound, nil},
+		{`go build ./... >&2`, NoWriteFound, nil},
+		{`cp notes.md backup.md 2>&1`, TargetsResolved, []string{"/repo/backup.md"}},
+		{`go vet ./... 1>report.txt`, TargetsResolved, []string{"/repo/report.txt"}},
+	} {
+		got := TargetsOf(ToolGateInput{Tool: "bash", Input: map[string]any{"command": want.command}, Cwd: "/repo", ProjectDir: "/repo"})
+		paths := make([]string, 0, len(got.Targets))
+		for _, target := range got.Targets {
+			paths = append(paths, target.Path)
+		}
+		if got.Determination != want.determination || !slices.Equal(paths, want.targets) {
+			t.Errorf("%q: %s %v, want %s %v", want.command, got.Determination, paths, want.determination, want.targets)
+		}
+	}
+}
+
+func TestTargetsOfSaysAGitCommandWritesWithoutNamingAPath(t *testing.T) {
+	for _, want := range []struct {
+		command       string
+		determination Determination
+	}{
+		{`git add -A && git -c user.name="owner" commit -q -m "feat: a thing" 2>&1|head -2`, TargetUnknown},
+		{`git push --force origin main`, TargetUnknown},
+		{`git status --short|head -5`, NoWriteFound},
+		{`git log --oneline|head -1`, NoWriteFound},
+	} {
+		got := TargetsOf(ToolGateInput{Tool: "bash", Input: map[string]any{"command": want.command}, Cwd: "/repo", ProjectDir: "/repo"})
+		if got.Determination != want.determination {
+			t.Errorf("%q: determination = %q, want %q", want.command, got.Determination, want.determination)
+		}
 	}
 }
 
