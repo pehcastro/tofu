@@ -6,10 +6,12 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 
+	"tofu/internal/konst"
 	"tofu/internal/llm"
 )
 
@@ -88,6 +90,23 @@ func TestProjectInstructionsReadTheClaudeFileInTheWorkingDirectory(t *testing.T)
 
 	if !strings.Contains(block, "never an em dash") || !strings.Contains(block, filepath.Join(root, "CLAUDE.md")) {
 		t.Fatalf("CLAUDE.md did not reach the prompt:\n%s", block)
+	}
+}
+
+func TestProjectInstructionsAreCappedAndSayWhatWasDropped(t *testing.T) {
+	root := t.TempDir()
+	write(t, filepath.Join(root, "CLAUDE.md"), strings.Repeat("a", konst.ProjectInstructionsBytes+500))
+
+	block := ProjectInstructions(root, "")
+
+	if len(block) > konst.ProjectInstructionsBytes+200 {
+		t.Fatalf("the block is %d bytes, past the %d cap plus its own notice", len(block), konst.ProjectInstructionsBytes)
+	}
+	if !strings.Contains(block, "capped at "+strconv.Itoa(konst.ProjectInstructionsBytes)+" bytes") || !strings.Contains(block, "dropped") {
+		t.Fatalf("the block never says it was capped:\n%s", block)
+	}
+	if !strings.Contains(block, filepath.Join(root, "CLAUDE.md")) {
+		t.Fatalf("the drop notice never names the file it cut:\n%s", block)
 	}
 }
 

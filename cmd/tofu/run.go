@@ -306,9 +306,9 @@ func runTurn(opts runOpts, selected models.Model, built []turn.Tool, budget reca
 
 func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn.SpawnTool) {
 	home, _ := os.UserHomeDir()
-	system := runSystem(opts)
+	environment := turn.Environment(opts.dir, time.Now())
 	if written := turn.ProjectInstructions(opts.dir, home); written != "" {
-		system += "\n\n" + written
+		environment += "\n\n" + written
 	}
 	config := turn.Config{
 		Model:       run.model,
@@ -316,8 +316,8 @@ func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn
 		Tools:       turn.NewRegistry(built...),
 		Task:        opts.task,
 		Wire:        opts.wire,
-		System:      system,
-		Environment: turn.Environment(opts.dir, time.Now()),
+		System:      runSystem(opts),
+		Environment: environment,
 		Caps: turn.Caps{
 			MaxSteps:     opts.maxSteps,
 			MaxDecisions: opts.maxDecisions,

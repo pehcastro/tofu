@@ -1,11 +1,13 @@
 package turn
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
+	"tofu/internal/konst"
 	"tofu/internal/sys"
 )
 
@@ -55,16 +57,34 @@ func ProjectInstructions(dir, home string) string {
 	}
 
 	var block strings.Builder
+	var dropped []string
 	for _, path := range paths {
 		body, err := os.ReadFile(path)
 		text := strings.TrimSpace(string(body))
 		if err != nil || text == "" {
 			continue
 		}
+		entry := "instructions from " + path + ", which outrank anything above them that disagrees:\n" + text
+		separator := ""
 		if block.Len() > 0 {
-			block.WriteString("\n\n")
+			separator = "\n\n"
 		}
-		block.WriteString("instructions from " + path + ", which outrank anything above them that disagrees:\n" + text)
+		room := konst.ProjectInstructionsBytes - block.Len() - len(separator)
+		if room <= 0 {
+			dropped = append(dropped, fmt.Sprintf("%s (%d bytes)", path, len(entry)))
+			continue
+		}
+		if len(entry) > room {
+			block.WriteString(separator)
+			block.WriteString(entry[:room])
+			dropped = append(dropped, fmt.Sprintf("%s (%d of %d bytes)", path, len(entry)-room, len(entry)))
+			continue
+		}
+		block.WriteString(separator)
+		block.WriteString(entry)
+	}
+	if len(dropped) > 0 {
+		fmt.Fprintf(&block, "\n\n[capped at %d bytes: dropped %s]", konst.ProjectInstructionsBytes, strings.Join(dropped, ", "))
 	}
 	return block.String()
 }
