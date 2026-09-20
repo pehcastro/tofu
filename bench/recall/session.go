@@ -1,9 +1,11 @@
 package recall
 
 import (
+	"cmp"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"slices"
 	"strconv"
 	"strings"
@@ -55,7 +57,7 @@ type ReplayStep struct {
 	RecordedTokens  int
 	CacheReadTokens int
 	FreshTokens     int
-	Dropped         int
+	Drops           []rc.Drop
 }
 
 type ForkRow struct {
@@ -64,6 +66,30 @@ type ForkRow struct {
 	TokensAfter   int
 	CarryTokens   int
 	BlockedMicros int64
+	SourcesKnown  int
+	SourcesNamed  int
+}
+
+type Refetch struct {
+	Step   int
+	Source string
+	Bytes  int
+	Named  bool
+}
+
+type callArgs struct {
+	Path    string `json:"path"`
+	Handle  string `json:"handle"`
+	Pattern string `json:"pattern"`
+	Command string `json:"command"`
+}
+
+func callSource(call SessionCall) string {
+	var args callArgs
+	if err := json.Unmarshal(call.Args, &args); err != nil {
+		return call.Tool
+	}
+	return cmp.Or(args.Path, args.Handle, args.Pattern, args.Command, call.Tool)
 }
 
 type CarryBuilder func(*rc.Store, rc.Config, rc.Conversation) (rc.Carry, error)
@@ -75,11 +101,31 @@ type Arm struct {
 }
 
 type ReplayResult struct {
-	Steps []ReplayStep
-	Drops []rc.Drop
-	Forks []ForkRow
-	Peak  rc.Occupancy
-	Final rc.Occupancy
+	Steps     []ReplayStep
+	Drops     []rc.Drop
+	Forks     []ForkRow
+	Refetches []Refetch
+	Peak      rc.Occupancy
+	Final     rc.Occupancy
+	Carried   rc.Conversation
+}
+
+func (r ReplayResult) RefetchedBytes() int {
+	total := 0
+	for _, refetch := range r.Refetches {
+		total += refetch.Bytes
+	}
+	return total
+}
+
+func (r ReplayResult) BlindRefetches() int {
+	blind := 0
+	for _, refetch := range r.Refetches {
+		if !refetch.Named {
+			blind++
+		}
+	}
+	return blind
 }
 
 func (r ReplayResult) InputTokens() int {
@@ -133,6 +179,9 @@ func ReplaySession(store *rc.Store, cfg rc.Config, bands rc.Bands, session Sessi
 
 	var result ReplayResult
 	var sent rc.Conversation
+	seen := make(map[string]bool)
+	carried := make(map[string]bool)
+	var carryText string
 	for _, step := range session.Steps {
 		occupancy := rc.Measure(cfg, bands, conversation)
 		if occupancy.Total() > result.Peak.Total() {
@@ -155,6 +204,16 @@ func ReplaySession(store *rc.Store, cfg rc.Config, bands rc.Bands, session Sessi
 			conversation.Entries = append(conversation.Entries, rc.Entry{Step: step.Index, Text: assistant})
 		}
 		for _, call := range step.ToolCalls {
+			source := callSource(call)
+			if carried[source] {
+				result.Refetches = append(result.Refetches, Refetch{
+					Step:   step.Index,
+					Source: source,
+					Bytes:  call.RenderedBytes,
+					Named:  strings.Contains(carryText, source),
+				})
+			}
+			seen[source] = true
 			conversation.Entries = append(conversation.Entries, rc.Entry{
 				Step:         step.Index,
 				Tool:         call.Tool,
@@ -170,12 +229,21 @@ func ReplaySession(store *rc.Store, cfg rc.Config, bands rc.Bands, session Sessi
 			}
 			before := rc.Measure(cfg, bands, conversation).Total()
 			conversation = rc.Conversation{Instructions: instructions + "\n" + carry.Text}
+			carried, carryText = maps.Clone(seen), carry.Text
+			named := 0
+			for source := range carried {
+				if strings.Contains(carryText, source) {
+					named++
+				}
+			}
 			result.Forks = append(result.Forks, ForkRow{
 				Step:          step.Index,
 				TokensBefore:  before,
 				TokensAfter:   rc.Measure(cfg, bands, conversation).Total(),
 				CarryTokens:   cfg.Tokens(carry.Text),
 				BlockedMicros: time.Since(started).Microseconds(),
+				SourcesKnown:  len(carried),
+				SourcesNamed:  named,
 			})
 			continue
 		}
@@ -188,9 +256,9 @@ func ReplaySession(store *rc.Store, cfg rc.Config, bands rc.Bands, session Sessi
 		}
 		conversation = compacted
 		result.Drops = append(result.Drops, drops...)
-		result.Steps[len(result.Steps)-1].Dropped = len(drops)
+		result.Steps[len(result.Steps)-1].Drops = drops
 	}
-	result.Final = rc.Measure(cfg, bands, conversation)
+	result.Final, result.Carried = rc.Measure(cfg, bands, conversation), conversation
 	return result, nil
 }
 

@@ -8,9 +8,10 @@ import (
 )
 
 var (
-	armNothing = Arm{Name: "nothing"}
-	armRewrite = Arm{Name: "in place rewrite", Rewrite: true}
-	armHandles = Arm{Name: "fork, handles", Carry: rc.HandleCarry}
+	armNothing   = Arm{Name: "nothing"}
+	armRewrite   = Arm{Name: "in place rewrite", Rewrite: true}
+	armHandles   = Arm{Name: "fork, handles", Carry: rc.HandleCarry}
+	armDistilled = Arm{Name: "fork, distilled", Carry: rc.DistilledCarry}
 )
 
 func recordedTurn(t *testing.T) (rc.Config, Session) {
@@ -123,6 +124,7 @@ func TestEveryArmOnTheRecordedTurnAtATargetItActuallyCrosses(t *testing.T) {
 	nothing := replay(t, cfg, bands, session, armNothing)
 	rewrite := replay(t, cfg, bands, session, armRewrite)
 	handles := replay(t, cfg, bands, session, armHandles)
+	distilled := replay(t, cfg, bands, session, armDistilled)
 	summary := replay(t, cfg, bands, session, Arm{Name: "fork, summary", Carry: recorded.Carry()})
 	if len(rewrite.Drops) == 0 || len(handles.Forks) == 0 {
 		t.Fatalf("at a %d target the recorded turn, peaking at %d tokens, neither dropped nor forked",
@@ -133,6 +135,7 @@ func TestEveryArmOnTheRecordedTurnAtATargetItActuallyCrosses(t *testing.T) {
 		{armNothing.Name, nothing},
 		{armRewrite.Name, rewrite},
 		{armHandles.Name, handles},
+		{armDistilled.Name, distilled},
 		{"fork, summary", summary},
 	}))
 	t.Logf("the summary carried %d tokens against the handle list's %d, and cost %d model call and %d ms of latency to produce",
@@ -156,6 +159,35 @@ func TestEveryArmOnTheRecordedTurnAtATargetItActuallyCrosses(t *testing.T) {
 	t.Logf("the fork bills %d against the rewrite's %d, %.1f%% less",
 		handles.BilledUnits(), rewrite.BilledUnits(),
 		100*float64(rewrite.BilledUnits()-handles.BilledUnits())/float64(rewrite.BilledUnits()))
+}
+
+func TestWhatTheNextSessionHasToRefetchUnderEachWayOfWritingTheCarry(t *testing.T) {
+	cfg, session := recordedTurn(t)
+	bands := measuringBands()
+	recorded, err := ReadSummaries(filepath.Join("testdata", "fork-summaries.json"))
+	if err != nil {
+		t.Fatalf("read the recorded summaries: %v", err)
+	}
+
+	arms := []Arm{armHandles, armDistilled, {Name: "fork, model summary", Carry: recorded.Carry()}}
+	for _, arm := range arms {
+		result := replay(t, cfg, bands, session, arm)
+		if len(result.Forks) != 1 {
+			t.Fatalf("%s forked %d times and the recorded summary arm can only answer once", arm.Name, len(result.Forks))
+		}
+		fork := result.Forks[0]
+		t.Logf("%-20s fork at step %2d, carry %5d tokens, built in %7d microseconds, names %2d of %2d sources known, %d refetches after it of which %d blind, %d bytes",
+			arm.Name, fork.Step, fork.CarryTokens, fork.BlockedMicros, fork.SourcesNamed, fork.SourcesKnown,
+			len(result.Refetches), result.BlindRefetches(), result.RefetchedBytes())
+		for _, refetch := range result.Refetches {
+			t.Logf("    step %d went back to %s, %d bytes, named in the carry: %v", refetch.Step, refetch.Source, refetch.Bytes, refetch.Named)
+		}
+		if fork.SourcesNamed == 0 {
+			t.Fatalf("%s names none of the %d sources the ended session had, so the new one cannot reach any of them", arm.Name, fork.SourcesKnown)
+		}
+	}
+	t.Logf("the model summary cost %d ms to produce, %d input tokens and %d output, against single digit microseconds for either carry built in code",
+		recorded.Calls[0].LatencyMS, recorded.Calls[0].InputTokens, recorded.Calls[0].OutputTokens)
 }
 
 func TestTheLengthAtWhichAForkStartsBeatingDoingNothingAtTheShippedTarget(t *testing.T) {

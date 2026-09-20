@@ -38,6 +38,9 @@ type Header struct {
 	Wire             string     `json:"wire,omitempty"`
 	Model            string     `json:"model,omitempty"`
 	Parent           string     `json:"parent,omitempty"`
+	ContextCeiling   int        `json:"context_ceiling,omitempty"`
+	ContextTarget    int        `json:"context_target,omitempty"`
+	AutoCompaction   string     `json:"auto_compaction,omitempty"`
 	Root             string     `json:"root"`
 	ForkedInto       string     `json:"forked_into,omitempty"`
 	ForkKind         string     `json:"fork_kind,omitempty"`

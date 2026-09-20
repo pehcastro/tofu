@@ -7,8 +7,8 @@ import (
 	"strings"
 )
 
-//go:embed data/elide.yaml
-var elideCatalog embed.FS
+//go:embed data
+var catalog embed.FS
 
 type Config struct {
 	ElideAboveBytes        int
@@ -28,14 +28,14 @@ func (c Config) Tokens(text string) int {
 }
 
 func LoadConfig() (Config, error) {
-	data, err := elideCatalog.ReadFile("data/elide.yaml")
+	data, err := catalog.ReadFile("data/elide.yaml")
 	if err != nil {
 		return Config{}, err
 	}
 	return ParseConfig(data)
 }
 
-func ParseConfig(data []byte) (Config, error) {
+func numbersByName(data []byte) (map[string]int, error) {
 	fields := make(map[string]int)
 	for _, raw := range strings.Split(string(data), "\n") {
 		line := strings.TrimSpace(raw)
@@ -44,14 +44,22 @@ func ParseConfig(data []byte) (Config, error) {
 		}
 		key, value, ok := strings.Cut(line, ":")
 		if !ok {
-			return Config{}, fmt.Errorf("recall: elide catalog line %q has no key", raw)
+			return nil, fmt.Errorf("recall: catalog line %q has no key", raw)
 		}
 		key = strings.TrimSpace(key)
 		n, err := strconv.Atoi(strings.TrimSpace(value))
 		if err != nil {
-			return Config{}, fmt.Errorf("recall: elide catalog %q: %w", key, err)
+			return nil, fmt.Errorf("recall: catalog %q: %w", key, err)
 		}
 		fields[key] = n
+	}
+	return fields, nil
+}
+
+func ParseConfig(data []byte) (Config, error) {
+	fields, err := numbersByName(data)
+	if err != nil {
+		return Config{}, err
 	}
 	cfg := Config{
 		ElideAboveBytes:        fields["elide_above_bytes"],

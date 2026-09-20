@@ -4,10 +4,14 @@ const Version = "0.4.0"
 
 const (
 	ContextCeilingTokens = 250000
-	BandIdentityTokens   = 4000
-	BandFactsTokens      = 0
-	BandWorkingSetTokens = 16000
-	BandRecentTokens     = 30000
+
+	BandShareWhole      = 10000
+	BandIdentityShare   = 160
+	BandFactsShare      = 0
+	BandWorkingSetShare = 640
+	BandRecentShare     = 1200
+
+	CarrySignpostBytes = 120
 )
 
 const (
@@ -60,8 +64,9 @@ const (
 	CrewMaxDepth   = 2
 	CrewMaxBreadth = 4
 
-	SubAgentRetainedRows = 4
-	SubAgentMissionChars = 60
+	SubAgentRetainedRows    = 4
+	SubAgentMissionChars    = 60
+	SubAgentMaxProcessDepth = 1
 )
 
 const (

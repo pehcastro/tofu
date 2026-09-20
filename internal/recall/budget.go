@@ -14,13 +14,22 @@ type Bands struct {
 	Recent     int `json:"recent"`
 }
 
-func ShippedBands() Bands {
+const bandShareOfWindow = konst.BandIdentityShare + konst.BandFactsShare + konst.BandWorkingSetShare + konst.BandRecentShare
+
+const widestCeilingTokens = konst.ContextCeilingTokens * konst.BandShareWhole / bandShareOfWindow
+
+func BandsOf(ceilingTokens int) Bands {
+	ceiling := min(ceilingTokens, widestCeilingTokens)
 	return Bands{
-		Identity:   konst.BandIdentityTokens,
-		Facts:      konst.BandFactsTokens,
-		WorkingSet: konst.BandWorkingSetTokens,
-		Recent:     konst.BandRecentTokens,
+		Identity:   ceiling * konst.BandIdentityShare / konst.BandShareWhole,
+		Facts:      ceiling * konst.BandFactsShare / konst.BandShareWhole,
+		WorkingSet: ceiling * konst.BandWorkingSetShare / konst.BandShareWhole,
+		Recent:     ceiling * konst.BandRecentShare / konst.BandShareWhole,
 	}
+}
+
+func ShippedBands() Bands {
+	return BandsOf(konst.ContextCeilingTokens)
 }
 
 func (b Bands) Target() int {
