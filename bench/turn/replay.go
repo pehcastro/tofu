@@ -5,44 +5,19 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
-	"time"
 
-	"tofu/internal/sys"
+	"tofu/bench/corpus"
 	"tofu/internal/turn/tools"
 )
 
-type RecordedCall struct {
-	Tool        string          `json:"tool"`
-	Args        json.RawMessage `json:"args,omitempty"`
-	Error       string          `json:"error,omitempty"`
-	ResultBytes int64           `json:"result_bytes,omitempty"`
-}
-
-type RecordedStep struct {
-	Index     int            `json:"index"`
-	ToolCalls []RecordedCall `json:"tool_calls,omitempty"`
-}
-
-type RecordedTurn struct {
-	ID          string         `json:"id"`
-	At          time.Time      `json:"at"`
-	Steps       []RecordedStep `json:"steps"`
-	WallClockMS int64          `json:"wall_clock_ms"`
-}
+type (
+	RecordedCall = corpus.RecordedCall
+	RecordedStep = corpus.RecordedStep
+	RecordedTurn = corpus.RecordedTurn
+)
 
 func ReadRecordedTurn(path string) (RecordedTurn, error) {
-	data, err := sys.ReadFile(path)
-	if err != nil {
-		return RecordedTurn{}, err
-	}
-	var recorded RecordedTurn
-	if err := json.Unmarshal(data, &recorded); err != nil {
-		return RecordedTurn{}, fmt.Errorf("bench: %s is not a recorded turn: %w", path, err)
-	}
-	if len(recorded.Steps) == 0 || recorded.WallClockMS == 0 {
-		return RecordedTurn{}, fmt.Errorf("bench: %s carries no step and no wall clock", path)
-	}
-	return recorded, nil
+	return corpus.ReadTurn(path)
 }
 
 const (

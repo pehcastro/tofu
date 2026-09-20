@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strings"
 
+	"tofu/bench/corpus"
 	"tofu/internal/turn/tools"
 )
 
@@ -32,34 +33,34 @@ func ReadCorpus(dir string) (Corpus, error) {
 	if err != nil {
 		return Corpus{}, err
 	}
-	corpus := Corpus{Dir: dir, EntryCount: len(entries)}
+	turnCorpus := Corpus{Dir: dir, EntryCount: len(entries)}
 	for _, entry := range entries {
 		name := entry.Name()
 		if entry.IsDir() {
-			corpus.JSONLDirsSeen++
-			recorded, err := ReadRecordedTurnDir(filepath.Join(dir, name))
+			turnCorpus.JSONLDirsSeen++
+			recorded, err := corpus.ReadTurnDir(filepath.Join(dir, name))
 			if err != nil {
-				corpus.Skipped = append(corpus.Skipped, SkippedTurn{Path: name, Reason: err.Error()})
-				corpus.JSONLDirsSkipped = append(corpus.JSONLDirsSkipped, name)
+				turnCorpus.Skipped = append(turnCorpus.Skipped, SkippedTurn{Path: name, Reason: err.Error()})
+				turnCorpus.JSONLDirsSkipped = append(turnCorpus.JSONLDirsSkipped, name)
 				continue
 			}
-			corpus.Turns = append(corpus.Turns, recorded)
-			corpus.JSONLDirs = append(corpus.JSONLDirs, recorded.ID)
+			turnCorpus.Turns = append(turnCorpus.Turns, recorded)
+			turnCorpus.JSONLDirs = append(turnCorpus.JSONLDirs, recorded.ID)
 			continue
 		}
 		if filepath.Ext(name) != ".json" {
-			corpus.Skipped = append(corpus.Skipped, SkippedTurn{Path: name, Reason: "not a .json file"})
+			turnCorpus.Skipped = append(turnCorpus.Skipped, SkippedTurn{Path: name, Reason: "not a .json file"})
 			continue
 		}
-		recorded, err := ReadRecordedTurn(filepath.Join(dir, name))
+		recorded, err := corpus.ReadTurn(filepath.Join(dir, name))
 		if err != nil {
-			corpus.Skipped = append(corpus.Skipped, SkippedTurn{Path: name, Reason: err.Error()})
+			turnCorpus.Skipped = append(turnCorpus.Skipped, SkippedTurn{Path: name, Reason: err.Error()})
 			continue
 		}
-		corpus.Turns = append(corpus.Turns, recorded)
+		turnCorpus.Turns = append(turnCorpus.Turns, recorded)
 	}
-	sort.Slice(corpus.Turns, func(i, j int) bool { return corpus.Turns[i].ID < corpus.Turns[j].ID })
-	return corpus, nil
+	sort.Slice(turnCorpus.Turns, func(i, j int) bool { return turnCorpus.Turns[i].ID < turnCorpus.Turns[j].ID })
+	return turnCorpus, nil
 }
 
 const SameQuestionMethod = "same tool, CallKey differs, and a reader's subject matches: for read, artifact_fetch and fetch the subject is the cleaned path or handle; for grep, search, symbols and glob it is the pattern lowercased with runs of whitespace collapsed to one space. pairs are counted within one turn only, because the memo's scope is one turn."
