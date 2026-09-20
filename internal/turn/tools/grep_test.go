@@ -5,11 +5,14 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 
 	"tofu/internal/konst"
+	"tofu/internal/sys"
 	"tofu/internal/turn/tools"
 )
 
@@ -133,8 +136,27 @@ func TestTheIgnoredWalkIsMeasuredOnTheRecordedQuestion(t *testing.T) {
 	if files == 0 {
 		t.Fatal("the filtered walk found no file at all")
 	}
-	if strings.Contains(filtered.Content, ".local/") {
-		t.Fatalf("grep read the ignored .local tree, which is what this ticket is about")
+
+	ignored := []string{"node_modules", ".git", sys.StateDirName, sys.LegacyStateDirName, ".local", ".claude", ".playground"}
+	inspected := 0
+	for _, line := range strings.Split(filtered.Content, "\n") {
+		parts := strings.SplitN(line, ":", 3)
+		if len(parts) < 3 {
+			continue
+		}
+		if _, err := strconv.Atoi(parts[1]); err != nil {
+			continue
+		}
+		inspected++
+		for _, segment := range strings.Split(parts[0], "/") {
+			if slices.Contains(ignored, segment) {
+				t.Fatalf("grep returned %q, under the ignored name %q", parts[0], segment)
+			}
+		}
+	}
+	t.Logf("%d result paths inspected against the ignored names", inspected)
+	if inspected == 0 {
+		t.Fatal("the filtered grep matched no line, so no result path was inspected")
 	}
 	if os.Getenv("TOFU_MEASURE_UNFILTERED") == "" {
 		t.Skip("the unfiltered arm reads every ignored byte in the tree, so it runs only under TOFU_MEASURE_UNFILTERED")
