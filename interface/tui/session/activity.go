@@ -5,6 +5,8 @@ import (
 	"strings"
 	"time"
 
+	"charm.land/lipgloss/v2"
+
 	"tofu/interface/tui/crew"
 	"tofu/interface/tui/theme"
 	"tofu/internal/widget"
@@ -20,16 +22,70 @@ const (
 	intentLeast   = 12
 )
 
+type phase int
+
+const (
+	requesting phase = iota
+	thinking
+	working
+	waitingOnYou
+)
+
+func (p phase) drawn() (string, lipgloss.Style) {
+	switch p {
+	case requesting:
+		return "requesting", theme.Dim()
+	case thinking:
+		return "thinking", theme.Accent()
+	case working:
+		return "working", theme.Tool()
+	case waitingOnYou:
+		return "waiting", theme.Warn()
+	}
+	panic("session: unknown phase")
+}
+
 type activity struct {
 	since  time.Duration
 	name   string
 	owns   string
 	intent string
 	tokens int
+	style  lipgloss.Style
+}
+
+func (m Model) reached() (phase, string) {
+	if m.Awaiting() {
+		return waitingOnYou, ""
+	}
+	if m.inFlight() {
+		return requesting, ""
+	}
+	for index := len(m.entries) - 1; index >= 0; index-- {
+		if entry := m.entries[index]; entry.running() {
+			return working, entry.label()
+		}
+	}
+	return thinking, ""
+}
+
+func (m *Model) settle() {
+	if !m.Busy {
+		return
+	}
+	at, intent := m.reached()
+	if at == m.phase && intent == m.intent {
+		return
+	}
+	if m.now().Sub(m.shown) < PhaseDwell {
+		return
+	}
+	m.phase, m.intent, m.shown = at, intent, m.now()
 }
 
 func (m Model) activityRows() []activity {
 	rows := make([]activity, 0, len(m.Children)+1)
+	_, busyStyle := working.drawn()
 	for _, child := range m.Children {
 		if child.State != crew.Running {
 			continue
@@ -40,22 +96,21 @@ func (m Model) activityRows() []activity {
 			owns:   strings.Join(child.Owns, " "),
 			intent: child.Doing,
 			tokens: child.Tokens,
+			style:  busyStyle,
 		})
 	}
 	if !m.Busy {
 		return rows
 	}
-	state, what := thinking, ""
-	for index := len(m.entries) - 1; index >= 0; index-- {
-		if entry := m.entries[index]; entry.running() {
-			state, what = working, entry.label()
-			break
-		}
+	name, style := m.phase.drawn()
+	return append(rows, activity{since: m.phaseSince(), name: name, intent: m.intent, style: style})
+}
+
+func (m Model) phaseSince() time.Duration {
+	if m.phase == requesting {
+		return max(m.now().Sub(m.requested), 0)
 	}
-	if m.Awaiting() {
-		state = waitingOnYou
-	}
-	return append(rows, activity{since: m.elapsed(m.began), name: state, intent: what})
+	return m.elapsed(m.began)
 }
 
 func (m Model) activityLines() []string {
@@ -85,12 +140,7 @@ func (m Model) activityLine(row activity, held bool) string {
 		room = m.width - widget.Cells(clock+gap+who)
 	}
 	room = max(room, 1)
-	line := theme.Accent().Render(clock) + gap + theme.Text().Render(who) +
-		theme.Tool().Render(widget.Pad(widget.Fit(row.intent, room), room))
-	if spent != "" {
-		line += theme.Text().Render(spent)
-	}
-	return line
+	return row.style.Render(clock + gap + who + widget.Pad(widget.Fit(row.intent, room), room) + spent)
 }
 
 func spin(since time.Duration) string {
@@ -98,8 +148,13 @@ func spin(since time.Duration) string {
 	return string(frames[int(since/TickInterval)%len(frames)])
 }
 
+func (m Model) inFlight() bool { return !m.requested.IsZero() && m.answered.IsZero() }
+
 func (m Model) elapsed(at time.Time) time.Duration {
 	now := m.now()
+	if m.inFlight() {
+		now = m.requested
+	}
 	if !m.waiting.IsZero() {
 		now = m.waiting
 	}
@@ -132,6 +187,10 @@ func (m *Model) Resume() {
 	m.markAsked(false)
 	waited := m.now().Sub(m.waiting)
 	m.waiting = time.Time{}
+	m.hold(waited)
+}
+
+func (m *Model) hold(waited time.Duration) {
 	if waited <= 0 {
 		return
 	}
@@ -141,4 +200,21 @@ func (m *Model) Resume() {
 			m.entries[index].Started = m.entries[index].Started.Add(waited)
 		}
 	}
+}
+
+func (m *Model) Requesting() {
+	if !m.Busy {
+		return
+	}
+	m.requested, m.answered = m.now(), time.Time{}
+}
+
+func (m *Model) Returned() {
+	if !m.inFlight() {
+		return
+	}
+	m.answered = m.now()
+	waited := m.answered.Sub(m.requested)
+	m.waited += waited
+	m.hold(waited)
 }

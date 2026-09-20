@@ -61,7 +61,7 @@ func sessionApp(t *testing.T, width, height int) *App {
 		{Kind: EventToolCall, ID: "c2", Tool: "bash", Text: "go test ./internal/judge/..."},
 		{Kind: EventDecision, Decision: asked()},
 		{Kind: EventToolResult, ID: "c2", Text: "ok tofu/internal/judge 0.42s"},
-		{Kind: EventDone, Text: "turn stopped, 3 steps, 8412 ms, quota windows five_hour and seven_day"},
+		{Kind: EventDone, Text: "stopped after"},
 	} {
 		app.Update(event)
 	}
@@ -105,17 +105,7 @@ const (
 
 func liveApp(t *testing.T, at *time.Time) *App {
 	t.Helper()
-	app := newTestApp(Options{
-		Repo:   "silo",
-		Branch: "develop",
-		Now:    func() time.Time { return *at },
-		Wires:  anthropicAlone,
-		Turn:   func(context.Context, string, string, func(Event)) {},
-	})
-	app.Init()
-	app.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
-	typeText(app, "how many go files are under each root?")
-	app.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	app := phaseApp(t, at)
 	app.Update(Event{Kind: EventText, Text: prose})
 	app.Update(Event{Kind: EventToolCall, ID: "c0", Tool: "read", Text: "internal/turn/loop.go"})
 	app.Update(Event{Kind: EventToolResult, ID: "c0", Text: "84 lines, 2.1 KB"})

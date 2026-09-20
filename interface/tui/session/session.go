@@ -19,6 +19,8 @@ import (
 
 const TickInterval = 250 * time.Millisecond
 
+const PhaseDwell = 400 * time.Millisecond
+
 const (
 	entryWindow    = 500
 	composerRows   = 3
@@ -31,9 +33,6 @@ const (
 	quitHint       = "ctrl+c quit"
 	stopHint       = "ctrl+c stops the turn"
 	stoppingHint   = "stopping the turn, ctrl+c will not quit until it ends"
-	thinking       = "thinking"
-	working        = "working"
-	waitingOnYou   = "waiting"
 	noResult       = "no result"
 	continuation   = "    "
 	toolMarker     = "⟩ "
@@ -104,6 +103,12 @@ type Model struct {
 	Children  []crew.Child
 	now       func() time.Time
 	waiting   time.Time
+	requested time.Time
+	answered  time.Time
+	waited    time.Duration
+	phase     phase
+	intent    string
+	shown     time.Time
 	prose     Prose
 	entries   []Entry
 	composer  textarea.Model
@@ -326,10 +331,25 @@ func (m *Model) Follow() { m.following = true }
 
 func (m *Model) ToggleOpen() { m.open = !m.open }
 
-func (m *Model) Start() { m.Busy, m.Stopping, m.began = true, false, m.now() }
+func (m *Model) Start() {
+	at := m.now()
+	m.Busy, m.Stopping, m.began = true, false, at
+	m.waited, m.phase, m.intent, m.shown = 0, requesting, "", at
+	m.requested, m.answered = at, time.Time{}
+}
+
+func (m *Model) Close(words string) {
+	work := m.elapsed(m.began)
+	line := words + " " + widget.Elapsed(work)
+	if m.waited > work {
+		line += foldSeparator + "waited " + widget.Elapsed(m.waited)
+	}
+	m.Append(Entry{Kind: Note, Body: line})
+}
 
 func (m *Model) Stop() {
 	m.Busy, m.Stopping = false, false
+	m.requested, m.answered = time.Time{}, time.Time{}
 	m.seal()
 	for index := range m.entries {
 		if m.entries[index].running() {
@@ -338,7 +358,8 @@ func (m *Model) Stop() {
 	}
 }
 
-func (m Model) View() string {
+func (m *Model) View() string {
+	m.settle()
 	rows := m.transcriptRows()
 	tail, scrollable := m.tailAnchor(rows)
 	from := tail
@@ -347,7 +368,7 @@ func (m Model) View() string {
 	}
 	lines := m.linesFrom(from, rows)
 	for len(lines) < rows {
-		lines = append(lines, "")
+		lines = append([]string{""}, lines...)
 	}
 	footer := append([]string{strings.Join(lines, "\n")}, m.activityLines()...)
 	footer = append(footer, theme.Rule().Render(strings.Repeat("─", m.width)))

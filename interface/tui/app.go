@@ -42,6 +42,7 @@ const (
 	EventAwaitPerson
 	EventResumed
 	EventSteered
+	EventRequesting
 )
 
 type Event struct {
@@ -69,10 +70,18 @@ func (e Event) snapshot() bool {
 	case EventContext, EventForkStart, EventForkEnd, EventCrew:
 		return true
 	case EventText, EventTextDelta, EventToolCall, EventToolResult, EventNote, EventFailure, EventStats, EventDone,
-		EventDecision, EventGateOff, EventAwaitPerson, EventResumed, EventSteered:
+		EventDecision, EventGateOff, EventAwaitPerson, EventResumed, EventSteered, EventRequesting:
 		return false
 	}
 	panic("tui: unknown event kind")
+}
+
+func (e Event) answered() bool {
+	switch e.Kind {
+	case EventText, EventTextDelta, EventToolCall, EventStats:
+		return true
+	}
+	return false
 }
 
 type Turn func(ctx context.Context, wire, task string, emit func(Event))
@@ -585,7 +594,12 @@ func (a *App) waitForEvent() tea.Cmd {
 }
 
 func (a *App) absorb(event Event) {
+	if event.answered() {
+		a.view.Returned()
+	}
 	switch event.Kind {
+	case EventRequesting:
+		a.view.Requesting()
 	case EventText:
 		a.view.Append(session.Entry{Kind: session.Assistant, Body: event.Text})
 	case EventTextDelta:
@@ -599,8 +613,10 @@ func (a *App) absorb(event Event) {
 			status = edit.Tally()
 		}
 		a.view.Finish(event.ID, session.Result{Status: status, Bytes: event.Bytes, Failed: event.Failed})
-	case EventNote, EventDone:
+	case EventNote:
 		a.view.Append(session.Entry{Kind: session.Note, Body: event.Text})
+	case EventDone:
+		a.view.Close(event.Text)
 	case EventFailure:
 		a.view.Append(session.Entry{Kind: session.Failure, Body: event.Text})
 	case EventDecision:

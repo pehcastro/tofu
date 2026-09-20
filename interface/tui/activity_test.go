@@ -72,33 +72,19 @@ func TestWithNothingRunningThereIsNoActivityRow(t *testing.T) {
 	assertGolden(t, "session-80x24.golden", app.View().Content)
 }
 
-func TestTheSpinnerAndElapsedAreAccentAndTheIntentCarriesTheToolColour(t *testing.T) {
+func TestTheWholeRunningRowCarriesThePhasesOwnColour(t *testing.T) {
 	at := fixedStart()
-	content := liveApp(t, &at).View().Content
-	line := ""
-	for _, row := range strings.Split(content, "\n") {
-		if strings.ContainsAny(ansi.Strip(row), spinnerFrames) {
-			line = row
-		}
-	}
-	if line == "" {
-		t.Fatalf("no running row in the frame\n%s", content)
-	}
-	accentOpen, _, _ := strings.Cut(theme.Accent().Render(""), "\x1b[m")
+	line := styledTurnRow(t, liveApp(t, &at))
 	toolOpen, _, _ := strings.Cut(theme.Tool().Render(""), "\x1b[m")
-	if !strings.HasPrefix(line, accentOpen) {
-		t.Errorf("the running row does not open with the accent %q\n%q", accentOpen, line)
+	if !strings.HasPrefix(line, toolOpen) {
+		t.Errorf("a working row does not open with the tool colour %q\n%q", toolOpen, line)
 	}
-	if !strings.Contains(line, toolOpen+"bash for d in") {
-		t.Errorf("the intent does not carry the tool colour %q\n%q", toolOpen, line)
+	if painted := colours(line); len(painted) != 2 {
+		t.Errorf("the row is painted with %v, want the phase colour opened once and closed once\n%q", painted, line)
 	}
 	elapsed := strings.Fields(ansi.Strip(line))
 	if len(elapsed) < 2 || !strings.HasSuffix(elapsed[1], "s") {
 		t.Fatalf("the running row carries no elapsed time: %q", ansi.Strip(line))
-	}
-	head, _, _ := strings.Cut(line, "\x1b[m")
-	if !strings.Contains(head, elapsed[1]) {
-		t.Errorf("the elapsed time is outside the accent run %q\n%q", head, line)
 	}
 }
 
@@ -241,11 +227,13 @@ func TestTheRunningRowNamesTheStateAndNotTheWordTurn(t *testing.T) {
 		t.Errorf("a running call does not read as working: %q", row)
 	}
 	app.Update(Event{Kind: EventToolResult, ID: "c2", Text: "14 lines, 64 bytes"})
+	at = at.Add(time.Second)
 	if row := turnRow(t, app); !strings.Contains(row, "thinking") {
 		t.Errorf("a turn waiting on the model does not read as thinking: %q", row)
 	}
 	app.Update(Event{Kind: EventToolCall, ID: "c3", Tool: "bash", Text: "go test ./internal/..."})
 	app.Update(Event{Kind: EventAwaitPerson})
+	at = at.Add(time.Second)
 	if row := turnRow(t, app); !strings.Contains(row, "waiting") {
 		t.Errorf("a turn waiting on the person does not say so: %q", row)
 	}
