@@ -25,8 +25,29 @@ type RecordedCall struct {
 }
 
 type RecordedStep struct {
-	Index     int            `json:"index"`
-	ToolCalls []RecordedCall `json:"tool_calls,omitempty"`
+	Index         int            `json:"index"`
+	ToolCalls     []RecordedCall `json:"tool_calls,omitempty"`
+	AssistantText string         `json:"assistant_text,omitempty"`
+}
+
+func (s *RecordedStep) UnmarshalJSON(data []byte) error {
+	type alias RecordedStep
+	var lower alias
+	if err := json.Unmarshal(data, &lower); err != nil {
+		return err
+	}
+	*s = RecordedStep(lower)
+	if s.AssistantText != "" {
+		return nil
+	}
+	var upper struct {
+		AssistantText string `json:"AssistantText"`
+	}
+	if err := json.Unmarshal(data, &upper); err != nil {
+		return err
+	}
+	s.AssistantText = upper.AssistantText
+	return nil
 }
 
 type RecordedTurn struct {
@@ -58,6 +79,7 @@ type Walked struct {
 func scrubTurn(recorded RecordedTurn) RecordedTurn {
 	recorded.Task = Scrub(recorded.Task)
 	for i, step := range recorded.Steps {
+		recorded.Steps[i].AssistantText = Scrub(step.AssistantText)
 		for j, call := range step.ToolCalls {
 			if len(call.Args) > 0 {
 				call.Args = json.RawMessage(Scrub(string(call.Args)))

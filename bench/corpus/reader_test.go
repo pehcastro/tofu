@@ -164,6 +164,103 @@ func TestAPlantedHomePathDoesNotSurviveTheDirRead(t *testing.T) {
 	}
 }
 
+func hasStepWithText(steps []RecordedStep) bool {
+	for _, step := range steps {
+		if strings.TrimSpace(step.AssistantText) != "" {
+			return true
+		}
+	}
+	return false
+}
+
+func TestTheReaderCarriesReplyTextOnBothSchemas(t *testing.T) {
+	t.Run("single file", func(t *testing.T) {
+		entries, err := os.ReadDir(sessionsDir)
+		if err != nil {
+			t.Skipf("no %s on this machine: %v", sessionsDir, err)
+		}
+		for _, entry := range entries {
+			if entry.IsDir() || filepath.Ext(entry.Name()) != ".json" {
+				continue
+			}
+			recorded, err := ReadTurn(filepath.Join(sessionsDir, entry.Name()))
+			if err != nil {
+				continue
+			}
+			if hasStepWithText(recorded.Steps) {
+				return
+			}
+		}
+		t.Skip("no single file turn on this machine carries reply text")
+	})
+	t.Run("header and jsonl", func(t *testing.T) {
+		entries, err := os.ReadDir(sessionsDir)
+		if err != nil {
+			t.Skipf("no %s on this machine: %v", sessionsDir, err)
+		}
+		for _, entry := range entries {
+			if !entry.IsDir() {
+				continue
+			}
+			recorded, err := ReadTurnDir(filepath.Join(sessionsDir, entry.Name()))
+			if err != nil {
+				continue
+			}
+			if hasStepWithText(recorded.Steps) {
+				return
+			}
+		}
+		t.Skip("no header and jsonl turn on this machine carries reply text")
+	})
+}
+
+func TestAPlantedHomePathInReplyTextDoesNotSurviveTheRead(t *testing.T) {
+	name, ok := firstReadableEntry(t, false)
+	if !ok {
+		t.Skip("no single file turn on this machine")
+	}
+	scratch := t.TempDir()
+	original, err := os.ReadFile(filepath.Join(sessionsDir, name))
+	if err != nil {
+		t.Fatal(err)
+	}
+	fields := map[string]any{}
+	if err := json.Unmarshal(original, &fields); err != nil {
+		t.Fatal(err)
+	}
+	stepsKey := "Steps"
+	if _, ok := fields["steps"]; ok {
+		stepsKey = "steps"
+	}
+	steps, ok := fields[stepsKey].([]any)
+	if !ok || len(steps) == 0 {
+		t.Skip("this turn carries no step to plant into")
+	}
+	step, ok := steps[0].(map[string]any)
+	if !ok {
+		t.Skip("this turn's step is not the expected shape")
+	}
+	step["AssistantText"] = plantedHomePath
+	step["assistant_text"] = plantedHomePath
+	steps[0] = step
+	fields[stepsKey] = steps
+	planted, err := json.Marshal(fields)
+	if err != nil {
+		t.Fatal(err)
+	}
+	plantedPath := filepath.Join(scratch, name)
+	if err := os.WriteFile(plantedPath, planted, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	recorded, err := ReadTurn(plantedPath)
+	if err != nil {
+		t.Fatalf("reading the planted copy: %v", err)
+	}
+	if leaks := serializedLeaks(t, recorded); len(leaks) > 0 {
+		t.Fatalf("a planted home path in reply text survived the read: %q", leaks)
+	}
+}
+
 func TestWalkSessionsOverTheRealTreeReportsTheFiveNumbers(t *testing.T) {
 	if _, err := os.Stat(sessionsDir); os.IsNotExist(err) {
 		t.Skip("no .tofu/sessions on this machine")
