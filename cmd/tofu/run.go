@@ -392,21 +392,28 @@ func dryRunBody(opts runOpts, model string, config turn.Config) ([]byte, error) 
 	return anthropic.Request{Model: model, System: []string{config.System}, Messages: messages, Tools: tools}.Encode(true)
 }
 
+func turnTransportConfig() transport.Config {
+	return transport.Config{
+		AttemptTimeout: time.Duration(konst.TurnAttemptTimeoutMillis) * time.Millisecond,
+		Retries:        konst.TurnRetries,
+		Backoff:        time.Duration(konst.TurnBackoffMillis) * time.Millisecond,
+		MaxBackoff:     time.Duration(konst.TurnMaxBackoffMillis) * time.Millisecond,
+		Growth:         konst.TurnBackoffGrowth,
+		JitterFraction: konst.TurnBackoffJitterFraction,
+		TotalWait:      time.Duration(konst.TurnTotalBackoffCeilingMillis) * time.Millisecond,
+		Concurrency:    1,
+	}
+}
+
 func keyModel(model string) (turn.Model, error) {
 	key, err := jev.Key(".env")
 	if err != nil {
 		return nil, err
 	}
 	wire, err := openrouter.New(openrouter.Config{
-		Model: model,
-		Key:   key,
-		Transport: transport.Config{
-			AttemptTimeout: time.Duration(konst.TurnAttemptTimeoutMillis) * time.Millisecond,
-			Retries:        konst.TurnRetries,
-			Backoff:        time.Duration(konst.TurnBackoffMillis) * time.Millisecond,
-			MaxBackoff:     time.Duration(konst.TurnMaxBackoffMillis) * time.Millisecond,
-			Concurrency:    1,
-		},
+		Model:     model,
+		Key:       key,
+		Transport: turnTransportConfig(),
 	})
 	if err != nil {
 		return nil, err

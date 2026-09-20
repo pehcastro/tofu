@@ -21,6 +21,7 @@ import (
 	"tofu/internal/llm/models"
 	"tofu/internal/llm/wire/anthropic"
 	"tofu/internal/llm/wire/codex"
+	"tofu/internal/transport"
 	"tofu/internal/turn"
 )
 
@@ -800,5 +801,25 @@ func TestBothWiresMapALengthStopToTheSameOutcome(t *testing.T) {
 		if subscription != llm.OutcomeTruncated {
 			t.Fatalf("with %d tool calls a length stop is %s on both wires, and it has to be truncated", calls, subscription)
 		}
+	}
+}
+
+func TestTheTurnTransportConfigCarriesTheBackoffShapeAndACeiling(t *testing.T) {
+	config := turnTransportConfig()
+	want := transport.Config{
+		AttemptTimeout: time.Duration(konst.TurnAttemptTimeoutMillis) * time.Millisecond,
+		Retries:        konst.TurnRetries,
+		Backoff:        time.Duration(konst.TurnBackoffMillis) * time.Millisecond,
+		MaxBackoff:     time.Duration(konst.TurnMaxBackoffMillis) * time.Millisecond,
+		Growth:         konst.TurnBackoffGrowth,
+		JitterFraction: konst.TurnBackoffJitterFraction,
+		TotalWait:      time.Duration(konst.TurnTotalBackoffCeilingMillis) * time.Millisecond,
+		Concurrency:    1,
+	}
+	if config.Growth != want.Growth || config.JitterFraction != want.JitterFraction || config.TotalWait != want.TotalWait {
+		t.Fatalf("the config the binary builds is %+v, want the growth, jitter and ceiling from konst: %+v", config, want)
+	}
+	if config.TotalWait <= 0 {
+		t.Fatal("the ceiling that closes the unbounded Retry-After wait is unset")
 	}
 }

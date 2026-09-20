@@ -6,7 +6,9 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"hash/fnv"
 	"io"
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -26,6 +28,9 @@ type Config struct {
 	Retries        int
 	Backoff        time.Duration
 	MaxBackoff     time.Duration
+	Growth         float64
+	JitterFraction float64
+	TotalWait      time.Duration
 	Concurrency    int
 	HTTP           *http.Client
 	Now            func() time.Time
@@ -68,12 +73,24 @@ func New(config Config) (*Client, error) {
 	if config.MaxBackoff > 0 && config.MaxBackoff < config.Backoff {
 		return nil, Fail("transport.New", KindBadRequest, nil, "max backoff must not be below backoff")
 	}
+	if config.Growth < 0 {
+		return nil, Fail("transport.New", KindBadRequest, nil, "growth must not be negative")
+	}
+	if config.JitterFraction < 0 {
+		return nil, Fail("transport.New", KindBadRequest, nil, "jitter fraction must not be negative")
+	}
+	if config.TotalWait < 0 {
+		return nil, Fail("transport.New", KindBadRequest, nil, "total wait must not be negative")
+	}
 	if config.Concurrency < 1 {
 		return nil, Fail("transport.New", KindBadRequest, nil, "concurrency must be at least one")
 	}
 	client := config.HTTP
 	if client == nil {
 		client = &http.Client{}
+	}
+	if config.Growth == 0 {
+		config.Growth = 1
 	}
 	if config.Now == nil {
 		config.Now = time.Now
@@ -104,8 +121,9 @@ func (c *Client) Do(ctx context.Context, request Request) (Response, error) {
 	start := c.config.Now()
 	attempts := c.config.Retries + 1
 	var failure error
+	var waited time.Duration
 	for attempt := 1; attempt <= attempts; attempt++ {
-		response, wait, err := c.attempt(ctx, request, id)
+		response, advice, err := c.attempt(ctx, request, id)
 		if err == nil {
 			response.RequestID = id
 			response.Attempts = attempt
@@ -116,10 +134,15 @@ func (c *Client) Do(ctx context.Context, request Request) (Response, error) {
 		if KindOf(err).Fatal() || attempt == attempts {
 			return Response{}, err
 		}
-		if err := c.config.Sleep(ctx, c.backoff(wait)); err != nil {
+		next := c.wait(advice, attempt, id)
+		if c.config.TotalWait > 0 && waited+next > c.config.TotalWait {
+			return Response{}, failure
+		}
+		if err := c.config.Sleep(ctx, next); err != nil {
 			return Response{}, &Error{Kind: KindTimeout, Op: "transport.Do", RequestID: id,
 				Detail: "waiting to retry", Err: err}
 		}
+		waited += next
 	}
 	return Response{}, failure
 }
@@ -174,15 +197,23 @@ func (c *Client) attempt(ctx context.Context, request Request, id string) (Respo
 	}
 }
 
-func (c *Client) backoff(advice time.Duration) time.Duration {
-	wait := advice
-	if wait <= 0 {
-		wait = c.config.Backoff
+func (c *Client) wait(advice time.Duration, attempt int, id string) time.Duration {
+	if advice > 0 {
+		return advice
 	}
-	if c.config.MaxBackoff > 0 && wait > c.config.MaxBackoff {
-		wait = c.config.MaxBackoff
+	base := float64(c.config.Backoff) * math.Pow(c.config.Growth, float64(attempt-1))
+	if c.config.MaxBackoff > 0 && base > float64(c.config.MaxBackoff) {
+		base = float64(c.config.MaxBackoff)
 	}
-	return wait
+	h := fnv.New32a()
+	_, _ = h.Write([]byte(id))
+	_, _ = h.Write([]byte{byte(attempt)})
+	jitter := float64(h.Sum32()%2000)/1000 - 1
+	result := base + base*c.config.JitterFraction*jitter
+	if result < 0 {
+		result = 0
+	}
+	return time.Duration(result)
 }
 
 func (c *Client) retryAfter(header http.Header) time.Duration {

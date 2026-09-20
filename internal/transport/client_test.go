@@ -94,7 +94,7 @@ func TestDoRetriesAndHonoursRetryAfterMillisFirst(t *testing.T) {
 	}
 }
 
-func TestDoCapsTheAdvisedWait(t *testing.T) {
+func TestDoHonoursRetryAfterEvenPastTheLocalMaxBackoff(t *testing.T) {
 	var calls int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if atomic.AddInt32(&calls, 1) == 1 {
@@ -114,8 +114,8 @@ func TestDoCapsTheAdvisedWait(t *testing.T) {
 	if _, err := client.Do(context.Background(), Request{Method: http.MethodGet, URL: server.URL}); err != nil {
 		t.Fatalf("doing the request: %v", err)
 	}
-	if len(waits) != 1 || waits[0] != 200*time.Millisecond {
-		t.Fatalf("expected the wait capped at 200ms, got %v", waits)
+	if len(waits) != 1 || waits[0] != 30*time.Second {
+		t.Fatalf("expected the server's 30s honoured past the 200ms local cap, got %v", waits)
 	}
 }
 
@@ -166,6 +166,171 @@ func TestDoStopsOnAFatalStatus(t *testing.T) {
 	}
 	if len(waits) != 0 {
 		t.Fatalf("expected no wait, got %v", waits)
+	}
+}
+
+func TestDoStopsOnABillingFailure(t *testing.T) {
+	var calls int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&calls, 1)
+		w.WriteHeader(http.StatusPaymentRequired)
+		_, _ = w.Write([]byte(`{"error":"add funds"}`))
+	}))
+	defer server.Close()
+
+	var waits []time.Duration
+	client, err := New(testConfig(&waits))
+	if err != nil {
+		t.Fatalf("building the client: %v", err)
+	}
+	_, err = client.Do(context.Background(), Request{Method: http.MethodGet, URL: server.URL})
+	if KindOf(err) != KindBilling {
+		t.Fatalf("expected kind billing, got %v", err)
+	}
+	if calls != 1 {
+		t.Fatalf("expected one attempt on a billing failure, got %d", calls)
+	}
+	if len(waits) != 0 {
+		t.Fatalf("expected no wait, got %v", waits)
+	}
+}
+
+func TestDoRetriesMoreThanOnceAndEventuallySucceeds(t *testing.T) {
+	var calls int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if atomic.AddInt32(&calls, 1) <= 3 {
+			w.WriteHeader(http.StatusTooManyRequests)
+			return
+		}
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}))
+	defer server.Close()
+
+	var waits []time.Duration
+	config := testConfig(&waits)
+	config.Retries = 3
+	client, err := New(config)
+	if err != nil {
+		t.Fatalf("building the client: %v", err)
+	}
+	response, err := client.Do(context.Background(), Request{Method: http.MethodGet, URL: server.URL})
+	if err != nil {
+		t.Fatalf("expected the fourth attempt to succeed, got %v", err)
+	}
+	if response.Attempts != 4 {
+		t.Fatalf("expected four attempts, got %d", response.Attempts)
+	}
+	if len(waits) != 3 {
+		t.Fatalf("expected three waits before the success, got %v", waits)
+	}
+}
+
+func TestDoGrowsTheWaitBetweenAttempts(t *testing.T) {
+	var calls int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if atomic.AddInt32(&calls, 1) <= 3 {
+			w.WriteHeader(http.StatusTooManyRequests)
+			return
+		}
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}))
+	defer server.Close()
+
+	var waits []time.Duration
+	config := testConfig(&waits)
+	config.Retries = 3
+	config.Growth = 2
+	config.MaxBackoff = time.Hour
+	client, err := New(config)
+	if err != nil {
+		t.Fatalf("building the client: %v", err)
+	}
+	if _, err := client.Do(context.Background(), Request{Method: http.MethodGet, URL: server.URL}); err != nil {
+		t.Fatalf("doing the request: %v", err)
+	}
+	if len(waits) != 3 {
+		t.Fatalf("expected three waits, got %v", waits)
+	}
+	if waits[0] >= waits[1] || waits[1] >= waits[2] {
+		t.Fatalf("expected each wait to be longer than the last, got %v", waits)
+	}
+}
+
+func TestDoSpreadsTheWaitSoTwoRequestsDoNotRetryTogether(t *testing.T) {
+	failOnce := func() http.HandlerFunc {
+		var calls int32
+		return func(w http.ResponseWriter, r *http.Request) {
+			if atomic.AddInt32(&calls, 1) == 1 {
+				w.WriteHeader(http.StatusTooManyRequests)
+				return
+			}
+			_, _ = w.Write([]byte(`{"ok":true}`))
+		}
+	}
+	serverA := httptest.NewServer(failOnce())
+	defer serverA.Close()
+	serverB := httptest.NewServer(failOnce())
+	defer serverB.Close()
+
+	newClient := func(id string, waits *[]time.Duration) *Client {
+		config := testConfig(waits)
+		config.JitterFraction = 0.5
+		config.NewRequestID = func() string { return id }
+		client, err := New(config)
+		if err != nil {
+			t.Fatalf("building the client: %v", err)
+		}
+		return client
+	}
+
+	var waitsA, waitsB []time.Duration
+	clientA := newClient("req-a", &waitsA)
+	clientB := newClient("req-b", &waitsB)
+	if _, err := clientA.Do(context.Background(), Request{Method: http.MethodGet, URL: serverA.URL}); err != nil {
+		t.Fatalf("doing request a: %v", err)
+	}
+	if _, err := clientB.Do(context.Background(), Request{Method: http.MethodGet, URL: serverB.URL}); err != nil {
+		t.Fatalf("doing request b: %v", err)
+	}
+	if len(waitsA) != 1 || len(waitsB) != 1 {
+		t.Fatalf("expected one wait each, got %v and %v", waitsA, waitsB)
+	}
+	if waitsA[0] == waitsB[0] {
+		t.Fatalf("two requests failing at once retried after the same wait: %v", waitsA[0])
+	}
+}
+
+func TestDoGivesUpWhenTheTotalWaitCeilingIsReached(t *testing.T) {
+	var calls int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&calls, 1)
+		w.WriteHeader(http.StatusTooManyRequests)
+	}))
+	defer server.Close()
+
+	var waits []time.Duration
+	config := testConfig(&waits)
+	config.Retries = 5
+	config.Growth = 2
+	config.MaxBackoff = time.Hour
+	config.TotalWait = 300 * time.Millisecond
+	client, err := New(config)
+	if err != nil {
+		t.Fatalf("building the client: %v", err)
+	}
+	_, err = client.Do(context.Background(), Request{Method: http.MethodGet, URL: server.URL})
+	if KindOf(err) != KindRateLimit {
+		t.Fatalf("expected kind rate_limit, got %v", err)
+	}
+	if calls >= 6 {
+		t.Fatalf("expected the ceiling to cut the run short of all six attempts, got %d calls", calls)
+	}
+	var total time.Duration
+	for _, wait := range waits {
+		total += wait
+	}
+	if total > 300*time.Millisecond {
+		t.Fatalf("expected the total wait to respect the 300ms ceiling, spent %v across %v", total, waits)
 	}
 }
 
@@ -275,6 +440,9 @@ func TestNewRefusesAnImpossibleConfig(t *testing.T) {
 		{"no concurrency", Config{AttemptTimeout: time.Second}},
 		{"a cap below the backoff", Config{AttemptTimeout: time.Second, Retries: 1,
 			Backoff: time.Second, MaxBackoff: time.Millisecond, Concurrency: 1}},
+		{"negative growth", Config{AttemptTimeout: time.Second, Concurrency: 1, Growth: -1}},
+		{"negative jitter fraction", Config{AttemptTimeout: time.Second, Concurrency: 1, JitterFraction: -1}},
+		{"negative total wait", Config{AttemptTimeout: time.Second, Concurrency: 1, TotalWait: -time.Second}},
 	}
 	for _, test := range cases {
 		t.Run(test.name, func(t *testing.T) {
