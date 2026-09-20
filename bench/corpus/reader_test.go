@@ -261,6 +261,79 @@ func TestAPlantedHomePathInReplyTextDoesNotSurviveTheRead(t *testing.T) {
 	}
 }
 
+func TestTheReaderCarriesTheTypedOutcomeOnBothSchemas(t *testing.T) {
+	t.Run("single file", func(t *testing.T) {
+		entries, err := os.ReadDir(sessionsDir)
+		if err != nil {
+			t.Skipf("no %s on this machine: %v", sessionsDir, err)
+		}
+		for _, entry := range entries {
+			if entry.IsDir() || filepath.Ext(entry.Name()) != ".json" {
+				continue
+			}
+			recorded, err := ReadTurn(filepath.Join(sessionsDir, entry.Name()))
+			if err != nil || recorded.Outcome == "" {
+				continue
+			}
+			return
+		}
+		t.Skip("no single file turn on this machine carries an outcome")
+	})
+	t.Run("header and jsonl", func(t *testing.T) {
+		entries, err := os.ReadDir(sessionsDir)
+		if err != nil {
+			t.Skipf("no %s on this machine: %v", sessionsDir, err)
+		}
+		for _, entry := range entries {
+			if !entry.IsDir() {
+				continue
+			}
+			recorded, err := ReadTurnDir(filepath.Join(sessionsDir, entry.Name()))
+			if err != nil || recorded.Outcome == "" {
+				continue
+			}
+			return
+		}
+		t.Skip("no header and jsonl turn on this machine carries an outcome")
+	})
+}
+
+func TestAPlantedHomePathInOutcomeDoesNotSurviveTheRead(t *testing.T) {
+	name, ok := firstReadableEntry(t, false)
+	if !ok {
+		t.Skip("no single file turn on this machine")
+	}
+	scratch := t.TempDir()
+	original, err := os.ReadFile(filepath.Join(sessionsDir, name))
+	if err != nil {
+		t.Fatal(err)
+	}
+	fields := map[string]any{}
+	if err := json.Unmarshal(original, &fields); err != nil {
+		t.Fatal(err)
+	}
+	outcomeKey := "Outcome"
+	if _, ok := fields["outcome"]; ok {
+		outcomeKey = "outcome"
+	}
+	fields[outcomeKey] = plantedHomePath
+	planted, err := json.Marshal(fields)
+	if err != nil {
+		t.Fatal(err)
+	}
+	plantedPath := filepath.Join(scratch, name)
+	if err := os.WriteFile(plantedPath, planted, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	recorded, err := ReadTurn(plantedPath)
+	if err != nil {
+		t.Fatalf("reading the planted copy: %v", err)
+	}
+	if leaks := serializedLeaks(t, recorded); len(leaks) > 0 {
+		t.Fatalf("a planted home path in outcome survived the read: %q", leaks)
+	}
+}
+
 func TestWalkSessionsOverTheRealTreeReportsTheFiveNumbers(t *testing.T) {
 	if _, err := os.Stat(sessionsDir); os.IsNotExist(err) {
 		t.Skip("no .tofu/sessions on this machine")

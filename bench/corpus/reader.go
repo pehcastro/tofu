@@ -56,6 +56,23 @@ type RecordedTurn struct {
 	At          time.Time      `json:"at"`
 	Steps       []RecordedStep `json:"steps"`
 	WallClockMS int64          `json:"wall_clock_ms"`
+	Outcome     string         `json:"outcome,omitempty"`
+}
+
+func (t *RecordedTurn) UnmarshalJSON(data []byte) error {
+	type alias RecordedTurn
+	shadow := struct {
+		*alias
+		Outcome json.RawMessage `json:"outcome"`
+	}{alias: (*alias)(t)}
+	if err := json.Unmarshal(data, &shadow); err != nil {
+		return err
+	}
+	var outcome string
+	if json.Unmarshal(shadow.Outcome, &outcome) == nil {
+		t.Outcome = outcome
+	}
+	return nil
 }
 
 type Turn struct {
@@ -78,6 +95,7 @@ type Walked struct {
 
 func scrubTurn(recorded RecordedTurn) RecordedTurn {
 	recorded.Task = Scrub(recorded.Task)
+	recorded.Outcome = Scrub(recorded.Outcome)
 	for i, step := range recorded.Steps {
 		recorded.Steps[i].AssistantText = Scrub(step.AssistantText)
 		for j, call := range step.ToolCalls {
