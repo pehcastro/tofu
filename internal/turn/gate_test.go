@@ -7,21 +7,26 @@ import (
 	"strconv"
 	"testing"
 
+	"boji/internal/judge/ledger"
 	"boji/internal/llm"
 )
 
 type stubGate struct {
-	verdict  string
+	verdicts []ledger.Verdict
+	reason   *ledger.Reason
 	err      error
 	requests []GateRequest
 }
 
+func gateSaying(verdicts ...ledger.Verdict) *stubGate { return &stubGate{verdicts: verdicts} }
+
 func (g *stubGate) Decide(_ context.Context, request GateRequest) (GateDecision, error) {
 	g.requests = append(g.requests, request)
 	if g.err != nil {
-		return GateDecision{Verdict: "ask"}, g.err
+		return GateDecision{Verdict: ledger.VerdictAsk}, g.err
 	}
-	return GateDecision{ID: "row-" + strconv.Itoa(len(g.requests)), Verdict: g.verdict}, nil
+	verdict := g.verdicts[min(len(g.requests), len(g.verdicts))-1]
+	return GateDecision{ID: "row-" + strconv.Itoa(len(g.requests)), Verdict: verdict, Reason: g.reason}, nil
 }
 
 func gatedConfig(gate Gate, tool Tool, model Model) Config {
@@ -38,7 +43,7 @@ func gatedConfig(gate Gate, tool Tool, model Model) Config {
 
 func TestRunAsksTheGateBeforeEveryToolCallAndRecordsTheDecision(t *testing.T) {
 	tool := &stubTool{name: "write", result: Result{Content: "ok"}}
-	gate := &stubGate{verdict: "allow"}
+	gate := gateSaying(ledger.VerdictAllow)
 	model := &stubModel{decisions: []llm.Decision{
 		toolCallDecision(llm.ToolCall{ID: "c1", Name: "write", Arguments: json.RawMessage(`{"path":"a.txt"}`)}),
 		toolCallDecision(llm.ToolCall{ID: "c2", Name: "write", Arguments: json.RawMessage(`{"path":"b.txt"}`)}),
@@ -65,9 +70,9 @@ func TestRunAsksTheGateBeforeEveryToolCallAndRecordsTheDecision(t *testing.T) {
 	}
 }
 
-func TestRunProceedsThroughADenyBecauseTheGateOnlyRecords(t *testing.T) {
+func TestUnderShadowADenyStillRunsTheCallAndOnlyRecordsTheVerdict(t *testing.T) {
 	tool := &stubTool{name: "write", result: Result{Content: "ok"}}
-	gate := &stubGate{verdict: "deny"}
+	gate := gateSaying(ledger.VerdictDeny)
 	model := &stubModel{decisions: []llm.Decision{
 		toolCallDecision(llm.ToolCall{ID: "c1", Name: "write", Arguments: json.RawMessage(`{"path":"a.txt"}`)}),
 		messageDecision(),
@@ -88,7 +93,7 @@ func TestRunProceedsThroughADenyBecauseTheGateOnlyRecords(t *testing.T) {
 	}
 }
 
-func TestRunRecordsAGateFailureAndStillRunsTheCall(t *testing.T) {
+func TestUnderShadowAGateThatErrorsStillRunsTheCall(t *testing.T) {
 	tool := &stubTool{name: "write", result: Result{Content: "ok"}}
 	gate := &stubGate{err: errors.New("the route timed out")}
 	model := &stubModel{decisions: []llm.Decision{
@@ -113,8 +118,8 @@ func TestRunRecordsAGateFailureAndStillRunsTheCall(t *testing.T) {
 }
 
 func TestRunStopsAtTheDecisionCapWithItsOwnOutcome(t *testing.T) {
-	gate := &stubGate{verdict: "allow"}
-	config := gatedConfig(gate, &stubTool{name: "noop", result: Result{Content: "ok"}}, alwaysToolCallModel(0, 10))
+	gate := gateSaying(ledger.VerdictAllow)
+	config := gatedConfig(gate, &stubTool{name: "noop", result: Result{Content: "ok"}}, alwaysToolCallModel(10))
 	config.Caps = Caps{MaxSteps: 10, MaxDecisions: 3}
 
 	row, err := Run(context.Background(), config)

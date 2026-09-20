@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	catalogpolicy "boji/catalog/policy"
 	"boji/internal/judge/jev"
 	"boji/internal/judge/ledger"
 	"boji/internal/judge/policy"
@@ -17,11 +18,13 @@ import (
 	"boji/internal/turn"
 )
 
-const replayTestPolicyBody = `name: replay_test
-policy_version: 1
-questions: replay_test
-questions_version: 1
-notes: fixture for BOJI-033
+const replayTestPolicyRef = "tool_gate@3"
+
+const replayTestPolicyBody = `name: tool_gate
+policy_version: 3
+questions: tool_gate
+questions_version: 3
+notes: fixture for BOJI-033, the project override BOJI-136 replays against
 
 risk_question: risk
 approval_question: approval
@@ -36,19 +39,31 @@ thresholds:
   from_untrusted_block_at: 0.5
 `
 
+func replayProjectPolicyPath() string {
+	return filepath.Join("catalog", "policy", replayTestPolicyRef+".yaml")
+}
+
 func writeReplayPolicyFixture(t *testing.T) policy.Policy {
 	t.Helper()
-	policyDir := filepath.Join("catalog", "policy")
-	if err := os.MkdirAll(policyDir, 0o755); err != nil {
+	path := replayProjectPolicyPath()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		t.Fatalf("mkdir catalog/policy: %v", err)
 	}
-	path := filepath.Join(policyDir, "replay_test@1.yaml")
 	if err := os.WriteFile(path, []byte(replayTestPolicyBody), 0o644); err != nil {
 		t.Fatalf("writing policy fixture: %v", err)
 	}
 	pol, err := policy.Load(path)
 	if err != nil {
 		t.Fatalf("policy.Load: %v", err)
+	}
+	return pol
+}
+
+func shippedReplayPolicy(t *testing.T) policy.Policy {
+	t.Helper()
+	pol, err := policy.LoadFS(catalogpolicy.Files(), replayTestPolicyRef+".yaml")
+	if err != nil {
+		t.Fatalf("policy.LoadFS: %v", err)
 	}
 	return pol
 }
@@ -78,8 +93,8 @@ func writeReplayFixtureRow(t *testing.T, writer *ledger.Writer, pol policy.Polic
 	}
 	row := ledger.Row{
 		Point:         "tool_gate",
-		Questions:     "replay_test",
-		Version:       1,
+		Questions:     pol.Questions,
+		Version:       pol.QuestionsVersion,
 		Answers:       answers,
 		Verdict:       toLedgerVerdict(verdict),
 		Policy:        pol.Name,
@@ -149,7 +164,7 @@ func gateFallbackRow(t *testing.T, reader *ledger.Reader, wire stubJevWire) ledg
 	if err != nil {
 		t.Fatalf("the gate returned an error instead of a row: %v", err)
 	}
-	if decision.Verdict != string(ledger.VerdictAsk) {
+	if decision.Verdict != ledger.VerdictAsk {
 		t.Fatalf("verdict = %q, want ask", decision.Verdict)
 	}
 	row, ok, err := reader.ByID(decision.ID)
@@ -332,6 +347,60 @@ func TestReplayNeedsAPoint(t *testing.T) {
 	code := replayVerb(nil, &out, &errOut, time.Now)
 	if code != exitUsage {
 		t.Fatalf("exit = %d, want %d", code, exitUsage)
+	}
+}
+
+func TestReplayReadsTheEmbeddedPolicyWhenTheProjectHasNoCatalog(t *testing.T) {
+	reader, writer := replayTestReader(t)
+	writeReplayFixtureRow(t, writer, shippedReplayPolicy(t), replayFixtureAnswers(0), "")
+
+	result, err := runReplay(reader, ledger.Filter{Point: "tool_gate"}, map[string]float64{})
+	if err != nil {
+		t.Fatalf("runReplay in a project with no catalog: %v", err)
+	}
+	if result.rescored != 1 {
+		t.Fatalf("rescored=%d, want 1", result.rescored)
+	}
+	if len(result.policies) != 1 || result.policies[0].origin != policy.OriginBinary {
+		t.Fatalf("policies = %+v, want one from the binary", result.policies)
+	}
+
+	var out, errOut bytes.Buffer
+	if code := replayVerb([]string{"--point", "tool_gate"}, &out, &errOut, time.Now); code != exitOK {
+		t.Fatalf("exit = %d, want %d, stderr %s", code, exitOK, errOut.String())
+	}
+	if !strings.Contains(out.String(), "policy "+replayTestPolicyRef+" from the binary") {
+		t.Fatalf("the report does not name the policy it replayed against: %s", out.String())
+	}
+	t.Logf("boji replay --point tool_gate:\n%s", out.String())
+}
+
+func TestReplayPrefersTheProjectPolicyAndSaysSo(t *testing.T) {
+	_, writer := replayTestReader(t)
+	writeReplayFixtureRow(t, writer, writeReplayPolicyFixture(t), replayFixtureAnswers(0), "")
+
+	var out, errOut bytes.Buffer
+	if code := replayVerb([]string{"--point", "tool_gate"}, &out, &errOut, time.Now); code != exitOK {
+		t.Fatalf("exit = %d, want %d, stderr %s", code, exitOK, errOut.String())
+	}
+	if !strings.Contains(out.String(), "policy "+replayTestPolicyRef+" from the project") {
+		t.Fatalf("the report does not say the project policy was used: %s", out.String())
+	}
+}
+
+func TestReplayFailsWhenTheProjectPolicyCannotBeRead(t *testing.T) {
+	reader, writer := replayTestReader(t)
+	writeReplayFixtureRow(t, writer, shippedReplayPolicy(t), replayFixtureAnswers(0), "")
+	if err := os.MkdirAll(replayProjectPolicyPath(), 0o755); err != nil {
+		t.Fatalf("mkdir over the policy path: %v", err)
+	}
+
+	_, err := runReplay(reader, ledger.Filter{Point: "tool_gate"}, map[string]float64{})
+	if err == nil {
+		t.Fatal("a policy that exists and cannot be read replayed anyway, want an error")
+	}
+	if !strings.Contains(err.Error(), replayTestPolicyRef) {
+		t.Fatalf("the error does not name the policy: %v", err)
 	}
 }
 
