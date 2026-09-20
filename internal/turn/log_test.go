@@ -229,7 +229,8 @@ func fullyPopulatedRow() Row {
 					TokensAfter:   1204,
 					BlockedMicros: 318,
 					Carry: recall.Carry{
-						Text: "this session continues one that reached its context budget and ended.",
+						Text:  "this session continues one that reached its context budget and ended.",
+						Facts: []string{"the route table lives in server/routes.ts"},
 						Results: []recall.CarriedResult{{
 							Tool:     "bash",
 							Key:      `bash {"command":"npm test"}`,
@@ -272,6 +273,13 @@ func fullyPopulatedRow() Row {
 		TotalCostUSD: 0.0015,
 		WallClockMS:  1500,
 		DecisionIDs:  []string{"2026-09-18-deadbeef"},
+		Budget: recall.Budget{
+			Model:         "anthropic/claude-fable-5.1",
+			CeilingTokens: 200000,
+			Bands:         recall.BandsOf(200000),
+			Automatic:     true,
+			Source:        "the recorded 200000 token context window of anthropic/claude-fable-5.1",
+		},
 	}
 }
 

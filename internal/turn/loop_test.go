@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -13,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"tofu/internal/konst"
 	"tofu/internal/llm"
 	"tofu/internal/recall"
 	"tofu/internal/session"
@@ -140,6 +142,7 @@ type measuringModel struct {
 	awoken    chan struct{}
 	asks      int64
 	contexts  []int
+	requests  [][]llm.Message
 }
 
 func (m *measuringModel) asksAndTheNextWakeUp() (int64, <-chan struct{}) {
@@ -181,6 +184,7 @@ func (m *measuringModel) Ask(_ context.Context, request llm.Request) (llm.Decisi
 		}
 	}
 	m.contexts = append(m.contexts, carried)
+	m.requests = append(m.requests, slices.Clone(request.Messages))
 	if m.calls >= len(m.decisions) {
 		return llm.Decision{}, errors.New("measuringModel: no more decisions queued")
 	}
@@ -220,6 +224,13 @@ func longTurnConfig(t *testing.T) (Config, *measuringModel) {
 	config.Caps = Caps{MaxSteps: longTurnSteps + 2}
 	config.ResultBytesCap = longTurnResultBytes * 2
 	config.ArtifactDir = t.TempDir()
+	config.Budget = recall.Budget{
+		Model:         "a stub with the shipped window",
+		CeilingTokens: konst.ContextCeilingTokens,
+		Bands:         recall.ShippedBands(),
+		Automatic:     true,
+		Source:        "the shipped ceiling this build measures against",
+	}
 	return config, model
 }
 

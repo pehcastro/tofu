@@ -100,6 +100,8 @@ type Row struct {
 	WallClockMS  int64     `json:"wall_clock_ms"`
 	DecisionIDs  []string  `json:"decision_ids,omitempty"`
 
+	Budget recall.Budget `json:"budget"`
+
 	Conversation []llm.Message `json:"-"`
 }
 
@@ -230,6 +232,11 @@ func (r Row) Header() session.Header {
 		ForkKind:   string(r.ForkKind),
 		Outcome:    r.Outcome.String(),
 		CostUSD:    r.TotalCostUSD,
+	}
+	if r.Budget != (recall.Budget{}) {
+		header.ContextCeiling = r.Budget.CeilingTokens
+		header.ContextTarget = r.Budget.Bands.Target()
+		header.AutoCompaction = r.Budget.Record()
 	}
 	for _, step := range r.Steps {
 		if step.Fork != nil {

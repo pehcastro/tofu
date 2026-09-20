@@ -42,6 +42,38 @@ func TestModelsAnswersWithTheDefaultsAndCountsWhatItCollapsed(t *testing.T) {
 	}
 }
 
+func TestRefreshWritesTheRegistryAndAFreshOneOutranksTheSnapshot(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"openai":{"models":{"gpt-5.6-sol":{"limit":{"context":123456}}}}}`))
+	}))
+	defer server.Close()
+	t.Setenv(models.RegistryURLVariable, server.URL)
+
+	shipped, err := modelRegistry()
+	if err != nil {
+		t.Fatalf("the registry before any refresh: %v", err)
+	}
+	if shipped.From != models.ShippedRegistryName || shipped.Window("openai/gpt-5.6-sol") != 1050000 {
+		t.Fatalf("with nothing on disk the registry is %q and answers %d tokens", shipped.From, shipped.Window("openai/gpt-5.6-sol"))
+	}
+
+	var out bytes.Buffer
+	if code := modelsVerb([]string{"--refresh"}, &out, &out, plain); code != exitOK {
+		t.Fatalf("tofu models --refresh exited %d: %s", code, out.String())
+	}
+	refreshed, err := modelRegistry()
+	if err != nil {
+		t.Fatalf("the registry after the refresh: %v", err)
+	}
+	if refreshed.Window("openai/gpt-5.6-sol") != 123456 {
+		t.Fatalf("the refreshed registry answers %d tokens, want the 123456 the source served", refreshed.Window("openai/gpt-5.6-sol"))
+	}
+	t.Logf("%s", strings.TrimSpace(out.String()))
+}
+
 func TestModelsNamesEveryModelByProviderAndName(t *testing.T) {
 	var out, errOut bytes.Buffer
 	if code := modelsVerb([]string{jsonFlag}, &out, &errOut, plain); code != exitOK {

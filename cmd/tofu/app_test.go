@@ -29,6 +29,7 @@ import (
 	"tofu/internal/konst"
 	"tofu/internal/llm"
 	"tofu/internal/llm/cred"
+	"tofu/internal/llm/models"
 	"tofu/internal/recall"
 	sessionstore "tofu/internal/session"
 	"tofu/internal/transport"
@@ -517,9 +518,11 @@ func stubbedTurn(dir string, model turn.Model, answers ...bool) tui.Turn {
 	return resumedTurn(dir, model, person, sessionResume{})
 }
 
+var stubSelection = models.Model{ID: "stub-model", Windows: []string{"stub"}, ContextTokens: konst.ContextCeilingTokens}
+
 func resumedTurn(dir string, model turn.Model, person chan tui.Answer, resumed sessionResume) tui.Turn {
 	return appTurnOn(dir, func(runOpts) (appWire, error) {
-		return appWire{model: model, spend: turn.SpendSubscription, windows: "stub"}, nil
+		return appWire{model: model, spend: turn.SpendSubscription, selected: stubSelection}, nil
 	}, person, time.Now, resumed)
 }
 
@@ -703,7 +706,7 @@ func TestAChildRunningForTenSecondsReadsTenSecondsAndWhatItSpent(t *testing.T) {
 	}}
 	driver := driveApp(t)
 	appTurnOn(dir, func(runOpts) (appWire, error) {
-		return appWire{model: model, spend: turn.SpendSubscription, windows: "stub"}, nil
+		return appWire{model: model, spend: turn.SpendSubscription, selected: stubSelection}, nil
 	}, nil, model.clock, sessionResume{})(t.Context(), wireSubscription, "hand the note to a child", driver.emit)
 
 	running := ""

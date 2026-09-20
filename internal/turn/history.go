@@ -78,14 +78,14 @@ func historyOf(messages []llm.Message) recall.Conversation {
 	return conversation
 }
 
-func forkHistory(artifacts Artifacts, bands recall.Bands, task string, messages []llm.Message) (*Fork, []llm.Message, Occupancy, error) {
+func forkHistory(artifacts Artifacts, budget recall.Budget, task string, messages []llm.Message) (*Fork, []llm.Message, Occupancy, error) {
 	ended := historyOf(messages)
-	occupancy := occupancyOf(recall.Measure(artifacts.preview, bands, ended))
-	if occupancy.Total() <= bands.Target() {
+	occupancy := occupancyOf(recall.Measure(artifacts.preview, budget.Bands, ended))
+	if !budget.Crossed(artifacts.preview, ended) {
 		return nil, messages, occupancy, nil
 	}
 	started := time.Now()
-	carry, err := recall.HandleCarry(artifacts.store, artifacts.preview, ended)
+	carry, err := recall.DistilledCarry(artifacts.store, artifacts.preview, ended)
 	if err != nil {
 		return nil, nil, occupancy, err
 	}
@@ -101,16 +101,16 @@ func forkHistory(artifacts Artifacts, bands recall.Bands, task string, messages 
 	return &Fork{
 		Kind:          ForkContinuation,
 		TokensBefore:  occupancy.Total(),
-		TokensAfter:   recall.Measure(artifacts.preview, bands, historyOf(begun)).Total(),
+		TokensAfter:   recall.Measure(artifacts.preview, budget.Bands, historyOf(begun)).Total(),
 		BlockedMicros: time.Since(started).Microseconds(),
 		Carry:         carry,
 	}, begun, occupancy, nil
 }
 
-func compactHistory(artifacts Artifacts, bands recall.Bands, step int, messages []llm.Message) (*Compaction, error) {
+func compactHistory(artifacts Artifacts, budget recall.Budget, step int, messages []llm.Message) (*Compaction, error) {
 	before := historyOf(messages)
-	tokensBefore := recall.Measure(artifacts.preview, bands, before).Total()
-	after, drops, err := recall.Compact(artifacts.store, artifacts.preview, bands, before)
+	tokensBefore := recall.Measure(artifacts.preview, budget.Bands, before).Total()
+	after, drops, err := recall.Compact(artifacts.store, artifacts.preview, budget.Bands, before)
 	if err != nil {
 		return nil, err
 	}
@@ -126,7 +126,7 @@ func compactHistory(artifacts Artifacts, bands recall.Bands, step int, messages 
 	return &Compaction{
 		Step:         step,
 		TokensBefore: tokensBefore,
-		TokensAfter:  recall.Measure(artifacts.preview, bands, after).Total(),
+		TokensAfter:  recall.Measure(artifacts.preview, budget.Bands, after).Total(),
 		Drops:        drops,
 	}, nil
 }

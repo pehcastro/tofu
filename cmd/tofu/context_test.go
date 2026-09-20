@@ -4,11 +4,13 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"tofu/internal/konst"
 	"tofu/internal/llm"
 	"tofu/internal/recall"
 	"tofu/internal/session"
@@ -85,20 +87,24 @@ func TestContextOnASessionRecordedBeforeTheOccupancyNamesTheAbsenceAndTheFork(t 
 	t.Logf("%s", printed)
 }
 
-func TestContextOnASessionRecordedAfterItPrintsEveryBandIncludingTheZeroCapFacts(t *testing.T) {
+func TestContextOnASessionRecordedAfterItPrintsEveryBandAgainstThisBuildsCaps(t *testing.T) {
 	recordedSessions(t)
 	printed := contextRun(t, recordedBeforeCaps)
 	if strings.Contains(printed, contextNeverMeasured) {
 		t.Fatalf("a measured session printed the absence:\n%s", printed)
 	}
+	shipped := recall.ShippedBands()
+	row := func(band string, tokens, cap int) string {
+		return fmt.Sprintf("%-11s %8d  %8d   %3d%%", band, tokens, cap, recall.FillPercent(tokens, cap))
+	}
 	for _, want := range []string{
-		"identity         333      4000     8%",
-		"facts              0         0     0%",
-		"working set        0     16000     0%",
-		"recent           138     30000     0%",
-		"total            471     50000     0%",
-		"ceiling          471    250000     0%",
-		contextCapsUnrecorded + " 50000, so the caps above are this build's, totalling 50000",
+		row("identity", 333, shipped.Identity),
+		row("facts", 0, shipped.Facts),
+		row("working set", 0, shipped.WorkingSet),
+		row("recent", 138, shipped.Recent),
+		row("total", 471, shipped.Target()),
+		row("ceiling", 471, konst.ContextCeilingTokens),
+		fmt.Sprintf("%s 50000, so the caps above are this build's, totalling %d", contextCapsUnrecorded, shipped.Target()),
 		"2310 bytes per thousand tokens",
 	} {
 		if !strings.Contains(printed, want) {
@@ -120,12 +126,14 @@ func TestContextJSONCarriesOneFieldPerBandWithTheTotalAndTheMark(t *testing.T) {
 	if report.Unmeasured != "" {
 		t.Fatalf("a measured session reports itself unmeasured: %q", report.Unmeasured)
 	}
+	shipped := recall.ShippedBands()
 	measured := *report.Occupancy
-	if measured.Identity != (contextBandReport{Tokens: 333, Cap: 4000, Percent: 8}) {
-		t.Fatalf("identity reads %+v", measured.Identity)
+	identity := contextBandReport{Tokens: 333, Cap: shipped.Identity, Percent: recall.FillPercent(333, shipped.Identity)}
+	if measured.Identity != identity {
+		t.Fatalf("identity reads %+v, want %+v", measured.Identity, identity)
 	}
-	if measured.Facts != (contextBandReport{}) {
-		t.Fatalf("the facts band, whose cap is zero, reads %+v", measured.Facts)
+	if measured.Facts != (contextBandReport{Cap: shipped.Facts}) {
+		t.Fatalf("the facts band, which this session never filled, reads %+v", measured.Facts)
 	}
 	if measured.Total != 471 || measured.Mark != 50000 {
 		t.Fatalf("total %d against mark %d", measured.Total, measured.Mark)
@@ -302,7 +310,7 @@ func TestASessionRecordedNowNamesTheCapsItsStepsWereMeasuredAgainst(t *testing.T
 		Task:           "count the rules",
 		ResultBytesCap: 4096,
 		ArtifactDir:    filepath.Join(dir, "artifacts"),
-		Bands:          bands,
+		Budget:         recall.Budget{CeilingTokens: 14500, Bands: bands, Automatic: true, Source: "the caps this test runs under"},
 		Sessions:       store,
 	})
 	if err != nil {

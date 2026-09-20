@@ -67,7 +67,7 @@ func TestTofuRunUnderEnforceDoesNotWriteTheDeniedFile(t *testing.T) {
 		gateArm:      gateEnforce,
 		maxDecisions: konst.TurnMaxDecisions,
 	}
-	config, _ := runConfig(opts, built, noteThenStop(), turn.SpendSubscription, gate)
+	config, _ := runConfig(opts, built, runtime{model: noteThenStop(), spend: turn.SpendSubscription, gate: gate})
 	if config.GateMode != turn.GateEnforce {
 		t.Fatalf("the run is in %s, want enforce from the flag", config.GateMode)
 	}

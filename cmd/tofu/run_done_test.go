@@ -279,7 +279,7 @@ func spawnOneChild(t *testing.T, review turn.DoneReview, decisions []llm.Decisio
 	spawnCall := llm.ToolCall{ID: "call-1", Name: "spawn", Arguments: json.RawMessage(`{"task":"write note.txt","owns":["note.txt"]}`)}
 	queued := append([]llm.Decision{{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{spawnCall}}}, decisions...)
 
-	config, spawner := runConfig(opts, built, &queuedModel{decisions: queued}, turn.SpendSubscription, nil)
+	config, spawner := runConfig(opts, built, runtime{model: &queuedModel{decisions: queued}, spend: turn.SpendSubscription})
 	spawner.Review = review
 	if _, err := turn.Run(context.Background(), config); err != nil {
 		t.Fatalf("turn.Run: %v", err)

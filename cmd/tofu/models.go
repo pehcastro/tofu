@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -12,10 +14,68 @@ import (
 	"tofu/internal/konst"
 	"tofu/internal/llm/cred"
 	"tofu/internal/llm/models"
+	"tofu/internal/sys"
 	"tofu/internal/transport"
 )
 
-const modelsUsage = "usage: tofu models [--discover] [--json]"
+const (
+	modelsUsage      = "usage: tofu models [--discover] [--refresh] [--json]"
+	registryFileName = "model-windows.json"
+	registryDirMode  = 0o755
+)
+
+func registryPath() (string, error) {
+	dir, err := sys.HomeConfigDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, registryFileName), nil
+}
+
+func modelRegistry() (models.Registry, error) {
+	path, err := registryPath()
+	if err != nil {
+		return models.ShippedRegistry()
+	}
+	return models.RegistryAt(path)
+}
+
+func refreshRegistry(ctx context.Context, out io.Writer) int {
+	source := models.RegistrySource()
+	path, listed, err := fetchedRegistry(ctx, source)
+	if err != nil {
+		_, _ = fmt.Fprintf(out, "%s: %v\n", models.RefreshVerb, err)
+		return exitVerdict
+	}
+	_, _ = fmt.Fprintf(out, "context windows from %s: %d, written to %s\n", source, listed, path)
+	return exitOK
+}
+
+func fetchedRegistry(ctx context.Context, source string) (string, int, error) {
+	path, err := registryPath()
+	if err != nil {
+		return "", 0, err
+	}
+	client, err := transport.New(transport.Config{
+		AttemptTimeout: time.Duration(konst.TurnAttemptTimeoutMillis) * time.Millisecond,
+		Concurrency:    1,
+	})
+	if err != nil {
+		return "", 0, err
+	}
+	body, err := models.FetchRegistry(ctx, client, source)
+	if err != nil {
+		return "", 0, err
+	}
+	registry, err := models.ParseRegistry(body, source)
+	if err != nil {
+		return "", 0, err
+	}
+	if err := os.MkdirAll(filepath.Dir(path), registryDirMode); err != nil {
+		return "", 0, err
+	}
+	return path, len(registry.Windows), registry.Store(path)
+}
 
 type modelReport struct {
 	Slug         string   `json:"slug"`
@@ -46,17 +106,22 @@ func modelCatalog() (models.Catalog, error) {
 }
 
 func modelsVerb(args []string, out, errOut io.Writer, shade palette) int {
-	discover, asJSON := false, false
+	discover, refresh, asJSON := false, false, false
 	for _, arg := range args {
 		switch arg {
 		case "--discover":
 			discover = true
+		case "--refresh":
+			refresh = true
 		case jsonFlag:
 			asJSON = true
 		default:
 			_, _ = fmt.Fprintf(errOut, "tofu models: unknown flag %q, %s\n", arg, modelsUsage)
 			return exitUsage
 		}
+	}
+	if refresh {
+		return refreshRegistry(context.Background(), out)
 	}
 	catalog, err := modelCatalog()
 	if err != nil {

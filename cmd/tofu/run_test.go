@@ -78,8 +78,8 @@ func TestRunVerbDryRunPrintsTheRequestAndMakesNoCall(t *testing.T) {
 	if code != exitOK {
 		t.Fatalf("expected exit %d, got %d (stderr %q)", exitOK, code, errOut.String())
 	}
-	if errOut.Len() != 0 {
-		t.Fatalf("expected no stderr output, got %q", errOut.String())
+	if !strings.HasPrefix(errOut.String(), "context budget on, the ceiling tofu operates under") {
+		t.Fatalf("a dry run has to name the ceiling it would run under, got %q", errOut.String())
 	}
 	var body map[string]any
 	if err := json.Unmarshal(out.Bytes(), &body); err != nil {
@@ -111,7 +111,7 @@ func toolNames(t *testing.T, opts runOpts) []string {
 	if err != nil {
 		t.Fatalf("buildRunTools %s: %v", opts.toolSet, err)
 	}
-	config, _ := runConfig(opts, built, nil, turn.SpendSubscription, nil)
+	config, _ := runConfig(opts, built, runtime{spend: turn.SpendSubscription})
 	var named []string
 	for _, definition := range config.Tools.Definitions() {
 		named = append(named, definition.Name)
@@ -325,7 +325,7 @@ func TestAChildRunsOnADifferentSubscriptionFromItsParent(t *testing.T) {
 		{Build: "claude-opus-5-20260101", Outcome: llm.OutcomeMessage, Content: "the child reported"},
 	}}
 
-	config, spawner := runConfig(opts, built, parent, turn.SpendSubscription, nil)
+	config, spawner := runConfig(opts, built, runtime{model: parent, spend: turn.SpendSubscription})
 	row, err := turn.Run(context.Background(), config)
 	if err != nil {
 		t.Fatalf("turn.Run: %v", err)
@@ -471,7 +471,7 @@ func TestTheParentTurnRowNamesTheChildItSpawnedAndCarriesItsRowAndCost(t *testin
 		{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "the child did it", Usage: llm.Usage{Cost: 0.08}},
 	}}
 
-	config, spawner := runConfig(opts, built, model, turn.SpendSubscription, nil)
+	config, spawner := runConfig(opts, built, runtime{model: model, spend: turn.SpendSubscription})
 	row, err := turn.Run(context.Background(), config)
 	if err != nil {
 		t.Fatalf("turn.Run: %v", err)
@@ -533,7 +533,7 @@ func TestRunRecordsADenyAuthorityCannotRelaxAndStillRunsTheStep(t *testing.T) {
 		{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "done"},
 	}}
 
-	config, _ := runConfig(opts, registry, model, turn.SpendSubscription, gate)
+	config, _ := runConfig(opts, registry, runtime{model: model, spend: turn.SpendSubscription, gate: gate})
 	row, err := turn.Run(context.Background(), config)
 	if err != nil {
 		t.Fatalf("turn.Run: %v", err)

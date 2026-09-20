@@ -24,6 +24,7 @@ import (
 	"tofu/internal/llm/wire/anthropic"
 	"tofu/internal/llm/wire/codex"
 	"tofu/internal/llm/wire/openrouter"
+	"tofu/internal/recall"
 	"tofu/internal/session"
 	"tofu/internal/transport"
 	"tofu/internal/turn"
@@ -64,19 +65,28 @@ type childRole struct {
 }
 
 type runOpts struct {
-	dir          string
-	task         string
-	turnID       string
-	wire         string
-	dryRun       bool
-	gateArm      string
-	noCrew       bool
-	doneArm      string
-	model        string
-	toolSet      string
-	maxSteps     int
-	maxDecisions int
-	child        childRole
+	dir            string
+	task           string
+	turnID         string
+	wire           string
+	dryRun         bool
+	gateArm        string
+	noCrew         bool
+	doneArm        string
+	model          string
+	toolSet        string
+	maxSteps       int
+	maxDecisions   int
+	contextCeiling int
+	child          childRole
+}
+
+type runtime struct {
+	model    turn.Model
+	spend    turn.Spend
+	budget   recall.Budget
+	gate     *toolGate
+	sessions *session.Store
 }
 
 func boundRoles(wire string) (models.Bindings, error) {
@@ -123,7 +133,30 @@ func chooseChild(opts runOpts) (childRole, error) {
 	return childRole{wire: forChild.Wire, id: forChild.Model.ID, windows: forChild.Model.WindowText()}, nil
 }
 
+const runUsage = `tofu run works a task in a directory until it is done.
+
+Usage:
+  tofu run --dir <path> [arguments] <task>
+
+Arguments:
+  --dir <path>          the directory the task is worked in, required
+  --model <id>          the model to run on, otherwise the one the turn role is bound to
+  --wire <name>         anthropic, codex or openrouter
+  --tools <set>         full, or three for the read, write and bash arm
+  --gate <arm>          off, shadow or enforce, otherwise the policy's own mode decides
+  --no-gate             the arm that turns the tool gate off
+  --no-crew             run without the spawn tool
+  --done-review <arm>   the arm that reviews a child's answer
+  --max-steps <n>       cap the steps a turn takes
+  --max-decisions <n>   cap the gate decisions a turn spends
+  --dry-run             print the request that would be sent and send nothing
+`
+
 func runVerb(args []string, out, errOut io.Writer) int {
+	if slices.Contains(args, "--help") || slices.Contains(args, "-h") {
+		_, _ = fmt.Fprint(out, runUsage)
+		return exitOK
+	}
 	opts, err := parseRunArgs(args)
 	if err != nil {
 		return runFail(errOut, err)
@@ -141,25 +174,76 @@ func runVerb(args []string, out, errOut io.Writer) int {
 	if err != nil {
 		return runFail(errOut, err)
 	}
+	budget, err := contextBudget(opts, selected)
+	if err != nil {
+		return runFail(errOut, err)
+	}
 
 	if opts.dryRun {
-		config, _ := runConfig(opts, built, nil, turn.SpendSubscription, nil)
+		config, _ := runConfig(opts, built, runtime{spend: turn.SpendSubscription, budget: budget})
 		body, err := dryRunBody(opts, selected.ID, config)
 		if err != nil {
 			return runFail(errOut, err)
 		}
+		_, _ = fmt.Fprintln(errOut, "context budget "+budget.Record())
 		_, _ = fmt.Fprintln(out, string(body))
 		return exitOK
 	}
-	return runTurn(opts, selected, built, out, errOut)
+	return runTurn(opts, selected, built, budget, out, errOut)
 }
 
-func runTurn(opts runOpts, selected models.Model, built []turn.Tool, out, errOut io.Writer) int {
+func contextBudget(opts runOpts, model models.Model) (recall.Budget, error) {
+	registry, err := modelRegistry()
+	if err != nil {
+		return recall.Budget{}, err
+	}
+	windowTokens, windowSource := models.WindowFor(model, registry, models.Served{})
+	budget, err := recall.BudgetFor(model.ID, windowTokens)
+	if err != nil {
+		return recall.Budget{}, err
+	}
+	budget.WindowSource = windowSource
+	if opts.contextCeiling <= 0 {
+		return budget, nil
+	}
+	return budget.At(opts.contextCeiling, fmt.Sprintf("--context-ceiling %d, which is read before %s and wins when both are set",
+		opts.contextCeiling, recall.CeilingVariable)), nil
+}
+
+type windowGuard struct {
+	inner  turn.Model
+	budget recall.Budget
+	cfg    recall.Config
+}
+
+func (g windowGuard) Ask(ctx context.Context, request llm.Request) (llm.Decision, error) {
+	tokens := 0
+	for _, message := range request.Messages {
+		tokens += g.cfg.MessageTokens(message.Content)
+	}
+	if err := g.budget.RefuseOverWindow(tokens); err != nil {
+		return llm.Decision{}, err
+	}
+	return g.inner.Ask(ctx, request)
+}
+
+func guarded(model turn.Model, budget recall.Budget) (turn.Model, error) {
+	cfg, err := recall.LoadConfig()
+	if err != nil {
+		return nil, err
+	}
+	return windowGuard{inner: model, budget: budget, cfg: cfg}, nil
+}
+
+func runTurn(opts runOpts, selected models.Model, built []turn.Tool, budget recall.Budget, out, errOut io.Writer) int {
 	model, spend, store, err := runModel(opts, selected.ID)
 	if store != nil {
 		defer func() { _ = store.Close() }()
 	}
 	if err != nil {
+		return runFail(errOut, err)
+	}
+	if model, err = guarded(model, budget); err != nil {
 		return runFail(errOut, err)
 	}
 
@@ -190,7 +274,7 @@ func runTurn(opts runOpts, selected models.Model, built []turn.Tool, out, errOut
 		return runFail(errOut, err)
 	}
 
-	config, spawner := runConfig(opts, built, model, spend, gate)
+	config, spawner := runConfig(opts, built, runtime{model: model, spend: spend, budget: budget, gate: gate, sessions: sessions})
 	if spawner != nil {
 		review, reviewErr := newDoneReview(opts.doneArm)
 		if reviewErr != nil {
@@ -198,14 +282,11 @@ func runTurn(opts runOpts, selected models.Model, built []turn.Tool, out, errOut
 		}
 		spawner.Review = review
 	}
-	config.Sessions = sessions
+	_, _ = fmt.Fprintln(out, "context budget "+budget.Record())
 	row, runErr := turn.Run(context.Background(), config)
 	printRunRow(out, row, selected.ID, selected.WindowText())
 	for _, child := range childRows(spawner) {
 		printRunRow(out, child, askedAs, windows)
-		if writeErr := turn.WriteSession(sessions, child); writeErr != nil {
-			_, _ = fmt.Fprintf(errOut, "tofu run: writing the child row: %v\n", writeErr)
-		}
 	}
 	if row.ID != "" {
 		if headErr := sessions.SetHead(row.ID); headErr != nil {
@@ -221,15 +302,15 @@ func runTurn(opts runOpts, selected models.Model, built []turn.Tool, out, errOut
 	return exitOK
 }
 
-func runConfig(opts runOpts, built []turn.Tool, model turn.Model, spend turn.Spend, gate *toolGate) (turn.Config, *turn.SpawnTool) {
+func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn.SpawnTool) {
 	home, _ := os.UserHomeDir()
 	system := runSystem(opts)
 	if written := turn.ProjectInstructions(opts.dir, home); written != "" {
 		system += "\n\n" + written
 	}
 	config := turn.Config{
-		Model:       model,
-		Spend:       spend,
+		Model:       run.model,
+		Spend:       run.spend,
 		Tools:       turn.NewRegistry(built...),
 		Task:        opts.task,
 		Wire:        opts.wire,
@@ -240,10 +321,12 @@ func runConfig(opts runOpts, built []turn.Tool, model turn.Model, spend turn.Spe
 			MaxDecisions: opts.maxDecisions,
 		},
 		ResultBytesCap: konst.TurnResultBytesCap,
+		Budget:         run.budget,
+		Sessions:       run.sessions,
 	}
-	if gate != nil {
-		config.Gate = gate
-		config.GateMode = gateMode(opts.gateArm, gate.set.Mode)
+	if run.gate != nil {
+		config.Gate = run.gate
+		config.GateMode = gateMode(opts.gateArm, run.gate.set.Mode)
 	}
 	parentID := cmp.Or(opts.turnID, "turn-"+strconv.FormatInt(time.Now().UnixNano(), 16))
 	config.NewID = func() string { return parentID }
@@ -470,19 +553,26 @@ func buildRunTools(dir, set string) ([]turn.Tool, error) {
 	if err := cmp.Or(readErr, writeErr, bashErr); err != nil {
 		return nil, err
 	}
+	checked, checkErr := tools.Checked(dir, []turn.Tool{bashTool})
+	if checkErr != nil {
+		return nil, checkErr
+	}
+	shell := checked[0]
 	if set == toolSetThree {
-		return []turn.Tool{readTool, writeTool, bashTool}, nil
+		return tools.NewMemo().Wrap([]turn.Tool{readTool, writeTool, shell}), nil
 	}
 	globTool, globErr := tools.NewGlob(dir)
 	grepTool, grepErr := tools.NewGrep(dir)
 	searchTool, searchErr := tools.NewSearch(dir)
+	symbolsTool, symbolsErr := tools.NewSymbols(dir)
 	editTool, editErr := tools.NewEdit(dir)
 	projectTool, projectErr := tools.NewProject(dir)
 	verbTools, verbErr := tools.NewVerbs(dir)
-	if err := cmp.Or(globErr, grepErr, searchErr, editErr, projectErr, verbErr); err != nil {
+	if err := cmp.Or(globErr, grepErr, searchErr, symbolsErr, editErr, projectErr, verbErr); err != nil {
 		return nil, err
 	}
-	return append([]turn.Tool{readTool, writeTool, bashTool, projectTool, globTool, grepTool, searchTool, editTool}, verbTools...), nil
+	full := append([]turn.Tool{readTool, writeTool, shell, projectTool, globTool, grepTool, searchTool, symbolsTool, editTool}, verbTools...)
+	return tools.NewMemo().Wrap(full), nil
 }
 
 func printRunRow(out io.Writer, row turn.Row, askedAs, windows string) {
@@ -564,6 +654,10 @@ func parseRunArgs(args []string) (runOpts, error) {
 			opts.maxSteps, err = nextInt(args, &i, arg)
 		case "--max-decisions":
 			opts.maxDecisions, err = nextInt(args, &i, arg)
+		case "--context-ceiling":
+			if opts.contextCeiling, err = nextInt(args, &i, arg); err == nil && opts.contextCeiling <= 0 {
+				err = fmt.Errorf("--context-ceiling %d takes a count of tokens above zero, as in --context-ceiling 20000", opts.contextCeiling)
+			}
 		default:
 			switch {
 			case strings.HasPrefix(arg, "--"):

@@ -3,7 +3,9 @@ package turn
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"strings"
 
@@ -26,8 +28,9 @@ func (t *ReadTool) Name() string { return "read" }
 
 func (t *ReadTool) Definition() llm.Tool {
 	return llm.Tool{
-		Name:        "read",
-		Description: "reads a file inside the turn's working directory, whole, or only the lines from start_line to end_line, counted from 1 and both included",
+		Name: "read",
+		Description: "reads a file inside the turn's working directory, whole, or only the lines from start_line to end_line, counted from 1 and both included. " +
+			"a path that does not exist is repaired when exactly one file under the working directory carries that name and refused when two do, and a repair is named at the top of the result",
 		Parameters: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -55,12 +58,27 @@ func (t *ReadTool) Run(_ context.Context, raw json.RawMessage) (Result, error) {
 	if err != nil {
 		return Result{}, fmt.Errorf("read: %w", err)
 	}
+	repair := ""
 	content, err := os.ReadFile(resolved)
+	if errors.Is(err, fs.ErrNotExist) {
+		found, listErr := t.root.lookalikes(args.Path)
+		if listErr != nil {
+			return Result{}, fmt.Errorf("read: %w", listErr)
+		}
+		repaired, note, refusal := RepairPath(args.Path, "file", found)
+		if refusal != nil {
+			return Result{}, fmt.Errorf("read: %w", refusal)
+		}
+		args.Path, repair = repaired, note+"\n"
+		if resolved, err = t.root.Resolve(repaired); err == nil {
+			content, err = os.ReadFile(resolved)
+		}
+	}
 	if err != nil {
 		return Result{}, fmt.Errorf("read: %w", err)
 	}
 	if args.StartLine <= 0 && args.EndLine <= 0 {
-		return Result{Content: string(content), Command: "read " + args.Path}, nil
+		return Result{Content: repair + string(content), Command: "read " + args.Path}, nil
 	}
 
 	lines := strings.Split(strings.TrimSuffix(string(content), "\n"), "\n")
@@ -79,7 +97,7 @@ func (t *ReadTool) Run(_ context.Context, raw json.RawMessage) (Result, error) {
 	}
 	span := fmt.Sprintf("%s lines %d-%d of %d", args.Path, start, end, len(lines))
 	return Result{
-		Content: span + "\n" + strings.Join(lines[start-1:end], "\n"),
+		Content: repair + span + "\n" + strings.Join(lines[start-1:end], "\n"),
 		Command: "read " + span,
 	}, nil
 }

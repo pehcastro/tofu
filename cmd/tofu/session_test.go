@@ -200,7 +200,7 @@ func TestSessionResumeSendsTheMessagesTheRecordHolds(t *testing.T) {
 
 func liveAppSession(dir string, model turn.Model) *appSession {
 	return newAppSession(dir, func(runOpts) (appWire, error) {
-		return appWire{model: model, spend: turn.SpendSubscription, windows: "stub"}, nil
+		return appWire{model: model, spend: turn.SpendSubscription, selected: stubSelection}, nil
 	}, nil, time.Now, sessionResume{})
 }
 
@@ -228,7 +228,7 @@ func TestSlashNewDropsWhatIsCarriedAndSlashResumeTakesTheHeadBack(t *testing.T) 
 
 	second := &sendModel{queued: []llm.Decision{{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "still here"}}}
 	live.open = func(runOpts) (appWire, error) {
-		return appWire{model: second, spend: turn.SpendSubscription, windows: "stub"}, nil
+		return appWire{model: second, spend: turn.SpendSubscription, selected: stubSelection}, nil
 	}
 	live.run(t.Context(), wireSubscription, "what did you write", collected(&events))
 	if len(second.requests) != 1 {

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -80,7 +81,12 @@ func TestAProjectRulesCatalogOverridesTheOneInTheBinary(t *testing.T) {
 	}
 }
 
-func TestRulesListPrintsFourRules(t *testing.T) {
+var shippedRuleIDs = []string{
+	"comments", "em_dash", "no_worktree", "ownership",
+	"test_assertion", "test_boundary_cases", "test_mock_boundary",
+}
+
+func TestRulesListPrintsEveryShippedRule(t *testing.T) {
 	out := &bytes.Buffer{}
 	errOut := &bytes.Buffer{}
 	code := rulesListVerb([]string{"--catalog", shippedRulesCatalogDir(t)}, out, errOut)
@@ -88,11 +94,16 @@ func TestRulesListPrintsFourRules(t *testing.T) {
 		t.Fatalf("exit code = %d, want %d, stderr %q", code, exitOK, errOut.String())
 	}
 	lines := strings.Split(strings.TrimRight(out.String(), "\n"), "\n")
-	if len(lines) != 5 {
-		t.Fatalf("lines = %d, want an origin line and 4 rules: %q", len(lines), out.String())
+	if len(lines) != len(shippedRuleIDs)+1 {
+		t.Fatalf("lines = %d, want an origin line and %v: %q", len(lines), shippedRuleIDs, out.String())
 	}
-	if !strings.HasPrefix(lines[0], "4 rules from ") {
+	if !strings.HasPrefix(lines[0], strconv.Itoa(len(shippedRuleIDs))+" rules from ") {
 		t.Fatalf("the first line does not count the rules and name the set: %q", lines[0])
+	}
+	for i, id := range shippedRuleIDs {
+		if !strings.HasPrefix(lines[i+1], id) {
+			t.Fatalf("line %d is %q, want the rule %s", i+1, lines[i+1], id)
+		}
 	}
 	for _, line := range lines[1:] {
 		if !strings.Contains(line, "structural") || !strings.Contains(line, "shadow") {
@@ -112,8 +123,8 @@ func TestRulesListJSON(t *testing.T) {
 	if err := json.Unmarshal(out.Bytes(), &report); err != nil {
 		t.Fatalf("unmarshalling json: %v, body %q", err, out.String())
 	}
-	if len(report.Rules) != 4 {
-		t.Fatalf("listing = %d, want 4: %+v", len(report.Rules), report.Rules)
+	if len(report.Rules) != len(shippedRuleIDs) {
+		t.Fatalf("listing = %d, want %v: %+v", len(report.Rules), shippedRuleIDs, report.Rules)
 	}
 	if report.Origin == "" {
 		t.Fatalf("the report does not name the rule set it used: %+v", report)

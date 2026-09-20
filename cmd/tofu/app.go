@@ -26,6 +26,7 @@ import (
 	"tofu/internal/konst"
 	"tofu/internal/llm"
 	"tofu/internal/llm/cred"
+	"tofu/internal/llm/models"
 	"tofu/internal/llm/quota"
 	sessionstore "tofu/internal/session"
 	"tofu/internal/turn"
@@ -289,10 +290,10 @@ func appQuota(wire string) frame.Quota {
 }
 
 type appWire struct {
-	model   turn.Model
-	spend   turn.Spend
-	store   *cred.Store
-	windows string
+	model    turn.Model
+	spend    turn.Spend
+	store    *cred.Store
+	selected models.Model
 }
 
 func openAppWire(opts runOpts) (appWire, error) {
@@ -301,7 +302,7 @@ func openAppWire(opts runOpts) (appWire, error) {
 		return appWire{}, err
 	}
 	model, spend, store, err := runModel(opts, selected.ID)
-	return appWire{model: model, spend: spend, store: store, windows: selected.WindowText()}, err
+	return appWire{model: model, spend: spend, store: store, selected: selected}, err
 }
 
 func awaitPerson(emit func(tui.Event), answers <-chan tui.Answer, granted map[string]bool) turn.Person {
@@ -465,8 +466,18 @@ func (s *appSession) run(ctx context.Context, wire, task string, emit func(tui.E
 		}
 	}
 
-	watch := &appWatcher{inner: opened.model, gate: gate, emit: emit, now: s.now, seen: s.shown}
-	config, spawner := runConfig(opts, built, watch, opened.spend, gate)
+	budget, budgetErr := contextBudget(opts, opened.selected)
+	if budgetErr != nil {
+		fail(budgetErr)
+		return
+	}
+	asked, guardErr := guarded(opened.model, budget)
+	if guardErr != nil {
+		fail(guardErr)
+		return
+	}
+	watch := &appWatcher{inner: asked, gate: gate, emit: emit, now: s.now, seen: s.shown}
+	config, spawner := runConfig(opts, built, runtime{model: watch, spend: opened.spend, budget: budget, gate: gate, sessions: sessions})
 	config.History = s.carried
 	if s.answers != nil {
 		config.Person = awaitPerson(emit, s.answers, s.granted)
@@ -481,7 +492,7 @@ func (s *appSession) run(ctx context.Context, wire, task string, emit func(tui.E
 		}
 		emit(tui.Event{Kind: tui.EventContext, Context: frame.Context{
 			Used:   step.Occupancy.Total(),
-			Budget: konst.ContextCeilingTokens,
+			Budget: budget.CeilingTokens,
 		}})
 	}
 	config.EndedSession = func(turn.Row) error {
@@ -489,16 +500,10 @@ func (s *appSession) run(ctx context.Context, wire, task string, emit func(tui.E
 		emit(tui.Event{Kind: tui.EventForkEnd})
 		return nil
 	}
-	config.Sessions = sessions
 	row, runErr := turn.Run(ctx, config)
 	stopped := errors.Is(runErr, context.Canceled)
 	if runErr != nil && !stopped {
 		fail(runErr)
-	}
-	for _, child := range childRows(spawner) {
-		if writeErr := turn.WriteSession(sessions, child); writeErr != nil {
-			fail(writeErr)
-		}
 	}
 	if row.Conversation != nil {
 		s.carried = turn.Sendable(row.Conversation)
@@ -516,7 +521,7 @@ func (s *appSession) run(ctx context.Context, wire, task string, emit func(tui.E
 	emit(tui.Event{
 		Kind: tui.EventDone,
 		Text: fmt.Sprintf("turn %s, %d steps, %d ms, quota windows %s",
-			outcome, len(row.Steps), row.WallClockMS, opened.windows),
+			outcome, len(row.Steps), row.WallClockMS, opened.selected.WindowText()),
 	})
 }
 

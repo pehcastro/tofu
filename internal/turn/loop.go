@@ -62,7 +62,7 @@ type Config struct {
 	NoCompaction    bool
 	NoFork          bool
 	NoLastWord      bool
-	Bands           recall.Bands
+	Budget          recall.Budget
 	Sessions        *session.Store
 	Steering        func() []string
 	Step            func(StepRow)
@@ -119,11 +119,6 @@ func Run(ctx context.Context, config Config) (Row, error) {
 	if handles {
 		tools = NewRegistry(append(slices.Clone(tools.tools), artifacts.FetchTool())...)
 	}
-	for _, tool := range tools.tools {
-		if spawner, spawning := tool.(*SpawnTool); spawning && spawner.base.Sessions == nil {
-			spawner.base.Sessions = config.Sessions
-		}
-	}
 	now := config.Now
 	if now == nil {
 		now = time.Now
@@ -132,9 +127,9 @@ func Run(ctx context.Context, config Config) (Row, error) {
 	if newID == nil {
 		newID = func() string { return "turn-" + strconv.FormatInt(now().UnixNano(), 16) }
 	}
-	bands := config.Bands
-	if bands.Target() == 0 {
-		bands = recall.ShippedBands()
+	budget := config.Budget
+	if budget == (recall.Budget{}) {
+		budget = recall.Budget{Bands: recall.ShippedBands(), Source: "this turn was given no context budget"}
 	}
 	endedSession := config.EndedSession
 	if endedSession == nil && config.Sessions == nil {
@@ -147,7 +142,7 @@ func Run(ctx context.Context, config Config) (Row, error) {
 
 	start := now()
 	origin := newID()
-	row := Row{ID: origin, Schema: SchemaVersion, At: start, Task: config.Task, Wire: config.Wire, Spend: config.Spend, Root: origin, SpawnedFrom: config.SpawnedFrom}
+	row := Row{ID: origin, Schema: SchemaVersion, At: start, Task: config.Task, Wire: config.Wire, Spend: config.Spend, Root: origin, SpawnedFrom: config.SpawnedFrom, Budget: budget}
 
 	var recorder *session.Recorder
 	if config.Sessions != nil {
@@ -362,8 +357,8 @@ func Run(ctx context.Context, config Config) (Row, error) {
 				return endAt(OutcomeDecisionCap, step, settled), nil
 			}
 			if !config.NoFork {
-				fork, begun, occupancy, err := forkHistory(artifacts, bands, config.FirstUserMessage(), messages)
-				measuredAgainst := bands
+				fork, begun, occupancy, err := forkHistory(artifacts, budget, config.FirstUserMessage(), messages)
+				measuredAgainst := budget.Bands
 				stepRow.Occupancy, stepRow.Bands = &occupancy, &measuredAgainst
 				if err != nil {
 					keep(stepRow)
@@ -401,6 +396,7 @@ func Run(ctx context.Context, config Config) (Row, error) {
 						ForkedFrom:  ended.ID,
 						ForkKind:    fork.Kind,
 						SpawnedFrom: config.SpawnedFrom,
+						Budget:      budget,
 					}
 					messages, sent = begun, 0
 					if recorder != nil {
@@ -411,8 +407,8 @@ func Run(ctx context.Context, config Config) (Row, error) {
 					continue
 				}
 			}
-			if !config.NoCompaction {
-				compaction, err := compactHistory(artifacts, bands, step, messages)
+			if !config.NoCompaction && budget.Automatic {
+				compaction, err := compactHistory(artifacts, budget, step, messages)
 				if err != nil {
 					keep(stepRow)
 					return finish(OutcomeError), err

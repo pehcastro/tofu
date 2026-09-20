@@ -60,6 +60,9 @@ type sessionRow struct {
 	Root             string    `json:"root,omitempty"`
 	ForkedInto       string    `json:"forked_into,omitempty"`
 	ForkKind         string    `json:"fork_kind,omitempty"`
+	ContextCeiling   int       `json:"context_ceiling,omitempty"`
+	ContextTarget    int       `json:"context_target,omitempty"`
+	AutoCompaction   string    `json:"auto_compaction,omitempty"`
 	ForkTokensBefore int       `json:"fork_tokens_before,omitempty"`
 	ForkTokensAfter  int       `json:"fork_tokens_after,omitempty"`
 	CostUSD          float64   `json:"cost_usd,omitempty"`
@@ -338,6 +341,9 @@ func sessionDetail(store *session.Store, handle string) (sessionRow, []llm.Messa
 		Root:             header.Root,
 		ForkedInto:       header.ForkedInto,
 		ForkKind:         header.ForkKind,
+		ContextCeiling:   header.ContextCeiling,
+		ContextTarget:    header.ContextTarget,
+		AutoCompaction:   header.AutoCompaction,
 		ForkTokensBefore: header.ForkTokensBefore,
 		ForkTokensAfter:  header.ForkTokensAfter,
 		CostUSD:          header.CostUSD,
@@ -522,6 +528,10 @@ func sessionInfoText(row sessionRow, shade palette, now time.Time) string {
 	if lineage := sessionLineage(row); lineage != "" {
 		body.WriteString(paragraph("lineage", lineage))
 	}
+	if row.AutoCompaction != "" {
+		body.WriteString(paragraph("context", strconv.Itoa(row.ContextCeiling)+" token ceiling, "+
+			strconv.Itoa(row.ContextTarget)+" token target, automatic compaction "+row.AutoCompaction))
+	}
 	if row.Head {
 		body.WriteString(labelled("head", "tofu --continue resumes this one") + "\n")
 	}
@@ -534,7 +544,11 @@ func sessionInfoText(row sessionRow, shade palette, now time.Time) string {
 func sessionLineage(row sessionRow) string {
 	var parts []string
 	if row.Parent != "" {
-		parts = append(parts, "continues "+row.Parent)
+		began := "spawned by "
+		if row.ForkKind != "" {
+			began = "continues "
+		}
+		parts = append(parts, began+row.Parent)
 	}
 	if row.Root != "" && row.Root != row.ID && row.Root != row.Parent {
 		parts = append(parts, "rooted at "+row.Root)

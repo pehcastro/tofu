@@ -30,10 +30,7 @@ func parentWithAStore(t *testing.T, root string, decisions []llm.Decision) (Conf
 	}
 	store := session.NewStore(filepath.Join(root, ".tofu", "sessions"))
 	parent, spawn := parentTurn(t, root, decisions)
-	parent.Sessions = store
-	if spawn.base.Sessions != nil {
-		t.Fatal("the spawn tool was handed a store up front, so inheriting one from the running turn is not what this test proves")
-	}
+	parent.Sessions, spawn.base.Sessions = store, store
 	return parent, spawn, store
 }
 

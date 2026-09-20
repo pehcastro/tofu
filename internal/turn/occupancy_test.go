@@ -19,7 +19,12 @@ func TestAMeasuredStepNamesTheCapsItWasMeasuredAgainstOnBothWrites(t *testing.T)
 	}}
 	config := baseConfig(t, model, NewRegistry(tool))
 	config.ArtifactDir = t.TempDir()
-	config.Bands = recall.Bands{Identity: 1000, Facts: 0, WorkingSet: 2000, Recent: 3000}
+	config.Budget = recall.Budget{
+		CeilingTokens: 6000,
+		Bands:         recall.Bands{Identity: 1000, Facts: 0, WorkingSet: 2000, Recent: 3000},
+		Automatic:     true,
+		Source:        "the caps this test runs under",
+	}
 	config.Sessions = store
 	config.EndedSession = nil
 
@@ -57,18 +62,18 @@ func TestAMeasuredStepNamesTheCapsItWasMeasuredAgainstOnBothWrites(t *testing.T)
 			if seen == nil {
 				t.Fatalf("step %d measured %d tokens and %s names no caps", step.Index, step.Occupancy.Total(), name)
 			}
-			if *seen != config.Bands {
-				t.Fatalf("step %d: %s names caps %+v against the %+v it ran under", step.Index, name, *seen, config.Bands)
+			if *seen != config.Budget.Bands {
+				t.Fatalf("step %d: %s names caps %+v against the %+v it ran under", step.Index, name, *seen, config.Budget.Bands)
 			}
 		}
-		if step.Occupancy.Target != config.Bands.Target() {
-			t.Fatalf("step %d marks %d against caps totalling %d", step.Index, step.Occupancy.Target, config.Bands.Target())
+		if step.Occupancy.Target != config.Budget.Bands.Target() {
+			t.Fatalf("step %d marks %d against caps totalling %d", step.Index, step.Occupancy.Target, config.Budget.Bands.Target())
 		}
 	}
 	if measured == 0 {
 		t.Fatal("no step recorded an occupancy, so nothing carried caps")
 	}
-	t.Logf("%d of %d steps carry caps %+v on both writes", measured, len(row.Steps), config.Bands)
+	t.Logf("%d of %d steps carry caps %+v on both writes", measured, len(row.Steps), config.Budget.Bands)
 }
 
 func TestAStepFromBeforeTheCapsReadsAsAnAbsenceAndCapsOfZeroDoNot(t *testing.T) {
