@@ -56,7 +56,3 @@ func commandPaths(command string) []string {
 	}
 	return paths
 }
-
-func AllowCommand(command string, owns []string) error {
-	return (&Boundary{Owns: owns}).Command(command)
-}

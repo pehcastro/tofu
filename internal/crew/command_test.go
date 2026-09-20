@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func TestAllowCommandRefusesEveryWayAShellReachesOutsideTheHeldPaths(t *testing.T) {
+func TestBoundaryCommandRefusesEveryWayAShellReachesOutsideTheHeldPaths(t *testing.T) {
 	owns := []string{"internal/crew/**"}
 	refused := []struct {
 		command string
@@ -24,7 +24,7 @@ func TestAllowCommandRefusesEveryWayAShellReachesOutsideTheHeldPaths(t *testing.
 	}
 	for _, refusal := range refused {
 		t.Run(refusal.command, func(t *testing.T) {
-			err := AllowCommand(refusal.command, owns)
+			err := (&Boundary{Owns: owns}).Command(refusal.command)
 			if err == nil {
 				t.Fatalf("the command was allowed to reach outside %v", owns)
 			}
@@ -35,7 +35,7 @@ func TestAllowCommandRefusesEveryWayAShellReachesOutsideTheHeldPaths(t *testing.
 	}
 }
 
-func TestAllowCommandLetsACommandInsideTheHeldPathsThrough(t *testing.T) {
+func TestBoundaryCommandLetsACommandInsideTheHeldPathsThrough(t *testing.T) {
 	owns := []string{"internal/crew/**", "internal/konst/konst.go"}
 	allowed := []string{
 		"go test ./internal/crew/...",
@@ -47,7 +47,7 @@ func TestAllowCommandLetsACommandInsideTheHeldPathsThrough(t *testing.T) {
 	}
 	for _, command := range allowed {
 		t.Run(command, func(t *testing.T) {
-			if err := AllowCommand(command, owns); err != nil {
+			if err := (&Boundary{Owns: owns}).Command(command); err != nil {
 				t.Fatalf("a command inside the held paths was refused: %v", err)
 			}
 		})
