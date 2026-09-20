@@ -124,3 +124,21 @@ func TestEveryPlanStateTheToolHasIsDrawable(t *testing.T) {
 		t.Fatalf("the view is handed %+v, want %+v", drawn, want)
 	}
 }
+
+func TestDrawnPlanStateNamesEveryToolPlanState(t *testing.T) {
+	want := map[tools.PlanState]session.PlanState{
+		tools.PlanPending: session.PlanPending,
+		tools.PlanRunning: session.PlanRunning,
+		tools.PlanDone:    session.PlanDone,
+		tools.PlanDropped: session.PlanDropped,
+	}
+	for _, state := range tools.AllPlanStates() {
+		expected, named := want[state]
+		if !named {
+			t.Fatalf("%s carries no expected drawn state, so a new plan state can reach drawnPlanState untested", state)
+		}
+		if got := drawnPlanState(state); got != expected {
+			t.Fatalf("drawnPlanState(%s) = %v, want %v", state, got, expected)
+		}
+	}
+}

@@ -2,12 +2,64 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"tofu/internal/judge/jev"
 	"tofu/internal/judge/ledger"
+	"tofu/internal/judge/policy"
 	"tofu/internal/judge/question"
 )
+
+func panicOf(call func()) (message string) {
+	defer func() {
+		if raised := recover(); raised != nil {
+			message = fmt.Sprint(raised)
+		}
+	}()
+	call()
+	return ""
+}
+
+func TestToLedgerVerdictNamesEveryPolicyVerdict(t *testing.T) {
+	want := map[policy.Verdict]ledger.Verdict{
+		policy.VerdictAllow: ledger.VerdictAllow,
+		policy.VerdictAsk:   ledger.VerdictAsk,
+		policy.VerdictDeny:  ledger.VerdictDeny,
+	}
+	for _, v := range policy.AllVerdicts() {
+		expected, named := want[v]
+		if !named {
+			t.Fatalf("%s carries no expected ledger verdict, so a new policy verdict can reach toLedgerVerdict untested", v)
+		}
+		if got := toLedgerVerdict(v); got != expected {
+			t.Errorf("toLedgerVerdict(%s) = %s, want %s", v, got, expected)
+		}
+	}
+}
+
+func TestToPolicyVerdictNamesEveryLedgerVerdict(t *testing.T) {
+	want := map[ledger.Verdict]policy.Verdict{
+		ledger.VerdictAllow: policy.VerdictAllow,
+		ledger.VerdictAsk:   policy.VerdictAsk,
+		ledger.VerdictDeny:  policy.VerdictDeny,
+	}
+	for _, v := range ledger.AllVerdicts() {
+		if v == ledger.VerdictUnset {
+			if raised := panicOf(func() { toPolicyVerdict(v) }); raised == "" {
+				t.Errorf("toPolicyVerdict(unset) no longer panics: the impossible state is now reachable")
+			}
+			continue
+		}
+		expected, named := want[v]
+		if !named {
+			t.Fatalf("%s carries no expected policy verdict, so a new ledger verdict can reach toPolicyVerdict untested", v)
+		}
+		if got := toPolicyVerdict(v); got != expected {
+			t.Errorf("toPolicyVerdict(%s) = %s, want %s", v, got, expected)
+		}
+	}
+}
 
 type stubWire struct {
 	calls int

@@ -29,6 +29,10 @@ const (
 	VerdictDeny  Verdict = "deny"
 )
 
+func AllVerdicts() []Verdict {
+	return []Verdict{VerdictUnset, VerdictAllow, VerdictAsk, VerdictDeny}
+}
+
 func (v Verdict) String() string {
 	switch v {
 	case VerdictUnset:

@@ -341,3 +341,26 @@ func TestLiveTheTypedDoneReviewReadsTwoRecordedChildren(t *testing.T) {
 	}
 	t.Logf("tofu why %s\n%s", empty.ID, out.String())
 }
+
+func TestDoneVerdictNamesEveryLedgerVerdict(t *testing.T) {
+	want := map[ledger.Verdict]turn.DoneVerdict{
+		ledger.VerdictAllow: turn.DoneReopen,
+		ledger.VerdictAsk:   turn.DoneAccepted,
+		ledger.VerdictDeny:  turn.DoneAccepted,
+	}
+	for _, v := range ledger.AllVerdicts() {
+		if v == ledger.VerdictUnset {
+			if raised := panicOf(func() { doneVerdict(v) }); raised == "" {
+				t.Errorf("doneVerdict(unset) no longer panics: the impossible state is now reachable")
+			}
+			continue
+		}
+		expected, named := want[v]
+		if !named {
+			t.Fatalf("%s carries no expected done verdict, so a new ledger verdict can reach doneVerdict untested", v)
+		}
+		if got := doneVerdict(v); got != expected {
+			t.Errorf("doneVerdict(%s) = %s, want %s", v, got, expected)
+		}
+	}
+}

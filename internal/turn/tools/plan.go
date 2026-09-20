@@ -25,6 +25,10 @@ const (
 	PlanDropped PlanState = "dropped"
 )
 
+func AllPlanStates() []PlanState {
+	return []PlanState{PlanPending, PlanRunning, PlanDone, PlanDropped}
+}
+
 type PlanItem struct {
 	Phase string    `json:"phase,omitempty"`
 	Text  string    `json:"text"`
