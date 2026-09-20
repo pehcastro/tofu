@@ -8,11 +8,14 @@ import (
 	"path/filepath"
 )
 
+var ErrStale = errors.New("the file changed after the preview was taken")
+
 type Preview struct {
-	Path   string
-	Before string
-	After  string
-	Diff   string
+	Path    string
+	Existed bool
+	Before  string
+	After   string
+	Diff    string
 }
 
 func Plan(root, path string, edits []Edit) (Preview, error) {
@@ -23,6 +26,7 @@ func Plan(root, path string, edits []Edit) (Preview, error) {
 	if err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return Preview{}, fmt.Errorf("reading %s before the edit: %w", path, err)
 	}
+	existed := err == nil
 	before := string(raw)
 	after := before
 	for i, edit := range edits {
@@ -31,16 +35,15 @@ func Plan(root, path string, edits []Edit) (Preview, error) {
 			return Preview{}, fmt.Errorf("edit %d of %d on %s: %w", i+1, len(edits), path, err)
 		}
 	}
-	return Preview{Path: path, Before: before, After: after, Diff: Unified(path, before, after)}, nil
-}
-
-func (p Preview) Inverse() Preview {
-	return Preview{Path: p.Path, Before: p.After, After: p.Before, Diff: Unified(p.Path, p.After, p.Before)}
+	return Preview{Path: path, Existed: existed, Before: before, After: after, Diff: Unified(path, before, after)}, nil
 }
 
 func (p Preview) Result() string {
-	if p.Before == "" {
+	if !p.Existed {
 		return fmt.Sprintf("created %s: %d lines, %d bytes", p.Path, len(splitLines(p.After)), len(p.After))
+	}
+	if p.Diff == "" {
+		return fmt.Sprintf("%s already held that text, so nothing changed", p.Path)
 	}
 	return p.Diff
 }
@@ -52,8 +55,8 @@ func Commit(root string, p Preview) error {
 		return fmt.Errorf("reading %s before the write: %w", p.Path, err)
 	}
 	if string(current) != p.Before {
-		return fmt.Errorf("%s changed after the preview was taken, %d bytes on disk against %d previewed",
-			p.Path, len(current), len(p.Before))
+		return fmt.Errorf("%s: %w, %d bytes on disk against %d previewed",
+			p.Path, ErrStale, len(current), len(p.Before))
 	}
 	if err := os.MkdirAll(filepath.Dir(full), 0o750); err != nil {
 		return fmt.Errorf("making the directory for %s: %w", p.Path, err)

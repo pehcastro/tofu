@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -10,6 +11,7 @@ import (
 	"strings"
 
 	"boji/internal/llm"
+	"boji/internal/search"
 	"boji/internal/transform"
 	"boji/internal/turn"
 )
@@ -72,6 +74,11 @@ func (e Edit) Run(_ context.Context, raw json.RawMessage) (turn.Result, error) {
 		return turn.Result{}, fmt.Errorf("edit: %w", err)
 	}
 
+	if bytes.IndexByte(body, 0) >= 0 {
+		return turn.Result{}, errors.New("edit: " + search.Note(search.BinarySkipped,
+			args.Path+" holds a null byte, so it is not text and replacing a stretch of it would corrupt it"))
+	}
+
 	before := string(body)
 	switch occurrences := strings.Count(before, args.Old); occurrences {
 	case 0:
@@ -91,6 +98,10 @@ func (e Edit) Run(_ context.Context, raw json.RawMessage) (turn.Result, error) {
 		return turn.Result{}, fmt.Errorf("edit: %w", err)
 	}
 	if err := transform.Commit(string(e.root), preview); err != nil {
+		if errors.Is(err, transform.ErrStale) {
+			return turn.Result{}, errors.New("edit: " + search.Note(search.Stale,
+				args.Path+" is no longer the text edit read, so nothing was written: read it again and edit the text that is there now"))
+		}
 		return turn.Result{}, fmt.Errorf("edit: %w", err)
 	}
 	return turn.Result{Content: preview.Diff, Command: "edit " + args.Path}, nil

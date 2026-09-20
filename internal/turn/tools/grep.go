@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"boji/internal/llm"
+	"boji/internal/search"
 	"boji/internal/turn"
 )
 
@@ -34,15 +35,16 @@ func (g Grep) Definition() llm.Tool {
 		Description: "searches the text of every file under the turn's working directory for a regular expression " +
 			"and returns every matching line as path:line:text. " +
 			"the expression is go regexp syntax, which is the same as perl for everything short of backreferences. " +
-			"it never descends into node_modules, .git or .boji and it never reads a file that holds a null byte. " +
+			ignoredWalkDescription + ", and it never reads a file that holds a null byte. " +
 			"zero matches is an answer, not an error: the result says how many files were searched. " +
 			"it does not list file names by pattern, which glob does, and it does not change anything",
 		Parameters: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
-				"pattern": map[string]any{"type": "string"},
-				"path":    map[string]any{"type": "string"},
-				"glob":    map[string]any{"type": "string"},
+				"pattern":         map[string]any{"type": "string"},
+				"path":            map[string]any{"type": "string"},
+				"glob":            map[string]any{"type": "string"},
+				"include_ignored": map[string]any{"type": "boolean"},
 			},
 			"required": []string{"pattern"},
 		},
@@ -50,9 +52,10 @@ func (g Grep) Definition() llm.Tool {
 }
 
 type grepArgs struct {
-	Pattern string `json:"pattern"`
-	Path    string `json:"path"`
-	Glob    string `json:"glob"`
+	Pattern        string `json:"pattern"`
+	Path           string `json:"path"`
+	Glob           string `json:"glob"`
+	IncludeIgnored bool   `json:"include_ignored"`
 }
 
 func (g Grep) Run(_ context.Context, raw json.RawMessage) (turn.Result, error) {
@@ -68,14 +71,14 @@ func (g Grep) Run(_ context.Context, raw json.RawMessage) (turn.Result, error) {
 		return turn.Result{}, fmt.Errorf("grep: %q is not a regular expression: %w", args.Pattern, err)
 	}
 	under := cmp.Or(args.Path, ".")
-	files, err := filesUnder(g.root, under)
+	listed, err := filesUnder(g.root, under, args.IncludeIgnored)
 	if err != nil {
 		return turn.Result{}, fmt.Errorf("grep: %w", err)
 	}
 
 	var lines []string
-	searched, matched := 0, 0
-	for _, rel := range files {
+	searched, matched, binary := 0, 0, 0
+	for _, rel := range listed.files {
 		if args.Glob != "" && !matchesPattern(args.Glob, rel) {
 			continue
 		}
@@ -84,6 +87,7 @@ func (g Grep) Run(_ context.Context, raw json.RawMessage) (turn.Result, error) {
 			return turn.Result{}, fmt.Errorf("grep: %w", err)
 		}
 		if bytes.IndexByte(body, 0) >= 0 {
+			binary++
 			continue
 		}
 		searched++
@@ -100,17 +104,22 @@ func (g Grep) Run(_ context.Context, raw json.RawMessage) (turn.Result, error) {
 		}
 	}
 
+	note := listed.note
+	if binary > 0 {
+		note = strings.TrimSpace(note + " " + search.Note(search.BinarySkipped,
+			fmt.Sprintf("%d of the %d files under %s hold a null byte and were not searched", binary, binary+searched, under)))
+	}
 	command := "grep " + args.Pattern + " under " + under
 	if len(lines) == 0 {
 		return turn.Result{
-			Content: fmt.Sprintf("%q matches no line in any of the %d text files under %s. the files were read: this is an answer, not a failure",
-				args.Pattern, searched, under),
+			Content: withNote(fmt.Sprintf("%q matches no line in any of the %d text files under %s. the files were read: this is an answer, not a failure",
+				args.Pattern, searched, under), note),
 			Command: command,
 		}, nil
 	}
 	return turn.Result{
-		Content: fmt.Sprintf("%d matching lines in %d of the %d text files under %s\n%s\n",
-			len(lines), matched, searched, under, strings.Join(lines, "\n")),
+		Content: withNote(fmt.Sprintf("%d matching lines in %d of the %d text files under %s\n%s\n",
+			len(lines), matched, searched, under, strings.Join(lines, "\n")), note),
 		Command: command,
 	}, nil
 }

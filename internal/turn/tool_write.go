@@ -3,10 +3,14 @@ package turn
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io/fs"
+	"os"
 
 	"boji/internal/llm"
 	"boji/internal/sys"
+	"boji/internal/transform"
 )
 
 const writePerm = 0o644
@@ -27,8 +31,10 @@ func (t *WriteTool) Name() string { return "write" }
 
 func (t *WriteTool) Definition() llm.Tool {
 	return llm.Tool{
-		Name:        "write",
-		Description: "writes a file inside the turn's working directory, replacing it whole",
+		Name: "write",
+		Description: "writes a file inside the turn's working directory, replacing it whole. " +
+			"the result says the file was created when it was not there before, " +
+			"and is a unified diff of what changed when it was",
 		Parameters: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -54,8 +60,20 @@ func (t *WriteTool) Run(_ context.Context, raw json.RawMessage) (Result, error) 
 	if err != nil {
 		return Result{}, fmt.Errorf("write: %w", err)
 	}
+	held, readErr := os.ReadFile(resolved)
+	if readErr != nil && !errors.Is(readErr, fs.ErrNotExist) {
+		return Result{}, fmt.Errorf("write: reading %s before replacing it: %w", args.Path, readErr)
+	}
 	if err := sys.WriteFile(resolved, []byte(args.Content), writePerm); err != nil {
 		return Result{}, fmt.Errorf("write: %w", err)
 	}
-	return Result{Content: fmt.Sprintf("wrote %d bytes to %s", len(args.Content), args.Path), Command: "write " + args.Path}, nil
+	before := string(held)
+	preview := transform.Preview{
+		Path:    args.Path,
+		Existed: readErr == nil,
+		Before:  before,
+		After:   args.Content,
+		Diff:    transform.Unified(args.Path, before, args.Content),
+	}
+	return Result{Content: preview.Result(), Command: "write " + args.Path}, nil
 }

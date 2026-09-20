@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -246,7 +247,8 @@ func TestAnEditIsReversedWithinTheTurn(t *testing.T) {
 	if err := Commit(root, preview); err != nil {
 		t.Fatal(err)
 	}
-	if err := Commit(root, preview.Inverse()); err != nil {
+	revert := Preview{Path: preview.Path, Before: preview.After, After: preview.Before}
+	if err := Commit(root, revert); err != nil {
 		t.Fatalf("reverting: %v", err)
 	}
 	onDisk, err := os.ReadFile(filepath.Join(root, "index.ts"))
@@ -272,8 +274,58 @@ func TestCommitRefusesWhenTheFileMovedUnderThePreview(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, "package.json"), []byte("{}\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := Commit(root, preview); err == nil {
+	err = Commit(root, preview)
+	if err == nil {
 		t.Fatal("Commit wrote over a file that had changed since the preview")
+	}
+	t.Logf("refusal: %v", err)
+	if !errors.Is(err, ErrStale) {
+		t.Fatalf("a caller cannot tell staleness from a write failure: %v", err)
+	}
+}
+
+func TestAFailureThatIsNotStalenessDoesNotCarryTheStaleError(t *testing.T) {
+	root := seed(t, filepath.Join("pkg", "index.ts"), "a\n")
+	err := Commit(root, Preview{Path: "pkg", Existed: true, Before: "", After: "b\n"})
+	if err == nil {
+		t.Fatal("Commit wrote a file where a directory stands")
+	}
+	t.Logf("refusal: %v", err)
+	if errors.Is(err, ErrStale) {
+		t.Fatalf("a failed write was reported as a stale file: %v", err)
+	}
+}
+
+func TestAPreviewSaysWhetherTheFileWasCreatedOrReplaced(t *testing.T) {
+	root := seed(t, "held.txt", "")
+	made, err := Plan(root, "fresh.txt", []Edit{{Kind: Create, Text: "one\ntwo\n"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if made.Existed {
+		t.Fatal("a file that is not on disk was previewed as existing")
+	}
+	if want := "created fresh.txt: 2 lines, 8 bytes"; made.Result() != want {
+		t.Fatalf("Result reads %q, want %q", made.Result(), want)
+	}
+
+	empty, err := Plan(root, "held.txt", []Edit{{Kind: Create, Text: "one\n"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !empty.Existed {
+		t.Fatal("a file on disk holding nothing was previewed as absent")
+	}
+	if strings.Contains(empty.Result(), "created") {
+		t.Fatalf("replacing an empty file read as a creation: %q", empty.Result())
+	}
+
+	same, err := Plan(root, "held.txt", []Edit{{Kind: Create, Text: ""}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(same.Result(), "nothing changed") {
+		t.Fatalf("a preview that changes nothing reads %q", same.Result())
 	}
 }
 
