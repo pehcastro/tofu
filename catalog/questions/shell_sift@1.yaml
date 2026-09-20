@@ -1,0 +1,35 @@
+name: shell_sift
+questions_version: 1
+
+state:
+  - task
+  - command
+  - exit_code
+  - stream
+  - position
+  - chunk
+
+questions:
+  still_needed:
+    type: noul
+    instructions: >-
+      A shell command was run to make progress on the task, and its output is
+      about to be put in front of the model that asked for it. The output has
+      been cut into chunks and this is one of them. Decide whether the model
+      still needs this chunk in front of it to carry out the task it stated.
+      Judge the chunk against that task, not against how interesting it looks:
+      the same listing can be the whole answer to one request and noise in
+      another. Assume the model has already been told the command that ran and
+      its exit status, so a chunk that only repeats those adds nothing.
+    criteria:
+      true: >-
+        The model would be worse off without this chunk. It carries a fact the
+        task asks for, or names the file, symbol, count, revision, path or
+        value the task is about, or it reports something that went wrong, or it
+        is the part of the output the next step has to act on.
+      false: >-
+        The model can carry out the task just as well without this chunk. It is
+        filler for this particular task: repetition of what a neighbouring
+        chunk already says, entries the task does not ask about, decoration,
+        progress text, or a long uniform run where a few rows already make the
+        point.

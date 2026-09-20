@@ -193,8 +193,11 @@ func TestDoctorJSONCarriesEveryPointTheTextCollapsed(t *testing.T) {
 		if point.Point == "" || point.Mode == "" || point.File == "" || point.ThresholdsFrom == "" {
 			t.Fatalf("a point lost a field the text collapsed: %+v", point)
 		}
-		if point.Thresholds.RiskAskAt == 0 || point.Thresholds.RiskDenyAt == 0 {
-			t.Fatalf("a point lost its thresholds: %+v", point)
+		if point.Schema == "" && (point.Thresholds.RiskAskAt == 0 || point.Thresholds.RiskDenyAt == 0) {
+			t.Fatalf("a gate point lost its thresholds: %+v", point)
+		}
+		if point.Schema != "" && point.Thresholds != (doctorThresholds{}) {
+			t.Fatalf("a point with its own schema was given the gate's thresholds: %+v", point)
 		}
 	}
 	if report.Root == "" || report.Go == "" || report.Ledger == "" || report.SpendLimit == "" {

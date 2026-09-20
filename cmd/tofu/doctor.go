@@ -93,6 +93,7 @@ type doctorThresholds struct {
 
 type doctorPolicy struct {
 	Point          string           `json:"point"`
+	Schema         string           `json:"schema,omitempty"`
 	Mode           string           `json:"mode"`
 	Declared       string           `json:"declared,omitempty"`
 	Fallback       string           `json:"fallback,omitempty"`

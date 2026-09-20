@@ -3,6 +3,7 @@ package policy
 import (
 	"fmt"
 	"io/fs"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -49,6 +50,9 @@ func LoadPoint(shipped fs.FS, ref string, set question.Set) (Policy, Origin, err
 	if err != nil {
 		return Policy{}, "", fmt.Errorf("the policy %s from %s is unusable: %w", ref, origin, err)
 	}
+	if pol.Schema != SchemaGate {
+		return pol, origin, nil
+	}
 	findings := Lint(pol, set)
 	if len(findings) == 0 {
 		return pol, origin, nil
@@ -76,10 +80,64 @@ func Load(path string) (Policy, error) {
 	return parse(data, path)
 }
 
+var schemaName = regexp.MustCompile(`^[a-z][a-z_0-9]*$`)
+
+func declaredSchema(data []byte, path string) (string, error) {
+	schema := SchemaGate
+	err := scanBytes(data, path, func(indent int, key, value string, _ int) error {
+		if indent == 0 && key == "schema" {
+			schema = value
+		}
+		return nil
+	})
+	if err != nil {
+		return "", err
+	}
+	if !schemaName.MatchString(schema) {
+		return "", fmt.Errorf("%s: schema is %q and a schema name is lower case letters, digits and underscores", path, schema)
+	}
+	return schema, nil
+}
+
+func sharedField(key string) bool {
+	switch key {
+	case "name", "schema", "policy_version", "questions", "questions_version", "mode", "sample_floor", "notes":
+		return true
+	}
+	return false
+}
+
 func parse(data []byte, path string) (Policy, error) {
-	pol := Policy{File: path}
+	schema, err := declaredSchema(data, path)
+	if err != nil {
+		return Policy{}, err
+	}
+	pol := Policy{File: path, Schema: schema}
+	foreign := schema != SchemaGate
+	if foreign {
+		pol.ForeignThresholds = map[string]float64{}
+	}
 	inThresholds := false
-	err := scanBytes(data, path, func(indent int, key, value string, line int) error {
+	err = scanBytes(data, path, func(indent int, key, value string, line int) error {
+		if foreign {
+			switch {
+			case indent == 0:
+				inThresholds = key == "thresholds"
+				if inThresholds || !sharedField(key) {
+					return nil
+				}
+				return pol.setField(key, value, path, line)
+			case inThresholds:
+				n, err := strconv.ParseFloat(value, 64)
+				if err != nil {
+					return fmt.Errorf("%s:%d: %q is a number, found %q", path, line, key, value)
+				}
+				pol.ForeignThresholds[key] = n
+				return nil
+			default:
+				return nil
+			}
+		}
 		switch {
 		case indent == 0:
 			inThresholds = key == "thresholds"
@@ -153,6 +211,8 @@ func (p *Policy) setField(key, value, path string, line int) error {
 	switch key {
 	case "name":
 		p.Name = value
+	case "schema":
+		p.Schema = value
 	case "policy_version":
 		n, err := strconv.Atoi(value)
 		if err != nil {

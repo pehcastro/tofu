@@ -118,6 +118,9 @@ func policyPoint(ref string, layers []question.Layer) doctorPolicy {
 		Origin: string(origin),
 		File:   pol.File,
 	}
+	if pol.Schema != policy.SchemaGate {
+		point.Schema = pol.Schema
+	}
 	if pol.ModeDeclared {
 		point.Declared = pol.Mode.String()
 	}
@@ -131,12 +134,14 @@ func policyPoint(ref string, layers []question.Layer) doctorPolicy {
 	if res.Pinned {
 		point.ThresholdsFrom = "the lock"
 	}
-	point.Thresholds = doctorThresholds{
-		RiskAskAt:            res.Policy.Thresholds.RiskAskAt,
-		RiskDenyAt:           res.Policy.Thresholds.RiskDenyAt,
-		UserRequestedRelaxAt: res.Policy.Thresholds.UserRequestedRelaxAt,
-		ApprovalRelaxAt:      res.Policy.Thresholds.ApprovalRelaxAt,
-		FromUntrustedBlockAt: res.Policy.Thresholds.FromUntrustedBlockAt,
+	if point.Schema == "" {
+		point.Thresholds = doctorThresholds{
+			RiskAskAt:            res.Policy.Thresholds.RiskAskAt,
+			RiskDenyAt:           res.Policy.Thresholds.RiskDenyAt,
+			UserRequestedRelaxAt: res.Policy.Thresholds.UserRequestedRelaxAt,
+			ApprovalRelaxAt:      res.Policy.Thresholds.ApprovalRelaxAt,
+			FromUntrustedBlockAt: res.Policy.Thresholds.FromUntrustedBlockAt,
+		}
 	}
 	if point.Declared != point.Mode {
 		point.Fallback = res.Reason

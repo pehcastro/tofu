@@ -20,20 +20,20 @@ var identitySubstitutions = []identitySubstitution{
 
 var separatorsInOrderOfLength = []string{`\\`, `\`, "/"}
 
-var credentialMarkers = []string{
-	"sk-or-v1-",
-	"sk-ant-api",
-	"sk-ant-oat",
-	"sk-proj-",
-	"ghp_",
-	"gho_",
-	"github_pat_",
-	"AKIA",
-	"xoxb-",
-	"xoxp-",
-	"eyJhbGciOi",
-	"eyJ0eXAiOi",
-	"-----BEGIN ",
+var credentialSubstitutions = []identitySubstitution{
+	{"sk-or-v1-", "redacted-openrouter-key-"},
+	{"sk-ant-api", "redacted-anthropic-api-key"},
+	{"sk-ant-oat", "redacted-anthropic-oauth-token"},
+	{"sk-proj-", "redacted-openai-key-"},
+	{"ghp_", "redacted-github-token-"},
+	{"gho_", "redacted-github-oauth-token-"},
+	{"github_pat_", "redacted-github-pat-"},
+	{"AKIA", "redacted-aws-key-"},
+	{"xoxb-", "redacted-slack-bot-token-"},
+	{"xoxp-", "redacted-slack-user-token-"},
+	{"eyJhbGciOi", "redacted-jwt-algorithm-"},
+	{"eyJ0eXAiOi", "redacted-jwt-type-"},
+	{"-----BEGIN ", "redacted-pem-block "},
 }
 
 func Scrub(text string) string {
@@ -43,6 +43,9 @@ func Scrub(text string) string {
 			to := strings.ReplaceAll(substitution.scrubbed, "/", separator)
 			text = strings.ReplaceAll(text, from, to)
 		}
+	}
+	for _, substitution := range credentialSubstitutions {
+		text = strings.ReplaceAll(text, substitution.real, substitution.scrubbed)
 	}
 	return text
 }
@@ -58,9 +61,9 @@ func LeaksIn(text string) []string {
 			}
 		}
 	}
-	for _, marker := range credentialMarkers {
-		if strings.Contains(text, marker) {
-			found = append(found, marker)
+	for _, substitution := range credentialSubstitutions {
+		if strings.Contains(text, substitution.real) {
+			found = append(found, substitution.real)
 		}
 	}
 	return found

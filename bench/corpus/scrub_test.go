@@ -57,3 +57,30 @@ func TestScrubRemovesEveryIdentityThatLeaksInReports(t *testing.T) {
 		}
 	}
 }
+
+func TestScrubRemovesEveryCredentialMarkerThatLeaksInReports(t *testing.T) {
+	for _, substitution := range credentialSubstitutions {
+		planted := "the key is " + substitution.real + "0123456789abcdef and that is all of it"
+		scrubbed := Scrub(planted)
+		if leaks := LeaksIn(scrubbed); len(leaks) > 0 {
+			t.Errorf("%q survives its own scrub as %q, so Scrub and LeaksIn have drifted apart", substitution.real, leaks)
+		}
+		if !strings.Contains(scrubbed, substitution.scrubbed) {
+			t.Errorf("%q scrubbed to %q, which does not say what kind of credential was there", substitution.real, scrubbed)
+		}
+		if again := Scrub(scrubbed); again != scrubbed {
+			t.Errorf("scrubbing %q twice gave %q, so the replacement is not a fixed point", substitution.real, again)
+		}
+	}
+}
+
+func TestNothingScrubsIntoSomethingAnotherScrubWouldCatch(t *testing.T) {
+	var all []identitySubstitution
+	all = append(all, identitySubstitutions...)
+	all = append(all, credentialSubstitutions...)
+	for _, substitution := range all {
+		if leaks := LeaksIn(substitution.scrubbed); len(leaks) > 0 {
+			t.Errorf("%q is a replacement and it carries %q, so a scrubbed fixture reads as leaking", substitution.scrubbed, leaks)
+		}
+	}
+}

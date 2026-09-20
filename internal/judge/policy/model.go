@@ -71,8 +71,11 @@ func (t Thresholds) String() string {
 		t.RiskAskAt, t.RiskDenyAt, t.UserRequestedRelaxAt, t.ApprovalRelaxAt, t.FromUntrustedBlockAt)
 }
 
+const SchemaGate = "gate"
+
 type Policy struct {
 	Name                  string
+	Schema                string
 	PolicyVersion         int
 	Questions             string
 	QuestionsVersion      int
@@ -81,6 +84,7 @@ type Policy struct {
 	UserRequestedQuestion string
 	FromUntrustedQuestion string
 	Thresholds            Thresholds
+	ForeignThresholds     map[string]float64
 	Mode                  Mode
 	ModeDeclared          bool
 	SampleFloor           int
