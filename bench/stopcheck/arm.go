@@ -20,13 +20,10 @@ type Cheap struct {
 }
 
 func CheapArm(turn Turn, at int) Cheap {
-	step := turn.Steps[at]
-	switch {
-	case step.Index >= konst.TurnMaxSteps:
-		return Cheap{Stop, "the loop's own step cap"}
-	case len(step.Calls) == 0:
+	if len(turn.Steps[at].Calls) == 0 {
 		return Cheap{Stop, "the step called no tool, which is how the loop ends a turn today"}
-	case repeatsEarlierStep(turn, at):
+	}
+	if repeatsEarlierStep(turn, at) {
 		return Cheap{Stop, "every command in the step had already run earlier in this turn"}
 	}
 	return Cheap{Continue, "the step ran a command the turn had not run before"}
@@ -75,9 +72,6 @@ func StateAt(turn Turn, at int) state.StopCheckState {
 		}
 		built.RecentSteps = append(built.RecentSteps, converted)
 	}
-	built.Budget = state.StopCheckBudget{
-		AtStepCap:     turn.Steps[at].Index >= konst.TurnMaxSteps,
-		AtDecisionCap: decisions >= konst.TurnMaxDecisions,
-	}
+	built.Budget = state.StopCheckBudget{AtDecisionCap: decisions >= konst.TurnMaxDecisions}
 	return built
 }

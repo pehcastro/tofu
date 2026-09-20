@@ -1,0 +1,52 @@
+{
+  "id": "turn-18d69b4eeadf40e4",
+  "schema": 1,
+  "at": "2026-09-19T00:31:05.1766049-03:00",
+  "task": "create hello.txt containing the single word hello, then stop",
+  "model": "claude-opus-5",
+  "spend": "subscription",
+  "steps": [
+    {
+      "index": 1,
+      "tool_calls": [
+        {
+          "tool": "write",
+          "args": {
+            "path": "hello.txt",
+            "content": "hello\n"
+          },
+          "command": "write hello.txt",
+          "result_bytes": 26,
+          "rendered_bytes": 26,
+          "result_hash": "a86d0bb14dafa8a0220dd4be993775fa13b728ec1296ddc21838a408da410805",
+          "gate_decision_id": "2026-09-19-5b6c0a1f8c4d4536193c007bc0bfe31e",
+          "gate_verdict": "allow",
+          "duration_ms": 11
+        }
+      ],
+      "assistant_text": "I'll create that file for you.",
+      "stop_reason": "tool_use",
+      "prompt_tokens": 589,
+      "completion_tokens": 83,
+      "cache_read_tokens": 0,
+      "cache_write_tokens": 0,
+      "cost_usd": 0
+    },
+    {
+      "index": 2,
+      "assistant_text": "Created `hello.txt` containing the word `hello`.",
+      "stop_reason": "end_turn",
+      "prompt_tokens": 682,
+      "completion_tokens": 20,
+      "cache_read_tokens": 0,
+      "cache_write_tokens": 0,
+      "cost_usd": 0
+    }
+  ],
+  "outcome": "stopped",
+  "total_cost_usd": 0,
+  "wall_clock_ms": 2998,
+  "decision_ids": [
+    "2026-09-19-5b6c0a1f8c4d4536193c007bc0bfe31e"
+  ]
+}

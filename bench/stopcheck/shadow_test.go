@@ -64,7 +64,7 @@ func (g *shadowGate) Decide(_ context.Context, request turn.GateRequest) (turn.G
 		return turn.GateDecision{}, err
 	}
 	g.written = append(g.written, row)
-	return turn.GateDecision{ID: row.ID, Verdict: string(ledger.VerdictAllow)}, nil
+	return turn.GateDecision{ID: row.ID, Verdict: ledger.VerdictAllow}, nil
 }
 
 func stopNowAnswers(wording int) []ledger.Answer {

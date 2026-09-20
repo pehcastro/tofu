@@ -1,0 +1,11 @@
+{
+  "id": "turn-18d69b4aa36d9d2c",
+  "schema": 1,
+  "at": "2026-09-19T00:30:46.7981059-03:00",
+  "task": "say ok",
+  "model": "",
+  "spend": "subscription",
+  "outcome": "error",
+  "total_cost_usd": 0,
+  "wall_clock_ms": 501
+}

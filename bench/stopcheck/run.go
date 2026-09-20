@@ -91,6 +91,7 @@ func New(root, key string) (Battery, error) {
 		return Battery{}, fmt.Errorf("policy %s fails its own lint: %s", Point, findings[0])
 	}
 	resolution := policy.Resolve(pol, policy.LockLookup{}, policy.Current{})
+	pol = resolution.Policy
 
 	wire, err := openrouter.New(openrouter.Config{
 		Key: key,

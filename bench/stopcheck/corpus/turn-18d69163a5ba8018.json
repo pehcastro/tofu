@@ -1,0 +1,39 @@
+{
+  "id": "turn-18d69163a5ba8018",
+  "schema": 1,
+  "at": "2026-09-18T21:29:19.0946038-03:00",
+  "task": "Write a file called hello.txt containing the single word hello, then stop.",
+  "model": "anthropic/claude-fable-5.1",
+  "steps": [
+    {
+      "index": 1,
+      "tool_calls": [
+        {
+          "tool": "write",
+          "args": {
+            "path": "hello.txt",
+            "content": "hello"
+          },
+          "command": "write hello.txt",
+          "result_bytes": 26,
+          "rendered_bytes": 26,
+          "result_hash": "b8edbe8c3d8703c74b4251ebd92ca531cb9cbd8fdd33737b42b07d272f242a7a",
+          "duration_ms": 1
+        }
+      ],
+      "prompt_tokens": 569,
+      "completion_tokens": 71,
+      "cost_usd": 0.00924
+    },
+    {
+      "index": 2,
+      "assistant_text": "Done — `hello.txt` now contains the word `hello`.",
+      "prompt_tokens": 660,
+      "completion_tokens": 22,
+      "cost_usd": 0.0077
+    }
+  ],
+  "outcome": "stopped",
+  "total_cost_usd": 0.01694,
+  "wall_clock_ms": 10097
+}

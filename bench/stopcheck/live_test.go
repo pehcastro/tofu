@@ -19,7 +19,7 @@ func TestLiveBatteryOverEveryRecordedStep(t *testing.T) {
 	if err != nil {
 		t.Fatalf("no credential: %v", err)
 	}
-	turns, skipped, err := ReadSessions(sessionsDir)
+	turns, skipped, err := ReadSessions(corpusDir)
 	if err != nil {
 		t.Fatalf("ReadSessions: %v", err)
 	}

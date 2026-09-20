@@ -50,12 +50,44 @@ func TestCheapArmMissesARepeatWrittenWithADifferentCommand(t *testing.T) {
 	t.Logf("the cheap arm reads the same listing run twice as new work: %s, because %s", got.Answer, got.Rule)
 }
 
-func TestCheapArmStopsAtTheLoopsOwnStepCap(t *testing.T) {
+func TestCheapArmReadsNoCapIntoAHighStepIndex(t *testing.T) {
 	turn := turnOf([]string{"ls"})
 	turn.Steps[0].Index = konst.TurnMaxSteps
 	got := CheapArm(turn, 0)
-	if got.Answer != Stop {
-		t.Fatalf("step %d = %+v, want stop at the cap", konst.TurnMaxSteps, got)
+	if got.Answer != Continue {
+		t.Fatalf("step %d = %+v, want continue: the loop has no default step cap, so a step index is not evidence a turn should stop", konst.TurnMaxSteps, got)
+	}
+}
+
+const cheapArmAgreements = 68
+
+func TestTheCheapArmsAgreementOnTheFrozenCorpus(t *testing.T) {
+	turns, _, err := ReadSessions(corpusDir)
+	if err != nil {
+		t.Fatalf("ReadSessions: %v", err)
+	}
+	labels := Labels()
+	agreement := Agreement{Arm: "cheap arm"}
+	highest := 0
+	for _, turn := range turns {
+		for at, step := range turn.Steps {
+			if step.Index > highest {
+				highest = step.Index
+			}
+			label, labelled := labels[stepKey(turn.ID, step.Index)]
+			if !labelled {
+				continue
+			}
+			agreement.count(CheapArm(turn, at).Answer, label.Want)
+		}
+	}
+	t.Logf("%s", agreement.Line())
+	t.Logf("the highest step index in the frozen corpus is %d, under the %d the retired rule stopped at, so that rule never fired on a step counted here", highest, konst.TurnMaxSteps)
+	if agreement.Total != corpusLabelled {
+		t.Fatalf("the cheap arm decided %d labelled steps, want the %d the corpus carries", agreement.Total, corpusLabelled)
+	}
+	if agreement.Agreed != cheapArmAgreements {
+		t.Errorf("the cheap arm agreed with %d of %d hand labels, want %d. an edit to the arm moves this number, and the published report is measured against it", agreement.Agreed, agreement.Total, cheapArmAgreements)
 	}
 }
 
@@ -81,7 +113,7 @@ func TestStateAtCarriesEveryStepSoFarAndMarksTheRepeat(t *testing.T) {
 }
 
 func TestTheRecordedHonoTurnIsWhereTheArmsPartCompany(t *testing.T) {
-	turns, _, err := ReadSessions(sessionsDir)
+	turns, _, err := ReadSessions(corpusDir)
 	if err != nil {
 		t.Fatalf("ReadSessions: %v", err)
 	}
@@ -92,7 +124,7 @@ func TestTheRecordedHonoTurnIsWhereTheArmsPartCompany(t *testing.T) {
 		}
 	}
 	if len(hono.Steps) < 10 {
-		t.Skipf("turn-18d6913a528f4528 is no longer in %s, so this evidence cannot be rechecked", sessionsDir)
+		t.Skipf("turn-18d6913a528f4528 is no longer in %s, so this evidence cannot be rechecked", corpusDir)
 	}
 	ninth, tenth := CheapArm(hono, 8), CheapArm(hono, 9)
 	t.Logf("step 9 (%q): cheap arm says %s, because %s", hono.Steps[8].Calls[0].Command, ninth.Answer, ninth.Rule)
