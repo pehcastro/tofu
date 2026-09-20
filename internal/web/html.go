@@ -3,6 +3,7 @@ package web
 import (
 	"bytes"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 	"unicode"
@@ -67,6 +68,53 @@ func Units(contentType string, body []byte, base *url.URL) []Unit {
 		return units
 	}
 	return append([]Unit{{Kind: UnitHeading, Text: "# " + title}}, units...)
+}
+
+type Cut struct {
+	Units int
+	Bytes int
+}
+
+var (
+	numberedMarker = regexp.MustCompile(`^[0-9]+\. `)
+	pureLink       = regexp.MustCompile(`^[^|()]+\([a-z][a-z0-9+.-]*://[^()\s]+\)$`)
+)
+
+func Reduce(units []Unit) ([]Unit, Cut) {
+	if len(units) == 0 {
+		return units, Cut{}
+	}
+	kept := make([]Unit, 1, len(units))
+	kept[0] = units[0]
+	var cut Cut
+	for _, unit := range units[1:] {
+		if (unit.Kind == UnitItem || unit.Kind == UnitRow) && linkOnlyLine(stripMarker(unit.Text)) {
+			cut.Units++
+			cut.Bytes += len(unit.Text)
+			continue
+		}
+		kept = append(kept, unit)
+	}
+	return kept, cut
+}
+
+func stripMarker(text string) string {
+	body := strings.TrimSpace(text)
+	body = strings.TrimPrefix(body, "- ")
+	body = strings.TrimPrefix(body, "> ")
+	return numberedMarker.ReplaceAllString(body, "")
+}
+
+func linkOnlyLine(body string) bool {
+	if body == "" {
+		return false
+	}
+	for _, part := range strings.Split(body, " | ") {
+		if !pureLink.MatchString(strings.TrimSpace(part)) {
+			return false
+		}
+	}
+	return true
 }
 
 var blockTags = map[string]bool{

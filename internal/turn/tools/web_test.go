@@ -154,6 +154,31 @@ func TestAFetchedPageArrivesInTheRowAsUnitsRatherThanMarkup(t *testing.T) {
 	}
 }
 
+func TestAFetchedPageDropsLinkOnlyNavigationAndTheMessageSaysWhatWent(t *testing.T) {
+	server, _ := servePage(t, `<html><head><title>Notes</title></head><body><main>
+		<h1>Notes</h1><p>Read the guide for context.</p>
+		<ul>
+			<li><a href="/guide">Guide</a></li>
+			<li>See the <a href="/guide">Guide</a> for more</li>
+		</ul>
+	</main></body></html>`)
+
+	model := fetching(server.URL)
+	runWeb(t, model, tools.NewWeb(webLimits()), konst.TurnResultBytesCap, nil)
+	content := model.toolResult(t)
+	t.Logf("the model saw:\n%s", content)
+
+	if !strings.Contains(content, "dropped 1 units of navigation") {
+		t.Fatalf("the message does not say how many units and bytes went: %q", content)
+	}
+	if strings.Count(content, "Guide (") != 1 {
+		t.Fatalf("the link-only item did not go, or the kept one did too: %q", content)
+	}
+	if !strings.Contains(content, "for more") {
+		t.Fatal("the item holding a link and other text was removed")
+	}
+}
+
 func TestAPageTooLargeForTheResultCapBecomesAHandleRatherThanATruncation(t *testing.T) {
 	server, _ := servePage(t, "<html><body><main><h1>Long</h1>"+
 		strings.Repeat("<p>a paragraph that says nothing in particular.</p>", 400)+"</main></body></html>")

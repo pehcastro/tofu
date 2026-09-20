@@ -55,11 +55,15 @@ func (t webFetch) Run(ctx context.Context, raw json.RawMessage) (turn.Result, er
 	if err != nil {
 		return turn.Result{}, fmt.Errorf("fetch: %w", err)
 	}
-	body := web.Render(page.Units)
+	kept, cut := web.Reduce(page.Units)
+	body := web.Render(kept)
+	message := fmt.Sprintf("fetched %s: %d bytes of %s became %d units and %d bytes of text",
+		page.URL, page.RawBytes, page.ContentType, len(kept), len(body))
+	if cut.Units > 0 {
+		message += fmt.Sprintf(", dropped %d units of navigation, %d bytes", cut.Units, cut.Bytes)
+	}
 	return turn.Result{
-		Content: fmt.Sprintf("fetched %s: %d bytes of %s became %d units and %d bytes of text\n%s",
-			page.URL, page.RawBytes, page.ContentType, len(page.Units), len(body),
-			web.Untrusted("the web page "+page.URL, body)),
+		Content: message + "\n" + web.Untrusted("the web page "+page.URL, body),
 		Command: "fetch " + page.URL,
 	}, nil
 }
