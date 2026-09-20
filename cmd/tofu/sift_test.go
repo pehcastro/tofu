@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"tofu/bench/readworth"
+	"tofu/internal/konst"
 	"tofu/internal/sift"
 )
 
@@ -91,19 +93,60 @@ func TestSiftOffArmMarksEveryParagraphAndStaysReversible(t *testing.T) {
 	}
 }
 
-func TestSiftDefaultsToTheSignpostArmAndMakesNoCall(t *testing.T) {
-	rendered, summary, code := runSift(t, nil, "## What was built\n\nthe answer is four\n")
+func TestSiftDefaultsToTheLengthArmAndMakesNoCall(t *testing.T) {
+	short := "just four words here"
+	long := "this paragraph carries the real answer and runs well past the fifteen word floor on its own"
+	rendered, summary, code := runSift(t, nil, short+"\n\n"+long+"\n")
 	if code != exitOK {
 		t.Fatalf("tofu sift exited %d: %s", code, summary)
 	}
-	if !strings.HasPrefix(summary, "signpost: ") {
-		t.Fatalf("the default arm is not signpost: %q", summary)
+	if !strings.HasPrefix(summary, "length: ") {
+		t.Fatalf("the default arm is not length: %q", summary)
 	}
-	if !strings.Contains(rendered, "[sift:0 ") || !strings.Contains(rendered, "the answer is four") {
-		t.Fatalf("the signpost arm did not drop the heading and keep the answer:\n%s", rendered)
+	if !strings.Contains(rendered, "[sift:0 under the word floor]") {
+		t.Fatalf("the length arm did not remove the short paragraph:\n%s", rendered)
+	}
+	if !strings.Contains(rendered, long) {
+		t.Fatalf("the length arm dropped the paragraph over the floor:\n%s", rendered)
 	}
 	if !strings.Contains(summary, "$0.000000") {
 		t.Fatalf("the default arm spent money: %q", summary)
+	}
+}
+
+func TestSiftArmJevStillReachesTheJudgment(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	t.Setenv("OPENROUTER_KEY", "")
+
+	long := "one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen"
+	_, errOut, code := runSift(t, []string{"--arm", armJev}, long+"\n")
+	if code != exitUsage {
+		t.Fatalf("tofu sift --arm jev exited %d, want %d: %s", code, exitUsage, errOut)
+	}
+	if !strings.Contains(errOut, "OPENROUTER_KEY") {
+		t.Fatalf("the jev arm did not reach key resolution, so it did not run the judgment: %q", errOut)
+	}
+}
+
+func TestTheLengthFloorMatchesTheBenchArm(t *testing.T) {
+	if konst.SiftReadWorthWordFloor != 15 {
+		t.Fatalf("bench/readworth/report-2026-09-21.md measured the winning floor at 15 words, konst carries %d", konst.SiftReadWorthWordFloor)
+	}
+	cases := []string{
+		"",
+		"one two three four five six seven eight nine ten eleven twelve thirteen fourteen",
+		"one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen",
+		`I'll write a file called hello.txt with the word "hello".`,
+		"**`src/store.ts`** -- `done` -> `completed`, added `priority: Priority` (`'low' | 'normal' | 'high'`, defaulting to `'normal'` in `create`), added a `TaskFilter` type, and `list(filter)` now does the filtering itself. Every caller passes a filter.",
+	}
+	for _, text := range cases {
+		bench := readworth.ArmLength(readworth.Row{Paragraph: text}, konst.SiftReadWorthWordFloor)
+		binary := sift.Length(sift.Part{Text: text})
+		if bench.Keep != binary.Keep {
+			t.Fatalf("%q: bench arm kept=%v, binary arm kept=%v", text, bench.Keep, binary.Keep)
+		}
 	}
 }
 

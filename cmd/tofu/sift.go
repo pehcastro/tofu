@@ -19,10 +19,34 @@ import (
 const siftPoint = "read_worth@1"
 
 const (
+	armLength   = "length"
 	armSignpost = "signpost"
 	armBrevity  = "brevity"
 	armJev      = "jev"
 )
+
+var siftUsage = fmt.Sprintf(`tofu sift marks each paragraph of standard input as kept or elided.
+
+Arms:
+  length    default. drop a paragraph under a %d-word floor, keep the rest.
+            no live call. bench/readworth/report-2026-09-21.md measured this
+            arm at 87.1%% accuracy and more bytes saved than jev, on both
+            live runs against the same corpus.
+  signpost  drop a markdown heading, or a short line ending in a colon.
+            no live call.
+  brevity   flag banned words, a scorecard, a run of bold, an opening that
+            agrees. no live call.
+  jev       ask read_worth@1 to score answers_the_task against the padding
+            questions. one live call per paragraph, with cost and latency.
+            it lost the readworth bench on accuracy at equal savings; kept
+            reachable because a corpus is not a proof for all time.
+
+Flags:
+  --arm NAME    length (default), signpost, brevity or jev
+  --task TEXT   the reader's request, read by the jev arm only
+  --restore     undo a previous sift, reading the fence back to the original
+  --no-log      with --arm jev, skip the decision ledger
+`, konst.SiftReadWorthWordFloor)
 
 type siftOpts struct {
 	task    string
@@ -32,6 +56,10 @@ type siftOpts struct {
 }
 
 func siftVerb(args []string, in io.Reader, out, errOut io.Writer) int {
+	if len(args) > 0 && (args[0] == "--help" || args[0] == "-h") {
+		_, _ = io.WriteString(out, siftUsage)
+		return exitOK
+	}
 	opts, err := parseSiftArgs(args)
 	if err != nil {
 		return siftFail(errOut, err)
@@ -80,18 +108,25 @@ func siftVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 }
 
 func siftMarks(parts []sift.Part, opts siftOpts) ([]sift.Mark, float64, error) {
-	marks := make([]sift.Mark, len(parts))
-	if opts.arm != armJev {
-		judge := sift.Signpost
-		if opts.arm == armBrevity {
-			judge = sift.Cheap
-		}
-		for i, p := range parts {
-			marks[i] = judge(p)
-		}
-		return marks, 0, nil
+	if opts.arm == armJev {
+		return siftJev(parts, opts)
 	}
+	judge := sift.Length
+	switch opts.arm {
+	case armSignpost:
+		judge = sift.Signpost
+	case armBrevity:
+		judge = sift.Cheap
+	}
+	marks := make([]sift.Mark, len(parts))
+	for i, p := range parts {
+		marks[i] = judge(p)
+	}
+	return marks, 0, nil
+}
 
+func siftJev(parts []sift.Part, opts siftOpts) ([]sift.Mark, float64, error) {
+	marks := make([]sift.Mark, len(parts))
 	set, err := resolveCatalog(siftPoint)
 	if err != nil {
 		return nil, 0, err
@@ -177,17 +212,17 @@ func siftFail(errOut io.Writer, err error) int {
 }
 
 func parseSiftArgs(args []string) (siftOpts, error) {
-	opts := siftOpts{arm: armSignpost}
+	opts := siftOpts{arm: armLength}
 	for i := 0; i < len(args); i++ {
 		switch args[i] {
 		case "--arm":
 			i++
 			if i >= len(args) {
-				return siftOpts{}, fmt.Errorf("--arm needs one of %s, %s or %s", armSignpost, armBrevity, armJev)
+				return siftOpts{}, fmt.Errorf("--arm needs one of %s, %s, %s or %s", armLength, armSignpost, armBrevity, armJev)
 			}
 			opts.arm = args[i]
-			if opts.arm != armSignpost && opts.arm != armBrevity && opts.arm != armJev {
-				return siftOpts{}, fmt.Errorf("%q is not an arm; the arms are %s, %s and %s", opts.arm, armSignpost, armBrevity, armJev)
+			if opts.arm != armLength && opts.arm != armSignpost && opts.arm != armBrevity && opts.arm != armJev {
+				return siftOpts{}, fmt.Errorf("%q is not an arm; the arms are %s, %s, %s and %s", opts.arm, armLength, armSignpost, armBrevity, armJev)
 			}
 		case "--restore":
 			opts.restore = true

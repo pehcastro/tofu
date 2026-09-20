@@ -45,19 +45,22 @@ const (
 )
 
 const (
-	TurnAttemptTimeoutMillis = 30000
-	TurnRetries              = 1
-	TurnBackoffMillis        = 250
-	TurnMaxBackoffMillis     = 2000
-	TurnResultBytesCap       = 32768
-	IgnoreFileBytesCap       = 65536
-	ProjectInstructionsBytes = 16384
-	TurnParallelToolCalls    = 4
-	TurnMaxSteps             = 40
-	TurnMaxDecisions         = 40
-	TurnLoopGuardRepeats     = 3
-	TurnLoopGuardWindow      = 6
-	SubscriptionCacheTTL     = "1h"
+	TurnAttemptTimeoutMillis      = 30000
+	TurnRetries                   = 4
+	TurnBackoffMillis             = 250
+	TurnMaxBackoffMillis          = 2000
+	TurnBackoffGrowth             = 2
+	TurnBackoffJitterFraction     = 0.2
+	TurnTotalBackoffCeilingMillis = 15000
+	TurnResultBytesCap            = 32768
+	IgnoreFileBytesCap            = 65536
+	ProjectInstructionsBytes      = 16384
+	TurnParallelToolCalls         = 4
+	TurnMaxSteps                  = 40
+	TurnMaxDecisions              = 40
+	TurnLoopGuardRepeats          = 3
+	TurnLoopGuardWindow           = 6
+	SubscriptionCacheTTL          = "1h"
 
 	VerbMaxDepth      = 2
 	VerbTimeoutMillis = 120000
@@ -86,8 +89,9 @@ const (
 )
 
 const (
-	SiftConcurrency     = 4
-	SiftSignpostWordCap = 8
+	SiftConcurrency        = 4
+	SiftSignpostWordCap    = 8
+	SiftReadWorthWordFloor = 15
 
 	BrevityWordCap    = 120
 	BrevityBoldCap    = 3
