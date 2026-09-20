@@ -91,13 +91,66 @@ func TestTheSplitIsAPureFunctionOfTheIdAndTheLabel(t *testing.T) {
 }
 
 func TestTheCorpusIsAsciiBecauseTheRepositoryRefusesAnEmDash(t *testing.T) {
-	raw, err := gateFiles.ReadFile("gate/cases.jsonl")
-	if err != nil {
-		t.Fatal(err)
+	for _, name := range []string{"gate/cases.jsonl", "gate/cases-whole.jsonl"} {
+		raw, err := gateFiles.ReadFile(name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for i, b := range raw {
+			if b > 127 {
+				t.Fatalf("%s byte %d is 0x%x, the corpus must be ascii", name, i, b)
+			}
+		}
 	}
-	for i, b := range raw {
-		if b > 127 {
-			t.Fatalf("byte %d is 0x%x, the corpus must be ascii", i, b)
+}
+
+func TestEveryCutCommandWasRecoveredWholeBesideTheCaseThatCarriesItCut(t *testing.T) {
+	records, err := GateRecords()
+	if err != nil {
+		t.Fatalf("loading the corpus: %v", err)
+	}
+	whole, err := GateWholeCommandRecords()
+	if err != nil {
+		t.Fatalf("loading the recovered commands: %v", err)
+	}
+	cut := CutCommands(records)
+	if len(cut) != 33 || len(records) != 178 {
+		t.Fatalf("%d of %d cases carry a cut command, the report states 33 of 178", len(cut), len(records))
+	}
+	split, err := GateSplit()
+	if err != nil {
+		t.Fatalf("loading the split: %v", err)
+	}
+	heldOutCut := 0
+	for _, id := range split.Heldout {
+		if cut[id] {
+			heldOutCut++
+		}
+	}
+	if heldOutCut != 14 {
+		t.Errorf("%d of the held-out cases carry a cut command, the report states 14", heldOutCut)
+	}
+	t.Logf("%d of %d cases carry a command cut at recording time, %d of the %d held out, %d recovered whole", len(cut), len(records), heldOutCut, len(split.Heldout), len(whole))
+	if len(whole) != len(cut) {
+		t.Fatalf("%d cases were recovered whole for %d cut commands", len(whole), len(cut))
+	}
+	recorded := map[string]Record{}
+	for _, record := range records {
+		recorded[record.ID] = record
+	}
+	for _, record := range whole {
+		original, known := recorded[record.ID]
+		switch {
+		case !known:
+			t.Errorf("%s was recovered whole and is not in the corpus", record.ID)
+		case !cut[record.ID]:
+			t.Errorf("%s was recovered whole and its recorded command was never cut", record.ID)
+		case strings.Contains(record.Command(), TruncationMark):
+			t.Errorf("%s still carries %q after recovery", record.ID, TruncationMark)
+		case len(record.Command()) <= len(original.Command()):
+			t.Errorf("%s recovered to %d characters from %d", record.ID, len(record.Command()), len(original.Command()))
+		case record.Label != original.Label || record.LabelBy != original.LabelBy || record.LabelNote != original.LabelNote:
+			t.Errorf("%s changed its label, and this ticket changes no label", record.ID)
 		}
 	}
 }

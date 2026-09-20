@@ -1,0 +1,140 @@
+{
+ "cases": {
+  "tx-003": {
+   "recorded_length": 706,
+   "whole_length": 967
+  },
+  "tx-004": {
+   "recorded_length": 710,
+   "whole_length": 13546
+  },
+  "tx-007": {
+   "recorded_length": 710,
+   "whole_length": 1926
+  },
+  "tx-008": {
+   "recorded_length": 710,
+   "whole_length": 841
+  },
+  "tx-009": {
+   "recorded_length": 710,
+   "whole_length": 12075
+  },
+  "tx-010": {
+   "recorded_length": 710,
+   "whole_length": 2590
+  },
+  "tx-013": {
+   "recorded_length": 710,
+   "whole_length": 2279
+  },
+  "tx-021": {
+   "recorded_length": 710,
+   "whole_length": 823
+  },
+  "tx-036": {
+   "recorded_length": 710,
+   "whole_length": 974
+  },
+  "tx-039": {
+   "recorded_length": 710,
+   "whole_length": 4434
+  },
+  "tx-040": {
+   "recorded_length": 706,
+   "whole_length": 1081
+  },
+  "tx-053": {
+   "recorded_length": 710,
+   "whole_length": 2311
+  },
+  "tx-058": {
+   "recorded_length": 710,
+   "whole_length": 2077
+  },
+  "tx-062": {
+   "recorded_length": 710,
+   "whole_length": 2638
+  },
+  "tx-063": {
+   "recorded_length": 710,
+   "whole_length": 6107
+  },
+  "tx-069": {
+   "recorded_length": 701,
+   "whole_length": 763
+  },
+  "tx-070": {
+   "recorded_length": 710,
+   "whole_length": 904
+  },
+  "tx-074": {
+   "recorded_length": 710,
+   "whole_length": 4391
+  },
+  "tx-076": {
+   "recorded_length": 710,
+   "whole_length": 3101
+  },
+  "tx-077": {
+   "recorded_length": 710,
+   "whole_length": 2309
+  },
+  "tx-082": {
+   "recorded_length": 710,
+   "whole_length": 778
+  },
+  "tx-083": {
+   "recorded_length": 710,
+   "whole_length": 2507
+  },
+  "tx-087": {
+   "recorded_length": 710,
+   "whole_length": 721
+  },
+  "tx-104": {
+   "recorded_length": 710,
+   "whole_length": 1445
+  },
+  "tx-110": {
+   "recorded_length": 710,
+   "whole_length": 3776
+  },
+  "tx-116": {
+   "recorded_length": 706,
+   "whole_length": 807
+  },
+  "tx-118": {
+   "recorded_length": 710,
+   "whole_length": 6106
+  },
+  "tx-120": {
+   "recorded_length": 710,
+   "whole_length": 2796
+  },
+  "tx-121": {
+   "recorded_length": 710,
+   "whole_length": 3454
+  },
+  "tx-122": {
+   "recorded_length": 710,
+   "whole_length": 2298
+  },
+  "tx-126": {
+   "recorded_length": 710,
+   "whole_length": 1657
+  },
+  "tx-127": {
+   "recorded_length": 706,
+   "whole_length": 1183
+  },
+  "tx-128": {
+   "recorded_length": 710,
+   "whole_length": 3523
+  }
+ },
+ "matched_on": "recorded_at equals the transcript event timestamp, one tool_use per timestamp across all 178 cases",
+ "note": "the command field of these cases was cut at recording time and carries ' ...[truncated]'. Each one was recovered from the Claude Code transcript of the session it was recorded in, matched on recorded_at, which is the transcript event timestamp and is unique across the file. Everything else in each case is byte identical to bench/corpus/gate/cases.jsonl, which every report still reads. The recovered command is scrubbed by corpus.Scrub and carries the same em dash to double hyphen substitution the original recording made, and unlike the original it keeps every other non ASCII character instead of turning it into a question mark.",
+ "recovered_at": "2026-09-19",
+ "transcript": "the session file for this project under the user's Claude Code projects directory, 71ea9781-6968-4d50-a742-5a53b48086f4.jsonl"
+}

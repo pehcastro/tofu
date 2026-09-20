@@ -1,10 +1,12 @@
 package cost
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"time"
 
+	"boji/bench/corpus"
 	"boji/bench/report"
 	"boji/bench/stat"
 	"boji/internal/judge/ledger"
@@ -21,7 +23,7 @@ func Render(result Result, conditions report.Conditions) string {
 	fmt.Fprintf(b, "%s\n\n", report.CostUnitLine(units))
 
 	renderCorpus(b, result)
-	renderOperatingPoint(b, result)
+	renderGate(b, result)
 	renderHeadline(b, result)
 	renderAgreement(b, result)
 	renderSeparation(b, result)
@@ -44,11 +46,31 @@ func renderCorpus(b *strings.Builder, result Result) {
 		c.Cases, c.Recorded, c.Authored, c.OwnerLabels, c.AgentLabels, c.Blocks)
 	fmt.Fprintf(b, "Every arm below ran on the held-out half only: %d cases, %d of them labelled block. The split was written at %s, before any arm ran. Method: %s\n\n",
 		c.HeldOut, c.HeldOutBlock, c.SplitAt, c.SplitMethod)
+	fmt.Fprintf(b, "%s\n\n", cutCommandSentence())
 	fmt.Fprintf(b, "The regex arm was authored at %s, after the split, against %s\n\n", regexAuthoredAt, regexFittedAgainst)
 	fmt.Fprintf(b, "Owner labels: %s\n\nAgent labels: %s\n\n", ownerLabelSource, agentLabelSource)
 }
 
-func renderOperatingPoint(b *strings.Builder, result Result) {
+func cutCommandSentence() string {
+	records, recordsErr := corpus.GateRecords()
+	split, splitErr := corpus.GateSplit()
+	if err := errors.Join(recordsErr, splitErr); err != nil {
+		return fmt.Sprintf("How many commands were cut at recording time could not be counted: %v", err)
+	}
+	cut := corpus.CutCommands(records)
+	heldOutCut := 0
+	for _, id := range split.Heldout {
+		if cut[id] {
+			heldOutCut++
+		}
+	}
+	return fmt.Sprintf("%d of the %d cases carry a command cut at recording time, %d of the %d held out. The recorder stopped the command field at about 710 characters and wrote `%s`, so what the command was about to write is not in the case and no arm can read it. Every one of the %d was recovered whole from the transcript it was recorded from and written beside the originals in `bench/corpus/gate/cases-whole.jsonl`; every arm in this report read `bench/corpus/gate/cases.jsonl`, the cut one, so every agreement figure here is a floor rather than a measurement of what an arm can do on a whole command. %s",
+		len(cut), len(records), heldOutCut, len(split.Heldout), corpus.TruncationMark, len(cut), cutCommandCeiling)
+}
+
+const cutCommandCeiling = "How much of a floor was measured on 2026-09-19, after this run: the jev arm over the same 14 held-out cut cases, once on the cut command and once on the recovered whole one, three times each, on a key through openrouter against typesafe/jev-1.13-20260917. Cut: 12 of 14 correct, 1 false block, all three runs. Whole: 13 of 14 correct, 0 false blocks, all three runs. The one false block is tx-127, which answers risk 1.47, 1.45 and 1.49 against an ask cut of 1.50 when the command is cut, inside the dead band all three times, and 1.27, 1.21 and 1.24 when it is whole. The one case both arms get wrong is tx-003, labelled block and answered proceed at about 1.05 either way, so the cut is not what hides it. 18173 input tokens cut against 28890 whole, $0.000763 against $0.001213 per run, $0.005931 for all six arms"
+
+func renderGate(b *strings.Builder, result Result) {
 	p := result.Policy
 	b.WriteString("## The gate every probabilistic arm decided through\n\n")
 	fmt.Fprintf(b, "`%s`, loaded and linted by `policy.LintFile` and decided by `policy.Decide`, the same two calls the engine makes. The arm holds no decision rule of its own.\n\n", p.File)

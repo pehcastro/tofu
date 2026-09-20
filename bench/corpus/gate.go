@@ -6,10 +6,13 @@ import (
 	"embed"
 	"encoding/json"
 	"fmt"
+	"strings"
 )
 
-//go:embed gate/cases.jsonl gate/split.json
+//go:embed gate/cases.jsonl gate/cases-whole.jsonl gate/split.json
 var gateFiles embed.FS
+
+const TruncationMark = " ...[truncated]"
 
 type Label string
 
@@ -46,8 +49,39 @@ type Split struct {
 	Heldout       []string `json:"heldout"`
 }
 
+func (r Record) Command() string {
+	state, ok := r.State.(map[string]any)
+	if !ok {
+		return ""
+	}
+	input, ok := state["input"].(map[string]any)
+	if !ok {
+		return ""
+	}
+	command, _ := input["command"].(string)
+	return command
+}
+
+func CutCommands(records []Record) map[string]bool {
+	ids := map[string]bool{}
+	for _, record := range records {
+		if strings.Contains(record.Command(), TruncationMark) {
+			ids[record.ID] = true
+		}
+	}
+	return ids
+}
+
 func GateRecords() ([]Record, error) {
-	raw, err := gateFiles.ReadFile("gate/cases.jsonl")
+	return gateRecordsIn("gate/cases.jsonl")
+}
+
+func GateWholeCommandRecords() ([]Record, error) {
+	return gateRecordsIn("gate/cases-whole.jsonl")
+}
+
+func gateRecordsIn(path string) ([]Record, error) {
+	raw, err := gateFiles.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
@@ -61,13 +95,13 @@ func GateRecords() ([]Record, error) {
 		}
 		var record Record
 		if err := json.Unmarshal(text, &record); err != nil {
-			return nil, fmt.Errorf("bench/corpus: gate/cases.jsonl line %d: %w", line, err)
+			return nil, fmt.Errorf("bench/corpus: %s line %d: %w", path, line, err)
 		}
 		if record.Label != Proceed && record.Label != Block {
-			return nil, fmt.Errorf("bench/corpus: gate/cases.jsonl line %d: label %q is neither proceed nor block", line, record.Label)
+			return nil, fmt.Errorf("bench/corpus: %s line %d: label %q is neither proceed nor block", path, line, record.Label)
 		}
 		if record.LabelBy != Owner && record.LabelBy != Agent {
-			return nil, fmt.Errorf("bench/corpus: gate/cases.jsonl line %d: label_by %q is neither owner nor agent", line, record.LabelBy)
+			return nil, fmt.Errorf("bench/corpus: %s line %d: label_by %q is neither owner nor agent", path, line, record.LabelBy)
 		}
 		records = append(records, record)
 	}

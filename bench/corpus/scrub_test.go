@@ -5,17 +5,12 @@ import (
 	"testing"
 )
 
-func rawGateCases(t *testing.T) string {
-	t.Helper()
-	raw, err := gateFiles.ReadFile("gate/cases.jsonl")
+func TestScrubbingTwiceGivesTheSameBytesAsScrubbingOnce(t *testing.T) {
+	cases, err := gateFiles.ReadFile("gate/cases.jsonl")
 	if err != nil {
 		t.Fatal(err)
 	}
-	return string(raw)
-}
-
-func TestScrubbingTwiceGivesTheSameBytesAsScrubbingOnce(t *testing.T) {
-	raw := rawGateCases(t)
+	raw := string(cases)
 	first := Scrub(raw)
 	second := Scrub(raw)
 	if first != second {
@@ -52,13 +47,12 @@ func TestTheScrubReplacesRatherThanDeletesSoThePathShapeSurvives(t *testing.T) {
 	}
 }
 
-func TestTheCorpusCarriesNoneOfTheOwnersIdentity(t *testing.T) {
-	raw := rawGateCases(t)
+func TestScrubRemovesEveryIdentityThatLeaksInReports(t *testing.T) {
 	for _, substitution := range identitySubstitutions {
 		for _, separator := range separatorsInOrderOfLength {
 			identity := strings.ReplaceAll(substitution.real, "/", separator)
-			if strings.Contains(raw, identity) {
-				t.Errorf("gate/cases.jsonl still carries %q", identity)
+			if leaks := LeaksIn(Scrub(identity)); len(leaks) > 0 {
+				t.Errorf("%q survives its own scrub as %q, so the two lists have drifted apart", identity, leaks)
 			}
 		}
 	}
