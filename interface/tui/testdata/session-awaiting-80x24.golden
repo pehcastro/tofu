@@ -1,0 +1,24 @@
+[38;5;252;48;5;236mboji test  ·  silo  ·  develop  ·  anthropic → claude-opus-5  ·  14:32 00:00[m[48;5;236m    [m
+[38;5;39m1 session[m   [38;5;240m2 crew[m   [38;5;240m3 file edits[m   [38;5;240m6 settings[m                                  
+[38;5;240m· type a task and press enter. boji works in silo[m                               
+[38;5;39m» push the branch[m                                                               
+[38;5;245m⟩ bash git push --force origin main                                    [m  [38;5;214mask[m  [38;5;39m0s[m
+[38;5;245m    approval        0.75  ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░░░[m                                  
+[38;5;245m    from_untrusted  0.02  ░░░░░░░░░░░░░░░░░░░░[m                                  
+[38;5;245m    risk            2.00  ▓▓▓▓▓▓▓▓▓▓▓▓▓░░░░░░░[m                                  
+[38;5;245m    user_requested  0.11  ▓▓░░░░░░░░░░░░░░░░░░[m                                  
+[38;5;240m    risk 2.00 is over risk_ask_at 1.50[m                                          
+[38;5;214m    [a] allow once   [d] deny   [A] always here[m                                 
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+[38;5;39m⠋ 0s   [m  [38;5;252mwaiting   [m[38;5;44mbash git push --force origin main                            [m
+[38;5;236m────────────────────────────────────────────────────────────────────────────────[m
+[40m[37m▏ [m[m[40m[38;5;240mw[m[m[40m[38;5;240mhat should boji do here?[m[m[40m                                                     [m
+[38;5;240m[37m▏ [m[m[30m [m                                                                             
+[38;5;240m[37m▏ [m[m[30m [m                                                                             
+[38;5;240mctrl+c stops the turn   ⏎ send   ⇧⏎ newline   / commands   ctrl+o detail[m        
+[38;5;252;48;5;236mcontext unread  ·  quota unread  ·  ⇅ 0/0  ·  jev 0[m[48;5;236m                             [m

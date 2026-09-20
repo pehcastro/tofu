@@ -1,0 +1,445 @@
+package tui
+
+import (
+	"context"
+	"fmt"
+	"strconv"
+	"strings"
+	"testing"
+	"time"
+
+	tea "charm.land/bubbletea/v2"
+
+	app "boji/interface/tui"
+	"boji/interface/tui/crew"
+	"boji/interface/tui/frame"
+	"boji/interface/tui/paste"
+	"boji/interface/tui/session"
+	"boji/interface/tui/settings"
+)
+
+const (
+	benchWidth          = 120
+	benchHeight         = 36
+	benchTranscript     = 200
+	benchLongTranscript = 10000
+	benchCrew           = 6
+	benchCrewCalls      = 60
+)
+
+func benchApp() *app.App {
+	at := time.Date(2026, 9, 19, 14, 32, 0, 0, time.UTC)
+	built := app.New(app.Options{
+		Repo:    "silo",
+		Branch:  "develop",
+		Release: "test",
+		Wires:   func() []app.Wire { return []app.Wire{{Name: "anthropic", Model: "claude-opus-5"}} },
+		Paths:   benchRepoPaths,
+		Now:     func() time.Time { return at },
+		Turn:    func(context.Context, string, string, func(app.Event)) {},
+		Providers: []settings.Provider{
+			{Name: "anthropic", State: "oauth  62% of the 7d window, resets 18:00", Source: "the credential store"},
+			{Name: "openrouter", Key: "sk-or-v1-77c1f0b6e5a94d2f8badc0ffee1234567890abcd", State: "ok", Source: ".env at ~/.boji/.env"},
+			{Name: "jev", State: "build jev-2026-09-01", Source: "the last decision"},
+			{Name: "codex", Fix: "boji login codex", Source: "nothing is stored"},
+		},
+	})
+	built.Init()
+	built.Update(tea.WindowSizeMsg{Width: benchWidth, Height: benchHeight})
+	built.Update(app.Event{Kind: app.EventContext, Context: frame.Context{Used: 118000, Budget: 250000}})
+	built.Update(app.Event{Kind: app.EventForkStart})
+	for step := range benchTranscript {
+		call := "c" + strconv.Itoa(step)
+		built.Update(app.Event{Kind: app.EventToolCall, ID: call, Tool: "read",
+			Text: "internal/judge/policy/toolgate.go line " + strconv.Itoa(step)})
+		built.Update(app.Event{Kind: app.EventToolResult, ID: call, Text: "412 lines, 11.8 KB"})
+	}
+	return built
+}
+
+func BenchmarkSessionView(b *testing.B) {
+	built := benchApp()
+	if built.View().Cursor == nil {
+		b.Fatal("the bench is not measuring a frame that places the cursor")
+	}
+	b.ReportAllocs()
+	for b.Loop() {
+		_ = built.View()
+	}
+}
+
+const benchMessages = 20
+
+const benchAnswer = "## the gate\n\nThe **gate** reads `toolgate.go` before the policy.\n\n" +
+	"```go\nfunc Decide(answers Answers) Verdict\n```\n\n" +
+	"- a question is asked once\n- a verdict is always logged\n\n" +
+	"| point | verdict |\n| --- | --- |\n| tool_gate | ask |\n"
+
+func BenchmarkSessionViewWithProse(b *testing.B) {
+	built := benchApp()
+	for range benchMessages {
+		built.Update(app.Event{Kind: app.EventText, Text: benchAnswer})
+	}
+	if !strings.Contains(built.View().Content, "toolgate.go") {
+		b.Fatal("the bench is not measuring a transcript of rendered messages")
+	}
+	b.ReportAllocs()
+	for b.Loop() {
+		_ = built.View()
+	}
+}
+
+func benchLongApp(b *testing.B, keys ...tea.KeyPressMsg) *app.App {
+	b.Helper()
+	built := benchApp()
+	for step := range benchLongTranscript {
+		built.Update(app.Event{Kind: app.EventToolCall, ID: "long" + strconv.Itoa(step), Tool: "read",
+			Text: "toolgate.go line " + strconv.Itoa(step)})
+	}
+	built.Update(openKey())
+	for _, key := range keys {
+		built.Update(key)
+	}
+	return built
+}
+
+const benchRun = 100
+
+func openKey() tea.KeyPressMsg { return tea.KeyPressMsg{Code: 'o', Mod: tea.ModCtrl} }
+
+func benchRunApp(b *testing.B) *app.App {
+	b.Helper()
+	built := benchApp()
+	for step := range benchRun {
+		call := "run" + strconv.Itoa(step)
+		built.Update(app.Event{Kind: app.EventToolCall, ID: call, Tool: "read",
+			Text: "internal/judge/policy/toolgate.go line " + strconv.Itoa(step)})
+		built.Update(app.Event{Kind: app.EventToolResult, ID: call, Text: "412 lines, 11.8 KB", Bytes: 11800})
+	}
+	built.Update(app.Event{Kind: app.EventText, Text: "the gate reads the policy before the wire."})
+	return built
+}
+
+func BenchmarkSessionViewCollapsedRun(b *testing.B) {
+	built := benchRunApp(b)
+	if !strings.Contains(built.View().Content, " tools, ") {
+		b.Fatal("the bench is not measuring a collapsed run")
+	}
+	b.ReportAllocs()
+	for b.Loop() {
+		_ = built.View()
+	}
+}
+
+func BenchmarkSessionViewOpenRun(b *testing.B) {
+	built := benchRunApp(b)
+	built.Update(openKey())
+	if !strings.Contains(built.View().Content, "toolgate.go line ") {
+		b.Fatal("the bench is not measuring an opened run")
+	}
+	b.ReportAllocs()
+	for b.Loop() {
+		_ = built.View()
+	}
+}
+
+func BenchmarkSessionViewLongTranscriptAtTheTail(b *testing.B) {
+	built := benchLongApp(b)
+	if !strings.Contains(built.View().Content, "line "+strconv.Itoa(benchLongTranscript-1)) {
+		b.Fatal("the bench is not measuring the tail of the long transcript")
+	}
+	b.ReportAllocs()
+	for b.Loop() {
+		_ = built.View()
+	}
+}
+
+func BenchmarkSessionViewLongTranscriptScrolledBack(b *testing.B) {
+	built := benchLongApp(b, tea.KeyPressMsg{Code: tea.KeyHome})
+	if !strings.Contains(built.View().Content, "scrolled back") {
+		b.Fatal("the bench is not measuring a scrolled transcript")
+	}
+	b.ReportAllocs()
+	for b.Loop() {
+		_ = built.View()
+	}
+}
+
+func BenchmarkSessionScrollLongTranscript(b *testing.B) {
+	built := benchLongApp(b)
+	b.ReportAllocs()
+	for b.Loop() {
+		built.Update(tea.KeyPressMsg{Code: tea.KeyPgUp})
+		built.Update(tea.KeyPressMsg{Code: tea.KeyPgDown})
+	}
+}
+
+const (
+	benchPastes    = 3
+	benchPastedFmt = "turn-19a2b3c4d5-image-0%d.png"
+	benchPastedLen = 1_482_304
+)
+
+func BenchmarkSessionViewWithPastedImages(b *testing.B) {
+	built := benchApp()
+	for image := range benchPastes {
+		built.Update(tea.KeyPressMsg{Code: 'v', Mod: tea.ModCtrl})
+		built.Update(paste.Outcome{
+			Index: image + 1,
+			State: paste.Ready,
+			Name:  fmt.Sprintf(benchPastedFmt, image+1),
+			Bytes: benchPastedLen,
+		})
+	}
+	if !strings.Contains(built.View().Content, fmt.Sprintf(benchPastedFmt, benchPastes)) {
+		b.Fatal("the bench is not measuring a frame holding three pasted images")
+	}
+	b.ReportAllocs()
+	for b.Loop() {
+		_ = built.View()
+	}
+}
+
+func benchDecision(verdict session.Verdict) *session.Decision {
+	return &session.Decision{
+		Tool:    "read",
+		Verdict: verdict,
+		Answers: []session.Answer{
+			{Question: "approval", Value: 0.75, Max: 1},
+			{Question: "from_untrusted", Value: 0.02, Max: 1},
+			{Question: "risk", Value: 2, Max: 3},
+			{Question: "user_requested", Value: 0.11, Max: 1},
+		},
+		Reason: session.Reason{Question: "risk", Limit: "risk_ask_at", Threshold: 1.5, Value: 2},
+	}
+}
+
+func BenchmarkSessionViewWithDecisions(b *testing.B) {
+	built := benchApp()
+	for step := range benchTranscript {
+		verdict := session.Allow
+		if step%2 == 1 {
+			verdict = session.Ask
+		}
+		built.Update(app.Event{Kind: app.EventDecision, Decision: benchDecision(verdict)})
+	}
+	b.ReportAllocs()
+	for b.Loop() {
+		_ = built.View()
+	}
+}
+
+func benchSend(built *app.App, task string) {
+	for _, letter := range task {
+		built.Update(tea.KeyPressMsg{Code: letter, Text: string(letter)})
+	}
+	built.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+}
+
+const benchQueued = 3
+
+func BenchmarkSessionViewWithThreeQueuedMessages(b *testing.B) {
+	built := benchApp()
+	benchSend(built, "why does the gate read the policy first?")
+	for step := range benchQueued {
+		benchSend(built, "and then read internal/point/toolgate"+strconv.Itoa(step)+".go")
+	}
+	if !strings.Contains(built.View().Content, "waiting") {
+		b.Fatal("the bench is not measuring a frame carrying a queue")
+	}
+	b.ReportAllocs()
+	for b.Loop() {
+		_ = built.View()
+	}
+}
+
+func BenchmarkSessionViewAwaitingAnAnswer(b *testing.B) {
+	built := benchApp()
+	benchSend(built, "push the branch")
+	built.Update(app.Event{Kind: app.EventToolCall, ID: "ask", Tool: "read", Text: "internal/judge/policy/toolgate.go"})
+	built.Update(app.Event{Kind: app.EventDecision, Decision: benchDecision(session.Ask)})
+	built.Update(app.Event{Kind: app.EventAwaitPerson})
+	if !strings.Contains(built.View().Content, "always here") {
+		b.Fatal("the bench is not measuring a frame that waits on an answer")
+	}
+	b.ReportAllocs()
+	for b.Loop() {
+		_ = built.View()
+	}
+}
+
+func benchChildren() []crew.Child {
+	children := make([]crew.Child, 0, benchCrew)
+	for index := range benchCrew {
+		child := crew.Child{
+			Name:   "go-dev-" + strconv.Itoa(index),
+			Owns:   []string{"internal/judge/**", "internal/point/" + strconv.Itoa(index) + "/**"},
+			Doing:  "writing internal/judge/policy/toolgate.go",
+			Since:  time.Duration(index) * time.Minute,
+			Steps:  index,
+			Total:  benchCrew,
+			State:  crew.State(index % 3),
+			Tokens: 181000 - index*1000,
+			Report: "renamed the interface and its five implementations, and one call site still reaches the old name through an alias.",
+		}
+		for step := range benchCrewCalls {
+			child.Calls = append(child.Calls, crew.Call{
+				Tool:   "edit",
+				Text:   "internal/judge/policy/toolgate.go line " + strconv.Itoa(step),
+				Result: "+18 -4",
+			})
+		}
+		children = append(children, child)
+	}
+	return children
+}
+
+func BenchmarkSessionViewWithTheActivityBlock(b *testing.B) {
+	built := benchApp()
+	built.Update(app.Event{Kind: app.EventCrew, Children: benchChildren()})
+	built.Update(app.Event{Kind: app.EventToolCall, ID: "live", Tool: "bash", Text: "go test ./internal/..."})
+	if !strings.Contains(built.View().Content, "go-dev-0") {
+		b.Fatal("the bench is not measuring a frame carrying the activity block")
+	}
+	b.ReportAllocs()
+	for b.Loop() {
+		_ = built.View()
+	}
+}
+
+func BenchmarkSessionViewWithTheCommandMenuOpen(b *testing.B) {
+	built := benchApp()
+	for _, letter := range "/se" {
+		built.Update(tea.KeyPressMsg{Code: letter, Text: string(letter)})
+	}
+	if !strings.Contains(built.View().Content, "/settings") {
+		b.Fatal("the bench is not measuring a frame carrying the command menu")
+	}
+	b.ReportAllocs()
+	for b.Loop() {
+		_ = built.View()
+	}
+}
+
+const benchPaths = 5000
+
+func benchRepoPaths() []string {
+	paths := make([]string, 0, benchPaths)
+	for index := range benchPaths {
+		paths = append(paths, "internal/judge/policy/toolgate"+strconv.Itoa(index)+".go")
+	}
+	return paths
+}
+
+func BenchmarkSessionViewWithThePathMenuOpen(b *testing.B) {
+	built := benchApp()
+	built.Update(built.Init()())
+	for _, letter := range "read @toolgate" + strconv.Itoa(benchPaths-1) {
+		built.Update(tea.KeyPressMsg{Code: letter, Text: string(letter)})
+	}
+	if !strings.Contains(built.View().Content, "@internal/judge/policy/toolgate"+strconv.Itoa(benchPaths-1)+".go") {
+		b.Fatal("the bench is not measuring a frame carrying the path menu")
+	}
+	b.ReportAllocs()
+	for b.Loop() {
+		_ = built.View()
+	}
+}
+
+func BenchmarkCrewView(b *testing.B) {
+	built := benchApp()
+	built.Update(app.Event{Kind: app.EventCrew, Children: benchChildren()})
+	built.Update(tea.KeyPressMsg{Code: '2', Mod: tea.ModAlt})
+	built.Update(tea.KeyPressMsg{Code: tea.KeyDown})
+	if !strings.Contains(built.View().Content, "ownership") {
+		b.Fatal("the bench is not measuring the crew view")
+	}
+	b.ReportAllocs()
+	for b.Loop() {
+		_ = built.View()
+	}
+}
+
+const benchEditDiff = "--- internal/judge/policy/toolgate.go\n" +
+	"+++ internal/judge/policy/toolgate.go\n" +
+	"@@ -40,6 +40,7 @@\n" +
+	" func Decide(answers Answers) Verdict {\n" +
+	"\tif answers.Risk > thresholds.RiskAskAt {\n" +
+	"-\t\treturn Ask\n" +
+	"+\t\treturn AskWithReason(answers)\n" +
+	"\t}\n" +
+	"\treturn Allow\n" +
+	"}\n"
+
+func benchEditsApp(b *testing.B) *app.App {
+	b.Helper()
+	built := benchApp()
+	built.Update(app.Event{Kind: app.EventCrew, Children: benchChildren()})
+	for step := range benchTranscript {
+		id := "edit" + strconv.Itoa(step)
+		path := "internal/judge/policy/toolgate" + strconv.Itoa(step) + ".go"
+		built.Update(app.Event{Kind: app.EventToolCall, ID: id, Tool: "edit", Text: path})
+		built.Update(app.Event{Kind: app.EventToolResult, ID: id, Text: "9 lines, 210 bytes",
+			Agent: benchChildren()[step%benchCrew].Name, Diff: benchEditDiff})
+	}
+	built.Update(tea.KeyPressMsg{Code: '3', Mod: tea.ModAlt})
+	return built
+}
+
+func BenchmarkFileEditsView(b *testing.B) {
+	built := benchEditsApp(b)
+	if !strings.Contains(built.View().Content, "AskWithReason") {
+		b.Fatal("the bench is not measuring a file edits view holding diffs")
+	}
+	b.ReportAllocs()
+	for b.Loop() {
+		_ = built.View()
+	}
+}
+
+const benchCreatedLines = 500
+
+func BenchmarkFileEditsViewWithACreatedFile(b *testing.B) {
+	built := benchEditsApp(b)
+	var content strings.Builder
+	for line := range benchCreatedLines {
+		content.WriteString("\tcase konst.Limit" + strconv.Itoa(line) + ": return konst.Limit" + strconv.Itoa(line) + "\n")
+	}
+	built.Update(app.Event{Kind: app.EventToolCall, ID: "created", Tool: "write", Text: "internal/konst/konst.go"})
+	built.Update(app.Event{Kind: app.EventToolResult, ID: "created", Text: "created internal/konst/konst.go",
+		Created: content.String()})
+	if !strings.Contains(built.View().Content, "+500 -0") {
+		b.Fatal("the bench is not measuring a file edits view holding a created file")
+	}
+	b.ReportAllocs()
+	for b.Loop() {
+		_ = built.View()
+	}
+}
+
+func BenchmarkFileEditsViewFilteredToOneAgent(b *testing.B) {
+	built := benchEditsApp(b)
+	built.Update(tea.KeyPressMsg{Code: tea.KeyDown})
+	built.Update(tea.KeyPressMsg{Code: tea.KeyDown})
+	b.ReportAllocs()
+	for b.Loop() {
+		_ = built.View()
+	}
+}
+
+func BenchmarkStrip(b *testing.B) {
+	strip := frame.Strip{Views: []frame.View{{Digit: '1', Name: "session"}, {Digit: '6', Name: "settings"}}}
+	b.ReportAllocs()
+	for b.Loop() {
+		_ = strip.Render(benchWidth)
+	}
+}
+
+func BenchmarkSettingsView(b *testing.B) {
+	built := benchApp()
+	built.Update(tea.KeyPressMsg{Code: '6', Mod: tea.ModAlt})
+	b.ReportAllocs()
+	for b.Loop() {
+		_ = built.View()
+	}
+}
