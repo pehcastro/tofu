@@ -6,12 +6,16 @@ const (
 	ContextCeilingTokens = 250000
 
 	BandShareWhole      = 10000
-	BandIdentityShare   = 160
-	BandFactsShare      = 0
-	BandWorkingSetShare = 640
+	BandIdentityShare   = 480
+	BandFactsShare      = 120
+	BandWorkingSetShare = 720
 	BandRecentShare     = 1200
 
+	MessageFramingTokens = 40
+
 	CarrySignpostBytes = 120
+	FactSignpostBytes  = 64
+	FactSheetLines     = 64
 )
 
 const (

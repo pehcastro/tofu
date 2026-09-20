@@ -16,10 +16,7 @@ type Bands struct {
 
 const bandShareOfWindow = konst.BandIdentityShare + konst.BandFactsShare + konst.BandWorkingSetShare + konst.BandRecentShare
 
-const widestCeilingTokens = konst.ContextCeilingTokens * konst.BandShareWhole / bandShareOfWindow
-
-func BandsOf(ceilingTokens int) Bands {
-	ceiling := min(ceilingTokens, widestCeilingTokens)
+func BandsOf(ceiling int) Bands {
 	return Bands{
 		Identity:   ceiling * konst.BandIdentityShare / konst.BandShareWhole,
 		Facts:      ceiling * konst.BandFactsShare / konst.BandShareWhole,
@@ -46,8 +43,23 @@ type Entry struct {
 
 type Conversation struct {
 	Instructions string
+	ToolSchemas  string
 	Facts        []string
 	Entries      []Entry
+}
+
+type Bill struct {
+	CacheRead int
+	Fresh     int
+}
+
+func (b Bill) Total() int {
+	return b.CacheRead + b.Fresh
+}
+
+func Billed(cachedPrefixTokens, requestTokens int) Bill {
+	read := min(cachedPrefixTokens, requestTokens)
+	return Bill{CacheRead: read, Fresh: requestTokens - read}
 }
 
 type Occupancy struct {
@@ -91,17 +103,17 @@ func OccupancyTable(o Occupancy) string {
 }
 
 func Measure(cfg Config, bands Bands, c Conversation) Occupancy {
-	occupancy := Occupancy{Bands: bands, Identity: cfg.Tokens(c.Instructions)}
+	occupancy := Occupancy{Bands: bands, Identity: cfg.Tokens(c.Instructions) + cfg.Tokens(c.ToolSchemas)}
 	for _, fact := range c.Facts {
 		occupancy.Facts += cfg.Tokens(fact)
 	}
 	recent := recentFrom(cfg, bands, c.Entries)
 	for i, entry := range c.Entries {
 		if i < recent {
-			occupancy.WorkingSet += cfg.Tokens(entry.Text)
+			occupancy.WorkingSet += cfg.MessageTokens(entry.Text)
 			continue
 		}
-		occupancy.Recent += cfg.Tokens(entry.Text)
+		occupancy.Recent += cfg.MessageTokens(entry.Text)
 	}
 	return occupancy
 }
@@ -113,7 +125,7 @@ func recentFrom(cfg Config, bands Bands, entries []Entry) int {
 	newestStep := entries[len(entries)-1].Step
 	tokens := 0
 	for i := len(entries) - 1; i >= 0; i-- {
-		tokens += cfg.Tokens(entries[i].Text)
+		tokens += cfg.MessageTokens(entries[i].Text)
 		if tokens > bands.Recent && entries[i].Step != newestStep {
 			return i + 1
 		}

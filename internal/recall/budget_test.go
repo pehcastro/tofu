@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"tofu/internal/konst"
 	"tofu/internal/recall"
 )
 
@@ -28,10 +29,10 @@ func TestTheRecentBandHoldsTheNewestStepWholeEvenWhenItIsOversized(t *testing.T)
 	}
 
 	occupancy := recall.Measure(cfg, bands, conversation)
-	if occupancy.Recent != 1000 {
-		t.Fatalf("recent band = %d tokens, want both entries of step 2, 1000 tokens", occupancy.Recent)
+	if occupancy.Recent != 1000+2*konst.MessageFramingTokens {
+		t.Fatalf("recent band = %d tokens, want both entries of step 2, 1000 tokens of text and the framing the wire puts around each one", occupancy.Recent)
 	}
-	if occupancy.WorkingSet != 500 {
-		t.Fatalf("working set = %d tokens, want the single step 1 entry, 500 tokens", occupancy.WorkingSet)
+	if occupancy.WorkingSet != 500+konst.MessageFramingTokens {
+		t.Fatalf("working set = %d tokens, want the single step 1 entry, 500 tokens of text and its framing", occupancy.WorkingSet)
 	}
 }

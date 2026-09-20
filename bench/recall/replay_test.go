@@ -4,14 +4,15 @@ import (
 	"path/filepath"
 	"testing"
 
+	"tofu/internal/konst"
 	rc "tofu/internal/recall"
 )
 
 var (
 	armNothing   = Arm{Name: "nothing"}
 	armRewrite   = Arm{Name: "in place rewrite", Rewrite: true}
-	armHandles   = Arm{Name: "fork, handles", Carry: rc.HandleCarry}
-	armDistilled = Arm{Name: "fork, distilled", Carry: rc.DistilledCarry}
+	armHandles   = Arm{Name: "fork, handles", Carry: rc.HandleCarry, Signpost: konst.FactSignpostBytes}
+	armDistilled = Arm{Name: "fork, distilled", Carry: rc.DistilledCarry, Signpost: konst.CarrySignpostBytes}
 )
 
 func recordedTurn(t *testing.T) (rc.Config, Session) {
@@ -62,8 +63,8 @@ func TestOccupancyOfARecordedTurnAgainstTheFourBands(t *testing.T) {
 				band.name, band.cap)
 		}
 		if band.occupied > band.cap {
-			t.Fatalf("the %s band peaked at %d tokens against a %d cap, so the cap was not set from this turn",
-				band.name, band.occupied, band.cap)
+			t.Fatalf("the %s band peaked at %d tokens against a %d cap, so the shares in konst were not set from this turn and another band is holding the room it needs:\n%s",
+				band.name, band.occupied, band.cap, rc.OccupancyTable(result.Peak))
 		}
 	}
 }
@@ -72,12 +73,14 @@ func TestTheEstimatorTracksTheTokensTheProviderActuallyBilled(t *testing.T) {
 	cfg, session := recordedTurn(t)
 	result := replay(t, cfg, rc.ShippedBands(), session, armNothing)
 
-	worst, worstStep := 0.0, 0
+	worst, worstStep, sheet := 0.0, 0, 0
 	for _, step := range result.Steps {
 		if step.RecordedTokens < 200 {
 			continue
 		}
-		off := float64(step.InputTokens-step.RecordedTokens) / float64(step.RecordedTokens)
+		sheet += step.FactsTokens
+		asRecorded := step.InputTokens - step.FactsTokens
+		off := float64(asRecorded-step.RecordedTokens) / float64(step.RecordedTokens)
 		if off < 0 {
 			off = -off
 		}
@@ -85,7 +88,8 @@ func TestTheEstimatorTracksTheTokensTheProviderActuallyBilled(t *testing.T) {
 			worst, worstStep = off, step.Index
 		}
 	}
-	t.Logf("worst per step error %.1f%% at step %d", worst*100, worstStep)
+	t.Logf("worst per step error %.1f%% at step %d, over a conversation the estimator reads at %d tokens and the fact sheet the run itself never carried at %d",
+		worst*100, worstStep, result.InputTokens(), sheet)
 	if worst > 0.15 {
 		t.Fatalf("the estimator is %.1f%% off the billed tokens at step %d: the budget would be measuring the wrong thing", worst*100, worstStep)
 	}

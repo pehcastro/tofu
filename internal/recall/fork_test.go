@@ -47,7 +47,7 @@ func TestTheCarryNamesEveryResultAndHoldsEachOneWholeInTheStore(t *testing.T) {
 func TestCrossedIsTheTargetAndNotTheCeiling(t *testing.T) {
 	cfg := recall.Config{BytesPerThousandTokens: 1000, CompactFloorBytes: 8}
 	bands := recall.Bands{Identity: 10, Facts: 0, WorkingSet: 100, Recent: 100}
-	under := recall.Conversation{Entries: []recall.Entry{{Step: 1, Text: strings.Repeat("a", 200)}}}
+	under := recall.Conversation{Entries: []recall.Entry{{Step: 1, Text: strings.Repeat("a", 100)}}}
 	over := recall.Conversation{Entries: []recall.Entry{
 		{Step: 1, Text: strings.Repeat("a", 200000)},
 		{Step: 2, Text: "now"},

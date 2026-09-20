@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"tofu/internal/konst"
 	rc "tofu/internal/recall"
 	"tofu/internal/sys"
 )
@@ -54,6 +55,7 @@ func ReadSession(path string) (Session, error) {
 type ReplayStep struct {
 	Index           int
 	InputTokens     int
+	FactsTokens     int
 	RecordedTokens  int
 	CacheReadTokens int
 	FreshTokens     int
@@ -62,6 +64,7 @@ type ReplayStep struct {
 
 type ForkRow struct {
 	Step          int
+	Carry         rc.Carry
 	TokensBefore  int
 	TokensAfter   int
 	CarryTokens   int
@@ -95,9 +98,10 @@ func callSource(call SessionCall) string {
 type CarryBuilder func(*rc.Store, rc.Config, rc.Conversation) (rc.Carry, error)
 
 type Arm struct {
-	Name    string
-	Rewrite bool
-	Carry   CarryBuilder
+	Name     string
+	Rewrite  bool
+	Carry    CarryBuilder
+	Signpost int
 }
 
 type ReplayResult struct {
@@ -153,13 +157,10 @@ func (r ReplayResult) FreshTokens() int {
 }
 
 func cachedPrefixTokens(cfg rc.Config, previous, current rc.Conversation) int {
-	if previous.Instructions != current.Instructions || !slices.Equal(previous.Facts, current.Facts) {
+	if previous.Instructions != current.Instructions {
 		return 0
 	}
 	tokens := cfg.Tokens(current.Instructions)
-	for _, fact := range current.Facts {
-		tokens += cfg.Tokens(fact)
-	}
 	for i, entry := range current.Entries {
 		if i >= len(previous.Entries) || previous.Entries[i].Text != entry.Text {
 			break
@@ -173,6 +174,7 @@ func ReplaySession(store *rc.Store, cfg rc.Config, bands rc.Bands, session Sessi
 	if len(session.Steps) == 0 {
 		return ReplayResult{}, errors.New("recall: a session with no steps has nothing to replay")
 	}
+	signpostBytes := cmp.Or(arm.Signpost, konst.FactSignpostBytes)
 	unrecordedPrefixBytes := session.Steps[0].CacheReadTokens * cfg.BytesPerThousandTokens / 1000
 	instructions := session.Task + strings.Repeat(".", unrecordedPrefixBytes)
 	conversation := rc.Conversation{Instructions: instructions}
@@ -181,7 +183,7 @@ func ReplaySession(store *rc.Store, cfg rc.Config, bands rc.Bands, session Sessi
 	var sent rc.Conversation
 	seen := make(map[string]bool)
 	carried := make(map[string]bool)
-	var carryText string
+	var newSessionText string
 	for _, step := range session.Steps {
 		occupancy := rc.Measure(cfg, bands, conversation)
 		if occupancy.Total() > result.Peak.Total() {
@@ -191,11 +193,12 @@ func ReplaySession(store *rc.Store, cfg rc.Config, bands rc.Bands, session Sessi
 		result.Steps = append(result.Steps, ReplayStep{
 			Index:           step.Index,
 			InputTokens:     occupancy.Total(),
+			FactsTokens:     occupancy.Facts,
 			RecordedTokens:  step.PromptTokens + step.CacheReadTokens,
 			CacheReadTokens: cached,
 			FreshTokens:     occupancy.Total() - cached,
 		})
-		sent = rc.Conversation{Instructions: conversation.Instructions, Facts: conversation.Facts, Entries: slices.Clone(conversation.Entries)}
+		sent = rc.Conversation{Instructions: conversation.Instructions, Entries: slices.Clone(conversation.Entries)}
 		assistant := step.AssistantText
 		for _, call := range step.ToolCalls {
 			assistant += "\n" + call.Tool + " " + string(call.Args)
@@ -210,7 +213,7 @@ func ReplaySession(store *rc.Store, cfg rc.Config, bands rc.Bands, session Sessi
 					Step:   step.Index,
 					Source: source,
 					Bytes:  call.RenderedBytes,
-					Named:  strings.Contains(carryText, source),
+					Named:  strings.Contains(newSessionText, source),
 				})
 			}
 			seen[source] = true
@@ -221,6 +224,11 @@ func ReplaySession(store *rc.Store, cfg rc.Config, bands rc.Bands, session Sessi
 				Text:         recordedBody(call),
 			})
 		}
+		sheet, _, err := rc.Distil(store, conversation, signpostBytes)
+		if err != nil {
+			return ReplayResult{}, err
+		}
+		conversation.Facts = sheet
 		if arm.Carry != nil && rc.Crossed(cfg, bands, conversation) {
 			started := time.Now()
 			carry, err := arm.Carry(store, cfg, conversation)
@@ -228,16 +236,25 @@ func ReplaySession(store *rc.Store, cfg rc.Config, bands rc.Bands, session Sessi
 				return ReplayResult{}, err
 			}
 			before := rc.Measure(cfg, bands, conversation).Total()
-			conversation = rc.Conversation{Instructions: instructions + "\n" + carry.Text}
-			carried, carryText = maps.Clone(seen), carry.Text
+			conversation = rc.Conversation{
+				Instructions: instructions,
+				Facts:        sheet,
+				Entries: []rc.Entry{
+					{Step: step.Index, Text: session.Task},
+					{Step: step.Index, Text: aboveTheSheet(carry.Text, sheet)},
+				},
+			}
+			carried = maps.Clone(seen)
+			newSessionText = strings.Join(append(slices.Clone(sheet), carry.Text), "\n")
 			named := 0
 			for source := range carried {
-				if strings.Contains(carryText, source) {
+				if strings.Contains(newSessionText, source) {
 					named++
 				}
 			}
 			result.Forks = append(result.Forks, ForkRow{
 				Step:          step.Index,
+				Carry:         carry,
 				TokensBefore:  before,
 				TokensAfter:   rc.Measure(cfg, bands, conversation).Total(),
 				CarryTokens:   cfg.Tokens(carry.Text),
@@ -295,6 +312,20 @@ func Extend(session Session, steps int) Session {
 		longer.Steps = append(longer.Steps, step)
 	}
 	return longer
+}
+
+func aboveTheSheet(carry string, sheet []string) string {
+	inBand := make(map[string]bool, len(sheet))
+	for _, line := range sheet {
+		inBand[line] = true
+	}
+	var left []string
+	for _, line := range strings.Split(carry, "\n") {
+		if !inBand[strings.TrimSpace(line)] {
+			left = append(left, line)
+		}
+	}
+	return strings.Join(left, "\n")
 }
 
 func recordedBody(call SessionCall) string {

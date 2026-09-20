@@ -15,85 +15,65 @@ type Budget struct {
 	Model         string
 	CeilingTokens int
 	Bands         Bands
+	WindowTokens  int
+	WindowSource  string
 	Automatic     bool
 	Source        string
 }
 
-func contextWindows() (map[string]int, error) {
-	data, err := catalog.ReadFile("data/context-window-tokens.yaml")
-	if err != nil {
-		return nil, err
+func BudgetFor(model string, windowTokens int) (Budget, error) {
+	budget := Budget{Model: model, WindowTokens: windowTokens, Automatic: true}
+	text := strings.TrimSpace(os.Getenv(CeilingVariable))
+	if text == "" {
+		return budget.At(konst.ContextCeilingTokens, "the ceiling tofu operates under, which is ours and the same on every model"), nil
 	}
-	return numbersByName(data)
+	set, err := strconv.Atoi(text)
+	if err != nil || set <= 0 {
+		return Budget{}, fmt.Errorf("recall: %s is %q, and it takes a count of tokens above zero, as in %s=20000", CeilingVariable, text, CeilingVariable)
+	}
+	return budget.At(set, fmt.Sprintf("%s=%d in the environment of this run", CeilingVariable, set)), nil
 }
 
-func windowOf(windows map[string]int, model string) (int, bool) {
-	if window, recorded := windows[model]; recorded {
-		return window, true
-	}
-	window, matches := 0, 0
-	for name, tokens := range windows {
-		if _, bare, qualified := strings.Cut(name, "/"); qualified && bare == model {
-			window, matches = tokens, matches+1
-		}
-	}
-	return window, matches == 1
-}
-
-func setCeiling() (int, error) {
-	text, set := os.LookupEnv(CeilingVariable)
-	if !set || strings.TrimSpace(text) == "" {
-		return 0, nil
-	}
-	ceiling, err := strconv.Atoi(strings.TrimSpace(text))
-	if err != nil || ceiling <= 0 {
-		return 0, fmt.Errorf("recall: %s is %q, and it takes a count of tokens above zero, as in %s=20000", CeilingVariable, text, CeilingVariable)
-	}
-	return ceiling, nil
-}
-
-func BudgetFor(model string) (Budget, error) {
-	ceiling, err := setCeiling()
-	if err != nil {
-		return Budget{}, err
-	}
-	if ceiling > 0 {
-		return Budget{
-			Model:         model,
-			CeilingTokens: ceiling,
-			Bands:         BandsOf(ceiling),
-			Automatic:     true,
-			Source:        fmt.Sprintf("%s=%d in the environment of this run", CeilingVariable, ceiling),
-		}, nil
-	}
-	windows, err := contextWindows()
-	if err != nil {
-		return Budget{}, err
-	}
-	window, recorded := windowOf(windows, model)
-	if !recorded || window <= 0 {
-		return Budget{Model: model, Bands: ShippedBands(), Source: "no context window is recorded for " + model}, nil
-	}
-	return Budget{
-		Model:         model,
-		CeilingTokens: window,
-		Bands:         BandsOf(window),
-		Automatic:     true,
-		Source:        fmt.Sprintf("the recorded %d token context window of %s", window, model),
-	}, nil
+func (b Budget) At(ceilingTokens int, source string) Budget {
+	b.CeilingTokens, b.Bands, b.Source = ceilingTokens, BandsOf(ceilingTokens), source
+	return b
 }
 
 func (b Budget) Record() string {
-	if !b.Automatic {
-		return fmt.Sprintf("off, %s: the budget is not read from a window, nothing is compacted or forked on a token count, "+
-			"and an unfamiliar model is not truncated on its first step. the bands shown are the shipped ones "+
-			"and they measure occupancy without acting on it. set %s to a token count to compact on purpose",
-			b.Source, CeilingVariable)
+	return fmt.Sprintf("on, %s: a %d token ceiling gives a %d token target, %d parts of %d. %s",
+		b.Source, b.CeilingTokens, b.Bands.Target(), bandShareOfWindow, konst.BandShareWhole, b.wall())
+}
+
+func (b Budget) wall() string {
+	if b.WindowTokens <= 0 {
+		return "no context window is recorded for " + b.Model +
+			", so nothing is refused for being over the wall and the ceiling above still compacts"
 	}
-	return fmt.Sprintf("on, %s: a %d token ceiling gives a %d token target, %d parts of %d",
-		b.Source, b.CeilingTokens, b.Bands.Target(), bandShareOfWindow, konst.BandShareWhole)
+	wall := fmt.Sprintf("a request over the %d token window of %s is refused before it is sent", b.WindowTokens, b.Model)
+	if b.WindowSource == "" {
+		return wall
+	}
+	return wall + ", " + b.WindowSource
 }
 
 func (b Budget) Crossed(cfg Config, c Conversation) bool {
-	return b.Automatic && Crossed(cfg, b.Bands, c)
+	return Crossed(cfg, b.Bands, c)
+}
+
+type OverWindow struct {
+	Model         string
+	WindowTokens  int
+	RequestTokens int
+}
+
+func (o *OverWindow) Error() string {
+	return fmt.Sprintf("%s holds %d tokens and this request is about %d, so it was not sent",
+		o.Model, o.WindowTokens, o.RequestTokens)
+}
+
+func (b Budget) RefuseOverWindow(requestTokens int) error {
+	if b.WindowTokens <= 0 || requestTokens <= b.WindowTokens {
+		return nil
+	}
+	return &OverWindow{Model: b.Model, WindowTokens: b.WindowTokens, RequestTokens: requestTokens}
 }

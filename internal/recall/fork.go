@@ -1,7 +1,6 @@
 package recall
 
 import (
-	"fmt"
 	"strings"
 	"unicode"
 
@@ -18,15 +17,9 @@ type CarriedResult struct {
 
 type Carry struct {
 	Text    string          `json:"text"`
+	Facts   []string        `json:"facts,omitempty"`
 	Results []CarriedResult `json:"results"`
 }
-
-type carryDetail int
-
-const (
-	carryNames carryDetail = iota
-	carrySignposts
-)
 
 func Crossed(cfg Config, bands Bands, c Conversation) bool {
 	return Measure(cfg, bands, c).Total() > bands.Target()
@@ -35,61 +28,39 @@ func Crossed(cfg Config, bands Bands, c Conversation) bool {
 const carryPreamble = "this session continues one that reached its context budget and ended. " +
 	"the session that ended is on disk whole and nothing in it was rewritten. " +
 	"every result it read is held whole in an artifact, and artifact_fetch reads any range of one by its handle.\n" +
-	"what it did, in order:\n"
+	"what this line of sessions has already looked at, oldest first:\n"
 
 const carryLastWord = "the last thing it said or did:\n"
 
 func HandleCarry(store *Store, cfg Config, c Conversation) (Carry, error) {
-	return buildCarry(store, cfg, c, carryNames)
+	return buildCarry(store, c, konst.FactSignpostBytes)
 }
 
 func DistilledCarry(store *Store, cfg Config, c Conversation) (Carry, error) {
-	return buildCarry(store, cfg, c, carrySignposts)
+	return buildCarry(store, c, konst.CarrySignpostBytes)
 }
 
-func buildCarry(store *Store, cfg Config, c Conversation, detail carryDetail) (Carry, error) {
-	var carry Carry
+func buildCarry(store *Store, c Conversation, signpostBytes int) (Carry, error) {
+	facts, kept, err := Distil(store, c, signpostBytes)
+	if err != nil {
+		return Carry{}, err
+	}
 	text := &strings.Builder{}
 	text.WriteString(carryPreamble)
-	for _, entry := range c.Entries {
-		if entry.Tool == "" {
-			continue
-		}
-		stored := len(entry.Text) >= cfg.CompactFloorBytes
-		if !stored && detail == carryNames {
-			continue
-		}
-		handle := entry.Handle
-		if handle == "" && stored {
-			put, err := store.put([]byte(entry.Text))
-			if err != nil {
-				return Carry{}, fmt.Errorf("recall: the fork could not store the %s result from step %d: %w", entry.Tool, entry.Step, err)
-			}
-			handle = put
-		}
-		result := CarriedResult{Tool: entry.Tool, Key: entry.SupersedeKey, Bytes: len(entry.Text), Handle: handle}
-		fmt.Fprintf(text, "  step %d %s: %d bytes", entry.Step, oneLine(entry.SupersedeKey), result.Bytes)
-		if handle != "" {
-			fmt.Fprintf(text, ", artifact %s", handle)
-		}
-		if detail == carrySignposts {
-			result.Signpost = oneLine(entry.Text)
-			fmt.Fprintf(text, "\n    it came back: %s", result.Signpost)
-		}
+	for _, line := range facts {
+		text.WriteString(line)
 		text.WriteString("\n")
-		carry.Results = append(carry.Results, result)
 	}
 	text.WriteString(carryLastWord)
 	text.WriteString(lastWord(c))
-	carry.Text = text.String()
-	return carry, nil
+	return Carry{Text: text.String(), Facts: facts, Results: kept}, nil
 }
 
-func oneLine(text string) string {
+func oneLine(text string, limit int) string {
 	var line strings.Builder
 	gap := false
 	for _, letter := range text {
-		if line.Len() >= konst.CarrySignpostBytes {
+		if line.Len() >= limit {
 			return line.String() + " ..."
 		}
 		if unicode.IsSpace(letter) {

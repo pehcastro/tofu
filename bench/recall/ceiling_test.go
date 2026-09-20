@@ -13,8 +13,9 @@ import (
 )
 
 const (
-	setCeilingTokens = 20000
-	replayedModel    = "claude-opus-5"
+	setCeilingTokens    = 20000
+	replayedModel       = "claude-opus-5"
+	replayedModelWindow = 1000000
 )
 
 func budgetAt(t *testing.T, ceiling int) rc.Budget {
@@ -22,7 +23,7 @@ func budgetAt(t *testing.T, ceiling int) rc.Budget {
 	if ceiling > 0 {
 		t.Setenv(rc.CeilingVariable, strconv.Itoa(ceiling))
 	}
-	budget, err := rc.BudgetFor(replayedModel)
+	budget, err := rc.BudgetFor(replayedModel, replayedModelWindow)
 	if err != nil {
 		t.Fatalf("budget for %s: %v", replayedModel, err)
 	}

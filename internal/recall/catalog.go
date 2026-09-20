@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+
+	"tofu/internal/konst"
 )
 
 //go:embed data
@@ -25,6 +27,10 @@ const (
 
 func (c Config) Tokens(text string) int {
 	return len(text) * 1000 / c.BytesPerThousandTokens
+}
+
+func (c Config) MessageTokens(text string) int {
+	return c.Tokens(text) + konst.MessageFramingTokens
 }
 
 func LoadConfig() (Config, error) {
