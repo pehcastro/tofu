@@ -1,0 +1,23 @@
+name: page_sift
+questions_version: 1
+
+state:
+  - task
+  - url
+  - units
+
+questions:
+  still_needed:
+    type: noul
+    instructions: >-
+      A unit from a page fetched to help with a task, one of many carried in
+      state.units. Judge only the unit at this question's own index against
+      the task that caused the fetch: still needed, or not.
+    criteria:
+      true: >-
+        It carries a fact, value, name or step the task needs, or the next
+        step has to act on it.
+      false: >-
+        It is navigation, a footer, a cookie notice, decoration, or it
+        repeats a fact another unit already gives, and the task does not
+        need it.

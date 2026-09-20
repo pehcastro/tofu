@@ -1,0 +1,11 @@
+name: page_sift
+schema: page_sift
+policy_version: 1
+questions: page_sift
+questions_version: 1
+mode: shadow
+sample_floor: 21
+notes: shadow until a number says otherwise, so the sieve records what it would have removed and the model is given the page whole. one request per page carries a noul for every candidate unit, following the frontier shape in komikat_psearch rather than one call per unit. a unit carrying a code block is the only kind held out of judgment in code; the page title and every heading are ordinary candidates, because TOFU-236 found both to be unsafe assumptions. internal/sift reads it. keep_at is a prior and not a fit, chosen at the middle of the noul range because nothing has been calibrated on fetched pages yet.
+
+thresholds:
+  keep_at: 0.5

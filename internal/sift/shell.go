@@ -27,6 +27,7 @@ const (
 	HeldExit      Held = "the exit status"
 	HeldFirstUnit Held = "the first unit"
 	HeldLastUnit  Held = "the last unit"
+	HeldCode      Held = "a code block"
 )
 
 type Unit struct {
