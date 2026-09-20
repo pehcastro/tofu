@@ -8,6 +8,23 @@ Boji is personal and not released, so the public interface that a version promis
 
 The minor number carries breaking changes, which is what 0.x means, and **there is never a 1.0.0**. The owner decided that on 2026-09-19: this stays 0.x forever, so the promise the version makes is the one 0.x already makes, that anything can break on a minor bump.
 
+## 0.3.7 - 2026-09-20
+
+The last version under the name boji. A model is named by its provider, a role picks the model, and the composer takes what you type while a turn runs.
+
+### Added
+
+- **a model is `provider/name` and nothing else resolves it.** `anthropic/claude-opus-5`, not `claude-opus-5`. The catalog is a directory per provider under `catalog/models/`, with the subscriptions in `catalog/subscriptions/`, and a file missing a required field is refused by its own name and the field it lacks rather than skipped. `boji catalog` counts every kind and prints what each one requires
+- **a role binds a model to a job.** `catalog/roles/turn.yaml` and `catalog/roles/child.yaml`, one field, `model`. The turn you drive and the children it spawns can run on different models on different accounts, so a child can work on the Codex subscription while the turn runs on Anthropic. Nothing is bound in the shipped tree, so a plain run resolves exactly as it did before, and `boji models` says which role reaches which model and which role has nothing bound
+- **typing while a turn runs queues instead of doing nothing.** Enter puts the text in a queue, clears the composer and shows the row in the transcript marked as waiting. Several queue in order, any of them can be removed before it runs, and the mark clears when the model actually receives it. A message queued mid-turn reaches the model at its next step as a message from you; one queued after the last step starts the next turn. Ctrl+c drops the queue
+- **the session record keeps what was read**, every path and its size, findable without reading the whole body, and switchable off. A session can be ended and still resume, and a session past its lifetime is listed as expired rather than deleted. The default lifetime is never
+- a created file in the `file edits` tab draws every line it wrote marked as added, and the tally and the content agree: a file reported `+16 -0` draws sixteen added rows. A file too large to draw says how many lines it has instead of drawing nothing. The first row of the sidebar is `feed`
+
+### Changed
+
+- `write` says whether it created the file or replaced it, and a replacement comes back with its diff. A caller can test for a file that changed underneath with `errors.Is` rather than by reading the file again to guess why the write failed
+- a child has a state on every exit path, including a cap and a cancel, and a child that returns normally reaches `in_review` rather than `finished`, because finishing is the orchestrator's word. A parked child keeps the work it had already done
+
 ## 0.3.6 - 2026-09-20
 
 Orienting in a repository, and the transcript getting its conversation back.
