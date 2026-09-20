@@ -8,6 +8,12 @@ Tofu is personal and not released, so the public interface that a version promis
 
 The minor number carries breaking changes, which is what 0.x means, and **there is never a 1.0.0**. The owner decided that on 2026-09-19: this stays 0.x forever, so the promise the version makes is the one 0.x already makes, that anything can break on a minor bump.
 
+## Unreleased
+
+### Added
+
+- The model's words appear as it writes them. Before this the interface drew nothing until a whole step finished, including its tool calls, so a long answer was a spinner. The text still lands in the record as one message, not as a thousand fragments.
+
 ## 0.4.2 - 2026-09-21
 
 It stopped making the same mistake twice, and it stops itself when it starts.
