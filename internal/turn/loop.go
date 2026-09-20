@@ -52,6 +52,7 @@ type Config struct {
 	Task            string
 	History         []llm.Message
 	Wire            string
+	SpawnedFrom     string
 	System          string
 	Environment     string
 	Caps            Caps
@@ -98,6 +99,9 @@ func Run(ctx context.Context, config Config) (Row, error) {
 	if config.Spend != SpendSubscription && config.Spend != SpendAPIKey {
 		return Row{}, errors.New("turn: the row has to say which arm paid, subscription or api_key")
 	}
+	if depth := processDepth(); depth > shippedSubAgentProcessDepth {
+		return Row{}, ProcessDepthLimitError{Depth: depth, Limit: shippedSubAgentProcessDepth}
+	}
 	dir := config.ArtifactDir
 	if dir == "" {
 		state, err := sys.ProjectStateDir()
@@ -114,6 +118,11 @@ func Run(ctx context.Context, config Config) (Row, error) {
 	tools := config.Tools
 	if handles {
 		tools = NewRegistry(append(slices.Clone(tools.tools), artifacts.FetchTool())...)
+	}
+	for _, tool := range tools.tools {
+		if spawner, spawning := tool.(*SpawnTool); spawning && spawner.base.Sessions == nil {
+			spawner.base.Sessions = config.Sessions
+		}
 	}
 	now := config.Now
 	if now == nil {
@@ -138,7 +147,7 @@ func Run(ctx context.Context, config Config) (Row, error) {
 
 	start := now()
 	origin := newID()
-	row := Row{ID: origin, Schema: SchemaVersion, At: start, Task: config.Task, Wire: config.Wire, Spend: config.Spend, Root: origin}
+	row := Row{ID: origin, Schema: SchemaVersion, At: start, Task: config.Task, Wire: config.Wire, Spend: config.Spend, Root: origin, SpawnedFrom: config.SpawnedFrom}
 
 	var recorder *session.Recorder
 	if config.Sessions != nil {
@@ -213,8 +222,8 @@ func Run(ctx context.Context, config Config) (Row, error) {
 			if spawner, spawning := tool.(*SpawnTool); spawning {
 				for _, child := range spawner.children {
 					row.ChildIDs = append(row.ChildIDs, child.ID)
-					row.TotalCostUSD += child.TotalCostUSD
 				}
+				row.TotalCostUSD += spawner.spend
 			}
 		}
 		row.WallClockMS = now().Sub(start).Milliseconds()
@@ -381,16 +390,17 @@ func Run(ctx context.Context, config Config) (Row, error) {
 						}()
 					}
 					row = Row{
-						ID:         fork.Into,
-						Schema:     SchemaVersion,
-						At:         now(),
-						Task:       config.Task,
-						Wire:       config.Wire,
-						Model:      row.Model,
-						Spend:      config.Spend,
-						Root:       origin,
-						ForkedFrom: ended.ID,
-						ForkKind:   fork.Kind,
+						ID:          fork.Into,
+						Schema:      SchemaVersion,
+						At:          now(),
+						Task:        config.Task,
+						Wire:        config.Wire,
+						Model:       row.Model,
+						Spend:       config.Spend,
+						Root:        origin,
+						ForkedFrom:  ended.ID,
+						ForkKind:    fork.Kind,
+						SpawnedFrom: config.SpawnedFrom,
 					}
 					messages, sent = begun, 0
 					if recorder != nil {

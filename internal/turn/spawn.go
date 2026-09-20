@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"slices"
 	"strconv"
 	"strings"
@@ -30,6 +31,28 @@ type BreadthLimitError struct {
 
 func (e BreadthLimitError) Error() string {
 	return fmt.Sprintf("spawn refused: this turn has already spawned %d children and the crew breadth limit is %d", e.Spawned, e.Limit)
+}
+
+const (
+	subAgentDepthVar            = "TOFU_SUBAGENT_DEPTH"
+	shippedSubAgentProcessDepth = 1
+)
+
+type ProcessDepthLimitError struct {
+	Depth int
+	Limit int
+}
+
+func (e ProcessDepthLimitError) Error() string {
+	return fmt.Sprintf(
+		"turn refused: this tofu process is %d deep inside another tofu turn and the sub-agent process limit is %d. "+
+			"a turn whose shell runs tofu, whose shell runs tofu, has no bound and is a fork bomb: hand the work to spawn instead",
+		e.Depth, e.Limit)
+}
+
+func processDepth() int {
+	depth, _ := strconv.Atoi(os.Getenv(subAgentDepthVar))
+	return depth
 }
 
 type DoneVerdict string
@@ -67,9 +90,11 @@ type SpawnTool struct {
 	parentID string
 	depth    int
 	spawned  int
+	spend    float64
 	base     Config
 	roster   *crew.Roster
 	children []Row
+	reports  []ChildReport
 }
 
 func NewSpawnTool(parentID string, base Config, roster *crew.Roster) *SpawnTool {
@@ -79,6 +104,8 @@ func NewSpawnTool(parentID string, base Config, roster *crew.Roster) *SpawnTool 
 func (t *SpawnTool) Name() string { return "spawn" }
 
 func (t *SpawnTool) Children() []Row { return t.children }
+
+func (t *SpawnTool) Reports() []ChildReport { return t.reports }
 
 func (t *SpawnTool) Definition() llm.Tool {
 	return llm.Tool{
@@ -133,9 +160,14 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 		return Result{}, BreadthLimitError{Spawned: t.spawned, Limit: konst.CrewMaxBreadth}
 	}
 
-	childID := t.parentID + "-c" + strconv.Itoa(t.spawned+1)
-	mission := args.mission()
-	if err := t.roster.Hold(crew.SubAgent{ID: childID, Mission: mission, Brief: args.Task, Owns: args.Owns}); err != nil {
+	agent := crew.SubAgent{
+		ID:      t.parentID + "-c" + strconv.Itoa(t.spawned+1),
+		Mission: args.mission(),
+		Brief:   args.Task,
+		Owns:    args.Owns,
+	}
+	childID := agent.ID
+	if err := t.roster.Hold(agent); err != nil {
 		var collision crew.CollisionError
 		if errors.As(err, &collision) && collision.HolderReport != "" {
 			return Result{Command: "handback " + collision.Holder, Content: fmt.Sprintf(
@@ -159,6 +191,7 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 	child.Task = args.Task
 	child.Tools = NewRegistry(append(owned, nested)...)
 	child.NewID = func() string { return childID }
+	child.SpawnedFrom = t.parentID
 
 	childCtx, release := context.WithCancel(ctx)
 	defer release()
@@ -174,13 +207,18 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 		claims, state = t.reviewed(ctx, child, row)
 	}
 	t.retain(append(claims, nested.children...))
+	for _, claim := range claims {
+		t.spend += claim.TotalCostUSD
+	}
 
-	report := childReport(claims[len(claims)-1], state)
-	t.roster.Reached(childID, state, report)
+	report := reportOf(agent, claims[len(claims)-1], state)
+	t.reports = append(t.reports, report)
+	text := report.Text()
+	t.roster.Reached(childID, state, text)
 	if runErr != nil {
 		return Result{}, fmt.Errorf("spawn: child %s is %s: %w", childID, state, runErr)
 	}
-	return Result{Content: report, Command: "spawn " + childID + " " + state.String() + ": " + mission}, nil
+	return Result{Content: text, Command: "spawn " + childID + " " + state.String() + ": " + agent.Mission}, nil
 }
 
 func (t *SpawnTool) retain(rows []Row) {
@@ -219,27 +257,6 @@ func (t *SpawnTool) reviewed(ctx context.Context, child Config, first Row) ([]Ro
 		return []Row{first, second}, crew.InReview
 	}
 	panic("turn: unknown done verdict " + string(decision.Verdict))
-}
-
-func childReport(row Row, state crew.State) string {
-	calls := 0
-	for _, step := range row.Steps {
-		calls += len(step.ToolCalls)
-	}
-	report := &strings.Builder{}
-	fmt.Fprintf(report, "sub-agent %s is %s, %s after %d steps and %d tool calls, costing $%.4f\n",
-		row.ID, state, row.Outcome, len(row.Steps), calls, row.TotalCostUSD)
-	if len(row.Steps) > 0 {
-		report.WriteString(row.Steps[len(row.Steps)-1].AssistantText)
-	}
-	for _, step := range row.Steps {
-		for _, call := range step.ToolCalls {
-			if call.Error != "" {
-				report.WriteString("\ncould not: " + call.Tool + ": " + call.Error)
-			}
-		}
-	}
-	return report.String()
 }
 
 type ownedTool struct {

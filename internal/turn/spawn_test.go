@@ -375,7 +375,7 @@ func TestWithTheReviewOffTheChildClaimReachesTheParentUnchanged(t *testing.T) {
 	if len(children) != 1 {
 		t.Fatalf("the claim was reviewed: %d children", len(children))
 	}
-	if result.Content != childReport(children[0], crew.InReview) {
+	if result.Content != spawn.Reports()[0].Text() {
 		t.Fatalf("the parent saw something other than the child's report: %q", result.Content)
 	}
 	if !strings.HasSuffix(result.Content, claim) {

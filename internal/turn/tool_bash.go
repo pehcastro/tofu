@@ -6,9 +6,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
@@ -108,6 +110,7 @@ func (t *BashTool) Run(ctx context.Context, raw json.RawMessage) (Result, error)
 	started := time.Now()
 	cmd := exec.CommandContext(ctx, t.shell, "-c", args.Command)
 	cmd.Dir = string(t.root)
+	cmd.Env = append(os.Environ(), subAgentDepthVar+"="+strconv.Itoa(processDepth()+1))
 	cmd.WaitDelay = konst.BashWaitDelayMillis * time.Millisecond
 
 	output, runErr := cmd.CombinedOutput()

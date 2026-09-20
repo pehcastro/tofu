@@ -231,10 +231,11 @@ func fullyPopulatedRow() Row {
 					Carry: recall.Carry{
 						Text: "this session continues one that reached its context budget and ended.",
 						Results: []recall.CarriedResult{{
-							Tool:   "bash",
-							Key:    `bash {"command":"npm test"}`,
-							Bytes:  20000,
-							Handle: "e4c8c5f23f8eca8498d82e4ba0eb3942",
+							Tool:     "bash",
+							Key:      `bash {"command":"npm test"}`,
+							Bytes:    20000,
+							Handle:   "e4c8c5f23f8eca8498d82e4ba0eb3942",
+							Signpost: "3 tests ran, 1 failed",
 						}},
 					},
 				},
@@ -262,6 +263,7 @@ func fullyPopulatedRow() Row {
 				CostUSD:          0.0005,
 			},
 		},
+		SpawnedFrom:  "turn-fixture-0000",
 		ForkedFrom:   "turn-fixture-0000",
 		ForkedInto:   "turn-fixture-0001-f2",
 		ForkKind:     ForkContinuation,

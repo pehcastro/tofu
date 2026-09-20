@@ -89,6 +89,7 @@ type Row struct {
 	Spend        Spend     `json:"spend"`
 	Steps        []StepRow `json:"steps,omitempty"`
 	Root         string    `json:"root,omitempty"`
+	SpawnedFrom  string    `json:"spawned_from,omitempty"`
 	ForkedFrom   string    `json:"forked_from,omitempty"`
 	ForkedInto   string    `json:"forked_into,omitempty"`
 	ForkKind     ForkKind  `json:"fork_kind,omitempty"`
@@ -223,7 +224,7 @@ func (r Row) Header() session.Header {
 		Task:       r.Task,
 		Wire:       r.Wire,
 		Model:      r.Model,
-		Parent:     r.ForkedFrom,
+		Parent:     cmp.Or(r.ForkedFrom, r.SpawnedFrom),
 		Root:       cmp.Or(r.Root, r.ID),
 		ForkedInto: r.ForkedInto,
 		ForkKind:   string(r.ForkKind),
