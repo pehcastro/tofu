@@ -147,6 +147,9 @@ const (
 	setupTitle    = "tofu cannot start a turn yet"
 	setupKeys     = "[1-9] run the fix   [r] check again   [q] quit"
 	setupIndent   = "   "
+	setupWatch    = "or run the command in another terminal: tofu picks it up here"
+	setupPoll     = time.Second
+	readyNote     = "type a task and press enter. tofu works in "
 	gateOffLine   = "the gate is off, so no call on this session is judged."
 	altPrefix     = "alt+"
 	stoppingNote  = "stopping the turn"
@@ -180,6 +183,8 @@ type closedMsg struct{}
 
 type requirementsMsg []Requirement
 
+type recheckMsg struct{}
+
 type pathsMsg []string
 
 type tickMsg time.Time
@@ -210,9 +215,13 @@ func New(options Options) *App {
 	app.resize(app.width, app.height)
 	app.readWires()
 	if len(app.requirements) == 0 {
-		app.view.Append(session.Entry{Kind: session.Note, Body: "type a task and press enter. tofu works in " + options.Repo})
+		app.sayWhatToType()
 	}
 	return app
+}
+
+func (a *App) sayWhatToType() {
+	a.view.Append(session.Entry{Kind: session.Note, Body: readyNote + a.options.Repo})
 }
 
 func (a *App) readWires() {
@@ -229,7 +238,16 @@ func Run(options Options) error {
 	return err
 }
 
-func (a *App) Init() tea.Cmd { return tea.Batch(a.view.Focus(), a.pollQuota(), a.readPaths()) }
+func (a *App) Init() tea.Cmd {
+	return tea.Batch(a.view.Focus(), a.pollQuota(), a.readPaths(), a.watchSetup())
+}
+
+func (a *App) watchSetup() tea.Cmd {
+	if len(a.requirements) == 0 || a.options.Recheck == nil {
+		return nil
+	}
+	return tea.Tick(setupPoll, func(time.Time) tea.Msg { return recheckMsg{} })
+}
 
 func (a *App) readPaths() tea.Cmd {
 	under := a.options.Paths
@@ -312,10 +330,22 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.status.Quota = msg
 		return a, nil
 
+	case recheckMsg:
+		recheck := a.options.Recheck
+		if recheck == nil {
+			return a, nil
+		}
+		return a, func() tea.Msg { return requirementsMsg(recheck()) }
+
 	case requirementsMsg:
+		cleared := len(a.requirements) > 0 && len(msg) == 0
 		a.requirements = msg
 		a.readWires()
-		return a, nil
+		if !cleared {
+			return a, a.watchSetup()
+		}
+		a.sayWhatToType()
+		return a, a.view.Focus()
 
 	case tickMsg:
 		a.ticking = false
@@ -688,6 +718,9 @@ func (a *App) setupView(rows int) string {
 			lines = append(lines, theme.Dim().Render(setupIndent+line))
 		}
 		lines = append(lines, "")
+	}
+	if a.options.Recheck != nil {
+		lines = append(lines, theme.Dim().Render(widget.Fit(setupWatch, a.width)), "")
 	}
 	lines = append(lines, theme.Faint().Render(widget.Fit(setupKeys, a.width)))
 	for len(lines) < rows {

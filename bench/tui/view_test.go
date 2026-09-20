@@ -443,3 +443,51 @@ func BenchmarkSettingsView(b *testing.B) {
 		_ = built.View()
 	}
 }
+
+func setupApp(t *testing.T, width, height int) *app.App {
+	t.Helper()
+	required := []app.Requirement{
+		{What: "no subscription is signed in, so no model can answer",
+			Fix: "tofu login anthropic, which opens the browser; tofu login codex signs in the other subscription"},
+		{What: "there is no openrouter key, so jev judges no tool call",
+			Fix: "tofu login openrouter, which asks for the key and checks it reaches jev"},
+	}
+	at := time.Date(2026, 9, 19, 14, 32, 0, 0, time.UTC)
+	built := app.New(app.Options{
+		Repo:         "silo",
+		Branch:       "develop",
+		Release:      "test",
+		Now:          func() time.Time { return at },
+		Requirements: required,
+		Recheck:      func() []app.Requirement { return required },
+	})
+	built.Init()
+	built.Update(tea.WindowSizeMsg{Width: width, Height: height})
+	if !strings.Contains(built.View().Content, "openrouter") {
+		t.Fatal("this is not the setup screen")
+	}
+	return built
+}
+
+const (
+	frameBudget = 16700 * time.Microsecond
+	framesTimed = 100
+	timedRounds = 3
+)
+
+func TestTheSetupViewDrawsInsideTheFrameBudget(t *testing.T) {
+	for _, size := range []struct{ width, height int }{{80, 24}, {120, 36}} {
+		built := setupApp(t, size.width, size.height)
+		for round := range timedRounds {
+			began := time.Now()
+			for range framesTimed {
+				_ = built.View()
+			}
+			each := time.Since(began) / framesTimed
+			t.Logf("%dx%d round %d: %v a frame over %d frames", size.width, size.height, round+1, each, framesTimed)
+			if each > frameBudget {
+				t.Errorf("the setup view at %dx%d takes %v a frame, over the %v budget", size.width, size.height, each, frameBudget)
+			}
+		}
+	}
+}
