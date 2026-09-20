@@ -21,6 +21,7 @@ type Mode string
 const (
 	ModeShadow   Mode = "shadow"
 	ModeEnforced Mode = "enforced"
+	ModeOff      Mode = "off"
 )
 
 func (m Mode) String() string {
@@ -29,6 +30,8 @@ func (m Mode) String() string {
 		return "shadow"
 	case ModeEnforced:
 		return "enforced"
+	case ModeOff:
+		return "off"
 	}
 	panic("rule: unknown mode " + string(m))
 }

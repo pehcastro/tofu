@@ -22,19 +22,19 @@ func LoadFS(shipped fs.FS) ([]Rule, error) {
 	if err != nil {
 		return nil, err
 	}
-	rules := make([]Rule, 0, len(names))
+	loaded := make([]Rule, 0, len(names))
 	for _, name := range names {
 		data, err := fs.ReadFile(shipped, name)
 		if err != nil {
 			return nil, err
 		}
-		r, err := parseRule(data, "catalog/rules/"+name)
+		one, err := parseRule(data, "catalog/rules/"+name)
 		if err != nil {
 			return nil, err
 		}
-		rules = append(rules, r)
+		loaded = append(loaded, one)
 	}
-	return rules, nil
+	return loaded, nil
 }
 
 func parseRule(data []byte, path string) (Rule, error) {
@@ -65,15 +65,48 @@ func LoadDir(dir string) ([]Rule, error) {
 	if err != nil {
 		return nil, err
 	}
-	rules := make([]Rule, 0, len(names))
+	loaded := make([]Rule, 0, len(names))
 	for _, name := range names {
-		r, err := Load(filepath.Join(dir, name))
+		path := filepath.Join(dir, name)
+		data, err := sys.ReadFile(path)
 		if err != nil {
 			return nil, err
 		}
-		rules = append(rules, r)
+		one, err := parseRule(data, path)
+		if err != nil {
+			return nil, err
+		}
+		loaded = append(loaded, one)
 	}
-	return rules, nil
+	return loaded, nil
+}
+
+func Layer(shipped, project []Rule) []Rule {
+	pending := make(map[string]Rule, len(project))
+	for _, one := range project {
+		pending[one.ID] = one
+	}
+	kept := make([]Rule, 0, len(shipped)+len(project))
+	keep := func(one Rule) {
+		if one.Mode != ModeOff {
+			kept = append(kept, one)
+		}
+	}
+	for _, one := range shipped {
+		if override, replaced := pending[one.ID]; replaced {
+			delete(pending, one.ID)
+			keep(override)
+			continue
+		}
+		keep(one)
+	}
+	for _, one := range project {
+		if _, unused := pending[one.ID]; unused {
+			delete(pending, one.ID)
+			keep(one)
+		}
+	}
+	return kept
 }
 
 func (r *Rule) setField(key, value, path string, line int) error {
@@ -86,8 +119,8 @@ func (r *Rule) setField(key, value, path string, line int) error {
 		r.Checker = value
 	case "mode":
 		m := Mode(value)
-		if m != ModeShadow && m != ModeEnforced {
-			return fmt.Errorf("%s:%d: mode is %q or %q, found %q", path, line, ModeShadow, ModeEnforced, value)
+		if m != ModeShadow && m != ModeEnforced && m != ModeOff {
+			return fmt.Errorf("%s:%d: mode is %q, %q or %q, found %q", path, line, ModeShadow, ModeEnforced, ModeOff, value)
 		}
 		r.Mode = m
 		r.ModeDeclared = true

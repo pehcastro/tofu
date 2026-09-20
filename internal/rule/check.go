@@ -10,21 +10,27 @@ import (
 
 const emDashRune = rune(0x2014)
 
-type Checker func(Rule, Artifact) ([]Finding, error)
+type Checker struct {
+	Subject Subject
+	Check   func(Rule, Artifact) ([]Finding, error)
+}
 
 func Builtins() map[string]Checker {
 	return map[string]Checker{
-		"comments":    checkComments,
-		"em_dash":     checkEmDash,
-		"ownership":   checkOwnership,
-		"no_worktree": checkNoWorktree,
+		"comments":            {Subject: SubjectGoFile, Check: checkComments},
+		"em_dash":             {Subject: SubjectTextFile, Check: checkEmDash},
+		"ownership":           {Subject: SubjectOwnsWrite, Check: checkOwnership},
+		"no_worktree":         {Subject: SubjectShellCommand, Check: checkNoWorktree},
+		"test_assertion":      {Subject: SubjectGoPackage, Check: checkTestAssertion},
+		"test_mock_boundary":  {Subject: SubjectGoPackage, Check: checkTestMockBoundary},
+		"test_boundary_cases": {Subject: SubjectGoPackage, Check: checkTestBoundaryCases},
 	}
 }
 
 func checkComments(_ Rule, a Artifact) ([]Finding, error) {
 	gf, ok := a.(GoFile)
 	if !ok {
-		return nil, artifactMismatch("go_file", a)
+		return nil, artifactMismatch(SubjectGoFile, a)
 	}
 	comments, err := sys.FileCommentViolations(gf.Path)
 	if err != nil {
@@ -40,7 +46,7 @@ func checkComments(_ Rule, a Artifact) ([]Finding, error) {
 func checkEmDash(r Rule, a Artifact) ([]Finding, error) {
 	tf, ok := a.(TextFile)
 	if !ok {
-		return nil, artifactMismatch("text_file", a)
+		return nil, artifactMismatch(SubjectTextFile, a)
 	}
 	data, err := sys.ReadFile(tf.Path)
 	if err != nil {
@@ -63,7 +69,7 @@ func checkEmDash(r Rule, a Artifact) ([]Finding, error) {
 func checkOwnership(_ Rule, a Artifact) ([]Finding, error) {
 	ow, ok := a.(OwnsWrite)
 	if !ok {
-		return nil, artifactMismatch("owns_write", a)
+		return nil, artifactMismatch(SubjectOwnsWrite, a)
 	}
 	matched, err := crew.Matches(ow.Path, ow.Owns)
 	if err != nil {
@@ -78,7 +84,7 @@ func checkOwnership(_ Rule, a Artifact) ([]Finding, error) {
 func checkNoWorktree(_ Rule, a Artifact) ([]Finding, error) {
 	sc, ok := a.(ShellCommand)
 	if !ok {
-		return nil, artifactMismatch("shell_command", a)
+		return nil, artifactMismatch(SubjectShellCommand, a)
 	}
 	for i, arg := range sc.Argv {
 		if i > 0 && sc.Argv[i-1] == "git" && arg == "worktree" {
@@ -88,6 +94,6 @@ func checkNoWorktree(_ Rule, a Artifact) ([]Finding, error) {
 	return nil, nil
 }
 
-func artifactMismatch(want string, got Artifact) error {
+func artifactMismatch(want Subject, got Artifact) error {
 	return fmt.Errorf("rule: checker expects a %s artifact, got %T", want, got)
 }

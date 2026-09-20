@@ -1,5 +1,15 @@
 package rule
 
+type Subject string
+
+const (
+	SubjectGoFile       Subject = "go_file"
+	SubjectGoPackage    Subject = "go_package"
+	SubjectTextFile     Subject = "text_file"
+	SubjectOwnsWrite    Subject = "owns_write"
+	SubjectShellCommand Subject = "shell_command"
+)
+
 type Artifact interface {
 	artifact()
 }
@@ -9,6 +19,12 @@ type GoFile struct {
 }
 
 func (GoFile) artifact() {}
+
+type GoPackage struct {
+	Dir string
+}
+
+func (GoPackage) artifact() {}
 
 type TextFile struct {
 	Path string

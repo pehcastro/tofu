@@ -19,7 +19,7 @@ func Run(r Rule, checkers map[string]Checker, a Artifact, target string, now tim
 	if !ok {
 		return Fire{}, fmt.Errorf("rule %q names checker %q, which is not registered", r.ID, r.Checker)
 	}
-	findings, err := checker(r, a)
+	findings, err := checker.Check(r, a)
 	if err != nil {
 		return Fire{}, err
 	}

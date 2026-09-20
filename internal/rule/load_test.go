@@ -60,13 +60,46 @@ func TestLoadDefaultsToShadowWhenModeIsMissing(t *testing.T) {
 	}
 }
 
+func TestLayerLetsAProjectRetuneOneShippedRuleTurnAnotherOffAndAddItsOwn(t *testing.T) {
+	off, err := parseRule([]byte("id: test_boundary_cases\nkind: structural\nchecker: test_boundary_cases\nmode: off\n"), "someone-elses-project/rules/test_boundary_cases@1.yaml")
+	if err != nil {
+		t.Fatalf("parseRule: %v", err)
+	}
+	shipped := []Rule{
+		{ID: "test_assertion", Kind: KindStructural, Checker: "test_assertion", Mode: ModeShadow},
+		{ID: "test_boundary_cases", Kind: KindStructural, Checker: "test_boundary_cases", Mode: ModeShadow},
+	}
+	project := []Rule{
+		{ID: "test_assertion", Kind: KindStructural, Checker: "test_assertion", Mode: ModeEnforced},
+		off,
+		{ID: "no_worktree", Kind: KindStructural, Checker: "no_worktree", Mode: ModeShadow},
+	}
+
+	layered := Layer(shipped, project)
+
+	if len(layered) != 2 {
+		t.Fatalf("layered = %d rules, want 2: %+v", len(layered), layered)
+	}
+	if layered[0].ID != "test_assertion" || layered[0].Mode != ModeEnforced {
+		t.Fatalf("the project did not retune the shipped rule: %+v", layered[0])
+	}
+	if layered[1].ID != "no_worktree" {
+		t.Fatalf("the rule the project added on its own is %q, want no_worktree", layered[1].ID)
+	}
+	for _, r := range layered {
+		if r.ID == "test_boundary_cases" {
+			t.Fatal("a rule the project turned off is still in the layered set")
+		}
+	}
+}
+
 func TestLoadDirLoadsEveryShippedRule(t *testing.T) {
 	rules, err := LoadDir(filepath.Join("..", "..", "catalog", "rules"))
 	if err != nil {
 		t.Fatalf("LoadDir: %v", err)
 	}
-	if len(rules) != 4 {
-		t.Fatalf("rules = %d, want 4: %+v", len(rules), rules)
+	if len(rules) != 7 {
+		t.Fatalf("rules = %d, want 7: %+v", len(rules), rules)
 	}
 	for _, r := range rules {
 		if r.Mode != ModeShadow {
