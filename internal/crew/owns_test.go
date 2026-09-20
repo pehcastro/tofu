@@ -53,6 +53,14 @@ func TestMatches(t *testing.T) {
 			[]string{"cmd/boji/**"}, `cmd\bojix\main.go`, false,
 		},
 		{
+			"a_subtree_glob_matches_the_directory_it_names_so_a_child_can_stand_in_it",
+			[]string{"internal/crew/**"}, "internal/crew", true,
+		},
+		{
+			"a_subtree_glob_does_not_match_a_sibling_directory",
+			[]string{"internal/crew/**"}, "internal/crewx", false,
+		},
+		{
 			"boji_006_brief_granted_bench_go_the_filed_owns_did_not_list",
 			[]string{"bench/api/**", "bench/report/**", "bench/corpus/**"}, "cmd/boji/bench.go", false,
 		},
