@@ -5,9 +5,63 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
+	"time"
 )
+
+func TestACommandPastItsOwnDeadlineIsStoppedAndSaysSoAndHowLongItRan(t *testing.T) {
+	tool, err := NewBashTool(t.TempDir())
+	if err != nil {
+		t.Fatalf("building the bash tool: %v", err)
+	}
+
+	started := time.Now()
+	_, err = tool.Run(context.Background(), json.RawMessage(`{"command":"sleep 30","timeout_ms":300}`))
+	took := time.Since(started)
+
+	if err == nil {
+		t.Fatal("a command that outran its deadline came back as an ordinary result")
+	}
+	if took > 10*time.Second {
+		t.Fatalf("nothing stopped the command: it ran %v against a 300 ms deadline", took)
+	}
+	for _, want := range []string{"degraded stopped", "past the 300 ms deadline", "timeout_ms", "project_report"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("the stopped command never says %q: %v", want, err)
+		}
+	}
+	if !regexp.MustCompile(`ran \d+ ms`).MatchString(err.Error()) {
+		t.Fatalf("the stopped command never says how long it ran: %v", err)
+	}
+	t.Logf("stopped after %v with: %v", took, err)
+}
+
+func TestACommandThatFinishesInsideItsDeadlineIsUnaffected(t *testing.T) {
+	tool, err := NewBashTool(t.TempDir())
+	if err != nil {
+		t.Fatalf("building the bash tool: %v", err)
+	}
+	result, err := tool.Run(context.Background(), json.RawMessage(`{"command":"echo well inside","timeout_ms":30000}`))
+	if err != nil {
+		t.Fatalf("a quick command was treated as an overrun: %v", err)
+	}
+	if result.ExitCode == nil || *result.ExitCode != 0 || !strings.Contains(result.Content, "well inside") {
+		t.Fatalf("the quick command returned %+v", result)
+	}
+}
+
+func TestATimeoutAboveTheCeilingIsRefusedWithTheCeilingNamed(t *testing.T) {
+	tool, err := NewBashTool(t.TempDir())
+	if err != nil {
+		t.Fatalf("building the bash tool: %v", err)
+	}
+	_, err = tool.Run(context.Background(), json.RawMessage(`{"command":"echo x","timeout_ms":900000}`))
+	if err == nil || !strings.Contains(err.Error(), "600000") {
+		t.Fatalf("a timeout_ms above the ceiling was taken: %v", err)
+	}
+}
 
 const recordedFixture = `import { describe, it, expect } from 'bun:test'
 import { Hono } from 'hono'

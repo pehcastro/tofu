@@ -46,7 +46,7 @@ func recordedSubscription(t *testing.T, streams ...string) Subscription {
 
 func TestTheTurnRowRoundTripsTheStopReasonAndTheTokensOfARecordedSubscriptionStream(t *testing.T) {
 	tool := &stubTool{name: "write", result: Result{Content: "wrote hello.txt", Command: "write hello.txt"}}
-	gate := &stubGate{verdict: "allow"}
+	gate := gateSaying("allow")
 	config := Config{
 		Model:          recordedSubscription(t, "subscription-tool-use.sse", "subscription-end-turn.sse"),
 		Spend:          SpendSubscription,

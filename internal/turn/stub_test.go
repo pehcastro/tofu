@@ -4,16 +4,19 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"sync"
 
 	"boji/internal/llm"
 )
 
 type stubModel struct {
 	decisions []llm.Decision
+	requests  []llm.Request
 	calls     int
 }
 
-func (m *stubModel) Ask(_ context.Context, _ llm.Request) (llm.Decision, error) {
+func (m *stubModel) Ask(_ context.Context, request llm.Request) (llm.Decision, error) {
+	m.requests = append(m.requests, request)
 	if m.calls >= len(m.decisions) {
 		return llm.Decision{}, errors.New("stubModel: no more decisions queued")
 	}
@@ -31,10 +34,11 @@ func (m *errorModel) Ask(_ context.Context, _ llm.Request) (llm.Decision, error)
 }
 
 type stubTool struct {
-	name   string
-	result Result
-	err    error
-	calls  int
+	name    string
+	result  Result
+	err     error
+	running sync.Mutex
+	calls   int
 }
 
 func (t *stubTool) Name() string { return t.name }
@@ -44,7 +48,9 @@ func (t *stubTool) Definition() llm.Tool {
 }
 
 func (t *stubTool) Run(_ context.Context, _ json.RawMessage) (Result, error) {
+	t.running.Lock()
 	t.calls++
+	t.running.Unlock()
 	return t.result, t.err
 }
 

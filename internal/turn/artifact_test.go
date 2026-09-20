@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 	"testing"
 
@@ -11,7 +12,7 @@ import (
 	"boji/internal/recall"
 )
 
-const testBytesCap = konst.TurnResultBytesCap
+const testBytesCap = 4096
 
 func bigBody() string {
 	var b strings.Builder
@@ -184,6 +185,46 @@ func TestFetchRefusesAWellFormedHandleNothingStored(t *testing.T) {
 	if err == nil {
 		t.Fatal("a handle nothing was stored under was accepted")
 	}
+}
+
+const capBeforeBOJI174 = 8192
+
+func TestASourceFileOfThisRepositoryIsReadWholeAtTheShippedCap(t *testing.T) {
+	body, err := os.ReadFile("spawn.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	artifacts, err := NewArtifacts(t.TempDir(), true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	preview, err := recall.LoadConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	whole, handle, err := artifacts.Render(string(body), konst.TurnResultBytesCap)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("spawn.go is %d lines and %d bytes, %d tokens by the elide estimator, against a cap of %d bytes",
+		strings.Count(string(body), "\n"), len(body), preview.Tokens(string(body)), konst.TurnResultBytesCap)
+	if handle != "" || whole != string(body) {
+		t.Fatalf("a %d byte source file came back as %d bytes with handle %q", len(body), len(whole), handle)
+	}
+
+	elided, oldHandle, err := artifacts.Render(string(body), capBeforeBOJI174)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if oldHandle == "" {
+		t.Fatalf("the old %d byte cap did not elide this file, so it is the wrong file to measure with", capBeforeBOJI174)
+	}
+	unseen := len(body) - preview.HeadBytes - preview.TailBytes
+	t.Logf("at the old %d byte cap the model saw %d bytes and had to fetch %d more, which is %d artifact_fetch round trips",
+		capBeforeBOJI174, len(elided), unseen, (unseen+capBeforeBOJI174-1)/capBeforeBOJI174)
+	t.Logf("reading it whole costs %d tokens more than the elided render, and removes those round trips",
+		preview.Tokens(string(body))-preview.Tokens(elided))
 }
 
 func TestBothArmsRenderTheSameResultAndTheSizesAreTheFinding(t *testing.T) {
