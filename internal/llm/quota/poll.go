@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"boji/internal/transport"
+	"tofu/internal/transport"
 )
 
 const (
@@ -90,7 +90,7 @@ func (p *Poller) fetch(ctx context.Context, account Account) (Report, error) {
 	case Anthropic:
 		request.Header.Set("User-Agent", claudeUserAgent)
 	case Codex:
-		request.Header.Set("User-Agent", "boji")
+		request.Header.Set("User-Agent", "tofu")
 		if account.AccountID != "" {
 			request.Header.Set("ChatGPT-Account-Id", account.AccountID)
 		}

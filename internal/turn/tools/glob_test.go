@@ -9,9 +9,9 @@ import (
 	"strings"
 	"testing"
 
-	"boji/internal/konst"
-	"boji/internal/turn"
-	"boji/internal/turn/tools"
+	"tofu/internal/konst"
+	"tofu/internal/turn"
+	"tofu/internal/turn/tools"
 )
 
 func globbed(t *testing.T, root, args string) string {
@@ -102,7 +102,7 @@ func TestTheThreeSkippedDirectoriesNeedNoIgnoreFile(t *testing.T) {
 		t.Fatalf("the walk found nothing at all:\n%s", listed)
 	}
 	if strings.Contains(listed, "buried.txt") {
-		t.Fatalf("a directory boji always skips was walked with no .gitignore present:\n%s", listed)
+		t.Fatalf("a directory tofu always skips was walked with no .gitignore present:\n%s", listed)
 	}
 }
 

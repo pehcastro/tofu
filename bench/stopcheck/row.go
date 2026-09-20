@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"sort"
 
-	"boji/internal/judge/jev"
-	"boji/internal/judge/jev/wire/openrouter"
-	"boji/internal/judge/ledger"
-	"boji/internal/judge/policy"
+	"tofu/internal/judge/jev"
+	"tofu/internal/judge/jev/wire/openrouter"
+	"tofu/internal/judge/ledger"
+	"tofu/internal/judge/policy"
 )
 
 func toLedgerAnswers(wording int, in map[string]jev.Answer) []ledger.Answer {

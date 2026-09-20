@@ -6,14 +6,14 @@ import (
 	"path/filepath"
 	"testing"
 
-	"boji/internal/judge/jev"
+	"tofu/internal/judge/jev"
 )
 
 const repoRoot = "../.."
 
 func TestLiveBatteryOverEveryRecordedStep(t *testing.T) {
-	if os.Getenv("BOJI_LIVE") != "1" {
-		t.Skip("set BOJI_LIVE=1 to run both arms against the real jev route")
+	if os.Getenv("TOFU_LIVE") != "1" {
+		t.Skip("set TOFU_LIVE=1 to run both arms against the real jev route")
 	}
 	key, err := jev.Key(filepath.Join(repoRoot, ".env"))
 	if err != nil {

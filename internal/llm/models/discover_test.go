@@ -9,8 +9,8 @@ import (
 	"testing/fstest"
 	"time"
 
-	"boji/internal/llm/wire/codex"
-	"boji/internal/transport"
+	"tofu/internal/llm/wire/codex"
+	"tofu/internal/transport"
 )
 
 func testClient(t *testing.T) *transport.Client {

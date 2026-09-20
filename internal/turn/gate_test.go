@@ -7,8 +7,8 @@ import (
 	"strconv"
 	"testing"
 
-	"boji/internal/judge/ledger"
-	"boji/internal/llm"
+	"tofu/internal/judge/ledger"
+	"tofu/internal/llm"
 )
 
 type stubGate struct {

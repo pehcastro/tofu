@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"boji/internal/judge/ledger"
+	"tofu/internal/judge/ledger"
 )
 
 const recordedHeredocTicketCase = "tx-055"

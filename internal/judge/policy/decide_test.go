@@ -3,7 +3,7 @@ package policy
 import (
 	"testing"
 
-	"boji/internal/konst"
+	"tofu/internal/konst"
 )
 
 func TestDeadBandEscalatesOnBothSides(t *testing.T) {

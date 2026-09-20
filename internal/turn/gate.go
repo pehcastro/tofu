@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"strconv"
 
-	"boji/internal/judge/ledger"
+	"tofu/internal/judge/ledger"
 )
 
 type GateRequest struct {

@@ -26,31 +26,31 @@ func TestMatches(t *testing.T) {
 		},
 		{
 			"a_literal_path_matches_itself_owns_match_ps1_test_ownsmatch_body",
-			[]string{"cmd/boji/main.go"}, "cmd/boji/main.go", true,
+			[]string{"cmd/tofu/main.go"}, "cmd/tofu/main.go", true,
 		},
 		{
 			"a_literal_path_does_not_match_a_sibling_owns_match_ps1_test_ownsmatch_body",
-			[]string{"cmd/boji/main.go"}, "cmd/boji/lint.go", false,
+			[]string{"cmd/tofu/main.go"}, "cmd/tofu/lint.go", false,
 		},
 		{
 			"matching_is_case_insensitive_owns_match_ps1_tolowerinvariant",
 			[]string{"Internal/Crew/**"}, "internal/crew/OWNS.GO", true,
 		},
 		{
-			"cmd_boji_star_star_matches_main_go_forward_slash_boji_027_acceptance_line_2",
-			[]string{"cmd/boji/**"}, "cmd/boji/main.go", true,
+			"cmd_tofu_star_star_matches_main_go_forward_slash_boji_027_acceptance_line_2",
+			[]string{"cmd/tofu/**"}, "cmd/tofu/main.go", true,
 		},
 		{
-			"cmd_boji_star_star_matches_main_go_backslash_boji_027_acceptance_line_2",
-			[]string{"cmd/boji/**"}, `cmd\boji\main.go`, true,
+			"cmd_tofu_star_star_matches_main_go_backslash_boji_027_acceptance_line_2",
+			[]string{"cmd/tofu/**"}, `cmd\tofu\main.go`, true,
 		},
 		{
-			"cmd_boji_star_star_rejects_bojix_forward_slash_boji_027_acceptance_line_2",
-			[]string{"cmd/boji/**"}, "cmd/bojix/main.go", false,
+			"cmd_tofu_star_star_rejects_tofux_forward_slash_boji_027_acceptance_line_2",
+			[]string{"cmd/tofu/**"}, "cmd/tofux/main.go", false,
 		},
 		{
-			"cmd_boji_star_star_rejects_bojix_backslash_boji_027_acceptance_line_2",
-			[]string{"cmd/boji/**"}, `cmd\bojix\main.go`, false,
+			"cmd_tofu_star_star_rejects_tofux_backslash_boji_027_acceptance_line_2",
+			[]string{"cmd/tofu/**"}, `cmd\tofux\main.go`, false,
 		},
 		{
 			"a_subtree_glob_matches_the_directory_it_names_so_a_child_can_stand_in_it",
@@ -62,11 +62,11 @@ func TestMatches(t *testing.T) {
 		},
 		{
 			"boji_006_brief_granted_bench_go_the_filed_owns_did_not_list",
-			[]string{"bench/api/**", "bench/report/**", "bench/corpus/**"}, "cmd/boji/bench.go", false,
+			[]string{"bench/api/**", "bench/report/**", "bench/corpus/**"}, "cmd/tofu/bench.go", false,
 		},
 		{
 			"boji_011_brief_granted_bench_go_the_filed_owns_did_not_list",
-			[]string{"bench/cost/**"}, "cmd/boji/bench.go", false,
+			[]string{"bench/cost/**"}, "cmd/tofu/bench.go", false,
 		},
 		{
 			"boji_015_brief_granted_client_test_go_the_filed_owns_did_not_list",

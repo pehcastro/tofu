@@ -3,7 +3,7 @@ package turn
 import (
 	"time"
 
-	iturn "boji/internal/turn"
+	iturn "tofu/internal/turn"
 )
 
 const (

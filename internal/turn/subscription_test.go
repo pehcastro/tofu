@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"boji/internal/llm/wire/anthropic"
+	"tofu/internal/llm/wire/anthropic"
 )
 
 func recordedSubscription(t *testing.T, streams ...string) Subscription {

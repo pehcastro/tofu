@@ -108,7 +108,7 @@ func codexSpec() Spec {
 		AuthorizeParams: map[string]string{
 			"id_token_add_organizations": "true",
 			"codex_cli_simplified_flow":  "true",
-			"originator":                 "boji",
+			"originator":                 "tofu",
 		},
 		CallbackPort: 1455,
 		CallbackPath: "/auth/callback",

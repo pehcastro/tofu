@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"boji/catalog/questions"
+	"tofu/catalog/questions"
 )
 
 func TestEveryShippedSetIsEmbedded(t *testing.T) {

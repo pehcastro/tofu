@@ -9,7 +9,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"boji/internal/widget"
+	"tofu/internal/widget"
 )
 
 const steerBuffer = 8

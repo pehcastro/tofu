@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"boji/internal/judge/jev"
+	"tofu/internal/judge/jev"
 )
 
 type OptionSweepPoint struct {

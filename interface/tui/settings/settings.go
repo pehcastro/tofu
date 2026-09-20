@@ -3,8 +3,8 @@ package settings
 import (
 	"strings"
 
-	"boji/interface/tui/theme"
-	"boji/internal/widget"
+	"tofu/interface/tui/theme"
+	"tofu/internal/widget"
 )
 
 const (

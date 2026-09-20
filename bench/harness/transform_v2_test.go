@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"boji/bench/transform"
+	"tofu/bench/transform"
 )
 
 func TestTransformArmsOverTheV2Session(t *testing.T) {

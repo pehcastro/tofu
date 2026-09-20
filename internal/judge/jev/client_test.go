@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"boji/internal/konst"
-	"boji/internal/transport"
+	"tofu/internal/konst"
+	"tofu/internal/transport"
 )
 
 const stubRequestByteCap = 90000

@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"boji/bench/report"
+	"tofu/bench/report"
 )
 
 func Render(result Result, conditions report.Conditions) string {

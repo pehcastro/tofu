@@ -7,7 +7,7 @@ type Arm string
 const (
 	ArmClaude Arm = "claude"
 	ArmCodex  Arm = "codex"
-	ArmBoji   Arm = "boji"
+	ArmTofu   Arm = "tofu"
 )
 
 type CredentialKind string

@@ -3,7 +3,7 @@ package llm
 import (
 	"encoding/json"
 
-	"boji/internal/transport"
+	"tofu/internal/transport"
 )
 
 type Outcome int

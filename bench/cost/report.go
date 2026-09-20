@@ -6,10 +6,10 @@ import (
 	"strings"
 	"time"
 
-	"boji/bench/corpus"
-	"boji/bench/report"
-	"boji/bench/stat"
-	"boji/internal/judge/ledger"
+	"tofu/bench/corpus"
+	"tofu/bench/report"
+	"tofu/bench/stat"
+	"tofu/internal/judge/ledger"
 )
 
 func Render(result Result, conditions report.Conditions) string {

@@ -3,8 +3,8 @@ package turn
 import (
 	"time"
 
-	"boji/internal/llm"
-	"boji/internal/recall"
+	"tofu/internal/llm"
+	"tofu/internal/recall"
 )
 
 type ForkKind string

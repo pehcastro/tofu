@@ -9,9 +9,9 @@ import (
 	"strconv"
 	"strings"
 
-	"boji/internal/crew"
-	"boji/internal/konst"
-	"boji/internal/llm"
+	"tofu/internal/crew"
+	"tofu/internal/konst"
+	"tofu/internal/llm"
 )
 
 type DepthLimitError struct {

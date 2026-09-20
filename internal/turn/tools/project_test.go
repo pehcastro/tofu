@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"boji/internal/konst"
-	"boji/internal/turn"
+	"tofu/internal/konst"
+	"tofu/internal/turn"
 )
 
 func projectTree(t *testing.T) string {
@@ -102,8 +102,8 @@ func TestProjectReportSaysWhenALimitCutASectionRatherThanLookingComplete(t *test
 }
 
 func TestProjectReportAgainstTheTwoFindCommandsFromTheRecordedRun(t *testing.T) {
-	if os.Getenv("BOJI_MEASURE_FIND") == "" {
-		t.Skip("the find arms walk every ignored directory and take minutes, so they run only under BOJI_MEASURE_FIND")
+	if os.Getenv("TOFU_MEASURE_FIND") == "" {
+		t.Skip("the find arms walk every ignored directory and take minutes, so they run only under TOFU_MEASURE_FIND")
 	}
 	root, err := filepath.Abs(filepath.Join("..", "..", ".."))
 	if err != nil {
@@ -166,7 +166,7 @@ func TestProjectReportReadsTheWholeRepositoryInUnderASecond(t *testing.T) {
 	if took > time.Second {
 		t.Fatalf("project_report took %v on %s", took, root)
 	}
-	for _, want := range []string{"go ", "entry points", "documentation", "cmd/boji/main.go"} {
+	for _, want := range []string{"go ", "entry points", "documentation", "cmd/tofu/main.go"} {
 		if !strings.Contains(result.Content, want) {
 			t.Fatalf("the report of the real repository never says %q:\n%s", want, result.Content)
 		}

@@ -11,10 +11,10 @@ import (
 	"strings"
 	"time"
 
-	"boji/bench/harness"
-	"boji/internal/judge/jev/wire/openrouter"
-	"boji/internal/sys"
-	"boji/internal/turn"
+	"tofu/bench/harness"
+	"tofu/internal/judge/jev/wire/openrouter"
+	"tofu/internal/sys"
+	"tofu/internal/turn"
 )
 
 type harnessOpts struct {
@@ -24,7 +24,7 @@ type harnessOpts struct {
 	offline    bool
 	transcript string
 	run        int
-	bojiBin    string
+	tofuBin    string
 }
 
 const harnessTranscriptDir = "bench/harness/testdata/boji-1"
@@ -50,8 +50,8 @@ func parseHarnessArgs(args []string) (harnessOpts, error) {
 			opts.run, err = nextInt(args, &i, arg)
 		case "--transcript":
 			opts.transcript, err = nextArg(args, &i, arg)
-		case "--boji":
-			opts.bojiBin, err = nextArg(args, &i, arg)
+		case "--tofu":
+			opts.tofuBin, err = nextArg(args, &i, arg)
 		default:
 			err = fmt.Errorf("unknown argument %q", arg)
 		}
@@ -60,36 +60,36 @@ func parseHarnessArgs(args []string) (harnessOpts, error) {
 		}
 	}
 	if opts.offline && opts.arm == "" {
-		opts.arm = harness.ArmBoji
+		opts.arm = harness.ArmTofu
 	}
 	return opts, nil
 }
 
 func knownArm(name string) error {
 	switch harness.Arm(name) {
-	case harness.ArmBoji, harness.ArmClaude, harness.ArmCodex:
+	case harness.ArmTofu, harness.ArmClaude, harness.ArmCodex:
 		return nil
 	}
-	return fmt.Errorf("unknown arm %q, the arms are boji, claude and codex", name)
+	return fmt.Errorf("unknown arm %q, the arms are tofu, claude and codex", name)
 }
 
-func bojiUnderTest(named string) (path string, cleanup func(), err error) {
+func tofuUnderTest(named string) (path string, cleanup func(), err error) {
 	if named != "" {
 		abs, err := filepath.Abs(named)
 		return abs, func() {}, err
 	}
-	dir, err := os.MkdirTemp("", "boji-bench-arm")
+	dir, err := os.MkdirTemp("", "tofu-bench-arm")
 	if err != nil {
 		return "", func() {}, err
 	}
-	bin := filepath.Join(dir, "boji")
+	bin := filepath.Join(dir, "tofu")
 	if runtime.GOOS == "windows" {
 		bin += ".exe"
 	}
-	build := exec.Command("go", "build", "-o", bin, "./cmd/boji")
+	build := exec.Command("go", "build", "-o", bin, "./cmd/tofu")
 	if out, err := build.CombinedOutput(); err != nil {
 		_ = os.RemoveAll(dir)
-		return "", func() {}, fmt.Errorf("the boji arm measures the boji in this tree, so the bench builds ./cmd/boji, and that failed. Name a built binary with --boji to measure one instead: %w\n%s", err, out)
+		return "", func() {}, fmt.Errorf("the tofu arm measures the tofu in this tree, so the bench builds ./cmd/tofu, and that failed. Name a built binary with --tofu to measure one instead: %w\n%s", err, out)
 	}
 	return bin, func() { _ = os.RemoveAll(dir) }, nil
 }
@@ -111,7 +111,7 @@ func benchHarness(out, errOut io.Writer, args []string) int {
 	if err != nil {
 		return fail(errOut, "harness", err)
 	}
-	if opts.arm != harness.ArmBoji {
+	if opts.arm != harness.ArmTofu {
 		if err := harness.Fprint(out, plan); err != nil {
 			return fail(errOut, "harness", err)
 		}
@@ -120,7 +120,7 @@ func benchHarness(out, errOut io.Writer, args []string) int {
 	}
 
 	if !opts.offline {
-		bin, cleanup, err := bojiUnderTest(opts.bojiBin)
+		bin, cleanup, err := tofuUnderTest(opts.tofuBin)
 		if err != nil {
 			return fail(errOut, "harness", err)
 		}
@@ -153,14 +153,14 @@ func benchHarness(out, errOut io.Writer, args []string) int {
 		CLIVersion: sys.Version(), Commit: sys.BuildRevision(),
 	}
 
-	row, gaps := harness.MeasureBoji(session, sources, meta)
+	row, gaps := harness.MeasureTofu(session, sources, meta)
 	renderHarnessRow(out, row, gaps, execution, opts, ledgerDir)
 	_, _ = fmt.Fprint(out, harness.Render([]harness.Row{row}))
 	return exitOK
 }
 
 func printEveryPlan(out io.Writer, opts harnessOpts) error {
-	for _, arm := range []harness.Arm{harness.ArmBoji, harness.ArmClaude, harness.ArmCodex} {
+	for _, arm := range []harness.Arm{harness.ArmTofu, harness.ArmClaude, harness.ArmCodex} {
 		plan, err := harness.BuildPlan(".", arm, opts.task, opts.version)
 		if err != nil {
 			return err

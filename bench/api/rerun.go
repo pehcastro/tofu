@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"boji/bench/stat"
-	"boji/internal/judge/jev"
+	"tofu/bench/stat"
+	"tofu/internal/judge/jev"
 )
 
 const rerunThresholdProbe = 0.5

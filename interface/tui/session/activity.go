@@ -5,9 +5,9 @@ import (
 	"strings"
 	"time"
 
-	"boji/interface/tui/crew"
-	"boji/interface/tui/theme"
-	"boji/internal/widget"
+	"tofu/interface/tui/crew"
+	"tofu/interface/tui/theme"
+	"tofu/internal/widget"
 )
 
 const (

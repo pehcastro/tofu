@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"boji/internal/judge/ledger"
+	"tofu/internal/judge/ledger"
 )
 
 var (

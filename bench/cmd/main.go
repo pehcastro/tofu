@@ -10,13 +10,13 @@ import (
 	"strconv"
 	"time"
 
-	benchapi "boji/bench/api"
-	benchcost "boji/bench/cost"
-	"boji/bench/report"
-	benchturn "boji/bench/turn"
-	benchwording "boji/bench/wording"
-	"boji/internal/judge/jev"
-	"boji/internal/judge/jev/wire/openrouter"
+	benchapi "tofu/bench/api"
+	benchcost "tofu/bench/cost"
+	"tofu/bench/report"
+	benchturn "tofu/bench/turn"
+	benchwording "tofu/bench/wording"
+	"tofu/internal/judge/jev"
+	"tofu/internal/judge/jev/wire/openrouter"
 )
 
 const (

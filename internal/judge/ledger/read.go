@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"boji/internal/sys"
+	"tofu/internal/sys"
 )
 
 const lineCeiling = 1 << 20

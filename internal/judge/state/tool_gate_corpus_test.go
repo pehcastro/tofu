@@ -5,8 +5,8 @@ import (
 	"io/fs"
 	"testing"
 
-	"boji/bench/corpus"
-	"boji/internal/judge/ledger"
+	"tofu/bench/corpus"
+	"tofu/internal/judge/ledger"
 )
 
 type corpusCase struct {

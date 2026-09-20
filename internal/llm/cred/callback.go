@@ -33,7 +33,7 @@ const pageHead = `<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer">
-<title>boji</title>
+<title>tofu</title>
 <style>
 :root { color-scheme: light dark; --bg: #f7f7f5; --card: #ffffff; --ink: #1b1b19; --muted: #6d6a62; --line: #e5e3dd; --ok: #2f7d4f; --bad: #b03a2e; }
 @media (prefers-color-scheme: dark) { :root { --bg: #131312; --card: #1c1c1a; --ink: #f0eee6; --muted: #9b978c; --line: #2d2c29; --ok: #79c894; --bad: #e8806f; } }
@@ -50,7 +50,7 @@ main.bad h1 { color: var(--bad); }
 <main class="`
 
 func callbackDocument(reason callbackReason) string {
-	class, heading, detail := "ok", "Signed in", "boji holds the credential now, and the terminal has gone on without you."
+	class, heading, detail := "ok", "Signed in", "tofu holds the credential now, and the terminal has gone on without you."
 	foot := "You can close this window."
 	if reason != "" {
 		class, heading, detail = "bad", "Sign-in failed", string(reason)

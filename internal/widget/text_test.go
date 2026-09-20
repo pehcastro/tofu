@@ -64,20 +64,20 @@ func TestFitCountsDisplayCellsAndMarksTheCut(t *testing.T) {
 		width int
 		want  string
 	}{
-		{"boji", 0, ""},
-		{"boji", -3, ""},
-		{"boji", 1, ellipsis},
+		{"tofu", 0, ""},
+		{"tofu", -3, ""},
+		{"tofu", 1, ellipsis},
 		{"b", 1, "b"},
-		{"boji", 4, "boji"},
-		{"boji", 9, "boji"},
-		{"boji", 3, "bo" + ellipsis},
+		{"tofu", 4, "tofu"},
+		{"tofu", 9, "tofu"},
+		{"tofu", 3, "to" + ellipsis},
 		{"ключ", 4, "ключ"},
 		{"ключ", 3, "кл" + ellipsis},
 		{"日本語です", 10, "日本語です"},
 		{"日本語です", 9, "日本語で" + ellipsis},
 		{"日本語です", 4, "日" + ellipsis},
-		{family + " boji", 7, family + " boji"},
-		{family + " boji", 6, family + " bo" + ellipsis},
+		{family + " tofu", 7, family + " tofu"},
+		{family + " tofu", 6, family + " to" + ellipsis},
 		{family, 1, ellipsis},
 	} {
 		if got := Fit(step.text, step.width); got != step.want {
@@ -115,10 +115,10 @@ func TestPadAndLeadCountCellsAndNeverShortenAnything(t *testing.T) {
 	}{
 		{"", 0, "", ""},
 		{"", 2, "  ", "  "},
-		{"boji", 0, "boji", "boji"},
-		{"boji", 2, "boji", "boji"},
-		{"boji", 4, "boji", "boji"},
-		{"boji", 6, "boji  ", "  boji"},
+		{"tofu", 0, "tofu", "tofu"},
+		{"tofu", 2, "tofu", "tofu"},
+		{"tofu", 4, "tofu", "tofu"},
+		{"tofu", 6, "tofu  ", "  tofu"},
 		{"ключ", 6, "ключ  ", "  ключ"},
 		{"日本", 4, "日本", "日本"},
 		{"日本", 6, "日本  ", "  日本"},

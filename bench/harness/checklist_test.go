@@ -122,7 +122,7 @@ func TestChecklistResults_TurnsChecksIntoRowChecklist(t *testing.T) {
 }
 
 func TestRunChecklist_MissingBinaryIsAnError(t *testing.T) {
-	_, err := RunChecklist("boji-bench-checklist-missing-binary-xyz", "checker.ts", t.TempDir())
+	_, err := RunChecklist("tofu-bench-checklist-missing-binary-xyz", "checker.ts", t.TempDir())
 	if err == nil {
 		t.Fatal("expected an error for a missing bun binary, got nil")
 	}

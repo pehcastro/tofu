@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"boji/catalog/questions"
-	"boji/internal/judge/question"
+	"tofu/catalog/questions"
+	"tofu/internal/judge/question"
 )
 
 func TestBareToolGateIsRefusedWithTwoVersionsOnDisk(t *testing.T) {

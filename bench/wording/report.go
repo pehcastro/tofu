@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"boji/bench/report"
+	"tofu/bench/report"
 )
 
 const (

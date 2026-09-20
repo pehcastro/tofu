@@ -6,7 +6,7 @@ import (
 	"errors"
 	"sync"
 
-	"boji/internal/llm"
+	"tofu/internal/llm"
 )
 
 type stubModel struct {

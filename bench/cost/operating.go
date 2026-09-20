@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"boji/internal/judge/policy"
+	"tofu/internal/judge/policy"
 )
 
 const calibrationFilePath = "bench/cost/calibration/tool_gate@1.json"

@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"boji/internal/recall"
+	"tofu/internal/recall"
 )
 
 func shippedConfig(t *testing.T) recall.Config {

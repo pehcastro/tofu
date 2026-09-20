@@ -11,10 +11,10 @@ import (
 	"strconv"
 	"strings"
 
-	"boji/internal/konst"
-	"boji/internal/llm"
-	"boji/internal/search"
-	"boji/internal/turn"
+	"tofu/internal/konst"
+	"tofu/internal/llm"
+	"tofu/internal/search"
+	"tofu/internal/turn"
 )
 
 type Project struct {

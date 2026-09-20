@@ -6,11 +6,11 @@ import (
 	"testing"
 	"time"
 
-	"boji/internal/judge/jev"
-	"boji/internal/judge/jev/wire/openrouter"
-	"boji/internal/judge/ledger"
-	"boji/internal/judge/policy"
-	"boji/internal/transport"
+	"tofu/internal/judge/jev"
+	"tofu/internal/judge/jev/wire/openrouter"
+	"tofu/internal/judge/ledger"
+	"tofu/internal/judge/policy"
+	"tofu/internal/transport"
 )
 
 func TestAnUnreachableEndpointStillLeavesARow(t *testing.T) {
@@ -27,7 +27,7 @@ func TestAnUnreachableEndpointStillLeavesARow(t *testing.T) {
 		t.Fatalf("NewClient: %v", err)
 	}
 
-	state := []byte(`{"agent":"boji","tool":"bash","input":{"command":"git push --force"},"cwd":"/home/user/project","context":{"user_recent_messages":["can you check if the tests pass?"],"flagged_untrusted_content":null}}`)
+	state := []byte(`{"agent":"tofu","tool":"bash","input":{"command":"git push --force"},"cwd":"/home/user/project","context":{"user_recent_messages":["can you check if the tests pass?"],"flagged_untrusted_content":null}}`)
 	_, askErr := client.Ask(context.Background(), jev.Request{
 		State:     json.RawMessage(state),
 		Questions: []jev.Question{{ID: "risk", Kind: jev.QuestionNoul, Instructions: "how risky is this call", True: "risky", False: "safe"}},

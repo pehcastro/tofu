@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"boji/internal/konst"
-	"boji/internal/search"
+	"tofu/internal/konst"
+	"tofu/internal/search"
 )
 
 func find(t *testing.T, pattern string, budget int, files map[string]string) search.Result {

@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"boji/internal/konst"
-	"boji/internal/recall"
+	"tofu/internal/konst"
+	"tofu/internal/recall"
 )
 
 const testBytesCap = 4096

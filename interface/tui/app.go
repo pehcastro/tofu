@@ -10,16 +10,16 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
-	"boji/interface/tui/crew"
-	"boji/interface/tui/edits"
-	"boji/interface/tui/frame"
-	"boji/interface/tui/markdown"
-	"boji/interface/tui/paste"
-	"boji/interface/tui/session"
-	"boji/interface/tui/settings"
-	"boji/interface/tui/theme"
-	"boji/internal/sys"
-	"boji/internal/widget"
+	"tofu/interface/tui/crew"
+	"tofu/interface/tui/edits"
+	"tofu/interface/tui/frame"
+	"tofu/interface/tui/markdown"
+	"tofu/interface/tui/paste"
+	"tofu/interface/tui/session"
+	"tofu/interface/tui/settings"
+	"tofu/interface/tui/theme"
+	"tofu/internal/sys"
+	"tofu/internal/widget"
 )
 
 type EventKind int
@@ -144,7 +144,7 @@ const (
 	headerRows    = 1
 	stripRow      = 1
 	bodyRow       = stripRow + 1
-	setupTitle    = "boji cannot start a turn yet"
+	setupTitle    = "tofu cannot start a turn yet"
 	setupKeys     = "[1-9] run the fix   [r] check again   [q] quit"
 	setupIndent   = "   "
 	gateOffLine   = "the gate is off, so no call on this session is judged."
@@ -210,7 +210,7 @@ func New(options Options) *App {
 	app.resize(app.width, app.height)
 	app.readWires()
 	if len(app.requirements) == 0 {
-		app.view.Append(session.Entry{Kind: session.Note, Body: "type a task and press enter. boji works in " + options.Repo})
+		app.view.Append(session.Entry{Kind: session.Note, Body: "type a task and press enter. tofu works in " + options.Repo})
 	}
 	return app
 }

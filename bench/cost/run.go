@@ -7,11 +7,11 @@ import (
 	"path/filepath"
 	"time"
 
-	benchapi "boji/bench/api"
-	"boji/bench/corpus"
-	"boji/internal/judge/jev"
-	"boji/internal/judge/ledger"
-	"boji/internal/judge/policy"
+	benchapi "tofu/bench/api"
+	"tofu/bench/corpus"
+	"tofu/internal/judge/jev"
+	"tofu/internal/judge/ledger"
+	"tofu/internal/judge/policy"
 )
 
 type CaseResult struct {

@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	"boji/internal/transport"
+	"tofu/internal/transport"
 )
 
 func TestUnavailabilityNamesTheReason(t *testing.T) {

@@ -9,15 +9,15 @@ import (
 	"testing"
 	"time"
 
-	benchapi "boji/bench/api"
-	"boji/bench/corpus"
-	"boji/internal/judge/policy"
+	benchapi "tofu/bench/api"
+	"tofu/bench/corpus"
+	"tofu/internal/judge/policy"
 )
 
 const barWidth = 30
 
 func TestLiveCalibrationPassOverBothHalves(t *testing.T) {
-	key := liveKey(t, "BOJI_LIVE_CALIBRATION")
+	key := liveKey(t, "TOFU_LIVE_CALIBRATION")
 	battery, _, err := benchapi.GateBattery()
 	if err != nil {
 		t.Fatalf("GateBattery: %v", err)

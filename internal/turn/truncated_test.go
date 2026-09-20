@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"boji/internal/llm"
-	"boji/internal/llm/wire/anthropic"
+	"tofu/internal/llm"
+	"tofu/internal/llm/wire/anthropic"
 )
 
 func truncatedDecision(content string, calls ...llm.ToolCall) llm.Decision {

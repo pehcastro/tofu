@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"boji/internal/judge/jev"
-	"boji/internal/judge/policy"
+	"tofu/internal/judge/jev"
+	"tofu/internal/judge/policy"
 )
 
 const gatePolicyFile = "catalog/policy/tool_gate@1.yaml"

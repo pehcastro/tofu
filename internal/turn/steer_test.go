@@ -5,8 +5,8 @@ import (
 	"slices"
 	"testing"
 
-	"boji/internal/llm"
-	"boji/internal/session"
+	"tofu/internal/llm"
+	"tofu/internal/session"
 )
 
 const (

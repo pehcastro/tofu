@@ -3,8 +3,8 @@ package jev
 import (
 	"strconv"
 
-	"boji/internal/konst"
-	"boji/internal/transport"
+	"tofu/internal/konst"
+	"tofu/internal/transport"
 )
 
 const floatSlack = 1e-9

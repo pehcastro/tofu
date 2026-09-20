@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"boji/internal/llm"
-	"boji/internal/recall"
+	"tofu/internal/llm"
+	"tofu/internal/recall"
 )
 
 type sequentialTool struct {

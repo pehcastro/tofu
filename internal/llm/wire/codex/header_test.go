@@ -70,7 +70,7 @@ func TestSubscriptionHeadersMatchTheSpec(t *testing.T) {
 		HeaderRoutingHint:   "model=gpt-5.5-codex",
 		HeaderResidency:     "eu",
 		HeaderBeta:          "responses=experimental",
-		HeaderOriginator:    "boji",
+		HeaderOriginator:    "tofu",
 		HeaderVersion:       "0.153.0",
 		HeaderAccept:        "text/event-stream",
 		HeaderContentType:   "application/json",

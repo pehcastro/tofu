@@ -8,7 +8,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"boji/internal/sys"
+	"tofu/internal/sys"
 )
 
 const cacheSuffix = ".json"

@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"boji/internal/judge/jev"
+	"tofu/internal/judge/jev"
 )
 
 func lintBody(t *testing.T, body string) []Finding {

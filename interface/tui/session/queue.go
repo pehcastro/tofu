@@ -4,8 +4,8 @@ import (
 	"slices"
 	"strconv"
 
-	"boji/interface/tui/theme"
-	"boji/internal/widget"
+	"tofu/interface/tui/theme"
+	"tofu/internal/widget"
 )
 
 const (

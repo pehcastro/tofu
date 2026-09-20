@@ -1,11 +1,11 @@
-[38;5;252;48;5;236mboji test  ·  silo  ·  14:34 00:00[m[48;5;236m                                              [m
-[38;5;214mboji cannot start a turn yet[m                                                    
+[38;5;252;48;5;236mtofu test  ·  silo  ·  14:34 00:00[m[48;5;236m                                              [m
+[38;5;214mtofu cannot start a turn yet[m                                                    
                                                                                 
 [38;5;252m1. there is no anthropic subscription credential, so no model can answer[m        
-[38;5;245m   press 1 to run boji login anthropic[m                                          
+[38;5;245m   press 1 to run tofu login anthropic[m                                          
                                                                                 
 [38;5;252m2. there is no openrouter key, so no tool call is judged[m                        
-[38;5;245m   press 2 to run boji login openrouter[m                                         
+[38;5;245m   press 2 to run tofu login openrouter[m                                         
                                                                                 
 [38;5;240m[1-9] run the fix   [r] check again   [q] quit[m                                  
                                                                                 

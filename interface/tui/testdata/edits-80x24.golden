@@ -1,9 +1,9 @@
-[38;5;252;48;5;236mboji test  ·  silo  ·  develop  ·  codex → gpt-5.6-sol-2026-09-01  ·  14:34[m[48;5;236m     [m
+[38;5;252;48;5;236mtofu test  ·  silo  ·  develop  ·  codex → gpt-5.6-sol-2026-09-01  ·  14:34[m[48;5;236m     [m
 [38;5;240m1 session[m   [38;5;240m2 crew[m   [38;5;39m3 file edits[m   [38;5;240m6 settings[m                                  
 [38;5;39mfile edits    [m[38;5;236m │ [m[38;5;252mgo-docs edited docs/verification.md                     [m  [38;5;245m+1 -1[m
 [38;5;252m              [m[38;5;236m │ [m[38;5;245m  @@ -8,2 +8,2 @@                                              [m
 [38;5;39m›  feed      3[m[38;5;236m │ [m[38;5;167m  -a skip is silent                                            [m
-[38;5;252m ✓ boji      1[m[38;5;236m │ [m[38;5;114m  +a skip is a result and it is named                          [m
+[38;5;252m ✓ tofu      1[m[38;5;236m │ [m[38;5;114m  +a skip is a result and it is named                          [m
 [38;5;252m ● go-dev    1[m[38;5;236m │ [m[38;5;252m                                                               [m
 [38;5;252m ✓ go-docs   1[m[38;5;236m │ [m[38;5;252mgo-dev edited internal/rule/check.go                    [m  [38;5;245m+1 -0[m
 [38;5;252m ⤺ go-rules  0[m[38;5;236m │ [m[38;5;245m  @@ -12,3 +12,4 @@                                            [m
@@ -11,7 +11,7 @@
 [38;5;240m↑↓ pick       [m[38;5;236m │ [m[38;5;114m  +    return nil                                              [m
 [38;5;240mpgup older    [m[38;5;236m │ [m[38;5;240m  }                                                            [m
               [38;5;236m │ [m[38;5;252m                                                               [m
-              [38;5;236m │ [m[38;5;252mboji edited internal/judge/policy/toolgate.go           [m  [38;5;245m+1 -1[m
+              [38;5;236m │ [m[38;5;252mtofu edited internal/judge/policy/toolgate.go           [m  [38;5;245m+1 -1[m
               [38;5;236m │ [m[38;5;245m  @@ -40,6 +40,7 @@                                            [m
               [38;5;236m │ [m[38;5;240m   func Decide(answers Answers) Verdict {                      [m
               [38;5;236m │ [m[38;5;240m      if answers.Risk > thresholds.RiskAskAt {                 [m

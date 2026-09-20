@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"boji/internal/konst"
+	"tofu/internal/konst"
 )
 
 const (

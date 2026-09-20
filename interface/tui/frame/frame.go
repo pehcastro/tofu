@@ -6,10 +6,10 @@ import (
 	"strings"
 	"time"
 
-	"boji/interface/tui/theme"
-	"boji/internal/konst"
-	"boji/internal/sys"
-	"boji/internal/widget"
+	"tofu/interface/tui/theme"
+	"tofu/internal/konst"
+	"tofu/internal/sys"
+	"tofu/internal/widget"
 )
 
 const (
@@ -109,7 +109,7 @@ func headerText(head Head, width int) string {
 }
 
 func headFields(head Head, drop headDropped) []string {
-	fields := []string{"boji " + head.Release}
+	fields := []string{"tofu " + head.Release}
 	if drop < headRepo {
 		fields = append(fields, head.Repo)
 	}

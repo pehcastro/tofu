@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"boji/internal/crew"
-	"boji/internal/llm"
+	"tofu/internal/crew"
+	"tofu/internal/llm"
 )
 
 func bashCall(id, command string) llm.Decision {

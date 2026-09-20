@@ -1,9 +1,9 @@
-[38;5;252;48;5;236mboji test  ·  silo  ·  develop  ·  codex → gpt-5.6-sol-2026-09-01  ·  14:34 00:00[m[48;5;236m                                       [m
+[38;5;252;48;5;236mtofu test  ·  silo  ·  develop  ·  codex → gpt-5.6-sol-2026-09-01  ·  14:34 00:00[m[48;5;236m                                       [m
 [38;5;240m1 session[m   [38;5;240m2 crew[m   [38;5;39m3 file edits[m   [38;5;240m6 settings[m                                                                          
 [38;5;39mfile edits    [m[38;5;236m │ [m[38;5;252mgo-dev edited internal/rule/check.go                                                            [m  [38;5;245m+1 -0[m
 [38;5;252m              [m[38;5;236m │ [m[38;5;245m  @@ -12,3 +12,4 @@                                                                                    [m
 [38;5;252m   feed      3[m[38;5;236m │ [m[38;5;240m   func Check(findings []Finding) error {                                                              [m
-[38;5;252m ✓ boji      1[m[38;5;236m │ [m[38;5;114m  +    return nil                                                                                      [m
+[38;5;252m ✓ tofu      1[m[38;5;236m │ [m[38;5;114m  +    return nil                                                                                      [m
 [38;5;39m›● go-dev    1[m[38;5;236m │ [m[38;5;240m  }                                                                                                    [m
 [38;5;252m ✓ go-docs   1[m[38;5;236m │ [m[38;5;252m                                                                                                       [m
 [38;5;252m ⤺ go-rules  0[m[38;5;236m │ [m                                                                                                       

@@ -3,7 +3,7 @@ package report
 import (
 	"strings"
 
-	"boji/internal/judge/ledger"
+	"tofu/internal/judge/ledger"
 )
 
 const CostUnitPrefix = "Cost unit: "

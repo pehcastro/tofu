@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	catalogpolicy "boji/catalog/policy"
-	"boji/internal/judge/question"
+	catalogpolicy "tofu/catalog/policy"
+	"tofu/internal/judge/question"
 )
 
 func toolGatePolicyPath() string {

@@ -13,7 +13,7 @@ import (
 
 func TestBuildPlanPrintsCommandDirEnvAndUnsetCapsForAllThreeArms(t *testing.T) {
 	root := repositoryRoot(t)
-	for _, arm := range []Arm{ArmClaude, ArmCodex, ArmBoji} {
+	for _, arm := range []Arm{ArmClaude, ArmCodex, ArmTofu} {
 		plan, err := BuildPlan(root, arm, "hono", 1)
 		if err != nil {
 			t.Fatalf("%s: BuildPlan: %v", arm, err)
@@ -54,7 +54,7 @@ func TestBuildPlanPassesThePromptTextNotItsPath(t *testing.T) {
 	}
 	want := strings.TrimSpace(string(raw))
 
-	plan, err := BuildPlan(root, ArmBoji, "hono", 1)
+	plan, err := BuildPlan(root, ArmTofu, "hono", 1)
 	if err != nil {
 		t.Fatalf("BuildPlan: %v", err)
 	}
@@ -63,14 +63,14 @@ func TestBuildPlanPassesThePromptTextNotItsPath(t *testing.T) {
 	}
 	for _, arg := range plan.Command {
 		if strings.HasSuffix(arg, ".prompt.txt") {
-			t.Errorf("the command still carries a prompt file path %q, boji run takes the task as a string", arg)
+			t.Errorf("the command still carries a prompt file path %q, tofu run takes the task as a string", arg)
 		}
 	}
 }
 
 func TestEveryArmPlanNamesItsModelSoTheComparisonIsLikeForLike(t *testing.T) {
 	root := repositoryRoot(t)
-	want := map[Arm]string{ArmClaude: claudeArmModel, ArmCodex: codexArmModel, ArmBoji: bojiArmModel}
+	want := map[Arm]string{ArmClaude: claudeArmModel, ArmCodex: codexArmModel, ArmTofu: tofuArmModel}
 	for arm, model := range want {
 		plan, err := BuildPlan(root, arm, "hono", 1)
 		if err != nil {
@@ -99,7 +99,7 @@ func TestEveryArmPlanNamesItsModelSoTheComparisonIsLikeForLike(t *testing.T) {
 }
 
 func TestBuildPlanFailsWhenThePromptIsMissing(t *testing.T) {
-	if _, err := BuildPlan(t.TempDir(), ArmBoji, "hono", 1); err == nil {
+	if _, err := BuildPlan(t.TempDir(), ArmTofu, "hono", 1); err == nil {
 		t.Fatal("BuildPlan returned no error for a root with no prompt file")
 	}
 }
@@ -125,14 +125,14 @@ func TestBuildPlanStartsNoProcessForAnyArm(t *testing.T) {
 	dir := t.TempDir()
 	marker := filepath.Join(dir, "marker.txt")
 	script := "@echo ran > \"" + marker + "\"\r\n"
-	for _, name := range []string{"claude.cmd", "codex.cmd", "boji.cmd"} {
+	for _, name := range []string{"claude.cmd", "codex.cmd", "tofu.cmd"} {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(script), 0o755); err != nil {
 			t.Fatalf("write sentinel %s: %v", name, err)
 		}
 	}
 	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
 
-	for _, arm := range []Arm{ArmClaude, ArmCodex, ArmBoji} {
+	for _, arm := range []Arm{ArmClaude, ArmCodex, ArmTofu} {
 		plan, err := BuildPlan(root, arm, "hono", 1)
 		if err != nil {
 			t.Fatalf("%s: BuildPlan: %v", arm, err)

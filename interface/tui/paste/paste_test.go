@@ -9,7 +9,7 @@ import (
 
 	"github.com/charmbracelet/x/ansi"
 
-	"boji/internal/sys"
+	"tofu/internal/sys"
 )
 
 const (

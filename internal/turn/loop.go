@@ -12,12 +12,12 @@ import (
 	"sync"
 	"time"
 
-	"boji/internal/konst"
-	"boji/internal/llm"
-	"boji/internal/recall"
-	"boji/internal/session"
-	"boji/internal/sys"
-	"boji/internal/transport"
+	"tofu/internal/konst"
+	"tofu/internal/llm"
+	"tofu/internal/recall"
+	"tofu/internal/session"
+	"tofu/internal/sys"
+	"tofu/internal/transport"
 )
 
 type Model interface {

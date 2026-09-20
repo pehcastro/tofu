@@ -6,8 +6,8 @@ import (
 	"charm.land/glamour/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"boji/interface/tui/theme"
-	"boji/internal/widget"
+	"tofu/interface/tui/theme"
+	"tofu/internal/widget"
 )
 
 type Renderer struct {

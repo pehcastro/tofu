@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"boji/internal/recall"
+	"tofu/internal/recall"
 )
 
 func overflowing(bands recall.Bands, cfg recall.Config) recall.Conversation {

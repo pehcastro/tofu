@@ -10,8 +10,8 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"boji/interface/tui/session"
-	"boji/interface/tui/theme"
+	"tofu/interface/tui/session"
+	"tofu/interface/tui/theme"
 )
 
 const (
@@ -37,14 +37,14 @@ func fourteenCalls() []runCall {
 		{tool: "read", text: "internal/turn/loop.go", result: "84 lines, 2.1 KB", bytes: 2148},
 		{tool: "bash", text: "go build ./...", result: "no output", bytes: 96},
 		{tool: "read", text: "internal/judge/policy/toolgate.go", result: "412 lines, 11.8 KB", bytes: 11800},
-		{tool: "bash", text: "go test ./internal/judge/...", result: "ok boji/internal/judge 0.42s", bytes: 412},
+		{tool: "bash", text: "go test ./internal/judge/...", result: "ok tofu/internal/judge 0.42s", bytes: 412},
 		{tool: "glob", text: "internal/**/*.go", result: "184 paths", bytes: 3140},
 		{tool: "read", text: "internal/judge/jev/wire.go", result: "266 lines, 8.2 KB", bytes: 8210},
 		{tool: "bash", text: "go vet ./internal/...", result: "no output", bytes: 128},
 		{tool: "read", text: "internal/point/toolgate.go", result: "141 lines, 4.1 KB", bytes: 4096},
 		{tool: "bash", text: "rg toolgate internal", result: "31 lines, 2.2 KB", bytes: 2210},
 		{tool: "read", text: "catalog/questions/tool_gate.yaml", result: "58 lines, 1.7 KB", bytes: 1740},
-		{tool: "bash", text: "go test ./internal/point/...", result: "ok boji/internal/point 0.31s", bytes: 380},
+		{tool: "bash", text: "go test ./internal/point/...", result: "ok tofu/internal/point 0.31s", bytes: 380},
 		{tool: "read", text: "internal/turn/budget.go", result: "172 lines, 5.3 KB", bytes: 5310},
 		{tool: "bash", text: longIntent, detail: longCommand, result: "14 lines, 64 bytes", bytes: 64},
 		{tool: "bash", text: "go tool deadcode -test ./...", result: "no output", bytes: 96},
@@ -229,7 +229,7 @@ func failedRun() []runCall {
 	return readsAround(runCall{
 		tool:   "bash",
 		text:   "go test ./internal/recall/...",
-		result: "FAIL boji/internal/recall 0.18s",
+		result: "FAIL tofu/internal/recall 0.18s",
 		failed: true,
 	})
 }
@@ -239,7 +239,7 @@ func TestAFailedCallIsNeverFoldedAndTheRunBreaksAroundIt(t *testing.T) {
 	content := wholeRun(t, &at, runWidth, runHeight, failedRun()).View().Content
 	assertGolden(t, "session-run-failure-80x24.golden", content)
 	plain := ansi.Strip(content)
-	for _, want := range []string{"go test ./internal/recall/...", "FAIL boji/internal/recall 0.18s"} {
+	for _, want := range []string{"go test ./internal/recall/...", "FAIL tofu/internal/recall 0.18s"} {
 		if !strings.Contains(plain, want) {
 			t.Errorf("the failed call does not show %q without being opened\n%s", want, plain)
 		}
@@ -247,7 +247,7 @@ func TestAFailedCallIsNeverFoldedAndTheRunBreaksAroundIt(t *testing.T) {
 	if rows := callRows(plain); rows != 1 {
 		t.Errorf("the run drew %d call rows, want the failed one alone\n%s", rows, plain)
 	}
-	if !strings.Contains(content, theme.Fail().Render("FAIL boji/internal/recall 0.18s")) {
+	if !strings.Contains(content, theme.Fail().Render("FAIL tofu/internal/recall 0.18s")) {
 		t.Errorf("the failure is drawn like every other result\n%q", content)
 	}
 	if folds := strings.Count(plain, " tools, "); folds != 2 {

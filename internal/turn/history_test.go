@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"boji/internal/llm"
+	"tofu/internal/llm"
 )
 
 func TestHistoryNumbersEntriesByStepAndKeepsThemAlignedWithTheMessages(t *testing.T) {

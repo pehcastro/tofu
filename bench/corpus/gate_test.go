@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"boji/internal/judge/state"
+	"tofu/internal/judge/state"
 )
 
 func TestGateCorpusHoldsAtLeastOneHundredAndTwentyRecordedCases(t *testing.T) {

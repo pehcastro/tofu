@@ -3,7 +3,7 @@ package stopcheck
 import (
 	"testing"
 
-	"boji/internal/konst"
+	"tofu/internal/konst"
 )
 
 func turnOf(commands ...[]string) Turn {

@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"boji/bench/api"
+	"tofu/bench/api"
 )
 
 type Conditions struct {

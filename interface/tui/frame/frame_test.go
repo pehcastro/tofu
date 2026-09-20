@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"boji/internal/konst"
-	"boji/internal/widget"
+	"tofu/internal/konst"
+	"tofu/internal/widget"
 )
 
 func head(release string) Head {
@@ -24,7 +24,7 @@ func head(release string) Head {
 func TestTheHeaderCarriesTheVersionNextToTheName(t *testing.T) {
 	for _, width := range []int{80, 120} {
 		text := headerText(head(konst.Version), width)
-		if !strings.HasPrefix(text, "boji "+konst.Version+separator) {
+		if !strings.HasPrefix(text, "tofu "+konst.Version+separator) {
 			t.Errorf("at width %d the header does not lead with the name and the version\n%s", width, text)
 		}
 		for _, want := range []string{"silo", "develop", "codex → gpt-5.6-sol-2026-09-01"} {

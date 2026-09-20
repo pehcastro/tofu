@@ -11,10 +11,10 @@ import (
 	"testing"
 	"time"
 
-	"boji/internal/judge/ledger"
-	"boji/internal/konst"
-	"boji/internal/llm"
-	"boji/internal/session"
+	"tofu/internal/judge/ledger"
+	"tofu/internal/konst"
+	"tofu/internal/llm"
+	"tofu/internal/session"
 )
 
 const traceWait = 2 * time.Second

@@ -7,8 +7,8 @@ const (
 	KeyPath             = "/responses"
 
 	PinnedCodexClientVersion = "0.153.0"
-	Originator               = "boji"
-	UserAgentPrefix          = "boji/"
+	Originator               = "tofu"
+	UserAgentPrefix          = "tofu/"
 	BetaResponsesSSE         = "responses=experimental"
 
 	JWTAuthClaim          = "https://api.openai.com/auth"

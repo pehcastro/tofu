@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"boji/internal/session"
+	"tofu/internal/session"
 )
 
 func TestAStepFromBeforeTheOccupancyReadsAsAnAbsenceAndAMeasuredZeroDoesNot(t *testing.T) {

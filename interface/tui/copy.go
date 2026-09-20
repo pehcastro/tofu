@@ -5,9 +5,9 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"boji/interface/tui/session"
-	"boji/internal/sys"
-	"boji/internal/widget"
+	"tofu/interface/tui/session"
+	"tofu/internal/sys"
+	"tofu/internal/widget"
 )
 
 const (

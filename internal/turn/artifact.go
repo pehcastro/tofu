@@ -6,8 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"boji/internal/llm"
-	"boji/internal/recall"
+	"tofu/internal/llm"
+	"tofu/internal/recall"
 )
 
 const truncationMarker = "\n...(truncated)...\n"

@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"boji/internal/llm"
-	"boji/internal/session"
+	"tofu/internal/llm"
+	"tofu/internal/session"
 )
 
 func recordingConfig(t *testing.T, model Model, tools Registry) (Config, *session.Store) {

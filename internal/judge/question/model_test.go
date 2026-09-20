@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"testing"
 
-	"boji/internal/judge/jev"
+	"tofu/internal/judge/jev"
 )
 
 func TestToJevCarriesChoiceOptionCriteria(t *testing.T) {

@@ -4,7 +4,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	rc "boji/internal/recall"
+	rc "tofu/internal/recall"
 )
 
 var (

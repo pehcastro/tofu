@@ -8,9 +8,9 @@ import (
 	"strings"
 	"testing"
 
-	"boji/bench/harness"
-	"boji/bench/harness/task"
-	"boji/internal/sys"
+	"tofu/bench/harness"
+	"tofu/bench/harness/task"
+	"tofu/internal/sys"
 )
 
 var benchedVersions = []int{1, 2}
@@ -19,7 +19,7 @@ const (
 	storedV2Row   = "bench/harness/testdata/v2-row/row.json"
 	v2SessionDir  = "bench/harness/testdata/v2-session"
 	v2ArmDir      = ".playground/hono-boji"
-	storeV2RowEnv = "BOJI_STORE_V2_ROW"
+	storeV2RowEnv = "TOFU_STORE_V2_ROW"
 	v2RowVersion  = 2
 )
 
@@ -157,14 +157,14 @@ func TestStoreTheV2Row(t *testing.T) {
 	}
 
 	armDir := filepath.Join(root, filepath.FromSlash(v2ArmDir))
-	row, gaps := harness.MeasureBoji(session, harness.Sources{
+	row, gaps := harness.MeasureTofu(session, harness.Sources{
 		LedgerDir:   filepath.Join(state, "log"),
 		ArmDir:      armDir,
 		BunBin:      "bun",
 		CheckerPath: task.Path(root, v2RowVersion, task.Checker),
 		StartCommit: harness.OwnStartCommit(armDir),
 	}, harness.RunMeta{
-		Arm: harness.ArmBoji, Task: "hono", Version: v2RowVersion, Run: 1,
+		Arm: harness.ArmTofu, Task: "hono", Version: v2RowVersion, Run: 1,
 		CLIVersion: sys.Version(), Commit: sys.BuildRevision(),
 	})
 	for i, gate := range row.Gates {

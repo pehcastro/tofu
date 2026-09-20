@@ -5,8 +5,8 @@ import (
 
 	"charm.land/lipgloss/v2"
 
-	"boji/interface/tui/theme"
-	"boji/internal/widget"
+	"tofu/interface/tui/theme"
+	"tofu/internal/widget"
 )
 
 const (

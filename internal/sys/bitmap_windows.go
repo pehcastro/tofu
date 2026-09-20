@@ -52,10 +52,10 @@ func pngFromDIB(raw []byte) ([]byte, error) {
 	paletteCount := int(binary.LittleEndian.Uint32(raw[paletteCountOffset:]))
 
 	if bits != bitsTrueColour && bits != bitsWithAlpha {
-		return nil, errors.New("sys: the clipboard bitmap is " + strconv.Itoa(bits) + " bits a pixel, and boji reads 24 and 32")
+		return nil, errors.New("sys: the clipboard bitmap is " + strconv.Itoa(bits) + " bits a pixel, and tofu reads 24 and 32")
 	}
 	if compression != compressionNone && compression != compressionBitfields {
-		return nil, errors.New("sys: the clipboard bitmap is compressed in a way boji does not read")
+		return nil, errors.New("sys: the clipboard bitmap is compressed in a way tofu does not read")
 	}
 	height := signedHeight
 	bottomUp := signedHeight > 0

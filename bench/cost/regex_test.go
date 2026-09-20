@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"boji/bench/corpus"
+	"tofu/bench/corpus"
 )
 
 func TestTheRegexArmWasAuthoredAfterTheSplitWasWritten(t *testing.T) {

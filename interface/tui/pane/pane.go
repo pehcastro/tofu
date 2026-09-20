@@ -5,7 +5,7 @@ import (
 
 	"charm.land/lipgloss/v2"
 
-	"boji/internal/widget"
+	"tofu/internal/widget"
 )
 
 func Cell(text string, width int, style lipgloss.Style) string {

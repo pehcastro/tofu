@@ -3,7 +3,7 @@ package jev
 import (
 	"encoding/json"
 
-	"boji/internal/transport"
+	"tofu/internal/transport"
 )
 
 type Usage struct {

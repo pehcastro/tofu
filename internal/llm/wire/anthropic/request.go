@@ -9,8 +9,8 @@ import (
 	"regexp"
 	"strings"
 
-	"boji/internal/llm"
-	"boji/internal/transport"
+	"tofu/internal/llm"
+	"tofu/internal/transport"
 )
 
 type Request struct {

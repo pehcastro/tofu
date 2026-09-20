@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"boji/internal/transport"
+	"tofu/internal/transport"
 )
 
 type fakeWire struct {

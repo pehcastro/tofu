@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"boji/internal/sys"
-	"boji/internal/transport"
+	"tofu/internal/sys"
+	"tofu/internal/transport"
 )
 
 type Source int

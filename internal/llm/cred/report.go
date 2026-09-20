@@ -4,7 +4,7 @@ import (
 	"strings"
 	"time"
 
-	"boji/internal/sys"
+	"tofu/internal/sys"
 )
 
 const dayStamp = "2006-01-02"

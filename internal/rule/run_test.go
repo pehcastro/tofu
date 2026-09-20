@@ -71,7 +71,7 @@ func TestOwnershipCheckerWrapsCrewMatches(t *testing.T) {
 		t.Fatalf("a path inside owns produced a finding: %+v", fire.Findings)
 	}
 
-	uncovered := OwnsWrite{Path: "cmd/boji/bench.go", Owns: []string{"internal/rule/**"}}
+	uncovered := OwnsWrite{Path: "cmd/tofu/bench.go", Owns: []string{"internal/rule/**"}}
 	fire, err = Run(r, Builtins(), uncovered, uncovered.Path, time.Now())
 	if err != nil {
 		t.Fatalf("Run: %v", err)

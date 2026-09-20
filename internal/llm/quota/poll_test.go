@@ -108,7 +108,7 @@ func TestDoctorSeparatesASpentWindowFromABrokenCredential(t *testing.T) {
 
 func TestDoctorSaysTheSpendLimitBelongsToTheProvider(t *testing.T) {
 	line := SpendLimitLine()
-	if !strings.Contains(line, "boji sets none") || !strings.Contains(line, "the account that issued the key") {
+	if !strings.Contains(line, "tofu sets none") || !strings.Contains(line, "the account that issued the key") {
 		t.Fatalf("the spend limit line read %q", line)
 	}
 }

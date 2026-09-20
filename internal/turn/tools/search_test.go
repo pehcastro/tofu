@@ -10,9 +10,9 @@ import (
 	"strings"
 	"testing"
 
-	"boji/internal/konst"
-	"boji/internal/turn"
-	"boji/internal/turn/tools"
+	"tofu/internal/konst"
+	"tofu/internal/turn"
+	"tofu/internal/turn/tools"
 )
 
 func searchResult(t *testing.T, root, args string) turn.Result {
@@ -97,7 +97,7 @@ func repositoryRoot(t *testing.T) string {
 		}
 		parent := filepath.Dir(at)
 		if parent == at {
-			t.Skip("this measurement needs the boji repository and go.mod is not above the test")
+			t.Skip("this measurement needs the tofu repository and go.mod is not above the test")
 		}
 		at = parent
 	}

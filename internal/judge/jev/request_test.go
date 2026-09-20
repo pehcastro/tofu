@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"boji/internal/transport"
+	"tofu/internal/transport"
 )
 
 func TestEncodeKeepsOptionOrderAndCriteriaKinds(t *testing.T) {

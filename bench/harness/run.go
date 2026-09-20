@@ -14,9 +14,9 @@ import (
 	"strings"
 	"time"
 
-	"boji/internal/judge/ledger"
-	"boji/internal/session"
-	"boji/internal/turn"
+	"tofu/internal/judge/ledger"
+	"tofu/internal/session"
+	"tofu/internal/turn"
 )
 
 const singleFileSuffix = ".json"
@@ -187,8 +187,8 @@ func LoadSession(path string) (turn.Row, error) {
 	return row, nil
 }
 
-func MeasureBoji(session turn.Row, src Sources, meta RunMeta) (Row, []string) {
-	row, gaps, err := ParseBoji(src.LedgerDir, ledger.Filter{TurnID: session.ID}, meta)
+func MeasureTofu(session turn.Row, src Sources, meta RunMeta) (Row, []string) {
+	row, gaps, err := ParseTofu(src.LedgerDir, ledger.Filter{TurnID: session.ID}, meta)
 	if err != nil {
 		row = Row{Arm: meta.Arm, Task: meta.Task, Version: meta.Version, Run: meta.Run, CLIVersion: meta.CLIVersion, CredentialKind: meta.CredentialKind, Commit: meta.Commit}
 		gaps = append(gaps, "jev ledger: "+err.Error())
@@ -304,7 +304,7 @@ func endReasonOf(session turn.Row) (EndReason, string) {
 	case turn.OutcomeStepCap:
 		return EndReasonTurnCap, ""
 	case turn.OutcomeRetiredCostCap:
-		return EndReasonCrash, "end reason: this turn row was written when boji still had a cost cap, that cap is gone, and harness.EndReason has no variant for it, so this row says crash"
+		return EndReasonCrash, "end reason: this turn row was written when tofu still had a cost cap, that cap is gone, and harness.EndReason has no variant for it, so this row says crash"
 	case turn.OutcomeRetiredWallClockCap:
 		return EndReasonWallClock, ""
 	case turn.OutcomeDecisionCap:
@@ -377,7 +377,7 @@ func spendUnitOf(r Row) string {
 	if r.ModelDollars != nil {
 		return fmt.Sprintf("api key, %.4f dollars on the model, %.4f on jev", *r.ModelDollars, r.JudgeDollars)
 	}
-	if r.Arm == ArmBoji {
+	if r.Arm == ArmTofu {
 		return fmt.Sprintf("subscription quota for the model, %.4f openrouter dollars for jev", r.JudgeDollars)
 	}
 	return "subscription quota, no money left the account"

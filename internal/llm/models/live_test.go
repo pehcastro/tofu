@@ -6,14 +6,14 @@ import (
 	"testing"
 	"time"
 
-	"boji/internal/llm/cred"
-	"boji/internal/transport"
+	"tofu/internal/llm/cred"
+	"tofu/internal/transport"
 )
 
 func liveAccount(t *testing.T, spec SubscriptionSpec) Account {
 	t.Helper()
-	if os.Getenv("BOJI_LIVE_MODELS") != "1" {
-		t.Skip("set BOJI_LIVE_MODELS=1 to ask the live subscription which models it serves")
+	if os.Getenv("TOFU_LIVE_MODELS") != "1" {
+		t.Skip("set TOFU_LIVE_MODELS=1 to ask the live subscription which models it serves")
 	}
 	path, err := cred.Path()
 	if err != nil {
@@ -21,7 +21,7 @@ func liveAccount(t *testing.T, spec SubscriptionSpec) Account {
 	}
 	store, err := cred.Open(path)
 	if err != nil {
-		t.Skipf("no credential store, run boji login %s: %v", spec.Wire, err)
+		t.Skipf("no credential store, run tofu login %s: %v", spec.Wire, err)
 	}
 	t.Cleanup(func() { _ = store.Close() })
 	credential, err := cred.Lookup(spec.Wire)

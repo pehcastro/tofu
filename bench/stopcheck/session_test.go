@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"boji/bench/corpus"
+	"tofu/bench/corpus"
 )
 
 const (

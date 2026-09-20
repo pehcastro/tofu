@@ -8,11 +8,11 @@ import (
 	"testing"
 	"time"
 
-	"boji/internal/llm"
-	"boji/internal/llm/cred"
-	"boji/internal/llm/wire/anthropic"
-	rc "boji/internal/recall"
-	"boji/internal/turn"
+	"tofu/internal/llm"
+	"tofu/internal/llm/cred"
+	"tofu/internal/llm/wire/anthropic"
+	rc "tofu/internal/recall"
+	"tofu/internal/turn"
 )
 
 const liveSummaryModel = "claude-sonnet-5"
@@ -31,7 +31,7 @@ func liveSubscription(t *testing.T) turn.Subscription {
 	}
 	store, err := cred.Open(path)
 	if err != nil {
-		t.Skipf("no credential store, run boji login anthropic: %v", err)
+		t.Skipf("no credential store, run tofu login anthropic: %v", err)
 	}
 	t.Cleanup(func() { _ = store.Close() })
 	spec, err := cred.Lookup("anthropic")
@@ -43,7 +43,7 @@ func liveSubscription(t *testing.T) turn.Subscription {
 		Token:     cred.NewManager(store, spec).Access,
 		Watchdog:  2 * time.Minute,
 		SessionID: "00000000-0000-4000-8000-0000000000f0",
-		InstallID: "boji-bench-recall",
+		InstallID: "tofu-bench-recall",
 	})
 	if err != nil {
 		t.Fatalf("building the wire: %v", err)
@@ -52,8 +52,8 @@ func liveSubscription(t *testing.T) turn.Subscription {
 }
 
 func TestLiveSummaryCarryAtEveryForkOfTheRecordedTurn(t *testing.T) {
-	if os.Getenv("BOJI_LIVE") != "1" {
-		t.Skip("set BOJI_LIVE=1 to spend subscription quota writing one summary per fork")
+	if os.Getenv("TOFU_LIVE") != "1" {
+		t.Skip("set TOFU_LIVE=1 to spend subscription quota writing one summary per fork")
 	}
 	cfg, session := recordedTurn(t)
 	bands := measuringBands()

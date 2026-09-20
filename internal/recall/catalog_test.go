@@ -3,7 +3,7 @@ package recall_test
 import (
 	"testing"
 
-	"boji/internal/recall"
+	"tofu/internal/recall"
 )
 
 func TestLoadConfigReadsTheShippedCatalogFile(t *testing.T) {

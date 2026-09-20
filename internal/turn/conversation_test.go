@@ -8,7 +8,7 @@ import (
 	"sync"
 	"testing"
 
-	"boji/internal/llm"
+	"tofu/internal/llm"
 )
 
 type contextModel struct {

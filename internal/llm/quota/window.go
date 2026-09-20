@@ -3,7 +3,7 @@ package quota
 import (
 	"time"
 
-	"boji/internal/transport"
+	"tofu/internal/transport"
 )
 
 type Provider string
@@ -116,6 +116,6 @@ func Diagnose(report Report, err error) Condition {
 }
 
 func SpendLimitLine() string {
-	return "spend limit: boji sets none, an api key's spending limit is the provider's, " +
+	return "spend limit: tofu sets none, an api key's spending limit is the provider's, " +
 		"set on the account that issued the key"
 }

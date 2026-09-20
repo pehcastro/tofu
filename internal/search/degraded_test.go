@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"boji/internal/search"
+	"tofu/internal/search"
 )
 
 func TestASearchCutShortByItsBudgetSaysSoByNameRatherThanLookingComplete(t *testing.T) {

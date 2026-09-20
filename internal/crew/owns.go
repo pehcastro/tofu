@@ -11,7 +11,7 @@ type UnparseableGlobError struct {
 }
 
 func (e UnparseableGlobError) Error() string {
-	return fmt.Sprintf("owns glob %q has a character boji's matcher does not understand", e.Glob)
+	return fmt.Sprintf("owns glob %q has a character tofu's matcher does not understand", e.Glob)
 }
 
 type DeniedError struct {

@@ -20,14 +20,14 @@ func Tasks() []Task {
 		{
 			Name: "hello",
 			Prompt: "Using the write tool, write a file named hello.txt containing exactly the text " +
-				"hello from boji and nothing else. After it is written, reply with a short " +
+				"hello from tofu and nothing else. After it is written, reply with a short " +
 				"confirmation message in plain text and do not call any more tools.",
-			Check: checkExactFile("hello.txt", "hello from boji"),
+			Check: checkExactFile("hello.txt", "hello from tofu"),
 		},
 		{
 			Name: "config",
 			Prompt: "Using the write tool, create a file named config.json containing a JSON object " +
-				"with exactly two keys: name set to the string boji and version set to the number 1. " +
+				"with exactly two keys: name set to the string tofu and version set to the number 1. " +
 				"Reply with a short confirmation message in plain text after it is written and do not " +
 				"call any more tools.",
 			Check: checkConfigJSON,
@@ -91,8 +91,8 @@ func checkConfigJSON(dir string) (bool, string) {
 	if len(m) != 2 {
 		return false, fmt.Sprintf("config.json has %d keys, wanted 2", len(m))
 	}
-	if m["name"] != "boji" {
-		return false, fmt.Sprintf("config.json name was %v, wanted \"boji\"", m["name"])
+	if m["name"] != "tofu" {
+		return false, fmt.Sprintf("config.json name was %v, wanted \"tofu\"", m["name"])
 	}
 	if version, ok := m["version"].(float64); !ok || version != 1 {
 		return false, fmt.Sprintf("config.json version was %v, wanted 1", m["version"])

@@ -9,8 +9,8 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"boji/interface/tui/crew"
-	"boji/interface/tui/theme"
+	"tofu/interface/tui/crew"
+	"tofu/interface/tui/theme"
 )
 
 const (

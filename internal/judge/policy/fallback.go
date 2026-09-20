@@ -5,7 +5,7 @@ import (
 	"regexp"
 	"strings"
 
-	"boji/internal/judge/jev"
+	"tofu/internal/judge/jev"
 )
 
 type Arm string

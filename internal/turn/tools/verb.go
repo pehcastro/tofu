@@ -13,13 +13,13 @@ import (
 	"strings"
 	"time"
 
-	"boji/internal/konst"
-	"boji/internal/llm"
-	"boji/internal/search"
-	"boji/internal/turn"
+	"tofu/internal/konst"
+	"tofu/internal/llm"
+	"tofu/internal/search"
+	"tofu/internal/turn"
 )
 
-const verbDepthEnvar = "BOJI_VERB_DEPTH"
+const verbDepthEnvar = "TOFU_VERB_DEPTH"
 
 type verbParam int
 
@@ -61,25 +61,25 @@ type verbSpec struct {
 func verbSpecs() []verbSpec {
 	return []verbSpec{
 		{
-			tool:  "boji_lint_comments",
+			tool:  "tofu_lint_comments",
 			words: []string{"lint", "comments"},
-			about: "runs boji's own comment rule over the tree with the go parser, and prints every comment it found as path:line:column: text. " +
+			about: "runs tofu's own comment rule over the tree with the go parser, and prints every comment it found as path:line:column: text. " +
 				"this project allows no comment of any kind, not a line comment and not a documentation comment, so any output at all is a list of things to delete. " +
 				"a nonzero exit means comments were found, which is an answer rather than a failure",
 			needs:  "it needs nothing beyond the working tree, and it reads only go source",
 			params: []verbParam{verbParamPath},
 		},
 		{
-			tool:  "boji_rules_check",
+			tool:  "tofu_rules_check",
 			words: []string{"rules", "check"},
-			about: "runs boji's rule catalog over the tree and prints every rule that fired, which of them blocked, and how many findings each had. " +
+			about: "runs tofu's rule catalog over the tree and prints every rule that fired, which of them blocked, and how many findings each had. " +
 				"the first line is the answer: how many fires blocked, out of how many, and which rule set ran. " +
 				"a nonzero exit means a rule in blocking mode fired",
 			needs:  "it needs nothing beyond the working tree: the rule catalog travels inside the binary, and a catalog/rules directory in the working tree replaces it",
 			params: []verbParam{verbParamPath},
 		},
 		{
-			tool:  "boji_judge",
+			tool:  "tofu_judge",
 			words: []string{"judge"},
 			about: "asks a typed question battery about a state and prints, for every question, the answer with its distribution, and the verdict the policy reached. " +
 				"use it to get a calibrated answer about the state of the work rather than guessing at one in prose",
@@ -87,7 +87,7 @@ func verbSpecs() []verbSpec {
 			params: []verbParam{verbParamState, verbParamBattery},
 		},
 		{
-			tool:  "boji_why",
+			tool:  "tofu_why",
 			words: []string{"why"},
 			about: "prints the chain behind one decision that was already recorded: every question with its answer and its whole distribution, the verdict the policy reached, the threshold each answer was compared against, and a line naming any question that landed in the dead band. " +
 				"reach for it when the gate has already allowed, asked about or denied something and you want the reason that was recorded rather than a fresh guess at it. " +
@@ -96,7 +96,7 @@ func verbSpecs() []verbSpec {
 			params: []verbParam{verbParamID},
 		},
 		{
-			tool:  "boji_replay",
+			tool:  "tofu_replay",
 			words: []string{"replay"},
 			about: "rescores every decision recorded at one point against thresholds you move, and prints how many rows were read, how many were rescored, how many verdicts changed, and for each change how many recorded outcomes now agree and how many now disagree. " +
 				"reach for it before proposing a threshold, so the proposal carries what that number would have done to decisions that were really made. " +
@@ -228,12 +228,12 @@ func (v Verb) spawn(ctx context.Context, words []string, body string) (turn.Resu
 		return turn.Result{}, fmt.Errorf("%s: %w", v.spec.tool, err)
 	}
 	if depth >= konst.VerbMaxDepth {
-		return turn.Result{}, fmt.Errorf("%s: this boji is already nested %d deep and the bound is %d: a further nested run is refused",
+		return turn.Result{}, fmt.Errorf("%s: this tofu is already nested %d deep and the bound is %d: a further nested run is refused",
 			v.spec.tool, depth, konst.VerbMaxDepth)
 	}
 	running, err := os.Executable()
 	if err != nil {
-		return turn.Result{}, fmt.Errorf("%s: finding the running boji: %w", v.spec.tool, err)
+		return turn.Result{}, fmt.Errorf("%s: finding the running tofu: %w", v.spec.tool, err)
 	}
 	ctx, cancel := context.WithTimeout(ctx, time.Duration(konst.VerbTimeoutMillis)*time.Millisecond)
 	defer cancel()
@@ -246,7 +246,7 @@ func (v Verb) spawn(ctx context.Context, words []string, body string) (turn.Resu
 	}
 
 	output, runErr := cmd.CombinedOutput()
-	command := "boji " + strings.Join(words, " ")
+	command := "tofu " + strings.Join(words, " ")
 	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 		return turn.Result{}, errors.New(v.spec.tool + ": " + search.Note(search.Stopped,
 			fmt.Sprintf("%s ran past the %d ms deadline and was killed", command, konst.VerbTimeoutMillis)))

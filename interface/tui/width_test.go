@@ -8,9 +8,9 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"boji/interface/tui/crew"
-	"boji/interface/tui/frame"
-	"boji/interface/tui/settings"
+	"tofu/interface/tui/crew"
+	"tofu/interface/tui/frame"
+	"tofu/interface/tui/settings"
 )
 
 const (
@@ -103,7 +103,7 @@ func wideFrames(t *testing.T) map[string]string {
 		Repo:         cjkRepo,
 		Branch:       emojiBranch(),
 		Now:          fixedClock(),
-		Requirements: []Requirement{{What: "契約が無いので、どのモデルも答えられません", Fix: "boji login anthropic"}},
+		Requirements: []Requirement{{What: "契約が無いので、どのモデルも答えられません", Fix: "tofu login anthropic"}},
 	})
 	setup.Update(tea.WindowSizeMsg{Width: wideColumns, Height: wideRows})
 	frames["setup"] = setup.View().Content

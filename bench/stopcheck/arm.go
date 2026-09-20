@@ -3,8 +3,8 @@ package stopcheck
 import (
 	"strings"
 
-	"boji/internal/judge/state"
-	"boji/internal/konst"
+	"tofu/internal/judge/state"
+	"tofu/internal/konst"
 )
 
 type Answer string

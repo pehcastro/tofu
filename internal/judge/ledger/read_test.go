@@ -382,10 +382,10 @@ func TestSummaryCountsRowsAndDates(t *testing.T) {
 	if stats.String() != want {
 		t.Fatalf("Stats.String() = %q, want %q", stats.String(), want)
 	}
-	t.Logf("boji doctor line: ledger: %s", stats)
+	t.Logf("tofu doctor line: ledger: %s", stats)
 }
 
-func TestTheLineBojiDoctorPrintsForTheProjectLedger(t *testing.T) {
+func TestTheLineTofuDoctorPrintsForTheProjectLedger(t *testing.T) {
 	t.Chdir(t.TempDir())
 	dir, err := Dir()
 	if err != nil {

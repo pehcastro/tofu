@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"boji/internal/crew"
-	"boji/internal/sys"
+	"tofu/internal/crew"
+	"tofu/internal/sys"
 )
 
 const emDashRune = rune(0x2014)

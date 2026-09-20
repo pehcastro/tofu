@@ -10,10 +10,10 @@ import (
 	"path/filepath"
 	"strings"
 
-	"boji/internal/llm"
-	"boji/internal/search"
-	"boji/internal/transform"
-	"boji/internal/turn"
+	"tofu/internal/llm"
+	"tofu/internal/search"
+	"tofu/internal/transform"
+	"tofu/internal/turn"
 )
 
 type Edit struct {

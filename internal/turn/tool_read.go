@@ -7,7 +7,7 @@ import (
 	"os"
 	"strings"
 
-	"boji/internal/llm"
+	"tofu/internal/llm"
 )
 
 type ReadTool struct {

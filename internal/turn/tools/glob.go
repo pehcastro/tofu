@@ -13,10 +13,10 @@ import (
 	"regexp"
 	"strings"
 
-	"boji/internal/konst"
-	"boji/internal/llm"
-	"boji/internal/search"
-	"boji/internal/turn"
+	"tofu/internal/konst"
+	"tofu/internal/llm"
+	"tofu/internal/search"
+	"tofu/internal/turn"
 )
 
 type Glob struct {
@@ -253,7 +253,7 @@ func (w *walk) load(dir, base string) {
 		rule, err := parseIgnoreLine(line)
 		if err != nil {
 			w.notes = append(w.notes, search.Note(search.IgnoreSkipped,
-				fmt.Sprintf("the .gitignore in %s has a pattern boji does not support, %s: %v", where, line, err)))
+				fmt.Sprintf("the .gitignore in %s has a pattern tofu does not support, %s: %v", where, line, err)))
 			continue
 		}
 		scope.rules = append(scope.rules, rule)

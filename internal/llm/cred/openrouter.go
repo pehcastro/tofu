@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"boji/internal/sys"
+	"tofu/internal/sys"
 )
 
 const (

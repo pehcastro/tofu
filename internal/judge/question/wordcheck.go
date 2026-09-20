@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	"boji/internal/judge/jev"
+	"tofu/internal/judge/jev"
 )
 
 func arithmeticPhrases() []string {

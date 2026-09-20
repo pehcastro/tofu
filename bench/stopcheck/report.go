@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"boji/bench/report"
-	"boji/internal/judge/ledger"
+	"tofu/bench/report"
+	"tofu/internal/judge/ledger"
 )
 
 type Agreement struct {

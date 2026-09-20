@@ -8,9 +8,9 @@ import (
 	"sort"
 	"strings"
 
-	"boji/internal/llm/wire/anthropic"
-	"boji/internal/llm/wire/codex"
-	"boji/internal/transport"
+	"tofu/internal/llm/wire/anthropic"
+	"tofu/internal/llm/wire/codex"
+	"tofu/internal/transport"
 )
 
 const (
