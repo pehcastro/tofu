@@ -25,7 +25,15 @@ type Request struct {
 	InstallID string
 	UserID    string
 	CacheTTL  string
+
+	HistoryCacheOff bool
 }
+
+const (
+	historyCacheMinMessages    = 3
+	historyCacheMinPrefixChars = 4096
+	cacheBreakpointsPerRequest = 4
+)
 
 type cacheControl struct {
 	Type string `json:"type"`
@@ -46,6 +54,8 @@ type contentBlock struct {
 	Input     json.RawMessage `json:"input,omitempty"`
 	ToolUseID string          `json:"tool_use_id,omitempty"`
 	Content   string          `json:"content,omitempty"`
+
+	CacheControl *cacheControl `json:"cache_control,omitempty"`
 }
 
 type wireMessage struct {
@@ -96,7 +106,10 @@ func (r Request) Encode(oauth bool) ([]byte, error) {
 	}
 
 	system := systemBlocks(r.System, oauth, firstUserText(r.Messages), r.CacheTTL)
-	applyHeadCaching(system, tools, r.CacheTTL)
+	head := applyHeadCaching(system, tools, r.CacheTTL)
+	if !r.HistoryCacheOff {
+		applyHistoryCaching(messages, r.CacheTTL, cacheBreakpointsPerRequest-head)
+	}
 
 	userID, err := metadataUserID(r, oauth)
 	if err != nil {
@@ -149,18 +162,53 @@ func ephemeral(ttl string) *cacheControl {
 	return &cacheControl{Type: "ephemeral", TTL: ttl}
 }
 
-func applyHeadCaching(system []systemBlock, tools []wireTool, ttl string) {
+func applyHeadCaching(system []systemBlock, tools []wireTool, ttl string) int {
+	placed := 0
 	if len(tools) > 0 {
 		tools[len(tools)-1].CacheControl = ephemeral(ttl)
+		placed++
 	}
 	for _, block := range system {
 		if block.CacheControl != nil {
+			placed++
+		}
+	}
+	if last := len(system) - 1; last >= 0 && system[last].CacheControl == nil {
+		system[last].CacheControl = ephemeral(ttl)
+		placed++
+	}
+	return placed
+}
+
+func applyHistoryCaching(messages []wireMessage, ttl string, budget int) {
+	if budget < 1 || len(messages) < historyCacheMinMessages || historyChars(messages) < historyCacheMinPrefixChars {
+		return
+	}
+	last := len(messages) - 1
+	markPrefixEnd(messages[last].Content, ttl)
+	if budget < 2 {
+		return
+	}
+	for index := 1; index < last; index++ {
+		if messages[index].Role == "user" {
+			markPrefixEnd(messages[index].Content, ttl)
 			return
 		}
 	}
-	if len(system) > 0 {
-		system[len(system)-1].CacheControl = ephemeral(ttl)
+}
+
+func markPrefixEnd(blocks []contentBlock, ttl string) {
+	blocks[len(blocks)-1].CacheControl = ephemeral(ttl)
+}
+
+func historyChars(messages []wireMessage) int {
+	total := 0
+	for _, message := range messages {
+		for _, block := range message.Content {
+			total += len(block.Text) + len(block.Content) + len(block.Input)
+		}
 	}
+	return total
 }
 
 func firstUserText(messages []llm.Message) string {

@@ -101,6 +101,7 @@ func (w *Wire) Ask(ctx context.Context, request Request) (Result, Dump, error) {
 		clientMetadata = nil
 	}
 
+	request.Identity = identity
 	body, err := request.Encode(clientMetadata)
 	if err != nil {
 		return Result{}, Dump{}, err

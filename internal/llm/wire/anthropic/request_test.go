@@ -2,6 +2,7 @@ package anthropic
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -238,5 +239,135 @@ func TestEncodeKeepsACallerSessionIDInsteadOfDrawingAFreshOne(t *testing.T) {
 	}
 	if !strings.Contains(string(body), `{\"session_id\":\"kept\"}`) {
 		t.Fatalf("the caller envelope was overwritten: %s", body)
+	}
+}
+
+func exchange(step int, bulk string) []llm.Message {
+	call := fmt.Sprintf("toolu_%d", step)
+	return []llm.Message{
+		{Role: llm.RoleAssistant, ToolCalls: []llm.ToolCall{{ID: call, Name: "read"}}},
+		{Role: llm.RoleTool, ToolCallID: call, Content: bulk},
+	}
+}
+
+func historyRequest(exchanges int) Request {
+	request := minimalRequest()
+	bulk := strings.Repeat("a line of a file that was read\n", 200)
+	for step := 1; step <= exchanges; step++ {
+		request.Messages = append(request.Messages, exchange(step, bulk)...)
+	}
+	return request
+}
+
+func messageBreakpoints(t *testing.T, request Request) []int {
+	t.Helper()
+	body, err := request.Encode(true)
+	if err != nil {
+		t.Fatalf("encoding: %v", err)
+	}
+	var decoded struct {
+		Messages []wireMessage `json:"messages"`
+	}
+	if err := json.Unmarshal(body, &decoded); err != nil {
+		t.Fatalf("decoding: %v", err)
+	}
+	var indexes []int
+	for index, message := range decoded.Messages {
+		for _, block := range message.Content {
+			if block.CacheControl != nil {
+				indexes = append(indexes, index)
+			}
+		}
+	}
+	return indexes
+}
+
+func TestEncodeBreaksTheCacheOnTheHistoryAndNotOnlyOnTheHead(t *testing.T) {
+	indexes := messageBreakpoints(t, historyRequest(2))
+	if len(indexes) != 2 || indexes[0] != 2 || indexes[1] != 4 {
+		t.Fatalf("message breakpoints sit at %v, want the anchor at 2 and the moving one at 4", indexes)
+	}
+}
+
+func TestEncodeAdvancesTheMovingBreakpointAndLeavesTheAnchor(t *testing.T) {
+	first := messageBreakpoints(t, historyRequest(2))
+	second := messageBreakpoints(t, historyRequest(3))
+	if len(first) != 2 || len(second) != 2 {
+		t.Fatalf("step one broke at %v and step two at %v", first, second)
+	}
+	if first[0] != second[0] {
+		t.Fatalf("the anchor moved from %d to %d", first[0], second[0])
+	}
+	if second[1] != first[1]+2 {
+		t.Fatalf("the moving breakpoint went from %d to %d", first[1], second[1])
+	}
+}
+
+func TestEncodeLeavesAHistoryShorterThanTheCacheMinimumAlone(t *testing.T) {
+	short := minimalRequest()
+	short.Messages = append(short.Messages, exchange(1, "one")...)
+	if indexes := messageBreakpoints(t, short); indexes != nil {
+		t.Fatalf("a history well under %d characters was broken at %v", historyCacheMinPrefixChars, indexes)
+	}
+
+	oneExchange := minimalRequest()
+	oneExchange.Messages = append(oneExchange.Messages,
+		exchange(1, strings.Repeat("x", historyCacheMinPrefixChars))...)
+	if indexes := messageBreakpoints(t, oneExchange); len(indexes) != 1 || indexes[0] != 2 {
+		t.Fatalf("one exchange has no earlier prefix to anchor, breakpoints are %v", indexes)
+	}
+}
+
+func TestEncodeMarksTheInstructionBlockOnTheOAuthPath(t *testing.T) {
+	request := minimalRequest()
+	request.System = []string{"the project instructions"}
+	body, err := request.Encode(true)
+	if err != nil {
+		t.Fatalf("encoding: %v", err)
+	}
+	var decoded struct {
+		System []systemBlock `json:"system"`
+	}
+	if err := json.Unmarshal(body, &decoded); err != nil {
+		t.Fatalf("decoding: %v", err)
+	}
+	last := decoded.System[len(decoded.System)-1]
+	if last.Text != "the project instructions" {
+		t.Fatalf("the last system block is %q", last.Text)
+	}
+	if last.CacheControl == nil {
+		t.Fatal("the instruction block sits outside the cached prefix on the first request")
+	}
+}
+
+func TestEncodeSpendsTheFourBreakpointsHeadFirst(t *testing.T) {
+	request := historyRequest(4)
+	request.System = []string{"the project instructions"}
+	request.Tools = []llm.Tool{{Name: "read"}, {Name: "write"}}
+	body, err := request.Encode(true)
+	if err != nil {
+		t.Fatalf("encoding: %v", err)
+	}
+	if count := strings.Count(string(body), `"cache_control"`); count != cacheBreakpointsPerRequest {
+		t.Fatalf("the request carries %d breakpoints, want exactly %d", count, cacheBreakpointsPerRequest)
+	}
+	if indexes := messageBreakpoints(t, request); len(indexes) != 1 || indexes[0] != len(request.Messages)-1 {
+		t.Fatalf("the history keeps %v, want the moving breakpoint alone on the last message", indexes)
+	}
+}
+
+func TestEncodeOffArmLeavesTheHistoryAloneAndKeepsTheHead(t *testing.T) {
+	request := historyRequest(2)
+	request.HistoryCacheOff = true
+	if indexes := messageBreakpoints(t, request); indexes != nil {
+		t.Fatalf("the off arm still broke the cache at %v", indexes)
+	}
+	body, err := request.Encode(true)
+	if err != nil {
+		t.Fatalf("encoding: %v", err)
+	}
+	if !strings.Contains(string(body), ClaudeCodeSystemIdentity) ||
+		!strings.Contains(string(body), `"cache_control"`) {
+		t.Fatalf("the head breakpoint went away with the history one: %s", body)
 	}
 }

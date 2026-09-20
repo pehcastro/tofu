@@ -186,6 +186,48 @@ func TestTurnMetadataIsAFixedSizeAsciiProjection(t *testing.T) {
 	}
 }
 
+func TestEncodeKeepsOneCacheKeyForTheWholeSessionAndSendsNoBreakpoints(t *testing.T) {
+	request := Request{
+		Model:    "gpt-5.5-codex",
+		Messages: hello(),
+		Identity: Identity{SessionID: "session-0000", TurnID: "turn-0000"},
+	}
+	first, err := request.Encode(nil)
+	if err != nil {
+		t.Fatalf("encoding: %v", err)
+	}
+	request.Messages = append(request.Messages,
+		llm.Message{Role: llm.RoleAssistant, Content: "one"},
+		llm.Message{Role: llm.RoleUser, Content: "two"})
+	request.Identity.TurnID = "turn-0001"
+	second, err := request.Encode(nil)
+	if err != nil {
+		t.Fatalf("encoding: %v", err)
+	}
+	if decodeBody(t, first)["prompt_cache_key"] != "session-0000" ||
+		decodeBody(t, second)["prompt_cache_key"] != "session-0000" {
+		t.Fatalf("the cache key is not stable across steps: %s then %s", first, second)
+	}
+	if strings.Contains(string(second), "cache_control") {
+		t.Fatalf("the responses endpoint has no cache breakpoint field: %s", second)
+	}
+}
+
+func TestEncodeKeepsAnExplicitCacheKeyOverTheSessionID(t *testing.T) {
+	body, err := Request{
+		Model:          "gpt-5.5-codex",
+		Messages:       hello(),
+		PromptCacheKey: "pinned",
+		Identity:       Identity{SessionID: "session-0000"},
+	}.Encode(nil)
+	if err != nil {
+		t.Fatalf("encoding: %v", err)
+	}
+	if decodeBody(t, body)["prompt_cache_key"] != "pinned" {
+		t.Fatalf("the pinned key was overwritten: %s", body)
+	}
+}
+
 func TestTurnMetadataRefusesToExceedTheBackendCap(t *testing.T) {
 	identity := Identity{InstallationID: strings.Repeat("x", TurnMetadataHeaderCap+1)}
 	if _, _, err := identity.TurnMetadata(); err == nil {

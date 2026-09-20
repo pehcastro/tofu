@@ -3,6 +3,7 @@ package turn
 import (
 	"context"
 
+	"boji/internal/konst"
 	"boji/internal/llm"
 	"boji/internal/llm/wire/anthropic"
 )
@@ -26,6 +27,7 @@ func (s Subscription) Ask(ctx context.Context, request llm.Request) (llm.Decisio
 		System:   system,
 		Messages: messages,
 		Tools:    request.Tools,
+		CacheTTL: konst.SubscriptionCacheTTL,
 	})
 	if err != nil {
 		return llm.Decision{}, err
@@ -34,7 +36,7 @@ func (s Subscription) Ask(ctx context.Context, request llm.Request) (llm.Decisio
 	decision := llm.Decision{
 		Build:            result.Model,
 		RequestID:        result.ID,
-		Outcome:          subscriptionOutcome(result),
+		Outcome:          llm.OutcomeAfter(result.Stop, len(result.ToolCalls)),
 		Stop:             result.StopReason,
 		Content:          result.Content,
 		ToolCalls:        result.ToolCalls,
@@ -47,19 +49,4 @@ func (s Subscription) Ask(ctx context.Context, request llm.Request) (llm.Decisio
 		decision.Refusal = result.StopReason
 	}
 	return decision, nil
-}
-
-func subscriptionOutcome(result anthropic.Result) llm.Outcome {
-	switch result.Stop {
-	case anthropic.StopError:
-		return llm.OutcomeRefusal
-	case anthropic.StopLength:
-		return llm.OutcomeMessage
-	case anthropic.StopToolUse, anthropic.StopEnd, anthropic.StopUnknown:
-		if len(result.ToolCalls) > 0 {
-			return llm.OutcomeToolCalls
-		}
-		return llm.OutcomeMessage
-	}
-	panic("turn: unknown anthropic stop")
 }

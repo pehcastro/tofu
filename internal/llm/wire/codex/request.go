@@ -2,6 +2,7 @@ package codex
 
 import (
 	"bytes"
+	"cmp"
 	"encoding/json"
 	"slices"
 	"strings"
@@ -107,7 +108,7 @@ func (r Request) Encode(clientMetadata map[string]string) ([]byte, error) {
 		Input:          input,
 		Stream:         true,
 		Store:          false,
-		PromptCacheKey: r.PromptCacheKey,
+		PromptCacheKey: cmp.Or(r.PromptCacheKey, r.Identity.SessionID),
 		Instructions:   r.Instructions,
 		Tools:          tools,
 		ToolChoice:     r.ToolChoice,
