@@ -47,6 +47,7 @@ type Config struct {
 	Model           Model
 	Spend           Spend
 	Tools           Registry
+	ToolSource      func() Registry
 	Gate            Gate
 	GateMode        GateMode
 	Boundary        *crew.Boundary
@@ -117,9 +118,16 @@ func Run(ctx context.Context, config Config) (Row, error) {
 	if err != nil {
 		return Row{}, err
 	}
-	tools := config.Tools
-	if handles {
-		tools = NewRegistry(append(slices.Clone(tools.tools), artifacts.FetchTool())...)
+	source := config.ToolSource
+	if source == nil {
+		source = func() Registry { return config.Tools }
+	}
+	currentTools := func() Registry {
+		live := source()
+		if !handles {
+			return live
+		}
+		return NewRegistry(append(slices.Clone(live.tools), artifacts.FetchTool())...)
 	}
 	now := config.Now
 	if now == nil {
@@ -206,7 +214,7 @@ func Run(ctx context.Context, config Config) (Row, error) {
 		for _, failed := range forkWriteErrs {
 			row.Warnings = append(row.Warnings, "the session this one forked from was not written: "+failed)
 		}
-		for _, tool := range tools.tools {
+		for _, tool := range currentTools().tools {
 			if spawner, spawning := tool.(*SpawnTool); spawning {
 				for _, child := range spawner.children {
 					row.ChildIDs = append(row.ChildIDs, child.ID)
@@ -229,7 +237,7 @@ func Run(ctx context.Context, config Config) (Row, error) {
 			return finish(outcome)
 		}
 		messages = append(slices.Clone(history), llm.Message{Role: llm.RoleUser, Content: lead + andThisIsItsLastStep})
-		decision, err := config.Model.Ask(ctx, llm.Request{Messages: messages, Tools: tools.Definitions()})
+		decision, err := config.Model.Ask(ctx, llm.Request{Messages: messages, Tools: currentTools().Definitions()})
 		row.TotalCostUSD += decision.Usage.Cost
 		reason := ""
 		switch {
@@ -266,7 +274,8 @@ func Run(ctx context.Context, config Config) (Row, error) {
 			return endAtCap(outcome, step, settled), nil
 		}
 
-		decision, err := config.Model.Ask(ctx, llm.Request{Messages: messages, Tools: tools.Definitions()})
+		stepTools := currentTools()
+		decision, err := config.Model.Ask(ctx, llm.Request{Messages: messages, Tools: stepTools.Definitions()})
 		if err != nil {
 			return finish(OutcomeError), err
 		}
@@ -304,7 +313,7 @@ func Run(ctx context.Context, config Config) (Row, error) {
 			var repeated ToolCallRow
 			var repeats int
 			for len(pending) > 0 && !capped && !tripped {
-				width := min(max(tools.parallelPrefix(pending), 1), konst.TurnParallelToolCalls)
+				width := min(max(stepTools.parallelPrefix(pending), 1), konst.TurnParallelToolCalls)
 				wave := make([]gatedCall, 0, width)
 				for _, call := range pending[:width] {
 					if config.Gate != nil && config.Caps.MaxDecisions > 0 && decisions >= config.Caps.MaxDecisions {
@@ -333,7 +342,7 @@ func Run(ctx context.Context, config Config) (Row, error) {
 				rows := make([]ToolCallRow, len(wave))
 				answers := make([]llm.Message, len(wave))
 				if len(wave) == 1 {
-					rows[0], answers[0] = wave[0].run(ctx, tools, config.ResultBytesCap, artifacts, 0)
+					rows[0], answers[0] = wave[0].run(ctx, stepTools, config.ResultBytesCap, artifacts, 0)
 				} else {
 					batches++
 					var running sync.WaitGroup
@@ -341,7 +350,7 @@ func Run(ctx context.Context, config Config) (Row, error) {
 					for i, gated := range wave {
 						go func() {
 							defer running.Done()
-							rows[i], answers[i] = gated.run(ctx, tools, config.ResultBytesCap, artifacts, batches)
+							rows[i], answers[i] = gated.run(ctx, stepTools, config.ResultBytesCap, artifacts, batches)
 						}()
 					}
 					running.Wait()
