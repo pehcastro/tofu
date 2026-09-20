@@ -14,6 +14,7 @@ import (
 	"tofu/internal/llm/wire/anthropic"
 	"tofu/internal/llm/wire/codex"
 	"tofu/internal/session"
+	"tofu/internal/sys"
 	"tofu/internal/turn"
 )
 
@@ -85,7 +86,7 @@ func TestSessionListPrintsTheRecordedSessionsNewestFirst(t *testing.T) {
 func TestASessionTheStoreCannotParseIsCountedAndNamed(t *testing.T) {
 	store := sessionProject(t)
 	recorded(t, store, "turn-good", "the readable one", time.Now())
-	broken := filepath.Join(".boji", "sessions", "turn-broken")
+	broken := filepath.Join(sys.StateDirName, "sessions", "turn-broken")
 	if err := os.MkdirAll(broken, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -455,7 +456,7 @@ func TestTwoSessionsSharingANameAreBothListedWithTheirDatesRatherThanOneBeingPic
 }
 
 func TestTheSessionsAlreadyOnDiskListWithNoNameRatherThanFailing(t *testing.T) {
-	store := session.NewStore(filepath.Join("..", "..", ".boji", "sessions"))
+	store := session.NewStore(filepath.Join(sys.StateDir(filepath.Join("..", "..")), "sessions"))
 	listing, err := store.Listing()
 	if err != nil {
 		t.Fatalf("listing the recorded sessions: %v", err)
@@ -612,7 +613,7 @@ func TestASessionPastTheLifetimeIsListedAsExpiredAndIsStillOnDisk(t *testing.T) 
 		t.Errorf("the list says nothing about the expired session:\n%s", text)
 	}
 	for _, id := range []string{"turn-old", "turn-young"} {
-		if _, err := os.Stat(filepath.Join(".boji", "sessions", id, "header.json")); err != nil {
+		if _, err := os.Stat(filepath.Join(sys.StateDirName, "sessions", id, "header.json")); err != nil {
 			t.Fatalf("%s was deleted: %v", id, err)
 		}
 	}

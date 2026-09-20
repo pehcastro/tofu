@@ -18,12 +18,29 @@ func Join(elem ...string) string {
 	return filepath.Join(elem...)
 }
 
+const (
+	StateDirName       = ".tofu"
+	LegacyStateDirName = ".boji"
+)
+
+func StateDir(parent string) string {
+	current := filepath.Join(parent, StateDirName)
+	if info, err := os.Stat(current); err == nil && info.IsDir() {
+		return current
+	}
+	legacy := filepath.Join(parent, LegacyStateDirName)
+	if info, err := os.Stat(legacy); err == nil && info.IsDir() {
+		return legacy
+	}
+	return current
+}
+
 func HomeConfigDir() (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(home, ".boji"), nil
+	return StateDir(home), nil
 }
 
 func ProjectStateDir() (string, error) {
@@ -31,7 +48,7 @@ func ProjectStateDir() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(wd, ".boji"), nil
+	return StateDir(wd), nil
 }
 
 func CatalogDir() (string, error) {

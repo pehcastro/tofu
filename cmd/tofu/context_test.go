@@ -26,7 +26,7 @@ var recordedCaps = recall.Bands{Identity: 2000, Facts: 0, WorkingSet: 9000, Rece
 func recordedSessions(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
-	sessions := filepath.Join(dir, ".boji", "sessions")
+	sessions := filepath.Join(dir, ".tofu", "sessions")
 	if err := os.MkdirAll(sessions, 0o755); err != nil {
 		t.Fatalf("make the session directory: %v", err)
 	}
@@ -187,7 +187,7 @@ func TestContextReadsTheNewestReadableSessionAndSaysWhatItSteppedOver(t *testing
 
 func TestContextWhereEverySessionIsUnreadableSaysSoRatherThanReportingAnAbsence(t *testing.T) {
 	dir := t.TempDir()
-	sessions := filepath.Join(dir, ".boji", "sessions")
+	sessions := filepath.Join(dir, ".tofu", "sessions")
 	if err := os.MkdirAll(sessions, 0o755); err != nil {
 		t.Fatalf("make the session directory: %v", err)
 	}
@@ -287,7 +287,7 @@ func (m *onlyToolThenDone) Ask(context.Context, llm.Request) (llm.Decision, erro
 
 func TestASessionRecordedNowNamesTheCapsItsStepsWereMeasuredAgainst(t *testing.T) {
 	dir := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(dir, ".boji", "sessions"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(dir, ".tofu", "sessions"), 0o755); err != nil {
 		t.Fatalf("make the session directory: %v", err)
 	}
 	t.Chdir(dir)

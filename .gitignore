@@ -14,5 +14,7 @@ CLAUDE.md
 .claude
 .playground
 .boji
+.tofu
+.tofu.partial
 
 bench/harness/testdata/gates/

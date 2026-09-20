@@ -16,6 +16,7 @@ import (
 	"tofu/internal/judge/question"
 	"tofu/internal/judge/state"
 	"tofu/internal/konst"
+	"tofu/internal/sys"
 	"tofu/internal/transport"
 )
 
@@ -109,8 +110,9 @@ func New(root, key string) (Battery, error) {
 	if err != nil {
 		return Battery{}, err
 	}
-	cacheDir := filepath.Join(root, ".boji", "cache")
-	logDir := filepath.Join(root, ".boji", "log")
+	stateDir := sys.StateDir(root)
+	cacheDir := filepath.Join(stateDir, "cache")
+	logDir := filepath.Join(stateDir, "log")
 	questions := make([]jev.Question, 0, len(set.Questions))
 	for _, q := range set.Questions {
 		questions = append(questions, q.ToJev())

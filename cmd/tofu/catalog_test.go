@@ -42,7 +42,7 @@ func TestCatalogCountsTheRolesTheProjectBound(t *testing.T) {
 
 func TestCatalogNamesTheFileAndTheFieldItRefused(t *testing.T) {
 	project := t.TempDir()
-	broken := filepath.Join(project, ".boji", "models", "openai")
+	broken := filepath.Join(project, ".tofu", "models", "openai")
 	if err := os.MkdirAll(broken, 0o755); err != nil {
 		t.Fatalf("building a project catalog: %v", err)
 	}
@@ -63,7 +63,7 @@ func TestCatalogNamesTheFileAndTheFieldItRefused(t *testing.T) {
 
 func TestProjectCatalogOverridesTheShippedOneFieldByField(t *testing.T) {
 	project := t.TempDir()
-	dir := filepath.Join(project, ".boji", "models", "anthropic")
+	dir := filepath.Join(project, ".tofu", "models", "anthropic")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatalf("building a project catalog: %v", err)
 	}

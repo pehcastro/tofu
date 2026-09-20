@@ -245,7 +245,7 @@ func TestRunKeepsTheOpenRouterArmReachableWithItsOwnModel(t *testing.T) {
 
 func writeProjectRole(t *testing.T, project, role, slug string) {
 	t.Helper()
-	dir := filepath.Join(project, ".boji", "roles")
+	dir := filepath.Join(project, ".tofu", "roles")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatalf("building a project role directory: %v", err)
 	}

@@ -41,7 +41,7 @@ func Environment(dir string, now time.Time) string {
 func ProjectInstructions(dir, home string) string {
 	var paths []string
 	if home != "" {
-		for _, global := range [...]string{filepath.Join(home, ".boji", "AGENTS.md"), filepath.Join(home, ".claude", "CLAUDE.md")} {
+		for _, global := range [...]string{filepath.Join(sys.StateDir(home), "AGENTS.md"), filepath.Join(home, ".claude", "CLAUDE.md")} {
 			if isFile(global) {
 				paths = append(paths, global)
 				break

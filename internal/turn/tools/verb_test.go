@@ -213,6 +213,9 @@ func standInForwardsToARealTofu(t *testing.T) {
 	if err != nil {
 		t.Fatalf("finding the module root: %v", err)
 	}
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
 	real := filepath.Join(t.TempDir(), tofuName())
 	build := exec.Command("go", "build", "-o", real, "./cmd/tofu")
 	build.Dir = module

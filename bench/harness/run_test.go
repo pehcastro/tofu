@@ -537,6 +537,9 @@ func repositoryRoot(t *testing.T) string {
 
 func buildTofu(t *testing.T, root string) string {
 	t.Helper()
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
 	bin := filepath.Join(t.TempDir(), "tofu.exe")
 	cmd := exec.Command("go", "build", "-o", bin, "./cmd/tofu")
 	cmd.Dir = root

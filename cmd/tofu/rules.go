@@ -255,7 +255,7 @@ func runFileRules(byChecker map[string][]rule.Rule, checkers map[string]rule.Che
 
 func skipRuleDir(name string) bool {
 	switch name {
-	case ".git", ".boji", "node_modules", "vendor":
+	case ".git", sys.StateDirName, sys.LegacyStateDirName, "node_modules", "vendor":
 		return true
 	default:
 		return false

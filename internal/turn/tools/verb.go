@@ -92,7 +92,7 @@ func verbSpecs() []verbSpec {
 			about: "prints the chain behind one decision that was already recorded: every question with its answer and its whole distribution, the verdict the policy reached, the threshold each answer was compared against, and a line naming any question that landed in the dead band. " +
 				"reach for it when the gate has already allowed, asked about or denied something and you want the reason that was recorded rather than a fresh guess at it. " +
 				"a nonzero exit means no row carries that id",
-			needs:  "it needs the .boji ledger in the working tree and nothing else: it reads the record, so it makes no network call, spends nothing and needs no key",
+			needs:  "it needs the .tofu ledger in the working tree and nothing else: it reads the record, so it makes no network call, spends nothing and needs no key",
 			params: []verbParam{verbParamID},
 		},
 		{
@@ -101,7 +101,7 @@ func verbSpecs() []verbSpec {
 			about: "rescores every decision recorded at one point against thresholds you move, and prints how many rows were read, how many were rescored, how many verdicts changed, and for each change how many recorded outcomes now agree and how many now disagree. " +
 				"reach for it before proposing a threshold, so the proposal carries what that number would have done to decisions that were really made. " +
 				"a nonzero exit means the point or a threshold name was not one the policy declares, and the message lists the names it takes",
-			needs:  "it needs the .boji ledger in the working tree: it rescores the answers that were recorded, so it makes no network call, spends nothing and needs no key",
+			needs:  "it needs the .tofu ledger in the working tree: it rescores the answers that were recorded, so it makes no network call, spends nothing and needs no key",
 			params: []verbParam{verbParamPoint, verbParamSet},
 		},
 	}

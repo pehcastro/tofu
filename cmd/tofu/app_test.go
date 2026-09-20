@@ -426,7 +426,7 @@ func TestAResultSaysSomethingOrSaysNothing(t *testing.T) {
 
 func TestAnOversizeResultNeverPutsTheModelsHandleOnTheScreen(t *testing.T) {
 	dir := scratchProject(t)
-	artifacts, err := turn.NewArtifacts(filepath.Join(dir, ".boji", "artifacts"), true)
+	artifacts, err := turn.NewArtifacts(filepath.Join(dir, ".tofu", "artifacts"), true)
 	if err != nil {
 		t.Fatal(err)
 	}

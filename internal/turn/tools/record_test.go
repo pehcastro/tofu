@@ -18,7 +18,7 @@ import (
 
 func recordOneDecision(t *testing.T, root string) ledger.Row {
 	t.Helper()
-	writer := ledger.NewWriter(filepath.Join(root, ".boji", "log"))
+	writer := ledger.NewWriter(filepath.Join(root, ".tofu", "log"))
 	row, err := writer.Append(ledger.Row{
 		Point:         "tool_gate",
 		Questions:     "tool_gate",

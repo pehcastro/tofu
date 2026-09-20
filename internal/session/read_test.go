@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"tofu/internal/sys"
 )
 
 func readStep(t *testing.T, index int, assistantText string, paths ...string) Event {
@@ -146,7 +148,7 @@ func TestReasoningSwitchedOffSaysSoRatherThanLeavingTheFieldEmpty(t *testing.T) 
 }
 
 func TestTheSessionsAlreadyOnDiskStillReadAndTheirReadsAreCountedRatherThanInvented(t *testing.T) {
-	store := NewStore(filepath.Join("..", "..", ".boji", "sessions"))
+	store := NewStore(filepath.Join(sys.StateDir(filepath.Join("..", "..")), "sessions"))
 	listing, err := store.Listing()
 	if err != nil {
 		t.Fatalf("listing the recorded sessions: %v", err)

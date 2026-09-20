@@ -39,7 +39,7 @@ func benchApp() *app.App {
 		Turn:    func(context.Context, string, string, func(app.Event)) {},
 		Providers: []settings.Provider{
 			{Name: "anthropic", State: "oauth  62% of the 7d window, resets 18:00", Source: "the credential store"},
-			{Name: "openrouter", Key: "sk-or-v1-77c1f0b6e5a94d2f8badc0ffee1234567890abcd", State: "ok", Source: ".env at ~/.boji/.env"},
+			{Name: "openrouter", Key: "sk-or-v1-77c1f0b6e5a94d2f8badc0ffee1234567890abcd", State: "ok", Source: ".env at ~/.tofu/.env"},
 			{Name: "jev", State: "build jev-2026-09-01", Source: "the last decision"},
 			{Name: "codex", Fix: "tofu login codex", Source: "nothing is stored"},
 		},

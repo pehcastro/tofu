@@ -46,6 +46,7 @@ readable form collapses: doctor, models, usage, context, rules.
 `
 
 func main() {
+	copyLegacyStateDirs(os.Stdout)
 	os.Exit(run(os.Args[1:], os.Stdin, os.Stdout, os.Stderr))
 }
 

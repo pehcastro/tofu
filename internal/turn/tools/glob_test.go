@@ -90,10 +90,10 @@ func TestANegationReIncludesAFileItsParentPatternExcluded(t *testing.T) {
 	}
 }
 
-func TestTheThreeSkippedDirectoriesNeedNoIgnoreFile(t *testing.T) {
+func TestTheAlwaysSkippedDirectoriesNeedNoIgnoreFile(t *testing.T) {
 	root := t.TempDir()
 	seed(t, root, "kept.txt", "x\n")
-	for _, dir := range []string{"node_modules", ".git", ".boji"} {
+	for _, dir := range []string{"node_modules", ".git", ".tofu", ".boji"} {
 		seed(t, root, dir+"/buried.txt", "x\n")
 	}
 

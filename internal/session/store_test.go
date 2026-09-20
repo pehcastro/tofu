@@ -193,7 +193,7 @@ func TestTheHeadSurvivesARenameThatFails(t *testing.T) {
 		t.Fatalf("read the store directory: %v", err)
 	}
 	for _, entry := range entries {
-		if strings.HasPrefix(entry.Name(), ".boji-") {
+		if strings.HasPrefix(entry.Name(), ".tofu-") {
 			t.Fatalf("the failed write left %s behind", entry.Name())
 		}
 	}

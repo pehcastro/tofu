@@ -412,8 +412,8 @@ func TestTheLineTofuDoctorPrintsForTheProjectLedger(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Summary: %v", err)
 	}
-	if !strings.HasSuffix(filepath.ToSlash(dir), ".boji/log") {
-		t.Fatalf("the ledger lives at .boji/log, Dir returned %s", dir)
+	if !strings.HasSuffix(filepath.ToSlash(dir), ".tofu/log") {
+		t.Fatalf("the ledger lives at .tofu/log, Dir returned %s", dir)
 	}
 	if stats.Rows != 9 {
 		t.Fatalf("the doctor line must count 9 rows, it counted %d", stats.Rows)

@@ -95,7 +95,7 @@ func TestRegexDecideKeepsAScratchDeleteApartFromARealOne(t *testing.T) {
 	if got := RegexDecide(`S="/tmp/scratch/x" && rm -rf "$S"`, "run the probe"); got != Proceed {
 		t.Fatalf("got %s, want proceed on a scratch delete", got)
 	}
-	if got := RegexDecide("rm -f .boji/log/*.jsonl", "run the probe"); got != Block {
+	if got := RegexDecide("rm -f .tofu/log/*.jsonl", "run the probe"); got != Block {
 		t.Fatalf("got %s, want block on a delete of the decision log", got)
 	}
 }
