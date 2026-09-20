@@ -11,31 +11,15 @@ import (
 	"boji/internal/transport"
 )
 
-type Stop int
+type Stop = llm.Stop
 
 const (
-	StopUnknown Stop = iota
-	StopEnd
-	StopLength
-	StopToolUse
-	StopError
+	StopUnknown = llm.StopUnknown
+	StopEnd     = llm.StopEnd
+	StopLength  = llm.StopLength
+	StopToolUse = llm.StopToolUse
+	StopError   = llm.StopError
 )
-
-func (s Stop) String() string {
-	switch s {
-	case StopUnknown:
-		return "unknown"
-	case StopEnd:
-		return "stop"
-	case StopLength:
-		return "length"
-	case StopToolUse:
-		return "tool_use"
-	case StopError:
-		return "error"
-	}
-	panic("anthropic: unknown stop " + strconv.Itoa(int(s)))
-}
 
 type Usage struct {
 	Input      int

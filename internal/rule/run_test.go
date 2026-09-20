@@ -30,11 +30,6 @@ func TestShadowRecordsAFireAndBlocksNothing(t *testing.T) {
 	if fire.Blocked {
 		t.Fatal("Blocked = true in shadow mode")
 	}
-	var ledger Ledger
-	ledger.Append(fire)
-	if got := len(ledger.Fires()); got != 1 {
-		t.Fatalf("ledger recorded %d fires, want 1", got)
-	}
 }
 
 func TestEnforcedBlocksTheSameRuleAndTheRecordDistinguishesIt(t *testing.T) {
@@ -63,16 +58,26 @@ func TestEnforcedBlocksTheSameRuleAndTheRecordDistinguishesIt(t *testing.T) {
 	if shadowFire.Mode == enforcedFire.Mode {
 		t.Fatal("the two runs carry the same mode, they are not distinguishable in the record")
 	}
+}
 
-	var ledger Ledger
-	ledger.Append(shadowFire)
-	ledger.Append(enforcedFire)
-	fires := ledger.Fires()
-	if fires[0].Mode != ModeShadow || fires[1].Mode != ModeEnforced {
-		t.Fatalf("ledger did not keep the two modes apart: %+v", fires)
+func TestOwnershipCheckerWrapsCrewMatches(t *testing.T) {
+	r := Rule{ID: "ownership", Kind: KindStructural, Checker: "ownership", Mode: ModeShadow}
+	covered := OwnsWrite{Path: "internal/rule/run.go", Owns: []string{"internal/rule/**"}}
+	fire, err := Run(r, Builtins(), covered, covered.Path, time.Now())
+	if err != nil {
+		t.Fatalf("Run: %v", err)
 	}
-	if fires[0].Blocked == fires[1].Blocked {
-		t.Fatal("ledger rows do not distinguish shadow from enforced by Blocked")
+	if len(fire.Findings) != 0 {
+		t.Fatalf("a path inside owns produced a finding: %+v", fire.Findings)
+	}
+
+	uncovered := OwnsWrite{Path: "cmd/boji/bench.go", Owns: []string{"internal/rule/**"}}
+	fire, err = Run(r, Builtins(), uncovered, uncovered.Path, time.Now())
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(fire.Findings) != 1 {
+		t.Fatalf("a path outside owns produced %d findings, want 1", len(fire.Findings))
 	}
 }
 

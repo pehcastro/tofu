@@ -1,6 +1,10 @@
 package quota
 
-import "time"
+import (
+	"time"
+
+	"boji/internal/transport"
+)
 
 type Provider string
 
@@ -83,4 +87,35 @@ func (r Report) WaitUntil(now time.Time) (time.Time, bool) {
 		return time.Time{}, false
 	}
 	return latest, true
+}
+
+type Condition int
+
+const (
+	ConditionUnknown Condition = iota
+	ConditionServing
+	ConditionWindowSpent
+	ConditionCredentialBroken
+)
+
+func Diagnose(report Report, err error) Condition {
+	if err != nil {
+		kind := transport.KindOf(err)
+		if kind == transport.KindAuth || kind == transport.KindMissingCredential {
+			return ConditionCredentialBroken
+		}
+		return ConditionUnknown
+	}
+	switch {
+	case report.Exhausted():
+		return ConditionWindowSpent
+	case len(report.Windows) == 0:
+		return ConditionUnknown
+	}
+	return ConditionServing
+}
+
+func SpendLimitLine() string {
+	return "spend limit: boji sets none, an api key's spending limit is the provider's, " +
+		"set on the account that issued the key"
 }

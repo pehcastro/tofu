@@ -6,13 +6,12 @@ import (
 )
 
 type Fire struct {
-	RuleID     string
-	Mode       Mode
-	Target     string
-	Findings   []Finding
-	Blocked    bool
-	Overridden bool
-	At         time.Time
+	RuleID   string
+	Mode     Mode
+	Target   string
+	Findings []Finding
+	Blocked  bool
+	At       time.Time
 }
 
 func Run(r Rule, checkers map[string]Checker, a Artifact, target string, now time.Time) (Fire, error) {

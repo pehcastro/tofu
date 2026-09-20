@@ -13,6 +13,7 @@ const (
 	OutcomeMessage
 	OutcomeToolCalls
 	OutcomeRefusal
+	OutcomeTruncated
 )
 
 func (o Outcome) String() string {
@@ -23,6 +24,8 @@ func (o Outcome) String() string {
 		return "tool_calls"
 	case OutcomeRefusal:
 		return "refusal"
+	case OutcomeTruncated:
+		return "truncated"
 	}
 	panic("llm: unknown outcome")
 }

@@ -3,6 +3,7 @@ package quota
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -85,9 +86,8 @@ func TestDoctorSeparatesASpentWindowFromABrokenCredential(t *testing.T) {
 	if got := Diagnose(spent, nil); got != ConditionWindowSpent {
 		t.Fatalf("a spent window diagnosed as %d, want a spent window", got)
 	}
-	spentLine := DoctorLine(spent, nil, recordedNow)
-	if !strings.Contains(spentLine, "the credential is fine") || !strings.Contains(spentLine, "a window is spent") {
-		t.Fatalf("the spent line read %q", spentLine)
+	if until, waits := spent.WaitUntil(recordedNow); !waits || !until.After(recordedNow) {
+		t.Fatalf("a spent window reports no time to wait until: %v %v", until, waits)
 	}
 
 	brokenPoller := stubCodexPoller(t, func(http.ResponseWriter, *http.Request) {
@@ -101,12 +101,8 @@ func TestDoctorSeparatesASpentWindowFromABrokenCredential(t *testing.T) {
 	if got := Diagnose(broken, err); got != ConditionCredentialBroken {
 		t.Fatalf("a broken credential diagnosed as %d, want a broken credential", got)
 	}
-	brokenLine := DoctorLine(broken, err, recordedNow)
-	if !strings.Contains(brokenLine, "the credential is broken") || !strings.Contains(brokenLine, "boji login codex") {
-		t.Fatalf("the broken line read %q", brokenLine)
-	}
-	if brokenLine == spentLine {
-		t.Fatal("a spent window and a broken credential report the same line")
+	if _, waits := broken.WaitUntil(recordedNow); waits {
+		t.Fatal("a broken credential is reported as a window worth waiting out")
 	}
 }
 
@@ -126,15 +122,17 @@ func TestAPollReportsNoAccountIdentifierAndNoToken(t *testing.T) {
 	if err != nil {
 		t.Fatalf("polling: %v", err)
 	}
-	rendered := strings.Join(append(report.Lines(recordedNow), DoctorLine(report, nil, recordedNow)), "\n")
-	if strings.Contains(rendered, account.AccountID) || strings.Contains(rendered, "token-secret") {
-		t.Fatalf("the rendered report carried an identifier or a token:\n%s", rendered)
+	whole := fmt.Sprintf("%+v", report)
+	if strings.Contains(whole, account.AccountID) || strings.Contains(whole, "token-secret") {
+		t.Fatalf("the report carried an identifier or a token:\n%s", whole)
 	}
-	want := "codex, read from the usage endpoint, plan Plus\n" +
-		"  5h 100.0% used of a 5h window, resets 2026-06-02T13:00:00Z (in 1h0m0s)\n" +
-		"  7d 42.5% used of a 7d window, resets 2026-06-04T00:00:00Z (in 36h0m0s)\n" +
-		"codex: the credential is fine, a window is spent, back at 2026-06-02T13:00:00Z (in 1h0m0s)"
-	if rendered != want {
-		t.Fatalf("boji usage would print\n%s\nwant\n%s", rendered, want)
+	if report.Plan != "Plus" || len(report.Windows) != 2 {
+		t.Fatalf("the recorded body read as %+v", report)
+	}
+	if report.Windows[0].ID != "5h" || report.Windows[0].Used.Fraction != 1 {
+		t.Fatalf("the spent window read as %+v", report.Windows[0])
+	}
+	if report.Windows[1].ID != "7d" || report.Windows[1].Used.Fraction != 0.425 {
+		t.Fatalf("the second window read as %+v", report.Windows[1])
 	}
 }

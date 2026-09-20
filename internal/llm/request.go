@@ -36,11 +36,31 @@ type ToolCall struct {
 	Arguments json.RawMessage
 }
 
+type ToolOutcome int
+
+const (
+	ToolOutcomeUnset ToolOutcome = iota
+	ToolOutcomeRan
+	ToolOutcomeFailed
+)
+
+func (o ToolOutcome) Failed() bool {
+	switch o {
+	case ToolOutcomeUnset, ToolOutcomeRan:
+		return false
+	case ToolOutcomeFailed:
+		return true
+	}
+	panic("llm: unknown tool outcome")
+}
+
 type Message struct {
-	Role       Role
-	Content    string
-	ToolCallID string
-	ToolCalls  []ToolCall
+	Role            Role
+	Content         string
+	ToolCallID      string
+	ToolCalls       []ToolCall
+	ToolOutcome     ToolOutcome
+	ToolResultBytes int
 }
 
 type Tool struct {

@@ -1,9 +1,12 @@
 package anthropic
 
 import (
+	"bytes"
 	"cmp"
 	"context"
 	"os"
+	"path/filepath"
+	"strconv"
 	"testing"
 	"time"
 
@@ -11,7 +14,10 @@ import (
 	"boji/internal/llm/cred"
 )
 
-const liveModel = "claude-sonnet-4-5-20250929"
+const (
+	liveModel                  = "claude-sonnet-4-5-20250929"
+	headerOnlyCacheWriteTokens = 2997
+)
 
 func liveWire(t *testing.T) *Wire {
 	t.Helper()
@@ -62,6 +68,46 @@ func TestLiveCompletion(t *testing.T) {
 		result.Model, result.Stop, result.Content, result.Usage, result.Warnings)
 	if result.Content == "" {
 		t.Fatal("the live turn returned no content")
+	}
+}
+
+func TestLiveWritesTheInstructionPrefixOnTheFirstRequest(t *testing.T) {
+	wire := liveWire(t)
+	instructions, err := os.ReadFile(filepath.Join("..", "..", "..", "..", "CLAUDE.md"))
+	if err != nil {
+		t.Fatalf("reading the project instructions: %v", err)
+	}
+	nonce := strconv.FormatInt(time.Now().UnixNano(), 36)
+	system := []string{"conversation " + nonce + " starts here.\n" + string(instructions)}
+	tools := []llm.Tool{{Name: "read", Description: "Read a file."}, {Name: "write", Description: "Write a file."}}
+	messages := []llm.Message{{Role: llm.RoleUser, Content: "Reply with the single word: ok"}}
+
+	first, dump, err := wire.Ask(context.Background(), Request{
+		MaxTokens: 16, System: system, Tools: tools, Messages: messages})
+	if err != nil {
+		t.Fatalf("first send: %v", err)
+	}
+	t.Logf("system prefix %d bytes, breakpoints %d",
+		len(system[0]), bytes.Count(dump.Body, []byte(`"cache_control"`)))
+	t.Logf("send 1 step 1: cache_read %d cache_write %d in %d out %d",
+		first.Usage.CacheRead, first.Usage.CacheWrite, first.Usage.Input, first.Usage.Output)
+	if first.Usage.CacheWrite <= headerOnlyCacheWriteTokens {
+		t.Fatalf("the first send wrote %d cached tokens, no more than the %d header-only figure",
+			first.Usage.CacheWrite, headerOnlyCacheWriteTokens)
+	}
+
+	second, _, err := wire.Ask(context.Background(), Request{MaxTokens: 16, System: system, Tools: tools,
+		Messages: append(messages,
+			llm.Message{Role: llm.RoleAssistant, Content: first.Content},
+			llm.Message{Role: llm.RoleUser, Content: "Reply with the single word: ok"})})
+	if err != nil {
+		t.Fatalf("second send: %v", err)
+	}
+	t.Logf("send 2 step 1: cache_read %d cache_write %d in %d out %d",
+		second.Usage.CacheRead, second.Usage.CacheWrite, second.Usage.Input, second.Usage.Output)
+	if second.Usage.CacheRead < first.Usage.CacheWrite {
+		t.Fatalf("the second send read %d of the %d the first wrote",
+			second.Usage.CacheRead, first.Usage.CacheWrite)
 	}
 }
 
