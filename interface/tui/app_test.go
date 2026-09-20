@@ -35,10 +35,15 @@ func fixedClock() func() time.Time {
 }
 
 func bothWires() []Wire {
-	return []Wire{{Name: "codex", Model: "gpt-5.6-sol"}, {Name: "anthropic", Model: "claude-opus-5"}}
+	return []Wire{
+		{Name: "codex", Model: "gpt-5.6-sol", Provider: "openai"},
+		{Name: "anthropic", Model: "claude-opus-5", Provider: "anthropic"},
+	}
 }
 
-func anthropicAlone() []Wire { return []Wire{{Name: "anthropic", Model: "claude-opus-5"}} }
+func anthropicAlone() []Wire {
+	return []Wire{{Name: "anthropic", Model: "claude-opus-5", Provider: "anthropic"}}
+}
 
 func sessionApp(t *testing.T, width, height int) *App {
 	t.Helper()
@@ -223,6 +228,22 @@ func TestTheWholeCommandIsBehindAKeyAndNotOnTheScreenByDefault(t *testing.T) {
 	t.Log("\n" + expanded)
 }
 
+func TestACacheHitAndAMissRenderDifferentBottomBars(t *testing.T) {
+	miss := sessionApp(t, 80, 24).View().Content
+	hit := sessionApp(t, 80, 24)
+	hit.Update(Event{Kind: EventStats, Model: "gpt-5.6-sol-2026-09-01", TokensIn: 284000, TokensOut: 61000, CacheRead: 9603, Decisions: 3})
+	hitContent := hit.View().Content
+	if miss == hitContent {
+		t.Fatalf("a cache hit and a cache miss render the same frame")
+	}
+	if !strings.Contains(hitContent, "9k+284k/61k") {
+		t.Fatalf("a cache hit does not carry the cached read beside the fresh input\n%s", hitContent)
+	}
+	if !strings.Contains(miss, "284k/61k") || strings.Contains(miss, "+284k") {
+		t.Fatalf("a turn with no cache hit already carries a cache mark\n%s", miss)
+	}
+}
+
 func TestAnAllowedCallShowsTheVerdictAndNoDistributions(t *testing.T) {
 	app := sessionApp(t, 120, 36)
 	content := app.View().Content
@@ -366,8 +387,8 @@ func TestTwoSubscriptionsAskNothingAndTheFirstSignedInRunsTheTurn(t *testing.T) 
 			t.Errorf("two subscriptions still ask %q\n%s", absent, opened)
 		}
 	}
-	if !strings.Contains(opened, "codex → gpt-5.6-sol") {
-		t.Errorf("the header does not name the wire and model it chose\n%s", opened)
+	if !strings.Contains(opened, "openai → gpt-5.6-sol") {
+		t.Errorf("the header does not name the provider and model it chose\n%s", opened)
 	}
 	if !strings.Contains(ansi.Strip(opened), "what should tofu do here?") {
 		t.Errorf("the app did not open on a session with a composer\n%s", opened)

@@ -16,6 +16,7 @@ const (
 	clockFormat   = "15:04"
 	separator     = "  ·  "
 	wireArrow     = " → "
+	cacheMark     = "+"
 	contextUnread = "context unread"
 	agentMark     = "●"
 	ForkNotice    = "⟳ forking the session in the background"
@@ -48,21 +49,21 @@ const (
 	contextBar
 )
 
-func Resolved(wire, model string) string {
-	if wire == "" || model == "" {
-		return wire + model
+func Resolved(provider, model string) string {
+	if provider == "" || model == "" {
+		return provider + model
 	}
-	return wire + wireArrow + model
+	return provider + wireArrow + model
 }
 
 type Head struct {
-	Release string
-	Repo    string
-	Branch  string
-	Wire    string
-	Model   string
-	At      time.Time
-	Elapsed time.Duration
+	Release  string
+	Repo     string
+	Branch   string
+	Provider string
+	Model    string
+	At       time.Time
+	Elapsed  time.Duration
 }
 
 type Quota struct {
@@ -81,6 +82,7 @@ type Status struct {
 	Context   Context
 	TokensIn  int
 	TokensOut int
+	CacheRead int
 	Decisions int
 	Quota     Quota
 	Agents    int
@@ -121,7 +123,7 @@ func headFields(head Head, drop headDropped) []string {
 		if drop >= headModel {
 			model = ""
 		}
-		fields = append(fields, Resolved(head.Wire, model))
+		fields = append(fields, Resolved(head.Provider, model))
 	}
 	if drop >= headClock || head.At.IsZero() {
 		return fields
@@ -149,7 +151,11 @@ func barText(status Status, width int) string {
 func fieldsWithout(status Status, drop dropped) []string {
 	fields := []string{contextText(status.Context, drop), quotaText(status.Quota, status.At, drop)}
 	if drop < tokenCounts {
-		fields = append(fields, "⇅ "+widget.Count(status.TokensIn)+"/"+widget.Count(status.TokensOut))
+		in := widget.Count(status.TokensIn)
+		if status.CacheRead > 0 {
+			in = widget.Count(status.CacheRead) + cacheMark + in
+		}
+		fields = append(fields, "⇅ "+in+"/"+widget.Count(status.TokensOut))
 	}
 	if drop < jevCount {
 		fields = append(fields, "jev "+strconv.Itoa(status.Decisions))

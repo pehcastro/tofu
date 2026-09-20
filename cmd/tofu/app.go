@@ -142,7 +142,7 @@ func appWires() []tui.Wire {
 		if err != nil {
 			continue
 		}
-		wires = append(wires, tui.Wire{Name: string(provider), Model: selected.ID})
+		wires = append(wires, tui.Wire{Name: string(provider), Model: selected.ID, Provider: string(selected.Provider)})
 	}
 	return wires
 }
@@ -662,16 +662,17 @@ type watchedChild struct {
 }
 
 type appWatcher struct {
-	inner    turn.Model
-	gate     *toolGate
-	spawner  *turn.SpawnTool
-	emit     func(tui.Event)
-	now      func() time.Time
-	seen     map[string]bool
-	wrote    map[string]string
-	in       int
-	out      int
-	children []watchedChild
+	inner     turn.Model
+	gate      *toolGate
+	spawner   *turn.SpawnTool
+	emit      func(tui.Event)
+	now       func() time.Time
+	seen      map[string]bool
+	wrote     map[string]string
+	in        int
+	out       int
+	cacheRead int
+	children  []watchedChild
 }
 
 func (a *appWatcher) Ask(ctx context.Context, request llm.Request) (llm.Decision, error) {
@@ -712,6 +713,7 @@ func (a *appWatcher) Ask(ctx context.Context, request llm.Request) (llm.Decision
 	}
 	a.in += decision.Usage.InputTokens
 	a.out += decision.Usage.OutputTokens
+	a.cacheRead += decision.CacheReadTokens
 	for index := len(a.children) - 1; index >= 0; index-- {
 		if a.children[index].child.State == crew.Running {
 			a.children[index].child.Tokens += decision.Usage.InputTokens + decision.Usage.OutputTokens
@@ -719,7 +721,7 @@ func (a *appWatcher) Ask(ctx context.Context, request llm.Request) (llm.Decision
 			break
 		}
 	}
-	stats := tui.Event{Kind: tui.EventStats, Model: decision.Build, TokensIn: a.in, TokensOut: a.out}
+	stats := tui.Event{Kind: tui.EventStats, Model: decision.Build, TokensIn: a.in, TokensOut: a.out, CacheRead: a.cacheRead}
 	if a.gate != nil {
 		stats.Decisions = a.gate.decisions
 	}

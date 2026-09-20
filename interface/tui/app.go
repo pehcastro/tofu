@@ -57,6 +57,7 @@ type Event struct {
 	Model     string
 	TokensIn  int
 	TokensOut int
+	CacheRead int
 	Decisions int
 	Decision  *session.Decision
 	Context   frame.Context
@@ -103,8 +104,9 @@ type Requirement struct {
 }
 
 type Wire struct {
-	Name  string
-	Model string
+	Name     string
+	Model    string
+	Provider string
 }
 
 type Options struct {
@@ -179,6 +181,7 @@ type App struct {
 	status       frame.Status
 	wire         string
 	model        string
+	provider     string
 	width        int
 	height       int
 	started      time.Time
@@ -240,7 +243,7 @@ func (a *App) readWires() {
 		return
 	}
 	if signed := a.options.Wires(); len(signed) > 0 {
-		a.wire, a.model = signed[0].Name, signed[0].Model
+		a.wire, a.model, a.provider = signed[0].Name, signed[0].Model, signed[0].Provider
 	}
 }
 
@@ -648,7 +651,7 @@ func (a *App) absorb(event Event) {
 	case EventForkEnd:
 		a.strip.Notice = ""
 	case EventStats:
-		a.status.TokensIn, a.status.TokensOut = event.TokensIn, event.TokensOut
+		a.status.TokensIn, a.status.TokensOut, a.status.CacheRead = event.TokensIn, event.TokensOut, event.CacheRead
 		a.status.Decisions = event.Decisions
 		if event.Model != "" {
 			a.model = event.Model
@@ -682,13 +685,13 @@ func (a *App) tick() tea.Cmd {
 func (a *App) View() tea.View {
 	at := a.options.Now()
 	head := frame.Head{
-		Release: a.options.Release,
-		Repo:    a.options.Repo,
-		Branch:  a.options.Branch,
-		Wire:    a.wire,
-		Model:   a.model,
-		At:      at,
-		Elapsed: at.Sub(a.started),
+		Release:  a.options.Release,
+		Repo:     a.options.Repo,
+		Branch:   a.options.Branch,
+		Provider: a.provider,
+		Model:    a.model,
+		At:       at,
+		Elapsed:  at.Sub(a.started),
 	}
 	rows := []string{frame.Header(head, a.width)}
 	var caret *tea.Cursor

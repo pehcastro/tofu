@@ -136,6 +136,9 @@ func TestAWireWithNoCredentialIsNeverOffered(t *testing.T) {
 	if len(codexAlone) != 1 || codexAlone[0].Name != "codex" || codexAlone[0].Model != "gpt-5.6-sol" {
 		t.Fatalf("wires %+v with only codex signed in, want codex and its default model alone", codexAlone)
 	}
+	if codexAlone[0].Provider != "openai" {
+		t.Fatalf("the codex subscription reports provider %q, want openai, since a subscription and its provider are not the same word", codexAlone[0].Provider)
+	}
 	storeCredential(t, cred.Anthropic)
 	both := appWires()
 	if len(both) != 2 || both[0].Name != "anthropic" || both[0].Model != "claude-opus-5" || both[1].Name != "codex" {

@@ -11,13 +11,13 @@ import (
 
 func head(release string) Head {
 	return Head{
-		Release: release,
-		Repo:    "silo",
-		Branch:  "develop",
-		Wire:    "codex",
-		Model:   "gpt-5.6-sol-2026-09-01",
-		At:      time.Date(2026, 9, 19, 14, 34, 0, 0, time.Local),
-		Elapsed: 138 * time.Second,
+		Release:  release,
+		Repo:     "silo",
+		Branch:   "develop",
+		Provider: "codex",
+		Model:    "gpt-5.6-sol-2026-09-01",
+		At:       time.Date(2026, 9, 19, 14, 34, 0, 0, time.Local),
+		Elapsed:  138 * time.Second,
 	}
 }
 
@@ -123,6 +123,23 @@ func TestTheContextMeterDrawsNoForkMarkAtAnyFill(t *testing.T) {
 			t.Errorf("the meter at %d0%% is %d cells of bar, want %d: %q",
 				tenth, bar, konst.MeterBarWidthChars, text)
 		}
+	}
+}
+
+func TestTheCachedReadIsShownBesideTheFreshInput(t *testing.T) {
+	fresh := carried()
+	text := barText(fresh, 120)
+	if !strings.Contains(text, "⇅ 284k/61k") {
+		t.Fatalf("a turn with no cache hit still shows a cache mark\n%s", text)
+	}
+	cached := carried()
+	cached.CacheRead = 92000
+	cachedText := barText(cached, 120)
+	if !strings.Contains(cachedText, "⇅ 92k+284k/61k") {
+		t.Fatalf("a turn with a cache hit does not carry the cached read beside the fresh input\n%s", cachedText)
+	}
+	if text == cachedText {
+		t.Fatalf("a cache hit and a cache miss render the same bar\n%s", text)
 	}
 }
 

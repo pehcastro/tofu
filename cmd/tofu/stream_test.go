@@ -84,6 +84,40 @@ func TestACancelledStreamSealsTheEntryItWasWriting(t *testing.T) {
 	}
 }
 
+func TestACacheHitCarriesTheReadSeparatelyFromTheFreshInput(t *testing.T) {
+	cached := scratchProject(t)
+	cachedModel := &sendModel{queued: []llm.Decision{{
+		Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "the answer",
+		Usage: llm.Usage{InputTokens: 400}, CacheReadTokens: 9603,
+	}}}
+	cachedDriver := driveApp(t)
+	stubbedTurn(cached, cachedModel)(t.Context(), wireSubscription, "explain the gate", cachedDriver.emit)
+
+	fresh := scratchProject(t)
+	freshModel := &sendModel{queued: []llm.Decision{{
+		Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "the answer",
+		Usage: llm.Usage{InputTokens: 400},
+	}}}
+	freshDriver := driveApp(t)
+	stubbedTurn(fresh, freshModel)(t.Context(), wireSubscription, "explain the gate", freshDriver.emit)
+
+	stats := cachedDriver.of(tui.EventStats)
+	if len(stats) == 0 || stats[len(stats)-1].CacheRead != 9603 {
+		t.Fatalf("the stats event does not carry the cached read: %+v", stats)
+	}
+	cachedFrame := cachedDriver.view()
+	freshFrame := freshDriver.view()
+	if !strings.Contains(cachedFrame, "9k+400") {
+		t.Fatalf("a cache hit does not show the cached read beside the fresh input\n%s", cachedFrame)
+	}
+	if strings.Contains(freshFrame, "+400") {
+		t.Fatalf("a turn with no cache hit still shows a cache mark\n%s", freshFrame)
+	}
+	if cachedFrame == freshFrame {
+		t.Fatalf("a cache hit and a cache miss render the same frame")
+	}
+}
+
 func recordedEventKinds(t *testing.T, dir string) []sessionstore.EventKind {
 	t.Helper()
 	matches, err := filepath.Glob(filepath.Join(dir, ".tofu", "sessions", "turn-*"))
