@@ -228,6 +228,17 @@ func TestTheWholeCommandIsBehindAKeyAndNotOnTheScreenByDefault(t *testing.T) {
 	t.Log("\n" + expanded)
 }
 
+func TestSlashDetailRevealsTheWholeCommandLikeCtrlO(t *testing.T) {
+	at := time.Date(2026, 9, 19, 14, 32, 0, 0, time.UTC)
+	app := liveApp(t, &at)
+	typeText(app, "/detail")
+	app.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	expanded := ansi.Strip(app.View().Content)
+	if !strings.Contains(expanded, "wc -l") {
+		t.Fatalf("/detail did not reveal the whole command\n%s", expanded)
+	}
+}
+
 func TestACacheHitAndAMissRenderDifferentBottomBars(t *testing.T) {
 	miss := sessionApp(t, 80, 24).View().Content
 	hit := sessionApp(t, 80, 24)

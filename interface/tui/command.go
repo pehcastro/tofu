@@ -15,6 +15,7 @@ func commands(options Options) []session.Command {
 		{Name: "settings", What: "the providers and the file each value came from"},
 		{Name: "copy", What: "put the last answer on the clipboard"},
 		{Name: "copy-call", What: "put the last tool call and its result on the clipboard"},
+		{Name: "detail", What: "show or hide each tool call's full output"},
 	}
 	if options.ResumeHead != nil {
 		listed = append(listed, session.Command{Name: "resume", What: "carry the last session into the next task"})
@@ -65,6 +66,8 @@ func (a *App) runCommand(name string) tea.Cmd {
 	case "copy-call":
 		call, found := a.view.LastCall()
 		return a.copy(callUnit, call, found)
+	case "detail":
+		a.view.ToggleOpen()
 	case "resume":
 		a.carry(a.options.ResumeHead)
 	case "new":

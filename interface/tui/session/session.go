@@ -27,7 +27,7 @@ const (
 	ruleRows       = 1
 	footerRows     = composerRows + 2
 	placeholder    = "what should tofu do here?"
-	keyHints       = "⏎ send   ⇧⏎ newline   / commands   ctrl+o detail"
+	keyHints       = "⏎ send   ⇧⏎ newline   / commands"
 	queueHints     = "⏎ queues   alt+↑↓ picks   ctrl+x unqueues"
 	hintGap        = "   "
 	quitHint       = "ctrl+c quit"
