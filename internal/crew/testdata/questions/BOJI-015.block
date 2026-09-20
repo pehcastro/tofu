@@ -1,0 +1,6 @@
+### question · deferred · BOJI-015
+
+where: internal/konst/konst.go
+ask: EstimateBytes(32000) is 90,165 bytes and refuses BOJI-006's 90,411-byte, 32,086-token fixture that the live route accepted: should JudgeStateTokenCeiling move to the measured behavior, or is refusing a request that bills a little over the documented round number the conservative behavior to keep?
+default: kept the documented round number, so the fixture stays refused
+answer:

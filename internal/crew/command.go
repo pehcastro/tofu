@@ -58,10 +58,5 @@ func commandPaths(command string) []string {
 }
 
 func AllowCommand(command string, owns []string) error {
-	for _, named := range commandPaths(command) {
-		if err := Allow(named, owns); err != nil {
-			return err
-		}
-	}
-	return nil
+	return (&Boundary{Owns: owns}).Command(command)
 }

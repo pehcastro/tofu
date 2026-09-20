@@ -1,0 +1,6 @@
+### question · deferred · BOJI-011
+
+where: bench/cost/labels.go
+ask: the label source is my own reading of bench-001's override-rule prose applied to all six cases, since no file in the tree carries an explicit per-case verdict: does the owner accept the six proceed/block calls?
+default: used my own reading as the label source, stated it once in the file every row cites, and named that file as the one line to change
+answer:

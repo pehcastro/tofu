@@ -1,0 +1,6 @@
+### question · deferred · BOJI-006
+
+where: cmd/boji/main.go
+ask: `boji bench api` cannot run as a compiled verb because the dispatch switch has no `case "bench"` and this ticket's owns names only `cmd/boji/bench.go`: who adds the one dispatch line and the one usage line?
+default: proved the acceptance line by calling benchVerb directly from cmd/boji/bench_test.go, which is the identical code path, and named both lines to add
+answer:

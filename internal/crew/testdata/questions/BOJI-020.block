@@ -1,0 +1,6 @@
+### question · deferred · BOJI-020
+
+where: internal/judge/question/load.go
+ask: the general fix to question.Resolve and pick, refusing an ambiguous bare name tree-wide rather than only for the shipped catalog layer, is still undone: does it get its own ticket or an explicit grant now?
+default: patched pinnedFS in catalog/questions/embed.go, left the general fix undone, and recorded that the tree's behavior depends on the patch until it lands
+answer:
