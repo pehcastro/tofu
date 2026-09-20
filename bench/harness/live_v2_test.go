@@ -49,18 +49,11 @@ func TestV2BojiArmRunsLiveAndProducesARow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	session, err := LatestSession(filepath.Join(state, "sessions"), execution.Start)
+	recorded, err := LatestSession(filepath.Join(state, "sessions"), execution.Start)
 	if err != nil {
 		t.Fatal(err)
 	}
-	recorded, err := os.ReadFile(filepath.Join(state, "sessions", session.ID+".json"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := os.MkdirAll(sessionDir, 0o750); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(sessionDir, session.ID+".json"), recorded, 0o600); err != nil {
+	if err := StoreTranscript(sessionDir, recorded); err != nil {
 		t.Fatal(err)
 	}
 
@@ -76,7 +69,7 @@ func TestV2BojiArmRunsLiveAndProducesARow(t *testing.T) {
 		Arm: ArmBoji, Task: "hono", Version: 2, Run: 1,
 		CLIVersion: sys.Version(), Commit: sys.BuildRevision(),
 	}
-	row, gaps := MeasureBoji(session, src, meta)
+	row, gaps := MeasureBoji(recorded, src, meta)
 	t.Logf("\n%s\n%s", Detail(row, gaps, execution, ledgerDir), Render([]Row{row}))
 
 	if row.Turns == 0 {

@@ -14,11 +14,10 @@ import (
 )
 
 const (
-	Reps            = 3
-	Model           = "anthropic/claude-fable-5-1"
-	loopMaxSteps    = 5
-	cappedMaxSteps  = 1
-	runMaxWallClock = 60 * time.Second
+	Reps           = 3
+	Model          = "anthropic/claude-fable-5-1"
+	loopMaxSteps   = 5
+	cappedMaxSteps = 1
 )
 
 type armSpec struct {
@@ -98,8 +97,7 @@ func runOne(ctx context.Context, client *llm.Client, task Task, armName string, 
 		Tools: tools,
 		Task:  task.Prompt,
 		Caps: iturn.Caps{
-			MaxSteps:     maxSteps,
-			MaxWallClock: runMaxWallClock,
+			MaxSteps: maxSteps,
 		},
 		ResultBytesCap: 4096,
 	})

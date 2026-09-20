@@ -1,6 +1,8 @@
 package cost
 
 import (
+	"os"
+	"strings"
 	"testing"
 
 	"boji/internal/judge/jev"
@@ -66,24 +68,15 @@ func TestTheArmRefusesAnAnswerSetTheGateWouldRefuse(t *testing.T) {
 	}
 }
 
-func TestTheSupersededArmDisagreesWithTheGateOnMostOfTheGrid(t *testing.T) {
-	pol, _ := shippedGate(t)
-	point := publishedPoint(t)
-	grid := gateGrid()
-	disagreed := 0
-	for _, answer := range grid {
-		gateVerdict, _, err := decide(answerMap(pol, answer), pol)
-		if err != nil {
-			t.Fatalf("%+v: %v", answer, err)
-		}
-		if DecideByApproval(answer.UserRequested, answer.Approval, point) != gateVerdict {
-			disagreed++
-		}
+func TestTheGateCarriesNoThresholdInItsOwnSource(t *testing.T) {
+	source, err := os.ReadFile("gate.go")
+	if err != nil {
+		t.Fatalf("reading gate.go: %v", err)
 	}
-	t.Logf("the superseded approval arm and the shipped gate disagree on %d of %d grid points, %.1f%%",
-		disagreed, len(grid), 100*float64(disagreed)/float64(len(grid)))
-	if disagreed == 0 {
-		t.Fatal("the two functions agree everywhere, which would mean the published arm was the gate after all")
+	for _, literal := range []string{"0.5", "0.75", "0.8", "1.5", "2.5"} {
+		if strings.Contains(string(source), literal) {
+			t.Fatalf("gate.go carries %q, so a threshold is in code again", literal)
+		}
 	}
 }
 
