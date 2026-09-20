@@ -25,6 +25,8 @@ const (
 	realBojiEnvar       = "BOJI_STAND_IN_FORWARDS_TO"
 	depthEnvar          = "BOJI_VERB_DEPTH"
 	slashSlash          = "/" + "/"
+	rulesInTheBinary    = "the binary"
+	rulesInTheProject   = "the project"
 )
 
 func TestMain(m *testing.M) {
@@ -204,7 +206,8 @@ func TestTheRecursionBoundRefusesANestedRunAtTheLimit(t *testing.T) {
 	}
 }
 
-func TestATurnCallsLintCommentsThroughTheToolAndTheResultNamesARealComment(t *testing.T) {
+func standInForwardsToARealBoji(t *testing.T) {
+	t.Helper()
 	module, err := filepath.Abs(filepath.Join("..", "..", ".."))
 	if err != nil {
 		t.Fatalf("finding the module root: %v", err)
@@ -213,9 +216,109 @@ func TestATurnCallsLintCommentsThroughTheToolAndTheResultNamesARealComment(t *te
 	build := exec.Command("go", "build", "-o", real, "./cmd/boji")
 	build.Dir = module
 	if out, err := build.CombinedOutput(); err != nil {
-		t.Fatalf("building boji: %v\n%s", err, out)
+		t.Skipf("this test runs the real boji and the tree does not build it, which is not a finding about this package: %v\n%s", err, out)
 	}
 	t.Setenv(realBojiEnvar, real)
+}
+
+func TestATurnCallsRulesCheckThroughTheToolInATreeThatIsNotThisRepository(t *testing.T) {
+	standInForwardsToARealBoji(t)
+	root := t.TempDir()
+	seed(t, root, "scratch/notes.md", "the line that breaks the rule"+string(rune(0x2014))+"on purpose\n")
+
+	model := &recordingModel{calls: []llm.ToolCall{
+		{ID: "c1", Name: "boji_rules_check", Arguments: json.RawMessage(`{"path":"scratch"}`)},
+	}}
+	called := loggedRows(t, verbTurn(t, root, model))
+	if len(called) != 1 {
+		t.Fatalf("expected one tool call row, got %d", len(called))
+	}
+	if called[0].ExitCode == nil || *called[0].ExitCode != 0 {
+		t.Fatalf("boji rules check did not reach a verdict: %v", called[0].ExitCode)
+	}
+	results := model.toolResults()
+	t.Logf("the model was sent: %s", strings.TrimSpace(results))
+	if !strings.Contains(results, rulesInTheBinary) {
+		t.Fatalf("the result does not name the rule set that ran: %q", results)
+	}
+	if strings.Contains(results, rulesInTheProject) {
+		t.Fatalf("a tree with no catalog was told the project's rules ran: %q", results)
+	}
+	if !strings.Contains(results, "em_dash") {
+		t.Fatalf("the shipped em dash rule did not fire: %q", results)
+	}
+}
+
+func TestATurnCallsJudgeThroughTheToolAndTheMissingKeyIsAStatedRequirement(t *testing.T) {
+	standInForwardsToARealBoji(t)
+	t.Setenv("OPENROUTER_KEY", "")
+	root := t.TempDir()
+
+	model := &recordingModel{calls: []llm.ToolCall{
+		{ID: "c1", Name: "boji_judge", Arguments: json.RawMessage(`{"state":"the tests pass and the task is done","battery":"stop_check@1"}`)},
+	}}
+	called := loggedRows(t, verbTurn(t, root, model))
+	if len(called) != 1 {
+		t.Fatalf("expected one tool call row, got %d", len(called))
+	}
+	if called[0].ExitCode == nil || *called[0].ExitCode != 2 {
+		t.Fatalf("boji judge without a key did not exit 2: %v", called[0].ExitCode)
+	}
+	results := model.toolResults()
+	t.Logf("the model was sent: %s", strings.TrimSpace(results))
+	if !strings.Contains(results, "OPENROUTER_KEY") {
+		t.Fatalf("the result does not name what the verb needs: %q", results)
+	}
+	if strings.Contains(results, "unmarshal") {
+		t.Fatalf("the request shape is still wrong: %q", results)
+	}
+}
+
+func TestTheJudgeVerbSendsTheRequestShapeTheVerbReads(t *testing.T) {
+	result, err := verbTool(t, t.TempDir(), "boji_judge").Run(context.Background(),
+		json.RawMessage(`{"state":"49 pass 0 fail","battery":"stop_check@1"}`))
+	if err != nil {
+		t.Fatalf("running the judge verb: %v", err)
+	}
+	t.Logf("result: %s", strings.TrimSpace(result.Content))
+	if !strings.Contains(result.Content, `stdin "{\"state\":\"49 pass 0 fail\",\"catalog\":\"stop_check@1\"}"`) {
+		t.Fatalf("the verb did not send the shape boji judge reads: %q", result.Content)
+	}
+}
+
+func TestTheJudgeVerbRefusesTheCallTheModelActuallyMade(t *testing.T) {
+	recorded := json.RawMessage(`{"body":"{\"state\":\"Task API changed in place: done renamed to completed\",\"questions\":[\"Does the work satisfy every requirement of the task?\",\"Was the existing code changed in place rather than rewritten?\"]}"}`)
+	_, err := verbTool(t, t.TempDir(), "boji_judge").Run(context.Background(), recorded)
+	if err == nil {
+		t.Fatal("the recorded call was accepted, so the model learns nothing")
+	}
+	t.Logf("refusal: %v", err)
+	for _, want := range []string{"body", "state", "battery"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("the refusal does not name %q, so it does not name the shape it wants: %v", want, err)
+		}
+	}
+}
+
+func TestEveryVerbToolSaysWhatItNeedsToRun(t *testing.T) {
+	verbs, err := tools.NewVerbs(t.TempDir())
+	if err != nil {
+		t.Fatalf("building the verb tools: %v", err)
+	}
+	if len(verbs) != 5 {
+		t.Fatalf("expected five verb tools, got %d", len(verbs))
+	}
+	for _, verb := range verbs {
+		description := verb.Definition().Description
+		t.Logf("%s: %s", verb.Name(), description)
+		if !strings.Contains(description, "it needs") {
+			t.Fatalf("%s does not say what it needs to run: %q", verb.Name(), description)
+		}
+	}
+}
+
+func TestATurnCallsLintCommentsThroughTheToolAndTheResultNamesARealComment(t *testing.T) {
+	standInForwardsToARealBoji(t)
 
 	root := t.TempDir()
 	comment := slashSlash + " the comment boji lint has to find"

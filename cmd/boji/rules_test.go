@@ -27,6 +27,59 @@ func writeEmDashFixture(t *testing.T, dir, name string) {
 	}
 }
 
+const enforcedEmDashRule = "id: em_dash\nkind: structural\nchecker: em_dash\nmode: enforced\n"
+
+func writeProjectRulesCatalog(t *testing.T, root string) {
+	t.Helper()
+	dir := filepath.Join(root, "catalog", "rules")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatalf("making the project rules catalog: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "em_dash@1.yaml"), []byte(enforcedEmDashRule), 0o644); err != nil {
+		t.Fatalf("writing the project rule: %v", err)
+	}
+}
+
+func TestRulesCheckOutsideThisRepositoryReadsTheRulesInTheBinary(t *testing.T) {
+	t.Chdir(t.TempDir())
+	violations := t.TempDir()
+	writeEmDashFixture(t, violations, "violation.md")
+
+	out := &bytes.Buffer{}
+	errOut := &bytes.Buffer{}
+	code := rulesCheckVerb([]string{violations}, out, errOut)
+	if code != exitOK {
+		t.Fatalf("exit code = %d, want %d, stderr %q, stdout %q", code, exitOK, errOut.String(), out.String())
+	}
+	if !strings.Contains(out.String(), "rules from "+rulesFromTheBinary) {
+		t.Fatalf("the verb does not name the rule set it used: %q", out.String())
+	}
+	if !strings.Contains(out.String(), "em_dash") {
+		t.Fatalf("the shipped em dash rule did not fire: %q", out.String())
+	}
+}
+
+func TestAProjectRulesCatalogOverridesTheOneInTheBinary(t *testing.T) {
+	root := t.TempDir()
+	writeProjectRulesCatalog(t, root)
+	t.Chdir(root)
+	violations := t.TempDir()
+	writeEmDashFixture(t, violations, "violation.md")
+
+	out := &bytes.Buffer{}
+	errOut := &bytes.Buffer{}
+	code := rulesCheckVerb([]string{violations}, out, errOut)
+	if code != exitVerdict {
+		t.Fatalf("exit code = %d, want %d, stderr %q, stdout %q", code, exitVerdict, errOut.String(), out.String())
+	}
+	if !strings.Contains(out.String(), "rules from "+rulesFromTheProject) {
+		t.Fatalf("the verb does not name the project rule set: %q", out.String())
+	}
+	if !strings.Contains(out.String(), "blocked=true") {
+		t.Fatalf("the project rule did not block: %q", out.String())
+	}
+}
+
 func TestRulesListPrintsFourRules(t *testing.T) {
 	out := &bytes.Buffer{}
 	errOut := &bytes.Buffer{}
@@ -35,10 +88,13 @@ func TestRulesListPrintsFourRules(t *testing.T) {
 		t.Fatalf("exit code = %d, want %d, stderr %q", code, exitOK, errOut.String())
 	}
 	lines := strings.Split(strings.TrimRight(out.String(), "\n"), "\n")
-	if len(lines) != 4 {
-		t.Fatalf("lines = %d, want 4: %q", len(lines), out.String())
+	if len(lines) != 5 {
+		t.Fatalf("lines = %d, want an origin line and 4 rules: %q", len(lines), out.String())
 	}
-	for _, line := range lines {
+	if !strings.HasPrefix(lines[0], "4 rules from ") {
+		t.Fatalf("the first line does not count the rules and name the set: %q", lines[0])
+	}
+	for _, line := range lines[1:] {
 		if !strings.Contains(line, "structural") || !strings.Contains(line, "shadow") {
 			t.Fatalf("line %q does not carry a kind and a mode", line)
 		}
@@ -52,12 +108,15 @@ func TestRulesListJSON(t *testing.T) {
 	if code != exitOK {
 		t.Fatalf("exit code = %d, want %d, stderr %q", code, exitOK, errOut.String())
 	}
-	var listing []ruleListing
-	if err := json.Unmarshal(out.Bytes(), &listing); err != nil {
+	var report ruleListReport
+	if err := json.Unmarshal(out.Bytes(), &report); err != nil {
 		t.Fatalf("unmarshalling json: %v, body %q", err, out.String())
 	}
-	if len(listing) != 4 {
-		t.Fatalf("listing = %d, want 4: %+v", len(listing), listing)
+	if len(report.Rules) != 4 {
+		t.Fatalf("listing = %d, want 4: %+v", len(report.Rules), report.Rules)
+	}
+	if report.Origin == "" {
+		t.Fatalf("the report does not name the rule set it used: %+v", report)
 	}
 }
 
@@ -84,8 +143,7 @@ func TestRulesCheckShadowFireDoesNotChangeExitCode(t *testing.T) {
 func writeEnforcedEmDashCatalog(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
-	enforcedRule := "id: em_dash\nkind: structural\nchecker: em_dash\nmode: enforced\n"
-	if err := os.WriteFile(filepath.Join(dir, "em_dash@1.yaml"), []byte(enforcedRule), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "em_dash@1.yaml"), []byte(enforcedEmDashRule), 0o644); err != nil {
 		t.Fatalf("writing the scratch catalog: %v", err)
 	}
 	return dir
@@ -115,32 +173,42 @@ func TestRulesCheckDoesNotPromoteTheShippedCatalog(t *testing.T) {
 	if code != exitOK {
 		t.Fatalf("rulesListVerb: exit %d, stderr %q", code, errOut.String())
 	}
-	var rules []ruleListing
-	if err := json.Unmarshal(out.Bytes(), &rules); err != nil {
+	var report ruleListReport
+	if err := json.Unmarshal(out.Bytes(), &report); err != nil {
 		t.Fatalf("reading the shipped catalog: %v", err)
 	}
-	for _, r := range rules {
+	for _, r := range report.Rules {
 		if r.Mode != "shadow" {
 			t.Fatalf("shipped rule %q is %q, this ticket promotes nothing", r.ID, r.Mode)
 		}
 	}
 }
 
-func TestRulesCheckOverrideRateIsReadable(t *testing.T) {
+func TestRulesCheckCountsTheFiresItBlocked(t *testing.T) {
 	t.Chdir(t.TempDir())
 	scratchCatalog := writeEnforcedEmDashCatalog(t)
 	violationDir := t.TempDir()
 	writeEmDashFixture(t, violationDir, "one.md")
 	writeEmDashFixture(t, violationDir, "two.md")
+	if err := os.WriteFile(filepath.Join(violationDir, "clean.md"), []byte("no rule fires here\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 
 	out := &bytes.Buffer{}
 	errOut := &bytes.Buffer{}
-	code := rulesCheckVerb([]string{violationDir, "--catalog", scratchCatalog}, out, errOut)
+	code := rulesCheckVerb([]string{violationDir, "--catalog", scratchCatalog, "--json"}, out, errOut)
 	if code != exitVerdict {
 		t.Fatalf("exit code = %d, want %d, stderr %q", code, exitVerdict, errOut.String())
 	}
-	if !strings.Contains(out.String(), "override rate: 0/2 blocked fires overridden") {
-		t.Fatalf("stdout does not carry a readable override rate: %q", out.String())
+	var report ruleCheckReport
+	if err := json.Unmarshal(out.Bytes(), &report); err != nil {
+		t.Fatalf("reading the check report: %v", err)
+	}
+	if len(report.Fires) != 2 || report.Blocked != 2 {
+		t.Fatalf("two violating files and one clean one gave %d fires and %d blocked: %+v", len(report.Fires), report.Blocked, report)
+	}
+	if strings.Contains(out.String(), "override") {
+		t.Fatalf("the report still carries an override number nothing can move: %q", out.String())
 	}
 }
 

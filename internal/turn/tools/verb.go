@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"maps"
 	"os"
@@ -14,6 +15,7 @@ import (
 
 	"boji/internal/konst"
 	"boji/internal/llm"
+	"boji/internal/search"
 	"boji/internal/turn"
 )
 
@@ -23,15 +25,27 @@ type verbParam int
 
 const (
 	verbParamPath verbParam = iota
-	verbParamBody
+	verbParamState
+	verbParamBattery
+	verbParamID
+	verbParamPoint
+	verbParamSet
 )
 
-func (p verbParam) name() string {
+func (p verbParam) about() (name string, describe string, required bool) {
 	switch p {
 	case verbParamPath:
-		return "path"
-	case verbParamBody:
-		return "body"
+		return "path", "one file or directory to narrow the check to, relative to the working directory. leave it out to check the whole tree", false
+	case verbParamState:
+		return "state", "what you want judged, as plain prose or as a json object. describe the work and its evidence, for instance the commands you ran and what they printed", true
+	case verbParamBattery:
+		return "battery", "the name of the question set to ask, either stop_check@1 for whether the work is finished or tool_gate@1 for whether an action is safe to take", true
+	case verbParamID:
+		return "id", "the id of one decision that was already recorded, exactly as it appears in the ledger row or in the message that blocked you", true
+	case verbParamPoint:
+		return "point", "the decision point whose recorded rows to rescore, for instance tool_gate or stop_check", true
+	case verbParamSet:
+		return "set", "the thresholds to move, each one as name=value, and more than one separated by commas, for instance risk_ask_at=1.2,risk_deny_at=2.8. leave it out to rescore against the thresholds that were recorded", false
 	}
 	panic("tools: unknown verb parameter")
 }
@@ -40,6 +54,7 @@ type verbSpec struct {
 	tool   string
 	words  []string
 	about  string
+	needs  string
 	params []verbParam
 }
 
@@ -50,27 +65,64 @@ func verbSpecs() []verbSpec {
 			words: []string{"lint", "comments"},
 			about: "runs boji's own comment rule over the tree with the go parser, and prints every comment it found as path:line:column: text. " +
 				"this project allows no comment of any kind, not a line comment and not a documentation comment, so any output at all is a list of things to delete. " +
-				"path is optional and narrows the check to one file or directory relative to the working directory. " +
 				"a nonzero exit means comments were found, which is an answer rather than a failure",
+			needs:  "it needs nothing beyond the working tree, and it reads only go source",
 			params: []verbParam{verbParamPath},
 		},
 		{
 			tool:  "boji_rules_check",
 			words: []string{"rules", "check"},
 			about: "runs boji's rule catalog over the tree and prints every rule that fired, which of them blocked, and how many findings each had. " +
-				"path is optional and narrows the check to one file or directory relative to the working directory. " +
+				"the first line is the answer: how many fires blocked, out of how many, and which rule set ran. " +
 				"a nonzero exit means a rule in blocking mode fired",
+			needs:  "it needs nothing beyond the working tree: the rule catalog travels inside the binary, and a catalog/rules directory in the working tree replaces it",
 			params: []verbParam{verbParamPath},
 		},
 		{
 			tool:  "boji_judge",
 			words: []string{"judge"},
-			about: "asks boji's typed question battery about a state and prints the answer of each question with its distribution and the verdict the policy reached. " +
-				"body is the request as json, an object carrying state and questions, and it is required. " +
-				"use this to get a calibrated answer about the state of the work rather than guessing at one in prose",
-			params: []verbParam{verbParamBody},
+			about: "asks a typed question battery about a state and prints, for every question, the answer with its distribution, and the verdict the policy reached. " +
+				"use it to get a calibrated answer about the state of the work rather than guessing at one in prose",
+			needs:  "it needs the openrouter key, as OPENROUTER_KEY in the environment or in a .env file at the root of the working tree; without it the verb exits 2 and says so",
+			params: []verbParam{verbParamState, verbParamBattery},
+		},
+		{
+			tool:  "boji_why",
+			words: []string{"why"},
+			about: "prints the chain behind one decision that was already recorded: every question with its answer and its whole distribution, the verdict the policy reached, the threshold each answer was compared against, and a line naming any question that landed in the dead band. " +
+				"reach for it when the gate has already allowed, asked about or denied something and you want the reason that was recorded rather than a fresh guess at it. " +
+				"a nonzero exit means no row carries that id",
+			needs:  "it needs the .boji ledger in the working tree and nothing else: it reads the record, so it makes no network call, spends nothing and needs no key",
+			params: []verbParam{verbParamID},
+		},
+		{
+			tool:  "boji_replay",
+			words: []string{"replay"},
+			about: "rescores every decision recorded at one point against thresholds you move, and prints how many rows were read, how many were rescored, how many verdicts changed, and for each change how many recorded outcomes now agree and how many now disagree. " +
+				"reach for it before proposing a threshold, so the proposal carries what that number would have done to decisions that were really made. " +
+				"a nonzero exit means the point or a threshold name was not one the policy declares, and the message lists the names it takes",
+			needs:  "it needs the .boji ledger in the working tree: it rescores the answers that were recorded, so it makes no network call, spends nothing and needs no key",
+			params: []verbParam{verbParamPoint, verbParamSet},
 		},
 	}
+}
+
+type judgeRequest struct {
+	State   json.RawMessage `json:"state"`
+	Catalog string          `json:"catalog"`
+}
+
+func judgeBody(state, battery string) (string, error) {
+	value := json.RawMessage(state)
+	if !strings.HasPrefix(state, "{") || !json.Valid(value) {
+		quoted, err := json.Marshal(state)
+		if err != nil {
+			return "", err
+		}
+		value = quoted
+	}
+	body, err := json.Marshal(judgeRequest{State: value, Catalog: battery})
+	return string(body), err
 }
 
 type Verb struct {
@@ -97,14 +149,15 @@ func (v Verb) Definition() llm.Tool {
 	properties := make(map[string]any, len(v.spec.params))
 	var required []string
 	for _, param := range v.spec.params {
-		properties[param.name()] = map[string]any{"type": "string"}
-		if param == verbParamBody {
-			required = append(required, param.name())
+		name, describe, must := param.about()
+		properties[name] = map[string]any{"type": "string", "description": describe}
+		if must {
+			required = append(required, name)
 		}
 	}
 	return llm.Tool{
 		Name:        v.spec.tool,
-		Description: v.spec.about,
+		Description: v.spec.about + ". " + v.spec.needs,
 		Parameters:  map[string]any{"type": "object", "properties": properties, "required": required},
 	}
 }
@@ -116,31 +169,56 @@ func (v Verb) Run(ctx context.Context, raw json.RawMessage) (turn.Result, error)
 			return turn.Result{}, fmt.Errorf("%s: arguments are not the expected shape: %w", v.spec.tool, err)
 		}
 	}
+	values := make(map[verbParam]string, len(v.spec.params))
+	names := make([]string, len(v.spec.params))
+	for i, param := range v.spec.params {
+		names[i], _, _ = param.about()
+		values[param] = strings.TrimSpace(args[names[i]])
+		delete(args, names[i])
+	}
+	if len(args) > 0 {
+		return turn.Result{}, fmt.Errorf("%s: it has no argument named %s: its arguments are %s",
+			v.spec.tool, strings.Join(slices.Sorted(maps.Keys(args)), ", "), strings.Join(names, " and "))
+	}
+
 	words := slices.Clone(v.spec.words)
-	body := ""
+	state, battery := "", ""
 	for _, param := range v.spec.params {
-		value := strings.TrimSpace(args[param.name()])
-		delete(args, param.name())
+		name, describe, must := param.about()
+		value := values[param]
+		if value == "" {
+			if must {
+				return turn.Result{}, fmt.Errorf("%s: %s is required: %s", v.spec.tool, name, describe)
+			}
+			continue
+		}
 		switch param {
 		case verbParamPath:
-			if value == "" {
-				continue
-			}
 			if _, err := v.root.Resolve(value); err != nil {
 				return turn.Result{}, fmt.Errorf("%s: %w", v.spec.tool, err)
 			}
 			words = append(words, value)
-		case verbParamBody:
-			if value == "" {
-				return turn.Result{}, fmt.Errorf("%s: body is required and it is the json request the verb reads", v.spec.tool)
+		case verbParamState:
+			state = value
+		case verbParamBattery:
+			battery = value
+		case verbParamID:
+			words = append(words, value)
+		case verbParamPoint:
+			words = append(words, "--point", value)
+		case verbParamSet:
+			for _, setting := range strings.FieldsFunc(value, func(r rune) bool { return r == ',' || r == ' ' }) {
+				words = append(words, "--set", setting)
 			}
-			body = value
 		}
 	}
-	if len(args) > 0 {
-		return turn.Result{}, fmt.Errorf("%s: %s is none of its arguments", v.spec.tool, strings.Join(slices.Sorted(maps.Keys(args)), ", "))
+	if state == "" {
+		return v.spawn(ctx, words, "")
 	}
-
+	body, err := judgeBody(state, battery)
+	if err != nil {
+		return turn.Result{}, fmt.Errorf("%s: %w", v.spec.tool, err)
+	}
 	return v.spawn(ctx, words, body)
 }
 
@@ -169,6 +247,10 @@ func (v Verb) spawn(ctx context.Context, words []string, body string) (turn.Resu
 
 	output, runErr := cmd.CombinedOutput()
 	command := "boji " + strings.Join(words, " ")
+	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		return turn.Result{}, errors.New(v.spec.tool + ": " + search.Note(search.Stopped,
+			fmt.Sprintf("%s ran past the %d ms deadline and was killed", command, konst.VerbTimeoutMillis)))
+	}
 	if cmd.ProcessState == nil {
 		return turn.Result{}, fmt.Errorf("%s: %s did not run: %w", v.spec.tool, command, runErr)
 	}

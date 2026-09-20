@@ -11,11 +11,16 @@ import (
 	"strings"
 	"time"
 
+	catalogrules "boji/catalog/rules"
 	"boji/internal/rule"
 	"boji/internal/sys"
 )
 
-const rulesFireSuffix = ".rules.jsonl"
+const (
+	rulesFireSuffix     = ".rules.jsonl"
+	rulesFromTheBinary  = "the binary"
+	rulesFromTheProject = "the project"
+)
 
 var rulesTextExtensions = map[string]bool{".go": true, ".md": true}
 
@@ -46,8 +51,7 @@ type ruleFireListing struct {
 
 type ruleFireRecord struct {
 	ruleFireListing
-	Overridden bool      `json:"overridden"`
-	At         time.Time `json:"at"`
+	At time.Time `json:"at"`
 }
 
 func fireListing(f rule.Fire) ruleFireListing {
@@ -55,9 +59,14 @@ func fireListing(f rule.Fire) ruleFireListing {
 }
 
 type ruleCheckReport struct {
-	Fires      []ruleFireListing `json:"fires"`
-	Overridden int               `json:"overridden"`
-	Blocked    int               `json:"blocked"`
+	Origin  string            `json:"origin"`
+	Fires   []ruleFireListing `json:"fires"`
+	Blocked int               `json:"blocked"`
+}
+
+type ruleListReport struct {
+	Origin string        `json:"origin"`
+	Rules  []ruleListing `json:"rules"`
 }
 
 func rulesVerb(args []string, out, errOut io.Writer) int {
@@ -79,15 +88,26 @@ func rulesFail(errOut io.Writer, err error) int {
 	return exitUsage
 }
 
-func rulesCatalogDir(override string) (string, error) {
+func loadRules(override string) ([]rule.Rule, string, error) {
 	if override != "" {
-		return override, nil
+		rules, err := rule.LoadDir(override)
+		return rules, override, err
 	}
 	catalogDir, err := sys.CatalogDir()
 	if err != nil {
-		return "", err
+		return nil, "", err
 	}
-	return filepath.Join(catalogDir, "rules"), nil
+	dir := filepath.Join(catalogDir, "rules")
+	present, err := sys.Exists(dir)
+	if err != nil {
+		return nil, "", err
+	}
+	if present {
+		rules, err := rule.LoadDir(dir)
+		return rules, rulesFromTheProject, err
+	}
+	rules, err := rule.LoadFS(catalogrules.Files())
+	return rules, rulesFromTheBinary, err
 }
 
 func rulesListVerb(args []string, out, errOut io.Writer) int {
@@ -95,27 +115,24 @@ func rulesListVerb(args []string, out, errOut io.Writer) int {
 	if err != nil {
 		return rulesFail(errOut, err)
 	}
-	dir, err := rulesCatalogDir(opts.catalog)
+	rules, origin, err := loadRules(opts.catalog)
 	if err != nil {
 		return rulesFail(errOut, err)
 	}
-	rules, err := rule.LoadDir(dir)
-	if err != nil {
-		return rulesFail(errOut, err)
+	listing := make([]ruleListing, len(rules))
+	for i, r := range rules {
+		listing[i] = ruleListing{ID: r.ID, Kind: string(r.Kind), Mode: r.Mode.String()}
 	}
 	if opts.json {
-		listing := make([]ruleListing, len(rules))
-		for i, r := range rules {
-			listing[i] = ruleListing{ID: r.ID, Kind: string(r.Kind), Mode: r.Mode.String()}
-		}
-		body, err := json.Marshal(listing)
+		body, err := json.Marshal(ruleListReport{Origin: origin, Rules: listing})
 		if err != nil {
 			return rulesFail(errOut, err)
 		}
 		_, _ = fmt.Fprintln(out, string(body))
 		return exitOK
 	}
-	for _, r := range rules {
+	_, _ = fmt.Fprintf(out, "%d rules from %s\n", len(listing), origin)
+	for _, r := range listing {
 		_, _ = fmt.Fprintf(out, "%-12s %-10s %s\n", r.ID, r.Kind, r.Mode)
 	}
 	return exitOK
@@ -126,11 +143,7 @@ func rulesCheckVerb(args []string, out, errOut io.Writer) int {
 	if err != nil {
 		return rulesFail(errOut, err)
 	}
-	dir, err := rulesCatalogDir(opts.catalog)
-	if err != nil {
-		return rulesFail(errOut, err)
-	}
-	rules, err := rule.LoadDir(dir)
+	rules, origin, err := loadRules(opts.catalog)
 	if err != nil {
 		return rulesFail(errOut, err)
 	}
@@ -139,8 +152,7 @@ func rulesCheckVerb(args []string, out, errOut io.Writer) int {
 		roots = []string{opts.path}
 	}
 
-	var ledger rule.Ledger
-	fires, err := walkRuleArtifacts(rules, roots, time.Now, &ledger)
+	fires, err := walkRuleArtifacts(rules, roots, time.Now)
 	if err != nil {
 		return rulesFail(errOut, err)
 	}
@@ -149,30 +161,31 @@ func rulesCheckVerb(args []string, out, errOut io.Writer) int {
 	if err != nil {
 		return rulesFail(errOut, err)
 	}
+	blocked := 0
 	for _, f := range fires {
 		if err := appendRuleFire(logDir, f); err != nil {
 			return rulesFail(errOut, err)
 		}
+		if f.Blocked {
+			blocked++
+		}
 	}
 
-	overridden, blocked := ledger.OverrideRate()
 	if opts.json {
-		if err := printRulesCheckJSON(out, fires, overridden, blocked); err != nil {
+		if err := printRulesCheckJSON(out, origin, fires, blocked); err != nil {
 			return rulesFail(errOut, err)
 		}
 	} else {
-		printRulesCheck(out, fires, overridden, blocked)
+		printRulesCheck(out, origin, fires, blocked)
 	}
 
-	for _, f := range fires {
-		if f.Blocked {
-			return exitVerdict
-		}
+	if blocked > 0 {
+		return exitVerdict
 	}
 	return exitOK
 }
 
-func walkRuleArtifacts(rules []rule.Rule, roots []string, now func() time.Time, ledger *rule.Ledger) ([]rule.Fire, error) {
+func walkRuleArtifacts(rules []rule.Rule, roots []string, now func() time.Time) ([]rule.Fire, error) {
 	checkers := rule.Builtins()
 	byChecker := make(map[string][]rule.Rule)
 	for _, r := range rules {
@@ -198,7 +211,7 @@ func walkRuleArtifacts(rules []rule.Rule, roots []string, now func() time.Time, 
 				}
 				return nil
 			}
-			collected, err := runFileRules(byChecker, checkers, path, now, ledger)
+			collected, err := runFileRules(byChecker, checkers, path, now)
 			if err != nil {
 				return err
 			}
@@ -212,7 +225,7 @@ func walkRuleArtifacts(rules []rule.Rule, roots []string, now func() time.Time, 
 	return fires, nil
 }
 
-func runFileRules(byChecker map[string][]rule.Rule, checkers map[string]rule.Checker, path string, now func() time.Time, ledger *rule.Ledger) ([]rule.Fire, error) {
+func runFileRules(byChecker map[string][]rule.Rule, checkers map[string]rule.Checker, path string, now func() time.Time) ([]rule.Fire, error) {
 	var fires []rule.Fire
 	ext := filepath.Ext(path)
 	if ext == ".go" {
@@ -222,7 +235,6 @@ func runFileRules(byChecker map[string][]rule.Rule, checkers map[string]rule.Che
 				return nil, err
 			}
 			if len(fire.Findings) > 0 {
-				ledger.Append(fire)
 				fires = append(fires, fire)
 			}
 		}
@@ -234,7 +246,6 @@ func runFileRules(byChecker map[string][]rule.Rule, checkers map[string]rule.Che
 				return nil, err
 			}
 			if len(fire.Findings) > 0 {
-				ledger.Append(fire)
 				fires = append(fires, fire)
 			}
 		}
@@ -269,7 +280,7 @@ func appendRuleFire(dir string, f rule.Fire) error {
 		return err
 	}
 	defer func() { _ = file.Close() }()
-	line, err := json.Marshal(ruleFireRecord{ruleFireListing: fireListing(f), Overridden: f.Overridden, At: f.At})
+	line, err := json.Marshal(ruleFireRecord{ruleFireListing: fireListing(f), At: f.At})
 	if err != nil {
 		return err
 	}
@@ -277,19 +288,19 @@ func appendRuleFire(dir string, f rule.Fire) error {
 	return err
 }
 
-func printRulesCheck(out io.Writer, fires []rule.Fire, overridden, blocked int) {
+func printRulesCheck(out io.Writer, origin string, fires []rule.Fire, blocked int) {
+	_, _ = fmt.Fprintf(out, "%d blocked of %d fires, rules from %s\n", blocked, len(fires), origin)
 	for _, f := range fires {
 		_, _ = fmt.Fprintf(out, "%s  %s  %s  blocked=%t\n", f.RuleID, f.Target, f.Mode, f.Blocked)
 	}
-	_, _ = fmt.Fprintf(out, "override rate: %d/%d blocked fires overridden\n", overridden, blocked)
 }
 
-func printRulesCheckJSON(out io.Writer, fires []rule.Fire, overridden, blocked int) error {
+func printRulesCheckJSON(out io.Writer, origin string, fires []rule.Fire, blocked int) error {
 	listing := make([]ruleFireListing, len(fires))
 	for i, f := range fires {
 		listing[i] = fireListing(f)
 	}
-	body, err := json.Marshal(ruleCheckReport{Fires: listing, Overridden: overridden, Blocked: blocked})
+	body, err := json.Marshal(ruleCheckReport{Origin: origin, Fires: listing, Blocked: blocked})
 	if err != nil {
 		return err
 	}

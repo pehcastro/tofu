@@ -2,6 +2,7 @@ package rule
 
 import (
 	"fmt"
+	"io/fs"
 	"path/filepath"
 	"strings"
 
@@ -9,8 +10,36 @@ import (
 )
 
 func Load(path string) (Rule, error) {
+	data, err := sys.ReadFile(path)
+	if err != nil {
+		return Rule{}, err
+	}
+	return parseRule(data, path)
+}
+
+func LoadFS(shipped fs.FS) ([]Rule, error) {
+	names, err := fs.Glob(shipped, "*.yaml")
+	if err != nil {
+		return nil, err
+	}
+	rules := make([]Rule, 0, len(names))
+	for _, name := range names {
+		data, err := fs.ReadFile(shipped, name)
+		if err != nil {
+			return nil, err
+		}
+		r, err := parseRule(data, "catalog/rules/"+name)
+		if err != nil {
+			return nil, err
+		}
+		rules = append(rules, r)
+	}
+	return rules, nil
+}
+
+func parseRule(data []byte, path string) (Rule, error) {
 	r := Rule{File: path}
-	err := scanKV(path, func(key, value string, line int) error {
+	err := scanKV(data, path, func(key, value string, line int) error {
 		return r.setField(key, value, path, line)
 	})
 	if err != nil {
@@ -76,11 +105,7 @@ func (r *Rule) setField(key, value, path string, line int) error {
 	return nil
 }
 
-func scanKV(path string, fn func(key, value string, line int) error) error {
-	data, err := sys.ReadFile(path)
-	if err != nil {
-		return err
-	}
+func scanKV(data []byte, path string, fn func(key, value string, line int) error) error {
 	for i, raw := range strings.Split(strings.ReplaceAll(string(data), "\r\n", "\n"), "\n") {
 		line := i + 1
 		trimmed := strings.TrimSpace(raw)
