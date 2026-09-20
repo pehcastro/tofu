@@ -30,7 +30,7 @@ const (
 )
 
 func TestReadStreamCompletesATextTurn(t *testing.T) {
-	result, err := ReadStream(sse(eventMessageStart, eventTextStart, eventTextDelta, eventTextStop, eventStopTurn, eventStop), true)
+	result, err := ReadStream(sse(eventMessageStart, eventTextStart, eventTextDelta, eventTextStop, eventStopTurn, eventStop), true, nil)
 	if err != nil {
 		t.Fatalf("reading: %v", err)
 	}
@@ -46,7 +46,7 @@ func TestReadStreamCompletesATextTurn(t *testing.T) {
 }
 
 func TestReadStreamFailsWhenNoStartEventArrives(t *testing.T) {
-	_, err := ReadStream(sse(eventTextDelta, eventStopTurn, eventStop), true)
+	_, err := ReadStream(sse(eventTextDelta, eventStopTurn, eventStop), true, nil)
 	if err == nil {
 		t.Fatal("a stream with no message_start was accepted")
 	}
@@ -56,7 +56,7 @@ func TestReadStreamFailsWhenNoStartEventArrives(t *testing.T) {
 }
 
 func TestReadStreamFailsWhenNoTerminalEnvelopeArrives(t *testing.T) {
-	_, err := ReadStream(sse(eventMessageStart, eventTextStart, eventTextDelta), true)
+	_, err := ReadStream(sse(eventMessageStart, eventTextStart, eventTextDelta), true, nil)
 	if err == nil {
 		t.Fatal("a truncated stream was finalized as a clean stop")
 	}
@@ -66,7 +66,7 @@ func TestReadStreamFailsWhenNoTerminalEnvelopeArrives(t *testing.T) {
 }
 
 func TestReadStreamAcceptsAStopReasonWithNoTrailingFrame(t *testing.T) {
-	result, err := ReadStream(sse(eventMessageStart, eventTextStart, eventTextDelta, eventTextStop, eventStopTurn), true)
+	result, err := ReadStream(sse(eventMessageStart, eventTextStart, eventTextDelta, eventTextStop, eventStopTurn), true, nil)
 	if err != nil {
 		t.Fatalf("a stop reason without message_stop was rejected: %v", err)
 	}
@@ -88,7 +88,7 @@ func TestReadStreamKeepsALeadingUnderscoreOnTheWayBack(t *testing.T) {
 		`{"type":"message_delta","delta":{"stop_reason":"tool_use"}}`,
 		eventStop,
 	)
-	result, err := ReadStream(events, true)
+	result, err := ReadStream(events, true, nil)
 	if err != nil {
 		t.Fatalf("reading: %v", err)
 	}
@@ -138,7 +138,7 @@ func TestMapStopReasonCollapsesTheWireVocabulary(t *testing.T) {
 
 func TestReadStreamDegradesAnUnknownStopReason(t *testing.T) {
 	result, err := ReadStream(sse(eventMessageStart,
-		`{"type":"message_delta","delta":{"stop_reason":"invented_next_week"}}`, eventStop), true)
+		`{"type":"message_delta","delta":{"stop_reason":"invented_next_week"}}`, eventStop), true, nil)
 	if err != nil {
 		t.Fatalf("an unknown stop reason failed the turn: %v", err)
 	}
@@ -150,9 +150,55 @@ func TestReadStreamDegradesAnUnknownStopReason(t *testing.T) {
 	}
 }
 
+func multiDeltaTextEvents() []string {
+	return []string{
+		eventMessageStart,
+		eventTextStart,
+		`{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"The gate reads "}}`,
+		`{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"toolgate.go "}}`,
+		`{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"before the policy."}}`,
+		eventTextStop,
+		eventStopTurn,
+		eventStop,
+	}
+}
+
+func TestReadStreamReportsEveryTextDeltaAsItArrives(t *testing.T) {
+	var deltas []string
+	result, err := ReadStream(sse(multiDeltaTextEvents()...), true, func(text string) { deltas = append(deltas, text) })
+	if err != nil {
+		t.Fatalf("reading: %v", err)
+	}
+	if len(deltas) != 3 {
+		t.Fatalf("%d deltas arrived, want 3: %q", len(deltas), deltas)
+	}
+	if joined := strings.Join(deltas, ""); joined != result.Content {
+		t.Fatalf("the deltas joined read %q, want the result content %q", joined, result.Content)
+	}
+}
+
+func TestReadStreamDeltasMatchTheNonStreamingContentByteForByte(t *testing.T) {
+	streamed, err := ReadStream(sse(multiDeltaTextEvents()...), true, nil)
+	if err != nil {
+		t.Fatalf("reading without a delta callback: %v", err)
+	}
+	var deltas []string
+	withDeltas, err := ReadStream(sse(multiDeltaTextEvents()...), true, func(text string) { deltas = append(deltas, text) })
+	if err != nil {
+		t.Fatalf("reading with a delta callback: %v", err)
+	}
+	if strings.Join(deltas, "") != streamed.Content {
+		t.Fatalf("the streamed deltas read %q, want the non-streaming content %q byte for byte",
+			strings.Join(deltas, ""), streamed.Content)
+	}
+	if withDeltas.Content != streamed.Content {
+		t.Fatalf("a delta callback changed the decoded content: %q vs %q", withDeltas.Content, streamed.Content)
+	}
+}
+
 func TestReadStreamFailsOnAnErrorEvent(t *testing.T) {
 	_, err := ReadStream(sse(eventMessageStart,
-		`{"type":"error","error":{"type":"overloaded_error","message":"Overloaded"}}`), true)
+		`{"type":"error","error":{"type":"overloaded_error","message":"Overloaded"}}`), true, nil)
 	if transport.KindOf(err) != transport.KindProvider || !strings.Contains(err.Error(), "Overloaded") {
 		t.Fatalf("error is %v", err)
 	}

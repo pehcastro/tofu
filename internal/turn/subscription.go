@@ -28,6 +28,7 @@ func (s Subscription) Ask(ctx context.Context, request llm.Request) (llm.Decisio
 		Messages: messages,
 		Tools:    request.Tools,
 		CacheTTL: konst.SubscriptionCacheTTL,
+		OnDelta:  request.OnDelta,
 	})
 	if err != nil {
 		return llm.Decision{}, err

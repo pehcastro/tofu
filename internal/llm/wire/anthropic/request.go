@@ -27,6 +27,7 @@ type Request struct {
 	CacheTTL  string
 
 	HistoryCacheOff bool
+	OnDelta         func(string)
 }
 
 const (

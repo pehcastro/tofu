@@ -139,7 +139,7 @@ func (w *Wire) Ask(ctx context.Context, request Request) (Result, Dump, error) {
 		Attestation: attestation,
 	}
 
-	result, err := w.post(ctx, dump, oauth)
+	result, err := w.post(ctx, dump, oauth, request.OnDelta)
 	result.Warnings = append(warnings, result.Warnings...)
 	return result, dump, err
 }
@@ -159,7 +159,7 @@ func (w *Wire) endpoint(oauth bool) string {
 	return url
 }
 
-func (w *Wire) post(ctx context.Context, dump Dump, oauth bool) (Result, error) {
+func (w *Wire) post(ctx context.Context, dump Dump, oauth bool, onDelta func(string)) (Result, error) {
 	ctx, cancel := context.WithTimeout(ctx, w.config.Watchdog)
 	defer cancel()
 
@@ -192,7 +192,7 @@ func (w *Wire) post(ctx context.Context, dump Dump, oauth bool) (Result, error) 
 		return Result{}, err
 	}
 	defer func() { _ = reader.Close() }()
-	return ReadStream(reader, oauth)
+	return ReadStream(reader, oauth, onDelta)
 }
 
 func decoded(response *http.Response) (io.ReadCloser, error) {

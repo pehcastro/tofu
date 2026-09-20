@@ -72,6 +72,7 @@ type Tool struct {
 type Request struct {
 	Messages []Message
 	Tools    []Tool
+	OnDelta  func(string)
 }
 
 func (r Request) Encode(model string) ([]byte, error) {

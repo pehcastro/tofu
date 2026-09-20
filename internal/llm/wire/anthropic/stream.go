@@ -114,7 +114,7 @@ const (
 	streamLineBytes = 16 << 20
 )
 
-func ReadStream(body io.Reader, oauth bool) (Result, error) {
+func ReadStream(body io.Reader, oauth bool, onDelta func(string)) (Result, error) {
 	var result Result
 	open := map[int]*openBlock{}
 	var text, thinking strings.Builder
@@ -175,6 +175,9 @@ func ReadStream(body io.Reader, oauth bool) (Result, error) {
 			switch event.Delta.Type {
 			case "text_delta":
 				text.WriteString(event.Delta.Text)
+				if onDelta != nil && event.Delta.Text != "" {
+					onDelta(event.Delta.Text)
+				}
 			case "thinking_delta":
 				thinking.WriteString(event.Delta.Thinking)
 			case "input_json_delta":

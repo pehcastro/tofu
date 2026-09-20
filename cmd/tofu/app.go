@@ -701,6 +701,11 @@ func (a *appWatcher) Ask(ctx context.Context, request llm.Request) (llm.Decision
 	}
 
 	a.emit(tui.Event{Kind: tui.EventRequesting})
+	streamed := false
+	request.OnDelta = func(text string) {
+		streamed = true
+		a.emit(tui.Event{Kind: tui.EventTextDelta, Text: text})
+	}
 	decision, err := a.inner.Ask(ctx, request)
 	if err != nil {
 		return decision, err
@@ -720,7 +725,7 @@ func (a *appWatcher) Ask(ctx context.Context, request llm.Request) (llm.Decision
 	}
 	a.emit(stats)
 
-	if text := strings.TrimSpace(decision.Content); text != "" {
+	if text := strings.TrimSpace(decision.Content); text != "" && !streamed {
 		a.emit(tui.Event{Kind: tui.EventText, Text: text})
 	}
 	for _, call := range decision.ToolCalls {
