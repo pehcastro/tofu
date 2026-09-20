@@ -5,6 +5,7 @@ import (
 	"io/fs"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 
 	"tofu/internal/sys"
@@ -117,7 +118,7 @@ type Contract struct {
 
 func Contracts() []Contract {
 	return []Contract{
-		{Kind: modelsDir, Required: []string{"subscription", "use"}, Optional: []string{"reason", "window"}},
+		{Kind: modelsDir, Required: []string{"subscription", "use"}, Optional: []string{"reason", "window", "context_tokens"}},
 		{Kind: subscriptionsDir, Required: []string{"provider", "wire", "windows"}, Optional: []string{"not_models"}},
 		{Kind: rolesDir, Required: []string{"model"}},
 	}
@@ -301,6 +302,14 @@ func buildModel(slug string, from *sheet, known map[Subscription]SubscriptionSpe
 		return model, &Broken{File: from.file, Why: fmt.Sprintf("the %s subscription is served by %s, so this model is filed under the wrong vendor", spec.ID, spec.Provider)}
 	}
 	model.Windows = append(append([]string{}, spec.Windows...), commas(from.values["window"])...)
+	if declared := from.values["context_tokens"]; declared != "" {
+		tokens, err := strconv.Atoi(declared)
+		if err != nil || tokens <= 0 {
+			return model, &Broken{File: from.file, Field: "context_tokens", Why: fmt.Sprintf(
+				"a context window is a count of tokens above zero, found %q. leave it out when nobody has read the real number, and tofu will not compact this model on a guess", declared)}
+		}
+		model.ContextTokens = tokens
+	}
 	if model.Use == "" {
 		model.Use = UseExcluded
 		model.Reason = "the entry declares no use, so tofu will not send it until somebody says it may"

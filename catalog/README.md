@@ -22,10 +22,15 @@ The path is the identity. A model is `provider/name`, one string, and it is the 
 | `use` | yes | `default`, `allowed` or `excluded`. A file with no `use` loads excluded, because tofu does not send a model nobody has ruled on |
 | `reason` | when excluded | why, in the words of whoever decided |
 | `window` | no | an extra quota bucket this model alone spends, on top of its subscription's |
+| `context_tokens` | no | how many tokens the model's context window holds, as somebody read it from the vendor |
 
 Exactly one `default` per subscription, and a subscription with models has one.
 
 Nothing else lives here. A file directly under `catalog/models/`, or a directory that is not a vendor, is refused by name rather than ignored.
+
+**An absent `context_tokens` means tofu never compacts that model automatically.** The field is written only when somebody has read the real number, because a guessed window is worse than none: too low compacts a turn that had room, too high sends a request the vendor answers with a context overflow. A value that is not a count of tokens above zero is refused by file and by field rather than rounded into something usable. The five that ship were read in September 2026: `claude-opus-5` at 1,000,000 from its own model banner, `claude-opus-4-5-20251101`, `claude-sonnet-4-5-20250929` and `claude-haiku-4-5-20251001` at 200,000, `gpt-5.5` at 400,000.
+
+**A bare name is read, never written.** The identity is `provider/name` and that is the string every new record writes. Session headers on disk from before this rule carry the bare name with the vendor in a separate `wire` field, so the window lookup also answers a bare name, and only when exactly one vendor directory holds it. Two vendors serving one name resolves to no window at all, which means no automatic compaction, because choosing one of two is a guess.
 
 ## subscriptions
 

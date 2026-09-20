@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"sort"
+	"strconv"
 	"strings"
 
 	"tofu/internal/llm/wire/anthropic"
@@ -30,6 +31,7 @@ type Served struct {
 	Subscription Subscription
 	Pin          string
 	IDs          []string
+	Windows      map[string]int
 }
 
 func Discover(ctx context.Context, client *transport.Client, account Account) (Served, error) {
@@ -42,7 +44,7 @@ func Discover(ctx context.Context, client *transport.Client, account Account) (S
 	if err != nil {
 		return served, err
 	}
-	served.IDs, err = servedIDs(response.Body)
+	served.IDs, served.Windows, err = servedModels(response.Body)
 	if err != nil {
 		return served, err
 	}
@@ -90,8 +92,11 @@ func discoveryRequest(account Account, token string) transport.Request {
 }
 
 type servedEntry struct {
-	ID   string `json:"id"`
-	Slug string `json:"slug"`
+	ID               string `json:"id"`
+	Slug             string `json:"slug"`
+	ContextWindow    int    `json:"context_window"`
+	MaxInputTokens   int    `json:"max_input_tokens"`
+	MaxContextWindow int    `json:"max_context_window"`
 }
 
 type servedBody struct {
@@ -99,10 +104,10 @@ type servedBody struct {
 	Models []servedEntry `json:"models"`
 }
 
-func servedIDs(body []byte) ([]string, error) {
+func servedModels(body []byte) ([]string, map[string]int, error) {
 	var payload servedBody
 	if err := json.Unmarshal(body, &payload); err != nil {
-		return nil, transport.Fail("models.Discover", transport.KindProvider, nil,
+		return nil, nil, transport.Fail("models.Discover", transport.KindProvider, nil,
 			"the model list is not the shape either backend documents")
 	}
 	entries := payload.Models
@@ -110,18 +115,38 @@ func servedIDs(body []byte) ([]string, error) {
 		entries = payload.Data
 	}
 	ids := make([]string, 0, len(entries))
+	windows := make(map[string]int)
 	for _, entry := range entries {
-		if id := cmp.Or(entry.Slug, entry.ID); id != "" {
-			ids = append(ids, id)
+		id := cmp.Or(entry.Slug, entry.ID)
+		if id == "" {
+			continue
+		}
+		ids = append(ids, id)
+		if tokens := cmp.Or(entry.ContextWindow, entry.MaxInputTokens, entry.MaxContextWindow); tokens > 0 {
+			windows[id] = tokens
 		}
 	}
-	return ids, nil
+	return ids, windows, nil
+}
+
+func WindowFor(model Model, registry Registry, served Served) (int, string) {
+	if model.ContextTokens > 0 {
+		return model.ContextTokens, "as the catalog states it in " + model.File
+	}
+	if tokens := registry.Window(model.Slug()); tokens > 0 {
+		return tokens, "as " + registry.From + " lists it"
+	}
+	if tokens := served.Windows[model.ID]; tokens > 0 {
+		return tokens, "as the " + string(served.Subscription) + " account reports it under " + served.Pin
+	}
+	return 0, ""
 }
 
 type Reconciliation struct {
 	Served      Served
 	Unknown     []string
 	Unreachable []string
+	Windows     []string
 }
 
 func (c Catalog) Reconcile(served Served) Reconciliation {
@@ -148,8 +173,14 @@ func (c Catalog) Reconcile(served Served) Reconciliation {
 		}
 	}
 	for _, model := range c.Models {
-		if model.Subscription == served.Subscription && !isServed[model.ID] {
+		if model.Subscription != served.Subscription {
+			continue
+		}
+		if !isServed[model.ID] {
 			result.Unreachable = append(result.Unreachable, model.Slug())
+		}
+		if tokens := served.Windows[model.ID]; tokens > 0 && tokens != model.ContextTokens {
+			result.Windows = append(result.Windows, model.Slug()+" "+strconv.Itoa(tokens))
 		}
 	}
 	return result
@@ -161,6 +192,7 @@ func (r Reconciliation) Lines() []string {
 		head + "the account serves " + list(r.Served.IDs) + " under " + r.Served.Pin,
 		head + "served and not in the catalog: " + list(r.Unknown),
 		head + "in the catalog and not served: " + list(r.Unreachable),
+		head + "windows the account reports that the catalog does not carry: " + list(r.Windows),
 	}
 }
 

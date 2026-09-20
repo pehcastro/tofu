@@ -1,2 +1,3 @@
 subscription: claude
 use: allowed
+context_tokens: 200000

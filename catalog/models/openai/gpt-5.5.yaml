@@ -1,3 +1,4 @@
 subscription: codex
 use: excluded
 reason: a previous generation the account still serves, superseded by gpt-5.6-sol
+context_tokens: 400000

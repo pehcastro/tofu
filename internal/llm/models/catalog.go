@@ -61,13 +61,14 @@ type SubscriptionSpec struct {
 }
 
 type Model struct {
-	Provider     Provider
-	ID           string
-	Subscription Subscription
-	Windows      []string
-	Use          Use
-	Reason       string
-	File         string
+	Provider      Provider
+	ID            string
+	Subscription  Subscription
+	Windows       []string
+	ContextTokens int
+	Use           Use
+	Reason        string
+	File          string
 }
 
 func (m Model) Slug() string { return string(m.Provider) + "/" + m.ID }
@@ -146,6 +147,19 @@ func (c Catalog) Select(slug string) (Model, error) {
 		return model, nil
 	}
 	return Model{}, &Refusal{Kind: RefusedUnknown, Slug: slug, Known: known}
+}
+
+func (c Catalog) ContextTokens(recordedName string) (int, bool) {
+	bare, bareMatches := 0, 0
+	for _, model := range c.Models {
+		switch recordedName {
+		case model.Slug():
+			return model.ContextTokens, model.ContextTokens > 0
+		case model.ID:
+			bare, bareMatches = model.ContextTokens, bareMatches+1
+		}
+	}
+	return bare, bareMatches == 1 && bare > 0
 }
 
 func (c Catalog) Default(subscription Subscription) (Model, error) {

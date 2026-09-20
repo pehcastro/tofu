@@ -1,0 +1,17 @@
+{
+  "data": [
+    {
+      "type": "model",
+      "id": "claude-fable-5",
+      "display_name": "Claude Fable 5",
+      "max_input_tokens": 1000000,
+      "max_tokens": 128000
+    },
+    {
+      "type": "model",
+      "id": "claude-haiku-4-5-20251001",
+      "max_input_tokens": 200000,
+      "max_tokens": 64000
+    }
+  ]
+}
