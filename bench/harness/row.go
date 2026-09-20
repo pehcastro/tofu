@@ -33,6 +33,7 @@ const (
 	EndReasonDone      EndReason = "done"
 	EndReasonWallClock EndReason = "wall_clock_cap"
 	EndReasonTurnCap   EndReason = "turn_cap"
+	EndReasonTruncated EndReason = "output_truncated"
 	EndReasonCrash     EndReason = "crash"
 )
 

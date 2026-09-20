@@ -1,0 +1,112 @@
+{
+  "id": "turn-18d6d295dfac466c-f2",
+  "schema": 1,
+  "at": "2026-09-19T17:24:13.3189043-03:00",
+  "task": "one at a time, print the whole contents of a.ts with cat, then b.ts, then c.ts, each in its own step, and then say in one sentence what the three files have in common",
+  "model": "claude-opus-5",
+  "spend": "subscription",
+  "steps": [
+    {
+      "index": 4,
+      "tool_calls": [
+        {
+          "tool": "artifact_fetch",
+          "args": {
+            "handle": "7309aec615d7d6215cce1475605d1064",
+            "offset": 0,
+            "length": 1266
+          },
+          "command": "artifact_fetch 7309aec615d7d6215cce1475605d1064 bytes 0 to 1266 of 1266",
+          "child_id": "",
+          "result_bytes": 1266,
+          "rendered_bytes": 1266,
+          "result_hash": "f6732f5b6e622f9967f995b658ae49a525175ea1ec53776568ceec9956cc4354",
+          "gate_decision_id": "2026-09-19-8883e54f9455b2e3b1542d87e8285e1f",
+          "gate_verdict": "allow",
+          "duration_ms": 0
+        },
+        {
+          "tool": "artifact_fetch",
+          "args": {
+            "handle": "530f03bc89f609d4630004b3aca073a7",
+            "offset": 0,
+            "length": 1266
+          },
+          "command": "artifact_fetch 530f03bc89f609d4630004b3aca073a7 bytes 0 to 1266 of 1266",
+          "child_id": "",
+          "result_bytes": 1266,
+          "rendered_bytes": 1266,
+          "result_hash": "1d7ba0016f377fd4316e99f530b8df3bb15663db20c8aec915aa23d25e14d302",
+          "gate_decision_id": "2026-09-19-5c28209ba6d219cb00658c3622b9293a",
+          "gate_verdict": "allow",
+          "duration_ms": 0
+        },
+        {
+          "tool": "artifact_fetch",
+          "args": {
+            "handle": "8330a969ac6d2f00af6643d38710fc31",
+            "offset": 0,
+            "length": 1266
+          },
+          "command": "artifact_fetch 8330a969ac6d2f00af6643d38710fc31 bytes 0 to 1266 of 1266",
+          "child_id": "",
+          "result_bytes": 1266,
+          "rendered_bytes": 1266,
+          "result_hash": "d71802ccfecf259261640a0353c1b4eeaf50df14d9f475b3a3ef170c95f82140",
+          "gate_decision_id": "2026-09-19-26124a8d5ead50c0b64f3d6b75428973",
+          "gate_verdict": "allow",
+          "duration_ms": 0
+        }
+      ],
+      "stop_reason": "tool_use",
+      "prompt_tokens": 468,
+      "completion_tokens": 829,
+      "cache_read_tokens": 693,
+      "cache_write_tokens": 0,
+      "cost_usd": 0,
+      "fork": {
+        "step": 4,
+        "kind": "continuation",
+        "into": "turn-18d6d295dfac466c-f3",
+        "tokens_before": 2217,
+        "tokens_after": 641,
+        "blocked_micros": 2415,
+        "carry": {
+          "text": "this session continues one that reached its context budget and ended. the session that ended is on disk whole and nothing in it was rewritten. every result it read is held whole in an artifact, and artifact_fetch reads any range of one by its handle.\nwhat it did, in order:\n  step 1 artifact_fetch {\"handle\": \"7309aec615d7d6215cce1475605d1064\", \"offset\": 0, \"length\": 1266}: 1266 bytes, artifact c26bddb4c9154d9489a92adc9cb8085e\n  step 1 artifact_fetch {\"handle\": \"530f03bc89f609d4630004b3aca073a7\", \"offset\": 0, \"length\": 1266}: 1266 bytes, artifact 6fc13dba28dfc63aed0743df32d515aa\n  step 1 artifact_fetch {\"handle\": \"8330a969ac6d2f00af6643d38710fc31\", \"offset\": 0, \"length\": 1266}: 1266 bytes, artifact 0f6815d3b0cf80a4ac1178bdd5a42cd6\nwhere it had got to, in its own words:\n\nartifact_fetch {\"handle\": \"7309aec615d7d6215cce1475605d1064\", \"offset\": 0, \"length\": 1266}\nartifact_fetch {\"handle\": \"530f03bc89f609d4630004b3aca073a7\", \"offset\": 0, \"length\": 1266}\nartifact_fetch {\"handle\": \"8330a969ac6d2f00af6643d38710fc31\", \"offset\": 0, \"length\": 1266}",
+          "results": [
+            {
+              "tool": "artifact_fetch",
+              "key": "artifact_fetch {\"handle\": \"7309aec615d7d6215cce1475605d1064\", \"offset\": 0, \"length\": 1266}",
+              "bytes": 1266,
+              "handle": "c26bddb4c9154d9489a92adc9cb8085e"
+            },
+            {
+              "tool": "artifact_fetch",
+              "key": "artifact_fetch {\"handle\": \"530f03bc89f609d4630004b3aca073a7\", \"offset\": 0, \"length\": 1266}",
+              "bytes": 1266,
+              "handle": "6fc13dba28dfc63aed0743df32d515aa"
+            },
+            {
+              "tool": "artifact_fetch",
+              "key": "artifact_fetch {\"handle\": \"8330a969ac6d2f00af6643d38710fc31\", \"offset\": 0, \"length\": 1266}",
+              "bytes": 1266,
+              "handle": "0f6815d3b0cf80a4ac1178bdd5a42cd6"
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "forked_from": "turn-18d6d295dfac466c",
+  "forked_into": "turn-18d6d295dfac466c-f3",
+  "fork_kind": "continuation",
+  "child_ids": null,
+  "outcome": "forked",
+  "total_cost_usd": 0,
+  "wall_clock_ms": 21179,
+  "decision_ids": [
+    "2026-09-19-8883e54f9455b2e3b1542d87e8285e1f",
+    "2026-09-19-5c28209ba6d219cb00658c3622b9293a",
+    "2026-09-19-26124a8d5ead50c0b64f3d6b75428973"
+  ]
+}

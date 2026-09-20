@@ -1,0 +1,133 @@
+{
+  "id": "turn-18d6d295dfac466c",
+  "schema": 1,
+  "at": "2026-09-19T17:24:03.0709203-03:00",
+  "task": "one at a time, print the whole contents of a.ts with cat, then b.ts, then c.ts, each in its own step, and then say in one sentence what the three files have in common",
+  "model": "claude-opus-5",
+  "spend": "subscription",
+  "steps": [
+    {
+      "index": 1,
+      "tool_calls": [
+        {
+          "tool": "bash",
+          "args": {
+            "command": "cat a.ts"
+          },
+          "command": "cat a.ts",
+          "child_id": "",
+          "exit_code": 0,
+          "result_bytes": 21778,
+          "rendered_bytes": 1266,
+          "result_hash": "699867eb872ff9a8e5890a9378bc8385e04f0bf78f6edb4a3f32f6af86ec1720",
+          "result_handle": "8c124327456517918a7810ce33a764ab",
+          "gate_decision_id": "2026-09-19-9f2c40cb6e725e842a3bc580b0fb5c00",
+          "gate_verdict": "allow",
+          "duration_ms": 37
+        }
+      ],
+      "assistant_text": "I'll read them one at a time as you asked.",
+      "stop_reason": "tool_use",
+      "prompt_tokens": 200,
+      "completion_tokens": 67,
+      "cache_read_tokens": 693,
+      "cache_write_tokens": 0,
+      "cost_usd": 0
+    },
+    {
+      "index": 2,
+      "tool_calls": [
+        {
+          "tool": "bash",
+          "args": {
+            "command": "cat b.ts"
+          },
+          "command": "cat b.ts",
+          "child_id": "",
+          "exit_code": 0,
+          "result_bytes": 21778,
+          "rendered_bytes": 1266,
+          "result_hash": "398c83c0ea42f8080c11407cec0ff56ff65fdbe67e3095fbadc9d950ea57c600",
+          "result_handle": "4c8e776d30aba881c225f39c3ed6c5c3",
+          "gate_decision_id": "2026-09-19-94a40223422596a0a1fa0c8fdabdd719",
+          "gate_verdict": "allow",
+          "duration_ms": 36
+        }
+      ],
+      "stop_reason": "tool_use",
+      "prompt_tokens": 727,
+      "completion_tokens": 373,
+      "cache_read_tokens": 693,
+      "cache_write_tokens": 0,
+      "cost_usd": 0
+    },
+    {
+      "index": 3,
+      "tool_calls": [
+        {
+          "tool": "bash",
+          "args": {
+            "command": "cat c.ts"
+          },
+          "command": "cat c.ts",
+          "child_id": "",
+          "exit_code": 0,
+          "result_bytes": 21778,
+          "rendered_bytes": 1266,
+          "result_hash": "024ab5f061082ba1b9845f99743ddcc54648285607ed3bfb9cbbd69731c9479f",
+          "result_handle": "715230a0cdce16f42bbd11ab9fcd29e9",
+          "gate_decision_id": "2026-09-19-ff47cf9df80cc08b89d6947961bcf8c4",
+          "gate_verdict": "allow",
+          "duration_ms": 36
+        }
+      ],
+      "stop_reason": "tool_use",
+      "prompt_tokens": 1261,
+      "completion_tokens": 52,
+      "cache_read_tokens": 693,
+      "cache_write_tokens": 0,
+      "cost_usd": 0,
+      "fork": {
+        "step": 3,
+        "kind": "continuation",
+        "into": "turn-18d6d295dfac466c-f2",
+        "tokens_before": 1867,
+        "tokens_after": 455,
+        "blocked_micros": 2001,
+        "carry": {
+          "text": "this session continues one that reached its context budget and ended. the session that ended is on disk whole and nothing in it was rewritten. every result it read is held whole in an artifact, and artifact_fetch reads any range of one by its handle.\nwhat it did, in order:\n  step 1 bash {\"command\": \"cat a.ts\"}: 1266 bytes, artifact 7309aec615d7d6215cce1475605d1064\n  step 2 bash {\"command\": \"cat b.ts\"}: 1266 bytes, artifact 530f03bc89f609d4630004b3aca073a7\n  step 3 bash {\"command\": \"cat c.ts\"}: 1266 bytes, artifact 8330a969ac6d2f00af6643d38710fc31\nwhere it had got to, in its own words:\n\nbash {\"command\": \"cat c.ts\"}",
+          "results": [
+            {
+              "tool": "bash",
+              "key": "bash {\"command\": \"cat a.ts\"}",
+              "bytes": 1266,
+              "handle": "7309aec615d7d6215cce1475605d1064"
+            },
+            {
+              "tool": "bash",
+              "key": "bash {\"command\": \"cat b.ts\"}",
+              "bytes": 1266,
+              "handle": "530f03bc89f609d4630004b3aca073a7"
+            },
+            {
+              "tool": "bash",
+              "key": "bash {\"command\": \"cat c.ts\"}",
+              "bytes": 1266,
+              "handle": "8330a969ac6d2f00af6643d38710fc31"
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "forked_into": "turn-18d6d295dfac466c-f2",
+  "child_ids": null,
+  "outcome": "forked",
+  "total_cost_usd": 0,
+  "wall_clock_ms": 10247,
+  "decision_ids": [
+    "2026-09-19-9f2c40cb6e725e842a3bc580b0fb5c00",
+    "2026-09-19-94a40223422596a0a1fa0c8fdabdd719",
+    "2026-09-19-ff47cf9df80cc08b89d6947961bcf8c4"
+  ]
+}
