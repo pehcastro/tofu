@@ -56,12 +56,8 @@ func (s *scan) segment(segment []string) {
 	if len(args) == 0 {
 		return
 	}
-	verb := args[0]
-	if cut := strings.LastIndexAny(verb, "/\\"); cut >= 0 {
-		verb = verb[cut+1:]
-	}
 	operands := notFlags(args[1:])
-	switch strings.TrimSuffix(strings.ToLower(verb), ".exe") {
+	switch programName(args[0]) {
 	case "cd":
 		if len(operands) > 0 {
 			s.base = resolve(s.base, s.expand(operands[0]))

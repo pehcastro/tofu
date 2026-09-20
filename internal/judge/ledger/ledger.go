@@ -10,11 +10,13 @@ import (
 	"tofu/internal/sys"
 )
 
-const SchemaVersion = 6
+const SchemaVersion = 7
 
 const StateBuilderSchema = 3
 
 const StateBodySchema = 6
+
+const FingerprintSchema = 7
 
 const dayLayout = "2006-01-02"
 
@@ -193,6 +195,7 @@ type Row struct {
 	Build         string          `json:"build"`
 	Model         string          `json:"model"`
 	StateHash     string          `json:"state_hash"`
+	Fingerprint   string          `json:"fingerprint,omitempty"`
 	StateBuilder  string          `json:"state_builder,omitempty"`
 	State         json.RawMessage `json:"state,omitempty"`
 	StateElision  *StateElision   `json:"state_elision,omitempty"`

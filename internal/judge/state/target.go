@@ -150,6 +150,6 @@ func under(full, root string) bool {
 		return false
 	}
 	lowered := strings.ToLower(full)
-	folder := strings.ToLower(path.Clean(strings.ReplaceAll(root, "\\", "/")))
+	folder := slashedLower(root)
 	return lowered == folder || strings.HasPrefix(lowered, strings.TrimSuffix(folder, "/")+"/")
 }

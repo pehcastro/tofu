@@ -9,8 +9,8 @@ import (
 )
 
 func TestSchemaBumpedForTheStateBody(t *testing.T) {
-	if SchemaVersion != StateBodySchema {
-		t.Fatalf("schema version = %d, want %d after adding the state body", SchemaVersion, StateBodySchema)
+	if SchemaVersion < StateBodySchema {
+		t.Fatalf("schema version = %d, want at least %d, the state body arrived there", SchemaVersion, StateBodySchema)
 	}
 	if StateBodySchema != 6 {
 		t.Fatalf("the state body arrived at schema %d, want 6", StateBodySchema)

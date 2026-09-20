@@ -2,6 +2,7 @@ package jev
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 
 	"tofu/internal/transport"
@@ -28,6 +29,7 @@ type Decision struct {
 	TransportID string
 	Answers     map[string]Answer
 	Usage       Usage
+	AssetsUsed  json.RawMessage
 	Attempts    int
 	Latency     time.Duration
 	Bytes       int
@@ -83,6 +85,7 @@ func (c *Client) Ask(ctx context.Context, request Request) (Decision, error) {
 		TransportID: raw.RequestID,
 		Answers:     response.Answers,
 		Usage:       response.Usage,
+		AssetsUsed:  response.AssetsUsed,
 		Attempts:    raw.Attempts,
 		Latency:     raw.Latency,
 		Bytes:       len(body),
