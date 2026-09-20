@@ -5,15 +5,17 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"time"
 
 	"tofu/internal/sys"
 	"tofu/internal/turn/tools"
 )
 
 type RecordedCall struct {
-	Tool  string          `json:"tool"`
-	Args  json.RawMessage `json:"args,omitempty"`
-	Error string          `json:"error,omitempty"`
+	Tool        string          `json:"tool"`
+	Args        json.RawMessage `json:"args,omitempty"`
+	Error       string          `json:"error,omitempty"`
+	ResultBytes int64           `json:"result_bytes,omitempty"`
 }
 
 type RecordedStep struct {
@@ -23,6 +25,7 @@ type RecordedStep struct {
 
 type RecordedTurn struct {
 	ID          string         `json:"id"`
+	At          time.Time      `json:"at"`
 	Steps       []RecordedStep `json:"steps"`
 	WallClockMS int64          `json:"wall_clock_ms"`
 }
@@ -48,17 +51,22 @@ const (
 )
 
 type ReplayArm struct {
-	Name        string
-	Steps       int
-	Calls       int
-	CacheHits   int
-	Retries     int
-	Repaired    int
-	Undecided   int
-	WallClockMS float64
+	Name           string
+	Steps          int
+	Calls          int
+	CacheHits      int
+	Retries        int
+	Repaired       int
+	Refusals       int
+	Undecided      int
+	BytesReturned  int64
+	AnswersChanged int
+	WallClockMS    float64
 }
 
 var repairableFailure = regexp.MustCompile(`was asked for occurrence \d+ and the file holds 1`)
+
+var refusedFailure = regexp.MustCompile(`nothing was changed|matches no line in the file|matches \d+ lines? \([^)]*\) and an edit must name exactly one`)
 
 func recordedPath(call RecordedCall) string {
 	var args struct {
@@ -68,10 +76,16 @@ func recordedPath(call RecordedCall) string {
 	return args.Path
 }
 
-func Replay(recorded RecordedTurn) []ReplayArm {
+type BytesSkipped struct {
+	ByCache int64
+	ByRetry int64
+}
+
+func Replay(recorded RecordedTurn) ([]ReplayArm, BytesSkipped) {
 	asRecorded := ReplayArm{Name: ArmRecorded, Steps: len(recorded.Steps), WallClockMS: float64(recorded.WallClockMS)}
 	layered := ReplayArm{Name: ArmLayered}
 	perStep := float64(recorded.WallClockMS) / float64(len(recorded.Steps))
+	var skipped BytesSkipped
 
 	seen := map[string]bool{}
 	repairedBefore := ""
@@ -79,11 +93,17 @@ func Replay(recorded RecordedTurn) []ReplayArm {
 		kept := 0
 		for _, call := range step.ToolCalls {
 			asRecorded.Calls++
+			asRecorded.BytesReturned += call.ResultBytes
+			if refusedFailure.MatchString(call.Error) {
+				asRecorded.Refusals++
+			}
+
 			target := call.Tool + " " + recordedPath(call)
 			retryOf := repairedBefore
 			repairedBefore = ""
 			if retryOf == target {
 				layered.Retries++
+				skipped.ByRetry += call.ResultBytes
 				continue
 			}
 			if !tools.SideEffectFree(call.Tool) {
@@ -91,16 +111,22 @@ func Replay(recorded RecordedTurn) []ReplayArm {
 			} else if key, keyed := tools.CallKey(call.Tool, call.Args); keyed {
 				if seen[key] {
 					layered.CacheHits++
+					layered.AnswersChanged++
+					skipped.ByCache += call.ResultBytes
 					continue
 				}
 				seen[key] = true
 			}
 			kept++
 			layered.Calls++
+			layered.BytesReturned += call.ResultBytes
 			switch {
 			case repairableFailure.MatchString(call.Error):
 				layered.Repaired++
+				layered.AnswersChanged++
 				repairedBefore = target
+			case refusedFailure.MatchString(call.Error):
+				layered.Refusals++
 			case call.Error != "":
 				layered.Undecided++
 			}
@@ -110,7 +136,7 @@ func Replay(recorded RecordedTurn) []ReplayArm {
 		}
 	}
 	layered.WallClockMS = float64(recorded.WallClockMS) - float64(asRecorded.Steps-layered.Steps)*perStep
-	return []ReplayArm{asRecorded, layered}
+	return []ReplayArm{asRecorded, layered}, skipped
 }
 
 func RenderReplay(recorded RecordedTurn, arms []ReplayArm) string {
@@ -118,8 +144,8 @@ func RenderReplay(recorded RecordedTurn, arms []ReplayArm) string {
 	fmt.Fprintf(&out, "recorded turn %s: %d steps, %d wall clock ms, %.0f ms per step\n",
 		recorded.ID, len(recorded.Steps), recorded.WallClockMS, float64(recorded.WallClockMS)/float64(len(recorded.Steps)))
 	for _, arm := range arms {
-		fmt.Fprintf(&out, "arm %q: steps %d, calls %d, cache hits %d, retries removed %d, repaired %d, failures the record cannot decide %d, wall clock %.0f ms\n",
-			arm.Name, arm.Steps, arm.Calls, arm.CacheHits, arm.Retries, arm.Repaired, arm.Undecided, arm.WallClockMS)
+		fmt.Fprintf(&out, "arm %q: steps %d, calls %d, cache hits %d, retries removed %d, repaired %d, refused %d, failures the record cannot decide %d, bytes returned %d, answers changed %d, wall clock %.0f ms\n",
+			arm.Name, arm.Steps, arm.Calls, arm.CacheHits, arm.Retries, arm.Repaired, arm.Refusals, arm.Undecided, arm.BytesReturned, arm.AnswersChanged, arm.WallClockMS)
 	}
 	out.WriteString("the wall clock of the second arm is derived: the recorded wall clock less the removed steps at the recorded mean cost of a step, never a re-measurement, because the recording holds no model response to replay\n")
 	return out.String()
