@@ -423,3 +423,35 @@ func TestMoreCallsThanTheCapRunInWaves(t *testing.T) {
 		t.Fatalf("the step lists the calls as %v, and the model made them as %v", got, ids)
 	}
 }
+
+func TestFetchAndWebSearchRunInTheSameWaveAsARead(t *testing.T) {
+	log := &callLog{}
+	together := newBarrier(3)
+	config := parallelConfig(t,
+		[]Tool{
+			&tracedTool{name: "read", log: log, hold: together.wait},
+			&tracedTool{name: "fetch", log: log, hold: together.wait},
+			&tracedTool{name: "web_search", log: log, hold: together.wait},
+		},
+		toolCallDecision(
+			llm.ToolCall{ID: "cs", Name: "web_search", Arguments: json.RawMessage(`{"id":"s1"}`)},
+			llm.ToolCall{ID: "cf", Name: "fetch", Arguments: json.RawMessage(`{"id":"f1"}`)},
+			llm.ToolCall{ID: "cr", Name: "read", Arguments: json.RawMessage(`{"id":"r1"}`)},
+		))
+
+	row, err := Run(context.Background(), config)
+	if err != nil {
+		t.Fatalf("Run returned an error: %v", err)
+	}
+	for _, call := range row.Steps[0].ToolCalls {
+		if call.Error != "" {
+			t.Fatalf("%s did not see the others running: %s", call.Tool, call.Error)
+		}
+		if call.ParallelBatch != 1 {
+			t.Fatalf("%s is in batch %d, and the three read-only calls are one wave: %+v", call.Tool, call.ParallelBatch, row.Steps[0].ToolCalls)
+		}
+	}
+	if peak := log.highWater(); peak != 3 {
+		t.Fatalf("at most %d of the three ran at once, and the story is %s", peak, log.story())
+	}
+}

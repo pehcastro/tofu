@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"tofu/internal/crew"
 	"tofu/internal/llm"
 	"tofu/internal/recall"
 )
@@ -213,6 +214,14 @@ func fullyPopulatedRow() Row {
 				CacheWriteTokens: 40,
 				CostUSD:          0.001,
 				Warnings:         []string{"recorded so the round trip proves a wire warning survives"},
+				Grants: []crew.Question{{
+					Ticket:  "turn-fixture-0001-c1",
+					Kind:    crew.Grant,
+					Where:   "server/routes.ts",
+					Ask:     "this ticket must write server/routes.ts and its owns does not hold it",
+					Default: "refused the write and left the path untouched",
+					Answer:  "recorded so the round trip proves an answered grant survives",
+				}},
 				Occupancy: &Occupancy{
 					Identity:   1200,
 					Facts:      340,

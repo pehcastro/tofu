@@ -71,6 +71,26 @@ func TestTheSameReadTwiceInOneTurnReachesTheFileSystemOnce(t *testing.T) {
 	}
 }
 
+func TestTheSameFetchTwiceInOneTurnReachesTheServerOnce(t *testing.T) {
+	server, requests := servePage(t, "<html><body><h1>a page</h1><p>one paragraph worth reading</p></body></html>")
+	counted := &countingTool{tool: tools.NewWeb(webLimits())[0]}
+	fetchTool := tools.NewMemo().Wrap([]turn.Tool{counted})[0]
+	args := `{"url":"` + server.URL + `/page"}`
+
+	first := run(t, fetchTool, args)
+	second := run(t, fetchTool, args)
+
+	if *requests != 1 {
+		t.Fatalf("the stub server answered %d requests, want one", *requests)
+	}
+	if counted.runs != 1 {
+		t.Fatalf("the fetch tool ran %d times, so the client's own page cache answered the second call and not the memo", counted.runs)
+	}
+	if !strings.Contains(second.Content, "cached") || !strings.Contains(second.Content, first.Content) {
+		t.Fatalf("the second answer is not the first one held by the memo:\n%s", second.Content)
+	}
+}
+
 func TestAWriteInvalidatesTheAnswerForThatPath(t *testing.T) {
 	root := t.TempDir()
 	seed(t, root, "a.txt", "first\n")

@@ -400,3 +400,88 @@ func TestTheSpawnToolIsGivenTheSessionStoreBeforeTheTurnStarts(t *testing.T) {
 	}
 	t.Logf("child %s recorded %d steps and %d events under a store the spawn tool had before the turn began", childID, steps, len(events))
 }
+
+func TestWithNoSearchKeyStoredTheTurnIsGivenFetchAndNoWebSearch(t *testing.T) {
+	root, err := filepath.Abs(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatalf("resolving the repository root: %v", err)
+	}
+	opts := armOpts(t)
+	t.Chdir(root)
+	names := toolNames(t, opts)
+	if !slices.Contains(names, "fetch") {
+		t.Errorf("a turn is given %v, and fetch is not among them", names)
+	}
+	if slices.Contains(names, "web_search") {
+		t.Errorf("web_search is offered with no provider key stored: %v", names)
+	}
+	t.Logf("the tools a turn is given: %v", names)
+}
+
+func TestAProjectCarryingNoWebCatalogStillBuildsItsTools(t *testing.T) {
+	dir := t.TempDir()
+	t.Chdir(dir)
+	built, err := buildRunTools(dir, toolSetFull)
+	if err != nil {
+		t.Fatalf("a project carrying no web catalog could not build its tools: %v", err)
+	}
+	for _, tool := range built {
+		if tool.Name() == "fetch" || tool.Name() == "web_search" {
+			t.Errorf("a project with no web catalog was given %s anyway", tool.Name())
+		}
+	}
+}
+
+type watchingModel struct {
+	inner turn.Model
+	store *session.Store
+	child string
+	found []bool
+}
+
+func (m *watchingModel) Ask(ctx context.Context, request llm.Request) (llm.Decision, error) {
+	_, err := m.store.Header(m.child)
+	m.found = append(m.found, err == nil)
+	return m.inner.Ask(ctx, request)
+}
+
+func TestAChildLeavesItsRecordWhileTheParentsTurnIsStillRunning(t *testing.T) {
+	dir := t.TempDir()
+	t.Chdir(dir)
+	opts := armOpts(t)
+	opts.dir, opts.task, opts.turnID = dir, "hand the work to a child", "turn-parent"
+	built, err := buildRunTools(dir, opts.toolSet)
+	if err != nil {
+		t.Fatalf("buildRunTools: %v", err)
+	}
+	store := session.NewStore(filepath.Join(dir, ".tofu", "sessions"))
+	model := &watchingModel{store: store, child: "turn-parent-c1", inner: &queuedModel{decisions: []llm.Decision{
+		{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{
+			{ID: "call-1", Name: "spawn", Arguments: json.RawMessage(`{"task":"write note.txt","owns":["note.txt"]}`)},
+		}},
+		{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{
+			{ID: "call-2", Name: "write", Arguments: json.RawMessage(`{"path":"note.txt","content":"a note"}`)},
+		}},
+		{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "the child wrote it"},
+		{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "the child reported"},
+	}}}
+
+	config, _ := runConfig(opts, built, runtime{model: model, spend: turn.SpendSubscription, sessions: store})
+	row, err := turn.Run(context.Background(), config)
+	if err != nil {
+		t.Fatalf("turn.Run: %v", err)
+	}
+	if len(model.found) != 4 {
+		t.Fatalf("the turn asked %d times, want the parent twice and the child twice", len(model.found))
+	}
+	if model.found[0] {
+		t.Errorf("the child's record was on disk before the parent spawned it")
+	}
+	if !model.found[1] || !model.found[2] {
+		t.Errorf("the child asked twice and its record was on disk %v, want it there for both", model.found)
+	}
+	if len(row.ChildIDs) != 1 || row.ChildIDs[0] != model.child {
+		t.Fatalf("the parent names %v, want the child %q", row.ChildIDs, model.child)
+	}
+	t.Logf("the child's record was on disk at asks %v, and the parent only returned after that", model.found)
+}

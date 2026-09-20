@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"tofu/internal/crew"
 	"tofu/internal/konst"
 	"tofu/internal/llm"
 	"tofu/internal/recall"
@@ -48,6 +49,7 @@ type Config struct {
 	Tools           Registry
 	Gate            Gate
 	GateMode        GateMode
+	Boundary        *crew.Boundary
 	Person          Person
 	Task            string
 	History         []llm.Message
@@ -131,15 +133,6 @@ func Run(ctx context.Context, config Config) (Row, error) {
 	if budget == (recall.Budget{}) {
 		budget = recall.Budget{Bands: recall.ShippedBands(), Source: "this turn was given no context budget"}
 	}
-	endedSession := config.EndedSession
-	if endedSession == nil && config.Sessions == nil {
-		store, err := session.Open()
-		if err != nil {
-			return Row{}, err
-		}
-		endedSession = func(row Row) error { return WriteSession(store, row) }
-	}
-
 	start := now()
 	origin := newID()
 	row := Row{ID: origin, Schema: SchemaVersion, At: start, Task: config.Task, Wire: config.Wire, Spend: config.Spend, Root: origin, SpawnedFrom: config.SpawnedFrom, Budget: budget}
@@ -258,7 +251,7 @@ func Run(ctx context.Context, config Config) (Row, error) {
 		return finish(outcome)
 	}
 
-	decisions, forks := 0, 0
+	decisions, forks, recordedGrants := 0, 0, 0
 	for step := 1; ; step++ {
 		if config.Steering != nil {
 			for _, steered := range config.Steering() {
@@ -352,6 +345,11 @@ func Run(ctx context.Context, config Config) (Row, error) {
 				flush()
 				pending = pending[len(wave):]
 			}
+			if config.Boundary != nil {
+				asked := config.Boundary.Asked()
+				stepRow.Grants = slices.Clone(asked[recordedGrants:])
+				recordedGrants = len(asked)
+			}
 			if capped {
 				keep(stepRow)
 				return endAt(OutcomeDecisionCap, step, settled), nil
@@ -373,11 +371,11 @@ func Run(ctx context.Context, config Config) (Row, error) {
 					ended.Outcome, ended.ForkedInto = OutcomeForked, fork.Into
 					ended.WallClockMS = now().Sub(start).Milliseconds()
 					note(recorder.End(ended.Header(), ended.Summary()))
-					if endedSession != nil {
+					if config.EndedSession != nil {
 						written.Add(1)
 						go func() {
 							defer written.Done()
-							if err := endedSession(ended); err != nil {
+							if err := config.EndedSession(ended); err != nil {
 								forkWrites.Lock()
 								forkWriteErrs = append(forkWriteErrs, err.Error())
 								forkWrites.Unlock()

@@ -1098,7 +1098,7 @@ func TestACancelledTurnReportsStoppedAndCarriesNoGoError(t *testing.T) {
 	if len(done) != 1 {
 		t.Fatalf("the turn closed with %d done events, want one", len(done))
 	}
-	if !strings.HasPrefix(done[0].Text, "turn stopped,") {
+	if done[0].Text != doneWords(turn.OutcomeStopped) {
 		t.Errorf("the closing line reads %q, want a turn that reports as stopped", done[0].Text)
 	}
 	screen := driver.view()
@@ -1121,7 +1121,7 @@ func TestATurnThatFailsForAnotherReasonStillReportsTheError(t *testing.T) {
 		t.Fatalf("the failure was reported as %+v, want the error text", failures)
 	}
 	done := driver.of(tui.EventDone)
-	if len(done) != 1 || !strings.HasPrefix(done[0].Text, "turn error,") {
+	if len(done) != 1 || done[0].Text != doneWords(turn.OutcomeError) {
 		t.Fatalf("the closing line reads %+v, want a turn that reports as an error", done)
 	}
 }
@@ -1252,6 +1252,31 @@ func TestThePlaceAGrantCoversIsTheToolAndItsSubject(t *testing.T) {
 		got := askedPlace(turn.GateRequest{Tool: one.tool, Args: json.RawMessage(one.args)})
 		if got != one.place {
 			t.Errorf("%s %s is the place %q, want %q", one.tool, one.args, got, one.place)
+		}
+	}
+}
+
+func TestEveryOutcomeClosesTheTurnInWordsAndNeverInItsEnumName(t *testing.T) {
+	for _, one := range []struct {
+		outcome turn.Outcome
+		words   string
+	}{
+		{turn.OutcomeUnset, "finished in"},
+		{turn.OutcomeForked, "finished in"},
+		{turn.OutcomeStopped, "stopped after"},
+		{turn.OutcomeStepCap, "stopped at the step cap after"},
+		{turn.OutcomeDecisionCap, "stopped at the decision cap after"},
+		{turn.OutcomeError, "failed after"},
+		{turn.OutcomeTruncated, "stopped on a reply it could not finish, after"},
+		{turn.OutcomeRetiredCostCap, "stopped at a cap this build no longer sets, after"},
+		{turn.OutcomeRetiredWallClockCap, "stopped at a cap this build no longer sets, after"},
+	} {
+		words := doneWords(one.outcome)
+		if words != one.words {
+			t.Errorf("%s closes the turn with %q, want %q", one.outcome, words, one.words)
+		}
+		if strings.Contains(words, "_") {
+			t.Errorf("%s closes the turn with its own enum name: %q", one.outcome, words)
 		}
 	}
 }

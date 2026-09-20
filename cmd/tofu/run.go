@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"slices"
 	"strconv"
@@ -29,6 +30,7 @@ import (
 	"tofu/internal/transport"
 	"tofu/internal/turn"
 	"tofu/internal/turn/tools"
+	"tofu/internal/web"
 )
 
 const (
@@ -571,8 +573,31 @@ func buildRunTools(dir, set string) ([]turn.Tool, error) {
 	if err := cmp.Or(globErr, grepErr, searchErr, symbolsErr, editErr, projectErr, verbErr); err != nil {
 		return nil, err
 	}
+	webTools, webErr := buildWebTools()
+	if webErr != nil {
+		return nil, webErr
+	}
 	full := append([]turn.Tool{readTool, writeTool, shell, projectTool, globTool, grepTool, searchTool, symbolsTool, editTool}, verbTools...)
-	return tools.NewMemo().Wrap(full), nil
+	return tools.NewMemo().Wrap(append(full, webTools...)), nil
+}
+
+func buildWebTools() ([]turn.Tool, error) {
+	layers, err := web.DefaultLayers()
+	if err != nil {
+		return nil, err
+	}
+	carried := slices.ContainsFunc(layers, func(layer web.Layer) bool {
+		_, err := fs.Stat(layer.FS, "fetch.yaml")
+		return err == nil
+	})
+	if !carried {
+		return nil, nil
+	}
+	config, err := web.Load(layers)
+	if err != nil {
+		return nil, err
+	}
+	return tools.NewWeb(config), nil
 }
 
 func printRunRow(out io.Writer, row turn.Row, askedAs, windows string) {

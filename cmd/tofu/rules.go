@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -21,8 +20,6 @@ const (
 	rulesFromTheBinary  = "the binary"
 	rulesFromTheProject = "the project"
 )
-
-var rulesTextExtensions = map[string]bool{".go": true, ".md": true}
 
 type rulesListOpts struct {
 	catalog string
@@ -131,9 +128,13 @@ func rulesListVerb(args []string, out, errOut io.Writer) int {
 		_, _ = fmt.Fprintln(out, string(body))
 		return exitOK
 	}
+	widest := 0
+	for _, r := range listing {
+		widest = max(widest, len(r.ID))
+	}
 	_, _ = fmt.Fprintf(out, "%d rules from %s\n", len(listing), origin)
 	for _, r := range listing {
-		_, _ = fmt.Fprintf(out, "%-12s %-10s %s\n", r.ID, r.Kind, r.Mode)
+		_, _ = fmt.Fprintf(out, "%-*s %-10s %s\n", widest, r.ID, r.Kind, r.Mode)
 	}
 	return exitOK
 }
@@ -152,9 +153,20 @@ func rulesCheckVerb(args []string, out, errOut io.Writer) int {
 		roots = []string{opts.path}
 	}
 
-	fires, err := walkRuleArtifacts(rules, roots, time.Now)
-	if err != nil {
-		return rulesFail(errOut, err)
+	var fires []rule.Fire
+	for _, root := range roots {
+		present, err := sys.Exists(root)
+		if err != nil {
+			return rulesFail(errOut, err)
+		}
+		if !present {
+			continue
+		}
+		found, err := rule.CheckTree(rules, rule.Builtins(), root, time.Now)
+		if err != nil {
+			return rulesFail(errOut, err)
+		}
+		fires = append(fires, found...)
 	}
 
 	logDir, err := rulesLogDir()
@@ -183,83 +195,6 @@ func rulesCheckVerb(args []string, out, errOut io.Writer) int {
 		return exitVerdict
 	}
 	return exitOK
-}
-
-func walkRuleArtifacts(rules []rule.Rule, roots []string, now func() time.Time) ([]rule.Fire, error) {
-	checkers := rule.Builtins()
-	byChecker := make(map[string][]rule.Rule)
-	for _, r := range rules {
-		byChecker[r.Checker] = append(byChecker[r.Checker], r)
-	}
-
-	var fires []rule.Fire
-	for _, root := range roots {
-		present, err := sys.Exists(root)
-		if err != nil {
-			return nil, err
-		}
-		if !present {
-			continue
-		}
-		err = sys.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
-			if err != nil {
-				return err
-			}
-			if d.IsDir() {
-				if skipRuleDir(d.Name()) {
-					return filepath.SkipDir
-				}
-				return nil
-			}
-			collected, err := runFileRules(byChecker, checkers, path, now)
-			if err != nil {
-				return err
-			}
-			fires = append(fires, collected...)
-			return nil
-		})
-		if err != nil {
-			return nil, err
-		}
-	}
-	return fires, nil
-}
-
-func runFileRules(byChecker map[string][]rule.Rule, checkers map[string]rule.Checker, path string, now func() time.Time) ([]rule.Fire, error) {
-	var fires []rule.Fire
-	ext := filepath.Ext(path)
-	if ext == ".go" {
-		for _, r := range byChecker["comments"] {
-			fire, err := rule.Run(r, checkers, rule.GoFile{Path: path}, path, now())
-			if err != nil {
-				return nil, err
-			}
-			if len(fire.Findings) > 0 {
-				fires = append(fires, fire)
-			}
-		}
-	}
-	if rulesTextExtensions[ext] {
-		for _, r := range byChecker["em_dash"] {
-			fire, err := rule.Run(r, checkers, rule.TextFile{Path: path}, path, now())
-			if err != nil {
-				return nil, err
-			}
-			if len(fire.Findings) > 0 {
-				fires = append(fires, fire)
-			}
-		}
-	}
-	return fires, nil
-}
-
-func skipRuleDir(name string) bool {
-	switch name {
-	case ".git", sys.StateDirName, sys.LegacyStateDirName, "node_modules", "vendor":
-		return true
-	default:
-		return false
-	}
 }
 
 func rulesLogDir() (string, error) {

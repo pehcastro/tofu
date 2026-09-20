@@ -116,28 +116,27 @@ func (g *toolGate) ask(ctx context.Context, request turn.GateRequest) (ledger.Ro
 	if err := json.Unmarshal(request.Args, &input); err != nil {
 		return ledger.Row{}, fmt.Errorf("the %s call carries arguments the gate cannot read: %w", request.Tool, err)
 	}
-	built, builder, err := state.BuildToolGateV3(state.ToolGateInput{
+	call := state.ToolGateInput{
 		Agent:      "tofu-run",
 		Tool:       request.Tool,
 		Input:      input,
 		Cwd:        g.cwd,
 		ProjectDir: g.cwd,
 		Context:    state.ToolGateContext{UserRecentMessages: []string{request.Task}},
-	})
+	}
+	built, builder, err := state.BuildToolGateV3(call)
 	if err != nil {
 		return ledger.Row{}, err
 	}
+	written := rowInput{turnID: request.TurnID, stateBuilder: builder, fingerprint: state.FingerprintOf(call)}
 	builtState := json.RawMessage(built)
 	decision, err := g.client.Ask(ctx, jev.Request{State: builtState, Questions: g.set.Questions})
 	g.decisions++
 	if err != nil {
-		return appendFallbackRow(builtState, g.set, rowInput{turnID: request.TurnID, stateBuilder: builder}, err)
+		return appendFallbackRow(builtState, g.set, written, err)
 	}
 	g.costUSD += decision.Usage.Cost
-	return appendRow(builtState, g.set, rowInput{
-		decision:     &decision,
-		answers:      toLedgerAnswers(g.set.QuestionsVersion, decision.Answers),
-		turnID:       request.TurnID,
-		stateBuilder: builder,
-	})
+	written.decision = &decision
+	written.answers = toLedgerAnswers(g.set.QuestionsVersion, decision.Answers)
+	return appendRow(builtState, g.set, written)
 }

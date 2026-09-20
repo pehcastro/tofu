@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"time"
 
+	"tofu/internal/crew"
 	"tofu/internal/llm"
 	"tofu/internal/recall"
 	"tofu/internal/session"
@@ -70,6 +71,8 @@ type StepRow struct {
 	Bands            *recall.Bands `json:"bands,omitempty"`
 	Compaction       *Compaction   `json:"compaction,omitempty"`
 	Fork             *Fork         `json:"fork,omitempty"`
+
+	Grants []crew.Question `json:"grants,omitempty"`
 }
 
 type Spend string

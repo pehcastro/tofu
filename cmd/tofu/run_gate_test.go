@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -9,7 +10,9 @@ import (
 	catalogpolicy "tofu/catalog/policy"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/judge/policy"
+	"tofu/internal/judge/state"
 	"tofu/internal/sys"
+	"tofu/internal/turn"
 )
 
 const gateFixtureBuild = "typesafe/jev-1.13-20260917"
@@ -111,6 +114,49 @@ func gateScratch(t *testing.T, lockBuild string) (string, policy.Thresholds, pol
 	writeGateLedgerRowFixture(t)
 	pinned := writeGateLockFixture(t, lockBuild)
 	return dir, declared, pinned
+}
+
+func TestADecisionMadeNowCarriesTheFingerprintOfTheCallItJudged(t *testing.T) {
+	dir, _, _ := gateScratch(t, gateFixtureBuild)
+	stubJev(t, 200, middlingRiskAskReply)
+	gate, err := newToolGate(dir)
+	if err != nil {
+		t.Fatalf("newToolGate: %v", err)
+	}
+
+	decision, err := gate.Decide(t.Context(), turn.GateRequest{
+		TurnID: "turn-fingerprint",
+		Task:   "write the note the README asked for",
+		Tool:   "write",
+		Args:   json.RawMessage(`{"path":"note.txt","content":"hello"}`),
+	})
+	if err != nil {
+		t.Fatalf("the gate did not decide: %v", err)
+	}
+
+	ledgerDir, err := ledger.Dir()
+	if err != nil {
+		t.Fatalf("ledger dir: %v", err)
+	}
+	row, found, err := ledger.NewReader(ledgerDir).ByID(decision.ID)
+	if err != nil || !found {
+		t.Fatalf("reading row %s back: found %v, err %v", decision.ID, found, err)
+	}
+	want := state.FingerprintOf(state.ToolGateInput{
+		Agent:      "tofu-run",
+		Tool:       "write",
+		Input:      map[string]any{"path": "note.txt", "content": "hello"},
+		Cwd:        dir,
+		ProjectDir: dir,
+		Context:    state.ToolGateContext{UserRecentMessages: []string{"write the note the README asked for"}},
+	})
+	if row.Fingerprint != want || want == "" {
+		t.Fatalf("the row carries fingerprint %q and the call fingerprints as %q", row.Fingerprint, want)
+	}
+	if row.Schema != ledger.FingerprintSchema {
+		t.Fatalf("the row is schema %d, and a row carrying a fingerprint is schema %d", row.Schema, ledger.FingerprintSchema)
+	}
+	t.Logf("row %s carries %s", row.ID, row.Fingerprint)
 }
 
 func TestTheGateReadsThePolicyInTheBinaryWhenTheProjectHasNoCatalog(t *testing.T) {

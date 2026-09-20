@@ -254,6 +254,34 @@ func TestRulesCheckWritesTheFireWhereWhyCanFindIt(t *testing.T) {
 	}
 }
 
+func TestRulesCheckReachesTheRulesWhoseSubjectIsAPackage(t *testing.T) {
+	catalog := shippedRulesCatalogDir(t)
+	tree, err := filepath.Abs(filepath.Join("..", "..", "internal", "rule", "testdata", "tree"))
+	if err != nil {
+		t.Fatalf("resolving the fixture tree: %v", err)
+	}
+	t.Chdir(t.TempDir())
+
+	out := &bytes.Buffer{}
+	errOut := &bytes.Buffer{}
+	if code := rulesCheckVerb([]string{tree, "--catalog", catalog, "--json"}, out, errOut); code != exitOK {
+		t.Fatalf("rulesCheckVerb: exit %d, stderr %q", code, errOut.String())
+	}
+	var report ruleCheckReport
+	if err := json.Unmarshal(out.Bytes(), &report); err != nil {
+		t.Fatalf("reading the check report: %v, body %q", err, out.String())
+	}
+	fired := map[string]int{}
+	for _, f := range report.Fires {
+		fired[f.RuleID]++
+	}
+	for _, id := range []string{"test_assertion", "test_mock_boundary", "test_boundary_cases"} {
+		if fired[id] != 2 {
+			t.Errorf("%s fired on %d packages of the fixture tree, want 2: %v", id, fired[id], fired)
+		}
+	}
+}
+
 func TestRulesVerbRejectsUnknownSubcommand(t *testing.T) {
 	out := &bytes.Buffer{}
 	errOut := &bytes.Buffer{}

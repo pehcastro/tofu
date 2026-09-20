@@ -13,7 +13,7 @@ import (
 	"tofu/internal/konst"
 )
 
-func printWhy(out io.Writer, wr whyRow, now time.Time, color bool, precedent *ledger.Row) {
+func printWhy(out io.Writer, wr whyRow, now time.Time, color bool, precedents []ledger.Precedent) {
 	if wr.isReplay {
 		_, _ = fmt.Fprintf(out, "%s is a replay of %s, recorded %s ago\n\n", wr.queried.ID, wr.chain.ID, agoString(now.Sub(wr.queried.At)))
 	}
@@ -37,8 +37,31 @@ func printWhy(out io.Writer, wr whyRow, now time.Time, color bool, precedent *le
 	printAuthority(out, row, wr.blockedBy)
 	printMode(out, row)
 	printState(out, row, wr.statePath)
-	if precedent != nil {
-		_, _ = fmt.Fprintf(out, "  nearest precedent (exact state match)  %s, %s ago\n", precedent.ID, agoString(now.Sub(precedent.At)))
+	printPrecedents(out, precedents, now, color)
+}
+
+func precedentWhy(found ledger.Precedent) string {
+	if found.SameFingerprint {
+		return "the same call"
+	}
+	if !found.Comparable {
+		return "no question in common"
+	}
+	return fmt.Sprintf("answers %.3f away", found.Distance)
+}
+
+func printPrecedents(out io.Writer, found []ledger.Precedent, now time.Time, color bool) {
+	if len(found) == 0 {
+		return
+	}
+	_, _ = fmt.Fprintf(out, "  precedent  %d at this point, nearest first\n", len(found))
+	for _, precedent := range found {
+		line := fmt.Sprintf("    %s  %s  %s  %s ago", precedent.Row.ID, colorVerdict(precedent.Row.Verdict, color),
+			precedentWhy(precedent), agoString(now.Sub(precedent.Row.At)))
+		if outcome := precedent.Row.Outcome; outcome != nil {
+			line += "  outcome " + outcome.Kind
+		}
+		_, _ = fmt.Fprintln(out, line)
 	}
 }
 
@@ -221,19 +244,34 @@ func rowFields(row ledger.Row) (map[string]any, error) {
 	return fields, nil
 }
 
-func printWhyJSON(out io.Writer, wr whyRow, now time.Time, precedent *ledger.Row) error {
+func precedentsJSON(found []ledger.Precedent, now time.Time) []map[string]any {
+	listed := make([]map[string]any, len(found))
+	for i, precedent := range found {
+		listed[i] = map[string]any{
+			"row_id":           precedent.Row.ID,
+			"verdict":          precedent.Row.Verdict,
+			"distance":         precedent.Distance,
+			"same_fingerprint": precedent.SameFingerprint,
+			"comparable":       precedent.Comparable,
+			"why":              precedentWhy(precedent),
+			"ago":              agoString(now.Sub(precedent.Row.At)),
+		}
+		if outcome := precedent.Row.Outcome; outcome != nil {
+			listed[i]["outcome"] = outcome.Kind
+		}
+	}
+	return listed
+}
+
+func printWhyJSON(out io.Writer, wr whyRow, now time.Time, precedents []ledger.Precedent) error {
 	fields, err := rowFields(wr.queried)
 	if err != nil {
 		return err
 	}
 	fields["ago"] = agoString(now.Sub(wr.chain.At))
 	fields["threshold"] = thresholdJSON(wr.chain)
-	if precedent != nil {
-		fields["precedent"] = map[string]any{
-			"row_id":      precedent.ID,
-			"exact_match": true,
-			"ago":         agoString(now.Sub(precedent.At)),
-		}
+	if len(precedents) > 0 {
+		fields["precedents"] = precedentsJSON(precedents, now)
 	}
 	if wr.isReplay {
 		chain, err := rowFields(wr.chain)

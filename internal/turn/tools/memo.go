@@ -14,7 +14,7 @@ import (
 
 func SideEffectFree(name string) bool {
 	switch name {
-	case "read", "glob", "grep", "search", "symbols", "project_report":
+	case "read", "glob", "grep", "search", "symbols", "project_report", "artifact_fetch", "fetch", "web_search":
 		return true
 	}
 	return false

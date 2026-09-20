@@ -177,13 +177,14 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 		return Result{}, fmt.Errorf("spawn: %w", err)
 	}
 
+	boundary := &crew.Boundary{Ticket: childID, Owns: args.Owns}
 	owned := slices.Clone(t.base.Tools.tools)
 	for i, tool := range owned {
 		switch tool.Name() {
 		case "write", "edit":
-			owned[i] = ownedTool{tool: tool, owns: args.Owns}
+			owned[i] = ownedTool{tool: tool, boundary: boundary}
 		case "bash":
-			owned[i] = ownedShell{tool: tool, owns: args.Owns}
+			owned[i] = ownedShell{tool: tool, boundary: boundary}
 		}
 	}
 	nested := &SpawnTool{Review: t.Review, parentID: childID, depth: t.depth + 1, base: t.base, roster: t.roster}
@@ -192,6 +193,7 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 	child.Tools = NewRegistry(append(owned, nested)...)
 	child.NewID = func() string { return childID }
 	child.SpawnedFrom = t.parentID
+	child.Boundary = boundary
 
 	childCtx, release := context.WithCancel(ctx)
 	defer release()
@@ -206,12 +208,17 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 	default:
 		claims, state = t.reviewed(ctx, child, row)
 	}
+	asked := boundary.Asked()
+	if len(asked) > 0 && state != crew.Errored && state != crew.Parked {
+		state = crew.WaitingAnswer
+	}
 	t.retain(append(claims, nested.children...))
 	for _, claim := range claims {
 		t.spend += claim.TotalCostUSD
 	}
 
 	report := reportOf(agent, claims[len(claims)-1], state)
+	report.Asked = asked
 	t.reports = append(t.reports, report)
 	text := report.Text()
 	t.roster.Reached(childID, state, text)
@@ -260,15 +267,15 @@ func (t *SpawnTool) reviewed(ctx context.Context, child Config, first Row) ([]Ro
 }
 
 type ownedTool struct {
-	tool Tool
-	owns []string
+	tool     Tool
+	boundary *crew.Boundary
 }
 
 func (t ownedTool) Name() string { return t.tool.Name() }
 
 func (t ownedTool) Definition() llm.Tool {
 	definition := t.tool.Definition()
-	definition.Description += ", and only inside the paths this agent holds: " + strings.Join(t.owns, ", ")
+	definition.Description += ", and only inside the paths this agent holds: " + strings.Join(t.boundary.Owns, ", ")
 	return definition
 }
 
@@ -279,15 +286,15 @@ func (t ownedTool) Run(ctx context.Context, raw json.RawMessage) (Result, error)
 	if err := json.Unmarshal(raw, &args); err != nil {
 		return Result{}, fmt.Errorf("%s: arguments are not the expected shape: %w", t.Name(), err)
 	}
-	if err := crew.Allow(args.Path, t.owns); err != nil {
+	if err := t.boundary.Write(args.Path); err != nil {
 		return Result{}, fmt.Errorf("%s: %w", t.Name(), err)
 	}
 	return t.tool.Run(ctx, raw)
 }
 
 type ownedShell struct {
-	tool Tool
-	owns []string
+	tool     Tool
+	boundary *crew.Boundary
 }
 
 func (t ownedShell) Name() string { return t.tool.Name() }
@@ -295,7 +302,7 @@ func (t ownedShell) Name() string { return t.tool.Name() }
 func (t ownedShell) Definition() llm.Tool {
 	definition := t.tool.Definition()
 	definition.Description += ", and every path the command names has to be inside the paths this agent holds: " +
-		strings.Join(t.owns, ", ") +
+		strings.Join(t.boundary.Owns, ", ") +
 		". A command naming any path outside them is refused before it runs, and that work goes back to the parent."
 	return definition
 }
@@ -305,7 +312,7 @@ func (t ownedShell) Run(ctx context.Context, raw json.RawMessage) (Result, error
 	if err := json.Unmarshal(raw, &args); err != nil {
 		return Result{}, fmt.Errorf("%s: arguments are not the expected shape: %w", t.Name(), err)
 	}
-	if err := crew.AllowCommand(args.Command, t.owns); err != nil {
+	if err := t.boundary.Command(args.Command); err != nil {
 		return Result{}, fmt.Errorf("%s: %w", t.Name(), err)
 	}
 	return t.tool.Run(ctx, raw)

@@ -47,25 +47,15 @@ func directoriesOf(files []string) []string {
 }
 
 func repairPath(root turn.Root, requested string, withDirectories bool) (string, string, error) {
-	kind := "file"
+	noun := "file"
 	if withDirectories {
-		kind = "path"
+		noun = "path"
 	}
 	found, err := lookalikes(root, requested, withDirectories)
 	if err != nil {
 		return "", "", err
 	}
-	base := path.Base(path.Clean(filepath.ToSlash(requested)))
-	switch len(found) {
-	case 0:
-		return "", "", fmt.Errorf("%s is not a %s under the working directory, and nothing there is named %s: nothing was run",
-			requested, kind, base)
-	case 1:
-		return found[0], fmt.Sprintf("repaired: the path was %s, which does not exist, and %s is the only %s under the working directory named %s, so that is the one that ran. send that path next time",
-			requested, found[0], kind, base), nil
-	}
-	return "", "", fmt.Errorf("%s is not a %s under the working directory, and %d of them are named %s: %s. name the one you mean, because a repair is only made when it is the only candidate: nothing was run",
-		requested, kind, len(found), base, strings.Join(found, ", "))
+	return turn.RepairPath(requested, noun, found)
 }
 
 func exactOccurrences(body, wanted string) []int {

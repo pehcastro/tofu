@@ -229,7 +229,7 @@ func TestWhyJSONParsesAndCarriesEveryStoredField(t *testing.T) {
 		t.Fatalf("--json output does not parse: %v\n%s", err, out.String())
 	}
 
-	writtenOnlyWhenTheStateIsElided := map[string]bool{"state_elision": true}
+	writtenOnlyWhenTheStateIsElided := map[string]bool{"state_elision": true, "fingerprint": true}
 	rowType := reflect.TypeOf(ledger.Row{})
 	for i := 0; i < rowType.NumField(); i++ {
 		tag := rowType.Field(i).Tag.Get("json")
@@ -368,6 +368,93 @@ func TestWhyLastFiveTakesFiveMostRecentAtAPoint(t *testing.T) {
 	got := strings.Count(out.String(), "tool_gate  ")
 	if got != 4 {
 		t.Fatalf("only 4 tool_gate rows exist across 8 writes, --last 5 must report all 4, got %d in:\n%s", got, out.String())
+	}
+}
+
+func writePrecedentLedger(t *testing.T, dir string) (target, nearest, sameCall ledger.Row) {
+	t.Helper()
+	at := time.Date(2026, 9, 18, 9, 0, 0, 0, time.UTC)
+	writer := ledger.NewWriterWithClock(dir, func() time.Time { return at })
+	gateRow := func(minute int, risk float64, print string) ledger.Row {
+		return ledger.Row{
+			Point: "tool_gate", Questions: "tool_gate", Version: 3, Build: "b", Model: "m",
+			StateHash: strconv.Itoa(minute), Fingerprint: print, At: at.Add(time.Duration(minute) * time.Minute),
+			Verdict: ledger.VerdictAsk,
+			Answers: []ledger.Answer{{Question: "risk", Wording: 3, Kind: ledger.AnswerNoul, Noul: risk}},
+		}
+	}
+	stored := make([]ledger.Row, 0, 4)
+	for _, row := range []ledger.Row{
+		gateRow(1, 0.90, "bash.ffffffffffffffff"),
+		gateRow(2, 0.40, ""),
+		gateRow(3, 0.42, ""),
+		gateRow(4, 0.41, "bash.ffffffffffffffff"),
+	} {
+		written, err := writer.Append(row)
+		if err != nil {
+			t.Fatalf("Append: %v", err)
+		}
+		stored = append(stored, written)
+	}
+	return stored[3], stored[2], stored[0]
+}
+
+func TestWhyListsThePrecedentsAndPutsTheSameCallFirst(t *testing.T) {
+	t.Chdir(t.TempDir())
+	dir, err := ledger.Dir()
+	if err != nil {
+		t.Fatalf("Dir: %v", err)
+	}
+	target, nearest, sameCall := writePrecedentLedger(t, dir)
+
+	var out, errOut bytes.Buffer
+	if code := whyVerb([]string{target.ID}, &out, &errOut, time.Now); code != exitOK {
+		t.Fatalf("exit = %d, stderr %s", code, errOut.String())
+	}
+	text := out.String()
+	if !strings.Contains(text, "precedent  3 at this point") {
+		t.Fatalf("the row has three precedents and why reports:\n%s", text)
+	}
+	first, second := strings.Index(text, sameCall.ID), strings.Index(text, nearest.ID)
+	if first < 0 || second < 0 || first > second {
+		t.Fatalf("the same call %s is ranked after the nearer answers %s:\n%s", sameCall.ID, nearest.ID, text)
+	}
+	if !strings.Contains(text, "the same call") || !strings.Contains(text, "answers 0.010 away") {
+		t.Fatalf("the shortlist does not say why each row is on it:\n%s", text)
+	}
+	_, shortlist, _ := strings.Cut(text, "  precedent  ")
+	t.Logf("precedent  %s", shortlist)
+}
+
+func TestWhyJSONCarriesTheWholeShortlist(t *testing.T) {
+	t.Chdir(t.TempDir())
+	dir, err := ledger.Dir()
+	if err != nil {
+		t.Fatalf("Dir: %v", err)
+	}
+	target, _, sameCall := writePrecedentLedger(t, dir)
+
+	var out, errOut bytes.Buffer
+	if code := whyVerb([]string{target.ID, "--json"}, &out, &errOut, time.Now); code != exitOK {
+		t.Fatalf("exit = %d, stderr %s", code, errOut.String())
+	}
+	var fields struct {
+		Precedents []struct {
+			RowID           string  `json:"row_id"`
+			Distance        float64 `json:"distance"`
+			SameFingerprint bool    `json:"same_fingerprint"`
+			Verdict         string  `json:"verdict"`
+		} `json:"precedents"`
+	}
+	if err := json.Unmarshal(out.Bytes(), &fields); err != nil {
+		t.Fatalf("the json does not parse: %v\n%s", err, out.String())
+	}
+	if len(fields.Precedents) != 3 {
+		t.Fatalf("the json carries %d precedents, want the three the shortlist found: %s", len(fields.Precedents), out.String())
+	}
+	head := fields.Precedents[0]
+	if head.RowID != sameCall.ID || !head.SameFingerprint || head.Verdict != string(ledger.VerdictAsk) {
+		t.Fatalf("the first precedent reads %+v, want %s matched on its fingerprint", head, sameCall.ID)
 	}
 }
 

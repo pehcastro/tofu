@@ -16,16 +16,17 @@ type ChildCommand struct {
 }
 
 type ChildReport struct {
-	ID      string         `json:"id"`
-	Mission string         `json:"mission"`
-	Owns    []string       `json:"owns"`
-	State   string         `json:"state"`
-	Outcome Outcome        `json:"outcome"`
-	Steps   int            `json:"steps"`
-	Wrote   []string       `json:"wrote,omitempty"`
-	Ran     []ChildCommand `json:"ran,omitempty"`
-	CostUSD float64        `json:"cost_usd"`
-	Prose   string         `json:"prose,omitempty"`
+	ID      string          `json:"id"`
+	Mission string          `json:"mission"`
+	Owns    []string        `json:"owns"`
+	State   string          `json:"state"`
+	Outcome Outcome         `json:"outcome"`
+	Steps   int             `json:"steps"`
+	Wrote   []string        `json:"wrote,omitempty"`
+	Ran     []ChildCommand  `json:"ran,omitempty"`
+	CostUSD float64         `json:"cost_usd"`
+	Asked   []crew.Question `json:"asked,omitempty"`
+	Prose   string          `json:"prose,omitempty"`
 }
 
 func reportOf(agent crew.SubAgent, row Row, state crew.State) ChildReport {
@@ -78,6 +79,9 @@ func (r ChildReport) Text() string {
 		if call.Error != "" {
 			fmt.Fprintf(body, "could not: %s: %s\n", call.Tool, call.Error)
 		}
+	}
+	for _, question := range r.Asked {
+		fmt.Fprintf(body, "asks a %s: %s\n", question.Kind, question.Ask)
 	}
 	body.WriteString(r.Prose)
 	return body.String()

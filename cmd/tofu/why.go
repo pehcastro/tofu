@@ -82,7 +82,7 @@ func whyVerb(args []string, out, errOut io.Writer, now func() time.Time) int {
 		if e := wr.chain.StateElision; e != nil {
 			wr.statePath = filepath.Join(dir, e.File)
 		}
-		precedent, err := findPrecedent(reader, wr.chain)
+		precedents, err := reader.Precedents(wr.chain)
 		if err != nil {
 			return whyFail(errOut, err)
 		}
@@ -90,12 +90,12 @@ func whyVerb(args []string, out, errOut io.Writer, now func() time.Time) int {
 			_, _ = fmt.Fprintln(out)
 		}
 		if opts.json {
-			if err := printWhyJSON(out, wr, moment, precedent); err != nil {
+			if err := printWhyJSON(out, wr, moment, precedents); err != nil {
 				return whyFail(errOut, err)
 			}
 			continue
 		}
-		printWhy(out, wr, moment, color, precedent)
+		printWhy(out, wr, moment, color, precedents)
 	}
 	return exitOK
 }
@@ -231,28 +231,6 @@ func loadChain(reader *ledger.Reader, row ledger.Row, dir string) (whyRow, error
 		return whyRow{}, notFoundError{id: row.ReplayOf, dir: dir}
 	}
 	return whyRow{queried: row, chain: original, isReplay: true}, nil
-}
-
-func findPrecedent(reader *ledger.Reader, row ledger.Row) (*ledger.Row, error) {
-	var best ledger.Row
-	found := false
-	_, err := reader.Each(ledger.Filter{Point: row.Point}, func(candidate ledger.Row) error {
-		if candidate.ID == row.ID || candidate.StateHash != row.StateHash || !candidate.At.Before(row.At) {
-			return nil
-		}
-		if !found || candidate.At.After(best.At) {
-			best = candidate
-			found = true
-		}
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	if !found {
-		return nil, nil
-	}
-	return &best, nil
 }
 
 func isTerminalWriter(w io.Writer) bool {

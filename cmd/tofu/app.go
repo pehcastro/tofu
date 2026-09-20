@@ -518,11 +518,27 @@ func (s *appSession) run(ctx context.Context, wire, task string, emit func(tui.E
 	if stopped {
 		outcome = turn.OutcomeStopped
 	}
-	emit(tui.Event{
-		Kind: tui.EventDone,
-		Text: fmt.Sprintf("turn %s, %d steps, %d ms, quota windows %s",
-			outcome, len(row.Steps), row.WallClockMS, opened.selected.WindowText()),
-	})
+	emit(tui.Event{Kind: tui.EventDone, Text: doneWords(outcome)})
+}
+
+func doneWords(outcome turn.Outcome) string {
+	switch outcome {
+	case turn.OutcomeUnset, turn.OutcomeForked:
+		return "finished in"
+	case turn.OutcomeStopped:
+		return "stopped after"
+	case turn.OutcomeStepCap:
+		return "stopped at the step cap after"
+	case turn.OutcomeDecisionCap:
+		return "stopped at the decision cap after"
+	case turn.OutcomeTruncated:
+		return "stopped on a reply it could not finish, after"
+	case turn.OutcomeError:
+		return "failed after"
+	case turn.OutcomeRetiredCostCap, turn.OutcomeRetiredWallClockCap:
+		return "stopped at a cap this build no longer sets, after"
+	}
+	panic("tofu: unknown outcome " + outcome.String())
 }
 
 func gateDecision(tool string, gated turn.GateDecision) session.Decision {
@@ -626,6 +642,7 @@ func (a *appWatcher) Ask(ctx context.Context, request llm.Request) (llm.Decision
 		a.childReturned(message)
 	}
 
+	a.emit(tui.Event{Kind: tui.EventRequesting})
 	decision, err := a.inner.Ask(ctx, request)
 	if err != nil {
 		return decision, err

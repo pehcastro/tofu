@@ -42,6 +42,7 @@ type rowInput struct {
 	answers      []ledger.Answer
 	turnID       string
 	stateBuilder string
+	fingerprint  string
 }
 
 func rowSkeleton(state any, set battery, in rowInput) (ledger.Row, error) {
@@ -55,6 +56,7 @@ func rowSkeleton(state any, set battery, in rowInput) (ledger.Row, error) {
 		Version:      set.QuestionsVersion,
 		Model:        openrouter.Alias,
 		StateHash:    ledger.HashOf(body),
+		Fingerprint:  in.fingerprint,
 		StateBuilder: in.stateBuilder,
 		State:        body,
 		Answers:      in.answers,
