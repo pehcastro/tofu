@@ -8,10 +8,10 @@ import (
 )
 
 type Bands struct {
-	Identity   int
-	Facts      int
-	WorkingSet int
-	Recent     int
+	Identity   int `json:"identity"`
+	Facts      int `json:"facts"`
+	WorkingSet int `json:"working_set"`
+	Recent     int `json:"recent"`
 }
 
 func ShippedBands() Bands {
@@ -53,6 +53,34 @@ func (o Occupancy) Total() int {
 	return o.Identity + o.Facts + o.WorkingSet + o.Recent
 }
 
+func FillPercent(tokens, capacity int) int {
+	if capacity <= 0 {
+		return 0
+	}
+	return tokens * 100 / capacity
+}
+
+func OccupancyTable(o Occupancy) string {
+	rows := []struct {
+		band   string
+		tokens int
+		limit  int
+	}{
+		{"identity", o.Identity, o.Bands.Identity},
+		{"facts", o.Facts, o.Bands.Facts},
+		{"working set", o.WorkingSet, o.Bands.WorkingSet},
+		{"recent", o.Recent, o.Bands.Recent},
+		{"total", o.Total(), o.Bands.Target()},
+		{"ceiling", o.Total(), konst.ContextCeilingTokens},
+	}
+	var report strings.Builder
+	report.WriteString("band          tokens       cap   fill\n")
+	for _, row := range rows {
+		fmt.Fprintf(&report, "%-11s %8d  %8d   %3d%%\n", row.band, row.tokens, row.limit, FillPercent(row.tokens, row.limit))
+	}
+	return report.String()
+}
+
 func Measure(cfg Config, bands Bands, c Conversation) Occupancy {
 	occupancy := Occupancy{Bands: bands, Identity: cfg.Tokens(c.Instructions)}
 	for _, fact := range c.Facts {
@@ -82,30 +110,4 @@ func recentFrom(cfg Config, bands Bands, entries []Entry) int {
 		}
 	}
 	return 0
-}
-
-func (o Occupancy) String() string {
-	rows := []struct {
-		band   string
-		tokens int
-		limit  int
-	}{
-		{"identity", o.Identity, o.Bands.Identity},
-		{"facts", o.Facts, o.Bands.Facts},
-		{"working set", o.WorkingSet, o.Bands.WorkingSet},
-		{"recent", o.Recent, o.Bands.Recent},
-		{"total", o.Total(), o.Bands.Target()},
-	}
-	var report strings.Builder
-	report.WriteString("band          tokens       cap   fill\n")
-	for _, row := range rows {
-		fill := 0
-		if row.limit > 0 {
-			fill = row.tokens * 100 / row.limit
-		}
-		fmt.Fprintf(&report, "%-11s %8d  %8d   %3d%%\n", row.band, row.tokens, row.limit, fill)
-	}
-	fmt.Fprintf(&report, "ceiling     %8d  %8d   %3d%%\n",
-		o.Total(), konst.ContextCeilingTokens, o.Total()*100/konst.ContextCeilingTokens)
-	return report.String()
 }

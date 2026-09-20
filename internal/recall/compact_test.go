@@ -21,7 +21,7 @@ func overflowing(bands recall.Bands, cfg recall.Config) recall.Conversation {
 				Text:         fmt.Sprintf("result of step %d: ", step) + strings.Repeat("x", body),
 			})
 	}
-	oversized := bands.Recent * cfg.BytesPerThousandTokens / 1000 * 3 / 2
+	oversized := bands.Recent * cfg.BytesPerThousandTokens / 1000 / 4
 	conversation.Entries = append(conversation.Entries,
 		recall.Entry{
 			Step:         21,

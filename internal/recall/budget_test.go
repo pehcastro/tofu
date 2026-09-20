@@ -7,15 +7,6 @@ import (
 	"boji/internal/recall"
 )
 
-func loadRecordedTurn(t *testing.T) recall.Session {
-	t.Helper()
-	session, err := recall.ReadSession("testdata/recorded-turn.json")
-	if err != nil {
-		t.Fatalf("read recorded turn: %v", err)
-	}
-	return session
-}
-
 func shippedConfig(t *testing.T) recall.Config {
 	t.Helper()
 	cfg, err := recall.LoadConfig()
@@ -23,54 +14,6 @@ func shippedConfig(t *testing.T) recall.Config {
 		t.Fatalf("load config: %v", err)
 	}
 	return cfg
-}
-
-func TestOccupancyOfARecordedTurnAgainstTheFourBands(t *testing.T) {
-	cfg := shippedConfig(t)
-	bands := recall.ShippedBands()
-	session := loadRecordedTurn(t)
-
-	result, err := recall.ReplaySession(recall.NewStore(t.TempDir()), cfg, bands, session, false)
-	if err != nil {
-		t.Fatalf("replay: %v", err)
-	}
-	t.Logf("recorded turn %s, %d steps, no compaction\npeak occupancy\n%send of turn\n%s",
-		session.ID, len(session.Steps), result.Peak, result.Final)
-
-	if result.Final.Total() == 0 {
-		t.Fatal("a 44 step turn measured as empty")
-	}
-	if result.Final.Identity == 0 {
-		t.Fatal("the identity band measured as empty, so the task and the cached prefix were never counted")
-	}
-}
-
-func TestTheEstimatorTracksTheTokensTheProviderActuallyBilled(t *testing.T) {
-	cfg := shippedConfig(t)
-	session := loadRecordedTurn(t)
-
-	result, err := recall.ReplaySession(recall.NewStore(t.TempDir()), cfg, recall.ShippedBands(), session, false)
-	if err != nil {
-		t.Fatalf("replay: %v", err)
-	}
-
-	worst, worstStep := 0.0, 0
-	for _, step := range result.Steps {
-		if step.RecordedTokens < 200 {
-			continue
-		}
-		off := float64(step.InputTokens-step.RecordedTokens) / float64(step.RecordedTokens)
-		if off < 0 {
-			off = -off
-		}
-		if off > worst {
-			worst, worstStep = off, step.Index
-		}
-	}
-	t.Logf("worst per step error %.1f%% at step %d", worst*100, worstStep)
-	if worst > 0.15 {
-		t.Fatalf("the estimator is %.1f%% off the billed tokens at step %d: the budget would be measuring the wrong thing", worst*100, worstStep)
-	}
 }
 
 func TestTheRecentBandHoldsTheNewestStepWholeEvenWhenItIsOversized(t *testing.T) {

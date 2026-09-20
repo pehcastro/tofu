@@ -3,6 +3,7 @@ package recall
 import (
 	"fmt"
 	"slices"
+	"strings"
 )
 
 type DropReason string
@@ -13,12 +14,12 @@ const (
 )
 
 type Drop struct {
-	Step        int
-	Tool        string
-	Handle      string
-	Bytes       int
-	TokensFreed int
-	Reason      DropReason
+	Step        int        `json:"step"`
+	Tool        string     `json:"tool"`
+	Handle      string     `json:"handle"`
+	Bytes       int        `json:"bytes"`
+	TokensFreed int        `json:"tokens_freed"`
+	Reason      DropReason `json:"reason"`
 }
 
 func Compact(store *Store, cfg Config, bands Bands, c Conversation) (Conversation, []Drop, error) {
@@ -40,7 +41,7 @@ func Compact(store *Store, cfg Config, bands Bands, c Conversation) (Conversatio
 	}
 	var superseded, aged []victim
 	for i, entry := range entries[:recentFrom(cfg, bands, entries)] {
-		if entry.Tool == "" || entry.Handle != "" || len(entry.Text) < cfg.CompactFloorBytes {
+		if entry.Tool == "" || entry.Handle != "" || AlreadyDropped(entry.Text) || len(entry.Text) < cfg.CompactFloorBytes {
 			continue
 		}
 		if entry.SupersedeKey != "" && newest[entry.SupersedeKey] != i {
@@ -50,6 +51,8 @@ func Compact(store *Store, cfg Config, bands Bands, c Conversation) (Conversatio
 		aged = append(aged, victim{i, DroppedAged})
 	}
 
+	slices.Reverse(superseded)
+	slices.Reverse(aged)
 	var drops []Drop
 	for _, chosen := range slices.Concat(superseded, aged) {
 		if total <= bands.Target() {
@@ -79,9 +82,15 @@ func Compact(store *Store, cfg Config, bands Bands, c Conversation) (Conversatio
 	return c, drops, nil
 }
 
+const droppedNoticeMark = " result that stood here is held whole in artifact "
+
+func AlreadyDropped(text string) bool {
+	return strings.Contains(text, droppedNoticeMark)
+}
+
 func droppedNotice(tool string, bytes int, handle string) string {
 	return fmt.Sprintf(
-		"the %s result that stood here is held whole in artifact %s: %d bytes, dropped from this conversation to stay inside the context budget. "+
+		"the %s%s%s: %d bytes, dropped from this conversation to stay inside the context budget. "+
 			"call artifact_fetch with that handle, an offset and a length to read any range of it.",
-		tool, handle, bytes)
+		tool, droppedNoticeMark, handle, bytes)
 }
