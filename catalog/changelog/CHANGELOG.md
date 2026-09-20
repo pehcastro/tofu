@@ -8,16 +8,28 @@ Boji is personal and not released, so the public interface that a version promis
 
 The minor number carries breaking changes, which is what 0.x means, and **there is never a 1.0.0**. The owner decided that on 2026-09-19: this stays 0.x forever, so the promise the version makes is the one 0.x already makes, that anything can break on a minor bump.
 
-## Unreleased
+## 0.4.1 - 2026-09-21
+
+Typing `tofu` in a project you have never opened walks you through it, the running row says what it is actually doing, and the model can reach the network.
 
 ### Added
 
+- **the first run.** With no subscription signed in and no key stored, the app draws what is missing and the command that fixes each, instead of an error. Run `tofu login` in another terminal and it notices within a second and moves on without a restart. The key is never in a frame, a log or a recorded session
+- **`fetch` and `web_search`.** A page comes back as units a model can use rather than as markup: 67,692 bytes of one documentation page became 37,274, with every code block intact and links carrying their targets. A page too large becomes a handle. A page that is not text says so. Every fetched page arrives between markers with a per-call random id, as data that cannot issue an instruction. The search provider is catalog data, so changing it is a file rather than a commit, and with no key stored the tool is absent from the list rather than failing when called
+- **`tofu why` shows the ten nearest precedents** for a decision, why each one is on the list, and which of them carries a human outcome. A decision now records a fingerprint of the call it judged, so two runs of the same command against different arguments are recognised as the same kind of decision
+- confidence is computed here from the vendor's own published formulas rather than read off the response, and both numbers are kept. They agree to within 0.027 across 1,751 recorded answers
+- three rules for what a test may not do, in the catalog, so they reach any repository: an assertion that only checks a value exists is not an assertion, a mock stands at a boundary, and a test file covers the empty case and the boundary
 - a recorded session carries the ceiling it ran at, the target that came from it, and one sentence saying whether automatic compaction was on and why. `tofu session info --json` reads all three
 - `symbols`, which answers which line declares a name and which function each call sits in, from `go/parser` with no cgo. `grep` answers neither
 - a bash result carrying a `file:line` citation is checked before the model sees it, and a citation that does not resolve is refused by name rather than warned about. Results this binary generated are not checked, because their citations are true by construction
 
 ### Changed
 
+- **the running row has three phases and its clock counts the work.** `requesting` while the provider has said nothing, `thinking`, then `working` with the tool's name. The count starts when the first token arrives, so it no longer includes the wait. A phase holds for 400 ms before another can replace it, which is what stops it flickering between two tool calls, and the whole row is one colour per phase. A turn closes with `finished in 13s`, and the wait only when the wait was longer than the work
+- a finished step is drawn where the running row was, because the transcript is bottom aligned now rather than padded downward
+- **the ceiling tofu operates under is its own, and it does not move with the model.** A million token window does not mean a million token request is a good idea, it means an expensive one. The model's window is a wall that refuses a request that could not have worked, and it comes from a registry with a shipped offline snapshot rather than being typed into each model's file
+- a token estimate now counts the instruction prefix and the tool schemas, which every request pays for and nothing counted. It was up to 84 percent out against what the provider billed and is now 14
+- a child that writes outside its paths asks for the path once and waits, instead of the refusal being something a worker can route around
 - a tool call repeated inside one turn is answered once. A write to a path clears it, and a cached answer says it was cached
 - `read` on a path that does not exist repairs it when exactly one file under the working directory has that name, says it did, and refuses with both named when two do
 - a fork carries what was found rather than a list of byte counts. The new session gets one line per source with what came back, instead of a list of calls and their sizes
