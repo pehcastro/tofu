@@ -127,7 +127,7 @@ func Run(ctx context.Context, config Config) (Row, error) {
 	}
 	newID := config.NewID
 	if newID == nil {
-		newID = func() string { return "turn-" + strconv.FormatInt(now().UnixNano(), 16) }
+		newID = func() string { return NewID(now()) }
 	}
 	budget := config.Budget
 	if budget == (recall.Budget{}) {
@@ -423,6 +423,10 @@ func Run(ctx context.Context, config Config) (Row, error) {
 			panic("turn: unknown model outcome")
 		}
 	}
+}
+
+func NewID(at time.Time) string {
+	return session.IDPrefix + strconv.FormatInt(at.UnixNano(), 16)
 }
 
 func stepFrom(index int, decision llm.Decision) StepRow {

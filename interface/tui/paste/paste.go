@@ -12,7 +12,6 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"tofu/interface/tui/theme"
-	"tofu/internal/session"
 	"tofu/internal/sys"
 	"tofu/internal/widget"
 )
@@ -36,9 +35,10 @@ type Outcome struct {
 }
 
 type Board struct {
-	Read  func() (sys.Clipboard, error)
-	Dir   func() (string, error)
-	Write func(path string, body []byte) error
+	Read     func() (sys.Clipboard, error)
+	Dir      func() (string, error)
+	Write    func(path string, body []byte) error
+	Recorded func(name string, bytes int, format string)
 }
 
 const (
@@ -55,7 +55,9 @@ func Default(board Board) Board {
 		board.Read = sys.ReadClipboard
 	}
 	if board.Dir == nil {
-		board.Dir = headSessionDir
+		board.Dir = func() (string, error) {
+			return "", errors.New("paste: nothing decides where a pasted image belongs")
+		}
 	}
 	if board.Write == nil {
 		board.Write = func(path string, body []byte) error {
@@ -63,22 +65,6 @@ func Default(board Board) Board {
 		}
 	}
 	return board
-}
-
-func headSessionDir() (string, error) {
-	store, err := session.Open()
-	if err != nil {
-		return "", err
-	}
-	head, err := store.Head()
-	if err != nil {
-		return "", err
-	}
-	sessions, err := sys.SessionsDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(sessions, head.ID), nil
 }
 
 func (b Board) Attach(index int) tea.Cmd {
@@ -137,7 +123,11 @@ func (b Board) store(index int, body []byte, suffix string) (Outcome, error) {
 	if err := b.Write(filepath.Join(dir, name), body); err != nil {
 		return Outcome{}, err
 	}
-	return Outcome{Index: index, State: Ready, Name: name, Bytes: len(body)}, nil
+	outcome := Outcome{Index: index, State: Ready, Name: name, Bytes: len(body)}
+	if b.Recorded != nil {
+		b.Recorded(outcome.Name, outcome.Bytes, outcome.Format())
+	}
+	return outcome, nil
 }
 
 func imagesUnder(dir, prefix string) int {
@@ -154,14 +144,17 @@ func imagesUnder(dir, prefix string) int {
 	return count
 }
 
+func (o Outcome) Format() string {
+	return strings.ToUpper(strings.TrimPrefix(filepath.Ext(o.Name), "."))
+}
+
 func (o Outcome) Render(width int) string {
 	head := marker + "image " + strconv.Itoa(o.Index) + gap
 	switch o.State {
 	case Working:
 		return theme.Faint().Render(widget.Fit(head+"pasting", width))
 	case Ready:
-		format := strings.ToUpper(strings.TrimPrefix(filepath.Ext(o.Name), "."))
-		return theme.Tool().Render(widget.Fit(head+format+gap+widget.Size(o.Bytes)+gap+o.Name, width))
+		return theme.Tool().Render(widget.Fit(head+o.Format()+gap+widget.Size(o.Bytes)+gap+o.Name, width))
 	case Failed:
 		return theme.Fail().Render(widget.Fit(head+"could not be pasted: "+o.Cause, width))
 	case Textual:

@@ -84,7 +84,7 @@ func copyTreeInto(source fs.FS, target string) (int, error) {
 }
 
 func countSessions(state string) int {
-	listing, err := session.NewStore(filepath.Join(state, "sessions")).Listing()
+	listing, err := session.OpenAt(state).Listing()
 	if err != nil {
 		return 0
 	}

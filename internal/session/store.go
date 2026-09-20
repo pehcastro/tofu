@@ -37,12 +37,16 @@ func NewStore(dir string) *Store {
 
 func (s *Store) Use(settings Settings) { s.settings = settings }
 
+func (s *Store) Dir(id string) string { return filepath.Join(s.dir, id) }
+
+func OpenAt(state string) *Store { return NewStore(filepath.Join(state, "sessions")) }
+
 func Open() (*Store, error) {
 	state, err := sys.ProjectStateDir()
 	if err != nil {
 		return nil, err
 	}
-	return NewStore(filepath.Join(state, "sessions")), nil
+	return OpenAt(state), nil
 }
 
 func (s *Store) Write(header Header, events []Event) error {
@@ -56,7 +60,7 @@ func (s *Store) Write(header Header, events []Event) error {
 	if header.Name == nil {
 		header.Name = s.keptOrNewName(header.ID)
 	}
-	dir := filepath.Join(s.dir, header.ID)
+	dir := s.Dir(header.ID)
 	recorded, err := s.settings.withReads(events)
 	if err != nil {
 		return err
@@ -69,6 +73,14 @@ func (s *Store) Write(header Header, events []Event) error {
 		return err
 	}
 	return s.writeWhole(filepath.Join(dir, headerName), body)
+}
+
+func (s *Store) AppendEvent(id string, kind EventKind, body any) error {
+	raw, err := json.Marshal(body)
+	if err != nil {
+		return err
+	}
+	return appendEvents(filepath.Join(s.Dir(id), bodyName), []Event{{Kind: kind, Body: raw}})
 }
 
 func appendEvents(path string, events []Event) error {
@@ -195,7 +207,7 @@ func (s *Store) Header(id string) (Header, error) {
 }
 
 func (s *Store) Body(id string) ([]Event, error) {
-	raw, err := s.readFile(filepath.Join(s.dir, id, bodyName))
+	raw, err := s.readFile(filepath.Join(s.Dir(id), bodyName))
 	if err != nil {
 		_, events, singleErr := s.singleFile(id)
 		if singleErr != nil {
@@ -309,7 +321,7 @@ func (s *Store) SetHead(id string) error {
 }
 
 func (s *Store) read(id string) (Header, error) {
-	raw, err := s.readFile(filepath.Join(s.dir, id, headerName))
+	raw, err := s.readFile(filepath.Join(s.Dir(id), headerName))
 	if err == nil {
 		var header Header
 		if err := json.Unmarshal(raw, &header); err != nil {

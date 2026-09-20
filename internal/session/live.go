@@ -17,7 +17,7 @@ func (s *Store) Begin(header Header) (*Recorder, error) {
 	if err := s.Write(header, nil); err != nil {
 		return nil, err
 	}
-	body, err := os.OpenFile(filepath.Join(s.dir, header.ID, bodyName), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	body, err := os.OpenFile(filepath.Join(s.Dir(header.ID), bodyName), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
 	if err != nil {
 		return nil, err
 	}

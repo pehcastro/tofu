@@ -12,8 +12,10 @@ import (
 	"time"
 
 	"tofu/interface/tui"
+	"tofu/interface/tui/paste"
 	"tofu/internal/llm"
 	sessionstore "tofu/internal/session"
+	"tofu/internal/sys"
 	"tofu/internal/turn"
 )
 
@@ -254,6 +256,105 @@ func TestTwoSendsAppendToOneSessionBody(t *testing.T) {
 	}
 	if !strings.Contains(written, "first task") || !strings.Contains(written, "second task") {
 		t.Fatalf("the body does not hold both tasks:\n%s", written)
+	}
+}
+
+func screenshotBoard(t *testing.T, live *appSession) paste.Board {
+	t.Helper()
+	return paste.Default(paste.Board{
+		Read: func() (sys.Clipboard, error) {
+			return sys.Clipboard{Kind: sys.ClipboardImage, PNG: []byte("pretend this is a screenshot")}, nil
+		},
+		Dir:      live.pendingSessionDir,
+		Recorded: live.recordAttachment,
+	})
+}
+
+func TestAnImagePastedBeforeTheFirstSendLandsInTheSessionThatSendCreates(t *testing.T) {
+	dir := scratchProject(t)
+	model := &sendModel{queued: []llm.Decision{{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "seen"}}}
+	live := newAppSession(dir, func(runOpts) (appWire, error) {
+		return appWire{model: model, spend: turn.SpendSubscription, selected: stubSelection}, nil
+	}, nil, time.Now, sessionResume{})
+
+	board := screenshotBoard(t, live)
+	msg := board.Attach(1)()
+	outcome, ok := msg.(paste.Outcome)
+	if !ok || outcome.State != paste.Ready {
+		t.Fatalf("the paste returned %#v before any send, want a ready image", msg)
+	}
+	pending := live.pendingID()
+
+	var events []tui.Event
+	live.run(t.Context(), wireSubscription, "look at what I pasted", collected(&events))
+	if live.id != pending {
+		t.Fatalf("send minted %s, want the id the paste already used: %s", live.id, pending)
+	}
+
+	store, err := sessionstore.Open()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(store.Dir(live.id), outcome.Name)); err != nil {
+		t.Fatalf("%s is not inside the session send created: %v", outcome.Name, err)
+	}
+}
+
+func TestAPasteInARepositoryWithNoRecordedSessionWorks(t *testing.T) {
+	dir := scratchProject(t)
+	live := newAppSession(dir, nil, nil, time.Now, sessionResume{})
+	board := screenshotBoard(t, live)
+	msg := board.Attach(1)()
+	outcome, ok := msg.(paste.Outcome)
+	if !ok || outcome.State != paste.Ready {
+		t.Fatalf("pasting in %s with no session on disk returned %#v", dir, msg)
+	}
+	store, err := sessionstore.Open()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(store.Dir(live.pendingID()), outcome.Name)); err != nil {
+		t.Fatalf("the pasted image did not land beside the pending session: %v", err)
+	}
+}
+
+func TestASendRecordsTheAttachmentEventInTheSessionBody(t *testing.T) {
+	dir := scratchProject(t)
+	model := &sendModel{queued: []llm.Decision{{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "seen"}}}
+	live := newAppSession(dir, func(runOpts) (appWire, error) {
+		return appWire{model: model, spend: turn.SpendSubscription, selected: stubSelection}, nil
+	}, nil, time.Now, sessionResume{})
+
+	board := screenshotBoard(t, live)
+	msg := board.Attach(1)()
+	outcome := msg.(paste.Outcome)
+
+	var events []tui.Event
+	live.run(t.Context(), wireSubscription, "look at what I pasted", collected(&events))
+
+	store, err := sessionstore.Open()
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, err := store.Body(live.id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, event := range body {
+		if event.Kind != sessionstore.EventAttachment {
+			continue
+		}
+		var attachment sessionstore.Attachment
+		if err := json.Unmarshal(event.Body, &attachment); err != nil {
+			t.Fatal(err)
+		}
+		if attachment.File == outcome.Name && attachment.Bytes == outcome.Bytes && attachment.Format == "PNG" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("the body of %s carries no attachment event naming %s, %d bytes, PNG", live.id, outcome.Name, outcome.Bytes)
 	}
 }
 

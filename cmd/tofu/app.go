@@ -19,6 +19,7 @@ import (
 	"tofu/interface/tui"
 	"tofu/interface/tui/crew"
 	"tofu/interface/tui/frame"
+	"tofu/interface/tui/paste"
 	"tofu/interface/tui/session"
 	"tofu/interface/tui/settings"
 	"tofu/internal/judge/jev"
@@ -93,6 +94,7 @@ func appVerb(in io.Reader, out, errOut io.Writer, resumed sessionResume) int {
 		Providers:    appProviders(),
 		Quota:        appQuota,
 		Turn:         live.run,
+		Paste:        paste.Board{Dir: live.pendingSessionDir, Recorded: live.recordAttachment},
 		Answers:      answers,
 		Steering:     steering,
 		Paths:        appPaths(dir),
@@ -412,6 +414,29 @@ func (s *appSession) startFresh() string {
 	return freshSessionNote
 }
 
+func (s *appSession) pendingID() string {
+	if s.id == "" {
+		s.id = turn.NewID(s.now())
+	}
+	return s.id
+}
+
+func (s *appSession) pendingSessionDir() (string, error) {
+	store, err := sessionstore.Open()
+	if err != nil {
+		return "", err
+	}
+	return store.Dir(s.pendingID()), nil
+}
+
+func (s *appSession) recordAttachment(name string, bytes int, format string) {
+	store, err := sessionstore.Open()
+	if err != nil {
+		return
+	}
+	_ = store.AppendEvent(s.pendingID(), sessionstore.EventAttachment, sessionstore.Attachment{File: name, Bytes: bytes, Format: format})
+}
+
 func (s *appSession) resumeHead() string {
 	store, err := sessionstore.Open()
 	if err != nil {
@@ -430,7 +455,7 @@ func (s *appSession) run(ctx context.Context, wire, task string, emit func(tui.E
 	opts := runOpts{
 		dir:          s.dir,
 		task:         task,
-		turnID:       s.id,
+		turnID:       s.pendingID(),
 		wire:         cmp.Or(wire, wireSubscription),
 		toolSet:      toolSetFull,
 		maxDecisions: konst.TurnMaxDecisions,

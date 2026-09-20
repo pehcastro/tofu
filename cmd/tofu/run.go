@@ -330,7 +330,7 @@ func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn
 		config.Gate = run.gate
 		config.GateMode = gateMode(opts.gateArm, run.gate.set.Mode)
 	}
-	parentID := cmp.Or(opts.turnID, "turn-"+strconv.FormatInt(time.Now().UnixNano(), 16))
+	parentID := cmp.Or(opts.turnID, turn.NewID(time.Now()))
 	config.NewID = func() string { return parentID }
 	if opts.noCrew || opts.toolSet == toolSetThree {
 		return config, nil

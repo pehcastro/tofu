@@ -10,11 +10,18 @@ const SchemaVersion = 1
 type EventKind string
 
 const (
-	EventStep    EventKind = "step"
-	EventMessage EventKind = "message"
-	EventRead    EventKind = "read"
-	EventOutcome EventKind = "outcome"
+	EventStep       EventKind = "step"
+	EventMessage    EventKind = "message"
+	EventRead       EventKind = "read"
+	EventOutcome    EventKind = "outcome"
+	EventAttachment EventKind = "attachment"
 )
+
+type Attachment struct {
+	File   string `json:"file"`
+	Bytes  int    `json:"bytes"`
+	Format string `json:"format"`
+}
 
 type EndReason string
 
