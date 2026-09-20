@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"boji/internal/judge/jev"
-	"boji/internal/konst"
+	"tofu/internal/judge/jev"
+	"tofu/internal/konst"
 )
 
 func DefaultCaps() jev.WireCaps {

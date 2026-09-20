@@ -14,10 +14,10 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"boji/interface/tui/crew"
-	"boji/interface/tui/frame"
-	"boji/interface/tui/session"
-	"boji/interface/tui/settings"
+	"tofu/interface/tui/crew"
+	"tofu/interface/tui/frame"
+	"tofu/interface/tui/session"
+	"tofu/interface/tui/settings"
 )
 
 var update = flag.Bool("update", false, "rewrite the golden files")
@@ -60,7 +60,7 @@ func sessionApp(t *testing.T, width, height int) *App {
 		{Kind: EventToolResult, ID: "c1", Text: "412 lines, 11.8 KB"},
 		{Kind: EventToolCall, ID: "c2", Tool: "bash", Text: "go test ./internal/judge/..."},
 		{Kind: EventDecision, Decision: asked()},
-		{Kind: EventToolResult, ID: "c2", Text: "ok boji/internal/judge 0.42s"},
+		{Kind: EventToolResult, ID: "c2", Text: "ok tofu/internal/judge 0.42s"},
 		{Kind: EventDone, Text: "turn stopped, 3 steps, 8412 ms, quota windows five_hour and seven_day"},
 	} {
 		app.Update(event)
@@ -268,7 +268,7 @@ func gateOffApp(t *testing.T, width, height int) *App {
 		{Kind: EventToolResult, ID: "c1", Text: "412 lines, 11.8 KB"},
 		{Kind: EventGateOff, Text: "there is no openrouter key"},
 		{Kind: EventToolCall, ID: "c2", Tool: "bash", Text: "go test ./internal/judge/..."},
-		{Kind: EventToolResult, ID: "c2", Text: "ok boji/internal/judge 0.42s"},
+		{Kind: EventToolResult, ID: "c2", Text: "ok tofu/internal/judge 0.42s"},
 	} {
 		app.Update(event)
 	}
@@ -379,7 +379,7 @@ func TestTwoSubscriptionsAskNothingAndTheFirstSignedInRunsTheTurn(t *testing.T) 
 	if !strings.Contains(opened, "codex → gpt-5.6-sol") {
 		t.Errorf("the header does not name the wire and model it chose\n%s", opened)
 	}
-	if !strings.Contains(ansi.Strip(opened), "what should boji do here?") {
+	if !strings.Contains(ansi.Strip(opened), "what should tofu do here?") {
 		t.Errorf("the app did not open on a session with a composer\n%s", opened)
 	}
 	assertGolden(t, "chosen-80x24.golden", opened)
@@ -471,7 +471,7 @@ func TestTheCrewViewOpensAndEscReturnsToTheSession(t *testing.T) {
 		t.Fatalf("esc left the app on view %d, want the session", app.current)
 	}
 	back := app.View().Content
-	if !strings.Contains(back, "ok boji/internal/judge 0.42s") {
+	if !strings.Contains(back, "ok tofu/internal/judge 0.42s") {
 		t.Fatalf("esc did not return to the session transcript\n%s", back)
 	}
 	if !strings.Contains(back, "●1") {
@@ -594,7 +594,7 @@ func settingsApp(t *testing.T, width, height int) *App {
 			{Name: "anthropic", State: "oauth  62% of the 7d window, resets 18:00", Source: "the credential store"},
 			{Name: "openrouter", Key: openRouterKey, State: "ok", Source: ".env at ~/.boji/.env"},
 			{Name: "jev", State: "build jev-2026-09-01", Source: "the last decision"},
-			{Name: "codex", Fix: "boji login codex", Source: "nothing is stored"},
+			{Name: "codex", Fix: "tofu login codex", Source: "nothing is stored"},
 		},
 	})
 	app.Init()
@@ -700,11 +700,11 @@ func setupRequirements() []Requirement {
 	return []Requirement{
 		{
 			What: "there is no anthropic subscription credential, so no model can answer",
-			Fix:  "boji login anthropic",
+			Fix:  "tofu login anthropic",
 		},
 		{
 			What: "there is no openrouter key, so no tool call is judged",
-			Fix:  "boji login openrouter",
+			Fix:  "tofu login openrouter",
 		},
 	}
 }
@@ -734,8 +734,8 @@ func TestSetupViewGolden(t *testing.T) {
 func TestARequirementRunsItsOwnFix(t *testing.T) {
 	ran := make([]string, 0, 2)
 	requirements := setupRequirements()
-	requirements[0].Run = func() *exec.Cmd { ran = append(ran, "anthropic"); return exec.Command("boji", "login", "anthropic") }
-	requirements[1].Run = func() *exec.Cmd { ran = append(ran, "openrouter"); return exec.Command("boji", "login", "openrouter") }
+	requirements[0].Run = func() *exec.Cmd { ran = append(ran, "anthropic"); return exec.Command("tofu", "login", "anthropic") }
+	requirements[1].Run = func() *exec.Cmd { ran = append(ran, "openrouter"); return exec.Command("tofu", "login", "openrouter") }
 	app := newTestApp(Options{Repo: "silo", Now: fixedClock(), Requirements: requirements})
 	app.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 
@@ -756,7 +756,7 @@ func TestARequirementWithoutItsOwnFixFallsBackToLogin(t *testing.T) {
 		Repo:         "silo",
 		Now:          fixedClock(),
 		Requirements: setupRequirements()[:1],
-		Login:        func() *exec.Cmd { ran++; return exec.Command("boji", "login", "anthropic") },
+		Login:        func() *exec.Cmd { ran++; return exec.Command("tofu", "login", "anthropic") },
 	})
 	app.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 	if _, cmd := app.Update(tea.KeyPressMsg{Code: '1', Text: "1"}); cmd == nil {
@@ -982,7 +982,7 @@ func TestTheComposerKeepsTheKeysItOwnsWhileItHasText(t *testing.T) {
 	}
 }
 
-const answer = "## Boji\n\nThe **gate** reads `toolgate.go` before the policy.\n\n" +
+const answer = "## Tofu\n\nThe **gate** reads `toolgate.go` before the policy.\n\n" +
 	"```go\nfunc Decide(answers Answers) Verdict\n```\n\n" +
 	"- a question is asked once\n" +
 	"- a verdict is always logged\n\n" +
@@ -1010,7 +1010,7 @@ func TestProseRendersAsMarkdownWithTheGitHubExtensions(t *testing.T) {
 	content := app.View().Content
 	plain := ansi.Strip(content)
 	for what, want := range map[string]string{
-		"the heading":    "## Boji",
+		"the heading":    "## Tofu",
 		"the code span":  " toolgate.go ",
 		"the fenced go":  "func Decide(answers Answers) Verdict",
 		"the list":       "• a question is asked once",

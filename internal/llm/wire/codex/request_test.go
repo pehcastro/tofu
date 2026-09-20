@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"boji/internal/llm"
+	"tofu/internal/llm"
 )
 
 func decodeBody(t *testing.T, body []byte) map[string]any {

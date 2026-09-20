@@ -11,11 +11,11 @@ import (
 	"strings"
 	"testing"
 
-	benchapi "boji/bench/api"
-	"boji/internal/judge/jev"
-	"boji/internal/judge/policy"
-	"boji/internal/judge/question"
-	"boji/internal/konst"
+	benchapi "tofu/bench/api"
+	"tofu/internal/judge/jev"
+	"tofu/internal/judge/policy"
+	"tofu/internal/judge/question"
+	"tofu/internal/konst"
 )
 
 const (
@@ -221,8 +221,8 @@ func onTheCut(pol policy.Policy, runs ...scored) bool {
 }
 
 func TestLiveCompareTheTwoNewestQuestionSets(t *testing.T) {
-	if os.Getenv("BOJI_LIVE_STATE_RESCORE") != "1" {
-		t.Skip("set BOJI_LIVE_STATE_RESCORE=1 to spend about $0.007 on four jev calls per recorded case")
+	if os.Getenv("TOFU_LIVE_STATE_RESCORE") != "1" {
+		t.Skip("set TOFU_LIVE_STATE_RESCORE=1 to spend about $0.007 on four jev calls per recorded case")
 	}
 	pol := gateTheBenchReportDecidesThrough(t)
 	key, err := jev.Key("../../../.env")
@@ -293,8 +293,8 @@ func TestLiveCompareTheTwoNewestQuestionSets(t *testing.T) {
 }
 
 func TestLiveReadEveryAnswerOnTheDisagreementCase(t *testing.T) {
-	if os.Getenv("BOJI_LIVE_STATE_RESCORE") != "1" {
-		t.Skip("set BOJI_LIVE_STATE_RESCORE=1 to spend about $0.0005 on one jev call per question set")
+	if os.Getenv("TOFU_LIVE_STATE_RESCORE") != "1" {
+		t.Skip("set TOFU_LIVE_STATE_RESCORE=1 to spend about $0.0005 on one jev call per question set")
 	}
 	const disagreement = "tx-003"
 	one, ok := gateCases(t)[disagreement]

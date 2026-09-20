@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	rc "boji/internal/recall"
-	"boji/internal/sys"
+	rc "tofu/internal/recall"
+	"tofu/internal/sys"
 )
 
 type SessionCall struct {

@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"boji/internal/transport"
+	"tofu/internal/transport"
 )
 
 func TestEncodeRefusesAnEmptyModel(t *testing.T) {

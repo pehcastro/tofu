@@ -34,13 +34,13 @@ func dollarPtr(v float64) *float64 { return &v }
 func routesFixture() []Row {
 	return []Row{
 		{
-			Arm: ArmBoji, Task: "hono-routes", Version: 1, Run: 1,
+			Arm: ArmTofu, Task: "hono-routes", Version: 1, Run: 1,
 			CredentialKind: CredentialKindKey,
 			Gates:          gatesFailing("build"),
 			Checklist:      checklistFullPass(),
 		},
 		{
-			Arm: ArmBoji, Task: "hono-routes", Version: 1, Run: 2,
+			Arm: ArmTofu, Task: "hono-routes", Version: 1, Run: 2,
 			CredentialKind: CredentialKindKey,
 			WallClockMS:    100000,
 			ModelDollars:   dollarPtr(0.11),
@@ -110,28 +110,28 @@ func TestRenderGolden(t *testing.T) {
 func TestGateFailureExcludedButShown(t *testing.T) {
 	out := Render(routesFixture())
 
-	if !strings.Contains(out, "boji v1 run1: FAIL build") {
+	if !strings.Contains(out, "tofu v1 run1: FAIL build") {
 		t.Fatalf("failing row missing from gates door:\n%s", out)
 	}
-	if !strings.Contains(out, "boji: model $0.1100 (spread $0.0000, 1 runs)") {
-		t.Fatalf("failed run1 leaked into boji's dollars-per-passing-run figure, only run2 must count:\n%s", out)
+	if !strings.Contains(out, "tofu: model $0.1100 (spread $0.0000, 1 runs)") {
+		t.Fatalf("failed run1 leaked into tofu's dollars-per-passing-run figure, only run2 must count:\n%s", out)
 	}
-	if !strings.Contains(out, "boji: 4.00 (spread 0.00, 1 runs)") {
-		t.Fatalf("failed run1 leaked into boji's turns-per-passing-run figure, only run2 must count:\n%s", out)
+	if !strings.Contains(out, "tofu: 4.00 (spread 0.00, 1 runs)") {
+		t.Fatalf("failed run1 leaked into tofu's turns-per-passing-run figure, only run2 must count:\n%s", out)
 	}
-	if strings.Count(out, "boji:") != 3 {
-		t.Fatalf("want exactly 3 non-gate lines naming boji (dollars, turns, checklist), the failed run1 must not add a fourth:\n%s", out)
+	if strings.Count(out, "\ntofu:") != 3 {
+		t.Fatalf("want exactly 3 non-gate lines naming tofu (dollars, turns, checklist), the failed run1 must not add a fourth:\n%s", out)
 	}
 }
 
 func TestMixingCredentialKindsRefusesDollars(t *testing.T) {
 	out := Render(routesFixture())
 
-	want := "boji vs claude: dollars not comparable, credential kinds differ (key vs subscription)"
+	want := "claude vs tofu: dollars not comparable, credential kinds differ (subscription vs key)"
 	if !strings.Contains(out, want) {
 		t.Fatalf("missing refusal line %q:\n%s", want, out)
 	}
-	if strings.Contains(out, "boji vs claude: $") {
+	if strings.Contains(out, "claude vs tofu: $") {
 		t.Fatalf("a dollar figure was printed for a mixed-kind comparison instead of a refusal:\n%s", out)
 	}
 }
@@ -160,7 +160,7 @@ func TestNoWeightedScoreTotalOrPercentageInOutput(t *testing.T) {
 func TestDifferenceSmallerThanSpreadIsNoDifference(t *testing.T) {
 	out := Render(routesFixture())
 
-	want := "boji vs codex: no difference (dollars diff $0.0000, spread $0.0200)"
+	want := "codex vs tofu: no difference (dollars diff $0.0000, spread $0.0200)"
 	if !strings.Contains(out, want) {
 		t.Fatalf("missing no-difference line %q:\n%s", want, out)
 	}
@@ -169,7 +169,7 @@ func TestDifferenceSmallerThanSpreadIsNoDifference(t *testing.T) {
 func armWithNoTurnsRecorded() []Row {
 	return []Row{
 		{
-			Arm: ArmBoji, Task: "crashed-before-any-turn", Version: 2, Run: 1,
+			Arm: ArmTofu, Task: "crashed-before-any-turn", Version: 2, Run: 1,
 			CredentialKind: CredentialKindSubscription,
 			WallClockMS:    30000,
 			Turns:          0,
@@ -190,10 +190,10 @@ func armWithNoTurnsRecorded() []Row {
 func TestAnArmThatRecordedNoTurnsIsNotRanked(t *testing.T) {
 	out := Render(armWithNoTurnsRecorded())
 
-	if !strings.Contains(out, "boji: turns not recorded on any passing run") {
+	if !strings.Contains(out, "tofu: turns not recorded on any passing run") {
 		t.Fatalf("a row with zero turns rendered as a measurement:\n%s", out)
 	}
-	if !strings.Contains(out, "boji vs claude: turns not comparable, boji recorded none") {
+	if !strings.Contains(out, "claude vs tofu: turns not comparable, tofu recorded none") {
 		t.Fatalf("missing the refusal to compare against an unmeasured arm:\n%s", out)
 	}
 	if strings.Contains(out, "lower on turns") {

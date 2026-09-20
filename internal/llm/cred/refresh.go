@@ -56,7 +56,7 @@ func (m *Manager) Access(ctx context.Context) (string, error) {
 		return "", err
 	}
 	if !found {
-		return "", fmt.Errorf("cred: no %s credential, run boji login %s", m.spec.Provider, m.spec.Provider)
+		return "", fmt.Errorf("cred: no %s credential, run tofu login %s", m.spec.Provider, m.spec.Provider)
 	}
 	if row.DisabledCause != "" {
 		return "", fmt.Errorf("cred: the %s credential is disabled: %s", m.spec.Provider, row.DisabledCause)

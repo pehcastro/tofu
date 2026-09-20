@@ -7,10 +7,10 @@ import (
 	"strconv"
 	"testing"
 
-	benchapi "boji/bench/api"
-	"boji/bench/report"
-	"boji/internal/judge/jev"
-	"boji/internal/judge/jev/wire/openrouter"
+	benchapi "tofu/bench/api"
+	"tofu/bench/report"
+	"tofu/internal/judge/jev"
+	"tofu/internal/judge/jev/wire/openrouter"
 )
 
 const repoRoot = "../.."
@@ -28,12 +28,12 @@ func liveKey(t *testing.T, gate string) string {
 }
 
 func TestLiveProbeOverTheFirstHeldOutCases(t *testing.T) {
-	key := liveKey(t, "BOJI_LIVE_COST_PROBE")
+	key := liveKey(t, "TOFU_LIVE_COST_PROBE")
 	count := 2
-	if raw := os.Getenv("BOJI_LIVE_COST_CASES"); raw != "" {
+	if raw := os.Getenv("TOFU_LIVE_COST_CASES"); raw != "" {
 		parsed, err := strconv.Atoi(raw)
 		if err != nil {
-			t.Fatalf("BOJI_LIVE_COST_CASES: %v", err)
+			t.Fatalf("TOFU_LIVE_COST_CASES: %v", err)
 		}
 		count = parsed
 	}
@@ -58,7 +58,7 @@ func TestLiveProbeOverTheFirstHeldOutCases(t *testing.T) {
 }
 
 func TestLiveEveryArmOverTheHeldOutHalf(t *testing.T) {
-	key := liveKey(t, "BOJI_LIVE_COST")
+	key := liveKey(t, "TOFU_LIVE_COST")
 	t.Chdir(repoRoot)
 	result, err := Run(context.Background(), key)
 	if err != nil {

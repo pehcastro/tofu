@@ -13,9 +13,9 @@ import (
 	"testing"
 	"time"
 
-	"boji/internal/llm"
-	"boji/internal/recall"
-	"boji/internal/session"
+	"tofu/internal/llm"
+	"tofu/internal/recall"
+	"tofu/internal/session"
 )
 
 func baseConfig(t *testing.T, model Model, tools Registry) Config {

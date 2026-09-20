@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"boji/internal/judge/ledger"
-	"boji/internal/llm"
+	"tofu/internal/judge/ledger"
+	"tofu/internal/llm"
 )
 
 func enforced(gate Gate, tool Tool, model Model) Config {

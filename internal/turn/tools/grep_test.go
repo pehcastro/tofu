@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"boji/internal/konst"
-	"boji/internal/turn/tools"
+	"tofu/internal/konst"
+	"tofu/internal/turn/tools"
 )
 
 func TestGrepUnderASubdirectoryIgnoreFileReportsOnlyTheFilesItSearched(t *testing.T) {
@@ -136,8 +136,8 @@ func TestTheIgnoredWalkIsMeasuredOnTheRecordedQuestion(t *testing.T) {
 	if strings.Contains(filtered.Content, ".local/") {
 		t.Fatalf("grep read the ignored .local tree, which is what this ticket is about")
 	}
-	if os.Getenv("BOJI_MEASURE_UNFILTERED") == "" {
-		t.Skip("the unfiltered arm reads every ignored byte in the tree, so it runs only under BOJI_MEASURE_UNFILTERED")
+	if os.Getenv("TOFU_MEASURE_UNFILTERED") == "" {
+		t.Skip("the unfiltered arm reads every ignored byte in the tree, so it runs only under TOFU_MEASURE_UNFILTERED")
 	}
 
 	started = time.Now()

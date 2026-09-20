@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"boji/internal/llm"
-	"boji/internal/llm/cred"
+	"tofu/internal/llm"
+	"tofu/internal/llm/cred"
 )
 
 const (
@@ -21,8 +21,8 @@ const (
 
 func liveWire(t *testing.T) *Wire {
 	t.Helper()
-	if os.Getenv("BOJI_LIVE_ANTHROPIC") != "1" {
-		t.Skip("set BOJI_LIVE_ANTHROPIC=1 to spend a turn of the subscription quota")
+	if os.Getenv("TOFU_LIVE_ANTHROPIC") != "1" {
+		t.Skip("set TOFU_LIVE_ANTHROPIC=1 to spend a turn of the subscription quota")
 	}
 	path, err := cred.Path()
 	if err != nil {
@@ -30,7 +30,7 @@ func liveWire(t *testing.T) *Wire {
 	}
 	store, err := cred.Open(path)
 	if err != nil {
-		t.Skipf("no credential store, run boji login anthropic: %v", err)
+		t.Skipf("no credential store, run tofu login anthropic: %v", err)
 	}
 	t.Cleanup(func() { _ = store.Close() })
 	spec, err := cred.Lookup("anthropic")
@@ -39,11 +39,11 @@ func liveWire(t *testing.T) *Wire {
 	}
 
 	wire, err := New(Config{
-		Model:     cmp.Or(os.Getenv("BOJI_LIVE_ANTHROPIC_MODEL"), liveModel),
+		Model:     cmp.Or(os.Getenv("TOFU_LIVE_ANTHROPIC_MODEL"), liveModel),
 		Token:     cred.NewManager(store, spec).Access,
 		Watchdog:  2 * time.Minute,
 		SessionID: "00000000-0000-4000-8000-000000000001",
-		InstallID: "boji-live-test",
+		InstallID: "tofu-live-test",
 	})
 	if err != nil {
 		t.Fatalf("building the wire: %v", err)

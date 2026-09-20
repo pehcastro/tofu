@@ -1,6 +1,6 @@
 package state
 
-import "boji/internal/judge/ledger"
+import "tofu/internal/judge/ledger"
 
 const ToolGatePoint = "tool_gate"
 

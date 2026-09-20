@@ -32,11 +32,11 @@ func TestUnknownTargetExitsUsageAndNamesIt(t *testing.T) {
 	}
 }
 
-func TestBojiUnderTestTakesTheNamedBinaryAndBuildsNothing(t *testing.T) {
-	named := filepath.Join(t.TempDir(), "boji-that-does-not-exist")
-	path, cleanup, err := bojiUnderTest(named)
+func TestTofuUnderTestTakesTheNamedBinaryAndBuildsNothing(t *testing.T) {
+	named := filepath.Join(t.TempDir(), "tofu-that-does-not-exist")
+	path, cleanup, err := tofuUnderTest(named)
 	if err != nil {
-		t.Fatalf("bojiUnderTest: %v", err)
+		t.Fatalf("tofuUnderTest: %v", err)
 	}
 	defer cleanup()
 	if path != named {
@@ -44,7 +44,7 @@ func TestBojiUnderTestTakesTheNamedBinaryAndBuildsNothing(t *testing.T) {
 	}
 }
 
-func TestHarnessOfflineNeedsNoBojiBinary(t *testing.T) {
+func TestHarnessOfflineNeedsNoTofuBinary(t *testing.T) {
 	transcript := t.TempDir()
 	session := filepath.Join(transcript, "session.json")
 	body := `{"id":"turn-1","schema":1,"at":"2026-09-18T10:00:00Z","task":"hono","model":"m","spend":"api_key","outcome":"stopped","total_cost_usd":0.5,"wall_clock_ms":10}`
@@ -65,7 +65,7 @@ func TestHarnessOfflineNeedsNoBojiBinary(t *testing.T) {
 	if code := benchHarness(out, errOut, []string{"--offline", "--transcript", transcript}); code != exitOK {
 		t.Fatalf("exit code = %d, want %d, stderr %q", code, exitOK, errOut.String())
 	}
-	if !strings.Contains(out.String(), "ROW boji hono v1 run1") {
+	if !strings.Contains(out.String(), "ROW tofu hono v1 run1") {
 		t.Fatalf("stdout does not carry the row: %q", out.String())
 	}
 	if strings.Contains(out.String(), "running:") {
@@ -74,8 +74,8 @@ func TestHarnessOfflineNeedsNoBojiBinary(t *testing.T) {
 }
 
 func TestAPILive(t *testing.T) {
-	if os.Getenv("BOJI_LIVE") != "1" {
-		t.Skip("set BOJI_LIVE=1 to call the real route")
+	if os.Getenv("TOFU_LIVE") != "1" {
+		t.Skip("set TOFU_LIVE=1 to call the real route")
 	}
 	wd, err := os.Getwd()
 	if err != nil {

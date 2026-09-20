@@ -5,10 +5,10 @@ import (
 	"strings"
 	"time"
 
-	"boji/interface/tui/pane"
-	"boji/interface/tui/theme"
-	roster "boji/internal/crew"
-	"boji/internal/widget"
+	"tofu/interface/tui/pane"
+	"tofu/interface/tui/theme"
+	roster "tofu/internal/crew"
+	"tofu/internal/widget"
 )
 
 const (

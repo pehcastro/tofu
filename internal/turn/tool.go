@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"boji/internal/llm"
+	"tofu/internal/llm"
 )
 
 type Result struct {

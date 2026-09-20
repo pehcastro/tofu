@@ -1,4 +1,4 @@
-module boji
+module tofu
 
 go 1.25.8
 

@@ -8,7 +8,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"boji/interface/tui/edits"
+	"tofu/interface/tui/edits"
 )
 
 const (
@@ -96,7 +96,7 @@ func TestEveryRowNamesTheAgentTheVerbAndThePath(t *testing.T) {
 	createdFile(app, "w1", "", "catalog/README.md", "one\ntwo\n")
 	app.Update(tea.KeyPressMsg{Code: '3', Mod: tea.ModAlt})
 	feed := ansi.Strip(app.View().Content)
-	for _, want := range []string{"go-dev edited " + gatePath, "boji created catalog/README.md"} {
+	for _, want := range []string{"go-dev edited " + gatePath, "tofu created catalog/README.md"} {
 		if !strings.Contains(feed, want) {
 			t.Errorf("the feed does not name who did what with %q\n%s", want, feed)
 		}

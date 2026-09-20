@@ -123,12 +123,12 @@ func TestADotSlashAndADotDotSlashCompleteTheSameWayAsAnAt(t *testing.T) {
 func TestABackslashEscapesTheSigilAndTheModelReadsItWithoutTheBackslash(t *testing.T) {
 	entered := make(chan string, 1)
 	app := pathApp(t, entered)
-	typeText(app, `mail me at \@boji`)
+	typeText(app, `mail me at \@tofu`)
 	if picked, open := app.view.Picked(); open {
 		t.Fatalf("an escaped sigil opened a picker on %q", picked)
 	}
 	app.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
-	if task := sent(t, entered); task != "mail me at @boji" {
+	if task := sent(t, entered); task != "mail me at @tofu" {
 		t.Errorf("the model was sent %q, want the backslash gone", task)
 	}
 }

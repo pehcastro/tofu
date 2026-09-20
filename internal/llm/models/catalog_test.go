@@ -83,7 +83,7 @@ func TestEveryFileUnderModelsIsAModel(t *testing.T) {
 			t.Fatalf("%s is not a provider directory, so it is not a model", provider.Name())
 		}
 		if !Provider(provider.Name()).valid() {
-			t.Fatalf("%s is not a vendor boji reaches", provider.Name())
+			t.Fatalf("%s is not a vendor tofu reaches", provider.Name())
 		}
 		entries, err := os.ReadDir(filepath.Join(root, provider.Name()))
 		if err != nil {

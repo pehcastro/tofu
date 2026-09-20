@@ -3,7 +3,7 @@ package codex
 import (
 	"strings"
 
-	"boji/internal/sys"
+	"tofu/internal/sys"
 )
 
 type Header struct {

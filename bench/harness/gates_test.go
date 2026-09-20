@@ -53,8 +53,8 @@ func runGit(t *testing.T, dir string, args ...string) {
 	cmd := exec.Command("git", args...)
 	cmd.Dir = dir
 	cmd.Env = append(os.Environ(),
-		"GIT_AUTHOR_NAME=bench fixture", "GIT_AUTHOR_EMAIL=bench@boji.local",
-		"GIT_COMMITTER_NAME=bench fixture", "GIT_COMMITTER_EMAIL=bench@boji.local")
+		"GIT_AUTHOR_NAME=bench fixture", "GIT_AUTHOR_EMAIL=bench@tofu.local",
+		"GIT_COMMITTER_NAME=bench fixture", "GIT_COMMITTER_EMAIL=bench@tofu.local")
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("git %v: %v\n%s", args, err, out)
 	}
@@ -217,7 +217,7 @@ func TestTestGate_DeletedTestsFailsWithCounts(t *testing.T) {
 }
 
 func TestCommandGate_MissingCommandIsCouldNotEvaluate(t *testing.T) {
-	outcome := runCommandGate("build", t.TempDir(), []string{"boji-bench-gate-missing-binary-xyz"})
+	outcome := runCommandGate("build", t.TempDir(), []string{"tofu-bench-gate-missing-binary-xyz"})
 	if outcome.Status == GateStatusPassed {
 		t.Fatalf("missing command reported passed, must never be passed")
 	}
@@ -247,10 +247,10 @@ func TestNoGateReadsArmName(t *testing.T) {
 
 	claude := runForArm("claude", task)
 	codex := runForArm("codex", task)
-	boji := runForArm("boji", task)
+	tofu := runForArm("tofu", task)
 
-	if !reflect.DeepEqual(claude, codex) || !reflect.DeepEqual(codex, boji) {
-		t.Fatalf("results differ by arm label:\nclaude=%+v\ncodex=%+v\nboji=%+v", claude, codex, boji)
+	if !reflect.DeepEqual(claude, codex) || !reflect.DeepEqual(codex, tofu) {
+		t.Fatalf("results differ by arm label:\nclaude=%+v\ncodex=%+v\ntofu=%+v", claude, codex, tofu)
 	}
 }
 

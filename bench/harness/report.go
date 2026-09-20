@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"boji/internal/judge/jev/wire/openrouter"
+	"tofu/internal/judge/jev/wire/openrouter"
 )
 
 func Detail(row Row, gaps []string, execution Execution, ledgerDir string) string {

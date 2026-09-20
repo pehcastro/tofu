@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 
-	"boji/internal/judge/ledger"
+	"tofu/internal/judge/ledger"
 )
 
 func main() {

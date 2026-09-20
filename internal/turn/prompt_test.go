@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"boji/internal/llm"
+	"tofu/internal/llm"
 )
 
 func write(t *testing.T, path, body string) {

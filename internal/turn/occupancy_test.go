@@ -5,9 +5,9 @@ import (
 	"encoding/json"
 	"testing"
 
-	"boji/internal/llm"
-	"boji/internal/recall"
-	"boji/internal/session"
+	"tofu/internal/llm"
+	"tofu/internal/recall"
+	"tofu/internal/session"
 )
 
 func TestAMeasuredStepNamesTheCapsItWasMeasuredAgainstOnBothWrites(t *testing.T) {

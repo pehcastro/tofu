@@ -4,7 +4,7 @@ import (
 	"os"
 	"testing"
 
-	"boji/internal/recall"
+	"tofu/internal/recall"
 )
 
 func TestFetchOfAnUnknownIDFails(t *testing.T) {

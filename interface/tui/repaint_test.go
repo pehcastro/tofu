@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"boji/interface/tui/session"
+	"tofu/interface/tui/session"
 )
 
 const repaintStretch = 12

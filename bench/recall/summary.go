@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	rc "boji/internal/recall"
-	"boji/internal/sys"
+	rc "tofu/internal/recall"
+	"tofu/internal/sys"
 )
 
 type Summary struct {

@@ -8,10 +8,10 @@ import (
 	"strings"
 	"testing"
 
-	"boji/internal/konst"
-	"boji/internal/llm"
-	"boji/internal/turn"
-	"boji/internal/turn/tools"
+	"tofu/internal/konst"
+	"tofu/internal/llm"
+	"tofu/internal/turn"
+	"tofu/internal/turn/tools"
 )
 
 type scriptedModel struct {

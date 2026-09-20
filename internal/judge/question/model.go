@@ -1,6 +1,6 @@
 package question
 
-import "boji/internal/judge/jev"
+import "tofu/internal/judge/jev"
 
 type Kind string
 

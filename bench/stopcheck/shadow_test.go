@@ -7,11 +7,11 @@ import (
 	"path/filepath"
 	"testing"
 
-	"boji/internal/judge/ledger"
-	"boji/internal/judge/policy"
-	"boji/internal/judge/state"
-	"boji/internal/llm"
-	"boji/internal/turn"
+	"tofu/internal/judge/ledger"
+	"tofu/internal/judge/policy"
+	"tofu/internal/judge/state"
+	"tofu/internal/llm"
+	"tofu/internal/turn"
 )
 
 type queuedModel struct {

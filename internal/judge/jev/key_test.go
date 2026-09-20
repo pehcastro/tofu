@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"boji/internal/transport"
+	"tofu/internal/transport"
 )
 
 func keyName() string { return "OPENROUTER" + "_KEY" }

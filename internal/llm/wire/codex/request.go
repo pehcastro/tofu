@@ -7,8 +7,8 @@ import (
 	"slices"
 	"strings"
 
-	"boji/internal/llm"
-	"boji/internal/transport"
+	"tofu/internal/llm"
+	"tofu/internal/transport"
 )
 
 type Sampling struct {

@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"boji/bench/api"
-	"boji/bench/report"
+	"tofu/bench/api"
+	"tofu/bench/report"
 )
 
 func TestReportRenderingMatchesTheGoldenFile(t *testing.T) {

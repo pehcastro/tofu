@@ -12,10 +12,10 @@ import (
 	"testing"
 	"time"
 
-	"boji/internal/turn"
+	"tofu/internal/turn"
 )
 
-const sleeperEnv = "BOJI_BENCH_SLEEPER"
+const sleeperEnv = "TOFU_BENCH_SLEEPER"
 
 func TestSleeperHelperOutlivesAnyCapTheRunnerSets(t *testing.T) {
 	if os.Getenv(sleeperEnv) != "1" {
@@ -27,7 +27,7 @@ func TestSleeperHelperOutlivesAnyCapTheRunnerSets(t *testing.T) {
 func TestExecuteKillsAProcessThatOutlivesTheWallClockCap(t *testing.T) {
 	t.Setenv(sleeperEnv, "1")
 	plan := Plan{
-		Arm:     ArmBoji,
+		Arm:     ArmTofu,
 		Command: []string{os.Args[0], "-test.run=TestSleeperHelperOutlivesAnyCapTheRunnerSets", "-test.timeout=0"},
 		Caps:    Caps{WallClock: 500 * time.Millisecond},
 	}
@@ -46,8 +46,8 @@ func TestExecuteKillsAProcessThatOutlivesTheWallClockCap(t *testing.T) {
 
 func TestExecuteReportsAnOrdinaryFailureAsACrashNotTheCap(t *testing.T) {
 	plan := Plan{
-		Arm:     ArmBoji,
-		Command: []string{os.Args[0], "-boji-bench-not-a-flag"},
+		Arm:     ArmTofu,
+		Command: []string{os.Args[0], "-tofu-bench-not-a-flag"},
 		Caps:    Caps{WallClock: 30 * time.Second},
 	}
 	execution, err := Execute(context.Background(), plan)
@@ -62,8 +62,8 @@ func TestExecuteReportsAnOrdinaryFailureAsACrashNotTheCap(t *testing.T) {
 var benchedVersions = []int{1, 2}
 
 const (
-	liveVersionEnv  = "BOJI_LIVE_VERSION"
-	liveArmDirEnv   = "BOJI_LIVE_ARM_DIR"
+	liveVersionEnv  = "TOFU_LIVE_VERSION"
+	liveArmDirEnv   = "TOFU_LIVE_ARM_DIR"
 	transcriptsRoot = ".playground/transcripts"
 )
 
@@ -135,15 +135,15 @@ func measureArm(execution Execution, src Sources, meta RunMeta) (Row, []string, 
 			Arm: meta.Arm, Task: meta.Task, Version: meta.Version, Run: meta.Run,
 			CLIVersion: meta.CLIVersion, CredentialKind: meta.CredentialKind, Commit: meta.Commit, Model: codexArmModel,
 		})
-	case ArmBoji:
+	case ArmTofu:
 		row, gaps := scoreTree(Row{
 			Arm: meta.Arm, Task: meta.Task, Version: meta.Version, Run: meta.Run,
 			CLIVersion: meta.CLIVersion, CredentialKind: meta.CredentialKind, Commit: meta.Commit,
-			Model: bojiArmModel, EndReason: EndReasonDone,
+			Model: tofuArmModel, EndReason: EndReasonDone,
 		}, src, []string{"wall clock, turns, tokens and tool calls: this row was scored from the preserved result tree, not from a turn row, because the run that produced the tree wrote none that survived"})
 		return row, gaps, nil
 	}
-	return Row{}, nil, fmt.Errorf("%q is not an arm this bench measures, want claude, codex or boji", meta.Arm)
+	return Row{}, nil, fmt.Errorf("%q is not an arm this bench measures, want claude, codex or tofu", meta.Arm)
 }
 
 func runLiveArm(t *testing.T, arm Arm, envName string) {
@@ -177,11 +177,11 @@ func runLiveArm(t *testing.T, arm Arm, envName string) {
 }
 
 func TestClaudeArmRunsLiveAndProducesARow(t *testing.T) {
-	runLiveArm(t, ArmClaude, "BOJI_LIVE_CLAUDE")
+	runLiveArm(t, ArmClaude, "TOFU_LIVE_CLAUDE")
 }
 
 func TestCodexArmRunsLiveAndProducesARow(t *testing.T) {
-	runLiveArm(t, ArmCodex, "BOJI_LIVE_CODEX")
+	runLiveArm(t, ArmCodex, "TOFU_LIVE_CODEX")
 }
 
 type recordedRow struct {
@@ -209,10 +209,10 @@ func writeRecordedRow(t *testing.T, root string, row Row, gaps []string) string 
 }
 
 func TestScoreATreeAnArmAlreadyWrote(t *testing.T) {
-	dir := os.Getenv("BOJI_SCORE_DIR")
+	dir := os.Getenv("TOFU_SCORE_DIR")
 	if dir == "" {
-		t.Skip("scoring: set BOJI_SCORE_DIR to the tree an arm wrote, BOJI_SCORE_ARM to claude, codex or boji, " +
-			"BOJI_LIVE_VERSION to the task version, and BOJI_SCORE_TRANSCRIPT to the raw transcript when there is one. " +
+		t.Skip("scoring: set TOFU_SCORE_DIR to the tree an arm wrote, TOFU_SCORE_ARM to claude, codex or tofu, " +
+			"TOFU_LIVE_VERSION to the task version, and TOFU_SCORE_TRANSCRIPT to the raw transcript when there is one. " +
 			"This spends nothing, it re-reads a run that already happened.")
 	}
 	root := repositoryRoot(t)
@@ -221,7 +221,7 @@ func TestScoreATreeAnArmAlreadyWrote(t *testing.T) {
 		t.Fatalf("%s: %v", liveVersionEnv, err)
 	}
 	execution := Execution{Plan: Plan{Caps: Caps{WallClock: defaultWallClockCap, TurnCap: defaultTurnCap}}}
-	transcript := os.Getenv("BOJI_SCORE_TRANSCRIPT")
+	transcript := os.Getenv("TOFU_SCORE_TRANSCRIPT")
 	if transcript != "" {
 		stdout, err := os.ReadFile(transcript)
 		if err != nil {
@@ -237,8 +237,8 @@ func TestScoreATreeAnArmAlreadyWrote(t *testing.T) {
 
 	row, gaps, err := measureArm(execution,
 		Sources{ArmDir: dir, BunBin: "bun", CheckerPath: CheckerPath(root, version), StartCommit: OwnStartCommit(dir)},
-		RunMeta{Arm: Arm(os.Getenv("BOJI_SCORE_ARM")), Task: "hono", Version: version, Run: 1,
-			CLIVersion: os.Getenv("BOJI_SCORE_CLI"), CredentialKind: CredentialKindSubscription, Commit: OwnStartCommit(dir)})
+		RunMeta{Arm: Arm(os.Getenv("TOFU_SCORE_ARM")), Task: "hono", Version: version, Run: 1,
+			CLIVersion: os.Getenv("TOFU_SCORE_CLI"), CredentialKind: CredentialKindSubscription, Commit: OwnStartCommit(dir)})
 	if err != nil {
 		t.Fatalf("measure %s: %v", dir, err)
 	}
@@ -252,12 +252,12 @@ func TestReportEveryArmFromTheRowsOnDisk(t *testing.T) {
 	if err != nil {
 		t.Fatalf("glob the recorded rows: %v", err)
 	}
-	stored := filepath.Join(root, filepath.FromSlash(storedBojiV2Row))
+	stored := filepath.Join(root, filepath.FromSlash(storedTofuV2Row))
 	if _, err := os.Stat(stored); err == nil {
 		paths = append(paths, stored)
 	}
 	if len(paths) == 0 {
-		t.Skipf("no recorded rows under %s and no stored boji row at %s", recordedRowsRoot, storedBojiV2Row)
+		t.Skipf("no recorded rows under %s and no stored tofu row at %s", recordedRowsRoot, storedTofuV2Row)
 	}
 	var rows []Row
 	for _, path := range paths {
@@ -298,29 +298,29 @@ func TestReportEveryArmFromTheRowsOnDisk(t *testing.T) {
 	}
 }
 
-const storedBojiV2Row = "bench/harness/testdata/v2-row/row.json"
+const storedTofuV2Row = "bench/harness/testdata/v2-row/row.json"
 
-func TestBojiArmCommandUsesOnlyFlagsRunParses(t *testing.T) {
+func TestTofuArmCommandUsesOnlyFlagsRunParses(t *testing.T) {
 	root := repositoryRoot(t)
-	bojiBin := buildBoji(t, root)
-	plan, err := BuildPlan(root, ArmBoji, "hono", 1)
+	tofuBin := buildTofu(t, root)
+	plan, err := BuildPlan(root, ArmTofu, "hono", 1)
 	if err != nil {
 		t.Fatalf("BuildPlan: %v", err)
 	}
 
 	args := append(append([]string{}, plan.Command[1:]...), "--dry-run")
-	cmd := exec.Command(bojiBin, args...)
+	cmd := exec.Command(tofuBin, args...)
 	cmd.Dir = root
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		t.Fatalf("boji %s\nexited %v\n%s", strings.Join(args, " "), err, out)
+		t.Fatalf("tofu %s\nexited %v\n%s", strings.Join(args, " "), err, out)
 	}
 
 	bogus := append(append([]string{}, args...), "--wall-clock-cap", "30m")
-	cmd = exec.Command(bojiBin, bogus...)
+	cmd = exec.Command(tofuBin, bogus...)
 	cmd.Dir = root
 	if out, err := cmd.CombinedOutput(); err == nil {
-		t.Fatalf("boji run accepted --wall-clock-cap, so this test cannot tell a real flag from an invented one\n%s", out)
+		t.Fatalf("tofu run accepted --wall-clock-cap, so this test cannot tell a real flag from an invented one\n%s", out)
 	}
 }
 
@@ -470,18 +470,18 @@ func TestMeasureBojiFillsTheRowFromAStoredTurnRowAndLedger(t *testing.T) {
 	transcript := filepath.Join(root, harnessTestdataDir)
 	session, err := LoadSession(filepath.Join(transcript, "session.json"))
 	if err != nil {
-		t.Skipf("no stored transcript at %s: the recorded boji run is not in the repository yet and %s is not in this ticket's owns, see the report: %v", transcript, transcript, err)
+		t.Skipf("no stored transcript at %s: the recorded tofu run is not in the repository yet and %s is not in this ticket's owns, see the report: %v", transcript, transcript, err)
 	}
 
-	meta := RunMeta{Arm: ArmBoji, Task: "hono", Version: 1, Run: 1, CredentialKind: CredentialKindKey}
+	meta := RunMeta{Arm: ArmTofu, Task: "hono", Version: 1, Run: 1, CredentialKind: CredentialKindKey}
 	src := Sources{
 		LedgerDir:   transcript,
-		ArmDir:      ArmDir(root, ArmBoji, "hono"),
+		ArmDir:      ArmDir(root, ArmTofu, "hono"),
 		BunBin:      "bun",
 		CheckerPath: CheckerPath(root, 1),
-		StartCommit: OwnStartCommit(ArmDir(root, ArmBoji, "hono")),
+		StartCommit: OwnStartCommit(ArmDir(root, ArmTofu, "hono")),
 	}
-	row, gaps := MeasureBoji(session, src, meta)
+	row, gaps := MeasureTofu(session, src, meta)
 
 	if row.Turns != int64(len(session.Steps)) {
 		t.Errorf("Turns = %d, want %d from the stored turn row", row.Turns, len(session.Steps))
@@ -535,13 +535,16 @@ func repositoryRoot(t *testing.T) string {
 	return root
 }
 
-func buildBoji(t *testing.T, root string) string {
+func buildTofu(t *testing.T, root string) string {
 	t.Helper()
-	bin := filepath.Join(t.TempDir(), "boji.exe")
-	cmd := exec.Command("go", "build", "-o", bin, "./cmd/boji")
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	bin := filepath.Join(t.TempDir(), "tofu.exe")
+	cmd := exec.Command("go", "build", "-o", bin, "./cmd/tofu")
 	cmd.Dir = root
 	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Skipf("cmd/boji does not build right now, so the flag list cannot be checked against its parser: %v\n%s", err, out)
+		t.Skipf("cmd/tofu does not build right now, so the flag list cannot be checked against its parser: %v\n%s", err, out)
 	}
 	return bin
 }

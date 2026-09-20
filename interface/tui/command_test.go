@@ -53,7 +53,7 @@ func TestSlashSettingsOpensTheViewAndSendsNothingToTheModel(t *testing.T) {
 		t.Errorf("the composer still holds %q after the command ran", left)
 	}
 	content := ansi.Strip(app.View().Content)
-	if strings.Contains(content, "what should boji do here?") {
+	if strings.Contains(content, "what should tofu do here?") {
 		t.Errorf("the settings view still draws the composer\n%s", content)
 	}
 }

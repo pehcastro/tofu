@@ -382,10 +382,10 @@ func TestSummaryCountsRowsAndDates(t *testing.T) {
 	if stats.String() != want {
 		t.Fatalf("Stats.String() = %q, want %q", stats.String(), want)
 	}
-	t.Logf("boji doctor line: ledger: %s", stats)
+	t.Logf("tofu doctor line: ledger: %s", stats)
 }
 
-func TestTheLineBojiDoctorPrintsForTheProjectLedger(t *testing.T) {
+func TestTheLineTofuDoctorPrintsForTheProjectLedger(t *testing.T) {
 	t.Chdir(t.TempDir())
 	dir, err := Dir()
 	if err != nil {
@@ -412,8 +412,8 @@ func TestTheLineBojiDoctorPrintsForTheProjectLedger(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Summary: %v", err)
 	}
-	if !strings.HasSuffix(filepath.ToSlash(dir), ".boji/log") {
-		t.Fatalf("the ledger lives at .boji/log, Dir returned %s", dir)
+	if !strings.HasSuffix(filepath.ToSlash(dir), ".tofu/log") {
+		t.Fatalf("the ledger lives at .tofu/log, Dir returned %s", dir)
 	}
 	if stats.Rows != 9 {
 		t.Fatalf("the doctor line must count 9 rows, it counted %d", stats.Rows)

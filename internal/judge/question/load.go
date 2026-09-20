@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"strings"
 
-	"boji/internal/sys"
+	"tofu/internal/sys"
 )
 
 func Load(path string) (Set, error) {

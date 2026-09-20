@@ -2,6 +2,8 @@
 .env.*
 !.env.example
 
+/tofu.exe
+/tofu
 /boji.exe
 /boji
 *.exe
@@ -12,5 +14,7 @@ CLAUDE.md
 .claude
 .playground
 .boji
+.tofu
+.tofu.partial
 
 bench/harness/testdata/gates/

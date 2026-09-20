@@ -3,9 +3,9 @@ package turn
 import (
 	"context"
 
-	"boji/internal/konst"
-	"boji/internal/llm"
-	"boji/internal/llm/wire/anthropic"
+	"tofu/internal/konst"
+	"tofu/internal/llm"
+	"tofu/internal/llm/wire/anthropic"
 )
 
 type Subscription struct {

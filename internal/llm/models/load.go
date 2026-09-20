@@ -7,7 +7,7 @@ import (
 	"sort"
 	"strings"
 
-	"boji/internal/sys"
+	"tofu/internal/sys"
 )
 
 const (
@@ -269,13 +269,13 @@ func buildSubscription(id string, from *sheet) (SubscriptionSpec, *Broken) {
 		File:      from.file,
 	}
 	if !spec.ID.valid() {
-		return spec, &Broken{File: from.file, Why: fmt.Sprintf("%q is not a subscription boji can reach, it reaches %s and %s", id, Claude, Codex)}
+		return spec, &Broken{File: from.file, Why: fmt.Sprintf("%q is not a subscription tofu can reach, it reaches %s and %s", id, Claude, Codex)}
 	}
 	if !spec.Provider.valid() {
 		return spec, &Broken{File: from.file, Field: "provider", Why: fmt.Sprintf("the vendor is %s or %s, found %q", Anthropic, OpenAI, spec.Provider)}
 	}
 	if spec.Wire == "" {
-		return spec, &Broken{File: from.file, Field: "wire", Why: "the subscription names no wire, so boji cannot tell which credential and which protocol reach it"}
+		return spec, &Broken{File: from.file, Field: "wire", Why: "the subscription names no wire, so tofu cannot tell which credential and which protocol reach it"}
 	}
 	if len(spec.Windows) == 0 {
 		return spec, &Broken{File: from.file, Field: "windows", Why: "a subscription spends a quota window rather than money, so it names its windows"}
@@ -303,7 +303,7 @@ func buildModel(slug string, from *sheet, known map[Subscription]SubscriptionSpe
 	model.Windows = append(append([]string{}, spec.Windows...), commas(from.values["window"])...)
 	if model.Use == "" {
 		model.Use = UseExcluded
-		model.Reason = "the entry declares no use, so boji will not send it until somebody says it may"
+		model.Reason = "the entry declares no use, so tofu will not send it until somebody says it may"
 		return model, nil
 	}
 	if !model.Use.valid() {

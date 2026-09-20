@@ -68,12 +68,12 @@ func TestTheCursorMovesWithTheCaret(t *testing.T) {
 	if before == nil {
 		t.Fatal("the empty composer reports no cursor")
 	}
-	typeText(app, "boji!")
+	typeText(app, "tofu!")
 	after := app.View().Cursor
 	if after == nil {
 		t.Fatal("the typed composer reports no cursor")
 	}
-	if after.X-before.X != len("boji!") {
+	if after.X-before.X != len("tofu!") {
 		t.Fatalf("typing 5 characters moved the cursor %d cells, want 5", after.X-before.X)
 	}
 	if after.Y != before.Y {

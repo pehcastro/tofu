@@ -8,9 +8,9 @@ import (
 	"io/fs"
 	"os"
 
-	"boji/internal/llm"
-	"boji/internal/sys"
-	"boji/internal/transform"
+	"tofu/internal/llm"
+	"tofu/internal/sys"
+	"tofu/internal/transform"
 )
 
 const writePerm = 0o644

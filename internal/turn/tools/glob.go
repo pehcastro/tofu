@@ -13,10 +13,11 @@ import (
 	"regexp"
 	"strings"
 
-	"boji/internal/konst"
-	"boji/internal/llm"
-	"boji/internal/search"
-	"boji/internal/turn"
+	"tofu/internal/konst"
+	"tofu/internal/llm"
+	"tofu/internal/search"
+	"tofu/internal/sys"
+	"tofu/internal/turn"
 )
 
 type Glob struct {
@@ -30,7 +31,7 @@ func NewGlob(dir string) (Glob, error) {
 
 func (g Glob) Name() string { return "glob" }
 
-const ignoredWalkDescription = "it never descends into node_modules, .git or .boji, " +
+const ignoredWalkDescription = "it never descends into node_modules, .git or .tofu, " +
 	"and it skips every path a .gitignore excludes, reading the one in the working directory and the one in any directory it enters. " +
 	"a project instruction file, AGENTS.md or CLAUDE.md, is always listed even when an ignore file excludes it. " +
 	"set include_ignored to true to walk the ignored paths too, and the result says the walk was unfiltered"
@@ -167,7 +168,7 @@ func filesUnder(root turn.Root, under string, includeIgnored bool) (listing, err
 		}
 		if entry.IsDir() {
 			switch entry.Name() {
-			case "node_modules", ".git", ".boji":
+			case "node_modules", ".git", sys.StateDirName, sys.LegacyStateDirName:
 				return fs.SkipDir
 			}
 		}
@@ -253,7 +254,7 @@ func (w *walk) load(dir, base string) {
 		rule, err := parseIgnoreLine(line)
 		if err != nil {
 			w.notes = append(w.notes, search.Note(search.IgnoreSkipped,
-				fmt.Sprintf("the .gitignore in %s has a pattern boji does not support, %s: %v", where, line, err)))
+				fmt.Sprintf("the .gitignore in %s has a pattern tofu does not support, %s: %v", where, line, err)))
 			continue
 		}
 		scope.rules = append(scope.rules, rule)

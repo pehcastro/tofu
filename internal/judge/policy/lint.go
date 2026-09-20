@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"boji/internal/judge/question"
+	"tofu/internal/judge/question"
 )
 
 type Rule string

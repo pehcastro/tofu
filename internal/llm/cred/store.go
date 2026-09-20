@@ -11,7 +11,7 @@ import (
 
 	_ "modernc.org/sqlite"
 
-	"boji/internal/sys"
+	"tofu/internal/sys"
 )
 
 const (

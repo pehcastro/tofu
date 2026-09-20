@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"boji/internal/sys"
+	"tofu/internal/sys"
 )
 
 func writeCommentFixtureTree(t *testing.T) string {
@@ -25,7 +25,7 @@ func writeCommentFixtureTree(t *testing.T) string {
 	return dir
 }
 
-func TestCommentsCheckerMatchesBojiLintCommentsLineByLine(t *testing.T) {
+func TestCommentsCheckerMatchesTofuLintCommentsLineByLine(t *testing.T) {
 	root := writeCommentFixtureTree(t)
 	want, err := sys.TreeCommentViolations(root)
 	if err != nil {
@@ -59,11 +59,11 @@ func TestCommentsCheckerMatchesBojiLintCommentsLineByLine(t *testing.T) {
 	sort.Strings(gotLines)
 
 	if len(gotLines) != len(wantLines) {
-		t.Fatalf("the registry found %d violations, boji lint comments found %d over the same tree:\nregistry: %v\nlint:     %v", len(gotLines), len(wantLines), gotLines, wantLines)
+		t.Fatalf("the registry found %d violations, tofu lint comments found %d over the same tree:\nregistry: %v\nlint:     %v", len(gotLines), len(wantLines), gotLines, wantLines)
 	}
 	for i := range wantLines {
 		if gotLines[i] != wantLines[i] {
-			t.Fatalf("line %d: registry says %q, boji lint comments says %q", i, gotLines[i], wantLines[i])
+			t.Fatalf("line %d: registry says %q, tofu lint comments says %q", i, gotLines[i], wantLines[i])
 		}
 	}
 }

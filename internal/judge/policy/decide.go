@@ -1,9 +1,9 @@
 package policy
 
 import (
-	"boji/internal/judge/jev"
-	"boji/internal/konst"
-	"boji/internal/transport"
+	"tofu/internal/judge/jev"
+	"tofu/internal/konst"
+	"tofu/internal/transport"
 )
 
 func Decide(answers map[string]jev.Answer, pol Policy) (Verdict, Reason, error) {

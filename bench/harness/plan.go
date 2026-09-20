@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"boji/bench/harness/task"
+	"tofu/bench/harness/task"
 )
 
 const (
@@ -22,7 +22,7 @@ const playgroundRoot = ".playground"
 const (
 	claudeArmModel = "opus"
 	codexArmModel  = "gpt-5.6-sol"
-	bojiArmModel   = "anthropic/claude-opus-5"
+	tofuArmModel   = "anthropic/claude-opus-5"
 )
 
 type Caps struct {
@@ -95,12 +95,12 @@ func BuildPlan(root string, arm Arm, task string, version int) (Plan, error) {
 			"-C", dir,
 		}
 		plan.Env = []string{"the chatgpt subscription credential codex login already holds"}
-	case ArmBoji:
-		plan.Model = bojiArmModel
+	case ArmTofu:
+		plan.Model = tofuArmModel
 		plan.Command = []string{
-			"boji", "run", prompt,
+			"tofu", "run", prompt,
 			"--dir", dir,
-			"--model", bojiArmModel,
+			"--model", tofuArmModel,
 			"--max-steps", strconv.Itoa(caps.TurnCap),
 		}
 		plan.Env = []string{"OPENROUTER_KEY for the jev gate, the anthropic subscription credential for the model"}

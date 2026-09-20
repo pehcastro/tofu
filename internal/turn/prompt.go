@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"boji/internal/sys"
+	"tofu/internal/sys"
 )
 
 const PreferTheToolOverTheShell = "prefer the tool that does the thing over a shell command that imitates it: " +
@@ -20,7 +20,7 @@ const PreferTheToolOverTheShell = "prefer the tool that does the thing over a sh
 	"bash is for the project's own commands, its package manager, its build and its tests, " +
 	"and for nothing one of those tools already does, and a command it runs is killed at its deadline and its output is lost. " +
 	"never write a throwaway script to change a file: that is what edit is. " +
-	"boji_lint_comments, boji_rules_check and boji_judge run boji's own checks with boji's own parser, " +
+	"tofu_lint_comments, tofu_rules_check and tofu_judge run tofu's own checks with tofu's own parser, " +
 	"so use one of those rather than a shell command or a guess in prose when you want to know whether the work holds up."
 
 func Environment(dir string, now time.Time) string {
@@ -41,7 +41,7 @@ func Environment(dir string, now time.Time) string {
 func ProjectInstructions(dir, home string) string {
 	var paths []string
 	if home != "" {
-		for _, global := range [...]string{filepath.Join(home, ".boji", "AGENTS.md"), filepath.Join(home, ".claude", "CLAUDE.md")} {
+		for _, global := range [...]string{filepath.Join(sys.StateDir(home), "AGENTS.md"), filepath.Join(home, ".claude", "CLAUDE.md")} {
 			if isFile(global) {
 				paths = append(paths, global)
 				break

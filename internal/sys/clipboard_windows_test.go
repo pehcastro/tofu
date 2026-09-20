@@ -10,7 +10,7 @@ import (
 	"testing"
 )
 
-const liveClipboardVar = "BOJI_LIVE_CLIPBOARD"
+const liveClipboardVar = "TOFU_LIVE_CLIPBOARD"
 
 func TestWriteClipboardTextRefusesTextWindowsCannotCarryAndNeverOpensTheClipboard(t *testing.T) {
 	err := WriteClipboardText("the answer\x00and a zero byte")

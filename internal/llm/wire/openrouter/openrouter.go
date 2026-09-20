@@ -4,8 +4,8 @@ import (
 	"context"
 	"net/http"
 
-	"boji/internal/llm"
-	"boji/internal/transport"
+	"tofu/internal/llm"
+	"tofu/internal/transport"
 )
 
 const (

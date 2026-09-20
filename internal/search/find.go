@@ -11,7 +11,7 @@ import (
 	"slices"
 	"strings"
 
-	"boji/internal/konst"
+	"tofu/internal/konst"
 )
 
 type Placement string

@@ -4,7 +4,7 @@ import (
 	"os"
 	"testing"
 
-	"boji/internal/judge/jev"
+	"tofu/internal/judge/jev"
 )
 
 func writeFile(t *testing.T, path, content string) {

@@ -12,10 +12,10 @@ import (
 	"testing"
 	"time"
 
-	"boji/internal/judge/jev"
-	"boji/internal/konst"
-	"boji/internal/llm"
-	"boji/internal/transport"
+	"tofu/internal/judge/jev"
+	"tofu/internal/konst"
+	"tofu/internal/llm"
+	"tofu/internal/transport"
 )
 
 const liveAttemptMillis = 30000
@@ -154,8 +154,8 @@ func TestAskHonoursThePerAttemptTimeoutAndRetries(t *testing.T) {
 
 func liveClient(t *testing.T) *llm.Client {
 	t.Helper()
-	if os.Getenv("BOJI_LIVE") != "1" {
-		t.Skip("set BOJI_LIVE=1 to call the real route")
+	if os.Getenv("TOFU_LIVE") != "1" {
+		t.Skip("set TOFU_LIVE=1 to call the real route")
 	}
 	key, err := jev.Key("../../../../.env")
 	if err != nil {

@@ -3,7 +3,7 @@ package tui
 import (
 	tea "charm.land/bubbletea/v2"
 
-	"boji/interface/tui/session"
+	"tofu/interface/tui/session"
 )
 
 const turnRunningNote = "a turn is running. stop it with ctrl+c first"
@@ -22,7 +22,7 @@ func commands(options Options) []session.Command {
 	if options.NewSession != nil {
 		listed = append(listed, session.Command{Name: "new", What: "start fresh, carrying nothing from the last session"})
 	}
-	return append(listed, session.Command{Name: "quit", What: "leave boji"})
+	return append(listed, session.Command{Name: "quit", What: "leave tofu"})
 }
 
 func (a *App) menuKey(key string) (bool, tea.Cmd) {

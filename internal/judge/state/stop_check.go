@@ -1,6 +1,6 @@
 package state
 
-import "boji/internal/judge/ledger"
+import "tofu/internal/judge/ledger"
 
 const StopCheckPoint = "stop_check"
 

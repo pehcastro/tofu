@@ -8,7 +8,7 @@ import (
 	"os"
 	"time"
 
-	"boji/internal/judge/policy"
+	"tofu/internal/judge/policy"
 )
 
 const recordedAnswersPath = "bench/cost/answers/heldout-2026-09-19.jsonl"

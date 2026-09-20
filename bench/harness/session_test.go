@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"boji/internal/session"
-	"boji/internal/turn"
+	"tofu/internal/session"
+	"tofu/internal/turn"
 )
 
 const recordedSessionID = "turn-18d6a5df2caeac68"
@@ -82,7 +82,7 @@ func TestLatestSessionReadsTheHeaderAndBodyShapeTheLoopWritesNow(t *testing.T) {
 
 	read, err := LatestSession(dir, written.At.Add(-time.Minute))
 	if err != nil {
-		t.Fatalf("LatestSession over a directory holding one session in the shape boji writes: %v", err)
+		t.Fatalf("LatestSession over a directory holding one session in the shape tofu writes: %v", err)
 	}
 	if !reflect.DeepEqual(read, written) {
 		t.Fatalf("read back\n%+v\nwant the row that was written\n%+v", read, written)

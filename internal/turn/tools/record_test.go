@@ -10,22 +10,22 @@ import (
 	"strings"
 	"testing"
 
-	"boji/internal/judge/ledger"
-	"boji/internal/konst"
-	"boji/internal/recall"
-	"boji/internal/turn/tools"
+	"tofu/internal/judge/ledger"
+	"tofu/internal/konst"
+	"tofu/internal/recall"
+	"tofu/internal/turn/tools"
 )
 
 func recordOneDecision(t *testing.T, root string) ledger.Row {
 	t.Helper()
-	writer := ledger.NewWriter(filepath.Join(root, ".boji", "log"))
+	writer := ledger.NewWriter(filepath.Join(root, ".tofu", "log"))
 	row, err := writer.Append(ledger.Row{
 		Point:         "tool_gate",
 		Questions:     "tool_gate",
 		Version:       3,
 		Build:         "typesafe/jev-1.13-20260917",
 		Model:         "~typesafe/jev-latest",
-		State:         []byte(`{"agent":"boji","input":{"command":"ls"},"tool":"bash"}`),
+		State:         []byte(`{"agent":"tofu","input":{"command":"ls"},"tool":"bash"}`),
 		Policy:        "tool_gate",
 		PolicyVersion: 3,
 		Verdict:       ledger.VerdictAllow,
@@ -55,20 +55,20 @@ func recordOneDecision(t *testing.T, root string) ledger.Row {
 }
 
 func TestTheWhyToolReturnsTheChainBehindARecordedDecision(t *testing.T) {
-	standInForwardsToARealBoji(t)
+	standInForwardsToARealTofu(t)
 	root := t.TempDir()
 	recorded := recordOneDecision(t, root)
 
-	result, err := verbTool(t, root, "boji_why").Run(context.Background(),
+	result, err := verbTool(t, root, "tofu_why").Run(context.Background(),
 		json.RawMessage(`{"id":`+strconv.Quote(recorded.ID)+`}`))
 	if err != nil {
 		t.Fatalf("running the why tool: %v", err)
 	}
-	t.Logf("boji_why %s printed:\n%s", recorded.ID, result.Content)
+	t.Logf("tofu_why %s printed:\n%s", recorded.ID, result.Content)
 	if result.ExitCode == nil || *result.ExitCode != 0 {
-		t.Fatalf("boji why did not explain a recorded id: %v", result.ExitCode)
+		t.Fatalf("tofu why did not explain a recorded id: %v", result.ExitCode)
 	}
-	if result.Command != "boji why "+recorded.ID {
+	if result.Command != "tofu why "+recorded.ID {
 		t.Fatalf("the row does not name the verb that ran: %q", result.Command)
 	}
 	for _, want := range []string{"risk", "approval", "from_untrusted", "ALLOW", "1.5", `"command":"ls"`} {
@@ -79,20 +79,20 @@ func TestTheWhyToolReturnsTheChainBehindARecordedDecision(t *testing.T) {
 }
 
 func TestTheReplayToolReturnsTheChangedVerdictCountForAMovedThreshold(t *testing.T) {
-	standInForwardsToARealBoji(t)
+	standInForwardsToARealTofu(t)
 	root := t.TempDir()
 	recordOneDecision(t, root)
 
-	result, err := verbTool(t, root, "boji_replay").Run(context.Background(),
+	result, err := verbTool(t, root, "tofu_replay").Run(context.Background(),
 		json.RawMessage(`{"point":"tool_gate","set":"risk_ask_at=-1"}`))
 	if err != nil {
 		t.Fatalf("running the replay tool: %v", err)
 	}
-	t.Logf("boji_replay printed:\n%s", result.Content)
+	t.Logf("tofu_replay printed:\n%s", result.Content)
 	if result.ExitCode == nil || *result.ExitCode != 0 {
-		t.Fatalf("boji replay did not rescore: %v", result.ExitCode)
+		t.Fatalf("tofu replay did not rescore: %v", result.ExitCode)
 	}
-	if result.Command != "boji replay --point tool_gate --set risk_ask_at=-1" {
+	if result.Command != "tofu replay --point tool_gate --set risk_ask_at=-1" {
 		t.Fatalf("the set argument did not reach the verb as its own flag: %q", result.Command)
 	}
 	if !strings.Contains(result.Content, "1 rows read, 1 rescored") {
@@ -107,13 +107,13 @@ func TestTheReplayToolReturnsTheChangedVerdictCountForAMovedThreshold(t *testing
 }
 
 func TestTheReplayToolSplitsEveryThresholdIntoItsOwnFlag(t *testing.T) {
-	result, err := verbTool(t, t.TempDir(), "boji_replay").Run(context.Background(),
+	result, err := verbTool(t, t.TempDir(), "tofu_replay").Run(context.Background(),
 		json.RawMessage(`{"point":"tool_gate","set":"risk_ask_at=1.2, risk_deny_at=2.8"}`))
 	if err != nil {
 		t.Fatalf("running the replay tool: %v", err)
 	}
 	t.Logf("result: %s", strings.TrimSpace(result.Content))
-	if result.Command != "boji replay --point tool_gate --set risk_ask_at=1.2 --set risk_deny_at=2.8" {
+	if result.Command != "tofu replay --point tool_gate --set risk_ask_at=1.2 --set risk_deny_at=2.8" {
 		t.Fatalf("two thresholds did not become two flags: %q", result.Command)
 	}
 }
@@ -139,8 +139,8 @@ func TestTheRecordToolsCarryNoWireInTheirImportGraph(t *testing.T) {
 func TestTheRecordToolsRefuseAtTheSameDepthBoundAsTheOthers(t *testing.T) {
 	root := t.TempDir()
 	calls := map[string]string{
-		"boji_why":    `{"id":"20260918T192434Z-3f2a"}`,
-		"boji_replay": `{"point":"tool_gate"}`,
+		"tofu_why":    `{"id":"20260918T192434Z-3f2a"}`,
+		"tofu_replay": `{"point":"tool_gate"}`,
 	}
 	for name, arguments := range calls {
 		t.Setenv(depthEnvar, strconv.Itoa(konst.VerbMaxDepth-1))
@@ -161,7 +161,7 @@ func TestTheRecordToolsRefuseAtTheSameDepthBoundAsTheOthers(t *testing.T) {
 }
 
 func TestAMissingRequiredParameterIsNamedRatherThanDumpedAsUsage(t *testing.T) {
-	wanted := map[string]string{"boji_why": "id", "boji_replay": "point"}
+	wanted := map[string]string{"tofu_why": "id", "tofu_replay": "point"}
 	for name, parameter := range wanted {
 		_, err := verbTool(t, t.TempDir(), name).Run(context.Background(), json.RawMessage(`{}`))
 		if err == nil {
@@ -197,13 +197,13 @@ func TestTheTwoRecordToolsAddAMeasuredCostToEveryRequest(t *testing.T) {
 		}
 		allBytes += len(encoded)
 		allTokens += cfg.Tokens(string(encoded))
-		if verb.Name() == "boji_why" || verb.Name() == "boji_replay" {
+		if verb.Name() == "tofu_why" || verb.Name() == "tofu_replay" {
 			addedBytes += len(encoded)
 			addedTokens += cfg.Tokens(string(encoded))
 			t.Logf("%s: %d bytes, %d tokens", verb.Name(), len(encoded), cfg.Tokens(string(encoded)))
 		}
 	}
-	t.Logf("five verb tools are %d bytes and %d tokens; boji_why and boji_replay add %d bytes and %d tokens at %d bytes per thousand tokens",
+	t.Logf("five verb tools are %d bytes and %d tokens; tofu_why and tofu_replay add %d bytes and %d tokens at %d bytes per thousand tokens",
 		allBytes, allTokens, addedBytes, addedTokens, cfg.BytesPerThousandTokens)
 	if addedTokens == 0 {
 		t.Fatal("the two new tools measured as nothing, so the names they are matched on are wrong")

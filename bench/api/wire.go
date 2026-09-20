@@ -4,10 +4,10 @@ import (
 	"context"
 	"time"
 
-	"boji/internal/judge/jev"
-	"boji/internal/judge/jev/wire/openrouter"
-	"boji/internal/konst"
-	"boji/internal/transport"
+	"tofu/internal/judge/jev"
+	"tofu/internal/judge/jev/wire/openrouter"
+	"tofu/internal/konst"
+	"tofu/internal/transport"
 )
 
 func NewWire(key string) (*openrouter.Wire, error) {

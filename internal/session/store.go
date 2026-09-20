@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"boji/internal/sys"
+	"tofu/internal/sys"
 )
 
 const (
@@ -100,7 +100,7 @@ func (s *Store) writeWhole(path string, body []byte) error {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
-	tmp, err := os.CreateTemp(dir, ".boji-*")
+	tmp, err := os.CreateTemp(dir, ".tofu-*")
 	if err != nil {
 		return err
 	}

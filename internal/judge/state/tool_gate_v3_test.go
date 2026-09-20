@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"boji/internal/judge/question"
+	"tofu/internal/judge/question"
 )
 
 const toolGateV3Path = "../../../catalog/questions/tool_gate@3.yaml"
@@ -76,7 +76,7 @@ func contextTargets(t *testing.T, built []byte) WriteTargets {
 
 func TestBuildToolGateV3CarriesTheTargetsAndItsOwnShape(t *testing.T) {
 	built, version, err := BuildToolGateV3(ToolGateInput{
-		Agent: "boji", Tool: "bash",
+		Agent: "tofu", Tool: "bash",
 		Input:      map[string]any{"command": "cat > .local/boji/tickets/doing/BOJI-070.md <<'TICKET'\nid: BOJI-070\nTICKET\n"},
 		Cwd:        "/repo",
 		ProjectDir: "/repo",

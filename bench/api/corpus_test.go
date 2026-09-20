@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"boji/bench/corpus"
+	"tofu/bench/corpus"
 )
 
 const wantCorpusFileCount = 12

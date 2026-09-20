@@ -3,7 +3,7 @@ package policy
 import (
 	"testing"
 
-	"boji/internal/judge/jev"
+	"tofu/internal/judge/jev"
 )
 
 const gateBatteryReport = "bench/report/api-2026-09-18.md"

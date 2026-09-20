@@ -7,7 +7,7 @@ import (
 )
 
 func TestBuildToolGateLeavesAnUnknownContextPresentAndEmpty(t *testing.T) {
-	got, _, err := BuildToolGate(ToolGateInput{Agent: "boji", Tool: "bash", Input: map[string]any{"command": "ls"}, Cwd: "/tmp"})
+	got, _, err := BuildToolGate(ToolGateInput{Agent: "tofu", Tool: "bash", Input: map[string]any{"command": "ls"}, Cwd: "/tmp"})
 	if err != nil {
 		t.Fatalf("BuildToolGate: %v", err)
 	}
@@ -41,7 +41,7 @@ func TestBuildToolGateLeavesAnUnknownContextPresentAndEmpty(t *testing.T) {
 }
 
 func TestBuildToolGateVersionIsDottedByPoint(t *testing.T) {
-	_, version, err := BuildToolGate(ToolGateInput{Agent: "boji", Tool: "bash", Input: map[string]any{"command": "ls"}, Cwd: "/tmp"})
+	_, version, err := BuildToolGate(ToolGateInput{Agent: "tofu", Tool: "bash", Input: map[string]any{"command": "ls"}, Cwd: "/tmp"})
 	if err != nil {
 		t.Fatalf("BuildToolGate: %v", err)
 	}

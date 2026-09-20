@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"boji/internal/llm"
+	"tofu/internal/llm"
 )
 
 func alwaysToolCallModel(n int) *stubModel {

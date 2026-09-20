@@ -12,9 +12,9 @@ import (
 	"strings"
 	"time"
 
-	"boji/internal/konst"
-	"boji/internal/llm"
-	"boji/internal/search"
+	"tofu/internal/konst"
+	"tofu/internal/llm"
+	"tofu/internal/search"
 )
 
 type BashTool struct {

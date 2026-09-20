@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"boji/internal/sys"
+	"tofu/internal/sys"
 )
 
 const logSuffix = ".jsonl"

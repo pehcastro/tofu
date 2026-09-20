@@ -8,15 +8,16 @@ import (
 	"strconv"
 	"time"
 
-	catalogquestions "boji/catalog/questions"
-	"boji/internal/judge/jev"
-	"boji/internal/judge/jev/wire/openrouter"
-	"boji/internal/judge/ledger"
-	"boji/internal/judge/policy"
-	"boji/internal/judge/question"
-	"boji/internal/judge/state"
-	"boji/internal/konst"
-	"boji/internal/transport"
+	catalogquestions "tofu/catalog/questions"
+	"tofu/internal/judge/jev"
+	"tofu/internal/judge/jev/wire/openrouter"
+	"tofu/internal/judge/ledger"
+	"tofu/internal/judge/policy"
+	"tofu/internal/judge/question"
+	"tofu/internal/judge/state"
+	"tofu/internal/konst"
+	"tofu/internal/sys"
+	"tofu/internal/transport"
 )
 
 const Point = "stop_check@1"
@@ -109,8 +110,9 @@ func New(root, key string) (Battery, error) {
 	if err != nil {
 		return Battery{}, err
 	}
-	cacheDir := filepath.Join(root, ".boji", "cache")
-	logDir := filepath.Join(root, ".boji", "log")
+	stateDir := sys.StateDir(root)
+	cacheDir := filepath.Join(stateDir, "cache")
+	logDir := filepath.Join(stateDir, "log")
 	questions := make([]jev.Question, 0, len(set.Questions))
 	for _, q := range set.Questions {
 		questions = append(questions, q.ToJev())

@@ -3,9 +3,9 @@ package api
 import (
 	"fmt"
 
-	catalogquestions "boji/catalog/questions"
-	"boji/internal/judge/jev"
-	"boji/internal/judge/question"
+	catalogquestions "tofu/catalog/questions"
+	"tofu/internal/judge/jev"
+	"tofu/internal/judge/question"
 )
 
 func GateBattery() ([]jev.Question, int, error) {
@@ -34,7 +34,7 @@ var countSweepPool = []jev.Question{
 	nounQuestion("q03", "Does the state's context carry a user_recent_messages field?"),
 	nounQuestion("q04", "Does the state's input field carry a command key?"),
 	nounQuestion("q05", "Does the state's context carry flagged_untrusted_content?"),
-	nounQuestion("q06", "Does the state name an agent called boji?"),
+	nounQuestion("q06", "Does the state name an agent called tofu?"),
 	nounQuestion("q07", "Does the command in the state contain the word git?"),
 	nounQuestion("q08", "Does the state's cwd field end with project?"),
 	nounQuestion("q09", "Is the state a JSON object with more than two top level fields?"),

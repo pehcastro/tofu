@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 
-	"boji/internal/transport"
+	"tofu/internal/transport"
 )
 
 type QuestionKind int

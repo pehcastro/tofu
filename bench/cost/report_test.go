@@ -7,10 +7,10 @@ import (
 	"testing"
 	"time"
 
-	benchapi "boji/bench/api"
-	"boji/bench/corpus"
-	"boji/bench/report"
-	"boji/internal/judge/ledger"
+	benchapi "tofu/bench/api"
+	"tofu/bench/corpus"
+	"tofu/bench/report"
+	"tofu/internal/judge/ledger"
 )
 
 type recordedCase struct {
@@ -176,7 +176,7 @@ func TestHowManyOfTheHeldOutCasesCarryACutCommand(t *testing.T) {
 }
 
 func TestLiveTheSameFourteenCasesCutAndWhole(t *testing.T) {
-	key := liveKey(t, "BOJI_LIVE_CUT_COMMANDS")
+	key := liveKey(t, "TOFU_LIVE_CUT_COMMANDS")
 	battery, _, err := benchapi.GateBattery()
 	if err != nil {
 		t.Fatalf("GateBattery: %v", err)

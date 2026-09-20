@@ -11,10 +11,10 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"boji/interface/tui/theme"
-	"boji/internal/session"
-	"boji/internal/sys"
-	"boji/internal/widget"
+	"tofu/interface/tui/theme"
+	"tofu/internal/session"
+	"tofu/internal/sys"
+	"tofu/internal/widget"
 )
 
 type State int
@@ -115,7 +115,7 @@ func (b Board) copyFile(index int, files []string) (Outcome, error) {
 	}
 	suffix := strings.ToLower(filepath.Ext(files[0]))
 	if !slices.Contains([]string{pngSuffix, ".jpg", ".jpeg", ".gif", ".webp", ".bmp"}, suffix) {
-		return Outcome{}, errors.New(filepath.Base(files[0]) + " is not an image boji can attach")
+		return Outcome{}, errors.New(filepath.Base(files[0]) + " is not an image tofu can attach")
 	}
 	body, err := os.ReadFile(files[0])
 	if err != nil {

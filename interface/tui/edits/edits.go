@@ -9,10 +9,10 @@ import (
 
 	"charm.land/lipgloss/v2"
 
-	"boji/interface/tui/crew"
-	"boji/interface/tui/pane"
-	"boji/interface/tui/theme"
-	"boji/internal/widget"
+	"tofu/interface/tui/crew"
+	"tofu/interface/tui/pane"
+	"tofu/interface/tui/theme"
+	"tofu/internal/widget"
 )
 
 const (
@@ -33,7 +33,7 @@ const (
 	intoHeader   = "+++ "
 	title        = "file edits"
 	feedLabel    = "  feed"
-	Self         = "boji"
+	Self         = "tofu"
 	emptyTitle   = "no file has changed in this session"
 	emptyBody    = "when the turn edits or writes a file the change appears here with its diff, and the session keeps one row saying which file changed and by how much."
 	quietAgent   = "this agent has changed no file"

@@ -7,9 +7,9 @@ import (
 	"sort"
 	"time"
 
-	benchapi "boji/bench/api"
-	"boji/bench/stat"
-	"boji/internal/judge/jev"
+	benchapi "tofu/bench/api"
+	"tofu/bench/stat"
+	"tofu/internal/judge/jev"
 )
 
 const repsPerCase = 3

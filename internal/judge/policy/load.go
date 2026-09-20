@@ -6,8 +6,8 @@ import (
 	"strconv"
 	"strings"
 
-	"boji/internal/judge/question"
-	"boji/internal/sys"
+	"tofu/internal/judge/question"
+	"tofu/internal/sys"
 )
 
 type Origin string

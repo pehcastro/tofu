@@ -3,7 +3,7 @@ package sift
 import (
 	"strings"
 
-	"boji/internal/konst"
+	"tofu/internal/konst"
 )
 
 func Signpost(part Part) Mark {

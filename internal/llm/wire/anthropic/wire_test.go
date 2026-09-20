@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"boji/internal/llm"
-	"boji/internal/transport"
+	"tofu/internal/llm"
+	"tofu/internal/transport"
 )
 
 const stubOAuthToken = "sk-ant-oat01-not-a-real-token"

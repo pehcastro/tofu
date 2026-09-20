@@ -11,10 +11,10 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
-	"boji/interface/tui/crew"
-	"boji/interface/tui/paste"
-	"boji/interface/tui/theme"
-	"boji/internal/widget"
+	"tofu/interface/tui/crew"
+	"tofu/interface/tui/paste"
+	"tofu/interface/tui/theme"
+	"tofu/internal/widget"
 )
 
 const TickInterval = 250 * time.Millisecond
@@ -24,7 +24,7 @@ const (
 	composerRows   = 3
 	ruleRows       = 1
 	footerRows     = composerRows + 2
-	placeholder    = "what should boji do here?"
+	placeholder    = "what should tofu do here?"
 	keyHints       = "⏎ send   ⇧⏎ newline   / commands   ctrl+o detail"
 	queueHints     = "⏎ queues   alt+↑↓ picks   ctrl+x unqueues"
 	hintGap        = "   "

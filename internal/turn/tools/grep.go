@@ -13,9 +13,9 @@ import (
 	"strconv"
 	"strings"
 
-	"boji/internal/llm"
-	"boji/internal/search"
-	"boji/internal/turn"
+	"tofu/internal/llm"
+	"tofu/internal/search"
+	"tofu/internal/turn"
 )
 
 type Grep struct {

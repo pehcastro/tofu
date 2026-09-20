@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"boji/internal/recall"
+	"tofu/internal/recall"
 )
 
 func walkStored(dir string, fn func([]byte)) error {

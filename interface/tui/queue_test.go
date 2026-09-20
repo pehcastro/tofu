@@ -11,7 +11,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"boji/internal/konst"
+	"tofu/internal/konst"
 )
 
 const (

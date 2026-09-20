@@ -3,7 +3,7 @@ package api
 import (
 	"testing"
 
-	"boji/internal/judge/question"
+	"tofu/internal/judge/question"
 )
 
 func TestGateBatteryResolvesAPinnedCatalogVersion(t *testing.T) {

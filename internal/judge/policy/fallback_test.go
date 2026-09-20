@@ -5,10 +5,10 @@ import (
 	"strings"
 	"testing"
 
-	"boji/bench/corpus"
-	"boji/internal/judge/jev"
-	"boji/internal/judge/ledger"
-	"boji/internal/transport"
+	"tofu/bench/corpus"
+	"tofu/internal/judge/jev"
+	"tofu/internal/judge/ledger"
+	"tofu/internal/transport"
 )
 
 type stubWire struct {
@@ -144,7 +144,7 @@ func TestTheRowNamesTheArmAndSaysTheDecisionWasNotMade(t *testing.T) {
 	}
 	row := fallbackRow(t, t.TempDir(), f, pol, state)
 	if row.Reason.ModeReason == nil {
-		t.Fatal("the row carries no sentence, boji why has nothing to print")
+		t.Fatal("the row carries no sentence, tofu why has nothing to print")
 	}
 	sentence := *row.Reason.ModeReason
 	for _, want := range []string{"the typed decision was not made", "rate_limit", "regex arm answered deny", "recorded as ask, never allow"} {

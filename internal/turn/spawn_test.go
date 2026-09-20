@@ -13,11 +13,11 @@ import (
 	"testing"
 	"time"
 
-	"boji/internal/crew"
-	"boji/internal/judge/ledger"
-	"boji/internal/konst"
-	"boji/internal/llm"
-	"boji/internal/session"
+	"tofu/internal/crew"
+	"tofu/internal/judge/ledger"
+	"tofu/internal/konst"
+	"tofu/internal/llm"
+	"tofu/internal/session"
 )
 
 func claimDecision(text string) llm.Decision {
@@ -353,7 +353,7 @@ func TestTheReopenDecisionIsOnTheChildRowAndInTheLedger(t *testing.T) {
 	}
 	row, found, err := ledger.NewReader(dir).ByID(ids[0])
 	if err != nil || !found {
-		t.Fatalf("boji why reads the ledger by id and %s is not there: found %v, %v", ids[0], found, err)
+		t.Fatalf("tofu why reads the ledger by id and %s is not there: found %v, %v", ids[0], found, err)
 	}
 	if row.Point != "stop_check@1" || len(row.Answers) != 1 {
 		t.Fatalf("the ledger row is not the stop_check chain why would print: %+v", row)

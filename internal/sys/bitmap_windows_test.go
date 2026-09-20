@@ -53,7 +53,7 @@ func TestPNGFromDIBRefusesAnUnreadableDepth(t *testing.T) {
 	raw := twoByTwoDIB(t)
 	binary.LittleEndian.PutUint16(raw[bitCountOffset:], 8)
 	if _, err := pngFromDIB(raw); err == nil {
-		t.Fatal("an 8 bit palette bitmap decoded, and boji does not read palettes")
+		t.Fatal("an 8 bit palette bitmap decoded, and tofu does not read palettes")
 	}
 }
 

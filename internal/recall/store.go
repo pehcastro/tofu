@@ -5,7 +5,7 @@ import (
 	"encoding/hex"
 	"path/filepath"
 
-	"boji/internal/sys"
+	"tofu/internal/sys"
 )
 
 const storeIDBytes = 16

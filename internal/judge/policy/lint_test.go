@@ -4,7 +4,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"boji/internal/judge/question"
+	"tofu/internal/judge/question"
 )
 
 func toolGateQuestionsPath() string {

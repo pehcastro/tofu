@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"boji/internal/transport"
+	"tofu/internal/transport"
 )
 
 type capture struct {

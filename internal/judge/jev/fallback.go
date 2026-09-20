@@ -3,7 +3,7 @@ package jev
 import (
 	"strconv"
 
-	"boji/internal/transport"
+	"tofu/internal/transport"
 )
 
 type Unavailable int

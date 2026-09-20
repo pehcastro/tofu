@@ -25,7 +25,7 @@ func TestProseIsRenderedOncePerWidth(t *testing.T) {
 	calls := 0
 	model := New(fixed(), counted(&calls))
 	model.SetSize(80, 24)
-	model.Append(Entry{Kind: Assistant, Body: "**Boji** reads `toolgate.go`"})
+	model.Append(Entry{Kind: Assistant, Body: "**Tofu** reads `toolgate.go`"})
 	if calls != 1 {
 		t.Fatalf("appending one message called the renderer %d times, want 1", calls)
 	}
@@ -54,13 +54,13 @@ func TestStreamingProseStaysPlainUntilItStops(t *testing.T) {
 	calls := 0
 	model := New(fixed(), counted(&calls))
 	model.SetSize(80, 24)
-	model.Stream("**Boji** ")
+	model.Stream("**Tofu** ")
 	model.Stream("reads `toolgate.go`")
 	streaming := model.View()
 	if calls != 0 {
 		t.Fatalf("a streaming message called the renderer %d times, want 0", calls)
 	}
-	if !strings.Contains(streaming, "**Boji** reads `toolgate.go`") {
+	if !strings.Contains(streaming, "**Tofu** reads `toolgate.go`") {
 		t.Errorf("a streaming message is not shown as plain text:\n%s", streaming)
 	}
 	model.Stop()

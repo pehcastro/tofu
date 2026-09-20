@@ -7,17 +7,17 @@ import (
 	"testing"
 	"time"
 
-	"boji/internal/llm"
-	"boji/internal/llm/cred"
+	"tofu/internal/llm"
+	"tofu/internal/llm/cred"
 )
 
 const liveModel = "gpt-5.1-codex"
 
 func liveWire(t *testing.T) *Wire {
 	t.Helper()
-	if os.Getenv("BOJI_LIVE_CODEX") != "1" {
-		t.Skip("set BOJI_LIVE_CODEX=1 to spend a turn of the subscription quota; " +
-			"on 2026-09-19 boji usage read the codex 7d window at 100% with a reset at 2026-09-19T18:44:30Z, " +
+	if os.Getenv("TOFU_LIVE_CODEX") != "1" {
+		t.Skip("set TOFU_LIVE_CODEX=1 to spend a turn of the subscription quota; " +
+			"on 2026-09-19 tofu usage read the codex 7d window at 100% with a reset at 2026-09-19T18:44:30Z, " +
 			"so a request before that reset answers with a quota rejection rather than a completion")
 	}
 	path, err := cred.Path()
@@ -26,7 +26,7 @@ func liveWire(t *testing.T) *Wire {
 	}
 	store, err := cred.Open(path)
 	if err != nil {
-		t.Skipf("no credential store, run boji login codex: %v", err)
+		t.Skipf("no credential store, run tofu login codex: %v", err)
 	}
 	t.Cleanup(func() { _ = store.Close() })
 	spec, err := cred.Lookup("codex")
@@ -35,10 +35,10 @@ func liveWire(t *testing.T) *Wire {
 	}
 
 	wire, err := New(Config{
-		Model:          cmp.Or(os.Getenv("BOJI_LIVE_CODEX_MODEL"), liveModel),
+		Model:          cmp.Or(os.Getenv("TOFU_LIVE_CODEX_MODEL"), liveModel),
 		Token:          cred.NewManager(store, spec).Access,
 		Watchdog:       2 * time.Minute,
-		InstallationID: "boji-live-test",
+		InstallationID: "tofu-live-test",
 		SessionID:      "00000000-0000-4000-8000-000000000002",
 	})
 	if err != nil {

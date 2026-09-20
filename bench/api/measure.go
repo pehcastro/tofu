@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	"boji/bench/stat"
-	"boji/internal/judge/jev"
+	"tofu/bench/stat"
+	"tofu/internal/judge/jev"
 )
 
 type GateCaseResult struct {

@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"boji/bench/corpus"
+	"tofu/bench/corpus"
 )
 
 type GateCase struct {

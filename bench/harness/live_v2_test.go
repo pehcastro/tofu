@@ -6,30 +6,30 @@ import (
 	"path/filepath"
 	"testing"
 
-	"boji/internal/sys"
+	"tofu/internal/sys"
 )
 
 const (
-	liveEnv           = "BOJI_LIVE"
-	binaryEnv         = "BOJI_BIN"
+	liveEnv           = "TOFU_LIVE"
+	binaryEnv         = "TOFU_BIN"
 	v2SessionTestdata = "testdata/v2-session"
 	v2BeforeTestdata  = "testdata/v2-before"
 )
 
 func TestV2BojiArmRunsLiveAndProducesARow(t *testing.T) {
 	if os.Getenv(liveEnv) != "1" {
-		t.Skip("live: this runs the boji arm against the playground and spends the subscription. Set " +
-			liveEnv + "=1 and " + binaryEnv + " to a built boji binary to run it.")
+		t.Skip("live: this runs the tofu arm against the playground and spends the subscription. Set " +
+			liveEnv + "=1 and " + binaryEnv + " to a built tofu binary to run it.")
 	}
 	binary := os.Getenv(binaryEnv)
 	if binary == "" {
-		t.Fatal(binaryEnv + " is unset: the arm is driven by a built boji binary, and building one here would be a tree-wide check")
+		t.Fatal(binaryEnv + " is unset: the arm is driven by a built tofu binary, and building one here would be a tree-wide check")
 	}
 	root := repositoryRoot(t)
 	sessionDir := filepath.Join(root, "bench", "harness", v2SessionTestdata)
 	t.Chdir(root)
 
-	plan, err := BuildPlan(".", ArmBoji, "hono", 2)
+	plan, err := BuildPlan(".", ArmTofu, "hono", 2)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -66,10 +66,10 @@ func TestV2BojiArmRunsLiveAndProducesARow(t *testing.T) {
 		StartCommit: OwnStartCommit(plan.Dir),
 	}
 	meta := RunMeta{
-		Arm: ArmBoji, Task: "hono", Version: 2, Run: 1,
+		Arm: ArmTofu, Task: "hono", Version: 2, Run: 1,
 		CLIVersion: sys.Version(), Commit: sys.BuildRevision(),
 	}
-	row, gaps := MeasureBoji(recorded, src, meta)
+	row, gaps := MeasureTofu(recorded, src, meta)
 	t.Logf("\n%s\n%s", Detail(row, gaps, execution, ledgerDir), Render([]Row{row}))
 
 	if row.Turns == 0 {

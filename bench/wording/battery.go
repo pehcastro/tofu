@@ -1,8 +1,8 @@
 package wording
 
 import (
-	"boji/internal/judge/jev"
-	"boji/internal/judge/question"
+	"tofu/internal/judge/jev"
+	"tofu/internal/judge/question"
 )
 
 const (

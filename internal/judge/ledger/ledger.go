@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"time"
 
-	"boji/internal/sys"
+	"tofu/internal/sys"
 )
 
 const SchemaVersion = 6

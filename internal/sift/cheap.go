@@ -5,7 +5,7 @@ import (
 	"regexp"
 	"strings"
 
-	"boji/internal/konst"
+	"tofu/internal/konst"
 )
 
 const emDash = string(rune(0x2014))

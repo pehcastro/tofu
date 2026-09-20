@@ -3,7 +3,7 @@ package cost
 import (
 	"fmt"
 
-	"boji/internal/judge/policy"
+	"tofu/internal/judge/policy"
 )
 
 const CalibrationArm = "jev-calibration"

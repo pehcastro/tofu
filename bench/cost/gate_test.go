@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"boji/internal/judge/jev"
-	"boji/internal/judge/policy"
+	"tofu/internal/judge/jev"
+	"tofu/internal/judge/policy"
 )
 
 func shippedGate(t *testing.T) (policy.Policy, policy.Resolution) {

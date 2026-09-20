@@ -6,11 +6,11 @@ import (
 	"os"
 	"time"
 
-	"boji/bench/stat"
-	"boji/internal/llm"
-	"boji/internal/llm/wire/openrouter"
-	"boji/internal/transport"
-	iturn "boji/internal/turn"
+	"tofu/bench/stat"
+	"tofu/internal/llm"
+	"tofu/internal/llm/wire/openrouter"
+	"tofu/internal/transport"
+	iturn "tofu/internal/turn"
 )
 
 const (
@@ -75,7 +75,7 @@ func runOne(ctx context.Context, client *llm.Client, task Task, armName string, 
 		return RunResult{Task: task.Name, Arm: armName, Rep: rep, CallErr: err.Error()}
 	}
 
-	dir, err := os.MkdirTemp("", "boji-bench-turn-*")
+	dir, err := os.MkdirTemp("", "tofu-bench-turn-*")
 	if err != nil {
 		return failed(err)
 	}

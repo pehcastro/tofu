@@ -7,9 +7,9 @@ import (
 	"strconv"
 	"time"
 
-	"boji/internal/llm"
-	"boji/internal/recall"
-	"boji/internal/session"
+	"tofu/internal/llm"
+	"tofu/internal/recall"
+	"tofu/internal/session"
 )
 
 const SchemaVersion = 1

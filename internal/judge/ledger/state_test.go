@@ -19,7 +19,7 @@ func TestSchemaBumpedForTheStateBody(t *testing.T) {
 
 func TestASmallStateIsCarriedWholeOnTheRow(t *testing.T) {
 	dir := t.TempDir()
-	body := []byte(`{"agent":"boji","input":{"command":"git push --force"},"tool":"bash"}`)
+	body := []byte(`{"agent":"tofu","input":{"command":"git push --force"},"tool":"bash"}`)
 
 	stored, err := NewWriter(dir).Append(Row{Point: "tool_gate", Questions: "tool_gate", Version: 1, State: body})
 	if err != nil {

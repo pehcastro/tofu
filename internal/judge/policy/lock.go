@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"time"
 
-	"boji/internal/sys"
+	"tofu/internal/sys"
 )
 
 type Lock struct {

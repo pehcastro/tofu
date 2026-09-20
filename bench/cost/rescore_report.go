@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"boji/internal/judge/policy"
-	"boji/internal/konst"
+	"tofu/internal/judge/policy"
+	"tofu/internal/konst"
 )
 
 const deterministicArmSource = "recomputed from the held-out half: these two arms read the state and ask no question, so no policy decides for them and nothing about them can change"
