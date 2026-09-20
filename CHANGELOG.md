@@ -17,9 +17,12 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 - A policy file may declare a `schema` other than the gate's, and its thresholds load with it. A threshold that is not a number fails the load with the file and the line rather than reading as zero.
 - `tofu check` writes a ledger row carrying the fingerprint of the command it judged, so a judgement made by hand at the command line is found as precedent by the same call inside a run. A replayed row carries the fingerprint of the row it replays.
 
+- `fetch` drops a list or table row whose whole content is a link, because that is navigation, and the result says how many units and how many bytes went. A code block and the page title are never dropped. Over three large reference pages this removes 16.2 percent of the text, and 19.9 percent of the Node file-system reference, without losing anything that answered the question.
+
 ### Fixed
 
 - `tofu doctor --json` carries a `schema` field for a point that is not the gate, and no longer reports a policy it cannot read as making the binary unusable.
+- An image pasted before the first send of a session lands in that session's directory rather than in a different one, and the session body records the file, its size and its format. A paste in a directory with no recorded session works.
 
 ## 0.4.1 - 2026-09-21
 
