@@ -48,6 +48,14 @@ func New(config Config) (*Wire, error) {
 func (w *Wire) Model() string { return w.model }
 
 func (w *Wire) Post(ctx context.Context, body []byte) (llm.Raw, error) {
+	marked, err := MarkStablePrefix(body)
+	if err != nil {
+		return llm.Raw{}, err
+	}
+	return w.send(ctx, marked)
+}
+
+func (w *Wire) send(ctx context.Context, body []byte) (llm.Raw, error) {
 	header := http.Header{}
 	header.Set("Authorization", "Bearer "+w.key)
 	header.Set("Content-Type", "application/json")

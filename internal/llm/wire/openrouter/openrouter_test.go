@@ -243,3 +243,46 @@ func TestLiveToolCall(t *testing.T) {
 	t.Logf("parsed arguments %+v", arguments)
 	t.Logf("cost $%.9f request id %s", decision.Usage.Cost, decision.RequestID)
 }
+
+const jevAlias = "~typesafe/jev-latest"
+
+func TestLiveMarkingChangesTheProvidersReportedCacheTokens(t *testing.T) {
+	if os.Getenv("TOFU_LIVE") != "1" {
+		t.Skip("set TOFU_LIVE=1 to call the real route")
+	}
+	key, err := jev.Key("../../../../.env")
+	if err != nil {
+		t.Fatalf("no credential: %v", err)
+	}
+	config := wireConfig("")
+	config.Model = jevAlias
+	config.Key = key
+	config.Transport.AttemptTimeout = liveAttemptMillis * time.Millisecond
+	wire, err := New(config)
+	if err != nil {
+		t.Fatalf("building the wire: %v", err)
+	}
+
+	request := llm.Request{
+		Messages: []llm.Message{
+			{Role: llm.RoleSystem, Content: strings.Repeat("this instruction line is identical on every request. ", 200)},
+			{Role: llm.RoleUser, Content: "reply with the single word: pong"},
+		},
+	}
+	body, err := request.Encode(wire.Model())
+	if err != nil {
+		t.Fatalf("encoding: %v", err)
+	}
+
+	unmarked, err := wire.send(context.Background(), body)
+	if err != nil {
+		t.Fatalf("posting unmarked: %v", err)
+	}
+	t.Logf("unmarked response: %s", unmarked.Body)
+
+	marked, err := wire.Post(context.Background(), body)
+	if err != nil {
+		t.Fatalf("posting marked: %v", err)
+	}
+	t.Logf("marked response: %s", marked.Body)
+}
