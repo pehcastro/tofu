@@ -6,6 +6,22 @@ import (
 	"boji/internal/judge/policy"
 )
 
+const CalibrationArm = "jev-calibration"
+
+func CalibrationRescoreRows() ([]AnswerRow, error) {
+	fit, verify, err := CalibrationAnswers()
+	if err != nil {
+		return nil, err
+	}
+	rows := make([]AnswerRow, 0, len(fit)+len(verify))
+	rows = append(rows, fit...)
+	rows = append(rows, verify...)
+	for index := range rows {
+		rows[index].Arm = CalibrationArm
+	}
+	return rows, nil
+}
+
 type RescoreCount struct {
 	Arm             string
 	Rows            int
@@ -22,11 +38,12 @@ type RescoreResult struct {
 	Policy     policy.Policy
 	Resolution policy.Resolution
 	ModelCalls int
+	Rows       []AnswerRow
 	Arms       []RescoreCount
 }
 
 func Rescore(rows []AnswerRow, pol policy.Policy, resolution policy.Resolution) (RescoreResult, error) {
-	result := RescoreResult{Policy: pol, Resolution: resolution}
+	result := RescoreResult{Policy: pol, Resolution: resolution, Rows: rows}
 	counts := map[string]*RescoreCount{}
 	var order []string
 	for _, row := range rows {
