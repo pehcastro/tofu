@@ -8,7 +8,9 @@ Tofu is personal and not released, so the public interface that a version promis
 
 The minor number carries breaking changes, which is what 0.x means, and **there is never a 1.0.0**. The owner decided that on 2026-09-19: this stays 0.x forever, so the promise the version makes is the one 0.x already makes, that anything can break on a minor bump.
 
-## Unreleased
+## 0.4.2 - 2026-09-21
+
+It stopped making the same mistake twice, and it stops itself when it starts.
 
 ### Added
 
@@ -16,6 +18,8 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 - `tofu sift` reads a shell result against the task that asked for it and marks what is still worth reading. It is in shadow: nothing is removed and the model is given the output whole. Standard error, the chunk carrying the exit status and the first and last chunk of standard output are never candidates.
 - A policy file may declare a `schema` other than the gate's, and its thresholds load with it. A threshold that is not a number fails the load with the file and the line rather than reading as zero.
 - `tofu check` writes a ledger row carrying the fingerprint of the command it judged, so a judgement made by hand at the command line is found as precedent by the same call inside a run. A replayed row carries the fingerprint of the row it replays.
+- A turn stops itself when the model calls the same tool with the same arguments and gets the same result three times inside six calls, and it says which tool, with which arguments, and how many times. Before this it ran to the forty step cap and stopped without explaining anything.
+- The prompt carries the working directory, today's date, the platform, whether this is a git repository and the branch, and it reads a `CLAUDE.md` or an `AGENTS.md` walking up from where you typed `tofu`. The nearest file wins. The text is capped and says which file it cut and by how much.
 
 - `fetch` drops a list or table row whose whole content is a link, because that is navigation, and the result says how many units and how many bytes went. A code block and the page title are never dropped. Over three large reference pages this removes 16.2 percent of the text, and 19.9 percent of the Node file-system reference, without losing anything that answered the question.
 
@@ -23,6 +27,8 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 
 - `tofu doctor --json` carries a `schema` field for a point that is not the gate, and no longer reports a policy it cannot read as making the binary unusable.
 - An image pasted before the first send of a session lands in that session's directory rather than in a different one, and the session body records the file, its size and its format. A paste in a directory with no recorded session works.
+- The request that writes a turn's last word now carries the same tool definitions as every other request, so a turn that ends at a cap no longer pays for an uncached prefix. That block is 5,960 tokens, 62 percent of the cached prefix, and it was being bought again on every capped ending.
+- A project's own `CLAUDE.md` no longer sits inside the cached part of the prompt, so opening a second project stops invalidating the cache of the first.
 
 ## 0.4.1 - 2026-09-21
 
