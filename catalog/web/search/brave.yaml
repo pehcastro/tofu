@@ -1,0 +1,12 @@
+use: default
+reason: an independent index, one GET with one header, and a free tier that needs no card
+endpoint: https://api.search.brave.com/res/v1/web/search
+query_param: q
+count_param: count
+max_results: 10
+key_variable: BRAVE_SEARCH_KEY
+key_header: X-Subscription-Token
+results_path: web.results
+title_field: title
+url_field: url
+snippet_field: description

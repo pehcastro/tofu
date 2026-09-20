@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Worker pools | Acme Runtime docs</title>
+  <link rel="stylesheet" href="/static/docs.css">
+  <script src="/static/analytics.js"></script>
+</head>
+<body>
+<nav class="top-nav" role="navigation">
+  <a href="/">Home</a>
+  <a href="/docs">Docs</a>
+  <a href="/pricing">Pricing</a>
+</nav>
+<div class="layout">
+  <aside class="sidebar">
+    <ul>
+      <li><a href="/docs/install">Installing</a></li>
+      <li><a href="/docs/pools">Worker pools</a></li>
+      <li><a href="/docs/queues">Queues</a></li>
+    </ul>
+  </aside>
+  <main class="documentation-content">
+    <h1>Worker pools</h1>
+    <p>A worker pool bounds how many jobs run at the same time. Size it from
+    measured resource use rather than from the length of the queue, because
+    every live worker holds memory, file descriptors and a connection to the
+    database.</p>
+    <div class="breadcrumb"><a href="/docs">Docs</a> / Worker pools</div>
+    <h2>Creating a pool</h2>
+    <p>Call <code>runtime.NewPool</code> with the ceiling you measured. See the
+    <a href="/docs/queues">queue reference</a> for how jobs arrive.</p>
+    <pre class="highlight"><code class="language-go">pool := runtime.NewPool(runtime.PoolConfig{
+	Workers: 8,
+	Queue:   jobs,
+})
+if err := pool.Start(ctx); err != nil {
+	return fmt.Errorf("starting the pool: %w", err)
+}
+defer pool.Drain()</code></pre>
+    <h2>Choosing the ceiling</h2>
+    <ul>
+      <li>Start at the number of cores and measure.</li>
+      <li>Raise it while latency is flat and the queue is not empty.</li>
+      <li>Stop when memory per worker times the ceiling reaches half of what the host has.</li>
+    </ul>
+    <table>
+      <thead><tr><th>Setting</th><th>Default</th><th>Meaning</th></tr></thead>
+      <tbody>
+        <tr><td>Workers</td><td>4</td><td>jobs running at the same time</td></tr>
+        <tr><td>Backlog</td><td>1024</td><td>jobs held before Submit blocks</td></tr>
+      </tbody>
+    </table>
+    <blockquote>Draining is not cancellation: a drained pool finishes the jobs it
+    already accepted.</blockquote>
+    <div class="related-pages">
+      <a href="/docs/queues">Queues</a>
+      <a href="/docs/metrics">Metrics</a>
+    </div>
+  </main>
+</div>
+<footer class="site-footer">
+  <p>Copyright 2026 Acme. All rights reserved.</p>
+</footer>
+<script>window.acme = {page: "pools"};</script>
+</body>
+</html>

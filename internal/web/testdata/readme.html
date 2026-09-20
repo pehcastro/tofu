@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>ridge/ferry: a tiny job runner</title>
+</head>
+<body>
+<header class="app-header">
+  <a href="/">ridge</a>
+  <form class="search-form"><input name="q" placeholder="Search or jump to"></form>
+  <a href="/login">Sign in</a>
+</header>
+<div class="repository-content">
+  <nav class="file-navigation" aria-label="Repository files">
+    <a href="/ridge/ferry/tree/main/cmd">cmd</a>
+    <a href="/ridge/ferry/tree/main/internal">internal</a>
+    <a href="/ridge/ferry/blob/main/go.mod">go.mod</a>
+  </nav>
+  <article class="markdown-body">
+    <h1>ferry</h1>
+    <p>A job runner that does one thing: it moves work from a queue to a
+    process and tells you what happened. No daemon, no broker, one binary.</p>
+    <h2>Install</h2>
+    <pre><code class="language-bash">go install github.com/ridge/ferry/cmd/ferry@latest</code></pre>
+    <h2>Use</h2>
+    <p>Point it at a queue and a command. Every run is recorded in
+    <code>.ferry/runs.jsonl</code>.</p>
+    <pre><code class="language-bash">ferry run --queue ./jobs --parallel 4 -- ./worker.sh
+ferry why 01J8Z --format json</code></pre>
+    <h2>Why not cron</h2>
+    <ul>
+      <li>cron has no record of what a run did</li>
+      <li>cron cannot bound how many run at once</li>
+      <li>cron cannot answer why a run was skipped</li>
+    </ul>
+    <p>The design notes are in <a href="/ridge/ferry/blob/main/docs/design.md">docs/design.md</a>.</p>
+    <h2>License</h2>
+    <p>MIT, see <a href="/ridge/ferry/blob/main/LICENSE">LICENSE</a>.</p>
+  </article>
+  <aside class="repository-sidebar">
+    <h3>About</h3>
+    <p>Stars 412, forks 31, watchers 9.</p>
+  </aside>
+</div>
+<footer class="site-footer"><a href="/about">About</a><a href="/terms">Terms</a></footer>
+</body>
+</html>

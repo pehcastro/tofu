@@ -1,0 +1,9 @@
+use: excluded
+reason: a self-hosted instance and no key at all. set endpoint to your own and use default in the project layer to pick it over brave
+endpoint: http://localhost:8888/search?format=json
+query_param: q
+max_results: 10
+results_path: results
+title_field: title
+url_field: url
+snippet_field: content

@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>The queue is not the problem</title>
+  <meta name="description" content="Why adding workers stopped helping.">
+</head>
+<body>
+<header class="masthead">
+  <a href="/">The Slow Loop</a>
+  <nav><a href="/archive">Archive</a><a href="/rss">RSS</a></nav>
+</header>
+<main>
+  <article>
+    <h1>The queue is not the problem</h1>
+    <p class="byline">By Dana Okafor, 14 March 2026</p>
+    <p>We spent a week adding workers. The backlog kept growing, and the graph
+    that mattered never moved. The queue was never the constraint: one row lock
+    was, and every worker we added waited on it.</p>
+    <h2>What we measured</h2>
+    <p>Latency at the ninety ninth percentile went from 1,338 ms to 396 ms after
+    a single change, and the change was not in the queue.</p>
+    <blockquote>
+      <p>A number from one run is not a measurement. We ran it twelve times.</p>
+    </blockquote>
+    <p>The lock was taken in <a href="https://example.org/repo/blob/main/claim.sql">claim.sql</a>
+    and held for the whole transaction, including the network round trip to the
+    object store. Moving the upload out of the transaction was four lines.</p>
+    <img src="/images/latency.png" alt="a latency graph">
+    <h2>What we would do first next time</h2>
+    <ol>
+      <li>Look at where time is spent before adding anything.</li>
+      <li>Ask what the workers are waiting on, not how many there are.</li>
+      <li>Keep the run that disproved the theory.</li>
+    </ol>
+    <p>None of this is new. It was still faster to add workers than to read the
+    transaction, which is why we did the wrong thing for a week.</p>
+  </article>
+  <div class="newsletter-signup">
+    <h3>Get this in your inbox</h3>
+    <form><input type="email" placeholder="you@example.com"><button>Subscribe</button></form>
+  </div>
+  <section class="comments">
+    <h3>14 comments</h3>
+    <p>anon: skill issue</p>
+  </section>
+</main>
+<footer>
+  <p>The Slow Loop, written in one sitting every other week.</p>
+</footer>
+</body>
+</html>
