@@ -62,8 +62,10 @@ func TestALockPinsTheThresholdsTheDecisionThenRunsAt(t *testing.T) {
 		t.Fatalf("the lock pinned %+v, want approval_relax_at 0.80", lock.Thresholds)
 	}
 	current := Current{Build: lock.Build, QuestionsVersion: lock.QuestionsVersion, Known: true}
-	if resolution := Resolve(pol, LockLookup{Present: true, Lock: lock}, current); resolution.Mode != ModeEnforced {
-		t.Fatalf("mode = %s because %s, want enforced", resolution.Mode, resolution.Reason)
+	lookup := LockLookup{Present: true, Lock: lock}
+	enforced := Resolve(pol, lookup, current)
+	if enforced.Mode != ModeEnforced {
+		t.Fatalf("mode = %s because %s, want enforced", enforced.Mode, enforced.Reason)
 	}
 	answers := neutralAnswers(pol)
 	answers[pol.RiskQuestion] = scoreAnswerFixture(1.9)
@@ -73,7 +75,18 @@ func TestALockPinsTheThresholdsTheDecisionThenRunsAt(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Decide before the lock: %v", err)
 	}
-	after, reason, err := Decide(answers, lock.Pinned(pol))
+	if !enforced.Pinned {
+		t.Fatalf("an enforced resolution over a lock with thresholds is not pinned")
+	}
+	stale := Current{Build: "typesafe/jev-1.12-20260901", QuestionsVersion: lock.QuestionsVersion, Known: true}
+	shadowed := Resolve(pol, lookup, stale)
+	if shadowed.Mode != ModeShadow {
+		t.Fatalf("mode = %s over a lock fitted against another build, want shadow", shadowed.Mode)
+	}
+	if shadowed.Pinned || shadowed.Policy.Thresholds != pol.Thresholds {
+		t.Fatalf("a shadow point took the lock's thresholds: %+v", shadowed.Policy.Thresholds)
+	}
+	after, reason, err := Decide(answers, enforced.Policy)
 	if err != nil {
 		t.Fatalf("Decide under the lock: %v", err)
 	}

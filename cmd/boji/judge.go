@@ -60,11 +60,11 @@ func judgeVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 		if err != nil {
 			return judgeFail(errOut, err)
 		}
-		set.Policy = &pol
 		res, err := resolvePolicyMode(pol)
 		if err != nil {
 			return judgeFail(errOut, err)
 		}
+		set.Policy = &res.Policy
 		set.Mode = res.Mode
 		set.ModeReason = res.Reason
 	}

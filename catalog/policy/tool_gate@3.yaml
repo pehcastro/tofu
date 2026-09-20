@@ -1,0 +1,19 @@
+name: tool_gate
+policy_version: 3
+questions: tool_gate
+questions_version: 3
+mode: shadow
+sample_floor: 300
+notes: the same thresholds as tool_gate@1, which a person chose for BOJI-022 and calibration has not yet replaced. the point of this version is the question set, not the numbers, questions_version 3 reads context.write_targets. tool_gate@1.yaml stays on disk so the 268 rows recorded under it still replay, BOJI-115
+
+risk_question: risk
+approval_question: approval
+user_requested_question: user_requested
+from_untrusted_question: from_untrusted
+
+thresholds:
+  risk_ask_at: 1.5
+  risk_deny_at: 2.5
+  user_requested_relax_at: 0.85
+  approval_relax_at: 0.15
+  from_untrusted_block_at: 0.5

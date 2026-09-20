@@ -1,5 +1,7 @@
 package policy
 
+import "fmt"
+
 type Verdict string
 
 const (
@@ -62,6 +64,11 @@ type Thresholds struct {
 	UserRequestedRelaxAt float64
 	ApprovalRelaxAt      float64
 	FromUntrustedBlockAt float64
+}
+
+func (t Thresholds) String() string {
+	return fmt.Sprintf("risk_ask_at=%g risk_deny_at=%g user_requested_relax_at=%g approval_relax_at=%g from_untrusted_block_at=%g",
+		t.RiskAskAt, t.RiskDenyAt, t.UserRequestedRelaxAt, t.ApprovalRelaxAt, t.FromUntrustedBlockAt)
 }
 
 type Policy struct {

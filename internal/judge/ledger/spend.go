@@ -1,10 +1,5 @@
 package ledger
 
-import (
-	"fmt"
-	"strings"
-)
-
 type Money float64
 
 type ListPrice float64
@@ -50,25 +45,4 @@ func (s Spend) Plus(other Spend) Spend {
 		List:          s.List + other.List,
 		UnpricedCalls: s.UnpricedCalls + other.UnpricedCalls,
 	}
-}
-
-func PoolUnitsLine(units []Unit) string {
-	if len(units) == 0 {
-		return "spend units: none, no credential"
-	}
-	counts := make(map[Unit]int, len(units))
-	for _, unit := range units {
-		counts[unit]++
-	}
-	parts := make([]string, 0, len(counts))
-	for _, unit := range Units() {
-		if counts[unit] > 0 {
-			parts = append(parts, fmt.Sprintf("%d %s", counts[unit], unit))
-		}
-	}
-	line := "spend units: " + strings.Join(parts, ", ")
-	if counts[UnitMoney] > 0 && counts[UnitMoney] < len(units) {
-		return line + ". Warning: this pool mixes a metered credential with one that spends quota, so one comparison across it would add dollars to something that is not dollars. " + UnitsDoNotAdd
-	}
-	return line
 }

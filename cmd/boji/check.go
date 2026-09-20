@@ -34,7 +34,7 @@ func checkVerb(args []string, out, errOut io.Writer) int {
 	if err != nil {
 		return checkFail(errOut, err)
 	}
-	policyPath := sys.Join(catalogDir, "policy", "tool_gate@1.yaml")
+	policyPath := sys.Join(catalogDir, "policy", runGatePoint+".yaml")
 
 	key, err := jev.Key(".env")
 	if err != nil {
@@ -95,69 +95,35 @@ func runCheck(ctx context.Context, client *jev.Client, policyPath, command strin
 	if err != nil {
 		return ledger.Row{}, err
 	}
-	set, err := resolveCatalog("tool_gate@1")
+	set, err := resolveCatalog(runGatePoint)
 	if err != nil {
 		return ledger.Row{}, err
 	}
-	built, builderVersion, err := state.BuildToolGate(state.ToolGateInput{
-		Agent: "owner-shell",
-		Tool:  "bash",
-		Input: map[string]any{"command": command},
-		Cwd:   cwd,
+	built, builderVersion, err := state.BuildToolGateV3(state.ToolGateInput{
+		Agent:      "owner-shell",
+		Tool:       "bash",
+		Input:      map[string]any{"command": command},
+		Cwd:        cwd,
+		ProjectDir: cwd,
 	})
 	if err != nil {
 		return ledger.Row{}, err
 	}
 	rawState := json.RawMessage(built)
 
-	decision, err := client.Ask(ctx, jev.Request{State: rawState, Questions: set.Questions})
-	if err != nil {
-		return ledger.Row{}, err
-	}
-
 	pol, err := policy.Load(policyPath)
 	if err != nil {
 		return ledger.Row{}, err
 	}
-	verdict, reason, err := policy.Decide(decision.Answers, pol)
-	if err != nil {
-		return ledger.Row{}, err
-	}
+	set.Policy, set.Mode = &pol, policy.ModeShadow
 
-	dir, err := ledger.Dir()
+	decision, err := client.Ask(ctx, jev.Request{State: rawState, Questions: set.Questions})
 	if err != nil {
 		return ledger.Row{}, err
 	}
-	hash, err := ledger.Hash(rawState)
-	if err != nil {
-		return ledger.Row{}, err
-	}
-	row := ledger.Row{
-		Point:         set.SetName,
-		Questions:     set.SetName,
-		Version:       set.QuestionsVersion,
-		Model:         openrouter.Alias,
-		StateHash:     hash,
-		StateBuilder:  builderVersion,
-		Answers:       toLedgerAnswers(set.QuestionsVersion, decision.Answers),
-		Verdict:       ledger.Verdict(verdict),
-		Policy:        pol.Name,
-		PolicyVersion: pol.PolicyVersion,
-		Reason: &ledger.Reason{
-			Question:   reason.Question,
-			Comparison: string(reason.Comparison),
-			Threshold:  reason.Threshold,
-			Value:      reason.Value,
-			DeadBand:   reason.DeadBand,
-			RelaxedBy:  reason.RelaxedBy,
-			Blocked:    reason.Blocked,
-			Ambiguous:  reason.Ambiguous,
-			Mode:       ledger.ModeShadow,
-		},
-		Build:     decision.Build,
-		LatencyMS: decision.Latency.Milliseconds(),
-		Cost:      decision.Usage.Cost,
-		RequestID: decision.RequestID,
-	}
-	return ledger.NewWriter(dir).Append(row)
+	return appendRow(rawState, set, rowInput{
+		decision:     &decision,
+		answers:      toLedgerAnswers(set.QuestionsVersion, decision.Answers),
+		stateBuilder: builderVersion,
+	})
 }

@@ -50,13 +50,6 @@ func LoadLock(path string) (Lock, error) {
 	return lock, nil
 }
 
-func (l Lock) Pinned(pol Policy) Policy {
-	if l.PinsThresholds {
-		pol.Thresholds = l.Thresholds
-	}
-	return pol
-}
-
 func (l *Lock) setField(key, value, path string, line int) error {
 	switch key {
 	case "policy":

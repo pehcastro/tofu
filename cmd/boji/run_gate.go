@@ -8,13 +8,9 @@ import (
 	"strings"
 	"time"
 
-	catalogpolicy "boji/catalog/policy"
-	"boji/catalog/questions"
 	"boji/internal/judge/jev"
 	jevwire "boji/internal/judge/jev/wire/openrouter"
 	"boji/internal/judge/ledger"
-	"boji/internal/judge/policy"
-	"boji/internal/judge/question"
 	"boji/internal/judge/state"
 	"boji/internal/konst"
 	"boji/internal/sys"
@@ -23,7 +19,7 @@ import (
 )
 
 const (
-	runGatePoint       = "tool_gate@1"
+	runGatePoint       = "tool_gate@3"
 	judgeEndpointEnvar = "BOJI_JUDGE_ENDPOINT"
 )
 
@@ -31,29 +27,46 @@ type toolGate struct {
 	client    *jev.Client
 	set       battery
 	cwd       string
+	watch     func(tool string, decision turn.GateDecision, err error)
 	decisions int
 	costUSD   float64
 }
 
 func newToolGate(dir string) (*toolGate, error) {
-	set, err := resolveCatalog(runGatePoint)
+	set, err := resolvePoint(runGatePoint)
 	if err != nil {
 		return nil, err
 	}
-	pol, origin, err := gatePolicy()
+	client, err := newJevClient()
 	if err != nil {
 		return nil, err
+	}
+	return &toolGate{client: client, set: set, cwd: dir}, nil
+}
+
+func resolvePoint(point string) (battery, error) {
+	set, err := resolveCatalog(point)
+	if err != nil {
+		return battery{}, err
+	}
+	pol, origin, err := loadPolicyPoint(point)
+	if err != nil {
+		return battery{}, err
 	}
 	resolution, err := resolvePolicyMode(pol)
 	if err != nil {
-		return nil, err
+		return battery{}, err
 	}
+	pol = resolution.Policy
 	set.Policy, set.Mode = &pol, resolution.Mode
 	set.ModeReason = fmt.Sprintf("the policy came from %s as %s", origin, pol.File)
 	if resolution.Reason != "" && !strings.Contains(resolution.Reason, pol.File) {
 		set.ModeReason += "; " + resolution.Reason
 	}
+	return set, nil
+}
 
+func newJevClient() (*jev.Client, error) {
 	key, err := gateKey()
 	if err != nil {
 		return nil, err
@@ -71,23 +84,7 @@ func newToolGate(dir string) (*toolGate, error) {
 	if err != nil {
 		return nil, err
 	}
-	client, err := jev.NewClient(jev.Config{Wire: wire})
-	if err != nil {
-		return nil, err
-	}
-	return &toolGate{client: client, set: set, cwd: dir}, nil
-}
-
-func gatePolicy() (policy.Policy, policy.Origin, error) {
-	layers, err := question.DefaultLayers(questions.Files())
-	if err != nil {
-		return policy.Policy{}, "", err
-	}
-	set, _, err := question.Resolve(runGatePoint, layers)
-	if err != nil {
-		return policy.Policy{}, "", err
-	}
-	return policy.LoadPoint(catalogpolicy.Files(), runGatePoint, set)
+	return jev.NewClient(jev.Config{Wire: wire})
 }
 
 func gateKey() (string, error) {
@@ -104,10 +101,14 @@ func gateKey() (string, error) {
 
 func (g *toolGate) Decide(ctx context.Context, request turn.GateRequest) (turn.GateDecision, error) {
 	row, err := g.ask(ctx, request)
+	decision := turn.GateDecision{ID: row.ID, Verdict: row.Verdict, Answers: row.Answers, Reason: row.Reason}
 	if err != nil {
-		return turn.GateDecision{Verdict: string(ledger.VerdictAsk)}, err
+		decision = turn.GateDecision{Verdict: ledger.VerdictAsk}
 	}
-	return turn.GateDecision{ID: row.ID, Verdict: string(row.Verdict)}, nil
+	if g.watch != nil {
+		g.watch(request.Tool, decision, err)
+	}
+	return decision, err
 }
 
 func (g *toolGate) ask(ctx context.Context, request turn.GateRequest) (ledger.Row, error) {
@@ -115,12 +116,13 @@ func (g *toolGate) ask(ctx context.Context, request turn.GateRequest) (ledger.Ro
 	if err := json.Unmarshal(request.Args, &input); err != nil {
 		return ledger.Row{}, fmt.Errorf("the %s call carries arguments the gate cannot read: %w", request.Tool, err)
 	}
-	built, builder, err := state.BuildToolGate(state.ToolGateInput{
-		Agent:   "boji-run",
-		Tool:    request.Tool,
-		Input:   input,
-		Cwd:     g.cwd,
-		Context: state.ToolGateContext{UserRecentMessages: []string{request.Task}},
+	built, builder, err := state.BuildToolGateV3(state.ToolGateInput{
+		Agent:      "boji-run",
+		Tool:       request.Tool,
+		Input:      input,
+		Cwd:        g.cwd,
+		ProjectDir: g.cwd,
+		Context:    state.ToolGateContext{UserRecentMessages: []string{request.Task}},
 	})
 	if err != nil {
 		return ledger.Row{}, err

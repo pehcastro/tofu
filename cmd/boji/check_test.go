@@ -16,7 +16,7 @@ import (
 
 func toolGatePolicyPath(t *testing.T) string {
 	t.Helper()
-	abs, err := filepath.Abs(filepath.Join("..", "..", "catalog", "policy", "tool_gate@1.yaml"))
+	abs, err := filepath.Abs(filepath.Join("..", "..", "catalog", "policy", runGatePoint+".yaml"))
 	if err != nil {
 		t.Fatalf("resolving the shipped policy path: %v", err)
 	}
@@ -66,6 +66,47 @@ func TestCheckWritesARowWithAVerdict(t *testing.T) {
 	}
 	if found.Verdict != ledger.VerdictAsk {
 		t.Fatalf("the row read back carries verdict %q", found.Verdict)
+	}
+}
+
+func TestCheckRowCarriesTheStateItWasDecidedOnAndTheTargetItNamed(t *testing.T) {
+	policyPath := toolGatePolicyPath(t)
+	project := t.TempDir()
+	t.Chdir(project)
+	client, err := jev.NewClient(jev.Config{Wire: &stubWire{reply: askReply}})
+	if err != nil {
+		t.Fatalf("client: %v", err)
+	}
+
+	row, err := runCheck(context.Background(), client, policyPath, "rm -f notes.md")
+	if err != nil {
+		t.Fatalf("runCheck: %v", err)
+	}
+	dir, err := ledger.Dir()
+	if err != nil {
+		t.Fatalf("ledger.Dir: %v", err)
+	}
+	found, ok, err := ledger.NewReader(dir).ByID(row.ID)
+	if err != nil {
+		t.Fatalf("reading the row back: %v", err)
+	}
+	if !ok {
+		t.Fatalf("row %q is not in the ledger", row.ID)
+	}
+	var decoded struct {
+		Context struct {
+			Targets state.WriteTargets `json:"write_targets"`
+		} `json:"context"`
+	}
+	if err := json.Unmarshal(found.State, &decoded); err != nil {
+		t.Fatalf("the row carries no state boji why can render: %v", err)
+	}
+	targets := decoded.Context.Targets
+	if targets.Determination != state.TargetsResolved || len(targets.Targets) != 1 {
+		t.Fatalf("write_targets = %+v, want one resolved target", targets)
+	}
+	if got := targets.Targets[0]; got.Location != state.LocationInsideProject || !strings.HasSuffix(got.Path, "/notes.md") {
+		t.Fatalf("target = %+v, want notes.md inside the project", got)
 	}
 }
 
@@ -169,14 +210,15 @@ func TestCheckSendsExactlyWhatTheStateBuilderProduces(t *testing.T) {
 		t.Fatalf("runCheck: %v", err)
 	}
 
-	want, _, err := state.BuildToolGate(state.ToolGateInput{
-		Agent: "owner-shell",
-		Tool:  "bash",
-		Input: map[string]any{"command": "git push --force origin main"},
-		Cwd:   cwd,
+	want, _, err := state.BuildToolGateV3(state.ToolGateInput{
+		Agent:      "owner-shell",
+		Tool:       "bash",
+		Input:      map[string]any{"command": "git push --force origin main"},
+		Cwd:        cwd,
+		ProjectDir: cwd,
 	})
 	if err != nil {
-		t.Fatalf("state.BuildToolGate: %v", err)
+		t.Fatalf("state.BuildToolGateV3: %v", err)
 	}
 
 	var envelope struct {
