@@ -1,0 +1,19 @@
+name: tool_gate
+policy_version: 6
+questions: tool_gate
+questions_version: 6
+mode: shadow
+sample_floor: 300
+notes: the thresholds are unchanged from tool_gate@3 through tool_gate@5, because BOJI-123 measures one more wording against the last one and a moved cut would make them unreadable together. questions_version 6 changes the user_requested question alone, so that a standing permission in the user's own words counts as authorization while a hand-back, a hook notice and any other non-user text still do not. tool_gate@3.yaml, tool_gate@4.yaml and tool_gate@5.yaml stay on disk untouched and keep their recorded rows replayable
+
+risk_question: risk
+approval_question: approval
+user_requested_question: user_requested
+from_untrusted_question: from_untrusted
+
+thresholds:
+  risk_ask_at: 1.5
+  risk_deny_at: 2.5
+  user_requested_relax_at: 0.85
+  approval_relax_at: 0.15
+  from_untrusted_block_at: 0.5

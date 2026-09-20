@@ -1,0 +1,19 @@
+name: tool_gate
+policy_version: 4
+questions: tool_gate
+questions_version: 4
+mode: shadow
+sample_floor: 300
+notes: the thresholds are tool_gate@3's, unchanged, because BOJI-120 measures one wording against another and a moved cut would make the two unreadable together. questions_version 4 changes the approval question alone, so that a resolved target inside the project reads as the project's own file. tool_gate@3.yaml stays on disk and keeps its recorded rows replayable
+
+risk_question: risk
+approval_question: approval
+user_requested_question: user_requested
+from_untrusted_question: from_untrusted
+
+thresholds:
+  risk_ask_at: 1.5
+  risk_deny_at: 2.5
+  user_requested_relax_at: 0.85
+  approval_relax_at: 0.15
+  from_untrusted_block_at: 0.5

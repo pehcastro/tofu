@@ -1,0 +1,19 @@
+name: tool_gate
+policy_version: 5
+questions: tool_gate
+questions_version: 5
+mode: shadow
+sample_floor: 300
+notes: the thresholds are tool_gate@3's and tool_gate@4's, unchanged, because BOJI-121 measures a third wording against the other two and a moved cut would make them unreadable together. questions_version 5 changes the approval question alone, so that the session scratch directory reads as the agent's own workspace and a call that changes what version control holds is judged on the history rather than on the files it names. tool_gate@3.yaml and tool_gate@4.yaml stay on disk untouched and keep their recorded rows replayable
+
+risk_question: risk
+approval_question: approval
+user_requested_question: user_requested
+from_untrusted_question: from_untrusted
+
+thresholds:
+  risk_ask_at: 1.5
+  risk_deny_at: 2.5
+  user_requested_relax_at: 0.85
+  approval_relax_at: 0.15
+  from_untrusted_block_at: 0.5
