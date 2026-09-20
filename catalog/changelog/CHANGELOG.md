@@ -8,6 +8,23 @@ Boji is personal and not released, so the public interface that a version promis
 
 The minor number carries breaking changes, which is what 0.x means, and **there is never a 1.0.0**. The owner decided that on 2026-09-19: this stays 0.x forever, so the promise the version makes is the one 0.x already makes, that anything can break on a minor bump.
 
+## 0.4.0 - 2026-09-20
+
+boji is tofu. The minor number carries it because the name is the command you type and the directory your history lives in, which is exactly what a version promises.
+
+### Changed
+
+- **the binary is `tofu`.** `tofu run`, `tofu session`, `tofu usage`, every verb as it was, with the same flags and the same exit codes. Install it and the old `boji.exe` can go
+- **the data directory is `.tofu`**, in the project and at `~/.tofu`. The first run that finds only the old one copies it and says so, with the counts, and the old directory is read and never touched: it is still there and deleting it is yours to do. A second run copies nothing and says nothing. An interrupted copy never becomes the new directory, and the next run throws the partial away and starts over. Your seventy-one recorded sessions and both your logins came across and `diff -r` reports no difference
+- the thirty-one `BOJI_*` environment variables are `TOFU_*`. Most gate a test skip, so the skip names were compared one by one before and after, and none appeared or vanished
+- the five tools the model can call are `tofu_lint_comments`, `tofu_rules_check`, `tofu_judge`, `tofu_why`, `tofu_replay`. The four recorded sessions that carry the old names still read and still replay
+
+### Not changed
+
+- ticket ids stay `BOJI-NNN`. An id is an identifier and not a brand, and three other tickets reference each one
+- `CHANGELOG.md` and the planning documents keep the words they were written with. They are the record of what was decided when it was called that
+- `bench/corpus/` keeps one old environment variable name inside a recorded command and one old import path inside a size fixture. Both are recorded evidence with state hashes: changing a byte changes the measurement
+
 ## 0.3.7 - 2026-09-20
 
 The last version under the name boji. A model is named by its provider, a role picks the model, and the composer takes what you type while a turn runs.
