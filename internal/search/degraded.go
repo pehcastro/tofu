@@ -11,6 +11,7 @@ const (
 	Partial       Degraded = "partial"
 	Stale         Degraded = "stale"
 	Stopped       Degraded = "stopped"
+	NameMatched   Degraded = "name_matched"
 )
 
 func Note(state Degraded, detail string) string {
@@ -32,6 +33,8 @@ func Note(state Degraded, detail string) string {
 		meaning = "the file changed between the read and the write, so nothing was written"
 	case Stopped:
 		meaning = "the command was killed at its deadline and its output is gone"
+	case NameMatched:
+		meaning = "the answer was matched on the identifier rather than resolved through types, so two symbols sharing one name are one entry and a call through an interface or a function value is missed"
 	default:
 		panic("search: " + string(state) + " is not a degraded state")
 	}

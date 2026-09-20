@@ -73,6 +73,7 @@ func (s Search) Run(_ context.Context, raw json.RawMessage) (turn.Result, error)
 	if err != nil {
 		return turn.Result{}, fmt.Errorf("search: %w", err)
 	}
+	under = listed.under
 	result, err := search.Find(search.Request{
 		Root:      string(s.root),
 		Files:     listed.files,

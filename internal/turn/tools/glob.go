@@ -78,6 +78,7 @@ func (g Glob) Run(_ context.Context, raw json.RawMessage) (turn.Result, error) {
 	if err != nil {
 		return turn.Result{}, fmt.Errorf("glob: %w", err)
 	}
+	under = listed.under
 
 	var found []string
 	for _, rel := range listed.files {
@@ -126,6 +127,7 @@ func withNote(content, note string) string {
 }
 
 type listing struct {
+	under string
 	files []string
 	bytes int64
 	note  string
@@ -157,6 +159,17 @@ func filesUnder(root turn.Root, under string, includeIgnored bool) (listing, err
 		return listing{}, err
 	}
 	walked := walk{root: root}
+	if _, err := os.Stat(from); err != nil {
+		repaired, note, refusal := repairPath(root, under, true)
+		if refusal != nil {
+			return listing{}, refusal
+		}
+		if from, err = root.Resolve(repaired); err != nil {
+			return listing{}, err
+		}
+		under = repaired
+		walked.notes = append(walked.notes, note)
+	}
 	if includeIgnored {
 		walked.notes = append(walked.notes, search.Note(search.Unfiltered, "include_ignored was set, so this listing is wider than git's"))
 	} else {
@@ -204,7 +217,7 @@ func filesUnder(root turn.Root, under string, includeIgnored bool) (listing, err
 		walked.notes = append(walked.notes, search.Note(search.Partial,
 			fmt.Sprintf("%d of the %d files listed could not be measured, so the total size is lower than the real one", walked.unsized, len(walked.files))))
 	}
-	return listing{files: walked.files, bytes: walked.bytes, note: strings.Join(walked.notes, " ")}, walkErr
+	return listing{under: under, files: walked.files, bytes: walked.bytes, note: strings.Join(walked.notes, " ")}, walkErr
 }
 
 func projectInstructions(name string) bool {

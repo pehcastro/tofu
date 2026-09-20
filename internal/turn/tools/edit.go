@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -32,8 +33,11 @@ func (e Edit) Definition() llm.Tool {
 		Name: "edit",
 		Description: "replaces one exact stretch of text inside a file that already exists and leaves the rest of it untouched. " +
 			"old_string is copied from the file character for character, including indentation and line breaks, " +
-			"and it has to appear exactly once: when it appears more than once, add the lines above or below it until it is unique. " +
+			"and it has to appear exactly once: when it appears more than once the result lists every occurrence with its line number, " +
+			"so add the lines above or below it until it is unique. " +
 			"new_string is what it becomes, and an empty new_string deletes it. " +
+			"a path that does not exist, or a stretch of text that differs from the file in whitespace alone, is repaired when there is exactly one candidate and refused when there are two, " +
+			"and a repair is named at the top of the result. " +
 			"the result is a unified diff of what changed. " +
 			"use write instead to create a file or to replace the whole of one",
 		Parameters: map[string]any{
@@ -69,54 +73,54 @@ func (e Edit) Run(_ context.Context, raw json.RawMessage) (turn.Result, error) {
 	if err != nil {
 		return turn.Result{}, fmt.Errorf("edit: %w", err)
 	}
+	target := filepath.ToSlash(args.Path)
+	var repairs []string
 	body, err := os.ReadFile(resolved)
+	if errors.Is(err, fs.ErrNotExist) {
+		repaired, note, refusal := repairPath(e.root, args.Path, false)
+		if refusal != nil {
+			return turn.Result{}, fmt.Errorf("edit: %w", refusal)
+		}
+		target, repairs = repaired, append(repairs, note)
+		if resolved, err = e.root.Resolve(target); err == nil {
+			body, err = os.ReadFile(resolved)
+		}
+	}
 	if err != nil {
 		return turn.Result{}, fmt.Errorf("edit: %w", err)
 	}
 
 	if bytes.IndexByte(body, 0) >= 0 {
 		return turn.Result{}, errors.New("edit: " + search.Note(search.BinarySkipped,
-			args.Path+" holds a null byte, so it is not text and replacing a stretch of it would corrupt it"))
+			target+" holds a null byte, so it is not text and replacing a stretch of it would corrupt it"))
 	}
 
 	before := string(body)
-	switch occurrences := strings.Count(before, args.Old); occurrences {
-	case 0:
-		return turn.Result{}, fmt.Errorf("edit: %s holds no text matching old_string%s", args.Path, nearestLine(before, args.Old))
-	case 1:
-	default:
-		return turn.Result{}, fmt.Errorf("edit: old_string appears %d times in %s and an edit must name exactly one: add the lines above or below it until it is unique",
-			occurrences, args.Path)
+	after, note, err := replaceOnce(before, target, args.Old, args.New)
+	if err != nil {
+		return turn.Result{}, err
+	}
+	if note != "" {
+		repairs = append(repairs, note)
 	}
 
-	edits, err := transform.Derive(before, strings.Replace(before, args.Old, args.New, 1))
+	edits, err := transform.Derive(before, after)
 	if err != nil {
 		return turn.Result{}, fmt.Errorf("edit: %w", err)
 	}
-	preview, err := transform.Plan(string(e.root), filepath.ToSlash(args.Path), edits)
+	preview, err := transform.Plan(string(e.root), target, edits)
 	if err != nil {
 		return turn.Result{}, fmt.Errorf("edit: %w", err)
 	}
 	if err := transform.Commit(string(e.root), preview); err != nil {
 		if errors.Is(err, transform.ErrStale) {
 			return turn.Result{}, errors.New("edit: " + search.Note(search.Stale,
-				args.Path+" is no longer the text edit read, so nothing was written: read it again and edit the text that is there now"))
+				target+" is no longer the text edit read, so nothing was written: read it again and edit the text that is there now"))
 		}
 		return turn.Result{}, fmt.Errorf("edit: %w", err)
 	}
-	return turn.Result{Content: preview.Diff, Command: "edit " + args.Path}, nil
-}
-
-func nearestLine(before, old string) string {
-	first, _, _ := strings.Cut(old, "\n")
-	trimmed := strings.TrimSpace(first)
-	if trimmed == "" {
-		return ""
-	}
-	for number, line := range strings.Split(before, "\n") {
-		if strings.TrimSpace(line) == trimmed {
-			return fmt.Sprintf(", though line %d reads %q, so the difference is in the whitespace or in the lines after it", number+1, line)
-		}
-	}
-	return ""
+	return turn.Result{
+		Content: strings.Join(append(repairs, preview.Diff), "\n"),
+		Command: "edit " + target,
+	}, nil
 }

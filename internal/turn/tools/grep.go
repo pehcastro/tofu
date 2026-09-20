@@ -75,6 +75,7 @@ func (g Grep) Run(_ context.Context, raw json.RawMessage) (turn.Result, error) {
 	if err != nil {
 		return turn.Result{}, fmt.Errorf("grep: %w", err)
 	}
+	under = listed.under
 
 	var lines []string
 	searched, matched, binary := 0, 0, 0

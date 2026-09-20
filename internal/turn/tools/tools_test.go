@@ -44,12 +44,13 @@ func registry(t *testing.T, root string) turn.Registry {
 	globTool, globErr := tools.NewGlob(root)
 	grepTool, grepErr := tools.NewGrep(root)
 	editTool, editErr := tools.NewEdit(root)
-	for _, err := range []error{globErr, grepErr, editErr} {
+	symbolsTool, symbolsErr := tools.NewSymbols(root)
+	for _, err := range []error{globErr, grepErr, editErr, symbolsErr} {
 		if err != nil {
 			t.Fatalf("building the tools: %v", err)
 		}
 	}
-	return turn.NewRegistry(globTool, grepTool, editTool)
+	return turn.NewRegistry(globTool, grepTool, editTool, symbolsTool)
 }
 
 func runCalls(t *testing.T, root string, bytesCap int, truncate bool, calls ...llm.ToolCall) turn.Row {
