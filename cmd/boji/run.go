@@ -5,16 +5,18 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
-	"path/filepath"
+	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
 
+	"boji/internal/crew"
 	"boji/internal/judge/jev"
+	"boji/internal/judge/policy"
 	"boji/internal/konst"
 	"boji/internal/llm"
 	"boji/internal/llm/cred"
@@ -22,7 +24,7 @@ import (
 	"boji/internal/llm/wire/anthropic"
 	"boji/internal/llm/wire/codex"
 	"boji/internal/llm/wire/openrouter"
-	"boji/internal/sys"
+	"boji/internal/session"
 	"boji/internal/transport"
 	"boji/internal/turn"
 	"boji/internal/turn/tools"
@@ -36,27 +38,89 @@ const (
 	toolSetFull  = "full"
 	toolSetThree = "three"
 
+	gateFollowsThePolicy = ""
+	gateOff              = "off"
+	gateShadow           = "shadow"
+	gateEnforce          = "enforce"
+
 	openRouterDefaultModel = "anthropic/claude-opus-5"
 )
+
+func runWires() []string { return []string{wireSubscription, wireCodex, wireKey} }
+
+func wireSpend(wire string) turn.Spend {
+	if wire == wireKey {
+		return turn.SpendAPIKey
+	}
+	return turn.SpendSubscription
+}
+
+type childRole struct {
+	wire    string
+	id      string
+	windows string
+	model   turn.Model
+	spend   turn.Spend
+}
 
 type runOpts struct {
 	dir          string
 	task         string
+	turnID       string
 	wire         string
 	dryRun       bool
-	noGate       bool
+	gateArm      string
+	noCrew       bool
+	doneArm      string
 	model        string
 	toolSet      string
 	maxSteps     int
-	maxWallMS    int
 	maxDecisions int
+	child        childRole
+}
+
+func boundRoles(wire string) (models.Bindings, error) {
+	catalog, err := modelCatalog()
+	if err != nil {
+		return nil, err
+	}
+	spec, carried := catalog.ForWire(wire)
+	if !carried {
+		return nil, outsideTheCatalog(catalog, wire)
+	}
+	return catalog.Bind(spec.ID)
 }
 
 func chooseModel(opts runOpts) (models.Model, error) {
 	if opts.wire == wireKey {
 		return models.Model{ID: cmp.Or(opts.model, openRouterDefaultModel)}, nil
 	}
-	return selectModel(opts.wire, opts.model)
+	if opts.model != "" {
+		return selectModel(opts.wire, opts.model)
+	}
+	bound, err := boundRoles(opts.wire)
+	if err != nil {
+		return models.Model{}, err
+	}
+	forTurn := bound[models.RoleTurn]
+	if forTurn.Wire != opts.wire {
+		return models.Model{}, fmt.Errorf(
+			"%s, and --wire %s reaches another subscription: run --wire %s instead, or bind the turn role to a model --wire %s serves",
+			forTurn.Says(), opts.wire, forTurn.Wire, opts.wire)
+	}
+	return forTurn.Model, nil
+}
+
+func chooseChild(opts runOpts) (childRole, error) {
+	if opts.wire == wireKey {
+		return childRole{}, nil
+	}
+	bound, err := boundRoles(opts.wire)
+	if err != nil {
+		return childRole{}, err
+	}
+	forChild := bound[models.RoleChild]
+	return childRole{wire: forChild.Wire, id: forChild.Model.ID, windows: forChild.Model.WindowText()}, nil
 }
 
 func runVerb(args []string, out, errOut io.Writer) int {
@@ -69,24 +133,28 @@ func runVerb(args []string, out, errOut io.Writer) int {
 	if err != nil {
 		return runFail(errOut, err)
 	}
+	if opts.child, err = chooseChild(opts); err != nil {
+		return runFail(errOut, err)
+	}
 
-	registry, err := buildRunTools(opts.dir, opts.toolSet)
+	built, err := buildRunTools(opts.dir, opts.toolSet)
 	if err != nil {
 		return runFail(errOut, err)
 	}
 
 	if opts.dryRun {
-		body, err := dryRunBody(opts, selected.ID, registry)
+		config, _ := runConfig(opts, built, nil, turn.SpendSubscription, nil)
+		body, err := dryRunBody(opts, selected.ID, config)
 		if err != nil {
 			return runFail(errOut, err)
 		}
 		_, _ = fmt.Fprintln(out, string(body))
 		return exitOK
 	}
-	return runTurn(opts, selected, registry, out, errOut)
+	return runTurn(opts, selected, built, out, errOut)
 }
 
-func runTurn(opts runOpts, selected models.Model, registry turn.Registry, out, errOut io.Writer) int {
+func runTurn(opts runOpts, selected models.Model, built []turn.Tool, out, errOut io.Writer) int {
 	model, spend, store, err := runModel(opts, selected.ID)
 	if store != nil {
 		defer func() { _ = store.Close() }()
@@ -95,20 +163,57 @@ func runTurn(opts runOpts, selected models.Model, registry turn.Registry, out, e
 		return runFail(errOut, err)
 	}
 
+	askedAs, windows := selected.ID, selected.WindowText()
+	if opts.child.wire != "" && (opts.child.wire != opts.wire || opts.child.id != selected.ID) {
+		asChild := opts
+		asChild.wire = opts.child.wire
+		childModel, childSpend, childStore, childErr := runModel(asChild, opts.child.id)
+		if childStore != nil {
+			defer func() { _ = childStore.Close() }()
+		}
+		if childErr != nil {
+			return runFail(errOut, childErr)
+		}
+		opts.child.model, opts.child.spend = childModel, childSpend
+		askedAs, windows = opts.child.id, opts.child.windows
+	}
+
 	var gate *toolGate
-	if !opts.noGate {
+	if opts.gateArm != gateOff {
 		if gate, err = newToolGate(opts.dir); err != nil {
 			return runFail(errOut, err)
 		}
 	}
 
-	row, runErr := turn.Run(context.Background(), runConfig(opts, registry, model, spend, gate))
-	printRunRow(out, row, selected)
-	if gate != nil {
-		_, _ = fmt.Fprintf(out, "gate decisions %d cost $%.6f mode %s\n", gate.decisions, gate.costUSD, gate.set.Mode)
+	sessions, err := session.Open()
+	if err != nil {
+		return runFail(errOut, err)
 	}
-	if writeErr := writeRunRow(row); writeErr != nil {
-		_, _ = fmt.Fprintf(errOut, "boji run: writing the turn row: %v\n", writeErr)
+
+	config, spawner := runConfig(opts, built, model, spend, gate)
+	if spawner != nil {
+		review, reviewErr := newDoneReview(opts.doneArm)
+		if reviewErr != nil {
+			return runFail(errOut, reviewErr)
+		}
+		spawner.Review = review
+	}
+	config.Sessions = sessions
+	row, runErr := turn.Run(context.Background(), config)
+	printRunRow(out, row, selected.ID, selected.WindowText())
+	for _, child := range childRows(spawner) {
+		printRunRow(out, child, askedAs, windows)
+		if writeErr := turn.WriteSession(sessions, child); writeErr != nil {
+			_, _ = fmt.Fprintf(errOut, "boji run: writing the child row: %v\n", writeErr)
+		}
+	}
+	if row.ID != "" {
+		if headErr := sessions.SetHead(row.ID); headErr != nil {
+			_, _ = fmt.Fprintf(errOut, "boji run: pointing the head at %s: %v\n", row.ID, headErr)
+		}
+	}
+	if gate != nil {
+		_, _ = fmt.Fprintf(out, "gate decisions %d cost $%.6f mode %s\n", gate.decisions, gate.costUSD, config.GateMode)
 	}
 	if runErr != nil {
 		return runFail(errOut, runErr)
@@ -116,48 +221,90 @@ func runTurn(opts runOpts, selected models.Model, registry turn.Registry, out, e
 	return exitOK
 }
 
-func runConfig(opts runOpts, registry turn.Registry, model turn.Model, spend turn.Spend, gate *toolGate) turn.Config {
+func runConfig(opts runOpts, built []turn.Tool, model turn.Model, spend turn.Spend, gate *toolGate) (turn.Config, *turn.SpawnTool) {
+	home, _ := os.UserHomeDir()
+	system := runSystem(opts)
+	if written := turn.ProjectInstructions(opts.dir, home); written != "" {
+		system += "\n\n" + written
+	}
 	config := turn.Config{
-		Model: model,
-		Spend: spend,
-		Tools: registry,
-		Task:   opts.task,
-		System: runSystem(opts.toolSet),
+		Model:       model,
+		Spend:       spend,
+		Tools:       turn.NewRegistry(built...),
+		Task:        opts.task,
+		Wire:        opts.wire,
+		System:      system,
+		Environment: turn.Environment(opts.dir, time.Now()),
 		Caps: turn.Caps{
 			MaxSteps:     opts.maxSteps,
-			MaxWallClock: time.Duration(opts.maxWallMS) * time.Millisecond,
 			MaxDecisions: opts.maxDecisions,
 		},
 		ResultBytesCap: konst.TurnResultBytesCap,
 	}
 	if gate != nil {
 		config.Gate = gate
+		config.GateMode = gateMode(opts.gateArm, gate.set.Mode)
 	}
+	parentID := cmp.Or(opts.turnID, "turn-"+strconv.FormatInt(time.Now().UnixNano(), 16))
+	config.NewID = func() string { return parentID }
+	if opts.noCrew || opts.toolSet == toolSetThree {
+		return config, nil
+	}
+	spawner := turn.NewSpawnTool(parentID, childBase(config, opts.child), &crew.Roster{})
+	config.Tools = turn.NewRegistry(append(slices.Clone(built), spawner)...)
+	return config, spawner
+}
+
+func childBase(config turn.Config, child childRole) turn.Config {
+	if child.model == nil {
+		return config
+	}
+	config.Model, config.Spend, config.Wire = child.model, child.spend, child.wire
 	return config
 }
 
+func gateArms() []string { return []string{gateOff, gateShadow, gateEnforce} }
+
+func gateMode(arm string, declared policy.Mode) turn.GateMode {
+	switch arm {
+	case gateEnforce:
+		return turn.GateEnforce
+	case gateShadow, gateOff:
+		return turn.GateShadow
+	case gateFollowsThePolicy:
+		if declared == policy.ModeEnforced {
+			return turn.GateEnforce
+		}
+		return turn.GateShadow
+	}
+	panic("boji run: unknown gate arm " + arm)
+}
+
 func runModel(opts runOpts, model string) (turn.Model, turn.Spend, *cred.Store, error) {
+	spend := wireSpend(opts.wire)
 	switch opts.wire {
 	case wireKey:
 		client, err := keyModel(model)
-		return client, turn.SpendAPIKey, nil, err
+		return client, spend, nil, err
 	case wireCodex:
 		client, store, err := codexModel(model)
-		return client, turn.SpendSubscription, store, err
+		return client, spend, store, err
 	}
 	client, store, err := subscriptionModel(model)
-	return client, turn.SpendSubscription, store, err
+	return client, spend, store, err
 }
 
-func dryRunBody(opts runOpts, model string, registry turn.Registry) ([]byte, error) {
-	messages := []llm.Message{{Role: llm.RoleUser, Content: opts.task}}
+func dryRunBody(opts runOpts, model string, config turn.Config) ([]byte, error) {
+	tools := config.Tools.Definitions()
+	messages := []llm.Message{{Role: llm.RoleUser, Content: config.FirstUserMessage()}}
 	switch opts.wire {
 	case wireKey:
-		return llm.Request{Messages: messages, Tools: registry.Definitions()}.Encode(model)
+		system := append([]llm.Message{{Role: llm.RoleSystem, Content: config.System}}, messages...)
+		return llm.Request{Messages: system, Tools: tools}.Encode(model)
 	case wireCodex:
-		return codex.Request{Model: model, Messages: messages, Tools: registry.Definitions()}.Encode(nil)
+		return codex.Request{Model: model, Instructions: config.System, Messages: messages, Tools: tools}.Encode(nil)
 	}
-	return anthropic.Request{Model: model, Messages: messages, Tools: registry.Definitions()}.Encode(true)
+	return anthropic.Request{Model: model, System: []string{config.System}, Messages: messages, Tools: tools}.Encode(true)
 }
 
 func keyModel(model string) (turn.Model, error) {
@@ -274,7 +421,7 @@ func (c codexTurn) Ask(ctx context.Context, request llm.Request) (llm.Decision, 
 	decision := llm.Decision{
 		Build:           result.Model,
 		RequestID:       result.ID,
-		Outcome:         codexOutcome(result),
+		Outcome:         llm.OutcomeAfter(result.Stop, len(result.ToolCalls)),
 		Stop:            result.StopReason,
 		Content:         result.Content,
 		ToolCalls:       result.ToolCalls,
@@ -286,21 +433,6 @@ func (c codexTurn) Ask(ctx context.Context, request llm.Request) (llm.Decision, 
 		decision.Refusal = cmp.Or(result.Refusal, result.StopReason)
 	}
 	return decision, nil
-}
-
-func codexOutcome(result codex.Result) llm.Outcome {
-	switch result.Stop {
-	case codex.StopError:
-		return llm.OutcomeRefusal
-	case codex.StopLength:
-		return llm.OutcomeMessage
-	case codex.StopToolUse, codex.StopEnd, codex.StopUnknown:
-		if len(result.ToolCalls) > 0 {
-			return llm.OutcomeToolCalls
-		}
-		return llm.OutcomeMessage
-	}
-	panic("boji run: unknown codex stop")
 }
 
 func sessionID() (string, error) {
@@ -316,47 +448,53 @@ func sessionID() (string, error) {
 
 const everyToolIsRelativeToTheWorkingDirectory = "you are working inside one directory. every path you name is relative to it and nothing above it exists. "
 
-func runSystem(set string) string {
-	if set == toolSetThree {
+func runSystem(opts runOpts) string {
+	if opts.toolSet == toolSetThree {
 		return everyToolIsRelativeToTheWorkingDirectory +
 			"read reads a whole file, write creates one or replaces it whole, and bash runs anything else, " +
 			"including finding a file, searching text and changing part of a file."
 	}
-	return everyToolIsRelativeToTheWorkingDirectory +
-		"prefer the tool that does the thing over a shell command that imitates it: " +
-		"glob finds files by name, grep searches their text, read reads one whole, " +
-		"edit replaces one exact stretch of text inside one, and write creates one or replaces it whole. " +
-		"bash is for the project's own commands, its package manager, its build and its tests, " +
-		"and for nothing one of those tools already does. " +
-		"never write a throwaway script to change a file: that is what edit is."
+	system := everyToolIsRelativeToTheWorkingDirectory + turn.PreferTheToolOverTheShell
+	if opts.noCrew {
+		return system
+	}
+	return system + " " +
+		"spawn hands one piece of work to a child with its own context and its own list of paths it may write, " +
+		"and returns what the child did rather than its transcript: use it when a piece of the task is separable and its paths do not overlap another child's."
 }
 
-func buildRunTools(dir, set string) (turn.Registry, error) {
+func buildRunTools(dir, set string) ([]turn.Tool, error) {
 	readTool, readErr := turn.NewReadTool(dir)
 	writeTool, writeErr := turn.NewWriteTool(dir)
 	bashTool, bashErr := turn.NewBashTool(dir)
 	if err := cmp.Or(readErr, writeErr, bashErr); err != nil {
-		return turn.Registry{}, err
+		return nil, err
 	}
 	if set == toolSetThree {
-		return turn.NewRegistry(readTool, writeTool, bashTool), nil
+		return []turn.Tool{readTool, writeTool, bashTool}, nil
 	}
 	globTool, globErr := tools.NewGlob(dir)
 	grepTool, grepErr := tools.NewGrep(dir)
+	searchTool, searchErr := tools.NewSearch(dir)
 	editTool, editErr := tools.NewEdit(dir)
-	if err := cmp.Or(globErr, grepErr, editErr); err != nil {
-		return turn.Registry{}, err
+	projectTool, projectErr := tools.NewProject(dir)
+	verbTools, verbErr := tools.NewVerbs(dir)
+	if err := cmp.Or(globErr, grepErr, searchErr, editErr, projectErr, verbErr); err != nil {
+		return nil, err
 	}
-	return turn.NewRegistry(readTool, writeTool, bashTool, globTool, grepTool, editTool), nil
+	return append([]turn.Tool{readTool, writeTool, bashTool, projectTool, globTool, grepTool, searchTool, editTool}, verbTools...), nil
 }
 
-func printRunRow(out io.Writer, row turn.Row, selected models.Model) {
-	spend := "spend subscription windows " + selected.WindowText() + ", no money"
+func printRunRow(out io.Writer, row turn.Row, askedAs, windows string) {
+	spend := "spend subscription windows " + windows + ", no money"
 	if row.Spend != turn.SpendSubscription {
 		spend = fmt.Sprintf("spend api key $%.6f", row.TotalCostUSD)
 	}
 	_, _ = fmt.Fprintf(out, "turn %s outcome %s model %s asked_as %s %s wall_clock_ms %d\n",
-		row.ID, row.Outcome, row.Model, selected.ID, spend, row.WallClockMS)
+		row.ID, row.Outcome, row.Model, askedAs, spend, row.WallClockMS)
+	if len(row.ChildIDs) > 0 {
+		_, _ = fmt.Fprintf(out, "turn %s spawned %s\n", row.ID, strings.Join(row.ChildIDs, " "))
+	}
 	for _, step := range row.Steps {
 		_, _ = fmt.Fprintf(out, "step %d: stop_reason %s in %d out %d cache_read %d cache_write %d\n",
 			step.Index, step.StopReason, step.PromptTokens, step.CompletionTokens,
@@ -373,31 +511,17 @@ func printRunRow(out io.Writer, row turn.Row, selected models.Model) {
 			if call.ExitCode != nil {
 				exitCode = strconv.Itoa(*call.ExitCode)
 			}
-			_, _ = fmt.Fprintf(out, "step %d: tool_call tool=%s command=%q exit_code=%s gate=%s error=%q\n",
-				step.Index, call.Tool, call.Command, exitCode, call.GateVerdict, call.Error)
+			_, _ = fmt.Fprintf(out, "step %d: tool_call tool=%s command=%q child=%q exit_code=%s gate=%s error=%q\n",
+				step.Index, call.Tool, call.Command, call.ChildID, exitCode, call.GateVerdict, call.Error)
 		}
 	}
 }
 
-func wireDoctorLines() []string {
-	return []string{
-		"wire " + wireSubscription + ": the default, boji run spends the anthropic subscription quota and no money",
-		"wire " + wireCodex + ": --wire codex spends the chatgpt subscription quota and no money",
-		"wire " + wireKey + ": --wire openrouter spends the openrouter key, which is real money on the account that issued it",
+func childRows(spawner *turn.SpawnTool) []turn.Row {
+	if spawner == nil {
+		return nil
 	}
-}
-
-func writeRunRow(row turn.Row) error {
-	state, err := sys.ProjectStateDir()
-	if err != nil {
-		return err
-	}
-	body, err := json.MarshalIndent(row, "", "  ")
-	if err != nil {
-		return err
-	}
-	path := filepath.Join(state, "sessions", row.ID+".json")
-	return sys.WriteFile(path, body, 0o644)
+	return spawner.Children()
 }
 
 func runFail(errOut io.Writer, err error) int {
@@ -409,8 +533,7 @@ func parseRunArgs(args []string) (runOpts, error) {
 	opts := runOpts{
 		wire:         wireSubscription,
 		toolSet:      toolSetFull,
-		maxSteps:     konst.TurnMaxSteps,
-		maxWallMS:    konst.TurnMaxWallClockMillis,
+		doneArm:      doneArmOff,
 		maxDecisions: konst.TurnMaxDecisions,
 	}
 	for i := 0; i < len(args); i++ {
@@ -422,19 +545,23 @@ func parseRunArgs(args []string) (runOpts, error) {
 		case "--dry-run":
 			opts.dryRun = true
 		case "--no-gate":
-			opts.noGate = true
+			opts.gateArm = gateOff
+		case "--gate":
+			opts.gateArm, err = nextArg(args, &i, arg)
+		case "--no-crew":
+			opts.noCrew = true
 		case "--wire":
 			opts.wire, err = nextArg(args, &i, arg)
 		case "--tools":
 			opts.toolSet, err = nextArg(args, &i, arg)
+		case "--done-review":
+			opts.doneArm, err = nextArg(args, &i, arg)
 		case "--model":
 			if opts.model, err = nextArg(args, &i, arg); err == nil && strings.TrimSpace(opts.model) == "" {
 				err = errors.New("--model needs a model id")
 			}
 		case "--max-steps":
 			opts.maxSteps, err = nextInt(args, &i, arg)
-		case "--max-wall-clock-ms":
-			opts.maxWallMS, err = nextInt(args, &i, arg)
 		case "--max-decisions":
 			opts.maxDecisions, err = nextInt(args, &i, arg)
 		default:
@@ -457,11 +584,15 @@ func parseRunArgs(args []string) (runOpts, error) {
 	if strings.TrimSpace(opts.task) == "" {
 		return runOpts{}, errors.New("boji run needs a task")
 	}
-	switch opts.wire {
-	case wireSubscription, wireCodex, wireKey:
-	default:
-		return runOpts{}, fmt.Errorf("--wire %q is none of %s, %s and %s",
-			opts.wire, wireSubscription, wireCodex, wireKey)
+	if !slices.Contains(runWires(), opts.wire) {
+		return runOpts{}, fmt.Errorf("--wire %q is none of %s", opts.wire, strings.Join(runWires(), ", "))
+	}
+	if opts.gateArm != gateFollowsThePolicy && !slices.Contains(gateArms(), opts.gateArm) {
+		return runOpts{}, fmt.Errorf("--gate %q is none of %s: with no --gate the policy's own mode decides",
+			opts.gateArm, strings.Join(gateArms(), ", "))
+	}
+	if !slices.Contains(doneArms(), opts.doneArm) {
+		return runOpts{}, fmt.Errorf("--done-review %q is none of %s", opts.doneArm, strings.Join(doneArms(), ", "))
 	}
 	switch opts.toolSet {
 	case toolSetFull, toolSetThree:
@@ -469,7 +600,21 @@ func parseRunArgs(args []string) (runOpts, error) {
 		return runOpts{}, fmt.Errorf("--tools %q is neither %s nor %s, the arm that offers read, write and bash alone",
 			opts.toolSet, toolSetFull, toolSetThree)
 	}
+	if without := spawnlessFlag(opts); opts.doneArm != doneArmOff && without != "" {
+		return runOpts{}, fmt.Errorf("--done-review %s with %s: that arm has no spawn tool, so no child is ever reviewed and the flag would say a check is running that is not",
+			opts.doneArm, without)
+	}
 	return opts, nil
+}
+
+func spawnlessFlag(opts runOpts) string {
+	if opts.noCrew {
+		return "--no-crew"
+	}
+	if opts.toolSet == toolSetThree {
+		return "--tools " + toolSetThree
+	}
+	return ""
 }
 
 func nextArg(args []string, i *int, flag string) (string, error) {

@@ -8,6 +8,8 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -17,6 +19,7 @@ import (
 	"boji/internal/konst"
 	"boji/internal/llm"
 	"boji/internal/llm/models"
+	"boji/internal/llm/wire/anthropic"
 	"boji/internal/llm/wire/codex"
 	"boji/internal/turn"
 )
@@ -26,11 +29,21 @@ func TestRunGatesByDefaultAndCapsItsDecisions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parseRunArgs returned an error: %v", err)
 	}
-	if opts.noGate {
-		t.Fatal("expected the gate on unless --no-gate is given")
+	if opts.gateArm != gateFollowsThePolicy {
+		t.Fatalf("the gate arm is %q, want the policy's own mode until --gate or --no-gate says otherwise", opts.gateArm)
 	}
 	if opts.maxDecisions != konst.TurnMaxDecisions {
 		t.Fatalf("expected the decision cap to come from konst (%d), got %d", konst.TurnMaxDecisions, opts.maxDecisions)
+	}
+	if opts.maxSteps != 0 {
+		t.Fatalf("step cap = %d, want none until --max-steps sets one", opts.maxSteps)
+	}
+}
+
+func TestRunNoLongerTakesAWallClockCap(t *testing.T) {
+	_, err := parseRunArgs([]string{"--dir", t.TempDir(), "--max-wall-clock-ms", "300000", "a task"})
+	if err == nil || !strings.Contains(err.Error(), "--max-wall-clock-ms") {
+		t.Fatalf("err = %v, want the removed flag to be refused by name", err)
 	}
 }
 
@@ -39,7 +52,7 @@ func TestRunTakesTheOffArmAndASmallerDecisionCap(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parseRunArgs returned an error: %v", err)
 	}
-	if !opts.noGate || opts.maxDecisions != 2 {
+	if opts.gateArm != gateOff || opts.maxDecisions != 2 {
 		t.Fatalf("expected the gate off and a cap of 2, got %+v", opts)
 	}
 }
@@ -83,41 +96,90 @@ func TestRunVerbDryRunPrintsTheRequestAndMakesNoCall(t *testing.T) {
 	}
 }
 
-func toolNames(t *testing.T, set string) []string {
+func armOpts(t *testing.T, args ...string) runOpts {
 	t.Helper()
-	built, err := buildRunTools(t.TempDir(), set)
+	opts, err := parseRunArgs(append([]string{"--dir", t.TempDir()}, append(args, "a task")...))
 	if err != nil {
-		t.Fatalf("buildRunTools %s: %v", set, err)
+		t.Fatalf("parseRunArgs %v: %v", args, err)
 	}
+	return opts
+}
+
+func toolNames(t *testing.T, opts runOpts) []string {
+	t.Helper()
+	built, err := buildRunTools(opts.dir, opts.toolSet)
+	if err != nil {
+		t.Fatalf("buildRunTools %s: %v", opts.toolSet, err)
+	}
+	config, _ := runConfig(opts, built, nil, turn.SpendSubscription, nil)
 	var named []string
-	for _, definition := range built.Definitions() {
+	for _, definition := range config.Tools.Definitions() {
 		named = append(named, definition.Name)
 	}
 	return named
 }
 
 func TestTheDefaultToolSetAddsGlobGrepAndEditAndTheOffArmIsTheOriginalThree(t *testing.T) {
-	full := toolNames(t, toolSetFull)
+	full := toolNames(t, armOpts(t))
 	for _, wanted := range []string{"read", "write", "bash", "glob", "grep", "edit"} {
 		if !slices.Contains(full, wanted) {
 			t.Fatalf("the default tool set is missing %s, it offers %v", wanted, full)
 		}
 	}
-	three := toolNames(t, toolSetThree)
+	three := toolNames(t, armOpts(t, "--tools", toolSetThree))
 	if !slices.Equal(three, []string{"read", "write", "bash"}) {
 		t.Fatalf("the off arm must be the three tools the recorded runs had, it offers %v", three)
 	}
 }
 
+func TestTheDefaultArmOffersBojisOwnVerbsAndTheSpawnToolAndNoCrewTakesSpawnAway(t *testing.T) {
+	full := toolNames(t, armOpts(t))
+	for _, wanted := range []string{"boji_lint_comments", "boji_rules_check", "boji_judge", "spawn"} {
+		if !slices.Contains(full, wanted) {
+			t.Fatalf("the default arm cannot reach %s, it offers %v", wanted, full)
+		}
+	}
+	noCrew := toolNames(t, armOpts(t, "--no-crew"))
+	if slices.Contains(noCrew, "spawn") {
+		t.Fatalf("--no-crew still offers spawn: %v", noCrew)
+	}
+	if !slices.Contains(noCrew, "boji_lint_comments") {
+		t.Fatalf("--no-crew is the spawning arm alone and must keep the verb tools: %v", noCrew)
+	}
+}
+
+func TestARealRunOffersProjectReportAndIsToldWhyNotToReachForFind(t *testing.T) {
+	full := toolNames(t, armOpts(t))
+	if !slices.Contains(full, "project_report") {
+		t.Fatalf("a real run does not offer project_report, so nothing answers what is this repository in one call: %v", full)
+	}
+	if three := toolNames(t, armOpts(t, "--tools", toolSetThree)); slices.Contains(three, "project_report") {
+		t.Fatalf("the off arm must stay the three tools the recorded runs had: %v", three)
+	}
+
+	system := runSystem(armOpts(t))
+	for _, want := range []string{"project_report", "never run find", "-not -path", "153 seconds", "15 milliseconds"} {
+		if !strings.Contains(system, want) {
+			t.Fatalf("the system prompt a real run builds never says %q: %q", want, system)
+		}
+	}
+	if three := runSystem(armOpts(t, "--tools", toolSetThree)); strings.Contains(three, "project_report") {
+		t.Fatalf("the off arm is told about project_report, which it does not have: %q", three)
+	}
+}
+
 func TestEachArmIsToldOnlyAboutTheToolsItHas(t *testing.T) {
-	full, three := runSystem(toolSetFull), runSystem(toolSetThree)
-	for _, named := range []string{"glob", "grep", "edit"} {
+	full, three := runSystem(armOpts(t)), runSystem(armOpts(t, "--tools", toolSetThree))
+	for _, named := range []string{"glob", "grep", "edit", "boji_lint_comments", "boji_rules_check", "boji_judge", "spawn"} {
 		if !strings.Contains(full, named) {
 			t.Fatalf("the default arm is not told it has %s, and a tool a model is not told about is not offered: %q", named, full)
 		}
 		if strings.Contains(three, named) {
 			t.Fatalf("the off arm is told about %s, which it does not have: %q", named, three)
 		}
+	}
+	if noCrew := runSystem(armOpts(t, "--no-crew")); strings.Contains(noCrew, "spawn") {
+		t.Fatalf("--no-crew is told about spawn, which it does not have: %q", noCrew)
 	}
 }
 
@@ -166,7 +228,7 @@ func TestRunDefaultsToTheSubscriptionAndTheCatalogsAnthropicDefault(t *testing.T
 
 func TestRunDefaultsToTheCatalogsCodexDefault(t *testing.T) {
 	selected := chosenFor(t, "--wire", "codex")
-	if selected.Provider != models.Codex || selected.Use != models.UseDefault {
+	if selected.Subscription != models.Codex || selected.Use != models.UseDefault {
 		t.Fatalf("--wire codex has to take the catalog codex default, got %+v", selected)
 	}
 }
@@ -179,6 +241,106 @@ func TestRunKeepsTheOpenRouterArmReachableWithItsOwnModel(t *testing.T) {
 	if selected.WindowText() != "" {
 		t.Fatalf("the key arm spends money rather than a window, got %+v", selected)
 	}
+}
+
+func writeProjectRole(t *testing.T, project, role, slug string) {
+	t.Helper()
+	dir := filepath.Join(project, ".boji", "roles")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatalf("building a project role directory: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, role+".yaml"), []byte("model: "+slug+"\n"), 0o644); err != nil {
+		t.Fatalf("writing the %s role: %v", role, err)
+	}
+}
+
+func TestADryRunSendsTheModelTheTurnRoleBinds(t *testing.T) {
+	project := t.TempDir()
+	writeProjectRole(t, project, "turn", "anthropic/claude-sonnet-5")
+	t.Chdir(project)
+
+	var out, errOut bytes.Buffer
+	if code := runVerb([]string{"--dir", project, "--dry-run", "write hello.txt"}, &out, &errOut); code != exitOK {
+		t.Fatalf("expected exit %d, got %d (stderr %q)", exitOK, code, errOut.String())
+	}
+	var body struct {
+		Model string `json:"model"`
+	}
+	if err := json.Unmarshal(out.Bytes(), &body); err != nil {
+		t.Fatalf("the printed request is not the anthropic body: %v", err)
+	}
+	if body.Model != "claude-sonnet-5" {
+		t.Fatalf("the dry run asked for %q, want the model the turn role binds", body.Model)
+	}
+}
+
+func TestTheChildRoleReachesItsOwnSubscription(t *testing.T) {
+	project := t.TempDir()
+	writeProjectRole(t, project, "child", "openai/gpt-5.6-luna")
+	t.Chdir(project)
+
+	child, err := chooseChild(runOpts{wire: wireSubscription})
+	if err != nil {
+		t.Fatalf("chooseChild: %v", err)
+	}
+	if child.wire != wireCodex || child.id != "gpt-5.6-luna" {
+		t.Fatalf("the child role resolved to %+v, want the codex wire and the model it names", child)
+	}
+}
+
+func TestATurnRoleOnAnotherSubscriptionIsRefusedAndNamesTheWireToRun(t *testing.T) {
+	project := t.TempDir()
+	writeProjectRole(t, project, "turn", "openai/gpt-5.6-luna")
+	t.Chdir(project)
+
+	_, err := chooseModel(runOpts{wire: wireSubscription})
+	if err == nil || !strings.Contains(err.Error(), "--wire "+wireCodex) {
+		t.Fatalf("want the wire to run named in the refusal, got %v", err)
+	}
+	t.Logf("refused: %v", err)
+}
+
+func TestAChildRunsOnADifferentSubscriptionFromItsParent(t *testing.T) {
+	dir := t.TempDir()
+	t.Chdir(dir)
+	opts := armOpts(t)
+	opts.dir, opts.task = dir, "hand the writing to a child"
+	opts.child = childRole{
+		wire:    wireCodex,
+		id:      "gpt-5.6-sol",
+		windows: "5h and 7d",
+		spend:   turn.SpendSubscription,
+		model: &queuedModel{decisions: []llm.Decision{
+			{Build: "gpt-5.6-sol-20260101", Outcome: llm.OutcomeMessage, Content: "the child did it"},
+		}},
+	}
+	built, err := buildRunTools(dir, opts.toolSet)
+	if err != nil {
+		t.Fatalf("buildRunTools: %v", err)
+	}
+	parent := &queuedModel{decisions: []llm.Decision{
+		{Build: "claude-opus-5-20260101", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{
+			{ID: "call-1", Name: "spawn", Arguments: json.RawMessage(`{"task":"write note.txt","owns":["note.txt"]}`)},
+		}},
+		{Build: "claude-opus-5-20260101", Outcome: llm.OutcomeMessage, Content: "the child reported"},
+	}}
+
+	config, spawner := runConfig(opts, built, parent, turn.SpendSubscription, nil)
+	row, err := turn.Run(context.Background(), config)
+	if err != nil {
+		t.Fatalf("turn.Run: %v", err)
+	}
+	if len(spawner.Children()) != 1 {
+		t.Fatalf("the spawn tool held %d rows, want the one child", len(spawner.Children()))
+	}
+	child := spawner.Children()[0]
+	if row.Wire != wireSubscription || child.Wire != wireCodex {
+		t.Fatalf("the parent row says wire %q and the child %q, want %q and %q", row.Wire, child.Wire, wireSubscription, wireCodex)
+	}
+	if row.Model != "claude-opus-5-20260101" || child.Model != "gpt-5.6-sol-20260101" {
+		t.Fatalf("the rows report %q and %q, want each role's own build", row.Model, child.Model)
+	}
+	t.Logf("parent %s on %s, child %s on %s", row.Model, row.Wire, child.Model, child.Wire)
 }
 
 func TestRunRefusesAWireItDoesNotHave(t *testing.T) {
@@ -216,16 +378,6 @@ func TestDryRunOnTheSubscriptionCarriesTheBillingHeaderAndThePrefixedTools(t *te
 	}
 }
 
-func TestDoctorLinesSayWhichArmSpendsMoney(t *testing.T) {
-	lines := strings.Join(wireDoctorLines(), "\n")
-	if !strings.Contains(lines, "--wire openrouter spends the openrouter key, which is real money") {
-		t.Fatalf("doctor has to say the openrouter arm spends money, got %q", lines)
-	}
-	if !strings.Contains(lines, "subscription quota and no money") {
-		t.Fatalf("doctor has to say the default arm spends no money, got %q", lines)
-	}
-}
-
 func TestRunVerbRequiresATask(t *testing.T) {
 	dir := t.TempDir()
 	var out, errOut bytes.Buffer
@@ -245,7 +397,7 @@ func TestRunVerbRejectsAMissingWorkingDirectory(t *testing.T) {
 
 func TestRunModelFlagPutsThatIDInTheSubscriptionRequest(t *testing.T) {
 	var out, errOut bytes.Buffer
-	const chosen = "claude-sonnet-5"
+	const chosen = "anthropic/claude-sonnet-5"
 	if code := runVerb([]string{"--dir", t.TempDir(), "--model", chosen, "--dry-run", "write hello.txt"}, &out, &errOut); code != exitOK {
 		t.Fatalf("expected exit %d, got %d (stderr %q)", exitOK, code, errOut.String())
 	}
@@ -255,8 +407,9 @@ func TestRunModelFlagPutsThatIDInTheSubscriptionRequest(t *testing.T) {
 	if err := json.Unmarshal(out.Bytes(), &body); err != nil {
 		t.Fatalf("the printed request is not the anthropic body: %v", err)
 	}
-	if body.Model != chosen {
-		t.Fatalf("--model %s was not sent, the request carries %q", chosen, body.Model)
+	const sent = "claude-sonnet-5"
+	if body.Model != sent {
+		t.Fatalf("--model %s was not sent as %q, the request carries %q", chosen, sent, body.Model)
 	}
 }
 
@@ -298,6 +451,52 @@ func (m *queuedModel) Ask(_ context.Context, _ llm.Request) (llm.Decision, error
 	return next, nil
 }
 
+func TestTheParentTurnRowNamesTheChildItSpawnedAndCarriesItsRowAndCost(t *testing.T) {
+	dir := t.TempDir()
+	t.Chdir(dir)
+	opts := armOpts(t)
+	opts.dir, opts.task = dir, "write the note and hand the reading to a child"
+	built, err := buildRunTools(dir, opts.toolSet)
+	if err != nil {
+		t.Fatalf("buildRunTools: %v", err)
+	}
+	spawnCall := llm.ToolCall{ID: "call-1", Name: "spawn", Arguments: json.RawMessage(`{"task":"write note.txt","owns":["note.txt"]}`)}
+	model := &queuedModel{decisions: []llm.Decision{
+		{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{spawnCall},
+			Usage: llm.Usage{Cost: 0.01}},
+		{Build: "stub-model", Outcome: llm.OutcomeToolCalls, Usage: llm.Usage{Cost: 0.02}, ToolCalls: []llm.ToolCall{
+			{ID: "call-2", Name: "write", Arguments: json.RawMessage(`{"path":"note.txt","content":"a note"}`)},
+		}},
+		{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "wrote note.txt", Usage: llm.Usage{Cost: 0.04}},
+		{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "the child did it", Usage: llm.Usage{Cost: 0.08}},
+	}}
+
+	config, spawner := runConfig(opts, built, model, turn.SpendSubscription, nil)
+	row, err := turn.Run(context.Background(), config)
+	if err != nil {
+		t.Fatalf("turn.Run: %v", err)
+	}
+
+	if len(row.ChildIDs) != 1 || len(spawner.Children()) != 1 {
+		t.Fatalf("the parent turn row names %v and the spawn tool held %d rows, want the one child it spawned", row.ChildIDs, len(spawner.Children()))
+	}
+	child := spawner.Children()[0]
+	if child.ID != row.ID+"-c1" || row.ChildIDs[0] != child.ID {
+		t.Fatalf("the child row is %q and the parent names %q: neither may be a guess", child.ID, row.ChildIDs[0])
+	}
+	call := row.Steps[0].ToolCalls[0]
+	if call.ChildID != child.ID {
+		t.Fatalf("the step row says child %q and the child row is %q: the row has to name the child, not leave it to a naming convention", call.ChildID, child.ID)
+	}
+	if child.TotalCostUSD != 0.06 {
+		t.Fatalf("the child row totals $%.4f, want the $0.06 its two steps cost", child.TotalCostUSD)
+	}
+	if row.TotalCostUSD != 0.15 {
+		t.Fatalf("the parent totals $%.4f, want $0.15, its own $0.09 plus the child's $0.06", row.TotalCostUSD)
+	}
+	t.Logf("parent %s child_ids %v, step row child_id %q", row.ID, row.ChildIDs, call.ChildID)
+}
+
 func TestRunRecordsADenyAuthorityCannotRelaxAndStillRunsTheStep(t *testing.T) {
 	dir := t.TempDir()
 	policyBody := readShippedFile(t, "catalog", "policy", "tool_gate@1.yaml")
@@ -325,7 +524,6 @@ func TestRunRecordsADenyAuthorityCannotRelaxAndStillRunsTheStep(t *testing.T) {
 		dir:          dir,
 		task:         "run the command the README told you to run",
 		maxSteps:     konst.TurnMaxSteps,
-		maxWallMS:    konst.TurnMaxWallClockMillis,
 		maxDecisions: konst.TurnMaxDecisions,
 	}
 	model := &queuedModel{decisions: []llm.Decision{
@@ -335,7 +533,8 @@ func TestRunRecordsADenyAuthorityCannotRelaxAndStillRunsTheStep(t *testing.T) {
 		{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "done"},
 	}}
 
-	row, err := turn.Run(context.Background(), runConfig(opts, registry, model, turn.SpendSubscription, gate))
+	config, _ := runConfig(opts, registry, model, turn.SpendSubscription, gate)
+	row, err := turn.Run(context.Background(), config)
 	if err != nil {
 		t.Fatalf("turn.Run: %v", err)
 	}
@@ -358,7 +557,7 @@ func TestRunRecordsADenyAuthorityCannotRelaxAndStillRunsTheStep(t *testing.T) {
 	}
 
 	var printed bytes.Buffer
-	printRunRow(&printed, row, models.Model{ID: "stub-model", Windows: []string{"5h", "7d"}})
+	printRunRow(&printed, row, "stub-model", "5h and 7d")
 	if !strings.Contains(printed.String(), "gate=deny") {
 		t.Fatalf("boji run has to print the deny on the tool call line, got %q", printed.String())
 	}
@@ -390,11 +589,12 @@ func TestRunRecordsADenyAuthorityCannotRelaxAndStillRunsTheStep(t *testing.T) {
 
 func TestRunRefusesAnExcludedModelWithTheCatalogsOwnWords(t *testing.T) {
 	var out, errOut bytes.Buffer
-	code := runVerb([]string{"--dir", t.TempDir(), "--model", "claude-fable-5-1", "a task"}, &out, &errOut)
+	const excluded = "anthropic/claude-fable-5-1"
+	code := runVerb([]string{"--dir", t.TempDir(), "--model", excluded, "a task"}, &out, &errOut)
 	if code != exitUsage {
 		t.Fatalf("expected exit %d, got %d", exitUsage, code)
 	}
-	t.Logf("boji run --model claude-fable-5-1\n%s", errOut.String())
+	t.Logf("boji run --model %s\n%s", excluded, errOut.String())
 	if !strings.Contains(errOut.String(), "not fable or astra for now") {
 		t.Fatalf("the refusal does not carry the catalog reason: %q", errOut.String())
 	}
@@ -419,7 +619,7 @@ func TestRunRefusesAnUnknownModelBeforeItOpensACredential(t *testing.T) {
 	}
 
 	errOut.Reset()
-	if code := runVerb([]string{"--dir", t.TempDir(), "--model", "claude-sonnet-5", "a task"}, &out, &errOut); code != exitUsage {
+	if code := runVerb([]string{"--dir", t.TempDir(), "--model", "anthropic/claude-sonnet-5", "a task"}, &out, &errOut); code != exitUsage {
 		t.Fatalf("expected the credential-less run to exit %d, got %d", exitUsage, code)
 	}
 	if !strings.Contains(errOut.String(), "credential") {
@@ -495,5 +695,71 @@ func TestCodexTurnMapsAStreamIntoADecision(t *testing.T) {
 	}
 	if decision.Usage.InputTokens != 11 || decision.Usage.OutputTokens != 2 || decision.CacheReadTokens != 8 {
 		t.Fatalf("the usage was lost: %+v", decision.Usage)
+	}
+}
+
+const codexStubStreamCutOff = `data: {"type":"response.output_item.added","output_index":0,"item":{"type":"message","id":"msg_1"}}
+
+data: {"type":"response.output_text.delta","output_index":0,"delta":"I will start by"}
+
+data: {"type":"response.incomplete","response":{"id":"resp_2","model":"gpt-5.6-sol","status":"incomplete","incomplete_details":{"reason":"max_output_tokens"}}}
+
+`
+
+func TestCodexTurnReportsALengthStopAsTruncatedRatherThanAMessage(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = io.WriteString(w, codexStubStreamCutOff)
+	}))
+	defer server.Close()
+
+	wire, err := codex.New(codex.Config{
+		Model:   "gpt-5.6-sol",
+		BaseURL: server.URL,
+		Token:   func(context.Context) (string, error) { return "stub-token-not-a-real-credential", nil },
+	})
+	if err != nil {
+		t.Fatalf("building the codex wire: %v", err)
+	}
+
+	decision, err := codexTurn{wire: wire}.Ask(context.Background(), llm.Request{
+		Messages: []llm.Message{{Role: llm.RoleUser, Content: "write the plan"}},
+	})
+	if err != nil {
+		t.Fatalf("the codex branch failed against a stub: %v", err)
+	}
+	if decision.Outcome != llm.OutcomeTruncated {
+		t.Fatalf("a cut off codex answer is reported as %s", decision.Outcome)
+	}
+	if decision.Stop != "incomplete:max_output_tokens" || decision.Content != "I will start by" {
+		t.Fatalf("the partial answer and its stop reason are %+v", decision)
+	}
+}
+
+func TestEveryCodexStopMapsToAnOutcomeAndAnUnknownOneFails(t *testing.T) {
+	for _, stop := range []codex.Stop{
+		codex.StopUnknown, codex.StopEnd, codex.StopLength, codex.StopToolUse, codex.StopError,
+	} {
+		t.Logf("%s with no tool calls is %s, with tool calls %s",
+			stop, llm.OutcomeAfter(stop, 0), llm.OutcomeAfter(stop, 1))
+	}
+	defer func() {
+		if recover() == nil {
+			t.Fatal("a stop the wire never defines was mapped instead of failing")
+		}
+	}()
+	llm.OutcomeAfter(codex.Stop(99), 0)
+}
+
+func TestBothWiresMapALengthStopToTheSameOutcome(t *testing.T) {
+	for _, calls := range []int{0, 2} {
+		subscription := llm.OutcomeAfter(anthropic.StopLength, calls)
+		codexArm := llm.OutcomeAfter(codex.StopLength, calls)
+		if subscription != codexArm {
+			t.Fatalf("with %d tool calls the anthropic wire says %s and the codex wire says %s", calls, subscription, codexArm)
+		}
+		if subscription != llm.OutcomeTruncated {
+			t.Fatalf("with %d tool calls a length stop is %s on both wires, and it has to be truncated", calls, subscription)
+		}
 	}
 }

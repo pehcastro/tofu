@@ -1,67 +1,38 @@
 package turn
 
 import (
+	"cmp"
 	"encoding/json"
-	"fmt"
+	"errors"
+	"strconv"
 	"time"
+
+	"boji/internal/llm"
+	"boji/internal/recall"
+	"boji/internal/session"
 )
 
 const SchemaVersion = 1
 
-type Outcome int
+type Outcome = session.Outcome
 
 const (
-	OutcomeUnset Outcome = iota
-	OutcomeStopped
-	OutcomeStepCap
-	OutcomeRetiredCostCap
-	OutcomeWallClockCap
-	OutcomeDecisionCap
-	OutcomeError
+	OutcomeUnset               = session.OutcomeUnset
+	OutcomeStopped             = session.OutcomeStopped
+	OutcomeStepCap             = session.OutcomeStepCap
+	OutcomeRetiredCostCap      = session.OutcomeRetiredCostCap
+	OutcomeRetiredWallClockCap = session.OutcomeRetiredWallClockCap
+	OutcomeDecisionCap         = session.OutcomeDecisionCap
+	OutcomeForked              = session.OutcomeForked
+	OutcomeError               = session.OutcomeError
+	OutcomeTruncated           = session.OutcomeTruncated
 )
-
-func (o Outcome) String() string {
-	switch o {
-	case OutcomeUnset:
-		return "unset"
-	case OutcomeStopped:
-		return "stopped"
-	case OutcomeStepCap:
-		return "step_cap"
-	case OutcomeRetiredCostCap:
-		return "cost_cap"
-	case OutcomeWallClockCap:
-		return "wall_clock_cap"
-	case OutcomeDecisionCap:
-		return "decision_cap"
-	case OutcomeError:
-		return "error"
-	}
-	panic("turn: unknown outcome")
-}
-
-func (o Outcome) MarshalJSON() ([]byte, error) {
-	return json.Marshal(o.String())
-}
-
-func (o *Outcome) UnmarshalJSON(data []byte) error {
-	var text string
-	if err := json.Unmarshal(data, &text); err != nil {
-		return err
-	}
-	for candidate := OutcomeUnset; candidate <= OutcomeError; candidate++ {
-		if candidate.String() == text {
-			*o = candidate
-			return nil
-		}
-	}
-	return fmt.Errorf("turn: row carries unknown outcome %q", text)
-}
 
 type ToolCallRow struct {
 	Tool              string          `json:"tool"`
 	Args              json.RawMessage `json:"args,omitempty"`
 	Command           string          `json:"command,omitempty"`
+	ChildID           string          `json:"child_id"`
 	ExitCode          *int            `json:"exit_code,omitempty"`
 	ResultBytes       int             `json:"result_bytes"`
 	RenderedBytes     int             `json:"rendered_bytes"`
@@ -69,11 +40,19 @@ type ToolCallRow struct {
 	ResultHandle      string          `json:"result_handle,omitempty"`
 	ResultHandleError string          `json:"result_handle_error,omitempty"`
 
+	ParallelBatch  int    `json:"parallel_batch,omitempty"`
 	GateDecisionID string `json:"gate_decision_id,omitempty"`
 	GateVerdict    string `json:"gate_verdict,omitempty"`
 	GateError      string `json:"gate_error,omitempty"`
 	DurationMS     int64  `json:"duration_ms"`
 	Error          string `json:"error,omitempty"`
+}
+
+func (r ToolCallRow) Outcome() llm.ToolOutcome {
+	if r.Error != "" || (r.ExitCode != nil && *r.ExitCode != 0) {
+		return llm.ToolOutcomeFailed
+	}
+	return llm.ToolOutcomeRan
 }
 
 type StepRow struct {
@@ -87,6 +66,10 @@ type StepRow struct {
 	CacheWriteTokens int           `json:"cache_write_tokens"`
 	CostUSD          float64       `json:"cost_usd"`
 	Warnings         []string      `json:"warnings,omitempty"`
+	Occupancy        *Occupancy    `json:"occupancy,omitempty"`
+	Bands            *recall.Bands `json:"bands,omitempty"`
+	Compaction       *Compaction   `json:"compaction,omitempty"`
+	Fork             *Fork         `json:"fork,omitempty"`
 }
 
 type Spend string
@@ -101,11 +84,184 @@ type Row struct {
 	Schema       int       `json:"schema"`
 	At           time.Time `json:"at"`
 	Task         string    `json:"task"`
+	Wire         string    `json:"wire,omitempty"`
 	Model        string    `json:"model"`
 	Spend        Spend     `json:"spend"`
 	Steps        []StepRow `json:"steps,omitempty"`
+	Root         string    `json:"root,omitempty"`
+	ForkedFrom   string    `json:"forked_from,omitempty"`
+	ForkedInto   string    `json:"forked_into,omitempty"`
+	ForkKind     ForkKind  `json:"fork_kind,omitempty"`
+	Warnings     []string  `json:"warnings,omitempty"`
+	ChildIDs     []string  `json:"child_ids"`
 	Outcome      Outcome   `json:"outcome"`
 	TotalCostUSD float64   `json:"total_cost_usd"`
 	WallClockMS  int64     `json:"wall_clock_ms"`
 	DecisionIDs  []string  `json:"decision_ids,omitempty"`
+
+	Conversation []llm.Message `json:"-"`
+}
+
+type MessageToolCall struct {
+	ID        string          `json:"id"`
+	Name      string          `json:"name"`
+	Arguments json.RawMessage `json:"arguments,omitempty"`
+}
+
+type MessageRow struct {
+	Role            string            `json:"role"`
+	Content         string            `json:"content,omitempty"`
+	ToolCallID      string            `json:"tool_call_id,omitempty"`
+	ToolCalls       []MessageToolCall `json:"tool_calls,omitempty"`
+	ToolOutcome     string            `json:"tool_outcome,omitempty"`
+	ToolResultBytes int               `json:"tool_result_bytes,omitempty"`
+}
+
+func toolOutcomeName(outcome llm.ToolOutcome) string {
+	switch outcome {
+	case llm.ToolOutcomeUnset:
+		return ""
+	case llm.ToolOutcomeRan:
+		return "ran"
+	case llm.ToolOutcomeFailed:
+		return "failed"
+	}
+	panic("turn: unknown tool outcome")
+}
+
+func messageRowOf(message llm.Message) MessageRow {
+	row := MessageRow{
+		Role:            message.Role.String(),
+		Content:         message.Content,
+		ToolCallID:      message.ToolCallID,
+		ToolOutcome:     toolOutcomeName(message.ToolOutcome),
+		ToolResultBytes: message.ToolResultBytes,
+	}
+	for _, call := range message.ToolCalls {
+		row.ToolCalls = append(row.ToolCalls, MessageToolCall{ID: call.ID, Name: call.Name, Arguments: call.Arguments})
+	}
+	return row
+}
+
+func (m MessageRow) Message() (llm.Message, error) {
+	message := llm.Message{Content: m.Content, ToolCallID: m.ToolCallID, ToolResultBytes: m.ToolResultBytes}
+	switch m.Role {
+	case "system":
+		message.Role = llm.RoleSystem
+	case "user":
+		message.Role = llm.RoleUser
+	case "assistant":
+		message.Role = llm.RoleAssistant
+	case "tool":
+		message.Role = llm.RoleTool
+	default:
+		return llm.Message{}, errors.New("turn: a recorded message names the role " + strconv.Quote(m.Role) + ", which is none this build sends")
+	}
+	switch m.ToolOutcome {
+	case "":
+		message.ToolOutcome = llm.ToolOutcomeUnset
+	case "ran":
+		message.ToolOutcome = llm.ToolOutcomeRan
+	case "failed":
+		message.ToolOutcome = llm.ToolOutcomeFailed
+	default:
+		return llm.Message{}, errors.New("turn: a recorded message names the tool outcome " + strconv.Quote(m.ToolOutcome) + ", which is none this build records")
+	}
+	for _, call := range m.ToolCalls {
+		message.ToolCalls = append(message.ToolCalls, llm.ToolCall{ID: call.ID, Name: call.Name, Arguments: call.Arguments})
+	}
+	return message, nil
+}
+
+func ConversationFrom(events []session.Event) ([]llm.Message, error) {
+	var messages []llm.Message
+	for _, event := range events {
+		if event.Kind != session.EventMessage {
+			continue
+		}
+		var row MessageRow
+		if err := json.Unmarshal(event.Body, &row); err != nil {
+			return nil, err
+		}
+		message, err := row.Message()
+		if err != nil {
+			return nil, err
+		}
+		messages = append(messages, message)
+	}
+	return Sendable(messages), nil
+}
+
+func Sendable(messages []llm.Message) []llm.Message {
+	answered := map[string]bool{}
+	for _, message := range messages {
+		if message.ToolCallID != "" {
+			answered[message.ToolCallID] = true
+		}
+	}
+	sendable := make([]llm.Message, 0, len(messages))
+	for _, message := range messages {
+		var kept []llm.ToolCall
+		for _, call := range message.ToolCalls {
+			if answered[call.ID] {
+				kept = append(kept, call)
+			}
+		}
+		message.ToolCalls = kept
+		if message.Role == llm.RoleAssistant && kept == nil && message.Content == "" {
+			continue
+		}
+		sendable = append(sendable, message)
+	}
+	return sendable
+}
+
+func (r Row) Header() session.Header {
+	header := session.Header{
+		ID:         r.ID,
+		At:         r.At,
+		Task:       r.Task,
+		Wire:       r.Wire,
+		Model:      r.Model,
+		Parent:     r.ForkedFrom,
+		Root:       cmp.Or(r.Root, r.ID),
+		ForkedInto: r.ForkedInto,
+		ForkKind:   string(r.ForkKind),
+		Outcome:    r.Outcome.String(),
+		CostUSD:    r.TotalCostUSD,
+	}
+	for _, step := range r.Steps {
+		if step.Fork != nil {
+			header.ForkTokensBefore, header.ForkTokensAfter = step.Fork.TokensBefore, step.Fork.TokensAfter
+		}
+	}
+	return header
+}
+
+func (r Row) Summary() Row {
+	r.Steps = nil
+	return r
+}
+
+func (r Row) Record() (session.Header, []session.Event, error) {
+	events := make([]session.Event, 0, len(r.Conversation)+len(r.Steps)+1)
+	for _, message := range r.Conversation {
+		body, err := json.Marshal(messageRowOf(message))
+		if err != nil {
+			return session.Header{}, nil, err
+		}
+		events = append(events, session.Event{Kind: session.EventMessage, Body: body})
+	}
+	for _, step := range r.Steps {
+		body, err := json.Marshal(step)
+		if err != nil {
+			return session.Header{}, nil, err
+		}
+		events = append(events, session.Event{Kind: session.EventStep, Body: body})
+	}
+	body, err := json.Marshal(r.Summary())
+	if err != nil {
+		return session.Header{}, nil, err
+	}
+	return r.Header(), append(events, session.Event{Kind: session.EventOutcome, Body: body}), nil
 }
