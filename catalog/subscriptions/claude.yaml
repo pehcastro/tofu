@@ -1,0 +1,3 @@
+provider: anthropic
+wire: anthropic
+windows: 5h, 7d

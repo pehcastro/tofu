@@ -10,7 +10,7 @@ import (
 	"boji/internal/transport"
 )
 
-func liveAccount(t *testing.T, provider Provider) Account {
+func liveAccount(t *testing.T, spec SubscriptionSpec) Account {
 	t.Helper()
 	if os.Getenv("BOJI_LIVE_MODELS") != "1" {
 		t.Skip("set BOJI_LIVE_MODELS=1 to ask the live subscription which models it serves")
@@ -21,21 +21,21 @@ func liveAccount(t *testing.T, provider Provider) Account {
 	}
 	store, err := cred.Open(path)
 	if err != nil {
-		t.Skipf("no credential store, run boji login %s: %v", provider, err)
+		t.Skipf("no credential store, run boji login %s: %v", spec.Wire, err)
 	}
 	t.Cleanup(func() { _ = store.Close() })
-	spec, err := cred.Lookup(string(provider))
+	credential, err := cred.Lookup(spec.Wire)
 	if err != nil {
-		t.Fatalf("looking up the %s spec: %v", provider, err)
+		t.Fatalf("looking up the %s spec: %v", spec.Wire, err)
 	}
-	row, present, err := store.Row(cred.Provider(provider))
+	row, present, err := store.Row(cred.Provider(spec.Wire))
 	if err != nil || !present {
-		t.Skipf("no %s credential: %v", provider, err)
+		t.Skipf("no %s credential: %v", spec.Wire, err)
 	}
 	return Account{
-		Provider:  provider,
-		AccountID: row.Credential.Identity.AccountID,
-		Token:     cred.NewManager(store, spec).Access,
+		Subscription: spec.ID,
+		AccountID:    row.Credential.Identity.AccountID,
+		Token:        cred.NewManager(store, credential).Access,
 	}
 }
 
@@ -44,16 +44,12 @@ func TestLiveDiscovery(t *testing.T) {
 	if err != nil {
 		t.Fatalf("building the transport: %v", err)
 	}
-	for _, provider := range Providers() {
-		t.Run(string(provider), func(t *testing.T) {
-			account := liveAccount(t, provider)
-			served, err := Discover(context.Background(), client, account)
+	catalog := shippedCatalog(t)
+	for _, spec := range catalog.Subscriptions {
+		t.Run(string(spec.ID), func(t *testing.T) {
+			served, err := Discover(context.Background(), client, liveAccount(t, spec))
 			if err != nil {
-				t.Fatalf("discovery against %s under %s: %v", provider, served.Pin, err)
-			}
-			catalog, err := Load(os.DirFS("../../../catalog/models"))
-			if err != nil {
-				t.Fatalf("loading the catalog: %v", err)
+				t.Fatalf("discovery against %s under %s: %v", spec.ID, served.Pin, err)
 			}
 			for _, line := range catalog.Reconcile(served).Lines() {
 				t.Log(line)

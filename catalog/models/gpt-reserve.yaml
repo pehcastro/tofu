@@ -1,5 +1,0 @@
-id: gpt-reserve
-provider: codex
-window: 5h, 7d
-use: excluded
-reason: nobody has ruled on it, so boji does not send it until somebody does

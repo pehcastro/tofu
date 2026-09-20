@@ -1,0 +1,4 @@
+provider: openai
+wire: codex
+windows: 5h, 7d
+not_models: codex-auto-review

@@ -32,9 +32,9 @@ func TestDiscoverReportsTheCodexPinBesideTheResult(t *testing.T) {
 	defer server.Close()
 
 	served, err := Discover(context.Background(), testClient(t), Account{
-		Provider: Codex,
-		BaseURL:  server.URL + "/codex/models?client_version=" + codex.PinnedCodexClientVersion,
-		Token:    func(context.Context) (string, error) { return "token", nil },
+		Subscription: Codex,
+		BaseURL:      server.URL + "/codex/models?client_version=" + codex.PinnedCodexClientVersion,
+		Token:        func(context.Context) (string, error) { return "token", nil },
 	})
 	if err != nil {
 		t.Fatalf("discovering: %v", err)
@@ -42,11 +42,10 @@ func TestDiscoverReportsTheCodexPinBesideTheResult(t *testing.T) {
 	if sentVersion != codex.PinnedCodexClientVersion || sentQuery != codex.PinnedCodexClientVersion {
 		t.Fatalf("the pin must gate discovery, header %q query %q", sentVersion, sentQuery)
 	}
-	catalog, err := Load(fstest.MapFS{
-		"sol.yaml": &fstest.MapFile{Data: []byte("id: gpt-5.6-sol\nprovider: codex\nwindow: 7d\nuse: default\n")},
-		"gone.yaml": &fstest.MapFile{Data: []byte(
-			"id: gpt-5.6-vanished\nprovider: codex\nwindow: 7d\nuse: allowed\n")},
-	})
+	catalog, err := Load([]Layer{layerOf("catalog", withSubscriptions(fstest.MapFS{
+		"models/openai/gpt-5.6-sol.yaml":      &fstest.MapFile{Data: []byte("subscription: codex\nuse: default\n")},
+		"models/openai/gpt-5.6-vanished.yaml": &fstest.MapFile{Data: []byte("subscription: codex\nuse: allowed\n")},
+	}))})
 	if err != nil {
 		t.Fatalf("loading: %v", err)
 	}
@@ -63,13 +62,12 @@ func TestDiscoverReportsTheCodexPinBesideTheResult(t *testing.T) {
 }
 
 func TestReconcileRendersAnEmptyListRatherThanNothing(t *testing.T) {
-	catalog, err := Load(fstest.MapFS{
-		"sol.yaml": &fstest.MapFile{Data: []byte("id: gpt-5.6-sol\nprovider: codex\nwindow: 7d\nuse: default\n")},
-	})
+	catalog, err := Load([]Layer{layerOf("catalog", withSubscriptions(oneFile(
+		"models/openai/gpt-5.6-sol.yaml", "subscription: codex\nuse: default\n")))})
 	if err != nil {
 		t.Fatalf("loading: %v", err)
 	}
-	lines := catalog.Reconcile(Served{Provider: Codex, Pin: "pin", IDs: []string{"gpt-5.6-sol"}}).Lines()
+	lines := catalog.Reconcile(Served{Subscription: Codex, Pin: "pin", IDs: []string{"gpt-5.6-sol"}}).Lines()
 	for _, line := range lines[1:] {
 		if !strings.HasSuffix(line, "(none)") {
 			t.Fatalf("an empty finding is still a line, got %q", line)
@@ -84,9 +82,9 @@ func TestDiscoverReadsTheAnthropicListShape(t *testing.T) {
 	defer server.Close()
 
 	served, err := Discover(context.Background(), testClient(t), Account{
-		Provider: Anthropic,
-		BaseURL:  server.URL,
-		Token:    func(context.Context) (string, error) { return "token", nil },
+		Subscription: Claude,
+		BaseURL:      server.URL,
+		Token:        func(context.Context) (string, error) { return "token", nil },
 	})
 	if err != nil {
 		t.Fatalf("discovering: %v", err)

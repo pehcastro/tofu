@@ -1,4 +1,0 @@
-id: claude-sonnet-5
-provider: anthropic
-window: 5h, 7d
-use: allowed

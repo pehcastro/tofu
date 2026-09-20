@@ -22,7 +22,7 @@ const playgroundRoot = ".playground"
 const (
 	claudeArmModel = "opus"
 	codexArmModel  = "gpt-5.6-sol"
-	bojiArmModel   = "claude-opus-5"
+	bojiArmModel   = "anthropic/claude-opus-5"
 )
 
 type Caps struct {
@@ -101,7 +101,6 @@ func BuildPlan(root string, arm Arm, task string, version int) (Plan, error) {
 			"boji", "run", prompt,
 			"--dir", dir,
 			"--model", bojiArmModel,
-			"--max-wall-clock-ms", strconv.FormatInt(caps.WallClock.Milliseconds(), 10),
 			"--max-steps", strconv.Itoa(caps.TurnCap),
 		}
 		plan.Env = []string{"OPENROUTER_KEY for the jev gate, the anthropic subscription credential for the model"}

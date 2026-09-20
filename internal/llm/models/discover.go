@@ -20,20 +20,20 @@ const (
 )
 
 type Account struct {
-	Provider  Provider
-	AccountID string
-	Token     func(context.Context) (string, error)
-	BaseURL   string
+	Subscription Subscription
+	AccountID    string
+	Token        func(context.Context) (string, error)
+	BaseURL      string
 }
 
 type Served struct {
-	Provider Provider
-	Pin      string
-	IDs      []string
+	Subscription Subscription
+	Pin          string
+	IDs          []string
 }
 
 func Discover(ctx context.Context, client *transport.Client, account Account) (Served, error) {
-	served := Served{Provider: account.Provider, Pin: pinOf(account.Provider)}
+	served := Served{Subscription: account.Subscription, Pin: pinOf(account.Subscription)}
 	token, err := account.Token(ctx)
 	if err != nil {
 		return served, err
@@ -50,14 +50,14 @@ func Discover(ctx context.Context, client *transport.Client, account Account) (S
 	return served, nil
 }
 
-func pinOf(provider Provider) string {
-	switch provider {
-	case Anthropic:
+func pinOf(subscription Subscription) string {
+	switch subscription {
+	case Claude:
 		return "claude-cli " + anthropic.PinnedClaudeCodeVersion
 	case Codex:
 		return "codex client version " + codex.PinnedCodexClientVersion
 	}
-	panic("models: unknown provider " + string(provider))
+	panic("models: unknown subscription " + string(subscription))
 }
 
 func discoveryRequest(account Account, token string) transport.Request {
@@ -65,8 +65,8 @@ func discoveryRequest(account Account, token string) transport.Request {
 	header.Set("Authorization", "Bearer "+token)
 	header.Set("Accept", "application/json")
 	url := ""
-	switch account.Provider {
-	case Anthropic:
+	switch account.Subscription {
+	case Claude:
 		url = anthropicModelsURL
 		header.Set("anthropic-version", anthropic.AnthropicAPIVersion)
 		header.Set("anthropic-beta", oauthBeta)
@@ -80,7 +80,7 @@ func discoveryRequest(account Account, token string) transport.Request {
 		header.Set(codex.HeaderOriginator, codex.Originator)
 		header.Set(codex.HeaderVersion, codex.PinnedCodexClientVersion)
 	default:
-		panic("models: unknown provider " + string(account.Provider))
+		panic("models: unknown subscription " + string(account.Subscription))
 	}
 	return transport.Request{
 		Method: http.MethodGet,
@@ -125,30 +125,38 @@ type Reconciliation struct {
 }
 
 func (c Catalog) Reconcile(served Served) Reconciliation {
-	inCatalog := make(map[string]bool, len(c.Models))
+	accounted := make(map[string]bool, len(c.Models))
+	for _, spec := range c.Subscriptions {
+		if spec.ID != served.Subscription {
+			continue
+		}
+		for _, id := range spec.NotModels {
+			accounted[id] = true
+		}
+	}
 	for _, model := range c.Models {
-		if model.Provider == served.Provider {
-			inCatalog[model.ID] = true
+		if model.Subscription == served.Subscription {
+			accounted[model.ID] = true
 		}
 	}
 	isServed := make(map[string]bool, len(served.IDs))
 	result := Reconciliation{Served: served}
 	for _, id := range served.IDs {
 		isServed[id] = true
-		if !inCatalog[id] {
+		if !accounted[id] {
 			result.Unknown = append(result.Unknown, id)
 		}
 	}
 	for _, model := range c.Models {
-		if model.Provider == served.Provider && !isServed[model.ID] {
-			result.Unreachable = append(result.Unreachable, model.ID)
+		if model.Subscription == served.Subscription && !isServed[model.ID] {
+			result.Unreachable = append(result.Unreachable, model.Slug())
 		}
 	}
 	return result
 }
 
 func (r Reconciliation) Lines() []string {
-	head := string(r.Served.Provider) + ": "
+	head := string(r.Served.Subscription) + ": "
 	return []string{
 		head + "the account serves " + list(r.Served.IDs) + " under " + r.Served.Pin,
 		head + "served and not in the catalog: " + list(r.Unknown),

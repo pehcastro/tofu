@@ -1,5 +1,3 @@
-id: codex-auto-review
-provider: codex
-window: 5h, 7d
+subscription: codex
 use: excluded
 reason: nobody has ruled on it, so boji does not send it until somebody does
