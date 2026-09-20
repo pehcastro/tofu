@@ -131,10 +131,10 @@ func TestBashToolRefusesAnEmptyCommand(t *testing.T) {
 
 func TestConfineRejectsASymlinkOrDeepEscape(t *testing.T) {
 	root := t.TempDir()
-	if _, err := confine(root, "sub/../../outside"); err == nil {
+	if _, err := Root(root).Resolve("sub/../../outside"); err == nil {
 		t.Fatal("expected a nested escape to be rejected")
 	}
-	if _, err := confine(root, "sub/inside"); err != nil {
+	if _, err := Root(root).Resolve("sub/inside"); err != nil {
 		t.Fatalf("did not expect a nested but confined path to be rejected: %v", err)
 	}
 }

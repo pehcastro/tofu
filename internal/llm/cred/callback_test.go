@@ -32,7 +32,7 @@ func TestCallbackBindsBothLoopbackAddressesWhenBothExist(t *testing.T) {
 	if !ipv6LoopbackAvailable() {
 		t.Skip("this host has no IPv6 loopback, the dual bind cannot be observed here")
 	}
-	server, err := startCallback(testCallbackPath,"state-1", 0, true, true)
+	server, err := startCallback(testCallbackPath, "state-1", 0, true, true)
 	if err != nil {
 		t.Fatalf("start: %v", err)
 	}
@@ -55,7 +55,7 @@ func TestCallbackBindsBothLoopbackAddressesWhenBothExist(t *testing.T) {
 }
 
 func TestCallbackServesAloneWhenIPv6IsAbsent(t *testing.T) {
-	server, err := startCallback(testCallbackPath,"state-1", 0, true, false)
+	server, err := startCallback(testCallbackPath, "state-1", 0, true, false)
 	if err != nil {
 		t.Fatalf("start: %v", err)
 	}
@@ -76,7 +76,7 @@ func TestCallbackServesAloneWhenIPv6IsAbsent(t *testing.T) {
 }
 
 func TestCallbackRefusesAMismatchedState(t *testing.T) {
-	server, err := startCallback(testCallbackPath,"state-1", 0, true, false)
+	server, err := startCallback(testCallbackPath, "state-1", 0, true, false)
 	if err != nil {
 		t.Fatalf("start: %v", err)
 	}
@@ -143,7 +143,7 @@ const (
 
 func servedPages(t *testing.T) map[string]string {
 	t.Helper()
-	server, err := startCallback(testCallbackPath,knownState, 0, true, false)
+	server, err := startCallback(testCallbackPath, knownState, 0, true, false)
 	if err != nil {
 		t.Fatalf("start: %v", err)
 	}
@@ -162,13 +162,13 @@ func servedPages(t *testing.T) map[string]string {
 }
 
 func TestCallbackWithoutFallbackFailsOnABusyPort(t *testing.T) {
-	held, err := startCallback(testCallbackPath,"", 0, true, false)
+	held, err := startCallback(testCallbackPath, "", 0, true, false)
 	if err != nil {
 		t.Fatalf("start: %v", err)
 	}
 	defer held.close()
 
-	if _, err := startCallback(testCallbackPath,"", held.port, false, false); err == nil {
+	if _, err := startCallback(testCallbackPath, "", held.port, false, false); err == nil {
 		t.Error("a second server bound a port already held, want a failure")
 	}
 }

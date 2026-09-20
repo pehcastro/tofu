@@ -42,6 +42,23 @@ func (r Registry) lookup(name string) (Tool, bool) {
 	return tool, ok
 }
 
+func readOnly(name string) bool {
+	switch name {
+	case "read", "glob", "grep", "search", "project_report", "artifact_fetch":
+		return true
+	}
+	return false
+}
+
+func (r Registry) parallelPrefix(calls []llm.ToolCall) int {
+	for i, call := range calls {
+		if _, known := r.lookup(call.Name); !known || !readOnly(call.Name) {
+			return i
+		}
+	}
+	return len(calls)
+}
+
 func (r Registry) Definitions() []llm.Tool {
 	defs := make([]llm.Tool, len(r.tools))
 	for i, tool := range r.tools {
@@ -84,6 +101,3 @@ func (r Root) Resolve(requested string) (string, error) {
 	}
 	return cleaned, nil
 }
-
-
-func confine(root, requested string) (string, error) { return Root(root).Resolve(requested) }

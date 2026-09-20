@@ -13,4 +13,5 @@ linters:
     - gocritic
 
 formatters:
-  enable: []
+  enable:
+    - gofmt

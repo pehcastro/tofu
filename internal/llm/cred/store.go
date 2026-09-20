@@ -15,9 +15,9 @@ import (
 )
 
 const (
-	storeFileName    = "agent.db"
-	storeFileMode    = 0o600
-	storeDirMode     = 0o700
+	storeFileName     = "agent.db"
+	storeFileMode     = 0o600
+	storeDirMode      = 0o700
 	connectionPragmas = "?_txlock=immediate&_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)&_pragma=synchronous(NORMAL)"
 	schemaStatements  = `
 CREATE TABLE IF NOT EXISTS credentials (

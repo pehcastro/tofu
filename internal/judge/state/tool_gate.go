@@ -15,9 +15,9 @@ type ToolGateContext struct {
 }
 
 type ToolGateInput struct {
-	Agent      string
-	Tool       string
-	Input      map[string]any
+	Agent          string
+	Tool           string
+	Input          map[string]any
 	Cwd            string
 	ProjectDir     string
 	ScratchDir     string
