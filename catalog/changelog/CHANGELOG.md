@@ -12,6 +12,7 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 
 ### Added
 
+- A `github_pr_diff` tool. It takes a pull request number, a full URL, or nothing meaning the current branch, and shells out to `gh` rather than holding a token of its own. `gh` missing and `gh` unauthenticated each get their own refusal saying what to do, instead of a wall of standard error.
 - The model's words appear as it writes them. Before this the interface drew nothing until a whole step finished, including its tool calls, so a long answer was a spinner. The text still lands in the record as one message, not as a thousand fragments.
 
 ## 0.4.2 - 2026-09-21
