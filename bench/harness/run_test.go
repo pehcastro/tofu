@@ -324,13 +324,145 @@ func TestBojiArmCommandUsesOnlyFlagsRunParses(t *testing.T) {
 	}
 }
 
+func panicOf(call func()) (message string) {
+	defer func() {
+		if raised := recover(); raised != nil {
+			message = fmt.Sprint(raised)
+		}
+	}()
+	call()
+	return ""
+}
+
+func everyTurnOutcome() []turn.Outcome {
+	var all []turn.Outcome
+	for candidate := turn.OutcomeUnset; panicOf(func() { _ = candidate.String() }) == ""; candidate++ {
+		all = append(all, candidate)
+	}
+	return all
+}
+
 func TestEndReasonOfNamesEveryTurnOutcome(t *testing.T) {
-	for outcome := turn.OutcomeUnset; outcome <= turn.OutcomeError; outcome++ {
-		reason, _ := endReasonOf(outcome)
-		if reason == "" {
-			t.Errorf("outcome %s produced an empty end reason", outcome)
+	readBefore := map[turn.Outcome]EndReason{
+		turn.OutcomeUnset:               EndReasonCrash,
+		turn.OutcomeStopped:             EndReasonDone,
+		turn.OutcomeStepCap:             EndReasonTurnCap,
+		turn.OutcomeRetiredCostCap:      EndReasonCrash,
+		turn.OutcomeRetiredWallClockCap: EndReasonWallClock,
+		turn.OutcomeDecisionCap:         EndReasonTurnCap,
+		turn.OutcomeForked:              EndReasonCrash,
+		turn.OutcomeError:               EndReasonCrash,
+		turn.OutcomeTruncated:           EndReasonTruncated,
+	}
+	outcomes := everyTurnOutcome()
+	if len(outcomes) < len(readBefore) {
+		t.Fatalf("the walk found %d outcomes and this table holds %d, so the walk stops short of the enum", len(outcomes), len(readBefore))
+	}
+	for _, outcome := range outcomes {
+		want, pinned := readBefore[outcome]
+		if !pinned {
+			t.Errorf("outcome %s is new and nothing pins what a row carrying it reads to", outcome)
+			continue
+		}
+		var reason EndReason
+		raised := panicOf(func() { reason, _ = endReasonOf(turn.Row{ID: "turn-1", Outcome: outcome}) })
+		if raised != "" {
+			t.Errorf("outcome %s has no case in endReasonOf: %s", outcome, raised)
+			continue
+		}
+		if reason != want {
+			t.Errorf("outcome %s reads to %q, and it read to %q before", outcome, reason, want)
 		}
 	}
+}
+
+func TestARecordedRowCarryingTruncatedReadsToAnEndReason(t *testing.T) {
+	dir := t.TempDir()
+	writeSessionFile(t, dir, turn.Row{
+		ID: "turn-truncated", Schema: turn.SchemaVersion, At: time.Now().Add(-time.Hour),
+		Task: "a task", Spend: turn.SpendSubscription, Outcome: turn.OutcomeTruncated,
+		Steps: []turn.StepRow{{Index: 1, StopReason: "max_tokens"}},
+	})
+	row, err := LoadSession(filepath.Join(dir, "turn-truncated.json"))
+	if err != nil {
+		t.Fatalf("LoadSession: %v", err)
+	}
+	if row.Outcome != turn.OutcomeTruncated {
+		t.Fatalf("the recorded row read back as %s, so it never carried truncated and this test is not the one it claims to be", row.Outcome)
+	}
+	reason, gap := endReasonOf(row)
+	if reason != EndReasonTruncated || gap != "" {
+		t.Fatalf("end reason %q with gap %q, want %q and no gap: the model ran out of output room, nothing capped and nothing crashed", reason, gap, EndReasonTruncated)
+	}
+}
+
+func writeSessionFile(t *testing.T, dir string, row turn.Row) {
+	t.Helper()
+	body, err := json.Marshal(row)
+	if err != nil {
+		t.Fatalf("marshal %s: %v", row.ID, err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, row.ID+".json"), body, 0o644); err != nil {
+		t.Fatalf("write %s: %v", row.ID, err)
+	}
+}
+
+func forkedChain(t *testing.T, dir string) time.Time {
+	t.Helper()
+	start := time.Now().Add(-time.Hour)
+	writeSessionFile(t, dir, turn.Row{
+		ID: "turn-chain", Schema: turn.SchemaVersion, At: start, Task: "a task", Spend: turn.SpendAPIKey,
+		Outcome: turn.OutcomeForked, ForkedInto: "turn-chain-f2",
+		Steps: []turn.StepRow{{Index: 1}, {Index: 2}},
+	})
+	writeSessionFile(t, dir, turn.Row{
+		ID: "turn-chain-f2", Schema: turn.SchemaVersion, At: start.Add(time.Minute), Task: "a task", Spend: turn.SpendAPIKey,
+		Outcome: turn.OutcomeStopped, ForkedFrom: "turn-chain", ForkKind: turn.ForkContinuation,
+		Steps: []turn.StepRow{{Index: 3}},
+	})
+	return start
+}
+
+func TestAForkedSessionIsNeverTheOneScored(t *testing.T) {
+	dir := t.TempDir()
+	forkedChain(t, dir)
+	origin, err := LoadSession(filepath.Join(dir, "turn-chain.json"))
+	if err != nil {
+		t.Fatalf("load the origin session: %v", err)
+	}
+
+	session := continuationOf(dir, origin)
+	if session.ID != "turn-chain-f2" {
+		t.Fatalf("scored session %s, want the continuation turn-chain-f2: a forked session is not the end of the work", session.ID)
+	}
+	reason, gap := endReasonOf(session)
+	if reason != EndReasonDone || gap != "" {
+		t.Fatalf("end reason %q with gap %q, want done and no gap", reason, gap)
+	}
+}
+
+func TestABrokenForkChainIsACrashThatNamesTheMissingSession(t *testing.T) {
+	dir := t.TempDir()
+	start := forkedChain(t, dir)
+	if err := os.Remove(filepath.Join(dir, "turn-chain-f2.json")); err != nil {
+		t.Fatalf("remove the continuation, which is what a run killed between the fork and the end leaves behind: %v", err)
+	}
+
+	session, err := LatestSession(dir, start.Add(-time.Minute))
+	if err != nil {
+		t.Fatalf("LatestSession: %v", err)
+	}
+	if session.ID != "turn-chain" {
+		t.Fatalf("scored session %s, want the forked origin, which is all that is on disk", session.ID)
+	}
+	reason, gap := endReasonOf(session)
+	if reason != EndReasonCrash {
+		t.Fatalf("end reason %q, want crash: the session that finished the work is not on disk", reason)
+	}
+	if !strings.Contains(gap, "turn-chain-f2") {
+		t.Fatalf("the gap does not name the missing session: %q", gap)
+	}
+	t.Logf("%s", gap)
 }
 
 func TestMeasureBojiFillsTheRowFromAStoredTurnRowAndLedger(t *testing.T) {

@@ -15,8 +15,11 @@ import (
 	"time"
 
 	"boji/internal/judge/ledger"
+	"boji/internal/session"
 	"boji/internal/turn"
 )
+
+const singleFileSuffix = ".json"
 
 type Execution struct {
 	Plan      Plan
@@ -92,48 +95,84 @@ func TaskGates(armDir, startCommit string) Task {
 }
 
 func LatestSession(dir string, after time.Time) (turn.Row, error) {
-	entries, err := os.ReadDir(dir)
+	listing, err := session.NewStore(dir).Listing()
 	if err != nil {
 		return turn.Row{}, err
 	}
-	var newest turn.Row
-	var found bool
-	for _, entry := range entries {
-		if entry.IsDir() || filepath.Ext(entry.Name()) != ".json" {
+	for _, header := range listing.Sessions {
+		if header.At.Before(after) {
 			continue
 		}
-		path := filepath.Join(dir, entry.Name())
-		written, err := sessionWrittenAt(path)
+		row, err := sessionRow(dir, header.ID)
 		if err != nil {
 			return turn.Row{}, err
 		}
-		if written.Before(after) || (found && !written.After(newest.At)) {
-			continue
-		}
-		row, err := LoadSession(path)
-		if err != nil {
-			return turn.Row{}, err
-		}
-		newest, found = row, true
+		return continuationOf(dir, row), nil
 	}
-	if !found {
-		return turn.Row{}, fmt.Errorf("no turn row in %s is dated at or after %s, so the run wrote nothing this bench can read", dir, after.Format(time.RFC3339))
+	unread := ""
+	for _, skip := range listing.Skipped {
+		unread += " " + skip.ID
 	}
-	return newest, nil
+	if unread != "" {
+		unread = ", and these rows could not be read at all:" + unread
+	}
+	return turn.Row{}, fmt.Errorf("no turn row in %s is dated at or after %s, so the run wrote nothing this bench can read%s",
+		dir, after.Format(time.RFC3339), unread)
 }
 
-func sessionWrittenAt(path string) (time.Time, error) {
-	body, err := os.ReadFile(path)
+func continuationOf(dir string, row turn.Row) turn.Row {
+	walked := map[string]bool{row.ID: true}
+	for row.ForkedInto != "" && !walked[row.ForkedInto] {
+		next, err := sessionRow(dir, row.ForkedInto)
+		if err != nil {
+			return row
+		}
+		walked[next.ID] = true
+		row = next
+	}
+	return row
+}
+
+func sessionRow(dir, id string) (turn.Row, error) {
+	events, err := session.NewStore(dir).Body(id)
 	if err != nil {
-		return time.Time{}, err
+		return turn.Row{}, err
 	}
-	var dated struct {
-		At time.Time `json:"at"`
+	var row turn.Row
+	var steps []turn.StepRow
+	for i, event := range events {
+		switch event.Kind {
+		case session.EventStep:
+			var step turn.StepRow
+			if err := json.Unmarshal(event.Body, &step); err != nil {
+				return turn.Row{}, fmt.Errorf("event %d of session %s does not read as a step: %w", i+1, id, err)
+			}
+			steps = append(steps, step)
+		case session.EventOutcome:
+			if err := json.Unmarshal(event.Body, &row); err != nil {
+				return turn.Row{}, fmt.Errorf("the outcome event of session %s does not read as a turn row: %w", id, err)
+			}
+		case session.EventMessage, session.EventRead:
+		default:
+			return turn.Row{}, fmt.Errorf("event %d of session %s is of kind %q, which this bench has no reading for", i+1, id, event.Kind)
+		}
 	}
-	if err := json.Unmarshal(body, &dated); err != nil {
-		return time.Time{}, fmt.Errorf("%s carries no readable date: %w", path, err)
+	if row.ID == "" {
+		return turn.Row{}, fmt.Errorf("the body of session %s carries no outcome event, so there is no turn row in it", id)
 	}
-	return dated.At, nil
+	row.Steps = steps
+	return row, nil
+}
+
+func StoreTranscript(dir string, row turn.Row) error {
+	body, err := json.MarshalIndent(row, "", "  ")
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(dir, 0o750); err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(dir, row.ID+singleFileSuffix), body, 0o600)
 }
 
 func LoadSession(path string) (turn.Row, error) {
@@ -169,7 +208,7 @@ func MeasureBoji(session turn.Row, src Sources, meta RunMeta) (Row, []string) {
 	row.ToolCalls = countToolCalls(session)
 	row.BilledInput, row.BilledOutput = countTokens(session)
 
-	endReason, endGap := endReasonOf(session.Outcome)
+	endReason, endGap := endReasonOf(session)
 	row.EndReason = endReason
 
 	for _, gap := range []string{credentialGap, endGap} {
@@ -258,24 +297,31 @@ func graded(checks []ChecklistCheck) []ChecklistCheck {
 	return out
 }
 
-func endReasonOf(outcome turn.Outcome) (EndReason, string) {
-	switch outcome {
+func endReasonOf(session turn.Row) (EndReason, string) {
+	switch session.Outcome {
 	case turn.OutcomeStopped:
 		return EndReasonDone, ""
 	case turn.OutcomeStepCap:
 		return EndReasonTurnCap, ""
 	case turn.OutcomeRetiredCostCap:
 		return EndReasonCrash, "end reason: this turn row was written when boji still had a cost cap, that cap is gone, and harness.EndReason has no variant for it, so this row says crash"
-	case turn.OutcomeWallClockCap:
+	case turn.OutcomeRetiredWallClockCap:
 		return EndReasonWallClock, ""
 	case turn.OutcomeDecisionCap:
 		return EndReasonTurnCap, "end reason: the turn ended on the decision cap, and harness.EndReason has no variant for that, so this row says turn_cap"
+	case turn.OutcomeTruncated:
+		return EndReasonTruncated, ""
 	case turn.OutcomeError:
 		return EndReasonCrash, ""
 	case turn.OutcomeUnset:
 		return EndReasonCrash, "end reason: the turn row carries no outcome, so this row says crash"
+	case turn.OutcomeForked:
+		return EndReasonCrash, fmt.Sprintf(
+			"end reason: session %s forked into %s and a forked session is not the end of the work, "+
+				"so the session that finished it is the one to score and it was not on disk to be followed",
+			session.ID, session.ForkedInto)
 	}
-	panic("harness: unknown turn outcome " + outcome.String())
+	panic("harness: unknown turn outcome " + session.Outcome.String())
 }
 
 func countToolCalls(session turn.Row) ToolCalls {
@@ -310,7 +356,7 @@ func countTokens(session turn.Row) (input, output int64) {
 
 func Spend(rows []Row) string {
 	b := &strings.Builder{}
-	fmt.Fprintf(b, "SPEND, each arm in its own unit\n")
+	fmt.Fprint(b, "SPEND, each arm in its own unit\n")
 	sorted := append([]Row(nil), rows...)
 	sort.Slice(sorted, func(i, j int) bool {
 		if sorted[i].Version != sorted[j].Version {
