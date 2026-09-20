@@ -4,9 +4,22 @@ Kept by hand, in the shape of keepachangelog.com, and versioned by semver.
 
 **`.local/boji/diagram.html` is updated in the same edit as every entry below.** It draws what runs where, keeps a version selector so an older shape can be read back, and marks in green what changed in the selected version. It exists because too much moves in a night to hold in one head.
 
-Boji is personal and not released, so the public interface that a version promises is the command line and the file formats: the verbs and their flags, the exit codes, the catalog schema, the ledger row schema and the policy schema. A version says what changed for someone driving the binary or reading its files, not what changed inside it.
+Tofu is personal and not released, so the public interface that a version promises is the command line and the file formats: the verbs and their flags, the exit codes, the catalog schema, the ledger row schema and the policy schema. A version says what changed for someone driving the binary or reading its files, not what changed inside it.
 
 The minor number carries breaking changes, which is what 0.x means, and **there is never a 1.0.0**. The owner decided that on 2026-09-19: this stays 0.x forever, so the promise the version makes is the one 0.x already makes, that anything can break on a minor bump.
+
+## Unreleased
+
+### Added
+
+- The model can state a plan, mark one item running and mark it done, and the plan draws in the session view directly above the running row without moving the transcript. One item runs at a time and a second is refused. An item is named by its words, never by an index.
+- `tofu sift` reads a shell result against the task that asked for it and marks what is still worth reading. It is in shadow: nothing is removed and the model is given the output whole. Standard error, the chunk carrying the exit status and the first and last chunk of standard output are never candidates.
+- A policy file may declare a `schema` other than the gate's, and its thresholds load with it. A threshold that is not a number fails the load with the file and the line rather than reading as zero.
+- `tofu check` writes a ledger row carrying the fingerprint of the command it judged, so a judgement made by hand at the command line is found as precedent by the same call inside a run. A replayed row carries the fingerprint of the row it replays.
+
+### Fixed
+
+- `tofu doctor --json` carries a `schema` field for a point that is not the gate, and no longer reports a policy it cannot read as making the binary unusable.
 
 ## 0.4.1 - 2026-09-21
 
