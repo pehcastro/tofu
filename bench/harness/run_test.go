@@ -334,14 +334,6 @@ func panicOf(call func()) (message string) {
 	return ""
 }
 
-func everyTurnOutcome() []turn.Outcome {
-	var all []turn.Outcome
-	for candidate := turn.OutcomeUnset; panicOf(func() { _ = candidate.String() }) == ""; candidate++ {
-		all = append(all, candidate)
-	}
-	return all
-}
-
 func TestEndReasonOfNamesEveryTurnOutcome(t *testing.T) {
 	readBefore := map[turn.Outcome]EndReason{
 		turn.OutcomeUnset:               EndReasonCrash,
@@ -353,8 +345,9 @@ func TestEndReasonOfNamesEveryTurnOutcome(t *testing.T) {
 		turn.OutcomeForked:              EndReasonCrash,
 		turn.OutcomeError:               EndReasonCrash,
 		turn.OutcomeTruncated:           EndReasonTruncated,
+		turn.OutcomeLoopGuard:           EndReasonTurnCap,
 	}
-	outcomes := everyTurnOutcome()
+	outcomes := turn.AllOutcomes()
 	if len(outcomes) < len(readBefore) {
 		t.Fatalf("the walk found %d outcomes and this table holds %d, so the walk stops short of the enum", len(outcomes), len(readBefore))
 	}

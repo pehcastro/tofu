@@ -29,7 +29,7 @@ func cappedConfig(model Model, caps Caps) Config {
 	return Config{
 		Model:          model,
 		Spend:          SpendAPIKey,
-		Tools:          NewRegistry(&stubTool{name: "noop", result: Result{Content: "ok"}}),
+		Tools:          NewRegistry(&stubTool{name: "noop", result: Result{Content: "ok"}, varying: true}),
 		Task:           "loop forever",
 		Caps:           caps,
 		ResultBytesCap: 4096,
@@ -82,7 +82,7 @@ func TestRunAnswersWithWhatItHasAtTheDecisionCap(t *testing.T) {
 	}
 }
 
-func TestTheLastCallIsOfferedNoTools(t *testing.T) {
+func TestTheLastCallCarriesTheSameToolsAsEveryOtherCall(t *testing.T) {
 	model := alwaysToolCallModel(2)
 	model.decisions = append(model.decisions, messageDecision())
 
@@ -92,11 +92,17 @@ func TestTheLastCallIsOfferedNoTools(t *testing.T) {
 	if len(model.requests) != 3 {
 		t.Fatalf("expected 2 working calls and one last call, got %d", len(model.requests))
 	}
-	if len(model.requests[0].Tools) == 0 {
+	working, last := model.requests[0].Tools, model.requests[2].Tools
+	if len(working) == 0 {
 		t.Fatal("the working calls were offered no tools, so this proves nothing")
 	}
-	if tools := model.requests[2].Tools; len(tools) != 0 {
-		t.Fatalf("the last call was offered %d tools, and it must be offered none", len(tools))
+	if len(last) != len(working) {
+		t.Fatalf("the last call was offered %d tools against %d on every other call", len(last), len(working))
+	}
+	for i, tool := range working {
+		if last[i].Name != tool.Name {
+			t.Fatalf("the last call's tool %d is %q, want %q to match the prefix every other request sends", i, last[i].Name, tool.Name)
+		}
 	}
 }
 

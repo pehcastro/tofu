@@ -544,10 +544,10 @@ func (s *appSession) run(ctx context.Context, wire, task string, emit func(tui.E
 	if stopped {
 		outcome = turn.OutcomeStopped
 	}
-	emit(tui.Event{Kind: tui.EventDone, Text: doneWords(outcome)})
+	emit(tui.Event{Kind: tui.EventDone, Text: doneWords(outcome, row.Guard)})
 }
 
-func doneWords(outcome turn.Outcome) string {
+func doneWords(outcome turn.Outcome, guard *turn.LoopGuardStop) string {
 	switch outcome {
 	case turn.OutcomeUnset, turn.OutcomeForked:
 		return "finished in"
@@ -563,8 +563,18 @@ func doneWords(outcome turn.Outcome) string {
 		return "failed after"
 	case turn.OutcomeRetiredCostCap, turn.OutcomeRetiredWallClockCap:
 		return "stopped at a cap this build no longer sets, after"
+	case turn.OutcomeLoopGuard:
+		return loopGuardWords(guard) + ", after"
 	}
 	panic("tofu: unknown outcome " + outcome.String())
+}
+
+func loopGuardWords(guard *turn.LoopGuardStop) string {
+	if guard == nil {
+		return "stopped itself after repeating a tool call"
+	}
+	return "stopped itself after calling " + strconv.Quote(guard.Tool) + " with " + string(guard.Args) +
+		" and getting the same result " + strconv.Itoa(guard.Repeats) + " times in a row"
 }
 
 func statedPlan(items []tools.PlanItem) []session.PlanItem {

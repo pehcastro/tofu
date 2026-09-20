@@ -4,12 +4,61 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strconv"
 	"testing"
 
 	"tofu/internal/judge/ledger"
 	"tofu/internal/llm"
 )
+
+func panicOf(call func()) (message string) {
+	defer func() {
+		if raised := recover(); raised != nil {
+			message = fmt.Sprint(raised)
+		}
+	}()
+	call()
+	return ""
+}
+
+func TestRefusedWhyNamesEveryLedgerVerdict(t *testing.T) {
+	request := GateRequest{TurnID: "turn-1", Tool: "write"}
+	handled := map[ledger.Verdict]bool{
+		ledger.VerdictUnset: true,
+		ledger.VerdictAllow: true,
+		ledger.VerdictAsk:   true,
+		ledger.VerdictDeny:  true,
+	}
+	for _, v := range ledger.AllVerdicts() {
+		if !handled[v] {
+			t.Fatalf("%s carries no expected behaviour in this test, so a new ledger verdict can reach refusedWhy untested", v)
+		}
+		decision := GateDecision{Verdict: v}
+		raised := panicOf(func() {
+			refusedWhy(context.Background(), nil, request, decision, "")
+		})
+		if raised != "" {
+			t.Errorf("%s has no case in refusedWhy: %s", v, raised)
+		}
+	}
+}
+
+func TestAllGateModesAreNamed(t *testing.T) {
+	for _, m := range AllGateModes() {
+		if raised := panicOf(func() { _ = m.String() }); raised != "" {
+			t.Errorf("gate mode %d has no case in String: %s", int(m), raised)
+		}
+	}
+}
+
+func TestAllPersonAnswersAreNamed(t *testing.T) {
+	for _, a := range AllPersonAnswers() {
+		if raised := panicOf(func() { _ = a.allows() }); raised != "" {
+			t.Errorf("person answer %d has no case in allows: %s", int(a), raised)
+		}
+	}
+}
 
 type stubGate struct {
 	verdicts []ledger.Verdict
@@ -119,7 +168,7 @@ func TestUnderShadowAGateThatErrorsStillRunsTheCall(t *testing.T) {
 
 func TestRunStopsAtTheDecisionCapWithItsOwnOutcome(t *testing.T) {
 	gate := gateSaying(ledger.VerdictAllow)
-	config := gatedConfig(gate, &stubTool{name: "noop", result: Result{Content: "ok"}}, alwaysToolCallModel(10))
+	config := gatedConfig(gate, &stubTool{name: "noop", result: Result{Content: "ok"}, varying: true}, alwaysToolCallModel(10))
 	config.Caps = Caps{MaxSteps: 10, MaxDecisions: 3}
 
 	row, err := Run(context.Background(), config)

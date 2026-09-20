@@ -33,6 +33,10 @@ const (
 	GateEnforce
 )
 
+func AllGateModes() []GateMode {
+	return []GateMode{GateShadow, GateEnforce}
+}
+
 func (m GateMode) String() string {
 	switch m {
 	case GateShadow:
@@ -50,6 +54,10 @@ const (
 	PersonAllowedOnce
 	PersonAlwaysHere
 )
+
+func AllPersonAnswers() []PersonAnswer {
+	return []PersonAnswer{PersonDenied, PersonAllowedOnce, PersonAlwaysHere}
+}
 
 func (a PersonAnswer) allows() bool {
 	switch a {

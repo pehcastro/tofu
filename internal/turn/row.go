@@ -27,7 +27,12 @@ const (
 	OutcomeForked              = session.OutcomeForked
 	OutcomeError               = session.OutcomeError
 	OutcomeTruncated           = session.OutcomeTruncated
+	OutcomeLoopGuard           = session.OutcomeLoopGuard
 )
+
+func AllOutcomes() []Outcome {
+	return session.AllOutcomes()
+}
 
 type ToolCallRow struct {
 	Tool              string          `json:"tool"`
@@ -103,9 +108,16 @@ type Row struct {
 	WallClockMS  int64     `json:"wall_clock_ms"`
 	DecisionIDs  []string  `json:"decision_ids,omitempty"`
 
-	Budget recall.Budget `json:"budget"`
+	Budget recall.Budget  `json:"budget"`
+	Guard  *LoopGuardStop `json:"loop_guard,omitempty"`
 
 	Conversation []llm.Message `json:"-"`
+}
+
+type LoopGuardStop struct {
+	Tool    string          `json:"tool"`
+	Args    json.RawMessage `json:"args,omitempty"`
+	Repeats int             `json:"repeats"`
 }
 
 type MessageToolCall struct {

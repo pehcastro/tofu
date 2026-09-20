@@ -223,14 +223,13 @@ func Run(ctx context.Context, config Config) (Row, error) {
 		}
 		return row
 	}
-	endAt := func(outcome Outcome, step int, history []llm.Message) Row {
+	endAt := func(outcome Outcome, lead string, step int, history []llm.Message) Row {
 		messages = history
 		if config.NoLastWord || step == 1 {
 			return finish(outcome)
 		}
-		messages = append(slices.Clone(history),
-			llm.Message{Role: llm.RoleUser, Content: "this turn reached its " + outcome.String() + andThisIsItsLastStep})
-		decision, err := config.Model.Ask(ctx, llm.Request{Messages: messages})
+		messages = append(slices.Clone(history), llm.Message{Role: llm.RoleUser, Content: lead + andThisIsItsLastStep})
+		decision, err := config.Model.Ask(ctx, llm.Request{Messages: messages, Tools: tools.Definitions()})
 		row.TotalCostUSD += decision.Usage.Cost
 		reason := ""
 		switch {
@@ -242,7 +241,7 @@ func Run(ctx context.Context, config Config) (Row, error) {
 			reason = "the model answered with no text"
 		}
 		if reason != "" {
-			row.Warnings = append(row.Warnings, "the turn reached "+outcome.String()+" and the last answer was not obtained: "+reason)
+			row.Warnings = append(row.Warnings, lead+", and the last answer was not obtained: "+reason)
 			return finish(outcome)
 		}
 		row.Model = decision.Build
@@ -250,7 +249,11 @@ func Run(ctx context.Context, config Config) (Row, error) {
 		keep(stepFrom(len(row.Steps)+1, decision))
 		return finish(outcome)
 	}
+	endAtCap := func(outcome Outcome, step int, history []llm.Message) Row {
+		return endAt(outcome, "this turn reached its "+outcome.String(), step, history)
+	}
 
+	guard := &loopGuard{}
 	decisions, forks, recordedGrants := 0, 0, 0
 	for step := 1; ; step++ {
 		if config.Steering != nil {
@@ -260,7 +263,7 @@ func Run(ctx context.Context, config Config) (Row, error) {
 		}
 		settled := messages
 		if outcome, capped := config.Caps.exceeded(step); capped {
-			return endAt(outcome, step, settled), nil
+			return endAtCap(outcome, step, settled), nil
 		}
 
 		decision, err := config.Model.Ask(ctx, llm.Request{Messages: messages, Tools: tools.Definitions()})
@@ -297,7 +300,10 @@ func Run(ctx context.Context, config Config) (Row, error) {
 		case llm.OutcomeToolCalls:
 			messages = append(messages, llm.Message{Role: llm.RoleAssistant, ToolCalls: decision.ToolCalls})
 			pending, batches, capped := decision.ToolCalls, 0, false
-			for len(pending) > 0 && !capped {
+			var tripped bool
+			var repeated ToolCallRow
+			var repeats int
+			for len(pending) > 0 && !capped && !tripped {
 				width := min(max(tools.parallelPrefix(pending), 1), konst.TurnParallelToolCalls)
 				wave := make([]gatedCall, 0, width)
 				for _, call := range pending[:width] {
@@ -344,15 +350,28 @@ func Run(ctx context.Context, config Config) (Row, error) {
 				messages = append(messages, answers...)
 				flush()
 				pending = pending[len(wave):]
+				for _, called := range rows {
+					if hit, seen := guard.observe(called); hit {
+						tripped, repeated, repeats = true, called, seen
+						break
+					}
+				}
 			}
 			if config.Boundary != nil {
 				asked := config.Boundary.Asked()
 				stepRow.Grants = slices.Clone(asked[recordedGrants:])
 				recordedGrants = len(asked)
 			}
+			if tripped {
+				cause := loopGuardCause(repeated, repeats)
+				row.Guard = &LoopGuardStop{Tool: repeated.Tool, Args: repeated.Args, Repeats: repeats}
+				row.Warnings = append(row.Warnings, "the turn stopped itself: "+cause)
+				keep(stepRow)
+				return endAt(OutcomeLoopGuard, "this turn stopped itself because "+cause, step, messages), nil
+			}
 			if capped {
 				keep(stepRow)
-				return endAt(OutcomeDecisionCap, step, settled), nil
+				return endAtCap(OutcomeDecisionCap, step, settled), nil
 			}
 			if !config.NoFork {
 				fork, begun, occupancy, err := forkHistory(artifacts, budget, config.FirstUserMessage(), messages)

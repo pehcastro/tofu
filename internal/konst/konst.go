@@ -51,9 +51,12 @@ const (
 	TurnMaxBackoffMillis     = 2000
 	TurnResultBytesCap       = 32768
 	IgnoreFileBytesCap       = 65536
+	ProjectInstructionsBytes = 16384
 	TurnParallelToolCalls    = 4
 	TurnMaxSteps             = 40
 	TurnMaxDecisions         = 40
+	TurnLoopGuardRepeats     = 3
+	TurnLoopGuardWindow      = 6
 	SubscriptionCacheTTL     = "1h"
 
 	VerbMaxDepth      = 2

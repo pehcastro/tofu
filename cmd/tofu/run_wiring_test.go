@@ -197,7 +197,8 @@ func TestARunAtATwentyThousandCeilingCompactsAndTheRecordSaysWhatItDropped(t *te
 	var decisions []llm.Decision
 	for i := range 8 {
 		decisions = append(decisions, llm.Decision{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{
-			{ID: "call-" + string(rune('a'+i)), Name: "bash", Arguments: json.RawMessage(`{"command":"echo ` + strings.Repeat("y", 6000) + `"}`)},
+			{ID: "call-" + string(rune('a'+i)), Name: "bash",
+				Arguments: json.RawMessage(`{"command":"echo ` + strconv.Itoa(i) + " " + strings.Repeat("y", 6000) + `"}`)},
 		}})
 	}
 	decisions = append(decisions, llm.Decision{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "read it"})

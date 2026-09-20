@@ -282,6 +282,11 @@ func fullyPopulatedRow() Row {
 		TotalCostUSD: 0.0015,
 		WallClockMS:  1500,
 		DecisionIDs:  []string{"2026-09-18-deadbeef"},
+		Guard: &LoopGuardStop{
+			Tool:    "bash",
+			Args:    json.RawMessage(`{"command":"npm test"}`),
+			Repeats: 3,
+		},
 		Budget: recall.Budget{
 			Model:         "anthropic/claude-fable-5.1",
 			CeilingTokens: 200000,

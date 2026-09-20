@@ -168,6 +168,35 @@ func TestARealRunOffersProjectReportAndIsToldWhyNotToReachForFind(t *testing.T) 
 	}
 }
 
+func TestRunConfigKeepsProjectInstructionsOutOfTheCachedSystemPrompt(t *testing.T) {
+	dirWithRules := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dirWithRules, "CLAUDE.md"), []byte("rules only this directory has"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	optsPlain := armOpts(t)
+	optsRuled, err := parseRunArgs([]string{"--dir", dirWithRules, "a task"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	built, _, err := buildRunTools(optsPlain.dir, optsPlain.toolSet)
+	if err != nil {
+		t.Fatal(err)
+	}
+	configPlain, _ := runConfig(optsPlain, built, runtime{spend: turn.SpendSubscription})
+	configRuled, _ := runConfig(optsRuled, built, runtime{spend: turn.SpendSubscription})
+
+	if configPlain.System != configRuled.System {
+		t.Fatalf("a directory's own CLAUDE.md changed the cached system prompt:\nplain: %q\nruled: %q", configPlain.System, configRuled.System)
+	}
+	if !strings.Contains(configRuled.Environment, "rules only this directory has") {
+		t.Fatalf("the ruled directory's CLAUDE.md never reached the environment block:\n%s", configRuled.Environment)
+	}
+	if strings.Contains(configPlain.Environment, "rules only this directory has") {
+		t.Fatalf("a directory with no CLAUDE.md carries another directory's rules:\n%s", configPlain.Environment)
+	}
+}
+
 func TestEachArmIsToldOnlyAboutTheToolsItHas(t *testing.T) {
 	full, three := runSystem(armOpts(t)), runSystem(armOpts(t, "--tools", toolSetThree))
 	for _, named := range []string{"glob", "grep", "edit", "tofu_lint_comments", "tofu_rules_check", "tofu_judge", "spawn"} {

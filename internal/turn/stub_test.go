@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strconv"
 	"sync"
 
 	"tofu/internal/llm"
@@ -37,6 +38,7 @@ type stubTool struct {
 	name    string
 	result  Result
 	err     error
+	varying bool
 	running sync.Mutex
 	calls   int
 }
@@ -50,8 +52,13 @@ func (t *stubTool) Definition() llm.Tool {
 func (t *stubTool) Run(_ context.Context, _ json.RawMessage) (Result, error) {
 	t.running.Lock()
 	t.calls++
+	calls := t.calls
 	t.running.Unlock()
-	return t.result, t.err
+	result := t.result
+	if t.varying {
+		result.Content += " " + strconv.Itoa(calls)
+	}
+	return result, t.err
 }
 
 func toolCallDecision(calls ...llm.ToolCall) llm.Decision {

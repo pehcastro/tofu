@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"path/filepath"
+	"strconv"
 	"testing"
 
 	"tofu/internal/judge/ledger"
@@ -27,16 +28,19 @@ func (m *queuedModel) Ask(context.Context, llm.Request) (llm.Decision, error) {
 	return m.decisions[m.asked-1], nil
 }
 
-type echoTool struct{}
+type echoTool struct {
+	calls int
+}
 
-func (echoTool) Name() string { return "bash" }
+func (*echoTool) Name() string { return "bash" }
 
-func (echoTool) Definition() llm.Tool {
+func (*echoTool) Definition() llm.Tool {
 	return llm.Tool{Name: "bash", Description: "run a command", Parameters: map[string]any{"type": "object"}}
 }
 
-func (echoTool) Run(context.Context, json.RawMessage) (turn.Result, error) {
-	return turn.Result{Content: "ok", Command: "ls"}, nil
+func (t *echoTool) Run(context.Context, json.RawMessage) (turn.Result, error) {
+	t.calls++
+	return turn.Result{Content: "ok " + strconv.Itoa(t.calls), Command: "ls"}, nil
 }
 
 type shadowGate struct {
@@ -115,7 +119,7 @@ func TestAStopDecisionRecordedMidTurnInShadowDoesNotEndTheTurn(t *testing.T) {
 	row, err := turn.Run(context.Background(), turn.Config{
 		Model:          model,
 		Spend:          turn.SpendAPIKey,
-		Tools:          turn.NewRegistry(echoTool{}),
+		Tools:          turn.NewRegistry(&echoTool{}),
 		Gate:           gate,
 		Task:           "list the folder",
 		Caps:           turn.Caps{MaxSteps: 10, MaxDecisions: 10},

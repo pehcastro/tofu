@@ -7,6 +7,14 @@ import (
 
 type Outcome int
 
+func AllOutcomes() []Outcome {
+	all := make([]Outcome, 0, int(outcomeCount))
+	for candidate := OutcomeUnset; candidate < outcomeCount; candidate++ {
+		all = append(all, candidate)
+	}
+	return all
+}
+
 const (
 	OutcomeUnset Outcome = iota
 	OutcomeStopped
@@ -17,6 +25,7 @@ const (
 	OutcomeForked
 	OutcomeError
 	OutcomeTruncated
+	OutcomeLoopGuard
 	outcomeCount
 )
 
@@ -40,6 +49,8 @@ func (o Outcome) String() string {
 		return "error"
 	case OutcomeTruncated:
 		return "truncated"
+	case OutcomeLoopGuard:
+		return "loop_guard"
 	}
 	panic(fmt.Sprintf("session: outcome %d has no name", int(o)))
 }

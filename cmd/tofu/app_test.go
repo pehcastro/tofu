@@ -1098,7 +1098,7 @@ func TestACancelledTurnReportsStoppedAndCarriesNoGoError(t *testing.T) {
 	if len(done) != 1 {
 		t.Fatalf("the turn closed with %d done events, want one", len(done))
 	}
-	if done[0].Text != doneWords(turn.OutcomeStopped) {
+	if done[0].Text != doneWords(turn.OutcomeStopped, nil) {
 		t.Errorf("the closing line reads %q, want a turn that reports as stopped", done[0].Text)
 	}
 	screen := driver.view()
@@ -1121,7 +1121,7 @@ func TestATurnThatFailsForAnotherReasonStillReportsTheError(t *testing.T) {
 		t.Fatalf("the failure was reported as %+v, want the error text", failures)
 	}
 	done := driver.of(tui.EventDone)
-	if len(done) != 1 || done[0].Text != doneWords(turn.OutcomeError) {
+	if len(done) != 1 || done[0].Text != doneWords(turn.OutcomeError, nil) {
 		t.Fatalf("the closing line reads %+v, want a turn that reports as an error", done)
 	}
 }
@@ -1257,26 +1257,47 @@ func TestThePlaceAGrantCoversIsTheToolAndItsSubject(t *testing.T) {
 }
 
 func TestEveryOutcomeClosesTheTurnInWordsAndNeverInItsEnumName(t *testing.T) {
-	for _, one := range []struct {
-		outcome turn.Outcome
-		words   string
-	}{
-		{turn.OutcomeUnset, "finished in"},
-		{turn.OutcomeForked, "finished in"},
-		{turn.OutcomeStopped, "stopped after"},
-		{turn.OutcomeStepCap, "stopped at the step cap after"},
-		{turn.OutcomeDecisionCap, "stopped at the decision cap after"},
-		{turn.OutcomeError, "failed after"},
-		{turn.OutcomeTruncated, "stopped on a reply it could not finish, after"},
-		{turn.OutcomeRetiredCostCap, "stopped at a cap this build no longer sets, after"},
-		{turn.OutcomeRetiredWallClockCap, "stopped at a cap this build no longer sets, after"},
-	} {
-		words := doneWords(one.outcome)
-		if words != one.words {
-			t.Errorf("%s closes the turn with %q, want %q", one.outcome, words, one.words)
+	want := map[turn.Outcome]string{
+		turn.OutcomeUnset:               "finished in",
+		turn.OutcomeForked:              "finished in",
+		turn.OutcomeStopped:             "stopped after",
+		turn.OutcomeStepCap:             "stopped at the step cap after",
+		turn.OutcomeDecisionCap:         "stopped at the decision cap after",
+		turn.OutcomeError:               "failed after",
+		turn.OutcomeTruncated:           "stopped on a reply it could not finish, after",
+		turn.OutcomeRetiredCostCap:      "stopped at a cap this build no longer sets, after",
+		turn.OutcomeRetiredWallClockCap: "stopped at a cap this build no longer sets, after",
+		turn.OutcomeLoopGuard:           loopGuardWords(nil) + ", after",
+	}
+	for _, outcome := range turn.AllOutcomes() {
+		expected, named := want[outcome]
+		if !named {
+			t.Fatalf("%s carries no expected closing words in this test, so a new outcome can reach doneWords untested", outcome)
 		}
-		if strings.Contains(words, "_") {
-			t.Errorf("%s closes the turn with its own enum name: %q", one.outcome, words)
+		got := doneWords(outcome, nil)
+		if got != expected {
+			t.Errorf("%s closes the turn with %q, want %q", outcome, got, expected)
+		}
+		if strings.Contains(got, "_") {
+			t.Errorf("%s closes the turn with its own enum name: %q", outcome, got)
+		}
+	}
+}
+
+func TestSessionVerdictNamesEveryLedgerVerdict(t *testing.T) {
+	want := map[ledger.Verdict]session.Verdict{
+		ledger.VerdictUnset: session.Ask,
+		ledger.VerdictAllow: session.Allow,
+		ledger.VerdictAsk:   session.Ask,
+		ledger.VerdictDeny:  session.Deny,
+	}
+	for _, v := range ledger.AllVerdicts() {
+		expected, named := want[v]
+		if !named {
+			t.Fatalf("%s carries no expected session verdict, so a new ledger verdict can reach sessionVerdict untested", v)
+		}
+		if got := sessionVerdict(v); got != expected {
+			t.Errorf("sessionVerdict(%s) = %s, want %s", v, got, expected)
 		}
 	}
 }
