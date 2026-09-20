@@ -1,7 +1,9 @@
 package policy
 
 import (
+	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"tofu/internal/judge/question"
@@ -39,6 +41,42 @@ func TestLintFileOnTheShippedPolicy(t *testing.T) {
 	}
 	if pol.Name != "tool_gate" {
 		t.Fatalf("pol.Name = %q", pol.Name)
+	}
+}
+
+func TestAFindingWithNoFieldNamesThePolicyAlone(t *testing.T) {
+	finding := Finding{
+		Rule:   RuleQuestionMissing,
+		Policy: "tool_gate",
+		Field:  "risk_question",
+		File:   "catalog/policy/tool_gate@1.yaml",
+		Detail: "no such question",
+	}
+	want := "catalog/policy/tool_gate@1.yaml: tool_gate.risk_question: question-not-in-the-set: no such question"
+	if got := finding.String(); got != want {
+		t.Fatalf("a finding on a field reads %q, want %q", got, want)
+	}
+	finding.Field = ""
+	want = "catalog/policy/tool_gate@1.yaml: tool_gate: question-not-in-the-set: no such question"
+	if got := finding.String(); got != want {
+		t.Fatalf("a finding on no field reads %q, want %q", got, want)
+	}
+}
+
+func TestLintFileReportsAQuestionSetItCannotRead(t *testing.T) {
+	dir := t.TempDir()
+	policyDir := filepath.Join(dir, "policy")
+	if err := os.MkdirAll(policyDir, 0o750); err != nil {
+		t.Fatalf("making %s: %v", policyDir, err)
+	}
+	path := filepath.Join(policyDir, "tool_gate@1.yaml")
+	writeFile(t, path, strings.Replace(projectToolGatePolicy, "questions_version: 1", "questions_version: 99", 1))
+	pol, findings, err := LintFile(path)
+	if err == nil {
+		t.Fatalf("LintFile linted %s against a question set that is not on disk: %v", pol.Name, findings)
+	}
+	if findings != nil {
+		t.Fatalf("LintFile returned findings it could not have computed: %v", findings)
 	}
 }
 

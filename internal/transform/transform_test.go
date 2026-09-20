@@ -336,6 +336,63 @@ func TestAPathOutsideTheRootIsRefused(t *testing.T) {
 	}
 }
 
+func TestDeriveNumbersARepeatedAnchorAndLeavesAUniqueOneAlone(t *testing.T) {
+	cases := []struct {
+		name             string
+		before           string
+		after            string
+		anchorOccurrence int
+		untilOccurrence  int
+	}{
+		{name: "a unique anchor needs no occurrence", before: "a\nx\ny\nb\n", after: "a\nz\nb\n"},
+		{
+			name:             "a repeated anchor carries the occurrence that makes it unique",
+			before:           "a\nx\ny\nb\nx\ny\nc\n",
+			after:            "a\nz\nb\nx\ny\nc\n",
+			anchorOccurrence: 1,
+			untilOccurrence:  1,
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			edits, err := Derive(c.before, c.after)
+			if err != nil {
+				t.Fatalf("Derive: %v", err)
+			}
+			if len(edits) != 1 {
+				t.Fatalf("derived %d edits, wanted 1: %+v", len(edits), edits)
+			}
+			want := Edit{
+				Kind:             Replace,
+				Anchor:           "x",
+				AnchorOccurrence: c.anchorOccurrence,
+				Until:            "y",
+				UntilOccurrence:  c.untilOccurrence,
+				Text:             "z\n",
+			}
+			if edits[0] != want {
+				t.Fatalf("derived %+v, wanted %+v", edits[0], want)
+			}
+			applyAndCheckPreview(t, seed(t, "f.txt", c.before), "f.txt", edits, c.after)
+		})
+	}
+}
+
+func TestPlanSaysWhichEditInTheChainFailed(t *testing.T) {
+	root := seed(t, "notes.txt", "a\nb\n")
+	_, err := Plan(root, "notes.txt", []Edit{
+		{Kind: Prepend, Text: "top\n"},
+		{Kind: Replace, Anchor: "nothing like this", Until: "b", Text: ""},
+	})
+	if err == nil {
+		t.Fatal("Plan accepted a chain whose second edit anchors on a line that is not there")
+	}
+	want := `edit 2 of 2 on notes.txt: anchor "nothing like this" matches no line in the file`
+	if err.Error() != want {
+		t.Fatalf("Plan reported %q, wanted %q", err, want)
+	}
+}
+
 func TestAnUnknownKindIsRefused(t *testing.T) {
 	if _, err := (Edit{Kind: "rename_symbol"}).On("a\n"); err == nil {
 		t.Fatal("an edit kind this catalogue does not hold was applied")

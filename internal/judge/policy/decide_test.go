@@ -37,6 +37,127 @@ func TestDeadBandEscalatesOnBothSides(t *testing.T) {
 	}
 }
 
+func TestAScoreOneDeadBandFromTheThresholdIsInsideTheBand(t *testing.T) {
+	pol := fixturePolicy()
+	pol.Thresholds.RiskAskAt = 0.25
+	t.Logf("risk_ask_at is 0.25 here because 0.25 plus or minus %g is exact in binary, so the edge of the band is the edge and not a rounding of it", konst.ThresholdDeadBand)
+	for _, risk := range []float64{pol.Thresholds.RiskAskAt - konst.ThresholdDeadBand, pol.Thresholds.RiskAskAt + konst.ThresholdDeadBand} {
+		answers := neutralAnswers(pol)
+		answers[pol.RiskQuestion] = scoreAnswerFixture(risk)
+		got, reason, err := Decide(answers, pol)
+		if err != nil {
+			t.Fatalf("Decide: %v", err)
+		}
+		if got != VerdictAsk {
+			t.Errorf("risk %v, one dead band from %v: verdict = %s, want %s", risk, pol.Thresholds.RiskAskAt, got, VerdictAsk)
+		}
+		if !reason.DeadBand {
+			t.Errorf("risk %v, one dead band from %v: the row does not record it as borderline", risk, pol.Thresholds.RiskAskAt)
+		}
+	}
+}
+
+func TestTheReasonNamesTheThresholdItComparedAgainst(t *testing.T) {
+	pol := fixturePolicy()
+	cases := []struct {
+		name       string
+		risk       float64
+		comparison Comparison
+		threshold  float64
+	}{
+		{name: "clear of both thresholds", risk: 0.1, comparison: ComparisonRiskAskAt, threshold: pol.Thresholds.RiskAskAt},
+		{name: "above the ask threshold", risk: 2.0, comparison: ComparisonRiskAskAt, threshold: pol.Thresholds.RiskAskAt},
+		{name: "above the deny threshold", risk: 3.0, comparison: ComparisonRiskDenyAt, threshold: pol.Thresholds.RiskDenyAt},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			answers := neutralAnswers(pol)
+			answers[pol.RiskQuestion] = scoreAnswerFixture(c.risk)
+			_, reason, err := Decide(answers, pol)
+			if err != nil {
+				t.Fatalf("Decide: %v", err)
+			}
+			if reason.Comparison != c.comparison {
+				t.Fatalf("comparison = %s, want %s", reason.Comparison, c.comparison)
+			}
+			if reason.Threshold != c.threshold {
+				t.Fatalf("threshold = %v, want %v, the number the row says decided it", reason.Threshold, c.threshold)
+			}
+			if reason.Value != c.risk {
+				t.Fatalf("value = %v, want %v", reason.Value, c.risk)
+			}
+		})
+	}
+}
+
+func TestTheApprovalRelaxationBandSitsWhereThePolicyPutIt(t *testing.T) {
+	pol := fixturePolicy()
+	relax := pol.Thresholds.ApprovalRelaxAt
+	cases := []struct {
+		name      string
+		approval  float64
+		want      Verdict
+		relaxedBy string
+	}{
+		{name: "clear below the band", approval: relax - 2*konst.ThresholdDeadBand, want: VerdictAsk, relaxedBy: pol.ApprovalQuestion},
+		{name: "on the lower edge of the band", approval: relax - konst.ThresholdDeadBand, want: VerdictDeny},
+		{name: "on the threshold itself", approval: relax, want: VerdictDeny},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			answers := neutralAnswers(pol)
+			answers[pol.RiskQuestion] = scoreAnswerFixture(3.0)
+			answers[pol.ApprovalQuestion] = noulAnswerFixture(c.approval)
+			got, reason, err := Decide(answers, pol)
+			if err != nil {
+				t.Fatalf("Decide: %v", err)
+			}
+			if got != c.want {
+				t.Errorf("approval %v against approval_relax_at %v: verdict = %s, want %s", c.approval, relax, got, c.want)
+			}
+			if reason.RelaxedBy != c.relaxedBy {
+				t.Errorf("approval %v: relaxed by = %q, want %q", c.approval, reason.RelaxedBy, c.relaxedBy)
+			}
+		})
+	}
+}
+
+func TestTheUserRequestedRelaxationBandSitsWhereThePolicyPutIt(t *testing.T) {
+	pol := fixturePolicy()
+	relax := pol.Thresholds.UserRequestedRelaxAt
+	cases := []struct {
+		name          string
+		userRequested float64
+		want          Verdict
+		relaxedBy     string
+		ambiguous     string
+	}{
+		{name: "clear above the band", userRequested: relax + 2*konst.ThresholdDeadBand, want: VerdictAsk, relaxedBy: pol.UserRequestedQuestion},
+		{name: "on the upper edge of the band", userRequested: relax + konst.ThresholdDeadBand, want: VerdictDeny, ambiguous: pol.UserRequestedQuestion},
+		{name: "on the threshold itself", userRequested: relax, want: VerdictDeny, ambiguous: pol.UserRequestedQuestion},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			answers := neutralAnswers(pol)
+			answers[pol.RiskQuestion] = scoreAnswerFixture(3.0)
+			answers[pol.UserRequestedQuestion] = noulAnswerFixture(c.userRequested)
+			got, reason, err := Decide(answers, pol)
+			if err != nil {
+				t.Fatalf("Decide: %v", err)
+			}
+			if got != c.want {
+				t.Errorf("user_requested %v against user_requested_relax_at %v: verdict = %s, want %s", c.userRequested, relax, got, c.want)
+			}
+			if reason.RelaxedBy != c.relaxedBy {
+				t.Errorf("user_requested %v: relaxed by = %q, want %q", c.userRequested, reason.RelaxedBy, c.relaxedBy)
+			}
+			if reason.Ambiguous != c.ambiguous {
+				t.Errorf("user_requested %v: ambiguous = %q, want %q", c.userRequested, reason.Ambiguous, c.ambiguous)
+			}
+		})
+	}
+}
+
 func TestAuthorityNoulRelaxesAndNeverTightens(t *testing.T) {
 	pol := fixturePolicy()
 

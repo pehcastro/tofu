@@ -135,6 +135,25 @@ func TestUnavailableNeverAllows(t *testing.T) {
 	}
 }
 
+func TestTheRegexArmReadsAStateThatCarriesNoUserMessages(t *testing.T) {
+	cases := []struct {
+		name  string
+		state string
+		want  Verdict
+	}{
+		{name: "a force push nobody asked for", state: `{"input":{"command":"git push --force"},"context":{}}`, want: VerdictDeny},
+		{name: "a harmless command nobody asked for", state: `{"input":{"command":"ls -la"},"context":{}}`, want: VerdictAllow},
+		{name: "the message list is present and empty", state: `{"input":{"command":"git push --force"},"context":{"user_recent_messages":[]}}`, want: VerdictDeny},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := RegexArm([]byte(c.state)); got != c.want {
+				t.Fatalf("RegexArm = %s, want %s", got, c.want)
+			}
+		})
+	}
+}
+
 func TestTheRowNamesTheArmAndSaysTheDecisionWasNotMade(t *testing.T) {
 	pol := fixturePolicy()
 	state := []byte(`{"input":{"command":"git push --force"},"context":{"user_recent_messages":["can you check if the tests pass?"]}}`)

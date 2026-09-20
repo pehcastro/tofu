@@ -143,6 +143,19 @@ func TestLoadRejectsAnUnknownField(t *testing.T) {
 	}
 }
 
+func TestAParseFailureNamesTheLineItHappenedOn(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "bad@1.yaml")
+	writeFile(t, path, "name: bad\npolicy_version: 1\n\nnot_a_field: 1\n")
+	_, err := Load(path)
+	if err == nil {
+		t.Fatal("Load accepted an unknown field")
+	}
+	want := path + `:4: unknown field "not_a_field"`
+	if err.Error() != want {
+		t.Fatalf("Load reported %q, want %q", err, want)
+	}
+}
+
 func TestLoadDefaultsToShadowWhenModeIsAbsent(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "noMode@1.yaml")

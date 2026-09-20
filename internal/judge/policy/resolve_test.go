@@ -79,6 +79,17 @@ func TestResolveFallsBackToShadowBelowTheSampleFloor(t *testing.T) {
 	}
 }
 
+func TestResolveEnforcesWhenTheSampleSitsExactlyOnTheFloor(t *testing.T) {
+	pol := enforcedFixturePolicy()
+	lock := validLockFor(pol, "typesafe/jev-1.13-20260917")
+	lock.NFit, lock.NVerify = pol.SampleFloor, pol.SampleFloor+100
+	current := Current{Build: "typesafe/jev-1.13-20260917", QuestionsVersion: 1, Known: true}
+	res := Resolve(pol, LockLookup{Present: true, Lock: lock}, current)
+	if res.Mode != ModeEnforced {
+		t.Fatalf("a sample of exactly the floor %d resolved to %s: %q", pol.SampleFloor, res.Mode, res.Reason)
+	}
+}
+
 func TestResolveEnforcesOnAValidLock(t *testing.T) {
 	pol := enforcedFixturePolicy()
 	lock := validLockFor(pol, "typesafe/jev-1.13-20260917")
