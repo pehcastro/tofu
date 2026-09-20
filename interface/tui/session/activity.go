@@ -125,7 +125,7 @@ func (m Model) activityLines() []string {
 }
 
 func (m Model) activityLine(row activity, held bool) string {
-	clock := spin(row.since) + " " + widget.Pad(widget.Elapsed(row.since), elapsedColumn)
+	clock := spin(row.since) + " " + widget.Pad(widget.Until(row.since), elapsedColumn)
 	name := widget.Pad(widget.Fit(row.name, nameColumn), nameColumn)
 	who, spent := name, ""
 	if held {

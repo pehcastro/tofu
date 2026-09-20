@@ -160,7 +160,7 @@ func (m Model) row(index int, child Child, width int) string {
 		picked = pickedMark
 	}
 	head := picked + Mark(child.State) + widget.Pad(child.Name, nameColumn)
-	tail := widget.Lead(widget.Elapsed(child.Since), sinceColumn) + gap + widget.Pad(dots(child), progressDots)
+	tail := widget.Lead(widget.Until(child.Since), sinceColumn) + gap + widget.Pad(dots(child), progressDots)
 	room := max(width-widget.Cells(head)-widget.Cells(tail), 1)
 	return head + widget.Pad(widget.Fit(child.Doing, room), room) + tail
 }

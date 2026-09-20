@@ -9,11 +9,12 @@ import (
 )
 
 const (
-	filledRune     = "▓"
-	emptyRune      = "░"
-	percentCells   = 4
-	hoursPerDay    = 24
-	minutesPerHour = 60
+	filledRune       = "▓"
+	emptyRune        = "░"
+	percentCells     = 4
+	hoursPerDay      = 24
+	minutesPerHour   = 60
+	secondsPerMinute = 60
 )
 
 func Bar(fraction float64, width int) string {
@@ -33,22 +34,26 @@ func Quota(fraction float64, resetsAt, now time.Time) string {
 	if resetsAt.IsZero() {
 		return meter
 	}
-	return meter + "  resets " + Until(resetsAt.Sub(now))
+	if left := resetsAt.Sub(now); left > 0 {
+		return meter + "  resets in " + Until(left)
+	}
+	return meter + "  resets now"
 }
 
-func Until(left time.Duration) string {
-	minutes := int(left.Minutes())
-	if minutes <= 0 {
-		return "now"
+func Until(d time.Duration) string {
+	seconds := max(int(d.Seconds()), 0)
+	if seconds < secondsPerMinute {
+		return strconv.Itoa(seconds) + "s"
 	}
+	minutes := seconds / secondsPerMinute
 	if minutes < minutesPerHour {
-		return "in " + strconv.Itoa(minutes) + "m"
+		return both(minutes, "m", seconds%secondsPerMinute, "s")
 	}
 	hours := minutes / minutesPerHour
 	if hours < hoursPerDay {
-		return "in " + both(hours, "h", minutes%minutesPerHour, "m")
+		return both(hours, "h", minutes%minutesPerHour, "m")
 	}
-	return "in " + both(hours/hoursPerDay, "d", hours%hoursPerDay, "h")
+	return both(hours/hoursPerDay, "d", hours%hoursPerDay, "h")
 }
 
 func both(whole int, unit string, part int, partUnit string) string {

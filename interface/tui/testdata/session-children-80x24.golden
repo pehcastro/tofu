@@ -12,8 +12,8 @@
                                                                                 
 [1;38;5;255m▌ [m[38;5;252mcounting the go files under each root, then reading the[m[38;5;252m rules.[m                
 [38;5;39m· 3 tools · read 2 · bash 1 · 1s[m                                                
-[38;5;44m⠦ 2m14s  go-dev    internal/judge/**   writing policy/toolgate.go           181k[m
-[38;5;44m⠇ 1m02s  bench     bench/harness/**    go test ./bench/...                  129k[m
+[38;5;44m⠦ 2m 14s  go-dev    internal/judge/**   writing policy/toolgate.go          181k[m
+[38;5;44m⠇ 1m 2s  bench     bench/harness/**    go test ./bench/...                  129k[m
 [38;5;44m⠦ 9s     go-docs   docs/**             reading docs/verification.md           4k[m
 [38;5;44m⠼ 1s     working                       bash for d in internal/* interface/* cmd…[m
 [38;5;236m────────────────────────────────────────────────────────────────────────────────[m

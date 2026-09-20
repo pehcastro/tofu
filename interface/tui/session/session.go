@@ -341,9 +341,9 @@ func (m *Model) Start() {
 
 func (m *Model) Close(words string) {
 	work := m.elapsed(m.began)
-	line := words + " " + widget.Elapsed(work)
+	line := words + " " + widget.Until(work)
 	if m.waited > work {
-		line += foldSeparator + "waited " + widget.Elapsed(m.waited)
+		line += foldSeparator + "waited " + widget.Until(m.waited)
 	}
 	m.Append(Entry{Kind: Note, Body: line})
 }
@@ -432,7 +432,7 @@ func (m Model) foldLine(start, end int) string {
 	if bytes > 0 {
 		fields = append(fields, widget.Size(bytes))
 	}
-	fields = append(fields, widget.Elapsed(since))
+	fields = append(fields, widget.Until(since))
 	return style.Render(widget.Fit(noteMarker+strings.Join(fields, separator), m.width))
 }
 
@@ -486,7 +486,7 @@ func (m Model) toolLines(entry Entry) []string {
 	status, statusStyle := entry.Status, style
 	switch {
 	case entry.running():
-		status, statusStyle = widget.Elapsed(m.elapsed(entry.Started)), theme.Accent()
+		status, statusStyle = widget.Until(m.elapsed(entry.Started)), theme.Accent()
 	case entry.Failed:
 		statusStyle = theme.Fail()
 	}

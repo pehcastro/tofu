@@ -12,6 +12,7 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 
 ### Added
 
+- Every duration reads the same way, because one rule now writes all of them instead of three. **The turn clock changes shape**: a turn of two minutes and fourteen seconds reads `2m 14s` where it read `2m14s`, matching the hours and days that already carried a space.
 - A `github_pr_diff` tool. It takes a pull request number, a full URL, or nothing meaning the current branch, and shells out to `gh` rather than holding a token of its own. `gh` missing and `gh` unauthenticated each get their own refusal saying what to do, instead of a wall of standard error.
 - The model's words appear as it writes them. Before this the interface drew nothing until a whole step finished, including its tool calls, so a long answer was a spinner. The text still lands in the record as one message, not as a thousand fragments.
 

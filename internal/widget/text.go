@@ -1,15 +1,11 @@
 package widget
 
 import (
-	"fmt"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/charmbracelet/x/ansi"
 )
-
-const secondsPerMinute = int(time.Minute / time.Second)
 
 const (
 	kilobyte = 1 << 10
@@ -70,14 +66,6 @@ func Size(bytes int) string {
 		return strconv.FormatFloat(float64(bytes)/kilobyte, 'f', 1, 64) + " KB"
 	}
 	return strconv.Itoa(bytes) + " bytes"
-}
-
-func Elapsed(since time.Duration) string {
-	seconds := max(int(since.Seconds()), 0)
-	if seconds < secondsPerMinute {
-		return strconv.Itoa(seconds) + "s"
-	}
-	return fmt.Sprintf("%dm%02ds", seconds/secondsPerMinute, seconds%secondsPerMinute)
 }
 
 func Wrap(text string, width int) []string {

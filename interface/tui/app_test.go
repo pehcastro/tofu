@@ -512,7 +512,7 @@ func TestCrewViewGolden(t *testing.T) {
 	} {
 		t.Run(size.name, func(t *testing.T) {
 			content := crewApp(t, size.width, size.height).View().Content
-			for _, want := range []string{"go-dev", "go-docs", "go-rules", "2m14s", "6m41s", "12s"} {
+			for _, want := range []string{"go-dev", "go-docs", "go-rules", "2m 14s", "6m 41s", "12s"} {
 				if !strings.Contains(content, want) {
 					t.Errorf("the crew view does not show %q\n%s", want, content)
 				}

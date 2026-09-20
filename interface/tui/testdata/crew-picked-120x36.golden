@@ -2,8 +2,8 @@
 [38;5;240m1 session[m   [38;5;39m2 crew[m   [38;5;240m3 file edits[m   [38;5;240m6 settings[m                                                                          
 [38;5;39mcrew  3 children, 1 running                                                  [m[38;5;236m │ [m[38;5;39mgo-docs                                 [m
 [38;5;252m                                                                             [m[38;5;236m │ [m[38;5;252m                                        [m
-[38;5;252m ● go-dev    writing policy/toolgate.go                        2m14s  ▪▪▪▪▪▫▫[m[38;5;236m │ [m[38;5;44m⟩ read docs/verification.md             [m
-[38;5;39m›✓ go-docs   done, 12 files read                               6m41s         [m[38;5;236m │ [m[38;5;240m  412 lines                             [m
+[38;5;252m ● go-dev    writing policy/toolgate.go                       2m 14s  ▪▪▪▪▪▫▫[m[38;5;236m │ [m[38;5;44m⟩ read docs/verification.md             [m
+[38;5;39m›✓ go-docs   done, 12 files read                              6m 41s         [m[38;5;236m │ [m[38;5;240m  412 lines                             [m
 [38;5;252m ⤺ go-rules  handed back to go-dev                               12s         [m[38;5;236m │ [m[38;5;252m                                        [m
 [38;5;252m                                                                             [m[38;5;236m │ [m[38;5;252m▌ renamed the interface and its five    [m
 [38;5;245mownership                                                                    [m[38;5;236m │ [m[38;5;252m  implementations. one call site in     [m

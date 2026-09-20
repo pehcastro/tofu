@@ -4,7 +4,6 @@ import (
 	"slices"
 	"strings"
 	"testing"
-	"time"
 )
 
 func TestMaskNeverRevealsMoreThanFourRunesOrMostOfTheSecret(t *testing.T) {
@@ -171,25 +170,6 @@ func TestWrapTruncatesAWordWiderThanTheColumnRatherThanBreakingIt(t *testing.T) 
 	want := []string{"run", "internal/…", "now"}
 	if !slices.Equal(got, want) {
 		t.Errorf("a word wider than the column wrapped to %q, want %q", got, want)
-	}
-}
-
-func TestElapsedReadsAsAClockPastAMinuteAndNeverGoesBackwards(t *testing.T) {
-	for _, step := range []struct {
-		since time.Duration
-		want  string
-	}{
-		{-time.Hour, "0s"},
-		{0, "0s"},
-		{999 * time.Millisecond, "0s"},
-		{59 * time.Second, "59s"},
-		{time.Minute, "1m00s"},
-		{61 * time.Second, "1m01s"},
-		{time.Hour, "60m00s"},
-	} {
-		if got := Elapsed(step.since); got != step.want {
-			t.Errorf("Elapsed(%s) = %q, want %q", step.since, got, step.want)
-		}
 	}
 }
 

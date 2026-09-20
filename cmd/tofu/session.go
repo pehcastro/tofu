@@ -594,12 +594,8 @@ func sessionWhen(at, now time.Time) string {
 	switch {
 	case since < 0, since >= sessionWeek:
 		return at.Format(sessionDate)
-	case since < time.Minute:
-		return "just now"
-	case since < time.Hour:
-		return strconv.Itoa(int(since.Minutes())) + "m ago"
 	case since < sessionDay:
-		return strconv.Itoa(int(since.Hours())) + "h ago"
+		return widget.Until(since) + " ago"
 	}
 	return at.Format(sessionClock)
 }

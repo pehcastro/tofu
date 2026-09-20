@@ -9,27 +9,55 @@ import (
 
 var rawHours = regexp.MustCompile(`\b([2-9][4-9]|[3-9][0-9]|[0-9]{3,})h`)
 
-func TestAResetReadsAsADurationAPersonPlansAround(t *testing.T) {
+func TestADurationRendersAtEveryScale(t *testing.T) {
 	for _, step := range []struct {
-		window string
-		left   time.Duration
-		want   string
+		scale string
+		d     time.Duration
+		want  string
 	}{
-		{"spent", 0, "now"},
-		{"5h", 40 * time.Minute, "in 40m"},
-		{"5h", 2*time.Hour + 6*time.Minute, "in 2h 6m"},
-		{"1d", 3 * time.Hour, "in 3h"},
-		{"7d", 75*time.Hour + 26*time.Minute, "in 3d 3h"},
-		{"7d", 160*time.Hour + 15*time.Minute, "in 6d 16h"},
-		{"mo", 24 * time.Hour, "in 1d"},
+		{"seconds", 40 * time.Second, "40s"},
+		{"minutes", 40 * time.Minute, "40m"},
+		{"hours", 2*time.Hour + 6*time.Minute, "2h 6m"},
+		{"days", 75*time.Hour + 26*time.Minute, "3d 3h"},
 	} {
-		got := Until(step.left)
+		got := Until(step.d)
 		if got != step.want {
-			t.Errorf("the %s window resets %q, want %q", step.window, got, step.want)
+			t.Errorf("the %s case renders %q, want %q", step.scale, got, step.want)
 		}
 		if rawHours.MatchString(got) {
-			t.Errorf("the %s window prints a raw hour count over 24: %q", step.window, got)
+			t.Errorf("the %s case prints a raw hour count over 24: %q", step.scale, got)
 		}
+	}
+}
+
+func TestAZeroOrPastDurationFloorsAtZeroSeconds(t *testing.T) {
+	for _, d := range []time.Duration{0, -time.Hour} {
+		if got := Until(d); got != "0s" {
+			t.Errorf("Until(%s) = %q, want %q", d, got, "0s")
+		}
+	}
+}
+
+func TestTheSameDurationBacksTheSessionCrewAndTofuSessionViews(t *testing.T) {
+	for _, step := range []struct {
+		place string
+		d     time.Duration
+		want  string
+	}{
+		{"interface/tui/session turn clock", 41 * time.Second, "41s"},
+		{"interface/tui/crew fold row", 2*time.Hour + 14*time.Minute, "2h 14m"},
+		{"cmd/tofu session list", 10 * time.Minute, "10m"},
+	} {
+		if got := Until(step.d); got != step.want {
+			t.Errorf("%s reads Until(%s) as %q, want %q", step.place, step.d, got, step.want)
+		}
+	}
+}
+
+func TestAResetPrintsNowRatherThanZeroSeconds(t *testing.T) {
+	now := time.Now()
+	if got := Quota(0.4, now, now); !strings.HasSuffix(got, "resets now") {
+		t.Errorf("a reset that has already passed reads %q, want it to end in %q", got, "resets now")
 	}
 }
 
