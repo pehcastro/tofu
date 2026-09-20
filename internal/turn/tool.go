@@ -44,7 +44,7 @@ func (r Registry) lookup(name string) (Tool, bool) {
 
 func readOnly(name string) bool {
 	switch name {
-	case "read", "glob", "grep", "search", "symbols", "project_report", "artifact_fetch", "fetch", "web_search":
+	case "read", "glob", "grep", "search", "symbols", "project_report", "artifact_fetch", "fetch", "web_search", "github_pr_diff":
 		return true
 	}
 	return false

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"path"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 
@@ -14,10 +15,20 @@ import (
 
 func SideEffectFree(name string) bool {
 	switch name {
-	case "read", "glob", "grep", "search", "symbols", "project_report", "artifact_fetch", "fetch", "web_search":
+	case "read", "glob", "grep", "search", "symbols", "project_report", "artifact_fetch", "fetch", "web_search", "github_pr_diff":
 		return true
 	}
 	return false
+}
+
+var pullRequestURL = regexp.MustCompile(`^https://github\.com/[^/]+/[^/]+/pull/(\d+)/?$`)
+
+func pullRequestKey(raw string) string {
+	trimmed := strings.TrimSpace(raw)
+	if match := pullRequestURL.FindStringSubmatch(trimmed); match != nil {
+		return match[1]
+	}
+	return trimmed
 }
 
 func CallKey(name string, raw json.RawMessage) (string, bool) {
@@ -45,6 +56,8 @@ func CallKey(name string, raw json.RawMessage) (string, bool) {
 				delete(args, key)
 			case strings.Contains(key, "path"):
 				args[key] = path.Clean(filepath.ToSlash(shape))
+			case name == "github_pr_diff" && key == "pr":
+				args[key] = pullRequestKey(shape)
 			}
 		}
 	}

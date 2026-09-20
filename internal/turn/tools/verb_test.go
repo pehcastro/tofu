@@ -21,14 +21,15 @@ import (
 )
 
 const (
-	standInExitEnvar    = "TOFU_STAND_IN_EXIT"
-	standInMessageEnvar = "TOFU_STAND_IN_MESSAGE"
-	standInStdoutEnvar  = "TOFU_STAND_IN_STDOUT"
-	realTofuEnvar       = "TOFU_STAND_IN_FORWARDS_TO"
-	depthEnvar          = "TOFU_VERB_DEPTH"
-	slashSlash          = "/" + "/"
-	rulesInTheBinary    = "the binary"
-	rulesInTheProject   = "the project"
+	standInExitEnvar      = "TOFU_STAND_IN_EXIT"
+	standInMessageEnvar   = "TOFU_STAND_IN_MESSAGE"
+	standInStdoutEnvar    = "TOFU_STAND_IN_STDOUT"
+	standInCallsFileEnvar = "TOFU_STAND_IN_CALLS_FILE"
+	realTofuEnvar         = "TOFU_STAND_IN_FORWARDS_TO"
+	depthEnvar            = "TOFU_VERB_DEPTH"
+	slashSlash            = "/" + "/"
+	rulesInTheBinary      = "the binary"
+	rulesInTheProject     = "the project"
 )
 
 func TestMain(m *testing.M) {
@@ -47,6 +48,12 @@ func standInForTofu(args []string) int {
 			return 3
 		}
 		return forwarded.ProcessState.ExitCode()
+	}
+	if callsFile := os.Getenv(standInCallsFileEnvar); callsFile != "" {
+		if f, err := os.OpenFile(callsFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600); err == nil {
+			_, _ = f.WriteString("1\n")
+			_ = f.Close()
+		}
 	}
 	body, _ := io.ReadAll(os.Stdin)
 	running, _ := os.Executable()

@@ -26,7 +26,7 @@ index 83db48f..bf269c4 100644
  func Foo() {}
 `
 
-func plantGH(t *testing.T, exitCode int, stdout, stderr string) {
+func plantGH(t *testing.T, exitCode int, stdout, stderr string) string {
 	t.Helper()
 	running, err := os.Executable()
 	if err != nil {
@@ -44,10 +44,25 @@ func plantGH(t *testing.T, exitCode int, stdout, stderr string) {
 	if err := os.WriteFile(filepath.Join(dir, name), body, 0o700); err != nil {
 		t.Fatalf("planting a stand-in gh: %v", err)
 	}
+	callsFile := filepath.Join(dir, "calls")
 	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
 	t.Setenv(standInExitEnvar, strconv.Itoa(exitCode))
 	t.Setenv(standInStdoutEnvar, stdout)
 	t.Setenv(standInMessageEnvar, stderr)
+	t.Setenv(standInCallsFileEnvar, callsFile)
+	return callsFile
+}
+
+func countCalls(t *testing.T, callsFile string) int {
+	t.Helper()
+	body, err := os.ReadFile(callsFile)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return 0
+		}
+		t.Fatalf("reading the calls file: %v", err)
+	}
+	return strings.Count(string(body), "1\n")
 }
 
 func TestGitHubPRDiffRefusesWhenGhIsMissing(t *testing.T) {
@@ -153,5 +168,69 @@ func TestADiffOverTheResultCapGoesToTheArtifactStoreAndTheModelIsTold(t *testing
 	}
 	if !strings.Contains(model.toolResult(t), "artifact "+called[0].ResultHandle) {
 		t.Fatal("the model was not told the handle that holds the diff")
+	}
+}
+
+func TestTheSamePullRequestAskedForTwiceRunsGhOnce(t *testing.T) {
+	callsFile := plantGH(t, 0, recordedPRDiff, "")
+	tool, err := tools.NewGitHubPRDiff(t.TempDir())
+	if err != nil {
+		t.Fatalf("building the tool: %v", err)
+	}
+	wrapped := tools.NewMemo().Wrap([]turn.Tool{tool})[0]
+
+	run(t, wrapped, `{"pr":"42"}`)
+	run(t, wrapped, `{"pr":"42"}`)
+
+	if got := countCalls(t, callsFile); got != 1 {
+		t.Fatalf("gh ran %d times for the same pull request asked for twice, want 1", got)
+	}
+}
+
+func TestAPullRequestNamedByNumberAndByURLIsOneCacheEntry(t *testing.T) {
+	callsFile := plantGH(t, 0, recordedPRDiff, "")
+	tool, err := tools.NewGitHubPRDiff(t.TempDir())
+	if err != nil {
+		t.Fatalf("building the tool: %v", err)
+	}
+	wrapped := tools.NewMemo().Wrap([]turn.Tool{tool})[0]
+
+	run(t, wrapped, `{"pr":"42"}`)
+	second := run(t, wrapped, `{"pr":"https://github.com/owner/repo/pull/42"}`)
+
+	if got := countCalls(t, callsFile); got != 1 {
+		t.Fatalf("gh ran %d times for one pull request spelled two ways, want 1", got)
+	}
+	if !strings.Contains(second.Content, "cached") {
+		t.Fatalf("the url spelling was not served from the cache built by the number spelling:\n%s", second.Content)
+	}
+}
+
+func TestAWriteDuringTheTurnClearsTheCachedPullRequestDiff(t *testing.T) {
+	callsFile := plantGH(t, 0, recordedPRDiff, "")
+	prTool, err := tools.NewGitHubPRDiff(t.TempDir())
+	if err != nil {
+		t.Fatalf("building the tool: %v", err)
+	}
+	root := t.TempDir()
+	writeTool, err := turn.NewWriteTool(root)
+	if err != nil {
+		t.Fatalf("building write: %v", err)
+	}
+	memo := tools.NewMemo()
+	wrapped := memo.Wrap([]turn.Tool{prTool, writeTool})
+	prWrapped, writeWrapped := wrapped[0], wrapped[1]
+
+	run(t, prWrapped, `{"pr":"42"}`)
+	run(t, prWrapped, `{"pr":"42"}`)
+	if got := countCalls(t, callsFile); got != 1 {
+		t.Fatalf("gh ran %d times before the write, want 1", got)
+	}
+
+	run(t, writeWrapped, `{"path":"a.txt","content":"anything\n"}`)
+	run(t, prWrapped, `{"pr":"42"}`)
+
+	if got := countCalls(t, callsFile); got != 2 {
+		t.Fatalf("gh ran %d times after a write cleared the memo, want 2", got)
 	}
 }
