@@ -6,15 +6,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"time"
 
 	"tofu/internal/judge/jev"
 	"tofu/internal/judge/jev/wire/openrouter"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/judge/policy"
 	"tofu/internal/judge/question"
-	"tofu/internal/konst"
-	"tofu/internal/transport"
 )
 
 type judgeInput struct {
@@ -83,19 +80,7 @@ func judgeVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 	if err != nil {
 		return judgeFail(errOut, err)
 	}
-	wire, err := openrouter.New(openrouter.Config{
-		Key: key,
-		Transport: transport.Config{
-			AttemptTimeout: time.Duration(konst.JudgeTimeoutMillis) * time.Millisecond,
-			Retries:        konst.JudgeRetries,
-			Backoff:        time.Duration(konst.JudgeBackoffMillis) * time.Millisecond,
-			Concurrency:    1,
-		},
-	})
-	if err != nil {
-		return judgeFail(errOut, err)
-	}
-	client, err := jev.NewClient(jev.Config{Wire: wire})
+	client, err := jevClientOn(key)
 	if err != nil {
 		return judgeFail(errOut, err)
 	}

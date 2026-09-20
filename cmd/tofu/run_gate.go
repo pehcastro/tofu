@@ -71,6 +71,10 @@ func newJevClient() (*jev.Client, error) {
 	if err != nil {
 		return nil, err
 	}
+	return jevClientOn(key)
+}
+
+func jevClientOn(key string) (*jev.Client, error) {
 	wire, err := jevwire.New(jevwire.Config{
 		Key:      key,
 		Endpoint: os.Getenv(judgeEndpointEnvar),

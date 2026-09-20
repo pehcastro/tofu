@@ -7,16 +7,12 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"time"
 
 	"tofu/internal/judge/jev"
-	"tofu/internal/judge/jev/wire/openrouter"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/judge/policy"
 	"tofu/internal/judge/state"
-	"tofu/internal/konst"
 	"tofu/internal/sys"
-	"tofu/internal/transport"
 )
 
 type checkOpts struct {
@@ -40,19 +36,7 @@ func checkVerb(args []string, out, errOut io.Writer) int {
 	if err != nil {
 		return checkFail(errOut, err)
 	}
-	wire, err := openrouter.New(openrouter.Config{
-		Key: key,
-		Transport: transport.Config{
-			AttemptTimeout: time.Duration(konst.JudgeTimeoutMillis) * time.Millisecond,
-			Retries:        konst.JudgeRetries,
-			Backoff:        time.Duration(konst.JudgeBackoffMillis) * time.Millisecond,
-			Concurrency:    1,
-		},
-	})
-	if err != nil {
-		return checkFail(errOut, err)
-	}
-	client, err := jev.NewClient(jev.Config{Wire: wire})
+	client, err := jevClientOn(key)
 	if err != nil {
 		return checkFail(errOut, err)
 	}
@@ -99,13 +83,14 @@ func runCheck(ctx context.Context, client *jev.Client, policyPath, command strin
 	if err != nil {
 		return ledger.Row{}, err
 	}
-	built, builderVersion, err := state.BuildToolGateV3(state.ToolGateInput{
+	call := state.ToolGateInput{
 		Agent:      "owner-shell",
 		Tool:       "bash",
 		Input:      map[string]any{"command": command},
 		Cwd:        cwd,
 		ProjectDir: cwd,
-	})
+	}
+	built, builderVersion, err := state.BuildToolGateV3(call)
 	if err != nil {
 		return ledger.Row{}, err
 	}
@@ -125,5 +110,6 @@ func runCheck(ctx context.Context, client *jev.Client, policyPath, command strin
 		decision:     &decision,
 		answers:      toLedgerAnswers(set.QuestionsVersion, decision.Answers),
 		stateBuilder: builderVersion,
+		fingerprint:  state.FingerprintOf(call),
 	})
 }

@@ -178,7 +178,21 @@ func runJudge(ctx context.Context, client *jev.Client, req jev.Request, set batt
 	if !hit {
 		return judgeOutcome{answers: entry.Answers, fresh: true, decision: asker.decision, verdict: asker.verdict, mode: set.Mode}, nil
 	}
-	replayInput := rowInput{replayOf: entry.RowID, build: entry.Build, requestID: entry.RequestID, answers: entry.Answers}
+	dir, err := ledger.Dir()
+	if err != nil {
+		return judgeOutcome{}, err
+	}
+	replayed, _, err := ledger.NewReader(dir).ByID(entry.RowID)
+	if err != nil {
+		return judgeOutcome{}, err
+	}
+	replayInput := rowInput{
+		replayOf:    entry.RowID,
+		build:       entry.Build,
+		requestID:   entry.RequestID,
+		answers:     entry.Answers,
+		fingerprint: replayed.Fingerprint,
+	}
 	row, err := appendRow(req.State, set, replayInput)
 	if err != nil {
 		return judgeOutcome{}, err
