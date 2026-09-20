@@ -6,14 +6,27 @@
   "build": "typesafe/jev-1.13-20260917",
   "mode": "enforced",
   "sample_floor": 300,
-  "n_fit": 0,
-  "n_verify": 0,
+  "n_fit": 89,
+  "n_verify": 89,
   "ece": null,
   "map": "identity",
-  "rule": "the arm proceeds when user_requested is at or above user_requested_override_at, otherwise blocks when approval is at or above approval_block_at",
-  "thresholds": {
-    "user_requested_override_at": 0.5,
-    "approval_block_at": 0.5
+  "gate_thresholds": {
+    "risk_ask_at": 1.5,
+    "risk_deny_at": 2.5,
+    "user_requested_relax_at": 0.85,
+    "approval_relax_at": 0.15,
+    "from_untrusted_block_at": 0.5
   },
-  "provenance": "the point the jev, opus and fable arms ran at in bench/cost/report-2026-09-19.md. It was a literal in bench/cost/decision.go until BOJI-091 moved it here. Nobody fitted it and nobody verified it, so n_fit and n_verify are 0 and the point resolves to shadow"
+  "fit": {
+    "chosen": 2.125,
+    "agreement_fit": 0.9438,
+    "agreement_verify": 0.9438,
+    "always_proceed_verify": 0.9326,
+    "blocks_caught_verify": 1,
+    "blocks_verify": 6,
+    "plateau_low": 2.0,
+    "plateau_high": 3.0,
+    "adopted": false
+  },
+  "provenance": "BOJI-132 removed the thresholds and rule fields, the two field operating point of the superseded approval arm. Every reader of them is gone: bench/cost/sweep.go and bench/cost/decision_test.go were deleted, bench/cost/operating.go and bench/cost/operating_test.go no longer score that rule, and internal/judge/state/rescore_live_test.go now decides through policy.Decide over catalog/policy/tool_gate@1.yaml. The figures that rule produced are withdrawn in bench/cost/sweep-2026-09-19.md and not yet withdrawn in bench/cost/report-2026-09-19.md. gate_thresholds is what catalog/policy/tool_gate@1.yaml ships and what policy.Decide reads, unchanged by BOJI-122. n_fit and n_verify are the 89 and 89 of bench/corpus/gate/split.json, each asked live on 2026-09-19 at build typesafe/jev-1.13-20260917 with every question answer kept. The fit block records the risk_ask_at cut BOJI-122 fitted on 2026-09-19 over fit-2026-09-19.jsonl and scored on verify-2026-09-19.jsonl, and did not adopt: at 2.125 the gate agrees with 84 of 89 verify labels and catches 1 of 6 blocks, while always-proceed agrees with 83 and catches none, so the cut is worth one case and no mode changes on 178 labels against a floor of 300"
 }

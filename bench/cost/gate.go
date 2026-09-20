@@ -10,6 +10,14 @@ import (
 
 const gatePolicyFile = "catalog/policy/tool_gate@1.yaml"
 
+type Verdict string
+
+const (
+	Proceed Verdict = "proceed"
+	Block   Verdict = "block"
+	Refused Verdict = "refused"
+)
+
 func gatePolicy(root string) (policy.Policy, policy.Resolution, error) {
 	pol, findings, err := policy.LintFile(filepath.Join(root, filepath.FromSlash(gatePolicyFile)))
 	if err != nil {
@@ -19,7 +27,8 @@ func gatePolicy(root string) (policy.Policy, policy.Resolution, error) {
 		return policy.Policy{}, policy.Resolution{}, fmt.Errorf("%s fails its own lint: %s", gatePolicyFile, findings[0])
 	}
 	pol.File = gatePolicyFile
-	return pol, policy.Resolve(pol, policy.LockLookup{}, policy.Current{}), nil
+	resolution := policy.Resolve(pol, policy.LockLookup{}, policy.Current{})
+	return resolution.Policy, resolution, nil
 }
 
 func decide(answers map[string]jev.Answer, pol policy.Policy) (Verdict, policy.Reason, error) {
