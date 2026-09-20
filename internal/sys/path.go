@@ -42,6 +42,14 @@ func CatalogDir() (string, error) {
 	return filepath.Join(wd, "catalog"), nil
 }
 
+func SessionsDir() (string, error) {
+	state, err := ProjectStateDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(state, "sessions"), nil
+}
+
 func CalibrationDir() (string, error) {
 	state, err := ProjectStateDir()
 	if err != nil {

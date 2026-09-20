@@ -82,15 +82,6 @@ func ListFiles(dir string, suffix string) ([]string, error) {
 	return names, nil
 }
 
-func Readable(path string) bool {
-	f, err := os.Open(path)
-	if err != nil {
-		return false
-	}
-	_ = f.Close()
-	return true
-}
-
 func WalkDir(dir string, fn fs.WalkDirFunc) error {
 	return filepath.WalkDir(dir, fn)
 }
