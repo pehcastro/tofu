@@ -69,6 +69,9 @@ func LintFile(policyPath string) (Policy, []Finding, error) {
 	if err != nil {
 		return Policy{}, nil, err
 	}
+	if pol.Schema != SchemaGate {
+		return pol, nil, nil
+	}
 	catalogDir := filepath.Dir(filepath.Dir(policyPath))
 	questionsPath := filepath.Join(catalogDir, "questions", fmt.Sprintf("%s@%d.yaml", pol.Questions, pol.QuestionsVersion))
 	set, err := question.Load(questionsPath)

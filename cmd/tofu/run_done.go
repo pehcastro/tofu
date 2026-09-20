@@ -12,7 +12,7 @@ import (
 	"tofu/internal/turn"
 )
 
-const doneReviewPoint = "stop_check@1"
+const doneReviewPoint = state.StopCheckPolicyRef
 
 const (
 	doneArmOff   = "off"
@@ -40,7 +40,7 @@ type typedDoneReview struct {
 }
 
 func newTypedDoneReview() (typedDoneReview, error) {
-	set, err := resolvePoint(doneReviewPoint)
+	set, err := resolveStopCheckPoint()
 	if err != nil {
 		return typedDoneReview{}, err
 	}
@@ -49,6 +49,32 @@ func newTypedDoneReview() (typedDoneReview, error) {
 		return typedDoneReview{}, err
 	}
 	return typedDoneReview{client: client, set: set}, nil
+}
+
+func resolveStopCheckPoint() (battery, error) {
+	set, err := resolveCatalog(doneReviewPoint)
+	if err != nil {
+		return battery{}, err
+	}
+	pol, origin, err := state.StopCheckPolicy()
+	if err != nil {
+		return battery{}, err
+	}
+	if pol.Questions != set.SetName || pol.QuestionsVersion != set.QuestionsVersion {
+		return battery{}, fmt.Errorf("policy %s names the question set %s@%d and the battery resolved %s@%d",
+			doneReviewPoint, pol.Questions, pol.QuestionsVersion, set.SetName, set.QuestionsVersion)
+	}
+	resolution, err := resolvePolicyMode(pol)
+	if err != nil {
+		return battery{}, err
+	}
+	pol = resolution.Policy
+	set.Policy, set.Mode = &pol, resolution.Mode
+	set.ModeReason = fmt.Sprintf("the policy came from %s as %s", origin, pol.File)
+	if resolution.Reason != "" && !strings.Contains(resolution.Reason, pol.File) {
+		set.ModeReason += "; " + resolution.Reason
+	}
+	return set, nil
 }
 
 func (r typedDoneReview) Review(ctx context.Context, child turn.Row) (turn.DoneDecision, error) {

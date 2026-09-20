@@ -1,19 +1,15 @@
 name: stop_check
+schema: stop_check
 policy_version: 1
 questions: stop_check
 questions_version: 1
 mode: shadow
 sample_floor: 300
-notes: shadow only, and the verdict is read as continue for allow, ask the human for ask, stop the turn for deny. the four role names are the policy schema's, not this point's, mapping risk_question to stop_pressure, approval_question to stalled, user_requested_question to work_remains and from_untrusted_question to budget_exhausted. numbers copied from tool_gate@1, chosen by a person, not produced by calibration, BOJI-079
-
-risk_question: stop_pressure
-approval_question: stalled
-user_requested_question: work_remains
-from_untrusted_question: budget_exhausted
+notes: shadow only, and the verdict is read as continue for allow, ask the human for ask, stop the turn for deny. numbers copied from tool_gate@1, chosen by a person, not produced by calibration, BOJI-079
 
 thresholds:
-  risk_ask_at: 1.5
-  risk_deny_at: 2.5
-  user_requested_relax_at: 0.85
-  approval_relax_at: 0.15
-  from_untrusted_block_at: 0.5
+  stop_pressure_ask_at: 1.5
+  stop_pressure_deny_at: 2.5
+  work_remains_relax_at: 0.85
+  stalled_relax_at: 0.15
+  budget_exhausted_block_at: 0.5

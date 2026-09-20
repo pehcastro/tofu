@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"path/filepath"
 	"strconv"
 	"testing"
 
@@ -82,12 +81,9 @@ func stopNowAnswers(wording int) []ledger.Answer {
 
 func shippedPolicy(t *testing.T) (policy.Policy, policy.Resolution) {
 	t.Helper()
-	pol, findings, err := policy.LintFile(filepath.Join("..", "..", "catalog", "policy", Point+".yaml"))
+	pol, _, err := state.StopCheckPolicy()
 	if err != nil {
 		t.Fatalf("loading the shipped stop_check policy: %v", err)
-	}
-	for _, finding := range findings {
-		t.Errorf("the shipped policy fails its own lint: %s", finding)
 	}
 	return pol, policy.Resolve(pol, policy.LockLookup{}, policy.Current{})
 }

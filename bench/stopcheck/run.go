@@ -20,7 +20,7 @@ import (
 	"tofu/internal/transport"
 )
 
-const Point = "stop_check@1"
+const Point = state.StopCheckPolicyRef
 
 type StepResult struct {
 	Turn      string
@@ -84,12 +84,13 @@ func New(root, key string) (Battery, error) {
 	if err != nil {
 		return Battery{}, err
 	}
-	pol, findings, err := policy.LintFile(filepath.Join(root, "catalog", "policy", Point+".yaml"))
+	pol, _, err := state.StopCheckPolicy()
 	if err != nil {
 		return Battery{}, err
 	}
-	if len(findings) > 0 {
-		return Battery{}, fmt.Errorf("policy %s fails its own lint: %s", Point, findings[0])
+	if pol.Questions != set.Name || pol.QuestionsVersion != set.QuestionsVersion {
+		return Battery{}, fmt.Errorf("policy %s names question set %s@%d and the loaded set is %s@%d",
+			Point, pol.Questions, pol.QuestionsVersion, set.Name, set.QuestionsVersion)
 	}
 	resolution := policy.Resolve(pol, policy.LockLookup{}, policy.Current{})
 	pol = resolution.Policy
