@@ -148,6 +148,16 @@ func TestTheDefaultArmOffersTofusOwnVerbsAndTheSpawnToolAndNoCrewTakesSpawnAway(
 	}
 }
 
+func TestARealRunOffersTheGitHubPullRequestDiffToolAndTheOffArmDoesNot(t *testing.T) {
+	full := toolNames(t, armOpts(t))
+	if !slices.Contains(full, "github_pr_diff") {
+		t.Fatalf("a real run does not offer github_pr_diff: %v", full)
+	}
+	if three := toolNames(t, armOpts(t, "--tools", toolSetThree)); slices.Contains(three, "github_pr_diff") {
+		t.Fatalf("the off arm must stay the three tools the recorded runs had: %v", three)
+	}
+}
+
 func TestARealRunOffersProjectReportAndIsToldWhyNotToReachForFind(t *testing.T) {
 	full := toolNames(t, armOpts(t))
 	if !slices.Contains(full, "project_report") {

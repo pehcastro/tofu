@@ -570,7 +570,8 @@ func buildRunTools(dir, set string) ([]turn.Tool, *tools.Plan, error) {
 	editTool, editErr := tools.NewEdit(dir)
 	projectTool, projectErr := tools.NewProject(dir)
 	verbTools, verbErr := tools.NewVerbs(dir)
-	if err := cmp.Or(globErr, grepErr, searchErr, symbolsErr, editErr, projectErr, verbErr); err != nil {
+	githubTool, githubErr := tools.NewGitHubPRDiff(dir)
+	if err := cmp.Or(globErr, grepErr, searchErr, symbolsErr, editErr, projectErr, verbErr, githubErr); err != nil {
 		return nil, nil, err
 	}
 	webTools, webErr := buildWebTools()
@@ -578,7 +579,7 @@ func buildRunTools(dir, set string) ([]turn.Tool, *tools.Plan, error) {
 		return nil, nil, webErr
 	}
 	plan := tools.NewPlan()
-	full := append([]turn.Tool{readTool, writeTool, shell, plan, projectTool, globTool, grepTool, searchTool, symbolsTool, editTool}, verbTools...)
+	full := append([]turn.Tool{readTool, writeTool, shell, plan, projectTool, globTool, grepTool, searchTool, symbolsTool, editTool, githubTool}, verbTools...)
 	return tools.NewMemo().Wrap(append(full, webTools...)), plan, nil
 }
 

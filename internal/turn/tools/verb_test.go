@@ -23,6 +23,7 @@ import (
 const (
 	standInExitEnvar    = "TOFU_STAND_IN_EXIT"
 	standInMessageEnvar = "TOFU_STAND_IN_MESSAGE"
+	standInStdoutEnvar  = "TOFU_STAND_IN_STDOUT"
 	realTofuEnvar       = "TOFU_STAND_IN_FORWARDS_TO"
 	depthEnvar          = "TOFU_VERB_DEPTH"
 	slashSlash          = "/" + "/"
@@ -49,8 +50,12 @@ func standInForTofu(args []string) int {
 	}
 	body, _ := io.ReadAll(os.Stdin)
 	running, _ := os.Executable()
-	fmt.Printf("stand-in %s ran %q depth %s stdin %q\n",
-		filepath.Base(running), strings.Join(args, " "), os.Getenv(depthEnvar), body)
+	if stdout := os.Getenv(standInStdoutEnvar); stdout != "" {
+		fmt.Print(stdout)
+	} else {
+		fmt.Printf("stand-in %s ran %q depth %s stdin %q\n",
+			filepath.Base(running), strings.Join(args, " "), os.Getenv(depthEnvar), body)
+	}
 	fmt.Fprint(os.Stderr, os.Getenv(standInMessageEnvar))
 	code, _ := strconv.Atoi(os.Getenv(standInExitEnvar))
 	return code
