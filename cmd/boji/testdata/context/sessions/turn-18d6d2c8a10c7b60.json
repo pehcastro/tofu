@@ -1,0 +1,168 @@
+{
+  "id": "turn-18d6d2c8a10c7b60",
+  "schema": 1,
+  "at": "2026-09-19T17:27:41.0635928-03:00",
+  "task": "one at a time, print the whole contents of a.ts with cat, then b.ts, then c.ts, each in its own step, and then say in one sentence what the three files have in common",
+  "model": "claude-opus-5",
+  "spend": "subscription",
+  "steps": [
+    {
+      "index": 1,
+      "tool_calls": [
+        {
+          "tool": "bash",
+          "args": {
+            "command": "cat a.ts"
+          },
+          "command": "cat a.ts",
+          "child_id": "",
+          "exit_code": 0,
+          "result_bytes": 21778,
+          "rendered_bytes": 1266,
+          "result_hash": "699867eb872ff9a8e5890a9378bc8385e04f0bf78f6edb4a3f32f6af86ec1720",
+          "result_handle": "4b14bd3ed72289501a484b8141682ae3",
+          "gate_decision_id": "2026-09-19-3072dd5a1a60fe4e41449703eb1335f5",
+          "gate_verdict": "allow",
+          "duration_ms": 37
+        }
+      ],
+      "assistant_text": "I'll read them one at a time as requested.",
+      "stop_reason": "tool_use",
+      "prompt_tokens": 200,
+      "completion_tokens": 66,
+      "cache_read_tokens": 693,
+      "cache_write_tokens": 0,
+      "cost_usd": 0
+    },
+    {
+      "index": 2,
+      "tool_calls": [
+        {
+          "tool": "bash",
+          "args": {
+            "command": "cat b.ts"
+          },
+          "command": "cat b.ts",
+          "child_id": "",
+          "exit_code": 0,
+          "result_bytes": 21778,
+          "rendered_bytes": 1266,
+          "result_hash": "398c83c0ea42f8080c11407cec0ff56ff65fdbe67e3095fbadc9d950ea57c600",
+          "result_handle": "56944bccce9cd73cee4d01106c4664b0",
+          "gate_decision_id": "2026-09-19-2edfd305bf565134bd8115922d6d57af",
+          "gate_verdict": "allow",
+          "duration_ms": 37
+        }
+      ],
+      "assistant_text": "a.ts came back too large to paste inline — it's 21,778 bytes of generated one-line exports (`a0`–`a219`), and the tool showed me only the head and tail. Next file:",
+      "stop_reason": "tool_use",
+      "prompt_tokens": 731,
+      "completion_tokens": 419,
+      "cache_read_tokens": 693,
+      "cache_write_tokens": 0,
+      "cost_usd": 0
+    },
+    {
+      "index": 3,
+      "tool_calls": [
+        {
+          "tool": "bash",
+          "args": {
+            "command": "cat c.ts"
+          },
+          "command": "cat c.ts",
+          "child_id": "",
+          "exit_code": 0,
+          "result_bytes": 21778,
+          "rendered_bytes": 1266,
+          "result_hash": "024ab5f061082ba1b9845f99743ddcc54648285607ed3bfb9cbbd69731c9479f",
+          "result_handle": "87905edacb99964008a11d641d8958c0",
+          "gate_decision_id": "2026-09-19-eb5c6c109045d7681fb6d347eb5ab34b",
+          "gate_verdict": "allow",
+          "duration_ms": 36
+        }
+      ],
+      "stop_reason": "tool_use",
+      "prompt_tokens": 1262,
+      "completion_tokens": 52,
+      "cache_read_tokens": 693,
+      "cache_write_tokens": 0,
+      "cost_usd": 0
+    },
+    {
+      "index": 4,
+      "tool_calls": [
+        {
+          "tool": "bash",
+          "args": {
+            "command": "diff \u003c(sed 's/a/X/g' a.ts) \u003c(sed 's/b/X/g' b.ts) \u0026\u0026 diff \u003c(sed 's/a/X/g' a.ts) \u003c(sed 's/c/X/g' c.ts) \u0026\u0026 echo IDENTICAL_MODULO_LETTER; wc -l a.ts b.ts c.ts"
+          },
+          "command": "diff \u003c(sed 's/a/X/g' a.ts) \u003c(sed 's/b/X/g' b.ts) \u0026\u0026 diff \u003c(sed 's/a/X/g' a.ts) \u003c(sed 's/c/X/g' c.ts) \u0026\u0026 echo IDENTICAL_MODULO_LETTER; wc -l a.ts b.ts c.ts",
+          "child_id": "",
+          "exit_code": 0,
+          "result_bytes": 44117,
+          "rendered_bytes": 1266,
+          "result_hash": "b17b0b145427cec47b680d363127b9e163efb9906c49237897ab83dc8bb86629",
+          "result_handle": "8b77e2b15846e2ca0d10c096df2c24a9",
+          "gate_decision_id": "2026-09-19-acc386c2486f9d92f24d39e19671c492",
+          "gate_verdict": "allow",
+          "duration_ms": 109
+        }
+      ],
+      "stop_reason": "tool_use",
+      "prompt_tokens": 1790,
+      "completion_tokens": 197,
+      "cache_read_tokens": 693,
+      "cache_write_tokens": 0,
+      "cost_usd": 0,
+      "fork": {
+        "step": 4,
+        "kind": "continuation",
+        "into": "turn-18d6d2c8a10c7b60-f2",
+        "tokens_before": 2490,
+        "tokens_after": 622,
+        "blocked_micros": 2750,
+        "carry": {
+          "text": "this session continues one that reached its context budget and ended. the session that ended is on disk whole and nothing in it was rewritten. every result it read is held whole in an artifact, and artifact_fetch reads any range of one by its handle.\nwhat it did, in order:\n  step 1 bash {\"command\": \"cat a.ts\"}: 1266 bytes, artifact dfff2e3cde49b5508843bbe05d72a361\n  step 2 bash {\"command\": \"cat b.ts\"}: 1266 bytes, artifact 4b2b4f04ea5e346344220f08e8743408\n  step 3 bash {\"command\": \"cat c.ts\"}: 1266 bytes, artifact 0fbd6532dc785752f01a900503a2d3f4\n  step 4 bash {\"command\": \"diff \u003c(sed 's/a/X/g' a.ts) \u003c(sed 's/b/X/g' b.ts) \u0026\u0026 diff \u003c(sed 's/a/X/g' a.ts) \u003c(sed 's/c/X/g' c.ts) \u0026\u0026 echo IDENTICAL_MODULO_LETTER; wc -l a.ts b.ts c.ts\"}: 1266 bytes, artifact 9941ec11dc0255a11aad38c5e53a7deb\nwhere it had got to, in its own words:\n\nbash {\"command\": \"diff \u003c(sed 's/a/X/g' a.ts) \u003c(sed 's/b/X/g' b.ts) \u0026\u0026 diff \u003c(sed 's/a/X/g' a.ts) \u003c(sed 's/c/X/g' c.ts) \u0026\u0026 echo IDENTICAL_MODULO_LETTER; wc -l a.ts b.ts c.ts\"}",
+          "results": [
+            {
+              "tool": "bash",
+              "key": "bash {\"command\": \"cat a.ts\"}",
+              "bytes": 1266,
+              "handle": "dfff2e3cde49b5508843bbe05d72a361"
+            },
+            {
+              "tool": "bash",
+              "key": "bash {\"command\": \"cat b.ts\"}",
+              "bytes": 1266,
+              "handle": "4b2b4f04ea5e346344220f08e8743408"
+            },
+            {
+              "tool": "bash",
+              "key": "bash {\"command\": \"cat c.ts\"}",
+              "bytes": 1266,
+              "handle": "0fbd6532dc785752f01a900503a2d3f4"
+            },
+            {
+              "tool": "bash",
+              "key": "bash {\"command\": \"diff \u003c(sed 's/a/X/g' a.ts) \u003c(sed 's/b/X/g' b.ts) \u0026\u0026 diff \u003c(sed 's/a/X/g' a.ts) \u003c(sed 's/c/X/g' c.ts) \u0026\u0026 echo IDENTICAL_MODULO_LETTER; wc -l a.ts b.ts c.ts\"}",
+              "bytes": 1266,
+              "handle": "9941ec11dc0255a11aad38c5e53a7deb"
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "forked_into": "turn-18d6d2c8a10c7b60-f2",
+  "child_ids": null,
+  "outcome": "forked",
+  "total_cost_usd": 0,
+  "wall_clock_ms": 14048,
+  "decision_ids": [
+    "2026-09-19-3072dd5a1a60fe4e41449703eb1335f5",
+    "2026-09-19-2edfd305bf565134bd8115922d6d57af",
+    "2026-09-19-eb5c6c109045d7681fb6d347eb5ab34b",
+    "2026-09-19-acc386c2486f9d92f24d39e19671c492"
+  ]
+}

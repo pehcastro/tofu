@@ -4,15 +4,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"path/filepath"
 	"sort"
 	"strings"
 
+	catalogpolicy "boji/catalog/policy"
 	"boji/catalog/questions"
 	"boji/internal/judge/jev"
 	"boji/internal/judge/policy"
 	"boji/internal/judge/question"
-	"boji/internal/sys"
 )
 
 type inlineOption struct {
@@ -127,24 +126,25 @@ func resolvePolicy(ref string, set battery) (policy.Policy, error) {
 	if !strings.ContainsRune(ref, '@') {
 		return policy.Policy{}, fmt.Errorf("the policy %q names no version; a policy is named name@version, so it never resolves silently to the wrong one", ref)
 	}
-	catalogDir, err := sys.CatalogDir()
+	pol, _, err := loadPolicyPoint(ref)
 	if err != nil {
 		return policy.Policy{}, err
-	}
-	pol, findings, err := policy.LintFile(filepath.Join(catalogDir, "policy", ref+".yaml"))
-	if err != nil {
-		return policy.Policy{}, err
-	}
-	if len(findings) > 0 {
-		msgs := make([]string, len(findings))
-		for i, f := range findings {
-			msgs[i] = f.String()
-		}
-		return policy.Policy{}, fmt.Errorf("policy %s fails its own lint: %s", ref, strings.Join(msgs, "; "))
 	}
 	if pol.Questions != set.SetName || pol.QuestionsVersion != set.QuestionsVersion {
 		return policy.Policy{}, fmt.Errorf("policy %s names the question set %s@%d and the battery resolved %s@%d",
 			ref, pol.Questions, pol.QuestionsVersion, set.SetName, set.QuestionsVersion)
 	}
 	return pol, nil
+}
+
+func loadPolicyPoint(ref string) (policy.Policy, policy.Origin, error) {
+	layers, err := question.DefaultLayers(questions.Files())
+	if err != nil {
+		return policy.Policy{}, "", err
+	}
+	set, _, err := question.Resolve(ref, layers)
+	if err != nil {
+		return policy.Policy{}, "", err
+	}
+	return policy.LoadPoint(catalogpolicy.Files(), ref, set)
 }

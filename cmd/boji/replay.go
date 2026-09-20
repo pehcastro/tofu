@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -12,7 +11,6 @@ import (
 
 	"boji/internal/judge/ledger"
 	"boji/internal/judge/policy"
-	"boji/internal/sys"
 )
 
 var replayThresholdFields = []string{
@@ -39,12 +37,19 @@ type replayChange struct {
 	after ledger.Verdict
 }
 
+type replayPolicySource struct {
+	ref    string
+	origin policy.Origin
+	pol    policy.Policy
+}
+
 type replayResult struct {
 	read        int
 	rescored    int
 	skipped     int
 	unavailable int
 	changes     []replayChange
+	policies    replayPolicies
 }
 
 func replayVerb(args []string, out, errOut io.Writer, now func() time.Time) int {
@@ -161,7 +166,7 @@ func knownThreshold(key string) bool {
 
 func runReplay(reader *ledger.Reader, filter ledger.Filter, sets map[string]float64) (replayResult, error) {
 	var result replayResult
-	policies := map[string]policy.Policy{}
+	var policies replayPolicies
 	_, err := reader.Each(filter, func(row ledger.Row) error {
 		result.read++
 		if row.Reason != nil && policy.IsUnavailable(row.Reason.Comparison) {
@@ -172,7 +177,7 @@ func runReplay(reader *ledger.Reader, filter ledger.Filter, sets map[string]floa
 			result.skipped++
 			return nil
 		}
-		pol, err := loadReplayPolicy(policies, row.Policy, row.PolicyVersion)
+		pol, err := policies.load(row.Policy, row.PolicyVersion)
 		if err != nil {
 			return err
 		}
@@ -188,23 +193,24 @@ func runReplay(reader *ledger.Reader, filter ledger.Filter, sets map[string]floa
 		}
 		return nil
 	})
+	result.policies = policies
 	return result, err
 }
 
-func loadReplayPolicy(cache map[string]policy.Policy, name string, version int) (policy.Policy, error) {
+type replayPolicies []replayPolicySource
+
+func (p *replayPolicies) load(name string, version int) (policy.Policy, error) {
 	ref := fmt.Sprintf("%s@%d", name, version)
-	if pol, ok := cache[ref]; ok {
-		return pol, nil
+	for _, source := range *p {
+		if source.ref == ref {
+			return source.pol, nil
+		}
 	}
-	catalogDir, err := sys.CatalogDir()
+	pol, origin, err := loadPolicyPoint(ref)
 	if err != nil {
 		return policy.Policy{}, err
 	}
-	pol, err := policy.Load(filepath.Join(catalogDir, "policy", ref+".yaml"))
-	if err != nil {
-		return policy.Policy{}, err
-	}
-	cache[ref] = pol
+	*p = append(*p, replayPolicySource{ref: ref, origin: origin, pol: pol})
 	return pol, nil
 }
 
@@ -229,6 +235,9 @@ func withOverrides(t policy.Thresholds, sets map[string]float64) policy.Threshol
 func printReplay(out io.Writer, result replayResult, elapsed time.Duration, verbose bool) {
 	_, _ = fmt.Fprintf(out, "  %d rows read, %d rescored, %d skipped for having no policy, %d unavailable: the typed decision was never made    0 API calls, %s\n",
 		result.read, result.rescored, result.skipped, result.unavailable, elapsed.Round(time.Millisecond))
+	for _, source := range result.policies {
+		_, _ = fmt.Fprintf(out, "  policy %s from %s: %s\n", source.ref, source.origin, source.pol.File)
+	}
 	_, _ = fmt.Fprintf(out, "  verdict changes: %d\n\n", len(result.changes))
 
 	for _, t := range replayTransitions(result.changes) {

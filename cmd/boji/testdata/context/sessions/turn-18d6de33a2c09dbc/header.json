@@ -1,0 +1,10 @@
+{
+  "id": "turn-18d6de33a2c09dbc",
+  "schema": 1,
+  "at": "2026-09-19T20:56:55.2815815-03:00",
+  "task": "read every md file in this directory and explain what the three of them say together",
+  "wire": "anthropic",
+  "model": "claude-opus-5",
+  "root": "turn-18d6de33a2c09dbc",
+  "outcome": "step_cap"
+}

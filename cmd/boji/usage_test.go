@@ -2,10 +2,123 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"strings"
 	"testing"
 	"time"
+
+	"boji/interface/tui/frame"
+	"boji/internal/llm/quota"
+	"boji/internal/transport"
 )
+
+func usageMoment() time.Time { return time.Date(2026, 9, 19, 14, 32, 0, 0, time.UTC) }
+
+func usageFixture(now time.Time) usageReport {
+	return usageReport{
+		State:   usageServing,
+		Fullest: "anthropic 7d",
+		Providers: []credentialReport{
+			{Provider: "anthropic", State: usageServingState, Windows: []windowReport{
+				{ID: "5h", Used: 0.11, Reported: true, ResetsAt: now.Add(2*time.Hour + 6*time.Minute)},
+				{ID: "7d", Used: 0.71, Reported: true, ResetsAt: now.Add(75*time.Hour + 26*time.Minute)},
+				{ID: "1d"},
+			}},
+			{Provider: "codex", State: usageServingState, Windows: []windowReport{
+				{ID: "7d", Used: 0.13, Reported: true, ResetsAt: now.Add(160*time.Hour + 15*time.Minute)},
+			}},
+		},
+		SpendLimit: quota.SpendLimitLine(),
+		ReportedAt: now,
+	}
+}
+
+func TestNoQuotaWindowPrintsARawHourCount(t *testing.T) {
+	now := usageMoment()
+	printed := usageText(usageFixture(now), plain, now)
+	for _, arithmetic := range []string{"75h", "160h"} {
+		if strings.Contains(printed, arithmetic) {
+			t.Fatalf("a window resets in %q, which is arithmetic rather than a duration\n%s", arithmetic, printed)
+		}
+	}
+	for _, want := range []string{"resets in 2h 6m", "resets in 3d 3h", "resets in 6d 16h"} {
+		if !strings.Contains(printed, want) {
+			t.Errorf("the report lost %q\n%s", want, printed)
+		}
+	}
+}
+
+func TestAWindowWithNoUsageDataDoesNotRender(t *testing.T) {
+	now := usageMoment()
+	printed := usageText(usageFixture(now), plain, now)
+	for _, gone := range []string{" 1d ", "not reported"} {
+		if strings.Contains(printed, gone) {
+			t.Errorf("a window with no usage data renders %q\n%s", gone, printed)
+		}
+	}
+	if lines := strings.Count(printed, "resets in "); lines != 3 {
+		t.Fatalf("the report draws %d windows, want the 3 that reported\n%s", lines, printed)
+	}
+}
+
+func TestOnlyTheFullestWindowIsColoured(t *testing.T) {
+	now := usageMoment()
+	painted := 0
+	for _, line := range strings.Split(usageText(usageFixture(now), coloured, now), "\n") {
+		if strings.Contains(line, "resets in ") && strings.Contains(line, "\x1b[") {
+			painted++
+		}
+	}
+	if painted != 1 {
+		t.Fatalf("%d window rows carry an escape sequence, want only the fullest", painted)
+	}
+}
+
+func TestTheQuotaColourIsAThresholdAtHalfAndFourFifths(t *testing.T) {
+	for _, step := range []struct {
+		fraction float64
+		coloured bool
+	}{{0, false}, {0.49, false}, {0.5, true}, {0.79, true}, {0.8, true}, {1, true}} {
+		got := coloured.full(step.fraction, "meter")
+		if (got != "meter") != step.coloured {
+			t.Errorf("at %.2f the meter reads %q, coloured %v, want coloured %v",
+				step.fraction, got, got != "meter", step.coloured)
+		}
+	}
+	if coloured.full(0.5, "meter") == coloured.full(0.8, "meter") {
+		t.Fatal("the warning step and the full step draw the same colour")
+	}
+	if plain.full(1, "meter") != "meter" {
+		t.Fatal("a pipe gets colour")
+	}
+}
+
+func TestTheSameQuotaRendersInUsageAndInTheStatusBar(t *testing.T) {
+	now := usageMoment()
+	var meter string
+	for _, line := range strings.Split(usageText(usageFixture(now), plain, now), "\n") {
+		if strings.Contains(line, "71%") {
+			_, after, _ := strings.Cut(line, "7d")
+			meter = strings.TrimSpace(after)
+		}
+	}
+	if meter == "" {
+		t.Fatal("boji usage draws no meter for the 7d window")
+	}
+	status := frame.Status{
+		Context: frame.Context{Used: 118000, Budget: 250000},
+		At:      now,
+		Quota: frame.Quota{
+			Label:    "anthropic 7d",
+			Fraction: 0.71,
+			Reported: true,
+			ResetsAt: now.Add(75*time.Hour + 26*time.Minute),
+		},
+	}
+	if bar := frame.Bar(status, 200); !strings.Contains(bar, meter) {
+		t.Fatalf("the status bar does not draw the quota the way boji usage does\nusage %q\nbar   %q", meter, bar)
+	}
+}
 
 func isolateHome(t *testing.T) {
 	t.Helper()
@@ -14,39 +127,74 @@ func isolateHome(t *testing.T) {
 	t.Setenv("USERPROFILE", dir)
 }
 
-func TestUsageRefusesAnArgument(t *testing.T) {
+func TestUsageRefusesAnUnknownFlag(t *testing.T) {
 	var out, errOut bytes.Buffer
-	if code := usageVerb([]string{"anthropic"}, &out, &errOut); code != exitUsage {
+	if code := usageVerb([]string{"anthropic"}, &out, &errOut, plain); code != exitUsage {
 		t.Fatalf("an argument gave exit %d, want %d", code, exitUsage)
 	}
-	if !strings.Contains(errOut.String(), "usage: boji usage") {
+	if !strings.Contains(errOut.String(), usageFlags) {
 		t.Fatalf("the error read %q", errOut.String())
 	}
 }
 
-func TestUsageWithoutACredentialNamesWhoOwnsTheSpendLimit(t *testing.T) {
+func TestUsageWithoutACredentialNamesTheFixAndWhoOwnsTheSpendLimit(t *testing.T) {
 	isolateHome(t)
 	var out, errOut bytes.Buffer
-	if code := usageVerb(nil, &out, &errOut); code != exitOK {
+	if code := usageVerb(nil, &out, &errOut, plain); code != exitOK {
 		t.Fatalf("exit %d, stderr %q", code, errOut.String())
 	}
 	printed := out.String()
-	if !strings.Contains(printed, "no subscription credential") {
-		t.Fatalf("the output read %q", printed)
+	if !strings.HasPrefix(printed, usageNoCredential) {
+		t.Fatalf("the first line does not answer the question: %q", printed)
+	}
+	if !strings.Contains(printed, "run boji login "+wireSubscription) {
+		t.Fatalf("the output names no fix: %q", printed)
 	}
 	if !strings.Contains(printed, "an api key's spending limit is the provider's") {
 		t.Fatalf("the spend limit line is missing from %q", printed)
 	}
 }
 
-func TestDoctorLinesCarryTheQuotaStateAndTheSpendLimit(t *testing.T) {
-	isolateHome(t)
-	lines := quotaDoctorLines(time.Now())
-	if len(lines) == 0 {
-		t.Fatal("no doctor line")
+func TestUsageSeparatesASpentWindowFromABrokenCredential(t *testing.T) {
+	now := time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)
+	spent := pollResult{report: quota.Report{
+		Provider: quota.Codex,
+		Windows: []quota.Window{{
+			ID:       "5h",
+			Used:     quota.Used{Fraction: 1, Reported: true},
+			ResetsAt: now.Add(time.Hour),
+		}},
+	}}
+	broken := pollResult{
+		report: quota.Report{Provider: quota.Codex},
+		err:    transport.Fail("cred", transport.KindAuth, nil, "the codex credential is disabled"),
 	}
-	last := lines[len(lines)-1]
-	if !strings.Contains(last, "spend limit: boji sets none") {
-		t.Fatalf("the last doctor line read %q", last)
+	spentState, brokenState := credentialState(spent, now), credentialState(broken, now)
+	if !strings.Contains(spentState, "every window is spent") {
+		t.Fatalf("a spent window reads %q", spentState)
+	}
+	if !strings.Contains(brokenState, "run boji login codex") {
+		t.Fatalf("a broken credential reads %q, with no command to fix it", brokenState)
+	}
+	if spentState == brokenState {
+		t.Fatal("a spent window and a broken credential read the same")
+	}
+}
+
+func TestUsageJSONParsesAndCarriesTheSpendLimit(t *testing.T) {
+	isolateHome(t)
+	var out, errOut bytes.Buffer
+	if code := usageVerb([]string{jsonFlag}, &out, &errOut, plain); code != exitOK {
+		t.Fatalf("exit %d, stderr %q", code, errOut.String())
+	}
+	var report usageReport
+	if err := json.Unmarshal(out.Bytes(), &report); err != nil {
+		t.Fatalf("boji usage --json does not parse: %v\n%s", err, out.String())
+	}
+	if report.SpendLimit == "" || report.ReportedAt.IsZero() {
+		t.Fatalf("the json dropped a field: %+v", report)
+	}
+	if len(report.Blockers) == 0 {
+		t.Fatalf("a home with no credential reports no blocker: %+v", report)
 	}
 }
