@@ -1,0 +1,23 @@
+Done — everything passes.
+
+```
+Test Files  1 passed (1)
+     Tests  4 passed (4)
+```
+
+- `npm install` — 52 packages, clean.
+- `npm test` — 4/4 pass, including the `/users/` trailing-slash case I'd flagged as unverified guesswork. It behaves as written; no adjustment needed.
+- `npm run typecheck` — clean (`tsc --noEmit`, no output).
+
+One thing worth your attention: the install reported **6 vulnerabilities (1 critical, 1 high, 4 moderate)**. The audit body only prints the moderate ones, which is misleading — the critical and high are visible only in the JSON:
+
+| Package | Severity | Issue |
+|---|---|---|
+| `vitest` | critical | UI server can read/execute arbitrary files when listening |
+| `vite` | high | path traversal in optimized-deps `.map`; `server.fs.deny` bypass on Windows |
+| `esbuild`, `vite-node`, `@vitest/mocker` | moderate | dev-server request forgery (transitive) |
+| `@hono/node-server` | moderate | `serve-static` path traversal on Windows via encoded `%5C` |
+
+The first five are dev-only and reachable only via the Vitest UI / Vite dev server, which you aren't running — low practical risk for this project, though you're on Windows, which is exactly the platform those advisories target. The `@hono/node-server` one is your sole runtime dep, but the advisory is in `serve-static`, which this API doesn't use.
+
+`npm audit fix --force` clears all six by jumping to `vitest@4` and `@hono/node-server@2` — both major bumps. I left it alone since breaking upgrades weren't part of the ask. Want me to take them and re-run the suite?

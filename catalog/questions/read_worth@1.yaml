@@ -1,0 +1,95 @@
+name: read_worth
+questions_version: 1
+
+state:
+  - paragraph
+  - task
+  - already_said
+  - position
+
+questions:
+  answers_the_task:
+    type: score
+    instructions: >-
+      Judge whether `paragraph` gives the reader what `task` asked for. Read
+      `task` as the reader's own words. Content that carries the answer, a
+      finding, a measurement, a cause, a risk the reader has to act on, or a
+      question the reader has to settle, is the answer. Content about the reply
+      itself is not.
+    criteria:
+      - >-
+        Nothing here is what was asked for. It is about the reply, the process,
+        or the reader.
+      - >-
+        It touches the subject without saying anything the reader could act on.
+      - >-
+        It carries part of the answer, mixed with material that is not.
+      - >-
+        It is the answer, or a fact, a number or a caveat the reader needs to
+        use the answer.
+
+  preamble:
+    type: score
+    instructions: >-
+      Judge how much of `paragraph` announces or frames rather than says. An
+      announcement of what is about to be done, a plan of the reply, a
+      restatement of `task` back at the reader, or a transition sentence is
+      preamble. `position` says where the paragraph sits in the reply, and
+      the opening is where preamble usually is.
+    criteria:
+      - It says something. It announces nothing.
+      - It opens with a short frame and then says something.
+      - Most of it announces or restates, with a little content.
+      - It is entirely announcement, framing or restatement of the task.
+
+  recap:
+    type: score
+    instructions: >-
+      Judge whether `paragraph` repeats what `already_said` contains.
+      `already_said` holds the paragraphs of this same reply that come before
+      this one. A summary of work the reader watched happen, or a list of
+      changes the reply has already described, is recap.
+    criteria:
+      - Everything here is new against `already_said`.
+      - It reuses a point from `already_said` to make a new one.
+      - Most of it restates `already_said` in other words.
+      - It is a summary of `already_said` and adds nothing.
+
+  hedging:
+    type: score
+    instructions: >-
+      Judge how much of `paragraph` is qualification that leaves the reader no
+      wiser. Offers of further work, permission seeking, apology, and
+      alternatives listed without a recommendation are hedging. A caveat that
+      names a specific condition and what happens under it is not hedging, it is
+      the answer.
+    criteria:
+      - It commits to a position, or its caveat is specific and actionable.
+      - It qualifies once and still commits.
+      - It is mostly qualification, an offer, or an apology.
+      - It commits to nothing and asks the reader to decide with no help.
+
+  jargon:
+    type: score
+    instructions: >-
+      Judge how much of `paragraph` is vocabulary that carries no meaning for
+      the reader. Terms of art the reader would know are not jargon. Phrases
+      that could be deleted without changing what the reader learns are.
+    criteria:
+      - Plain words throughout, or terms of art the reader needs.
+      - One vague phrase in an otherwise plain paragraph.
+      - Vague vocabulary carries much of the paragraph.
+      - It is vocabulary with no content behind it.
+
+  selling:
+    type: score
+    instructions: >-
+      Judge how much of `paragraph` praises the work, the reader, or the
+      reply. Agreeing with the reader, calling a result clean, robust or
+      seamless, and stacked status claims about what passed are selling.
+      Reporting a measured result plainly is not selling.
+    criteria:
+      - It reports without praising.
+      - One evaluative word sits on an otherwise plain report.
+      - Praise of the work or the reader carries much of it.
+      - It is praise, agreement or a status parade with no fact under it.

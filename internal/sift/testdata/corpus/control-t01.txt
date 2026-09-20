@@ -1,0 +1,10 @@
+Scaffolded, nothing installed:
+
+- `package.json` — ESM, deps `hono` + `@hono/node-server`; dev deps `tsx`, `typescript`, `@types/node`. Scripts: `dev` (tsx watch), `build` (tsc), `start`, `typecheck`.
+- `tsconfig.json` — ES2022 strict, `src` → `dist`.
+- `src/index.ts:6` — `GET /health` returning `{ status: 'ok' }`; port from `PORT`, default 3000.
+- `.gitignore`
+
+When you're ready: `npm install`, then `npm run dev` and hit `http://localhost:3000/health`.
+
+Two notes: I pinned caret ranges from what I know of the registry rather than resolving live, so `npm install` will pull the current 4.x/5.x tips — fine, but the lockfile is the source of truth. And this uses the Node adapter; if you're actually targeting Bun/Deno/Workers, drop `@hono/node-server` and export `app` directly.

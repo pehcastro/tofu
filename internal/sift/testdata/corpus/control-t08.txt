@@ -1,0 +1,24 @@
+**Registration order decides it. First one registered wins — the static route has no inherent priority.** Measured on your installed Hono, both orders:
+
+| Registered order | `GET /users/me` | `GET /users/1` |
+|---|---|---|
+| `:id` then `me` | `param:me` ← **`/users/me` is unreachable** | `param:1` |
+| `me` then `:id` | `static` | `param:1` |
+
+(One correction to my lead-in: I implied this differs from Express, but Express is also registration-order. The routers that *do* rank static above dynamic regardless of order are trie-based ones like Fastify's find-my-way. Hono behaves like Express here.)
+
+So in your `src/app.ts`, `/users/me` must go **above** `/users/:id`:
+
+```ts
+app.get('/users/me', (c) => c.json(currentUser))
+app.get('/users/:id', (c) => { /* ... */ })
+```
+
+Put it below and the param route swallows it — `c.req.param('id')` receives the literal string `"me"`, your Map lookup misses, and you get a 404 that looks like a data bug rather than a routing bug. That's the failure worth remembering, because nothing warns you: no startup error, no shadowed-route diagnostic, just a confusing 404.
+
+Mechanically, Hono's default `SmartRouter` picks `RegExpRouter` for route sets like this — it compiles all routes into a single regex and evaluates them in insertion order, taking the first handler that returns a response. The single-pass regex is why Hono is fast, but it's also why it can't reorder your routes to be "smart" about specificity.
+
+Two practical implications:
+
+- **If you can't control order** — say `/users/me` lives in a sub-app mounted with `app.route()` after the param route — reordering the `route()` calls is the fix, not reordering within the sub-app.
+- **Alternative that sidesteps order entirely**: handle it inside the param route with `if (c.req.param('id') === 'me')`. Uglier, but immune to someone later shuffling registrations. For a demo, ordering is fine.

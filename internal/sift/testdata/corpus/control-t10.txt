@@ -1,0 +1,28 @@
+## What was built
+
+A minimal Hono API in `the project directory`:
+
+- **`src/app.ts`** — the Hono app: `GET /health` → `{status:'ok'}`; `GET /users/:id` reading a 3-user in-memory `Map`; a `notFound` handler making every 404 return JSON.
+- **`src/index.ts`** — Node bootstrap only: `serve()` with port from `PORT`, default 3000.
+- **`src/app.test.ts`** — 5 vitest cases driven through `app.request()`, so no port gets bound.
+- **`package.json`**, **`tsconfig.json`**, **`.gitignore`**, plus `node_modules` and `package-lock.json` from the install.
+
+## Sequence
+
+1. **Scaffold** — package manifest (`hono`, `@hono/node-server`; dev: `tsx`, `typescript`, `@types/node`), strict ES2022 tsconfig, health endpoint. No install, per your instruction.
+2. **`/users/:id`** — added the `User` type, the seeded Map, and the lookup with a 404 on miss.
+3. **Vitest** — added the dep and scripts, and **split `app.ts` out of `index.ts`**. That split was required, not cosmetic: the original `index.ts` called `serve()` at module scope, so importing it in a test would have started a real listener and hung the run. Also excluded `*.test.ts` from tsconfig so builds don't emit tests into `dist`.
+4. **Install + run** — `npm install` clean (52 packages), `npm test` 4/4 green, `npm run typecheck` clean. The trailing-slash test I'd flagged as unverified guesswork turned out correct as written.
+5. **404 body** — you asked to replace a plain-text 404 with JSON. The `/users/:id` handler was already returning JSON, so I said so and fixed the actual plain-text source: Hono's default not-found handler. Both now return `{error:'not found'}`. Tests updated and extended to 5; all pass.
+6. **Routing question** — rather than assert from memory, I ran a throwaway test of both registration orders and deleted it after. Result: **registration order wins, static routes get no automatic priority** — register `/users/me` above `/users/:id` or it becomes unreachable. I also corrected my own opening claim that this differs from Express; it doesn't (Express is also registration-order — Fastify's trie router is the one that ranks static first).
+
+## Verified vs. not
+
+Verified by running: install, 5/5 tests, typecheck, and the routing behavior. **Never run:** `npm run build` and the server itself — the endpoints are proven through `app.request()`, not a live HTTP socket.
+
+## Open items
+
+- **Your delete request is unanswered.** There's no `tests/` directory; there's one file, `src/app.test.ts`. I asked whether you want just the file removed, or the whole test toolchain (dep + scripts + tsconfig exclude). Nothing has been deleted.
+- **6 npm audit vulnerabilities** — 1 critical (`vitest` UI server), 1 high (`vite`), 4 moderate. All dev-only except `@hono/node-server`, whose advisory is in `serve-static`, which this app doesn't use. The fix requires two major bumps; I left it alone.
+- **Not a git repo**, so none of this is committed or recoverable if deleted.
+- Advice given, not acted on: keep the Map for a throwaway demo; revisit only when you add a write endpoint or a second process.

@@ -1,0 +1,63 @@
+# file	index	keep|drop	note
+# keep means the reader loses something they could act on if the paragraph goes.
+# drop means a header on its own, an announcement of what follows, a restatement
+# of what the reader already read, bookkeeping they would assume, or an offer of
+# more work. Labelled by hand on 2026-09-19 against the task each reply answered,
+# which is in tasks.tsv.
+control-t01	0	keep	the result and the state of the install in one line
+control-t01	1	keep	the files that were written
+control-t01	2	keep	the commands to run next
+control-t01	3	keep	two caveats the reader cannot guess
+control-t02	0	drop	announces the file about to be listed
+control-t02	1	keep	what was added and where
+control-t02	2	keep	why the keys are strings, and how to hit it
+control-t02	3	keep	the Map resets on reload
+control-t03	0	keep	the tests were never run
+control-t03	1	drop	a header on its own
+control-t03	2	keep	the files and the cases
+control-t03	3	keep	why the split was needed
+control-t03	4	keep	typecheck no longer covers the test file
+control-t03	5	drop	an offer of more work
+control-t04	0	keep	the result
+control-t04	1	drop	the test runner output, restated by the bullet below
+control-t04	2	keep	what each command actually did
+control-t04	3	keep	the audit hides the critical and the high
+control-t04	4	keep	which package carries which advisory
+control-t04	5	keep	the judgement of practical risk
+control-t04	6	keep	the decision the reader has to make
+control-t05	0	keep	the status that was asked for
+control-t05	1	keep	the files, asked for
+control-t05	2	keep	what was actually run
+control-t05	3	keep	what is open
+control-t05	4	drop	an offer of more work
+control-t06	0	keep	the result
+control-t06	1	keep	the change to the handler
+control-t06	2	drop	which assertions were edited, bookkeeping
+control-t06	3	keep	the two 404s are now indistinguishable
+control-t07	0	keep	the answer, three words
+control-t07	1	keep	why
+control-t07	2	keep	the failure mode
+control-t07	3	keep	the trigger to revisit
+control-t07	4	keep	the cheapest next step if the trigger fires
+control-t08	0	keep	the answer and that it was measured
+control-t08	1	keep	the measured table
+control-t08	2	keep	corrects a claim about Express the reader may believe
+control-t08	3	keep	what to change in the reader's file
+control-t08	4	keep	the snippet to paste
+control-t08	5	keep	the failure it causes and why nothing warns
+control-t08	6	keep	the mechanism, which the task asked for
+control-t08	7	drop	announces the two points below
+control-t08	8	keep	the two points
+control-t09	0	keep	the directory the reader named does not exist
+control-t09	1	keep	why nothing was deleted, and the question
+control-t09	2	keep	the two options
+control-t09	3	drop	an offer and a restatement of the previous paragraph
+control-t10	0	drop	a header on its own
+control-t10	1	drop	announces the list below
+control-t10	2	keep	the files, which the summary was asked for
+control-t10	3	drop	a header on its own
+control-t10	4	keep	the sequence, which the summary was asked for
+control-t10	5	drop	a header on its own
+control-t10	6	keep	what was verified and what was never run
+control-t10	7	drop	a header on its own
+control-t10	8	keep	the open items, including the unanswered delete

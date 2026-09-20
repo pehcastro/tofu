@@ -1,0 +1,9 @@
+Keep the Map.
+
+For a throwaway demo it's the right call on every axis that matters: zero setup, no connection lifecycle to babysit, tests run in 15ms with no fixtures or teardown, and anyone cloning it runs `npm install && npm run dev` with nothing else installed. A database buys you persistence and query power — neither of which a demo with three hardcoded users needs.
+
+The one thing to know is the failure mode you'd hit if this stops being throwaway: the Map is per-process, so it resets on every `tsx watch` reload and doesn't survive a restart. That's invisible while everything is reads, and becomes an immediate problem the moment you add a `POST /users` and expect the data to still be there. It also breaks silently under more than one process.
+
+So the trigger to revisit isn't "this got serious" in the abstract — it's specifically **the first write endpoint**, or needing two processes. Until then the Map is not a shortcut you're paying down later; it's the correct shape for the job.
+
+If you do cross that line, SQLite via `node:sqlite` (built into Node 22+) or `better-sqlite3` is the cheapest next step — one file, synchronous API, no server to run, and your handlers keep the same structure.

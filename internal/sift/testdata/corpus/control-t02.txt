@@ -1,0 +1,8 @@
+Added to `src/index.ts`:
+
+- A `User` type and a module-level `Map<string, User>` seeded with ids `1`, `2`, `3` (`src/index.ts:9`).
+- `GET /users/:id` (`src/index.ts:22`) — looks up the raw path param, returns the user as JSON, or `{ error: 'user not found' }` with status 404 when the key isn't present.
+
+Keys are strings, matching what `c.req.param` gives you, so no coercion is needed. Once deps are installed: `curl localhost:3000/users/2` → Grace Hopper, `curl localhost:3000/users/99` → 404.
+
+Worth knowing for later: the Map is per-process and resets on every `tsx watch` reload, so it's fine as a stub but not somewhere to put writes you care about.

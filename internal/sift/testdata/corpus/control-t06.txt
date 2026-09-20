@@ -1,0 +1,9 @@
+Fixed and verified — 5/5 tests pass.
+
+Changes in `src/app.ts`:
+- `GET /users/:id` miss → `{error:'not found'}` (was `'user not found'`)
+- Added `app.notFound()` → `{error:'not found'}` with 404, which replaces Hono's default plain-text `404 Not Found` for every unmatched path
+
+In `src/app.test.ts`: updated the miss assertion, added a body assertion to the `/users/` case, and added a new test for an arbitrary unmatched route (`/nope`) that checks status, `content-type: application/json`, and body.
+
+Note that the two 404s are now indistinguishable to a client — "user 999 doesn't exist" and "that route doesn't exist" return identical bodies. That's fine if it's deliberate (it's the standard choice for not leaking which ids are real), but if you want the API to help callers debug typos'd paths, the route-level miss should carry a distinct message or an error code field.

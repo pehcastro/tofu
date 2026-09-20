@@ -1,0 +1,8 @@
+There's no `tests/` directory — the tests are a single colocated file, `src/app.test.ts` (the 5 passing cases). Nothing else in the project is test-related except the `vitest` devDep and the `test`/`test:watch` scripts.
+
+I'm holding off because this directory isn't a git repo, so a delete is unrecoverable — and the thing you named doesn't exist, which makes me want to be sure I remove what you actually mean. Tell me which:
+
+1. **Just the file** — `rm src/app.test.ts`, leave vitest installed so you can add tests back easily.
+2. **All test tooling** — the file plus `vitest` from `package.json`, the two scripts, and the `*.test.ts` exclude in `tsconfig.json`, then re-run install to prune.
+
+Say "1" or "2" and it's done. If you were thinking of something else that lives in a `tests/` folder, it was never created in this project.

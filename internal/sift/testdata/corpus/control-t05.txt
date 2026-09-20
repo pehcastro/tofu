@@ -1,0 +1,16 @@
+Project is scaffolded, working, and verified. Nothing running in the background.
+
+**Files** in `the project directory`:
+- `src/app.ts` — Hono app: `GET /health` → `{status:'ok'}`, `GET /users/:id` reading a Map seeded with 3 users, 404 on miss
+- `src/index.ts` — Node bootstrap only (`serve`, port from `PORT`, default 3000)
+- `src/app.test.ts` — 4 vitest cases via `app.request()`
+- `package.json`, `tsconfig.json`, `.gitignore`, plus installed `node_modules`
+
+**Verified by actually running:** `npm install` clean, `npm test` 4/4 passing, `npm run typecheck` clean.
+
+**Not yet done / open:**
+- The 6 npm audit vulnerabilities — my question from the last turn is still on the table: `npm audit fix --force` would take `vitest` to v4 and `@hono/node-server` to v2, both majors. Your call, and I haven't touched it.
+- Never run: `npm run build` and the server itself (`npm run dev`) — the endpoints are proven by tests, not by a live HTTP request.
+- This directory isn't a git repo, so none of this is committed.
+
+Fastest next steps, if you want them: `npm run dev` and curl the two routes, or hand me the audit decision.

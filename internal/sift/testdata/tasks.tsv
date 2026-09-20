@@ -1,0 +1,10 @@
+control-t01	Set up a minimal Hono API in TypeScript here. One GET /health endpoint returning {status:'ok'}. Use npm, tsx for dev. Don't run install yet.
+control-t02	Now add a GET /users/:id endpoint that reads from an in-memory Map seeded with 3 users. Return 404 if missing.
+control-t03	Add vitest and write tests for both endpoints.
+control-t04	Run npm install and then the tests.
+control-t05	Where are we?
+control-t06	The 404 body should be {error:'not found'} instead of plain text. Fix it.
+control-t07	Should I use a database or keep the Map for now? This is a throwaway demo.
+control-t08	Explain how Hono's routing resolves /users/:id versus /users/me if I added both, and which wins.
+control-t09	Delete the tests directory.
+control-t10	Give me a summary of everything you did this session.

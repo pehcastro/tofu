@@ -1,0 +1,19 @@
+Done, but **I have not run these tests** — install is still un-run per your earlier instruction, so nothing here is verified beyond my reading of it.
+
+What changed:
+
+- **`src/app.ts`** (new) — routes + the seeded Map, exports `app`.
+- **`src/index.ts`** — now just the Node bootstrap: imports `app`, calls `serve`.
+- **`src/app.test.ts`** (new) — four cases via Hono's `app.request()`, so no port is bound and no server lifecycle to manage:
+  - `/health` → 200 + `{status:'ok'}`
+  - `/users/2` → 200 + Grace Hopper
+  - `/users/999` → 404 + `{error:'user not found'}`
+  - `/users/` → 404 (the param route shouldn't match an empty segment)
+- **`package.json`** — `vitest` devDep, `test` (`vitest run`) and `test:watch` scripts.
+- **`tsconfig.json`** — excludes `*.test.ts` so `npm run build` doesn't emit tests into `dist`.
+
+The split was necessary, not cosmetic: the old `index.ts` called `serve()` at module scope, so any import of it during a test run would start a listener on 3000 and leave the process hanging.
+
+Two consequences worth flagging. The tsconfig exclude means `npm run typecheck` no longer covers the test file — vitest still transpiles and runs it, but type errors in tests won't fail typecheck; a separate `tsconfig.test.json` fixes that if you want it. And the last test asserts current Hono routing behavior for a trailing-slash path, which I reasoned about rather than observed — it's the case most likely to need adjusting on first run.
+
+Say the word and I'll run `npm install && npm test` and fix whatever falls out.
