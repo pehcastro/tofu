@@ -8,6 +8,24 @@ Boji is personal and not released, so the public interface that a version promis
 
 The minor number carries breaking changes, which is what 0.x means, and **there is never a 1.0.0**. The owner decided that on 2026-09-19: this stays 0.x forever, so the promise the version makes is the one 0.x already makes, that anything can break on a minor bump.
 
+## Unreleased
+
+### Added
+
+- a recorded session carries the ceiling it ran at, the target that came from it, and one sentence saying whether automatic compaction was on and why. `tofu session info --json` reads all three
+- `symbols`, which answers which line declares a name and which function each call sits in, from `go/parser` with no cgo. `grep` answers neither
+- a bash result carrying a `file:line` citation is checked before the model sees it, and a citation that does not resolve is refused by name rather than warned about. Results this binary generated are not checked, because their citations are true by construction
+
+### Changed
+
+- a tool call repeated inside one turn is answered once. A write to a path clears it, and a cached answer says it was cached
+- `read` on a path that does not exist repairs it when exactly one file under the working directory has that name, says it did, and refuses with both named when two do
+- a fork carries what was found rather than a list of byte counts. The new session gets one line per source with what came back, instead of a list of calls and their sizes
+
+### Fixed
+
+- **a spawned child's session events were written twice.** The child records itself and the parent wrote the same row again afterwards
+
 ## 0.4.0 - 2026-09-20
 
 boji is tofu. The minor number carries it because the name is the command you type and the directory your history lives in, which is exactly what a version promises.
