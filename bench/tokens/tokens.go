@@ -30,11 +30,12 @@ type GlobCall struct {
 }
 
 type Result struct {
-	SessionsDir string
-	Turns       int
-	Skipped     []corpus.SkippedTurn
-	Totals      []ToolTotals
-	GlobCalls   []GlobCall
+	SessionsDir    string
+	Turns          int
+	Skipped        []corpus.SkippedTurn
+	ReplayFailures int
+	Totals         []ToolTotals
+	GlobCalls      []GlobCall
 }
 
 func Run(sessionsDir, repoRoot string) (Result, error) {
@@ -42,7 +43,12 @@ func Run(sessionsDir, repoRoot string) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	glob, err := tools.NewGlob(repoRoot)
+	tree, remove, err := pinnedTree(repoRoot)
+	if err != nil {
+		return Result{}, err
+	}
+	defer remove()
+	glob, err := tools.NewGlob(tree)
 	if err != nil {
 		return Result{}, err
 	}
@@ -65,6 +71,9 @@ func Run(sessionsDir, repoRoot string) (Result, error) {
 				replayed := replayGlob(glob, call)
 				replayed.Turn = turn.ID
 				replayed.Step = step.Index
+				if replayed.ReplayError != "" {
+					result.ReplayFailures++
+				}
 				result.GlobCalls = append(result.GlobCalls, replayed)
 				totals.AfterBytes += replayed.AfterBytes
 			}
@@ -106,6 +115,7 @@ func Render(result Result) string {
 		after += t.AfterBytes
 	}
 
+	fmt.Fprintf(b, "replayed against commit %s, never against the working tree\n", PinnedCommit)
 	fmt.Fprintf(b, "sessions read: %d turns under %s, %d skipped\n", result.Turns, result.SessionsDir, len(result.Skipped))
 	for _, s := range result.Skipped {
 		fmt.Fprintf(b, "  skipped: %s: %s\n", s.Path, s.Reason)
@@ -123,12 +133,24 @@ func Render(result Result) string {
 	}
 	b.WriteString("\n")
 	renderGlobCalls(b, result.GlobCalls)
+	b.WriteString("\n")
+	renderReplayFailures(b, result)
+	b.WriteString("\n")
 	b.WriteString("dollars: $0.00 in every row. every model in this table ran on a subscription, which spends a quota window rather than money, and catalog/models carries no per-token rate for a subscription model. this is a named skip: the dollar column cannot be computed from the catalog as it stands.\n")
 	return b.String()
 }
 
+func renderReplayFailures(b *strings.Builder, result Result) {
+	fmt.Fprintf(b, "glob calls that cannot replay: %d of %d\n", result.ReplayFailures, len(result.GlobCalls))
+	for _, c := range result.GlobCalls {
+		if c.ReplayError != "" {
+			fmt.Fprintf(b, "  cannot replay: %s step %d %s: %s\n", c.Turn, c.Step, c.Args, c.ReplayError)
+		}
+	}
+}
+
 func renderGlobCalls(b *strings.Builder, calls []GlobCall) {
-	fmt.Fprintf(b, "every recorded glob call, %d of them, replayed against the tree as it stands today\n", len(calls))
+	fmt.Fprintf(b, "every recorded glob call, %d of them, replayed against the tree at %s\n", len(calls), PinnedCommit)
 	fmt.Fprintf(b, "%-26s %5s %10s %10s %10s %10s  %s\n", "turn", "step", "matched", "returned", "was bytes", "now bytes", "args")
 	for _, c := range calls {
 		if c.ReplayError != "" {
