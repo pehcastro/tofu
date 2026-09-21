@@ -12,9 +12,12 @@
 .local
 CLAUDE.md
 .claude
+.mcp.json
 .playground
 .boji
 .tofu
 .tofu.partial
 
 bench/harness/testdata/gates/
+
+rtk/
