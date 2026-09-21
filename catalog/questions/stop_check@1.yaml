@@ -1,4 +1,5 @@
 name: stop_check
+domain: general
 questions_version: 1
 
 state:

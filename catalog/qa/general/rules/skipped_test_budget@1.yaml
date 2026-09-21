@@ -1,0 +1,8 @@
+id: skipped_test_budget
+domain: qa
+kind: measured
+measurement: bench/testquality/flakerun
+mode: shadow
+source: .local/sources/qa-skills/skills.sh/petrkindlmann/qa-skills/skills/qa-metrics/SKILL.md
+evidence: 62 of 2202 test names over 70 packages were skipped in every one of 3 runs on 2026-09-21, which is 2.8 percent of the suite reporting nothing while the bar stays green
+notes: fires on a test skipped in every run of a package. A skip is a result and a coverage gap that a green bar hides, so it is counted and named rather than folded into the pass total. The rule is about the trend, not about any one skip, because a skip guarding a live network call is correct and a skip left over from a broken fixture is not

@@ -9,13 +9,13 @@ import (
 )
 
 const (
-	composerPrompt = "▏ "
+	composerPrompt = "  "
 	composerHeight = 3
 )
 
 func cursorApp(t *testing.T) *App {
 	t.Helper()
-	app := newTestApp(Options{Repo: "silo", Branch: "develop", Now: fixedClock(), Wires: anthropicAlone})
+	app := newTestApp(Options{Repo: testRepo, Branch: "develop", Now: fixedClock(), Wires: anthropicAlone})
 	app.Init()
 	app.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 	return app
@@ -29,17 +29,6 @@ func plainRows(view tea.View) []string {
 	return rows
 }
 
-func composerTop(t *testing.T, rows []string) int {
-	t.Helper()
-	for index, row := range rows {
-		if strings.HasPrefix(row, composerPrompt) {
-			return index
-		}
-	}
-	t.Fatalf("no composer row in the frame:\n%s", strings.Join(rows, "\n"))
-	return 0
-}
-
 func TestTheSessionCursorSitsInsideTheComposer(t *testing.T) {
 	app := cursorApp(t)
 	typeText(app, "rename the judge")
@@ -48,7 +37,7 @@ func TestTheSessionCursorSitsInsideTheComposer(t *testing.T) {
 		t.Fatal("the session view reports no cursor")
 	}
 	rows := plainRows(view)
-	top := composerTop(t, rows)
+	top := composerTopRow(t, view.Content) + 1
 	if view.Cursor.Y < top || view.Cursor.Y >= top+composerHeight {
 		t.Fatalf("the cursor is on row %d, want a composer row between %d and %d\n%s",
 			view.Cursor.Y, top, top+composerHeight-1, strings.Join(rows, "\n"))
@@ -109,15 +98,15 @@ func TestANewlineMovesTheCursorDownOneRow(t *testing.T) {
 func TestTheOtherViewsShowNoCursor(t *testing.T) {
 	for _, view := range []struct {
 		name string
-		key  tea.KeyPressMsg
+		show func(*App)
 	}{
-		{"crew", tea.KeyPressMsg{Code: '2', Mod: tea.ModAlt}},
-		{"settings", tea.KeyPressMsg{Code: '6', Mod: tea.ModAlt}},
+		{"crew", func(app *App) { app.Update(tea.KeyPressMsg{Code: '4', Mod: tea.ModAlt}) }},
+		{"settings", func(app *App) { app.runCommand("settings") }},
 	} {
 		t.Run(view.name, func(t *testing.T) {
 			app := cursorApp(t)
 			typeText(app, "half a task")
-			app.Update(view.key)
+			view.show(app)
 			if cursor := app.View().Cursor; cursor != nil {
 				t.Fatalf("the %s view puts a cursor at %d,%d", view.name, cursor.X, cursor.Y)
 			}
@@ -126,7 +115,7 @@ func TestTheOtherViewsShowNoCursor(t *testing.T) {
 }
 
 func TestTheSetupScreenShowsNoCursor(t *testing.T) {
-	setup := newTestApp(Options{Repo: "silo", Now: fixedClock(), Requirements: setupRequirements(), Wires: anthropicAlone})
+	setup := newTestApp(Options{Repo: testRepo, Now: fixedClock(), Requirements: setupRequirements(), Wires: anthropicAlone})
 	setup.Init()
 	setup.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 	if cursor := setup.View().Cursor; cursor != nil {

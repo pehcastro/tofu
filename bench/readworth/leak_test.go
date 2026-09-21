@@ -3,6 +3,7 @@ package readworth
 import (
 	"encoding/json"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -12,11 +13,6 @@ func TestReadCorpusRefusesARowThatCameOffTheRecordingMachine(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() {
-		if err := os.WriteFile(corpusFile, clean, 0o600); err != nil {
-			t.Fatal(err)
-		}
-	})
 
 	cases := map[string]string{
 		"a home path off the recording machine": "C:\\Users\\Luiz\\.local\\bin",
@@ -28,12 +24,13 @@ func TestReadCorpusRefusesARowThatCameOffTheRecordingMachine(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if err := os.WriteFile(corpusFile, append(clean, append(row, '\n')...), 0o600); err != nil {
+			copyPath := filepath.Join(t.TempDir(), "readworth-corpus.jsonl")
+			if err := os.WriteFile(copyPath, append(append([]byte{}, clean...), append(row, '\n')...), 0o600); err != nil {
 				t.Fatal(err)
 			}
-			_, err = ReadCorpus()
+			_, err = readCorpusFile(copyPath)
 			if err == nil {
-				t.Fatal("ReadCorpus accepted a row carrying what the scrub removes")
+				t.Fatal("readCorpusFile accepted a row carrying what the scrub removes")
 			}
 			if !strings.Contains(err.Error(), "came off the recording machine") {
 				t.Fatalf("the refusal does not say what is wrong: %v", err)

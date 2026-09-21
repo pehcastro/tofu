@@ -1,0 +1,6 @@
+id: test_boundary_cases
+domain: qa
+kind: structural
+checker: test_boundary_cases
+mode: shadow
+notes: fires on a test file that declares tests and passes no nil, no zero, no empty string, no empty composite literal and no Max or Min limit as a call argument or a table value, so nothing in it exercises the empty case or the boundary

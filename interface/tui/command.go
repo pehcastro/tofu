@@ -10,12 +10,17 @@ const turnRunningNote = "a turn is running. stop it with ctrl+c first"
 
 func commands(options Options) []session.Command {
 	listed := []session.Command{
-		{Name: "session", What: "the stream, the tool activity and the composer"},
-		{Name: "crew", What: "the children, what each owns and what each is doing"},
+		{Name: "chat", What: "the conversation and the composer"},
+		{Name: "work", What: "every tool call whole, with its arguments and its output"},
+		{Name: "file-edits", What: "a diff feed of every change, who made it and where"},
+		{Name: "sub-agents", What: "the children, what each owns and what each is doing"},
+		{Name: "shells", What: "the persistent processes an agent left running"},
 		{Name: "settings", What: "the providers and the file each value came from"},
 		{Name: "copy", What: "put the last answer on the clipboard"},
 		{Name: "copy-call", What: "put the last tool call and its result on the clipboard"},
-		{Name: "detail", What: "show or hide each tool call's full output"},
+	}
+	if options.Reload != nil {
+		listed = append(listed, session.Command{Name: "reload", What: "re-read rules, skills and hooks from disk"})
 	}
 	if options.ResumeHead != nil {
 		listed = append(listed, session.Command{Name: "resume", What: "carry the last session into the next task"})
@@ -55,10 +60,16 @@ func (a *App) runCommand(name string) tea.Cmd {
 	}
 	a.view.Reset()
 	switch name {
-	case "session":
-		a.show(viewSession)
-	case "crew":
+	case "chat":
+		a.show(viewChat)
+	case "work":
+		a.show(viewWork)
+	case "file-edits":
+		a.show(viewEdits)
+	case "sub-agents":
 		a.show(viewCrew)
+	case "shells":
+		a.show(viewShells)
 	case "settings":
 		a.show(viewSettings)
 	case "copy":
@@ -66,8 +77,8 @@ func (a *App) runCommand(name string) tea.Cmd {
 	case "copy-call":
 		call, found := a.view.LastCall()
 		return a.copy(callUnit, call, found)
-	case "detail":
-		a.view.ToggleOpen()
+	case "reload":
+		a.reload()
 	case "resume":
 		a.carry(a.options.ResumeHead)
 	case "new":
@@ -78,6 +89,13 @@ func (a *App) runCommand(name string) tea.Cmd {
 		a.view.Append(session.Entry{Kind: session.Note, Body: "there is no /" + name + ". type / to see the commands."})
 	}
 	return nil
+}
+
+func (a *App) reload() {
+	if a.options.Reload == nil {
+		return
+	}
+	a.view.Append(session.Entry{Kind: session.Note, Body: a.options.Reload()})
 }
 
 func (a *App) carry(change func() string) {

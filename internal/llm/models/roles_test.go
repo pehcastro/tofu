@@ -38,7 +38,7 @@ func withRole(id RoleID, slug string) fstest.MapFS {
 }
 
 func TestEachRoleBindsToAModelSlugAndReadsBack(t *testing.T) {
-	for id, slug := range map[RoleID]string{RoleTurn: "anthropic/claude-opus-5", RoleChild: "openai/gpt-5.6-luna"} {
+	for id, slug := range map[RoleID]string{RoleTurn: "claude-sub/claude-opus-5", RoleChild: "codex-sub/gpt-5.6-luna"} {
 		bound := boundIn(t, withRole(id, slug), Claude)[id]
 		if bound.Model.Slug() != slug {
 			t.Fatalf("%s reads back %q, want %q", id, bound.Model.Slug(), slug)
@@ -53,8 +53,8 @@ func TestEachRoleBindsToAModelSlugAndReadsBack(t *testing.T) {
 }
 
 func TestARoleNamingAModelTheCatalogDoesNotHaveIsRefusedByName(t *testing.T) {
-	_, err := Load([]Layer{layerOf("catalog", withRole(RoleTurn, "anthropic/claude-opus-9"))})
-	if err == nil || !strings.Contains(err.Error(), "no anthropic/claude-opus-9") {
+	_, err := Load([]Layer{layerOf("catalog", withRole(RoleTurn, "claude-sub/claude-opus-9"))})
+	if err == nil || !strings.Contains(err.Error(), "no claude-sub/claude-opus-9") {
 		t.Fatalf("want the unknown model refused by name, got %v", err)
 	}
 	if !strings.Contains(err.Error(), "roles"+string(filepath.Separator)+"turn.yaml") {
@@ -63,7 +63,7 @@ func TestARoleNamingAModelTheCatalogDoesNotHaveIsRefusedByName(t *testing.T) {
 }
 
 func TestARoleNamingAnExcludedModelIsRefusedWithTheCatalogsOwnReason(t *testing.T) {
-	_, err := Load([]Layer{layerOf("catalog", withRole(RoleChild, "anthropic/claude-fable-5"))})
+	_, err := Load([]Layer{layerOf("catalog", withRole(RoleChild, "claude-sub/claude-fable-5"))})
 	if err == nil || !strings.Contains(err.Error(), "the owner will not pay for fable") {
 		t.Fatalf("want the catalog's own reason, got %v", err)
 	}
@@ -80,9 +80,9 @@ func TestAFileUnderRolesThatIsNotARoleIsRefusedByName(t *testing.T) {
 
 func TestAProjectRoleFileLeavesTheGlobalOneTheProjectDoesNotName(t *testing.T) {
 	global := twoModels()
-	global["roles/turn.yaml"] = &fstest.MapFile{Data: []byte("model: anthropic/claude-opus-5\n")}
-	global["roles/child.yaml"] = &fstest.MapFile{Data: []byte("model: openai/gpt-5.6-sol\n")}
-	project := oneFile("roles/child.yaml", "model: openai/gpt-5.6-luna\n")
+	global["roles/turn.yaml"] = &fstest.MapFile{Data: []byte("model: claude-sub/claude-opus-5\n")}
+	global["roles/child.yaml"] = &fstest.MapFile{Data: []byte("model: codex-sub/gpt-5.6-sol\n")}
+	project := oneFile("roles/child.yaml", "model: codex-sub/gpt-5.6-luna\n")
 
 	catalog, err := Load([]Layer{layerOf("global", global), layerOf("project", project)})
 	if err != nil {
@@ -92,10 +92,10 @@ func TestAProjectRoleFileLeavesTheGlobalOneTheProjectDoesNotName(t *testing.T) {
 	if err != nil {
 		t.Fatalf("binding: %v", err)
 	}
-	if got := bound[RoleChild].Model.Slug(); got != "openai/gpt-5.6-luna" {
+	if got := bound[RoleChild].Model.Slug(); got != "codex-sub/gpt-5.6-luna" {
 		t.Fatalf("the project layer did not win the child role, it reads %q", got)
 	}
-	if got := bound[RoleTurn].Model.Slug(); got != "anthropic/claude-opus-5" {
+	if got := bound[RoleTurn].Model.Slug(); got != "claude-sub/claude-opus-5" {
 		t.Fatalf("the project layer took the turn role it never named, it reads %q", got)
 	}
 	if !strings.HasPrefix(bound[RoleTurn].File, "global") {
@@ -105,10 +105,10 @@ func TestAProjectRoleFileLeavesTheGlobalOneTheProjectDoesNotName(t *testing.T) {
 
 func TestARoleWithNothingBoundFallsBackToTheSubscriptionDefaultAndSaysSo(t *testing.T) {
 	bound := boundIn(t, twoModels(), Codex)[RoleChild]
-	if bound.By != BoundByDefault || bound.Model.Slug() != "openai/gpt-5.6-sol" {
+	if bound.By != BoundByDefault || bound.Model.Slug() != "codex-sub/gpt-5.6-sol" {
 		t.Fatalf("the child role did not fall back to the codex default: %+v", bound)
 	}
-	want := "child has nothing bound, so it runs openai/gpt-5.6-sol, the codex default"
+	want := "child has nothing bound, so it runs codex-sub/gpt-5.6-sol, the codex default"
 	if bound.Says() != want {
 		t.Fatalf("it says %q, want %q", bound.Says(), want)
 	}
@@ -136,14 +136,14 @@ func TestBindingsArePinnedAndAReReadPicksUpTheChange(t *testing.T) {
 		return bound
 	}
 
-	write("anthropic/claude-opus-5")
+	write("claude-sub/claude-opus-5")
 	pinned := reread()
-	write("openai/gpt-5.6-luna")
+	write("codex-sub/gpt-5.6-luna")
 
-	if got := pinned[RoleTurn].Model.Slug(); got != "anthropic/claude-opus-5" {
+	if got := pinned[RoleTurn].Model.Slug(); got != "claude-sub/claude-opus-5" {
 		t.Fatalf("the pinned binding changed under the session, it reads %q", got)
 	}
-	if got := reread()[RoleTurn].Model.Slug(); got != "openai/gpt-5.6-luna" {
+	if got := reread()[RoleTurn].Model.Slug(); got != "codex-sub/gpt-5.6-luna" {
 		t.Fatalf("re-reading did not pick up the change, it reads %q", got)
 	}
 }

@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -43,9 +44,17 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
+func packageDir() string {
+	_, file, _, ok := runtime.Caller(0)
+	if !ok {
+		panic("runtime.Caller could not find this test file")
+	}
+	return filepath.Dir(file)
+}
+
 func fixtureHash() string {
 	sum := sha256.New()
-	err := filepath.WalkDir(".", func(path string, entry fs.DirEntry, err error) error {
+	err := filepath.WalkDir(packageDir(), func(path string, entry fs.DirEntry, err error) error {
 		if err != nil || entry.IsDir() {
 			return err
 		}

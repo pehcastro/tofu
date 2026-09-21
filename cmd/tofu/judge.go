@@ -7,10 +7,10 @@ import (
 	"fmt"
 	"io"
 
+	"tofu/internal/judge/gate"
 	"tofu/internal/judge/jev"
 	"tofu/internal/judge/jev/wire/openrouter"
 	"tofu/internal/judge/ledger"
-	"tofu/internal/judge/policy"
 	"tofu/internal/judge/question"
 )
 
@@ -18,13 +18,13 @@ type judgeInput struct {
 	State     any                       `json:"state"`
 	Questions map[string]inlineQuestion `json:"questions"`
 	Catalog   string                    `json:"catalog"`
-	Policy    string                    `json:"policy"`
+	Rule      string                    `json:"rule"`
 }
 
 type judgeOpts struct {
-	dryRun   bool
-	noCache  bool
-	noPolicy bool
+	dryRun  bool
+	noCache bool
+	noRule  bool
 }
 
 func judgeVerb(args []string, in io.Reader, out, errOut io.Writer) int {
@@ -52,16 +52,16 @@ func judgeVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 	if err != nil {
 		return judgeFail(errOut, err)
 	}
-	if !opts.noPolicy && input.Policy != "" {
-		pol, err := resolvePolicy(input.Policy, set)
+	if !opts.noRule && input.Rule != "" {
+		pol, err := resolveRule(input.Rule, set)
 		if err != nil {
 			return judgeFail(errOut, err)
 		}
-		res, err := resolvePolicyMode(pol)
+		res, err := resolveRuleMode(pol)
 		if err != nil {
 			return judgeFail(errOut, err)
 		}
-		set.Policy = &res.Policy
+		set.Rule = &res.Rule
 		set.Mode = res.Mode
 		set.ModeReason = res.Reason
 	}
@@ -102,7 +102,7 @@ func judgeExitCode(outcome judgeOutcome) int {
 	if outcome.verdict == ledger.VerdictUnset {
 		return exitOK
 	}
-	if policy.ExitCode(outcome.mode, toPolicyVerdict(outcome.verdict)) == 1 {
+	if gate.ExitCode(outcome.mode, toGateVerdict(outcome.verdict)) == 1 {
 		return exitVerdict
 	}
 	return exitOK
@@ -122,8 +122,8 @@ func parseJudgeArgs(args []string) (judgeOpts, string, error) {
 			opts.dryRun = true
 		case "--no-cache":
 			opts.noCache = true
-		case "--no-policy":
-			opts.noPolicy = true
+		case "--no-rule":
+			opts.noRule = true
 		case "--lint":
 			i++
 			if i >= len(args) {

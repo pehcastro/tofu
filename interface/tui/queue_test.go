@@ -23,11 +23,13 @@ const (
 func queueApp(t *testing.T, tasks chan<- string) *App {
 	t.Helper()
 	app := newTestApp(Options{
-		Repo:   "silo",
+		Repo:   testRepo,
 		Branch: "develop",
 		Now:    fixedClock(),
 		Wires:  anthropicAlone,
-		Turn:   func(_ context.Context, _, task string, _ func(Event)) { tasks <- task },
+		Turn: func(_ context.Context, _, task string, _ CalledFromInsideTheTurnAndNeverAfterItReturns) {
+			tasks <- task
+		},
 	})
 	app.Init()
 	app.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
@@ -44,7 +46,7 @@ func endTurn(t *testing.T, app *App) {
 	for {
 		msg := app.waitForEvent()()
 		app.Update(msg)
-		if _, done := msg.(closedMsg); done {
+		if _, done := msg.(Closed); done {
 			return
 		}
 	}
@@ -195,6 +197,22 @@ func TestNoGoldenFixtureCarriesTheVersion(t *testing.T) {
 		}
 		if strings.Contains(string(body), konst.Version) {
 			t.Errorf("%s carries the version %s, so every release moves it", name, konst.Version)
+		}
+	}
+}
+
+func TestNoGoldenFixtureCarriesAVendorToolUseID(t *testing.T) {
+	names, err := filepath.Glob(filepath.Join("testdata", "*.golden"))
+	if err != nil || len(names) == 0 {
+		t.Fatalf("no golden fixture was read: %v", err)
+	}
+	for _, name := range names {
+		body, err := os.ReadFile(name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(string(body), "toolu_") {
+			t.Errorf("%s carries a vendor tool-use id on screen", name)
 		}
 	}
 }

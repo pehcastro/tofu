@@ -12,13 +12,14 @@ import (
 	"tofu/internal/judge/jev"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/judge/state"
+	"tofu/internal/sys"
 )
 
-func toolGatePolicyPath(t *testing.T) string {
+func toolGateRulePath(t *testing.T) string {
 	t.Helper()
-	abs, err := filepath.Abs(filepath.Join("..", "..", "catalog", "policy", runGatePoint+".yaml"))
+	abs, err := filepath.Abs(filepath.Join("..", "..", "catalog", "general", "rules", runGatePoint+".yaml"))
 	if err != nil {
-		t.Fatalf("resolving the shipped policy path: %v", err)
+		t.Fatalf("resolving the shipped rule path: %v", err)
 	}
 	return abs
 }
@@ -32,14 +33,14 @@ const askReply = `{"model":"typesafe/jev-1.13-20260917","provider":"TypeSafe","i
 	`},"usage":{"input_tokens":10,"output_tokens":2,"cost":0.00002}}`
 
 func TestCheckWritesARowWithAVerdict(t *testing.T) {
-	policyPath := toolGatePolicyPath(t)
+	rulePath := toolGateRulePath(t)
 	t.Chdir(t.TempDir())
 	client, err := jev.NewClient(jev.Config{Wire: &stubWire{reply: askReply}})
 	if err != nil {
 		t.Fatalf("client: %v", err)
 	}
 
-	row, err := runCheck(context.Background(), client, policyPath, "git push --force origin main")
+	row, err := runCheck(context.Background(), client, rulePath, "git push --force origin main")
 	if err != nil {
 		t.Fatalf("runCheck: %v", err)
 	}
@@ -53,9 +54,9 @@ func TestCheckWritesARowWithAVerdict(t *testing.T) {
 		t.Fatalf("point = %q, want tool_gate", row.Point)
 	}
 
-	dir, err := ledger.Dir()
+	dir, err := sys.LogDir()
 	if err != nil {
-		t.Fatalf("ledger.Dir: %v", err)
+		t.Fatalf("sys.LogDir: %v", err)
 	}
 	found, ok, err := ledger.NewReader(dir).ByID(row.ID)
 	if err != nil {
@@ -70,7 +71,7 @@ func TestCheckWritesARowWithAVerdict(t *testing.T) {
 }
 
 func TestCheckRowCarriesTheStateItWasDecidedOnAndTheTargetItNamed(t *testing.T) {
-	policyPath := toolGatePolicyPath(t)
+	rulePath := toolGateRulePath(t)
 	project := t.TempDir()
 	t.Chdir(project)
 	client, err := jev.NewClient(jev.Config{Wire: &stubWire{reply: askReply}})
@@ -78,13 +79,13 @@ func TestCheckRowCarriesTheStateItWasDecidedOnAndTheTargetItNamed(t *testing.T) 
 		t.Fatalf("client: %v", err)
 	}
 
-	row, err := runCheck(context.Background(), client, policyPath, "rm -f notes.md")
+	row, err := runCheck(context.Background(), client, rulePath, "rm -f notes.md")
 	if err != nil {
 		t.Fatalf("runCheck: %v", err)
 	}
-	dir, err := ledger.Dir()
+	dir, err := sys.LogDir()
 	if err != nil {
-		t.Fatalf("ledger.Dir: %v", err)
+		t.Fatalf("sys.LogDir: %v", err)
 	}
 	found, ok, err := ledger.NewReader(dir).ByID(row.ID)
 	if err != nil {
@@ -111,18 +112,18 @@ func TestCheckRowCarriesTheStateItWasDecidedOnAndTheTargetItNamed(t *testing.T) 
 }
 
 func TestCheckTwoCallsWriteTwoRows(t *testing.T) {
-	policyPath := toolGatePolicyPath(t)
+	rulePath := toolGateRulePath(t)
 	t.Chdir(t.TempDir())
 	client, err := jev.NewClient(jev.Config{Wire: &stubWire{reply: askReply}})
 	if err != nil {
 		t.Fatalf("client: %v", err)
 	}
 
-	first, err := runCheck(context.Background(), client, policyPath, "git push --force origin main")
+	first, err := runCheck(context.Background(), client, rulePath, "git push --force origin main")
 	if err != nil {
 		t.Fatalf("first runCheck: %v", err)
 	}
-	second, err := runCheck(context.Background(), client, policyPath, "ls -la")
+	second, err := runCheck(context.Background(), client, rulePath, "ls -la")
 	if err != nil {
 		t.Fatalf("second runCheck: %v", err)
 	}
@@ -130,9 +131,9 @@ func TestCheckTwoCallsWriteTwoRows(t *testing.T) {
 		t.Fatalf("both checks produced the same row id %q", first.ID)
 	}
 
-	dir, err := ledger.Dir()
+	dir, err := sys.LogDir()
 	if err != nil {
-		t.Fatalf("ledger.Dir: %v", err)
+		t.Fatalf("sys.LogDir: %v", err)
 	}
 	var rows []ledger.Row
 	if _, err := ledger.NewReader(dir).Each(ledger.Filter{}, func(row ledger.Row) error {
@@ -146,34 +147,34 @@ func TestCheckTwoCallsWriteTwoRows(t *testing.T) {
 	}
 }
 
-func enforcedToolGatePolicyPath(t *testing.T) string {
+func enforcedToolGateRulePath(t *testing.T) string {
 	t.Helper()
-	shipped, err := os.ReadFile(toolGatePolicyPath(t))
+	shipped, err := os.ReadFile(toolGateRulePath(t))
 	if err != nil {
-		t.Fatalf("reading the shipped policy: %v", err)
+		t.Fatalf("reading the shipped rule: %v", err)
 	}
 	enforced := strings.Replace(string(shipped), "mode: shadow", "mode: enforced", 1)
 	path := filepath.Join(t.TempDir(), "tool_gate@1.yaml")
 	if err := os.WriteFile(path, []byte(enforced), 0o644); err != nil {
-		t.Fatalf("writing the enforced policy fixture: %v", err)
+		t.Fatalf("writing the enforced rule fixture: %v", err)
 	}
 	return path
 }
 
-func TestCheckRowRecordsShadowWhateverThePolicyDeclares(t *testing.T) {
-	policyPath := enforcedToolGatePolicyPath(t)
+func TestCheckRowRecordsShadowWhateverTheRuleDeclares(t *testing.T) {
+	rulePath := enforcedToolGateRulePath(t)
 	t.Chdir(t.TempDir())
 	client, err := jev.NewClient(jev.Config{Wire: &stubWire{reply: askReply}})
 	if err != nil {
 		t.Fatalf("client: %v", err)
 	}
 
-	row, err := runCheck(context.Background(), client, policyPath, "git push --force origin main")
+	row, err := runCheck(context.Background(), client, rulePath, "git push --force origin main")
 	if err != nil {
 		t.Fatalf("runCheck: %v", err)
 	}
 	if row.Mode() != ledger.ModeShadow {
-		t.Fatalf("mode = %v, want shadow: check decides and never blocks, whatever the policy declares", row.Mode())
+		t.Fatalf("mode = %v, want shadow: check decides and never blocks, whatever the rule declares", row.Mode())
 	}
 }
 
@@ -194,7 +195,7 @@ func (w *capturingWire) Post(_ context.Context, body []byte) (jev.Raw, error) {
 }
 
 func TestCheckSendsExactlyWhatTheStateBuilderProduces(t *testing.T) {
-	policyPath := toolGatePolicyPath(t)
+	rulePath := toolGateRulePath(t)
 	t.Chdir(t.TempDir())
 	wire := &capturingWire{reply: askReply}
 	client, err := jev.NewClient(jev.Config{Wire: wire})
@@ -206,7 +207,7 @@ func TestCheckSendsExactlyWhatTheStateBuilderProduces(t *testing.T) {
 		t.Fatalf("os.Getwd: %v", err)
 	}
 
-	if _, err := runCheck(context.Background(), client, policyPath, "git push --force origin main"); err != nil {
+	if _, err := runCheck(context.Background(), client, rulePath, "git push --force origin main"); err != nil {
 		t.Fatalf("runCheck: %v", err)
 	}
 

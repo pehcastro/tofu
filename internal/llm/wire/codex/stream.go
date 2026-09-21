@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"tofu/internal/konst"
 	"tofu/internal/llm"
 	"tofu/internal/transport"
 )
@@ -42,11 +43,6 @@ type Result struct {
 	TurnState  string
 	Warnings   []string
 }
-
-const (
-	streamReadBytes = 64 << 10
-	streamLineBytes = 16 << 20
-)
 
 type streamItem struct {
 	Type      string `json:"type"`
@@ -108,7 +104,7 @@ type streamState struct {
 func ReadStream(body io.Reader) (Result, error) {
 	state := streamState{open: map[int]*openItem{}}
 	scanner := bufio.NewScanner(body)
-	scanner.Buffer(make([]byte, 0, streamReadBytes), streamLineBytes)
+	scanner.Buffer(make([]byte, 0, konst.StreamReadBytes), konst.StreamLineBytes)
 
 	for scanner.Scan() {
 		line := scanner.Text()

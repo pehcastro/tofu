@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"tofu/internal/konst"
 	"tofu/internal/llm"
 	"tofu/internal/transport"
 )
@@ -38,20 +39,6 @@ type Result struct {
 	ToolCalls  []llm.ToolCall
 	Usage      Usage
 	Warnings   []string
-}
-
-func MapStopReason(reason string) (Stop, bool) {
-	switch reason {
-	case "end_turn", "stop_sequence", "pause_turn", "compaction":
-		return StopEnd, true
-	case "max_tokens", "model_context_window_exceeded":
-		return StopLength, true
-	case "tool_use":
-		return StopToolUse, true
-	case "refusal", "sensitive":
-		return StopError, true
-	}
-	return StopEnd, false
 }
 
 type streamEvent struct {
@@ -109,11 +96,6 @@ type openBlock struct {
 	arguments strings.Builder
 }
 
-const (
-	streamReadBytes = 64 << 10
-	streamLineBytes = 16 << 20
-)
-
 func ReadStream(body io.Reader, oauth bool, onDelta func(string)) (Result, error) {
 	var result Result
 	open := map[int]*openBlock{}
@@ -121,7 +103,7 @@ func ReadStream(body io.Reader, oauth bool, onDelta func(string)) (Result, error
 	sawStart, sawTerminal, sawStop := false, false, false
 
 	scanner := bufio.NewScanner(body)
-	scanner.Buffer(make([]byte, 0, streamReadBytes), streamLineBytes)
+	scanner.Buffer(make([]byte, 0, konst.StreamReadBytes), konst.StreamLineBytes)
 	for scanner.Scan() {
 		line := scanner.Text()
 		if !strings.HasPrefix(line, "data:") {
@@ -201,9 +183,9 @@ func ReadStream(body io.Reader, oauth bool, onDelta func(string)) (Result, error
 			}
 			sawTerminal = true
 			result.StopReason = event.Delta.StopReason
-			stop, known := MapStopReason(event.Delta.StopReason)
+			stop, handled := llm.MapFinishReason(event.Delta.StopReason)
 			result.Stop = stop
-			if !known {
+			if !handled {
 				result.Warnings = append(result.Warnings, "unhandled stop reason: "+event.Delta.StopReason)
 			}
 

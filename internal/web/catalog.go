@@ -208,24 +208,17 @@ func credential(variable string) (string, bool) {
 	if value := strings.TrimSpace(os.Getenv(variable)); value != "" {
 		return value, true
 	}
-	paths := []string{".env"}
+	paths := []string{sys.CredentialFileName}
 	if home, err := sys.HomeConfigDir(); err == nil {
-		paths = append(paths, sys.Join(home, ".env"))
+		paths = append(paths, sys.Join(home, sys.CredentialFileName))
 	}
 	for _, path := range paths {
-		raw, err := os.ReadFile(path)
+		raw, err := sys.ReadCredential(path)
 		if err != nil {
 			continue
 		}
-		for _, line := range strings.Split(string(raw), "\n") {
-			line = strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(line), "export "))
-			value, found := strings.CutPrefix(line, variable+"=")
-			if !found {
-				continue
-			}
-			if value = strings.Trim(strings.TrimSpace(value), `"'`); value != "" {
-				return value, true
-			}
+		if value := sys.CredentialAssignment(string(raw), variable); value != "" {
+			return value, true
 		}
 	}
 	return "", false

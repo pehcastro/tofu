@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/rand"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"regexp"
@@ -34,6 +35,8 @@ const (
 	historyCacheMinMessages    = 3
 	historyCacheMinPrefixChars = 4096
 	cacheBreakpointsPerRequest = 4
+
+	ImageBytesCap = 5 << 20
 )
 
 type cacheControl struct {
@@ -47,9 +50,16 @@ type systemBlock struct {
 	CacheControl *cacheControl `json:"cache_control,omitempty"`
 }
 
+type imageSource struct {
+	Type      string `json:"type"`
+	MediaType string `json:"media_type"`
+	Data      string `json:"data"`
+}
+
 type contentBlock struct {
 	Type      string          `json:"type"`
 	Text      string          `json:"text,omitempty"`
+	Source    *imageSource    `json:"source,omitempty"`
 	ID        string          `json:"id,omitempty"`
 	Name      string          `json:"name,omitempty"`
 	Input     json.RawMessage `json:"input,omitempty"`
@@ -230,12 +240,24 @@ func encodeMessages(messages []llm.Message, oauth bool) ([]wireMessage, error) {
 				"message %d is a system message; anthropic carries those in the system field", index)
 
 		case llm.RoleUser:
-			if message.Content == "" {
+			if message.Content == "" && len(message.Images) == 0 {
 				return nil, transport.Fail("anthropic.Encode", transport.KindBadRequest, nil,
 					"message %d is a user message with no content", index)
 			}
-			encoded = append(encoded, wireMessage{Role: "user",
-				Content: []contentBlock{{Type: "text", Text: message.Content}}})
+			blocks := make([]contentBlock, 0, len(message.Images)+1)
+			if message.Content != "" {
+				blocks = append(blocks, contentBlock{Type: "text", Text: message.Content})
+			}
+			for imageIndex, image := range message.Images {
+				if len(image.Data) > ImageBytesCap {
+					return nil, transport.Fail("anthropic.Encode", transport.KindBadRequest, nil,
+						"message %d image %d is %d bytes, past the %d byte cap", index, imageIndex, len(image.Data), ImageBytesCap)
+				}
+				blocks = append(blocks, contentBlock{Type: "image", Source: &imageSource{
+					Type: "base64", MediaType: image.MediaType, Data: base64.StdEncoding.EncodeToString(image.Data),
+				}})
+			}
+			encoded = append(encoded, wireMessage{Role: "user", Content: blocks})
 
 		case llm.RoleTool:
 			if message.ToolCallID == "" {
@@ -341,18 +363,9 @@ func metadataUserID(r Request, oauth bool) (string, error) {
 	if !oauth {
 		return "", nil
 	}
-
-	session := r.SessionID
-	if session == "" {
-		generated, err := randomUUID()
-		if err != nil {
-			return "", err
-		}
-		session = generated
-	}
 	encoded, err := json.Marshal(claudeUserID{
 		DeviceID:    deviceID(r.InstallID, r.AccountID),
-		SessionID:   session,
+		SessionID:   r.SessionID,
 		AccountUUID: r.AccountID,
 	})
 	if err != nil {
@@ -383,7 +396,7 @@ func deviceID(installID, accountID string) string {
 func randomUUID() (string, error) {
 	var raw [16]byte
 	if _, err := rand.Read(raw[:]); err != nil {
-		return "", transport.Fail("anthropic.Encode", transport.KindBadRequest, err, "drawing a session id")
+		return "", transport.Fail("anthropic.Ask", transport.KindBadRequest, err, "drawing a session id")
 	}
 	raw[6] = raw[6]&0x0f | 0x40
 	raw[8] = raw[8]&0x3f | 0x80

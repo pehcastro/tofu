@@ -31,6 +31,7 @@ func baseConfig(t *testing.T, model Model, tools Registry) Config {
 		Wire:           "anthropic",
 		Caps:           Caps{MaxSteps: 10},
 		ResultBytesCap: 4096,
+		ArtifactDir:    t.TempDir(),
 		EndedSession:   func(row Row) error { return WriteSession(scratch, row) },
 	}
 }

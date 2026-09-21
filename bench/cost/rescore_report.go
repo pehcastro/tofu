@@ -4,16 +4,16 @@ import (
 	"fmt"
 	"strings"
 
-	"tofu/internal/judge/policy"
+	"tofu/internal/judge/gate"
 	"tofu/internal/konst"
 )
 
-const deterministicArmSource = "recomputed from the held-out half: these two arms read the state and ask no question, so no policy decides for them and nothing about them can change"
+const deterministicArmSource = "recomputed from the held-out half: these two arms read the state and ask no question, so no rule decides for them and nothing about them can change"
 
 func RenderRescore(result RescoreResult) string {
 	b := &strings.Builder{}
-	p := result.Policy
-	fmt.Fprintf(b, "Every number below is decided by `policy.Decide` reading `%s`, the five threshold rule the live gate runs. Revisions of this report before 2026-09-19 scored with `DecideByApproval`, a two threshold rule nothing under `cmd/` or `internal/` calls, and its figures are not comparable with these.\n\n", p.File)
+	p := result.Rule
+	fmt.Fprintf(b, "Every number below is decided by `gate.Decide` reading `%s`, the five threshold rule the live gate runs. Revisions of this report before 2026-09-19 scored with `DecideByApproval`, a two threshold rule nothing under `cmd/` or `internal/` calls, and its figures are not comparable with these.\n\n", p.File)
 	calibrated := 0
 	for _, arm := range result.Arms {
 		if arm.Arm == CalibrationArm {
@@ -44,13 +44,13 @@ func RenderRescore(result RescoreResult) string {
 	}
 	renderRescoreRow(b, totals)
 
-	fmt.Fprintf(b, "\nA row can be re-scored only when it carries all four answers the policy reads. %d of %d do. The last column counts only the re-scored rows, so it is not comparable with the one before it unless the two middle columns are zero.\n\n",
+	fmt.Fprintf(b, "\nA row can be re-scored only when it carries all four answers the rule reads. %d of %d do. The last column counts only the re-scored rows, so it is not comparable with the one before it unless the two middle columns are zero.\n\n",
 		totals.Rescored, totals.Rows)
 	renderDeadBand(b, p, result.Rows)
 	return b.String()
 }
 
-func renderDeadBand(b *strings.Builder, pol policy.Policy, rows []AnswerRow) {
+func renderDeadBand(b *strings.Builder, pol gate.Rule, rows []AnswerRow) {
 	carryAnswers := 0
 	inBand := map[string]bool{}
 	table := &strings.Builder{}
@@ -59,7 +59,7 @@ func renderDeadBand(b *strings.Builder, pol policy.Policy, rows []AnswerRow) {
 			continue
 		}
 		carryAnswers++
-		for _, cut := range policyCuts(pol, row) {
+		for _, cut := range ruleCuts(pol, row) {
 			distance := cut.value - cut.threshold
 			if distance > konst.ThresholdDeadBand || distance < -konst.ThresholdDeadBand {
 				continue
@@ -68,7 +68,7 @@ func renderDeadBand(b *strings.Builder, pol policy.Policy, rows []AnswerRow) {
 			fmt.Fprintf(table, "| %s | %s | %s | %.2f | %+.2f | %s |\n", row.Arm, row.Case, cut.question, cut.value, distance, row.Verdict)
 		}
 	}
-	fmt.Fprintf(b, "## Rows whose answer sat on the cut\n\n%d of the %d rows that carry answers sit inside the dead band of %.2f, measured from this instrument's own rerun spread and read from `konst.ThresholdDeadBand`. The cuts are the ones `policy.Decide` compares against, read from `%s`: risk %.2f and %.2f, user_requested %.2f, approval %.2f, from_untrusted %.2f. A row this close to a cut answers differently between two runs of the same question on the same state, so its verdict is a coin flip and the counts above, which include it, move by that much for no reason anyone changed.\n\n",
+	fmt.Fprintf(b, "## Rows whose answer sat on the cut\n\n%d of the %d rows that carry answers sit inside the dead band of %.2f, measured from this instrument's own rerun spread and read from `konst.ThresholdDeadBand`. The cuts are the ones `gate.Decide` compares against, read from `%s`: risk %.2f and %.2f, user_requested %.2f, approval %.2f, from_untrusted %.2f. A row this close to a cut answers differently between two runs of the same question on the same state, so its verdict is a coin flip and the counts above, which include it, move by that much for no reason anyone changed.\n\n",
 		len(inBand), carryAnswers, konst.ThresholdDeadBand, pol.File,
 		pol.Thresholds.RiskAskAt, pol.Thresholds.RiskDenyAt,
 		pol.Thresholds.UserRequestedRelaxAt, pol.Thresholds.ApprovalRelaxAt, pol.Thresholds.FromUntrustedBlockAt)
@@ -83,7 +83,7 @@ type questionCut struct {
 	threshold float64
 }
 
-func policyCuts(pol policy.Policy, row AnswerRow) []questionCut {
+func ruleCuts(pol gate.Rule, row AnswerRow) []questionCut {
 	cuts := []questionCut{
 		{pol.UserRequestedQuestion, row.UserRequested, pol.Thresholds.UserRequestedRelaxAt},
 		{pol.ApprovalQuestion, row.Approval, pol.Thresholds.ApprovalRelaxAt},

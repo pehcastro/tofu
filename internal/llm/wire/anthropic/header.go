@@ -4,12 +4,11 @@ import (
 	"runtime"
 	"slices"
 	"strings"
+
+	"tofu/internal/llm"
 )
 
-type Header struct {
-	Name  string
-	Value string
-}
+type Header = llm.Header
 
 type HeaderOptions struct {
 	Token        string
@@ -80,18 +79,18 @@ func Headers(options HeaderOptions) []Header {
 			accept = "text/event-stream"
 		}
 		headers := []Header{
-			{"Accept", accept},
-			{"Accept-Encoding", "gzip, deflate, br, zstd"},
-			{"Connection", "keep-alive"},
-			{"Content-Type", "application/json"},
-			{"anthropic-version", AnthropicAPIVersion},
-			{"anthropic-dangerous-direct-browser-access", "true"},
-			{"x-app", "cli"},
+			{Name: "Accept", Value: accept},
+			{Name: "Accept-Encoding", Value: "gzip, deflate, br, zstd"},
+			{Name: "Connection", Value: "keep-alive"},
+			{Name: "Content-Type", Value: "application/json"},
+			{Name: "anthropic-version", Value: AnthropicAPIVersion},
+			{Name: "anthropic-dangerous-direct-browser-access", Value: "true"},
+			{Name: "x-app", Value: "cli"},
 		}
 		if beta := BetaHeader(nil, options.ExtraBetas); beta != "" {
-			headers = append(headers, Header{"anthropic-beta", beta})
+			headers = append(headers, Header{Name: "anthropic-beta", Value: beta})
 		}
-		return append(headers, Header{"X-Api-Key", options.Token})
+		return append(headers, Header{Name: "X-Api-Key", Value: options.Token})
 	}
 
 	base := ClaudeCodeUtilityBetas()
@@ -100,32 +99,32 @@ func Headers(options HeaderOptions) []Header {
 	}
 
 	headers := []Header{
-		{"Accept", "application/json"},
-		{"Content-Type", "application/json"},
-		{"User-Agent", ClaudeCodeUserAgent},
+		{Name: "Accept", Value: "application/json"},
+		{Name: "Content-Type", Value: "application/json"},
+		{Name: "User-Agent", Value: ClaudeCodeUserAgent},
 	}
 	if options.SessionID != "" {
-		headers = append(headers, Header{"X-Claude-Code-Session-Id", options.SessionID})
+		headers = append(headers, Header{Name: "X-Claude-Code-Session-Id", Value: options.SessionID})
 	}
 	headers = append(headers,
-		Header{"X-Stainless-Arch", stainlessArch(runtime.GOARCH)},
-		Header{"X-Stainless-Lang", "js"},
-		Header{"X-Stainless-OS", stainlessOS(runtime.GOOS)},
-		Header{"X-Stainless-Package-Version", PinnedAnthropicSDKVersion},
-		Header{"X-Stainless-Retry-Count", "0"},
-		Header{"X-Stainless-Runtime", "node"},
-		Header{"X-Stainless-Runtime-Version", PinnedNodeRuntimeVersion},
-		Header{"X-Stainless-Timeout", PinnedStainlessTimeoutSeconds},
+		Header{Name: "X-Stainless-Arch", Value: stainlessArch(runtime.GOARCH)},
+		Header{Name: "X-Stainless-Lang", Value: "js"},
+		Header{Name: "X-Stainless-OS", Value: stainlessOS(runtime.GOOS)},
+		Header{Name: "X-Stainless-Package-Version", Value: PinnedAnthropicSDKVersion},
+		Header{Name: "X-Stainless-Retry-Count", Value: "0"},
+		Header{Name: "X-Stainless-Runtime", Value: "node"},
+		Header{Name: "X-Stainless-Runtime-Version", Value: PinnedNodeRuntimeVersion},
+		Header{Name: "X-Stainless-Timeout", Value: PinnedStainlessTimeoutSeconds},
 	)
 	if beta := BetaHeader(base, options.ExtraBetas); beta != "" {
-		headers = append(headers, Header{"anthropic-beta", beta})
+		headers = append(headers, Header{Name: "anthropic-beta", Value: beta})
 	}
 	return append(headers,
-		Header{"anthropic-dangerous-direct-browser-access", "true"},
-		Header{"anthropic-version", AnthropicAPIVersion},
-		Header{"Authorization", "Bearer " + options.Token},
-		Header{"x-app", "cli"},
-		Header{"Connection", "keep-alive"},
-		Header{"Accept-Encoding", "gzip, deflate, br, zstd"},
+		Header{Name: "anthropic-dangerous-direct-browser-access", Value: "true"},
+		Header{Name: "anthropic-version", Value: AnthropicAPIVersion},
+		Header{Name: "Authorization", Value: "Bearer " + options.Token},
+		Header{Name: "x-app", Value: "cli"},
+		Header{Name: "Connection", Value: "keep-alive"},
+		Header{Name: "Accept-Encoding", Value: "gzip, deflate, br, zstd"},
 	)
 }

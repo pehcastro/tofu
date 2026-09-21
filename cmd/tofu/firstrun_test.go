@@ -14,13 +14,20 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"tofu/interface/tui"
-	"tofu/internal/judge/ledger"
+	"tofu/interface/tui/session"
 	"tofu/internal/llm"
 	"tofu/internal/llm/cred"
 	"tofu/internal/sys"
 )
 
-const composerPlaceholder = "what should tofu do here?"
+func containsAPlaceholder(text string) bool {
+	for _, example := range session.PlaceholderExamples {
+		if strings.Contains(text, example) {
+			return true
+		}
+	}
+	return false
+}
 
 func firstRunApp(t *testing.T, width, height int) *tui.App {
 	t.Helper()
@@ -51,10 +58,13 @@ func TestAFirstRunWithNothingStoredDrawsTheSetupAndNotAnError(t *testing.T) {
 			t.Errorf("the first frame at 120 columns does not say %q\n%s", want, wide)
 		}
 	}
-	for _, absent := range []string{"panic", "sqlite", "no such file", composerPlaceholder} {
+	for _, absent := range []string{"panic", "sqlite", "no such file"} {
 		if strings.Contains(narrow, absent) {
 			t.Errorf("the first frame carries %q instead of the setup\n%s", absent, narrow)
 		}
+	}
+	if containsAPlaceholder(narrow) {
+		t.Errorf("the first frame carries the composer placeholder instead of the setup\n%s", narrow)
 	}
 	t.Log("\n" + narrow)
 	t.Log("\n" + wide)
@@ -87,7 +97,7 @@ func TestWithBothStoredNoSetupIsDrawnAndTheComposerHasFocus(t *testing.T) {
 			t.Errorf("setup is still drawn with everything stored: %q\n%s", absent, frame)
 		}
 	}
-	if !strings.Contains(frame, composerPlaceholder) {
+	if !containsAPlaceholder(frame) {
 		t.Errorf("the composer is not drawn\n%s", frame)
 	}
 	if app.View().Cursor == nil {
@@ -134,7 +144,7 @@ func TestALoginRunInAnotherTerminalMovesTheAppOnWithoutARestart(t *testing.T) {
 			t.Errorf("the app still asks for %q after the login ran elsewhere\n%s", absent, frame)
 		}
 	}
-	if !strings.Contains(frame, composerPlaceholder) {
+	if !containsAPlaceholder(frame) {
 		t.Errorf("the app did not reach the composer\n%s", frame)
 	}
 	t.Log("\n" + frame)
@@ -205,7 +215,11 @@ func TestTheKeyIsNeverInAFrameALogOrARecordedSession(t *testing.T) {
 		{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "wrote the note"},
 	}}
 	app := firstRunApp(t, 100, 30)
-	stubbedTurn(dir, model)(t.Context(), wireSubscription, "write a note", func(event tui.Event) { app.Update(event) })
+	var turned eventLog
+	stubbedTurn(dir, model)(t.Context(), wireSubscription, "write a note", turned.add)
+	for _, event := range turned.all() {
+		app.Update(event)
+	}
 
 	if !strings.Contains(authorization, key) {
 		t.Fatalf("the gate never reached jev with the key, so nothing was at risk of leaking: %q", authorization)
@@ -224,7 +238,7 @@ func TestTheKeyIsNeverInAFrameALogOrARecordedSession(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	logDir, err := ledger.Dir()
+	logDir, err := sys.LogDir()
 	if err != nil {
 		t.Fatal(err)
 	}

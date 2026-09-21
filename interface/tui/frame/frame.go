@@ -1,69 +1,82 @@
 package frame
 
 import (
-	"fmt"
 	"strconv"
 	"strings"
 	"time"
 
 	"tofu/interface/tui/theme"
+	"tofu/interface/tui/trace"
 	"tofu/internal/konst"
 	"tofu/internal/sys"
 	"tofu/internal/widget"
 )
 
 const (
-	clockFormat   = "15:04"
-	separator     = "  ·  "
-	wireArrow     = " → "
-	cacheMark     = "+"
-	contextUnread = "context unread"
-	agentMark     = "●"
-	ForkNotice    = "⟳ forking the session in the background"
-	develSuffix   = "+dev"
-	dirtyMark     = "-dirty"
+	modelSeparator    = "/"
+	pathPrefix        = "./"
+	separator         = "  ·  "
+	contextUnread     = "context unread"
+	quotaUnread       = "quota unread"
+	agentMark         = "●"
+	ForkNotice        = "⟳ forking"
+	develSuffix       = "+dev"
+	dirtyMark         = "-dirty"
+	quotaPercentCells = 4
 )
 
 type headDropped int
 
 const (
 	headNothing headDropped = iota
-	headElapsed
 	headClock
+	headSession
 	headModel
-	headRepo
 	headBranch
-	headWire
 )
 
-type dropped int
+type rowOneDrop int
 
 const (
-	nothing dropped = iota
-	sessionNote
-	jevCount
-	resetClause
-	tokenCounts
-	agentCount
-	quotaMeter
-	contextBar
+	rowOneFull rowOneDrop = iota
+	rowOneNoQuotaBar
+	rowOneNoReset
+	rowOneLabelOnly
+	rowOneNoContextBar
+)
+
+func RowOneDropOrder() []string {
+	return []string{"quota bar", "quota reset", "quota label", "context bar"}
+}
+
+type rowTwoDrop int
+
+const (
+	rowTwoFull rowTwoDrop = iota
+	rowTwoNoUpdate
+	rowTwoNoRelease
+	rowTwoNoNote
+	rowTwoNoJev
+	rowTwoNoAgent
+	rowTwoNoTokens
 )
 
 func Resolved(provider, model string) string {
 	if provider == "" || model == "" {
 		return provider + model
 	}
-	return provider + wireArrow + model
+	return provider + modelSeparator + model
 }
 
 type Head struct {
-	Release  string
-	Repo     string
-	Branch   string
-	Provider string
-	Model    string
-	At       time.Time
-	Elapsed  time.Duration
+	Path        string
+	Branch      string
+	Provider    string
+	Model       string
+	SessionName string
+	SessionID   string
+	At          time.Time
+	Started     time.Time
 }
 
 type Quota struct {
@@ -78,16 +91,25 @@ type Context struct {
 	Budget int
 }
 
+type Update struct {
+	Available bool
+	Current   string
+	Latest    string
+	Restart   bool
+}
+
 type Status struct {
 	Context   Context
 	TokensIn  int
 	TokensOut int
 	CacheRead int
 	Decisions int
-	Quota     Quota
+	Quotas    []Quota
 	Agents    int
 	At        time.Time
 	Note      string
+	Release   string
+	Update    Update
 }
 
 func Release(buildVersion, buildRevision string) string {
@@ -102,99 +124,166 @@ func Header(head Head, width int) string {
 }
 
 func headerText(head Head, width int) string {
-	for drop := headNothing; drop < headWire; drop++ {
+	for drop := headNothing; drop < headBranch; drop++ {
 		if text := join(headFields(head, drop)); widget.Cells(text) <= width {
 			return text
 		}
 	}
-	return join(headFields(head, headWire))
+	return join(headFields(head, headBranch))
 }
 
 func headFields(head Head, drop headDropped) []string {
-	fields := []string{"tofu " + head.Release}
-	if drop < headRepo {
-		fields = append(fields, head.Repo)
-	}
+	fields := []string{pathPrefix + head.Path}
 	if drop < headBranch {
 		fields = append(fields, head.Branch)
 	}
-	if drop < headWire {
-		model := head.Model
-		if drop >= headModel {
-			model = ""
-		}
-		fields = append(fields, Resolved(head.Provider, model))
+	if drop < headModel {
+		fields = append(fields, Resolved(head.Provider, head.Model))
 	}
-	if drop >= headClock || head.At.IsZero() {
-		return fields
+	if drop < headSession {
+		fields = append(fields, sessionText(head))
 	}
-	clock := head.At.Format(clockFormat)
-	if drop < headElapsed {
-		clock += " " + short(head.Elapsed)
-	}
-	return append(fields, clock)
-}
-
-func Bar(status Status, width int) string {
-	return theme.Bar().Width(width).Render(widget.Fit(barText(status, width), width))
-}
-
-func barText(status Status, width int) string {
-	for drop := nothing; drop <= contextBar; drop++ {
-		if text := join(fieldsWithout(status, drop)); widget.Cells(text) <= width {
-			return text
-		}
-	}
-	return contextText(status.Context, contextBar)
-}
-
-func fieldsWithout(status Status, drop dropped) []string {
-	fields := []string{contextText(status.Context, drop), quotaText(status.Quota, status.At, drop)}
-	if drop < tokenCounts {
-		in := widget.Count(status.TokensIn)
-		if status.CacheRead > 0 {
-			in = widget.Count(status.CacheRead) + cacheMark + in
-		}
-		fields = append(fields, "⇅ "+in+"/"+widget.Count(status.TokensOut))
-	}
-	if drop < jevCount {
-		fields = append(fields, "jev "+strconv.Itoa(status.Decisions))
-	}
-	if drop < agentCount && status.Agents > 0 {
-		fields = append(fields, agentMark+strconv.Itoa(status.Agents))
-	}
-	if drop < sessionNote {
-		fields = append(fields, status.Note)
+	if drop < headClock && !head.Started.IsZero() {
+		fields = append(fields, widget.Until(head.At.Sub(head.Started)))
 	}
 	return fields
 }
 
-func contextText(carried Context, drop dropped) string {
+func sessionText(head Head) string {
+	if head.SessionID == "" {
+		return ""
+	}
+	return strings.TrimSpace(head.SessionName + " " + trace.Short(head.SessionID))
+}
+
+func Bar(status Status, width int) string {
+	row1, row2 := barLines(status, width)
+	style := theme.Bar().Width(width)
+	return style.Render(widget.Fit(row1, width)) + "\n" + style.Render(widget.Fit(row2, width))
+}
+
+func barLines(status Status, width int) (string, string) {
+	return row1Text(status, width), row2Text(status, width)
+}
+
+func row1Text(status Status, width int) string {
+	for drop := rowOneFull; drop <= rowOneNoContextBar; drop++ {
+		if text := join(row1Fields(status, drop)); widget.Cells(text) <= width {
+			return text
+		}
+	}
+	return contextText(status.Context, rowOneNoContextBar)
+}
+
+func row1Fields(status Status, drop rowOneDrop) []string {
+	fields := []string{contextText(status.Context, drop)}
+	if len(status.Quotas) == 0 {
+		return append(fields, quotaUnread)
+	}
+	for _, quota := range status.Quotas {
+		fields = append(fields, quotaText(quota, status.At, drop))
+	}
+	return fields
+}
+
+func row2Text(status Status, width int) string {
+	for drop := rowTwoFull; drop <= rowTwoNoTokens; drop++ {
+		if text := join(row2Fields(status, drop)); widget.Cells(text) <= width {
+			return text
+		}
+	}
+	return ""
+}
+
+func row2Fields(status Status, drop rowTwoDrop) []string {
+	var fields []string
+	if drop < rowTwoNoTokens {
+		fields = append(fields, tokensText(status))
+	}
+	if drop < rowTwoNoJev {
+		fields = append(fields, "jev "+strconv.Itoa(status.Decisions))
+	}
+	if drop < rowTwoNoAgent && status.Agents > 0 {
+		fields = append(fields, agentMark+strconv.Itoa(status.Agents))
+	}
+	if drop < rowTwoNoNote {
+		fields = append(fields, status.Note)
+	}
+	return append(fields, releaseText(status.Release, status.Update, drop))
+}
+
+func tokensText(status Status) string {
+	text := widget.Count(status.TokensIn) + " read  " + widget.Count(status.TokensOut) + " write"
+	if status.CacheRead > 0 {
+		text += "  " + widget.Count(status.CacheRead) + " cached"
+	}
+	return text
+}
+
+func releaseText(release string, update Update, drop rowTwoDrop) string {
+	if release == "" || drop >= rowTwoNoRelease {
+		return ""
+	}
+	text := "tofu " + release
+	if drop < rowTwoNoUpdate {
+		text += updateSuffix(update)
+	}
+	return text
+}
+
+func updateSuffix(update Update) string {
+	switch {
+	case !update.Available:
+		return ""
+	case update.Restart:
+		return "  restart to update"
+	case update.Latest != "":
+		return " → " + update.Latest
+	default:
+		return "  update available"
+	}
+}
+
+func contextText(carried Context, drop rowOneDrop) string {
 	if carried.Budget <= 0 {
 		return contextUnread
 	}
 	numbers := widget.Count(carried.Used) + "/" + widget.Count(carried.Budget)
-	if drop >= contextBar {
+	if drop >= rowOneNoContextBar {
 		return numbers
 	}
 	return numbers + " " + widget.Bar(float64(carried.Used)/float64(carried.Budget), konst.MeterBarWidthChars)
 }
 
-func quotaText(quota Quota, at time.Time, drop dropped) string {
+func quotaText(quota Quota, at time.Time, drop rowOneDrop) string {
 	if quota.Label == "" {
-		return "quota unread"
+		return quotaUnread
 	}
 	if !quota.Reported {
 		return quota.Label + " quota not reported"
 	}
-	if drop >= quotaMeter {
+	if drop >= rowOneLabelOnly {
 		return quota.Label
 	}
-	resetsAt := quota.ResetsAt
-	if drop >= resetClause {
-		resetsAt = time.Time{}
+	reading := widget.Lead(widget.Percent(quota.Fraction), quotaPercentCells)
+	if drop < rowOneNoQuotaBar {
+		reading = widget.Bar(quota.Fraction, konst.MeterBarWidthChars) + " " + reading
 	}
-	return quota.Label + " " + widget.Quota(quota.Fraction, resetsAt, at)
+	text := quota.Label + " " + reading
+	if drop < rowOneNoReset {
+		text += resetClause(quota.ResetsAt, at)
+	}
+	return text
+}
+
+func resetClause(resetsAt, at time.Time) string {
+	if resetsAt.IsZero() {
+		return ""
+	}
+	if left := resetsAt.Sub(at); left > 0 {
+		return "  resets in " + widget.Until(left)
+	}
+	return "  resets now"
 }
 
 func join(fields []string) string {
@@ -205,9 +294,4 @@ func join(fields []string) string {
 		}
 	}
 	return strings.Join(kept, separator)
-}
-
-func short(elapsed time.Duration) string {
-	seconds := int(elapsed.Seconds())
-	return fmt.Sprintf("%02d:%02d", seconds/60, seconds%60)
 }

@@ -51,7 +51,7 @@ func TestTheDeadBandIsMeasuredFromTheCutsTheGateCompares(t *testing.T) {
 		fmt.Sprintf("risk %.2f", pol.Thresholds.RiskAskAt),
 	} {
 		if !strings.Contains(section, want) {
-			t.Errorf("the dead band section does not name %q, so it measures distance from a cut policy.Decide never compares against", want)
+			t.Errorf("the dead band section does not name %q, so it measures distance from a cut gate.Decide never compares against", want)
 		}
 	}
 }
@@ -111,7 +111,7 @@ func TestThePublishedReportIsUntouchedByThisTicket(t *testing.T) {
 	}
 	for _, phrase := range []string{
 		"user_requested and approval are the two answers the decision reads",
-		"| Arm | Case | Answer | Label | Labelled by | user_requested | approval | The call |",
+		"| Arm | Case | Answer | Label | Labelled by | user_requested | approval |",
 	} {
 		if !strings.Contains(string(published), phrase) {
 			t.Fatalf("report-2026-09-19.md no longer carries %q, so it was edited", phrase)

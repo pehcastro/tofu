@@ -1,0 +1,9 @@
+{
+  "id": "turn-18d6e9c215a392f0",
+  "schema": 1,
+  "at": "2026-09-20T00:28:41.7223196-03:00",
+  "task": "/settings",
+  "wire": "anthropic",
+  "root": "turn-18d6e9c215a392f0",
+  "outcome": "error"
+}

@@ -91,7 +91,7 @@ type doctorThresholds struct {
 	FromUntrustedBlockAt float64 `json:"from_untrusted_block_at"`
 }
 
-type doctorPolicy struct {
+type doctorRule struct {
 	Point          string           `json:"point"`
 	Schema         string           `json:"schema,omitempty"`
 	Mode           string           `json:"mode"`
@@ -117,7 +117,7 @@ type doctorReport struct {
 	Store       string             `json:"credential_store"`
 	Gate        doctorGate         `json:"gate"`
 	Catalog     doctorCatalog      `json:"catalog"`
-	Policies    []doctorPolicy     `json:"policies"`
+	Rules       []doctorRule       `json:"rules"`
 	Calibration string             `json:"calibration"`
 	Ledger      string             `json:"ledger"`
 	SpendLimit  string             `json:"spend_limit"`
@@ -157,7 +157,7 @@ func doctorState(now time.Time) doctorReport {
 		root = "."
 	}
 	located, _ := locateGateKey()
-	catalog, policies := readCatalog()
+	catalog, rules := readCatalog()
 	report := doctorReport{
 		Version:     frame.Release(sys.Version(), sys.BuildRevision()),
 		Blockers:    doctorBlockers(),
@@ -165,7 +165,7 @@ func doctorState(now time.Time) doctorReport {
 		Store:       cred.DoctorState(),
 		Gate:        doctorGate{Variable: located.Name, Source: gateSource(located), Path: located.Path},
 		Catalog:     catalog,
-		Policies:    policies,
+		Rules:       rules,
 		Calibration: calibrationState(),
 		Ledger:      ledgerState(),
 		SpendLimit:  quota.SpendLimitLine(),

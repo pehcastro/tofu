@@ -11,8 +11,9 @@ import (
 	"tofu/internal/llm"
 )
 
-func enforced(gate Gate, tool Tool, model Model) Config {
-	config := gatedConfig(gate, tool, model)
+func enforced(t *testing.T, gate Gate, tool Tool, model Model) Config {
+	t.Helper()
+	config := gatedConfig(t, gate, tool, model)
 	config.GateMode = GateEnforce
 	return config
 }
@@ -48,7 +49,7 @@ func TestUnderEnforceADenyDoesNotRunTheToolAndTellsTheModelWhy(t *testing.T) {
 	gate.reason = &ledger.Reason{Question: "risk", Comparison: "risk_deny_at", Threshold: 2.5, Value: 3}
 	model := callThenAnswer(judgedWrite("c1", "a.txt"))
 
-	row, err := Run(context.Background(), enforced(gate, tool, model))
+	row, err := Run(context.Background(), enforced(t, gate, tool, model))
 	if err != nil {
 		t.Fatalf("Run returned an error: %v", err)
 	}
@@ -73,7 +74,7 @@ func TestARefusedCallDoesNotEndTheTurn(t *testing.T) {
 	gate := gateSaying(ledger.VerdictDeny, ledger.VerdictAllow)
 	model := callThenAnswer(judgedWrite("c1", "a.txt"), judgedWrite("c2", "b.txt"))
 
-	row, err := Run(context.Background(), enforced(gate, tool, model))
+	row, err := Run(context.Background(), enforced(t, gate, tool, model))
 	if err != nil {
 		t.Fatalf("Run returned an error: %v", err)
 	}
@@ -94,7 +95,7 @@ func TestUnderEnforceAGateThatErrorsRefuses(t *testing.T) {
 	gate := &stubGate{err: errors.New("the route timed out")}
 	model := callThenAnswer(judgedWrite("c1", "a.txt"))
 
-	row, err := Run(context.Background(), enforced(gate, tool, model))
+	row, err := Run(context.Background(), enforced(t, gate, tool, model))
 	if err != nil {
 		t.Fatalf("Run returned an error: %v", err)
 	}
@@ -115,7 +116,7 @@ func TestUnderEnforceAnAskWithNoPersonRefusesAndSaysSo(t *testing.T) {
 	tool := &stubTool{name: "write", result: Result{Content: "ok"}}
 	model := callThenAnswer(judgedWrite("c1", "a.txt"))
 
-	row, err := Run(context.Background(), enforced(gateSaying(ledger.VerdictAsk), tool, model))
+	row, err := Run(context.Background(), enforced(t, gateSaying(ledger.VerdictAsk), tool, model))
 	if err != nil {
 		t.Fatalf("Run returned an error: %v", err)
 	}
@@ -134,7 +135,7 @@ func TestUnderEnforceAnAskFollowsThePersonsAnswer(t *testing.T) {
 		tool := &stubTool{name: "write", result: Result{Content: "ok"}}
 		model := callThenAnswer(judgedWrite("c1", "a.txt"))
 		var asked GateRequest
-		config := enforced(gateSaying(ledger.VerdictAsk), tool, model)
+		config := enforced(t, gateSaying(ledger.VerdictAsk), tool, model)
 		config.Person = func(_ context.Context, request GateRequest, decision GateDecision) (PersonAnswer, error) {
 			asked = request
 			if decision.Verdict != ledger.VerdictAsk {

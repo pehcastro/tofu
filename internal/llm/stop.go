@@ -1,6 +1,9 @@
 package llm
 
-import "strconv"
+import (
+	"strconv"
+	"strings"
+)
 
 type Stop int
 
@@ -26,6 +29,23 @@ func (s Stop) String() string {
 		return "error"
 	}
 	panic("llm: unknown stop " + strconv.Itoa(int(s)))
+}
+
+func MapFinishReason(reason string) (Stop, bool) {
+	if strings.HasSuffix(reason, ":max_output_tokens") {
+		return StopLength, true
+	}
+	switch reason {
+	case "stop", "end_turn", "stop_sequence", "pause_turn", "compaction", "completed":
+		return StopEnd, true
+	case "length", "max_tokens", "model_context_window_exceeded":
+		return StopLength, true
+	case "tool_calls", "tool_use", "function_call":
+		return StopToolUse, true
+	case "content_filter", "error", "refusal", "sensitive":
+		return StopError, true
+	}
+	return StopEnd, false
 }
 
 func OutcomeAfter(stop Stop, toolCalls int) Outcome {

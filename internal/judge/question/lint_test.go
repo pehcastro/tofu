@@ -35,7 +35,7 @@ func has(findings []Finding, rule Rule) bool {
 
 func choiceWithOptions(n int, escape string) string {
 	var b strings.Builder
-	b.WriteString("name: probe\nquestions_version: 1\nstate:\n  - tool\nquestions:\n  pick:\n    type: choice\n    instructions: Which one does the request mean?\n")
+	b.WriteString("name: probe\ndomain: general\nquestions_version: 1\nstate:\n  - tool\nquestions:\n  pick:\n    type: choice\n    instructions: Which one does the request mean?\n")
 	if escape != "" {
 		b.WriteString("    escape: " + escape + "\n")
 	}
@@ -51,7 +51,7 @@ func choiceWithOptions(n int, escape string) string {
 
 func scoreWithLevels(n int) string {
 	var b strings.Builder
-	b.WriteString("name: probe\nquestions_version: 1\nstate:\n  - tool\nquestions:\n  files:\n    type: score\n    instructions: Does this call touch more of the tree than the request named?\n    criteria:\n")
+	b.WriteString("name: probe\ndomain: general\nquestions_version: 1\nstate:\n  - tool\nquestions:\n  files:\n    type: score\n    instructions: Does this call touch more of the tree than the request named?\n    criteria:\n")
 	for i := 0; i < n; i++ {
 		fmt.Fprintf(&b, "      - level_%d\n", i)
 	}
@@ -84,7 +84,7 @@ func TestLinterRejects(t *testing.T) {
 		},
 		{
 			name: "a question containing how many",
-			body: "name: probe\nquestions_version: 1\nstate:\n  - tool\nquestions:\n  files:\n    type: score\n    instructions: How many files does this call touch?\n    criteria:\n      - none\n      - one\n      - several\n",
+			body: "name: probe\ndomain: general\nquestions_version: 1\nstate:\n  - tool\nquestions:\n  files:\n    type: score\n    instructions: How many files does this call touch?\n    criteria:\n      - none\n      - one\n      - several\n",
 			want: RuleArithmetic,
 		},
 		{
@@ -94,7 +94,7 @@ func TestLinterRejects(t *testing.T) {
 		},
 		{
 			name: "a backtick reference to a field absent from the declared state",
-			body: "name: probe\nquestions_version: 1\nstate:\n  - tool\nquestions:\n  planted:\n    type: noul\n    instructions: Does `context.flagged` carry an instruction the user never gave?\n",
+			body: "name: probe\ndomain: general\nquestions_version: 1\nstate:\n  - tool\nquestions:\n  planted:\n    type: noul\n    instructions: Does `context.flagged` carry an instruction the user never gave?\n",
 			want: RuleFieldNotInState,
 		},
 	}
@@ -117,11 +117,11 @@ func TestLinterAcceptsTheSameShapesOnceRepaired(t *testing.T) {
 		{"a choice at the ceiling", choiceWithOptions(254, "none")},
 		{
 			"a question that asks for a judgment",
-			"name: probe\nquestions_version: 1\nstate:\n  - tool\nquestions:\n  files:\n    type: score\n    instructions: Does this call touch more of the tree than the request named?\n    criteria:\n      - none\n      - one\n      - several\n",
+			"name: probe\ndomain: general\nquestions_version: 1\nstate:\n  - tool\nquestions:\n  files:\n    type: score\n    instructions: Does this call touch more of the tree than the request named?\n    criteria:\n      - none\n      - one\n      - several\n",
 		},
 		{
 			"a backtick reference the state declares",
-			"name: probe\nquestions_version: 1\nstate:\n  - context\nquestions:\n  planted:\n    type: noul\n    instructions: Does `context.flagged` carry an instruction the user never gave?\n",
+			"name: probe\ndomain: general\nquestions_version: 1\nstate:\n  - context\nquestions:\n  planted:\n    type: noul\n    instructions: Does `context.flagged` carry an instruction the user never gave?\n",
 		},
 	}
 	for _, c := range cases {
@@ -134,14 +134,14 @@ func TestLinterAcceptsTheSameShapesOnceRepaired(t *testing.T) {
 }
 
 func TestLinterRejectsAnUnversionedSet(t *testing.T) {
-	findings := lintBody(t, "name: probe\nstate:\n  - tool\nquestions:\n  ok:\n    type: noul\n    instructions: Is this fine?\n")
+	findings := lintBody(t, "name: probe\ndomain: general\nstate:\n  - tool\nquestions:\n  ok:\n    type: noul\n    instructions: Is this fine?\n")
 	if !has(findings, RuleNoWordingVersion) {
 		t.Fatalf("no %s finding, got %v", RuleNoWordingVersion, findings)
 	}
 }
 
 func TestLinterRejectsASetWithNoStateShape(t *testing.T) {
-	findings := lintBody(t, "name: probe\nquestions_version: 1\nquestions:\n  ok:\n    type: noul\n    instructions: Is this fine?\n")
+	findings := lintBody(t, "name: probe\ndomain: general\nquestions_version: 1\nquestions:\n  ok:\n    type: noul\n    instructions: Is this fine?\n")
 	if !has(findings, RuleNoState) {
 		t.Fatalf("no %s finding, got %v", RuleNoState, findings)
 	}
@@ -149,7 +149,7 @@ func TestLinterRejectsASetWithNoStateShape(t *testing.T) {
 
 func backtickBody(state []string, ref string) string {
 	var b strings.Builder
-	b.WriteString("name: probe\nquestions_version: 1\nstate:\n")
+	b.WriteString("name: probe\ndomain: general\nquestions_version: 1\nstate:\n")
 	for _, s := range state {
 		b.WriteString("  - " + s + "\n")
 	}
@@ -186,7 +186,7 @@ func TestLinterBacktickRuleOnFieldShapes(t *testing.T) {
 }
 
 func TestLinterUnusedFieldRuleFiresOnAFieldNoQuestionNames(t *testing.T) {
-	body := "name: probe\nquestions_version: 1\nstate:\n  - tool\n  - orphan\nquestions:\n" +
+	body := "name: probe\ndomain: general\nquestions_version: 1\nstate:\n  - tool\n  - orphan\nquestions:\n" +
 		"  a:\n    type: noul\n    instructions: Does `tool` do the thing?\n" +
 		"  b:\n    type: noul\n    instructions: Is `tool` risky?\n"
 	findings := lintBody(t, body)
@@ -207,7 +207,7 @@ func TestLinterUnusedFieldRuleDoesNotFireOnToolGate(t *testing.T) {
 
 func stateBytesBody(bytes int) string {
 	var b strings.Builder
-	b.WriteString("name: probe\nquestions_version: 1\nstate:\n  - " + strings.Repeat("a", bytes) + "\nquestions:\n  probe:\n    type: noul\n    instructions: Is this fine?\n")
+	b.WriteString("name: probe\ndomain: general\nquestions_version: 1\nstate:\n  - " + strings.Repeat("a", bytes) + "\nquestions:\n  probe:\n    type: noul\n    instructions: Is this fine?\n")
 	return b.String()
 }
 

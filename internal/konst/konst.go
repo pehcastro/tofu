@@ -1,6 +1,6 @@
 package konst
 
-const Version = "0.4.2"
+const Version = "0.4.6"
 
 const (
 	ContextCeilingTokens = 250000
@@ -34,8 +34,18 @@ const (
 	TransportErrorDetailBytes = 512
 	TransportRequestIDBytes   = 8
 
+	StreamReadBytes = 64 << 10
+	StreamLineBytes = 16 << 20
+
 	WhyBarWidthChars   = 20
 	MeterBarWidthChars = 12
+)
+
+const (
+	FrameBudgetMicros   = 16700
+	FrameBudgetAttempts = 3
+	FrameBudgetSamples  = 200
+	FrameStallMicros    = 4000
 )
 
 const (
@@ -54,10 +64,10 @@ const (
 	TurnTotalBackoffCeilingMillis = 15000
 	TurnResultBytesCap            = 32768
 	IgnoreFileBytesCap            = 65536
+	GlobPathsResultCap            = 300
 	ProjectInstructionsBytes      = 16384
 	TurnParallelToolCalls         = 4
 	TurnMaxSteps                  = 40
-	TurnMaxDecisions              = 40
 	TurnLoopGuardRepeats          = 3
 	TurnLoopGuardWindow           = 6
 	SubscriptionCacheTTL          = "1h"
@@ -86,6 +96,7 @@ const (
 	SearchUnitHeaderTokens = 40
 	SearchFrameLines       = 3
 	SearchMatchLinesListed = 5
+	SearchCandidateScanCap = 1200
 )
 
 const (
@@ -96,4 +107,11 @@ const (
 	BrevityWordCap    = 120
 	BrevityBoldCap    = 3
 	BrevityMetricsCap = 2
+)
+
+const (
+	MutateWorkers                 = 1
+	MutateTimeoutCoefficient      = 5
+	MutateChildMemoryCeilingBytes = 4 * 1024 * 1024 * 1024
+	DiffTableMaxCells             = 10 * 1000 * 1000
 )

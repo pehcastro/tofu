@@ -2,6 +2,7 @@ package llm
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"tofu/internal/transport"
@@ -25,6 +26,18 @@ func TestEncodeRefusesAnUnknownRole(t *testing.T) {
 	_, err := Request{Messages: []Message{{Role: RoleUnknown, Content: "hi"}}}.Encode("m")
 	if transport.KindOf(err) != transport.KindBadRequest {
 		t.Fatalf("expected kind bad_request, got %v", err)
+	}
+}
+
+func TestEncodeRefusesAnImageNamingTheWire(t *testing.T) {
+	request := Request{Messages: []Message{{Role: RoleUser, Content: "look",
+		Images: []Image{{MediaType: "image/png", Data: []byte("x")}}}}}
+	_, err := request.Encode("m")
+	if transport.KindOf(err) != transport.KindBadRequest {
+		t.Fatalf("expected kind bad_request, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "openrouter") {
+		t.Fatalf("the refusal does not name the wire: %v", err)
 	}
 }
 

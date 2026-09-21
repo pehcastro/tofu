@@ -3,6 +3,7 @@ package transport
 import (
 	"errors"
 	"fmt"
+	"net/http"
 	"strconv"
 )
 
@@ -62,6 +63,27 @@ func (k Kind) String() string {
 		return "provider"
 	}
 	panic("transport: unknown error kind " + strconv.Itoa(int(k)))
+}
+
+func StatusKind(status int) Kind {
+	switch status {
+	case http.StatusUnauthorized, http.StatusForbidden:
+		return KindAuth
+	case http.StatusPaymentRequired:
+		return KindBilling
+	case http.StatusNotFound:
+		return KindModelAccess
+	case http.StatusRequestTimeout:
+		return KindTimeout
+	case http.StatusRequestEntityTooLarge:
+		return KindRequestTooLarge
+	case http.StatusTooManyRequests:
+		return KindRateLimit
+	}
+	if status >= 500 {
+		return KindProvider
+	}
+	return KindBadRequest
 }
 
 type Error struct {

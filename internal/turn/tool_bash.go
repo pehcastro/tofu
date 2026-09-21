@@ -64,16 +64,18 @@ func askTheShellWhereItIs(shell string, root Root) (string, string, bool) {
 	return family, dir, true
 }
 
-func (t *BashTool) Name() string { return "bash" }
+const bashToolName = "bash"
+
+func (t *BashTool) Name() string { return bashToolName }
 
 func (t *BashTool) Definition() llm.Tool {
 	return llm.Tool{
-		Name: "bash",
+		Name: bashToolName,
 		Description: fmt.Sprintf(
 			"runs one command in %s. cwd is already %s: spell paths that way, no cd. a nonzero exit is reported with its code. "+
 				"a command is killed after %d ms and its output is lost, so a long one has to be narrowed or given a larger timeout_ms, up to %d. "+
 				"do not use it to walk the tree: find, ls -R and wc descend into every ignored directory and take minutes here, "+
-				"while glob, grep, search and project_report skip what .gitignore skips and answer in milliseconds.",
+				"while glob, search and project_report skip what .gitignore skips and answer in milliseconds.",
 			t.shellName, t.shellDir, konst.BashDeadlineMillis, konst.BashMaxDeadlineMillis),
 		Parameters: map[string]any{
 			"type": "object",
@@ -88,7 +90,7 @@ func (t *BashTool) Definition() llm.Tool {
 
 type bashArgs struct {
 	Command   string `json:"command"`
-	TimeoutMS int    `json:"timeout_ms"`
+	TimeoutMS int    `json:"timeout_ms,omitempty"`
 }
 
 func (t *BashTool) Run(ctx context.Context, raw json.RawMessage) (Result, error) {
@@ -117,7 +119,7 @@ func (t *BashTool) Run(ctx context.Context, raw json.RawMessage) (Result, error)
 	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 		return Result{}, errors.New("bash: " + search.Note(search.Stopped, fmt.Sprintf(
 			"%q ran %d ms, past the %d ms deadline. do not run it again unchanged: narrow it, or pass timeout_ms up to %d when the command truly needs longer. "+
-				"a question about which files exist or what they contain is answered by project_report, glob, grep or search without a shell and without this cost",
+				"a question about which files exist or what they contain is answered by project_report, glob or search without a shell and without this cost",
 			args.Command, time.Since(started).Milliseconds(), deadline, konst.BashMaxDeadlineMillis)))
 	}
 	if cmd.ProcessState == nil {

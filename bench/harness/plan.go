@@ -22,7 +22,7 @@ const playgroundRoot = ".playground"
 const (
 	claudeArmModel = "opus"
 	codexArmModel  = "gpt-5.6-sol"
-	tofuArmModel   = "anthropic/claude-opus-5"
+	tofuArmModel   = "claude-sub/claude-opus-5"
 )
 
 type Caps struct {

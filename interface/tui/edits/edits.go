@@ -3,15 +3,18 @@ package edits
 import (
 	"cmp"
 	"fmt"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"charm.land/lipgloss/v2"
 
 	"tofu/interface/tui/crew"
 	"tofu/interface/tui/pane"
 	"tofu/interface/tui/theme"
+	"tofu/interface/tui/trace"
 	"tofu/internal/widget"
 )
 
@@ -42,11 +45,16 @@ const (
 	createdVerb  = "created"
 	pickHint     = "↑↓ pick"
 	scrollHint   = "pgup older"
+	whenFormat   = "15:04:05"
+	oscStart     = "\x1b]8;;"
+	oscEnd       = "\x1b\\"
 )
 
 type Edit struct {
 	Agent   string
 	Path    string
+	ID      string
+	When    time.Time
 	verb    string
 	body    string
 	undrawn string
@@ -54,8 +62,8 @@ type Edit struct {
 	removed int
 }
 
-func Changed(agent, path, diff, created string) (Edit, bool) {
-	edit := Edit{Agent: cmp.Or(agent, Self), Path: path, verb: editedVerb}
+func Changed(agent, path, diff, created, id string, when time.Time) (Edit, bool) {
+	edit := Edit{Agent: cmp.Or(agent, Self), Path: path, ID: id, When: when, verb: editedVerb}
 	switch {
 	case diff != "":
 		for _, header := range []string{fromHeader, intoHeader} {
@@ -98,6 +106,15 @@ func (e Edit) Tally() string {
 	return addedMark + strconv.Itoa(e.added) + " " + removedMark + strconv.Itoa(e.removed)
 }
 
+func hyperlink(root, path string) string {
+	target := path
+	if root != "" && !filepath.IsAbs(path) {
+		target = filepath.ToSlash(filepath.Join(root, path))
+	}
+	uri := "file://" + target
+	return oscStart + uri + oscEnd + path + oscStart + oscEnd
+}
+
 type agent struct {
 	name  string
 	state crew.State
@@ -107,6 +124,7 @@ type agent struct {
 type Model struct {
 	Children []crew.Child
 	Busy     bool
+	Root     string
 	edits    []Edit
 	pick     int
 	top      int
@@ -264,7 +282,13 @@ func (m Model) feed(width int) []string {
 }
 
 func (m Model) editRows(edit Edit, width, room int) []string {
-	head := edit.Agent + " " + edit.verb + " " + edit.Path
+	head := edit.Agent + " " + edit.verb + " " + hyperlink(m.Root, edit.Path)
+	if !edit.When.IsZero() {
+		head += gap + edit.When.Format(whenFormat)
+	}
+	if id := trace.Short(edit.ID); id != "" {
+		head += gap + id
+	}
 	tally := edit.Tally()
 	named := max(width-widget.Cells(tally)-widget.Cells(gap), 1)
 	lines := []string{theme.Text().Render(widget.Pad(widget.Fit(head, named), named)) + gap + theme.Dim().Render(tally)}

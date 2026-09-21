@@ -2,8 +2,7 @@ package turn
 
 import (
 	"context"
-	"slices"
-	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -15,13 +14,8 @@ func TestTheStepHookReadsTheSameOccupancyTheForkDecidedOn(t *testing.T) {
 		sessions <- row
 		return nil
 	}
-	var mutex sync.Mutex
-	var published []StepRow
-	config.Step = func(step StepRow) {
-		mutex.Lock()
-		defer mutex.Unlock()
-		published = append(published, step)
-	}
+	var seen []StepRow
+	config.Step = func(step StepRow) { seen = append(seen, step) }
 
 	row, err := Run(context.Background(), config)
 	if err != nil {
@@ -34,15 +28,6 @@ func TestTheStepHookReadsTheSameOccupancyTheForkDecidedOn(t *testing.T) {
 	}
 	recorded = append(recorded, row.Steps...)
 
-	var seen []StepRow
-	for deadline := time.Now().Add(5 * time.Second); ; time.Sleep(time.Millisecond) {
-		mutex.Lock()
-		seen = slices.Clone(published)
-		mutex.Unlock()
-		if len(seen) >= len(recorded) || time.Now().After(deadline) {
-			break
-		}
-	}
 	if len(seen) != len(recorded) {
 		t.Fatalf("the hook saw %d steps and the turn recorded %d", len(seen), len(recorded))
 	}
@@ -77,8 +62,33 @@ func TestTheStepHookReadsTheSameOccupancyTheForkDecidedOn(t *testing.T) {
 		len(seen), forks, forked.Occupancy.Total(), forked.Index, forked.Fork.TokensBefore, forked.Occupancy.Target)
 }
 
-func TestAStepHookThatNeverReturnsDoesNotHoldTheTurnUp(t *testing.T) {
+func TestNoStepReachesTheHookAfterRunHasReturned(t *testing.T) {
 	config, _ := longTurnConfig(t)
+	var delivered atomic.Int64
+	config.Step = func(StepRow) {
+		time.Sleep(50 * time.Millisecond)
+		delivered.Add(1)
+	}
+
+	row, err := Run(context.Background(), config)
+	atReturn := delivered.Load()
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+
+	time.Sleep(2 * time.Second)
+	if settled := delivered.Load(); settled != atReturn {
+		t.Fatalf("%d steps had reached the hook when Run returned and %d had two seconds later", atReturn, settled)
+	}
+	if atReturn == 0 {
+		t.Fatalf("no step reached the hook at all, against %d the turn recorded", len(row.Steps))
+	}
+	t.Logf("%d steps reached the hook and all of them returned before Run did, against %d the turn recorded",
+		atReturn, len(row.Steps))
+}
+
+func TestABlockedStepHookHoldsUpOnlyTheEndOfTheTurn(t *testing.T) {
+	config, model := longTurnConfig(t)
 	blocked := make(chan struct{})
 	config.Step = func(StepRow) { <-blocked }
 
@@ -91,16 +101,23 @@ func TestAStepHookThatNeverReturnsDoesNotHoldTheTurnUp(t *testing.T) {
 		finished <- row
 	}()
 
+	if !model.waitForAnAskAfter(longTurnSteps, time.After(20*time.Second)) {
+		close(blocked)
+		t.Fatalf("the loop stalled on its blocked reader before its %dth model call", longTurnSteps+1)
+	}
 	select {
 	case ended := <-finished:
 		close(blocked)
-		if len(ended.Steps) == 0 {
-			t.Fatal("the turn finished with no step recorded")
-		}
-		t.Logf("the turn finished %s with %d steps while the reader was still blocked on the first one",
+		t.Fatalf("Run returned %s with %d steps while the hook was still blocked on the first one", ended.Outcome, len(ended.Steps))
+	case <-time.After(200 * time.Millisecond):
+	}
+
+	close(blocked)
+	select {
+	case ended := <-finished:
+		t.Logf("the loop reached its last model call with the hook blocked, Run waited, and released it finished %s with %d steps",
 			ended.Outcome, len(ended.Steps))
 	case <-time.After(20 * time.Second):
-		close(blocked)
-		t.Fatal("the turn never finished: the engine waited on its reader")
+		t.Fatal("the turn never finished after the hook was released")
 	}
 }

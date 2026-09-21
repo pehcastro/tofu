@@ -8,7 +8,7 @@ import (
 	"os"
 	"time"
 
-	"tofu/internal/judge/policy"
+	"tofu/internal/judge/gate"
 )
 
 const recordedAnswersPath = "bench/cost/answers/heldout-2026-09-19.jsonl"
@@ -53,7 +53,7 @@ func RecordedAnswers() ([]AnswerRow, error) {
 	return parseAnswers(recordedAnswersFile, recordedAnswersPath)
 }
 
-func answerRows(arms []ArmResult, pol policy.Policy, source string) []AnswerRow {
+func answerRows(arms []ArmResult, pol gate.Rule, source string) []AnswerRow {
 	var rows []AnswerRow
 	for _, arm := range arms {
 		for _, c := range arm.Cases {

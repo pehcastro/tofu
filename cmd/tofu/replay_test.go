@@ -10,18 +10,22 @@ import (
 	"testing"
 	"time"
 
-	catalogpolicy "tofu/catalog/policy"
+	shipped "tofu/catalog"
+	"tofu/internal/judge/gate"
 	"tofu/internal/judge/jev"
 	"tofu/internal/judge/ledger"
-	"tofu/internal/judge/policy"
+	"tofu/internal/judge/state"
+	"tofu/internal/sys"
 	"tofu/internal/transport"
 	"tofu/internal/turn"
 )
 
-const replayTestPolicyRef = "tool_gate@3"
+const replayTestRuleRef = "tool_gate@3"
 
-const replayTestPolicyBody = `name: tool_gate
-policy_version: 3
+const replayTestRuleBody = `name: tool_gate
+domain: general
+kind: threshold
+rule_version: 3
 questions: tool_gate
 questions_version: 3
 notes: fixture for BOJI-033, the project override BOJI-136 replays against
@@ -39,31 +43,31 @@ thresholds:
   from_untrusted_block_at: 0.5
 `
 
-func replayProjectPolicyPath() string {
-	return filepath.Join("catalog", "policy", replayTestPolicyRef+".yaml")
+func replayProjectRulePath() string {
+	return filepath.Join("catalog", "general", "rules", replayTestRuleRef+".yaml")
 }
 
-func writeReplayPolicyFixture(t *testing.T) policy.Policy {
+func writeReplayRuleFixture(t *testing.T) gate.Rule {
 	t.Helper()
-	path := replayProjectPolicyPath()
+	path := replayProjectRulePath()
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		t.Fatalf("mkdir catalog/policy: %v", err)
+		t.Fatalf("mkdir catalog/general/rules: %v", err)
 	}
-	if err := os.WriteFile(path, []byte(replayTestPolicyBody), 0o644); err != nil {
-		t.Fatalf("writing policy fixture: %v", err)
+	if err := os.WriteFile(path, []byte(replayTestRuleBody), 0o644); err != nil {
+		t.Fatalf("writing rule fixture: %v", err)
 	}
-	pol, err := policy.Load(path)
+	pol, err := gate.Load(path)
 	if err != nil {
-		t.Fatalf("policy.Load: %v", err)
+		t.Fatalf("gate.Load: %v", err)
 	}
 	return pol
 }
 
-func shippedReplayPolicy(t *testing.T) policy.Policy {
+func shippedReplayRule(t *testing.T) gate.Rule {
 	t.Helper()
-	pol, err := policy.LoadFS(catalogpolicy.Files(), replayTestPolicyRef+".yaml")
+	pol, err := gate.LoadFS(shipped.Files(), replayTestRuleRef)
 	if err != nil {
-		t.Fatalf("policy.LoadFS: %v", err)
+		t.Fatalf("gate.LoadFS: %v", err)
 	}
 	return pol
 }
@@ -85,11 +89,11 @@ func replayFixtureAnswers(risk float64) []ledger.Answer {
 	}
 }
 
-func writeReplayFixtureRow(t *testing.T, writer *ledger.Writer, pol policy.Policy, answers []ledger.Answer, outcome string) {
+func writeReplayFixtureRow(t *testing.T, writer *ledger.Writer, pol gate.Rule, answers []ledger.Answer, outcome string) {
 	t.Helper()
-	verdict, _, err := policy.Decide(ledgerAnswersToJev(answers), pol)
+	verdict, _, err := gate.Decide(ledgerAnswersToJev(answers), pol)
 	if err != nil {
-		t.Fatalf("policy.Decide: %v", err)
+		t.Fatalf("gate.Decide: %v", err)
 	}
 	row := ledger.Row{
 		Point:         "tool_gate",
@@ -98,7 +102,7 @@ func writeReplayFixtureRow(t *testing.T, writer *ledger.Writer, pol policy.Polic
 		Answers:       answers,
 		Verdict:       toLedgerVerdict(verdict),
 		Policy:        pol.Name,
-		PolicyVersion: pol.PolicyVersion,
+		PolicyVersion: pol.RuleVersion,
 	}
 	written, err := writer.Append(row)
 	if err != nil {
@@ -114,9 +118,9 @@ func writeReplayFixtureRow(t *testing.T, writer *ledger.Writer, pol policy.Polic
 func replayTestReader(t *testing.T) (*ledger.Reader, *ledger.Writer) {
 	t.Helper()
 	t.Chdir(t.TempDir())
-	dir, err := ledger.Dir()
+	dir, err := sys.LogDir()
 	if err != nil {
-		t.Fatalf("ledger.Dir: %v", err)
+		t.Fatalf("sys.LogDir: %v", err)
 	}
 	return ledger.NewReader(dir), ledger.NewWriter(dir)
 }
@@ -143,7 +147,7 @@ func gateFallbackRow(t *testing.T, reader *ledger.Reader, wire stubJevWire) ledg
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)
 	}
-	pol := writeReplayPolicyFixture(t)
+	pol := writeReplayRuleFixture(t)
 	gate := &toolGate{
 		client: client,
 		cwd:    t.TempDir(),
@@ -151,8 +155,8 @@ func gateFallbackRow(t *testing.T, reader *ledger.Reader, wire stubJevWire) ledg
 			SetName:          "tool_gate",
 			QuestionsVersion: 1,
 			Questions:        []jev.Question{{ID: "risk", Kind: jev.QuestionNoul, Instructions: "how risky is this call", True: "risky", False: "safe"}},
-			Policy:           &pol,
-			Mode:             policy.ModeShadow,
+			Rule:             &pol,
+			Mode:             gate.ModeShadow,
 		},
 	}
 	decision, err := gate.Decide(context.Background(), turn.GateRequest{
@@ -208,7 +212,7 @@ func TestTheGateWritesARowForEveryUnavailableReason(t *testing.T) {
 
 func TestReplaySweepsPastRowsWhereTheTypedDecisionWasNotMade(t *testing.T) {
 	reader, writer := replayTestReader(t)
-	pol := writeReplayPolicyFixture(t)
+	pol := writeReplayRuleFixture(t)
 	writeReplayFixtureRow(t, writer, pol, replayFixtureAnswers(2), "")
 	gateFallbackRow(t, reader, stubJevWire{err: transport.Fail("stub", transport.KindTimeout, nil, "no answer in 2.5 s")})
 
@@ -232,7 +236,7 @@ func TestReplaySweepsPastRowsWhereTheTypedDecisionWasNotMade(t *testing.T) {
 
 func TestReplayIdentityAtCurrentThresholdsChangesNothing(t *testing.T) {
 	reader, writer := replayTestReader(t)
-	pol := writeReplayPolicyFixture(t)
+	pol := writeReplayRuleFixture(t)
 
 	writeReplayFixtureRow(t, writer, pol, replayFixtureAnswers(0), "")
 	writeReplayFixtureRow(t, writer, pol, replayFixtureAnswers(2), "")
@@ -255,7 +259,7 @@ func TestReplayIdentityAtCurrentThresholdsChangesNothing(t *testing.T) {
 
 func TestReplayIdentityBreaksWhenThresholdsActuallyMove(t *testing.T) {
 	reader, writer := replayTestReader(t)
-	pol := writeReplayPolicyFixture(t)
+	pol := writeReplayRuleFixture(t)
 	writeReplayFixtureRow(t, writer, pol, replayFixtureAnswers(2), "")
 
 	result, err := runReplay(reader, ledger.Filter{Point: "tool_gate"}, map[string]float64{"risk_deny_at": 1.9})
@@ -267,9 +271,9 @@ func TestReplayIdentityBreaksWhenThresholdsActuallyMove(t *testing.T) {
 	}
 }
 
-func TestReplayCountsRowsWithNoPolicyAsSkipped(t *testing.T) {
+func TestReplayCountsRowsNamingNoRuleAsSkipped(t *testing.T) {
 	reader, writer := replayTestReader(t)
-	pol := writeReplayPolicyFixture(t)
+	pol := writeReplayRuleFixture(t)
 	writeReplayFixtureRow(t, writer, pol, replayFixtureAnswers(0), "")
 	if _, err := writer.Append(ledger.Row{Point: "tool_gate", Answers: replayFixtureAnswers(3)}); err != nil {
 		t.Fatalf("writer.Append: %v", err)
@@ -289,7 +293,7 @@ func TestReplayCountsRowsWithNoPolicyAsSkipped(t *testing.T) {
 
 func TestReplayCountsAgreementAndDisagreementWithOutcome(t *testing.T) {
 	reader, writer := replayTestReader(t)
-	pol := writeReplayPolicyFixture(t)
+	pol := writeReplayRuleFixture(t)
 
 	writeReplayFixtureRow(t, writer, pol, replayFixtureAnswers(2), "deny")
 	writeReplayFixtureRow(t, writer, pol, replayFixtureAnswers(2.1), "ask")
@@ -329,7 +333,7 @@ func TestReplayUnknownThresholdExitsTwoAndNamesTheKnownOnes(t *testing.T) {
 func TestReplayRunsWithNoNetworkCredentialOrWireConfigured(t *testing.T) {
 	t.Setenv("OPENROUTER_KEY", "")
 	_, writer := replayTestReader(t)
-	pol := writeReplayPolicyFixture(t)
+	pol := writeReplayRuleFixture(t)
 	writeReplayFixtureRow(t, writer, pol, replayFixtureAnswers(0), "")
 
 	var out, errOut bytes.Buffer
@@ -350,9 +354,9 @@ func TestReplayNeedsAPoint(t *testing.T) {
 	}
 }
 
-func TestReplayReadsTheEmbeddedPolicyWhenTheProjectHasNoCatalog(t *testing.T) {
+func TestReplayReadsTheEmbeddedRuleWhenTheProjectHasNoCatalog(t *testing.T) {
 	reader, writer := replayTestReader(t)
-	writeReplayFixtureRow(t, writer, shippedReplayPolicy(t), replayFixtureAnswers(0), "")
+	writeReplayFixtureRow(t, writer, shippedReplayRule(t), replayFixtureAnswers(0), "")
 
 	result, err := runReplay(reader, ledger.Filter{Point: "tool_gate"}, map[string]float64{})
 	if err != nil {
@@ -361,47 +365,131 @@ func TestReplayReadsTheEmbeddedPolicyWhenTheProjectHasNoCatalog(t *testing.T) {
 	if result.rescored != 1 {
 		t.Fatalf("rescored=%d, want 1", result.rescored)
 	}
-	if len(result.policies) != 1 || result.policies[0].origin != policy.OriginBinary {
-		t.Fatalf("policies = %+v, want one from the binary", result.policies)
+	if len(result.rules) != 1 || result.rules[0].origin != gate.OriginBinary {
+		t.Fatalf("policies = %+v, want one from the binary", result.rules)
 	}
 
 	var out, errOut bytes.Buffer
 	if code := replayVerb([]string{"--point", "tool_gate"}, &out, &errOut, time.Now); code != exitOK {
 		t.Fatalf("exit = %d, want %d, stderr %s", code, exitOK, errOut.String())
 	}
-	if !strings.Contains(out.String(), "policy "+replayTestPolicyRef+" from the binary") {
-		t.Fatalf("the report does not name the policy it replayed against: %s", out.String())
+	if !strings.Contains(out.String(), "rule "+replayTestRuleRef+" from the binary") {
+		t.Fatalf("the report does not name the rule it replayed against: %s", out.String())
 	}
 	t.Logf("tofu replay --point tool_gate:\n%s", out.String())
 }
 
-func TestReplayPrefersTheProjectPolicyAndSaysSo(t *testing.T) {
+func TestReplayPrefersTheProjectRuleAndSaysSo(t *testing.T) {
 	_, writer := replayTestReader(t)
-	writeReplayFixtureRow(t, writer, writeReplayPolicyFixture(t), replayFixtureAnswers(0), "")
+	writeReplayFixtureRow(t, writer, writeReplayRuleFixture(t), replayFixtureAnswers(0), "")
 
 	var out, errOut bytes.Buffer
 	if code := replayVerb([]string{"--point", "tool_gate"}, &out, &errOut, time.Now); code != exitOK {
 		t.Fatalf("exit = %d, want %d, stderr %s", code, exitOK, errOut.String())
 	}
-	if !strings.Contains(out.String(), "policy "+replayTestPolicyRef+" from the project") {
-		t.Fatalf("the report does not say the project policy was used: %s", out.String())
+	if !strings.Contains(out.String(), "rule "+replayTestRuleRef+" from the project") {
+		t.Fatalf("the report does not say the project rule was used: %s", out.String())
 	}
 }
 
-func TestReplayFailsWhenTheProjectPolicyCannotBeRead(t *testing.T) {
+func TestReplayFailsWhenTheProjectRuleCannotBeRead(t *testing.T) {
 	reader, writer := replayTestReader(t)
-	writeReplayFixtureRow(t, writer, shippedReplayPolicy(t), replayFixtureAnswers(0), "")
-	if err := os.MkdirAll(replayProjectPolicyPath(), 0o755); err != nil {
-		t.Fatalf("mkdir over the policy path: %v", err)
+	writeReplayFixtureRow(t, writer, shippedReplayRule(t), replayFixtureAnswers(0), "")
+	if err := os.MkdirAll(replayProjectRulePath(), 0o755); err != nil {
+		t.Fatalf("mkdir over the rule path: %v", err)
 	}
 
 	_, err := runReplay(reader, ledger.Filter{Point: "tool_gate"}, map[string]float64{})
 	if err == nil {
-		t.Fatal("a policy that exists and cannot be read replayed anyway, want an error")
+		t.Fatal("a rule that exists and cannot be read replayed anyway, want an error")
 	}
-	if !strings.Contains(err.Error(), replayTestPolicyRef) {
-		t.Fatalf("the error does not name the policy: %v", err)
+	if !strings.Contains(err.Error(), replayTestRuleRef) {
+		t.Fatalf("the error does not name the rule: %v", err)
 	}
+}
+
+func stopCheckFixtureAnswers(pressure float64) []ledger.Answer {
+	return []ledger.Answer{
+		scoreAnswer("stop_pressure", pressure),
+		noulAnswer("stalled", 0.28),
+		noulAnswer("work_remains", 0.67),
+		noulAnswer("budget_exhausted", 0.04),
+	}
+}
+
+func TestReplayRescoresStopCheckRowsAgainstTheirOwnThresholds(t *testing.T) {
+	reader, writer := replayTestReader(t)
+	for _, row := range []ledger.Row{
+		{Point: state.StopCheckPoint, Questions: "stop_check", Version: 1, Answers: stopCheckFixtureAnswers(1.38), Verdict: ledger.VerdictAllow, Policy: "stop_check", PolicyVersion: 1},
+		{Point: state.StopCheckPoint, Questions: "stop_check", Version: 1, Answers: stopCheckFixtureAnswers(2.9), Verdict: ledger.VerdictDeny, Policy: "stop_check", PolicyVersion: 1},
+	} {
+		if _, err := writer.Append(row); err != nil {
+			t.Fatalf("writer.Append: %v", err)
+		}
+	}
+
+	result, err := runReplay(reader, ledger.Filter{Point: state.StopCheckPoint}, map[string]float64{})
+	if err != nil {
+		t.Fatalf("runReplay over stop_check rows: %v", err)
+	}
+	if result.read != 2 || result.rescored != 2 || len(result.changes) != 0 {
+		t.Fatalf("read=%d rescored=%d changes=%d, want 2/2/0", result.read, result.rescored, len(result.changes))
+	}
+
+	var out, errOut bytes.Buffer
+	if code := replayVerb([]string{"--point", state.StopCheckPoint}, &out, &errOut, time.Now); code != exitOK {
+		t.Fatalf("exit = %d, want %d, stderr %s", code, exitOK, errOut.String())
+	}
+	if !strings.Contains(out.String(), "2 rows read, 2 rescored") {
+		t.Fatalf("the report does not count the stop_check rows: %s", out.String())
+	}
+	t.Logf("tofu replay --point stop_check:\n%s", out.String())
+}
+
+func TestReplayMovesAStopCheckVerdictWhenItsOwnThresholdMoves(t *testing.T) {
+	reader, writer := replayTestReader(t)
+	row := ledger.Row{Point: state.StopCheckPoint, Questions: "stop_check", Version: 1, Answers: stopCheckFixtureAnswers(1.38), Verdict: ledger.VerdictAllow, Policy: "stop_check", PolicyVersion: 1}
+	if _, err := writer.Append(row); err != nil {
+		t.Fatalf("writer.Append: %v", err)
+	}
+
+	result, err := runReplay(reader, ledger.Filter{Point: state.StopCheckPoint}, map[string]float64{"risk_ask_at": 0.5})
+	if err != nil {
+		t.Fatalf("runReplay: %v", err)
+	}
+	if len(result.changes) != 1 || result.changes[0].after != ledger.VerdictAsk {
+		t.Fatalf("lowering the ask threshold under the fixture pressure moved %+v, want one row to ask", result.changes)
+	}
+}
+
+func TestReplayCountsAndNamesARowWhoseSchemaHasNoDecider(t *testing.T) {
+	reader, writer := replayTestReader(t)
+	rows := []ledger.Row{
+		{Point: "page_sift", Questions: "page_sift", Version: 1, Answers: replayFixtureAnswers(0), Verdict: ledger.VerdictAllow, Policy: "page_sift", PolicyVersion: 1},
+		{Point: "page_sift", Questions: "page_sift", Version: 1, Answers: replayFixtureAnswers(3), Verdict: ledger.VerdictAllow, Policy: "page_sift", PolicyVersion: 1},
+	}
+	for _, row := range rows {
+		if _, err := writer.Append(row); err != nil {
+			t.Fatalf("writer.Append: %v", err)
+		}
+	}
+
+	result, err := runReplay(reader, ledger.Filter{Point: "page_sift"}, map[string]float64{})
+	if err != nil {
+		t.Fatalf("a schema with no decider ended the run instead of being counted: %v", err)
+	}
+	if result.read != 2 || result.rescored != 0 || result.noDecider[replayNoDecider{ref: "page_sift@1", schema: "page_sift"}] != 2 {
+		t.Fatalf("read=%d rescored=%d noDecider=%+v, want 2 read and 2 counted against page_sift@1", result.read, result.rescored, result.noDecider)
+	}
+
+	var out, errOut bytes.Buffer
+	if code := replayVerb([]string{"--point", "page_sift"}, &out, &errOut, time.Now); code != exitOK {
+		t.Fatalf("exit = %d, want %d, stderr %s", code, exitOK, errOut.String())
+	}
+	if !strings.Contains(out.String(), "page_sift@1") || !strings.Contains(out.String(), "no decider") {
+		t.Fatalf("the report does not name the schema it could not rescore: %s", out.String())
+	}
+	t.Logf("tofu replay --point page_sift:\n%s", out.String())
 }
 
 func TestReplaySinceParsesDays(t *testing.T) {

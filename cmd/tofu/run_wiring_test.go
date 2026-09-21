@@ -134,7 +134,7 @@ func TestABashResultCarryingAFabricatedCitationReachesTheModelRefused(t *testing
 	t.Logf("%s", result.Content)
 }
 
-func TestAGrepResultGetsNoCitationVerdictBecauseThisBinaryWroteIt(t *testing.T) {
+func TestASearchResultGetsNoCitationVerdictBecauseThisBinaryWroteIt(t *testing.T) {
 	dir := t.TempDir()
 	var lines strings.Builder
 	for range 200 {
@@ -143,14 +143,14 @@ func TestAGrepResultGetsNoCitationVerdictBecauseThisBinaryWroteIt(t *testing.T) 
 	if err := os.WriteFile(filepath.Join(dir, "many.go"), []byte(lines.String()), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	result := ranTool(t, dir, "grep", `{"pattern":"wanted"}`)
-	if strings.Count(result.Content, "many.go:") < 200 {
-		t.Fatalf("grep matched fewer than the 200 lines written, so the count proves nothing:\n%s", result.Content)
+	result := ranTool(t, dir, "search", `{"pattern":"wanted"}`)
+	if !strings.Contains(result.Content, "many.go:1-200") {
+		t.Fatalf("search did not frame the 200 written lines as one unit, so the count proves nothing:\n%s", result.Content)
 	}
 	if strings.Contains(result.Content, "citations:") {
-		t.Fatalf("a grep result carries a citation verdict on output this binary generated:\n%s", result.Content)
+		t.Fatalf("a search result carries a citation verdict on output this binary generated:\n%s", result.Content)
 	}
-	t.Logf("grep returned %d bytes over 200 matches and no citation verdict", len(result.Content))
+	t.Logf("search returned %d bytes over 200 matches and no citation verdict", len(result.Content))
 }
 
 func TestTheContextCeilingFlagWinsOverTheEnvironmentVariable(t *testing.T) {

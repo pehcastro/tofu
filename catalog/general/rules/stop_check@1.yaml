@@ -1,0 +1,17 @@
+name: stop_check
+domain: general
+kind: threshold
+schema: stop_check
+rule_version: 1
+questions: stop_check
+questions_version: 1
+mode: shadow
+sample_floor: 300
+notes: shadow only, and the verdict is read as continue for allow, ask the human for ask, stop the turn for deny. numbers copied from tool_gate@1, chosen by a person, not produced by calibration, BOJI-079
+
+thresholds:
+  stop_pressure_ask_at: 1.5
+  stop_pressure_deny_at: 2.5
+  work_remains_relax_at: 0.85
+  stalled_relax_at: 0.15
+  budget_exhausted_block_at: 0.5

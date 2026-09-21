@@ -14,24 +14,6 @@ import (
 	"tofu/internal/turn/tools"
 )
 
-func repository(t *testing.T) string {
-	t.Helper()
-	dir, err := filepath.Abs(".")
-	if err != nil {
-		t.Fatalf("locating the repository: %v", err)
-	}
-	for {
-		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
-			return dir
-		}
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			t.Fatal("no go.mod above this package, so there is no repository to measure over")
-		}
-		dir = parent
-	}
-}
-
 type measured struct {
 	name    string
 	millis  float64
@@ -64,31 +46,31 @@ func report(t *testing.T, headline string, arms ...measured) {
 	t.Log("\n" + out.String())
 }
 
-func TestSymbolsAgainstGrepOnTheSameQuestionInThisRepository(t *testing.T) {
-	root := repository(t)
-	grepTool, _ := tools.NewGrep(root)
+func TestSymbolsAgainstSearchOnTheSameQuestionInThisRepository(t *testing.T) {
+	root := repositoryRoot(t)
+	searchTool, _ := tools.NewSearch(root)
 	symbolsTool, _ := tools.NewSymbols(root)
 
-	grepped := measure(t, "grep NewRoot under internal/turn", grepTool, `{"pattern":"NewRoot","path":"internal/turn"}`)
+	searched := measure(t, "search NewRoot under internal/turn", searchTool, `{"pattern":"NewRoot","path":"internal/turn"}`)
 	resolved := measure(t, "symbols NewRoot under internal/turn", symbolsTool, `{"name":"NewRoot","path":"internal/turn"}`)
-	report(t, "one question, where is NewRoot declared and who calls it", grepped, resolved)
+	report(t, "one question, where is NewRoot declared and who calls it", searched, resolved)
 
-	if grepped.bytes == 0 || resolved.bytes == 0 {
+	if searched.bytes == 0 || resolved.bytes == 0 {
 		t.Fatal("one of the two arms answered nothing, so the comparison says nothing")
 	}
 }
 
 func TestTheMemoAgainstRunningTheSameCallTwiceInThisRepository(t *testing.T) {
-	root := repository(t)
-	grepTool, _ := tools.NewGrep(root)
-	held := tools.NewMemo().Wrap([]turn.Tool{grepTool})[0]
+	root := repositoryRoot(t)
+	searchTool, _ := tools.NewSearch(root)
+	held := tools.NewMemo().Wrap([]turn.Tool{searchTool})[0]
 	args := `{"pattern":"func NewRoot"}`
 
-	first := measure(t, "grep over the whole tree, first call", grepTool, args)
-	again := measure(t, "grep over the whole tree, second call, no memo", grepTool, args)
-	measure(t, "grep over the whole tree, first call through the memo", held, args)
-	cached := measure(t, "grep over the whole tree, second call through the memo", held, args)
-	report(t, "the same grep twice over this repository", first, again, cached)
+	first := measure(t, "search over the whole tree, first call", searchTool, args)
+	again := measure(t, "search over the whole tree, second call, no memo", searchTool, args)
+	measure(t, "search over the whole tree, first call through the memo", held, args)
+	cached := measure(t, "search over the whole tree, second call through the memo", held, args)
+	report(t, "the same search twice over this repository", first, again, cached)
 
 	if cached.millis > again.millis {
 		t.Fatalf("the memo answered slower than running the tool again: %.3f ms against %.3f ms", cached.millis, again.millis)
@@ -96,7 +78,7 @@ func TestTheMemoAgainstRunningTheSameCallTwiceInThisRepository(t *testing.T) {
 }
 
 func TestTheRefusalAgainstTheReadItSavesOnARealFile(t *testing.T) {
-	root := repository(t)
+	root := repositoryRoot(t)
 	body, err := os.ReadFile(filepath.Join(root, "internal", "search", "find.go"))
 	if err != nil {
 		t.Fatalf("reading a real file to copy: %v", err)
@@ -123,7 +105,7 @@ func TestTheRefusalAgainstTheReadItSavesOnARealFile(t *testing.T) {
 }
 
 func TestTheRepairedPathAgainstTheGlobItSaves(t *testing.T) {
-	root := repository(t)
+	root := repositoryRoot(t)
 	globTool, _ := tools.NewGlob(root)
 
 	repaired := measure(t, "glob under konst, a path that does not exist", globTool, `{"pattern":"*.go","path":"konst"}`)

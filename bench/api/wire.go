@@ -6,20 +6,26 @@ import (
 
 	"tofu/internal/judge/jev"
 	"tofu/internal/judge/jev/wire/openrouter"
+	"tofu/internal/judge/jev/wire/typesafe"
 	"tofu/internal/konst"
 	"tofu/internal/transport"
 )
 
+func judgeTransport() transport.Config {
+	return transport.Config{
+		AttemptTimeout: time.Duration(konst.JudgeTimeoutMillis) * time.Millisecond,
+		Retries:        konst.JudgeRetries,
+		Backoff:        250 * time.Millisecond,
+		Concurrency:    1,
+	}
+}
+
 func NewWire(key string) (*openrouter.Wire, error) {
-	return openrouter.New(openrouter.Config{
-		Key: key,
-		Transport: transport.Config{
-			AttemptTimeout: time.Duration(konst.JudgeTimeoutMillis) * time.Millisecond,
-			Retries:        konst.JudgeRetries,
-			Backoff:        250 * time.Millisecond,
-			Concurrency:    1,
-		},
-	})
+	return openrouter.New(openrouter.Config{Key: key, Transport: judgeTransport()})
+}
+
+func NewTypeSafeWire(key string) (*typesafe.Wire, error) {
+	return typesafe.New(typesafe.Config{Key: key, Transport: judgeTransport()})
 }
 
 type Call struct {

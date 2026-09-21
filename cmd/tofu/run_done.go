@@ -12,7 +12,7 @@ import (
 	"tofu/internal/turn"
 )
 
-const doneReviewPoint = state.StopCheckPolicyRef
+const doneReviewPoint = state.StopCheckRuleRef
 
 const (
 	doneArmOff   = "off"
@@ -56,21 +56,21 @@ func resolveStopCheckPoint() (battery, error) {
 	if err != nil {
 		return battery{}, err
 	}
-	pol, origin, err := state.StopCheckPolicy()
+	pol, origin, err := state.StopCheckRule()
 	if err != nil {
 		return battery{}, err
 	}
 	if pol.Questions != set.SetName || pol.QuestionsVersion != set.QuestionsVersion {
-		return battery{}, fmt.Errorf("policy %s names the question set %s@%d and the battery resolved %s@%d",
+		return battery{}, fmt.Errorf("rule %s names the question set %s@%d and the battery resolved %s@%d",
 			doneReviewPoint, pol.Questions, pol.QuestionsVersion, set.SetName, set.QuestionsVersion)
 	}
-	resolution, err := resolvePolicyMode(pol)
+	resolution, err := resolveRuleMode(pol)
 	if err != nil {
 		return battery{}, err
 	}
-	pol = resolution.Policy
-	set.Policy, set.Mode = &pol, resolution.Mode
-	set.ModeReason = fmt.Sprintf("the policy came from %s as %s", origin, pol.File)
+	pol = resolution.Rule
+	set.Rule, set.Mode = &pol, resolution.Mode
+	set.ModeReason = fmt.Sprintf("the rule came from %s as %s", origin, pol.File)
 	if resolution.Reason != "" && !strings.Contains(resolution.Reason, pol.File) {
 		set.ModeReason += "; " + resolution.Reason
 	}
@@ -124,7 +124,7 @@ func doneReason(row ledger.Row) string {
 			answered = append(answered, answer.Question+" "+answer.Choice)
 		}
 	}
-	return fmt.Sprintf("%s read your own row and answered %s, which the policy reads as %s; tofu why %s has the whole chain",
+	return fmt.Sprintf("%s read your own row and answered %s, which the rule reads as %s; tofu why %s has the whole chain",
 		doneReviewPoint, strings.Join(answered, ", "), row.Verdict.String(), row.ID)
 }
 

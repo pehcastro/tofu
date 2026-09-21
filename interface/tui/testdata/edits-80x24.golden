@@ -1,17 +1,17 @@
-[38;5;252;48;5;236mtofu test  ·  silo  ·  develop  ·  openai → gpt-5.6-sol-2026-09-01  ·  14:34[m[48;5;236m    [m
-[38;5;240m1 session[m   [38;5;240m2 crew[m   [38;5;39m3 file edits[m   [38;5;240m6 settings[m                                  
-[38;5;39mfile edits    [m[38;5;236m │ [m[38;5;252mgo-docs edited docs/verification.md                     [m  [38;5;245m+1 -1[m
+[38;5;252;48;5;236m./tofu  ·  develop  ·  codex-sub/gpt-5.6-sol  ·  amber-cedar-otter #3c5f71[m[48;5;236m      [m
+[38;5;240m[1] chat[m   [38;5;240m[2] work[m   [38;5;39m[3] file edits[m   [38;5;240m[4] sub-agents (1)[m   [38;5;240m[5] shells[m          
+[38;5;39mfile edits    [m[38;5;236m │ [m[38;5;252mgo-docs edited ]8;;file://docs/verification.md\docs/verification.md]8;;\  14:34:18  #e3      [m  [38;5;245m+1 -1[m
 [38;5;252m              [m[38;5;236m │ [m[38;5;245m  @@ -8,2 +8,2 @@                                              [m
 [38;5;39m›  feed      3[m[38;5;236m │ [m[38;5;167m  -a skip is silent                                            [m
 [38;5;252m ✓ tofu      1[m[38;5;236m │ [m[38;5;114m  +a skip is a result and it is named                          [m
 [38;5;252m ● go-dev    1[m[38;5;236m │ [m[38;5;252m                                                               [m
-[38;5;252m ✓ go-docs   1[m[38;5;236m │ [m[38;5;252mgo-dev edited internal/rule/check.go                    [m  [38;5;245m+1 -0[m
+[38;5;252m ✓ go-docs   1[m[38;5;236m │ [m[38;5;252mgo-dev edited ]8;;file://internal/rule/check.go\internal/rule/check.go]8;;\  14:34:18  #e2     [m  [38;5;245m+1 -0[m
 [38;5;252m ⤺ go-rules  0[m[38;5;236m │ [m[38;5;245m  @@ -12,3 +12,4 @@                                            [m
 [38;5;252m              [m[38;5;236m │ [m[38;5;240m   func Check(findings []Finding) error {                      [m
 [38;5;240m↑↓ pick       [m[38;5;236m │ [m[38;5;114m  +    return nil                                              [m
 [38;5;240mpgup older    [m[38;5;236m │ [m[38;5;240m  }                                                            [m
               [38;5;236m │ [m[38;5;252m                                                               [m
-              [38;5;236m │ [m[38;5;252mtofu edited internal/judge/policy/toolgate.go           [m  [38;5;245m+1 -1[m
+              [38;5;236m │ [m[38;5;252mtofu edited ]8;;file://internal/judge/policy/toolgate.go\internal/judge/policy/toolgate.go]8;;\  14:34:18…[m  [38;5;245m+1 -1[m
               [38;5;236m │ [m[38;5;245m  @@ -40,6 +40,7 @@                                            [m
               [38;5;236m │ [m[38;5;240m   func Decide(answers Answers) Verdict {                      [m
               [38;5;236m │ [m[38;5;240m      if answers.Risk > thresholds.RiskAskAt {                 [m
@@ -21,4 +21,5 @@
               [38;5;236m │ [m[38;5;240m      return Allow                                             [m
               [38;5;236m │ [m[38;5;240m  }                                                            [m
               [38;5;236m │ [m[38;5;252m                                                               [m
-[38;5;252;48;5;236m118k/250k ▓▓▓▓▓▓░░░░░░  ·  codex 7d ▓▓▓▓▓▓▓░░░░░  62%  ·  ⇅ 284k/61k  ·  ●1[m[48;5;236m     [m
+[38;5;252;48;5;236m118k/250k ▓▓▓▓▓▓░░░░░░  ·  claude 5h  62%  ·  claude weekly  31%[m[48;5;236m                [m
+[38;5;252;48;5;236m284k read  61k write  ·  jev 3  ·  ●1  ·  tofu 0.4.0[m[48;5;236m                            [m

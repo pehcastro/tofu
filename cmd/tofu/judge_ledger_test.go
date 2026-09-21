@@ -5,10 +5,11 @@ import (
 	"fmt"
 	"testing"
 
+	"tofu/internal/judge/gate"
 	"tofu/internal/judge/jev"
 	"tofu/internal/judge/ledger"
-	"tofu/internal/judge/policy"
 	"tofu/internal/judge/question"
+	"tofu/internal/sys"
 )
 
 func panicOf(call func()) (message string) {
@@ -21,16 +22,16 @@ func panicOf(call func()) (message string) {
 	return ""
 }
 
-func TestToLedgerVerdictNamesEveryPolicyVerdict(t *testing.T) {
-	want := map[policy.Verdict]ledger.Verdict{
-		policy.VerdictAllow: ledger.VerdictAllow,
-		policy.VerdictAsk:   ledger.VerdictAsk,
-		policy.VerdictDeny:  ledger.VerdictDeny,
+func TestToLedgerVerdictNamesEveryGateVerdict(t *testing.T) {
+	want := map[gate.Verdict]ledger.Verdict{
+		gate.VerdictAllow: ledger.VerdictAllow,
+		gate.VerdictAsk:   ledger.VerdictAsk,
+		gate.VerdictDeny:  ledger.VerdictDeny,
 	}
-	for _, v := range policy.AllVerdicts() {
+	for _, v := range gate.AllVerdicts() {
 		expected, named := want[v]
 		if !named {
-			t.Fatalf("%s carries no expected ledger verdict, so a new policy verdict can reach toLedgerVerdict untested", v)
+			t.Fatalf("%s carries no expected ledger verdict, so a new gate verdict can reach toLedgerVerdict untested", v)
 		}
 		if got := toLedgerVerdict(v); got != expected {
 			t.Errorf("toLedgerVerdict(%s) = %s, want %s", v, got, expected)
@@ -38,25 +39,25 @@ func TestToLedgerVerdictNamesEveryPolicyVerdict(t *testing.T) {
 	}
 }
 
-func TestToPolicyVerdictNamesEveryLedgerVerdict(t *testing.T) {
-	want := map[ledger.Verdict]policy.Verdict{
-		ledger.VerdictAllow: policy.VerdictAllow,
-		ledger.VerdictAsk:   policy.VerdictAsk,
-		ledger.VerdictDeny:  policy.VerdictDeny,
+func TestToGateVerdictNamesEveryLedgerVerdict(t *testing.T) {
+	want := map[ledger.Verdict]gate.Verdict{
+		ledger.VerdictAllow: gate.VerdictAllow,
+		ledger.VerdictAsk:   gate.VerdictAsk,
+		ledger.VerdictDeny:  gate.VerdictDeny,
 	}
 	for _, v := range ledger.AllVerdicts() {
 		if v == ledger.VerdictUnset {
-			if raised := panicOf(func() { toPolicyVerdict(v) }); raised == "" {
-				t.Errorf("toPolicyVerdict(unset) no longer panics: the impossible state is now reachable")
+			if raised := panicOf(func() { toGateVerdict(v) }); raised == "" {
+				t.Errorf("toGateVerdict(unset) no longer panics: the impossible state is now reachable")
 			}
 			continue
 		}
 		expected, named := want[v]
 		if !named {
-			t.Fatalf("%s carries no expected policy verdict, so a new ledger verdict can reach toPolicyVerdict untested", v)
+			t.Fatalf("%s carries no expected gate verdict, so a new ledger verdict can reach toGateVerdict untested", v)
 		}
-		if got := toPolicyVerdict(v); got != expected {
-			t.Errorf("toPolicyVerdict(%s) = %s, want %s", v, got, expected)
+		if got := toGateVerdict(v); got != expected {
+			t.Errorf("toGateVerdict(%s) = %s, want %s", v, got, expected)
 		}
 	}
 }
@@ -100,9 +101,9 @@ func TestAReplayedRowAgreesOnBuildAndDisagreesOnTheMarker(t *testing.T) {
 		t.Fatalf("expected one wire call across both runs, got %d", wire.calls)
 	}
 
-	dir, err := ledger.Dir()
+	dir, err := sys.LogDir()
 	if err != nil {
-		t.Fatalf("ledger.Dir: %v", err)
+		t.Fatalf("sys.LogDir: %v", err)
 	}
 	var rows []ledger.Row
 	if _, err := ledger.NewReader(dir).Each(ledger.Filter{}, func(row ledger.Row) error {

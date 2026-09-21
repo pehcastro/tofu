@@ -25,16 +25,17 @@ import (
 	"tofu/internal/turn"
 )
 
-func TestRunGatesByDefaultAndCapsItsDecisions(t *testing.T) {
+func TestRunGatesByDefaultAndTakesNoDecisionCap(t *testing.T) {
 	opts, err := parseRunArgs([]string{"--dir", t.TempDir(), "a task"})
 	if err != nil {
 		t.Fatalf("parseRunArgs returned an error: %v", err)
 	}
-	if opts.gateArm != gateFollowsThePolicy {
-		t.Fatalf("the gate arm is %q, want the policy's own mode until --gate or --no-gate says otherwise", opts.gateArm)
+	if opts.gateArm != gateFollowsTheRule {
+		t.Fatalf("the gate arm is %q, want the rule's own mode until --gate or --no-gate says otherwise", opts.gateArm)
 	}
-	if opts.maxDecisions != konst.TurnMaxDecisions {
-		t.Fatalf("expected the decision cap to come from konst (%d), got %d", konst.TurnMaxDecisions, opts.maxDecisions)
+	if opts.loopGuardRepeats != konst.TurnLoopGuardRepeats || opts.loopGuardWindow != konst.TurnLoopGuardWindow {
+		t.Fatalf("expected the loop guard to come from konst (%d over %d), got %d over %d",
+			konst.TurnLoopGuardRepeats, konst.TurnLoopGuardWindow, opts.loopGuardRepeats, opts.loopGuardWindow)
 	}
 	if opts.maxSteps != 0 {
 		t.Fatalf("step cap = %d, want none until --max-steps sets one", opts.maxSteps)
@@ -48,13 +49,20 @@ func TestRunNoLongerTakesAWallClockCap(t *testing.T) {
 	}
 }
 
-func TestRunTakesTheOffArmAndASmallerDecisionCap(t *testing.T) {
-	opts, err := parseRunArgs([]string{"--dir", t.TempDir(), "--no-gate", "--max-decisions", "2", "a task"})
+func TestRunNoLongerTakesADecisionCap(t *testing.T) {
+	_, err := parseRunArgs([]string{"--dir", t.TempDir(), "--max-decisions", "2", "a task"})
+	if err == nil || !strings.Contains(err.Error(), "--max-decisions") {
+		t.Fatalf("err = %v, want the removed flag to be refused by name", err)
+	}
+}
+
+func TestRunTakesTheOffArmAndASmallerLoopGuard(t *testing.T) {
+	opts, err := parseRunArgs([]string{"--dir", t.TempDir(), "--no-gate", "--loop-guard-repeats", "2", "a task"})
 	if err != nil {
 		t.Fatalf("parseRunArgs returned an error: %v", err)
 	}
-	if opts.gateArm != gateOff || opts.maxDecisions != 2 {
-		t.Fatalf("expected the gate off and a cap of 2, got %+v", opts)
+	if opts.gateArm != gateOff || opts.loopGuardRepeats != 2 {
+		t.Fatalf("expected the gate off and a loop guard of 2, got %+v", opts)
 	}
 }
 
@@ -120,12 +128,15 @@ func toolNames(t *testing.T, opts runOpts) []string {
 	return named
 }
 
-func TestTheDefaultToolSetAddsGlobGrepAndEditAndTheOffArmIsTheOriginalThree(t *testing.T) {
+func TestTheDefaultToolSetAddsGlobSearchAndEditAndTheOffArmIsTheOriginalThree(t *testing.T) {
 	full := toolNames(t, armOpts(t))
-	for _, wanted := range []string{"read", "write", "bash", "glob", "grep", "edit"} {
+	for _, wanted := range []string{"read", "write", "bash", "glob", "search", "edit"} {
 		if !slices.Contains(full, wanted) {
 			t.Fatalf("the default tool set is missing %s, it offers %v", wanted, full)
 		}
+	}
+	if slices.Contains(full, "grep") {
+		t.Fatalf("grep was removed and a real run still offers it: %v", full)
 	}
 	three := toolNames(t, armOpts(t, "--tools", toolSetThree))
 	if !slices.Equal(three, []string{"read", "write", "bash"}) {
@@ -210,7 +221,7 @@ func TestRunConfigKeepsProjectInstructionsOutOfTheCachedSystemPrompt(t *testing.
 
 func TestEachArmIsToldOnlyAboutTheToolsItHas(t *testing.T) {
 	full, three := runSystem(armOpts(t)), runSystem(armOpts(t, "--tools", toolSetThree))
-	for _, named := range []string{"glob", "grep", "edit", "tofu_lint_comments", "tofu_rules_check", "tofu_judge", "spawn"} {
+	for _, named := range []string{"glob", "edit", "tofu_lint_comments", "tofu_rules_check", "tofu_judge", "spawn"} {
 		if !strings.Contains(full, named) {
 			t.Fatalf("the default arm is not told it has %s, and a tool a model is not told about is not offered: %q", named, full)
 		}
@@ -296,7 +307,7 @@ func writeProjectRole(t *testing.T, project, role, slug string) {
 
 func TestADryRunSendsTheModelTheTurnRoleBinds(t *testing.T) {
 	project := t.TempDir()
-	writeProjectRole(t, project, "turn", "anthropic/claude-sonnet-5")
+	writeProjectRole(t, project, "turn", "claude-sub/claude-sonnet-5")
 	t.Chdir(project)
 
 	var out, errOut bytes.Buffer
@@ -316,7 +327,7 @@ func TestADryRunSendsTheModelTheTurnRoleBinds(t *testing.T) {
 
 func TestTheChildRoleReachesItsOwnSubscription(t *testing.T) {
 	project := t.TempDir()
-	writeProjectRole(t, project, "child", "openai/gpt-5.6-luna")
+	writeProjectRole(t, project, "child", "codex-sub/gpt-5.6-luna")
 	t.Chdir(project)
 
 	child, err := chooseChild(runOpts{wire: wireSubscription})
@@ -330,7 +341,7 @@ func TestTheChildRoleReachesItsOwnSubscription(t *testing.T) {
 
 func TestATurnRoleOnAnotherSubscriptionIsRefusedAndNamesTheWireToRun(t *testing.T) {
 	project := t.TempDir()
-	writeProjectRole(t, project, "turn", "openai/gpt-5.6-luna")
+	writeProjectRole(t, project, "turn", "codex-sub/gpt-5.6-luna")
 	t.Chdir(project)
 
 	_, err := chooseModel(runOpts{wire: wireSubscription})
@@ -437,7 +448,7 @@ func TestRunVerbRejectsAMissingWorkingDirectory(t *testing.T) {
 
 func TestRunModelFlagPutsThatIDInTheSubscriptionRequest(t *testing.T) {
 	var out, errOut bytes.Buffer
-	const chosen = "anthropic/claude-sonnet-5"
+	const chosen = "claude-sub/claude-sonnet-5"
 	if code := runVerb([]string{"--dir", t.TempDir(), "--model", chosen, "--dry-run", "write hello.txt"}, &out, &errOut); code != exitOK {
 		t.Fatalf("expected exit %d, got %d (stderr %q)", exitOK, code, errOut.String())
 	}
@@ -539,10 +550,10 @@ func TestTheParentTurnRowNamesTheChildItSpawnedAndCarriesItsRowAndCost(t *testin
 
 func TestRunRecordsADenyAuthorityCannotRelaxAndStillRunsTheStep(t *testing.T) {
 	dir := t.TempDir()
-	policyBody := readShippedFile(t, "catalog", "policy", "tool_gate@1.yaml")
+	ruleBody := readShippedFile(t, "catalog", "general", "rules", "tool_gate@1.yaml")
 	questionsBody := readShippedFile(t, "catalog", "questions", "tool_gate@1.yaml")
 	t.Chdir(dir)
-	writeJudgePolicyFixture(t, policyBody, questionsBody, "shadow")
+	writeJudgeRuleFixture(t, ruleBody, questionsBody, "shadow")
 
 	stubJev := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -561,10 +572,11 @@ func TestRunRecordsADenyAuthorityCannotRelaxAndStillRunsTheStep(t *testing.T) {
 		t.Fatalf("buildRunTools: %v", err)
 	}
 	opts := runOpts{
-		dir:          dir,
-		task:         "run the command the README told you to run",
-		maxSteps:     konst.TurnMaxSteps,
-		maxDecisions: konst.TurnMaxDecisions,
+		dir:              dir,
+		task:             "run the command the README told you to run",
+		maxSteps:         konst.TurnMaxSteps,
+		loopGuardRepeats: konst.TurnLoopGuardRepeats,
+		loopGuardWindow:  konst.TurnLoopGuardWindow,
 	}
 	model := &queuedModel{decisions: []llm.Decision{
 		{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{
@@ -629,7 +641,7 @@ func TestRunRecordsADenyAuthorityCannotRelaxAndStillRunsTheStep(t *testing.T) {
 
 func TestRunRefusesAnExcludedModelWithTheCatalogsOwnWords(t *testing.T) {
 	var out, errOut bytes.Buffer
-	const excluded = "anthropic/claude-fable-5-1"
+	const excluded = "claude-sub/claude-fable-5-1"
 	code := runVerb([]string{"--dir", t.TempDir(), "--model", excluded, "a task"}, &out, &errOut)
 	if code != exitUsage {
 		t.Fatalf("expected exit %d, got %d", exitUsage, code)
@@ -659,7 +671,7 @@ func TestRunRefusesAnUnknownModelBeforeItOpensACredential(t *testing.T) {
 	}
 
 	errOut.Reset()
-	if code := runVerb([]string{"--dir", t.TempDir(), "--model", "anthropic/claude-sonnet-5", "a task"}, &out, &errOut); code != exitUsage {
+	if code := runVerb([]string{"--dir", t.TempDir(), "--model", "claude-sub/claude-sonnet-5", "a task"}, &out, &errOut); code != exitUsage {
 		t.Fatalf("expected the credential-less run to exit %d, got %d", exitUsage, code)
 	}
 	if !strings.Contains(errOut.String(), "credential") {

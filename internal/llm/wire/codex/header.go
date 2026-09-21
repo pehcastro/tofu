@@ -1,15 +1,11 @@
 package codex
 
 import (
-	"strings"
-
+	"tofu/internal/llm"
 	"tofu/internal/sys"
 )
 
-type Header struct {
-	Name  string
-	Value string
-}
+type Header = llm.Header
 
 type HeaderOptions struct {
 	Token        string
@@ -30,62 +26,43 @@ func routingHint(model, serviceTier string) string {
 }
 
 func Headers(options HeaderOptions) []Header {
-	headers := []Header{{HeaderAuthorization, "Bearer " + options.Token}}
+	headers := []Header{{Name: HeaderAuthorization, Value: "Bearer " + options.Token}}
 	if !options.Subscription {
 		return append(headers,
-			Header{HeaderAccept, "text/event-stream"},
-			Header{HeaderContentType, "application/json"})
+			Header{Name: HeaderAccept, Value: "text/event-stream"},
+			Header{Name: HeaderContentType, Value: "application/json"})
 	}
 
 	if options.Claims.AccountID != "" {
-		headers = append(headers, Header{HeaderAccountID, options.Claims.AccountID})
+		headers = append(headers, Header{Name: HeaderAccountID, Value: options.Claims.AccountID})
 	}
-	headers = append(headers, Header{HeaderRoutingHint, routingHint(options.Model, options.ServiceTier)})
+	headers = append(headers, Header{Name: HeaderRoutingHint, Value: routingHint(options.Model, options.ServiceTier)})
 	if options.Claims.Residency != "" {
-		headers = append(headers, Header{HeaderResidency, options.Claims.Residency})
+		headers = append(headers, Header{Name: HeaderResidency, Value: options.Claims.Residency})
 	}
 	headers = append(headers,
-		Header{HeaderBeta, BetaResponsesSSE},
-		Header{HeaderOriginator, Originator},
-		Header{HeaderVersion, PinnedCodexClientVersion},
-		Header{HeaderUserAgent, UserAgentPrefix + sys.Version()},
+		Header{Name: HeaderBeta, Value: BetaResponsesSSE},
+		Header{Name: HeaderOriginator, Value: Originator},
+		Header{Name: HeaderVersion, Value: PinnedCodexClientVersion},
+		Header{Name: HeaderUserAgent, Value: UserAgentPrefix + sys.Version()},
 	)
 	if options.Identity.SessionID != "" {
 		headers = append(headers,
-			Header{HeaderConversationID, options.Identity.SessionID},
-			Header{HeaderSessionID, options.Identity.SessionID},
-			Header{HeaderClientRequestID, options.Identity.SessionID},
-			Header{HeaderScopedSessionID, options.Identity.SessionID},
+			Header{Name: HeaderConversationID, Value: options.Identity.SessionID},
+			Header{Name: HeaderSessionID, Value: options.Identity.SessionID},
+			Header{Name: HeaderClientRequestID, Value: options.Identity.SessionID},
+			Header{Name: HeaderScopedSessionID, Value: options.Identity.SessionID},
 		)
 	}
 	headers = append(headers,
-		Header{HeaderThreadID, options.Identity.ThreadID},
-		Header{HeaderWindowID, options.Identity.WindowID},
-		Header{HeaderTurnMetadata, options.TurnMetadata},
+		Header{Name: HeaderThreadID, Value: options.Identity.ThreadID},
+		Header{Name: HeaderWindowID, Value: options.Identity.WindowID},
+		Header{Name: HeaderTurnMetadata, Value: options.TurnMetadata},
 	)
 	if options.TurnState != "" {
-		headers = append(headers, Header{HeaderTurnState, options.TurnState})
+		headers = append(headers, Header{Name: HeaderTurnState, Value: options.TurnState})
 	}
 	return append(headers,
-		Header{HeaderAccept, "text/event-stream"},
-		Header{HeaderContentType, "application/json"})
-}
-
-func redactHeaderValue(name, value string) string {
-	lower := strings.ToLower(name)
-	if lower == "authorization" {
-		return "Bearer " + RedactedCredential
-	}
-	if lower == HeaderAPIKey {
-		return RedactedCredential
-	}
-	for _, marker := range []string{"account", "session", "conversation", "thread", "window", "installation"} {
-		if strings.Contains(lower, marker) {
-			return RedactedCredential
-		}
-	}
-	if strings.HasPrefix(lower, "x-codex-turn") || lower == HeaderClientRequestID || lower == "cookie" {
-		return RedactedCredential
-	}
-	return value
+		Header{Name: HeaderAccept, Value: "text/event-stream"},
+		Header{Name: HeaderContentType, Value: "application/json"})
 }

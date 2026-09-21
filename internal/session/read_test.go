@@ -38,7 +38,7 @@ func recorded(t *testing.T, settings Settings, events ...Event) (*Store, string)
 	store := NewStore(t.TempDir())
 	store.Use(settings)
 	id := "turn-1"
-	recorder, err := store.Begin(Header{ID: id, Root: id, At: time.Now()})
+	recorder, err := store.Begin(Header{ID: id, Root: id, At: time.Now()}, AuthorOrchestrator)
 	if err != nil {
 		t.Fatalf("begin: %v", err)
 	}
@@ -92,7 +92,7 @@ func TestReadsAreFoundByTheirOwnLineWithoutParsingTheWholeBody(t *testing.T) {
 	}
 	var found []string
 	for _, line := range strings.Split(strings.TrimSpace(string(body)), "\n") {
-		if strings.HasPrefix(line, `{"kind":"read"`) {
+		if strings.Contains(line, `"kind":"read"`) {
 			found = append(found, line)
 		}
 	}

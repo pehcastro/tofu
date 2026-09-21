@@ -7,10 +7,10 @@ import (
 	"sort"
 	"strings"
 
-	catalogpolicy "tofu/catalog/policy"
+	shipped "tofu/catalog"
 	"tofu/catalog/questions"
+	"tofu/internal/judge/gate"
 	"tofu/internal/judge/jev"
-	"tofu/internal/judge/policy"
 	"tofu/internal/judge/question"
 )
 
@@ -31,8 +31,8 @@ type battery struct {
 	Kinds            map[string]question.Kind
 	SetName          string
 	QuestionsVersion int
-	Policy           *policy.Policy
-	Mode             policy.Mode
+	Rule             *gate.Rule
+	Mode             gate.Mode
 	ModeReason       string
 }
 
@@ -122,29 +122,29 @@ func toInlineJevQuestion(name string, in inlineQuestion) (jev.Question, question
 	return jev.Question{}, "", fmt.Errorf("question %q has the unknown type %q", name, in.Type)
 }
 
-func resolvePolicy(ref string, set battery) (policy.Policy, error) {
+func resolveRule(ref string, set battery) (gate.Rule, error) {
 	if !strings.ContainsRune(ref, '@') {
-		return policy.Policy{}, fmt.Errorf("the policy %q names no version; a policy is named name@version, so it never resolves silently to the wrong one", ref)
+		return gate.Rule{}, fmt.Errorf("the rule %q names no version; a rule is named name@version, so it never resolves silently to the wrong one", ref)
 	}
-	pol, _, err := loadPolicyPoint(ref)
+	r, _, err := loadRulePoint(ref)
 	if err != nil {
-		return policy.Policy{}, err
+		return gate.Rule{}, err
 	}
-	if pol.Questions != set.SetName || pol.QuestionsVersion != set.QuestionsVersion {
-		return policy.Policy{}, fmt.Errorf("policy %s names the question set %s@%d and the battery resolved %s@%d",
-			ref, pol.Questions, pol.QuestionsVersion, set.SetName, set.QuestionsVersion)
+	if r.Questions != set.SetName || r.QuestionsVersion != set.QuestionsVersion {
+		return gate.Rule{}, fmt.Errorf("rule %s names the question set %s@%d and the battery resolved %s@%d",
+			ref, r.Questions, r.QuestionsVersion, set.SetName, set.QuestionsVersion)
 	}
-	return pol, nil
+	return r, nil
 }
 
-func loadPolicyPoint(ref string) (policy.Policy, policy.Origin, error) {
+func loadRulePoint(ref string) (gate.Rule, gate.Origin, error) {
 	layers, err := question.DefaultLayers(questions.Files())
 	if err != nil {
-		return policy.Policy{}, "", err
+		return gate.Rule{}, "", err
 	}
 	set, _, err := question.Resolve(ref, layers)
 	if err != nil {
-		return policy.Policy{}, "", err
+		return gate.Rule{}, "", err
 	}
-	return policy.LoadPoint(catalogpolicy.Files(), ref, set)
+	return gate.LoadPoint(shipped.Files(), ref, set)
 }

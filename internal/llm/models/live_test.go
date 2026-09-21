@@ -51,7 +51,7 @@ func TestLiveDiscovery(t *testing.T) {
 			if err != nil {
 				t.Fatalf("discovery against %s under %s: %v", spec.ID, served.Pin, err)
 			}
-			for _, line := range catalog.Reconcile(served).Lines() {
+			for _, line := range catalog.Reconcile(served, shippedTable(t)).Lines() {
 				t.Log(line)
 			}
 		})

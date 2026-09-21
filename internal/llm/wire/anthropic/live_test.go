@@ -4,9 +4,14 @@ import (
 	"bytes"
 	"cmp"
 	"context"
+	"image"
+	"image/color"
+	"image/draw"
+	"image/png"
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -108,6 +113,35 @@ func TestLiveWritesTheInstructionPrefixOnTheFirstRequest(t *testing.T) {
 	if second.Usage.CacheRead < first.Usage.CacheWrite {
 		t.Fatalf("the second send read %d of the %d the first wrote",
 			second.Usage.CacheRead, first.Usage.CacheWrite)
+	}
+}
+
+func redSquarePNG(t *testing.T) []byte {
+	t.Helper()
+	img := image.NewRGBA(image.Rect(0, 0, 64, 64))
+	draw.Draw(img, img.Bounds(), &image.Uniform{C: color.RGBA{R: 220, G: 20, B: 20, A: 255}}, image.Point{}, draw.Src)
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, img); err != nil {
+		t.Fatalf("encoding the probe image: %v", err)
+	}
+	return buf.Bytes()
+}
+
+func TestLiveDescribesAPastedImage(t *testing.T) {
+	wire := liveWire(t)
+	messages := []llm.Message{{Role: llm.RoleUser, Content: "What single color is this square? Reply with one word.",
+		Images: []llm.Image{{MediaType: "image/png", Data: redSquarePNG(t)}}}}
+	result, dump, err := wire.Ask(context.Background(), Request{MaxTokens: 16, Messages: messages})
+	t.Logf("request dump:\n%s", dump)
+	if err != nil {
+		t.Fatalf("asking: %v", err)
+	}
+	t.Logf("model %s content %q usage %+v", result.Model, result.Content, result.Usage)
+	if result.Content == "" {
+		t.Fatal("the live turn returned no content")
+	}
+	if !strings.Contains(strings.ToLower(result.Content), "red") {
+		t.Fatalf("the model described the red square as %q, want it naming red", result.Content)
 	}
 }
 

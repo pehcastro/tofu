@@ -1,3 +1,2 @@
 subscription: claude
 use: default
-context_tokens: 1000000

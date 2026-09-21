@@ -7,8 +7,8 @@ import (
 	"strconv"
 	"testing"
 
+	"tofu/internal/judge/gate"
 	"tofu/internal/judge/ledger"
-	"tofu/internal/judge/policy"
 	"tofu/internal/judge/state"
 	"tofu/internal/llm"
 	"tofu/internal/turn"
@@ -44,8 +44,8 @@ func (t *echoTool) Run(context.Context, json.RawMessage) (turn.Result, error) {
 
 type shadowGate struct {
 	writer  *ledger.Writer
-	pol     policy.Policy
-	mode    policy.Mode
+	pol     gate.Rule
+	mode    gate.Mode
 	reason  string
 	written []ledger.Row
 }
@@ -79,28 +79,28 @@ func stopNowAnswers(wording int) []ledger.Answer {
 	}
 }
 
-func shippedPolicy(t *testing.T) (policy.Policy, policy.Resolution) {
+func shippedRule(t *testing.T) (gate.Rule, gate.Resolution) {
 	t.Helper()
-	pol, _, err := state.StopCheckPolicy()
+	pol, _, err := state.StopCheckRule()
 	if err != nil {
-		t.Fatalf("loading the shipped stop_check policy: %v", err)
+		t.Fatalf("loading the shipped stop_check rule: %v", err)
 	}
-	return pol, policy.Resolve(pol, policy.LockLookup{}, policy.Current{})
+	return pol, gate.Resolve(pol, gate.LockLookup{}, gate.Current{})
 }
 
-func TestTheShippedPolicyResolvesToShadow(t *testing.T) {
-	pol, resolution := shippedPolicy(t)
-	if !pol.ModeDeclared || pol.Mode != policy.ModeShadow {
-		t.Fatalf("the shipped policy declares mode %q, want shadow", pol.Mode)
+func TestTheShippedRuleResolvesToShadow(t *testing.T) {
+	pol, resolution := shippedRule(t)
+	if !pol.ModeDeclared || pol.Mode != gate.ModeShadow {
+		t.Fatalf("the shipped rule declares mode %q, want shadow", pol.Mode)
 	}
-	if resolution.Mode != policy.ModeShadow {
-		t.Fatalf("policy.Resolve made stop_check %s: %s", resolution.Mode, resolution.Reason)
+	if resolution.Mode != gate.ModeShadow {
+		t.Fatalf("gate.Resolve made stop_check %s: %s", resolution.Mode, resolution.Reason)
 	}
 	t.Logf("stop_check resolves to %s: %s", resolution.Mode, resolution.Reason)
 }
 
 func TestAStopDecisionRecordedMidTurnInShadowDoesNotEndTheTurn(t *testing.T) {
-	pol, resolution := shippedPolicy(t)
+	pol, resolution := shippedRule(t)
 	dir := t.TempDir()
 	gate := &shadowGate{writer: ledger.NewWriter(dir), pol: pol, mode: resolution.Mode, reason: resolution.Reason}
 
@@ -118,7 +118,7 @@ func TestAStopDecisionRecordedMidTurnInShadowDoesNotEndTheTurn(t *testing.T) {
 		Tools:          turn.NewRegistry(&echoTool{}),
 		Gate:           gate,
 		Task:           "list the folder",
-		Caps:           turn.Caps{MaxSteps: 10, MaxDecisions: 10},
+		Caps:           turn.Caps{MaxSteps: 10},
 		ResultBytesCap: 4096,
 	})
 	if err != nil {

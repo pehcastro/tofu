@@ -12,10 +12,12 @@ import (
 
 	app "tofu/interface/tui"
 	"tofu/interface/tui/crew"
+	"tofu/interface/tui/fixture"
 	"tofu/interface/tui/frame"
 	"tofu/interface/tui/paste"
 	"tofu/interface/tui/session"
 	"tofu/interface/tui/settings"
+	"tofu/internal/konst"
 )
 
 const (
@@ -36,7 +38,7 @@ func benchApp() *app.App {
 		Wires:   func() []app.Wire { return []app.Wire{{Name: "anthropic", Model: "claude-opus-5"}} },
 		Paths:   benchRepoPaths,
 		Now:     func() time.Time { return at },
-		Turn:    func(context.Context, string, string, func(app.Event)) {},
+		Turn:    func(context.Context, string, string, app.CalledFromInsideTheTurnAndNeverAfterItReturns) {},
 		Providers: []settings.Provider{
 			{Name: "anthropic", State: "oauth  62% of the 7d window, resets 18:00", Source: "the credential store"},
 			{Name: "openrouter", Key: "sk-or-v1-77c1f0b6e5a94d2f8badc0ffee1234567890abcd", State: "ok", Source: ".env at ~/.tofu/.env"},
@@ -46,7 +48,7 @@ func benchApp() *app.App {
 	})
 	built.Init()
 	built.Update(tea.WindowSizeMsg{Width: benchWidth, Height: benchHeight})
-	built.Update(app.Event{Kind: app.EventContext, Context: frame.Context{Used: 118000, Budget: 250000}})
+	built.Update(app.Event{Kind: app.EventContext, Context: fixture.Context()})
 	built.Update(app.Event{Kind: app.EventForkStart})
 	for step := range benchTranscript {
 		call := "c" + strconv.Itoa(step)
@@ -491,15 +493,14 @@ func setupApp(t *testing.T, width, height int) *app.App {
 }
 
 const (
-	frameBudget = 16700 * time.Microsecond
+	frameBudget = konst.FrameBudgetMicros * time.Microsecond
 	framesTimed = 100
-	timedRounds = 3
 )
 
 func TestTheSetupViewDrawsInsideTheFrameBudget(t *testing.T) {
 	for _, size := range []struct{ width, height int }{{80, 24}, {120, 36}} {
 		built := setupApp(t, size.width, size.height)
-		for round := range timedRounds {
+		for round := range konst.FrameBudgetAttempts {
 			began := time.Now()
 			for range framesTimed {
 				_ = built.View()

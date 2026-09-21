@@ -1,0 +1,112 @@
+package sys
+
+import (
+	"io/fs"
+	"os"
+	"path/filepath"
+	"testing"
+)
+
+func TestNoSourceRootHoldsARecordedStateDirectory(t *testing.T) {
+	root := SourceRoot()
+	if _, err := os.Stat(filepath.Join(root, "go.mod")); err != nil {
+		t.Fatalf("this guard reads the source tree and %s is not it: %v", root, err)
+	}
+	var held []string
+	for _, source := range []string{"bench", "cmd", "interface", "catalog", "internal"} {
+		walked := filepath.Join(root, source)
+		err := filepath.WalkDir(walked, func(path string, entry fs.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			if !entry.IsDir() {
+				return nil
+			}
+			if entry.Name() == StateDirName || entry.Name() == LegacyStateDirName {
+				held = append(held, path)
+				return fs.SkipDir
+			}
+			return nil
+		})
+		if err != nil {
+			t.Fatalf("walking %s: %v", walked, err)
+		}
+	}
+	if len(held) > 0 {
+		t.Fatalf("a source root holds a recorded state directory, which a test wrote by running with its own package as the working directory: %v", held)
+	}
+}
+
+func TestATestInsideTheSourceTreeGetsAStateDirectoryOutsideIt(t *testing.T) {
+	inside, err := ProjectStateDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if InsideSourceTree(inside) {
+		t.Fatalf("a test working in the source tree was handed %s, which is in the source tree", inside)
+	}
+	t.Logf("a test working in %s records into %s", mustGetwd(t), inside)
+
+	t.Chdir(t.TempDir())
+	outside, err := ProjectStateDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := filepath.Join(mustGetwd(t), StateDirName); outside != want {
+		t.Fatalf("outside the source tree the project state directory is %s, want %s", outside, want)
+	}
+}
+
+func TestATestWorkingAtTheSourceRootItselfGetsAStateDirectoryOutsideIt(t *testing.T) {
+	t.Chdir(SourceRoot())
+	dir, err := ProjectStateDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if InsideSourceTree(dir) {
+		t.Fatalf("a test working at the source root was handed %s, which is the owner's own state directory", dir)
+	}
+}
+
+func TestTheRedirectedHomeIsNeitherTheOwnersNorTheProjects(t *testing.T) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir, err := HomeConfigDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if dir == StateDir(home) {
+		t.Fatalf("a test that set no home was handed %s, where the live credential and the credential database live", dir)
+	}
+	project, err := ProjectStateDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if dir == project {
+		t.Fatalf("the redirected home and the redirected project are both %s, and a layered read cannot tell them apart", dir)
+	}
+}
+
+func TestAHomeTheTestChoseIsTheHomeItGets(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	dir, err := HomeConfigDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := filepath.Join(home, StateDirName); dir != want {
+		t.Fatalf("a test that chose %s was handed %s, want %s", home, dir, want)
+	}
+}
+
+func mustGetwd(t *testing.T) string {
+	t.Helper()
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return wd
+}

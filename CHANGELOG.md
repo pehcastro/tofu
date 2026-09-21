@@ -10,11 +10,124 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 
 ## Unreleased
 
+## 0.4.6 - 2026-09-21
+
+A rule file with one bad number no longer turns the gate off, a failed request is tried again, and the mouse works.
+
+### Fixed
+
+- **A tool gate rule that cannot be satisfied now refuses to start a turn instead of running every call unjudged.** A missing key and an unusable rule were one branch, and both left the gate off behind the same banner. They are two now and they read differently on screen. **There was also no range check at all**, so a threshold of 1.85 on a zero to one scale loaded cleanly and asked the model anyway.
+- **Both subscription wires retry.** One overloaded answer used to end a turn five steps in. The retry window is the connection, never the stream, so a retried request can never repeat text already on your screen. **A step can now put five requests on the wire, and a retried one may still bill.**
+- **A one letter answer no longer approves a gate ask.** The answers are `1`, `2` and `3`. Typing a sentence that began with `a` under an open ask used to allow the call on its first character.
+- A pale column down the left of the composer. It was a border glyph painted over the tint, and the tint is meant to be the only edge.
+- An id typed from the transcript reaches the work view. It was matched against the start of an id where the screen draws the end.
+
 ### Added
 
-- Every duration reads the same way, because one rule now writes all of them instead of three. **The turn clock changes shape**: a turn of two minutes and fourteen seconds reads `2m 14s` where it read `2m14s`, matching the hours and days that already carried a space.
-- A `github_pr_diff` tool. It takes a pull request number, a full URL, or nothing meaning the current branch, and shells out to `gh` rather than holding a token of its own. `gh` missing and `gh` unauthenticated each get their own refusal saying what to do, instead of a wall of standard error.
-- The model's words appear as it writes them. Before this the interface drew nothing until a whole step finished, including its tool calls, so a long answer was a spinner. The text still lands in the record as one message, not as a thousand fragments.
+- **The mouse.** The five tabs and any trace id are clickable. Everything else on the screen still selects with a drag, and a drag that starts on a tab selects instead of switching.
+- **A gate ask says what tripped it in words**, using the wording the judge itself was given rather than a scale invented here. A decision recorded before this still prints its numbers.
+- **A command proxy, off by default**, set in `catalog/tools/shell/proxy.yaml`. It rewrites a shell command before the gate sees it, so the ledger records the command that actually ran. A project's own filter file is refused, and a proxy that crashes falls back to the raw command.
+- **`README.md`.** The repository now says what tofu is in its first line, that it is personal and not released, which judgments lost to their free arm and are switched off with the numbers that say so, how to build and drive the binary from a fresh checkout, and where in `bench/` the numbers live. There is still no `LICENSE`, so the default is all rights reserved.
+
+### Measured
+
+- A pasted screenshot costs about 1,765 tokens. 190,476 bytes at 1536 by 850, measured against the same turn without it and cross-checked against the vendor's own area rule. **File size says almost nothing about the cost.**
+- A recorded session runs a median of 7 tool calls and at most 55. 1.5 percent of tool result bytes come off losslessly, and `glob` is 92 percent of the corpus by size with none removable.
+- Fifty three production failures published by another harness were checked against this tree: five were real and are named in `.local/boji/planning/doing/known-failures.md`.
+
+### Removed
+
+- **The `grep` tool is gone. `search` is the only way to find text.** Over a tree of 13,140 files the two tools took 48.5 s and 37 s for the same query, and returned 133 MB against 17 KB. **The removal is about the bytes, not the seconds:** a tool that hands back 133 MB spends a context window on one call. `grep` could not be capped, because every cap tried cost half the correct answers on a thirty question bench, so it goes rather than shrinks. `search` now says in its own description that it finds text and that there is no grep tool, so a model does not reach for what is not there.
+
+### Changed
+
+- **`tofu search` reports what it scanned.** A call says how many files it looked at and how many it returned, and stops after 1,200 candidates rather than reading a whole tree. The cap has never fired on a real question.
+
+## 0.4.5 - 2026-09-21
+
+What is happening right now has its own line, and five things on screen have their own colour.
+
+### Added
+
+- **A progress line under the running summary.** The summary carries the counters and the line beneath it carries the one call happening now, with a spinner while it runs. It replaces itself, so a turn with twelve tool calls is still two lines. **The sub-agents view draws the same line for a child.**
+- Five things that were all the same dim now read as themselves: a tool call, a shell command, a file path, an event id, and a finished call.
+- Whether the running line counts shell calls separately is a setting.
+
+### Changed
+
+- **The separator above the composer is gone.** The tint already says where the input begins and two marks for one boundary is one too many.
+- **The composer has a blank row above and below its text, inside the tint**, so it reads as an area rather than a strip with words in it.
+
+### Fixed
+
+- **A pasted image deleted from the message was still attached.** Two separate paths carried it: the chip list under the composer, and a list of files on disk that never looked at the message at all. **Both now keep only what the message still refers to.**
+
+## 0.4.4 - 2026-09-21
+
+He ran it and wrote down what it drew.
+
+### Added
+
+- **`tofu frame` renders the interface to standard output and exits**, at any width and height, with `--plain` to strip the colour. The interface can now be read without being run, which is how three of the fixes below were found.
+- A progress line is not here yet. What is: the running line now reads `· (12) tools · jev 6 · shell (1) · 44s · [#c11]` and never names a tool.
+
+### Changed
+
+- **The clock starts when you press enter and stops when you have the final answer.** It no longer restarts on a phase, a request or a tool call, and only the word beside it changes. `requesting` appears once, before the first response of a message, and never again in that turn.
+- **A short id is the last six characters of the real one, not the first.** Every session id begins `turn-` and a hex timestamp, so for months every id on screen was the same six characters: `#turn-1` under everything.
+- **The running line counts tools rather than naming them.** A shell keeps its own count, because a process that outlives its call is a different kind of thing.
+- Headings render as headings. A second level heading printed its own hash marks, and every markdown fixture was a short handwritten string, so nothing caught it. The fixture is now a real recorded answer of 583 words.
+- Brackets mean a thing can be activated, `[1] chat` and `[#c11]`, and the whole label is the target, not the bracket.
+- A finished turn reads `cooked for 44s`.
+- **The arrow keys belong to the input and never move the transcript.** The wheel, `pgup` and `pgdown` scroll. No key does both.
+- The composer's tint covers every row of it, at every colour depth.
+- A shell command draws in its own colour rather than the same dim as every other tool call.
+
+### Fixed
+
+- **The vendor's own tool-use id was on screen.** `#toolu_` was Anthropic's identifier for a call, printed directly. The interface mints its own id per call and pairs it with the result.
+- The placeholder's first character looked like a leftover letter you could not delete. It was the terminal cursor drawn as a block over it, now a bar.
+- The greeting stayed at the top of the transcript for the whole session. It goes at the first message.
+- A model named by a subscription is drawn that way everywhere, including the frame header, which still read `openai/gpt-5.6-sol` for a model a Codex subscription serves.
+- Three placeholder examples, one picked per session, instead of an instruction that repeated the hint line below it.
+
+## 0.4.3 - 2026-09-21
+
+The interface he designed, and the first tool a judgment clearly wins.
+
+### Added
+
+- Five views, on five digits: chat, work, file edits, sub-agents and shells. **Chat folds every tool call into one running line and never draws a row per call.** The command, the result size and the gate verdict all move to work, which draws each call whole with its arguments and its output. `ctrl+o` jumps to work rather than expanding the transcript.
+- **Every event carries an id**, drawn as `#a3f9c1`. Typing an id jumps to that event in work. The record holds a full uuid and the screen prints the first six; an id that matches two events resolves to neither rather than picking one.
+- File edits is a diff feed with a sidebar of the agents in the session, active and finished separately. Each change names who made it, where, when and its id. **A path is written as a terminal hyperlink**, so it opens in whatever editor the system already hands it to. Nothing configures an editor.
+- Shells: any process an agent started that outlives its call, a dev server, a build, a test run. `tofu shells list`, `tofu shells log <name>` and `tofu shells kill <name>`, and `k` kills from the view. The registry is a real directory, so the command line and the interface see the same processes.
+- Settings persist. Global and project, project wins, and the view names the file a value came from. A change is on disk before the next keystroke. **A warning appears only when a setting that truly needs a restart has changed**, from a snapshot taken when the screen opened. Typing filters, and a row whose value differs from its default is marked. `tofu settings get|set` reads the same table, and `tofu reload` re-reads rules.
+- **`tofu frame` renders the interface to standard output** at any width and exits, so it can be read without being run. `--plain` strips the colour.
+- A models picker grouped by whatever serves each model, and an update check that runs in the background, never blocks, and stays silent when there is no network.
+- Input history on up and down, restoring the draft. A pasted image becomes a numbered chip where it was pasted, and the sent message draws a tree naming what went with it.
+- Markdown renders while the answer is still streaming. A line already drawn does not change shape when the next delta arrives.
+- `tofu shells` and the settings verbs aside, `konst` gained a memory ceiling and a worker count for mutation runs, and a cap on the diff table.
+
+### Changed
+
+- **A model is named by what pays for it.** `claude-sub/claude-opus-5` when a subscription serves it, `anthropic/claude-opus-5` only when a direct API key does. The same model reached two ways bills two ways and the prefix is the only thing that says which. The suffix is derived from the subscription's own name, so a new one needs no extra field.
+- **The turn has no decision cap.** It ran to forty gated tool calls and stopped mid-sentence. Any cap is a setting now, and zero means none. `--max-decisions` is refused by name.
+- `glob` returns at most 300 paths and says how many matched. Uncapped it returned 6.3 MB for the pattern `*`, and across the recorded corpus that one tool was 94 percent of every byte the model read. **Capping it cuts 93.1 percent of all tool result bytes.**
+- The bottom bar is two rows: context as a value over a value with a bar, both quota windows each with its own percentage and reset, and read, written and cached as three separate numbers. **The reset is the last thing dropped as the terminal narrows**, not the first.
+- The top row reads path, branch, `source/model`, the session name with its id, and the session clock. No version string, no arrow.
+- A blank line separates a person's message from the answer above it, the break between two turns is larger than any break inside one, and the activity block has a gap above it.
+- Sub-agents carry a state rather than a tab each: working, waiting for an answer, in review, parked, errored, finished.
+
+### Fixed
+
+- **A mutation run reached 30.6 GB on the owner's machine.** The runner allowed four test binaries at once at thirty times the clean run with no memory bound, and killing it killed only the wrapper. It now runs one at a time inside a job object with a 4 GiB ceiling the kernel enforces, and cancelling kills the whole tree.
+- `internal/transform`'s diff built a table the size of one file's lines times the other's, with no bound. A large enough diff reached it without any mutation at all. It is guarded before the table is built, so no mutation to the surrounding loops can defeat the guard.
+- The package's own test binary never finished when run outside `go test`, because it hashed the working directory rather than its own. It resolves its own directory now and exits in half a second.
+- A killed process was sometimes recorded as having exited on its own, from a race between the kill and the waiter. Both now agree through one lock.
+- `grep` and `search` walked the whole tree reloading every ignore rule at every directory. The walk over a 3.3 million line tree fell from parity with a full crawl to about a second.
+- Four wall-clock tests asserted the worst frame of a run and failed whenever the machine was busy, at 119 ms against a 16.7 ms budget while the average stayed at 1 ms. They assert the median and print the worst.
+- Two published bench reports carried the owner's email, username and machine paths in transcript rows. Scrubbed, and the transcript column that carried them is gone.
+- The transcript no longer sinks to the bottom of an empty screen, and the fold line stops alternating between grey and blue on every tool call. It carries the tool count, the jev count and the elapsed time, and no longer a byte total.
 
 ## 0.4.2 - 2026-09-21
 

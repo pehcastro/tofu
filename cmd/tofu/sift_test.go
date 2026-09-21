@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"tofu/bench/readworth"
+	"tofu/internal/judge/jev"
 	"tofu/internal/konst"
 	"tofu/internal/sift"
 )
@@ -168,6 +169,7 @@ func TestSiftLiveAgainstTheHandLabels(t *testing.T) {
 	if os.Getenv(liveEnvar) == "" {
 		t.Skipf("set %s=1 to spend real Jev calls", liveEnvar)
 	}
+	jev.AllowLiveCredential(t)
 	tasks := readTasks(t)
 	labels := readLabels(t)
 	names, err := filepath.Glob(filepath.Join(testdataDir(), "corpus", "*.txt"))
@@ -222,6 +224,7 @@ func TestSiftLiveOneMessage(t *testing.T) {
 	if os.Getenv(liveEnvar) == "" {
 		t.Skipf("set %s=1 to spend real Jev calls", liveEnvar)
 	}
+	jev.AllowLiveCredential(t)
 	name := "control-t10"
 	original := readCorpusFile(t, name)
 	rendered, summary, code := runSift(t, []string{"--arm", armJev, "--task", readTasks(t)[name]}, original)

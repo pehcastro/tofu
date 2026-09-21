@@ -35,7 +35,7 @@ func (s *Strip) Render(width int) string {
 		if index == 0 {
 			gap = ""
 		}
-		label := string(view.Digit) + " " + view.Name
+		label := "[" + string(view.Digit) + "] " + view.Name
 		if column+widget.Cells(gap)+widget.Cells(label) > width {
 			break
 		}

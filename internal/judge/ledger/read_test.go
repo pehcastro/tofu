@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"tofu/internal/sys"
 )
 
 func canonicalWithTheOutcomeRemoved(t *testing.T, row Row) []byte {
@@ -387,9 +389,9 @@ func TestSummaryCountsRowsAndDates(t *testing.T) {
 
 func TestTheLineTofuDoctorPrintsForTheProjectLedger(t *testing.T) {
 	t.Chdir(t.TempDir())
-	dir, err := Dir()
+	dir, err := sys.LogDir()
 	if err != nil {
-		t.Fatalf("Dir: %v", err)
+		t.Fatalf("LogDir: %v", err)
 	}
 
 	empty, err := Summary(dir)
@@ -413,7 +415,7 @@ func TestTheLineTofuDoctorPrintsForTheProjectLedger(t *testing.T) {
 		t.Fatalf("Summary: %v", err)
 	}
 	if !strings.HasSuffix(filepath.ToSlash(dir), ".tofu/log") {
-		t.Fatalf("the ledger lives at .tofu/log, Dir returned %s", dir)
+		t.Fatalf("the ledger lives at .tofu/log, LogDir returned %s", dir)
 	}
 	if stats.Rows != 9 {
 		t.Fatalf("the doctor line must count 9 rows, it counted %d", stats.Rows)

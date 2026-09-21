@@ -53,8 +53,9 @@ func TestTheTurnRowRoundTripsTheStopReasonAndTheTokensOfARecordedSubscriptionStr
 		Tools:          NewRegistry(tool),
 		Gate:           gate,
 		Task:           "write hello.txt",
-		Caps:           Caps{MaxSteps: 10, MaxDecisions: 10},
+		Caps:           Caps{MaxSteps: 10},
 		ResultBytesCap: 4096,
+		ArtifactDir:    t.TempDir(),
 	}
 
 	row, err := Run(context.Background(), config)

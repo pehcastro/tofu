@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"tofu/internal/llm"
 	"tofu/internal/transport"
 )
 
@@ -119,20 +120,47 @@ func TestUnderscoreToolNameSurvivesTheRoundTrip(t *testing.T) {
 	}
 }
 
-func TestMapStopReasonCollapsesTheWireVocabulary(t *testing.T) {
+func TestMapFinishReasonCollapsesTheWireVocabulary(t *testing.T) {
 	cases := map[string]Stop{
 		"end_turn": StopEnd, "stop_sequence": StopEnd, "pause_turn": StopEnd, "compaction": StopEnd,
 		"max_tokens": StopLength, "model_context_window_exceeded": StopLength,
 		"tool_use": StopToolUse, "refusal": StopError, "sensitive": StopError,
 	}
 	for reason, want := range cases {
-		got, known := MapStopReason(reason)
-		if got != want || !known {
-			t.Fatalf("%q mapped to %s (known %v), want %s", reason, got, known, want)
+		got, handled := llm.MapFinishReason(reason)
+		if got != want || !handled {
+			t.Fatalf("%q mapped to %s (handled %v), want %s", reason, got, handled, want)
 		}
 	}
-	if got, known := MapStopReason("invented_next_week"); got != StopEnd || known {
-		t.Fatalf("an unknown reason mapped to %s (known %v)", got, known)
+	if got, handled := llm.MapFinishReason("invented_next_week"); got != StopEnd || handled {
+		t.Fatalf("an unknown reason mapped to %s (handled %v)", got, handled)
+	}
+}
+
+func TestTheKeyPathAndTheSubscriptionAgreeOnEveryStopReasonEitherWireSends(t *testing.T) {
+	reasons := []string{
+		"stop", "end_turn", "stop_sequence", "pause_turn", "compaction", "completed",
+		"length", "max_tokens", "model_context_window_exceeded", "incomplete:max_output_tokens",
+		"tool_calls", "tool_use", "function_call",
+		"content_filter", "error", "refusal", "sensitive",
+		"invented_next_week",
+	}
+	for _, reason := range reasons {
+		streamed, err := ReadStream(sse(eventMessageStart, eventTextStart, eventTextDelta, eventTextStop,
+			`{"type":"message_delta","delta":{"stop_reason":"`+reason+`"}}`, eventStop), true, nil)
+		if err != nil {
+			t.Fatalf("streaming %q: %v", reason, err)
+		}
+		subscription := llm.OutcomeAfter(streamed.Stop, len(streamed.ToolCalls))
+
+		decoded, err := llm.Decode([]byte(`{"id":"gen-1","model":"m","choices":[{"finish_reason":"` + reason +
+			`","message":{"content":"hi"}}]}`))
+		if err != nil {
+			t.Fatalf("decoding %q: %v", reason, err)
+		}
+		if decoded.Outcome != subscription {
+			t.Errorf("%q is %s on the key path and %s on the subscription path", reason, decoded.Outcome, subscription)
+		}
 	}
 }
 

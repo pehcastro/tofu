@@ -3,14 +3,19 @@ package codex
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
+	"tofu/internal/konst"
 	"tofu/internal/transport"
 )
+
+const statusOverloaded = 529
 
 type capture struct {
 	path   string
@@ -41,6 +46,28 @@ func serve(t *testing.T, token string, body string) (*Wire, *capture) {
 		t.Fatalf("building the wire: %v", err)
 	}
 	return wire, seen
+}
+
+func serveStatus(t *testing.T, status int, header map[string]string, body string) *Wire {
+	t.Helper()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		for name, value := range header {
+			w.Header().Set(name, value)
+		}
+		w.WriteHeader(status)
+		_, _ = io.WriteString(w, body)
+	}))
+	t.Cleanup(server.Close)
+
+	wire, err := New(Config{
+		BaseURL: server.URL + SubscriptionPath,
+		Model:   "gpt-5.5-codex",
+		Token:   func(context.Context) (string, error) { return subscriptionToken(t), nil },
+	})
+	if err != nil {
+		t.Fatalf("building the wire: %v", err)
+	}
+	return wire
 }
 
 func TestAskSendsTheSubscriptionShape(t *testing.T) {
@@ -127,27 +154,23 @@ func TestAskReportsTheRefusedControls(t *testing.T) {
 }
 
 func TestQuotaRejectionIsARateLimit(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("x-codex-primary-used-percent", "100")
-		w.WriteHeader(http.StatusTooManyRequests)
-		_, _ = io.WriteString(w, `{"detail":"You've hit your usage limit."}`)
-	}))
-	defer server.Close()
-
-	wire, err := New(Config{
-		BaseURL: server.URL + SubscriptionPath,
-		Model:   "gpt-5.5-codex",
-		Token:   func(context.Context) (string, error) { return subscriptionToken(t), nil },
-	})
-	if err != nil {
-		t.Fatalf("building the wire: %v", err)
-	}
-	_, _, err = wire.Ask(context.Background(), Request{Messages: hello()})
+	wire := serveStatus(t, http.StatusTooManyRequests,
+		map[string]string{"x-codex-primary-used-percent": "100"},
+		`{"detail":"You've hit your usage limit."}`)
+	_, _, err := wire.Ask(context.Background(), Request{Messages: hello()})
 	if transport.KindOf(err) != transport.KindRateLimit {
 		t.Fatalf("a 429 classified as %v: %v", transport.KindOf(err), err)
 	}
 	if transport.KindOf(err).Fatal() {
 		t.Fatalf("a quota rejection is fatal: %v", err)
+	}
+}
+
+func TestRequestTimeoutIsATimeoutTheWayTransportReadsIt(t *testing.T) {
+	wire := serveStatus(t, http.StatusRequestTimeout, nil, `{"detail":"took too long"}`)
+	_, _, err := wire.Ask(context.Background(), Request{Messages: hello()})
+	if got := transport.KindOf(err); got != transport.KindTimeout {
+		t.Fatalf("a 408 classified as %s: %v", got, err)
 	}
 }
 
@@ -158,6 +181,54 @@ func TestMissingTokenFailsClosed(t *testing.T) {
 	}
 	if _, _, err := wire.Ask(context.Background(), Request{Messages: hello()}); transport.KindOf(err) != transport.KindMissingCredential {
 		t.Fatalf("an empty token gave %v", err)
+	}
+}
+
+func TestAnErrorBodyIsTruncatedToTheTransportDetailCap(t *testing.T) {
+	wire := serveStatus(t, http.StatusInternalServerError, nil,
+		strings.Repeat("e", konst.TransportErrorDetailBytes*4))
+	_, _, err := wire.Ask(context.Background(), Request{Messages: hello()})
+	var failure *transport.Error
+	if !errors.As(err, &failure) {
+		t.Fatalf("error is %v", err)
+	}
+	if len(failure.Detail) != konst.TransportErrorDetailBytes {
+		t.Fatalf("the detail is %d bytes and the cap is %d", len(failure.Detail), konst.TransportErrorDetailBytes)
+	}
+}
+
+func TestAnOverloadedSubscriptionAnswerIsRetriedAndTheStreamStillArrives(t *testing.T) {
+	served := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		served++
+		if served == 1 {
+			w.WriteHeader(statusOverloaded)
+			_, _ = io.WriteString(w, `{"detail":"overloaded"}`)
+			return
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = io.WriteString(w, sse(textItemAdded, textDelta, textItemDone, responseDone))
+	}))
+	t.Cleanup(server.Close)
+
+	wire, err := New(Config{
+		BaseURL:   server.URL + SubscriptionPath,
+		Model:     "gpt-5.5-codex",
+		Token:     func(context.Context) (string, error) { return subscriptionToken(t), nil },
+		Transport: transport.Config{Retries: konst.TurnRetries, Backoff: time.Millisecond, MaxBackoff: time.Millisecond},
+	})
+	if err != nil {
+		t.Fatalf("building the wire: %v", err)
+	}
+	result, _, err := wire.Ask(context.Background(), Request{Messages: hello()})
+	if err != nil {
+		t.Fatalf("one 529 ended the turn: %v", err)
+	}
+	if served != 2 {
+		t.Fatalf("the stub saw %d requests, want the failure and one retry", served)
+	}
+	if result.Content != "ok" {
+		t.Fatalf("result is %+v", result)
 	}
 }
 

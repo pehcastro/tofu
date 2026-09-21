@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"tofu/internal/judge/ledger"
+	"tofu/internal/sys"
 	"tofu/internal/transport"
 )
 
@@ -73,7 +74,7 @@ func writeFixtureLedger(t *testing.T, dir string, decide ...func(*ledger.Row)) (
 
 func TestWhyLastPrintsTheMostRecentRowWithEveryDistribution(t *testing.T) {
 	t.Chdir(t.TempDir())
-	dir, err := ledger.Dir()
+	dir, err := sys.LogDir()
 	if err != nil {
 		t.Fatalf("Dir: %v", err)
 	}
@@ -105,7 +106,7 @@ func TestWhyLastPrintsTheMostRecentRowWithEveryDistribution(t *testing.T) {
 
 func TestWhyPrintsTheRuleAndThresholdWhenAReasonIsPresent(t *testing.T) {
 	t.Chdir(t.TempDir())
-	dir, err := ledger.Dir()
+	dir, err := sys.LogDir()
 	if err != nil {
 		t.Fatalf("Dir: %v", err)
 	}
@@ -131,15 +132,15 @@ func TestWhyPrintsTheRuleAndThresholdWhenAReasonIsPresent(t *testing.T) {
 	if !strings.Contains(text, "ambiguous  user_requested sat inside the dead band") {
 		t.Fatalf("expected the ambiguous question to be named, got:\n%s", text)
 	}
-	if strings.Contains(text, "absent: no policy or calibration lock yet") {
+	if strings.Contains(text, "absent: no rule or calibration lock yet") {
 		t.Fatalf("a row with a reason must not print the absent line, got:\n%s", text)
 	}
-	t.Logf("tofu why --last (policy-bearing, ambiguous):\n%s", text)
+	t.Logf("tofu why --last (rule-bearing, ambiguous):\n%s", text)
 }
 
 func TestWhyOnAReplayedRowNamesTheRowItReplays(t *testing.T) {
 	t.Chdir(t.TempDir())
-	dir, err := ledger.Dir()
+	dir, err := sys.LogDir()
 	if err != nil {
 		t.Fatalf("Dir: %v", err)
 	}
@@ -172,7 +173,7 @@ func TestWhyOnAReplayedRowNamesTheRowItReplays(t *testing.T) {
 
 func TestWhyOnAnUnknownIDExitsTwoAndNamesWhereItLooked(t *testing.T) {
 	t.Chdir(t.TempDir())
-	dir, err := ledger.Dir()
+	dir, err := sys.LogDir()
 	if err != nil {
 		t.Fatalf("Dir: %v", err)
 	}
@@ -197,11 +198,11 @@ func TestWhyOnAnUnknownIDExitsTwoAndNamesWhereItLooked(t *testing.T) {
 
 func TestWhyJSONParsesAndCarriesEveryStoredField(t *testing.T) {
 	t.Chdir(t.TempDir())
-	dir, err := ledger.Dir()
+	dir, err := sys.LogDir()
 	if err != nil {
 		t.Fatalf("Dir: %v", err)
 	}
-	modeReason := "declared shadow in catalog/policy/tool_gate@1.yaml"
+	modeReason := "declared shadow in catalog/general/rules/tool_gate@1.yaml"
 	_, replay := writeFixtureLedger(t, dir, func(r *ledger.Row) {
 		r.Verdict = ledger.VerdictAllow
 		r.Policy = "tool_gate"
@@ -262,7 +263,7 @@ func TestWhyJSONParsesAndCarriesEveryStoredField(t *testing.T) {
 
 func TestWhyStateBuilderReadsDifferentlyForAnOldSchemaRowAndAnUnadoptedWriter(t *testing.T) {
 	t.Chdir(t.TempDir())
-	dir, err := ledger.Dir()
+	dir, err := sys.LogDir()
 	if err != nil {
 		t.Fatalf("Dir: %v", err)
 	}
@@ -339,7 +340,7 @@ func TestWhyNeedsAnIDOrLast(t *testing.T) {
 
 func TestWhyLastFiveTakesFiveMostRecentAtAPoint(t *testing.T) {
 	t.Chdir(t.TempDir())
-	dir, err := ledger.Dir()
+	dir, err := sys.LogDir()
 	if err != nil {
 		t.Fatalf("Dir: %v", err)
 	}
@@ -401,7 +402,7 @@ func writePrecedentLedger(t *testing.T, dir string) (target, nearest, sameCall l
 
 func TestWhyListsThePrecedentsAndPutsTheSameCallFirst(t *testing.T) {
 	t.Chdir(t.TempDir())
-	dir, err := ledger.Dir()
+	dir, err := sys.LogDir()
 	if err != nil {
 		t.Fatalf("Dir: %v", err)
 	}
@@ -428,7 +429,7 @@ func TestWhyListsThePrecedentsAndPutsTheSameCallFirst(t *testing.T) {
 
 func TestWhyJSONCarriesTheWholeShortlist(t *testing.T) {
 	t.Chdir(t.TempDir())
-	dir, err := ledger.Dir()
+	dir, err := sys.LogDir()
 	if err != nil {
 		t.Fatalf("Dir: %v", err)
 	}
@@ -472,7 +473,7 @@ func TestWhyMakesNoNetworkCall(t *testing.T) {
 	}
 
 	t.Chdir(t.TempDir())
-	dir, err := ledger.Dir()
+	dir, err := sys.LogDir()
 	if err != nil {
 		t.Fatalf("Dir: %v", err)
 	}
@@ -491,7 +492,7 @@ func TestWhyMakesNoNetworkCall(t *testing.T) {
 
 func TestWhyPrintsTheStateTheBuilderProduced(t *testing.T) {
 	t.Chdir(t.TempDir())
-	dir, err := ledger.Dir()
+	dir, err := sys.LogDir()
 	if err != nil {
 		t.Fatalf("Dir: %v", err)
 	}
@@ -517,7 +518,7 @@ func TestWhyPrintsTheStateTheBuilderProduced(t *testing.T) {
 
 func TestWhyOnAnElidedRowSaysWhereTheWholeStateIs(t *testing.T) {
 	t.Chdir(t.TempDir())
-	dir, err := ledger.Dir()
+	dir, err := sys.LogDir()
 	if err != nil {
 		t.Fatalf("Dir: %v", err)
 	}
@@ -547,7 +548,7 @@ func TestWhyOnAnElidedRowSaysWhereTheWholeStateIs(t *testing.T) {
 
 func TestWhyOnARowFromBeforeTheStateBodyDoesNotFail(t *testing.T) {
 	t.Chdir(t.TempDir())
-	dir, err := ledger.Dir()
+	dir, err := sys.LogDir()
 	if err != nil {
 		t.Fatalf("Dir: %v", err)
 	}
@@ -575,7 +576,7 @@ func TestWhyOnARowFromBeforeTheStateBodyDoesNotFail(t *testing.T) {
 
 func TestWhySeparatesARowThatPredatesTheStateBodyFromOneThatSimplyHasNone(t *testing.T) {
 	t.Chdir(t.TempDir())
-	dir, err := ledger.Dir()
+	dir, err := sys.LogDir()
 	if err != nil {
 		t.Fatalf("Dir: %v", err)
 	}
@@ -597,25 +598,25 @@ func TestWhySeparatesARowThatPredatesTheStateBodyFromOneThatSimplyHasNone(t *tes
 }
 
 func TestWhySaysAuthorityCouldNotRelaxADenyAndNamesTheQuestion(t *testing.T) {
-	shipped, err := filepath.Abs(filepath.Join("..", "..", "catalog", "policy", "tool_gate@1.yaml"))
+	shipped, err := filepath.Abs(filepath.Join("..", "..", "catalog", "general", "rules", "tool_gate@1.yaml"))
 	if err != nil {
 		t.Fatalf("Abs: %v", err)
 	}
-	policyBody, err := os.ReadFile(shipped)
+	ruleBody, err := os.ReadFile(shipped)
 	if err != nil {
-		t.Fatalf("reading the shipped policy: %v", err)
+		t.Fatalf("reading the shipped rule: %v", err)
 	}
 	root := t.TempDir()
-	planted := filepath.Join(root, "catalog", "policy", "tool_gate@1.yaml")
+	planted := filepath.Join(root, "catalog", "general", "rules", "tool_gate@1.yaml")
 	if err := os.MkdirAll(filepath.Dir(planted), 0o755); err != nil {
 		t.Fatalf("MkdirAll: %v", err)
 	}
-	if err := os.WriteFile(planted, policyBody, 0o644); err != nil {
+	if err := os.WriteFile(planted, ruleBody, 0o644); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}
 	t.Chdir(root)
 
-	dir, err := ledger.Dir()
+	dir, err := sys.LogDir()
 	if err != nil {
 		t.Fatalf("Dir: %v", err)
 	}
@@ -660,7 +661,7 @@ func TestWhySaysAuthorityCouldNotRelaxADenyAndNamesTheQuestion(t *testing.T) {
 
 func TestWhyNamesTheQuestionThatRelaxedAVerdict(t *testing.T) {
 	t.Chdir(t.TempDir())
-	dir, err := ledger.Dir()
+	dir, err := sys.LogDir()
 	if err != nil {
 		t.Fatalf("Dir: %v", err)
 	}
@@ -687,7 +688,7 @@ func TestWhyNamesTheQuestionThatRelaxedAVerdict(t *testing.T) {
 
 func TestWhyStateFetchesAnElidedBodyAndTheRowPointsAtIt(t *testing.T) {
 	t.Chdir(t.TempDir())
-	dir, err := ledger.Dir()
+	dir, err := sys.LogDir()
 	if err != nil {
 		t.Fatalf("Dir: %v", err)
 	}

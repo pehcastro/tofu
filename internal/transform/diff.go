@@ -3,6 +3,8 @@ package transform
 import (
 	"fmt"
 	"strings"
+
+	"tofu/internal/konst"
 )
 
 const diffContextLines = 3
@@ -25,13 +27,23 @@ func splitLines(text string) []string {
 	return split
 }
 
+func oversizedForDiff(oldLines, nextLines int) bool {
+	return oldLines*nextLines > konst.DiffTableMaxCells
+}
+
 func Hunks(before, after string) []Hunk {
 	old, next := splitLines(before), splitLines(after)
+	if oversizedForDiff(len(old), len(next)) {
+		return []Hunk{{Removed: old, Added: next}}
+	}
 	table := longestCommon(old, next)
 	i, j := 0, 0
 	aligned := func() bool { return i < len(old) && j < len(next) && old[i] == next[j] }
 	var hunks []Hunk
-	for i < len(old) || j < len(next) {
+	for range len(old) + len(next) {
+		if i >= len(old) && j >= len(next) {
+			break
+		}
 		if aligned() {
 			i++
 			j++

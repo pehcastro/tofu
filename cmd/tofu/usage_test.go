@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"tofu/interface/tui/fixture"
 	"tofu/interface/tui/frame"
 	"tofu/internal/llm/quota"
 	"tofu/internal/transport"
@@ -93,30 +94,67 @@ func TestTheQuotaColourIsAThresholdAtHalfAndFourFifths(t *testing.T) {
 	}
 }
 
-func TestTheSameQuotaRendersInUsageAndInTheStatusBar(t *testing.T) {
+func TestBothQuotaWindowsRenderInUsageAndInTheStatusBar(t *testing.T) {
 	now := usageMoment()
-	var meter string
+	var anthropicMeter, codexMeter string
 	for _, line := range strings.Split(usageText(usageFixture(now), plain, now), "\n") {
 		if strings.Contains(line, "71%") {
 			_, after, _ := strings.Cut(line, "7d")
-			meter = strings.TrimSpace(after)
+			anthropicMeter = strings.TrimSpace(after)
+		}
+		if strings.Contains(line, "13%") {
+			_, after, _ := strings.Cut(line, "7d")
+			codexMeter = strings.TrimSpace(after)
 		}
 	}
-	if meter == "" {
-		t.Fatal("tofu usage draws no meter for the 7d window")
+	if anthropicMeter == "" || codexMeter == "" {
+		t.Fatalf("tofu usage draws no meter for one of the 7d windows: anthropic %q, codex %q", anthropicMeter, codexMeter)
+	}
+	quotas := quotasFrom([]pollResult{
+		{report: quota.Report{Provider: quota.Anthropic, Windows: []quota.Window{
+			{ID: "7d", Used: quota.Used{Fraction: 0.71, Reported: true}, ResetsAt: now.Add(75*time.Hour + 26*time.Minute)},
+		}}},
+		{report: quota.Report{Provider: quota.Codex, Windows: []quota.Window{
+			{ID: "7d", Used: quota.Used{Fraction: 0.13, Reported: true}, ResetsAt: now.Add(160*time.Hour + 15*time.Minute)},
+		}}},
+	})
+	if len(quotas) != 2 {
+		t.Fatalf("quotasFrom returned %d quotas, want one per provider: %+v", len(quotas), quotas)
 	}
 	status := frame.Status{
-		Context: frame.Context{Used: 118000, Budget: 250000},
+		Context: fixture.Context(),
 		At:      now,
-		Quota: frame.Quota{
-			Label:    "anthropic 7d",
-			Fraction: 0.71,
-			Reported: true,
-			ResetsAt: now.Add(75*time.Hour + 26*time.Minute),
-		},
+		Quotas:  quotas,
 	}
-	if bar := frame.Bar(status, 200); !strings.Contains(bar, meter) {
-		t.Fatalf("the status bar does not draw the quota the way tofu usage does\nusage %q\nbar   %q", meter, bar)
+	bar := frame.Bar(status, 200)
+	if !strings.Contains(bar, anthropicMeter) || !strings.Contains(bar, codexMeter) {
+		t.Fatalf("the status bar does not draw both quota windows the way tofu usage does\nusage anthropic %q, codex %q\nbar %q", anthropicMeter, codexMeter, bar)
+	}
+}
+
+func TestAThirdQuotaSourceAppearsByAddingDataAlone(t *testing.T) {
+	now := usageMoment()
+	two := quotasFrom([]pollResult{
+		{report: quota.Report{Provider: quota.Anthropic, Windows: []quota.Window{
+			{ID: "7d", Used: quota.Used{Fraction: 0.71, Reported: true}, ResetsAt: now},
+		}}},
+		{report: quota.Report{Provider: quota.Codex, Windows: []quota.Window{
+			{ID: "7d", Used: quota.Used{Fraction: 0.13, Reported: true}, ResetsAt: now},
+		}}},
+	})
+	three := quotasFrom([]pollResult{
+		{report: quota.Report{Provider: quota.Anthropic, Windows: []quota.Window{
+			{ID: "7d", Used: quota.Used{Fraction: 0.71, Reported: true}, ResetsAt: now},
+		}}},
+		{report: quota.Report{Provider: quota.Codex, Windows: []quota.Window{
+			{ID: "7d", Used: quota.Used{Fraction: 0.13, Reported: true}, ResetsAt: now},
+		}}},
+		{report: quota.Report{Provider: "gemini", Windows: []quota.Window{
+			{ID: "7d", Used: quota.Used{Fraction: 0.4, Reported: true}, ResetsAt: now},
+		}}},
+	})
+	if len(two) != 2 || len(three) != 3 {
+		t.Fatalf("adding one more report row gave %d then %d quotas, want 2 then 3", len(two), len(three))
 	}
 }
 

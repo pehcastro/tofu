@@ -94,7 +94,7 @@ func TestAForkTakesTheCurrentRegistry(t *testing.T) {
 		switched = true
 		return Result{Content: "ok"}, nil
 	}}
-	after := &stubTool{name: "grep", result: Result{Content: "ok"}}
+	after := &stubTool{name: "glob", result: Result{Content: "ok"}}
 	model := &stubModel{decisions: []llm.Decision{
 		toolCallDecision(llm.ToolCall{ID: "call-1", Name: "read", Arguments: json.RawMessage(`{}`)}),
 		messageDecision(),
@@ -120,10 +120,10 @@ func TestAForkTakesTheCurrentRegistry(t *testing.T) {
 	if len(model.requests) != 2 {
 		t.Fatalf("expected 2 requests, got %d", len(model.requests))
 	}
-	if hasTool(model.requests[0].Tools, "grep") {
-		t.Fatalf("the request before the fork already carries grep: %v", toolNames(model.requests[0].Tools))
+	if hasTool(model.requests[0].Tools, "glob") {
+		t.Fatalf("the request before the fork already carries glob: %v", toolNames(model.requests[0].Tools))
 	}
-	if !hasTool(model.requests[1].Tools, "grep") {
+	if !hasTool(model.requests[1].Tools, "glob") {
 		t.Fatalf("the request after the fork does not carry the registry current at that point: %v", toolNames(model.requests[1].Tools))
 	}
 }

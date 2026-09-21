@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"testing"
 
 	"tofu/internal/sys"
 	"tofu/internal/transport"
@@ -24,21 +25,38 @@ type Located struct {
 	Length int
 }
 
+const (
+	OpenRouterVariable = "OPENROUTER_KEY"
+	TypeSafeVariable   = "TYPESAFE_API_KEY"
+)
+
+func AllowLiveCredential(tb testing.TB) {
+	sys.AllowLiveCredential(tb)
+}
+
 func Key(envPath string) (string, error) {
-	value, _, err := find(envPath)
+	return KeyFor(envPath, OpenRouterVariable)
+}
+
+func KeyFor(envPath, variable string) (string, error) {
+	value, _, err := find(envPath, variable)
 	return value, err
 }
 
 func Locate(envPath string) (Located, error) {
-	value, located, err := find(envPath)
+	value, located, err := find(envPath, OpenRouterVariable)
 	located.Length = len(value)
 	return located, err
 }
 
-func find(envPath string) (string, Located, error) {
-	value, name := os.Getenv("OPENROUTER_KEY"), "OPENROUTER_KEY"
-	if trimmed := strings.TrimSpace(value); trimmed != "" {
-		return trimmed, Located{Name: name, Source: SourceEnvironment}, nil
+func find(envPath, name string) (string, Located, error) {
+	hidden := sys.CredentialsHiddenFromTests()
+	value := strings.TrimSpace(os.Getenv(name))
+	if hidden && sys.EqualsOwnerCredential(name, value) {
+		value = ""
+	}
+	if value != "" {
+		return value, Located{Name: name, Source: SourceEnvironment}, nil
 	}
 	if envPath == "" {
 		return "", Located{Name: name, Source: SourceMissing}, transport.Fail("jev.Key", transport.KindMissingCredential, nil, "%s is not set", name)
@@ -48,6 +66,9 @@ func find(envPath string) (string, Located, error) {
 		abs = envPath
 	}
 	missing := Located{Name: name, Source: SourceMissing, Path: abs}
+	if hidden && sys.IsOwnerCredential(abs) {
+		return "", missing, transport.Fail("jev.Key", transport.KindMissingCredential, nil, "%s is hidden from tests: %s is one of the owner's credential files, and a test that means to spend calls jev.AllowLiveCredential first", name, abs)
+	}
 	present, err := sys.Exists(envPath)
 	if err != nil {
 		return "", missing, transport.Fail("jev.Key", transport.KindMissingCredential, err, "reading %s", envPath)
@@ -55,24 +76,12 @@ func find(envPath string) (string, Located, error) {
 	if !present {
 		return "", missing, transport.Fail("jev.Key", transport.KindMissingCredential, nil, "%s is not set and %s does not exist", name, envPath)
 	}
-	raw, err := sys.ReadFile(envPath)
+	raw, err := sys.ReadCredential(envPath)
 	if err != nil {
 		return "", missing, transport.Fail("jev.Key", transport.KindMissingCredential, err, "reading %s", envPath)
 	}
-	for _, line := range strings.Split(string(raw), "\n") {
-		line = strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(line), "export "))
-		if line == "" || strings.HasPrefix(line, "#") {
-			continue
-		}
-		key, found := strings.CutPrefix(line, name+"=")
-		if !found {
-			continue
-		}
-		key = strings.TrimSpace(key)
-		key = strings.Trim(key, `"'`)
-		if key != "" {
-			return key, Located{Name: name, Source: SourceDotEnv, Path: abs}, nil
-		}
+	if key := sys.CredentialAssignment(string(raw), name); key != "" {
+		return key, Located{Name: name, Source: SourceDotEnv, Path: abs}, nil
 	}
 	return "", missing, transport.Fail("jev.Key", transport.KindMissingCredential, nil, "%s is not set and %s does not carry it", name, envPath)
 }

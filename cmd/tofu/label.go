@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"tofu/internal/judge/ledger"
+	"tofu/internal/sys"
 )
 
 type outcome string
@@ -38,7 +39,7 @@ func labelVerb(args []string, out, errOut io.Writer, now func() time.Time) int {
 	if err != nil {
 		return labelFail(errOut, err)
 	}
-	dir, err := ledger.Dir()
+	dir, err := sys.LogDir()
 	if err != nil {
 		return labelFail(errOut, err)
 	}

@@ -157,6 +157,9 @@ func (m Model) commandLines() []string {
 	lines := make([]string, 0, len(rows))
 	for index, row := range rows {
 		marker, style := unpickedMarker, theme.Dim()
+		if sigil != commandPrefix {
+			style = theme.Path()
+		}
 		if index == picked {
 			marker, style = pickedMarker, theme.Accent()
 		}

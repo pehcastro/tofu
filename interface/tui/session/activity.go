@@ -8,12 +8,13 @@ import (
 	"charm.land/lipgloss/v2"
 
 	"tofu/interface/tui/crew"
+	"tofu/interface/tui/progress"
 	"tofu/interface/tui/theme"
+	"tofu/interface/tui/trace"
 	"tofu/internal/widget"
 )
 
 const (
-	spinFrames    = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
 	elapsedColumn = 5
 	nameColumn    = 10
 	ownsColumn    = 20
@@ -58,7 +59,7 @@ func (m Model) reached() (phase, string) {
 	if m.Awaiting() {
 		return waitingOnYou, ""
 	}
-	if m.inFlight() {
+	if m.inFlight() && !m.respondedOnce {
 		return requesting, ""
 	}
 	for index := len(m.entries) - 1; index >= 0; index-- {
@@ -107,10 +108,11 @@ func (m Model) activityRows() []activity {
 }
 
 func (m Model) phaseSince() time.Duration {
-	if m.phase == requesting {
-		return max(m.now().Sub(m.requested), 0)
+	now := m.now()
+	if !m.waiting.IsZero() {
+		now = m.waiting
 	}
-	return m.elapsed(m.began)
+	return max(now.Sub(m.entered), 0)
 }
 
 func (m Model) activityLines() []string {
@@ -125,7 +127,7 @@ func (m Model) activityLines() []string {
 }
 
 func (m Model) activityLine(row activity, held bool) string {
-	clock := spin(row.since) + " " + widget.Pad(widget.Until(row.since), elapsedColumn)
+	clock := progress.Spin(row.since, TickInterval) + " " + widget.Pad(widget.Until(row.since), elapsedColumn)
 	name := widget.Pad(widget.Fit(row.name, nameColumn), nameColumn)
 	who, spent := name, ""
 	if held {
@@ -143,9 +145,24 @@ func (m Model) activityLine(row activity, held bool) string {
 	return row.style.Render(clock + gap + who + widget.Pad(widget.Fit(row.intent, room), room) + spent)
 }
 
-func spin(since time.Duration) string {
-	frames := []rune(spinFrames)
-	return string(frames[int(since/TickInterval)%len(frames)])
+func (m Model) progressLine(end int) string {
+	if end != len(m.entries) || !m.Busy {
+		return ""
+	}
+	entry := m.entries[end-1]
+	if entry.label() == "" {
+		return ""
+	}
+	line := progress.Line{Label: entry.label(), Live: entry.running()}
+	if line.Live {
+		line.Since, line.Tick = m.elapsed(entry.Started), TickInterval
+	}
+	id := trace.Short(entry.ID)
+	if id == "" {
+		return line.View(m.width)
+	}
+	room := max(m.width-widget.Cells(id+gap), 1)
+	return widget.Pad(line.View(room), room) + gap + theme.ID().Render(id)
 }
 
 func (m Model) inFlight() bool { return !m.requested.IsZero() && m.answered.IsZero() }
@@ -162,6 +179,8 @@ func (m Model) elapsed(at time.Time) time.Duration {
 }
 
 func (m Model) Awaiting() bool { return !m.waiting.IsZero() }
+
+func (m Model) TakesAnswerDigits() bool { return m.Awaiting() && m.composer.Value() == "" }
 
 func (m *Model) markAsked(awaiting bool) {
 	for index := len(m.entries) - 1; index >= 0; index-- {
@@ -185,9 +204,10 @@ func (m *Model) Resume() {
 		return
 	}
 	m.markAsked(false)
-	waited := m.now().Sub(m.waiting)
+	waited := max(m.now().Sub(m.waiting), 0)
 	m.waiting = time.Time{}
 	m.hold(waited)
+	m.entered = m.entered.Add(waited)
 }
 
 func (m *Model) hold(waited time.Duration) {
@@ -214,6 +234,7 @@ func (m *Model) Returned() {
 		return
 	}
 	m.answered = m.now()
+	m.respondedOnce = true
 	waited := m.answered.Sub(m.requested)
 	m.waited += waited
 	m.hold(waited)

@@ -1,8 +1,10 @@
 package anthropic
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -182,6 +184,48 @@ func TestEncodeRefusesASystemRoleMessage(t *testing.T) {
 	}
 }
 
+func TestEncodeSendsAnImageAsAnImageBlock(t *testing.T) {
+	request := minimalRequest()
+	request.Messages = []llm.Message{{Role: llm.RoleUser, Content: "what is this",
+		Images: []llm.Image{{MediaType: "image/png", Data: []byte("pretend png bytes")}}}}
+	body, err := request.Encode(true)
+	if err != nil {
+		t.Fatalf("encoding: %v", err)
+	}
+	var decoded struct {
+		Messages []wireMessage `json:"messages"`
+	}
+	if err := json.Unmarshal(body, &decoded); err != nil {
+		t.Fatalf("decoding: %v", err)
+	}
+	if len(decoded.Messages) != 1 || len(decoded.Messages[0].Content) != 2 {
+		t.Fatalf("the message is %+v", decoded.Messages)
+	}
+	image := decoded.Messages[0].Content[1]
+	if image.Type != "image" || image.Source == nil {
+		t.Fatalf("the second block is %+v, want an image block", image)
+	}
+	if image.Source.Type != "base64" || image.Source.MediaType != "image/png" {
+		t.Fatalf("the image source is %+v", image.Source)
+	}
+	if image.Source.Data != base64.StdEncoding.EncodeToString([]byte("pretend png bytes")) {
+		t.Fatalf("the image data was not base64 encoded")
+	}
+}
+
+func TestEncodeRefusesAnImageOverTheCap(t *testing.T) {
+	request := minimalRequest()
+	request.Messages = []llm.Message{{Role: llm.RoleUser, Content: "look",
+		Images: []llm.Image{{MediaType: "image/png", Data: make([]byte, ImageBytesCap+1)}}}}
+	_, err := request.Encode(true)
+	if transport.KindOf(err) != transport.KindBadRequest {
+		t.Fatalf("error is %v", err)
+	}
+	if !strings.Contains(err.Error(), strconv.Itoa(ImageBytesCap+1)) {
+		t.Fatalf("the refusal does not name the size: %v", err)
+	}
+}
+
 func TestEncodeLeavesAngleBracketsUnescaped(t *testing.T) {
 	request := minimalRequest()
 	request.Messages = []llm.Message{{Role: llm.RoleUser, Content: "a <b> & c"}}
@@ -194,6 +238,24 @@ func TestEncodeLeavesAngleBracketsUnescaped(t *testing.T) {
 	}
 }
 
+func encodedUserID(t *testing.T, body []byte) claudeUserID {
+	t.Helper()
+	var envelope struct {
+		Metadata *wireMetadata `json:"metadata"`
+	}
+	if err := json.Unmarshal(body, &envelope); err != nil {
+		t.Fatalf("the request body is not json: %v", err)
+	}
+	if envelope.Metadata == nil {
+		t.Fatal("the request carries no metadata")
+	}
+	var userID claudeUserID
+	if err := json.Unmarshal([]byte(envelope.Metadata.UserID), &userID); err != nil {
+		t.Fatalf("user_id is not the json envelope: %q", envelope.Metadata.UserID)
+	}
+	return userID
+}
+
 func TestEncodeGeneratesTheMetadataEnvelopeOnOAuthOnly(t *testing.T) {
 	request := minimalRequest()
 	request.SessionID = "11111111-2222-3333-4444-555555555555"
@@ -204,19 +266,7 @@ func TestEncodeGeneratesTheMetadataEnvelopeOnOAuthOnly(t *testing.T) {
 	if err != nil {
 		t.Fatalf("encoding: %v", err)
 	}
-	var decoded struct {
-		Metadata *wireMetadata `json:"metadata"`
-	}
-	if err := json.Unmarshal(body, &decoded); err != nil {
-		t.Fatalf("decoding: %v", err)
-	}
-	if decoded.Metadata == nil {
-		t.Fatal("an oauth request carries metadata")
-	}
-	var userID claudeUserID
-	if err := json.Unmarshal([]byte(decoded.Metadata.UserID), &userID); err != nil {
-		t.Fatalf("user_id is not the json envelope: %q", decoded.Metadata.UserID)
-	}
+	userID := encodedUserID(t, body)
 	if userID.SessionID != request.SessionID || userID.AccountUUID != request.AccountID || userID.DeviceID == "" {
 		t.Fatalf("user_id is %+v", userID)
 	}

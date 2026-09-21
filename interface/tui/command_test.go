@@ -13,7 +13,7 @@ import (
 func commandApp(t *testing.T, entered chan<- string) *App {
 	t.Helper()
 	app := newTestApp(Options{
-		Repo:       "silo",
+		Repo:       testRepo,
 		Branch:     "develop",
 		Now:        fixedClock(),
 		Wires:      anthropicAlone,
@@ -21,7 +21,7 @@ func commandApp(t *testing.T, entered chan<- string) *App {
 		Paths:      repoPaths,
 		ResumeHead: func() string { return "continuing turn-19a2b3c4d5, 12 messages from 3 steps" },
 		NewSession: func() string { return "the next task starts a new session" },
-		Turn: func(_ context.Context, _, task string, _ func(Event)) {
+		Turn: func(_ context.Context, _, task string, _ CalledFromInsideTheTurnAndNeverAfterItReturns) {
 			entered <- task
 		},
 	})
@@ -53,7 +53,7 @@ func TestSlashSettingsOpensTheViewAndSendsNothingToTheModel(t *testing.T) {
 		t.Errorf("the composer still holds %q after the command ran", left)
 	}
 	content := ansi.Strip(app.View().Content)
-	if strings.Contains(content, "what should tofu do here?") {
+	if containsAPlaceholder(content) {
 		t.Errorf("the settings view still draws the composer\n%s", content)
 	}
 }
@@ -63,22 +63,22 @@ func TestASlashListsTheCommandsAndTypingFiltersTheList(t *testing.T) {
 	app := commandApp(t, entered)
 	typeText(app, "/")
 	listed := ansi.Strip(app.View().Content)
-	for _, want := range []string{"/session", "/crew", "/settings", "/quit"} {
+	for _, want := range []string{"/chat", "/work", "/sub-agents", "/settings", "/quit"} {
 		if !strings.Contains(listed, want) {
 			t.Errorf("a bare slash does not list %s\n%s", want, listed)
 		}
 	}
 
-	typeText(app, "se")
+	typeText(app, "co")
 	filtered := ansi.Strip(app.View().Content)
-	for _, want := range []string{"/session", "/settings"} {
+	for _, want := range []string{"/copy", "/copy-call"} {
 		if !strings.Contains(filtered, want) {
-			t.Errorf("/se does not list %s\n%s", want, filtered)
+			t.Errorf("/co does not list %s\n%s", want, filtered)
 		}
 	}
-	for _, gone := range []string{"/crew", "/quit"} {
+	for _, gone := range []string{"/sub-agents", "/quit"} {
 		if strings.Contains(filtered, gone) {
-			t.Errorf("/se still lists %s\n%s", gone, filtered)
+			t.Errorf("/co still lists %s\n%s", gone, filtered)
 		}
 	}
 	nothingEntered(t, entered)
@@ -134,35 +134,35 @@ func TestTheOpenMenuGolden(t *testing.T) {
 func TestTheMenuMovesCompletesAndCloses(t *testing.T) {
 	entered := make(chan string, 1)
 	app := commandApp(t, entered)
-	typeText(app, "/se")
+	typeText(app, "/co")
 	app.Update(tea.KeyPressMsg{Code: tea.KeyDown})
 	picked, open := app.view.Picked()
-	if !open || picked != "settings" {
-		t.Fatalf("down picked %q open %v, want settings", picked, open)
+	if !open || picked != "copy-call" {
+		t.Fatalf("down picked %q open %v, want copy-call", picked, open)
 	}
 	app.Update(tea.KeyPressMsg{Code: tea.KeyUp})
-	if picked, _ = app.view.Picked(); picked != "session" {
-		t.Fatalf("up picked %q, want session back", picked)
+	if picked, _ = app.view.Picked(); picked != "copy" {
+		t.Fatalf("up picked %q, want copy back", picked)
 	}
 
 	app.Update(tea.KeyPressMsg{Code: tea.KeyTab})
-	if typed := app.view.Value(); typed != "/se" {
-		t.Errorf("tab on two matches wrote %q, want the shared prefix /se", typed)
+	if typed := app.view.Value(); typed != "/copy" {
+		t.Errorf("tab on two matches wrote %q, want the shared prefix /copy", typed)
 	}
-	typeText(app, "t")
+	typeText(app, "-")
 	app.Update(tea.KeyPressMsg{Code: tea.KeyTab})
-	if typed := app.view.Value(); typed != "/settings" {
-		t.Errorf("tab on one match wrote %q, want /settings", typed)
+	if typed := app.view.Value(); typed != "/copy-call" {
+		t.Errorf("tab on one match wrote %q, want /copy-call", typed)
 	}
 
 	app.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
 	if _, open := app.view.Picked(); open {
 		t.Error("esc left the menu open")
 	}
-	if typed := app.view.Value(); typed != "/settings" {
+	if typed := app.view.Value(); typed != "/copy-call" {
 		t.Errorf("esc changed the text to %q", typed)
 	}
-	if app.current != viewSession {
+	if app.current != viewChat {
 		t.Error("esc while the menu was open also switched view")
 	}
 	nothingEntered(t, entered)
@@ -243,7 +243,7 @@ func TestASlashOnTheSecondLineIsNotACommand(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("the two-line task never reached the model")
 	}
-	if app.current != viewSession {
+	if app.current != viewChat {
 		t.Error("the second line opened a view")
 	}
 }

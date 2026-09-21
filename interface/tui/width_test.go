@@ -9,6 +9,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"tofu/interface/tui/crew"
+	"tofu/interface/tui/fixture"
 	"tofu/interface/tui/frame"
 	"tofu/interface/tui/settings"
 )
@@ -36,7 +37,7 @@ func emojiBranch() string {
 func cjkProviders() []settings.Provider {
 	return []settings.Provider{
 		{Name: "anthropic", State: "oauth  7日ウィンドウの 62%、18:00 に戻る", Source: "資格情報ストア"},
-		{Name: "openrouter", Key: openRouterKey, State: "ok", Source: "~/.boji/.env の設定"},
+		{Name: "openrouter", Key: openRouterKey, State: "ok", Source: "~/.tofu/.env の設定"},
 	}
 }
 
@@ -74,9 +75,9 @@ func wideFrames(t *testing.T) map[string]string {
 	})
 	app.Init()
 	app.Update(tea.WindowSizeMsg{Width: wideColumns, Height: wideRows})
-	app.Update(frame.Quota{Label: "codex 7日", Fraction: 0.62, Reported: true, ResetsAt: fixedClock()().Add(time.Hour)})
+	app.Update([]frame.Quota{{Label: "codex 7日", Fraction: 0.62, Reported: true, ResetsAt: fixedClock()().Add(time.Hour)}})
 	for _, event := range []Event{
-		{Kind: EventContext, Context: frame.Context{Used: 118000, Budget: 250000}},
+		{Kind: EventContext, Context: fixture.Context()},
 		{Kind: EventStats, Model: "gpt-5.6-sol-2026-09-01", TokensIn: 284000, TokensOut: 61000, Decisions: 3},
 		{Kind: EventText, Text: cjkProse},
 		{Kind: EventToolCall, ID: "c1", Tool: "read", Text: cjkIntent, Detail: cjkIntent},
@@ -89,7 +90,7 @@ func wideFrames(t *testing.T) map[string]string {
 	frames := map[string]string{"session": app.View().Content}
 
 	app.Update(Event{Kind: EventCrew, Children: cjkChildren()})
-	app.Update(tea.KeyPressMsg{Code: '2', Mod: tea.ModAlt})
+	app.Update(tea.KeyPressMsg{Code: '4', Mod: tea.ModAlt})
 	app.Update(tea.KeyPressMsg{Code: tea.KeyDown})
 	frames["crew"] = app.View().Content
 
@@ -129,7 +130,7 @@ func TestTheStripPlacesItsZonesInCellsSoAClickLandsOnTheNameItHits(t *testing.T)
 	strip := frame.Strip{Views: []frame.View{{Digit: '1', Name: "session"}, {Digit: '2', Name: "crew"}}}
 	plain := ansi.Strip(strip.Render(wideColumns))
 	for index, view := range strip.Views {
-		label := string(view.Digit) + " " + view.Name
+		label := "[" + string(view.Digit) + "] " + view.Name
 		start := strings.Index(plain, label)
 		if start < 0 {
 			t.Fatalf("the strip does not draw %q at all:\n%s", label, plain)

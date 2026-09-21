@@ -458,7 +458,7 @@ func TestABrokenForkChainIsACrashThatNamesTheMissingSession(t *testing.T) {
 	t.Logf("%s", gap)
 }
 
-func TestMeasureBojiFillsTheRowFromAStoredTurnRowAndLedger(t *testing.T) {
+func TestMeasureTofuFillsTheRowFromAStoredTurnRowAndLedger(t *testing.T) {
 	root := repositoryRoot(t)
 	transcript := filepath.Join(root, harnessTestdataDir)
 	session, err := LoadSession(filepath.Join(transcript, "session.json"))

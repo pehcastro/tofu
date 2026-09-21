@@ -1,16 +1,26 @@
 package rule
 
+const (
+	DomainDev     = "dev"
+	DomainQA      = "qa"
+	DomainGeneral = "general"
+	DomainTools   = "tools"
+)
+
+const ThresholdKind = "threshold"
+
 type Kind string
 
 const (
 	KindStructural Kind = "structural"
 	KindDecision   Kind = "decision"
 	KindHuman      Kind = "human"
+	KindMeasured   Kind = "measured"
 )
 
 func (k Kind) valid() bool {
 	switch k {
-	case KindStructural, KindDecision, KindHuman:
+	case KindStructural, KindDecision, KindHuman, KindMeasured:
 		return true
 	}
 	return false
@@ -54,7 +64,11 @@ func (e Exception) valid() bool {
 type Rule struct {
 	ID           string
 	Kind         Kind
+	Domain       string
 	Checker      string
+	Measurement  string
+	Source       string
+	Evidence     string
 	Mode         Mode
 	ModeDeclared bool
 	Except       Exception

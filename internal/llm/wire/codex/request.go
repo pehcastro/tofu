@@ -163,6 +163,10 @@ func (r Request) RefusedControls() []string {
 func encodeInput(messages []llm.Message) ([]inputItem, error) {
 	items := make([]inputItem, 0, len(messages))
 	for index, message := range messages {
+		if len(message.Images) > 0 {
+			return nil, transport.Fail("codex.Encode", transport.KindBadRequest, nil,
+				"message %d carries an image; the codex wire does not send one", index)
+		}
 		switch message.Role {
 		case llm.RoleSystem:
 			return nil, transport.Fail("codex.Encode", transport.KindBadRequest, nil,

@@ -25,6 +25,7 @@ func liveClient(t *testing.T) (*jev.Client, question.Set) {
 	if os.Getenv("TOFU_LIVE") != "1" {
 		t.Skip("set TOFU_LIVE=1 to put the question to the real jev route")
 	}
+	jev.AllowLiveCredential(t)
 	key, err := jev.Key(filepath.Join(repoRoot, ".env"))
 	if err != nil {
 		t.Fatalf("no credential: %v", err)
@@ -63,7 +64,7 @@ func tally(t *testing.T, arm string, readings []Reading) {
 
 func TestTheJudgedArmAgainstTheFreeArmOverEveryCapturedOutput(t *testing.T) {
 	client, set := liveClient(t)
-	pol := shippedPolicy(t)
+	pol := shippedRule(t)
 	rows := corpusRows(t)
 
 	for run := 1; run <= 2; run++ {
@@ -98,7 +99,7 @@ func TestTheJudgedArmAgainstTheFreeArmOverEveryCapturedOutput(t *testing.T) {
 			sum += l
 		}
 		tally(t, fmt.Sprintf("run %d free   arm, no threshold to set", run), free)
-		tally(t, fmt.Sprintf("run %d judged arm at the policy's keep_at %.2f", run, pol.KeepAt), judged)
+		tally(t, fmt.Sprintf("run %d judged arm at the rule's keep_at %.2f", run, pol.KeepAt), judged)
 		t.Logf("run %d judged arm: %d calls, %d answered, %d failed, $%.6f, mean %s, p50 %s, p99 %s, %s of wall clock at concurrency %d",
 			run, calls, len(latencies), errors, cost,
 			(sum / time.Duration(len(latencies))).Round(time.Millisecond),

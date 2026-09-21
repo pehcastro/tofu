@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 
+	"tofu/internal/judge/ledger"
+	"tofu/internal/konst"
 	"tofu/internal/llm"
 )
 
@@ -25,7 +27,14 @@ func alwaysToolCallModel(n int) *stubModel {
 	return &stubModel{decisions: decisions}
 }
 
-func cappedConfig(model Model, caps Caps) Config {
+func cappedConfig(t *testing.T, model Model, caps Caps) Config {
+	t.Helper()
+	if caps.LoopGuardRepeats == 0 {
+		caps.LoopGuardRepeats = konst.TurnLoopGuardRepeats
+	}
+	if caps.LoopGuardWindow == 0 {
+		caps.LoopGuardWindow = konst.TurnLoopGuardWindow
+	}
 	return Config{
 		Model:          model,
 		Spend:          SpendAPIKey,
@@ -33,6 +42,7 @@ func cappedConfig(model Model, caps Caps) Config {
 		Task:           "loop forever",
 		Caps:           caps,
 		ResultBytesCap: 4096,
+		ArtifactDir:    t.TempDir(),
 	}
 }
 
@@ -44,7 +54,7 @@ func TestRunAnswersWithWhatItHasAtTheStepCap(t *testing.T) {
 		Content: "i read three files and did not finish",
 	})
 
-	row, err := Run(context.Background(), cappedConfig(model, Caps{MaxSteps: 3}))
+	row, err := Run(context.Background(), cappedConfig(t, model, Caps{MaxSteps: 3}))
 	if err != nil {
 		t.Fatalf("Run returned an error: %v", err)
 	}
@@ -63,22 +73,22 @@ func TestRunAnswersWithWhatItHasAtTheStepCap(t *testing.T) {
 	}
 }
 
-func TestRunAnswersWithWhatItHasAtTheDecisionCap(t *testing.T) {
-	model := alwaysToolCallModel(2)
-	model.decisions = append(model.decisions, llm.Decision{Build: "m1", Outcome: llm.OutcomeMessage, Content: "one file read, no verdict left"})
-	config := cappedConfig(model, Caps{MaxDecisions: 1})
-	config.Gate = gateSaying("allow")
+func TestRunMakesMoreToolCallsThanTheOldDecisionCapAndFinishesOnItsOwn(t *testing.T) {
+	const calls = 45
+	model := alwaysToolCallModel(calls)
+	model.decisions = append(model.decisions, messageDecision())
+	config := cappedConfig(t, model, Caps{MaxSteps: calls + 1})
+	config.Gate = gateSaying(ledger.VerdictAllow)
 
 	row, err := Run(context.Background(), config)
 	if err != nil {
 		t.Fatalf("Run returned an error: %v", err)
 	}
-	if row.Outcome != OutcomeDecisionCap {
-		t.Fatalf("outcome = %s, want decision_cap", row.Outcome)
+	if row.Outcome != OutcomeStopped {
+		t.Fatalf("outcome = %s, want the turn to finish on its own answer past the old 40 call cap", row.Outcome)
 	}
-	last := row.Steps[len(row.Steps)-1]
-	if last.AssistantText != "one file read, no verdict left" {
-		t.Fatalf("last step = %+v, want the answer the model gave when its budget ran out", last)
+	if len(row.DecisionIDs) != calls {
+		t.Fatalf("expected %d gate decisions past the old cap, got %d", calls, len(row.DecisionIDs))
 	}
 }
 
@@ -86,7 +96,7 @@ func TestTheLastCallCarriesTheSameToolsAsEveryOtherCall(t *testing.T) {
 	model := alwaysToolCallModel(2)
 	model.decisions = append(model.decisions, messageDecision())
 
-	if _, err := Run(context.Background(), cappedConfig(model, Caps{MaxSteps: 2})); err != nil {
+	if _, err := Run(context.Background(), cappedConfig(t, model, Caps{MaxSteps: 2})); err != nil {
 		t.Fatalf("Run returned an error: %v", err)
 	}
 	if len(model.requests) != 3 {
@@ -110,7 +120,7 @@ func TestTheLastCallAsksForWhatIsDoneAndWhatIsLeft(t *testing.T) {
 	model := alwaysToolCallModel(1)
 	model.decisions = append(model.decisions, messageDecision())
 
-	if _, err := Run(context.Background(), cappedConfig(model, Caps{MaxSteps: 1})); err != nil {
+	if _, err := Run(context.Background(), cappedConfig(t, model, Caps{MaxSteps: 1})); err != nil {
 		t.Fatalf("Run returned an error: %v", err)
 	}
 	if len(model.requests) != 2 {
@@ -128,30 +138,10 @@ func TestTheLastCallAsksForWhatIsDoneAndWhatIsLeft(t *testing.T) {
 	}
 }
 
-func TestACapOnTheFirstStepGetsNoLastCall(t *testing.T) {
-	model := &stubModel{decisions: []llm.Decision{toolCallDecision(
-		llm.ToolCall{ID: "c1", Name: "noop", Arguments: json.RawMessage(`{}`)},
-		llm.ToolCall{ID: "c2", Name: "noop", Arguments: json.RawMessage(`{}`)},
-	)}}
-	config := cappedConfig(model, Caps{MaxDecisions: 1})
-	config.Gate = gateSaying("allow")
-
-	row, err := Run(context.Background(), config)
-	if err != nil {
-		t.Fatalf("Run returned an error: %v", err)
-	}
-	if row.Outcome != OutcomeDecisionCap {
-		t.Fatalf("outcome = %s, want decision_cap", row.Outcome)
-	}
-	if model.calls != 1 {
-		t.Fatalf("the model was called %d times: a cap on the first step has nothing to answer with", model.calls)
-	}
-}
-
 func TestALastCallThatFailsEndsTheTurnAtTheCap(t *testing.T) {
 	model := alwaysToolCallModel(2)
 
-	row, err := Run(context.Background(), cappedConfig(model, Caps{MaxSteps: 2}))
+	row, err := Run(context.Background(), cappedConfig(t, model, Caps{MaxSteps: 2}))
 	if err != nil {
 		t.Fatalf("Run returned an error: %v", err)
 	}
@@ -168,7 +158,7 @@ func TestALastCallThatFailsEndsTheTurnAtTheCap(t *testing.T) {
 
 func TestNoLastWordTurnsTheLastCallOff(t *testing.T) {
 	model := alwaysToolCallModel(2)
-	config := cappedConfig(model, Caps{MaxSteps: 2})
+	config := cappedConfig(t, model, Caps{MaxSteps: 2})
 	config.NoLastWord = true
 
 	row, err := Run(context.Background(), config)
@@ -185,7 +175,7 @@ func TestNoStepCapByDefault(t *testing.T) {
 	model := alwaysToolCallModel(60)
 	model.decisions = append(model.decisions, messageDecision())
 
-	row, err := Run(context.Background(), cappedConfig(model, Caps{}))
+	row, err := Run(context.Background(), cappedConfig(t, model, Caps{}))
 	if err != nil {
 		t.Fatalf("Run returned an error: %v", err)
 	}

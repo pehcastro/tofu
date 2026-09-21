@@ -22,6 +22,7 @@ import (
 	"tofu/interface/tui/paste"
 	"tofu/interface/tui/session"
 	"tofu/interface/tui/settings"
+	"tofu/interface/tui/shells"
 	"tofu/internal/judge/jev"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/konst"
@@ -30,6 +31,8 @@ import (
 	"tofu/internal/llm/models"
 	"tofu/internal/llm/quota"
 	sessionstore "tofu/internal/session"
+	"tofu/internal/shell"
+	"tofu/internal/sys"
 	"tofu/internal/turn"
 	"tofu/internal/turn/tools"
 	"tofu/internal/widget"
@@ -83,8 +86,11 @@ func appVerb(in io.Reader, out, errOut io.Writer, resumed sessionResume) int {
 	steering := make(chan string, queuedMessages)
 	live := newAppSession(dir, openAppWire, answers, time.Now, resumed)
 	live.steer = steering
+	settingsStore, _ := openSettings(dir)
+	registry, registryErr := openShellRegistry()
 	if err := tui.Run(tui.Options{
 		Repo:         filepath.Base(dir),
+		Root:         dir,
 		Branch:       branchOf(dir),
 		Note:         note,
 		Requirements: appRequirements(),
@@ -93,6 +99,8 @@ func appVerb(in io.Reader, out, errOut io.Writer, resumed sessionResume) int {
 		Wires:        appWires,
 		Providers:    appProviders(),
 		Quota:        appQuota,
+		Settings:     settingsStore,
+		Reload:       appReload,
 		Turn:         live.run,
 		Paste:        paste.Board{Dir: live.pendingSessionDir, Recorded: live.recordAttachment},
 		Answers:      answers,
@@ -100,6 +108,8 @@ func appVerb(in io.Reader, out, errOut io.Writer, resumed sessionResume) int {
 		Paths:        appPaths(dir),
 		ResumeHead:   live.resumeHead,
 		NewSession:   live.startFresh,
+		Shells:       appShells(registry, registryErr),
+		KillShell:    appKillShell(registry, registryErr),
 	}); err != nil {
 		_, _ = fmt.Fprintf(errOut, "tofu: %v\n", err)
 		return exitVerdict
@@ -142,7 +152,8 @@ func appWires() []tui.Wire {
 		if err != nil {
 			continue
 		}
-		wires = append(wires, tui.Wire{Name: string(provider), Model: selected.ID, Provider: string(selected.Provider)})
+		subscription, id, _ := strings.Cut(selected.Slug(), "/")
+		wires = append(wires, tui.Wire{Name: string(provider), Model: id, Provider: subscription})
 	}
 	return wires
 }
@@ -240,7 +251,7 @@ func openRouterProvider() settings.Provider {
 }
 
 func jevProvider() settings.Provider {
-	dir, err := ledger.Dir()
+	dir, err := sys.LogDir()
 	if err != nil {
 		return settings.Provider{Name: jevName, Fix: unreadableSource + err.Error()}
 	}
@@ -265,30 +276,79 @@ func branchOf(dir string) string {
 	return strings.TrimPrefix(strings.TrimSpace(string(head)), "ref: refs/heads/")
 }
 
-func appQuota(wire string) frame.Quota {
+func appShells(registry *shell.Registry, openErr error) func() []shells.Entry {
+	return func() []shells.Entry {
+		if openErr != nil {
+			return nil
+		}
+		found, err := registry.List()
+		if err != nil {
+			return nil
+		}
+		entries := make([]shells.Entry, 0, len(found))
+		for _, one := range found {
+			entry := shells.Entry{Name: one.Name, Command: one.Command, Started: one.Started, ExitCode: one.ExitCode}
+			switch one.State {
+			case shell.Running:
+				entry.State = shells.Running
+			case shell.Exited:
+				entry.State = shells.Exited
+			case shell.Killed:
+				entry.State = shells.Killed
+			}
+			entry.Log, _ = registry.Tail(one.Name, shell.DefaultTail)
+			entries = append(entries, entry)
+		}
+		return entries
+	}
+}
+
+func appKillShell(registry *shell.Registry, openErr error) func(string) error {
+	return func(name string) error {
+		if openErr != nil {
+			return openErr
+		}
+		return registry.Kill(name)
+	}
+}
+
+func appQuota() []frame.Quota {
 	results, err := pollCredentials(context.Background(), time.Now)
 	if err != nil {
-		return frame.Quota{}
+		return nil
 	}
-	var fullest frame.Quota
+	return quotasFrom(results)
+}
+
+func quotasFrom(results []pollResult) []frame.Quota {
+	quotas := make([]frame.Quota, 0, len(results))
 	for _, result := range results {
-		if result.err != nil || result.report.Provider != quota.Provider(cmp.Or(wire, wireSubscription)) {
+		if result.err != nil {
 			continue
 		}
-		fullest.Label = string(result.report.Provider)
-		for _, window := range result.report.Windows {
-			if !window.Used.Reported || strings.Contains(window.ID, ":") || window.Used.Fraction < fullest.Fraction {
-				continue
-			}
-			fullest = frame.Quota{
-				Label:    string(result.report.Provider) + " " + window.ID,
-				Fraction: window.Used.Fraction,
-				Reported: true,
-				ResetsAt: window.ResetsAt,
-			}
+		if fullest, ok := fullestWindow(result.report); ok {
+			quotas = append(quotas, fullest)
 		}
 	}
-	return fullest
+	return quotas
+}
+
+func fullestWindow(report quota.Report) (frame.Quota, bool) {
+	var fullest frame.Quota
+	found := false
+	for _, window := range report.Windows {
+		if !window.Used.Reported || strings.Contains(window.ID, ":") || (found && window.Used.Fraction <= fullest.Fraction) {
+			continue
+		}
+		fullest = frame.Quota{
+			Label:    string(report.Provider) + " " + window.ID,
+			Fraction: window.Used.Fraction,
+			Reported: true,
+			ResetsAt: window.ResetsAt,
+		}
+		found = true
+	}
+	return fullest, found
 }
 
 type appWire struct {
@@ -307,7 +367,7 @@ func openAppWire(opts runOpts) (appWire, error) {
 	return appWire{model: model, spend: spend, store: store, selected: selected}, err
 }
 
-func awaitPerson(emit func(tui.Event), answers <-chan tui.Answer, granted map[string]bool) turn.Person {
+func awaitPerson(emit tui.CalledFromInsideTheTurnAndNeverAfterItReturns, answers <-chan tui.Answer, granted map[string]bool) turn.Person {
 	return func(ctx context.Context, request turn.GateRequest, _ turn.GateDecision) (turn.PersonAnswer, error) {
 		place := askedPlace(request)
 		if granted[place] {
@@ -336,7 +396,7 @@ func awaitPerson(emit func(tui.Event), answers <-chan tui.Answer, granted map[st
 	}
 }
 
-func steered(queue <-chan string, emit func(tui.Event)) []string {
+func steered(queue <-chan string, emit tui.CalledFromInsideTheTurnAndNeverAfterItReturns) []string {
 	var taken []string
 	for {
 		select {
@@ -390,6 +450,12 @@ type appSession struct {
 	carried []llm.Message
 	shown   map[string]bool
 	granted map[string]bool
+	pending []pendingImage
+}
+
+type pendingImage struct {
+	index int
+	name  string
 }
 
 func newAppSession(dir string, open func(runOpts) (appWire, error), answers <-chan tui.Answer, now func() time.Time, resumed sessionResume) *appSession {
@@ -429,12 +495,77 @@ func (s *appSession) pendingSessionDir() (string, error) {
 	return store.Dir(s.pendingID()), nil
 }
 
-func (s *appSession) recordAttachment(name string, bytes int, format string) {
+func (s *appSession) recordAttachment(index int, name string, bytes int, format string) {
 	store, err := sessionstore.Open()
 	if err != nil {
 		return
 	}
 	_ = store.AppendEvent(s.pendingID(), sessionstore.EventAttachment, sessionstore.Attachment{File: name, Bytes: bytes, Format: format})
+	s.pending = append(s.pending, pendingImage{index: index, name: name})
+}
+
+func (s *appSession) takePendingImages(task string) ([]llm.Image, error) {
+	pending := s.pending
+	s.pending = nil
+	var wanted []pendingImage
+	for _, image := range pending {
+		if strings.Contains(task, session.ImageToken(image.index)) {
+			wanted = append(wanted, image)
+		}
+	}
+	if len(wanted) == 0 {
+		return nil, nil
+	}
+	store, err := sessionstore.Open()
+	if err != nil {
+		return nil, err
+	}
+	dir := store.Dir(s.pendingID())
+	images := make([]llm.Image, 0, len(wanted))
+	for _, image := range wanted {
+		data, err := os.ReadFile(filepath.Join(dir, image.name))
+		if err != nil {
+			return nil, err
+		}
+		images = append(images, llm.Image{MediaType: imageMediaType(image.name), Data: data})
+	}
+	return images, nil
+}
+
+func imageMediaType(name string) string {
+	ext := strings.ToLower(filepath.Ext(name))
+	switch ext {
+	case ".png":
+		return "image/png"
+	case ".jpg", ".jpeg":
+		return "image/jpeg"
+	case ".gif":
+		return "image/gif"
+	case ".webp":
+		return "image/webp"
+	}
+	return "image/" + strings.TrimPrefix(ext, ".")
+}
+
+func (s *appSession) label(store *sessionstore.Store) (string, string) {
+	id := s.id
+	if id == "" {
+		return "", ""
+	}
+	header, err := store.Header(id)
+	if err != nil {
+		if writeErr := store.Write(sessionstore.Header{ID: id, Root: id, At: s.now()}, nil); writeErr != nil {
+			return "", id
+		}
+		header, err = store.Header(id)
+		if err != nil {
+			return "", id
+		}
+	}
+	if header.Name == nil {
+		return "", id
+	}
+	return *header.Name, id
 }
 
 func (s *appSession) resumeHead() string {
@@ -450,15 +581,22 @@ func (s *appSession) resumeHead() string {
 	return "continuing " + carry.Session + ", " + strconv.Itoa(carry.Carried) + " messages from " + sessionSteps(carry.Steps)
 }
 
-func (s *appSession) run(ctx context.Context, wire, task string, emit func(tui.Event)) {
+func (s *appSession) run(ctx context.Context, wire, task string, emit tui.CalledFromInsideTheTurnAndNeverAfterItReturns) {
 	fail := func(err error) { emit(tui.Event{Kind: tui.EventFailure, Text: err.Error()}) }
+	images, imagesErr := s.takePendingImages(task)
+	if imagesErr != nil {
+		fail(imagesErr)
+		return
+	}
 	opts := runOpts{
-		dir:          s.dir,
-		task:         task,
-		turnID:       s.pendingID(),
-		wire:         cmp.Or(wire, wireSubscription),
-		toolSet:      toolSetFull,
-		maxDecisions: konst.TurnMaxDecisions,
+		dir:              s.dir,
+		task:             task,
+		turnID:           s.pendingID(),
+		wire:             cmp.Or(wire, wireSubscription),
+		toolSet:          toolSetFull,
+		loopGuardRepeats: konst.TurnLoopGuardRepeats,
+		loopGuardWindow:  konst.TurnLoopGuardWindow,
+		maxSteps:         appDecisionCap(s.dir),
 	}
 	opened, err := s.open(opts)
 	if opened.store != nil {
@@ -474,7 +612,15 @@ func (s *appSession) run(ctx context.Context, wire, task string, emit func(tui.E
 		fail(err)
 		return
 	}
+	if name, id := s.label(sessions); id != "" {
+		emit(tui.Event{Kind: tui.EventSession, Text: name, ID: id})
+	}
 	gate, gateErr := newToolGate(s.dir)
+	var unusable unusableRule
+	if errors.As(gateErr, &unusable) {
+		fail(fmt.Errorf("no turn starts while the tool gate rule is unusable: %w", unusable))
+		return
+	}
 	if gateErr != nil {
 		emit(tui.Event{Kind: tui.EventGateOff, Text: gateErr.Error()})
 	}
@@ -501,9 +647,10 @@ func (s *appSession) run(ctx context.Context, wire, task string, emit func(tui.E
 		fail(guardErr)
 		return
 	}
-	watch := &appWatcher{inner: asked, gate: gate, emit: emit, now: s.now, seen: s.shown}
+	watch := &appWatcher{inner: asked, gate: gate, emit: emit, now: s.now, turnID: opts.turnID, seen: s.shown}
 	config, spawner := runConfig(opts, built, runtime{model: watch, spend: opened.spend, budget: budget, gate: gate, sessions: sessions})
 	config.History = s.carried
+	config.Images = images
 	if s.answers != nil {
 		config.Person = awaitPerson(emit, s.answers, s.granted)
 	}
@@ -552,7 +699,7 @@ func doneWords(outcome turn.Outcome, guard *turn.LoopGuardStop) string {
 	case turn.OutcomeUnset, turn.OutcomeForked:
 		return "finished in"
 	case turn.OutcomeStopped:
-		return "stopped after"
+		return "cooked for"
 	case turn.OutcomeStepCap:
 		return "stopped at the step cap after"
 	case turn.OutcomeDecisionCap:
@@ -616,6 +763,11 @@ func gateDecision(tool string, gated turn.GateDecision) session.Decision {
 		RelaxedBy: gated.Reason.RelaxedBy,
 		Blocked:   gated.Reason.Blocked,
 	}
+	for _, answer := range gated.Answers {
+		if answer.Question == gated.Reason.Question {
+			decision.Reason.Levels = answer.Legend
+		}
+	}
 	if len(gated.Answers) == 0 && gated.Reason.ModeReason != nil {
 		decision.Failure = *gated.Reason.ModeReason
 	}
@@ -665,8 +817,9 @@ type appWatcher struct {
 	inner     turn.Model
 	gate      *toolGate
 	spawner   *turn.SpawnTool
-	emit      func(tui.Event)
+	emit      tui.CalledFromInsideTheTurnAndNeverAfterItReturns
 	now       func() time.Time
+	turnID    string
 	seen      map[string]bool
 	wrote     map[string]string
 	in        int
@@ -683,7 +836,7 @@ func (a *appWatcher) Ask(ctx context.Context, request llm.Request) (llm.Decision
 		a.seen[message.ToolCallID] = true
 		result := tui.Event{
 			Kind:   tui.EventToolResult,
-			ID:     message.ToolCallID,
+			ID:     sessionstore.EventIDFor(a.turnID, message.ToolCallID),
 			Text:   resultSummary(message.Content),
 			Bytes:  message.ToolResultBytes,
 			Failed: message.ToolOutcome.Failed(),
@@ -711,12 +864,13 @@ func (a *appWatcher) Ask(ctx context.Context, request llm.Request) (llm.Decision
 	if err != nil {
 		return decision, err
 	}
-	a.in += decision.Usage.InputTokens
+	fresh := decision.PromptAccounting.FreshTokens(decision.Usage.InputTokens, decision.CacheReadTokens)
+	a.in += fresh
 	a.out += decision.Usage.OutputTokens
 	a.cacheRead += decision.CacheReadTokens
 	for index := len(a.children) - 1; index >= 0; index-- {
 		if a.children[index].child.State == crew.Running {
-			a.children[index].child.Tokens += decision.Usage.InputTokens + decision.Usage.OutputTokens
+			a.children[index].child.Tokens += fresh + decision.Usage.OutputTokens
 			a.sendCrew()
 			break
 		}
@@ -732,7 +886,8 @@ func (a *appWatcher) Ask(ctx context.Context, request llm.Request) (llm.Decision
 	}
 	for _, call := range decision.ToolCalls {
 		intent, detail := callIntent(call)
-		a.emit(tui.Event{Kind: tui.EventToolCall, ID: call.ID, Tool: call.Name, Text: intent, Detail: detail})
+		promotes := a.spawner != nil && call.Name == a.spawner.Name()
+		a.emit(tui.Event{Kind: tui.EventToolCall, ID: sessionstore.EventIDFor(a.turnID, call.ID), Tool: call.Name, Text: intent, Detail: detail, Promote: promotes})
 		a.noteWholeFile(call)
 		a.childStarted(call)
 	}
@@ -778,7 +933,11 @@ func (a *appWatcher) childReturned(message llm.Message) {
 		if watched.call != message.ToolCallID {
 			continue
 		}
-		watched.child.State, watched.child.Report = crew.Done, message.Content
+		watched.child.State = crew.Done
+		if message.ToolOutcome.Failed() {
+			watched.child.State = crew.Errored
+		}
+		watched.child.Report = message.Content
 		watched.child.Since = a.now().Sub(watched.started)
 		for _, row := range a.spawner.Children()[watched.rows:] {
 			watched.child.Steps += len(row.Steps)

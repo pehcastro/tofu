@@ -36,6 +36,7 @@ readable form collapses: doctor, models, usage, context, rules.
   judge     read a state and a question battery, print the answers
   check     run the tool gate on a shell command, in shadow, and log it
   session   list the recorded sessions, read one, rename one, or continue one
+  shells    list the persistent processes an agent left running, read one's log, kill one
   context   print the context bands of a recorded session and what fills them
   sift      mark what is worth reading in a message and elide the rest
   label     attach an outcome to a ledger row, by id or the last one
@@ -43,6 +44,8 @@ readable form collapses: doctor, models, usage, context, rules.
   catalog   resolve a catalog entry and show the origin of each field
   lint      run a house-rule check over the tree
   rules     list or run the rule catalog
+  settings  list, get or set a declared setting, global or project
+  reload    re-read rules from disk without a restart
 `
 
 func main() {
@@ -60,6 +63,8 @@ func run(args []string, in io.Reader, out io.Writer, errOut io.Writer) int {
 		return continueVerb(args[1:], in, out, errOut)
 	case "session":
 		return sessionVerb(args[1:], in, out, errOut, shade)
+	case "shells":
+		return shellsVerb(args[1:], out, errOut)
 	case "version":
 		return version(out)
 	case "changelog":
@@ -74,6 +79,8 @@ func run(args []string, in io.Reader, out io.Writer, errOut io.Writer) int {
 		return modelsVerb(args[1:], out, errOut, shade)
 	case "why":
 		return whyVerb(args[1:], out, errOut, time.Now)
+	case "frame":
+		return frameVerb(args[1:], out, errOut)
 	case "run":
 		return runVerb(args[1:], out, errOut)
 	case "judge":
@@ -94,6 +101,10 @@ func run(args []string, in io.Reader, out io.Writer, errOut io.Writer) int {
 		return lintVerb(args[1:], out, errOut)
 	case "rules":
 		return rulesVerb(args[1:], out, errOut)
+	case "settings":
+		return settingsVerb(args[1:], out, errOut)
+	case "reload":
+		return reloadVerb(out, errOut)
 	case "help", "-h", "--help":
 		_, _ = fmt.Fprint(out, usage)
 		return exitOK

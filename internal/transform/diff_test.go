@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+
+	"tofu/internal/konst"
 )
 
 func TestTheUnifiedHeaderCountsBothSidesOfAHunkInTheMiddleOfAFile(t *testing.T) {
@@ -20,6 +22,32 @@ func TestTheUnifiedHeaderCountsBothSidesOfAHunkInTheMiddleOfAFile(t *testing.T) 
 		" line 08\n line 09\n line 10\n"
 	if got := Unified("notes.txt", before.String(), after); got != want {
 		t.Fatalf("the diff was\n%s\nwanted\n%s", got, want)
+	}
+}
+
+func TestOversizedForDiffTripsExactlyOneCellPastTheBound(t *testing.T) {
+	if oversizedForDiff(1, konst.DiffTableMaxCells) {
+		t.Fatal("a table sized exactly at the bound was refused")
+	}
+	if !oversizedForDiff(1, konst.DiffTableMaxCells+1) {
+		t.Fatal("a table one cell past the bound was accepted")
+	}
+}
+
+func TestAFilePairPastTheDiffBoundFallsBackToOneHunkInsteadOfBuildingTheTable(t *testing.T) {
+	lines := 3163
+	if !oversizedForDiff(lines, lines) {
+		t.Fatalf("%d lines on each side does not exceed the diff bound, fix the test", lines)
+	}
+	before := strings.Repeat("a\n", lines)
+	after := strings.Repeat("b\n", lines)
+	hunks := Hunks(before, after)
+	if len(hunks) != 1 {
+		t.Fatalf("got %d hunks past the diff bound, wanted the whole file folded into one", len(hunks))
+	}
+	if len(hunks[0].Removed) != lines || len(hunks[0].Added) != lines {
+		t.Fatalf("the fallback hunk held %d removed and %d added, wanted %d of each",
+			len(hunks[0].Removed), len(hunks[0].Added), lines)
 	}
 }
 

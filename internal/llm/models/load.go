@@ -5,7 +5,6 @@ import (
 	"io/fs"
 	"os"
 	"sort"
-	"strconv"
 	"strings"
 
 	"tofu/internal/sys"
@@ -118,7 +117,7 @@ type Contract struct {
 
 func Contracts() []Contract {
 	return []Contract{
-		{Kind: modelsDir, Required: []string{"subscription", "use"}, Optional: []string{"reason", "window", "context_tokens"}},
+		{Kind: modelsDir, Required: []string{"use"}, Optional: []string{"subscription", "reason", "window"}},
 		{Kind: subscriptionsDir, Required: []string{"provider", "wire", "windows"}, Optional: []string{"not_models"}},
 		{Kind: rolesDir, Required: []string{"model"}},
 	}
@@ -270,7 +269,7 @@ func buildSubscription(id string, from *sheet) (SubscriptionSpec, *Broken) {
 		File:      from.file,
 	}
 	if !spec.ID.valid() {
-		return spec, &Broken{File: from.file, Why: fmt.Sprintf("%q is not a subscription tofu can reach, it reaches %s and %s", id, Claude, Codex)}
+		return spec, &Broken{File: from.file, Why: fmt.Sprintf("%q is not a name a subscription file can carry, a subscription is one word", id)}
 	}
 	if !spec.Provider.valid() {
 		return spec, &Broken{File: from.file, Field: "provider", Why: fmt.Sprintf("the vendor is %s or %s, found %q", Anthropic, OpenAI, spec.Provider)}
@@ -294,21 +293,20 @@ func buildModel(slug string, from *sheet, known map[Subscription]SubscriptionSpe
 		Reason:       from.values["reason"],
 		File:         from.file,
 	}
-	spec, carried := known[model.Subscription]
-	if !carried {
-		return model, &Broken{File: from.file, Field: "subscription", Why: fmt.Sprintf("no subscription in the catalog is called %q", model.Subscription)}
+	if !model.Provider.valid() {
+		return model, &Broken{File: from.file, Why: fmt.Sprintf("the vendor is %s or %s, found %q", Anthropic, OpenAI, model.Provider)}
 	}
-	if model.Provider != spec.Provider {
-		return model, &Broken{File: from.file, Why: fmt.Sprintf("the %s subscription is served by %s, so this model is filed under the wrong vendor", spec.ID, spec.Provider)}
-	}
-	model.Windows = append(append([]string{}, spec.Windows...), commas(from.values["window"])...)
-	if declared := from.values["context_tokens"]; declared != "" {
-		tokens, err := strconv.Atoi(declared)
-		if err != nil || tokens <= 0 {
-			return model, &Broken{File: from.file, Field: "context_tokens", Why: fmt.Sprintf(
-				"a context window is a count of tokens above zero, found %q. leave it out when nobody has read the real number, and tofu will not compact this model on a guess", declared)}
+	if model.Subscription != "" {
+		spec, carried := known[model.Subscription]
+		if !carried {
+			return model, &Broken{File: from.file, Field: "subscription", Why: fmt.Sprintf("no subscription in the catalog is called %q", model.Subscription)}
 		}
-		model.ContextTokens = tokens
+		if model.Provider != spec.Provider {
+			return model, &Broken{File: from.file, Why: fmt.Sprintf("the %s subscription is served by %s, so this model is filed under the wrong vendor", spec.ID, spec.Provider)}
+		}
+		model.Windows = append(append([]string{}, spec.Windows...), commas(from.values["window"])...)
+	} else {
+		model.Windows = commas(from.values["window"])
 	}
 	if model.Use == "" {
 		model.Use = UseExcluded
@@ -329,6 +327,9 @@ func (c Catalog) defaults() []Broken {
 	chosen := map[Subscription]string{}
 	served := map[Subscription]bool{}
 	for _, model := range c.Models {
+		if model.Subscription == "" {
+			continue
+		}
 		served[model.Subscription] = true
 		if model.Use != UseDefault {
 			continue

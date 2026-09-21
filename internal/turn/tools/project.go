@@ -36,7 +36,7 @@ func (p Project) Definition() llm.Tool {
 			"the entry points and manifests the project is built and started from, and its documentation files. " +
 			ignoredWalkDescription + ". " +
 			"it costs one walk: never assemble this from find, ls -R or wc, which descend into every ignored directory and take minutes on a tree this one walks in milliseconds. " +
-			"after it, glob lists files by name, grep searches their text, search returns the whole declaration around a match, and read reads one file whole",
+			"after it, glob lists files by name, search finds text and returns the whole declaration around a match, and read reads one file whole",
 		Parameters: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -103,7 +103,7 @@ func (p Project) Run(_ context.Context, raw json.RawMessage) (turn.Result, error
 		}
 		fmt.Fprintf(&out, "\n%s\n  %s\n", part.title, strings.Join(part.lines, "\n  "))
 	}
-	out.WriteString("\nnext: glob lists files by name, grep searches their text, search returns the declaration around a match, read reads one file whole\n")
+	out.WriteString("\nnext: glob lists files by name, search finds text and returns the declaration around a match, read reads one file whole\n")
 
 	note := listed.note
 	if len(cut) > 0 {

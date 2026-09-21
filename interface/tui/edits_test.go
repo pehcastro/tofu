@@ -168,16 +168,21 @@ func TestAnEditLeavesItsDiffOutOfTheSessionAndPutsItInTheEditsView(t *testing.T)
 	app := sessionApp(t, 80, 24)
 	edited(app, "e1", "", gatePath, gateDiff)
 	transcript := ansi.Strip(app.View().Content)
-	if !strings.Contains(transcript, "⟩ edit "+gatePath) {
-		t.Errorf("the session does not show the call that made the edit\n%s", transcript)
-	}
-	if !strings.Contains(transcript, "+1 -1") {
-		t.Errorf("the session does not say how much the file changed\n%s", transcript)
+	if strings.Contains(transcript, "⟩ edit "+gatePath) {
+		t.Errorf("chat drew the call that made the edit, it belongs in work\n%s", transcript)
 	}
 	for _, body := range []string{"@@ -40,6", "return AskWithReason", "func Decide"} {
 		if strings.Contains(transcript, body) {
 			t.Errorf("the session drew the diff line %q\n%s", body, transcript)
 		}
+	}
+	app.Update(tea.KeyPressMsg{Code: '2', Mod: tea.ModAlt})
+	worked := ansi.Strip(app.View().Content)
+	if !strings.Contains(worked, "edit "+gatePath) {
+		t.Errorf("work does not show the call that made the edit\n%s", worked)
+	}
+	if !strings.Contains(worked, "+1 -1") {
+		t.Errorf("work does not say how much the file changed\n%s", worked)
 	}
 
 	app.Update(tea.KeyPressMsg{Code: '3', Mod: tea.ModAlt})
@@ -249,7 +254,7 @@ const measuredEdits = 30
 
 func editTurnRows(t *testing.T, inTheStream bool) int {
 	t.Helper()
-	app := newTestApp(Options{Repo: "silo", Branch: "develop", Now: fixedClock(), Wires: bothWires})
+	app := newTestApp(Options{Repo: testRepo, Branch: "develop", Now: fixedClock(), Wires: bothWires})
 	app.Init()
 	app.Update(tea.WindowSizeMsg{Width: 80, Height: 600})
 	app.Update(tea.KeyPressMsg{Code: 'o', Mod: tea.ModCtrl})

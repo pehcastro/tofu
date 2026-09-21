@@ -16,8 +16,10 @@ func TestCatalogNamesEveryKindAndItsContract(t *testing.T) {
 	t.Logf("tofu catalog\n%s", out.String())
 	text := out.String()
 	for _, want := range []string{
-		"models", "subscriptions", "roles", "questions", "policy", "rules",
-		"required subscription, use", "required provider, wire, windows", "required model",
+		"models", "subscriptions", "roles", "questions",
+		"domains from", "rules", "thresholds", "skills", "agents", "references",
+		"dev", "qa", "general", "shell", "fetch",
+		"required use", "required provider, wire, windows", "required model",
 		"winning field by field",
 	} {
 		if !strings.Contains(text, want) {
@@ -28,7 +30,7 @@ func TestCatalogNamesEveryKindAndItsContract(t *testing.T) {
 
 func TestCatalogCountsTheRolesTheProjectBound(t *testing.T) {
 	project := t.TempDir()
-	writeProjectRole(t, project, "turn", "anthropic/claude-sonnet-5")
+	writeProjectRole(t, project, "turn", "claude-sub/claude-sonnet-5")
 	t.Chdir(project)
 
 	var out, errOut bytes.Buffer
@@ -72,7 +74,7 @@ func TestProjectCatalogOverridesTheShippedOneFieldByField(t *testing.T) {
 	}
 	t.Chdir(project)
 
-	model, err := selectModel("anthropic", "anthropic/claude-fable-5")
+	model, err := selectModel("anthropic", "claude-sub/claude-fable-5")
 	if err != nil {
 		t.Fatalf("the project layer did not relax the exclusion: %v", err)
 	}

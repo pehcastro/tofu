@@ -35,9 +35,14 @@ func AllOutcomes() []Outcome {
 }
 
 type ToolCallRow struct {
+	ID     string `json:"id,omitempty"`
+	Parent string `json:"parent,omitempty"`
+	Author string `json:"author,omitempty"`
+
 	Tool              string          `json:"tool"`
 	Args              json.RawMessage `json:"args,omitempty"`
 	Command           string          `json:"command,omitempty"`
+	Proxy             *ProxyRow       `json:"proxy,omitempty"`
 	ChildID           string          `json:"child_id"`
 	ExitCode          *int            `json:"exit_code,omitempty"`
 	ResultBytes       int             `json:"result_bytes"`
@@ -62,6 +67,9 @@ func (r ToolCallRow) Outcome() llm.ToolOutcome {
 }
 
 type StepRow struct {
+	id      string
+	attempt int
+
 	Index            int           `json:"index"`
 	ToolCalls        []ToolCallRow `json:"tool_calls,omitempty"`
 	AssistantText    string        `json:"assistant_text,omitempty"`
@@ -234,6 +242,10 @@ func Sendable(messages []llm.Message) []llm.Message {
 	return sendable
 }
 
+func (r Row) PromptAccounting() llm.PromptAccounting {
+	return llm.PromptAccountingFor(r.Wire)
+}
+
 func (r Row) Header() session.Header {
 	header := session.Header{
 		ID:         r.ID,
@@ -266,25 +278,43 @@ func (r Row) Summary() Row {
 	return r
 }
 
+func (r Row) author() string {
+	if r.SpawnedFrom == "" {
+		return session.AuthorOrchestrator
+	}
+	return r.ID
+}
+
 func (r Row) Record() (session.Header, []session.Event, error) {
+	author, last := r.author(), ""
+	next := func(kind session.EventKind, attempt int, body any) (session.Event, error) {
+		raw, err := json.Marshal(body)
+		if err != nil {
+			return session.Event{}, err
+		}
+		id := session.NewEventID()
+		event := session.Event{ID: id, Parent: last, Author: author, Attempt: max(attempt, session.FirstAttempt), Kind: kind, Body: raw}
+		last = id
+		return event, nil
+	}
 	events := make([]session.Event, 0, len(r.Conversation)+len(r.Steps)+1)
 	for _, message := range r.Conversation {
-		body, err := json.Marshal(messageRowOf(message))
+		event, err := next(session.EventMessage, session.FirstAttempt, messageRowOf(message))
 		if err != nil {
 			return session.Header{}, nil, err
 		}
-		events = append(events, session.Event{Kind: session.EventMessage, Body: body})
+		events = append(events, event)
 	}
 	for _, step := range r.Steps {
-		body, err := json.Marshal(step)
+		event, err := next(session.EventStep, step.attempt, step)
 		if err != nil {
 			return session.Header{}, nil, err
 		}
-		events = append(events, session.Event{Kind: session.EventStep, Body: body})
+		events = append(events, event)
 	}
-	body, err := json.Marshal(r.Summary())
+	outcome, err := next(session.EventOutcome, session.FirstAttempt, r.Summary())
 	if err != nil {
 		return session.Header{}, nil, err
 	}
-	return r.Header(), append(events, session.Event{Kind: session.EventOutcome, Body: body}), nil
+	return r.Header(), append(events, outcome), nil
 }

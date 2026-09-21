@@ -18,12 +18,12 @@ type pending struct {
 	task string
 }
 
-func (m *Model) Queue(task string) {
+func (m *Model) Queue(task string, chips []Chip) {
 	m.queues++
 	row := pending{id: queuePrefix + strconv.Itoa(m.queues), task: task}
 	m.queue = append(m.queue, row)
 	m.pick = len(m.queue) - 1
-	m.Append(Entry{Kind: User, ID: row.id, Body: task, waiting: true})
+	m.Append(Entry{Kind: User, ID: row.id, Body: task, Chips: chips, waiting: true})
 }
 
 func (m Model) Queued() []string {

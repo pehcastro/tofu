@@ -1,11 +1,22 @@
 package session
 
 import (
+	"crypto/rand"
+	"crypto/sha256"
 	"encoding/json"
+	"errors"
+	"fmt"
+	"strings"
 	"time"
 )
 
-const SchemaVersion = 1
+const SchemaVersion = 3
+
+const AuthorOrchestrator = "orchestrator"
+
+const eventIDBytes = 16
+
+const FirstAttempt = 1
 
 type EventKind string
 
@@ -32,8 +43,62 @@ const (
 )
 
 type Event struct {
-	Kind EventKind       `json:"kind"`
-	Body json.RawMessage `json:"body"`
+	ID      string          `json:"id,omitempty"`
+	Parent  string          `json:"parent,omitempty"`
+	Author  string          `json:"author,omitempty"`
+	Attempt int             `json:"attempt"`
+	Kind    EventKind       `json:"kind"`
+	Body    json.RawMessage `json:"body"`
+}
+
+func NewEventID() string {
+	var raw [eventIDBytes]byte
+	if _, err := rand.Read(raw[:]); err != nil {
+		panic("session: the system random source failed: " + err.Error())
+	}
+	return uuidOf(raw)
+}
+
+func EventIDFor(scope, key string) string {
+	sum := sha256.Sum256([]byte(scope + "\x00" + key))
+	var raw [eventIDBytes]byte
+	copy(raw[:], sum[:])
+	return uuidOf(raw)
+}
+
+func uuidOf(raw [eventIDBytes]byte) string {
+	raw[6] = raw[6]&0x0f | 0x40
+	raw[8] = raw[8]&0x3f | 0x80
+	return fmt.Sprintf("%x-%x-%x-%x-%x", raw[0:4], raw[4:6], raw[6:8], raw[8:10], raw[10:16])
+}
+
+var (
+	ErrEventHashNotFound  = errors.New("session: nothing in this session ends with that id")
+	ErrEventHashAmbiguous = errors.New("session: more than one event in this session ends with that id")
+)
+
+func DrawnAs(id, hash string) bool {
+	if id == "" || hash == "" {
+		return false
+	}
+	return strings.HasSuffix(strings.ToLower(id), strings.ToLower(strings.TrimPrefix(hash, "#")))
+}
+
+func FindByHash(events []Event, hash string) (Event, error) {
+	var found []Event
+	for _, event := range events {
+		if DrawnAs(event.ID, hash) {
+			found = append(found, event)
+		}
+	}
+	switch len(found) {
+	case 0:
+		return Event{}, fmt.Errorf("%w: %q", ErrEventHashNotFound, hash)
+	case 1:
+		return found[0], nil
+	default:
+		return Event{}, fmt.Errorf("%w: %q matches %d events", ErrEventHashAmbiguous, hash, len(found))
+	}
 }
 
 type Header struct {

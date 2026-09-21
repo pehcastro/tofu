@@ -67,8 +67,8 @@ func TestDoRetriesAndHonoursRetryAfterMillisFirst(t *testing.T) {
 	var calls int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if atomic.AddInt32(&calls, 1) == 1 {
-			w.Header().Set(RetryAfterMillis, "120")
-			w.Header().Set(RetryAfter, "30")
+			w.Header().Set(RetryAfterMillisHeader, "120")
+			w.Header().Set(RetryAfterHeader, "30")
 			w.WriteHeader(http.StatusTooManyRequests)
 			_, _ = w.Write([]byte(`{"error":"slow down"}`))
 			return
@@ -98,7 +98,7 @@ func TestDoHonoursRetryAfterEvenPastTheLocalMaxBackoff(t *testing.T) {
 	var calls int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if atomic.AddInt32(&calls, 1) == 1 {
-			w.Header().Set(RetryAfter, "30")
+			w.Header().Set(RetryAfterHeader, "30")
 			w.WriteHeader(http.StatusServiceUnavailable)
 			return
 		}
@@ -455,17 +455,9 @@ func TestNewRefusesAnImpossibleConfig(t *testing.T) {
 
 func TestRetryAfterReadsAnHttpDate(t *testing.T) {
 	now := time.Date(2026, 9, 18, 12, 0, 0, 0, time.UTC)
-	var waits []time.Duration
-	config := testConfig(&waits)
-	config.Now = func() time.Time { return now }
-	config.MaxBackoff = time.Hour
-	client, err := New(config)
-	if err != nil {
-		t.Fatalf("building the client: %v", err)
-	}
 	header := http.Header{}
-	header.Set(RetryAfter, now.Add(90*time.Second).Format(http.TimeFormat))
-	if got := client.retryAfter(header); got != 90*time.Second {
+	header.Set(RetryAfterHeader, now.Add(90*time.Second).Format(http.TimeFormat))
+	if got := RetryAfter(header, now); got != 90*time.Second {
 		t.Fatalf("expected 90s from the date, got %v", got)
 	}
 }
@@ -493,7 +485,7 @@ func TestStatusKind(t *testing.T) {
 		422: KindBadRequest, 429: KindRateLimit, 500: KindProvider, 529: KindProvider,
 	}
 	for status, want := range cases {
-		if got := statusKind(status); got != want {
+		if got := StatusKind(status); got != want {
 			t.Fatalf("status %d is %s, expected %s", status, got, want)
 		}
 	}

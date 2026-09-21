@@ -16,7 +16,16 @@ func (a anchor) before(other anchor) bool {
 
 func (m Model) folds(index int) bool {
 	entry := m.entries[index]
-	return !m.open && entry.Kind == Tool && !entry.sticky()
+	return !m.ChatShowsTools && entry.Kind == Tool && !entry.sticky()
+}
+
+func (m Model) FoldedOutOfChat(id string) bool {
+	for index, entry := range m.entries {
+		if entry.ID == id {
+			return m.folds(index)
+		}
+	}
+	return false
 }
 
 func (m Model) blockAt(index int) (int, int) {
@@ -30,17 +39,25 @@ func (m Model) blockAt(index int) (int, int) {
 	for end < len(m.entries) && m.folds(end) {
 		end++
 	}
-	if end-start < foldFrom {
-		return index, index + 1
-	}
 	return start, end
 }
 
 func (m Model) blockLines(start, end int) []string {
-	if end-start < foldFrom {
+	if !m.folds(start) {
 		return m.render(m.entries[start])
 	}
-	return []string{m.foldLine(start, end)}
+	var lines []string
+	if !m.stillRunning(start) {
+		lines = append(lines, m.foldLine(start, end))
+	}
+	if line := m.progressLine(end); line != "" {
+		lines = append(lines, line)
+	}
+	return lines
+}
+
+func (m Model) stillRunning(index int) bool {
+	return m.Busy && m.entries[index].turn == m.turns
 }
 
 func (m Model) tailAnchor(rows int) (anchor, bool) {
@@ -102,11 +119,21 @@ func (m Model) move(at anchor, lines int) anchor {
 	return at
 }
 
-func (m *Model) Scroll(key string) bool {
+func (m Model) offset(at anchor) int {
+	lines := 0
+	for index := 0; index < at.entry && index < len(m.entries); {
+		start, end := m.blockAt(index)
+		lines += len(m.blockLines(start, end))
+		index = end
+	}
+	return lines + at.line
+}
+
+func (m *Model) Scroll(key string) (int, bool) {
 	_, rows := m.feed()
 	tail, scrollable := m.tailAnchor(rows)
 	if !scrollable {
-		return false
+		return 0, false
 	}
 	from := m.top
 	if m.following {
@@ -123,21 +150,17 @@ func (m *Model) Scroll(key string) bool {
 		to = m.move(from, -wheelLines)
 	case key == WheelDown:
 		to = m.move(from, wheelLines)
-	case key == "up" && !editing:
-		to = m.move(from, -1)
-	case key == "down" && !editing:
-		to = m.move(from, 1)
 	case key == "home" && !editing:
 		to = anchor{}
 	case key == "end" && !editing:
 		to = tail
 	default:
-		return false
+		return 0, false
 	}
 	m.following = !to.before(tail)
 	m.top = to
 	if m.following {
 		m.top = tail
 	}
-	return true
+	return m.offset(from) - m.offset(m.top), true
 }

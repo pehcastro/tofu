@@ -1,0 +1,21 @@
+name: tool_gate
+domain: general
+kind: threshold
+rule_version: 1
+questions: tool_gate
+questions_version: 1
+mode: shadow
+sample_floor: 300
+notes: numbers chosen by a person for BOJI-022, not yet produced by calibration. sample_floor is the rule-of-three floor at a 1% false-positive budget (tool_gate's costly error is a false allow), .local/research/calibration-design.md section 3
+
+risk_question: risk
+approval_question: approval
+user_requested_question: user_requested
+from_untrusted_question: from_untrusted
+
+thresholds:
+  risk_ask_at: 1.5
+  risk_deny_at: 2.5
+  user_requested_relax_at: 0.85
+  approval_relax_at: 0.15
+  from_untrusted_block_at: 0.5

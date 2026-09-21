@@ -4,13 +4,17 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 
+	"tofu/internal/judge/gate"
 	"tofu/internal/judge/ledger"
-	"tofu/internal/judge/policy"
+	"tofu/internal/judge/state"
+	"tofu/internal/sys"
 )
 
 var replayThresholdFields = []string{
@@ -37,10 +41,20 @@ type replayChange struct {
 	after ledger.Verdict
 }
 
-type replayPolicySource struct {
+type replayRuleSource struct {
 	ref    string
-	origin policy.Origin
-	pol    policy.Policy
+	origin gate.Origin
+	pol    gate.Rule
+	err    error
+}
+
+type replayNoDecider struct {
+	ref    string
+	schema string
+}
+
+func (n replayNoDecider) Error() string {
+	return fmt.Sprintf("the rule %s declares the schema %q and replay has no decider for it", n.ref, n.schema)
 }
 
 type replayResult struct {
@@ -48,8 +62,9 @@ type replayResult struct {
 	rescored    int
 	skipped     int
 	unavailable int
+	noDecider   map[replayNoDecider]int
 	changes     []replayChange
-	policies    replayPolicies
+	rules       replayRules
 }
 
 func replayVerb(args []string, out, errOut io.Writer, now func() time.Time) int {
@@ -57,7 +72,7 @@ func replayVerb(args []string, out, errOut io.Writer, now func() time.Time) int 
 	if err != nil {
 		return replayFail(errOut, err)
 	}
-	dir, err := ledger.Dir()
+	dir, err := sys.LogDir()
 	if err != nil {
 		return replayFail(errOut, err)
 	}
@@ -122,7 +137,7 @@ func parseReplayArgs(args []string) (replayOpts, error) {
 	}
 	for key := range opts.sets {
 		if !knownThreshold(key) {
-			return replayOpts{}, fmt.Errorf("%q is not a threshold this policy declares, want one of %s", key, strings.Join(replayThresholdFields, ", "))
+			return replayOpts{}, fmt.Errorf("%q is not a threshold this rule declares, want one of %s", key, strings.Join(replayThresholdFields, ", "))
 		}
 	}
 	return opts, nil
@@ -165,11 +180,11 @@ func knownThreshold(key string) bool {
 }
 
 func runReplay(reader *ledger.Reader, filter ledger.Filter, sets map[string]float64) (replayResult, error) {
-	var result replayResult
-	var policies replayPolicies
+	result := replayResult{noDecider: map[replayNoDecider]int{}}
+	var rules replayRules
 	_, err := reader.Each(filter, func(row ledger.Row) error {
 		result.read++
-		if row.Reason != nil && policy.IsUnavailable(row.Reason.Comparison) {
+		if row.Reason != nil && gate.IsUnavailable(row.Reason.Comparison) {
 			result.unavailable++
 			return nil
 		}
@@ -177,12 +192,17 @@ func runReplay(reader *ledger.Reader, filter ledger.Filter, sets map[string]floa
 			result.skipped++
 			return nil
 		}
-		pol, err := policies.load(row.Policy, row.PolicyVersion)
+		pol, err := rules.load(row.Policy, row.PolicyVersion)
+		var missing replayNoDecider
+		if errors.As(err, &missing) {
+			result.noDecider[missing]++
+			return nil
+		}
 		if err != nil {
 			return err
 		}
 		pol.Thresholds = withOverrides(pol.Thresholds, sets)
-		verdict, _, err := policy.Decide(ledgerAnswersToJev(row.Answers), pol)
+		verdict, _, err := gate.Decide(ledgerAnswersToJev(row.Answers), pol)
 		if err != nil {
 			return err
 		}
@@ -193,28 +213,36 @@ func runReplay(reader *ledger.Reader, filter ledger.Filter, sets map[string]floa
 		}
 		return nil
 	})
-	result.policies = policies
+	result.rules = rules
 	return result, err
 }
 
-type replayPolicies []replayPolicySource
+type replayRules []replayRuleSource
 
-func (p *replayPolicies) load(name string, version int) (policy.Policy, error) {
+func (p *replayRules) load(name string, version int) (gate.Rule, error) {
 	ref := fmt.Sprintf("%s@%d", name, version)
 	for _, source := range *p {
 		if source.ref == ref {
-			return source.pol, nil
+			return source.pol, source.err
 		}
 	}
-	pol, origin, err := loadPolicyPoint(ref)
-	if err != nil {
-		return policy.Policy{}, err
-	}
-	*p = append(*p, replayPolicySource{ref: ref, origin: origin, pol: pol})
-	return pol, nil
+	pol, origin, err := replayDecide(ref)
+	*p = append(*p, replayRuleSource{ref: ref, origin: origin, pol: pol, err: err})
+	return pol, err
 }
 
-func withOverrides(t policy.Thresholds, sets map[string]float64) policy.Thresholds {
+func replayDecide(ref string) (gate.Rule, gate.Origin, error) {
+	if ref == state.StopCheckRuleRef {
+		return state.StopCheckRule()
+	}
+	pol, origin, err := loadRulePoint(ref)
+	if err != nil || pol.Schema == gate.SchemaGate {
+		return pol, origin, err
+	}
+	return gate.Rule{}, origin, replayNoDecider{ref: ref, schema: pol.Schema}
+}
+
+func withOverrides(t gate.Thresholds, sets map[string]float64) gate.Thresholds {
 	for key, value := range sets {
 		switch key {
 		case "risk_ask_at":
@@ -233,10 +261,16 @@ func withOverrides(t policy.Thresholds, sets map[string]float64) policy.Threshol
 }
 
 func printReplay(out io.Writer, result replayResult, elapsed time.Duration, verbose bool) {
-	_, _ = fmt.Fprintf(out, "  %d rows read, %d rescored, %d skipped for having no policy, %d unavailable: the typed decision was never made    0 API calls, %s\n",
+	_, _ = fmt.Fprintf(out, "  %d rows read, %d rescored, %d skipped for naming no rule, %d unavailable: the typed decision was never made    0 API calls, %s\n",
 		result.read, result.rescored, result.skipped, result.unavailable, elapsed.Round(time.Millisecond))
-	for _, source := range result.policies {
-		_, _ = fmt.Fprintf(out, "  policy %s from %s: %s\n", source.ref, source.origin, source.pol.File)
+	for _, source := range result.rules {
+		if source.err != nil {
+			continue
+		}
+		_, _ = fmt.Fprintf(out, "  rule %s from %s: %s\n", source.ref, source.origin, source.pol.File)
+	}
+	for _, missing := range slices.SortedFunc(maps.Keys(result.noDecider), func(a, b replayNoDecider) int { return strings.Compare(a.ref, b.ref) }) {
+		_, _ = fmt.Fprintf(out, "  %d skipped: %v\n", result.noDecider[missing], missing)
 	}
 	_, _ = fmt.Fprintf(out, "  verdict changes: %d\n\n", len(result.changes))
 

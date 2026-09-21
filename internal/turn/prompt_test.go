@@ -28,7 +28,7 @@ func write(t *testing.T, path, body string) {
 func TestTheToolGuidanceNamesFindWhyItIsSlowHereAndWhatToUseInstead(t *testing.T) {
 	for _, want := range []string{
 		"never run find", "-not -path", "descends into every directory git ignores",
-		"153 seconds", "15 milliseconds", "project_report", "glob", "grep",
+		"153 seconds", "15 milliseconds", "project_report", "glob", "search",
 	} {
 		if !strings.Contains(PreferTheToolOverTheShell, want) {
 			t.Fatalf("the tool guidance never says %q:\n%s", want, PreferTheToolOverTheShell)

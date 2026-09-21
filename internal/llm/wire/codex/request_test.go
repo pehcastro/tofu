@@ -155,6 +155,15 @@ func TestSystemMessagesAreRefused(t *testing.T) {
 	}
 }
 
+func TestAnImageIsRefusedNamingTheWire(t *testing.T) {
+	messages := []llm.Message{{Role: llm.RoleUser, Content: "look",
+		Images: []llm.Image{{MediaType: "image/png", Data: []byte("x")}}}}
+	_, err := Request{Model: "m", Messages: messages}.Encode(nil)
+	if err == nil || !strings.Contains(err.Error(), "codex") {
+		t.Fatalf("an image gave %v, want a refusal naming codex", err)
+	}
+}
+
 func TestTurnMetadataIsAFixedSizeAsciiProjection(t *testing.T) {
 	identity := Identity{
 		InstallationID: "install-\u00e9",

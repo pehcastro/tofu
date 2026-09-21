@@ -1,0 +1,6 @@
+id: test_assertion
+domain: qa
+kind: structural
+checker: test_assertion
+mode: shadow
+notes: a claim is an if whose body calls t.Fatal or t.Error, or an assert or require call. A claim is existential when it fails on a value being nil, zero or empty, when it fails on a comma ok flag, or when it calls Nil, NotNil, Empty, NotEmpty, Zero, NotZero, IsType, Implements, Error or NoError. A guard that fails on err != nil is setup and is not counted as a claim at all. The rule fires on a test function that makes at least one claim and not one claim about a specific value

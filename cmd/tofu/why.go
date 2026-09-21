@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
+	"tofu/internal/judge/gate"
 	"tofu/internal/judge/ledger"
-	"tofu/internal/judge/policy"
 	"tofu/internal/sys"
 )
 
@@ -46,7 +46,7 @@ func whyVerb(args []string, out, errOut io.Writer, now func() time.Time) int {
 	if err != nil {
 		return whyFail(errOut, err)
 	}
-	dir, err := ledger.Dir()
+	dir, err := sys.LogDir()
 	if err != nil {
 		return whyFail(errOut, err)
 	}
@@ -54,7 +54,19 @@ func whyVerb(args []string, out, errOut io.Writer, now func() time.Time) int {
 
 	rows, err := whyRows(reader, dir, opts)
 	if err != nil {
-		return whyFail(errOut, err)
+		found, lookedUp, lookupErr := recordedCallByHash(opts.id)
+		if lookupErr != nil || !lookedUp {
+			return whyFail(errOut, err)
+		}
+		printRecordedCall(out, found)
+		if found.call.GateDecisionID == "" {
+			return exitOK
+		}
+		_, _ = fmt.Fprintln(out)
+		opts.id = found.call.GateDecisionID
+		if rows, err = whyRows(reader, dir, opts); err != nil {
+			return whyFail(errOut, err)
+		}
 	}
 
 	if opts.state {
@@ -180,7 +192,11 @@ func blockingQuestion(row ledger.Row) string {
 	if err != nil {
 		return ""
 	}
-	pol, err := policy.Load(filepath.Join(catalog, "policy", fmt.Sprintf("%s@%d.yaml", row.Policy, row.PolicyVersion)))
+	found, err := gate.FindRule(os.DirFS(catalog), fmt.Sprintf("%s@%d", row.Policy, row.PolicyVersion))
+	if err != nil || found == "" {
+		return ""
+	}
+	pol, err := gate.Load(filepath.Join(catalog, filepath.FromSlash(found)))
 	if err != nil {
 		return ""
 	}

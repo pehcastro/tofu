@@ -12,8 +12,8 @@ import (
 	"testing"
 
 	benchapi "tofu/bench/api"
+	"tofu/internal/judge/gate"
 	"tofu/internal/judge/jev"
-	"tofu/internal/judge/policy"
 	"tofu/internal/judge/question"
 	"tofu/internal/konst"
 )
@@ -27,14 +27,15 @@ var comparedSets = []string{toolGateV5Path, toolGateV6Path}
 
 const (
 	recordedAnswersPath = "../../../bench/cost/answers/heldout-2026-09-19.jsonl"
-	gatePolicyPath      = "../../../catalog/policy/tool_gate@1.yaml"
+	gatePolicyPath      = "../../../catalog/general/rules/tool_gate@1.yaml"
+	gateCatalogDir      = "../../../catalog"
 	labelProceed        = "proceed"
 	labelBlock          = "block"
 )
 
-func gateTheBenchReportDecidesThrough(t *testing.T) policy.Policy {
+func gateTheBenchReportDecidesThrough(t *testing.T) gate.Rule {
 	t.Helper()
-	pol, findings, err := policy.LintFile(gatePolicyPath)
+	pol, findings, err := gate.LintFile(gatePolicyPath, gateCatalogDir)
 	if err != nil {
 		t.Fatalf("read the policy the gate runs: %v", err)
 	}
@@ -68,13 +69,13 @@ func TestTheRescoreDecidesThroughThePolicyTheGateRuns(t *testing.T) {
 	for _, want := range []struct {
 		why     string
 		run     scored
-		verdict policy.Verdict
+		verdict gate.Verdict
 	}{
-		{"risk clear below the ask cut", scored{risk: cut.RiskAskAt - 2*band, approval: approvalHeld}, policy.VerdictAllow},
-		{"risk clear above the deny cut", scored{risk: cut.RiskDenyAt + 2*band, approval: approvalHeld}, policy.VerdictDeny},
-		{"the user asked for it, so deny relaxes to ask", scored{risk: cut.RiskDenyAt + 2*band, approval: approvalHeld, userRequested: cut.UserRequestedRelaxAt + 2*band}, policy.VerdictAsk},
-		{"untrusted content refuses the relax the user would have earned", scored{risk: cut.RiskDenyAt + 2*band, approval: approvalHeld, userRequested: cut.UserRequestedRelaxAt + 2*band, fromUntrusted: cut.FromUntrustedBlockAt}, policy.VerdictDeny},
-		{"approval withdrawn below its own cut relaxes deny to ask on its own", scored{risk: cut.RiskDenyAt + 2*band, approval: approvalWithdrawn}, policy.VerdictAsk},
+		{"risk clear below the ask cut", scored{risk: cut.RiskAskAt - 2*band, approval: approvalHeld}, gate.VerdictAllow},
+		{"risk clear above the deny cut", scored{risk: cut.RiskDenyAt + 2*band, approval: approvalHeld}, gate.VerdictDeny},
+		{"the user asked for it, so deny relaxes to ask", scored{risk: cut.RiskDenyAt + 2*band, approval: approvalHeld, userRequested: cut.UserRequestedRelaxAt + 2*band}, gate.VerdictAsk},
+		{"untrusted content refuses the relax the user would have earned", scored{risk: cut.RiskDenyAt + 2*band, approval: approvalHeld, userRequested: cut.UserRequestedRelaxAt + 2*band, fromUntrusted: cut.FromUntrustedBlockAt}, gate.VerdictDeny},
+		{"approval withdrawn below its own cut relaxes deny to ask on its own", scored{risk: cut.RiskDenyAt + 2*band, approval: approvalWithdrawn}, gate.VerdictAsk},
 	} {
 		if got := verdictAt(t, want.run, pol); got != want.verdict {
 			t.Errorf("risk %.2f approval %.2f user_requested %.2f from_untrusted %.2f decided %q, want %q: %s",
@@ -177,33 +178,33 @@ func setName(path string) string {
 
 const coinFlip = "unstable"
 
-func verdictAt(t *testing.T, run scored, pol policy.Policy) policy.Verdict {
+func verdictAt(t *testing.T, run scored, pol gate.Rule) gate.Verdict {
 	t.Helper()
-	verdict, _, err := policy.Decide(map[string]jev.Answer{
+	verdict, _, err := gate.Decide(map[string]jev.Answer{
 		pol.RiskQuestion:          {Kind: jev.QuestionScore, Score: run.risk},
 		pol.ApprovalQuestion:      {Kind: jev.QuestionNoul, Noul: run.approval},
 		pol.UserRequestedQuestion: {Kind: jev.QuestionNoul, Noul: run.userRequested},
 		pol.FromUntrustedQuestion: {Kind: jev.QuestionNoul, Noul: run.fromUntrusted},
 	}, pol)
 	if err != nil {
-		t.Fatalf("policy.Decide over %+v: %v", run, err)
+		t.Fatalf("gate.Decide over %+v: %v", run, err)
 	}
 	return verdict
 }
 
-func steadyVerdict(t *testing.T, pol policy.Policy, first, second scored) string {
+func steadyVerdict(t *testing.T, pol gate.Rule, first, second scored) string {
 	t.Helper()
 	one, two := verdictAt(t, first, pol), verdictAt(t, second, pol)
 	if one != two {
 		return coinFlip
 	}
-	if one == policy.VerdictAllow {
+	if one == gate.VerdictAllow {
 		return labelProceed
 	}
 	return labelBlock
 }
 
-func onTheCut(pol policy.Policy, runs ...scored) bool {
+func onTheCut(pol gate.Rule, runs ...scored) bool {
 	for _, run := range runs {
 		for _, pair := range [][2]float64{
 			{run.risk, pol.Thresholds.RiskAskAt},
@@ -225,6 +226,8 @@ func TestLiveCompareTheTwoNewestQuestionSets(t *testing.T) {
 		t.Skip("set TOFU_LIVE_STATE_RESCORE=1 to spend about $0.007 on four jev calls per recorded case")
 	}
 	pol := gateTheBenchReportDecidesThrough(t)
+	jev.AllowLiveCredential(t)
+	jev.AllowLiveCredential(t)
 	key, err := jev.Key("../../../.env")
 	if err != nil {
 		t.Fatalf("no credential: %v", err)
@@ -247,7 +250,7 @@ func TestLiveCompareTheTwoNewestQuestionSets(t *testing.T) {
 		}
 	}
 
-	t.Logf("every verdict below is policy.Decide over %s: %+v", gatePolicyPath, pol.Thresholds)
+	t.Logf("every verdict below is gate.Decide over %s: %+v", gatePolicyPath, pol.Thresholds)
 	header, rule := "| case | label |", "|---|---|"
 	for _, path := range paths {
 		header += fmt.Sprintf(" %s approval | %s user_requested | %s verdict | %s on the cut |", setName(path), setName(path), setName(path), setName(path))

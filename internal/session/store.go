@@ -80,7 +80,16 @@ func (s *Store) AppendEvent(id string, kind EventKind, body any) error {
 	if err != nil {
 		return err
 	}
-	return appendEvents(filepath.Join(s.Dir(id), bodyName), []Event{{Kind: kind, Body: raw}})
+	event := Event{ID: NewEventID(), Parent: s.lastEventID(id), Author: AuthorOrchestrator, Attempt: FirstAttempt, Kind: kind, Body: raw}
+	return appendEvents(filepath.Join(s.Dir(id), bodyName), []Event{event})
+}
+
+func (s *Store) lastEventID(id string) string {
+	events, err := s.Body(id)
+	if err != nil || len(events) == 0 {
+		return ""
+	}
+	return events[len(events)-1].ID
 }
 
 func appendEvents(path string, events []Event) error {
@@ -96,6 +105,10 @@ func appendEvents(path string, events []Event) error {
 		lines.Write(line)
 		lines.WriteByte('\n')
 	}
+	return appendLines(path, lines.Bytes())
+}
+
+func appendLines(path string, lines []byte) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
@@ -103,7 +116,7 @@ func appendEvents(path string, events []Event) error {
 	if err != nil {
 		return err
 	}
-	_, written := file.Write(lines.Bytes())
+	_, written := file.Write(lines)
 	return cmp.Or(written, file.Close())
 }
 

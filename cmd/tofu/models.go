@@ -41,58 +41,60 @@ func modelRegistry() (models.Registry, error) {
 }
 
 func refreshRegistry(ctx context.Context, out io.Writer) int {
-	source := models.RegistrySource()
-	path, listed, err := fetchedRegistry(ctx, source)
-	if err != nil {
+	refusal := func(err error) int {
 		_, _ = fmt.Fprintf(out, "%s: %v\n", models.RefreshVerb, err)
 		return exitVerdict
 	}
-	_, _ = fmt.Fprintf(out, "context windows from %s: %d, written to %s\n", source, listed, path)
-	return exitOK
-}
-
-func fetchedRegistry(ctx context.Context, source string) (string, int, error) {
+	source := models.RegistrySource()
 	path, err := registryPath()
 	if err != nil {
-		return "", 0, err
+		return refusal(err)
 	}
 	client, err := transport.New(transport.Config{
 		AttemptTimeout: time.Duration(konst.TurnAttemptTimeoutMillis) * time.Millisecond,
 		Concurrency:    1,
 	})
 	if err != nil {
-		return "", 0, err
+		return refusal(err)
 	}
 	body, err := models.FetchRegistry(ctx, client, source)
 	if err != nil {
-		return "", 0, err
+		return refusal(err)
 	}
 	registry, err := models.ParseRegistry(body, source)
 	if err != nil {
-		return "", 0, err
+		return refusal(err)
 	}
 	if err := os.MkdirAll(filepath.Dir(path), registryDirMode); err != nil {
-		return "", 0, err
+		return refusal(err)
 	}
-	return path, len(registry.Windows), registry.Store(path)
+	if err := registry.Store(path); err != nil {
+		return refusal(err)
+	}
+	_, _ = fmt.Fprintf(out, "context windows from %s: %d, written to %s\n", source, len(registry.Windows), path)
+	return exitOK
 }
 
 type modelReport struct {
-	Slug         string   `json:"slug"`
-	Provider     string   `json:"provider"`
-	ID           string   `json:"id"`
-	Subscription string   `json:"subscription"`
-	Use          string   `json:"use"`
-	Windows      []string `json:"windows"`
-	Roles        []string `json:"roles,omitempty"`
-	Reason       string   `json:"reason,omitempty"`
-	File         string   `json:"file"`
+	Slug          string   `json:"slug"`
+	Provider      string   `json:"provider"`
+	ID            string   `json:"id"`
+	Subscription  string   `json:"subscription"`
+	Use           string   `json:"use"`
+	Windows       []string `json:"windows"`
+	ContextTokens int      `json:"context_tokens,omitempty"`
+	WindowFrom    string   `json:"window_from,omitempty"`
+	Roles         []string `json:"roles,omitempty"`
+	Reason        string   `json:"reason,omitempty"`
+	File          string   `json:"file"`
 }
 
 type modelsReport struct {
 	Subscriptions []string      `json:"subscriptions"`
 	Defaults      []string      `json:"defaults"`
 	Usable        int           `json:"usable"`
+	Table         string        `json:"table"`
+	Windowed      int           `json:"windowed"`
 	Unbound       []string      `json:"unbound_roles,omitempty"`
 	Models        []modelReport `json:"models"`
 }
@@ -128,10 +130,15 @@ func modelsVerb(args []string, out, errOut io.Writer, shade palette) int {
 		_, _ = fmt.Fprintf(errOut, "tofu models: %v\n", err)
 		return exitUsage
 	}
-	if discover {
-		return discoverModels(context.Background(), catalog, out)
+	registry, err := modelRegistry()
+	if err != nil {
+		_, _ = fmt.Fprintf(errOut, "tofu models: %v\n", err)
+		return exitUsage
 	}
-	report := modelsOf(catalog)
+	if discover {
+		return discoverModels(context.Background(), catalog, registry, out)
+	}
+	report := modelsOf(catalog, registry)
 	if !asJSON {
 		_, _ = fmt.Fprint(out, modelsText(catalog, report, shade))
 		return exitOK
@@ -143,8 +150,8 @@ func modelsVerb(args []string, out, errOut io.Writer, shade palette) int {
 	return exitOK
 }
 
-func modelsOf(catalog models.Catalog) modelsReport {
-	report := modelsReport{Models: make([]modelReport, 0, len(catalog.Models))}
+func modelsOf(catalog models.Catalog, registry models.Registry) modelsReport {
+	report := modelsReport{Table: registry.From, Models: make([]modelReport, 0, len(catalog.Models))}
 	for _, spec := range catalog.Subscriptions {
 		report.Subscriptions = append(report.Subscriptions, string(spec.ID))
 	}
@@ -160,16 +167,22 @@ func modelsOf(catalog models.Catalog) modelsReport {
 		}
 	}
 	for _, model := range catalog.Models {
+		contextTokens, windowFrom := models.WindowFor(model, registry, models.Served{})
+		if contextTokens > 0 {
+			report.Windowed++
+		}
 		report.Models = append(report.Models, modelReport{
-			Slug:         model.Slug(),
-			Provider:     string(model.Provider),
-			ID:           model.ID,
-			Subscription: string(model.Subscription),
-			Use:          string(model.Use),
-			Windows:      model.Windows,
-			Roles:        bound[model.Slug()],
-			Reason:       model.Reason,
-			File:         model.File,
+			Slug:          model.Slug(),
+			Provider:      string(model.Provider),
+			ID:            model.ID,
+			Subscription:  string(model.Subscription),
+			Use:           string(model.Use),
+			Windows:       model.Windows,
+			ContextTokens: contextTokens,
+			WindowFrom:    windowFrom,
+			Roles:         bound[model.Slug()],
+			Reason:        model.Reason,
+			File:          model.File,
 		})
 		switch model.Use {
 		case models.UseDefault:
@@ -192,6 +205,11 @@ func modelsText(catalog models.Catalog, report modelsReport, shade palette) stri
 		for _, line := range subscriptionLines(report, spec) {
 			body.WriteString(line + "\n")
 		}
+	}
+	body.WriteString("\n")
+	for _, line := range wrapped("windows", strconv.Itoa(report.Windowed)+" of "+strconv.Itoa(len(report.Models))+
+		" models take a context window from "+report.Table+", and "+models.RefreshVerb+" reads the table again") {
+		body.WriteString(line + "\n")
 	}
 	label := "roles"
 	for _, id := range report.Unbound {
@@ -222,7 +240,8 @@ func subscriptionLines(report modelsReport, spec models.SubscriptionSpec) []stri
 		}
 		switch models.Use(model.Use) {
 		case models.UseDefault:
-			lines = append(lines, wrapped(label, withRoles(model)+" by default on --wire "+spec.Wire+", spends "+strings.Join(model.Windows, " and "))...)
+			lines = append(lines, wrapped(label, withRoles(model)+" by default on --wire "+spec.Wire+
+				", a "+strconv.Itoa(model.ContextTokens)+" token window, spends "+strings.Join(model.Windows, " and "))...)
 			label = ""
 		case models.UseAllowed:
 			allowed = append(allowed, withRoles(model))
@@ -244,7 +263,7 @@ func subscriptionLines(report modelsReport, spec models.SubscriptionSpec) []stri
 	return lines
 }
 
-func discoverModels(ctx context.Context, catalog models.Catalog, out io.Writer) int {
+func discoverModels(ctx context.Context, catalog models.Catalog, registry models.Registry, out io.Writer) int {
 	store, client, err := discoveryStore()
 	if err != nil {
 		_, _ = fmt.Fprintf(out, "tofu models: %v\n", err)
@@ -277,7 +296,7 @@ func discoverModels(ctx context.Context, catalog models.Catalog, out io.Writer) 
 			code = exitVerdict
 			continue
 		}
-		for _, line := range catalog.Reconcile(served).Lines() {
+		for _, line := range catalog.Reconcile(served, registry).Lines() {
 			_, _ = fmt.Fprintln(out, line)
 		}
 	}

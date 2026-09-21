@@ -1,17 +1,19 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
+	"os"
 	"strings"
 
 	shipped "tofu/catalog"
-	catalogpolicy "tofu/catalog/policy"
 	"tofu/catalog/questions"
-	catalogrules "tofu/catalog/rules"
 	"tofu/internal/judge/question"
 	"tofu/internal/llm/models"
+	"tofu/internal/rule"
+	"tofu/internal/sys"
 )
 
 const catalogUsage = "usage: tofu catalog [resolve <name>]"
@@ -44,6 +46,31 @@ func catalogResolve(name string, out, errOut io.Writer) int {
 	return exitOK
 }
 
+func catalogSource() (fs.FS, string, string) {
+	dir, err := sys.CatalogDir()
+	if err != nil {
+		return shipped.Files(), catalogRoot, rulesFromTheBinary
+	}
+	isDir, err := sys.IsDir(dir)
+	if err != nil || !isDir {
+		return shipped.Files(), catalogRoot, rulesFromTheBinary
+	}
+	return os.DirFS(dir), dir, rulesFromTheProject
+}
+
+func printDomains(out io.Writer, domains []rule.Domain) []error {
+	var refused []error
+	for _, domain := range domains {
+		_, _ = fmt.Fprintf(out, "  %-9s rules %2d   thresholds %2d   skills %2d   agents %2d   references %2d\n",
+			domain.Name, len(domain.Rules), len(domain.Thresholds), len(domain.Skills), len(domain.Agents), len(domain.References))
+		refused = append(refused, domain.Refused...)
+		for _, unreachable := range domain.Unreachable() {
+			refused = append(refused, errors.New(unreachable))
+		}
+	}
+	return refused
+}
+
 func catalogReport(out, errOut io.Writer) int {
 	layers, err := models.Layers(shipped.Files())
 	if err != nil {
@@ -64,18 +91,22 @@ func catalogReport(out, errOut io.Writer) int {
 		}
 		_, _ = fmt.Fprintf(out, "%-14s %3d loaded   %s\n", contract.Kind, loaded[contract.Kind], fields)
 	}
-	for _, kind := range []struct {
-		name  string
-		files fs.FS
-		is    string
-	}{
-		{"questions", questions.Files(), "the wording a decision point asks, checked by tofu catalog resolve"},
-		{"policy", catalogpolicy.Files(), "the mode and the thresholds a decision point reads, checked by tofu doctor"},
-		{"rules", catalogrules.Files(), "the standing rules a turn is held to, checked by tofu rules list"},
-	} {
-		names, _ := fs.Glob(kind.files, "*.yaml")
-		_, _ = fmt.Fprintf(out, "%-14s %3d shipped  %s\n", kind.name, len(names), kind.is)
+
+	sets, refused := question.LoadAll(questions.Files(), catalogRoot+"/questions")
+	_, _ = fmt.Fprintf(out, "%-14s %3d loaded   the wording a decision point asks, checked by tofu catalog resolve\n", "questions", len(sets))
+
+	proxy := loadProxySetting(".")
+	refused = append(refused, proxy.refused...)
+	_, _ = fmt.Fprintf(out, "%-14s use %-3s   from %s   required use, timeout_ms\n", "proxy", proxy.use, proxy.layer)
+
+	files, dir, origin := catalogSource()
+	domains, err := rule.LoadDomains(files, catalogRoot)
+	if err != nil {
+		_, _ = fmt.Fprintf(errOut, "tofu catalog: %v\n", err)
+		return exitUsage
 	}
+	_, _ = fmt.Fprintf(out, "\ndomains from %s, %s\n", origin, dir)
+	refused = append(refused, printDomains(out, domains)...)
 
 	origins := make([]string, 0, len(layers))
 	for _, layer := range layers {
@@ -83,12 +114,15 @@ func catalogReport(out, errOut io.Writer) int {
 	}
 	_, _ = fmt.Fprintf(out, "\nlayered %s, the last one winning field by field\n", strings.Join(origins, ", then "))
 
-	if len(catalog.Broken) == 0 {
+	for _, broken := range catalog.Broken {
+		refused = append(refused, broken)
+	}
+	if len(refused) == 0 {
 		return exitOK
 	}
-	_, _ = fmt.Fprintf(out, "\n%d refused\n", len(catalog.Broken))
-	for _, refused := range catalog.Broken {
-		_, _ = fmt.Fprintln(out, "  "+refused.Error())
+	_, _ = fmt.Fprintf(out, "\n%d refused\n", len(refused))
+	for _, one := range refused {
+		_, _ = fmt.Fprintln(out, "  "+one.Error())
 	}
 	return exitVerdict
 }

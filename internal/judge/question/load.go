@@ -2,6 +2,8 @@ package question
 
 import (
 	"fmt"
+	"io/fs"
+	"path"
 	"strconv"
 	"strings"
 
@@ -28,6 +30,40 @@ func Load(path string) (Set, error) {
 	return decode(root, name, version, path)
 }
 
+func LoadAll(sets fs.FS, root string) ([]Set, []error) {
+	names, err := fs.Glob(sets, "*.yaml")
+	if err != nil {
+		return nil, []error{err}
+	}
+	var loaded []Set
+	var refused []error
+	for _, name := range names {
+		data, err := fs.ReadFile(sets, name)
+		if err != nil {
+			refused = append(refused, err)
+			continue
+		}
+		file := path.Join(root, name)
+		base, version, ok := splitFileName(name)
+		if !ok {
+			refused = append(refused, fmt.Errorf("%s: a question file is named <set>@<version>.yaml", file))
+			continue
+		}
+		tree, err := parse(file, data)
+		if err != nil {
+			refused = append(refused, err)
+			continue
+		}
+		set, err := decode(tree, base, version, file)
+		if err != nil {
+			refused = append(refused, err)
+			continue
+		}
+		loaded = append(loaded, set)
+	}
+	return loaded, refused
+}
+
 func decode(root *node, name string, version int, file string) (Set, error) {
 	if root == nil || root.kind != nodeMap {
 		return Set{}, fmt.Errorf("%s: a question file is a map", file)
@@ -35,6 +71,12 @@ func decode(root *node, name string, version int, file string) (Set, error) {
 	set := Set{Name: name, Version: version, File: file}
 	if n, ok := root.child("name"); ok && n.kind == nodeScalar && n.text != "" {
 		set.Name = n.text
+	}
+	if n, ok := root.child("domain"); ok && n.kind == nodeScalar {
+		set.Domain = n.text
+	}
+	if set.Domain == "" {
+		return Set{}, fmt.Errorf("%s: the question set declares no domain", file)
 	}
 	if n, ok := root.child("questions_version"); ok && n.kind == nodeScalar && n.text != "" {
 		v, err := strconv.Atoi(n.text)

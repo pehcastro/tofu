@@ -28,11 +28,7 @@ const (
 )
 
 func (s Subscription) valid() bool {
-	switch s {
-	case Claude, Codex:
-		return true
-	}
-	return false
+	return s != "" && !strings.ContainsAny(string(s), " /\t\n")
 }
 
 type Use string
@@ -61,17 +57,23 @@ type SubscriptionSpec struct {
 }
 
 type Model struct {
-	Provider      Provider
-	ID            string
-	Subscription  Subscription
-	Windows       []string
-	ContextTokens int
-	Use           Use
-	Reason        string
-	File          string
+	Provider     Provider
+	ID           string
+	Subscription Subscription
+	Windows      []string
+	Use          Use
+	Reason       string
+	File         string
 }
 
-func (m Model) Slug() string { return string(m.Provider) + "/" + m.ID }
+func (m Model) Slug() string {
+	if m.Subscription != "" {
+		return string(m.Subscription) + "-sub/" + m.ID
+	}
+	return string(m.Provider) + "/" + m.ID
+}
+
+func (m Model) VendorSlug() string { return string(m.Provider) + "/" + m.ID }
 
 func (m Model) WindowText() string { return strings.Join(m.Windows, " and ") }
 
@@ -149,17 +151,20 @@ func (c Catalog) Select(slug string) (Model, error) {
 	return Model{}, &Refusal{Kind: RefusedUnknown, Slug: slug, Known: known}
 }
 
-func (c Catalog) ContextTokens(recordedName string) (int, bool) {
-	bare, bareMatches := 0, 0
+func (c Catalog) Resolve(recorded string) (Model, bool) {
 	for _, model := range c.Models {
-		switch recordedName {
-		case model.Slug():
-			return model.ContextTokens, model.ContextTokens > 0
-		case model.ID:
-			bare, bareMatches = model.ContextTokens, bareMatches+1
+		if model.Slug() == recorded {
+			return model, true
 		}
 	}
-	return bare, bareMatches == 1 && bare > 0
+	var bare Model
+	bareMatches := 0
+	for _, model := range c.Models {
+		if model.ID == recorded {
+			bare, bareMatches = model, bareMatches+1
+		}
+	}
+	return bare, bareMatches == 1
 }
 
 func (c Catalog) Default(subscription Subscription) (Model, error) {

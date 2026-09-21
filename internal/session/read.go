@@ -136,7 +136,7 @@ func (s Settings) withReads(events []Event) ([]Event, error) {
 			if err != nil {
 				return nil, err
 			}
-			recorded = append(recorded, Event{Kind: EventRead, Body: body})
+			recorded = append(recorded, Event{ID: NewEventID(), Parent: event.ID, Author: event.Author, Attempt: event.Attempt, Kind: EventRead, Body: body})
 		}
 	}
 	return recorded, nil

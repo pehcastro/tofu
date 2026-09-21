@@ -10,6 +10,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"tofu/internal/transport"
 )
 
 type stubCredential struct {
@@ -48,6 +50,43 @@ func TestTheUsageEndpointIsPolledOnceAndNeverRetriedInsideOneCall(t *testing.T) 
 	}
 	if got := hits.Load(); got != 1 {
 		t.Fatalf("the usage endpoint was called %d times, want one, retrying only deepens the throttle", got)
+	}
+}
+
+func TestAFailedPollKeepsTheCauseAndTheRequestID(t *testing.T) {
+	var seenRequestID string
+	poller := stubCodexPoller(t, func(w http.ResponseWriter, r *http.Request) {
+		seenRequestID = r.Header.Get(transport.RequestIDHeader)
+		http.Error(w, "usage is down for maintenance", http.StatusInternalServerError)
+	})
+	_, err := poller.Poll(context.Background(), Account{Provider: Codex, Credential: stubCredential{token: "token"}})
+	if err == nil {
+		t.Fatal("a broken usage endpoint reported success")
+	}
+	var failure *transport.Error
+	if !errors.As(err, &failure) {
+		t.Fatalf("the failure is not a transport error: %v", err)
+	}
+	if seenRequestID == "" || failure.RequestID != seenRequestID {
+		t.Fatalf("the failure carries request id %q and the endpoint saw %q, so nothing can be chased with the vendor",
+			failure.RequestID, seenRequestID)
+	}
+	if failure.Status != http.StatusInternalServerError {
+		t.Fatalf("the failure carries status %d", failure.Status)
+	}
+	if !strings.Contains(err.Error(), "usage is down for maintenance") {
+		t.Fatalf("the cause underneath was dropped: %v", err)
+	}
+}
+
+func TestABrokenCredentialKeepsTheCauseUnderneath(t *testing.T) {
+	poller := stubCodexPoller(t, func(http.ResponseWriter, *http.Request) {
+		t.Error("a broken credential still reached the usage endpoint")
+	})
+	cause := errors.New("cred: the codex refresh token expired")
+	_, err := poller.Poll(context.Background(), Account{Provider: Codex, Credential: stubCredential{err: cause}})
+	if !errors.Is(err, cause) {
+		t.Fatalf("the credential error is not reachable underneath: %v", err)
 	}
 }
 

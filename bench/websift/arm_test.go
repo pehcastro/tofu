@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	catalogpolicy "tofu/catalog/policy"
+	catalog "tofu/catalog"
 	"tofu/internal/sift"
 )
 
@@ -49,19 +49,19 @@ func byGroup(rows []Row, group string) []Row {
 	return out
 }
 
-func shippedPolicy(t *testing.T) sift.PagePolicy {
+func shippedRule(t *testing.T) sift.PageRule {
 	t.Helper()
-	pol, err := sift.LoadPagePolicy(catalogpolicy.Files(), "page_sift@1.yaml")
+	r, err := sift.LoadPageRule(catalog.Files(), "page_sift@1")
 	if err != nil {
-		t.Fatalf("load the shipped policy: %v", err)
+		t.Fatalf("load the shipped rule: %v", err)
 	}
-	return pol
+	return r
 }
 
-func TestTheShippedPolicyIsShadowAndTheModelIsGivenThePageWhole(t *testing.T) {
-	pol := shippedPolicy(t)
+func TestTheShippedRuleIsShadowAndTheModelIsGivenThePageWhole(t *testing.T) {
+	pol := shippedRule(t)
 	if pol.Mode != sift.ModeShadow {
-		t.Fatalf("catalog/policy/page_sift@1.yaml is %s and nothing has been calibrated on fetched pages", pol.Mode)
+		t.Fatalf("catalog/tools/fetch/rules/page_sift@1.yaml is %s and nothing has been calibratedon fetched pages", pol.Mode)
 	}
 	wouldDrop := 0
 	for i, row := range corpusRows(t) {

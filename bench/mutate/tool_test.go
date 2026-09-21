@@ -13,7 +13,7 @@ func TestCommandPutsThePackagePatternLastAndRunsInTheDirectoryItWasGiven(t *test
 		t.Fatalf("the command runs in %q, want the directory it was given", cmd.Dir)
 	}
 	argv := strings.Join(cmd.Args[1:], " ")
-	if argv != "unleash --timeout-coefficient 30 --workers 4 ./internal/judge/policy/" {
+	if argv != "unleash --timeout-coefficient 5 --workers 1 ./internal/judge/policy/" {
 		t.Fatalf("argv = %q", argv)
 	}
 }

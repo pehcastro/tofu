@@ -22,12 +22,12 @@ func repoPaths() []string {
 func pathApp(t *testing.T, entered chan<- string) *App {
 	t.Helper()
 	app := newTestApp(Options{
-		Repo:   "silo",
+		Repo:   testRepo,
 		Branch: "develop",
 		Now:    fixedClock(),
 		Wires:  anthropicAlone,
 		Paths:  repoPaths,
-		Turn: func(_ context.Context, _, task string, _ func(Event)) {
+		Turn: func(_ context.Context, _, task string, _ CalledFromInsideTheTurnAndNeverAfterItReturns) {
 			entered <- task
 		},
 	})

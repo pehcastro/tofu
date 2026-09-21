@@ -1,0 +1,31 @@
+[38;5;252;48;5;236m./tofu  ·  develop  ·  claude-sub/claude-opus-5  ·  amber-cedar-otter #3c5f71  ·  8s[m[48;5;236m                [m
+[38;5;39m[1] chat[m   [38;5;240m[2] work[m   [38;5;240m[3] file edits[m   [38;5;240m[4] sub-agents[m   [38;5;240m[5] shells[m                                  
+                                                                                                    
+[38;5;39m» why does the gate read the policy first?[m                                                          
+[38;5;39m⠴ read internal/judge/policy/toolgate.go[m                                                         [38;5;223m#c1[m
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+[38;5;44m⠦ 4s     working   read internal/judge/policy/toolgate.go                                           [m
+[100m                                                                                                    [m
+[100m[100m[100m[37;100m  [m[m[100m[38;5;240;100mh[m[m[100m[38;5;240;100mey tofu, can you explain this repository to me?[m[m[100m[100m                                                  [m
+[100m[100m[38;5;240;100m[37;100m  [m[m[30;100m [m[100m                                                                                                 [m
+[100m[100m[38;5;240;100m[37;100m  [m[m[30;100m [m[100m                                                                                                 [m
+[100m                                                                                                    [m
+[38;5;240mctrl+c stops the turn   ⏎ send   ⇧⏎ newline   / commands[m                                            
+[38;5;252;48;5;236m118k/250k ▓▓▓▓▓▓░░░░░░  ·  claude 5h  62%  resets in 3h 27m  ·  claude weekly  31%  resets in 1d 5h[m[48;5;236m [m
+[38;5;252;48;5;236m291k read  61k write  190k cached  ·  jev 3  ·  tofu 0.4.0[m[48;5;236m                                          [m

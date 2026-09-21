@@ -53,7 +53,7 @@ func doctorGroups(report doctorReport) [][]string {
 	groups = append(groups, access)
 
 	state := line("catalog", catalogText(report.Catalog))
-	state = append(state, policyText(report.Policies, report.Root)...)
+	state = append(state, ruleText(report.Rules, report.Root)...)
 	state = append(state, line("calibration", report.Calibration)...)
 	state = append(state, line("ledger", report.Ledger)...)
 	return append(groups, state)
@@ -98,17 +98,17 @@ func catalogText(catalog doctorCatalog) string {
 	return fmt.Sprintf("the one in the binary, %d points, nothing overrides it in %s", catalog.Points, catalog.Dir)
 }
 
-type policyGroup struct {
+type ruleGroup struct {
 	settled string
 	count   int
 	point   string
 	decides bool
 }
 
-func policyText(policies []doctorPolicy, root string) []string {
-	var groups []policyGroup
+func ruleText(rules []doctorRule, root string) []string {
+	var groups []ruleGroup
 	var odd []string
-	for _, point := range policies {
+	for _, point := range rules {
 		if point.Unusable != "" {
 			odd = append(odd, point.Point+" unusable, "+point.Unusable)
 			continue
@@ -128,11 +128,11 @@ func policyText(policies []doctorPolicy, root string) []string {
 			found = true
 		}
 		if !found {
-			groups = append(groups, policyGroup{settled: settled, count: 1, point: point.Point, decides: point.Point == runGatePoint})
+			groups = append(groups, ruleGroup{settled: settled, count: 1, point: point.Point, decides: point.Point == runGatePoint})
 		}
 	}
 	var lines []string
-	label := "policy"
+	label := "rules"
 	for _, group := range groups {
 		head := group.point + " " + group.settled
 		if group.count > 1 {

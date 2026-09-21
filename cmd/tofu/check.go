@@ -7,10 +7,11 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 
+	"tofu/internal/judge/gate"
 	"tofu/internal/judge/jev"
 	"tofu/internal/judge/ledger"
-	"tofu/internal/judge/policy"
 	"tofu/internal/judge/state"
 	"tofu/internal/sys"
 )
@@ -30,7 +31,18 @@ func checkVerb(args []string, out, errOut io.Writer) int {
 	if err != nil {
 		return checkFail(errOut, err)
 	}
-	policyPath := sys.Join(catalogDir, "policy", runGatePoint+".yaml")
+	rulePath := ""
+	isDir, err := sys.IsDir(catalogDir)
+	if err != nil {
+		return checkFail(errOut, err)
+	}
+	if isDir {
+		found, err := gate.FindRule(os.DirFS(catalogDir), runGatePoint)
+		if err != nil {
+			return checkFail(errOut, err)
+		}
+		rulePath = sys.Join(catalogDir, filepath.FromSlash(found))
+	}
 
 	key, err := jev.Key(".env")
 	if err != nil {
@@ -41,7 +53,7 @@ func checkVerb(args []string, out, errOut io.Writer) int {
 		return checkFail(errOut, err)
 	}
 
-	row, err := runCheck(context.Background(), client, policyPath, opts.command)
+	row, err := runCheck(context.Background(), client, rulePath, opts.command)
 	if err != nil {
 		return checkFail(errOut, err)
 	}
@@ -74,7 +86,7 @@ func parseCheckArgs(args []string) (checkOpts, error) {
 	return opts, nil
 }
 
-func runCheck(ctx context.Context, client *jev.Client, policyPath, command string) (ledger.Row, error) {
+func runCheck(ctx context.Context, client *jev.Client, rulePath, command string) (ledger.Row, error) {
 	cwd, err := os.Getwd()
 	if err != nil {
 		return ledger.Row{}, err
@@ -96,11 +108,11 @@ func runCheck(ctx context.Context, client *jev.Client, policyPath, command strin
 	}
 	rawState := json.RawMessage(built)
 
-	pol, err := policy.Load(policyPath)
+	r, err := gate.Load(rulePath)
 	if err != nil {
 		return ledger.Row{}, err
 	}
-	set.Policy, set.Mode = &pol, policy.ModeShadow
+	set.Rule, set.Mode = &r, gate.ModeShadow
 
 	decision, err := client.Ask(ctx, jev.Request{State: rawState, Questions: set.Questions})
 	if err != nil {

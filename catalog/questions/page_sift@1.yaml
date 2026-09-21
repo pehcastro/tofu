@@ -1,4 +1,5 @@
 name: page_sift
+domain: fetch
 questions_version: 1
 
 state:

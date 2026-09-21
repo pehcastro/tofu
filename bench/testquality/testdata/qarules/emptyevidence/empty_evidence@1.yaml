@@ -1,0 +1,7 @@
+id: empty_evidence
+domain: qa
+kind: structural
+checker: comments
+mode: shadow
+source: .local/sources/qa-skills/qaskills.sh/Pramod/flaky-test-quarantine/SKILL.md
+evidence: ""

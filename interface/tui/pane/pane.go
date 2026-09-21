@@ -12,6 +12,10 @@ func Cell(text string, width int, style lipgloss.Style) string {
 	return style.Render(widget.Pad(widget.Fit(text, width), width))
 }
 
+func Raw(text string, width int) string {
+	return widget.Pad(widget.Fit(text, width), width)
+}
+
 func Block(marker, body string, width int, style lipgloss.Style) []string {
 	room := max(width-widget.Cells(marker), 1)
 	var lines []string

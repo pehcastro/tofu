@@ -29,6 +29,7 @@ func liveClient(t *testing.T) (*jev.Client, question.Set) {
 	if os.Getenv("TOFU_LIVE") != "1" {
 		t.Skip("set TOFU_LIVE=1 to put the question to the real jev route")
 	}
+	jev.AllowLiveCredential(t)
 	key, err := jev.Key(filepath.Join(repoRoot, ".env"))
 	if err != nil {
 		t.Fatalf("no credential: %v", err)
@@ -51,7 +52,7 @@ func liveClient(t *testing.T) (*jev.Client, question.Set) {
 
 func TestTheJudgedArmAgainstTheFreeArmsOverEveryFetchedPage(t *testing.T) {
 	client, set := liveClient(t)
-	pol := shippedPolicy(t)
+	pol := shippedRule(t)
 	rows := corpusRows(t)
 
 	for run := 1; run <= 2; run++ {

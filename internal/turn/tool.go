@@ -37,14 +37,9 @@ func NewRegistry(tools ...Tool) Registry {
 	return Registry{tools: tools, byName: byName}
 }
 
-func (r Registry) lookup(name string) (Tool, bool) {
-	tool, ok := r.byName[name]
-	return tool, ok
-}
-
 func readOnly(name string) bool {
 	switch name {
-	case "read", "glob", "grep", "search", "symbols", "project_report", "artifact_fetch", "fetch", "web_search", "github_pr_diff":
+	case "read", "glob", "search", "symbols", "project_report", "artifact_fetch", "fetch", "web_search", "github_pr_diff":
 		return true
 	}
 	return false
@@ -52,7 +47,7 @@ func readOnly(name string) bool {
 
 func (r Registry) parallelPrefix(calls []llm.ToolCall) int {
 	for i, call := range calls {
-		if _, known := r.lookup(call.Name); !known || !readOnly(call.Name) {
+		if _, known := r.byName[call.Name]; !known || !readOnly(call.Name) {
 			return i
 		}
 	}

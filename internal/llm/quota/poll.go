@@ -3,6 +3,7 @@ package quota
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"sync"
 	"time"
@@ -80,7 +81,7 @@ func (p *Poller) Poll(ctx context.Context, account Account) (Report, error) {
 func (p *Poller) fetch(ctx context.Context, account Account) (Report, error) {
 	token, err := account.Credential.Access(ctx)
 	if err != nil {
-		return Report{}, transport.Fail("quota.Poll", transport.KindMissingCredential, nil,
+		return Report{}, transport.Fail("quota.Poll", transport.KindMissingCredential, err,
 			"the %s credential could not be resolved", account.Provider)
 	}
 	request := transport.Request{Method: http.MethodGet, URL: p.urls[account.Provider], Header: http.Header{}}
@@ -101,13 +102,18 @@ func (p *Poller) fetch(ctx context.Context, account Account) (Report, error) {
 	response, err := p.client.Do(ctx, request)
 	if err != nil {
 		var failure *transport.Error
-		status := 0
-		if errors.As(err, &failure) {
-			status = failure.Status
+		if !errors.As(err, &failure) {
+			return Report{}, err
 		}
-		return Report{}, transport.Fail("quota.Poll", transport.KindOf(err), nil,
-			"the %s usage endpoint answered %d and it is not polled again inside this call",
-			account.Provider, status)
+		return Report{}, &transport.Error{
+			Kind:      failure.Kind,
+			Op:        "quota.Poll",
+			Status:    failure.Status,
+			RequestID: failure.RequestID,
+			Detail: fmt.Sprintf("the %s usage endpoint answered %d and it is not polled again inside this call",
+				account.Provider, failure.Status),
+			Err: err,
+		}
 	}
 	if account.Provider == Anthropic {
 		return FromAnthropicUsage(response.Body, p.now())

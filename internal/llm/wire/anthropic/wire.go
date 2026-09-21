@@ -10,16 +10,16 @@ import (
 	"strings"
 	"time"
 
+	"tofu/internal/konst"
+	"tofu/internal/llm"
 	"tofu/internal/transport"
 )
 
 const (
-	Name                    = "anthropic"
+	Name                    = llm.WireAnthropic
 	MessagesPath            = "/v1/messages"
 	OAuthQuery              = "?beta=true"
 	WatchdogSeconds         = 600
-	RedactedCredential      = "<redacted>"
-	ErrorDetailBytes        = 512
 	unattestedRequestNotice = "the billing placeholder is present but not patched; sending an unattested request"
 )
 
@@ -30,6 +30,7 @@ type Config struct {
 	Model     string
 	Token     TokenSource
 	HTTP      *http.Client
+	Transport transport.Config
 	Watchdog  time.Duration
 	Proxy     bool
 	SessionID string
@@ -59,38 +60,17 @@ func New(config Config) (*Wire, error) {
 	if config.Watchdog <= 0 {
 		config.Watchdog = WatchdogSeconds * time.Second
 	}
-	client := config.HTTP
-	if client == nil {
-		client = &http.Client{}
+	client := &http.Client{}
+	if config.HTTP != nil {
+		*client = *config.HTTP
 	}
+	client.Transport = llm.Retrying(client.Transport, config.Transport)
 	return &Wire{config: config, http: client}, nil
 }
 
 type Dump struct {
-	Method      string
-	URL         string
-	Headers     []Header
-	Body        []byte
+	llm.Dump
 	Attestation Attestation
-}
-
-func (d Dump) String() string {
-	var out strings.Builder
-	out.WriteString(d.Method + " " + d.URL + "\n")
-	for _, header := range d.Headers {
-		value := header.Value
-		switch strings.ToLower(header.Name) {
-		case "authorization":
-			value = "Bearer " + RedactedCredential
-		case "x-api-key":
-			value = RedactedCredential
-		}
-		out.WriteString(header.Name + ": " + value + "\n")
-	}
-	out.WriteString("\n")
-	out.Write(d.Body)
-	out.WriteString("\n")
-	return out.String()
 }
 
 func (w *Wire) Ask(ctx context.Context, request Request) (Result, Dump, error) {
@@ -108,6 +88,11 @@ func (w *Wire) Ask(ctx context.Context, request Request) (Result, Dump, error) {
 			"the token source returned nothing")
 	}
 	oauth := IsOAuthToken(token)
+	if oauth && request.SessionID == "" {
+		if request.SessionID, err = randomUUID(); err != nil {
+			return Result{}, Dump{}, err
+		}
+	}
 
 	body, err := request.Encode(oauth)
 	if err != nil {
@@ -124,18 +109,27 @@ func (w *Wire) Ask(ctx context.Context, request Request) (Result, Dump, error) {
 	}
 
 	dump := Dump{
-		Method: http.MethodPost,
-		URL:    w.endpoint(oauth),
-		Headers: Headers(HeaderOptions{
-			Token:        token,
-			OAuth:        oauth,
-			Stream:       true,
-			AgentRequest: len(request.Tools) > 0 || request.Thinking,
-			Thinking:     request.Thinking,
-			SessionID:    request.SessionID,
-			ExtraBetas:   request.extraBetas(oauth),
-		}),
-		Body:        body,
+		Dump: llm.Dump{
+			Method: http.MethodPost,
+			URL:    w.endpoint(oauth),
+			Headers: Headers(HeaderOptions{
+				Token:        token,
+				OAuth:        oauth,
+				Stream:       true,
+				AgentRequest: len(request.Tools) > 0 || request.Thinking,
+				Thinking:     request.Thinking,
+				SessionID:    request.SessionID,
+				ExtraBetas:   request.extraBetas(oauth),
+			}),
+			Body: body,
+			Identifiers: []string{
+				request.SessionID,
+				request.AccountID,
+				request.InstallID,
+				request.UserID,
+				deviceID(request.InstallID, request.AccountID),
+			},
+		},
 		Attestation: attestation,
 	}
 
@@ -178,9 +172,9 @@ func (w *Wire) post(ctx context.Context, dump Dump, oauth bool, onDelta func(str
 	defer func() { _ = response.Body.Close() }()
 
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		detail, _ := io.ReadAll(io.LimitReader(response.Body, ErrorDetailBytes))
+		detail, _ := io.ReadAll(io.LimitReader(response.Body, konst.TransportErrorDetailBytes))
 		return Result{}, &transport.Error{
-			Kind:   statusKind(response.StatusCode),
+			Kind:   transport.StatusKind(response.StatusCode),
 			Op:     "anthropic.Ask",
 			Status: response.StatusCode,
 			Detail: strings.TrimSpace(string(detail)),
@@ -211,22 +205,4 @@ func decoded(response *http.Response) (io.ReadCloser, error) {
 	return nil, transport.Fail("anthropic.Ask", transport.KindProvider, nil,
 		"the response is encoded as %q and this wire decodes only gzip and deflate",
 		response.Header.Get("Content-Encoding"))
-}
-
-func statusKind(status int) transport.Kind {
-	switch {
-	case status == http.StatusUnauthorized, status == http.StatusForbidden:
-		return transport.KindAuth
-	case status == http.StatusPaymentRequired:
-		return transport.KindBilling
-	case status == http.StatusNotFound:
-		return transport.KindModelAccess
-	case status == http.StatusRequestEntityTooLarge:
-		return transport.KindRequestTooLarge
-	case status == http.StatusTooManyRequests:
-		return transport.KindRateLimit
-	case status >= 500:
-		return transport.KindProvider
-	}
-	return transport.KindBadRequest
 }

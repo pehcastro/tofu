@@ -5,13 +5,13 @@ import (
 	"strings"
 	"testing"
 
+	"tofu/internal/judge/gate"
 	"tofu/internal/judge/jev"
-	"tofu/internal/judge/policy"
 )
 
-func shippedGate(t *testing.T) (policy.Policy, policy.Resolution) {
+func shippedGate(t *testing.T) (gate.Rule, gate.Resolution) {
 	t.Helper()
-	pol, resolution, err := gatePolicy(repoRoot)
+	pol, resolution, err := gateRule(repoRoot)
 	if err != nil {
 		t.Fatalf("loading the shipped tool gate: %v", err)
 	}
@@ -40,12 +40,12 @@ func TestTheArmAndTheGateReachTheSameVerdictFromTheSameAnswers(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%+v: %v", answer, err)
 		}
-		gateVerdict, _, err := policy.Decide(answers, pol)
+		gateVerdict, _, err := gate.Decide(answers, pol)
 		if err != nil {
 			t.Fatalf("%+v: %v", answer, err)
 		}
 		want := Block
-		if gateVerdict == policy.VerdictAllow {
+		if gateVerdict == gate.VerdictAllow {
 			want = Proceed
 		}
 		if armVerdict != want {
@@ -59,12 +59,12 @@ func TestTheArmRefusesAnAnswerSetTheGateWouldRefuse(t *testing.T) {
 	answers := answerMap(pol, gateAnswers{Risk: 3})
 	delete(answers, pol.RiskQuestion)
 	if _, _, err := decide(answers, pol); err == nil {
-		t.Fatal("the arm decided without a risk answer, so it is not going through policy.Decide")
+		t.Fatal("the arm decided without a risk answer, so it is not going through gate.Decide")
 	}
 	answers = answerMap(pol, gateAnswers{Risk: 3})
 	answers[pol.RiskQuestion] = jev.Answer{Kind: jev.QuestionNoul, Noul: 1}
 	if _, _, err := decide(answers, pol); err == nil {
-		t.Fatal("the arm read a noul where the policy needs a score")
+		t.Fatal("the arm read a noul where the rule needs a score")
 	}
 }
 

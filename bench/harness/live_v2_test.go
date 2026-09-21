@@ -16,7 +16,7 @@ const (
 	v2BeforeTestdata  = "testdata/v2-before"
 )
 
-func TestV2BojiArmRunsLiveAndProducesARow(t *testing.T) {
+func TestV2TofuArmRunsLiveAndProducesARow(t *testing.T) {
 	if os.Getenv(liveEnv) != "1" {
 		t.Skip("live: this runs the tofu arm against the playground and spends the subscription. Set " +
 			liveEnv + "=1 and " + binaryEnv + " to a built tofu binary to run it.")

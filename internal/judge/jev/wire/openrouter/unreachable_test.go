@@ -6,10 +6,10 @@ import (
 	"testing"
 	"time"
 
+	"tofu/internal/judge/gate"
 	"tofu/internal/judge/jev"
 	"tofu/internal/judge/jev/wire/openrouter"
 	"tofu/internal/judge/ledger"
-	"tofu/internal/judge/policy"
 	"tofu/internal/transport"
 )
 
@@ -36,7 +36,7 @@ func TestAnUnreachableEndpointStillLeavesARow(t *testing.T) {
 		t.Fatal("the unreachable endpoint answered, which cannot happen")
 	}
 
-	fallback := policy.DecideUnavailable(askErr, state)
+	fallback := gate.DecideUnavailable(askErr, state)
 	sentence := fallback.Sentence()
 	hash, err := ledger.Hash(state)
 	if err != nil {

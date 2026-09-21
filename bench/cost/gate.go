@@ -4,11 +4,11 @@ import (
 	"fmt"
 	"path/filepath"
 
+	"tofu/internal/judge/gate"
 	"tofu/internal/judge/jev"
-	"tofu/internal/judge/policy"
 )
 
-const gatePolicyFile = "catalog/policy/tool_gate@1.yaml"
+const gateRuleFile = "catalog/general/rules/tool_gate@1.yaml"
 
 type Verdict string
 
@@ -18,25 +18,25 @@ const (
 	Refused Verdict = "refused"
 )
 
-func gatePolicy(root string) (policy.Policy, policy.Resolution, error) {
-	pol, findings, err := policy.LintFile(filepath.Join(root, filepath.FromSlash(gatePolicyFile)))
+func gateRule(root string) (gate.Rule, gate.Resolution, error) {
+	pol, findings, err := gate.LintFile(filepath.Join(root, filepath.FromSlash(gateRuleFile)), filepath.Join(root, "catalog"))
 	if err != nil {
-		return policy.Policy{}, policy.Resolution{}, err
+		return gate.Rule{}, gate.Resolution{}, err
 	}
 	if len(findings) > 0 {
-		return policy.Policy{}, policy.Resolution{}, fmt.Errorf("%s fails its own lint: %s", gatePolicyFile, findings[0])
+		return gate.Rule{}, gate.Resolution{}, fmt.Errorf("%s fails its own lint: %s", gateRuleFile, findings[0])
 	}
-	pol.File = gatePolicyFile
-	resolution := policy.Resolve(pol, policy.LockLookup{}, policy.Current{})
-	return resolution.Policy, resolution, nil
+	pol.File = gateRuleFile
+	resolution := gate.Resolve(pol, gate.LockLookup{}, gate.Current{})
+	return resolution.Rule, resolution, nil
 }
 
-func decide(answers map[string]jev.Answer, pol policy.Policy) (Verdict, policy.Reason, error) {
-	verdict, reason, err := policy.Decide(answers, pol)
+func decide(answers map[string]jev.Answer, pol gate.Rule) (Verdict, gate.Reason, error) {
+	verdict, reason, err := gate.Decide(answers, pol)
 	if err != nil {
-		return "", policy.Reason{}, err
+		return "", gate.Reason{}, err
 	}
-	if verdict == policy.VerdictAllow {
+	if verdict == gate.VerdictAllow {
 		return Proceed, reason, nil
 	}
 	return Block, reason, nil
@@ -49,7 +49,7 @@ type gateAnswers struct {
 	FromUntrusted float64
 }
 
-func answerMap(pol policy.Policy, answers gateAnswers) map[string]jev.Answer {
+func answerMap(pol gate.Rule, answers gateAnswers) map[string]jev.Answer {
 	return map[string]jev.Answer{
 		pol.RiskQuestion:          {Kind: jev.QuestionScore, Score: answers.Risk},
 		pol.ApprovalQuestion:      {Kind: jev.QuestionNoul, Noul: answers.Approval},
@@ -58,7 +58,7 @@ func answerMap(pol policy.Policy, answers gateAnswers) map[string]jev.Answer {
 	}
 }
 
-func rowAnswers(pol policy.Policy, row AnswerRow) (map[string]jev.Answer, bool) {
+func rowAnswers(pol gate.Rule, row AnswerRow) (map[string]jev.Answer, bool) {
 	if !row.AnswersKnown || row.Risk == nil || row.FromUntrusted == nil {
 		return nil, false
 	}

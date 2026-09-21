@@ -54,9 +54,15 @@ func (o ToolOutcome) Failed() bool {
 	panic("llm: unknown tool outcome")
 }
 
+type Image struct {
+	MediaType string
+	Data      []byte
+}
+
 type Message struct {
 	Role            Role
 	Content         string
+	Images          []Image
 	ToolCallID      string
 	ToolCalls       []ToolCall
 	ToolOutcome     ToolOutcome
@@ -110,6 +116,10 @@ func (r Request) Encode(model string) ([]byte, error) {
 }
 
 func encodeMessage(index int, message Message) (wireMessage, error) {
+	if len(message.Images) > 0 {
+		return wireMessage{}, transport.Fail("llm.Encode", transport.KindBadRequest, nil,
+			"message %d carries an image; the openrouter wire does not send one", index)
+	}
 	switch message.Role {
 	case RoleSystem, RoleUser:
 		if message.Content == "" {

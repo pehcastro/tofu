@@ -7,6 +7,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
 	"tofu/interface/tui/crew"
@@ -28,37 +29,45 @@ func spinningRows(rows []string) []int {
 	return found
 }
 
-func ruleRow(t *testing.T, rows []string) int {
+const composerBlockRows = 5
+
+func composerTint() string {
+	escape, _, _ := strings.Cut(lipgloss.NewStyle().Background(theme.ComposerColor()).Render("X"), "X")
+	return escape
+}
+
+func composerTopRow(t *testing.T, content string) int {
 	t.Helper()
-	for index, row := range rows {
-		if strings.HasPrefix(row, strings.Repeat("─", activityWidth)) {
+	for index, row := range strings.Split(content, "\n") {
+		if strings.Contains(row, composerTint()) {
 			return index
 		}
 	}
-	t.Fatalf("no rule row in the frame:\n%s", strings.Join(rows, "\n"))
+	t.Fatalf("no composer row in the frame:\n%s", content)
 	return 0
 }
 
 func fixedStart() time.Time { return time.Date(2026, 9, 19, 14, 32, 0, 0, time.UTC) }
 
-func TestTheRunningRowSitsBetweenTheTranscriptAndTheRule(t *testing.T) {
+func TestTheRunningRowSitsBetweenTheTranscriptAndTheComposer(t *testing.T) {
 	at := fixedStart()
 	app := liveApp(t, &at)
 	view := app.View()
 	rows := plainRows(view)
-	rule := ruleRow(t, rows)
+	top := composerTopRow(t, view.Content)
 	running := spinningRows(rows)
-	if len(running) != 1 {
-		t.Fatalf("the frame carries %d spinning rows, want one\n%s", len(running), strings.Join(rows, "\n"))
+	if len(running) != 2 {
+		t.Fatalf("the frame carries %d spinning rows, want two, the progress line and the footer\n%s", len(running), strings.Join(rows, "\n"))
 	}
-	if running[0] != rule-1 {
-		t.Errorf("the running row is row %d and the rule is row %d, want the row just above it\n%s",
-			running[0], rule, strings.Join(rows, "\n"))
+	if running[1] != top-1 {
+		t.Errorf("the footer's running row is row %d and the composer begins at row %d, want the row just above it\n%s",
+			running[1], top, strings.Join(rows, "\n"))
 	}
-	fold := slices.IndexFunc(rows, func(row string) bool { return strings.Contains(row, "· 3 tools") })
-	if fold < 0 || fold >= running[0] {
-		t.Errorf("the run's fold line is row %d and the running row is %d, want the fold above it\n%s",
-			fold, running[0], strings.Join(rows, "\n"))
+	if fold := slices.IndexFunc(rows, func(row string) bool { return strings.Contains(row, " tools") }); fold >= 0 {
+		t.Errorf("row %d summarises a turn that has not ended\n%s", fold, strings.Join(rows, "\n"))
+	}
+	if !strings.Contains(rows[running[0]], "#") {
+		t.Errorf("the transcript's running line carries no id\n%s", rows[running[0]])
 	}
 	assertGolden(t, "session-activity-80x24.golden", view.Content)
 }
@@ -88,15 +97,14 @@ func TestTheWholeRunningRowCarriesThePhasesOwnColour(t *testing.T) {
 	}
 }
 
-func belowTheComposer(t *testing.T, rows []string) []string {
+func belowTheComposer(t *testing.T, view tea.View) []string {
 	t.Helper()
-	return rows[ruleRow(t, rows)+composerHeight+1:]
+	return plainRows(view)[composerTopRow(t, view.Content)+composerBlockRows:]
 }
 
 func TestNothingUnderTheComposerSaysWhatIsRunning(t *testing.T) {
 	at := fixedStart()
-	rows := plainRows(liveApp(t, &at).View())
-	for _, row := range belowTheComposer(t, rows) {
+	for _, row := range belowTheComposer(t, liveApp(t, &at).View()) {
 		if strings.ContainsAny(row, spinnerFrames) {
 			t.Errorf("a row under the composer spins: %q", row)
 		}
@@ -171,12 +179,14 @@ func TestEachRunningChildIsARowCarryingWhatItSpent(t *testing.T) {
 	app.Update(Event{Kind: EventCrew, Children: runningChildren()})
 	view := app.View()
 	rows := plainRows(view)
-	running := spinningRows(rows)
-	if len(running) != 4 {
-		t.Fatalf("three children and a turn draw %d rows, want 4\n%s", len(running), strings.Join(rows, "\n"))
+	all := spinningRows(rows)
+	if len(all) != 5 {
+		t.Fatalf("a call, three children and a turn draw %d spinning rows, want 5\n%s", len(all), strings.Join(rows, "\n"))
 	}
-	if rule := ruleRow(t, rows); running[3] != rule-1 || running[0] != rule-4 {
-		t.Errorf("the block is on rows %v and the rule is row %d\n%s", running, rule, strings.Join(rows, "\n"))
+	running := all[1:]
+	top := composerTopRow(t, view.Content)
+	if running[3] != top-1 || running[0] != top-4 {
+		t.Errorf("the footer block is on rows %v and the composer begins at row %d\n%s", running, top, strings.Join(rows, "\n"))
 	}
 	for index, want := range []string{"go-dev", "bench", "go-docs", "working"} {
 		if !strings.Contains(rows[running[index]], want) {
@@ -188,7 +198,7 @@ func TestEachRunningChildIsARowCarryingWhatItSpent(t *testing.T) {
 			t.Errorf("row %d does not carry the tokens %q: %q", index, want, rows[running[index]])
 		}
 	}
-	if strings.Contains(strings.Join(rows[:ruleRow(t, rows)], "\n"), "go-rules") {
+	if strings.Contains(strings.Join(rows[:top], "\n"), "go-rules") {
 		t.Errorf("a child that is not running took a row\n%s", strings.Join(rows, "\n"))
 	}
 	assertGolden(t, "session-children-80x24.golden", view.Content)

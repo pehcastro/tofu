@@ -29,7 +29,7 @@ func fieldFile(t *testing.T, fields []Field, path string) string {
 
 func overrideLayers(t *testing.T) []Layer {
 	t.Helper()
-	catalog := layerDir(t, "catalog", "name: tool_gate\nquestions_version: 1\nstate:\n  - tool\nquestions:\n  risk:\n    type: score\n    instructions: from the catalog\n    criteria:\n      - low\n      - high\n")
+	catalog := layerDir(t, "catalog", "name: tool_gate\ndomain: general\nquestions_version: 1\nstate:\n  - tool\nquestions:\n  risk:\n    type: score\n    instructions: from the catalog\n    criteria:\n      - low\n      - high\n")
 	global := layerDir(t, "global", "questions:\n  risk:\n    instructions: from the global file\n  approval:\n    type: noul\n    instructions: from the global file\n")
 	project := layerDir(t, "project", "questions:\n  risk:\n    instructions: from the project file\n")
 	return []Layer{catalog, global, project}
@@ -107,8 +107,8 @@ func TestResolveRefusesAnAbsentSet(t *testing.T) {
 func twoVersionDiskLayer(t *testing.T) Layer {
 	t.Helper()
 	dir := t.TempDir()
-	body1 := "name: tool_gate\nquestions_version: 1\nstate:\n  - tool\nquestions:\n  risk:\n    type: score\n    instructions: v1\n    criteria:\n      - low\n      - high\n"
-	body2 := "name: tool_gate\nquestions_version: 2\nstate:\n  - tool\nquestions:\n  risk:\n    type: score\n    instructions: v2\n    criteria:\n      - low\n      - high\n"
+	body1 := "name: tool_gate\ndomain: general\nquestions_version: 1\nstate:\n  - tool\nquestions:\n  risk:\n    type: score\n    instructions: v1\n    criteria:\n      - low\n      - high\n"
+	body2 := "name: tool_gate\ndomain: general\nquestions_version: 2\nstate:\n  - tool\nquestions:\n  risk:\n    type: score\n    instructions: v2\n    criteria:\n      - low\n      - high\n"
 	if err := os.WriteFile(filepath.Join(dir, "tool_gate@1.yaml"), []byte(body1), 0o644); err != nil {
 		t.Fatalf("write @1: %v", err)
 	}
@@ -132,7 +132,7 @@ func TestBareNameWithTwoVersionsOnADiskLayerIsRefused(t *testing.T) {
 }
 
 func TestBareNameWithOneVersionStillResolves(t *testing.T) {
-	layer := layerDir(t, "catalog", "name: tool_gate\nquestions_version: 1\nstate:\n  - tool\nquestions:\n  risk:\n    type: score\n    instructions: v1\n    criteria:\n      - low\n      - high\n")
+	layer := layerDir(t, "catalog", "name: tool_gate\ndomain: general\nquestions_version: 1\nstate:\n  - tool\nquestions:\n  risk:\n    type: score\n    instructions: v1\n    criteria:\n      - low\n      - high\n")
 	set, _, err := Resolve("tool_gate", []Layer{layer})
 	if err != nil {
 		t.Fatalf("resolve: %v", err)

@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"sort"
 
+	"tofu/internal/judge/gate"
 	"tofu/internal/judge/jev"
 	"tofu/internal/judge/jev/wire/openrouter"
 	"tofu/internal/judge/ledger"
-	"tofu/internal/judge/policy"
 )
 
 func toLedgerAnswers(wording int, in map[string]jev.Answer) []ledger.Answer {
@@ -72,8 +72,8 @@ type rowInput struct {
 	stateBuilder string
 	wording      int
 	answers      []ledger.Answer
-	pol          policy.Policy
-	mode         policy.Mode
+	pol          gate.Rule
+	mode         gate.Mode
 	modeReason   string
 	turnID       string
 	replayOf     string
@@ -88,7 +88,7 @@ func appendRow(writer *ledger.Writer, in rowInput) (ledger.Row, error) {
 	if err != nil {
 		return ledger.Row{}, err
 	}
-	verdict, reason, err := policy.Decide(toJevAnswers(in.answers), in.pol)
+	verdict, reason, err := gate.Decide(toJevAnswers(in.answers), in.pol)
 	if err != nil {
 		return ledger.Row{}, err
 	}
@@ -104,7 +104,7 @@ func appendRow(writer *ledger.Writer, in rowInput) (ledger.Row, error) {
 		Answers:       in.answers,
 		Verdict:       ledger.Verdict(verdict),
 		Policy:        in.pol.Name,
-		PolicyVersion: in.pol.PolicyVersion,
+		PolicyVersion: in.pol.RuleVersion,
 		Reason: &ledger.Reason{
 			Question:   reason.Question,
 			Comparison: string(reason.Comparison),

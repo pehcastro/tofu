@@ -16,6 +16,7 @@ func liveClient(t *testing.T) *jev.Client {
 	if os.Getenv("TOFU_LIVE") != "1" {
 		t.Skip("set TOFU_LIVE=1 to put the question to the real jev route")
 	}
+	jev.AllowLiveCredential(t)
 	key, err := jev.Key(repoRoot + "/.env")
 	if err != nil {
 		t.Fatalf("no credential: %v", err)

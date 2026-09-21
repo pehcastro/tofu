@@ -1,4 +1,5 @@
 id: unknown_mode
+domain: general
 kind: structural
 checker: em_dash
 mode: sometimes

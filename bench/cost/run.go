@@ -9,9 +9,9 @@ import (
 
 	benchapi "tofu/bench/api"
 	"tofu/bench/corpus"
+	"tofu/internal/judge/gate"
 	"tofu/internal/judge/jev"
 	"tofu/internal/judge/ledger"
-	"tofu/internal/judge/policy"
 )
 
 type CaseResult struct {
@@ -23,7 +23,7 @@ type CaseResult struct {
 	List         ledger.ListPrice
 	LatencyMS    float64
 	Answers      map[string]jev.Answer
-	Reason       policy.Reason
+	Reason       gate.Reason
 	Verdict      Verdict
 	Label        Verdict
 	Correct      bool
@@ -50,7 +50,7 @@ type Disagreement struct {
 	Probe   string
 	LabelBy corpus.Labeller
 	Answers map[string]jev.Answer
-	Reason  policy.Reason
+	Reason  gate.Reason
 	Answer  Verdict
 	Label   Verdict
 	Refusal string
@@ -82,8 +82,8 @@ type CorpusCount struct {
 type Result struct {
 	GeneratedAt          time.Time
 	Corpus               CorpusCount
-	Policy               policy.Policy
-	Resolution           policy.Resolution
+	Rule                 gate.Rule
+	Resolution           gate.Resolution
 	AnswersFile          string
 	Arms                 []ArmResult
 	Pairs                []Pair
@@ -111,7 +111,7 @@ func Run(ctx context.Context, key string) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	pol, resolution, err := gatePolicy(root)
+	pol, resolution, err := gateRule(root)
 	if err != nil {
 		return Result{}, err
 	}
@@ -137,7 +137,7 @@ func Run(ctx context.Context, key string) (Result, error) {
 	result := Result{
 		GeneratedAt: time.Now(),
 		Corpus:      countCorpus(records, heldOut, split),
-		Policy:      pol,
+		Rule:        pol,
 		Resolution:  resolution,
 		Arms:        []ArmResult{jevArm, runRegex(heldOut), runAlwaysProceed(heldOut)},
 	}
@@ -237,7 +237,7 @@ func msSince(d time.Duration) float64 {
 	return float64(d) / float64(time.Millisecond)
 }
 
-func runJev(ctx context.Context, key string, records []corpus.Record, battery []jev.Question, pol policy.Policy) (ArmResult, error) {
+func runJev(ctx context.Context, key string, records []corpus.Record, battery []jev.Question, pol gate.Rule) (ArmResult, error) {
 	wire, err := benchapi.NewWire(key)
 	if err != nil {
 		return ArmResult{}, err

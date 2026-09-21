@@ -96,12 +96,12 @@ func TestReadRepairsALineRangeAndStillNamesTheSpan(t *testing.T) {
 func TestSymbolsIsBatchedWithTheOtherReadOnlyCalls(t *testing.T) {
 	registry := NewRegistry(
 		&stubTool{name: "symbols"},
-		&stubTool{name: "grep"},
+		&stubTool{name: "glob"},
 		&stubTool{name: "write"},
 	)
-	calls := []llm.ToolCall{{Name: "symbols"}, {Name: "grep"}, {Name: "write"}}
+	calls := []llm.ToolCall{{Name: "symbols"}, {Name: "glob"}, {Name: "write"}}
 	if width := registry.parallelPrefix(calls); width != 2 {
-		t.Fatalf("the parallel prefix is %d calls wide, want symbols and grep together and write on its own", width)
+		t.Fatalf("the parallel prefix is %d calls wide, want symbols and glob together and write on its own", width)
 	}
 	if !readOnly("symbols") {
 		t.Fatal("symbols is not read only, so a batch would stop at it")

@@ -8,11 +8,13 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"tofu/internal/sys"
 )
 
 func shippedRulesCatalogDir(t *testing.T) string {
 	t.Helper()
-	abs, err := filepath.Abs(filepath.Join("..", "..", "catalog", "rules"))
+	abs, err := filepath.Abs(filepath.Join("..", "..", "catalog"))
 	if err != nil {
 		t.Fatalf("resolving the shipped rules dir: %v", err)
 	}
@@ -28,11 +30,11 @@ func writeEmDashFixture(t *testing.T, dir, name string) {
 	}
 }
 
-const enforcedEmDashRule = "id: em_dash\nkind: structural\nchecker: em_dash\nmode: enforced\n"
+const enforcedEmDashRule = "id: em_dash\ndomain: general\nkind: structural\nchecker: em_dash\nmode: enforced\n"
 
 func writeProjectRulesCatalog(t *testing.T, root string) {
 	t.Helper()
-	dir := filepath.Join(root, "catalog", "rules")
+	dir := filepath.Join(root, "catalog", "general", "rules")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatalf("making the project rules catalog: %v", err)
 	}
@@ -82,7 +84,8 @@ func TestAProjectRulesCatalogOverridesTheOneInTheBinary(t *testing.T) {
 }
 
 var shippedRuleIDs = []string{
-	"comments", "em_dash", "no_worktree", "ownership",
+	"comments", "no_worktree", "ownership", "em_dash",
+	"flake_disagreement", "skipped_test_budget",
 	"test_assertion", "test_boundary_cases", "test_mock_boundary",
 }
 
@@ -106,8 +109,11 @@ func TestRulesListPrintsEveryShippedRule(t *testing.T) {
 		}
 	}
 	for _, line := range lines[1:] {
-		if !strings.Contains(line, "structural") || !strings.Contains(line, "shadow") {
-			t.Fatalf("line %q does not carry a kind and a mode", line)
+		if !strings.Contains(line, "structural") && !strings.Contains(line, "measured") {
+			t.Fatalf("line %q does not carry a kind", line)
+		}
+		if !strings.Contains(line, "shadow") {
+			t.Fatalf("line %q does not carry a mode", line)
 		}
 	}
 }
@@ -235,9 +241,9 @@ func TestRulesCheckWritesTheFireWhereWhyCanFindIt(t *testing.T) {
 		t.Fatalf("rulesCheckVerb: exit %d, stderr %q", code, errOut.String())
 	}
 
-	logDir, err := rulesLogDir()
+	logDir, err := sys.LogDir()
 	if err != nil {
-		t.Fatalf("rulesLogDir: %v", err)
+		t.Fatalf("sys.LogDir: %v", err)
 	}
 	entries, err := os.ReadDir(logDir)
 	if err != nil {

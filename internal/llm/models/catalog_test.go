@@ -76,7 +76,7 @@ func TestEveryFileUnderModelsIsAModel(t *testing.T) {
 	catalog := shippedCatalog(t)
 	filed := map[string]bool{}
 	for _, model := range catalog.Models {
-		filed[model.Slug()+".yaml"] = true
+		filed[model.VendorSlug()+".yaml"] = true
 	}
 	for _, provider := range providers {
 		if !provider.IsDir() {
@@ -154,7 +154,7 @@ func TestLoadDefaultsAnUndeclaredUseToExcluded(t *testing.T) {
 	if err != nil {
 		t.Fatalf("loading: %v", err)
 	}
-	quiet, err := catalog.Select("openai/gpt-5.6-luna")
+	quiet, err := catalog.Select("codex-sub/gpt-5.6-luna")
 	if err == nil {
 		t.Fatalf("a model with no use must not be sendable, got %+v", quiet)
 	}
@@ -172,7 +172,7 @@ func TestProjectOverridesGlobalFieldByField(t *testing.T) {
 	if err != nil {
 		t.Fatalf("loading: %v", err)
 	}
-	model, err := catalog.Select("openai/gpt-5.6-sol")
+	model, err := catalog.Select("codex-sub/gpt-5.6-sol")
 	if err != nil {
 		t.Fatalf("the project layer did not win: %v", err)
 	}
@@ -203,23 +203,23 @@ func TestTheShippedWiresResolveTheModelsTheyResolvedBefore(t *testing.T) {
 		}
 	}
 	frozen := map[string]string{
-		"anthropic/claude-fable-5":             "claude-fable-5 excluded 5h and 7d and 7d:fable",
-		"anthropic/claude-fable-5-1":           "claude-fable-5-1 excluded 5h and 7d and 7d:fable",
-		"anthropic/claude-haiku-4-5-20251001":  "claude-haiku-4-5-20251001 allowed 5h and 7d",
-		"anthropic/claude-opus-4-5-20251101":   "claude-opus-4-5-20251101 excluded 5h and 7d",
-		"anthropic/claude-opus-4-6":            "claude-opus-4-6 excluded 5h and 7d",
-		"anthropic/claude-opus-4-7":            "claude-opus-4-7 excluded 5h and 7d",
-		"anthropic/claude-opus-4-8":            "claude-opus-4-8 excluded 5h and 7d",
-		"anthropic/claude-opus-5":              "claude-opus-5 default 5h and 7d",
-		"anthropic/claude-sonnet-4-5-20250929": "claude-sonnet-4-5-20250929 excluded 5h and 7d",
-		"anthropic/claude-sonnet-4-6":          "claude-sonnet-4-6 excluded 5h and 7d",
-		"anthropic/claude-sonnet-5":            "claude-sonnet-5 allowed 5h and 7d",
-		"openai/gpt-5.5":                       "gpt-5.5 excluded 5h and 7d",
-		"openai/gpt-5.6-luna":                  "gpt-5.6-luna allowed 5h and 7d",
-		"openai/gpt-5.6-sol":                   "gpt-5.6-sol default 5h and 7d",
-		"openai/gpt-5.6-terra":                 "gpt-5.6-terra allowed 5h and 7d",
-		"openai/gpt-6-astra":                   "gpt-6-astra excluded 5h and 7d",
-		"openai/gpt-reserve":                   "gpt-reserve excluded 5h and 7d",
+		"claude-sub/claude-fable-5":             "claude-fable-5 excluded 5h and 7d and 7d:fable",
+		"claude-sub/claude-fable-5-1":           "claude-fable-5-1 excluded 5h and 7d and 7d:fable",
+		"claude-sub/claude-haiku-4-5-20251001":  "claude-haiku-4-5-20251001 allowed 5h and 7d",
+		"claude-sub/claude-opus-4-5-20251101":   "claude-opus-4-5-20251101 excluded 5h and 7d",
+		"claude-sub/claude-opus-4-6":            "claude-opus-4-6 excluded 5h and 7d",
+		"claude-sub/claude-opus-4-7":            "claude-opus-4-7 excluded 5h and 7d",
+		"claude-sub/claude-opus-4-8":            "claude-opus-4-8 excluded 5h and 7d",
+		"claude-sub/claude-opus-5":              "claude-opus-5 default 5h and 7d",
+		"claude-sub/claude-sonnet-4-5-20250929": "claude-sonnet-4-5-20250929 excluded 5h and 7d",
+		"claude-sub/claude-sonnet-4-6":          "claude-sonnet-4-6 excluded 5h and 7d",
+		"claude-sub/claude-sonnet-5":            "claude-sonnet-5 allowed 5h and 7d",
+		"codex-sub/gpt-5.5":                     "gpt-5.5 excluded 5h and 7d",
+		"codex-sub/gpt-5.6-luna":                "gpt-5.6-luna allowed 5h and 7d",
+		"codex-sub/gpt-5.6-sol":                 "gpt-5.6-sol default 5h and 7d",
+		"codex-sub/gpt-5.6-terra":               "gpt-5.6-terra allowed 5h and 7d",
+		"codex-sub/gpt-6-astra":                 "gpt-6-astra excluded 5h and 7d",
+		"codex-sub/gpt-reserve":                 "gpt-reserve excluded 5h and 7d",
 	}
 	if len(catalog.Models) != len(frozen) {
 		t.Fatalf("the catalog carries %d models and the frozen table has %d", len(catalog.Models), len(frozen))
@@ -234,28 +234,28 @@ func TestTheShippedWiresResolveTheModelsTheyResolvedBefore(t *testing.T) {
 
 func TestCodexAutoReviewIsAServedNameRatherThanAModel(t *testing.T) {
 	catalog := shippedCatalog(t)
-	if _, err := catalog.Select("openai/codex-auto-review"); err == nil {
+	if _, err := catalog.Select("codex-sub/codex-auto-review"); err == nil {
 		t.Fatal("codex-auto-review is still a model")
 	}
-	reconciled := catalog.Reconcile(Served{Subscription: Codex, Pin: "test", IDs: []string{"gpt-5.6-sol", "codex-auto-review"}})
+	reconciled := catalog.Reconcile(Served{Subscription: Codex, Pin: "test", IDs: []string{"gpt-5.6-sol", "codex-auto-review"}}, shippedTable(t))
 	if len(reconciled.Unknown) != 0 {
 		t.Fatalf("the account serves %v and the catalog cannot account for them", reconciled.Unknown)
 	}
 }
 
 func TestSelectRefusesAnUnknownModelAndNamesWhatItKnows(t *testing.T) {
-	_, err := shippedCatalog(t).Select("anthropic/claude-opus-latest")
+	_, err := shippedCatalog(t).Select("claude-sub/claude-opus-latest")
 	var refusal *Refusal
 	if !errors.As(err, &refusal) || refusal.Kind != RefusedUnknown {
 		t.Fatalf("want an unknown refusal, got %v", err)
 	}
-	if !strings.Contains(refusal.Error(), "anthropic/claude-opus-5") {
+	if !strings.Contains(refusal.Error(), "claude-sub/claude-opus-5") {
 		t.Fatalf("the refusal must name what the catalog knows by slug, got %q", refusal.Error())
 	}
 }
 
 func TestSelectRefusesAnExcludedModelWithItsCatalogReason(t *testing.T) {
-	_, err := shippedCatalog(t).Select("anthropic/claude-fable-5-1")
+	_, err := shippedCatalog(t).Select("claude-sub/claude-fable-5-1")
 	var refusal *Refusal
 	if !errors.As(err, &refusal) || refusal.Kind != RefusedExcluded {
 		t.Fatalf("want an exclusion refusal, got %v", err)

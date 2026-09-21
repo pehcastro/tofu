@@ -24,7 +24,7 @@ func TestModelsAnswersWithTheDefaultsAndCountsWhatItCollapsed(t *testing.T) {
 	t.Logf("tofu models\n%s", out.String())
 	text := out.String()
 	first := strings.Split(text, "\n")[0]
-	for _, want := range []string{"anthropic/claude-opus-5", "openai/gpt-5.6-sol", "usable"} {
+	for _, want := range []string{"claude-sub/claude-opus-5", "codex-sub/gpt-5.6-sol", "usable"} {
 		if !strings.Contains(first, want) {
 			t.Fatalf("the first line %q does not answer with %q", first, want)
 		}
@@ -74,6 +74,51 @@ func TestRefreshWritesTheRegistryAndAFreshOneOutranksTheSnapshot(t *testing.T) {
 	t.Logf("%s", strings.TrimSpace(out.String()))
 }
 
+func TestModelsListsEveryWindowWithTheFetchDisabled(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	reached := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		reached++
+		_, _ = w.Write([]byte(`{"openai":{"models":{"gpt-5.6-sol":{"limit":{"context":1}}}}}`))
+	}))
+	defer server.Close()
+	t.Setenv(models.RegistryURLVariable, server.URL)
+
+	var out, errOut bytes.Buffer
+	if code := modelsVerb([]string{jsonFlag}, &out, &errOut, plain); code != exitOK {
+		t.Fatalf("tofu models --json exited %d: %s", code, errOut.String())
+	}
+	if reached != 0 {
+		t.Fatalf("listing models reached the network %d times", reached)
+	}
+	var report modelsReport
+	if err := json.Unmarshal(out.Bytes(), &report); err != nil {
+		t.Fatalf("tofu models --json does not parse: %v", err)
+	}
+	if report.Table != models.ShippedRegistryName {
+		t.Fatalf("the table is %q, want the snapshot embedded in the binary", report.Table)
+	}
+	for _, model := range report.Models {
+		if model.Use == string(models.UseExcluded) {
+			continue
+		}
+		if model.ContextTokens <= 0 || !strings.Contains(model.WindowFrom, model.Provider+"/"+model.ID) {
+			t.Fatalf("%s is sendable and its window reads %d from %q", model.Slug, model.ContextTokens, model.WindowFrom)
+		}
+	}
+	t.Logf("%d of %d models take a window from %s with no network", report.Windowed, len(report.Models), report.Table)
+
+	out.Reset()
+	if code := modelsVerb([]string{"--refresh"}, &out, &errOut, plain); code != exitOK {
+		t.Fatalf("tofu models --refresh exited %d: %s", code, out.String())
+	}
+	if reached != 1 {
+		t.Fatalf("the counter never saw a request, so the zero above proves nothing: %d", reached)
+	}
+}
+
 func TestModelsNamesEveryModelByProviderAndName(t *testing.T) {
 	var out, errOut bytes.Buffer
 	if code := modelsVerb([]string{jsonFlag}, &out, &errOut, plain); code != exitOK {
@@ -88,8 +133,12 @@ func TestModelsNamesEveryModelByProviderAndName(t *testing.T) {
 		t.Fatalf("tofu models exited %d", code)
 	}
 	for _, model := range report.Models {
-		if model.Slug != model.Provider+"/"+model.ID {
-			t.Fatalf("the slug is not provider/name: %+v", model)
+		want := model.Provider + "/" + model.ID
+		if model.Subscription != "" {
+			want = model.Subscription + "-sub/" + model.ID
+		}
+		if model.Slug != want {
+			t.Fatalf("the slug is not source/name: %+v", model)
 		}
 		if model.Use == string(models.UseExcluded) {
 			continue
@@ -137,7 +186,7 @@ func TestModelsJSONKeepsEveryModelTheTextCollapsed(t *testing.T) {
 
 func TestModelsNamesTheRoleEachModelIsBoundTo(t *testing.T) {
 	project := t.TempDir()
-	writeProjectRole(t, project, "child", "openai/gpt-5.6-luna")
+	writeProjectRole(t, project, "child", "codex-sub/gpt-5.6-luna")
 	t.Chdir(project)
 
 	var out, errOut bytes.Buffer
@@ -146,7 +195,7 @@ func TestModelsNamesTheRoleEachModelIsBoundTo(t *testing.T) {
 	}
 	t.Logf("tofu models\n%s", out.String())
 	text := oneLine(out.String())
-	if !strings.Contains(text, "openai/gpt-5.6-luna [child]") {
+	if !strings.Contains(text, "codex-sub/gpt-5.6-luna [child]") {
 		t.Fatalf("tofu models does not name the role the model is bound to:\n%s", out.String())
 	}
 	if !strings.Contains(text, "turn has nothing bound") {
@@ -158,7 +207,7 @@ func TestModelsNamesTheRoleEachModelIsBoundTo(t *testing.T) {
 }
 
 func TestRunModelExcludedIsRefusedWithTheCatalogReason(t *testing.T) {
-	_, err := selectModel("anthropic", "anthropic/claude-fable-5-1")
+	_, err := selectModel("anthropic", "claude-sub/claude-fable-5-1")
 	var refusal *models.Refusal
 	if !errors.As(err, &refusal) || refusal.Kind != models.RefusedExcluded {
 		t.Fatalf("want the catalog exclusion, got %v", err)
@@ -169,7 +218,7 @@ func TestRunModelExcludedIsRefusedWithTheCatalogReason(t *testing.T) {
 }
 
 func TestSelectModelRefusesAModelTheWireCannotReach(t *testing.T) {
-	_, err := selectModel("codex", "anthropic/claude-opus-5")
+	_, err := selectModel("codex", "claude-sub/claude-opus-5")
 	if err == nil || !strings.Contains(err.Error(), "belongs to the claude subscription") {
 		t.Fatalf("want the wire mismatch named, got %v", err)
 	}
@@ -210,13 +259,13 @@ func TestRunModelUnknownIsRefusedBeforeAnyRequest(t *testing.T) {
 		return err
 	}
 
-	if err := ask("anthropic/claude-opus-latest"); err == nil || !strings.Contains(err.Error(), "claude-opus-latest") {
+	if err := ask("claude-sub/claude-opus-latest"); err == nil || !strings.Contains(err.Error(), "claude-opus-latest") {
 		t.Fatalf("an unknown model must be refused by name, got %v", err)
 	}
 	if calls != 0 {
 		t.Fatalf("an unknown model reached the wire %d times", calls)
 	}
-	_ = ask("anthropic/claude-opus-5")
+	_ = ask("claude-sub/claude-opus-5")
 	if calls != 1 {
 		t.Fatalf("the counter never saw a request, so the zero above proves nothing: %d", calls)
 	}

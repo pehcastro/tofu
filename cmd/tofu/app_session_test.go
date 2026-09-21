@@ -6,13 +6,16 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"tofu/interface/tui"
 	"tofu/interface/tui/paste"
+	"tofu/interface/tui/session"
 	"tofu/internal/llm"
 	sessionstore "tofu/internal/session"
 	"tofu/internal/sys"
@@ -51,8 +54,21 @@ func (m *rememberingModel) Ask(_ context.Context, request llm.Request) (llm.Deci
 	}}, nil
 }
 
-func collected(into *[]tui.Event) func(tui.Event) {
-	return func(event tui.Event) { *into = append(*into, event) }
+type eventLog struct {
+	mu     sync.Mutex
+	events []tui.Event
+}
+
+func (l *eventLog) add(event tui.Event) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.events = append(l.events, event)
+}
+
+func (l *eventLog) all() []tui.Event {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return slices.Clone(l.events)
 }
 
 func TestASecondSendCarriesTheFirstExchangeAndItsToolCalls(t *testing.T) {
@@ -63,9 +79,9 @@ func TestASecondSendCarriesTheFirstExchangeAndItsToolCalls(t *testing.T) {
 		{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "written down"},
 	}}
 	send := stubbedTurn(dir, model)
-	var events []tui.Event
-	send(t.Context(), wireSubscription, "explain the repo", collected(&events))
-	send(t.Context(), wireSubscription, "write those findings down", collected(&events))
+	var events eventLog
+	send(t.Context(), wireSubscription, "explain the repo", events.add)
+	send(t.Context(), wireSubscription, "write those findings down", events.add)
 
 	if len(model.requests) != 3 {
 		t.Fatalf("the model was asked %d times, want two for the first send and one for the second", len(model.requests))
@@ -133,16 +149,16 @@ func TestASendStoppedPartWayCarriesItsWorkIntoThePleaseContinue(t *testing.T) {
 	model.cancel = cancel
 	send := stubbedTurn(dir, model)
 
-	var interrupted []tui.Event
-	send(stopped, wireSubscription, "explain the repo", collected(&interrupted))
-	for _, event := range interrupted {
+	var interrupted eventLog
+	send(stopped, wireSubscription, "explain the repo", interrupted.add)
+	for _, event := range interrupted.all() {
 		if event.Kind == tui.EventFailure {
 			t.Fatalf("stopping a send reported a failure: %s", event.Text)
 		}
 	}
 
-	var resumed []tui.Event
-	send(t.Context(), wireSubscription, "please continue", collected(&resumed))
+	var resumed eventLog
+	send(t.Context(), wireSubscription, "please continue", resumed.add)
 	if len(model.requests) != 3 {
 		t.Fatalf("the model was asked %d times, want two for the stopped send and one for the continue", len(model.requests))
 	}
@@ -180,19 +196,19 @@ func TestASecondSendAnswersFromWhatTheFirstLearnedWithoutATool(t *testing.T) {
 	}
 	send := stubbedTurn(dir, &rememberingModel{fact: fact})
 
-	var first []tui.Event
-	send(t.Context(), wireSubscription, "explain the repo", collected(&first))
-	var second []tui.Event
-	send(t.Context(), wireSubscription, "write those findings down", collected(&second))
+	var first eventLog
+	send(t.Context(), wireSubscription, "explain the repo", first.add)
+	var second eventLog
+	send(t.Context(), wireSubscription, "write those findings down", second.add)
 
 	firstCalls, secondCalls := 0, 0
-	for _, event := range first {
+	for _, event := range first.all() {
 		if event.Kind == tui.EventToolCall {
 			firstCalls++
 		}
 	}
 	answered := ""
-	for _, event := range second {
+	for _, event := range second.all() {
 		switch event.Kind {
 		case tui.EventToolCall:
 			secondCalls++
@@ -217,9 +233,9 @@ func TestTwoSendsAppendToOneSessionBody(t *testing.T) {
 		{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "second answer"},
 	}}
 	send := stubbedTurn(dir, model)
-	var events []tui.Event
-	send(t.Context(), wireSubscription, "first task", collected(&events))
-	send(t.Context(), wireSubscription, "second task", collected(&events))
+	var events eventLog
+	send(t.Context(), wireSubscription, "first task", events.add)
+	send(t.Context(), wireSubscription, "second task", events.add)
 
 	store, err := sessionstore.Open()
 	if err != nil {
@@ -285,8 +301,8 @@ func TestAnImagePastedBeforeTheFirstSendLandsInTheSessionThatSendCreates(t *test
 	}
 	pending := live.pendingID()
 
-	var events []tui.Event
-	live.run(t.Context(), wireSubscription, "look at what I pasted", collected(&events))
+	var events eventLog
+	live.run(t.Context(), wireSubscription, "look at what I pasted", events.add)
 	if live.id != pending {
 		t.Fatalf("send minted %s, want the id the paste already used: %s", live.id, pending)
 	}
@@ -297,6 +313,59 @@ func TestAnImagePastedBeforeTheFirstSendLandsInTheSessionThatSendCreates(t *test
 	}
 	if _, err := os.Stat(filepath.Join(store.Dir(live.id), outcome.Name)); err != nil {
 		t.Fatalf("%s is not inside the session send created: %v", outcome.Name, err)
+	}
+}
+
+func TestAPastedImageReachesTheRequestSentToTheModel(t *testing.T) {
+	dir := scratchProject(t)
+	model := &sendModel{queued: []llm.Decision{{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "seen"}}}
+	live := newAppSession(dir, func(runOpts) (appWire, error) {
+		return appWire{model: model, spend: turn.SpendSubscription, selected: stubSelection}, nil
+	}, nil, time.Now, sessionResume{})
+
+	board := screenshotBoard(t, live)
+	msg := board.Attach(1)()
+	outcome := msg.(paste.Outcome)
+
+	var events eventLog
+	live.run(t.Context(), wireSubscription, "look at "+session.ImageToken(1), events.add)
+
+	if len(model.requests) != 1 {
+		t.Fatalf("the model was asked %d times, want one", len(model.requests))
+	}
+	last := model.requests[0].Messages[len(model.requests[0].Messages)-1]
+	if len(last.Images) != 1 {
+		t.Fatalf("the request carries %d images, want one", len(last.Images))
+	}
+	if last.Images[0].MediaType != "image/png" || string(last.Images[0].Data) != "pretend this is a screenshot" {
+		t.Fatalf("the image reaching the model is %+v, want the %d bytes pasted as %s", last.Images[0], outcome.Bytes, outcome.Format())
+	}
+}
+
+func TestDeletingAPastedImagesTokenDropsItFromTheRequestSentToTheModel(t *testing.T) {
+	dir := scratchProject(t)
+	model := &sendModel{queued: []llm.Decision{{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "seen"}}}
+	live := newAppSession(dir, func(runOpts) (appWire, error) {
+		return appWire{model: model, spend: turn.SpendSubscription, selected: stubSelection}, nil
+	}, nil, time.Now, sessionResume{})
+
+	board := screenshotBoard(t, live)
+	board.Attach(1)()
+	board.Attach(2)()
+
+	var events eventLog
+	task := "compare " + session.ImageToken(1)
+	live.run(t.Context(), wireSubscription, task, events.add)
+
+	if len(model.requests) != 1 {
+		t.Fatalf("the model was asked %d times, want one", len(model.requests))
+	}
+	last := model.requests[0].Messages[len(model.requests[0].Messages)-1]
+	if len(last.Images) != 1 {
+		t.Fatalf("the request carries %d images, want the one whose token survived", len(last.Images))
+	}
+	if string(last.Images[0].Data) != "pretend this is a screenshot" {
+		t.Fatalf("the surviving image is %+v", last.Images[0])
 	}
 }
 
@@ -329,8 +398,8 @@ func TestASendRecordsTheAttachmentEventInTheSessionBody(t *testing.T) {
 	msg := board.Attach(1)()
 	outcome := msg.(paste.Outcome)
 
-	var events []tui.Event
-	live.run(t.Context(), wireSubscription, "look at what I pasted", collected(&events))
+	var events eventLog
+	live.run(t.Context(), wireSubscription, "look at what I pasted", events.add)
 
 	store, err := sessionstore.Open()
 	if err != nil {
@@ -356,6 +425,14 @@ func TestASendRecordsTheAttachmentEventInTheSessionBody(t *testing.T) {
 	if !found {
 		t.Fatalf("the body of %s carries no attachment event naming %s, %d bytes, PNG", live.id, outcome.Name, outcome.Bytes)
 	}
+
+	raw, err := os.ReadFile(filepath.Join(store.Dir(live.id), "body.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(raw), "pretend this is a screenshot") {
+		t.Fatalf("the recorded body carries the image bytes:\n%s", raw)
+	}
 }
 
 func TestAConversationThatOutgrowsItsBudgetAcrossSendsForks(t *testing.T) {
@@ -369,9 +446,9 @@ func TestAConversationThatOutgrowsItsBudgetAcrossSendsForks(t *testing.T) {
 			{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{writeNote("call-" + strconv.Itoa(attempt))}},
 			{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "noted"},
 		}
-		var events []tui.Event
-		send(t.Context(), wireSubscription, bulk, collected(&events))
-		for _, event := range events {
+		var events eventLog
+		send(t.Context(), wireSubscription, bulk, events.add)
+		for _, event := range events.all() {
 			if event.Kind == tui.EventForkStart {
 				forkedAt = attempt
 			}
@@ -402,10 +479,10 @@ func TestLiveASecondSendReadsTheCacheOfTheFirst(t *testing.T) {
 	}
 
 	send := appTurnOn(dir, openAppWire, nil, time.Now, sessionResume{})
-	var events []tui.Event
-	send(t.Context(), wireSubscription, "read loop.md and judge.md and say in one sentence what each is about", collected(&events))
-	send(t.Context(), wireSubscription, "without calling any tool, repeat what judge.md was about", collected(&events))
-	for _, event := range events {
+	var events eventLog
+	send(t.Context(), wireSubscription, "read loop.md and judge.md and say in one sentence what each is about", events.add)
+	send(t.Context(), wireSubscription, "without calling any tool, repeat what judge.md was about", events.add)
+	for _, event := range events.all() {
 		if event.Kind == tui.EventFailure {
 			t.Fatalf("the live run failed: %s", event.Text)
 		}

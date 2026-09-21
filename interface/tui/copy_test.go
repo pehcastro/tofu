@@ -38,12 +38,12 @@ func copyApp(t *testing.T, board *stubBoard) *App {
 	t.Helper()
 	at := time.Date(2026, 9, 19, 14, 32, 0, 0, time.UTC)
 	app := newTestApp(Options{
-		Repo:   "silo",
+		Repo:   testRepo,
 		Branch: "develop",
 		Now:    func() time.Time { return at },
 		Wires:  anthropicAlone,
 		Copy:   board.write,
-		Turn:   func(context.Context, string, string, func(Event)) {},
+		Turn:   func(context.Context, string, string, CalledFromInsideTheTurnAndNeverAfterItReturns) {},
 	})
 	app.Init()
 	app.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
@@ -137,7 +137,7 @@ func TestACopyThatFailsSaysTheCopyDidNotHappen(t *testing.T) {
 
 func TestWithNothingToCopyTheKeySaysSoAndWritesNothing(t *testing.T) {
 	board := &stubBoard{}
-	app := newTestApp(Options{Repo: "silo", Branch: "develop", Now: fixedClock(), Wires: anthropicAlone, Copy: board.write})
+	app := newTestApp(Options{Repo: testRepo, Branch: "develop", Now: fixedClock(), Wires: anthropicAlone, Copy: board.write})
 	app.Init()
 	app.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 	app.Update(tea.KeyPressMsg{Code: 'y', Mod: tea.ModCtrl})

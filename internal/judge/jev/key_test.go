@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"tofu/internal/sys"
 	"tofu/internal/transport"
 )
 
@@ -119,6 +120,67 @@ func TestLocateWhenThereIsNone(t *testing.T) {
 	want := mustAbs(t, path)
 	if got.Path != want {
 		t.Fatalf("expected the resolved path %s, got %s", want, got.Path)
+	}
+}
+
+func TestATestThatDoesNotOptInReachesNoCredentialInTheSourceTree(t *testing.T) {
+	t.Setenv(keyName(), "")
+	t.Chdir(sys.SourceRoot())
+	key, err := Key(".env")
+	if key != "" {
+		t.Fatalf("a test read a credential of length %d out of the source tree", len(key))
+	}
+	if transport.KindOf(err) != transport.KindMissingCredential {
+		t.Fatalf("expected kind missing_credential, got %v", err)
+	}
+}
+
+func TestATestThatDoesNotOptInReachesNoCredentialInTheHomeStateDirectory(t *testing.T) {
+	t.Setenv(keyName(), "")
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Skipf("skipped, not counted as a pass: this machine reports no home directory (%v)", err)
+	}
+	if strings.HasPrefix(home, os.TempDir()) {
+		t.Skipf("skipped, not counted as a pass: the home directory %s is a temporary one, so it is nobody's credential store", home)
+	}
+	path := filepath.Join(sys.StateDir(home), ".env")
+	key, keyErr := Key(path)
+	if key != "" {
+		t.Fatalf("a test read a credential of length %d out of the home state directory", len(key))
+	}
+	if keyErr == nil || !strings.Contains(keyErr.Error(), "hidden from tests") {
+		t.Fatalf("expected %s to be hidden from tests, got %v", path, keyErr)
+	}
+}
+
+func TestATestThatDoesNotOptInReachesNoCredentialItPlantedFromTheOwnersOwn(t *testing.T) {
+	if !sys.PlantOwnerCredential(t, keyName()) {
+		t.Skipf("skipped, not counted as a pass: this machine carries no %s in the source tree .env", keyName())
+	}
+	key, err := Key("")
+	if key != "" {
+		t.Fatalf("a test read the owner credential of length %d out of the environment", len(key))
+	}
+	if transport.KindOf(err) != transport.KindMissingCredential {
+		t.Fatalf("expected kind missing_credential, got %v", err)
+	}
+}
+
+func TestATestThatOptsInByNameReachesTheCredentialAgain(t *testing.T) {
+	AllowLiveCredential(t)
+	t.Setenv(keyName(), "")
+	root := sys.SourceRoot()
+	if _, err := os.Stat(filepath.Join(root, ".env")); err != nil {
+		t.Skipf("skipped, not counted as a pass: this machine has no .env at %s (%v)", root, err)
+	}
+	t.Chdir(root)
+	key, err := Key(".env")
+	if err != nil {
+		t.Fatalf("an opted-in test was refused: %v", err)
+	}
+	if key == "" {
+		t.Fatal("an opted-in test read an empty credential")
 	}
 }
 

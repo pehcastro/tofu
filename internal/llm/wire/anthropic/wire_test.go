@@ -2,12 +2,15 @@ package anthropic
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
+	"tofu/internal/konst"
 	"tofu/internal/llm"
 	"tofu/internal/transport"
 )
@@ -82,6 +85,24 @@ func liveLikeServer(t *testing.T, events string, seen *string, seenHeaders *http
 	}))
 	t.Cleanup(server.Close)
 	return server
+}
+
+func serveStatus(t *testing.T, status int, header map[string]string, body string) *Wire {
+	t.Helper()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		for name, value := range header {
+			w.Header().Set(name, value)
+		}
+		w.WriteHeader(status)
+		_, _ = io.WriteString(w, body)
+	}))
+	t.Cleanup(server.Close)
+
+	wire, err := New(Config{BaseURL: server.URL, Model: "m", Token: stubToken(stubOAuthToken, new(int)), Proxy: true})
+	if err != nil {
+		t.Fatalf("building the wire: %v", err)
+	}
+	return wire
 }
 
 func textTurnEvents() string {
@@ -214,53 +235,91 @@ func TestAskCarriesTheClaudeCodeHeaderSetAndTheOAuthQuery(t *testing.T) {
 	}
 }
 
+func TestASessionIDDrawnForTheCallerIsNotPrintedInTheDump(t *testing.T) {
+	var sent string
+	var headers http.Header
+	server := liveLikeServer(t, textTurnEvents(), &sent, &headers)
+
+	wire, err := New(Config{BaseURL: server.URL, Model: "claude-opus-4-1-20250805",
+		Token: stubToken(stubOAuthToken, new(int)), Proxy: true})
+	if err != nil {
+		t.Fatalf("building the wire: %v", err)
+	}
+	_, dump, err := wire.Ask(context.Background(), Request{
+		Messages: []llm.Message{{Role: llm.RoleUser, Content: "say ok"}},
+	})
+	if err != nil {
+		t.Fatalf("asking: %v", err)
+	}
+
+	drawn := encodedUserID(t, []byte(sent)).SessionID
+	if drawn == "" {
+		t.Fatal("the request carries no session id at all")
+	}
+	if strings.Contains(dump.String(), drawn) {
+		t.Fatalf("the dump prints the session id drawn for the caller:\n%s", dump)
+	}
+}
+
+func TestTheRequestCarriesTheSessionIDAndTheDumpDoesNot(t *testing.T) {
+	var sent string
+	var headers http.Header
+	server := liveLikeServer(t, textTurnEvents(), &sent, &headers)
+
+	wire, err := New(Config{BaseURL: server.URL, Model: "claude-opus-4-1-20250805",
+		Token: stubToken(stubOAuthToken, new(int)), Proxy: true, SessionID: "session-0000"})
+	if err != nil {
+		t.Fatalf("building the wire: %v", err)
+	}
+	_, dump, err := wire.Ask(context.Background(), Request{
+		Messages: []llm.Message{{Role: llm.RoleUser, Content: "say ok"}},
+	})
+	if err != nil {
+		t.Fatalf("asking: %v", err)
+	}
+
+	if headers.Get("X-Claude-Code-Session-Id") != "session-0000" {
+		t.Fatalf("the request lost the session header: %q", headers.Get("X-Claude-Code-Session-Id"))
+	}
+	if strings.Contains(dump.String(), "session-0000") {
+		t.Fatalf("the dump prints the session id:\n%s", dump)
+	}
+}
+
 func TestDumpRedactsTheCredential(t *testing.T) {
-	dump := Dump{
+	dump := Dump{Dump: llm.Dump{
 		Method:  http.MethodPost,
 		URL:     OfficialBaseURL + MessagesPath + OAuthQuery,
 		Headers: Headers(HeaderOptions{Token: stubOAuthToken, OAuth: true, Stream: true, AgentRequest: true}),
 		Body:    []byte(`{"model":"m"}`),
-	}
+	}}
 	text := dump.String()
 	if strings.Contains(text, stubOAuthToken) {
 		t.Fatal("the dump carries the token")
 	}
-	if !strings.Contains(text, "Authorization: Bearer "+RedactedCredential) {
+	if !strings.Contains(text, "Authorization: Bearer "+llm.Redacted) {
 		t.Fatalf("dump is %s", text)
 	}
 }
 
 func TestAskRefusesANonStreamingEncodingItCannotRead(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Encoding", "zstd")
-		_, _ = io.WriteString(w, "binary")
-	}))
-	defer server.Close()
-
-	wire, err := New(Config{BaseURL: server.URL, Model: "m", Token: stubToken(stubOAuthToken, new(int)), Proxy: true})
-	if err != nil {
-		t.Fatalf("building the wire: %v", err)
-	}
-	_, _, err = wire.Ask(context.Background(), Request{Messages: []llm.Message{{Role: llm.RoleUser, Content: "x"}}})
+	wire := serveStatus(t, http.StatusOK, map[string]string{"Content-Encoding": "zstd"}, "binary")
+	_, _, err := wire.Ask(context.Background(), Request{Messages: []llm.Message{{Role: llm.RoleUser, Content: "x"}}})
 	if err == nil || !strings.Contains(err.Error(), "zstd") {
 		t.Fatalf("error is %v", err)
 	}
 }
 
-func TestAskMapsAnErrorStatusToATypedKind(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusTooManyRequests)
-		_, _ = io.WriteString(w, `{"error":{"message":"rate limit"}}`)
-	}))
-	defer server.Close()
-
-	wire, err := New(Config{BaseURL: server.URL, Model: "m", Token: stubToken(stubOAuthToken, new(int)), Proxy: true})
-	if err != nil {
-		t.Fatalf("building the wire: %v", err)
-	}
-	_, _, err = wire.Ask(context.Background(), Request{Messages: []llm.Message{{Role: llm.RoleUser, Content: "x"}}})
-	if transport.KindOf(err) != transport.KindRateLimit {
-		t.Fatalf("error is %v", err)
+func TestAskMapsEveryErrorStatusTheWayTransportDoes(t *testing.T) {
+	for status, want := range map[int]transport.Kind{
+		408: transport.KindTimeout,
+		429: transport.KindRateLimit,
+	} {
+		wire := serveStatus(t, status, nil, `{"error":{"message":"no"}}`)
+		_, _, err := wire.Ask(context.Background(), Request{Messages: []llm.Message{{Role: llm.RoleUser, Content: "x"}}})
+		if got := transport.KindOf(err); got != want {
+			t.Errorf("status %d is %s, expected %s", status, got, want)
+		}
 	}
 }
 
@@ -292,8 +351,76 @@ func TestBetaHeaderDeduplicatesAndPreservesOrder(t *testing.T) {
 	}
 }
 
+func TestAnErrorBodyIsTruncatedToTheTransportDetailCap(t *testing.T) {
+	wire := serveStatus(t, http.StatusInternalServerError, nil,
+		strings.Repeat("e", konst.TransportErrorDetailBytes*4))
+	_, _, err := wire.Ask(context.Background(), Request{Messages: []llm.Message{{Role: llm.RoleUser, Content: "x"}}})
+	var failure *transport.Error
+	if !errors.As(err, &failure) {
+		t.Fatalf("error is %v", err)
+	}
+	if len(failure.Detail) != konst.TransportErrorDetailBytes {
+		t.Fatalf("the detail is %d bytes and the cap is %d", len(failure.Detail), konst.TransportErrorDetailBytes)
+	}
+}
+
 func TestIsOAuthTokenReadsTheTokenItself(t *testing.T) {
 	if !IsOAuthToken(stubOAuthToken) || IsOAuthToken("sk-ant-api03-key") {
 		t.Fatal("oauth detection is not the sk-ant-oat substring")
+	}
+}
+
+const statusOverloaded = 529
+
+func failingThenStreaming(t *testing.T, status int, served *int) *Wire {
+	t.Helper()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		*served++
+		if *served == 1 {
+			w.WriteHeader(status)
+			_, _ = io.WriteString(w, `{"type":"error","error":{"type":"overloaded_error"}}`)
+			return
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = io.WriteString(w, textTurnEvents())
+	}))
+	t.Cleanup(server.Close)
+
+	wire, err := New(Config{
+		BaseURL:   server.URL,
+		Model:     "m",
+		Proxy:     true,
+		Token:     stubToken(stubOAuthToken, new(int)),
+		Transport: transport.Config{Retries: konst.TurnRetries, Backoff: time.Millisecond, MaxBackoff: time.Millisecond},
+	})
+	if err != nil {
+		t.Fatalf("building the wire: %v", err)
+	}
+	return wire
+}
+
+func TestAnOverloadedSubscriptionAnswerIsRetriedAndTheStreamStillArrives(t *testing.T) {
+	served := 0
+	wire := failingThenStreaming(t, statusOverloaded, &served)
+	result, _, err := wire.Ask(context.Background(), Request{Messages: []llm.Message{{Role: llm.RoleUser, Content: "say ok"}}})
+	if err != nil {
+		t.Fatalf("one 529 ended the turn: %v", err)
+	}
+	if served != 2 {
+		t.Fatalf("the stub saw %d requests, want the failure and one retry", served)
+	}
+	if result.Content != "hi" {
+		t.Fatalf("result is %+v", result)
+	}
+}
+
+func TestARefusedSubscriptionRequestIsNotRetried(t *testing.T) {
+	served := 0
+	wire := failingThenStreaming(t, http.StatusBadRequest, &served)
+	if _, _, err := wire.Ask(context.Background(), Request{Messages: []llm.Message{{Role: llm.RoleUser, Content: "say ok"}}}); err == nil {
+		t.Fatal("a 400 was read as an answer")
+	}
+	if served != 1 {
+		t.Fatalf("the stub saw %d requests, and it would have answered the second: a refusal sent again is the same refusal", served)
 	}
 }

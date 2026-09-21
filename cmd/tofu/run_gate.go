@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"tofu/internal/judge/gate"
 	"tofu/internal/judge/jev"
 	jevwire "tofu/internal/judge/jev/wire/openrouter"
 	"tofu/internal/judge/ledger"
@@ -32,10 +33,16 @@ type toolGate struct {
 	costUSD   float64
 }
 
+type unusableRule struct{ err error }
+
+func (u unusableRule) Error() string { return u.err.Error() }
+
+func (u unusableRule) Unwrap() error { return u.err }
+
 func newToolGate(dir string) (*toolGate, error) {
 	set, err := resolvePoint(runGatePoint)
 	if err != nil {
-		return nil, err
+		return nil, unusableRule{err}
 	}
 	client, err := newJevClient()
 	if err != nil {
@@ -49,21 +56,49 @@ func resolvePoint(point string) (battery, error) {
 	if err != nil {
 		return battery{}, err
 	}
-	pol, origin, err := loadPolicyPoint(point)
+	pol, origin, err := loadRulePoint(point)
 	if err != nil {
 		return battery{}, err
 	}
-	resolution, err := resolvePolicyMode(pol)
+	if err := thresholdsInRange(pol, set); err != nil {
+		return battery{}, err
+	}
+	resolution, err := resolveRuleMode(pol)
 	if err != nil {
 		return battery{}, err
 	}
-	pol = resolution.Policy
-	set.Policy, set.Mode = &pol, resolution.Mode
-	set.ModeReason = fmt.Sprintf("the policy came from %s as %s", origin, pol.File)
+	pol = resolution.Rule
+	set.Rule, set.Mode = &pol, resolution.Mode
+	set.ModeReason = fmt.Sprintf("the rule came from %s as %s", origin, pol.File)
 	if resolution.Reason != "" && !strings.Contains(resolution.Reason, pol.File) {
 		set.ModeReason += "; " + resolution.Reason
 	}
 	return set, nil
+}
+
+func thresholdsInRange(r gate.Rule, set battery) error {
+	topRisk := 0.0
+	for _, q := range set.Questions {
+		if q.ID == r.RiskQuestion {
+			topRisk = float64(len(q.Levels) - 1)
+		}
+	}
+	for _, field := range []struct {
+		name  string
+		value float64
+		top   float64
+	}{
+		{"risk_ask_at", r.Thresholds.RiskAskAt, topRisk},
+		{"risk_deny_at", r.Thresholds.RiskDenyAt, topRisk},
+		{"user_requested_relax_at", r.Thresholds.UserRequestedRelaxAt, 1},
+		{"approval_relax_at", r.Thresholds.ApprovalRelaxAt, 1},
+		{"from_untrusted_block_at", r.Thresholds.FromUntrustedBlockAt, 1},
+	} {
+		if field.value < 0 || field.value > field.top {
+			return fmt.Errorf("%s: thresholds.%s is %g and it reads between 0 and %g", r.File, field.name, field.value, field.top)
+		}
+	}
+	return nil
 }
 
 func newJevClient() (*jev.Client, error) {

@@ -11,7 +11,7 @@ import (
 
 	benchapi "tofu/bench/api"
 	"tofu/bench/corpus"
-	"tofu/internal/judge/policy"
+	"tofu/internal/judge/gate"
 )
 
 const barWidth = 30
@@ -105,9 +105,9 @@ func TestTheGateIsScoredAgainstAlwaysProceedOnBothHalves(t *testing.T) {
 	}{{"fit", fit}, {"verify", verify}} {
 		five, err := ScoreRiskCut(pol, half.rows, pol.Thresholds.RiskAskAt)
 		if err != nil {
-			t.Fatalf("policy.Decide over the %s half: %v", half.name, err)
+			t.Fatalf("gate.Decide over the %s half: %v", half.name, err)
 		}
-		t.Logf("%s, policy.Decide from catalog/policy/tool_gate@1.yaml, risk_ask_at %.2f user_requested_relax_at %.2f: %d/%d correct, %d of %d blocks caught, %d false blocks",
+		t.Logf("%s, gate.Decide from catalog/general/rules/tool_gate@1.yaml, risk_ask_at %.2f user_requested_relax_at %.2f: %d/%d correct, %d of %d blocks caught, %d false blocks",
 			half.name, pol.Thresholds.RiskAskAt, pol.Thresholds.UserRequestedRelaxAt,
 			five.Correct, five.Cases, five.CaughtBlock, five.Blocks, five.FalseBlock)
 		t.Logf("%s, always-proceed, no rule and no cut: %d/%d correct, 0 of %d blocks caught, 0 false blocks",
@@ -174,16 +174,16 @@ func TestTheCalibrationCarriesTheFiveThresholdsTheGateReadsAndStillStaysShadow(t
 		t.Fatalf("GateCalibration: %v", err)
 	}
 	shipped, _ := shippedGate(t)
-	if calibration.Gate.toPolicy() != shipped.Thresholds {
-		t.Fatalf("the calibration pins %s and catalog/policy/tool_gate@1.yaml ships %s", calibration.Gate.toPolicy(), shipped.Thresholds)
+	if calibration.Gate.toThresholds() != shipped.Thresholds {
+		t.Fatalf("the calibration pins %s and catalog/general/rules/tool_gate@1.yaml ships %s", calibration.Gate.toThresholds(), shipped.Thresholds)
 	}
 	if calibration.NFit != 89 || calibration.NVerify != 89 {
 		t.Fatalf("n_fit %d and n_verify %d, and the split holds 89 on each side", calibration.NFit, calibration.NVerify)
 	}
-	if calibration.Mode != policy.ModeEnforced {
+	if calibration.Mode != gate.ModeEnforced {
 		t.Fatalf("the file declares %s, and the arms did decide through it", calibration.Mode)
 	}
-	if resolution.Mode != policy.ModeShadow || resolution.Pinned {
+	if resolution.Mode != gate.ModeShadow || resolution.Pinned {
 		t.Fatalf("mode %s pinned %v on %d fitted cases against a floor of %d", resolution.Mode, resolution.Pinned, calibration.NFit, calibration.SampleFloor)
 	}
 	if !strings.Contains(resolution.Reason, "below the floor") {

@@ -78,10 +78,66 @@ func TestTheSearchToolIsRegistrableAndItsDescriptionSaysWhatItReturns(t *testing
 	if definition.Name != tool.Name() {
 		t.Fatalf("the model would call %q and the registry would look up %q", definition.Name, tool.Name())
 	}
-	for _, phrase := range []string{"whole declaration", "comment", "string literal", "fallback", "token budget"} {
+	for _, phrase := range []string{
+		"whole declaration", "comment", "string literal", "fallback", "token budget",
+		"finds text anywhere", "there is no grep tool",
+	} {
 		if !strings.Contains(definition.Description, phrase) {
 			t.Fatalf("the description does not tell the model about %q: %s", phrase, definition.Description)
 		}
+	}
+}
+
+func TestSearchUnderASubdirectoryIgnoreFileNeverReadsTheIgnoredCopy(t *testing.T) {
+	root := t.TempDir()
+	seed(t, root, ".gitignore", "vendored/\n")
+	seed(t, root, "src/app.go", "package src\n\nconst needleHere = 1\n")
+	seed(t, root, "vendored/copy.go", "package vendored\n\nconst needleHere = 2\n")
+
+	found := searchResult(t, root, `{"pattern":"needleHere"}`)
+	if strings.Contains(found.Content, "vendored/copy.go") {
+		t.Fatalf("search read a file the .gitignore excludes:\n%s", found.Content)
+	}
+	if !strings.Contains(found.Content, "src/app.go") {
+		t.Fatalf("search missed the one file it was supposed to read:\n%s", found.Content)
+	}
+
+	unfiltered := searchResult(t, root, `{"pattern":"needleHere","include_ignored":true}`)
+	if !strings.Contains(unfiltered.Content, "vendored/copy.go") || !strings.Contains(unfiltered.Content, "degraded unfiltered") {
+		t.Fatalf("the override did not reach the ignored file or did not say so:\n%s", unfiltered.Content)
+	}
+}
+
+func TestAnAgentCanSearchThisRepositoryForItsOwnInstructions(t *testing.T) {
+	root := repositoryRoot(t)
+	if _, err := os.Stat(filepath.Join(root, "CLAUDE.md")); err != nil {
+		t.Skip("CLAUDE.md is itself gitignored here, so a clone does not carry one to find")
+	}
+	found := searchResult(t, root, `{"pattern":"No ticket, no agent"}`)
+	if !strings.Contains(found.Content, "CLAUDE.md:") {
+		t.Fatalf("line 11 of the root .gitignore hid the project's own rules from search:\n%s", found.Content)
+	}
+}
+
+func TestABinaryFileIsNamedAsSkippedBySearchAndRefusedByEdit(t *testing.T) {
+	root := t.TempDir()
+	seed(t, root, "notes.txt", "needleHere\n")
+	seed(t, root, "blob.bin", "needleHere\x00tail\n")
+
+	found := searchResult(t, root, `{"pattern":"needleHere"}`)
+	for _, want := range []string{"degraded binary_skipped", "null byte", "not a complete answer"} {
+		if !strings.Contains(found.Content, want) {
+			t.Fatalf("search never says %q about the file it did not read:\n%s", want, found.Content)
+		}
+	}
+
+	editTool, err := tools.NewEdit(root)
+	if err != nil {
+		t.Fatalf("building edit: %v", err)
+	}
+	_, err = editTool.Run(context.Background(), json.RawMessage(`{"path":"blob.bin","old_string":"needleHere","new_string":"other"}`))
+	if err == nil || !strings.Contains(err.Error(), "degraded binary_skipped") {
+		t.Fatalf("edit rewrote a binary file or did not name why it refused: %v", err)
 	}
 }
 
@@ -103,13 +159,8 @@ func repositoryRoot(t *testing.T) string {
 	}
 }
 
-func TestSearchAgainstGrepOnRecordedQuestions(t *testing.T) {
+func TestSearchStaysUnderItsBudgetOnRecordedQuestions(t *testing.T) {
 	root := repositoryRoot(t)
-	grepTool, err := tools.NewGrep(root)
-	if err != nil {
-		t.Fatalf("building the tool: %v", err)
-	}
-
 	questions := []struct{ pattern, path string }{
 		{`t\.Skip|t\.Skipf`, "internal/judge"},
 		{`t\.Skip`, "internal/judge"},
@@ -122,14 +173,9 @@ func TestSearchAgainstGrepOnRecordedQuestions(t *testing.T) {
 		if err != nil {
 			t.Fatalf("encoding the question: %v", err)
 		}
-		grepped, err := grepTool.Run(context.Background(), args)
-		if err != nil {
-			t.Fatalf("grep %s: %v", question.pattern, err)
-		}
 		searched := searchResult(t, root, string(args))
-		grepTokens := len(grepped.Content) / konst.SearchBytesPerToken
 		searchTokens := len(searched.Content) / konst.SearchBytesPerToken
-		t.Logf("%s under %s: grep %d tokens, search %d tokens", question.pattern, question.path, grepTokens, searchTokens)
+		t.Logf("%s under %s: search %d tokens", question.pattern, question.path, searchTokens)
 		if searchTokens > konst.SearchTokenBudget {
 			t.Fatalf("search returned about %d tokens, over its own budget of %d", searchTokens, konst.SearchTokenBudget)
 		}

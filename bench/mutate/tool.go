@@ -1,11 +1,15 @@
 package mutate
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"os/exec"
+	"strconv"
 	"strings"
 	"time"
+
+	"tofu/internal/konst"
 )
 
 type Tool struct {
@@ -14,7 +18,15 @@ type Tool struct {
 	Args   []string
 }
 
-var Gremlins = Tool{Name: "gremlins", Binary: "gremlins", Args: []string{"unleash", "--timeout-coefficient", "30", "--workers", "4"}}
+var Gremlins = Tool{
+	Name:   "gremlins",
+	Binary: "gremlins",
+	Args: []string{
+		"unleash",
+		"--timeout-coefficient", strconv.Itoa(konst.MutateTimeoutCoefficient),
+		"--workers", strconv.Itoa(konst.MutateWorkers),
+	},
+}
 
 var changes = map[string]string{
 	"CONDITIONALS_BOUNDARY":   "a comparison boundary moved, > became >=",
@@ -47,13 +59,17 @@ func (t Tool) Command(ctx context.Context, dir, pattern string) *exec.Cmd {
 
 func (t Tool) Run(ctx context.Context, dir, pattern string) (Outcome, error) {
 	started := time.Now()
-	output, runErr := t.Command(ctx, dir, pattern).CombinedOutput()
-	mutants, err := Parse(string(output))
+	cmd := t.Command(ctx, dir, pattern)
+	var output bytes.Buffer
+	cmd.Stdout = &output
+	cmd.Stderr = &output
+	runErr := run(ctx, cmd, konst.MutateChildMemoryCeilingBytes)
+	mutants, err := Parse(output.String())
 	if err != nil {
 		return Outcome{}, err
 	}
 	if len(mutants) == 0 && runErr != nil {
-		return Outcome{}, fmt.Errorf("%s in %s: %w: %s", t.Name, dir, runErr, strings.TrimSpace(string(output)))
+		return Outcome{}, fmt.Errorf("%s in %s: %w: %s", t.Name, dir, runErr, strings.TrimSpace(output.String()))
 	}
 	return Outcome{Tool: t.Name, Package: pattern, Elapsed: time.Since(started), Mutants: mutants}, nil
 }

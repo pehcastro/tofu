@@ -32,6 +32,32 @@ func servedFrom(t *testing.T, subscription Subscription, payload string) Served 
 	return served
 }
 
+func shippedTable(t *testing.T) Registry {
+	t.Helper()
+	registry, err := ShippedRegistry()
+	if err != nil {
+		t.Fatalf("parsing the shipped snapshot of models.dev: %v", err)
+	}
+	return registry
+}
+
+func windowsTheModelFilesCarriedByHand() map[string]int {
+	return map[string]int{
+		"claude-sub/claude-opus-5":              1000000,
+		"claude-sub/claude-opus-4-5-20251101":   200000,
+		"claude-sub/claude-sonnet-4-5-20250929": 200000,
+		"claude-sub/claude-haiku-4-5-20251001":  200000,
+		"codex-sub/gpt-5.5":                     400000,
+	}
+}
+
+func windowsThePublishedTableCorrects() map[string]int {
+	return map[string]int{
+		"claude-sub/claude-sonnet-4-5-20250929": 1000000,
+		"codex-sub/gpt-5.5":                     1050000,
+	}
+}
+
 func TestTheCodexListReportsAWindowPerModel(t *testing.T) {
 	served := servedFrom(t, Codex, "codex-models.json")
 	for slug, want := range map[string]int{"gpt-6-astra": 272000, "gpt-5.6-sol": 272000, "gpt-5.5": 272000} {
@@ -57,89 +83,122 @@ func TestTheAnthropicListReportsNoWindowAndTheProxyShapeDoes(t *testing.T) {
 	t.Logf("the official list reports no window and a list that carries max_input_tokens reports %v", proxy.Windows)
 }
 
-func TestTheCatalogTheRegistryAndTheAccountResolveInThatOrder(t *testing.T) {
-	catalog := shippedCatalog(t)
-	registry, err := ShippedRegistry()
-	if err != nil {
-		t.Fatalf("the shipped registry snapshot: %v", err)
-	}
+func TestThePublishedTableAnswersBeforeTheAccountDoes(t *testing.T) {
+	catalog, registry := shippedCatalog(t), shippedTable(t)
 	served := servedFrom(t, Codex, "codex-models.json")
-
-	stated, err := catalog.Select("anthropic/claude-haiku-4-5-20251001")
-	if err != nil {
-		t.Fatalf("selecting a model the catalog states a window for: %v", err)
-	}
-	if tokens, source := WindowFor(stated, registry, served); tokens != 200000 || !strings.Contains(source, "catalog") {
-		t.Fatalf("%s resolved to %d tokens %q, want the 200000 the catalog states", stated.Slug(), tokens, source)
+	if served.Windows["gpt-5.6-sol"] == registry.Window("openai/gpt-5.6-sol") {
+		t.Fatal("the account and the table agree on the codex default, so this proves no order")
 	}
 
-	listed, err := catalog.Select("openai/gpt-5.6-sol")
+	listed, err := catalog.Select("codex-sub/gpt-5.6-sol")
 	if err != nil {
 		t.Fatalf("selecting the codex default: %v", err)
 	}
-	if listed.ContextTokens != 0 {
-		t.Fatalf("the catalog states %d tokens for %s, and this case needs the model it states nothing for", listed.ContextTokens, listed.Slug())
-	}
 	tokens, source := WindowFor(listed, registry, served)
 	if tokens != 1050000 || !strings.Contains(source, "models.dev") {
-		t.Fatalf("%s resolved to %d tokens %q, want the 1050000 the registry lists", listed.Slug(), tokens, source)
+		t.Fatalf("%s resolved to %d tokens %q, want the 1050000 the table publishes", listed.Slug(), tokens, source)
 	}
 
 	custom := Model{Provider: OpenAI, ID: "gpt-custom", Subscription: Codex}
 	reported := Served{Subscription: Codex, Pin: "codex client version 0.153.0", Windows: map[string]int{"gpt-custom": 300000}}
 	if tokens, source := WindowFor(custom, registry, reported); tokens != 300000 || !strings.Contains(source, "account") {
-		t.Fatalf("a model in neither the catalog nor the registry resolved to %d tokens %q, want the 300000 the account reports", tokens, source)
+		t.Fatalf("a model no table lists resolved to %d tokens %q, want the 300000 the account reports", tokens, source)
 	}
 	if tokens, source := WindowFor(custom, registry, Served{}); tokens != 0 || source != "" {
-		t.Fatalf("a model none of the three knows resolved to %d tokens %q", tokens, source)
+		t.Fatalf("a model neither the table nor the account knows resolved to %d tokens %q", tokens, source)
 	}
-	t.Logf("catalog 200000, registry %d %s, account 300000, none 0", tokens, source)
+}
+
+func TestEveryWindowTypedByHandNowComesFromThePublishedTable(t *testing.T) {
+	catalog, registry := shippedCatalog(t), shippedTable(t)
+	for slug, byHand := range windowsTheModelFilesCarriedByHand() {
+		model, found := catalog.Resolve(slug)
+		if !found {
+			t.Fatalf("%s left the catalog with its window", slug)
+		}
+		want := byHand
+		if published, corrected := windowsThePublishedTableCorrects()[slug]; corrected {
+			want = published
+		}
+		tokens, source := WindowFor(model, registry, Served{})
+		if tokens != want {
+			t.Fatalf("%s answers %d tokens, want the %d the table publishes", slug, tokens, want)
+		}
+		if !strings.Contains(source, registry.From) || !strings.Contains(source, model.VendorSlug()) {
+			t.Fatalf("%s does not say it was joined on %s in %s: %q", slug, model.VendorSlug(), registry.From, source)
+		}
+	}
+}
+
+func TestTheTableIsJoinedOnTheVendorFormAndTheSlugStaysThePayerForm(t *testing.T) {
+	catalog, err := Load([]Layer{layerOf("catalog", withSubscriptions(oneFile(
+		"models/openai/gpt-5.6-sol.yaml", "subscription: codex\nuse: default\n")))})
+	if err != nil {
+		t.Fatalf("loading: %v", err)
+	}
+	registry, err := ParseRegistry([]byte(
+		`{"openai":{"models":{"gpt-5.6-sol":{"limit":{"context":1050000}}}},`+
+			`"codex":{"models":{"gpt-5.6-sol":{"limit":{"context":7}}}}}`), "a table keyed both ways")
+	if err != nil {
+		t.Fatalf("parsing: %v", err)
+	}
+	model, found := catalog.Resolve("codex-sub/gpt-5.6-sol")
+	if !found || model.Slug() != "codex-sub/gpt-5.6-sol" || model.VendorSlug() != "openai/gpt-5.6-sol" {
+		t.Fatalf("the payer form and the vendor form are not both spelled out: %+v", model)
+	}
+	if tokens, _ := WindowFor(model, registry, Served{}); tokens != 1050000 {
+		t.Fatalf("the join answered %d tokens, and 7 is the entry filed under the payer form", tokens)
+	}
 }
 
 func TestADatedCatalogIdStillFindsTheUndatedRegistryEntry(t *testing.T) {
-	registry, err := ShippedRegistry()
+	registry, err := ParseRegistry([]byte(
+		`{"anthropic":{"models":{"claude-haiku-4-5":{"limit":{"context":200000}}}}}`), "a table with no dated alias")
 	if err != nil {
-		t.Fatalf("the shipped registry snapshot: %v", err)
+		t.Fatalf("parsing: %v", err)
 	}
 	if tokens := registry.Window("anthropic/claude-haiku-4-5-20251001"); tokens != 200000 {
-		t.Fatalf("a dated catalog id resolved to %d tokens against a registry that lists claude-haiku-4-5", tokens)
+		t.Fatalf("a dated catalog id resolved to %d tokens against a table that lists claude-haiku-4-5", tokens)
 	}
 	if tokens := registry.Window("anthropic/claude-haiku-4-5-2025100x"); tokens != 0 {
 		t.Fatalf("a suffix that is not a date was cut off anyway and resolved to %d tokens", tokens)
 	}
 }
 
-func TestWhichSourceAnsweredForEveryModelWeShip(t *testing.T) {
-	catalog := shippedCatalog(t)
-	registry, err := ShippedRegistry()
-	if err != nil {
-		t.Fatalf("the shipped registry snapshot: %v", err)
-	}
-	served := map[Subscription]Served{
-		Codex:  servedFrom(t, Codex, "codex-models.json"),
-		Claude: servedFrom(t, Claude, "anthropic-models.json"),
-	}
+func TestEveryModelTheAccountCanSendTakesAWindowFromTheTable(t *testing.T) {
+	catalog, registry := shippedCatalog(t), shippedTable(t)
 	answered := 0
 	for _, model := range catalog.Models {
-		tokens, source := WindowFor(model, registry, served[model.Subscription])
+		tokens, source := WindowFor(model, registry, Served{})
 		if tokens > 0 {
 			answered++
+		}
+		if model.Use != UseExcluded && tokens <= 0 {
+			t.Fatalf("%s is sendable and no table entry gives it a window, so it would compact on a guess", model.Slug())
 		}
 		t.Logf("%-40s %8d %s", model.Slug(), tokens, source)
 	}
 	if answered == len(catalog.Models) {
 		t.Fatalf("all %d models have a window, and the case worth watching is the one that has none", answered)
 	}
-	t.Logf("%d of %d models the catalog ships resolve to a window", answered, len(catalog.Models))
+	t.Logf("%d of %d models the catalog ships take a window from %s", answered, len(catalog.Models), registry.From)
 }
 
-func TestReconcileNamesAWindowTheCatalogDoesNotCarry(t *testing.T) {
-	lines := shippedCatalog(t).Reconcile(servedFrom(t, Codex, "codex-models.json")).Lines()
+func TestReconcileNamesAWindowThePublishedTableDoesNotMatch(t *testing.T) {
+	lines := shippedCatalog(t).Reconcile(servedFrom(t, Codex, "codex-models.json"), shippedTable(t)).Lines()
 	last := lines[len(lines)-1]
-	for _, want := range []string{"openai/gpt-5.6-sol 272000", "openai/gpt-6-astra 272000", "openai/gpt-5.5 272000"} {
+	for _, want := range []string{"codex-sub/gpt-5.6-sol 272000", "codex-sub/gpt-6-astra 272000", "codex-sub/gpt-5.5 272000"} {
 		if !strings.Contains(last, want) {
-			t.Fatalf("the reconciliation does not name %q, so a window the account reports stays invisible until somebody edits a file:\n%s", want, last)
+			t.Fatalf("the reconciliation does not name %q, so a window the account reports stays invisible:\n%s", want, last)
 		}
 	}
 	t.Logf("%s", last)
+}
+
+func TestAModelFileCannotCarryAContextWindowAtAll(t *testing.T) {
+	_, err := Load([]Layer{layerOf("catalog", withSubscriptions(oneFile(
+		"models/openai/gpt-5.6-sol.yaml", "subscription: codex\nuse: default\ncontext_tokens: 400000\n")))})
+	if err == nil || !strings.Contains(err.Error(), "context_tokens: unknown field") {
+		t.Fatalf("a local file still carries an upstream fact, got %v", err)
+	}
 }

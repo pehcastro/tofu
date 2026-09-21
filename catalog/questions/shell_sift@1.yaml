@@ -1,4 +1,5 @@
 name: shell_sift
+domain: shell
 questions_version: 1
 
 state:

@@ -1,36 +1,92 @@
 # The catalog
 
-Everything tofu ships as data lives here, one directory per kind. The directory is the kind, the file is the thing, and the path is the name. Nothing here is code and nothing here imports anything: `tofu/catalog` sits at the bottom of the import graph on purpose.
+Everything tofu ships as data lives here. Nothing here is code and nothing here imports anything: `tofu/catalog` sits at the bottom of the import graph on purpose.
 
-A kind is resolved in three layers, and the last one to mention a field wins that field:
+Two shapes live side by side and they answer different questions.
+
+**What tofu may talk to** is filed by kind: `models/`, `subscriptions/`, `roles/`, `web/`, `questions/`, `changelog/`. The directory is the kind, the file is the thing, the path is the name.
+
+**What tofu knows** is filed by domain: `dev/`, `qa/`, `general/`, `tools/<tool>/`. A domain holds `rules/`, `skills/`, `agents/` and `references/`, and a language directory inside a domain holds what is true only of that language.
+
+Either shape resolves in three layers, and the last one to mention a field wins that field:
 
 1. `catalog/`, shipped inside the binary
-2. `~/.boji/`, the person
-3. `./.boji/`, the project
+2. `~/.tofu/`, the person
+3. `./.tofu/`, the project
 
 The merge is field by field, not file by file. A project file that says `use: allowed` and nothing else keeps every other fact from the layer beneath it. `tofu catalog` prints what loaded, from where, and every file it refused with the field that failed.
 
+## The domains
+
+```
+catalog/general/rules/         true everywhere
+catalog/dev/rules/             writing code, any language
+catalog/dev/go/rules/          writing Go
+catalog/qa/general/rules/      testing, any language
+catalog/qa/general/skills/     procedures a person or an agent follows
+catalog/qa/agents/             sub-agent definitions
+catalog/qa/references/         material any skill or agent in this domain may read
+catalog/tools/shell/rules/     the shell tool alone
+catalog/tools/shell/proxy.yaml the command proxy the shell tool runs behind, off unless a person turns it on
+catalog/tools/fetch/rules/     the fetch tool alone
+```
+
+**`tools/shell/proxy.yaml` is a setting rather than a rule, and it is the one file under a tool directory that declares no domain.** `use` is `off` or `rtk`, and `off` means the turn loop holds no proxy at all: no process is started and no path is looked up. With `use: rtk` every bash command is offered to `rtk rewrite` before the tool gate sees it, so the gate, the person and the recorded row all carry the command that will actually run. `timeout_ms` bounds that one call.
+
+**A directory is created only when something belongs in it.** There is no `catalog/dev/skills/` because no dev skill has been written, and no `catalog/qa/go/` because none of the twenty three QA skills read for TOFU-291 carries Go material. The shape without the content is worse than no shape.
+
+**Every rule, every skill, every agent and every question declares its `domain:`, and a file that does not is refused by name.** The directory is not allowed to carry that meaning on its own, because a person adding a file has to say what it is for. A domain is `dev`, `qa`, `general` or a tool name, and under `tools/` the domain is the tool directory rather than the word `tools`.
+
+**A reference is reachable by every skill and every agent in its own domain, and by nothing else.** A document naming a reference its domain does not ship is refused by name, so a reference is never silently missing at the moment somebody needed it.
+
+## rules
+
+`catalog/<domain>/rules/<id>@<version>.yaml`, or `catalog/<domain>/<language>/rules/...`
+
+One directory holds two families of rule and `kind:` says which.
+
+**A checker rule** is a check over a tree or a diff, read by `internal/rule`. It carries `id`, `domain`, `kind`, a `mode` of `shadow`, `enforced` or `off`, and either a `checker:` naming a builtin or, when `kind: measured`, a `measurement:` with the `source:` it was distilled from and the `evidence:` that paid for it. `tofu rules list` and `tofu rules check` read these.
+
+**A threshold rule** is what a decision point reads, `kind: threshold`, loaded by `internal/judge/policy`. It carries `name`, `domain`, `kind`, `rule_version`, the `questions` set and `questions_version` it is asked against, a `mode`, a `sample_floor`, and a `thresholds:` block. `tofu doctor` reports which one decided and in which mode.
+
+**A recorded decision names a threshold rule by `name@version`, never by path.** That is why a rule can move between domains without touching a single row in `.tofu/log`, and why old versions stay on disk: a recorded decision replays against the wording and the cuts that judged it.
+
+## questions
+
+`catalog/questions/<name>@<version>.yaml`
+
+The wording handed to Jev, loaded by `internal/judge/question`. Each set declares its `domain`, and a set without one is refused by name. `tofu catalog resolve <name>` prints a set field by field with the file and line that decided each one.
+
 ## models
 
-`catalog/models/<provider>/<name>.yaml`
+`catalog/models/<vendor>/<name>.yaml`
 
-The path is the identity. A model is `provider/name`, one string, and it is the same string in a sub-agent definition, in `/model`, in `tofu run --model` and in the status bar. The provider is the vendor: `openai`, never `codex`.
+The directory names the vendor who built the model: `openai`, never `codex`. That is a fact about the model and does not change with who pays. **The identity tofu writes everywhere else, a sub-agent definition, `/model`, `tofu run --model`, the status bar, is a slug built from who pays rather than from the directory:**
+
+- served by a subscription: `<subscription>-sub/<name>`, for example `claude-sub/claude-opus-5`. The `-sub` suffix is derived from the subscription's own name and is never written by hand.
+- paid by a direct key, no `subscription` field in the model's file: `<vendor>/<name>`, for example `anthropic/claude-opus-5`. This is the one case where the bare vendor name is the correct identity, and it never collides with a subscription slug because a subscription name always carries the suffix.
+
+The same model reached two ways, once on a subscription and once on a direct key, bills two ways and is filed as two entries so the slug always says which is paying.
 
 | field | required | what it is |
 |---|---|---|
-| `subscription` | yes | the subscription that serves it, and a subscription file must exist for it |
+| `subscription` | when a subscription pays | the subscription that serves it, and a subscription file must exist for it. Absent means a direct key pays instead |
 | `use` | yes | `default`, `allowed` or `excluded`. A file with no `use` loads excluded, because tofu does not send a model nobody has ruled on |
 | `reason` | when excluded | why, in the words of whoever decided |
 | `window` | no | an extra quota bucket this model alone spends, on top of its subscription's |
-| `context_tokens` | no | how many tokens the model's context window holds, as somebody read it from the vendor |
+| `context_tokens` | removed | **Gone since TOFU-304 on 2026-09-21.** A model file that carries one is refused as an unknown field. A context window is an upstream fact and a model file holds local decisions, so the two are no longer in one place. |
 
-Exactly one `default` per subscription, and a subscription with models has one.
+Exactly one `default` per subscription, and a subscription with models has one. A direct-key model carries no default requirement of its own.
 
 Nothing else lives here. A file directly under `catalog/models/`, or a directory that is not a vendor, is refused by name rather than ignored.
 
-**An absent `context_tokens` means tofu never compacts that model automatically.** The field is written only when somebody has read the real number, because a guessed window is worse than none: too low compacts a turn that had room, too high sends a request the vendor answers with a context overflow. A value that is not a count of tokens above zero is refused by file and by field rather than rounded into something usable. The five that ship were read in September 2026: `claude-opus-5` at 1,000,000 from its own model banner, `claude-opus-4-5-20251101`, `claude-sonnet-4-5-20250929` and `claude-haiku-4-5-20251001` at 200,000, `gpt-5.5` at 400,000.
+**A context window comes from `models.dev` and from nowhere else.** Three layers: a snapshot embedded in the binary, a cache at `~/.tofu/model-windows.json` written by `tofu models --refresh`, and the rulings in `catalog/models/`, which no table ever touches. **`tofu models --refresh` is the only thing in the catalog that reaches the network**, and it is a verb rather than a background refresh, because a network call hiding behind a verb somebody ran for another reason is what would cost the catalog its no-network property.
 
-**A bare name is read, never written.** The identity is `provider/name` and that is the string every new record writes. Session headers on disk from before this rule carry the bare name with the vendor in a separate `wire` field, so the window lookup also answers a bare name, and only when exactly one vendor directory holds it. Two vendors serving one name resolves to no window at all, which means no automatic compaction, because choosing one of two is a guess.
+An absent window still means tofu never compacts that model automatically, and a guess is still worse than none: too low compacts a turn that had room, too high sends a request the vendor answers with an overflow. 16 of 17 models carry one from the snapshot with no network. The one without is `codex-sub/gpt-reserve`, which no published table lists, and it stays without rather than getting a guess.
+
+**Two of the five hand-read numbers were wrong and nobody could have known.** `claude-sonnet-4-5-20250929` was typed at 200,000 against a published 1,000,000, and `gpt-5.5` at 400,000 against 1,050,000. Both are excluded models so neither was ever sent, and both were wrong on disk for as long as they were there.
+
+**A bare name is read, never written.** Session headers on disk from before this rule, and from before the money-based slug, carry a bare model name alone, sometimes with the vendor in a separate `wire` field. Reading one back matches it against every model's own name and resolves only when exactly one model in the whole catalog carries it; two models sharing a bare name resolve to nothing rather than a guess.
 
 ## subscriptions
 
@@ -53,7 +109,7 @@ A role is a name a call site asks for a model by. There are two, and both are re
 
 | field | required | what it is |
 |---|---|---|
-| `model` | yes | the model it binds, written `provider/name`, the same string everywhere else |
+| `model` | yes | the model it binds, written by its slug, `<subscription>-sub/name` or `<vendor>/name`, the same string everywhere else |
 
 A file named anything but a role is refused by name rather than ignored, because a role nothing reads is a setting that silently does nothing. A role naming a model the catalog does not have is refused by name, and one naming an excluded model is refused with the catalog's own words for that exclusion.
 
@@ -61,19 +117,17 @@ The model names its subscription, so binding `child` to a model on another accou
 
 A session resolves its roles once, when it starts. Changing a file changes the next turn rather than the running one, because a record that cannot be reproduced is worth less than a setting that feels live.
 
-## questions, policy, rules
+## Adding a domain, or a language inside one
 
-`catalog/questions/<name>@<version>.yaml`, `catalog/policy/<name>@<version>.yaml`, `catalog/rules/<name>@<version>.yaml`
-
-Loaded and validated by `internal/judge/question`, `internal/judge/policy` and `internal/rule`. `tofu catalog resolve <name>` prints a question set field by field with the file and line that decided each one. `tofu doctor` reports which policy decided, and `tofu rules list` reports which rule set did.
+A domain is a directory with something real in it and a `domain:` on every file. Nothing else is needed and nothing registers it: `tofu catalog` finds it by walking. A language directory inside a domain is created the first time a file belongs only to that language, and never before.
 
 ## Adding a kind
 
 Four things, and none of them is a new mechanism:
 
-1. A directory under `catalog/`, and the same directory name under `~/.boji/` and `./.boji/`. The layering is the same for every kind.
+1. A directory under `catalog/`, and the same directory name under `~/.tofu/` and `./.tofu/`. The layering is the same for every kind.
 2. A contract: the field names, which are required, and what an absent one means. A required field added later defaults to the conservative value, because every file that already exists is missing it.
 3. A loader that refuses a file by name and by field rather than skipping it, and that reports every refusal rather than the first.
 4. A line in `tofu catalog`, so a person can see what loaded and what did not without reading the source.
 
-Sub-agents, skills and hooks are the kinds coming next. Each one arrives as a directory plus a contract plus a loader plus a line, and nothing above it has to change.
+Hooks are the kind coming next. It arrives as a directory plus a contract plus a loader plus a line, and nothing above it has to change.

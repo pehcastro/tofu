@@ -17,6 +17,7 @@ func liveJevWire(t *testing.T) jev.Wire {
 	if os.Getenv("TOFU_LIVE") != "1" {
 		t.Skip("set TOFU_LIVE=1 to put the last word to the real jev route")
 	}
+	jev.AllowLiveCredential(t)
 	key, err := jev.Key(filepath.Join(forkRepoRoot, ".env"))
 	if err != nil {
 		t.Skipf("no OPENROUTER_KEY reachable: %v", err)

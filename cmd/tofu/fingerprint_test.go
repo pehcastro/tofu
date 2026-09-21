@@ -14,6 +14,7 @@ import (
 	"tofu/internal/judge/ledger"
 	"tofu/internal/judge/question"
 	"tofu/internal/judge/state"
+	"tofu/internal/sys"
 	"tofu/internal/turn"
 )
 
@@ -21,9 +22,9 @@ const forcePush = "git push --force origin main"
 
 func rowByID(t *testing.T, id string) ledger.Row {
 	t.Helper()
-	dir, err := ledger.Dir()
+	dir, err := sys.LogDir()
 	if err != nil {
-		t.Fatalf("ledger.Dir: %v", err)
+		t.Fatalf("sys.LogDir: %v", err)
 	}
 	row, found, err := ledger.NewReader(dir).ByID(id)
 	if err != nil || !found {
@@ -32,13 +33,13 @@ func rowByID(t *testing.T, id string) ledger.Row {
 	return row
 }
 
-func checkCommand(t *testing.T, policyPath, command string) ledger.Row {
+func checkCommand(t *testing.T, rulePath, command string) ledger.Row {
 	t.Helper()
 	client, err := jev.NewClient(jev.Config{Wire: &stubWire{reply: askReply}})
 	if err != nil {
 		t.Fatalf("client: %v", err)
 	}
-	row, err := runCheck(context.Background(), client, policyPath, command)
+	row, err := runCheck(context.Background(), client, rulePath, command)
 	if err != nil {
 		t.Fatalf("runCheck: %v", err)
 	}
@@ -46,14 +47,14 @@ func checkCommand(t *testing.T, policyPath, command string) ledger.Row {
 }
 
 func TestCheckWritesARowCarryingTheFingerprintOfTheCommandItJudged(t *testing.T) {
-	policyPath := toolGatePolicyPath(t)
+	rulePath := toolGateRulePath(t)
 	t.Chdir(t.TempDir())
 	cwd, err := os.Getwd()
 	if err != nil {
 		t.Fatalf("os.Getwd: %v", err)
 	}
 
-	row := rowByID(t, checkCommand(t, policyPath, forcePush).ID)
+	row := rowByID(t, checkCommand(t, rulePath, forcePush).ID)
 
 	want := state.FingerprintOf(state.ToolGateInput{
 		Agent:      "owner-shell",
@@ -73,11 +74,11 @@ func TestCheckWritesARowCarryingTheFingerprintOfTheCommandItJudged(t *testing.T)
 
 func gateAndCheckRows(t *testing.T) (gated, checked ledger.Row) {
 	t.Helper()
-	policyPath := toolGatePolicyPath(t)
+	rulePath := toolGateRulePath(t)
 	dir, _, _ := gateScratch(t, gateFixtureBuild)
 	stubJev(t, 200, middlingRiskAskReply)
 
-	checked = rowByID(t, checkCommand(t, policyPath, forcePush).ID)
+	checked = rowByID(t, checkCommand(t, rulePath, forcePush).ID)
 	time.Sleep(2 * time.Millisecond)
 
 	gate, err := newToolGate(dir)
@@ -163,9 +164,9 @@ func TestAReplayedRowCarriesTheFingerprintOfTheRowItReplays(t *testing.T) {
 		t.Fatalf("the judge asked the wire %d times, so this is not the replay path", wire.calls)
 	}
 
-	dir, err := ledger.Dir()
+	dir, err := sys.LogDir()
 	if err != nil {
-		t.Fatalf("ledger.Dir: %v", err)
+		t.Fatalf("sys.LogDir: %v", err)
 	}
 	var replay ledger.Row
 	if _, err := ledger.NewReader(dir).Each(ledger.Filter{}, func(row ledger.Row) error {

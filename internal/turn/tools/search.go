@@ -28,14 +28,19 @@ func (s Search) Name() string { return "search" }
 func (s Search) Definition() llm.Tool {
 	return llm.Tool{
 		Name: "search",
-		Description: "finds a regular expression under the turn's working directory and returns the whole declaration each match sits inside, " +
+		Description: "finds text anywhere under the turn's working directory and is the only tool that reads file contents to find something: there is no grep tool. " +
+			"the pattern is go regexp syntax, which is the same as perl for everything short of backreferences, and it is matched against every line of every text file. " +
+			"it returns the whole declaration each match sits inside, " +
 			"so a match in a go file comes back as the entire function, method, type or constant rather than the line. " +
 			"it says whether each match is in code, in a comment or in a string literal, which the parser knows and a line does not. " +
 			"a file it cannot parse, which is every file that is not go and any go file with a syntax error, " +
 			"comes back as the lines around the match and is counted as a fallback. " +
-			"it spends a token budget rather than a line count: over the budget it returns fewer whole units and never a cut one. " +
+			"it spends a token budget rather than a line count: over the budget it returns fewer whole units and never a cut one, " +
+			"and it says how many matched and how many came back so a short answer is never mistaken for the whole. " +
 			ignoredWalkDescription + ". " +
-			"use grep when you want every matching line of a text file, and read when you already know which file and which lines you want",
+			"when it returned less than you needed, narrow path or raise max_tokens rather than running a shell search, " +
+			"which descends into every ignored directory and hands back every matching line instead of a bounded answer. " +
+			"read is for when you already know which file and which lines you want",
 		Parameters: map[string]any{
 			"type": "object",
 			"properties": map[string]any{

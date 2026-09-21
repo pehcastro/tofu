@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	"tofu/internal/llm"
 	"tofu/internal/llm/wire/anthropic"
 	"tofu/internal/llm/wire/codex"
 	"tofu/internal/transport"
@@ -40,7 +41,12 @@ func Discover(ctx context.Context, client *transport.Client, account Account) (S
 	if err != nil {
 		return served, err
 	}
-	response, err := client.Do(ctx, discoveryRequest(account, token))
+	dump := discoveryRequest(account, token)
+	header := http.Header{}
+	for _, pair := range dump.Headers {
+		header.Set(pair.Name, pair.Value)
+	}
+	response, err := client.Do(ctx, transport.Request{Method: dump.Method, URL: dump.URL, Header: header})
 	if err != nil {
 		return served, err
 	}
@@ -62,32 +68,36 @@ func pinOf(subscription Subscription) string {
 	panic("models: unknown subscription " + string(subscription))
 }
 
-func discoveryRequest(account Account, token string) transport.Request {
-	header := http.Header{}
-	header.Set("Authorization", "Bearer "+token)
-	header.Set("Accept", "application/json")
+func discoveryRequest(account Account, token string) llm.Dump {
+	headers := []llm.Header{
+		{Name: "Authorization", Value: "Bearer " + token},
+		{Name: "Accept", Value: "application/json"},
+	}
 	url := ""
 	switch account.Subscription {
 	case Claude:
 		url = anthropicModelsURL
-		header.Set("anthropic-version", anthropic.AnthropicAPIVersion)
-		header.Set("anthropic-beta", oauthBeta)
-		header.Set("User-Agent", anthropic.ClaudeCodeUserAgent)
+		headers = append(headers,
+			llm.Header{Name: "anthropic-version", Value: anthropic.AnthropicAPIVersion},
+			llm.Header{Name: "anthropic-beta", Value: oauthBeta},
+			llm.Header{Name: "User-Agent", Value: anthropic.ClaudeCodeUserAgent})
 	case Codex:
 		url = codexModelsURL
 		if account.AccountID != "" {
-			header.Set(codex.HeaderAccountID, account.AccountID)
+			headers = append(headers, llm.Header{Name: codex.HeaderAccountID, Value: account.AccountID})
 		}
-		header.Set(codex.HeaderBeta, codex.BetaResponsesSSE)
-		header.Set(codex.HeaderOriginator, codex.Originator)
-		header.Set(codex.HeaderVersion, codex.PinnedCodexClientVersion)
+		headers = append(headers,
+			llm.Header{Name: codex.HeaderBeta, Value: codex.BetaResponsesSSE},
+			llm.Header{Name: codex.HeaderOriginator, Value: codex.Originator},
+			llm.Header{Name: codex.HeaderVersion, Value: codex.PinnedCodexClientVersion})
 	default:
 		panic("models: unknown subscription " + string(account.Subscription))
 	}
-	return transport.Request{
-		Method: http.MethodGet,
-		URL:    cmp.Or(account.BaseURL, url),
-		Header: header,
+	return llm.Dump{
+		Method:      http.MethodGet,
+		URL:         cmp.Or(account.BaseURL, url),
+		Headers:     headers,
+		Identifiers: []string{account.AccountID},
 	}
 }
 
@@ -107,7 +117,7 @@ type servedBody struct {
 func servedModels(body []byte) ([]string, map[string]int, error) {
 	var payload servedBody
 	if err := json.Unmarshal(body, &payload); err != nil {
-		return nil, nil, transport.Fail("models.Discover", transport.KindProvider, nil,
+		return nil, nil, transport.Fail("models.Discover", transport.KindProvider, err,
 			"the model list is not the shape either backend documents")
 	}
 	entries := payload.Models
@@ -130,11 +140,8 @@ func servedModels(body []byte) ([]string, map[string]int, error) {
 }
 
 func WindowFor(model Model, registry Registry, served Served) (int, string) {
-	if model.ContextTokens > 0 {
-		return model.ContextTokens, "as the catalog states it in " + model.File
-	}
-	if tokens := registry.Window(model.Slug()); tokens > 0 {
-		return tokens, "as " + registry.From + " lists it"
+	if tokens := registry.Window(model.VendorSlug()); tokens > 0 {
+		return tokens, "as " + registry.From + " lists " + model.VendorSlug()
 	}
 	if tokens := served.Windows[model.ID]; tokens > 0 {
 		return tokens, "as the " + string(served.Subscription) + " account reports it under " + served.Pin
@@ -144,12 +151,13 @@ func WindowFor(model Model, registry Registry, served Served) (int, string) {
 
 type Reconciliation struct {
 	Served      Served
+	Table       string
 	Unknown     []string
 	Unreachable []string
 	Windows     []string
 }
 
-func (c Catalog) Reconcile(served Served) Reconciliation {
+func (c Catalog) Reconcile(served Served, registry Registry) Reconciliation {
 	accounted := make(map[string]bool, len(c.Models))
 	for _, spec := range c.Subscriptions {
 		if spec.ID != served.Subscription {
@@ -179,10 +187,11 @@ func (c Catalog) Reconcile(served Served) Reconciliation {
 		if !isServed[model.ID] {
 			result.Unreachable = append(result.Unreachable, model.Slug())
 		}
-		if tokens := served.Windows[model.ID]; tokens > 0 && tokens != model.ContextTokens {
+		if tokens := served.Windows[model.ID]; tokens > 0 && tokens != registry.Window(model.VendorSlug()) {
 			result.Windows = append(result.Windows, model.Slug()+" "+strconv.Itoa(tokens))
 		}
 	}
+	result.Table = registry.From
 	return result
 }
 
@@ -192,7 +201,7 @@ func (r Reconciliation) Lines() []string {
 		head + "the account serves " + list(r.Served.IDs) + " under " + r.Served.Pin,
 		head + "served and not in the catalog: " + list(r.Unknown),
 		head + "in the catalog and not served: " + list(r.Unreachable),
-		head + "windows the account reports that the catalog does not carry: " + list(r.Windows),
+		head + "windows the account reports that " + r.Table + " does not match: " + list(r.Windows),
 	}
 }
 

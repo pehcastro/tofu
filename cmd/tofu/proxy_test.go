@@ -1,0 +1,181 @@
+package main
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"os"
+	"os/exec"
+	"path/filepath"
+	goruntime "runtime"
+	"strings"
+	"testing"
+
+	"tofu/internal/llm"
+	"tofu/internal/turn"
+)
+
+const standInProxySource = `package main
+
+import (
+	"fmt"
+	"os"
+	"strings"
+)
+
+func main() {
+	if log := os.Getenv("FAKE_RTK_LOG"); log != "" {
+		if f, err := os.OpenFile(log, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600); err == nil {
+			fmt.Fprintln(f, strings.Join(os.Args[1:], " "))
+			f.Close()
+		}
+	}
+	if len(os.Args) > 1 && os.Args[1] == "rewrite" {
+		fmt.Print("rtk " + strings.Join(os.Args[2:], " "))
+		os.Exit(3)
+	}
+	fmt.Println("filtered: ok")
+}
+`
+
+func standInProxyOnPath(t *testing.T) string {
+	t.Helper()
+	source := t.TempDir()
+	for name, body := range map[string]string{"go.mod": "module fakertk\n\ngo 1.24\n", "main.go": standInProxySource} {
+		if err := os.WriteFile(filepath.Join(source, name), []byte(body), 0o600); err != nil {
+			t.Fatalf("writing the stand-in proxy: %v", err)
+		}
+	}
+	name := "rtk"
+	if goruntime.GOOS == "windows" {
+		name += ".exe"
+	}
+	dir := t.TempDir()
+	build := exec.Command("go", "build", "-o", filepath.Join(dir, name), ".")
+	build.Dir = source
+	build.Env = append(os.Environ(), "GOFLAGS=-mod=mod", "GOWORK=off")
+	if out, err := build.CombinedOutput(); err != nil {
+		t.Skipf("this test needs a stand-in rtk and this machine did not build one, which is not a finding about the wiring: %v\n%s", err, out)
+	}
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	log := filepath.Join(t.TempDir(), "calls.txt")
+	t.Setenv("FAKE_RTK_LOG", log)
+	return log
+}
+
+func projectWithProxySheet(t *testing.T, sheet string) string {
+	t.Helper()
+	project := t.TempDir()
+	if sheet != "" {
+		dir := filepath.Join(project, ".tofu", "tools", "shell")
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatalf("building the project layer: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, "proxy.yaml"), []byte(sheet), 0o600); err != nil {
+			t.Fatalf("writing the project proxy setting: %v", err)
+		}
+	}
+	t.Chdir(project)
+	return project
+}
+
+func runOneBashCall(t *testing.T, project string) turn.ToolCallRow {
+	t.Helper()
+	opts, err := parseRunArgs([]string{"--dir", project, "run one command"})
+	if err != nil {
+		t.Fatalf("parseRunArgs: %v", err)
+	}
+	built, _, err := buildRunTools(project, opts.toolSet)
+	if err != nil {
+		t.Skipf("this machine cannot build the run tools, so no command can be run at all: %v", err)
+	}
+	model := &queuedModel{decisions: []llm.Decision{
+		{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{
+			{ID: "call-1", Name: "bash", Arguments: json.RawMessage(`{"command":"echo hi"}`)},
+		}},
+		{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "ran it"},
+	}}
+	config, _ := runConfig(opts, built, runtime{model: model, spend: turn.SpendSubscription})
+	row, err := turn.Run(context.Background(), config)
+	if err != nil {
+		t.Fatalf("turn.Run: %v", err)
+	}
+	if len(row.Steps) == 0 || len(row.Steps[0].ToolCalls) != 1 {
+		t.Fatalf("the turn never made the one bash call: %+v", row.Steps)
+	}
+	return row.Steps[0].ToolCalls[0]
+}
+
+func TestAProjectTurningTheProxyOnRewritesTheCommandARunActuallyExecutes(t *testing.T) {
+	log := standInProxyOnPath(t)
+	project := projectWithProxySheet(t, "use: rtk\ntimeout_ms: 5000\n")
+
+	called := runOneBashCall(t, project)
+	if called.Proxy == nil {
+		t.Fatalf("the run recorded no proxy with the project layer saying rtk: %+v", called)
+	}
+	if called.Proxy.Asked != "echo hi" || called.Proxy.Ran != "rtk echo hi" {
+		t.Fatalf("the row does not carry both the asked and the run command: %+v", called.Proxy)
+	}
+	spawned, err := os.ReadFile(log)
+	if err != nil {
+		t.Fatalf("the proxy was never spawned: %v", err)
+	}
+	t.Logf("proxy row %+v\nthe stand-in rtk was called with:\n%s", called.Proxy, spawned)
+}
+
+func TestTheShippedDefaultRecordsNoProxyAndSpawnsNothing(t *testing.T) {
+	log := standInProxyOnPath(t)
+	project := projectWithProxySheet(t, "")
+
+	called := runOneBashCall(t, project)
+	if called.Proxy != nil {
+		t.Fatalf("the shipped default recorded a proxy: %+v", called.Proxy)
+	}
+	if _, err := os.Stat(log); !os.IsNotExist(err) {
+		spawned, _ := os.ReadFile(log)
+		t.Fatalf("the shipped default spawned the proxy anyway: %s", spawned)
+	}
+}
+
+func TestCatalogNamesTheProxySettingAndTheLayerItCameFrom(t *testing.T) {
+	project := projectWithProxySheet(t, "use: rtk\ntimeout_ms: 5000\n")
+
+	var out, errOut bytes.Buffer
+	if code := catalogVerb(nil, &out, &errOut); code != exitOK {
+		t.Fatalf("tofu catalog exited %d: %s\n%s", code, errOut.String(), out.String())
+	}
+	line := proxyLine(t, out.String())
+	if !strings.Contains(line, "use rtk") || !strings.Contains(line, "project ") || !strings.Contains(line, filepath.Base(project)) {
+		t.Fatalf("tofu catalog does not name the setting and the layer: %q", line)
+	}
+	t.Logf("tofu catalog\n%s", line)
+}
+
+func TestCatalogNamesARefusedProxyFileAndTheFieldThatFailed(t *testing.T) {
+	projectWithProxySheet(t, "use: maybe\ntimeout_ms: 5000\n")
+
+	var out, errOut bytes.Buffer
+	if code := catalogVerb(nil, &out, &errOut); code != exitVerdict {
+		t.Fatalf("a refused proxy file must fail the verb, got %d\n%s", code, out.String())
+	}
+	text := out.String()
+	if !strings.Contains(text, "proxy.yaml") || !strings.Contains(text, "use has to be") {
+		t.Fatalf("tofu catalog does not name the refused file and the field:\n%s", text)
+	}
+	if !strings.Contains(proxyLine(t, text), "use off") {
+		t.Fatalf("a refused file did not leave the setting off:\n%s", text)
+	}
+	t.Logf("tofu catalog\n%s", text)
+}
+
+func proxyLine(t *testing.T, text string) string {
+	t.Helper()
+	for _, line := range strings.Split(text, "\n") {
+		if strings.HasPrefix(line, "proxy ") {
+			return line
+		}
+	}
+	t.Fatalf("tofu catalog says nothing about the proxy:\n%s", text)
+	return ""
+}

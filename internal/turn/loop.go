@@ -26,8 +26,9 @@ type Model interface {
 }
 
 type Caps struct {
-	MaxSteps     int
-	MaxDecisions int
+	MaxSteps         int
+	LoopGuardRepeats int
+	LoopGuardWindow  int
 }
 
 func (c Caps) exceeded(step int) (Outcome, bool) {
@@ -43,6 +44,8 @@ const theResponseHitTheOutputTokenLimit = "the response hit the output token lim
 const andThisIsItsLastStep = " and this is its last step: answer now from what you already have, " +
 	"saying what you did, what is left undone, and what to do next."
 
+type CalledOnItsOwnGoroutineAndAlwaysBeforeRunReturns func(StepRow)
+
 type Config struct {
 	Model           Model
 	Spend           Spend
@@ -50,9 +53,11 @@ type Config struct {
 	ToolSource      func() Registry
 	Gate            Gate
 	GateMode        GateMode
+	Proxy           *CommandProxy
 	Boundary        *crew.Boundary
 	Person          Person
 	Task            string
+	Images          []llm.Image
 	History         []llm.Message
 	Wire            string
 	SpawnedFrom     string
@@ -68,7 +73,7 @@ type Config struct {
 	Budget          recall.Budget
 	Sessions        *session.Store
 	Steering        func() []string
-	Step            func(StepRow)
+	Step            CalledOnItsOwnGoroutineAndAlwaysBeforeRunReturns
 	EndedSession    func(Row) error
 	Now             func() time.Time
 	NewID           func() string
@@ -147,7 +152,7 @@ func Run(ctx context.Context, config Config) (Row, error) {
 
 	var recorder *session.Recorder
 	if config.Sessions != nil {
-		if recorder, err = config.Sessions.Begin(row.Header()); err != nil {
+		if recorder, err = config.Sessions.Begin(row.Header(), row.author()); err != nil {
 			return Row{}, err
 		}
 	}
@@ -164,15 +169,21 @@ func Run(ctx context.Context, config Config) (Row, error) {
 	}
 	afterSystem := len(messages)
 	messages = append(messages, config.History...)
-	messages = append(messages, llm.Message{Role: llm.RoleUser, Content: config.FirstUserMessage()})
+	messages = append(messages, llm.Message{Role: llm.RoleUser, Content: config.FirstUserMessage(), Images: config.Images})
 
 	var written sync.WaitGroup
 	var forkWrites sync.Mutex
 	var forkWriteErrs []string
 	latest := make(chan StepRow, konst.TurnMaxSteps)
-	defer close(latest)
+	var stepping sync.WaitGroup
+	defer func() {
+		close(latest)
+		stepping.Wait()
+	}()
 	if config.Step != nil {
+		stepping.Add(1)
 		go func() {
+			defer stepping.Done()
 			for step := range latest {
 				config.Step(step)
 			}
@@ -193,7 +204,7 @@ func Run(ctx context.Context, config Config) (Row, error) {
 	}
 	keep := func(step StepRow) {
 		flush()
-		note(recorder.Append(session.EventStep, step))
+		note(recorder.AppendAttempt(session.EventStep, step.id, step.attempt, step))
 		row.Steps = append(row.Steps, step)
 		select {
 		case latest <- step:
@@ -237,7 +248,7 @@ func Run(ctx context.Context, config Config) (Row, error) {
 			return finish(outcome)
 		}
 		messages = append(slices.Clone(history), llm.Message{Role: llm.RoleUser, Content: lead + andThisIsItsLastStep})
-		decision, err := config.Model.Ask(ctx, llm.Request{Messages: messages, Tools: currentTools().Definitions()})
+		decision, attempt, err := askCountingAttempts(ctx, config.Model, llm.Request{Messages: messages, Tools: currentTools().Definitions()})
 		row.TotalCostUSD += decision.Usage.Cost
 		reason := ""
 		switch {
@@ -254,35 +265,31 @@ func Run(ctx context.Context, config Config) (Row, error) {
 		}
 		row.Model = decision.Build
 		messages = append(messages, llm.Message{Role: llm.RoleAssistant, Content: decision.Content})
-		keep(stepFrom(len(row.Steps)+1, decision))
+		keep(stepFrom(len(row.Steps)+1, attempt, decision))
 		return finish(outcome)
 	}
-	endAtCap := func(outcome Outcome, step int, history []llm.Message) Row {
-		return endAt(outcome, "this turn reached its "+outcome.String(), step, history)
-	}
-
-	guard := &loopGuard{}
-	decisions, forks, recordedGrants := 0, 0, 0
+	guard := newLoopGuard(config.Caps)
+	forks, recordedGrants := 0, 0
 	for step := 1; ; step++ {
 		if config.Steering != nil {
 			for _, steered := range config.Steering() {
 				messages = append(messages, llm.Message{Role: llm.RoleUser, Content: steered})
 			}
 		}
-		settled := messages
 		if outcome, capped := config.Caps.exceeded(step); capped {
-			return endAtCap(outcome, step, settled), nil
+			lead := "this turn reached its " + outcome.String() + " of " + strconv.Itoa(config.Caps.MaxSteps) + ", and the work is not finished"
+			return endAt(outcome, lead, step, messages), nil
 		}
 
 		stepTools := currentTools()
-		decision, err := config.Model.Ask(ctx, llm.Request{Messages: messages, Tools: stepTools.Definitions()})
+		decision, attempt, err := askCountingAttempts(ctx, config.Model, llm.Request{Messages: messages, Tools: stepTools.Definitions()})
 		if err != nil {
 			return finish(OutcomeError), err
 		}
 		row.Model = decision.Build
 		row.TotalCostUSD += decision.Usage.Cost
 
-		stepRow := stepFrom(step, decision)
+		stepRow := stepFrom(step, attempt, decision)
 
 		switch decision.Outcome {
 		case llm.OutcomeMessage:
@@ -300,7 +307,8 @@ func Run(ctx context.Context, config Config) (Row, error) {
 			}
 			for _, call := range decision.ToolCalls {
 				callRow, resultMessage := rejectedCall(call, time.Now(),
-					"tool call "+strconv.Quote(call.Name)+" was not executed: "+theResponseHitTheOutputTokenLimit)
+					"tool call "+strconv.Quote(call.Name)+" was not executed: "+theResponseHitTheOutputTokenLimit,
+					session.EventIDFor(origin, call.ID), stepRow.id, row.author())
 				stepRow.ToolCalls = append(stepRow.ToolCalls, callRow)
 				messages = append(messages, resultMessage)
 			}
@@ -308,22 +316,21 @@ func Run(ctx context.Context, config Config) (Row, error) {
 
 		case llm.OutcomeToolCalls:
 			messages = append(messages, llm.Message{Role: llm.RoleAssistant, ToolCalls: decision.ToolCalls})
-			pending, batches, capped := decision.ToolCalls, 0, false
+			pending, batches := decision.ToolCalls, 0
 			var tripped bool
 			var repeated ToolCallRow
 			var repeats int
-			for len(pending) > 0 && !capped && !tripped {
+			author := row.author()
+			for len(pending) > 0 && !tripped {
 				width := min(max(stepTools.parallelPrefix(pending), 1), konst.TurnParallelToolCalls)
 				wave := make([]gatedCall, 0, width)
-				for _, call := range pending[:width] {
-					if config.Gate != nil && config.Caps.MaxDecisions > 0 && decisions >= config.Caps.MaxDecisions {
-						capped = true
-						break
-					}
+				for _, asked := range pending[:width] {
+					call := asked
+					proxied, proxyRow := config.Proxy.rewrite(ctx, asked)
+					call.Arguments = proxied
 					request := GateRequest{TurnID: row.ID, Task: config.Task, Tool: call.Name, Args: call.Arguments}
-					gated := gatedCall{call: call}
+					gated := gatedCall{call: call, asked: asked, proxy: proxyRow, id: session.EventIDFor(origin, call.ID), parent: stepRow.id, author: author}
 					if config.Gate != nil {
-						decisions++
 						verdict, err := config.Gate.Decide(ctx, request)
 						gated.verdict = verdict
 						if err != nil {
@@ -360,6 +367,9 @@ func Run(ctx context.Context, config Config) (Row, error) {
 				flush()
 				pending = pending[len(wave):]
 				for _, called := range rows {
+					if called.Proxy != nil && called.Proxy.Note != "" && !slices.Contains(row.Warnings, called.Proxy.Note) {
+						row.Warnings = append(row.Warnings, called.Proxy.Note)
+					}
 					if hit, seen := guard.observe(called); hit {
 						tripped, repeated, repeats = true, called, seen
 						break
@@ -372,15 +382,11 @@ func Run(ctx context.Context, config Config) (Row, error) {
 				recordedGrants = len(asked)
 			}
 			if tripped {
-				cause := loopGuardCause(repeated, repeats)
+				cause := loopGuardCause(repeated, repeats, guard.window)
 				row.Guard = &LoopGuardStop{Tool: repeated.Tool, Args: repeated.Args, Repeats: repeats}
 				row.Warnings = append(row.Warnings, "the turn stopped itself: "+cause)
 				keep(stepRow)
 				return endAt(OutcomeLoopGuard, "this turn stopped itself because "+cause, step, messages), nil
-			}
-			if capped {
-				keep(stepRow)
-				return endAtCap(OutcomeDecisionCap, step, settled), nil
 			}
 			if !config.NoFork {
 				fork, begun, occupancy, err := forkHistory(artifacts, budget, config.FirstUserMessage(), messages)
@@ -426,7 +432,7 @@ func Run(ctx context.Context, config Config) (Row, error) {
 					}
 					messages, sent = begun, 0
 					if recorder != nil {
-						next, beginErr := config.Sessions.Begin(row.Header())
+						next, beginErr := config.Sessions.Begin(row.Header(), row.author())
 						note(beginErr)
 						recorder = next
 					}
@@ -457,8 +463,10 @@ func NewID(at time.Time) string {
 	return session.IDPrefix + strconv.FormatInt(at.UnixNano(), 16)
 }
 
-func stepFrom(index int, decision llm.Decision) StepRow {
+func stepFrom(index, attempt int, decision llm.Decision) StepRow {
 	return StepRow{
+		id:               session.NewEventID(),
+		attempt:          attempt,
 		Index:            index,
 		AssistantText:    decision.Content,
 		StopReason:       decision.Stop,
@@ -473,26 +481,33 @@ func stepFrom(index int, decision llm.Decision) StepRow {
 
 type gatedCall struct {
 	call    llm.ToolCall
+	asked   llm.ToolCall
+	proxy   *ProxyRow
+	id      string
+	parent  string
+	author  string
 	verdict GateDecision
 	gateErr string
 	refusal string
 }
 
 func (g gatedCall) run(ctx context.Context, tools Registry, resultBytesCap int, artifacts Artifacts, batch int) (ToolCallRow, llm.Message) {
-	row, answer := rejectedCall(g.call, time.Now(), g.refusal)
+	row, answer := rejectedCall(g.call, time.Now(), g.refusal, g.id, g.parent, g.author)
 	if g.refusal == "" {
-		row, answer = runToolCall(ctx, tools, g.call, resultBytesCap, artifacts)
+		row, answer = g.execute(ctx, tools, resultBytesCap, artifacts)
 	}
 	row.GateDecisionID, row.GateVerdict, row.GateError = g.verdict.ID, string(g.verdict.Verdict), g.gateErr
 	row.ParallelBatch = batch
+	row.Proxy = g.proxy
 	return row, answer
 }
 
-func runToolCall(ctx context.Context, tools Registry, call llm.ToolCall, resultBytesCap int, artifacts Artifacts) (ToolCallRow, llm.Message) {
+func (g gatedCall) execute(ctx context.Context, tools Registry, resultBytesCap int, artifacts Artifacts) (ToolCallRow, llm.Message) {
+	call := g.call
 	started := time.Now()
-	tool, ok := tools.lookup(call.Name)
+	tool, ok := tools.byName[call.Name]
 	if !ok {
-		return rejectedCall(call, started, "unknown tool "+strconv.Quote(call.Name))
+		return rejectedCall(call, started, "unknown tool "+strconv.Quote(call.Name), g.id, g.parent, g.author)
 	}
 
 	spawner, spawning := tool.(*SpawnTool)
@@ -502,13 +517,22 @@ func runToolCall(ctx context.Context, tools Registry, call llm.ToolCall, resultB
 	}
 
 	result, err := tool.Run(ctx, call.Arguments)
+	if err == nil && g.proxy != nil && g.proxy.Ran != "" && proxyPanicked(result.Content) {
+		g.proxy.ProxyBytes = len(result.Content)
+		g.proxy.Note = g.proxy.Proxy + " panicked instead of filtering the output, so the command ran as it was asked for"
+		call = g.asked
+		result, err = tool.Run(ctx, call.Arguments)
+	}
 	if err != nil {
-		return rejectedCall(call, started, err.Error())
+		return rejectedCall(call, started, err.Error(), g.id, g.parent, g.author)
 	}
 
 	rendered, handle, storeErr := artifacts.Render(result.Content, resultBytesCap)
 	sum := sha256.Sum256([]byte(result.Content))
 	row := ToolCallRow{
+		ID:            g.id,
+		Parent:        g.parent,
+		Author:        g.author,
 		Tool:          call.Name,
 		Args:          call.Arguments,
 		Command:       result.Command,
@@ -534,9 +558,9 @@ func runToolCall(ctx context.Context, tools Registry, call llm.ToolCall, resultB
 	}
 }
 
-func rejectedCall(call llm.ToolCall, started time.Time, reason string) (ToolCallRow, llm.Message) {
+func rejectedCall(call llm.ToolCall, started time.Time, reason, id, parent, author string) (ToolCallRow, llm.Message) {
 	content := "error: " + reason
-	row := ToolCallRow{Tool: call.Name, Args: call.Arguments, Error: reason, DurationMS: time.Since(started).Milliseconds()}
+	row := ToolCallRow{ID: id, Parent: parent, Author: author, Tool: call.Name, Args: call.Arguments, Error: reason, DurationMS: time.Since(started).Milliseconds()}
 	return row, llm.Message{
 		Role:            llm.RoleTool,
 		ToolCallID:      call.ID,

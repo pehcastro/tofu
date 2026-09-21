@@ -4,6 +4,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"tofu/internal/llm"
 )
 
 func headerNames(headers []Header) []string {
@@ -110,12 +112,12 @@ func TestKeyBranchCarriesNoSubscriptionHeader(t *testing.T) {
 }
 
 func TestDumpRedactsTheCredentialAndTheIdentity(t *testing.T) {
-	dump := Dump{
+	dump := Dump{Dump: llm.Dump{
 		Method:  "POST",
 		URL:     SubscriptionBaseURL + SubscriptionPath,
 		Headers: Headers(testHeaderOptions()),
 		Body:    []byte(`{"model":"gpt-5.5-codex"}`),
-	}
+	}}
 	text := dump.String()
 	for _, secret := range []string{"jwt-token", "acct-0000", "session-0000", "thread-0000", "window-0000", "install-0000"} {
 		if strings.Contains(text, secret) {

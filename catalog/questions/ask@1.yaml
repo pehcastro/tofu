@@ -1,0 +1,50 @@
+name: ask
+domain: general
+questions_version: 1
+
+state:
+  - path
+  - in_owns
+  - answered_by_spec_or_ticket
+  - precedent_exists
+  - reversibility
+
+questions:
+  action:
+    type: choice
+    instructions: >-
+      A worker doing ticketed work hit a moment of doubt about `path`. The
+      state already carries whether `in_owns` holds for that path, whether
+      `answered_by_spec_or_ticket` already settles it, whether
+      `precedent_exists` from an earlier decision, and what `reversibility`
+      says about the cost of a wrong guess. Choose the one action the worker
+      should take right now.
+    escape: ask_now
+    options:
+      - name: proceed
+        criteria: >-
+          Enough is already known: take the reading the state already points
+          to and keep working, with nothing left to settle.
+      - name: ask_now
+        criteria: >-
+          The doubt blocks real work, and a wrong guess would be costly or
+          hard to reverse: stop and put the question to the orchestrator
+          before doing anything else.
+      - name: defer_to_end
+        criteria: >-
+          The doubt does not block the rest of the ticket: finish everything
+          the answer does not touch, and carry the question to the report.
+
+  determined:
+    type: noul
+    instructions: >-
+      Judge whether the doubt about `path` is already settled by
+      `answered_by_spec_or_ticket` or `precedent_exists`, without asking
+      anyone.
+    criteria:
+      true: >-
+        The spec, the ticket's own text, or a recorded precedent already
+        answers this: nothing needs to be asked.
+      false: >-
+        Nothing already on hand answers this: the worker is genuinely
+        guessing.

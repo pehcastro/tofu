@@ -1,0 +1,13 @@
+name: shell_sift
+domain: shell
+kind: threshold
+schema: shell_sift
+rule_version: 1
+questions: shell_sift
+questions_version: 1
+mode: shadow
+sample_floor: 300
+notes: shadow until a lock says otherwise, so the sieve records what it would have removed and the model is given the output whole. this point has one question and one threshold, so it declares its own schema rather than renaming its question into the gate's four roles the way stop_check@1 had to. internal/sift reads it. keep_at is a prior and not a fit, chosen at the middle of the noul range because nothing has been calibrated on shell output yet. a chunk on standard error, the chunk carrying the exit status and the first and last chunk of standard output are never candidates, and that is decided in code rather than here
+
+thresholds:
+  keep_at: 0.5

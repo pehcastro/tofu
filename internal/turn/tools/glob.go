@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path"
@@ -43,7 +44,7 @@ func (g Glob) Definition() llm.Tool {
 			"the pattern is matched against the whole path relative to the working directory and against the file name alone, " +
 			"so *.ts finds every typescript file at any depth and src/*.ts finds only the ones directly under src. " +
 			ignoredWalkDescription + ". " +
-			"it does not read a file and it does not search file contents: grep does that",
+			"it does not read a file and it does not search file contents: search does that",
 		Parameters: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -95,9 +96,18 @@ func (g Glob) Run(_ context.Context, raw json.RawMessage) (turn.Result, error) {
 			Command: command,
 		}, nil
 	}
+	matched := len(found)
+	note := listed.note
+	header := fmt.Sprintf("%d of %d files under %s match %q", matched, len(listed.files), under, args.Pattern)
+	if matched > konst.GlobPathsResultCap {
+		found = found[:konst.GlobPathsResultCap]
+		header = fmt.Sprintf("%d of %d files under %s match %q, showing the first %d",
+			matched, len(listed.files), under, args.Pattern, konst.GlobPathsResultCap)
+		note = strings.TrimSpace(note + " " + search.Note(search.Truncated,
+			fmt.Sprintf("%d files matched and %d are shown: narrow the pattern to see the rest", matched, konst.GlobPathsResultCap)))
+	}
 	return turn.Result{
-		Content: withNote(fmt.Sprintf("%d of %d files under %s match %q\n%s\n",
-			len(found), len(listed.files), under, args.Pattern, strings.Join(found, "\n")), listed.note),
+		Content: withNote(header+"\n"+strings.Join(found, "\n")+"\n", note),
 		Command: command,
 	}, nil
 }
@@ -135,6 +145,8 @@ type listing struct {
 
 type ignoreRule struct {
 	expression *regexp.Regexp
+	literal    string
+	anchored   bool
 	negated    bool
 	dirOnly    bool
 }
@@ -190,6 +202,7 @@ func filesUnder(root turn.Root, under string, includeIgnored bool) (listing, err
 			return err
 		}
 		slash := filepath.ToSlash(rel)
+		walked.prune(slash)
 		if !entry.IsDir() {
 			if projectInstructions(entry.Name()) || !walked.ignored(slash, false) {
 				walked.files = append(walked.files, slash)
@@ -243,19 +256,20 @@ func (w *walk) loadAncestors(from string) {
 
 func (w *walk) load(dir, base string) {
 	name := filepath.Join(dir, ".gitignore")
-	info, err := os.Stat(name)
+	file, err := os.Open(name)
 	if err != nil {
 		return
 	}
+	defer func() { _ = file.Close() }()
 	where := cmp.Or(base, "./")
-	if info.Size() > konst.IgnoreFileBytesCap {
-		w.notes = append(w.notes, search.Note(search.IgnoreSkipped,
-			fmt.Sprintf("the .gitignore in %s is %d bytes, over the %d byte cap", where, info.Size(), konst.IgnoreFileBytesCap)))
-		return
-	}
-	body, err := os.ReadFile(name)
+	body, err := io.ReadAll(io.LimitReader(file, konst.IgnoreFileBytesCap+1))
 	if err != nil {
 		w.notes = append(w.notes, search.Note(search.IgnoreSkipped, "the .gitignore in "+where+" could not be read"))
+		return
+	}
+	if len(body) > konst.IgnoreFileBytesCap {
+		w.notes = append(w.notes, search.Note(search.IgnoreSkipped,
+			fmt.Sprintf("the .gitignore in %s is over the %d byte cap", where, konst.IgnoreFileBytesCap)))
 		return
 	}
 	scope := ignoreScope{base: base}
@@ -287,6 +301,9 @@ func parseIgnoreLine(line string) (ignoreRule, error) {
 	pattern = strings.TrimPrefix(pattern, "/")
 	if pattern == "" {
 		return ignoreRule{}, errors.New("the pattern is empty")
+	}
+	if !strings.ContainsAny(pattern, "*?[") {
+		return ignoreRule{literal: pattern, anchored: anchored, negated: negated, dirOnly: dirOnly}, nil
 	}
 	expression, err := ignoreExpression(pattern, anchored)
 	if err != nil {
@@ -348,6 +365,12 @@ func segmentExpression(segment string) string {
 	return built.String()
 }
 
+func (w *walk) prune(rel string) {
+	for len(w.scopes) > 0 && !strings.HasPrefix(rel, w.scopes[len(w.scopes)-1].base) {
+		w.scopes = w.scopes[:len(w.scopes)-1]
+	}
+}
+
 func (w *walk) ignored(rel string, isDir bool) bool {
 	excluded := false
 	for _, scope := range w.scopes {
@@ -359,7 +382,11 @@ func (w *walk) ignored(rel string, isDir bool) bool {
 			if rule.dirOnly && !isDir {
 				continue
 			}
-			if rule.expression.MatchString(within) {
+			matched := rule.expression != nil && rule.expression.MatchString(within)
+			if rule.literal != "" {
+				matched = within == rule.literal || (!rule.anchored && strings.HasSuffix(within, "/"+rule.literal))
+			}
+			if matched {
 				excluded = !rule.negated
 			}
 		}

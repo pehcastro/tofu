@@ -28,7 +28,7 @@ func (s Symbols) Definition() llm.Tool {
 	return llm.Tool{
 		Name: "symbols",
 		Description: "answers where one go identifier is declared, what that declaration calls, and every place that calls it, from the go parser rather than from a text match. " +
-			"reach for it before changing a function, because it says what the change breaks: grep says the name appears on a line and this says the name is declared here and called from these three places. " +
+			"reach for it before changing a function, because it says what the change breaks: search says the name appears in these declarations and this says the name is declared here and called from these three places. " +
 			"it reads only go files, it matches on the identifier rather than resolving types, " +
 			"so two symbols sharing one name come back as one answer and a call made through an interface or a function value is not found, and the result says so. " +
 			ignoredWalkDescription,

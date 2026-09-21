@@ -3,7 +3,7 @@ package cost
 import (
 	"fmt"
 
-	"tofu/internal/judge/policy"
+	"tofu/internal/judge/gate"
 )
 
 const CalibrationArm = "jev-calibration"
@@ -35,15 +35,15 @@ type RescoreCount struct {
 }
 
 type RescoreResult struct {
-	Policy     policy.Policy
-	Resolution policy.Resolution
+	Rule       gate.Rule
+	Resolution gate.Resolution
 	ModelCalls int
 	Rows       []AnswerRow
 	Arms       []RescoreCount
 }
 
-func Rescore(rows []AnswerRow, pol policy.Policy, resolution policy.Resolution) (RescoreResult, error) {
-	result := RescoreResult{Policy: pol, Resolution: resolution, Rows: rows}
+func Rescore(rows []AnswerRow, pol gate.Rule, resolution gate.Resolution) (RescoreResult, error) {
+	result := RescoreResult{Rule: pol, Resolution: resolution, Rows: rows}
 	counts := map[string]*RescoreCount{}
 	var order []string
 	for _, row := range rows {

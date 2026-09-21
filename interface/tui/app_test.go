@@ -15,50 +15,62 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"tofu/interface/tui/crew"
-	"tofu/interface/tui/frame"
+	"tofu/interface/tui/fixture"
+	"tofu/interface/tui/pick"
 	"tofu/interface/tui/session"
 	"tofu/interface/tui/settings"
+	"tofu/interface/tui/shells"
+	isettings "tofu/internal/settings"
 )
 
 var update = flag.Bool("update", false, "rewrite the golden files")
 
-const testRelease = "test"
+const (
+	testRelease = fixture.Release
+	testRepo    = fixture.Path
+)
 
 func newTestApp(options Options) *App {
 	options.Release = testRelease
-	return New(options)
+	app := New(options)
+	app.Update(Event{Kind: EventSession, Text: fixture.SessionName, ID: fixture.SessionID})
+	return app
 }
 
 func fixedClock() func() time.Time {
-	at := time.Date(2026, 9, 19, 14, 32, 0, 0, time.UTC)
-	return func() time.Time { return at.Add(138 * time.Second) }
+	at := fixture.Opened().Add(138 * time.Second)
+	return func() time.Time { return at }
+}
+
+func containsAPlaceholder(text string) bool {
+	for _, example := range session.PlaceholderExamples {
+		if strings.Contains(text, example) {
+			return true
+		}
+	}
+	return false
 }
 
 func bothWires() []Wire {
 	return []Wire{
-		{Name: "codex", Model: "gpt-5.6-sol", Provider: "openai"},
-		{Name: "anthropic", Model: "claude-opus-5", Provider: "anthropic"},
+		{Name: "codex", Model: "gpt-5.6-sol", Provider: "codex-sub"},
+		{Name: "anthropic", Model: "claude-opus-5", Provider: "claude-sub"},
 	}
 }
 
 func anthropicAlone() []Wire {
-	return []Wire{{Name: "anthropic", Model: "claude-opus-5", Provider: "anthropic"}}
+	return []Wire{{Name: "anthropic", Model: "claude-opus-5", Provider: "claude-sub"}}
 }
 
 func sessionApp(t *testing.T, width, height int) *App {
 	t.Helper()
-	app := newTestApp(Options{Repo: "silo", Branch: "develop", Now: fixedClock(), Wires: bothWires})
+	app := newTestApp(Options{Repo: testRepo, Branch: "develop", Now: fixedClock(), Wires: bothWires})
 	app.Init()
 	app.Update(tea.WindowSizeMsg{Width: width, Height: height})
-	app.Update(frame.Quota{
-		Label:    "codex 7d",
-		Fraction: 0.62,
-		Reported: true,
-		ResetsAt: time.Date(2026, 9, 19, 18, 0, 0, 0, time.Local),
-	})
+	app.Update(fixture.Quotas(fixedClock()()))
 	for _, event := range []Event{
-		{Kind: EventContext, Context: frame.Context{Used: 118000, Budget: 250000}},
-		{Kind: EventStats, Model: "gpt-5.6-sol-2026-09-01", TokensIn: 284000, TokensOut: 61000, Decisions: 3},
+		{Kind: EventContext, Context: fixture.Context()},
+		{Kind: EventStats, TokensIn: 284000, TokensOut: 61000, Decisions: 3},
 		{Kind: EventText, Text: "reading the gate first, then the policy that decides it."},
 		{Kind: EventToolCall, ID: "c1", Tool: "read", Text: "internal/judge/policy/toolgate.go"},
 		{Kind: EventDecision, Decision: allowed()},
@@ -66,7 +78,7 @@ func sessionApp(t *testing.T, width, height int) *App {
 		{Kind: EventToolCall, ID: "c2", Tool: "bash", Text: "go test ./internal/judge/..."},
 		{Kind: EventDecision, Decision: asked()},
 		{Kind: EventToolResult, ID: "c2", Text: "ok tofu/internal/judge 0.42s"},
-		{Kind: EventDone, Text: "stopped after"},
+		{Kind: EventDone, Text: "cooked for"},
 	} {
 		app.Update(event)
 	}
@@ -95,15 +107,21 @@ func asked() *session.Decision {
 			{Question: "risk", Value: 2, Max: 3},
 			{Question: "user_requested", Value: 0.11, Max: 1},
 		},
-		Reason: session.Reason{Question: "risk", Limit: "risk_ask_at", Threshold: 1.5, Value: 2},
+		Reason: session.Reason{
+			Question:  "risk",
+			Limit:     "risk_ask_at",
+			Levels:    fixture.RiskLevels(),
+			Threshold: 1.5,
+			Value:     2,
+		},
 	}
 }
 
 const (
-	longCommand = `cd /home/dev/silo; for d in internal/* interface/* cmd/* catalog/*; ` +
+	longCommand = `cd /home/dev/tofu; for d in internal/* interface/* cmd/* catalog/*; ` +
 		`do n=$(find "$d" -name '*.go' | wc -l); echo "$d $n"; done`
 	longIntent     = "for d in internal/* interface/* cmd/* +3 more"
-	forkNoticeHead = "⟳ forking the session"
+	forkNoticeHead = "⟳ forking"
 	oversizeRead   = "12.1 KB, first and last part kept"
 	prose          = "counting the go files under each root, then reading the rules."
 )
@@ -188,9 +206,9 @@ func spun(content string) string {
 func TestTheModelsProseIsDrawnDifferentlyFromToolActivity(t *testing.T) {
 	at := time.Date(2026, 9, 19, 14, 32, 0, 0, time.UTC)
 	app := liveApp(t, &at)
-	app.Update(tea.KeyPressMsg{Code: 'o', Mod: tea.ModCtrl})
+	app.Update(Event{Kind: EventDecision, Decision: asked()})
 	content := app.View().Content
-	spoken, called := styleOf(content, prose), styleOf(content, "read CLAUDE.md")
+	spoken, called := styleOf(content, prose), styleOf(content, "bash "+longIntent)
 	if spoken == "" || called == "" {
 		t.Fatalf("the fixture is missing a row: prose %q, tool %q\n%s", spoken, called, content)
 	}
@@ -228,42 +246,47 @@ func TestTheWholeCommandIsBehindAKeyAndNotOnTheScreenByDefault(t *testing.T) {
 	t.Log("\n" + expanded)
 }
 
-func TestSlashDetailRevealsTheWholeCommandLikeCtrlO(t *testing.T) {
+func TestSlashWorkRevealsTheWholeCommandLikeCtrlO(t *testing.T) {
 	at := time.Date(2026, 9, 19, 14, 32, 0, 0, time.UTC)
 	app := liveApp(t, &at)
-	typeText(app, "/detail")
+	typeText(app, "/work")
 	app.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	if app.current != viewWork {
+		t.Fatal("/work did not switch to the work view")
+	}
 	expanded := ansi.Strip(app.View().Content)
 	if !strings.Contains(expanded, "wc -l") {
-		t.Fatalf("/detail did not reveal the whole command\n%s", expanded)
+		t.Fatalf("/work did not reveal the whole command\n%s", expanded)
 	}
 }
 
 func TestACacheHitAndAMissRenderDifferentBottomBars(t *testing.T) {
 	miss := sessionApp(t, 80, 24).View().Content
 	hit := sessionApp(t, 80, 24)
-	hit.Update(Event{Kind: EventStats, Model: "gpt-5.6-sol-2026-09-01", TokensIn: 284000, TokensOut: 61000, CacheRead: 9603, Decisions: 3})
+	hit.Update(Event{Kind: EventStats, TokensIn: 284000, TokensOut: 61000, CacheRead: 9603, Decisions: 3})
 	hitContent := hit.View().Content
 	if miss == hitContent {
 		t.Fatalf("a cache hit and a cache miss render the same frame")
 	}
-	if !strings.Contains(hitContent, "9k+284k/61k") {
+	if !strings.Contains(hitContent, "284k read  61k write  9k cached") {
 		t.Fatalf("a cache hit does not carry the cached read beside the fresh input\n%s", hitContent)
 	}
-	if !strings.Contains(miss, "284k/61k") || strings.Contains(miss, "+284k") {
+	if !strings.Contains(miss, "284k read  61k write") || strings.Contains(miss, "cached") {
 		t.Fatalf("a turn with no cache hit already carries a cache mark\n%s", miss)
 	}
 }
 
-func TestAnAllowedCallShowsTheVerdictAndNoDistributions(t *testing.T) {
+func TestAnAllowedCallFoldsInChatAndCarriesNoVerdictOrDistributions(t *testing.T) {
 	app := sessionApp(t, 120, 36)
 	content := app.View().Content
-	if !strings.Contains(content, "allow") {
-		t.Fatalf("the allowed call does not show its verdict\n%s", content)
+	if strings.Contains(content, "  allow") {
+		t.Fatalf("the allowed call still shows its verdict in chat\n%s", content)
 	}
-	head, _, _ := strings.Cut(content, "go test ./internal/judge/...")
-	if strings.Contains(head, "0.04") || strings.Contains(head, "▓") {
-		t.Fatalf("the allowed call drew its distributions\n%s", head)
+	if strings.Contains(content, "0.04") {
+		t.Fatalf("the allowed call drew its distributions in chat\n%s", content)
+	}
+	if !strings.Contains(content, "(1) tools · jev 1") {
+		t.Fatalf("the allowed call did not fold into the turn's one running line\n%s", content)
 	}
 }
 
@@ -271,7 +294,7 @@ func TestAnAskedCallShowsEveryAnswerAndTheReason(t *testing.T) {
 	content := sessionApp(t, 120, 36).View().Content
 	for _, want := range []string{
 		"ask", "risk", "2.00", "approval", "0.75", "user_requested", "0.11", "from_untrusted", "0.02",
-		"risk 2.00 is over risk_ask_at 1.50",
+		riskSentence,
 	} {
 		if !strings.Contains(content, want) {
 			t.Errorf("the asked call does not show %q\n%s", want, content)
@@ -281,7 +304,7 @@ func TestAnAskedCallShowsEveryAnswerAndTheReason(t *testing.T) {
 
 func gateOffApp(t *testing.T, width, height int) *App {
 	t.Helper()
-	app := newTestApp(Options{Repo: "silo", Branch: "develop", Now: fixedClock(), Wires: anthropicAlone})
+	app := newTestApp(Options{Repo: testRepo, Branch: "develop", Now: fixedClock(), Wires: anthropicAlone})
 	app.Init()
 	app.Update(tea.WindowSizeMsg{Width: width, Height: height})
 	for _, event := range []Event{
@@ -384,11 +407,11 @@ func readGolden(t *testing.T, name string) []string {
 func TestTwoSubscriptionsAskNothingAndTheFirstSignedInRunsTheTurn(t *testing.T) {
 	ran := make(chan string, 1)
 	app := newTestApp(Options{
-		Repo:   "silo",
+		Repo:   testRepo,
 		Branch: "develop",
 		Now:    fixedClock(),
 		Wires:  bothWires,
-		Turn:   func(_ context.Context, wire, _ string, _ func(Event)) { ran <- wire },
+		Turn:   func(_ context.Context, wire, _ string, _ CalledFromInsideTheTurnAndNeverAfterItReturns) { ran <- wire },
 	})
 	app.Init()
 	app.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
@@ -398,10 +421,10 @@ func TestTwoSubscriptionsAskNothingAndTheFirstSignedInRunsTheTurn(t *testing.T) 
 			t.Errorf("two subscriptions still ask %q\n%s", absent, opened)
 		}
 	}
-	if !strings.Contains(opened, "openai → gpt-5.6-sol") {
-		t.Errorf("the header does not name the provider and model it chose\n%s", opened)
+	if !strings.Contains(opened, "codex-sub/gpt-5.6-sol") {
+		t.Errorf("the header does not name the subscription and model it chose\n%s", opened)
 	}
-	if !strings.Contains(ansi.Strip(opened), "what should tofu do here?") {
+	if !containsAPlaceholder(ansi.Strip(opened)) {
 		t.Errorf("the app did not open on a session with a composer\n%s", opened)
 	}
 	assertGolden(t, "chosen-80x24.golden", opened)
@@ -419,7 +442,7 @@ func TestTwoSubscriptionsAskNothingAndTheFirstSignedInRunsTheTurn(t *testing.T) 
 }
 
 func TestOneWireNamesItselfInTheHeader(t *testing.T) {
-	app := newTestApp(Options{Repo: "silo", Branch: "develop", Now: fixedClock(), Wires: anthropicAlone})
+	app := newTestApp(Options{Repo: testRepo, Branch: "develop", Now: fixedClock(), Wires: anthropicAlone})
 	app.Init()
 	app.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 	if app.wire != "anthropic" {
@@ -429,7 +452,7 @@ func TestOneWireNamesItselfInTheHeader(t *testing.T) {
 	if strings.Contains(content, "codex") {
 		t.Errorf("the app names a wire nobody signed in to\n%s", content)
 	}
-	if !strings.Contains(content, "anthropic → claude-opus-5") {
+	if !strings.Contains(content, "claude-sub/claude-opus-5") {
 		t.Errorf("the frame does not name the only wire\n%s", content)
 	}
 	assertGolden(t, "session-one-wire-80x24.golden", content)
@@ -474,9 +497,9 @@ func crewApp(t *testing.T, width, height int) *App {
 	t.Helper()
 	app := sessionApp(t, width, height)
 	app.Update(Event{Kind: EventCrew, Children: crewChildren()})
-	app.Update(tea.KeyPressMsg{Code: '2', Mod: tea.ModAlt})
+	app.Update(tea.KeyPressMsg{Code: '4', Mod: tea.ModAlt})
 	if app.current != viewCrew {
-		t.Fatalf("alt+2 left the app on view %d, want the crew view", app.current)
+		t.Fatalf("alt+4 left the app on view %d, want the crew view", app.current)
 	}
 	return app
 }
@@ -489,8 +512,8 @@ func TestTheCrewViewOpensAndEscReturnsToTheSession(t *testing.T) {
 		t.Fatalf("the crew view does not name its children\n%s", crewFrame)
 	}
 	app.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
-	if app.current != viewSession {
-		t.Fatalf("esc left the app on view %d, want the session", app.current)
+	if app.current != viewChat {
+		t.Fatalf("esc left the app on view %d, want chat", app.current)
 	}
 	back := app.View().Content
 	if !strings.Contains(back, "ok tofu/internal/judge 0.42s") {
@@ -505,24 +528,26 @@ func TestTheCrewViewOpensAndEscReturnsToTheSession(t *testing.T) {
 func TestTheCrewViewIsAlsoReachedByTabAndByAClick(t *testing.T) {
 	app := crewApp(t, 80, 24)
 	app.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
-	app.Update(tea.KeyPressMsg{Code: tea.KeyTab})
+	for range 3 {
+		app.Update(tea.KeyPressMsg{Code: tea.KeyTab})
+	}
 	if app.current != viewCrew {
-		t.Fatalf("tab from the session reached view %d, want the crew", app.current)
+		t.Fatalf("three tabs from chat reached view %d, want the crew", app.current)
 	}
 	app.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
-	column, hit := stripColumn(app, "2 crew")
+	column, hit := stripColumn(app, "[4] sub-agents")
 	if !hit {
-		t.Fatal("the strip registered no zone for the crew view")
+		t.Fatal("the strip registered no zone for the sub-agents view")
 	}
-	app.Update(tea.MouseClickMsg{X: column, Y: stripRow, Button: tea.MouseLeft})
+	click(app, pick.Cell{X: column, Y: stripRow})
 	if app.current != viewCrew {
-		t.Fatalf("a click at column %d did not select the crew view", column)
+		t.Fatalf("a click at column %d did not select the sub-agents view", column)
 	}
 }
 
 func TestWithNoChildrenTheCrewViewSaysSoInWords(t *testing.T) {
 	app := sessionApp(t, 80, 24)
-	app.Update(tea.KeyPressMsg{Code: '2', Mod: tea.ModAlt})
+	app.Update(tea.KeyPressMsg{Code: '4', Mod: tea.ModAlt})
 	content := app.View().Content
 	if !strings.Contains(content, "no child") {
 		t.Fatalf("the empty crew view does not say there is no child\n%s", content)
@@ -578,6 +603,16 @@ func TestOverlappingGlobsAreDrawnAsOneRegionRatherThanTwice(t *testing.T) {
 	}
 }
 
+func TestTheCrewWatchPaneDrawsTheRunningChildsProgressLine(t *testing.T) {
+	app := crewApp(t, 120, 36)
+	app.Update(tea.KeyPressMsg{Code: tea.KeyDown})
+	frame := ansi.Strip(app.View().Content)
+	if !strings.Contains(frame, "writing policy/toolgate.go") {
+		t.Fatalf("the watch pane does not draw the running child's progress line\n%s", frame)
+	}
+	assertGolden(t, "crew-watch-running-120x36.golden", app.View().Content)
+}
+
 func TestSelectingAChildShowsItsToolCallsAndItsReport(t *testing.T) {
 	app := crewApp(t, 120, 36)
 	before := ansi.Strip(app.View().Content)
@@ -608,20 +643,20 @@ const openRouterKey = "sk-or-v1-77c1f0b6e5a94d2f8badc0ffee1234567890abcd"
 func settingsApp(t *testing.T, width, height int) *App {
 	t.Helper()
 	app := newTestApp(Options{
-		Repo:   "silo",
+		Repo:   testRepo,
 		Branch: "develop",
 		Now:    fixedClock(),
 		Wires:  anthropicAlone,
 		Providers: []settings.Provider{
 			{Name: "anthropic", State: "oauth  62% of the 7d window, resets 18:00", Source: "the credential store"},
-			{Name: "openrouter", Key: openRouterKey, State: "ok", Source: ".env at ~/.boji/.env"},
+			{Name: "openrouter", Key: openRouterKey, State: "ok", Source: ".env at ~/.tofu/.env"},
 			{Name: "jev", State: "build jev-2026-09-01", Source: "the last decision"},
 			{Name: "codex", Fix: "tofu login codex", Source: "nothing is stored"},
 		},
 	})
 	app.Init()
 	app.Update(tea.WindowSizeMsg{Width: width, Height: height})
-	app.Update(tea.KeyPressMsg{Code: '6', Mod: tea.ModAlt})
+	app.runCommand("settings")
 	return app
 }
 
@@ -655,29 +690,205 @@ func TestSettingsNeverRendersTheWholeKey(t *testing.T) {
 	}
 }
 
-func TestKeysMoveBetweenTheSessionAndSettings(t *testing.T) {
+func TestTheSettingsCommandReachesSettingsAndEscReturnsToChat(t *testing.T) {
 	app := settingsApp(t, 80, 24)
 	if app.current != viewSettings {
-		t.Fatal("alt+6 did not reach the settings view")
+		t.Fatal("the settings command did not reach the settings view")
 	}
-	for _, want := range []viewID{viewSession, viewCrew, viewEdits, viewSettings} {
+	app.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
+	if app.current != viewChat {
+		t.Fatal("esc did not leave settings for chat")
+	}
+}
+
+func settingsStoreApp(t *testing.T, globalPath string) *App {
+	t.Helper()
+	store, err := isettings.Open(globalPath, "")
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	app := newTestApp(Options{Repo: testRepo, Now: fixedClock(), Settings: store})
+	app.Init()
+	app.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	app.runCommand("settings")
+	return app
+}
+
+func TestASettingChangedInTheRunningInterfaceIsOnDiskBeforeTheNextKeystroke(t *testing.T) {
+	globalPath := filepath.Join(t.TempDir(), "settings.json")
+	app := settingsStoreApp(t, globalPath)
+	app.settingsKey("down")
+	app.settingsKey("space")
+
+	raw, err := os.ReadFile(globalPath)
+	if err != nil {
+		t.Fatalf("read the settings file written by the toggle: %v", err)
+	}
+	if !strings.Contains(string(raw), `"chatShowsTools": 1`) {
+		t.Fatalf("the toggle is not on disk before the next keystroke\n%s", raw)
+	}
+}
+
+func TestASettingSurvivesARestartOfTheInterface(t *testing.T) {
+	globalPath := filepath.Join(t.TempDir(), "settings.json")
+	app := settingsStoreApp(t, globalPath)
+	app.settingsKey("down")
+	app.settingsKey("down")
+	for range 3 {
+		app.settingsKey("right")
+	}
+	if got := app.settingsStore.Int(isettings.DecisionCap); got != 3 {
+		t.Fatalf("decisionCap after three increments = %d, want 3", got)
+	}
+
+	restarted := settingsStoreApp(t, globalPath)
+	if got := restarted.settingsStore.Int(isettings.DecisionCap); got != 3 {
+		t.Fatalf("a rebuilt model over the same path reads decisionCap = %d, want 3", got)
+	}
+}
+
+func TestChatShowsToolsPersistsAcrossARestart(t *testing.T) {
+	globalPath := filepath.Join(t.TempDir(), "settings.json")
+	app := settingsStoreApp(t, globalPath)
+	app.settingsKey("down")
+	app.settingsKey("space")
+	if !app.settings.ChatShowsTools {
+		t.Fatal("toggling the row did not update the model's effective flag")
+	}
+
+	restarted := settingsStoreApp(t, globalPath)
+	if !restarted.settings.ChatShowsTools {
+		t.Fatal("chatShowsTools did not survive a restart")
+	}
+}
+
+func TestSpacePressedOnTheKeyboardTogglesASettingsRow(t *testing.T) {
+	spacePress := tea.KeyPressMsg{Code: tea.KeySpace, Text: " "}
+	if got := spacePress.String(); got != "space" {
+		t.Fatalf("a space press stringifies to %q, so this test is not sending what a keyboard sends", got)
+	}
+	app := settingsStoreApp(t, filepath.Join(t.TempDir(), "settings.json"))
+	app.Update(tea.KeyPressMsg{Code: tea.KeyDown})
+	app.Update(spacePress)
+	if !app.settingsStore.Bool(isettings.ChatShowsTools) {
+		t.Fatal("space through App.Update did not toggle the row under the cursor")
+	}
+}
+
+func TestFoldHidesShellIsASettingThatDropsTheShellCountFromTheRunningLine(t *testing.T) {
+	globalPath := filepath.Join(t.TempDir(), "settings.json")
+	app := settingsStoreApp(t, globalPath)
+	app.runCommand("chat")
+	app.Update(Event{Kind: EventToolCall, ID: "c1", Tool: "bash", Text: "go test ./..."})
+	before := ansi.Strip(app.View().Content)
+	if !strings.Contains(before, "shell (1)") {
+		t.Fatalf("a running shell call does not carry a shell count before the setting is touched\n%s", before)
+	}
+
+	app.runCommand("settings")
+	for range 3 {
+		app.settingsKey("down")
+	}
+	app.settingsKey("space")
+	if !app.settingsStore.Bool(isettings.FoldHidesShell) {
+		t.Fatal("toggling the row did not flip foldHidesShell on disk")
+	}
+
+	app.runCommand("chat")
+	after := ansi.Strip(app.View().Content)
+	if strings.Contains(after, "shell (1)") {
+		t.Fatalf("the running line still carries a shell count once foldHidesShell is on\n%s", after)
+	}
+}
+
+func TestTheSettingsViewTakesTheCursorScopeAndSearchKeys(t *testing.T) {
+	globalPath := filepath.Join(t.TempDir(), "settings.json")
+	app := settingsStoreApp(t, globalPath)
+	for _, letter := range "tool" {
+		app.settingsKey(string(letter))
+	}
+	content := app.View().Content
+	if !strings.Contains(content, "search: tool") {
+		t.Fatalf("the settings view does not show the search query\n%s", content)
+	}
+	if !strings.Contains(content, "chat shows every tool call") {
+		t.Fatalf("the search did not keep the matching row\n%s", content)
+	}
+	if strings.Contains(content, "decision cap") {
+		t.Fatalf("the search kept a row that does not match\n%s", content)
+	}
+	assertGolden(t, "settings-search-80x24.golden", content)
+
+	app.settingsKey("down")
+	app.settingsKey("space")
+	if !app.settingsStore.Bool(isettings.ChatShowsTools) {
+		t.Fatal("space did not toggle the matched row through the cursor")
+	}
+}
+
+func TestReloadAppearsInTheCommandMenuAndCallsTheVerb(t *testing.T) {
+	called := false
+	app := newTestApp(Options{
+		Repo: testRepo,
+		Now:  fixedClock(),
+		Reload: func() string {
+			called = true
+			return "reloaded 4 rules"
+		},
+	})
+	app.Init()
+	app.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+
+	found := false
+	for _, command := range commands(app.options) {
+		if command.Name == "reload" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("reload is not offered in the command menu")
+	}
+
+	app.runCommand("reload")
+	if !called {
+		t.Fatal("/reload did not call the verb")
+	}
+	if !strings.Contains(app.View().Content, "reloaded 4 rules") {
+		t.Fatalf("the reload result is not shown in chat\n%s", app.View().Content)
+	}
+}
+
+func TestNoBottomBarDrawsOnTheSubAgentsView(t *testing.T) {
+	app := crewApp(t, 80, 24)
+	content := app.View().Content
+	for _, absent := range []string{"/250k", "jev 3", "tofu " + testRelease} {
+		if strings.Contains(content, absent) {
+			t.Fatalf("the sub-agents view still draws %q from the bottom bar\n%s", absent, content)
+		}
+	}
+	assertGolden(t, "crew-no-bar-80x24.golden", content)
+}
+
+func TestTabCyclesTheFiveMainViews(t *testing.T) {
+	app := sessionApp(t, 80, 24)
+	for _, want := range []viewID{viewWork, viewEdits, viewCrew, viewShells, viewChat} {
 		app.Update(tea.KeyPressMsg{Code: tea.KeyTab})
 		if app.current != want {
 			t.Fatalf("tab reached view %d, want %d", app.current, want)
 		}
 	}
 	app.Update(tea.KeyPressMsg{Code: tea.KeyTab, Mod: tea.ModShift})
-	if app.current != viewEdits {
-		t.Fatalf("shift+tab reached view %d, want the file edits view", app.current)
+	if app.current != viewShells {
+		t.Fatalf("shift+tab reached view %d, want shells", app.current)
 	}
 	app.Update(tea.KeyPressMsg{Code: '1', Text: "1"})
-	if app.current != viewSession {
-		t.Fatal("the digit 1 did not select the session view")
+	if app.current != viewChat {
+		t.Fatal("the digit 1 did not select the chat view")
 	}
 	app.Update(tea.KeyPressMsg{Code: tea.KeyTab})
 	app.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
-	if app.current != viewSession {
-		t.Fatal("esc did not return to the session view")
+	if app.current != viewChat {
+		t.Fatal("esc did not return to the chat view")
 	}
 }
 
@@ -685,7 +896,7 @@ func TestDigitsTypeIntoTheComposer(t *testing.T) {
 	app := settingsApp(t, 80, 24)
 	app.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
 	typeText(app, "6")
-	if app.current != viewSession {
+	if app.current != viewChat {
 		t.Fatal("a digit typed into the composer switched the view")
 	}
 	if app.view.Value() != "6" {
@@ -694,18 +905,17 @@ func TestDigitsTypeIntoTheComposer(t *testing.T) {
 }
 
 func TestClickingAViewNameSelectsIt(t *testing.T) {
-	app := settingsApp(t, 80, 24)
-	app.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
-	column, hit := stripColumn(app, "6 settings")
+	app := sessionApp(t, 80, 24)
+	column, hit := stripColumn(app, "[5] shells")
 	if !hit {
-		t.Fatal("the strip registered no zone for the settings view")
+		t.Fatal("the strip registered no zone for the shells view")
 	}
-	app.Update(tea.MouseClickMsg{X: column, Y: stripRow, Button: tea.MouseLeft})
-	if app.current != viewSettings {
-		t.Fatalf("a click at column %d did not select the settings view", column)
+	click(app, pick.Cell{X: column, Y: stripRow})
+	if app.current != viewShells {
+		t.Fatalf("a click at column %d did not select the shells view", column)
 	}
-	app.Update(tea.MouseClickMsg{X: column, Y: stripRow + 4, Button: tea.MouseLeft})
-	if app.current != viewSettings {
+	click(app, pick.Cell{X: column, Y: stripRow + 4})
+	if app.current != viewShells {
 		t.Fatal("a click below the strip changed the view")
 	}
 }
@@ -734,7 +944,7 @@ func setupRequirements() []Requirement {
 func TestSetupViewGolden(t *testing.T) {
 	remaining := setupRequirements()[1:]
 	app := newTestApp(Options{
-		Repo:         "silo",
+		Repo:         testRepo,
 		Now:          fixedClock(),
 		Requirements: setupRequirements(),
 		Recheck:      func() []Requirement { return remaining },
@@ -758,7 +968,7 @@ func TestARequirementRunsItsOwnFix(t *testing.T) {
 	requirements := setupRequirements()
 	requirements[0].Run = func() *exec.Cmd { ran = append(ran, "anthropic"); return exec.Command("tofu", "login", "anthropic") }
 	requirements[1].Run = func() *exec.Cmd { ran = append(ran, "openrouter"); return exec.Command("tofu", "login", "openrouter") }
-	app := newTestApp(Options{Repo: "silo", Now: fixedClock(), Requirements: requirements})
+	app := newTestApp(Options{Repo: testRepo, Now: fixedClock(), Requirements: requirements})
 	app.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 
 	if _, cmd := app.Update(tea.KeyPressMsg{Code: '2', Text: "2"}); cmd == nil {
@@ -775,7 +985,7 @@ func TestARequirementRunsItsOwnFix(t *testing.T) {
 func TestARequirementWithoutItsOwnFixFallsBackToLogin(t *testing.T) {
 	ran := 0
 	app := newTestApp(Options{
-		Repo:         "silo",
+		Repo:         testRepo,
 		Now:          fixedClock(),
 		Requirements: setupRequirements()[:1],
 		Login:        func() *exec.Cmd { ran++; return exec.Command("tofu", "login", "anthropic") },
@@ -798,9 +1008,9 @@ func typeText(app *App, text string) {
 func TestInterruptStopsTheTurnAndKeepsTheApp(t *testing.T) {
 	cancelled := make(chan struct{})
 	app := newTestApp(Options{
-		Repo: "silo",
+		Repo: testRepo,
 		Now:  fixedClock(),
-		Turn: func(ctx context.Context, _, _ string, emit func(Event)) {
+		Turn: func(ctx context.Context, _, _ string, emit CalledFromInsideTheTurnAndNeverAfterItReturns) {
 			<-ctx.Done()
 			close(cancelled)
 			emit(Event{Kind: EventNote, Text: "stopped by the operator"})
@@ -832,7 +1042,7 @@ func TestInterruptStopsTheTurnAndKeepsTheApp(t *testing.T) {
 	for {
 		msg := app.waitForEvent()()
 		app.Update(msg)
-		if _, done := msg.(closedMsg); done {
+		if _, done := msg.(Closed); done {
 			break
 		}
 	}
@@ -849,7 +1059,7 @@ func TestInterruptStopsTheTurnAndKeepsTheApp(t *testing.T) {
 }
 
 func TestInterruptOutsideATurnQuits(t *testing.T) {
-	app := newTestApp(Options{Repo: "silo", Now: fixedClock()})
+	app := newTestApp(Options{Repo: testRepo, Now: fixedClock()})
 	app.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 	_, cmd := app.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
 	if cmd == nil {
@@ -870,27 +1080,26 @@ const (
 
 func longApp(t *testing.T) *App {
 	t.Helper()
-	app := newTestApp(Options{Repo: "silo", Branch: "develop", Now: fixedClock(), Wires: anthropicAlone})
+	app := newTestApp(Options{Repo: testRepo, Branch: "develop", Now: fixedClock(), Wires: anthropicAlone})
 	app.Init()
 	app.Update(tea.WindowSizeMsg{Width: narrowColumns, Height: narrowRows})
 	for step := range longSteps {
-		app.Update(Event{Kind: EventToolCall, Tool: "read", Text: "toolgate.go step " + strconv.Itoa(step)})
+		app.Update(Event{Kind: EventNote, Text: "toolgate.go step " + strconv.Itoa(step)})
 	}
-	app.Update(tea.KeyPressMsg{Code: 'o', Mod: tea.ModCtrl})
 	return app
 }
 
 func transcriptOf(frame string) string {
-	above, _, _ := strings.Cut(ansi.Strip(frame), strings.Repeat("─", narrowColumns))
-	return above
+	above, _, _ := strings.Cut(frame, composerTint())
+	return ansi.Strip(above)
 }
 
-func TestALongTranscriptScrollsALineAScreenToTheStartAndBackToTheTail(t *testing.T) {
+func TestALongTranscriptScrollsAWheelAScreenToTheStartAndBackToTheTail(t *testing.T) {
 	app := longApp(t)
 	tail := app.View().Content
 	assertGolden(t, "scroll-tail-80x24.golden", tail)
 
-	app.Update(tea.KeyPressMsg{Code: tea.KeyUp})
+	app.Update(tea.MouseWheelMsg{Button: tea.MouseWheelUp})
 	assertGolden(t, "scroll-line-80x24.golden", app.View().Content)
 
 	app.Update(tea.KeyPressMsg{Code: tea.KeyPgUp})
@@ -902,7 +1111,7 @@ func TestALongTranscriptScrollsALineAScreenToTheStartAndBackToTheTail(t *testing
 	if !strings.Contains(transcriptOf(start), "toolgate.go step 0") {
 		t.Fatalf("home did not reach the first entry\n%s", start)
 	}
-	app.Update(tea.KeyPressMsg{Code: tea.KeyUp})
+	app.Update(tea.MouseWheelMsg{Button: tea.MouseWheelUp})
 	if above := app.View().Content; above != start {
 		t.Fatalf("scrolling above the start moved the view\n%s", above)
 	}
@@ -936,12 +1145,13 @@ func TestOutputArrivingWhileScrolledUpDoesNotMoveTheView(t *testing.T) {
 	if !strings.Contains(ansi.Strip(before), scrolledWords) {
 		t.Fatalf("the view does not say it is scrolled back\n%s", before)
 	}
+	before2Tools := strings.Count(ansi.Strip(before), ") tools")
 	app.Update(Event{Kind: EventToolCall, Tool: "bash", Text: "arrived while scrolled back"})
 	after := app.View().Content
 	if after != before {
 		t.Fatalf("new output moved the view\n--- after ---\n%s\n--- before ---\n%s", after, before)
 	}
-	if strings.Contains(ansi.Strip(after), "arrived while scrolled back") {
+	if strings.Count(ansi.Strip(after), ") tools") != before2Tools {
 		t.Fatalf("the scrolled view drew the new entry\n%s", after)
 	}
 }
@@ -957,13 +1167,13 @@ func TestOutputArrivingAtTheTailMovesTheView(t *testing.T) {
 	if after == before {
 		t.Fatal("new output at the tail left the view unmoved")
 	}
-	if !strings.Contains(ansi.Strip(after), "arrived at the tail") {
+	if !strings.Contains(ansi.Strip(after), ") tools") {
 		t.Fatalf("the following view did not draw the new entry\n%s", after)
 	}
 }
 
 func TestAShortTranscriptCannotBeScrolledAndSaysNothingAboutIt(t *testing.T) {
-	app := newTestApp(Options{Repo: "silo", Branch: "develop", Now: fixedClock(), Wires: anthropicAlone})
+	app := newTestApp(Options{Repo: testRepo, Branch: "develop", Now: fixedClock(), Wires: anthropicAlone})
 	app.Init()
 	app.Update(tea.WindowSizeMsg{Width: narrowColumns, Height: narrowRows})
 	before := app.View().Content
@@ -1015,11 +1225,11 @@ const diagram = "The turn is a loop.\n\n```mermaid\ngraph TD\n  plan --> gate --
 func proseApp(t *testing.T, height int) *App {
 	t.Helper()
 	app := newTestApp(Options{
-		Repo:   "silo",
+		Repo:   testRepo,
 		Branch: "develop",
 		Now:    fixedClock(),
 		Wires:  anthropicAlone,
-		Turn:   func(context.Context, string, string, func(Event)) {},
+		Turn:   func(context.Context, string, string, CalledFromInsideTheTurnAndNeverAfterItReturns) {},
 	})
 	app.Init()
 	app.Update(tea.WindowSizeMsg{Width: 80, Height: height})
@@ -1032,7 +1242,7 @@ func TestProseRendersAsMarkdownWithTheGitHubExtensions(t *testing.T) {
 	content := app.View().Content
 	plain := ansi.Strip(content)
 	for what, want := range map[string]string{
-		"the heading":    "## Tofu",
+		"the heading":    "Tofu",
 		"the code span":  " toolgate.go ",
 		"the fenced go":  "func Decide(answers Answers) Verdict",
 		"the list":       "• a question is asked once",
@@ -1042,7 +1252,7 @@ func TestProseRendersAsMarkdownWithTheGitHubExtensions(t *testing.T) {
 			t.Errorf("%s is missing, want %q in\n%s", what, want, plain)
 		}
 	}
-	if strings.Contains(plain, "**gate**") || strings.Contains(plain, "`toolgate.go`") {
+	if strings.Contains(plain, "**gate**") || strings.Contains(plain, "`toolgate.go`") || strings.Contains(plain, "## Tofu") {
 		t.Errorf("the markdown is shown raw\n%s", plain)
 	}
 	if !strings.Contains(content, "\x1b[38;5;255;1mgate\x1b[m") {
@@ -1077,7 +1287,7 @@ func TestAStreamingMessageIsPlainAndTheCompleteOneIsMarkdown(t *testing.T) {
 	}
 	assertGolden(t, "session-streaming-80x24.golden", streaming)
 
-	app.Update(closedMsg{})
+	app.Update(Closed{})
 	complete := app.View().Content
 	if streaming == complete {
 		t.Fatal("the message was not re-rendered when it stopped")
@@ -1099,7 +1309,7 @@ func TestTheWheelScrollsTheTranscriptAndOnlyInTheSessionView(t *testing.T) {
 	if back := app.View().Content; back != tail {
 		t.Fatalf("the wheel did not return to the tail\n%s", back)
 	}
-	app.Update(tea.KeyPressMsg{Code: '2', Mod: tea.ModAlt})
+	app.Update(tea.KeyPressMsg{Code: '4', Mod: tea.ModAlt})
 	crewFrame := app.View().Content
 	app.Update(tea.MouseWheelMsg{Button: tea.MouseWheelUp})
 	if app.View().Content != crewFrame {
@@ -1108,9 +1318,9 @@ func TestTheWheelScrollsTheTranscriptAndOnlyInTheSessionView(t *testing.T) {
 }
 
 func TestTheSetupScreenDrawsNoStatusBar(t *testing.T) {
-	setup := newTestApp(Options{Repo: "silo", Now: fixedClock(), Requirements: setupRequirements()})
+	setup := newTestApp(Options{Repo: testRepo, Now: fixedClock(), Requirements: setupRequirements()})
 	setup.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
-	running := newTestApp(Options{Repo: "silo", Now: fixedClock(), Wires: anthropicAlone})
+	running := newTestApp(Options{Repo: testRepo, Now: fixedClock(), Wires: anthropicAlone})
 	running.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 
 	content := setup.View().Content
@@ -1124,5 +1334,84 @@ func TestTheSetupScreenDrawsNoStatusBar(t *testing.T) {
 	}
 	if content := running.View().Content; !strings.Contains(content, "jev 0") {
 		t.Errorf("the session view lost the status bar it still needs\n%s", content)
+	}
+}
+
+func zero() *int { code := 0; return &code }
+
+func shellEntries() []shells.Entry {
+	return []shells.Entry{
+		{Name: "dev-server", Command: "npm run dev", State: shells.Running, Started: time.Date(2026, 9, 19, 14, 30, 0, 0, time.UTC), Log: "listening on :3000"},
+		{Name: "build", Command: "go build ./...", State: shells.Exited, Started: time.Date(2026, 9, 19, 14, 31, 0, 0, time.UTC), ExitCode: zero(), Log: "compiling\ndone"},
+		{Name: "test-run", Command: "go test ./...", State: shells.Exited, Started: time.Date(2026, 9, 19, 14, 32, 0, 0, time.UTC), ExitCode: zero(), Log: "ok tofu/internal/shell 0.4s"},
+	}
+}
+
+func shellsApp(t *testing.T, width, height int) *App {
+	t.Helper()
+	app := sessionApp(t, width, height)
+	app.Update(shellsMsg(shellEntries()))
+	app.Update(tea.KeyPressMsg{Code: '5', Mod: tea.ModAlt})
+	if app.current != viewShells {
+		t.Fatalf("alt+5 left the app on view %d, want shells", app.current)
+	}
+	return app
+}
+
+func TestTheShellsViewListsNamedProcessesWithStateAndRecentOutput(t *testing.T) {
+	content := shellsApp(t, 120, 36).View().Content
+	for _, want := range []string{"dev-server", "npm run dev", "build", "go build ./...", "test-run", "listening on :3000"} {
+		if !strings.Contains(ansi.Strip(content), want) {
+			t.Errorf("the shells view does not show %q\n%s", want, ansi.Strip(content))
+		}
+	}
+	assertGolden(t, "shells-120x36.golden", content)
+}
+
+func TestTheEmptyShellsViewSaysNoProcessIsRunning(t *testing.T) {
+	app := sessionApp(t, 80, 24)
+	app.Update(tea.KeyPressMsg{Code: '5', Mod: tea.ModAlt})
+	content := ansi.Strip(app.View().Content)
+	if !strings.Contains(content, "no process is running") {
+		t.Fatalf("the empty shells view does not say there is nothing to see\n%s", content)
+	}
+	assertGolden(t, "shells-empty-80x24.golden", app.View().Content)
+}
+
+func TestKillingAProcessFromTheShellsViewRemovesIt(t *testing.T) {
+	killed := ""
+	app := sessionApp(t, 120, 36)
+	app.options.KillShell = func(name string) error { killed = name; return nil }
+	app.Update(shellsMsg(shellEntries()))
+	app.Update(tea.KeyPressMsg{Code: '5', Mod: tea.ModAlt})
+	app.Update(tea.KeyPressMsg{Code: 'k'})
+	if killed != "dev-server" {
+		t.Fatalf("killing the picked process called KillShell with %q, want dev-server", killed)
+	}
+	content := ansi.Strip(app.View().Content)
+	if strings.Contains(content, "dev-server") {
+		t.Errorf("a killed process is still in the view\n%s", content)
+	}
+	if !strings.Contains(content, "build") {
+		t.Errorf("killing one process dropped an unrelated one\n%s", content)
+	}
+}
+
+func TestNeitherFileEditsNorShellsTakeChatInput(t *testing.T) {
+	app := sessionApp(t, 80, 24)
+	edited(app, "e1", "", gatePath, gateDiff)
+	app.Update(tea.KeyPressMsg{Code: '3', Mod: tea.ModAlt})
+	before := app.View().Content
+	app.Update(tea.KeyPressMsg{Text: "x"})
+	if app.View().Content != before {
+		t.Errorf("a letter typed in the file edits view changed what is drawn")
+	}
+
+	app.Update(shellsMsg(shellEntries()))
+	app.Update(tea.KeyPressMsg{Code: '5', Mod: tea.ModAlt})
+	before = app.View().Content
+	app.Update(tea.KeyPressMsg{Text: "x"})
+	if app.View().Content != before {
+		t.Errorf("a letter typed in the shells view changed what is drawn")
 	}
 }

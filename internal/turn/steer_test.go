@@ -36,7 +36,8 @@ func userContent(messages []llm.Message) []string {
 	return said
 }
 
-func steeredConfig(steering func() []string) (Config, *stubModel) {
+func steeredConfig(t *testing.T, steering func() []string) (Config, *stubModel) {
+	t.Helper()
 	model := &stubModel{decisions: []llm.Decision{
 		toolCallDecision(llm.ToolCall{ID: "c1", Name: "read", Arguments: []byte(`{}`)}),
 		messageDecision(),
@@ -47,6 +48,7 @@ func steeredConfig(steering func() []string) (Config, *stubModel) {
 		Tools:          NewRegistry(&stubTool{name: "read", result: Result{Content: "file contents"}}),
 		Task:           "rewrite the gate",
 		ResultBytesCap: 4096,
+		ArtifactDir:    t.TempDir(),
 		Caps:           Caps{MaxSteps: 10},
 		NoFork:         true,
 		NoCompaction:   true,
@@ -55,7 +57,7 @@ func steeredConfig(steering func() []string) (Config, *stubModel) {
 }
 
 func TestAMessageQueuedDuringAStepReachesTheModelAtTheNextStep(t *testing.T) {
-	config, model := steeredConfig(steeringRounds(nil, []string{steerOne}))
+	config, model := steeredConfig(t, steeringRounds(nil, []string{steerOne}))
 	if _, err := Run(context.Background(), config); err != nil {
 		t.Fatalf("the run failed: %v", err)
 	}
@@ -73,7 +75,7 @@ func TestAMessageQueuedDuringAStepReachesTheModelAtTheNextStep(t *testing.T) {
 }
 
 func TestTwoMessagesQueuedInOneStepBothReachTheModelInOrder(t *testing.T) {
-	config, model := steeredConfig(steeringRounds(nil, []string{steerOne, steerTwo}))
+	config, model := steeredConfig(t, steeringRounds(nil, []string{steerOne, steerTwo}))
 	if _, err := Run(context.Background(), config); err != nil {
 		t.Fatalf("the run failed: %v", err)
 	}
@@ -88,7 +90,7 @@ func TestTwoMessagesQueuedInOneStepBothReachTheModelInOrder(t *testing.T) {
 }
 
 func TestASteeredMessageIsRecordedAsAUserMessage(t *testing.T) {
-	config, _ := steeredConfig(steeringRounds(nil, []string{steerOne}))
+	config, _ := steeredConfig(t, steeringRounds(nil, []string{steerOne}))
 	store := session.NewStore(t.TempDir())
 	config.Sessions = store
 	row, err := Run(context.Background(), config)
@@ -113,8 +115,8 @@ func TestASteeredMessageIsRecordedAsAUserMessage(t *testing.T) {
 }
 
 func TestATurnWithNothingSteeredAsksForExactlyTheSameMessages(t *testing.T) {
-	plain, plainModel := steeredConfig(nil)
-	steered, steeredModel := steeredConfig(steeringRounds(nil, nil, nil))
+	plain, plainModel := steeredConfig(t, nil)
+	steered, steeredModel := steeredConfig(t, steeringRounds(nil, nil, nil))
 	for _, config := range []Config{plain, steered} {
 		if _, err := Run(context.Background(), config); err != nil {
 			t.Fatalf("the run failed: %v", err)

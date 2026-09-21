@@ -78,15 +78,17 @@ func (g *stubGate) Decide(_ context.Context, request GateRequest) (GateDecision,
 	return GateDecision{ID: "row-" + strconv.Itoa(len(g.requests)), Verdict: verdict, Reason: g.reason}, nil
 }
 
-func gatedConfig(gate Gate, tool Tool, model Model) Config {
+func gatedConfig(t *testing.T, gate Gate, tool Tool, model Model) Config {
+	t.Helper()
 	return Config{
 		Model:          model,
 		Spend:          SpendAPIKey,
 		Tools:          NewRegistry(tool),
 		Gate:           gate,
 		Task:           "write a file",
-		Caps:           Caps{MaxSteps: 10, MaxDecisions: 10},
+		Caps:           Caps{MaxSteps: 10},
 		ResultBytesCap: 4096,
+		ArtifactDir:    t.TempDir(),
 	}
 }
 
@@ -99,7 +101,7 @@ func TestRunAsksTheGateBeforeEveryToolCallAndRecordsTheDecision(t *testing.T) {
 		messageDecision(),
 	}}
 
-	row, err := Run(context.Background(), gatedConfig(gate, tool, model))
+	row, err := Run(context.Background(), gatedConfig(t, gate, tool, model))
 	if err != nil {
 		t.Fatalf("Run returned an error: %v", err)
 	}
@@ -127,7 +129,7 @@ func TestUnderShadowADenyStillRunsTheCallAndOnlyRecordsTheVerdict(t *testing.T) 
 		messageDecision(),
 	}}
 
-	row, err := Run(context.Background(), gatedConfig(gate, tool, model))
+	row, err := Run(context.Background(), gatedConfig(t, gate, tool, model))
 	if err != nil {
 		t.Fatalf("Run returned an error: %v", err)
 	}
@@ -150,7 +152,7 @@ func TestUnderShadowAGateThatErrorsStillRunsTheCall(t *testing.T) {
 		messageDecision(),
 	}}
 
-	row, err := Run(context.Background(), gatedConfig(gate, tool, model))
+	row, err := Run(context.Background(), gatedConfig(t, gate, tool, model))
 	if err != nil {
 		t.Fatalf("Run returned an error: %v", err)
 	}
@@ -166,33 +168,13 @@ func TestUnderShadowAGateThatErrorsStillRunsTheCall(t *testing.T) {
 	}
 }
 
-func TestRunStopsAtTheDecisionCapWithItsOwnOutcome(t *testing.T) {
-	gate := gateSaying(ledger.VerdictAllow)
-	config := gatedConfig(gate, &stubTool{name: "noop", result: Result{Content: "ok"}, varying: true}, alwaysToolCallModel(10))
-	config.Caps = Caps{MaxSteps: 10, MaxDecisions: 3}
-
-	row, err := Run(context.Background(), config)
-	if err != nil {
-		t.Fatalf("Run returned an error: %v", err)
-	}
-	if row.Outcome != OutcomeDecisionCap {
-		t.Fatalf("expected outcome decision_cap, got %s", row.Outcome)
-	}
-	if len(gate.requests) != 3 {
-		t.Fatalf("expected exactly 3 decisions, got %d", len(gate.requests))
-	}
-	if len(row.DecisionIDs) != 3 {
-		t.Fatalf("expected 3 decision ids on the turn row, got %v", row.DecisionIDs)
-	}
-}
-
 func TestRunWithoutAGateRecordsNoDecision(t *testing.T) {
 	tool := &stubTool{name: "write", result: Result{Content: "ok"}}
 	model := &stubModel{decisions: []llm.Decision{
 		toolCallDecision(llm.ToolCall{ID: "c1", Name: "write", Arguments: json.RawMessage(`{"path":"a.txt"}`)}),
 		messageDecision(),
 	}}
-	row, err := Run(context.Background(), gatedConfig(nil, tool, model))
+	row, err := Run(context.Background(), gatedConfig(t, nil, tool, model))
 	if err != nil {
 		t.Fatalf("Run returned an error: %v", err)
 	}

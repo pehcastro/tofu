@@ -42,15 +42,15 @@ func seed(t *testing.T, root, rel, body string) {
 func registry(t *testing.T, root string) turn.Registry {
 	t.Helper()
 	globTool, globErr := tools.NewGlob(root)
-	grepTool, grepErr := tools.NewGrep(root)
+	searchTool, searchErr := tools.NewSearch(root)
 	editTool, editErr := tools.NewEdit(root)
 	symbolsTool, symbolsErr := tools.NewSymbols(root)
-	for _, err := range []error{globErr, grepErr, editErr, symbolsErr} {
+	for _, err := range []error{globErr, searchErr, editErr, symbolsErr} {
 		if err != nil {
 			t.Fatalf("building the tools: %v", err)
 		}
 	}
-	return turn.NewRegistry(globTool, grepTool, editTool, symbolsTool, tools.NewPlan())
+	return turn.NewRegistry(globTool, searchTool, editTool, symbolsTool, tools.NewPlan())
 }
 
 func runCalls(t *testing.T, root string, bytesCap int, truncate bool, calls ...llm.ToolCall) turn.Row {
@@ -102,7 +102,7 @@ func TestEachNewToolAppliesOnARealFileAndRoundTripsThroughTheStepRow(t *testing.
 
 	row := runCalls(t, root, konst.TurnResultBytesCap, false,
 		llm.ToolCall{ID: "c1", Name: "glob", Arguments: json.RawMessage(`{"pattern":"*.ts"}`)},
-		llm.ToolCall{ID: "c2", Name: "grep", Arguments: json.RawMessage(`{"pattern":"done"}`)},
+		llm.ToolCall{ID: "c2", Name: "search", Arguments: json.RawMessage(`{"pattern":"done"}`)},
 		llm.ToolCall{ID: "c3", Name: "edit", Arguments: json.RawMessage(
 			`{"path":"src/store.ts","old_string":"  title: string\n  done: boolean","new_string":"  title: string\n  completed: boolean"}`)},
 	)
@@ -134,12 +134,12 @@ func TestEachNewToolAppliesOnARealFileAndRoundTripsThroughTheStepRow(t *testing.
 	}
 }
 
-func TestGlobAndGrepSkipNodeModulesAndSayWhenNothingMatched(t *testing.T) {
+func TestGlobAndSearchSkipNodeModulesAndSayWhenNothingMatched(t *testing.T) {
 	root := t.TempDir()
 	seed(t, root, "src/app.ts", "const port = 3000\n")
 	seed(t, root, "node_modules/hono/index.ts", "const port = 3000\n")
 	globTool, _ := tools.NewGlob(root)
-	grepTool, _ := tools.NewGrep(root)
+	searchTool, _ := tools.NewSearch(root)
 
 	listed, err := globTool.Run(context.Background(), json.RawMessage(`{"pattern":"*.ts"}`))
 	if err != nil {
@@ -149,19 +149,22 @@ func TestGlobAndGrepSkipNodeModulesAndSayWhenNothingMatched(t *testing.T) {
 		t.Fatalf("glob must list the project and never node_modules, it returned:\n%s", listed.Content)
 	}
 
-	found, err := grepTool.Run(context.Background(), json.RawMessage(`{"pattern":"port"}`))
+	found, err := searchTool.Run(context.Background(), json.RawMessage(`{"pattern":"port"}`))
 	if err != nil {
-		t.Fatalf("grep: %v", err)
+		t.Fatalf("search: %v", err)
 	}
-	if !strings.Contains(found.Content, "src/app.ts:1:const port = 3000") || strings.Contains(found.Content, "node_modules") {
-		t.Fatalf("grep must report path:line:text and never node_modules, it returned:\n%s", found.Content)
+	if !strings.Contains(found.Content, "src/app.ts:1-") || !strings.Contains(found.Content, "const port = 3000") {
+		t.Fatalf("search must frame the match with its path and line span, it returned:\n%s", found.Content)
+	}
+	if strings.Contains(found.Content, "node_modules") {
+		t.Fatalf("search read a file under node_modules:\n%s", found.Content)
 	}
 
-	empty, err := grepTool.Run(context.Background(), json.RawMessage(`{"pattern":"nothing here matches this"}`))
+	empty, err := searchTool.Run(context.Background(), json.RawMessage(`{"pattern":"nothing here matches this"}`))
 	if err != nil {
 		t.Fatalf("zero matches must be an answer, not an error: %v", err)
 	}
-	if !strings.Contains(empty.Content, "matches no line") || !strings.Contains(empty.Content, "not a failure") {
+	if !strings.Contains(empty.Content, "no code unit holds that pattern") || !strings.Contains(empty.Content, "not a failure") {
 		t.Fatalf("zero matches must say it searched and found nothing, it returned:\n%s", empty.Content)
 	}
 }
@@ -200,25 +203,26 @@ func TestEditTakesTheMultiLineBlockAModelActuallySendsAndRefusesAnAmbiguousOne(t
 	}
 }
 
-func manyMatches(lines int) string {
+func manyMatches(places int) string {
 	var body strings.Builder
-	for i := 0; i < lines; i++ {
+	for i := 0; i < places; i++ {
 		body.WriteString("the needle is on this line and this line is long enough to add up quickly\n")
+		body.WriteString(strings.Repeat("filler that no pattern matches\n", konst.SearchFrameLines*2+1))
 	}
 	return body.String()
 }
 
-func TestALargeGrepResultGoesThroughTheArtifactHandleAndNotTruncation(t *testing.T) {
+func TestALargeSearchResultGoesThroughTheArtifactHandleAndNotTruncation(t *testing.T) {
 	root := t.TempDir()
 	seed(t, root, "big.txt", manyMatches(400))
-	call := llm.ToolCall{ID: "c1", Name: "grep", Arguments: json.RawMessage(`{"pattern":"needle"}`)}
+	call := llm.ToolCall{ID: "c1", Name: "search", Arguments: json.RawMessage(`{"pattern":"needle"}`)}
 
 	stored := loggedRows(t, runCalls(t, root, 1024, false, call))[0]
 	if stored.ResultHandleError != "" {
 		t.Fatalf("storing the artifact failed: %s", stored.ResultHandleError)
 	}
 	if stored.ResultHandle == "" {
-		t.Fatal("a grep result over the byte cap was rendered without an artifact handle, so the dropped bytes are unrecoverable")
+		t.Fatal("a search result over the byte cap was rendered without an artifact handle, so the dropped bytes are unrecoverable")
 	}
 	if stored.ResultBytes <= stored.RenderedBytes {
 		t.Fatalf("expected the rendered result to be smaller than the whole, got %d rendered of %d", stored.RenderedBytes, stored.ResultBytes)
@@ -229,6 +233,6 @@ func TestALargeGrepResultGoesThroughTheArtifactHandleAndNotTruncation(t *testing
 		t.Fatalf("the off arm truncates and must store nothing, got handle %s", truncated.ResultHandle)
 	}
 	if truncated.ResultHash != stored.ResultHash {
-		t.Fatal("the two arms did not see the same grep result, so the comparison says nothing")
+		t.Fatal("the two arms did not see the same search result, so the comparison says nothing")
 	}
 }

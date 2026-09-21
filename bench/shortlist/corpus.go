@@ -34,7 +34,11 @@ func (r Row) Hit(path string) bool {
 }
 
 func ReadCorpus() ([]Row, error) {
-	file, err := os.Open(corpusFile)
+	return readCorpusFile(corpusFile)
+}
+
+func readCorpusFile(path string) ([]Row, error) {
+	file, err := os.Open(path)
 	if err != nil {
 		return nil, err
 	}
@@ -50,10 +54,10 @@ func ReadCorpus() ([]Row, error) {
 		}
 		var row Row
 		if err := json.Unmarshal(scanner.Bytes(), &row); err != nil {
-			return nil, fmt.Errorf("%s: row %d: %w", corpusFile, len(rows)+1, err)
+			return nil, fmt.Errorf("%s: row %d: %w", path, len(rows)+1, err)
 		}
 		if leaks := corpus.LeaksIn(line); len(leaks) > 0 {
-			return nil, fmt.Errorf("%s: row %d carries %q, which came off the recording machine: re-extract it through corpus.Scrub", corpusFile, len(rows)+1, leaks)
+			return nil, fmt.Errorf("%s: row %d carries %q, which came off the recording machine: re-extract it through corpus.Scrub", path, len(rows)+1, leaks)
 		}
 		rows = append(rows, row)
 	}

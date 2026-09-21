@@ -2,10 +2,22 @@ package llm
 
 import (
 	"context"
+	"strconv"
 	"time"
 
 	"tofu/internal/transport"
 )
+
+type Attempts int
+
+const AttemptsUnreported Attempts = 0
+
+func (a Attempts) String() string {
+	if a <= AttemptsUnreported {
+		return "the wire did not report an attempt count"
+	}
+	return strconv.Itoa(int(a))
+}
 
 type Raw struct {
 	Body      []byte
@@ -15,6 +27,7 @@ type Raw struct {
 }
 
 type Wire interface {
+	Name() string
 	Model() string
 	Post(ctx context.Context, body []byte) (Raw, error)
 }
@@ -23,12 +36,14 @@ type Decision struct {
 	Build            string
 	RequestID        string
 	TransportID      string
+	Attempts         Attempts
 	Outcome          Outcome
 	Stop             string
 	Content          string
 	ToolCalls        []ToolCall
 	Refusal          string
 	Usage            Usage
+	PromptAccounting PromptAccounting
 	CacheReadTokens  int
 	CacheWriteTokens int
 	Warnings         []string
@@ -61,13 +76,18 @@ func (c *Client) Ask(ctx context.Context, request Request) (Decision, error) {
 	}
 
 	return Decision{
-		Build:       response.Build,
-		RequestID:   response.RequestID,
-		TransportID: raw.RequestID,
-		Outcome:     response.Outcome,
-		Content:     response.Content,
-		ToolCalls:   response.ToolCalls,
-		Refusal:     response.Refusal,
-		Usage:       response.Usage,
+		Build:            response.Build,
+		RequestID:        response.RequestID,
+		TransportID:      raw.RequestID,
+		Attempts:         Attempts(raw.Attempts),
+		Outcome:          response.Outcome,
+		Stop:             response.Stop,
+		Content:          response.Content,
+		ToolCalls:        response.ToolCalls,
+		Refusal:          response.Refusal,
+		Usage:            response.Usage,
+		PromptAccounting: PromptAccountingFor(c.wire.Name()),
+		CacheReadTokens:  response.CacheReadTokens,
+		Warnings:         response.Warnings,
 	}, nil
 }

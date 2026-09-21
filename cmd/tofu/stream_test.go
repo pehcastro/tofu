@@ -107,10 +107,10 @@ func TestACacheHitCarriesTheReadSeparatelyFromTheFreshInput(t *testing.T) {
 	}
 	cachedFrame := cachedDriver.view()
 	freshFrame := freshDriver.view()
-	if !strings.Contains(cachedFrame, "9k+400") {
+	if !strings.Contains(cachedFrame, "9k cached") {
 		t.Fatalf("a cache hit does not show the cached read beside the fresh input\n%s", cachedFrame)
 	}
-	if strings.Contains(freshFrame, "+400") {
+	if strings.Contains(freshFrame, "cached") {
 		t.Fatalf("a turn with no cache hit still shows a cache mark\n%s", freshFrame)
 	}
 	if cachedFrame == freshFrame {

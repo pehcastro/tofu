@@ -78,6 +78,7 @@ func (q Question) Words() []string {
 
 type Set struct {
 	Name             string
+	Domain           string
 	Version          int
 	QuestionsVersion int
 	State            []string

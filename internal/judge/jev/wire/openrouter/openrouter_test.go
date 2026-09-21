@@ -186,6 +186,7 @@ func liveClient(t *testing.T) (*Wire, *jev.Client) {
 	if os.Getenv("TOFU_LIVE") != "1" {
 		t.Skip("set TOFU_LIVE=1 to call the real route")
 	}
+	jev.AllowLiveCredential(t)
 	key, err := jev.Key("../../../../../.env")
 	if err != nil {
 		t.Fatalf("no credential: %v", err)

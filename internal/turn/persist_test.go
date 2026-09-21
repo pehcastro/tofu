@@ -24,6 +24,7 @@ func recordingConfig(t *testing.T, model Model, tools Registry) (Config, *sessio
 		Wire:           "anthropic",
 		Caps:           Caps{MaxSteps: 10},
 		ResultBytesCap: 4096,
+		ArtifactDir:    t.TempDir(),
 		Sessions:       store,
 	}, store
 }
@@ -145,7 +146,6 @@ func TestEveryCapIsRecorded(t *testing.T) {
 		outcome Outcome
 	}{
 		{name: "the step cap", caps: Caps{MaxSteps: 1}, outcome: OutcomeStepCap},
-		{name: "the decision cap", caps: Caps{MaxSteps: 10, MaxDecisions: 1}, gate: allowingGate{}, outcome: OutcomeDecisionCap},
 	} {
 		t.Run(capped.name, func(t *testing.T) {
 			tool := &stubTool{name: "read", result: Result{Content: "file contents"}}
@@ -360,10 +360,4 @@ type askFunc func(context.Context, llm.Request) (llm.Decision, error)
 
 func (a askFunc) Ask(ctx context.Context, request llm.Request) (llm.Decision, error) {
 	return a(ctx, request)
-}
-
-type allowingGate struct{}
-
-func (allowingGate) Decide(context.Context, GateRequest) (GateDecision, error) {
-	return GateDecision{ID: "decision-1"}, nil
 }

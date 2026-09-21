@@ -103,6 +103,107 @@ func TestAParentAndItsChildAreBothRecordedSessionsThatNameEachOther(t *testing.T
 		root, parentHeader.ID, childHeader.ID)
 }
 
+func TestEveryEventCarriesAnIDAParentThatExistsAndTheRightAuthor(t *testing.T) {
+	root := t.TempDir()
+	parent, _, store := parentWithAStore(t, root, []llm.Decision{
+		spawnCall("call-1", "write the greeting under mine/", "mine/**"),
+		writeCall("call-2", "mine/hello.txt", "written by the child"),
+		claimDecision("I wrote mine/hello.txt"),
+		claimDecision("the child did the work"),
+	})
+
+	row, err := Run(context.Background(), parent)
+	if err != nil {
+		t.Fatalf("Run returned an error: %v", err)
+	}
+	if len(row.ChildIDs) != 1 {
+		t.Fatalf("the parent row names %v children, want one", row.ChildIDs)
+	}
+	childID := row.ChildIDs[0]
+
+	byID := map[string]session.Event{}
+	sessions := map[string][]session.Event{}
+	for _, id := range []string{row.ID, childID} {
+		events, err := store.Body(id)
+		if err != nil {
+			t.Fatalf("reading %s: %v", id, err)
+		}
+		sessions[id] = events
+		for _, event := range events {
+			if event.ID == "" {
+				t.Fatalf("session %s carries a %s event with no id", id, event.Kind)
+			}
+			if event.Author == "" {
+				t.Fatalf("session %s carries a %s event with no author", id, event.Kind)
+			}
+			byID[event.ID] = event
+		}
+	}
+	for id, events := range sessions {
+		for _, event := range events {
+			if event.Parent == "" {
+				continue
+			}
+			if _, ok := byID[event.Parent]; !ok {
+				t.Fatalf("session %s carries a %s event whose parent %s does not exist", id, event.Kind, event.Parent)
+			}
+		}
+	}
+
+	toolParentChecked := false
+	for _, event := range sessions[childID] {
+		if event.Kind != session.EventStep {
+			continue
+		}
+		var step StepRow
+		if err := json.Unmarshal(event.Body, &step); err != nil {
+			t.Fatalf("a step of %s does not parse: %v", childID, err)
+		}
+		for _, call := range step.ToolCalls {
+			if call.Tool != "write" {
+				continue
+			}
+			if call.Parent != event.ID {
+				t.Fatalf("the write call names parent %q, want the step's own id %q", call.Parent, event.ID)
+			}
+			toolParentChecked = true
+		}
+	}
+	if !toolParentChecked {
+		t.Fatal("no write call was found to check its parent against")
+	}
+
+	authors := map[string]bool{}
+	for _, events := range sessions {
+		for _, event := range events {
+			authors[event.Author] = true
+		}
+	}
+	if !authors[session.AuthorOrchestrator] {
+		t.Fatalf("no event names the orchestrator as author: %v", authors)
+	}
+	if !authors[childID] {
+		t.Fatalf("no event names the child %s as author: %v", childID, authors)
+	}
+
+	again, err := store.Body(row.ID)
+	if err != nil {
+		t.Fatalf("second read of %s: %v", row.ID, err)
+	}
+	for i, event := range sessions[row.ID] {
+		if event.ID != again[i].ID {
+			t.Fatalf("event %d read %q the first time and %q the second", i, event.ID, again[i].ID)
+		}
+	}
+
+	for i, event := range sessions[row.ID] {
+		if i >= 3 {
+			break
+		}
+		t.Logf("%s parent=%q author=%q kind=%s body=%s", event.ID, event.Parent, event.Author, event.Kind, event.Body)
+	}
+}
+
 func TestTheParentSeesTheChildStepsWhileItRunsAndNotOnlyAtTheEnd(t *testing.T) {
 	root := t.TempDir()
 	const childID = "turn-parent-c1"

@@ -1,9 +1,11 @@
 package tui
 
 import (
+	"context"
 	"errors"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -26,7 +28,7 @@ func pasteApp(t *testing.T, board paste.Board) *App {
 	t.Helper()
 	at := time.Date(2026, 9, 19, 14, 32, 0, 0, time.UTC)
 	app := newTestApp(Options{
-		Repo:   "silo",
+		Repo:   testRepo,
 		Branch: "develop",
 		Wires:  anthropicAlone,
 		Now:    func() time.Time { return at },
@@ -67,13 +69,13 @@ func TestEitherPasteKeyAttachesAnImage(t *testing.T) {
 			if cmd == nil {
 				t.Fatalf("%s returned no command, so nothing was pasted", name)
 			}
-			if !strings.Contains(ansi.Strip(app.View().Content), "image 1  pasting") {
+			if !strings.Contains(ansi.Strip(app.View().Content), "[pasting 1]") {
 				t.Fatalf("%s left no placeholder in the composer:\n%s", name, ansi.Strip(app.View().Content))
 			}
 			app.Update(cmd())
 			frame := ansi.Strip(app.View().Content)
-			if !strings.Contains(frame, pasteSessionID+"-image-01.png") {
-				t.Fatalf("%s did not name the written file:\n%s", name, frame)
+			if !strings.Contains(frame, "[Image #1]") {
+				t.Fatalf("%s did not draw the numbered chip:\n%s", name, frame)
 			}
 			if _, err := os.Stat(filepath.Join(dir, pasteSessionID+"-image-01.png")); err != nil {
 				t.Fatalf("%s wrote nothing beside the record: %v", name, err)
@@ -95,7 +97,7 @@ func TestThePasteKeypressReturnsBeforeTheImageIsWritten(t *testing.T) {
 	go func() { written <- cmd() }()
 
 	frame := ansi.Strip(app.View().Content)
-	if !strings.Contains(frame, "image 1  pasting") {
+	if !strings.Contains(frame, "[pasting 1]") {
 		t.Fatalf("the frame does not render while the writer is blocked:\n%s", frame)
 	}
 	select {
@@ -105,7 +107,7 @@ func TestThePasteKeypressReturnsBeforeTheImageIsWritten(t *testing.T) {
 	}
 	close(release)
 	app.Update(<-written)
-	if !strings.Contains(ansi.Strip(app.View().Content), "-image-01.png") {
+	if !strings.Contains(ansi.Strip(app.View().Content), "[Image #1]") {
 		t.Fatal("the released write never reached the composer")
 	}
 }
@@ -141,6 +143,116 @@ func TestPastingTextLeavesNoPlaceholderAndTypesTheText(t *testing.T) {
 	}
 }
 
+func TestAPastedImageBecomesANumberedChipAtThePositionItWasPasted(t *testing.T) {
+	board, _ := pasteBoard(t)
+	app := pasteApp(t, board)
+	typeText(app, "look at ")
+	_, cmd := app.Update(tea.KeyPressMsg{Code: 'v', Mod: tea.ModCtrl})
+	app.Update(cmd())
+	typeText(app, " and tell me why")
+	if got := app.view.Value(); got != "look at [Image #1] and tell me why" {
+		t.Fatalf("the composer holds %q, want the chip at the pasted position", got)
+	}
+	assertGolden(t, "session-paste-image-chip-80x24.golden", app.View().Content)
+}
+
+func TestTwoImagesPastedInOrderNumberInThatOrder(t *testing.T) {
+	board, _ := pasteBoard(t)
+	app := pasteApp(t, board)
+	_, first := app.Update(tea.KeyPressMsg{Code: 'v', Mod: tea.ModCtrl})
+	app.Update(first())
+	_, second := app.Update(tea.KeyPressMsg{Code: 'v', Mod: tea.ModCtrl})
+	app.Update(second())
+	if got := app.view.Value(); got != "[Image #1][Image #2]" {
+		t.Fatalf("the composer holds %q, want the two chips numbered in paste order", got)
+	}
+}
+
+func TestALongPastedBlockBecomesATextChip(t *testing.T) {
+	board, _ := pasteBoard(t)
+	long := strings.Repeat("the gate reads the policy before the wire. ", 10)
+	board.Read = func() (sys.Clipboard, error) {
+		return sys.Clipboard{Kind: sys.ClipboardText, Text: long}, nil
+	}
+	app := pasteApp(t, board)
+	_, cmd := app.Update(tea.KeyPressMsg{Code: 'v', Mod: tea.ModCtrl})
+	app.Update(cmd())
+	frame := ansi.Strip(app.View().Content)
+	if strings.Contains(frame, long) {
+		t.Fatalf("a long paste was typed in full instead of becoming a chip:\n%s", frame)
+	}
+	want := "[Text " + strconv.Itoa(len([]rune(long))) + " chars]"
+	if !strings.Contains(frame, want) {
+		t.Fatalf("the frame does not carry %q:\n%s", want, frame)
+	}
+	assertGolden(t, "session-paste-text-chip-80x24.golden", app.View().Content)
+}
+
+func TestASentMessageDrawsATreeBeneathItNamingWhatWentWithIt(t *testing.T) {
+	board, _ := pasteBoard(t)
+	app := newTestApp(Options{
+		Repo:   testRepo,
+		Branch: "develop",
+		Wires:  anthropicAlone,
+		Now:    func() time.Time { return time.Date(2026, 9, 19, 14, 32, 0, 0, time.UTC) },
+		Paste:  board,
+		Turn:   func(context.Context, string, string, CalledFromInsideTheTurnAndNeverAfterItReturns) {},
+	})
+	app.Init()
+	app.Update(tea.WindowSizeMsg{Width: pasteWidth, Height: pasteHeight})
+	typeText(app, "compare ")
+	_, cmd := app.Update(tea.KeyPressMsg{Code: 'v', Mod: tea.ModCtrl})
+	app.Update(cmd())
+	typeText(app, " to the spec")
+	app.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	frame := ansi.Strip(app.View().Content)
+	for _, want := range []string{"compare [Image #1] to the spec", "└─ ", "PNG", pasteSessionID + "-image-01.png"} {
+		if !strings.Contains(frame, want) {
+			t.Fatalf("the sent message does not carry %q:\n%s", want, frame)
+		}
+	}
+	assertGolden(t, "session-paste-tree-80x24.golden", app.View().Content)
+}
+
+func TestDeletingAPastedImagesTokenDropsItFromTheSentTree(t *testing.T) {
+	board, _ := pasteBoard(t)
+	app := newTestApp(Options{
+		Repo:   testRepo,
+		Branch: "develop",
+		Wires:  anthropicAlone,
+		Now:    func() time.Time { return time.Date(2026, 9, 19, 14, 32, 0, 0, time.UTC) },
+		Paste:  board,
+		Turn:   func(context.Context, string, string, CalledFromInsideTheTurnAndNeverAfterItReturns) {},
+	})
+	app.Init()
+	app.Update(tea.WindowSizeMsg{Width: pasteWidth, Height: pasteHeight})
+	typeText(app, "compare ")
+	_, first := app.Update(tea.KeyPressMsg{Code: 'v', Mod: tea.ModCtrl})
+	app.Update(first())
+	_, second := app.Update(tea.KeyPressMsg{Code: 'v', Mod: tea.ModCtrl})
+	app.Update(second())
+	if got := app.view.Value(); got != "compare [Image #1][Image #2]" {
+		t.Fatalf("the composer holds %q before the delete", got)
+	}
+	for range len("[Image #2]") {
+		app.Update(tea.KeyPressMsg{Code: tea.KeyBackspace})
+	}
+	if got := app.view.Value(); got != "compare [Image #1]" {
+		t.Fatalf("the composer holds %q after deleting the second token", got)
+	}
+	app.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	frame := ansi.Strip(app.View().Content)
+	if strings.Count(frame, "└─ ") != 1 {
+		t.Fatalf("the sent message's tree does not carry exactly one attachment:\n%s", frame)
+	}
+	if strings.Contains(frame, pasteSessionID+"-image-02.png") {
+		t.Fatalf("the deleted image still appears in the tree:\n%s", frame)
+	}
+	if !strings.Contains(frame, pasteSessionID+"-image-01.png") {
+		t.Fatalf("the kept image is missing from the tree:\n%s", frame)
+	}
+}
+
 func TestThePastedComposerIsWhatHeSees(t *testing.T) {
 	board, _ := pasteBoard(t)
 	app := pasteApp(t, board)
@@ -148,7 +260,7 @@ func TestThePastedComposerIsWhatHeSees(t *testing.T) {
 	app.Update(cmd())
 	typeText(app, "what changed between these two frames?")
 	rows := strings.Split(ansi.Strip(app.View().Content), "\n")
-	composer := strings.Join(rows[len(rows)-6:], "\n")
+	composer := strings.Join(rows[len(rows)-8:], "\n")
 	if !strings.Contains(composer, "what changed between these two frames?") {
 		t.Fatalf("the composer does not hold the typed task:\n%s", composer)
 	}

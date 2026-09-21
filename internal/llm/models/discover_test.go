@@ -49,7 +49,7 @@ func TestDiscoverReportsTheCodexPinBesideTheResult(t *testing.T) {
 	if err != nil {
 		t.Fatalf("loading: %v", err)
 	}
-	lines := catalog.Reconcile(served).Lines()
+	lines := catalog.Reconcile(served, shippedTable(t)).Lines()
 	if !strings.Contains(lines[0], "under codex client version "+codex.PinnedCodexClientVersion) {
 		t.Fatalf("the pin must be reported beside the list, got %q", lines[0])
 	}
@@ -61,13 +61,30 @@ func TestDiscoverReportsTheCodexPinBesideTheResult(t *testing.T) {
 	}
 }
 
+func TestADumpOfTheDiscoveryRequestHidesTheAccountAndTheToken(t *testing.T) {
+	dump := discoveryRequest(Account{Subscription: Codex, AccountID: "acct-0000"}, "token-0000")
+	carried := ""
+	for _, header := range dump.Headers {
+		if strings.EqualFold(header.Name, codex.HeaderAccountID) {
+			carried = header.Value
+		}
+	}
+	if carried != "acct-0000" {
+		t.Fatalf("the discovery request carries the account header as %q", carried)
+	}
+	text := dump.String()
+	if strings.Contains(text, "acct-0000") || strings.Contains(text, "token-0000") {
+		t.Fatalf("a dump of the discovery request prints an identifier:\n%s", text)
+	}
+}
+
 func TestReconcileRendersAnEmptyListRatherThanNothing(t *testing.T) {
 	catalog, err := Load([]Layer{layerOf("catalog", withSubscriptions(oneFile(
 		"models/openai/gpt-5.6-sol.yaml", "subscription: codex\nuse: default\n")))})
 	if err != nil {
 		t.Fatalf("loading: %v", err)
 	}
-	lines := catalog.Reconcile(Served{Subscription: Codex, Pin: "pin", IDs: []string{"gpt-5.6-sol"}}).Lines()
+	lines := catalog.Reconcile(Served{Subscription: Codex, Pin: "pin", IDs: []string{"gpt-5.6-sol"}}, shippedTable(t)).Lines()
 	for _, line := range lines[1:] {
 		if !strings.HasSuffix(line, "(none)") {
 			t.Fatalf("an empty finding is still a line, got %q", line)

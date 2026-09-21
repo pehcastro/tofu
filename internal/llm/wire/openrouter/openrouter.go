@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	Name     = "openrouter"
+	Name     = llm.WireOpenRouter
 	Endpoint = "https://openrouter.ai/api/v1/chat/completions"
 )
 
@@ -45,6 +45,8 @@ func New(config Config) (*Wire, error) {
 	return &Wire{endpoint: endpoint, model: config.Model, key: config.Key, client: client}, nil
 }
 
+func (w *Wire) Name() string { return Name }
+
 func (w *Wire) Model() string { return w.model }
 
 func (w *Wire) Post(ctx context.Context, body []byte) (llm.Raw, error) {
@@ -55,11 +57,19 @@ func (w *Wire) Post(ctx context.Context, body []byte) (llm.Raw, error) {
 	return w.send(ctx, marked)
 }
 
+func Headers(key string) []llm.Header {
+	return []llm.Header{
+		{Name: "Authorization", Value: "Bearer " + key},
+		{Name: "Content-Type", Value: "application/json"},
+		{Name: "Accept", Value: "application/json"},
+	}
+}
+
 func (w *Wire) send(ctx context.Context, body []byte) (llm.Raw, error) {
 	header := http.Header{}
-	header.Set("Authorization", "Bearer "+w.key)
-	header.Set("Content-Type", "application/json")
-	header.Set("Accept", "application/json")
+	for _, pair := range Headers(w.key) {
+		header.Set(pair.Name, pair.Value)
+	}
 
 	response, err := w.client.Do(ctx, transport.Request{
 		Method: http.MethodPost,

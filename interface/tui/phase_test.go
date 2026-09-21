@@ -16,11 +16,11 @@ import (
 func phaseApp(t *testing.T, at *time.Time) *App {
 	t.Helper()
 	app := newTestApp(Options{
-		Repo:   "silo",
+		Repo:   testRepo,
 		Branch: "develop",
 		Now:    func() time.Time { return *at },
 		Wires:  anthropicAlone,
-		Turn:   func(context.Context, string, string, func(Event)) {},
+		Turn:   func(context.Context, string, string, CalledFromInsideTheTurnAndNeverAfterItReturns) {},
 	})
 	app.Init()
 	app.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
@@ -112,23 +112,31 @@ func TestACallShorterThanTheDwellNeverTakesTheRowAndIsStillCounted(t *testing.T)
 	if strings.Contains(row, "CLAUDE.md") {
 		t.Errorf("a 20 ms call took the row: %q", row)
 	}
+	finishTurn(app)
 	content := ansi.Strip(app.View().Content)
-	if !strings.Contains(content, "· 2 tools") {
-		t.Errorf("the step's history line does not count the short call\n%s", content)
+	if !strings.Contains(content, "· (2) tools") {
+		t.Errorf("the ended turn does not count the short call\n%s", content)
 	}
 }
 
-func TestTheClockReadsZeroWhenTheFirstTokenArrives(t *testing.T) {
+func TestOnlyThePhaseWordChangesWhenTheFirstTokenArrives(t *testing.T) {
 	at := fixedStart()
 	app := phaseApp(t, &at)
 	at = at.Add(40 * time.Second)
+	before := turnRow(t, app)
+	if !strings.Contains(before, "requesting") {
+		t.Fatalf("the row does not read as requesting before the first token: %q", before)
+	}
 	app.Update(Event{Kind: EventStats, Model: "claude-opus-5"})
-	if elapsed := turnElapsed(t, app); elapsed != "0s" {
-		t.Errorf("forty seconds of waiting on the provider left the clock at %q, want 0s", elapsed)
+	if elapsed := turnElapsed(t, app); elapsed != "40s" {
+		t.Errorf("the first token reset the clock to %q, want 40s", elapsed)
+	}
+	if after := turnRow(t, app); strings.Contains(after, "requesting") {
+		t.Errorf("the phase word did not change at the first token: %q", after)
 	}
 }
 
-func TestRequestingCarriesItsOwnCountAndTheTotalLeavesItOut(t *testing.T) {
+func TestTheClockCountsTheWholeTurnAndOnlyTheWordChanges(t *testing.T) {
 	at := fixedStart()
 	app := phaseApp(t, &at)
 	at = at.Add(37 * time.Second)
@@ -139,8 +147,8 @@ func TestRequestingCarriesItsOwnCountAndTheTotalLeavesItOut(t *testing.T) {
 	app.Update(Event{Kind: EventStats, Model: "claude-opus-5"})
 	at = at.Add(13 * time.Second)
 	working := turnRow(t, app)
-	if !strings.Contains(working, "13s") || strings.Contains(working, "50s") {
-		t.Errorf("the total counts the provider wait: %q", working)
+	if !strings.Contains(working, "50s") {
+		t.Errorf("the clock restarted on the phase change instead of reading 50s: %q", working)
 	}
 }
 
@@ -184,7 +192,7 @@ func TestTheClosingLineCarriesTheWaitOnlyWhenItWasLongerThanTheWork(t *testing.T
 }
 
 func TestAStoppedTurnAndACappedOneSayWhatEndedThem(t *testing.T) {
-	for _, words := range []string{"stopped after", "stopped at the step cap after"} {
+	for _, words := range []string{"cooked for", "stopped at the step cap after"} {
 		at := fixedStart()
 		app := phaseApp(t, &at)
 		app.Update(Event{Kind: EventStats, Model: "claude-opus-5"})
@@ -206,7 +214,7 @@ func rowOf(t *testing.T, rows []string, carrying string) int {
 	return at
 }
 
-func TestAFinishedStepIsDrawnWhereTheRunningRowWas(t *testing.T) {
+func TestTheRunningRowHoldsItsPlaceWhenAStepEndsAndNoStepIsSummarised(t *testing.T) {
 	at := fixedStart()
 	app := phaseApp(t, &at)
 	app.Update(Event{Kind: EventStats, Model: "claude-opus-5"})
@@ -219,19 +227,18 @@ func TestAFinishedStepIsDrawnWhereTheRunningRowWas(t *testing.T) {
 
 	before := plainRows(app.View())
 	running := rowOf(t, before, "working")
-	if live := rowOf(t, before, "· 2 tools ·"); live != running-1 {
-		t.Fatalf("the step's own line is row %d and the running row is %d\n%s", live, running, strings.Join(before, "\n"))
-	}
 
 	app.Update(Event{Kind: EventToolResult, ID: "c2", Text: "ok 0.4s"})
 	app.Update(Event{Kind: EventRequesting})
 	at = at.Add(2 * time.Second)
 	after := plainRows(app.View())
-	if finished := rowOf(t, after, "· 2 tools,"); finished != running-1 {
-		t.Errorf("the finished step is drawn on row %d, want the row %d it ran on\n%s",
-			finished, running-1, strings.Join(after, "\n"))
+	if joined := strings.Join(before, "\n"); strings.Contains(joined, " tools") {
+		t.Errorf("the turn summarises itself while a step runs\n%s", joined)
 	}
-	if moved := rowOf(t, after, "requesting"); moved != running {
+	if joined := strings.Join(after, "\n"); strings.Contains(joined, " tools") {
+		t.Errorf("the turn summarises itself once the step ends\n%s", joined)
+	}
+	if moved := rowOf(t, after, "thinking"); moved != running {
 		t.Errorf("the running row moved from %d to %d when the step ended\n%s", running, moved, strings.Join(after, "\n"))
 	}
 }

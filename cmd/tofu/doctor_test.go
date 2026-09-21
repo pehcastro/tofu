@@ -146,7 +146,7 @@ func TestDoctorNamesWhereTheKeyCameFrom(t *testing.T) {
 func TestDoctorPrintsTheRootAtMostOnce(t *testing.T) {
 	dir := chdirTemp(t)
 	t.Setenv(envVarName(), fakeSecret("env"))
-	writePolicyFixture(t, "mode: enforced\n")
+	writeRuleFixture(t, "mode: enforced\n")
 	printed := doctorOutput(t)
 	if count := strings.Count(printed, mustAbs(t, dir)); count != 1 {
 		t.Fatalf("the root appears %d times, want once:\n%s", count, printed)
@@ -166,10 +166,10 @@ func TestDoctorCollapsesPointsThatSayTheSameThing(t *testing.T) {
 	chdirTemp(t)
 	t.Setenv(envVarName(), fakeSecret("env"))
 	printed := doctorOutput(t)
-	points := len(doctorJSON(t).Policies)
+	points := len(doctorJSON(t).Rules)
 	line := doctorLine(t, printed, "points, all shadow")
-	if !strings.Contains(line, fmt.Sprintf("%d points, all shadow, thresholds from the policy", points)) {
-		t.Fatalf("the policy line = %q, want it to name all %d points", line, points)
+	if !strings.Contains(line, fmt.Sprintf("%d points, all shadow, thresholds from the rule", points)) {
+		t.Fatalf("the rules line = %q, want it to name all %d points", line, points)
 	}
 	if strings.Count(printed, "thresholds from") != 1 {
 		t.Fatalf("the thresholds are printed more than once:\n%s", printed)
@@ -183,13 +183,13 @@ func TestDoctorJSONCarriesEveryPointTheTextCollapsed(t *testing.T) {
 	chdirTemp(t)
 	t.Setenv(envVarName(), fakeSecret("env"))
 	report := doctorJSON(t)
-	if len(report.Policies) < 6 {
-		t.Fatalf("tofu doctor --json carries %d points, want the whole catalog", len(report.Policies))
+	if len(report.Rules) < 6 {
+		t.Fatalf("tofu doctor --json carries %d points, want the whole catalog", len(report.Rules))
 	}
 	if strings.Count(doctorOutput(t), "shadow") > 1 {
 		t.Fatal("the text form did not collapse, so the json proves nothing")
 	}
-	for _, point := range report.Policies {
+	for _, point := range report.Rules {
 		if point.Point == "" || point.Mode == "" || point.File == "" || point.ThresholdsFrom == "" {
 			t.Fatalf("a point lost a field the text collapsed: %+v", point)
 		}
@@ -205,22 +205,22 @@ func TestDoctorJSONCarriesEveryPointTheTextCollapsed(t *testing.T) {
 	}
 }
 
-func fixtureThresholds() string { return "thresholds from the policy" }
+func fixtureThresholds() string { return "thresholds from the rule" }
 
-func writePolicyFixture(t *testing.T, extra string) {
+func writeRuleFixture(t *testing.T, extra string) {
 	t.Helper()
 	catalogDir, err := sys.CatalogDir()
 	if err != nil {
 		t.Fatalf("catalog dir: %v", err)
 	}
-	path := filepath.Join(catalogDir, "policy", "tool_gate@1.yaml")
+	path := filepath.Join(catalogDir, "general", "rules", "tool_gate@1.yaml")
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
-	body := "name: tool_gate\npolicy_version: 1\nquestions: tool_gate\nquestions_version: 1\nsample_floor: 300\n" +
+	body := "name: tool_gate\ndomain: general\nkind: threshold\nrule_version: 1\nquestions: tool_gate\nquestions_version: 1\nsample_floor: 300\n" +
 		"risk_question: risk\napproval_question: approval\nuser_requested_question: user_requested\nfrom_untrusted_question: from_untrusted\n" + extra
 	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
-		t.Fatalf("writing policy fixture: %v", err)
+		t.Fatalf("writing rule fixture: %v", err)
 	}
 }
 
@@ -234,7 +234,7 @@ func writeLockFixture(t *testing.T, build string, questionsVersion, nFit, nVerif
 		t.Fatalf("mkdir: %v", err)
 	}
 	body := fmt.Sprintf(""+
-		"policy: tool_gate\npolicy_version: 1\nquestions: tool_gate\nquestions_version: %d\n"+
+		"rule: tool_gate\nrule_version: 1\nquestions: tool_gate\nquestions_version: %d\n"+
 		"build: %s\nn_fit: %d\nn_verify: %d\n",
 		questionsVersion, build, nFit, nVerify)
 	path := filepath.Join(calibDir, "tool_gate@1.lock")
@@ -247,9 +247,9 @@ const currentBuildFixture = "typesafe/jev-1.13-20260917"
 
 func writeLedgerRowFixture(t *testing.T) {
 	t.Helper()
-	dir, err := ledger.Dir()
+	dir, err := sys.LogDir()
 	if err != nil {
-		t.Fatalf("ledger dir: %v", err)
+		t.Fatalf("sys.LogDir: %v", err)
 	}
 	row := ledger.Row{Point: "tool_gate", Questions: "tool_gate", Version: 1, Build: currentBuildFixture}
 	if _, err := ledger.NewWriter(dir).Append(row); err != nil {
@@ -257,15 +257,15 @@ func writeLedgerRowFixture(t *testing.T) {
 	}
 }
 
-func policyPointOf(t *testing.T, point string) doctorPolicy {
+func rulePointOf(t *testing.T, point string) doctorRule {
 	t.Helper()
-	for _, candidate := range doctorJSON(t).Policies {
+	for _, candidate := range doctorJSON(t).Rules {
 		if candidate.Point == point {
 			return candidate
 		}
 	}
 	t.Fatalf("no point %s in tofu doctor --json", point)
-	return doctorPolicy{}
+	return doctorRule{}
 }
 
 func TestDoctorNamesEveryFallbackToShadowOnItsOwnLine(t *testing.T) {
@@ -299,26 +299,26 @@ func TestDoctorNamesEveryFallbackToShadowOnItsOwnLine(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			chdirTemp(t)
 			t.Setenv(envVarName(), fakeSecret("env"))
-			writePolicyFixture(t, "mode: enforced\n")
+			writeRuleFixture(t, "mode: enforced\n")
 			writeLedgerRowFixture(t)
 			testCase.lock(t)
 			printed := doctorOutput(t)
 			if !strings.Contains(oneLine(printed), "tool_gate@1 shadow, "+testCase.want) {
 				t.Fatalf("no fallback line carrying %q in:\n%s", testCase.want, printed)
 			}
-			if point := policyPointOf(t, "tool_gate@1"); point.Fallback != testCase.want || point.Declared != "enforced" {
+			if point := rulePointOf(t, "tool_gate@1"); point.Fallback != testCase.want || point.Declared != "enforced" {
 				t.Fatalf("the json lost the fallback: %+v", point)
 			}
 		})
 	}
 }
 
-func TestDoctorNamesAPolicyThatDeclaresNoMode(t *testing.T) {
+func TestDoctorNamesARuleThatDeclaresNoMode(t *testing.T) {
 	chdirTemp(t)
 	t.Setenv(envVarName(), fakeSecret("env"))
-	writePolicyFixture(t, "")
+	writeRuleFixture(t, "")
 	line := doctorLine(t, doctorOutput(t), "tool_gate@1 shadow")
-	if !strings.Contains(line, "the policy declares no mode") {
+	if !strings.Contains(line, "the rule declares no mode") {
 		t.Fatalf("the fallback line = %q", line)
 	}
 }
@@ -326,14 +326,14 @@ func TestDoctorNamesAPolicyThatDeclaresNoMode(t *testing.T) {
 func TestDoctorReportsAPointEnforcedOnAValidLock(t *testing.T) {
 	chdirTemp(t)
 	t.Setenv(envVarName(), fakeSecret("env"))
-	writePolicyFixture(t, "mode: enforced\n")
+	writeRuleFixture(t, "mode: enforced\n")
 	writeLedgerRowFixture(t)
 	writeLockFixture(t, currentBuildFixture, 1, 500, 400)
 	line := doctorLine(t, doctorOutput(t), "tool_gate@1 enforced")
 	if !strings.Contains(line, fixtureThresholds()) {
 		t.Fatalf("the enforced line = %q, want it to name where the thresholds came from", line)
 	}
-	if point := policyPointOf(t, "tool_gate@1"); point.Fallback != "" || point.Mode != "enforced" {
+	if point := rulePointOf(t, "tool_gate@1"); point.Fallback != "" || point.Mode != "enforced" {
 		t.Fatalf("the json disagrees with the text: %+v", point)
 	}
 }
@@ -346,7 +346,7 @@ func TestDoctorReportsTheCatalogInTheBinaryWhenTheProjectHasNone(t *testing.T) {
 	if !strings.Contains(line, "the one in the binary") {
 		t.Fatalf("catalog line = %q, want it to name the catalog in the binary", line)
 	}
-	if policyPointOf(t, runGatePoint).Point != runGatePoint {
+	if rulePointOf(t, runGatePoint).Point != runGatePoint {
 		t.Fatalf("doctor says nothing about %s, the point the gate decides through", runGatePoint)
 	}
 }
@@ -354,7 +354,7 @@ func TestDoctorReportsTheCatalogInTheBinaryWhenTheProjectHasNone(t *testing.T) {
 func TestDoctorReportsTheProjectCatalogWhenThereIsOne(t *testing.T) {
 	chdirTemp(t)
 	t.Setenv(envVarName(), fakeSecret("env"))
-	writePolicyFixture(t, "mode: shadow\n")
+	writeRuleFixture(t, "mode: shadow\n")
 	line := doctorLine(t, doctorOutput(t), "catalog")
 	if !strings.Contains(line, "the project's own, 1 of ") {
 		t.Fatalf("catalog line = %q, want it to count the project's own points", line)
@@ -368,17 +368,14 @@ func TestDoctorStillReportsACatalogItCannotRead(t *testing.T) {
 	if err != nil {
 		t.Fatalf("catalog dir: %v", err)
 	}
-	if err := os.MkdirAll(catalogDir, 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(catalogDir, "general", "rules", "tool_gate@1.yaml"), 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(catalogDir, "policy"), []byte("not a directory\n"), 0o600); err != nil {
-		t.Fatalf("writing the fixture: %v", err)
 	}
 	line := doctorLine(t, doctorOutput(t), "catalog")
 	if !strings.Contains(line, doctorUnreadable) {
 		t.Fatalf("catalog line = %q, want an unreadable catalog to stay an error", line)
 	}
-	if report := doctorJSON(t); report.Catalog.Unreadable == "" || len(report.Policies) != 0 {
+	if report := doctorJSON(t); report.Catalog.Unreadable == "" || len(report.Rules) != 0 {
 		t.Fatalf("the json lists points over a catalog it cannot read: %+v", report.Catalog)
 	}
 }

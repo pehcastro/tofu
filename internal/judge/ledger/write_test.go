@@ -7,7 +7,27 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"tofu/internal/sys"
 )
+
+func TestATestWorkingAtTheSourceRootAppendsOutsideTheOwnersLedger(t *testing.T) {
+	t.Chdir(sys.SourceRoot())
+	dir, err := sys.LogDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sys.InsideSourceTree(dir) {
+		t.Fatalf("a test working at the source root appends into %s, which is the owner's own ledger", dir)
+	}
+	row, err := NewWriter(dir).Append(sampleRow("tool_gate", VerdictAllow, time.Now()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, row.Day()+".jsonl")); err != nil {
+		t.Fatalf("the redirected row did not land under %s: %v", dir, err)
+	}
+}
 
 func sampleRow(point string, verdict Verdict, at time.Time) Row {
 	return Row{

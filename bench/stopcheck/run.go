@@ -9,10 +9,10 @@ import (
 	"time"
 
 	catalogquestions "tofu/catalog/questions"
+	"tofu/internal/judge/gate"
 	"tofu/internal/judge/jev"
 	"tofu/internal/judge/jev/wire/openrouter"
 	"tofu/internal/judge/ledger"
-	"tofu/internal/judge/policy"
 	"tofu/internal/judge/question"
 	"tofu/internal/judge/state"
 	"tofu/internal/konst"
@@ -20,7 +20,7 @@ import (
 	"tofu/internal/transport"
 )
 
-const Point = state.StopCheckPolicyRef
+const Point = state.StopCheckRuleRef
 
 type StepResult struct {
 	Turn      string
@@ -54,7 +54,7 @@ type Result struct {
 	GeneratedAt       time.Time
 	Build             string
 	Wording           int
-	Mode              policy.Mode
+	Mode              gate.Mode
 	ModeReason        string
 	Steps             []StepResult
 	Turns             []TurnCost
@@ -67,8 +67,8 @@ type Battery struct {
 	client   *jev.Client
 	battery  []jev.Question
 	wording  int
-	pol      policy.Policy
-	mode     policy.Mode
+	pol      gate.Rule
+	mode     gate.Mode
 	reason   string
 	cache    *ledger.Cache
 	writer   *ledger.Writer
@@ -84,16 +84,16 @@ func New(root, key string) (Battery, error) {
 	if err != nil {
 		return Battery{}, err
 	}
-	pol, _, err := state.StopCheckPolicy()
+	pol, _, err := state.StopCheckRule()
 	if err != nil {
 		return Battery{}, err
 	}
 	if pol.Questions != set.Name || pol.QuestionsVersion != set.QuestionsVersion {
-		return Battery{}, fmt.Errorf("policy %s names question set %s@%d and the loaded set is %s@%d",
+		return Battery{}, fmt.Errorf("rule %s names question set %s@%d and the loaded setis %s@%d",
 			Point, pol.Questions, pol.QuestionsVersion, set.Name, set.QuestionsVersion)
 	}
-	resolution := policy.Resolve(pol, policy.LockLookup{}, policy.Current{})
-	pol = resolution.Policy
+	resolution := gate.Resolve(pol, gate.LockLookup{}, gate.Current{})
+	pol = resolution.Rule
 
 	wire, err := openrouter.New(openrouter.Config{
 		Key: key,

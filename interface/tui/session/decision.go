@@ -1,19 +1,28 @@
 package session
 
 import (
+	"math"
 	"strconv"
+	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"charm.land/lipgloss/v2"
 
 	"tofu/interface/tui/theme"
+	"tofu/interface/tui/trace"
 	"tofu/internal/widget"
 )
 
 const (
-	barColumns   = 20
-	valueColumns = 4
-	gap          = "  "
-	answerKeys   = "[a] allow once   [d] deny   [A] always here"
+	barColumns       = 20
+	valueColumns     = 4
+	gap              = "  "
+	answerKeys       = "[1] allow once   [2] deny   [3] always here"
+	askMarker        = "? "
+	wantsWord        = " wants "
+	stillTakesTyping = "the chat still takes what you type"
+	askBlockRows     = 2
 )
 
 type Verdict int
@@ -58,6 +67,7 @@ type Answer struct {
 type Reason struct {
 	Question  string
 	Limit     string
+	Levels    []string
 	Threshold float64
 	Value     float64
 	DeadBand  bool
@@ -97,10 +107,44 @@ func (d Decision) lines(width int) []string {
 			lines = append(lines, theme.Faint().Render(continuation+line))
 		}
 	}
-	if d.Awaiting {
-		lines = append(lines, theme.Warn().Render(continuation+widget.Fit(answerKeys, body)))
-	}
 	return lines
+}
+
+func (m Model) openAsk() (Entry, bool) {
+	if !m.Awaiting() {
+		return Entry{}, false
+	}
+	for index := len(m.entries) - 1; index >= 0; index-- {
+		if entry := m.entries[index]; entry.Decision != nil && entry.Decision.Awaiting {
+			return entry, true
+		}
+	}
+	return Entry{}, false
+}
+
+func (m Model) askLines() []string {
+	entry, open := m.openAsk()
+	if !open {
+		return nil
+	}
+	head := askMarker + entry.Decision.Tool + wantsWord + entry.Body
+	if tripped := entry.Decision.tripped(); tripped != "" {
+		head += hintGap + tripped
+	}
+	id := ""
+	if short := trace.Short(entry.ID); short != "" {
+		id = hintGap + theme.ID().Render("["+short+"]")
+	}
+	keys := strings.Repeat(" ", widget.Cells(askMarker)) + answerKeys
+	return []string{
+		m.spread(theme.Warn().Render(head), id),
+		m.spread(theme.Warn().Render(keys), theme.Faint().Render(stillTakesTyping)),
+	}
+}
+
+func (m Model) spread(left, right string) string {
+	room := max(m.width-widget.Cells(right), 1)
+	return widget.Pad(widget.Fit(left, room), room) + right
 }
 
 func (d Decision) sentences() []string {
@@ -109,8 +153,7 @@ func (d Decision) sentences() []string {
 	}
 	var out []string
 	if d.Reason.Question != "" {
-		out = append(out, d.Reason.Question+" "+number(d.Reason.Value)+" "+d.standing()+" "+
-			d.Reason.Limit+" "+number(d.Reason.Threshold))
+		out = append(out, d.threshold())
 	}
 	if d.Reason.RelaxedBy != "" {
 		out = append(out, "relaxed one step by "+d.Reason.RelaxedBy)
@@ -121,14 +164,66 @@ func (d Decision) sentences() []string {
 	return out
 }
 
-func (d Decision) standing() string {
+func (d Decision) tripped() string {
+	if d.Reason.Question == "" || d.Failure != "" {
+		if reasons := d.sentences(); len(reasons) > 0 {
+			return reasons[0]
+		}
+		return ""
+	}
+	crossed := "over"
 	switch {
 	case d.Reason.DeadBand:
-		return "is within the dead band of"
-	case d.Reason.Value > d.Reason.Threshold:
-		return "is over"
+		crossed = "in the dead band at"
+	case d.Reason.Value <= d.Reason.Threshold:
+		crossed = "under"
 	}
-	return "is under"
+	return d.Reason.Question + " " + number(d.Reason.Value) + " " + crossed + " " + number(d.Reason.Threshold)
+}
+
+func (d Decision) threshold() string {
+	word := d.Reason.word()
+	numeric, worded := "is over", ""
+	switch {
+	case d.Reason.DeadBand:
+		numeric, worded = "is within the dead band of", ", inside the dead band"
+	case d.Reason.Value <= d.Reason.Threshold:
+		numeric, worded = "is under", ", under the line"
+	}
+	if word == "" {
+		return d.Reason.Question + " " + number(d.Reason.Value) + " " + numeric + " " +
+			d.Reason.Limit + " " + number(d.Reason.Threshold)
+	}
+	return d.Reason.Question + " is " + word + worded + ", so the call is " + d.Verdict.outcome()
+}
+
+func (v Verdict) outcome() string {
+	switch v {
+	case Allow:
+		return "allowed"
+	case Ask:
+		return "asked about"
+	case Deny:
+		return "refused"
+	}
+	panic("session: unknown verdict")
+}
+
+func (r Reason) word() string {
+	level := int(math.Round(r.Value))
+	if len(r.Levels) < 2 || level < 0 || level >= len(r.Levels) {
+		return ""
+	}
+	head := r.Levels[level]
+	if stop := strings.IndexAny(head, ":."); stop >= 0 {
+		head = head[:stop]
+	}
+	head = strings.TrimSpace(head)
+	if head == "" {
+		return ""
+	}
+	first, size := utf8.DecodeRuneInString(head)
+	return string(unicode.ToLower(first)) + head[size:]
 }
 
 func (a Answer) label() string {

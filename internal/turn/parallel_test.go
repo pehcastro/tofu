@@ -141,7 +141,7 @@ func parallelConfig(t *testing.T, tools []Tool, decisions ...llm.Decision) Confi
 		Spend:          SpendAPIKey,
 		Tools:          NewRegistry(tools...),
 		Task:           "read what the model asked for",
-		Caps:           Caps{MaxSteps: 10, MaxDecisions: 40},
+		Caps:           Caps{MaxSteps: 10},
 		ResultBytesCap: 4096,
 		ArtifactDir:    t.TempDir(),
 		NoCompaction:   true,

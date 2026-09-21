@@ -2,6 +2,7 @@ package jev
 
 import (
 	"encoding/json"
+	"slices"
 	"strings"
 	"testing"
 
@@ -93,7 +94,7 @@ func TestDecodeReadsTheMeasuredResponse(t *testing.T) {
 	if response.Usage.InputTokens != 776 || response.Usage.OutputTokens != 69 {
 		t.Fatalf("usage is %+v", response.Usage)
 	}
-	if response.Answers["risk"].Kind != QuestionScore || string(response.Answers["risk"].Legend) != `{"0":"none"}` {
+	if response.Answers["risk"].Kind != QuestionScore || !slices.Equal(response.Answers["risk"].Legend, Legend{"none"}) {
 		t.Fatalf("the score answer is %+v", response.Answers["risk"])
 	}
 }

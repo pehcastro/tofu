@@ -12,8 +12,8 @@ import (
 )
 
 const PreferTheToolOverTheShell = "prefer the tool that does the thing over a shell command that imitates it: " +
-	"project_report answers what is this repository in one call, glob finds files by name, grep searches their text, " +
-	"search returns the whole declaration a match sits inside, read reads one file whole, " +
+	"project_report answers what is this repository in one call, glob finds files by name, " +
+	"search finds text and returns the whole declaration a match sits inside, read reads one file whole, " +
 	"edit replaces one exact stretch of text inside one, and write creates one or replaces it whole. " +
 	"never run find, ls -R, du or wc over the tree. " +
 	"find descends into every directory git ignores, because -not -path filters what it prints and does not stop it walking, " +

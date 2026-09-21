@@ -6,11 +6,11 @@ import (
 	"testing/fstest"
 )
 
-func policyFile(body string) fstest.MapFS {
-	return fstest.MapFS{"shell_sift@1.yaml": {Data: []byte(body)}}
+func ruleFile(body string) fstest.MapFS {
+	return fstest.MapFS{"tools/shell/rules/shell_sift@1.yaml": {Data: []byte(body)}}
 }
 
-const shadowPolicy = "name: shell_sift\nschema: shell_sift\npolicy_version: 1\nquestions: shell_sift\nquestions_version: 1\nmode: shadow\nthresholds:\n  keep_at: 0.5\n"
+const shadowRule = "name: shell_sift\ndomain: shell\nkind: threshold\nschema: shell_sift\nrule_version: 1\nquestions: shell_sift\nquestions_version: 1\nmode: shadow\nthresholds:\n  keep_at: 0.5\n"
 
 func dropEverything(units []Unit) []Mark {
 	marks := make([]Mark, len(units))
@@ -106,7 +106,7 @@ func TestAnUnjudgedChunkIsRefusedRatherThanDropped(t *testing.T) {
 }
 
 func TestShadowGivesTheModelTheOutputWhole(t *testing.T) {
-	pol, err := LoadShellPolicy(policyFile(shadowPolicy), "shell_sift@1.yaml")
+	pol, err := LoadShellRule(ruleFile(shadowRule), "shell_sift@1")
 	if err != nil {
 		t.Fatalf("load: %v", err)
 	}
@@ -132,8 +132,8 @@ func TestShadowGivesTheModelTheOutputWhole(t *testing.T) {
 	}
 }
 
-func TestTheThresholdIsThePolicysAndNotTheCodes(t *testing.T) {
-	pol, err := LoadShellPolicy(policyFile(shadowPolicy), "shell_sift@1.yaml")
+func TestTheThresholdIsTheRulesAndNotTheCodes(t *testing.T) {
+	pol, err := LoadShellRule(ruleFile(shadowRule), "shell_sift@1")
 	if err != nil {
 		t.Fatalf("load: %v", err)
 	}
@@ -144,31 +144,33 @@ func TestTheThresholdIsThePolicysAndNotTheCodes(t *testing.T) {
 		t.Fatalf("DecideShell: %v", err)
 	}
 	if mark.Keep {
-		t.Fatalf("0.49 was kept against the policy's 0.5 cut: %s", mark.Reason)
+		t.Fatalf("0.49 was kept against the rule's 0.5 cut: %s", mark.Reason)
 	}
 	if mark, _ := DecideShell(unit, answers, 0.4); !mark.Keep {
-		t.Fatal("0.49 was dropped against a 0.4 cut, so the cut is not read from the policy")
+		t.Fatal("0.49 was dropped against a 0.4 cut, so the cut is not read from the rule")
 	}
 }
 
-func TestAMalformedPolicyIsRefusedRatherThanDefaulted(t *testing.T) {
+func TestAMalformedRuleIsRefusedRatherThanDefaulted(t *testing.T) {
 	cases := []struct {
 		name    string
 		body    string
 		refusal string
 	}{
-		{name: "a threshold outside the noul range", body: "name: shell_sift\nschema: shell_sift\nthresholds:\n  keep_at: 1.5\n", refusal: "keep_at is 1.5"},
-		{name: "no threshold at all", body: "name: shell_sift\nschema: shell_sift\n", refusal: "keep_at is 0"},
-		{name: "the gate's own policy handed to this loader", body: "name: tool_gate\nschema: gate\nthresholds:\n  risk_ask_at: 0.5\n", refusal: `schema is "gate"`},
-		{name: "no schema at all reads as the gate's own schema", body: "name: shell_sift\nthresholds:\n  keep_at: 0.5\n", refusal: `unknown threshold "keep_at"`},
-		{name: "a mode that is neither", body: "name: shell_sift\nschema: shell_sift\nmode: on\nthresholds:\n  keep_at: 0.5\n", refusal: "mode is"},
-		{name: "a threshold that is not a number", body: "name: shell_sift\nschema: shell_sift\nthresholds:\n  keep_at: banana\n", refusal: `"keep_at" is a number`},
+		{name: "a threshold outside the noul range", body: "name: shell_sift\ndomain: shell\nkind: threshold\nschema: shell_sift\nthresholds:\n  keep_at: 1.5\n", refusal: "keep_at is 1.5"},
+		{name: "no threshold at all", body: "name: shell_sift\ndomain: shell\nkind: threshold\nschema: shell_sift\n", refusal: "keep_at is 0"},
+		{name: "the gate's own rule handed to this loader", body: "name: tool_gate\ndomain: general\nkind: threshold\nschema: gate\nthresholds:\n  risk_ask_at: 0.5\n", refusal: `schema is "gate"`},
+		{name: "no schema at all reads as the gate's own schema", body: "name: shell_sift\ndomain: shell\nkind: threshold\nthresholds:\n  keep_at: 0.5\n", refusal: `unknown threshold "keep_at"`},
+		{name: "a mode that is neither", body: "name: shell_sift\ndomain: shell\nkind: threshold\nschema: shell_sift\nmode: on\nthresholds:\n  keep_at: 0.5\n", refusal: "mode is"},
+		{name: "a threshold that is not a number", body: "name: shell_sift\ndomain: shell\nkind: threshold\nschema: shell_sift\nthresholds:\n  keep_at: banana\n", refusal: `"keep_at" is a number`},
+		{name: "no domain at all", body: "name: shell_sift\nkind: threshold\nschema: shell_sift\nthresholds:\n  keep_at: 0.5\n", refusal: "declares no domain"},
+		{name: "no kind at all, so no decision point claims the file", body: "name: shell_sift\ndomain: shell\nschema: shell_sift\nthresholds:\n  keep_at: 0.5\n", refusal: "no rule named shell_sift@1"},
 	}
 	for _, each := range cases {
 		t.Run(each.name, func(t *testing.T) {
-			_, err := LoadShellPolicy(policyFile(each.body), "shell_sift@1.yaml")
+			_, err := LoadShellRule(ruleFile(each.body), "shell_sift@1")
 			if err == nil {
-				t.Fatal("the policy was accepted")
+				t.Fatal("the rule was accepted")
 			}
 			if !strings.Contains(err.Error(), each.refusal) {
 				t.Fatalf("the refusal does not say %q: %v", each.refusal, err)

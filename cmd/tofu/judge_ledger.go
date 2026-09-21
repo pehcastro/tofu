@@ -5,11 +5,12 @@ import (
 	"encoding/json"
 	"sort"
 
+	"tofu/internal/judge/gate"
 	"tofu/internal/judge/jev"
 	"tofu/internal/judge/jev/wire/openrouter"
 	"tofu/internal/judge/ledger"
-	"tofu/internal/judge/policy"
 	"tofu/internal/judge/question"
+	"tofu/internal/sys"
 )
 
 type judgeOutcome struct {
@@ -17,7 +18,7 @@ type judgeOutcome struct {
 	decision jev.Decision
 	fresh    bool
 	verdict  ledger.Verdict
-	mode     policy.Mode
+	mode     gate.Mode
 }
 
 func (o judgeOutcome) output(kinds map[string]question.Kind) map[string]any {
@@ -66,7 +67,7 @@ func rowSkeleton(state any, set battery, in rowInput) (ledger.Row, error) {
 }
 
 func appendRow(state any, set battery, in rowInput) (ledger.Row, error) {
-	dir, err := ledger.Dir()
+	dir, err := sys.LogDir()
 	if err != nil {
 		return ledger.Row{}, err
 	}
@@ -74,15 +75,15 @@ func appendRow(state any, set battery, in rowInput) (ledger.Row, error) {
 	if err != nil {
 		return ledger.Row{}, err
 	}
-	if set.Policy != nil {
-		verdict, reason, err := policy.Decide(ledgerAnswersToJev(in.answers), *set.Policy)
+	if set.Rule != nil {
+		verdict, reason, err := gate.Decide(ledgerAnswersToJev(in.answers), *set.Rule)
 		if err != nil {
 			return ledger.Row{}, err
 		}
 		reason.Mode = set.Mode
 		row.Verdict = toLedgerVerdict(verdict)
-		row.Policy = set.Policy.Name
-		row.PolicyVersion = set.Policy.PolicyVersion
+		row.Policy = set.Rule.Name
+		row.PolicyVersion = set.Rule.RuleVersion
 		row.Reason = toLedgerReason(reason)
 		if set.ModeReason != "" {
 			row.Reason.ModeReason = &set.ModeReason
@@ -101,10 +102,10 @@ func appendRow(state any, set battery, in rowInput) (ledger.Row, error) {
 }
 
 func appendFallbackRow(state json.RawMessage, set battery, in rowInput, cause error) (ledger.Row, error) {
-	if set.Policy == nil {
+	if set.Rule == nil {
 		return ledger.Row{}, cause
 	}
-	dir, err := ledger.Dir()
+	dir, err := sys.LogDir()
 	if err != nil {
 		return ledger.Row{}, err
 	}
@@ -112,11 +113,11 @@ func appendFallbackRow(state json.RawMessage, set battery, in rowInput, cause er
 	if err != nil {
 		return ledger.Row{}, err
 	}
-	fallback := policy.DecideUnavailable(cause, state)
+	fallback := gate.DecideUnavailable(cause, state)
 	sentence := fallback.Sentence()
 	row.Verdict = toLedgerVerdict(fallback.Verdict)
-	row.Policy, row.PolicyVersion = set.Policy.Name, set.Policy.PolicyVersion
-	row.Reason = toLedgerReason(fallback.Reason(*set.Policy, set.Mode))
+	row.Policy, row.PolicyVersion = set.Rule.Name, set.Rule.RuleVersion
+	row.Reason = toLedgerReason(fallback.Reason(*set.Rule, set.Mode))
 	row.Reason.ModeReason = &sentence
 	return ledger.NewWriter(dir).Append(row)
 }
@@ -178,7 +179,7 @@ func runJudge(ctx context.Context, client *jev.Client, req jev.Request, set batt
 	if !hit {
 		return judgeOutcome{answers: entry.Answers, fresh: true, decision: asker.decision, verdict: asker.verdict, mode: set.Mode}, nil
 	}
-	dir, err := ledger.Dir()
+	dir, err := sys.LogDir()
 	if err != nil {
 		return judgeOutcome{}, err
 	}
@@ -259,6 +260,7 @@ func toLedgerAnswer(id string, wording int, a jev.Answer) ledger.Answer {
 		la.Kind = ledger.AnswerScore
 		la.Score = a.Score
 		la.Dist = distOf(a.Probabilities)
+		la.Legend = a.Legend
 	}
 	return la
 }
@@ -293,41 +295,41 @@ func ledgerAnswersToJev(answers []ledger.Answer) map[string]jev.Answer {
 	return out
 }
 
-func toLedgerVerdict(v policy.Verdict) ledger.Verdict {
+func toLedgerVerdict(v gate.Verdict) ledger.Verdict {
 	switch v {
-	case policy.VerdictAllow:
+	case gate.VerdictAllow:
 		return ledger.VerdictAllow
-	case policy.VerdictAsk:
+	case gate.VerdictAsk:
 		return ledger.VerdictAsk
-	case policy.VerdictDeny:
+	case gate.VerdictDeny:
 		return ledger.VerdictDeny
 	}
-	panic("tofu: unknown policy verdict " + string(v))
+	panic("tofu: unknown gate verdict " + string(v))
 }
 
-func toPolicyVerdict(v ledger.Verdict) policy.Verdict {
+func toGateVerdict(v ledger.Verdict) gate.Verdict {
 	switch v {
 	case ledger.VerdictAllow:
-		return policy.VerdictAllow
+		return gate.VerdictAllow
 	case ledger.VerdictAsk:
-		return policy.VerdictAsk
+		return gate.VerdictAsk
 	case ledger.VerdictDeny:
-		return policy.VerdictDeny
+		return gate.VerdictDeny
 	}
 	panic("tofu: unknown ledger verdict " + string(v))
 }
 
-func toLedgerMode(m policy.Mode) ledger.Mode {
+func toLedgerMode(m gate.Mode) ledger.Mode {
 	switch m {
-	case policy.ModeShadow:
+	case gate.ModeShadow:
 		return ledger.ModeShadow
-	case policy.ModeEnforced:
+	case gate.ModeEnforced:
 		return ledger.ModeEnforced
 	}
-	panic("tofu: unknown policy mode " + string(m))
+	panic("tofu: unknown gate mode " + string(m))
 }
 
-func toLedgerReason(r policy.Reason) *ledger.Reason {
+func toLedgerReason(r gate.Reason) *ledger.Reason {
 	return &ledger.Reason{
 		Question:   r.Question,
 		Comparison: string(r.Comparison),

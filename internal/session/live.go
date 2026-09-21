@@ -8,12 +8,14 @@ import (
 )
 
 type Recorder struct {
-	store *Store
-	id    string
-	body  *os.File
+	store  *Store
+	id     string
+	body   *os.File
+	author string
+	last   string
 }
 
-func (s *Store) Begin(header Header) (*Recorder, error) {
+func (s *Store) Begin(header Header, author string) (*Recorder, error) {
 	if err := s.Write(header, nil); err != nil {
 		return nil, err
 	}
@@ -21,10 +23,14 @@ func (s *Store) Begin(header Header) (*Recorder, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Recorder{store: s, id: header.ID, body: body}, nil
+	return &Recorder{store: s, id: header.ID, body: body, author: author}, nil
 }
 
 func (r *Recorder) Append(kind EventKind, body any) error {
+	return r.AppendAttempt(kind, "", FirstAttempt, body)
+}
+
+func (r *Recorder) AppendAttempt(kind EventKind, id string, attempt int, body any) error {
 	if r == nil {
 		return nil
 	}
@@ -32,7 +38,10 @@ func (r *Recorder) Append(kind EventKind, body any) error {
 	if err != nil {
 		return err
 	}
-	events, err := r.store.settings.withReads([]Event{{Kind: kind, Body: raw}})
+	if id == "" {
+		id = NewEventID()
+	}
+	events, err := r.store.settings.withReads([]Event{{ID: id, Parent: r.last, Author: r.author, Attempt: max(attempt, FirstAttempt), Kind: kind, Body: raw}})
 	if err != nil {
 		return err
 	}
@@ -44,8 +53,13 @@ func (r *Recorder) Append(kind EventKind, body any) error {
 		}
 		lines = append(append(lines, line...), '\n')
 	}
-	_, err = r.body.Write(lines)
-	return err
+	if _, err := r.body.Write(lines); err != nil {
+		return err
+	}
+	if len(events) > 0 {
+		r.last = events[len(events)-1].ID
+	}
+	return nil
 }
 
 func (r *Recorder) End(header Header, outcome any) error {

@@ -8,10 +8,11 @@ import (
 	"strings"
 	"testing"
 
+	"tofu/internal/judge/gate"
 	"tofu/internal/judge/jev"
 	"tofu/internal/judge/ledger"
-	"tofu/internal/judge/policy"
 	"tofu/internal/judge/question"
+	"tofu/internal/sys"
 )
 
 const denyReply = `{"model":"typesafe/jev-1.13-20260917","provider":"TypeSafe","id":"gen-stub-deny",` +
@@ -35,15 +36,15 @@ func readShippedFile(t *testing.T, elem ...string) string {
 	return string(body)
 }
 
-func writeJudgePolicyFixture(t *testing.T, policyBody, questionsBody, mode string) {
+func writeJudgeRuleFixture(t *testing.T, ruleBody, questionsBody, mode string) {
 	t.Helper()
-	policyBody = strings.Replace(policyBody, "mode: shadow", "mode: "+mode, 1)
-	policyDir := filepath.Join("catalog", "policy")
-	if err := os.MkdirAll(policyDir, 0o755); err != nil {
+	ruleBody = strings.Replace(ruleBody, "mode: shadow", "mode: "+mode, 1)
+	ruleDir := filepath.Join("catalog", "general", "rules")
+	if err := os.MkdirAll(ruleDir, 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(policyDir, "tool_gate@1.yaml"), []byte(policyBody), 0o644); err != nil {
-		t.Fatalf("writing the policy fixture: %v", err)
+	if err := os.WriteFile(filepath.Join(ruleDir, "tool_gate@1.yaml"), []byte(ruleBody), 0o644); err != nil {
+		t.Fatalf("writing the rule fixture: %v", err)
 	}
 	questionsDir := filepath.Join("catalog", "questions")
 	if err := os.MkdirAll(questionsDir, 0o755); err != nil {
@@ -56,26 +57,26 @@ func writeJudgePolicyFixture(t *testing.T, policyBody, questionsBody, mode strin
 
 func TestJudgeExitCodeFollowsResolvedModeNotVerdictAlone(t *testing.T) {
 	dir := t.TempDir()
-	policyBody := readShippedFile(t, "catalog", "policy", "tool_gate@1.yaml")
+	ruleBody := readShippedFile(t, "catalog", "general", "rules", "tool_gate@1.yaml")
 	questionsBody := readShippedFile(t, "catalog", "questions", "tool_gate@1.yaml")
 	set, err := resolveCatalog("tool_gate@1")
 	if err != nil {
 		t.Fatalf("resolveCatalog: %v", err)
 	}
 	t.Chdir(dir)
-	writeJudgePolicyFixture(t, policyBody, questionsBody, "enforced")
-	pol, err := resolvePolicy("tool_gate@1", set)
+	writeJudgeRuleFixture(t, ruleBody, questionsBody, "enforced")
+	pol, err := resolveRule("tool_gate@1", set)
 	if err != nil {
-		t.Fatalf("resolvePolicy: %v", err)
+		t.Fatalf("resolveRule: %v", err)
 	}
-	set.Policy = &pol
+	set.Rule = &pol
 
 	for _, tc := range []struct {
-		mode policy.Mode
+		mode gate.Mode
 		want int
 	}{
-		{policy.ModeEnforced, exitVerdict},
-		{policy.ModeShadow, exitOK},
+		{gate.ModeEnforced, exitVerdict},
+		{gate.ModeShadow, exitOK},
 	} {
 		set.Mode = tc.mode
 		client, err := jev.NewClient(jev.Config{Wire: &stubWire{reply: denyReply}})
@@ -98,29 +99,29 @@ func TestJudgeExitCodeFollowsResolvedModeNotVerdictAlone(t *testing.T) {
 
 func TestJudgeRowRecordsResolvedModeNotDeclaredMode(t *testing.T) {
 	dir := t.TempDir()
-	policyBody := readShippedFile(t, "catalog", "policy", "tool_gate@1.yaml")
+	ruleBody := readShippedFile(t, "catalog", "general", "rules", "tool_gate@1.yaml")
 	questionsBody := readShippedFile(t, "catalog", "questions", "tool_gate@1.yaml")
 	set, err := resolveCatalog("tool_gate@1")
 	if err != nil {
 		t.Fatalf("resolveCatalog: %v", err)
 	}
 	t.Chdir(dir)
-	writeJudgePolicyFixture(t, policyBody, questionsBody, "enforced")
-	pol, err := resolvePolicy("tool_gate@1", set)
+	writeJudgeRuleFixture(t, ruleBody, questionsBody, "enforced")
+	pol, err := resolveRule("tool_gate@1", set)
 	if err != nil {
-		t.Fatalf("resolvePolicy: %v", err)
+		t.Fatalf("resolveRule: %v", err)
 	}
-	if pol.Mode != policy.ModeEnforced {
+	if pol.Mode != gate.ModeEnforced {
 		t.Fatalf("fixture setup: pol.Mode = %v, want enforced", pol.Mode)
 	}
-	res, err := resolvePolicyMode(pol)
+	res, err := resolveRuleMode(pol)
 	if err != nil {
-		t.Fatalf("resolvePolicyMode: %v", err)
+		t.Fatalf("resolveRuleMode: %v", err)
 	}
-	if res.Mode != policy.ModeShadow {
-		t.Fatalf("resolution mode = %v, want shadow: no lock file exists for this policy", res.Mode)
+	if res.Mode != gate.ModeShadow {
+		t.Fatalf("resolution mode = %v, want shadow: no lock file exists for this rule", res.Mode)
 	}
-	set.Policy = &pol
+	set.Rule = &pol
 	set.Mode = res.Mode
 
 	client, err := jev.NewClient(jev.Config{Wire: &stubWire{reply: denyReply}})
@@ -132,9 +133,9 @@ func TestJudgeRowRecordsResolvedModeNotDeclaredMode(t *testing.T) {
 		t.Fatalf("runJudge: %v", err)
 	}
 
-	ledgerDir, err := ledger.Dir()
+	ledgerDir, err := sys.LogDir()
 	if err != nil {
-		t.Fatalf("ledger.Dir: %v", err)
+		t.Fatalf("sys.LogDir: %v", err)
 	}
 	var rows []ledger.Row
 	if _, err := ledger.NewReader(ledgerDir).Each(ledger.Filter{}, func(row ledger.Row) error {
@@ -153,26 +154,26 @@ func TestJudgeRowRecordsResolvedModeNotDeclaredMode(t *testing.T) {
 
 func TestJudgeRowCarriesTheSentenceResolveReturned(t *testing.T) {
 	dir := t.TempDir()
-	policyBody := readShippedFile(t, "catalog", "policy", "tool_gate@1.yaml")
+	ruleBody := readShippedFile(t, "catalog", "general", "rules", "tool_gate@1.yaml")
 	questionsBody := readShippedFile(t, "catalog", "questions", "tool_gate@1.yaml")
 	set, err := resolveCatalog("tool_gate@1")
 	if err != nil {
 		t.Fatalf("resolveCatalog: %v", err)
 	}
 	t.Chdir(dir)
-	writeJudgePolicyFixture(t, policyBody, questionsBody, "enforced")
-	pol, err := resolvePolicy("tool_gate@1", set)
+	writeJudgeRuleFixture(t, ruleBody, questionsBody, "enforced")
+	pol, err := resolveRule("tool_gate@1", set)
 	if err != nil {
-		t.Fatalf("resolvePolicy: %v", err)
+		t.Fatalf("resolveRule: %v", err)
 	}
-	res, err := resolvePolicyMode(pol)
+	res, err := resolveRuleMode(pol)
 	if err != nil {
-		t.Fatalf("resolvePolicyMode: %v", err)
+		t.Fatalf("resolveRuleMode: %v", err)
 	}
 	if res.Reason == "" {
 		t.Fatal("fixture setup: Resolve returned no sentence to compare against")
 	}
-	set.Policy = &pol
+	set.Rule = &pol
 	set.Mode = res.Mode
 	set.ModeReason = res.Reason
 
@@ -185,9 +186,9 @@ func TestJudgeRowCarriesTheSentenceResolveReturned(t *testing.T) {
 		t.Fatalf("runJudge: %v", err)
 	}
 
-	ledgerDir, err := ledger.Dir()
+	ledgerDir, err := sys.LogDir()
 	if err != nil {
-		t.Fatalf("ledger.Dir: %v", err)
+		t.Fatalf("sys.LogDir: %v", err)
 	}
 	var rows []ledger.Row
 	if _, err := ledger.NewReader(ledgerDir).Each(ledger.Filter{}, func(row ledger.Row) error {
@@ -223,9 +224,9 @@ func TestJudgeRowCarriesAnEmptyTurnIDRatherThanAMissingField(t *testing.T) {
 		t.Fatalf("runJudge: %v", err)
 	}
 
-	dir, err := ledger.Dir()
+	dir, err := sys.LogDir()
 	if err != nil {
-		t.Fatalf("ledger.Dir: %v", err)
+		t.Fatalf("sys.LogDir: %v", err)
 	}
 	var rows []ledger.Row
 	if _, err := ledger.NewReader(dir).Each(ledger.Filter{}, func(row ledger.Row) error {
@@ -316,7 +317,7 @@ func TestJudgeLintFindsNothingOnTheShippedSet(t *testing.T) {
 func TestJudgeLintReportsAFindingWithExitVerdict(t *testing.T) {
 	dir := t.TempDir()
 	broken := filepath.Join(dir, "broken@1.yaml")
-	body := "name: broken\nquestions_version: 1\nstate:\n  - tool\nquestions:\n  pick:\n    type: choice\n    instructions: choose one\n    options:\n      - a\n      - b\n"
+	body := "name: broken\ndomain: general\nquestions_version: 1\nstate:\n  - tool\nquestions:\n  pick:\n    type: choice\n    instructions: choose one\n    options:\n      - a\n      - b\n"
 	if err := os.WriteFile(broken, []byte(body), 0o644); err != nil {
 		t.Fatalf("writing the fixture: %v", err)
 	}
@@ -339,10 +340,10 @@ func chdirRepoRoot(t *testing.T) {
 	t.Chdir(root)
 }
 
-func TestJudgePolicyBareNameIsRefused(t *testing.T) {
+func TestJudgeRuleBareNameIsRefused(t *testing.T) {
 	t.Setenv("OPENROUTER_KEY", "")
 	chdirRepoRoot(t)
-	body := `{"state":{"tool":"bash","input":{"command":"ls -la"}},"catalog":"tool_gate@1","policy":"tool_gate"}`
+	body := `{"state":{"tool":"bash","input":{"command":"ls -la"}},"catalog":"tool_gate@1","rule":"tool_gate"}`
 	var out, errOut bytes.Buffer
 	code := judgeVerb(nil, strings.NewReader(body), &out, &errOut)
 	if code != exitUsage {
@@ -353,10 +354,10 @@ func TestJudgePolicyBareNameIsRefused(t *testing.T) {
 	}
 }
 
-func TestJudgePolicyVersionMismatchIsRefusedBeforeAnyCall(t *testing.T) {
+func TestJudgeRuleVersionMismatchIsRefusedBeforeAnyCall(t *testing.T) {
 	t.Setenv("OPENROUTER_KEY", "")
 	chdirRepoRoot(t)
-	body := `{"state":{"tool":"bash","input":{"command":"ls -la"}},"catalog":"tool_gate@2","policy":"tool_gate@1"}`
+	body := `{"state":{"tool":"bash","input":{"command":"ls -la"}},"catalog":"tool_gate@2","rule":"tool_gate@1"}`
 	var out, errOut bytes.Buffer
 	code := judgeVerb(nil, strings.NewReader(body), &out, &errOut)
 	if code != exitUsage {
@@ -366,14 +367,14 @@ func TestJudgePolicyVersionMismatchIsRefusedBeforeAnyCall(t *testing.T) {
 		t.Fatalf("stdout = %q, want empty", out.String())
 	}
 	if strings.Contains(errOut.String(), "OPENROUTER_KEY") {
-		t.Fatalf("failed on the missing key, not the policy mismatch, so the refusal did not happen before the call: %s", errOut.String())
+		t.Fatalf("failed on the missing key, not the rule mismatch, so the refusal did not happen before the call: %s", errOut.String())
 	}
 	if !strings.Contains(errOut.String(), "tool_gate@1") || !strings.Contains(errOut.String(), "tool_gate@2") {
 		t.Fatalf("error does not name both versions: %s", errOut.String())
 	}
 }
 
-func TestNoPolicyNamedGetsNoVerdict(t *testing.T) {
+func TestNoRuleNamedGetsNoVerdict(t *testing.T) {
 	t.Chdir(t.TempDir())
 	wire := &stubWire{reply: `{"model":"typesafe/jev-1.13-20260917","answers":{"approval":{"type":"noul","noul":0.11}},"usage":{"input_tokens":10,"output_tokens":2,"cost":0.00002},"id":"gen-stub-1","provider":"TypeSafe"}`}
 	client, err := jev.NewClient(jev.Config{Wire: wire})
@@ -390,11 +391,11 @@ func TestNoPolicyNamedGetsNoVerdict(t *testing.T) {
 		t.Fatalf("runJudge: %v", err)
 	}
 	if outcome.verdict != ledger.VerdictUnset {
-		t.Fatalf("verdict = %q, want unset since no policy was named", outcome.verdict)
+		t.Fatalf("verdict = %q, want unset since no rule was named", outcome.verdict)
 	}
-	dir, err := ledger.Dir()
+	dir, err := sys.LogDir()
 	if err != nil {
-		t.Fatalf("ledger.Dir: %v", err)
+		t.Fatalf("sys.LogDir: %v", err)
 	}
 	var rows []ledger.Row
 	if _, err := ledger.NewReader(dir).Each(ledger.Filter{}, func(row ledger.Row) error {

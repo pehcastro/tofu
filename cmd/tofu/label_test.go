@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"tofu/internal/judge/ledger"
+	"tofu/internal/sys"
 )
 
 func TestParseOutcomeAcceptsTheClosedSet(t *testing.T) {
@@ -45,9 +46,9 @@ func seedRow(t *testing.T, dir string, at time.Time) ledger.Row {
 
 func TestLabelAttachesTheOutcomeAndWhyShowsIt(t *testing.T) {
 	t.Chdir(t.TempDir())
-	dir, err := ledger.Dir()
+	dir, err := sys.LogDir()
 	if err != nil {
-		t.Fatalf("ledger.Dir: %v", err)
+		t.Fatalf("sys.LogDir: %v", err)
 	}
 	row := seedRow(t, dir, time.Now())
 
@@ -74,9 +75,9 @@ func TestLabelAttachesTheOutcomeAndWhyShowsIt(t *testing.T) {
 
 func TestLabelRefusesARowThatAlreadyHasAnOutcome(t *testing.T) {
 	t.Chdir(t.TempDir())
-	dir, err := ledger.Dir()
+	dir, err := sys.LogDir()
 	if err != nil {
-		t.Fatalf("ledger.Dir: %v", err)
+		t.Fatalf("sys.LogDir: %v", err)
 	}
 	row := seedRow(t, dir, time.Now())
 
@@ -98,9 +99,9 @@ func TestLabelRefusesARowThatAlreadyHasAnOutcome(t *testing.T) {
 
 func TestLabelLastLabelsTheMostRecentRow(t *testing.T) {
 	t.Chdir(t.TempDir())
-	dir, err := ledger.Dir()
+	dir, err := sys.LogDir()
 	if err != nil {
-		t.Fatalf("ledger.Dir: %v", err)
+		t.Fatalf("sys.LogDir: %v", err)
 	}
 	older := seedRow(t, dir, time.Now().Add(-time.Hour))
 	newer := seedRow(t, dir, time.Now())

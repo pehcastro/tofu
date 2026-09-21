@@ -16,6 +16,7 @@ import (
 	"tofu/internal/judge/jev"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/llm"
+	"tofu/internal/sys"
 	"tofu/internal/turn"
 )
 
@@ -137,9 +138,9 @@ func TestTheTypedDoneReviewArmReopensAChildAndLogsTheDecision(t *testing.T) {
 		t.Fatal("the typed arm returned no decision id, so nothing points at the ledger row")
 	}
 
-	dir, err := ledger.Dir()
+	dir, err := sys.LogDir()
 	if err != nil {
-		t.Fatalf("ledger.Dir: %v", err)
+		t.Fatalf("sys.LogDir: %v", err)
 	}
 	row, found, err := ledger.NewReader(dir).ByID(decision.ID)
 	if err != nil || !found {
@@ -208,9 +209,9 @@ func TestAJevErrorLeavesTheChildsClaimStandingAndSaysSoOnTheRow(t *testing.T) {
 	}
 	t.Logf("child warning: %s", child.Warnings[0])
 
-	dir, err := ledger.Dir()
+	dir, err := sys.LogDir()
 	if err != nil {
-		t.Fatalf("ledger.Dir: %v", err)
+		t.Fatalf("sys.LogDir: %v", err)
 	}
 	var logged []ledger.Row
 	if _, err := ledger.NewReader(dir).Each(ledger.Filter{Point: "stop_check"}, func(row ledger.Row) error {
@@ -304,6 +305,7 @@ func TestLiveTheTypedDoneReviewReadsTwoRecordedChildren(t *testing.T) {
 	if os.Getenv("TOFU_LIVE") != "1" {
 		t.Skip("set TOFU_LIVE=1 to spend a fraction of a cent on two live stop_check@1 decisions")
 	}
+	jev.AllowLiveCredential(t)
 	key, err := jev.Key(filepath.Join("..", "..", ".env"))
 	if err != nil {
 		t.Fatalf("no credential: %v", err)

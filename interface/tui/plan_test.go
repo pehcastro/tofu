@@ -5,17 +5,15 @@ import (
 	"strconv"
 	"strings"
 	"testing"
-	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
+	"tofu/interface/tui/frametime"
 	"tofu/interface/tui/session"
 )
 
 const (
-	frameBudget    = 16700 * time.Microsecond
-	budgetFrames   = 200
 	planTranscript = 400
 	planMarkers    = "◇◆✓"
 	spinFrames     = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
@@ -93,13 +91,22 @@ func TestAPlanSitsDirectlyAboveTheRunningRowAndMovesNothingBelowIt(t *testing.T)
 			t.Fatalf("the %d rows above the last item do not hold the phase %q\n%s", block, label, strings.Join(after[top:last+1], "\n"))
 		}
 	}
-	if !strings.ContainsAny(after[last+1], spinFrames) {
-		t.Fatalf("the row under the plan is %q, want the running row\n%s", after[last+1], strings.Join(after, "\n"))
+	if strings.TrimSpace(after[last+1]) != "" {
+		t.Fatalf("the row under the plan is %q, want the blank line above the activity block\n%s", after[last+1], strings.Join(after, "\n"))
+	}
+	if !strings.ContainsAny(after[last+2], spinFrames) {
+		t.Fatalf("the row under the plan's gap is %q, want the running row\n%s", after[last+2], strings.Join(after, "\n"))
 	}
 
+	hintRow := -1
+	for row, line := range after {
+		if strings.Contains(line, "⏎ send") {
+			hintRow = row
+		}
+	}
 	changed := make([]int, 0, len(after))
 	for row := range before {
-		if before[row] != after[row] {
+		if row != hintRow && before[row] != after[row] {
 			changed = append(changed, row)
 		}
 	}
@@ -183,13 +190,5 @@ func TestTheSessionViewWithAPlanRendersInsideTheFrameBudget(t *testing.T) {
 		t.Fatal("the frame being measured does not carry the plan")
 	}
 
-	started := time.Now()
-	for range budgetFrames {
-		_ = app.View()
-	}
-	each := time.Since(started) / budgetFrames
-	t.Logf("%d frames at 120x36 with a plan and %d calls: %v a frame, budget %v", budgetFrames, planTranscript, each, frameBudget)
-	if each > frameBudget {
-		t.Errorf("a frame with a plan takes %v, over the %v budget", each, frameBudget)
-	}
+	frametime.Frames(t, "a plan and "+strconv.Itoa(planTranscript)+" calls at 120x36", func() { app.View() })
 }

@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
+	"tofu/internal/judge/gate"
 	"tofu/internal/judge/ledger"
-	"tofu/internal/judge/policy"
 	"tofu/internal/konst"
 )
 
@@ -84,10 +84,10 @@ func printState(out io.Writer, row ledger.Row, statePath string) {
 func printThreshold(out io.Writer, row ledger.Row) {
 	r := row.Reason
 	if r == nil {
-		_, _ = fmt.Fprintln(out, "  threshold  absent: no policy or calibration lock yet, waiting on E3")
+		_, _ = fmt.Fprintln(out, "  threshold  absent: no rule or calibration lock yet, waiting on E3")
 		return
 	}
-	if policy.IsUnavailable(r.Comparison) {
+	if gate.IsUnavailable(r.Comparison) {
 		_, _ = fmt.Fprintf(out, "  threshold  not compared: the typed decision was not made (%s)\n", r.Comparison)
 		return
 	}
@@ -212,9 +212,9 @@ func agoString(d time.Duration) string {
 func thresholdJSON(row ledger.Row) map[string]any {
 	r := row.Reason
 	if r == nil {
-		return map[string]any{"present": false, "note": "no policy or calibration lock yet, waiting on E3"}
+		return map[string]any{"present": false, "note": "no rule or calibration lock yet, waiting on E3"}
 	}
-	if policy.IsUnavailable(r.Comparison) {
+	if gate.IsUnavailable(r.Comparison) {
 		return map[string]any{"present": false, "note": "the typed decision was not made", "unavailable": r.Comparison}
 	}
 	out := map[string]any{

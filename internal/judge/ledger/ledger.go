@@ -68,6 +68,7 @@ type Answer struct {
 	Choice   string     `json:"choice,omitempty"`
 	Score    float64    `json:"score,omitempty"`
 	Dist     []Slice    `json:"dist,omitempty"`
+	Legend   []string   `json:"legend,omitempty"`
 }
 
 type answerWire struct {
@@ -78,6 +79,7 @@ type answerWire struct {
 	Choice   *string     `json:"choice"`
 	Score    *float64    `json:"score"`
 	Dist     []Slice     `json:"dist"`
+	Legend   []string    `json:"legend"`
 }
 
 func (a *Answer) UnmarshalJSON(data []byte) error {
@@ -92,7 +94,7 @@ func (a *Answer) UnmarshalJSON(data []byte) error {
 }
 
 func (a *Answer) fromTypedWire(wire answerWire) error {
-	*a = Answer{Question: wire.Question, Wording: wire.Wording, Kind: *wire.Kind, Dist: wire.Dist}
+	*a = Answer{Question: wire.Question, Wording: wire.Wording, Kind: *wire.Kind, Dist: wire.Dist, Legend: wire.Legend}
 	switch *wire.Kind {
 	case AnswerNoul:
 		if wire.Noul != nil {
@@ -225,14 +227,6 @@ func (r Row) Mode() Mode {
 		return ModeUnknown
 	}
 	return r.Reason.Mode
-}
-
-func Dir() (string, error) {
-	state, err := sys.ProjectStateDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(state, "log"), nil
 }
 
 func CacheDir() (string, error) {

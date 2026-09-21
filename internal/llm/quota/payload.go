@@ -61,7 +61,7 @@ type anthropicUsageBody struct {
 func FromAnthropicUsage(body []byte, now time.Time) (Report, error) {
 	var payload anthropicUsageBody
 	if err := json.Unmarshal(body, &payload); err != nil {
-		return Report{}, transport.Fail("quota.FromAnthropicUsage", transport.KindProvider, nil,
+		return Report{}, transport.Fail("quota.FromAnthropicUsage", transport.KindProvider, err,
 			"the anthropic usage payload is not the shape this endpoint documents")
 	}
 	report := Report{Provider: Anthropic, FetchedAt: now}
@@ -153,7 +153,7 @@ type codexUsageBody struct {
 func FromCodexUsage(body []byte, now time.Time) (Report, error) {
 	var payload codexUsageBody
 	if err := json.Unmarshal(body, &payload); err != nil {
-		return Report{}, transport.Fail("quota.FromCodexUsage", transport.KindProvider, nil,
+		return Report{}, transport.Fail("quota.FromCodexUsage", transport.KindProvider, err,
 			"the codex usage payload is not the shape this endpoint documents")
 	}
 	report := Report{Provider: Codex, Plan: payload.PlanType, FetchedAt: now}

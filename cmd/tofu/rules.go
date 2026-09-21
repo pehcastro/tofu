@@ -10,12 +10,13 @@ import (
 	"strings"
 	"time"
 
-	catalogrules "tofu/catalog/rules"
+	shipped "tofu/catalog"
 	"tofu/internal/rule"
 	"tofu/internal/sys"
 )
 
 const (
+	catalogRoot         = "catalog"
 	rulesFireSuffix     = ".rules.jsonl"
 	rulesFromTheBinary  = "the binary"
 	rulesFromTheProject = "the project"
@@ -94,16 +95,15 @@ func loadRules(override string) ([]rule.Rule, string, error) {
 	if err != nil {
 		return nil, "", err
 	}
-	dir := filepath.Join(catalogDir, "rules")
-	present, err := sys.Exists(dir)
+	isDir, err := sys.IsDir(catalogDir)
 	if err != nil {
 		return nil, "", err
 	}
-	if present {
-		rules, err := rule.LoadDir(dir)
+	if isDir {
+		rules, err := rule.LoadDir(catalogDir)
 		return rules, rulesFromTheProject, err
 	}
-	rules, err := rule.LoadFS(catalogrules.Files())
+	rules, err := rule.LoadFS(shipped.Files(), catalogRoot)
 	return rules, rulesFromTheBinary, err
 }
 
@@ -169,7 +169,7 @@ func rulesCheckVerb(args []string, out, errOut io.Writer) int {
 		fires = append(fires, found...)
 	}
 
-	logDir, err := rulesLogDir()
+	logDir, err := sys.LogDir()
 	if err != nil {
 		return rulesFail(errOut, err)
 	}
@@ -195,14 +195,6 @@ func rulesCheckVerb(args []string, out, errOut io.Writer) int {
 		return exitVerdict
 	}
 	return exitOK
-}
-
-func rulesLogDir() (string, error) {
-	state, err := sys.ProjectStateDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(state, "log"), nil
 }
 
 func appendRuleFire(dir string, f rule.Fire) error {

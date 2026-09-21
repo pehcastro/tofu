@@ -8,14 +8,14 @@ import (
 	"strings"
 	"time"
 
+	"tofu/internal/konst"
+	"tofu/internal/llm"
 	"tofu/internal/transport"
 )
 
 const (
-	Name               = "codex"
-	WatchdogSeconds    = 600
-	RedactedCredential = "<redacted>"
-	ErrorDetailBytes   = 512
+	Name            = llm.WireCodex
+	WatchdogSeconds = 600
 )
 
 type TokenSource func(ctx context.Context) (string, error)
@@ -25,6 +25,7 @@ type Config struct {
 	Model          string
 	Token          TokenSource
 	HTTP           *http.Client
+	Transport      transport.Config
 	Watchdog       time.Duration
 	InstallationID string
 	SessionID      string
@@ -45,32 +46,18 @@ func New(config Config) (*Wire, error) {
 	if config.Watchdog <= 0 {
 		config.Watchdog = WatchdogSeconds * time.Second
 	}
-	client := config.HTTP
-	if client == nil {
-		client = &http.Client{}
+	client := &http.Client{}
+	if config.HTTP != nil {
+		*client = *config.HTTP
 	}
+	client.Transport = llm.Retrying(client.Transport, config.Transport)
 	return &Wire{config: config, http: client}, nil
 }
 
 type Dump struct {
-	Method       string
-	URL          string
-	Headers      []Header
-	Body         []byte
+	llm.Dump
 	Subscription bool
 	Plan         string
-}
-
-func (d Dump) String() string {
-	var out strings.Builder
-	out.WriteString(d.Method + " " + d.URL + "\n")
-	for _, header := range d.Headers {
-		out.WriteString(header.Name + ": " + redactHeaderValue(header.Name, header.Value) + "\n")
-	}
-	out.WriteString("\n")
-	out.Write(d.Body)
-	out.WriteString("\n")
-	return out.String()
 }
 
 func (w *Wire) Ask(ctx context.Context, request Request) (Result, Dump, error) {
@@ -108,21 +95,31 @@ func (w *Wire) Ask(ctx context.Context, request Request) (Result, Dump, error) {
 	}
 
 	dump := Dump{
-		Method:       http.MethodPost,
-		URL:          w.endpoint(subscription),
 		Subscription: subscription,
 		Plan:         claims.PlanType,
-		Headers: Headers(HeaderOptions{
-			Token:        token,
-			Subscription: subscription,
-			Claims:       claims,
-			Model:        request.Model,
-			ServiceTier:  request.ServiceTier,
-			Identity:     identity,
-			TurnMetadata: metadataHeader,
-			TurnState:    request.TurnState,
-		}),
-		Body: body,
+		Dump: llm.Dump{
+			Method: http.MethodPost,
+			URL:    w.endpoint(subscription),
+			Headers: Headers(HeaderOptions{
+				Token:        token,
+				Subscription: subscription,
+				Claims:       claims,
+				Model:        request.Model,
+				ServiceTier:  request.ServiceTier,
+				Identity:     identity,
+				TurnMetadata: metadataHeader,
+				TurnState:    request.TurnState,
+			}),
+			Body: body,
+			Identifiers: []string{
+				identity.InstallationID,
+				identity.SessionID,
+				identity.ThreadID,
+				identity.WindowID,
+				identity.TurnID,
+				claims.AccountID,
+			},
+		},
 	}
 
 	result, err := w.post(ctx, dump)
@@ -163,9 +160,9 @@ func (w *Wire) post(ctx context.Context, dump Dump) (Result, error) {
 	defer func() { _ = response.Body.Close() }()
 
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		detail, _ := io.ReadAll(io.LimitReader(response.Body, ErrorDetailBytes))
+		detail, _ := io.ReadAll(io.LimitReader(response.Body, konst.TransportErrorDetailBytes))
 		return Result{}, &transport.Error{
-			Kind:   statusKind(response.StatusCode),
+			Kind:   transport.StatusKind(response.StatusCode),
 			Op:     "codex.Ask",
 			Status: response.StatusCode,
 			Detail: strings.TrimSpace(string(detail)),
@@ -177,22 +174,4 @@ func (w *Wire) post(ctx context.Context, dump Dump) (Result, error) {
 		result.TurnState = turnState
 	}
 	return result, err
-}
-
-func statusKind(status int) transport.Kind {
-	switch {
-	case status == http.StatusUnauthorized, status == http.StatusForbidden:
-		return transport.KindAuth
-	case status == http.StatusPaymentRequired:
-		return transport.KindBilling
-	case status == http.StatusNotFound:
-		return transport.KindModelAccess
-	case status == http.StatusRequestEntityTooLarge:
-		return transport.KindRequestTooLarge
-	case status == http.StatusTooManyRequests:
-		return transport.KindRateLimit
-	case status >= 500:
-		return transport.KindProvider
-	}
-	return transport.KindBadRequest
 }

@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"tofu/internal/judge/policy"
+	"tofu/internal/judge/gate"
 )
 
 const calibrationFilePath = "bench/cost/calibration/tool_gate@1.json"
@@ -19,7 +19,7 @@ type Calibration struct {
 	Questions        string         `json:"questions"`
 	QuestionsVersion int            `json:"questions_version"`
 	Build            string         `json:"build"`
-	Mode             policy.Mode    `json:"mode"`
+	Mode             gate.Mode      `json:"mode"`
 	SampleFloor      int            `json:"sample_floor"`
 	NFit             int            `json:"n_fit"`
 	NVerify          int            `json:"n_verify"`
@@ -36,8 +36,8 @@ type GateThresholds struct {
 	FromUntrustedBlockAt float64 `json:"from_untrusted_block_at"`
 }
 
-func (g GateThresholds) toPolicy() policy.Thresholds {
-	return policy.Thresholds{
+func (g GateThresholds) toThresholds() gate.Thresholds {
+	return gate.Thresholds{
 		RiskAskAt:            g.RiskAskAt,
 		RiskDenyAt:           g.RiskDenyAt,
 		UserRequestedRelaxAt: g.UserRequestedRelaxAt,
@@ -58,17 +58,17 @@ type FittedCut struct {
 	Adopted             bool    `json:"adopted"`
 }
 
-func GateCalibration() (Calibration, policy.Resolution, error) {
+func GateCalibration() (Calibration, gate.Resolution, error) {
 	var calibration Calibration
 	if err := json.Unmarshal(calibrationFile, &calibration); err != nil {
-		return Calibration{}, policy.Resolution{}, fmt.Errorf("%s: %w", calibrationFilePath, err)
+		return Calibration{}, gate.Resolution{}, fmt.Errorf("%s: %w", calibrationFilePath, err)
 	}
-	if calibration.Mode != policy.ModeShadow && calibration.Mode != policy.ModeEnforced {
-		return Calibration{}, policy.Resolution{}, fmt.Errorf("%s: mode is %q or %q, found %q", calibrationFilePath, policy.ModeShadow, policy.ModeEnforced, calibration.Mode)
+	if calibration.Mode != gate.ModeShadow && calibration.Mode != gate.ModeEnforced {
+		return Calibration{}, gate.Resolution{}, fmt.Errorf("%s: mode is %q or %q, found %q", calibrationFilePath, gate.ModeShadow, gate.ModeEnforced, calibration.Mode)
 	}
-	pol := policy.Policy{
+	pol := gate.Rule{
 		Name:             calibration.Policy,
-		PolicyVersion:    calibration.PolicyVersion,
+		RuleVersion:      calibration.PolicyVersion,
 		Questions:        calibration.Questions,
 		QuestionsVersion: calibration.QuestionsVersion,
 		Mode:             calibration.Mode,
@@ -76,20 +76,20 @@ func GateCalibration() (Calibration, policy.Resolution, error) {
 		SampleFloor:      calibration.SampleFloor,
 		File:             calibrationFilePath,
 	}
-	lock := policy.Lock{
-		Policy:           calibration.Policy,
-		PolicyVersion:    calibration.PolicyVersion,
+	lock := gate.Lock{
+		Rule:             calibration.Policy,
+		RuleVersion:      calibration.PolicyVersion,
 		Questions:        calibration.Questions,
 		QuestionsVersion: calibration.QuestionsVersion,
 		Build:            calibration.Build,
 		NFit:             calibration.NFit,
 		NVerify:          calibration.NVerify,
-		Thresholds:       calibration.Gate.toPolicy(),
+		Thresholds:       calibration.Gate.toThresholds(),
 		PinsThresholds:   true,
 		File:             calibrationFilePath,
 	}
-	current := policy.Current{Build: calibration.Build, QuestionsVersion: calibration.QuestionsVersion, Known: true}
-	return calibration, policy.Resolve(pol, policy.LockLookup{Present: true, Lock: lock}, current), nil
+	current := gate.Current{Build: calibration.Build, QuestionsVersion: calibration.QuestionsVersion, Known: true}
+	return calibration, gate.Resolve(pol, gate.LockLookup{Present: true, Lock: lock}, current), nil
 }
 
 const (
@@ -182,7 +182,7 @@ func scoreRows(rows []AnswerRow, cut float64, verdictOf func(AnswerRow) (Verdict
 	return score, nil
 }
 
-func ScoreRiskCut(pol policy.Policy, rows []AnswerRow, cut float64) (CutScore, error) {
+func ScoreRiskCut(pol gate.Rule, rows []AnswerRow, cut float64) (CutScore, error) {
 	pol.Thresholds.RiskAskAt = cut
 	return scoreRows(rows, cut, func(row AnswerRow) (Verdict, error) {
 		answers, complete := rowAnswers(pol, row)
@@ -202,7 +202,7 @@ type BudgetFit struct {
 	Feasible     bool
 }
 
-func FitUnderFalseBlockBudget(pol policy.Policy, fit, verify []AnswerRow, budget float64) (BudgetFit, error) {
+func FitUnderFalseBlockBudget(pol gate.Rule, fit, verify []AnswerRow, budget float64) (BudgetFit, error) {
 	curve, err := riskCurve(pol, fit)
 	if err != nil {
 		return BudgetFit{}, err
@@ -229,7 +229,7 @@ func FitUnderFalseBlockBudget(pol policy.Policy, fit, verify []AnswerRow, budget
 	return result, nil
 }
 
-func riskCurve(pol policy.Policy, rows []AnswerRow) ([]CutScore, error) {
+func riskCurve(pol gate.Rule, rows []AnswerRow) ([]CutScore, error) {
 	var curve []CutScore
 	for step := 0; step <= riskCutSteps; step++ {
 		score, err := ScoreRiskCut(pol, rows, riskScoreCeiling*float64(step)/riskCutSteps)
@@ -241,7 +241,7 @@ func riskCurve(pol policy.Policy, rows []AnswerRow) ([]CutScore, error) {
 	return curve, nil
 }
 
-func FitRiskCut(pol policy.Policy, fit, verify []AnswerRow, floor int) (CutFit, error) {
+func FitRiskCut(pol gate.Rule, fit, verify []AnswerRow, floor int) (CutFit, error) {
 	result := CutFit{SampleFloor: floor, ClearsFloor: len(fit) >= floor && len(verify) >= floor}
 	curve, err := riskCurve(pol, fit)
 	if err != nil {

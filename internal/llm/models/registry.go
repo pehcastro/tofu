@@ -17,7 +17,7 @@ import (
 var shippedRegistry []byte
 
 const (
-	ShippedRegistryName = "the snapshot of models.dev taken on 2026-09-16"
+	ShippedRegistryName = "the snapshot of models.dev taken on 2026-09-21"
 	RegistryURL         = "https://models.dev/api.json"
 	RegistryURLVariable = "TOFU_MODELS_REGISTRY_URL"
 	RefreshVerb         = "tofu models --refresh"

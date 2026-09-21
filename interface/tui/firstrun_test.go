@@ -11,7 +11,7 @@ import (
 func TestTheSetupScreenPicksUpALoginRunElsewhere(t *testing.T) {
 	left := setupRequirements()
 	app := newTestApp(Options{
-		Repo:         "silo",
+		Repo:         testRepo,
 		Now:          fixedClock(),
 		Requirements: left,
 		Recheck:      func() []Requirement { return left },
@@ -42,7 +42,7 @@ func TestTheSetupScreenPicksUpALoginRunElsewhere(t *testing.T) {
 	if strings.Contains(frame, setupTitle) {
 		t.Fatalf("the setup screen is still drawn after the logins were run\n%s", frame)
 	}
-	if !strings.Contains(frame, readyNote+"silo") {
+	if !strings.Contains(frame, readyNote+testRepo) {
 		t.Fatalf("the app moved on without saying what to type\n%s", frame)
 	}
 	if app.View().Cursor == nil {
@@ -51,15 +51,18 @@ func TestTheSetupScreenPicksUpALoginRunElsewhere(t *testing.T) {
 }
 
 func TestTheEmptyComposerSaysWhatToType(t *testing.T) {
-	app := newTestApp(Options{Repo: "silo", Branch: "develop", Now: fixedClock(), Wires: anthropicAlone})
+	app := newTestApp(Options{Repo: testRepo, Branch: "develop", Now: fixedClock(), Wires: anthropicAlone})
 	app.Init()
 	app.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 	view := app.View()
 	frame := ansi.Strip(view.Content)
-	for _, want := range []string{readyNote + "silo", "what should tofu do here?", "⏎ send"} {
+	for _, want := range []string{readyNote + testRepo, "⏎ send"} {
 		if !strings.Contains(frame, want) {
 			t.Errorf("the empty session at 80 columns does not say %q\n%s", want, frame)
 		}
+	}
+	if !containsAPlaceholder(frame) {
+		t.Errorf("the empty session at 80 columns has no composer placeholder\n%s", frame)
 	}
 	if view.Cursor == nil {
 		t.Error("the empty composer has no cursor, so it never took focus")

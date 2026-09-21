@@ -11,6 +11,7 @@ import (
 	"tofu/internal/crew"
 	"tofu/internal/llm"
 	"tofu/internal/recall"
+	"tofu/internal/session"
 )
 
 type sequentialTool struct {
@@ -188,10 +189,20 @@ func fullyPopulatedRow() Row {
 				Index: 1,
 				ToolCalls: []ToolCallRow{
 					{
-						Tool:              "bash",
-						Args:              json.RawMessage(`{"command":"npm test"}`),
-						Command:           "npm test",
-						ExitCode:          &ok,
+						ID:       "9f6f6b9e-2f3a-4a7a-9c9a-1c2d3e4f5a6b",
+						Parent:   "8e5e5a8d-1e2a-3a6a-8b8a-0b1c2d3e4a5b",
+						Author:   session.AuthorOrchestrator,
+						Tool:     "bash",
+						Args:     json.RawMessage(`{"command":"npm test"}`),
+						Command:  "npm test",
+						ExitCode: &ok,
+						Proxy: &ProxyRow{
+							Proxy:      "rtk",
+							Asked:      "npm test",
+							Ran:        "rtk npm test",
+							ProxyBytes: 196,
+							Note:       "recorded on the same call to prove every field of a rewrite round-trips",
+						},
 						ResultBytes:       120,
 						RenderedBytes:     120,
 						ResultHash:        "deadbeef",

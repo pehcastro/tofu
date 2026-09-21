@@ -2,6 +2,7 @@ package llm
 
 import (
 	"encoding/json"
+	"strconv"
 
 	"tofu/internal/transport"
 )
@@ -36,21 +37,61 @@ type Usage struct {
 	Cost         float64
 }
 
+const (
+	WireAnthropic  = "anthropic"
+	WireCodex      = "codex"
+	WireOpenRouter = "openrouter"
+)
+
+type PromptAccounting string
+
+const (
+	PromptExcludesCacheReads PromptAccounting = "excludes_cache_reads"
+	PromptIncludesCacheReads PromptAccounting = "includes_cache_reads"
+)
+
+func PromptAccountingFor(wire string) PromptAccounting {
+	if wire == WireCodex || wire == WireOpenRouter {
+		return PromptIncludesCacheReads
+	}
+	return PromptExcludesCacheReads
+}
+
+func (p PromptAccounting) FreshTokens(promptTokens, cacheReadTokens int) int {
+	if p == PromptIncludesCacheReads {
+		return promptTokens - cacheReadTokens
+	}
+	return promptTokens
+}
+
+func (p PromptAccounting) BilledTokens(promptTokens, cacheReadTokens int) int {
+	if p == PromptIncludesCacheReads {
+		return promptTokens
+	}
+	return promptTokens + cacheReadTokens
+}
+
 type Response struct {
-	Build     string
-	RequestID string
-	Outcome   Outcome
-	Content   string
-	ToolCalls []ToolCall
-	Refusal   string
-	Usage     Usage
-	Raw       []byte
+	Build           string
+	RequestID       string
+	Outcome         Outcome
+	Stop            string
+	Content         string
+	ToolCalls       []ToolCall
+	Refusal         string
+	Usage           Usage
+	CacheReadTokens int
+	Warnings        []string
+	Raw             []byte
 }
 
 type wireUsage struct {
 	PromptTokens     int     `json:"prompt_tokens"`
 	CompletionTokens int     `json:"completion_tokens"`
 	Cost             float64 `json:"cost"`
+	PromptDetails    struct {
+		CachedTokens int `json:"cached_tokens"`
+	} `json:"prompt_tokens_details"`
 }
 
 type wireResponseMessage struct {
@@ -92,47 +133,37 @@ func Decode(raw []byte) (Response, error) {
 	}
 
 	choice := wire.Choices[0]
-	usage := Usage{InputTokens: wire.Usage.PromptTokens, OutputTokens: wire.Usage.CompletionTokens, Cost: wire.Usage.Cost}
-
-	if choice.Message.Content == "" && (choice.Message.Refusal != "" || choice.FinishReason == "content_filter") {
-		return Response{
-			Build:     wire.Model,
-			RequestID: wire.ID,
-			Outcome:   OutcomeRefusal,
-			Refusal:   choice.Message.Refusal,
-			Usage:     usage,
-			Raw:       raw,
-		}, nil
+	calls, err := decodeToolCalls(choice.Message.ToolCalls)
+	if err != nil {
+		return Response{}, err
 	}
 
-	if len(choice.Message.ToolCalls) > 0 {
-		calls, err := decodeToolCalls(choice.Message.ToolCalls)
-		if err != nil {
-			return Response{}, err
-		}
-		return Response{
-			Build:     wire.Model,
-			RequestID: wire.ID,
-			Outcome:   OutcomeToolCalls,
-			ToolCalls: calls,
-			Usage:     usage,
-			Raw:       raw,
-		}, nil
+	stop, handled := MapFinishReason(choice.FinishReason)
+	outcome := OutcomeAfter(stop, len(calls))
+	if choice.Message.Refusal != "" && choice.Message.Content == "" {
+		outcome = OutcomeRefusal
 	}
-
-	if choice.Message.Content == "" {
+	if outcome == OutcomeMessage && choice.Message.Content == "" {
 		return Response{}, transport.Fail("llm.Decode", transport.KindInvalidAnswer, nil,
 			"the response has no content, no tool calls and no refusal")
 	}
 
-	return Response{
-		Build:     wire.Model,
-		RequestID: wire.ID,
-		Outcome:   OutcomeMessage,
-		Content:   choice.Message.Content,
-		Usage:     usage,
-		Raw:       raw,
-	}, nil
+	response := Response{
+		Build:           wire.Model,
+		RequestID:       wire.ID,
+		Outcome:         outcome,
+		Stop:            choice.FinishReason,
+		Content:         choice.Message.Content,
+		ToolCalls:       calls,
+		Refusal:         choice.Message.Refusal,
+		Usage:           Usage{InputTokens: wire.Usage.PromptTokens, OutputTokens: wire.Usage.CompletionTokens, Cost: wire.Usage.Cost},
+		CacheReadTokens: wire.Usage.PromptDetails.CachedTokens,
+		Raw:             raw,
+	}
+	if !handled {
+		response.Warnings = []string{"unhandled finish reason: " + strconv.Quote(choice.FinishReason)}
+	}
+	return response, nil
 }
 
 func decodeToolCalls(wire []wireToolCall) ([]ToolCall, error) {

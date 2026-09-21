@@ -9,11 +9,15 @@ import (
 )
 
 type fakeWire struct {
+	name     string
 	model    string
 	body     []byte
+	attempts int
 	err      error
 	requests int
 }
+
+func (w *fakeWire) Name() string { return w.name }
 
 func (w *fakeWire) Model() string { return w.model }
 
@@ -22,7 +26,7 @@ func (w *fakeWire) Post(ctx context.Context, body []byte) (Raw, error) {
 	if w.err != nil {
 		return Raw{}, w.err
 	}
-	return Raw{Body: w.body, RequestID: "req-fixed", Attempts: 1, Latency: time.Millisecond}, nil
+	return Raw{Body: w.body, RequestID: "req-fixed", Attempts: max(w.attempts, 1), Latency: time.Millisecond}, nil
 }
 
 func TestNewClientRefusesAClientWithNoWire(t *testing.T) {
@@ -55,6 +59,43 @@ func TestAskReturnsADecisionFromTheDecodedResponse(t *testing.T) {
 	}
 	if decision.Usage.Cost != 0.000009 {
 		t.Fatalf("decision usage is %+v", decision.Usage)
+	}
+}
+
+func TestAskCarriesTheAttemptStopCacheReadAndAccountingTheWireReturned(t *testing.T) {
+	wire := &fakeWire{
+		name:     WireOpenRouter,
+		model:    "openai/gpt-5.6",
+		attempts: 2,
+		body: []byte(`{"id":"gen-9","model":"openai/gpt-5.6","choices":[
+{"finish_reason":"length","message":{"content":"half an ans"}}],
+"usage":{"prompt_tokens":8016,"completion_tokens":40,"cost":0.0012,"prompt_tokens_details":{"cached_tokens":5120}}}`),
+	}
+	client, err := NewClient(wire)
+	if err != nil {
+		t.Fatalf("building the client: %v", err)
+	}
+	decision, err := client.Ask(context.Background(), Request{Messages: []Message{{Role: RoleUser, Content: "hi"}}})
+	if err != nil {
+		t.Fatalf("asking: %v", err)
+	}
+	if decision.Attempts != 2 {
+		t.Errorf("the decision reports attempts %s, the wire answered on its second", decision.Attempts)
+	}
+	if decision.Stop != "length" {
+		t.Errorf("the decision reports stop %q, the wire said length", decision.Stop)
+	}
+	if decision.CacheReadTokens != 5120 {
+		t.Errorf("the decision reports %d cache read tokens, the wire said 5120", decision.CacheReadTokens)
+	}
+	if decision.PromptAccounting != PromptIncludesCacheReads {
+		t.Errorf("the decision reports accounting %q, openrouter counts cache reads inside the prompt", decision.PromptAccounting)
+	}
+}
+
+func TestADecisionNoWireReportedAnAttemptForSaysSoRatherThanReportingNone(t *testing.T) {
+	if got := (Decision{}).Attempts.String(); got != "the wire did not report an attempt count" {
+		t.Fatalf("an unreported attempt count reads as %q", got)
 	}
 }
 

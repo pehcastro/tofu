@@ -10,18 +10,18 @@ import (
 	"github.com/charmbracelet/x/ansi"
 )
 
-const promptKeys = "[a] allow once   [d] deny   [A] always here"
+const promptKeys = "[1] allow once   [2] deny   [3] always here"
 
 func awaitingApp(t *testing.T, answers chan Answer) *App {
 	t.Helper()
 	at := time.Date(2026, 9, 19, 14, 32, 0, 0, time.UTC)
 	app := newTestApp(Options{
-		Repo:    "silo",
+		Repo:    testRepo,
 		Branch:  "develop",
 		Now:     func() time.Time { return at },
 		Wires:   anthropicAlone,
 		Answers: answers,
-		Turn:    func(context.Context, string, string, func(Event)) {},
+		Turn:    func(context.Context, string, string, CalledFromInsideTheTurnAndNeverAfterItReturns) {},
 	})
 	app.Init()
 	app.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
@@ -47,9 +47,9 @@ func TestTheAnswerKeysEachSendTheirOwnAnswer(t *testing.T) {
 		key  tea.KeyPressMsg
 		want Answer
 	}{
-		{tea.KeyPressMsg{Code: 'a', Text: "a"}, AllowedOnce},
-		{tea.KeyPressMsg{Code: 'd', Text: "d"}, Denied},
-		{tea.KeyPressMsg{Code: 'a', Text: "A", Mod: tea.ModShift}, AlwaysHere},
+		{tea.KeyPressMsg{Code: '1', Text: "1"}, AllowedOnce},
+		{tea.KeyPressMsg{Code: '2', Text: "2"}, Denied},
+		{tea.KeyPressMsg{Code: '3', Text: "3"}, AlwaysHere},
 	} {
 		answers := make(chan Answer, 1)
 		app := awaitingApp(t, answers)
@@ -68,27 +68,31 @@ func TestTheAnswerKeysEachSendTheirOwnAnswer(t *testing.T) {
 	}
 }
 
-func TestWhileAwaitingAKeyThatIsNotAnAnswerDoesNothing(t *testing.T) {
-	for _, pressed := range []tea.KeyPressMsg{
-		{Code: 'w', Text: "w"},
-		{Code: 'x', Text: "x"},
-		{Code: tea.KeyEnter},
-		{Code: tea.KeyTab},
-		{Code: '2', Mod: tea.ModAlt},
-	} {
-		answers := make(chan Answer, 1)
-		app := awaitingApp(t, answers)
-		before := app.View().Content
-		app.Update(pressed)
-		if len(answers) != 0 {
-			t.Errorf("%q resolved the ask", pressed.String())
-		}
-		if after := app.View().Content; after != before {
-			t.Errorf("%q changed the screen\n--- after ---\n%s\n--- before ---\n%s", pressed.String(), after, before)
-		}
-		if !strings.Contains(ansi.Strip(app.View().Content), promptKeys) {
-			t.Errorf("%q left the prompt no longer waiting", pressed.String())
-		}
+func TestAnAskingTurnStillTakesTypingInChat(t *testing.T) {
+	const sentence = "and open the changelog after that"
+	answers := make(chan Answer, 1)
+	app := awaitingApp(t, answers)
+	typeText(app, sentence)
+	if len(answers) != 0 {
+		t.Errorf("typing a sentence under an open ask answered it with %d", <-answers)
+	}
+	if typed := app.view.Value(); typed != sentence {
+		t.Errorf("the composer holds %q, want %q", typed, sentence)
+	}
+	if !strings.Contains(ansi.Strip(app.View().Content), promptKeys) {
+		t.Errorf("typing took the question off the screen\n%s", ansi.Strip(app.View().Content))
+	}
+}
+
+func TestADigitUnderAnOpenAskTypesOnceTheComposerHasWords(t *testing.T) {
+	answers := make(chan Answer, 1)
+	app := awaitingApp(t, answers)
+	typeText(app, "read 1 file")
+	if len(answers) != 0 {
+		t.Fatalf("a digit inside a sentence answered the ask with %d", <-answers)
+	}
+	if typed := app.view.Value(); typed != "read 1 file" {
+		t.Fatalf("the composer holds %q, want the digit inside the sentence", typed)
 	}
 }
 

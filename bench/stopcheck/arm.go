@@ -4,7 +4,6 @@ import (
 	"strings"
 
 	"tofu/internal/judge/state"
-	"tofu/internal/konst"
 )
 
 type Answer string
@@ -55,7 +54,6 @@ func ranEarlier(earlier []Step, command string) bool {
 
 func StateAt(turn Turn, at int) state.StopCheckState {
 	built := state.StopCheckState{Task: turn.Task}
-	decisions := 0
 	for i := 0; i <= at; i++ {
 		step := turn.Steps[i]
 		converted := state.StopCheckStep{
@@ -65,13 +63,11 @@ func StateAt(turn Turn, at int) state.StopCheckState {
 			RepeatsEarlierStep: repeatsEarlierStep(turn, i),
 		}
 		for _, call := range step.Calls {
-			decisions++
 			converted.ToolCalls = append(converted.ToolCalls, state.StopCheckCall{
 				Tool: call.Tool, Command: call.Command, Failed: call.Failed,
 			})
 		}
 		built.RecentSteps = append(built.RecentSteps, converted)
 	}
-	built.Budget = state.StopCheckBudget{AtDecisionCap: decisions >= konst.TurnMaxDecisions}
 	return built
 }

@@ -3,6 +3,7 @@ package tools_test
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
@@ -10,6 +11,7 @@ import (
 	"testing"
 
 	"tofu/internal/konst"
+	"tofu/internal/sys"
 	"tofu/internal/turn"
 	"tofu/internal/turn/tools"
 )
@@ -93,7 +95,7 @@ func TestANegationReIncludesAFileItsParentPatternExcluded(t *testing.T) {
 func TestTheAlwaysSkippedDirectoriesNeedNoIgnoreFile(t *testing.T) {
 	root := t.TempDir()
 	seed(t, root, "kept.txt", "x\n")
-	for _, dir := range []string{"node_modules", ".git", ".tofu", ".boji"} {
+	for _, dir := range []string{"node_modules", ".git", sys.StateDirName, sys.LegacyStateDirName} {
 		seed(t, root, dir+"/buried.txt", "x\n")
 	}
 
@@ -199,16 +201,16 @@ func TestAProjectInstructionFileIsWalkedEvenWhenAnIgnoreFileExcludesIt(t *testin
 		t.Fatalf("*.md stopped applying to a file that is not a project instruction file:\n%s", listed)
 	}
 
-	grepTool, err := tools.NewGrep(root)
+	searchTool, err := tools.NewSearch(root)
 	if err != nil {
 		t.Fatalf("building the tool: %v", err)
 	}
-	found, err := grepTool.Run(context.Background(), json.RawMessage(`{"pattern":"the project rules"}`))
+	found, err := searchTool.Run(context.Background(), json.RawMessage(`{"pattern":"the project rules"}`))
 	if err != nil {
-		t.Fatalf("grep: %v", err)
+		t.Fatalf("search: %v", err)
 	}
-	if !strings.Contains(found.Content, "CLAUDE.md:1:") {
-		t.Fatalf("an agent grepping for its own instructions got nothing:\n%s", found.Content)
+	if !strings.Contains(found.Content, "CLAUDE.md:1-") {
+		t.Fatalf("an agent searching for its own instructions got nothing:\n%s", found.Content)
 	}
 }
 
@@ -230,6 +232,40 @@ func TestListPathsSkipsAnIgnoredDirectoryAndKeepsTheInstructionFile(t *testing.T
 		if !slices.Contains(listed, wanted) {
 			t.Errorf("%s is missing from the completion candidates: %v", wanted, listed)
 		}
+	}
+}
+
+func TestAWildcardOverTheCapReturnsTheFirstFilesAndSaysHowManyMatched(t *testing.T) {
+	root := t.TempDir()
+	for i := range konst.GlobPathsResultCap + 40 {
+		seed(t, root, fmt.Sprintf("file-%04d.txt", i), "x\n")
+	}
+
+	listed := globbed(t, root, `{"pattern":"*"}`)
+	if strings.Count(listed, "\n") > konst.GlobPathsResultCap+2 {
+		t.Fatalf("more than %d lines came back for a listing over the cap:\n%d lines", konst.GlobPathsResultCap, strings.Count(listed, "\n"))
+	}
+	matched := konst.GlobPathsResultCap + 40
+	wantHeader := strings.Split(listed, "\n")[0]
+	if !strings.Contains(wantHeader, fmt.Sprintf("%d of %d files", matched, matched)) {
+		t.Fatalf("the header does not say how many matched: %q", wantHeader)
+	}
+	if !strings.Contains(wantHeader, fmt.Sprintf("showing the first %d", konst.GlobPathsResultCap)) {
+		t.Fatalf("the header does not say how many were returned: %q", wantHeader)
+	}
+	if !strings.Contains(listed, "degraded truncated") {
+		t.Fatalf("a capped result carries no note that it was cut:\n%s", listed)
+	}
+}
+
+func TestAWildcardUnderTheCapCarriesNoTruncationNote(t *testing.T) {
+	root := t.TempDir()
+	seed(t, root, "one.txt", "x\n")
+	seed(t, root, "two.txt", "x\n")
+
+	listed := globbed(t, root, `{"pattern":"*"}`)
+	if strings.Contains(listed, "degraded truncated") {
+		t.Fatalf("a result under the cap carries a truncation note it did not earn:\n%s", listed)
 	}
 }
 

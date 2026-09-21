@@ -1,0 +1,8 @@
+id: measured_with_checker
+domain: qa
+kind: measured
+measurement: bench/testquality/flakerun
+checker: comments
+mode: shadow
+source: .local/sources/qa-skills/skills.sh/petrkindlmann/qa-skills/skills/qa-metrics/SKILL.md
+evidence: 62 of 2202 test names were skipped in every one of 3 runs on 2026-09-21

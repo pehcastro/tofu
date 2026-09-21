@@ -11,8 +11,9 @@ import (
 	"tofu/internal/llm"
 )
 
-func fixedResultConfig(model Model, caps Caps) Config {
-	config := cappedConfig(model, caps)
+func fixedResultConfig(t *testing.T, model Model, caps Caps) Config {
+	t.Helper()
+	config := cappedConfig(t, model, caps)
 	config.Tools = NewRegistry(&stubTool{name: "noop", result: Result{Content: "ok"}})
 	return config
 }
@@ -21,7 +22,7 @@ func TestARepeatedCallWithTheSameResultStopsTheTurnPastTheLimit(t *testing.T) {
 	model := alwaysToolCallModel(konst.TurnLoopGuardRepeats)
 	model.decisions = append(model.decisions, messageDecision())
 
-	row, err := Run(context.Background(), fixedResultConfig(model, Caps{MaxSteps: 10}))
+	row, err := Run(context.Background(), fixedResultConfig(t, model, Caps{MaxSteps: 10}))
 	if err != nil {
 		t.Fatalf("Run returned an error: %v", err)
 	}
@@ -40,7 +41,7 @@ func TestARepeatedCallCarriesADistinctOutcomeAndAReadableReason(t *testing.T) {
 	model := alwaysToolCallModel(konst.TurnLoopGuardRepeats)
 	model.decisions = append(model.decisions, messageDecision())
 
-	row, err := Run(context.Background(), fixedResultConfig(model, Caps{MaxSteps: 10}))
+	row, err := Run(context.Background(), fixedResultConfig(t, model, Caps{MaxSteps: 10}))
 	if err != nil {
 		t.Fatalf("Run returned an error: %v", err)
 	}
@@ -70,7 +71,7 @@ func TestTheSameCallReturningADifferentResultDoesNotTripTheGuard(t *testing.T) {
 		decisions[i] = toolCallDecision(llm.ToolCall{ID: "call", Name: "noop", Arguments: json.RawMessage(`{}`)})
 	}
 	model := &stubModel{decisions: append(decisions, messageDecision())}
-	config := cappedConfig(model, Caps{MaxSteps: 10})
+	config := cappedConfig(t, model, Caps{MaxSteps: 10})
 	config.Tools = NewRegistry(&stubTool{name: "noop", varying: true})
 
 	row, err := Run(context.Background(), config)
@@ -107,7 +108,7 @@ func TestTheSameFileReadTwiceFarApartDoesNotTripTheGuard(t *testing.T) {
 	decisions = append(decisions, toolCallDecision(call("a.txt")))
 	model := &stubModel{decisions: append(decisions, messageDecision())}
 
-	config := cappedConfig(model, Caps{MaxSteps: len(decisions) + 2})
+	config := cappedConfig(t, model, Caps{MaxSteps: len(decisions) + 2})
 	config.Tools = NewRegistry(&stubTool{name: "read", result: Result{Content: "the same contents every time"}})
 
 	row, err := Run(context.Background(), config)

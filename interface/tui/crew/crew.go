@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"tofu/interface/tui/pane"
+	"tofu/interface/tui/progress"
 	"tofu/interface/tui/theme"
 	roster "tofu/internal/crew"
 	"tofu/internal/widget"
@@ -27,6 +28,9 @@ const (
 	runningMark   = "● "
 	doneMark      = "✓ "
 	handbackMark  = "⤺ "
+	waitingMark   = "? "
+	parkedMark    = "‖ "
+	erroredMark   = "✗ "
 	filledDot     = "▪"
 	emptyDot      = "▫"
 	callMarker    = "⟩ "
@@ -48,7 +52,32 @@ const (
 	Running State = iota
 	Done
 	HandedBack
+	WaitingForAnswer
+	Parked
+	Errored
 )
+
+func AllStates() []State {
+	return []State{Running, WaitingForAnswer, HandedBack, Parked, Errored, Done}
+}
+
+func (s State) Label() string {
+	switch s {
+	case Running:
+		return "working"
+	case WaitingForAnswer:
+		return "waiting for an answer"
+	case HandedBack:
+		return "in review"
+	case Parked:
+		return "parked"
+	case Errored:
+		return "errored"
+	case Done:
+		return "finished"
+	}
+	panic("crew: unknown state")
+}
 
 type Call struct {
 	Tool   string
@@ -145,7 +174,7 @@ func (m Model) list(width int) []string {
 	}
 	lines = append(lines, blank, pane.Cell(ownershipHead, width, theme.Dim()))
 	for _, held := range regions(m.Children) {
-		style := theme.Dim()
+		style := theme.Path()
 		if len(held.holders) > 1 {
 			style = theme.Warn()
 		}
@@ -170,7 +199,11 @@ func (m Model) watch(width int) []string {
 	if !picked {
 		return pane.Block("", watchHint, width, theme.Faint())
 	}
-	lines := []string{pane.Cell(child.Name, width, theme.Accent()), pane.Cell("", width, theme.Text())}
+	lines := []string{pane.Cell(child.Name+"  "+child.State.Label(), width, theme.Accent()), pane.Cell("", width, theme.Text())}
+	if child.State == Running {
+		line := progress.Line{Label: child.Doing, Since: child.Since, Tick: progress.TickInterval, Live: true}
+		lines = append(lines, pane.Raw(line.View(width), width), pane.Cell("", width, theme.Text()))
+	}
 	for _, call := range child.Calls {
 		lines = append(lines, pane.Block(callMarker, call.Tool+gap+call.Text, width, theme.Tool())...)
 		lines = append(lines, pane.Block(resultMarker, call.Result, width, theme.Faint())...)
@@ -267,6 +300,12 @@ func Mark(state State) string {
 		return doneMark
 	case HandedBack:
 		return handbackMark
+	case WaitingForAnswer:
+		return waitingMark
+	case Parked:
+		return parkedMark
+	case Errored:
+		return erroredMark
 	}
 	panic("crew: unknown child state")
 }

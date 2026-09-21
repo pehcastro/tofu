@@ -3,6 +3,8 @@ package rule
 import (
 	"fmt"
 	"io/fs"
+	"os"
+	"path"
 	"path/filepath"
 	"strings"
 
@@ -17,24 +19,42 @@ func Load(path string) (Rule, error) {
 	return parseRule(data, path)
 }
 
-func LoadFS(shipped fs.FS) ([]Rule, error) {
-	names, err := fs.Glob(shipped, "*.yaml")
+func LoadFS(shipped fs.FS, root string) ([]Rule, error) {
+	var loaded []Rule
+	err := fs.WalkDir(shipped, ".", func(name string, entry fs.DirEntry, err error) error {
+		dir := path.Dir(name)
+		if err != nil || entry.IsDir() || (dir != "." && path.Base(dir) != "rules") || !strings.HasSuffix(name, ".yaml") {
+			return err
+		}
+		data, err := fs.ReadFile(shipped, name)
+		if err != nil {
+			return err
+		}
+		if declared(data, "kind") == ThresholdKind {
+			return nil
+		}
+		one, err := parseRule(data, path.Join(root, name))
+		if err != nil {
+			return err
+		}
+		loaded = append(loaded, one)
+		return nil
+	})
 	if err != nil {
 		return nil, err
 	}
-	loaded := make([]Rule, 0, len(names))
-	for _, name := range names {
-		data, err := fs.ReadFile(shipped, name)
-		if err != nil {
-			return nil, err
-		}
-		one, err := parseRule(data, "catalog/rules/"+name)
-		if err != nil {
-			return nil, err
-		}
-		loaded = append(loaded, one)
-	}
 	return loaded, nil
+}
+
+func declared(data []byte, want string) string {
+	found := ""
+	_ = scanKV(data, "", func(key, value string, _ int) error {
+		if key == want && found == "" {
+			found = value
+		}
+		return nil
+	})
+	return found
 }
 
 func parseRule(data []byte, path string) (Rule, error) {
@@ -48,35 +68,42 @@ func parseRule(data []byte, path string) (Rule, error) {
 	if r.ID == "" {
 		return Rule{}, fmt.Errorf("%s: the rule declares no id", path)
 	}
-	if !r.Kind.valid() {
-		return Rule{}, fmt.Errorf("%s: kind is %q, %q or %q, found %q", path, KindStructural, KindDecision, KindHuman, r.Kind)
+	if r.Domain == "" {
+		return Rule{}, fmt.Errorf("%s: the rule declares no domain, and a domain is %q, %q, %q or a tool name", path, DomainDev, DomainQA, DomainGeneral)
 	}
-	if r.Checker == "" {
-		return Rule{}, fmt.Errorf("%s: the rule declares no checker", path)
+	if !r.Kind.valid() {
+		return Rule{}, fmt.Errorf("%s: kind is %q, %q, %q or %q, found %q", path, KindStructural, KindDecision, KindHuman, KindMeasured, r.Kind)
 	}
 	if !r.ModeDeclared {
 		r.Mode = ModeShadow
+	}
+	if r.Kind == KindMeasured {
+		if r.Checker != "" {
+			return Rule{}, fmt.Errorf("%s: rule %q is kind %s and declares checker %q, a measured rule names a measurement instead", path, r.ID, r.Kind, r.Checker)
+		}
+		for _, required := range [][2]string{{"measurement", r.Measurement}, {"source", r.Source}, {"evidence", r.Evidence}} {
+			if required[1] == "" {
+				return Rule{}, fmt.Errorf("%s: rule %q is kind %s and declares no %s", path, r.ID, r.Kind, required[0])
+			}
+		}
+		return r, nil
+	}
+	if r.Measurement != "" {
+		return Rule{}, fmt.Errorf("%s: rule %q is kind %s and declares measurement %q, only a %s rule is measured", path, r.ID, r.Kind, r.Measurement, KindMeasured)
+	}
+	if r.Checker == "" {
+		return Rule{}, fmt.Errorf("%s: rule %q is kind %s and declares no checker", path, r.ID, r.Kind)
 	}
 	return r, nil
 }
 
 func LoadDir(dir string) ([]Rule, error) {
-	names, err := sys.ListFiles(dir, ".yaml")
+	loaded, err := LoadFS(os.DirFS(dir), dir)
 	if err != nil {
 		return nil, err
 	}
-	loaded := make([]Rule, 0, len(names))
-	for _, name := range names {
-		path := filepath.Join(dir, name)
-		data, err := sys.ReadFile(path)
-		if err != nil {
-			return nil, err
-		}
-		one, err := parseRule(data, path)
-		if err != nil {
-			return nil, err
-		}
-		loaded = append(loaded, one)
+	for i := range loaded {
+		loaded[i].File = filepath.FromSlash(loaded[i].File)
 	}
 	return loaded, nil
 }
@@ -115,8 +142,16 @@ func (r *Rule) setField(key, value, path string, line int) error {
 		r.ID = value
 	case "kind":
 		r.Kind = Kind(value)
+	case "domain":
+		r.Domain = value
 	case "checker":
 		r.Checker = value
+	case "measurement":
+		r.Measurement = value
+	case "source":
+		r.Source = value
+	case "evidence":
+		r.Evidence = value
 	case "mode":
 		m := Mode(value)
 		if m != ModeShadow && m != ModeEnforced && m != ModeOff {

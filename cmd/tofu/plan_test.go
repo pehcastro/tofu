@@ -76,10 +76,10 @@ func TestAPlanStatedDuringATurnReachesTheView(t *testing.T) {
 		planCall("call-2", `{"op":"start","item":"read the gate"}`),
 		{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "stated"},
 	}}
-	var events []tui.Event
-	stubbedTurn(dir, model)(t.Context(), wireSubscription, "state a plan and start on it", collected(&events))
+	var events eventLog
+	stubbedTurn(dir, model)(t.Context(), wireSubscription, "state a plan and start on it", events.add)
 
-	plan, seen := lastPlan(events)
+	plan, seen := lastPlan(events.all())
 	if seen == 0 {
 		t.Fatal("a turn that stated a plan emitted no plan the view could draw")
 	}
@@ -95,10 +95,10 @@ func TestAPlanStatedDuringATurnReachesTheView(t *testing.T) {
 
 func TestATurnThatStatesNoPlanHandsTheViewNothingToDraw(t *testing.T) {
 	dir := scratchProject(t)
-	var events []tui.Event
-	stubbedTurn(dir, noteThenStop())(t.Context(), wireSubscription, "write the note", collected(&events))
+	var events eventLog
+	stubbedTurn(dir, noteThenStop())(t.Context(), wireSubscription, "write the note", events.add)
 
-	plan, seen := lastPlan(events)
+	plan, seen := lastPlan(events.all())
 	if seen == 0 {
 		t.Fatal("no step reported at all, so this proves nothing about a turn without a plan")
 	}

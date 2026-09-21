@@ -10,7 +10,6 @@ import (
 
 const (
 	openRouterVariable = "OPENROUTER_KEY"
-	openRouterFile     = ".env"
 	openRouterFileMode = 0o600
 )
 
@@ -19,7 +18,7 @@ func OpenRouterPath() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(dir, openRouterFile), nil
+	return filepath.Join(dir, sys.CredentialFileName), nil
 }
 
 func SaveOpenRouter(path, key string) error {
@@ -35,7 +34,7 @@ func SaveOpenRouter(path, key string) error {
 		return err
 	}
 	kept = append(kept, openRouterVariable+"="+key)
-	return sys.WriteFile(path, []byte(strings.Join(kept, "\n")+"\n"), openRouterFileMode)
+	return sys.WriteCredential(path, []byte(strings.Join(kept, "\n")+"\n"), openRouterFileMode)
 }
 
 func linesWithoutTheKey(path string) ([]string, error) {
@@ -43,7 +42,7 @@ func linesWithoutTheKey(path string) ([]string, error) {
 	if err != nil || !present {
 		return nil, err
 	}
-	raw, err := sys.ReadFile(path)
+	raw, err := sys.ReadCredential(path)
 	if err != nil {
 		return nil, err
 	}

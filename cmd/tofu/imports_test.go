@@ -49,7 +49,7 @@ func TestImportsFailsOnACommandImportingBench(t *testing.T) {
 func TestImportsFailsOnJudgeImportingTurn(t *testing.T) {
 	dir := writeFixtureModule(t, map[string]string{
 		"internal/turn/turn.go":         "package turn\n\nfunc Step() int { return 1 }\n",
-		"internal/judge/policy/pol.go":  "package policy\n\nimport \"tofu/internal/turn\"\n\nfunc Decide() int { return turn.Step() }\n",
+		"internal/judge/gate/rule.go":   "package gate\n\nimport \"tofu/internal/turn\"\n\nfunc Decide() int { return turn.Step() }\n",
 		"internal/judge/jev/client.go":  "package jev\n\nimport \"tofu/internal/sys\"\n\nfunc Name() string { return sys.OS() }\n",
 		"internal/sys/sys.go":           "package sys\n\nfunc OS() string { return \"windows\" }\n",
 		"internal/transport/retry.go":   "package transport\n\nfunc Retries() int { return 3 }\n",
@@ -62,7 +62,7 @@ func TestImportsFailsOnJudgeImportingTurn(t *testing.T) {
 	if code != exitVerdict {
 		t.Fatalf("exit = %d, want %d, output %q", code, exitVerdict, out.String())
 	}
-	want := "violation: tofu/internal/judge/policy imports tofu/internal/turn, and under tofu/internal, " +
+	want := "violation: tofu/internal/judge/gate imports tofu/internal/turn, and under tofu/internal, " +
 		"a package in tofu/internal/judge imports only " +
 		"tofu/internal/judge, tofu/internal/sys, tofu/internal/konst, tofu/internal/transport"
 	if !strings.Contains(out.String(), want) {

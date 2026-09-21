@@ -14,11 +14,11 @@ func turningApp(t *testing.T) (*App, chan struct{}) {
 	t.Helper()
 	started, stopped := make(chan struct{}), make(chan struct{})
 	app := newTestApp(Options{
-		Repo:   "silo",
+		Repo:   testRepo,
 		Branch: "develop",
 		Now:    fixedClock(),
 		Wires:  anthropicAlone,
-		Turn: func(ctx context.Context, _, _ string, _ func(Event)) {
+		Turn: func(ctx context.Context, _, _ string, _ CalledFromInsideTheTurnAndNeverAfterItReturns) {
 			close(started)
 			<-ctx.Done()
 			close(stopped)
@@ -48,7 +48,7 @@ func notes(app *App) int {
 
 func footer(app *App) string {
 	lines := strings.Split(ansi.Strip(app.View().Content), "\n")
-	return lines[len(lines)-2]
+	return lines[len(lines)-3]
 }
 
 func TestOneInterruptCancelsTheTurnAndWritesOneNote(t *testing.T) {

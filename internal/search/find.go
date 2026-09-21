@@ -52,13 +52,16 @@ type Unit struct {
 }
 
 type Stats struct {
-	Candidates int
-	Units      int
-	Returned   int
-	Fallbacks  int
-	Skipped    int
-	Budget     int
-	Tokens     int
+	Candidates  int
+	Units       int
+	Returned    int
+	Fallbacks   int
+	Skipped     int
+	Budget      int
+	Tokens      int
+	Scanned     int
+	TotalFiles  int
+	ScanStopped bool
 }
 
 type Result struct {
@@ -90,11 +93,17 @@ func Find(req Request) (Result, error) {
 
 	var found []Unit
 	var stats Stats
+	stats.TotalFiles = len(req.Files)
 	for _, rel := range req.Files {
+		if stats.Candidates >= konst.SearchCandidateScanCap {
+			stats.ScanStopped = true
+			break
+		}
 		body, err := os.ReadFile(filepath.Join(req.Root, filepath.FromSlash(rel)))
 		if err != nil {
 			return Result{}, fmt.Errorf("search: %w", err)
 		}
+		stats.Scanned++
 		if bytes.IndexByte(body, 0) >= 0 {
 			stats.Skipped++
 			continue
@@ -130,9 +139,17 @@ func Find(req Request) (Result, error) {
 	return Result{Units: kept, Stats: stats, Text: text}, nil
 }
 
+func sourceLines(body string) []string {
+	lines := strings.Split(body, "\n")
+	if last := len(lines) - 1; last > 0 && lines[last] == "" {
+		return lines[:last]
+	}
+	return lines
+}
+
 func hitLines(body string, pattern *regexp.Regexp) []hit {
 	var hits []hit
-	for index, line := range strings.Split(body, "\n") {
+	for index, line := range sourceLines(body) {
 		at := pattern.FindStringIndex(strings.TrimSuffix(line, "\r"))
 		if at == nil {
 			continue
@@ -143,7 +160,7 @@ func hitLines(body string, pattern *regexp.Regexp) []hit {
 }
 
 func unitsIn(rel, body string, hits []hit) []Unit {
-	lines := strings.Split(body, "\n")
+	lines := sourceLines(body)
 	if strings.HasSuffix(rel, ".go") {
 		if units, parsed := goUnits(rel, body, lines, hits); parsed {
 			return units
@@ -236,6 +253,9 @@ func render(units []Unit, stats Stats) (string, error) {
 		stats.Candidates, stats.Units, stats.Returned, stats.Fallbacks, fallbacks, stats.Tokens)
 	if stats.Fallbacks > 0 {
 		fmt.Fprintf(&out, "%s\n", Note(Fallback, fmt.Sprintf("%d of the %d units are the lines around the match rather than a declaration", stats.Fallbacks, stats.Units)))
+	}
+	if stats.ScanStopped {
+		fmt.Fprintf(&out, "%s\n", Note(Truncated, fmt.Sprintf("the scan stopped after %d of %d files because %d candidate lines had already been found: narrow the pattern or the path to see the rest", stats.Scanned, stats.TotalFiles, stats.Candidates)))
 	}
 	if stats.Returned < stats.Units {
 		fmt.Fprintf(&out, "%s\n", Note(Truncated, fmt.Sprintf("%d units matched and %d fit the %d token budget: raise max_tokens or narrow the pattern to see the rest", stats.Units, stats.Returned, stats.Budget)))

@@ -16,8 +16,8 @@ import (
 	"time"
 
 	"tofu/internal/crew"
+	"tofu/internal/judge/gate"
 	"tofu/internal/judge/jev"
-	"tofu/internal/judge/policy"
 	"tofu/internal/konst"
 	"tofu/internal/llm"
 	"tofu/internal/llm/cred"
@@ -36,15 +36,15 @@ import (
 const (
 	wireSubscription = "anthropic"
 	wireCodex        = "codex"
-	wireKey          = "openrouter"
+	wireKey          = openrouter.Name
 
 	toolSetFull  = "full"
 	toolSetThree = "three"
 
-	gateFollowsThePolicy = ""
-	gateOff              = "off"
-	gateShadow           = "shadow"
-	gateEnforce          = "enforce"
+	gateFollowsTheRule = ""
+	gateOff            = "off"
+	gateShadow         = "shadow"
+	gateEnforce        = "enforce"
 
 	openRouterDefaultModel = "anthropic/claude-opus-5"
 )
@@ -67,20 +67,21 @@ type childRole struct {
 }
 
 type runOpts struct {
-	dir            string
-	task           string
-	turnID         string
-	wire           string
-	dryRun         bool
-	gateArm        string
-	noCrew         bool
-	doneArm        string
-	model          string
-	toolSet        string
-	maxSteps       int
-	maxDecisions   int
-	contextCeiling int
-	child          childRole
+	dir              string
+	task             string
+	turnID           string
+	wire             string
+	dryRun           bool
+	gateArm          string
+	noCrew           bool
+	doneArm          string
+	model            string
+	toolSet          string
+	maxSteps         int
+	loopGuardRepeats int
+	loopGuardWindow  int
+	contextCeiling   int
+	child            childRole
 }
 
 type runtime struct {
@@ -145,13 +146,14 @@ Arguments:
   --model <id>          the model to run on, otherwise the one the turn role is bound to
   --wire <name>         anthropic, codex or openrouter
   --tools <set>         full, or three for the read, write and bash arm
-  --gate <arm>          off, shadow or enforce, otherwise the policy's own mode decides
+  --gate <arm>          off, shadow or enforce, otherwise the rule's own mode decides
   --no-gate             the arm that turns the tool gate off
   --no-crew             run without the spawn tool
-  --done-review <arm>   the arm that reviews a child's answer
-  --max-steps <n>       cap the steps a turn takes
-  --max-decisions <n>   cap the gate decisions a turn spends
-  --dry-run             print the request that would be sent and send nothing
+  --done-review <arm>          the arm that reviews a child's answer
+  --max-steps <n>              cap the steps a turn takes, unset means no cap
+  --loop-guard-repeats <n>     how many repeats of one call with one result stops a turn
+  --loop-guard-window <n>      how many recent calls the loop guard remembers
+  --dry-run                    print the request that would be sent and send nothing
 `
 
 func runVerb(args []string, out, errOut io.Writer) int {
@@ -162,6 +164,9 @@ func runVerb(args []string, out, errOut io.Writer) int {
 	opts, err := parseRunArgs(args)
 	if err != nil {
 		return runFail(errOut, err)
+	}
+	if opts.maxSteps == 0 {
+		opts.maxSteps = appDecisionCap(cmp.Or(opts.dir, "."))
 	}
 
 	selected, err := chooseModel(opts)
@@ -319,12 +324,14 @@ func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn
 		System:      runSystem(opts),
 		Environment: environment,
 		Caps: turn.Caps{
-			MaxSteps:     opts.maxSteps,
-			MaxDecisions: opts.maxDecisions,
+			MaxSteps:         opts.maxSteps,
+			LoopGuardRepeats: opts.loopGuardRepeats,
+			LoopGuardWindow:  opts.loopGuardWindow,
 		},
 		ResultBytesCap: konst.TurnResultBytesCap,
 		Budget:         run.budget,
 		Sessions:       run.sessions,
+		Proxy:          loadProxySetting(opts.dir).proxy,
 	}
 	if run.gate != nil {
 		config.Gate = run.gate
@@ -350,14 +357,14 @@ func childBase(config turn.Config, child childRole) turn.Config {
 
 func gateArms() []string { return []string{gateOff, gateShadow, gateEnforce} }
 
-func gateMode(arm string, declared policy.Mode) turn.GateMode {
+func gateMode(arm string, declared gate.Mode) turn.GateMode {
 	switch arm {
 	case gateEnforce:
 		return turn.GateEnforce
 	case gateShadow, gateOff:
 		return turn.GateShadow
-	case gateFollowsThePolicy:
-		if declared == policy.ModeEnforced {
+	case gateFollowsTheRule:
+		if declared == gate.ModeEnforced {
 			return turn.GateEnforce
 		}
 		return turn.GateShadow
@@ -410,9 +417,13 @@ func keyModel(model string) (turn.Model, error) {
 	if err != nil {
 		return nil, err
 	}
+	prompting, err := cred.NewLLMKey(cred.OpenRouter, key)
+	if err != nil {
+		return nil, err
+	}
 	wire, err := openrouter.New(openrouter.Config{
 		Model:     model,
-		Key:       key,
+		Key:       prompting.Prompt(),
 		Transport: turnTransportConfig(),
 	})
 	if err != nil {
@@ -458,6 +469,7 @@ func subscriptionModel(model string) (turn.Model, *cred.Store, error) {
 		Token:     token,
 		SessionID: session,
 		AccountID: accountID,
+		Transport: turnTransportConfig(),
 	})
 	if err != nil {
 		return nil, store, err
@@ -479,6 +491,7 @@ func codexModel(model string) (turn.Model, *cred.Store, error) {
 		Token:          token,
 		InstallationID: session,
 		SessionID:      session,
+		Transport:      turnTransportConfig(),
 	})
 	if err != nil {
 		return nil, store, err
@@ -511,15 +524,16 @@ func (c codexTurn) Ask(ctx context.Context, request llm.Request) (llm.Decision, 
 	}
 
 	decision := llm.Decision{
-		Build:           result.Model,
-		RequestID:       result.ID,
-		Outcome:         llm.OutcomeAfter(result.Stop, len(result.ToolCalls)),
-		Stop:            result.StopReason,
-		Content:         result.Content,
-		ToolCalls:       result.ToolCalls,
-		Usage:           llm.Usage{InputTokens: result.Usage.Input, OutputTokens: result.Usage.Output},
-		CacheReadTokens: result.Usage.CacheRead,
-		Warnings:        result.Warnings,
+		Build:            result.Model,
+		RequestID:        result.ID,
+		Outcome:          llm.OutcomeAfter(result.Stop, len(result.ToolCalls)),
+		Stop:             result.StopReason,
+		Content:          result.Content,
+		ToolCalls:        result.ToolCalls,
+		Usage:            llm.Usage{InputTokens: result.Usage.Input, OutputTokens: result.Usage.Output},
+		PromptAccounting: llm.PromptAccountingFor(codex.Name),
+		CacheReadTokens:  result.Usage.CacheRead,
+		Warnings:         result.Warnings,
 	}
 	if decision.Outcome == llm.OutcomeRefusal {
 		decision.Refusal = cmp.Or(result.Refusal, result.StopReason)
@@ -571,14 +585,13 @@ func buildRunTools(dir, set string) ([]turn.Tool, *tools.Plan, error) {
 		return tools.NewMemo().Wrap([]turn.Tool{readTool, writeTool, shell}), nil, nil
 	}
 	globTool, globErr := tools.NewGlob(dir)
-	grepTool, grepErr := tools.NewGrep(dir)
 	searchTool, searchErr := tools.NewSearch(dir)
 	symbolsTool, symbolsErr := tools.NewSymbols(dir)
 	editTool, editErr := tools.NewEdit(dir)
 	projectTool, projectErr := tools.NewProject(dir)
 	verbTools, verbErr := tools.NewVerbs(dir)
 	githubTool, githubErr := tools.NewGitHubPRDiff(dir)
-	if err := cmp.Or(globErr, grepErr, searchErr, symbolsErr, editErr, projectErr, verbErr, githubErr); err != nil {
+	if err := cmp.Or(globErr, searchErr, symbolsErr, editErr, projectErr, verbErr, githubErr); err != nil {
 		return nil, nil, err
 	}
 	webTools, webErr := buildWebTools()
@@ -586,7 +599,7 @@ func buildRunTools(dir, set string) ([]turn.Tool, *tools.Plan, error) {
 		return nil, nil, webErr
 	}
 	plan := tools.NewPlan()
-	full := append([]turn.Tool{readTool, writeTool, shell, plan, projectTool, globTool, grepTool, searchTool, symbolsTool, editTool, githubTool}, verbTools...)
+	full := append([]turn.Tool{readTool, writeTool, shell, plan, projectTool, globTool, searchTool, symbolsTool, editTool, githubTool}, verbTools...)
 	return tools.NewMemo().Wrap(append(full, webTools...)), plan, nil
 }
 
@@ -655,10 +668,11 @@ func runFail(errOut io.Writer, err error) int {
 
 func parseRunArgs(args []string) (runOpts, error) {
 	opts := runOpts{
-		wire:         wireSubscription,
-		toolSet:      toolSetFull,
-		doneArm:      doneArmOff,
-		maxDecisions: konst.TurnMaxDecisions,
+		wire:             wireSubscription,
+		toolSet:          toolSetFull,
+		doneArm:          doneArmOff,
+		loopGuardRepeats: konst.TurnLoopGuardRepeats,
+		loopGuardWindow:  konst.TurnLoopGuardWindow,
 	}
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
@@ -686,8 +700,10 @@ func parseRunArgs(args []string) (runOpts, error) {
 			}
 		case "--max-steps":
 			opts.maxSteps, err = nextInt(args, &i, arg)
-		case "--max-decisions":
-			opts.maxDecisions, err = nextInt(args, &i, arg)
+		case "--loop-guard-repeats":
+			opts.loopGuardRepeats, err = nextInt(args, &i, arg)
+		case "--loop-guard-window":
+			opts.loopGuardWindow, err = nextInt(args, &i, arg)
 		case "--context-ceiling":
 			if opts.contextCeiling, err = nextInt(args, &i, arg); err == nil && opts.contextCeiling <= 0 {
 				err = fmt.Errorf("--context-ceiling %d takes a count of tokens above zero, as in --context-ceiling 20000", opts.contextCeiling)
@@ -715,8 +731,8 @@ func parseRunArgs(args []string) (runOpts, error) {
 	if !slices.Contains(runWires(), opts.wire) {
 		return runOpts{}, fmt.Errorf("--wire %q is none of %s", opts.wire, strings.Join(runWires(), ", "))
 	}
-	if opts.gateArm != gateFollowsThePolicy && !slices.Contains(gateArms(), opts.gateArm) {
-		return runOpts{}, fmt.Errorf("--gate %q is none of %s: with no --gate the policy's own mode decides",
+	if opts.gateArm != gateFollowsTheRule && !slices.Contains(gateArms(), opts.gateArm) {
+		return runOpts{}, fmt.Errorf("--gate %q is none of %s: with no --gate the rule's own mode decides",
 			opts.gateArm, strings.Join(gateArms(), ", "))
 	}
 	if !slices.Contains(doneArms(), opts.doneArm) {

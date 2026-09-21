@@ -20,7 +20,7 @@ type Answer struct {
 	Probabilities   map[string]float64
 	Confidence      float64
 	LocalConfidence float64
-	Legend          json.RawMessage
+	Legend          Legend
 	Stats           json.RawMessage
 }
 
@@ -121,13 +121,17 @@ func decodeAnswer(id string, wire wireAnswer) (Answer, error) {
 		if len(wire.Probabilities) == 0 {
 			return Answer{}, transport.Fail("jev.Decode", transport.KindInvalidAnswer, nil, "answer %q is a score with no distribution", id)
 		}
+		legend, err := decodeLegend(id, wire.Legend)
+		if err != nil {
+			return Answer{}, err
+		}
 		return Answer{
 			Kind:            QuestionScore,
 			Score:           *wire.Score,
 			Probabilities:   wire.Probabilities,
 			Confidence:      value(wire.Confidence),
 			LocalConfidence: scoreConfidence(wire.Probabilities),
-			Legend:          wire.Legend,
+			Legend:          legend,
 			Stats:           wire.Stats,
 		}, nil
 	}

@@ -62,10 +62,11 @@ func TestTofuRunUnderEnforceDoesNotWriteTheDeniedFile(t *testing.T) {
 		t.Fatalf("buildRunTools: %v", err)
 	}
 	opts := runOpts{
-		dir:          dir,
-		task:         "write the note the README asked for",
-		gateArm:      gateEnforce,
-		maxDecisions: konst.TurnMaxDecisions,
+		dir:              dir,
+		task:             "write the note the README asked for",
+		gateArm:          gateEnforce,
+		loopGuardRepeats: konst.TurnLoopGuardRepeats,
+		loopGuardWindow:  konst.TurnLoopGuardWindow,
 	}
 	config, _ := runConfig(opts, built, runtime{model: noteThenStop(), spend: turn.SpendSubscription, gate: gate})
 	if config.GateMode != turn.GateEnforce {

@@ -3,7 +3,7 @@ package sift
 import (
 	"testing"
 
-	catalogpolicy "tofu/catalog/policy"
+	catalog "tofu/catalog"
 	"tofu/internal/sift"
 )
 
@@ -21,19 +21,19 @@ func corpusRows(t *testing.T) []Row {
 	return rows
 }
 
-func shippedPolicy(t *testing.T) sift.ShellPolicy {
+func shippedRule(t *testing.T) sift.ShellRule {
 	t.Helper()
-	pol, err := sift.LoadShellPolicy(catalogpolicy.Files(), "shell_sift@1.yaml")
+	r, err := sift.LoadShellRule(catalog.Files(), "shell_sift@1")
 	if err != nil {
-		t.Fatalf("load the shipped policy: %v", err)
+		t.Fatalf("load the shipped rule: %v", err)
 	}
-	return pol
+	return r
 }
 
-func TestTheShippedPolicyIsShadowAndTheModelIsGivenTheOutputWhole(t *testing.T) {
-	pol := shippedPolicy(t)
+func TestTheShippedRuleIsShadowAndTheModelIsGivenTheOutputWhole(t *testing.T) {
+	pol := shippedRule(t)
 	if pol.Mode != sift.ModeShadow {
-		t.Fatalf("catalog/policy/shell_sift@1.yaml is %s and nothing has been calibrated on shell output", pol.Mode)
+		t.Fatalf("catalog/tools/shell/rules/shell_sift@1.yaml is %s and nothing has been calibrated on shell output", pol.Mode)
 	}
 	wouldDrop := 0
 	for _, row := range corpusRows(t) {

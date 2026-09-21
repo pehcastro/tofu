@@ -15,7 +15,7 @@ import (
 const steerBuffer = 8
 
 func steeringTurn(steering chan string, started, taken chan<- string, release <-chan struct{}) Turn {
-	return func(_ context.Context, _, task string, emit func(Event)) {
+	return func(_ context.Context, _, task string, emit CalledFromInsideTheTurnAndNeverAfterItReturns) {
 		started <- task
 		<-release
 		for {
@@ -33,7 +33,7 @@ func steeringTurn(steering chan string, started, taken chan<- string, release <-
 func steerApp(t *testing.T, steering chan string, turn Turn) *App {
 	t.Helper()
 	app := newTestApp(Options{
-		Repo:     "silo",
+		Repo:     testRepo,
 		Branch:   "develop",
 		Now:      fixedClock(),
 		Wires:    anthropicAlone,
@@ -64,7 +64,7 @@ func TestAQueuedRowIsUnmarkedWhenTheModelTakesItAndNotWhenItWasQueued(t *testing
 	for delivered := false; !delivered; {
 		msg := app.waitForEvent()()
 		app.Update(msg)
-		if _, done := msg.(closedMsg); done {
+		if _, done := msg.(Closed); done {
 			t.Fatal("the turn ended without the queued message ever reaching the model")
 		}
 		event, sent := msg.(Event)
@@ -82,7 +82,7 @@ func TestAMessageQueuedAfterTheLastStepStartsTheNextTurn(t *testing.T) {
 	steering := make(chan string, steerBuffer)
 	started := make(chan string, 2)
 	ended := make(chan struct{})
-	app := steerApp(t, steering, func(_ context.Context, _, task string, _ func(Event)) {
+	app := steerApp(t, steering, func(_ context.Context, _, task string, _ CalledFromInsideTheTurnAndNeverAfterItReturns) {
 		started <- task
 		<-ended
 	})

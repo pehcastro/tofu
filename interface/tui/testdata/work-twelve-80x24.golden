@@ -1,0 +1,25 @@
+./tofu  ·  develop  ·  claude-sub/claude-opus-5  ·  amber-cedar-otter #3c5f71   
+[1] chat   [2] work   [3] file edits   [4] sub-agents   [5] shells              
+  out   done                                                                    
+                                                                                
+⟩ bash bash target 1  1000 bytes  #c6                                           
+  out   done                                                                    
+                                                                                
+⟩ bash bash target 2  1000 bytes  #c7                                           
+  out   done                                                                    
+                                                                                
+⟩ bash bash target 3  1000 bytes  #c8                                           
+  out   done                                                                    
+                                                                                
+⟩ glob glob target 0  1000 bytes  #c9                                           
+  out   done                                                                    
+                                                                                
+⟩ glob glob target 1  1000 bytes  #c10                                          
+  out   done                                                                    
+                                                                                
+⟩ glob glob target 2  1000 bytes  #c11                                          
+  out   done                                                                    
+                                                                                
+↑↓ pick   enter brings a reference into chat                                    
+context unread  ·  quota unread                                                 
+0 read  0 write  ·  jev 0  ·  tofu 0.4.0                                        

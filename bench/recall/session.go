@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"tofu/internal/konst"
+	"tofu/internal/llm"
 	rc "tofu/internal/recall"
 	"tofu/internal/sys"
 )
@@ -34,6 +35,7 @@ type SessionStep struct {
 type Session struct {
 	ID    string        `json:"id"`
 	Task  string        `json:"task"`
+	Wire  string        `json:"wire,omitempty"`
 	Steps []SessionStep `json:"steps,omitempty"`
 }
 
@@ -175,6 +177,7 @@ func ReplaySession(store *rc.Store, cfg rc.Config, bands rc.Bands, session Sessi
 		return ReplayResult{}, errors.New("recall: a session with no steps has nothing to replay")
 	}
 	signpostBytes := cmp.Or(arm.Signpost, konst.FactSignpostBytes)
+	accounting := llm.PromptAccountingFor(session.Wire)
 	unrecordedPrefixBytes := session.Steps[0].CacheReadTokens * cfg.BytesPerThousandTokens / 1000
 	instructions := session.Task + strings.Repeat(".", unrecordedPrefixBytes)
 	conversation := rc.Conversation{Instructions: instructions}
@@ -194,7 +197,7 @@ func ReplaySession(store *rc.Store, cfg rc.Config, bands rc.Bands, session Sessi
 			Index:           step.Index,
 			InputTokens:     occupancy.Total(),
 			FactsTokens:     occupancy.Facts,
-			RecordedTokens:  step.PromptTokens + step.CacheReadTokens,
+			RecordedTokens:  accounting.BilledTokens(step.PromptTokens, step.CacheReadTokens),
 			CacheReadTokens: cached,
 			FreshTokens:     occupancy.Total() - cached,
 		})

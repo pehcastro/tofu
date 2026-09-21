@@ -66,8 +66,8 @@ func TestReadSessionsSkipsATurnWrittenBeforeTheOutcomeWasAString(t *testing.T) {
 	if len(skipped) != 1 || skipped[0].File != "turn-legacy.json" {
 		t.Fatalf("skipped %v, want turn-legacy.json", skipped)
 	}
-	if !strings.Contains(skipped[0].Why, "older") {
-		t.Fatalf("the skip reason %q does not say why the file was skipped", skipped[0].Why)
+	if !strings.Contains(skipped[0].Why, "no step and no wall clock") {
+		t.Fatalf("the skip reason %q is not the shared reader's reason for a turn the old PascalCase schema wrote with no wall_clock_ms field it can bind to", skipped[0].Why)
 	}
 	t.Logf("skipped: %s: %s", skipped[0].File, skipped[0].Why)
 }

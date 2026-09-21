@@ -136,8 +136,8 @@ func TestAWireWithNoCredentialIsNeverOffered(t *testing.T) {
 	if len(codexAlone) != 1 || codexAlone[0].Name != "codex" || codexAlone[0].Model != "gpt-5.6-sol" {
 		t.Fatalf("wires %+v with only codex signed in, want codex and its default model alone", codexAlone)
 	}
-	if codexAlone[0].Provider != "openai" {
-		t.Fatalf("the codex subscription reports provider %q, want openai, since a subscription and its provider are not the same word", codexAlone[0].Provider)
+	if codexAlone[0].Provider != "codex-sub" {
+		t.Fatalf("the codex wire reports provider %q, want codex-sub, the subscription form the frame header composes", codexAlone[0].Provider)
 	}
 	storeCredential(t, cred.Anthropic)
 	both := appWires()
@@ -150,6 +150,7 @@ func TestLiveAppRunsATurnOnEachWire(t *testing.T) {
 	if os.Getenv("TOFU_LIVE") != "1" {
 		t.Skip("set TOFU_LIVE=1 to spend the subscription quota")
 	}
+	jev.AllowLiveCredential(t)
 	if key, err := jev.Key("../../.env"); err == nil {
 		t.Setenv("OPENROUTER_KEY", key)
 	}
@@ -168,17 +169,19 @@ func TestLiveAppRunsATurnOnEachWire(t *testing.T) {
 			})
 			app.Init()
 			app.Update(tea.WindowSizeMsg{Width: 100, Height: 28})
-			app.Update(appQuota(wire.Name))
+			app.Update(appQuota())
 
 			task := "create notes.txt holding the single word ready, then read it back and say what it holds"
 			app.Update(tui.Event{Kind: tui.EventText, Text: task})
+			var turned eventLog
+			appTurnOn(dir, openAppWire, nil, time.Now, sessionResume{})(t.Context(), wire.Name, task, turned.add)
 			answered := ""
-			appTurnOn(dir, openAppWire, nil, time.Now, sessionResume{})(t.Context(), wire.Name, task, func(event tui.Event) {
+			for _, event := range turned.all() {
 				if event.Model != "" {
 					answered = event.Model
 				}
 				app.Update(event)
-			})
+			}
 
 			t.Logf("wire %s asked for %s and the answer reported %s", wire.Name, wire.Model, answered)
 			t.Log("\n" + app.View().Content)
@@ -232,8 +235,15 @@ func settingsScreen(t *testing.T, providers []settings.Provider) string {
 	app := tui.New(tui.Options{Repo: "bob", Branch: "develop", Providers: providers})
 	app.Init()
 	app.Update(tea.WindowSizeMsg{Width: 100, Height: 20})
-	app.Update(tea.KeyPressMsg{Code: '6', Mod: tea.ModAlt})
+	openSettingsMenu(app)
 	return app.View().Content
+}
+
+func openSettingsMenu(app *tui.App) {
+	for _, letter := range "/settings" {
+		app.Update(tea.KeyPressMsg{Code: letter, Text: string(letter)})
+	}
+	app.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 }
 
 func TestSettingsNamesEveryProviderAndTheSourceThatDecidedIt(t *testing.T) {
@@ -307,7 +317,7 @@ func TestGateOffNoteNamesTheLogin(t *testing.T) {
 }
 
 func recordedGateDecision() turn.GateDecision {
-	modeReason := "the policy came from the catalog as tool_gate@3.yaml"
+	modeReason := "the rule came from the catalog as tool_gate@3.yaml"
 	return turn.GateDecision{
 		ID:      "2026-09-19-6f1c",
 		Verdict: ledger.VerdictAsk,
@@ -446,7 +456,7 @@ func TestAnOversizeResultNeverPutsTheModelsHandleOnTheScreen(t *testing.T) {
 	driver := driveApp(t)
 	driver.emit(tui.Event{Kind: tui.EventToolCall, ID: "c1", Tool: "read", Text: "CLAUDE.md"})
 	driver.emit(tui.Event{Kind: tui.EventToolResult, ID: "c1", Text: resultSummary(message)})
-	screen := driver.view()
+	screen := driver.view(tea.KeyPressMsg{Code: '2', Mod: tea.ModAlt})
 	for _, forbidden := range []string{"artifact_fetch", "not pasted", "holds this result whole", handle} {
 		if strings.Contains(screen, forbidden) {
 			t.Errorf("the screen carries %q, which is written for the model\n%s", forbidden, screen)
@@ -521,7 +531,7 @@ func stubbedTurn(dir string, model turn.Model, answers ...bool) tui.Turn {
 	return resumedTurn(dir, model, person, sessionResume{})
 }
 
-var stubSelection = models.Model{ID: "stub-model", Windows: []string{"stub"}, ContextTokens: konst.ContextCeilingTokens}
+var stubSelection = models.Model{ID: "stub-model", Windows: []string{"stub"}}
 
 func resumedTurn(dir string, model turn.Model, person chan tui.Answer, resumed sessionResume) tui.Turn {
 	return appTurnOn(dir, func(runOpts) (appWire, error) {
@@ -548,6 +558,30 @@ func noteThenStop() *queuedModel {
 	}}
 }
 
+func TestAToolCallsVendorIDNeverReachesTheScreenAndTheCallStillPairsWithItsResult(t *testing.T) {
+	dir := scratchProject(t)
+	driver := driveApp(t)
+	stubbedTurn(dir, &queuedModel{decisions: []llm.Decision{
+		{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{writeNote("toolu_01AbCdEfGhIjKlMn")}},
+		{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "wrote it"},
+	}})(t.Context(), wireSubscription, "write a note", driver.emit)
+
+	calls := driver.of(tui.EventToolCall)
+	results := driver.of(tui.EventToolResult)
+	if len(calls) != 1 || len(results) != 1 {
+		t.Fatalf("want one call and one result, got %d and %d", len(calls), len(results))
+	}
+	if calls[0].ID == "toolu_01AbCdEfGhIjKlMn" {
+		t.Fatalf("the call carries the vendor id instead of a minted event id: %q", calls[0].ID)
+	}
+	if calls[0].ID == "" || calls[0].ID != results[0].ID {
+		t.Fatalf("the call and its result do not share an event id: %q vs %q", calls[0].ID, results[0].ID)
+	}
+	if strings.Contains(driver.view(), "toolu_") {
+		t.Fatalf("the vendor id leaked onto the screen:\n%s", driver.view())
+	}
+}
+
 func TestATurnDrivenThroughTheAppFillsTheContextMeter(t *testing.T) {
 	dir := scratchProject(t)
 	driver := driveApp(t)
@@ -570,6 +604,34 @@ func TestATurnDrivenThroughTheAppFillsTheContextMeter(t *testing.T) {
 	}
 	t.Logf("context events %d, first %+v", len(carried), first)
 	t.Log("\n" + screen)
+}
+
+func TestADrivenTurnNamesTheSessionAndItsIDInTheHeader(t *testing.T) {
+	dir := scratchProject(t)
+	driver := driveApp(t)
+	stubbedTurn(dir, noteThenStop())(t.Context(), wireSubscription, "write a note", driver.emit)
+
+	screen := driver.view()
+	if !strings.Contains(screen, "#") {
+		t.Fatalf("the header does not carry the session id:\n%s", screen)
+	}
+	if strings.Contains(screen, "#turn-1") {
+		t.Fatalf("the header shows the id's constant literal prefix instead of a distinguishing suffix:\n%s", screen)
+	}
+	store, err := sessionstore.Open()
+	if err != nil {
+		t.Fatal(err)
+	}
+	listing, err := store.Listing()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(listing.Sessions) != 1 || listing.Sessions[0].Name == nil {
+		t.Fatalf("listing %+v, want the one session with a name", listing.Sessions)
+	}
+	if !strings.Contains(screen, *listing.Sessions[0].Name) {
+		t.Fatalf("the header does not carry the session name %q:\n%s", *listing.Sessions[0].Name, screen)
+	}
 }
 
 func TestAForkShowsTheNoticeAndThenStopsShowingIt(t *testing.T) {
@@ -662,7 +724,7 @@ func TestASpawnedChildShowsInTheCrewViewWithTheGlobsItHolds(t *testing.T) {
 	if ended.State != crew.Done || ended.Steps != 2 || ended.Report == "" {
 		t.Fatalf("the child ended as %+v, want it done with the steps and the report its rows carry", ended)
 	}
-	screen := driver.view(tea.KeyPressMsg{Code: '2', Mod: tea.ModAlt})
+	screen := driver.view(tea.KeyPressMsg{Code: '4', Mod: tea.ModAlt})
 	for _, want := range []string{"1 child", "c1", "note.txt", "ownership", "write note.txt"} {
 		if !strings.Contains(screen, want) {
 			t.Errorf("the crew view does not show %q:\n%s", want, screen)
@@ -738,7 +800,7 @@ func TestAFullEventChannelDropsTheSnapshotsAndNeverBlocksTheTurn(t *testing.T) {
 	app := tui.New(tui.Options{
 		Repo:  "scratch",
 		Wires: func() []tui.Wire { return []tui.Wire{{Name: wireSubscription, Model: "stub-model"}} },
-		Turn: func(_ context.Context, _, _ string, emit func(tui.Event)) {
+		Turn: func(_ context.Context, _, _ string, emit tui.CalledFromInsideTheTurnAndNeverAfterItReturns) {
 			for step := range kept {
 				emit(tui.Event{Kind: tui.EventText, Text: "step " + strconv.Itoa(step)})
 			}
@@ -797,7 +859,7 @@ func TestATurnWithNoChildrenSendsNoCrewEventAtAll(t *testing.T) {
 	if sent := driver.of(tui.EventCrew); len(sent) != 0 {
 		t.Fatalf("crew events %+v, want none: an empty crew view has to keep saying what it says today", sent)
 	}
-	screen := driver.view(tea.KeyPressMsg{Code: '2', Mod: tea.ModAlt})
+	screen := driver.view(tea.KeyPressMsg{Code: '4', Mod: tea.ModAlt})
 	if !strings.Contains(screen, "no child is holding any paths in this session") {
 		t.Errorf("the crew view is not the empty one:\n%s", screen)
 	}
@@ -872,7 +934,7 @@ func TestEveryToolSaysWhetherItFailedAndHowBigItsResultWas(t *testing.T) {
 	}
 }
 
-func TestTheFoldLineOnADrivenTurnCarriesItsSize(t *testing.T) {
+func TestTheFoldLineOnADrivenTurnNamesTheCountNotTheSize(t *testing.T) {
 	dir := scratchProject(t)
 	driver := driveApp(t)
 	model := &queuedModel{decisions: []llm.Decision{
@@ -888,12 +950,14 @@ func TestTheFoldLineOnADrivenTurnCarriesItsSize(t *testing.T) {
 		total += result.Bytes
 	}
 	if total == 0 {
-		t.Fatal("the three results carried no bytes at all, so the fold line has nothing to add up")
+		t.Fatal("the three results carried no bytes at all, so this test proves nothing")
 	}
 	screen := driver.view()
-	want := "3 tools, " + widget.Size(total)
-	if !strings.Contains(screen, want) {
-		t.Errorf("the fold line does not read %q\n%s", want, screen)
+	if !strings.Contains(screen, "(3) tools") {
+		t.Errorf("the fold line does not name the count\n%s", screen)
+	}
+	if strings.Contains(screen, widget.Size(total)) {
+		t.Errorf("the fold line still carries a byte figure\n%s", screen)
 	}
 	t.Log("\n" + screen)
 }
@@ -922,11 +986,15 @@ func TestARealEditReachesTheFileEditsViewAndLeavesOneRowBehind(t *testing.T) {
 	}
 
 	transcript := driver.view()
-	if !strings.Contains(transcript, "edit note.txt") || !strings.Contains(transcript, "+1 -1") {
-		t.Errorf("the transcript does not say which file changed and by how much\n%s", transcript)
+	if strings.Contains(transcript, "edit note.txt") {
+		t.Errorf("chat drew the call that made the edit, it belongs in work\n%s", transcript)
 	}
 	if strings.Contains(transcript, "a longer note") {
 		t.Errorf("the transcript drew the diff body\n%s", transcript)
+	}
+	worked := driver.view(tea.KeyPressMsg{Code: '2', Mod: tea.ModAlt})
+	if !strings.Contains(worked, "edit note.txt") || !strings.Contains(worked, "+1 -1") {
+		t.Errorf("work does not say which file changed and by how much\n%s", worked)
 	}
 	feed := driver.view(editsKey())
 	for _, want := range []string{"note.txt", "+1 -1", "-a note", "+a longer note", "and another"} {
@@ -1036,13 +1104,6 @@ func TestAFailedWriteIsNotAnEdit(t *testing.T) {
 	}
 }
 
-func answerKey(key string) tea.KeyPressMsg {
-	if key == "A" {
-		return tea.KeyPressMsg{Code: 'a', Text: "A", Mod: tea.ModShift}
-	}
-	return tea.KeyPressMsg{Code: rune(key[0]), Text: key}
-}
-
 func answeredByKeys(t *testing.T, dir string, model turn.Model, keys ...string) []tui.Event {
 	t.Helper()
 	answers := make(chan tui.Answer, 1)
@@ -1058,7 +1119,7 @@ func answeredByKeys(t *testing.T, dir string, model turn.Model, keys ...string) 
 		app.Update(tea.KeyPressMsg{Code: letter, Text: string(letter)})
 	}
 	var seen []tui.Event
-	waits := 0
+	waits, unanswered := 0, ""
 	_, started := app.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	for pending := []tea.Cmd{started}; len(pending) > 0; pending = pending[1:] {
 		if pending[0] == nil {
@@ -1071,12 +1132,20 @@ func answeredByKeys(t *testing.T, dir string, model turn.Model, keys ...string) 
 			seen = append(seen, msg)
 			_, next := app.Update(msg)
 			pending = append(pending, next)
-			if msg.Kind != tui.EventAwaitPerson {
+			if msg.Kind != tui.EventAwaitPerson || unanswered != "" {
 				continue
 			}
-			app.Update(answerKey(keys[min(waits, len(keys)-1)]))
+			key := keys[min(waits, len(keys)-1)]
+			app.Update(tea.KeyPressMsg{Code: rune(key[0]), Text: key})
+			if strings.Contains(app.View().Content, "[1] allow once") {
+				unanswered = key
+				app.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
+			}
 			waits++
 		}
+	}
+	if unanswered != "" {
+		t.Fatalf("%q did not answer the open question and the turn waited until it was stopped", unanswered)
 	}
 	return seen
 }
@@ -1143,7 +1212,7 @@ func TestTheKeyForAllowRunsTheAskedCallAndTheKeyForDenyRefusesIt(t *testing.T) {
 	for _, pressed := range []struct {
 		key string
 		ran bool
-	}{{"a", true}, {"d", false}} {
+	}{{"1", true}, {"2", false}} {
 		t.Run(pressed.key, func(t *testing.T) {
 			dir, _, _ := gateScratch(t, gateFixtureBuild)
 			stubJev(t, 200, middlingRiskAskReply)
@@ -1202,7 +1271,7 @@ func TestAlwaysHereAnswersTheSamePlaceAndNothingElse(t *testing.T) {
 	}
 	model.queued = append(model.queued, llm.Decision{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "all four"})
 
-	events := answeredByKeys(t, dir, model, "A", "a")
+	events := answeredByKeys(t, dir, model, "3", "1")
 
 	waits := countedKind(events, tui.EventAwaitPerson)
 	if waits != 3 {
@@ -1263,7 +1332,7 @@ func TestEveryOutcomeClosesTheTurnInWordsAndNeverInItsEnumName(t *testing.T) {
 	want := map[turn.Outcome]string{
 		turn.OutcomeUnset:               "finished in",
 		turn.OutcomeForked:              "finished in",
-		turn.OutcomeStopped:             "stopped after",
+		turn.OutcomeStopped:             "cooked for",
 		turn.OutcomeStepCap:             "stopped at the step cap after",
 		turn.OutcomeDecisionCap:         "stopped at the decision cap after",
 		turn.OutcomeError:               "failed after",

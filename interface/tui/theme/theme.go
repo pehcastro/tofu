@@ -1,6 +1,10 @@
 package theme
 
-import "charm.land/lipgloss/v2"
+import (
+	"image/color"
+
+	"charm.land/lipgloss/v2"
+)
 
 const (
 	ink        = "252"
@@ -9,11 +13,16 @@ const (
 	faint      = "240"
 	accentBlue = "39"
 	toolCyan   = "44"
+	callPurple = "141"
+	pathBlue   = "110"
+	idTan      = "223"
 	warnAmber  = "214"
 	failRed    = "203"
 	addGreen   = "114"
 	dropRed    = "167"
 	panel      = "236"
+	composer   = "8"
+	selected   = "24"
 )
 
 func Text() lipgloss.Style { return lipgloss.NewStyle().Foreground(lipgloss.Color(ink)) }
@@ -30,6 +39,12 @@ func Accent() lipgloss.Style { return lipgloss.NewStyle().Foreground(lipgloss.Co
 
 func Tool() lipgloss.Style { return lipgloss.NewStyle().Foreground(lipgloss.Color(toolCyan)) }
 
+func Call() lipgloss.Style { return lipgloss.NewStyle().Foreground(lipgloss.Color(callPurple)) }
+
+func Path() lipgloss.Style { return lipgloss.NewStyle().Foreground(lipgloss.Color(pathBlue)) }
+
+func ID() lipgloss.Style { return lipgloss.NewStyle().Foreground(lipgloss.Color(idTan)) }
+
 func Warn() lipgloss.Style { return lipgloss.NewStyle().Foreground(lipgloss.Color(warnAmber)) }
 
 func Fail() lipgloss.Style { return lipgloss.NewStyle().Foreground(lipgloss.Color(failRed)) }
@@ -44,4 +59,12 @@ func Bar() lipgloss.Style {
 		Background(lipgloss.Color(panel))
 }
 
+func Selected() lipgloss.Style {
+	return lipgloss.NewStyle().
+		Foreground(lipgloss.Color(speech)).
+		Background(lipgloss.Color(selected))
+}
+
 func Rule() lipgloss.Style { return lipgloss.NewStyle().Foreground(lipgloss.Color(panel)) }
+
+func ComposerColor() color.Color { return lipgloss.Color(composer) }

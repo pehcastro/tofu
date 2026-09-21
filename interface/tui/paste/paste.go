@@ -38,7 +38,7 @@ type Board struct {
 	Read     func() (sys.Clipboard, error)
 	Dir      func() (string, error)
 	Write    func(path string, body []byte) error
-	Recorded func(name string, bytes int, format string)
+	Recorded func(index int, name string, bytes int, format string)
 }
 
 const (
@@ -125,7 +125,7 @@ func (b Board) store(index int, body []byte, suffix string) (Outcome, error) {
 	}
 	outcome := Outcome{Index: index, State: Ready, Name: name, Bytes: len(body)}
 	if b.Recorded != nil {
-		b.Recorded(outcome.Name, outcome.Bytes, outcome.Format())
+		b.Recorded(outcome.Index, outcome.Name, outcome.Bytes, outcome.Format())
 	}
 	return outcome, nil
 }
