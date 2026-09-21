@@ -41,6 +41,10 @@ func (c Caps) exceeded(step int) (Outcome, bool) {
 const theResponseHitTheOutputTokenLimit = "the response hit the output token limit, so its arguments may be truncated. " +
 	"Re-issue the tool call with complete arguments."
 
+const theToolSucceededAndPrintedNothing = "the tool ran, succeeded and printed nothing."
+
+const theToolFailedAndPrintedNothing = "the tool ran, failed and printed nothing."
+
 const andThisIsItsLastStep = " and this is its last step: answer now from what you already have, " +
 	"saying what you did, what is left undone, and what to do next."
 
@@ -383,10 +387,18 @@ func Run(ctx context.Context, config Config) (Row, error) {
 			}
 			if tripped {
 				cause := loopGuardCause(repeated, repeats, guard.window)
+				stopped := "this turn stopped itself because " + cause
 				row.Guard = &LoopGuardStop{Tool: repeated.Tool, Args: repeated.Args, Repeats: repeats}
 				row.Warnings = append(row.Warnings, "the turn stopped itself: "+cause)
+				for _, unanswered := range pending {
+					callRow, resultMessage := rejectedCall(unanswered, time.Now(),
+						"tool call "+strconv.Quote(unanswered.Name)+" was not executed: "+stopped,
+						session.EventIDFor(origin, unanswered.ID), stepRow.id, author)
+					stepRow.ToolCalls = append(stepRow.ToolCalls, callRow)
+					messages = append(messages, resultMessage)
+				}
 				keep(stepRow)
-				return endAt(OutcomeLoopGuard, "this turn stopped itself because "+cause, step, messages), nil
+				return endAt(OutcomeLoopGuard, stopped, step, messages), nil
 			}
 			if !config.NoFork {
 				fork, begun, occupancy, err := forkHistory(artifacts, budget, config.FirstUserMessage(), messages)
@@ -549,10 +561,17 @@ func (g gatedCall) execute(ctx context.Context, tools Registry, resultBytesCap i
 	if spawning && len(spawner.children) > spawnedBefore {
 		row.ChildID = spawner.children[spawnedBefore].ID
 	}
+	body := rendered
+	if body == "" {
+		body = theToolSucceededAndPrintedNothing
+		if row.Outcome() == llm.ToolOutcomeFailed {
+			body = theToolFailedAndPrintedNothing
+		}
+	}
 	return row, llm.Message{
 		Role:            llm.RoleTool,
 		ToolCallID:      call.ID,
-		Content:         rendered,
+		Content:         body,
 		ToolOutcome:     row.Outcome(),
 		ToolResultBytes: row.ResultBytes,
 	}
