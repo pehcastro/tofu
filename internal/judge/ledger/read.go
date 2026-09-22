@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -49,11 +50,25 @@ func NewReader(dir string) *Reader {
 
 var errRowFound = errors.New("ledger: row found")
 
+type EscapingStateError struct {
+	File string
+	Dir  string
+}
+
+func (e EscapingStateError) Error() string {
+	return fmt.Sprintf("ledger: a row names %s as its state, which is outside the ledger at %s: refused, not read", e.File, e.Dir)
+}
+
 func (r *Reader) State(row Row) (json.RawMessage, error) {
 	if row.StateElision == nil {
 		return row.State, nil
 	}
-	return sys.ReadFile(filepath.Join(r.dir, row.StateElision.File))
+	named := row.StateElision.File
+	segments := strings.FieldsFunc(named, func(letter rune) bool { return letter == '/' || letter == '\\' })
+	if len(segments) == 0 || filepath.IsAbs(named) || slices.Contains(segments, "..") {
+		return nil, EscapingStateError{File: named, Dir: r.dir}
+	}
+	return sys.ReadFile(filepath.Join(r.dir, named))
 }
 
 func (r *Reader) ByID(id string) (Row, bool, error) {

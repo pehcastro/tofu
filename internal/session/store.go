@@ -179,9 +179,27 @@ func (s *Store) End(id string, reason EndReason, at time.Time) (Header, error) {
 	return header, s.Write(header, nil)
 }
 
+type EscapingHandleError struct {
+	Handle string
+}
+
+func (e EscapingHandleError) Error() string {
+	return fmt.Sprintf("session: %s is a path rather than the id or the name of a session here: refused, not followed", e.Handle)
+}
+
+func namesOneSession(handle string) error {
+	if handle == "." || handle == ".." || strings.ContainsAny(handle, `/\`) || filepath.IsAbs(handle) {
+		return EscapingHandleError{Handle: handle}
+	}
+	return nil
+}
+
 func (s *Store) Resolve(handle string) ([]Header, error) {
 	if handle == "" {
 		return nil, errors.New("session: which session? an id or a name names one")
+	}
+	if err := namesOneSession(handle); err != nil {
+		return nil, err
 	}
 	for _, id := range []string{handle, IDPrefix + handle} {
 		if header, err := s.Header(id); err == nil {
@@ -220,6 +238,9 @@ func (s *Store) Header(id string) (Header, error) {
 }
 
 func (s *Store) Body(id string) ([]Event, error) {
+	if err := namesOneSession(id); err != nil {
+		return nil, err
+	}
 	raw, err := s.readFile(filepath.Join(s.Dir(id), bodyName))
 	if err != nil {
 		_, events, singleErr := s.singleFile(id)
@@ -334,6 +355,9 @@ func (s *Store) SetHead(id string) error {
 }
 
 func (s *Store) read(id string) (Header, error) {
+	if err := namesOneSession(id); err != nil {
+		return Header{}, err
+	}
 	raw, err := s.readFile(filepath.Join(s.Dir(id), headerName))
 	if err == nil {
 		var header Header
@@ -357,6 +381,7 @@ type singleFileRow struct {
 	At           time.Time         `json:"at"`
 	Task         string            `json:"task"`
 	Model        string            `json:"model"`
+	Account      int64             `json:"account"`
 	ForkedFrom   string            `json:"forked_from"`
 	ForkedInto   string            `json:"forked_into"`
 	ForkKind     string            `json:"fork_kind"`
@@ -401,6 +426,7 @@ func (s *Store) singleFile(id string) (Header, []Event, error) {
 		At:         row.At,
 		Task:       row.Task,
 		Model:      row.Model,
+		Account:    row.Account,
 		Parent:     row.ForkedFrom,
 		ForkedInto: row.ForkedInto,
 		ForkKind:   row.ForkKind,
