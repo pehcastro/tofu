@@ -456,7 +456,7 @@ func subscriptionCredential(provider cred.Provider) (func(context.Context) (stri
 }
 
 func subscriptionModel(model string) (turn.Model, *cred.Store, error) {
-	token, accountID, store, err := subscriptionCredential(cred.Anthropic)
+	token, accountID, store, err := subscriptionCredential(cred.ClaudeSub)
 	if err != nil {
 		return nil, store, err
 	}
@@ -478,7 +478,7 @@ func subscriptionModel(model string) (turn.Model, *cred.Store, error) {
 }
 
 func codexModel(model string) (turn.Model, *cred.Store, error) {
-	token, _, store, err := subscriptionCredential(cred.Codex)
+	token, _, store, err := subscriptionCredential(cred.CodexSub)
 	if err != nil {
 		return nil, store, err
 	}

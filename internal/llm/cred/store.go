@@ -73,11 +73,26 @@ func Open(path string) (*Store, error) {
 	}
 	_ = os.Chmod(path, storeFileMode)
 	store := &Store{db: db}
+	if err := store.renameRetiredSources(); err != nil {
+		_ = store.Close()
+		return nil, err
+	}
 	if err := store.captureMissingKeys(); err != nil {
 		_ = store.Close()
 		return nil, err
 	}
 	return store, nil
+}
+
+func (s *Store) renameRetiredSources() error {
+	for retired, source := range map[string]Provider{retiredClaudeWord: ClaudeSub, retiredCodexWord: CodexSub} {
+		if _, err := s.db.Exec(
+			`UPDATE OR IGNORE credentials SET provider = ? WHERE provider = ?`,
+			string(source), retired); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s *Store) captureMissingKeys() error {
@@ -207,6 +222,9 @@ func (s *Store) selectRows(clause string, args ...any) ([]Row, error) {
 		}
 		if err := json.Unmarshal([]byte(data), &row.Credential); err != nil {
 			return nil, err
+		}
+		if source, known := Canonical(string(row.Credential.Provider)); known {
+			row.Credential.Provider = source
 		}
 		out = append(out, row)
 	}

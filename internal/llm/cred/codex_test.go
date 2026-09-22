@@ -41,7 +41,7 @@ func codexLogin(t *testing.T, account, email string) Credential {
 		})
 	}))
 	t.Cleanup(server.Close)
-	spec := codexSpec()
+	spec := codexSubSpec()
 	spec.TokenURL = server.URL
 	credential, err := exchange(context.Background(), server.Client(), spec,
 		"the-code", "", "http://127.0.0.1:1455/auth/callback", "the-verifier", time.Now())
@@ -89,7 +89,7 @@ func TestACodexRowStoredWithNoKeyIsRekeyedWhenTheStoreOpens(t *testing.T) {
 	store := openStore(t, dir)
 	now := time.Now()
 	data, err := json.Marshal(Credential{
-		Provider:   Codex,
+		Provider:   CodexSub,
 		Kind:       KindOAuth,
 		Access:     codexJWT(t, codexAccountOne, ""),
 		Refresh:    "refresh-already-on-disk",
@@ -102,7 +102,7 @@ func TestACodexRowStoredWithNoKeyIsRekeyedWhenTheStoreOpens(t *testing.T) {
 	if _, err := store.db.Exec(
 		`INSERT INTO credentials (provider, kind, account_key, data, created_at, updated_at)
 		VALUES (?, ?, '', ?, ?, ?)`,
-		string(Codex), KindOAuth, string(data), now.UnixMilli(), now.UnixMilli()); err != nil {
+		string(CodexSub), KindOAuth, string(data), now.UnixMilli(), now.UnixMilli()); err != nil {
 		t.Fatalf("seeding the row already on disk: %v", err)
 	}
 	if err := store.Close(); err != nil {

@@ -11,6 +11,7 @@ import (
 
 	"tofu/internal/judge/jev"
 	"tofu/internal/judge/ledger"
+	"tofu/internal/llm/cred"
 	"tofu/internal/sys"
 	"tofu/internal/turn"
 )
@@ -103,7 +104,7 @@ func TestDoctorNamesTheMissingCredentialAndTheCommandThatFixesIt(t *testing.T) {
 	if code := doctor(out, plain); code != exitVerdict {
 		t.Fatalf("exit = %d, want %d, output:\n%s", code, exitVerdict, out.String())
 	}
-	if fix := doctorFix(t, out.String(), noCredential); fix != "run tofu login "+wireSubscription {
+	if fix := doctorFix(t, out.String(), noCredential); fix != "run tofu login "+string(cred.ClaudeSub) {
 		t.Fatalf("the blocker is followed by %q, not the command that fixes it", fix)
 	}
 }

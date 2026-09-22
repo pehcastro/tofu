@@ -104,7 +104,7 @@ func wideFrames(t *testing.T) map[string]string {
 		Repo:         cjkRepo,
 		Branch:       emojiBranch(),
 		Now:          fixedClock(),
-		Requirements: []Requirement{{What: "契約が無いので、どのモデルも答えられません", Fix: "tofu login anthropic"}},
+		Requirements: []Requirement{{What: "契約が無いので、どのモデルも答えられません", Fix: "tofu login claude-sub"}},
 	})
 	setup.Update(tea.WindowSizeMsg{Width: wideColumns, Height: wideRows})
 	frames["setup"] = setup.View().Content

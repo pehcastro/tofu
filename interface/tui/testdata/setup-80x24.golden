@@ -1,8 +1,8 @@
 [38;5;252;48;5;236m./tofu  ·  amber-cedar-otter #3c5f71  ·  0s[m[48;5;236m                                     [m
 [38;5;214mtofu cannot start a turn yet[m                                                    
                                                                                 
-[38;5;252m1. there is no anthropic subscription credential, so no model can answer[m        
-[38;5;245m   press 1 to run tofu login anthropic[m                                          
+[38;5;252m1. there is no claude-sub subscription credential, so no model can answer[m       
+[38;5;245m   press 1 to run tofu login claude-sub[m                                         
                                                                                 
 [38;5;252m2. there is no openrouter key, so no tool call is judged[m                        
 [38;5;245m   press 2 to run tofu login openrouter[m                                         

@@ -26,7 +26,7 @@ import (
 )
 
 const (
-	loginUsage = "usage: tofu login <anthropic|codex|openrouter> [--paste], " +
+	loginUsage = "usage: tofu login <claude-sub|codex-sub|openrouter> [--paste], " +
 		"tofu login --status [--json] [--redact], or tofu login --disable|--enable <number>"
 	setAsideCause    = "set aside by hand, run tofu login --enable to bring it back"
 	openRouterName   = "openrouter"
@@ -73,6 +73,9 @@ func loginVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 			return loginFail(errOut, fmt.Errorf("unknown flag %q, %s", arg, loginUsage))
 		}
 		paste = true
+	}
+	if args[0] != string(spec.Provider) {
+		_, _ = fmt.Fprintf(out, "tofu login %s is now tofu login %s\n", args[0], spec.Provider)
 	}
 	if err := login(context.Background(), spec, paste, in, out); err != nil {
 		return loginRefused(errOut, "%v", err)

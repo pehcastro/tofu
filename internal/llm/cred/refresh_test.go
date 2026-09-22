@@ -50,7 +50,7 @@ func mintedBody() map[string]any {
 
 func testSpec(tokenURL string) Spec {
 	return Spec{
-		Provider:      Anthropic,
+		Provider:      ClaudeSub,
 		ClientID:      "client-id",
 		TokenURL:      tokenURL,
 		TokenBody:     BodyJSON,
@@ -62,7 +62,7 @@ func testSpec(tokenURL string) Spec {
 func seed(t *testing.T, store *Store, at time.Time, expires time.Time) {
 	t.Helper()
 	err := store.Save(Credential{
-		Provider:   Anthropic,
+		Provider:   ClaudeSub,
 		Kind:       KindOAuth,
 		Access:     storedAccess,
 		Refresh:    storedRefresh,
@@ -176,7 +176,7 @@ func TestDefinitiveRefreshFailureDisablesTheRowAndTransientDoesNot(t *testing.T)
 			if _, err := manager.Access(context.Background()); err == nil {
 				t.Fatal("access succeeded, want a refresh failure")
 			}
-			row, found, err := store.Row(Anthropic)
+			row, found, err := store.Row(ClaudeSub)
 			if err != nil || !found {
 				t.Fatalf("row: %v found=%v", err, found)
 			}
@@ -205,7 +205,7 @@ func TestRefreshKeepsTheIdentityCapturedAtLogin(t *testing.T) {
 	if _, err := manager.Access(context.Background()); err != nil {
 		t.Fatalf("access: %v", err)
 	}
-	row, found, err := store.Row(Anthropic)
+	row, found, err := store.Row(ClaudeSub)
 	if err != nil || !found {
 		t.Fatalf("row: %v found=%v", err, found)
 	}

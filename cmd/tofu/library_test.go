@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"tofu/internal/llm/models"
 )
 
 func TestLibraryNamesEveryKindAndItsContract(t *testing.T) {
@@ -91,7 +93,7 @@ func TestProjectLibraryOverridesTheShippedOneFieldByField(t *testing.T) {
 	if err != nil {
 		t.Fatalf("the project layer did not relax the exclusion: %v", err)
 	}
-	if model.Subscription != "claude" || model.WindowText() != "5h and 7d and 7d:fable" {
+	if model.Subscription != models.ClaudeSub || model.WindowText() != "5h and 7d and 7d:fable" {
 		t.Fatalf("the project file replaced facts it never mentioned: %+v", model)
 	}
 }

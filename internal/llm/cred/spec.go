@@ -9,9 +9,24 @@ import (
 type Provider string
 
 const (
-	Anthropic Provider = "anthropic"
-	Codex     Provider = "codex"
+	ClaudeSub Provider = "claude-sub"
+	CodexSub  Provider = "codex-sub"
 )
+
+const (
+	retiredClaudeWord = "anthropic"
+	retiredCodexWord  = "codex"
+)
+
+func Canonical(name string) (Provider, bool) {
+	switch name {
+	case string(ClaudeSub), retiredClaudeWord:
+		return ClaudeSub, true
+	case string(CodexSub), retiredCodexWord:
+		return CodexSub, true
+	}
+	return "", false
+}
 
 type TokenBody string
 
@@ -31,7 +46,6 @@ const (
 
 type Spec struct {
 	Provider            Provider
-	Label               string
 	ClientID            string
 	AuthorizeURL        string
 	Scopes              []string
@@ -54,20 +68,20 @@ type Spec struct {
 }
 
 func Lookup(name string) (Spec, error) {
-	switch Provider(name) {
-	case Anthropic:
-		return anthropicSpec(), nil
-	case Codex:
-		return codexSpec(), nil
+	source, _ := Canonical(name)
+	switch source {
+	case ClaudeSub:
+		return claudeSubSpec(), nil
+	case CodexSub:
+		return codexSubSpec(), nil
 	}
-	return Spec{}, fmt.Errorf("cred: unknown provider %q, want anthropic or codex", name)
+	return Spec{}, fmt.Errorf("cred: unknown source %q, want %s or %s", name, ClaudeSub, CodexSub)
 }
 
-func anthropicSpec() Spec {
+func claudeSubSpec() Spec {
 	clientID, _ := base64.StdEncoding.DecodeString(anthropicClientIDBase64)
 	return Spec{
-		Provider:     Anthropic,
-		Label:        "Anthropic (Claude Pro/Max)",
+		Provider:     ClaudeSub,
 		ClientID:     string(clientID),
 		AuthorizeURL: "https://claude.ai/oauth/authorize",
 		Scopes: []string{
@@ -100,10 +114,9 @@ func anthropicSpec() Spec {
 	}
 }
 
-func codexSpec() Spec {
+func codexSubSpec() Spec {
 	return Spec{
-		Provider:     Codex,
-		Label:        "ChatGPT Plus/Pro (Codex Subscription)",
+		Provider:     CodexSub,
 		ClientID:     codexClientID,
 		AuthorizeURL: "https://auth.openai.com/oauth/authorize",
 		Scopes:       []string{"openid", "profile", "email", "offline_access", "api.connectors.read", "api.connectors.invoke"},

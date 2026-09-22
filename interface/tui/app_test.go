@@ -648,10 +648,10 @@ func settingsApp(t *testing.T, width, height int) *App {
 		Now:    fixedClock(),
 		Wires:  anthropicAlone,
 		Providers: []settings.Provider{
-			{Name: "anthropic", State: "oauth  62% of the 7d window, resets 18:00", Source: "the credential store"},
+			{Name: "claude-sub", State: "oauth  62% of the 7d window, resets 18:00", Source: "the credential store"},
 			{Name: "openrouter", Key: openRouterKey, State: "ok", Source: ".env at ~/.tofu/.env"},
 			{Name: "jev", State: "build jev-2026-09-01", Source: "the last decision"},
-			{Name: "codex", Fix: "tofu login codex", Source: "nothing is stored"},
+			{Name: "codex-sub", Fix: "tofu login codex-sub", Source: "nothing is stored"},
 		},
 	})
 	app.Init()
@@ -931,8 +931,8 @@ func stripColumn(app *App, label string) (int, bool) {
 func setupRequirements() []Requirement {
 	return []Requirement{
 		{
-			What: "there is no anthropic subscription credential, so no model can answer",
-			Fix:  "tofu login anthropic",
+			What: "there is no claude-sub subscription credential, so no model can answer",
+			Fix:  "tofu login claude-sub",
 		},
 		{
 			What: "there is no openrouter key, so no tool call is judged",

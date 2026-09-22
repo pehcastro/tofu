@@ -84,7 +84,7 @@ func TestLoginStatusReportsNoneAndThenTheStoredCredential(t *testing.T) {
 	}
 	authorized := time.Date(2026, 9, 18, 12, 0, 0, 0, time.UTC)
 	err = store.Save(cred.Credential{
-		Provider:   cred.Anthropic,
+		Provider:   cred.ClaudeSub,
 		Kind:       cred.KindOAuth,
 		Access:     testAccess,
 		Refresh:    "refresh-not-a-real-token",

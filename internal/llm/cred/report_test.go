@@ -11,7 +11,7 @@ func TestReportNamesProviderKindAndExpiryAndNothingIdentifying(t *testing.T) {
 	line := Report([]Row{{
 		ID: 1,
 		Credential: Credential{
-			Provider:   Anthropic,
+			Provider:   ClaudeSub,
 			Kind:       KindOAuth,
 			Access:     "sk-ant-oat-secret",
 			Refresh:    "refresh-secret",
@@ -20,7 +20,7 @@ func TestReportNamesProviderKindAndExpiryAndNothingIdentifying(t *testing.T) {
 			Authorized: authorized,
 		},
 	}}, authorized)
-	for _, want := range []string{"anthropic", "oauth", "expires 2026-09-18T20:00:00Z", "re-login by 2026-10-18"} {
+	for _, want := range []string{string(ClaudeSub), "oauth", "expires 2026-09-18T20:00:00Z", "re-login by 2026-10-18"} {
 		if !strings.Contains(line, want) {
 			t.Errorf("report %q is missing %q", line, want)
 		}
@@ -38,7 +38,7 @@ func TestReportSaysNoneAndNamesADisabledRow(t *testing.T) {
 	}
 	line := Report([]Row{{
 		ID:            1,
-		Credential:    Credential{Provider: Anthropic, Kind: KindOAuth},
+		Credential:    Credential{Provider: ClaudeSub, Kind: KindOAuth},
 		DisabledCause: "oauth refresh failed: token endpoint answered 400: invalid_grant",
 	}}, time.Now())
 	if !strings.Contains(line, "disabled: oauth refresh failed") || !strings.Contains(line, "invalid_grant") {

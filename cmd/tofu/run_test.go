@@ -279,7 +279,7 @@ func TestRunDefaultsToTheSubscriptionAndTheAnthropicDefaultInTheLibrary(t *testi
 
 func TestRunDefaultsToTheCodexDefaultInTheLibrary(t *testing.T) {
 	selected := chosenFor(t, "--wire", "codex")
-	if selected.Subscription != models.Codex || selected.Use != models.UseDefault {
+	if selected.Subscription != models.CodexSub || selected.Use != models.UseDefault {
 		t.Fatalf("--wire codex has to take the library codex default, got %+v", selected)
 	}
 }

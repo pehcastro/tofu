@@ -32,7 +32,7 @@ func TestDiscoverReportsTheCodexPinBesideTheResult(t *testing.T) {
 	defer server.Close()
 
 	served, err := Discover(context.Background(), testClient(t), Account{
-		Subscription: Codex,
+		Subscription: CodexSub,
 		BaseURL:      server.URL + "/codex/models?client_version=" + codex.PinnedCodexClientVersion,
 		Token:        func(context.Context) (string, error) { return "token", nil },
 	})
@@ -43,8 +43,8 @@ func TestDiscoverReportsTheCodexPinBesideTheResult(t *testing.T) {
 		t.Fatalf("the pin must gate discovery, header %q query %q", sentVersion, sentQuery)
 	}
 	library, err := Load([]Layer{layerOf("library", withSubscriptions(fstest.MapFS{
-		"models/openai/gpt-5.6-sol.yaml":      &fstest.MapFile{Data: []byte("subscription: codex\nuse: default\n")},
-		"models/openai/gpt-5.6-vanished.yaml": &fstest.MapFile{Data: []byte("subscription: codex\nuse: allowed\n")},
+		"models/openai/gpt-5.6-sol.yaml":      &fstest.MapFile{Data: []byte("subscription: codex-sub\nuse: default\n")},
+		"models/openai/gpt-5.6-vanished.yaml": &fstest.MapFile{Data: []byte("subscription: codex-sub\nuse: allowed\n")},
 	}))})
 	if err != nil {
 		t.Fatalf("loading: %v", err)
@@ -62,7 +62,7 @@ func TestDiscoverReportsTheCodexPinBesideTheResult(t *testing.T) {
 }
 
 func TestADumpOfTheDiscoveryRequestHidesTheAccountAndTheToken(t *testing.T) {
-	dump := discoveryRequest(Account{Subscription: Codex, AccountID: "acct-0000"}, "token-0000")
+	dump := discoveryRequest(Account{Subscription: CodexSub, AccountID: "acct-0000"}, "token-0000")
 	carried := ""
 	for _, header := range dump.Headers {
 		if strings.EqualFold(header.Name, codex.HeaderAccountID) {
@@ -80,11 +80,11 @@ func TestADumpOfTheDiscoveryRequestHidesTheAccountAndTheToken(t *testing.T) {
 
 func TestReconcileRendersAnEmptyListRatherThanNothing(t *testing.T) {
 	library, err := Load([]Layer{layerOf("library", withSubscriptions(oneFile(
-		"models/openai/gpt-5.6-sol.yaml", "subscription: codex\nuse: default\n")))})
+		"models/openai/gpt-5.6-sol.yaml", "subscription: codex-sub\nuse: default\n")))})
 	if err != nil {
 		t.Fatalf("loading: %v", err)
 	}
-	lines := library.Reconcile(Served{Subscription: Codex, Pin: "pin", IDs: []string{"gpt-5.6-sol"}}, shippedTable(t)).Lines()
+	lines := library.Reconcile(Served{Subscription: CodexSub, Pin: "pin", IDs: []string{"gpt-5.6-sol"}}, shippedTable(t)).Lines()
 	for _, line := range lines[1:] {
 		if !strings.HasSuffix(line, "(none)") {
 			t.Fatalf("an empty finding is still a line, got %q", line)
@@ -99,7 +99,7 @@ func TestDiscoverReadsTheAnthropicListShape(t *testing.T) {
 	defer server.Close()
 
 	served, err := Discover(context.Background(), testClient(t), Account{
-		Subscription: Claude,
+		Subscription: ClaudeSub,
 		BaseURL:      server.URL,
 		Token:        func(context.Context) (string, error) { return "token", nil },
 	})

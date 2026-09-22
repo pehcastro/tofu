@@ -1,4 +1,4 @@
-subscription: claude
+subscription: claude-sub
 window: 7d:fable
 use: excluded
 reason: the owner on 2026-09-19, not fable or astra for now, those are not cheap. A current preference recorded as data, not a permanent rule

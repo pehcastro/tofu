@@ -64,7 +64,7 @@ func FromAnthropicUsage(body []byte, now time.Time) (Report, error) {
 		return Report{}, transport.Fail("quota.FromAnthropicUsage", transport.KindProvider, err,
 			"the anthropic usage payload is not the shape this endpoint documents")
 	}
-	report := Report{Provider: Anthropic, FetchedAt: now}
+	report := Report{Provider: ClaudeSub, FetchedAt: now}
 	report.appendBucket(fiveHourWindow, fiveHours, payload.FiveHour)
 	report.appendBucket(sevenDayWindow, week, payload.SevenDay)
 	for _, limit := range payload.Limits {
@@ -156,7 +156,7 @@ func FromCodexUsage(body []byte, now time.Time) (Report, error) {
 		return Report{}, transport.Fail("quota.FromCodexUsage", transport.KindProvider, err,
 			"the codex usage payload is not the shape this endpoint documents")
 	}
-	report := Report{Provider: Codex, Plan: payload.PlanType, FetchedAt: now}
+	report := Report{Provider: CodexSub, Plan: payload.PlanType, FetchedAt: now}
 	if payload.RateLimit == nil {
 		return report, nil
 	}

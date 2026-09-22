@@ -14,7 +14,7 @@ var update = flag.Bool("update", false, "rewrite the golden files")
 const (
 	fixtureCodexAccount = "11111111-2222-3333-4444-555555555555"
 	fixtureSpentState   = "every window is spent, back at 2026-09-26T18:42:00Z"
-	fixtureRefusal      = "2 anthropic accounts are usable and nothing says which, so every turn refuses"
+	fixtureRefusal      = "2 claude-sub accounts are usable and nothing says which, so every turn refuses"
 	fixtureGate         = "no key, so the jev gate is off: " + openRouterFix
 	fixtureWidestWindow = "7d:fable"
 	fixtureBars         = 5
@@ -35,7 +35,7 @@ func statusFixture() statusReport {
 						ID:        1,
 						Account:   "first@example.test",
 						Login:     "oauth, expires 2026-09-26T19:42:00Z, re-login by 2026-10-26",
-						Plan:      "not reported by anthropic",
+						Plan:      "not reported by claude-sub",
 						State:     statusUnchosen,
 						Attention: true,
 						Windows: []windowReport{
@@ -46,7 +46,7 @@ func statusFixture() statusReport {
 						ID:        2,
 						Account:   "second@example.test",
 						Login:     "oauth, expires 2026-09-26T19:42:00Z, re-login by 2026-10-26",
-						Plan:      "not reported by anthropic",
+						Plan:      "not reported by claude-sub",
 						State:     statusUnchosen,
 						Attention: true,
 						Windows: []windowReport{
@@ -82,7 +82,7 @@ func statusFixture() statusReport {
 						ID:      4,
 						Account: "third@example.test",
 						Login:   "oauth, expires 2026-09-26T19:42:00Z",
-						Plan:    "not reported by opencode",
+						Plan:    "not reported by opencode-sub",
 						State:   statusInUse,
 					},
 				},

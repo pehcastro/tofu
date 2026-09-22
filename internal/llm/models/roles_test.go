@@ -10,11 +10,11 @@ import (
 
 func twoModels() fstest.MapFS {
 	return withSubscriptions(fstest.MapFS{
-		"models/openai/gpt-5.6-sol.yaml":      &fstest.MapFile{Data: []byte("subscription: codex\nuse: default\n")},
-		"models/openai/gpt-5.6-luna.yaml":     &fstest.MapFile{Data: []byte("subscription: codex\nuse: allowed\n")},
-		"models/anthropic/claude-opus-5.yaml": &fstest.MapFile{Data: []byte("subscription: claude\nuse: default\n")},
+		"models/openai/gpt-5.6-sol.yaml":      &fstest.MapFile{Data: []byte("subscription: codex-sub\nuse: default\n")},
+		"models/openai/gpt-5.6-luna.yaml":     &fstest.MapFile{Data: []byte("subscription: codex-sub\nuse: allowed\n")},
+		"models/anthropic/claude-opus-5.yaml": &fstest.MapFile{Data: []byte("subscription: claude-sub\nuse: default\n")},
 		"models/anthropic/claude-fable-5.yaml": &fstest.MapFile{
-			Data: []byte("subscription: claude\nuse: excluded\nreason: the owner will not pay for fable\n")},
+			Data: []byte("subscription: claude-sub\nuse: excluded\nreason: the owner will not pay for fable\n")},
 	})
 }
 
@@ -39,11 +39,11 @@ func withRole(id RoleID, slug string) fstest.MapFS {
 
 func TestEachRoleBindsToAModelSlugAndReadsBack(t *testing.T) {
 	for id, slug := range map[RoleID]string{RoleTurn: "claude-sub/claude-opus-5", RoleChild: "codex-sub/gpt-5.6-luna"} {
-		bound := boundIn(t, withRole(id, slug), Claude)[id]
+		bound := boundIn(t, withRole(id, slug), ClaudeSub)[id]
 		if bound.Model.Slug() != slug {
 			t.Fatalf("%s reads back %q, want %q", id, bound.Model.Slug(), slug)
 		}
-		if bound.Wire != map[Subscription]string{Claude: "anthropic", Codex: "codex"}[bound.Model.Subscription] {
+		if bound.Wire != map[Subscription]string{ClaudeSub: "anthropic", CodexSub: "codex"}[bound.Model.Subscription] {
 			t.Fatalf("%s binds %s and reports wire %q", id, slug, bound.Wire)
 		}
 		if bound.By != BoundByFile || !strings.Contains(bound.File, string(id)+".yaml") {
@@ -88,7 +88,7 @@ func TestAProjectRoleFileLeavesTheGlobalOneTheProjectDoesNotName(t *testing.T) {
 	if err != nil {
 		t.Fatalf("loading: %v", err)
 	}
-	bound, err := library.Bind(Claude)
+	bound, err := library.Bind(ClaudeSub)
 	if err != nil {
 		t.Fatalf("binding: %v", err)
 	}
@@ -104,11 +104,11 @@ func TestAProjectRoleFileLeavesTheGlobalOneTheProjectDoesNotName(t *testing.T) {
 }
 
 func TestARoleWithNothingBoundFallsBackToTheSubscriptionDefaultAndSaysSo(t *testing.T) {
-	bound := boundIn(t, twoModels(), Codex)[RoleChild]
+	bound := boundIn(t, twoModels(), CodexSub)[RoleChild]
 	if bound.By != BoundByDefault || bound.Model.Slug() != "codex-sub/gpt-5.6-sol" {
 		t.Fatalf("the child role did not fall back to the codex default: %+v", bound)
 	}
-	want := "child has nothing bound, so it runs codex-sub/gpt-5.6-sol, the codex default"
+	want := "child has nothing bound, so it runs codex-sub/gpt-5.6-sol, the codex-sub default"
 	if bound.Says() != want {
 		t.Fatalf("it says %q, want %q", bound.Says(), want)
 	}
@@ -129,7 +129,7 @@ func TestBindingsArePinnedAndAReReadPicksUpTheChange(t *testing.T) {
 		if err != nil {
 			t.Fatalf("loading: %v", err)
 		}
-		bound, err := library.Bind(Claude)
+		bound, err := library.Bind(ClaudeSub)
 		if err != nil {
 			t.Fatalf("binding: %v", err)
 		}
@@ -155,7 +155,7 @@ func BenchmarkReReadingEveryLibraryFile(b *testing.B) {
 		if err != nil {
 			b.Fatalf("loading: %v", err)
 		}
-		if _, err := library.Bind(Claude); err != nil {
+		if _, err := library.Bind(ClaudeSub); err != nil {
 			b.Fatalf("binding: %v", err)
 		}
 	}

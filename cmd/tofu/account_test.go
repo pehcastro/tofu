@@ -31,7 +31,7 @@ func storeTwoAnthropicAccounts(t *testing.T) {
 	now := time.Now()
 	for _, account := range []string{firstTestAccount, secondTestAccount} {
 		credential := cred.Credential{
-			Provider:   cred.Anthropic,
+			Provider:   cred.ClaudeSub,
 			Kind:       cred.KindOAuth,
 			Access:     testAccess,
 			Expires:    now.Add(time.Hour),
@@ -99,7 +99,7 @@ func TestDisablingOneCredentialLeavesTheOtherChosen(t *testing.T) {
 
 func chosenAccount(t *testing.T) error {
 	t.Helper()
-	_, accountID, store, err := subscriptionCredential(cred.Anthropic)
+	_, accountID, store, err := subscriptionCredential(cred.ClaudeSub)
 	if store != nil {
 		defer func() { _ = store.Close() }()
 	}
@@ -111,7 +111,7 @@ func chosenAccount(t *testing.T) error {
 
 func TestTheListingNamesTheAccountAndThePaneStillMasksIt(t *testing.T) {
 	emptyHome(t)
-	stored := storeCredential(t, cred.Anthropic)
+	stored := storeCredential(t, cred.ClaudeSub)
 
 	listing, errOut, code := runLogin(t, "--status")
 	if code != exitOK {
@@ -155,7 +155,7 @@ func storeCodexLogin(t *testing.T, account string) {
 	defer func() { _ = store.Close() }()
 	now := time.Now()
 	credential := cred.Credential{
-		Provider:   cred.Codex,
+		Provider:   cred.CodexSub,
 		Kind:       cred.KindOAuth,
 		Access:     segment([]byte(`{"alg":"none"}`)) + "." + segment(claims) + ".not-a-signature",
 		Expires:    now.Add(time.Hour),

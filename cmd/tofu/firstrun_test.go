@@ -48,7 +48,7 @@ func plainFrame(app *tui.App) string { return ansi.Strip(app.View().Content) }
 func TestAFirstRunWithNothingStoredDrawsTheSetupAndNotAnError(t *testing.T) {
 	scratchProject(t)
 	narrow, wide := plainFrame(firstRunApp(t, 80, 24)), plainFrame(firstRunApp(t, 120, 36))
-	for _, want := range []string{noCredential, noGateKey, "tofu login anthropic", "tofu login openrouter"} {
+	for _, want := range []string{noCredential, noGateKey, "tofu login " + string(cred.ClaudeSub), "tofu login openrouter"} {
 		if !strings.Contains(narrow, want) {
 			t.Errorf("the first frame at 80 columns does not say %q\n%s", want, narrow)
 		}
@@ -72,7 +72,7 @@ func TestAFirstRunWithNothingStoredDrawsTheSetupAndNotAnError(t *testing.T) {
 
 func TestACredentialWithoutAKeyLeavesOnlyTheKeyStep(t *testing.T) {
 	scratchProject(t)
-	storeCredential(t, cred.Anthropic)
+	storeCredential(t, cred.ClaudeSub)
 	frame := plainFrame(firstRunApp(t, 80, 24))
 	if !strings.Contains(frame, noGateKey) {
 		t.Errorf("the key step is not drawn\n%s", frame)
@@ -88,7 +88,7 @@ func TestACredentialWithoutAKeyLeavesOnlyTheKeyStep(t *testing.T) {
 
 func TestWithBothStoredNoSetupIsDrawnAndTheComposerHasFocus(t *testing.T) {
 	scratchProject(t)
-	storeCredential(t, cred.Anthropic)
+	storeCredential(t, cred.ClaudeSub)
 	storeGateKey(t, gateKeyForTests)
 	app := firstRunApp(t, 80, 24)
 	frame := plainFrame(app)
@@ -132,7 +132,7 @@ func TestALoginRunInAnotherTerminalMovesTheAppOnWithoutARestart(t *testing.T) {
 		t.Fatalf("the app did not start on the setup screen\n%s", plainFrame(app))
 	}
 
-	storeCredential(t, cred.Anthropic)
+	storeCredential(t, cred.ClaudeSub)
 	storeGateKey(t, gateKeyForTests)
 	began := time.Now()
 	drive(t, app, start)
@@ -158,7 +158,7 @@ func TestTheAppAndDoctorCallTheSameStateReady(t *testing.T) {
 	}{
 		{"nothing stored", func() {}},
 		{"the key alone", func() { storeGateKey(t, gateKeyForTests) }},
-		{"the credential too", func() { storeCredential(t, cred.Anthropic) }},
+		{"the credential too", func() { storeCredential(t, cred.ClaudeSub) }},
 	} {
 		step.store()
 		required := appRequirements()
@@ -204,7 +204,7 @@ func TestTheKeyIsNeverInAFrameALogOrARecordedSession(t *testing.T) {
 	const key = "sk-or-v1-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcd"
 	storeGateKey(t, key)
 	t.Setenv("OPENROUTER_KEY", key)
-	storeCredential(t, cred.Anthropic)
+	storeCredential(t, cred.ClaudeSub)
 	var authorization string
 	jevStub(t, http.StatusOK, untrustedDenyReply, &authorization)
 

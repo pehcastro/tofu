@@ -3,23 +3,23 @@ claude-sub refuses every turn                                                   
 attention
 
   ┌ claude-sub
-  │ refuses   2 anthropic accounts are usable and nothing says which, so every turn refuses
+  │ refuses   2 claude-sub accounts are usable and nothing says which, so every turn refuses
   │ fix       run tofu login --disable 1
-  └────────────────────────────────────────────────────────────────────────────────────────
+  └─────────────────────────────────────────────────────────────────────────────────────────
 
 claude-sub
 
   ┌ #1  first@example.test
   │ state     usable, not chosen
   │ login     oauth, expires 2026-09-26T19:42:00Z, re-login by 2026-10-26
-  │ plan      not reported by anthropic
+  │ plan      not reported by claude-sub
   │ 5h        ▓▓▓░░░░░░░░░  25%  resets in 3h
   └──────────────────────────────────────────────────────────────────────
 
   ┌ #2  second@example.test
   │ state     usable, not chosen
   │ login     oauth, expires 2026-09-26T19:42:00Z, re-login by 2026-10-26
-  │ plan      not reported by anthropic
+  │ plan      not reported by claude-sub
   │ 5h        ▓▓▓▓▓▓▓░░░░░  62%  resets in 1h 30m
   │ 7d        ▓▓▓▓▓▓▓▓▓▓▓░  91%  resets in 2d 4h
   └──────────────────────────────────────────────────────────────────────
@@ -39,7 +39,7 @@ opencode-sub
   ┌ #4  third@example.test
   │ state     in use
   │ login     oauth, expires 2026-09-26T19:42:00Z
-  │ plan      not reported by opencode
+  │ plan      not reported by opencode-sub
   │ windows   no window is reporting use
   └──────────────────────────────────────────────
 

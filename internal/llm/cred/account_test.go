@@ -19,7 +19,7 @@ func accountAccess(account string) string { return storedAccess + "-" + account 
 func seedAccount(t *testing.T, store *Store, account string, at time.Time) int64 {
 	t.Helper()
 	err := store.Save(Credential{
-		Provider:   Anthropic,
+		Provider:   ClaudeSub,
 		Kind:       KindOAuth,
 		Access:     accountAccess(account),
 		Refresh:    storedRefresh,
@@ -52,7 +52,7 @@ func TestADisabledFirstAccountDoesNotHideTheSecond(t *testing.T) {
 		t.Fatalf("disable: %v", err)
 	}
 
-	row, found, err := store.RowAt(Anthropic, now)
+	row, found, err := store.RowAt(ClaudeSub, now)
 	if err != nil || !found {
 		t.Fatalf("RowAt = %v, %v", found, err)
 	}
@@ -65,10 +65,10 @@ func TestAnExpiredGrantDoesNotHideTheSecondAccount(t *testing.T) {
 	authorized := time.Date(2026, 9, 21, 12, 0, 0, 0, time.UTC)
 	store := openStore(t, t.TempDir())
 	seedAccount(t, store, firstAccount, authorized)
-	second := seedAccount(t, store, secondAccount, authorized.Add(anthropicSpec().GrantLife))
-	now := authorized.Add(anthropicSpec().GrantLife + time.Hour)
+	second := seedAccount(t, store, secondAccount, authorized.Add(claudeSubSpec().GrantLife))
+	now := authorized.Add(claudeSubSpec().GrantLife + time.Hour)
 
-	row, found, err := store.RowAt(Anthropic, now)
+	row, found, err := store.RowAt(ClaudeSub, now)
 	if err != nil || !found {
 		t.Fatalf("RowAt = %v, %v", found, err)
 	}
@@ -104,7 +104,7 @@ func TestTwoUsableAccountsForOneProviderAreRefusedRatherThanOrdered(t *testing.T
 	first := seedAccount(t, store, firstAccount, now)
 	second := seedAccount(t, store, secondAccount, now)
 
-	row, found, err := store.RowAt(Anthropic, now)
+	row, found, err := store.RowAt(ClaudeSub, now)
 	var refusal TwoAccounts
 	if !errors.As(err, &refusal) || found {
 		t.Fatalf("RowAt = %d, %v, %v, want a refusal naming both credentials", row.ID, found, err)

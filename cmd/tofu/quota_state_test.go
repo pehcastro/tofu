@@ -50,7 +50,7 @@ func storeWithTwoAnthropicAccounts(t *testing.T, now time.Time) *cred.Store {
 	t.Cleanup(func() { _ = store.Close() })
 	for _, account := range []string{firstStubAccount, secondStubAccount} {
 		credential := cred.Credential{
-			Provider:   cred.Anthropic,
+			Provider:   cred.ClaudeSub,
 			Kind:       cred.KindOAuth,
 			Access:     stubAccess(account),
 			Refresh:    "not-a-real-refresh-" + account,
@@ -75,7 +75,7 @@ func TestTwoAccountsOnOneProviderAreBothPolled(t *testing.T) {
 	url, requests := usageStub(t)
 
 	results, err := pollRows(context.Background(), store, rows,
-		func() time.Time { return now }, map[quota.Provider]string{quota.Anthropic: url})
+		func() time.Time { return now }, map[quota.Provider]string{quota.ClaudeSub: url})
 	if err != nil {
 		t.Fatalf("pollRows: %v", err)
 	}
@@ -116,7 +116,7 @@ func TestAnUnusableAccountIsReportedRatherThanPolledOrDropped(t *testing.T) {
 	url, requests := usageStub(t)
 
 	results, err := pollRows(context.Background(), store, rows,
-		func() time.Time { return now }, map[quota.Provider]string{quota.Anthropic: url})
+		func() time.Time { return now }, map[quota.Provider]string{quota.ClaudeSub: url})
 	if err != nil {
 		t.Fatalf("pollRows: %v", err)
 	}

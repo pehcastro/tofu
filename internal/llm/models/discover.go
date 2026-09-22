@@ -60,9 +60,9 @@ func Discover(ctx context.Context, client *transport.Client, account Account) (S
 
 func pinOf(subscription Subscription) string {
 	switch subscription {
-	case Claude:
+	case ClaudeSub:
 		return "claude-cli " + anthropic.PinnedClaudeCodeVersion
-	case Codex:
+	case CodexSub:
 		return "codex client version " + codex.PinnedCodexClientVersion
 	}
 	panic("models: unknown subscription " + string(subscription))
@@ -75,13 +75,13 @@ func discoveryRequest(account Account, token string) llm.Dump {
 	}
 	url := ""
 	switch account.Subscription {
-	case Claude:
+	case ClaudeSub:
 		url = anthropicModelsURL
 		headers = append(headers,
 			llm.Header{Name: "anthropic-version", Value: anthropic.AnthropicAPIVersion},
 			llm.Header{Name: "anthropic-beta", Value: oauthBeta},
 			llm.Header{Name: "User-Agent", Value: anthropic.ClaudeCodeUserAgent})
-	case Codex:
+	case CodexSub:
 		url = codexModelsURL
 		if account.AccountID != "" {
 			headers = append(headers, llm.Header{Name: codex.HeaderAccountID, Value: account.AccountID})

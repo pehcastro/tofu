@@ -59,7 +59,7 @@ func windowsThePublishedTableCorrects() map[string]int {
 }
 
 func TestTheCodexListReportsAWindowPerModel(t *testing.T) {
-	served := servedFrom(t, Codex, "codex-models.json")
+	served := servedFrom(t, CodexSub, "codex-models.json")
 	for slug, want := range map[string]int{"gpt-6-astra": 272000, "gpt-5.6-sol": 272000, "gpt-5.5": 272000} {
 		if served.Windows[slug] != want {
 			t.Fatalf("%s came back with a %d token window, want the %d the payload carries", slug, served.Windows[slug], want)
@@ -72,11 +72,11 @@ func TestTheCodexListReportsAWindowPerModel(t *testing.T) {
 }
 
 func TestTheAnthropicListReportsNoWindowAndTheProxyShapeDoes(t *testing.T) {
-	official := servedFrom(t, Claude, "anthropic-models.json")
+	official := servedFrom(t, ClaudeSub, "anthropic-models.json")
 	if len(official.Windows) != 0 {
 		t.Fatalf("the anthropic model list came back with windows %v, and its entries carry id, display_name and created_at alone", official.Windows)
 	}
-	proxy := servedFrom(t, Claude, "anthropic-proxy-models.json")
+	proxy := servedFrom(t, ClaudeSub, "anthropic-proxy-models.json")
 	if proxy.Windows["claude-haiku-4-5-20251001"] != 200000 {
 		t.Fatalf("an anthropic shaped list reporting max_input_tokens came back with %v", proxy.Windows)
 	}
@@ -85,7 +85,7 @@ func TestTheAnthropicListReportsNoWindowAndTheProxyShapeDoes(t *testing.T) {
 
 func TestThePublishedTableAnswersBeforeTheAccountDoes(t *testing.T) {
 	library, registry := shippedLibrary(t), shippedTable(t)
-	served := servedFrom(t, Codex, "codex-models.json")
+	served := servedFrom(t, CodexSub, "codex-models.json")
 	if served.Windows["gpt-5.6-sol"] == registry.Window("openai/gpt-5.6-sol") {
 		t.Fatal("the account and the table agree on the codex default, so this proves no order")
 	}
@@ -99,8 +99,8 @@ func TestThePublishedTableAnswersBeforeTheAccountDoes(t *testing.T) {
 		t.Fatalf("%s resolved to %d tokens %q, want the 1050000 the table publishes", listed.Slug(), tokens, source)
 	}
 
-	custom := Model{Provider: OpenAI, ID: "gpt-custom", Subscription: Codex}
-	reported := Served{Subscription: Codex, Pin: "codex client version 0.153.0", Windows: map[string]int{"gpt-custom": 300000}}
+	custom := Model{Provider: OpenAI, ID: "gpt-custom", Subscription: CodexSub}
+	reported := Served{Subscription: CodexSub, Pin: "codex client version 0.153.0", Windows: map[string]int{"gpt-custom": 300000}}
 	if tokens, source := WindowFor(custom, registry, reported); tokens != 300000 || !strings.Contains(source, "account") {
 		t.Fatalf("a model no table lists resolved to %d tokens %q, want the 300000 the account reports", tokens, source)
 	}
@@ -132,7 +132,7 @@ func TestEveryWindowTypedByHandNowComesFromThePublishedTable(t *testing.T) {
 
 func TestTheTableIsJoinedOnTheVendorFormAndTheSlugStaysThePayerForm(t *testing.T) {
 	library, err := Load([]Layer{layerOf("library", withSubscriptions(oneFile(
-		"models/openai/gpt-5.6-sol.yaml", "subscription: codex\nuse: default\n")))})
+		"models/openai/gpt-5.6-sol.yaml", "subscription: codex-sub\nuse: default\n")))})
 	if err != nil {
 		t.Fatalf("loading: %v", err)
 	}
@@ -185,7 +185,7 @@ func TestEveryModelTheAccountCanSendTakesAWindowFromTheTable(t *testing.T) {
 }
 
 func TestReconcileNamesAWindowThePublishedTableDoesNotMatch(t *testing.T) {
-	lines := shippedLibrary(t).Reconcile(servedFrom(t, Codex, "codex-models.json"), shippedTable(t)).Lines()
+	lines := shippedLibrary(t).Reconcile(servedFrom(t, CodexSub, "codex-models.json"), shippedTable(t)).Lines()
 	last := lines[len(lines)-1]
 	for _, want := range []string{"codex-sub/gpt-5.6-sol 272000", "codex-sub/gpt-6-astra 272000", "codex-sub/gpt-5.5 272000"} {
 		if !strings.Contains(last, want) {
@@ -197,7 +197,7 @@ func TestReconcileNamesAWindowThePublishedTableDoesNotMatch(t *testing.T) {
 
 func TestAModelFileCannotCarryAContextWindowAtAll(t *testing.T) {
 	_, err := Load([]Layer{layerOf("library", withSubscriptions(oneFile(
-		"models/openai/gpt-5.6-sol.yaml", "subscription: codex\nuse: default\ncontext_tokens: 400000\n")))})
+		"models/openai/gpt-5.6-sol.yaml", "subscription: codex-sub\nuse: default\ncontext_tokens: 400000\n")))})
 	if err == nil || !strings.Contains(err.Error(), "context_tokens: unknown field") {
 		t.Fatalf("a local file still carries an upstream fact, got %v", err)
 	}

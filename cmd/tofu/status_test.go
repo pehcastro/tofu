@@ -34,9 +34,9 @@ func vendorStubs(t *testing.T, now time.Time) map[quota.Provider]string {
 	t.Helper()
 	urls := make(map[quota.Provider]string, 2)
 	for provider, body := range map[quota.Provider]string{
-		quota.Anthropic: `{"five_hour":{"utilization":25,"resets_at":"` +
+		quota.ClaudeSub: `{"five_hour":{"utilization":25,"resets_at":"` +
 			now.Add(3*time.Hour).UTC().Format(time.RFC3339) + `"}}`,
-		quota.Codex: `{"plan_type":"pro","rate_limit":{"primary_window":` +
+		quota.CodexSub: `{"plan_type":"pro","rate_limit":{"primary_window":` +
 			`{"used_percent":13,"limit_window_seconds":604800,"reset_after_seconds":7200}}}`,
 	} {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -70,7 +70,7 @@ func storeLogins(t *testing.T, logins ...cred.Credential) {
 func anthropicLogin(account, email string) cred.Credential {
 	now := time.Now()
 	return cred.Credential{
-		Provider:   cred.Anthropic,
+		Provider:   cred.ClaudeSub,
 		Kind:       cred.KindOAuth,
 		Access:     testAccess,
 		Expires:    now.Add(time.Hour),
@@ -82,7 +82,7 @@ func anthropicLogin(account, email string) cred.Credential {
 func codexLogin(account string) cred.Credential {
 	now := time.Now()
 	return cred.Credential{
-		Provider:   cred.Codex,
+		Provider:   cred.CodexSub,
 		Kind:       cred.KindOAuth,
 		Access:     testAccess,
 		Expires:    now.Add(time.Hour),
@@ -181,7 +181,7 @@ func TestTheListingCarriesTheSubscriptionThePlanAndTheWindows(t *testing.T) {
 	for _, want := range []string{
 		"claude-sub",
 		"codex-sub",
-		"not reported by anthropic",
+		"not reported by claude-sub",
 		"pro",
 		"25%",
 		"13%",

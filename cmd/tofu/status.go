@@ -12,9 +12,7 @@ import (
 	"time"
 
 	"tofu/internal/llm/cred"
-	"tofu/internal/llm/models"
 	"tofu/internal/llm/quota"
-	shipped "tofu/library"
 )
 
 const (
@@ -108,7 +106,6 @@ func credentialStatus(now time.Time, redact bool, urls map[quota.Provider]string
 }
 
 func statusSources(store *cred.Store, rows []cred.Row, results []pollResult, redact bool, now time.Time) []sourceReport {
-	slugs := subscriptionSlugs()
 	var order []cred.Provider
 	for _, row := range rows {
 		if !slices.Contains(order, row.Credential.Provider) {
@@ -117,7 +114,7 @@ func statusSources(store *cred.Store, rows []cred.Row, results []pollResult, red
 	}
 	sources := make([]sourceReport, 0, len(order))
 	for _, provider := range order {
-		source := sourceReport{Subscription: cmp.Or(slugs[string(provider)], string(provider))}
+		source := sourceReport{Subscription: string(provider)}
 		var refusal cred.TwoAccounts
 		_, _, err := store.RowAt(provider, now)
 		refuses := errors.As(err, &refusal)
@@ -135,19 +132,6 @@ func statusSources(store *cred.Store, rows []cred.Row, results []pollResult, red
 		sources = append(sources, source)
 	}
 	return sources
-}
-
-func subscriptionSlugs() map[string]string {
-	slugs := make(map[string]string)
-	layers, err := models.Layers(shipped.Files())
-	if err != nil {
-		return slugs
-	}
-	library, _ := models.Load(layers)
-	for _, spec := range library.Subscriptions {
-		slugs[spec.Wire] = string(spec.ID) + "-sub"
-	}
-	return slugs
 }
 
 func accountOf(row cred.Row, result pollResult, refuses, redact bool, now time.Time) accountReport {

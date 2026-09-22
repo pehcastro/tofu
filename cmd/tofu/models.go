@@ -273,20 +273,20 @@ func discoverModels(ctx context.Context, library models.Library, registry models
 
 	code := exitOK
 	for _, spec := range library.Subscriptions {
-		credential, err := cred.Lookup(spec.Wire)
+		credential, err := cred.Lookup(string(spec.ID))
 		if err != nil {
 			_, _ = fmt.Fprintf(out, "%s: %v\n", spec.ID, err)
 			code = exitVerdict
 			continue
 		}
-		row, present, err := store.Row(cred.Provider(spec.Wire))
+		row, present, err := store.Row(credential.Provider)
 		if err != nil {
 			_, _ = fmt.Fprintf(out, "%s: %v\n", spec.ID, err)
 			code = exitVerdict
 			continue
 		}
 		if !present {
-			_, _ = fmt.Fprintf(out, "%s: no credential, run tofu login %s\n", spec.ID, spec.Wire)
+			_, _ = fmt.Fprintf(out, "%s: no credential, run tofu login %s\n", spec.ID, spec.ID)
 			code = exitVerdict
 			continue
 		}

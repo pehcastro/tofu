@@ -23,8 +23,8 @@ func (p Provider) valid() bool {
 type Subscription string
 
 const (
-	Claude Subscription = "claude"
-	Codex  Subscription = "codex"
+	ClaudeSub Subscription = "claude-sub"
+	CodexSub  Subscription = "codex-sub"
 )
 
 func (s Subscription) valid() bool {
@@ -68,7 +68,7 @@ type Model struct {
 
 func (m Model) Slug() string {
 	if m.Subscription != "" {
-		return string(m.Subscription) + "-sub/" + m.ID
+		return string(m.Subscription) + "/" + m.ID
 	}
 	return string(m.Provider) + "/" + m.ID
 }

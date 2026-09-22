@@ -9,8 +9,8 @@ import (
 type Provider string
 
 const (
-	Anthropic Provider = "anthropic"
-	Codex     Provider = "codex"
+	ClaudeSub Provider = "claude-sub"
+	CodexSub  Provider = "codex-sub"
 )
 
 type State int

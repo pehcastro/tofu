@@ -38,7 +38,7 @@ func stubCodexPoller(t *testing.T, handler http.HandlerFunc) *Poller {
 	server := httptest.NewServer(handler)
 	t.Cleanup(server.Close)
 	poller, err := NewPoller(server.Client(), func() time.Time { return recordedNow },
-		map[Provider]string{Codex: server.URL})
+		map[Provider]string{CodexSub: server.URL})
 	if err != nil {
 		t.Fatalf("building the poller: %v", err)
 	}
@@ -54,7 +54,7 @@ func TestTheUsageEndpointIsPolledOnceAndNeverRetriedInsideOneCall(t *testing.T) 
 		}
 		http.Error(w, "rate_limit", http.StatusTooManyRequests)
 	})
-	account := Account{Provider: Codex, Credential: stubCredential{token: "token"}}
+	account := Account{Provider: CodexSub, Credential: stubCredential{token: "token"}}
 	if _, err := poller.Poll(context.Background(), account); err == nil {
 		t.Fatal("a throttled usage endpoint reported success")
 	}
@@ -69,7 +69,7 @@ func TestAFailedPollKeepsTheCauseAndTheRequestID(t *testing.T) {
 		seenRequestID = r.Header.Get(transport.RequestIDHeader)
 		http.Error(w, "usage is down for maintenance", http.StatusInternalServerError)
 	})
-	_, err := poller.Poll(context.Background(), Account{Provider: Codex, Credential: stubCredential{token: "token"}})
+	_, err := poller.Poll(context.Background(), Account{Provider: CodexSub, Credential: stubCredential{token: "token"}})
 	if err == nil {
 		t.Fatal("a broken usage endpoint reported success")
 	}
@@ -94,7 +94,7 @@ func TestABrokenCredentialKeepsTheCauseUnderneath(t *testing.T) {
 		t.Error("a broken credential still reached the usage endpoint")
 	})
 	cause := errors.New("cred: the codex refresh token expired")
-	_, err := poller.Poll(context.Background(), Account{Provider: Codex, Credential: stubCredential{err: cause}})
+	_, err := poller.Poll(context.Background(), Account{Provider: CodexSub, Credential: stubCredential{err: cause}})
 	if !errors.Is(err, cause) {
 		t.Fatalf("the credential error is not reachable underneath: %v", err)
 	}
@@ -106,7 +106,7 @@ func TestTheCacheAnswersASecondPollInsideTheInterval(t *testing.T) {
 		hits.Add(1)
 		_, _ = w.Write(servingCodexBody("Plus"))
 	})
-	account := Account{Provider: Codex, AccountID: alphaAccount, Credential: stubCredential{token: "token"}}
+	account := Account{Provider: CodexSub, AccountID: alphaAccount, Credential: stubCredential{token: "token"}}
 	first, err := poller.Poll(context.Background(), account)
 	if err != nil {
 		t.Fatalf("the first poll failed: %v", err)
@@ -127,7 +127,7 @@ func TestDoctorSeparatesASpentWindowFromABrokenCredential(t *testing.T) {
 	spentPoller := stubCodexPoller(t, func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write(recordedBody(t, "codex-usage.json"))
 	})
-	spent, err := spentPoller.Poll(context.Background(), Account{Provider: Codex, Credential: stubCredential{token: "token"}})
+	spent, err := spentPoller.Poll(context.Background(), Account{Provider: CodexSub, Credential: stubCredential{token: "token"}})
 	if err != nil {
 		t.Fatalf("polling the spent account: %v", err)
 	}
@@ -141,7 +141,7 @@ func TestDoctorSeparatesASpentWindowFromABrokenCredential(t *testing.T) {
 	brokenPoller := stubCodexPoller(t, func(http.ResponseWriter, *http.Request) {
 		t.Error("a broken credential still reached the usage endpoint")
 	})
-	brokenAccount := Account{Provider: Codex, Credential: stubCredential{err: errors.New("cred: the codex credential is disabled")}}
+	brokenAccount := Account{Provider: CodexSub, Credential: stubCredential{err: errors.New("cred: the codex credential is disabled")}}
 	broken, err := brokenPoller.Poll(context.Background(), brokenAccount)
 	if err == nil {
 		t.Fatal("a broken credential polled successfully")
@@ -165,7 +165,7 @@ func TestAPollReportsNoAccountIdentifierAndNoToken(t *testing.T) {
 	poller := stubCodexPoller(t, func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write(recordedBody(t, "codex-usage.json"))
 	})
-	account := Account{Provider: Codex, AccountID: "acct-secret-uuid", Credential: stubCredential{token: "token-secret"}}
+	account := Account{Provider: CodexSub, AccountID: "acct-secret-uuid", Credential: stubCredential{token: "token-secret"}}
 	report, err := poller.Poll(context.Background(), account)
 	if err != nil {
 		t.Fatalf("polling: %v", err)
@@ -195,8 +195,8 @@ func TestOnePollerAnswersEachAccountOnOneProviderFromItsOwnCredential(t *testing
 		}
 		_, _ = w.Write(servingCodexBody(plan))
 	})
-	alpha := Account{Provider: Codex, AccountID: alphaAccount, Credential: stubCredential{token: "token-alpha"}}
-	beta := Account{Provider: Codex, AccountID: betaAccount, Credential: stubCredential{token: "token-beta"}}
+	alpha := Account{Provider: CodexSub, AccountID: alphaAccount, Credential: stubCredential{token: "token-alpha"}}
+	beta := Account{Provider: CodexSub, AccountID: betaAccount, Credential: stubCredential{token: "token-beta"}}
 	first, err := poller.Poll(context.Background(), alpha)
 	if err != nil {
 		t.Fatalf("polling the first account: %v", err)
@@ -219,7 +219,7 @@ func TestAnAccountWithNoIdentityIsPolledEveryTimeAndNeverCached(t *testing.T) {
 		hits.Add(1)
 		_, _ = w.Write(servingCodexBody("Plus"))
 	})
-	anonymous := Account{Provider: Codex, Credential: stubCredential{token: "token-anonymous"}}
+	anonymous := Account{Provider: CodexSub, Credential: stubCredential{token: "token-anonymous"}}
 	for range 2 {
 		if _, err := poller.Poll(context.Background(), anonymous); err != nil {
 			t.Fatalf("polling an account with no identity: %v", err)

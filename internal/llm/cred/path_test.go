@@ -47,7 +47,7 @@ func TestTheOldCredentialStoreStillOpensWhileTheNewDirectoryIsAbsent(t *testing.
 	if err != nil {
 		t.Fatalf("opening the old store: %v", err)
 	}
-	credential := Credential{Provider: Anthropic, Kind: KindOAuth, Access: "not-a-real-token"}
+	credential := Credential{Provider: ClaudeSub, Kind: KindOAuth, Access: "not-a-real-token"}
 	credential.Identity.AccountID = "account-1"
 	if err := written.Save(credential, time.Now()); err != nil {
 		t.Fatalf("saving into the old store: %v", err)

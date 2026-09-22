@@ -34,13 +34,13 @@ func TestOnlyAnExhaustedWindowWithAFutureResetAuthorizesWaiting(t *testing.T) {
 	timed := spent
 	timed.ResetsAt = recordedNow.Add(2 * time.Hour)
 
-	withReset := Report{Provider: Anthropic, Windows: []Window{timed}}
+	withReset := Report{Provider: ClaudeSub, Windows: []Window{timed}}
 	until, ok := withReset.WaitUntil(recordedNow)
 	if !ok || !until.Equal(timed.ResetsAt) {
 		t.Fatalf("an exhausted window with a future reset gave %v %v, want the reset", until, ok)
 	}
 
-	withoutReset := Report{Provider: Anthropic, Windows: []Window{spent}}
+	withoutReset := Report{Provider: ClaudeSub, Windows: []Window{spent}}
 	if _, ok := withoutReset.WaitUntil(recordedNow); ok {
 		t.Fatal("an exhausted window with no reset authorized a wait")
 	}
@@ -48,7 +48,7 @@ func TestOnlyAnExhaustedWindowWithAFutureResetAuthorizesWaiting(t *testing.T) {
 		t.Fatal("an exhausted window with no reset stopped reading as exhausted")
 	}
 
-	permanentBesideTimed := Report{Provider: Anthropic, Windows: []Window{timed, spent}}
+	permanentBesideTimed := Report{Provider: ClaudeSub, Windows: []Window{timed, spent}}
 	if _, ok := permanentBesideTimed.WaitUntil(recordedNow); ok {
 		t.Fatal("a permanent cap beside a timed window authorized a wait")
 	}

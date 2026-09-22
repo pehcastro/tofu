@@ -10,6 +10,7 @@ import (
 
 	"tofu/interface/tui/fixture"
 	"tofu/interface/tui/frame"
+	"tofu/internal/llm/cred"
 	"tofu/internal/llm/quota"
 	"tofu/internal/transport"
 )
@@ -112,10 +113,10 @@ func TestBothQuotaWindowsRenderInUsageAndInTheStatusBar(t *testing.T) {
 		t.Fatalf("tofu usage draws no meter for one of the 7d windows: anthropic %q, codex %q", anthropicMeter, codexMeter)
 	}
 	quotas := quotasFrom([]pollResult{
-		{report: quota.Report{Provider: quota.Anthropic, Windows: []quota.Window{
+		{report: quota.Report{Provider: quota.ClaudeSub, Windows: []quota.Window{
 			{ID: "7d", Used: quota.Used{Fraction: 0.71, Reported: true}, ResetsAt: now.Add(75*time.Hour + 26*time.Minute)},
 		}}},
-		{report: quota.Report{Provider: quota.Codex, Windows: []quota.Window{
+		{report: quota.Report{Provider: quota.CodexSub, Windows: []quota.Window{
 			{ID: "7d", Used: quota.Used{Fraction: 0.13, Reported: true}, ResetsAt: now.Add(160*time.Hour + 15*time.Minute)},
 		}}},
 	})
@@ -136,18 +137,18 @@ func TestBothQuotaWindowsRenderInUsageAndInTheStatusBar(t *testing.T) {
 func TestAThirdQuotaSourceAppearsByAddingDataAlone(t *testing.T) {
 	now := usageMoment()
 	two := quotasFrom([]pollResult{
-		{report: quota.Report{Provider: quota.Anthropic, Windows: []quota.Window{
+		{report: quota.Report{Provider: quota.ClaudeSub, Windows: []quota.Window{
 			{ID: "7d", Used: quota.Used{Fraction: 0.71, Reported: true}, ResetsAt: now},
 		}}},
-		{report: quota.Report{Provider: quota.Codex, Windows: []quota.Window{
+		{report: quota.Report{Provider: quota.CodexSub, Windows: []quota.Window{
 			{ID: "7d", Used: quota.Used{Fraction: 0.13, Reported: true}, ResetsAt: now},
 		}}},
 	})
 	three := quotasFrom([]pollResult{
-		{report: quota.Report{Provider: quota.Anthropic, Windows: []quota.Window{
+		{report: quota.Report{Provider: quota.ClaudeSub, Windows: []quota.Window{
 			{ID: "7d", Used: quota.Used{Fraction: 0.71, Reported: true}, ResetsAt: now},
 		}}},
-		{report: quota.Report{Provider: quota.Codex, Windows: []quota.Window{
+		{report: quota.Report{Provider: quota.CodexSub, Windows: []quota.Window{
 			{ID: "7d", Used: quota.Used{Fraction: 0.13, Reported: true}, ResetsAt: now},
 		}}},
 		{report: quota.Report{Provider: "gemini", Windows: []quota.Window{
@@ -186,7 +187,7 @@ func TestUsageWithoutACredentialNamesTheFixAndWhoOwnsTheSpendLimit(t *testing.T)
 	if !strings.HasPrefix(printed, usageNoCredential) {
 		t.Fatalf("the first line does not answer the question: %q", printed)
 	}
-	if !strings.Contains(printed, "run tofu login "+wireSubscription) {
+	if !strings.Contains(printed, "run tofu login "+string(cred.ClaudeSub)) {
 		t.Fatalf("the output names no fix: %q", printed)
 	}
 	if !strings.Contains(printed, "an api key's spending limit is the provider's") {
@@ -197,7 +198,7 @@ func TestUsageWithoutACredentialNamesTheFixAndWhoOwnsTheSpendLimit(t *testing.T)
 func TestUsageSeparatesASpentWindowFromABrokenCredential(t *testing.T) {
 	now := time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)
 	spent := pollResult{report: quota.Report{
-		Provider: quota.Codex,
+		Provider: quota.CodexSub,
 		Windows: []quota.Window{{
 			ID:       "5h",
 			Used:     quota.Used{Fraction: 1, Reported: true},
@@ -205,14 +206,14 @@ func TestUsageSeparatesASpentWindowFromABrokenCredential(t *testing.T) {
 		}},
 	}}
 	broken := pollResult{
-		report: quota.Report{Provider: quota.Codex},
+		report: quota.Report{Provider: quota.CodexSub},
 		err:    transport.Fail("cred", transport.KindAuth, nil, "the codex credential is disabled"),
 	}
 	spentState, brokenState := credentialState(spent, now), credentialState(broken, now)
 	if !strings.Contains(spentState, "every window is spent") {
 		t.Fatalf("a spent window reads %q", spentState)
 	}
-	if !strings.Contains(brokenState, "run tofu login codex") {
+	if !strings.Contains(brokenState, "run tofu login "+string(cred.CodexSub)) {
 		t.Fatalf("a broken credential reads %q, with no command to fix it", brokenState)
 	}
 	if spentState == brokenState {

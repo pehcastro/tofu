@@ -9,7 +9,7 @@ import (
 )
 
 func TestTheCredentialSpecReadsTheAccountClaimThisPackageNames(t *testing.T) {
-	spec, err := cred.Lookup(string(cred.Codex))
+	spec, err := cred.Lookup(string(cred.CodexSub))
 	if err != nil {
 		t.Fatalf("looking up the codex credential spec: %v", err)
 	}

@@ -11,6 +11,7 @@ const (
 	Path        = "tofu"
 	Branch      = "develop"
 	Provider    = "claude-sub"
+	Wire        = "anthropic"
 	Model       = "claude-opus-5"
 	Slug        = Provider + "/" + Model
 	SessionName = "amber-cedar-otter"

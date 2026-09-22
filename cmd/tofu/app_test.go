@@ -131,7 +131,7 @@ func TestAWireWithNoCredentialIsNeverOffered(t *testing.T) {
 	if wires := appWires(); len(wires) != 0 {
 		t.Fatalf("wires %+v with nothing signed in", wires)
 	}
-	storeCredential(t, cred.Codex)
+	storeCredential(t, cred.CodexSub)
 	codexAlone := appWires()
 	if len(codexAlone) != 1 || codexAlone[0].Name != "codex" || codexAlone[0].Model != "gpt-5.6-sol" {
 		t.Fatalf("wires %+v with only codex signed in, want codex and its default model alone", codexAlone)
@@ -139,7 +139,7 @@ func TestAWireWithNoCredentialIsNeverOffered(t *testing.T) {
 	if codexAlone[0].Provider != "codex-sub" {
 		t.Fatalf("the codex wire reports provider %q, want codex-sub, the subscription form the frame header composes", codexAlone[0].Provider)
 	}
-	storeCredential(t, cred.Anthropic)
+	storeCredential(t, cred.ClaudeSub)
 	both := appWires()
 	if len(both) != 2 || both[0].Name != "anthropic" || both[0].Model != "claude-opus-5" || both[1].Name != "codex" {
 		t.Fatalf("wires %+v with both signed in", both)
@@ -250,8 +250,8 @@ func openSettingsMenu(app *tui.App) {
 
 func TestSettingsNamesEveryProviderAndTheSourceThatDecidedIt(t *testing.T) {
 	emptyHome(t)
-	storeCredential(t, cred.Anthropic)
-	storeCredential(t, cred.Codex)
+	storeCredential(t, cred.ClaudeSub)
+	storeCredential(t, cred.CodexSub)
 	storeGateKey(t, gateKeyForTests)
 
 	providers := appProviders()
@@ -264,7 +264,7 @@ func TestSettingsNamesEveryProviderAndTheSourceThatDecidedIt(t *testing.T) {
 		}
 	}
 	screen := settingsScreen(t, providers)
-	for _, name := range []string{"anthropic", openRouterName, "jev", "codex"} {
+	for _, name := range []string{string(cred.ClaudeSub), openRouterName, "jev", string(cred.CodexSub)} {
 		if !strings.Contains(screen, name) {
 			t.Errorf("the settings view does not name %q:\n%s", name, screen)
 		}

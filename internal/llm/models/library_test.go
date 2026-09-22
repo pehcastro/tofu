@@ -30,8 +30,8 @@ func oneFile(name, body string) fstest.MapFS {
 
 func withSubscriptions(extra fstest.MapFS) fstest.MapFS {
 	base := fstest.MapFS{
-		"subscriptions/claude.yaml": &fstest.MapFile{Data: []byte("provider: anthropic\nwire: anthropic\nwindows: 5h, 7d\n")},
-		"subscriptions/codex.yaml":  &fstest.MapFile{Data: []byte("provider: openai\nwire: codex\nwindows: 5h, 7d\n")},
+		"subscriptions/claude-sub.yaml": &fstest.MapFile{Data: []byte("provider: anthropic\nwire: anthropic\nwindows: 5h, 7d\n")},
+		"subscriptions/codex-sub.yaml":  &fstest.MapFile{Data: []byte("provider: openai\nwire: codex\nwindows: 5h, 7d\n")},
 	}
 	for name, file := range extra {
 		base[name] = file
@@ -100,7 +100,7 @@ func TestEveryFileUnderModelsIsAModel(t *testing.T) {
 func TestLoadRefusesAFileUnderModelsThatIsNotAModel(t *testing.T) {
 	_, err := Load([]Layer{layerOf("library", withSubscriptions(fstest.MapFS{
 		"models/README.md":               &fstest.MapFile{Data: []byte("notes\n")},
-		"models/openai/gpt-5.6-sol.yaml": &fstest.MapFile{Data: []byte("subscription: codex\nuse: default\n")},
+		"models/openai/gpt-5.6-sol.yaml": &fstest.MapFile{Data: []byte("subscription: codex-sub\nuse: default\n")},
 	}))})
 	if err == nil || !strings.Contains(err.Error(), "models/README.md") {
 		t.Fatalf("want the stray file refused by name, got %v", err)
@@ -109,7 +109,7 @@ func TestLoadRefusesAFileUnderModelsThatIsNotAModel(t *testing.T) {
 
 func TestLoadRefusesAModelMissingARequiredFieldAndNamesTheField(t *testing.T) {
 	_, err := Load([]Layer{layerOf("library", withSubscriptions(oneFile(
-		"models/openai/gpt-5.6-sol.yaml", "subscription: codex\nuse: excluded\n")))})
+		"models/openai/gpt-5.6-sol.yaml", "subscription: codex-sub\nuse: excluded\n")))})
 	var refused *BrokenLibrary
 	if !errors.As(err, &refused) || len(refused.Refused) == 0 {
 		t.Fatalf("want a refusal, got %v", err)
@@ -122,7 +122,7 @@ func TestLoadRefusesAModelMissingARequiredFieldAndNamesTheField(t *testing.T) {
 
 func TestLoadRefusesAModelFiledUnderTheWrongVendor(t *testing.T) {
 	_, err := Load([]Layer{layerOf("library", withSubscriptions(oneFile(
-		"models/anthropic/gpt-5.6-sol.yaml", "subscription: codex\nuse: default\n")))})
+		"models/anthropic/gpt-5.6-sol.yaml", "subscription: codex-sub\nuse: default\n")))})
 	if err == nil || !strings.Contains(err.Error(), "wrong vendor") {
 		t.Fatalf("want the vendor mismatch refused, got %v", err)
 	}
@@ -130,7 +130,7 @@ func TestLoadRefusesAModelFiledUnderTheWrongVendor(t *testing.T) {
 
 func TestLoadRefusesAnUnknownField(t *testing.T) {
 	_, err := Load([]Layer{layerOf("library", withSubscriptions(oneFile(
-		"models/openai/gpt-5.6-sol.yaml", "subscription: codex\nuse: default\nprice: 3\n")))})
+		"models/openai/gpt-5.6-sol.yaml", "subscription: codex-sub\nuse: default\nprice: 3\n")))})
 	if err == nil || !strings.Contains(err.Error(), `price: unknown field`) {
 		t.Fatalf("want the unknown field refused by name, got %v", err)
 	}
@@ -138,8 +138,8 @@ func TestLoadRefusesAnUnknownField(t *testing.T) {
 
 func TestLoadRefusesTwoDefaultsForOneSubscription(t *testing.T) {
 	_, err := Load([]Layer{layerOf("library", withSubscriptions(fstest.MapFS{
-		"models/openai/gpt-5.6-sol.yaml":  &fstest.MapFile{Data: []byte("subscription: codex\nuse: default\n")},
-		"models/openai/gpt-5.6-luna.yaml": &fstest.MapFile{Data: []byte("subscription: codex\nuse: default\n")},
+		"models/openai/gpt-5.6-sol.yaml":  &fstest.MapFile{Data: []byte("subscription: codex-sub\nuse: default\n")},
+		"models/openai/gpt-5.6-luna.yaml": &fstest.MapFile{Data: []byte("subscription: codex-sub\nuse: default\n")},
 	}))})
 	if err == nil || !strings.Contains(err.Error(), "already has a default") {
 		t.Fatalf("want the second default refused, got %v", err)
@@ -148,8 +148,8 @@ func TestLoadRefusesTwoDefaultsForOneSubscription(t *testing.T) {
 
 func TestLoadDefaultsAnUndeclaredUseToExcluded(t *testing.T) {
 	library, err := Load([]Layer{layerOf("library", withSubscriptions(fstest.MapFS{
-		"models/openai/gpt-5.6-sol.yaml":  &fstest.MapFile{Data: []byte("subscription: codex\nuse: default\n")},
-		"models/openai/gpt-5.6-luna.yaml": &fstest.MapFile{Data: []byte("subscription: codex\n")},
+		"models/openai/gpt-5.6-sol.yaml":  &fstest.MapFile{Data: []byte("subscription: codex-sub\nuse: default\n")},
+		"models/openai/gpt-5.6-luna.yaml": &fstest.MapFile{Data: []byte("subscription: codex-sub\n")},
 	}))})
 	if err != nil {
 		t.Fatalf("loading: %v", err)
@@ -165,7 +165,7 @@ func TestLoadDefaultsAnUndeclaredUseToExcluded(t *testing.T) {
 
 func TestProjectOverridesGlobalFieldByField(t *testing.T) {
 	global := layerOf("global", withSubscriptions(oneFile(
-		"models/openai/gpt-5.6-sol.yaml", "subscription: codex\nwindow: 7d:sol\nuse: excluded\nreason: the global file says no\n")))
+		"models/openai/gpt-5.6-sol.yaml", "subscription: codex-sub\nwindow: 7d:sol\nuse: excluded\nreason: the global file says no\n")))
 	project := layerOf("project", oneFile(
 		"models/openai/gpt-5.6-sol.yaml", "use: default\n"))
 	library, err := Load([]Layer{global, project})
@@ -237,7 +237,7 @@ func TestCodexAutoReviewIsAServedNameRatherThanAModel(t *testing.T) {
 	if _, err := library.Select("codex-sub/codex-auto-review"); err == nil {
 		t.Fatal("codex-auto-review is still a model")
 	}
-	reconciled := library.Reconcile(Served{Subscription: Codex, Pin: "test", IDs: []string{"gpt-5.6-sol", "codex-auto-review"}}, shippedTable(t))
+	reconciled := library.Reconcile(Served{Subscription: CodexSub, Pin: "test", IDs: []string{"gpt-5.6-sol", "codex-auto-review"}}, shippedTable(t))
 	if len(reconciled.Unknown) != 0 {
 		t.Fatalf("the account serves %v and the library cannot account for them", reconciled.Unknown)
 	}

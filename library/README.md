@@ -63,7 +63,7 @@ The wording handed to Jev, loaded by `internal/judge/question`. Each set declare
 
 The directory names the vendor who built the model: `openai`, never `codex`. That is a fact about the model and does not change with who pays. **The identity tofu writes everywhere else, a sub-agent definition, `/model`, `tofu run --model`, the status bar, is a slug built from who pays rather than from the directory:**
 
-- served by a subscription: `<subscription>-sub/<name>`, for example `claude-sub/claude-opus-5`. The `-sub` suffix is derived from the subscription's own name and is never written by hand.
+- served by a subscription: `<subscription>/<name>`, for example `claude-sub/claude-opus-5`. The subscription carries the `-sub` suffix in its own file name, so it is spelled one way in the file name, in the `subscription` field, in the slug, and in `tofu login`.
 - paid by a direct key, no `subscription` field in the model's file: `<vendor>/<name>`, for example `anthropic/claude-opus-5`. This is the one case where the bare vendor name is the correct identity, and it never collides with a subscription slug because a subscription name always carries the suffix.
 
 The same model reached two ways, once on a subscription and once on a direct key, bills two ways and is filed as two entries so the slug always says which is paying.
@@ -90,14 +90,14 @@ An absent window still means tofu never compacts that model automatically, and a
 
 ## subscriptions
 
-`library/subscriptions/<name>.yaml`
+`library/subscriptions/<name>-sub.yaml`
 
-A subscription is an account you already pay for. It is not a provider: Codex is the OpenAI subscription and Claude is the Anthropic one. A quota window belongs here, because the window is spent by the account rather than by the model.
+A subscription is an account you already pay for. It is not a vendor: `codex-sub` is the OpenAI subscription and `claude-sub` is the Anthropic one. The file name is the whole name, suffix included, and it is what `tofu login`, the `subscription` field of a model, every slug and the credential store all spell. A quota window belongs here, because the window is spent by the account rather than by the model.
 
 | field | required | what it is |
 |---|---|---|
 | `provider` | yes | the vendor it buys from, `anthropic` or `openai` |
-| `wire` | yes | the name `tofu run --wire` and `tofu login` use, and the key the credential store is keyed by |
+| `wire` | yes | the protocol it speaks and the name `tofu run --wire` uses. A wire is not a source, so `claude-sub` speaks `wire: anthropic` and the two are never spelled alike by accident |
 | `windows` | yes | the quota buckets every model on it spends |
 | `not_models` | no | names the account serves that are not models, so discovery does not report them as unknown |
 
@@ -109,7 +109,7 @@ A role is a name a call site asks for a model by. There are two, and both are re
 
 | field | required | what it is |
 |---|---|---|
-| `model` | yes | the model it binds, written by its slug, `<subscription>-sub/name` or `<vendor>/name`, the same string everywhere else |
+| `model` | yes | the model it binds, written by its slug, `<subscription>/name` or `<vendor>/name`, the same string everywhere else |
 
 A file named anything but a role is refused by name rather than ignored, because a role nothing reads is a setting that silently does nothing. A role naming a model the library does not have is refused by name, and one naming an excluded model is refused with the library's own words for that exclusion.
 

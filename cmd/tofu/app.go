@@ -42,7 +42,7 @@ const (
 	noTerminal       = "tofu: the app needs a terminal. with input redirected, use tofu run --dir <dir> <task>"
 	gateOffNote      = "gate off: no tool call is judged until tofu login openrouter stores the key"
 	noCredential     = "no subscription is signed in, so no model can answer"
-	loginFix         = "tofu login anthropic, which opens the browser; tofu login codex signs in the other subscription"
+	loginFix         = "tofu login claude-sub, which opens the browser; tofu login codex-sub signs in the other subscription"
 	noGateKey        = "there is no openrouter key, so jev judges no tool call"
 	gateKeyFix       = "tofu login openrouter, which asks for the key and checks it reaches jev"
 	unreadableSource = "unreadable: "
@@ -95,7 +95,7 @@ func appVerb(in io.Reader, out, errOut io.Writer, resumed sessionResume) int {
 		Note:         note,
 		Requirements: appRequirements(),
 		Recheck:      appRequirements,
-		Login:        loginCommand(wireSubscription),
+		Login:        loginCommand(string(cred.ClaudeSub)),
 		Wires:        appWires,
 		Providers:    appProviders(),
 		Quota:        appQuota,
@@ -132,6 +132,11 @@ func loginCommand(provider string) func() *exec.Cmd {
 	return func() *exec.Cmd { return exec.Command(os.Args[0], "login", provider) }
 }
 
+type subscriptionSource struct {
+	source cred.Provider
+	wire   string
+}
+
 func appWires() []tui.Wire {
 	path, err := cred.Path()
 	if err != nil {
@@ -144,17 +149,16 @@ func appWires() []tui.Wire {
 	defer func() { _ = store.Close() }()
 	now := time.Now()
 	var wires []tui.Wire
-	for _, provider := range []cred.Provider{cred.Anthropic, cred.Codex} {
-		row, present, err := store.RowAt(provider, now)
+	for _, known := range []subscriptionSource{{cred.ClaudeSub, wireSubscription}, {cred.CodexSub, wireCodex}} {
+		row, present, err := store.RowAt(known.source, now)
 		if err != nil || !present || row.Unusable(now) != "" {
 			continue
 		}
-		selected, err := selectModel(string(provider), "")
+		selected, err := selectModel(known.wire, "")
 		if err != nil {
 			continue
 		}
-		subscription, id, _ := strings.Cut(selected.Slug(), "/")
-		wires = append(wires, tui.Wire{Name: string(provider), Model: id, Provider: subscription})
+		wires = append(wires, tui.Wire{Name: known.wire, Model: selected.ID, Provider: string(known.source)})
 	}
 	return wires
 }
@@ -171,11 +175,11 @@ func startBlockers() []startBlocker {
 	var blocking []startBlocker
 	if len(appWires()) == 0 {
 		blocking = append(blocking, startBlocker{
-			label:   wireSubscription,
+			label:   string(cred.ClaudeSub),
 			what:    noCredential,
 			fix:     loginFix,
-			command: "tofu login " + wireSubscription,
-			run:     loginCommand(wireSubscription),
+			command: "tofu login " + string(cred.ClaudeSub),
+			run:     loginCommand(string(cred.ClaudeSub)),
 		})
 	}
 	if _, err := gateKey(); err != nil {
@@ -209,15 +213,15 @@ func appProviders() []settings.Provider {
 		defer func() { _ = store.Close() }()
 	}
 	return []settings.Provider{
-		subscriptionProvider(wireSubscription, cred.Anthropic, store, path, err),
+		subscriptionProvider(cred.ClaudeSub, store, path, err),
 		openRouterProvider(),
 		jevProvider(),
-		subscriptionProvider(wireCodex, cred.Codex, store, path, err),
+		subscriptionProvider(cred.CodexSub, store, path, err),
 	}
 }
 
-func subscriptionProvider(name string, provider cred.Provider, store *cred.Store, path string, openErr error) settings.Provider {
-	row := settings.Provider{Name: name, Source: path}
+func subscriptionProvider(provider cred.Provider, store *cred.Store, path string, openErr error) settings.Provider {
+	row := settings.Provider{Name: string(provider), Source: path}
 	if openErr != nil {
 		row.Fix = unreadableSource + openErr.Error()
 		return row
@@ -228,7 +232,7 @@ func subscriptionProvider(name string, provider cred.Provider, store *cred.Store
 	case err != nil:
 		row.Fix = unreadableSource + err.Error()
 	case !present:
-		row.Fix = "run tofu login " + name
+		row.Fix = "run tofu login " + string(provider)
 	case stored.Unusable(now) != "":
 		row.State = stored.Unusable(now)
 	default:

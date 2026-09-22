@@ -135,7 +135,7 @@ func TestModelsNamesEveryModelByProviderAndName(t *testing.T) {
 	for _, model := range report.Models {
 		want := model.Provider + "/" + model.ID
 		if model.Subscription != "" {
-			want = model.Subscription + "-sub/" + model.ID
+			want = model.Subscription + "/" + model.ID
 		}
 		if model.Slug != want {
 			t.Fatalf("the slug is not source/name: %+v", model)
@@ -219,7 +219,7 @@ func TestRunModelExcludedIsRefusedWithTheLibraryReason(t *testing.T) {
 
 func TestSelectModelRefusesAModelTheWireCannotReach(t *testing.T) {
 	_, err := selectModel("codex", "claude-sub/claude-opus-5")
-	if err == nil || !strings.Contains(err.Error(), "belongs to the claude subscription") {
+	if err == nil || !strings.Contains(err.Error(), "belongs to the claude-sub subscription") {
 		t.Fatalf("want the wire mismatch named, got %v", err)
 	}
 }

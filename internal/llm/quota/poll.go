@@ -56,7 +56,7 @@ func NewPoller(httpClient *http.Client, now func() time.Time, urls map[Provider]
 		return nil, err
 	}
 	if urls == nil {
-		urls = map[Provider]string{Anthropic: anthropicUsageURL, Codex: codexUsageURL}
+		urls = map[Provider]string{ClaudeSub: anthropicUsageURL, CodexSub: codexUsageURL}
 	}
 	return &Poller{
 		client:   client,
@@ -97,9 +97,9 @@ func (p *Poller) fetch(ctx context.Context, account Account) (Report, error) {
 	request.Header.Set("Authorization", "Bearer "+token)
 	request.Header.Set("Accept", "application/json")
 	switch account.Provider {
-	case Anthropic:
+	case ClaudeSub:
 		request.Header.Set("User-Agent", claudeUserAgent)
-	case Codex:
+	case CodexSub:
 		request.Header.Set("User-Agent", "tofu")
 		if account.AccountID != "" {
 			request.Header.Set("ChatGPT-Account-Id", account.AccountID)
@@ -124,7 +124,7 @@ func (p *Poller) fetch(ctx context.Context, account Account) (Report, error) {
 			Err: err,
 		}
 	}
-	if account.Provider == Anthropic {
+	if account.Provider == ClaudeSub {
 		return FromAnthropicUsage(response.Body, p.now())
 	}
 	return FromCodexUsage(response.Body, p.now())
