@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"tofu/internal/recall"
 	"tofu/internal/session"
 )
 
@@ -44,7 +45,7 @@ func TestAStepFromBeforeTheOccupancyReadsAsAnAbsenceAndAMeasuredZeroDoesNot(t *t
 		t.Fatalf("a step that measured nothing writes %s, and a later reader cannot tell that from a measurement", unmeasured)
 	}
 
-	written, err := json.Marshal(StepRow{Index: 1, Occupancy: &Occupancy{Target: 50000}})
+	written, err := json.Marshal(StepRow{Index: 1, Occupancy: &recall.Occupancy{Target: 50000}})
 	if err != nil {
 		t.Fatalf("marshal a step that measured every band at zero: %v", err)
 	}

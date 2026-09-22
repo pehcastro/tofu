@@ -3,12 +3,72 @@ package turn
 import (
 	"context"
 	"encoding/json"
+	"path/filepath"
+	"strconv"
 	"testing"
 
 	"tofu/internal/llm"
 	"tofu/internal/recall"
 	"tofu/internal/session"
 )
+
+const liveSessionsDir = "../../.tofu/sessions"
+
+func TestAStepRowRecordedBeforeThisChangeStillDecodesWithItsWorkingSet(t *testing.T) {
+	store := session.NewStore(filepath.FromSlash(liveSessionsDir))
+	listing, err := store.Listing()
+	if err != nil {
+		t.Skipf("the live sessions are not readable from here, so nothing recorded by an earlier build is checked: %v", err)
+	}
+	sessions, steps, unreadable, first := 0, 0, 0, ""
+	for _, header := range listing.Sessions {
+		events, err := store.Body(header.ID)
+		if err != nil {
+			unreadable++
+			continue
+		}
+		measured := 0
+		for _, event := range events {
+			if event.Kind != session.EventStep {
+				continue
+			}
+			var step StepRow
+			if err := json.Unmarshal(event.Body, &step); err != nil {
+				t.Fatalf("%s: a recorded step does not parse: %v", header.ID, err)
+			}
+			var asWritten struct {
+				Occupancy json.RawMessage `json:"occupancy"`
+			}
+			if err := json.Unmarshal(event.Body, &asWritten); err != nil {
+				t.Fatalf("%s: a recorded step does not parse: %v", header.ID, err)
+			}
+			if step.Occupancy == nil {
+				continue
+			}
+			again, err := json.Marshal(step.Occupancy)
+			if err != nil {
+				t.Fatalf("%s: re-encode a recorded occupancy: %v", header.ID, err)
+			}
+			if string(again) != string(asWritten.Occupancy) {
+				t.Fatalf("%s step %d was written as %s and re-encodes as %s", header.ID, step.Index, asWritten.Occupancy, again)
+			}
+			if step.Occupancy.WorkingSet > 0 {
+				measured++
+				if first == "" {
+					first = header.ID + " step " + strconv.Itoa(step.Index) + " " + string(asWritten.Occupancy)
+				}
+			}
+		}
+		steps += measured
+		if measured > 0 {
+			sessions++
+		}
+	}
+	if steps == 0 {
+		t.Skip("no session on disk records a working set, so nothing older than this change was read back")
+	}
+	t.Logf("%d steps across %d live sessions decode a working set and re-encode byte for byte, the first of them %s; %d sessions unreadable", steps, sessions, first, unreadable)
+}
 
 func TestAMeasuredStepNamesTheCapsItWasMeasuredAgainstOnBothWrites(t *testing.T) {
 	store := session.NewStore(t.TempDir())
@@ -82,9 +142,9 @@ func TestAStepFromBeforeTheCapsReadsAsAnAbsenceAndCapsOfZeroDoNot(t *testing.T) 
 		name string
 		row  StepRow
 	}{
-		{"before the caps reached the row", StepRow{Index: 1, Occupancy: &Occupancy{Target: 50000}}},
-		{"measured against caps of zero", StepRow{Index: 1, Occupancy: &Occupancy{}, Bands: &recall.Bands{}}},
-		{"measured against the shipped caps", StepRow{Index: 1, Occupancy: &Occupancy{}, Bands: &shipped}},
+		{"before the caps reached the row", StepRow{Index: 1, Occupancy: &recall.Occupancy{Target: 50000}}},
+		{"measured against caps of zero", StepRow{Index: 1, Occupancy: &recall.Occupancy{}, Bands: &recall.Bands{}}},
+		{"measured against the shipped caps", StepRow{Index: 1, Occupancy: &recall.Occupancy{}, Bands: &shipped}},
 	} {
 		raw, err := json.Marshal(written.row)
 		if err != nil {

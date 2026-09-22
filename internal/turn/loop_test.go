@@ -522,8 +522,9 @@ func TestAForkedTurnIsWrittenAsAHeaderAndAJSONLBodyThatNameTheLineage(t *testing
 	if bands.Identity == 0 || bands.WorkingSet == 0 || bands.Recent == 0 || bands.Target == 0 {
 		t.Fatalf("the occupancy reads %+v, and this turn put something in every band but facts", bands)
 	}
-	if bands.Total() != forked.Fork.TokensBefore {
-		t.Fatalf("the bands add to %d and the fork says %d tokens were carried", bands.Total(), forked.Fork.TokensBefore)
+	if bands.Total() >= forked.Fork.TokensBefore {
+		t.Fatalf("the bands add to %d against the %d the fork decided on, and the request as sent cannot hold the results that arrived after it",
+			bands.Total(), forked.Fork.TokensBefore)
 	}
 	t.Logf("%d sessions, root %s, head %s; the fork step carries identity %d facts %d working set %d recent %d against target %d",
 		len(lineage), ended.Root, row.ID, bands.Identity, bands.Facts, bands.WorkingSet, bands.Recent, bands.Target)

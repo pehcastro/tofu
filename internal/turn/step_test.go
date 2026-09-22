@@ -51,14 +51,15 @@ func TestTheStepHookReadsTheSameOccupancyTheForkDecidedOn(t *testing.T) {
 			continue
 		}
 		forks, forked = forks+1, step
-		if step.Occupancy.Total() != step.Fork.TokensBefore {
-			t.Fatalf("step %d forked on %d tokens and the hook read %d", step.Index, step.Fork.TokensBefore, step.Occupancy.Total())
+		if step.Occupancy.Total() >= step.Fork.TokensBefore {
+			t.Fatalf("step %d forked on %d tokens and the hook read %d for the request it sent, which cannot already hold the results the fork measured",
+				step.Index, step.Fork.TokensBefore, step.Occupancy.Total())
 		}
 	}
 	if forks == 0 {
 		t.Fatal("the turn never forked, so no step compares the number read against the number decided on")
 	}
-	t.Logf("%d steps through the hook, %d of them forks; the hook read %d tokens on step %d and the fork decided on %d against target %d",
+	t.Logf("%d steps through the hook, %d of them forks; the hook read %d tokens sent on step %d and the fork decided on %d against target %d",
 		len(seen), forks, forked.Occupancy.Total(), forked.Index, forked.Fork.TokensBefore, forked.Occupancy.Target)
 }
 

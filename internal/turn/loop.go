@@ -52,6 +52,7 @@ type CalledOnItsOwnGoroutineAndAlwaysBeforeRunReturns func(StepRow)
 
 type Config struct {
 	Model           Model
+	Accounts        Accounts
 	Spend           Spend
 	Tools           Registry
 	ToolSource      func() Registry
@@ -99,7 +100,7 @@ func WriteSession(store *session.Store, row Row) error {
 }
 
 func Run(ctx context.Context, config Config) (Row, error) {
-	if config.Model == nil {
+	if config.Model == nil && config.Accounts.Pick == nil {
 		return Row{}, errors.New("turn: no model")
 	}
 	if strings.TrimSpace(config.Task) == "" {
@@ -127,6 +128,7 @@ func Run(ctx context.Context, config Config) (Row, error) {
 	if err != nil {
 		return Row{}, err
 	}
+	artifacts.preview = artifacts.preview.OnWire(config.Wire)
 	source := config.ToolSource
 	if source == nil {
 		source = func() Registry { return config.Tools }
@@ -150,9 +152,21 @@ func Run(ctx context.Context, config Config) (Row, error) {
 	if budget == (recall.Budget{}) {
 		budget = recall.Budget{Bands: recall.ShippedBands(), Source: "this turn was given no context budget"}
 	}
+	model, account := config.Model, Account{}
+	if config.Accounts.Pick != nil {
+		if account, err = config.Accounts.Pick(ctx); err != nil {
+			return Row{}, err
+		}
+		if account.Model != nil {
+			model = account.Model
+		}
+	}
+	if model == nil {
+		return Row{}, errors.New("turn: the account this session was pinned to came with no model")
+	}
 	start := now()
 	origin := newID()
-	row := Row{ID: origin, Schema: SchemaVersion, At: start, Task: config.Task, Wire: config.Wire, Spend: config.Spend, Root: origin, SpawnedFrom: config.SpawnedFrom, Budget: budget}
+	row := Row{ID: origin, Schema: SchemaVersion, At: start, Task: config.Task, Wire: config.Wire, Spend: config.Spend, Root: origin, Account: account.ID, SpawnedFrom: config.SpawnedFrom, Budget: budget}
 
 	var recorder *session.Recorder
 	if config.Sessions != nil {
@@ -252,7 +266,7 @@ func Run(ctx context.Context, config Config) (Row, error) {
 			return finish(outcome)
 		}
 		messages = append(slices.Clone(history), llm.Message{Role: llm.RoleUser, Content: lead + andThisIsItsLastStep})
-		decision, attempt, err := askCountingAttempts(ctx, config.Model, llm.Request{Messages: messages, Tools: currentTools().Definitions()})
+		decision, attempt, err := askCountingAttempts(ctx, model, llm.Request{Messages: messages, Tools: currentTools().Definitions()})
 		row.TotalCostUSD += decision.Usage.Cost
 		reason := ""
 		switch {
@@ -286,7 +300,8 @@ func Run(ctx context.Context, config Config) (Row, error) {
 		}
 
 		stepTools := currentTools()
-		decision, attempt, err := askCountingAttempts(ctx, config.Model, llm.Request{Messages: messages, Tools: stepTools.Definitions()})
+		asSent := recall.Measure(artifacts.preview, budget.Bands, historyOf(messages))
+		decision, attempt, err := askCountingAttempts(ctx, model, llm.Request{Messages: messages, Tools: stepTools.Definitions()})
 		if err != nil {
 			return finish(OutcomeError), err
 		}
@@ -294,6 +309,8 @@ func Run(ctx context.Context, config Config) (Row, error) {
 		row.TotalCostUSD += decision.Usage.Cost
 
 		stepRow := stepFrom(step, attempt, decision)
+		measuredAgainst := budget.Bands
+		stepRow.Occupancy, stepRow.Bands = &asSent, &measuredAgainst
 
 		switch decision.Outcome {
 		case llm.OutcomeMessage:
@@ -401,9 +418,18 @@ func Run(ctx context.Context, config Config) (Row, error) {
 				return endAt(OutcomeLoopGuard, stopped, step, messages), nil
 			}
 			if !config.NoFork {
-				fork, begun, occupancy, err := forkHistory(artifacts, budget, config.FirstUserMessage(), messages)
-				measuredAgainst := budget.Bands
-				stepRow.Occupancy, stepRow.Bands = &occupancy, &measuredAgainst
+				moved, moving, forced := Account{}, false, ForkKind("")
+				if config.Accounts.Next != nil {
+					next, spent, nextErr := config.Accounts.Next(ctx, account)
+					switch {
+					case nextErr != nil:
+						row.Warnings = append(row.Warnings,
+							"the pinned account's windows could not be read, so this session stays on it: "+nextErr.Error())
+					case spent:
+						moved, moving, forced = next, true, ForkAccountSpent
+					}
+				}
+				fork, begun, err := forkHistory(artifacts, budget, config.FirstUserMessage(), messages, forced)
 				if err != nil {
 					keep(stepRow)
 					return finish(OutcomeError), err
@@ -437,10 +463,19 @@ func Run(ctx context.Context, config Config) (Row, error) {
 						Model:       row.Model,
 						Spend:       config.Spend,
 						Root:        origin,
+						Account:     account.ID,
 						ForkedFrom:  ended.ID,
 						ForkKind:    fork.Kind,
 						SpawnedFrom: config.SpawnedFrom,
 						Budget:      budget,
+					}
+					if moving {
+						row.Account = moved.ID
+						row.Warnings = append(row.Warnings, movedAccountWords(account, moved, fork.TokensAfter))
+						account = moved
+						if moved.Model != nil {
+							model = moved.Model
+						}
 					}
 					messages, sent = begun, 0
 					if recorder != nil {

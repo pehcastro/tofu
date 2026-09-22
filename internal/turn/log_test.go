@@ -177,13 +177,14 @@ func TestTheOffArmTruncatesAndLeavesNoHandle(t *testing.T) {
 func fullyPopulatedRow() Row {
 	ok := 0
 	return Row{
-		ID:     "turn-fixture-0001",
-		Schema: SchemaVersion,
-		Task:   "add a route",
-		Wire:   "anthropic",
-		Model:  "anthropic/claude-fable-5.1",
-		Spend:  SpendAPIKey,
-		Root:   "turn-fixture-0000",
+		ID:      "turn-fixture-0001",
+		Schema:  SchemaVersion,
+		Task:    "add a route",
+		Wire:    "anthropic",
+		Model:   "anthropic/claude-fable-5.1",
+		Spend:   SpendAPIKey,
+		Root:    "turn-fixture-0000",
+		Account: 2,
 		Steps: []StepRow{
 			{
 				Index: 1,
@@ -233,7 +234,7 @@ func fullyPopulatedRow() Row {
 					Default: "refused the write and left the path untouched",
 					Answer:  "recorded so the round trip proves an answered grant survives",
 				}},
-				Occupancy: &Occupancy{
+				Occupancy: &recall.Occupancy{
 					Identity:   1200,
 					Facts:      340,
 					WorkingSet: 19000,

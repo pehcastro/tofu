@@ -70,20 +70,20 @@ type StepRow struct {
 	id      string
 	attempt int
 
-	Index            int           `json:"index"`
-	ToolCalls        []ToolCallRow `json:"tool_calls,omitempty"`
-	AssistantText    string        `json:"assistant_text,omitempty"`
-	StopReason       string        `json:"stop_reason,omitempty"`
-	PromptTokens     int           `json:"prompt_tokens"`
-	CompletionTokens int           `json:"completion_tokens"`
-	CacheReadTokens  int           `json:"cache_read_tokens"`
-	CacheWriteTokens int           `json:"cache_write_tokens"`
-	CostUSD          float64       `json:"cost_usd"`
-	Warnings         []string      `json:"warnings,omitempty"`
-	Occupancy        *Occupancy    `json:"occupancy,omitempty"`
-	Bands            *recall.Bands `json:"bands,omitempty"`
-	Compaction       *Compaction   `json:"compaction,omitempty"`
-	Fork             *Fork         `json:"fork,omitempty"`
+	Index            int               `json:"index"`
+	ToolCalls        []ToolCallRow     `json:"tool_calls,omitempty"`
+	AssistantText    string            `json:"assistant_text,omitempty"`
+	StopReason       string            `json:"stop_reason,omitempty"`
+	PromptTokens     int               `json:"prompt_tokens"`
+	CompletionTokens int               `json:"completion_tokens"`
+	CacheReadTokens  int               `json:"cache_read_tokens"`
+	CacheWriteTokens int               `json:"cache_write_tokens"`
+	CostUSD          float64           `json:"cost_usd"`
+	Warnings         []string          `json:"warnings,omitempty"`
+	Occupancy        *recall.Occupancy `json:"occupancy,omitempty"`
+	Bands            *recall.Bands     `json:"bands,omitempty"`
+	Compaction       *Compaction       `json:"compaction,omitempty"`
+	Fork             *Fork             `json:"fork,omitempty"`
 
 	Grants []crew.Question `json:"grants,omitempty"`
 }
@@ -105,6 +105,7 @@ type Row struct {
 	Spend        Spend     `json:"spend"`
 	Steps        []StepRow `json:"steps,omitempty"`
 	Root         string    `json:"root,omitempty"`
+	Account      int64     `json:"account,omitempty"`
 	SpawnedFrom  string    `json:"spawned_from,omitempty"`
 	ForkedFrom   string    `json:"forked_from,omitempty"`
 	ForkedInto   string    `json:"forked_into,omitempty"`
@@ -255,6 +256,7 @@ func (r Row) Header() session.Header {
 		Model:      r.Model,
 		Parent:     cmp.Or(r.ForkedFrom, r.SpawnedFrom),
 		Root:       cmp.Or(r.Root, r.ID),
+		Account:    r.Account,
 		ForkedInto: r.ForkedInto,
 		ForkKind:   string(r.ForkKind),
 		Outcome:    r.Outcome.String(),

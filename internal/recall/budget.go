@@ -63,11 +63,12 @@ func Billed(cachedPrefixTokens, requestTokens int) Bill {
 }
 
 type Occupancy struct {
-	Bands      Bands
-	Identity   int
-	Facts      int
-	WorkingSet int
-	Recent     int
+	Bands      Bands `json:"-"`
+	Identity   int   `json:"identity"`
+	Facts      int   `json:"facts"`
+	WorkingSet int   `json:"working_set"`
+	Recent     int   `json:"recent"`
+	Target     int   `json:"target"`
 }
 
 func (o Occupancy) Total() int {
@@ -103,7 +104,7 @@ func OccupancyTable(o Occupancy) string {
 }
 
 func Measure(cfg Config, bands Bands, c Conversation) Occupancy {
-	occupancy := Occupancy{Bands: bands, Identity: cfg.Tokens(c.Instructions) + cfg.Tokens(c.ToolSchemas)}
+	occupancy := Occupancy{Bands: bands, Target: bands.Target(), Identity: cfg.Tokens(c.Instructions) + cfg.Tokens(c.ToolSchemas)}
 	for _, fact := range c.Facts {
 		occupancy.Facts += cfg.Tokens(fact)
 	}

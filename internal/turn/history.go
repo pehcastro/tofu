@@ -11,7 +11,7 @@ type ForkKind string
 
 const (
 	ForkContinuation ForkKind = "continuation"
-	ForkClean        ForkKind = "clean"
+	ForkAccountSpent ForkKind = "account-spent"
 )
 
 type Fork struct {
@@ -22,28 +22,6 @@ type Fork struct {
 	TokensAfter   int          `json:"tokens_after"`
 	BlockedMicros int64        `json:"blocked_micros"`
 	Carry         recall.Carry `json:"carry"`
-}
-
-type Occupancy struct {
-	Identity   int `json:"identity"`
-	Facts      int `json:"facts"`
-	WorkingSet int `json:"working_set"`
-	Recent     int `json:"recent"`
-	Target     int `json:"target"`
-}
-
-func (o Occupancy) Total() int {
-	return o.Identity + o.Facts + o.WorkingSet + o.Recent
-}
-
-func occupancyOf(measured recall.Occupancy) Occupancy {
-	return Occupancy{
-		Identity:   measured.Identity,
-		Facts:      measured.Facts,
-		WorkingSet: measured.WorkingSet,
-		Recent:     measured.Recent,
-		Target:     measured.Bands.Target(),
-	}
 }
 
 type Compaction struct {
@@ -78,16 +56,19 @@ func historyOf(messages []llm.Message) recall.Conversation {
 	return conversation
 }
 
-func forkHistory(artifacts Artifacts, budget recall.Budget, task string, messages []llm.Message) (*Fork, []llm.Message, Occupancy, error) {
+func forkHistory(artifacts Artifacts, budget recall.Budget, task string, messages []llm.Message, forced ForkKind) (*Fork, []llm.Message, error) {
 	ended := historyOf(messages)
-	occupancy := occupancyOf(recall.Measure(artifacts.preview, budget.Bands, ended))
-	if !budget.Crossed(artifacts.preview, ended) {
-		return nil, messages, occupancy, nil
+	kind := forced
+	if kind == "" {
+		if !budget.Crossed(artifacts.preview, ended) {
+			return nil, messages, nil
+		}
+		kind = ForkContinuation
 	}
 	started := time.Now()
 	carry, err := recall.DistilledCarry(artifacts.store, artifacts.preview, ended)
 	if err != nil {
-		return nil, nil, occupancy, err
+		return nil, nil, err
 	}
 	var begun []llm.Message
 	for _, message := range messages {
@@ -99,12 +80,12 @@ func forkHistory(artifacts Artifacts, budget recall.Budget, task string, message
 		llm.Message{Role: llm.RoleUser, Content: task},
 		llm.Message{Role: llm.RoleUser, Content: carry.Text})
 	return &Fork{
-		Kind:          ForkContinuation,
-		TokensBefore:  occupancy.Total(),
+		Kind:          kind,
+		TokensBefore:  recall.Measure(artifacts.preview, budget.Bands, ended).Total(),
 		TokensAfter:   recall.Measure(artifacts.preview, budget.Bands, historyOf(begun)).Total(),
 		BlockedMicros: time.Since(started).Microseconds(),
 		Carry:         carry,
-	}, begun, occupancy, nil
+	}, begun, nil
 }
 
 func compactHistory(artifacts Artifacts, budget recall.Budget, step int, messages []llm.Message) (*Compaction, error) {

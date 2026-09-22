@@ -13,17 +13,26 @@ import (
 var library embed.FS
 
 type Config struct {
-	ElideAboveBytes        int
-	HeadBytes              int
-	TailBytes              int
-	BytesPerThousandTokens int
-	CompactFloorBytes      int
+	ElideAboveBytes          int
+	HeadBytes                int
+	TailBytes                int
+	BytesPerThousandTokens   int
+	BytesPerThousandTokensOn map[string]int
+	CompactFloorBytes        int
 }
 
 const (
 	conservativeBytesPerThousandTokens = 2000
 	conservativeCompactFloorBytes      = 256
+	wireRatioPrefix                    = "bytes_per_thousand_tokens_"
 )
+
+func (c Config) OnWire(wire string) Config {
+	if ratio, known := c.BytesPerThousandTokensOn[wire]; known {
+		c.BytesPerThousandTokens = ratio
+	}
+	return c
+}
 
 func (c Config) Tokens(text string) int {
 	return len(text) * 1000 / c.BytesPerThousandTokens
@@ -68,11 +77,17 @@ func ParseConfig(data []byte) (Config, error) {
 		return Config{}, err
 	}
 	cfg := Config{
-		ElideAboveBytes:        fields["elide_above_bytes"],
-		HeadBytes:              fields["head_bytes"],
-		TailBytes:              fields["tail_bytes"],
-		BytesPerThousandTokens: fields["bytes_per_thousand_tokens"],
-		CompactFloorBytes:      fields["compact_floor_bytes"],
+		ElideAboveBytes:          fields["elide_above_bytes"],
+		HeadBytes:                fields["head_bytes"],
+		TailBytes:                fields["tail_bytes"],
+		BytesPerThousandTokens:   fields["bytes_per_thousand_tokens"],
+		BytesPerThousandTokensOn: map[string]int{},
+		CompactFloorBytes:        fields["compact_floor_bytes"],
+	}
+	for key, ratio := range fields {
+		if wire, found := strings.CutPrefix(key, wireRatioPrefix); found && ratio > 0 {
+			cfg.BytesPerThousandTokensOn[wire] = ratio
+		}
 	}
 	if cfg.ElideAboveBytes <= 0 {
 		return Config{}, fmt.Errorf("recall: elide library needs a positive elide_above_bytes")

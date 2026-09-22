@@ -12,7 +12,8 @@ import (
 
 const (
 	compactionDecidesAboveTokens = 5000
-	marginPercent                = 80
+	marginPercent                = 25
+	underMarginPercent           = 10
 	worstRowsListed              = 10
 )
 
@@ -53,6 +54,8 @@ type spread struct {
 	median int
 	worst  int
 	at     estimateRow
+	under  int
+	lowest estimateRow
 }
 
 func spreadOf(rows []estimateRow) spread {
@@ -65,6 +68,9 @@ func spreadOf(rows []estimateRow) spread {
 		errors = append(errors, abs(r.off))
 		if abs(r.off) > found.worst {
 			found.worst, found.at = abs(r.off), r
+		}
+		if -r.off > found.under {
+			found.under, found.lowest = -r.off, r
 		}
 	}
 	if len(errors) == 0 {
@@ -83,29 +89,64 @@ func groupsOf(rows []estimateRow, nameOf func(estimateRow) string) map[string][]
 	return grouped
 }
 
-func TestOurEstimateOfAContextAgainstWhatTheProviderBilledForTheSameOne(t *testing.T) {
-	cfg, requests := recordedRequests(t)
-	bands := recall.ShippedBands()
+func conversationOn(cfg, wired recall.Config, c recall.Conversation) recall.Conversation {
+	c.Instructions = filler(cfg.Tokens(c.Instructions) * wired.BytesPerThousandTokens / 1000)
+	return c
+}
 
+func measured(cfg recall.Config, requests []recordedRequest, wireOf func(recordedRequest) string) []estimateRow {
+	bands := recall.ShippedBands()
 	rows := make([]estimateRow, 0, len(requests))
-	low, fromMessages := 0, 0
 	for _, request := range requests {
-		estimate := recall.Measure(cfg, bands, request.Conversation).Total()
+		wired := cfg.OnWire(wireOf(request))
+		estimate := recall.Measure(wired, bands, conversationOn(cfg, wired, request.Conversation)).Total()
 		billed := request.Reported.Total()
-		if request.Rebuilt == "messages" {
-			fromMessages++
-		}
-		if estimate < billed {
-			low++
-		}
 		rows = append(rows, estimateRow{request, estimate, offBy(estimate, billed), offBy(request.Recorded, billed)})
 	}
 	sort.Slice(rows, func(i, j int) bool { return rows[i].off < rows[j].off })
+	return rows
+}
+
+func oneConstantForEveryWire(recordedRequest) string { return "" }
+
+func theWireThatCarriedIt(r recordedRequest) string { return r.Wire }
+
+func TestOurEstimateOfAContextAgainstWhatTheProviderBilledForTheSameOne(t *testing.T) {
+	cfg, requests := recordedRequests(t)
+
+	rows := measured(cfg, requests, theWireThatCarriedIt)
+	for _, arm := range []struct {
+		what string
+		rows []estimateRow
+	}{
+		{"one constant for every wire", measured(cfg, requests, oneConstantForEveryWire)},
+		{"a constant per wire", rows},
+	} {
+		byWire := groupsOf(arm.rows, wireOfRow)
+		byWire["both wires"] = arm.rows
+		for _, name := range slices.Sorted(maps.Keys(byWire)) {
+			group := spreadOf(byWire[name])
+			t.Logf("%-27s on %-10s: %3d rows above %d billed tokens, median %2d percent, worst %2d percent over on %-8s step %2d, worst %2d percent under on %-8s step %2d",
+				arm.what, name, group.rows, compactionDecidesAboveTokens, group.median,
+				group.worst, shortID(group.at), group.at.request.Step,
+				group.under, shortID(group.lowest), group.lowest.request.Step)
+		}
+	}
+
+	low, fromMessages := 0, 0
+	for _, r := range rows {
+		if r.request.Rebuilt == "messages" {
+			fromMessages++
+		}
+		if r.estimate < r.billed() {
+			low++
+		}
+	}
 
 	listed := min(worstRowsListed, len(rows))
 	for _, r := range append(append([]estimateRow{}, rows[:listed]...), rows[len(rows)-listed:]...) {
 		t.Logf("%s step %2d, rebuilt from %-9s on %-9s: we estimate %6d, the provider billed %6d, %4d percent out, where the build recorded %6d, %4d percent out",
-			r.request.Session[len(r.request.Session)-8:], r.request.Step, r.request.Rebuilt, r.request.Wire,
+			shortID(r), r.request.Step, r.request.Rebuilt, r.request.Wire,
 			r.estimate, r.billed(), r.off, r.request.Recorded, r.was)
 	}
 
@@ -121,27 +162,34 @@ func TestOurEstimateOfAContextAgainstWhatTheProviderBilledForTheSameOne(t *testi
 		len(rows), fromMessages, len(rows)-fromMessages, low, compactionDecidesAboveTokens,
 		whole.rows, whole.median, whole.worst, whole.at.estimate, whole.at.billed())
 
-	for _, split := range []struct {
-		what   string
-		nameOf func(estimateRow) string
-	}{
-		{"recorded on", func(r estimateRow) string { return r.request.Day }},
-		{"carried by", func(r estimateRow) string { return r.request.Wire }},
-	} {
-		grouped := groupsOf(rows, split.nameOf)
-		for _, name := range slices.Sorted(maps.Keys(grouped)) {
-			group := spreadOf(grouped[name])
-			t.Logf("%s %s: %d rows above %d billed tokens, median %d percent, worst %d percent on %s step %d",
-				split.what, name, group.rows, compactionDecidesAboveTokens, group.median, group.worst,
-				group.at.request.Session[len(group.at.request.Session)-8:], group.at.request.Step)
-		}
+	byDay := groupsOf(rows, func(r estimateRow) string { return r.request.Day })
+	for _, name := range slices.Sorted(maps.Keys(byDay)) {
+		group := spreadOf(byDay[name])
+		t.Logf("recorded on %s: %d rows above %d billed tokens, median %d percent, worst %d percent on %s step %d",
+			name, group.rows, compactionDecidesAboveTokens, group.median, group.worst,
+			shortID(group.at), group.at.request.Step)
 	}
 
 	if whole.worst > marginPercent {
 		t.Fatalf("on a request of %d billed tokens we estimate %d, %d percent out, past the %d percent this bound allows: every threshold in context-budget.md is written in our units, so this is the size of the error in all of them",
 			whole.at.billed(), whole.at.estimate, whole.worst, marginPercent)
 	}
+	if whole.under > underMarginPercent {
+		t.Fatalf("on a request of %d billed tokens we estimate %d, %d percent under, past the %d percent this bound allows: an estimate under the provider's own number is the side that gets a request refused",
+			whole.lowest.billed(), whole.lowest.estimate, whole.under, underMarginPercent)
+	}
 }
+
+const sessionTailBytes = 8
+
+func shortID(r estimateRow) string {
+	if len(r.request.Session) < sessionTailBytes {
+		return "no row"
+	}
+	return r.request.Session[len(r.request.Session)-sessionTailBytes:]
+}
+
+func wireOfRow(r estimateRow) string { return r.request.Wire }
 
 func abs(n int) int {
 	if n < 0 {
