@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"tofu/internal/llm/cred"
+	"tofu/internal/widget"
 )
 
 const (
@@ -105,6 +106,55 @@ func chosenAccount(t *testing.T) error {
 		t.Fatal("the credential left usable was not the one chosen")
 	}
 	return err
+}
+
+func TestBothViewsShowTheAccountTheSameWay(t *testing.T) {
+	emptyHome(t)
+	stored := storeCredential(t, cred.Anthropic)
+
+	listing, errOut, code := runLogin(t, "--status")
+	if code != exitOK {
+		t.Fatalf("status = %d, %q", code, errOut)
+	}
+	pane := settingsScreen(t, appProviders())
+
+	shown := maskedAccount(cred.Identity{Email: stored})
+	if !strings.Contains(listing, shown) {
+		t.Errorf("tofu login --status does not show %q:\n%s", shown, listing)
+	}
+	if !strings.Contains(pane, shown) {
+		t.Errorf("the settings pane does not show %q:\n%s", shown, pane)
+	}
+	if strings.Contains(listing, stored) {
+		t.Error("tofu login --status names the account in full")
+	}
+	if strings.Contains(pane, stored) {
+		t.Errorf("the settings pane names the account in full:\n%s", pane)
+	}
+}
+
+func TestTwoAccountsThatMaskAlikeAreStillToldApart(t *testing.T) {
+	emptyHome(t)
+	storeTwoAnthropicAccounts(t)
+
+	if widget.Mask(firstTestAccount) != widget.Mask(secondTestAccount) {
+		t.Fatal("the two accounts do not share a tail, so nothing here is proved")
+	}
+	first := maskedAccount(cred.Identity{AccountID: firstTestAccount})
+	second := maskedAccount(cred.Identity{AccountID: secondTestAccount})
+	if first == second {
+		t.Fatalf("both accounts render as %q", first)
+	}
+
+	listing, errOut, code := runLogin(t, "--status")
+	if code != exitOK {
+		t.Fatalf("status = %d, %q", code, errOut)
+	}
+	for _, want := range []string{first, second} {
+		if !strings.Contains(listing, want) {
+			t.Errorf("the listing is missing %q:\n%s", want, listing)
+		}
+	}
 }
 
 func TestSettingAsideRefusesANumberThatIsNotStored(t *testing.T) {

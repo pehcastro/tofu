@@ -4,6 +4,8 @@ import (
 	"bufio"
 	"cmp"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -26,11 +28,12 @@ import (
 const (
 	loginUsage = "usage: tofu login <anthropic|codex|openrouter> [--paste], tofu login --status, " +
 		"or tofu login --disable|--enable <number>"
-	setAsideCause   = "set aside by hand, run tofu login --enable to bring it back"
-	openRouterName  = "openrouter"
-	openRouterFix   = "run tofu login openrouter and paste the key when it asks"
-	keyIsNeverTyped = "the key is read from a prompt and never from an argument: run tofu login openrouter on its own"
-	envFileName     = ".env"
+	setAsideCause    = "set aside by hand, run tofu login --enable to bring it back"
+	openRouterName   = "openrouter"
+	openRouterFix    = "run tofu login openrouter and paste the key when it asks"
+	keyIsNeverTyped  = "the key is read from a prompt and never from an argument: run tofu login openrouter on its own"
+	envFileName      = ".env"
+	accountMarkBytes = 2
 )
 
 func loginVerb(args []string, in io.Reader, out, errOut io.Writer) int {
@@ -121,9 +124,17 @@ func credentialListing(now time.Time) (string, error) {
 	return lines, nil
 }
 
+func maskedAccount(identity cred.Identity) string {
+	account := cmp.Or(identity.Email, identity.AccountID)
+	if account == "" {
+		return ""
+	}
+	sum := sha256.Sum256([]byte(account))
+	return widget.Mask(account) + "#" + hex.EncodeToString(sum[:accountMarkBytes])
+}
+
 func credentialLine(row cred.Row, now time.Time) string {
-	account := cmp.Or(row.Credential.Identity.Email, row.Credential.Identity.AccountID)
-	return fmt.Sprintf("#%d %s %s", row.ID, widget.Mask(account), row.State(now))
+	return fmt.Sprintf("#%d %s %s", row.ID, maskedAccount(row.Credential.Identity), row.State(now))
 }
 
 func credentialByID(rows []cred.Row, id int64) (cred.Row, bool) {

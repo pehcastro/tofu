@@ -196,7 +196,7 @@ func TestLiveAppRunsATurnOnEachWire(t *testing.T) {
 	}
 }
 
-func storeCredential(t *testing.T, provider cred.Provider) {
+func storeCredential(t *testing.T, provider cred.Provider) string {
 	t.Helper()
 	path, err := cred.Path()
 	if err != nil {
@@ -207,16 +207,18 @@ func storeCredential(t *testing.T, provider cred.Provider) {
 		t.Fatal(err)
 	}
 	defer func() { _ = store.Close() }()
+	email := string(provider) + "@example.com"
 	credential := cred.Credential{
 		Provider: provider,
 		Kind:     "oauth",
 		Access:   "access-token",
 		Expires:  time.Now().Add(time.Hour),
-		Identity: cred.Identity{Email: string(provider) + "@example.com"},
+		Identity: cred.Identity{Email: email},
 	}
 	if err := store.Save(credential, time.Now()); err != nil {
 		t.Fatal(err)
 	}
+	return email
 }
 
 func storeGateKey(t *testing.T, key string) {

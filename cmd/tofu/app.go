@@ -232,7 +232,7 @@ func subscriptionProvider(name string, provider cred.Provider, store *cred.Store
 	case stored.Unusable(now) != "":
 		row.State = stored.Unusable(now)
 	default:
-		row.State = strings.TrimSpace("signed in " + cmp.Or(stored.Credential.Identity.Email, stored.Credential.Identity.AccountID))
+		row.State = strings.TrimSpace("signed in " + maskedAccount(stored.Credential.Identity))
 	}
 	return row
 }
