@@ -10,6 +10,23 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 
 ## Unreleased
 
+## 0.4.8 - 2026-09-22
+
+`catalog` is `library`.
+
+### Changed
+
+- **The `catalog` directory is now `library`, and `tofu catalog` is now `tofu library`.** Two other tools already call the same thing a catalog, and a shared word made this look like a copy of theirs when the contents are ours. `library` also says the right thing: a place things are looked up from, rather than a list of what exists.
+- `tofu rules list` and `tofu rules check` take `--library` where they took `--catalog`.
+
+### Deprecated
+
+- **`tofu catalog` still runs and tells you the new name.** It goes at the next minor bump.
+
+### Note
+
+A decision recorded before today names its rule file by a `catalog/` path in the sentence `tofu why` prints. **Nothing resolves a path from that sentence**, so old decisions replay unchanged; the only effect is that `tofu why` on a row from before this release names a directory that no longer exists.
+
 ## 0.4.7 - 2026-09-22
 
 More than one account, and a screen that stops lying about which one.

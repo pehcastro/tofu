@@ -8,10 +8,10 @@ import (
 	"strconv"
 	"strings"
 
-	"tofu/catalog/changelog"
 	"tofu/internal/konst"
 	"tofu/internal/sys"
 	"tofu/internal/widget"
+	"tofu/library/changelog"
 )
 
 const (

@@ -35,7 +35,7 @@ func searchAgainst(t *testing.T, answer string) (web.Config, func() *http.Reques
 	return config, func() *http.Request { return asked }
 }
 
-func TestSearchAsksTheCatalogProviderAndReturnsWhatItRanked(t *testing.T) {
+func TestSearchAsksTheLibraryProviderAndReturnsWhatItRanked(t *testing.T) {
 	config, _ := searchAgainst(t, braveShapedAnswer)
 	results, err := web.NewClient(config).Search(context.Background(), config, "go worker pool", 2)
 	if err != nil {
@@ -53,7 +53,7 @@ func TestSearchAsksTheCatalogProviderAndReturnsWhatItRanked(t *testing.T) {
 	}
 }
 
-func TestSearchSendsTheKeyInTheHeaderTheCatalogNames(t *testing.T) {
+func TestSearchSendsTheKeyInTheHeaderTheLibraryNames(t *testing.T) {
 	config, latest := searchAgainst(t, braveShapedAnswer)
 	if _, err := web.NewClient(config).Search(context.Background(), config, "go worker pool", 0); err != nil {
 		t.Fatalf("searching: %v", err)
@@ -62,10 +62,10 @@ func TestSearchSendsTheKeyInTheHeaderTheCatalogNames(t *testing.T) {
 	t.Logf("the provider was asked %s with the key header present: %t",
 		asked.URL.String(), asked.Header.Get("X-Subscription-Token") != "")
 	if asked.Header.Get("X-Subscription-Token") != "a-key-that-is-never-printed" {
-		t.Fatalf("the key did not travel in the header the catalog names: %v", asked.Header)
+		t.Fatalf("the key did not travel in the header the library names: %v", asked.Header)
 	}
 	if asked.URL.Query().Get("q") != "go worker pool" || asked.URL.Query().Get("count") != "10" {
-		t.Fatalf("the query did not go in the parameters the catalog names: %s", asked.URL.RawQuery)
+		t.Fatalf("the query did not go in the parameters the library names: %s", asked.URL.RawQuery)
 	}
 }
 
@@ -74,7 +74,7 @@ func TestAnAnswerWithoutTheRankedListSaysWhereItLooked(t *testing.T) {
 	_, err := web.NewClient(config).Search(context.Background(), config, "go worker pool", 0)
 	t.Logf("a provider answering something else: %v", err)
 	if err == nil || !strings.Contains(err.Error(), "web.results") {
-		t.Fatalf("the failure does not name the path the catalog gave: %v", err)
+		t.Fatalf("the failure does not name the path the library gave: %v", err)
 	}
 	if strings.Contains(err.Error(), "a-key-that-is-never-printed") {
 		t.Fatal("the failure carries the key")

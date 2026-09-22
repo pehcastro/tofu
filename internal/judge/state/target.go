@@ -11,7 +11,7 @@ const (
 	ClassSourceCode  TargetClass = "source_code"
 	ClassTicket      TargetClass = "ticket"
 	ClassDocument    TargetClass = "document"
-	ClassCatalogData TargetClass = "catalog_data"
+	ClassLibraryData TargetClass = "library_data"
 	ClassConfig      TargetClass = "config"
 	ClassUnknown     TargetClass = "unknown_class"
 )
@@ -105,8 +105,8 @@ func classOf(full string) TargetClass {
 	parts := strings.Split(strings.ToLower(full), "/")
 	for _, part := range parts[:len(parts)-1] {
 		switch part {
-		case "catalog":
-			return ClassCatalogData
+		case "library":
+			return ClassLibraryData
 		case "tickets":
 			return ClassTicket
 		}

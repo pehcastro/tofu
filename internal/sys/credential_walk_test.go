@@ -14,7 +14,7 @@ import (
 
 const credentialMark = ".env"
 
-var credentialRoots = []string{"bench", "catalog", "cmd", "interface", "internal"}
+var credentialRoots = []string{"bench", "library", "cmd", "interface", "internal"}
 
 const credentialOpener = "sys.readCredentialFile"
 

@@ -97,12 +97,12 @@ func ProjectStateDir() (string, error) {
 	return StateDir(wd), nil
 }
 
-func CatalogDir() (string, error) {
+func LibraryDir() (string, error) {
 	wd, err := os.Getwd()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(wd, "catalog"), nil
+	return filepath.Join(wd, "library"), nil
 }
 
 func stateChild(name string) (string, error) {

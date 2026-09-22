@@ -3,9 +3,9 @@ package state
 import (
 	"fmt"
 
-	shipped "tofu/catalog"
 	"tofu/internal/judge/gate"
 	"tofu/internal/judge/question"
+	shipped "tofu/library"
 )
 
 const StopCheckRuleRef = "stop_check@1"

@@ -13,7 +13,7 @@
                                                                                                                         
   [38;5;252mFive roots, dependency order[m[38;5;252m bottom-up:[m                                                                               
                                                                                                                         
-  [38;5;252m• [m[38;5;44;48;5;236m catalog/ [m[38;5;252m: everything shipped as data, no code, bottom of the import graph. Models, subscriptions, roles, question[m 
+  [38;5;252m• [m[38;5;44;48;5;236m library/ [m[38;5;252m: everything shipped as data, no code, bottom of the import graph. Models, subscriptions, roles, question[m 
   [38;5;252msets, policies (thresholds), house rules. Resolved in three layers, field by field: embedded, then [m[38;5;44;48;5;236m ~/.boji/ [m[38;5;252m, then [m[38;5;44;48;5;236m .[m
   [38;5;44;48;5;236m/.boji/ [m[38;5;252m, last mention wins. Refusals are named by file and field, never[m[38;5;252m skipped.[m                                     
   [38;5;252m• [m[38;5;44;48;5;236m internal/ [m[38;5;252m: 19 packages. [m[38;5;44;48;5;236m judge/ [m[38;5;252m (jev client, question, policy, ledger, state) is the instrument; [m[38;5;44;48;5;236m turn/ [m[38;5;252m is the[m  
@@ -21,7 +21,7 @@
   [38;5;252m[m[38;5;44;48;5;236m memo [m[38;5;252m); [m[38;5;44;48;5;236m session/ [m[38;5;252m is one append-only record; plus [m[38;5;44;48;5;236m llm/ [m[38;5;252m (wire protocols, creds, quota), [m[38;5;44;48;5;236m rule/ [m[38;5;252m, [m[38;5;44;48;5;236m sift/ [m[38;5;252m, [m[38;5;44;48;5;236m recall/[m 
   [38;5;252m[m[38;5;44;48;5;236m shell/ [m[38;5;252m, [m[38;5;44;48;5;236m transform/ [m[38;5;252m, [m[38;5;44;48;5;236m konst/ [m[38;5;252m (every limit, one[m[38;5;252m file).[m                                                             
   [38;5;252m• [m[38;5;44;48;5;236m cmd/tofu/ [m[38;5;252m: ~[m[38;5;252m25 verbs. [m[38;5;44;48;5;236m run [m[38;5;252m, [m[38;5;44;48;5;236m judge [m[38;5;252m, [m[38;5;44;48;5;236m check [m[38;5;252m, [m[38;5;44;48;5;236m why [m[38;5;252m, [m[38;5;44;48;5;236m replay [m[38;5;252m, [m[38;5;44;48;5;236m session [m[38;5;252m, [m[38;5;44;48;5;236m shells [m[38;5;252m, [m[38;5;44;48;5;236m context [m[38;5;252m, [m[38;5;44;48;5;236m sift [m[38;5;252m, [m[38;5;44;48;5;236m label [m[38;5;252m,[m  
-  [38;5;252m[m[38;5;44;48;5;236m catalog [m[38;5;252m, [m[38;5;44;48;5;236m rules [m[38;5;252m, [m[38;5;44;48;5;236m settings [m[38;5;252m, [m[38;5;44;48;5;236m doctor [m[38;5;252m, [m[38;5;44;48;5;236m login [m[38;5;252m, [m[38;5;44;48;5;236m models [m[38;5;252m, [m[38;5;44;48;5;236m frame [m[38;5;252m.[m                                                 
+  [38;5;252m[m[38;5;44;48;5;236m library [m[38;5;252m, [m[38;5;44;48;5;236m rules [m[38;5;252m, [m[38;5;44;48;5;236m settings [m[38;5;252m, [m[38;5;44;48;5;236m doctor [m[38;5;252m, [m[38;5;44;48;5;236m login [m[38;5;252m, [m[38;5;44;48;5;236m models [m[38;5;252m, [m[38;5;44;48;5;236m frame [m[38;5;252m.[m                                                 
   [38;5;252m• [m[38;5;44;48;5;236m interface/tui/ [m[38;5;252m: Charm v2 stack ([m[38;5;44;48;5;236m charm.land [m[38;5;252m, bubbletea 2.0.9). Five views on five digits: chat, work, file edits,[m
   [38;5;252msub-agents, shells. Built last, deliberately. Every event carries a [m[38;5;44;48;5;236m #a3f9c1 [m[38;5;252m id; the views are a query over one[m      
   [38;5;252mrecord, not five[m[38;5;252m records.[m                                                                                             
@@ -55,7 +55,7 @@
                                                                                                                         
   [38;5;252m[m[38;5;39;1mCaveats on the[m[38;5;39;1m above[m                                                                                                  
                                                                                                                         
-  [38;5;252mI read the report, changelog, catalog README, board and a handful of files; I did not read the design docs under[m      
+  [38;5;252mI read the report, changelog, library README, board and a handful of files; I did not read the design docs under[m      
   [38;5;252m[m[38;5;44;48;5;236m .local/boji/planning/ [m[38;5;252m or run a build. If the "code owns the loop" framing is off in a way that matters, that's from[m 
   [38;5;252mthe docs describing intent and me not having watched it[m[38;5;252m run.[m                                                          
                                                                                                                         

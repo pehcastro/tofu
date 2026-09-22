@@ -96,13 +96,13 @@ func toolNames(t *testing.T, key string) string {
 	t.Helper()
 	t.Setenv(testSearchKey, key)
 	config, err := web.Load([]web.Layer{
-		{Origin: "catalog/web", FS: os.DirFS(filepath.Join("..", "..", "..", "catalog", "web"))},
+		{Origin: "library/web", FS: os.DirFS(filepath.Join("..", "..", "..", "library", "web"))},
 		{Origin: "project", FS: fstest.MapFS{"search/brave.yaml": &fstest.MapFile{
 			Data: []byte("key_variable: " + testSearchKey + "\n"),
 		}}},
 	})
 	if err != nil {
-		t.Fatalf("loading the web catalog: %v", err)
+		t.Fatalf("loading the web library: %v", err)
 	}
 	var names []string
 	for _, tool := range tools.NewWeb(config) {

@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	shipped "tofu/catalog"
 	"tofu/internal/judge/question"
+	shipped "tofu/library"
 )
 
 func TestARuleDeclaringNoSchemaIsAGateRuleAndKeepsTodaysRefusal(t *testing.T) {
@@ -48,7 +48,7 @@ func TestAForeignSchemaKeepsTheSharedFieldsAndIgnoresTheRest(t *testing.T) {
 }
 
 func TestAForeignSchemaIsNotLintedAgainstTheGatesFourRoles(t *testing.T) {
-	path, err := filepath.Abs(filepath.Join("..", "..", "..", "catalog", "questions", "shell_sift@1.yaml"))
+	path, err := filepath.Abs(filepath.Join("..", "..", "..", "library", "questions", "shell_sift@1.yaml"))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -8,7 +8,7 @@ import (
 	"tofu/internal/sys"
 )
 
-var lintRoots = []string{"bench", "cmd/tofu", "interface", "catalog", "internal"}
+var lintRoots = []string{"bench", "cmd/tofu", "interface", "library", "internal"}
 
 type lintFinding struct {
 	File   string `json:"file"`

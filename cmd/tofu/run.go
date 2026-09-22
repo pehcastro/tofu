@@ -93,15 +93,15 @@ type runtime struct {
 }
 
 func boundRoles(wire string) (models.Bindings, error) {
-	catalog, err := modelCatalog()
+	library, err := modelLibrary()
 	if err != nil {
 		return nil, err
 	}
-	spec, carried := catalog.ForWire(wire)
+	spec, carried := library.ForWire(wire)
 	if !carried {
-		return nil, outsideTheCatalog(catalog, wire)
+		return nil, outsideTheLibrary(library, wire)
 	}
-	return catalog.Bind(spec.ID)
+	return library.Bind(spec.ID)
 }
 
 func chooseModel(opts runOpts) (models.Model, error) {

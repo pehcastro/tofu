@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-var sourceRoots = []string{"bench", "catalog", "cmd", "interface", "internal"}
+var sourceRoots = []string{"bench", "library", "cmd", "interface", "internal"}
 
 var fixtureDirectoryNames = map[string]bool{"testdata": true, "corpus": true, "answers": true}
 

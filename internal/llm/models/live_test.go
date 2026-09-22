@@ -44,14 +44,14 @@ func TestLiveDiscovery(t *testing.T) {
 	if err != nil {
 		t.Fatalf("building the transport: %v", err)
 	}
-	catalog := shippedCatalog(t)
-	for _, spec := range catalog.Subscriptions {
+	library := shippedLibrary(t)
+	for _, spec := range library.Subscriptions {
 		t.Run(string(spec.ID), func(t *testing.T) {
 			served, err := Discover(context.Background(), client, liveAccount(t, spec))
 			if err != nil {
 				t.Fatalf("discovery against %s under %s: %v", spec.ID, served.Pin, err)
 			}
-			for _, line := range catalog.Reconcile(served, shippedTable(t)).Lines() {
+			for _, line := range library.Reconcile(served, shippedTable(t)).Lines() {
 				t.Log(line)
 			}
 		})

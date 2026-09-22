@@ -6,13 +6,13 @@ import (
 	"strings"
 	"testing"
 
-	"tofu/catalog/questions"
+	"tofu/library/questions"
 )
 
 func TestEveryShippedSetIsEmbedded(t *testing.T) {
 	disk, err := os.ReadDir(".")
 	if err != nil {
-		t.Fatalf("read catalog/questions: %v", err)
+		t.Fatalf("read library/questions: %v", err)
 	}
 	want := map[string]bool{}
 	for _, e := range disk {
@@ -25,7 +25,7 @@ func TestEveryShippedSetIsEmbedded(t *testing.T) {
 	}
 	entries, err := fs.ReadDir(questions.Files(), ".")
 	if err != nil {
-		t.Fatalf("read the embedded catalog: %v", err)
+		t.Fatalf("read the embedded library: %v", err)
 	}
 	got := map[string]bool{}
 	for _, e := range entries {
@@ -46,7 +46,7 @@ func TestEveryShippedSetIsEmbedded(t *testing.T) {
 func TestNoShippedSetCarriesAnEmDash(t *testing.T) {
 	entries, err := fs.ReadDir(questions.Files(), ".")
 	if err != nil {
-		t.Fatalf("read the embedded catalog: %v", err)
+		t.Fatalf("read the embedded library: %v", err)
 	}
 	for _, e := range entries {
 		data, err := fs.ReadFile(questions.Files(), e.Name())
@@ -62,7 +62,7 @@ func TestNoShippedSetCarriesAnEmDash(t *testing.T) {
 func TestNoQuestionFileOnDiskCarriesAnEmDash(t *testing.T) {
 	entries, err := os.ReadDir(".")
 	if err != nil {
-		t.Fatalf("read catalog/questions: %v", err)
+		t.Fatalf("read library/questions: %v", err)
 	}
 	for _, e := range entries {
 		if e.IsDir() || !strings.HasSuffix(e.Name(), ".yaml") {

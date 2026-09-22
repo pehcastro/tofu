@@ -18,7 +18,7 @@ type Layer struct {
 }
 
 func DefaultLayers() ([]Layer, error) {
-	catalogDir, err := sys.CatalogDir()
+	libraryDir, err := sys.LibraryDir()
 	if err != nil {
 		return nil, err
 	}
@@ -30,7 +30,7 @@ func DefaultLayers() ([]Layer, error) {
 	if err != nil {
 		return nil, err
 	}
-	dirs := []string{sys.Join(catalogDir, "web"), sys.Join(home, "web"), sys.Join(project, "web")}
+	dirs := []string{sys.Join(libraryDir, "web"), sys.Join(home, "web"), sys.Join(project, "web")}
 	layers := make([]Layer, len(dirs))
 	for i, dir := range dirs {
 		layers[i] = Layer{Origin: dir, FS: os.DirFS(dir)}

@@ -180,7 +180,7 @@ func TestAMissingRequiredParameterIsNamedRatherThanDumpedAsUsage(t *testing.T) {
 func TestTheTwoRecordToolsAddAMeasuredCostToEveryRequest(t *testing.T) {
 	cfg, err := recall.LoadConfig()
 	if err != nil {
-		t.Fatalf("loading the elide catalog: %v", err)
+		t.Fatalf("loading the elide library: %v", err)
 	}
 	verbs, err := tools.NewVerbs(t.TempDir())
 	if err != nil {

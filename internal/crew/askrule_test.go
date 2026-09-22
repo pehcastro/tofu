@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	shipped "tofu/catalog"
 	"tofu/internal/judge/gate"
+	shipped "tofu/library"
 )
 
 func TestTheShippedAskRuleDeclaresItsOwnSchemaAndIsShadow(t *testing.T) {
@@ -14,10 +14,10 @@ func TestTheShippedAskRuleDeclaresItsOwnSchemaAndIsShadow(t *testing.T) {
 		t.Fatalf("load the shipped rule: %v", err)
 	}
 	if r.Schema != AskSchema {
-		t.Fatalf("catalog/general/rules/ask@1.yaml declares schema %q, want %q", r.Schema, AskSchema)
+		t.Fatalf("library/general/rules/ask@1.yaml declares schema %q, want %q", r.Schema, AskSchema)
 	}
 	if r.Mode != gate.ModeShadow {
-		t.Fatalf("catalog/general/rules/ask@1.yaml is %s, want shadow", r.Mode)
+		t.Fatalf("library/general/rules/ask@1.yaml is %s, want shadow", r.Mode)
 	}
 	if r.DeterminedLowAt <= 0 || r.DeterminedLowAt > 1 {
 		t.Fatalf("determined_low_at is %g, want a noul threshold in (0, 1]", r.DeterminedLowAt)

@@ -10,11 +10,11 @@ import (
 )
 
 func TestEveryShippedModelPaidBySubscriptionCarriesTheSuffix(t *testing.T) {
-	catalog := shippedCatalog(t)
-	if len(catalog.Models) == 0 {
-		t.Fatal("the shipped catalog loaded no models at all")
+	library := shippedLibrary(t)
+	if len(library.Models) == 0 {
+		t.Fatal("the shipped library loaded no models at all")
 	}
-	for _, model := range catalog.Models {
+	for _, model := range library.Models {
 		if model.Subscription == "" {
 			t.Fatalf("%s carries no subscription, and every shipped model is paid by one", model.VendorSlug())
 		}
@@ -26,12 +26,12 @@ func TestEveryShippedModelPaidBySubscriptionCarriesTheSuffix(t *testing.T) {
 }
 
 func TestAModelWithNoSubscriptionFieldReadsTheBareVendor(t *testing.T) {
-	catalog, err := Load([]Layer{layerOf("catalog", withSubscriptions(oneFile(
+	library, err := Load([]Layer{layerOf("library", withSubscriptions(oneFile(
 		"models/anthropic/claude-direct.yaml", "use: allowed\n")))})
 	if err != nil {
 		t.Fatalf("loading: %v", err)
 	}
-	model, err := catalog.Select("anthropic/claude-direct")
+	model, err := library.Select("anthropic/claude-direct")
 	if err != nil {
 		t.Fatalf("a direct-key model does not resolve by vendor/name: %v", err)
 	}
@@ -41,14 +41,14 @@ func TestAModelWithNoSubscriptionFieldReadsTheBareVendor(t *testing.T) {
 }
 
 func TestTheSubSuffixIsDerivedNeverWrittenInTheSubscriptionFile(t *testing.T) {
-	catalog, err := Load([]Layer{layerOf("catalog", fstest.MapFS{
+	library, err := Load([]Layer{layerOf("library", fstest.MapFS{
 		"subscriptions/opencode.yaml":       &fstest.MapFile{Data: []byte("provider: anthropic\nwire: opencode\nwindows: 5h\n")},
 		"models/anthropic/deepseek-v3.yaml": &fstest.MapFile{Data: []byte("subscription: opencode\nuse: default\n")},
 	})})
 	if err != nil {
 		t.Fatalf("loading: %v", err)
 	}
-	model, err := catalog.Select("opencode-sub/deepseek-v3")
+	model, err := library.Select("opencode-sub/deepseek-v3")
 	if err != nil {
 		t.Fatalf("a new subscription's model does not resolve to the derived suffix: %v", err)
 	}
@@ -58,8 +58,8 @@ func TestTheSubSuffixIsDerivedNeverWrittenInTheSubscriptionFile(t *testing.T) {
 }
 
 func TestABareModelNameFromARecordedSessionStillResolves(t *testing.T) {
-	catalog := shippedCatalog(t)
-	model, found := catalog.Resolve("claude-opus-5")
+	library := shippedLibrary(t)
+	model, found := library.Resolve("claude-opus-5")
 	if !found || model.Slug() != "claude-sub/claude-opus-5" {
 		t.Fatalf("a bare recorded model name resolved to %+v, found %v", model, found)
 	}
@@ -85,10 +85,10 @@ func TestARealRecordedSessionReadsBackAndResolvesItsModel(t *testing.T) {
 	if err != nil {
 		t.Fatalf("reading the copy back: %v", err)
 	}
-	catalog := shippedCatalog(t)
-	model, found := catalog.Resolve(header.Model)
+	library := shippedLibrary(t)
+	model, found := library.Resolve(header.Model)
 	if !found {
-		t.Fatalf("the session names model %q and the catalog cannot resolve it", header.Model)
+		t.Fatalf("the session names model %q and the library cannot resolve it", header.Model)
 	}
 	if model.Slug() != "claude-sub/claude-opus-5" {
 		t.Fatalf("the recorded session resolved to %q, want claude-sub/claude-opus-5", model.Slug())

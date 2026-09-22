@@ -138,35 +138,35 @@ func TestTheShippedDefaultRecordsNoProxyAndSpawnsNothing(t *testing.T) {
 	}
 }
 
-func TestCatalogNamesTheProxySettingAndTheLayerItCameFrom(t *testing.T) {
+func TestLibraryNamesTheProxySettingAndTheLayerItCameFrom(t *testing.T) {
 	project := projectWithProxySheet(t, "use: rtk\ntimeout_ms: 5000\n")
 
 	var out, errOut bytes.Buffer
-	if code := catalogVerb(nil, &out, &errOut); code != exitOK {
-		t.Fatalf("tofu catalog exited %d: %s\n%s", code, errOut.String(), out.String())
+	if code := libraryVerb(nil, &out, &errOut); code != exitOK {
+		t.Fatalf("tofu library exited %d: %s\n%s", code, errOut.String(), out.String())
 	}
 	line := proxyLine(t, out.String())
 	if !strings.Contains(line, "use rtk") || !strings.Contains(line, "project ") || !strings.Contains(line, filepath.Base(project)) {
-		t.Fatalf("tofu catalog does not name the setting and the layer: %q", line)
+		t.Fatalf("tofu library does not name the setting and the layer: %q", line)
 	}
-	t.Logf("tofu catalog\n%s", line)
+	t.Logf("tofu library\n%s", line)
 }
 
-func TestCatalogNamesARefusedProxyFileAndTheFieldThatFailed(t *testing.T) {
+func TestLibraryNamesARefusedProxyFileAndTheFieldThatFailed(t *testing.T) {
 	projectWithProxySheet(t, "use: maybe\ntimeout_ms: 5000\n")
 
 	var out, errOut bytes.Buffer
-	if code := catalogVerb(nil, &out, &errOut); code != exitVerdict {
+	if code := libraryVerb(nil, &out, &errOut); code != exitVerdict {
 		t.Fatalf("a refused proxy file must fail the verb, got %d\n%s", code, out.String())
 	}
 	text := out.String()
 	if !strings.Contains(text, "proxy.yaml") || !strings.Contains(text, "use has to be") {
-		t.Fatalf("tofu catalog does not name the refused file and the field:\n%s", text)
+		t.Fatalf("tofu library does not name the refused file and the field:\n%s", text)
 	}
 	if !strings.Contains(proxyLine(t, text), "use off") {
 		t.Fatalf("a refused file did not leave the setting off:\n%s", text)
 	}
-	t.Logf("tofu catalog\n%s", text)
+	t.Logf("tofu library\n%s", text)
 }
 
 func proxyLine(t *testing.T, text string) string {
@@ -176,6 +176,6 @@ func proxyLine(t *testing.T, text string) string {
 			return line
 		}
 	}
-	t.Fatalf("tofu catalog says nothing about the proxy:\n%s", text)
+	t.Fatalf("tofu library says nothing about the proxy:\n%s", text)
 	return ""
 }

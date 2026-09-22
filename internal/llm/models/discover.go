@@ -157,7 +157,7 @@ type Reconciliation struct {
 	Windows     []string
 }
 
-func (c Catalog) Reconcile(served Served, registry Registry) Reconciliation {
+func (c Library) Reconcile(served Served, registry Registry) Reconciliation {
 	accounted := make(map[string]bool, len(c.Models))
 	for _, spec := range c.Subscriptions {
 		if spec.ID != served.Subscription {
@@ -199,8 +199,8 @@ func (r Reconciliation) Lines() []string {
 	head := string(r.Served.Subscription) + ": "
 	return []string{
 		head + "the account serves " + list(r.Served.IDs) + " under " + r.Served.Pin,
-		head + "served and not in the catalog: " + list(r.Unknown),
-		head + "in the catalog and not served: " + list(r.Unreachable),
+		head + "served and not in the library: " + list(r.Unknown),
+		head + "in the library and not served: " + list(r.Unreachable),
 		head + "windows the account reports that " + r.Table + " does not match: " + list(r.Windows),
 	}
 }

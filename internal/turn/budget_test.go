@@ -12,7 +12,7 @@ import (
 
 func TestAModelWithNoRecordedWindowStillCompactsAtTheOperatingCeiling(t *testing.T) {
 	config, _ := longTurnConfig(t)
-	unknown, err := recall.BudgetFor("a model no catalog records", 0)
+	unknown, err := recall.BudgetFor("a model no library records", 0)
 	if err != nil {
 		t.Fatalf("budget for an unrecorded model: %v", err)
 	}

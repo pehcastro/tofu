@@ -10,7 +10,7 @@ import (
 
 func shippedDomains(t *testing.T) []Domain {
 	t.Helper()
-	domains, err := LoadDomains(os.DirFS("../../catalog"), "catalog")
+	domains, err := LoadDomains(os.DirFS("../../library"), "library")
 	if err != nil {
 		t.Fatalf("LoadDomains: %v", err)
 	}
@@ -24,7 +24,7 @@ func domainNamed(t *testing.T, name string) Domain {
 			return domain
 		}
 	}
-	t.Fatalf("the catalog ships no %s domain", name)
+	t.Fatalf("the library ships no %s domain", name)
 	return Domain{}
 }
 
@@ -65,7 +65,7 @@ func TestAReferenceInAnotherDomainIsNotReachable(t *testing.T) {
 		"qa/references/flakiness.md": {Data: []byte("---\nname: flakiness\n---\n")},
 		"dev/references/golang.md":   {Data: []byte("---\nname: golang\n---\n")},
 		"qa/agents/qa.md":            {Data: []byte("---\nname: qa\ndomain: qa\nreferences:\n  - flakiness\n  - golang\n---\n")},
-	}, "catalog")
+	}, "library")
 	if err != nil {
 		t.Fatalf("LoadDomains: %v", err)
 	}
@@ -85,7 +85,7 @@ func TestAReferenceInAnotherDomainIsNotReachable(t *testing.T) {
 func TestADocumentWithNoDomainIsRefusedByName(t *testing.T) {
 	domains, err := LoadDomains(fstest.MapFS{
 		"qa/agents/qa.md": {Data: []byte("---\nname: qa\nreferences:\n  - flakiness\n---\n")},
-	}, "catalog")
+	}, "library")
 	if err != nil {
 		t.Fatalf("LoadDomains: %v", err)
 	}
@@ -93,7 +93,7 @@ func TestADocumentWithNoDomainIsRefusedByName(t *testing.T) {
 		t.Fatalf("domains = %+v, want one domain refusing one file", domains)
 	}
 	refused := domains[0].Refused[0].Error()
-	if !strings.HasPrefix(refused, "catalog/qa/agents/qa.md") || !strings.Contains(refused, "no domain") {
+	if !strings.HasPrefix(refused, "library/qa/agents/qa.md") || !strings.Contains(refused, "no domain") {
 		t.Fatalf("the refusal does not name the file and the field: %s", refused)
 	}
 }

@@ -43,7 +43,7 @@ func fourteenCalls() []runCall {
 		{tool: "bash", text: "go vet ./internal/...", result: "no output", bytes: 128},
 		{tool: "read", text: "internal/point/toolgate.go", result: "141 lines, 4.1 KB", bytes: 4096},
 		{tool: "bash", text: "rg toolgate internal", result: "31 lines, 2.2 KB", bytes: 2210},
-		{tool: "read", text: "catalog/questions/tool_gate.yaml", result: "58 lines, 1.7 KB", bytes: 1740},
+		{tool: "read", text: "library/questions/tool_gate.yaml", result: "58 lines, 1.7 KB", bytes: 1740},
 		{tool: "bash", text: "go test ./internal/point/...", result: "ok tofu/internal/point 0.31s", bytes: 380},
 		{tool: "read", text: "internal/turn/budget.go", result: "172 lines, 5.3 KB", bytes: 5310},
 		{tool: "bash", text: longIntent, detail: longCommand, result: "14 lines, 64 bytes", bytes: 64},

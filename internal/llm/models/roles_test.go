@@ -20,11 +20,11 @@ func twoModels() fstest.MapFS {
 
 func boundIn(t *testing.T, files fstest.MapFS, fallback Subscription) Bindings {
 	t.Helper()
-	catalog, err := Load([]Layer{layerOf("catalog", files)})
+	library, err := Load([]Layer{layerOf("library", files)})
 	if err != nil {
 		t.Fatalf("loading: %v", err)
 	}
-	bound, err := catalog.Bind(fallback)
+	bound, err := library.Bind(fallback)
 	if err != nil {
 		t.Fatalf("binding: %v", err)
 	}
@@ -52,8 +52,8 @@ func TestEachRoleBindsToAModelSlugAndReadsBack(t *testing.T) {
 	}
 }
 
-func TestARoleNamingAModelTheCatalogDoesNotHaveIsRefusedByName(t *testing.T) {
-	_, err := Load([]Layer{layerOf("catalog", withRole(RoleTurn, "claude-sub/claude-opus-9"))})
+func TestARoleNamingAModelTheLibraryDoesNotHaveIsRefusedByName(t *testing.T) {
+	_, err := Load([]Layer{layerOf("library", withRole(RoleTurn, "claude-sub/claude-opus-9"))})
 	if err == nil || !strings.Contains(err.Error(), "no claude-sub/claude-opus-9") {
 		t.Fatalf("want the unknown model refused by name, got %v", err)
 	}
@@ -62,17 +62,17 @@ func TestARoleNamingAModelTheCatalogDoesNotHaveIsRefusedByName(t *testing.T) {
 	}
 }
 
-func TestARoleNamingAnExcludedModelIsRefusedWithTheCatalogsOwnReason(t *testing.T) {
-	_, err := Load([]Layer{layerOf("catalog", withRole(RoleChild, "claude-sub/claude-fable-5"))})
+func TestARoleNamingAnExcludedModelIsRefusedWithTheReasonInTheLibrary(t *testing.T) {
+	_, err := Load([]Layer{layerOf("library", withRole(RoleChild, "claude-sub/claude-fable-5"))})
 	if err == nil || !strings.Contains(err.Error(), "the owner will not pay for fable") {
-		t.Fatalf("want the catalog's own reason, got %v", err)
+		t.Fatalf("want the library's own reason, got %v", err)
 	}
 }
 
 func TestAFileUnderRolesThatIsNotARoleIsRefusedByName(t *testing.T) {
 	files := twoModels()
 	files["roles/vision.yaml"] = &fstest.MapFile{Data: []byte("model: openai/gpt-5.6-luna\n")}
-	_, err := Load([]Layer{layerOf("catalog", files)})
+	_, err := Load([]Layer{layerOf("library", files)})
 	if err == nil || !strings.Contains(err.Error(), "a role is turn or child") {
 		t.Fatalf("want an unknown role refused by name, got %v", err)
 	}
@@ -84,11 +84,11 @@ func TestAProjectRoleFileLeavesTheGlobalOneTheProjectDoesNotName(t *testing.T) {
 	global["roles/child.yaml"] = &fstest.MapFile{Data: []byte("model: codex-sub/gpt-5.6-sol\n")}
 	project := oneFile("roles/child.yaml", "model: codex-sub/gpt-5.6-luna\n")
 
-	catalog, err := Load([]Layer{layerOf("global", global), layerOf("project", project)})
+	library, err := Load([]Layer{layerOf("global", global), layerOf("project", project)})
 	if err != nil {
 		t.Fatalf("loading: %v", err)
 	}
-	bound, err := catalog.Bind(Claude)
+	bound, err := library.Bind(Claude)
 	if err != nil {
 		t.Fatalf("binding: %v", err)
 	}
@@ -125,11 +125,11 @@ func TestBindingsArePinnedAndAReReadPicksUpTheChange(t *testing.T) {
 		}
 	}
 	reread := func() Bindings {
-		catalog, err := Load([]Layer{layerOf("catalog", twoModels()), {Name: "project", Origin: dir, FS: os.DirFS(dir)}})
+		library, err := Load([]Layer{layerOf("library", twoModels()), {Name: "project", Origin: dir, FS: os.DirFS(dir)}})
 		if err != nil {
 			t.Fatalf("loading: %v", err)
 		}
-		bound, err := catalog.Bind(Claude)
+		bound, err := library.Bind(Claude)
 		if err != nil {
 			t.Fatalf("binding: %v", err)
 		}
@@ -148,14 +148,14 @@ func TestBindingsArePinnedAndAReReadPicksUpTheChange(t *testing.T) {
 	}
 }
 
-func BenchmarkReReadingEveryCatalogFile(b *testing.B) {
+func BenchmarkReReadingEveryLibraryFile(b *testing.B) {
 	layer := shippedLayer()
 	for b.Loop() {
-		catalog, err := Load([]Layer{layer})
+		library, err := Load([]Layer{layer})
 		if err != nil {
 			b.Fatalf("loading: %v", err)
 		}
-		if _, err := catalog.Bind(Claude); err != nil {
+		if _, err := library.Bind(Claude); err != nil {
 			b.Fatalf("binding: %v", err)
 		}
 	}

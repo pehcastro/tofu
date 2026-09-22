@@ -202,7 +202,7 @@ func TestWhyJSONParsesAndCarriesEveryStoredField(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Dir: %v", err)
 	}
-	modeReason := "declared shadow in catalog/general/rules/tool_gate@1.yaml"
+	modeReason := "declared shadow in library/general/rules/tool_gate@1.yaml"
 	_, replay := writeFixtureLedger(t, dir, func(r *ledger.Row) {
 		r.Verdict = ledger.VerdictAllow
 		r.Policy = "tool_gate"
@@ -598,7 +598,7 @@ func TestWhySeparatesARowThatPredatesTheStateBodyFromOneThatSimplyHasNone(t *tes
 }
 
 func TestWhySaysAuthorityCouldNotRelaxADenyAndNamesTheQuestion(t *testing.T) {
-	shipped, err := filepath.Abs(filepath.Join("..", "..", "catalog", "general", "rules", "tool_gate@1.yaml"))
+	shipped, err := filepath.Abs(filepath.Join("..", "..", "library", "general", "rules", "tool_gate@1.yaml"))
 	if err != nil {
 		t.Fatalf("Abs: %v", err)
 	}
@@ -607,7 +607,7 @@ func TestWhySaysAuthorityCouldNotRelaxADenyAndNamesTheQuestion(t *testing.T) {
 		t.Fatalf("reading the shipped rule: %v", err)
 	}
 	root := t.TempDir()
-	planted := filepath.Join(root, "catalog", "general", "rules", "tool_gate@1.yaml")
+	planted := filepath.Join(root, "library", "general", "rules", "tool_gate@1.yaml")
 	if err := os.MkdirAll(filepath.Dir(planted), 0o755); err != nil {
 		t.Fatalf("MkdirAll: %v", err)
 	}

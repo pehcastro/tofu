@@ -115,7 +115,7 @@ func (e Edit) On(before string) (string, error) {
 		}
 		return strings.Join(lines[:from], "") + text + strings.Join(lines[to+1:], ""), nil
 	default:
-		return "", fmt.Errorf("edit kind %q is not one this catalogue holds", e.Kind)
+		return "", fmt.Errorf("edit kind %q is not one this transform holds", e.Kind)
 	}
 }
 

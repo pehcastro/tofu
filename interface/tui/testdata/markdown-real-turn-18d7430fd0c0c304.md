@@ -6,9 +6,9 @@
 
 Five roots, dependency order bottom-up:
 
-- **`catalog/`**: everything shipped as data, no code, bottom of the import graph. Models, subscriptions, roles, question sets, policies (thresholds), house rules. Resolved in three layers, field by field: embedded, then `~/.boji/`, then `./.boji/`, last mention wins. Refusals are named by file and field, never skipped.
+- **`library/`**: everything shipped as data, no code, bottom of the import graph. Models, subscriptions, roles, question sets, policies (thresholds), house rules. Resolved in three layers, field by field: embedded, then `~/.boji/`, then `./.boji/`, last mention wins. Refusals are named by file and field, never skipped.
 - **`internal/`**: 19 packages. `judge/` (jev client, question, policy, ledger, state) is the instrument; `turn/` is the agent loop with its tool set (`glob`, `grep`, `search`, `symbols`, `read`, `edit`, `bash`, `web`, `github`, `plan`, `memo`); `session/` is one append-only record; plus `llm/` (wire protocols, creds, quota), `rule/`, `sift/`, `recall/`, `shell/`, `transform/`, `konst/` (every limit, one file).
-- **`cmd/tofu/`**: ~25 verbs. `run`, `judge`, `check`, `why`, `replay`, `session`, `shells`, `context`, `sift`, `label`, `catalog`, `rules`, `settings`, `doctor`, `login`, `models`, `frame`.
+- **`cmd/tofu/`**: ~25 verbs. `run`, `judge`, `check`, `why`, `replay`, `session`, `shells`, `context`, `sift`, `label`, `library`, `rules`, `settings`, `doctor`, `login`, `models`, `frame`.
 - **`interface/tui/`**: Charm v2 stack (`charm.land`, bubbletea 2.0.9). Five views on five digits: chat, work, file edits, sub-agents, shells. Built last, deliberately. Every event carries a `#a3f9c1` id; the views are a query over one record, not five records.
 - **`bench/`**: 22 benchmark packages with dated markdown reports. This is the load-bearing part.
 
@@ -30,4 +30,4 @@ Two recent self-corrections worth knowing, both caught by the owner and both now
 
 ## Caveats on the above
 
-I read the report, changelog, catalog README, board and a handful of files; I did not read the design docs under `.local/boji/planning/` or run a build. If the "code owns the loop" framing is off in a way that matters, that's from the docs describing intent and me not having watched it run.
+I read the report, changelog, library README, board and a handful of files; I did not read the design docs under `.local/boji/planning/` or run a build. If the "code owns the loop" framing is off in a way that matters, that's from the docs describing intent and me not having watched it run.

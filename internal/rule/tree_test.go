@@ -7,7 +7,7 @@ import (
 )
 
 func TestCheckTreeRunsEveryShippedRuleOverATreeThatIsNotThisRepository(t *testing.T) {
-	rules, err := LoadDir(filepath.Join("..", "..", "catalog"))
+	rules, err := LoadDir(filepath.Join("..", "..", "library"))
 	if err != nil {
 		t.Fatalf("LoadDir: %v", err)
 	}

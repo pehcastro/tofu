@@ -222,10 +222,10 @@ func TestTheRescoreReportNamesEveryCaseInsideTheDeadBand(t *testing.T) {
 	t.Log("\n" + body)
 }
 
-func TestTheGateSectionNamesTheCatalogFileAndTheAnswersFile(t *testing.T) {
+func TestTheGateSectionNamesTheLibraryFileAndTheAnswersFile(t *testing.T) {
 	body := Render(recordedResult(t, recordedJevArm()), conditions("key"))
 	for _, want := range []string{
-		"`catalog/general/rules/tool_gate@1.yaml`, loaded and linted by `gate.LintFile` and decided by `gate.Decide`",
+		"`library/general/rules/tool_gate@1.yaml`, loaded and linted by `gate.LintFile` and decided by `gate.Decide`",
 		"risk ask at 1.50 and deny at 2.50",
 		"resolves to shadow",
 		"Raw answers for every arm and every case are in `bench/cost/answers/heldout-2026-09-18.jsonl`.",

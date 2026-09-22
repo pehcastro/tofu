@@ -206,11 +206,11 @@ func TestModelsNamesTheRoleEachModelIsBoundTo(t *testing.T) {
 	}
 }
 
-func TestRunModelExcludedIsRefusedWithTheCatalogReason(t *testing.T) {
+func TestRunModelExcludedIsRefusedWithTheLibraryReason(t *testing.T) {
 	_, err := selectModel("anthropic", "claude-sub/claude-fable-5-1")
 	var refusal *models.Refusal
 	if !errors.As(err, &refusal) || refusal.Kind != models.RefusedExcluded {
-		t.Fatalf("want the catalog exclusion, got %v", err)
+		t.Fatalf("want the library exclusion, got %v", err)
 	}
 	if !strings.Contains(err.Error(), "not fable or astra for now") {
 		t.Fatalf("the refusal is generic: %v", err)

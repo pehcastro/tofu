@@ -22,7 +22,7 @@ const (
 	OriginBinary  Origin = "binary"
 )
 
-const shippedRoot = "catalog"
+const shippedRoot = "library"
 
 func (o Origin) String() string {
 	switch o {
@@ -35,17 +35,17 @@ func (o Origin) String() string {
 }
 
 func LoadPoint(shipped fs.FS, ref string, set question.Set) (Rule, Origin, error) {
-	catalogDir, err := sys.CatalogDir()
+	libraryDir, err := sys.LibraryDir()
 	if err != nil {
 		return Rule{}, "", err
 	}
-	isDir, err := sys.IsDir(catalogDir)
+	isDir, err := sys.IsDir(libraryDir)
 	if err != nil {
 		return Rule{}, "", err
 	}
 	found := ""
 	if isDir {
-		if found, err = FindRule(os.DirFS(catalogDir), ref); err != nil {
+		if found, err = FindRule(os.DirFS(libraryDir), ref); err != nil {
 			return Rule{}, "", err
 		}
 	}
@@ -53,7 +53,7 @@ func LoadPoint(shipped fs.FS, ref string, set question.Set) (Rule, Origin, error
 	origin := OriginBinary
 	if found != "" {
 		origin = OriginProject
-		r, err = Load(sys.Join(catalogDir, filepath.FromSlash(found)))
+		r, err = Load(sys.Join(libraryDir, filepath.FromSlash(found)))
 	} else {
 		r, err = LoadFS(shipped, ref)
 	}
@@ -74,9 +74,9 @@ func LoadPoint(shipped fs.FS, ref string, set question.Set) (Rule, Origin, error
 	return Rule{}, "", fmt.Errorf("the rule %s from %s fails its own lint: %s", ref, origin, strings.Join(msgs, "; "))
 }
 
-func FindRule(catalog fs.FS, ref string) (string, error) {
+func FindRule(library fs.FS, ref string) (string, error) {
 	found := ""
-	err := walkThresholds(catalog, func(name, base string) {
+	err := walkThresholds(library, func(name, base string) {
 		if base == ref && found == "" {
 			found = name
 		}
@@ -84,15 +84,15 @@ func FindRule(catalog fs.FS, ref string) (string, error) {
 	return found, err
 }
 
-func Refs(catalog fs.FS) ([]string, error) {
+func Refs(library fs.FS) ([]string, error) {
 	var refs []string
-	err := walkThresholds(catalog, func(_, base string) { refs = append(refs, base) })
+	err := walkThresholds(library, func(_, base string) { refs = append(refs, base) })
 	sort.Strings(refs)
 	return refs, err
 }
 
-func walkThresholds(catalog fs.FS, found func(name, base string)) error {
-	return fs.WalkDir(catalog, ".", func(name string, entry fs.DirEntry, err error) error {
+func walkThresholds(library fs.FS, found func(name, base string)) error {
+	return fs.WalkDir(library, ".", func(name string, entry fs.DirEntry, err error) error {
 		if err != nil || !strings.HasSuffix(name, ".yaml") {
 			return err
 		}
@@ -102,7 +102,7 @@ func walkThresholds(catalog fs.FS, found func(name, base string)) error {
 		if entry.IsDir() {
 			return fmt.Errorf("%s is a directory where a rule file was expected", name)
 		}
-		data, err := fs.ReadFile(catalog, name)
+		data, err := fs.ReadFile(library, name)
 		if err != nil {
 			return err
 		}

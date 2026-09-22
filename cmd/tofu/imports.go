@@ -22,7 +22,7 @@ func importRules() []importRule {
 		{from: "tofu/internal", scope: "tofu/bench"},
 		{from: "tofu/internal", scope: "tofu/cmd"},
 		{from: "tofu/internal", scope: "tofu/interface"},
-		{from: "tofu/catalog", scope: "tofu"},
+		{from: "tofu/library", scope: "tofu"},
 		{from: "tofu/internal/konst", scope: "tofu"},
 		{from: "tofu/internal/sys", scope: "tofu"},
 		{

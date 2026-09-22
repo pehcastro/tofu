@@ -77,14 +77,14 @@ func (m Model) VendorSlug() string { return string(m.Provider) + "/" + m.ID }
 
 func (m Model) WindowText() string { return strings.Join(m.Windows, " and ") }
 
-type Catalog struct {
+type Library struct {
 	Subscriptions []SubscriptionSpec
 	Models        []Model
 	Roles         []Role
 	Broken        []Broken
 }
 
-func (c Catalog) wireFor(id Subscription) string {
+func (c Library) wireFor(id Subscription) string {
 	for _, spec := range c.Subscriptions {
 		if spec.ID == id {
 			return spec.Wire
@@ -93,7 +93,7 @@ func (c Catalog) wireFor(id Subscription) string {
 	return ""
 }
 
-func (c Catalog) ForWire(wire string) (SubscriptionSpec, bool) {
+func (c Library) ForWire(wire string) (SubscriptionSpec, bool) {
 	for _, spec := range c.Subscriptions {
 		if spec.Wire == wire {
 			return spec, true
@@ -102,7 +102,7 @@ func (c Catalog) ForWire(wire string) (SubscriptionSpec, bool) {
 	return SubscriptionSpec{}, false
 }
 
-func (c Catalog) Wires() []string {
+func (c Library) Wires() []string {
 	wires := make([]string, 0, len(c.Subscriptions))
 	for _, spec := range c.Subscriptions {
 		wires = append(wires, spec.Wire)
@@ -127,14 +127,14 @@ type Refusal struct {
 func (r *Refusal) Error() string {
 	switch r.Kind {
 	case RefusedExcluded:
-		return "the model catalog excludes " + r.Slug + ": " + r.Model.Reason
+		return "the model library excludes " + r.Slug + ": " + r.Model.Reason
 	case RefusedUnknown:
-		return "the model catalog has no " + r.Slug + ", it has " + strings.Join(r.Known, ", ")
+		return "the model library has no " + r.Slug + ", it has " + strings.Join(r.Known, ", ")
 	}
 	panic("models: unknown refusal kind")
 }
 
-func (c Catalog) Select(slug string) (Model, error) {
+func (c Library) Select(slug string) (Model, error) {
 	known := make([]string, 0, len(c.Models))
 	for _, model := range c.Models {
 		if model.Slug() != slug {
@@ -151,7 +151,7 @@ func (c Catalog) Select(slug string) (Model, error) {
 	return Model{}, &Refusal{Kind: RefusedUnknown, Slug: slug, Known: known}
 }
 
-func (c Catalog) Resolve(recorded string) (Model, bool) {
+func (c Library) Resolve(recorded string) (Model, bool) {
 	for _, model := range c.Models {
 		if model.Slug() == recorded {
 			return model, true
@@ -167,11 +167,11 @@ func (c Catalog) Resolve(recorded string) (Model, bool) {
 	return bare, bareMatches == 1
 }
 
-func (c Catalog) Default(subscription Subscription) (Model, error) {
+func (c Library) Default(subscription Subscription) (Model, error) {
 	for _, model := range c.Models {
 		if model.Subscription == subscription && model.Use == UseDefault {
 			return model, nil
 		}
 	}
-	return Model{}, fmt.Errorf("the model catalog has no default for the %s subscription", subscription)
+	return Model{}, fmt.Errorf("the model library has no default for the %s subscription", subscription)
 }

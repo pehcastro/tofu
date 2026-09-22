@@ -6,7 +6,7 @@ import (
 	"tofu/internal/recall"
 )
 
-func TestLoadConfigReadsTheShippedCatalogFile(t *testing.T) {
+func TestLoadConfigReadsTheShippedLibraryFile(t *testing.T) {
 	cfg, err := recall.LoadConfig()
 	if err != nil {
 		t.Fatalf("load config: %v", err)
@@ -24,7 +24,7 @@ func TestParseConfigTracksTheDataRatherThanALiteral(t *testing.T) {
 		t.Fatalf("parse config: %v", err)
 	}
 	if cfg.ElideAboveBytes == 4096 {
-		t.Fatal("changing the catalog data did not change the threshold: a literal is standing in for it")
+		t.Fatal("changing the library data did not change the threshold: a literal is standing in for it")
 	}
 	if cfg.ElideAboveBytes != 999 || cfg.HeadBytes != 7 || cfg.TailBytes != 3 {
 		t.Fatalf("config = %+v, want the fixture's own numbers", cfg)
@@ -33,6 +33,6 @@ func TestParseConfigTracksTheDataRatherThanALiteral(t *testing.T) {
 
 func TestParseConfigRejectsAMissingThreshold(t *testing.T) {
 	if _, err := recall.ParseConfig([]byte("head_bytes: 7\n")); err == nil {
-		t.Fatal("a catalog file with no elide_above_bytes was accepted")
+		t.Fatal("a library file with no elide_above_bytes was accepted")
 	}
 }

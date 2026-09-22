@@ -40,9 +40,9 @@ func (d Domain) Unreachable() []string {
 	return missing
 }
 
-func LoadDomains(catalog fs.FS, root string) ([]Domain, error) {
+func LoadDomains(library fs.FS, root string) ([]Domain, error) {
 	byName := map[string]*Domain{}
-	err := fs.WalkDir(catalog, ".", func(name string, entry fs.DirEntry, err error) error {
+	err := fs.WalkDir(library, ".", func(name string, entry fs.DirEntry, err error) error {
 		if err != nil || entry.IsDir() {
 			return err
 		}
@@ -50,7 +50,7 @@ func LoadDomains(catalog fs.FS, root string) ([]Domain, error) {
 		if !ok {
 			return nil
 		}
-		data, err := fs.ReadFile(catalog, name)
+		data, err := fs.ReadFile(library, name)
 		if err != nil {
 			return err
 		}

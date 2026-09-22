@@ -72,10 +72,10 @@ func verbSpecs() []verbSpec {
 		{
 			tool:  "tofu_rules_check",
 			words: []string{"rules", "check"},
-			about: "runs tofu's rule catalog over the tree and prints every rule that fired, which of them blocked, and how many findings each had. " +
+			about: "runs tofu's rule library over the tree and prints every rule that fired, which of them blocked, and how many findings each had. " +
 				"the first line is the answer: how many fires blocked, out of how many, and which rule set ran. " +
 				"a nonzero exit means a rule in blocking mode fired",
-			needs:  "it needs nothing beyond the working tree: the rule catalog travels inside the binary, and a catalog/rules directory in the working tree replaces it",
+			needs:  "it needs nothing beyond the working tree: the rule library travels inside the binary, and a library/rules directory in the working tree replaces it",
 			params: []verbParam{verbParamPath},
 		},
 		{
@@ -109,7 +109,7 @@ func verbSpecs() []verbSpec {
 
 type judgeRequest struct {
 	State   json.RawMessage `json:"state"`
-	Catalog string          `json:"catalog"`
+	Library string          `json:"library"`
 }
 
 func judgeBody(state, battery string) (string, error) {
@@ -121,7 +121,7 @@ func judgeBody(state, battery string) (string, error) {
 		}
 		value = quoted
 	}
-	body, err := json.Marshal(judgeRequest{State: value, Catalog: battery})
+	body, err := json.Marshal(judgeRequest{State: value, Library: battery})
 	return string(body), err
 }
 

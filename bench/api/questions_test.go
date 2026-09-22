@@ -6,7 +6,7 @@ import (
 	"tofu/internal/judge/question"
 )
 
-func TestGateBatteryResolvesAPinnedCatalogVersion(t *testing.T) {
+func TestGateBatteryResolvesAPinnedLibraryVersion(t *testing.T) {
 	questions, version, err := GateBattery()
 	if err != nil {
 		t.Fatalf("GateBattery: %v, want it to resolve tool_gate@1 without ambiguity", err)

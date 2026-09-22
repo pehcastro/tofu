@@ -7,27 +7,27 @@ import (
 	"strings"
 	"testing"
 
-	catalog "tofu/internal/llm/models"
+	library "tofu/internal/llm/models"
 )
 
 var update = flag.Bool("update", false, "rewrite the golden files")
 
-const shippedRoot = "../../../catalog"
+const shippedRoot = "../../../library"
 
-func shippedCatalog(t *testing.T) catalog.Catalog {
+func shippedLibrary(t *testing.T) library.Library {
 	t.Helper()
-	layer := catalog.Layer{Name: "catalog", Origin: "catalog", FS: os.DirFS(shippedRoot)}
-	loaded, err := catalog.Load([]catalog.Layer{layer})
+	layer := library.Layer{Name: "library", Origin: "library", FS: os.DirFS(shippedRoot)}
+	loaded, err := library.Load([]library.Layer{layer})
 	if err != nil {
-		t.Fatalf("loading the shipped catalog: %v", err)
+		t.Fatalf("loading the shipped library: %v", err)
 	}
 	return loaded
 }
 
 func TestEveryRowSpellsSourceSlashModel(t *testing.T) {
-	loaded := shippedCatalog(t)
+	loaded := shippedLibrary(t)
 	if len(loaded.Models) == 0 {
-		t.Fatal("the shipped catalog carries no model")
+		t.Fatal("the shipped library carries no model")
 	}
 	for _, one := range loaded.Models {
 		slug := Slug(one)
@@ -45,10 +45,10 @@ func TestEveryRowSpellsSourceSlashModel(t *testing.T) {
 	}
 }
 
-func TestBuildGroupsBySubscriptionInCatalogOrder(t *testing.T) {
-	built := Build(shippedCatalog(t))
+func TestBuildGroupsBySubscriptionInLibraryOrder(t *testing.T) {
+	built := Build(shippedLibrary(t))
 	if len(built.Groups) == 0 {
-		t.Fatal("no group built from a non-empty catalog")
+		t.Fatal("no group built from a non-empty library")
 	}
 	for _, group := range built.Groups {
 		for _, row := range group.Rows {
@@ -60,11 +60,11 @@ func TestBuildGroupsBySubscriptionInCatalogOrder(t *testing.T) {
 }
 
 func TestPickWalksEveryRowAndStopsAtTheEnds(t *testing.T) {
-	built := Build(shippedCatalog(t))
+	built := Build(shippedLibrary(t))
 	built.SetSize(80, 24)
 	total := built.count()
 	if total < 2 {
-		t.Fatalf("the shipped catalog has %d models, need at least 2 to prove the walk stops", total)
+		t.Fatalf("the shipped library has %d models, need at least 2 to prove the walk stops", total)
 	}
 	for range total + 3 {
 		built.Key("down")
@@ -99,7 +99,7 @@ func assertGolden(t *testing.T, name, got string) {
 }
 
 func TestPickerViewGolden(t *testing.T) {
-	built := Build(shippedCatalog(t))
+	built := Build(shippedLibrary(t))
 	built.SetSize(120, 36)
 	assertGolden(t, "picker-120x36.golden", built.View())
 }

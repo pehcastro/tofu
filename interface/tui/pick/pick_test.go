@@ -14,7 +14,7 @@ const (
 	frameWidth = 40
 	marker     = "▌ "
 	indent     = "  "
-	sentence   = "the gate reads the policy in catalog/policy/shell.yaml before the wire"
+	sentence   = "the gate reads the policy in library/policy/shell.yaml before the wire"
 )
 
 func rendered(t *testing.T) []string {
@@ -64,7 +64,7 @@ func TestASelectionAcrossAWrappedLineCopiesTheSentenceRatherThanTheCells(t *test
 	if strings.HasSuffix(got, " ") {
 		t.Errorf("the trailing spaces that pad the row to %d cells survived: %q", frameWidth, got)
 	}
-	if !strings.Contains(got, "in catalog/policy/shell.yaml before") {
+	if !strings.Contains(got, "in library/policy/shell.yaml before") {
 		t.Errorf("the path did not rejoin its sentence: %q", got)
 	}
 }

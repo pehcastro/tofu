@@ -76,7 +76,7 @@ type doctorGate struct {
 	Path     string `json:"path,omitempty"`
 }
 
-type doctorCatalog struct {
+type doctorLibrary struct {
 	Dir         string `json:"dir"`
 	Points      int    `json:"points"`
 	FromProject int    `json:"from_project"`
@@ -116,7 +116,7 @@ type doctorReport struct {
 	Credentials []credentialReport `json:"credentials"`
 	Store       string             `json:"credential_store"`
 	Gate        doctorGate         `json:"gate"`
-	Catalog     doctorCatalog      `json:"catalog"`
+	Library     doctorLibrary      `json:"library"`
 	Rules       []doctorRule       `json:"rules"`
 	Calibration string             `json:"calibration"`
 	Ledger      string             `json:"ledger"`
@@ -157,14 +157,14 @@ func doctorState(now time.Time) doctorReport {
 		root = "."
 	}
 	located, _ := locateGateKey()
-	catalog, rules := readCatalog()
+	library, rules := readLibrary()
 	report := doctorReport{
 		Version:     frame.Release(sys.Version(), sys.BuildRevision()),
 		Blockers:    doctorBlockers(),
 		Credentials: doctorCredentials(now),
 		Store:       cred.DoctorState(now),
 		Gate:        doctorGate{Variable: located.Name, Source: gateSource(located), Path: located.Path},
-		Catalog:     catalog,
+		Library:     library,
 		Rules:       rules,
 		Calibration: calibrationState(),
 		Ledger:      ledgerState(),

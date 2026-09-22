@@ -21,14 +21,14 @@ func DirLayer(name string, dir string) Layer {
 	return Layer{Name: name, Origin: dir, FS: os.DirFS(dir)}
 }
 
-func DefaultLayers(catalog fs.FS) ([]Layer, error) {
-	dir, err := sys.CatalogDir()
+func DefaultLayers(library fs.FS) ([]Layer, error) {
+	dir, err := sys.LibraryDir()
 	if err != nil {
 		return nil, err
 	}
-	shipped := DirLayer("catalog", sys.Join(dir, "questions"))
-	if catalog != nil {
-		shipped = Layer{Name: "catalog", Origin: "catalog/questions", FS: catalog}
+	shipped := DirLayer("library", sys.Join(dir, "questions"))
+	if library != nil {
+		shipped = Layer{Name: "library", Origin: "library/questions", FS: library}
 	}
 	home, err := sys.HomeConfigDir()
 	if err != nil {

@@ -45,7 +45,7 @@ func readRecordedTurn(t *testing.T) (Config, recordedTurn) {
 	}
 	cfg, err := LoadConfig()
 	if err != nil {
-		t.Fatalf("load the elide catalog: %v", err)
+		t.Fatalf("load the elide library: %v", err)
 	}
 	return cfg, turn
 }

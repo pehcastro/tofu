@@ -404,6 +404,6 @@ func TestPlanSaysWhichEditInTheChainFailed(t *testing.T) {
 
 func TestAnUnknownKindIsRefused(t *testing.T) {
 	if _, err := (Edit{Kind: "rename_symbol"}).On("a\n"); err == nil {
-		t.Fatal("an edit kind this catalogue does not hold was applied")
+		t.Fatal("an edit kind this transform does not hold was applied")
 	}
 }

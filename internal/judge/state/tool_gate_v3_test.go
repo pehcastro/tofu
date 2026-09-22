@@ -8,7 +8,7 @@ import (
 	"tofu/internal/judge/question"
 )
 
-const toolGateV3Path = "../../../catalog/questions/tool_gate@3.yaml"
+const toolGateV3Path = "../../../library/questions/tool_gate@3.yaml"
 
 func TestToolGateV3QuestionSetLintsClean(t *testing.T) {
 	set, err := question.Load(toolGateV3Path)

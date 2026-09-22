@@ -41,9 +41,9 @@ readable form collapses: doctor, models, usage, context, rules.
   sift      mark what is worth reading in a message and elide the rest
   label     attach an outcome to a ledger row, by id or the last one
   replay    re-score ledger rows against changed thresholds, no network
-  catalog   resolve a catalog entry and show the origin of each field
+  library   resolve a library entry and show the origin of each field
   lint      run a house-rule check over the tree
-  rules     list or run the rule catalog
+  rules     list or run the rule library
   settings  list, get or set a declared setting, global or project
   reload    re-read rules from disk without a restart
 `
@@ -95,8 +95,11 @@ func run(args []string, in io.Reader, out io.Writer, errOut io.Writer) int {
 		return labelVerb(args[1:], out, errOut, time.Now)
 	case "replay":
 		return replayVerb(args[1:], out, errOut, time.Now)
+	case "library":
+		return libraryVerb(args[1:], out, errOut)
 	case "catalog":
-		return catalogVerb(args[1:], out, errOut)
+		_, _ = fmt.Fprintln(errOut, "tofu catalog is now tofu library")
+		return libraryVerb(args[1:], out, errOut)
 	case "lint":
 		return lintVerb(args[1:], out, errOut)
 	case "rules":

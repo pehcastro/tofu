@@ -8,9 +8,9 @@ import (
 	"strings"
 	"testing"
 
-	"tofu/catalog/changelog"
 	"tofu/internal/konst"
 	"tofu/internal/widget"
+	"tofu/library/changelog"
 )
 
 const rootChangelogPath = "../../CHANGELOG.md"
@@ -48,7 +48,7 @@ func TestTheEmbeddedChangelogIsTheFileAtTheRootByteForByte(t *testing.T) {
 		t.Fatalf("read %s: %v", rootChangelogPath, err)
 	}
 	if changelog.Markdown != string(root) {
-		t.Fatalf("the embedded changelog is %d bytes and %s is %d: copy it into catalog/changelog and rebuild",
+		t.Fatalf("the embedded changelog is %d bytes and %s is %d: copy it into library/changelog and rebuild",
 			len(changelog.Markdown), rootChangelogPath, len(root))
 	}
 }

@@ -11,12 +11,12 @@ import (
 	"testing"
 	"testing/fstest"
 
-	shipped "tofu/catalog"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/konst"
 	"tofu/internal/llm"
 	"tofu/internal/recall"
 	"tofu/internal/session"
+	shipped "tofu/library"
 )
 
 const fakeProxySource = `package main
@@ -83,7 +83,7 @@ const (
 func proxyFrom(t *testing.T, root, sheet string) *CommandProxy {
 	t.Helper()
 	files := fstest.MapFS{proxySheetPath: &fstest.MapFile{Data: []byte(sheet)}}
-	proxy, err := LoadCommandProxy(files, "catalog", root)
+	proxy, err := LoadCommandProxy(files, "library", root)
 	if err != nil {
 		t.Fatalf("loading the proxy setting: %v", err)
 	}
@@ -339,20 +339,20 @@ func TestAVerbThatDownloadsACompilerIsRefused(t *testing.T) {
 	}
 }
 
-func TestTheShippedCatalogLeavesTheProxyOff(t *testing.T) {
-	proxy, err := LoadCommandProxy(shipped.Files(), "catalog", t.TempDir())
+func TestTheShippedLibraryLeavesTheProxyOff(t *testing.T) {
+	proxy, err := LoadCommandProxy(shipped.Files(), "library", t.TempDir())
 	if err != nil {
 		t.Fatalf("loading the shipped setting: %v", err)
 	}
 	if proxy != nil {
-		t.Fatalf("the shipped catalog turns the proxy on: %+v", proxy)
+		t.Fatalf("the shipped library turns the proxy on: %+v", proxy)
 	}
 }
 
 func TestTheProxySheetRefusesAFieldAndAValueItDoesNotKnow(t *testing.T) {
 	for _, sheet := range []string{"use: rtkx\ntimeout_ms: 5000\n", "use: rtk\ntimeout_ms: 0\n", "use: rtk\nbinary: rtk\n"} {
 		files := fstest.MapFS{proxySheetPath: &fstest.MapFile{Data: []byte(sheet)}}
-		proxy, err := LoadCommandProxy(files, "catalog", t.TempDir())
+		proxy, err := LoadCommandProxy(files, "library", t.TempDir())
 		if err == nil || proxy != nil {
 			t.Fatalf("%q was accepted", sheet)
 		}

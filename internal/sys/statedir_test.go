@@ -13,7 +13,7 @@ func TestNoSourceRootHoldsARecordedStateDirectory(t *testing.T) {
 		t.Fatalf("this guard reads the source tree and %s is not it: %v", root, err)
 	}
 	var held []string
-	for _, source := range []string{"bench", "cmd", "interface", "catalog", "internal"} {
+	for _, source := range []string{"bench", "cmd", "interface", "library", "internal"} {
 		walked := filepath.Join(root, source)
 		err := filepath.WalkDir(walked, func(path string, entry fs.DirEntry, err error) error {
 			if err != nil {

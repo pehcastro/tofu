@@ -11,7 +11,7 @@ import (
 
 func qaDomain(t *testing.T) rule.Domain {
 	t.Helper()
-	domains, err := rule.LoadDomains(os.DirFS("../../catalog"), "catalog")
+	domains, err := rule.LoadDomains(os.DirFS("../../library"), "library")
 	if err != nil {
 		t.Fatalf("LoadDomains: %v", err)
 	}
@@ -20,7 +20,7 @@ func qaDomain(t *testing.T) rule.Domain {
 			return domain
 		}
 	}
-	t.Fatal("the catalog ships no qa domain")
+	t.Fatal("the library ships no qa domain")
 	return rule.Domain{}
 }
 
@@ -37,12 +37,12 @@ func TestEveryQAAgentAndSkillNamesTheReferencesItReads(t *testing.T) {
 }
 
 func TestEveryQARuleDistilledFromASkillCitesItAndCarriesEvidence(t *testing.T) {
-	faults, err := QARuleFaults(os.DirFS("../../catalog/qa"), "catalog/qa")
+	faults, err := QARuleFaults(os.DirFS("../../library/qa"), "library/qa")
 	if err != nil {
-		t.Fatalf("loading catalog/qa: %v", err)
+		t.Fatalf("loading library/qa: %v", err)
 	}
 	if len(faults) != 0 {
-		t.Fatalf("catalog/qa: %v", faults)
+		t.Fatalf("library/qa: %v", faults)
 	}
 }
 

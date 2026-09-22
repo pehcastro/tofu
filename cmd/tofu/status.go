@@ -11,10 +11,10 @@ import (
 	"strings"
 	"time"
 
-	shipped "tofu/catalog"
 	"tofu/internal/llm/cred"
 	"tofu/internal/llm/models"
 	"tofu/internal/llm/quota"
+	shipped "tofu/library"
 )
 
 const (
@@ -143,8 +143,8 @@ func subscriptionSlugs() map[string]string {
 	if err != nil {
 		return slugs
 	}
-	catalog, _ := models.Load(layers)
-	for _, spec := range catalog.Subscriptions {
+	library, _ := models.Load(layers)
+	for _, spec := range library.Subscriptions {
 		slugs[spec.Wire] = string(spec.ID) + "-sub"
 	}
 	return slugs

@@ -52,7 +52,7 @@ func doctorGroups(report doctorReport) [][]string {
 	access = append(access, line("wires", wireText(report.Wires))...)
 	groups = append(groups, access)
 
-	state := line("catalog", catalogText(report.Catalog))
+	state := line("library", libraryText(report.Library))
 	state = append(state, ruleText(report.Rules, report.Root)...)
 	state = append(state, line("calibration", report.Calibration)...)
 	state = append(state, line("ledger", report.Ledger)...)
@@ -88,14 +88,14 @@ func wireText(wires []doctorWire) string {
 	return text + ", " + strings.Join(paid, " and ") + " spends money"
 }
 
-func catalogText(catalog doctorCatalog) string {
-	if catalog.Unreadable != "" {
-		return doctorUnreadable + catalog.Unreadable
+func libraryText(library doctorLibrary) string {
+	if library.Unreadable != "" {
+		return doctorUnreadable + library.Unreadable
 	}
-	if catalog.FromProject > 0 {
-		return fmt.Sprintf("the project's own, %d of %d points", catalog.FromProject, catalog.Points)
+	if library.FromProject > 0 {
+		return fmt.Sprintf("the project's own, %d of %d points", library.FromProject, library.Points)
 	}
-	return fmt.Sprintf("the one in the binary, %d points, nothing overrides it in %s", catalog.Points, catalog.Dir)
+	return fmt.Sprintf("the one in the binary, %d points, nothing overrides it in %s", library.Points, library.Dir)
 }
 
 type ruleGroup struct {

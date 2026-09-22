@@ -54,7 +54,7 @@ func TestVerbTableIsUnchanged(t *testing.T) {
 		{[]string{"check", "--nope"}, exitUsage, "tofu check: "},
 		{[]string{"label", "--nope"}, exitUsage, "tofu label: "},
 		{[]string{"replay", "--nope"}, exitUsage, "tofu replay: "},
-		{[]string{"catalog", "--nope"}, exitUsage, "tofu catalog: usage"},
+		{[]string{"library", "--nope"}, exitUsage, "tofu library: usage"},
 		{[]string{"lint", "--nope"}, exitUsage, "tofu lint: usage"},
 		{[]string{"rules", "--nope"}, exitUsage, "tofu rules: "},
 		{[]string{"nosuchverb"}, exitUsage, "unknown verb"},
@@ -319,7 +319,7 @@ func TestGateOffNoteNamesTheLogin(t *testing.T) {
 }
 
 func recordedGateDecision() turn.GateDecision {
-	modeReason := "the rule came from the catalog as tool_gate@3.yaml"
+	modeReason := "the rule came from the library as tool_gate@3.yaml"
 	return turn.GateDecision{
 		ID:      "2026-09-19-6f1c",
 		Verdict: ledger.VerdictAsk,

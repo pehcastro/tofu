@@ -8,12 +8,12 @@ import (
 	"testing"
 )
 
-func TestCatalogNamesEveryKindAndItsContract(t *testing.T) {
+func TestLibraryNamesEveryKindAndItsContract(t *testing.T) {
 	var out, errOut bytes.Buffer
-	if code := catalogVerb(nil, &out, &errOut); code != exitOK {
-		t.Fatalf("tofu catalog exited %d: %s\n%s", code, errOut.String(), out.String())
+	if code := libraryVerb(nil, &out, &errOut); code != exitOK {
+		t.Fatalf("tofu library exited %d: %s\n%s", code, errOut.String(), out.String())
 	}
-	t.Logf("tofu catalog\n%s", out.String())
+	t.Logf("tofu library\n%s", out.String())
 	text := out.String()
 	for _, want := range []string{
 		"models", "subscriptions", "roles", "questions",
@@ -23,30 +23,43 @@ func TestCatalogNamesEveryKindAndItsContract(t *testing.T) {
 		"winning field by field",
 	} {
 		if !strings.Contains(text, want) {
-			t.Fatalf("tofu catalog never says %q:\n%s", want, text)
+			t.Fatalf("tofu library never says %q:\n%s", want, text)
 		}
 	}
 }
 
-func TestCatalogCountsTheRolesTheProjectBound(t *testing.T) {
+func TestTheOldCatalogVerbStillRunsAndNamesTheNewWord(t *testing.T) {
+	var out, errOut bytes.Buffer
+	if code := run([]string{"catalog"}, strings.NewReader(""), &out, &errOut); code != exitOK {
+		t.Fatalf("tofu catalog exited %d: %s", code, errOut.String())
+	}
+	if errOut.String() != "tofu catalog is now tofu library\n" {
+		t.Fatalf("tofu catalog does not name the new word: %q", errOut.String())
+	}
+	if !strings.Contains(out.String(), "winning field by field") {
+		t.Fatalf("tofu catalog did not print the library report:\n%s", out.String())
+	}
+}
+
+func TestLibraryCountsTheRolesTheProjectBound(t *testing.T) {
 	project := t.TempDir()
 	writeProjectRole(t, project, "turn", "claude-sub/claude-sonnet-5")
 	t.Chdir(project)
 
 	var out, errOut bytes.Buffer
-	if code := catalogVerb(nil, &out, &errOut); code != exitOK {
-		t.Fatalf("tofu catalog exited %d: %s\n%s", code, errOut.String(), out.String())
+	if code := libraryVerb(nil, &out, &errOut); code != exitOK {
+		t.Fatalf("tofu library exited %d: %s\n%s", code, errOut.String(), out.String())
 	}
 	if !strings.Contains(out.String(), "roles            1 loaded") {
-		t.Fatalf("tofu catalog does not count the bound role:\n%s", out.String())
+		t.Fatalf("tofu library does not count the bound role:\n%s", out.String())
 	}
 }
 
-func TestCatalogNamesTheFileAndTheFieldItRefused(t *testing.T) {
+func TestLibraryNamesTheFileAndTheFieldItRefused(t *testing.T) {
 	project := t.TempDir()
 	broken := filepath.Join(project, ".tofu", "models", "openai")
 	if err := os.MkdirAll(broken, 0o755); err != nil {
-		t.Fatalf("building a project catalog: %v", err)
+		t.Fatalf("building a project library: %v", err)
 	}
 	if err := os.WriteFile(filepath.Join(broken, "gpt-5.6-terra.yaml"), []byte("use: excluded\n"), 0o644); err != nil {
 		t.Fatalf("writing the broken entry: %v", err)
@@ -54,20 +67,20 @@ func TestCatalogNamesTheFileAndTheFieldItRefused(t *testing.T) {
 	t.Chdir(project)
 
 	var out, errOut bytes.Buffer
-	if code := catalogVerb(nil, &out, &errOut); code != exitVerdict {
+	if code := libraryVerb(nil, &out, &errOut); code != exitVerdict {
 		t.Fatalf("a broken entry must fail the verb, got %d\n%s", code, out.String())
 	}
 	text := out.String()
 	if !strings.Contains(text, "gpt-5.6-terra.yaml") || !strings.Contains(text, "reason") {
-		t.Fatalf("tofu catalog does not name the file and the field:\n%s", text)
+		t.Fatalf("tofu library does not name the file and the field:\n%s", text)
 	}
 }
 
-func TestProjectCatalogOverridesTheShippedOneFieldByField(t *testing.T) {
+func TestProjectLibraryOverridesTheShippedOneFieldByField(t *testing.T) {
 	project := t.TempDir()
 	dir := filepath.Join(project, ".tofu", "models", "anthropic")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
-		t.Fatalf("building a project catalog: %v", err)
+		t.Fatalf("building a project library: %v", err)
 	}
 	if err := os.WriteFile(filepath.Join(dir, "claude-fable-5.yaml"), []byte("use: allowed\n"), 0o644); err != nil {
 		t.Fatalf("writing the project entry: %v", err)

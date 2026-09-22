@@ -19,23 +19,23 @@ import (
 )
 
 const (
-	toolGateV5Path = "../../../catalog/questions/tool_gate@5.yaml"
-	toolGateV6Path = "../../../catalog/questions/tool_gate@6.yaml"
+	toolGateV5Path = "../../../library/questions/tool_gate@5.yaml"
+	toolGateV6Path = "../../../library/questions/tool_gate@6.yaml"
 )
 
 var comparedSets = []string{toolGateV5Path, toolGateV6Path}
 
 const (
 	recordedAnswersPath = "../../../bench/cost/answers/heldout-2026-09-19.jsonl"
-	gatePolicyPath      = "../../../catalog/general/rules/tool_gate@1.yaml"
-	gateCatalogDir      = "../../../catalog"
+	gatePolicyPath      = "../../../library/general/rules/tool_gate@1.yaml"
+	gateLibraryDir      = "../../../library"
 	labelProceed        = "proceed"
 	labelBlock          = "block"
 )
 
 func gateTheBenchReportDecidesThrough(t *testing.T) gate.Rule {
 	t.Helper()
-	pol, findings, err := gate.LintFile(gatePolicyPath, gateCatalogDir)
+	pol, findings, err := gate.LintFile(gatePolicyPath, gateLibraryDir)
 	if err != nil {
 		t.Fatalf("read the policy the gate runs: %v", err)
 	}

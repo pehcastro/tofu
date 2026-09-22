@@ -10,12 +10,12 @@ import (
 	"strings"
 	"time"
 
-	shipped "tofu/catalog"
 	"tofu/internal/konst"
 	"tofu/internal/llm/cred"
 	"tofu/internal/llm/models"
 	"tofu/internal/sys"
 	"tofu/internal/transport"
+	shipped "tofu/library"
 )
 
 const (
@@ -99,10 +99,10 @@ type modelsReport struct {
 	Models        []modelReport `json:"models"`
 }
 
-func modelCatalog() (models.Catalog, error) {
+func modelLibrary() (models.Library, error) {
 	layers, err := models.Layers(shipped.Files())
 	if err != nil {
-		return models.Catalog{}, err
+		return models.Library{}, err
 	}
 	return models.Load(layers)
 }
@@ -125,7 +125,7 @@ func modelsVerb(args []string, out, errOut io.Writer, shade palette) int {
 	if refresh {
 		return refreshRegistry(context.Background(), out)
 	}
-	catalog, err := modelCatalog()
+	library, err := modelLibrary()
 	if err != nil {
 		_, _ = fmt.Fprintf(errOut, "tofu models: %v\n", err)
 		return exitUsage
@@ -136,11 +136,11 @@ func modelsVerb(args []string, out, errOut io.Writer, shade palette) int {
 		return exitUsage
 	}
 	if discover {
-		return discoverModels(context.Background(), catalog, registry, out)
+		return discoverModels(context.Background(), library, registry, out)
 	}
-	report := modelsOf(catalog, registry)
+	report := modelsOf(library, registry)
 	if !asJSON {
-		_, _ = fmt.Fprint(out, modelsText(catalog, report, shade))
+		_, _ = fmt.Fprint(out, modelsText(library, report, shade))
 		return exitOK
 	}
 	if err := writeJSON(out, report); err != nil {
@@ -150,13 +150,13 @@ func modelsVerb(args []string, out, errOut io.Writer, shade palette) int {
 	return exitOK
 }
 
-func modelsOf(catalog models.Catalog, registry models.Registry) modelsReport {
-	report := modelsReport{Table: registry.From, Models: make([]modelReport, 0, len(catalog.Models))}
-	for _, spec := range catalog.Subscriptions {
+func modelsOf(library models.Library, registry models.Registry) modelsReport {
+	report := modelsReport{Table: registry.From, Models: make([]modelReport, 0, len(library.Models))}
+	for _, spec := range library.Subscriptions {
 		report.Subscriptions = append(report.Subscriptions, string(spec.ID))
 	}
 	bound, declared := map[string][]string{}, map[models.RoleID]bool{}
-	for _, role := range catalog.Roles {
+	for _, role := range library.Roles {
 		slug := role.Model.Slug()
 		bound[slug] = append(bound[slug], string(role.ID))
 		declared[role.ID] = true
@@ -166,7 +166,7 @@ func modelsOf(catalog models.Catalog, registry models.Registry) modelsReport {
 			report.Unbound = append(report.Unbound, string(id))
 		}
 	}
-	for _, model := range catalog.Models {
+	for _, model := range library.Models {
 		contextTokens, windowFrom := models.WindowFor(model, registry, models.Served{})
 		if contextTokens > 0 {
 			report.Windowed++
@@ -196,11 +196,11 @@ func modelsOf(catalog models.Catalog, registry models.Registry) modelsReport {
 	return report
 }
 
-func modelsText(catalog models.Catalog, report modelsReport, shade palette) string {
+func modelsText(library models.Library, report modelsReport, shade palette) string {
 	count := strconv.Itoa(report.Usable) + " of " + strconv.Itoa(len(report.Models)) + " usable"
 	var body strings.Builder
 	body.WriteString(headline(strings.Join(report.Defaults, ", "), shade.settled(count), len(count)) + "\n")
-	for _, spec := range catalog.Subscriptions {
+	for _, spec := range library.Subscriptions {
 		body.WriteString("\n")
 		for _, line := range subscriptionLines(report, spec) {
 			body.WriteString(line + "\n")
@@ -263,7 +263,7 @@ func subscriptionLines(report modelsReport, spec models.SubscriptionSpec) []stri
 	return lines
 }
 
-func discoverModels(ctx context.Context, catalog models.Catalog, registry models.Registry, out io.Writer) int {
+func discoverModels(ctx context.Context, library models.Library, registry models.Registry, out io.Writer) int {
 	store, client, err := discoveryStore()
 	if err != nil {
 		_, _ = fmt.Fprintf(out, "tofu models: %v\n", err)
@@ -272,7 +272,7 @@ func discoverModels(ctx context.Context, catalog models.Catalog, registry models
 	defer func() { _ = store.Close() }()
 
 	code := exitOK
-	for _, spec := range catalog.Subscriptions {
+	for _, spec := range library.Subscriptions {
 		credential, err := cred.Lookup(spec.Wire)
 		if err != nil {
 			_, _ = fmt.Fprintf(out, "%s: %v\n", spec.ID, err)
@@ -301,7 +301,7 @@ func discoverModels(ctx context.Context, catalog models.Catalog, registry models
 			code = exitVerdict
 			continue
 		}
-		for _, line := range catalog.Reconcile(served, registry).Lines() {
+		for _, line := range library.Reconcile(served, registry).Lines() {
 			_, _ = fmt.Fprintln(out, line)
 		}
 	}
@@ -328,25 +328,25 @@ func discoveryStore() (*cred.Store, *transport.Client, error) {
 	return store, client, nil
 }
 
-func outsideTheCatalog(catalog models.Catalog, wire string) error {
+func outsideTheLibrary(library models.Library, wire string) error {
 	return fmt.Errorf(
-		"the model catalog covers the subscriptions reached by --wire %s, and --wire %s spends an api key, which is money rather than a window",
-		strings.Join(catalog.Wires(), " and --wire "), wire)
+		"the model library covers the subscriptions reached by --wire %s, and --wire %s spends an api key, which is money rather than a window",
+		strings.Join(library.Wires(), " and --wire "), wire)
 }
 
 func selectModel(wire, want string) (models.Model, error) {
-	catalog, err := modelCatalog()
+	library, err := modelLibrary()
 	if err != nil {
 		return models.Model{}, err
 	}
-	spec, carried := catalog.ForWire(wire)
+	spec, carried := library.ForWire(wire)
 	if !carried {
-		return models.Model{}, outsideTheCatalog(catalog, wire)
+		return models.Model{}, outsideTheLibrary(library, wire)
 	}
 	if want == "" {
-		return catalog.Default(spec.ID)
+		return library.Default(spec.ID)
 	}
-	model, err := catalog.Select(want)
+	model, err := library.Select(want)
 	if err != nil {
 		return models.Model{}, err
 	}

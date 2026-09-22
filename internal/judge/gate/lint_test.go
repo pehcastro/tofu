@@ -10,7 +10,7 @@ import (
 )
 
 func toolGateQuestionsPath() string {
-	return filepath.Join("..", "..", "..", "catalog", "questions", "tool_gate@1.yaml")
+	return filepath.Join("..", "..", "..", "library", "questions", "tool_gate@1.yaml")
 }
 
 func mustLoadToolGateQuestions(t *testing.T) question.Set {
@@ -32,7 +32,7 @@ func hasFinding(findings []Finding, check Check, field string) bool {
 }
 
 func TestLintFileOnTheShippedRule(t *testing.T) {
-	r, findings, err := LintFile(toolGateRulePath(), filepath.Join("..", "..", "..", "catalog"))
+	r, findings, err := LintFile(toolGateRulePath(), filepath.Join("..", "..", "..", "library"))
 	if err != nil {
 		t.Fatalf("LintFile: %v", err)
 	}
@@ -49,15 +49,15 @@ func TestAFindingWithNoFieldNamesTheRuleAlone(t *testing.T) {
 		Check:  CheckQuestionMissing,
 		Rule:   "tool_gate",
 		Field:  "risk_question",
-		File:   "catalog/general/rules/tool_gate@1.yaml",
+		File:   "library/general/rules/tool_gate@1.yaml",
 		Detail: "no such question",
 	}
-	want := "catalog/general/rules/tool_gate@1.yaml: tool_gate.risk_question: question-not-in-the-set: no such question"
+	want := "library/general/rules/tool_gate@1.yaml: tool_gate.risk_question: question-not-in-the-set: no such question"
 	if got := finding.String(); got != want {
 		t.Fatalf("a finding on a field reads %q, want %q", got, want)
 	}
 	finding.Field = ""
-	want = "catalog/general/rules/tool_gate@1.yaml: tool_gate: question-not-in-the-set: no such question"
+	want = "library/general/rules/tool_gate@1.yaml: tool_gate: question-not-in-the-set: no such question"
 	if got := finding.String(); got != want {
 		t.Fatalf("a finding on no field reads %q, want %q", got, want)
 	}

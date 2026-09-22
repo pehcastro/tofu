@@ -136,7 +136,7 @@ func Render(result Result) string {
 	b.WriteString("\n")
 	renderReplayFailures(b, result)
 	b.WriteString("\n")
-	b.WriteString("dollars: $0.00 in every row. every model in this table ran on a subscription, which spends a quota window rather than money, and catalog/models carries no per-token rate for a subscription model. this is a named skip: the dollar column cannot be computed from the catalog as it stands.\n")
+	b.WriteString("dollars: $0.00 in every row. every model in this table ran on a subscription, which spends a quota window rather than money, and library/models carries no per-token rate for a subscription model. this is a named skip: the dollar column cannot be computed from the library as it stands.\n")
 	return b.String()
 }
 

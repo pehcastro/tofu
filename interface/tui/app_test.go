@@ -118,7 +118,7 @@ func asked() *session.Decision {
 }
 
 const (
-	longCommand = `cd /home/dev/tofu; for d in internal/* interface/* cmd/* catalog/*; ` +
+	longCommand = `cd /home/dev/tofu; for d in internal/* interface/* cmd/* library/*; ` +
 		`do n=$(find "$d" -name '*.go' | wc -l); echo "$d $n"; done`
 	longIntent     = "for d in internal/* interface/* cmd/* +3 more"
 	forkNoticeHead = "⟳ forking"

@@ -6,7 +6,7 @@ import (
 )
 
 func toolGatePath() string {
-	return filepath.Join("..", "..", "..", "catalog", "questions", "tool_gate@1.yaml")
+	return filepath.Join("..", "..", "..", "library", "questions", "tool_gate@1.yaml")
 }
 
 func TestToolGateLintsWithNoFindings(t *testing.T) {

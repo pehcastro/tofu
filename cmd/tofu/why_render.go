@@ -104,7 +104,7 @@ func printAuthority(out io.Writer, row ledger.Row, blockedBy string) {
 	}
 	if r.Blocked {
 		if blockedBy == "" {
-			blockedBy = fmt.Sprintf("the from-untrusted question of %s@%d, which this catalog cannot name", row.Policy, row.PolicyVersion)
+			blockedBy = fmt.Sprintf("the from-untrusted question of %s@%d, which this library cannot name", row.Policy, row.PolicyVersion)
 		}
 		_, _ = fmt.Fprintf(out, "  authority  %s is at or inside its block threshold, so nothing could relax this %s\n", questionWithValue(row, blockedBy), verdictNoun(row.Verdict))
 		return

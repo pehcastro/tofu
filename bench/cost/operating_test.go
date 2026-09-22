@@ -107,7 +107,7 @@ func TestTheGateIsScoredAgainstAlwaysProceedOnBothHalves(t *testing.T) {
 		if err != nil {
 			t.Fatalf("gate.Decide over the %s half: %v", half.name, err)
 		}
-		t.Logf("%s, gate.Decide from catalog/general/rules/tool_gate@1.yaml, risk_ask_at %.2f user_requested_relax_at %.2f: %d/%d correct, %d of %d blocks caught, %d false blocks",
+		t.Logf("%s, gate.Decide from library/general/rules/tool_gate@1.yaml, risk_ask_at %.2f user_requested_relax_at %.2f: %d/%d correct, %d of %d blocks caught, %d false blocks",
 			half.name, pol.Thresholds.RiskAskAt, pol.Thresholds.UserRequestedRelaxAt,
 			five.Correct, five.Cases, five.CaughtBlock, five.Blocks, five.FalseBlock)
 		t.Logf("%s, always-proceed, no rule and no cut: %d/%d correct, 0 of %d blocks caught, 0 false blocks",
@@ -175,7 +175,7 @@ func TestTheCalibrationCarriesTheFiveThresholdsTheGateReadsAndStillStaysShadow(t
 	}
 	shipped, _ := shippedGate(t)
 	if calibration.Gate.toThresholds() != shipped.Thresholds {
-		t.Fatalf("the calibration pins %s and catalog/general/rules/tool_gate@1.yaml ships %s", calibration.Gate.toThresholds(), shipped.Thresholds)
+		t.Fatalf("the calibration pins %s and library/general/rules/tool_gate@1.yaml ships %s", calibration.Gate.toThresholds(), shipped.Thresholds)
 	}
 	if calibration.NFit != 89 || calibration.NVerify != 89 {
 		t.Fatalf("n_fit %d and n_verify %d, and the split holds 89 on each side", calibration.NFit, calibration.NVerify)

@@ -8,11 +8,11 @@ import (
 	"testing"
 	"time"
 
-	catalog "tofu/catalog"
-	catalogquestions "tofu/catalog/questions"
 	"tofu/internal/crew"
 	"tofu/internal/judge/jev"
 	"tofu/internal/judge/question"
+	library "tofu/library"
+	libraryquestions "tofu/library/questions"
 )
 
 const repoRoot = "../.."
@@ -35,12 +35,12 @@ func liveClient(t *testing.T) (*jev.Client, question.Set, crew.AskRule) {
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)
 	}
-	layers := []question.Layer{{Name: "catalog", Origin: "catalog/questions", FS: catalogquestions.Files()}}
+	layers := []question.Layer{{Name: "library", Origin: "library/questions", FS: libraryquestions.Files()}}
 	set, _, err := question.Resolve(Point, layers)
 	if err != nil {
 		t.Fatalf("resolve %s: %v", Point, err)
 	}
-	pol, err := crew.LoadAskRule(catalog.Files(), "ask@1")
+	pol, err := crew.LoadAskRule(library.Files(), "ask@1")
 	if err != nil {
 		t.Fatalf("rule: %v", err)
 	}

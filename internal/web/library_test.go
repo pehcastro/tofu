@@ -13,7 +13,7 @@ import (
 const absentKey = "TOFU_TEST_SEARCH_KEY_NOBODY_SETS"
 
 func shipped() web.Layer {
-	return web.Layer{Origin: "catalog/web", FS: os.DirFS("../../catalog/web")}
+	return web.Layer{Origin: "library/web", FS: os.DirFS("../../library/web")}
 }
 
 func project(files map[string]string) web.Layer {
@@ -24,7 +24,7 @@ func project(files map[string]string) web.Layer {
 	return web.Layer{Origin: "project", FS: mapped}
 }
 
-func TestTheLayersAreTheShippedCatalogThenTheHomeThenTheProject(t *testing.T) {
+func TestTheLayersAreTheShippedLibraryThenTheHomeThenTheProject(t *testing.T) {
 	layers, err := web.DefaultLayers()
 	if err != nil {
 		t.Fatalf("building the default layers: %v", err)
@@ -35,10 +35,10 @@ func TestTheLayersAreTheShippedCatalogThenTheHomeThenTheProject(t *testing.T) {
 	}
 	t.Logf("layers: %v", origins)
 	if len(layers) != 3 {
-		t.Fatalf("expected the catalog, the home and the project: %v", origins)
+		t.Fatalf("expected the library, the home and the project: %v", origins)
 	}
-	if !strings.HasSuffix(origins[0], filepath.Join("catalog", "web")) {
-		t.Fatalf("the shipped catalog is not the first layer: %q", origins[0])
+	if !strings.HasSuffix(origins[0], filepath.Join("library", "web")) {
+		t.Fatalf("the shipped library is not the first layer: %q", origins[0])
 	}
 	for _, origin := range origins[1:] {
 		if !strings.HasSuffix(origin, "web") || origin == origins[0] {
@@ -50,10 +50,10 @@ func TestTheLayersAreTheShippedCatalogThenTheHomeThenTheProject(t *testing.T) {
 	}
 }
 
-func TestTheShippedCatalogNamesTheProviderAndTheFetchCeiling(t *testing.T) {
+func TestTheShippedLibraryNamesTheProviderAndTheFetchCeiling(t *testing.T) {
 	config, err := web.Load([]web.Layer{shipped()})
 	if err != nil {
-		t.Fatalf("loading the shipped catalog: %v", err)
+		t.Fatalf("loading the shipped library: %v", err)
 	}
 	t.Logf("provider %s from %s, ceiling %d bytes, timeout %d ms",
 		config.Provider.Name, config.Provider.Origin, config.MaxPageBytes, config.TimeoutMS)
@@ -111,7 +111,7 @@ func TestAProviderWhoseKeyIsMissingIsNotAvailable(t *testing.T) {
 	}
 }
 
-func TestACatalogThatCannotBeTrustedIsRefusedRatherThanGuessed(t *testing.T) {
+func TestALibraryThatCannotBeTrustedIsRefusedRatherThanGuessed(t *testing.T) {
 	for _, broken := range []struct {
 		name  string
 		files map[string]string

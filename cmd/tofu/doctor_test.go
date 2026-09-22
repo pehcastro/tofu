@@ -184,7 +184,7 @@ func TestDoctorJSONCarriesEveryPointTheTextCollapsed(t *testing.T) {
 	t.Setenv(envVarName(), fakeSecret("env"))
 	report := doctorJSON(t)
 	if len(report.Rules) < 6 {
-		t.Fatalf("tofu doctor --json carries %d points, want the whole catalog", len(report.Rules))
+		t.Fatalf("tofu doctor --json carries %d points, want the whole library", len(report.Rules))
 	}
 	if strings.Count(doctorOutput(t), "shadow") > 1 {
 		t.Fatal("the text form did not collapse, so the json proves nothing")
@@ -209,11 +209,11 @@ func fixtureThresholds() string { return "thresholds from the rule" }
 
 func writeRuleFixture(t *testing.T, extra string) {
 	t.Helper()
-	catalogDir, err := sys.CatalogDir()
+	libraryDir, err := sys.LibraryDir()
 	if err != nil {
-		t.Fatalf("catalog dir: %v", err)
+		t.Fatalf("library dir: %v", err)
 	}
-	path := filepath.Join(catalogDir, "general", "rules", "tool_gate@1.yaml")
+	path := filepath.Join(libraryDir, "general", "rules", "tool_gate@1.yaml")
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
@@ -338,45 +338,45 @@ func TestDoctorReportsAPointEnforcedOnAValidLock(t *testing.T) {
 	}
 }
 
-func TestDoctorReportsTheCatalogInTheBinaryWhenTheProjectHasNone(t *testing.T) {
+func TestDoctorReportsTheLibraryInTheBinaryWhenTheProjectHasNone(t *testing.T) {
 	chdirTemp(t)
 	t.Setenv(envVarName(), fakeSecret("env"))
 	printed := doctorOutput(t)
-	line := doctorLine(t, printed, "catalog")
+	line := doctorLine(t, printed, "library")
 	if !strings.Contains(line, "the one in the binary") {
-		t.Fatalf("catalog line = %q, want it to name the catalog in the binary", line)
+		t.Fatalf("library line = %q, want it to name the library in the binary", line)
 	}
 	if rulePointOf(t, runGatePoint).Point != runGatePoint {
 		t.Fatalf("doctor says nothing about %s, the point the gate decides through", runGatePoint)
 	}
 }
 
-func TestDoctorReportsTheProjectCatalogWhenThereIsOne(t *testing.T) {
+func TestDoctorReportsTheProjectLibraryWhenThereIsOne(t *testing.T) {
 	chdirTemp(t)
 	t.Setenv(envVarName(), fakeSecret("env"))
 	writeRuleFixture(t, "mode: shadow\n")
-	line := doctorLine(t, doctorOutput(t), "catalog")
+	line := doctorLine(t, doctorOutput(t), "library")
 	if !strings.Contains(line, "the project's own, 1 of ") {
-		t.Fatalf("catalog line = %q, want it to count the project's own points", line)
+		t.Fatalf("library line = %q, want it to count the project's own points", line)
 	}
 }
 
-func TestDoctorStillReportsACatalogItCannotRead(t *testing.T) {
+func TestDoctorStillReportsALibraryItCannotRead(t *testing.T) {
 	chdirTemp(t)
 	t.Setenv(envVarName(), fakeSecret("env"))
-	catalogDir, err := sys.CatalogDir()
+	libraryDir, err := sys.LibraryDir()
 	if err != nil {
-		t.Fatalf("catalog dir: %v", err)
+		t.Fatalf("library dir: %v", err)
 	}
-	if err := os.MkdirAll(filepath.Join(catalogDir, "general", "rules", "tool_gate@1.yaml"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(libraryDir, "general", "rules", "tool_gate@1.yaml"), 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
-	line := doctorLine(t, doctorOutput(t), "catalog")
+	line := doctorLine(t, doctorOutput(t), "library")
 	if !strings.Contains(line, doctorUnreadable) {
-		t.Fatalf("catalog line = %q, want an unreadable catalog to stay an error", line)
+		t.Fatalf("library line = %q, want an unreadable library to stay an error", line)
 	}
-	if report := doctorJSON(t); report.Catalog.Unreadable == "" || len(report.Rules) != 0 {
-		t.Fatalf("the json lists points over a catalog it cannot read: %+v", report.Catalog)
+	if report := doctorJSON(t); report.Library.Unreadable == "" || len(report.Rules) != 0 {
+		t.Fatalf("the json lists points over a library it cannot read: %+v", report.Library)
 	}
 }
 

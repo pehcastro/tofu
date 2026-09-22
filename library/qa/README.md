@@ -1,17 +1,17 @@
-# catalog/qa
+# library/qa
 
-Shipped QA content, organised the way `.local/boji/planning/doing/catalog.md` draws it: a domain first, a language only when something in it is language-specific.
+Shipped QA content, organised the way `.local/boji/planning/doing/library.md` draws it: a domain first, a language only when something in it is language-specific.
 
 ```
-catalog/qa/agents/         a sub-agent definition
-catalog/qa/references/     material any skill or agent in this domain may read
-catalog/qa/general/rules/  rules true of testing in any language
-catalog/qa/general/skills/ procedures true of testing in any language
+library/qa/agents/         a sub-agent definition
+library/qa/references/     material any skill or agent in this domain may read
+library/qa/general/rules/  rules true of testing in any language
+library/qa/general/skills/ procedures true of testing in any language
 ```
 
 Every file here declares `domain: qa`, and a file that does not is refused by name. A reference is reachable by every skill and every agent in this domain and by nothing else, which `internal/rule.LoadDomains` enforces rather than the convention hoping.
 
-There is no `catalog/qa/go/`. Nothing in the twenty three skills read for TOFU-291 carries Go material: they are Playwright, Cypress, Jest, Selenium, React Testing Library, and three of them are not about software testing at all. Writing Go rules from memory instead is the mistake this domain was created to stop.
+There is no `library/qa/go/`. Nothing in the twenty three skills read for TOFU-291 carries Go material: they are Playwright, Cypress, Jest, Selenium, React Testing Library, and three of them are not about software testing at all. Writing Go rules from memory instead is the mistake this domain was created to stop.
 
 ## Where the content came from
 

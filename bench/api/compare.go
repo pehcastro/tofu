@@ -6,9 +6,9 @@ import (
 	"time"
 
 	"tofu/bench/stat"
-	shipped "tofu/catalog"
 	"tofu/internal/judge/gate"
 	"tofu/internal/judge/jev"
+	shipped "tofu/library"
 )
 
 const gateRuleRef = "tool_gate@1"

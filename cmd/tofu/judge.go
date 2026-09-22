@@ -17,7 +17,7 @@ import (
 type judgeInput struct {
 	State     any                       `json:"state"`
 	Questions map[string]inlineQuestion `json:"questions"`
-	Catalog   string                    `json:"catalog"`
+	Library   string                    `json:"library"`
 	Rule      string                    `json:"rule"`
 }
 

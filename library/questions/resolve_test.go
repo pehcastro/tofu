@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"tofu/catalog/questions"
 	"tofu/internal/judge/question"
+	"tofu/library/questions"
 )
 
 func TestBareToolGateIsRefusedWithTwoVersionsOnDisk(t *testing.T) {

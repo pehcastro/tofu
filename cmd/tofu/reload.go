@@ -6,22 +6,22 @@ import (
 	"os"
 	"strconv"
 
-	shipped "tofu/catalog"
 	"tofu/internal/rule"
 	"tofu/internal/settings"
 	"tofu/internal/sys"
+	shipped "tofu/library"
 )
 
 func runReload() (settings.ReloadResult, error) {
-	fromBinary, err := rule.LoadFS(shipped.Files(), catalogRoot)
+	fromBinary, err := rule.LoadFS(shipped.Files(), libraryRoot)
 	if err != nil {
 		return settings.ReloadResult{}, err
 	}
-	catalogDir, err := sys.CatalogDir()
+	libraryDir, err := sys.LibraryDir()
 	if err != nil {
 		return settings.ReloadResult{}, err
 	}
-	return settings.Reload(fromBinary, catalogDir)
+	return settings.Reload(fromBinary, libraryDir)
 }
 
 func reloadVerb(out, errOut io.Writer) int {

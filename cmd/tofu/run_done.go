@@ -52,7 +52,7 @@ func newTypedDoneReview() (typedDoneReview, error) {
 }
 
 func resolveStopCheckPoint() (battery, error) {
-	set, err := resolveCatalog(doneReviewPoint)
+	set, err := resolveLibrary(doneReviewPoint)
 	if err != nil {
 		return battery{}, err
 	}

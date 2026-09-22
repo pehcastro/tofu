@@ -29,10 +29,10 @@ func fieldFile(t *testing.T, fields []Field, path string) string {
 
 func overrideLayers(t *testing.T) []Layer {
 	t.Helper()
-	catalog := layerDir(t, "catalog", "name: tool_gate\ndomain: general\nquestions_version: 1\nstate:\n  - tool\nquestions:\n  risk:\n    type: score\n    instructions: from the catalog\n    criteria:\n      - low\n      - high\n")
+	library := layerDir(t, "library", "name: tool_gate\ndomain: general\nquestions_version: 1\nstate:\n  - tool\nquestions:\n  risk:\n    type: score\n    instructions: from the library\n    criteria:\n      - low\n      - high\n")
 	global := layerDir(t, "global", "questions:\n  risk:\n    instructions: from the global file\n  approval:\n    type: noul\n    instructions: from the global file\n")
 	project := layerDir(t, "project", "questions:\n  risk:\n    instructions: from the project file\n")
-	return []Layer{catalog, global, project}
+	return []Layer{library, global, project}
 }
 
 func TestOverrideChainResolvesToTheProjectFile(t *testing.T) {
@@ -61,10 +61,10 @@ func TestOverrideChainFallsThroughFieldByField(t *testing.T) {
 	}
 	risk, _ := set.Question("risk")
 	if len(risk.Levels) != 2 || risk.Levels[0].Text != "low" || risk.Levels[1].Text != "high" {
-		t.Errorf("risk levels = %v, want the two the catalog declares", risk.Levels)
+		t.Errorf("risk levels = %v, want the two the library declares", risk.Levels)
 	}
 	if risk.Kind != KindScore {
-		t.Errorf("risk kind = %q, want the catalog type", risk.Kind)
+		t.Errorf("risk kind = %q, want the library type", risk.Kind)
 	}
 	approval, ok := set.Question("approval")
 	if !ok {
@@ -74,10 +74,10 @@ func TestOverrideChainFallsThroughFieldByField(t *testing.T) {
 		t.Errorf("approval instructions = %q", approval.Instructions)
 	}
 	if set.QuestionsVersion != 1 || len(set.State) != 1 {
-		t.Errorf("questions_version = %d, state = %v, want the catalog values", set.QuestionsVersion, set.State)
+		t.Errorf("questions_version = %d, state = %v, want the library values", set.QuestionsVersion, set.State)
 	}
 	if got := fieldFile(t, fields, "questions.risk.criteria[0]"); got != filepath.Join(layers[0].Origin, "tool_gate@1.yaml") {
-		t.Errorf("risk criteria came from %q, want the catalog layer", got)
+		t.Errorf("risk criteria came from %q, want the library layer", got)
 	}
 	if got := fieldFile(t, fields, "questions.approval.instructions"); got != filepath.Join(layers[1].Origin, "tool_gate@1.yaml") {
 		t.Errorf("approval instructions came from %q, want the global layer", got)
@@ -115,7 +115,7 @@ func twoVersionDiskLayer(t *testing.T) Layer {
 	if err := os.WriteFile(filepath.Join(dir, "tool_gate@2.yaml"), []byte(body2), 0o644); err != nil {
 		t.Fatalf("write @2: %v", err)
 	}
-	return DirLayer("catalog", dir)
+	return DirLayer("library", dir)
 }
 
 func TestBareNameWithTwoVersionsOnADiskLayerIsRefused(t *testing.T) {
@@ -132,7 +132,7 @@ func TestBareNameWithTwoVersionsOnADiskLayerIsRefused(t *testing.T) {
 }
 
 func TestBareNameWithOneVersionStillResolves(t *testing.T) {
-	layer := layerDir(t, "catalog", "name: tool_gate\ndomain: general\nquestions_version: 1\nstate:\n  - tool\nquestions:\n  risk:\n    type: score\n    instructions: v1\n    criteria:\n      - low\n      - high\n")
+	layer := layerDir(t, "library", "name: tool_gate\ndomain: general\nquestions_version: 1\nstate:\n  - tool\nquestions:\n  risk:\n    type: score\n    instructions: v1\n    criteria:\n      - low\n      - high\n")
 	set, _, err := Resolve("tool_gate", []Layer{layer})
 	if err != nil {
 		t.Fatalf("resolve: %v", err)

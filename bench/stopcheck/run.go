@@ -8,7 +8,6 @@ import (
 	"strconv"
 	"time"
 
-	catalogquestions "tofu/catalog/questions"
 	"tofu/internal/judge/gate"
 	"tofu/internal/judge/jev"
 	"tofu/internal/judge/jev/wire/openrouter"
@@ -18,6 +17,7 @@ import (
 	"tofu/internal/konst"
 	"tofu/internal/sys"
 	"tofu/internal/transport"
+	libraryquestions "tofu/library/questions"
 )
 
 const Point = state.StopCheckRuleRef
@@ -76,7 +76,7 @@ type Battery struct {
 }
 
 func New(root, key string) (Battery, error) {
-	layers, err := question.DefaultLayers(catalogquestions.Files())
+	layers, err := question.DefaultLayers(libraryquestions.Files())
 	if err != nil {
 		return Battery{}, err
 	}

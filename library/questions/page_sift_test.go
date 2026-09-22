@@ -6,19 +6,19 @@ import (
 	"strings"
 	"testing"
 
-	"tofu/catalog/questions"
 	"tofu/internal/judge/question"
+	"tofu/library/questions"
 )
 
-const shellSiftPoint = "shell_sift@1"
+const pageSiftPoint = "page_sift@1"
 
-func shellSiftLayers(t *testing.T, extra ...question.Layer) []question.Layer {
+func pageSiftLayers(t *testing.T, extra ...question.Layer) []question.Layer {
 	t.Helper()
-	return append([]question.Layer{{Name: "catalog", Origin: "catalog/questions", FS: questions.Files()}}, extra...)
+	return append([]question.Layer{{Name: "library", Origin: "library/questions", FS: questions.Files()}}, extra...)
 }
 
-func TestShippedShellSiftAsksOneNoulAndPassesItsOwnLint(t *testing.T) {
-	set, _, err := question.Resolve(shellSiftPoint, shellSiftLayers(t))
+func TestShippedPageSiftAsksOneNoulAndPassesItsOwnLint(t *testing.T) {
+	set, _, err := question.Resolve(pageSiftPoint, pageSiftLayers(t))
 	if err != nil {
 		t.Fatalf("resolve: %v", err)
 	}
@@ -33,25 +33,25 @@ func TestShippedShellSiftAsksOneNoulAndPassesItsOwnLint(t *testing.T) {
 			t.Errorf("lint: %s", f)
 		}
 	}
-	for _, want := range []string{"still needs this chunk", "not against how interesting it looks"} {
+	for _, want := range []string{"this question's own index", "still needed, or not"} {
 		if !strings.Contains(set.Questions[0].Instructions, want) {
 			t.Errorf("the shipped wording does not carry %q: %s", want, set.Questions[0].Instructions)
 		}
 	}
 }
 
-func TestAProjectCatalogOverridesTheShippedShellSiftWording(t *testing.T) {
+func TestAProjectLibraryOverridesTheShippedPageSiftWording(t *testing.T) {
 	dir := t.TempDir()
-	override := "name: shell_sift\nquestions_version: 1\nquestions:\n  still_needed:\n    type: noul\n    instructions: >-\n      the project asks it differently, naming `chunk` and `task` itself\n"
-	if err := os.WriteFile(filepath.Join(dir, "shell_sift@1.yaml"), []byte(override), 0o600); err != nil {
+	override := "name: page_sift\nquestions_version: 1\nquestions:\n  still_needed:\n    type: noul\n    instructions: >-\n      the project asks it differently, naming `units` and `task` itself\n"
+	if err := os.WriteFile(filepath.Join(dir, "page_sift@1.yaml"), []byte(override), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
-	shipped, _, err := question.Resolve(shellSiftPoint, shellSiftLayers(t))
+	shipped, _, err := question.Resolve(pageSiftPoint, pageSiftLayers(t))
 	if err != nil {
 		t.Fatalf("resolve the shipped set: %v", err)
 	}
-	merged, _, err := question.Resolve(shellSiftPoint, shellSiftLayers(t, question.DirLayer("project", dir)))
+	merged, _, err := question.Resolve(pageSiftPoint, pageSiftLayers(t, question.DirLayer("project", dir)))
 	if err != nil {
 		t.Fatalf("resolve with a project layer: %v", err)
 	}

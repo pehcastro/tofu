@@ -8,7 +8,7 @@ import (
 
 	"tofu/interface/tui/pane"
 	"tofu/interface/tui/theme"
-	catalog "tofu/internal/llm/models"
+	library "tofu/internal/llm/models"
 	"tofu/internal/widget"
 )
 
@@ -19,17 +19,17 @@ const (
 	plainMark    = "  "
 	title        = "models"
 	pickHint     = "↑↓ pick a model"
-	emptyTitle   = "the catalog has no model to pick"
+	emptyTitle   = "the library has no model to pick"
 )
 
 type Row struct {
 	Slug   string
-	Use    catalog.Use
+	Use    library.Use
 	Window string
 	Reason string
 }
 
-func (r Row) excluded() bool { return r.Use == catalog.UseExcluded }
+func (r Row) excluded() bool { return r.Use == library.UseExcluded }
 
 type Group struct {
 	Source string
@@ -43,11 +43,11 @@ type Model struct {
 	height int
 }
 
-func Slug(model catalog.Model) string {
+func Slug(model library.Model) string {
 	return string(model.Subscription) + "/" + model.ID
 }
 
-func Build(loaded catalog.Catalog) Model {
+func Build(loaded library.Library) Model {
 	order := make([]string, 0, len(loaded.Subscriptions))
 	rows := map[string][]Row{}
 	for _, spec := range loaded.Subscriptions {

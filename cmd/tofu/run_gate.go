@@ -52,7 +52,7 @@ func newToolGate(dir string) (*toolGate, error) {
 }
 
 func resolvePoint(point string) (battery, error) {
-	set, err := resolveCatalog(point)
+	set, err := resolveLibrary(point)
 	if err != nil {
 		return battery{}, err
 	}

@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	catalog "tofu/catalog"
 	"tofu/internal/sift"
+	library "tofu/library"
 )
 
 func tally(t *testing.T, arm string, readings []Reading) {
@@ -51,7 +51,7 @@ func byGroup(rows []Row, group string) []Row {
 
 func shippedRule(t *testing.T) sift.PageRule {
 	t.Helper()
-	r, err := sift.LoadPageRule(catalog.Files(), "page_sift@1")
+	r, err := sift.LoadPageRule(library.Files(), "page_sift@1")
 	if err != nil {
 		t.Fatalf("load the shipped rule: %v", err)
 	}
@@ -61,7 +61,7 @@ func shippedRule(t *testing.T) sift.PageRule {
 func TestTheShippedRuleIsShadowAndTheModelIsGivenThePageWhole(t *testing.T) {
 	pol := shippedRule(t)
 	if pol.Mode != sift.ModeShadow {
-		t.Fatalf("catalog/tools/fetch/rules/page_sift@1.yaml is %s and nothing has been calibratedon fetched pages", pol.Mode)
+		t.Fatalf("library/tools/fetch/rules/page_sift@1.yaml is %s and nothing has been calibratedon fetched pages", pol.Mode)
 	}
 	wouldDrop := 0
 	for i, row := range corpusRows(t) {

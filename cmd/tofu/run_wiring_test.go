@@ -313,7 +313,7 @@ func TestAModelWithNoRecordedWindowCompactsAtTheOperatingCeiling(t *testing.T) {
 		t.Fatalf("buildRunTools: %v", err)
 	}
 
-	budget, err := contextBudget(opts, models.Model{ID: "a model no catalog records"})
+	budget, err := contextBudget(opts, models.Model{ID: "a model no library records"})
 	if err != nil {
 		t.Fatalf("contextBudget: %v", err)
 	}
@@ -419,16 +419,16 @@ func TestWithNoSearchKeyStoredTheTurnIsGivenFetchAndNoWebSearch(t *testing.T) {
 	t.Logf("the tools a turn is given: %v", names)
 }
 
-func TestAProjectCarryingNoWebCatalogStillBuildsItsTools(t *testing.T) {
+func TestAProjectCarryingNoWebLibraryStillBuildsItsTools(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
 	built, _, err := buildRunTools(dir, toolSetFull)
 	if err != nil {
-		t.Fatalf("a project carrying no web catalog could not build its tools: %v", err)
+		t.Fatalf("a project carrying no web library could not build its tools: %v", err)
 	}
 	for _, tool := range built {
 		if tool.Name() == "fetch" || tool.Name() == "web_search" {
-			t.Errorf("a project with no web catalog was given %s anyway", tool.Name())
+			t.Errorf("a project with no web library was given %s anyway", tool.Name())
 		}
 	}
 }

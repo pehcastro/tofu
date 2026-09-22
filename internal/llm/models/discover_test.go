@@ -42,22 +42,22 @@ func TestDiscoverReportsTheCodexPinBesideTheResult(t *testing.T) {
 	if sentVersion != codex.PinnedCodexClientVersion || sentQuery != codex.PinnedCodexClientVersion {
 		t.Fatalf("the pin must gate discovery, header %q query %q", sentVersion, sentQuery)
 	}
-	catalog, err := Load([]Layer{layerOf("catalog", withSubscriptions(fstest.MapFS{
+	library, err := Load([]Layer{layerOf("library", withSubscriptions(fstest.MapFS{
 		"models/openai/gpt-5.6-sol.yaml":      &fstest.MapFile{Data: []byte("subscription: codex\nuse: default\n")},
 		"models/openai/gpt-5.6-vanished.yaml": &fstest.MapFile{Data: []byte("subscription: codex\nuse: allowed\n")},
 	}))})
 	if err != nil {
 		t.Fatalf("loading: %v", err)
 	}
-	lines := catalog.Reconcile(served, shippedTable(t)).Lines()
+	lines := library.Reconcile(served, shippedTable(t)).Lines()
 	if !strings.Contains(lines[0], "under codex client version "+codex.PinnedCodexClientVersion) {
 		t.Fatalf("the pin must be reported beside the list, got %q", lines[0])
 	}
 	if !strings.Contains(lines[1], "gpt-6-astra") {
-		t.Fatalf("a served model the catalog does not know must be named, got %q", lines[1])
+		t.Fatalf("a served model the library does not know must be named, got %q", lines[1])
 	}
 	if !strings.Contains(lines[2], "gpt-5.6-vanished") {
-		t.Fatalf("a catalog model the account cannot reach must be named, got %q", lines[2])
+		t.Fatalf("a library model the account cannot reach must be named, got %q", lines[2])
 	}
 }
 
@@ -79,12 +79,12 @@ func TestADumpOfTheDiscoveryRequestHidesTheAccountAndTheToken(t *testing.T) {
 }
 
 func TestReconcileRendersAnEmptyListRatherThanNothing(t *testing.T) {
-	catalog, err := Load([]Layer{layerOf("catalog", withSubscriptions(oneFile(
+	library, err := Load([]Layer{layerOf("library", withSubscriptions(oneFile(
 		"models/openai/gpt-5.6-sol.yaml", "subscription: codex\nuse: default\n")))})
 	if err != nil {
 		t.Fatalf("loading: %v", err)
 	}
-	lines := catalog.Reconcile(Served{Subscription: Codex, Pin: "pin", IDs: []string{"gpt-5.6-sol"}}, shippedTable(t)).Lines()
+	lines := library.Reconcile(Served{Subscription: Codex, Pin: "pin", IDs: []string{"gpt-5.6-sol"}}, shippedTable(t)).Lines()
 	for _, line := range lines[1:] {
 		if !strings.HasSuffix(line, "(none)") {
 			t.Fatalf("an empty finding is still a line, got %q", line)

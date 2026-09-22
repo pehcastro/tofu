@@ -17,7 +17,7 @@ import (
 
 func toolGateRulePath(t *testing.T) string {
 	t.Helper()
-	abs, err := filepath.Abs(filepath.Join("..", "..", "catalog", "general", "rules", runGatePoint+".yaml"))
+	abs, err := filepath.Abs(filepath.Join("..", "..", "library", "general", "rules", runGatePoint+".yaml"))
 	if err != nil {
 		t.Fatalf("resolving the shipped rule path: %v", err)
 	}

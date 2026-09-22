@@ -13,7 +13,7 @@ func TestLoadFSReadsEveryRuleAndNamesTheDirectoryItActuallySitsIn(t *testing.T) 
 		"general/rules/em_dash@1.yaml": {Data: []byte("id: em_dash\ndomain: general\nkind: structural\nchecker: em_dash\nmode: enforced\n")},
 		"general/rules/notes.md":       {Data: []byte("not a rule\n")},
 	}
-	rules, err := LoadFS(shipped, "catalog")
+	rules, err := LoadFS(shipped, "library")
 	if err != nil {
 		t.Fatalf("LoadFS: %v", err)
 	}
@@ -23,11 +23,11 @@ func TestLoadFSReadsEveryRuleAndNamesTheDirectoryItActuallySitsIn(t *testing.T) 
 	if rules[0].ID != "comments" || rules[1].Mode != ModeEnforced {
 		t.Fatalf("LoadFS did not read the rules it was given: %+v", rules)
 	}
-	if rules[0].File != "catalog/dev/go/rules/comments@1.yaml" {
-		t.Fatalf("comments says it came from %q, want catalog/dev/go/rules/comments@1.yaml", rules[0].File)
+	if rules[0].File != "library/dev/go/rules/comments@1.yaml" {
+		t.Fatalf("comments says it came from %q, want library/dev/go/rules/comments@1.yaml", rules[0].File)
 	}
-	if rules[1].File != "catalog/general/rules/em_dash@1.yaml" {
-		t.Fatalf("em_dash says it came from %q, want catalog/general/rules/em_dash@1.yaml", rules[1].File)
+	if rules[1].File != "library/general/rules/em_dash@1.yaml" {
+		t.Fatalf("em_dash says it came from %q, want library/general/rules/em_dash@1.yaml", rules[1].File)
 	}
 }
 
@@ -35,7 +35,7 @@ func TestLoadFSSkipsARuleADecisionPointReads(t *testing.T) {
 	rules, err := LoadFS(fstest.MapFS{
 		"general/rules/em_dash@1.yaml":   {Data: []byte("id: em_dash\ndomain: general\nkind: structural\nchecker: em_dash\n")},
 		"general/rules/tool_gate@1.yaml": {Data: []byte("name: tool_gate\ndomain: general\nkind: threshold\nrule_version: 1\n")},
-	}, "catalog")
+	}, "library")
 	if err != nil {
 		t.Fatalf("LoadFS: %v", err)
 	}
@@ -45,21 +45,21 @@ func TestLoadFSSkipsARuleADecisionPointReads(t *testing.T) {
 }
 
 func TestLoadFSNamesTheFileInAnError(t *testing.T) {
-	_, err := LoadFS(fstest.MapFS{"general/rules/broken@1.yaml": {Data: []byte("id: broken\ndomain: general\nkind: rumour\nchecker: none\n")}}, "catalog")
+	_, err := LoadFS(fstest.MapFS{"general/rules/broken@1.yaml": {Data: []byte("id: broken\ndomain: general\nkind: rumour\nchecker: none\n")}}, "library")
 	if err == nil {
 		t.Fatal("LoadFS accepted a rule whose kind is not a kind")
 	}
-	if !strings.HasPrefix(err.Error(), "catalog/general/rules/broken@1.yaml") {
+	if !strings.HasPrefix(err.Error(), "library/general/rules/broken@1.yaml") {
 		t.Fatalf("the error does not start with the file it came from: %v", err)
 	}
 }
 
 func TestParseRuleRefusesARuleWithNoDomainByName(t *testing.T) {
-	_, err := parseRule([]byte("id: em_dash\nkind: structural\nchecker: em_dash\n"), "catalog/general/rules/em_dash@1.yaml")
+	_, err := parseRule([]byte("id: em_dash\nkind: structural\nchecker: em_dash\n"), "library/general/rules/em_dash@1.yaml")
 	if err == nil {
 		t.Fatal("parseRule accepted a rule that declares no domain")
 	}
-	if !strings.HasPrefix(err.Error(), "catalog/general/rules/em_dash@1.yaml") || !strings.Contains(err.Error(), "no domain") {
+	if !strings.HasPrefix(err.Error(), "library/general/rules/em_dash@1.yaml") || !strings.Contains(err.Error(), "no domain") {
 		t.Fatalf("the refusal does not name the file and the field: %v", err)
 	}
 }
@@ -119,7 +119,7 @@ func TestLayerLetsAProjectRetuneOneShippedRuleTurnAnotherOffAndAddItsOwn(t *test
 
 func TestLoadReadsTheMeasuredQARules(t *testing.T) {
 	for _, name := range []string{"flake_disagreement@1.yaml", "skipped_test_budget@1.yaml"} {
-		r, err := Load(filepath.Join("..", "..", "catalog", "qa", "general", "rules", name))
+		r, err := Load(filepath.Join("..", "..", "library", "qa", "general", "rules", name))
 		if err != nil {
 			t.Fatalf("Load %s: %v", name, err)
 		}
@@ -139,7 +139,7 @@ func TestLoadReadsTheMeasuredQARules(t *testing.T) {
 }
 
 func TestParseRuleRefusesAMeasuredRuleThatDeclaresAChecker(t *testing.T) {
-	_, err := parseRule([]byte("id: flake_disagreement\ndomain: qa\nkind: measured\nmeasurement: bench/testquality/flakerun\nchecker: comments\nsource: s\nevidence: e\n"), "catalog/qa/general/rules/flake_disagreement@1.yaml")
+	_, err := parseRule([]byte("id: flake_disagreement\ndomain: qa\nkind: measured\nmeasurement: bench/testquality/flakerun\nchecker: comments\nsource: s\nevidence: e\n"), "library/qa/general/rules/flake_disagreement@1.yaml")
 	if err == nil {
 		t.Fatal("parseRule accepted a measured rule carrying a checker")
 	}
@@ -149,7 +149,7 @@ func TestParseRuleRefusesAMeasuredRuleThatDeclaresAChecker(t *testing.T) {
 }
 
 func TestParseRuleRefusesAStructuralRuleThatDeclaresAMeasurement(t *testing.T) {
-	_, err := parseRule([]byte("id: comments\ndomain: dev\nkind: structural\nchecker: comments\nmeasurement: bench/testquality/flakerun\n"), "catalog/dev/go/rules/comments@1.yaml")
+	_, err := parseRule([]byte("id: comments\ndomain: dev\nkind: structural\nchecker: comments\nmeasurement: bench/testquality/flakerun\n"), "library/dev/go/rules/comments@1.yaml")
 	if err == nil {
 		t.Fatal("parseRule accepted a structural rule carrying a measurement")
 	}
@@ -159,7 +159,7 @@ func TestParseRuleRefusesAStructuralRuleThatDeclaresAMeasurement(t *testing.T) {
 }
 
 func TestLoadDirWalksEveryDomainAndSkipsTheRulesADecisionPointReads(t *testing.T) {
-	rules, err := LoadDir(filepath.Join("..", "..", "catalog"))
+	rules, err := LoadDir(filepath.Join("..", "..", "library"))
 	if err != nil {
 		t.Fatalf("LoadDir: %v", err)
 	}

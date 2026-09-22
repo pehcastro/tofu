@@ -120,7 +120,7 @@ func TestProjectReportAgainstTheTwoFindCommandsFromTheRecordedRun(t *testing.T) 
 
 	for _, arm := range []struct{ name, args string }{
 		{"project_report", ""},
-		{"find step 2", `{"command":"find bench cmd interface catalog internal -type d | sort; echo ---; find . -name '*.go' -not -path './.local/*' | wc -l","timeout_ms":600000}`},
+		{"find step 2", `{"command":"find bench cmd interface library internal -type d | sort; echo ---; find . -name '*.go' -not -path './.local/*' | wc -l","timeout_ms":600000}`},
 		{"find step 7", `{"command":"find . -name '*.go' -not -path './.local/*' -not -name '*_test.go' | xargs wc -l | tail -1","timeout_ms":600000}`},
 	} {
 		started := time.Now()

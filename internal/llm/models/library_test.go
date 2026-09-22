@@ -9,19 +9,19 @@ import (
 	"testing/fstest"
 )
 
-const shippedRoot = "../../../catalog"
+const shippedRoot = "../../../library"
 
 func shippedLayer() Layer {
-	return Layer{Name: "catalog", Origin: "catalog", FS: os.DirFS(shippedRoot)}
+	return Layer{Name: "library", Origin: "library", FS: os.DirFS(shippedRoot)}
 }
 
-func shippedCatalog(t *testing.T) Catalog {
+func shippedLibrary(t *testing.T) Library {
 	t.Helper()
-	catalog, err := Load([]Layer{shippedLayer()})
+	library, err := Load([]Layer{shippedLayer()})
 	if err != nil {
-		t.Fatalf("loading the shipped catalog: %v", err)
+		t.Fatalf("loading the shipped library: %v", err)
 	}
-	return catalog
+	return library
 }
 
 func oneFile(name, body string) fstest.MapFS {
@@ -44,12 +44,12 @@ func layerOf(name string, files fstest.MapFS) Layer {
 }
 
 func TestEveryShippedModelResolvesByItsSlugAndByThatAlone(t *testing.T) {
-	catalog := shippedCatalog(t)
-	if len(catalog.Models) == 0 {
-		t.Fatal("the shipped catalog loaded no models at all")
+	library := shippedLibrary(t)
+	if len(library.Models) == 0 {
+		t.Fatal("the shipped library loaded no models at all")
 	}
-	for _, model := range catalog.Models {
-		found, err := catalog.Select(model.Slug())
+	for _, model := range library.Models {
+		found, err := library.Select(model.Slug())
 		switch {
 		case model.Use == UseExcluded:
 			var refusal *Refusal
@@ -61,7 +61,7 @@ func TestEveryShippedModelResolvesByItsSlugAndByThatAlone(t *testing.T) {
 		case found.File != model.File:
 			t.Fatalf("%s resolved to %s", model.Slug(), found.File)
 		}
-		if _, err := catalog.Select(model.ID); err == nil {
+		if _, err := library.Select(model.ID); err == nil {
 			t.Fatalf("%q resolved without its provider, so the slug is not the identity", model.ID)
 		}
 	}
@@ -73,9 +73,9 @@ func TestEveryFileUnderModelsIsAModel(t *testing.T) {
 	if err != nil {
 		t.Fatalf("reading %s: %v", root, err)
 	}
-	catalog := shippedCatalog(t)
+	library := shippedLibrary(t)
 	filed := map[string]bool{}
-	for _, model := range catalog.Models {
+	for _, model := range library.Models {
 		filed[model.VendorSlug()+".yaml"] = true
 	}
 	for _, provider := range providers {
@@ -91,14 +91,14 @@ func TestEveryFileUnderModelsIsAModel(t *testing.T) {
 		}
 		for _, entry := range entries {
 			if !filed[provider.Name()+"/"+entry.Name()] {
-				t.Fatalf("%s/%s is under catalog/models and is not a model", provider.Name(), entry.Name())
+				t.Fatalf("%s/%s is under library/models and is not a model", provider.Name(), entry.Name())
 			}
 		}
 	}
 }
 
 func TestLoadRefusesAFileUnderModelsThatIsNotAModel(t *testing.T) {
-	_, err := Load([]Layer{layerOf("catalog", withSubscriptions(fstest.MapFS{
+	_, err := Load([]Layer{layerOf("library", withSubscriptions(fstest.MapFS{
 		"models/README.md":               &fstest.MapFile{Data: []byte("notes\n")},
 		"models/openai/gpt-5.6-sol.yaml": &fstest.MapFile{Data: []byte("subscription: codex\nuse: default\n")},
 	}))})
@@ -108,9 +108,9 @@ func TestLoadRefusesAFileUnderModelsThatIsNotAModel(t *testing.T) {
 }
 
 func TestLoadRefusesAModelMissingARequiredFieldAndNamesTheField(t *testing.T) {
-	_, err := Load([]Layer{layerOf("catalog", withSubscriptions(oneFile(
+	_, err := Load([]Layer{layerOf("library", withSubscriptions(oneFile(
 		"models/openai/gpt-5.6-sol.yaml", "subscription: codex\nuse: excluded\n")))})
-	var refused *BrokenCatalog
+	var refused *BrokenLibrary
 	if !errors.As(err, &refused) || len(refused.Refused) == 0 {
 		t.Fatalf("want a refusal, got %v", err)
 	}
@@ -121,7 +121,7 @@ func TestLoadRefusesAModelMissingARequiredFieldAndNamesTheField(t *testing.T) {
 }
 
 func TestLoadRefusesAModelFiledUnderTheWrongVendor(t *testing.T) {
-	_, err := Load([]Layer{layerOf("catalog", withSubscriptions(oneFile(
+	_, err := Load([]Layer{layerOf("library", withSubscriptions(oneFile(
 		"models/anthropic/gpt-5.6-sol.yaml", "subscription: codex\nuse: default\n")))})
 	if err == nil || !strings.Contains(err.Error(), "wrong vendor") {
 		t.Fatalf("want the vendor mismatch refused, got %v", err)
@@ -129,7 +129,7 @@ func TestLoadRefusesAModelFiledUnderTheWrongVendor(t *testing.T) {
 }
 
 func TestLoadRefusesAnUnknownField(t *testing.T) {
-	_, err := Load([]Layer{layerOf("catalog", withSubscriptions(oneFile(
+	_, err := Load([]Layer{layerOf("library", withSubscriptions(oneFile(
 		"models/openai/gpt-5.6-sol.yaml", "subscription: codex\nuse: default\nprice: 3\n")))})
 	if err == nil || !strings.Contains(err.Error(), `price: unknown field`) {
 		t.Fatalf("want the unknown field refused by name, got %v", err)
@@ -137,7 +137,7 @@ func TestLoadRefusesAnUnknownField(t *testing.T) {
 }
 
 func TestLoadRefusesTwoDefaultsForOneSubscription(t *testing.T) {
-	_, err := Load([]Layer{layerOf("catalog", withSubscriptions(fstest.MapFS{
+	_, err := Load([]Layer{layerOf("library", withSubscriptions(fstest.MapFS{
 		"models/openai/gpt-5.6-sol.yaml":  &fstest.MapFile{Data: []byte("subscription: codex\nuse: default\n")},
 		"models/openai/gpt-5.6-luna.yaml": &fstest.MapFile{Data: []byte("subscription: codex\nuse: default\n")},
 	}))})
@@ -147,14 +147,14 @@ func TestLoadRefusesTwoDefaultsForOneSubscription(t *testing.T) {
 }
 
 func TestLoadDefaultsAnUndeclaredUseToExcluded(t *testing.T) {
-	catalog, err := Load([]Layer{layerOf("catalog", withSubscriptions(fstest.MapFS{
+	library, err := Load([]Layer{layerOf("library", withSubscriptions(fstest.MapFS{
 		"models/openai/gpt-5.6-sol.yaml":  &fstest.MapFile{Data: []byte("subscription: codex\nuse: default\n")},
 		"models/openai/gpt-5.6-luna.yaml": &fstest.MapFile{Data: []byte("subscription: codex\n")},
 	}))})
 	if err != nil {
 		t.Fatalf("loading: %v", err)
 	}
-	quiet, err := catalog.Select("codex-sub/gpt-5.6-luna")
+	quiet, err := library.Select("codex-sub/gpt-5.6-luna")
 	if err == nil {
 		t.Fatalf("a model with no use must not be sendable, got %+v", quiet)
 	}
@@ -168,11 +168,11 @@ func TestProjectOverridesGlobalFieldByField(t *testing.T) {
 		"models/openai/gpt-5.6-sol.yaml", "subscription: codex\nwindow: 7d:sol\nuse: excluded\nreason: the global file says no\n")))
 	project := layerOf("project", oneFile(
 		"models/openai/gpt-5.6-sol.yaml", "use: default\n"))
-	catalog, err := Load([]Layer{global, project})
+	library, err := Load([]Layer{global, project})
 	if err != nil {
 		t.Fatalf("loading: %v", err)
 	}
-	model, err := catalog.Select("codex-sub/gpt-5.6-sol")
+	model, err := library.Select("codex-sub/gpt-5.6-sol")
 	if err != nil {
 		t.Fatalf("the project layer did not win: %v", err)
 	}
@@ -188,13 +188,13 @@ func TestProjectOverridesGlobalFieldByField(t *testing.T) {
 }
 
 func TestTheShippedWiresResolveTheModelsTheyResolvedBefore(t *testing.T) {
-	catalog := shippedCatalog(t)
+	library := shippedLibrary(t)
 	for wire, want := range map[string]string{"anthropic": "claude-opus-5", "codex": "gpt-5.6-sol"} {
-		spec, carried := catalog.ForWire(wire)
+		spec, carried := library.ForWire(wire)
 		if !carried {
 			t.Fatalf("no subscription answers to --wire %s", wire)
 		}
-		model, err := catalog.Default(spec.ID)
+		model, err := library.Default(spec.ID)
 		if err != nil {
 			t.Fatalf("--wire %s has no default: %v", wire, err)
 		}
@@ -221,10 +221,10 @@ func TestTheShippedWiresResolveTheModelsTheyResolvedBefore(t *testing.T) {
 		"codex-sub/gpt-6-astra":                 "gpt-6-astra excluded 5h and 7d",
 		"codex-sub/gpt-reserve":                 "gpt-reserve excluded 5h and 7d",
 	}
-	if len(catalog.Models) != len(frozen) {
-		t.Fatalf("the catalog carries %d models and the frozen table has %d", len(catalog.Models), len(frozen))
+	if len(library.Models) != len(frozen) {
+		t.Fatalf("the library carries %d models and the frozen table has %d", len(library.Models), len(frozen))
 	}
-	for _, model := range catalog.Models {
+	for _, model := range library.Models {
 		got := model.ID + " " + string(model.Use) + " " + model.WindowText()
 		if want := frozen[model.Slug()]; got != want {
 			t.Fatalf("%s now reads %q, it read %q", model.Slug(), got, want)
@@ -233,44 +233,44 @@ func TestTheShippedWiresResolveTheModelsTheyResolvedBefore(t *testing.T) {
 }
 
 func TestCodexAutoReviewIsAServedNameRatherThanAModel(t *testing.T) {
-	catalog := shippedCatalog(t)
-	if _, err := catalog.Select("codex-sub/codex-auto-review"); err == nil {
+	library := shippedLibrary(t)
+	if _, err := library.Select("codex-sub/codex-auto-review"); err == nil {
 		t.Fatal("codex-auto-review is still a model")
 	}
-	reconciled := catalog.Reconcile(Served{Subscription: Codex, Pin: "test", IDs: []string{"gpt-5.6-sol", "codex-auto-review"}}, shippedTable(t))
+	reconciled := library.Reconcile(Served{Subscription: Codex, Pin: "test", IDs: []string{"gpt-5.6-sol", "codex-auto-review"}}, shippedTable(t))
 	if len(reconciled.Unknown) != 0 {
-		t.Fatalf("the account serves %v and the catalog cannot account for them", reconciled.Unknown)
+		t.Fatalf("the account serves %v and the library cannot account for them", reconciled.Unknown)
 	}
 }
 
 func TestSelectRefusesAnUnknownModelAndNamesWhatItKnows(t *testing.T) {
-	_, err := shippedCatalog(t).Select("claude-sub/claude-opus-latest")
+	_, err := shippedLibrary(t).Select("claude-sub/claude-opus-latest")
 	var refusal *Refusal
 	if !errors.As(err, &refusal) || refusal.Kind != RefusedUnknown {
 		t.Fatalf("want an unknown refusal, got %v", err)
 	}
 	if !strings.Contains(refusal.Error(), "claude-sub/claude-opus-5") {
-		t.Fatalf("the refusal must name what the catalog knows by slug, got %q", refusal.Error())
+		t.Fatalf("the refusal must name what the library knows by slug, got %q", refusal.Error())
 	}
 }
 
-func TestSelectRefusesAnExcludedModelWithItsCatalogReason(t *testing.T) {
-	_, err := shippedCatalog(t).Select("claude-sub/claude-fable-5-1")
+func TestSelectRefusesAnExcludedModelWithItsLibraryReason(t *testing.T) {
+	_, err := shippedLibrary(t).Select("claude-sub/claude-fable-5-1")
 	var refusal *Refusal
 	if !errors.As(err, &refusal) || refusal.Kind != RefusedExcluded {
 		t.Fatalf("want an exclusion refusal, got %v", err)
 	}
 	if !strings.Contains(refusal.Error(), "not fable or astra for now") {
-		t.Fatalf("the refusal must carry the catalog reason, got %q", refusal.Error())
+		t.Fatalf("the refusal must carry the library reason, got %q", refusal.Error())
 	}
 }
 
 func TestSubscriptionsCarryTheQuotaWindowsAndTheModelsDoNot(t *testing.T) {
-	catalog := shippedCatalog(t)
-	if len(catalog.Subscriptions) != 2 {
-		t.Fatalf("want the claude and codex subscriptions, got %+v", catalog.Subscriptions)
+	library := shippedLibrary(t)
+	if len(library.Subscriptions) != 2 {
+		t.Fatalf("want the claude and codex subscriptions, got %+v", library.Subscriptions)
 	}
-	for _, spec := range catalog.Subscriptions {
+	for _, spec := range library.Subscriptions {
 		if len(spec.Windows) == 0 || spec.Wire == "" || !spec.Provider.valid() {
 			t.Fatalf("%s is missing a fact: %+v", spec.ID, spec)
 		}

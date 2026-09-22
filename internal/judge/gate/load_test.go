@@ -6,12 +6,12 @@ import (
 	"strings"
 	"testing"
 
-	shipped "tofu/catalog"
 	"tofu/internal/judge/question"
+	shipped "tofu/library"
 )
 
 func toolGateRulePath() string {
-	return filepath.Join("..", "..", "..", "catalog", "general", "rules", "tool_gate@1.yaml")
+	return filepath.Join("..", "..", "..", "library", "general", "rules", "tool_gate@1.yaml")
 }
 
 const projectToolGateRule = `name: tool_gate
@@ -32,7 +32,7 @@ thresholds:
 
 func shippedQuestionSet(t *testing.T) question.Set {
 	t.Helper()
-	path, err := filepath.Abs(filepath.Join("..", "..", "..", "catalog", "questions", "tool_gate@1.yaml"))
+	path, err := filepath.Abs(filepath.Join("..", "..", "..", "library", "questions", "tool_gate@1.yaml"))
 	if err != nil {
 		t.Fatalf("absolute question path: %v", err)
 	}
@@ -46,14 +46,14 @@ func shippedQuestionSet(t *testing.T) question.Set {
 func projectRuleDir(t *testing.T) (string, string) {
 	t.Helper()
 	root := t.TempDir()
-	dir := filepath.Join(root, "catalog", "general", "rules")
+	dir := filepath.Join(root, "library", "general", "rules")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatalf("making %s: %v", dir, err)
 	}
 	return root, filepath.Join(dir, "tool_gate@1.yaml")
 }
 
-func TestLoadPointReadsTheEmbeddedRuleWhenTheProjectHasNoCatalog(t *testing.T) {
+func TestLoadPointReadsTheEmbeddedRuleWhenTheProjectHasNoLibrary(t *testing.T) {
 	set := shippedQuestionSet(t)
 	t.Chdir(t.TempDir())
 	r, origin, err := LoadPoint(shipped.Files(), "tool_gate@1", set)
@@ -66,7 +66,7 @@ func TestLoadPointReadsTheEmbeddedRuleWhenTheProjectHasNoCatalog(t *testing.T) {
 	if r.Name != "tool_gate" || r.Thresholds.RiskAskAt != 1.5 {
 		t.Fatalf("name = %q risk_ask_at = %v, want tool_gate and 1.5", r.Name, r.Thresholds.RiskAskAt)
 	}
-	if r.File != "catalog/general/rules/tool_gate@1.yaml" {
+	if r.File != "library/general/rules/tool_gate@1.yaml" {
 		t.Fatalf("file = %q, want the embedded name", r.File)
 	}
 }

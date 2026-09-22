@@ -6,15 +6,15 @@ import (
 	"strings"
 	"testing"
 
-	"tofu/catalog/questions"
 	"tofu/internal/judge/question"
+	"tofu/library/questions"
 )
 
 const askPoint = "ask@1"
 
 func askLayers(t *testing.T, extra ...question.Layer) []question.Layer {
 	t.Helper()
-	return append([]question.Layer{{Name: "catalog", Origin: "catalog/questions", FS: questions.Files()}}, extra...)
+	return append([]question.Layer{{Name: "library", Origin: "library/questions", FS: questions.Files()}}, extra...)
 }
 
 func TestShippedAskAsksAChoiceAndANoulAndPassesItsOwnLint(t *testing.T) {
@@ -50,7 +50,7 @@ func TestShippedAskAsksAChoiceAndANoulAndPassesItsOwnLint(t *testing.T) {
 	}
 }
 
-func TestAProjectCatalogOverridesTheShippedAskWording(t *testing.T) {
+func TestAProjectLibraryOverridesTheShippedAskWording(t *testing.T) {
 	dir := t.TempDir()
 	override := "name: ask\nquestions_version: 1\nquestions:\n  determined:\n    type: noul\n    instructions: >-\n      the project asks it differently, naming `precedent_exists` itself\n"
 	if err := os.WriteFile(filepath.Join(dir, "ask@1.yaml"), []byte(override), 0o600); err != nil {

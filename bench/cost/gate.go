@@ -8,7 +8,7 @@ import (
 	"tofu/internal/judge/jev"
 )
 
-const gateRuleFile = "catalog/general/rules/tool_gate@1.yaml"
+const gateRuleFile = "library/general/rules/tool_gate@1.yaml"
 
 type Verdict string
 
@@ -19,7 +19,7 @@ const (
 )
 
 func gateRule(root string) (gate.Rule, gate.Resolution, error) {
-	pol, findings, err := gate.LintFile(filepath.Join(root, filepath.FromSlash(gateRuleFile)), filepath.Join(root, "catalog"))
+	pol, findings, err := gate.LintFile(filepath.Join(root, filepath.FromSlash(gateRuleFile)), filepath.Join(root, "library"))
 	if err != nil {
 		return gate.Rule{}, gate.Resolution{}, err
 	}

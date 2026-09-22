@@ -10,7 +10,6 @@ import (
 	"testing"
 	"time"
 
-	shipped "tofu/catalog"
 	"tofu/internal/judge/gate"
 	"tofu/internal/judge/jev"
 	"tofu/internal/judge/ledger"
@@ -18,6 +17,7 @@ import (
 	"tofu/internal/sys"
 	"tofu/internal/transport"
 	"tofu/internal/turn"
+	shipped "tofu/library"
 )
 
 const replayTestRuleRef = "tool_gate@3"
@@ -44,14 +44,14 @@ thresholds:
 `
 
 func replayProjectRulePath() string {
-	return filepath.Join("catalog", "general", "rules", replayTestRuleRef+".yaml")
+	return filepath.Join("library", "general", "rules", replayTestRuleRef+".yaml")
 }
 
 func writeReplayRuleFixture(t *testing.T) gate.Rule {
 	t.Helper()
 	path := replayProjectRulePath()
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		t.Fatalf("mkdir catalog/general/rules: %v", err)
+		t.Fatalf("mkdir library/general/rules: %v", err)
 	}
 	if err := os.WriteFile(path, []byte(replayTestRuleBody), 0o644); err != nil {
 		t.Fatalf("writing rule fixture: %v", err)
@@ -354,13 +354,13 @@ func TestReplayNeedsAPoint(t *testing.T) {
 	}
 }
 
-func TestReplayReadsTheEmbeddedRuleWhenTheProjectHasNoCatalog(t *testing.T) {
+func TestReplayReadsTheEmbeddedRuleWhenTheProjectHasNoLibrary(t *testing.T) {
 	reader, writer := replayTestReader(t)
 	writeReplayFixtureRow(t, writer, shippedReplayRule(t), replayFixtureAnswers(0), "")
 
 	result, err := runReplay(reader, ledger.Filter{Point: "tool_gate"}, map[string]float64{})
 	if err != nil {
-		t.Fatalf("runReplay in a project with no catalog: %v", err)
+		t.Fatalf("runReplay in a project with no library: %v", err)
 	}
 	if result.rescored != 1 {
 		t.Fatalf("rescored=%d, want 1", result.rescored)

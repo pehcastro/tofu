@@ -169,7 +169,7 @@ func runningChildren() []crew.Child {
 			State:  crew.Running,
 			Tokens: 4200,
 		},
-		{Name: "go-rules", Owns: []string{"catalog/**"}, Doing: "handed back", State: crew.HandedBack, Tokens: 900},
+		{Name: "go-rules", Owns: []string{"library/**"}, Doing: "handed back", State: crew.HandedBack, Tokens: 900},
 	}
 }
 

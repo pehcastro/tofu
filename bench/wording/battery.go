@@ -6,8 +6,8 @@ import (
 )
 
 const (
-	setV1Path = "catalog/questions/tool_gate@1.yaml"
-	setV2Path = "catalog/questions/tool_gate@2.yaml"
+	setV1Path = "library/questions/tool_gate@1.yaml"
+	setV2Path = "library/questions/tool_gate@2.yaml"
 )
 
 func loadBattery(path string) ([]jev.Question, error) {

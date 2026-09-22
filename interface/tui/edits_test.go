@@ -58,7 +58,7 @@ func numberedLines(count int) string {
 
 func TestACreatedFileDrawsEveryLineItHoldsAndAgreesWithItsTally(t *testing.T) {
 	app := sessionApp(t, 80, 40)
-	createdFile(app, "w1", "", "catalog/README.md", numberedLines(16))
+	createdFile(app, "w1", "", "library/README.md", numberedLines(16))
 	app.Update(tea.KeyPressMsg{Code: '3', Mod: tea.ModAlt})
 	feed := ansi.Strip(app.View().Content)
 	drawn := 0
@@ -93,10 +93,10 @@ func TestAFileTooLargeToDrawWholeSaysHowManyLinesItHas(t *testing.T) {
 func TestEveryRowNamesTheAgentTheVerbAndThePath(t *testing.T) {
 	app := sessionApp(t, 100, 40)
 	edited(app, "e1", "go-dev", gatePath, gateDiff)
-	createdFile(app, "w1", "", "catalog/README.md", "one\ntwo\n")
+	createdFile(app, "w1", "", "library/README.md", "one\ntwo\n")
 	app.Update(tea.KeyPressMsg{Code: '3', Mod: tea.ModAlt})
 	feed := ansi.Strip(app.View().Content)
-	for _, want := range []string{"go-dev edited " + gatePath, "tofu created catalog/README.md"} {
+	for _, want := range []string{"go-dev edited " + gatePath, "tofu created library/README.md"} {
 		if !strings.Contains(feed, want) {
 			t.Errorf("the feed does not name who did what with %q\n%s", want, feed)
 		}

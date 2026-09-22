@@ -27,21 +27,21 @@ func checkVerb(args []string, out, errOut io.Writer) int {
 		return checkFail(errOut, err)
 	}
 
-	catalogDir, err := sys.CatalogDir()
+	libraryDir, err := sys.LibraryDir()
 	if err != nil {
 		return checkFail(errOut, err)
 	}
 	rulePath := ""
-	isDir, err := sys.IsDir(catalogDir)
+	isDir, err := sys.IsDir(libraryDir)
 	if err != nil {
 		return checkFail(errOut, err)
 	}
 	if isDir {
-		found, err := gate.FindRule(os.DirFS(catalogDir), runGatePoint)
+		found, err := gate.FindRule(os.DirFS(libraryDir), runGatePoint)
 		if err != nil {
 			return checkFail(errOut, err)
 		}
-		rulePath = sys.Join(catalogDir, filepath.FromSlash(found))
+		rulePath = sys.Join(libraryDir, filepath.FromSlash(found))
 	}
 
 	key, err := jev.Key(".env")
@@ -91,7 +91,7 @@ func runCheck(ctx context.Context, client *jev.Client, rulePath, command string)
 	if err != nil {
 		return ledger.Row{}, err
 	}
-	set, err := resolveCatalog(runGatePoint)
+	set, err := resolveLibrary(runGatePoint)
 	if err != nil {
 		return ledger.Row{}, err
 	}

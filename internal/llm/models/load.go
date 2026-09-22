@@ -31,7 +31,7 @@ func Layers(shipped fs.FS) ([]Layer, error) {
 		return nil, err
 	}
 	return []Layer{
-		{Name: "catalog", Origin: "catalog", FS: shipped},
+		{Name: "library", Origin: "library", FS: shipped},
 		{Name: "global", Origin: home, FS: os.DirFS(home)},
 		{Name: "project", Origin: project, FS: os.DirFS(project)},
 	}, nil
@@ -50,14 +50,14 @@ func (b Broken) Error() string {
 	return b.File + ": " + b.Field + ": " + b.Why
 }
 
-type BrokenCatalog struct{ Refused []Broken }
+type BrokenLibrary struct{ Refused []Broken }
 
-func (b *BrokenCatalog) Error() string {
+func (b *BrokenLibrary) Error() string {
 	said := make([]string, 0, len(b.Refused))
 	for _, one := range b.Refused {
 		said = append(said, one.Error())
 	}
-	return fmt.Sprintf("the catalog refuses %d of its files: %s", len(said), strings.Join(said, "; "))
+	return fmt.Sprintf("the library refuses %d of its files: %s", len(said), strings.Join(said, "; "))
 }
 
 type sheet struct {
@@ -137,7 +137,7 @@ func allowedFields(kind string) map[string]bool {
 	panic("models: no contract for " + kind)
 }
 
-func Load(layers []Layer) (Catalog, error) {
+func Load(layers []Layer) (Library, error) {
 	var refused []Broken
 	subscriptions, models, roles := newMerged(), newMerged(), newMerged()
 	subscriptionFields := allowedFields(subscriptionsDir)
@@ -149,7 +149,7 @@ func Load(layers []Layer) (Catalog, error) {
 		refused = append(refused, readFlat(layer, rolesDir, "a role is one yaml file named after the role", roleFields, roles)...)
 	}
 
-	catalog := Catalog{}
+	library := Library{}
 	known := map[Subscription]SubscriptionSpec{}
 	for _, id := range subscriptions.order {
 		spec, bad := buildSubscription(id, subscriptions.sheets[id])
@@ -158,7 +158,7 @@ func Load(layers []Layer) (Catalog, error) {
 			continue
 		}
 		known[spec.ID] = spec
-		catalog.Subscriptions = append(catalog.Subscriptions, spec)
+		library.Subscriptions = append(library.Subscriptions, spec)
 	}
 	for _, slug := range models.order {
 		model, bad := buildModel(slug, models.sheets[slug], known)
@@ -166,29 +166,29 @@ func Load(layers []Layer) (Catalog, error) {
 			refused = append(refused, *bad)
 			continue
 		}
-		catalog.Models = append(catalog.Models, model)
+		library.Models = append(library.Models, model)
 	}
-	sort.Slice(catalog.Subscriptions, func(i, j int) bool {
-		return catalog.Subscriptions[i].ID < catalog.Subscriptions[j].ID
+	sort.Slice(library.Subscriptions, func(i, j int) bool {
+		return library.Subscriptions[i].ID < library.Subscriptions[j].ID
 	})
-	sort.Slice(catalog.Models, func(i, j int) bool {
-		return catalog.Models[i].Slug() < catalog.Models[j].Slug()
+	sort.Slice(library.Models, func(i, j int) bool {
+		return library.Models[i].Slug() < library.Models[j].Slug()
 	})
-	refused = append(refused, catalog.defaults()...)
+	refused = append(refused, library.defaults()...)
 	for _, name := range roles.order {
-		role, bad := buildRole(name, roles.sheets[name], catalog)
+		role, bad := buildRole(name, roles.sheets[name], library)
 		if bad != nil {
 			refused = append(refused, *bad)
 			continue
 		}
-		catalog.Roles = append(catalog.Roles, role)
+		library.Roles = append(library.Roles, role)
 	}
-	sort.Slice(catalog.Roles, func(i, j int) bool { return catalog.Roles[i].ID < catalog.Roles[j].ID })
-	catalog.Broken = refused
+	sort.Slice(library.Roles, func(i, j int) bool { return library.Roles[i].ID < library.Roles[j].ID })
+	library.Broken = refused
 	if len(refused) == 0 {
-		return catalog, nil
+		return library, nil
 	}
-	return catalog, &BrokenCatalog{Refused: refused}
+	return library, &BrokenLibrary{Refused: refused}
 }
 
 func readFlat(layer Layer, dir, why string, allowed map[string]bool, into *merged) []Broken {
@@ -218,7 +218,7 @@ func readModels(layer Layer, allowed map[string]bool, into *merged) []Broken {
 		if !provider.IsDir() {
 			refused = append(refused, Broken{
 				File: modelsDir + "/" + provider.Name(),
-				Why:  "catalog/models holds one directory per provider and nothing else, and a model is provider/name",
+				Why:  "library/models holds one directory per provider and nothing else, and a model is provider/name",
 			})
 			continue
 		}
@@ -299,7 +299,7 @@ func buildModel(slug string, from *sheet, known map[Subscription]SubscriptionSpe
 	if model.Subscription != "" {
 		spec, carried := known[model.Subscription]
 		if !carried {
-			return model, &Broken{File: from.file, Field: "subscription", Why: fmt.Sprintf("no subscription in the catalog is called %q", model.Subscription)}
+			return model, &Broken{File: from.file, Field: "subscription", Why: fmt.Sprintf("no subscription in the library is called %q", model.Subscription)}
 		}
 		if model.Provider != spec.Provider {
 			return model, &Broken{File: from.file, Why: fmt.Sprintf("the %s subscription is served by %s, so this model is filed under the wrong vendor", spec.ID, spec.Provider)}
@@ -322,7 +322,7 @@ func buildModel(slug string, from *sheet, known map[Subscription]SubscriptionSpe
 	return model, nil
 }
 
-func (c Catalog) defaults() []Broken {
+func (c Library) defaults() []Broken {
 	var refused []Broken
 	chosen := map[Subscription]string{}
 	served := map[Subscription]bool{}

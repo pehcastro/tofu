@@ -39,14 +39,14 @@ func readShippedFile(t *testing.T, elem ...string) string {
 func writeJudgeRuleFixture(t *testing.T, ruleBody, questionsBody, mode string) {
 	t.Helper()
 	ruleBody = strings.Replace(ruleBody, "mode: shadow", "mode: "+mode, 1)
-	ruleDir := filepath.Join("catalog", "general", "rules")
+	ruleDir := filepath.Join("library", "general", "rules")
 	if err := os.MkdirAll(ruleDir, 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
 	if err := os.WriteFile(filepath.Join(ruleDir, "tool_gate@1.yaml"), []byte(ruleBody), 0o644); err != nil {
 		t.Fatalf("writing the rule fixture: %v", err)
 	}
-	questionsDir := filepath.Join("catalog", "questions")
+	questionsDir := filepath.Join("library", "questions")
 	if err := os.MkdirAll(questionsDir, 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
@@ -57,11 +57,11 @@ func writeJudgeRuleFixture(t *testing.T, ruleBody, questionsBody, mode string) {
 
 func TestJudgeExitCodeFollowsResolvedModeNotVerdictAlone(t *testing.T) {
 	dir := t.TempDir()
-	ruleBody := readShippedFile(t, "catalog", "general", "rules", "tool_gate@1.yaml")
-	questionsBody := readShippedFile(t, "catalog", "questions", "tool_gate@1.yaml")
-	set, err := resolveCatalog("tool_gate@1")
+	ruleBody := readShippedFile(t, "library", "general", "rules", "tool_gate@1.yaml")
+	questionsBody := readShippedFile(t, "library", "questions", "tool_gate@1.yaml")
+	set, err := resolveLibrary("tool_gate@1")
 	if err != nil {
-		t.Fatalf("resolveCatalog: %v", err)
+		t.Fatalf("resolveLibrary: %v", err)
 	}
 	t.Chdir(dir)
 	writeJudgeRuleFixture(t, ruleBody, questionsBody, "enforced")
@@ -99,11 +99,11 @@ func TestJudgeExitCodeFollowsResolvedModeNotVerdictAlone(t *testing.T) {
 
 func TestJudgeRowRecordsResolvedModeNotDeclaredMode(t *testing.T) {
 	dir := t.TempDir()
-	ruleBody := readShippedFile(t, "catalog", "general", "rules", "tool_gate@1.yaml")
-	questionsBody := readShippedFile(t, "catalog", "questions", "tool_gate@1.yaml")
-	set, err := resolveCatalog("tool_gate@1")
+	ruleBody := readShippedFile(t, "library", "general", "rules", "tool_gate@1.yaml")
+	questionsBody := readShippedFile(t, "library", "questions", "tool_gate@1.yaml")
+	set, err := resolveLibrary("tool_gate@1")
 	if err != nil {
-		t.Fatalf("resolveCatalog: %v", err)
+		t.Fatalf("resolveLibrary: %v", err)
 	}
 	t.Chdir(dir)
 	writeJudgeRuleFixture(t, ruleBody, questionsBody, "enforced")
@@ -154,11 +154,11 @@ func TestJudgeRowRecordsResolvedModeNotDeclaredMode(t *testing.T) {
 
 func TestJudgeRowCarriesTheSentenceResolveReturned(t *testing.T) {
 	dir := t.TempDir()
-	ruleBody := readShippedFile(t, "catalog", "general", "rules", "tool_gate@1.yaml")
-	questionsBody := readShippedFile(t, "catalog", "questions", "tool_gate@1.yaml")
-	set, err := resolveCatalog("tool_gate@1")
+	ruleBody := readShippedFile(t, "library", "general", "rules", "tool_gate@1.yaml")
+	questionsBody := readShippedFile(t, "library", "questions", "tool_gate@1.yaml")
+	set, err := resolveLibrary("tool_gate@1")
 	if err != nil {
-		t.Fatalf("resolveCatalog: %v", err)
+		t.Fatalf("resolveLibrary: %v", err)
 	}
 	t.Chdir(dir)
 	writeJudgeRuleFixture(t, ruleBody, questionsBody, "enforced")
@@ -259,7 +259,7 @@ func TestJudgeRejectsMalformedJSON(t *testing.T) {
 
 func TestJudgeRejectsMissingState(t *testing.T) {
 	var out, errOut bytes.Buffer
-	code := judgeVerb(nil, strings.NewReader(`{"catalog":"tool_gate@1"}`), &out, &errOut)
+	code := judgeVerb(nil, strings.NewReader(`{"library":"tool_gate@1"}`), &out, &errOut)
 	if code != exitUsage {
 		t.Fatalf("exit = %d, want %d", code, exitUsage)
 	}
@@ -271,7 +271,7 @@ func TestJudgeRejectsMissingState(t *testing.T) {
 func TestJudgeDryRunNeedsNoKey(t *testing.T) {
 	t.Setenv("OPENROUTER_KEY", "")
 	t.Chdir(t.TempDir())
-	body := `{"state":{"tool":"bash","input":{"command":"ls -la"}},"catalog":"tool_gate@1"}`
+	body := `{"state":{"tool":"bash","input":{"command":"ls -la"}},"library":"tool_gate@1"}`
 	var out, errOut bytes.Buffer
 	code := judgeVerb([]string{"--dry-run"}, strings.NewReader(body), &out, &errOut)
 	if code != exitOK {
@@ -288,7 +288,7 @@ func TestJudgeDryRunNeedsNoKey(t *testing.T) {
 func TestJudgeExitsTwoWhenTheKeyIsMissing(t *testing.T) {
 	t.Setenv("OPENROUTER_KEY", "")
 	t.Chdir(t.TempDir())
-	body := `{"state":{"tool":"bash","input":{"command":"ls -la"}},"catalog":"tool_gate@1"}`
+	body := `{"state":{"tool":"bash","input":{"command":"ls -la"}},"library":"tool_gate@1"}`
 	var out, errOut bytes.Buffer
 	code := judgeVerb(nil, strings.NewReader(body), &out, &errOut)
 	if code != exitUsage {
@@ -304,7 +304,7 @@ func TestJudgeExitsTwoWhenTheKeyIsMissing(t *testing.T) {
 
 func TestJudgeLintFindsNothingOnTheShippedSet(t *testing.T) {
 	var out, errOut bytes.Buffer
-	fixture := filepath.Join("..", "..", "catalog", "questions", "tool_gate@1.yaml")
+	fixture := filepath.Join("..", "..", "library", "questions", "tool_gate@1.yaml")
 	code := judgeVerb([]string{"--lint", fixture}, nil, &out, &errOut)
 	if code != exitOK {
 		t.Fatalf("exit = %d, want %d, stdout %s stderr %s", code, exitOK, out.String(), errOut.String())
@@ -343,7 +343,7 @@ func chdirRepoRoot(t *testing.T) {
 func TestJudgeRuleBareNameIsRefused(t *testing.T) {
 	t.Setenv("OPENROUTER_KEY", "")
 	chdirRepoRoot(t)
-	body := `{"state":{"tool":"bash","input":{"command":"ls -la"}},"catalog":"tool_gate@1","rule":"tool_gate"}`
+	body := `{"state":{"tool":"bash","input":{"command":"ls -la"}},"library":"tool_gate@1","rule":"tool_gate"}`
 	var out, errOut bytes.Buffer
 	code := judgeVerb(nil, strings.NewReader(body), &out, &errOut)
 	if code != exitUsage {
@@ -357,7 +357,7 @@ func TestJudgeRuleBareNameIsRefused(t *testing.T) {
 func TestJudgeRuleVersionMismatchIsRefusedBeforeAnyCall(t *testing.T) {
 	t.Setenv("OPENROUTER_KEY", "")
 	chdirRepoRoot(t)
-	body := `{"state":{"tool":"bash","input":{"command":"ls -la"}},"catalog":"tool_gate@2","rule":"tool_gate@1"}`
+	body := `{"state":{"tool":"bash","input":{"command":"ls -la"}},"library":"tool_gate@2","rule":"tool_gate@1"}`
 	var out, errOut bytes.Buffer
 	code := judgeVerb(nil, strings.NewReader(body), &out, &errOut)
 	if code != exitUsage {
@@ -409,9 +409,9 @@ func TestNoRuleNamedGetsNoVerdict(t *testing.T) {
 	}
 }
 
-func TestCatalogResolveRefusesABareNameWithTwoVersions(t *testing.T) {
+func TestLibraryResolveRefusesABareNameWithTwoVersions(t *testing.T) {
 	var out, errOut bytes.Buffer
-	code := catalogVerb([]string{"resolve", "tool_gate"}, &out, &errOut)
+	code := libraryVerb([]string{"resolve", "tool_gate"}, &out, &errOut)
 	if code != exitUsage {
 		t.Fatalf("exit = %d, want %d, stdout %s", code, exitUsage, out.String())
 	}
@@ -420,9 +420,9 @@ func TestCatalogResolveRefusesABareNameWithTwoVersions(t *testing.T) {
 	}
 }
 
-func TestCatalogResolvePrintsEveryFieldAndItsOrigin(t *testing.T) {
+func TestLibraryResolvePrintsEveryFieldAndItsOrigin(t *testing.T) {
 	var out, errOut bytes.Buffer
-	code := catalogVerb([]string{"resolve", "tool_gate@1"}, &out, &errOut)
+	code := libraryVerb([]string{"resolve", "tool_gate@1"}, &out, &errOut)
 	if code != exitOK {
 		t.Fatalf("exit = %d, want %d, stderr %s", code, exitOK, errOut.String())
 	}

@@ -64,7 +64,7 @@ func lintQuestion(out *[]Finding, r Rule, set question.Set, field, name string, 
 	}
 }
 
-func LintFile(rulePath, catalogDir string) (Rule, []Finding, error) {
+func LintFile(rulePath, libraryDir string) (Rule, []Finding, error) {
 	r, err := Load(rulePath)
 	if err != nil {
 		return Rule{}, nil, err
@@ -72,7 +72,7 @@ func LintFile(rulePath, catalogDir string) (Rule, []Finding, error) {
 	if r.Schema != SchemaGate {
 		return r, nil, nil
 	}
-	questionsPath := filepath.Join(catalogDir, "questions", fmt.Sprintf("%s@%d.yaml", r.Questions, r.QuestionsVersion))
+	questionsPath := filepath.Join(libraryDir, "questions", fmt.Sprintf("%s@%d.yaml", r.Questions, r.QuestionsVersion))
 	set, err := question.Load(questionsPath)
 	if err != nil {
 		return r, nil, err

@@ -188,15 +188,15 @@ func blockingQuestion(row ledger.Row) string {
 	if row.Reason == nil || !row.Reason.Blocked || row.Policy == "" {
 		return ""
 	}
-	catalog, err := sys.CatalogDir()
+	library, err := sys.LibraryDir()
 	if err != nil {
 		return ""
 	}
-	found, err := gate.FindRule(os.DirFS(catalog), fmt.Sprintf("%s@%d", row.Policy, row.PolicyVersion))
+	found, err := gate.FindRule(os.DirFS(library), fmt.Sprintf("%s@%d", row.Policy, row.PolicyVersion))
 	if err != nil || found == "" {
 		return ""
 	}
-	pol, err := gate.Load(filepath.Join(catalog, filepath.FromSlash(found)))
+	pol, err := gate.Load(filepath.Join(library, filepath.FromSlash(found)))
 	if err != nil {
 		return ""
 	}

@@ -14,7 +14,7 @@ import (
 	"tofu/internal/widget"
 )
 
-const wrappedNote = "the gate reads the policy in catalog/policy/shell.yaml before it reaches " +
+const wrappedNote = "the gate reads the policy in library/policy/shell.yaml before it reaches " +
 	"the wire, and the wire declares its own limits rather than the caller guessing them"
 
 var (

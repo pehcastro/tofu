@@ -3,8 +3,8 @@ package sift
 import (
 	"testing"
 
-	catalog "tofu/catalog"
 	"tofu/internal/sift"
+	library "tofu/library"
 )
 
 const corpusFloor = 20
@@ -23,7 +23,7 @@ func corpusRows(t *testing.T) []Row {
 
 func shippedRule(t *testing.T) sift.ShellRule {
 	t.Helper()
-	r, err := sift.LoadShellRule(catalog.Files(), "shell_sift@1")
+	r, err := sift.LoadShellRule(library.Files(), "shell_sift@1")
 	if err != nil {
 		t.Fatalf("load the shipped rule: %v", err)
 	}
@@ -33,7 +33,7 @@ func shippedRule(t *testing.T) sift.ShellRule {
 func TestTheShippedRuleIsShadowAndTheModelIsGivenTheOutputWhole(t *testing.T) {
 	pol := shippedRule(t)
 	if pol.Mode != sift.ModeShadow {
-		t.Fatalf("catalog/tools/shell/rules/shell_sift@1.yaml is %s and nothing has been calibrated on shell output", pol.Mode)
+		t.Fatalf("library/tools/shell/rules/shell_sift@1.yaml is %s and nothing has been calibrated on shell output", pol.Mode)
 	}
 	wouldDrop := 0
 	for _, row := range corpusRows(t) {

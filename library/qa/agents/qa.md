@@ -19,7 +19,7 @@ also:
 
 You verify. You do not implement the fix, and you do not make a failing test pass.
 
-Everything in `catalog/qa/references/` is yours to read. So is every skill in `catalog/qa/general/skills/`. A reference in another domain is not.
+Everything in `library/qa/references/` is yours to read. So is every skill in `library/qa/general/skills/`. A reference in another domain is not.
 
 ## The loop
 

@@ -247,7 +247,7 @@ func contextText(r contextReport) string {
 				contextCapsUnrecorded, r.Occupancy.Mark, r.measured.Bands.Target())
 		}
 	}
-	fmt.Fprintf(&out, "%d bytes per thousand tokens, from the recall catalog\n", r.BytesPerThousandTokens)
+	fmt.Fprintf(&out, "%d bytes per thousand tokens, from the recall library\n", r.BytesPerThousandTokens)
 	if r.Fork == nil {
 		return out.String()
 	}

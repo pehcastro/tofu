@@ -258,7 +258,7 @@ func TestATurnCallsRulesCheckThroughTheToolInATreeThatIsNotThisRepository(t *tes
 		t.Fatalf("the result does not name the rule set that ran: %q", results)
 	}
 	if strings.Contains(results, rulesInTheProject) {
-		t.Fatalf("a tree with no catalog was told the project's rules ran: %q", results)
+		t.Fatalf("a tree with no library was told the project's rules ran: %q", results)
 	}
 	if !strings.Contains(results, "em_dash") {
 		t.Fatalf("the shipped em dash rule did not fire: %q", results)
@@ -297,7 +297,7 @@ func TestTheJudgeVerbSendsTheRequestShapeTheVerbReads(t *testing.T) {
 		t.Fatalf("running the judge verb: %v", err)
 	}
 	t.Logf("result: %s", strings.TrimSpace(result.Content))
-	if !strings.Contains(result.Content, `stdin "{\"state\":\"49 pass 0 fail\",\"catalog\":\"stop_check@1\"}"`) {
+	if !strings.Contains(result.Content, `stdin "{\"state\":\"49 pass 0 fail\",\"library\":\"stop_check@1\"}"`) {
 		t.Fatalf("the verb did not send the shape tofu judge reads: %q", result.Content)
 	}
 }

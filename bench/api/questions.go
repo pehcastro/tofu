@@ -3,13 +3,13 @@ package api
 import (
 	"fmt"
 
-	catalogquestions "tofu/catalog/questions"
 	"tofu/internal/judge/jev"
 	"tofu/internal/judge/question"
+	libraryquestions "tofu/library/questions"
 )
 
 func GateBattery() ([]jev.Question, int, error) {
-	layers, err := question.DefaultLayers(catalogquestions.Files())
+	layers, err := question.DefaultLayers(libraryquestions.Files())
 	if err != nil {
 		return nil, 0, err
 	}

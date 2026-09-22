@@ -257,7 +257,7 @@ func chosenFor(t *testing.T, args ...string) models.Model {
 	return selected
 }
 
-func TestRunDefaultsToTheSubscriptionAndTheCatalogsAnthropicDefault(t *testing.T) {
+func TestRunDefaultsToTheSubscriptionAndTheAnthropicDefaultInTheLibrary(t *testing.T) {
 	opts, err := parseRunArgs([]string{"--dir", t.TempDir(), "a task"})
 	if err != nil {
 		t.Fatalf("parseRunArgs returned an error: %v", err)
@@ -270,17 +270,17 @@ func TestRunDefaultsToTheSubscriptionAndTheCatalogsAnthropicDefault(t *testing.T
 		t.Fatalf("chooseModel returned an error: %v", err)
 	}
 	if selected.Use != models.UseDefault || selected.Provider != models.Anthropic {
-		t.Fatalf("the default has to come from the catalog, got %+v", selected)
+		t.Fatalf("the default has to come from the library, got %+v", selected)
 	}
 	if selected.WindowText() == "" {
 		t.Fatalf("the chosen model names no window, so the row cannot say what it spends: %+v", selected)
 	}
 }
 
-func TestRunDefaultsToTheCatalogsCodexDefault(t *testing.T) {
+func TestRunDefaultsToTheCodexDefaultInTheLibrary(t *testing.T) {
 	selected := chosenFor(t, "--wire", "codex")
 	if selected.Subscription != models.Codex || selected.Use != models.UseDefault {
-		t.Fatalf("--wire codex has to take the catalog codex default, got %+v", selected)
+		t.Fatalf("--wire codex has to take the library codex default, got %+v", selected)
 	}
 }
 
@@ -419,7 +419,7 @@ func TestDryRunOnTheSubscriptionCarriesTheBillingHeaderAndThePrefixedTools(t *te
 		t.Fatalf("the printed request is not the anthropic body: %v", err)
 	}
 	if want := chosenFor(t).ID; body.Model != want {
-		t.Fatalf("the dry run model is %q, want the catalog default %q", body.Model, want)
+		t.Fatalf("the dry run model is %q, want the library default %q", body.Model, want)
 	}
 	if len(body.System) < 2 || !strings.HasPrefix(body.System[0].Text, "x-anthropic-billing-header:") {
 		t.Fatalf("the oauth request must open with the billing block, got %+v", body.System)
@@ -550,8 +550,8 @@ func TestTheParentTurnRowNamesTheChildItSpawnedAndCarriesItsRowAndCost(t *testin
 
 func TestRunRecordsADenyAuthorityCannotRelaxAndStillRunsTheStep(t *testing.T) {
 	dir := t.TempDir()
-	ruleBody := readShippedFile(t, "catalog", "general", "rules", "tool_gate@1.yaml")
-	questionsBody := readShippedFile(t, "catalog", "questions", "tool_gate@1.yaml")
+	ruleBody := readShippedFile(t, "library", "general", "rules", "tool_gate@1.yaml")
+	questionsBody := readShippedFile(t, "library", "questions", "tool_gate@1.yaml")
 	t.Chdir(dir)
 	writeJudgeRuleFixture(t, ruleBody, questionsBody, "shadow")
 
@@ -639,7 +639,7 @@ func TestRunRecordsADenyAuthorityCannotRelaxAndStillRunsTheStep(t *testing.T) {
 	t.Logf("tofu why --json %s: %s", call.GateDecisionID, strings.TrimSpace(whyOut.String()))
 }
 
-func TestRunRefusesAnExcludedModelWithTheCatalogsOwnWords(t *testing.T) {
+func TestRunRefusesAnExcludedModelWithTheWordsInTheLibrary(t *testing.T) {
 	var out, errOut bytes.Buffer
 	const excluded = "claude-sub/claude-fable-5-1"
 	code := runVerb([]string{"--dir", t.TempDir(), "--model", excluded, "a task"}, &out, &errOut)
@@ -648,7 +648,7 @@ func TestRunRefusesAnExcludedModelWithTheCatalogsOwnWords(t *testing.T) {
 	}
 	t.Logf("tofu run --model %s\n%s", excluded, errOut.String())
 	if !strings.Contains(errOut.String(), "not fable or astra for now") {
-		t.Fatalf("the refusal does not carry the catalog reason: %q", errOut.String())
+		t.Fatalf("the refusal does not carry the library reason: %q", errOut.String())
 	}
 }
 
@@ -675,11 +675,11 @@ func TestRunRefusesAnUnknownModelBeforeItOpensACredential(t *testing.T) {
 		t.Fatalf("expected the credential-less run to exit %d, got %d", exitUsage, code)
 	}
 	if !strings.Contains(errOut.String(), "credential") {
-		t.Fatalf("a catalog model has to reach the credential, so the refusal above proves nothing: %q", errOut.String())
+		t.Fatalf("a library model has to reach the credential, so the refusal above proves nothing: %q", errOut.String())
 	}
 }
 
-func TestCodexDryRunIsTheCodexBodyOnTheCatalogDefault(t *testing.T) {
+func TestCodexDryRunIsTheCodexBodyOnTheLibraryDefault(t *testing.T) {
 	var out, errOut bytes.Buffer
 	if code := runVerb([]string{"--dir", t.TempDir(), "--wire", "codex", "--dry-run", "write hello.txt"}, &out, &errOut); code != exitOK {
 		t.Fatalf("expected exit %d, got %d (stderr %q)", exitOK, code, errOut.String())

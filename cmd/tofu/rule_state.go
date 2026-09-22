@@ -8,37 +8,37 @@ import (
 	"strings"
 	"time"
 
-	shipped "tofu/catalog"
-	"tofu/catalog/questions"
 	"tofu/internal/judge/gate"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/judge/question"
 	"tofu/internal/sys"
+	shipped "tofu/library"
+	"tofu/library/questions"
 )
 
-func readCatalog() (doctorCatalog, []doctorRule) {
+func readLibrary() (doctorLibrary, []doctorRule) {
 	dir, refs, err := ruleRefs()
 	if err != nil {
-		return doctorCatalog{Dir: dir, Unreadable: err.Error()}, nil
+		return doctorLibrary{Dir: dir, Unreadable: err.Error()}, nil
 	}
 	layers, err := question.DefaultLayers(questions.Files())
 	if err != nil {
-		return doctorCatalog{Dir: dir, Unreadable: err.Error()}, nil
+		return doctorLibrary{Dir: dir, Unreadable: err.Error()}, nil
 	}
-	catalog := doctorCatalog{Dir: dir, Points: len(refs)}
+	library := doctorLibrary{Dir: dir, Points: len(refs)}
 	points := make([]doctorRule, 0, len(refs))
 	for _, ref := range refs {
 		point := rulePoint(ref, layers)
 		if point.Origin == string(gate.OriginProject) {
-			catalog.FromProject++
+			library.FromProject++
 		}
 		points = append(points, point)
 	}
-	return catalog, points
+	return library, points
 }
 
 func ruleRefs() (string, []string, error) {
-	dir, err := sys.CatalogDir()
+	dir, err := sys.LibraryDir()
 	if err != nil {
 		return "", nil, err
 	}

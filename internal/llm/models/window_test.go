@@ -84,13 +84,13 @@ func TestTheAnthropicListReportsNoWindowAndTheProxyShapeDoes(t *testing.T) {
 }
 
 func TestThePublishedTableAnswersBeforeTheAccountDoes(t *testing.T) {
-	catalog, registry := shippedCatalog(t), shippedTable(t)
+	library, registry := shippedLibrary(t), shippedTable(t)
 	served := servedFrom(t, Codex, "codex-models.json")
 	if served.Windows["gpt-5.6-sol"] == registry.Window("openai/gpt-5.6-sol") {
 		t.Fatal("the account and the table agree on the codex default, so this proves no order")
 	}
 
-	listed, err := catalog.Select("codex-sub/gpt-5.6-sol")
+	listed, err := library.Select("codex-sub/gpt-5.6-sol")
 	if err != nil {
 		t.Fatalf("selecting the codex default: %v", err)
 	}
@@ -110,11 +110,11 @@ func TestThePublishedTableAnswersBeforeTheAccountDoes(t *testing.T) {
 }
 
 func TestEveryWindowTypedByHandNowComesFromThePublishedTable(t *testing.T) {
-	catalog, registry := shippedCatalog(t), shippedTable(t)
+	library, registry := shippedLibrary(t), shippedTable(t)
 	for slug, byHand := range windowsTheModelFilesCarriedByHand() {
-		model, found := catalog.Resolve(slug)
+		model, found := library.Resolve(slug)
 		if !found {
-			t.Fatalf("%s left the catalog with its window", slug)
+			t.Fatalf("%s left the library with its window", slug)
 		}
 		want := byHand
 		if published, corrected := windowsThePublishedTableCorrects()[slug]; corrected {
@@ -131,7 +131,7 @@ func TestEveryWindowTypedByHandNowComesFromThePublishedTable(t *testing.T) {
 }
 
 func TestTheTableIsJoinedOnTheVendorFormAndTheSlugStaysThePayerForm(t *testing.T) {
-	catalog, err := Load([]Layer{layerOf("catalog", withSubscriptions(oneFile(
+	library, err := Load([]Layer{layerOf("library", withSubscriptions(oneFile(
 		"models/openai/gpt-5.6-sol.yaml", "subscription: codex\nuse: default\n")))})
 	if err != nil {
 		t.Fatalf("loading: %v", err)
@@ -142,7 +142,7 @@ func TestTheTableIsJoinedOnTheVendorFormAndTheSlugStaysThePayerForm(t *testing.T
 	if err != nil {
 		t.Fatalf("parsing: %v", err)
 	}
-	model, found := catalog.Resolve("codex-sub/gpt-5.6-sol")
+	model, found := library.Resolve("codex-sub/gpt-5.6-sol")
 	if !found || model.Slug() != "codex-sub/gpt-5.6-sol" || model.VendorSlug() != "openai/gpt-5.6-sol" {
 		t.Fatalf("the payer form and the vendor form are not both spelled out: %+v", model)
 	}
@@ -151,14 +151,14 @@ func TestTheTableIsJoinedOnTheVendorFormAndTheSlugStaysThePayerForm(t *testing.T
 	}
 }
 
-func TestADatedCatalogIdStillFindsTheUndatedRegistryEntry(t *testing.T) {
+func TestADatedLibraryIdStillFindsTheUndatedRegistryEntry(t *testing.T) {
 	registry, err := ParseRegistry([]byte(
 		`{"anthropic":{"models":{"claude-haiku-4-5":{"limit":{"context":200000}}}}}`), "a table with no dated alias")
 	if err != nil {
 		t.Fatalf("parsing: %v", err)
 	}
 	if tokens := registry.Window("anthropic/claude-haiku-4-5-20251001"); tokens != 200000 {
-		t.Fatalf("a dated catalog id resolved to %d tokens against a table that lists claude-haiku-4-5", tokens)
+		t.Fatalf("a dated library id resolved to %d tokens against a table that lists claude-haiku-4-5", tokens)
 	}
 	if tokens := registry.Window("anthropic/claude-haiku-4-5-2025100x"); tokens != 0 {
 		t.Fatalf("a suffix that is not a date was cut off anyway and resolved to %d tokens", tokens)
@@ -166,9 +166,9 @@ func TestADatedCatalogIdStillFindsTheUndatedRegistryEntry(t *testing.T) {
 }
 
 func TestEveryModelTheAccountCanSendTakesAWindowFromTheTable(t *testing.T) {
-	catalog, registry := shippedCatalog(t), shippedTable(t)
+	library, registry := shippedLibrary(t), shippedTable(t)
 	answered := 0
-	for _, model := range catalog.Models {
+	for _, model := range library.Models {
 		tokens, source := WindowFor(model, registry, Served{})
 		if tokens > 0 {
 			answered++
@@ -178,14 +178,14 @@ func TestEveryModelTheAccountCanSendTakesAWindowFromTheTable(t *testing.T) {
 		}
 		t.Logf("%-40s %8d %s", model.Slug(), tokens, source)
 	}
-	if answered == len(catalog.Models) {
+	if answered == len(library.Models) {
 		t.Fatalf("all %d models have a window, and the case worth watching is the one that has none", answered)
 	}
-	t.Logf("%d of %d models the catalog ships take a window from %s", answered, len(catalog.Models), registry.From)
+	t.Logf("%d of %d models the library ships take a window from %s", answered, len(library.Models), registry.From)
 }
 
 func TestReconcileNamesAWindowThePublishedTableDoesNotMatch(t *testing.T) {
-	lines := shippedCatalog(t).Reconcile(servedFrom(t, Codex, "codex-models.json"), shippedTable(t)).Lines()
+	lines := shippedLibrary(t).Reconcile(servedFrom(t, Codex, "codex-models.json"), shippedTable(t)).Lines()
 	last := lines[len(lines)-1]
 	for _, want := range []string{"codex-sub/gpt-5.6-sol 272000", "codex-sub/gpt-6-astra 272000", "codex-sub/gpt-5.5 272000"} {
 		if !strings.Contains(last, want) {
@@ -196,7 +196,7 @@ func TestReconcileNamesAWindowThePublishedTableDoesNotMatch(t *testing.T) {
 }
 
 func TestAModelFileCannotCarryAContextWindowAtAll(t *testing.T) {
-	_, err := Load([]Layer{layerOf("catalog", withSubscriptions(oneFile(
+	_, err := Load([]Layer{layerOf("library", withSubscriptions(oneFile(
 		"models/openai/gpt-5.6-sol.yaml", "subscription: codex\nuse: default\ncontext_tokens: 400000\n")))})
 	if err == nil || !strings.Contains(err.Error(), "context_tokens: unknown field") {
 		t.Fatalf("a local file still carries an upstream fact, got %v", err)

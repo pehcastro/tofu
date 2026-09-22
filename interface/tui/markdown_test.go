@@ -111,10 +111,10 @@ func TestARealRecordedAnswerRendersHeadingsBulletsAndInlineCode(t *testing.T) {
 	if !strings.Contains(plain, "What it is") {
 		t.Errorf("the first heading's text is missing\n%s", plain)
 	}
-	if strings.Contains(plain, "catalog/  :") || strings.Contains(plain, "catalog/ :") {
+	if strings.Contains(plain, "library/  :") || strings.Contains(plain, "library/ :") {
 		t.Errorf("a bullet reads as a mangled fragment\n%s", plain)
 	}
-	if !strings.Contains(plain, "catalog/") {
+	if !strings.Contains(plain, "library/") {
 		t.Errorf("a nested bullet's code span is missing\n%s", plain)
 	}
 	if strings.Contains(plain, "`develop`") {

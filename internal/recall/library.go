@@ -10,7 +10,7 @@ import (
 )
 
 //go:embed data
-var catalog embed.FS
+var library embed.FS
 
 type Config struct {
 	ElideAboveBytes        int
@@ -34,7 +34,7 @@ func (c Config) MessageTokens(text string) int {
 }
 
 func LoadConfig() (Config, error) {
-	data, err := catalog.ReadFile("data/elide.yaml")
+	data, err := library.ReadFile("data/elide.yaml")
 	if err != nil {
 		return Config{}, err
 	}
@@ -50,12 +50,12 @@ func numbersByName(data []byte) (map[string]int, error) {
 		}
 		key, value, ok := strings.Cut(line, ":")
 		if !ok {
-			return nil, fmt.Errorf("recall: catalog line %q has no key", raw)
+			return nil, fmt.Errorf("recall: library line %q has no key", raw)
 		}
 		key = strings.TrimSpace(key)
 		n, err := strconv.Atoi(strings.TrimSpace(value))
 		if err != nil {
-			return nil, fmt.Errorf("recall: catalog %q: %w", key, err)
+			return nil, fmt.Errorf("recall: library %q: %w", key, err)
 		}
 		fields[key] = n
 	}
@@ -75,7 +75,7 @@ func ParseConfig(data []byte) (Config, error) {
 		CompactFloorBytes:      fields["compact_floor_bytes"],
 	}
 	if cfg.ElideAboveBytes <= 0 {
-		return Config{}, fmt.Errorf("recall: elide catalog needs a positive elide_above_bytes")
+		return Config{}, fmt.Errorf("recall: elide library needs a positive elide_above_bytes")
 	}
 	if cfg.BytesPerThousandTokens <= 0 {
 		cfg.BytesPerThousandTokens = conservativeBytesPerThousandTokens

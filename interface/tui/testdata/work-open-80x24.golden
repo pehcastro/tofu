@@ -3,7 +3,7 @@
 [38;5;252m⟩ bash rg toolgate internal  2.2 KB  #c8[m                                        
 [38;5;44m  out   31 lines, 2.2 KB[m                                                        
                                                                                 
-[38;5;252m⟩ read catalog/questions/tool_gate.yaml  1.7 KB  #c9[m                            
+[38;5;252m⟩ read library/questions/tool_gate.yaml  1.7 KB  #c9[m                            
 [38;5;44m  out   58 lines, 1.7 KB[m                                                        
                                                                                 
 [38;5;252m⟩ bash go test ./internal/point/...  380 bytes  #c10[m                            
@@ -13,7 +13,7 @@
 [38;5;44m  out   172 lines, 5.3 KB[m                                                       
                                                                                 
 [38;5;252m⟩ bash for d in internal/* interface/* cmd/* +3 more  64 bytes  #c12[m            
-[38;5;240m  args  cd /home/dev/tofu; for d in internal/* interface/* cmd/* catalog/*; do[m  
+[38;5;240m  args  cd /home/dev/tofu; for d in internal/* interface/* cmd/* library/*; do[m  
 [38;5;240m  args  n=$(find "$d" -name '*.go' | wc -l); echo "$d $n"; done[m                 
 [38;5;44m  out   14 lines, 64 bytes[m                                                      
                                                                                 

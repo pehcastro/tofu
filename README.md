@@ -80,7 +80,7 @@ Every verb, with one line each:
 ./tofu help
 ```
 
-What the rule catalog holds in this project:
+What the rule library holds in this project:
 
 ```
 ./tofu rules list
@@ -114,5 +114,5 @@ the report says so and the judgment stays off.
 
 `CHANGELOG.md`, kept by hand. It says what changed for someone
 driving the binary: the verbs, their flags, the exit codes, and the
-catalog, ledger and policy schemas. It never goes to 1.0.0, so a
+library, ledger and policy schemas. It never goes to 1.0.0, so a
 minor bump can break any of that.

@@ -7,11 +7,11 @@ import (
 	"sort"
 	"strings"
 
-	shipped "tofu/catalog"
-	"tofu/catalog/questions"
 	"tofu/internal/judge/gate"
 	"tofu/internal/judge/jev"
 	"tofu/internal/judge/question"
+	shipped "tofu/library"
+	"tofu/library/questions"
 )
 
 type inlineOption struct {
@@ -38,18 +38,18 @@ type battery struct {
 
 func resolveQuestions(input judgeInput) (battery, error) {
 	switch {
-	case input.Catalog != "" && len(input.Questions) > 0:
-		return battery{}, errors.New("the request names both a catalog battery and inline questions")
-	case input.Catalog != "":
-		return resolveCatalog(input.Catalog)
+	case input.Library != "" && len(input.Questions) > 0:
+		return battery{}, errors.New("the request names both a library battery and inline questions")
+	case input.Library != "":
+		return resolveLibrary(input.Library)
 	case len(input.Questions) > 0:
 		return resolveInline(input.Questions)
 	default:
-		return battery{}, errors.New("the request names neither a catalog battery nor questions")
+		return battery{}, errors.New("the request names neither a library battery nor questions")
 	}
 }
 
-func resolveCatalog(ref string) (battery, error) {
+func resolveLibrary(ref string) (battery, error) {
 	layers, err := question.DefaultLayers(questions.Files())
 	if err != nil {
 		return battery{}, err

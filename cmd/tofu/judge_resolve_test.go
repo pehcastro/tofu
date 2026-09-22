@@ -10,22 +10,22 @@ import (
 func toolGateBatteryInAScratchProject(t *testing.T) battery {
 	t.Helper()
 	t.Chdir(t.TempDir())
-	set, err := resolveCatalog(replayTestRuleRef)
+	set, err := resolveLibrary(replayTestRuleRef)
 	if err != nil {
-		t.Fatalf("resolveCatalog: %v", err)
+		t.Fatalf("resolveLibrary: %v", err)
 	}
 	return set
 }
 
-func TestResolveRuleReadsTheEmbeddedRuleWhenTheProjectHasNoCatalog(t *testing.T) {
+func TestResolveRuleReadsTheEmbeddedRuleWhenTheProjectHasNoLibrary(t *testing.T) {
 	pol, err := resolveRule(replayTestRuleRef, toolGateBatteryInAScratchProject(t))
 	if err != nil {
-		t.Fatalf("resolveRule in a project with no catalog: %v", err)
+		t.Fatalf("resolveRule in a project with no library: %v", err)
 	}
 	if pol.Name != "tool_gate" || pol.RuleVersion != 3 {
 		t.Fatalf("resolved %s@%d, want tool_gate@3", pol.Name, pol.RuleVersion)
 	}
-	if pol.File != "catalog/general/rules/"+replayTestRuleRef+".yaml" {
+	if pol.File != "library/general/rules/"+replayTestRuleRef+".yaml" {
 		t.Fatalf("rule file = %q, want the one in the binary", pol.File)
 	}
 }
@@ -34,7 +34,7 @@ func TestResolveRulePrefersTheProjectRule(t *testing.T) {
 	set := toolGateBatteryInAScratchProject(t)
 	path := replayProjectRulePath()
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		t.Fatalf("mkdir catalog/general/rules: %v", err)
+		t.Fatalf("mkdir library/general/rules: %v", err)
 	}
 	if err := os.WriteFile(path, []byte(replayTestRuleBody), 0o644); err != nil {
 		t.Fatalf("writing the project rule: %v", err)

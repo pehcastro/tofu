@@ -3,9 +3,9 @@ package main
 import (
 	"io/fs"
 
-	shipped "tofu/catalog"
 	"tofu/internal/llm/models"
 	"tofu/internal/turn"
+	shipped "tofu/library"
 )
 
 const proxySheet = "tools/shell/proxy.yaml"

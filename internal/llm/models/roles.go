@@ -63,7 +63,7 @@ func (b Binding) Says() string {
 
 type Bindings map[RoleID]Binding
 
-func (c Catalog) Bind(fallback Subscription) (Bindings, error) {
+func (c Library) Bind(fallback Subscription) (Bindings, error) {
 	declared := make(map[RoleID]Role, len(c.Roles))
 	for _, role := range c.Roles {
 		declared[role.ID] = role
@@ -86,7 +86,7 @@ func (c Catalog) Bind(fallback Subscription) (Bindings, error) {
 	return bound, nil
 }
 
-func buildRole(name string, from *sheet, catalog Catalog) (Role, *Broken) {
+func buildRole(name string, from *sheet, library Library) (Role, *Broken) {
 	id := RoleID(name)
 	if !id.valid() {
 		return Role{}, &Broken{File: from.file,
@@ -96,7 +96,7 @@ func buildRole(name string, from *sheet, catalog Catalog) (Role, *Broken) {
 	if slug == "" {
 		return Role{}, &Broken{File: from.file, Field: "model", Why: "a role binds one model, written provider/name"}
 	}
-	model, err := catalog.Select(slug)
+	model, err := library.Select(slug)
 	if err != nil {
 		return Role{}, &Broken{File: from.file, Field: "model", Why: err.Error()}
 	}

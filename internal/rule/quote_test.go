@@ -59,7 +59,7 @@ func TestTheQuotedExceptionSkipsAFenceAnIndentedBlockAndASpanAndKeepsProseAndABl
 }
 
 func TestTheShippedEmDashRuleDeclaresShadowAndTheQuotedException(t *testing.T) {
-	r, err := Load(filepath.Join("..", "..", "catalog", "general", "rules", "em_dash@1.yaml"))
+	r, err := Load(filepath.Join("..", "..", "library", "general", "rules", "em_dash@1.yaml"))
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}

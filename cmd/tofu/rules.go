@@ -10,26 +10,26 @@ import (
 	"strings"
 	"time"
 
-	shipped "tofu/catalog"
 	"tofu/internal/rule"
 	"tofu/internal/sys"
+	shipped "tofu/library"
 )
 
 const (
-	catalogRoot         = "catalog"
+	libraryRoot         = "library"
 	rulesFireSuffix     = ".rules.jsonl"
 	rulesFromTheBinary  = "the binary"
 	rulesFromTheProject = "the project"
 )
 
 type rulesListOpts struct {
-	catalog string
+	library string
 	json    bool
 }
 
 type rulesCheckOpts struct {
 	path    string
-	catalog string
+	library string
 	json    bool
 }
 
@@ -69,7 +69,7 @@ type ruleListReport struct {
 
 func rulesVerb(args []string, out, errOut io.Writer) int {
 	if len(args) == 0 {
-		return rulesFail(errOut, errors.New("usage: tofu rules list|check [path] [--catalog dir] [--json]"))
+		return rulesFail(errOut, errors.New("usage: tofu rules list|check [path] [--library dir] [--json]"))
 	}
 	switch args[0] {
 	case "list":
@@ -91,19 +91,19 @@ func loadRules(override string) ([]rule.Rule, string, error) {
 		rules, err := rule.LoadDir(override)
 		return rules, override, err
 	}
-	catalogDir, err := sys.CatalogDir()
+	libraryDir, err := sys.LibraryDir()
 	if err != nil {
 		return nil, "", err
 	}
-	isDir, err := sys.IsDir(catalogDir)
+	isDir, err := sys.IsDir(libraryDir)
 	if err != nil {
 		return nil, "", err
 	}
 	if isDir {
-		rules, err := rule.LoadDir(catalogDir)
+		rules, err := rule.LoadDir(libraryDir)
 		return rules, rulesFromTheProject, err
 	}
-	rules, err := rule.LoadFS(shipped.Files(), catalogRoot)
+	rules, err := rule.LoadFS(shipped.Files(), libraryRoot)
 	return rules, rulesFromTheBinary, err
 }
 
@@ -112,7 +112,7 @@ func rulesListVerb(args []string, out, errOut io.Writer) int {
 	if err != nil {
 		return rulesFail(errOut, err)
 	}
-	rules, origin, err := loadRules(opts.catalog)
+	rules, origin, err := loadRules(opts.library)
 	if err != nil {
 		return rulesFail(errOut, err)
 	}
@@ -144,7 +144,7 @@ func rulesCheckVerb(args []string, out, errOut io.Writer) int {
 	if err != nil {
 		return rulesFail(errOut, err)
 	}
-	rules, origin, err := loadRules(opts.catalog)
+	rules, origin, err := loadRules(opts.library)
 	if err != nil {
 		return rulesFail(errOut, err)
 	}
@@ -235,47 +235,47 @@ func printRulesCheckJSON(out io.Writer, origin string, fires []rule.Fire, blocke
 	return err
 }
 
-func parseRulesFlags(args []string) (catalog string, asJSON bool, rest []string, err error) {
+func parseRulesFlags(args []string) (library string, asJSON bool, rest []string, err error) {
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
 		switch {
 		case arg == "--json":
 			asJSON = true
-		case arg == "--catalog":
+		case arg == "--library":
 			i++
 			if i >= len(args) {
-				return "", false, nil, errors.New("--catalog needs a directory")
+				return "", false, nil, errors.New("--library needs a directory")
 			}
-			catalog = args[i]
+			library = args[i]
 		case strings.HasPrefix(arg, "-"):
 			return "", false, nil, fmt.Errorf("unknown argument %q", arg)
 		default:
 			rest = append(rest, arg)
 		}
 	}
-	return catalog, asJSON, rest, nil
+	return library, asJSON, rest, nil
 }
 
 func parseRulesListArgs(args []string) (rulesListOpts, error) {
-	catalog, asJSON, rest, err := parseRulesFlags(args)
+	library, asJSON, rest, err := parseRulesFlags(args)
 	if err != nil {
 		return rulesListOpts{}, err
 	}
 	if len(rest) > 0 {
 		return rulesListOpts{}, fmt.Errorf("unknown argument %q", rest[0])
 	}
-	return rulesListOpts{catalog: catalog, json: asJSON}, nil
+	return rulesListOpts{library: library, json: asJSON}, nil
 }
 
 func parseRulesCheckArgs(args []string) (rulesCheckOpts, error) {
-	catalog, asJSON, rest, err := parseRulesFlags(args)
+	library, asJSON, rest, err := parseRulesFlags(args)
 	if err != nil {
 		return rulesCheckOpts{}, err
 	}
 	if len(rest) > 1 {
 		return rulesCheckOpts{}, fmt.Errorf("tofu rules check takes one path, got %q and %q", rest[0], rest[1])
 	}
-	opts := rulesCheckOpts{catalog: catalog, json: asJSON}
+	opts := rulesCheckOpts{library: library, json: asJSON}
 	if len(rest) == 1 {
 		opts.path = rest[0]
 	}

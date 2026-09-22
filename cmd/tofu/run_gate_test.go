@@ -7,12 +7,12 @@ import (
 	"path/filepath"
 	"testing"
 
-	catalog "tofu/catalog"
 	"tofu/internal/judge/gate"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/judge/state"
 	"tofu/internal/sys"
 	"tofu/internal/turn"
+	library "tofu/library"
 )
 
 const gateFixtureBuild = "typesafe/jev-1.13-20260917"
@@ -22,11 +22,11 @@ const gateFixtureThresholds = "  risk_ask_at: 1.5\n  risk_deny_at: 2.5\n" +
 
 func writeGateRuleWithThresholds(t *testing.T, thresholds string) string {
 	t.Helper()
-	catalogDir, err := sys.CatalogDir()
+	libraryDir, err := sys.LibraryDir()
 	if err != nil {
-		t.Fatalf("catalog dir: %v", err)
+		t.Fatalf("library dir: %v", err)
 	}
-	path := filepath.Join(catalogDir, "general", "rules", runGatePoint+".yaml")
+	path := filepath.Join(libraryDir, "general", "rules", runGatePoint+".yaml")
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
@@ -167,10 +167,10 @@ func TestADecisionMadeNowCarriesTheFingerprintOfTheCallItJudged(t *testing.T) {
 	t.Logf("row %s carries %s", row.ID, row.Fingerprint)
 }
 
-func TestTheGateReadsTheRuleInTheBinaryWhenTheProjectHasNoCatalog(t *testing.T) {
+func TestTheGateReadsTheRuleInTheBinaryWhenTheProjectHasNoLibrary(t *testing.T) {
 	dir := chdirTemp(t)
 	t.Setenv(envVarName(), fakeSecret("gate"))
-	shipped, err := gate.LoadFS(catalog.Files(), runGatePoint)
+	shipped, err := gate.LoadFS(library.Files(), runGatePoint)
 	if err != nil {
 		t.Fatalf("gate.LoadFS: %v", err)
 	}
