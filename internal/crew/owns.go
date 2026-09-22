@@ -2,8 +2,13 @@ package crew
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
+
+	gopath "path"
 )
 
 type UnparseableGlobError struct {
@@ -12,6 +17,23 @@ type UnparseableGlobError struct {
 
 func (e UnparseableGlobError) Error() string {
 	return fmt.Sprintf("owns glob %q has a character tofu's matcher does not understand", e.Glob)
+}
+
+type UnparseablePathError struct {
+	Path string
+}
+
+func (e UnparseablePathError) Error() string {
+	return fmt.Sprintf("%q is not a path this check can read, so it is refused rather than decided on", e.Path)
+}
+
+type EscapingPathError struct {
+	Path     string
+	Resolved string
+}
+
+func (e EscapingPathError) Error() string {
+	return fmt.Sprintf("%q is a link to %q, outside the tree this agent works in: refuse it, do not follow it", e.Path, e.Resolved)
 }
 
 type DeniedError struct {
@@ -34,6 +56,34 @@ func validGlob(glob string) error {
 		return UnparseableGlobError{Glob: glob}
 	}
 	return nil
+}
+
+func targetPath(path string) (string, error) {
+	if strings.TrimSpace(path) == "" || strings.ContainsAny(path, "*?\x00") {
+		return "", UnparseablePathError{Path: path}
+	}
+	link, statErr := os.Lstat(path)
+	if statErr != nil || link.Mode()&os.ModeSymlink == 0 {
+		named := normalizePath(path)
+		if slices.Contains(strings.Split(named, "/"), "..") {
+			return "", UnparseablePathError{Path: path}
+		}
+		return gopath.Clean(named), nil
+	}
+	tree, treeErr := os.Getwd()
+	if treeErr == nil {
+		tree, treeErr = filepath.EvalSymlinks(tree)
+	}
+	resolved, linkErr := filepath.EvalSymlinks(path)
+	if treeErr != nil || linkErr != nil {
+		return "", UnparseablePathError{Path: path}
+	}
+	inside, err := filepath.Rel(tree, resolved)
+	reached := normalizePath(inside)
+	if err != nil || reached == ".." || strings.HasPrefix(reached, "../") {
+		return "", EscapingPathError{Path: path, Resolved: resolved}
+	}
+	return reached, nil
 }
 
 func Allow(path string, owns []string) error {
@@ -121,7 +171,10 @@ func overlap(a, b string) bool {
 }
 
 func Matches(path string, owns []string) (bool, error) {
-	target := normalizePath(path)
+	target, err := targetPath(path)
+	if err != nil {
+		return false, err
+	}
 	for _, glob := range owns {
 		if err := validGlob(glob); err != nil {
 			return false, err

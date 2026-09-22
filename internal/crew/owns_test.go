@@ -2,6 +2,8 @@ package crew
 
 import (
 	"errors"
+	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -97,5 +99,67 @@ func TestMatchesRefusesAnUnparseableGlobRatherThanSilentlyNotMatching(t *testing
 	var target UnparseableGlobError
 	if !errors.As(err, &target) {
 		t.Fatalf("Matches returned %v, want an UnparseableGlobError", err)
+	}
+}
+
+func TestMatchesRefusesAPathItCannotReadRatherThanDecidingOnIt(t *testing.T) {
+	for _, path := range []string{"", "   ", "internal/*/owns.go", "internal/crew/../../etc/passwd"} {
+		t.Run(path, func(t *testing.T) {
+			matched, err := Matches(path, []string{"internal/crew/**"})
+			if matched {
+				t.Fatalf("Matches(%q) allowed the write", path)
+			}
+			var target UnparseablePathError
+			if !errors.As(err, &target) {
+				t.Fatalf("Matches(%q) returned %v, want an UnparseablePathError", path, err)
+			}
+		})
+	}
+}
+
+func TestASymlinkWhoseLastComponentLeavesTheTreeIsRefused(t *testing.T) {
+	root, outside := t.TempDir(), t.TempDir()
+	held := filepath.Join(root, "internal", "crew")
+	if err := os.MkdirAll(held, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	secret := filepath.Join(outside, "secret.go")
+	if err := os.WriteFile(secret, []byte("package outside\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(held, "owns.go"), []byte("package crew\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(secret, filepath.Join(held, "borrowed.go")); err != nil {
+		t.Skipf("this host will not create a symlink without elevation, so the escape cannot be built: %v", err)
+	}
+	t.Chdir(root)
+
+	if _, err := Matches("internal/crew/owns.go", []string{"internal/crew/**"}); err != nil {
+		t.Fatalf("a real file inside owns was refused: %v", err)
+	}
+	matched, err := Matches("internal/crew/borrowed.go", []string{"internal/crew/**"})
+	if matched {
+		t.Fatal("a symlink pointing outside the tree was allowed by its own name")
+	}
+	var target EscapingPathError
+	if !errors.As(err, &target) {
+		t.Fatalf("Matches returned %v, want an EscapingPathError", err)
+	}
+}
+
+func TestASubtreeGlobDoesNotMatchASiblingSharingItsPrefix(t *testing.T) {
+	for _, path := range []string{"src-old/main.go", "src-old"} {
+		matched, err := Matches(path, []string{"src/**"})
+		if err != nil {
+			t.Fatalf("Matches(%q) returned error: %v", path, err)
+		}
+		if matched {
+			t.Fatalf("src/** matched %q", path)
+		}
+	}
+	matched, err := Matches("src/main.go", []string{"src/**"})
+	if err != nil || !matched {
+		t.Fatalf("src/** did not match its own child: %v %v", matched, err)
 	}
 }
