@@ -14,6 +14,11 @@ import (
 	"tofu/internal/transport"
 )
 
+const (
+	alphaAccount = "acct-alpha-fabricated"
+	betaAccount  = "acct-beta-fabricated"
+)
+
 type stubCredential struct {
 	token string
 	err   error
@@ -21,6 +26,11 @@ type stubCredential struct {
 
 func (s stubCredential) Access(context.Context) (string, error) {
 	return s.token, s.err
+}
+
+func servingCodexBody(plan string) []byte {
+	return []byte(`{"plan_type":"` + plan + `","rate_limit":{"limit_reached":false,` +
+		`"primary_window":{"used_percent":12,"limit_window_seconds":18000}}}`)
 }
 
 func stubCodexPoller(t *testing.T, handler http.HandlerFunc) *Poller {
@@ -94,10 +104,9 @@ func TestTheCacheAnswersASecondPollInsideTheInterval(t *testing.T) {
 	var hits atomic.Int64
 	poller := stubCodexPoller(t, func(w http.ResponseWriter, _ *http.Request) {
 		hits.Add(1)
-		_, _ = w.Write([]byte(`{"plan_type":"Plus","rate_limit":{"limit_reached":false,` +
-			`"primary_window":{"used_percent":12,"limit_window_seconds":18000}}}`))
+		_, _ = w.Write(servingCodexBody("Plus"))
 	})
-	account := Account{Provider: Codex, Credential: stubCredential{token: "token"}}
+	account := Account{Provider: Codex, AccountID: alphaAccount, Credential: stubCredential{token: "token"}}
 	first, err := poller.Poll(context.Background(), account)
 	if err != nil {
 		t.Fatalf("the first poll failed: %v", err)
@@ -173,5 +182,50 @@ func TestAPollReportsNoAccountIdentifierAndNoToken(t *testing.T) {
 	}
 	if report.Windows[1].ID != "7d" || report.Windows[1].Used.Fraction != 0.425 {
 		t.Fatalf("the second window read as %+v", report.Windows[1])
+	}
+}
+
+func TestOnePollerAnswersEachAccountOnOneProviderFromItsOwnCredential(t *testing.T) {
+	var hits atomic.Int64
+	poller := stubCodexPoller(t, func(w http.ResponseWriter, r *http.Request) {
+		hits.Add(1)
+		plan := "Plus"
+		if r.Header.Get("ChatGPT-Account-Id") == betaAccount {
+			plan = "Pro"
+		}
+		_, _ = w.Write(servingCodexBody(plan))
+	})
+	alpha := Account{Provider: Codex, AccountID: alphaAccount, Credential: stubCredential{token: "token-alpha"}}
+	beta := Account{Provider: Codex, AccountID: betaAccount, Credential: stubCredential{token: "token-beta"}}
+	first, err := poller.Poll(context.Background(), alpha)
+	if err != nil {
+		t.Fatalf("polling the first account: %v", err)
+	}
+	second, err := poller.Poll(context.Background(), beta)
+	if err != nil {
+		t.Fatalf("polling the second account: %v", err)
+	}
+	if first.Plan != "Plus" || second.Plan != "Pro" {
+		t.Fatalf("the two accounts read as %q and %q, so one was shown the other's window", first.Plan, second.Plan)
+	}
+	if hits.Load() != 2 {
+		t.Fatalf("the usage endpoint was called %d times for two accounts, want two", hits.Load())
+	}
+}
+
+func TestAnAccountWithNoIdentityIsPolledEveryTimeAndNeverCached(t *testing.T) {
+	var hits atomic.Int64
+	poller := stubCodexPoller(t, func(w http.ResponseWriter, _ *http.Request) {
+		hits.Add(1)
+		_, _ = w.Write(servingCodexBody("Plus"))
+	})
+	anonymous := Account{Provider: Codex, Credential: stubCredential{token: "token-anonymous"}}
+	for range 2 {
+		if _, err := poller.Poll(context.Background(), anonymous); err != nil {
+			t.Fatalf("polling an account with no identity: %v", err)
+		}
+	}
+	if hits.Load() != 2 {
+		t.Fatalf("an account with no identity was polled %d times, want two, an empty identity cannot name an entry", hits.Load())
 	}
 }

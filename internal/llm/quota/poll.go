@@ -35,8 +35,13 @@ type Poller struct {
 	interval time.Duration
 	urls     map[Provider]string
 	mu       sync.Mutex
-	last     map[Provider]time.Time
-	cached   map[Provider]Report
+	last     map[pollKey]time.Time
+	cached   map[pollKey]Report
+}
+
+type pollKey struct {
+	provider  Provider
+	accountID string
 }
 
 func NewPoller(httpClient *http.Client, now func() time.Time, urls map[Provider]string) (*Poller, error) {
@@ -58,23 +63,27 @@ func NewPoller(httpClient *http.Client, now func() time.Time, urls map[Provider]
 		now:      now,
 		interval: pollMinInterval,
 		urls:     urls,
-		last:     make(map[Provider]time.Time, len(urls)),
-		cached:   make(map[Provider]Report, len(urls)),
+		last:     make(map[pollKey]time.Time, len(urls)),
+		cached:   make(map[pollKey]Report, len(urls)),
 	}, nil
 }
 
 func (p *Poller) Poll(ctx context.Context, account Account) (Report, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	if last, seen := p.last[account.Provider]; seen && p.now().Sub(last) < p.interval {
-		return p.cached[account.Provider], nil
+	cacheable := account.AccountID != ""
+	key := pollKey{provider: account.Provider, accountID: account.AccountID}
+	if last, seen := p.last[key]; seen && cacheable && p.now().Sub(last) < p.interval {
+		return p.cached[key], nil
 	}
 	report, err := p.fetch(ctx, account)
 	if err != nil {
 		return Report{Provider: account.Provider, FetchedAt: p.now()}, err
 	}
-	p.last[account.Provider] = p.now()
-	p.cached[account.Provider] = report
+	if cacheable {
+		p.last[key] = p.now()
+		p.cached[key] = report
+	}
 	return report, nil
 }
 
