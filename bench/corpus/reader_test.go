@@ -3,6 +3,7 @@ package corpus
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -417,7 +418,8 @@ func TestAPlantedHomePathInBudgetSourceDoesNotSurviveTheDirRead(t *testing.T) {
 	}
 }
 
-func TestARecordedRowCarriesRenderedBytesAndTheArtifactHandle(t *testing.T) {
+func firstCallOffDisk(t *testing.T, wanted func(RecordedCall) bool) (where string, found RecordedCall, ok bool) {
+	t.Helper()
 	if _, err := os.Stat(sessionsDir); err != nil {
 		t.Skipf("no %s on this machine: %v", sessionsDir, err)
 	}
@@ -428,16 +430,31 @@ func TestARecordedRowCarriesRenderedBytesAndTheArtifactHandle(t *testing.T) {
 	for _, turn := range walked.Turns {
 		for _, step := range turn.Steps {
 			for _, call := range step.ToolCalls {
-				if call.ResultHandle == "" || call.RenderedBytes == 0 || call.RenderedBytes == call.ResultBytes {
-					continue
+				if wanted(call) {
+					return fmt.Sprintf("%s step %d %s", turn.ID, step.Index, call.Tool), call, true
 				}
-				t.Logf("%s step %d %s: result_bytes %d, rendered_bytes %d, result_handle %s",
-					turn.ID, step.Index, call.Tool, call.ResultBytes, call.RenderedBytes, call.ResultHandle)
-				return
 			}
 		}
 	}
-	t.Fatal("no row off disk carried a rendered byte count that differs from its result byte count together with an artifact handle, so either the reader drops them or the corpus never recorded one")
+	return "", RecordedCall{}, false
+}
+
+func TestARecordedRowCarriesRenderedBytesAndTheArtifactHandle(t *testing.T) {
+	where, call, ok := firstCallOffDisk(t, func(call RecordedCall) bool {
+		return call.ResultHandle != "" && call.RenderedBytes != 0 && call.RenderedBytes != call.ResultBytes
+	})
+	if !ok {
+		t.Fatal("no row off disk carried a rendered byte count that differs from its result byte count together with an artifact handle, so either the reader drops them or the corpus never recorded one")
+	}
+	t.Logf("%s: result_bytes %d, rendered_bytes %d, result_handle %s", where, call.ResultBytes, call.RenderedBytes, call.ResultHandle)
+}
+
+func TestARecordedRowCarriesTheResultHashARerunIsComparedAgainst(t *testing.T) {
+	where, call, ok := firstCallOffDisk(t, func(call RecordedCall) bool { return call.ResultHash != "" })
+	if !ok {
+		t.Fatal("no row off disk carried a result hash, so either the reader drops it or the corpus never recorded one")
+	}
+	t.Logf("%s: result_bytes %d, result_hash %s", where, call.ResultBytes, call.ResultHash)
 }
 
 func TestATurnWithStepsAndNoOutcomeLineIsReadAndSaysItsWallClockIsMissing(t *testing.T) {

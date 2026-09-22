@@ -150,7 +150,7 @@ func benchHarness(out, errOut io.Writer, args []string) int {
 	}
 	meta := harness.RunMeta{
 		Arm: opts.arm, Task: opts.task, Version: opts.version, Run: opts.run,
-		CLIVersion: sys.Version(), Commit: sys.BuildRevision(),
+		CLIVersion: sys.Version(), Commit: sys.BuildRevision(), Setup: plan.Setup,
 	}
 
 	row, gaps := harness.MeasureTofu(session, sources, meta)
@@ -217,6 +217,7 @@ func renderHarnessRow(out io.Writer, row harness.Row, gaps []string, execution h
 	_, _ = fmt.Fprintf(out, "machine: %s. model credential kind: %s. date: %s. commit: %s. cli: %s\n",
 		host, row.CredentialKind, row.Start.Format("2006-01-02"), row.Commit, row.CLIVersion)
 	_, _ = fmt.Fprintf(out, "model: %s. judge wire: %s. judge ledger: %s\n", row.Model, openrouter.Name, ledgerDir)
+	_, _ = fmt.Fprintf(out, "setup %s: %s\n", row.Setup.Name, row.Setup.Line())
 	_, _ = fmt.Fprintf(out, "checklist: %d/%d graded items\n", passed, total)
 	_, _ = fmt.Fprintf(out, "model spend: %s. jev decisions: $%.6f on the openrouter key\n", modelSpend, row.JudgeDollars)
 	_, _ = fmt.Fprintf(out, "wall clock: %d ms. turns: %d. end reason: %s\n",

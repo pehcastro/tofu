@@ -1,0 +1,225 @@
+TOFU-373  does a fork keep the parent's cache
+bench/forkcache, 2026-09-22
+
+
+ANSWER
+
+The first request after a context fork READS cache and writes none. On both recorded
+forks it read the whole cacheable head and paid zero cache write. The other harness's
+failure mode, a new session id forcing a full re-write of a byte-identical prefix, does
+not happen here: a recorded head written by one session was read by two later sessions
+with different ids, so a session id is not part of the key.
+
+An account fork could not be measured. There is no recorded one, and a session header
+as recorded carries no credential identity, so no recorded row can tell an account fork
+from a context fork even if one existed. That a cache is scoped to an account is an
+expectation here and not a measurement.
+
+v7's 110,486 stands on the fork question. It is low for a different reason, named below,
+and that reason is not the fork.
+
+
+CONDITIONS
+
+Corpus        .tofu/sessions, read only. 21 fork pairs found, 0 sessions skipped as
+              unreadable, 2 pairs on a wire that reports a cache write
+Ledger        2,999 rows at .tofu/log, unchanged, nothing here wrote to it
+Wire          anthropic, subscription credential (claude-sub), model claude-opus-5
+Recorded      2026-09-19 and 2026-09-20
+Measured      2026-09-22, Windows 10 Pro 19045, from the pinned copy at
+              bench/forkcache/testdata/forks.jsonl
+Live calls    none. No model call of any kind was made for this report.
+Warm up       none. Nothing was discarded.
+
+
+THE FIELD EVERY NUMBER COMES FROM
+
+first read    cache_read_input_tokens, from the anthropic message_start usage block,
+              parsed at internal/llm/wire/anthropic/stream.go:74, recorded as
+              cache_read_tokens on the step row
+first write   cache_creation_input_tokens, same block, stream.go:75, recorded as
+              cache_write_tokens
+first in      input_tokens, same block, recorded as prompt_tokens
+
+No local hash, digest or byte comparison appears anywhere in this measurement. A digest
+is a local identity and it is not evidence of a hit. Every figure in the table below is
+a field the provider returned.
+
+
+THE TABLE
+
+child                      wire       day         fork kind      kept read kept write  if continued  first in  first read  first write  fate
+turn-18d6f8d9e45f8efc-f2   anthropic  2026-09-20  continuation       40748       3439         44187      1535        9457            0  read
+turn-18d724d865ed9264-f2   anthropic  2026-09-20  continuation       64861       1491         66352     17083        6105            0  read
+
+kept read and kept write are the parent's last billed request. if continued is their sum,
+which is the cached prefix the next request would have presented had the session not
+forked. That column is the off arm: do not fork, carry on. It is the right arm because it
+is exactly what the fork replaces, one more append to the same conversation.
+
+Read straight across: the fork drops 34,730 and 60,247 tokens of cached prefix, and it
+pays nothing to put any of it back. The cacheable head survives the fork whole.
+
+
+WHAT THE 9,457 AND THE 6,105 ARE
+
+They are the head: the system blocks and the tool list, which are the only spans the
+request marks cacheable ahead of the message history, at
+internal/llm/wire/anthropic/request.go:176. The parent of the first pair wrote exactly
+9,457 on its own first request and read it on every request afterwards. The child read
+the same 9,457 under a new session id. The parent of the second pair read 6,105 on its
+own first request, so that head was already cached from an earlier session on the same
+account, and the child read it too.
+
+So the cache key survives a change of session id and survives the end of a session. The
+second pair's head can be traced to the session that paid for it, and it crossed two
+session boundaries that were not forks at all:
+
+  2026-09-20 18:17:47  turn-18d7240c1d7291dc     step 1   read 0      write 6105
+  2026-09-20 18:38:39  turn-18d724d865ed9264     step 1   read 6105   write 0
+  2026-09-20 18:42:16  turn-18d724d865ed9264-f2  step 24  read 6105   write 0
+
+One session wrote the head, an unrelated session 20 minutes 52 seconds later read it,
+and the fork of that session read it again. Nothing about a session id is in the key.
+
+That also puts one number on the expiry v7 says is unmodelled: a head survived 20
+minutes 52 seconds and two session boundaries under the 1h TTL. It is one observation
+and it is not a lifetime curve, but it rules out the five minute case for this head.
+
+
+THE FIRST POST-FORK REQUEST, PRICED
+
+Priced at the cache read rate the bench already uses, a tenth, with fresh at full:
+
+  turn-18d6f8d9e45f8efc-f2   fork 2,481 units   carry on, floor 4,419 units   0.56x
+  turn-18d724d865ed9264-f2   fork 17,694 units  carry on, floor 6,635 units   2.67x
+
+The floor is the cached prefix alone, before the step's own new content, so the
+carry-on arm is understated and the fork's advantage in the first row is larger than
+0.56x shows.
+
+The two rows disagree because the carry differs by a factor of eleven: 1,535 fresh
+tokens against 17,083. The cost of a fork's first request is set by what the carry
+holds, not by a lost cache key. That is the number to watch when TOFU-359 chooses what
+an account fork carries.
+
+
+WHAT THIS DOES TO context-budget.md v7
+
+On the fork question the table stands. The fork arm pays one fresh prefix and no
+re-write, which is what v7 assumed, and the assumption is now measured rather than
+assumed. 110,486 is not low because of a fork.
+
+It is low for a different reason, and this is the correction to make. v7 bills a fresh
+token at 1.0x. On this wire a fresh token is mostly a cache write, and a cache write is
+priced above a plain input token. Measured over all 272 recorded anthropic steps,
+cache_creation_input_tokens is 662,324 of 768,905 fresh tokens, 86.14 percent.
+internal/konst sets SubscriptionCacheTTL to 1h, and a one hour write is the dearer tier.
+
+Applying that share to v7's own fresh and cache read columns:
+
+  arm                  v7 billed   at write 1.25x   at write 2.0x
+  nothing                 153392           162899          191418
+  in place rewrite        242978           276833          378395
+  fork, handles           110486           121098          152934
+  fork, summary           104870           115034          145526
+
+The fork's advantage over doing nothing moves from 28.0 percent to 25.7 percent at the
+five minute rate and to 20.1 percent at the one hour rate we actually set. The ranking
+does not change. The rewrite gets worse, not better.
+
+CAUTION on this block: the token counts are measured, the 86.14 percent is measured, the
+price multipliers are published rates and are not read from any response field. Treat the
+three right-hand columns as arithmetic on a stated assumption, and the v7 column as the
+only measured one.
+
+
+THE ESTIMATOR AGAINST THE PROVIDER
+
+v7 set the rule that a fork is proved by the provider's number and not by ours. Both
+forks carry our own before-figure in the header, so the rule can be checked here:
+
+  turn-18d724d865ed9264   ours 66,162   provider 66,354   0.3 percent under
+  turn-18d6f8d9e45f8efc   ours 57,326   provider 44,189   29.7 percent over
+
+The second row is unexplained. One fork agreeing to 0.3 percent and the other being out
+by nearly a third is not a bound, and the estimator's accuracy is a separate ticket. It
+is recorded here because it was visible and because a threshold in v7's units depends
+on it.
+
+
+THE ACCOUNT FORK, AND WHY IT IS NOT HERE
+
+Counted and named as a skip:
+
+  19 of 21 recorded fork pairs are skipped. They are on the older single-file session
+  format that records no wire, and on that format cache_write_tokens is zero on every
+  row. A zero from a field the wire never filled is a missing field, not a measurement,
+  so those rows are excluded rather than counted as evidence for a read.
+
+  1 test is skipped: TestAnAccountForkIsNotInTheRecordedCorpus. All 21 recorded forks
+  are of kind continuation, which is a context fork. No account fork has ever been
+  recorded, because TOFU-359 is still building one.
+
+Two things block the account case and only one of them is the missing fork:
+
+  1. No recorded account fork exists.
+  2. A session header, as recorded, has no field naming the credential or the account,
+     so two rows either side of an account fork read identically to two rows either
+     side of a context fork.
+
+The second one is already being fixed by somebody else. TOFU-359 has an uncommitted
+Account int64 on session.Header in the working tree today. That is enough to separate
+the two arms once it is written into a record: compare the parent's account with the
+child's. No recorded session carries it yet, so nothing here can use it, and this bench
+deliberately does not couple to a field that is still being edited.
+
+What a live account-fork arm would cost: two requests. One on account A carrying a
+prefix large enough to be worth caching, and one on account B presenting the identical
+prefix, with the cache_read_input_tokens of the second being the whole answer. At the
+head size measured here, roughly 9,000 tokens of system and tools plus a carry, that is
+under 30,000 input tokens across the two calls and a handful of output tokens, on two
+subscriptions rather than a key. It cannot run now: anthropic resets 2026-09-23 06:00
+and codex 2026-09-26. The expected answer is that account B reads zero, because a
+prompt cache belongs to an organisation, and the value of running it is to turn that
+expectation into a number before TOFU-359 designs against it.
+
+
+IF A FORK COULD KEEP ITS PARENT'S KEY
+
+It already keeps the head; keeping the parent's message-history prefix as well would
+require the child's first request to resend the parent's messages byte-identically up to
+a cache breakpoint, which is the thing a fork exists to stop doing.
+
+
+WHAT THE BENCH NEEDS AND CANNOT WRITE
+
+For the orchestrator, one thing, and it is a request on work already in flight:
+
+  internal/session/record.go, the Header struct, TOFU-359's new Account int64. It
+  separates the two fork arms, which is what this bench needs, but an integer does not
+  carry the claude-sub and codex-sub spelling the rest of the tree uses for a source.
+  If the intent is that a person can read which subscription a row spent, the spelling
+  belongs on that field. If it is only an internal identity, say so and this bench will
+  compare it as an opaque number.
+
+  Once it is populated, this measurement gains its second arm at no cost: PairsIn takes
+  the field, and a pair whose parent and child accounts differ is the account fork.
+
+
+COMMANDS RUN
+
+  go build ./bench/... ./internal/recall/...                              exit 0
+  go vet ./bench/forkcache/... ./internal/recall/...                      exit 0
+  go tool golangci-lint run ./bench/forkcache/... ./internal/recall/...   0 issues
+  gofmt -l bench internal                                                 printed nothing
+  go test tofu/bench/forkcache -count=1                                   PASS, 1 skip
+  go test tofu/internal/recall -count=1                                   ok
+
+The full go test ./bench/... was not run. A hook refuses a tree-wide check while other
+tickets hold Go paths in doing/, and three do. The two packages this ticket owns were
+tested and are above.
+
+Both assertions were run inverted first and failed on the real rows before they passed:
+the fate assertion reported read where it demanded written, and the write assertion
+reported a write of 0 where it demanded one above zero.

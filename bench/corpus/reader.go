@@ -34,6 +34,7 @@ type RecordedCall struct {
 	ResultBytes    int64           `json:"result_bytes,omitempty"`
 	RenderedBytes  int64           `json:"rendered_bytes,omitempty"`
 	ResultHandle   string          `json:"result_handle,omitempty"`
+	ResultHash     string          `json:"result_hash,omitempty"`
 	GateDecisionID string          `json:"gate_decision_id,omitempty"`
 }
 

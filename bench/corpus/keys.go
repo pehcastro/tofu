@@ -38,7 +38,6 @@ var DeliberatelyUnread = []UnreadKey{
 	{"step", "fork", "whether this step is where a fork happened; session lineage, see the turn-level fork fields"},
 	{"call", "duration_ms", "how long the call took; no bench point reads it from the corpus yet"},
 	{"call", "gate_verdict", "pointer into the judge ledger, looked up there rather than duplicated here; bench/stopcheck looks up the row by gate_decision_id instead, checked 2026-09-20"},
-	{"call", "result_hash", "used to detect a rerun producing the same result; nothing reads RecordedCall for that today"},
 	{"call", "rendered_bytes", "how much of the result was shown to the model, distinct from result_bytes which is already read"},
 	{"call", "result_handle", "a pointer to an off-record artifact; no bench point reads it from the corpus yet"},
 	{"call", "child_id", "session lineage: a subagent spawned by this call"},
