@@ -30,7 +30,7 @@ func writeEmDashFixture(t *testing.T, dir, name string) {
 	}
 }
 
-const enforcedEmDashRule = "id: em_dash\ndomain: general\nkind: structural\nchecker: em_dash\nmode: enforced\n"
+const enforcedEmDashRule = "id: em_dash\ndomain: general\nkind: structural\nchecker: em_dash\nconcern: output_shape\nmode: enforced\n"
 
 func writeProjectRulesLibrary(t *testing.T, root string) {
 	t.Helper()

@@ -59,8 +59,21 @@ func declared(data []byte, want string) string {
 
 func parseRule(data []byte, path string) (Rule, error) {
 	r := Rule{File: path}
+	var declares declaredTrigger
 	err := scanKV(data, path, func(key, value string, line int) error {
-		return r.setField(key, value, path, line)
+		switch key {
+		case "condition":
+			declares.condition = value
+		case "scope":
+			declares.scope = value
+		case "language":
+			declares.language = value
+		case "task":
+			declares.task = value
+		default:
+			return r.setField(key, value, path, line)
+		}
+		return nil
 	})
 	if err != nil {
 		return Rule{}, err
@@ -74,8 +87,21 @@ func parseRule(data []byte, path string) (Rule, error) {
 	if !r.Kind.valid() {
 		return Rule{}, fmt.Errorf("%s: kind is %q, %q, %q or %q, found %q", path, KindStructural, KindDecision, KindHuman, KindMeasured, r.Kind)
 	}
+	if r.Concern == "" {
+		return Rule{}, fmt.Errorf("%s: rule %q declares no concern, and a concern is one of %s", path, r.ID, concernNames(allConcerns()))
+	}
+	if !r.Concern.valid() {
+		return Rule{}, fmt.Errorf("%s: rule %q declares the concern %q, and a concern is one of %s", path, r.ID, r.Concern, concernNames(allConcerns()))
+	}
 	if !r.ModeDeclared {
 		r.Mode = ModeShadow
+	}
+	r.Trigger, err = newTrigger(declares, path, r.ID)
+	if err != nil {
+		return Rule{}, err
+	}
+	if r.Concern.neverConditional() && !r.Trigger.AlwaysOn() {
+		return Rule{}, fmt.Errorf("%s: rule %q is concern %s and declares a trigger, and %s are never conditional", path, r.ID, r.Concern, concernNames(neverConditionalConcerns()))
 	}
 	if r.Kind == KindMeasured {
 		if r.Checker != "" {
@@ -142,6 +168,8 @@ func (r *Rule) setField(key, value, path string, line int) error {
 		r.ID = value
 	case "kind":
 		r.Kind = Kind(value)
+	case "concern":
+		r.Concern = Concern(value)
 	case "domain":
 		r.Domain = value
 	case "checker":

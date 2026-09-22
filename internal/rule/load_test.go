@@ -9,8 +9,8 @@ import (
 
 func TestLoadFSReadsEveryRuleAndNamesTheDirectoryItActuallySitsIn(t *testing.T) {
 	shipped := fstest.MapFS{
-		"dev/go/rules/comments@1.yaml": {Data: []byte("id: comments\ndomain: dev\nkind: structural\nchecker: comments\n")},
-		"general/rules/em_dash@1.yaml": {Data: []byte("id: em_dash\ndomain: general\nkind: structural\nchecker: em_dash\nmode: enforced\n")},
+		"dev/go/rules/comments@1.yaml": {Data: []byte("id: comments\ndomain: dev\nkind: structural\nchecker: comments\nconcern: code_rules\n")},
+		"general/rules/em_dash@1.yaml": {Data: []byte("id: em_dash\ndomain: general\nkind: structural\nchecker: em_dash\nconcern: output_shape\nmode: enforced\n")},
 		"general/rules/notes.md":       {Data: []byte("not a rule\n")},
 	}
 	rules, err := LoadFS(shipped, "library")
@@ -33,7 +33,7 @@ func TestLoadFSReadsEveryRuleAndNamesTheDirectoryItActuallySitsIn(t *testing.T) 
 
 func TestLoadFSSkipsARuleADecisionPointReads(t *testing.T) {
 	rules, err := LoadFS(fstest.MapFS{
-		"general/rules/em_dash@1.yaml":   {Data: []byte("id: em_dash\ndomain: general\nkind: structural\nchecker: em_dash\n")},
+		"general/rules/em_dash@1.yaml":   {Data: []byte("id: em_dash\ndomain: general\nkind: structural\nchecker: em_dash\nconcern: output_shape\n")},
 		"general/rules/tool_gate@1.yaml": {Data: []byte("name: tool_gate\ndomain: general\nkind: threshold\nrule_version: 1\n")},
 	}, "library")
 	if err != nil {
@@ -85,7 +85,7 @@ func TestLoadDefaultsToShadowWhenModeIsMissing(t *testing.T) {
 }
 
 func TestLayerLetsAProjectRetuneOneShippedRuleTurnAnotherOffAndAddItsOwn(t *testing.T) {
-	off, err := parseRule([]byte("id: test_boundary_cases\ndomain: qa\nkind: structural\nchecker: test_boundary_cases\nmode: off\n"), "someone-elses-project/rules/test_boundary_cases@1.yaml")
+	off, err := parseRule([]byte("id: test_boundary_cases\ndomain: qa\nkind: structural\nchecker: test_boundary_cases\nconcern: code_rules\nmode: off\n"), "someone-elses-project/rules/test_boundary_cases@1.yaml")
 	if err != nil {
 		t.Fatalf("parseRule: %v", err)
 	}
@@ -139,7 +139,7 @@ func TestLoadReadsTheMeasuredQARules(t *testing.T) {
 }
 
 func TestParseRuleRefusesAMeasuredRuleThatDeclaresAChecker(t *testing.T) {
-	_, err := parseRule([]byte("id: flake_disagreement\ndomain: qa\nkind: measured\nmeasurement: bench/testquality/flakerun\nchecker: comments\nsource: s\nevidence: e\n"), "library/qa/general/rules/flake_disagreement@1.yaml")
+	_, err := parseRule([]byte("id: flake_disagreement\ndomain: qa\nkind: measured\nconcern: code_rules\nmeasurement: bench/testquality/flakerun\nchecker: comments\nsource: s\nevidence: e\n"), "library/qa/general/rules/flake_disagreement@1.yaml")
 	if err == nil {
 		t.Fatal("parseRule accepted a measured rule carrying a checker")
 	}
@@ -149,7 +149,7 @@ func TestParseRuleRefusesAMeasuredRuleThatDeclaresAChecker(t *testing.T) {
 }
 
 func TestParseRuleRefusesAStructuralRuleThatDeclaresAMeasurement(t *testing.T) {
-	_, err := parseRule([]byte("id: comments\ndomain: dev\nkind: structural\nchecker: comments\nmeasurement: bench/testquality/flakerun\n"), "library/dev/go/rules/comments@1.yaml")
+	_, err := parseRule([]byte("id: comments\ndomain: dev\nkind: structural\nchecker: comments\nconcern: code_rules\nmeasurement: bench/testquality/flakerun\n"), "library/dev/go/rules/comments@1.yaml")
 	if err == nil {
 		t.Fatal("parseRule accepted a structural rule carrying a measurement")
 	}

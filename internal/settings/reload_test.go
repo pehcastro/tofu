@@ -15,7 +15,7 @@ func TestReloadReReadsRulesFromDiskAndNamesWhatItCannotReload(t *testing.T) {
 			t.Fatalf("write %s: %v", name, err)
 		}
 	}
-	write("one.yaml", "id: one\ndomain: general\nkind: structural\nchecker: alwaysPass\n")
+	write("one.yaml", "id: one\ndomain: general\nkind: structural\nchecker: alwaysPass\nconcern: code_rules\n")
 
 	result, err := Reload(nil, dir)
 	if err != nil {
@@ -25,7 +25,7 @@ func TestReloadReReadsRulesFromDiskAndNamesWhatItCannotReload(t *testing.T) {
 		t.Fatalf("Rules = %d, want 1 before the change on disk", result.Rules)
 	}
 
-	write("two.yaml", "id: two\ndomain: general\nkind: structural\nchecker: alwaysPass\n")
+	write("two.yaml", "id: two\ndomain: general\nkind: structural\nchecker: alwaysPass\nconcern: code_rules\n")
 	result, err = Reload(nil, dir)
 	if err != nil {
 		t.Fatalf("Reload after the change: %v", err)

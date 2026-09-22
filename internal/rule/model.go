@@ -1,5 +1,10 @@
 package rule
 
+import (
+	"slices"
+	"strings"
+)
+
 const (
 	DomainDev     = "dev"
 	DomainQA      = "qa"
@@ -24,6 +29,45 @@ func (k Kind) valid() bool {
 		return true
 	}
 	return false
+}
+
+type Concern string
+
+const (
+	ConcernOutputShape       Concern = "output_shape"
+	ConcernSafety            Concern = "safety"
+	ConcernEnvironment       Concern = "environment"
+	ConcernToolGuidance      Concern = "tool_guidance"
+	ConcernFormatContract    Concern = "format_contract"
+	ConcernCodeRules         Concern = "code_rules"
+	ConcernProcessDiscipline Concern = "process_discipline"
+	ConcernDomainKnowledge   Concern = "domain_knowledge"
+	ConcernTaskShaping       Concern = "task_shaping"
+	ConcernIdentity          Concern = "identity"
+)
+
+func neverConditionalConcerns() []Concern {
+	return []Concern{ConcernOutputShape, ConcernSafety, ConcernEnvironment, ConcernToolGuidance, ConcernFormatContract}
+}
+
+func conditionalConcerns() []Concern {
+	return []Concern{ConcernCodeRules, ConcernProcessDiscipline, ConcernDomainKnowledge, ConcernTaskShaping, ConcernIdentity}
+}
+
+func allConcerns() []Concern {
+	return append(neverConditionalConcerns(), conditionalConcerns()...)
+}
+
+func (c Concern) neverConditional() bool { return slices.Contains(neverConditionalConcerns(), c) }
+
+func (c Concern) valid() bool { return slices.Contains(allConcerns(), c) }
+
+func concernNames(of []Concern) string {
+	names := make([]string, len(of))
+	for i, one := range of {
+		names[i] = string(one)
+	}
+	return strings.Join(names, ", ")
 }
 
 type Mode string
@@ -64,6 +108,7 @@ func (e Exception) valid() bool {
 type Rule struct {
 	ID           string
 	Kind         Kind
+	Concern      Concern
 	Domain       string
 	Checker      string
 	Measurement  string
@@ -72,6 +117,7 @@ type Rule struct {
 	Mode         Mode
 	ModeDeclared bool
 	Except       Exception
+	Trigger      Trigger
 	Notes        string
 	File         string
 }

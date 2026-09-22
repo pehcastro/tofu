@@ -43,7 +43,7 @@ readable form collapses: doctor, models, usage, context, rules.
   replay    re-score ledger rows against changed thresholds, no network
   library   resolve a library entry and show the origin of each field
   lint      run a house-rule check over the tree
-  rules     list or run the rule library
+  rules     list the rule library, run it, or index what fires for a task
   settings  list, get or set a declared setting, global or project
   reload    re-read rules from disk without a restart
 `

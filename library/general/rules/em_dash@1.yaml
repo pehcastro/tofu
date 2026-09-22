@@ -1,6 +1,7 @@
 id: em_dash
 domain: general
 kind: structural
+concern: output_shape
 checker: em_dash
 mode: shadow
 except: quoted

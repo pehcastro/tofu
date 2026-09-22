@@ -69,13 +69,15 @@ type ruleListReport struct {
 
 func rulesVerb(args []string, out, errOut io.Writer) int {
 	if len(args) == 0 {
-		return rulesFail(errOut, errors.New("usage: tofu rules list|check [path] [--library dir] [--json]"))
+		return rulesFail(errOut, errors.New("usage: tofu rules list|check|index [path] [--task kind] [--library dir] [--json]"))
 	}
 	switch args[0] {
 	case "list":
 		return rulesListVerb(args[1:], out, errOut)
 	case "check":
 		return rulesCheckVerb(args[1:], out, errOut)
+	case "index":
+		return rulesIndexVerb(args[1:], out, errOut)
 	default:
 		return rulesFail(errOut, fmt.Errorf("unknown subcommand %q", args[0]))
 	}

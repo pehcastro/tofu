@@ -2,3 +2,4 @@ id: no_mode
 domain: general
 kind: structural
 checker: em_dash
+concern: output_shape

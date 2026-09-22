@@ -1,6 +1,8 @@
 id: test_mock_boundary
 domain: qa
 kind: structural
+concern: code_rules
 checker: test_mock_boundary
 mode: shadow
+scope: "**/*_test.go"
 notes: fires when a test file assigns a package level function variable declared by the package under test, or calls AssertCalled, AssertNotCalled, AssertNumberOfCalls, AssertExpectations, EXPECT or InOrder, which are claims about which internal call happened rather than about what the code produced
