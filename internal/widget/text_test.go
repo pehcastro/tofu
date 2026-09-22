@@ -144,7 +144,7 @@ func TestWrapKeepsEveryLineInsideTheColumn(t *testing.T) {
 		{"", 10, []string{""}},
 		{"press 1 to run", 20, []string{"press 1 to run"}},
 		{"press 1 to run", 8, []string{"press 1", "to run"}},
-		{"press 1 to run", 1, []string{ellipsis, "1", ellipsis, ellipsis}},
+		{"press 1 to run", 1, []string{"p", "r", "e", "s", "s", "1", "t", "o", "r", "u", "n"}},
 		{"one\ntwo", 10, []string{"one", "two"}},
 		{"one\r\ntwo", 10, []string{"one", "two"}},
 		{"one\n\ntwo", 10, []string{"one", "", "two"}},
@@ -165,11 +165,49 @@ func TestWrapKeepsEveryLineInsideTheColumn(t *testing.T) {
 	}
 }
 
-func TestWrapTruncatesAWordWiderThanTheColumnRatherThanBreakingIt(t *testing.T) {
+func TestWrapSplitsAWordWiderThanTheColumnRatherThanElidingIt(t *testing.T) {
 	got := Wrap("run internal/judge/policy/toolgate.go now", 10)
-	want := []string{"run", "internal/…", "now"}
+	want := []string{"run", "internal/j", "udge/polic", "y/toolgate", ".go now"}
 	if !slices.Equal(got, want) {
 		t.Errorf("a word wider than the column wrapped to %q, want %q", got, want)
+	}
+}
+
+func TestWrapNeverLosesAVisibleCell(t *testing.T) {
+	family := joinedEmoji()
+	for _, text := range []string{
+		"run internal/judge/policy/toolgate.go now",
+		"https://example.test/" + strings.Repeat("segment/", 6),
+		"ключ от квартиры где деньги лежат",
+		"日本語です 日本語です",
+		family + " " + family + family + family,
+		"one\ntwo three\n\nfour",
+	} {
+		for width := 1; width <= 12; width++ {
+			lines := Wrap(text, width)
+			cells := 0
+			for _, line := range lines {
+				cells += Cells(line)
+			}
+			joined := strings.Join(lines, "\n")
+			kept := strings.Join(strings.Fields(joined), "")
+			want := strings.Join(strings.Fields(text), "")
+			if kept != want {
+				t.Errorf("Wrap(%q, %d) kept %q, want %q", text, width, kept, want)
+			}
+			if spent := Cells(want) + strings.Count(joined, " "); cells != spent {
+				t.Errorf("Wrap(%q, %d) gave %d cells over %d words plus spaces", text, width, cells, spent)
+			}
+		}
+	}
+}
+
+func TestWrapAtOneColumnSplitsEveryGraphemeAndTerminates(t *testing.T) {
+	family := joinedEmoji()
+	got := Wrap("go 日本語 "+family, 1)
+	want := []string{"g", "o", "日", "本", "語", family}
+	if !slices.Equal(got, want) {
+		t.Errorf("Wrap at one column gave %q, want %q", got, want)
 	}
 }
 

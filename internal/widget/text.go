@@ -76,17 +76,28 @@ func Wrap(text string, width int) []string {
 	for _, paragraph := range strings.Split(strings.ReplaceAll(text, "\r\n", "\n"), "\n") {
 		line := ""
 		for _, word := range strings.Fields(paragraph) {
-			switch {
-			case line == "":
-				line = word
-			case Cells(line)+1+Cells(word) <= width:
-				line += " " + word
-			default:
-				lines = append(lines, Fit(line, width))
-				line = word
+			if line != "" {
+				if Cells(line)+1+Cells(word) <= width {
+					line += " " + word
+					continue
+				}
+				lines = append(lines, line)
 			}
+			for Cells(word) > width {
+				head := ansi.Truncate(word, width, "")
+				if head == "" {
+					head, _ = ansi.FirstGraphemeCluster(word, ansi.GraphemeWidth)
+				}
+				rest := ansi.TruncateLeft(word, Cells(head), "")
+				if rest == "" {
+					break
+				}
+				lines = append(lines, head)
+				word = rest
+			}
+			line = word
 		}
-		lines = append(lines, Fit(line, width))
+		lines = append(lines, line)
 	}
 	return lines
 }
