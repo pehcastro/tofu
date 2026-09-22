@@ -1,0 +1,172 @@
+TOFU-382  the account picker has no arm that turns it off
+bench/picker, 2026-09-22
+
+
+ANSWER
+
+The corpus cannot separate the three arms. There are zero recorded window readings in
+.tofu, over zero distinct accounts, so first usable, round robin and headroom make the
+same choice at every decision point there is, which is none. No number is offered in
+place of the answer.
+
+The reason is structural rather than accidental. Nothing in the tree ever writes a
+window reading to disk. quota.Poller holds a report in a map in memory, the status verb
+prints one and drops it, and no session header, ledger row or state file carries one.
+A corpus for this bench cannot accumulate until something records a reading.
+
+
+CONDITIONS
+
+Corpus        .tofu/log and .tofu/sessions, read only. 404 files, 18,401 rows scanned
+Readings      0 recorded window readings, 0 distinct accounts, 0 skipped for a missing
+              field. A row is a candidate reading when it carries a windows array
+Ledger        2,999 decision rows at .tofu/log, unchanged, nothing here wrote to it
+Machine       Windows 10 Pro 19045
+Measured      2026-09-22
+Live calls    none. No model call, no network, no credential read, no vendor polled
+Warm up       none. Nothing was discarded
+
+
+THE INSTRUMENT'S OWN OUTPUT, OVER THE RECORDED CORPUS
+
+corpus: ../../.tofu/log, ../../.tofu/sessions, read at 2026-09-22 18:40 -03:00
+404 files, 18401 rows, 0 recorded window readings over 0 distinct accounts, 0 skipped
+0 decision points, one per provider and reading time
+
+the cost of a forced move, from ../forkcache/testdata/forks.jsonl, child_first.cache_read
+  turn-18d6f8d9e45f8efc-f2      9457 tokens of fresh prefix
+  turn-18d724d865ed9264-f2      6105 tokens of fresh prefix
+
+the three arms over the recorded readings
+arm               moves    walls        at 9457        at 6105
+first usable        n/a      n/a            n/a            n/a
+round robin         n/a      n/a            n/a            n/a
+headroom            n/a      n/a            n/a            n/a
+
+the corpus cannot separate the three arms. 0 recorded window readings over 0 distinct
+accounts, and an arm only differs from another when two accounts are usable at the same
+decision point.
+what it would take: a recorded window reading per account per poll, written where a
+bench can read it. Nothing in the tree writes one today: the poller caches a report in
+memory and no session, ledger or state row carries it.
+no number is offered in place of the answer.
+
+
+WHAT IT WOULD TAKE
+
+One append-only file, a row per account per poll, carrying the provider, the credential
+row number the status screen already shows, the fetch time, and each window's id, used
+fraction and reset time. No token, no account id, no key: the row number is the only
+identity it needs, and it is already printed on screen.
+
+Two accounts on one provider must be usable at the same decision point for any arm to
+differ from another. One account's windows, however many readings, gives all three arms
+the same answer at every point.
+
+At the recorded poll floor of five minutes, two accounts on claude-sub produce about 576
+readings a day, and a week of ordinary use is enough to score the arms on real spend.
+
+
+THE COST OF A FORCED MOVE, AND WHERE IT COMES FROM
+
+9,457 and 6,105 tokens, the two anthropic rows of TOFU-373's pinned corpus at
+bench/forkcache/testdata/forks.jsonl, field child_first.cache_read, reported in
+bench/forkcache/report-2026-09-22.txt. The instrument reads those two rows rather than
+carrying a transcribed literal, and a test fails if the file stops holding exactly two
+anthropic rows or if either reports a non-positive prefix.
+
+They are kept as two columns and never averaged. A mean of two observations is a guess
+wearing a number's clothes, and the two differ by 55 percent.
+
+A move mid-session costs one fresh prefix. A wall, an account running out with none left
+to move to, is counted separately and is not priced, because what it costs is the end of
+the session rather than a token count.
+
+
+THE ARMS, AND WHY THESE THREE
+
+first usable   the lowest credential row number that is not spent. What tofu did before
+               0.4.9, and the deterministic baseline: no ranking at all
+round robin    rotate to the next usable row number at every decision point, wrapping.
+               The rival's rule, from
+               .local/sources/oh-my-pi-main/packages/ai/src/auth-storage.ts:1834, the
+               only harness of twelve that holds two credentials for one provider. It
+               moves without a reason and never measures the move
+headroom       quota.Pick at internal/llm/quota/pick.go, unmodified. The bench calls the
+               shipped function rather than restating its rule
+
+All three choose from the same usable set, so the comparison is the ranking and not the
+filter. held resets when the provider changes, because an account held for claude-sub is
+not a candidate for codex-sub and a provider boundary is not a move.
+
+
+THE INSTRUMENT DOES WORK, SHOWN ON A FIXTURE
+
+A hand built fixture, six decision points over two accounts, labelled as a fixture and
+never mixed with the recorded corpus. It exists to prove the instrument can separate the
+arms once readings exist, and it is not evidence about the picker.
+
+corpus: a hand built fixture, not the recorded corpus, read at 2026-09-22 12:00 +00:00
+0 files, 0 rows, 0 recorded window readings over 2 distinct accounts, 0 skipped
+6 decision points, one per provider and reading time
+
+the three arms over the recorded readings
+arm               moves    walls        at 9457        at 6105
+first usable          2        1          18914          12210
+round robin           4        1          37828          24420
+headroom              1        1           9457           6105
+
+Round robin pays four moves where headroom pays one, on a fixture built to hold the two
+accounts steady for three points. That is the shape the rival's rule has by construction
+and the shape this bench was built to price. It is arithmetic over a fixture, so it
+settles nothing about real sessions.
+
+
+TESTS, AND THE RED RUN BEHIND THEM
+
+Two assertions were inverted and run against the real code before they passed:
+
+  --- FAIL: TestTheArmArithmeticOnASmallFixture (0.00s)
+      picker_test.go:60: headroom: 1 moves and 1 walls, want 4 and 1
+  --- FAIL: TestAWindowPastItsResetCountsAsFullAgain (0.00s)
+      picker_test.go:71: a window 95 percent used whose reset has passed has headroom 1,
+      want 0.05
+
+The reset rule is the one most likely to be wrong, so it is asserted three ways: a
+window 95 percent used whose reset has passed reports headroom 1, the headroom arm
+picks that account over one with 60 percent left, and the same pair with the reset in
+the future picks the other way.
+
+The skip counting was proved by deleting the account guard from readingOf and running
+the fixture again:
+
+  --- FAIL: TestAReadingMissingAFieldIsSkippedAndNamed (0.01s)
+  panic: runtime error: invalid memory address or nil pointer dereference
+  tofu/bench/picker.readingOf reading.go:125
+
+The guard was restored and the test passes, naming provider, account, at and
+used_fraction in order over a six row fixture.
+
+
+COMMANDS RUN
+
+  gofmt -l bench/picker                              printed nothing
+  go vet ./bench/picker/...                          exit 0
+  go tool golangci-lint run ./bench/picker/...       0 issues
+  go test ./bench/picker/... -count=1 -timeout 180s  ok, 7 tests, 0 skips
+
+No tree-wide check was run. Every command is scoped to ./bench/picker/... .
+
+
+WHAT THE BENCH NEEDS AND CANNOT WRITE
+
+One thing, and it is the whole answer above:
+
+  internal/llm/quota, a recorded window reading. The Poller caches a Report per
+  provider and account id in memory and nothing persists it. A line appended per poll,
+  carrying provider, credential row number, fetch time and the windows, is enough for
+  this bench to score the three arms on real spend. The credential row number is the
+  identity, never the account id and never a token.
+
+  Until that exists the picker's own acceptance cannot be met by measurement, and
+  headroom stands on its argument rather than on a number.
