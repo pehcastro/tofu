@@ -10,6 +10,43 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 
 ## Unreleased
 
+## 0.4.9 - 2026-09-22
+
+Tofu runs on the account that has room, and every number it reports is one you can check.
+
+### Added
+
+- **Tofu picks an account instead of refusing.** With more than one account on a subscription it chooses once, at session start, by how much headroom is left across the windows that bind, and it stays on that account for the session. `tofu login --disable` is no longer the way to get past a second login.
+- **An account that runs out mid-session moves rather than stopping.** The session forks onto the next account carrying its handles, and the screen says which account it moved to, why, and what the move cost. A child picks its own account and leaves the parent's drained one alone.
+- **`tofu rules index "<task>" [paths...]`** says which rules would fire for a task and why each held-back rule did not. A scope that reached nothing reads differently from a condition that did not match, and a task naming no paths is answered rather than refused.
+- **`/links` lists every link the conversation carried**, newest first, with a count when one appeared more than once. Only `http` and `https` are shown, and a link with credential-shaped query parameters is shown with the parameters cut.
+- **`/quote` inserts a reference to a past turn**, `[quote#39cl]`, and nothing else. The reference is an id into the record rather than pasted text, so it cannot go stale and does not cost its tokens twice.
+- **Every quota reading is written to `.tofu/quota/<date>.jsonl`** when tofu polls a vendor, carrying the credential row number, the fetch time and each window's id, use and reset. No token, account id or email is ever in a row.
+- **`bench/report/index.html` is one page over every dated report**, with the headline number, the arms, the sample size and the skips, and it opens from disk with no network.
+
+### Fixed
+
+- **An account with room read as spent.** A vendor reports per-model windows beside the account windows, and one of those sitting at its cap made the whole account unusable. A window binds only when it is not scoped to a model, so an account with most of its five-hour window free is usable and is ranked properly.
+- **The token estimate read 32 percent over on Codex.** One constant served two wires that tokenize differently. Measured over the recorded corpus, the median error across both wires falls from 18 percent to 7 and the worst from 47 to 20.
+- **A recorded step's occupancy described a request nobody sent**, because it was measured after that step's tool results were appended. It is now the request as sent, and a recorded row keeps every band: the largest one was silently decoding as zero.
+- **The context bar showed the number the fork decided on** rather than what the request occupied. They are different quantities and the bar now shows the one a person watching a turn can act on.
+- **A file path read back out of the ledger, and a session handle typed on the command line, were both followed without a guard.** A path that leaves its root is refused, and the refusal cannot be mistaken for a missing file.
+- **A truncated tool result said only that something was missing.** It now says how many bytes were dropped, and when the whole output could not be stored it says that too, rather than leaving a hole with no explanation.
+
+### Changed
+
+- **A rule declares which of ten concerns it is, and the declaration is required.** Five concerns may never be conditional, so a rule that is about output shape, safety, the environment, tool guidance or the report format is refused if it declares a trigger at all. Two shipped rules were firing on the wrong trigger and one of them fired on a task naming only `CHANGELOG.md`.
+- **A rule fires on the language of the paths, the directories touched, or the verb the task names**, rather than on a path glob standing in for all three.
+- **The harness reports a median and a range over repeats rather than a mean.** A comparison where either arm has fewer than two passing repeats prints `not separable`, and a task that passes a gate on one repeat and fails on another is named unstable and ranks no arm.
+
+### Note
+
+**Three measurements in this release returned no, and that is the point of having them.** A moved cache breakpoint caches exactly as much as the old one, because the vendor looks back twenty content blocks and a turn here adds at most eight. The recorded corpus cannot separate a thrift arm from a shaping arm: six of 109 sessions carry both, and 22 sessions are one fixture written to produce reading. And the account picker cannot be scored against any arm yet, because until this release nothing ever wrote a quota reading down.
+
+**None of the 25 reports under `bench/` is built by rerunning its own code.** Every one is built from the text of its own markdown, and every one now says so on its page.
+
+**A recorded session written before this release keeps the old meaning of its occupancy** under the same key, and nothing in a row tells the two apart. Sessions recorded before event ids existed get a derived id when quoted, which resolves the same way every time but is not the id the record carried.
+
 ## 0.4.8 - 2026-09-22
 
 `catalog` is `library`.
