@@ -52,18 +52,16 @@ func TestLoginStatusListsEveryStoredCredential(t *testing.T) {
 	if code != exitOK {
 		t.Fatalf("status = %d", code)
 	}
-	for _, want := range []string{"#1 ", "#2 ", "····uuid"} {
+	for _, want := range []string{"#1 ", "#2 ", firstTestAccount, secondTestAccount} {
 		if !strings.Contains(out, want) {
 			t.Errorf("status %q is missing %q", out, want)
 		}
 	}
-	if lines := strings.Count(out, "anthropic oauth, expires"); lines != 2 {
+	if lines := strings.Count(out, "oauth, expires"); lines != 2 {
 		t.Errorf("status describes %d anthropic credentials, want both: %q", lines, out)
 	}
-	for _, secret := range []string{firstTestAccount, secondTestAccount, testAccess} {
-		if strings.Contains(out, secret) {
-			t.Fatal("the listing names something identifying")
-		}
+	if strings.Contains(out, testAccess) {
+		t.Fatal("the listing names a token")
 	}
 }
 
@@ -111,7 +109,7 @@ func chosenAccount(t *testing.T) error {
 	return err
 }
 
-func TestBothViewsShowTheAccountTheSameWay(t *testing.T) {
+func TestTheListingNamesTheAccountAndThePaneStillMasksIt(t *testing.T) {
 	emptyHome(t)
 	stored := storeCredential(t, cred.Anthropic)
 
@@ -119,20 +117,21 @@ func TestBothViewsShowTheAccountTheSameWay(t *testing.T) {
 	if code != exitOK {
 		t.Fatalf("status = %d, %q", code, errOut)
 	}
+	redacted, errOut, code := runLogin(t, "--status", redactFlag)
+	if code != exitOK {
+		t.Fatalf("status %s = %d, %q", redactFlag, code, errOut)
+	}
 	pane := settingsScreen(t, appProviders())
 
 	shown := maskedAccount(cred.Identity{Email: stored})
-	if !strings.Contains(listing, shown) {
-		t.Errorf("tofu login --status does not show %q:\n%s", shown, listing)
+	if !strings.Contains(listing, stored) {
+		t.Errorf("tofu login --status does not name the account:\n%s", listing)
 	}
-	if !strings.Contains(pane, shown) {
-		t.Errorf("the settings pane does not show %q:\n%s", shown, pane)
+	if !strings.Contains(redacted, shown) || strings.Contains(redacted, stored) {
+		t.Errorf("tofu login --status %s does not fall back to the mask:\n%s", redactFlag, redacted)
 	}
-	if strings.Contains(listing, stored) {
-		t.Error("tofu login --status names the account in full")
-	}
-	if strings.Contains(pane, stored) {
-		t.Errorf("the settings pane names the account in full:\n%s", pane)
+	if !strings.Contains(pane, shown) || strings.Contains(pane, stored) {
+		t.Errorf("the settings pane no longer masks the account:\n%s", pane)
 	}
 }
 
@@ -167,7 +166,7 @@ func storeCodexLogin(t *testing.T, account string) {
 	}
 }
 
-func TestBothViewsShowACodexAccountTheSameWay(t *testing.T) {
+func TestACodexAccountIsNamedByItsIDInTheListingAndMaskedInThePane(t *testing.T) {
 	emptyHome(t)
 	const account = "codex-account-uuid"
 	storeCodexLogin(t, account)
@@ -182,21 +181,15 @@ func TestBothViewsShowACodexAccountTheSameWay(t *testing.T) {
 	if !strings.Contains(shown, "#") {
 		t.Fatal("a codex account renders without a fingerprint")
 	}
-	if !strings.Contains(listing, shown) {
-		t.Errorf("tofu login --status does not show the codex account masked:\n%s", listing)
+	if !strings.Contains(listing, account) {
+		t.Errorf("tofu login --status does not name the codex account:\n%s", listing)
 	}
-	if !strings.Contains(pane, shown) {
-		t.Errorf("the settings pane does not show the codex account masked:\n%s", pane)
-	}
-	if strings.Contains(listing, account) {
-		t.Error("tofu login --status names the codex account in full")
-	}
-	if strings.Contains(pane, account) {
-		t.Errorf("the settings pane names the codex account in full:\n%s", pane)
+	if !strings.Contains(pane, shown) || strings.Contains(pane, account) {
+		t.Errorf("the settings pane no longer masks the codex account:\n%s", pane)
 	}
 }
 
-func TestTwoAccountsThatMaskAlikeAreStillToldApart(t *testing.T) {
+func TestTwoAccountsThatMaskAlikeAreStillToldApartWhenRedacted(t *testing.T) {
 	emptyHome(t)
 	storeTwoAnthropicAccounts(t)
 
@@ -209,7 +202,7 @@ func TestTwoAccountsThatMaskAlikeAreStillToldApart(t *testing.T) {
 		t.Fatalf("both accounts render as %q", first)
 	}
 
-	listing, errOut, code := runLogin(t, "--status")
+	listing, errOut, code := runLogin(t, "--status", redactFlag)
 	if code != exitOK {
 		t.Fatalf("status = %d, %q", code, errOut)
 	}

@@ -26,8 +26,8 @@ import (
 )
 
 const (
-	loginUsage = "usage: tofu login <anthropic|codex|openrouter> [--paste], tofu login --status, " +
-		"or tofu login --disable|--enable <number>"
+	loginUsage = "usage: tofu login <anthropic|codex|openrouter> [--paste], " +
+		"tofu login --status [--json] [--redact], or tofu login --disable|--enable <number>"
 	setAsideCause    = "set aside by hand, run tofu login --enable to bring it back"
 	openRouterName   = "openrouter"
 	openRouterFix    = "run tofu login openrouter and paste the key when it asks"
@@ -42,16 +42,7 @@ func loginVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 	}
 	switch args[0] {
 	case "--status":
-		if len(args) > 1 {
-			return loginFail(errOut, errors.New(loginUsage))
-		}
-		listing, err := credentialListing(time.Now())
-		if err != nil {
-			return loginRefused(errOut, "%v", err)
-		}
-		_, _ = fmt.Fprint(out, listing)
-		_, _ = fmt.Fprintf(out, "openrouter: %s\n", openRouterStatus())
-		return exitOK
+		return statusVerb(args[1:], out, errOut, paletteOf(out), time.Now(), nil)
 	case "--disable", "--enable":
 		if len(args) != 2 {
 			return loginFail(errOut, errors.New(loginUsage))
@@ -99,29 +90,6 @@ func openStoredCredentials() (*cred.Store, error) {
 		return nil, err
 	}
 	return cred.Open(path)
-}
-
-func credentialListing(now time.Time) (string, error) {
-	store, err := openStoredCredentials()
-	if err != nil {
-		return "", err
-	}
-	if store == nil {
-		return "credentials: none\n", nil
-	}
-	defer func() { _ = store.Close() }()
-	rows, err := store.List()
-	if err != nil {
-		return "", err
-	}
-	if len(rows) == 0 {
-		return "credentials: none\n", nil
-	}
-	lines := "credentials:\n"
-	for _, row := range rows {
-		lines += "  " + credentialLine(row, now) + "\n"
-	}
-	return lines, nil
 }
 
 func maskedAccount(identity cred.Identity) string {

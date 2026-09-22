@@ -67,7 +67,7 @@ func TestLoginStatusReportsNoneAndThenTheStoredCredential(t *testing.T) {
 	emptyHome(t)
 
 	out, _, code := runLogin(t, "--status")
-	if code != exitOK || !strings.HasPrefix(out, "credentials: none\n") {
+	if code != exitOK || !strings.HasPrefix(out, statusNoCredential) {
 		t.Fatalf("status without a credential = %q, code %d", out, code)
 	}
 	if !strings.Contains(out, "tofu login openrouter") {
@@ -103,12 +103,12 @@ func TestLoginStatusReportsNoneAndThenTheStoredCredential(t *testing.T) {
 	if code != exitOK {
 		t.Fatalf("status = %d", code)
 	}
-	for _, want := range []string{"anthropic", "oauth", "expires 2026-09-18T20:00:00Z", "re-login by 2026-10-18"} {
+	for _, want := range []string{"claude-sub", testEmail, "oauth", "expires 2026-09-18T20:00:00Z", "re-login by 2026-10-18"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("status %q is missing %q", out, want)
 		}
 	}
-	for _, secret := range []string{testAccess, "refresh-not-a-real-token", testEmail, "account-uuid-1"} {
+	for _, secret := range []string{testAccess, "refresh-not-a-real-token"} {
 		if strings.Contains(out, secret) {
 			t.Fatalf("status leaked %q", secret)
 		}

@@ -14,6 +14,7 @@ import (
 const (
 	usageWindowColumn = 10
 	usageServingState = "serving"
+	noVendorInATest   = "a test may not reach a vendor, so pass pollRows a stub url"
 )
 
 type pollResult struct {
@@ -50,23 +51,27 @@ type credentialReport struct {
 func credentialReports(results []pollResult, now time.Time) []credentialReport {
 	reports := make([]credentialReport, 0, len(results))
 	for _, result := range results {
-		windows := make([]windowReport, 0, len(result.report.Windows))
-		for _, window := range result.report.Windows {
-			windows = append(windows, windowReport{
-				ID:       window.ID,
-				Used:     window.Used.Fraction,
-				Reported: window.Used.Reported,
-				ResetsAt: window.ResetsAt,
-			})
-		}
 		reports = append(reports, credentialReport{
 			Provider: string(result.report.Provider),
 			Plan:     result.report.Plan,
 			State:    credentialState(result, now),
-			Windows:  windows,
+			Windows:  windowsOf(result.report),
 		})
 	}
 	return reports
+}
+
+func windowsOf(report quota.Report) []windowReport {
+	windows := make([]windowReport, 0, len(report.Windows))
+	for _, window := range report.Windows {
+		windows = append(windows, windowReport{
+			ID:       window.ID,
+			Used:     window.Used.Fraction,
+			Reported: window.Used.Reported,
+			ResetsAt: window.ResetsAt,
+		})
+	}
+	return windows
 }
 
 func credentialState(result pollResult, now time.Time) string {
@@ -126,6 +131,10 @@ func pollRows(
 	results := make([]pollResult, 0, len(rows))
 	for _, row := range rows {
 		provider := quota.Provider(row.Credential.Provider)
+		if urls == nil && sys.CredentialsHiddenFromTests() {
+			results = append(results, pollResult{report: quota.Report{Provider: provider}, unusable: noVendorInATest})
+			continue
+		}
 		if cause := row.Unusable(now()); cause != "" {
 			results = append(results, pollResult{report: quota.Report{Provider: provider}, unusable: cause})
 			continue
