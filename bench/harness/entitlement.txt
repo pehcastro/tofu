@@ -6,6 +6,10 @@ A passing eval entitles you to keep the change for the task set it passed on, an
 
 A move smaller than the run to run spread is not a move, and it entitles nobody to anything.
 
+One repeat is one sample of a stochastic run. It entitles nobody to a comparison, because a single run has no spread to be smaller than.
+
+A task whose door opens on one repeat and shuts on the next is unstable, and an unstable task ranks no arm. The instability is the finding: mend the task or the harness, never take a median across it.
+
 A setup that comes out ahead on one task set does not become the default for everything. It becomes the default for that task set, recorded beside the rows that earned it.
 
 There is no single combined number here and there will not be one. Whoever owns the weights owns the winner.

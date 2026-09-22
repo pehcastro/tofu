@@ -292,7 +292,7 @@ func TestReportEveryArmFromTheRowsOnDisk(t *testing.T) {
 		warning := ""
 		if len(unmeasured) > 0 {
 			warning = "READ FIRST: " + strings.Join(unmeasured, ", ") +
-				" carries no turn count and no wall clock, and Render averages that zero in, so every FRONTIER and TURNS line naming it is wrong. Only its GATES and CHECKLIST lines mean anything.\n"
+				" carries no turn count and no wall clock, and Render reads that zero as a wall clock, so every FRONTIER line naming it is wrong. Only its GATES and CHECKLIST lines mean anything.\n"
 		}
 		t.Logf("\nhono v%d, %d arms\n%s%s%s", version, len(ofVersion), warning, Render(ofVersion), Spend(ofVersion))
 	}

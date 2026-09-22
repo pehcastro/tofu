@@ -9,7 +9,46 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+
+	"tofu/internal/judge/ledger"
 )
+
+func TestAPlanOfThreeRepeatsPutsItsRepeatIndexOnEveryRow(t *testing.T) {
+	plan := Plan{Arm: ArmTofu, Task: "hono", Version: 2, Repeats: 3}
+
+	var rows []Row
+	for _, meta := range plan.Runs() {
+		meta.CredentialKind = CredentialKindSubscription
+		row, _, err := ParseTofu(t.TempDir(), ledger.Filter{}, meta)
+		if err != nil {
+			t.Fatalf("ParseTofu: %v", err)
+		}
+		rows = append(rows, row)
+	}
+
+	if len(rows) != 3 {
+		t.Fatalf("a plan of three repeats produced %d rows", len(rows))
+	}
+	for i, row := range rows {
+		if row.Run != i+1 {
+			t.Fatalf("row %d carries repeat index %d, so a repeat cannot be told from the one before it", i+1, row.Run)
+		}
+	}
+
+	var buf bytes.Buffer
+	if err := Fprint(&buf, plan); err != nil {
+		t.Fatalf("Fprint: %v", err)
+	}
+	if !strings.Contains(buf.String(), "repeats: 3") {
+		t.Fatalf("the printed plan does not say how many repeats it asks for:\n%s", buf.String())
+	}
+
+	once := Plan{Arm: ArmTofu, Task: "hono", Version: 2}
+	if len(once.Runs()) != 1 || !strings.Contains(once.RepeatLine(), "carries no spread") {
+		t.Fatalf("a plan that asks for nothing runs %d times and says %q, and one run must say plainly that it has no spread",
+			len(once.Runs()), once.RepeatLine())
+	}
+}
 
 func TestBuildPlanPrintsCommandDirEnvAndUnsetCapsForAllThreeArms(t *testing.T) {
 	root := repositoryRoot(t)

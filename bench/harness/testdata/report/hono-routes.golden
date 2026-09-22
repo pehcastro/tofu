@@ -1,39 +1,48 @@
+ROWS READ
+every one of the 9 rows offered carries the fields this report reads
+
 SETUPS hono-routes
-unrecorded: usually_passes, 4 of 6 runs passed. no setup was recorded beside this row, so nothing about it can be reproduced
+unrecorded: always_passes, 9 of 9 runs passed. no setup was recorded beside this row, so nothing about it can be reproduced
 
 GATES hono-routes
 claude v1 run1: PASS
-claude v1 run2: FAIL checklist: handles empty body
+claude v1 run2: PASS
+claude v1 run3: PASS
 codex v1 run1: PASS
 codex v1 run2: PASS
-tofu v1 run1: FAIL build
+codex v1 run3: PASS
+tofu v1 run1: PASS
 tofu v1 run2: PASS
+tofu v1 run3: PASS
 
 FRONTIER hono-routes (passing runs only)
+claude: wall clock median 121000 ms, range 120000 ms to 124000 ms over 3 repeats
+codex: wall clock median 92000 ms, range 90000 ms to 95000 ms over 3 repeats
+tofu: wall clock median 101000 ms, range 100000 ms to 102000 ms over 3 repeats
 claude vs codex: wall clock not comparable, credential kinds differ (subscription vs key)
 claude vs tofu: wall clock not comparable, credential kinds differ (subscription vs key)
-codex vs tofu: wall clock 92500ms vs 100000ms
+codex vs tofu: codex lower on wall clock by 9000 ms (widest range 5000 ms)
 
 DOLLARS PER PASSING RUN hono-routes
 claude: model n/a, spent as subscription quota. jev decisions $0.0000 on the openrouter key
-codex: model $0.1100 (spread $0.0200, 2 runs). jev decisions $0.0000
-tofu: model $0.1100 (spread $0.0000, 1 runs). jev decisions $0.0000
+codex: model median $0.1100, range $0.1000 to $0.1200 over 3 repeats. jev decisions $0.0000
+tofu: model median $0.1100, range $0.1100 to $0.1200 over 3 repeats. jev decisions $0.0000
 claude vs codex: dollars not comparable, credential kinds differ (subscription vs key)
 claude vs tofu: dollars not comparable, credential kinds differ (subscription vs key)
-codex vs tofu: no difference (dollars diff $0.0000, spread $0.0200)
+codex vs tofu: no difference (dollars diff $0.0000, widest range $0.0200)
 
 TURNS PER PASSING RUN hono-routes
-claude: 6.00 (spread 0.00, 1 runs)
-codex: 4.50 (spread 1.00, 2 runs)
-tofu: 4.00 (spread 0.00, 1 runs)
-claude vs codex: codex lower on turns by 1.50 (spread 1.00)
-claude vs tofu: tofu lower on turns by 2.00 (spread 0.00)
-codex vs tofu: no difference (turns diff 0.50, spread 1.00)
+claude: median 6.00, range 6.00 to 7.00 over 3 repeats
+codex: median 4.00, range 4.00 to 5.00 over 3 repeats
+tofu: median 5.00, range 4.00 to 6.00 over 3 repeats
+claude vs codex: codex lower on turns by 2.00 (widest range 1.00)
+claude vs tofu: no difference (turns diff 1.00, widest range 2.00)
+codex vs tofu: no difference (turns diff 1.00, widest range 2.00)
 
 CHECKLIST hono-routes
-claude: 2/3
-codex: 2/2
-tofu: 1/1
+claude: 3/3
+codex: 3/3
+tofu: 3/3
 
 WHAT A PASSING EVAL ENTITLES
 A setup is the version of ourselves under test: a name, the rule files loaded under it, and the exact prompt bytes sent. A row carries all three, so a run can be reproduced rather than recognised.
@@ -43,6 +52,10 @@ A tier is a rate over repeated runs, never a verdict on one. always_passes, usua
 A passing eval entitles you to keep the change for the task set it passed on, and to say where it was measured. Nothing else.
 
 A move smaller than the run to run spread is not a move, and it entitles nobody to anything.
+
+One repeat is one sample of a stochastic run. It entitles nobody to a comparison, because a single run has no spread to be smaller than.
+
+A task whose door opens on one repeat and shuts on the next is unstable, and an unstable task ranks no arm. The instability is the finding: mend the task or the harness, never take a median across it.
 
 A setup that comes out ahead on one task set does not become the default for everything. It becomes the default for that task set, recorded beside the rows that earned it.
 

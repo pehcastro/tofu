@@ -30,6 +30,8 @@ type Caps struct {
 	TurnCap   int
 }
 
+const defaultRepeats = 1
+
 type Plan struct {
 	Arm        Arm
 	Task       string
@@ -44,6 +46,26 @@ type Plan struct {
 	Model      string
 	Caps       Caps
 	Setup      Setup
+	Repeats    int
+}
+
+func (p Plan) Runs() []RunMeta {
+	repeats := p.Repeats
+	if repeats < defaultRepeats {
+		repeats = defaultRepeats
+	}
+	metas := make([]RunMeta, 0, repeats)
+	for repeat := 1; repeat <= repeats; repeat++ {
+		metas = append(metas, RunMeta{Arm: p.Arm, Task: p.Task, Version: p.Version, Run: repeat, Setup: p.Setup})
+	}
+	return metas
+}
+
+func (p Plan) RepeatLine() string {
+	if p.Repeats > defaultRepeats {
+		return fmt.Sprintf("%d repeats, and the report reads their median and range", p.Repeats)
+	}
+	return "1 repeat, which is one sample of a stochastic run and carries no spread"
 }
 
 func PromptPath(root string, version int) string {
@@ -77,6 +99,7 @@ func BuildPlan(root string, arm Arm, task string, version int) (Plan, error) {
 		Arm: arm, Task: task, Version: version,
 		Prompt: prompt, PromptPath: promptPath,
 		Dir: dir, Branch: fmt.Sprintf("v%d", version), Caps: caps, Setup: setup,
+		Repeats: defaultRepeats,
 	}
 
 	switch arm {
@@ -118,9 +141,9 @@ func BuildPlan(root string, arm Arm, task string, version int) (Plan, error) {
 
 func Fprint(w io.Writer, p Plan) error {
 	_, err := fmt.Fprintf(w,
-		"arm %s task %s version %d\ncommand: %s\ndir: %s\nbranch: %s\nprompt: %s\nmodel: %s\nenv: %s\nsetup %s: %s\ncaps, unset rather than measured, nobody has given a number: wall clock %s, turns %d\n\n",
+		"arm %s task %s version %d\ncommand: %s\ndir: %s\nbranch: %s\nprompt: %s\nmodel: %s\nenv: %s\nsetup %s: %s\nrepeats: %s\ncaps, unset rather than measured, nobody has given a number: wall clock %s, turns %d\n\n",
 		p.Arm, p.Task, p.Version, Shell(p.Command), p.Dir, p.Branch, p.PromptPath, p.Model, strings.Join(p.Env, ", "),
-		p.Setup.Name, p.Setup.Line(), p.Caps.WallClock, p.Caps.TurnCap)
+		p.Setup.Name, p.Setup.Line(), p.RepeatLine(), p.Caps.WallClock, p.Caps.TurnCap)
 	return err
 }
 

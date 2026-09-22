@@ -31,61 +31,47 @@ func checklistFullPass() []ChecklistResult {
 
 func dollarPtr(v float64) *float64 { return &v }
 
-func routesFixture() []Row {
-	return []Row{
-		{
-			Arm: ArmTofu, Task: "hono-routes", Version: 1, Run: 1,
-			CredentialKind: CredentialKindKey,
-			Gates:          gatesFailing("build"),
-			Checklist:      checklistFullPass(),
-		},
-		{
-			Arm: ArmTofu, Task: "hono-routes", Version: 1, Run: 2,
-			CredentialKind: CredentialKindKey,
-			WallClockMS:    100000,
-			ModelDollars:   dollarPtr(0.11),
-			Turns:          4,
+func passingRepeats(task string, arm Arm, kind CredentialKind, wall, turns []int64, dollars []float64) []Row {
+	rows := make([]Row, 0, len(turns))
+	for i := range turns {
+		row := Row{
+			Arm: arm, Task: task, Version: 1, Run: i + 1,
+			CredentialKind: kind,
+			WallClockMS:    wall[i],
+			Turns:          turns[i],
 			Gates:          gatesOK(),
 			Checklist:      checklistFullPass(),
-		},
-		{
-			Arm: ArmClaude, Task: "hono-routes", Version: 1, Run: 1,
-			CredentialKind: CredentialKindSubscription,
-			WallClockMS:    120000,
-			Turns:          6,
-			Gates:          gatesOK(),
-			Checklist:      checklistFullPass(),
-		},
-		{
-			Arm: ArmClaude, Task: "hono-routes", Version: 1, Run: 2,
-			CredentialKind: CredentialKindSubscription,
-			WallClockMS:    124000,
-			Turns:          6,
-			Gates:          gatesOK(),
-			Checklist: []ChecklistResult{
-				{Item: "returns 400 on missing field", Passed: true},
-				{Item: "handles empty body", Passed: false},
-			},
-		},
-		{
-			Arm: ArmCodex, Task: "hono-routes", Version: 1, Run: 1,
-			CredentialKind: CredentialKindKey,
-			WallClockMS:    90000,
-			ModelDollars:   dollarPtr(0.10),
-			Turns:          4,
-			Gates:          gatesOK(),
-			Checklist:      checklistFullPass(),
-		},
-		{
-			Arm: ArmCodex, Task: "hono-routes", Version: 1, Run: 2,
-			CredentialKind: CredentialKindKey,
-			WallClockMS:    95000,
-			ModelDollars:   dollarPtr(0.12),
-			Turns:          5,
-			Gates:          gatesOK(),
-			Checklist:      checklistFullPass(),
-		},
+		}
+		if len(dollars) > 0 {
+			row.ModelDollars = dollarPtr(dollars[i])
+		}
+		rows = append(rows, row)
 	}
+	return rows
+}
+
+func tofuRoutesRepeats() []Row {
+	return passingRepeats("hono-routes", ArmTofu, CredentialKindKey,
+		[]int64{100000, 102000, 101000}, []int64{4, 5, 6}, []float64{0.11, 0.11, 0.12})
+}
+
+func codexRoutesRepeats() []Row {
+	return passingRepeats("hono-routes", ArmCodex, CredentialKindKey,
+		[]int64{90000, 95000, 92000}, []int64{4, 5, 4}, []float64{0.10, 0.12, 0.11})
+}
+
+func routesFixture() []Row {
+	rows := append(tofuRoutesRepeats(), passingRepeats("hono-routes", ArmClaude, CredentialKindSubscription,
+		[]int64{120000, 124000, 121000}, []int64{6, 6, 7}, nil)...)
+	return append(rows, codexRoutesRepeats()...)
+}
+
+func failingEveryRepeat() []Row {
+	rows := tofuRoutesRepeats()
+	for i := range rows {
+		rows[i].Gates = gatesFailing("build")
+	}
+	return append(rows, codexRoutesRepeats()...)
 }
 
 func TestRenderGolden(t *testing.T) {
@@ -108,19 +94,19 @@ func TestRenderGolden(t *testing.T) {
 }
 
 func TestGateFailureExcludedButShown(t *testing.T) {
-	out := Render(routesFixture())
+	out := Render(failingEveryRepeat())
 
 	if !strings.Contains(out, "tofu v1 run1: FAIL build") {
 		t.Fatalf("failing row missing from gates door:\n%s", out)
 	}
-	if !strings.Contains(out, "tofu: model $0.1100 (spread $0.0000, 1 runs)") {
-		t.Fatalf("failed run1 leaked into tofu's dollars-per-passing-run figure, only run2 must count:\n%s", out)
+	if strings.Contains(out, "UNSTABLE") {
+		t.Fatalf("an arm that failed every repeat is not unstable, it is stably failing:\n%s", out)
 	}
-	if !strings.Contains(out, "tofu: 4.00 (spread 0.00, 1 runs)") {
-		t.Fatalf("failed run1 leaked into tofu's turns-per-passing-run figure, only run2 must count:\n%s", out)
+	if strings.Count(out, "\ntofu:") != 0 {
+		t.Fatalf("an arm whose every repeat failed the gate was ranked anyway:\n%s", out)
 	}
-	if strings.Count(out, "\ntofu:") != 3 {
-		t.Fatalf("want exactly 3 non-gate lines naming tofu (dollars, turns, checklist), the failed run1 must not add a fourth:\n%s", out)
+	if !strings.Contains(out, "codex: model median $0.1100, range $0.1000 to $0.1200 over 3 repeats") {
+		t.Fatalf("the passing arm lost its median and range:\n%s", out)
 	}
 }
 
@@ -160,7 +146,7 @@ func TestNoWeightedScoreTotalOrPercentageInOutput(t *testing.T) {
 func TestDifferenceSmallerThanSpreadIsNoDifference(t *testing.T) {
 	out := Render(routesFixture())
 
-	want := "codex vs tofu: no difference (dollars diff $0.0000, spread $0.0200)"
+	want := "codex vs tofu: no difference (dollars diff $0.0000, widest range $0.0200)"
 	if !strings.Contains(out, want) {
 		t.Fatalf("missing no-difference line %q:\n%s", want, out)
 	}
@@ -204,8 +190,70 @@ func TestAnArmThatRecordedNoTurnsIsNotRanked(t *testing.T) {
 func TestRealDifferenceIsReportedWithSpread(t *testing.T) {
 	out := Render(routesFixture())
 
-	want := "claude vs codex: codex lower on turns by 1.50 (spread 1.00)"
+	want := "claude vs codex: codex lower on turns by 2.00 (widest range 1.00)"
 	if !strings.Contains(out, want) {
 		t.Fatalf("missing real difference line %q:\n%s", want, out)
+	}
+}
+
+func subscriptionRepeats(task string, arm Arm, wall, turns []int64) []Row {
+	return passingRepeats(task, arm, CredentialKindSubscription, wall, turns, nil)
+}
+
+func TestMedianAndRangeOverThreeRepeats(t *testing.T) {
+	rows := append(
+		subscriptionRepeats("hono-repeats", ArmClaude, []int64{120000, 124000, 121000}, []int64{6, 6, 7}),
+		subscriptionRepeats("hono-repeats", ArmCodex, []int64{90000, 95000, 92000}, []int64{4, 5, 4})...)
+
+	out := Render(rows)
+
+	if !strings.Contains(out, "median 6.00, range 6.00 to 7.00 over 3 repeats") {
+		t.Fatalf("no median and range over the three repeats:\n%s", out)
+	}
+}
+
+func TestOneRepeatSaysItHasNoSpread(t *testing.T) {
+	rows := append(
+		subscriptionRepeats("hono-once", ArmClaude, []int64{120000}, []int64{6}),
+		subscriptionRepeats("hono-once", ArmCodex, []int64{90000}, []int64{4})...)
+
+	out := Render(rows)
+
+	if !strings.Contains(out, "one repeat, which is a sample and not a spread") {
+		t.Fatalf("a single repeat was printed as if it carried a spread:\n%s", out)
+	}
+	if strings.Contains(out, "lower on turns") {
+		t.Fatalf("two arms of one repeat each were separated, which one run cannot do:\n%s", out)
+	}
+}
+
+func TestATaskUnstableAcrossRepeatsRanksNoArm(t *testing.T) {
+	rows := append(
+		subscriptionRepeats("hono-unstable", ArmClaude, []int64{120000, 124000, 121000}, []int64{6, 6, 7}),
+		subscriptionRepeats("hono-unstable", ArmCodex, []int64{90000, 95000, 92000}, []int64{4, 5, 4})...)
+	rows[4].Gates = gatesFailing("build")
+
+	out := Render(rows)
+
+	if !strings.Contains(out, "UNSTABLE hono-unstable") {
+		t.Fatalf("an arm that passed on two repeats and failed on one was not named unstable:\n%s", out)
+	}
+	if strings.Contains(out, "TURNS PER PASSING RUN hono-unstable") {
+		t.Fatalf("an unstable task ranked an arm anyway:\n%s", out)
+	}
+}
+
+func TestRowsSkippedForAMissingFieldAreCountedAndNamed(t *testing.T) {
+	rows := subscriptionRepeats("hono-missing", ArmClaude, []int64{120000, 124000, 121000}, []int64{6, 6, 7})
+	rows[1].CredentialKind = ""
+	rows[2].Gates = nil
+
+	out := Render(rows)
+
+	if !strings.Contains(out, "2 rows are not read") {
+		t.Fatalf("rows missing a field were not counted:\n%s", out)
+	}
+	if !strings.Contains(out, "claude v1 run2 has no credential kind") || !strings.Contains(out, "claude v1 run3 has no gate result") {
+		t.Fatalf("rows missing a field were not named:\n%s", out)
 	}
 }

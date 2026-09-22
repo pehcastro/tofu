@@ -3,6 +3,7 @@ package harness
 import (
 	_ "embed"
 	"fmt"
+	"math"
 	"os"
 	"sort"
 	"strings"
@@ -62,11 +63,27 @@ func firstLine(text string) string {
 
 func Render(rows []Row) string {
 	var b strings.Builder
-	for _, task := range tasksOf(rows) {
-		renderTask(&b, task, rowsForTask(rows, task))
+	kept, missing := readable(rows)
+	renderMissing(&b, len(rows), missing)
+	for _, task := range tasksOf(kept) {
+		renderTask(&b, task, rowsForTask(kept, task))
 	}
 	b.WriteString("\nWHAT A PASSING EVAL ENTITLES\n" + entitlement)
 	return b.String()
+}
+
+func renderMissing(b *strings.Builder, offered int, missing []MissingField) {
+	fmt.Fprint(b, "ROWS READ\n")
+	if len(missing) == 0 {
+		fmt.Fprintf(b, "every one of the %d rows offered carries the fields this report reads\n\n", offered)
+		return
+	}
+	named := make([]string, 0, len(missing))
+	for _, m := range missing {
+		named = append(named, m.Line())
+	}
+	fmt.Fprintf(b, "%d rows are not read, one missing field each, of the %d offered: %s\n\n",
+		len(missing), offered, strings.Join(named, ", "))
 }
 
 func renderSetups(b *strings.Builder, task string, rows []Row) {
@@ -117,10 +134,32 @@ func rowsForTask(rows []Row, task string) []Row {
 func renderTask(b *strings.Builder, task string, rows []Row) {
 	renderSetups(b, task, rows)
 	gateOK, full := renderGates(b, task, rows)
+	if renderUnstable(b, task, rows) {
+		return
+	}
 	renderFrontier(b, task, full)
 	renderDollarsRatio(b, task, full)
 	renderTurnsRatio(b, task, full)
 	renderChecklist(b, task, gateOK)
+}
+
+func renderUnstable(b *strings.Builder, task string, rows []Row) bool {
+	var unstable []Stability
+	for _, s := range StabilityOf(rows) {
+		if s.Unstable() {
+			unstable = append(unstable, s)
+		}
+	}
+	if len(unstable) == 0 {
+		return false
+	}
+	fmt.Fprintf(b, "\nUNSTABLE %s\n", task)
+	for _, s := range unstable {
+		fmt.Fprintln(b, s.Line())
+	}
+	fmt.Fprint(b, "this task ranks no arm: a door that opens on one repeat and shuts on the next is the finding, "+
+		"and a median taken across it stands for nothing\n\n")
+	return true
 }
 
 func evaluateGates(r Row) (bool, []string) {
@@ -199,23 +238,6 @@ func kindOf(byArm map[Arm][]Row, a Arm) CredentialKind {
 	return byArm[a][0].CredentialKind
 }
 
-func meanAndSpread(values []float64) (mean, spread float64) {
-	if len(values) == 0 {
-		return 0, 0
-	}
-	lo, hi, sum := values[0], values[0], 0.0
-	for _, v := range values {
-		sum += v
-		if v < lo {
-			lo = v
-		}
-		if v > hi {
-			hi = v
-		}
-	}
-	return sum / float64(len(values)), hi - lo
-}
-
 func dollarsOf(rows []Row) []float64 {
 	var values []float64
 	for _, r := range rows {
@@ -256,6 +278,11 @@ func renderFrontier(b *strings.Builder, task string, full []Row) {
 	fmt.Fprintf(b, "\nFRONTIER %s (passing runs only)\n", task)
 	arms := sortedArms(full)
 	byArm := groupByArm(full)
+	wall := map[Arm]Spread{}
+	for _, a := range arms {
+		wall[a] = SpreadOf(wallClockOf(byArm[a]))
+		fmt.Fprintf(b, "%s: wall clock %s\n", a, wall[a].Line("%.0f ms"))
+	}
 	for i := 0; i < len(arms); i++ {
 		for j := i + 1; j < len(arms); j++ {
 			a, c := arms[i], arms[j]
@@ -264,9 +291,7 @@ func renderFrontier(b *strings.Builder, task string, full []Row) {
 				fmt.Fprintf(b, "%s vs %s: wall clock not comparable, credential kinds differ (%s vs %s)\n", a, c, kindA, kindC)
 				continue
 			}
-			wallA, _ := meanAndSpread(wallClockOf(byArm[a]))
-			wallC, _ := meanAndSpread(wallClockOf(byArm[c]))
-			fmt.Fprintf(b, "%s vs %s: wall clock %.0fms vs %.0fms\n", a, c, wallA, wallC)
+			compare(b, a, c, "wall clock", "%.0f ms", wall[a], wall[c])
 		}
 	}
 }
@@ -275,17 +300,16 @@ func renderDollarsRatio(b *strings.Builder, task string, full []Row) {
 	fmt.Fprintf(b, "\nDOLLARS PER PASSING RUN %s\n", task)
 	arms := sortedArms(full)
 	byArm := groupByArm(full)
-	mean, spread := map[Arm]float64{}, map[Arm]float64{}
+	spread := map[Arm]Spread{}
 	for _, a := range arms {
 		rows := byArm[a]
-		judge, _ := meanAndSpread(judgeDollarsOf(rows))
+		judge := SpreadOf(judgeDollarsOf(rows))
 		if rows[0].CredentialKind == CredentialKindSubscription {
-			fmt.Fprintf(b, "%s: model n/a, spent as subscription quota. jev decisions $%.4f on the openrouter key\n", a, judge)
+			fmt.Fprintf(b, "%s: model n/a, spent as subscription quota. jev decisions $%.4f on the openrouter key\n", a, judge.Median)
 			continue
 		}
-		m, s := meanAndSpread(dollarsOf(rows))
-		mean[a], spread[a] = m, s
-		fmt.Fprintf(b, "%s: model $%.4f (spread $%.4f, %d runs). jev decisions $%.4f\n", a, m, s, len(rows), judge)
+		spread[a] = SpreadOf(dollarsOf(rows))
+		fmt.Fprintf(b, "%s: model %s. jev decisions $%.4f\n", a, spread[a].Line("$%.4f"), judge.Median)
 	}
 	for i := 0; i < len(arms); i++ {
 		for j := i + 1; j < len(arms); j++ {
@@ -298,7 +322,7 @@ func renderDollarsRatio(b *strings.Builder, task string, full []Row) {
 			if kindA == CredentialKindSubscription {
 				continue
 			}
-			compare(b, a, c, "dollars", "$%.4f", mean[a], mean[c], spread[a], spread[c])
+			compare(b, a, c, "dollars", "$%.4f", spread[a], spread[c])
 		}
 	}
 }
@@ -307,16 +331,15 @@ func renderTurnsRatio(b *strings.Builder, task string, full []Row) {
 	fmt.Fprintf(b, "\nTURNS PER PASSING RUN %s\n", task)
 	arms := sortedArms(full)
 	byArm := groupByArm(full)
-	mean, spread, measured := map[Arm]float64{}, map[Arm]float64{}, map[Arm]bool{}
+	spread, measured := map[Arm]Spread{}, map[Arm]bool{}
 	for _, a := range arms {
 		values := turnsOf(byArm[a])
 		if len(values) == 0 {
 			fmt.Fprintf(b, "%s: turns not recorded on any passing run, so this arm carries no turn measurement\n", a)
 			continue
 		}
-		m, s := meanAndSpread(values)
-		mean[a], spread[a], measured[a] = m, s, true
-		fmt.Fprintf(b, "%s: %.2f (spread %.2f, %d runs)\n", a, m, s, len(values))
+		spread[a], measured[a] = SpreadOf(values), true
+		fmt.Fprintf(b, "%s: %s\n", a, spread[a].Line("%.2f"))
 	}
 	for i := 0; i < len(arms); i++ {
 		for j := i + 1; j < len(arms); j++ {
@@ -332,29 +355,39 @@ func renderTurnsRatio(b *strings.Builder, task string, full []Row) {
 				fmt.Fprintf(b, "%s vs %s: turns not comparable, %s recorded none\n", a, c, strings.Join(missing, " and "))
 				continue
 			}
-			compare(b, a, c, "turns", "%.2f", mean[a], mean[c], spread[a], spread[c])
+			compare(b, a, c, "turns", "%.2f", spread[a], spread[c])
 		}
 	}
 }
 
-func compare(b *strings.Builder, a, c Arm, label, format string, meanA, meanC, spreadA, spreadC float64) {
-	diff := meanA - meanC
-	if diff < 0 {
-		diff = -diff
+func compare(b *strings.Builder, a, c Arm, label, unit string, spreadA, spreadC Spread) {
+	var single []string
+	if !spreadA.Separable() {
+		single = append(single, string(a))
 	}
-	widest := spreadA
-	if spreadC > widest {
-		widest = spreadC
+	if !spreadC.Separable() {
+		single = append(single, string(c))
 	}
+	if len(single) > 0 {
+		carries := "carries"
+		if len(single) > 1 {
+			carries = "carry"
+		}
+		fmt.Fprintf(b, "%s vs %s: %s not separable, %s %s fewer than two passing repeats and one run has no spread\n",
+			a, c, label, strings.Join(single, " and "), carries)
+		return
+	}
+	diff := math.Abs(spreadA.Median - spreadC.Median)
+	widest := math.Max(spreadA.Width(), spreadC.Width())
 	if diff < widest {
-		fmt.Fprintf(b, "%s vs %s: no difference (%s diff "+format+", spread "+format+")\n", a, c, label, diff, widest)
+		fmt.Fprintf(b, "%s vs %s: no difference (%s diff "+unit+", widest range "+unit+")\n", a, c, label, diff, widest)
 		return
 	}
 	lower := a
-	if meanC < meanA {
+	if spreadC.Median < spreadA.Median {
 		lower = c
 	}
-	fmt.Fprintf(b, "%s vs %s: %s lower on %s by "+format+" (spread "+format+")\n", a, c, lower, label, diff, widest)
+	fmt.Fprintf(b, "%s vs %s: %s lower on %s by "+unit+" (widest range "+unit+")\n", a, c, lower, label, diff, widest)
 }
 
 func renderChecklist(b *strings.Builder, task string, gateOK []Row) {
