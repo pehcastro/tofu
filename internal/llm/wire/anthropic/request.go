@@ -32,9 +32,10 @@ type Request struct {
 }
 
 const (
-	historyCacheMinMessages    = 3
-	historyCacheMinPrefixChars = 4096
-	cacheBreakpointsPerRequest = 4
+	historyCacheMinMessages       = 3
+	historyCacheMinPrefixChars    = 4096
+	historyCacheCommittedMinChars = 4096
+	cacheBreakpointsPerRequest    = 4
 
 	ImageBytesCap = 5 << 20
 )
@@ -195,17 +196,21 @@ func applyHistoryCaching(messages []wireMessage, ttl string, budget int) {
 	if budget < 1 || len(messages) < historyCacheMinMessages || historyChars(messages) < historyCacheMinPrefixChars {
 		return
 	}
-	last := len(messages) - 1
-	markPrefixEnd(messages[last].Content, ttl)
-	if budget < 2 {
+	markPrefixEnd(messages[len(messages)-1].Content, ttl)
+	committed := committedPrefixEnd(messages)
+	if budget < 2 || committed < 1 || historyChars(messages[:committed+1]) < historyCacheCommittedMinChars {
 		return
 	}
-	for index := 1; index < last; index++ {
-		if messages[index].Role == "user" {
-			markPrefixEnd(messages[index].Content, ttl)
-			return
+	markPrefixEnd(messages[committed].Content, ttl)
+}
+
+func committedPrefixEnd(messages []wireMessage) int {
+	for index := len(messages) - 1; index > 0; index-- {
+		if messages[index].Role == "assistant" {
+			return index - 1
 		}
 	}
+	return -1
 }
 
 func markPrefixEnd(blocks []contentBlock, ttl string) {

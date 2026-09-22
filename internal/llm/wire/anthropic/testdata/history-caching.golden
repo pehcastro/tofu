@@ -1,0 +1,101 @@
+{
+  "model": "claude-opus-4-1-20250805",
+  "messages": [
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "text",
+          "text": "say ok"
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "toolu_1",
+          "name": "_read",
+          "input": {}
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_1",
+          "content": "read\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\n"
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "toolu_2",
+          "name": "_read",
+          "input": {}
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_2",
+          "content": "read\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\n",
+          "cache_control": {
+            "type": "ephemeral"
+          }
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "toolu_3",
+          "name": "_read",
+          "input": {}
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_3",
+          "content": "read\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\nread\n",
+          "cache_control": {
+            "type": "ephemeral"
+          }
+        }
+      ]
+    }
+  ],
+  "system": [
+    {
+      "type": "text",
+      "text": "x-anthropic-billing-header: cc_version=2.1.257.468; cc_entrypoint=cli; cch=00000;"
+    },
+    {
+      "type": "text",
+      "text": "You are Claude Code, Anthropic's official CLI for Claude.",
+      "cache_control": {
+        "type": "ephemeral"
+      }
+    }
+  ],
+  "max_tokens": 64000,
+  "metadata": {
+    "user_id": "{\"session_id\":\"\"}"
+  },
+  "stream": true
+}

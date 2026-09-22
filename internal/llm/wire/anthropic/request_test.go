@@ -339,20 +339,6 @@ func TestEncodeBreaksTheCacheOnTheHistoryAndNotOnlyOnTheHead(t *testing.T) {
 	}
 }
 
-func TestEncodeAdvancesTheMovingBreakpointAndLeavesTheAnchor(t *testing.T) {
-	first := messageBreakpoints(t, historyRequest(2))
-	second := messageBreakpoints(t, historyRequest(3))
-	if len(first) != 2 || len(second) != 2 {
-		t.Fatalf("step one broke at %v and step two at %v", first, second)
-	}
-	if first[0] != second[0] {
-		t.Fatalf("the anchor moved from %d to %d", first[0], second[0])
-	}
-	if second[1] != first[1]+2 {
-		t.Fatalf("the moving breakpoint went from %d to %d", first[1], second[1])
-	}
-}
-
 func TestEncodeLeavesAHistoryShorterThanTheCacheMinimumAlone(t *testing.T) {
 	short := minimalRequest()
 	short.Messages = append(short.Messages, exchange(1, "one")...)
