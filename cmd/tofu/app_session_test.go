@@ -290,7 +290,7 @@ func TestAnImagePastedBeforeTheFirstSendLandsInTheSessionThatSendCreates(t *test
 	dir := scratchProject(t)
 	model := &sendModel{queued: []llm.Decision{{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "seen"}}}
 	live := newAppSession(dir, func(runOpts) (appWire, error) {
-		return appWire{model: model, spend: turn.SpendSubscription, selected: stubSelection}, nil
+		return wireOn(model), nil
 	}, nil, time.Now, sessionResume{})
 
 	board := screenshotBoard(t, live)
@@ -320,7 +320,7 @@ func TestAPastedImageReachesTheRequestSentToTheModel(t *testing.T) {
 	dir := scratchProject(t)
 	model := &sendModel{queued: []llm.Decision{{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "seen"}}}
 	live := newAppSession(dir, func(runOpts) (appWire, error) {
-		return appWire{model: model, spend: turn.SpendSubscription, selected: stubSelection}, nil
+		return wireOn(model), nil
 	}, nil, time.Now, sessionResume{})
 
 	board := screenshotBoard(t, live)
@@ -346,7 +346,7 @@ func TestDeletingAPastedImagesTokenDropsItFromTheRequestSentToTheModel(t *testin
 	dir := scratchProject(t)
 	model := &sendModel{queued: []llm.Decision{{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "seen"}}}
 	live := newAppSession(dir, func(runOpts) (appWire, error) {
-		return appWire{model: model, spend: turn.SpendSubscription, selected: stubSelection}, nil
+		return wireOn(model), nil
 	}, nil, time.Now, sessionResume{})
 
 	board := screenshotBoard(t, live)
@@ -391,7 +391,7 @@ func TestASendRecordsTheAttachmentEventInTheSessionBody(t *testing.T) {
 	dir := scratchProject(t)
 	model := &sendModel{queued: []llm.Decision{{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "seen"}}}
 	live := newAppSession(dir, func(runOpts) (appWire, error) {
-		return appWire{model: model, spend: turn.SpendSubscription, selected: stubSelection}, nil
+		return wireOn(model), nil
 	}, nil, time.Now, sessionResume{})
 
 	board := screenshotBoard(t, live)

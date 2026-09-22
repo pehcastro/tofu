@@ -535,9 +535,13 @@ func stubbedTurn(dir string, model turn.Model, answers ...bool) tui.Turn {
 
 var stubSelection = models.Model{ID: "stub-model", Windows: []string{"stub"}}
 
+func wireOn(model turn.Model) appWire {
+	return appWire{held: &accounts{fixed: model, now: time.Now}, spend: turn.SpendSubscription, selected: stubSelection}
+}
+
 func resumedTurn(dir string, model turn.Model, person chan tui.Answer, resumed sessionResume) tui.Turn {
 	return appTurnOn(dir, func(runOpts) (appWire, error) {
-		return appWire{model: model, spend: turn.SpendSubscription, selected: stubSelection}, nil
+		return wireOn(model), nil
 	}, person, time.Now, resumed)
 }
 
@@ -662,7 +666,32 @@ func TestAForkShowsTheNoticeAndThenStopsShowingIt(t *testing.T) {
 	t.Log("\n" + driver.frames[noticed])
 }
 
-func TestTheBarIsShownTheNumberTheForkDecidedOn(t *testing.T) {
+func forkingStep(t *testing.T, store *sessionstore.Store) turn.StepRow {
+	t.Helper()
+	listing, err := store.Listing()
+	if err != nil {
+		t.Fatalf("list the sessions the turn wrote: %v", err)
+	}
+	for _, header := range listing.Sessions {
+		events, err := store.Body(header.ID)
+		if err != nil {
+			t.Fatalf("read the body of %s: %v", header.ID, err)
+		}
+		steps, err := contextSteps(events)
+		if err != nil {
+			t.Fatalf("read the steps of %s: %v", header.ID, err)
+		}
+		for _, step := range steps {
+			if step.Fork != nil && step.Occupancy != nil {
+				return step
+			}
+		}
+	}
+	t.Fatal("no recorded step both measured the request it sent and forked, so there is nothing to compare the bar against")
+	return turn.StepRow{}
+}
+
+func TestTheBarShowsTheRequestAsSentAndTheForkDecidedOnWhatCameBackAfterIt(t *testing.T) {
 	dir := scratchProject(t)
 	driver := driveApp(t)
 	overBudget := strings.Repeat("x", recall.ShippedBands().Target()*3)
@@ -672,34 +701,37 @@ func TestTheBarIsShownTheNumberTheForkDecidedOn(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open the sessions the turn wrote: %v", err)
 	}
-	listing, err := store.Listing()
+	forking := forkingStep(t, store)
+	cfg, err := recall.LoadConfig()
 	if err != nil {
-		t.Fatalf("list the sessions the turn wrote: %v", err)
+		t.Fatalf("read the recall library: %v", err)
 	}
-	decided := 0
-	for _, header := range listing.Sessions {
-		if header.ForkTokensBefore > 0 {
-			decided = header.ForkTokensBefore
-		}
+	onWire := cfg.OnWire(wireSubscription)
+
+	asked, appended := "", 0
+	for _, call := range forking.ToolCalls {
+		asked += "\n" + call.Tool + " " + string(call.Args)
+		appended += onWire.MessageTokens(strings.Repeat("x", call.RenderedBytes))
 	}
-	if decided == 0 {
-		t.Fatal("no session header carries what the fork decided on, so there is nothing to compare the bar against")
+	appended += onWire.MessageTokens(asked)
+
+	asSent, decided := forking.Occupancy.Total(), forking.Fork.TokensBefore
+	if decided-asSent != appended {
+		t.Fatalf("step %d sent %d tokens and the fork decided on %d, a gap of %d, where the call and its %d results are %d",
+			forking.Index, asSent, decided, decided-asSent, len(forking.ToolCalls), appended)
 	}
 
 	var shown []int
-	for deadline := time.Now().Add(5 * time.Second); ; time.Sleep(time.Millisecond) {
-		shown = nil
-		for _, event := range driver.of(tui.EventContext) {
-			shown = append(shown, event.Context.Used)
-		}
-		if slices.Contains(shown, decided) || time.Now().After(deadline) {
-			break
-		}
+	for _, event := range driver.of(tui.EventContext) {
+		shown = append(shown, event.Context.Used)
 	}
-	if !slices.Contains(shown, decided) {
-		t.Fatalf("the fork decided on %d tokens and the bar was shown %v", decided, shown)
+	if !slices.Contains(shown, asSent) {
+		t.Fatalf("step %d sent a request of %d tokens and the bar was shown %v", forking.Index, asSent, shown)
 	}
-	t.Logf("the bar was shown %v and the fork decided on %d", shown, decided)
+	if slices.Contains(shown, decided) {
+		t.Fatalf("the bar was shown %d, the conversation after step %d's results, rather than the request it sent", decided, forking.Index)
+	}
+	t.Logf("step %d sent %d tokens, the fork decided on %d, and the %d between them are the call and its results", forking.Index, asSent, decided, appended)
 }
 
 func TestASpawnedChildShowsInTheCrewViewWithTheGlobsItHolds(t *testing.T) {
@@ -773,7 +805,7 @@ func TestAChildRunningForTenSecondsReadsTenSecondsAndWhatItSpent(t *testing.T) {
 	}}
 	driver := driveApp(t)
 	appTurnOn(dir, func(runOpts) (appWire, error) {
-		return appWire{model: model, spend: turn.SpendSubscription, selected: stubSelection}, nil
+		return wireOn(model), nil
 	}, nil, model.clock, sessionResume{})(t.Context(), wireSubscription, "hand the note to a child", driver.emit)
 
 	running := ""

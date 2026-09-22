@@ -239,7 +239,7 @@ func contextText(r contextReport) string {
 	if r.measured == nil {
 		out.WriteString(r.Unmeasured + "\n")
 	} else {
-		fmt.Fprintf(&out, "measured at step %d\n\n%s", r.Occupancy.Step, recall.OccupancyTable(*r.measured))
+		fmt.Fprintf(&out, "the occupancy step %d recorded\n\n%s", r.Occupancy.Step, recall.OccupancyTable(*r.measured))
 		if r.Occupancy.CapsRecorded {
 			fmt.Fprintf(&out, "\n%s %d\n", contextCapsRecorded, r.measured.Bands.Target())
 		} else {

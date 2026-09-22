@@ -361,9 +361,9 @@ func TestAChildRunsOnADifferentSubscriptionFromItsParent(t *testing.T) {
 		id:      "gpt-5.6-sol",
 		windows: "5h and 7d",
 		spend:   turn.SpendSubscription,
-		model: &queuedModel{decisions: []llm.Decision{
+		held: &accounts{now: time.Now, fixed: &queuedModel{decisions: []llm.Decision{
 			{Build: "gpt-5.6-sol-20260101", Outcome: llm.OutcomeMessage, Content: "the child did it"},
-		}},
+		}}},
 	}
 	built, _, err := buildRunTools(dir, opts.toolSet)
 	if err != nil {

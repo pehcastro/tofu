@@ -22,6 +22,8 @@ const (
 
 func stubAccess(account string) string { return "not-a-real-token-" + account }
 
+func stubEmail(account string) string { return account + "@not-a-real-domain.invalid" }
+
 func usageStub(t *testing.T) (string, func() []string) {
 	t.Helper()
 	var guard sync.Mutex
@@ -58,6 +60,7 @@ func storeWithTwoAnthropicAccounts(t *testing.T, now time.Time) *cred.Store {
 			Authorized: now,
 		}
 		credential.Identity.AccountID = account
+		credential.Identity.Email = stubEmail(account)
 		if err := store.Save(credential, now); err != nil {
 			t.Fatalf("seeding an account: %v", err)
 		}
