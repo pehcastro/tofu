@@ -25,6 +25,7 @@ const KindOAuth = "oauth"
 const (
 	anthropicClientIDBase64 = "OWQxYzI1MGEtZTYxYi00NGQ5LTg4ZWQtNTk0NGQxOTYyZjVl"
 	codexClientID           = "app_EMoamEEZ73f0CkXaXp7hrann"
+	codexAuthClaim          = "https://api.openai.com/auth"
 	claudeCodeSDKVersion    = "0.112.1"
 )
 
@@ -44,6 +45,7 @@ type Spec struct {
 	RefreshHeaders      map[string]string
 	ExpirySkew          time.Duration
 	GrantLife           time.Duration
+	IdentityTokenField  string
 	AccountIDPath       string
 	EmailPath           string
 	OrgIDPath           string
@@ -110,11 +112,14 @@ func codexSpec() Spec {
 			"codex_cli_simplified_flow":  "true",
 			"originator":                 "tofu",
 		},
-		CallbackPort: 1455,
-		CallbackPath: "/auth/callback",
-		PortFallback: false,
-		TokenURL:     "https://auth.openai.com/oauth/token",
-		TokenBody:    BodyForm,
-		Instructions: "A browser window should open. Complete login to finish.",
+		CallbackPort:       1455,
+		CallbackPath:       "/auth/callback",
+		PortFallback:       false,
+		TokenURL:           "https://auth.openai.com/oauth/token",
+		TokenBody:          BodyForm,
+		IdentityTokenField: "id_token",
+		AccountIDPath:      codexAuthClaim + ".chatgpt_account_id",
+		EmailPath:          "email",
+		Instructions:       "A browser window should open. Complete login to finish.",
 	}
 }

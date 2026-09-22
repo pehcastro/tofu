@@ -172,27 +172,58 @@ func mapCredential(spec Spec, body map[string]any, previous *Credential, now tim
 		credential.Authorized = previous.Authorized
 		return credential, nil
 	}
-	credential.Identity = Identity{
-		AccountID: jsonPath(body, spec.AccountIDPath),
-		Email:     jsonPath(body, spec.EmailPath),
-		OrgID:     jsonPath(body, spec.OrgIDPath),
-		OrgName:   jsonPath(body, spec.OrgNamePath),
+	claims := body
+	if spec.IdentityTokenField != "" {
+		claims = jwtClaims(jsonPath(body, spec.IdentityTokenField))
 	}
+	credential.Identity = identityFrom(spec, claims)
 	return credential, nil
 }
 
-func jsonPath(body map[string]any, path string) string {
-	if path == "" {
-		return ""
+func identityFrom(spec Spec, claims map[string]any) Identity {
+	return Identity{
+		AccountID: jsonPath(claims, spec.AccountIDPath),
+		Email:     jsonPath(claims, spec.EmailPath),
+		OrgID:     jsonPath(claims, spec.OrgIDPath),
+		OrgName:   jsonPath(claims, spec.OrgNamePath),
 	}
+}
+
+func jwtClaims(token string) map[string]any {
+	parts := strings.Split(token, ".")
+	if len(parts) != 3 {
+		return nil
+	}
+	payload, err := base64.RawURLEncoding.DecodeString(strings.TrimRight(parts[1], "="))
+	if err != nil {
+		return nil
+	}
+	var claims map[string]any
+	if json.Unmarshal(payload, &claims) != nil {
+		return nil
+	}
+	return claims
+}
+
+func jsonPath(body map[string]any, path string) string {
 	var current any = body
-	for _, segment := range strings.Split(path, ".") {
+	for path != "" {
 		object, ok := current.(map[string]any)
 		if !ok {
 			return ""
 		}
-		current = object[segment]
+		key, rest := longestKeyIn(object, path)
+		current, path = object[key], rest
 	}
 	text, _ := current.(string)
 	return text
+}
+
+func longestKeyIn(object map[string]any, path string) (string, string) {
+	for cut := len(path); cut > 0; cut = strings.LastIndex(path[:cut], ".") {
+		if _, held := object[path[:cut]]; held {
+			return path[:cut], strings.TrimPrefix(path[cut:], ".")
+		}
+	}
+	return path, ""
 }

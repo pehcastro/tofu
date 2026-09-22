@@ -72,7 +72,42 @@ func Open(path string) (*Store, error) {
 		return nil, err
 	}
 	_ = os.Chmod(path, storeFileMode)
-	return &Store{db: db}, nil
+	store := &Store{db: db}
+	if err := store.captureMissingKeys(); err != nil {
+		_ = store.Close()
+		return nil, err
+	}
+	return store, nil
+}
+
+func (s *Store) captureMissingKeys() error {
+	rows, err := s.selectRows("WHERE account_key = ''")
+	if err != nil {
+		return err
+	}
+	for _, row := range rows {
+		spec, err := Lookup(string(row.Credential.Provider))
+		if err != nil || spec.IdentityTokenField == "" {
+			continue
+		}
+		identity := identityFrom(spec, jwtClaims(row.Credential.Access))
+		if identity.AccountID == "" {
+			continue
+		}
+		row.Credential.Identity = identity
+		data, err := json.Marshal(row.Credential)
+		if err != nil {
+			return err
+		}
+		if _, err := s.db.Exec(
+			`UPDATE credentials SET account_key = ?, data = ? WHERE id = ? AND NOT EXISTS
+			(SELECT 1 FROM credentials taken WHERE taken.provider = ? AND taken.account_key = ?)`,
+			identity.AccountID, string(data), row.ID,
+			string(row.Credential.Provider), identity.AccountID); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s *Store) Close() error {

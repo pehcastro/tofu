@@ -4,7 +4,22 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"testing"
+
+	"tofu/internal/llm/cred"
 )
+
+func TestTheCredentialSpecReadsTheAccountClaimThisPackageNames(t *testing.T) {
+	spec, err := cred.Lookup(string(cred.Codex))
+	if err != nil {
+		t.Fatalf("looking up the codex credential spec: %v", err)
+	}
+	if want := JWTAuthClaim + "." + AccountClaim; spec.AccountIDPath != want {
+		t.Fatalf("the credential spec reads the account from %q and this package names %q", spec.AccountIDPath, want)
+	}
+	if spec.IdentityTokenField == "" {
+		t.Fatal("the codex credential spec names no token to read the identity from")
+	}
+}
 
 func fakeJWT(t *testing.T, claims map[string]any) string {
 	t.Helper()

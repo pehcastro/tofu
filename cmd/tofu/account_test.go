@@ -1,11 +1,14 @@
 package main
 
 import (
+	"encoding/base64"
+	"encoding/json"
 	"strings"
 	"testing"
 	"time"
 
 	"tofu/internal/llm/cred"
+	"tofu/internal/llm/wire/codex"
 	"tofu/internal/widget"
 )
 
@@ -130,6 +133,66 @@ func TestBothViewsShowTheAccountTheSameWay(t *testing.T) {
 	}
 	if strings.Contains(pane, stored) {
 		t.Errorf("the settings pane names the account in full:\n%s", pane)
+	}
+}
+
+func storeCodexLogin(t *testing.T, account string) {
+	t.Helper()
+	claims, err := json.Marshal(map[string]any{
+		codex.JWTAuthClaim: map[string]any{codex.AccountClaim: account},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	segment := base64.RawURLEncoding.EncodeToString
+	path, err := cred.Path()
+	if err != nil {
+		t.Fatal(err)
+	}
+	store, err := cred.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = store.Close() }()
+	now := time.Now()
+	credential := cred.Credential{
+		Provider:   cred.Codex,
+		Kind:       cred.KindOAuth,
+		Access:     segment([]byte(`{"alg":"none"}`)) + "." + segment(claims) + ".not-a-signature",
+		Expires:    now.Add(time.Hour),
+		Authorized: now,
+	}
+	if err := store.Save(credential, now); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestBothViewsShowACodexAccountTheSameWay(t *testing.T) {
+	emptyHome(t)
+	const account = "codex-account-uuid"
+	storeCodexLogin(t, account)
+
+	listing, errOut, code := runLogin(t, "--status")
+	if code != exitOK {
+		t.Fatalf("status = %d, %q", code, errOut)
+	}
+	pane := settingsScreen(t, appProviders())
+
+	shown := maskedAccount(cred.Identity{AccountID: account})
+	if !strings.Contains(shown, "#") {
+		t.Fatal("a codex account renders without a fingerprint")
+	}
+	if !strings.Contains(listing, shown) {
+		t.Errorf("tofu login --status does not show the codex account masked:\n%s", listing)
+	}
+	if !strings.Contains(pane, shown) {
+		t.Errorf("the settings pane does not show the codex account masked:\n%s", pane)
+	}
+	if strings.Contains(listing, account) {
+		t.Error("tofu login --status names the codex account in full")
+	}
+	if strings.Contains(pane, account) {
+		t.Errorf("the settings pane names the codex account in full:\n%s", pane)
 	}
 }
 
