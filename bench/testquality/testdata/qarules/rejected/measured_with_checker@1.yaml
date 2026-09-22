@@ -1,6 +1,7 @@
 id: measured_with_checker
 domain: qa
 kind: measured
+concern: code_rules
 measurement: bench/testquality/flakerun
 checker: comments
 mode: shadow
