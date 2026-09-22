@@ -10,6 +10,28 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 
 ## Unreleased
 
+## 0.4.7 - 2026-09-22
+
+More than one account, and a screen that stops lying about which one.
+
+### Added
+
+- **`tofu login --status` is a listing rather than a line.** Each subscription is a heading, each account under it carries the email it belongs to, the plan when the vendor reports one, and how full each quota window is. `--redact` masks the account when you are sharing a screen.
+- **A second account for the same subscription is stored and reachable.** Signing in again no longer overwrites the first one. When two are usable and nothing says which, tofu refuses and names both by number rather than picking by accident, and the listing says so with the command that sets one aside.
+
+### Fixed
+
+- **A second Codex login used to overwrite the first.** A Codex credential stored without naming its account, so both rows collided. A login names its account now, and the row already on disk is repaired the first time tofu opens the store.
+- **With two accounts on one subscription, quota was polled for neither.** Each account is polled for its own windows, and a window is remembered against the account it belongs to rather than against the vendor.
+- **`tofu usage` said no credential was stored while listing two of them**, whenever every window was spent.
+- **The account was printed in full in the settings pane and masked in the listing.** One rule now, and the mask tells two accounts apart instead of rendering them identically.
+- **A command that succeeds and prints nothing is no longer sent as an empty message**, which some vendors refuse. An empty success and an empty failure also read differently now, so the model can tell a command that worked from one that broke.
+- **A turn that stops itself keeps its last word.** Tool calls left unanswered when the loop guard tripped made the final request malformed, so the explanation of why the turn stopped was the thing that got lost.
+
+### Changed
+
+- The token benchmark replays against a fixed commit instead of the working tree, so its numbers measure the cap rather than yesterday's edits.
+
 ## 0.4.6 - 2026-09-21
 
 A rule file with one bad number no longer turns the gate off, a failed request is tried again, and the mouse works.
