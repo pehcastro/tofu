@@ -1,6 +1,7 @@
 package cred
 
 import (
+	"context"
 	"errors"
 	"strconv"
 	"strings"
@@ -13,12 +14,14 @@ const (
 	secondAccount = "account-b"
 )
 
+func accountAccess(account string) string { return storedAccess + "-" + account }
+
 func seedAccount(t *testing.T, store *Store, account string, at time.Time) int64 {
 	t.Helper()
 	err := store.Save(Credential{
 		Provider:   Anthropic,
 		Kind:       KindOAuth,
-		Access:     storedAccess,
+		Access:     accountAccess(account),
 		Refresh:    storedRefresh,
 		Expires:    at.Add(time.Hour),
 		Identity:   Identity{AccountID: account},
@@ -71,6 +74,27 @@ func TestAnExpiredGrantDoesNotHideTheSecondAccount(t *testing.T) {
 	}
 	if row.ID != second {
 		t.Fatalf("a credential whose refresh grant expired was chosen over the usable one")
+	}
+}
+
+func TestAManagerNamingARowAnswersWhileTheProviderSelectorRefuses(t *testing.T) {
+	now := time.Now()
+	store := openStore(t, t.TempDir())
+	spec := testSpec("")
+	for _, account := range []string{firstAccount, secondAccount} {
+		id := seedAccount(t, store, account, now)
+		manager := NewAccountManager(store, spec, id)
+		access, err := manager.Access(context.Background())
+		if err != nil {
+			t.Fatalf("a manager naming a stored row was refused: %v", err)
+		}
+		if access != accountAccess(account) {
+			t.Fatal("a manager naming a row resolved a different row")
+		}
+	}
+	var refusal TwoAccounts
+	if _, err := NewManager(store, spec).Access(context.Background()); !errors.As(err, &refusal) {
+		t.Fatalf("the provider selector answered %v, want a refusal while two rows are usable", err)
 	}
 }
 

@@ -34,6 +34,7 @@ type flight struct {
 type Manager struct {
 	store    *Store
 	spec     Spec
+	find     func(time.Time) (Row, bool, error)
 	client   *http.Client
 	now      func() time.Time
 	mu       sync.Mutex
@@ -41,9 +42,22 @@ type Manager struct {
 }
 
 func NewManager(store *Store, spec Spec) *Manager {
+	return newManager(store, spec, func(now time.Time) (Row, bool, error) {
+		return store.RowAt(spec.Provider, now)
+	})
+}
+
+func NewAccountManager(store *Store, spec Spec, id int64) *Manager {
+	return newManager(store, spec, func(time.Time) (Row, bool, error) {
+		return store.RowByID(id)
+	})
+}
+
+func newManager(store *Store, spec Spec, find func(time.Time) (Row, bool, error)) *Manager {
 	return &Manager{
 		store:    store,
 		spec:     spec,
+		find:     find,
 		client:   &http.Client{},
 		now:      time.Now,
 		inflight: make(map[int64]*flight),
@@ -51,7 +65,7 @@ func NewManager(store *Store, spec Spec) *Manager {
 }
 
 func (m *Manager) Access(ctx context.Context) (string, error) {
-	row, found, err := m.store.RowAt(m.spec.Provider, m.now())
+	row, found, err := m.find(m.now())
 	if err != nil {
 		return "", err
 	}
@@ -111,7 +125,7 @@ func (m *Manager) refreshLeased(ctx context.Context, row Row) (string, error) {
 	}
 	defer func() { _ = m.store.ReleaseLease(row.ID, owner) }()
 
-	current, found, err := m.store.RowAt(m.spec.Provider, m.now())
+	current, found, err := m.find(m.now())
 	if err != nil {
 		return "", err
 	}
@@ -154,7 +168,7 @@ func (m *Manager) mint(ctx context.Context, row Row) (string, error) {
 		return "", err
 	}
 	if !replaced {
-		peer, found, err := m.store.RowAt(m.spec.Provider, m.now())
+		peer, found, err := m.find(m.now())
 		if err != nil {
 			return "", err
 		}

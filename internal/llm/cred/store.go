@@ -125,6 +125,14 @@ func (s *Store) Row(provider Provider) (Row, bool, error) {
 	return s.RowAt(provider, time.Now())
 }
 
+func (s *Store) RowByID(id int64) (Row, bool, error) {
+	rows, err := s.selectRows("WHERE id = ?", id)
+	if err != nil || len(rows) == 0 {
+		return Row{}, false, err
+	}
+	return rows[0], true, nil
+}
+
 func (s *Store) RowAt(provider Provider, now time.Time) (Row, bool, error) {
 	rows, err := s.selectRows("WHERE provider = ? ORDER BY id", string(provider))
 	if err != nil || len(rows) == 0 {

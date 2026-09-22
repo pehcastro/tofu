@@ -17,8 +17,9 @@ const (
 )
 
 type pollResult struct {
-	report quota.Report
-	err    error
+	report   quota.Report
+	err      error
+	unusable string
 }
 
 type windowReport struct {
@@ -69,6 +70,9 @@ func credentialReports(results []pollResult, now time.Time) []credentialReport {
 }
 
 func credentialState(result pollResult, now time.Time) string {
+	if result.unusable != "" {
+		return "not polled, " + result.unusable
+	}
 	switch quota.Diagnose(result.report, result.err) {
 	case quota.ConditionServing:
 		return usageServingState
@@ -109,20 +113,35 @@ func pollCredentials(ctx context.Context, now func() time.Time) ([]pollResult, e
 	if err != nil {
 		return nil, err
 	}
-	poller, err := quota.NewPoller(nil, now, nil)
-	if err != nil {
-		return nil, err
-	}
+	return pollRows(ctx, store, rows, now, nil)
+}
+
+func pollRows(
+	ctx context.Context,
+	store *cred.Store,
+	rows []cred.Row,
+	now func() time.Time,
+	urls map[quota.Provider]string,
+) ([]pollResult, error) {
 	results := make([]pollResult, 0, len(rows))
 	for _, row := range rows {
+		provider := quota.Provider(row.Credential.Provider)
+		if cause := row.Unusable(now()); cause != "" {
+			results = append(results, pollResult{report: quota.Report{Provider: provider}, unusable: cause})
+			continue
+		}
 		spec, err := cred.Lookup(string(row.Credential.Provider))
 		if err != nil {
 			return nil, err
 		}
+		poller, err := quota.NewPoller(nil, now, urls)
+		if err != nil {
+			return nil, err
+		}
 		report, err := poller.Poll(ctx, quota.Account{
-			Provider:   quota.Provider(row.Credential.Provider),
+			Provider:   provider,
 			AccountID:  row.Credential.Identity.AccountID,
-			Credential: cred.NewManager(store, spec),
+			Credential: cred.NewAccountManager(store, spec, row.ID),
 		})
 		results = append(results, pollResult{report: report, err: err})
 	}
