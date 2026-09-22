@@ -17,7 +17,7 @@
       "percent": 100,
       "severity": "high",
       "resets_at": "2026-06-06T00:00:00Z",
-      "scope": { "model": { "display_name": "Fable", "id": null }, "surface": null },
+      "scope": { "model": { "display_name": "A Model Tofu Will Not Run", "id": null }, "surface": null },
       "is_active": false
     }
   ]

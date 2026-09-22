@@ -1,16 +1,9 @@
-claude-sub refuses every turn                                                                            needs attention
-
-attention
-
-  ┌ claude-sub
-  │ refuses   2 claude-sub accounts are usable and nothing says which, so every turn refuses
-  │ fix       run tofu login --disable 1
-  └─────────────────────────────────────────────────────────────────────────────────────────
+1 of 4 accounts need attention                                                                           needs attention
 
 claude-sub
 
   ┌ #1  first@example.test
-  │ state     usable, not chosen
+  │ state     in use
   │ login     oauth, expires 2026-09-26T19:42:00Z, re-login by 2026-10-26
   │ plan      not reported by claude-sub
   │ 5h        ▓▓▓░░░░░░░░░  25%  resets in 3h

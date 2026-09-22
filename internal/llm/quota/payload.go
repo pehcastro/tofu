@@ -88,7 +88,7 @@ func scopedWindow(limit anthropicLimit) (string, time.Duration) {
 		if slug == "" {
 			return "", 0
 		}
-		return sevenDayWindow + ":" + slug, week
+		return sevenDayWindow + windowModelMark + slug, week
 	}
 	return "", 0
 }

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"path/filepath"
 	"time"
 
 	"tofu/internal/llm/cred"
@@ -15,12 +16,16 @@ const (
 	usageWindowColumn = 10
 	usageServingState = "serving"
 	noVendorInATest   = "a test may not reach a vendor, so pass pollRows a stub url"
+
+	quotaReadingDirName    = "quota"
+	quotaReadingNotWritten = "the quota reading was not recorded: "
 )
 
 type pollResult struct {
-	report   quota.Report
-	err      error
-	unusable string
+	report    quota.Report
+	err       error
+	unusable  string
+	recordErr error
 }
 
 type windowReport struct {
@@ -75,6 +80,14 @@ func windowsOf(report quota.Report) []windowReport {
 }
 
 func credentialState(result pollResult, now time.Time) string {
+	state := quotaState(result, now)
+	if result.recordErr == nil {
+		return state
+	}
+	return state + ", " + quotaReadingNotWritten + result.recordErr.Error()
+}
+
+func quotaState(result pollResult, now time.Time) string {
 	if result.unusable != "" {
 		return "not polled, " + result.unusable
 	}
@@ -129,6 +142,18 @@ func pollRows(
 	urls map[quota.Provider]string,
 ) ([]pollResult, error) {
 	results := make([]pollResult, 0, len(rows))
+	readings, recordErr := quotaReadingDir()
+	record := func(reading quota.Reading) error {
+		if recordErr != nil {
+			return recordErr
+		}
+		recordErr = quota.AppendReading(readings, reading)
+		return recordErr
+	}
+	poller, err := quota.NewPoller(nil, now, urls, record)
+	if err != nil {
+		return nil, err
+	}
 	for _, row := range rows {
 		provider := quota.Provider(row.Credential.Provider)
 		if urls == nil && sys.CredentialsHiddenFromTests() {
@@ -143,16 +168,24 @@ func pollRows(
 		if err != nil {
 			return nil, err
 		}
-		poller, err := quota.NewPoller(nil, now, urls)
-		if err != nil {
-			return nil, err
-		}
 		report, err := poller.Poll(ctx, quota.Account{
 			Provider:   provider,
 			AccountID:  row.Credential.Identity.AccountID,
+			Row:        row.ID,
 			Credential: cred.NewAccountManager(store, spec, row.ID),
 		})
 		results = append(results, pollResult{report: report, err: err})
 	}
+	for index := range results {
+		results[index].recordErr = recordErr
+	}
 	return results, nil
+}
+
+func quotaReadingDir() (string, error) {
+	state, err := sys.ProjectStateDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(state, quotaReadingDirName), nil
 }

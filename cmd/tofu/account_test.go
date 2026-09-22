@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"strings"
@@ -65,12 +66,16 @@ func TestLoginStatusListsEveryStoredCredential(t *testing.T) {
 	}
 }
 
-func TestDisablingOneCredentialLeavesTheOtherChosen(t *testing.T) {
+func TestTwoUsableCredentialsArePickedBetweenAndSettingOneAsideMovesTheChoice(t *testing.T) {
 	emptyHome(t)
 	storeTwoAnthropicAccounts(t)
 
-	if err := chosenAccount(t); err == nil {
-		t.Fatal("two usable credentials chose one by ordering")
+	chosen, err := chosenAccount(t)
+	if err != nil {
+		t.Fatalf("two usable credentials refused to choose: %v", err)
+	}
+	if chosen != 1 {
+		t.Fatalf("the picker chose #%d, want the first while neither reports a window", chosen)
 	}
 
 	out, errOut, code := runLogin(t, "--disable", "1")
@@ -81,8 +86,12 @@ func TestDisablingOneCredentialLeavesTheOtherChosen(t *testing.T) {
 		t.Fatalf("disable said %q", out)
 	}
 
-	if err := chosenAccount(t); err != nil {
+	aside, err := chosenAccount(t)
+	if err != nil {
 		t.Fatalf("after setting one aside: %v", err)
+	}
+	if aside != 2 {
+		t.Fatalf("the picker chose #%d while #1 is set aside", aside)
 	}
 
 	out, errOut, code = runLogin(t, "--enable", "1")
@@ -92,21 +101,23 @@ func TestDisablingOneCredentialLeavesTheOtherChosen(t *testing.T) {
 	if strings.Contains(out, "set aside by hand") {
 		t.Fatalf("enable said %q", out)
 	}
-	if err := chosenAccount(t); err == nil {
-		t.Fatal("two usable credentials chose one by ordering again")
+	back, err := chosenAccount(t)
+	if err != nil || back != 1 {
+		t.Fatalf("the picker chose #%d (%v) once both are usable again", back, err)
 	}
 }
 
-func chosenAccount(t *testing.T) error {
+func chosenAccount(t *testing.T) (int64, error) {
 	t.Helper()
-	_, accountID, store, err := subscriptionCredential(cred.ClaudeSub)
-	if store != nil {
-		defer func() { _ = store.Close() }()
+	held, _, err := openAccounts(runOpts{wire: wireSubscription}, "anthropic/claude-opus-5")
+	if held != nil {
+		defer held.close()
 	}
-	if err == nil && accountID != secondTestAccount {
-		t.Fatal("the credential left usable was not the one chosen")
+	if err != nil {
+		return 0, err
 	}
-	return err
+	account, err := held.pick(context.Background())
+	return account.ID, err
 }
 
 func TestTheListingNamesTheAccountAndThePaneStillMasksIt(t *testing.T) {

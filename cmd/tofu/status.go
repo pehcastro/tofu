@@ -3,7 +3,6 @@ package main
 import (
 	"cmp"
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"slices"
@@ -41,8 +40,6 @@ type accountReport struct {
 type sourceReport struct {
 	Subscription string          `json:"subscription"`
 	Accounts     []accountReport `json:"accounts"`
-	Refusal      string          `json:"refusal,omitempty"`
-	Fix          string          `json:"fix,omitempty"`
 }
 
 type statusReport struct {
@@ -100,12 +97,12 @@ func credentialStatus(now time.Time, redact bool, urls map[quota.Provider]string
 	if err != nil {
 		return report, err
 	}
-	report.Sources = statusSources(store, rows, results, redact, now)
+	report.Sources = statusSources(rows, results, redact, now)
 	report.Headline, report.State = statusHeadline(report.Sources)
 	return report, nil
 }
 
-func statusSources(store *cred.Store, rows []cred.Row, results []pollResult, redact bool, now time.Time) []sourceReport {
+func statusSources(rows []cred.Row, results []pollResult, redact bool, now time.Time) []sourceReport {
 	var order []cred.Provider
 	for _, row := range rows {
 		if !slices.Contains(order, row.Credential.Provider) {
@@ -115,18 +112,10 @@ func statusSources(store *cred.Store, rows []cred.Row, results []pollResult, red
 	sources := make([]sourceReport, 0, len(order))
 	for _, provider := range order {
 		source := sourceReport{Subscription: string(provider)}
-		var refusal cred.TwoAccounts
-		_, _, err := store.RowAt(provider, now)
-		refuses := errors.As(err, &refusal)
-		if refuses {
-			source.Refusal = fmt.Sprintf(
-				"%d %s accounts are usable and nothing says which, so every turn refuses",
-				len(refusal.IDs), provider)
-			source.Fix = "tofu login --disable " + strconv.FormatInt(refusal.IDs[0], 10)
-		}
+		chosen, _ := quota.Pick(statusCandidates(provider, rows, results, now), quota.Provider(provider), now)
 		for index, row := range rows {
 			if row.Credential.Provider == provider {
-				source.Accounts = append(source.Accounts, accountOf(row, results[index], refuses, redact, now))
+				source.Accounts = append(source.Accounts, accountOf(row, results[index], row.ID != chosen.ID, redact, now))
 			}
 		}
 		sources = append(sources, source)
@@ -134,8 +123,23 @@ func statusSources(store *cred.Store, rows []cred.Row, results []pollResult, red
 	return sources
 }
 
-func accountOf(row cred.Row, result pollResult, refuses, redact bool, now time.Time) accountReport {
-	state, attention := accountState(row, result, refuses, now)
+func statusCandidates(provider cred.Provider, rows []cred.Row, results []pollResult, now time.Time) []quota.Candidate {
+	candidates := make([]quota.Candidate, 0, len(rows))
+	for index, row := range rows {
+		if row.Credential.Provider != provider || row.Unusable(now) != "" {
+			continue
+		}
+		candidates = append(candidates, quota.Candidate{
+			ID:       row.ID,
+			Provider: quota.Provider(provider),
+			Report:   results[index].report,
+		})
+	}
+	return candidates
+}
+
+func accountOf(row cred.Row, result pollResult, unchosen, redact bool, now time.Time) accountReport {
+	state, attention := accountState(row, result, unchosen, now)
 	return accountReport{
 		ID:        row.ID,
 		Account:   accountName(row.Credential.Identity, redact),
@@ -154,17 +158,17 @@ func accountName(identity cred.Identity, redact bool) string {
 	return cmp.Or(identity.Email, identity.AccountID, noAccountYet)
 }
 
-func accountState(row cred.Row, result pollResult, refuses bool, now time.Time) (string, bool) {
+func accountState(row cred.Row, result pollResult, unchosen bool, now time.Time) (string, bool) {
 	condition := credentialState(result, now)
 	switch {
 	case row.DisabledCause != "":
 		return statusSetAside, true
 	case row.Unusable(now) != "":
 		return statusExpired, true
-	case refuses:
-		return statusUnchosen, true
 	case condition != usageServingState:
 		return condition, true
+	case unchosen:
+		return statusUnchosen, false
 	}
 	return statusInUse, false
 }
@@ -177,11 +181,8 @@ func accountPlan(row cred.Row, result pollResult, now time.Time) string {
 }
 
 func statusHeadline(sources []sourceReport) (string, string) {
-	total, attention, refusing := 0, 0, ""
+	total, attention := 0, 0
 	for _, source := range sources {
-		if source.Refusal != "" && refusing == "" {
-			refusing = source.Subscription
-		}
 		for _, account := range source.Accounts {
 			total++
 			if account.Attention {
@@ -192,8 +193,6 @@ func statusHeadline(sources []sourceReport) (string, string) {
 	switch {
 	case total == 0:
 		return statusNoCredential, statusAttention
-	case refusing != "":
-		return refusing + " refuses every turn", statusAttention
 	case attention > 0:
 		return fmt.Sprintf("%d of %s need attention", attention, accountCount(total)), statusAttention
 	}

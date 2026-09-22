@@ -35,10 +35,15 @@ func servingCodexBody(plan string) []byte {
 
 func stubCodexPoller(t *testing.T, handler http.HandlerFunc) *Poller {
 	t.Helper()
+	return recordingCodexPoller(t, handler, nil)
+}
+
+func recordingCodexPoller(t *testing.T, handler http.HandlerFunc, record func(Reading) error) *Poller {
+	t.Helper()
 	server := httptest.NewServer(handler)
 	t.Cleanup(server.Close)
 	poller, err := NewPoller(server.Client(), func() time.Time { return recordedNow },
-		map[Provider]string{CodexSub: server.URL})
+		map[Provider]string{CodexSub: server.URL}, record)
 	if err != nil {
 		t.Fatalf("building the poller: %v", err)
 	}

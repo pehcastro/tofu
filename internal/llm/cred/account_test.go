@@ -2,9 +2,6 @@ package cred
 
 import (
 	"context"
-	"errors"
-	"strconv"
-	"strings"
 	"testing"
 	"time"
 )
@@ -77,7 +74,7 @@ func TestAnExpiredGrantDoesNotHideTheSecondAccount(t *testing.T) {
 	}
 }
 
-func TestAManagerNamingARowAnswersWhileTheProviderSelectorRefuses(t *testing.T) {
+func TestAManagerNamingARowAnswersAndTheProviderSelectorTakesTheFirstUsableOne(t *testing.T) {
 	now := time.Now()
 	store := openStore(t, t.TempDir())
 	spec := testSpec("")
@@ -92,34 +89,26 @@ func TestAManagerNamingARowAnswersWhileTheProviderSelectorRefuses(t *testing.T) 
 			t.Fatal("a manager naming a row resolved a different row")
 		}
 	}
-	var refusal TwoAccounts
-	if _, err := NewManager(store, spec).Access(context.Background()); !errors.As(err, &refusal) {
-		t.Fatalf("the provider selector answered %v, want a refusal while two rows are usable", err)
+	access, err := NewManager(store, spec).Access(context.Background())
+	if err != nil {
+		t.Fatalf("the provider selector refused while two rows are usable: %v", err)
+	}
+	if access != accountAccess(firstAccount) {
+		t.Fatal("the provider selector took neither stored row in order, and it knows no window to choose by")
 	}
 }
 
-func TestTwoUsableAccountsForOneProviderAreRefusedRatherThanOrdered(t *testing.T) {
+func TestTwoUsableAccountsForOneProviderAreOrderedRatherThanRefused(t *testing.T) {
 	now := time.Date(2026, 9, 21, 12, 0, 0, 0, time.UTC)
 	store := openStore(t, t.TempDir())
 	first := seedAccount(t, store, firstAccount, now)
-	second := seedAccount(t, store, secondAccount, now)
+	seedAccount(t, store, secondAccount, now)
 
 	row, found, err := store.RowAt(ClaudeSub, now)
-	var refusal TwoAccounts
-	if !errors.As(err, &refusal) || found {
-		t.Fatalf("RowAt = %d, %v, %v, want a refusal naming both credentials", row.ID, found, err)
+	if err != nil || !found {
+		t.Fatalf("RowAt = %v, %v, want the first usable row rather than a refusal", found, err)
 	}
-	if len(refusal.IDs) != 2 || refusal.IDs[0] != first || refusal.IDs[1] != second {
-		t.Fatalf("the refusal names %v, want both stored credentials", refusal.IDs)
-	}
-	firstTag := "#" + strconv.FormatInt(first, 10)
-	secondTag := "#" + strconv.FormatInt(second, 10)
-	if !strings.Contains(err.Error(), firstTag) || !strings.Contains(err.Error(), secondTag) {
-		t.Fatalf("the refusal does not name both stored credentials: %v", err)
-	}
-	for _, secret := range []string{firstAccount, secondAccount, storedAccess, storedRefresh} {
-		if strings.Contains(err.Error(), secret) {
-			t.Fatal("the refusal names something identifying")
-		}
+	if row.ID != first {
+		t.Fatalf("RowAt chose #%d, want the first usable row: headroom is read by the picker, not here", row.ID)
 	}
 }

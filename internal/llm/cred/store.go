@@ -7,8 +7,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strconv"
-	"strings"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -155,22 +153,6 @@ func (s *Store) List() ([]Row, error) {
 	return s.selectRows("ORDER BY id")
 }
 
-type TwoAccounts struct {
-	Provider Provider
-	IDs      []int64
-}
-
-func (e TwoAccounts) Error() string {
-	tags := make([]string, 0, len(e.IDs))
-	for _, id := range e.IDs {
-		tags = append(tags, "#"+strconv.FormatInt(id, 10))
-	}
-	return fmt.Sprintf(
-		"cred: %d %s credentials are usable (%s) and nothing says which to use, "+
-			"run tofu login --status to see them and tofu login --disable <number> to set one aside",
-		len(e.IDs), e.Provider, strings.Join(tags, ", "))
-}
-
 func (s *Store) Row(provider Provider) (Row, bool, error) {
 	return s.RowAt(provider, time.Now())
 }
@@ -188,23 +170,12 @@ func (s *Store) RowAt(provider Provider, now time.Time) (Row, bool, error) {
 	if err != nil || len(rows) == 0 {
 		return Row{}, false, err
 	}
-	var usable []Row
 	for _, row := range rows {
 		if row.Unusable(now) == "" {
-			usable = append(usable, row)
+			return row, true, nil
 		}
 	}
-	if len(usable) == 0 {
-		return rows[0], true, nil
-	}
-	if len(usable) == 1 {
-		return usable[0], true, nil
-	}
-	refusal := TwoAccounts{Provider: provider}
-	for _, row := range usable {
-		refusal.IDs = append(refusal.IDs, row.ID)
-	}
-	return Row{}, false, refusal
+	return rows[0], true, nil
 }
 
 func (s *Store) selectRows(clause string, args ...any) ([]Row, error) {

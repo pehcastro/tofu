@@ -358,9 +358,8 @@ func fullestWindow(report quota.Report) (frame.Quota, bool) {
 }
 
 type appWire struct {
-	model    turn.Model
+	held     *accounts
 	spend    turn.Spend
-	store    *cred.Store
 	selected models.Model
 }
 
@@ -369,8 +368,8 @@ func openAppWire(opts runOpts) (appWire, error) {
 	if err != nil {
 		return appWire{}, err
 	}
-	model, spend, store, err := runModel(opts, selected.ID)
-	return appWire{model: model, spend: spend, store: store, selected: selected}, err
+	held, spend, err := openAccounts(opts, selected.ID)
+	return appWire{held: held, spend: spend, selected: selected}, err
 }
 
 func awaitPerson(emit tui.CalledFromInsideTheTurnAndNeverAfterItReturns, answers <-chan tui.Answer, granted map[string]bool) turn.Person {
@@ -605,8 +604,8 @@ func (s *appSession) run(ctx context.Context, wire, task string, emit tui.Called
 		maxSteps:         appDecisionCap(s.dir),
 	}
 	opened, err := s.open(opts)
-	if opened.store != nil {
-		defer func() { _ = opened.store.Close() }()
+	if opened.held != nil {
+		defer opened.held.close()
 	}
 	if err != nil {
 		fail(err)
@@ -648,13 +647,16 @@ func (s *appSession) run(ctx context.Context, wire, task string, emit tui.Called
 		fail(budgetErr)
 		return
 	}
-	asked, guardErr := guarded(opened.model, budget)
-	if guardErr != nil {
-		fail(guardErr)
-		return
+	watch := &appWatcher{gate: gate, emit: emit, now: s.now, turnID: opts.turnID, seen: s.shown}
+	opened.held.wrap = func(model turn.Model) (turn.Model, error) {
+		asked, guardErr := guarded(model, budget)
+		if guardErr != nil {
+			return nil, guardErr
+		}
+		watch.inner = asked
+		return watch, nil
 	}
-	watch := &appWatcher{inner: asked, gate: gate, emit: emit, now: s.now, turnID: opts.turnID, seen: s.shown}
-	config, spawner := runConfig(opts, built, runtime{model: watch, spend: opened.spend, budget: budget, gate: gate, sessions: sessions})
+	config, spawner := runConfig(opts, built, runtime{accounts: opened.held.forTurn(), spend: opened.spend, budget: budget, gate: gate, sessions: sessions})
 	config.History = s.carried
 	config.Images = images
 	if s.answers != nil {

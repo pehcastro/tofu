@@ -1,6 +1,7 @@
 package quota
 
 import (
+	"strings"
 	"time"
 
 	"tofu/internal/transport"
@@ -33,6 +34,10 @@ type Window struct {
 	ResetsAt time.Time
 }
 
+const windowModelMark = ":"
+
+func (w Window) Binds() bool { return !strings.Contains(w.ID, windowModelMark) }
+
 func (w Window) State() State {
 	switch {
 	case !w.Used.Reported:
@@ -52,6 +57,16 @@ type Report struct {
 	FetchedAt     time.Time
 }
 
+func (r Report) binding() []Window {
+	bound := make([]Window, 0, len(r.Windows))
+	for _, window := range r.Windows {
+		if window.Binds() {
+			bound = append(bound, window)
+		}
+	}
+	return bound
+}
+
 func (r Report) Exhausted() bool {
 	if r.CreditOverage {
 		return false
@@ -59,7 +74,7 @@ func (r Report) Exhausted() bool {
 	if r.LimitReached {
 		return true
 	}
-	for _, window := range r.Windows {
+	for _, window := range r.binding() {
 		if window.State() == StateExhausted {
 			return true
 		}
@@ -72,7 +87,7 @@ func (r Report) WaitUntil(now time.Time) (time.Time, bool) {
 		return time.Time{}, false
 	}
 	var latest time.Time
-	for _, window := range r.Windows {
+	for _, window := range r.binding() {
 		if window.State() != StateExhausted {
 			continue
 		}
@@ -109,7 +124,7 @@ func Diagnose(report Report, err error) Condition {
 	switch {
 	case report.Exhausted():
 		return ConditionWindowSpent
-	case len(report.Windows) == 0:
+	case len(report.binding()) == 0:
 		return ConditionUnknown
 	}
 	return ConditionServing

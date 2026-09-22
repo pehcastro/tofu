@@ -9,7 +9,6 @@ import (
 )
 
 const (
-	attentionHeading    = "attention"
 	accountNumberColumn = 4
 	factGap             = 2
 	factTextFloor       = 24
@@ -21,8 +20,6 @@ const (
 	factLogin           = "login"
 	factPlan            = "plan"
 	factWindows         = "windows"
-	factRefuses         = "refuses"
-	factFix             = "fix"
 )
 
 type layout struct {
@@ -35,7 +32,6 @@ type layout struct {
 func statusText(report statusReport, shade palette, now time.Time, width int) string {
 	page := layout{shade: shade, now: now, column: factColumn(report), width: width}
 	lines := headlineLines(report, page)
-	lines = append(lines, attentionArea(report, page)...)
 	for _, source := range report.Sources {
 		lines = append(lines, "", source.Subscription)
 		for _, account := range source.Accounts {
@@ -59,23 +55,6 @@ func headlineLines(report statusReport, page layout) []string {
 		return []string{report.Headline + strings.Repeat(" ", gap) + painted}
 	}
 	return []string{report.Headline, painted}
-}
-
-func attentionArea(report statusReport, page layout) []string {
-	var lines []string
-	for _, source := range report.Sources {
-		if source.Refusal == "" {
-			continue
-		}
-		if lines == nil {
-			lines = []string{"", attentionHeading}
-		}
-		body := factLines(factRefuses, source.Refusal, page, nil)
-		body = append(body, factLines(factFix, "run "+source.Fix, page, nil)...)
-		lines = append(lines, "")
-		lines = append(lines, card(page.shade.unsettled(source.Subscription), body, page)...)
-	}
-	return lines
 }
 
 func accountCard(account accountReport, page layout) []string {
@@ -114,7 +93,7 @@ func card(head string, body []string, page layout) []string {
 }
 
 func factColumn(report statusReport) int {
-	widest := max(len(factState), len(factLogin), len(factPlan), len(factWindows), len(factRefuses), len(factFix))
+	widest := max(len(factState), len(factLogin), len(factPlan), len(factWindows))
 	for _, source := range report.Sources {
 		for _, account := range source.Accounts {
 			for _, window := range account.Windows {

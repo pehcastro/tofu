@@ -26,6 +26,7 @@ type Credential interface {
 type Account struct {
 	Provider   Provider
 	AccountID  string
+	Row        int64
 	Credential Credential
 }
 
@@ -34,6 +35,7 @@ type Poller struct {
 	now      func() time.Time
 	interval time.Duration
 	urls     map[Provider]string
+	record   func(Reading) error
 	mu       sync.Mutex
 	last     map[pollKey]time.Time
 	cached   map[pollKey]Report
@@ -44,7 +46,12 @@ type pollKey struct {
 	accountID string
 }
 
-func NewPoller(httpClient *http.Client, now func() time.Time, urls map[Provider]string) (*Poller, error) {
+func NewPoller(
+	httpClient *http.Client,
+	now func() time.Time,
+	urls map[Provider]string,
+	record func(Reading) error,
+) (*Poller, error) {
 	client, err := transport.New(transport.Config{
 		AttemptTimeout: pollTimeout,
 		Retries:        0,
@@ -63,6 +70,7 @@ func NewPoller(httpClient *http.Client, now func() time.Time, urls map[Provider]
 		now:      now,
 		interval: pollMinInterval,
 		urls:     urls,
+		record:   record,
 		last:     make(map[pollKey]time.Time, len(urls)),
 		cached:   make(map[pollKey]Report, len(urls)),
 	}, nil
@@ -83,6 +91,9 @@ func (p *Poller) Poll(ctx context.Context, account Account) (Report, error) {
 	if cacheable {
 		p.last[key] = p.now()
 		p.cached[key] = report
+	}
+	if p.record != nil {
+		_ = p.record(ReadingOf(account.Row, report))
 	}
 	return report, nil
 }

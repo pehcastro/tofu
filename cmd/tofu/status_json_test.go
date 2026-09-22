@@ -14,7 +14,6 @@ var update = flag.Bool("update", false, "rewrite the golden files")
 const (
 	fixtureCodexAccount = "11111111-2222-3333-4444-555555555555"
 	fixtureSpentState   = "every window is spent, back at 2026-09-26T18:42:00Z"
-	fixtureRefusal      = "2 claude-sub accounts are usable and nothing says which, so every turn refuses"
 	fixtureGate         = "no key, so the jev gate is off: " + openRouterFix
 	fixtureWidestWindow = "7d:fable"
 	fixtureBars         = 5
@@ -25,7 +24,7 @@ func fixtureMoment() time.Time { return time.Date(2026, 9, 26, 18, 42, 0, 0, tim
 func statusFixture() statusReport {
 	at := fixtureMoment()
 	return statusReport{
-		Headline: "claude-sub refuses every turn",
+		Headline: "1 of 4 accounts need attention",
 		State:    statusAttention,
 		Sources: []sourceReport{
 			{
@@ -36,8 +35,8 @@ func statusFixture() statusReport {
 						Account:   "first@example.test",
 						Login:     "oauth, expires 2026-09-26T19:42:00Z, re-login by 2026-10-26",
 						Plan:      "not reported by claude-sub",
-						State:     statusUnchosen,
-						Attention: true,
+						State:     statusInUse,
+						Attention: false,
 						Windows: []windowReport{
 							{ID: "5h", Used: 0.25, Reported: true, ResetsAt: at.Add(3 * time.Hour)},
 						},
@@ -48,15 +47,13 @@ func statusFixture() statusReport {
 						Login:     "oauth, expires 2026-09-26T19:42:00Z, re-login by 2026-10-26",
 						Plan:      "not reported by claude-sub",
 						State:     statusUnchosen,
-						Attention: true,
+						Attention: false,
 						Windows: []windowReport{
 							{ID: "5h", Used: 0.62, Reported: true, ResetsAt: at.Add(90 * time.Minute)},
 							{ID: "7d", Used: 0.91, Reported: true, ResetsAt: at.Add(52 * time.Hour)},
 						},
 					},
 				},
-				Refusal: fixtureRefusal,
-				Fix:     "tofu login --disable 1",
 			},
 			{
 				Subscription: "codex-sub",

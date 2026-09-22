@@ -62,7 +62,7 @@ type childRole struct {
 	wire    string
 	id      string
 	windows string
-	model   turn.Model
+	held    *accounts
 	spend   turn.Spend
 }
 
@@ -86,6 +86,7 @@ type runOpts struct {
 
 type runtime struct {
 	model    turn.Model
+	accounts turn.Accounts
 	spend    turn.Spend
 	budget   recall.Budget
 	gate     *toolGate
@@ -243,29 +244,27 @@ func guarded(model turn.Model, budget recall.Budget) (turn.Model, error) {
 }
 
 func runTurn(opts runOpts, selected models.Model, built []turn.Tool, budget recall.Budget, out, errOut io.Writer) int {
-	model, spend, store, err := runModel(opts, selected.ID)
-	if store != nil {
-		defer func() { _ = store.Close() }()
+	held, spend, err := openAccounts(opts, selected.ID)
+	if held != nil {
+		defer held.close()
 	}
 	if err != nil {
 		return runFail(errOut, err)
 	}
-	if model, err = guarded(model, budget); err != nil {
-		return runFail(errOut, err)
-	}
+	held.wrap = func(model turn.Model) (turn.Model, error) { return guarded(model, budget) }
 
 	askedAs, windows := selected.ID, selected.WindowText()
 	if opts.child.wire != "" && (opts.child.wire != opts.wire || opts.child.id != selected.ID) {
 		asChild := opts
 		asChild.wire = opts.child.wire
-		childModel, childSpend, childStore, childErr := runModel(asChild, opts.child.id)
-		if childStore != nil {
-			defer func() { _ = childStore.Close() }()
+		childHeld, childSpend, childErr := openAccounts(asChild, opts.child.id)
+		if childHeld != nil {
+			defer childHeld.close()
 		}
 		if childErr != nil {
 			return runFail(errOut, childErr)
 		}
-		opts.child.model, opts.child.spend = childModel, childSpend
+		opts.child.held, opts.child.spend = childHeld, childSpend
 		askedAs, windows = opts.child.id, opts.child.windows
 	}
 
@@ -281,7 +280,7 @@ func runTurn(opts runOpts, selected models.Model, built []turn.Tool, budget reca
 		return runFail(errOut, err)
 	}
 
-	config, spawner := runConfig(opts, built, runtime{model: model, spend: spend, budget: budget, gate: gate, sessions: sessions})
+	config, spawner := runConfig(opts, built, runtime{accounts: held.forTurn(), spend: spend, budget: budget, gate: gate, sessions: sessions})
 	if spawner != nil {
 		review, reviewErr := newDoneReview(opts.doneArm)
 		if reviewErr != nil {
@@ -317,6 +316,7 @@ func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn
 	}
 	config := turn.Config{
 		Model:       run.model,
+		Accounts:    run.accounts,
 		Spend:       run.spend,
 		Tools:       turn.NewRegistry(built...),
 		Task:        opts.task,
@@ -348,10 +348,10 @@ func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn
 }
 
 func childBase(config turn.Config, child childRole) turn.Config {
-	if child.model == nil {
+	if child.held == nil {
 		return config
 	}
-	config.Model, config.Spend, config.Wire = child.model, child.spend, child.wire
+	config.Model, config.Accounts, config.Spend, config.Wire = nil, child.held.forTurn(), child.spend, child.wire
 	return config
 }
 
@@ -370,20 +370,6 @@ func gateMode(arm string, declared gate.Mode) turn.GateMode {
 		return turn.GateShadow
 	}
 	panic("tofu run: unknown gate arm " + arm)
-}
-
-func runModel(opts runOpts, model string) (turn.Model, turn.Spend, *cred.Store, error) {
-	spend := wireSpend(opts.wire)
-	switch opts.wire {
-	case wireKey:
-		client, err := keyModel(model)
-		return client, spend, nil, err
-	case wireCodex:
-		client, store, err := codexModel(model)
-		return client, spend, store, err
-	}
-	client, store, err := subscriptionModel(model)
-	return client, spend, store, err
 }
 
 func dryRunBody(opts runOpts, model string, config turn.Config) ([]byte, error) {
@@ -430,73 +416,6 @@ func keyModel(model string) (turn.Model, error) {
 		return nil, err
 	}
 	return llm.NewClient(wire)
-}
-
-func subscriptionCredential(provider cred.Provider) (func(context.Context) (string, error), string, *cred.Store, error) {
-	spec, err := cred.Lookup(string(provider))
-	if err != nil {
-		return nil, "", nil, err
-	}
-	path, err := cred.Path()
-	if err != nil {
-		return nil, "", nil, err
-	}
-	store, err := cred.Open(path)
-	if err != nil {
-		return nil, "", nil, err
-	}
-	row, present, err := store.Row(provider)
-	if err != nil {
-		return nil, "", store, err
-	}
-	if !present {
-		return nil, "", store, fmt.Errorf("no %s subscription credential, run tofu login %s", provider, provider)
-	}
-	return cred.NewManager(store, spec).Access, row.Credential.Identity.AccountID, store, nil
-}
-
-func subscriptionModel(model string) (turn.Model, *cred.Store, error) {
-	token, accountID, store, err := subscriptionCredential(cred.ClaudeSub)
-	if err != nil {
-		return nil, store, err
-	}
-	session, err := sessionID()
-	if err != nil {
-		return nil, store, err
-	}
-	wire, err := anthropic.New(anthropic.Config{
-		Model:     model,
-		Token:     token,
-		SessionID: session,
-		AccountID: accountID,
-		Transport: turnTransportConfig(),
-	})
-	if err != nil {
-		return nil, store, err
-	}
-	return turn.Subscription{Wire: wire}, store, nil
-}
-
-func codexModel(model string) (turn.Model, *cred.Store, error) {
-	token, _, store, err := subscriptionCredential(cred.CodexSub)
-	if err != nil {
-		return nil, store, err
-	}
-	session, err := sessionID()
-	if err != nil {
-		return nil, store, err
-	}
-	wire, err := codex.New(codex.Config{
-		Model:          model,
-		Token:          token,
-		InstallationID: session,
-		SessionID:      session,
-		Transport:      turnTransportConfig(),
-	})
-	if err != nil {
-		return nil, store, err
-	}
-	return codexTurn{wire: wire}, store, nil
 }
 
 type codexTurn struct {
@@ -631,6 +550,9 @@ func printRunRow(out io.Writer, row turn.Row, askedAs, windows string) {
 		row.ID, row.Outcome, row.Model, askedAs, spend, row.WallClockMS)
 	if len(row.ChildIDs) > 0 {
 		_, _ = fmt.Fprintf(out, "turn %s spawned %s\n", row.ID, strings.Join(row.ChildIDs, " "))
+	}
+	for _, warning := range row.Warnings {
+		_, _ = fmt.Fprintf(out, "turn %s warning %s\n", row.ID, warning)
 	}
 	for _, step := range row.Steps {
 		_, _ = fmt.Fprintf(out, "step %d: stop_reason %s in %d out %d cache_read %d cache_write %d\n",

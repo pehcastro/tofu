@@ -231,30 +231,26 @@ func TestAStateThatNeedsAttentionReadsDifferentlyFromOneThatDoesNot(t *testing.T
 	}
 }
 
-func TestTwoUsableAccountsSayWhyEveryTurnRefusesAndWhatFixesIt(t *testing.T) {
+func TestTwoUsableAccountsSayWhichOneATurnTakesAndWhichItPassedOver(t *testing.T) {
 	emptyHome(t)
 	storeLogins(t,
 		anthropicLogin("account-uuid-a", firstEmail),
 		anthropicLogin("account-uuid-b", secondEmail))
 
 	listing := statusOf(t)
-	if !strings.Contains(flat(listing), "so every turn refuses") {
-		t.Fatalf("the listing does not say a turn will refuse:\n%s", listing)
+	if strings.Contains(flat(listing), "so every turn refuses") {
+		t.Fatalf("two usable accounts still refuse a turn:\n%s", listing)
 	}
-	if !strings.Contains(listing, "run tofu login --disable 1") {
-		t.Fatalf("the listing names no command that fixes it:\n%s", listing)
+	if !strings.Contains(flat(listing), statusInUse) || !strings.Contains(flat(listing), statusUnchosen) {
+		t.Fatalf("the listing does not say which account a turn takes:\n%s", listing)
 	}
 	t.Log("\n" + listing)
-	first, _, _ := strings.Cut(listing, "\n")
-	if !strings.Contains(first, "claude-sub refuses every turn") {
-		t.Fatalf("the headline hides the refusal: %q", first)
-	}
 
 	if _, errOut, code := runLogin(t, "--disable", "1"); code != exitOK {
 		t.Fatalf("disable = %d, %q", code, errOut)
 	}
-	if after := statusOf(t); strings.Contains(flat(after), "so every turn refuses") {
-		t.Fatalf("one account is set aside and the listing still refuses:\n%s", after)
+	if after := statusOf(t); strings.Contains(flat(after), statusUnchosen) {
+		t.Fatalf("one account is set aside and the other is still not chosen:\n%s", after)
 	}
 }
 
@@ -316,8 +312,6 @@ func TestStatusJSONCarriesEveryFieldTheTextDoes(t *testing.T) {
 	carries(report.Gate)
 	for _, source := range report.Sources {
 		carries(source.Subscription)
-		carries(source.Refusal)
-		carries(source.Fix)
 		for _, account := range source.Accounts {
 			carries("#" + strconv.FormatInt(account.ID, 10))
 			carries(account.Account)

@@ -96,30 +96,17 @@ func TestTwoAccountsUnderOneSubscriptionAreVisiblySeparated(t *testing.T) {
 	}
 }
 
-func TestTheRefusalHasItsOwnAreaAndIsNotARowBetweenAccounts(t *testing.T) {
-	for _, width := range []int{narrowWidth, wideWidth} {
-		lines := renderedAt(width)
-		heading, refusal, subscription := -1, -1, -1
-		for at, line := range lines {
-			switch {
-			case strings.TrimSpace(line) == attentionHeading:
-				heading = at
-			case strings.Contains(line, factRefuses):
-				refusal = at
-			case strings.TrimSpace(line) == "claude-sub":
-				subscription = at
-			}
-		}
-		if heading < 0 || refusal < 0 || subscription < 0 {
-			t.Fatalf("at %d columns the attention area is missing:\n%s", width, strings.Join(lines, "\n"))
-		}
-		if heading >= refusal || refusal >= subscription {
-			t.Fatalf("at %d columns the refusal sits at %d, outside the area at %d and the listing at %d",
-				width, refusal, heading, subscription)
-		}
-		if first, second := headAt(lines, "#1"), headAt(lines, "#2"); first < refusal && refusal < second {
-			t.Fatalf("at %d columns the refusal is a row between the accounts at %d and %d", width, first, second)
-		}
+func TestTheAccountTheTurnPassedOverSaysSoWithoutAskingForAttention(t *testing.T) {
+	painted := statusText(statusFixture(), coloured, fixtureMoment(), narrowWidth)
+	unchosen := cardOf(t, painted, "#2")
+	if !strings.Contains(unchosen, statusUnchosen) {
+		t.Fatalf("the account the picker passed over does not say so:\n%s", unchosen)
+	}
+	if strings.Contains(unchosen, theme.Warn().Render(statusUnchosen)) {
+		t.Fatalf("an account with room that simply was not chosen is drawn as a warning:\n%s", unchosen)
+	}
+	if !strings.Contains(cardOf(t, painted, "#1"), statusInUse) {
+		t.Fatalf("the chosen account does not say it is the one in use:\n%s", painted)
 	}
 }
 

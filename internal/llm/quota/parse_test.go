@@ -62,7 +62,7 @@ func TestTheUsageEndpointPayloadsCarryEveryWindow(t *testing.T) {
 	if got := windowByID(t, anthropic, "5h").Used.Fraction; got != 0.17 {
 		t.Fatalf("the anthropic 5h utilization read %v, want 0.17", got)
 	}
-	scoped := windowByID(t, anthropic, "7d:fable")
+	scoped := perModelWindow(t, anthropic)
 	if scoped.State() != StateExhausted {
 		t.Fatalf("an inactive scoped limit at 100 percent read %+v, want exhausted", scoped)
 	}

@@ -114,6 +114,7 @@ type Header struct {
 	ContextTarget    int        `json:"context_target,omitempty"`
 	AutoCompaction   string     `json:"auto_compaction,omitempty"`
 	Root             string     `json:"root"`
+	Account          int64      `json:"account,omitempty"`
 	ForkedInto       string     `json:"forked_into,omitempty"`
 	ForkKind         string     `json:"fork_kind,omitempty"`
 	ForkTokensBefore int        `json:"fork_tokens_before,omitempty"`
