@@ -12,6 +12,13 @@ import (
 
 const truncationMarker = "\n...(truncated)...\n"
 
+const droppedMarker = "\n...(%s dropped from the middle of this result, which was not stored anywhere. " +
+	"run a narrower command to read the part you need.)...\n"
+
+const unstoredMarker = "\n...(%s dropped from the middle of this result. the whole output could not be stored, " +
+	"so there is no artifact handle for it and artifact_fetch cannot reach the missing bytes. " +
+	"run a narrower command to read the part you need.)...\n"
+
 const artifactHandleBytes = 16
 
 type Artifacts struct {
@@ -33,13 +40,13 @@ func (a Artifacts) Render(content string, bytesCap int) (string, string, error) 
 		return content, "", nil
 	}
 	if !a.handles {
-		return truncateMiddle(content, bytesCap), "", nil
+		return truncateMiddle(content, bytesCap, droppedMarker), "", nil
 	}
 	preview := a.preview
 	preview.ElideAboveBytes = bytesCap
 	elided, err := recall.Elide(a.store, preview, []byte(content), true)
 	if err != nil {
-		return truncateMiddle(content, bytesCap), "", err
+		return truncateMiddle(content, bytesCap, unstoredMarker), "", err
 	}
 	reference := elided.Reference
 	return fmt.Sprintf(
@@ -50,9 +57,14 @@ func (a Artifacts) Render(content string, bytesCap int) (string, string, error) 
 	), reference.ID, nil
 }
 
-func truncateMiddle(content string, bytesCap int) string {
+func truncateMiddle(content string, bytesCap int, marker string) string {
+	dropped := len(content) - bytesCap
+	amount := fmt.Sprintf("%d bytes", dropped)
+	if dropped == 1 {
+		amount = "1 byte"
+	}
 	head := bytesCap / 2
-	return content[:head] + truncationMarker + content[len(content)-(bytesCap-head):]
+	return content[:head] + fmt.Sprintf(marker, amount) + content[len(content)-(bytesCap-head):]
 }
 
 func (a Artifacts) FetchTool() FetchTool {

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -49,11 +50,12 @@ func TestTheOffArmCutsTheMiddleAndHandsBackNoHandle(t *testing.T) {
 	if handle != "" {
 		t.Fatalf("the off arm produced a handle %q", handle)
 	}
-	if !strings.Contains(rendered, truncationMarker) {
-		t.Fatal("the off arm did not cut the middle")
+	marker := markerOf(t, rendered)
+	if !strings.Contains(marker, "dropped from the middle") {
+		t.Fatalf("the off arm cut the middle and left %q in its place", marker)
 	}
-	if len(rendered) != testBytesCap+len(truncationMarker) {
-		t.Fatalf("the off arm rendered %d bytes, wanted %d", len(rendered), testBytesCap+len(truncationMarker))
+	if len(rendered) != testBytesCap+len(marker) {
+		t.Fatalf("the off arm rendered %d bytes, wanted %d", len(rendered), testBytesCap+len(marker))
 	}
 }
 
@@ -250,5 +252,84 @@ func TestBothArmsRenderTheSameResultAndTheSizesAreTheFinding(t *testing.T) {
 	if len(withHandle) >= len(truncated) {
 		t.Fatalf("the handle arm rendered %d bytes against the off arm's %d, so it costs more than it saves",
 			len(withHandle), len(truncated))
+	}
+}
+
+func markerOf(t *testing.T, rendered string) string {
+	t.Helper()
+	head := testBytesCap / 2
+	tail := testBytesCap - head
+	if len(rendered) <= testBytesCap {
+		t.Fatalf("rendered %d bytes against a %d byte cap, so nothing was truncated", len(rendered), testBytesCap)
+	}
+	return rendered[head : len(rendered)-tail]
+}
+
+func TestTheTruncationMarkerNamesTheExactNumberOfBytesItDropped(t *testing.T) {
+	artifacts, err := NewArtifacts(t.TempDir(), false)
+	if err != nil {
+		t.Fatalf("building the artifact store: %v", err)
+	}
+	const dropped = 617
+	rendered, _, err := artifacts.Render(strings.Repeat("x", testBytesCap+dropped), testBytesCap)
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+	marker := markerOf(t, rendered)
+	if !strings.Contains(marker, fmt.Sprintf("%d bytes", dropped)) {
+		t.Fatalf("the marker %q does not name the %d bytes it dropped", marker, dropped)
+	}
+}
+
+func TestAContentAtTheCapIsWholeAndOneByteOverDropsExactlyOneByte(t *testing.T) {
+	artifacts, err := NewArtifacts(t.TempDir(), false)
+	if err != nil {
+		t.Fatalf("building the artifact store: %v", err)
+	}
+	atCap := strings.Repeat("x", testBytesCap)
+	rendered, handle, err := artifacts.Render(atCap, testBytesCap)
+	if err != nil {
+		t.Fatalf("render at the cap: %v", err)
+	}
+	if rendered != atCap || handle != "" {
+		t.Fatalf("a content of exactly %d bytes rendered %d bytes with handle %q, wanted it back whole",
+			testBytesCap, len(rendered), handle)
+	}
+	rendered, _, err = artifacts.Render(atCap+"y", testBytesCap)
+	if err != nil {
+		t.Fatalf("render one byte over the cap: %v", err)
+	}
+	marker := markerOf(t, rendered)
+	if !strings.Contains(marker, "1 byte ") {
+		t.Fatalf("one byte over the cap produced the marker %q, wanted it to name a single byte", marker)
+	}
+	if kept := len(rendered) - len(marker); kept != testBytesCap {
+		t.Fatalf("one byte over the cap kept %d bytes of content, wanted %d", kept, testBytesCap)
+	}
+}
+
+func TestAStoreFailureSaysTheWholeResultCouldNotBeStored(t *testing.T) {
+	blocked := filepath.Join(t.TempDir(), "not-a-directory")
+	if err := os.WriteFile(blocked, []byte("a file, so no directory can be made under it"), 0o644); err != nil {
+		t.Fatalf("writing the blocking file: %v", err)
+	}
+	artifacts, err := NewArtifacts(filepath.Join(blocked, "artifacts"), true)
+	if err != nil {
+		t.Fatalf("building the artifact store: %v", err)
+	}
+	body := bigBody()
+	rendered, handle, err := artifacts.Render(body, testBytesCap)
+	if err == nil {
+		t.Fatal("the store did not fail, so this test proves nothing about the error path")
+	}
+	if handle != "" {
+		t.Fatalf("a failed store still produced the handle %q", handle)
+	}
+	marker := markerOf(t, rendered)
+	if !strings.Contains(marker, "could not be stored") {
+		t.Fatalf("the marker %q does not say the result could not be stored", marker)
+	}
+	if !strings.Contains(marker, fmt.Sprintf("%d bytes", len(body)-testBytesCap)) {
+		t.Fatalf("the marker %q does not name the %d bytes it dropped", marker, len(body)-testBytesCap)
 	}
 }
