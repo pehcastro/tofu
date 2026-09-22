@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -234,5 +235,90 @@ func TestUsageJSONParsesAndCarriesTheSpendLimit(t *testing.T) {
 	}
 	if len(report.Blockers) == 0 {
 		t.Fatalf("a home with no credential reports no blocker: %+v", report)
+	}
+}
+
+func usageSpentFixture(now time.Time) usageReport {
+	spent := "every window is spent, back at " + now.Add(48*time.Hour).UTC().Format(time.RFC3339)
+	return usageReport{
+		State: usageAttention,
+		Providers: []credentialReport{
+			{Provider: "anthropic", State: spent, Windows: []windowReport{{ID: "5h"}, {ID: "7d"}}},
+			{Provider: "codex", State: spent, Windows: []windowReport{{ID: "7d"}}},
+		},
+		SpendLimit: quota.SpendLimitLine(),
+		ReportedAt: now,
+	}
+}
+
+func TestUsageHeadlineDoesNotDenyACredentialItPrints(t *testing.T) {
+	now := usageMoment()
+	printed := usageText(usageSpentFixture(now), plain, now)
+	first, _, _ := strings.Cut(printed, "\n")
+	if strings.Contains(first, usageNoCredential) {
+		t.Fatalf("two stored credentials are listed and the headline reads %q\n%s", first, printed)
+	}
+	if !strings.Contains(first, usageNoWindowReported) {
+		t.Fatalf("the headline does not say what the state is: %q", first)
+	}
+	if count := strings.Count(printed, "every window is spent"); count != 2 {
+		t.Fatalf("the body draws %d spent providers, want 2\n%s", count, printed)
+	}
+}
+
+func TestUsageHeadlineSaysNothingIsStoredOnlyWhenNothingIs(t *testing.T) {
+	now := usageMoment()
+	empty := usageReport{State: usageNone, SpendLimit: quota.SpendLimitLine(), ReportedAt: now}
+	first, _, _ := strings.Cut(usageText(empty, plain, now), "\n")
+	if !strings.HasPrefix(first, usageNoCredential) {
+		t.Fatalf("an empty store reads %q", first)
+	}
+	if got := usageHeadline(usageFixture(now)); got != "anthropic 7d is the fullest at 71%" {
+		t.Fatalf("a reporting window gives the headline %q", got)
+	}
+}
+
+func TestUsageJSONShapeIsUnchanged(t *testing.T) {
+	var out bytes.Buffer
+	if err := writeJSON(&out, usageSpentFixture(usageMoment())); err != nil {
+		t.Fatalf("writeJSON: %v", err)
+	}
+	want := `{
+  "state": "needs attention",
+  "providers": [
+    {
+      "provider": "anthropic",
+      "state": "every window is spent, back at 2026-09-21T14:32:00Z",
+      "windows": [
+        {
+          "id": "5h",
+          "used_fraction": 0,
+          "used_reported": false
+        },
+        {
+          "id": "7d",
+          "used_fraction": 0,
+          "used_reported": false
+        }
+      ]
+    },
+    {
+      "provider": "codex",
+      "state": "every window is spent, back at 2026-09-21T14:32:00Z",
+      "windows": [
+        {
+          "id": "7d",
+          "used_fraction": 0,
+          "used_reported": false
+        }
+      ]
+    }
+  ],
+  "spend_limit": ` + strconv.Quote(quota.SpendLimitLine()) + `,
+  "reported_at": "2026-09-19T14:32:00Z"
+}
+`
+	if out.String() != want {
+		t.Fatalf("the json changed shape\ngot\n%s\nwant\n%s", out.String(), want)
 	}
 }

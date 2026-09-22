@@ -12,9 +12,10 @@ import (
 )
 
 const (
-	usageFlags        = "usage: tofu usage [--json]"
-	usageNoCredential = "no subscription credential is stored"
-	spendLimitPrefix  = "spend limit: "
+	usageFlags            = "usage: tofu usage [--json]"
+	usageNoCredential     = "no subscription credential is stored"
+	usageNoWindowReported = "no window is reporting use"
+	spendLimitPrefix      = "spend limit: "
 )
 
 type usageState int
@@ -126,7 +127,6 @@ func usageText(report usageReport, shade palette, now time.Time) string {
 	if report.State != usageServing {
 		painted = shade.unsettled(state)
 	}
-	head := usageNoCredential
 	var body strings.Builder
 	for _, provider := range report.Providers {
 		label := provider.Provider
@@ -140,7 +140,6 @@ func usageText(report usageReport, shade palette, now time.Time) string {
 			}
 			shown := plain
 			if provider.Provider+" "+window.ID == report.Fullest {
-				head = report.Fullest + " is the fullest at " + window.percent()
 				shown = shade
 			}
 			body.WriteString(labelled(label, window.text(shown, now)) + "\n")
@@ -151,5 +150,22 @@ func usageText(report usageReport, shade palette, now time.Time) string {
 		body.WriteString(strings.Join(blockerLines(blocker.Label, blocker.What, blocker.Command), "\n") + "\n")
 	}
 	limit := wrapped("spend", strings.TrimPrefix(report.SpendLimit, spendLimitPrefix))
-	return headline(head, painted, len(state)) + "\n\n" + body.String() + "\n" + strings.Join(limit, "\n") + "\n"
+	return headline(usageHeadline(report), painted, len(state)) + "\n\n" + body.String() + "\n" + strings.Join(limit, "\n") + "\n"
+}
+
+func usageHeadline(report usageReport) string {
+	switch report.State {
+	case usageNone:
+		return usageNoCredential
+	case usageServing, usageAttention:
+		for _, provider := range report.Providers {
+			for _, window := range provider.Windows {
+				if window.Reported && provider.Provider+" "+window.ID == report.Fullest {
+					return report.Fullest + " is the fullest at " + window.percent()
+				}
+			}
+		}
+		return usageNoWindowReported
+	}
+	panic("tofu usage: unknown state")
 }
