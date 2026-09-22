@@ -1,0 +1,218 @@
+[
+  {
+    "report": "bench/picker/report-2026-09-22.txt",
+    "figure": "0 recorded window readings",
+    "says": "The three arms cannot be separated, because nothing in the tree ever wrote a window reading to disk: the poller cached a report in memory and every caller dropped it. Over a hand-built two-account fixture the same instrument separates them cleanly, first usable at 2 forced moves, round robin at 4, headroom at 1, and that table says nothing about real sessions.",
+    "from": "prose",
+    "sample": "404 files and 18,401 rows read, 0 readings over 0 distinct accounts",
+    "skips": "0 on the real corpus, stated rather than hidden"
+  },
+  {
+    "report": "bench/harness/report-2026-09-22.md",
+    "figure": "36 runs",
+    "says": "Three arms, four tasks and three repeats is 36 runs and 83 minutes of arm time at the median of the recorded rows, gate time on top and never measured. The harness stopped printing a mean over runs: a comparison where either arm has fewer than two passing repeats prints not separable, and a task whose door opens on one repeat and shuts on the next ranks no arm.",
+    "from": "prose",
+    "sample": "4 recorded rows, 3 of them carrying a turn count and a wall clock, plus a 3-repeat fixture that fixes the output shape",
+    "skips": "7 named: 3 live-gated, 2 needing an env-named tree, 1 measuring from a stored turn row, 1 helper process"
+  },
+  {
+    "report": "bench/api/report-2026-09-18.md",
+    "figure": "598 ms",
+    "says": "A Jev call over a 28k state comes back in a median 598 ms over 3 runs, and latency by question count is flat from 1 to 12 questions.",
+    "from": "prose",
+    "sample": "5 state sizes at 3 runs each, plus a 6 case gate battery",
+    "skips": ""
+  },
+  {
+    "report": "bench/ask/report-2026-09-21.md",
+    "figure": "One correct call out of four",
+    "says": "The free ownership boundary already gets the three grant moments exactly and for nothing, so the judgment wins one extra moment of the remaining four and misses three.",
+    "from": "prose",
+    "sample": "7 real moments taken from the ticket logs",
+    "skips": ""
+  },
+  {
+    "report": "bench/cost/report-2026-09-18.md",
+    "figure": "$0.000041",
+    "says": "Jev decided for $0.000041 per correct decision against opus at $0.005351, 131 times more. All four arms scored six of six, so this run is a cost result and not a correctness result.",
+    "from": "prose",
+    "sample": "6 cases, 4 arms",
+    "skips": "accuracy is not readable from this run at all: every arm scored 6 of 6"
+  },
+  {
+    "report": "bench/cost/report-2026-09-19.md",
+    "figure": "$1.584970",
+    "says": "What stands is the spend: $1.584970 on a key through OpenRouter, on two frontier arms retired the same day. Every accuracy figure in the file is withdrawn, because the verdicts came from a rule the gate does not run.",
+    "from": "prose",
+    "sample": "89 cases, 5 arms",
+    "skips": "the fable arm did not finish its half, 51 cases of 89"
+  },
+  {
+    "report": "bench/forkcache/report-2026-09-22.txt",
+    "figure": "zero cache write",
+    "says": "The first request after a context fork reads the whole cacheable head and pays zero cache write, on both recorded forks.",
+    "from": "prose",
+    "sample": "2 recorded context forks",
+    "skips": "the account fork arm could not be measured, because no recorded account fork exists"
+  },
+  {
+    "report": "bench/harness/report-2026-09-20.md",
+    "figure": "10 write calls",
+    "says": "The three-arm comparison this package exists for has never been run. The one real figure it produces is a transform measure over 1 recorded turn and its 10 write calls.",
+    "from": "prose",
+    "sample": "1 recorded turn, 10 write calls",
+    "skips": "the three-arm table, Claude against Codex against Tofu, has never been run and waits on E4"
+  },
+  {
+    "report": "bench/mutate/report-2026-09-20.md",
+    "figure": "84.62%",
+    "says": "Mutation efficacy on internal/judge/policy, reproduced today from the committed fixture: 88 killed, 16 lived, 84.62%. The after figures, 95.19 and 100, come from a board entry rather than a rerun.",
+    "from": "prose",
+    "sample": "one recorded gremlins run: 88 killed, 16 lived, 5 not covered",
+    "skips": "the after run is not reproduced here and its ticket log is empty, so a board line is the only surviving source"
+  },
+  {
+    "report": "bench/promote/report-2026-09-21.md",
+    "figure": "0 rows",
+    "says": "The promotion recorder holds 0 rows and needs 78 before anything can be judged. There is no arm and no accuracy number here yet, and the report says so rather than inventing one.",
+    "from": "prose",
+    "sample": "0 rows against a floor of 78",
+    "skips": "everything: no run has produced a promotion log"
+  },
+  {
+    "report": "bench/readworth/report-2026-09-21.md",
+    "figure": "87.1%",
+    "says": "A length floor of 15 characters matches jev at 87.1% accuracy and saves more bytes, 12.6% against 9.4%, for no call and no money. The free arm removes more, costs nothing and is not worse.",
+    "from": "prose",
+    "sample": "70 hand-labelled paragraphs, 35 keep and 35 drop, over 25 tasks, judged twice",
+    "skips": "one labeller and no second reviewer, which the report names as its own limitation"
+  },
+  {
+    "report": "bench/recall/report-2026-09-20.md",
+    "figure": "20 real forks",
+    "says": "In all 20 real forks the last word is a bare tool call and never prose, so there is nothing for a distilled or a Jev arm to summarise. The free raw copy wins and a live Jev call was disqualified on latency alone.",
+    "from": "prose",
+    "sample": "20 real forks",
+    "skips": ""
+  },
+  {
+    "report": "bench/shortlist/report-2026-09-21.md",
+    "figure": "The corpus holds four.",
+    "says": "Thirty file-localisation questions were asked for and the recorded corpus yields four, so file_shortlist is neither recommended nor refused. The judge closing 25% to 100% hit@1 on four questions is a direction, not a result.",
+    "from": "prose",
+    "sample": "4 questions, drawn from 131 recorded turns of which 20 ever write",
+    "skips": "12 of those 20 turns are file creation, where there is no existing file to localise"
+  },
+  {
+    "report": "bench/sift/report-2026-09-21.md",
+    "figure": "27 of 34",
+    "says": "Jev keeps 27 of 34 needles against the free arm's 18 at the bytes saved the free arm already matches, two runs, same direction. The policy still reads mode: shadow, so the win is measured and not wired.",
+    "from": "prose",
+    "sample": "34 needles, two full live runs, 594 live decisions",
+    "skips": ""
+  },
+  {
+    "report": "bench/stopcheck/report-2026-09-19.md",
+    "figure": "37 agreements against 36",
+    "says": "The typed arm won 37 agreements against the cheap arm's 36 out of 41 labelled steps. The corpus is 78 steps today, so this run is stale and does not line up against the two later ones.",
+    "from": "prose",
+    "sample": "41 labelled steps",
+    "skips": "the corpus was extended to 78 steps after this run, so every figure here is measured against a smaller set"
+  },
+  {
+    "report": "bench/stopcheck/report-2026-09-20.md",
+    "figure": "71 agreements against 68",
+    "says": "The typed arm won 71 agreements against the cheap arm's 68 out of 78 labelled steps, which on a corpus this size is one labeller's judgement on a handful of steps rather than a result.",
+    "from": "prose",
+    "sample": "78 labelled steps of 79 recorded",
+    "skips": ""
+  },
+  {
+    "report": "bench/stopcheck/report-2026-09-21.md",
+    "figure": "71 agreements against 68",
+    "says": "Unchanged from the run of the day before: the typed arm won 71 agreements against the cheap arm's 68 out of 78 labelled steps, and neither arm is fit to end a turn, so the point stays in shadow.",
+    "from": "prose",
+    "sample": "78 labelled steps of 79 recorded",
+    "skips": ""
+  },
+  {
+    "report": "bench/testquality/report-2026-09-21.md",
+    "figure": "off 53, on 53",
+    "says": "The three test-quality rules moved the dead-test count by nothing over nine comparable tasks. The model already reaches the rule catalog through a standing tool, so a sentence in the prompt changes almost nothing.",
+    "from": "prose",
+    "sample": "9 comparable tasks, 10 runs with the rules on and 10 with them off",
+    "skips": "one task of ten is not comparable between the arms and is out of the count"
+  },
+  {
+    "report": "bench/thrift/report-2026-09-21.md",
+    "figure": "15.5 percent",
+    "says": "Every session ever recorded here, added together, is 15.5 percent of the one hypothetical session the volume case multiplied. A recorded session runs a median of 7 tool calls and a worst case of 55, not 9,000.",
+    "from": "prose",
+    "sample": "107 recorded sessions, 1,401 tool calls, 419 of them bash",
+    "skips": "counted and named in the report's own Skips section"
+  },
+  {
+    "report": "bench/tokens/report-2026-09-21.md",
+    "figure": "88.7%",
+    "says": "glob is 88.7% of every result byte the model read, 48,186,030 of 54,295,422 over 109 recorded turns, and a cap of 300 paths cuts the corpus total by 88.4%.",
+    "from": "prose",
+    "sample": "109 recorded turns read through bench/corpus",
+    "skips": "counted and named in the report's own Corpus and skips section"
+  },
+  {
+    "report": "bench/tokens/report-2026-09-21-pinned.md",
+    "figure": "207 to 1,222",
+    "says": "Replayed against a pinned commit, the safe band for the glob path cap is 207 to 1,222 and 300 sits inside it with nothing in between, so the cap is a judgement rather than a measurement. The cap is unchanged at 300.",
+    "from": "prose",
+    "sample": "136 glob calls replayed against a tree of 1,223 tracked files",
+    "skips": "counted and named in the report's own Skips section; the pin drops every call that named an ignored path"
+  },
+  {
+    "report": "bench/transform/report-2026-09-20.md",
+    "figure": "3 of 14",
+    "says": "Only 3 of 14 recorded writes are the shape a typed edit exists for; the other 11 create a file that did not exist. One changed line in the largest recorded file costs 4,284 output tokens to rewrite and 96 to express typed.",
+    "from": "prose",
+    "sample": "17 recorded turns, 14 write calls",
+    "skips": ""
+  },
+  {
+    "report": "bench/turn/report-2026-09-18.md",
+    "figure": "3 of 24 runs failed",
+    "says": "The loop arm passed all 12 of its runs and the one-step arm failed the two-file task three times out of three. The whole run cost $0.399410 over 24 turns on a key.",
+    "from": "prose",
+    "sample": "4 tasks, 3 reps, 2 arms, 24 turns",
+    "skips": "3 of 24 runs failed their outcome check and are out of the timing figures"
+  },
+  {
+    "report": "bench/turn/report-2026-09-21.md",
+    "figure": "16513 ms",
+    "says": "Replaying 102 recorded turns, the repair rule saves 2 round trips and a derived 16513 ms. Refuse saves nothing by construction and remember saves nothing at all, and remember is not kept.",
+    "from": "prose",
+    "sample": "102 replayed turns",
+    "skips": "8 of 110 entries under .tofu/sessions did not parse as a recorded turn"
+  },
+  {
+    "report": "bench/websift/report-2026-09-21.md",
+    "figure": "21/21",
+    "says": "The readability rule, a free arm, keeps 21/21 needles where the shipped judged arm keeps 15/21, and the judgment is not wired. The first round compared two arms that had nothing to remove.",
+    "from": "prose",
+    "sample": "24 pages: 21 focused and 3 reference pages up to 390KB",
+    "skips": "the whole first round was thrown out, because both arms had nothing to remove on those pages"
+  },
+  {
+    "report": "bench/wording/report-2026-09-18.md",
+    "figure": "1 of 6",
+    "says": "No case's verdict changed between the two wordings of tool_gate@1, 1 of 6 cases had a margin wider than the rerun spread, and v2 costs more for the identical decision. Keep v1.",
+    "from": "prose",
+    "sample": "6 cases, two wordings of the same question set",
+    "skips": ""
+  },
+  {
+    "report": "bench/wrongpath/report-2026-09-22.md",
+    "figure": "1.01 per session",
+    "says": "At 30 sessions per arm the smallest visible difference in reverts is 1.01 per session against a corpus mean of 0.47, so the measure cannot separate two arms and this line of work stops here.",
+    "from": "prose",
+    "sample": "109 recorded sessions, 51 reverts and 48 contradictions",
+    "skips": "82 of 109 sessions carry no shape at all, and one session holds 17 of the 51 reverts"
+  }
+]

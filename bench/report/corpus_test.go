@@ -52,7 +52,7 @@ func hasDatedReport(pkgPath string) bool {
 		return false
 	}
 	for _, entry := range entries {
-		if !entry.IsDir() && datedReportName.MatchString(entry.Name()) {
+		if !entry.IsDir() && datedReport.MatchString(entry.Name()) {
 			return true
 		}
 	}

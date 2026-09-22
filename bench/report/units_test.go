@@ -20,7 +20,6 @@ func TestEveryDatedReportCarriesTheUnitOfItsCostFigures(t *testing.T) {
 	awaiting := map[string]string{
 		"turn/report-2026-09-18.md":    "money, from usage.cost on an OpenRouter key; BOJI-064 could not write the line, bench/turn is outside its owns",
 		"wording/report-2026-09-18.md": "money, from usage.cost on an OpenRouter key; BOJI-064 could not write the line, bench/wording is outside its owns",
-		"cost/rescore-2026-09-19.md":   "money, the same unit its sibling cost/report-2026-09-19.md declares and reads from the same ledger; BOJI-098 could not write the line, bench/cost is outside its owns",
 		"cost/sweep-2026-09-19.md":     "money, the same unit its sibling cost/report-2026-09-19.md declares and reads from the same ledger; BOJI-098 could not write the line, bench/cost is outside its owns",
 	}
 	declared, pending, noFigures := 0, 0, 0

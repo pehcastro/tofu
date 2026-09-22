@@ -1,0 +1,7 @@
+[
+  {
+    "report": "bench/forkcache/report-2026-09-22.txt",
+    "state": "withdrawn in part",
+    "why": "the estimator section only, withdrawn by the board entry of 2026-09-22 in .local/boji/tickets/BOARD.md and not by the file. Two of its rows compare numbers taken from two different conversations, so that section does not measure the estimator against the provider. Every other section of the file stands."
+  }
+]
