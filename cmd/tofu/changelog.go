@@ -3,13 +3,10 @@ package main
 import (
 	"fmt"
 	"io"
-	"os"
 	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
-
-	"github.com/charmbracelet/x/term"
 
 	"tofu/catalog/changelog"
 	"tofu/internal/konst"
@@ -210,18 +207,6 @@ func recordChangelogSeen() error {
 	return sys.WriteFile(filepath.Join(dir, changelogSeenFile), []byte(konst.Version+"\n"), changelogSeenMode)
 }
 
-func changelogWidth(out io.Writer) int {
-	file, isFile := out.(*os.File)
-	if !isFile {
-		return konst.ProseWidthChars
-	}
-	width, _, err := term.GetSize(file.Fd())
-	if err != nil || width <= 0 {
-		return konst.ProseWidthChars
-	}
-	return width
-}
-
 func changelogVerb(args []string, out, errOut io.Writer) int {
 	all, asJSON := false, false
 	for _, arg := range args {
@@ -243,7 +228,7 @@ func changelogVerb(args []string, out, errOut io.Writer) int {
 		}
 		return exitOK
 	}
-	width := changelogWidth(out)
+	width := outputWidth(out)
 	if all {
 		_, _ = fmt.Fprint(out, changelogText("tofu "+konst.Version+", every version", versions, width))
 		return exitOK

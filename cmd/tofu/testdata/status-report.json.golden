@@ -1,0 +1,93 @@
+{
+  "headline": "claude-sub refuses every turn",
+  "state": "needs attention",
+  "sources": [
+    {
+      "subscription": "claude-sub",
+      "accounts": [
+        {
+          "id": 1,
+          "account": "first@example.test",
+          "login": "oauth, expires 2026-09-26T19:42:00Z, re-login by 2026-10-26",
+          "plan": "not reported by anthropic",
+          "state": "usable, not chosen",
+          "needs_attention": true,
+          "windows": [
+            {
+              "id": "5h",
+              "used_fraction": 0.25,
+              "used_reported": true,
+              "resets_at": "2026-09-26T21:42:00Z"
+            }
+          ]
+        },
+        {
+          "id": 2,
+          "account": "second@example.test",
+          "login": "oauth, expires 2026-09-26T19:42:00Z, re-login by 2026-10-26",
+          "plan": "not reported by anthropic",
+          "state": "usable, not chosen",
+          "needs_attention": true,
+          "windows": [
+            {
+              "id": "5h",
+              "used_fraction": 0.62,
+              "used_reported": true,
+              "resets_at": "2026-09-26T20:12:00Z"
+            },
+            {
+              "id": "7d",
+              "used_fraction": 0.91,
+              "used_reported": true,
+              "resets_at": "2026-09-28T22:42:00Z"
+            }
+          ]
+        }
+      ],
+      "refusal": "2 anthropic accounts are usable and nothing says which, so every turn refuses",
+      "fix": "tofu login --disable 1"
+    },
+    {
+      "subscription": "codex-sub",
+      "accounts": [
+        {
+          "id": 3,
+          "account": "11111111-2222-3333-4444-555555555555",
+          "login": "oauth, expires 2026-09-26T19:42:00Z",
+          "plan": "pro",
+          "state": "every window is spent, back at 2026-09-26T18:42:00Z",
+          "needs_attention": true,
+          "windows": [
+            {
+              "id": "5h",
+              "used_fraction": 1,
+              "used_reported": true,
+              "resets_at": "2026-09-26T20:42:00Z"
+            },
+            {
+              "id": "7d:fable",
+              "used_fraction": 1,
+              "used_reported": true,
+              "resets_at": "2026-09-28T01:42:00Z"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "subscription": "opencode-sub",
+      "accounts": [
+        {
+          "id": 4,
+          "account": "third@example.test",
+          "login": "oauth, expires 2026-09-26T19:42:00Z",
+          "plan": "not reported by opencode",
+          "state": "in use",
+          "needs_attention": false
+        }
+      ]
+    }
+  ],
+  "jev_key": "no key, so the jev gate is off: run tofu login openrouter and paste the key when it asks",
+  "reported_at": "2026-09-26T18:42:00Z"
+}

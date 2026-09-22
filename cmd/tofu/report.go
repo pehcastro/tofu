@@ -55,6 +55,28 @@ func (p palette) unsettled(text string) string {
 	panic("tofu: unknown palette")
 }
 
+func (p palette) rule(text string) string {
+	switch p {
+	case plain:
+		return text
+	case coloured:
+		return theme.Rule().Render(text)
+	}
+	panic("tofu: unknown palette")
+}
+
+func outputWidth(out io.Writer) int {
+	file, isFile := out.(*os.File)
+	if !isFile {
+		return konst.ProseWidthChars
+	}
+	width, _, err := term.GetSize(file.Fd())
+	if err != nil || width <= 0 {
+		return konst.ProseWidthChars
+	}
+	return width
+}
+
 func (p palette) full(fraction float64, text string) string {
 	switch {
 	case p == plain, fraction < quotaWarnFraction:

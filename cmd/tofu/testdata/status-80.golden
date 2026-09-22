@@ -1,0 +1,49 @@
+claude-sub refuses every turn                                    needs attention
+
+attention
+
+  ┌ claude-sub
+  │ refuses   2 anthropic accounts are usable and nothing says which, so every
+  │           turn refuses
+  │ fix       run tofu login --disable 1
+  └───────────────────────────────────────────────────────────────────────────
+
+claude-sub
+
+  ┌ #1  first@example.test
+  │ state     usable, not chosen
+  │ login     oauth, expires 2026-09-26T19:42:00Z, re-login by 2026-10-26
+  │ plan      not reported by anthropic
+  │ 5h        ▓▓▓░░░░░░░░░  25%  resets in 3h
+  └──────────────────────────────────────────────────────────────────────
+
+  ┌ #2  second@example.test
+  │ state     usable, not chosen
+  │ login     oauth, expires 2026-09-26T19:42:00Z, re-login by 2026-10-26
+  │ plan      not reported by anthropic
+  │ 5h        ▓▓▓▓▓▓▓░░░░░  62%  resets in 1h 30m
+  │ 7d        ▓▓▓▓▓▓▓▓▓▓▓░  91%  resets in 2d 4h
+  └──────────────────────────────────────────────────────────────────────
+
+codex-sub
+
+  ┌ #3  11111111-2222-3333-4444-555555555555
+  │ state     every window is spent, back at 2026-09-26T18:42:00Z
+  │ login     oauth, expires 2026-09-26T19:42:00Z
+  │ plan      pro
+  │ 5h        ▓▓▓▓▓▓▓▓▓▓▓▓ 100%  resets in 2h
+  │ 7d:fable  ▓▓▓▓▓▓▓▓▓▓▓▓ 100%  resets in 1d 7h
+  └──────────────────────────────────────────────────────────────
+
+opencode-sub
+
+  ┌ #4  third@example.test
+  │ state     in use
+  │ login     oauth, expires 2026-09-26T19:42:00Z
+  │ plan      not reported by opencode
+  │ windows   no window is reporting use
+  └──────────────────────────────────────────────
+
+jev
+  no key, so the jev gate is off: run tofu login openrouter and paste the key
+  when it asks

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"tofu/interface/tui/theme"
+	"tofu/internal/konst"
 	"tofu/internal/llm/cred"
 	"tofu/internal/llm/quota"
 	"tofu/internal/sys"
@@ -24,7 +25,10 @@ const (
 	secondEmail = "work@example.test"
 )
 
-func flat(text string) string { return strings.Join(strings.Fields(text), " ") }
+func flat(text string) string {
+	rails := strings.NewReplacer(cardTop, "", cardSide, "", cardFoot, "", cardRule, "")
+	return strings.Join(strings.Fields(rails.Replace(text)), " ")
+}
 
 func vendorStubs(t *testing.T, now time.Time) map[quota.Provider]string {
 	t.Helper()
@@ -105,6 +109,24 @@ func statusLine(t *testing.T, listing, contains string) string {
 		}
 	}
 	t.Fatalf("no line carries %q:\n%s", contains, listing)
+	return ""
+}
+
+func cardOf(t *testing.T, listing, head string) string {
+	t.Helper()
+	var held []string
+	for _, line := range strings.Split(listing, "\n") {
+		switch {
+		case strings.Contains(line, cardTop) && strings.Contains(line, head):
+			held = []string{line}
+		case held == nil:
+		case strings.Contains(line, cardFoot+cardRule):
+			return strings.Join(append(held, line), "\n")
+		default:
+			held = append(held, line)
+		}
+	}
+	t.Fatalf("no card is headed %q:\n%s", head, listing)
 	return ""
 }
 
@@ -198,14 +220,14 @@ func TestAStateThatNeedsAttentionReadsDifferentlyFromOneThatDoesNot(t *testing.T
 		t.Fatalf("both accounts read %q", aside.State)
 	}
 
-	painted := statusText(report, coloured, now)
-	asideCell := statusLine(t, painted, "#1")
-	servingCell := statusLine(t, painted, "#2")
-	if !strings.Contains(asideCell, theme.Warn().Render(aside.State)) {
-		t.Fatalf("the account that needs attention is not drawn as a warning: %q", asideCell)
+	painted := statusText(report, coloured, now, konst.ProseWidthChars)
+	asideCard := cardOf(t, painted, "#1")
+	servingCard := cardOf(t, painted, "#2")
+	if !strings.Contains(asideCard, theme.Warn().Render(aside.State)) {
+		t.Fatalf("the account that needs attention is not drawn as a warning:\n%s", asideCard)
 	}
-	if strings.Contains(servingCell, theme.Warn().Render(serving.State)) {
-		t.Fatalf("the serving account is drawn as a warning: %q", servingCell)
+	if strings.Contains(servingCard, theme.Warn().Render(serving.State)) {
+		t.Fatalf("the serving account is drawn as a warning:\n%s", servingCard)
 	}
 }
 

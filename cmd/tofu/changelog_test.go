@@ -231,7 +231,7 @@ func TestDownAPipeTheChangelogWrapsToTheProseWidth(t *testing.T) {
 	t.Setenv("USERPROFILE", home)
 
 	var out, errOut bytes.Buffer
-	if width := changelogWidth(&out); width != konst.ProseWidthChars {
+	if width := outputWidth(&out); width != konst.ProseWidthChars {
 		t.Fatalf("a writer that is no terminal wraps at %d, want the prose width %d", width, konst.ProseWidthChars)
 	}
 	if code := run([]string{"changelog", "--all"}, strings.NewReader(""), &out, &errOut); code != exitOK {

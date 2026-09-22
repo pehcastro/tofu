@@ -12,27 +12,22 @@ import (
 	"time"
 
 	shipped "tofu/catalog"
-	"tofu/internal/konst"
 	"tofu/internal/llm/cred"
 	"tofu/internal/llm/models"
 	"tofu/internal/llm/quota"
-	"tofu/internal/widget"
 )
 
 const (
-	statusFlags         = "usage: tofu login --status [--json] [--redact]"
-	redactFlag          = "--redact"
-	statusNoCredential  = "no credential is stored"
-	statusServing       = "serving"
-	statusAttention     = "needs attention"
-	statusInUse         = "in use"
-	statusSetAside      = "set aside"
-	statusExpired       = "expired"
-	statusUnchosen      = "usable, not chosen"
-	noAccountYet        = "no account captured yet"
-	accountNumberColumn = 6
-	accountColumn       = 26
-	accountFactIndent   = len(reportIndent) + accountNumberColumn
+	statusFlags        = "usage: tofu login --status [--json] [--redact]"
+	redactFlag         = "--redact"
+	statusNoCredential = "no credential is stored"
+	statusServing      = "serving"
+	statusAttention    = "needs attention"
+	statusInUse        = "in use"
+	statusSetAside     = "set aside"
+	statusExpired      = "expired"
+	statusUnchosen     = "usable, not chosen"
+	noAccountYet       = "no account captured yet"
 )
 
 type accountReport struct {
@@ -82,7 +77,7 @@ func statusVerb(args []string, out, errOut io.Writer, shade palette, now time.Ti
 		return exitVerdict
 	}
 	if !asJSON {
-		_, _ = fmt.Fprint(out, statusText(report, shade, now))
+		_, _ = fmt.Fprint(out, statusText(report, shade, now, outputWidth(out)))
 	}
 	return exitOK
 }
@@ -226,57 +221,4 @@ func accountCount(total int) string {
 		return "1 account"
 	}
 	return strconv.Itoa(total) + " accounts"
-}
-
-func statusText(report statusReport, shade palette, now time.Time) string {
-	painted := shade.settled(report.State)
-	if report.State != statusServing {
-		painted = shade.unsettled(report.State)
-	}
-	lines := []string{headline(report.Headline, painted, len(report.State))}
-	for _, source := range report.Sources {
-		lines = append(lines, "", source.Subscription)
-		for _, account := range source.Accounts {
-			lines = append(lines, accountLines(account, shade, now)...)
-		}
-		if source.Refusal != "" {
-			lines = append(lines, blockerLines("refuses", source.Refusal, source.Fix)...)
-		}
-	}
-	lines = append(lines, "")
-	lines = append(lines, wrapped(jevName, report.Gate)...)
-	return strings.Join(lines, "\n") + "\n"
-}
-
-func accountLines(account accountReport, shade palette, now time.Time) []string {
-	state := shade.settled(account.State)
-	if account.Attention {
-		state = shade.unsettled(account.State)
-	}
-	lines := []string{reportIndent +
-		widget.Pad("#"+strconv.FormatInt(account.ID, 10), accountNumberColumn) +
-		widget.Pad(account.Account, accountColumn) + state}
-	lines = append(lines, factLines("login", account.Login)...)
-	lines = append(lines, factLines("plan", account.Plan)...)
-	reported := false
-	for _, window := range account.Windows {
-		if !window.Reported {
-			continue
-		}
-		reported = true
-		lines = append(lines, strings.Repeat(" ", accountFactIndent)+window.text(shade, now))
-	}
-	if !reported {
-		lines = append(lines, factLines("windows", usageNoWindowReported)...)
-	}
-	return lines
-}
-
-func factLines(label, text string) []string {
-	var lines []string
-	for _, line := range widget.Wrap(text, konst.ReportWidthChars-accountFactIndent-usageWindowColumn) {
-		lines = append(lines, strings.Repeat(" ", accountFactIndent)+widget.Pad(label, usageWindowColumn)+line)
-		label = ""
-	}
-	return lines
 }
