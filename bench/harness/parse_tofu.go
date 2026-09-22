@@ -17,6 +17,7 @@ func ParseTofu(dir string, filter ledger.Filter, meta TofuMeta) (Row, []string, 
 		CLIVersion:     meta.CLIVersion,
 		CredentialKind: meta.CredentialKind,
 		Commit:         meta.Commit,
+		Setup:          meta.Setup,
 	}
 
 	var count int

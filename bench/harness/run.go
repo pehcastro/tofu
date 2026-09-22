@@ -190,7 +190,7 @@ func LoadSession(path string) (turn.Row, error) {
 func MeasureTofu(session turn.Row, src Sources, meta RunMeta) (Row, []string) {
 	row, gaps, err := ParseTofu(src.LedgerDir, ledger.Filter{TurnID: session.ID}, meta)
 	if err != nil {
-		row = Row{Arm: meta.Arm, Task: meta.Task, Version: meta.Version, Run: meta.Run, CLIVersion: meta.CLIVersion, CredentialKind: meta.CredentialKind, Commit: meta.Commit}
+		row = Row{Arm: meta.Arm, Task: meta.Task, Version: meta.Version, Run: meta.Run, CLIVersion: meta.CLIVersion, CredentialKind: meta.CredentialKind, Commit: meta.Commit, Setup: meta.Setup}
 		gaps = append(gaps, "jev ledger: "+err.Error())
 	}
 

@@ -43,6 +43,7 @@ type Plan struct {
 	Env        []string
 	Model      string
 	Caps       Caps
+	Setup      Setup
 }
 
 func PromptPath(root string, version int) string {
@@ -65,12 +66,17 @@ func BuildPlan(root string, arm Arm, task string, version int) (Plan, error) {
 	}
 	prompt := strings.TrimSpace(string(raw))
 
+	setup, err := SetupOf(stockSetupName, filepath.Join(root, stockRuleDir), prompt)
+	if err != nil {
+		return Plan{}, fmt.Errorf("the setup under test is what a row is read back by, and it could not be recorded: %w", err)
+	}
+
 	dir := ArmDir(root, arm, task)
 	caps := Caps{WallClock: defaultWallClockCap, TurnCap: defaultTurnCap}
 	plan := Plan{
 		Arm: arm, Task: task, Version: version,
 		Prompt: prompt, PromptPath: promptPath,
-		Dir: dir, Branch: fmt.Sprintf("v%d", version), Caps: caps,
+		Dir: dir, Branch: fmt.Sprintf("v%d", version), Caps: caps, Setup: setup,
 	}
 
 	switch arm {
@@ -112,9 +118,9 @@ func BuildPlan(root string, arm Arm, task string, version int) (Plan, error) {
 
 func Fprint(w io.Writer, p Plan) error {
 	_, err := fmt.Fprintf(w,
-		"arm %s task %s version %d\ncommand: %s\ndir: %s\nbranch: %s\nprompt: %s\nmodel: %s\nenv: %s\ncaps, unset rather than measured, nobody has given a number: wall clock %s, turns %d\n\n",
+		"arm %s task %s version %d\ncommand: %s\ndir: %s\nbranch: %s\nprompt: %s\nmodel: %s\nenv: %s\nsetup %s: %s\ncaps, unset rather than measured, nobody has given a number: wall clock %s, turns %d\n\n",
 		p.Arm, p.Task, p.Version, Shell(p.Command), p.Dir, p.Branch, p.PromptPath, p.Model, strings.Join(p.Env, ", "),
-		p.Caps.WallClock, p.Caps.TurnCap)
+		p.Setup.Name, p.Setup.Line(), p.Caps.WallClock, p.Caps.TurnCap)
 	return err
 }
 

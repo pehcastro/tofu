@@ -1,3 +1,6 @@
+SETUPS hono-routes
+unrecorded: usually_passes, 4 of 6 runs passed. no setup was recorded beside this row, so nothing about it can be reproduced
+
 GATES hono-routes
 claude v1 run1: PASS
 claude v1 run2: FAIL checklist: handles empty body
@@ -31,3 +34,20 @@ CHECKLIST hono-routes
 claude: 2/3
 codex: 2/2
 tofu: 1/1
+
+WHAT A PASSING EVAL ENTITLES
+A setup is the version of ourselves under test: a name, the rule files loaded under it, and the exact prompt bytes sent. A row carries all three, so a run can be reproduced rather than recognised.
+
+A tier is a rate over repeated runs, never a verdict on one. always_passes, usually_passes and usually_fails say what to expect of the next run. Do not fold them back into a pass or fail column: the failure a conditional rule has to catch is a rule that does not fire, which is a rate, and one column calls that flaky and hides it.
+
+A passing eval entitles you to keep the change for the task set it passed on, and to say where it was measured. Nothing else.
+
+A move smaller than the run to run spread is not a move, and it entitles nobody to anything.
+
+A setup that comes out ahead on one task set does not become the default for everything. It becomes the default for that task set, recorded beside the rows that earned it.
+
+There is no single combined number here and there will not be one. Whoever owns the weights owns the winner.
+
+A setup name with nothing recorded beside it is a label. A row whose setup carries no rule files and no prompt bytes cannot be reproduced, and it is read as unrecorded rather than as a result.
+
+A change kept because the eval passed must have failed that eval before the change was made. A setup that already passed is measuring something you had for free.

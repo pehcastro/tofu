@@ -1,6 +1,7 @@
 package harness
 
 import (
+	_ "embed"
 	"fmt"
 	"os"
 	"sort"
@@ -9,6 +10,9 @@ import (
 
 	"tofu/internal/judge/jev/wire/openrouter"
 )
+
+//go:embed entitlement.txt
+var entitlement string
 
 func Detail(row Row, gaps []string, execution Execution, ledgerDir string) string {
 	host, err := os.Hostname()
@@ -28,6 +32,7 @@ func Detail(row Row, gaps []string, execution Execution, ledgerDir string) strin
 	fmt.Fprintf(b, "machine: %s. model credential kind: %s. date: %s. commit: %s. cli: %s\n",
 		host, row.CredentialKind, row.Start.Format("2006-01-02"), row.Commit, row.CLIVersion)
 	fmt.Fprintf(b, "model: %s. judge wire: %s. judge ledger: %s\n", row.Model, openrouter.Name, ledgerDir)
+	fmt.Fprintf(b, "setup %s: %s\n", row.Setup.Name, row.Setup.Line())
 	fmt.Fprintf(b, "checklist: %d/%d graded items\n", passed, total)
 	fmt.Fprintf(b, "model spend: %s. jev decisions: $%.6f on the openrouter key\n", modelSpend, row.JudgeDollars)
 	fmt.Fprintf(b, "wall clock: %d ms. turns: %d. end reason: %s\n", row.WallClockMS, row.Turns, row.EndReason)
@@ -60,7 +65,30 @@ func Render(rows []Row) string {
 	for _, task := range tasksOf(rows) {
 		renderTask(&b, task, rowsForTask(rows, task))
 	}
+	b.WriteString("\nWHAT A PASSING EVAL ENTITLES\n" + entitlement)
 	return b.String()
+}
+
+func renderSetups(b *strings.Builder, task string, rows []Row) {
+	fmt.Fprintf(b, "SETUPS %s\n", task)
+	bySetup := map[string][]Row{}
+	for _, r := range rows {
+		bySetup[r.Setup.Name] = append(bySetup[r.Setup.Name], r)
+	}
+	names := make([]string, 0, len(bySetup))
+	for name := range bySetup {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		group := bySetup[name]
+		label := name
+		if label == "" {
+			label = "unrecorded"
+		}
+		fmt.Fprintf(b, "%s: %s, %d of %d runs passed. %s\n", label, TierOf(group), PassCount(group), len(group), group[0].Setup.Line())
+	}
+	fmt.Fprintln(b)
 }
 
 func tasksOf(rows []Row) []string {
@@ -87,6 +115,7 @@ func rowsForTask(rows []Row, task string) []Row {
 }
 
 func renderTask(b *strings.Builder, task string, rows []Row) {
+	renderSetups(b, task, rows)
 	gateOK, full := renderGates(b, task, rows)
 	renderFrontier(b, task, full)
 	renderDollarsRatio(b, task, full)

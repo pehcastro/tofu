@@ -15,6 +15,7 @@ type CodexMeta struct {
 	CredentialKind CredentialKind
 	Commit         string
 	Model          string
+	Setup          Setup
 	Start          time.Time
 	End            time.Time
 }
@@ -45,6 +46,7 @@ func ParseCodex(data []byte, meta CodexMeta) (Row, []string, error) {
 		CLIVersion:     meta.CLIVersion,
 		CredentialKind: meta.CredentialKind,
 		Commit:         meta.Commit,
+		Setup:          meta.Setup,
 		Model:          meta.Model,
 		Start:          meta.Start,
 		End:            meta.End,

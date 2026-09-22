@@ -25,6 +25,7 @@ type RunMeta struct {
 	CLIVersion     string
 	CredentialKind CredentialKind
 	Commit         string
+	Setup          Setup
 }
 
 type EndReason string
@@ -62,6 +63,7 @@ type ChecklistResult struct {
 type Row struct {
 	Arm            Arm               `json:"arm"`
 	Task           string            `json:"task"`
+	Setup          Setup             `json:"setup"`
 	Version        int               `json:"version"`
 	Run            int               `json:"run"`
 	Start          time.Time         `json:"start"`
