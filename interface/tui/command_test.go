@@ -8,6 +8,8 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
+
+	"tofu/interface/tui/links"
 )
 
 func commandApp(t *testing.T, entered chan<- string) *App {
@@ -55,6 +57,49 @@ func TestSlashSettingsOpensTheViewAndSendsNothingToTheModel(t *testing.T) {
 	content := ansi.Strip(app.View().Content)
 	if containsAPlaceholder(content) {
 		t.Errorf("the settings view still draws the composer\n%s", content)
+	}
+}
+
+func TestSlashLinksOpensThePickerEvenWhenTheRecordHoldsNone(t *testing.T) {
+	entered := make(chan string, 1)
+	app := commandApp(t, entered)
+	typeText(app, "/links")
+	app.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+
+	if app.current != viewLinks {
+		t.Fatalf("/links left the app on view %d, want the links picker", app.current)
+	}
+	content := ansi.Strip(app.View().Content)
+	if !strings.Contains(content, "0 links") {
+		t.Errorf("the picker does not say it holds nothing\n%s", content)
+	}
+	nothingEntered(t, entered)
+}
+
+func TestEnterOnAPickedLinkCopiesItAndComesBackToChat(t *testing.T) {
+	copied := make(chan string, 1)
+	app := newTestApp(Options{
+		Repo: testRepo,
+		Now:  fixedClock(),
+		Copy: func(text string) error { copied <- text; return nil },
+	})
+	app.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	app.links.Set([]links.Link{{URL: "https://go.dev/doc", From: "you", Count: 1}}, "")
+	app.show(viewLinks)
+	_, cmd := app.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+
+	if cmd == nil {
+		t.Fatal("enter on a picked link ran no command")
+	}
+	msg, isCopy := cmd().(copiedMsg)
+	if !isCopy || msg.text != "https://go.dev/doc" {
+		t.Fatalf("enter produced %#v", msg)
+	}
+	if got := <-copied; got != "https://go.dev/doc" {
+		t.Fatalf("the clipboard was handed %q", got)
+	}
+	if app.current != viewChat {
+		t.Fatalf("copying a link left the app on view %d, want chat", app.current)
 	}
 }
 

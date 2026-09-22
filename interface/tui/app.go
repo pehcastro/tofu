@@ -14,9 +14,11 @@ import (
 	"tofu/interface/tui/crew"
 	"tofu/interface/tui/edits"
 	"tofu/interface/tui/frame"
+	"tofu/interface/tui/links"
 	"tofu/interface/tui/markdown"
 	"tofu/interface/tui/paste"
 	"tofu/interface/tui/pick"
+	"tofu/interface/tui/quote"
 	"tofu/interface/tui/session"
 	"tofu/interface/tui/settings"
 	"tofu/interface/tui/shells"
@@ -157,6 +159,8 @@ const (
 	viewCrew
 	viewShells
 	viewSettings
+	viewLinks
+	viewQuote
 )
 
 const subAgentsIndex = int(viewCrew)
@@ -212,6 +216,8 @@ type App struct {
 	crew           crew.Model
 	edits          edits.Model
 	shells         shells.Model
+	links          links.Model
+	quote          quote.Model
 	settings       settings.Model
 	settingsStore  *isettings.Store
 	status         frame.Status
@@ -339,6 +345,8 @@ func (a *App) resize(width, height int) {
 	a.crew.SetSize(width, height-viewChrome)
 	a.edits.SetSize(width, height-viewChrome)
 	a.shells.SetSize(width, height-viewChrome)
+	a.links.SetSize(width, height-viewChrome)
+	a.quote.SetSize(width, height-viewChrome)
 	a.settings.SetSize(width, height-viewChrome)
 }
 
@@ -517,6 +525,11 @@ func (a *App) key(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return a, nil
 	case viewSettings:
 		a.settingsKey(key)
+		return a, nil
+	case viewLinks:
+		return a, a.linksKey(key)
+	case viewQuote:
+		a.quoteKey(key)
 		return a, nil
 	case viewWork:
 		a.workKey(key)
@@ -1020,6 +1033,10 @@ func (a *App) body() string {
 		return a.shells.View()
 	case viewSettings:
 		return a.settings.View()
+	case viewLinks:
+		return a.links.View()
+	case viewQuote:
+		return a.quote.View()
 	}
 	panic("tui: unknown view")
 }

@@ -3,10 +3,17 @@ package tui
 import (
 	tea "charm.land/bubbletea/v2"
 
+	"tofu/interface/tui/links"
+	"tofu/interface/tui/quote"
 	"tofu/interface/tui/session"
+	isession "tofu/internal/session"
+	"tofu/internal/sys"
 )
 
-const turnRunningNote = "a turn is running. stop it with ctrl+c first"
+const (
+	turnRunningNote = "a turn is running. stop it with ctrl+c first"
+	noRecordYet     = "nothing is recorded under this repository yet"
+)
 
 func commands(options Options) []session.Command {
 	listed := []session.Command{
@@ -16,6 +23,8 @@ func commands(options Options) []session.Command {
 		{Name: "sub-agents", What: "the children, what each owns and what each is doing"},
 		{Name: "shells", What: "the persistent processes an agent left running"},
 		{Name: "settings", What: "the providers and the file each value came from"},
+		{Name: "links", What: "every link this conversation carried, newest first"},
+		{Name: "quote", What: "cite a past turn by id, newest first"},
 		{Name: "copy", What: "put the last answer on the clipboard"},
 		{Name: "copy-call", What: "put the last tool call and its result on the clipboard"},
 	}
@@ -72,6 +81,12 @@ func (a *App) runCommand(name string) tea.Cmd {
 		a.show(viewShells)
 	case "settings":
 		a.show(viewSettings)
+	case "links":
+		a.links.Set(a.recordedLinks())
+		a.show(viewLinks)
+	case "quote":
+		a.quote.Set(a.recordedTurns())
+		a.show(viewQuote)
 	case "copy":
 		return a.copyAnswer()
 	case "copy-call":
@@ -89,6 +104,61 @@ func (a *App) runCommand(name string) tea.Cmd {
 		a.view.Append(session.Entry{Kind: session.Note, Body: "there is no /" + name + ". type / to see the commands."})
 	}
 	return nil
+}
+
+func (a *App) recordedTalk() (isession.Conversation, string) {
+	store := isession.OpenAt(sys.StateDir(a.options.Root))
+	id := a.sessionID
+	if id == "" {
+		head, err := store.Head()
+		if err != nil {
+			return isession.Conversation{}, noRecordYet
+		}
+		id = head.ID
+	}
+	talk, err := store.Conversation(id)
+	if err != nil {
+		return isession.Conversation{}, err.Error()
+	}
+	return talk, ""
+}
+
+func (a *App) recordedLinks() ([]links.Link, string) {
+	talk, trouble := a.recordedTalk()
+	if trouble != "" {
+		return nil, trouble
+	}
+	return links.Collect(talk), ""
+}
+
+func (a *App) recordedTurns() ([]quote.Turn, string) {
+	talk, trouble := a.recordedTalk()
+	if trouble != "" {
+		return nil, trouble
+	}
+	return quote.Collect(talk), ""
+}
+
+func (a *App) linksKey(key string) tea.Cmd {
+	if key != "enter" {
+		a.links.Key(key)
+		return nil
+	}
+	one, picked := a.links.Picked()
+	a.show(viewChat)
+	return a.copy(linkUnit, one.URL, picked)
+}
+
+func (a *App) quoteKey(key string) {
+	if key != "enter" {
+		a.quote.Key(key)
+		return
+	}
+	one, picked := a.quote.Picked()
+	a.show(viewChat)
+	if picked {
+		a.view.Insert(quote.Ref(one.Event))
+	}
 }
 
 func (a *App) reload() {

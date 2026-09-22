@@ -214,6 +214,8 @@ func tintedState(state textarea.StyleState) textarea.StyleState {
 
 func (m *Model) Focus() tea.Cmd { return m.composer.Focus() }
 
+func (m *Model) Insert(text string) { m.composer.InsertString(text) }
+
 func (m Model) Cursor() *tea.Cursor {
 	caret := m.composer.Cursor()
 	if caret == nil {

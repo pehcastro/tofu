@@ -14,6 +14,7 @@ const (
 	nothingToCopy = "there is nothing there to copy yet"
 	answerUnit    = "the last answer"
 	callUnit      = "the tool call"
+	linkUnit      = "the link"
 	copyFailed    = "the copy did not happen: "
 	copyWritten   = " copied, "
 	copyHanded    = " handed to the terminal, which does not say whether it took it"

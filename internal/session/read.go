@@ -38,21 +38,6 @@ type Reads struct {
 	Unrecorded int    `json:"unrecorded"`
 }
 
-type stepCall struct {
-	Tool         string          `json:"tool"`
-	Args         json.RawMessage `json:"args"`
-	ResultBytes  int             `json:"result_bytes"`
-	ResultHash   string          `json:"result_hash"`
-	ResultHandle string          `json:"result_handle"`
-	Error        string          `json:"error"`
-}
-
-type stepRow struct {
-	Index         int        `json:"index"`
-	AssistantText string     `json:"assistant_text"`
-	ToolCalls     []stepCall `json:"tool_calls"`
-}
-
 type readArgs struct {
 	Path      string `json:"path"`
 	StartLine int    `json:"start_line"`
@@ -62,7 +47,7 @@ type readArgs struct {
 	Length    int    `json:"length"`
 }
 
-func readsInStep(step stepRow, reasoning bool) []Read {
+func readsInStep(step StepBody, reasoning bool) []Read {
 	var reads []Read
 	for _, call := range step.ToolCalls {
 		if call.Tool != readTool && call.Tool != artifactFetchTool {
@@ -127,7 +112,7 @@ func (s Settings) withReads(events []Event) ([]Event, error) {
 		if event.Kind != EventStep {
 			continue
 		}
-		var step stepRow
+		var step StepBody
 		if err := json.Unmarshal(event.Body, &step); err != nil {
 			return nil, fmt.Errorf("session: a step being recorded does not read back: %w", err)
 		}
@@ -158,7 +143,7 @@ func (s *Store) ReadsOf(id string) (Reads, error) {
 			}
 			reads.Reads = append(reads.Reads, read)
 		case EventStep:
-			var step stepRow
+			var step StepBody
 			if err := json.Unmarshal(event.Body, &step); err != nil {
 				return Reads{}, fmt.Errorf("session: a step of %s does not parse: %w", id, err)
 			}
