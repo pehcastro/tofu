@@ -142,10 +142,11 @@ func appWires() []tui.Wire {
 		return nil
 	}
 	defer func() { _ = store.Close() }()
+	now := time.Now()
 	var wires []tui.Wire
 	for _, provider := range []cred.Provider{cred.Anthropic, cred.Codex} {
-		row, present, err := store.Row(provider)
-		if err != nil || !present || row.DisabledCause != "" {
+		row, present, err := store.RowAt(provider, now)
+		if err != nil || !present || row.Unusable(now) != "" {
 			continue
 		}
 		selected, err := selectModel(string(provider), "")
@@ -221,14 +222,15 @@ func subscriptionProvider(name string, provider cred.Provider, store *cred.Store
 		row.Fix = unreadableSource + openErr.Error()
 		return row
 	}
-	stored, present, err := store.Row(provider)
+	now := time.Now()
+	stored, present, err := store.RowAt(provider, now)
 	switch {
 	case err != nil:
 		row.Fix = unreadableSource + err.Error()
 	case !present:
 		row.Fix = "run tofu login " + name
-	case stored.DisabledCause != "":
-		row.State = "disabled, " + stored.DisabledCause
+	case stored.Unusable(now) != "":
+		row.State = stored.Unusable(now)
 	default:
 		row.State = strings.TrimSpace("signed in " + cmp.Or(stored.Credential.Identity.Email, stored.Credential.Identity.AccountID))
 	}

@@ -2,11 +2,13 @@ package main
 
 import (
 	"bufio"
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
 	"io"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -18,10 +20,13 @@ import (
 	"tofu/internal/llm/cred"
 	"tofu/internal/sys"
 	"tofu/internal/transport"
+	"tofu/internal/widget"
 )
 
 const (
-	loginUsage      = "usage: tofu login <anthropic|codex|openrouter> [--paste], or tofu login --status"
+	loginUsage = "usage: tofu login <anthropic|codex|openrouter> [--paste], tofu login --status, " +
+		"or tofu login --disable|--enable <number>"
+	setAsideCause   = "set aside by hand, run tofu login --enable to bring it back"
 	openRouterName  = "openrouter"
 	openRouterFix   = "run tofu login openrouter and paste the key when it asks"
 	keyIsNeverTyped = "the key is read from a prompt and never from an argument: run tofu login openrouter on its own"
@@ -32,12 +37,33 @@ func loginVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 	if len(args) == 0 {
 		return loginFail(errOut, errors.New(loginUsage))
 	}
-	if args[0] == "--status" {
-		_, _ = fmt.Fprintf(out, "credentials: %s\n", cred.DoctorState())
+	switch args[0] {
+	case "--status":
+		if len(args) > 1 {
+			return loginFail(errOut, errors.New(loginUsage))
+		}
+		listing, err := credentialListing(time.Now())
+		if err != nil {
+			return loginRefused(errOut, "%v", err)
+		}
+		_, _ = fmt.Fprint(out, listing)
 		_, _ = fmt.Fprintf(out, "openrouter: %s\n", openRouterStatus())
 		return exitOK
-	}
-	if args[0] == openRouterName {
+	case "--disable", "--enable":
+		if len(args) != 2 {
+			return loginFail(errOut, errors.New(loginUsage))
+		}
+		cause := setAsideCause
+		if args[0] == "--enable" {
+			cause = ""
+		}
+		line, err := setCredentialAside(args[1], cause, time.Now())
+		if err != nil {
+			return loginRefused(errOut, "%v", err)
+		}
+		_, _ = fmt.Fprintln(out, line)
+		return exitOK
+	case openRouterName:
 		if len(args) > 1 {
 			return loginFail(errOut, errors.New(keyIsNeverTyped))
 		}
@@ -58,6 +84,92 @@ func loginVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 		return loginRefused(errOut, "%v", err)
 	}
 	return exitOK
+}
+
+func openStoredCredentials() (*cred.Store, error) {
+	path, err := cred.Path()
+	if err != nil {
+		return nil, err
+	}
+	present, err := sys.Exists(path)
+	if err != nil || !present {
+		return nil, err
+	}
+	return cred.Open(path)
+}
+
+func credentialListing(now time.Time) (string, error) {
+	store, err := openStoredCredentials()
+	if err != nil {
+		return "", err
+	}
+	if store == nil {
+		return "credentials: none\n", nil
+	}
+	defer func() { _ = store.Close() }()
+	rows, err := store.List()
+	if err != nil {
+		return "", err
+	}
+	if len(rows) == 0 {
+		return "credentials: none\n", nil
+	}
+	lines := "credentials:\n"
+	for _, row := range rows {
+		lines += "  " + credentialLine(row, now) + "\n"
+	}
+	return lines, nil
+}
+
+func credentialLine(row cred.Row, now time.Time) string {
+	account := cmp.Or(row.Credential.Identity.Email, row.Credential.Identity.AccountID)
+	return fmt.Sprintf("#%d %s %s", row.ID, widget.Mask(account), row.State(now))
+}
+
+func credentialByID(rows []cred.Row, id int64) (cred.Row, bool) {
+	for _, row := range rows {
+		if row.ID == id {
+			return row, true
+		}
+	}
+	return cred.Row{}, false
+}
+
+func setCredentialAside(number, cause string, now time.Time) (string, error) {
+	id, err := strconv.ParseInt(number, 10, 64)
+	if err != nil {
+		return "", fmt.Errorf("want a credential number as tofu login --status prints it, not %q", number)
+	}
+	store, err := openStoredCredentials()
+	if err != nil {
+		return "", err
+	}
+	missing := fmt.Errorf("no stored credential is numbered %d, tofu login --status lists them", id)
+	if store == nil {
+		return "", missing
+	}
+	defer func() { _ = store.Close() }()
+	rows, err := store.List()
+	if err != nil {
+		return "", err
+	}
+	if _, held := credentialByID(rows, id); !held {
+		return "", missing
+	}
+	if cause == "" {
+		err = store.Enable(id, now)
+	} else {
+		err = store.Disable(id, cause, now)
+	}
+	if err != nil {
+		return "", err
+	}
+	rows, err = store.List()
+	if err != nil {
+		return "", err
+	}
+	row, _ := credentialByID(rows, id)
+	return credentialLine(row, now), nil
 }
 
 func loginFail(errOut io.Writer, err error) int {
@@ -98,7 +210,7 @@ func login(ctx context.Context, spec cred.Spec, paste bool, in io.Reader, out io
 		return err
 	}
 	_, _ = fmt.Fprintf(out, "stored at %s\n", path)
-	_, _ = fmt.Fprintf(out, "credentials: %s\n", cred.Report([]cred.Row{{Credential: credential}}))
+	_, _ = fmt.Fprintf(out, "credentials: %s\n", cred.Report([]cred.Row{{Credential: credential}}, time.Now()))
 	return nil
 }
 

@@ -162,7 +162,7 @@ func doctorState(now time.Time) doctorReport {
 		Version:     frame.Release(sys.Version(), sys.BuildRevision()),
 		Blockers:    doctorBlockers(),
 		Credentials: doctorCredentials(now),
-		Store:       cred.DoctorState(),
+		Store:       cred.DoctorState(now),
 		Gate:        doctorGate{Variable: located.Name, Source: gateSource(located), Path: located.Path},
 		Catalog:     catalog,
 		Rules:       rules,

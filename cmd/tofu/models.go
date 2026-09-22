@@ -280,7 +280,12 @@ func discoverModels(ctx context.Context, catalog models.Catalog, registry models
 			continue
 		}
 		row, present, err := store.Row(cred.Provider(spec.Wire))
-		if err != nil || !present {
+		if err != nil {
+			_, _ = fmt.Fprintf(out, "%s: %v\n", spec.ID, err)
+			code = exitVerdict
+			continue
+		}
+		if !present {
 			_, _ = fmt.Fprintf(out, "%s: no credential, run tofu login %s\n", spec.ID, spec.Wire)
 			code = exitVerdict
 			continue

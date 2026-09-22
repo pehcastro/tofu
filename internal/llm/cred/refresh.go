@@ -51,15 +51,15 @@ func NewManager(store *Store, spec Spec) *Manager {
 }
 
 func (m *Manager) Access(ctx context.Context) (string, error) {
-	row, found, err := m.store.Row(m.spec.Provider)
+	row, found, err := m.store.RowAt(m.spec.Provider, m.now())
 	if err != nil {
 		return "", err
 	}
 	if !found {
 		return "", fmt.Errorf("cred: no %s credential, run tofu login %s", m.spec.Provider, m.spec.Provider)
 	}
-	if row.DisabledCause != "" {
-		return "", fmt.Errorf("cred: the %s credential is disabled: %s", m.spec.Provider, row.DisabledCause)
+	if cause := row.Unusable(m.now()); cause != "" {
+		return "", fmt.Errorf("cred: the %s credential is %s", m.spec.Provider, cause)
 	}
 	if m.fresh(row.Credential) {
 		return row.Credential.Access, nil
@@ -111,7 +111,7 @@ func (m *Manager) refreshLeased(ctx context.Context, row Row) (string, error) {
 	}
 	defer func() { _ = m.store.ReleaseLease(row.ID, owner) }()
 
-	current, found, err := m.store.Row(m.spec.Provider)
+	current, found, err := m.store.RowAt(m.spec.Provider, m.now())
 	if err != nil {
 		return "", err
 	}
@@ -154,7 +154,7 @@ func (m *Manager) mint(ctx context.Context, row Row) (string, error) {
 		return "", err
 	}
 	if !replaced {
-		peer, found, err := m.store.Row(m.spec.Provider)
+		peer, found, err := m.store.RowAt(m.spec.Provider, m.now())
 		if err != nil {
 			return "", err
 		}

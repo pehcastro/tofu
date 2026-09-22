@@ -9,7 +9,7 @@ import (
 
 const dayStamp = "2006-01-02"
 
-func DoctorState() string {
+func DoctorState(now time.Time) string {
 	path, err := Path()
 	if err != nil {
 		return "unknown: " + err.Error()
@@ -30,29 +30,49 @@ func DoctorState() string {
 	if err != nil {
 		return "unreadable: " + err.Error()
 	}
-	return Report(rows)
+	return Report(rows, now)
 }
 
-func Report(rows []Row) string {
+func Report(rows []Row, now time.Time) string {
 	if len(rows) == 0 {
 		return "none"
 	}
 	lines := make([]string, 0, len(rows))
 	for _, row := range rows {
-		lines = append(lines, describe(row))
+		lines = append(lines, row.State(now))
 	}
 	return strings.Join(lines, "; ")
 }
 
-func describe(row Row) string {
-	line := string(row.Credential.Provider) + " " + row.Credential.Kind
-	if row.DisabledCause != "" {
-		return line + ", disabled: " + strings.ReplaceAll(row.DisabledCause, "\n", " ")
+func (r Row) Unusable(now time.Time) string {
+	if r.DisabledCause != "" {
+		return "disabled: " + strings.ReplaceAll(r.DisabledCause, "\n", " ")
 	}
-	line += ", expires " + row.Credential.Expires.UTC().Format(time.RFC3339)
-	spec, err := Lookup(string(row.Credential.Provider))
-	if err != nil || spec.GrantLife == 0 || row.Credential.Authorized.IsZero() {
+	deadline, dated := r.reloginBy()
+	if !dated || now.Before(deadline) {
+		return ""
+	}
+	return "the login expired on " + deadline.UTC().Format(dayStamp) +
+		", run tofu login " + string(r.Credential.Provider)
+}
+
+func (r Row) reloginBy() (time.Time, bool) {
+	spec, err := Lookup(string(r.Credential.Provider))
+	if err != nil || spec.GrantLife == 0 || r.Credential.Authorized.IsZero() {
+		return time.Time{}, false
+	}
+	return r.Credential.Authorized.Add(spec.GrantLife), true
+}
+
+func (r Row) State(now time.Time) string {
+	line := string(r.Credential.Provider) + " " + r.Credential.Kind
+	if cause := r.Unusable(now); cause != "" {
+		return line + ", " + cause
+	}
+	line += ", expires " + r.Credential.Expires.UTC().Format(time.RFC3339)
+	deadline, dated := r.reloginBy()
+	if !dated {
 		return line
 	}
-	return line + ", re-login by " + row.Credential.Authorized.Add(spec.GrantLife).UTC().Format(dayStamp)
+	return line + ", re-login by " + deadline.UTC().Format(dayStamp)
 }

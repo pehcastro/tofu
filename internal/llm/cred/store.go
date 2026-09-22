@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -103,12 +105,48 @@ func (s *Store) List() ([]Row, error) {
 	return s.selectRows("ORDER BY id")
 }
 
+type TwoAccounts struct {
+	Provider Provider
+	IDs      []int64
+}
+
+func (e TwoAccounts) Error() string {
+	tags := make([]string, 0, len(e.IDs))
+	for _, id := range e.IDs {
+		tags = append(tags, "#"+strconv.FormatInt(id, 10))
+	}
+	return fmt.Sprintf(
+		"cred: %d %s credentials are usable (%s) and nothing says which to use, "+
+			"run tofu login --status to see them and tofu login --disable <number> to set one aside",
+		len(e.IDs), e.Provider, strings.Join(tags, ", "))
+}
+
 func (s *Store) Row(provider Provider) (Row, bool, error) {
-	rows, err := s.selectRows("WHERE provider = ? ORDER BY id LIMIT 1", string(provider))
+	return s.RowAt(provider, time.Now())
+}
+
+func (s *Store) RowAt(provider Provider, now time.Time) (Row, bool, error) {
+	rows, err := s.selectRows("WHERE provider = ? ORDER BY id", string(provider))
 	if err != nil || len(rows) == 0 {
 		return Row{}, false, err
 	}
-	return rows[0], true, nil
+	var usable []Row
+	for _, row := range rows {
+		if row.Unusable(now) == "" {
+			usable = append(usable, row)
+		}
+	}
+	if len(usable) == 0 {
+		return rows[0], true, nil
+	}
+	if len(usable) == 1 {
+		return usable[0], true, nil
+	}
+	refusal := TwoAccounts{Provider: provider}
+	for _, row := range usable {
+		refusal.IDs = append(refusal.IDs, row.ID)
+	}
+	return Row{}, false, refusal
 }
 
 func (s *Store) selectRows(clause string, args ...any) ([]Row, error) {
@@ -168,6 +206,13 @@ func (s *Store) Disable(id int64, cause string, now time.Time) error {
 	_, err := s.db.Exec(
 		`UPDATE credentials SET disabled_cause = ?, updated_at = ? WHERE id = ? AND disabled_cause IS NULL`,
 		cause, now.UnixMilli(), id)
+	return err
+}
+
+func (s *Store) Enable(id int64, now time.Time) error {
+	_, err := s.db.Exec(
+		`UPDATE credentials SET disabled_cause = NULL, updated_at = ? WHERE id = ?`,
+		now.UnixMilli(), id)
 	return err
 }
 
