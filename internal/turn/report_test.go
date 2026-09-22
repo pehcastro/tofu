@@ -1,0 +1,206 @@
+package turn
+
+import (
+	"encoding/json"
+	"strings"
+	"testing"
+
+	"tofu/internal/crew"
+	"tofu/internal/llm"
+)
+
+func childReport(t *testing.T, root string, decisions []llm.Decision) ChildReport {
+	t.Helper()
+	_, spawn := parentTurn(t, root, decisions)
+	spawnDirect(t, spawn, "write the greeting under mine/", "mine/**")
+	reports := spawn.Reports()
+	if len(reports) != 1 {
+		t.Fatalf("the parent holds %d reports, want one", len(reports))
+	}
+	return reports[0]
+}
+
+func TestAChildThatFinishedAndNoticedSomethingIsDoneWithConcerns(t *testing.T) {
+	clean := childReport(t, t.TempDir(), []llm.Decision{
+		writeCall("call-1", "mine/hello.txt", "written by the child"),
+		claimDecision("I wrote the greeting"),
+	})
+	noticed := childReport(t, t.TempDir(), []llm.Decision{
+		toolCallDecision(llm.ToolCall{ID: "call-1", Name: "read", Arguments: json.RawMessage(`{"path":"mine/ghost.txt"}`)}),
+		claimDecision("I wrote the greeting"),
+	})
+
+	if clean.Completion != crew.Done {
+		t.Fatalf("a child that did the work and hit nothing reads %s, want done: %+v", clean.Completion, clean.Findings)
+	}
+	if noticed.Completion != crew.DoneWithConcerns {
+		t.Fatalf("a child that finished and was refused a write reads %s, want done_with_concerns", noticed.Completion)
+	}
+	if clean.State != noticed.State || clean.Outcome != noticed.Outcome {
+		t.Fatalf("the two children differ in state or outcome, so the completion is not what carries the difference: %s/%s and %s/%s",
+			clean.State, clean.Outcome, noticed.State, noticed.Outcome)
+	}
+	if len(noticed.Findings) != 1 || noticed.Findings[0].Bucket != crew.ActOn {
+		t.Fatalf("the refused write is not one finding to act on: %+v", noticed.Findings)
+	}
+	if reason := noticed.Findings[0].Reason; strings.Contains(reason, "\n") || !strings.Contains(reason, "ghost.txt") {
+		t.Fatalf("the finding reason is not one line naming what happened: %q", reason)
+	}
+	t.Logf("clean: %s, noticed: %s %s", clean.Completion, noticed.Completion, noticed.Findings[0].Reason)
+}
+
+func TestTheParentTellsTheTwoApartFromTheTypedValueAndNotTheProse(t *testing.T) {
+	report := childReport(t, t.TempDir(), []llm.Decision{
+		toolCallDecision(llm.ToolCall{ID: "call-1", Name: "read", Arguments: json.RawMessage(`{"path":"mine/ghost.txt"}`)}),
+		claimDecision("all done, everything went fine"),
+	})
+
+	if report.Completion == crew.Done {
+		t.Fatal("the child's prose said it went fine and the completion agreed with the prose")
+	}
+	read := ChildReport{}
+	written, err := json.Marshal(report)
+	if err != nil || json.Unmarshal(written, &read) != nil {
+		t.Fatalf("the handback does not cross JSON: %v", err)
+	}
+	if read.Completion != crew.DoneWithConcerns {
+		t.Fatalf("read back, the completion is %s", read.Completion)
+	}
+	if !strings.Contains(string(written), `"completion":"done_with_concerns"`) {
+		t.Fatalf("a parent has to parse prose to find the completion: %s", written)
+	}
+}
+
+func TestTheLearningStepRunsOnEveryHandbackAndSaysSoWhenItFoundNothing(t *testing.T) {
+	nothing := childReport(t, t.TempDir(), []llm.Decision{
+		writeCall("call-1", "mine/hello.txt", "written by the child"),
+		claimDecision("I wrote the greeting"),
+	})
+	warned := claimDecision("I wrote the greeting")
+	warned.Warnings = []string{"the wire answered on attempt 2"}
+	something := childReport(t, t.TempDir(), []llm.Decision{
+		writeCall("call-1", "mine/hello.txt", "written by the child"),
+		warned,
+	})
+
+	if nothing.Learned == nil || len(nothing.Learned) != 0 {
+		t.Fatalf("a child that learned nothing carries %v, and an absent field cannot be told from a step that never ran", nothing.Learned)
+	}
+	written, err := json.Marshal(nothing)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(written), `"learned":[]`) {
+		t.Fatalf("the empty learning is missing from the handback rather than stated in it: %s", written)
+	}
+	if !strings.Contains(nothing.Text(), "learned nothing:") {
+		t.Fatalf("the handback is silent about the learning step: %q", nothing.Text())
+	}
+	if len(something.Learned) != 1 || something.Learned[0] != "the wire answered on attempt 2" {
+		t.Fatalf("what the run raised did not reach the handback: %v", something.Learned)
+	}
+	t.Logf("empty: %q", nothing.Text())
+}
+
+func TestEscalationCarriesWhatEachOfTheThreeAttemptsWas(t *testing.T) {
+	agent := crew.SubAgent{ID: "turn-parent-c1", Mission: "write the greeting", Owns: []string{"mine/**"}}
+	attempts := []Row{
+		{ID: "turn-parent-c1", Outcome: OutcomeStepCap, Steps: []StepRow{{ToolCalls: []ToolCallRow{{Tool: "read"}, {Tool: "write"}}}}},
+		{ID: "turn-parent-c1-r", Outcome: OutcomeLoopGuard, Steps: []StepRow{{ToolCalls: []ToolCallRow{{Tool: "bash"}}}}},
+		{ID: "turn-parent-c1-r-r", Outcome: OutcomeStopped},
+	}
+
+	written, err := json.Marshal(reportOf(agent, attempts, crew.InReview))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var read ChildReport
+	if err := json.Unmarshal(written, &read); err != nil {
+		t.Fatalf("reading the handback back: %v", err)
+	}
+
+	want := []crew.Attempt{
+		{ID: "turn-parent-c1", Tried: "read, write", Outcome: "step_cap"},
+		{ID: "turn-parent-c1-r", Tried: "bash", Outcome: "loop_guard"},
+		{ID: "turn-parent-c1-r-r", Tried: "nothing ran", Outcome: "stopped"},
+	}
+	if len(read.Attempts) != len(want) {
+		t.Fatalf("the handback carries %d attempts, and a count is not what was tried: %+v", len(read.Attempts), read.Attempts)
+	}
+	for i, attempt := range read.Attempts {
+		if attempt != want[i] {
+			t.Fatalf("attempt %d reads %+v, want %+v", i+1, attempt, want[i])
+		}
+	}
+	text := read.Text()
+	for _, line := range []string{"escalating after 3 attempts", "turn-parent-c1-r, tried bash, ended loop_guard"} {
+		if !strings.Contains(text, line) {
+			t.Fatalf("the handback text does not say %q:\n%s", line, text)
+		}
+	}
+	t.Logf("handback:\n%s", text)
+}
+
+func TestAFailureTheChildRecoveredFromIsDismissedAndNotADefect(t *testing.T) {
+	exit := 1
+	recovered := findings(Row{Outcome: OutcomeStopped, Steps: []StepRow{{ToolCalls: []ToolCallRow{
+		{Tool: "bash", Command: "go build ./...", ExitCode: &exit},
+		{Tool: "bash", Command: "go build ./internal/crew/..."},
+	}}}})
+	stuck := findings(Row{Outcome: OutcomeStopped, Steps: []StepRow{{ToolCalls: []ToolCallRow{
+		{Tool: "bash", Command: "go build ./...", ExitCode: &exit},
+		{Tool: "read", Error: "no file is at that path"},
+	}}}})
+
+	if len(recovered) != 1 || recovered[0].Bucket != crew.Dismissed {
+		t.Fatalf("a command that failed and then ran is not dismissed: %+v", recovered)
+	}
+	if completionOf(crew.InReview, recovered) != crew.Done {
+		t.Fatalf("a dismissed finding raised a concern, so every nit would read as a defect")
+	}
+	if len(stuck) != 2 || stuck[0].Bucket != crew.ActOn || stuck[1].Bucket != crew.ActOn {
+		t.Fatalf("two failures nothing recovered from are not both to act on: %+v", stuck)
+	}
+	if completionOf(crew.InReview, stuck) != crew.DoneWithConcerns {
+		t.Fatal("a failure nothing recovered from did not reach the parent")
+	}
+	t.Logf("dismissed: %q", recovered[0].Reason)
+}
+
+func TestEveryOutcomeAndEveryStateIsHandledAndAnUnknownOnePanicsByName(t *testing.T) {
+	for _, outcome := range AllOutcomes() {
+		finding, carries := outcomeFinding(outcome)
+		if carries && (finding.Reason == "" || strings.Contains(finding.Reason, "\n")) {
+			t.Fatalf("outcome %s gives a finding with no one line reason: %+v", outcome, finding)
+		}
+	}
+	for _, state := range []crew.State{crew.Working, crew.WaitingAnswer, crew.InReview, crew.Parked, crew.Errored, crew.Finished} {
+		if completionOf(state, nil).String() == "" {
+			t.Fatalf("state %s has no completion", state)
+		}
+	}
+	if completionOf(crew.Errored, nil) != crew.Blocked || completionOf(crew.Parked, nil) != crew.Blocked {
+		t.Fatal("a child that errored or was parked does not read as blocked")
+	}
+	if completionOf(crew.WaitingAnswer, nil) != crew.NeedsContext {
+		t.Fatal("a child waiting on an answer does not read as needs_context")
+	}
+	for _, c := range []struct {
+		what  string
+		read  func() string
+		wants string
+	}{
+		{"state", func() string { return completionOf(crew.State(11), nil).String() }, "unknown sub-agent state 11"},
+		{"outcome", func() string { finding, _ := outcomeFinding(Outcome(12)); return finding.Reason }, "unknown child outcome 12"},
+	} {
+		func() {
+			defer func() {
+				raised, isText := recover().(string)
+				if !isText || !strings.Contains(raised, c.wants) {
+					t.Fatalf("an unknown %s raised %v and has to name the value: %q", c.what, raised, c.wants)
+				}
+			}()
+			_ = c.read()
+		}()
+	}
+}

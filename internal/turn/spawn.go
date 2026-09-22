@@ -217,7 +217,7 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 		t.spend += claim.TotalCostUSD
 	}
 
-	report := reportOf(agent, claims[len(claims)-1], state)
+	report := reportOf(agent, claims, state)
 	report.Asked = asked
 	t.reports = append(t.reports, report)
 	text := report.Text()
