@@ -227,7 +227,10 @@ func (b Battery) decide(ctx context.Context, turn Turn, at int) (StepResult, err
 	}
 	out.RowID, out.Verdict, out.Build = row.ID, row.Verdict, row.Build
 	out.Typed = typedAnswer(row.Verdict)
-	out.Answers = answerValues(in.answers)
+	out.Answers, err = answerValues(b.pol.Questions, in.answers)
+	if err != nil {
+		return StepResult{}, err
+	}
 	return out, nil
 }
 
@@ -238,7 +241,7 @@ func typedAnswer(verdict ledger.Verdict) Answer {
 	return Stop
 }
 
-func answerValues(answers []ledger.Answer) map[string]float64 {
+func answerValues(battery string, answers []ledger.Answer) (map[string]float64, error) {
 	out := make(map[string]float64, len(answers))
 	for _, a := range answers {
 		switch a.Kind {
@@ -247,10 +250,10 @@ func answerValues(answers []ledger.Answer) map[string]float64 {
 		case ledger.AnswerScore:
 			out[a.Question] = a.Score
 		case ledger.AnswerChoice:
-			panic("stopcheck: stop_check asks no choice question and " + a.Question + " came back as one")
+			return nil, fmt.Errorf("stopcheck: battery %s asks no choice question and %s came back as one", battery, a.Question)
 		}
 	}
-	return out
+	return out, nil
 }
 
 func (b Battery) addGateSpend(turn Turn, cost *TurnCost) error {
