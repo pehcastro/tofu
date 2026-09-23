@@ -256,6 +256,14 @@
     "skips": "8 tests skipped in bench/harness and bench/cmd, all gated behind an environment variable: three live arm tests, two subprocess helpers, two writer gated recorders and the live API test"
   },
   {
+    "report": "bench/shortlist/report-2026-09-23-join.md",
+    "figure": "13",
+    "says": "The search to action join is the right denominator for this point by argument, and it clears the count floor of 12 at 13 distinct-task rows out of 23 recorded searches. It does not clear the leakage floor: 13 of 13 rows name their own label in their own task, because all thirteen tasks are one repeated template saying a named test file is missing and should be added back. So the corpus was not built, no arm ran and the stated cap of 13 calls, about eight hundredths of a cent, went unspent. The denominator argument is that the join carries a task, a candidate set and a right answer in one shape, which is what the point ranks in production, where the sibling report's population counts turn outcomes with nothing to rank against. The falsifier named with it partly fired: 8 of 23 acted searches, 34.8 percent, ended in a path the search never offered, which bounds how good any ranker over these candidates can look before a row is scored.",
+    "from": "prose",
+    "sample": "110 recorded sessions, 23 search calls joined to a later acting call, 15 hits of which 13 carry a distinct task; no arm ran and no call was made",
+    "skips": "1 entry under .tofu/sessions that is not a turn; the arms stay parked and their skip names the leakage, not the count; the report writer is gated behind TOFU_LIVE and makes no network call itself"
+  },
+  {
     "report": "bench/shortlist/report-2026-09-23.md",
     "figure": "12",
     "says": "Twelve questions would decide the gap this bench observed, and the recorded corpus can support two, so the arms were not rerun and nothing was spent. The arithmetic is stated rather than asserted: the 4 of 4 and 1 of 4 rates are Laplace smoothed first, because 4 of 4 has zero variance and a sample size formula divides by it, then two proportions at 95 percent confidence and 80 percent power give 11.3, rounded to twelve. The corpus count is read at run time out of 111 recorded entries: 110 turns read, 65 change no file, 37 create only, 8 recordable, 2 distinct once identical task text is deduplicated. That is unchanged from a count taken three days earlier, so the corpus is not slowly filling. Three of the four original questions named their own answer and were removed, leaving one, and the check that used to skip now fails on any leak. The report's conclusion is that this point cannot be settled by replaying recorded sessions on this machine and needs a shortlist call wired into the live harness with its outcomes logged.",

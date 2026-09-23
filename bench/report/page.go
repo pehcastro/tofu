@@ -13,6 +13,10 @@ const (
 	chartWidth      = 800.0
 )
 
+const badgeAsLabel = `
+.badge{border-radius:var(--radius-sm);white-space:normal;padding:.25rem .625rem;line-height:1.35}
+`
+
 type panel struct {
 	id      string
 	tab     string
@@ -32,7 +36,7 @@ func Page(d Data) string {
 	page := &strings.Builder{}
 	page.WriteString("<!doctype html>\n<html lang=\"en\" class=\"dark\">\n<head>\n<meta charset=\"utf-8\">\n")
 	page.WriteString("<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n<title>Tofu bench</title>\n")
-	page.WriteString("<style>" + shadcnTokens + shadcnComponents + pageLayout + "</style>\n</head>\n<body>\n<main>\n")
+	page.WriteString("<style>" + shadcnTokens + shadcnComponents + pageLayout + badgeAsLabel + "</style>\n</head>\n<body>\n<main>\n")
 	page.WriteString("<h1>What bench has measured</h1>\n")
 	page.WriteString("<div role=\"tablist\" class=\"tab-list\" aria-label=\"the questions this page answers\">\n")
 	for _, one := range panels {

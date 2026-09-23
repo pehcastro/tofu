@@ -327,7 +327,6 @@
       "switched_on": "yes, through the judged method",
       "costs": "a median $0.000540 a session, p95 $0.005454, worst $0.011070 over 110 recorded sessions, and p50 361 ms, p95 524 ms, worst 722 ms on 13 real shell_sift ledger decisions",
       "why": "jev keeps 27 of 34 planted needles against the free arm's 18, 1.50x, at equal bytes saved",
-      "measured": "bench/sift/report-2026-09-21.md, cost re-run in bench/sift/report-2026-09-22.md, bench/sift/report-2026-09-22-rerun.md and bench/sift/report-2026-09-22-rtk.md, and against 13 real ledger decisions in bench/sift/report-2026-09-23.md",
       "called_by": "internal/turn/shellsift.go"
     },
     {
@@ -336,7 +335,6 @@
       "switched_on": "yes, through the judged method",
       "costs": "a median $0.000074 a session over the 15 recorded sessions that ran it, worst $0.004574, $0.0087 over the whole recorded ledger, and the call is already made in shadow",
       "why": "jev agrees with 71 of 78 hand labels against the repeat check's 68, 1.04x, and makes a false stop a third as often",
-      "measured": "bench/stopcheck/report-2026-09-21.md",
       "called_by": "cmd/tofu/run_done.go"
     },
     {
@@ -344,8 +342,7 @@
       "on": false,
       "switched_on": "not wired",
       "costs": "nothing, and no call is made",
-      "why": "web.Reduce strips the same link-only rows at fetch time, so the link stripper elides 0 further bytes on all 24 recorded pages, 0.00 percent, where Reduce itself takes 11.69 percent of the extracted bytes. a second pass of one rule is not a decision point",
-      "measured": "bench/websift/report-2026-09-21.md, remeasured over the same 24 pages by TestThePageSiftRemovesNothingWebReduceHasNotAlreadyRemoved"
+      "why": "web.Reduce strips the same link-only rows at fetch time, so the link stripper elides 0 further bytes on all 24 recorded pages, 0.00 percent, where Reduce itself takes 11.69 percent of the extracted bytes. a second pass of one rule is not a decision point"
     },
     {
       "point": "read_worth",
@@ -353,7 +350,6 @@
       "switched_on": "yes, through the cheap method",
       "costs": "nothing, and no call is made",
       "why": "a fifteen word floor agrees with 87.1 percent of the labels, the same as jev, and saves 12.6 percent of bytes against 9.3. a tie goes to the method that costs nothing",
-      "measured": "bench/readworth/report-2026-09-21.md",
       "called_by": "cmd/tofu/sift.go"
     },
     {
@@ -361,48 +357,42 @@
       "on": false,
       "switched_on": "not wired",
       "costs": "nothing, and no call is made",
-      "why": "jev is right on 4 of 7 recorded moments against the ownership check's 3, 1.33x, and no cost a session can be produced. the recorded ledger carries no ask row and nothing measures moments of doubt per session",
-      "measured": "bench/ask/report-2026-09-21.md"
+      "why": "jev is right on 4 of 7 recorded moments against the ownership check's 3, 1.33x, and no cost a session can be produced. the recorded ledger carries no ask row and nothing measures moments of doubt per session"
     },
     {
       "point": "file_shortlist",
       "on": false,
       "switched_on": "not wired",
       "costs": "nothing, and no call is made",
-      "why": "bench/shortlist is parked by TOFU-449 on 2026-09-23 and the accuracy figure this line used to cite is withdrawn. three of its four questions name their own answer in their own prompt, so nothing measured there separates a ranking arm from a regular expression pulling a filename out of the task, and the corpus cannot be rebuilt today. 8 recordable turns carrying 2 distinct tasks in the recorded sessions, against the floor of 12 questions this shape needs, per NeededQuestions in bench/shortlist/size.go",
-      "measured": "bench/shortlist/report-2026-09-21.md, parked in bench/shortlist/report-2026-09-23.md"
+      "why": "the point is parked because three of its four questions name their own answer in their own prompt, so nothing measured there separates a ranking arm from a regular expression pulling a filename out of the task. 8 recordable turns carry 2 distinct tasks in the recorded sessions, against the floor of 12 questions this shape needs. a later join attempt cleared that floor at 13 distinct-task rows, but all 13 name their own answer too, so the corpus is still not built and the point is parked harder than before"
     },
     {
       "point": "tool_gate",
       "on": false,
       "switched_on": "not wired",
       "costs": "nothing, and no call is made",
-      "why": "the 178 case set carries no free arm, and the 6 of 6 a regular expression scored was over six cases written by something that could see all six",
-      "measured": "bench/cost/report-2026-09-19.md"
+      "why": "the 178 case set carries no free arm, and the 6 of 6 a regular expression scored was over six cases written by something that could see all six"
     },
     {
       "point": "instruction_trust",
       "on": false,
       "switched_on": "not wired",
       "costs": "nothing, and no call is made",
-      "why": "jev beats a regular expression 25 of 27 against 24 of 27 in bench/instruction/report-2026-09-23.md, but the corpus cannot decide it, a rerun minutes later tied both arms at 24 of 27, and 27 cases is a quarter of the few hundred a two-arm gap this size needs",
-      "measured": "bench/instruction/report-2026-09-23.md"
+      "why": "jev beats a regular expression 25 of 27 against 24 of 27, but the corpus cannot decide it, a rerun minutes later tied both arms at 24 of 27, and 27 cases is a quarter of the few hundred a two-arm gap this size needs"
     },
     {
       "point": "spawn_gate",
       "on": false,
       "switched_on": "not wired",
       "costs": "nothing, and no call is made",
-      "why": "nothing is measured, and it waits on one recorded parent and child",
-      "measured": "none"
+      "why": "nothing is measured, and it waits on one recorded parent and child"
     },
     {
       "point": "thrift",
       "on": false,
       "switched_on": "not wired",
       "costs": "nothing, and no call is made",
-      "why": "the point reads library/questions/config/thrift_rule@1.yaml directly, which ships mode off, and nothing is cut until a measurement moves it",
-      "measured": "bench/thrift/report-2026-09-23.md, 393 live calls, $0.040968, all 8 sampled results under the truncation cap so fixed truncation never fired on them, thrift cut 1.9 percent of their tokens anyway; and bench/thrift/report-2026-09-23-overcap.md, 247 calls, $0.013247, 3 of the 9 over-cap results actually judged, where thrift cut a further 13.7 percent of the fixed-truncation tokens once truncation actually fired"
+      "why": "the point reads library/questions/config/thrift_rule@1.yaml directly, which ships mode off, and nothing is cut until a measurement moves it"
     }
   ],
   "what_decides_what_read_from": "library/decisions/methods@1.yaml",
@@ -653,6 +643,25 @@
       "conclusion": [
         {
           "text": "The plan's claim that four search patterns cost nothing is false as written, and the rescue rate on recorded searches is zero.",
+          "withdrawn": false
+        }
+      ],
+      "conclusion_unparsed": false,
+      "state": "stands",
+      "state_source": "",
+      "state_note": ""
+    },
+    {
+      "package": "shortlist",
+      "date": "2026-09-23",
+      "source": "bench/shortlist/report-2026-09-23-join.md",
+      "figure": "13",
+      "built_from": "prose",
+      "sample": "110 recorded sessions, 23 search calls joined to a later acting call, 15 hits of which 13 carry a distinct task; no arm ran and no call was made",
+      "skips": "1 entry under .tofu/sessions that is not a turn; the arms stay parked and their skip names the leakage, not the count; the report writer is gated behind TOFU_LIVE and makes no network call itself",
+      "conclusion": [
+        {
+          "text": "The search join is the right denominator by argument, and it clears the count floor of 12 at 13. It does not clear the leakage floor: 13 of 13 rows name their own label in their own task.",
           "withdrawn": false
         }
       ],
@@ -1368,7 +1377,7 @@
     }
   ],
   "counts": {
-    "reports": 38,
+    "reports": 39,
     "packages_with_a_dated_report": 24,
     "packages_with_no_dated_report": 6,
     "withdrawn_whole_or_in_part": 5,
