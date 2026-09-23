@@ -34,6 +34,7 @@ type Choice struct {
 	Why      string
 	Measured string
 	Cost     string
+	Bench    string
 	Line     int
 }
 
@@ -204,6 +205,8 @@ func (c *Choice) setField(key, value, path string, line int) error {
 		c.Measured = value
 	case "cost":
 		c.Cost = value
+	case "bench":
+		c.Bench = value
 	default:
 		return fmt.Errorf("%s:%d: unknown field %q", path, line, key)
 	}
