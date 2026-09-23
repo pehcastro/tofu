@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -78,23 +78,38 @@ func TestTheMemoAgainstRunningTheSameCallTwiceInThisRepository(t *testing.T) {
 }
 
 func TestTheRefusalAgainstTheReadItSavesOnARealFile(t *testing.T) {
-	root := repositoryRoot(t)
-	body, err := os.ReadFile(filepath.Join(root, "internal", "search", "find.go"))
+	_, self, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("could not locate this test's own source file")
+	}
+	body, err := os.ReadFile(self)
 	if err != nil {
-		t.Fatalf("reading a real file to copy: %v", err)
+		t.Fatalf("reading this package's own source to copy: %v", err)
+	}
+	anchor := "\tt.Fatalf("
+	if occurrences := strings.Count(string(body), anchor); occurrences < 2 {
+		t.Fatalf("the anchor %q is no longer ambiguous in this file, occurs %d times", anchor, occurrences)
 	}
 	scratch := t.TempDir()
-	seed(t, scratch, "find.go", string(body))
+	seed(t, scratch, "measure_test.go", string(body))
 	editTool, _ := tools.NewEdit(scratch)
 	readTool, err := turn.NewReadTool(scratch)
 	if err != nil {
 		t.Fatalf("building read: %v", err)
 	}
 
-	refused := measure(t, "edit, refused with every occurrence named", editTool,
-		`{"path":"find.go","old_string":"\treturn out.String()","new_string":"\treturn built.String()"}`)
-	read := measure(t, "read of the whole file, the move the bare refusal forced", readTool, `{"path":"find.go"}`)
-	report(t, "an ambiguous anchor in a real file", refused, read)
+	args, err := json.Marshal(struct {
+		Path      string `json:"path"`
+		OldString string `json:"old_string"`
+		NewString string `json:"new_string"`
+	}{Path: "measure_test.go", OldString: anchor, NewString: "\tt.Fatal("})
+	if err != nil {
+		t.Fatalf("building edit args: %v", err)
+	}
+
+	refused := measure(t, "edit, refused with every occurrence named", editTool, string(args))
+	read := measure(t, "read of the whole file, the move the bare refusal forced", readTool, `{"path":"measure_test.go"}`)
+	report(t, "an ambiguous anchor in this package's own test file", refused, read)
 
 	if !strings.Contains(refused.content, "every occurrence") {
 		t.Fatalf("the refused arm is not the refusal being measured:\n%s", refused.content)
