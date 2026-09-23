@@ -77,3 +77,49 @@ func TestWritingTheTextAFileAlreadyHoldsSaysNothingChanged(t *testing.T) {
 		t.Fatalf("an identical write did not say the file is unchanged: %q", result.Content)
 	}
 }
+
+func TestWriteReplacingAFileThisTurnHasNotReadIsRefusedWithItsContent(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "note.txt"), []byte("kept as is\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	tool, err := NewWriteTool(root)
+	if err != nil {
+		t.Fatalf("building the tool: %v", err)
+	}
+	tool = tool.Reading(NewReadLedger())
+
+	args, err := json.Marshal(writeArgs{Path: "note.txt", Content: "overwritten\n"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = tool.Run(context.Background(), args)
+	if err == nil {
+		t.Fatal("a write over a file this turn has not read must be refused")
+	}
+	for _, fact := range []string{"note.txt exists and has not been read", "kept as is"} {
+		if !strings.Contains(err.Error(), fact) {
+			t.Fatalf("the refusal does not name %q: %v", fact, err)
+		}
+	}
+	if got, readErr := os.ReadFile(filepath.Join(root, "note.txt")); readErr != nil || strings.Contains(string(got), "overwritten") {
+		t.Fatalf("a refused write changed the file: %q, %v", got, readErr)
+	}
+}
+
+func TestWriteThatCreatesAFileIsNotRefusedByTheReadGate(t *testing.T) {
+	root := t.TempDir()
+	tool, err := NewWriteTool(root)
+	if err != nil {
+		t.Fatalf("building the tool: %v", err)
+	}
+	tool = tool.Reading(NewReadLedger())
+
+	args, err := json.Marshal(writeArgs{Path: "new.txt", Content: "born here\n"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tool.Run(context.Background(), args); err != nil {
+		t.Fatalf("creating a file needs no prior read: %v", err)
+	}
+}

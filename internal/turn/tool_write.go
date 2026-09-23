@@ -7,7 +7,10 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"path/filepath"
+	"sync"
 
+	"tofu/internal/konst"
 	"tofu/internal/llm"
 	"tofu/internal/sys"
 	"tofu/internal/transform"
@@ -15,8 +18,51 @@ import (
 
 const writePerm = 0o644
 
+type ReadLedger struct {
+	mutex sync.Mutex
+	seen  map[string]bool
+}
+
+func NewReadLedger() *ReadLedger {
+	return &ReadLedger{seen: map[string]bool{}}
+}
+
+func ledgerKey(path string) string {
+	return filepath.ToSlash(filepath.Clean(path))
+}
+
+func (l *ReadLedger) Mark(path string) {
+	if l == nil {
+		return
+	}
+	l.mutex.Lock()
+	defer l.mutex.Unlock()
+	l.seen[ledgerKey(path)] = true
+}
+
+func (l *ReadLedger) Saw(path string) bool {
+	if l == nil {
+		return true
+	}
+	l.mutex.Lock()
+	defer l.mutex.Unlock()
+	return l.seen[ledgerKey(path)]
+}
+
+func RefusalExcerpt(body []byte) string {
+	if len(body) <= konst.TurnResultBytesCap {
+		return string(body)
+	}
+	head := konst.TurnResultBytesCap / 2
+	tailFrom := len(body) - (konst.TurnResultBytesCap - head)
+	return string(body[:head]) +
+		fmt.Sprintf("\n...(%d bytes cut from the middle, too large for a refusal to carry whole)...\n", tailFrom-head) +
+		string(body[tailFrom:])
+}
+
 type WriteTool struct {
-	root Root
+	root   Root
+	ledger *ReadLedger
 }
 
 func NewWriteTool(root string) (*WriteTool, error) {
@@ -25,6 +71,11 @@ func NewWriteTool(root string) (*WriteTool, error) {
 		return nil, err
 	}
 	return &WriteTool{root: resolved}, nil
+}
+
+func (t *WriteTool) Reading(ledger *ReadLedger) *WriteTool {
+	t.ledger = ledger
+	return t
 }
 
 func (t *WriteTool) Name() string { return "write" }
@@ -64,9 +115,14 @@ func (t *WriteTool) Run(_ context.Context, raw json.RawMessage) (Result, error) 
 	if readErr != nil && !errors.Is(readErr, fs.ErrNotExist) {
 		return Result{}, fmt.Errorf("write: reading %s before replacing it: %w", args.Path, readErr)
 	}
+	if readErr == nil && !t.ledger.Saw(args.Path) {
+		return Result{}, fmt.Errorf("write: %s exists and has not been read by this turn, so replacing it whole is refused rather than trusted against a guess: "+
+			"read it, or edit part of it, then write it again with its current content folded in.\n%s", args.Path, RefusalExcerpt(held))
+	}
 	if err := sys.WriteFile(resolved, []byte(args.Content), writePerm); err != nil {
 		return Result{}, fmt.Errorf("write: %w", err)
 	}
+	t.ledger.Mark(args.Path)
 	before := string(held)
 	preview := transform.Preview{
 		Path:    args.Path,

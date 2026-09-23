@@ -18,12 +18,18 @@ import (
 )
 
 type Edit struct {
-	root turn.Root
+	root   turn.Root
+	ledger *turn.ReadLedger
 }
 
 func NewEdit(dir string) (Edit, error) {
 	root, err := turn.NewRoot(dir)
 	return Edit{root: root}, err
+}
+
+func (e Edit) Reading(ledger *turn.ReadLedger) Edit {
+	e.ledger = ledger
+	return e
 }
 
 func (e Edit) Name() string { return "edit" }
@@ -104,6 +110,10 @@ func (e Edit) Run(_ context.Context, raw json.RawMessage) (turn.Result, error) {
 		return turn.Result{}, errors.New("edit: " + search.Note(search.BinarySkipped,
 			target+" holds a null byte, so it is not text and replacing a stretch of it would corrupt it"))
 	}
+	if !e.ledger.Saw(target) {
+		return turn.Result{}, fmt.Errorf("edit: %s has not been read by this turn, so the edit is refused rather than trusted against a guess: "+
+			"read it, then edit the text that is actually there.\n%s", target, turn.RefusalExcerpt(body))
+	}
 
 	before := string(body)
 	var after, note string
@@ -137,6 +147,7 @@ func (e Edit) Run(_ context.Context, raw json.RawMessage) (turn.Result, error) {
 		}
 		return turn.Result{}, fmt.Errorf("edit: %w", err)
 	}
+	e.ledger.Mark(target)
 	return turn.Result{
 		Content: strings.Join(append(repairs, preview.Diff), "\n"),
 		Command: "edit " + target,
