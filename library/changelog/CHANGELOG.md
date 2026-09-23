@@ -10,6 +10,18 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 
 ## Unreleased
 
+### Added
+
+- **`tofu rules list` shows a mode only where the mode decides something.** A threshold rule's mode is read and is shown; a rule with no checker and no off setting had a mode printed beside it that nothing consulted, which read as a setting you could change.
+
+### Fixed
+
+- **A ledger file, a subscription filename, a credential row, a cached answer and a zero valued message role could each crash tofu rather than being refused.** All five were reachable from a file or a reply rather than from code, none had ever been reached: 2,780 recorded decision rows, 3 credential rows, 75 cached answers and two subscription files were checked and every value was one this build knows. Each is now refused where it is read, and the row that fails says why instead of disappearing.
+
+### Added
+
+- **`tofu run --no-instructions` sends no instruction file at all**: neither the nearest `AGENTS.md` or `CLAUDE.md` at or above the working directory, nor your personal `AGENTS.md` or `CLAUDE.md` in your home directory. The default is unchanged and still sends both. Until now a run inside a repository carrying instructions written for another tool had no way to say no, and the benchmark arranged it by writing empty files into the tree. `--show-prompt` says `instruction files: off by request` under the flag, so a missing block reads as a choice rather than an empty directory.
+
 ## 0.4.12 - 2026-09-23
 
 You choose what runs, and you can point at what was said.
