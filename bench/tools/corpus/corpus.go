@@ -2,6 +2,8 @@ package corpus
 
 import (
 	"bufio"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -9,8 +11,6 @@ import (
 )
 
 const (
-	questionsFile = "testdata/questions.jsonl"
-
 	BandNamed     = "named"
 	BandDescribed = "described"
 	BandIntent    = "intent"
@@ -18,6 +18,8 @@ const (
 	ScoreAll = "all"
 
 	TreeTofu = "tofu"
+
+	fingerprintHexDigits = 12
 )
 
 type Answer struct {
@@ -25,42 +27,77 @@ type Answer struct {
 	Line int    `json:"line"`
 }
 
-type Question struct {
-	ID          string   `json:"id"`
-	Text        string   `json:"text"`
-	Tree        string   `json:"tree"`
-	Band        string   `json:"band"`
-	File        string   `json:"file"`
-	Line        int      `json:"line"`
-	Answers     []Answer `json:"answers,omitempty"`
-	ScoreRule   string   `json:"score_rule,omitempty"`
-	Identifiers []string `json:"identifiers,omitempty"`
-	Source      string   `json:"source"`
-	Note        string   `json:"note"`
+type LineFingerprint string
+
+func fingerprintOf(line string) LineFingerprint {
+	sum := sha256.Sum256([]byte(strings.Join(strings.Fields(line), " ")))
+	return LineFingerprint(hex.EncodeToString(sum[:])[:fingerprintHexDigits])
 }
 
-func (q Question) AllAnswers() []Answer {
+type Pin struct {
+	Answer
+	Fingerprint LineFingerprint `json:"fingerprint"`
+}
+
+type Question struct {
+	ID          string          `json:"id"`
+	Text        string          `json:"text"`
+	Tree        string          `json:"tree"`
+	Band        string          `json:"band"`
+	File        string          `json:"file"`
+	Line        int             `json:"line"`
+	Fingerprint LineFingerprint `json:"fingerprint,omitempty"`
+	Answers     []Pin           `json:"answers,omitempty"`
+	ScoreRule   string          `json:"score_rule,omitempty"`
+	Identifiers []string        `json:"identifiers,omitempty"`
+	Source      string          `json:"source"`
+	Note        string          `json:"note"`
+}
+
+func (q Question) Pins() []Pin {
 	if len(q.Answers) > 0 {
 		return q.Answers
 	}
 	if q.File == "" {
 		return nil
 	}
-	return []Answer{{File: q.File, Line: q.Line}}
+	return []Pin{{Answer: Answer{File: q.File, Line: q.Line}, Fingerprint: q.Fingerprint}}
 }
 
-func (q Question) MatchesFile(path string) bool {
-	for _, a := range q.AllAnswers() {
-		if a.File == path {
+type Asked struct {
+	ID        string
+	Text      string
+	Tree      string
+	Band      string
+	ScoreRule string
+	answers   []Answer
+}
+
+func (q Question) Asked() Asked {
+	pins := q.Pins()
+	answers := make([]Answer, len(pins))
+	for i, p := range pins {
+		answers[i] = p.Answer
+	}
+	return Asked{ID: q.ID, Text: q.Text, Tree: q.Tree, Band: q.Band, ScoreRule: q.ScoreRule, answers: answers}
+}
+
+func (a Asked) AllAnswers() []Answer {
+	return a.answers
+}
+
+func (a Asked) MatchesFile(path string) bool {
+	for _, answer := range a.answers {
+		if answer.File == path {
 			return true
 		}
 	}
 	return false
 }
 
-func (q Question) AnyAnswerFileIn(content string) bool {
-	for _, a := range q.AllAnswers() {
-		if strings.Contains(content, a.File) {
+func (a Asked) AnyAnswerFileIn(content string) bool {
+	for _, answer := range a.answers {
+		if strings.Contains(content, answer.File) {
 			return true
 		}
 	}
@@ -75,9 +112,6 @@ func TreeRoot(tofuRoot, tree string) string {
 }
 
 func ReadQuestions(path string) ([]Question, error) {
-	if path == "" {
-		path = questionsFile
-	}
 	file, err := os.Open(path)
 	if err != nil {
 		return nil, err

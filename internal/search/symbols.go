@@ -152,11 +152,7 @@ func (g *Graph) render() string {
 		fmt.Fprintf(&out, "\nnothing under this path calls %s\n", g.Name)
 		return out.String()
 	}
-	places := "places"
-	if len(g.Callers) == 1 {
-		places = "place"
-	}
-	fmt.Fprintf(&out, "\ncalled from %d %s\n", len(g.Callers), places)
+	fmt.Fprintf(&out, "\ncalled from %s\n", plural(len(g.Callers), "place"))
 	for _, site := range g.Callers {
 		within := site.Within
 		if within == "" {

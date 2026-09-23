@@ -13,13 +13,13 @@ import (
 
 const turnSampleSize = 6
 
-func turnSample(qs []toolscorpus.Question) []toolscorpus.Question {
-	byBand := map[string][]toolscorpus.Question{}
+func turnSample(qs []toolscorpus.Asked) []toolscorpus.Asked {
+	byBand := map[string][]toolscorpus.Asked{}
 	for _, q := range qs {
 		byBand[q.Band] = append(byBand[q.Band], q)
 	}
 	perBand := turnSampleSize / 3
-	var sample []toolscorpus.Question
+	var sample []toolscorpus.Asked
 	for _, band := range []string{toolscorpus.BandNamed, toolscorpus.BandDescribed, toolscorpus.BandIntent} {
 		pool := byBand[band]
 		step := len(pool) / perBand

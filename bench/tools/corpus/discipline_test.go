@@ -1,7 +1,9 @@
 package corpus
 
 import (
+	"encoding/json"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"strings"
 	"testing"
@@ -55,7 +57,7 @@ func forbiddenWords(a Answer, identifiers []string) map[string]bool {
 }
 
 func TestDescribedAndIntentQuestionsCarryNoAnswerVocabulary(t *testing.T) {
-	qs, err := ReadQuestions("../testdata/questions.jsonl")
+	qs, err := ReadQuestions(corpusPath)
 	if err != nil {
 		t.Fatalf("ReadQuestions: %v", err)
 	}
@@ -67,14 +69,71 @@ func TestDescribedAndIntentQuestionsCarryNoAnswerVocabulary(t *testing.T) {
 			continue
 		}
 		words := tools.ContentWords(q.Text)
-		for _, a := range q.AllAnswers() {
-			forbidden := forbiddenWords(a, q.Identifiers)
+		for _, p := range q.Pins() {
+			forbidden := forbiddenWords(p.Answer, q.Identifiers)
 			for _, w := range words {
 				if forbidden[strings.ToLower(w)] {
 					t.Errorf("%s (%s): %q names %q, a path component, stem or identifier of its own answer %s:%d",
-						q.ID, q.Band, w, w, a.File, a.Line)
+						q.ID, q.Band, w, w, p.File, p.Line)
 				}
 			}
 		}
 	}
+}
+
+func reaches(t, want reflect.Type) bool {
+	if t == want {
+		return true
+	}
+	if kind := t.Kind(); kind == reflect.Slice || kind == reflect.Array || kind == reflect.Pointer {
+		return reaches(t.Elem(), want)
+	}
+	if t.Kind() != reflect.Struct {
+		return false
+	}
+	for i := range t.NumField() {
+		if reaches(t.Field(i).Type, want) {
+			return true
+		}
+	}
+	return false
+}
+
+func TestWhatAnArmIsHandedCarriesNoFingerprint(t *testing.T) {
+	asked, fingerprint := reflect.TypeOf(Asked{}), reflect.TypeOf(LineFingerprint(""))
+	for i := range asked.NumField() {
+		if field := asked.Field(i); reaches(field.Type, fingerprint) {
+			t.Errorf("Asked.%s reaches a %s: an arm that can read the fingerprint of its own answer line is the strongest leak this corpus could carry", field.Name, fingerprint)
+		}
+	}
+	for i := range asked.NumMethod() {
+		method := asked.Method(i)
+		for out := range method.Type.NumOut() {
+			if reaches(method.Type.Out(out), fingerprint) {
+				t.Errorf("Asked.%s returns a %s and an arm calls it", method.Name, fingerprint)
+			}
+		}
+	}
+
+	qs, err := ReadQuestions(corpusPath)
+	if err != nil {
+		t.Fatalf("ReadQuestions: %v", err)
+	}
+	pinned := 0
+	for _, q := range qs {
+		handed, err := json.Marshal(q.Asked())
+		if err != nil {
+			t.Fatalf("%s: %v", q.ID, err)
+		}
+		for _, p := range q.Pins() {
+			if p.Fingerprint == "" {
+				continue
+			}
+			pinned++
+			if strings.Contains(string(handed), string(p.Fingerprint)) {
+				t.Errorf("%s: what the arms are handed carries the fingerprint of %s:%d", q.ID, p.File, p.Line)
+			}
+		}
+	}
+	t.Logf("%d fingerprints recorded, none of them in what an arm is handed", pinned)
 }

@@ -22,7 +22,7 @@ func broadPattern(words []string) string {
 	return tools.Alternation(words[:min(jevgrepBroadWordCap, len(words))])
 }
 
-func twoPatterns(q toolscorpus.Question) (string, string) {
+func twoPatterns(q toolscorpus.Asked) (string, string) {
 	words := tools.ContentWords(q.Text)
 	broad := broadPattern(words)
 	narrow := broad
@@ -66,7 +66,7 @@ func choosePattern(ctx context.Context, client *jev.Client, question, a, b strin
 	return a, decision, nil
 }
 
-func Jevgrep(ctx context.Context, client *jev.Client, root string, q toolscorpus.Question) tools.Outcome {
+func Jevgrep(ctx context.Context, client *jev.Client, root string, q toolscorpus.Asked) tools.Outcome {
 	a, b := twoPatterns(q)
 	started := time.Now()
 	pattern, decision, err := choosePattern(ctx, client, q.Text, a, b)
@@ -88,7 +88,7 @@ func Jevgrep(ctx context.Context, client *jev.Client, root string, q toolscorpus
 	}
 }
 
-func JevgrepTriple(ctx context.Context, client *jev.Client, root string, q toolscorpus.Question) tools.Outcome {
+func JevgrepTriple(ctx context.Context, client *jev.Client, root string, q toolscorpus.Asked) tools.Outcome {
 	a, b := twoPatterns(q)
 	words := tools.ContentWords(q.Text)
 	c := tools.Alternation(words[:min(2, len(words))])
@@ -141,7 +141,7 @@ func JevgrepTriple(ctx context.Context, client *jev.Client, root string, q tools
 	}
 }
 
-func JevgrepAnswer(ctx context.Context, client *jev.Client, root string, q toolscorpus.Question) tools.Outcome {
+func JevgrepAnswer(ctx context.Context, client *jev.Client, root string, q toolscorpus.Asked) tools.Outcome {
 	broad := broadPattern(tools.ContentWords(q.Text))
 	started := time.Now()
 	lines, _, err := GitGrep(root, broad, q.Tree)
@@ -205,7 +205,7 @@ func topLevelDirs(root string) []string {
 	return dirs
 }
 
-func JevgrepNarrowed(ctx context.Context, client *jev.Client, root string, q toolscorpus.Question) tools.Outcome {
+func JevgrepNarrowed(ctx context.Context, client *jev.Client, root string, q toolscorpus.Asked) tools.Outcome {
 	started := time.Now()
 	dirs := topLevelDirs(root)
 	if len(dirs) == 0 {

@@ -18,7 +18,7 @@ type nativeResult struct {
 	err    error
 }
 
-func TofuSearch(root string, q toolscorpus.Question) tools.Outcome {
+func TofuSearch(root string, q toolscorpus.Asked) tools.Outcome {
 	search, err := tofutools.NewSearch(root)
 	if err != nil {
 		return tools.Outcome{Version: "tofu search", Skipped: err.Error()}

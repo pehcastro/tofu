@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"time"
 
 	"tofu/internal/konst"
 )
@@ -62,12 +63,15 @@ type Stats struct {
 	Scanned     int
 	TotalFiles  int
 	ScanStopped bool
+	Read        time.Duration
 }
 
 type Result struct {
-	Units []Unit
-	Stats Stats
-	Text  string
+	Units    []Unit
+	Stats    Stats
+	Answered Candidate
+	Tried    []Attempt
+	Text     string
 }
 
 type Request struct {
@@ -91,30 +95,52 @@ func Find(req Request) (Result, error) {
 		budget = konst.SearchTokenBudget
 	}
 
-	var found []Unit
+	source := req.Pattern.String()
+	matched := make(map[string]string)
 	var stats Stats
 	stats.TotalFiles = len(req.Files)
-	for _, rel := range req.Files {
-		if stats.Candidates >= konst.SearchCandidateScanCap {
-			stats.ScanStopped = true
-			break
+
+	literal := &sweep{candidate: Literal, pattern: req.Pattern, hits: map[string][]hit{}}
+	if err := scanTree(req, literal, matched, &stats); err != nil {
+		return Result{}, err
+	}
+	insensitive := caseInsensitiveSweep(source)
+	answering := literal
+	switch {
+	case literal.lines > 0:
+		insensitive.notRun = "the literal answered, and a case insensitive form can only add lines that differ from it in case"
+	case insensitive.pattern != nil:
+		stats.Scanned, stats.Skipped, stats.ScanStopped = 0, 0, false
+		if err := scanTree(req, insensitive, matched, &stats); err != nil {
+			return Result{}, err
 		}
-		body, err := os.ReadFile(filepath.Join(req.Root, filepath.FromSlash(rel)))
-		if err != nil {
-			return Result{}, fmt.Errorf("search: %w", err)
+		answering = insensitive
+	}
+
+	answered, pattern := NoCandidate, req.Pattern
+	var found []Unit
+	if answering.lines > 0 {
+		answered, pattern, stats.Candidates = answering.candidate, answering.pattern, answering.lines
+		for _, rel := range req.Files {
+			if hits, ok := answering.hits[rel]; ok {
+				found = append(found, unitsIn(rel, matched[rel], hits)...)
+			}
 		}
-		stats.Scanned++
-		if bytes.IndexByte(body, 0) >= 0 {
-			stats.Skipped++
-			continue
-		}
-		source := string(body)
-		hits := hitLines(source, req.Pattern)
-		if len(hits) == 0 {
-			continue
-		}
-		stats.Candidates += len(hits)
-		found = append(found, unitsIn(rel, source, hits)...)
+	}
+
+	narrowOver := map[string]string{}
+	if literal.lines > 0 {
+		narrowOver = matched
+	}
+	symbol, err := goSymbolAttempt(req.Root, source, narrowOver)
+	if err != nil {
+		return Result{}, err
+	}
+	tried := []Attempt{
+		literal.attempt(),
+		wordBoundarySweep(source, literal, narrowOver).attempt(),
+		insensitive.attempt(),
+		symbol,
 	}
 
 	stats.Units = len(found)
@@ -125,18 +151,45 @@ func Find(req Request) (Result, error) {
 		}
 	}
 
-	kept := choose(found, req.Pattern, budget)
+	kept := choose(found, pattern, budget)
 	stats.Returned = len(kept)
 	stats.Budget = budget
 	stats.Tokens = konst.SearchResultOverhead
 	for _, unit := range kept {
 		stats.Tokens += unit.Tokens
 	}
-	text, err := render(kept, stats)
+	result := Result{Units: kept, Stats: stats, Answered: answered, Tried: tried}
+	result.Text, err = result.render()
 	if err != nil {
 		return Result{}, err
 	}
-	return Result{Units: kept, Stats: stats, Text: text}, nil
+	return result, nil
+}
+
+func scanTree(req Request, into *sweep, matched map[string]string, stats *Stats) error {
+	for _, rel := range req.Files {
+		if into.lines >= konst.SearchCandidateScanCap {
+			stats.ScanStopped = true
+			return nil
+		}
+		started := time.Now()
+		body, err := os.ReadFile(filepath.Join(req.Root, filepath.FromSlash(rel)))
+		stats.Read += time.Since(started)
+		if err != nil {
+			return fmt.Errorf("search: %w", err)
+		}
+		stats.Scanned++
+		if bytes.IndexByte(body, 0) >= 0 {
+			stats.Skipped++
+			continue
+		}
+		source := string(body)
+		into.scan(rel, source)
+		if _, ok := into.hits[rel]; ok {
+			matched[rel] = source
+		}
+	}
+	return nil
 }
 
 func sourceLines(body string) []string {
@@ -241,73 +294,4 @@ func score(unit Unit, pattern *regexp.Regexp) int {
 		}
 	}
 	return points
-}
-
-func render(units []Unit, stats Stats) (string, error) {
-	fallbacks := "fallbacks"
-	if stats.Fallbacks == 1 {
-		fallbacks = "fallback"
-	}
-	var out strings.Builder
-	fmt.Fprintf(&out, "%d text candidates, %d units, %d returned, %d %s, about %d tokens\n",
-		stats.Candidates, stats.Units, stats.Returned, stats.Fallbacks, fallbacks, stats.Tokens)
-	if stats.Fallbacks > 0 {
-		fmt.Fprintf(&out, "%s\n", Note(Fallback, fmt.Sprintf("%d of the %d units are the lines around the match rather than a declaration", stats.Fallbacks, stats.Units)))
-	}
-	if stats.ScanStopped {
-		fmt.Fprintf(&out, "%s\n", Note(Truncated, fmt.Sprintf("the scan stopped after %d of %d files because %d candidate lines had already been found: narrow the pattern or the path to see the rest", stats.Scanned, stats.TotalFiles, stats.Candidates)))
-	}
-	if stats.Returned < stats.Units {
-		fmt.Fprintf(&out, "%s\n", Note(Truncated, fmt.Sprintf("%d units matched and %d fit the %d token budget: raise max_tokens or narrow the pattern to see the rest", stats.Units, stats.Returned, stats.Budget)))
-	}
-	if stats.Skipped > 0 {
-		fmt.Fprintf(&out, "%s\n", Note(BinarySkipped, fmt.Sprintf("%d files hold a null byte and were not read", stats.Skipped)))
-	}
-	if len(units) == 0 {
-		out.WriteString("no code unit holds that pattern. the files were read: this is an answer, not a failure\n")
-		return out.String(), nil
-	}
-	out.WriteString("each result is the whole declaration the match sits inside, not the matching line\n")
-	for _, unit := range units {
-		note, err := matchNote(unit.Matches)
-		if err != nil {
-			return "", err
-		}
-		what := string(unit.Kind)
-		if unit.Symbol != "" {
-			what += " " + unit.Symbol
-		}
-		fmt.Fprintf(&out, "\n%s:%d-%d %s, %s\n%s\n", unit.Path, unit.FirstLine, unit.LastLine, what, note, unit.Body)
-	}
-	return out.String(), nil
-}
-
-func matchNote(matches []Match) (string, error) {
-	parts := make([]string, 0, len(matches))
-	for index, match := range matches {
-		if index == konst.SearchMatchLinesListed {
-			parts = append(parts, fmt.Sprintf("and %d more", len(matches)-index))
-			break
-		}
-		phrase, err := match.Placement.phrase()
-		if err != nil {
-			return "", err
-		}
-		parts = append(parts, fmt.Sprintf("line %d in %s", match.Line, phrase))
-	}
-	return "matched on " + strings.Join(parts, ", "), nil
-}
-
-func (p Placement) phrase() (string, error) {
-	switch p {
-	case InCode:
-		return "code", nil
-	case InComment:
-		return "a comment", nil
-	case InString:
-		return "a string literal", nil
-	case NotParsed:
-		return "a file this tool does not parse", nil
-	}
-	return "", fmt.Errorf("search: %q is not a placement", string(p))
 }

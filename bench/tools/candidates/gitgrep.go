@@ -45,7 +45,7 @@ func hitsOne(lines []string, a toolscorpus.Answer) bool {
 	return false
 }
 
-func HitsTarget(lines []string, q toolscorpus.Question) bool {
+func HitsTarget(lines []string, q toolscorpus.Asked) bool {
 	answers := q.AllAnswers()
 	if len(answers) == 0 {
 		return false
@@ -66,11 +66,11 @@ func HitsTarget(lines []string, q toolscorpus.Question) bool {
 	return false
 }
 
-func Realistic(root string, q toolscorpus.Question) tools.Outcome {
+func Realistic(root string, q toolscorpus.Asked) tools.Outcome {
 	return runPattern("git grep realistic", root, tools.RealisticPattern(q.Text), q)
 }
 
-func Quoted(root string, q toolscorpus.Question) tools.Outcome {
+func Quoted(root string, q toolscorpus.Asked) tools.Outcome {
 	terms := tools.QuotedTerms(q.Text)
 	if len(terms) == 0 {
 		return tools.Outcome{Version: "git grep quoted", Skipped: "the question carries no backtick quoted term"}
@@ -78,7 +78,7 @@ func Quoted(root string, q toolscorpus.Question) tools.Outcome {
 	return runPattern("git grep quoted", root, tools.Alternation(terms), q)
 }
 
-func runPattern(version, root, pattern string, q toolscorpus.Question) tools.Outcome {
+func runPattern(version, root, pattern string, q toolscorpus.Asked) tools.Outcome {
 	started := time.Now()
 	lines, bytes, err := GitGrep(root, pattern, q.Tree)
 	elapsed := time.Since(started)

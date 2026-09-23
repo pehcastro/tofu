@@ -34,7 +34,7 @@ func (o Outcome) TotalTokens() int {
 
 const promptTemplate = "Using only your own read only search tools against this repository, answer with the exact file path and line number that answers this question, in the form path:line. Question: "
 
-func hitsAnswer(text string, q toolscorpus.Question) bool {
+func hitsAnswer(text string, q toolscorpus.Asked) bool {
 	for _, a := range q.AllAnswers() {
 		if strings.Contains(text, a.File+":"+strconv.Itoa(a.Line)) {
 			return true
@@ -57,7 +57,7 @@ func runStdin(ctx context.Context, name string, dir string, args []string, promp
 	return out.String(), time.Since(started), err
 }
 
-func RunClaude(ctx context.Context, root string, q toolscorpus.Question) Outcome {
+func RunClaude(ctx context.Context, root string, q toolscorpus.Asked) Outcome {
 	text, elapsed, err := runStdin(ctx, "claude", root,
 		[]string{"-p", "--output-format", "json", "--allowedTools", "Grep,Glob,Read"}, promptTemplate+q.Text)
 	if err != nil {
@@ -105,7 +105,7 @@ type codexEvent struct {
 	} `json:"usage"`
 }
 
-func RunCodex(ctx context.Context, root string, q toolscorpus.Question) Outcome {
+func RunCodex(ctx context.Context, root string, q toolscorpus.Asked) Outcome {
 	text, elapsed, err := runStdin(ctx, "codex", "",
 		[]string{"exec", "-s", "read-only", "-C", root, "--skip-git-repo-check", "--json"}, promptTemplate+q.Text)
 	if err != nil {
@@ -155,7 +155,7 @@ var (
 	toolLine = regexp.MustCompile(`^step \d+: tool_call `)
 )
 
-func RunTofu(ctx context.Context, dir, wire string, q toolscorpus.Question) Outcome {
+func RunTofu(ctx context.Context, dir, wire string, q toolscorpus.Asked) Outcome {
 	exe, exeErr := filepath.Abs("../../../tofu.exe")
 	tree, treeErr := filepath.Abs(dir)
 	if err := errors.Join(exeErr, treeErr); err != nil {

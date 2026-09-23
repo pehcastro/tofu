@@ -43,7 +43,7 @@ func liveClient(t *testing.T) *jev.Client {
 	return client
 }
 
-func loadQuestions(t *testing.T) []toolscorpus.Question {
+func loadQuestions(t *testing.T) []toolscorpus.Asked {
 	t.Helper()
 	qs, err := toolscorpus.ReadQuestions("../testdata/questions.jsonl")
 	if err != nil {
@@ -52,11 +52,15 @@ func loadQuestions(t *testing.T) []toolscorpus.Question {
 	if len(qs) != wantCorpusQuestions {
 		t.Fatalf("the corpus carries %d questions, want %d", len(qs), wantCorpusQuestions)
 	}
-	return qs
+	asked := make([]toolscorpus.Asked, len(qs))
+	for i, q := range qs {
+		asked[i] = q.Asked()
+	}
+	return asked
 }
 
-func questionsByTree(qs []toolscorpus.Question) map[string][]toolscorpus.Question {
-	byTree := map[string][]toolscorpus.Question{}
+func questionsByTree(qs []toolscorpus.Asked) map[string][]toolscorpus.Asked {
+	byTree := map[string][]toolscorpus.Asked{}
 	for _, q := range qs {
 		byTree[q.Tree] = append(byTree[q.Tree], q)
 	}
@@ -142,7 +146,7 @@ func newScoreboard(version string) *scoreboard {
 	}
 }
 
-func (s *scoreboard) add(q toolscorpus.Question, o tools.Outcome) {
+func (s *scoreboard) add(q toolscorpus.Asked, o tools.Outcome) {
 	s.overall.add(o)
 	if s.byTree[q.Tree] == nil {
 		s.byTree[q.Tree] = &tally{version: s.version}
@@ -201,7 +205,7 @@ func exactTwoSidedSignP(a, b int) float64 {
 	return min(1, 2*tail/math.Pow(2, float64(n)))
 }
 
-func separation(t *testing.T, a, b *scoreboard, band string, questions []toolscorpus.Question) {
+func separation(t *testing.T, a, b *scoreboard, band string, questions []toolscorpus.Asked) {
 	onlyFirst, onlySecond, inBand := 0, 0, 0
 	for _, q := range questions {
 		if band != toolscorpus.ScoreAll && q.Band != band {
@@ -225,7 +229,7 @@ func separation(t *testing.T, a, b *scoreboard, band string, questions []toolsco
 		a.version, b.version, inBand, band, onlyFirst, onlySecond, inBand-onlyFirst-onlySecond, p, verdict)
 }
 
-func runFreeToolArm(questions []toolscorpus.Question, board *scoreboard, run func(root string, q toolscorpus.Question) tools.Outcome) {
+func runFreeToolArm(questions []toolscorpus.Asked, board *scoreboard, run func(root string, q toolscorpus.Asked) tools.Outcome) {
 	for _, q := range questions {
 		root := toolscorpus.TreeRoot(tofuRoot, q.Tree)
 		board.add(q, run(root, q))
@@ -247,12 +251,12 @@ const renamedRipgrepRow = "the two arms above were called ripgrep raw and ripgre
 	"rg is not installed on this machine and both have always shelled out to git grep -nE. " +
 	"they are named git grep realistic and git grep quoted from this run on, and every earlier row naming ripgrep is the same measurement under a wrong name."
 
-func toolTableSample(qs []toolscorpus.Question, full bool) []toolscorpus.Question {
+func toolTableSample(qs []toolscorpus.Asked, full bool) []toolscorpus.Asked {
 	if full {
 		return qs
 	}
 	byTree := questionsByTree(qs)
-	var sample []toolscorpus.Question
+	var sample []toolscorpus.Asked
 	for tree, pool := range byTree {
 		if tree == toolscorpus.TreeTofu || len(pool) <= largeTreeSampleSize {
 			sample = append(sample, pool...)
