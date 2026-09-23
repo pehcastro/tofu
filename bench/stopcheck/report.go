@@ -86,7 +86,7 @@ func Render(r Result) string {
 	fmt.Fprintf(&b, "turns with no steps, which offer no decision point: %d%s\n", len(r.TurnsWithoutSteps), namesOf(r.TurnsWithoutSteps))
 	fmt.Fprintf(&b, "session files skipped: %d\n", len(r.Skipped))
 	for _, s := range r.Skipped {
-		fmt.Fprintf(&b, "  %s: %s\n", s.File, s.Why)
+		fmt.Fprintf(&b, "  %s: %s\n", s.Path, s.Reason)
 	}
 	if len(r.Unlabelled) > 0 {
 		fmt.Fprintf(&b, "steps with no hand label, not decided and not counted: %d%s\n", len(r.Unlabelled), namesOf(r.Unlabelled))

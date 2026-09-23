@@ -5,6 +5,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	"tofu/bench/corpus"
 )
 
 const notSeparable = "n/a"
@@ -64,10 +66,10 @@ func verdict(result Result) string {
 		"no number is offered in place of the answer.\n"
 }
 
-func skipLines(skips []Skip) []string {
+func skipLines(skips []corpus.SkippedTurn) []string {
 	counts := map[string]int{}
 	for _, skip := range skips {
-		counts[skip.Path+" is missing "+skip.Field]++
+		counts[skip.Path+" is missing "+skip.Reason]++
 	}
 	lines := make([]string, 0, len(counts))
 	for line, count := range counts {

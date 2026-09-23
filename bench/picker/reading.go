@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"tofu/bench/corpus"
 	"tofu/internal/llm/quota"
 )
 
@@ -17,18 +18,13 @@ type Reading struct {
 	Report quota.Report
 }
 
-type Skip struct {
-	Path  string
-	Field string
-}
-
 type Corpus struct {
 	Roots    []string
 	Files    int
 	Rows     int
 	Readings []Reading
 	Accounts int
-	Skips    []Skip
+	Skips    []corpus.SkippedTurn
 }
 
 type recordedWindow struct {
@@ -45,7 +41,7 @@ type recordedReading struct {
 }
 
 func Gather(roots ...string) (Corpus, error) {
-	corpus := Corpus{Roots: roots}
+	gathered := Corpus{Roots: roots}
 	seen := map[int64]bool{}
 	for _, root := range roots {
 		err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
@@ -57,15 +53,15 @@ func Gather(roots ...string) (Corpus, error) {
 			case !strings.HasSuffix(path, ".json") && !strings.HasSuffix(path, ".jsonl"):
 				return nil
 			}
-			corpus.Files++
-			return corpus.scan(path, seen)
+			gathered.Files++
+			return gathered.scan(path, seen)
 		})
 		if err != nil && !os.IsNotExist(err) {
 			return Corpus{}, err
 		}
 	}
-	corpus.Accounts = len(seen)
-	return corpus, nil
+	gathered.Accounts = len(seen)
+	return gathered, nil
 }
 
 func (c *Corpus) scan(path string, seen map[int64]bool) error {
@@ -89,7 +85,7 @@ func (c *Corpus) scan(path string, seen map[int64]bool) error {
 		}
 		reading, field := readingOf(recorded)
 		if field != "" {
-			c.Skips = append(c.Skips, Skip{Path: path, Field: field})
+			c.Skips = append(c.Skips, corpus.SkippedTurn{Path: path, Reason: field})
 			continue
 		}
 		seen[reading.Row] = true

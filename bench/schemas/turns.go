@@ -62,23 +62,16 @@ func (t TurnUsage) CalledToolNames() []string {
 	return names
 }
 
-type SkippedSession struct {
-	Path   string
-	Reason string
-}
-
-func ReadSessions(dir string) (usable []TurnUsage, skipped []SkippedSession, err error) {
+func ReadSessions(dir string) (usable []TurnUsage, skipped []corpus.SkippedTurn, err error) {
 	walked, err := corpus.WalkSessions(dir)
 	if err != nil {
 		return nil, nil, err
 	}
-	for _, entry := range walked.Skipped {
-		skipped = append(skipped, SkippedSession{Path: entry.Path, Reason: entry.Reason})
-	}
+	skipped = append(skipped, walked.Skipped...)
 	for _, turn := range walked.Turns {
 		usage, reason := toTurnUsage(turn.RecordedTurn)
 		if reason != "" {
-			skipped = append(skipped, SkippedSession{Path: turn.ID, Reason: reason})
+			skipped = append(skipped, corpus.SkippedTurn{Path: turn.ID, Reason: reason})
 			continue
 		}
 		usable = append(usable, usage)

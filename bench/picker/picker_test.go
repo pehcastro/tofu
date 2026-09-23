@@ -121,7 +121,7 @@ func TestAReadingMissingAFieldIsSkippedAndNamed(t *testing.T) {
 	}
 	fields := []string{}
 	for _, skip := range corpus.Skips {
-		fields = append(fields, skip.Field)
+		fields = append(fields, skip.Reason)
 	}
 	want := []string{"provider", "account", "at", "used_fraction"}
 	if !slices.Equal(fields, want) {
@@ -138,7 +138,7 @@ func TestEveryRecordedRowIsEitherAReadingOrANamedSkip(t *testing.T) {
 		t.Fatal("no row was read: the corpus path is wrong or the corpus is empty")
 	}
 	for _, skip := range corpus.Skips {
-		if skip.Field == "" {
+		if skip.Reason == "" {
 			t.Fatalf("%s was skipped with no field named", skip.Path)
 		}
 	}

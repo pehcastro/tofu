@@ -16,7 +16,7 @@ import (
 
 const repoRoot = "../.."
 
-func liveBattery(t *testing.T) (Battery, []Turn, []Skipped) {
+func liveBattery(t *testing.T) (Battery, []Turn, []corpus.SkippedTurn) {
 	t.Helper()
 	if os.Getenv("TOFU_LIVE") != "1" {
 		t.Skip("set TOFU_LIVE=1 to put the question to the real jev route")

@@ -60,7 +60,7 @@ func TestEverySkippedSessionNamesWhyItCouldNotBeMeasured(t *testing.T) {
 	byReason := map[string]int{}
 	for _, skip := range reach.Skipped {
 		if skip.Reason == "" {
-			t.Fatalf("session %s was skipped with no reason given", skip.ID)
+			t.Fatalf("session %s was skipped with no reason given", skip.Path)
 		}
 		byReason[skip.Reason]++
 	}

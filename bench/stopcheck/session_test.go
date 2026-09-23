@@ -63,13 +63,13 @@ func TestReadSessionsSkipsATurnWrittenBeforeTheOutcomeWasAString(t *testing.T) {
 	if len(turns) != 1 || turns[0].ID != "turn-modern" {
 		t.Fatalf("read %d turns %v, want only turn-modern", len(turns), turns)
 	}
-	if len(skipped) != 1 || skipped[0].File != "turn-legacy.json" {
+	if len(skipped) != 1 || skipped[0].Path != "turn-legacy.json" {
 		t.Fatalf("skipped %v, want turn-legacy.json", skipped)
 	}
-	if !strings.Contains(skipped[0].Why, "no step and no wall clock") {
-		t.Fatalf("the skip reason %q is not the shared reader's reason for a turn the old PascalCase schema wrote with no wall_clock_ms field it can bind to", skipped[0].Why)
+	if !strings.Contains(skipped[0].Reason, "no step and no wall clock") {
+		t.Fatalf("the skip reason %q is not the shared reader's reason for a turn the old PascalCase schema wrote with no wall_clock_ms field it can bind to", skipped[0].Reason)
 	}
-	t.Logf("skipped: %s: %s", skipped[0].File, skipped[0].Why)
+	t.Logf("skipped: %s: %s", skipped[0].Path, skipped[0].Reason)
 }
 
 func TestReadSessionsKeepsCommandsFailuresAndGateIDs(t *testing.T) {
@@ -129,7 +129,7 @@ func TestEveryStepInTheFrozenCorpusCarriesAHandLabel(t *testing.T) {
 	t.Logf("%s holds %d readable turns, %d of them with no step, %d skipped files and %d steps in all. hand labels: %d. unlabelled on purpose: %d",
 		corpusDir, len(turns), audit.empty, len(skipped), audit.steps, labelled, audit.onPurpose)
 	for _, s := range skipped {
-		t.Logf("skipped %s: %s", s.File, s.Why)
+		t.Logf("skipped %s: %s", s.Path, s.Reason)
 	}
 }
 

@@ -29,18 +29,13 @@ type Turn struct {
 	Steps []Step
 }
 
-type Skipped struct {
-	File string
-	Why  string
-}
-
-func ReadSessions(dir string) ([]Turn, []Skipped, error) {
+func ReadSessions(dir string) ([]Turn, []corpus.SkippedTurn, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return nil, nil, err
 	}
 	var turns []Turn
-	var skipped []Skipped
+	var skipped []corpus.SkippedTurn
 	for _, entry := range entries {
 		name := entry.Name()
 		if entry.IsDir() || !strings.HasSuffix(name, ".json") {
@@ -48,13 +43,13 @@ func ReadSessions(dir string) ([]Turn, []Skipped, error) {
 		}
 		recorded, err := corpus.ReadTurn(filepath.Join(dir, name))
 		if err != nil {
-			skipped = append(skipped, Skipped{File: name, Why: err.Error()})
+			skipped = append(skipped, corpus.SkippedTurn{Path: name, Reason: err.Error()})
 			continue
 		}
 		turns = append(turns, convertTurn(recorded))
 	}
 	sort.Slice(turns, func(i, j int) bool { return turns[i].ID < turns[j].ID })
-	sort.Slice(skipped, func(i, j int) bool { return skipped[i].File < skipped[j].File })
+	sort.Slice(skipped, func(i, j int) bool { return skipped[i].Path < skipped[j].Path })
 	return turns, skipped, nil
 }
 

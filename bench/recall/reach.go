@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"sort"
 
+	"tofu/bench/corpus"
 	rc "tofu/internal/recall"
 	"tofu/internal/session"
 	"tofu/internal/turn"
@@ -16,11 +17,6 @@ type SessionPeak struct {
 	Task   string
 	Peak   int
 	Target int
-}
-
-type SkippedSession struct {
-	ID     string
-	Reason string
 }
 
 type ForkEvent struct {
@@ -36,7 +32,7 @@ type ForkEvent struct {
 
 type CorpusReach struct {
 	Measured    []SessionPeak
-	Skipped     []SkippedSession
+	Skipped     []corpus.SkippedTurn
 	Forks       []ForkEvent
 	Compactions int
 }
@@ -55,16 +51,16 @@ func WalkCorpusReach(sessionsDir string) (CorpusReach, error) {
 	}
 	var reach CorpusReach
 	for _, skip := range listing.Skipped {
-		reach.Skipped = append(reach.Skipped, SkippedSession{ID: skip.ID, Reason: skip.Reason.Error()})
+		reach.Skipped = append(reach.Skipped, corpus.SkippedTurn{Path: skip.ID, Reason: skip.Reason.Error()})
 	}
 	for _, header := range listing.Sessions {
 		steps, err := readSteps(store, header.ID)
 		if err != nil {
-			reach.Skipped = append(reach.Skipped, SkippedSession{ID: header.ID, Reason: err.Error()})
+			reach.Skipped = append(reach.Skipped, corpus.SkippedTurn{Path: header.ID, Reason: err.Error()})
 			continue
 		}
 		if len(steps) == 0 {
-			reach.Skipped = append(reach.Skipped, SkippedSession{ID: header.ID, Reason: ReasonNoSteps})
+			reach.Skipped = append(reach.Skipped, corpus.SkippedTurn{Path: header.ID, Reason: ReasonNoSteps})
 			continue
 		}
 		peak, target, ok := peakOccupancy(steps)
@@ -73,7 +69,7 @@ func WalkCorpusReach(sessionsDir string) (CorpusReach, error) {
 			if isSingleFileSession(sessionsDir, header.ID) {
 				reason = ReasonPreOccupancySchema
 			}
-			reach.Skipped = append(reach.Skipped, SkippedSession{ID: header.ID, Reason: reason})
+			reach.Skipped = append(reach.Skipped, corpus.SkippedTurn{Path: header.ID, Reason: reason})
 			continue
 		}
 		reach.Measured = append(reach.Measured, SessionPeak{ID: header.ID, Task: header.Task, Peak: peak, Target: target})

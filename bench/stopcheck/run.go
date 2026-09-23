@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"time"
 
+	"tofu/bench/corpus"
 	"tofu/internal/judge/gate"
 	"tofu/internal/judge/jev"
 	"tofu/internal/judge/jev/wire/openrouter"
@@ -60,7 +61,7 @@ type Result struct {
 	ModeReason        string
 	Steps             []StepResult
 	Turns             []TurnCost
-	Skipped           []Skipped
+	Skipped           []corpus.SkippedTurn
 	TurnsWithoutSteps []string
 	Unlabelled        []string
 }
@@ -133,7 +134,7 @@ func New(root, key string) (Battery, error) {
 	}, nil
 }
 
-func (b Battery) Run(ctx context.Context, turns []Turn, skipped []Skipped) (Result, error) {
+func (b Battery) Run(ctx context.Context, turns []Turn, skipped []corpus.SkippedTurn) (Result, error) {
 	result := Result{GeneratedAt: time.Now(), Wording: b.wording, Mode: b.mode, ModeReason: b.reason, Skipped: skipped}
 	labels := Labels()
 	for _, turn := range turns {

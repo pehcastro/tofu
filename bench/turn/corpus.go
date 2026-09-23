@@ -3,63 +3,47 @@ package turn
 import (
 	"encoding/json"
 	"fmt"
-	"os"
 	"path"
 	"path/filepath"
-	"sort"
 	"strings"
 
 	"tofu/bench/corpus"
 	"tofu/internal/turn/tools"
 )
 
-type SkippedTurn struct {
-	Path   string
-	Reason string
-}
-
 type Corpus struct {
 	Dir              string
 	EntryCount       int
 	Turns            []RecordedTurn
-	Skipped          []SkippedTurn
+	Skipped          []corpus.SkippedTurn
 	JSONLDirs        []string
 	JSONLDirsSeen    int
 	JSONLDirsSkipped []string
 }
 
 func ReadCorpus(dir string) (Corpus, error) {
-	entries, err := os.ReadDir(dir)
+	walked, err := corpus.WalkSessions(dir)
 	if err != nil {
 		return Corpus{}, err
 	}
-	turnCorpus := Corpus{Dir: dir, EntryCount: len(entries)}
-	for _, entry := range entries {
-		name := entry.Name()
-		if entry.IsDir() {
+	turnCorpus := Corpus{Dir: dir, EntryCount: walked.EntryCount, Skipped: append([]corpus.SkippedTurn{}, walked.Skipped...)}
+	for _, entry := range walked.Turns {
+		isDir := entry.Schema == corpus.SchemaHeaderJSONL
+		if isDir {
 			turnCorpus.JSONLDirsSeen++
-			recorded, err := corpus.ReadTurnDir(filepath.Join(dir, name))
-			if err != nil {
-				turnCorpus.Skipped = append(turnCorpus.Skipped, SkippedTurn{Path: name, Reason: err.Error()})
-				turnCorpus.JSONLDirsSkipped = append(turnCorpus.JSONLDirsSkipped, name)
-				continue
+		}
+		if !entry.WallClockRecorded {
+			turnCorpus.Skipped = append(turnCorpus.Skipped, corpus.SkippedTurn{Path: entry.ID, Reason: corpus.ErrNoWallClock.Error()})
+			if isDir {
+				turnCorpus.JSONLDirsSkipped = append(turnCorpus.JSONLDirsSkipped, entry.ID)
 			}
-			turnCorpus.Turns = append(turnCorpus.Turns, recorded)
-			turnCorpus.JSONLDirs = append(turnCorpus.JSONLDirs, recorded.ID)
 			continue
 		}
-		if filepath.Ext(name) != ".json" {
-			turnCorpus.Skipped = append(turnCorpus.Skipped, SkippedTurn{Path: name, Reason: "not a .json file"})
-			continue
+		turnCorpus.Turns = append(turnCorpus.Turns, entry.RecordedTurn)
+		if isDir {
+			turnCorpus.JSONLDirs = append(turnCorpus.JSONLDirs, entry.ID)
 		}
-		recorded, err := corpus.ReadTurn(filepath.Join(dir, name))
-		if err != nil {
-			turnCorpus.Skipped = append(turnCorpus.Skipped, SkippedTurn{Path: name, Reason: err.Error()})
-			continue
-		}
-		turnCorpus.Turns = append(turnCorpus.Turns, recorded)
 	}
-	sort.Slice(turnCorpus.Turns, func(i, j int) bool { return turnCorpus.Turns[i].ID < turnCorpus.Turns[j].ID })
 	return turnCorpus, nil
 }
 
