@@ -633,6 +633,25 @@
       "state_note": ""
     },
     {
+      "package": "recall",
+      "date": "2026-09-23",
+      "source": "bench/recall/report-2026-09-23.md",
+      "figure": "26.5",
+      "built_from": "prose",
+      "sample": "47 of 110 recorded sessions carry occupancy and could be measured, with two crossings and two forks among them",
+      "skips": "63 of 110 sessions could not be measured, split by reason: 55 predate the occupancy field, 4 never wrote it to any step, 4 carry no steps at all. Three live tests stay skipped behind TOFU_LIVE and no model call was made.",
+      "conclusion": [
+        {
+          "text": "- Whether a wrong eviction is visible when one happens: the two real forks never produced one to check against, so the re-fetch label is proved to work in code (bench/recall/session.go, report-2026-09-20.md) but has never caught a real mistake.",
+          "withdrawn": false
+        }
+      ],
+      "conclusion_unparsed": false,
+      "state": "stands",
+      "state_source": "",
+      "state_note": ""
+    },
+    {
       "package": "schemas",
       "date": "2026-09-23",
       "source": "bench/schemas/report-2026-09-23.md",
@@ -1396,7 +1415,7 @@
     }
   ],
   "counts": {
-    "reports": 40,
+    "reports": 41,
     "packages_with_a_dated_report": 25,
     "packages_with_no_dated_report": 6,
     "withdrawn_whole_or_in_part": 5,

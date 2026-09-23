@@ -272,6 +272,14 @@
     "skips": "1 entry under .tofu/sessions that is not a turn; the two live arm tests stay skipped and their skip message now cites the two against twelve gap"
   },
   {
+    "report": "bench/recall/report-2026-09-23.md",
+    "figure": "26.5",
+    "says": "No recorded session has ever come near the context ceiling: the highest peak is 66,162 tokens, 26.5 percent of the 250,000 limit, and the median is 20,179, 8.1 percent. Zero sessions reached half the ceiling, one reached a quarter and fifteen reached a tenth. Two sessions did cross the compaction target in force when they ran, 66,162 against 63,000 and 57,326 against 50,000, and the two targets differ because the band shares in konst moved between them. Nothing has ever been evicted by the in-place rewrite: zero compaction events on any step of any recorded session. What ran twice instead was the fork, which isolates and continues, matching the two crossings one for one. The re-fetch rate is therefore defined rather than undefined, and it is 0 of 2: neither continuation repeated a pre-fork tool call, and the one time one wanted old material it fetched the artifact handle the carry already held. The condition under which this starts to matter is named: a session several times longer than any recorded, a smaller ceiling, a model with a smaller window, or a task reading much larger results than this corpus of many small calls.",
+    "from": "prose",
+    "sample": "47 of 110 recorded sessions carry occupancy and could be measured, with two crossings and two forks among them",
+    "skips": "63 of 110 sessions could not be measured, split by reason: 55 predate the occupancy field, 4 never wrote it to any step, 4 carry no steps at all. Three live tests stay skipped behind TOFU_LIVE and no model call was made."
+  },
+  {
     "report": "bench/schemas/report-2026-09-23.md",
     "figure": "16575",
     "says": "The tool schemas a turn sends cost 16,575 bytes on every request, about 4,143 tokens for all 18 tools, and deferring them is not worth building. The figure is measured by encoding a real request with and without the tools array and taking the difference; summing the tools individually gives 16,492, and the 83 byte gap is the array's own brackets and commas. Caching is what decides it: on the measured turn the block was written to cache once on step one and never again across eleven steps, and 81.6 percent of that turn's billed input was cache reads. Across the corpus, 24 recorded turns wrote to cache and 23 of them made a second model call and read the write back; at today's 18 tool scale, 14 of 15 did. The deferral mechanism is named and costed rather than assumed: a catalog line plus a fetch before first use would have added 5 round trips to the measured turn to save at most 2,873 tokens, paid once at cache-write price. The only case it would pay is a turn that makes exactly one model call and never returns, which was 1 of 24.",

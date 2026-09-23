@@ -78,12 +78,13 @@ Why the rest are not compared:
 
 ## Every dated report, newest first
 
-40 dated reports over 25 benches. 6 benches carry none. 5 are withdrawn whole or in part, 1 is stale, and 11 reports name no conclusion a reader can find. A withdrawal declared from outside a report lives in `bench/report/withdrawals.json`; every other state is declared by the report's own first lines.
+41 dated reports over 25 benches. 6 benches carry none. 5 are withdrawn whole or in part, 1 is stale, and 11 reports name no conclusion a reader can find. A withdrawal declared from outside a report lives in `bench/report/withdrawals.json`; every other state is declared by the report's own first lines.
 
 | Bench | Date | Report | What it found | Sample | State |
 |---|---|---|---|---|---|
 | harness | 2026-09-23 | `bench/harness/report-2026-09-23.md` | Against who. Claude Code 2.1.280 driving claude -p on opus, and Codex CLI 0.155.1 driving codex exec on gpt-5.6-sol. | one task, the v1 hono seed of 5 files, one repeat per arm, three arms live on the owner's subscriptions, between 05:42 and 05:52 local time | stands |
 | instruction | 2026-09-23 | `bench/instruction/report-2026-09-23.md` | On this corpus jev beats the regex arm, 25 of 27 against 24 of 27, and the margin is two cases. Both arms score high because this project's own recorded sessions carry almost no adversarial instruction-shaped text: what looks like a directive is nearly always the harness's own scaffolding (an oversized-result notice telling the model to call artifact_fetch, a bash-timeout caution, a refused-citation notice), never a planted attack. | 27 labelled cases read out of .tofu/sessions at run time, every row keyed by turn id and tool call id, none hand written | stands |
+| recall | 2026-09-23 | `bench/recall/report-2026-09-23.md` | - Whether a wrong eviction is visible when one happens: the two real forks never produced one to check against, so the re-fetch label is proved to work in code (bench/recall/session.go, report-2026-09-20.md) but has never caught a real mistake. | 47 of 110 recorded sessions carry occupancy and could be measured, with two crossings and two forks among them | stands |
 | schemas | 2026-09-23 | `bench/schemas/report-2026-09-23.md` | unparsed: no heading in this file names its own answer | one recorded 11 step turn measured in full, plus 51 of 111 recorded turns carrying cache accounting, of which 24 wrote to cache and 15 are at today's 18 tool scale | stands |
 | search | 2026-09-23 | `bench/search/report-2026-09-23.md` | The plan's claim that four search patterns cost nothing is false as written, and the rescue rate on recorded searches is zero. | 23 recorded search tool calls read out of .tofu/sessions at run time, 20 replayed against the tracked tree of 1513 files, 3 skipped because the recorded path is gone; cost measured 5 runs each, median | stands |
 | shortlist | 2026-09-23 | `bench/shortlist/report-2026-09-23-join.md` | The search join is the right denominator by argument, and it clears the count floor of 12 at 13. It does not clear the leakage floor: 13 of 13 rows name their own label in their own task. | 110 recorded sessions, 23 search calls joined to a later acting call, 15 hits of which 13 carry a distinct task; no arm ran and no call was made | stands |
@@ -143,4 +144,4 @@ Why the rest are not compared:
 
 ### Where these reports came from
 
-4 of 40 reports are built by running the package's own code again and 36 of 40 from the markdown's own text, which is weaker evidence, and every one of those says so.
+4 of 41 reports are built by running the package's own code again and 37 of 41 from the markdown's own text, which is weaker evidence, and every one of those says so.
