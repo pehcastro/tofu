@@ -5,4 +5,5 @@ concern: code_rules
 checker: comments
 mode: shadow
 language: go
+text: NEVER write a comment in go source, including a doc comment on an exported identifier. a comment repairs a name, a type or a function that failed to carry its meaning: rename it, give it a type that says what it is, or split it. only //go:build, //go:generate, //go:embed and //nolint are allowed.
 notes: parses go/ast through internal/sys.FileCommentViolations, the same function tofu lint comments already runs

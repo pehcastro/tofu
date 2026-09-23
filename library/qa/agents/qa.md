@@ -6,13 +6,11 @@ references:
   - flakiness
   - failure-triage
   - metrics
+  - test-planning
 skills:
   - flake-triage
   - test-plan
-source: .local/sources/qa-skills/qaskills.sh/qaskills/qa-agent-claude/SKILL.md
-also:
-  - .local/sources/qa-skills/skills.sh/mattpocock/skills-qa-recovered/SKILL.md
-  - .local/sources/qa-skills/skills.sh/desplega-ai/ai-toolbox/cc-plugin/base/skills/qa/SKILL.md
+source: library/qa/references/failure-triage.md
 ---
 
 # QA

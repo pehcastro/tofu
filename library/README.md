@@ -45,7 +45,7 @@ library/tools/fetch/rules/     the fetch tool alone
 
 One directory holds two families of rule and `kind:` says which.
 
-**A checker rule** is a check over a tree or a diff, read by `internal/rule`. It carries `id`, `domain`, `kind`, a `mode` of `shadow`, `enforced` or `off`, and either a `checker:` naming a builtin or, when `kind: measured`, a `measurement:` with the `source:` it was distilled from and the `evidence:` that paid for it. `tofu rules list` and `tofu rules check` read these.
+**A checker rule** is a check over a tree or a diff, read by `internal/rule`. It carries `id`, `domain`, `kind`, a `mode` of `shadow`, `enforced` or `off`, and either a `checker:` naming a builtin or, when `kind: measured`, a `measurement:` with the `source:` it was distilled from and the `evidence:` that paid for it. A `source:` anywhere under `library/` names a path under `library/`, which is a file in a domain's `references/`, so a rule can be checked against its material in any checkout. `tofu rules list` and `tofu rules check` read these.
 
 **A threshold rule** is what a decision point reads, `kind: threshold`, loaded by `internal/judge/policy`. It carries `name`, `domain`, `kind`, `rule_version`, the `questions` set and `questions_version` it is asked against, a `mode`, a `sample_floor`, and a `thresholds:` block. `tofu doctor` reports which one decided and in which mode.
 

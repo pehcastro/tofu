@@ -1,11 +1,39 @@
 package rule
 
 import (
+	"fmt"
+	"io/fs"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"testing/fstest"
 )
+
+const shippedLibrary = "../../library"
+
+func ruleFilesOnDisk(t *testing.T, library string) (loadable, decisionPoint []string) {
+	t.Helper()
+	err := filepath.WalkDir(library, func(name string, entry fs.DirEntry, err error) error {
+		if err != nil || entry.IsDir() || filepath.Base(filepath.Dir(name)) != "rules" || !strings.HasSuffix(name, ".yaml") {
+			return err
+		}
+		data, err := os.ReadFile(name)
+		if err != nil {
+			return err
+		}
+		if strings.Contains(string(data), "kind: "+ThresholdKind) {
+			decisionPoint = append(decisionPoint, name)
+			return nil
+		}
+		loadable = append(loadable, name)
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("walking %s: %v", library, err)
+	}
+	return loadable, decisionPoint
+}
 
 func TestLoadFSReadsEveryRuleAndNamesTheDirectoryItActuallySitsIn(t *testing.T) {
 	shipped := fstest.MapFS{
@@ -129,8 +157,8 @@ func TestLoadReadsTheMeasuredQARules(t *testing.T) {
 		if r.Measurement != "bench/testquality/flakerun" {
 			t.Fatalf("%s measurement = %q, want bench/testquality/flakerun", name, r.Measurement)
 		}
-		if !strings.HasPrefix(r.Source, ".local/sources/qa-skills/") {
-			t.Fatalf("%s source = %q, want a path under .local/sources/qa-skills/", name, r.Source)
+		if !strings.HasPrefix(r.Source, "library/qa/references/") {
+			t.Fatalf("%s source = %q, want a reference under library/qa/references/", name, r.Source)
 		}
 		if !strings.Contains(r.Evidence, "2202 test names over 70 packages") {
 			t.Fatalf("%s evidence = %q, want the 2026-09-21 sweep it was measured on", name, r.Evidence)
@@ -159,12 +187,23 @@ func TestParseRuleRefusesAStructuralRuleThatDeclaresAMeasurement(t *testing.T) {
 }
 
 func TestLoadDirWalksEveryDomainAndSkipsTheRulesADecisionPointReads(t *testing.T) {
-	rules, err := LoadDir(filepath.Join("..", "..", "library"))
+	rules, err := LoadDir(shippedLibrary)
 	if err != nil {
 		t.Fatalf("LoadDir: %v", err)
 	}
-	if len(rules) != 9 {
-		t.Fatalf("rules = %d, want 9: %+v", len(rules), rules)
+	loadable, decisionPoint := ruleFilesOnDisk(t, shippedLibrary)
+	if len(rules) != len(loadable) {
+		t.Fatalf("rules = %d, want the %d rule files on disk: %v", len(rules), len(loadable), loadable)
+	}
+	if len(decisionPoint) == 0 {
+		t.Fatal("no rule file on disk declares the threshold kind, so nothing here exercises the skip")
+	}
+	for _, skipped := range decisionPoint {
+		for _, r := range rules {
+			if r.File == skipped {
+				t.Fatalf("LoadDir returned %s, which a decision point reads", skipped)
+			}
+		}
 	}
 	domains := map[string]int{}
 	for _, r := range rules {
@@ -178,5 +217,40 @@ func TestLoadDirWalksEveryDomainAndSkipsTheRulesADecisionPointReads(t *testing.T
 	}
 	if domains[DomainDev] == 0 || domains[DomainQA] == 0 || domains[DomainGeneral] == 0 {
 		t.Fatalf("the shipped rules cover %v, want at least one in dev, qa and general", domains)
+	}
+}
+
+func TestAnAddedRuleMovesEveryCountAndBreaksNothingElse(t *testing.T) {
+	shipped, err := LoadDir(shippedLibrary)
+	if err != nil {
+		t.Fatalf("LoadDir: %v", err)
+	}
+	grown := t.TempDir()
+	if err := os.CopyFS(grown, os.DirFS(shippedLibrary)); err != nil {
+		t.Fatalf("copying the shipped library: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(grown, "general", "rules", "eleventh@1.yaml"), []byte("id: eleventh\ndomain: general\nkind: structural\nchecker: em_dash\nconcern: output_shape\n"), 0o644); err != nil {
+		t.Fatalf("writing the added rule: %v", err)
+	}
+
+	grownRules, err := LoadDir(grown)
+	if err != nil {
+		t.Fatalf("LoadDir on the grown library: %v", err)
+	}
+	if len(grownRules) != len(shipped)+1 {
+		t.Fatalf("the grown library loads %d rules, want the %d shipped ones and the one added", len(grownRules), len(shipped))
+	}
+
+	task := Task{Text: "add a table test for the loader", Paths: []string{"internal/rule/load_test.go"}}
+	fired := 0
+	for _, m := range Index(shipped, task) {
+		if m.Fires {
+			fired++
+		}
+	}
+	out := &strings.Builder{}
+	WriteIndex(out, Index(grownRules, task))
+	if !strings.HasPrefix(out.String(), fmt.Sprintf("%d of %d rules fire\n", fired+1, len(shipped)+1)) {
+		t.Fatalf("the grown index opens with %q, want %d of %d", strings.SplitN(out.String(), "\n", 2)[0], fired+1, len(shipped)+1)
 	}
 }

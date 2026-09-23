@@ -9,7 +9,7 @@ import (
 	"tofu/internal/rule"
 )
 
-const qaSkillSource = ".local/sources/qa-skills/"
+const qaSkillSource = "library/qa/references/"
 
 func QARuleFaults(rules fs.FS, root string) ([]string, error) {
 	loaded, err := rule.LoadFS(rules, root)

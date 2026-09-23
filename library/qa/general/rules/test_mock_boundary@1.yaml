@@ -5,4 +5,5 @@ concern: code_rules
 checker: test_mock_boundary
 mode: shadow
 scope: "**/*_test.go"
+text: assert what the code produced, not which internal call it made. NEVER reassign a function variable the package under test declares, and NEVER assert that a call happened, how often, or in what order: substitute at a boundary the code already has and check the result.
 notes: fires when a test file assigns a package level function variable declared by the package under test, or calls AssertCalled, AssertNotCalled, AssertNumberOfCalls, AssertExpectations, EXPECT or InOrder, which are claims about which internal call happened rather than about what the code produced

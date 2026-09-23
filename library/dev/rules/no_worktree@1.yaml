@@ -4,4 +4,5 @@ kind: structural
 concern: safety
 checker: no_worktree
 mode: shadow
+text: NEVER run git worktree. work in the checkout you were given, and keep two pieces of work apart by giving each its own paths to write.
 notes: checks the parsed argv only, never a heredoc body, the case that once refused the ticket explaining why git worktree is refused

@@ -5,7 +5,7 @@ description: Prove a test disagrees with itself, categorise why, and fix the cau
 references:
   - flakiness
   - failure-triage
-source: .local/sources/qa-skills/qaskills.sh/Pramod/flaky-test-quarantine/SKILL.md
+source: library/qa/references/flakiness.md
 ---
 
 # Flake triage

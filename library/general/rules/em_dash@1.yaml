@@ -5,4 +5,5 @@ concern: output_shape
 checker: em_dash
 mode: shadow
 except: quoted
+text: NEVER write an em dash. use a comma, a colon, or two sentences. a dash inside quoted text, a code fence or a backtick span belongs to the source and stays.
 notes: a literal U+2014 outside a quotation, where a markdown fence, an indented block and a backtick span are quotations and a blockquote is not

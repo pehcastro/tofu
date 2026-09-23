@@ -1,8 +1,8 @@
 package rule
 
 import (
+	"fmt"
 	"path/filepath"
-	"sort"
 	"strings"
 	"testing"
 	"testing/fstest"
@@ -120,16 +120,27 @@ func TestWriteIndexShowsEveryRuleItsVerdictAndTheReason(t *testing.T) {
 }
 
 func TestTheShippedIndexSaysWhatFiresForATaskAndWhy(t *testing.T) {
-	rules, err := LoadDir(filepath.Join("..", "..", "library"))
+	rules, err := LoadDir(shippedLibrary)
 	if err != nil {
 		t.Fatalf("LoadDir: %v", err)
 	}
+	index := Index(rules, Task{Text: "add a table test for the loader", Paths: []string{"internal/rule/load_test.go", "internal/rule/load.go"}})
 	out := &strings.Builder{}
-	WriteIndex(out, Index(rules, Task{Text: "add a table test for the loader", Paths: []string{"internal/rule/load_test.go", "internal/rule/load.go"}}))
+	WriteIndex(out, index)
 	t.Log("\n" + out.String())
 
-	if !strings.HasPrefix(out.String(), "9 of 9 rules fire\n") {
-		t.Fatalf("the index opens with %q, want 9 of 9 for a task naming a go file and a test file", strings.SplitN(out.String(), "\n", 2)[0])
+	unconditional := 0
+	for i, m := range index {
+		declaresNoCondition := rules[i].Trigger.condition == nil
+		if m.Fires != declaresNoCondition {
+			t.Fatalf("rule %q fires = %v for a task naming a go file and a test file, and it declares a condition = %v: %s", m.RuleID, m.Fires, !declaresNoCondition, m.Why)
+		}
+		if declaresNoCondition {
+			unconditional++
+		}
+	}
+	if !strings.HasPrefix(out.String(), fmt.Sprintf("%d of %d rules fire\n", unconditional, len(rules))) {
+		t.Fatalf("the index opens with %q, want %d of %d for a task naming a go file and a test file", strings.SplitN(out.String(), "\n", 2)[0], unconditional, len(rules))
 	}
 	for _, want := range []string{
 		"fires em_dash             always on, the rule declares no trigger",
@@ -141,12 +152,22 @@ func TestTheShippedIndexSaysWhatFiresForATaskAndWhy(t *testing.T) {
 		}
 	}
 
+	onProse := Index(rules, Task{Text: "rewrite the changelog entry", Paths: []string{"CHANGELOG.md"}})
 	prose := &strings.Builder{}
-	WriteIndex(prose, Index(rules, Task{Text: "rewrite the changelog entry", Paths: []string{"CHANGELOG.md"}}))
+	WriteIndex(prose, onProse)
 	t.Log("\n" + prose.String())
 
-	if !strings.HasPrefix(prose.String(), "3 of 9 rules fire\n") {
-		t.Fatalf("the index opens with %q, want 3 of 9 for a task naming one markdown file", strings.SplitN(prose.String(), "\n", 2)[0])
+	alwaysOn := 0
+	for i, m := range onProse {
+		if m.Fires != rules[i].Trigger.AlwaysOn() {
+			t.Fatalf("rule %q fires = %v for a task naming one markdown file, and it is always on = %v: %s", m.RuleID, m.Fires, rules[i].Trigger.AlwaysOn(), m.Why)
+		}
+		if m.Fires {
+			alwaysOn++
+		}
+	}
+	if !strings.HasPrefix(prose.String(), fmt.Sprintf("%d of %d rules fire\n", alwaysOn, len(rules))) {
+		t.Fatalf("the index opens with %q, want %d of %d for a task naming one markdown file", strings.SplitN(prose.String(), "\n", 2)[0], alwaysOn, len(rules))
 	}
 	if !strings.Contains(prose.String(), "      comments            no path the task names is go") {
 		t.Fatalf("the index does not say why comments was held back:\n%s", prose)
@@ -154,7 +175,7 @@ func TestTheShippedIndexSaysWhatFiresForATaskAndWhy(t *testing.T) {
 }
 
 func TestTheShippedGoRulesReachGoFilesAndNothingElse(t *testing.T) {
-	rules, err := LoadDir(filepath.Join("..", "..", "library"))
+	rules, err := LoadDir(shippedLibrary)
 	if err != nil {
 		t.Fatalf("LoadDir: %v", err)
 	}
@@ -163,14 +184,6 @@ func TestTheShippedGoRulesReachGoFilesAndNothingElse(t *testing.T) {
 		if !r.Trigger.AlwaysOn() {
 			scoped[r.ID] = r
 		}
-	}
-	if len(scoped) != 6 {
-		ids := make([]string, 0, len(scoped))
-		for id := range scoped {
-			ids = append(ids, id)
-		}
-		sort.Strings(ids)
-		t.Fatalf("%d shipped rules carry a trigger, want 6: %v", len(scoped), ids)
 	}
 
 	source := Task{Paths: []string{"internal/rule/trigger.go"}}
@@ -187,9 +200,21 @@ func TestTheShippedGoRulesReachGoFilesAndNothingElse(t *testing.T) {
 	if !fires("comments", source) || !fires("comments", test) || fires("comments", prose) {
 		t.Fatal("the comments rule does not reach exactly the go files")
 	}
+	goRules := map[string]bool{"comments": true}
 	for _, id := range []string{"test_assertion", "test_mock_boundary", "test_boundary_cases", "skipped_test_budget", "flake_disagreement"} {
 		if fires(id, source) || !fires(id, test) || fires(id, prose) {
 			t.Fatalf("rule %q does not reach exactly the go test files", id)
+		}
+		goRules[id] = true
+	}
+	for id, r := range scoped {
+		if goRules[id] {
+			continue
+		}
+		for _, task := range []Task{source, test} {
+			if on, why := r.Trigger.firesFor(task); on {
+				t.Fatalf("rule %q is not one of the go rules and reaches %v: %s", id, task.Paths, why)
+			}
 		}
 	}
 }

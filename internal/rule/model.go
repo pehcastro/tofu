@@ -118,6 +118,7 @@ type Rule struct {
 	ModeDeclared bool
 	Except       Exception
 	Trigger      Trigger
+	Text         string
 	Notes        string
 	File         string
 }

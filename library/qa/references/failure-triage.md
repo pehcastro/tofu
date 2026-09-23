@@ -1,8 +1,9 @@
 ---
 id: failure-triage
 domain: qa
-source: .local/sources/qa-skills/qaskills.sh/qaskills/qa-agent-claude/SKILL.md
-also: .local/sources/qa-skills/skills.sh/vasilyu1983/ai-agents-public/frameworks/shared-skills/skills/qa-testing-strategy/SKILL.md
+document: QA Agent for Claude Code, a skill describing a seven step explore to report loop
+found: published on qaskills.sh, copied into a local archive on 2026-09-21 and not committed here
+related: a second skill, qa-testing-strategy, published on skills.sh, which says the same thing about weakening a test
 ---
 
 # Triage before acting on a failing test
@@ -29,3 +30,23 @@ One failing case is triaged at its own layer first. Widening to the full suite a
 ## Escalate rather than absorb
 
 A real defect goes back to the person or the agent that owns the code, with the reproduction and the evidence, not into a quiet test edit.
+
+## The passage this was drawn from
+
+Quoted from *QA Agent for Claude Code*, its triage step and its guardrails. The action column of the original table used an em dash where a colon stands here, and the table is written as a list because the rows are long.
+
+> ## Step 5 - Triage failures
+>
+> For each failure, classify before acting:
+>
+> - Real bug. Signal: App behaves wrong vs. the requirement. Action: **Stop and report to the user** with repro + trace: do NOT "fix" the test to pass
+> - Stale locator. Signal: Element moved/renamed. Action: Self-heal (step 6)
+> - Bad test. Signal: Wrong assertion/expectation. Action: Fix the test
+> - Flaky. Signal: Passes on retry, timing-related. Action: Remove the race (waits/data), not add a sleep
+>
+> The cardinal rule: **never make a failing test pass by weakening it to hide a real defect.**
+
+> - **Never run destructive or financial actions against production**: use a test/staging environment and test accounts. Refuse if only prod is available.
+> - Escalate real bugs; never silently rewrite a test to green.
+
+The rest of that document is a browser crawling loop, a Page Object Model and self-healing locators, which belong to a web suite and not to this tree.

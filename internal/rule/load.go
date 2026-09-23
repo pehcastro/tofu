@@ -117,6 +117,12 @@ func parseRule(data []byte, path string) (Rule, error) {
 	if r.Measurement != "" {
 		return Rule{}, fmt.Errorf("%s: rule %q is kind %s and declares measurement %q, only a %s rule is measured", path, r.ID, r.Kind, r.Measurement, KindMeasured)
 	}
+	if r.Kind == KindHuman {
+		if r.Text == "" {
+			return Rule{}, fmt.Errorf("%s: rule %q is kind %s and declares no text, and text is what the model reads", path, r.ID, r.Kind)
+		}
+		return r, nil
+	}
 	if r.Checker == "" {
 		return Rule{}, fmt.Errorf("%s: rule %q is kind %s and declares no checker", path, r.ID, r.Kind)
 	}
@@ -193,6 +199,8 @@ func (r *Rule) setField(key, value, path string, line int) error {
 			return fmt.Errorf("%s:%d: except is %q, found %q", path, line, ExceptionQuoted, value)
 		}
 		r.Except = e
+	case "text":
+		r.Text = value
 	case "notes":
 		r.Notes = value
 	default:

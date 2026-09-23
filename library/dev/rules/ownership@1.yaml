@@ -4,4 +4,5 @@ kind: structural
 concern: safety
 checker: ownership
 mode: shadow
+text: write only inside the paths you were given. NEVER create, edit or delete a file outside them: when the work needs one, name the path and say why instead of reaching for it.
 notes: wraps internal/crew.Matches, the ownership check crew already implements

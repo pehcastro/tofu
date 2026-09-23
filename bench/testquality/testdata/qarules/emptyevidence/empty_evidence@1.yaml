@@ -4,5 +4,5 @@ kind: structural
 concern: code_rules
 checker: comments
 mode: shadow
-source: .local/sources/qa-skills/qaskills.sh/Pramod/flaky-test-quarantine/SKILL.md
+source: library/qa/references/flakiness.md
 evidence: ""

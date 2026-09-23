@@ -3,10 +3,10 @@ name: test-plan
 domain: qa
 description: Decide what a change needs tested before writing a test. Use when a feature is about to be verified, when a release needs a scope, or when somebody asks for a QA plan.
 references:
+  - test-planning
   - metrics
   - failure-triage
-source: .local/sources/qa-skills/qaskills.sh/user_3AG3Azgv7YSVCcWHF89CwTlkLWj/test-plan-instructions/SKILL.md
-also: .local/sources/qa-skills/skills.sh/vasilyu1983/ai-agents-public/frameworks/shared-skills/skills/qa-testing-strategy/SKILL.md
+source: library/qa/references/test-planning.md
 ---
 
 # Test plan

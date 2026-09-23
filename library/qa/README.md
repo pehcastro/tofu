@@ -15,7 +15,9 @@ There is no `library/qa/go/`. Nothing in the twenty three skills read for TOFU-2
 
 ## Where the content came from
 
-Every file here names the skill it was distilled from, by its path under `.local/sources/qa-skills/`. The clones are not shipped and not committed; the citation is so a person can read the original.
+Every file here names its `source:` as a path under `library/`, and that path is a file in `references/` carrying the passage the work was drawn from, the document it came from and where it was found. A citation that pointed at a clone under `.local/sources/` was a dead path in every checkout but one, which is what TOFU-413 fixed.
+
+Four outside documents produced this domain. `references/flakiness.md` is cited by the `flake_disagreement` rule and the `flake-triage` skill, `references/metrics.md` by the `skipped_test_budget` rule, `references/failure-triage.md` by the `qa` agent, and `references/test-planning.md` by the `test-plan` skill.
 
 ## The rule about rules
 
