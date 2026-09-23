@@ -173,6 +173,41 @@ func TestEveryArmAsksForTheSameThinkingEffort(t *testing.T) {
 	}
 }
 
+func TestEveryArmPlanStatesItsPostureSoALaterChangeCannotSilentlyMoveIt(t *testing.T) {
+	root := repositoryRoot(t)
+	onTheCommandLine := map[Arm]string{
+		ArmClaude: "--permission-mode bypassPermissions --safe-mode",
+		ArmCodex:  "--sandbox danger-full-access",
+	}
+	wantPosture := map[Arm]string{
+		ArmClaude: claudePosture,
+		ArmCodex:  codexPosture,
+		ArmTofu:   tofuPosture,
+	}
+	for _, arm := range []Arm{ArmClaude, ArmCodex, ArmTofu} {
+		plan, err := BuildPlan(root, arm, "hono", 1)
+		if err != nil {
+			t.Fatalf("%s: BuildPlan: %v", arm, err)
+		}
+		if plan.Posture != wantPosture[arm] {
+			t.Errorf("%s: plan states posture %q, want %q", arm, plan.Posture, wantPosture[arm])
+		}
+		if flag, named := onTheCommandLine[arm]; named && !strings.Contains(Shell(plan.Command), flag) {
+			t.Errorf("%s: the command is %s and does not carry %s, so the posture printed does not match what runs", arm, Shell(plan.Command), flag)
+		}
+		if arm == ArmCodex && strings.Contains(Shell(plan.Command), "workspace-write") {
+			t.Errorf("%s: the command still carries workspace-write, the stricter posture that rejected the owner's own commands: %s", arm, Shell(plan.Command))
+		}
+		var buf bytes.Buffer
+		if err := Fprint(&buf, plan); err != nil {
+			t.Fatalf("%s: Fprint: %v", arm, err)
+		}
+		if !strings.Contains(buf.String(), "posture: "+plan.PostureLine()) {
+			t.Errorf("%s: the printed plan does not state its posture the way it states the other arms', got %q", arm, buf.String())
+		}
+	}
+}
+
 func TestTheTofuArmTurnsItsInstructionWalkOffOnTheCommandLine(t *testing.T) {
 	root := repositoryRoot(t)
 	plan, err := BuildPlan(root, ArmTofu, "hono", 1)

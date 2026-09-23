@@ -33,6 +33,17 @@ const (
 	tofuEffortSetBy   = "--effort medium, one of none, minimal, low, medium, high, xhigh and max in tofu run --help, reaching output_config.effort on the anthropic wire in internal/llm/wire/anthropic/request.go"
 )
 
+const (
+	claudePosture      = "full permission, no house rules, no hooks, no MCP"
+	claudePostureSetBy = "--permission-mode bypassPermissions --safe-mode"
+
+	codexPosture      = "full permission, no sandbox, the posture the owner drives codex under"
+	codexPostureSetBy = "--sandbox danger-full-access, matching sandbox_mode = \"danger-full-access\" and approval_policy = \"never\" in the owner's own ~/.codex/config.toml"
+
+	tofuPosture      = "its own tool gate, whatever the active rule set's mode decides"
+	tofuPostureSetBy = "no permission flag on the command line, --max-steps 40 is the only external cap"
+)
+
 type Caps struct {
 	WallClock time.Duration
 	TurnCap   int
@@ -41,27 +52,33 @@ type Caps struct {
 const defaultRepeats = 1
 
 type Plan struct {
-	Arm         Arm
-	Task        string
-	Version     int
-	Prompt      string
-	PromptPath  string
-	Command     []string
-	Dir         string
-	WorkingDir  string
-	Branch      string
-	Env         []string
-	Model       string
-	Caps        Caps
-	Setup       Setup
-	Seed        Seed
-	Effort      Effort
-	EffortSetBy string
-	Repeats     int
+	Arm          Arm
+	Task         string
+	Version      int
+	Prompt       string
+	PromptPath   string
+	Command      []string
+	Dir          string
+	WorkingDir   string
+	Branch       string
+	Env          []string
+	Model        string
+	Caps         Caps
+	Setup        Setup
+	Seed         Seed
+	Effort       Effort
+	EffortSetBy  string
+	Posture      string
+	PostureSetBy string
+	Repeats      int
 }
 
 func (p Plan) EffortLine() string {
 	return string(p.Effort) + ", " + p.EffortSetBy
+}
+
+func (p Plan) PostureLine() string {
+	return p.Posture + ", " + p.PostureSetBy
 }
 
 func (p Plan) Runs() []RunMeta {
@@ -133,6 +150,7 @@ func BuildPlan(root string, arm Arm, name string, version int) (Plan, error) {
 	case ArmClaude:
 		plan.Model = claudeArmModel
 		plan.Effort, plan.EffortSetBy = AskedEffort, claudeEffortSetBy
+		plan.Posture, plan.PostureSetBy = claudePosture, claudePostureSetBy
 		plan.WorkingDir = dir
 		plan.Command = []string{
 			"claude", "-p", prompt,
@@ -146,19 +164,20 @@ func BuildPlan(root string, arm Arm, name string, version int) (Plan, error) {
 	case ArmCodex:
 		plan.Model = codexArmModel
 		plan.Effort, plan.EffortSetBy = AskedEffort, codexEffortSetBy
+		plan.Posture, plan.PostureSetBy = codexPosture, codexPostureSetBy
 		plan.Command = []string{
 			"codex", "exec", prompt,
 			"-m", codexArmModel,
 			"-c", "model_reasoning_effort='" + string(AskedEffort) + "'",
 			"--json",
-			"--sandbox", "workspace-write",
-			"-c", "sandbox_workspace_write.network_access=true",
+			"--sandbox", "danger-full-access",
 			"-C", dir,
 		}
 		plan.Env = []string{"the chatgpt subscription credential codex login already holds"}
 	case ArmTofu:
 		plan.Model = tofuArmModel
 		plan.Effort, plan.EffortSetBy = AskedEffort, tofuEffortSetBy
+		plan.Posture, plan.PostureSetBy = tofuPosture, tofuPostureSetBy
 		plan.Command = []string{
 			"tofu", "run", prompt,
 			"--dir", dir,
@@ -176,8 +195,8 @@ func BuildPlan(root string, arm Arm, name string, version int) (Plan, error) {
 
 func Fprint(w io.Writer, p Plan) error {
 	_, err := fmt.Fprintf(w,
-		"arm %s task %s version %d\ncommand: %s\ndir: %s\nbranch: %s\nprompt: %s\nmodel: %s\neffort: %s\nenv: %s\nsetup %s: %s\nseed: %s\nrepeats: %s\ncaps, unset rather than measured, nobody has given a number: wall clock %s, turns %d\n\n",
-		p.Arm, p.Task, p.Version, Shell(p.Command), p.Dir, p.Branch, p.PromptPath, p.Model, p.EffortLine(), strings.Join(p.Env, ", "),
+		"arm %s task %s version %d\ncommand: %s\ndir: %s\nbranch: %s\nprompt: %s\nmodel: %s\neffort: %s\nposture: %s\nenv: %s\nsetup %s: %s\nseed: %s\nrepeats: %s\ncaps, unset rather than measured, nobody has given a number: wall clock %s, turns %d\n\n",
+		p.Arm, p.Task, p.Version, Shell(p.Command), p.Dir, p.Branch, p.PromptPath, p.Model, p.EffortLine(), p.PostureLine(), strings.Join(p.Env, ", "),
 		p.Setup.Name, p.Setup.Line(), p.Seed.Line(), p.RepeatLine(), p.Caps.WallClock, p.Caps.TurnCap)
 	return err
 }
