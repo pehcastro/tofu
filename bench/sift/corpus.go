@@ -59,9 +59,10 @@ func readCorpusFile(path string) ([]Row, error) {
 }
 
 type Planted struct {
-	Shell sift.Shell
-	Units []sift.Unit
-	At    int
+	Shell  sift.Shell
+	Units  []sift.Unit
+	At     int
+	Needle string
 }
 
 func Plant(row Row, index int) (Planted, error) {
@@ -90,7 +91,7 @@ func Plant(row Row, index int) (Planted, error) {
 	planted := sift.SplitShell(result)
 	for _, unit := range planted {
 		if strings.Contains(unit.Text, needle) {
-			return Planted{Shell: result, Units: planted, At: unit.Index}, nil
+			return Planted{Shell: result, Units: planted, At: unit.Index, Needle: strings.TrimRight(needle, "\n")}, nil
 		}
 	}
 	return Planted{}, fmt.Errorf("%s: the needle was planted and no unit carries it", row.Session)

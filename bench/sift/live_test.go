@@ -18,8 +18,6 @@ import (
 	libraryquestions "tofu/library/questions"
 )
 
-const repoRoot = "../.."
-
 func liveClient(t *testing.T) (*jev.Client, question.Set) {
 	t.Helper()
 	if os.Getenv("TOFU_LIVE") != "1" {
@@ -71,6 +69,7 @@ func TestTheJudgedArmAgainstTheFreeArmOverEveryCapturedOutput(t *testing.T) {
 		var free, judged []Reading
 		var latencies []time.Duration
 		var answered []Answered
+		var plants []Planted
 		cost, errors, calls := 0.0, 0, 0
 		started := time.Now()
 
@@ -79,10 +78,11 @@ func TestTheJudgedArmAgainstTheFreeArmOverEveryCapturedOutput(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Plant: %v", err)
 			}
-			asked := Ask(context.Background(), client, set, row, planted)
+			asked := Ask(context.Background(), client, set, planted.Shell, planted.Units, row.Task)
 			answered = append(answered, asked)
+			plants = append(plants, planted)
 			free = append(free, Free(row, planted))
-			judged = append(judged, asked.Cut(pol.KeepAt))
+			judged = append(judged, Read(row, planted, asked.Cut(pol.KeepAt)))
 			latencies = append(latencies, asked.Latencies...)
 			cost += asked.Cost
 			errors += asked.Errors
@@ -109,8 +109,8 @@ func TestTheJudgedArmAgainstTheFreeArmOverEveryCapturedOutput(t *testing.T) {
 
 		for _, cut := range []float64{0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9} {
 			var at []Reading
-			for _, asked := range answered {
-				at = append(at, asked.Cut(cut))
+			for i, asked := range answered {
+				at = append(at, Read(rows[i], plants[i], asked.Cut(cut)))
 			}
 			tally(t, fmt.Sprintf("run %d judged at keep_at %.2f", run, cut), at)
 		}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -37,7 +38,7 @@ func (r Reading) Line() string {
 		r.Session, r.Command, r.Units, r.Candidates, r.NeedleAt, kept, r.Before, r.After)
 }
 
-func read(row Row, planted Planted, marks []sift.Mark) Reading {
+func Read(row Row, planted Planted, message string) Reading {
 	candidates := 0
 	for _, unit := range planted.Units {
 		if unit.Held == sift.NotHeld {
@@ -50,9 +51,9 @@ func read(row Row, planted Planted, marks []sift.Mark) Reading {
 		Units:      len(planted.Units),
 		Candidates: candidates,
 		NeedleAt:   planted.At,
-		NeedleKept: marks[planted.At].Keep,
+		NeedleKept: strings.Contains(message, planted.Needle),
 		Before:     len(sift.JoinUnits(planted.Units)),
-		After:      len(sift.Message(planted.Units, marks, sift.ModeEnforced)),
+		After:      len(message),
 	}
 }
 
@@ -61,7 +62,7 @@ func Free(row Row, planted Planted) Reading {
 	for i, unit := range planted.Units {
 		marks[i] = sift.ShellCheap(unit)
 	}
-	return read(row, planted, marks)
+	return Read(row, planted, sift.Message(planted.Units, marks, sift.ModeEnforced))
 }
 
 func NewWire(key string) (*openrouter.Wire, error) {
@@ -80,27 +81,30 @@ type reply struct {
 	score   float64
 	latency time.Duration
 	cost    float64
+	build   string
 	failed  bool
 }
 
 type Answered struct {
-	Row       Row
-	Planted   Planted
-	Scores    map[int]float64
-	Latencies []time.Duration
-	Cost      float64
-	Errors    int
+	Units      []sift.Unit
+	Scores     map[int]float64
+	Latencies  []time.Duration
+	Cost       float64
+	Errors     int
+	StateBytes int
+	Build      string
 }
 
-func Ask(ctx context.Context, client *jev.Client, set question.Set, row Row, planted Planted) Answered {
+func Ask(ctx context.Context, client *jev.Client, set question.Set, shell sift.Shell, units []sift.Unit, task string) Answered {
 	questions := make([]jev.Question, len(set.Questions))
 	for i, q := range set.Questions {
 		questions[i] = q.ToJev()
 	}
 
-	replies := make([]reply, len(planted.Units))
+	replies := make([]reply, len(units))
+	sent := make([]int, len(units))
 	var wg sync.WaitGroup
-	for i, unit := range planted.Units {
+	for i, unit := range units {
 		if unit.Held != sift.NotHeld {
 			continue
 		}
@@ -108,10 +112,11 @@ func Ask(ctx context.Context, client *jev.Client, set question.Set, row Row, pla
 		go func(i int) {
 			defer wg.Done()
 			replies[i].failed = true
-			state, err := json.Marshal(sift.BuildShellState(planted.Shell, planted.Units, i, row.Task))
+			state, err := json.Marshal(sift.BuildShellState(shell, units, i, task))
 			if err != nil {
 				return
 			}
+			sent[i] = len(state)
 			decision, err := client.Ask(ctx, jev.Request{State: json.RawMessage(state), Questions: questions})
 			if err != nil {
 				return
@@ -120,30 +125,32 @@ func Ask(ctx context.Context, client *jev.Client, set question.Set, row Row, pla
 			if !ok {
 				return
 			}
-			replies[i] = reply{score: answer.Noul, latency: decision.Latency, cost: decision.Usage.Cost}
+			replies[i] = reply{score: answer.Noul, latency: decision.Latency, cost: decision.Usage.Cost, build: decision.Build}
 		}(i)
 	}
 	wg.Wait()
 
-	out := Answered{Row: row, Planted: planted, Scores: map[int]float64{}}
-	for i, unit := range planted.Units {
+	out := Answered{Units: units, Scores: map[int]float64{}}
+	for i, unit := range units {
 		if unit.Held != sift.NotHeld {
 			continue
 		}
 		out.Cost += replies[i].cost
+		out.StateBytes += sent[i]
 		if replies[i].failed {
 			out.Errors++
 			continue
 		}
 		out.Latencies = append(out.Latencies, replies[i].latency)
 		out.Scores[i] = replies[i].score
+		out.Build = replies[i].build
 	}
 	return out
 }
 
-func (a Answered) Cut(keepAt float64) Reading {
-	marks := make([]sift.Mark, len(a.Planted.Units))
-	for i, unit := range a.Planted.Units {
+func (a Answered) Cut(keepAt float64) string {
+	marks := make([]sift.Mark, len(a.Units))
+	for i, unit := range a.Units {
 		answers := map[string]float64{}
 		if score, ok := a.Scores[i]; ok {
 			answers[sift.NeededQuestion] = score
@@ -154,5 +161,5 @@ func (a Answered) Cut(keepAt float64) Reading {
 		}
 		marks[i] = mark
 	}
-	return read(a.Row, a.Planted, marks)
+	return sift.Message(a.Units, marks, sift.ModeEnforced)
 }
