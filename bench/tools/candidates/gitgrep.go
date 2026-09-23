@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"tofu/bench/tools"
 	toolscorpus "tofu/bench/tools/corpus"
 )
 
@@ -63,4 +64,32 @@ func HitsTarget(lines []string, q toolscorpus.Question) bool {
 		}
 	}
 	return false
+}
+
+func Realistic(root string, q toolscorpus.Question) tools.Outcome {
+	return runPattern("git grep realistic", root, tools.RealisticPattern(q.Text), q)
+}
+
+func Quoted(root string, q toolscorpus.Question) tools.Outcome {
+	terms := tools.QuotedTerms(q.Text)
+	if len(terms) == 0 {
+		return tools.Outcome{Version: "git grep quoted", Skipped: "the question carries no backtick quoted term"}
+	}
+	return runPattern("git grep quoted", root, tools.Alternation(terms), q)
+}
+
+func runPattern(version, root, pattern string, q toolscorpus.Question) tools.Outcome {
+	started := time.Now()
+	lines, bytes, err := GitGrep(root, pattern, q.Tree)
+	elapsed := time.Since(started)
+	if err != nil {
+		return tools.Outcome{Version: version, Skipped: err.Error(), Calls: 1, Elapsed: elapsed}
+	}
+	return tools.Outcome{
+		Version: version,
+		Hit:     HitsTarget(lines, q),
+		Bytes:   bytes,
+		Calls:   1,
+		Elapsed: elapsed,
+	}
 }
