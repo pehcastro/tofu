@@ -6,6 +6,7 @@ import (
 	"slices"
 	"time"
 
+	"tofu/internal/llm"
 	"tofu/internal/llm/cred"
 	"tofu/internal/llm/quota"
 	"tofu/internal/llm/wire/anthropic"
@@ -18,6 +19,7 @@ type accounts struct {
 	spec     cred.Spec
 	store    *cred.Store
 	modelID  string
+	effort   llm.Effort
 	urls     map[quota.Provider]string
 	now      func() time.Time
 	wrap     func(turn.Model) (turn.Model, error)
@@ -140,7 +142,7 @@ func (a *accounts) modelOn(row cred.Row) (turn.Model, error) {
 		if err != nil {
 			return nil, err
 		}
-		return codexTurn{wire: wire}, nil
+		return codexTurn{wire: wire, effort: a.effort}, nil
 	}
 	wire, err := anthropic.New(anthropic.Config{
 		Model:     a.modelID,
@@ -152,7 +154,7 @@ func (a *accounts) modelOn(row cred.Row) (turn.Model, error) {
 	if err != nil {
 		return nil, err
 	}
-	return turn.Subscription{Wire: wire}, nil
+	return turn.Subscription{Wire: wire, Effort: a.effort}, nil
 }
 
 func openAccounts(opts runOpts, modelID string) (*accounts, turn.Spend, error) {
@@ -177,5 +179,5 @@ func openAccounts(opts runOpts, modelID string) (*accounts, turn.Spend, error) {
 	if err != nil {
 		return nil, spend, err
 	}
-	return &accounts{provider: provider, spec: spec, store: store, modelID: modelID, now: time.Now}, spend, nil
+	return &accounts{provider: provider, spec: spec, store: store, modelID: modelID, effort: opts.effort, now: time.Now}, spend, nil
 }

@@ -1,5 +1,7 @@
 package anthropic
 
+import "tofu/internal/llm"
+
 const (
 	PinnedClaudeCodeVersion       = "2.1.257"
 	PinnedAnthropicSDKVersion     = "0.112.1"
@@ -35,6 +37,10 @@ func BillingFingerprintSourceIndexes() [3]int { return [3]int{4, 7, 20} }
 
 func AnthropicBuiltinToolNames() [4]string {
 	return [4]string{"web_search", "code_execution", "text_editor", "computer"}
+}
+
+func ReasoningEfforts() []llm.Effort {
+	return []llm.Effort{llm.EffortLow, llm.EffortMedium, llm.EffortHigh, llm.EffortXHigh, llm.EffortMax}
 }
 
 func ClaudeCodeAgentBetas(thinking bool) []string {

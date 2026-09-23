@@ -5,7 +5,6 @@ import (
 	"cmp"
 	"encoding/json"
 	"slices"
-	"strings"
 
 	"tofu/internal/llm"
 	"tofu/internal/transport"
@@ -28,7 +27,7 @@ type Request struct {
 	Messages        []llm.Message
 	Tools           []llm.Tool
 	ToolChoice      string
-	Effort          string
+	Effort          llm.Effort
 	SummaryOff      bool
 	ServiceTier     string
 	PromptCacheKey  string
@@ -128,10 +127,10 @@ func (r Request) reasoning() (*wireReasoning, error) {
 	}
 	if !slices.Contains(ReasoningEfforts(), r.Effort) {
 		return nil, transport.Fail("codex.Encode", transport.KindBadRequest, nil,
-			"%q is not a codex reasoning effort; the vocabulary is %s",
-			r.Effort, strings.Join(ReasoningEfforts(), " "))
+			"%q is not a codex reasoning effort; this wire takes %s",
+			r.Effort, llm.EffortList(ReasoningEfforts()))
 	}
-	reasoning := &wireReasoning{Effort: r.Effort}
+	reasoning := &wireReasoning{Effort: string(r.Effort)}
 	if !r.SummaryOff {
 		reasoning.Summary = DefaultReasoningSummary
 	}

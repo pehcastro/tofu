@@ -1,5 +1,7 @@
 package codex
 
+import "tofu/internal/llm"
+
 const (
 	SubscriptionBaseURL = "https://chatgpt.com/backend-api"
 	SubscriptionPath    = "/codex/responses"
@@ -46,8 +48,11 @@ const (
 	WhitespaceByteCap         = 16 << 10
 )
 
-func ReasoningEfforts() []string {
-	return []string{"none", "minimal", "low", "medium", "high", "xhigh", "max"}
+func ReasoningEfforts() []llm.Effort {
+	return []llm.Effort{
+		llm.EffortNone, llm.EffortMinimal, llm.EffortLow,
+		llm.EffortMedium, llm.EffortHigh, llm.EffortXHigh, llm.EffortMax,
+	}
 }
 
 func ForbiddenSamplingControls() []string {

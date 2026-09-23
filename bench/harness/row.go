@@ -12,10 +12,7 @@ const (
 
 type Effort string
 
-const (
-	EffortMedium Effort = "medium"
-	EffortNone   Effort = "none"
-)
+const EffortMedium Effort = "medium"
 
 type CredentialKind string
 

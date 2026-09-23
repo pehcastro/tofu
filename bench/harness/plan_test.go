@@ -142,6 +142,7 @@ func TestEveryArmAsksForTheSameThinkingEffort(t *testing.T) {
 	onTheCommandLine := map[Arm]string{
 		ArmClaude: "--effort medium",
 		ArmCodex:  "-c model_reasoning_effort='medium'",
+		ArmTofu:   "--effort medium",
 	}
 	for arm, flag := range onTheCommandLine {
 		plan, err := BuildPlan(root, arm, "hono", 1)
@@ -154,17 +155,6 @@ func TestEveryArmAsksForTheSameThinkingEffort(t *testing.T) {
 		if !strings.Contains(Shell(plan.Command), flag) {
 			t.Errorf("%s: the command is %s and does not carry %s, so the arm runs at its own default", arm, Shell(plan.Command), flag)
 		}
-	}
-
-	tofu, err := BuildPlan(root, ArmTofu, "hono", 1)
-	if err != nil {
-		t.Fatalf("tofu: BuildPlan: %v", err)
-	}
-	if tofu.Effort != EffortNone {
-		t.Errorf("the tofu arm claims effort %q, and nothing in tofu run or the turn loop sets one", tofu.Effort)
-	}
-	if !strings.Contains(tofu.EffortSetBy, "no flag") {
-		t.Errorf("the tofu arm says its effort was set by %q, and it must say plainly that no flag sets it", tofu.EffortSetBy)
 	}
 
 	for _, arm := range []Arm{ArmClaude, ArmCodex, ArmTofu} {

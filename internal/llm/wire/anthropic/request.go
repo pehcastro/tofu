@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"regexp"
+	"slices"
 	"strings"
 
 	"tofu/internal/llm"
@@ -20,7 +21,7 @@ type Request struct {
 	Messages  []llm.Message
 	Tools     []llm.Tool
 	MaxTokens int
-	Thinking  bool
+	Effort    llm.Effort
 	SessionID string
 	AccountID string
 	InstallID string
@@ -86,6 +87,10 @@ type wireMetadata struct {
 	UserID string `json:"user_id"`
 }
 
+type wireOutput struct {
+	Effort string `json:"effort"`
+}
+
 type wireBody struct {
 	Model     string        `json:"model"`
 	Messages  []wireMessage `json:"messages"`
@@ -93,6 +98,7 @@ type wireBody struct {
 	Tools     []wireTool    `json:"tools,omitempty"`
 	MaxTokens int           `json:"max_tokens"`
 	Metadata  *wireMetadata `json:"metadata,omitempty"`
+	Output    *wireOutput   `json:"output_config,omitempty"`
 	Stream    bool          `json:"stream"`
 }
 
@@ -131,6 +137,10 @@ func (r Request) Encode(oauth bool) ([]byte, error) {
 	if userID != "" {
 		metadata = &wireMetadata{UserID: userID}
 	}
+	output, err := r.outputConfig()
+	if err != nil {
+		return nil, err
+	}
 
 	var out bytes.Buffer
 	encoder := json.NewEncoder(&out)
@@ -142,11 +152,24 @@ func (r Request) Encode(oauth bool) ([]byte, error) {
 		Tools:     tools,
 		MaxTokens: maxTokens,
 		Metadata:  metadata,
+		Output:    output,
 		Stream:    true,
 	}); err != nil {
 		return nil, transport.Fail("anthropic.Encode", transport.KindBadRequest, err, "encoding the request")
 	}
 	return bytes.TrimRight(out.Bytes(), "\n"), nil
+}
+
+func (r Request) outputConfig() (*wireOutput, error) {
+	if !r.Effort.Thinks() {
+		return nil, nil
+	}
+	if !slices.Contains(ReasoningEfforts(), r.Effort) {
+		return nil, transport.Fail("anthropic.Encode", transport.KindBadRequest, nil,
+			"%q is not an anthropic thinking effort; this wire takes %s",
+			r.Effort, llm.EffortList(ReasoningEfforts()))
+	}
+	return &wireOutput{Effort: string(r.Effort)}, nil
 }
 
 func systemBlocks(prompts []string, oauth bool, firstUserMessage, ttl string) []systemBlock {

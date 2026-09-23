@@ -9,7 +9,8 @@ import (
 )
 
 type Subscription struct {
-	Wire *anthropic.Wire
+	Wire   *anthropic.Wire
+	Effort llm.Effort
 }
 
 func (s Subscription) Ask(ctx context.Context, request llm.Request) (llm.Decision, error) {
@@ -27,6 +28,7 @@ func (s Subscription) Ask(ctx context.Context, request llm.Request) (llm.Decisio
 		System:   system,
 		Messages: messages,
 		Tools:    request.Tools,
+		Effort:   s.Effort,
 		CacheTTL: konst.SubscriptionCacheTTL,
 		OnDelta:  request.OnDelta,
 	})

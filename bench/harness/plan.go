@@ -30,7 +30,7 @@ const AskedEffort = EffortMedium
 const (
 	claudeEffortSetBy = "--effort medium, one of low, medium, high, xhigh and max in claude --help"
 	codexEffortSetBy  = "-c model_reasoning_effort='medium', the config override codex exec --help documents, reaching model_reasoning_effort in codex-rs/core/src/config/mod.rs:967"
-	tofuEffortSetBy   = "no flag, because tofu run takes --model and --max-steps and nothing for effort, and internal/turn/subscription.go:26 builds the anthropic request with thinking left unset"
+	tofuEffortSetBy   = "--effort medium, one of none, minimal, low, medium, high, xhigh and max in tofu run --help, reaching output_config.effort on the anthropic wire in internal/llm/wire/anthropic/request.go"
 )
 
 type Caps struct {
@@ -157,11 +157,12 @@ func BuildPlan(root string, arm Arm, name string, version int) (Plan, error) {
 		plan.Env = []string{"the chatgpt subscription credential codex login already holds"}
 	case ArmTofu:
 		plan.Model = tofuArmModel
-		plan.Effort, plan.EffortSetBy = EffortNone, tofuEffortSetBy
+		plan.Effort, plan.EffortSetBy = AskedEffort, tofuEffortSetBy
 		plan.Command = []string{
 			"tofu", "run", prompt,
 			"--dir", dir,
 			"--model", tofuArmModel,
+			"--effort", string(AskedEffort),
 			"--max-steps", strconv.Itoa(caps.TurnCap),
 		}
 		plan.Env = []string{"OPENROUTER_KEY for the jev gate, the anthropic subscription credential for the model"}
