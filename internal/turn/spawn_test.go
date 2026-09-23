@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -458,6 +459,77 @@ func TestAChildIsWorkingWhileItRuns(t *testing.T) {
 	if seen != crew.Working {
 		t.Fatalf("a child running its tools reads as %s, want working", seen)
 	}
+}
+
+func readWhileTheChildIsStillRunning(t *testing.T, root, task string, decisions []llm.Decision) crew.SubAgent {
+	t.Helper()
+	_, spawn := parentTurn(t, root, decisions)
+	stepped := make(chan StepRow, len(decisions))
+	spawn.base.Step = func(step StepRow) { stepped <- step }
+	var seen crew.SubAgent
+	probes := 0
+	spawn.base.Tools = NewRegistry(&childTool{name: "probe", run: func(context.Context) (Result, error) {
+		probes++
+		if probes > 1 {
+			<-stepped
+			seen = spawn.roster.SubAgents()[0]
+		}
+		return Result{Content: "the roster was read from inside the child"}, nil
+	}})
+
+	spawnDirect(t, spawn, task, "mine/**")
+
+	if seen.State != crew.Working {
+		t.Fatalf("the child read as %s, so it was not still running and this proves nothing", seen.State)
+	}
+	return seen
+}
+
+func TestARunningChildCarriesWhenItStartedAndTheStepThatMovedIt(t *testing.T) {
+	seen := readWhileTheChildIsStillRunning(t, t.TempDir(), "read the roster from inside", []llm.Decision{
+		childCall("call-1", "probe"), childCall("call-2", "probe"), claimDecision("done"),
+	})
+
+	if seen.Started.IsZero() {
+		t.Fatal("a running child carries no start time")
+	}
+	if seen.Active.Before(seen.Started) {
+		t.Fatalf("a running child last stepped at %v, before it started at %v", seen.Active, seen.Started)
+	}
+	if seen.Steps != 1 {
+		t.Fatalf("one step had ended and the running child reads %d steps", seen.Steps)
+	}
+	t.Logf("started %v, last active %v, %d steps", seen.Started, seen.Active, seen.Steps)
+}
+
+func TestARunningChildCarriesTheToolItCalledAndNeverTheArguments(t *testing.T) {
+	const planted = "sk-live-4f9c2b7e0a13d85f6c21"
+	secretCall := toolCallDecision(llm.ToolCall{ID: "call-1", Name: "probe", Arguments: json.RawMessage(`{"command":"export OPENROUTER_KEY=` + planted + `"}`)})
+	seen := readWhileTheChildIsStillRunning(t, t.TempDir(), "call a tool with a key in its arguments", []llm.Decision{
+		secretCall, childCall("call-2", "probe"), claimDecision("done"),
+	})
+
+	if !slices.Equal(seen.Calling, []string{"probe"}) {
+		t.Fatalf("a running child carries %v, want the name of the call its first step made", seen.Calling)
+	}
+	if held := fmt.Sprintf("%+v", seen); strings.Contains(held, planted) {
+		t.Fatalf("the roster repeats a key that was in a call's arguments: %s", held)
+	}
+	t.Logf("calling %v, and the planted %q is nowhere in %+v", seen.Calling, planted, seen)
+}
+
+func TestAChildThatOutRunsTheBoundCarriesItsNewestCalls(t *testing.T) {
+	steps := konst.SubAgentCallsWatched + 2
+	var decisions []llm.Decision
+	for step := range steps {
+		decisions = append(decisions, childCall("call-"+strconv.Itoa(step+1), "probe"))
+	}
+	seen := readWhileTheChildIsStillRunning(t, t.TempDir(), "call one tool many times", append(decisions, claimDecision("done")))
+
+	if len(seen.Calling) > konst.SubAgentCallsWatched {
+		t.Fatalf("a child %d steps in carries %d calls, want at most %d", steps, len(seen.Calling), konst.SubAgentCallsWatched)
+	}
+	t.Logf("%d steps of one call each left %v", steps, seen.Calling)
 }
 
 func TestAParkedChildKeepsTheWorkItHadAlreadyDone(t *testing.T) {

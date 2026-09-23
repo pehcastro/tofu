@@ -2,8 +2,26 @@ package crew
 
 import (
 	"errors"
+	"slices"
+	"strconv"
+	"strings"
 	"testing"
+	"time"
+
+	"tofu/internal/konst"
 )
+
+const childSteps = 200
+
+func holdingOneChild(t *testing.T) (*Roster, time.Time) {
+	t.Helper()
+	start := time.Unix(1758585600, 0)
+	roster := &Roster{}
+	if err := roster.Hold(SubAgent{ID: "c1", Owns: []string{"internal/crew/**"}, Started: start}); err != nil {
+		t.Fatal(err)
+	}
+	return roster, start
+}
 
 func TestRosterRefusesASecondHolderOfAnOverlappingPath(t *testing.T) {
 	cases := []struct {
@@ -119,8 +137,8 @@ func TestEveryStateHasAName(t *testing.T) {
 		Errored:       "errored",
 		Finished:      "finished",
 	}
-	if len(named) != int(Finished)+1 {
-		t.Fatalf("%d states are named and the enum runs to %d", len(named), int(Finished))
+	if len(named) != len(States()) || len(named) != int(Finished)+1 {
+		t.Fatalf("%d states are named, States() lists %d and the enum runs to %d", len(named), len(States()), int(Finished))
 	}
 	for state, want := range named {
 		if state.String() != want {
@@ -140,4 +158,128 @@ func TestAStateThisBuildDoesNotKnowFailsRatherThanRendering(t *testing.T) {
 	}()
 	t.Log(State(9).String())
 	t.Fatal("an unknown state rendered instead of failing")
+}
+
+func TestARunningChildCarriesWhenItStartedAndWhenItLastStepped(t *testing.T) {
+	roster, start := holdingOneChild(t)
+	if held := roster.SubAgents()[0]; !held.Active.Equal(start) {
+		t.Fatalf("a child that has taken no step reads as last active at %v, want its start %v", held.Active, start)
+	}
+
+	roster.Stepped("c1", 3, start.Add(90*time.Second))
+
+	held := roster.SubAgents()[0]
+	if held.State != Working {
+		t.Fatalf("the child reads as %s, so it is not running and this proves nothing", held.State)
+	}
+	if !held.Started.Equal(start) || !held.Active.Equal(start.Add(90*time.Second)) || held.Steps != 3 {
+		t.Fatalf("a running child does not carry its start, its last step and its step count: %+v", held)
+	}
+}
+
+func TestOnlyAStepMovesTheLastActivityOfARunningChild(t *testing.T) {
+	roster, start := holdingOneChild(t)
+	roster.Stepped("c1", 1, start.Add(time.Minute))
+	if err := roster.Hold(SubAgent{ID: "c2", Owns: []string{"internal/turn/**"}, Started: start.Add(time.Hour)}); err != nil {
+		t.Fatal(err)
+	}
+	roster.Stepped("c2", 1, start.Add(2*time.Hour))
+	roster.Reached("c2", Finished, "c2 reported")
+	if held := roster.SubAgents()[0]; !held.Active.Equal(start.Add(time.Minute)) || held.Steps != 1 {
+		t.Fatalf("another child working or reporting moved this one: %+v", held)
+	}
+}
+
+func TestARosterCanReachEveryStateTheCrewViewDraws(t *testing.T) {
+	for _, state := range States() {
+		t.Run(state.String(), func(t *testing.T) {
+			roster, start := holdingOneChild(t)
+			roster.Stepped("c1", 1, start.Add(time.Second))
+			if state != Working {
+				roster.Reached("c1", state, "the child reported")
+			}
+			held := roster.SubAgents()[0]
+			if held.State != state {
+				t.Fatalf("the roster reads %s, want %s", held.State, state)
+			}
+			if !held.Started.Equal(start) || !held.Active.Equal(start.Add(time.Second)) {
+				t.Fatalf("a child in %s lost its start or its last activity: %+v", state, held)
+			}
+		})
+	}
+}
+
+func TestARunningChildCarriesTheToolNamesOfItsLatestStep(t *testing.T) {
+	roster, start := holdingOneChild(t)
+
+	roster.Stepped("c1", 1, start.Add(time.Second), "read", "bash")
+
+	held := roster.SubAgents()[0]
+	if held.State != Working {
+		t.Fatalf("the child reads as %s, so it is not running and this proves nothing", held.State)
+	}
+	if !slices.Equal(held.Calling, []string{"read", "bash"}) {
+		t.Fatalf("a running child carries %v, want the names of the two calls its step made", held.Calling)
+	}
+}
+
+func TestAtTheBoundAChildCarriesOnlyItsNewestCalls(t *testing.T) {
+	roster, start := holdingOneChild(t)
+	var called []string
+	for step := 1; step <= konst.SubAgentCallsWatched+3; step++ {
+		name := "tool" + strconv.Itoa(step)
+		called = append(called, name)
+		roster.Stepped("c1", step, start.Add(time.Duration(step)*time.Second), name)
+	}
+
+	held := roster.SubAgents()[0]
+	want := called[len(called)-konst.SubAgentCallsWatched:]
+	if !slices.Equal(held.Calling, want) {
+		t.Fatalf("after %d calls the child carries %v, want the newest %d, %v", len(called), held.Calling, konst.SubAgentCallsWatched, want)
+	}
+}
+
+func TestAStepThatCalledNothingLeavesTheEarlierCallsAlone(t *testing.T) {
+	roster, start := holdingOneChild(t)
+	roster.Stepped("c1", 1, start.Add(time.Second), "read")
+	roster.Stepped("c1", 2, start.Add(2*time.Second))
+	if held := roster.SubAgents()[0]; !slices.Equal(held.Calling, []string{"read"}) {
+		t.Fatalf("a step with no tool call left %v behind, want the one call before it", held.Calling)
+	}
+}
+
+func TestReadingTheCallsOfAChildThatKeepsSteppingIsNotARace(t *testing.T) {
+	roster, start := holdingOneChild(t)
+	stepped := make(chan struct{})
+	go func() {
+		for step := 1; step <= childSteps; step++ {
+			roster.Stepped("c1", step, start.Add(time.Duration(step)*time.Second), "tool"+strconv.Itoa(step))
+		}
+		close(stepped)
+	}()
+	for range childSteps {
+		for _, name := range roster.SubAgents()[0].Calling {
+			if !strings.HasPrefix(name, "tool") {
+				t.Errorf("a call read while the child stepped reads %q", name)
+			}
+		}
+	}
+	<-stepped
+}
+
+func TestReadingTheRosterWhileAChildStepsIsNotARace(t *testing.T) {
+	roster, start := holdingOneChild(t)
+	stepped := make(chan struct{})
+	go func() {
+		for step := 1; step <= childSteps; step++ {
+			roster.Stepped("c1", step, start.Add(time.Duration(step)*time.Second))
+		}
+		close(stepped)
+	}()
+	for range childSteps {
+		if held := roster.SubAgents()[0]; held.State != Working {
+			t.Errorf("the child reads as %s while it is still stepping", held.State)
+		}
+	}
+	<-stepped
 }

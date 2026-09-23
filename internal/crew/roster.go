@@ -2,7 +2,12 @@ package crew
 
 import (
 	"fmt"
+	"slices"
 	"strconv"
+	"sync"
+	"time"
+
+	"tofu/internal/konst"
 )
 
 type State int
@@ -15,6 +20,10 @@ const (
 	Errored
 	Finished
 )
+
+func States() []State {
+	return []State{Working, WaitingAnswer, InReview, Parked, Errored, Finished}
+}
 
 func (s State) String() string {
 	switch s {
@@ -41,6 +50,10 @@ type SubAgent struct {
 	Owns    []string
 	State   State
 	Report  string
+	Started time.Time
+	Active  time.Time
+	Steps   int
+	Calling []string
 }
 
 type CollisionError struct {
@@ -56,10 +69,13 @@ func (e CollisionError) Error() string {
 }
 
 type Roster struct {
+	held   sync.Mutex
 	agents []SubAgent
 }
 
 func (r *Roster) Hold(agent SubAgent) error {
+	r.held.Lock()
+	defer r.held.Unlock()
 	for _, glob := range agent.Owns {
 		if err := validGlob(glob); err != nil {
 			return err
@@ -72,12 +88,31 @@ func (r *Roster) Hold(agent SubAgent) error {
 			}
 		}
 	}
-	agent.State = Working
+	agent.State, agent.Active = Working, agent.Started
 	r.agents = append(r.agents, agent)
 	return nil
 }
 
+func (r *Roster) Stepped(id string, steps int, at time.Time, calling ...string) {
+	r.held.Lock()
+	defer r.held.Unlock()
+	for i := range r.agents {
+		agent := &r.agents[i]
+		if agent.ID != id {
+			continue
+		}
+		agent.Steps, agent.Active = steps, at
+		agent.Calling = append(agent.Calling, calling...)
+		if older := len(agent.Calling) - konst.SubAgentCallsWatched; older > 0 {
+			agent.Calling = slices.Delete(agent.Calling, 0, older)
+		}
+		return
+	}
+}
+
 func (r *Roster) Reached(id string, state State, report string) {
+	r.held.Lock()
+	defer r.held.Unlock()
 	for i := range r.agents {
 		if r.agents[i].ID == id {
 			r.agents[i].State, r.agents[i].Report = state, report
@@ -86,4 +121,12 @@ func (r *Roster) Reached(id string, state State, report string) {
 	}
 }
 
-func (r *Roster) SubAgents() []SubAgent { return r.agents }
+func (r *Roster) SubAgents() []SubAgent {
+	r.held.Lock()
+	defer r.held.Unlock()
+	read := slices.Clone(r.agents)
+	for i := range read {
+		read[i].Calling = slices.Clone(read[i].Calling)
+	}
+	return read
+}

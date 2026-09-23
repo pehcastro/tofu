@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"tofu/internal/crew"
 	"tofu/internal/judge/method"
@@ -180,11 +181,16 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 		return Result{}, BreadthLimitError{Spawned: t.spawned, Limit: konst.CrewMaxBreadth}
 	}
 
+	clock := t.base.Now
+	if clock == nil {
+		clock = time.Now
+	}
 	agent := crew.SubAgent{
 		ID:      t.parentID + "-c" + strconv.Itoa(t.spawned+1),
 		Mission: args.mission(),
 		Brief:   args.Task,
 		Owns:    args.Owns,
+		Started: clock(),
 	}
 	childID := agent.ID
 	if err := t.roster.Hold(agent); err != nil {
@@ -214,6 +220,16 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 	child.NewID = func() string { return childID }
 	child.SpawnedFrom = t.parentID
 	child.Boundary = boundary
+	child.Step = func(step StepRow) {
+		called := make([]string, len(step.ToolCalls))
+		for i, call := range step.ToolCalls {
+			called[i] = call.Tool
+		}
+		t.roster.Stepped(childID, step.Index, clock(), called...)
+		if t.base.Step != nil {
+			t.base.Step(step)
+		}
+	}
 
 	childCtx, release := context.WithCancel(ctx)
 	defer release()
