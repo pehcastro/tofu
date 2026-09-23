@@ -10,6 +10,41 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 
 ## Unreleased
 
+## 0.4.12 - 2026-09-23
+
+You choose what runs, and you can point at what was said.
+
+### Added
+
+- **`tofu run --effort <level>`** sets how hard the model thinks: `none`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`. The vocabulary is the vendors' own, not a new one. The anthropic wire takes `low` through `max` and refuses `minimal` by name rather than picking a neighbour; the codex wire takes all seven. The openrouter wire sends no level, so `--effort` with `--wire key` is refused instead of being dropped.
+- **A `[quote#abcd]` reference resolves to the turn it names.** `/quote` has inserted one since 0.4.9 and nothing could read it back. A tool now returns that turn's words, so the model cites rather than paraphrases. An id matching two turns, and an id matching none, each come back with their own message asking for the reference again rather than quoting the nearest turn. A turn recorded before event ids existed is quotable: 856 of them are.
+- **The crew view shows what a child is calling while it is calling it.** It carries when the child started, when it last stepped, how many steps it has taken, and the names of its last five calls. It said "no tool call yet" for the whole life of a running child before.
+
+### Fixed
+
+- **`tofu shell kill` returned while the tree was still running.** Terminating a job is asynchronous and nothing waited on its members, so for about 16 milliseconds after kill reported success the children still held the port and the log. An immediate restart under the same name hit "address already in use".
+- **A process the shell spawned before it joined its job escaped kill for its whole life.** The gap was about a third of a millisecond against a first child at 39, so it never fired on an idle machine. Held open on a real condition it fires every time: 40 of 40 rounds, 20 of them still running when kill returned. The shell is created suspended and resumed only once it is a member, so nothing it spawns can predate its membership.
+- **The crew view kept its own copy of the crew, with its own clock.** The elapsed time a person read was measured from a timestamp the view took, not from when the child started, and three of its six states could never appear.
+- **The model picker offered a model a hook forbids.** Its default selection was on one of the two banned models, and nothing checked the excluded flag at the point of picking.
+- **Eleven shipped rules declared a mode that could not do anything**, and one of them said `enforced`. A mode only chooses for a rule that names a checker. Three rules carry no checker and no longer carry a mode, and `enforced` is refused by name on the kinds that cannot have one.
+
+### Changed
+
+- **A turn now thinks at `medium` by default.** It ran at none until now, which nobody chose: it was what an unset field did. Every subscription turn, in the terminal interface as well as on the command line, now carries a thinking level, and a turn costs more output tokens than it did.
+- **The model picker changes the model, not only the subscription**, and carries the thinking effort beside it, chosen with the left and right keys, because the model and the effort are one choice. It offers only the levels the picked subscription's wire accepts. The pick lasts until the app closes.
+- **The anthropic request carries `output_config.effort`** and the `effort-2025-11-24` beta with it. The request field was a bool that nothing ever set and is now a level.
+
+### Note
+
+**The benchmark was understating tofu's own token use by 62 percent.** The tofu arm counted prompt plus completion and ignored cache entirely, while the claude arm counted all three into one column, so the two sat in the same table under two definitions of billed input. Every tofu against claude token figure produced before today was wrong in tofu's favour.
+
+**The three benchmark arms are asked the same thing now.** All three run at medium, and the runner says so on its own last line.
+
+**Three corpora leak and none was repaired.** In one, three of four questions name their own answer inside their own prompt, so a regular expression scores three of four: that package is parked, because the recorded sessions yield seven usable turns carrying two distinct tasks against a floor of thirty. A planted state in another is recoverable from a substring. Each is named in its own provenance rather than quietly fixed, because the leak is the evidence that a figure was wrong.
+
+**Nothing on the report page cites a figure a withdrawal struck.** The build refuses it, and a quotation that is a table row strikes every row of that table.
+
+
 ### Added
 
 - **`tofu run --effort <level>`** sets how hard the model thinks: `none`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`. The vocabulary is the vendors' own, not a new one. The anthropic wire takes `low` through `max` and refuses `minimal` by name rather than picking a neighbour; the codex wire takes all seven. The openrouter wire sends no level, so `--effort` with `--wire key` is refused instead of being dropped.
