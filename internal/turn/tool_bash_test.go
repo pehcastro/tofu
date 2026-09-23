@@ -182,55 +182,73 @@ func TestAParentShellIsNotHeldToAnyOwnsBecauseItHoldsTheWholeTree(t *testing.T) 
 	}
 }
 
-func shellSaysAboutItself(t *testing.T, tool *BashTool) (string, string) {
+func shellSaysAboutItself(t *testing.T, tool *BashTool) string {
 	t.Helper()
-	cmd := exec.Command(tool.shell, "-c", "uname -o; pwd")
+	cmd := exec.Command(tool.shell, "-c", "uname -o")
 	cmd.Dir = string(tool.root)
 	out, err := cmd.Output()
 	if err != nil {
 		t.Fatalf("asking the shell what it is: %v", err)
 	}
-	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
-	if len(lines) != 2 {
-		t.Fatalf("the shell answered with something other than a family and a directory: %q", out)
-	}
-	return strings.TrimSpace(lines[0]), strings.TrimSpace(lines[1])
+	return strings.TrimSpace(string(out))
 }
 
-func TestTheShellDescriptionNamesTheShellAndTheDirectoryAsTheShellSpellsThem(t *testing.T) {
-	tool, err := NewBashTool(t.TempDir())
+func TestTheShellDescriptionNamesTheFamilyButNoDirectory(t *testing.T) {
+	root := t.TempDir()
+	tool, err := NewBashTool(root)
 	if err != nil {
 		t.Fatalf("building the bash tool: %v", err)
 	}
-	family, spelled := shellSaysAboutItself(t, tool)
+	family := shellSaysAboutItself(t, tool)
 	description := tool.Definition().Description
 
-	for _, want := range []string{family, spelled} {
-		if !strings.Contains(description, want) {
-			t.Fatalf("the description does not name %q: %q", want, description)
-		}
+	if !strings.Contains(description, family) {
+		t.Fatalf("the description does not name %q: %q", family, description)
 	}
-	if native := string(tool.root); native != spelled && strings.Contains(description, native) {
-		t.Fatalf("the description spells the directory the host's way %q rather than the shell's %q: %q", native, spelled, description)
+	if strings.Contains(description, filepath.ToSlash(root)) || strings.Contains(description, root) {
+		t.Fatalf("the description carries the working directory %q: %q", root, description)
 	}
 }
 
-func TestTheShellDescriptionIsBuiltFromTheToolAndNotFromALiteral(t *testing.T) {
+func shellSpelledWorkingDirectory(t *testing.T, tool *BashTool) string {
+	t.Helper()
+	cmd := exec.Command(tool.shell, "-c", "pwd")
+	cmd.Dir = string(tool.root)
+	out, err := cmd.Output()
+	if err != nil {
+		t.Fatalf("asking the shell for its own working directory: %v", err)
+	}
+	return strings.TrimSpace(string(out))
+}
+
+func TestNoToolDefinitionCarriesTheAbsoluteWorkingDirectory(t *testing.T) {
+	root := t.TempDir()
+	bash, err := NewBashTool(root)
+	if err != nil {
+		t.Fatalf("building the bash tool: %v", err)
+	}
+	spelled := shellSpelledWorkingDirectory(t, bash)
+	registry := NewRegistry(bash)
+	for _, def := range registry.Definitions() {
+		for _, spelling := range []string{root, filepath.ToSlash(root), spelled} {
+			if strings.Contains(def.Description, spelling) {
+				t.Fatalf("tool %s carries the absolute working directory %q in its description: %q", def.Name, spelling, def.Description)
+			}
+		}
+	}
+}
+
+func TestTheShellDescriptionIsIdenticalFromTwoDifferentWorkingDirectories(t *testing.T) {
 	var descriptions []string
 	for range 2 {
 		tool, err := NewBashTool(t.TempDir())
 		if err != nil {
 			t.Fatalf("building the bash tool: %v", err)
 		}
-		_, spelled := shellSaysAboutItself(t, tool)
-		description := tool.Definition().Description
-		if !strings.Contains(description, spelled) {
-			t.Fatalf("a tool at %q does not say so: %q", spelled, description)
-		}
-		descriptions = append(descriptions, description)
+		descriptions = append(descriptions, tool.Definition().Description)
 	}
-	if descriptions[0] == descriptions[1] {
-		t.Fatalf("two tools in different directories describe themselves identically: %q", descriptions[0])
+	if descriptions[0] != descriptions[1] {
+		t.Fatalf("two tools in different directories describe themselves differently:\n%q\n%q", descriptions[0], descriptions[1])
 	}
 }
 

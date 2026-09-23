@@ -23,7 +23,6 @@ type BashTool struct {
 	root      Root
 	shell     string
 	shellName string
-	shellDir  string
 }
 
 func NewBashTool(root string) (*BashTool, error) {
@@ -36,32 +35,24 @@ func NewBashTool(root string) (*BashTool, error) {
 		if lookErr != nil {
 			continue
 		}
-		family, dir, ok := askTheShellWhereItIs(shell, resolved)
-		if !ok {
-			family, dir = runtime.GOOS, string(resolved)
+		family := askTheShellItsFamily(shell, resolved)
+		if family == "" {
+			family = runtime.GOOS
 		}
 		name := strings.TrimSuffix(filepath.Base(shell), ".exe")
-		return &BashTool{root: resolved, shell: shell, shellName: name + " on " + family, shellDir: dir}, nil
+		return &BashTool{root: resolved, shell: shell, shellName: name + " on " + family}, nil
 	}
 	return nil, errors.New("bash: no sh or bash on PATH, and cmd.exe is not a substitute: it mangles every quoted argument and understands none of the posix syntax this tool advertises")
 }
 
-func askTheShellWhereItIs(shell string, root Root) (string, string, bool) {
-	cmd := exec.Command(shell, "-c", "uname -o; pwd")
+func askTheShellItsFamily(shell string, root Root) string {
+	cmd := exec.Command(shell, "-c", "uname -o")
 	cmd.Dir = string(root)
 	out, err := cmd.Output()
 	if err != nil {
-		return "", "", false
+		return ""
 	}
-	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
-	if len(lines) != 2 {
-		return "", "", false
-	}
-	family, dir := strings.TrimSpace(lines[0]), strings.TrimSpace(lines[1])
-	if family == "" || dir == "" {
-		return "", "", false
-	}
-	return family, dir, true
+	return strings.TrimSpace(string(out))
 }
 
 const bashToolName = "bash"
@@ -74,11 +65,11 @@ func (t *BashTool) Definition() llm.Tool {
 	return llm.Tool{
 		Name: bashToolName,
 		Description: fmt.Sprintf(
-			"runs one command in %s. cwd is already %s: spell paths that way, no cd. a nonzero exit is reported with its code. "+
+			"runs one command in %s. cwd is already the working directory named in the environment block: spell paths that way, no cd. a nonzero exit is reported with its code. "+
 				"a command is killed after %d ms and its output is lost, so a long one has to be narrowed or given a larger timeout_ms, up to %d. "+
 				"do not use it to walk the tree: find, ls -R and wc descend into every ignored directory and take minutes here, "+
 				"while glob, search and project_report skip what .gitignore skips and answer in milliseconds.",
-			t.shellName, t.shellDir, konst.BashDeadlineMillis, konst.BashMaxDeadlineMillis),
+			t.shellName, konst.BashDeadlineMillis, konst.BashMaxDeadlineMillis),
 		Parameters: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
