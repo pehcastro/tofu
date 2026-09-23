@@ -9,12 +9,7 @@ import (
 )
 
 func TestTransformArmsOverTheV2Session(t *testing.T) {
-	entries, err := os.ReadDir(v2SessionTestdata)
-	if err != nil || len(entries) == 0 {
-		t.Skipf("no v2 session under %s: run TestV2TofuArmRunsLiveAndProducesARow first, it stores the recorded turn there", v2SessionTestdata)
-	}
-
-	writes, turns, err := transform.Load(v2SessionTestdata, v2BeforeTestdata)
+	writes, turns, err := transform.LoadFiles([]string{v2SessionRecording}, v2BeforeTestdata)
 	if err != nil {
 		t.Fatal(err)
 	}

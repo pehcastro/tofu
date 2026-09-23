@@ -24,7 +24,7 @@ type harnessOpts struct {
 	tofuBin    string
 }
 
-const harnessTranscriptDir = "bench/harness/testdata/boji-1"
+const harnessTranscriptDir = "bench/harness/testdata/tofu-v1"
 
 func parseHarnessArgs(args []string) (harnessOpts, error) {
 	opts := harnessOpts{task: "hono", version: 1, transcript: harnessTranscriptDir, repeats: 1}
@@ -117,26 +117,22 @@ func benchHarness(out, errOut io.Writer, args []string) int {
 		return exitOK
 	}
 
-	if !opts.offline {
-		bin, cleanup, err := tofuUnderTest(opts.tofuBin)
-		if err != nil {
-			return fail(errOut, "harness", err)
-		}
-		defer cleanup()
-		plan.Command[0] = bin
+	if opts.offline {
+		return replayOneRepeat(out, errOut, plan, opts)
 	}
+
+	bin, cleanup, err := tofuUnderTest(opts.tofuBin)
+	if err != nil {
+		return fail(errOut, "harness", err)
+	}
+	defer cleanup()
+	plan.Command[0] = bin
 
 	state, err := sys.ProjectStateDir()
 	if err != nil {
 		return fail(errOut, "harness", err)
 	}
 	ledgerDir := filepath.Join(state, "log")
-	if opts.offline {
-		ledgerDir = opts.transcript
-	}
-	if opts.offline {
-		return replayOneRepeat(out, errOut, plan, opts, ledgerDir)
-	}
 
 	measure := func(execution harness.Execution, meta harness.RunMeta) (harness.Row, []string, error) {
 		meta.CLIVersion, meta.Commit = sys.Version(), sys.BuildRevision()
@@ -174,7 +170,7 @@ func harnessSources(armDir, ledgerDir string, version int) harness.Sources {
 	}
 }
 
-func replayOneRepeat(out, errOut io.Writer, plan harness.Plan, opts harnessOpts, ledgerDir string) int {
+func replayOneRepeat(out, errOut io.Writer, plan harness.Plan, opts harnessOpts) int {
 	path := filepath.Join(opts.transcript, "session.json")
 	session, err := harness.LoadSession(path)
 	if err != nil {
@@ -182,10 +178,10 @@ func replayOneRepeat(out, errOut io.Writer, plan harness.Plan, opts harnessOpts,
 	}
 	meta := plan.Runs()[0]
 	meta.CLIVersion, meta.Commit = sys.Version(), sys.BuildRevision()
-	row, gaps := harness.MeasureTofu(session, harnessSources(plan.Dir, ledgerDir, opts.version), meta)
+	row, gaps := harness.MeasureTofu(session, harnessSources(plan.Dir, opts.transcript, opts.version), meta)
 	execution := harness.Execution{Plan: plan, Start: session.At, End: session.At, EndReason: harness.EndReasonDone}
 	source := "offline, replayed from " + opts.transcript + ", no arm was executed and no model was called"
-	_, _ = fmt.Fprintln(out, "\n"+harness.Detail(row, gaps, execution, ledgerDir, source))
+	_, _ = fmt.Fprintln(out, "\n"+harness.Detail(row, gaps, execution, opts.transcript, source))
 	_, _ = fmt.Fprint(out, harness.Render([]harness.Row{row}))
 	return exitOK
 }

@@ -2,7 +2,9 @@
 
 Both are one real tofu run on the hono v1 task, taken out of `.tofu/sessions` and `.tofu/log` on 2026-09-23 for TOFU-437. Nothing under `.tofu` was changed, moved or deleted to make them.
 
-Until this pair existed, `MeasureTofu` had never read a recorded transcript: the only thing in `bench/harness/testdata/boji-1` is a ledger written by a generator, and the test that measures a tofu run skipped.
+`session.json` is byte for byte `bench/stopcheck/corpus/turn-18d69bfed2bf52a0.json`, sha256 `659c579cbb3db4ed82a6ab094d4e891cc279d6bfd2baef66896061f6656a4bc1`. The same turn was taken out of `.tofu/sessions` twice, by two tickets, because neither could see the other's copy. It keeps its own name here and TOFU-458 decided that on 2026-09-23: this directory is a named fixture, a transcript paired with the 91 ledger rows that belong to it, and `bench/cmd/harness.go` ships it as the default `--transcript` for `bench harness --offline`. A runtime default that reads out of another package's test corpus is worse than the second copy. The corpus copy carries no ledger and is hand labelled for stop checks, which is a different use of the same bytes.
+
+Until this pair existed, `MeasureTofu` had never read a recorded transcript: the only thing in `bench/harness/testdata/boji-1` was a ledger written by a generator, and the test that measures a tofu run skipped. TOFU-442 deleted that directory and pointed `parse_tofu_test.go` here.
 
 ## The run
 
@@ -41,6 +43,6 @@ Nothing else changed. `session.json` is byte for byte identical to the file in `
 
 ## What it cannot say
 
-The turn row names no `wire`, because the recorder did not write that field in September 2026. Whether a prompt token count already includes cache reads depends on the wire, so `MeasureTofu` adds the column the anthropic way and says so in a gap on every row built from this fixture. Every step here reports zero cache reads and zero cache writes, so nothing in this fixture can tell the two accountings apart; `turn-18d6a5df2caeac68` under `testdata/recorded-session` is the one that can, and it is what `TestBilledInputCountsCacheTheWayTheClaudeArmCountsIt` uses.
+The turn row names no `wire`, because the recorder did not write that field in September 2026. Whether a prompt token count already includes cache reads depends on the wire, so `MeasureTofu` adds the column the anthropic way and says so in a gap on every row built from this fixture. Every step here reports zero cache reads and zero cache writes, so nothing in this fixture can tell the two accountings apart; `turn-18d6a5df2caeac68` under `bench/stopcheck/corpus` is the one that can, and it is what `TestBilledInputCountsCacheTheWayTheClaudeArmCountsIt` uses.
 
 The tree this run produced is not here. `TestMeasureTofuFillsTheRowFromAStoredTurnRowAndLedger` scores the gates and the checklist against a freshly staged v1 seed committed to its own git repository, so the checklist count is real and the checklist score is not. Only the turn row half and the ledger half of that row mean anything.

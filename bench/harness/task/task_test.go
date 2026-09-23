@@ -16,7 +16,7 @@ import (
 
 const (
 	storedV2Row   = "bench/harness/testdata/v2-row/row.json"
-	v2SessionDir  = "bench/harness/testdata/v2-session"
+	v2Recording   = "bench/stopcheck/corpus/turn-18d6a27c7dfb1644.json"
 	v2ArmDir      = ".playground/hono-boji"
 	storeV2RowEnv = "TOFU_STORE_V2_ROW"
 	v2RowVersion  = 2
@@ -180,11 +180,7 @@ func TestStoreTheV2Row(t *testing.T) {
 		t.Skip("writer only: this runs the gates and the checker over " + v2ArmDir + ". Set " + storeV2RowEnv + "=1 to rewrite " + storedV2Row)
 	}
 	root := repositoryRoot(t)
-	recorded, err := filepath.Glob(filepath.Join(root, filepath.FromSlash(v2SessionDir), "*.json"))
-	if err != nil || len(recorded) != 1 {
-		t.Fatalf("%s must hold exactly one recorded session and holds %d: %v", v2SessionDir, len(recorded), err)
-	}
-	session, err := harness.LoadSession(recorded[0])
+	session, err := harness.LoadSession(filepath.Join(root, filepath.FromSlash(v2Recording)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -214,7 +210,7 @@ func TestStoreTheV2Row(t *testing.T) {
 		CheckerRevision:   mustRevise(t, root, task.Checker),
 		PromptRevision:    mustRevise(t, root, task.Prompt),
 		ArmDir:            v2ArmDir,
-		SessionDir:        v2SessionDir,
+		SessionDir:        v2Recording,
 		GateReasons:       gateReasonsAreFirstLineOnly,
 		Gaps:              gaps,
 		Row:               row,

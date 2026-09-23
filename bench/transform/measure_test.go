@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -41,11 +42,36 @@ func treeHash() string {
 	return hex.EncodeToString(sum.Sum(nil))
 }
 
+const (
+	censusTurns          = 17
+	v2MaintenanceSession = "turn-18d6a27c7dfb1644.json"
+)
+
+var measuredElsewhere = map[string]string{
+	v2MaintenanceSession:         "the v2 maintenance session, measured on its own against testdata/v2-before",
+	"turn-18d6a5df2caeac68.json": "recorded after this census was frozen, and it carries no write call",
+}
+
 func load(t *testing.T) ([]Write, int) {
 	t.Helper()
-	writes, turns, err := Load(filepath.Join("testdata", "sessions"), filepath.Join("testdata", "before"))
+	names, err := filepath.Glob(filepath.Join("..", "stopcheck", "corpus", "*.json"))
 	if err != nil {
 		t.Fatal(err)
+	}
+	slices.Sort(names)
+	names = slices.DeleteFunc(names, func(name string) bool {
+		_, elsewhere := measuredElsewhere[filepath.Base(name)]
+		return elsewhere
+	})
+	for name, why := range measuredElsewhere {
+		t.Logf("outside this census: %s, %s", name, why)
+	}
+	writes, turns, err := LoadFiles(names, filepath.Join("testdata", "before"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if turns != censusTurns {
+		t.Fatalf("the census is %d turns of the shared corpus and this run read %d, so a recording arrived or left and every figure below moves with it", censusTurns, turns)
 	}
 	if len(writes) < 10 {
 		t.Fatalf("the recorded turns held %d write calls, the measurement needs at least ten", len(writes))

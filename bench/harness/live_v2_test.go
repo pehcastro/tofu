@@ -10,10 +10,11 @@ import (
 )
 
 const (
-	liveEnv           = "TOFU_LIVE"
-	binaryEnv         = "TOFU_BIN"
-	v2SessionTestdata = "testdata/v2-session"
-	v2BeforeTestdata  = "testdata/v2-before"
+	liveEnv            = "TOFU_LIVE"
+	binaryEnv          = "TOFU_BIN"
+	v2SessionTestdata  = "testdata/v2-session"
+	v2BeforeTestdata   = "testdata/v2-before"
+	v2SessionRecording = "../stopcheck/corpus/turn-18d6a27c7dfb1644.json"
 )
 
 func TestV2TofuArmRunsLiveAndProducesARow(t *testing.T) {
@@ -75,5 +76,6 @@ func TestV2TofuArmRunsLiveAndProducesARow(t *testing.T) {
 	if row.Turns == 0 {
 		t.Fatal("the run produced a turn row with no steps, so nothing was measured")
 	}
-	t.Logf("the recorded turn is stored at %s, and TestTransformArmsOverTheV2Session counts its writes", sessionDir)
+	t.Logf("the recorded turn is stored at %s. the turn the offline tests measure is the one committed at %s, "+
+		"so a fresh recording is measured only once it is added to the corpus", sessionDir, v2SessionRecording)
 }

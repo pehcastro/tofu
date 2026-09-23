@@ -12,11 +12,5 @@
     "recorded_at": "2026-09-18",
     "command": "codex exec \"Reply with exactly the word hello and nothing else.\" --json --sandbox read-only --skip-git-repo-check -C <scratch dir>",
     "note": "The account's ChatGPT usage limit was already exhausted at record time (error: usage limit, reset Sep 19th 2026). The run never reached a turn.completed event, so it carries no token or cost figures. Retrying would not change this before the reset, and BOJI-017 does not retry in a loop, so this genuine error transcript is what is checked in."
-  },
-  "boji-1/2026-09-18.jsonl": {
-    "kind": "generated",
-    "cli_version": "n/a, boji run does not exist before E4",
-    "recorded_at": "2026-09-18",
-    "note": "Not a live boji run. Written by bench/harness/gen/main.go (removed after use) calling ledger.NewWriterWithClock(...).Append(...) from internal/judge/ledger, so every field and its encoding come from the real ledger schema in internal/judge/ledger/ledger.go and write.go, not from a hand-typed guess. Three tool_gate rows standing in for the Jev decisions a real boji run would log."
   }
 }

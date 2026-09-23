@@ -16,9 +16,9 @@ const recordedSessionID = "turn-18d6a5df2caeac68"
 
 func recordedSingleFileSession(t *testing.T, dir string) turn.Row {
 	t.Helper()
-	body, err := os.ReadFile(filepath.Join("testdata", "recorded-session", recordedSessionID+".json"))
+	body, err := os.ReadFile(filepath.Join("..", "stopcheck", "corpus", recordedSessionID+".json"))
 	if err != nil {
-		t.Fatalf("read the session recorded under .boji/sessions before the writer changed: %v", err)
+		t.Fatalf("read the session recorded under .boji/sessions before the writer changed, kept once in the stopcheck corpus: %v", err)
 	}
 	var row turn.Row
 	if err := json.Unmarshal(body, &row); err != nil {

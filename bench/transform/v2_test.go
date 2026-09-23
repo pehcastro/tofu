@@ -1,18 +1,13 @@
 package transform
 
 import (
-	"os"
 	"path/filepath"
 	"testing"
 )
 
 func TestBothArmsOverTheV2MaintenanceSession(t *testing.T) {
-	sessions := filepath.Join("..", "harness", "testdata", "v2-session")
-	entries, err := os.ReadDir(sessions)
-	if err != nil || len(entries) == 0 {
-		t.Skipf("no v2 session under %s", sessions)
-	}
-	writes, turns, err := Load(sessions, filepath.Join("..", "harness", "testdata", "v2-before"))
+	recording := filepath.Join("..", "stopcheck", "corpus", v2MaintenanceSession)
+	writes, turns, err := LoadFiles([]string{recording}, filepath.Join("..", "harness", "testdata", "v2-before"))
 	if err != nil {
 		t.Fatal(err)
 	}

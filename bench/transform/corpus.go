@@ -7,7 +7,6 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"slices"
 )
 
 type Write struct {
@@ -37,12 +36,7 @@ type session struct {
 	} `json:"steps"`
 }
 
-func Load(sessionDir, beforeDir string) ([]Write, int, error) {
-	names, err := filepath.Glob(filepath.Join(sessionDir, "*.json"))
-	if err != nil {
-		return nil, 0, fmt.Errorf("listing %s: %w", sessionDir, err)
-	}
-	slices.Sort(names)
+func LoadFiles(names []string, beforeDir string) ([]Write, int, error) {
 	var writes []Write
 	for _, name := range names {
 		raw, err := os.ReadFile(name)
