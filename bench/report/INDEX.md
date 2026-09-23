@@ -78,7 +78,7 @@ Why the rest are not compared:
 
 ## Every dated report, newest first
 
-43 dated reports over 27 benches. 6 benches carry none. 5 are withdrawn whole or in part, 1 is stale, and 12 reports name no conclusion a reader can find. A withdrawal declared from outside a report lives in `bench/report/withdrawals.json`; every other state is declared by the report's own first lines.
+44 dated reports over 28 benches. 6 benches carry none. 5 are withdrawn whole or in part, 1 is stale, and 13 reports name no conclusion a reader can find. A withdrawal declared from outside a report lives in `bench/report/withdrawals.json`; every other state is declared by the report's own first lines.
 
 | Bench | Date | Report | What it found | Sample | State |
 |---|---|---|---|---|---|
@@ -92,6 +92,7 @@ Why the rest are not compared:
 | shortlist | 2026-09-23 | `bench/shortlist/report-2026-09-23-join.md` | The search join is the right denominator by argument, and it clears the count floor of 12 at 13. It does not clear the leakage floor: 13 of 13 rows name their own label in their own task. | 110 recorded sessions, 23 search calls joined to a later acting call, 15 hits of which 13 carry a distinct task; no arm ran and no call was made | stands |
 | shortlist | 2026-09-23 | `bench/shortlist/report-2026-09-23.md` | Twelve questions would decide the observed gap. The recorded corpus can support two distinct tasks. | 111 recorded entries read at run time, 110 turns parsed, 8 recordable and 2 distinct tasks; no arm was run and no call was made | stands |
 | sift | 2026-09-23 | `bench/sift/report-2026-09-23.md` | shell_sift is live. The ledger carries 13 real shell_sift decisions, all from one turn, and this report measures them instead of guessing from TOFU-217. | 13 shell_sift rows out of 3,039 in .tofu/log, all from one turn and two shell tool calls; the byte and session figures beside them are re-run over 110 recorded sessions | stands |
+| sweep | 2026-09-23 | `bench/sweep/report-2026-09-23.md` | unparsed: no heading in this file names its own answer | every top level package under bench, 33 of them, with a computed source and test line baseline per package so a later sweep can diff it | stands |
 | thrift | 2026-09-23 | `bench/thrift/report-2026-09-23-overcap.md` | unparsed: no heading in this file names its own answer | 9 distinct read and search artifacts over the 32,768 byte cap, out of 39 stored, with 3 judged live and 6 skipped for a stated reason | stands |
 | thrift | 2026-09-23 | `bench/thrift/report-2026-09-23.md` | unparsed: no heading in this file names its own answer | 110 recorded sessions read out of 111 entries, 119 stored artifact handles, and 8 read and search results judged live inside a 400 call cap with 31 skipped | stands |
 | forkcache | 2026-09-22 | `bench/forkcache/report-2026-09-22.txt` | The first request after a context fork READS cache and writes none. On both recorded forks it read the whole cacheable head and paid zero cache write. | 2 recorded context forks | withdrawn in part |
@@ -146,4 +147,4 @@ Why the rest are not compared:
 
 ### Where these reports came from
 
-4 of 43 reports are built by running the package's own code again and 39 of 43 from the markdown's own text, which is weaker evidence, and every one of those says so.
+4 of 44 reports are built by running the package's own code again and 40 of 44 from the markdown's own text, which is weaker evidence, and every one of those says so.
