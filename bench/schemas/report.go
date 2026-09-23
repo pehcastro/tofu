@@ -27,7 +27,7 @@ func (r Report) Render() string {
 	fmt.Fprintf(&b, "Machine: %s. %s\n\n", r.Machine, r.BuildNote)
 
 	b.WriteString("## What was counted\n\n")
-	fmt.Fprintf(&b, "The tool count and every byte figure below come from building the exact registry `cmd/tofu/run.go` builds for a plain `tofu run` with no `--tools`, `--no-subagents` or `--truncate-results` flag, which is the invocation the harness report of 2026-09-23 recorded for `%s`. That registry carries %d tools, matching the count BOJI-520's own reference cites from the tree. Every tool call actually recorded in that turn's steps is a member of this registry: %s.\n\n",
+	fmt.Fprintf(&b, "The tool count and every byte figure below come from building the exact registry `cmd/tofu/run.go` builds for a plain `tofu run` with no `--tools`, `--no-subagents` or `--truncate-results` flag, which is the invocation the harness report of 2026-09-23 recorded for `%s`. That registry carries %d tools, matching the count this bench's own ticket cites from the tree. Every tool call actually recorded in that turn's steps is a member of this registry: %s.\n\n",
 		r.Target.ID, r.ToolCount, presence(r.CalledNotInRegistry))
 
 	b.WriteString("## Whole and per-tool schema cost\n\n")
