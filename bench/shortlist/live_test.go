@@ -68,6 +68,7 @@ func (a armTally) log(t *testing.T) {
 }
 
 func TestTheFourArmsOverTheIdenticalCorpus(t *testing.T) {
+	t.Skip(parked)
 	client := liveClient(t)
 	rows := corpusRows(t)
 
@@ -115,6 +116,7 @@ func TestTheFourArmsOverTheIdenticalCorpus(t *testing.T) {
 }
 
 func TestTheSameQuestionJudgedTwice(t *testing.T) {
+	t.Skip(parked)
 	client := liveClient(t)
 	rows := corpusRows(t)
 	row := rows[0]
