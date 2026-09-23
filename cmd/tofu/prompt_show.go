@@ -8,7 +8,7 @@ import (
 )
 
 func showPrompt(opts runOpts, out, errOut io.Writer) int {
-	environment, notice := runEnvironment(opts)
+	environment, instructions, notice := runEnvironment(opts)
 	if notice != "" {
 		writeNotice(errOut)(notice)
 	}
@@ -27,8 +27,8 @@ func showPrompt(opts runOpts, out, errOut io.Writer) int {
 		}
 		widest = max(widest, len(part.Concern))
 	}
-	_, _ = fmt.Fprintf(out, "task: %s\npaths the task names: %s\nverb the task names: %s\nrules: %d fire, %d held back\n\n",
-		opts.task,
+	_, _ = fmt.Fprintf(out, "task: %s\ninstruction files: %s\npaths the task names: %s\nverb the task names: %s\nrules: %d fire, %d held back\n\n",
+		opts.task, instructions,
 		cmp.Or(strings.Join(composed.Task.Paths, ", "), "none, so a scope and a language reach nothing"),
 		cmp.Or(string(composed.Task.Verb), "none, so a rule that names a task holds back"),
 		fired, len(composed.HeldBack))

@@ -2,11 +2,13 @@ package turn
 
 import (
 	"encoding/json"
+	"strconv"
 	"strings"
 	"testing"
 
 	"tofu/internal/crew"
 	"tofu/internal/llm"
+	"tofu/internal/secret"
 )
 
 func childReport(t *testing.T, root string, decisions []llm.Decision) ChildReport {
@@ -165,6 +167,35 @@ func TestAFailureTheChildRecoveredFromIsDismissedAndNotADefect(t *testing.T) {
 		t.Fatal("a failure nothing recovered from did not reach the parent")
 	}
 	t.Logf("dismissed: %q", recovered[0].Reason)
+}
+
+func TestAFinishedChildsCallTextIsTheToolsOwnLabelSoABashArgumentIsKeptWholeAndNeverReachesTheProse(t *testing.T) {
+	planted := "sk-ant-oat" + strings.Repeat("0", 16)
+	command := `curl -H "Authorization: Bearer ` + planted + `" https://api.example.com`
+	if len(secret.CredentialsIn(command)) != 1 {
+		t.Fatal("the planted argument is not credential shaped, so this test proves nothing about a credential")
+	}
+
+	report := reportOf(
+		crew.SubAgent{ID: "turn-parent-c1", Mission: "call the api", Owns: []string{"mine/**"}},
+		[]Row{{ID: "turn-parent-c1", Outcome: OutcomeStopped, Steps: []StepRow{{ToolCalls: []ToolCallRow{
+			{Tool: "bash", Command: command},
+		}}}}},
+		crew.InReview,
+	)
+
+	shapes := make([]string, len(report.Ran))
+	for index, one := range report.Ran {
+		shapes[index] = one.Tool + " " + strconv.Itoa(len(one.Command)) + " bytes carrying " +
+			strings.Join(secret.CredentialsIn(one.Command), ",")
+	}
+	if len(report.Ran) != 1 || report.Ran[0].Command != command {
+		t.Fatalf("a finished bash call does not carry the tool's own label whole: %v", shapes)
+	}
+	if strings.Contains(report.Text(), planted) {
+		t.Fatal("the prose handed to the parent repeats a command line, and it carries counts only")
+	}
+	t.Logf("the view reads %v, the prose reads %q", shapes, strings.SplitN(report.Text(), "\n", 2)[0])
 }
 
 func TestEveryOutcomeAndEveryStateIsHandledAndAnUnknownOnePanicsByName(t *testing.T) {

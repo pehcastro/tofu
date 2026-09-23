@@ -176,6 +176,23 @@ func TestProjectInstructionsNameTheFileWithoutAPathOnThisMachine(t *testing.T) {
 	}
 }
 
+func TestTheSentenceForInstructionsOffNamesEverySourceTheBlockCanCarry(t *testing.T) {
+	root, home := t.TempDir(), t.TempDir()
+	write(t, filepath.Join(home, ".claude", "CLAUDE.md"), "the personal rule")
+	write(t, filepath.Join(root, "AGENTS.md"), "the project rule")
+
+	block, _ := ProjectInstructions(root, home, 0)
+
+	if !strings.Contains(block, "the personal rule") || !strings.Contains(block, "the project rule") {
+		t.Fatalf("the block carries fewer than the two sources the sentence promises to turn off:\n%s", block)
+	}
+	for _, named := range []string{"AGENTS.md", "CLAUDE.md", "working directory", "home directory"} {
+		if !strings.Contains(InstructionsOff, named) {
+			t.Fatalf("a person reading %q is never told about %s, which the block carries", InstructionsOff, named)
+		}
+	}
+}
+
 func TestProjectInstructionsAreEmptyWhenTheTreeHasNeitherFile(t *testing.T) {
 	if block, _ := ProjectInstructions(t.TempDir(), t.TempDir(), 0); block != "" {
 		t.Fatalf("a tree with no AGENTS.md and no CLAUDE.md produced:\n%q", block)

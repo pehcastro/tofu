@@ -25,6 +25,10 @@ const PreferTheToolOverTheShell = "prefer the tool that does the thing over a sh
 	"tofu_lint_comments, tofu_rules_check and tofu_judge run tofu's own checks with tofu's own parser, " +
 	"so use one of those rather than a shell command or a guess in prose when you want to know whether the work holds up."
 
+const InstructionsOff = "sends no instruction file at all: " +
+	"neither the nearest AGENTS.md or CLAUDE.md at or above the working directory, " +
+	"nor your personal AGENTS.md or CLAUDE.md in your home directory"
+
 func Environment(dir string, now time.Time) string {
 	lines := []string{
 		"<env>",

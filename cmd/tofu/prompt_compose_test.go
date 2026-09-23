@@ -52,7 +52,7 @@ func TestATaskNamingNoPathAndNoVerbCarriesEveryAlwaysOnConcernAndEveryUnconditio
 	if err != nil {
 		t.Fatal(err)
 	}
-	environment, _ := runEnvironment(opts)
+	environment, _, _ := runEnvironment(opts)
 	composed, err := composePrompt(opts, environment)
 	if err != nil {
 		t.Fatal(err)

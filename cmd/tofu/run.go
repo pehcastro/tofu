@@ -95,6 +95,7 @@ type runOpts struct {
 	loopGuardWindow  int
 	contextCeiling   int
 	siftArm          string
+	noInstructions   bool
 	child            childRole
 }
 
@@ -159,7 +160,7 @@ func chooseChild(opts runOpts) (childRole, error) {
 func runUsage() string {
 	return fmt.Sprintf(runUsageText,
 		llm.EffortList(llm.Efforts()), llm.EffortDefault,
-		llm.EffortList(anthropic.ReasoningEfforts()), shellSiftCost())
+		llm.EffortList(anthropic.ReasoningEfforts()), shellSiftCost(), turn.InstructionsOff)
 }
 
 const runUsageText = `tofu run works a task in a directory until it is done.
@@ -185,6 +186,7 @@ Arguments:
                         costs, from library/decisions/methods@1.yaml:
                         %s
   --no-crew             run without the spawn tool
+  --no-instructions     the arm that %s
   --done-review <arm>          the arm that reviews a child's answer
   --max-steps <n>              cap the steps a turn takes, unset means no cap
   --loop-guard-repeats <n>     how many repeats of one call with one result stops a turn
@@ -370,13 +372,18 @@ func runTurn(opts runOpts, selected models.Model, built []turn.Tool, budget reca
 	return exitOK
 }
 
-func runEnvironment(opts runOpts) (environment, notice string) {
+func runEnvironment(opts runOpts) (environment, instructions, notice string) {
+	environment = turn.Environment(opts.dir, time.Now())
+	if opts.noInstructions {
+		return environment, "off by request, and " + turn.InstructionsOff, ""
+	}
 	home, _ := os.UserHomeDir()
 	setting, unreadable := appSetting(opts.dir, settingspkg.ProjectInstructionsCap)
 	capBytes := turn.InstructionCap(setting)
-	environment = turn.Environment(opts.dir, time.Now())
 	written, cut := turn.ProjectInstructions(opts.dir, home, capBytes)
+	instructions = "on, and neither an AGENTS.md nor a CLAUDE.md was found to send"
 	if written != "" {
+		instructions = fmt.Sprintf("on, %d bytes", len(written))
 		environment += "\n\n" + written
 	}
 	var notices []string
@@ -387,7 +394,7 @@ func runEnvironment(opts runOpts) (environment, notice string) {
 		notices = append(notices, fmt.Sprintf("your instructions were cut at %d bytes and %s never reached the model: raise the cap with tofu settings set %s <bytes>",
 			capBytes, strings.Join(cut, ", "), settingspkg.ProjectInstructionsCap))
 	}
-	return environment, strings.Join(notices, "; ")
+	return environment, instructions, strings.Join(notices, "; ")
 }
 
 func writeNotice(w io.Writer) func(string) {
@@ -408,7 +415,7 @@ func composePrompt(opts runOpts, environment string) (turn.Composed, error) {
 }
 
 func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn.SpawnTool, error) {
-	environment, notice := runEnvironment(opts)
+	environment, _, notice := runEnvironment(opts)
 	if notice != "" && run.notify != nil {
 		run.notify(notice)
 	}
@@ -727,6 +734,8 @@ func parseRunArgs(args []string) (runOpts, error) {
 			opts.siftArm, err = nextArg(args, &i, arg)
 		case "--no-crew":
 			opts.noCrew = true
+		case "--no-instructions":
+			opts.noInstructions = true
 		case "--wire":
 			opts.wire, err = nextArg(args, &i, arg)
 		case "--tools":
