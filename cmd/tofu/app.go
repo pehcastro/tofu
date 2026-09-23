@@ -23,6 +23,7 @@ import (
 	"tofu/interface/tui/session"
 	"tofu/interface/tui/settings"
 	"tofu/interface/tui/shells"
+	roster "tofu/internal/crew"
 	"tofu/internal/judge/jev"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/konst"
@@ -159,7 +160,12 @@ func appWires() []tui.Wire {
 		if err != nil {
 			continue
 		}
-		wires = append(wires, tui.Wire{Name: known.wire, Model: selected.ID, Provider: string(known.source)})
+		wires = append(wires, tui.Wire{
+			Name:     known.wire,
+			Model:    selected.ID,
+			Provider: string(known.source),
+			Efforts:  wireEfforts(known.wire),
+		})
 	}
 	return wires
 }
@@ -587,7 +593,22 @@ func (s *appSession) resumeHead() string {
 	return "continuing " + carry.Session + ", " + strconv.Itoa(carry.Carried) + " messages from " + sessionSteps(carry.Steps)
 }
 
-func (s *appSession) run(ctx context.Context, wire, task string, emit tui.CalledFromInsideTheTurnAndNeverAfterItReturns) {
+func pickedOpts(dir, turnID, task string, pick tui.Pick, maxSteps int) runOpts {
+	return runOpts{
+		dir:              dir,
+		task:             task,
+		turnID:           turnID,
+		wire:             cmp.Or(pick.Wire, wireSubscription),
+		model:            pick.Model,
+		toolSet:          toolSetFull,
+		effort:           cmp.Or(pick.Effort, llm.EffortDefault),
+		loopGuardRepeats: konst.TurnLoopGuardRepeats,
+		loopGuardWindow:  konst.TurnLoopGuardWindow,
+		maxSteps:         maxSteps,
+	}
+}
+
+func (s *appSession) run(ctx context.Context, pick tui.Pick, task string, emit tui.CalledFromInsideTheTurnAndNeverAfterItReturns) {
 	fail := func(err error) { emit(tui.Event{Kind: tui.EventFailure, Text: err.Error()}) }
 	images, imagesErr := s.takePendingImages(task)
 	if imagesErr != nil {
@@ -598,16 +619,7 @@ func (s *appSession) run(ctx context.Context, wire, task string, emit tui.Called
 	if unreadable != "" {
 		emit(tui.Event{Kind: tui.EventNote, Text: unreadable})
 	}
-	opts := runOpts{
-		dir:              s.dir,
-		task:             task,
-		turnID:           s.pendingID(),
-		wire:             cmp.Or(wire, wireSubscription),
-		toolSet:          toolSetFull,
-		loopGuardRepeats: konst.TurnLoopGuardRepeats,
-		loopGuardWindow:  konst.TurnLoopGuardWindow,
-		maxSteps:         maxSteps,
-	}
+	opts := pickedOpts(s.dir, s.pendingID(), task, pick, maxSteps)
 	opened, err := s.open(opts)
 	if opened.held != nil {
 		defer opened.held.close()
@@ -652,7 +664,8 @@ func (s *appSession) run(ctx context.Context, wire, task string, emit tui.Called
 		fail(budgetErr)
 		return
 	}
-	watch := &appWatcher{gate: gate, emit: emit, now: s.now, turnID: opts.turnID, seen: s.shown, maxSteps: opts.maxSteps}
+	held := &roster.Roster{}
+	watch := &appWatcher{gate: gate, held: held, emit: emit, now: s.now, turnID: opts.turnID, seen: s.shown, maxSteps: opts.maxSteps, spent: map[string]int{}}
 	opened.held.wrap = func(model turn.Model) (turn.Model, error) {
 		asked, guardErr := guarded(model, budget)
 		if guardErr != nil {
@@ -662,7 +675,7 @@ func (s *appSession) run(ctx context.Context, wire, task string, emit tui.Called
 		return watch, nil
 	}
 	notify := func(notice string) { emit(tui.Event{Kind: tui.EventNote, Text: notice}) }
-	config, spawner, configErr := runConfig(opts, built, runtime{accounts: opened.held.forTurn(), spend: opened.spend, budget: budget, gate: gate, sessions: sessions, notify: notify})
+	config, spawner, configErr := runConfig(opts, built, runtime{accounts: opened.held.forTurn(), spend: opened.spend, budget: budget, gate: gate, sessions: sessions, notify: notify, roster: held, now: s.now})
 	if configErr != nil {
 		fail(configErr)
 		return
@@ -824,17 +837,11 @@ func sessionAnswer(answer ledger.Answer) session.Answer {
 	return out
 }
 
-type watchedChild struct {
-	child   crew.Child
-	call    string
-	started time.Time
-	rows    int
-}
-
 type appWatcher struct {
 	inner     turn.Model
 	gate      *toolGate
 	spawner   *turn.SpawnTool
+	held      *roster.Roster
 	emit      tui.CalledFromInsideTheTurnAndNeverAfterItReturns
 	now       func() time.Time
 	turnID    string
@@ -844,7 +851,7 @@ type appWatcher struct {
 	in        int
 	out       int
 	cacheRead int
-	children  []watchedChild
+	spent     map[string]int
 }
 
 func (a *appWatcher) Ask(ctx context.Context, request llm.Request) (llm.Decision, error) {
@@ -870,8 +877,8 @@ func (a *appWatcher) Ask(ctx context.Context, request llm.Request) (llm.Decision
 		}
 		delete(a.wrote, message.ToolCallID)
 		a.emit(result)
-		a.childReturned(message)
 	}
+	a.sendCrew()
 
 	a.emit(tui.Event{Kind: tui.EventRequesting})
 	streamed := false
@@ -887,13 +894,7 @@ func (a *appWatcher) Ask(ctx context.Context, request llm.Request) (llm.Decision
 	a.in += fresh
 	a.out += decision.Usage.OutputTokens
 	a.cacheRead += decision.CacheReadTokens
-	for index := len(a.children) - 1; index >= 0; index-- {
-		if a.children[index].child.State == crew.Running {
-			a.children[index].child.Tokens += fresh + decision.Usage.OutputTokens
-			a.sendCrew()
-			break
-		}
-	}
+	a.creditRunningChild(fresh + decision.Usage.OutputTokens)
 	stats := tui.Event{Kind: tui.EventStats, Model: decision.Build, TokensIn: a.in, TokensOut: a.out, CacheRead: a.cacheRead}
 	if a.gate != nil {
 		stats.Decisions = a.gate.decisions
@@ -908,7 +909,6 @@ func (a *appWatcher) Ask(ctx context.Context, request llm.Request) (llm.Decision
 		promotes := a.spawner != nil && call.Name == a.spawner.Name()
 		a.emit(tui.Event{Kind: tui.EventToolCall, ID: sessionstore.EventIDFor(a.turnID, call.ID), Tool: call.Name, Text: intent, Detail: detail, Promote: promotes})
 		a.noteWholeFile(call)
-		a.childStarted(call)
 	}
 	return decision, nil
 }
@@ -926,60 +926,99 @@ func (a *appWatcher) noteWholeFile(call llm.ToolCall) {
 	a.wrote[call.ID] = args.Content
 }
 
-func (a *appWatcher) childStarted(call llm.ToolCall) {
-	if a.spawner == nil || call.Name != a.spawner.Name() {
+func (a *appWatcher) creditRunningChild(tokens int) {
+	if a.held == nil {
 		return
 	}
-	var args struct {
-		Task string   `json:"task"`
-		Owns []string `json:"owns"`
-	}
-	if err := json.Unmarshal(call.Arguments, &args); err != nil {
-		return
-	}
-	a.children = append(a.children, watchedChild{
-		child:   crew.Child{Name: "c" + strconv.Itoa(len(a.children)+1), Owns: args.Owns, Doing: args.Task, Total: cmp.Or(a.maxSteps, konst.TurnMaxSteps)},
-		call:    call.ID,
-		started: a.now(),
-		rows:    len(a.spawner.Children()),
-	})
-	a.sendCrew()
-}
-
-func (a *appWatcher) childReturned(message llm.Message) {
-	for index := range a.children {
-		watched := &a.children[index]
-		if watched.call != message.ToolCallID {
+	crewed := a.held.SubAgents()
+	for index := len(crewed) - 1; index >= 0; index-- {
+		if crewed[index].State != roster.Working {
 			continue
 		}
-		watched.child.State = crew.Done
-		if message.ToolOutcome.Failed() {
-			watched.child.State = crew.Errored
-		}
-		watched.child.Report = message.Content
-		watched.child.Since = a.now().Sub(watched.started)
-		for _, row := range a.spawner.Children()[watched.rows:] {
-			watched.child.Steps += len(row.Steps)
-			for _, step := range row.Steps {
-				for _, ran := range step.ToolCalls {
-					watched.child.Calls = append(watched.child.Calls, crew.Call{Tool: ran.Tool, Text: ran.Command, Result: ran.Error})
-				}
-			}
-		}
-		a.sendCrew()
+		a.spent[crewed[index].ID] += tokens
+		a.draw(crewed)
 		return
 	}
 }
 
 func (a *appWatcher) sendCrew() {
-	children := make([]crew.Child, len(a.children))
-	for index, watched := range a.children {
-		children[index] = watched.child
-		if watched.child.State == crew.Running {
-			children[index].Since = a.now().Sub(watched.started)
+	if a.held == nil {
+		return
+	}
+	a.draw(a.held.SubAgents())
+}
+
+func (a *appWatcher) draw(crewed []roster.SubAgent) {
+	if len(crewed) == 0 {
+		return
+	}
+	children := make([]crew.Child, len(crewed))
+	for index, agent := range crewed {
+		since := agent.Active.Sub(agent.Started)
+		if agent.State == roster.Working {
+			since = a.now().Sub(agent.Started)
+		}
+		children[index] = crew.Child{
+			Name:   "c" + strconv.Itoa(index+1),
+			Owns:   agent.Owns,
+			Doing:  agent.Mission,
+			Since:  since,
+			Steps:  agent.Steps,
+			Total:  cmp.Or(a.maxSteps, konst.TurnMaxSteps),
+			Tokens: a.spent[agent.ID],
+			State:  drawnState(agent.State),
+			Calls:  recordedOrCalling(a.callsOf(agent.ID), agent.Calling),
+			Report: agent.Report,
 		}
 	}
 	a.emit(tui.Event{Kind: tui.EventCrew, Children: children})
+}
+
+func drawnState(state roster.State) crew.State {
+	switch state {
+	case roster.Working:
+		return crew.Running
+	case roster.WaitingAnswer:
+		return crew.WaitingForAnswer
+	case roster.InReview:
+		return crew.HandedBack
+	case roster.Parked:
+		return crew.Parked
+	case roster.Errored:
+		return crew.Errored
+	case roster.Finished:
+		return crew.Done
+	}
+	panic("tofu: unknown sub-agent state " + state.String())
+}
+
+func recordedOrCalling(recorded []crew.Call, calling []string) []crew.Call {
+	if len(recorded) > 0 {
+		return recorded
+	}
+	watched := make([]crew.Call, len(calling))
+	for index, tool := range calling {
+		watched[index] = crew.Call{Tool: tool}
+	}
+	return watched
+}
+
+func (a *appWatcher) callsOf(id string) []crew.Call {
+	if a.spawner == nil {
+		return nil
+	}
+	var calls []crew.Call
+	for _, row := range a.spawner.Children() {
+		if row.ID != id && !strings.HasPrefix(row.ID, id+"-r") {
+			continue
+		}
+		for _, step := range row.Steps {
+			for _, ran := range step.ToolCalls {
+				calls = append(calls, crew.Call{Tool: ran.Tool, Text: ran.Command, Result: ran.Error})
+			}
+		}
+	}
+	return calls
 }
 
 func callIntent(call llm.ToolCall) (string, string) {

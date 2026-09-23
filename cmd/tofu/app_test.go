@@ -24,6 +24,7 @@ import (
 	"tofu/interface/tui/markdown"
 	"tofu/interface/tui/session"
 	"tofu/interface/tui/settings"
+	roster "tofu/internal/crew"
 	"tofu/internal/judge/jev"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/konst"
@@ -174,7 +175,7 @@ func TestLiveAppRunsATurnOnEachWire(t *testing.T) {
 			task := "create notes.txt holding the single word ready, then read it back and say what it holds"
 			app.Update(tui.Event{Kind: tui.EventText, Text: task})
 			var turned eventLog
-			appTurnOn(dir, openAppWire, nil, time.Now, sessionResume{})(t.Context(), wire.Name, task, turned.add)
+			appTurnOn(dir, openAppWire, nil, time.Now, sessionResume{})(t.Context(), tui.Pick{Wire: wire.Name}, task, turned.add)
 			answered := ""
 			for _, event := range turned.all() {
 				if event.Model != "" {
@@ -518,6 +519,8 @@ func (d *appDriver) view(keys ...tea.Msg) string {
 	return d.app.View().Content
 }
 
+var onTheSubscription = tui.Pick{Wire: wireSubscription}
+
 func stubbedTurn(dir string, model turn.Model, answers ...bool) tui.Turn {
 	var person chan tui.Answer
 	if len(answers) > 0 {
@@ -570,7 +573,7 @@ func TestAToolCallsVendorIDNeverReachesTheScreenAndTheCallStillPairsWithItsResul
 	stubbedTurn(dir, &queuedModel{decisions: []llm.Decision{
 		{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{writeNote("toolu_01AbCdEfGhIjKlMn")}},
 		{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "wrote it"},
-	}})(t.Context(), wireSubscription, "write a note", driver.emit)
+	}})(t.Context(), onTheSubscription, "write a note", driver.emit)
 
 	calls := driver.of(tui.EventToolCall)
 	results := driver.of(tui.EventToolResult)
@@ -591,7 +594,7 @@ func TestAToolCallsVendorIDNeverReachesTheScreenAndTheCallStillPairsWithItsResul
 func TestATurnDrivenThroughTheAppFillsTheContextMeter(t *testing.T) {
 	dir := scratchProject(t)
 	driver := driveApp(t)
-	stubbedTurn(dir, noteThenStop())(t.Context(), wireSubscription, strings.Repeat("carry this task. ", 600), driver.emit)
+	stubbedTurn(dir, noteThenStop())(t.Context(), onTheSubscription, strings.Repeat("carry this task. ", 600), driver.emit)
 
 	carried := driver.of(tui.EventContext)
 	if len(carried) == 0 {
@@ -615,7 +618,7 @@ func TestATurnDrivenThroughTheAppFillsTheContextMeter(t *testing.T) {
 func TestADrivenTurnNamesTheSessionAndItsIDInTheHeader(t *testing.T) {
 	dir := scratchProject(t)
 	driver := driveApp(t)
-	stubbedTurn(dir, noteThenStop())(t.Context(), wireSubscription, "write a note", driver.emit)
+	stubbedTurn(dir, noteThenStop())(t.Context(), onTheSubscription, "write a note", driver.emit)
 
 	screen := driver.view()
 	if !strings.Contains(screen, "#") {
@@ -644,7 +647,7 @@ func TestAForkShowsTheNoticeAndThenStopsShowingIt(t *testing.T) {
 	dir := scratchProject(t)
 	driver := driveApp(t)
 	overBudget := strings.Repeat("x", recall.ShippedBands().Target()*3)
-	stubbedTurn(dir, noteThenStop())(t.Context(), wireSubscription, overBudget, driver.emit)
+	stubbedTurn(dir, noteThenStop())(t.Context(), onTheSubscription, overBudget, driver.emit)
 
 	if len(driver.of(tui.EventForkStart)) != 1 || len(driver.of(tui.EventForkEnd)) != 1 {
 		t.Fatalf("fork events start %d end %d, want one of each",
@@ -695,7 +698,7 @@ func TestTheBarShowsTheRequestAsSentAndTheForkDecidedOnWhatCameBackAfterIt(t *te
 	dir := scratchProject(t)
 	driver := driveApp(t)
 	overBudget := strings.Repeat("x", recall.ShippedBands().Target()*3)
-	stubbedTurn(dir, noteThenStop())(t.Context(), wireSubscription, overBudget, driver.emit)
+	stubbedTurn(dir, noteThenStop())(t.Context(), onTheSubscription, overBudget, driver.emit)
 
 	store, err := sessionstore.Open()
 	if err != nil {
@@ -744,7 +747,7 @@ func TestASpawnedChildShowsInTheCrewViewWithTheGlobsItHolds(t *testing.T) {
 		{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "the child did it"},
 	}}
 	driver := driveApp(t)
-	stubbedTurn(dir, model)(t.Context(), wireSubscription, "hand the note to a child", driver.emit)
+	stubbedTurn(dir, model)(t.Context(), onTheSubscription, "hand the note to a child", driver.emit)
 
 	crewEvents := driver.of(tui.EventCrew)
 	if len(crewEvents) < 2 {
@@ -755,8 +758,8 @@ func TestASpawnedChildShowsInTheCrewViewWithTheGlobsItHolds(t *testing.T) {
 		t.Fatalf("the first crew event carries %+v, want one running child holding note.txt", started)
 	}
 	ended := crewEvents[len(crewEvents)-1].Children[0]
-	if ended.State != crew.Done || ended.Steps != 2 || ended.Report == "" {
-		t.Fatalf("the child ended as %+v, want it done with the steps and the report its rows carry", ended)
+	if ended.State != crew.HandedBack || ended.Steps != 2 || ended.Report == "" {
+		t.Fatalf("the child ended as %+v, want it in review with the steps and the report the roster carries", ended)
 	}
 	screen := driver.view(tea.KeyPressMsg{Code: '4', Mod: tea.ModAlt})
 	for _, want := range []string{"1 child", "c1", "note.txt", "ownership", "write note.txt"} {
@@ -806,7 +809,7 @@ func TestAChildRunningForTenSecondsReadsTenSecondsAndWhatItSpent(t *testing.T) {
 	driver := driveApp(t)
 	appTurnOn(dir, func(runOpts) (appWire, error) {
 		return wireOn(model), nil
-	}, nil, model.clock, sessionResume{})(t.Context(), wireSubscription, "hand the note to a child", driver.emit)
+	}, nil, model.clock, sessionResume{})(t.Context(), onTheSubscription, "hand the note to a child", driver.emit)
 
 	running := ""
 	for _, framed := range driver.frames {
@@ -834,7 +837,7 @@ func TestAFullEventChannelDropsTheSnapshotsAndNeverBlocksTheTurn(t *testing.T) {
 	app := tui.New(tui.Options{
 		Repo:  "scratch",
 		Wires: func() []tui.Wire { return []tui.Wire{{Name: wireSubscription, Model: "stub-model"}} },
-		Turn: func(_ context.Context, _, _ string, emit tui.CalledFromInsideTheTurnAndNeverAfterItReturns) {
+		Turn: func(_ context.Context, _ tui.Pick, _ string, emit tui.CalledFromInsideTheTurnAndNeverAfterItReturns) {
 			for step := range kept {
 				emit(tui.Event{Kind: tui.EventText, Text: "step " + strconv.Itoa(step)})
 			}
@@ -888,7 +891,7 @@ func TestAFullEventChannelDropsTheSnapshotsAndNeverBlocksTheTurn(t *testing.T) {
 func TestATurnWithNoChildrenSendsNoCrewEventAtAll(t *testing.T) {
 	dir := scratchProject(t)
 	driver := driveApp(t)
-	stubbedTurn(dir, noteThenStop())(t.Context(), wireSubscription, "write the note yourself", driver.emit)
+	stubbedTurn(dir, noteThenStop())(t.Context(), onTheSubscription, "write the note yourself", driver.emit)
 
 	if sent := driver.of(tui.EventCrew); len(sent) != 0 {
 		t.Fatalf("crew events %+v, want none: an empty crew view has to keep saying what it says today", sent)
@@ -945,7 +948,7 @@ func TestEveryToolSaysWhetherItFailedAndHowBigItsResultWas(t *testing.T) {
 				{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "done"},
 			}}
 			driver := driveApp(t)
-			stubbedTurn(dir, model)(t.Context(), wireSubscription, "fail once and then succeed", driver.emit)
+			stubbedTurn(dir, model)(t.Context(), onTheSubscription, "fail once and then succeed", driver.emit)
 
 			results := driver.of(tui.EventToolResult)
 			if len(results) != 2 {
@@ -977,7 +980,7 @@ func TestTheFoldLineOnADrivenTurnNamesTheCountNotTheSize(t *testing.T) {
 		{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{writeNote("call-3")}},
 		{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "wrote it three times"},
 	}}
-	stubbedTurn(dir, model)(t.Context(), wireSubscription, "write the note three times", driver.emit)
+	stubbedTurn(dir, model)(t.Context(), onTheSubscription, "write the note three times", driver.emit)
 
 	total := 0
 	for _, result := range driver.of(tui.EventToolResult) {
@@ -1009,7 +1012,7 @@ func TestARealEditReachesTheFileEditsViewAndLeavesOneRowBehind(t *testing.T) {
 			callTo("call-1", "edit", `{"path":"note.txt","old_string":"a note","new_string":"a longer note"}`)}},
 		{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "done"},
 	}}
-	stubbedTurn(dir, model)(t.Context(), wireSubscription, "make the note longer", driver.emit)
+	stubbedTurn(dir, model)(t.Context(), onTheSubscription, "make the note longer", driver.emit)
 
 	results := driver.of(tui.EventToolResult)
 	if len(results) != 1 {
@@ -1068,7 +1071,7 @@ func TestACreatedFileShowsEveryLineItWroteMarkedAsAdded(t *testing.T) {
 			callTo("call-2", "read", `{"path":"note.txt"}`)}},
 		{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "done"},
 	}}
-	stubbedTurn(dir, model)(t.Context(), wireSubscription, "write the note", driver.emit)
+	stubbedTurn(dir, model)(t.Context(), onTheSubscription, "write the note", driver.emit)
 
 	feed := ansi.Strip(driver.view(tea.WindowSizeMsg{Width: 100, Height: 40}, editsKey()))
 	drawn := 0
@@ -1099,7 +1102,7 @@ func TestAWholeReplacementShowsItsDiffRatherThanItsContent(t *testing.T) {
 			writeCall(t, "call-1", "note.txt", "a longer note\nand another\n")}},
 		{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "done"},
 	}}
-	stubbedTurn(dir, model)(t.Context(), wireSubscription, "replace the note", driver.emit)
+	stubbedTurn(dir, model)(t.Context(), onTheSubscription, "replace the note", driver.emit)
 
 	results := driver.of(tui.EventToolResult)
 	if len(results) != 1 || !strings.HasPrefix(results[0].Diff, "--- note.txt") {
@@ -1124,7 +1127,7 @@ func TestAFailedWriteIsNotAnEdit(t *testing.T) {
 			callTo("call-1", "write", `{"path":"../outside.txt","content":"one\ntwo\n"}`)}},
 		{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "done"},
 	}}
-	stubbedTurn(dir, model)(t.Context(), wireSubscription, "write outside the root", driver.emit)
+	stubbedTurn(dir, model)(t.Context(), onTheSubscription, "write outside the root", driver.emit)
 
 	results := driver.of(tui.EventToolResult)
 	if len(results) != 1 || !results[0].Failed {
@@ -1195,7 +1198,7 @@ func TestACancelledTurnReportsStoppedAndCarriesNoGoError(t *testing.T) {
 	cancelled := transport.Fail("anthropic.Ask", transport.KindProvider, context.Canceled,
 		"posting the request: Post %q", "https://api.anthropic.com/v1/messages?beta=true")
 	driver := driveApp(t)
-	stubbedTurn(dir, refusingModel{err: cancelled})(t.Context(), wireSubscription, "a task", driver.emit)
+	stubbedTurn(dir, refusingModel{err: cancelled})(t.Context(), onTheSubscription, "a task", driver.emit)
 
 	if failures := driver.of(tui.EventFailure); len(failures) != 0 {
 		t.Fatalf("a cancelled turn reported a failure: %q", failures[0].Text)
@@ -1220,7 +1223,7 @@ func TestATurnThatFailsForAnotherReasonStillReportsTheError(t *testing.T) {
 	dir := scratchProject(t)
 	broken := errors.New("the provider answered with no content")
 	driver := driveApp(t)
-	stubbedTurn(dir, refusingModel{err: broken})(t.Context(), wireSubscription, "a task", driver.emit)
+	stubbedTurn(dir, refusingModel{err: broken})(t.Context(), onTheSubscription, "a task", driver.emit)
 
 	failures := driver.of(tui.EventFailure)
 	if len(failures) != 1 || !strings.Contains(failures[0].Text, broken.Error()) {
@@ -1409,16 +1412,16 @@ func TestSessionVerdictNamesEveryLedgerVerdict(t *testing.T) {
 }
 
 func TestTheCrewBarFollowsTheCapTheTurnWasGiven(t *testing.T) {
-	call := llm.ToolCall{ID: "call", Name: "spawn", Arguments: json.RawMessage(`{"task":"do it","owns":["x"]}`)}
 	for _, one := range []struct{ maxSteps, total int }{{0, konst.TurnMaxSteps}, {12, 12}} {
+		var sent []tui.Event
 		watch := &appWatcher{
-			emit:     func(tui.Event) {},
+			emit:     func(event tui.Event) { sent = append(sent, event) },
 			now:      time.Now,
 			maxSteps: one.maxSteps,
-			spawner:  turn.NewSpawnTool("parent", turn.Config{}, nil),
+			held:     rosterHolding(t, roster.SubAgent{ID: "parent-c1", Mission: "do it", Owns: []string{"x"}}),
 		}
-		watch.childStarted(call)
-		if got := watch.children[0].child.Total; got != one.total {
+		watch.sendCrew()
+		if got := sent[0].Children[0].Total; got != one.total {
 			t.Fatalf("a bar under a cap of %d draws %d steps, want %d", one.maxSteps, got, one.total)
 		}
 	}

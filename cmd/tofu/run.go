@@ -52,6 +52,16 @@ const (
 
 func runWires() []string { return []string{wireSubscription, wireCodex, wireKey} }
 
+func wireEfforts(wire string) []llm.Effort {
+	switch wire {
+	case wireSubscription:
+		return anthropic.ReasoningEfforts()
+	case wireCodex:
+		return llm.Efforts()
+	}
+	return nil
+}
+
 func wireSpend(wire string) turn.Spend {
 	if wire == wireKey {
 		return turn.SpendAPIKey
@@ -79,6 +89,7 @@ type runOpts struct {
 	doneArm          string
 	model            string
 	toolSet          string
+	effort           llm.Effort
 	maxSteps         int
 	loopGuardRepeats int
 	loopGuardWindow  int
@@ -97,6 +108,8 @@ type runtime struct {
 	scorer   *shellScorer
 	sessions *session.Store
 	notify   func(string)
+	roster   *crew.Roster
+	now      func() time.Time
 }
 
 func boundRoles(wire string) (models.Bindings, error) {
@@ -143,7 +156,11 @@ func chooseChild(opts runOpts) (childRole, error) {
 	return childRole{wire: forChild.Wire, id: forChild.Model.ID, windows: forChild.Model.WindowText()}, nil
 }
 
-func runUsage() string { return fmt.Sprintf(runUsageText, shellSiftCost()) }
+func runUsage() string {
+	return fmt.Sprintf(runUsageText,
+		llm.EffortList(llm.Efforts()), llm.EffortDefault,
+		llm.EffortList(anthropic.ReasoningEfforts()), shellSiftCost())
+}
 
 const runUsageText = `tofu run works a task in a directory until it is done.
 
@@ -155,6 +172,10 @@ Arguments:
   --model <id>          the model to run on, otherwise the one the turn role is bound to
   --wire <name>         anthropic, codex or openrouter
   --tools <set>         full, or three for the read, write and bash arm
+  --effort <level>      how hard the model thinks: %s.
+                        the default is %s. the anthropic wire takes %s,
+                        and refuses the rest rather than picking a neighbour.
+                        the openrouter wire sends no level and takes no --effort
   --gate <arm>          off, shadow or enforce, otherwise the rule's own mode decides
   --no-gate             the arm that turns the tool gate off
   --sift <arm>          free or judged, otherwise the method table decides which
@@ -397,6 +418,7 @@ func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn
 	}
 	config := turn.Config{
 		Model:       run.model,
+		Now:         run.now,
 		Accounts:    run.accounts,
 		Spend:       run.spend,
 		Tools:       turn.NewRegistry(built...),
@@ -424,10 +446,14 @@ func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn
 	if run.scorer != nil {
 		run.scorer.turnID = parentID
 	}
+	if run.sessions != nil && opts.toolSet != toolSetThree {
+		built = append(slices.Clone(built), tools.NewQuote(run.sessions, parentID))
+		config.Tools = turn.NewRegistry(built...)
+	}
 	if opts.noCrew || opts.toolSet == toolSetThree {
 		return config, nil, nil
 	}
-	spawner := turn.NewSpawnTool(parentID, childBase(config, opts.child), &crew.Roster{})
+	spawner := turn.NewSpawnTool(parentID, childBase(config, opts.child), cmp.Or(run.roster, &crew.Roster{}))
 	config.Tools = turn.NewRegistry(append(slices.Clone(built), spawner)...)
 	return config, spawner, nil
 }
@@ -465,9 +491,9 @@ func dryRunBody(opts runOpts, model string, config turn.Config) ([]byte, error) 
 		system := append([]llm.Message{{Role: llm.RoleSystem, Content: config.System}}, messages...)
 		return llm.Request{Messages: system, Tools: tools}.Encode(model)
 	case wireCodex:
-		return codex.Request{Model: model, Instructions: config.System, Messages: messages, Tools: tools}.Encode(nil)
+		return codex.Request{Model: model, Instructions: config.System, Messages: messages, Tools: tools, Effort: opts.effort}.Encode(nil)
 	}
-	return anthropic.Request{Model: model, System: []string{config.System}, Messages: messages, Tools: tools}.Encode(true)
+	return anthropic.Request{Model: model, System: []string{config.System}, Messages: messages, Tools: tools, Effort: opts.effort}.Encode(true)
 }
 
 func turnTransportConfig() transport.Config {
@@ -504,7 +530,8 @@ func keyModel(model string) (turn.Model, error) {
 }
 
 type codexTurn struct {
-	wire *codex.Wire
+	wire   *codex.Wire
+	effort llm.Effort
 }
 
 func (c codexTurn) Ask(ctx context.Context, request llm.Request) (llm.Decision, error) {
@@ -522,6 +549,7 @@ func (c codexTurn) Ask(ctx context.Context, request llm.Request) (llm.Decision, 
 		Instructions: strings.Join(instructions, "\n\n"),
 		Messages:     messages,
 		Tools:        request.Tools,
+		Effort:       c.effort,
 	})
 	if err != nil {
 		return llm.Decision{}, err
@@ -709,6 +737,11 @@ func parseRunArgs(args []string) (runOpts, error) {
 			if opts.model, err = nextArg(args, &i, arg); err == nil && strings.TrimSpace(opts.model) == "" {
 				err = errors.New("--model needs a model id")
 			}
+		case "--effort":
+			var raw string
+			if raw, err = nextArg(args, &i, arg); err == nil {
+				opts.effort, err = llm.ParseEffort(raw)
+			}
 		case "--max-steps":
 			opts.maxSteps, err = nextInt(args, &i, arg)
 		case "--loop-guard-repeats":
@@ -741,6 +774,13 @@ func parseRunArgs(args []string) (runOpts, error) {
 	}
 	if !slices.Contains(runWires(), opts.wire) {
 		return runOpts{}, fmt.Errorf("--wire %q is none of %s", opts.wire, strings.Join(runWires(), ", "))
+	}
+	if opts.wire == wireKey && opts.effort != "" {
+		return runOpts{}, fmt.Errorf("--effort %s with --wire %s: the openrouter wire sends no reasoning effort, so the level would be dropped without a word",
+			opts.effort, wireKey)
+	}
+	if opts.wire != wireKey {
+		opts.effort = cmp.Or(opts.effort, llm.EffortDefault)
 	}
 	if opts.gateArm != gateFollowsTheRule && !slices.Contains(gateArms(), opts.gateArm) {
 		return runOpts{}, fmt.Errorf("--gate %q is none of %s: with no --gate the rule's own mode decides",
