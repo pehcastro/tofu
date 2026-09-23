@@ -40,19 +40,6 @@ func headingsOf(lines []string) []heading {
 	return found
 }
 
-func titleOf(body string) string {
-	for _, line := range strings.Split(body, "\n") {
-		if strings.TrimSpace(line) == "" {
-			continue
-		}
-		if text, ok := lineHeading(strings.TrimSpace(line)); ok {
-			return plain(text)
-		}
-		return plain(strings.TrimSpace(line))
-	}
-	return ""
-}
-
 func selfDeclaredState(body string) (State, string) {
 	lines := strings.Split(body, "\n")
 	headings := headingsOf(lines)

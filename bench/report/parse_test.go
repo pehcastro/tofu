@@ -42,23 +42,3 @@ func TestAConclusionIsTakenOnlyFromAHeadingThatNamesOne(t *testing.T) {
 		})
 	}
 }
-
-func TestATableEarnsAChartOnlyWhenItHoldsADistribution(t *testing.T) {
-	spread := Block{Kind: BlockTable, Head: []string{"cap", "calls cut"}, Rows: [][]string{
-		{"100", "20"}, {"150", "18"}, {"200", "16"}, {"300", "13"}, {"500", "12"},
-	}}
-	chart, ok := chartFor(spread)
-	if !ok || len(chart.Values) != 5 || chart.Title != "calls cut" {
-		t.Fatalf("a five row numeric column is a distribution: %+v %v", chart, ok)
-	}
-	twoNumbers := Block{Kind: BlockTable, Head: []string{"arm", "kept"}, Rows: [][]string{{"jev", "27"}, {"free", "18"}}}
-	if _, ok := chartFor(twoNumbers); ok {
-		t.Error("a bar chart of two numbers is worse than the two numbers")
-	}
-	flat := Block{Kind: BlockTable, Head: []string{"arm", "runs"}, Rows: [][]string{
-		{"a", "3"}, {"b", "3"}, {"c", "3"}, {"d", "3"}, {"e", "3"},
-	}}
-	if _, ok := chartFor(flat); ok {
-		t.Error("one value repeated five times is not a distribution")
-	}
-}

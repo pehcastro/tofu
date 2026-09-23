@@ -11,8 +11,6 @@ import (
 
 var onDisk = regexp.MustCompile(`^report-\d{4}-\d{2}-\d{2}.*\.(md|txt)$`)
 
-const svgNamespace = "http://www.w3.org/2000/svg"
-
 func built(t *testing.T) Data {
 	t.Helper()
 	data, err := Build("..")
@@ -96,7 +94,7 @@ func TestEveryBenchWithNoDatedReportIsNamedAndClassified(t *testing.T) {
 	for _, pkg := range data.NoReport {
 		named[pkg.Package] = pkg.Kind
 	}
-	for _, want := range []string{"cmd", "corpus", "prompts", "report", "stat", "tools", "tui"} {
+	for _, want := range []string{"cmd", "corpus", "prompts", "report", "stat", "tui"} {
 		if _, ok := named[want]; !ok {
 			t.Errorf("bench/%s has no dated report and is not named in the index", want)
 		}
@@ -132,8 +130,8 @@ func TestEveryReportOpensWithAFigureTakenFromTheReportItself(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if report.Figure == "" || report.Says == "" || report.Sample == "" {
-			t.Errorf("%s opens with figure %q, says %q, sample %q", report.Source, report.Figure, report.Says, report.Sample)
+		if report.Figure == "" || report.Sample == "" {
+			t.Errorf("%s opens with figure %q and sample %q", report.Source, report.Figure, report.Sample)
 		}
 		if !strings.Contains(plain(string(body)), report.Figure) {
 			t.Errorf("%s: the headline %q is not in the report", report.Source, report.Figure)
@@ -176,13 +174,8 @@ func TestTheFilesOnDiskAreWhatTheGeneratorWouldWriteNow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	script, err := data.JS()
-	if err != nil {
-		t.Fatal(err)
-	}
 	for name, want := range map[string][]byte{
-		ViewerFile: []byte(Viewer),
-		DataScript: script,
+		ViewerFile: []byte(Page(data)),
 		DataFile:   machine,
 		"INDEX.md": []byte(data.Markdown()),
 	} {
@@ -196,29 +189,22 @@ func TestTheFilesOnDiskAreWhatTheGeneratorWouldWriteNow(t *testing.T) {
 	}
 }
 
-func TestTheScriptAndTheJSONCarryTheSameContent(t *testing.T) {
-	script, err := os.ReadFile(DataScript)
-	if err != nil {
-		t.Fatal(err)
-	}
+func TestTheMachineFormCarriesEveryJudgmentTheViewerShows(t *testing.T) {
 	machine, err := os.ReadFile(DataFile)
 	if err != nil {
 		t.Fatal(err)
 	}
-	body := strings.TrimSuffix(strings.TrimPrefix(string(script), DataGlobal+" = "), ";\n")
-	var fromScript, fromJSON Data
-	if err := json.Unmarshal([]byte(body), &fromScript); err != nil {
-		t.Fatalf("%s does not hold one assignment of JSON to %s: %v", DataScript, DataGlobal, err)
-	}
-	if err := json.Unmarshal(machine, &fromJSON); err != nil {
+	var fromDisk Data
+	if err := json.Unmarshal(machine, &fromDisk); err != nil {
 		t.Fatal(err)
 	}
-	if len(fromScript.Reports) != len(fromJSON.Reports) {
-		t.Fatalf("%s carries %d reports and %s carries %d", DataScript, len(fromScript.Reports), DataFile, len(fromJSON.Reports))
+	page := Page(built(t))
+	if len(fromDisk.Judgments) == 0 {
+		t.Fatalf("%s carries no judgment row", DataFile)
 	}
-	for i, report := range fromScript.Reports {
-		if report.Source != fromJSON.Reports[i].Source || report.Figure != fromJSON.Reports[i].Figure {
-			t.Errorf("row %d differs: %q against %q", i, report.Source, fromJSON.Reports[i].Source)
+	for _, row := range fromDisk.Judgments {
+		if !strings.Contains(page, row.Point) {
+			t.Errorf("%s carries %s and the page does not show it", DataFile, row.Point)
 		}
 	}
 }
@@ -229,8 +215,12 @@ func TestTheHumanIndexCarriesTheSameRowsAsTheMachineOne(t *testing.T) {
 		t.Fatal(err)
 	}
 	var rows [][]string
+	inReports := false
 	for _, line := range strings.Split(string(doc), "\n") {
-		if !strings.HasPrefix(line, "| ") || strings.HasPrefix(line, "|---") || strings.HasPrefix(line, "| Bench ") {
+		if strings.HasPrefix(line, "## Every dated report") {
+			inReports = true
+		}
+		if !inReports || !strings.HasPrefix(line, "| ") || strings.HasPrefix(line, "|---") || strings.HasPrefix(line, "| Bench ") {
 			continue
 		}
 		cells := strings.Split(strings.Trim(strings.TrimSpace(line), "|"), " | ")
@@ -244,7 +234,7 @@ func TestTheHumanIndexCarriesTheSameRowsAsTheMachineOne(t *testing.T) {
 		t.Fatalf("INDEX.md carries %d rows and the machine form carries %d", len(rows), len(data.Reports))
 	}
 	for i, report := range data.Reports {
-		want := []string{report.Package, report.Date, "`" + report.Source + "`", report.Figure, report.Conclusion, report.Sample, string(report.State)}
+		want := []string{report.Package, report.Date, "`" + report.Source + "`", report.Conclusion, report.Sample, string(report.State)}
 		for j, cell := range want {
 			if cell == "" {
 				cell = "not stated"
@@ -261,14 +251,15 @@ func TestTheViewerFetchesNothingWhenItOpens(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	page := strings.ReplaceAll(string(body), svgNamespace, "")
-	for _, refused := range []string{"http://", "https://", "<link", "@import", "fetch(", "XMLHttpRequest", "import("} {
+	page := string(body)
+	for _, refused := range []string{"http://", "https://", "<link", "@import", "fetch(", "XMLHttpRequest", "import(", "src="} {
 		if strings.Contains(page, refused) {
 			t.Errorf("%s reaches for %q when it opens", ViewerFile, refused)
 		}
 	}
-	scripts := regexp.MustCompile(`<script[^>]*src="([^"]+)"`).FindAllStringSubmatch(page, -1)
-	if len(scripts) != 1 || scripts[0][1] != DataScript {
-		t.Errorf("the viewer loads %v and the only file it may load is %s", scripts, DataScript)
+	for _, copied := range []string{"oklch(0.5770 0.2450 27.3250)", "--radius-xl", ".table-container", ".tab-trigger", ".card-header", ".badge"} {
+		if !strings.Contains(page, copied) {
+			t.Errorf("%s does not carry the shadcn component %q that was copied into it", ViewerFile, copied)
+		}
 	}
 }

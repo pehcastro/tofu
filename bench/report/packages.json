@@ -2,36 +2,31 @@
   {
     "package": "cmd",
     "kind": "runner",
-    "note": "the bench command itself, package main. It runs the other benches and measures nothing of its own."
+    "note": "the bench command, package main. Runs the other benches, measures 0 things of its own."
   },
   {
     "package": "corpus",
     "kind": "library",
-    "note": "the shared reader over recorded sessions and the six gate cases. Every bench that reads .tofu/sessions reads it through here, so its work shows up in the reports that use it."
+    "note": "the shared reader over recorded sessions and the 6 gate cases. Every bench that reads .tofu/sessions reads it through here."
   },
   {
     "package": "report",
     "kind": "runner",
-    "note": "this package: the reader over every dated report, the viewer and the data it reads. It reads other packages' reports and measures nothing itself."
+    "note": "this package: the reader over every dated report, the viewer and its data. Measures 0 things of its own."
   },
   {
     "package": "stat",
     "kind": "library",
-    "note": "median and percentile over a slice of floats, called by every bench that reports a spread."
+    "note": "median, p95 and p99 over a slice of floats, called by every bench that reports a spread."
   },
   {
     "package": "prompts",
     "kind": "measurement with no dated report",
-    "note": "a correlation over recorded prompts, owned by TOFU-380 and not yet run to a dated report."
-  },
-  {
-    "package": "tools",
-    "kind": "measurement with no dated report",
-    "note": "four search arms over a 24 KB question corpus: ripgrep, git grep, bm25 and jevgrep. It has a corpus and it has arms, so it owes a dated report."
+    "note": "a correlation over recorded prompts, owed by TOFU-380, 0 dated reports so far."
   },
   {
     "package": "tui",
     "kind": "measurement with no dated report",
-    "note": "Go benchmarks over the session view, run by go test -bench. Never written up to a dated report, so no figure from it is quotable."
+    "note": "Go benchmarks over the session view, run by go test -bench. 0 dated reports, so 0 figures from it are quotable."
   }
 ]

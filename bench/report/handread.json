@@ -1,5 +1,29 @@
 [
   {
+    "report": "bench/sift/report-2026-09-22-rtk.md",
+    "figure": "70.9%",
+    "says": "rtk in front of Jev buys a 29 percent cheaper Jev call, $0.00644 against $0.00909, and pays 5 of 34 needles for it. Jev after rtk sees 66.5 percent of the state bytes over 73.4 percent of the calls. Neither rtk arm beats Jev alone: rtk alone keeps 26 of 34 at 36.9 percent of bytes removed, rtk then Jev 25 of 34 at 48.3 percent, Jev alone 30 of 34 at 26.7 percent, the regex 18 of 34 at 54.7 percent. rtk has no filter for 21 of the 34 recorded commands and passes them through whole.",
+    "from": "rerun",
+    "sample": "the same 34 recorded shell results the regex and Jev arms were scored on, one needle planted per row, four methods through one scoring function, two full live runs plus an earlier single run, $0.04659 spent",
+    "skips": "4 tests skipped offline, three wanting TOFU_LIVE=1 and one wanting TOFU_REWRITE_CORPUS=1; no corpus row skipped, all 34 scored by all four methods; 21 rows have no rtk filter and are scored as passthrough rather than dropped"
+  },
+  {
+    "report": "bench/sift/report-2026-09-22.md",
+    "figure": "$0.00054",
+    "says": "Switching shell_sift@1 on costs a median $0.00054 a session and $0.01107 in the worst of 109 recorded sessions, and stops sending 54.0 percent of every shell result, 13.7 percent of every byte the model reads back from a tool. The ledger holds no shell_sift row at all, so the per-decision price is borrowed from the TOFU-217 log and bracketed above by the ledger p50 at $0.000478 a sift.",
+    "from": "rerun",
+    "sample": "109 recorded sessions carrying 419 shell results, 2,999 ledger rows of which 1,756 are wire calls, and the 34 row shell corpus for candidate units per sift",
+    "skips": "243 ledger rows with no point, 1,000 with a point but no wire call, 1 session entry named HEAD; no row skipped for a missing field"
+  },
+  {
+    "report": "bench/tools/report-2026-09-22.md",
+    "figure": "29 of 100",
+    "says": "The best free search arm reads 29 of 100 and the corpus cannot separate it from tofu search at 18 of 100, exact two sided p = 0.10 over 24 discordant against 13. The only arm it separates is bm25 alone at 0 of 20. file_shortlist gets no ranking from this file.",
+    "from": "rerun",
+    "sample": "100 questions across five trees, 20 named, 40 described, 40 intent, six answers repinned first because the tofu tree had moved under them",
+    "skips": "80 of 100 named, every described and intent question, skipped by git grep quoted for having no backtick term; 4 gated tests named in the output"
+  },
+  {
     "report": "bench/picker/report-2026-09-22.txt",
     "figure": "0 recorded window readings",
     "says": "The three arms cannot be separated, because nothing in the tree ever wrote a window reading to disk: the poller cached a report in memory and every caller dropped it. Over a hand-built two-account fixture the same instrument separates them cleanly, first usable at 2 forced moves, round robin at 4, headroom at 1, and that table says nothing about real sessions.",

@@ -1,0 +1,271 @@
+{
+  "jev_costs": [
+    {
+      "label": "Jev, paid per decision",
+      "figure": "$0.000041",
+      "note": "per correct decision, 6 case battery, 2026-09-18",
+      "source": "bench/cost/report-2026-09-18.md",
+      "evidence": "Jev decided for $0.000041 per correct decision and opus for $0.005351, 131 times Jev."
+    },
+    {
+      "label": "Jev, median latency",
+      "figure": "344 ms",
+      "note": "median of 7 calls, 2026-09-21",
+      "source": "bench/ask/report-2026-09-21.md",
+      "evidence": "judged 4 of 7, free 3 of 7, 7 calls, $0.000187, $0.000027 each, mean 376ms, p50 344ms"
+    }
+  ],
+  "arms": {
+    "question": "Is tofu better than claude and codex, on what, by how much",
+    "tab": "1. Tofu against claude and codex",
+    "because": "2 of 3 tools have a recorded run, over 2 tasks, 1 repeat each. Naming a winner needs 2 passing repeats per tool.",
+    "source": "bench/harness/report-2026-09-22.md",
+    "what_exists": [
+      {
+        "text": "4 recorded runs, of which 3 carry a turn count and a wall clock",
+        "evidence": "Four runs are recorded and three of them carry a turn count and a wall clock"
+      },
+      {
+        "text": "0 recorded codex runs: the one recorded codex transcript hit a usage limit and never finished",
+        "evidence": "codex has no recorded row at all, because the one recorded codex exec transcript hit a usage limit and never reached turn.completed"
+      },
+      {
+        "text": "the harness refuses to name a winner under 2 passing repeats",
+        "evidence": "a comparison where either arm has fewer than two passing repeats prints not separable instead of a winner"
+      },
+      {
+        "text": "2 kinds of money: a subscription and an API key are refused against each other rather than printed",
+        "evidence": "claude vs codex: wall clock not comparable, credential kinds differ (subscription vs key)"
+      }
+    ],
+    "what_it_would_take": [
+      {
+        "text": "36 runs: 3 tools, 4 tasks, 3 repeats each",
+        "evidence": "Three arms, four tasks, three repeats each is 36 runs."
+      },
+      {
+        "text": "828 turns at the median, 504 to 1,260 across the observed range",
+        "evidence": "Turns: 828 at the median, 504 to 1,260 across the observed range."
+      },
+      {
+        "text": "83 minutes of running time at the median, 38 to 141 minutes across the range, with build and test time on top and never measured",
+        "evidence": "Wall clock: 83 minutes of arm time at the median, 38 minutes to 141 minutes across the range."
+      },
+      {
+        "text": "2 more task prompts and 2 more checkers, because only 2 tasks exist",
+        "evidence": "Only two tasks exist, v1 and v2, so four tasks means writing two more prompts and two more checkers first"
+      }
+    ]
+  },
+  "versions": {
+    "question": "Is this version of tofu better than the last one, on what, by how much",
+    "tab": "2. This version against the last",
+    "because": "Every recorded run carries a version and 1 repeat. 1 run against 1 run is 2 samples side by side, the reading this harness was changed to stop printing.",
+    "source": "bench/harness/report-2026-09-22.md",
+    "what_exists": [
+      {
+        "text": "1 claude run at v1 and 1 at v2, 1 tofu run at v2, and 1 tofu run at v1 carrying no turn count and no wall clock",
+        "evidence": "| boji hono v1 run1 | none recorded | none recorded | none | none |"
+      },
+      {
+        "text": "the 70 percent version gap this page used to imply was 2 single runs put side by side",
+        "evidence": "Two single samples set side by side, which reads as a 70 percent gap."
+      }
+    ],
+    "what_it_would_take": [
+      {
+        "text": "a spread from repeating the same run, which no version has",
+        "evidence": "There is no rerun spread here, only an extrapolation from single runs, which is the very thing the change exists to stop reporting."
+      },
+      {
+        "text": "the same run shape as the table above, once per version"
+      }
+    ]
+  },
+  "judgments": [
+    {
+      "point": "file_shortlist",
+      "question": "which file answers this question",
+      "axis": {"name": "the right file ranked first", "unit": "percent of questions", "better_when": "higher"},
+      "free_arm": {
+        "name": "BM25",
+        "does": "ranks every file by how many of the question's rarer words it contains and takes the top one, with no stopword list and no boost for a matching filename",
+        "does_from": "bench/shortlist/rank.go",
+        "percent": 25.0,
+        "hits": 1,
+        "out_of": 4,
+        "evidence": "| BM25 (strong free) | 1/4 (25.0%) | 4/4 (100.0%) |"
+      },
+      "judged_arm": {
+        "name": "Jev",
+        "does": "scores each of the five files BM25 shortlisted against the question and reorders them",
+        "does_from": "bench/shortlist/arm.go",
+        "percent": 100.0,
+        "hits": 4,
+        "out_of": 4,
+        "evidence": "| judged, Jev reranking the BM25 shortlist | 4/4 (100.0%) | 4/4 (100.0%) |"
+      },
+      "sample_size": 4,
+      "sample_of": "file finding questions, against a floor of 30 the recorded sessions could not reach",
+      "wiring": "not wired",
+      "source": "bench/shortlist/report-2026-09-21.md"
+    },
+    {
+      "point": "shell_sift",
+      "question": "how much of a shell result to keep",
+      "axis": {"name": "planted needles kept", "unit": "percent of results", "better_when": "higher"},
+      "free_arm": {
+        "name": "regex on error lines",
+        "does": "keeps the head and the tail of the output, keeps any line matching an error pattern, and drops the middle",
+        "does_from": "internal/sift/shellarm.go",
+        "percent": 52.9,
+        "hits": 18,
+        "out_of": 34,
+        "evidence": "| free (head/tail kept, regex on error lines) | 18 of 34 | 18 of 34 | 54.7% |"
+      },
+      "judged_arm": {
+        "name": "Jev",
+        "does": "scores each chunk of the output for whether the task still needs it, and drops the chunks that score low",
+        "does_from": "bench/sift/arm.go",
+        "percent": 79.4,
+        "hits": 27,
+        "out_of": 34,
+        "evidence": "| jev | 27 of 34 | 26 of 34 | 54.0%, 54.2% |"
+      },
+      "sample_size": 34,
+      "sample_of": "recorded shell results, one needle planted in each",
+      "wiring": "not wired",
+      "source": "bench/sift/report-2026-09-21.md"
+    },
+    {
+      "point": "ask",
+      "question": "should this write be asked about",
+      "axis": {"name": "the right call against what the record shows", "unit": "percent of moments", "better_when": "higher"},
+      "free_arm": {
+        "name": "the ownership check",
+        "does": "asks now when the path being written is outside the list of paths this agent was given, and carries on when it is inside",
+        "does_from": "bench/ask/arm.go",
+        "percent": 42.9,
+        "hits": 3,
+        "out_of": 7,
+        "evidence": "judged 4 of 7, free 3 of 7, 7 calls, $0.000187, $0.000027 each, mean 376ms, p50 344ms"
+      },
+      "judged_arm": {
+        "name": "Jev",
+        "does": "scores how settled the situation is and chooses to ask now, wait until the end, or carry on",
+        "does_from": "bench/ask/arm.go",
+        "percent": 57.1,
+        "hits": 4,
+        "out_of": 7,
+        "evidence": "judged 4 of 7, free 3 of 7, 7 calls, $0.000187, $0.000027 each, mean 376ms, p50 344ms"
+      },
+      "sample_size": 7,
+      "sample_of": "real moments taken from the ticket logs, against the 20 this project uses for a decision of this shape",
+      "wiring": "not wired",
+      "source": "bench/ask/report-2026-09-21.md"
+    },
+    {
+      "point": "stop_check",
+      "question": "should the turn stop here",
+      "axis": {"name": "agreement with a hand label", "unit": "percent of steps", "better_when": "higher"},
+      "free_arm": {
+        "name": "the repeat check",
+        "does": "stops when the step called no tool at all, or when every command in the step already ran earlier in the same turn",
+        "does_from": "bench/stopcheck/arm.go",
+        "percent": 87.2,
+        "hits": 68,
+        "out_of": 78,
+        "evidence": "cheap arm: 68 of 78 labelled steps, 87.2%"
+      },
+      "judged_arm": {
+        "name": "Jev",
+        "does": "scores whether work remains, whether the turn has stalled and whether the budget is spent, then stops or carries on",
+        "does_from": "bench/stopcheck/arm.go",
+        "percent": 91.0,
+        "hits": 71,
+        "out_of": 78,
+        "evidence": "typed arm: 71 of 78 labelled steps, 91.0%"
+      },
+      "sample_size": 78,
+      "sample_of": "hand labelled steps, one labeller, no second opinion",
+      "wiring": "not wired",
+      "source": "bench/stopcheck/report-2026-09-21.md"
+    },
+    {
+      "point": "read_worth",
+      "question": "is this paragraph worth reading",
+      "axis": {"name": "agreement with a hand label", "unit": "percent of paragraphs", "better_when": "higher"},
+      "free_arm": {
+        "name": "word counter",
+        "does": "drops any paragraph of fewer than 15 words and keeps every longer one",
+        "does_from": "bench/readworth/arm.go",
+        "percent": 87.1,
+        "evidence": "| length floor 15 | 87.1% | 12.6% | 87.1% | 12.6% |"
+      },
+      "judged_arm": {
+        "name": "Jev",
+        "does": "scores each paragraph for whether it answers the task and how much of it is padding, then drops it under the shipped cut",
+        "does_from": "internal/sift/judge.go",
+        "percent": 87.1,
+        "evidence": "| jev, shipped rule | 88.6% | 9.4% | 87.1% | 9.3% |"
+      },
+      "sample_size": 70,
+      "sample_of": "hand labelled paragraphs over 25 tasks, 35 keep and 35 drop",
+      "wiring": "not wired",
+      "source": "bench/readworth/report-2026-09-21.md"
+    },
+    {
+      "point": "page_sift",
+      "question": "how much of a web page to keep",
+      "axis": {"name": "planted needles kept", "unit": "percent of pages", "better_when": "higher"},
+      "free_arm": {
+        "name": "the link stripper",
+        "does": "drops any list item or table row that is nothing but a link and keeps every other line. The report calls this the readability rule.",
+        "does_from": "internal/sift/pagearm.go",
+        "percent": 100.0,
+        "hits": 21,
+        "out_of": 21,
+        "evidence": "| readability | 21/21 | -0.2% |"
+      },
+      "judged_arm": {
+        "name": "Jev",
+        "does": "scores each part of the page for whether the task still needs it and drops anything under 0.5",
+        "does_from": "bench/websift/arm.go",
+        "percent": 71.4,
+        "hits": 15,
+        "out_of": 21,
+        "evidence": "| judged, shipped keep_at 0.5 | 15/21 | 9.1%, 10.9% (two runs) |"
+      },
+      "sample_size": 21,
+      "sample_of": "focused pages of a 24 page set, one needle planted in each",
+      "wiring": "not wired",
+      "source": "bench/websift/report-2026-09-21.md"
+    },
+    {
+      "point": "tool_gate",
+      "question": "should this command be allowed to run",
+      "axis": {"name": "agreement with a hand label", "unit": "percent of cases", "better_when": "higher"},
+      "free_arm": {},
+      "judged_arm": {},
+      "sample_size": 89,
+      "sample_of": "held out cases of a 178 case set",
+      "wiring": "not wired",
+      "source": "bench/cost/report-2026-09-19.md",
+      "unanswerable_because": "Nobody has a usable score for either side of this one. The only dated report that measured it withdrew every accuracy number in the file on 2026-09-19, because they were scored by a rule the gate does not actually run. It needs one fresh run of Jev and one of the regular expression over the same 89 cases, through the rule the gate really uses, written up as a dated report.",
+      "unanswerable_evidence": "Agreement with the label: the Correct, Agreement, Blocks caught and False blocks columns, every row."
+    },
+    {
+      "point": "tool_gate wording",
+      "question": "does splitting one question into two change the answer",
+      "axis": {"name": "verdicts that changed", "unit": "percent of cases", "better_when": "lower"},
+      "free_arm": {},
+      "judged_arm": {},
+      "sample_size": 6,
+      "sample_of": "cases written by hand, never recorded from a real turn",
+      "wiring": "not wired",
+      "source": "bench/wording/report-2026-09-18.md",
+      "unanswerable_because": "There is nothing cheap to compare this against: both sides are Jev, one question against two. The six cases were also written by hand rather than recorded, so nothing here says what would happen on real traffic.",
+      "unanswerable_evidence": "The six states are authored, not recorded."
+    }
+  ]
+}

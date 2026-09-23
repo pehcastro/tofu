@@ -14,13 +14,6 @@ const (
 	FromRerun Provenance = "rerun"
 )
 
-func (p Provenance) Describe() string {
-	if p == FromRerun {
-		return "built by running the package's own code again"
-	}
-	return "built from the report's own text, not from a rerun, which is weaker evidence"
-}
-
 type handRead struct {
 	Report string     `json:"report"`
 	Figure string     `json:"figure"`
@@ -34,11 +27,8 @@ type Report struct {
 	Package     string     `json:"package"`
 	Date        string     `json:"date"`
 	Source      string     `json:"source"`
-	Title       string     `json:"title"`
 	Figure      string     `json:"figure"`
-	Says        string     `json:"says"`
 	BuiltFrom   Provenance `json:"built_from"`
-	BuiltFromIs string     `json:"built_from_is"`
 	Sample      string     `json:"sample"`
 	Skips       string     `json:"skips"`
 	Conclusion  string     `json:"conclusion"`
@@ -47,8 +37,6 @@ type Report struct {
 	StateSource string     `json:"state_source"`
 	StateNote   string     `json:"state_note"`
 	Conditions  []string   `json:"conditions"`
-	Arms        *Block     `json:"arms"`
-	Body        []Block    `json:"body"`
 }
 
 func Build(benchRoot string) (Data, error) {
@@ -66,6 +54,7 @@ func Build(benchRoot string) (Data, error) {
 		WithdrawalsLiveIn: WithdrawalsPath,
 		GeneratedBy:       RegenerateWith,
 	}
+	bodies := make(map[string]string, len(index.Entries))
 	for _, entry := range index.Entries {
 		body, err := os.ReadFile(filepath.Join(benchRoot, "..", entry.Path))
 		if err != nil {
@@ -75,21 +64,18 @@ func Build(benchRoot string) (Data, error) {
 		if !named {
 			return Data{}, fmt.Errorf("%s carries no headline figure in bench/report/handread.json: a report opens with a number and none may be invented here", entry.Path)
 		}
-		text := string(body)
-		if !strings.Contains(plain(text), read.Figure) {
+		text := plain(string(body))
+		if !strings.Contains(text, read.Figure) {
 			return Data{}, fmt.Errorf("%s: the headline figure %q does not appear in the report it is taken from", entry.Path, read.Figure)
 		}
 		delete(hand, entry.Path)
-		blocks := blocksOf(text)
+		bodies[entry.Path] = text
 		data.Reports = append(data.Reports, Report{
 			Package:     entry.Package,
 			Date:        entry.Date,
 			Source:      entry.Path,
-			Title:       entry.Title,
 			Figure:      read.Figure,
-			Says:        read.Says,
 			BuiltFrom:   read.From,
-			BuiltFromIs: read.From.Describe(),
 			Sample:      read.Sample,
 			Skips:       read.Skips,
 			Conclusion:  quotable(entry),
@@ -97,15 +83,19 @@ func Build(benchRoot string) (Data, error) {
 			State:       entry.State,
 			StateSource: entry.StateSource,
 			StateNote:   entry.StateNote,
-			Conditions:  conditionsOf(text),
-			Arms:        armsOf(blocks),
-			Body:        blocks,
+			Conditions:  conditionsOf(string(body)),
 		})
 	}
 	for path := range hand {
 		return Data{}, fmt.Errorf("bench/report/handread.json names %s, which is not a dated report under bench/", path)
 	}
-	data.Dates = datesChart(data.Reports)
+	if err := readJSON(filepath.Join(benchRoot, "report", "answers.json"), &data.Answers); err != nil {
+		return Data{}, err
+	}
+	if err := checkAnswers(data.Answers, filepath.Join(benchRoot, ".."), bodies); err != nil {
+		return Data{}, err
+	}
+	data.Judgments = rowsOf(data.Answers)
 	return data, nil
 }
 
@@ -149,28 +139,4 @@ func conditionsOf(body string) []string {
 		}
 	}
 	return said
-}
-
-func armsOf(blocks []Block) *Block {
-	for _, block := range blocks {
-		if block.Kind == BlockTable && len(block.Head) > 1 && strings.Contains(strings.ToLower(block.Head[0]), "arm") {
-			table := block
-			return &table
-		}
-	}
-	return nil
-}
-
-func datesChart(reports []Report) Chart {
-	chart := Chart{Title: "dated reports written that day", Unit: "reports"}
-	for i := len(reports) - 1; i >= 0; i-- {
-		date := reports[i].Date
-		if len(chart.Labels) > 0 && chart.Labels[len(chart.Labels)-1] == date {
-			chart.Values[len(chart.Values)-1]++
-			continue
-		}
-		chart.Labels = append(chart.Labels, date)
-		chart.Values = append(chart.Values, 1)
-	}
-	return chart
 }

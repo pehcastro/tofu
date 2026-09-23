@@ -42,7 +42,6 @@ type datedEntry struct {
 	Package     string
 	Date        string
 	Path        string
-	Title       string
 	Conclusion  string
 	State       State
 	StateSource string
@@ -161,7 +160,6 @@ func readPackageReports(benchRoot, pkg string, withdrawals map[string]withdrawal
 			Package:    pkg,
 			Date:       match[1],
 			Path:       path,
-			Title:      titleOf(text),
 			Conclusion: conclusionOf(text),
 			State:      StateStands,
 		}

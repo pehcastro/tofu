@@ -27,13 +27,8 @@ func generate(root string) error {
 	if err != nil {
 		return err
 	}
-	script, err := data.JS()
-	if err != nil {
-		return err
-	}
 	for name, body := range map[string][]byte{
-		report.ViewerFile: []byte(report.Viewer),
-		report.DataScript: script,
+		report.ViewerFile: []byte(report.Page(data)),
 		report.DataFile:   machine,
 		"INDEX.md":        []byte(data.Markdown()),
 	} {
@@ -41,8 +36,9 @@ func generate(root string) error {
 			return err
 		}
 	}
-	fmt.Printf("%s, %s, %s and INDEX.md written under %s. %d reports, %d benches, %d with no report, %d withdrawn, %d stale, %d unparsed.\n",
-		report.ViewerFile, report.DataScript, report.DataFile, filepath.Join(root, "report"),
+	fmt.Printf("%s, %s and INDEX.md written under %s. %d of %d Jev decisions have a cheaper method measured beside them, %d reports over %d benches, %d with none, %d withdrawn, %d stale, %d naming no answer.\n",
+		report.ViewerFile, report.DataFile, filepath.Join(root, "report"),
+		data.ComparedDecisions(), len(data.Judgments),
 		data.Counts.Reports, data.Counts.MeasuredPackage, data.Counts.NoReport,
 		data.Counts.Withdrawn, data.Counts.Stale, data.Counts.Unparsed)
 	return nil
