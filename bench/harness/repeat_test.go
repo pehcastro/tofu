@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -47,6 +48,26 @@ func TestSpreadOfTwoOrMoreRepeatsIsSeparable(t *testing.T) {
 	}
 	if s.Width() != 20 {
 		t.Fatalf("width of low 100 high 120 is 20, got %v", s.Width())
+	}
+}
+
+func handRolledSpreadOf(values []float64) Spread {
+	sorted := append([]float64(nil), values...)
+	sort.Float64s(sorted)
+	middle := len(sorted) / 2
+	median := sorted[middle]
+	if len(sorted)%2 == 0 {
+		median = (sorted[middle-1] + sorted[middle]) / 2
+	}
+	return Spread{Median: median, Low: sorted[0], High: sorted[len(sorted)-1], Repeats: len(sorted)}
+}
+
+func TestSpreadOfAgreesWithTheHandRolledArithmeticOnARealRerunSeries(t *testing.T) {
+	approval := []float64{0.37, 0.35, 0.34, 0.36, 0.36}
+	want := handRolledSpreadOf(approval)
+	got := SpreadOf(approval)
+	if got != want {
+		t.Fatalf("SpreadOf(%v) = %+v, hand-rolled gives %+v, on BOJI-006's 5-run rerun of case-6-sed-named-file.json approval", approval, got, want)
 	}
 }
 

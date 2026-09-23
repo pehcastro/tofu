@@ -55,7 +55,7 @@ func Corpus() []Moment {
 			},
 		},
 		{
-			Ticket: "BOJI-011", Cite: "BOJI-011 (crew-design.md:16)", Label: LabelWidened, Ideal: subagent.ActionAskNow,
+			Ticket: "BOJI-011", Cite: "BOJI-011:291", Label: LabelWidened, Ideal: subagent.ActionAskNow,
 			State: subagent.AskState{
 				Path: "cmd/boji/bench.go", InOwns: false, Answered: false, Precedent: false,
 				Reversibility: "a file outside owns granted by a brief the ticket did not say, quiet until the orchestrator notices",

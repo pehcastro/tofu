@@ -3,6 +3,8 @@ package harness
 import (
 	"fmt"
 	"sort"
+
+	"tofu/bench/stat"
 )
 
 type Spread struct {
@@ -16,14 +18,8 @@ func SpreadOf(values []float64) Spread {
 	if len(values) == 0 {
 		return Spread{}
 	}
-	sorted := append([]float64(nil), values...)
-	sort.Float64s(sorted)
-	middle := len(sorted) / 2
-	median := sorted[middle]
-	if len(sorted)%2 == 0 {
-		median = (sorted[middle-1] + sorted[middle]) / 2
-	}
-	return Spread{Median: median, Low: sorted[0], High: sorted[len(sorted)-1], Repeats: len(sorted)}
+	low, high := stat.Spread(values)
+	return Spread{Median: stat.Median(values), Low: low, High: high, Repeats: len(values)}
 }
 
 func (s Spread) Width() float64 { return s.High - s.Low }
