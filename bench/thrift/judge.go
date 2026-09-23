@@ -118,25 +118,9 @@ func judgeOne(ctx context.Context, client *jev.Client, jevQuestions []jev.Questi
 	if remaining := callCap - judged.CallsMade; len(parts) > remaining {
 		return JudgedRow{}, JudgedSkip{Turn: turnID, Reason: fmt.Sprintf("%d paragraphs would exceed the %d live call cap, %d left", len(parts), callCap, remaining)}, false
 	}
-	marks := make([]sift.Mark, len(parts))
-	for i, part := range parts {
-		state := thrift.BuildState(part.Text, i, len(parts), tool, command, task)
-		raw, err := json.Marshal(state)
-		if err != nil {
-			return JudgedRow{}, JudgedSkip{Turn: turnID, Reason: "state does not marshal: " + err.Error()}, false
-		}
-		decision, err := client.Ask(ctx, jev.Request{State: raw, Questions: jevQuestions})
-		judged.CallsMade++
-		if err != nil {
-			return JudgedRow{}, JudgedSkip{Turn: turnID, Reason: "jev.Ask: " + err.Error()}, false
-		}
-		judged.CostUSD += decision.Usage.Cost
-		answer, answered := decision.Answers[thrift.NeededQuestion]
-		mark, decErr := thrift.Decide(i, answer.Noul, answered, thriftKeepAt)
-		if decErr != nil {
-			mark = thrift.Mark{Keep: true, Reason: "kept, unanswered"}
-		}
-		marks[i] = sift.Mark{Keep: mark.Keep, Reason: mark.Reason}
+	marks, err := judgeParagraphs(ctx, client, jevQuestions, &judged.CallsMade, &judged.CostUSD, parts, tool, command, task)
+	if err != nil {
+		return JudgedRow{}, JudgedSkip{Turn: turnID, Reason: err.Error()}, false
 	}
 	judgedText := renderJudgedCut(parts, marks)
 	if len(judgedText) >= len(content) {
@@ -155,6 +139,30 @@ func judgeOne(ctx context.Context, client *jev.Client, jevQuestions []jev.Questi
 		FixedTokens:  int64(len(fixed) / konst.SearchBytesPerToken),
 		ThriftTokens: int64(len(judgedText) / konst.SearchBytesPerToken),
 	}, JudgedSkip{}, true
+}
+
+func judgeParagraphs(ctx context.Context, client *jev.Client, jevQuestions []jev.Question, calls *int, cost *float64, parts []sift.Part, tool, command, task string) ([]sift.Mark, error) {
+	marks := make([]sift.Mark, len(parts))
+	for i, part := range parts {
+		state := thrift.BuildState(part.Text, i, len(parts), tool, command, task)
+		raw, err := json.Marshal(state)
+		if err != nil {
+			return nil, fmt.Errorf("state does not marshal: %w", err)
+		}
+		decision, err := client.Ask(ctx, jev.Request{State: raw, Questions: jevQuestions})
+		*calls++
+		if err != nil {
+			return nil, fmt.Errorf("jev.Ask: %w", err)
+		}
+		*cost += decision.Usage.Cost
+		answer, answered := decision.Answers[thrift.NeededQuestion]
+		mark, decErr := thrift.Decide(i, answer.Noul, answered, thriftKeepAt)
+		if decErr != nil {
+			mark = thrift.Mark{Keep: true, Reason: "kept, unanswered"}
+		}
+		marks[i] = sift.Mark{Keep: mark.Keep, Reason: mark.Reason}
+	}
+	return marks, nil
 }
 
 func renderJudgedCut(parts []sift.Part, marks []sift.Mark) string {
