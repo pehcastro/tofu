@@ -139,11 +139,11 @@ func allWildcards(tokens []globToken) bool {
 	return true
 }
 
-func overlap(a, b string) bool {
-	left, right := globTokens(normalizePath(a)), globTokens(normalizePath(b))
+func sharesAPath(a, b string) bool {
+	left, right := globTokens(a), globTokens(b)
 	memo := make(map[[2]int]bool, len(left)*len(right))
-	var sharesAPath func(i, j int) bool
-	sharesAPath = func(i, j int) bool {
+	var reaches func(i, j int) bool
+	reaches = func(i, j int) bool {
 		if known, seen := memo[[2]int{i, j}]; seen {
 			return known
 		}
@@ -154,20 +154,38 @@ func overlap(a, b string) bool {
 		case j == len(right):
 			answer = allWildcards(left[i:])
 		case left[i].kind == tokenTree:
-			answer = sharesAPath(i+1, j) || sharesAPath(i, j+1)
+			answer = reaches(i+1, j) || reaches(i, j+1)
 		case right[j].kind == tokenTree:
-			answer = sharesAPath(i, j+1) || sharesAPath(i+1, j)
+			answer = reaches(i, j+1) || reaches(i+1, j)
 		case left[i].kind == tokenSegment:
-			answer = sharesAPath(i+1, j) || (canEmitASegmentChar(right[j]) && sharesAPath(i, j+1))
+			answer = reaches(i+1, j) || (canEmitASegmentChar(right[j]) && reaches(i, j+1))
 		case right[j].kind == tokenSegment:
-			answer = sharesAPath(i, j+1) || (canEmitASegmentChar(left[i]) && sharesAPath(i+1, j))
+			answer = reaches(i, j+1) || (canEmitASegmentChar(left[i]) && reaches(i+1, j))
 		default:
-			answer = left[i].char == right[j].char && sharesAPath(i+1, j+1)
+			answer = left[i].char == right[j].char && reaches(i+1, j+1)
 		}
 		memo[[2]int{i, j}] = answer
 		return answer
 	}
-	return sharesAPath(0, 0)
+	return reaches(0, 0)
+}
+
+func globForms(glob string) []string {
+	if directory := strings.TrimSuffix(glob, "/**"); directory != glob {
+		return []string{glob, directory}
+	}
+	return []string{glob}
+}
+
+func overlap(a, b string) bool {
+	for _, left := range globForms(normalizePath(a)) {
+		for _, right := range globForms(normalizePath(b)) {
+			if sharesAPath(left, right) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func Matches(path string, owns []string) (bool, error) {
@@ -179,18 +197,7 @@ func Matches(path string, owns []string) (bool, error) {
 		if err := validGlob(glob); err != nil {
 			return false, err
 		}
-		normalized := normalizePath(glob)
-		if strings.HasSuffix(normalized, "/**") && target == strings.TrimSuffix(normalized, "/**") {
-			return true, nil
-		}
-		pattern := regexp.QuoteMeta(normalized)
-		pattern = strings.ReplaceAll(pattern, `\*\*`, `.*`)
-		pattern = strings.ReplaceAll(pattern, `\*`, `[^/]*`)
-		re, err := regexp.Compile("^" + pattern + "$")
-		if err != nil {
-			return false, err
-		}
-		if re.MatchString(target) {
+		if overlap(glob, target) {
 			return true, nil
 		}
 	}
