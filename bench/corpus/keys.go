@@ -28,10 +28,6 @@ var DeliberatelyUnread = []UnreadKey{
 	{"turn", "fork_kind", "session lineage: why the fork happened"},
 	{"turn", "fork_tokens_before", "session lineage: token count at the fork point"},
 	{"turn", "fork_tokens_after", "session lineage: token count after the fork"},
-	{"step", "prompt_tokens", "token accounting per step; no bench point reads it from the corpus yet"},
-	{"step", "completion_tokens", "token accounting per step; no bench point reads it from the corpus yet"},
-	{"step", "cache_read_tokens", "token accounting per step; no bench point reads it from the corpus, and bench/recall reads it from its own fixtures rather than through RecordedStep"},
-	{"step", "cache_write_tokens", "token accounting per step; no bench point reads it from the corpus yet"},
 	{"step", "cost_usd", "already summed into the turn's total_cost_usd, which is itself unread; see that entry"},
 	{"step", "occupancy", "context-window occupancy at the step; bench/recall reads this from its own fixtures, not RecordedStep"},
 	{"step", "bands", "context-window band split at the step; same as occupancy"},
@@ -66,6 +62,8 @@ func knownKeys(level string) map[string]bool {
 	case "step":
 		known := taggedKeys(reflect.TypeOf(RecordedStep{}))
 		known["assistanttext"] = true
+		known["prompttokens"] = true
+		known["completiontokens"] = true
 		return known
 	case "call":
 		return taggedKeys(reflect.TypeOf(RecordedCall{}))

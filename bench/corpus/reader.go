@@ -51,11 +51,15 @@ type RecordedMessage struct {
 }
 
 type RecordedStep struct {
-	Index         int            `json:"index"`
-	Attempt       int            `json:"attempt"`
-	ToolCalls     []RecordedCall `json:"tool_calls,omitempty"`
-	AssistantText string         `json:"assistant_text,omitempty"`
-	StopReason    string         `json:"stop_reason,omitempty"`
+	Index            int            `json:"index"`
+	Attempt          int            `json:"attempt"`
+	ToolCalls        []RecordedCall `json:"tool_calls,omitempty"`
+	AssistantText    string         `json:"assistant_text,omitempty"`
+	StopReason       string         `json:"stop_reason,omitempty"`
+	PromptTokens     int            `json:"prompt_tokens,omitempty"`
+	CompletionTokens int            `json:"completion_tokens,omitempty"`
+	CacheReadTokens  *int           `json:"cache_read_tokens,omitempty"`
+	CacheWriteTokens *int           `json:"cache_write_tokens,omitempty"`
 }
 
 func (s *RecordedStep) UnmarshalJSON(data []byte) error {
@@ -65,16 +69,24 @@ func (s *RecordedStep) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	*s = RecordedStep(lower)
-	if s.AssistantText != "" {
+	if s.AssistantText != "" && (s.PromptTokens != 0 || s.CompletionTokens != 0) {
 		return nil
 	}
 	var upper struct {
-		AssistantText string `json:"AssistantText"`
+		AssistantText    string `json:"AssistantText"`
+		PromptTokens     int    `json:"PromptTokens"`
+		CompletionTokens int    `json:"CompletionTokens"`
 	}
 	if err := json.Unmarshal(data, &upper); err != nil {
 		return err
 	}
-	s.AssistantText = upper.AssistantText
+	if s.AssistantText == "" {
+		s.AssistantText = upper.AssistantText
+	}
+	if s.PromptTokens == 0 && s.CompletionTokens == 0 {
+		s.PromptTokens = upper.PromptTokens
+		s.CompletionTokens = upper.CompletionTokens
+	}
 	return nil
 }
 
