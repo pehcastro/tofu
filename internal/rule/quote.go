@@ -1,13 +1,50 @@
 package rule
 
-import "strings"
+import (
+	"go/ast"
+	"go/parser"
+	"go/token"
+	"strings"
+)
 
 const indentedBlockWidth = 4
 
 func withoutQuotations(path string, lines []string) []string {
-	if !strings.HasSuffix(path, ".md") {
+	switch {
+	case strings.HasSuffix(path, ".md"):
+		return withoutMarkdownQuotations(lines)
+	case strings.HasSuffix(path, ".go"):
+		return withoutGoQuotations(lines)
+	default:
 		return lines
 	}
+}
+
+func withoutGoQuotations(lines []string) []string {
+	source := []byte(strings.Join(lines, "\n"))
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, "", source, parser.ParseComments)
+	if err != nil {
+		return lines
+	}
+	authored := append([]byte(nil), source...)
+	ast.Inspect(file, func(n ast.Node) bool {
+		lit, ok := n.(*ast.BasicLit)
+		if !ok || (lit.Kind != token.STRING && lit.Kind != token.CHAR) {
+			return true
+		}
+		offset := fset.Position(lit.Pos()).Offset
+		for i := offset; i < offset+len(lit.Value); i++ {
+			if authored[i] != '\n' {
+				authored[i] = ' '
+			}
+		}
+		return true
+	})
+	return strings.Split(string(authored), "\n")
+}
+
+func withoutMarkdownQuotations(lines []string) []string {
 	authored := make([]string, len(lines))
 	openFence := ""
 	previousBlank := true

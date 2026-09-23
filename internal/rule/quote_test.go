@@ -58,6 +58,34 @@ func TestTheQuotedExceptionSkipsAFenceAnIndentedBlockAndASpanAndKeepsProseAndABl
 	}
 }
 
+func TestGoQuotationsExemptAStringARuneAndARawStringButKeepAComment(t *testing.T) {
+	dash := string(rune(0x2014))
+	lines := []string{
+		"package p",
+		`const strLit = "a` + dash + `b"`,
+		"const runeLit = '" + dash + "'",
+		"const rawLit = `c" + dash + "d`",
+		"// comment" + dash + "here",
+		"var _ = strLit",
+		"var _ = runeLit",
+		"var _ = rawLit",
+	}
+	path := filepath.Join(t.TempDir(), "fixture.go")
+	if err := os.WriteFile(path, []byte(strings.Join(lines, "\n")), 0o644); err != nil {
+		t.Fatalf("writing fixture: %v", err)
+	}
+
+	got := strings.Join(emDashFindingLines(t, path, ExceptionQuoted), " ")
+	if got != ":5" {
+		t.Fatalf("with the exception on, the rule fired at %q, want only the comment on line 5", got)
+	}
+
+	naive := emDashFindingLines(t, path, ExceptionNone)
+	if len(naive) != 4 {
+		t.Fatalf("without the exception the rule fired %d times, want 4 (string, rune, raw string, comment), so the fixture no longer distinguishes the two arms: %v", len(naive), naive)
+	}
+}
+
 func TestTheShippedEmDashRuleDeclaresShadowAndTheQuotedException(t *testing.T) {
 	r, err := Load(filepath.Join("..", "..", "library", "general", "rules", "em_dash@1.yaml"))
 	if err != nil {
