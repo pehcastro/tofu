@@ -45,7 +45,7 @@ func uniqueSorted(keys []string) []string {
 
 type corpusVisitor func(schema, level string, obj map[string]json.RawMessage)
 
-func walkCalls(t *testing.T, callsRaw json.RawMessage, schema string, visit corpusVisitor) {
+func walkNamedCalls(t *testing.T, callsRaw json.RawMessage, schema, level string, visit corpusVisitor) {
 	t.Helper()
 	if len(callsRaw) == 0 {
 		return
@@ -55,7 +55,7 @@ func walkCalls(t *testing.T, callsRaw json.RawMessage, schema string, visit corp
 		t.Fatalf("tool_calls is not a JSON array: %v", err)
 	}
 	for _, callRaw := range calls {
-		visit(schema, "call", rawObject(t, callRaw))
+		visit(schema, level, rawObject(t, callRaw))
 	}
 }
 
@@ -71,7 +71,7 @@ func walkSteps(t *testing.T, stepsRaw json.RawMessage, schema string, visit corp
 	for _, stepRaw := range steps {
 		step := rawObject(t, stepRaw)
 		visit(schema, "step", step)
-		walkCalls(t, step["tool_calls"], schema, visit)
+		walkNamedCalls(t, step["tool_calls"], schema, "call", visit)
 	}
 }
 
@@ -94,7 +94,11 @@ func walkBody(t *testing.T, body []byte, schema string, visit corpusVisitor) {
 		case "step":
 			step := rawObject(t, entry.Body)
 			visit(schema, "step", step)
-			walkCalls(t, step["tool_calls"], schema, visit)
+			walkNamedCalls(t, step["tool_calls"], schema, "call", visit)
+		case "message":
+			message := rawObject(t, entry.Body)
+			visit(schema, "message", message)
+			walkNamedCalls(t, message["tool_calls"], schema, "message_call", visit)
 		}
 	}
 }
@@ -168,12 +172,12 @@ func TestTheReportCountsKeysCarriedAndKeysRead(t *testing.T) {
 			carried[schema][level+"."+strings.ToLower(key)] = true
 		}
 	})
-	readCount := len(knownKeys("turn")) + len(knownKeys("step")) + len(knownKeys("call"))
+	readCount := len(knownKeys("turn")) + len(knownKeys("step")) + len(knownKeys("call")) + len(knownKeys("message")) + len(knownKeys("message_call"))
 	for _, schema := range []string{"single file", "header and jsonl"} {
 		if len(carried[schema]) == 0 {
 			t.Logf("%s: no example on this machine", schema)
 			continue
 		}
-		t.Logf("%s: %d distinct keys carried across turn, step and call; the reader now reads %d of them", schema, len(carried[schema]), readCount)
+		t.Logf("%s: %d distinct keys carried across turn, step, call and message; the reader now reads %d of them", schema, len(carried[schema]), readCount)
 	}
 }

@@ -42,6 +42,9 @@ var DeliberatelyUnread = []UnreadKey{
 	{"call", "result_handle", "a pointer to an off-record artifact; no bench point reads it from the corpus yet"},
 	{"call", "child_id", "session lineage: a subagent spawned by this call"},
 	{"call", "parallel_batch", "which parallel batch a call belongs to; no bench point reads it from the corpus yet"},
+	{"message", "tool_outcome", "whether a tool message's own call succeeded; no bench point reads it from the corpus yet"},
+	{"message", "tool_result_bytes", "the size of a tool message's result before rendering; no bench point reads it from the corpus yet"},
+	{"message_call", "arguments", "the raw arguments an assistant message's tool call carried; no bench point reads it from the corpus yet"},
 }
 
 func taggedKeys(t reflect.Type) map[string]bool {
@@ -66,6 +69,10 @@ func knownKeys(level string) map[string]bool {
 		return known
 	case "call":
 		return taggedKeys(reflect.TypeOf(RecordedCall{}))
+	case "message":
+		return taggedKeys(reflect.TypeOf(RecordedMessage{}))
+	case "message_call":
+		return taggedKeys(reflect.TypeOf(RecordedToolCallName{}))
 	}
 	return nil
 }

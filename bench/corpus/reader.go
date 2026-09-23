@@ -38,6 +38,18 @@ type RecordedCall struct {
 	GateDecisionID string          `json:"gate_decision_id,omitempty"`
 }
 
+type RecordedToolCallName struct {
+	ID   string `json:"id,omitempty"`
+	Name string `json:"name,omitempty"`
+}
+
+type RecordedMessage struct {
+	Role       string                 `json:"role,omitempty"`
+	Content    string                 `json:"content,omitempty"`
+	ToolCallID string                 `json:"tool_call_id,omitempty"`
+	ToolCalls  []RecordedToolCallName `json:"tool_calls,omitempty"`
+}
+
 type RecordedStep struct {
 	Index         int            `json:"index"`
 	Attempt       int            `json:"attempt"`
@@ -67,17 +79,18 @@ func (s *RecordedStep) UnmarshalJSON(data []byte) error {
 }
 
 type RecordedTurn struct {
-	ID             string         `json:"id"`
-	Task           string         `json:"task"`
-	At             time.Time      `json:"at"`
-	Steps          []RecordedStep `json:"steps"`
-	WallClockMS    int64          `json:"wall_clock_ms"`
-	Outcome        string         `json:"outcome,omitempty"`
-	ContextCeiling int            `json:"context_ceiling,omitempty"`
-	ContextTarget  int            `json:"context_target,omitempty"`
-	AutoCompaction string         `json:"auto_compaction,omitempty"`
-	Budget         recall.Budget  `json:"budget,omitempty"`
-	Account        int64          `json:"account,omitempty"`
+	ID             string            `json:"id"`
+	Task           string            `json:"task"`
+	At             time.Time         `json:"at"`
+	Steps          []RecordedStep    `json:"steps"`
+	WallClockMS    int64             `json:"wall_clock_ms"`
+	Outcome        string            `json:"outcome,omitempty"`
+	ContextCeiling int               `json:"context_ceiling,omitempty"`
+	ContextTarget  int               `json:"context_target,omitempty"`
+	AutoCompaction string            `json:"auto_compaction,omitempty"`
+	Budget         recall.Budget     `json:"budget,omitempty"`
+	Account        int64             `json:"account,omitempty"`
+	Messages       []RecordedMessage `json:"-"`
 }
 
 func (t *RecordedTurn) UnmarshalJSON(data []byte) error {
@@ -133,6 +146,9 @@ func scrubTurn(recorded RecordedTurn) RecordedTurn {
 			call.GateDecisionID = Scrub(call.GateDecisionID)
 			recorded.Steps[i].ToolCalls[j] = call
 		}
+	}
+	for i, message := range recorded.Messages {
+		recorded.Messages[i].Content = Scrub(message.Content)
 	}
 	return recorded
 }
@@ -191,6 +207,12 @@ func ReadTurnDir(dir string) (RecordedTurn, error) {
 			}
 			step.Attempt = entry.Attempt
 			recorded.Steps = append(recorded.Steps, step)
+		case "message":
+			var message RecordedMessage
+			if err := json.Unmarshal(entry.Body, &message); err != nil {
+				return RecordedTurn{}, fmt.Errorf("bench/corpus: %s/body.jsonl message is not the expected shape: %w", dir, err)
+			}
+			recorded.Messages = append(recorded.Messages, message)
 		case "outcome":
 			if err := json.Unmarshal(entry.Body, &recorded); err != nil {
 				return RecordedTurn{}, fmt.Errorf("bench/corpus: %s/body.jsonl outcome is not the expected shape: %w", dir, err)
