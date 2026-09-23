@@ -626,6 +626,11 @@ func (s *appSession) run(ctx context.Context, pick tui.Pick, task string, emit t
 		emit(tui.Event{Kind: tui.EventNote, Text: spawnUnreadable})
 	}
 	opts.noSubAgents = maySpawn == 0
+	readBeforeEdit, readUnreadable := appSetting(s.dir, settingspkg.ReadBeforeEdit)
+	if readUnreadable != "" {
+		emit(tui.Event{Kind: tui.EventNote, Text: readUnreadable})
+	}
+	opts.readBeforeEdit = readBeforeEdit != 0
 	opened, err := s.open(opts)
 	if opened.held != nil {
 		defer opened.held.close()
@@ -634,7 +639,7 @@ func (s *appSession) run(ctx context.Context, pick tui.Pick, task string, emit t
 		fail(err)
 		return
 	}
-	built, plan, builtErr := buildRunTools(s.dir, opts.toolSet)
+	built, plan, builtErr := buildRunToolsReading(s.dir, opts.toolSet, opts.readBeforeEdit)
 	sessions, sessionsErr := sessionstore.Open()
 	if err := cmp.Or(builtErr, sessionsErr); err != nil {
 		fail(err)

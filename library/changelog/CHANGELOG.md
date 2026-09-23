@@ -10,6 +10,14 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 
 ## Unreleased
 
+### Changed
+
+- **`--no-crew` is now `--no-subagents`.** They are sub-agents everywhere: in the interface, in the settings, in the verbs and in what tofu writes to you. A script passing the old flag stops working and says the flag is unknown.
+
+### Added
+
+- **A setting decides whether a turn may spawn a sub-agent**, `turnMaySpawn`, on by default, in the settings pane under `turn`. It applies to a turn started in the app and to `tofu run` alike. **`--no-subagents` turns spawning off for one run whatever the setting says, and there is no flag that turns it on when the setting says off**, so the setting cannot be bypassed from the command line it is meant to constrain.
+
 ## 0.4.13 - 2026-09-23
 
 A file tofu reads cannot crash it, and you can tell it to ignore the house rules.

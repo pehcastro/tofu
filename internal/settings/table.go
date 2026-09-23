@@ -24,6 +24,7 @@ const (
 	DecisionCap            = "decisionCap"
 	ProjectInstructionsCap = "projectInstructionsCap"
 	TurnMaySpawn           = "turnMaySpawn"
+	ReadBeforeEdit         = "readBeforeEdit"
 )
 
 func DeclaredDefault(key string) int {
@@ -42,5 +43,6 @@ func Default() []Spec {
 		{Key: FoldHidesShell, Label: "the running line drops the shell count", Group: "chat", Kind: Bool, Default: 0, Restart: false},
 		{Key: ProjectInstructionsCap, Label: "bytes of your instruction files sent each turn, below one restores the default", Group: "turn", Kind: Int, Default: konst.ProjectInstructionsBytesDefault, Restart: true},
 		{Key: TurnMaySpawn, Label: "a turn may spawn a sub-agent", Group: "turn", Kind: Bool, Default: 1, Restart: true},
+		{Key: ReadBeforeEdit, Label: "an edit or a write to a file this turn has not read is refused", Group: "turn", Kind: Bool, Default: 1, Restart: true},
 	}
 }

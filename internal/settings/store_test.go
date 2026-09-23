@@ -69,6 +69,13 @@ func TestTheDecisionCapDefaultsToNoCap(t *testing.T) {
 	}
 }
 
+func TestTheReadBeforeEditSettingDefaultsToOn(t *testing.T) {
+	store, _, _ := openTemp(t)
+	if !store.Bool(ReadBeforeEdit) {
+		t.Fatal("readBeforeEdit default is off, want on: TOFU-510 measured the cost of on at 1.8 percent of edits")
+	}
+}
+
 func TestARestartRequiredSettingIsPendingOnlyAfterItChanges(t *testing.T) {
 	store, _, _ := openTemp(t)
 	if pending := store.RestartPending(); len(pending) != 0 {

@@ -13,7 +13,8 @@ import (
 )
 
 type ReadTool struct {
-	root Root
+	root   Root
+	ledger *ReadLedger
 }
 
 func NewReadTool(root string) (*ReadTool, error) {
@@ -22,6 +23,11 @@ func NewReadTool(root string) (*ReadTool, error) {
 		return nil, err
 	}
 	return &ReadTool{root: resolved}, nil
+}
+
+func (t *ReadTool) Reading(ledger *ReadLedger) *ReadTool {
+	t.ledger = ledger
+	return t
 }
 
 func (t *ReadTool) Name() string { return "read" }
@@ -78,6 +84,7 @@ func (t *ReadTool) Run(_ context.Context, raw json.RawMessage) (Result, error) {
 		return Result{}, fmt.Errorf("read: %w", err)
 	}
 	if args.StartLine <= 0 && args.EndLine <= 0 {
+		t.ledger.Mark(args.Path)
 		return Result{Content: repair + string(content), Command: "read " + args.Path}, nil
 	}
 
@@ -96,6 +103,7 @@ func (t *ReadTool) Run(_ context.Context, raw json.RawMessage) (Result, error) {
 		return Result{}, fmt.Errorf("read: %s end_line %d is before start_line %d", args.Path, end, start)
 	}
 	span := fmt.Sprintf("%s lines %d-%d of %d", args.Path, start, end, len(lines))
+	t.ledger.Mark(args.Path)
 	return Result{
 		Content: repair + span + "\n" + strings.Join(lines[start-1:end], "\n"),
 		Command: "read " + span,

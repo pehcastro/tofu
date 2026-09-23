@@ -21,6 +21,7 @@ import (
 	"tofu/internal/llm/models"
 	"tofu/internal/llm/wire/anthropic"
 	"tofu/internal/llm/wire/codex"
+	settingspkg "tofu/internal/settings"
 	"tofu/internal/transport"
 	"tofu/internal/turn"
 )
@@ -884,5 +885,116 @@ func TestTheTurnTransportConfigCarriesTheBackoffShapeAndACeiling(t *testing.T) {
 	}
 	if config.TotalWait <= 0 {
 		t.Fatal("the ceiling that closes the unbounded Retry-After wait is unset")
+	}
+}
+
+func toolByName(t *testing.T, built []turn.Tool, name string) turn.Tool {
+	t.Helper()
+	for _, tool := range built {
+		if tool.Name() == name {
+			return tool
+		}
+	}
+	t.Fatalf("no %s tool among %d built", name, len(built))
+	return nil
+}
+
+func TestTheLedgerIsOneAndSharedByReadEditAndWrite(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "note.txt"), []byte("a note\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	built, _, err := buildRunToolsReading(dir, toolSetFull, true)
+	if err != nil {
+		t.Fatalf("buildRunToolsReading: %v", err)
+	}
+	read, edit, write := toolByName(t, built, "read"), toolByName(t, built, "edit"), toolByName(t, built, "write")
+	ctx := context.Background()
+
+	if _, err := write.Run(ctx, json.RawMessage(`{"path":"note.txt","content":"blind overwrite"}`)); err == nil {
+		t.Fatal("a blind write to an existing file this turn never read must be refused")
+	}
+	if _, err := read.Run(ctx, json.RawMessage(`{"path":"note.txt"}`)); err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if _, err := edit.Run(ctx, json.RawMessage(`{"path":"note.txt","old_string":"a note","new_string":"an edited note"}`)); err != nil {
+		t.Fatalf("the read marked note.txt on the same ledger, so the edit must not be refused: %v", err)
+	}
+	if _, err := write.Run(ctx, json.RawMessage(`{"path":"note.txt","content":"a written note"}`)); err != nil {
+		t.Fatalf("the edit that just ran marks the ledger too, so the write must not be refused: %v", err)
+	}
+}
+
+func TestABlindEditIsRefusedAndTheRetryAfterAReadSucceedsWithTheRefusalsContent(t *testing.T) {
+	dir := t.TempDir()
+	original := "line one\nline two\n"
+	if err := os.WriteFile(filepath.Join(dir, "note.txt"), []byte(original), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	built, _, err := buildRunToolsReading(dir, toolSetFull, true)
+	if err != nil {
+		t.Fatalf("buildRunToolsReading: %v", err)
+	}
+	read, edit := toolByName(t, built, "read"), toolByName(t, built, "edit")
+	ctx := context.Background()
+	call := json.RawMessage(`{"path":"note.txt","old_string":"line one","new_string":"line ONE"}`)
+
+	_, err = edit.Run(ctx, call)
+	if err == nil {
+		t.Fatal("a blind edit on a file this turn never read must be refused")
+	}
+	if !strings.Contains(err.Error(), original) {
+		t.Fatalf("the refusal did not carry the file's own content, so a retry could not be built from it: %v", err)
+	}
+
+	if _, err := read.Run(ctx, json.RawMessage(`{"path":"note.txt"}`)); err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	result, err := edit.Run(ctx, call)
+	if err != nil {
+		t.Fatalf("the same turn's next attempt, informed by the refusal's content, must succeed: %v", err)
+	}
+	if !strings.Contains(result.Content, "line ONE") {
+		t.Fatalf("the successful edit's diff does not show the change: %q", result.Content)
+	}
+}
+
+func TestRunVerbResolvesReadBeforeEditFromSettings(t *testing.T) {
+	isolatedHomeAndProject(t)
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "note.txt"), []byte("a note\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	call := json.RawMessage(`{"path":"note.txt","old_string":"a note","new_string":"another note"}`)
+
+	on, unreadable := appSetting(dir, settingspkg.ReadBeforeEdit)
+	if unreadable != "" {
+		t.Fatalf("appSetting: %s", unreadable)
+	}
+	if on == 0 {
+		t.Fatal("readBeforeEdit must default to on for this test to prove anything")
+	}
+	built, _, err := buildRunToolsReading(dir, toolSetFull, on != 0)
+	if err != nil {
+		t.Fatalf("buildRunToolsReading: %v", err)
+	}
+	if _, err := toolByName(t, built, "edit").Run(context.Background(), call); err == nil {
+		t.Fatal("runVerb resolves readBeforeEdit through appSetting, on by default, and must refuse a blind edit")
+	}
+
+	var out, errOut bytes.Buffer
+	if code := settingsVerb([]string{"set", "readBeforeEdit", "false"}, &out, &errOut); code != exitOK {
+		t.Fatalf("settings set exited %d: %s", code, errOut.String())
+	}
+	off, unreadable := appSetting(dir, settingspkg.ReadBeforeEdit)
+	if unreadable != "" {
+		t.Fatalf("appSetting: %s", unreadable)
+	}
+	built, _, err = buildRunToolsReading(dir, toolSetFull, off != 0)
+	if err != nil {
+		t.Fatalf("buildRunToolsReading: %v", err)
+	}
+	if _, err := toolByName(t, built, "edit").Run(context.Background(), call); err != nil {
+		t.Fatalf("readBeforeEdit off must let the same blind edit through: %v", err)
 	}
 }

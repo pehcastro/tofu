@@ -556,6 +556,14 @@ func scratchProject(t *testing.T) string {
 	return dir
 }
 
+func disableReadBeforeEdit(t *testing.T) {
+	t.Helper()
+	var out, errOut bytes.Buffer
+	if code := settingsVerb([]string{"set", "readBeforeEdit", "false"}, &out, &errOut); code != exitOK {
+		t.Fatalf("settings set readBeforeEdit false exited %d: %s", code, errOut.String())
+	}
+}
+
 func writeNote(id string) llm.ToolCall {
 	return llm.ToolCall{ID: id, Name: "write", Arguments: json.RawMessage(`{"path":"note.txt","content":"a note"}`)}
 }
@@ -791,6 +799,45 @@ func TestATurnStartedInTheAppOffersSpawnWhenTurnMaySpawnIsOn(t *testing.T) {
 	}
 }
 
+func TestTheAppResolvesReadBeforeEditFromSettingsAndRefusesABlindEditByDefault(t *testing.T) {
+	dir := scratchProject(t)
+	if err := os.WriteFile(filepath.Join(dir, "note.txt"), []byte("a note\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	driver := driveApp(t)
+	model := &queuedModel{decisions: []llm.Decision{
+		{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{
+			callTo("call-1", "edit", `{"path":"note.txt","old_string":"a note","new_string":"another note"}`)}},
+		{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "done"},
+	}}
+	stubbedTurn(dir, model)(t.Context(), onTheSubscription, "edit the note", driver.emit)
+
+	results := driver.of(tui.EventToolResult)
+	if len(results) != 1 || !results[0].Failed {
+		t.Fatalf("the app resolves readBeforeEdit on by default and must refuse a blind edit: %+v", results)
+	}
+}
+
+func TestTheAppResolvesReadBeforeEditOffAndAllowsTheSameBlindEdit(t *testing.T) {
+	dir := scratchProject(t)
+	disableReadBeforeEdit(t)
+	if err := os.WriteFile(filepath.Join(dir, "note.txt"), []byte("a note\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	driver := driveApp(t)
+	model := &queuedModel{decisions: []llm.Decision{
+		{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{
+			callTo("call-1", "edit", `{"path":"note.txt","old_string":"a note","new_string":"another note"}`)}},
+		{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "done"},
+	}}
+	stubbedTurn(dir, model)(t.Context(), onTheSubscription, "edit the note", driver.emit)
+
+	results := driver.of(tui.EventToolResult)
+	if len(results) != 1 || results[0].Failed {
+		t.Fatalf("readBeforeEdit off must let the app's blind edit through: %+v", results)
+	}
+}
+
 func TestATurnStartedInTheAppDoesNotOfferSpawnWhenTurnMaySpawnIsOff(t *testing.T) {
 	dir := scratchProject(t)
 	var out, errOut bytes.Buffer
@@ -974,6 +1021,7 @@ func TestEveryToolSaysWhetherItFailedAndHowBigItsResultWas(t *testing.T) {
 	} {
 		t.Run(one.tool, func(t *testing.T) {
 			dir := scratchProject(t)
+			disableReadBeforeEdit(t)
 			if err := os.WriteFile(filepath.Join(dir, "note.txt"), []byte(note), 0o644); err != nil {
 				t.Fatal(err)
 			}
@@ -1038,6 +1086,7 @@ func editsKey() tea.KeyPressMsg { return tea.KeyPressMsg{Code: '3', Mod: tea.Mod
 
 func TestARealEditReachesTheFileEditsViewAndLeavesOneRowBehind(t *testing.T) {
 	dir := scratchProject(t)
+	disableReadBeforeEdit(t)
 	if err := os.WriteFile(filepath.Join(dir, "note.txt"), []byte("a note\nand another\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -1128,6 +1177,7 @@ func TestACreatedFileShowsEveryLineItWroteMarkedAsAdded(t *testing.T) {
 
 func TestAWholeReplacementShowsItsDiffRatherThanItsContent(t *testing.T) {
 	dir := scratchProject(t)
+	disableReadBeforeEdit(t)
 	if err := os.WriteFile(filepath.Join(dir, "note.txt"), []byte("a note\nand another\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}

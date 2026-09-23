@@ -86,6 +86,7 @@ type runOpts struct {
 	showPrompt       bool
 	gateArm          string
 	noSubAgents      bool
+	readBeforeEdit   bool
 	doneArm          string
 	model            string
 	toolSet          string
@@ -188,6 +189,10 @@ Arguments:
   --no-subagents        run without the spawn tool for this run, no matter what
                         the turnMaySpawn setting says; there is no flag that
                         turns spawning on when that setting says off
+                        the readBeforeEdit setting, on by default, refuses an
+                        edit or a write to a file this turn has not read;
+                        there is no flag for it, set it with
+                        tofu settings set readBeforeEdit false
   --no-instructions     the arm that %s
   --done-review <arm>          the arm that reviews a child's answer
   --max-steps <n>              cap the steps a turn takes, unset means no cap
@@ -220,6 +225,11 @@ func runVerb(args []string, out, errOut io.Writer) int {
 		}
 		opts.noSubAgents = maySpawn == 0
 	}
+	readBeforeEdit, readUnreadable := appSetting(cmp.Or(opts.dir, "."), settingspkg.ReadBeforeEdit)
+	if readUnreadable != "" {
+		_, _ = fmt.Fprintln(errOut, "tofu run: "+readUnreadable)
+	}
+	opts.readBeforeEdit = readBeforeEdit != 0
 	if opts.showPrompt {
 		return showPrompt(opts, out, errOut)
 	}
@@ -232,7 +242,7 @@ func runVerb(args []string, out, errOut io.Writer) int {
 		return runFail(errOut, err)
 	}
 
-	built, _, err := buildRunTools(opts.dir, opts.toolSet)
+	built, _, err := buildRunToolsReading(opts.dir, opts.toolSet, opts.readBeforeEdit)
 	if err != nil {
 		return runFail(errOut, err)
 	}
@@ -618,19 +628,29 @@ func runSystem(opts runOpts) string {
 }
 
 func buildRunTools(dir, set string) ([]turn.Tool, *tools.Plan, error) {
+	return buildRunToolsReading(dir, set, false)
+}
+
+func buildRunToolsReading(dir, set string, readBeforeEdit bool) ([]turn.Tool, *tools.Plan, error) {
 	readTool, readErr := turn.NewReadTool(dir)
 	writeTool, writeErr := turn.NewWriteTool(dir)
 	bashTool, bashErr := turn.NewBashTool(dir)
 	if err := cmp.Or(readErr, writeErr, bashErr); err != nil {
 		return nil, nil, err
 	}
+	var ledger *turn.ReadLedger
+	if readBeforeEdit {
+		ledger = turn.NewReadLedger()
+	}
+	read := readTool.Reading(ledger)
+	write := writeTool.Reading(ledger)
 	checked, checkErr := tools.Checked(dir, []turn.Tool{bashTool})
 	if checkErr != nil {
 		return nil, nil, checkErr
 	}
 	shell := checked[0]
 	if set == toolSetThree {
-		return tools.NewMemo().Wrap([]turn.Tool{readTool, writeTool, shell}), nil, nil
+		return tools.NewMemo().Wrap([]turn.Tool{read, write, shell}), nil, nil
 	}
 	globTool, globErr := tools.NewGlob(dir)
 	searchTool, searchErr := tools.NewSearch(dir)
@@ -647,7 +667,7 @@ func buildRunTools(dir, set string) ([]turn.Tool, *tools.Plan, error) {
 		return nil, nil, webErr
 	}
 	plan := tools.NewPlan()
-	full := append([]turn.Tool{readTool, writeTool, shell, plan, projectTool, globTool, searchTool, symbolsTool, editTool, githubTool}, verbTools...)
+	full := append([]turn.Tool{read, write, shell, plan, projectTool, globTool, searchTool, symbolsTool, editTool.Reading(ledger), githubTool}, verbTools...)
 	return tools.NewMemo().Wrap(append(full, webTools...)), plan, nil
 }
 

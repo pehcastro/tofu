@@ -126,7 +126,8 @@ func buildTools(dir string) (iturn.Registry, error) {
 	if err != nil {
 		return iturn.Registry{}, err
 	}
-	return iturn.NewRegistry(readTool, writeTool, bashTool), nil
+	ledger := iturn.NewReadLedger()
+	return iturn.NewRegistry(readTool.Reading(ledger), writeTool.Reading(ledger), bashTool), nil
 }
 
 func statsFor(taskName, armName string, runs []RunResult) TaskArmStats {
