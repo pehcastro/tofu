@@ -188,7 +188,7 @@ footer{margin-top:60px;color:var(--muted-foreground);font-size:.8125rem}
 <div class="cards" style="--cols:5">
 <div class="card"><div class="card-header"><p class="card-description">Compared</p></div><div class="card-content"><p class="card-title"><span class="fig" data-figure="5 of 8 decisions">5 of 8 decisions</span></p><p class="card-description">a cheaper method measured beside Jev</p></div></div>
 <div class="card"><div class="card-header"><p class="card-description">Not compared</p></div><div class="card-content"><p class="card-title"><span class="fig" data-figure="3 of 8 decisions">3 of 8 decisions</span></p><p class="card-description">no usable score on one side</p></div></div>
-<div class="card"><div class="card-header"><p class="card-description">Switched on</p></div><div class="card-content"><p class="card-title"><span class="fig" data-figure="3 of 9 decision points">3 of 9 decision points</span></p><p class="card-description">read from library/decisions/methods@1.yaml</p></div></div>
+<div class="card"><div class="card-header"><p class="card-description">Switched on</p></div><div class="card-content"><p class="card-title"><span class="fig" data-figure="3 of 10 decision points">3 of 10 decision points</span></p><p class="card-description">read from library/decisions/methods@1.yaml</p></div></div>
 <div class="card"><div class="card-header"><p class="card-description">Jev, paid per decision</p></div><div class="card-content"><p class="card-title"><span class="fig" data-figure="$0.000041">$0.000041</span></p><p class="card-description">per correct decision, 6 case battery, 2026-09-18</p></div></div>
 <div class="card"><div class="card-header"><p class="card-description">Jev, median latency</p></div><div class="card-content"><p class="card-title"><span class="fig" data-figure="344 ms">344 ms</span></p><p class="card-description">median of 7 calls, 2026-09-21</p></div></div>
 </div>
@@ -226,7 +226,7 @@ footer{margin-top:60px;color:var(--muted-foreground);font-size:.8125rem}
 </div>
 <div role="tabpanel" class="tab-content" id="panel-decides" aria-labelledby="tab-decides" tabindex="0" hidden>
 <h2>What decides what when you run tofu, and what it costs</h2>
-<p class="lede"><span class="fig" data-figure="3 of 9 decision points">3 of 9 decision points</span> decide anything when you run tofu today, read from <code>library/decisions/methods@1.yaml</code>.</p>
+<p class="lede"><span class="fig" data-figure="3 of 10 decision points">3 of 10 decision points</span> decide anything when you run tofu today, read from <code>library/decisions/methods@1.yaml</code>.</p>
 <div class="table-container"><table class="table">
 <caption class="table-caption">One row per decision point, what decides it now, and what that costs a session.</caption>
 <thead><tr class="table-row"><th class="table-head">What decides</th><th class="table-head">Switched on</th><th class="table-head">What it costs</th><th class="table-head">Why</th><th class="table-head">Called by</th></tr></thead>
@@ -258,17 +258,52 @@ footer{margin-top:60px;color:var(--muted-foreground);font-size:.8125rem}
 <tr class="table-row"><td class="table-cell"><code>spawn_gate</code><span class="detail"><code>none</code></span></td><td class="table-cell"><span class="badge" data-variant="outline">not wired</span></td><td class="table-cell"><blockquote>nothing, and no call is made<cite>library/decisions/methods@1.yaml</cite></blockquote>
 </td><td class="table-cell"><blockquote>nothing is measured, and it waits on one recorded parent and child<cite>library/decisions/methods@1.yaml</cite></blockquote>
 </td><td class="table-cell"><code></code></td></tr>
+<tr class="table-row"><td class="table-cell"><code>thrift</code><span class="detail"><code>bench/thrift/report-2026-09-23.md, 393 live calls, $0.040968, all 8 sampled results under the truncation cap so fixed truncation never fired on them, thrift cut 1.9 percent of their tokens anyway, no result over the cap judged yet</code></span></td><td class="table-cell"><span class="badge" data-variant="outline">not wired</span></td><td class="table-cell"><blockquote>nothing, and no call is made<cite>library/decisions/methods@1.yaml</cite></blockquote>
+</td><td class="table-cell"><blockquote>the point reads library/questions/config/thrift_rule@1.yaml directly, which ships mode off, and nothing is cut until a measurement moves it<cite>library/decisions/methods@1.yaml</cite></blockquote>
+</td><td class="table-cell"><code></code></td></tr>
 </tbody></table></div>
 </div>
 <div role="tabpanel" class="tab-content" id="panel-reports" aria-labelledby="tab-reports" tabindex="0" hidden>
 <h2>Every dated report under bench/, newest first</h2>
 <div class="cards" style="--cols:5">
-<div class="card"><div class="card-header"><p class="card-description">Written up</p></div><div class="card-content"><p class="card-title"><span class="fig" data-figure="31 dated reports">31 dated reports</span></p><p class="card-description">one file each, under bench/</p></div></div>
-<div class="card"><div class="card-header"><p class="card-description">Benches measuring</p></div><div class="card-content"><p class="card-title"><span class="fig" data-figure="22 of 28">22 of 28</span></p><p class="card-description">the rest are named below, not hidden</p></div></div>
-<div class="card"><div class="card-header"><p class="card-description">Withdrawn</p></div><div class="card-content"><p class="card-title"><span class="fig" data-figure="5 of 31">5 of 31</span></p><p class="card-description">struck rather than deleted</p></div></div>
-<div class="card"><div class="card-header"><p class="card-description">Stale</p></div><div class="card-content"><p class="card-title"><span class="fig" data-figure="1 of 31">1 of 31</span></p><p class="card-description">measured against a corpus that moved</p></div></div>
-<div class="card"><div class="card-header"><p class="card-description">Naming no answer</p></div><div class="card-content"><p class="card-title"><span class="fig" data-figure="8 of 31">8 of 31</span></p><p class="card-description">no heading names the file&#39;s own conclusion</p></div></div>
+<div class="card"><div class="card-header"><p class="card-description">Written up</p></div><div class="card-content"><p class="card-title"><span class="fig" data-figure="35 dated reports">35 dated reports</span></p><p class="card-description">one file each, under bench/</p></div></div>
+<div class="card"><div class="card-header"><p class="card-description">Benches measuring</p></div><div class="card-content"><p class="card-title"><span class="fig" data-figure="23 of 29">23 of 29</span></p><p class="card-description">the rest are named below, not hidden</p></div></div>
+<div class="card"><div class="card-header"><p class="card-description">Withdrawn</p></div><div class="card-content"><p class="card-title"><span class="fig" data-figure="5 of 35">5 of 35</span></p><p class="card-description">struck rather than deleted</p></div></div>
+<div class="card"><div class="card-header"><p class="card-description">Stale</p></div><div class="card-content"><p class="card-title"><span class="fig" data-figure="1 of 35">1 of 35</span></p><p class="card-description">measured against a corpus that moved</p></div></div>
+<div class="card"><div class="card-header"><p class="card-description">Naming no answer</p></div><div class="card-content"><p class="card-title"><span class="fig" data-figure="9 of 35">9 of 35</span></p><p class="card-description">no heading names the file&#39;s own conclusion</p></div></div>
 </div>
+<details><summary>harness, 2026-09-23 <span class="path">bench/harness/report-2026-09-23.md</span></summary>
+<h3>What it found, in the report's own words</h3>
+<blockquote>Against who. Claude Code 2.1.280 driving claude -p on opus, and Codex CLI 0.155.1 driving codex exec on gpt-5.6-sol.<cite>bench/harness/report-2026-09-23.md</cite></blockquote>
+<h3>What it rests on</h3>
+<blockquote>one task, the v1 hono seed of 5 files, one repeat per arm, three arms live on the owner&#39;s subscriptions, between 05:42 and 05:52 local time<cite>bench/harness/report-2026-09-23.md</cite></blockquote>
+<blockquote>Skipped: 8 tests skipped in bench/harness and bench/cmd, all gated behind an environment variable: three live arm tests, two subprocess helpers, two writer gated recorders and the live API test<cite>bench/harness/report-2026-09-23.md</cite></blockquote>
+<span class="badge" data-variant="outline">built from prose</span>
+</details>
+<details><summary>search, 2026-09-23 <span class="path">bench/search/report-2026-09-23.md</span></summary>
+<h3>What it found, in the report's own words</h3>
+<blockquote>The plan&#39;s claim that four search patterns cost nothing is false as written, and the rescue rate on recorded searches is zero.<cite>bench/search/report-2026-09-23.md</cite></blockquote>
+<h3>What it rests on</h3>
+<blockquote>23 recorded search tool calls read out of .tofu/sessions at run time, 20 replayed against the tracked tree of 1513 files, 3 skipped because the recorded path is gone; cost measured 5 runs each, median<cite>bench/search/report-2026-09-23.md</cite></blockquote>
+<blockquote>Skipped: 1 entry under .tofu/sessions that is not a turn, 3 of 23 rows whose recorded path is gone, each logged with its turn id; every test skips with a stated reason when .tofu/sessions is absent<cite>bench/search/report-2026-09-23.md</cite></blockquote>
+<span class="badge" data-variant="outline">built from prose</span>
+</details>
+<details><summary>sift, 2026-09-23 <span class="path">bench/sift/report-2026-09-23.md</span></summary>
+<h3>What it found, in the report's own words</h3>
+<blockquote>shell_sift is live. The ledger carries 13 real shell_sift decisions, all from one turn, and this report measures them instead of guessing from TOFU-217.<cite>bench/sift/report-2026-09-23.md</cite></blockquote>
+<h3>What it rests on</h3>
+<blockquote>13 shell_sift rows out of 3,039 in .tofu/log, all from one turn and two shell tool calls; the byte and session figures beside them are re-run over 110 recorded sessions<cite>bench/sift/report-2026-09-23.md</cite></blockquote>
+<blockquote>Skipped: 1 entry under .tofu/sessions that is not a turn, logged as HEAD, not a .json file; the live route tests skip unless TOFU_LIVE is set<cite>bench/sift/report-2026-09-23.md</cite></blockquote>
+<span class="badge" data-variant="outline">built from prose</span>
+</details>
+<details><summary>thrift, 2026-09-23 <span class="path">bench/thrift/report-2026-09-23.md</span></summary>
+<h3>What it found, in the report's own words</h3>
+<blockquote>unparsed: no heading in this file names its own answer<cite>bench/thrift/report-2026-09-23.md</cite></blockquote>
+<h3>What it rests on</h3>
+<blockquote>110 recorded sessions read out of 111 entries, 119 stored artifact handles, and 8 read and search results judged live inside a 400 call cap with 31 skipped<cite>bench/thrift/report-2026-09-23.md</cite></blockquote>
+<blockquote>Skipped: 1 entry under .tofu/sessions that is not a turn; 31 live calls skipped, each named with its reason: a result not split into more than one paragraph, or a paragraph count that would exceed the live call cap<cite>bench/thrift/report-2026-09-23.md</cite></blockquote>
+<span class="badge" data-variant="outline">built from prose</span>
+</details>
 <details><summary>forkcache, 2026-09-22 <span class="path">bench/forkcache/report-2026-09-22.txt</span><span class="badge" data-variant="secondary">withdrawn in part</span></summary>
 <blockquote>the estimator section only, withdrawn by the board entry of 2026-09-22 in .local/boji/tickets/BOARD.md and not by the file. Two of its rows compare numbers taken from two different conversations, so that section does not measure the estimator against the provider. Both rows are quoted below with the sentence that introduces them, because the rows are where the figures are and a withdrawal that quotes only the lead-in leaves them standing. Every other section of the file stands.<cite>withdrawn in part, said by bench/report/withdrawals.json</cite></blockquote>
 <h3>What it found, in the report's own words</h3>

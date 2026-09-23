@@ -42,7 +42,7 @@ Read from `bench/harness/report-2026-09-22.md`.
 
 ## What decides what today
 
-3 of 9 decision points decide anything when you run tofu today, read from `library/decisions/methods@1.yaml`.
+3 of 10 decision points decide anything when you run tofu today, read from `library/decisions/methods@1.yaml`.
 
 | What decides | Switched on | What it costs | Why | Called by | Measured |
 |---|---|---|---|---|---|
@@ -55,6 +55,7 @@ Read from `bench/harness/report-2026-09-22.md`.
 | `tool_gate` | not wired | nothing, and no call is made | the 178 case set carries no free arm, and the 6 of 6 a regular expression scored was over six cases written by something that could see all six | not stated | bench/cost/report-2026-09-19.md |
 | `instruction_trust` | not wired | nothing, and no call is made | nothing is measured | not stated | none |
 | `spawn_gate` | not wired | nothing, and no call is made | nothing is measured, and it waits on one recorded parent and child | not stated | none |
+| `thrift` | not wired | nothing, and no call is made | the point reads library/questions/config/thrift_rule@1.yaml directly, which ships mode off, and nothing is cut until a measurement moves it | not stated | bench/thrift/report-2026-09-23.md, 393 live calls, $0.040968, all 8 sampled results under the truncation cap so fixed truncation never fired on them, thrift cut 1.9 percent of their tokens anyway, no result over the cap judged yet |
 
 ## Which decisions Jev wins, which it loses, and by how much
 
@@ -77,10 +78,14 @@ Why the rest are not compared:
 
 ## Every dated report, newest first
 
-31 dated reports over 22 benches. 6 benches carry none. 5 are withdrawn whole or in part, 1 is stale, and 8 reports name no conclusion a reader can find. A withdrawal declared from outside a report lives in `bench/report/withdrawals.json`; every other state is declared by the report's own first lines.
+35 dated reports over 23 benches. 6 benches carry none. 5 are withdrawn whole or in part, 1 is stale, and 9 reports name no conclusion a reader can find. A withdrawal declared from outside a report lives in `bench/report/withdrawals.json`; every other state is declared by the report's own first lines.
 
 | Bench | Date | Report | What it found | Sample | State |
 |---|---|---|---|---|---|
+| harness | 2026-09-23 | `bench/harness/report-2026-09-23.md` | Against who. Claude Code 2.1.280 driving claude -p on opus, and Codex CLI 0.155.1 driving codex exec on gpt-5.6-sol. | one task, the v1 hono seed of 5 files, one repeat per arm, three arms live on the owner's subscriptions, between 05:42 and 05:52 local time | stands |
+| search | 2026-09-23 | `bench/search/report-2026-09-23.md` | The plan's claim that four search patterns cost nothing is false as written, and the rescue rate on recorded searches is zero. | 23 recorded search tool calls read out of .tofu/sessions at run time, 20 replayed against the tracked tree of 1513 files, 3 skipped because the recorded path is gone; cost measured 5 runs each, median | stands |
+| sift | 2026-09-23 | `bench/sift/report-2026-09-23.md` | shell_sift is live. The ledger carries 13 real shell_sift decisions, all from one turn, and this report measures them instead of guessing from TOFU-217. | 13 shell_sift rows out of 3,039 in .tofu/log, all from one turn and two shell tool calls; the byte and session figures beside them are re-run over 110 recorded sessions | stands |
+| thrift | 2026-09-23 | `bench/thrift/report-2026-09-23.md` | unparsed: no heading in this file names its own answer | 110 recorded sessions read out of 111 entries, 119 stored artifact handles, and 8 read and search results judged live inside a 400 call cap with 31 skipped | stands |
 | forkcache | 2026-09-22 | `bench/forkcache/report-2026-09-22.txt` | The first request after a context fork READS cache and writes none. On both recorded forks it read the whole cacheable head and paid zero cache write. | 2 recorded context forks | withdrawn in part |
 | harness | 2026-09-22 | `bench/harness/report-2026-09-22.md` | unparsed: no heading in this file names its own answer | 4 recorded rows, 3 of them carrying a turn count and a wall clock, plus a 3-repeat fixture that fixes the output shape | stands |
 | picker | 2026-09-22 | `bench/picker/report-2026-09-22.txt` | The corpus cannot separate the three arms. There are zero recorded window readings in .tofu, over zero distinct accounts, so first usable, round robin and headroom make the same choice at every decision point there is, which is none. | 404 files and 18,401 rows read, 0 readings over 0 distinct accounts | stands |
@@ -133,4 +138,4 @@ Why the rest are not compared:
 
 ### Where these reports came from
 
-4 of 31 reports are built by running the package's own code again and 27 of 31 from the markdown's own text, which is weaker evidence, and every one of those says so.
+4 of 35 reports are built by running the package's own code again and 31 of 35 from the markdown's own text, which is weaker evidence, and every one of those says so.

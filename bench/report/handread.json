@@ -246,5 +246,37 @@
     "from": "prose",
     "sample": "109 recorded sessions, 51 reverts and 48 contradictions",
     "skips": "82 of 109 sessions carry no shape at all, and one session holds 17 of the 51 reverts"
+  },
+  {
+    "report": "bench/harness/report-2026-09-23.md",
+    "figure": "19",
+    "says": "All three arms ran live on the v1 hono task, one repeat each, asked for thinking effort medium on their own command lines. Claude scored 19 of 19 checklist items, codex 19 of 19, tofu 18 of 19. Every figure is one sample and none is a median or a win. Tofu's single miss is checklist item 20: GET / still works in its tree, its tests live in a different file, and none of them requests the root, so the checker finds no test for it. The run found three harness defects first: the runner refused to execute the vendor arms at all, staging deleted the arm's git repository so every diff reading gate returned could not evaluate, and the tofu arm was being handed this repository's own CLAUDE.md, which begins with an instruction not to write code. Only the openrouter key moved money, $0.001171, all of it jev gate decisions.",
+    "from": "prose",
+    "sample": "one task, the v1 hono seed of 5 files, one repeat per arm, three arms live on the owner's subscriptions, between 05:42 and 05:52 local time",
+    "skips": "8 tests skipped in bench/harness and bench/cmd, all gated behind an environment variable: three live arm tests, two subprocess helpers, two writer gated recorders and the live API test"
+  },
+  {
+    "report": "bench/thrift/report-2026-09-23.md",
+    "figure": "1.9",
+    "says": "A judged cut over a read or search result was measured live against fixed truncation, 393 Jev calls for $0.040968, and it removed 402 of 21,569 tokens, 1.9 percent. TOFU-338 measured a mechanical pass at 1.5 percent of recorded result bytes, so the judgment clears that floor and does not clear it widely. The arm it is compared against did not fire on this sample: all 8 measured results are under the 32,768 byte truncation cap and the largest is 12,793 bytes, so the 1.9 percent came off results fixed truncation would have passed through whole. 9 of 39 stored read and search artifacts in the corpus exceed the cap and none fell inside the live call budget, so the arm-firing comparison cannot be made on this sample. Three arms over the corpus total read neither 570,999 tokens, rtk alone 458,199, rtk with the judged cut 457,797, and the last term is not extrapolated past the 8 calls actually judged. Task outcome was not measured, so fewer tokens with the same outcome is not claimed. The point ships off.",
+    "from": "prose",
+    "sample": "110 recorded sessions read out of 111 entries, 119 stored artifact handles, and 8 read and search results judged live inside a 400 call cap with 31 skipped",
+    "skips": "1 entry under .tofu/sessions that is not a turn; 31 live calls skipped, each named with its reason: a result not split into more than one paragraph, or a paragraph count that would exceed the live call cap"
+  },
+  {
+    "report": "bench/sift/report-2026-09-23.md",
+    "figure": "13",
+    "says": "The shell sift is live and the ledger carries 13 real shell_sift decisions, so the report measures them instead of deriving from TOFU-217. They cost p50 361 ms, p95 524 ms, worst 722 ms, and $0.000431 in total, every figure read off the latency_ms and cost fields of the recorded rows rather than a rate card. 9 of the 13 cut the shell chunk and 4 left it whole, counted against the shipped keep_at of 0.50. TOFU-217 predicted $0.0000303 per decision and the measured median is $0.0000331, 9 percent above, so the prediction is kept only as the comparison. The 13 decisions are not 13 independent calls: they come from two shell tool calls inside one turn, turn-18d7e7074db17e6c, so there is no session to session spread and no real tail. The report says that in its own words and concludes that thirteen is not enough to decide whether the point behaves the same way on the next hundred.",
+    "from": "prose",
+    "sample": "13 shell_sift rows out of 3,039 in .tofu/log, all from one turn and two shell tool calls; the byte and session figures beside them are re-run over 110 recorded sessions",
+    "skips": "1 entry under .tofu/sessions that is not a turn, logged as HEAD, not a .json file; the live route tests skip unless TOFU_LIVE is set"
+  },
+  {
+    "report": "bench/search/report-2026-09-23.md",
+    "figure": "0",
+    "says": "Running four candidate search patterns over the whole tree costs 320 ms against 14 ms for the literal, so the plan's claim that they cost nothing is false as written and the first implementation spent 638 ms of candidate scan on an 819 ms call. Each form now runs only where it can change the answer: the word boundary and go symbol forms match a subset of the literal, so they are free at 11 ms of a 165 ms call against 131 ms spent reading files. Telling an absence from a wrong pattern is not free, about 590 ms against 150 ms, roughly 3.5x. Over 20 replayed recorded searches, 6 returned nothing and a candidate form rescued 0 of them: not one was a case error. What it buys is the other half, 30 percent of real searches now saying absence rather than being ambiguous. The self answer check caught four leaks across two rounds, including the bench's own test file answering a recorded pattern.",
+    "from": "prose",
+    "sample": "23 recorded search tool calls read out of .tofu/sessions at run time, 20 replayed against the tracked tree of 1513 files, 3 skipped because the recorded path is gone; cost measured 5 runs each, median",
+    "skips": "1 entry under .tofu/sessions that is not a turn, 3 of 23 rows whose recorded path is gone, each logged with its turn id; every test skips with a stated reason when .tofu/sessions is absent"
   }
 ]
