@@ -1407,3 +1407,19 @@ func TestSessionVerdictNamesEveryLedgerVerdict(t *testing.T) {
 		}
 	}
 }
+
+func TestTheCrewBarFollowsTheCapTheTurnWasGiven(t *testing.T) {
+	call := llm.ToolCall{ID: "call", Name: "spawn", Arguments: json.RawMessage(`{"task":"do it","owns":["x"]}`)}
+	for _, one := range []struct{ maxSteps, total int }{{0, konst.TurnMaxSteps}, {12, 12}} {
+		watch := &appWatcher{
+			emit:     func(tui.Event) {},
+			now:      time.Now,
+			maxSteps: one.maxSteps,
+			spawner:  turn.NewSpawnTool("parent", turn.Config{}, nil),
+		}
+		watch.childStarted(call)
+		if got := watch.children[0].child.Total; got != one.total {
+			t.Fatalf("a bar under a cap of %d draws %d steps, want %d", one.maxSteps, got, one.total)
+		}
+	}
+}

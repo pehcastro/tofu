@@ -594,6 +594,10 @@ func (s *appSession) run(ctx context.Context, wire, task string, emit tui.Called
 		fail(imagesErr)
 		return
 	}
+	maxSteps, unreadable := appSetting(s.dir, settingspkg.DecisionCap)
+	if unreadable != "" {
+		emit(tui.Event{Kind: tui.EventNote, Text: unreadable})
+	}
 	opts := runOpts{
 		dir:              s.dir,
 		task:             task,
@@ -602,7 +606,7 @@ func (s *appSession) run(ctx context.Context, wire, task string, emit tui.Called
 		toolSet:          toolSetFull,
 		loopGuardRepeats: konst.TurnLoopGuardRepeats,
 		loopGuardWindow:  konst.TurnLoopGuardWindow,
-		maxSteps:         appSetting(s.dir, settingspkg.DecisionCap),
+		maxSteps:         maxSteps,
 	}
 	opened, err := s.open(opts)
 	if opened.held != nil {
@@ -648,7 +652,7 @@ func (s *appSession) run(ctx context.Context, wire, task string, emit tui.Called
 		fail(budgetErr)
 		return
 	}
-	watch := &appWatcher{gate: gate, emit: emit, now: s.now, turnID: opts.turnID, seen: s.shown}
+	watch := &appWatcher{gate: gate, emit: emit, now: s.now, turnID: opts.turnID, seen: s.shown, maxSteps: opts.maxSteps}
 	opened.held.wrap = func(model turn.Model) (turn.Model, error) {
 		asked, guardErr := guarded(model, budget)
 		if guardErr != nil {
@@ -834,6 +838,7 @@ type appWatcher struct {
 	emit      tui.CalledFromInsideTheTurnAndNeverAfterItReturns
 	now       func() time.Time
 	turnID    string
+	maxSteps  int
 	seen      map[string]bool
 	wrote     map[string]string
 	in        int
@@ -933,7 +938,7 @@ func (a *appWatcher) childStarted(call llm.ToolCall) {
 		return
 	}
 	a.children = append(a.children, watchedChild{
-		child:   crew.Child{Name: "c" + strconv.Itoa(len(a.children)+1), Owns: args.Owns, Doing: args.Task, Total: konst.TurnMaxSteps},
+		child:   crew.Child{Name: "c" + strconv.Itoa(len(a.children)+1), Owns: args.Owns, Doing: args.Task, Total: cmp.Or(a.maxSteps, konst.TurnMaxSteps)},
 		call:    call.ID,
 		started: a.now(),
 		rows:    len(a.spawner.Children()),

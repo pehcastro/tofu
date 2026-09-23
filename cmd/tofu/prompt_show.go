@@ -8,9 +8,9 @@ import (
 )
 
 func showPrompt(opts runOpts, out, errOut io.Writer) int {
-	environment, cutNotice := runEnvironment(opts)
-	if cutNotice != "" {
-		writeNotice(errOut)(cutNotice)
+	environment, notice := runEnvironment(opts)
+	if notice != "" {
+		writeNotice(errOut)(notice)
 	}
 	composed, err := composePrompt(opts, environment)
 	if err != nil {

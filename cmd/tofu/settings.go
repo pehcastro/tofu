@@ -22,12 +22,13 @@ func openSettings(dir string) (*settingspkg.Store, error) {
 	return settingspkg.Open(global, project)
 }
 
-func appSetting(dir, key string) int {
+func appSetting(dir, key string) (value int, unreadable string) {
 	store, err := openSettings(dir)
 	if err != nil {
-		return 0
+		fallback := settingspkg.DeclaredDefault(key)
+		return fallback, fmt.Sprintf("%s fell back to its default of %d because the settings file could not be read: %v", key, fallback, err)
 	}
-	return store.Int(key)
+	return store.Int(key), ""
 }
 
 func settingsVerb(args []string, out, errOut io.Writer) int {

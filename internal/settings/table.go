@@ -25,6 +25,15 @@ const (
 	ProjectInstructionsCap = "projectInstructionsCap"
 )
 
+func DeclaredDefault(key string) int {
+	for _, spec := range Default() {
+		if spec.Key == key {
+			return spec.Default
+		}
+	}
+	return 0
+}
+
 func Default() []Spec {
 	return []Spec{
 		{Key: ChatShowsTools, Label: "chat shows every tool call", Group: "chat", Kind: Bool, Default: 0, Restart: false},

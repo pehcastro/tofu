@@ -171,7 +171,11 @@ func runVerb(args []string, out, errOut io.Writer) int {
 		return runFail(errOut, err)
 	}
 	if opts.maxSteps == 0 {
-		opts.maxSteps = appSetting(cmp.Or(opts.dir, "."), settingspkg.DecisionCap)
+		var unreadable string
+		opts.maxSteps, unreadable = appSetting(cmp.Or(opts.dir, "."), settingspkg.DecisionCap)
+		if unreadable != "" {
+			_, _ = fmt.Fprintln(errOut, "tofu run: "+unreadable)
+		}
 	}
 	if opts.showPrompt {
 		return showPrompt(opts, out, errOut)
@@ -321,19 +325,24 @@ func runTurn(opts runOpts, selected models.Model, built []turn.Tool, budget reca
 	return exitOK
 }
 
-func runEnvironment(opts runOpts) (environment, cutNotice string) {
+func runEnvironment(opts runOpts) (environment, notice string) {
 	home, _ := os.UserHomeDir()
-	capBytes := turn.InstructionCap(appSetting(opts.dir, settingspkg.ProjectInstructionsCap))
+	setting, unreadable := appSetting(opts.dir, settingspkg.ProjectInstructionsCap)
+	capBytes := turn.InstructionCap(setting)
 	environment = turn.Environment(opts.dir, time.Now())
 	written, cut := turn.ProjectInstructions(opts.dir, home, capBytes)
 	if written != "" {
 		environment += "\n\n" + written
 	}
-	if len(cut) == 0 {
-		return environment, ""
+	var notices []string
+	if unreadable != "" {
+		notices = append(notices, unreadable)
 	}
-	return environment, fmt.Sprintf("your instructions were cut at %d bytes and %s never reached the model: raise the cap with tofu settings set %s <bytes>",
-		capBytes, strings.Join(cut, ", "), settingspkg.ProjectInstructionsCap)
+	if len(cut) > 0 {
+		notices = append(notices, fmt.Sprintf("your instructions were cut at %d bytes and %s never reached the model: raise the cap with tofu settings set %s <bytes>",
+			capBytes, strings.Join(cut, ", "), settingspkg.ProjectInstructionsCap))
+	}
+	return environment, strings.Join(notices, "; ")
 }
 
 func writeNotice(w io.Writer) func(string) {
@@ -354,9 +363,9 @@ func composePrompt(opts runOpts, environment string) (turn.Composed, error) {
 }
 
 func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn.SpawnTool, error) {
-	environment, cutNotice := runEnvironment(opts)
-	if cutNotice != "" && run.notify != nil {
-		run.notify(cutNotice)
+	environment, notice := runEnvironment(opts)
+	if notice != "" && run.notify != nil {
+		run.notify(notice)
 	}
 	composed, err := composePrompt(opts, environment)
 	if err != nil {

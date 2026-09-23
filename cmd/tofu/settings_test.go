@@ -7,7 +7,10 @@ import (
 	"strings"
 	"testing"
 
+	"tofu/internal/konst"
 	settingspkg "tofu/internal/settings"
+	"tofu/internal/sys"
+	"tofu/internal/turn"
 )
 
 func isolatedHomeAndProject(t *testing.T) string {
@@ -36,14 +39,61 @@ func TestSettingsSetPersistsAndGetReadsItBack(t *testing.T) {
 
 func TestDecisionCapDefaultsToNoCap(t *testing.T) {
 	isolatedHomeAndProject(t)
-	if got := appSetting(".", settingspkg.DecisionCap); got != 0 {
-		t.Fatalf("the decision cap default = %d, want 0, meaning no cap", got)
+	value, unreadable := appSetting(".", settingspkg.DecisionCap)
+	if value != 0 || unreadable != "" {
+		t.Fatalf("the decision cap default = %d with notice %q, want 0, meaning no cap, and silence", value, unreadable)
+	}
+}
+
+func unreadableSettingsFile(t *testing.T) string {
+	t.Helper()
+	isolatedHomeAndProject(t)
+	dir, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	state := filepath.Join(dir, sys.StateDirName)
+	if err := os.MkdirAll(state, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(state, settingspkg.FileName), []byte("{not json"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := openSettings(dir); err == nil {
+		t.Fatal("the settings file must fail to open, or a test over it proves nothing")
+	}
+	return dir
+}
+
+func TestASettingsFileThatCannotBeReadIsReportedRatherThanReadAsUnset(t *testing.T) {
+	dir := unreadableSettingsFile(t)
+	value, unreadable := appSetting(dir, settingspkg.DecisionCap)
+	if value != settingspkg.DeclaredDefault(settingspkg.DecisionCap) {
+		t.Fatalf("the decision cap over an unreadable file = %d, want the declared default", value)
+	}
+	for _, want := range []string{settingspkg.DecisionCap, "could not be read", settingspkg.FileName} {
+		if !strings.Contains(unreadable, want) {
+			t.Fatalf("the notice a person reads does not say %q: %q", want, unreadable)
+		}
+	}
+}
+
+func TestAnUnreadableSettingsFileCannotSwitchTheLoopGuardOff(t *testing.T) {
+	dir := unreadableSettingsFile(t)
+	opts, err := parseRunArgs([]string{"--dir", dir, "a task"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	config, _ := mustConfig(t, opts, nil, runtime{spend: turn.SpendSubscription})
+	if config.Caps.LoopGuardRepeats != konst.TurnLoopGuardRepeats || config.Caps.LoopGuardWindow != konst.TurnLoopGuardWindow {
+		t.Fatalf("the loop guard reached the turn as %d over %d, want konst's %d over %d, which no settings file feeds",
+			config.Caps.LoopGuardRepeats, config.Caps.LoopGuardWindow, konst.TurnLoopGuardRepeats, konst.TurnLoopGuardWindow)
 	}
 }
 
 func TestTheProjectInstructionCapDefaultsToThirtyTwoKilobytes(t *testing.T) {
 	isolatedHomeAndProject(t)
-	if got := appSetting(".", settingspkg.ProjectInstructionsCap); got != 32*1024 {
+	if got, _ := appSetting(".", settingspkg.ProjectInstructionsCap); got != 32*1024 {
 		t.Fatalf("the project instruction cap default = %d, want %d", got, 32*1024)
 	}
 }
