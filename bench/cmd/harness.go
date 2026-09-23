@@ -9,12 +9,9 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
-	"time"
 
 	"tofu/bench/harness"
-	"tofu/internal/judge/jev/wire/openrouter"
 	"tofu/internal/sys"
-	"tofu/internal/turn"
 )
 
 type harnessOpts struct {
@@ -23,14 +20,14 @@ type harnessOpts struct {
 	version    int
 	offline    bool
 	transcript string
-	run        int
+	repeats    int
 	tofuBin    string
 }
 
 const harnessTranscriptDir = "bench/harness/testdata/boji-1"
 
 func parseHarnessArgs(args []string) (harnessOpts, error) {
-	opts := harnessOpts{task: "hono", version: 1, transcript: harnessTranscriptDir, run: 1}
+	opts := harnessOpts{task: "hono", version: 1, transcript: harnessTranscriptDir, repeats: 1}
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
 		var err error
@@ -46,8 +43,8 @@ func parseHarnessArgs(args []string) (harnessOpts, error) {
 			opts.task, err = nextArg(args, &i, arg)
 		case "--version":
 			opts.version, err = nextInt(args, &i, arg)
-		case "--run":
-			opts.run, err = nextInt(args, &i, arg)
+		case "--repeats":
+			opts.repeats, err = nextInt(args, &i, arg)
 		case "--transcript":
 			opts.transcript, err = nextArg(args, &i, arg)
 		case "--tofu":
@@ -111,6 +108,7 @@ func benchHarness(out, errOut io.Writer, args []string) int {
 	if err != nil {
 		return fail(errOut, "harness", err)
 	}
+	plan.Repeats = opts.repeats
 	if opts.arm != harness.ArmTofu {
 		if err := harness.Fprint(out, plan); err != nil {
 			return fail(errOut, "harness", err)
@@ -128,11 +126,6 @@ func benchHarness(out, errOut io.Writer, args []string) int {
 		plan.Command[0] = bin
 	}
 
-	session, execution, err := harnessSession(out, plan, opts)
-	if err != nil {
-		return fail(errOut, "harness", err)
-	}
-
 	state, err := sys.ProjectStateDir()
 	if err != nil {
 		return fail(errOut, "harness", err)
@@ -141,25 +134,64 @@ func benchHarness(out, errOut io.Writer, args []string) int {
 	if opts.offline {
 		ledgerDir = opts.transcript
 	}
-	sources := harness.Sources{
-		LedgerDir:   ledgerDir,
-		ArmDir:      plan.Dir,
-		BunBin:      "bun",
-		CheckerPath: harness.CheckerPath(".", opts.version),
-		StartCommit: harness.OwnStartCommit(plan.Dir),
-	}
-	meta := harness.RunMeta{
-		Arm: opts.arm, Task: opts.task, Version: opts.version, Run: opts.run,
-		CLIVersion: sys.Version(), Commit: sys.BuildRevision(), Setup: plan.Setup,
+	if opts.offline {
+		return replayOneRepeat(out, errOut, plan, opts, ledgerDir)
 	}
 
-	row, gaps := harness.MeasureTofu(session, sources, meta)
-	renderHarnessRow(out, row, gaps, execution, opts, ledgerDir)
+	measure := func(execution harness.Execution, meta harness.RunMeta) (harness.Row, []string, error) {
+		meta.CLIVersion, meta.Commit = sys.Version(), sys.BuildRevision()
+		session, err := harness.LatestSession(filepath.Join(state, "sessions"), execution.Start)
+		if err != nil {
+			return harness.Row{}, nil, err
+		}
+		row, gaps := harness.MeasureTofu(session, harnessSources(plan.Dir, ledgerDir, opts.version), meta)
+		return row, gaps, nil
+	}
+
+	_, _ = fmt.Fprintf(out, "running %s\neach of %d repeats after staging the v%d seed into %s\n",
+		harness.Shell(plan.Command), plan.Repeats, plan.Version, plan.Dir)
+	repeats, err := harness.RunRepeats(context.Background(), ".", plan, measure)
+	if err != nil {
+		return fail(errOut, "harness", err)
+	}
+	rows := make([]harness.Row, 0, len(repeats))
+	for _, repeat := range repeats {
+		_, _ = fmt.Fprint(out, repeat.Execution.Stdout, repeat.Execution.Stderr)
+		_, _ = fmt.Fprintln(out, "\n"+harness.Detail(repeat.Row, repeat.Gaps, repeat.Execution, ledgerDir, harness.LiveSource(repeat.Execution)))
+		rows = append(rows, repeat.Row)
+	}
+	_, _ = fmt.Fprint(out, harness.Render(rows))
+	return exitOK
+}
+
+func harnessSources(armDir, ledgerDir string, version int) harness.Sources {
+	return harness.Sources{
+		LedgerDir:   ledgerDir,
+		ArmDir:      armDir,
+		BunBin:      "bun",
+		CheckerPath: harness.CheckerPath(".", version),
+		StartCommit: harness.OwnStartCommit(armDir),
+	}
+}
+
+func replayOneRepeat(out, errOut io.Writer, plan harness.Plan, opts harnessOpts, ledgerDir string) int {
+	path := filepath.Join(opts.transcript, "session.json")
+	session, err := harness.LoadSession(path)
+	if err != nil {
+		return fail(errOut, "harness", fmt.Errorf("the offline arm replays a stored transcript and %s is not readable, name another with --transcript: %w", path, err))
+	}
+	meta := plan.Runs()[0]
+	meta.CLIVersion, meta.Commit = sys.Version(), sys.BuildRevision()
+	row, gaps := harness.MeasureTofu(session, harnessSources(plan.Dir, ledgerDir, opts.version), meta)
+	execution := harness.Execution{Plan: plan, Start: session.At, End: session.At, EndReason: harness.EndReasonDone}
+	source := "offline, replayed from " + opts.transcript + ", no arm was executed and no model was called"
+	_, _ = fmt.Fprintln(out, "\n"+harness.Detail(row, gaps, execution, ledgerDir, source))
 	_, _ = fmt.Fprint(out, harness.Render([]harness.Row{row}))
 	return exitOK
 }
 
 func printEveryPlan(out io.Writer, opts harnessOpts) error {
+	var apart []string
 	for _, arm := range []harness.Arm{harness.ArmTofu, harness.ArmClaude, harness.ArmCodex} {
 		plan, err := harness.BuildPlan(".", arm, opts.task, opts.version)
 		if err != nil {
@@ -168,81 +200,14 @@ func printEveryPlan(out io.Writer, opts harnessOpts) error {
 		if err := harness.Fprint(out, plan); err != nil {
 			return err
 		}
-	}
-	return nil
-}
-
-func harnessSession(out io.Writer, plan harness.Plan, opts harnessOpts) (turn.Row, harness.Execution, error) {
-	if opts.offline {
-		path := filepath.Join(opts.transcript, "session.json")
-		session, err := harness.LoadSession(path)
-		if err != nil {
-			return turn.Row{}, harness.Execution{}, fmt.Errorf("the offline arm replays a stored transcript and %s is not readable, name another with --transcript: %w", path, err)
+		if plan.Effort != harness.AskedEffort {
+			apart = append(apart, fmt.Sprintf("%s runs at %s: %s", arm, plan.Effort, plan.EffortSetBy))
 		}
-		return session, harness.Execution{Plan: plan, Start: session.At, End: session.At, EndReason: harness.EndReasonDone}, nil
 	}
-	_, _ = fmt.Fprintf(out, "running: %s\n", harness.Shell(plan.Command))
-	execution, err := harness.Execute(context.Background(), plan)
-	if err != nil {
-		return turn.Row{}, harness.Execution{}, err
+	if len(apart) == 0 {
+		_, _ = fmt.Fprintf(out, "every arm was asked for thinking effort %s on its own command line, so the three are on a par\n", harness.AskedEffort)
+		return nil
 	}
-	_, _ = fmt.Fprint(out, execution.Stdout, execution.Stderr)
-	state, err := sys.ProjectStateDir()
-	if err != nil {
-		return turn.Row{}, execution, err
-	}
-	session, err := harness.LatestSession(filepath.Join(state, "sessions"), execution.Start)
-	return session, execution, err
-}
-
-func renderHarnessRow(out io.Writer, row harness.Row, gaps []string, execution harness.Execution, opts harnessOpts, ledgerDir string) {
-	host, err := os.Hostname()
-	if err != nil {
-		host = "unknown"
-	}
-	source := fmt.Sprintf("live, %s of wall clock in the runner, exit code %d, runner end reason %s",
-		execution.Elapsed().Round(time.Millisecond), execution.ExitCode, execution.EndReason)
-	if opts.offline {
-		source = "offline, replayed from " + opts.transcript + ", no arm was executed and no model was called"
-	}
-	passed, total := harness.ChecklistScore(row)
-	modelSpend := "subscription quota, no money, so there is no model dollar figure"
-	if row.ModelDollars != nil {
-		modelSpend = fmt.Sprintf("api key $%.6f", *row.ModelDollars)
-	}
-	caps := execution.Plan.Caps
-
-	_, _ = fmt.Fprintf(out, "\nROW %s %s v%d run%d\n", row.Arm, row.Task, row.Version, row.Run)
-	_, _ = fmt.Fprintf(out, "source: %s\n", source)
-	_, _ = fmt.Fprintf(out, "machine: %s. model credential kind: %s. date: %s. commit: %s. cli: %s\n",
-		host, row.CredentialKind, row.Start.Format("2006-01-02"), row.Commit, row.CLIVersion)
-	_, _ = fmt.Fprintf(out, "model: %s. judge wire: %s. judge ledger: %s\n", row.Model, openrouter.Name, ledgerDir)
-	_, _ = fmt.Fprintf(out, "setup %s: %s\n", row.Setup.Name, row.Setup.Line())
-	_, _ = fmt.Fprintf(out, "checklist: %d/%d graded items\n", passed, total)
-	_, _ = fmt.Fprintf(out, "model spend: %s. jev decisions: $%.6f on the openrouter key\n", modelSpend, row.JudgeDollars)
-	_, _ = fmt.Fprintf(out, "wall clock: %d ms. turns: %d. end reason: %s\n",
-		row.WallClockMS, row.Turns, row.EndReason)
-	_, _ = fmt.Fprintf(out, "tokens: %d in, %d out\n", row.BilledInput, row.BilledOutput)
-	_, _ = fmt.Fprintf(out, "tool calls: read %d, write %d, shell %d, other %d, failed %d\n",
-		row.ToolCalls.Read, row.ToolCalls.Write, row.ToolCalls.Shell, row.ToolCalls.Other, row.ToolCalls.Failed)
-	_, _ = fmt.Fprintf(out, "caps, unset rather than measured, nobody has given a number: wall clock %s, turns %d\n",
-		caps.WallClock, caps.TurnCap)
-	for _, gate := range row.Gates {
-		_, _ = fmt.Fprintf(out, "gate %s: %s %s\n", gate.Name, gate.Status, firstLine(gate.Reason))
-	}
-	for _, item := range row.Checklist {
-		_, _ = fmt.Fprintf(out, "checklist %s: %t\n", item.Item, item.Passed)
-	}
-	for _, gap := range gaps {
-		_, _ = fmt.Fprintf(out, "gap: %s\n", gap)
-	}
-	_, _ = fmt.Fprintln(out)
-}
-
-func firstLine(text string) string {
-	line, _, _ := strings.Cut(strings.TrimSpace(text), "\n")
-	if len(line) > 160 {
-		return line[:160] + " ..."
-	}
-	return line
+	_, _ = fmt.Fprintf(out, "thinking effort %s was asked for and %s\n", harness.AskedEffort, strings.Join(apart, "; "))
+	return nil
 }

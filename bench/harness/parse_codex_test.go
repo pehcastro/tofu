@@ -10,8 +10,10 @@ func TestParseCodexTurnsTheRecordedTranscriptIntoARow(t *testing.T) {
 	data := loadTestdata(t, "codex-1.jsonl")
 	start := time.Date(2026, 9, 18, 11, 0, 0, 0, time.UTC)
 	meta := CodexMeta{
-		Arm: ArmCodex, Task: "hono", Version: 1, Run: 1,
-		CLIVersion: "codex-cli 0.153.4", CredentialKind: CredentialKindSubscription,
+		RunMeta: RunMeta{
+			Arm: ArmCodex, Task: "hono", Version: 1, Run: 1,
+			CLIVersion: "codex-cli 0.153.4", CredentialKind: CredentialKindSubscription, Effort: EffortMedium,
+		},
 		Start: start, End: start.Add(2 * time.Second),
 	}
 

@@ -137,6 +137,51 @@ func TestEveryArmPlanNamesItsModelSoTheComparisonIsLikeForLike(t *testing.T) {
 	}
 }
 
+func TestEveryArmAsksForTheSameThinkingEffort(t *testing.T) {
+	root := repositoryRoot(t)
+	onTheCommandLine := map[Arm]string{
+		ArmClaude: "--effort medium",
+		ArmCodex:  "-c model_reasoning_effort='medium'",
+	}
+	for arm, flag := range onTheCommandLine {
+		plan, err := BuildPlan(root, arm, "hono", 1)
+		if err != nil {
+			t.Fatalf("%s: BuildPlan: %v", arm, err)
+		}
+		if plan.Effort != EffortMedium {
+			t.Errorf("%s: plan runs at effort %q, want %q, so the three arms are not asked the same thing", arm, plan.Effort, EffortMedium)
+		}
+		if !strings.Contains(Shell(plan.Command), flag) {
+			t.Errorf("%s: the command is %s and does not carry %s, so the arm runs at its own default", arm, Shell(plan.Command), flag)
+		}
+	}
+
+	tofu, err := BuildPlan(root, ArmTofu, "hono", 1)
+	if err != nil {
+		t.Fatalf("tofu: BuildPlan: %v", err)
+	}
+	if tofu.Effort != EffortNone {
+		t.Errorf("the tofu arm claims effort %q, and nothing in tofu run or the turn loop sets one", tofu.Effort)
+	}
+	if !strings.Contains(tofu.EffortSetBy, "no flag") {
+		t.Errorf("the tofu arm says its effort was set by %q, and it must say plainly that no flag sets it", tofu.EffortSetBy)
+	}
+
+	for _, arm := range []Arm{ArmClaude, ArmCodex, ArmTofu} {
+		plan, err := BuildPlan(root, arm, "hono", 1)
+		if err != nil {
+			t.Fatalf("%s: BuildPlan: %v", arm, err)
+		}
+		var buf bytes.Buffer
+		if err := Fprint(&buf, plan); err != nil {
+			t.Fatalf("%s: Fprint: %v", arm, err)
+		}
+		if !strings.Contains(buf.String(), "effort: "+plan.EffortLine()) {
+			t.Errorf("%s: the printed plan does not say what effort it runs at:\n%s", arm, buf.String())
+		}
+	}
+}
+
 func TestBuildPlanFailsWhenThePromptIsMissing(t *testing.T) {
 	if _, err := BuildPlan(t.TempDir(), ArmTofu, "hono", 1); err == nil {
 		t.Fatal("BuildPlan returned no error for a root with no prompt file")

@@ -1,0 +1,13 @@
+Notes are piling up in this service. Give a note an expiry, and stop an expired note from lingering.
+
+1. A note may carry an expiry. POST /notes accepts an optional "expiresAt", an ISO 8601 timestamp. A value that is not a timestamp, or one that has already passed, is invalid input and returns HTTP 400 with the JSON error body this API already returns. A note created without an "expiresAt" never expires.
+
+2. PATCH /notes/:id may set "expiresAt", and may clear it by sending null. The same values are invalid on PATCH as on POST.
+
+3. An expired note is out of the way: it is not in GET /notes and GET /notes/:id returns 404 for it. A note is expired from the moment its expiry has passed and not from some later moment.
+
+4. GET /notes?expired=true lists the expired notes instead, the one whose expiry passed most recently first. GET /notes?expired=false lists the notes that have not expired, which is what GET /notes already gives. Any other value of "expired" returns HTTP 400.
+
+5. Keep every route that exists working, and keep every existing test passing, changed only where expiry makes it wrong. Add tests for the new behaviour.
+
+6. This project has written its designs down. Read what is already recorded here before you choose one, and follow it. If a requirement above can be read more than one way, write in DECISIONS.md at the top of the project which reading you took and what in the project settled it, before you implement it.

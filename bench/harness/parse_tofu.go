@@ -18,6 +18,8 @@ func ParseTofu(dir string, filter ledger.Filter, meta TofuMeta) (Row, []string, 
 		CredentialKind: meta.CredentialKind,
 		Commit:         meta.Commit,
 		Setup:          meta.Setup,
+		Seed:           meta.Seed,
+		Effort:         meta.Effort,
 	}
 
 	var count int

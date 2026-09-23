@@ -10,6 +10,13 @@ const (
 	ArmTofu   Arm = "tofu"
 )
 
+type Effort string
+
+const (
+	EffortMedium Effort = "medium"
+	EffortNone   Effort = "none"
+)
+
 type CredentialKind string
 
 const (
@@ -26,6 +33,8 @@ type RunMeta struct {
 	CredentialKind CredentialKind
 	Commit         string
 	Setup          Setup
+	Seed           Seed
+	Effort         Effort
 }
 
 type EndReason string
@@ -64,6 +73,8 @@ type Row struct {
 	Arm            Arm               `json:"arm"`
 	Task           string            `json:"task"`
 	Setup          Setup             `json:"setup"`
+	Seed           Seed              `json:"seed"`
+	Effort         Effort            `json:"effort"`
 	Version        int               `json:"version"`
 	Run            int               `json:"run"`
 	Start          time.Time         `json:"start"`

@@ -1,0 +1,7 @@
+{
+  "status": 403,
+  "code": "plan.capability.withheld",
+  "decided_in": "src/plan/overrides.ts",
+  "symbol": "withheldByPlan",
+  "formats": ["json", "ndjson", "parquet"]
+}

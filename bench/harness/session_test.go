@@ -66,14 +66,40 @@ func sessionTheLoopWrites(t *testing.T, dir string, at time.Time) turn.Row {
 	return row
 }
 
-func sameWorkMeasured(t *testing.T, row turn.Row) {
+func sameWorkMeasured(t *testing.T, row turn.Row, wantInput int64) {
 	t.Helper()
 	calls := countToolCalls(row)
 	input, output := countTokens(row)
-	if calls.Read != 1 || calls.Failed != 0 || input != 797 || output != 182 {
-		t.Fatalf("measured %+v and %d tokens in, %d out, want one read, none failed, 797 in and 182 out", calls, input, output)
+	if calls.Read != 1 || calls.Failed != 0 || input != wantInput || output != 182 {
+		t.Fatalf("measured %+v and %d tokens in, %d out, want one read, none failed, %d in and 182 out", calls, input, output, wantInput)
 	}
 	t.Logf("%s measures %d turns, one read, %d tokens in and %d out", row.ID, len(row.Steps), input, output)
+}
+
+const (
+	billedWithoutCache = 797
+	billedWithCache    = 2075
+)
+
+func TestBilledInputCountsCacheTheWayTheClaudeArmCountsIt(t *testing.T) {
+	recorded := recordedSingleFileSession(t, t.TempDir())
+	var prompt, cacheRead, cacheWrite int
+	for _, step := range recorded.Steps {
+		prompt += step.PromptTokens
+		cacheRead += step.CacheReadTokens
+		cacheWrite += step.CacheWriteTokens
+	}
+	if cacheRead == 0 || cacheWrite == 0 {
+		t.Fatalf("%s reports %d cache reads and %d cache writes, so it cannot show how they are counted", recorded.ID, cacheRead, cacheWrite)
+	}
+
+	input, _ := countTokens(recorded)
+	want := int64(prompt + cacheRead + cacheWrite)
+	if input != want {
+		t.Fatalf("billed input %d over a turn that reports %d prompt, %d cache read and %d cache write, want %d: "+
+			"ParseClaude adds all three into the same column and the two arms sit in the same table",
+			input, prompt, cacheRead, cacheWrite, want)
+	}
 }
 
 func TestLatestSessionReadsTheHeaderAndBodyShapeTheLoopWritesNow(t *testing.T) {
@@ -87,7 +113,7 @@ func TestLatestSessionReadsTheHeaderAndBodyShapeTheLoopWritesNow(t *testing.T) {
 	if !reflect.DeepEqual(read, written) {
 		t.Fatalf("read back\n%+v\nwant the row that was written\n%+v", read, written)
 	}
-	sameWorkMeasured(t, read)
+	sameWorkMeasured(t, read, billedWithoutCache)
 }
 
 func TestLatestSessionStillReadsARecordedSingleFileSession(t *testing.T) {
@@ -108,7 +134,7 @@ func TestLatestSessionStillReadsARecordedSingleFileSession(t *testing.T) {
 	if !reflect.DeepEqual(read, recorded) {
 		t.Fatalf("read back\n%+v\nwant every field the fixture recorded\n%+v", read, recorded)
 	}
-	sameWorkMeasured(t, read)
+	sameWorkMeasured(t, read, billedWithCache)
 }
 
 func TestADirectoryHoldingBothShapesReturnsTheNewerSession(t *testing.T) {

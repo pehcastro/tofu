@@ -70,6 +70,36 @@ func Execute(ctx context.Context, plan Plan) (Execution, error) {
 	return Execution{}, fmt.Errorf("%s never started: %w", Shell(plan.Command), err)
 }
 
+type Repeat struct {
+	Execution Execution
+	Row       Row
+	Gaps      []string
+}
+
+type Measure func(Execution, RunMeta) (Row, []string, error)
+
+func RunRepeats(ctx context.Context, root string, plan Plan, measure Measure) ([]Repeat, error) {
+	runs := plan.Runs()
+	repeats := make([]Repeat, 0, len(runs))
+	for _, meta := range runs {
+		seed, err := Stage(root, plan.Version, plan.Dir)
+		if err != nil {
+			return repeats, fmt.Errorf("run%d of %d starts from the v%d seed and staging it failed: %w", meta.Run, len(runs), plan.Version, err)
+		}
+		meta.Seed = seed
+		execution, err := Execute(ctx, plan)
+		if err != nil {
+			return repeats, err
+		}
+		row, gaps, err := measure(execution, meta)
+		if err != nil {
+			return repeats, err
+		}
+		repeats = append(repeats, Repeat{Execution: execution, Row: row, Gaps: gaps})
+	}
+	return repeats, nil
+}
+
 type Sources struct {
 	LedgerDir   string
 	ArmDir      string
@@ -211,7 +241,7 @@ func MeasureTofu(session turn.Row, src Sources, meta RunMeta) (Row, []string) {
 	endReason, endGap := endReasonOf(session)
 	row.EndReason = endReason
 
-	for _, gap := range []string{credentialGap, endGap} {
+	for _, gap := range []string{credentialGap, endGap, wireGapOf(session)} {
 		if gap != "" {
 			gaps = append(gaps, gap)
 		}
@@ -349,11 +379,20 @@ func countToolCalls(session turn.Row) ToolCalls {
 }
 
 func countTokens(session turn.Row) (input, output int64) {
+	accounting := session.PromptAccounting()
 	for _, step := range session.Steps {
-		input += int64(step.PromptTokens)
+		input += int64(accounting.BilledTokens(step.PromptTokens, step.CacheReadTokens) + step.CacheWriteTokens)
 		output += int64(step.CompletionTokens)
 	}
 	return input, output
+}
+
+func wireGapOf(session turn.Row) string {
+	if session.Wire != "" {
+		return ""
+	}
+	return "billed input tokens: this turn row names no wire, and whether its prompt count already includes cache reads depends on the wire, " +
+		"so the column is added the anthropic way and an openrouter or codex run recorded this way would be counted twice"
 }
 
 func Spend(rows []Row) string {

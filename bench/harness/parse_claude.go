@@ -41,6 +41,8 @@ func ParseClaude(data []byte, meta ClaudeMeta) (Row, []string, error) {
 		CredentialKind: meta.CredentialKind,
 		Commit:         meta.Commit,
 		Setup:          meta.Setup,
+		Seed:           meta.Seed,
+		Effort:         meta.Effort,
 		WallClockMS:    t.DurationMS,
 		BilledInput:    t.Usage.InputTokens + t.Usage.CacheCreationInputTokens + t.Usage.CacheReadInputTokens,
 		BilledOutput:   t.Usage.OutputTokens,

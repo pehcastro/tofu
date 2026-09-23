@@ -7,17 +7,10 @@ import (
 )
 
 type CodexMeta struct {
-	Arm            Arm
-	Task           string
-	Version        int
-	Run            int
-	CLIVersion     string
-	CredentialKind CredentialKind
-	Commit         string
-	Model          string
-	Setup          Setup
-	Start          time.Time
-	End            time.Time
+	RunMeta
+	Model string
+	Start time.Time
+	End   time.Time
 }
 
 type codexUsage struct {
@@ -47,6 +40,8 @@ func ParseCodex(data []byte, meta CodexMeta) (Row, []string, error) {
 		CredentialKind: meta.CredentialKind,
 		Commit:         meta.Commit,
 		Setup:          meta.Setup,
+		Seed:           meta.Seed,
+		Effort:         meta.Effort,
 		Model:          meta.Model,
 		Start:          meta.Start,
 		End:            meta.End,

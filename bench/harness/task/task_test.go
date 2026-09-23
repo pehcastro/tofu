@@ -2,6 +2,7 @@ package task_test
 
 import (
 	"encoding/json"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -12,8 +13,6 @@ import (
 	"tofu/bench/harness/task"
 	"tofu/internal/sys"
 )
-
-var benchedVersions = []int{1, 2}
 
 const (
 	storedV2Row   = "bench/harness/testdata/v2-row/row.json"
@@ -45,8 +44,8 @@ func repositoryRoot(t *testing.T) string {
 	return root
 }
 
-func TestEveryPartOfBothVersionsIsTrackedAndHashable(t *testing.T) {
-	root := repositoryRoot(t)
+func trackedUnderTaskDir(t *testing.T, root string) map[string]bool {
+	t.Helper()
 	listed, err := exec.Command("git", "-C", root, "ls-files", "--cached", "--others", "--exclude-standard", task.Dir).Output()
 	if err != nil {
 		t.Fatalf("git ls-files %s: %v", task.Dir, err)
@@ -55,8 +54,45 @@ func TestEveryPartOfBothVersionsIsTrackedAndHashable(t *testing.T) {
 	for _, line := range strings.Fields(string(listed)) {
 		tracked[line] = true
 	}
+	return tracked
+}
 
-	for _, version := range benchedVersions {
+func TestEverySeedTreeIsTrackedSoARowCanNameTheTreeItStartedFrom(t *testing.T) {
+	root := repositoryRoot(t)
+	tracked := trackedUnderTaskDir(t, root)
+	for _, benched := range task.All() {
+		dir := task.Path(root, benched.Version, task.Seed)
+		files := 0
+		err := filepath.WalkDir(dir, func(path string, entry fs.DirEntry, err error) error {
+			if err != nil || entry.IsDir() {
+				return err
+			}
+			files++
+			relative, err := filepath.Rel(root, path)
+			if err != nil {
+				return err
+			}
+			if !tracked[filepath.ToSlash(relative)] {
+				t.Errorf("%s: git ignores %s, so the seed a row names is not in the repository", benched.Name, filepath.ToSlash(relative))
+			}
+			return nil
+		})
+		if err != nil {
+			t.Fatalf("%s v%d: walk the seed at %s: %v", benched.Name, benched.Version, dir, err)
+		}
+		if files == 0 {
+			t.Errorf("%s v%d: the seed at %s holds no file", benched.Name, benched.Version, dir)
+		}
+		t.Logf("%s v%d: %d files under %s", benched.Name, benched.Version, files, filepath.ToSlash(task.Path("", benched.Version, task.Seed)))
+	}
+}
+
+func TestEveryPartOfBothVersionsIsTrackedAndHashable(t *testing.T) {
+	root := repositoryRoot(t)
+	tracked := trackedUnderTaskDir(t, root)
+
+	for _, benched := range task.All() {
+		version := benched.Version
 		for _, part := range []task.Part{task.Prompt, task.Checklist, task.Checker} {
 			revision, err := task.Revision(root, version, part)
 			if err != nil {
@@ -75,7 +111,8 @@ func TestEveryPartOfBothVersionsIsTrackedAndHashable(t *testing.T) {
 
 func TestTheHarnessResolvesThePromptAndCheckerFromTheTrackedTask(t *testing.T) {
 	root := repositoryRoot(t)
-	for _, version := range benchedVersions {
+	for _, benched := range task.All() {
+		version := benched.Version
 		if got, want := harness.PromptPath(root, version), task.Path(root, version, task.Prompt); got != want {
 			t.Errorf("harness.PromptPath(v%d) = %s, want the tracked %s", version, got, want)
 		}

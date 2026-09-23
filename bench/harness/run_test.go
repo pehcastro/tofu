@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"tofu/bench/harness/task"
 	"tofu/internal/turn"
 )
 
@@ -81,7 +82,11 @@ func liveArmPlan(t *testing.T, arm Arm, envName string) (string, Plan) {
 		}
 		version = parsed
 	}
-	plan, err := BuildPlan(root, arm, "hono", version)
+	benched, err := task.Of(version)
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan, err := BuildPlan(root, arm, benched.Name, version)
 	if err != nil {
 		t.Fatalf("BuildPlan: %v", err)
 	}
@@ -91,7 +96,7 @@ func liveArmPlan(t *testing.T, arm Arm, envName string) (string, Plan) {
 			plan.WorkingDir = dir
 		}
 		for i, arg := range plan.Command {
-			if arg == ArmDir(root, arm, "hono") {
+			if arg == ArmDir(root, arm, plan.Task, version) {
 				plan.Command[i] = dir
 			}
 		}
@@ -131,10 +136,7 @@ func measureArm(execution Execution, src Sources, meta RunMeta) (Row, []string, 
 	case ArmClaude:
 		return MeasureClaude(execution, src, meta)
 	case ArmCodex:
-		return MeasureCodex(execution, src, CodexMeta{
-			Arm: meta.Arm, Task: meta.Task, Version: meta.Version, Run: meta.Run,
-			CLIVersion: meta.CLIVersion, CredentialKind: meta.CredentialKind, Commit: meta.Commit, Model: codexArmModel,
-		})
+		return MeasureCodex(execution, src, CodexMeta{RunMeta: meta, Model: codexArmModel})
 	case ArmTofu:
 		row, gaps := scoreTree(Row{
 			Arm: meta.Arm, Task: meta.Task, Version: meta.Version, Run: meta.Run,
@@ -168,7 +170,7 @@ func runLiveArm(t *testing.T, arm Arm, envName string) {
 	if err != nil {
 		t.Fatalf("measure %s: %v", path, err)
 	}
-	t.Logf("\n%s\n%s\n%s", Detail(row, gaps, execution, "n/a, this arm runs no jev gate"), Spend([]Row{row}), Render([]Row{row}))
+	t.Logf("\n%s\n%s\n%s", Detail(row, gaps, execution, "n/a, this arm runs no jev gate", LiveSource(execution)), Spend([]Row{row}), Render([]Row{row}))
 	t.Logf("row written to %s", writeRecordedRow(t, root, row, gaps))
 
 	if row.Turns == 0 {
@@ -242,7 +244,7 @@ func TestScoreATreeAnArmAlreadyWrote(t *testing.T) {
 	if err != nil {
 		t.Fatalf("measure %s: %v", dir, err)
 	}
-	t.Logf("\n%s\n%s\n%s", Detail(row, gaps, execution, "n/a, this arm runs no jev gate"), Spend([]Row{row}), Render([]Row{row}))
+	t.Logf("\n%s\n%s\n%s", Detail(row, gaps, execution, "n/a, this arm runs no jev gate", LiveSource(execution)), Spend([]Row{row}), Render([]Row{row}))
 	t.Logf("row written to %s", writeRecordedRow(t, root, row, gaps))
 }
 
@@ -308,7 +310,16 @@ func TestTofuArmCommandUsesOnlyFlagsRunParses(t *testing.T) {
 		t.Fatalf("BuildPlan: %v", err)
 	}
 
+	staged := filepath.Join(playground(t), "hono-v1-tofu")
+	if _, err := Stage(root, 1, staged); err != nil {
+		t.Fatalf("stage the v1 seed for the dry run: %v", err)
+	}
 	args := append(append([]string{}, plan.Command[1:]...), "--dry-run")
+	for i, arg := range args {
+		if arg == plan.Dir {
+			args[i] = staged
+		}
+	}
 	cmd := exec.Command(tofuBin, args...)
 	cmd.Dir = root
 	out, err := cmd.CombinedOutput()
@@ -458,24 +469,67 @@ func TestABrokenForkChainIsACrashThatNamesTheMissingSession(t *testing.T) {
 	t.Logf("%s", gap)
 }
 
+func committedSeed(t *testing.T, root string, version int) string {
+	t.Helper()
+	dir := filepath.Join(playground(t), fmt.Sprintf("hono-v%d-tofu", version))
+	if _, err := Stage(root, version, dir); err != nil {
+		t.Fatalf("stage the v%d seed the recorded run started from: %v", version, err)
+	}
+	for _, args := range [][]string{
+		{"init"},
+		{"add", "-A"},
+		{"-c", "user.name=bench", "-c", "user.email=bench@example.com", "commit", "-m", "seed"},
+	} {
+		out, err := exec.Command("git", append([]string{"-C", dir}, args...)...).CombinedOutput()
+		if err != nil {
+			t.Fatalf("git %s in the staged seed: %v\n%s", strings.Join(args, " "), err, out)
+		}
+	}
+	return dir
+}
+
 func TestMeasureTofuFillsTheRowFromAStoredTurnRowAndLedger(t *testing.T) {
 	root := repositoryRoot(t)
 	transcript := filepath.Join(root, harnessTestdataDir)
 	session, err := LoadSession(filepath.Join(transcript, "session.json"))
 	if err != nil {
-		t.Skipf("no stored transcript at %s: the recorded tofu run is not in the repository yet and %s is not in this ticket's owns, see the report: %v", transcript, transcript, err)
+		t.Fatalf("the recorded tofu run is the fixture this test exists for: %v", err)
 	}
 
+	armDir := committedSeed(t, root, 1)
 	meta := RunMeta{Arm: ArmTofu, Task: "hono", Version: 1, Run: 1, CredentialKind: CredentialKindKey}
 	src := Sources{
 		LedgerDir:   transcript,
-		ArmDir:      ArmDir(root, ArmTofu, "hono"),
+		ArmDir:      armDir,
 		BunBin:      "bun",
 		CheckerPath: CheckerPath(root, 1),
-		StartCommit: OwnStartCommit(ArmDir(root, ArmTofu, "hono")),
+		StartCommit: OwnStartCommit(armDir),
 	}
 	row, gaps := MeasureTofu(session, src, meta)
 
+	t.Logf("%d turns, %+v, %d tokens in and %d out, %.6f openrouter dollars on jev, wall clock %d ms, gaps %v",
+		row.Turns, row.ToolCalls, row.BilledInput, row.BilledOutput, row.JudgeDollars, row.WallClockMS, gaps)
+
+	if row.JudgeDollars <= 0 {
+		t.Errorf("JudgeDollars = %v: the ledger beside the transcript holds this turn's own jev rows and none of them was joined to it", row.JudgeDollars)
+	}
+	for _, gap := range gaps {
+		if strings.Contains(gap, "no ledger rows matched") {
+			t.Errorf("the turn id filter found nothing in the ledger recorded for that same turn: %s", gap)
+		}
+	}
+	if row.EndReason != EndReasonDone {
+		t.Errorf("EndReason = %q, want %q: the recorded turn stopped on its own", row.EndReason, EndReasonDone)
+	}
+	if row.BilledInput <= 0 || row.BilledOutput <= 0 {
+		t.Errorf("tokens %d in, %d out: a thirteen step turn billed neither", row.BilledInput, row.BilledOutput)
+	}
+	if row.ToolCalls.Write == 0 || row.ToolCalls.Shell == 0 {
+		t.Errorf("tool calls %+v: the recorded turn wrote files and ran shell commands", row.ToolCalls)
+	}
+	if row.WallClockMS != session.WallClockMS {
+		t.Errorf("WallClockMS = %d, want the turn row's own %d", row.WallClockMS, session.WallClockMS)
+	}
 	if row.Turns != int64(len(session.Steps)) {
 		t.Errorf("Turns = %d, want %d from the stored turn row", row.Turns, len(session.Steps))
 	}
@@ -500,7 +554,7 @@ func TestMeasureTofuFillsTheRowFromAStoredTurnRowAndLedger(t *testing.T) {
 }
 
 const (
-	harnessTestdataDir   = "bench/harness/testdata/boji-1"
+	harnessTestdataDir   = "bench/harness/" + tofuV1Testdata
 	gradedChecklistItems = 19
 )
 

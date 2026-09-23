@@ -1,0 +1,15 @@
+This project is an HTTP API. Answer one question about it. Do not change it.
+
+The question. A client sends POST /v1/exports as the account acct_gold_7, with the body {"reportId": "<a report that account created>", "format": "csv"}. The credential is valid, the account exists, the report exists and belongs to it, the body is well formed, and the client is nowhere near any rate limit.
+
+Write ANSWER.json at the top of this project. It is a single JSON object with exactly these five keys and no others:
+
+- "status": the HTTP status number the client gets back, as a number.
+- "code": the exact string the JSON error body carries in its "code" field. If the request succeeds, use the empty string.
+- "decided_in": the project-relative path, with forward slashes, of the one file that holds the value which produces this outcome. Not the file that reports it to the client, and not the file that looks it up: the file where that value is written down by hand.
+- "symbol": the name of the exported binding in that file that holds it.
+- "formats": every export format this account is allowed to use, as an array of strings sorted alphabetically.
+
+Answer from the code that actually runs. The documentation in this project is written by hand, nothing checks it against the code, and nothing under docs/ decides what the server does.
+
+Do not edit any file that is already here, do not add a test, and do not add any file other than ANSWER.json.

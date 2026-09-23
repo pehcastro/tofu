@@ -70,7 +70,7 @@ func TestV2TofuArmRunsLiveAndProducesARow(t *testing.T) {
 		CLIVersion: sys.Version(), Commit: sys.BuildRevision(),
 	}
 	row, gaps := MeasureTofu(recorded, src, meta)
-	t.Logf("\n%s\n%s", Detail(row, gaps, execution, ledgerDir), Render([]Row{row}))
+	t.Logf("\n%s\n%s", Detail(row, gaps, execution, ledgerDir, LiveSource(execution)), Render([]Row{row}))
 
 	if row.Turns == 0 {
 		t.Fatal("the run produced a turn row with no steps, so nothing was measured")

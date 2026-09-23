@@ -25,6 +25,14 @@ const (
 	tofuArmModel   = "claude-sub/claude-opus-5"
 )
 
+const AskedEffort = EffortMedium
+
+const (
+	claudeEffortSetBy = "--effort medium, one of low, medium, high, xhigh and max in claude --help"
+	codexEffortSetBy  = "-c model_reasoning_effort='medium', the config override codex exec --help documents, reaching model_reasoning_effort in codex-rs/core/src/config/mod.rs:967"
+	tofuEffortSetBy   = "no flag, because tofu run takes --model and --max-steps and nothing for effort, and internal/turn/subscription.go:26 builds the anthropic request with thinking left unset"
+)
+
 type Caps struct {
 	WallClock time.Duration
 	TurnCap   int
@@ -33,20 +41,27 @@ type Caps struct {
 const defaultRepeats = 1
 
 type Plan struct {
-	Arm        Arm
-	Task       string
-	Version    int
-	Prompt     string
-	PromptPath string
-	Command    []string
-	Dir        string
-	WorkingDir string
-	Branch     string
-	Env        []string
-	Model      string
-	Caps       Caps
-	Setup      Setup
-	Repeats    int
+	Arm         Arm
+	Task        string
+	Version     int
+	Prompt      string
+	PromptPath  string
+	Command     []string
+	Dir         string
+	WorkingDir  string
+	Branch      string
+	Env         []string
+	Model       string
+	Caps        Caps
+	Setup       Setup
+	Seed        Seed
+	Effort      Effort
+	EffortSetBy string
+	Repeats     int
+}
+
+func (p Plan) EffortLine() string {
+	return string(p.Effort) + ", " + p.EffortSetBy
 }
 
 func (p Plan) Runs() []RunMeta {
@@ -56,7 +71,7 @@ func (p Plan) Runs() []RunMeta {
 	}
 	metas := make([]RunMeta, 0, repeats)
 	for repeat := 1; repeat <= repeats; repeat++ {
-		metas = append(metas, RunMeta{Arm: p.Arm, Task: p.Task, Version: p.Version, Run: repeat, Setup: p.Setup})
+		metas = append(metas, RunMeta{Arm: p.Arm, Task: p.Task, Version: p.Version, Run: repeat, Setup: p.Setup, Seed: p.Seed, Effort: p.Effort})
 	}
 	return metas
 }
@@ -76,11 +91,23 @@ func CheckerPath(root string, version int) string {
 	return task.Path(root, version, task.Checker)
 }
 
-func ArmDir(root string, arm Arm, task string) string {
-	return filepath.Join(root, playgroundRoot, task+"-"+string(arm))
+func ArmDir(root string, arm Arm, name string, version int) string {
+	return filepath.Join(root, playgroundRoot, fmt.Sprintf("%s-v%d-%s", name, version, arm))
 }
 
-func BuildPlan(root string, arm Arm, task string, version int) (Plan, error) {
+func BuildPlan(root string, arm Arm, name string, version int) (Plan, error) {
+	benched, err := task.Of(version)
+	if err != nil {
+		return Plan{}, err
+	}
+	if name != benched.Name {
+		return Plan{}, fmt.Errorf("v%d is the %s task and it was asked for as %q, and running it under another name would point it at that task's directory",
+			version, benched.Name, name)
+	}
+	seed, err := SeedOf(root, version)
+	if err != nil {
+		return Plan{}, err
+	}
 	promptPath := PromptPath(root, version)
 	raw, err := os.ReadFile(promptPath)
 	if err != nil {
@@ -93,22 +120,24 @@ func BuildPlan(root string, arm Arm, task string, version int) (Plan, error) {
 		return Plan{}, fmt.Errorf("the setup under test is what a row is read back by, and it could not be recorded: %w", err)
 	}
 
-	dir := ArmDir(root, arm, task)
+	dir := ArmDir(root, arm, benched.Name, version)
 	caps := Caps{WallClock: defaultWallClockCap, TurnCap: defaultTurnCap}
 	plan := Plan{
-		Arm: arm, Task: task, Version: version,
+		Arm: arm, Task: benched.Name, Version: version,
 		Prompt: prompt, PromptPath: promptPath,
-		Dir: dir, Branch: fmt.Sprintf("v%d", version), Caps: caps, Setup: setup,
+		Dir: dir, Branch: fmt.Sprintf("v%d", version), Caps: caps, Setup: setup, Seed: seed,
 		Repeats: defaultRepeats,
 	}
 
 	switch arm {
 	case ArmClaude:
 		plan.Model = claudeArmModel
+		plan.Effort, plan.EffortSetBy = AskedEffort, claudeEffortSetBy
 		plan.WorkingDir = dir
 		plan.Command = []string{
 			"claude", "-p", prompt,
 			"--model", claudeArmModel,
+			"--effort", string(AskedEffort),
 			"--output-format", "json",
 			"--permission-mode", "bypassPermissions",
 			"--safe-mode",
@@ -116,9 +145,11 @@ func BuildPlan(root string, arm Arm, task string, version int) (Plan, error) {
 		plan.Env = []string{"the anthropic subscription credential claude auth already holds"}
 	case ArmCodex:
 		plan.Model = codexArmModel
+		plan.Effort, plan.EffortSetBy = AskedEffort, codexEffortSetBy
 		plan.Command = []string{
 			"codex", "exec", prompt,
 			"-m", codexArmModel,
+			"-c", "model_reasoning_effort='" + string(AskedEffort) + "'",
 			"--json",
 			"--sandbox", "workspace-write",
 			"-C", dir,
@@ -126,6 +157,7 @@ func BuildPlan(root string, arm Arm, task string, version int) (Plan, error) {
 		plan.Env = []string{"the chatgpt subscription credential codex login already holds"}
 	case ArmTofu:
 		plan.Model = tofuArmModel
+		plan.Effort, plan.EffortSetBy = EffortNone, tofuEffortSetBy
 		plan.Command = []string{
 			"tofu", "run", prompt,
 			"--dir", dir,
@@ -141,9 +173,9 @@ func BuildPlan(root string, arm Arm, task string, version int) (Plan, error) {
 
 func Fprint(w io.Writer, p Plan) error {
 	_, err := fmt.Fprintf(w,
-		"arm %s task %s version %d\ncommand: %s\ndir: %s\nbranch: %s\nprompt: %s\nmodel: %s\nenv: %s\nsetup %s: %s\nrepeats: %s\ncaps, unset rather than measured, nobody has given a number: wall clock %s, turns %d\n\n",
-		p.Arm, p.Task, p.Version, Shell(p.Command), p.Dir, p.Branch, p.PromptPath, p.Model, strings.Join(p.Env, ", "),
-		p.Setup.Name, p.Setup.Line(), p.RepeatLine(), p.Caps.WallClock, p.Caps.TurnCap)
+		"arm %s task %s version %d\ncommand: %s\ndir: %s\nbranch: %s\nprompt: %s\nmodel: %s\neffort: %s\nenv: %s\nsetup %s: %s\nseed: %s\nrepeats: %s\ncaps, unset rather than measured, nobody has given a number: wall clock %s, turns %d\n\n",
+		p.Arm, p.Task, p.Version, Shell(p.Command), p.Dir, p.Branch, p.PromptPath, p.Model, p.EffortLine(), strings.Join(p.Env, ", "),
+		p.Setup.Name, p.Setup.Line(), p.Seed.Line(), p.RepeatLine(), p.Caps.WallClock, p.Caps.TurnCap)
 	return err
 }
 

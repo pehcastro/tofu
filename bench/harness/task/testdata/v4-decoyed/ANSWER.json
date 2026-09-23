@@ -1,0 +1,7 @@
+{
+  "status": 201,
+  "code": "",
+  "decided_in": "src/plan/plans.ts",
+  "symbol": "PLANS",
+  "formats": ["csv", "json", "ndjson", "parquet", "xlsx"]
+}

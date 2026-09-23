@@ -15,7 +15,12 @@ import (
 //go:embed entitlement.txt
 var entitlement string
 
-func Detail(row Row, gaps []string, execution Execution, ledgerDir string) string {
+func LiveSource(execution Execution) string {
+	return fmt.Sprintf("live, %s of wall clock in the runner, exit code %d, runner end reason %s",
+		execution.Elapsed().Round(time.Millisecond), execution.ExitCode, execution.EndReason)
+}
+
+func Detail(row Row, gaps []string, execution Execution, ledgerDir, source string) string {
 	host, err := os.Hostname()
 	if err != nil {
 		host = "unknown"
@@ -28,19 +33,21 @@ func Detail(row Row, gaps []string, execution Execution, ledgerDir string) strin
 
 	b := &strings.Builder{}
 	fmt.Fprintf(b, "ROW %s %s v%d run%d\n", row.Arm, row.Task, row.Version, row.Run)
-	fmt.Fprintf(b, "source: live, %s of wall clock in the runner, exit code %d, runner end reason %s\n",
-		execution.Elapsed().Round(time.Millisecond), execution.ExitCode, execution.EndReason)
+	fmt.Fprintf(b, "source: %s\n", source)
 	fmt.Fprintf(b, "machine: %s. model credential kind: %s. date: %s. commit: %s. cli: %s\n",
 		host, row.CredentialKind, row.Start.Format("2006-01-02"), row.Commit, row.CLIVersion)
 	fmt.Fprintf(b, "model: %s. judge wire: %s. judge ledger: %s\n", row.Model, openrouter.Name, ledgerDir)
 	fmt.Fprintf(b, "setup %s: %s\n", row.Setup.Name, row.Setup.Line())
+	fmt.Fprintf(b, "seed: %s\n", row.Seed.Line())
+	fmt.Fprintf(b, "effort: %s, %s\n", row.Effort, execution.Plan.EffortSetBy)
 	fmt.Fprintf(b, "checklist: %d/%d graded items\n", passed, total)
 	fmt.Fprintf(b, "model spend: %s. jev decisions: $%.6f on the openrouter key\n", modelSpend, row.JudgeDollars)
 	fmt.Fprintf(b, "wall clock: %d ms. turns: %d. end reason: %s\n", row.WallClockMS, row.Turns, row.EndReason)
 	fmt.Fprintf(b, "tokens: %d in, %d out\n", row.BilledInput, row.BilledOutput)
 	fmt.Fprintf(b, "tool calls: read %d, write %d, shell %d, other %d, failed %d\n",
 		row.ToolCalls.Read, row.ToolCalls.Write, row.ToolCalls.Shell, row.ToolCalls.Other, row.ToolCalls.Failed)
-	fmt.Fprintf(b, "caps: wall clock %s, turns %d\n", execution.Plan.Caps.WallClock, execution.Plan.Caps.TurnCap)
+	fmt.Fprintf(b, "caps, unset rather than measured, nobody has given a number: wall clock %s, turns %d\n",
+		execution.Plan.Caps.WallClock, execution.Plan.Caps.TurnCap)
 	for _, gate := range row.Gates {
 		fmt.Fprintf(b, "gate %s: %s %s\n", gate.Name, gate.Status, firstLine(gate.Reason))
 	}
