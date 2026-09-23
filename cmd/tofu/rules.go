@@ -36,7 +36,7 @@ type rulesCheckOpts struct {
 type ruleListing struct {
 	ID   string `json:"id"`
 	Kind string `json:"kind"`
-	Mode string `json:"mode"`
+	Mode string `json:"mode,omitempty"`
 }
 
 type ruleFireListing struct {
@@ -122,7 +122,11 @@ func rulesListVerb(args []string, out, errOut io.Writer) int {
 	}
 	listing := make([]ruleListing, len(rules))
 	for i, r := range rules {
-		listing[i] = ruleListing{ID: r.ID, Kind: string(r.Kind), Mode: r.Mode.String()}
+		mode := ""
+		if r.Checker != "" || r.Mode == rule.ModeOff {
+			mode = r.Mode.String()
+		}
+		listing[i] = ruleListing{ID: r.ID, Kind: string(r.Kind), Mode: mode}
 	}
 	if opts.json {
 		body, err := json.Marshal(ruleListReport{Origin: origin, Rules: listing})
@@ -136,9 +140,9 @@ func rulesListVerb(args []string, out, errOut io.Writer) int {
 	for _, r := range listing {
 		widest = max(widest, len(r.ID))
 	}
-	_, _ = fmt.Fprintf(out, "%d rules from %s\n", len(listing), origin)
+	_, _ = fmt.Fprintf(out, "%d rules from %s, a mode is shown only where it does something\n", len(listing), origin)
 	for _, r := range listing {
-		_, _ = fmt.Fprintf(out, "%-*s %-10s %s\n", widest, r.ID, r.Kind, r.Mode)
+		_, _ = fmt.Fprintln(out, strings.TrimRight(fmt.Sprintf("%-*s %-10s %s", widest, r.ID, r.Kind, r.Mode), " "))
 	}
 	return exitOK
 }

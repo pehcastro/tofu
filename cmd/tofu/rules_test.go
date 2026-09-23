@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -119,9 +120,86 @@ func TestRulesListPrintsEveryShippedRule(t *testing.T) {
 		if !strings.Contains(line, string(r.Kind)) {
 			t.Fatalf("line %q does not carry the kind %s the rule declares", line, r.Kind)
 		}
-		if !strings.Contains(line, r.Mode.String()) {
-			t.Fatalf("line %q does not carry the mode %s the rule declares", line, r.Mode)
+		if carriesMode := strings.Contains(line, r.Mode.String()); carriesMode != (r.Checker != "") {
+			t.Fatalf("line %q carries the mode %s: %t, and the rule names the checker %q", line, r.Mode, carriesMode, r.Checker)
 		}
+	}
+}
+
+func rulesListText(t *testing.T, args ...string) string {
+	t.Helper()
+	out := &bytes.Buffer{}
+	errOut := &bytes.Buffer{}
+	if code := rulesListVerb(args, out, errOut); code != exitOK {
+		t.Fatalf("rulesListVerb %v: exit %d, stderr %q", args, code, errOut.String())
+	}
+	return out.String()
+}
+
+func ruleRow(t *testing.T, listing, id string) string {
+	t.Helper()
+	for _, line := range strings.Split(strings.TrimRight(listing, "\n"), "\n") {
+		if strings.HasPrefix(line, id+" ") {
+			return line
+		}
+	}
+	t.Fatalf("no row for %s in:\n%s", id, listing)
+	return ""
+}
+
+func TestRulesListShowsNoModeWhereTheRuleDeclaresNone(t *testing.T) {
+	listing := rulesListText(t, "--library", shippedRulesLibraryDir(t))
+	for _, id := range []string{"quote", "flake_disagreement", "skipped_test_budget"} {
+		row := ruleRow(t, listing, id)
+		if strings.Contains(row, "shadow") {
+			t.Errorf("%s names no checker and declares no mode, and its row still reads %q", id, row)
+		}
+		if strings.HasSuffix(row, " ") {
+			t.Errorf("%s leaves the mode column padded with blanks: %q", id, row)
+		}
+	}
+	if row := ruleRow(t, listing, "em_dash"); !strings.Contains(row, "shadow") {
+		t.Errorf("em_dash names a checker and its row lost the mode: %q", row)
+	}
+}
+
+func TestRulesListShowsModeOffWithoutAChecker(t *testing.T) {
+	dir := t.TempDir()
+	dropped := "id: quiet\ndomain: general\nkind: human\nconcern: identity\nmode: off\ntext: nothing\n"
+	if err := os.WriteFile(filepath.Join(dir, "quiet@1.yaml"), []byte(dropped), 0o644); err != nil {
+		t.Fatalf("writing the scratch library: %v", err)
+	}
+	if row := ruleRow(t, rulesListText(t, "--library", dir), "quiet"); !strings.HasSuffix(row, "off") {
+		t.Fatalf("a rule dropped by mode off does not say so: %q", row)
+	}
+}
+
+func TestRulesListNeverShowsTheShellSieveMode(t *testing.T) {
+	listing := rulesListText(t, "--library", shippedRulesLibraryDir(t))
+	if strings.Contains(listing, "shell_sift") || strings.Contains(listing, "enforced") {
+		t.Fatalf("the shell sieve is a threshold rule this listing does not load, and its enforced mode does not switch the cut on:\n%s", listing)
+	}
+}
+
+func TestRulesListJSONOmitsTheModeWhereTheRuleDeclaresNone(t *testing.T) {
+	body := rulesListText(t, "--library", shippedRulesLibraryDir(t), "--json")
+	var report struct {
+		Rules []map[string]any `json:"rules"`
+	}
+	if err := json.Unmarshal([]byte(body), &report); err != nil {
+		t.Fatalf("unmarshalling json: %v, body %q", err, body)
+	}
+	byID := map[string]map[string]any{}
+	for _, one := range report.Rules {
+		byID[fmt.Sprint(one["id"])] = one
+	}
+	for _, id := range []string{"quote", "flake_disagreement", "skipped_test_budget"} {
+		if mode, carried := byID[id]["mode"]; carried {
+			t.Errorf("%s declares no mode and json carries mode %v", id, mode)
+		}
+	}
+	if byID["em_dash"]["mode"] != "shadow" {
+		t.Errorf("em_dash names a checker and json lost its mode: %v", byID["em_dash"])
 	}
 }
 
@@ -141,8 +219,12 @@ func TestRulesListJSON(t *testing.T) {
 		t.Fatalf("listing = %d, want the %d rules on disk: %+v", len(report.Rules), len(shipped), report.Rules)
 	}
 	for i, r := range shipped {
-		if report.Rules[i] != (ruleListing{ID: r.ID, Kind: string(r.Kind), Mode: r.Mode.String()}) {
-			t.Fatalf("listing %d is %+v, want the rule %s on disk: %+v", i, report.Rules[i], r.ID, r)
+		want := ruleListing{ID: r.ID, Kind: string(r.Kind)}
+		if r.Checker != "" {
+			want.Mode = r.Mode.String()
+		}
+		if report.Rules[i] != want {
+			t.Fatalf("listing %d is %+v, want %+v for the rule %s on disk", i, report.Rules[i], want, r.ID)
 		}
 	}
 	if report.Origin == "" {
@@ -208,7 +290,7 @@ func TestRulesCheckDoesNotPromoteTheShippedLibrary(t *testing.T) {
 		t.Fatalf("reading the shipped library: %v", err)
 	}
 	for _, r := range report.Rules {
-		if r.Mode != "shadow" {
+		if r.Mode != "" && r.Mode != "shadow" {
 			t.Fatalf("shipped rule %q is %q, this ticket promotes nothing", r.ID, r.Mode)
 		}
 	}
