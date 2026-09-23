@@ -5,7 +5,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"testing/fstest"
 
 	"tofu/internal/session"
 )
@@ -45,18 +44,16 @@ func TestAModelWithNoSubscriptionFieldReadsTheBareVendor(t *testing.T) {
 }
 
 func TestASubscriptionIsSpelledTheSameWayInItsFileNameAndInEverySlug(t *testing.T) {
-	library, err := Load([]Layer{layerOf("library", fstest.MapFS{
-		"subscriptions/opencode-sub.yaml":   &fstest.MapFile{Data: []byte("provider: anthropic\nwire: opencode\nwindows: 5h\n")},
-		"models/anthropic/deepseek-v3.yaml": &fstest.MapFile{Data: []byte("subscription: opencode-sub\nuse: default\n")},
-	})})
+	library, err := Load([]Layer{layerOf("library", withSubscriptions(oneFile(
+		"models/anthropic/claude-extra.yaml", "subscription: claude-sub\nuse: default\n")))})
 	if err != nil {
 		t.Fatalf("loading: %v", err)
 	}
-	model, err := library.Select("opencode-sub/deepseek-v3")
+	model, err := library.Select("claude-sub/claude-extra")
 	if err != nil {
-		t.Fatalf("a new subscription's model does not resolve by the name its file carries: %v", err)
+		t.Fatalf("a model does not resolve by the subscription its file carries: %v", err)
 	}
-	if model.Subscription != "opencode-sub" {
+	if model.Subscription != ClaudeSub {
 		t.Fatalf("the model carries subscription %q", model.Subscription)
 	}
 }

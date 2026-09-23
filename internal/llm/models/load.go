@@ -269,7 +269,12 @@ func buildSubscription(id string, from *sheet) (SubscriptionSpec, *Broken) {
 		File:      from.file,
 	}
 	if !spec.ID.valid() {
-		return spec, &Broken{File: from.file, Why: fmt.Sprintf("%q is not a name a subscription file can carry, a subscription is one word", id)}
+		all := AllSubscriptions()
+		known := make([]string, len(all))
+		for i, sub := range all {
+			known[i] = string(sub)
+		}
+		return spec, &Broken{File: from.file, Why: fmt.Sprintf("%q is not a subscription this build knows, it knows %s", id, strings.Join(known, ", "))}
 	}
 	if !spec.Provider.valid() {
 		return spec, &Broken{File: from.file, Field: "provider", Why: fmt.Sprintf("the vendor is %s or %s, found %q", Anthropic, OpenAI, spec.Provider)}

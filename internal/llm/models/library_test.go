@@ -265,6 +265,38 @@ func TestSelectRefusesAnExcludedModelWithItsLibraryReason(t *testing.T) {
 	}
 }
 
+func TestSubscriptionValidRefusesAnyNameOutsideTheClosedSet(t *testing.T) {
+	if Subscription("gemini-sub").valid() {
+		t.Fatal("gemini-sub is not a subscription this build knows and must not validate")
+	}
+	for _, known := range AllSubscriptions() {
+		if !known.valid() {
+			t.Fatalf("%s is a known subscription and must validate", known)
+		}
+	}
+}
+
+func TestLoadRefusesAFileNamingAnUnknownSubscription(t *testing.T) {
+	library, err := Load([]Layer{layerOf("library", fstest.MapFS{
+		"subscriptions/gemini-sub.yaml": &fstest.MapFile{Data: []byte("provider: anthropic\nwire: anthropic\nwindows: 5h, 7d\n")},
+	})})
+	if len(library.Subscriptions) != 0 {
+		t.Fatalf("gemini-sub must not become a subscription entry, got %+v", library.Subscriptions)
+	}
+	var refused *BrokenLibrary
+	if !errors.As(err, &refused) || len(refused.Refused) == 0 {
+		t.Fatalf("want a refusal, got %v", err)
+	}
+	first := refused.Refused[0]
+	if !strings.Contains(first.File, "gemini-sub.yaml") {
+		t.Fatalf("the refusal must name the file, got %q", first.File)
+	}
+	want := `"gemini-sub" is not a subscription this build knows, it knows claude-sub, codex-sub`
+	if first.Why != want {
+		t.Fatalf("got reason %q, want %q", first.Why, want)
+	}
+}
+
 func TestSubscriptionsCarryTheQuotaWindowsAndTheModelsDoNot(t *testing.T) {
 	library := shippedLibrary(t)
 	if len(library.Subscriptions) != 2 {

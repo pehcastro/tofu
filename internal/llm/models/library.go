@@ -27,8 +27,17 @@ const (
 	CodexSub  Subscription = "codex-sub"
 )
 
+func AllSubscriptions() []Subscription {
+	return []Subscription{ClaudeSub, CodexSub}
+}
+
 func (s Subscription) valid() bool {
-	return s != "" && !strings.ContainsAny(string(s), " /\t\n")
+	for _, known := range AllSubscriptions() {
+		if s == known {
+			return true
+		}
+	}
+	return false
 }
 
 type Use string
