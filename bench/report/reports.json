@@ -842,6 +842,25 @@
       "state_note": ""
     },
     {
+      "package": "tokens",
+      "date": "2026-09-23",
+      "source": "bench/tokens/report-2026-09-23.md",
+      "figure": "69.7%",
+      "built_from": "prose",
+      "sample": "the same 18-tool registry cmd/tofu/run.go builds for a plain tofu run, that TOFU-520 measured",
+      "skips": "none: no live model call and no network call, len(Description) and marshalled len(Parameters) read straight off the registry",
+      "conclusion": [
+        {
+          "text": "unparsed: no heading in this file names its own answer",
+          "withdrawn": false
+        }
+      ],
+      "conclusion_unparsed": true,
+      "state": "stands",
+      "state_source": "",
+      "state_note": ""
+    },
+    {
       "package": "forkcache",
       "date": "2026-09-22",
       "source": "bench/forkcache/report-2026-09-22.txt",
@@ -1472,12 +1491,12 @@
     }
   ],
   "counts": {
-    "reports": 44,
+    "reports": 45,
     "packages_with_a_dated_report": 28,
     "packages_with_no_dated_report": 6,
     "withdrawn_whole_or_in_part": 6,
     "stale": 1,
-    "unparsed": 13
+    "unparsed": 14
   },
   "withdrawals_declared_from_outside_live_in": "bench/report/withdrawals.json",
   "generated_by": "go run ./bench/report/gen"

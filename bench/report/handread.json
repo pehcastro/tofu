@@ -312,6 +312,14 @@
     "skips": "60 of 111 turns carry no usable cache accounting, either predating it or holding no steps, and the report gives the split. No live model call was made and no account was spent."
   },
   {
+    "report": "bench/tokens/report-2026-09-23.md",
+    "figure": "69.7%",
+    "says": "Description bytes are 69.7 percent of the wire schema bytes over all 18 tools, below the 79 percent another harness reports, 11,559 description bytes and 3,987 parameter bytes of a 16,574 byte whole. Seventeen of the eighteen tools measure byte for byte identical to TOFU-520's 16,575; bash alone differs by one byte, because its description embeds the shell's own pwd for the directory the generator ran from, one character shorter here than in bench/schemas/gen, and that is the whole of the gap.",
+    "from": "prose",
+    "sample": "the same 18-tool registry cmd/tofu/run.go builds for a plain tofu run, that TOFU-520 measured",
+    "skips": "none: no live model call and no network call, len(Description) and marshalled len(Parameters) read straight off the registry"
+  },
+  {
     "report": "bench/instruction/report-2026-09-23.md",
     "figure": "25",
     "says": "Jev scored 25 of 27 against a regular expression's 24 of 27 on a corpus of real recorded tool results, and a rerun minutes later tied both arms at 24, so the report's conclusion is that the corpus cannot decide this rather than that the judgment won. Both arms score high because this project's recorded sessions carry almost no adversarial instruction-shaped text: what looks like a directive is nearly always the harness's own scaffolding, an oversized-result notice, a bash-timeout caution or a refused-citation notice, never a planted attack. Neither arm's mistakes sit inside the other's: the regular expression's three misses are directive-shaped words inside ordinary Go source or a test assertion rather than text addressed to a reader, and jev's two misses are the same refused-citation caution scored at 0.18, under its own line, which the literal word match caught. The two-task test found no separation, 0.03 to 0.06 apart on three cases, which is the opposite of what the shell sift found. Deciding two arms that both score in the high eighties needs a few hundred labelled cases, and this corpus is 27. It cost $0.000935 over 27 live calls.",

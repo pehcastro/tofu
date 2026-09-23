@@ -78,7 +78,7 @@ Why the rest are not compared:
 
 ## Every dated report, newest first
 
-44 dated reports over 28 benches. 6 benches carry none. 6 are withdrawn whole or in part, 1 is stale, and 13 reports name no conclusion a reader can find. A withdrawal declared from outside a report lives in `bench/report/withdrawals.json`; every other state is declared by the report's own first lines.
+45 dated reports over 28 benches. 6 benches carry none. 6 are withdrawn whole or in part, 1 is stale, and 14 reports name no conclusion a reader can find. A withdrawal declared from outside a report lives in `bench/report/withdrawals.json`; every other state is declared by the report's own first lines.
 
 | Bench | Date | Report | What it found | Sample | State |
 |---|---|---|---|---|---|
@@ -95,6 +95,7 @@ Why the rest are not compared:
 | sweep | 2026-09-23 | `bench/sweep/report-2026-09-23.md` | unparsed: no heading in this file names its own answer | every top level package under bench, 33 of them, with a computed source and test line baseline per package so a later sweep can diff it | stands |
 | thrift | 2026-09-23 | `bench/thrift/report-2026-09-23-overcap.md` | unparsed: no heading in this file names its own answer | 9 distinct read and search artifacts over the 32,768 byte cap, out of 39 stored, with 3 judged live and 6 skipped for a stated reason | stands |
 | thrift | 2026-09-23 | `bench/thrift/report-2026-09-23.md` | unparsed: no heading in this file names its own answer | 110 recorded sessions read out of 111 entries, 119 stored artifact handles, and 8 read and search results judged live inside a 400 call cap with 31 skipped | stands |
+| tokens | 2026-09-23 | `bench/tokens/report-2026-09-23.md` | unparsed: no heading in this file names its own answer | the same 18-tool registry cmd/tofu/run.go builds for a plain tofu run, that TOFU-520 measured | stands |
 | forkcache | 2026-09-22 | `bench/forkcache/report-2026-09-22.txt` | The first request after a context fork READS cache and writes none. On both recorded forks it read the whole cacheable head and paid zero cache write. | 2 recorded context forks | withdrawn in part |
 | harness | 2026-09-22 | `bench/harness/report-2026-09-22.md` | unparsed: no heading in this file names its own answer | 4 recorded rows, 3 of them carrying a turn count and a wall clock, plus a 3-repeat fixture that fixes the output shape | stands |
 | picker | 2026-09-22 | `bench/picker/report-2026-09-22.txt` | The corpus cannot separate the three arms. There are zero recorded window readings in .tofu, over zero distinct accounts, so first usable, round robin and headroom make the same choice at every decision point there is, which is none. | 404 files and 18,401 rows read, 0 readings over 0 distinct accounts | stands |
@@ -148,4 +149,4 @@ Why the rest are not compared:
 
 ### Where these reports came from
 
-4 of 44 reports are built by running the package's own code again and 40 of 44 from the markdown's own text, which is weaker evidence, and every one of those says so.
+4 of 45 reports are built by running the package's own code again and 41 of 45 from the markdown's own text, which is weaker evidence, and every one of those says so.
