@@ -1,0 +1,44 @@
+kind: method_table
+table_version: 1
+notes: one row per decision point, naming which method decides it. a point reads judged, cheap or unwired, and unwired is a stated answer rather than a default. changing a point's method is changing the one method line here. this file does not say whether a rule is enforced, which is the rule's own mode field.
+
+methods:
+  shell_sift:
+    method: judged
+    why: jev keeps 27 of 34 planted needles against the free arm's 18, 1.50x, at equal bytes saved
+    measured: bench/sift/report-2026-09-21.md
+    cost: a median $0.000540 a session, p95 $0.005508, worst $0.011070 over 109 recorded sessions, and 838 ms on a shell call
+  stop_check:
+    method: judged
+    why: jev agrees with 71 of 78 hand labels against the repeat check's 68, 1.04x, and makes a false stop a third as often
+    measured: bench/stopcheck/report-2026-09-21.md
+    cost: a median $0.000074 a session over the 15 recorded sessions that ran it, worst $0.004574, $0.0087 over the whole recorded ledger, and the call is already made in shadow
+  page_sift:
+    method: unwired
+    why: web.Reduce strips the same link-only rows at fetch time, so the link stripper elides 0 further bytes on all 24 recorded pages, 0.00 percent, where Reduce itself takes 11.69 percent of the extracted bytes. a second pass of one rule is not a decision point
+    measured: bench/websift/report-2026-09-21.md, remeasured over the same 24 pages by TestThePageSiftRemovesNothingWebReduceHasNotAlreadyRemoved
+  read_worth:
+    method: cheap
+    why: a fifteen word floor agrees with 87.1 percent of the labels, the same as jev, and saves 12.6 percent of bytes against 9.3. a tie goes to the method that costs nothing
+    measured: bench/readworth/report-2026-09-21.md
+    cost: nothing, and no call is made
+  ask:
+    method: unwired
+    why: jev is right on 4 of 7 recorded moments against the ownership check's 3, 1.33x, and no cost a session can be produced. the recorded ledger carries no ask row and nothing measures moments of doubt per session
+    measured: bench/ask/report-2026-09-21.md
+  file_shortlist:
+    method: unwired
+    why: jev ranks the right file first on 4 of 4 against bm25's 1, 4.00x, over four questions against the floor of 30 this shape needs
+    measured: bench/shortlist/report-2026-09-21.md
+  tool_gate:
+    method: unwired
+    why: the 178 case set carries no free arm, and the 6 of 6 a regular expression scored was over six cases written by something that could see all six
+    measured: bench/cost/report-2026-09-19.md
+  instruction_trust:
+    method: unwired
+    why: nothing is measured
+    measured: none
+  spawn_gate:
+    method: unwired
+    why: nothing is measured, and it waits on one recorded parent and child
+    measured: none
