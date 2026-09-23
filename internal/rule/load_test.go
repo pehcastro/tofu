@@ -176,6 +176,34 @@ func TestParseRuleRefusesAMeasuredRuleThatDeclaresAChecker(t *testing.T) {
 	}
 }
 
+func TestParseRuleRefusesEnforcedOnARuleNoCheckerCanAct(t *testing.T) {
+	for _, one := range []struct {
+		kind string
+		body string
+	}{
+		{kind: string(KindMeasured), body: "id: flake_disagreement\ndomain: qa\nkind: measured\nconcern: code_rules\nmeasurement: bench/testquality/flakerun\nsource: s\nevidence: e\nmode: enforced\n"},
+		{kind: string(KindHuman), body: "id: quote\ndomain: general\nkind: human\nconcern: task_shaping\ntext: read the turn\nmode: enforced\n"},
+	} {
+		_, err := parseRule([]byte(one.body), "library/"+one.kind+".yaml")
+		if err == nil {
+			t.Fatalf("parseRule accepted mode enforced on a %s rule, which has no checker and so can never block", one.kind)
+		}
+		if !strings.Contains(err.Error(), "enforced") || !strings.Contains(err.Error(), "checker") {
+			t.Fatalf("the refusal on a %s rule names neither the mode nor the missing checker: %v", one.kind, err)
+		}
+	}
+}
+
+func TestParseRuleKeepsOffOnARuleNoCheckerCanActBecauseLayerDropsIt(t *testing.T) {
+	r, err := parseRule([]byte("id: quote\ndomain: general\nkind: human\nconcern: task_shaping\ntext: read the turn\nmode: off\n"), "project/quote@1.yaml")
+	if err != nil {
+		t.Fatalf("parseRule refused mode off on a human rule, and off is how a project drops one: %v", err)
+	}
+	if kept := Layer([]Rule{{ID: "quote", Kind: KindHuman, Mode: ModeShadow}}, []Rule{r}); len(kept) != 0 {
+		t.Fatalf("Layer kept %+v after the project turned the rule off", kept)
+	}
+}
+
 func TestParseRuleRefusesAStructuralRuleThatDeclaresAMeasurement(t *testing.T) {
 	_, err := parseRule([]byte("id: comments\ndomain: dev\nkind: structural\nchecker: comments\nconcern: code_rules\nmeasurement: bench/testquality/flakerun\n"), "library/dev/go/rules/comments@1.yaml")
 	if err == nil {

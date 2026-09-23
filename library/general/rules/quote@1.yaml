@@ -2,7 +2,6 @@ id: quote
 domain: general
 kind: human
 concern: task_shaping
-mode: shadow
 condition: \[quote#[0-9a-z]+\]
 source: library/general/references/quote-resolution.md
-text: a message carrying [quote#abcd] names one recorded turn: read that turn before answering and cite its words rather than paraphrase. an id matching no turn, or more than one, resolves to neither: name which happened and ask for the reference again, never the nearest turn. a turn recorded before event ids existed is quotable and resolves the same way, its id derived from the session and the turn's place in it
+text: a message carrying [quote#abcd] names one recorded turn: read that turn before answering, by calling the quote tool with that id, and cite its words rather than paraphrase. an id matching no turn, or more than one, resolves to neither: the tool says which of the two happened, so name it and ask for the reference again, never the nearest turn. a turn recorded before event ids existed is quotable and resolves the same way, its id derived from the session and the turn's place in it. the tool hands back what was said and the names of the tools that ran, never a tool's arguments and never its output, so ask outright for anything else

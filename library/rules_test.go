@@ -1,12 +1,75 @@
 package library_test
 
 import (
+	"io/fs"
+	"os"
+	"path"
 	"strings"
 	"testing"
 
 	"tofu/internal/rule"
 	"tofu/library"
 )
+
+func everyRuleFile(t *testing.T) map[string]string {
+	t.Helper()
+	found := map[string]string{}
+	err := fs.WalkDir(library.Files(), ".", func(name string, entry fs.DirEntry, err error) error {
+		if err != nil || entry.IsDir() || path.Base(path.Dir(name)) != "rules" {
+			return err
+		}
+		data, err := fs.ReadFile(library.Files(), name)
+		if err != nil {
+			return err
+		}
+		found[name] = string(data)
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("walking the shipped rules: %v", err)
+	}
+	return found
+}
+
+func TestTheReadmeNamesEveryRuleThatShipsEnforced(t *testing.T) {
+	readme, err := os.ReadFile("README.md")
+	if err != nil {
+		t.Fatalf("reading the library README: %v", err)
+	}
+	said := string(readme)
+	enforced := 0
+	for name, body := range everyRuleFile(t) {
+		if !strings.Contains(body, "mode: enforced") {
+			continue
+		}
+		enforced++
+		id := strings.SplitN(path.Base(name), "@", 2)[0]
+		if !strings.Contains(said, id) {
+			t.Fatalf("%s ships mode: enforced and the README never names %s, so a reader has no way to learn what being enforced does for it", name, id)
+		}
+	}
+	if enforced == 0 {
+		t.Fatal("no shipped rule declares mode: enforced, so this test proves nothing")
+	}
+	t.Logf("%d shipped rule files declare mode: enforced", enforced)
+}
+
+func TestNoRuleWithoutACheckerCarriesAModeLine(t *testing.T) {
+	checkerless := 0
+	for name, body := range everyRuleFile(t) {
+		if strings.Contains(body, "kind: "+rule.ThresholdKind) || strings.Contains(body, "checker:") {
+			continue
+		}
+		checkerless++
+		if strings.Contains(body, "mode:") {
+			t.Fatalf("%s names no checker and declares a mode, and shadow against enforced decides nothing for a rule nothing checks", name)
+		}
+	}
+	if checkerless == 0 {
+		t.Fatal("every shipped rule names a checker or is a decision point, so this test proves nothing")
+	}
+	t.Logf("%d shipped rule files name no checker and carry no mode", checkerless)
+}
 
 func shippedRule(t *testing.T, id string) rule.Rule {
 	t.Helper()

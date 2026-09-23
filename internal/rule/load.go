@@ -103,6 +103,9 @@ func parseRule(data []byte, path string) (Rule, error) {
 	if r.Concern.neverConditional() && !r.Trigger.AlwaysOn() {
 		return Rule{}, fmt.Errorf("%s: rule %q is concern %s and declares a trigger, and %s are never conditional", path, r.ID, r.Concern, concernNames(neverConditionalConcerns()))
 	}
+	if r.Mode == ModeEnforced && (r.Kind == KindMeasured || r.Kind == KindHuman) {
+		return Rule{}, fmt.Errorf("%s: rule %q is kind %s and declares mode %s, and only a rule naming a checker can block: use %s to drop it or leave the mode out", path, r.ID, r.Kind, ModeEnforced, ModeOff)
+	}
 	if r.Kind == KindMeasured {
 		if r.Checker != "" {
 			return Rule{}, fmt.Errorf("%s: rule %q is kind %s and declares checker %q, a measured rule names a measurement instead", path, r.ID, r.Kind, r.Checker)

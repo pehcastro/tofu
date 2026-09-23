@@ -1,19 +1,25 @@
 ---
 id: quote-resolution
 domain: general
-document: interface/tui/quote and internal/session, read in this repository on 2026-09-22
+document: interface/tui/quote, internal/turn/tools and internal/session, read in this repository on 2026-09-23
 found: this repository; this file is a description of what the code does, not a quotation
 ---
 
 # How a quote reference resolves
 
-A message can carry `[quote#abcd]`, where `abcd` is a short prefix of a recorded event id. Two functions turn that into a turn, and between them they already name every outcome the rule has to talk about.
+A message can carry `[quote#abcd]`, where `abcd` is the tail of a recorded event id. The `quote` tool turns that into a turn, and the functions under it already name every outcome the rule has to talk about.
 
-## What the two functions do
+## What the tool does
+
+`internal/turn/tools.Quote` takes the reference as the model received it, reads the recorded session it belongs to, and returns that turn's own words, the names of the tools that ran, and nothing else. A tool call's arguments and a tool's output are never handed back, so a credential pasted into a command line is not repeated by the quote. What the person typed comes back as it was recorded, which is the text that was already sent when the turn happened.
+
+A turn larger than the tool result cap comes back cut at the cap, with a note naming its whole size in bytes and how many of them are there. The session record on disk is never written by a quote.
+
+## What the two functions under it do
 
 `interface/tui/quote.Collect` walks a conversation and keeps one `Turn` per utterance: the event id, who said it, and the first non empty line of what was said, or the names of the tools that ran when there was no text. A turn recorded before event ids existed is not skipped. It is given an id derived from the session and the turn's place in it, by `internal/session.EventIDFor`, so an old transcript is quotable on the same terms as a new one.
 
-`interface/tui/quote.Resolve` hands those ids to `internal/session.FindByHash` and returns the turn behind the one that matched.
+`interface/tui/quote.Resolve` hands those ids to `internal/session.FindByHash` and returns the turn behind the one that matched. The tool derives its ids the same way and goes through the same `FindByHash`, so the picker and the model read one policy rather than two.
 
 ## The three outcomes are the function's own
 
