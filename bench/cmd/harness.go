@@ -244,7 +244,7 @@ func replayOneRepeat(out, errOut io.Writer, plan harness.Plan, opts harnessOpts)
 }
 
 func printEveryPlan(out io.Writer, opts harnessOpts) error {
-	var apart []string
+	plans := make([]harness.Plan, 0, 3)
 	for _, arm := range []harness.Arm{harness.ArmTofu, harness.ArmClaude, harness.ArmCodex} {
 		plan, err := harness.BuildPlan(".", arm, opts.task, opts.version)
 		if err != nil {
@@ -253,14 +253,45 @@ func printEveryPlan(out io.Writer, opts harnessOpts) error {
 		if err := harness.Fprint(out, plan); err != nil {
 			return err
 		}
-		if plan.Effort != harness.AskedEffort {
-			apart = append(apart, fmt.Sprintf("%s runs at %s: %s", arm, plan.Effort, plan.EffortSetBy))
+		plans = append(plans, plan)
+	}
+	_, _ = fmt.Fprint(out, parityLine(plans))
+	return nil
+}
+
+func parityLine(plans []harness.Plan) string {
+	var apart []string
+	for _, p := range plans {
+		if p.Effort != harness.AskedEffort {
+			apart = append(apart, fmt.Sprintf("%s runs thinking effort %s: %s", p.Arm, p.Effort, p.EffortLine()))
 		}
 	}
+	apart = append(apart, posturesApart(plans)...)
 	if len(apart) == 0 {
-		_, _ = fmt.Fprintf(out, "every arm was asked for thinking effort %s on its own command line, so the three are on a par\n", harness.AskedEffort)
+		return fmt.Sprintf("every arm was asked for thinking effort %s and stands on the same posture, so the three are on a par\n", harness.AskedEffort)
+	}
+	return fmt.Sprintf("thinking effort %s was asked for and %s\n", harness.AskedEffort, strings.Join(apart, "; "))
+}
+
+func posturesApart(plans []harness.Plan) []string {
+	counts := map[string]int{}
+	for _, p := range plans {
+		counts[p.Posture]++
+	}
+	if len(counts) == 1 {
 		return nil
 	}
-	_, _ = fmt.Fprintf(out, "thinking effort %s was asked for and %s\n", harness.AskedEffort, strings.Join(apart, "; "))
-	return nil
+	majority := ""
+	for value, count := range counts {
+		if count*2 > len(plans) {
+			majority = value
+		}
+	}
+	var apart []string
+	for _, p := range plans {
+		if majority == "" || p.Posture != majority {
+			apart = append(apart, fmt.Sprintf("%s stands on a different posture: %s", p.Arm, p.PostureLine()))
+		}
+	}
+	return apart
 }

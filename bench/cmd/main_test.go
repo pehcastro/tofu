@@ -47,6 +47,56 @@ func TestTofuUnderTestTakesTheNamedBinaryAndBuildsNothing(t *testing.T) {
 	}
 }
 
+func threeAgreeingPlans() []harness.Plan {
+	return []harness.Plan{
+		{Arm: harness.ArmTofu, Effort: harness.AskedEffort, EffortSetBy: "tofu effort", Posture: "full permission", PostureSetBy: "tofu posture"},
+		{Arm: harness.ArmClaude, Effort: harness.AskedEffort, EffortSetBy: "claude effort", Posture: "full permission", PostureSetBy: "claude posture"},
+		{Arm: harness.ArmCodex, Effort: harness.AskedEffort, EffortSetBy: "codex effort", Posture: "full permission", PostureSetBy: "codex posture"},
+	}
+}
+
+func TestParityLineAgreesOnEffortAndPosture(t *testing.T) {
+	line := parityLine(threeAgreeingPlans())
+	want := "every arm was asked for thinking effort " + string(harness.AskedEffort) + " and stands on the same posture, so the three are on a par\n"
+	if line != want {
+		t.Fatalf("line = %q, want %q", line, want)
+	}
+}
+
+func TestParityLineNamesTheAxisAndTheArmWhenPostureDiffers(t *testing.T) {
+	plans := threeAgreeingPlans()
+	plans[2].Posture, plans[2].PostureSetBy = "sandboxed", "codex sandbox flag"
+	line := parityLine(plans)
+	if !strings.Contains(line, "posture") {
+		t.Fatalf("line = %q, want it to name the posture axis", line)
+	}
+	if !strings.Contains(line, string(harness.ArmCodex)) {
+		t.Fatalf("line = %q, want it to name codex, the arm that differs", line)
+	}
+	if strings.Contains(line, string(harness.ArmClaude)+" stands on a different posture") {
+		t.Fatalf("line = %q, claude agrees with tofu and should not be named", line)
+	}
+}
+
+func TestParityLineNamesAllThreeWhenNoMajorityAgreesOnPosture(t *testing.T) {
+	atRepositoryRoot(t)
+	var plans []harness.Plan
+	for _, arm := range []harness.Arm{harness.ArmTofu, harness.ArmClaude, harness.ArmCodex} {
+		plan, err := harness.BuildPlan(".", arm, "hono", 1)
+		if err != nil {
+			t.Fatalf("BuildPlan(%s): %v", arm, err)
+		}
+		plans = append(plans, plan)
+	}
+	line := parityLine(plans)
+	for _, arm := range []harness.Arm{harness.ArmTofu, harness.ArmClaude, harness.ArmCodex} {
+		want := string(arm) + " stands on a different posture:"
+		if !strings.Contains(line, want) {
+			t.Fatalf("line = %q, want it to name %s as apart, none is a baseline the other two are compared against", line, arm)
+		}
+	}
+}
+
 func atRepositoryRoot(t *testing.T) {
 	t.Helper()
 	wd, err := os.Getwd()
