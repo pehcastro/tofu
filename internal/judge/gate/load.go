@@ -137,7 +137,14 @@ func LoadFS(shipped fs.FS, ref string) (Rule, error) {
 	if err != nil {
 		return Rule{}, err
 	}
-	return parse(data, path.Join(shippedRoot, name))
+	r, err := parse(data, path.Join(shippedRoot, name))
+	if err != nil {
+		if dir := path.Dir(name); dir != "." {
+			return Rule{}, fmt.Errorf("%w (%s was read as a rule because its directory is named %q)", err, path.Join(shippedRoot, dir), "rules")
+		}
+		return Rule{}, err
+	}
+	return r, nil
 }
 
 func Load(path string) (Rule, error) {

@@ -1,10 +1,12 @@
 package gate
 
 import (
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"testing/fstest"
 
 	"tofu/internal/judge/question"
 	shipped "tofu/library"
@@ -112,6 +114,55 @@ func TestLoadPointFailsWhenTheProjectRuleDoesNotMatchTheQuestions(t *testing.T) 
 	t.Chdir(root)
 	if _, _, err := LoadPoint(shipped.Files(), "tool_gate@1", set); err == nil {
 		t.Fatal("LoadPoint accepted a project rule naming a question the set does not have")
+	}
+}
+
+func TestLoadFSNamesTheDirectoryAndTheConventionWhenARuleFailsToParse(t *testing.T) {
+	shipped := fstest.MapFS{
+		"tools/shell/rules/broken@1.yaml": {Data: []byte("domain: general\nkind: threshold\nrule_version: 1\n")},
+	}
+	_, err := LoadFS(shipped, "broken@1")
+	if err == nil {
+		t.Fatal("LoadFS accepted a rule that declares no name")
+	}
+	if !strings.Contains(err.Error(), "library/tools/shell/rules") {
+		t.Fatalf("the error does not name the directory the file was read from: %v", err)
+	}
+	if !strings.Contains(err.Error(), `was read as a rule because its directory is named "rules"`) {
+		t.Fatalf("the error does not say the directory's name is why the file was read: %v", err)
+	}
+}
+
+func thresholdFilesOnDisk(t *testing.T, library string) []string {
+	t.Helper()
+	var found []string
+	err := filepath.WalkDir(library, func(name string, entry fs.DirEntry, err error) error {
+		if err != nil || entry.IsDir() || filepath.Base(filepath.Dir(name)) != "rules" || !strings.HasSuffix(name, ".yaml") {
+			return err
+		}
+		data, err := os.ReadFile(name)
+		if err != nil {
+			return err
+		}
+		if strings.Contains(string(data), "kind: "+ThresholdKind) {
+			found = append(found, strings.TrimSuffix(filepath.Base(name), ".yaml"))
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("walking %s: %v", library, err)
+	}
+	return found
+}
+
+func TestRefsRecruitsExactlyTheThresholdFilesOnDisk(t *testing.T) {
+	onDisk := thresholdFilesOnDisk(t, filepath.Join("..", "..", "..", "library"))
+	refs, err := Refs(shipped.Files())
+	if err != nil {
+		t.Fatalf("Refs: %v", err)
+	}
+	if len(refs) != len(onDisk) {
+		t.Fatalf("Refs = %d, want the %d threshold files on disk: refs=%v onDisk=%v", len(refs), len(onDisk), refs, onDisk)
 	}
 }
 

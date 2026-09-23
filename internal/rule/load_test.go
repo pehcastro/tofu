@@ -82,6 +82,19 @@ func TestLoadFSNamesTheFileInAnError(t *testing.T) {
 	}
 }
 
+func TestLoadFSNamesTheDirectoryAndTheConventionWhenARuleFailsToParse(t *testing.T) {
+	_, err := LoadFS(fstest.MapFS{"tools/shell/rules/broken@1.yaml": {Data: []byte("id: broken\ndomain: general\nkind: rumour\nchecker: none\n")}}, "library")
+	if err == nil {
+		t.Fatal("LoadFS accepted a rule whose kind is not a kind")
+	}
+	if !strings.Contains(err.Error(), "library/tools/shell/rules") {
+		t.Fatalf("the error does not name the directory the file was read from: %v", err)
+	}
+	if !strings.Contains(err.Error(), `was read as a rule because its directory is named "rules"`) {
+		t.Fatalf("the error does not say the directory's name is why the file was read: %v", err)
+	}
+}
+
 func TestParseRuleRefusesARuleWithNoDomainByName(t *testing.T) {
 	_, err := parseRule([]byte("id: em_dash\nkind: structural\nchecker: em_dash\n"), "library/general/rules/em_dash@1.yaml")
 	if err == nil {

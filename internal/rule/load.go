@@ -35,6 +35,9 @@ func LoadFS(shipped fs.FS, root string) ([]Rule, error) {
 		}
 		one, err := parseRule(data, path.Join(root, name))
 		if err != nil {
+			if dir != "." {
+				return fmt.Errorf("%w (%s was read as a rule because its directory is named %q)", err, path.Join(root, dir), "rules")
+			}
 			return err
 		}
 		loaded = append(loaded, one)
