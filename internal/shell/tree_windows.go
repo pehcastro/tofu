@@ -7,6 +7,8 @@ import (
 	"os/exec"
 	"runtime"
 	"strconv"
+	"syscall"
+	"time"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
@@ -18,6 +20,14 @@ const (
 	jobAccessQuery     = 0x0004
 	jobAccessTerminate = 0x0008
 )
+
+type jobProcessIDList struct {
+	AssignedProcesses uint32
+	IDsInList         uint32
+	FirstID           uintptr
+}
+
+var errTreeStillExiting = errors.New("shell: the process tree had not finished exiting")
 
 func jobName(pid int) (*uint16, error) {
 	return windows.UTF16PtrFromString("tofu-shell-" + strconv.Itoa(pid))
@@ -44,12 +54,45 @@ func adoptIntoJob(pid int) (windows.Handle, error) {
 	return job, nil
 }
 
+func spawnSuspended(cmd *exec.Cmd) error {
+	cmd.SysProcAttr = &syscall.SysProcAttr{CreationFlags: windows.CREATE_SUSPENDED}
+	return cmd.Start()
+}
+
+func resumeSuspended(pid int) error {
+	snapshot, err := windows.CreateToolhelp32Snapshot(windows.TH32CS_SNAPTHREAD, 0)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = windows.CloseHandle(snapshot) }()
+	var entry windows.ThreadEntry32
+	entry.Size = uint32(unsafe.Sizeof(entry))
+	for err := windows.Thread32First(snapshot, &entry); err == nil; err = windows.Thread32Next(snapshot, &entry) {
+		if entry.OwnerProcessID != uint32(pid) {
+			continue
+		}
+		thread, err := windows.OpenThread(windows.THREAD_SUSPEND_RESUME, false, entry.ThreadID)
+		if err != nil {
+			return err
+		}
+		_, err = windows.ResumeThread(thread)
+		_ = windows.CloseHandle(thread)
+		return err
+	}
+	return errors.New("shell: the suspended shell had no thread to resume")
+}
+
 func startTree(cmd *exec.Cmd) (tree, error) {
-	if err := cmd.Start(); err != nil {
+	if err := spawnSuspended(cmd); err != nil {
 		return tree{}, err
 	}
 	job, err := adoptIntoJob(cmd.Process.Pid)
 	if err != nil {
+		_ = cmd.Process.Kill()
+		return tree{}, err
+	}
+	if err := resumeSuspended(cmd.Process.Pid); err != nil {
+		_ = windows.CloseHandle(job)
 		_ = cmd.Process.Kill()
 		return tree{}, err
 	}
@@ -102,6 +145,51 @@ func treeAlive(pid int) bool {
 	return err == nil && active > 0
 }
 
+func memberIDs(job windows.Handle, assigned uint32) ([]uint32, error) {
+	list := make([]jobProcessIDList, assigned)
+	if err := windows.QueryInformationJobObject(job, windows.JobObjectBasicProcessIdList, uintptr(unsafe.Pointer(&list[0])), uint32(len(list))*uint32(unsafe.Sizeof(list[0])), nil); err != nil {
+		return nil, err
+	}
+	ids := make([]uint32, 0, list[0].IDsInList)
+	for _, member := range unsafe.Slice(&list[0].FirstID, list[0].IDsInList) {
+		ids = append(ids, uint32(member))
+	}
+	return ids, nil
+}
+
+func memberHandles(job windows.Handle, assigned uint32) ([]windows.Handle, error) {
+	ids, err := memberIDs(job, assigned)
+	if err != nil {
+		return nil, err
+	}
+	handles := make([]windows.Handle, 0, len(ids))
+	for _, id := range ids {
+		handle, err := windows.OpenProcess(windows.SYNCHRONIZE, false, id)
+		if err != nil {
+			continue
+		}
+		handles = append(handles, handle)
+	}
+	return handles, nil
+}
+
+func waitMembersExited(handles []windows.Handle, deadline time.Time) error {
+	for _, handle := range handles {
+		remaining := time.Until(deadline)
+		if remaining <= 0 {
+			return errTreeStillExiting
+		}
+		state, err := windows.WaitForSingleObject(handle, uint32(remaining.Milliseconds()))
+		if err != nil {
+			return err
+		}
+		if state != windows.WAIT_OBJECT_0 {
+			return errTreeStillExiting
+		}
+	}
+	return nil
+}
+
 func killTree(pid int) error {
 	job, err := openJobByName(pid, jobAccessQuery|jobAccessTerminate)
 	if err != nil {
@@ -115,5 +203,17 @@ func killTree(pid int) error {
 	if active == 0 {
 		return ErrTreeGone
 	}
-	return windows.TerminateJobObject(job, 1)
+	handles, err := memberHandles(job, active)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		for _, handle := range handles {
+			_ = windows.CloseHandle(handle)
+		}
+	}()
+	if err := windows.TerminateJobObject(job, 1); err != nil {
+		return err
+	}
+	return waitMembersExited(handles, time.Now().Add(killWait))
 }

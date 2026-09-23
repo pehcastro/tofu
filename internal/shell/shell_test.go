@@ -109,22 +109,25 @@ func TestKillingATwiceEndedProcessIsNotOverwrittenByItsOwnExit(t *testing.T) {
 	}
 }
 
+func waitForDescendants(t *testing.T, r *Registry, name string) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		log, err := r.Tail(name, DefaultTail)
+		if err == nil && strings.Contains(log, "listening") {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatalf("%q never wrote its log, so nothing proves its descendants had started", name)
+}
+
 func TestKillLeavesNothingHoldingTheLogFileOpen(t *testing.T) {
 	r := registry(t)
 	if _, err := r.Start(t.TempDir(), "dev-server", "sleep 30 & echo listening on :3000; wait"); err != nil {
 		t.Fatal(err)
 	}
-	spawned := false
-	for deadline := time.Now().Add(5 * time.Second); !spawned && time.Now().Before(deadline); {
-		log, err := r.Tail("dev-server", DefaultTail)
-		spawned = err == nil && strings.Contains(log, "listening")
-		if !spawned {
-			time.Sleep(10 * time.Millisecond)
-		}
-	}
-	if !spawned {
-		t.Fatal("the process never wrote its log, so nothing proves a descendant was holding it")
-	}
+	waitForDescendants(t, r, "dev-server")
 	if err := r.Kill("dev-server"); err != nil {
 		t.Fatal(err)
 	}
