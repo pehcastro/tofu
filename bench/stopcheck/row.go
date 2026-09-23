@@ -68,6 +68,7 @@ func toJevAnswers(answers []ledger.Answer) map[string]jev.Answer {
 }
 
 type rowInput struct {
+	bench        string
 	state        any
 	stateBuilder string
 	wording      int
@@ -94,6 +95,7 @@ func appendRow(writer *ledger.Writer, in rowInput) (ledger.Row, error) {
 	}
 	reason.Mode = in.mode
 	row := ledger.Row{
+		Bench:         in.bench,
 		Point:         in.pol.Name,
 		Questions:     in.pol.Questions,
 		Version:       in.wording,

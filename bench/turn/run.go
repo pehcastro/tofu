@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"tofu/bench/stat"
+	"tofu/internal/konst"
 	"tofu/internal/llm"
 	"tofu/internal/llm/wire/openrouter"
 	"tofu/internal/transport"
@@ -70,7 +71,7 @@ func Run(ctx context.Context, key string) (Result, error) {
 	return result, nil
 }
 
-func runOne(ctx context.Context, client *llm.Client, task Task, armName string, maxSteps, rep int) RunResult {
+func runOne(ctx context.Context, model iturn.Model, task Task, armName string, maxSteps, rep int) RunResult {
 	failed := func(err error) RunResult {
 		return RunResult{Task: task.Name, Arm: armName, Rep: rep, CallErr: err.Error()}
 	}
@@ -93,11 +94,14 @@ func runOne(ctx context.Context, client *llm.Client, task Task, armName string, 
 	}
 
 	row, runErr := iturn.Run(ctx, iturn.Config{
-		Model: client,
+		Model: model,
+		Spend: iturn.SpendAPIKey,
 		Tools: tools,
 		Task:  task.Prompt,
 		Caps: iturn.Caps{
-			MaxSteps: maxSteps,
+			MaxSteps:         maxSteps,
+			LoopGuardRepeats: konst.TurnLoopGuardRepeats,
+			LoopGuardWindow:  konst.TurnLoopGuardWindow,
 		},
 		ResultBytesCap: 4096,
 	})

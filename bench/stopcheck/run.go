@@ -22,6 +22,8 @@ import (
 
 const Point = state.StopCheckRuleRef
 
+const BenchName = "stopcheck"
+
 type StepResult struct {
 	Turn      string
 	Step      int
@@ -188,6 +190,7 @@ func (b Battery) decide(ctx context.Context, turn Turn, at int) (StepResult, err
 	}
 
 	in := rowInput{
+		bench: BenchName,
 		state: raw, stateBuilder: builder, wording: b.wording,
 		pol: b.pol, mode: b.mode, modeReason: b.reason, turnID: turn.ID,
 	}

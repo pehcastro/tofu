@@ -7,7 +7,6 @@ import (
 	"go/token"
 	"os"
 	"path/filepath"
-	"reflect"
 	"strconv"
 	"strings"
 	"testing"
@@ -196,6 +195,23 @@ func TestWhyOnAnUnknownIDExitsTwoAndNamesWhereItLooked(t *testing.T) {
 	}
 }
 
+func storedFields(t *testing.T, dir, id string) map[string]any {
+	t.Helper()
+	row, found, err := ledger.NewReader(dir).ByID(id)
+	if err != nil || !found {
+		t.Fatalf("reading row %s back: found %v, err %v", id, found, err)
+	}
+	line, err := json.Marshal(row)
+	if err != nil {
+		t.Fatalf("marshalling the stored row: %v", err)
+	}
+	var fields map[string]any
+	if err := json.Unmarshal(line, &fields); err != nil {
+		t.Fatalf("the stored row does not parse: %v\n%s", err, line)
+	}
+	return fields
+}
+
 func TestWhyJSONParsesAndCarriesEveryStoredField(t *testing.T) {
 	t.Chdir(t.TempDir())
 	dir, err := sys.LogDir()
@@ -230,35 +246,61 @@ func TestWhyJSONParsesAndCarriesEveryStoredField(t *testing.T) {
 		t.Fatalf("--json output does not parse: %v\n%s", err, out.String())
 	}
 
-	writtenOnlyWhenTheStateIsElided := map[string]bool{"state_elision": true, "fingerprint": true}
-	rowType := reflect.TypeOf(ledger.Row{})
-	for i := 0; i < rowType.NumField(); i++ {
-		tag := rowType.Field(i).Tag.Get("json")
-		name := strings.Split(tag, ",")[0]
-		if name == "" || name == "-" || writtenOnlyWhenTheStateIsElided[name] {
-			continue
-		}
+	carried := storedFields(t, dir, replay.ID)
+	for name := range carried {
 		if _, ok := fields[name]; !ok {
-			t.Errorf("the row carries field %q, --json dropped it: %s", name, out.String())
+			t.Errorf("the stored row carries field %q, --json dropped it: %s", name, out.String())
 		}
 	}
 
-	reason, ok := fields["reason"].(map[string]any)
+	printed, ok := fields["reason"].(map[string]any)
 	if !ok {
 		t.Fatalf("the row carries a reason, --json dropped it: %s", out.String())
 	}
-	reasonType := reflect.TypeOf(ledger.Reason{})
-	for i := 0; i < reasonType.NumField(); i++ {
-		tag := reasonType.Field(i).Tag.Get("json")
-		name := strings.Split(tag, ",")[0]
-		if name == "" || name == "-" {
-			continue
-		}
-		if _, ok := reason[name]; !ok {
-			t.Errorf("the reason carries field %q, --json dropped it: %s", name, out.String())
+	for name := range carried["reason"].(map[string]any) {
+		if _, ok := printed[name]; !ok {
+			t.Errorf("the stored reason carries field %q, --json dropped it: %s", name, out.String())
 		}
 	}
 	t.Logf("tofu why %s --json:\n%s", replay.ID, out.String())
+}
+
+func TestARowCarryingAFieldThisBuildDoesNotKnowStillReadsAndPrints(t *testing.T) {
+	t.Chdir(t.TempDir())
+	dir, err := sys.LogDir()
+	if err != nil {
+		t.Fatalf("Dir: %v", err)
+	}
+	original, _ := writeFixtureLedger(t, dir)
+
+	fields := storedFields(t, dir, original.ID)
+	fields["bench"] = "sift-1"
+	fields["a_field_a_later_build_adds"] = "tenth"
+	line, err := json.Marshal(fields)
+	if err != nil {
+		t.Fatalf("marshalling the fixture: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, original.Day()+".jsonl"), append(line, '\n'), 0o644); err != nil {
+		t.Fatalf("writing the fixture: %v", err)
+	}
+
+	var out, errOut bytes.Buffer
+	if code := whyVerb([]string{original.ID, "--json"}, &out, &errOut, time.Now); code != exitOK {
+		t.Fatalf("a row carrying a field this build does not know did not print: exit %d, stderr %s", code, errOut.String())
+	}
+	var printed map[string]any
+	if err := json.Unmarshal(out.Bytes(), &printed); err != nil {
+		t.Fatalf("--json output does not parse: %v\n%s", err, out.String())
+	}
+	if printed["bench"] != "sift-1" {
+		t.Fatalf("the row carries bench sift-1, --json printed %v: %s", printed["bench"], out.String())
+	}
+	for _, name := range []string{"id", "point", "verdict", "answers", "schema"} {
+		if _, ok := printed[name]; !ok {
+			t.Fatalf("an unknown field cost the row its %q: %s", name, out.String())
+		}
+	}
+	t.Logf("tofu why %s --json, one field this build knows and one it does not:\n%s", original.ID, out.String())
 }
 
 func TestWhyStateBuilderReadsDifferentlyForAnOldSchemaRowAndAnUnadoptedWriter(t *testing.T) {

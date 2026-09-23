@@ -10,13 +10,15 @@ import (
 	"tofu/internal/sys"
 )
 
-const SchemaVersion = 7
+const SchemaVersion = 8
 
 const StateBuilderSchema = 3
 
 const StateBodySchema = 6
 
 const FingerprintSchema = 7
+
+const BenchSchema = 8
 
 const dayLayout = "2006-01-02"
 
@@ -216,6 +218,22 @@ type Row struct {
 	ReplayOf      string          `json:"replay_of,omitempty"`
 	Outcome       *Outcome        `json:"outcome,omitempty"`
 	TurnID        string          `json:"turn_id,omitempty"`
+	Bench         string          `json:"bench,omitempty"`
+}
+
+type Origin string
+
+const (
+	OriginAny   Origin = ""
+	OriginTurn  Origin = "turn"
+	OriginBench Origin = "bench"
+)
+
+func (r Row) Origin() Origin {
+	if r.Bench == "" {
+		return OriginTurn
+	}
+	return OriginBench
 }
 
 func (r Row) Day() string {

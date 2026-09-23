@@ -10,8 +10,8 @@ import (
 const realLedgerDir = "../../../.tofu/log"
 
 func TestSchemaBumpedForTheFingerprint(t *testing.T) {
-	if SchemaVersion != FingerprintSchema {
-		t.Fatalf("schema version = %d, want %d, the fingerprint arrived there", SchemaVersion, FingerprintSchema)
+	if SchemaVersion < FingerprintSchema {
+		t.Fatalf("schema version = %d, below %d, where the fingerprint arrived", SchemaVersion, FingerprintSchema)
 	}
 	if FingerprintSchema <= StateBodySchema {
 		t.Fatalf("the fingerprint schema is %d and the state body schema is %d, an added field moves the version forward", FingerprintSchema, StateBodySchema)

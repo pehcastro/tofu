@@ -10,6 +10,7 @@ import (
 	"tofu/internal/judge/gate"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/judge/state"
+	"tofu/internal/konst"
 	"tofu/internal/llm"
 	"tofu/internal/turn"
 )
@@ -118,7 +119,7 @@ func TestAStopDecisionRecordedMidTurnInShadowDoesNotEndTheTurn(t *testing.T) {
 		Tools:          turn.NewRegistry(&echoTool{}),
 		Gate:           gate,
 		Task:           "list the folder",
-		Caps:           turn.Caps{MaxSteps: 10},
+		Caps:           turn.Caps{MaxSteps: 10, LoopGuardRepeats: konst.TurnLoopGuardRepeats, LoopGuardWindow: konst.TurnLoopGuardWindow},
 		ResultBytesCap: 4096,
 	})
 	if err != nil {

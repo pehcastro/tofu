@@ -201,8 +201,8 @@ func TestARowAtAPointThatDefinesNoFingerprintWritesAndReadsBack(t *testing.T) {
 	if row.Fingerprint != "" {
 		t.Fatalf("a point that defines no fingerprint wrote %q", row.Fingerprint)
 	}
-	if row.Schema != ledger.FingerprintSchema {
-		t.Fatalf("the row is schema %d, want %d", row.Schema, ledger.FingerprintSchema)
+	if row.Schema < ledger.FingerprintSchema {
+		t.Fatalf("the row is schema %d, older than the schema %d the fingerprint field arrived at", row.Schema, ledger.FingerprintSchema)
 	}
 	t.Logf("%s at %s, schema %d, no fingerprint", row.ID, row.Point, row.Schema)
 }
