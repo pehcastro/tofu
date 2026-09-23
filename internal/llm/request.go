@@ -18,6 +18,8 @@ const (
 
 func (r Role) String() string {
 	switch r {
+	case RoleUnknown:
+		return "unknown"
 	case RoleSystem:
 		return "system"
 	case RoleUser:

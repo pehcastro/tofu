@@ -19,6 +19,8 @@ const (
 
 func (o Outcome) String() string {
 	switch o {
+	case OutcomeUnknown:
+		return "unknown"
 	case OutcomeMessage:
 		return "message"
 	case OutcomeToolCalls:

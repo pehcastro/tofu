@@ -196,6 +196,12 @@ func TestDecodeNamesAFinishReasonNeitherWireHandles(t *testing.T) {
 	}
 }
 
+func TestOutcomeStringHandlesItsZeroValue(t *testing.T) {
+	if got := OutcomeUnknown.String(); got != "unknown" {
+		t.Fatalf("OutcomeUnknown.String() = %q, want %q", got, "unknown")
+	}
+}
+
 func TestDecodeRejectsAToolCallWithMalformedArguments(t *testing.T) {
 	_, err := Decode([]byte(`{"id":"gen-5","model":"m","choices":[
 {"finish_reason":"tool_calls","message":{"content":"","tool_calls":[

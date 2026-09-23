@@ -29,6 +29,12 @@ func TestEncodeRefusesAnUnknownRole(t *testing.T) {
 	}
 }
 
+func TestRoleStringHandlesItsZeroValue(t *testing.T) {
+	if got := RoleUnknown.String(); got != "unknown" {
+		t.Fatalf("RoleUnknown.String() = %q, want %q", got, "unknown")
+	}
+}
+
 func TestEncodeRefusesAnImageNamingTheWire(t *testing.T) {
 	request := Request{Messages: []Message{{Role: RoleUser, Content: "look",
 		Images: []Image{{MediaType: "image/png", Data: []byte("x")}}}}}
