@@ -39,20 +39,26 @@ func answerWordsInTask(row Row) []string {
 	return named
 }
 
-const parked = "bench/shortlist is parked: three of its four recorded rows name their own label in their own task, the tasks are the owner's words from one real session and are not rewritten, and .tofu/sessions holds two distinct turns a shortlist question can be drawn from, one of them this one. See TOFU-449 and testdata/PROVENANCE.md"
+const parked = "bench/shortlist is parked: .tofu/sessions holds two distinct turns a shortlist question can be drawn from against the twelve NeededQuestions(4,4,1,4) asks for. See TOFU-501, TOFU-449 and testdata/PROVENANCE.md"
 
-func TestNoRowNamesItsOwnLabelInItsOwnTask(t *testing.T) {
-	rows, err := ReadCorpus()
-	if err != nil {
-		t.Fatalf("ReadCorpus: %v", err)
-	}
+func leakyRows(rows []Row) []string {
 	var leaky []string
 	for _, row := range rows {
 		if named := answerWordsInTask(row); len(named) > 0 {
 			leaky = append(leaky, fmt.Sprintf("%s names %v of its label %v", row.TurnID, named, row.Label))
 		}
 	}
-	t.Skipf("%d of %d rows are refused and kept as recorded: %s. %s", len(leaky), len(rows), strings.Join(leaky, "; "), parked)
+	return leaky
+}
+
+func TestNoRowNamesItsOwnLabelInItsOwnTask(t *testing.T) {
+	rows, err := ReadCorpus()
+	if err != nil {
+		t.Fatalf("ReadCorpus: %v", err)
+	}
+	if leaky := leakyRows(rows); len(leaky) > 0 {
+		t.Fatalf("%d of %d rows name their own label in their own task, and TOFU-501 dropped the ones that did: %s", len(leaky), len(rows), strings.Join(leaky, "; "))
+	}
 }
 
 func TestAnswerWordsInTaskReadsEveryPathWordAndNothingShorterThanThree(t *testing.T) {

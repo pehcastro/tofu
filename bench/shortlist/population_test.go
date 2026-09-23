@@ -9,10 +9,9 @@ import (
 	"tofu/bench/corpus"
 )
 
-const (
-	sessionsDir                    = repoRoot + "/.tofu/sessions"
-	questionsAShortlistFigureNeeds = 30
-)
+const sessionsDir = repoRoot + "/.tofu/sessions"
+
+var questionsAShortlistFigureNeeds = NeededQuestions(4, 4, 1, 4)
 
 type population struct {
 	turns      int
@@ -83,7 +82,7 @@ func TestHowManyShortlistQuestionsTheRecordedSessionsCouldYield(t *testing.T) {
 	t.Logf("%d entries, %d turns read, %d unreadable: %d carry no task, %d change no file, %d only create files that did not exist, %d are recordable, %d of those carry a distinct task",
 		walked.EntryCount, counted.turns, len(walked.Skipped), counted.noTask, counted.noChange, counted.creation, counted.recordable, counted.distinct)
 	if counted.distinct >= questionsAShortlistFigureNeeds {
-		t.Fatalf("%d distinct recordable turns is at or above the %d a shortlist figure needs: rebuild the corpus and lift the park in answerwords_test.go", counted.distinct, questionsAShortlistFigureNeeds)
+		t.Fatalf("%d distinct recordable turns is at or above the %d NeededQuestions(4,4,1,4) asks for: rebuild the corpus", counted.distinct, questionsAShortlistFigureNeeds)
 	}
 }
 

@@ -1,37 +1,33 @@
 # Where shortlist-corpus.jsonl came from
 
-**Recorded**, with **hand labels**. Four rows, 28,278 bytes, added 2026-09-20. The `task` is the user's own prompt, verbatim, the `files` are the tree as it stood, whole, and the `label` is the set of paths the turn actually changed, read from its own write and edit calls rather than decided afterwards.
+**Recorded**, with **hand labels**. One row, added 2026-09-20, three more added the same day and dropped 2026-09-23 by TOFU-501 for leaking. The `task` is the user's own prompt, verbatim, the `files` are the tree as it stood, whole, and the `label` is the set of paths the turn actually changed, read from its own write and edit calls rather than decided afterwards.
 
-**All four rows come from one turn**, `turn-18d6a7961d933ee8`: three numbered items of its prompt taken separately and the whole prompt as a fourth. One session, one project, one afternoon.
+**The row comes from one turn**, `turn-18d6a7961d933ee8`, one numbered item of its prompt. One session, one project, one afternoon.
 
-## The corpus is four rows, and that is the finding
+## The corpus started at four rows; TOFU-501 cut it to one
 
-`report-2026-09-21.md` opens on it. The ticket asked for at least thirty file-localisation questions. `.tofu/sessions` carried 131 recorded turns, 20 of which ever call `edit` or `write`, and 12 of those 20 create a file that did not exist, which is not localisation. **Four survived.** Nothing measured on four rows separates two arms, and the report says so rather than printing a ranking.
+`report-2026-09-21.md` opens on the four. The ticket asked for at least thirty file-localisation questions. `.tofu/sessions` carried 131 recorded turns, 20 of which ever call `edit` or `write`, and 12 of those 20 create a file that did not exist, which is not localisation. **Four survived.** Nothing measured on four rows separates two arms, and the report says so rather than printing a ranking.
 
-## Leakage: three of four rows leak, and they are not repaired
+## Leakage: three of four rows leaked, and TOFU-501 dropped them
 
-**Method, run on 2026-09-23**, the same rule `bench/tools/corpus/discipline_test.go` applies: split every path component and file stem of a row's own label into words of three characters or more, split on non-alphanumerics and on camel case, lowercase both sides, and look for any of them in the content words of the task.
+**Method**, the same rule `bench/tools/corpus/discipline_test.go` applies: split every path component and file stem of a row's own label into words of three characters or more, split on non-alphanumerics and on camel case, lowercase both sides, and look for any of them in the content words of the task.
 
-| row | label | words of the answer that appear in the question |
-|---|---|---|
-| `turn-18d6a7961d933ee8#item3` | `src/store.ts` | none |
-| `turn-18d6a7961d933ee8#item6` | `README.md` | `readme` |
-| `turn-18d6a7961d933ee8#item7` | `package.json` | `package`, `json` |
-| `turn-18d6a7961d933ee8#whole` | six paths | `src`, `package`, `json`, `readme` |
+| row | label | words of the answer that appeared in the question | disposition |
+|---|---|---|---|
+| `turn-18d6a7961d933ee8#item3` | `src/store.ts` | none | kept |
+| `turn-18d6a7961d933ee8#item6` | `README.md` | `readme` | dropped |
+| `turn-18d6a7961d933ee8#item7` | `package.json` | `package`, `json` | dropped |
+| `turn-18d6a7961d933ee8#whole` | six paths | `src`, `package`, `json`, `readme` | dropped |
 
-**Three of four.** The task says "Update README.md so it lists the routes" and the answer is `README.md`. The task says "Add a check script to package.json" and the answer is `package.json`. A regular expression that pulls a filename out of the prompt gets both, and no ranking arm scored on this file can be told apart from that regular expression.
+The task says "Update README.md so it lists the routes" and the answer is `README.md`. The task says "Add a check script to package.json" and the answer is `package.json`. A regular expression that pulls a filename out of the prompt gets both, and no ranking arm scored on those rows could be told apart from that regular expression. **`item6`, `item7` and `whole` are removed from `shortlist-corpus.jsonl`.** They stay recorded here, in this file and in `report-2026-09-21.md`, which is not edited. `answerwords_test.go` now asserts zero leaks over what remains rather than skipping.
 
-**Not repaired.** The rows are real recordings and the prompts are the user's own words; editing either would make the corpus written rather than recorded, which is a worse trade than admitting the leak. The real repair is more rows, and `report-2026-09-21.md` already says the population to draw them from does not exist yet. This needs its own ticket.
+## Parked on 2026-09-23 by TOFU-449, sized and closed on 2026-09-23 by TOFU-501
 
-**Read every `file_shortlist` number from this corpus as measuring the corpus.** One clean row is not a measurement.
+`population_test.go` reads `.tofu/sessions` through `bench/corpus.WalkSessions` and counts a turn as able to yield a shortlist question when it carries a non-empty task, when a `write` or an `edit` in it names a path, and when at least one changed path was already there before the turn, read off the turn's own calls: the first call touching it is a `read` or an `edit`, never a `write`. Turns are grouped by the exact task text, because a rerun of one prompt is one question asked twice.
 
-## Parked on 2026-09-23 by TOFU-449, and what un-parks it
+TOFU-501 computed the number of questions the observed gap needs, `size.go`, `NeededQuestions`: Laplace-smooth the four-question result (4/4 judged, 1/4 BM25) to 5/6 and 2/6 to avoid a zero-variance 100% estimate, then apply the two-proportion sample size formula at 95% confidence and 80% power: n = (1.96+0.84)^2 × (0.833×0.167 + 0.333×0.667) / (0.833−0.333)^2 = 7.84 × 0.361 / 0.25 ≈ 11.3, rounds up to **12**.
 
-`answerwords_test.go` is the refusal, and it skips rather than failing: the three rows stay on disk exactly as recorded, and the skip names them every run. `live_test.go` skips before it reads the credential, so no `TOFU_LIVE=1` run prints an arm table off these four rows.
-
-**The population was recounted, not repeated.** `population_test.go` reads `.tofu/sessions` through `bench/corpus.WalkSessions` and counts a turn as able to yield a shortlist question when it carries a non-empty task, when a `write` or an `edit` in it names a path, and when at least one changed path was already there before the turn, read off the turn's own calls: the first call touching it is a `read` or an `edit`, never a `write`. Turns are grouped by the exact task text, because a rerun of one prompt is one question asked twice. On 2026-09-23: 110 entries, 109 turns read, 1 unreadable, 0 with no task, 65 changing no file, 37 creating only files that did not exist, **7 recordable, carrying 2 distinct tasks.** Six of the seven are reruns of the prompt this corpus already comes from. The other is the Hono build turn, which `report-2026-09-21.md` rejected for building from nothing.
-
-So the corpus cannot be repaired by adding rows either. `population_test.go` fails, rather than passing, once 30 distinct recordable turns exist, and that is the signal to rebuild and lift the park.
+On 2026-09-23: 111 entries, 110 turns read, 1 unreadable, 0 with no task, 65 changing no file, 37 creating only files that did not exist, **8 recordable, carrying 2 distinct tasks.** Six of the eight are reruns of the prompt this corpus already comes from; the other two are reruns of the Hono build turn, which `report-2026-09-21.md` rejected for building from nothing. **2 against a needed 12, and the count has not moved in the direction that matters**: entries grew by one, the distinct-task count did not. `population_test.go` fails, rather than passing, once 12 distinct recordable turns exist, and that is the signal to rebuild.
 
 ## What it does not carry
 
