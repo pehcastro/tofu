@@ -34,12 +34,28 @@ type Report struct {
 	BuiltFrom   Provenance `json:"built_from"`
 	Sample      string     `json:"sample"`
 	Skips       string     `json:"skips"`
-	Conclusion  string     `json:"conclusion"`
+	Conclusion  []Said     `json:"conclusion"`
 	Unparsed    bool       `json:"conclusion_unparsed"`
 	State       State      `json:"state"`
 	StateSource string     `json:"state_source"`
 	StateNote   string     `json:"state_note"`
-	Conditions  []string   `json:"conditions"`
+}
+
+type Said struct {
+	Text string `json:"text"`
+	Fell bool   `json:"withdrawn"`
+}
+
+func (r Report) Quoted() string {
+	parts := make([]string, 0, len(r.Conclusion))
+	for _, part := range r.Conclusion {
+		if part.Fell {
+			parts = append(parts, "~~"+part.Text+"~~")
+			continue
+		}
+		parts = append(parts, part.Text)
+	}
+	return strings.Join(parts, " ")
 }
 
 func Build(benchRoot string) (Data, error) {
@@ -86,7 +102,6 @@ func Build(benchRoot string) (Data, error) {
 			State:       entry.State,
 			StateSource: entry.StateSource,
 			StateNote:   entry.StateNote,
-			Conditions:  conditionsOf(string(body)),
 		})
 	}
 	for path := range hand {
@@ -136,24 +151,32 @@ func readHandRead(path string) (map[string]handRead, error) {
 	return byReport, nil
 }
 
-func quotable(entry datedEntry) string {
-	if entry.State == StateWithdrawn || entry.State == StateWithdrawnInPart {
-		return "not quoted here: this report is " + string(entry.State) + ", and the note says by whom"
+func quotable(entry datedEntry) []Said {
+	if entry.State == StateWithdrawn || (entry.State == StateWithdrawnInPart && len(entry.Fell) == 0) {
+		return []Said{{Text: "not quoted here: this report is " + string(entry.State) + ", and the note says by whom"}}
 	}
-	return entry.Conclusion
-}
-
-func conditionsOf(body string) []string {
-	lines := strings.Split(body, "\n")
-	headings := headingsOf(lines)
-	if len(headings) < 2 {
-		return nil
-	}
-	var said []string
-	for _, line := range lines[headings[0].line+1 : headings[1].line] {
-		if text := plain(strings.TrimSpace(line)); text != "" {
-			said = append(said, text)
-		}
+	said := []Said{{Text: entry.Conclusion}}
+	for _, quotation := range entry.Fell {
+		said = strike(said, flatten(quotation))
 	}
 	return said
+}
+
+func strike(said []Said, quotation string) []Said {
+	var marked []Said
+	for _, part := range said {
+		at := strings.Index(part.Text, quotation)
+		if part.Fell || at < 0 {
+			marked = append(marked, part)
+			continue
+		}
+		if before := strings.TrimSpace(part.Text[:at]); before != "" {
+			marked = append(marked, Said{Text: before})
+		}
+		marked = append(marked, Said{Text: quotation, Fell: true})
+		if after := strings.TrimSpace(part.Text[at+len(quotation):]); after != "" {
+			marked = append(marked, Said{Text: after})
+		}
+	}
+	return marked
 }

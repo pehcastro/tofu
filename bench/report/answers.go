@@ -163,7 +163,27 @@ func rowsOf(answers Answers, wiring map[string]Wiring) []JudgmentRow {
 	return rows
 }
 
-func checkAnswers(answers Answers, table method.Table, tree string, bodies map[string]string) error {
+func standingText(tree string, bodies map[string]string) (map[string]string, error) {
+	withdrawals, err := readWithdrawals(filepath.Join(tree, filepath.FromSlash(WithdrawalsPath)))
+	if err != nil {
+		return nil, err
+	}
+	standing := make(map[string]string, len(bodies))
+	for source, text := range bodies {
+		said := flatten(text)
+		for _, struck := range withdrawals[source].Fell {
+			said = strings.ReplaceAll(said, flatten(struck), "")
+		}
+		standing[source] = said
+	}
+	return standing, nil
+}
+
+func checkAnswers(answers Answers, table method.Table, tree string, reports map[string]string) error {
+	bodies, err := standingText(tree, reports)
+	if err != nil {
+		return err
+	}
 	if len(answers.JevCosts) == 0 {
 		return fmt.Errorf("%s: a reader comparing Jev with a regular expression is told what a Jev call costs", AnswersPath)
 	}
@@ -234,7 +254,7 @@ func checkEvidence(evidence, source string, bodies map[string]string) error {
 		return fmt.Errorf("%s cites %s, which is not a dated report under bench/", AnswersPath, source)
 	}
 	if !strings.Contains(body, evidence) {
-		return fmt.Errorf("%s: %q is not in %s, so the number it carries was not read from the report", AnswersPath, evidence, source)
+		return fmt.Errorf("%s: %q is not in the standing part of %s, so either the report never printed it or %s struck it", AnswersPath, evidence, source, WithdrawalsPath)
 	}
 	return nil
 }

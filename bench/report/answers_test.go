@@ -2,6 +2,7 @@ package report
 
 import (
 	"html"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -91,6 +92,31 @@ func TestADecisionThatCannotNameItsMethodsIsNeverGivenANumber(t *testing.T) {
 		t.Fatal("a percentage citing a line no report carries was accepted")
 	} else {
 		t.Logf("refused, as it must be: %v", err)
+	}
+}
+
+func TestASentenceAWithdrawalStruckIsNoLongerEvidence(t *testing.T) {
+	const shortlist = "bench/shortlist/report-2026-09-21.md"
+	body, err := os.ReadFile(filepath.Join("..", "..", filepath.FromSlash(shortlist)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	standing, err := standingText(filepath.Join("..", ".."), map[string]string{shortlist: string(body)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	struck := "| judged, Jev reranking the BM25 shortlist | 4/4 (100.0%) | 4/4 (100.0%) |"
+	if !strings.Contains(flatten(string(body)), struck) {
+		t.Fatalf("%q is not in the report at all, so striking it proves nothing", struck)
+	}
+	if err := checkEvidence(struck, shortlist, standing); err == nil {
+		t.Fatal("a figure the withdrawal struck was accepted as evidence")
+	} else {
+		t.Logf("refused, as it must be: %v", err)
+	}
+	stands := "Not yet decided, and it cannot be decided from four questions."
+	if err := checkEvidence(stands, shortlist, standing); err != nil {
+		t.Errorf("the standing half of a partly withdrawn report was refused: %v", err)
 	}
 }
 

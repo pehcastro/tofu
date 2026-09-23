@@ -87,29 +87,15 @@
       "point": "file_shortlist",
       "question": "which file answers this question",
       "axis": {"name": "the right file ranked first", "unit": "percent of questions", "better_when": "higher"},
-      "free_arm": {
-        "name": "BM25",
-        "does": "ranks every file by how many of the question's rarer words it contains and takes the top one, with no stopword list and no boost for a matching filename",
-        "does_from": "bench/shortlist/rank.go",
-        "percent": 25.0,
-        "hits": 1,
-        "out_of": 4,
-        "evidence": "| BM25 (strong free) | 1/4 (25.0%) | 4/4 (100.0%) |"
-      },
-      "judged_arm": {
-        "name": "Jev",
-        "does": "scores each of the five files BM25 shortlisted against the question and reorders them",
-        "does_from": "bench/shortlist/arm.go",
-        "percent": 100.0,
-        "hits": 4,
-        "out_of": 4,
-        "evidence": "| judged, Jev reranking the BM25 shortlist | 4/4 (100.0%) | 4/4 (100.0%) |"
-      },
+      "free_arm": {},
+      "judged_arm": {},
       "sample_size": 4,
       "sample_of": "file finding questions, against a floor of 30 the recorded sessions could not reach",
       "decides": "file_shortlist",
       "wiring": "unwired",
-      "source": "bench/shortlist/report-2026-09-21.md"
+      "source": "bench/shortlist/report-2026-09-21.md",
+      "unanswerable_because": "The one table that scored the two methods was struck on 2026-09-23 by bench/report/withdrawals.json, so there is no reading left to compare. 3 of the 4 questions name their own answer inside their own prompt, which makes that table a judge reading a filename out of the task against a BM25 with no stopword list, and nothing scored on it can be told apart from a regular expression pulling the filename out. The corpus is parked rather than rebuilt: the recorded sessions yield 7 recordable turns carrying 2 distinct tasks against a floor of 30, so there is nothing to rerun it on. What stands from the run is the cost and latency of Jev alone, 4 calls at $0.000063 a question and a p50 of about 333 ms, which says what the method costs and nothing about whether it wins.",
+      "unanswerable_evidence": "Not yet decided, and it cannot be decided from four questions."
     },
     {
       "point": "shell_sift",

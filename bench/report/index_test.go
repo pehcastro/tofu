@@ -63,8 +63,8 @@ func TestTheCostReportSaysItsOwnWithdrawal(t *testing.T) {
 	if report.StateSource != SelfDeclared {
 		t.Errorf("the withdrawal is credited to %q rather than %q", report.StateSource, SelfDeclared)
 	}
-	if strings.Contains(report.Conclusion, "$0.000063") {
-		t.Errorf("the index quotes a figure this report withdrew: %q", report.Conclusion)
+	if strings.Contains(report.Quoted(), "$0.000063") {
+		t.Errorf("the index quotes a figure this report withdrew: %q", report.Quoted())
 	}
 }
 
@@ -234,7 +234,7 @@ func TestTheHumanIndexCarriesTheSameRowsAsTheMachineOne(t *testing.T) {
 		t.Fatalf("INDEX.md carries %d rows and the machine form carries %d", len(rows), len(data.Reports))
 	}
 	for i, report := range data.Reports {
-		want := []string{report.Package, report.Date, "`" + report.Source + "`", report.Conclusion, report.Sample, string(report.State)}
+		want := []string{report.Package, report.Date, "`" + report.Source + "`", report.Quoted(), report.Sample, string(report.State)}
 		for j, cell := range want {
 			if cell == "" {
 				cell = "not stated"

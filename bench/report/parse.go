@@ -11,6 +11,7 @@ var (
 	conclusionHeading = regexp.MustCompile(`(?i)\b(headline|answer|conclusion|findings?|recommendation|won|numbers say)\b`)
 	sentenceEnd       = regexp.MustCompile(`[.!?](\s|$)`)
 	inlineMarkup      = regexp.MustCompile("[`*]")
+	whitespaceRun     = regexp.MustCompile(`\s+`)
 )
 
 const firstSentenceFloor = 120
@@ -40,12 +41,20 @@ func headingsOf(lines []string) []heading {
 	return found
 }
 
+func sectionsOf(lines []string) []heading {
+	found := headingsOf(lines)
+	if len(found) == 0 || strings.TrimSpace(strings.Join(lines[:found[0].line], "")) != "" {
+		return found
+	}
+	return found[1:]
+}
+
 func selfDeclaredState(body string) (State, string) {
 	lines := strings.Split(body, "\n")
-	headings := headingsOf(lines)
+	sections := sectionsOf(lines)
 	head := lines
-	if len(headings) > 1 {
-		head = lines[:headings[1].line]
+	if len(sections) > 0 {
+		head = lines[:sections[0].line]
 	}
 	for _, line := range head {
 		switch {
@@ -62,14 +71,14 @@ func selfDeclaredState(body string) (State, string) {
 
 func conclusionOf(body string) string {
 	lines := strings.Split(body, "\n")
-	headings := headingsOf(lines)
-	for i, h := range headings {
-		if i == 0 || !conclusionHeading.MatchString(h.text) {
+	sections := sectionsOf(lines)
+	for i, h := range sections {
+		if !conclusionHeading.MatchString(h.text) {
 			continue
 		}
 		end := len(lines)
-		if i+1 < len(headings) {
-			end = headings[i+1].line
+		if i+1 < len(sections) {
+			end = sections[i+1].line
 		}
 		if said := firstProse(lines[h.line+1 : end]); said != "" {
 			return said
@@ -112,4 +121,8 @@ func sentences(text string) string {
 
 func plain(text string) string {
 	return strings.TrimSpace(inlineMarkup.ReplaceAllString(text, ""))
+}
+
+func flatten(text string) string {
+	return strings.TrimSpace(whitespaceRun.ReplaceAllString(plain(text), " "))
 }

@@ -130,7 +130,7 @@ func writeReports(doc *strings.Builder, d Data) {
 	doc.WriteString("| Bench | Date | Report | What it found | Sample | State |\n|---|---|---|---|---|---|\n")
 	for _, report := range d.Reports {
 		fmt.Fprintf(doc, "| %s | %s | `%s` | %s | %s | %s |\n",
-			report.Package, report.Date, report.Source, cell(report.Conclusion), cell(report.Sample), report.State)
+			report.Package, report.Date, report.Source, cell(report.Quoted()), cell(report.Sample), report.State)
 	}
 	doc.WriteString("\n### Not standing\n\n")
 	for _, report := range d.Reports {

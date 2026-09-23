@@ -67,6 +67,23 @@ func quoteHTML(text, source string) string {
 	return fmt.Sprintf("<blockquote>%s<cite>%s</cite></blockquote>\n", html.EscapeString(text), html.EscapeString(source))
 }
 
+func saidHTML(said []Said, source string) string {
+	quote := &strings.Builder{}
+	quote.WriteString("<blockquote>")
+	for at, part := range said {
+		if at > 0 {
+			quote.WriteString(" ")
+		}
+		if part.Fell {
+			fmt.Fprintf(quote, "<s class=\"fell\">%s</s> <span class=\"badge\" data-variant=\"secondary\">withdrawn</span>", html.EscapeString(part.Text))
+			continue
+		}
+		quote.WriteString(html.EscapeString(part.Text))
+	}
+	fmt.Fprintf(quote, "<cite>%s</cite></blockquote>\n", html.EscapeString(source))
+	return quote.String()
+}
+
 func statCards(stats []Stat) string {
 	cards := &strings.Builder{}
 	fmt.Fprintf(cards, "<div class=\"cards\" style=\"--cols:%d\">\n", cardColumns(len(stats)))
@@ -237,7 +254,7 @@ func reportsHTML(d Data) string {
 			body.WriteString(quoteHTML(report.StateNote, string(report.State)+", said by "+report.StateSource))
 		}
 		body.WriteString("<h3>What it found, in the report's own words</h3>\n")
-		body.WriteString(quoteHTML(report.Conclusion, report.Source))
+		body.WriteString(saidHTML(report.Conclusion, report.Source))
 		body.WriteString("<h3>What it rests on</h3>\n")
 		body.WriteString(quoteHTML(report.Sample, report.Source))
 		if report.Skips != "" {

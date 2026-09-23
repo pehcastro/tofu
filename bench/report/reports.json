@@ -93,28 +93,22 @@
           "better_when": "higher"
         },
         "free_arm": {
-          "name": "BM25",
-          "does": "ranks every file by how many of the question's rarer words it contains and takes the top one, with no stopword list and no boost for a matching filename",
-          "does_from": "bench/shortlist/rank.go",
-          "percent": 25,
-          "hits": 1,
-          "out_of": 4,
-          "evidence": "| BM25 (strong free) | 1/4 (25.0%) | 4/4 (100.0%) |"
+          "name": "",
+          "percent": 0,
+          "evidence": ""
         },
         "judged_arm": {
-          "name": "Jev",
-          "does": "scores each of the five files BM25 shortlisted against the question and reorders them",
-          "does_from": "bench/shortlist/arm.go",
-          "percent": 100,
-          "hits": 4,
-          "out_of": 4,
-          "evidence": "| judged, Jev reranking the BM25 shortlist | 4/4 (100.0%) | 4/4 (100.0%) |"
+          "name": "",
+          "percent": 0,
+          "evidence": ""
         },
         "sample_size": 4,
         "sample_of": "file finding questions, against a floor of 30 the recorded sessions could not reach",
         "decides": "file_shortlist",
         "wiring": "unwired",
-        "source": "bench/shortlist/report-2026-09-21.md"
+        "source": "bench/shortlist/report-2026-09-21.md",
+        "unanswerable_because": "The one table that scored the two methods was struck on 2026-09-23 by bench/report/withdrawals.json, so there is no reading left to compare. 3 of the 4 questions name their own answer inside their own prompt, which makes that table a judge reading a filename out of the task against a BM25 with no stopword list, and nothing scored on it can be told apart from a regular expression pulling the filename out. The corpus is parked rather than rebuilt: the recorded sessions yield 7 recordable turns carrying 2 distinct tasks against a floor of 30, so there is nothing to rerun it on. What stands from the run is the cost and latency of Jev alone, 4 calls at $0.000063 a question and a p50 of about 333 ms, which says what the method costs and nothing about whether it wins.",
+        "unanswerable_evidence": "Not yet decided, and it cannot be decided from four questions."
       },
       {
         "point": "shell_sift",
@@ -375,7 +369,7 @@
       "on": false,
       "switched_on": "not wired",
       "costs": "nothing, and no call is made",
-      "why": "jev ranks the right file first on 4 of 4 against bm25's 1, 4.00x, over four questions against the floor of 30 this shape needs",
+      "why": "bench/shortlist is parked by TOFU-449 on 2026-09-23 and the accuracy figure this line used to cite is withdrawn. three of its four questions name their own answer in their own prompt, so nothing measured there separates a ranking arm from a regular expression pulling a filename out of the task, and the corpus cannot be rebuilt today. 7 recordable turns carrying 2 distinct tasks in the recorded sessions, against the floor of 30 this shape needs",
       "measured": "bench/shortlist/report-2026-09-21.md"
     },
     {
@@ -405,30 +399,6 @@
   ],
   "what_decides_what_read_from": "library/decisions/methods@1.yaml",
   "judgments": [
-    {
-      "point": "file_shortlist",
-      "question": "which file answers this question",
-      "axis": "measured as the right file ranked first, percent of questions, higher is better",
-      "free_arm": {
-        "name": "BM25",
-        "does": "ranks every file by how many of the question's rarer words it contains and takes the top one, with no stopword list and no boost for a matching filename",
-        "reading": "25.0%",
-        "percent": 25
-      },
-      "judged_arm": {
-        "name": "Jev",
-        "does": "scores each of the five files BM25 shortlisted against the question and reorders them",
-        "reading": "100.0%",
-        "percent": 100
-      },
-      "winner": "Jev",
-      "gap": "75.0 points",
-      "multiple": "4.00x",
-      "sample": "4 file finding questions, against a floor of 30 the recorded sessions could not reach",
-      "switched_on": "not wired",
-      "wired": false,
-      "source": "bench/shortlist/report-2026-09-21.md"
-    },
     {
       "point": "shell_sift",
       "question": "how much of a shell result to keep",
@@ -550,6 +520,31 @@
       "source": "bench/websift/report-2026-09-21.md"
     },
     {
+      "point": "file_shortlist",
+      "question": "which file answers this question",
+      "axis": "measured as the right file ranked first, percent of questions, higher is better",
+      "free_arm": {
+        "name": "",
+        "does": "",
+        "reading": "",
+        "percent": 0
+      },
+      "judged_arm": {
+        "name": "",
+        "does": "",
+        "reading": "",
+        "percent": 0
+      },
+      "winner": "",
+      "gap": "",
+      "multiple": "",
+      "sample": "4 file finding questions, against a floor of 30 the recorded sessions could not reach",
+      "switched_on": "not wired",
+      "wired": false,
+      "source": "bench/shortlist/report-2026-09-21.md",
+      "unanswerable_because": "The one table that scored the two methods was struck on 2026-09-23 by bench/report/withdrawals.json, so there is no reading left to compare. 3 of the 4 questions name their own answer inside their own prompt, which makes that table a judge reading a filename out of the task against a BM25 with no stopword list, and nothing scored on it can be told apart from a regular expression pulling the filename out. The corpus is parked rather than rebuilt: the recorded sessions yield 7 recordable turns carrying 2 distinct tasks against a floor of 30, so there is nothing to rerun it on. What stands from the run is the cost and latency of Jev alone, 4 calls at $0.000063 a question and a p50 of about 333 ms, which says what the method costs and nothing about whether it wins."
+    },
+    {
       "point": "tool_gate",
       "question": "should this command be allowed to run",
       "axis": "measured as agreement with a hand label, percent of cases, higher is better",
@@ -609,24 +604,16 @@
       "built_from": "prose",
       "sample": "2 recorded context forks",
       "skips": "the account fork arm could not be measured, because no recorded account fork exists",
-      "conclusion": "not quoted here: this report is withdrawn in part, and the note says by whom",
-      "conclusion_unparsed": true,
+      "conclusion": [
+        {
+          "text": "The first request after a context fork READS cache and writes none. On both recorded forks it read the whole cacheable head and paid zero cache write.",
+          "withdrawn": false
+        }
+      ],
+      "conclusion_unparsed": false,
       "state": "withdrawn in part",
       "state_source": "bench/report/withdrawals.json",
-      "state_note": "the estimator section only, withdrawn by the board entry of 2026-09-22 in .local/boji/tickets/BOARD.md and not by the file. Two of its rows compare numbers taken from two different conversations, so that section does not measure the estimator against the provider. Every other section of the file stands.",
-      "conditions": [
-        "The first request after a context fork READS cache and writes none. On both recorded",
-        "forks it read the whole cacheable head and paid zero cache write. The other harness's",
-        "failure mode, a new session id forcing a full re-write of a byte-identical prefix, does",
-        "not happen here: a recorded head written by one session was read by two later sessions",
-        "with different ids, so a session id is not part of the key.",
-        "An account fork could not be measured. There is no recorded one, and a session header",
-        "as recorded carries no credential identity, so no recorded row can tell an account fork",
-        "from a context fork even if one existed. That a cache is scoped to an account is an",
-        "expectation here and not a measurement.",
-        "v7's 110,486 stands on the fork question. It is low for a different reason, named below,",
-        "and that reason is not the fork."
-      ]
+      "state_note": "the estimator section only, withdrawn by the board entry of 2026-09-22 in .local/boji/tickets/BOARD.md and not by the file. Two of its rows compare numbers taken from two different conversations, so that section does not measure the estimator against the provider. Both rows are quoted below with the sentence that introduces them, because the rows are where the figures are and a withdrawal that quotes only the lead-in leaves them standing. Every other section of the file stands."
     },
     {
       "package": "harness",
@@ -636,16 +623,16 @@
       "built_from": "prose",
       "sample": "4 recorded rows, 3 of them carrying a turn count and a wall clock, plus a 3-repeat fixture that fixes the output shape",
       "skips": "7 named: 3 live-gated, 2 needing an env-named tree, 1 measuring from a stored turn row, 1 helper process",
-      "conclusion": "unparsed: no heading in this file names its own answer",
+      "conclusion": [
+        {
+          "text": "unparsed: no heading in this file names its own answer",
+          "withdrawn": false
+        }
+      ],
       "conclusion_unparsed": true,
       "state": "stands",
       "state_source": "",
-      "state_note": "",
-      "conditions": [
-        "Machine: DESKTOP-AHUN9RO, Windows 10 Pro 19045, go1.27.1 windows/amd64, tree at c7dbede.",
-        "Cost unit: money. A money figure is dollars that left the account behind the credential named above, read from the response of the call it names and never from a rate card. The dollar figures in the instrument section below are fixture values that fix the shape of the output and were never spent; a subscription arm prints no dollar figure at all, because its quota is not money and two quotas do not add.",
-        "Nothing here was run live. No model call, no vendor command line, no credential. Every number below comes from rows already on disk or from a fixture, and every command is deterministic and offline. No call was discarded as a warm-up because no call was made."
-      ]
+      "state_note": ""
     },
     {
       "package": "picker",
@@ -655,21 +642,16 @@
       "built_from": "prose",
       "sample": "404 files and 18,401 rows read, 0 readings over 0 distinct accounts",
       "skips": "0 on the real corpus, stated rather than hidden",
-      "conclusion": "unparsed: no heading in this file names its own answer",
-      "conclusion_unparsed": true,
+      "conclusion": [
+        {
+          "text": "The corpus cannot separate the three arms. There are zero recorded window readings in .tofu, over zero distinct accounts, so first usable, round robin and headroom make the same choice at every decision point there is, which is none.",
+          "withdrawn": false
+        }
+      ],
+      "conclusion_unparsed": false,
       "state": "stands",
       "state_source": "",
-      "state_note": "",
-      "conditions": [
-        "The corpus cannot separate the three arms. There are zero recorded window readings in",
-        ".tofu, over zero distinct accounts, so first usable, round robin and headroom make the",
-        "same choice at every decision point there is, which is none. No number is offered in",
-        "place of the answer.",
-        "The reason is structural rather than accidental. Nothing in the tree ever writes a",
-        "window reading to disk. quota.Poller holds a report in a map in memory, the status verb",
-        "prints one and drops it, and no session header, ledger row or state file carries one.",
-        "A corpus for this bench cannot accumulate until something records a reading."
-      ]
+      "state_note": ""
     },
     {
       "package": "sift",
@@ -679,17 +661,16 @@
       "built_from": "rerun",
       "sample": "the same 34 recorded shell results at the shipped keep_at 0.50, three full live runs of 297 calls each, 891 calls, $0.02726 counted plus an identical first sitting whose output was lost, $0.05452 spent",
       "skips": "0 of 34 corpus rows skipped for a missing field, 0 of 891 calls failed, 4 tests skip offline wanting TOFU_LIVE=1 or TOFU_REWRITE_CORPUS=1",
-      "conclusion": "The rerun spread is one needle and 0.4 points of bytes saved, so it cannot explain a move of three needles and 27.5 points, and the cause is on the model's side under an unchanged build id.",
+      "conclusion": [
+        {
+          "text": "The rerun spread is one needle and 0.4 points of bytes saved, so it cannot explain a move of three needles and 27.5 points, and the cause is on the model's side under an unchanged build id.",
+          "withdrawn": false
+        }
+      ],
       "conclusion_unparsed": false,
       "state": "stands",
       "state_source": "",
-      "state_note": "",
-      "conditions": [
-        "Machine: DESKTOP-AHUN9RO, go1.27.1 windows/amd64, 2026-09-22. Credential kind: key. Wire: openrouter. Build the response reported: typesafe/jev-1.13-20260917, on every one of the 891 calls.",
-        "Cost unit: money. A money figure is dollars that left the account behind the credential named above, read from the response of the call it names and never from a rate card.",
-        "This report needs the network. It is gated behind TOFU_LIVE=1 and skipped otherwise. No first call was discarded as a warm up: every call made is counted.",
-        "Nothing was changed to produce it. The threshold is still the shipped keep_at 0.50, the corpus is still the same 34 rows, and the needle rule and the bytes measure are the ones bench/sift.Read has carried since TOFU-412."
-      ]
+      "state_note": ""
     },
     {
       "package": "sift",
@@ -699,16 +680,16 @@
       "built_from": "rerun",
       "sample": "the same 34 recorded shell results the regex and Jev arms were scored on, one needle planted per row, four methods through one scoring function, two full live runs plus an earlier single run, $0.04659 spent",
       "skips": "4 tests skipped offline, three wanting TOFU_LIVE=1 and one wanting TOFU_REWRITE_CORPUS=1; no corpus row skipped, all 34 scored by all four methods; 21 rows have no rtk filter and are scored as passthrough rather than dropped",
-      "conclusion": "rtk in front of Jev buys a 29 percent cheaper Jev call and pays 5 of 34 needles for it, and neither rtk arm beats Jev alone.",
+      "conclusion": [
+        {
+          "text": "rtk in front of Jev buys a 29 percent cheaper Jev call and pays 5 of 34 needles for it, and neither rtk arm beats Jev alone.",
+          "withdrawn": false
+        }
+      ],
       "conclusion_unparsed": false,
       "state": "stands",
       "state_source": "",
-      "state_note": "",
-      "conditions": [
-        "Machine: DESKTOP-AHUN9RO, go1.27.1 windows/amd64, 2026-09-22. Credential kind: key. Wire: openrouter. Build the response reported: typesafe/jev-1.13-20260917. Proxy: rtk 0.43.0, at C:\\Users\\Luiz\\.local\\bin\\rtk.",
-        "Cost unit: money. A money figure is dollars that left the account behind the credential named above, read from the response of the call it names and never from a rate card. A millisecond figure is wall clock on the machine named above.",
-        "This report needs the network. It is gated behind TOFU_LIVE=1 and skipped otherwise. No first call was discarded: every Jev call made is counted."
-      ]
+      "state_note": ""
     },
     {
       "package": "sift",
@@ -718,16 +699,16 @@
       "built_from": "rerun",
       "sample": "109 recorded sessions carrying 419 shell results, 2,999 ledger rows of which 1,756 are wire calls, and the 34 row shell corpus for candidate units per sift",
       "skips": "243 ledger rows with no point, 1,000 with a point but no wire call, 1 session entry named HEAD; no row skipped for a missing field",
-      "conclusion": "Switching shell_sift@1 from shadow to enforced costs a median $0.00054 a session and $0.01107 in the worst session of 109 recorded, and it stops sending the model 54.0 percent of every shell result, which is 13.7 percent of every byte the model reads back from a tool.",
+      "conclusion": [
+        {
+          "text": "Switching shell_sift@1 from shadow to enforced costs a median $0.00054 a session and $0.01107 in the worst session of 109 recorded, and it stops sending the model 54.0 percent of every shell result, which is 13.7 percent of every byte the model reads back from a tool.",
+          "withdrawn": false
+        }
+      ],
       "conclusion_unparsed": false,
       "state": "stands",
       "state_source": "",
-      "state_note": "",
-      "conditions": [
-        "Machine: DESKTOP-AHUN9RO, go1.27.1 windows/amd64, 2026-09-22. Credential kind: key. Route: openrouter, typesafe/jev-1.13-20260917, for the recorded rows only.",
-        "Cost unit: money. A money figure is dollars that left the account behind the credential named above, read from the response of the call it names and never from a rate card.",
-        "No model call and no Jev call was made to write this report. Every figure is read from .tofu/sessions and .tofu/log, both read only, or copied from the TOFU-217 log of 2026-09-21 where it says so on its own line. The offline measurement is TestWhatSwitchingTheShellSiftOnWouldCost in this package and its output is pasted below whole. No first call was discarded because no call was made."
-      ]
+      "state_note": ""
     },
     {
       "package": "tools",
@@ -737,12 +718,16 @@
       "built_from": "rerun",
       "sample": "100 questions across five trees, 20 named, 40 described, 40 intent, six answers repinned first because the tofu tree had moved under them",
       "skips": "80 of 100 named, every described and intent question, skipped by git grep quoted for having no backtick term; 4 gated tests named in the output",
-      "conclusion": "29 of 100 is the best a free arm does, git grep with one realistic term, and the corpus cannot tell it apart from tofu search at 18 of 100: 24 questions only the first gets, 13 only the second, exact two sided p = 0.10.",
+      "conclusion": [
+        {
+          "text": "29 of 100 is the best a free arm does, git grep with one realistic term, and the corpus cannot tell it apart from tofu search at 18 of 100: 24 questions only the first gets, 13 only the second, exact two sided p = 0.10.",
+          "withdrawn": false
+        }
+      ],
       "conclusion_unparsed": false,
       "state": "stands",
       "state_source": "",
-      "state_note": "",
-      "conditions": null
+      "state_note": ""
     },
     {
       "package": "wrongpath",
@@ -752,12 +737,16 @@
       "built_from": "prose",
       "sample": "109 recorded sessions, 51 reverts and 48 contradictions",
       "skips": "82 of 109 sessions carry no shape at all, and one session holds 17 of the 51 reverts",
-      "conclusion": "The measure cannot separate two arms and this line of work stops here.",
+      "conclusion": [
+        {
+          "text": "The measure cannot separate two arms and this line of work stops here.",
+          "withdrawn": false
+        }
+      ],
       "conclusion_unparsed": false,
       "state": "stands",
       "state_source": "",
-      "state_note": "",
-      "conditions": null
+      "state_note": ""
     },
     {
       "package": "ask",
@@ -767,16 +756,16 @@
       "built_from": "prose",
       "sample": "7 real moments taken from the ticket logs",
       "skips": "",
-      "conclusion": "The free arm's three are exactly the three widenings. That is ask.md's own claim holding: the ownership boundary already knows the grant case, exactly and for nothing.",
+      "conclusion": [
+        {
+          "text": "The free arm's three are exactly the three widenings. That is ask.md's own claim holding: the ownership boundary already knows the grant case, exactly and for nothing.",
+          "withdrawn": false
+        }
+      ],
       "conclusion_unparsed": false,
       "state": "stands",
       "state_source": "",
-      "state_note": "",
-      "conditions": [
-        "Machine: DESKTOP-AHUN9RO. Credential kind: key. Route: openrouter, typesafe/jev-1.13-20260917.",
-        "Cost unit: money. A money figure is dollars that left the account behind the credential named above, read from the response of the call it names and never from a rate card.",
-        "Written by the orchestrator from TOFU-268's run, because the subagent's write of this path was refused. Every figure below is from that live run and none is recomputed."
-      ]
+      "state_note": ""
     },
     {
       "package": "promote",
@@ -786,16 +775,16 @@
       "built_from": "prose",
       "sample": "0 rows against a floor of 78",
       "skips": "everything: no run has produced a promotion log",
-      "conclusion": "unparsed: no heading in this file names its own answer",
+      "conclusion": [
+        {
+          "text": "unparsed: no heading in this file names its own answer",
+          "withdrawn": false
+        }
+      ],
       "conclusion_unparsed": true,
       "state": "stands",
       "state_source": "",
-      "state_note": "",
-      "conditions": [
-        "Machine: DESKTOP-AHUN9RO, go1.27.1 windows/amd64. Credential kind: none. Wire: none. No model call of any kind runs in this package and nothing leaves the machine.",
-        "Cost unit: none. There is no spend to report, because no call is made.",
-        "TOFU-306 builds the recorder. There is no arm and no accuracy number here, because there is nothing yet to be accurate about."
-      ]
+      "state_note": ""
     },
     {
       "package": "readworth",
@@ -805,15 +794,16 @@
       "built_from": "prose",
       "sample": "70 hand-labelled paragraphs, 35 keep and 35 drop, over 25 tasks, judged twice",
       "skips": "one labeller and no second reviewer, which the report names as its own limitation",
-      "conclusion": "The length-15 free arm, and read_worth should be unwired in favor of it. At the point where jev's accuracy sits, the length floor saves more bytes for the same accuracy, on both runs, with no live call and no cost.",
+      "conclusion": [
+        {
+          "text": "The length-15 free arm, and read_worth should be unwired in favor of it. At the point where jev's accuracy sits, the length floor saves more bytes for the same accuracy, on both runs, with no live call and no cost.",
+          "withdrawn": false
+        }
+      ],
       "conclusion_unparsed": false,
       "state": "stands",
       "state_source": "",
-      "state_note": "",
-      "conditions": [
-        "Machine: DESKTOP-AHUN9RO. Credential kind: key. Route: openrouter, typesafe/jev-1.13-20260917. Every number below is from a run today; none are copied from an earlier ticket log.",
-        "Cost unit: money. A money figure is dollars that left the account behind the credential named above, read from the response of the call it names and never from a rate card."
-      ]
+      "state_note": ""
     },
     {
       "package": "shortlist",
@@ -823,20 +813,16 @@
       "built_from": "prose",
       "sample": "4 questions, drawn from 131 recorded turns of which 20 ever write",
       "skips": "12 of those 20 turns are file creation, where there is no existing file to localise",
-      "conclusion": "The ticket asked for at least thirty file-localisation questions drawn from real recorded turns in .tofu/sessions. The corpus holds four.",
+      "conclusion": [
+        {
+          "text": "The ticket asked for at least thirty file-localisation questions drawn from real recorded turns in .tofu/sessions. The corpus holds four.",
+          "withdrawn": false
+        }
+      ],
       "conclusion_unparsed": false,
-      "state": "stands",
-      "state_source": "",
-      "state_note": "",
-      "conditions": [
-        "Date: 2026-09-20. Machine: the owner's Windows machine, same as bench-001. Route: POST",
-        "https://openrouter.ai/api/alpha/decisions, model alias ~typesafe/jev-latest, dated build",
-        "typesafe/jev-1.13-20260917, the same build bench-001 saw. Credential: the OpenRouter key that",
-        "pays for Jev only. Every number below is from a real live run of bench/shortlist, command and",
-        "output pasted under Verify.",
-        "Cost unit: money. A money figure is dollars that left the account behind the credential named",
-        "above, read from the response of the call it names and never from a rate card."
-      ]
+      "state": "withdrawn in part",
+      "state_source": "bench/report/withdrawals.json",
+      "state_note": "the four-arm accuracy table and the two sentences that read a gap off it, withdrawn by TOFU-449 on 2026-09-23 and not by the file. Three of the four questions name their own answer in their own prompt: #item6 is labelled README.md and its task says update README.md, #item7 is labelled package.json and its task says add a check script to package.json, and the whole-task row names two of its six paths. What that table compares is a judge that can read the filename out of the prompt against a BM25 with no stopword list, so no arm scored on it can be told apart from a regular expression pulling a filename out of the task. bench/shortlist is parked rather than rebuilt: on 2026-09-23 its population test read 110 entries and 109 turns of the recorded sessions and found 7 recordable turns carrying 2 distinct tasks, against the floor of 30, and six of the seven are reruns of the prompt this corpus already comes from. Everything not struck stands, including the cost and latency table, which does not depend on the labels, and the finding the report opens with, that the corpus holds four questions."
     },
     {
       "package": "sift",
@@ -846,16 +832,20 @@
       "built_from": "prose",
       "sample": "34 needles, two full live runs, 594 live decisions",
       "skips": "",
-      "conclusion": "The judgment, on needles kept at equal bytes saved, and it is not wired. catalog/policy/shell_sift@1.yaml still reads mode: shadow, so the model is given every shell result whole; TOFU-217 measured the win and left the lock for a later ticket to pull.",
+      "conclusion": [
+        {
+          "text": "The judgment, on needles kept at equal bytes saved,",
+          "withdrawn": false
+        },
+        {
+          "text": "and it is not wired. catalog/policy/shell_sift@1.yaml still reads mode: shadow, so the model is given every shell result whole; TOFU-217 measured the win and left the lock for a later ticket to pull.",
+          "withdrawn": true
+        }
+      ],
       "conclusion_unparsed": false,
-      "state": "stands",
-      "state_source": "",
-      "state_note": "",
-      "conditions": [
-        "Machine: DESKTOP-AHUN9RO. Credential kind: key. Route: openrouter, typesafe/jev-1.13-20260917.",
-        "Cost unit: money. A money figure is dollars that left the account behind the credential named above, read from the response of the call it names and never from a rate card.",
-        "No measurement in this report is rerun and no model call was made to write it. The live figures below are copied from the log of TOFU-217, dated 2026-09-21, where they say so on their own line. The two offline, non-model tests were re-executed today only to check the log's numbers still reproduce; each says where its number came from."
-      ]
+      "state": "withdrawn in part",
+      "state_source": "bench/report/withdrawals.json",
+      "state_note": "two sentences, withdrawn by TOFU-441 on 2026-09-23 and not by the file, and both say the opposite of what tofu does now. There is no file at catalog/policy/shell_sift@1.yaml: the rule is library/tools/shell/rules/shell_sift@1.yaml, renamed when 0.4.8 made catalog into library, and it reads mode: enforced, flipped by TOFU-434 and committed in 0.4.11 on 2026-09-23. So the sieve is wired and a shell result arrives at the model cut, with a line at the end of it saying how many bytes were removed and which method removed them. The test of that name is gone with it: bench/sift/arm_test.go carries TestTheShippedRuleIsEnforcedAndTheModelIsGivenTheOutputCut. The finding this report measured stands and is the reason the rule was flipped. Everything not struck stands, including what the file says it did not do, and the newer bench/sift/report-2026-09-22.md measures what the flip costs and is untouched by this."
     },
     {
       "package": "stopcheck",
@@ -865,15 +855,16 @@
       "built_from": "prose",
       "sample": "78 labelled steps of 79 recorded",
       "skips": "",
-      "conclusion": "the typed arm won, 71 agreements against 68 out of 78 labelled steps, which on a corpus this size is one labeller's judgement on a handful of steps rather than a result.",
+      "conclusion": [
+        {
+          "text": "the typed arm won, 71 agreements against 68 out of 78 labelled steps, which on a corpus this size is one labeller's judgement on a handful of steps rather than a result.",
+          "withdrawn": false
+        }
+      ],
       "conclusion_unparsed": false,
       "state": "stands",
       "state_source": "",
-      "state_note": "",
-      "conditions": [
-        "generated 2026-09-21 09:47:21Z, jev build typesafe/jev-1.13-20260917, questions stop_check@1, policy mode shadow (declared shadow in catalog/policy/stop_check@1.yaml)",
-        "Cost unit: money. A money figure is dollars that left the account behind the credential named above, read from the response of the call it names and never from a rate card."
-      ]
+      "state_note": ""
     },
     {
       "package": "testquality",
@@ -883,16 +874,16 @@
       "built_from": "prose",
       "sample": "9 comparable tasks, 10 runs with the rules on and 10 with them off",
       "skips": "one task of ten is not comparable between the arms and is out of the count",
-      "conclusion": "Dead-test count over the nine comparable tasks: off 53, on 53. Net zero.",
+      "conclusion": [
+        {
+          "text": "Dead-test count over the nine comparable tasks: off 53, on 53. Net zero.",
+          "withdrawn": false
+        }
+      ],
       "conclusion_unparsed": false,
       "state": "stands",
       "state_source": "",
-      "state_note": "",
-      "conditions": [
-        "Machine: DESKTOP-AHUN9RO, go1.27.1 windows/amd64. Wire: codex, codex-sub/gpt-5.6-sol, driven as a real tofu run against real packages in a scratch clone, never the real tree.",
-        "Cost unit: subscription quota. No money left the account behind any key: every model call in this ablation ran on a subscription, which spends a quota window and carries no per-token price. tofu usage for codex 7d read 57 percent before round one and 70 percent after round two, all of it this ticket. Anthropic 7d moved 89 to 91 percent from other work on the same machine; nothing here ran on anthropic.",
-        "Written by the orchestrator from TOFU-288's two rounds, because that agent's write of this path was refused. Every figure is from those runs and none is recomputed."
-      ]
+      "state_note": ""
     },
     {
       "package": "thrift",
@@ -902,15 +893,16 @@
       "built_from": "prose",
       "sample": "107 recorded sessions, 1,401 tool calls, 419 of them bash",
       "skips": "counted and named in the report's own Skips section",
-      "conclusion": "The volume case does not hold. A recorded session runs a median of 7 tool calls and a worst case of 55, not 9,000.",
+      "conclusion": [
+        {
+          "text": "The volume case does not hold. A recorded session runs a median of 7 tool calls and a worst case of 55, not 9,000.",
+          "withdrawn": false
+        }
+      ],
       "conclusion_unparsed": false,
       "state": "stands",
       "state_source": "",
-      "state_note": "",
-      "conditions": [
-        "generated 2026-09-21, no model call, no Jev call and no credential of any kind, corpus .tofu/sessions and .tofu/artifacts read only, tool bench/thrift, run by go test ./bench/thrift/ -count=1 -v, machine Intel Core i9-14900K, 32 threads, Windows 10 Pro 19045, go1.27.1 windows/amd64, no warm up and no discarded first call.",
-        "Cost unit: unpriced. Every recorded turn here ran on a subscription, which spends a quota window and carries no per-token rate, so no row carries a dollar figure. This is a named skip."
-      ]
+      "state_note": ""
     },
     {
       "package": "tokens",
@@ -920,17 +912,16 @@
       "built_from": "prose",
       "sample": "136 glob calls replayed against a tree of 1,223 tracked files",
       "skips": "counted and named in the report's own Skips section; the pin drops every call that named an ignored path",
-      "conclusion": "unparsed: no heading in this file names its own answer",
+      "conclusion": [
+        {
+          "text": "unparsed: no heading in this file names its own answer",
+          "withdrawn": false
+        }
+      ],
       "conclusion_unparsed": true,
       "state": "stands",
       "state_source": "",
-      "state_note": "",
-      "conditions": [
-        "generated 2026-09-21 20:45 on DESKTOP-AHUN9RO, go1.27.1 windows/amd64, no model call and no Jev call of any kind, no credential of any kind read, corpus .tofu/sessions read through bench/corpus, replay tree git archive e3c805d2b86b5e289305f21a88bcde837b37c838, cap internal/konst.GlobPathsResultCap = 300, tool bench/tokens, run by go test ./bench/tokens/ -run TestByteTotalsOverTheRealCorpus -count=1 -v",
-        "Cost unit: unpriced. A money figure is dollars that left the account behind the credential named above, read from the response of the call it names and never from a rate card. This run made no call at all.",
-        "Nothing was warmed up and nothing was discarded. Both runs pasted below are first runs of a fresh process.",
-        "This file supersedes report-2026-09-21.md, which replayed against the working tree. Every figure that file carried appears below in a live tree column rather than being lost."
-      ]
+      "state_note": ""
     },
     {
       "package": "tokens",
@@ -940,17 +931,16 @@
       "built_from": "prose",
       "sample": "109 recorded turns read through bench/corpus",
       "skips": "counted and named in the report's own Corpus and skips section",
-      "conclusion": "Yes. glob is 88.7% of every result byte the model read, 48,186,030 of 54,295,422 over 109 recorded turns, and the cap cuts it to 3.2% and the total to 6,313,245 bytes, 88.4% less.",
+      "conclusion": [
+        {
+          "text": "Yes. glob is 88.7% of every result byte the model read, 48,186,030 of 54,295,422 over 109 recorded turns, and the cap cuts it to 3.2% and the total to 6,313,245 bytes, 88.4% less.",
+          "withdrawn": false
+        }
+      ],
       "conclusion_unparsed": false,
       "state": "stands",
       "state_source": "",
-      "state_note": "",
-      "conditions": [
-        "generated 2026-09-21 20:07 on DESKTOP-AHUN9RO, go1.27.1 windows/amd64, no model call and no Jev call of any kind, corpus .tofu/sessions read through bench/corpus, cap internal/konst.GlobPathsResultCap = 300, tool bench/tokens, run by go test ./bench/tokens/ -run TestByteTotalsOverTheRealCorpus -count=1 -v",
-        "Cost unit: unpriced. A money figure is dollars that left the account behind the credential named above, read from the response of the call it names and never from a rate card. This run made no paid call, so it has no money figure, and every recorded turn it reads ran on a subscription, which spends a quota window and carries no per-token price.",
-        "Nothing was warmed up and nothing was discarded. Both runs pasted below are first runs of a fresh process.",
-        "This file replaces an earlier file of the same name and the same date, written before TOFU-341. That earlier file was never committed, so git holds no copy of it, and every figure it carried is repeated below in a before column rather than lost."
-      ]
+      "state_note": ""
     },
     {
       "package": "turn",
@@ -960,15 +950,16 @@
       "built_from": "prose",
       "sample": "102 replayed turns",
       "skips": "8 of 110 entries under .tofu/sessions did not parse as a recorded turn",
-      "conclusion": "unparsed: no heading in this file names its own answer",
+      "conclusion": [
+        {
+          "text": "unparsed: no heading in this file names its own answer",
+          "withdrawn": false
+        }
+      ],
       "conclusion_unparsed": true,
       "state": "stands",
       "state_source": "",
-      "state_note": "",
-      "conditions": [
-        "Machine: DESKTOP-AHUN9RO. Credential kind: none, this run makes no model call. Wire: none. Source: recorded turns replayed from ../../.tofu/sessions.",
-        "This is not a benchmark run. No model call was made, live or otherwise, and the bench verb was not run: every number below comes from replaying the tool calls a recorded turn already made, inside an ordinary go test."
-      ]
+      "state_note": ""
     },
     {
       "package": "websift",
@@ -978,16 +969,20 @@
       "built_from": "prose",
       "sample": "24 pages: 21 focused and 3 reference pages up to 390KB",
       "skips": "the whole first round was thrown out, because both arms had nothing to remove on those pages",
-      "conclusion": "not quoted here: this report is withdrawn in part, and the note says by whom",
+      "conclusion": [
+        {
+          "text": "The readability rule, a free arm, and the judgment is not wired.",
+          "withdrawn": false
+        },
+        {
+          "text": "catalog/policy/page_sift@1.yaml still reads mode: shadow, so the model is given every fetched page whole.",
+          "withdrawn": true
+        }
+      ],
       "conclusion_unparsed": false,
       "state": "withdrawn in part",
       "state_source": "bench/report/withdrawals.json",
-      "state_note": "one sentence of the Arm that won section, withdrawn by TOFU-440 on 2026-09-23 and not by the file: catalog/policy/page_sift@1.yaml still reads mode: shadow, so the model is given every fetched page whole. Both halves have moved. There is no file at that path: the rule is library/tools/fetch/rules/page_sift@1.yaml, renamed when 0.4.8 made catalog into library. And the sentence predates library/decisions/methods@1.yaml, so it reads shadow as a lock a later ticket would pull, where the method table now records page_sift as unwired because web.Reduce already strips the link-only rows the sieve would strip, 0.00 percent of further bytes on all 24 recorded pages. The report's own finding stands: the readability rule wins, keeping 21 of 21 needles on the focused group and 3 of 3 on the reference group where the judged arm at the shipped keep_at 0.5 keeps 15 of 21 and 0 of 3, and the judgment is not wired. Every needle, byte, cost, latency, rerun and two-task figure in the file stands, and so does the skip it declares.",
-      "conditions": [
-        "Machine: DESKTOP-AHUN9RO. Credential kind: key. Route: openrouter, typesafe/jev-1.13-20260917.",
-        "Cost unit: money. A money figure is dollars that left the account behind the credential named above, read from the response of the call it names and never from a rate card.",
-        "No measurement in this report is rerun and no model call was made to write it. The live figures below are copied from the log of TOFU-236, dated 2026-09-21, where they say so on their own line. The offline, non-model tests were re-executed today only to check the log's numbers still reproduce; each says where its number came from."
-      ]
+      "state_note": "one sentence of the Arm that won section, withdrawn by TOFU-440 on 2026-09-23 and not by the file. Both halves of it have moved. There is no file at that path: the rule is library/tools/fetch/rules/page_sift@1.yaml, renamed when 0.4.8 made catalog into library. And the sentence predates library/decisions/methods@1.yaml, so it reads shadow as a lock a later ticket would pull, where the method table now records page_sift as unwired because web.Reduce already strips the link-only rows the sieve would strip, 0.00 percent of further bytes on all 24 recorded pages. Everything not struck stands, including the skip the file declares."
     },
     {
       "package": "harness",
@@ -997,15 +992,16 @@
       "built_from": "prose",
       "sample": "1 recorded turn, 10 write calls",
       "skips": "the three-arm table, Claude against Codex against Tofu, has never been run and waits on E4",
-      "conclusion": "unparsed: no heading in this file names its own answer",
+      "conclusion": [
+        {
+          "text": "unparsed: no heading in this file names its own answer",
+          "withdrawn": false
+        }
+      ],
       "conclusion_unparsed": true,
       "state": "stands",
       "state_source": "",
-      "state_note": "",
-      "conditions": [
-        "Machine: DESKTOP-AHUN9RO.",
-        "No measurement in this report is rerun and no model call was made to write it. TestTransformArmsOverTheV2Session below was run today, is deterministic, makes no model call and no network call, and reads only committed fixtures under testdata; running it does not spend anything and reproduces the same numbers on any machine."
-      ]
+      "state_note": ""
     },
     {
       "package": "mutate",
@@ -1015,15 +1011,16 @@
       "built_from": "prose",
       "sample": "one recorded gremlins run: 88 killed, 16 lived, 5 not covered",
       "skips": "the after run is not reproduced here and its ticket log is empty, so a board line is the only surviving source",
-      "conclusion": "unparsed: no heading in this file names its own answer",
+      "conclusion": [
+        {
+          "text": "unparsed: no heading in this file names its own answer",
+          "withdrawn": false
+        }
+      ],
       "conclusion_unparsed": true,
       "state": "stands",
       "state_source": "",
-      "state_note": "",
-      "conditions": [
-        "Machine: DESKTOP-AHUN9RO.",
-        "No measurement in this report is rerun and no model call was made to write it. bench/mutate runs gremlins, a mutation-testing tool over Go source, never a model. The before figure below was reproduced today from the committed fixture by the package's own existing tests, offline, no network call. The after figures are taken from .local/boji/tickets/BOARD.md, the \"Twelve accepted, 2026-09-21\" entry, on their own line below, because the after run itself is not pasted in either TOFU-215's or TOFU-223's ticket log (both ## Log sections are empty) and this ticket forbids rerunning it to recover the number."
-      ]
+      "state_note": ""
     },
     {
       "package": "recall",
@@ -1033,15 +1030,16 @@
       "built_from": "prose",
       "sample": "20 real forks",
       "skips": "",
-      "conclusion": "From the TOFU-246 log, dated 2026-09-21, taken from a ticket log rather than a rerun: the free arm, and gap 11 is struck rather than built.",
+      "conclusion": [
+        {
+          "text": "From the TOFU-246 log, dated 2026-09-21, taken from a ticket log rather than a rerun: the free arm, and gap 11 is struck rather than built.",
+          "withdrawn": false
+        }
+      ],
       "conclusion_unparsed": false,
       "state": "stands",
       "state_source": "",
-      "state_note": "",
-      "conditions": [
-        "Machine: DESKTOP-AHUN9RO.",
-        "No measurement in this report is rerun and no live model call was made to write it. The figures below are copied from the log of TOFU-246, dated 2026-09-21, where they say so on their own line. The offline, deterministic tests were re-executed today only to check the log's numbers still reproduce; each says where its number came from. bench/recall/jevword_test.go puts a last word to the real Jev route and is gated behind TOFU_LIVE=1; it did not run today and this report makes no claim from it."
-      ]
+      "state_note": ""
     },
     {
       "package": "stopcheck",
@@ -1051,15 +1049,16 @@
       "built_from": "prose",
       "sample": "78 labelled steps of 79 recorded",
       "skips": "",
-      "conclusion": "the typed arm won, 71 agreements against 68 out of 78 labelled steps, which on a corpus this size is one labeller's judgement on a handful of steps rather than a result.",
+      "conclusion": [
+        {
+          "text": "the typed arm won, 71 agreements against 68 out of 78 labelled steps, which on a corpus this size is one labeller's judgement on a handful of steps rather than a result.",
+          "withdrawn": false
+        }
+      ],
       "conclusion_unparsed": false,
       "state": "stands",
       "state_source": "",
-      "state_note": "",
-      "conditions": [
-        "generated 2026-09-20 22:01:55Z, jev build typesafe/jev-1.13-20260917, questions stop_check@1, policy mode shadow (declared shadow in catalog/policy/stop_check@1.yaml)",
-        "Cost unit: money. A money figure is dollars that left the account behind the credential named above, read from the response of the call it names and never from a rate card."
-      ]
+      "state_note": ""
     },
     {
       "package": "transform",
@@ -1069,15 +1068,16 @@
       "built_from": "prose",
       "sample": "17 recorded turns, 14 write calls",
       "skips": "",
-      "conclusion": "unparsed: no heading in this file names its own answer",
+      "conclusion": [
+        {
+          "text": "unparsed: no heading in this file names its own answer",
+          "withdrawn": false
+        }
+      ],
       "conclusion_unparsed": true,
       "state": "stands",
       "state_source": "",
-      "state_note": "",
-      "conditions": [
-        "Machine: DESKTOP-AHUN9RO.",
-        "No measurement in this report is rerun and no model call was made to write it. bench/transform compares the write tool against a typed-edit tool by arithmetic over token estimates fitted to real recorded steps; it never calls a model. The census below (14 writes, 17 turns, 11 creates, 3 replaces, 0 refusals) is the same result BOJI-086/BOJI-090 recorded when this corpus was first measured, restated on its own line, and reproduced today by the package's own existing test against the same committed fixture."
-      ]
+      "state_note": ""
     },
     {
       "package": "cost",
@@ -1087,31 +1087,16 @@
       "built_from": "prose",
       "sample": "89 cases, 5 arms",
       "skips": "the fable arm did not finish its half, 51 cases of 89",
-      "conclusion": "not quoted here: this report is withdrawn in part, and the note says by whom",
+      "conclusion": [
+        {
+          "text": "not quoted here: this report is withdrawn in part, and the note says by whom",
+          "withdrawn": false
+        }
+      ],
       "conclusion_unparsed": false,
       "state": "withdrawn in part",
       "state_source": "the file's own text",
-      "state_note": "# PART OF THIS REPORT IS WITHDRAWN, 2026-09-19, BOJI-133",
-      "conditions": [
-        "The accuracy reading is withdrawn. The cost, token and latency reading stands. Read the next two lists before any number below.",
-        "Every verdict in this file was produced by DecideByApproval, a two threshold rule over user_requested and approval that bench/cost/decision.go held until BOJI-132 deleted it. Nothing under cmd/ or internal/ ever called it. The tool gate runs policy.Decide over the five thresholds in catalog/policy/tool_gate@1.yaml: risk_ask_at, risk_deny_at, user_requested_relax_at, approval_relax_at and from_untrusted_block_at. On the calibration halves the two rules differ by 14 correct answers and 16 false blocks, recorded in the header of bench/cost/sweep-2026-09-19.md.",
-        "Withdrawn, because a verdict is in them. Every figure listed here describes a rule the gate does not run and none of it may be quoted as a measurement of the gate.",
-        "- Headline: both money-per-correct figures and the 149 times ratio, because the divisor is a correct count.",
-        "- Agreement with the label: the Correct, Agreement, Blocks caught and False blocks columns, every row.",
-        "- Does any arm separate from any other: the whole table. Every column is built from per case correctness.",
-        "- Cost per correct decision: the Correct column, Money per correct and List price per correct. The Total money column is not withdrawn.",
-        "- Disagreements: which cases appear, and the Answer column. A case is in that table because the rule disagreed with the label, so a different rule lists different cases.",
-        "Stands, because no decision rule was read to produce it. These figures cost $1.584970 on a key through OpenRouter, on two frontier arms that were retired the same day and cannot be run again, and they are the reason this file is kept rather than deleted.",
-        "- Machine, credential kind, wire, the cost unit line, and the whole of The set: case counts, the split and its method, the label sources, the cut command measurement.",
-        "- Agreement with the label: the Arm, Model id, Cases and p50 wall clock columns, and the note on the arm that did not finish the half.",
-        "- Cost per correct decision: the Unit, Total money, Total list price and Unpriced calls columns.",
-        "- Context tokens avoided: 102143 billed input tokens, the frontier rate of $0.0000104887 per token measured from this run's own calls, and the $1.071348 that follows from them.",
-        "- Disagreements: the user_requested and approval values and the command text on every row that appears. Those are recorded answers, not verdicts.",
-        "- Total spend: $1.584970.",
-        "The measurement of the gate that does stand is bench/cost/rescore-2026-09-19.md, decided by policy.Decide over recorded answers from this same corpus.",
-        "No number below this line has been edited. BOJI-133 added this notice and nothing else. One paragraph below, the one about commands cut at recording time, was rewritten by an earlier ticket on 2026-09-19 when the sentence it is generated from changed.",
-        "---"
-      ]
+      "state_note": "# PART OF THIS REPORT IS WITHDRAWN, 2026-09-19, BOJI-133"
     },
     {
       "package": "stopcheck",
@@ -1121,24 +1106,16 @@
       "built_from": "prose",
       "sample": "41 labelled steps",
       "skips": "the corpus was extended to 78 steps after this run, so every figure here is measured against a smaller set",
-      "conclusion": "the typed arm won, 37 agreements against 36 out of 41 labelled steps, which on a corpus this size is one labeller's judgement on a handful of steps rather than a result.",
+      "conclusion": [
+        {
+          "text": "the typed arm won, 37 agreements against 36 out of 41 labelled steps, which on a corpus this size is one labeller's judgement on a handful of steps rather than a result.",
+          "withdrawn": false
+        }
+      ],
       "conclusion_unparsed": false,
       "state": "stale",
       "state_source": "the file's own text",
-      "state_note": "\u003e STALE. Every agreement figure below is measured against a corpus smaller than the one in the tree.",
-      "conditions": [
-        "\u003e STALE. Every agreement figure below is measured against a corpus smaller than the one in the tree.",
-        "\u003e",
-        "\u003e Added by the orchestrator on 2026-09-20, from BOJI-161's report. The run below scored 41 labelled steps. The frozen corpus now holds 79 steps and 78 hand labels, extended for BOJI-098 after this file was generated at 04:01:51Z. So the cheap arm reads 36 of 41 at 87.8 percent here and measures 68 of 78 at 87.2 percent today, and the two are not the same measurement. Do not compare them line to line.",
-        "\u003e",
-        "\u003e Nothing below was recomputed and nothing is wrong about the run it describes. It is stale on corpus size, and it was already stale before BOJI-161 touched anything: that ticket deleted a rule from the cheap arm and moved the figure by zero, because the rule had never fired. The highest step index in the corpus is 35 against the 40 it compared against.",
-        "\u003e",
-        "\u003e The typed arm's figures are untouched, and the state bytes are byte identical, so every cached answer still hits and nothing was rebought.",
-        "\u003e",
-        "\u003e This file is not corrected in place. Either it is regenerated over all 78 labels or it is withdrawn, and that is the owner's call.",
-        "generated 2026-09-19 04:01:51Z, jev build typesafe/jev-1.13-20260917, questions stop_check@1, policy mode shadow (declared shadow in ..\\..\\catalog\\policy\\stop_check@1.yaml)",
-        "Cost unit: money. A money figure is dollars that left the account behind the credential named above, read from the response of the call it names and never from a rate card. This line was added by hand for BOJI-098 after the run; every figure below is exactly as measured on 2026-09-19 and none was recomputed. Render now prints it, so the next run carries it without a hand edit."
-      ]
+      "state_note": "\u003e STALE. Every agreement figure below is measured against a corpus smaller than the one in the tree."
     },
     {
       "package": "api",
@@ -1148,17 +1125,16 @@
       "built_from": "prose",
       "sample": "5 state sizes at 3 runs each, plus a 6 case gate battery",
       "skips": "",
-      "conclusion": "No first call was discarded as a warm-up. Latency by state size, 3 runs each, median/tokens: 300 tokens 305 ms/920, 1k 320 ms/1982, 4k 428 ms/6748, 12k 486 ms/19446, 28k 598 ms/32086.",
+      "conclusion": [
+        {
+          "text": "No first call was discarded as a warm-up. Latency by state size, 3 runs each, median/tokens: 300 tokens 305 ms/920, 1k 320 ms/1982, 4k 428 ms/6748, 12k 486 ms/19446, 28k 598 ms/32086.",
+          "withdrawn": false
+        }
+      ],
       "conclusion_unparsed": false,
       "state": "stands",
       "state_source": "",
-      "state_note": "",
-      "conditions": [
-        "Machine: DESKTOP-AHUN9RO. Credential kind: key. Wire: openrouter. Build id the response reported: typesafe/jev-1.13-20260917.",
-        "Cost unit: money. A money figure is dollars that left the account behind the credential named above, read from the response of the call it names and never from a rate card.",
-        "No measurement in this report is rerun and no model call was made to write it. Every figure below is copied from bench/report/api-2026-09-18.md, an already-published dated report from boji bench api's round-1 run (BOJI-006), which is the actual measurement of this package's corpus (bench/corpus: six gate cases, five size fixtures). That file is not inside bench/api itself, which is the one thing this report fixes: TestEveryBenchCorpusHasADatedReport only looks in a package's own directory.",
-        "bench/api/testdata/report.golden.md is a separate thing and not a corpus of recorded states: it is the golden fixture for TestReportRenderingMatchesTheGoldenFile, which checks that report.Render formats a hand-built api.Result correctly. It carries invented numbers (TESTBOX, 2026-01-02) on purpose, to keep the renderer test independent of any real run, and none of them belong in a measurement report."
-      ]
+      "state_note": ""
     },
     {
       "package": "cost",
@@ -1168,17 +1144,16 @@
       "built_from": "prose",
       "sample": "6 cases, 4 arms",
       "skips": "accuracy is not readable from this run at all: every arm scored 6 of 6",
-      "conclusion": "Jev decided for $0.000041 per correct decision and opus for $0.005351, 131 times Jev. On this date both sides were money on the same credential kind, so the ratio was defined.",
+      "conclusion": [
+        {
+          "text": "Jev decided for $0.000041 per correct decision and opus for $0.005351, 131 times Jev. On this date both sides were money on the same credential kind, so the ratio was defined.",
+          "withdrawn": false
+        }
+      ],
       "conclusion_unparsed": false,
       "state": "stands",
       "state_source": "",
-      "state_note": "",
-      "conditions": [
-        "Relabelled by BOJI-080 on 2026-09-19. What this run could show: the money each arm spends per call and per correct decision, measured from the response of every call, which is why the cost figures below still stand. What it could not show: whether any arm is more correct than any other. All four arms scored six of six, a set on which every arm is perfect separates nothing, and the regular expression arm in it was written by something that had already read all six cases, so it was a baseline fitted to its own test set. Nothing below is evidence about accuracy. The correctness question is answered, as far as it can be, in the report for the 178 case corpus.",
-        "Added by BOJI-133 on 2026-09-19, and it is the smallest of the reasons above rather than a new one: the Answer column in every arm table below was produced by DecideByApproval, a two threshold rule over user_requested and approval that nothing under cmd/ or internal/ ever called and that BOJI-132 deleted, while the gate runs policy.Decide over catalog/policy/tool_gate@1.yaml, the two are scored side by side in the header of bench/cost/sweep-2026-09-19.md, and the measurement that stands is bench/cost/rescore-2026-09-19.md.",
-        "Machine: DESKTOP-AHUN9RO. Credential kind: key. Wire: openrouter.",
-        "Cost unit: money. A money figure is dollars that left the account behind the credential named above, read from the response of the call it names and never from a rate card. This line was added by BOJI-064 after the run; every figure below is exactly as measured on 2026-09-18 and none was recomputed. Every arm on this date ran through one OpenRouter key, so every Dollars column below is money and the totals are legal sums."
-      ]
+      "state_note": ""
     },
     {
       "package": "turn",
@@ -1188,17 +1163,16 @@
       "built_from": "prose",
       "sample": "4 tasks, 3 reps, 2 arms, 24 turns",
       "skips": "3 of 24 runs failed their outcome check and are out of the timing figures",
-      "conclusion": "unparsed: no heading in this file names its own answer",
+      "conclusion": [
+        {
+          "text": "unparsed: no heading in this file names its own answer",
+          "withdrawn": false
+        }
+      ],
       "conclusion_unparsed": true,
       "state": "stands",
       "state_source": "",
-      "state_note": "",
-      "conditions": [
-        "Machine: DESKTOP-AHUN9RO. Credential kind: key. Wire: openrouter. Model: anthropic/claude-fable-5-1.",
-        "Total spend of this run: $0.399410 over 24 turns, summed from usage.cost on each model response, never from a price table. Run this on purpose, not twice by accident.",
-        "4 tasks, 3 reps each, two arms (loop and capped at one step): 24 turns total, 3 failed.",
-        "No first run was discarded as a warm-up; every run below, including the first, counts. Every task runs in a fresh, disposable scratch directory outside this repository, made with os.MkdirTemp, one per run, removed after the run."
-      ]
+      "state_note": ""
     },
     {
       "package": "wording",
@@ -1208,15 +1182,16 @@
       "built_from": "prose",
       "sample": "6 cases, two wordings of the same question set",
       "skips": "",
-      "conclusion": "Keep tool_gate@1. No case's verdict changed between the two wordings, every margin sits inside or explained beyond the 0.00 to 0.05 rerun spread BOJI-006 measured on this corpus (1 of 6 cases (case-4-rm-rf.json) had a per-question margin wider than that spread, see above), and v2 costs more for the identical decision on every case.",
+      "conclusion": [
+        {
+          "text": "Keep tool_gate@1. No case's verdict changed between the two wordings, every margin sits inside or explained beyond the 0.00 to 0.05 rerun spread BOJI-006 measured on this corpus (1 of 6 cases (case-4-rm-rf.json) had a per-question margin wider than that spread, see above), and v2 costs more for the identical decision on every case.",
+          "withdrawn": false
+        }
+      ],
       "conclusion_unparsed": false,
       "state": "stands",
       "state_source": "",
-      "state_note": "",
-      "conditions": [
-        "Machine: DESKTOP-AHUN9RO. Credential kind: key. Wire: openrouter. Build id the response reported: typesafe/jev-1.13-20260917.",
-        "tool_gate@1 (single from_untrusted noul) against tool_gate@2 (matches_planted_instruction and serves_untrusted_author, both nouls), interleaved per case: v1 then v2, 3 times per case, over the same six bench/corpus states. BOJI-006 measured 5 reruns of the six-case gate battery on this corpus and found a per-question spread of 0.00 to 0.05; a move smaller than that is not a difference."
-      ]
+      "state_note": ""
     }
   ],
   "benches_with_no_dated_report": [
@@ -1255,9 +1230,9 @@
     "reports": 31,
     "packages_with_a_dated_report": 22,
     "packages_with_no_dated_report": 6,
-    "withdrawn_whole_or_in_part": 3,
+    "withdrawn_whole_or_in_part": 5,
     "stale": 1,
-    "unparsed": 10
+    "unparsed": 8
   },
   "withdrawals_declared_from_outside_live_in": "bench/report/withdrawals.json",
   "generated_by": "go run ./bench/report/gen"

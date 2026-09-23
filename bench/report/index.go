@@ -6,7 +6,9 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
+	"strings"
 )
 
 type State string
@@ -46,12 +48,14 @@ type datedEntry struct {
 	State       State
 	StateSource string
 	StateNote   string
+	Fell        []string
 }
 
 type withdrawal struct {
-	Report string `json:"report"`
-	State  State  `json:"state"`
-	Why    string `json:"why"`
+	Report string   `json:"report"`
+	State  State    `json:"state"`
+	Why    string   `json:"why"`
+	Fell   []string `json:"fell"`
 }
 
 type Package struct {
@@ -168,6 +172,7 @@ func readPackageReports(benchRoot, pkg string, withdrawals map[string]withdrawal
 		}
 		if outside, ok := withdrawals[path]; ok {
 			entry.State, entry.StateSource, entry.StateNote = outside.State, WithdrawalsPath, outside.Why
+			entry.Fell = outside.Fell
 			delete(withdrawals, path)
 		}
 		entries = append(entries, entry)
@@ -175,15 +180,61 @@ func readPackageReports(benchRoot, pkg string, withdrawals map[string]withdrawal
 	return entries, nil
 }
 
+const tableRowMark = "|"
+
+func fellIn(report, text string, fell []string) ([]string, error) {
+	said, lines := flatten(text), strings.Split(text, "\n")
+	struck := make([]string, 0, len(fell))
+	for _, quotation := range fell {
+		want := flatten(quotation)
+		if !strings.Contains(said, want) {
+			return nil, fmt.Errorf("%s: %s says %q falls, and that sentence does not appear in the report, so nothing on the page would be struck", WithdrawalsPath, report, quotation)
+		}
+		if !strings.HasPrefix(want, tableRowMark) {
+			struck = append(struck, want)
+			continue
+		}
+		struck = append(struck, tableHolding(lines, want)...)
+	}
+	return struck, nil
+}
+
+func tableHolding(lines []string, row string) []string {
+	at := slices.IndexFunc(lines, func(line string) bool { return flatten(line) == row })
+	if at < 0 {
+		return []string{row}
+	}
+	first, last := at, at
+	for first > 0 && strings.HasPrefix(flatten(lines[first-1]), tableRowMark) {
+		first--
+	}
+	for last+1 < len(lines) && strings.HasPrefix(flatten(lines[last+1]), tableRowMark) {
+		last++
+	}
+	table := make([]string, 0, last-first+1)
+	for _, line := range lines[first : last+1] {
+		table = append(table, flatten(line))
+	}
+	return table
+}
+
 func readWithdrawals(path string) (map[string]withdrawal, error) {
 	var list []withdrawal
 	if err := readJSON(path, &list); err != nil {
 		return nil, err
 	}
+	tree := filepath.Join(path, "..", "..", "..")
 	byReport := make(map[string]withdrawal, len(list))
 	for _, item := range list {
 		switch item.State {
-		case StateWithdrawn, StateWithdrawnInPart, StateStale:
+		case StateWithdrawnInPart:
+			if len(item.Fell) == 0 {
+				return nil, fmt.Errorf("%s: %s is withdrawn in part and quotes no sentence under fell, so the renderer cannot tell the half that fell from the half that stands", WithdrawalsPath, item.Report)
+			}
+		case StateWithdrawn, StateStale:
+			if len(item.Fell) > 0 {
+				return nil, fmt.Errorf("%s: %s is %q and quotes sentences under fell, which only a partial withdrawal does", WithdrawalsPath, item.Report, item.State)
+			}
 		case StateStands:
 			return nil, fmt.Errorf("%s: %s is declared as %q, which is what a report is without an entry here", WithdrawalsPath, item.Report, item.State)
 		default:
@@ -191,6 +242,12 @@ func readWithdrawals(path string) (map[string]withdrawal, error) {
 		}
 		if item.Why == "" {
 			return nil, fmt.Errorf("%s: %s is withdrawn from outside itself and says no reason", WithdrawalsPath, item.Report)
+		}
+		body, err := os.ReadFile(filepath.Join(tree, filepath.FromSlash(item.Report)))
+		if err == nil {
+			if item.Fell, err = fellIn(item.Report, string(body), item.Fell); err != nil {
+				return nil, err
+			}
 		}
 		byReport[item.Report] = item
 	}

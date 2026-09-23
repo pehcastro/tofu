@@ -124,6 +124,7 @@ p{margin:0 0 14px;max-width:88ch}
 .card-content li{margin-bottom:6px}
 blockquote{margin:0 0 14px;padding:10px 16px;border-left:3px solid var(--border);
   background:var(--muted);border-radius:0 var(--radius-md) var(--radius-md) 0}
+blockquote s.fell{color:var(--destructive);text-decoration-thickness:2px}
 blockquote cite{display:block;font-style:normal;font-size:.75rem;margin-top:6px;
   color:var(--muted-foreground);font-family:var(--font-mono)}
 details{border:1px solid var(--border);border-radius:var(--radius-lg);padding:12px 16px;margin-bottom:10px}

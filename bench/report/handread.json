@@ -130,7 +130,7 @@
   {
     "report": "bench/shortlist/report-2026-09-21.md",
     "figure": "The corpus holds four.",
-    "says": "Thirty file-localisation questions were asked for and the recorded corpus yields four, so file_shortlist is neither recommended nor refused. The judge closing 25% to 100% hit@1 on four questions is a direction, not a result.",
+    "says": "Thirty file-localisation questions were asked for and the recorded corpus yields four, so file_shortlist is neither recommended nor refused. The table that scored the two methods was struck by bench/report/withdrawals.json on 2026-09-23 and no reading off it is quoted here.",
     "from": "prose",
     "sample": "4 questions, drawn from 131 recorded turns of which 20 ever write",
     "skips": "12 of those 20 turns are file creation, where there is no existing file to localise"
@@ -138,7 +138,7 @@
   {
     "report": "bench/sift/report-2026-09-21.md",
     "figure": "27 of 34",
-    "says": "Jev keeps 27 of 34 needles against the free arm's 18 at the bytes saved the free arm already matches, two runs, same direction. The policy still reads mode: shadow, so the win is measured and not wired.",
+    "says": "Jev keeps 27 of 34 needles against the free arm's 18 at the bytes saved the free arm already matches, two runs, same direction. This is the run that paid for the flip: library/tools/shell/rules/shell_sift@1.yaml reads mode: enforced from TOFU-434, committed in 0.4.11, so the win is measured and wired.",
     "from": "prose",
     "sample": "34 needles, two full live runs, 594 live decisions",
     "skips": ""

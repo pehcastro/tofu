@@ -2,11 +2,38 @@
   {
     "report": "bench/forkcache/report-2026-09-22.txt",
     "state": "withdrawn in part",
-    "why": "the estimator section only, withdrawn by the board entry of 2026-09-22 in .local/boji/tickets/BOARD.md and not by the file. Two of its rows compare numbers taken from two different conversations, so that section does not measure the estimator against the provider. Every other section of the file stands."
+    "why": "the estimator section only, withdrawn by the board entry of 2026-09-22 in .local/boji/tickets/BOARD.md and not by the file. Two of its rows compare numbers taken from two different conversations, so that section does not measure the estimator against the provider. Both rows are quoted below with the sentence that introduces them, because the rows are where the figures are and a withdrawal that quotes only the lead-in leaves them standing. Every other section of the file stands.",
+    "fell": [
+      "v7 set the rule that a fork is proved by the provider's number and not by ours. Both forks carry our own before-figure in the header, so the rule can be checked here:",
+      "turn-18d724d865ed9264 ours 66,162 provider 66,354 0.3 percent under",
+      "turn-18d6f8d9e45f8efc ours 57,326 provider 44,189 29.7 percent over"
+    ]
   },
   {
     "report": "bench/websift/report-2026-09-21.md",
     "state": "withdrawn in part",
-    "why": "one sentence of the Arm that won section, withdrawn by TOFU-440 on 2026-09-23 and not by the file: catalog/policy/page_sift@1.yaml still reads mode: shadow, so the model is given every fetched page whole. Both halves have moved. There is no file at that path: the rule is library/tools/fetch/rules/page_sift@1.yaml, renamed when 0.4.8 made catalog into library. And the sentence predates library/decisions/methods@1.yaml, so it reads shadow as a lock a later ticket would pull, where the method table now records page_sift as unwired because web.Reduce already strips the link-only rows the sieve would strip, 0.00 percent of further bytes on all 24 recorded pages. The report's own finding stands: the readability rule wins, keeping 21 of 21 needles on the focused group and 3 of 3 on the reference group where the judged arm at the shipped keep_at 0.5 keeps 15 of 21 and 0 of 3, and the judgment is not wired. Every needle, byte, cost, latency, rerun and two-task figure in the file stands, and so does the skip it declares."
+    "why": "one sentence of the Arm that won section, withdrawn by TOFU-440 on 2026-09-23 and not by the file. Both halves of it have moved. There is no file at that path: the rule is library/tools/fetch/rules/page_sift@1.yaml, renamed when 0.4.8 made catalog into library. And the sentence predates library/decisions/methods@1.yaml, so it reads shadow as a lock a later ticket would pull, where the method table now records page_sift as unwired because web.Reduce already strips the link-only rows the sieve would strip, 0.00 percent of further bytes on all 24 recorded pages. Everything not struck stands, including the skip the file declares.",
+    "fell": [
+      "`catalog/policy/page_sift@1.yaml` still reads `mode: shadow`, so the model is given every fetched page whole."
+    ]
+  },
+  {
+    "report": "bench/sift/report-2026-09-21.md",
+    "state": "withdrawn in part",
+    "why": "two sentences, withdrawn by TOFU-441 on 2026-09-23 and not by the file, and both say the opposite of what tofu does now. There is no file at catalog/policy/shell_sift@1.yaml: the rule is library/tools/shell/rules/shell_sift@1.yaml, renamed when 0.4.8 made catalog into library, and it reads mode: enforced, flipped by TOFU-434 and committed in 0.4.11 on 2026-09-23. So the sieve is wired and a shell result arrives at the model cut, with a line at the end of it saying how many bytes were removed and which method removed them. The test of that name is gone with it: bench/sift/arm_test.go carries TestTheShippedRuleIsEnforcedAndTheModelIsGivenTheOutputCut. The finding this report measured stands and is the reason the rule was flipped. Everything not struck stands, including what the file says it did not do, and the newer bench/sift/report-2026-09-22.md measures what the flip costs and is untouched by this.",
+    "fell": [
+      "and it is not wired. `catalog/policy/shell_sift@1.yaml` still reads `mode: shadow`, so the model is given every shell result whole; TOFU-217 measured the win and left the lock for a later ticket to pull.",
+      "`TestTheShippedPolicyIsShadowAndTheModelIsGivenTheOutputWhole` passed the same run, confirming the model is still given the output whole."
+    ]
+  },
+  {
+    "report": "bench/shortlist/report-2026-09-21.md",
+    "state": "withdrawn in part",
+    "why": "the four-arm accuracy table and the two sentences that read a gap off it, withdrawn by TOFU-449 on 2026-09-23 and not by the file. Three of the four questions name their own answer in their own prompt: #item6 is labelled README.md and its task says update README.md, #item7 is labelled package.json and its task says add a check script to package.json, and the whole-task row names two of its six paths. What that table compares is a judge that can read the filename out of the prompt against a BM25 with no stopword list, so no arm scored on it can be told apart from a regular expression pulling a filename out of the task. bench/shortlist is parked rather than rebuilt: on 2026-09-23 its population test read 110 entries and 109 turns of the recorded sessions and found 7 recordable turns carrying 2 distinct tasks, against the floor of 30, and six of the seven are reruns of the prompt this corpus already comes from. Everything not struck stands, including the cost and latency table, which does not depend on the labels, and the finding the report opens with, that the corpus holds four questions.",
+    "fell": [
+      "the interesting number here is hit@1, where the retrieval alone is 25% and the judge lifts it to 100%.",
+      "| judged, Jev reranking the BM25 shortlist | 4/4 (100.0%) | 4/4 (100.0%) |",
+      "Directionally, on this tiny run, the judge closed a real gap the strong free arm left open (25% to 100% hit@1)"
+    ]
   }
 ]
