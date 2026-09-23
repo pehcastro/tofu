@@ -24,7 +24,7 @@ type armTotal struct {
 	cost      float64
 	elapsed   time.Duration
 	latencies []time.Duration
-	build     string
+	builds    map[string]int
 }
 
 func (a *armTotal) add(reading Reading) {
@@ -40,8 +40,11 @@ func (a *armTotal) addJev(answered Answered) {
 	a.state += answered.StateBytes
 	a.cost += answered.Cost
 	a.latencies = append(a.latencies, answered.Latencies...)
-	if answered.Build != "" {
-		a.build = answered.Build
+	if a.builds == nil {
+		a.builds = map[string]int{}
+	}
+	for build, n := range answered.Builds {
+		a.builds[build] += n
 	}
 }
 
@@ -51,10 +54,10 @@ func (a armTotal) spread() string {
 	}
 	sorted := append([]time.Duration(nil), a.latencies...)
 	sort.Slice(sorted, func(i, j int) bool { return sorted[i] < sorted[j] })
-	return fmt.Sprintf("p50 %s, p95 %s, worst %s, build %s",
+	return fmt.Sprintf("p50 %s, p95 %s, worst %s, builds %v",
 		sorted[len(sorted)/2].Round(time.Millisecond),
 		sorted[(len(sorted)*95)/100].Round(time.Millisecond),
-		sorted[len(sorted)-1].Round(time.Millisecond), a.build)
+		sorted[len(sorted)-1].Round(time.Millisecond), a.builds)
 }
 
 func (a armTotal) row(rows int) string {

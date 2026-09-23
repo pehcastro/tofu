@@ -588,6 +588,26 @@
     {
       "package": "sift",
       "date": "2026-09-22",
+      "source": "bench/sift/report-2026-09-22-rerun.md",
+      "figure": "0.027",
+      "built_from": "rerun",
+      "sample": "the same 34 recorded shell results at the shipped keep_at 0.50, three full live runs of 297 calls each, 891 calls, $0.02726 counted plus an identical first sitting whose output was lost, $0.05452 spent",
+      "skips": "0 of 34 corpus rows skipped for a missing field, 0 of 891 calls failed, 4 tests skip offline wanting TOFU_LIVE=1 or TOFU_REWRITE_CORPUS=1",
+      "conclusion": "The rerun spread is one needle and 0.4 points of bytes saved, so it cannot explain a move of three needles and 27.5 points, and the cause is on the model's side under an unchanged build id.",
+      "conclusion_unparsed": false,
+      "state": "stands",
+      "state_source": "",
+      "state_note": "",
+      "conditions": [
+        "Machine: DESKTOP-AHUN9RO, go1.27.1 windows/amd64, 2026-09-22. Credential kind: key. Wire: openrouter. Build the response reported: typesafe/jev-1.13-20260917, on every one of the 891 calls.",
+        "Cost unit: money. A money figure is dollars that left the account behind the credential named above, read from the response of the call it names and never from a rate card.",
+        "This report needs the network. It is gated behind TOFU_LIVE=1 and skipped otherwise. No first call was discarded as a warm up: every call made is counted.",
+        "Nothing was changed to produce it. The threshold is still the shipped keep_at 0.50, the corpus is still the same 34 rows, and the needle rule and the bytes measure are the ones bench/sift.Read has carried since TOFU-412."
+      ]
+    },
+    {
+      "package": "sift",
+      "date": "2026-09-22",
       "source": "bench/sift/report-2026-09-22-rtk.md",
       "figure": "70.9%",
       "built_from": "rerun",
@@ -1146,7 +1166,7 @@
     }
   ],
   "counts": {
-    "reports": 30,
+    "reports": 31,
     "packages_with_a_dated_report": 22,
     "packages_with_no_dated_report": 6,
     "withdrawn_whole_or_in_part": 2,

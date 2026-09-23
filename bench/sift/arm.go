@@ -2,6 +2,8 @@ package sift
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -92,7 +94,8 @@ type Answered struct {
 	Cost       float64
 	Errors     int
 	StateBytes int
-	Build      string
+	Builds     map[string]int
+	StateSum   string
 }
 
 func Ask(ctx context.Context, client *jev.Client, set question.Set, shell sift.Shell, units []sift.Unit, task string) Answered {
@@ -102,7 +105,7 @@ func Ask(ctx context.Context, client *jev.Client, set question.Set, shell sift.S
 	}
 
 	replies := make([]reply, len(units))
-	sent := make([]int, len(units))
+	states := make([][]byte, len(units))
 	var wg sync.WaitGroup
 	for i, unit := range units {
 		if unit.Held != sift.NotHeld {
@@ -116,7 +119,7 @@ func Ask(ctx context.Context, client *jev.Client, set question.Set, shell sift.S
 			if err != nil {
 				return
 			}
-			sent[i] = len(state)
+			states[i] = state
 			decision, err := client.Ask(ctx, jev.Request{State: json.RawMessage(state), Questions: questions})
 			if err != nil {
 				return
@@ -130,21 +133,24 @@ func Ask(ctx context.Context, client *jev.Client, set question.Set, shell sift.S
 	}
 	wg.Wait()
 
-	out := Answered{Units: units, Scores: map[int]float64{}}
+	out := Answered{Units: units, Scores: map[int]float64{}, Builds: map[string]int{}}
+	digest := sha256.New()
 	for i, unit := range units {
 		if unit.Held != sift.NotHeld {
 			continue
 		}
+		digest.Write(states[i])
 		out.Cost += replies[i].cost
-		out.StateBytes += sent[i]
+		out.StateBytes += len(states[i])
 		if replies[i].failed {
 			out.Errors++
 			continue
 		}
 		out.Latencies = append(out.Latencies, replies[i].latency)
 		out.Scores[i] = replies[i].score
-		out.Build = replies[i].build
+		out.Builds[replies[i].build]++
 	}
+	out.StateSum = hex.EncodeToString(digest.Sum(nil))
 	return out
 }
 

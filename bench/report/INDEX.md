@@ -60,13 +60,14 @@ Why the rest are not compared:
 
 ## Every dated report, newest first
 
-30 dated reports over 22 benches. 6 benches carry none. 2 are withdrawn whole or in part, 1 is stale, and 10 reports name no conclusion a reader can find. A withdrawal declared from outside a report lives in `bench/report/withdrawals.json`; every other state is declared by the report's own first lines.
+31 dated reports over 22 benches. 6 benches carry none. 2 are withdrawn whole or in part, 1 is stale, and 10 reports name no conclusion a reader can find. A withdrawal declared from outside a report lives in `bench/report/withdrawals.json`; every other state is declared by the report's own first lines.
 
 | Bench | Date | Report | What it found | Sample | State |
 |---|---|---|---|---|---|
 | forkcache | 2026-09-22 | `bench/forkcache/report-2026-09-22.txt` | not quoted here: this report is withdrawn in part, and the note says by whom | 2 recorded context forks | withdrawn in part |
 | harness | 2026-09-22 | `bench/harness/report-2026-09-22.md` | unparsed: no heading in this file names its own answer | 4 recorded rows, 3 of them carrying a turn count and a wall clock, plus a 3-repeat fixture that fixes the output shape | stands |
 | picker | 2026-09-22 | `bench/picker/report-2026-09-22.txt` | unparsed: no heading in this file names its own answer | 404 files and 18,401 rows read, 0 readings over 0 distinct accounts | stands |
+| sift | 2026-09-22 | `bench/sift/report-2026-09-22-rerun.md` | The rerun spread is one needle and 0.4 points of bytes saved, so it cannot explain a move of three needles and 27.5 points, and the cause is on the model's side under an unchanged build id. | the same 34 recorded shell results at the shipped keep_at 0.50, three full live runs of 297 calls each, 891 calls, $0.02726 counted plus an identical first sitting whose output was lost, $0.05452 spent | stands |
 | sift | 2026-09-22 | `bench/sift/report-2026-09-22-rtk.md` | rtk in front of Jev buys a 29 percent cheaper Jev call and pays 5 of 34 needles for it, and neither rtk arm beats Jev alone. | the same 34 recorded shell results the regex and Jev arms were scored on, one needle planted per row, four methods through one scoring function, two full live runs plus an earlier single run, $0.04659 spent | stands |
 | sift | 2026-09-22 | `bench/sift/report-2026-09-22.md` | Switching shell_sift@1 from shadow to enforced costs a median $0.00054 a session and $0.01107 in the worst session of 109 recorded, and it stops sending the model 54.0 percent of every shell result, which is 13.7 percent of every byte the model reads back from a tool. | 109 recorded sessions carrying 419 shell results, 2,999 ledger rows of which 1,756 are wire calls, and the 34 row shell corpus for candidate units per sift | stands |
 | tools | 2026-09-22 | `bench/tools/report-2026-09-22.md` | 29 of 100 is the best a free arm does, git grep with one realistic term, and the corpus cannot tell it apart from tofu search at 18 of 100: 24 questions only the first gets, 13 only the second, exact two sided p = 0.10. | 100 questions across five trees, 20 named, 40 described, 40 intent, six answers repinned first because the tofu tree had moved under them | stands |
@@ -112,4 +113,4 @@ Why the rest are not compared:
 
 ### Where these reports came from
 
-3 of 30 reports are built by running the package's own code again and 27 of 30 from the markdown's own text, which is weaker evidence, and every one of those says so.
+4 of 31 reports are built by running the package's own code again and 27 of 31 from the markdown's own text, which is weaker evidence, and every one of those says so.
