@@ -33,6 +33,7 @@ import (
 	"tofu/internal/recall"
 	sessionstore "tofu/internal/session"
 	roster "tofu/internal/subagent"
+	"tofu/internal/sys"
 	"tofu/internal/transport"
 	"tofu/internal/turn"
 	"tofu/internal/widget"
@@ -1509,5 +1510,58 @@ func TestTheSubAgentBarFollowsTheCapTheTurnWasGiven(t *testing.T) {
 		if got := sent[0].Children[0].Total; got != one.total {
 			t.Fatalf("a bar under a cap of %d draws %d steps, want %d", one.maxSteps, got, one.total)
 		}
+	}
+}
+
+func gateRowFixture(t *testing.T) (string, ledger.Row) {
+	t.Helper()
+	dir, err := sys.LogDir()
+	if err != nil {
+		t.Fatalf("sys.LogDir: %v", err)
+	}
+	row, err := ledger.NewWriter(dir).Append(ledger.Row{Point: "tool_gate"})
+	if err != nil {
+		t.Fatalf("writing the row fixture: %v", err)
+	}
+	return dir, row
+}
+
+func TestAwaitPersonWritesTheAnswerOntoTheRowAsAnOutcome(t *testing.T) {
+	dir, row := gateRowFixture(t)
+	answers := make(chan tui.Answer, 1)
+	answers <- tui.AllowedOnce
+	person := awaitPerson(func(tui.Event) {}, answers, map[string]bool{})
+
+	answer, err := person(context.Background(), turn.GateRequest{Tool: "write"}, turn.GateDecision{ID: row.ID})
+	if err != nil || answer != turn.PersonAllowedOnce {
+		t.Fatalf("person returned %v, %v", answer, err)
+	}
+
+	read, ok, err := ledger.NewReader(dir).ByID(row.ID)
+	if err != nil || !ok {
+		t.Fatalf("reading the row back: ok=%v err=%v", ok, err)
+	}
+	if read.Outcome == nil || read.Outcome.Kind != turn.OutcomeKindGateAnswer || read.Outcome.Detail != "allow" {
+		t.Fatalf("the row's outcome is %+v, want kind %q detail allow", read.Outcome, turn.OutcomeKindGateAnswer)
+	}
+}
+
+func TestAwaitPersonUnderAnAlreadyGrantedRuleWritesNoOutcome(t *testing.T) {
+	dir, row := gateRowFixture(t)
+	request := turn.GateRequest{Tool: "write", Args: json.RawMessage(`{"path":"a.txt"}`)}
+	granted := map[string]bool{askedPlace(request): true}
+	person := awaitPerson(func(tui.Event) {}, make(chan tui.Answer), granted)
+
+	answer, err := person(context.Background(), request, turn.GateDecision{ID: row.ID})
+	if err != nil || answer != turn.PersonAlwaysHere {
+		t.Fatalf("person returned %v, %v", answer, err)
+	}
+
+	read, ok, err := ledger.NewReader(dir).ByID(row.ID)
+	if err != nil || !ok {
+		t.Fatalf("reading the row back: ok=%v err=%v", ok, err)
+	}
+	if read.Outcome != nil {
+		t.Fatalf("a decision nobody was asked about must stay unlabelled, got %+v", read.Outcome)
 	}
 }

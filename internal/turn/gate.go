@@ -69,6 +69,18 @@ func (a PersonAnswer) allows() bool {
 	panic("turn: unknown person answer")
 }
 
+const OutcomeKindGateAnswer = "gate-answer"
+
+func (a PersonAnswer) Outcome() ledger.Outcome {
+	switch a {
+	case PersonDenied:
+		return ledger.Outcome{Kind: OutcomeKindGateAnswer, Detail: "deny"}
+	case PersonAllowedOnce, PersonAlwaysHere:
+		return ledger.Outcome{Kind: OutcomeKindGateAnswer, Detail: "allow"}
+	}
+	panic("turn: unknown person answer")
+}
+
 type Person func(ctx context.Context, request GateRequest, decision GateDecision) (PersonAnswer, error)
 
 const (

@@ -57,6 +57,29 @@ func TestAllPersonAnswersAreNamed(t *testing.T) {
 		if raised := panicOf(func() { _ = a.allows() }); raised != "" {
 			t.Errorf("person answer %d has no case in allows: %s", int(a), raised)
 		}
+		if raised := panicOf(func() { _ = a.Outcome() }); raised != "" {
+			t.Errorf("person answer %d has no case in Outcome: %s", int(a), raised)
+		}
+	}
+}
+
+func TestPersonAnswerOutcomeMatchesWhatWasAnswered(t *testing.T) {
+	cases := []struct {
+		answer PersonAnswer
+		detail string
+	}{
+		{PersonDenied, "deny"},
+		{PersonAllowedOnce, "allow"},
+		{PersonAlwaysHere, "allow"},
+	}
+	for _, c := range cases {
+		out := c.answer.Outcome()
+		if out.Kind != OutcomeKindGateAnswer {
+			t.Errorf("%d: expected kind %q, got %q", c.answer, OutcomeKindGateAnswer, out.Kind)
+		}
+		if out.Detail != c.detail {
+			t.Errorf("%d: expected detail %q, got %q", c.answer, c.detail, out.Detail)
+		}
 	}
 }
 
@@ -89,6 +112,21 @@ func gatedConfig(t *testing.T, gate Gate, tool Tool, model Model) Config {
 		Caps:           Caps{MaxSteps: 10},
 		ResultBytesCap: 4096,
 		ArtifactDir:    t.TempDir(),
+	}
+}
+
+func TestRefusedWhyOnlyAsksThePersonWhenTheVerdictIsAsk(t *testing.T) {
+	request := GateRequest{TurnID: "turn-1", Tool: "write"}
+	asked := 0
+	person := Person(func(context.Context, GateRequest, GateDecision) (PersonAnswer, error) {
+		asked++
+		return PersonAllowedOnce, nil
+	})
+	for _, v := range []ledger.Verdict{ledger.VerdictUnset, ledger.VerdictAllow, ledger.VerdictDeny} {
+		refusedWhy(context.Background(), person, request, GateDecision{ID: "row-1", Verdict: v}, "")
+	}
+	if asked != 0 {
+		t.Fatalf("the person was asked %d times for a verdict that never asks, so an unasked allow has nothing to write an outcome from", asked)
 	}
 }
 

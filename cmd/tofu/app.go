@@ -381,7 +381,7 @@ func openAppWire(opts runOpts) (appWire, error) {
 }
 
 func awaitPerson(emit tui.CalledFromInsideTheTurnAndNeverAfterItReturns, answers <-chan tui.Answer, granted map[string]bool) turn.Person {
-	return func(ctx context.Context, request turn.GateRequest, _ turn.GateDecision) (turn.PersonAnswer, error) {
+	return func(ctx context.Context, request turn.GateRequest, decision turn.GateDecision) (turn.PersonAnswer, error) {
 		place := askedPlace(request)
 		if granted[place] {
 			return turn.PersonAlwaysHere, nil
@@ -393,20 +393,35 @@ func awaitPerson(emit tui.CalledFromInsideTheTurnAndNeverAfterItReturns, answers
 			if !open {
 				return turn.PersonDenied, errors.New("the app stopped taking answers")
 			}
+			var out turn.PersonAnswer
 			switch answered {
 			case tui.AlwaysHere:
 				granted[place] = true
-				return turn.PersonAlwaysHere, nil
+				out = turn.PersonAlwaysHere
 			case tui.AllowedOnce:
-				return turn.PersonAllowedOnce, nil
+				out = turn.PersonAllowedOnce
 			case tui.Denied:
-				return turn.PersonDenied, nil
+				out = turn.PersonDenied
+			default:
+				panic("tofu: unknown answer from the app")
 			}
-			panic("tofu: unknown answer from the app")
+			recordPersonAnswer(decision.ID, out)
+			return out, nil
 		case <-ctx.Done():
 			return turn.PersonDenied, ctx.Err()
 		}
 	}
+}
+
+func recordPersonAnswer(id string, answer turn.PersonAnswer) {
+	if id == "" {
+		return
+	}
+	dir, err := sys.LogDir()
+	if err != nil {
+		return
+	}
+	_ = ledger.NewWriter(dir).Backfill(id, answer.Outcome())
 }
 
 func steered(queue <-chan string, emit tui.CalledFromInsideTheTurnAndNeverAfterItReturns) []string {
