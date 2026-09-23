@@ -223,7 +223,14 @@ func runVerb(args []string, out, errOut io.Writer) int {
 		if unreadable != "" {
 			_, _ = fmt.Fprintln(errOut, "tofu run: "+unreadable)
 		}
-		opts.noSubAgents = maySpawn == 0
+		if maySpawn == 0 {
+			opts.noSubAgents = true
+			if opts.doneArm != doneArmOff {
+				return runFail(errOut, fmt.Errorf(
+					"--done-review %s with the %s setting off: that arm has no spawn tool, so no child is ever reviewed and the flag would say a check is running that is not",
+					opts.doneArm, settingspkg.TurnMaySpawn))
+			}
+		}
 	}
 	readBeforeEdit, readUnreadable := appSetting(cmp.Or(opts.dir, "."), settingspkg.ReadBeforeEdit)
 	if readUnreadable != "" {

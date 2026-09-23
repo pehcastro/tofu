@@ -205,6 +205,27 @@ func TestTheTurnMaySpawnSettingOffWithNoFlagTakesSpawnAway(t *testing.T) {
 	}
 }
 
+func TestADoneReviewWithTheTurnMaySpawnSettingOffAndNoFlagIsRefusedByTheSetting(t *testing.T) {
+	isolatedHomeAndProject(t)
+	var out, errOut bytes.Buffer
+	if code := settingsVerb([]string{"set", "turnMaySpawn", "false"}, &out, &errOut); code != exitOK {
+		t.Fatalf("settings set exited %d: %s", code, errOut.String())
+	}
+	out.Reset()
+	errOut.Reset()
+
+	code := runVerb([]string{"--dir", t.TempDir(), "--done-review", doneArmTyped, "a task"}, &out, &errOut)
+	if code != exitUsage {
+		t.Fatalf("expected exit %d, got %d (stderr %q)", exitUsage, code, errOut.String())
+	}
+	if !strings.Contains(errOut.String(), settingspkg.TurnMaySpawn) {
+		t.Fatalf("the refusal must name the setting, got %q", errOut.String())
+	}
+	if strings.Contains(errOut.String(), "--no-subagents") {
+		t.Fatalf("the refusal names a flag nobody typed, got %q", errOut.String())
+	}
+}
+
 func TestTheNoSubAgentsFlagTakesSpawnAwayEvenWhenTheSettingIsOn(t *testing.T) {
 	isolatedHomeAndProject(t)
 	if names := dryRunToolNames(t, "--no-subagents"); slices.Contains(names, "spawn") {
