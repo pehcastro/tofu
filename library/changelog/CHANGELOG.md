@@ -10,6 +10,37 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 
 ## Unreleased
 
+## 0.4.10 - 2026-09-22
+
+Tofu tells the model which rules apply to the work, and can show you exactly what it sent.
+
+### Added
+
+- **The system prompt is composed from the rules that fire for the task.** A rule declares which of ten concerns it is, five of which are always on, and the other five fire on the language of the paths, the directories touched or the verb the task names. A rule that fires and carries no text fails the run rather than being dropped quietly.
+- **`tofu run --show-prompt` prints the prompt a turn would use** before it runs: every part, its concern, its size in bytes, and the rule file it came from, then every held-back rule with the reason it did not fire.
+- **`tofu rules index "<task>" [paths...]`** answers the same question without running anything.
+- **`tofu why <id>` prints the state a decision was made on**, reading back a state that was written to its own file. A missing state file, a state file outside the ledger, and a state that is there now read differently from each other.
+- **`projectInstructionsCap` is a setting**, 32 KB by default, and **tofu tells you on screen when your instruction files are cut** rather than only telling the model.
+
+### Fixed
+
+- **Your instruction files were cut at 16 KB and nothing said so on screen.** The cap is 32 KB now, which is what the one other harness that caps this uses, and a 17 KB `CLAUDE.md` reaches the model whole.
+- **Every rule cited a source under a directory that is not in the repository.** Thirteen citations pointed at a scratch path on one machine, so a fresh checkout had thirteen dead references. Every rule now cites a file under `library/`, and a test refuses one that does not.
+- **The composed prompt carried the absolute path of every rule file on the machine it ran on.** It names the rule now, and `--show-prompt` still prints the path for a person debugging.
+
+### Changed
+
+- **A rule carries the text a model reads, separately from the notes a maintainer reads.** Before this, nine of ten rules had only maintainer notes, so a prompt told a model that a rule "wraps internal/crew.Matches" rather than telling it not to write outside its paths.
+- **`bench/report/index.html` answers three questions**: is tofu better than claude and codex, is this version better than the last, and where does a judgment beat the cheaper way. The first two say what they would need rather than filling a table from one sample.
+
+### Note
+
+**Nothing tofu judges changes what tofu does.** All nineteen shipped rules and every decision point read `mode: shadow`. The report page says so on its own front tab: 0 of 8 measured decisions are switched on.
+
+**Of the six decisions with a cheaper method measured beside them, Jev wins four and loses two.** `shell_sift` is the clearest win at 1.50x and switching it on would cost a median $0.00054 a session, one cent in the worst recorded session, and 838 ms on a shell tool call.
+
+**rtk was measured for the first time.** In front of Jev it buys a 29 percent cheaper call and pays 5 of 34 needles for it. Neither rtk arm beats Jev alone, because rtk has no filter for 21 of the 34 recorded commands.
+
 ## 0.4.9 - 2026-09-22
 
 Tofu runs on the account that has room, and every number it reports is one you can check.
