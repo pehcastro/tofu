@@ -358,5 +358,13 @@
     "from": "prose",
     "sample": "23 recorded search tool calls read out of .tofu/sessions at run time, 20 replayed against the tracked tree of 1513 files, 3 skipped because the recorded path is gone; cost measured 5 runs each, median",
     "skips": "1 entry under .tofu/sessions that is not a turn, 3 of 23 rows whose recorded path is gone, each logged with its turn id; every test skips with a stated reason when .tofu/sessions is absent"
+  },
+  {
+    "report": "bench/prefix/report-2026-09-23.md",
+    "figure": "4135 bytes",
+    "says": "With the real composed system prompt turn.Compose sends for a real task, 9 rules firing on top of the two builtin blocks, the per-session cache rewrite is 4135 bytes, an estimated 1033 tokens, against TOFU-532's unrules floor of 2209 bytes and 552 tokens. The 9 fired rules add 2283 bytes; this package's ToolGuidance is 357 bytes short of cmd/tofu's real one, because the working-directory prefix and the spawn addendum are private constants it cannot import without copying, so 2283 minus 357 accounts for the whole 1926 byte gap. With the billing block absent, the same request with Request.Encode(false), the two fingerprinted first messages produce a byte-identical 3908-byte system array: 0 bytes rewritten per session, which is the arm.",
+    "from": "prose",
+    "sample": "one real task, write a fix for the flaky test in internal/turn/compose_test.go, against the shipped rule library under library/, composed and encoded directly with no live call and no network call",
+    "skips": "0, everything measured runs; TestGeneratorReproducesTheSameBytesTwice composes and measures the same rules twice in process rather than by re-invoking the generator, since report.Generate refuses to overwrite a dated report already on disk"
   }
 ]

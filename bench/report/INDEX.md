@@ -78,13 +78,14 @@ Why the rest are not compared:
 
 ## Every dated report, newest first
 
-45 dated reports over 28 benches. 6 benches carry none. 6 are withdrawn whole or in part, 1 is stale, and 14 reports name no conclusion a reader can find. A withdrawal declared from outside a report lives in `bench/report/withdrawals.json`; every other state is declared by the report's own first lines.
+46 dated reports over 29 benches. 6 benches carry none. 6 are withdrawn whole or in part, 1 is stale, and 14 reports name no conclusion a reader can find. A withdrawal declared from outside a report lives in `bench/report/withdrawals.json`; every other state is declared by the report's own first lines.
 
 | Bench | Date | Report | What it found | Sample | State |
 |---|---|---|---|---|---|
 | calibration | 2026-09-23 | `bench/calibration/report-2026-09-23.md` | unparsed: no heading in this file names its own answer | 2,780 ledger rows across the .tofu/log day files, of which 1,458 are tool_gate, 1,105 stop_check and 13 shell_sift, with 204 ad hoc judge questions excluded as not a threshold point | stands |
 | harness | 2026-09-23 | `bench/harness/report-2026-09-23.md` | Against who. Claude Code 2.1.280 driving claude -p on opus, and Codex CLI 0.155.1 driving codex exec on gpt-5.6-sol. | one task, the v1 hono seed of 5 files, one repeat per arm, three arms live on the owner's subscriptions, between 05:42 and 05:52 local time | stands |
 | instruction | 2026-09-23 | `bench/instruction/report-2026-09-23.md` | On this corpus jev beats the regex arm, 25 of 27 against 24 of 27, and the margin is two cases. Both arms score high because this project's own recorded sessions carry almost no adversarial instruction-shaped text: what looks like a directive is nearly always the harness's own scaffolding (an oversized-result notice telling the model to call artifact_fetch, a bash-timeout caution, a refused-citation notice), never a planted attack. | 27 labelled cases read out of .tofu/sessions at run time, every row keyed by turn id and tool call id, none hand written | stands |
+| prefix | 2026-09-23 | `bench/prefix/report-2026-09-23.md` | With the real composed system prompt for a real task, 9 rules firing on top of the two builtin blocks, the per-session rewrite is 4135 bytes, an estimated 1033 tokens. | one real task, write a fix for the flaky test in internal/turn/compose_test.go, against the shipped rule library under library/, composed and encoded directly with no live call and no network call | stands |
 | recall | 2026-09-23 | `bench/recall/report-2026-09-23.md` | - Whether a wrong eviction is visible when one happens: the two real forks never produced one to check against, so the re-fetch label is proved to work in code (bench/recall/session.go, report-2026-09-20.md) but has never caught a real mistake. | 47 of 110 recorded sessions carry occupancy and could be measured, with two crossings and two forks among them | stands |
 | rules | 2026-09-23 | `bench/rules/report-2026-09-23.md` | comments: shadow: never fired, so there is no evidence it should enforce or that it should delete; leave it recording until it has a fire to judge. | all 239 fire lines across three rules log files, with all 25 em dash fires and the full target list of the other 214 read by hand | stands |
 | schemas | 2026-09-23 | `bench/schemas/report-2026-09-23.md` | unparsed: no heading in this file names its own answer | one recorded 11 step turn measured in full, plus 51 of 111 recorded turns carrying cache accounting, of which 24 wrote to cache and 15 are at today's 18 tool scale | withdrawn in part |
@@ -149,4 +150,4 @@ Why the rest are not compared:
 
 ### Where these reports came from
 
-4 of 45 reports are built by running the package's own code again and 41 of 45 from the markdown's own text, which is weaker evidence, and every one of those says so.
+4 of 46 reports are built by running the package's own code again and 42 of 46 from the markdown's own text, which is weaker evidence, and every one of those says so.

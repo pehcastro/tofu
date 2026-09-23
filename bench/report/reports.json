@@ -652,6 +652,25 @@
       "state_note": ""
     },
     {
+      "package": "prefix",
+      "date": "2026-09-23",
+      "source": "bench/prefix/report-2026-09-23.md",
+      "figure": "4135 bytes",
+      "built_from": "prose",
+      "sample": "one real task, write a fix for the flaky test in internal/turn/compose_test.go, against the shipped rule library under library/, composed and encoded directly with no live call and no network call",
+      "skips": "0, everything measured runs; TestGeneratorReproducesTheSameBytesTwice composes and measures the same rules twice in process rather than by re-invoking the generator, since report.Generate refuses to overwrite a dated report already on disk",
+      "conclusion": [
+        {
+          "text": "With the real composed system prompt for a real task, 9 rules firing on top of the two builtin blocks, the per-session rewrite is 4135 bytes, an estimated 1033 tokens.",
+          "withdrawn": false
+        }
+      ],
+      "conclusion_unparsed": false,
+      "state": "stands",
+      "state_source": "",
+      "state_note": ""
+    },
+    {
       "package": "recall",
       "date": "2026-09-23",
       "source": "bench/recall/report-2026-09-23.md",
@@ -1491,8 +1510,8 @@
     }
   ],
   "counts": {
-    "reports": 45,
-    "packages_with_a_dated_report": 28,
+    "reports": 46,
+    "packages_with_a_dated_report": 29,
     "packages_with_no_dated_report": 6,
     "withdrawn_whole_or_in_part": 6,
     "stale": 1,
