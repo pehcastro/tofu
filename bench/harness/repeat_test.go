@@ -40,6 +40,23 @@ func TestFakeArmRecordsWhatItStartedFromAndLeavesAFileBehind(t *testing.T) {
 	}
 }
 
+func TestSpreadOfTwoOrMoreRepeatsIsSeparable(t *testing.T) {
+	s := SpreadOf([]float64{100, 108, 120})
+	if !s.Separable() {
+		t.Fatalf("three repeats carry a spread and must read as separable: %+v", s)
+	}
+	if s.Width() != 20 {
+		t.Fatalf("width of low 100 high 120 is 20, got %v", s.Width())
+	}
+}
+
+func TestSpreadOfOneRepeatIsNotSeparable(t *testing.T) {
+	s := SpreadOf([]float64{100})
+	if s.Separable() {
+		t.Fatalf("one repeat is a sample, not a spread, and must not read as separable: %+v", s)
+	}
+}
+
 func TestEveryRepeatStartsFromTheSeedAndCarriesItOnItsRow(t *testing.T) {
 	root := repositoryRoot(t)
 	armDir := filepath.Join(playground(t), "hono-v1-tofu")

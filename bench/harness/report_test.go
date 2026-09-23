@@ -243,6 +243,56 @@ func TestATaskUnstableAcrossRepeatsRanksNoArm(t *testing.T) {
 	}
 }
 
+func realRun20260923() []Row {
+	return []Row{
+		{
+			Arm: ArmClaude, Task: "hono-v1", Version: 1, Run: 1,
+			CredentialKind: CredentialKindSubscription,
+			WallClockMS:    51204, Turns: 8,
+			Gates:     gatesOK(),
+			Checklist: checklistFullPass(),
+		},
+		{
+			Arm: ArmCodex, Task: "hono-v1", Version: 1, Run: 1,
+			CredentialKind: CredentialKindSubscription,
+			WallClockMS:    285046, Turns: 1,
+			Gates:     gatesOK(),
+			Checklist: checklistFullPass(),
+		},
+	}
+}
+
+func TestOneRepeatFromTheReal20260923RowIsOneSampleNotASpread(t *testing.T) {
+	out := Render(realRun20260923())
+
+	for _, want := range []string{
+		"claude: wall clock 51204 ms on one repeat, which is a sample and not a spread",
+		"codex: wall clock 285046 ms on one repeat, which is a sample and not a spread",
+		"claude: 8.00 on one repeat, which is a sample and not a spread",
+		"codex: 1.00 on one repeat, which is a sample and not a spread",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("missing one-sample line %q from the real 2026-09-23 row data:\n%s", want, out)
+		}
+	}
+}
+
+func TestSuppressedComparisonSentenceOnTheReal20260923Row(t *testing.T) {
+	out := Render(realRun20260923())
+
+	for _, want := range []string{
+		"claude vs codex: wall clock not separable, claude and codex carry fewer than two passing repeats and one run has no spread",
+		"claude vs codex: turns not separable, claude and codex carry fewer than two passing repeats and one run has no spread",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("missing suppressed comparison sentence %q:\n%s", want, out)
+		}
+	}
+	if strings.Contains(out, "lower on wall clock") || strings.Contains(out, "lower on turns") {
+		t.Fatalf("two one-repeat arms were separated into a win, which one run each cannot support:\n%s", out)
+	}
+}
+
 func TestRowsSkippedForAMissingFieldAreCountedAndNamed(t *testing.T) {
 	rows := subscriptionRepeats("hono-missing", ArmClaude, []int64{120000, 124000, 121000}, []int64{6, 6, 7})
 	rows[1].CredentialKind = ""
