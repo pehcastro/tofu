@@ -7,7 +7,7 @@ questions: ask
 questions_version: 1
 mode: shadow
 sample_floor: 300
-notes: shadow only, and it changes nothing a worker does. the margin gate sits before the ask rather than after, so a low determined noul is what makes the choice's action stand; at or above the threshold the worker proceeds regardless of what the choice said. thresholds chosen by a person, not calibration, TOFU-268
+notes: shadow only, and it changes nothing a worker does. the margin gate sits before the ask rather than after, so a low determined noul is what makes the choice's action stand; at or above the threshold the worker proceeds regardless of what the choice said. thresholds are a prior chosen by a person, not produced by calibration
 
 thresholds:
   determined_low_at: 0.35

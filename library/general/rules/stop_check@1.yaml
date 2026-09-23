@@ -7,7 +7,7 @@ questions: stop_check
 questions_version: 1
 mode: shadow
 sample_floor: 300
-notes: shadow only, and the verdict is read as continue for allow, ask the human for ask, stop the turn for deny. numbers copied from tool_gate@1, chosen by a person, not produced by calibration, BOJI-079
+notes: shadow only, and the verdict is read as continue for allow, ask the human for ask, stop the turn for deny. numbers copied from tool_gate@1, chosen by a person, not produced by calibration
 
 thresholds:
   stop_pressure_ask_at: 1.5

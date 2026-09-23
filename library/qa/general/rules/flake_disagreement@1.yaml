@@ -5,6 +5,6 @@ concern: code_rules
 measurement: bench/testquality/flakerun
 scope: "**/*_test.go"
 source: library/qa/references/flakiness.md
-evidence: 3 of 2202 test names over 70 packages disagreed with themselves across 3 runs each on 2026-09-21, go1.27.1 windows/amd64. One was bench/shortlist TestReadCorpusRefusesARowThatCameOffTheRecordingMachine with outcomes fail pass pass, two were bench/tools/report tests that produced no result at all in runs two and three. None reproduced on a rerun of the same package, and the tree was being edited by another ticket during the sweep
+evidence: 3 of 2202 test names over 70 packages disagreed with themselves across 3 runs each on 2026-09-21, go1.27.1 windows/amd64. One was TestReadCorpusRefusesARowThatCameOffTheRecordingMachine with outcomes fail pass pass, two were report-tool tests that produced no result at all in runs two and three. None reproduced on a rerun of the same package, and the tree was being edited by other work during the sweep
 text: NEVER rerun a test until it passes and then move on. a test that disagrees with itself across runs of unchanged code is a defect in the test: make it deterministic, or quarantine it by name, and say which you did.
 notes: fires on a test whose outcomes across repeated runs of unchanged code are not all identical. A run in which the test did not appear counts as a disagreement, because a test that sometimes does not exist cannot be trusted when it does. One failure in one run is not enough to fire, and neither is a rerun that passed

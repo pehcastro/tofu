@@ -13,7 +13,7 @@ A flaky test produces different outcomes on the same code under the same conditi
 
 One failure is not flakiness, it is a candidate bug. A test is flaky when it disagrees with itself across runs of unchanged code. Until that is measured, nothing else in this file applies.
 
-`bench/testquality/flakerun <runs> <package>...` is the measurement here. It runs one package at a time, parses `go test -json`, and reports every test whose outcomes across runs are not all identical.
+the flakerun tool named in the `flake_disagreement` rule's `measurement` field is the measurement here. It runs one package at a time, parses `go test -json`, and reports every test whose outcomes across runs are not all identical.
 
 ## Four outcomes, not two
 
@@ -35,7 +35,7 @@ A retry, a longer timeout, or a rerun until green. Each hides the non-determinis
 
 ## What this repository already knew
 
-A real flake was found here before any of this existed: a test in `bench/sift` wrote the committed corpus that `bench/corpus` read, so the second package disagreed with itself depending on which package ran first. That is the shared-state category, and it was found by a person rather than by a measurement.
+A real flake was found here before any of this existed: a test in one package wrote the committed corpus that a second package read, so the second package disagreed with itself depending on which package ran first. That is the shared-state category, and it was found by a person rather than by a measurement.
 
 ## The passage this was drawn from
 
@@ -53,6 +53,6 @@ Quoted from *Flaky Test Quarantine*, its opening and four of its seven core prin
 
 > 7. **Isolation Verification**: After fixing a flaky test, verify the fix by running the test in isolation and in the full suite multiple times. Some flakiness only manifests under specific ordering or parallel execution conditions.
 
-The rest of that document is TypeScript for a quarantine registry, a Playwright fixture and two GitHub Actions workflows. None of it applies to a Go tree, and the measurement here is `bench/testquality/flakerun` instead.
+The rest of that document is TypeScript for a quarantine registry, a Playwright fixture and two GitHub Actions workflows. None of it applies to a Go tree, and the flakerun tool is the measurement instead.
 
 The fourth outcome above, absent, is ours and not the original's: it has pass, fail and skip.

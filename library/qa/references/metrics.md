@@ -19,7 +19,7 @@ Coverage at 72 percent means nothing. Coverage moving 68 to 72 over three sprint
 
 ## Coverage measures execution, not verification
 
-Code can be executed by a test that asserts nothing. Coverage paired with a mutation score is a truer picture, and that is why `bench/testquality` counts dead tests rather than lines. A suite with high coverage and escaping defects has tests without teeth.
+Code can be executed by a test that asserts nothing. Coverage paired with a mutation score is a truer picture, and that is why the dead-test count matters as much as the line count. A suite with high coverage and escaping defects has tests without teeth.
 
 ## Counting what is not there
 

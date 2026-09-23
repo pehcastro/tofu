@@ -6,7 +6,7 @@ questions: tool_gate
 questions_version: 1
 mode: shadow
 sample_floor: 300
-notes: numbers chosen by a person for BOJI-022, not yet produced by calibration. sample_floor is the rule-of-three floor at a 1% false-positive budget (tool_gate's costly error is a false allow), .local/research/calibration-design.md section 3
+notes: numbers chosen by a person, not yet produced by calibration. sample_floor is the rule-of-three floor at a 1% false-positive budget, because tool_gate's costly error is a false allow
 
 risk_question: risk
 approval_question: approval

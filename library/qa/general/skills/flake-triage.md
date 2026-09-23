@@ -15,7 +15,7 @@ source: library/qa/references/flakiness.md
 Run the package N times with the cache off and compare per test outcomes. Three runs finds the obvious case, ten finds the rest. One failure is not proof.
 
 ```
-go build -o flakerun ./bench/testquality/flakerun
+go build -o flakerun ./path/to/flakerun
 ./flakerun 3 <package>
 ```
 

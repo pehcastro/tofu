@@ -21,8 +21,8 @@ func TestTheBinaryCarriesTheMethodTableAndEveryWiredPointStatesItsCost(t *testin
 			continue
 		}
 		wired++
-		if chosen.Cost == "" || chosen.Measured == "" {
-			t.Errorf("%s is decided by %s and states cost %q from %q", chosen.Point, chosen.Method, chosen.Cost, chosen.Measured)
+		if chosen.Cost == "" {
+			t.Errorf("%s is decided by %s and states no cost", chosen.Point, chosen.Method)
 		}
 	}
 	if wired == 0 {

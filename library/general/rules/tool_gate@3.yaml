@@ -6,7 +6,7 @@ questions: tool_gate
 questions_version: 3
 mode: shadow
 sample_floor: 300
-notes: the same thresholds as tool_gate@1, which a person chose for BOJI-022 and calibration has not yet replaced. the point of this version is the question set, not the numbers, questions_version 3 reads context.write_targets. tool_gate@1.yaml stays on disk so the 268 rows recorded under it still replay, BOJI-115
+notes: the same thresholds as tool_gate@1, which a person chose and calibration has not yet replaced. the point of this version is the question set, not the numbers, questions_version 3 reads context.write_targets. tool_gate@1.yaml stays on disk so the rows recorded under it still replay
 
 risk_question: risk
 approval_question: approval

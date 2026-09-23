@@ -48,7 +48,7 @@ func TestTheFileShortlistReasonDoesNotRestateTheWithdrawnRatio(t *testing.T) {
 }
 
 func TestTheParkCitationCheckCatchesAReasonThatDropsIt(t *testing.T) {
-	why := "bench/shortlist is withdrawn and nothing here explains what replaces it."
+	why := "the old accuracy figure is withdrawn and nothing here explains what replaces it."
 	if missing := parkCitationIssues(why); len(missing) == 0 {
 		t.Fatal("a reason that never says why the point is parked passed the park-citation check")
 	}
