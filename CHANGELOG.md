@@ -10,6 +10,44 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 
 ## Unreleased
 
+## 0.4.11 - 2026-09-23
+
+Tofu acts on what it measured. A bash result arrives cut, and one file says what decides what.
+
+### Added
+
+- **A bash result reaches the model cut**, with a line at the end saying how many of how many bytes went and which method decided. Over 170 recorded bash results in 35 sessions the free arm saves 49.1 percent of bytes, concentrated in a few large outputs: the median session saves nothing and the best saves 74.7 percent.
+- **`tofu run --sift <arm>`** picks the arm by hand, `free` or `judged`, where the method table otherwise decides. `--help` prints what each arm costs, read from the table at print time.
+- **`library/decisions/methods@1.yaml` names the method for every decision point**, one line each, reading judged, cheap or unwired. Changing which method decides a point is changing one line. **Unwired is a stated answer with a reason, not a default.**
+- **`tofu rules fired [date]`** reads back the record tofu already writes on every rule that fires. 223 fires were on disk with no way to look at them.
+- **`tofu usage --history`** shows every recorded quota reading with the moment it was captured. 28 were on disk and only a benchmark read them.
+- **`/models` opens the model picker**, and the pick changes the wire the next turn runs on. It offers only the subscriptions the turn can actually run, and an excluded model cannot be picked.
+- **`edit` takes a Go symbol**, so replacing a function no longer means reproducing the old one character for character. Any edit that would leave a Go file unable to parse is refused with nothing written.
+- **A decision row says whether a turn or a benchmark wrote it.** 1,104 of 2,756 recorded rows are bench measurements, which is 40 percent, and nothing could tell them apart before.
+
+### Fixed
+
+- **A fresh clone did not build.** The method table and its parser were never committed, and `library/embed.go` embeds the library.
+- **Two agents could be given the same path.** The collision check and the permission check were two implementations of one glob language and disagreed on whether a subtree glob covers the directory it names. There is one matcher now, and it narrows: more spawns are refused, none newly allowed.
+- **The model picker offered a model a hook forbids.** Its default selection was on one of the two banned models, and nothing checked the excluded flag at the point of picking.
+- **`tofu reload` named two loaders that do not exist.** It said it had skipped skills and hooks. There is no loader for either, so it says what it actually re-read.
+- **`frame` was a verb the usage text never mentioned.** A test now compares the usage text against the verb table.
+- **The benchmark understated tofu's own token use by 62 percent.** The tofu arm counted prompt plus completion and ignored cache entirely, while the claude arm counted all three into the same column, so the two sat in one table under two definitions of billed input. Every tofu against claude token figure produced before today was wrong in tofu's favour.
+- **The benchmark measured repeat two on top of repeat one.** The runner never staged the task's seed between repeats.
+
+### Changed
+
+- **The three benchmark arms are asked the same thing.** Claude runs at `--effort medium` and codex at `model_reasoning_effort=medium`. **Tofu has no effort flag at all and its request leaves thinking unset**, so it runs at none, and every row says so rather than leaving a reader to find out.
+- **The report page reads what decides what.** It said 0 of 8, hand written; it says 3 of 9 now, derived from the method table, and the build fails if the page and the table disagree.
+- **The link-only rule lives once.** It existed twice, character for character, in the fetch path and in the sieve. The benchmark was measuring the second copy and reporting what the first already does.
+
+### Note
+
+**`page_sift` is measured and not wired, and that is a result rather than a gap.** Its cheap arm elides 0 further bytes on all 24 recorded pages, because `web.Reduce` already strips the same rows at fetch time, where `Reduce` itself takes 11.69 percent. A second pass of one rule is not a decision point.
+
+**The shell sieve acts with no calibration lock, so `tofu doctor` reports shadow while a turn cuts.** The rule's threshold is a prior and not a fit. The two will be made to agree.
+
+
 ## 0.4.10 - 2026-09-22
 
 Tofu tells the model which rules apply to the work, and can show you exactly what it sent.
