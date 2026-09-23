@@ -9,28 +9,28 @@ import (
 	"tofu/library/questions"
 )
 
-func TestEveryShippedSetIsEmbedded(t *testing.T) {
-	disk, err := os.ReadDir(".")
-	if err != nil {
-		t.Fatalf("read library/questions: %v", err)
-	}
-	want := map[string]bool{}
-	for _, e := range disk {
-		if !e.IsDir() && strings.HasSuffix(e.Name(), ".yaml") {
-			want[e.Name()] = true
+func yamlPaths(t *testing.T, files fs.FS) map[string]bool {
+	t.Helper()
+	found := map[string]bool{}
+	err := fs.WalkDir(files, ".", func(name string, entry fs.DirEntry, err error) error {
+		if err != nil || entry.IsDir() || !strings.HasSuffix(name, ".yaml") {
+			return err
 		}
+		found[name] = true
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("walking %v: %v", files, err)
 	}
+	return found
+}
+
+func TestEveryShippedSetIsEmbedded(t *testing.T) {
+	want := yamlPaths(t, os.DirFS("."))
 	if len(want) == 0 {
 		t.Fatal("no .yaml files on disk, nothing to prove")
 	}
-	entries, err := fs.ReadDir(questions.Files(), ".")
-	if err != nil {
-		t.Fatalf("read the embedded library: %v", err)
-	}
-	got := map[string]bool{}
-	for _, e := range entries {
-		got[e.Name()] = true
-	}
+	got := yamlPaths(t, questions.Files())
 	for name := range want {
 		if !got[name] {
 			t.Errorf("%s is on disk but not embedded", name)
@@ -44,36 +44,25 @@ func TestEveryShippedSetIsEmbedded(t *testing.T) {
 }
 
 func TestNoShippedSetCarriesAnEmDash(t *testing.T) {
-	entries, err := fs.ReadDir(questions.Files(), ".")
-	if err != nil {
-		t.Fatalf("read the embedded library: %v", err)
-	}
-	for _, e := range entries {
-		data, err := fs.ReadFile(questions.Files(), e.Name())
+	for name := range yamlPaths(t, questions.Files()) {
+		data, err := fs.ReadFile(questions.Files(), name)
 		if err != nil {
-			t.Fatalf("read %s: %v", e.Name(), err)
+			t.Fatalf("read %s: %v", name, err)
 		}
 		if strings.ContainsRune(string(data), rune(0x2014)) {
-			t.Errorf("%s carries an em dash", e.Name())
+			t.Errorf("%s carries an em dash", name)
 		}
 	}
 }
 
 func TestNoQuestionFileOnDiskCarriesAnEmDash(t *testing.T) {
-	entries, err := os.ReadDir(".")
-	if err != nil {
-		t.Fatalf("read library/questions: %v", err)
-	}
-	for _, e := range entries {
-		if e.IsDir() || !strings.HasSuffix(e.Name(), ".yaml") {
-			continue
-		}
-		data, err := os.ReadFile(e.Name())
+	for name := range yamlPaths(t, os.DirFS(".")) {
+		data, err := os.ReadFile(name)
 		if err != nil {
-			t.Fatalf("read %s: %v", e.Name(), err)
+			t.Fatalf("read %s: %v", name, err)
 		}
 		if strings.ContainsRune(string(data), rune(0x2014)) {
-			t.Errorf("%s carries an em dash", e.Name())
+			t.Errorf("%s carries an em dash", name)
 		}
 	}
 }

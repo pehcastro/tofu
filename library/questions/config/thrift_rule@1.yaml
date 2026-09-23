@@ -1,0 +1,18 @@
+name: thrift_rule
+rule_version: 1
+mode: off
+keep_at: 0.5
+notes: >-
+  off, so a read, glob or search result reaches the model exactly as
+  truncateMiddle would have cut it, and no judgment is asked. flip mode to
+  enforced only after a measurement says the judged cut beats that arm on
+  tokens without losing the task. internal/judge/thrift parses this file
+  itself rather than through the shared gate loader: that loader only finds a
+  rule inside a directory literally named rules, and library/tools/**/rules
+  is not this ticket's to write to. keep_at sits at the same
+  uncalibrated middle-of-noul prior shell_sift shipped with. this file sits
+  under config rather than rules on purpose: internal/rule.LoadDir walks any
+  directory named rules anywhere under library and would refuse this file as
+  an unknown schema, and internal/judge/method's own test demands a
+  library/decisions/methods@1.yaml row for every top-level file in
+  library/questions, which a threshold file is not.

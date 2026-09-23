@@ -5,7 +5,7 @@ import (
 	"io/fs"
 )
 
-//go:embed *.yaml
+//go:embed *.yaml config/*.yaml
 var shipped embed.FS
 
 func Files() fs.FS {

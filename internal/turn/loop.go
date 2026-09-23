@@ -70,6 +70,7 @@ type Config struct {
 	Environment     string
 	Caps            Caps
 	Sift            *ShellSift
+	Thrift          *ThriftSift
 	ResultBytesCap  int
 	ArtifactDir     string
 	TruncateResults bool
@@ -131,6 +132,7 @@ func Run(ctx context.Context, config Config) (Row, error) {
 	}
 	artifacts.preview = artifacts.preview.OnWire(config.Wire)
 	sifter := siftOrNothing(config.Sift)
+	thrifter := thriftOrNothing(config.Thrift)
 	source := config.ToolSource
 	if source == nil {
 		source = func() Registry { return config.Tools }
@@ -352,7 +354,7 @@ func Run(ctx context.Context, config Config) (Row, error) {
 					proxied, proxyRow := config.Proxy.rewrite(ctx, asked)
 					call.Arguments = proxied
 					request := GateRequest{TurnID: row.ID, Task: config.Task, Tool: call.Name, Args: call.Arguments}
-					gated := gatedCall{call: call, asked: asked, proxy: proxyRow, id: session.EventIDFor(origin, call.ID), parent: stepRow.id, author: author, sift: sifter, task: config.Task}
+					gated := gatedCall{call: call, asked: asked, proxy: proxyRow, id: session.EventIDFor(origin, call.ID), parent: stepRow.id, author: author, sift: sifter, thrift: thrifter, task: config.Task}
 					if config.Gate != nil {
 						verdict, err := config.Gate.Decide(ctx, request)
 						gated.verdict = verdict
@@ -537,6 +539,7 @@ type gatedCall struct {
 	author  string
 	task    string
 	sift    *ShellSift
+	thrift  *ThriftSift
 	verdict GateDecision
 	gateErr string
 	refusal string
@@ -579,7 +582,14 @@ func (g gatedCall) execute(ctx context.Context, tools Registry, resultBytesCap i
 	}
 
 	cut := g.cutShellResult(ctx, call.Name, result)
-	rendered, handle, storeErr := artifacts.Render(cut.Text, resultBytesCap)
+	thriftCut := g.cutThriftResult(ctx, call.Name, result)
+	saved := cut.Saved
+	text := cut.Text
+	if thriftCut.Saved > 0 {
+		text = thriftCut.Text
+		saved += thriftCut.Saved
+	}
+	rendered, handle, storeErr := artifacts.Render(text, resultBytesCap)
 	sum := sha256.Sum256([]byte(result.Content))
 	row := ToolCallRow{
 		ID:             g.id,
@@ -593,7 +603,7 @@ func (g gatedCall) execute(ctx context.Context, tools Registry, resultBytesCap i
 		RenderedBytes:  len(rendered),
 		ResultHash:     hex.EncodeToString(sum[:]),
 		ResultHandle:   handle,
-		SiftSavedBytes: cut.Saved,
+		SiftSavedBytes: saved,
 		DurationMS:     time.Since(started).Milliseconds(),
 	}
 	if storeErr != nil {
