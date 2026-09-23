@@ -256,6 +256,14 @@
     "skips": "8 tests skipped in bench/harness and bench/cmd, all gated behind an environment variable: three live arm tests, two subprocess helpers, two writer gated recorders and the live API test"
   },
   {
+    "report": "bench/thrift/report-2026-09-23-overcap.md",
+    "figure": "13.7",
+    "says": "The sibling report of the same day measured the judged cut on 8 results that were all under the truncation cap, where fixed truncation never fired. This one reaches the results over it, where the arm genuinely cuts, and the judged cut removes a further 3,367 of 24,619 tokens, 13.7 percent, against the 1.5 percent mechanical floor from TOFU-338. Nine distinct over-cap read and search artifacts were identified in the corpus and 3 were judged inside a stated cap of 250 live calls; 247 calls were made for $0.013247, against 393 calls and $0.040968 for the first run. The worked example is a design document, not a test log: fixed truncation drops 781 bytes from its middle and every one of those bytes falls inside a single paragraph the judgment marked keep, so truncation by position drops exactly the part the judgment says still matters. The 6 unjudged artifacts are each skipped with a named reason, a paragraph count over the remaining call budget, and two of them are 798 paragraph reads that would need roughly 0.18 dollars more to judge.",
+    "from": "prose",
+    "sample": "9 distinct read and search artifacts over the 32,768 byte cap, out of 39 stored, with 3 judged live and 6 skipped for a stated reason",
+    "skips": "6 of the 9 artifacts, each named with its turn and its paragraph count against the remaining call budget; both live tests skip unless TOFU_LIVE is set"
+  },
+  {
     "report": "bench/thrift/report-2026-09-23.md",
     "figure": "1.9",
     "says": "A judged cut over a read or search result was measured live against fixed truncation, 393 Jev calls for $0.040968, and it removed 402 of 21,569 tokens, 1.9 percent. TOFU-338 measured a mechanical pass at 1.5 percent of recorded result bytes, so the judgment clears that floor and does not clear it widely. The arm it is compared against did not fire on this sample: all 8 measured results are under the 32,768 byte truncation cap and the largest is 12,793 bytes, so the 1.9 percent came off results fixed truncation would have passed through whole. 9 of 39 stored read and search artifacts in the corpus exceed the cap and none fell inside the live call budget, so the arm-firing comparison cannot be made on this sample. Three arms over the corpus total read neither 570,999 tokens, rtk alone 458,199, rtk with the judged cut 457,797, and the last term is not extrapolated past the 8 calls actually judged. Task outcome was not measured, so fewer tokens with the same outcome is not claimed. The point ships off.",

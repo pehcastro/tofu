@@ -664,6 +664,25 @@
     {
       "package": "thrift",
       "date": "2026-09-23",
+      "source": "bench/thrift/report-2026-09-23-overcap.md",
+      "figure": "13.7",
+      "built_from": "prose",
+      "sample": "9 distinct read and search artifacts over the 32,768 byte cap, out of 39 stored, with 3 judged live and 6 skipped for a stated reason",
+      "skips": "6 of the 9 artifacts, each named with its turn and its paragraph count against the remaining call budget; both live tests skip unless TOFU_LIVE is set",
+      "conclusion": [
+        {
+          "text": "unparsed: no heading in this file names its own answer",
+          "withdrawn": false
+        }
+      ],
+      "conclusion_unparsed": true,
+      "state": "stands",
+      "state_source": "",
+      "state_note": ""
+    },
+    {
+      "package": "thrift",
+      "date": "2026-09-23",
       "source": "bench/thrift/report-2026-09-23.md",
       "figure": "1.9",
       "built_from": "prose",
@@ -1311,12 +1330,12 @@
     }
   ],
   "counts": {
-    "reports": 35,
+    "reports": 36,
     "packages_with_a_dated_report": 23,
     "packages_with_no_dated_report": 6,
     "withdrawn_whole_or_in_part": 5,
     "stale": 1,
-    "unparsed": 9
+    "unparsed": 10
   },
   "withdrawals_declared_from_outside_live_in": "bench/report/withdrawals.json",
   "generated_by": "go run ./bench/report/gen"
