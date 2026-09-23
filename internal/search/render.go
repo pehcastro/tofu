@@ -2,10 +2,27 @@ package search
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 
 	"tofu/internal/konst"
 )
+
+var unitHeaderPattern = regexp.MustCompile(`(?m)^(\S+):\d+-\d+ `)
+
+func OfferedPaths(rendered string) []string {
+	seen := make(map[string]bool)
+	var paths []string
+	for _, match := range unitHeaderPattern.FindAllStringSubmatch(rendered, -1) {
+		path := match[1]
+		if seen[path] {
+			continue
+		}
+		seen[path] = true
+		paths = append(paths, path)
+	}
+	return paths
+}
 
 func (r Result) render() (string, error) {
 	units, stats := r.Units, r.Stats

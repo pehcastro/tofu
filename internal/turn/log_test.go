@@ -295,6 +295,13 @@ func fullyPopulatedRow() Row {
 		TotalCostUSD: 0.0015,
 		WallClockMS:  1500,
 		DecisionIDs:  []string{"2026-09-18-deadbeef"},
+		SearchLinks: []SearchLink{{
+			SearchCallID: "call-1",
+			Offered:      []string{"server/routes.ts"},
+			ActedCallID:  "call-2",
+			ActedPath:    "server/routes.ts",
+			Kind:         SearchLinkHit,
+		}},
 		Guard: &LoopGuardStop{
 			Tool:    "bash",
 			Args:    json.RawMessage(`{"command":"npm test"}`),

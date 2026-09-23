@@ -97,26 +97,27 @@ const (
 )
 
 type Row struct {
-	ID           string    `json:"id"`
-	Schema       int       `json:"schema"`
-	At           time.Time `json:"at"`
-	Task         string    `json:"task"`
-	Wire         string    `json:"wire,omitempty"`
-	Model        string    `json:"model"`
-	Spend        Spend     `json:"spend"`
-	Steps        []StepRow `json:"steps,omitempty"`
-	Root         string    `json:"root,omitempty"`
-	Account      int64     `json:"account,omitempty"`
-	SpawnedFrom  string    `json:"spawned_from,omitempty"`
-	ForkedFrom   string    `json:"forked_from,omitempty"`
-	ForkedInto   string    `json:"forked_into,omitempty"`
-	ForkKind     ForkKind  `json:"fork_kind,omitempty"`
-	Warnings     []string  `json:"warnings,omitempty"`
-	ChildIDs     []string  `json:"child_ids"`
-	Outcome      Outcome   `json:"outcome"`
-	TotalCostUSD float64   `json:"total_cost_usd"`
-	WallClockMS  int64     `json:"wall_clock_ms"`
-	DecisionIDs  []string  `json:"decision_ids,omitempty"`
+	ID           string       `json:"id"`
+	Schema       int          `json:"schema"`
+	At           time.Time    `json:"at"`
+	Task         string       `json:"task"`
+	Wire         string       `json:"wire,omitempty"`
+	Model        string       `json:"model"`
+	Spend        Spend        `json:"spend"`
+	Steps        []StepRow    `json:"steps,omitempty"`
+	Root         string       `json:"root,omitempty"`
+	Account      int64        `json:"account,omitempty"`
+	SpawnedFrom  string       `json:"spawned_from,omitempty"`
+	ForkedFrom   string       `json:"forked_from,omitempty"`
+	ForkedInto   string       `json:"forked_into,omitempty"`
+	ForkKind     ForkKind     `json:"fork_kind,omitempty"`
+	Warnings     []string     `json:"warnings,omitempty"`
+	ChildIDs     []string     `json:"child_ids"`
+	Outcome      Outcome      `json:"outcome"`
+	TotalCostUSD float64      `json:"total_cost_usd"`
+	WallClockMS  int64        `json:"wall_clock_ms"`
+	DecisionIDs  []string     `json:"decision_ids,omitempty"`
+	SearchLinks  []SearchLink `json:"search_links,omitempty"`
 
 	Budget recall.Budget  `json:"budget"`
 	Guard  *LoopGuardStop `json:"loop_guard,omitempty"`
@@ -289,6 +290,7 @@ func (r Row) author() string {
 }
 
 func (r Row) Record() (session.Header, []session.Event, error) {
+	r.SearchLinks = searchLinksOf(r.Conversation)
 	author, last := r.author(), ""
 	next := func(kind session.EventKind, attempt int, body any) (session.Event, error) {
 		raw, err := json.Marshal(body)
