@@ -9,6 +9,7 @@ import (
 
 	benchcorpus "tofu/bench/corpus"
 	"tofu/internal/judge/ledger"
+	"tofu/internal/sift"
 )
 
 type LedgerRead struct {
@@ -20,6 +21,9 @@ type LedgerRead struct {
 	SkippedNoPoint   int
 	SkippedNoWire    int
 	ShellSiftDecided int
+	ShellSiftMillis  []float64
+	ShellSiftCosts   []float64
+	ShellSiftNeeded  []float64
 }
 
 func ReadLedger(dir string) (LedgerRead, error) {
@@ -46,7 +50,8 @@ func ReadLedger(dir string) (LedgerRead, error) {
 				read.SkippedNoPoint++
 				continue
 			}
-			if strings.HasPrefix(row.Point, "shell_sift") {
+			shellSift := strings.HasPrefix(row.Point, "shell_sift")
+			if shellSift {
 				read.ShellSiftDecided++
 			}
 			if row.LatencyMS <= 0 || row.Cost <= 0 {
@@ -56,6 +61,15 @@ func ReadLedger(dir string) (LedgerRead, error) {
 			read.Millis = append(read.Millis, float64(row.LatencyMS))
 			read.Costs = append(read.Costs, row.Cost)
 			read.PointsWithCalls[row.Point]++
+			if shellSift {
+				read.ShellSiftMillis = append(read.ShellSiftMillis, float64(row.LatencyMS))
+				read.ShellSiftCosts = append(read.ShellSiftCosts, row.Cost)
+				for _, answer := range row.Answers {
+					if answer.Question == sift.NeededQuestion {
+						read.ShellSiftNeeded = append(read.ShellSiftNeeded, answer.Noul)
+					}
+				}
+			}
 		}
 	}
 	return read, nil

@@ -15,10 +15,13 @@ const (
 	sessionDir = "../../.tofu/sessions"
 
 	dollarsPerShellResultTOFU217 = 0.00027
+	dollarsPerDecisionTOFU217    = 0.018 / 594
 	millisPerShellResultTOFU217  = 838.0
 	bytesSavedFractionTOFU217    = 0.540
 
 	sessionFloor = 100
+
+	reportedShellSiftRows = 13
 )
 
 func TestReadLedgerSeesAShellSiftRowWhenThereIsOne(t *testing.T) {
@@ -43,7 +46,7 @@ func TestReadLedgerSeesAShellSiftRowWhenThereIsOne(t *testing.T) {
 	}
 }
 
-func TestWhatSwitchingTheShellSiftOnWouldCost(t *testing.T) {
+func TestTheShellSiftPointHasBeenMeasured(t *testing.T) {
 	if _, err := os.Stat(sessionDir); err != nil {
 		t.Skipf("no recorded sessions at %s: %v", sessionDir, err)
 	}
@@ -58,12 +61,43 @@ func TestWhatSwitchingTheShellSiftOnWouldCost(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ReadLedger: %v", err)
 	}
-	if logRead.ShellSiftDecided != 0 {
-		t.Fatalf("the ledger carries %d shell_sift rows, so this report must measure them rather than derive from TOFU-217", logRead.ShellSiftDecided)
+	if logRead.ShellSiftDecided == 0 {
+		t.Fatal("the ledger carries no shell_sift rows, TOFU-482 measured 13 live decisions and the point has gone dark since")
+	}
+	if logRead.ShellSiftDecided != reportedShellSiftRows {
+		t.Fatalf("the ledger carries %d shell_sift rows and bench/sift/report-2026-09-23.md states %d, the report is stale",
+			logRead.ShellSiftDecided, reportedShellSiftRows)
 	}
 
-	t.Logf("ledger: %d files, %d rows, %d wire calls at %v, %d skipped for no point, %d skipped for no wire call, 0 of them shell_sift",
-		logRead.Files, logRead.Rows, len(logRead.Millis), logRead.PointsWithCalls, logRead.SkippedNoPoint, logRead.SkippedNoWire)
+	_, worstShellMillis := stat.Spread(logRead.ShellSiftMillis)
+	_, worstShellDollars := stat.Spread(logRead.ShellSiftCosts)
+	shellDollarsTotal := 0.0
+	for _, cost := range logRead.ShellSiftCosts {
+		shellDollarsTotal += cost
+	}
+	t.Logf("shell_sift measured: %d decisions, ms p50 %.0f p95 %.0f worst %.0f, $ p50 %.7f p95 %.7f worst %.7f, $%.6f total",
+		logRead.ShellSiftDecided,
+		stat.Median(logRead.ShellSiftMillis), stat.Percentile(logRead.ShellSiftMillis, 95), worstShellMillis,
+		stat.Median(logRead.ShellSiftCosts), stat.Percentile(logRead.ShellSiftCosts, 95), worstShellDollars,
+		shellDollarsTotal)
+	t.Logf("prediction vs measured, per decision: TOFU-217 predicted $%.7f, the 13 measured rows land at $%.7f median, %+.0f%%",
+		dollarsPerDecisionTOFU217, stat.Median(logRead.ShellSiftCosts),
+		100*(stat.Median(logRead.ShellSiftCosts)-dollarsPerDecisionTOFU217)/dollarsPerDecisionTOFU217)
+
+	rule := shippedRule(t)
+	changed, unchanged := 0, 0
+	for _, needed := range logRead.ShellSiftNeeded {
+		if needed >= rule.KeepAt {
+			unchanged++
+			continue
+		}
+		changed++
+	}
+	t.Logf("shell_sift rewrite: %d of %d decisions cut the chunk (still_needed under %.2f), %d left the chunk whole",
+		changed, len(logRead.ShellSiftNeeded), rule.KeepAt, unchanged)
+
+	t.Logf("ledger: %d files, %d rows, %d wire calls at %v, %d skipped for no point, %d skipped for no wire call, %d of them shell_sift",
+		logRead.Files, logRead.Rows, len(logRead.Millis), logRead.PointsWithCalls, logRead.SkippedNoPoint, logRead.SkippedNoWire, logRead.ShellSiftDecided)
 
 	_, worstMillis := stat.Spread(logRead.Millis)
 	t.Logf("recorded jev call: p50 %.0f ms, p95 %.0f ms, worst %.0f ms, p50 $%.7f, p95 $%.7f",
@@ -105,8 +139,8 @@ func TestWhatSwitchingTheShellSiftOnWouldCost(t *testing.T) {
 	}
 	perShell := float64(candidates) / float64(len(rows))
 	t.Logf("corpus: %.1f candidate units per shell result, %d over %d rows", perShell, candidates, len(rows))
-	t.Logf("cost of one judged sift: $%.6f from the TOFU-217 log, $%.6f from the ledger p50 times candidates",
-		dollarsPerShellResultTOFU217, perShell*stat.Median(logRead.Costs))
+	t.Logf("cost of one judged sift: $%.6f from the TOFU-217 log, $%.6f from the measured shell_sift p50 times candidates",
+		dollarsPerShellResultTOFU217, perShell*stat.Median(logRead.ShellSiftCosts))
 
 	dollars := make([]float64, len(shells))
 	spent := 0.0
@@ -131,6 +165,6 @@ func TestWhatSwitchingTheShellSiftOnWouldCost(t *testing.T) {
 	for batches*konst.SiftConcurrency < perShell {
 		batches++
 	}
-	t.Logf("latency added per shell tool call: %.0f ms from the TOFU-217 log, %.0f ms if the ledger p95 ran %.1f deep at concurrency %d",
-		millisPerShellResultTOFU217, stat.Percentile(logRead.Millis, 95)*batches, perShell, konst.SiftConcurrency)
+	t.Logf("latency added per shell tool call: %.0f ms from the TOFU-217 log, %.0f ms if the measured shell_sift p95 ran %.1f deep at concurrency %d",
+		millisPerShellResultTOFU217, stat.Percentile(logRead.ShellSiftMillis, 95)*batches, perShell, konst.SiftConcurrency)
 }
