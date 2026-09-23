@@ -45,7 +45,7 @@ type sitting struct {
 func (s sitting) saved() float64 { return 100 * float64(s.before-s.after) / float64(s.before) }
 
 func TestTheJudgedArmThreeTimesInOneSitting(t *testing.T) {
-	client, set := liveClient(t)
+	asker := liveClient(t)
 	rule := shippedRule(t)
 	all := corpusRows(t)
 
@@ -70,7 +70,7 @@ func TestTheJudgedArmThreeTimesInOneSitting(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Plant: %v", err)
 			}
-			asked := Ask(context.Background(), client, set, planted.Shell, planted.Units, row.Task)
+			asked := asker.Ask(context.Background(), planted.Shell, planted.Units, row.Task)
 			reading := Read(row, planted, asked.Cut(rule.KeepAt))
 			if reading.NeedleKept {
 				one.kept++

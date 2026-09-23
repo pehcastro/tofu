@@ -9,8 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"tofu/internal/judge/jev"
-	"tofu/internal/judge/question"
 	"tofu/internal/sift"
 )
 
@@ -76,17 +74,17 @@ func (a armTotal) row(rows int) string {
 
 func TestFourMethodsOverTheSameThirtyFourShellResults(t *testing.T) {
 	rtkOnPath(t)
-	client, set := liveClient(t)
+	asker := liveClient(t)
 	pol := shippedRule(t)
 	rows := corpusRows(t)
 
 	for run := 1; run <= 2; run++ {
 		t.Logf("run %d of 2", run)
-		fourMethods(t, client, set, pol.KeepAt, rows)
+		fourMethods(t, asker, pol.KeepAt, rows)
 	}
 }
 
-func fourMethods(t *testing.T, client *jev.Client, set question.Set, keepAt float64, rows []Row) {
+func fourMethods(t *testing.T, asker Asker, keepAt float64, rows []Row) {
 	regex := &armTotal{name: "regex on error lines"}
 	judged := &armTotal{name: "jev"}
 	proxy := &armTotal{name: "rtk"}
@@ -105,8 +103,8 @@ func fourMethods(t *testing.T, client *jev.Client, set question.Set, keepAt floa
 		thinned := planted.Shell
 		thinned.Stdout = run.Output
 
-		asked := Ask(context.Background(), client, set, planted.Shell, planted.Units, row.Task)
-		after := Ask(context.Background(), client, set, thinned, sift.SplitShell(thinned), row.Task)
+		asked := asker.Ask(context.Background(), planted.Shell, planted.Units, row.Task)
+		after := asker.Ask(context.Background(), thinned, sift.SplitShell(thinned), row.Task)
 
 		regex.add(Free(row, planted))
 		judged.addJev(asked)

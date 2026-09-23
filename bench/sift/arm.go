@@ -12,6 +12,7 @@ import (
 
 	"tofu/internal/judge/jev"
 	"tofu/internal/judge/jev/wire/openrouter"
+	"tofu/internal/judge/ledger"
 	"tofu/internal/judge/question"
 	"tofu/internal/konst"
 	"tofu/internal/sift"
@@ -79,33 +80,32 @@ func NewWire(key string) (*openrouter.Wire, error) {
 	})
 }
 
-type reply struct {
-	score   float64
-	latency time.Duration
-	cost    float64
-	build   string
-	failed  bool
-}
-
 type Answered struct {
 	Units      []sift.Unit
 	Scores     map[int]float64
 	Latencies  []time.Duration
 	Cost       float64
 	Errors     int
+	Unrecorded []error
 	StateBytes int
 	Builds     map[string]int
 	StateSum   string
 }
 
-func Ask(ctx context.Context, client *jev.Client, set question.Set, shell sift.Shell, units []sift.Unit, task string) Answered {
-	questions := make([]jev.Question, len(set.Questions))
-	for i, q := range set.Questions {
+type Asker struct {
+	Client *jev.Client
+	Set    question.Set
+	Ledger *ledger.Writer
+}
+
+func (a Asker) Ask(ctx context.Context, shell sift.Shell, units []sift.Unit, task string) Answered {
+	questions := make([]jev.Question, len(a.Set.Questions))
+	for i, q := range a.Set.Questions {
 		questions[i] = q.ToJev()
 	}
 
-	replies := make([]reply, len(units))
-	states := make([][]byte, len(units))
+	replies := make([]*jev.Decision, len(units))
+	states := make([]json.RawMessage, len(units))
 	var wg sync.WaitGroup
 	for i, unit := range units {
 		if unit.Held != sift.NotHeld {
@@ -114,21 +114,19 @@ func Ask(ctx context.Context, client *jev.Client, set question.Set, shell sift.S
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
-			replies[i].failed = true
 			state, err := json.Marshal(sift.BuildShellState(shell, units, i, task))
 			if err != nil {
 				return
 			}
 			states[i] = state
-			decision, err := client.Ask(ctx, jev.Request{State: json.RawMessage(state), Questions: questions})
+			decision, err := a.Client.Ask(ctx, jev.Request{State: state, Questions: questions})
 			if err != nil {
 				return
 			}
-			answer, ok := decision.Answers[sift.NeededQuestion]
-			if !ok {
+			if _, answered := decision.Answers[sift.NeededQuestion]; !answered {
 				return
 			}
-			replies[i] = reply{score: answer.Noul, latency: decision.Latency, cost: decision.Usage.Cost, build: decision.Build}
+			replies[i] = &decision
 		}(i)
 	}
 	wg.Wait()
@@ -140,15 +138,19 @@ func Ask(ctx context.Context, client *jev.Client, set question.Set, shell sift.S
 			continue
 		}
 		digest.Write(states[i])
-		out.Cost += replies[i].cost
 		out.StateBytes += len(states[i])
-		if replies[i].failed {
+		if replies[i] == nil {
 			out.Errors++
 			continue
 		}
-		out.Latencies = append(out.Latencies, replies[i].latency)
-		out.Scores[i] = replies[i].score
-		out.Builds[replies[i].build]++
+		decision := *replies[i]
+		out.Cost += decision.Usage.Cost
+		out.Latencies = append(out.Latencies, decision.Latency)
+		out.Scores[i] = decision.Answers[sift.NeededQuestion].Noul
+		out.Builds[decision.Build]++
+		if err := a.record(states[i], decision); err != nil {
+			out.Unrecorded = append(out.Unrecorded, err)
+		}
 	}
 	out.StateSum = hex.EncodeToString(digest.Sum(nil))
 	return out

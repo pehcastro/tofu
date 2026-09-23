@@ -1,0 +1,6 @@
+{"model":"typesafe/jev-1.13-20260917","id":"gen-recorded-0001","answers":{"still_needed":{"type":"noul","noul":0.91,"stats":{}}},"usage":{"input_tokens":1042,"output_tokens":12,"cost":0.0000306}}
+{"model":"typesafe/jev-1.13-20260917","id":"gen-recorded-0002","answers":{"still_needed":{"type":"noul","noul":0.62,"stats":{}}},"usage":{"input_tokens":1188,"output_tokens":12,"cost":0.0000306}}
+{"model":"typesafe/jev-1.13-20260917","id":"gen-recorded-0003","answers":{"still_needed":{"type":"noul","noul":0.44,"stats":{}}},"usage":{"input_tokens":967,"output_tokens":12,"cost":0.0000306}}
+{"model":"typesafe/jev-1.13-20260917","id":"gen-recorded-0004","answers":{"still_needed":{"type":"noul","noul":0.18,"stats":{}}},"usage":{"input_tokens":2451,"output_tokens":12,"cost":0.0000306}}
+{"model":"typesafe/jev-1.13-20260917","id":"gen-recorded-0005","answers":{"still_needed":{"type":"noul","noul":0.07,"stats":{}}},"usage":{"input_tokens":1530,"output_tokens":12,"cost":0.0000306}}
+{"model":"typesafe/jev-1.13-20260917","id":"gen-recorded-0006","answers":{"still_needed":{"type":"noul","noul":0.76,"stats":{}}},"usage":{"input_tokens":880,"output_tokens":12,"cost":0.0000306}}

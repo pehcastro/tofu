@@ -26,3 +26,11 @@ One JSON object per line: `session`, `task`, `command`, `outcome` and `output`. 
 ## What it does not carry
 
 `internal/turn/tool_bash.go` runs a command with `CombinedOutput`, so standard error and standard output arrive interleaved in one stream and no recorded row can say which line came from which. Every row is therefore loaded as standard output with the exit status taken from `outcome`. The rule that standard error is never a candidate for removal is proved on constructed input in `internal/sift/shell_test.go` instead, and it cannot be proved on this corpus until the tool separates the two streams.
+
+# Where judged-replies.jsonl came from
+
+**It is not a recording, and it says so here because the reason it is not one is the bug TOFU-415 fixes.** Every jev reply this bench ever paid for was thrown away at the end of the run, so on 2026-09-22 there was nothing on disk to replay. The six lines are written by hand in the shape `jev.Decode` accepts, carrying the build id `typesafe/jev-1.13-20260917` that the 2026-09-21 and 2026-09-22 runs both reported, and a per-call cost of $0.0000306, which is the $0.00909 of a 297 call run divided by its calls.
+
+`record_test.go` serves them round robin, one per call, so the judged arm runs offline over the whole corpus and leaves 297 rows without a network call or a cent. Only the row count, the row's shape and the state it carries are proved that way. No figure about how well the sieve scores can come from this file.
+
+Once a paid run has written rows under `.tofu/bench/sift/log`, a real reply can replace these six, and the day it does this section says so.

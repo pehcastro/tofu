@@ -12,13 +12,12 @@ import (
 	"time"
 
 	"tofu/internal/judge/jev"
-	"tofu/internal/judge/question"
+	"tofu/internal/judge/ledger"
 	"tofu/internal/konst"
 	"tofu/internal/sift"
-	libraryquestions "tofu/library/questions"
 )
 
-func liveClient(t *testing.T) (*jev.Client, question.Set) {
+func liveClient(t *testing.T) Asker {
 	t.Helper()
 	if os.Getenv("TOFU_LIVE") != "1" {
 		t.Skip("set TOFU_LIVE=1 to put the question to the real jev route")
@@ -36,12 +35,9 @@ func liveClient(t *testing.T) (*jev.Client, question.Set) {
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)
 	}
-	layers := []question.Layer{{Name: "library", Origin: "library/questions", FS: libraryquestions.Files()}}
-	set, _, err := question.Resolve(Point, layers)
-	if err != nil {
-		t.Fatalf("resolve %s: %v", Point, err)
-	}
-	return client, set
+	dir := filepath.Join(repoRoot, ".tofu", "bench", BenchName, "log")
+	t.Logf("every paid decision below is appended to %s, which is not the harness ledger at .tofu/log", dir)
+	return Asker{Client: client, Set: shippedQuestions(t), Ledger: ledger.NewWriter(dir)}
 }
 
 func tally(t *testing.T, arm string, readings []Reading) {
@@ -61,7 +57,7 @@ func tally(t *testing.T, arm string, readings []Reading) {
 }
 
 func TestTheJudgedArmAgainstTheFreeArmOverEveryCapturedOutput(t *testing.T) {
-	client, set := liveClient(t)
+	asker := liveClient(t)
 	pol := shippedRule(t)
 	rows := corpusRows(t)
 
@@ -78,7 +74,10 @@ func TestTheJudgedArmAgainstTheFreeArmOverEveryCapturedOutput(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Plant: %v", err)
 			}
-			asked := Ask(context.Background(), client, set, planted.Shell, planted.Units, row.Task)
+			asked := asker.Ask(context.Background(), planted.Shell, planted.Units, row.Task)
+			if len(asked.Unrecorded) > 0 {
+				t.Fatalf("a paid decision was not written to the bench ledger: %v", asked.Unrecorded[0])
+			}
 			answered = append(answered, asked)
 			plants = append(plants, planted)
 			free = append(free, Free(row, planted))
@@ -118,7 +117,7 @@ func TestTheJudgedArmAgainstTheFreeArmOverEveryCapturedOutput(t *testing.T) {
 }
 
 func TestTheSameChunkUnderTwoTasks(t *testing.T) {
-	client, set := liveClient(t)
+	asker := liveClient(t)
 	chunk := "bench/cost/report-2026-09-19.md\nbench/cost/rescore-2026-09-19.md\nbench/cost/sweep-2026-09-19.md\nbench/harness/plan.go\nbench/harness/row.go\n"
 	result := sift.Shell{Command: "git ls-files bench", Stdout: "the first line\n\n" + chunk + "\nthe last line\n"}
 	units := sift.SplitShell(result)
@@ -132,8 +131,8 @@ func TestTheSameChunkUnderTwoTasks(t *testing.T) {
 		t.Fatalf("the chunk did not survive splitting: %+v", units)
 	}
 
-	questions := make([]jev.Question, len(set.Questions))
-	for i, q := range set.Questions {
+	questions := make([]jev.Question, len(asker.Set.Questions))
+	for i, q := range asker.Set.Questions {
 		questions[i] = q.ToJev()
 	}
 	scores := map[string]float64{}
@@ -145,7 +144,7 @@ func TestTheSameChunkUnderTwoTasks(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		decision, err := client.Ask(context.Background(), jev.Request{State: json.RawMessage(state), Questions: questions})
+		decision, err := asker.Client.Ask(context.Background(), jev.Request{State: json.RawMessage(state), Questions: questions})
 		if err != nil {
 			t.Fatalf("Ask: %v", err)
 		}
