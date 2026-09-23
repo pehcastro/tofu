@@ -621,6 +621,11 @@ func (s *appSession) run(ctx context.Context, pick tui.Pick, task string, emit t
 		emit(tui.Event{Kind: tui.EventNote, Text: unreadable})
 	}
 	opts := pickedOpts(s.dir, s.pendingID(), task, pick, maxSteps)
+	maySpawn, spawnUnreadable := appSetting(s.dir, settingspkg.TurnMaySpawn)
+	if spawnUnreadable != "" {
+		emit(tui.Event{Kind: tui.EventNote, Text: spawnUnreadable})
+	}
+	opts.noSubAgents = maySpawn == 0
 	opened, err := s.open(opts)
 	if opened.held != nil {
 		defer opened.held.close()

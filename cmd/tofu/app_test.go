@@ -770,6 +770,41 @@ func TestASpawnedChildShowsInTheSubAgentViewWithTheGlobsItHolds(t *testing.T) {
 	t.Log("\n" + screen)
 }
 
+type toolNamesCapture struct {
+	names []string
+}
+
+func (m *toolNamesCapture) Ask(_ context.Context, req llm.Request) (llm.Decision, error) {
+	for _, tool := range req.Tools {
+		m.names = append(m.names, tool.Name)
+	}
+	return llm.Decision{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "done"}, nil
+}
+
+func TestATurnStartedInTheAppOffersSpawnWhenTurnMaySpawnIsOn(t *testing.T) {
+	dir := scratchProject(t)
+	driver := driveApp(t)
+	capture := &toolNamesCapture{}
+	stubbedTurn(dir, capture)(t.Context(), onTheSubscription, "say hello", driver.emit)
+	if !slices.Contains(capture.names, "spawn") {
+		t.Fatalf("turnMaySpawn defaults to on and the app offered %v, want spawn among them", capture.names)
+	}
+}
+
+func TestATurnStartedInTheAppDoesNotOfferSpawnWhenTurnMaySpawnIsOff(t *testing.T) {
+	dir := scratchProject(t)
+	var out, errOut bytes.Buffer
+	if code := settingsVerb([]string{"set", "turnMaySpawn", "false"}, &out, &errOut); code != exitOK {
+		t.Fatalf("settings set exited %d: %s", code, errOut.String())
+	}
+	driver := driveApp(t)
+	capture := &toolNamesCapture{}
+	stubbedTurn(dir, capture)(t.Context(), onTheSubscription, "say hello", driver.emit)
+	if slices.Contains(capture.names, "spawn") {
+		t.Fatalf("turnMaySpawn is off and the app still offered spawn: %v", capture.names)
+	}
+}
+
 type clockedStep struct {
 	waited   time.Duration
 	decision llm.Decision

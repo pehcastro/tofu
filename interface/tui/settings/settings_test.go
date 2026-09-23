@@ -116,6 +116,16 @@ func TestProjectOverrideWithASearchInProgress(t *testing.T) {
 	assertGolden(t, "project-override-with-search-120x36.golden", content)
 }
 
+func TestTheTurnMaySpawnSettingDrawsItsLabel(t *testing.T) {
+	rows := append(baseRows(), Row{Key: "turnMaySpawn", Group: "turn", Label: "a turn may spawn a sub-agent", Value: "true", Kind: Bool, Source: "default"})
+	m := Model{Scopes: []string{"global", "project"}, Rows: rows}
+	m.SetSize(120, 36)
+	content := m.View()
+	if !strings.Contains(content, "a turn may spawn a sub-agent") {
+		t.Fatalf("the settings pane never draws the turnMaySpawn label\n%s", content)
+	}
+}
+
 func TestBackspaceShortensTheQuery(t *testing.T) {
 	m := Model{Rows: baseRows()}
 	m.Key("a")

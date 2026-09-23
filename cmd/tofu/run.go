@@ -185,7 +185,9 @@ Arguments:
                         drops the rest, costs nothing and makes no call. judged
                         costs, from library/decisions/methods@1.yaml:
                         %s
-  --no-subagents        run without the spawn tool
+  --no-subagents        run without the spawn tool for this run, no matter what
+                        the turnMaySpawn setting says; there is no flag that
+                        turns spawning on when that setting says off
   --no-instructions     the arm that %s
   --done-review <arm>          the arm that reviews a child's answer
   --max-steps <n>              cap the steps a turn takes, unset means no cap
@@ -210,6 +212,13 @@ func runVerb(args []string, out, errOut io.Writer) int {
 		if unreadable != "" {
 			_, _ = fmt.Fprintln(errOut, "tofu run: "+unreadable)
 		}
+	}
+	if !opts.noSubAgents {
+		maySpawn, unreadable := appSetting(cmp.Or(opts.dir, "."), settingspkg.TurnMaySpawn)
+		if unreadable != "" {
+			_, _ = fmt.Fprintln(errOut, "tofu run: "+unreadable)
+		}
+		opts.noSubAgents = maySpawn == 0
 	}
 	if opts.showPrompt {
 		return showPrompt(opts, out, errOut)

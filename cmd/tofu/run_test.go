@@ -169,6 +169,48 @@ func TestTheDefaultArmOffersTofusOwnVerbsAndTheSpawnToolAndNoSubAgentsTakesSpawn
 	}
 }
 
+func dryRunToolNames(t *testing.T, args ...string) []string {
+	t.Helper()
+	var out, errOut bytes.Buffer
+	full := append([]string{"--dir", t.TempDir(), "--wire", wireKey, "--dry-run"}, append(args, "write hello.txt")...)
+	if code := runVerb(full, &out, &errOut); code != exitOK {
+		t.Fatalf("runVerb %v exited %d (stderr %q)", args, code, errOut.String())
+	}
+	var body struct {
+		Tools []struct {
+			Function struct {
+				Name string `json:"name"`
+			} `json:"function"`
+		} `json:"tools"`
+	}
+	if err := json.Unmarshal(out.Bytes(), &body); err != nil {
+		t.Fatalf("the printed request is not JSON: %v", err)
+	}
+	named := make([]string, len(body.Tools))
+	for i, tool := range body.Tools {
+		named[i] = tool.Function.Name
+	}
+	return named
+}
+
+func TestTheTurnMaySpawnSettingOffWithNoFlagTakesSpawnAway(t *testing.T) {
+	isolatedHomeAndProject(t)
+	var out, errOut bytes.Buffer
+	if code := settingsVerb([]string{"set", "turnMaySpawn", "false"}, &out, &errOut); code != exitOK {
+		t.Fatalf("settings set exited %d: %s", code, errOut.String())
+	}
+	if names := dryRunToolNames(t); slices.Contains(names, "spawn") {
+		t.Fatalf("turnMaySpawn set to false still offers spawn: %v", names)
+	}
+}
+
+func TestTheNoSubAgentsFlagTakesSpawnAwayEvenWhenTheSettingIsOn(t *testing.T) {
+	isolatedHomeAndProject(t)
+	if names := dryRunToolNames(t, "--no-subagents"); slices.Contains(names, "spawn") {
+		t.Fatalf("--no-subagents still offers spawn against the default, on setting: %v", names)
+	}
+}
+
 func TestARealRunOffersTheGitHubPullRequestDiffToolAndTheOffArmDoesNot(t *testing.T) {
 	full := toolNames(t, armOpts(t))
 	if !slices.Contains(full, "github_pr_diff") {

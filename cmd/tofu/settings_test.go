@@ -142,6 +142,13 @@ func TestChatShowsToolsIsADeclaredSetting(t *testing.T) {
 	}
 }
 
+func TestTurnMaySpawnDefaultsToOn(t *testing.T) {
+	isolatedHomeAndProject(t)
+	if got, _ := appSetting(".", settingspkg.TurnMaySpawn); got != 1 {
+		t.Fatalf("turnMaySpawn default = %d, want 1: today a run spawns unless --no-subagents is typed", got)
+	}
+}
+
 func TestSettingsFileNeverWritesIntoTheHomeStateDirsCredentialFile(t *testing.T) {
 	home := isolatedHomeAndProject(t)
 	var out, errOut bytes.Buffer
