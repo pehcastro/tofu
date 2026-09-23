@@ -10,6 +10,10 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 
 ## Unreleased
 
+## 0.4.14 - 2026-09-23
+
+They are sub-agents, and you decide whether a turn may spawn one or edit a file it has not read.
+
 ### Changed
 
 - **`--no-crew` is now `--no-subagents`.** They are sub-agents everywhere: in the interface, in the settings, in the verbs and in what tofu writes to you. A script passing the old flag stops working and says the flag is unknown.
@@ -17,6 +21,11 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 ### Added
 
 - **A setting decides whether a turn may spawn a sub-agent**, `turnMaySpawn`, on by default, in the settings pane under `turn`. It applies to a turn started in the app and to `tofu run` alike. **`--no-subagents` turns spawning off for one run whatever the setting says, and there is no flag that turns it on when the setting says off**, so the setting cannot be bypassed from the command line it is meant to constrain.
+- **An edit or a write to a file the turn has not read is refused**, `readBeforeEdit`, on by default. The refusal carries the file's current content, so the next attempt is informed rather than another guess. A read earlier in the turn counts, and so does an edit or a write the turn made itself: **a search does not, because it shows the matching lines and cannot vouch for the rest of the file an anchor edit is aimed at.** Measured against 110 recorded turns before it was turned on: of 55 real edits, one would have been refused.
+
+### Fixed
+
+- **Tofu carried this project's own development notes into every repository it ran in.** Eighteen files under the shipped library held ticket numbers, benchmark paths and dated report citations, all of it embedded in the binary and none of it usable by a turn. The rules themselves are unchanged: what went is the bookkeeping around them.
 
 ## 0.4.13 - 2026-09-23
 
