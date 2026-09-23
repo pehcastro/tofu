@@ -83,7 +83,7 @@ func Open(path string) (*Store, error) {
 }
 
 func (s *Store) renameRetiredSources() error {
-	for retired, source := range map[string]Provider{retiredClaudeWord: ClaudeSub, retiredCodexWord: CodexSub} {
+	for retired, source := range retiredProviderWords {
 		if _, err := s.db.Exec(
 			`UPDATE OR IGNORE credentials SET provider = ? WHERE provider = ?`,
 			string(source), retired); err != nil {
@@ -194,8 +194,12 @@ func (s *Store) selectRows(clause string, args ...any) ([]Row, error) {
 		if err := json.Unmarshal([]byte(data), &row.Credential); err != nil {
 			return nil, err
 		}
-		if source, known := Canonical(string(row.Credential.Provider)); known {
+		source, parseErr := ParseProvider(string(row.Credential.Provider))
+		switch {
+		case parseErr == nil:
 			row.Credential.Provider = source
+		case row.DisabledCause == "":
+			row.DisabledCause = parseErr.Error()
 		}
 		out = append(out, row)
 	}

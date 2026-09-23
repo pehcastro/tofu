@@ -18,14 +18,32 @@ const (
 	retiredCodexWord  = "codex"
 )
 
+func AllProviders() []Provider {
+	return []Provider{ClaudeSub, CodexSub}
+}
+
+var retiredProviderWords = map[string]Provider{
+	retiredClaudeWord: ClaudeSub,
+	retiredCodexWord:  CodexSub,
+}
+
 func Canonical(name string) (Provider, bool) {
-	switch name {
-	case string(ClaudeSub), retiredClaudeWord:
-		return ClaudeSub, true
-	case string(CodexSub), retiredCodexWord:
-		return CodexSub, true
+	for _, known := range AllProviders() {
+		if name == string(known) {
+			return known, true
+		}
+	}
+	if source, retired := retiredProviderWords[name]; retired {
+		return source, true
 	}
 	return "", false
+}
+
+func ParseProvider(name string) (Provider, error) {
+	if source, ok := Canonical(name); ok {
+		return source, nil
+	}
+	return "", fmt.Errorf("cred: unknown provider %q, want %s or %s", name, ClaudeSub, CodexSub)
 }
 
 type TokenBody string
@@ -68,14 +86,17 @@ type Spec struct {
 }
 
 func Lookup(name string) (Spec, error) {
-	source, _ := Canonical(name)
+	source, err := ParseProvider(name)
+	if err != nil {
+		return Spec{}, err
+	}
 	switch source {
 	case ClaudeSub:
 		return claudeSubSpec(), nil
 	case CodexSub:
 		return codexSubSpec(), nil
 	}
-	return Spec{}, fmt.Errorf("cred: unknown source %q, want %s or %s", name, ClaudeSub, CodexSub)
+	return Spec{}, err
 }
 
 func claudeSubSpec() Spec {
