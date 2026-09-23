@@ -13,13 +13,14 @@ import (
 )
 
 const (
-	minimumWidth = 20
-	gap          = "  "
-	pickedMark   = "› "
-	plainMark    = "  "
-	title        = "models"
-	pickHint     = "↑↓ pick a model"
-	emptyTitle   = "the library has no model to pick"
+	minimumWidth      = 20
+	beforeTheFirstRow = -1
+	gap               = "  "
+	pickedMark        = "› "
+	plainMark         = "  "
+	title             = "models"
+	pickHint          = "↑↓ choose   enter picks"
+	emptyTitle        = "the library has no model to pick"
 )
 
 type Row struct {
@@ -43,33 +44,26 @@ type Model struct {
 	height int
 }
 
-func Slug(model library.Model) string {
-	return string(model.Subscription) + "/" + model.ID
-}
-
-func Build(loaded library.Library) Model {
-	order := make([]string, 0, len(loaded.Subscriptions))
-	rows := map[string][]Row{}
-	for _, spec := range loaded.Subscriptions {
-		order = append(order, string(spec.ID))
-	}
+func Build(loaded library.Library, sources []library.Subscription) Model {
+	rows := map[library.Subscription][]Row{}
 	for _, one := range loaded.Models {
-		source := string(one.Subscription)
-		rows[source] = append(rows[source], Row{
-			Slug:   Slug(one),
+		rows[one.Subscription] = append(rows[one.Subscription], Row{
+			Slug:   one.Slug(),
 			Use:    one.Use,
 			Window: one.WindowText(),
 			Reason: one.Reason,
 		})
 	}
-	groups := make([]Group, 0, len(order))
-	for _, source := range order {
+	groups := make([]Group, 0, len(sources))
+	for _, source := range sources {
 		if len(rows[source]) == 0 {
 			continue
 		}
-		groups = append(groups, Group{Source: source, Rows: rows[source]})
+		groups = append(groups, Group{Source: string(source), Rows: rows[source]})
 	}
-	return Model{Groups: groups}
+	built := Model{Groups: groups, pick: beforeTheFirstRow}
+	built.move(1)
+	return built
 }
 
 func (m *Model) SetSize(width, height int) {
@@ -94,23 +88,28 @@ func (m *Model) Key(key string) {
 }
 
 func (m *Model) move(by int) {
-	if next := m.pick + by; next >= 0 && next < m.count() {
-		m.pick = next
+	for next := m.pick + by; next >= 0 && next < m.count(); next += by {
+		if row, _ := m.rowAt(next); !row.excluded() {
+			m.pick = next
+			return
+		}
 	}
 }
 
-func (m Model) Picked() (Row, bool) {
-	at := 0
+func (m Model) rowAt(at int) (Row, bool) {
+	if at < 0 {
+		return Row{}, false
+	}
 	for _, group := range m.Groups {
-		for _, row := range group.Rows {
-			if at == m.pick {
-				return row, true
-			}
-			at++
+		if at < len(group.Rows) {
+			return group.Rows[at], true
 		}
+		at -= len(group.Rows)
 	}
 	return Row{}, false
 }
+
+func (m Model) Picked() (Row, bool) { return m.rowAt(m.pick) }
 
 func (m Model) View() string {
 	if m.count() == 0 {

@@ -16,6 +16,7 @@ import (
 	"tofu/interface/tui/frame"
 	"tofu/interface/tui/links"
 	"tofu/interface/tui/markdown"
+	"tofu/interface/tui/models"
 	"tofu/interface/tui/paste"
 	"tofu/interface/tui/pick"
 	"tofu/interface/tui/quote"
@@ -25,6 +26,7 @@ import (
 	"tofu/interface/tui/theme"
 	"tofu/interface/tui/trace"
 	"tofu/interface/tui/work"
+	library "tofu/internal/llm/models"
 	isession "tofu/internal/session"
 	isettings "tofu/internal/settings"
 	"tofu/internal/sys"
@@ -132,6 +134,7 @@ type Options struct {
 	Recheck      func() []Requirement
 	Login        func() *exec.Cmd
 	Wires        func() []Wire
+	Models       func() (library.Library, error)
 	Providers    []settings.Provider
 	Quota        func() []frame.Quota
 	Settings     *isettings.Store
@@ -161,6 +164,7 @@ const (
 	viewSettings
 	viewLinks
 	viewQuote
+	viewModels
 )
 
 const subAgentsIndex = int(viewCrew)
@@ -218,6 +222,7 @@ type App struct {
 	shells         shells.Model
 	links          links.Model
 	quote          quote.Model
+	picker         models.Model
 	settings       settings.Model
 	settingsStore  *isettings.Store
 	status         frame.Status
@@ -226,6 +231,7 @@ type App struct {
 	provider       string
 	sessionName    string
 	sessionID      string
+	wires          []Wire
 	width          int
 	height         int
 	started        time.Time
@@ -261,6 +267,9 @@ func New(options Options) *App {
 	}
 	if options.Copy == nil {
 		options.Copy = sys.WriteClipboardText
+	}
+	if options.Models == nil {
+		options.Models = shippedModels
 	}
 	if options.Promotions == "" && options.Root != "" {
 		options.Promotions = isession.NewPromotionLog(sys.StateDir(options.Root))
@@ -301,9 +310,12 @@ func (a *App) readWires() {
 	if a.options.Wires == nil {
 		return
 	}
-	if signed := a.options.Wires(); len(signed) > 0 {
-		a.wire, a.model, a.provider = signed[0].Name, signed[0].Model, signed[0].Provider
+	signed := a.options.Wires()
+	if len(signed) == 0 {
+		return
 	}
+	a.wires = signed
+	a.wire, a.model, a.provider = signed[0].Name, signed[0].Model, signed[0].Provider
 }
 
 func Run(options Options) error {
@@ -347,6 +359,7 @@ func (a *App) resize(width, height int) {
 	a.shells.SetSize(width, height-viewChrome)
 	a.links.SetSize(width, height-viewChrome)
 	a.quote.SetSize(width, height-viewChrome)
+	a.picker.SetSize(width, height-viewChrome)
 	a.settings.SetSize(width, height-viewChrome)
 }
 
@@ -530,6 +543,9 @@ func (a *App) key(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return a, a.linksKey(key)
 	case viewQuote:
 		a.quoteKey(key)
+		return a, nil
+	case viewModels:
+		a.pickerKey(key)
 		return a, nil
 	case viewWork:
 		a.workKey(key)
@@ -1037,6 +1053,8 @@ func (a *App) body() string {
 		return a.links.View()
 	case viewQuote:
 		return a.quote.View()
+	case viewModels:
+		return a.picker.View()
 	}
 	panic("tui: unknown view")
 }

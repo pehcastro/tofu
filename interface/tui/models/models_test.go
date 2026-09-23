@@ -24,29 +24,53 @@ func shippedLibrary(t *testing.T) library.Library {
 	return loaded
 }
 
+func everySource(loaded library.Library) []library.Subscription {
+	sources := make([]library.Subscription, 0, len(loaded.Subscriptions))
+	for _, spec := range loaded.Subscriptions {
+		sources = append(sources, spec.ID)
+	}
+	return sources
+}
+
+func shippedPicker(t *testing.T) Model {
+	t.Helper()
+	loaded := shippedLibrary(t)
+	built := Build(loaded, everySource(loaded))
+	built.SetSize(120, 36)
+	return built
+}
+
 func TestEveryRowSpellsSourceSlashModel(t *testing.T) {
 	loaded := shippedLibrary(t)
 	if len(loaded.Models) == 0 {
 		t.Fatal("the shipped library carries no model")
 	}
+	type paidFor struct {
+		source library.Subscription
+		id     string
+	}
+	known := map[paidFor]bool{}
 	for _, one := range loaded.Models {
-		slug := Slug(one)
-		source, name, found := strings.Cut(slug, "/")
-		if !found {
-			t.Fatalf("%s has no slash", slug)
-		}
-		if source != string(one.Subscription) {
-			t.Errorf("%s: the source is %q, want the subscription %q that pays for it, not the vendor %q",
-				slug, source, one.Subscription, one.Provider)
-		}
-		if name != one.ID {
-			t.Errorf("%s: the model name is %q, want %q", slug, name, one.ID)
+		known[paidFor{one.Subscription, one.ID}] = true
+	}
+	for _, group := range Build(loaded, everySource(loaded)).Groups {
+		for _, row := range group.Rows {
+			source, name, found := strings.Cut(row.Slug, "/")
+			if !found {
+				t.Fatalf("%s has no slash", row.Slug)
+			}
+			if source != group.Source {
+				t.Errorf("%s: the source is %q, want the subscription %q that pays for it", row.Slug, source, group.Source)
+			}
+			if !known[paidFor{library.Subscription(source), name}] {
+				t.Errorf("%s: the library has no %q under the %q subscription, and a slug names the money", row.Slug, name, source)
+			}
 		}
 	}
 }
 
 func TestBuildGroupsBySubscriptionInLibraryOrder(t *testing.T) {
-	built := Build(shippedLibrary(t))
+	built := shippedPicker(t)
 	if len(built.Groups) == 0 {
 		t.Fatal("no group built from a non-empty library")
 	}
@@ -60,8 +84,7 @@ func TestBuildGroupsBySubscriptionInLibraryOrder(t *testing.T) {
 }
 
 func TestPickWalksEveryRowAndStopsAtTheEnds(t *testing.T) {
-	built := Build(shippedLibrary(t))
-	built.SetSize(80, 24)
+	built := shippedPicker(t)
 	total := built.count()
 	if total < 2 {
 		t.Fatalf("the shipped library has %d models, need at least 2 to prove the walk stops", total)
@@ -99,9 +122,30 @@ func assertGolden(t *testing.T, name, got string) {
 }
 
 func TestPickerViewGolden(t *testing.T) {
-	built := Build(shippedLibrary(t))
-	built.SetSize(120, 36)
-	assertGolden(t, "picker-120x36.golden", built.View())
+	assertGolden(t, "picker-120x36.golden", shippedPicker(t).View())
+}
+
+func TestAnExcludedModelCannotBePicked(t *testing.T) {
+	loaded := shippedLibrary(t)
+	excluded := 0
+	for _, one := range loaded.Models {
+		if one.Use == library.UseExcluded {
+			excluded++
+		}
+	}
+	if excluded == 0 {
+		t.Skip("the shipped library excludes no model, so nothing here can prove an excluded model is unreachable")
+	}
+	built := shippedPicker(t)
+	for _, key := range []string{"down", "up"} {
+		for range built.count() + excluded {
+			row, picked := built.Picked()
+			if picked && row.Use == library.UseExcluded {
+				t.Fatalf("the pick landed on %s, which the library excludes: %s", row.Slug, row.Reason)
+			}
+			built.Key(key)
+		}
+	}
 }
 
 func TestEmptyPickerGolden(t *testing.T) {

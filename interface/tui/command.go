@@ -22,6 +22,7 @@ func commands(options Options) []session.Command {
 		{Name: "file-edits", What: "a diff feed of every change, who made it and where"},
 		{Name: "sub-agents", What: "the children, what each owns and what each is doing"},
 		{Name: "shells", What: "the persistent processes an agent left running"},
+		{Name: "models", What: "every model the signed subscriptions serve, and which one the next turn runs"},
 		{Name: "settings", What: "the providers and the file each value came from"},
 		{Name: "links", What: "every link this conversation carried, newest first"},
 		{Name: "quote", What: "cite a past turn by id, newest first"},
@@ -79,6 +80,8 @@ func (a *App) runCommand(name string) tea.Cmd {
 		a.show(viewCrew)
 	case "shells":
 		a.show(viewShells)
+	case "models":
+		a.openPicker()
 	case "settings":
 		a.show(viewSettings)
 	case "links":
