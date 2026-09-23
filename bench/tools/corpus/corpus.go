@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -37,6 +38,36 @@ func fingerprintOf(line string) LineFingerprint {
 type Pin struct {
 	Answer
 	Fingerprint LineFingerprint `json:"fingerprint"`
+}
+
+var (
+	ErrPinContentChanged = errors.New("pinned content changed")
+	ErrPinAmbiguous      = errors.New("pinned content now matches more than one line")
+)
+
+type PinResolution struct {
+	Line  int
+	Moved bool
+}
+
+func ResolvePin(lines []string, p Pin) (PinResolution, error) {
+	if p.Line >= 1 && p.Line <= len(lines) && fingerprintOf(lines[p.Line-1]) == p.Fingerprint {
+		return PinResolution{Line: p.Line}, nil
+	}
+	var matches []int
+	for i, l := range lines {
+		if fingerprintOf(l) == p.Fingerprint {
+			matches = append(matches, i+1)
+		}
+	}
+	switch len(matches) {
+	case 0:
+		return PinResolution{}, fmt.Errorf("%w: line %d no longer carries fingerprint %s and no other line in the file does either", ErrPinContentChanged, p.Line, p.Fingerprint)
+	case 1:
+		return PinResolution{Line: matches[0], Moved: matches[0] != p.Line}, nil
+	default:
+		return PinResolution{}, fmt.Errorf("%w: fingerprint %s now names lines %v", ErrPinAmbiguous, p.Fingerprint, matches)
+	}
 }
 
 type Question struct {
