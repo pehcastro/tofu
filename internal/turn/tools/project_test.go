@@ -13,10 +13,23 @@ import (
 	"tofu/internal/turn"
 )
 
+func writeTree(t *testing.T, root string, files map[string]string) string {
+	t.Helper()
+	for path, body := range files {
+		full := filepath.Join(root, filepath.FromSlash(path))
+		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(full, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return root
+}
+
 func projectTree(t *testing.T) string {
 	t.Helper()
-	root := t.TempDir()
-	for path, body := range map[string]string{
+	return writeTree(t, t.TempDir(), map[string]string{
 		".gitignore":                  "node_modules/\ndist/\n",
 		"README.md":                   "the readme",
 		"CHANGELOG.md":                "the changelog",
@@ -29,16 +42,7 @@ func projectTree(t *testing.T) string {
 		"docs/deep/design.md":         "a nested note",
 		"node_modules/left/pad.js":    "module.exports = 1\n",
 		"dist/bundle.js":              "bundled\n",
-	} {
-		full := filepath.Join(root, filepath.FromSlash(path))
-		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(full, []byte(body), 0o644); err != nil {
-			t.Fatal(err)
-		}
-	}
-	return root
+	})
 }
 
 func runProject(t *testing.T, root, args string) string {
@@ -99,6 +103,29 @@ func TestProjectReportSaysWhenALimitCutASectionRatherThanLookingComplete(t *test
 			t.Fatalf("a cut section is presented as a complete answer:\n%s", content)
 		}
 	}
+}
+
+func TestACappedSectionKeepsTheEntryPointsAtTheTopOfTheTreeAndCutsTheFixturesUnderIt(t *testing.T) {
+	root := writeTree(t, t.TempDir(), map[string]string{
+		"go.mod":                          "module example\n",
+		"cmd/example/main.go":             "package main\n",
+		"bench/cost/testdata/one/main.go": "package main\n",
+		"bench/cost/testdata/two/main.go": "package main\n",
+		"bench/seed/src/index.ts":         "export const x = 1\n",
+		"bench/seed/package.json":         "{}\n",
+	})
+	content := runProject(t, root, `{"limit":3}`)
+	entries, _, _ := strings.Cut(strings.SplitN(content, "entry points\n", 2)[1], "\ndocumentation")
+
+	for _, want := range []string{"go.mod", "cmd/example/main.go"} {
+		if !strings.Contains(entries, want) {
+			t.Fatalf("a cap cut %q, the entry point a caller asks about:\n%s", want, content)
+		}
+	}
+	if strings.Contains(entries, "testdata") {
+		t.Fatalf("a fixture under testdata took a capped slot:\n%s", content)
+	}
+	t.Log("\n" + content)
 }
 
 func TestProjectReportAgainstTheTwoFindCommandsFromTheRecordedRun(t *testing.T) {

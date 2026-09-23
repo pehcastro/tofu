@@ -39,6 +39,11 @@ func (e Edit) Definition() llm.Tool {
 			"a path that does not exist, or a stretch of text that differs from the file in whitespace alone, is repaired when there is exactly one candidate and refused when there are two, " +
 			"and a repair is named at the top of the result. " +
 			"the result is a unified diff of what changed. " +
+			"symbol is the other way to say what is replaced, on a go file only: it names one declaration, spelled Resolve for a function, a type or a value and Root.Resolve for a method, " +
+			"and new_string becomes the whole of it, so the old text is never copied. " +
+			"use symbol when a whole declaration is being rewritten and old_string when part of one is or the file is not go. " +
+			"exactly one of the two is given. a symbol that does not name exactly one declaration in that file is refused with what was found, " +
+			"and an edit that would leave a go file unable to parse is refused with nothing written. " +
 			"use write instead to create a file or to replace the whole of one",
 		Parameters: map[string]any{
 			"type": "object",
@@ -46,16 +51,18 @@ func (e Edit) Definition() llm.Tool {
 				"path":       map[string]any{"type": "string"},
 				"old_string": map[string]any{"type": "string"},
 				"new_string": map[string]any{"type": "string"},
+				"symbol":     map[string]any{"type": "string"},
 			},
-			"required": []string{"path", "old_string", "new_string"},
+			"required": []string{"path", "new_string"},
 		},
 	}
 }
 
 type editArgs struct {
-	Path string `json:"path"`
-	Old  string `json:"old_string"`
-	New  string `json:"new_string"`
+	Path   string `json:"path"`
+	Old    string `json:"old_string"`
+	New    string `json:"new_string"`
+	Symbol string `json:"symbol"`
 }
 
 func (e Edit) Run(_ context.Context, raw json.RawMessage) (turn.Result, error) {
@@ -63,10 +70,13 @@ func (e Edit) Run(_ context.Context, raw json.RawMessage) (turn.Result, error) {
 	if err := json.Unmarshal(raw, &args); err != nil {
 		return turn.Result{}, fmt.Errorf("edit: arguments are not the expected shape: %w", err)
 	}
-	if args.Old == "" {
-		return turn.Result{}, errors.New("edit: old_string is the text being replaced and it cannot be empty: write creates a file")
+	if args.Old == "" && args.Symbol == "" {
+		return turn.Result{}, errors.New("edit: say what is replaced, either old_string for a stretch of text copied from the file or symbol for the whole of one go declaration: write creates a file")
 	}
-	if args.Old == args.New {
+	if args.Old != "" && args.Symbol != "" {
+		return turn.Result{}, errors.New("edit: old_string and symbol are the two ways to say what is replaced and a call gives exactly one: symbol replaces a whole go declaration and old_string replaces a stretch of text")
+	}
+	if args.Old != "" && args.Old == args.New {
 		return turn.Result{}, errors.New("edit: old_string and new_string are the same text, so there is nothing to change")
 	}
 	resolved, err := e.root.Resolve(args.Path)
@@ -96,12 +106,20 @@ func (e Edit) Run(_ context.Context, raw json.RawMessage) (turn.Result, error) {
 	}
 
 	before := string(body)
-	after, note, err := replaceOnce(before, target, args.Old, args.New)
+	var after, note string
+	if args.Symbol != "" {
+		after, err = replaceDeclaration(e.root, target, args.Symbol, before, args.New)
+	} else {
+		after, note, err = replaceOnce(before, target, args.Old, args.New)
+	}
 	if err != nil {
 		return turn.Result{}, err
 	}
 	if note != "" {
 		repairs = append(repairs, note)
+	}
+	if err := goStillParses(target, before, after); err != nil {
+		return turn.Result{}, err
 	}
 
 	edits, err := transform.Derive(before, after)

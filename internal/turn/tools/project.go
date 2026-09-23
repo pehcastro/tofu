@@ -81,6 +81,9 @@ func (p Project) Run(_ context.Context, raw json.RawMessage) (turn.Result, error
 		}
 	}
 
+	slices.SortFunc(entries, shallowestFirst)
+	slices.SortFunc(docs, shallowestFirst)
+
 	var out strings.Builder
 	fmt.Fprintf(&out, "project report for %s\n%d files holding %s, from one ignore-aware walk\n",
 		string(p.root), len(listed.files), sizeText(listed.bytes))
@@ -111,6 +114,19 @@ func (p Project) Run(_ context.Context, raw json.RawMessage) (turn.Result, error
 			"limit is "+strconv.Itoa(limit)+" and "+strings.Join(cut, ", ")+": raise limit, or glob the one you want in full"))
 	}
 	return turn.Result{Content: withNote(out.String(), note), Command: "project_report"}, nil
+}
+
+func shallowestFirst(left, right string) int {
+	fixture := func(rel string) int {
+		if slices.Contains(strings.Split(rel, "/"), "testdata") {
+			return 1
+		}
+		return 0
+	}
+	return cmp.Or(
+		cmp.Compare(fixture(left), fixture(right)),
+		cmp.Compare(strings.Count(left, "/"), strings.Count(right, "/")),
+		cmp.Compare(left, right))
 }
 
 func counted(counts map[string]int) []string {
