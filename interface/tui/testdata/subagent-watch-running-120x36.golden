@@ -1,0 +1,35 @@
+[38;5;252;48;5;236m./tofu  ·  develop  ·  codex-sub/gpt-5.6-sol  ·  amber-cedar-otter #3c5f71  ·  0s[m[48;5;236m                                       [m
+[38;5;240m[1] chat[m   [38;5;240m[2] work[m   [38;5;240m[3] file edits[m   [38;5;39m[4] sub-agents (1)[m   [38;5;240m[5] shells[m                                                  
+[38;5;39msub-agents  3 children, 1 running                                            [m[38;5;236m │ [m[38;5;39mgo-dev  working                         [m
+[38;5;252m                                                                             [m[38;5;236m │ [m[38;5;252m                                        [m
+[38;5;39m›● go-dev    writing policy/toolgate.go                       2m 14s  ▪▪▪▪▪▫▫[m[38;5;236m │ [m[38;5;39m⠦ writing policy/toolgate.go[m            
+[38;5;252m ✓ go-docs   done, 12 files read                              6m 41s         [m[38;5;236m │ [m[38;5;252m                                        [m
+[38;5;252m ⤺ go-rules  handed back to go-dev                               12s         [m[38;5;236m │ [m[38;5;44m⟩ edit internal/judge/policy/toolgate.go[m
+[38;5;252m                                                                             [m[38;5;236m │ [m[38;5;240m  +18 -4                                [m
+[38;5;245mownership                                                                    [m[38;5;236m │ [m[38;5;44m⟩ bash go test ./internal/judge/...     [m
+[38;5;214m    go-dev ∩ go-rules → internal/judge/** internal/judge/policy/** (overlap) [m[38;5;236m │ [m[38;5;240m  ok 0.42s                              [m
+[38;5;110m    go-dev → internal/point/**                                               [m[38;5;236m │ [m                                        
+[38;5;110m    go-docs → docs/**                                                        [m[38;5;236m │ [m                                        
+[38;5;252m                                                                             [m[38;5;236m │ [m                                        
+[38;5;240m↑↓ pick a child                                                              [m[38;5;236m │ [m                                        
+                                                                             [38;5;236m │ [m                                        
+                                                                             [38;5;236m │ [m                                        
+                                                                             [38;5;236m │ [m                                        
+                                                                             [38;5;236m │ [m                                        
+                                                                             [38;5;236m │ [m                                        
+                                                                             [38;5;236m │ [m                                        
+                                                                             [38;5;236m │ [m                                        
+                                                                             [38;5;236m │ [m                                        
+                                                                             [38;5;236m │ [m                                        
+                                                                             [38;5;236m │ [m                                        
+                                                                             [38;5;236m │ [m                                        
+                                                                             [38;5;236m │ [m                                        
+                                                                             [38;5;236m │ [m                                        
+                                                                             [38;5;236m │ [m                                        
+                                                                             [38;5;236m │ [m                                        
+                                                                             [38;5;236m │ [m                                        
+                                                                             [38;5;236m │ [m                                        
+                                                                             [38;5;236m │ [m                                        
+                                                                             [38;5;236m │ [m                                        
+                                                                             [38;5;236m │ [m                                        
+                                                                             [38;5;236m │ [m                                        

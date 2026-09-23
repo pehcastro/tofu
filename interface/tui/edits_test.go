@@ -153,7 +153,7 @@ func TestTheFirstSidebarRowReadsAsAFeed(t *testing.T) {
 func editsApp(t *testing.T, width, height int) *App {
 	t.Helper()
 	app := sessionApp(t, width, height)
-	app.Update(Event{Kind: EventCrew, Children: crewChildren()})
+	app.Update(Event{Kind: EventSubAgent, Children: subAgentChildren()})
 	edited(app, "e1", "", gatePath, gateDiff)
 	edited(app, "e2", "go-dev", rulesPath, rulesDiff)
 	edited(app, "e3", "go-docs", docsPath, docsDiff)

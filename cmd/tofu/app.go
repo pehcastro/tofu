@@ -17,13 +17,12 @@ import (
 	"github.com/charmbracelet/x/term"
 
 	"tofu/interface/tui"
-	"tofu/interface/tui/crew"
 	"tofu/interface/tui/frame"
 	"tofu/interface/tui/paste"
 	"tofu/interface/tui/session"
 	"tofu/interface/tui/settings"
 	"tofu/interface/tui/shells"
-	roster "tofu/internal/crew"
+	"tofu/interface/tui/subagent"
 	"tofu/internal/judge/jev"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/konst"
@@ -34,6 +33,7 @@ import (
 	sessionstore "tofu/internal/session"
 	settingspkg "tofu/internal/settings"
 	"tofu/internal/shell"
+	roster "tofu/internal/subagent"
 	"tofu/internal/sys"
 	"tofu/internal/turn"
 	"tofu/internal/turn/tools"
@@ -879,7 +879,7 @@ func (a *appWatcher) Ask(ctx context.Context, request llm.Request) (llm.Decision
 		delete(a.wrote, message.ToolCallID)
 		a.emit(result)
 	}
-	a.sendCrew()
+	a.sendSubAgents()
 
 	a.emit(tui.Event{Kind: tui.EventRequesting})
 	streamed := false
@@ -931,35 +931,35 @@ func (a *appWatcher) creditRunningChild(tokens int) {
 	if a.held == nil {
 		return
 	}
-	crewed := a.held.SubAgents()
-	for index := len(crewed) - 1; index >= 0; index-- {
-		if crewed[index].State != roster.Working {
+	agents := a.held.SubAgents()
+	for index := len(agents) - 1; index >= 0; index-- {
+		if agents[index].State != roster.Working {
 			continue
 		}
-		a.spent[crewed[index].ID] += tokens
-		a.draw(crewed)
+		a.spent[agents[index].ID] += tokens
+		a.draw(agents)
 		return
 	}
 }
 
-func (a *appWatcher) sendCrew() {
+func (a *appWatcher) sendSubAgents() {
 	if a.held == nil {
 		return
 	}
 	a.draw(a.held.SubAgents())
 }
 
-func (a *appWatcher) draw(crewed []roster.SubAgent) {
-	if len(crewed) == 0 {
+func (a *appWatcher) draw(agents []roster.SubAgent) {
+	if len(agents) == 0 {
 		return
 	}
-	children := make([]crew.Child, len(crewed))
-	for index, agent := range crewed {
+	children := make([]subagent.Child, len(agents))
+	for index, agent := range agents {
 		since := agent.Active.Sub(agent.Started)
 		if agent.State == roster.Working {
 			since = a.now().Sub(agent.Started)
 		}
-		children[index] = crew.Child{
+		children[index] = subagent.Child{
 			Name:   "c" + strconv.Itoa(index+1),
 			Owns:   agent.Owns,
 			Doing:  agent.Mission,
@@ -972,54 +972,54 @@ func (a *appWatcher) draw(crewed []roster.SubAgent) {
 			Report: agent.Report,
 		}
 	}
-	a.emit(tui.Event{Kind: tui.EventCrew, Children: children})
+	a.emit(tui.Event{Kind: tui.EventSubAgent, Children: children})
 }
 
-func drawnState(state roster.State) crew.State {
+func drawnState(state roster.State) subagent.State {
 	switch state {
 	case roster.Working:
-		return crew.Running
+		return subagent.Running
 	case roster.WaitingAnswer:
-		return crew.WaitingForAnswer
+		return subagent.WaitingForAnswer
 	case roster.InReview:
-		return crew.HandedBack
+		return subagent.HandedBack
 	case roster.Parked:
-		return crew.Parked
+		return subagent.Parked
 	case roster.Errored:
-		return crew.Errored
+		return subagent.Errored
 	case roster.Finished:
-		return crew.Done
+		return subagent.Done
 	}
 	panic("tofu: unknown sub-agent state " + state.String())
 }
 
-func recordedOrCalling(recorded []crew.Call, calling []string, dropped int) []crew.Call {
+func recordedOrCalling(recorded []subagent.Call, calling []string, dropped int) []subagent.Call {
 	if len(recorded) > 0 {
 		return recorded
 	}
-	watched := make([]crew.Call, len(calling))
+	watched := make([]subagent.Call, len(calling))
 	for index, tool := range calling {
-		watched[index] = crew.Call{Tool: tool}
+		watched[index] = subagent.Call{Tool: tool}
 	}
 	return hidingEarlier(watched, dropped)
 }
 
-func hidingEarlier(kept []crew.Call, hidden int) []crew.Call {
+func hidingEarlier(kept []subagent.Call, hidden int) []subagent.Call {
 	if hidden <= 0 {
 		return kept
 	}
-	return append([]crew.Call{{Tool: strconv.Itoa(hidden) + earlierCallsHidden}}, kept...)
+	return append([]subagent.Call{{Tool: strconv.Itoa(hidden) + earlierCallsHidden}}, kept...)
 }
 
-func recordedCalls(rows []turn.Row, id string) []crew.Call {
-	var calls []crew.Call
+func recordedCalls(rows []turn.Row, id string) []subagent.Call {
+	var calls []subagent.Call
 	for _, row := range rows {
 		if row.ID != id && !strings.HasPrefix(row.ID, id+"-r") {
 			continue
 		}
 		for _, step := range row.Steps {
 			for _, ran := range step.ToolCalls {
-				calls = append(calls, crew.Call{Tool: ran.Tool, Text: ran.Command, Result: ran.Error})
+				calls = append(calls, subagent.Call{Tool: ran.Tool, Text: ran.Command, Result: ran.Error})
 			}
 		}
 	}

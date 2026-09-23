@@ -23,30 +23,30 @@ func promoteApp(t *testing.T, at time.Time) *App {
 
 func TestAFinishedChildPromotesToChatOnTheSwitchAlone(t *testing.T) {
 	app := promoteApp(t, time.Now())
-	app.Update(Event{Kind: EventToolCall, ID: "c1", Tool: "crew", Text: "go-docs: write the docs", Promote: true})
+	app.Update(Event{Kind: EventToolCall, ID: "c1", Tool: "subagent", Text: "go-docs: write the docs", Promote: true})
 	app.Update(Event{Kind: EventToolResult, ID: "c1", Text: "wrote docs/verification.md"})
 	plain := ansi.Strip(app.View().Content)
-	if !strings.Contains(plain, "⟩ crew go-docs: write the docs") {
+	if !strings.Contains(plain, "⟩ subagent go-docs: write the docs") {
 		t.Fatalf("the finished child did not promote to its own row\n%s", plain)
 	}
 }
 
 func TestAnAskedChildPromotesToChatOnTheSwitchAlone(t *testing.T) {
 	app := promoteApp(t, time.Now())
-	app.Update(Event{Kind: EventToolCall, ID: "c1", Tool: "crew", Text: "go-docs: rewrite the guide", Promote: true})
-	app.Update(Event{Kind: EventDecision, Decision: &session.Decision{Tool: "crew", Verdict: session.Ask}})
+	app.Update(Event{Kind: EventToolCall, ID: "c1", Tool: "subagent", Text: "go-docs: rewrite the guide", Promote: true})
+	app.Update(Event{Kind: EventDecision, Decision: &session.Decision{Tool: "subagent", Verdict: session.Ask}})
 	plain := ansi.Strip(app.View().Content)
-	if !strings.Contains(plain, "⟩ crew go-docs: rewrite the guide") {
+	if !strings.Contains(plain, "⟩ subagent go-docs: rewrite the guide") {
 		t.Fatalf("the asked child did not promote to its own row\n%s", plain)
 	}
 }
 
 func TestAFailedChildPromotesToChatOnTheSwitchAlone(t *testing.T) {
 	app := promoteApp(t, time.Now())
-	app.Update(Event{Kind: EventToolCall, ID: "c1", Tool: "crew", Text: "go-docs: write the docs", Promote: true})
+	app.Update(Event{Kind: EventToolCall, ID: "c1", Tool: "subagent", Text: "go-docs: write the docs", Promote: true})
 	app.Update(Event{Kind: EventToolResult, ID: "c1", Text: "the child errored", Failed: true})
 	plain := ansi.Strip(app.View().Content)
-	if !strings.Contains(plain, "⟩ crew go-docs: write the docs") {
+	if !strings.Contains(plain, "⟩ subagent go-docs: write the docs") {
 		t.Fatalf("the failed child did not promote to its own row\n%s", plain)
 	}
 }

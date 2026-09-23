@@ -20,7 +20,7 @@ func TestTheScreenSaysAnAccountMovedAndWhatTheMoveCost(t *testing.T) {
 		t.Fatal(err)
 	}
 	opts := armOpts(t)
-	opts.dir, opts.task, opts.noCrew = dir, "read the note", true
+	opts.dir, opts.task, opts.noSubAgents = dir, "read the note", true
 	built, _, err := buildRunTools(dir, opts.toolSet)
 	if err != nil {
 		t.Fatalf("buildRunTools: %v", err)

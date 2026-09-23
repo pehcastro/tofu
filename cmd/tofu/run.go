@@ -15,7 +15,6 @@ import (
 	"strings"
 	"time"
 
-	"tofu/internal/crew"
 	"tofu/internal/judge/gate"
 	"tofu/internal/judge/jev"
 	"tofu/internal/konst"
@@ -28,6 +27,7 @@ import (
 	"tofu/internal/recall"
 	"tofu/internal/session"
 	settingspkg "tofu/internal/settings"
+	"tofu/internal/subagent"
 	"tofu/internal/transport"
 	"tofu/internal/turn"
 	"tofu/internal/turn/tools"
@@ -85,7 +85,7 @@ type runOpts struct {
 	dryRun           bool
 	showPrompt       bool
 	gateArm          string
-	noCrew           bool
+	noSubAgents      bool
 	doneArm          string
 	model            string
 	toolSet          string
@@ -109,7 +109,7 @@ type runtime struct {
 	scorer   *shellScorer
 	sessions *session.Store
 	notify   func(string)
-	roster   *crew.Roster
+	roster   *subagent.Roster
 	now      func() time.Time
 }
 
@@ -185,7 +185,7 @@ Arguments:
                         drops the rest, costs nothing and makes no call. judged
                         costs, from library/decisions/methods@1.yaml:
                         %s
-  --no-crew             run without the spawn tool
+  --no-subagents        run without the spawn tool
   --no-instructions     the arm that %s
   --done-review <arm>          the arm that reviews a child's answer
   --max-steps <n>              cap the steps a turn takes, unset means no cap
@@ -457,10 +457,10 @@ func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn
 		built = append(slices.Clone(built), tools.NewQuote(run.sessions, parentID))
 		config.Tools = turn.NewRegistry(built...)
 	}
-	if opts.noCrew || opts.toolSet == toolSetThree {
+	if opts.noSubAgents || opts.toolSet == toolSetThree {
 		return config, nil, nil
 	}
-	spawner := turn.NewSpawnTool(parentID, childBase(config, opts.child), cmp.Or(run.roster, &crew.Roster{}))
+	spawner := turn.NewSpawnTool(parentID, childBase(config, opts.child), cmp.Or(run.roster, &subagent.Roster{}))
 	config.Tools = turn.NewRegistry(append(slices.Clone(built), spawner)...)
 	return config, spawner, nil
 }
@@ -600,7 +600,7 @@ func runSystem(opts runOpts) string {
 			"including finding a file, searching text and changing part of a file."
 	}
 	system := everyToolIsRelativeToTheWorkingDirectory + turn.PreferTheToolOverTheShell
-	if opts.noCrew {
+	if opts.noSubAgents {
 		return system
 	}
 	return system + " " +
@@ -732,8 +732,8 @@ func parseRunArgs(args []string) (runOpts, error) {
 			opts.gateArm, err = nextArg(args, &i, arg)
 		case "--sift":
 			opts.siftArm, err = nextArg(args, &i, arg)
-		case "--no-crew":
-			opts.noCrew = true
+		case "--no-subagents":
+			opts.noSubAgents = true
 		case "--no-instructions":
 			opts.noInstructions = true
 		case "--wire":
@@ -816,8 +816,8 @@ func parseRunArgs(args []string) (runOpts, error) {
 }
 
 func spawnlessFlag(opts runOpts) string {
-	if opts.noCrew {
-		return "--no-crew"
+	if opts.noSubAgents {
+		return "--no-subagents"
 	}
 	if opts.toolSet == toolSetThree {
 		return "--tools " + toolSetThree

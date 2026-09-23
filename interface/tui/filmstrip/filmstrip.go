@@ -8,9 +8,9 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"tofu/interface/tui"
-	"tofu/interface/tui/crew"
 	"tofu/interface/tui/fixture"
 	"tofu/interface/tui/session"
+	"tofu/interface/tui/subagent"
 )
 
 const (
@@ -296,7 +296,7 @@ func failedTurn() scenario {
 }
 
 func childWorking() scenario {
-	working := []crew.Child{{
+	working := []subagent.Child{{
 		Name:   "go-dev",
 		Owns:   []string{"internal/judge/**"},
 		Doing:  "reading the policy loader",
@@ -304,9 +304,9 @@ func childWorking() scenario {
 		Steps:  2,
 		Total:  6,
 		Tokens: 18400,
-		State:  crew.Running,
+		State:  subagent.Running,
 	}}
-	finished := []crew.Child{{
+	finished := []subagent.Child{{
 		Name:   "go-dev",
 		Owns:   []string{"internal/judge/**"},
 		Doing:  "handed back",
@@ -314,12 +314,12 @@ func childWorking() scenario {
 		Steps:  6,
 		Total:  6,
 		Tokens: 51200,
-		State:  crew.Done,
+		State:  subagent.Done,
 		Report: "the loader reads the lock before the mode, with a test that fails without it.",
 	}}
 	return scenario{name: "child", beats: append(opening(),
 		beat{"child-starts", func(r *reel) {
-			r.send(tui.Event{Kind: tui.EventCrew, Children: working})
+			r.send(tui.Event{Kind: tui.EventSubAgent, Children: working})
 			r.wait(toolGap)
 		}},
 		beat{"child-working", func(r *reel) {
@@ -327,7 +327,7 @@ func childWorking() scenario {
 			r.wait(toolGap)
 		}},
 		beat{"child-reports", func(r *reel) {
-			r.send(result("c1", "209 lines, 6.2 KB"), tui.Event{Kind: tui.EventCrew, Children: finished})
+			r.send(result("c1", "209 lines, 6.2 KB"), tui.Event{Kind: tui.EventSubAgent, Children: finished})
 			r.wait(beatGap)
 		}},
 		beat{"answered", func(r *reel) {

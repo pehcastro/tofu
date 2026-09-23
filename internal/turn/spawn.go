@@ -11,11 +11,11 @@ import (
 	"strings"
 	"time"
 
-	"tofu/internal/crew"
 	"tofu/internal/judge/method"
 	"tofu/internal/judge/state"
 	"tofu/internal/konst"
 	"tofu/internal/llm"
+	"tofu/internal/subagent"
 	shipped "tofu/library"
 )
 
@@ -25,7 +25,7 @@ type DepthLimitError struct {
 }
 
 func (e DepthLimitError) Error() string {
-	return fmt.Sprintf("spawn refused: a child at depth %d would pass the crew depth limit of %d", e.Depth, e.Limit)
+	return fmt.Sprintf("spawn refused: a child at depth %d would pass the sub-agent depth limit of %d", e.Depth, e.Limit)
 }
 
 type BreadthLimitError struct {
@@ -34,7 +34,7 @@ type BreadthLimitError struct {
 }
 
 func (e BreadthLimitError) Error() string {
-	return fmt.Sprintf("spawn refused: this turn has already spawned %d children and the crew breadth limit is %d", e.Spawned, e.Limit)
+	return fmt.Sprintf("spawn refused: this turn has already spawned %d children and the sub-agent breadth limit is %d", e.Spawned, e.Limit)
 }
 
 const (
@@ -113,12 +113,12 @@ type SpawnTool struct {
 	spawned  int
 	spend    float64
 	base     Config
-	roster   *crew.Roster
+	roster   *subagent.Roster
 	children []Row
 	reports  []ChildReport
 }
 
-func NewSpawnTool(parentID string, base Config, roster *crew.Roster) *SpawnTool {
+func NewSpawnTool(parentID string, base Config, roster *subagent.Roster) *SpawnTool {
 	return &SpawnTool{parentID: parentID, base: base, roster: roster}
 }
 
@@ -133,7 +133,7 @@ func (t *SpawnTool) Definition() llm.Tool {
 		Name: "spawn",
 		Description: "hands one piece of work to a child with its own context and its own conversation, and returns the child's report rather than its transcript. " +
 			"owns lists the paths the child may write, every other path is refused at the write, and no two children may hold overlapping paths. " +
-			"At most " + strconv.Itoa(konst.CrewMaxBreadth) + " children per turn, nested at most " + strconv.Itoa(konst.CrewMaxDepth) + " deep.",
+			"At most " + strconv.Itoa(konst.SubAgentMaxBreadth) + " children per turn, nested at most " + strconv.Itoa(konst.SubAgentMaxDepth) + " deep.",
 		Parameters: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -174,18 +174,18 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 	if len(args.Owns) == 0 {
 		return Result{}, errors.New("spawn: owns is required, and a child holding no paths could write nothing")
 	}
-	if t.depth+1 > konst.CrewMaxDepth {
-		return Result{}, DepthLimitError{Depth: t.depth + 1, Limit: konst.CrewMaxDepth}
+	if t.depth+1 > konst.SubAgentMaxDepth {
+		return Result{}, DepthLimitError{Depth: t.depth + 1, Limit: konst.SubAgentMaxDepth}
 	}
-	if t.spawned >= konst.CrewMaxBreadth {
-		return Result{}, BreadthLimitError{Spawned: t.spawned, Limit: konst.CrewMaxBreadth}
+	if t.spawned >= konst.SubAgentMaxBreadth {
+		return Result{}, BreadthLimitError{Spawned: t.spawned, Limit: konst.SubAgentMaxBreadth}
 	}
 
 	clock := t.base.Now
 	if clock == nil {
 		clock = time.Now
 	}
-	agent := crew.SubAgent{
+	agent := subagent.SubAgent{
 		ID:      t.parentID + "-c" + strconv.Itoa(t.spawned+1),
 		Mission: args.mission(),
 		Brief:   args.Task,
@@ -194,7 +194,7 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 	}
 	childID := agent.ID
 	if err := t.roster.Hold(agent); err != nil {
-		var collision crew.CollisionError
+		var collision subagent.CollisionError
 		if errors.As(err, &collision) && collision.HolderReport != "" {
 			return Result{Command: "handback " + collision.Holder, Content: fmt.Sprintf(
 				"no child was started: %s already holds %q, and %q overlaps it. Send this work to %s rather than starting a rival.\n\n%s has reported:\n%s",
@@ -203,7 +203,7 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 		return Result{}, fmt.Errorf("spawn: %w", err)
 	}
 
-	boundary := &crew.Boundary{Ticket: childID, Owns: args.Owns}
+	boundary := &subagent.Boundary{Ticket: childID, Owns: args.Owns}
 	owned := slices.Clone(t.base.Tools.tools)
 	for i, tool := range owned {
 		switch tool.Name() {
@@ -235,18 +235,18 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 	defer release()
 	t.spawned++
 	row, runErr := Run(childCtx, child)
-	claims, state := []Row{row}, crew.InReview
+	claims, state := []Row{row}, subagent.InReview
 	switch {
 	case ctx.Err() != nil:
-		state = crew.Parked
+		state = subagent.Parked
 	case runErr != nil:
-		state = crew.Errored
+		state = subagent.Errored
 	default:
 		claims, state = t.reviewed(ctx, child, row)
 	}
 	asked := boundary.Asked()
-	if len(asked) > 0 && state != crew.Errored && state != crew.Parked {
-		state = crew.WaitingAnswer
+	if len(asked) > 0 && state != subagent.Errored && state != subagent.Parked {
+		state = subagent.WaitingAnswer
 	}
 	t.retain(append(claims, nested.children...))
 	for _, claim := range claims {
@@ -273,38 +273,38 @@ func (t *SpawnTool) retain(rows []Row) {
 	}
 }
 
-func (t *SpawnTool) reviewed(ctx context.Context, child Config, first Row) ([]Row, crew.State) {
+func (t *SpawnTool) reviewed(ctx context.Context, child Config, first Row) ([]Row, subagent.State) {
 	if t.Review == nil {
-		return []Row{first}, crew.InReview
+		return []Row{first}, subagent.InReview
 	}
 	decision, err := t.decided(ctx, first)
 	if err != nil {
 		first.Warnings = append(first.Warnings, "the done review did not run, so the child's own claim stands: "+err.Error())
-		return []Row{first}, crew.InReview
+		return []Row{first}, subagent.InReview
 	}
 	if decision.ID != "" {
 		first.DecisionIDs = append(first.DecisionIDs, decision.ID)
 	}
 	switch decision.Verdict {
 	case DoneAccepted:
-		return []Row{first}, crew.Finished
+		return []Row{first}, subagent.Finished
 	case DoneReopen:
 		child.Task = first.Task + "\n\nYou reported this finished and the done review did not believe you: " + decision.Reason
 		child.NewID = func() string { return first.ID + "-r" }
 		second, err := Run(ctx, child)
 		if err != nil {
 			first.Warnings = append(first.Warnings, "the child was re-opened and did not run again, so its first claim stands: "+err.Error())
-			return []Row{first}, crew.Errored
+			return []Row{first}, subagent.Errored
 		}
 		second.DecisionIDs = append(second.DecisionIDs, decision.ID)
-		return []Row{first, second}, crew.InReview
+		return []Row{first, second}, subagent.InReview
 	}
 	panic("turn: unknown done verdict " + string(decision.Verdict))
 }
 
 type ownedTool struct {
 	tool     Tool
-	boundary *crew.Boundary
+	boundary *subagent.Boundary
 }
 
 func (t ownedTool) Name() string { return t.tool.Name() }
@@ -330,7 +330,7 @@ func (t ownedTool) Run(ctx context.Context, raw json.RawMessage) (Result, error)
 
 type ownedShell struct {
 	tool     Tool
-	boundary *crew.Boundary
+	boundary *subagent.Boundary
 }
 
 func (t ownedShell) Name() string { return t.tool.Name() }

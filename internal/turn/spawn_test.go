@@ -14,11 +14,11 @@ import (
 	"testing"
 	"time"
 
-	"tofu/internal/crew"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/konst"
 	"tofu/internal/llm"
 	"tofu/internal/session"
+	"tofu/internal/subagent"
 )
 
 func claimDecision(text string) llm.Decision {
@@ -70,7 +70,7 @@ func parentTurn(t *testing.T, root string, decisions []llm.Decision) (Config, *S
 		ArtifactDir:    filepath.Join(root, "artifacts"),
 		NewID:          func() string { return parentID },
 	}
-	spawn := NewSpawnTool(parentID, base, &crew.Roster{})
+	spawn := NewSpawnTool(parentID, base, &subagent.Roster{})
 	parent := base
 	parent.Task = "hand the work to a child"
 	parent.Tools = NewRegistry(read, write, spawn)
@@ -200,7 +200,7 @@ func spawnDirect(t *testing.T, spawn *SpawnTool, task string, owns ...string) Re
 func TestASpawnOntoAHeldPathHandsBackTheChildHoldingIt(t *testing.T) {
 	root := t.TempDir()
 	parent, spawn := parentTurn(t, root, []llm.Decision{
-		spawnCall("call-1", "the crew package", "internal/crew/**"),
+		spawnCall("call-1", "the sub-agent package", "internal/subagent/**"),
 		claimDecision("I rewrote the roster and the tests pass"),
 		messageDecision(),
 	})
@@ -208,11 +208,11 @@ func TestASpawnOntoAHeldPathHandsBackTheChildHoldingIt(t *testing.T) {
 		t.Fatalf("Run returned an error: %v", err)
 	}
 
-	result := spawnDirect(t, spawn, "one file inside the crew package", "internal/crew/owns.go")
+	result := spawnDirect(t, spawn, "one file inside the sub-agent package", "internal/subagent/owns.go")
 	for _, want := range []string{
 		"turn-parent-c1",
-		"internal/crew/**",
-		"internal/crew/owns.go",
+		"internal/subagent/**",
+		"internal/subagent/owns.go",
 		"Send this work to turn-parent-c1 rather than starting a rival",
 		"I rewrote the roster and the tests pass",
 	} {
@@ -232,8 +232,8 @@ func TestASpawnOntoAHeldPathHandsBackTheChildHoldingIt(t *testing.T) {
 func TestTwoDisjointChildrenRunAndAThirdOverlappingEitherIsHandedBack(t *testing.T) {
 	root := t.TempDir()
 	parent, spawn := parentTurn(t, root, []llm.Decision{
-		spawnCall("call-1", "the crew package", "internal/crew/**"),
-		claimDecision("crew done"),
+		spawnCall("call-1", "the sub-agent package", "internal/subagent/**"),
+		claimDecision("sub-agent done"),
 		spawnCall("call-2", "the turn package", "internal/turn/**"),
 		claimDecision("turn done"),
 		messageDecision(),
@@ -247,7 +247,7 @@ func TestTwoDisjointChildrenRunAndAThirdOverlappingEitherIsHandedBack(t *testing
 		t.Fatalf("two disjoint children did not both run: %+v", children)
 	}
 	for _, c := range []struct{ glob, holder, claim string }{
-		{"internal/crew/owns.go", "turn-parent-c1", "crew done"},
+		{"internal/subagent/owns.go", "turn-parent-c1", "sub-agent done"},
 		{"internal/turn/spawn.go", "turn-parent-c2", "turn done"},
 	} {
 		result := spawnDirect(t, spawn, "a third child", c.glob)
@@ -370,7 +370,7 @@ func TestWithTheReviewOffTheChildClaimReachesTheParentUnchanged(t *testing.T) {
 		t.Fatal("the done review is on by default, and off is meant to be the behaviour today")
 	}
 
-	result := spawnDirect(t, spawn, "the crew package", "internal/crew/**")
+	result := spawnDirect(t, spawn, "the sub-agent package", "internal/subagent/**")
 
 	children := spawn.Children()
 	if len(children) != 1 {
@@ -401,7 +401,7 @@ func childCall(id, name string) llm.Decision {
 	return toolCallDecision(llm.ToolCall{ID: id, Name: name, Arguments: json.RawMessage(`{}`)})
 }
 
-func onlyChild(t *testing.T, spawn *SpawnTool) crew.SubAgent {
+func onlyChild(t *testing.T, spawn *SpawnTool) subagent.SubAgent {
 	t.Helper()
 	held := spawn.roster.SubAgents()
 	if len(held) != 1 {
@@ -417,7 +417,7 @@ func TestAChildThatReturnsNormallyIsInReviewBecauseFinishingIsTheOrchestratorsWo
 	result := spawnDirect(t, spawn, "write the greeting under mine/", "mine/**")
 
 	held := onlyChild(t, spawn)
-	if held.State != crew.InReview {
+	if held.State != subagent.InReview {
 		t.Fatalf("a child that stopped talking reads as %s, want in_review", held.State)
 	}
 	if strings.Contains(result.Content, "finished") {
@@ -437,7 +437,7 @@ func TestOnlyTheReviewMovesAChildToFinished(t *testing.T) {
 
 	result := spawnDirect(t, spawn, "write the greeting under mine/", "mine/**")
 
-	if held := onlyChild(t, spawn); held.State != crew.Finished {
+	if held := onlyChild(t, spawn); held.State != subagent.Finished {
 		t.Fatalf("the review accepted the work and the child reads as %s, want finished", held.State)
 	}
 	if !strings.Contains(result.Content, "is finished") {
@@ -448,7 +448,7 @@ func TestOnlyTheReviewMovesAChildToFinished(t *testing.T) {
 func TestAChildIsWorkingWhileItRuns(t *testing.T) {
 	root := t.TempDir()
 	_, spawn := parentTurn(t, root, []llm.Decision{childCall("call-1", "probe"), claimDecision("done")})
-	var seen crew.State
+	var seen subagent.State
 	spawn.base.Tools = NewRegistry(&childTool{name: "probe", run: func(context.Context) (Result, error) {
 		seen = spawn.roster.SubAgents()[0].State
 		return Result{Content: "the roster was read from inside the child"}, nil
@@ -456,17 +456,17 @@ func TestAChildIsWorkingWhileItRuns(t *testing.T) {
 
 	spawnDirect(t, spawn, "read the roster from inside", "mine/**")
 
-	if seen != crew.Working {
+	if seen != subagent.Working {
 		t.Fatalf("a child running its tools reads as %s, want working", seen)
 	}
 }
 
-func readWhileTheChildIsStillRunning(t *testing.T, root, task string, decisions []llm.Decision) crew.SubAgent {
+func readWhileTheChildIsStillRunning(t *testing.T, root, task string, decisions []llm.Decision) subagent.SubAgent {
 	t.Helper()
 	_, spawn := parentTurn(t, root, decisions)
 	stepped := make(chan StepRow, len(decisions))
 	spawn.base.Step = func(step StepRow) { stepped <- step }
-	var seen crew.SubAgent
+	var seen subagent.SubAgent
 	probes := 0
 	spawn.base.Tools = NewRegistry(&childTool{name: "probe", run: func(context.Context) (Result, error) {
 		probes++
@@ -479,7 +479,7 @@ func readWhileTheChildIsStillRunning(t *testing.T, root, task string, decisions 
 
 	spawnDirect(t, spawn, task, "mine/**")
 
-	if seen.State != crew.Working {
+	if seen.State != subagent.Working {
 		t.Fatalf("the child read as %s, so it was not still running and this proves nothing", seen.State)
 	}
 	return seen
@@ -558,7 +558,7 @@ func TestAParkedChildKeepsTheWorkItHadAlreadyDone(t *testing.T) {
 		t.Fatalf("a parked child is not a failed one: %v", err)
 	}
 
-	if held := onlyChild(t, spawn); held.State != crew.Parked {
+	if held := onlyChild(t, spawn); held.State != subagent.Parked {
 		t.Fatalf("a child the orchestrator stopped reads as %s, want parked", held.State)
 	}
 	half, err := os.ReadFile(filepath.Join(root, "mine", "half.txt"))
@@ -588,7 +588,7 @@ func TestAChildWhoseModelFailsIsRecordedAsErrored(t *testing.T) {
 	}
 
 	held := onlyChild(t, spawn)
-	if held.State != crew.Errored {
+	if held.State != subagent.Errored {
 		t.Fatalf("a child whose model failed reads as %s, want errored", held.State)
 	}
 	if !strings.Contains(held.Report, "is errored") {
@@ -609,7 +609,7 @@ func TestAChildStoppedByTheStepCapIsInReviewAndKeepsItsWork(t *testing.T) {
 
 	result := spawnDirect(t, spawn, "more work than one step", "mine/**")
 
-	if held := onlyChild(t, spawn); held.State != crew.InReview {
+	if held := onlyChild(t, spawn); held.State != subagent.InReview {
 		t.Fatalf("a capped child reads as %s, want in_review", held.State)
 	}
 	capped := spawn.Children()[0]
@@ -657,19 +657,19 @@ func TestTheParentKeepsTheStepsOfOnlyTheMostRecentChildren(t *testing.T) {
 	root := t.TempDir()
 	review := &stubReview{writer: ledger.NewWriter(filepath.Join(root, "ledger")), verdict: DoneReopen}
 	var decisions []llm.Decision
-	for range konst.CrewMaxBreadth * 2 {
+	for range konst.SubAgentMaxBreadth * 2 {
 		decisions = append(decisions, claimDecision("done"))
 	}
 	_, spawn := parentTurn(t, root, decisions)
 	spawn.Review = review
 
-	for child := 1; child <= konst.CrewMaxBreadth; child++ {
+	for child := 1; child <= konst.SubAgentMaxBreadth; child++ {
 		spawnDirect(t, spawn, "a piece of the work", fmt.Sprintf("part%d/**", child))
 	}
 
 	rows := spawn.Children()
-	if len(rows) != konst.CrewMaxBreadth*2 {
-		t.Fatalf("%d rows, want %d: every child was reopened once", len(rows), konst.CrewMaxBreadth*2)
+	if len(rows) != konst.SubAgentMaxBreadth*2 {
+		t.Fatalf("%d rows, want %d: every child was reopened once", len(rows), konst.SubAgentMaxBreadth*2)
 	}
 	carrying := 0
 	for _, row := range rows {
@@ -745,10 +745,10 @@ func TestTheRecordCarriesTheMissionAndTheBriefVerbatim(t *testing.T) {
 func TestTheDepthBoundRefusesAndNamesItsLimit(t *testing.T) {
 	root := t.TempDir()
 	var decisions []llm.Decision
-	for level := 1; level <= konst.CrewMaxDepth+1; level++ {
+	for level := 1; level <= konst.SubAgentMaxDepth+1; level++ {
 		decisions = append(decisions, spawnCall("call-1", "one level deeper", fmt.Sprintf("level%d/**", level)))
 	}
-	for range konst.CrewMaxDepth + 1 {
+	for range konst.SubAgentMaxDepth + 1 {
 		decisions = append(decisions, messageDecision())
 	}
 	parent, spawn := parentTurn(t, root, decisions)
@@ -759,7 +759,7 @@ func TestTheDepthBoundRefusesAndNamesItsLimit(t *testing.T) {
 
 	deepest := spawn.Children()[len(spawn.Children())-1]
 	refusal := firstToolCall(t, deepest).Error
-	want := fmt.Sprintf("a child at depth %d would pass the crew depth limit of %d", konst.CrewMaxDepth+1, konst.CrewMaxDepth)
+	want := fmt.Sprintf("a child at depth %d would pass the sub-agent depth limit of %d", konst.SubAgentMaxDepth+1, konst.SubAgentMaxDepth)
 	if !strings.Contains(refusal, want) {
 		t.Fatalf("the deepest child was not refused with %q: %q", want, refusal)
 	}
@@ -769,7 +769,7 @@ func TestTheDepthBoundRefusesAndNamesItsLimit(t *testing.T) {
 func TestTheBreadthBoundRefusesAndNamesItsLimit(t *testing.T) {
 	root := t.TempDir()
 	var decisions []llm.Decision
-	for child := 1; child <= konst.CrewMaxBreadth; child++ {
+	for child := 1; child <= konst.SubAgentMaxBreadth; child++ {
 		decisions = append(decisions, spawnCall("call-1", "a piece of the work", fmt.Sprintf("part%d/**", child)), messageDecision())
 	}
 	decisions = append(decisions, spawnCall("call-1", "one child too many", "extra/**"), messageDecision())
@@ -780,11 +780,11 @@ func TestTheBreadthBoundRefusesAndNamesItsLimit(t *testing.T) {
 		t.Fatalf("Run returned an error: %v", err)
 	}
 
-	if len(spawn.Children()) != konst.CrewMaxBreadth {
-		t.Fatalf("expected %d children, got %d", konst.CrewMaxBreadth, len(spawn.Children()))
+	if len(spawn.Children()) != konst.SubAgentMaxBreadth {
+		t.Fatalf("expected %d children, got %d", konst.SubAgentMaxBreadth, len(spawn.Children()))
 	}
-	refusal := row.Steps[konst.CrewMaxBreadth].ToolCalls[0].Error
-	want := fmt.Sprintf("already spawned %d children and the crew breadth limit is %d", konst.CrewMaxBreadth, konst.CrewMaxBreadth)
+	refusal := row.Steps[konst.SubAgentMaxBreadth].ToolCalls[0].Error
+	want := fmt.Sprintf("already spawned %d children and the sub-agent breadth limit is %d", konst.SubAgentMaxBreadth, konst.SubAgentMaxBreadth)
 	if !strings.Contains(refusal, want) {
 		t.Fatalf("the extra child was not refused with %q: %q", want, refusal)
 	}

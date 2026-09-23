@@ -8,16 +8,16 @@ import (
 	"testing"
 	"time"
 
-	"tofu/internal/crew"
 	"tofu/internal/judge/jev"
 	"tofu/internal/judge/question"
+	"tofu/internal/subagent"
 	library "tofu/library"
 	libraryquestions "tofu/library/questions"
 )
 
 const repoRoot = "../.."
 
-func liveClient(t *testing.T) (*jev.Client, question.Set, crew.AskRule) {
+func liveClient(t *testing.T) (*jev.Client, question.Set, subagent.AskRule) {
 	t.Helper()
 	if os.Getenv("TOFU_LIVE") != "1" {
 		t.Skip("set TOFU_LIVE=1 to put the question to the real jev route")
@@ -40,7 +40,7 @@ func liveClient(t *testing.T) (*jev.Client, question.Set, crew.AskRule) {
 	if err != nil {
 		t.Fatalf("resolve %s: %v", Point, err)
 	}
-	pol, err := crew.LoadAskRule(library.Files(), "ask@1")
+	pol, err := subagent.LoadAskRule(library.Files(), "ask@1")
 	if err != nil {
 		t.Fatalf("rule: %v", err)
 	}
@@ -59,7 +59,7 @@ func TestTheSevenCountedMomentsJudgedAgainstTheFreeArm(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%s %s: Ask: %v", m.Ticket, m.Cite, err)
 		}
-		verdict, err := crew.DecideAsk(judged.Action, judged.Determined, pol.DeterminedLowAt)
+		verdict, err := subagent.DecideAsk(judged.Action, judged.Determined, pol.DeterminedLowAt)
 		if err != nil {
 			t.Fatalf("%s %s: DecideAsk: %v", m.Ticket, m.Cite, err)
 		}

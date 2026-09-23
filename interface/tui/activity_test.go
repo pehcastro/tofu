@@ -10,7 +10,7 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"tofu/interface/tui/crew"
+	"tofu/interface/tui/subagent"
 	"tofu/interface/tui/theme"
 )
 
@@ -143,14 +143,14 @@ func TestScrollingTheTranscriptDoesNotMoveTheRunningRow(t *testing.T) {
 	assertGolden(t, "session-activity-scrolled-80x24.golden", view.Content)
 }
 
-func runningChildren() []crew.Child {
-	return []crew.Child{
+func runningChildren() []subagent.Child {
+	return []subagent.Child{
 		{
 			Name:   "go-dev",
 			Owns:   []string{"internal/judge/**"},
 			Doing:  "writing policy/toolgate.go",
 			Since:  2*time.Minute + 14*time.Second,
-			State:  crew.Running,
+			State:  subagent.Running,
 			Tokens: 181000,
 		},
 		{
@@ -158,7 +158,7 @@ func runningChildren() []crew.Child {
 			Owns:   []string{"bench/harness/**"},
 			Doing:  "go test ./bench/...",
 			Since:  time.Minute + 2*time.Second,
-			State:  crew.Running,
+			State:  subagent.Running,
 			Tokens: 129100,
 		},
 		{
@@ -166,17 +166,17 @@ func runningChildren() []crew.Child {
 			Owns:   []string{"docs/**"},
 			Doing:  "reading docs/verification.md",
 			Since:  9 * time.Second,
-			State:  crew.Running,
+			State:  subagent.Running,
 			Tokens: 4200,
 		},
-		{Name: "go-rules", Owns: []string{"library/**"}, Doing: "handed back", State: crew.HandedBack, Tokens: 900},
+		{Name: "go-rules", Owns: []string{"library/**"}, Doing: "handed back", State: subagent.HandedBack, Tokens: 900},
 	}
 }
 
 func TestEachRunningChildIsARowCarryingWhatItSpent(t *testing.T) {
 	at := fixedStart()
 	app := liveApp(t, &at)
-	app.Update(Event{Kind: EventCrew, Children: runningChildren()})
+	app.Update(Event{Kind: EventSubAgent, Children: runningChildren()})
 	view := app.View()
 	rows := plainRows(view)
 	all := spinningRows(rows)

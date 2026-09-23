@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"tofu/internal/crew"
 	"tofu/internal/llm"
+	"tofu/internal/subagent"
 )
 
 func bashCall(id, command string) llm.Decision {
@@ -77,7 +77,7 @@ func parentTurnWithAShell(t *testing.T, root string, decisions []llm.Decision) (
 		ArtifactDir:    filepath.Join(root, "artifacts"),
 		NewID:          func() string { return parentID },
 	}
-	spawn := NewSpawnTool(parentID, base, &crew.Roster{})
+	spawn := NewSpawnTool(parentID, base, &subagent.Roster{})
 	parent := base
 	parent.Task = "hand the work to a child"
 	parent.Tools = NewRegistry(write, bash, spawn)

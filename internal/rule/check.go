@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"tofu/internal/crew"
+	"tofu/internal/subagent"
 	"tofu/internal/sys"
 )
 
@@ -71,7 +71,7 @@ func checkOwnership(_ Rule, a Artifact) ([]Finding, error) {
 	if !ok {
 		return nil, artifactMismatch(SubjectOwnsWrite, a)
 	}
-	matched, err := crew.Matches(ow.Path, ow.Owns)
+	matched, err := subagent.Matches(ow.Path, ow.Owns)
 	if err != nil {
 		return nil, err
 	}

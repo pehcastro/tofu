@@ -13,10 +13,10 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"tofu/interface/tui/crew"
 	"tofu/interface/tui/markdown"
 	"tofu/interface/tui/paste"
 	"tofu/interface/tui/progress"
+	"tofu/interface/tui/subagent"
 	"tofu/interface/tui/theme"
 	"tofu/interface/tui/trace"
 	"tofu/internal/widget"
@@ -132,7 +132,7 @@ type Model struct {
 	Stopping       bool
 	Commands       []Command
 	Paths          []string
-	Children       []crew.Child
+	Children       []subagent.Child
 	now            func() time.Time
 	waiting        time.Time
 	requested      time.Time

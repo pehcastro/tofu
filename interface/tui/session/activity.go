@@ -7,8 +7,8 @@ import (
 
 	"charm.land/lipgloss/v2"
 
-	"tofu/interface/tui/crew"
 	"tofu/interface/tui/progress"
+	"tofu/interface/tui/subagent"
 	"tofu/interface/tui/theme"
 	"tofu/interface/tui/trace"
 	"tofu/internal/widget"
@@ -88,7 +88,7 @@ func (m Model) activityRows() []activity {
 	rows := make([]activity, 0, len(m.Children)+1)
 	_, busyStyle := working.drawn()
 	for _, child := range m.Children {
-		if child.State != crew.Running {
+		if child.State != subagent.Running {
 			continue
 		}
 		rows = append(rows, activity{

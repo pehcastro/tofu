@@ -183,7 +183,7 @@ func TestTheContextCeilingFlagWinsOverTheEnvironmentVariable(t *testing.T) {
 func TestARunAtATwentyThousandCeilingCompactsAndTheRecordSaysWhatItDropped(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
-	opts, err := parseRunArgs([]string{"--dir", dir, "--context-ceiling", "20000", "--no-crew", "read the big file over and over"})
+	opts, err := parseRunArgs([]string{"--dir", dir, "--context-ceiling", "20000", "--no-subagents", "read the big file over and over"})
 	if err != nil {
 		t.Fatalf("parseRunArgs: %v", err)
 	}
@@ -293,7 +293,7 @@ func TestARequestOverTheModelsWindowIsRefusedBeforeItIsSent(t *testing.T) {
 func TestAModelWithNoRecordedWindowCompactsAtTheOperatingCeiling(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
-	opts, err := parseRunArgs([]string{"--dir", dir, "--no-crew", "read every part of the dump"})
+	opts, err := parseRunArgs([]string{"--dir", dir, "--no-subagents", "read every part of the dump"})
 	if err != nil {
 		t.Fatalf("parseRunArgs: %v", err)
 	}

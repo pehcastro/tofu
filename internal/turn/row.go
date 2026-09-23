@@ -7,10 +7,10 @@ import (
 	"strconv"
 	"time"
 
-	"tofu/internal/crew"
 	"tofu/internal/llm"
 	"tofu/internal/recall"
 	"tofu/internal/session"
+	"tofu/internal/subagent"
 )
 
 const SchemaVersion = 1
@@ -86,7 +86,7 @@ type StepRow struct {
 	Compaction       *Compaction       `json:"compaction,omitempty"`
 	Fork             *Fork             `json:"fork,omitempty"`
 
-	Grants []crew.Question `json:"grants,omitempty"`
+	Grants []subagent.Question `json:"grants,omitempty"`
 }
 
 type Spend string

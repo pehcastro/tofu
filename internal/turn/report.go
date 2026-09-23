@@ -7,8 +7,8 @@ import (
 	"strconv"
 	"strings"
 
-	"tofu/internal/crew"
 	"tofu/internal/llm"
+	"tofu/internal/subagent"
 )
 
 type ChildCommand struct {
@@ -19,24 +19,24 @@ type ChildCommand struct {
 }
 
 type ChildReport struct {
-	ID         string          `json:"id"`
-	Mission    string          `json:"mission"`
-	Owns       []string        `json:"owns"`
-	State      string          `json:"state"`
-	Completion crew.Completion `json:"completion"`
-	Outcome    Outcome         `json:"outcome"`
-	Steps      int             `json:"steps"`
-	Attempts   []crew.Attempt  `json:"attempts"`
-	Findings   []crew.Finding  `json:"findings"`
-	Learned    []string        `json:"learned"`
-	Wrote      []string        `json:"wrote,omitempty"`
-	Ran        []ChildCommand  `json:"ran,omitempty"`
-	CostUSD    float64         `json:"cost_usd"`
-	Asked      []crew.Question `json:"asked,omitempty"`
-	Prose      string          `json:"prose,omitempty"`
+	ID         string              `json:"id"`
+	Mission    string              `json:"mission"`
+	Owns       []string            `json:"owns"`
+	State      string              `json:"state"`
+	Completion subagent.Completion `json:"completion"`
+	Outcome    Outcome             `json:"outcome"`
+	Steps      int                 `json:"steps"`
+	Attempts   []subagent.Attempt  `json:"attempts"`
+	Findings   []subagent.Finding  `json:"findings"`
+	Learned    []string            `json:"learned"`
+	Wrote      []string            `json:"wrote,omitempty"`
+	Ran        []ChildCommand      `json:"ran,omitempty"`
+	CostUSD    float64             `json:"cost_usd"`
+	Asked      []subagent.Question `json:"asked,omitempty"`
+	Prose      string              `json:"prose,omitempty"`
 }
 
-func reportOf(agent crew.SubAgent, attempts []Row, state crew.State) ChildReport {
+func reportOf(agent subagent.SubAgent, attempts []Row, state subagent.State) ChildReport {
 	row := attempts[len(attempts)-1]
 	report := ChildReport{
 		ID:       row.ID,
@@ -69,7 +69,7 @@ func reportOf(agent crew.SubAgent, attempts []Row, state crew.State) ChildReport
 	return report
 }
 
-func attemptOf(row Row) crew.Attempt {
+func attemptOf(row Row) subagent.Attempt {
 	var tools []string
 	for _, step := range row.Steps {
 		for _, call := range step.ToolCalls {
@@ -82,28 +82,28 @@ func attemptOf(row Row) crew.Attempt {
 	if len(tools) > 0 {
 		tried = strings.Join(tools, ", ")
 	}
-	return crew.Attempt{ID: row.ID, Tried: tried, Outcome: row.Outcome.String()}
+	return subagent.Attempt{ID: row.ID, Tried: tried, Outcome: row.Outcome.String()}
 }
 
-func completionOf(state crew.State, found []crew.Finding) crew.Completion {
+func completionOf(state subagent.State, found []subagent.Finding) subagent.Completion {
 	switch state {
-	case crew.Errored, crew.Parked:
-		return crew.Blocked
-	case crew.WaitingAnswer:
-		return crew.NeedsContext
-	case crew.Working, crew.InReview, crew.Finished:
+	case subagent.Errored, subagent.Parked:
+		return subagent.Blocked
+	case subagent.WaitingAnswer:
+		return subagent.NeedsContext
+	case subagent.Working, subagent.InReview, subagent.Finished:
 		for _, finding := range found {
 			if finding.Bucket.Concerns() {
-				return crew.DoneWithConcerns
+				return subagent.DoneWithConcerns
 			}
 		}
-		return crew.Done
+		return subagent.Done
 	}
 	panic("turn: unknown sub-agent state " + strconv.Itoa(int(state)))
 }
 
-func findings(row Row) []crew.Finding {
-	found := []crew.Finding{}
+func findings(row Row) []subagent.Finding {
+	found := []subagent.Finding{}
 	if outcome, carries := outcomeFinding(row.Outcome); carries {
 		found = append(found, outcome)
 	}
@@ -115,10 +115,10 @@ func findings(row Row) []crew.Finding {
 		if call.Outcome() != llm.ToolOutcomeFailed {
 			continue
 		}
-		bucket, after := crew.ActOn, "and nothing after it made "+call.Tool+" work"
+		bucket, after := subagent.ActOn, "and nothing after it made "+call.Tool+" work"
 		for _, later := range calls[i+1:] {
 			if later.Tool == call.Tool && later.Outcome() == llm.ToolOutcomeRan {
-				bucket, after = crew.Dismissed, "and "+call.Tool+" ran after it"
+				bucket, after = subagent.Dismissed, "and "+call.Tool+" ran after it"
 				break
 			}
 		}
@@ -126,27 +126,27 @@ func findings(row Row) []crew.Finding {
 		if failure == "" {
 			failure = "exit code " + strconv.Itoa(*call.ExitCode)
 		}
-		found = append(found, crew.Finding{Bucket: bucket, Reason: call.Tool + " failed " + after + ": " + failure})
+		found = append(found, subagent.Finding{Bucket: bucket, Reason: call.Tool + " failed " + after + ": " + failure})
 	}
 	return found
 }
 
-func outcomeFinding(outcome Outcome) (crew.Finding, bool) {
+func outcomeFinding(outcome Outcome) (subagent.Finding, bool) {
 	switch outcome {
 	case OutcomeUnset, OutcomeStopped:
-		return crew.Finding{}, false
+		return subagent.Finding{}, false
 	case OutcomeStepCap, OutcomeRetiredCostCap, OutcomeRetiredWallClockCap, OutcomeDecisionCap:
-		return crew.Finding{Bucket: crew.ActOn,
+		return subagent.Finding{Bucket: subagent.ActOn,
 			Reason: "the child was stopped by the " + outcome.String() + " and its work is unfinished"}, true
 	case OutcomeError:
-		return crew.Finding{Bucket: crew.ActOn, Reason: "the child ended on an error and its work is unfinished"}, true
+		return subagent.Finding{Bucket: subagent.ActOn, Reason: "the child ended on an error and its work is unfinished"}, true
 	case OutcomeLoopGuard:
-		return crew.Finding{Bucket: crew.ActOn, Reason: "the child repeated one call until the loop guard stopped it"}, true
+		return subagent.Finding{Bucket: subagent.ActOn, Reason: "the child repeated one call until the loop guard stopped it"}, true
 	case OutcomeTruncated:
-		return crew.Finding{Bucket: crew.Consider,
+		return subagent.Finding{Bucket: subagent.Consider,
 			Reason: "output was truncated, so what the child read may be short of what it asked for"}, true
 	case OutcomeForked:
-		return crew.Finding{Bucket: crew.Noted, Reason: "the child forked its conversation and this report is the fork"}, true
+		return subagent.Finding{Bucket: subagent.Noted, Reason: "the child forked its conversation and this report is the fork"}, true
 	}
 	panic("turn: unknown child outcome " + strconv.Itoa(int(outcome)))
 }

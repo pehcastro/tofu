@@ -6,10 +6,10 @@ import (
 	"strings"
 	"testing"
 
-	"tofu/internal/crew"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/judge/method"
 	"tofu/internal/llm"
+	"tofu/internal/subagent"
 	shipped "tofu/library"
 )
 
@@ -90,7 +90,7 @@ func TestTheStopCheckMethodComesFromTheShippedTableWhenNobodyPassesOne(t *testin
 	if review.reviewed != 1 {
 		t.Fatalf("the shipped table says judged and the judged arm ran %d times", review.reviewed)
 	}
-	if held := onlyChild(t, spawn); held.State != crew.Finished {
+	if held := onlyChild(t, spawn); held.State != subagent.Finished {
 		t.Fatalf("the accepted verdict left the child %s", held.State)
 	}
 }

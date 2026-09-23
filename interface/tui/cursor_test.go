@@ -100,7 +100,7 @@ func TestTheOtherViewsShowNoCursor(t *testing.T) {
 		name string
 		show func(*App)
 	}{
-		{"crew", func(app *App) { app.Update(tea.KeyPressMsg{Code: '4', Mod: tea.ModAlt}) }},
+		{"sub-agents", func(app *App) { app.Update(tea.KeyPressMsg{Code: '4', Mod: tea.ModAlt}) }},
 		{"settings", func(app *App) { app.runCommand("settings") }},
 	} {
 		t.Run(view.name, func(t *testing.T) {

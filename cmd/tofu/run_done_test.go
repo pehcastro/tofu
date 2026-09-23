@@ -75,7 +75,7 @@ func TestTheDoneReviewIsOffUntilTheCommandLineAsksForIt(t *testing.T) {
 }
 
 func TestADoneReviewIsRefusedOnAnArmThatCanSpawnNoChild(t *testing.T) {
-	for _, without := range [][]string{{"--no-crew"}, {"--tools", toolSetThree}} {
+	for _, without := range [][]string{{"--no-subagents"}, {"--tools", toolSetThree}} {
 		args := []string{"--dir", t.TempDir(), "--done-review", doneArmTyped}
 		args = append(append(args, without...), "a task")
 		_, err := parseRunArgs(args)

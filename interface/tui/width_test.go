@@ -8,10 +8,10 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"tofu/interface/tui/crew"
 	"tofu/interface/tui/fixture"
 	"tofu/interface/tui/frame"
 	"tofu/interface/tui/settings"
+	"tofu/interface/tui/subagent"
 )
 
 const (
@@ -41,8 +41,8 @@ func cjkProviders() []settings.Provider {
 	}
 }
 
-func cjkChildren() []crew.Child {
-	return []crew.Child{
+func cjkChildren() []subagent.Child {
+	return []subagent.Child{
 		{
 			Name:  "日本語エージェント",
 			Owns:  []string{"内部/判断/**", "内部/地点/**"},
@@ -50,15 +50,15 @@ func cjkChildren() []crew.Child {
 			Since: 2*time.Minute + 14*time.Second,
 			Steps: 5,
 			Total: 7,
-			State: crew.Running,
-			Calls: []crew.Call{{Tool: "edit", Text: "内部/判断/方針/道具門.go", Result: "+18 -4"}},
+			State: subagent.Running,
+			Calls: []subagent.Call{{Tool: "edit", Text: "内部/判断/方針/道具門.go", Result: "+18 -4"}},
 		},
 		{
 			Name:   "go-docs",
 			Owns:   []string{"docs/**"},
 			Doing:  "done, 12 files read",
 			Since:  6*time.Minute + 41*time.Second,
-			State:  crew.Done,
+			State:  subagent.Done,
 			Report: "五つの実装の名前を変えました。地点の呼び出しが一つ、別名で古い名前に届いています。",
 		},
 	}
@@ -89,10 +89,10 @@ func wideFrames(t *testing.T) map[string]string {
 	app.Update(tea.KeyPressMsg{Code: 'o', Mod: tea.ModCtrl})
 	frames := map[string]string{"session": app.View().Content}
 
-	app.Update(Event{Kind: EventCrew, Children: cjkChildren()})
+	app.Update(Event{Kind: EventSubAgent, Children: cjkChildren()})
 	app.Update(tea.KeyPressMsg{Code: '4', Mod: tea.ModAlt})
 	app.Update(tea.KeyPressMsg{Code: tea.KeyDown})
-	frames["crew"] = app.View().Content
+	frames["sub-agents"] = app.View().Content
 
 	app.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
 	frames["activity"] = app.View().Content
@@ -127,7 +127,7 @@ func TestNoRowRunsPastTheFrameWithACJKRepoAndAnEmojiBranch(t *testing.T) {
 }
 
 func TestTheStripPlacesItsZonesInCellsSoAClickLandsOnTheNameItHits(t *testing.T) {
-	strip := frame.Strip{Views: []frame.View{{Digit: '1', Name: "session"}, {Digit: '2', Name: "crew"}}}
+	strip := frame.Strip{Views: []frame.View{{Digit: '1', Name: "session"}, {Digit: '2', Name: "sub-agents"}}}
 	plain := ansi.Strip(strip.Render(wideColumns))
 	for index, view := range strip.Views {
 		label := "[" + string(view.Digit) + "] " + view.Name

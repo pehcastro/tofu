@@ -98,7 +98,7 @@ func TestARowCarriesWhatTheFreeArmDecidedAtTheTime(t *testing.T) {
 	}
 
 	promoted, promotedDir := corpusApp(t)
-	promoted.Update(Event{Kind: EventToolCall, ID: "c1", Tool: "crew", Text: "go-docs: write the docs", Promote: true})
+	promoted.Update(Event{Kind: EventToolCall, ID: "c1", Tool: "subagent", Text: "go-docs: write the docs", Promote: true})
 	promoted.Update(Event{Kind: EventToolResult, ID: "c1", Text: "wrote docs/verification.md"})
 	promoted.show(viewWork)
 	promoted.workKey("down")

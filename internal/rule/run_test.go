@@ -60,7 +60,7 @@ func TestEnforcedBlocksTheSameRuleAndTheRecordDistinguishesIt(t *testing.T) {
 	}
 }
 
-func TestOwnershipCheckerWrapsCrewMatches(t *testing.T) {
+func TestOwnershipCheckerWrapsSubAgentMatches(t *testing.T) {
 	r := Rule{ID: "ownership", Kind: KindStructural, Checker: "ownership", Mode: ModeShadow}
 	covered := OwnsWrite{Path: "internal/rule/run.go", Owns: []string{"internal/rule/**"}}
 	fire, err := Run(r, Builtins(), covered, covered.Path, time.Now())

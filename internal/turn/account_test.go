@@ -10,12 +10,12 @@ import (
 	"testing"
 	"time"
 
-	"tofu/internal/crew"
 	"tofu/internal/konst"
 	"tofu/internal/llm"
 	"tofu/internal/llm/quota"
 	"tofu/internal/recall"
 	"tofu/internal/session"
+	"tofu/internal/subagent"
 )
 
 const (
@@ -348,7 +348,7 @@ func accountSpawn(t *testing.T, book *accountBook, tool Tool, parentPick func(co
 		NewID:          func() string { return "turn-parent" },
 		EndedSession:   func(row Row) error { ended <- row; return nil },
 	}
-	spawn := NewSpawnTool("turn-parent", base, &crew.Roster{})
+	spawn := NewSpawnTool("turn-parent", base, &subagent.Roster{})
 	parent := base
 	parent.Accounts = Accounts{Pick: parentPick, Next: book.Next}
 	parent.Task = "hand the work to a child"

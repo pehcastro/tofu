@@ -153,19 +153,19 @@ func TestTheDefaultToolSetAddsGlobSearchAndEditAndTheOffArmIsTheOriginalThree(t 
 	}
 }
 
-func TestTheDefaultArmOffersTofusOwnVerbsAndTheSpawnToolAndNoCrewTakesSpawnAway(t *testing.T) {
+func TestTheDefaultArmOffersTofusOwnVerbsAndTheSpawnToolAndNoSubAgentsTakesSpawnAway(t *testing.T) {
 	full := toolNames(t, armOpts(t))
 	for _, wanted := range []string{"tofu_lint_comments", "tofu_rules_check", "tofu_judge", "spawn"} {
 		if !slices.Contains(full, wanted) {
 			t.Fatalf("the default arm cannot reach %s, it offers %v", wanted, full)
 		}
 	}
-	noCrew := toolNames(t, armOpts(t, "--no-crew"))
-	if slices.Contains(noCrew, "spawn") {
-		t.Fatalf("--no-crew still offers spawn: %v", noCrew)
+	noSubAgents := toolNames(t, armOpts(t, "--no-subagents"))
+	if slices.Contains(noSubAgents, "spawn") {
+		t.Fatalf("--no-subagents still offers spawn: %v", noSubAgents)
 	}
-	if !slices.Contains(noCrew, "tofu_lint_comments") {
-		t.Fatalf("--no-crew is the spawning arm alone and must keep the verb tools: %v", noCrew)
+	if !slices.Contains(noSubAgents, "tofu_lint_comments") {
+		t.Fatalf("--no-subagents is the spawning arm alone and must keep the verb tools: %v", noSubAgents)
 	}
 }
 
@@ -238,8 +238,8 @@ func TestEachArmIsToldOnlyAboutTheToolsItHas(t *testing.T) {
 			t.Fatalf("the off arm is told about %s, which it does not have: %q", named, three)
 		}
 	}
-	if noCrew := runSystem(armOpts(t, "--no-crew")); strings.Contains(noCrew, "spawn") {
-		t.Fatalf("--no-crew is told about spawn, which it does not have: %q", noCrew)
+	if noSubAgents := runSystem(armOpts(t, "--no-subagents")); strings.Contains(noSubAgents, "spawn") {
+		t.Fatalf("--no-subagents is told about spawn, which it does not have: %q", noSubAgents)
 	}
 }
 

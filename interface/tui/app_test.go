@@ -14,12 +14,12 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"tofu/interface/tui/crew"
 	"tofu/interface/tui/fixture"
 	"tofu/interface/tui/pick"
 	"tofu/interface/tui/session"
 	"tofu/interface/tui/settings"
 	"tofu/interface/tui/shells"
+	"tofu/interface/tui/subagent"
 	"tofu/internal/llm"
 	isettings "tofu/internal/settings"
 )
@@ -465,8 +465,8 @@ func TestOneWireNamesItselfInTheHeader(t *testing.T) {
 	assertGolden(t, "session-one-wire-80x24.golden", content)
 }
 
-func crewChildren() []crew.Child {
-	return []crew.Child{
+func subAgentChildren() []subagent.Child {
+	return []subagent.Child{
 		{
 			Name:  "go-dev",
 			Owns:  []string{"internal/judge/**", "internal/point/**"},
@@ -474,8 +474,8 @@ func crewChildren() []crew.Child {
 			Since: 2*time.Minute + 14*time.Second,
 			Steps: 5,
 			Total: 7,
-			State: crew.Running,
-			Calls: []crew.Call{
+			State: subagent.Running,
+			Calls: []subagent.Call{
 				{Tool: "edit", Text: "internal/judge/policy/toolgate.go", Result: "+18 -4"},
 				{Tool: "bash", Text: "go test ./internal/judge/...", Result: "ok  0.42s"},
 			},
@@ -485,8 +485,8 @@ func crewChildren() []crew.Child {
 			Owns:   []string{"docs/**"},
 			Doing:  "done, 12 files read",
 			Since:  6*time.Minute + 41*time.Second,
-			State:  crew.Done,
-			Calls:  []crew.Call{{Tool: "read", Text: "docs/verification.md", Result: "412 lines"}},
+			State:  subagent.Done,
+			Calls:  []subagent.Call{{Tool: "read", Text: "docs/verification.md", Result: "412 lines"}},
 			Report: "renamed the interface and its five implementations. one call site in point still reaches the old name through an alias.",
 		},
 		{
@@ -494,29 +494,29 @@ func crewChildren() []crew.Child {
 			Owns:   []string{"internal/judge/policy/**"},
 			Doing:  "handed back to go-dev",
 			Since:  12 * time.Second,
-			State:  crew.HandedBack,
+			State:  subagent.HandedBack,
 			Report: "internal/judge/policy is already held by go-dev, so the work went there.",
 		},
 	}
 }
 
-func crewApp(t *testing.T, width, height int) *App {
+func subAgentApp(t *testing.T, width, height int) *App {
 	t.Helper()
 	app := sessionApp(t, width, height)
-	app.Update(Event{Kind: EventCrew, Children: crewChildren()})
+	app.Update(Event{Kind: EventSubAgent, Children: subAgentChildren()})
 	app.Update(tea.KeyPressMsg{Code: '4', Mod: tea.ModAlt})
-	if app.current != viewCrew {
-		t.Fatalf("alt+4 left the app on view %d, want the crew view", app.current)
+	if app.current != viewSubAgents {
+		t.Fatalf("alt+4 left the app on view %d, want the sub-agent view", app.current)
 	}
 	return app
 }
 
-func TestTheCrewViewOpensAndEscReturnsToTheSession(t *testing.T) {
-	app := crewApp(t, 80, 24)
-	crewFrame := app.View().Content
-	assertGolden(t, "crew-80x24.golden", crewFrame)
-	if !strings.Contains(crewFrame, "go-dev") {
-		t.Fatalf("the crew view does not name its children\n%s", crewFrame)
+func TestTheSubAgentViewOpensAndEscReturnsToTheSession(t *testing.T) {
+	app := subAgentApp(t, 80, 24)
+	subAgentFrame := app.View().Content
+	assertGolden(t, "subagent-80x24.golden", subAgentFrame)
+	if !strings.Contains(subAgentFrame, "go-dev") {
+		t.Fatalf("the sub-agent view does not name its children\n%s", subAgentFrame)
 	}
 	app.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
 	if app.current != viewChat {
@@ -529,17 +529,17 @@ func TestTheCrewViewOpensAndEscReturnsToTheSession(t *testing.T) {
 	if !strings.Contains(back, "●1") {
 		t.Fatalf("the status bar does not count the one running child\n%s", back)
 	}
-	assertGolden(t, "crew-return-80x24.golden", back)
+	assertGolden(t, "subagent-return-80x24.golden", back)
 }
 
-func TestTheCrewViewIsAlsoReachedByTabAndByAClick(t *testing.T) {
-	app := crewApp(t, 80, 24)
+func TestTheSubAgentViewIsAlsoReachedByTabAndByAClick(t *testing.T) {
+	app := subAgentApp(t, 80, 24)
 	app.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
 	for range 3 {
 		app.Update(tea.KeyPressMsg{Code: tea.KeyTab})
 	}
-	if app.current != viewCrew {
-		t.Fatalf("three tabs from chat reached view %d, want the crew", app.current)
+	if app.current != viewSubAgents {
+		t.Fatalf("three tabs from chat reached view %d, want the sub-agent view", app.current)
 	}
 	app.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
 	column, hit := stripColumn(app, "[4] sub-agents")
@@ -547,38 +547,38 @@ func TestTheCrewViewIsAlsoReachedByTabAndByAClick(t *testing.T) {
 		t.Fatal("the strip registered no zone for the sub-agents view")
 	}
 	click(app, pick.Cell{X: column, Y: stripRow})
-	if app.current != viewCrew {
+	if app.current != viewSubAgents {
 		t.Fatalf("a click at column %d did not select the sub-agents view", column)
 	}
 }
 
-func TestWithNoChildrenTheCrewViewSaysSoInWords(t *testing.T) {
+func TestWithNoChildrenTheSubAgentViewSaysSoInWords(t *testing.T) {
 	app := sessionApp(t, 80, 24)
 	app.Update(tea.KeyPressMsg{Code: '4', Mod: tea.ModAlt})
 	content := app.View().Content
 	if !strings.Contains(content, "no child") {
-		t.Fatalf("the empty crew view does not say there is no child\n%s", content)
+		t.Fatalf("the empty sub-agent view does not say there is no child\n%s", content)
 	}
 	if strings.Contains(content, "ownership") || strings.Contains(content, " │ ") {
-		t.Fatalf("the empty crew view drew a frame instead of saying so\n%s", content)
+		t.Fatalf("the empty sub-agent view drew a frame instead of saying so\n%s", content)
 	}
-	assertGolden(t, "crew-empty-80x24.golden", content)
+	assertGolden(t, "subagent-empty-80x24.golden", content)
 }
 
-func TestCrewViewGolden(t *testing.T) {
+func TestSubAgentViewGolden(t *testing.T) {
 	for _, size := range []struct {
 		name   string
 		width  int
 		height int
 	}{
-		{"crew-80x24.golden", 80, 24},
-		{"crew-120x36.golden", 120, 36},
+		{"subagent-80x24.golden", 80, 24},
+		{"subagent-120x36.golden", 120, 36},
 	} {
 		t.Run(size.name, func(t *testing.T) {
-			content := crewApp(t, size.width, size.height).View().Content
+			content := subAgentApp(t, size.width, size.height).View().Content
 			for _, want := range []string{"go-dev", "go-docs", "go-rules", "2m 14s", "6m 41s", "12s"} {
 				if !strings.Contains(content, want) {
-					t.Errorf("the crew view does not show %q\n%s", want, content)
+					t.Errorf("the sub-agent view does not show %q\n%s", want, content)
 				}
 			}
 			assertGolden(t, size.name, content)
@@ -587,7 +587,7 @@ func TestCrewViewGolden(t *testing.T) {
 }
 
 func TestOverlappingGlobsAreDrawnAsOneRegionRatherThanTwice(t *testing.T) {
-	content := ansi.Strip(crewApp(t, 120, 36).View().Content)
+	content := ansi.Strip(subAgentApp(t, 120, 36).View().Content)
 	if held := strings.Count(content, "internal/judge/**"); held != 1 {
 		t.Fatalf("internal/judge/** appears %d times, want once\n%s", held, content)
 	}
@@ -610,18 +610,18 @@ func TestOverlappingGlobsAreDrawnAsOneRegionRatherThanTwice(t *testing.T) {
 	}
 }
 
-func TestTheCrewWatchPaneDrawsTheRunningChildsProgressLine(t *testing.T) {
-	app := crewApp(t, 120, 36)
+func TestTheSubAgentWatchPaneDrawsTheRunningChildsProgressLine(t *testing.T) {
+	app := subAgentApp(t, 120, 36)
 	app.Update(tea.KeyPressMsg{Code: tea.KeyDown})
 	frame := ansi.Strip(app.View().Content)
 	if !strings.Contains(frame, "writing policy/toolgate.go") {
 		t.Fatalf("the watch pane does not draw the running child's progress line\n%s", frame)
 	}
-	assertGolden(t, "crew-watch-running-120x36.golden", app.View().Content)
+	assertGolden(t, "subagent-watch-running-120x36.golden", app.View().Content)
 }
 
 func TestSelectingAChildShowsItsToolCallsAndItsReport(t *testing.T) {
-	app := crewApp(t, 120, 36)
+	app := subAgentApp(t, 120, 36)
 	before := ansi.Strip(app.View().Content)
 	if strings.Contains(before, "docs/verification.md") {
 		t.Fatalf("an unselected child shows its tool calls\n%s", before)
@@ -637,7 +637,7 @@ func TestSelectingAChildShowsItsToolCallsAndItsReport(t *testing.T) {
 	if strings.Contains(after, "go test ./internal/judge/...") {
 		t.Errorf("the selected child shows another child's tool call\n%s", after)
 	}
-	assertGolden(t, "crew-picked-120x36.golden", app.View().Content)
+	assertGolden(t, "subagent-picked-120x36.golden", app.View().Content)
 	app.Update(tea.KeyPressMsg{Code: tea.KeyUp})
 	app.Update(tea.KeyPressMsg{Code: tea.KeyUp})
 	if picked := ansi.Strip(app.View().Content); picked != before {
@@ -866,19 +866,19 @@ func TestReloadAppearsInTheCommandMenuAndCallsTheVerb(t *testing.T) {
 }
 
 func TestNoBottomBarDrawsOnTheSubAgentsView(t *testing.T) {
-	app := crewApp(t, 80, 24)
+	app := subAgentApp(t, 80, 24)
 	content := app.View().Content
 	for _, absent := range []string{"/250k", "jev 3", "tofu " + testRelease} {
 		if strings.Contains(content, absent) {
 			t.Fatalf("the sub-agents view still draws %q from the bottom bar\n%s", absent, content)
 		}
 	}
-	assertGolden(t, "crew-no-bar-80x24.golden", content)
+	assertGolden(t, "subagent-no-bar-80x24.golden", content)
 }
 
 func TestTabCyclesTheFiveMainViews(t *testing.T) {
 	app := sessionApp(t, 80, 24)
-	for _, want := range []viewID{viewWork, viewEdits, viewCrew, viewShells, viewChat} {
+	for _, want := range []viewID{viewWork, viewEdits, viewSubAgents, viewShells, viewChat} {
 		app.Update(tea.KeyPressMsg{Code: tea.KeyTab})
 		if app.current != want {
 			t.Fatalf("tab reached view %d, want %d", app.current, want)
@@ -1317,9 +1317,9 @@ func TestTheWheelScrollsTheTranscriptAndOnlyInTheSessionView(t *testing.T) {
 		t.Fatalf("the wheel did not return to the tail\n%s", back)
 	}
 	app.Update(tea.KeyPressMsg{Code: '4', Mod: tea.ModAlt})
-	crewFrame := app.View().Content
+	subAgentFrame := app.View().Content
 	app.Update(tea.MouseWheelMsg{Button: tea.MouseWheelUp})
-	if app.View().Content != crewFrame {
+	if app.View().Content != subAgentFrame {
 		t.Fatal("the wheel scrolled while another view was open")
 	}
 }

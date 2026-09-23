@@ -11,7 +11,6 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
-	"tofu/interface/tui/crew"
 	"tofu/interface/tui/edits"
 	"tofu/interface/tui/frame"
 	"tofu/interface/tui/links"
@@ -23,6 +22,7 @@ import (
 	"tofu/interface/tui/session"
 	"tofu/interface/tui/settings"
 	"tofu/interface/tui/shells"
+	"tofu/interface/tui/subagent"
 	"tofu/interface/tui/theme"
 	"tofu/interface/tui/trace"
 	"tofu/interface/tui/work"
@@ -50,7 +50,7 @@ const (
 	EventContext
 	EventForkStart
 	EventForkEnd
-	EventCrew
+	EventSubAgent
 	EventAwaitPerson
 	EventResumed
 	EventSteered
@@ -74,7 +74,7 @@ type Event struct {
 	Decisions int
 	Decision  *session.Decision
 	Context   frame.Context
-	Children  []crew.Child
+	Children  []subagent.Child
 	Diff      string
 	Plan      []session.PlanItem
 	Created   string
@@ -84,7 +84,7 @@ type Event struct {
 
 func (e Event) snapshot() bool {
 	switch e.Kind {
-	case EventContext, EventForkStart, EventForkEnd, EventCrew:
+	case EventContext, EventForkStart, EventForkEnd, EventSubAgent:
 		return true
 	case EventText, EventTextDelta, EventToolCall, EventToolResult, EventNote, EventFailure, EventStats, EventDone,
 		EventDecision, EventGateOff, EventAwaitPerson, EventResumed, EventSteered, EventRequesting, EventPlan, EventSession:
@@ -167,7 +167,7 @@ const (
 	viewChat viewID = iota
 	viewWork
 	viewEdits
-	viewCrew
+	viewSubAgents
 	viewShells
 	viewSettings
 	viewLinks
@@ -175,7 +175,7 @@ const (
 	viewModels
 )
 
-const subAgentsIndex = int(viewCrew)
+const subAgentsIndex = int(viewSubAgents)
 
 func namedViews() []frame.View {
 	return []frame.View{
@@ -225,7 +225,7 @@ type App struct {
 	strip          frame.Strip
 	view           session.Model
 	work           work.Model
-	crew           crew.Model
+	subagents      subagent.Model
 	edits          edits.Model
 	shells         shells.Model
 	links          links.Model
@@ -364,7 +364,7 @@ func (a *App) resize(width, height int) {
 	a.width, a.height = width, height
 	a.view.SetSize(width, height-viewChrome)
 	a.work.SetSize(width, height-viewChrome)
-	a.crew.SetSize(width, height-viewChrome)
+	a.subagents.SetSize(width, height-viewChrome)
 	a.edits.SetSize(width, height-viewChrome)
 	a.shells.SetSize(width, height-viewChrome)
 	a.links.SetSize(width, height-viewChrome)
@@ -537,8 +537,8 @@ func (a *App) key(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 	switch a.current {
-	case viewCrew:
-		a.crew.Key(key)
+	case viewSubAgents:
+		a.subagents.Key(key)
 		return a, nil
 	case viewEdits:
 		a.edits.Key(key)
@@ -864,9 +864,9 @@ func (a *App) absorb(event Event) {
 		}
 	case EventContext:
 		a.status.Context = event.Context
-	case EventCrew:
-		a.crew.Children, a.view.Children, a.edits.Children = event.Children, event.Children, event.Children
-		a.status.Agents = a.crew.Running()
+	case EventSubAgent:
+		a.subagents.Children, a.view.Children, a.edits.Children = event.Children, event.Children, event.Children
+		a.status.Agents = a.subagents.Running()
 		a.strip.Views[subAgentsIndex].Name = subAgentsLabel(a.status.Agents)
 	case EventPlan:
 		a.view.SetPlan(event.Plan)
@@ -1027,7 +1027,7 @@ func (a *App) View() tea.View {
 			a.view.FoldHidesShell = a.settingsStore.Bool(isettings.FoldHidesShell)
 		}
 		rows = append(rows, a.strip.Render(a.width), a.body())
-		if a.current != viewCrew {
+		if a.current != viewSubAgents {
 			rows = append(rows, frame.Bar(status, a.width))
 		}
 		if a.current == viewChat {
@@ -1051,8 +1051,8 @@ func (a *App) body() string {
 		return a.view.View()
 	case viewWork:
 		return a.work.View()
-	case viewCrew:
-		return a.crew.View()
+	case viewSubAgents:
+		return a.subagents.View()
 	case viewEdits:
 		return a.edits.View()
 	case viewShells:

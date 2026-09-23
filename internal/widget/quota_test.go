@@ -38,14 +38,14 @@ func TestAZeroOrPastDurationFloorsAtZeroSeconds(t *testing.T) {
 	}
 }
 
-func TestTheSameDurationBacksTheSessionCrewAndTofuSessionViews(t *testing.T) {
+func TestTheSameDurationBacksTheSessionSubAgentAndTofuSessionViews(t *testing.T) {
 	for _, step := range []struct {
 		place string
 		d     time.Duration
 		want  string
 	}{
 		{"interface/tui/session turn clock", 41 * time.Second, "41s"},
-		{"interface/tui/crew fold row", 2*time.Hour + 14*time.Minute, "2h 14m"},
+		{"interface/tui/subagent fold row", 2*time.Hour + 14*time.Minute, "2h 14m"},
 		{"cmd/tofu session list", 10 * time.Minute, "10m"},
 	} {
 		if got := Until(step.d); got != step.want {

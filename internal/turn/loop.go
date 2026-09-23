@@ -12,11 +12,11 @@ import (
 	"sync"
 	"time"
 
-	"tofu/internal/crew"
 	"tofu/internal/konst"
 	"tofu/internal/llm"
 	"tofu/internal/recall"
 	"tofu/internal/session"
+	"tofu/internal/subagent"
 	"tofu/internal/sys"
 	"tofu/internal/transport"
 )
@@ -59,7 +59,7 @@ type Config struct {
 	Gate            Gate
 	GateMode        GateMode
 	Proxy           *CommandProxy
-	Boundary        *crew.Boundary
+	Boundary        *subagent.Boundary
 	Person          Person
 	Task            string
 	Images          []llm.Image

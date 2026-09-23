@@ -10,7 +10,7 @@ import (
 	"slices"
 	"strings"
 
-	"tofu/internal/crew"
+	"tofu/internal/subagent"
 )
 
 type Verb string
@@ -75,7 +75,7 @@ func newTrigger(d declaredTrigger, file, id string) (Trigger, error) {
 		t.condition = pattern
 	}
 	if d.scope != "" {
-		if _, err := crew.Matches("a/path/the/scope/is/tested/against", []string{d.scope}); err != nil {
+		if _, err := subagent.Matches("a/path/the/scope/is/tested/against", []string{d.scope}); err != nil {
 			return Trigger{}, fmt.Errorf("%s: rule %q declares the scope %q and it is not a path glob: %v", file, id, d.scope, err)
 		}
 	}
@@ -105,7 +105,7 @@ func (t Trigger) firesFor(task Task) (bool, string) {
 	if t.scope != "" {
 		reached := ""
 		for _, p := range task.Paths {
-			if matched, err := crew.Matches(p, []string{t.scope}); err == nil && matched {
+			if matched, err := subagent.Matches(p, []string{t.scope}); err == nil && matched {
 				reached = p
 				break
 			}

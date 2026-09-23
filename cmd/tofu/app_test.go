@@ -19,12 +19,11 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"tofu/interface/tui"
-	"tofu/interface/tui/crew"
 	"tofu/interface/tui/frame"
 	"tofu/interface/tui/markdown"
 	"tofu/interface/tui/session"
 	"tofu/interface/tui/settings"
-	roster "tofu/internal/crew"
+	"tofu/interface/tui/subagent"
 	"tofu/internal/judge/jev"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/konst"
@@ -33,6 +32,7 @@ import (
 	"tofu/internal/llm/models"
 	"tofu/internal/recall"
 	sessionstore "tofu/internal/session"
+	roster "tofu/internal/subagent"
 	"tofu/internal/transport"
 	"tofu/internal/turn"
 	"tofu/internal/widget"
@@ -737,7 +737,7 @@ func TestTheBarShowsTheRequestAsSentAndTheForkDecidedOnWhatCameBackAfterIt(t *te
 	t.Logf("step %d sent %d tokens, the fork decided on %d, and the %d between them are the call and its results", forking.Index, asSent, decided, appended)
 }
 
-func TestASpawnedChildShowsInTheCrewViewWithTheGlobsItHolds(t *testing.T) {
+func TestASpawnedChildShowsInTheSubAgentViewWithTheGlobsItHolds(t *testing.T) {
 	dir := scratchProject(t)
 	spawnCall := llm.ToolCall{ID: "call-1", Name: "spawn", Arguments: json.RawMessage(`{"task":"write note.txt","owns":["note.txt"]}`)}
 	model := &queuedModel{decisions: []llm.Decision{
@@ -749,22 +749,22 @@ func TestASpawnedChildShowsInTheCrewViewWithTheGlobsItHolds(t *testing.T) {
 	driver := driveApp(t)
 	stubbedTurn(dir, model)(t.Context(), onTheSubscription, "hand the note to a child", driver.emit)
 
-	crewEvents := driver.of(tui.EventCrew)
-	if len(crewEvents) < 2 {
-		t.Fatalf("crew events %d, want one when the child starts, one per step it takes, and one when it reports", len(crewEvents))
+	subAgentEvents := driver.of(tui.EventSubAgent)
+	if len(subAgentEvents) < 2 {
+		t.Fatalf("sub-agent events %d, want one when the child starts, one per step it takes, and one when it reports", len(subAgentEvents))
 	}
-	started := crewEvents[0].Children
-	if len(started) != 1 || started[0].State != crew.Running || !slices.Equal(started[0].Owns, []string{"note.txt"}) {
-		t.Fatalf("the first crew event carries %+v, want one running child holding note.txt", started)
+	started := subAgentEvents[0].Children
+	if len(started) != 1 || started[0].State != subagent.Running || !slices.Equal(started[0].Owns, []string{"note.txt"}) {
+		t.Fatalf("the first sub-agent event carries %+v, want one running child holding note.txt", started)
 	}
-	ended := crewEvents[len(crewEvents)-1].Children[0]
-	if ended.State != crew.HandedBack || ended.Steps != 2 || ended.Report == "" {
+	ended := subAgentEvents[len(subAgentEvents)-1].Children[0]
+	if ended.State != subagent.HandedBack || ended.Steps != 2 || ended.Report == "" {
 		t.Fatalf("the child ended as %+v, want it in review with the steps and the report the roster carries", ended)
 	}
 	screen := driver.view(tea.KeyPressMsg{Code: '4', Mod: tea.ModAlt})
 	for _, want := range []string{"1 child", "c1", "note.txt", "ownership", "write note.txt"} {
 		if !strings.Contains(screen, want) {
-			t.Errorf("the crew view does not show %q:\n%s", want, screen)
+			t.Errorf("the sub-agent view does not show %q:\n%s", want, screen)
 		}
 	}
 	t.Log("\n" + screen)
@@ -888,17 +888,17 @@ func TestAFullEventChannelDropsTheSnapshotsAndNeverBlocksTheTurn(t *testing.T) {
 	t.Logf("kept every one of the %d text events and %d of the %d snapshots", texts, contexts, dropped)
 }
 
-func TestATurnWithNoChildrenSendsNoCrewEventAtAll(t *testing.T) {
+func TestATurnWithNoChildrenSendsNoSubAgentEventAtAll(t *testing.T) {
 	dir := scratchProject(t)
 	driver := driveApp(t)
 	stubbedTurn(dir, noteThenStop())(t.Context(), onTheSubscription, "write the note yourself", driver.emit)
 
-	if sent := driver.of(tui.EventCrew); len(sent) != 0 {
-		t.Fatalf("crew events %+v, want none: an empty crew view has to keep saying what it says today", sent)
+	if sent := driver.of(tui.EventSubAgent); len(sent) != 0 {
+		t.Fatalf("sub-agent events %+v, want none: an empty sub-agent view has to keep saying what it says today", sent)
 	}
 	screen := driver.view(tea.KeyPressMsg{Code: '4', Mod: tea.ModAlt})
 	if !strings.Contains(screen, "no child is holding any paths in this session") {
-		t.Errorf("the crew view is not the empty one:\n%s", screen)
+		t.Errorf("the sub-agent view is not the empty one:\n%s", screen)
 	}
 }
 
@@ -1411,7 +1411,7 @@ func TestSessionVerdictNamesEveryLedgerVerdict(t *testing.T) {
 	}
 }
 
-func TestTheCrewBarFollowsTheCapTheTurnWasGiven(t *testing.T) {
+func TestTheSubAgentBarFollowsTheCapTheTurnWasGiven(t *testing.T) {
 	for _, one := range []struct{ maxSteps, total int }{{0, konst.TurnMaxSteps}, {12, 12}} {
 		var sent []tui.Event
 		watch := &appWatcher{
@@ -1420,7 +1420,7 @@ func TestTheCrewBarFollowsTheCapTheTurnWasGiven(t *testing.T) {
 			maxSteps: one.maxSteps,
 			held:     rosterHolding(t, roster.SubAgent{ID: "parent-c1", Mission: "do it", Owns: []string{"x"}}),
 		}
-		watch.sendCrew()
+		watch.sendSubAgents()
 		if got := sent[0].Children[0].Total; got != one.total {
 			t.Fatalf("a bar under a cap of %d draws %d steps, want %d", one.maxSteps, got, one.total)
 		}

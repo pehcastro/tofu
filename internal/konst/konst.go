@@ -82,8 +82,8 @@ const (
 
 	ProjectSectionCap = 12
 
-	CrewMaxDepth   = 2
-	CrewMaxBreadth = 4
+	SubAgentMaxDepth   = 2
+	SubAgentMaxBreadth = 4
 
 	SubAgentRetainedRows    = 4
 	SubAgentMissionChars    = 60

@@ -8,18 +8,18 @@ import (
 	"strings"
 	"testing"
 
-	"tofu/internal/crew"
 	"tofu/internal/llm"
 	"tofu/internal/session"
+	"tofu/internal/subagent"
 )
 
-func recordedGrants(t *testing.T, store *session.Store, id string) []crew.Question {
+func recordedGrants(t *testing.T, store *session.Store, id string) []subagent.Question {
 	t.Helper()
 	events, err := store.Body(id)
 	if err != nil {
 		t.Fatalf("reading the record of %s: %v", id, err)
 	}
-	var asked []crew.Question
+	var asked []subagent.Question
 	for _, event := range events {
 		if event.Kind != session.EventStep {
 			continue
@@ -60,7 +60,7 @@ func TestAChildWritingOutsideItsPathsAsksOnceAndOnlyOnce(t *testing.T) {
 	if len(asked) != 1 {
 		t.Fatalf("the child's record carries %d grant rows, want exactly one for two attempts at the same path: %+v", len(asked), asked)
 	}
-	if asked[0].Kind != crew.Grant || asked[0].Where != "theirs/note.txt" || asked[0].Ticket != row.ChildIDs[0] {
+	if asked[0].Kind != subagent.Grant || asked[0].Where != "theirs/note.txt" || asked[0].Ticket != row.ChildIDs[0] {
 		t.Fatalf("the recorded row is %+v, want a grant naming the path and the child", asked[0])
 	}
 	if !strings.Contains(asked[0].Ask, "theirs/note.txt") || asked[0].Default == "" {
@@ -77,8 +77,8 @@ func TestAChildThatNeedsAPathItWasNotGrantedWaitsForTheAnswer(t *testing.T) {
 	_, spawn, _ := childReachingOutsideItsPaths(t, root)
 
 	child := onlyChild(t, spawn)
-	if child.State != crew.WaitingAnswer {
-		t.Fatalf("the child is %s, want %s: nothing it did answers the question it asked", child.State, crew.WaitingAnswer)
+	if child.State != subagent.WaitingAnswer {
+		t.Fatalf("the child is %s, want %s: nothing it did answers the question it asked", child.State, subagent.WaitingAnswer)
 	}
 	if !strings.Contains(child.Report, "theirs/note.txt") {
 		t.Fatalf("the parent's report does not carry the path the child needs:\n%s", child.Report)
@@ -103,7 +103,7 @@ func TestAChildInsideItsPathsAsksForNothing(t *testing.T) {
 	if asked := recordedGrants(t, store, row.ChildIDs[0]); len(asked) != 0 {
 		t.Fatalf("a child that stayed inside its paths asked for %+v", asked)
 	}
-	if child := onlyChild(t, spawn); child.State == crew.WaitingAnswer {
+	if child := onlyChild(t, spawn); child.State == subagent.WaitingAnswer {
 		t.Fatal("a child that asked for nothing is waiting for an answer")
 	}
 }

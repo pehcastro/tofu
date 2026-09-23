@@ -5,11 +5,11 @@ import (
 	"encoding/json"
 	"time"
 
-	"tofu/internal/crew"
 	"tofu/internal/judge/jev"
 	"tofu/internal/judge/jev/wire/openrouter"
 	"tofu/internal/judge/question"
 	"tofu/internal/konst"
+	"tofu/internal/subagent"
 	"tofu/internal/transport"
 )
 
@@ -34,7 +34,7 @@ type Judged struct {
 	Cost       float64
 }
 
-func Ask(ctx context.Context, client *jev.Client, set question.Set, state crew.AskState) (Judged, error) {
+func Ask(ctx context.Context, client *jev.Client, set question.Set, state subagent.AskState) (Judged, error) {
 	questions := make([]jev.Question, len(set.Questions))
 	for i, q := range set.Questions {
 		questions[i] = q.ToJev()
@@ -48,16 +48,16 @@ func Ask(ctx context.Context, client *jev.Client, set question.Set, state crew.A
 		return Judged{}, err
 	}
 	return Judged{
-		Action:     decision.Answers[crew.ActionQuestion].Choice,
-		Determined: decision.Answers[crew.DeterminedQuestion].Noul,
+		Action:     decision.Answers[subagent.ActionQuestion].Choice,
+		Determined: decision.Answers[subagent.DeterminedQuestion].Noul,
 		Latency:    decision.Latency,
 		Cost:       decision.Usage.Cost,
 	}, nil
 }
 
-func Free(state crew.AskState) string {
+func Free(state subagent.AskState) string {
 	if !state.InOwns {
-		return crew.ActionAskNow
+		return subagent.ActionAskNow
 	}
-	return crew.ActionProceed
+	return subagent.ActionProceed
 }

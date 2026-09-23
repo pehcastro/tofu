@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	"tofu/internal/crew"
 	"tofu/internal/llm"
 	"tofu/internal/secret"
+	"tofu/internal/subagent"
 )
 
 func childReport(t *testing.T, root string, decisions []llm.Decision) ChildReport {
@@ -32,17 +32,17 @@ func TestAChildThatFinishedAndNoticedSomethingIsDoneWithConcerns(t *testing.T) {
 		claimDecision("I wrote the greeting"),
 	})
 
-	if clean.Completion != crew.Done {
+	if clean.Completion != subagent.Done {
 		t.Fatalf("a child that did the work and hit nothing reads %s, want done: %+v", clean.Completion, clean.Findings)
 	}
-	if noticed.Completion != crew.DoneWithConcerns {
+	if noticed.Completion != subagent.DoneWithConcerns {
 		t.Fatalf("a child that finished and was refused a write reads %s, want done_with_concerns", noticed.Completion)
 	}
 	if clean.State != noticed.State || clean.Outcome != noticed.Outcome {
 		t.Fatalf("the two children differ in state or outcome, so the completion is not what carries the difference: %s/%s and %s/%s",
 			clean.State, clean.Outcome, noticed.State, noticed.Outcome)
 	}
-	if len(noticed.Findings) != 1 || noticed.Findings[0].Bucket != crew.ActOn {
+	if len(noticed.Findings) != 1 || noticed.Findings[0].Bucket != subagent.ActOn {
 		t.Fatalf("the refused write is not one finding to act on: %+v", noticed.Findings)
 	}
 	if reason := noticed.Findings[0].Reason; strings.Contains(reason, "\n") || !strings.Contains(reason, "ghost.txt") {
@@ -57,7 +57,7 @@ func TestTheParentTellsTheTwoApartFromTheTypedValueAndNotTheProse(t *testing.T) 
 		claimDecision("all done, everything went fine"),
 	})
 
-	if report.Completion == crew.Done {
+	if report.Completion == subagent.Done {
 		t.Fatal("the child's prose said it went fine and the completion agreed with the prose")
 	}
 	read := ChildReport{}
@@ -65,7 +65,7 @@ func TestTheParentTellsTheTwoApartFromTheTypedValueAndNotTheProse(t *testing.T) 
 	if err != nil || json.Unmarshal(written, &read) != nil {
 		t.Fatalf("the handback does not cross JSON: %v", err)
 	}
-	if read.Completion != crew.DoneWithConcerns {
+	if read.Completion != subagent.DoneWithConcerns {
 		t.Fatalf("read back, the completion is %s", read.Completion)
 	}
 	if !strings.Contains(string(written), `"completion":"done_with_concerns"`) {
@@ -105,14 +105,14 @@ func TestTheLearningStepRunsOnEveryHandbackAndSaysSoWhenItFoundNothing(t *testin
 }
 
 func TestEscalationCarriesWhatEachOfTheThreeAttemptsWas(t *testing.T) {
-	agent := crew.SubAgent{ID: "turn-parent-c1", Mission: "write the greeting", Owns: []string{"mine/**"}}
+	agent := subagent.SubAgent{ID: "turn-parent-c1", Mission: "write the greeting", Owns: []string{"mine/**"}}
 	attempts := []Row{
 		{ID: "turn-parent-c1", Outcome: OutcomeStepCap, Steps: []StepRow{{ToolCalls: []ToolCallRow{{Tool: "read"}, {Tool: "write"}}}}},
 		{ID: "turn-parent-c1-r", Outcome: OutcomeLoopGuard, Steps: []StepRow{{ToolCalls: []ToolCallRow{{Tool: "bash"}}}}},
 		{ID: "turn-parent-c1-r-r", Outcome: OutcomeStopped},
 	}
 
-	written, err := json.Marshal(reportOf(agent, attempts, crew.InReview))
+	written, err := json.Marshal(reportOf(agent, attempts, subagent.InReview))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -121,7 +121,7 @@ func TestEscalationCarriesWhatEachOfTheThreeAttemptsWas(t *testing.T) {
 		t.Fatalf("reading the handback back: %v", err)
 	}
 
-	want := []crew.Attempt{
+	want := []subagent.Attempt{
 		{ID: "turn-parent-c1", Tried: "read, write", Outcome: "step_cap"},
 		{ID: "turn-parent-c1-r", Tried: "bash", Outcome: "loop_guard"},
 		{ID: "turn-parent-c1-r-r", Tried: "nothing ran", Outcome: "stopped"},
@@ -147,23 +147,23 @@ func TestAFailureTheChildRecoveredFromIsDismissedAndNotADefect(t *testing.T) {
 	exit := 1
 	recovered := findings(Row{Outcome: OutcomeStopped, Steps: []StepRow{{ToolCalls: []ToolCallRow{
 		{Tool: "bash", Command: "go build ./...", ExitCode: &exit},
-		{Tool: "bash", Command: "go build ./internal/crew/..."},
+		{Tool: "bash", Command: "go build ./internal/subagent/..."},
 	}}}})
 	stuck := findings(Row{Outcome: OutcomeStopped, Steps: []StepRow{{ToolCalls: []ToolCallRow{
 		{Tool: "bash", Command: "go build ./...", ExitCode: &exit},
 		{Tool: "read", Error: "no file is at that path"},
 	}}}})
 
-	if len(recovered) != 1 || recovered[0].Bucket != crew.Dismissed {
+	if len(recovered) != 1 || recovered[0].Bucket != subagent.Dismissed {
 		t.Fatalf("a command that failed and then ran is not dismissed: %+v", recovered)
 	}
-	if completionOf(crew.InReview, recovered) != crew.Done {
+	if completionOf(subagent.InReview, recovered) != subagent.Done {
 		t.Fatalf("a dismissed finding raised a concern, so every nit would read as a defect")
 	}
-	if len(stuck) != 2 || stuck[0].Bucket != crew.ActOn || stuck[1].Bucket != crew.ActOn {
+	if len(stuck) != 2 || stuck[0].Bucket != subagent.ActOn || stuck[1].Bucket != subagent.ActOn {
 		t.Fatalf("two failures nothing recovered from are not both to act on: %+v", stuck)
 	}
-	if completionOf(crew.InReview, stuck) != crew.DoneWithConcerns {
+	if completionOf(subagent.InReview, stuck) != subagent.DoneWithConcerns {
 		t.Fatal("a failure nothing recovered from did not reach the parent")
 	}
 	t.Logf("dismissed: %q", recovered[0].Reason)
@@ -177,11 +177,11 @@ func TestAFinishedChildsCallTextIsTheToolsOwnLabelSoABashArgumentIsKeptWholeAndN
 	}
 
 	report := reportOf(
-		crew.SubAgent{ID: "turn-parent-c1", Mission: "call the api", Owns: []string{"mine/**"}},
+		subagent.SubAgent{ID: "turn-parent-c1", Mission: "call the api", Owns: []string{"mine/**"}},
 		[]Row{{ID: "turn-parent-c1", Outcome: OutcomeStopped, Steps: []StepRow{{ToolCalls: []ToolCallRow{
 			{Tool: "bash", Command: command},
 		}}}}},
-		crew.InReview,
+		subagent.InReview,
 	)
 
 	shapes := make([]string, len(report.Ran))
@@ -205,15 +205,15 @@ func TestEveryOutcomeAndEveryStateIsHandledAndAnUnknownOnePanicsByName(t *testin
 			t.Fatalf("outcome %s gives a finding with no one line reason: %+v", outcome, finding)
 		}
 	}
-	for _, state := range []crew.State{crew.Working, crew.WaitingAnswer, crew.InReview, crew.Parked, crew.Errored, crew.Finished} {
+	for _, state := range []subagent.State{subagent.Working, subagent.WaitingAnswer, subagent.InReview, subagent.Parked, subagent.Errored, subagent.Finished} {
 		if completionOf(state, nil).String() == "" {
 			t.Fatalf("state %s has no completion", state)
 		}
 	}
-	if completionOf(crew.Errored, nil) != crew.Blocked || completionOf(crew.Parked, nil) != crew.Blocked {
+	if completionOf(subagent.Errored, nil) != subagent.Blocked || completionOf(subagent.Parked, nil) != subagent.Blocked {
 		t.Fatal("a child that errored or was parked does not read as blocked")
 	}
-	if completionOf(crew.WaitingAnswer, nil) != crew.NeedsContext {
+	if completionOf(subagent.WaitingAnswer, nil) != subagent.NeedsContext {
 		t.Fatal("a child waiting on an answer does not read as needs_context")
 	}
 	for _, c := range []struct {
@@ -221,7 +221,7 @@ func TestEveryOutcomeAndEveryStateIsHandledAndAnUnknownOnePanicsByName(t *testin
 		read  func() string
 		wants string
 	}{
-		{"state", func() string { return completionOf(crew.State(11), nil).String() }, "unknown sub-agent state 11"},
+		{"state", func() string { return completionOf(subagent.State(11), nil).String() }, "unknown sub-agent state 11"},
 		{"outcome", func() string { finding, _ := outcomeFinding(Outcome(12)); return finding.Reason }, "unknown child outcome 12"},
 	} {
 		func() {

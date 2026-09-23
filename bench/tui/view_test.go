@@ -11,12 +11,12 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	app "tofu/interface/tui"
-	"tofu/interface/tui/crew"
 	"tofu/interface/tui/fixture"
 	"tofu/interface/tui/frame"
 	"tofu/interface/tui/paste"
 	"tofu/interface/tui/session"
 	"tofu/interface/tui/settings"
+	"tofu/interface/tui/subagent"
 	"tofu/internal/konst"
 )
 
@@ -25,8 +25,8 @@ const (
 	benchHeight         = 36
 	benchTranscript     = 200
 	benchLongTranscript = 10000
-	benchCrew           = 6
-	benchCrewCalls      = 60
+	benchSubAgents      = 6
+	benchSubAgentCalls  = 60
 )
 
 func benchApp() *app.App {
@@ -270,22 +270,22 @@ func BenchmarkSessionViewAwaitingAnAnswer(b *testing.B) {
 	}
 }
 
-func benchChildren() []crew.Child {
-	children := make([]crew.Child, 0, benchCrew)
-	for index := range benchCrew {
-		child := crew.Child{
+func benchChildren() []subagent.Child {
+	children := make([]subagent.Child, 0, benchSubAgents)
+	for index := range benchSubAgents {
+		child := subagent.Child{
 			Name:   "go-dev-" + strconv.Itoa(index),
 			Owns:   []string{"internal/judge/**", "internal/point/" + strconv.Itoa(index) + "/**"},
 			Doing:  "writing internal/judge/policy/toolgate.go",
 			Since:  time.Duration(index) * time.Minute,
 			Steps:  index,
-			Total:  benchCrew,
-			State:  crew.State(index % 3),
+			Total:  benchSubAgents,
+			State:  subagent.State(index % 3),
 			Tokens: 181000 - index*1000,
 			Report: "renamed the interface and its five implementations, and one call site still reaches the old name through an alias.",
 		}
-		for step := range benchCrewCalls {
-			child.Calls = append(child.Calls, crew.Call{
+		for step := range benchSubAgentCalls {
+			child.Calls = append(child.Calls, subagent.Call{
 				Tool:   "edit",
 				Text:   "internal/judge/policy/toolgate.go line " + strconv.Itoa(step),
 				Result: "+18 -4",
@@ -298,7 +298,7 @@ func benchChildren() []crew.Child {
 
 func BenchmarkSessionViewWithTheActivityBlock(b *testing.B) {
 	built := benchApp()
-	built.Update(app.Event{Kind: app.EventCrew, Children: benchChildren()})
+	built.Update(app.Event{Kind: app.EventSubAgent, Children: benchChildren()})
 	built.Update(app.Event{Kind: app.EventToolCall, ID: "live", Tool: "bash", Text: "go test ./internal/..."})
 	if !strings.Contains(built.View().Content, "go-dev-0") {
 		b.Fatal("the bench is not measuring a frame carrying the activity block")
@@ -369,13 +369,13 @@ func BenchmarkSessionViewWithThePathMenuOpen(b *testing.B) {
 	}
 }
 
-func BenchmarkCrewView(b *testing.B) {
+func BenchmarkSubAgentView(b *testing.B) {
 	built := benchApp()
-	built.Update(app.Event{Kind: app.EventCrew, Children: benchChildren()})
+	built.Update(app.Event{Kind: app.EventSubAgent, Children: benchChildren()})
 	built.Update(tea.KeyPressMsg{Code: '2', Mod: tea.ModAlt})
 	built.Update(tea.KeyPressMsg{Code: tea.KeyDown})
 	if !strings.Contains(built.View().Content, "ownership") {
-		b.Fatal("the bench is not measuring the crew view")
+		b.Fatal("the bench is not measuring the sub-agent view")
 	}
 	b.ReportAllocs()
 	for b.Loop() {
@@ -397,13 +397,13 @@ const benchEditDiff = "--- internal/judge/policy/toolgate.go\n" +
 func benchEditsApp(b *testing.B) *app.App {
 	b.Helper()
 	built := benchApp()
-	built.Update(app.Event{Kind: app.EventCrew, Children: benchChildren()})
+	built.Update(app.Event{Kind: app.EventSubAgent, Children: benchChildren()})
 	for step := range benchTranscript {
 		id := "edit" + strconv.Itoa(step)
 		path := "internal/judge/policy/toolgate" + strconv.Itoa(step) + ".go"
 		built.Update(app.Event{Kind: app.EventToolCall, ID: id, Tool: "edit", Text: path})
 		built.Update(app.Event{Kind: app.EventToolResult, ID: id, Text: "9 lines, 210 bytes",
-			Agent: benchChildren()[step%benchCrew].Name, Diff: benchEditDiff})
+			Agent: benchChildren()[step%benchSubAgents].Name, Diff: benchEditDiff})
 	}
 	built.Update(tea.KeyPressMsg{Code: '3', Mod: tea.ModAlt})
 	return built

@@ -77,7 +77,7 @@ func (a *App) runCommand(name string) tea.Cmd {
 	case "file-edits":
 		a.show(viewEdits)
 	case "sub-agents":
-		a.show(viewCrew)
+		a.show(viewSubAgents)
 	case "shells":
 		a.show(viewShells)
 	case "models":

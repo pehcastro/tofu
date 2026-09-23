@@ -11,8 +11,8 @@ import (
 
 	"charm.land/lipgloss/v2"
 
-	"tofu/interface/tui/crew"
 	"tofu/interface/tui/pane"
+	"tofu/interface/tui/subagent"
 	"tofu/interface/tui/theme"
 	"tofu/interface/tui/trace"
 	"tofu/internal/widget"
@@ -117,12 +117,12 @@ func hyperlink(root, path string) string {
 
 type agent struct {
 	name  string
-	state crew.State
+	state subagent.State
 	edits int
 }
 
 type Model struct {
-	Children []crew.Child
+	Children []subagent.Child
 	Busy     bool
 	Root     string
 	edits    []Edit
@@ -175,9 +175,9 @@ func (m *Model) scroll(by int) {
 }
 
 func (m Model) agents() []agent {
-	self := agent{name: Self, state: crew.Done}
+	self := agent{name: Self, state: subagent.Done}
 	if m.Busy {
-		self.state = crew.Running
+		self.state = subagent.Running
 	}
 	children := make([]agent, 0, len(m.Children))
 	for _, child := range m.Children {
@@ -197,8 +197,8 @@ func (m Model) agents() []agent {
 	return rows
 }
 
-func running(state crew.State) int {
-	if state == crew.Running {
+func running(state subagent.State) int {
+	if state == subagent.Running {
 		return 1
 	}
 	return 0
@@ -241,7 +241,7 @@ func (m Model) sidebar() ([]string, int) {
 	rows := []sideRow{{label: feedLabel, count: strconv.Itoa(len(m.edits))}}
 	width := max(widget.Cells(title), widget.Cells(pickHint), widget.Cells(scrollHint))
 	for _, found := range m.agents() {
-		rows = append(rows, sideRow{label: crew.Mark(found.state) + found.name, count: strconv.Itoa(found.edits)})
+		rows = append(rows, sideRow{label: subagent.Mark(found.state) + found.name, count: strconv.Itoa(found.edits)})
 	}
 	for _, row := range rows {
 		width = max(width, markerRoom+widget.Cells(row.label)+widget.Cells(gap)+widget.Cells(row.count))
