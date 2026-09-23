@@ -6,8 +6,7 @@ import (
 )
 
 type ReloadResult struct {
-	Rules   int
-	Skipped []string
+	Rules int
 }
 
 func Reload(shipped []rule.Rule, projectRuleDir string) (ReloadResult, error) {
@@ -21,11 +20,5 @@ func Reload(shipped []rule.Rule, projectRuleDir string) (ReloadResult, error) {
 			return ReloadResult{}, err
 		}
 	}
-	return ReloadResult{
-		Rules: len(rule.Layer(shipped, project)),
-		Skipped: []string{
-			"skills: no skill loader exists in the tree yet",
-			"hooks: no hook loader exists in the tree yet",
-		},
-	}, nil
+	return ReloadResult{Rules: len(rule.Layer(shipped, project))}, nil
 }

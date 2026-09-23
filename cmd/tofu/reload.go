@@ -36,9 +36,6 @@ func reloadVerb(out, errOut io.Writer) int {
 		return exitVerdict
 	}
 	_, _ = fmt.Fprintf(out, "reloaded %d rules from %s\n", result.Rules, dir)
-	for _, skipped := range result.Skipped {
-		_, _ = fmt.Fprintln(out, "not reloaded: "+skipped)
-	}
 	return exitOK
 }
 
@@ -47,9 +44,5 @@ func appReload() string {
 	if err != nil {
 		return "reload failed: " + err.Error()
 	}
-	summary := "reloaded " + strconv.Itoa(result.Rules) + " rules"
-	for _, skipped := range result.Skipped {
-		summary += "; not reloaded: " + skipped
-	}
-	return summary
+	return "reloaded " + strconv.Itoa(result.Rules) + " rules"
 }

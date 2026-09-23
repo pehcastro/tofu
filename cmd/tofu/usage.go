@@ -12,7 +12,8 @@ import (
 )
 
 const (
-	usageFlags            = "usage: tofu usage [--json]"
+	usageFlags            = "usage: tofu usage [--history] [--json]"
+	historyFlag           = "--history"
 	usageNoCredential     = "no subscription credential is stored"
 	usageNoWindowReported = "no window is reporting use"
 	spendLimitPrefix      = "spend limit: "
@@ -65,29 +66,39 @@ type usageReport struct {
 }
 
 func usageVerb(args []string, out, errOut io.Writer, shade palette) int {
-	asJSON := false
+	asJSON, history := false, false
 	for _, arg := range args {
-		if arg != jsonFlag {
+		switch arg {
+		case jsonFlag:
+			asJSON = true
+		case historyFlag:
+			history = true
+		default:
 			_, _ = fmt.Fprintln(errOut, usageFlags)
 			return exitUsage
 		}
-		asJSON = true
+	}
+	if history {
+		return usageHistoryVerb(out, errOut, asJSON)
 	}
 	now := time.Now()
 	report, err := readUsage(now)
 	if err != nil {
-		_, _ = fmt.Fprintf(errOut, "tofu usage: %v\n", err)
-		return exitVerdict
+		return usageFail(errOut, err)
 	}
 	if !asJSON {
 		_, _ = fmt.Fprint(out, usageText(report, shade, now))
 		return exitOK
 	}
 	if err := writeJSON(out, report); err != nil {
-		_, _ = fmt.Fprintf(errOut, "tofu usage: %v\n", err)
-		return exitVerdict
+		return usageFail(errOut, err)
 	}
 	return exitOK
+}
+
+func usageFail(errOut io.Writer, err error) int {
+	_, _ = fmt.Fprintf(errOut, "tofu usage: %v\n", err)
+	return exitVerdict
 }
 
 func readUsage(now time.Time) (usageReport, error) {

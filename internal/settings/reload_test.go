@@ -8,7 +8,7 @@ import (
 	"tofu/internal/rule"
 )
 
-func TestReloadReReadsRulesFromDiskAndNamesWhatItCannotReload(t *testing.T) {
+func TestReloadReReadsRulesFromDisk(t *testing.T) {
 	dir := t.TempDir()
 	write := func(name, body string) {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o644); err != nil {
@@ -33,10 +33,6 @@ func TestReloadReReadsRulesFromDiskAndNamesWhatItCannotReload(t *testing.T) {
 	if result.Rules != 2 {
 		t.Fatalf("Rules after adding two.yaml = %d, want 2", result.Rules)
 	}
-	if len(result.Skipped) == 0 {
-		t.Fatal("Reload must say what it cannot reload")
-	}
-
 	if _, err := Reload([]rule.Rule{}, filepath.Join(dir, "does-not-exist")); err != nil {
 		t.Fatalf("Reload with a missing project rule dir must not error: %v", err)
 	}

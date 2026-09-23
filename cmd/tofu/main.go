@@ -25,7 +25,8 @@ Verbs:
   changelog print what changed since the version you last read
   doctor    say whether tofu can run here, and what is wrong if it cannot
   login     mint a subscription credential for a provider
-  usage     print every credential's quota windows and when each resets
+  usage     print every credential's quota windows and when each resets,
+            or --history for the readings already recorded, each with its moment
   models    list the models each subscription serves, and why one is excluded
 
 A verb that reports state takes --json, which carries every field the
@@ -43,7 +44,8 @@ readable form collapses: doctor, models, usage, context, rules.
   replay    re-score ledger rows against changed thresholds, no network
   library   resolve a library entry and show the origin of each field
   lint      run a house-rule check over the tree
-  rules     list the rule library, run it, or index what fires for a task
+  rules     list the rule library, run it, read back what fired, or index a task
+  frame     print one recorded interface frame, at a width and a height
   settings  list, get or set a declared setting, global or project
   reload    re-read rules from disk without a restart
 `
