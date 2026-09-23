@@ -135,7 +135,7 @@ func writeReport(out, errOut io.Writer, target string, produce producer) int {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return fail(errOut, target, err)
 	}
-	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+	if err := report.Write(path, []byte(body), 0o644, "report"); err != nil {
 		return fail(errOut, target, err)
 	}
 	_, _ = fmt.Fprint(out, body)

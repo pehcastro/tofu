@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -11,6 +12,7 @@ import (
 	"strings"
 
 	"tofu/bench/harness"
+	"tofu/bench/report"
 	"tofu/internal/sys"
 )
 
@@ -19,12 +21,15 @@ type harnessOpts struct {
 	task       string
 	version    int
 	offline    bool
+	spend      bool
 	transcript string
 	repeats    int
 	tofuBin    string
 }
 
 const harnessTranscriptDir = "bench/harness/testdata/tofu-v1"
+
+const noLedger = "none, this arm reaches no jev and writes no ledger row"
 
 func parseHarnessArgs(args []string) (harnessOpts, error) {
 	opts := harnessOpts{task: "hono", version: 1, transcript: harnessTranscriptDir, repeats: 1}
@@ -34,6 +39,8 @@ func parseHarnessArgs(args []string) (harnessOpts, error) {
 		switch arg {
 		case "--offline":
 			opts.offline = true
+		case "--spend":
+			opts.spend = true
 		case "--arm":
 			var name string
 			if name, err = nextArg(args, &i, arg); err == nil {
@@ -109,18 +116,28 @@ func benchHarness(out, errOut io.Writer, args []string) int {
 		return fail(errOut, "harness", err)
 	}
 	plan.Repeats = opts.repeats
-	if opts.arm != harness.ArmTofu {
-		if err := harness.Fprint(out, plan); err != nil {
-			return fail(errOut, "harness", err)
-		}
-		_, _ = fmt.Fprintf(out, "the %s arm printed its plan and ran nothing: executing it spends an account the owner has not approved for this bench\n", opts.arm)
-		return exitOK
-	}
 
 	if opts.offline {
+		if opts.arm != harness.ArmTofu {
+			return fail(errOut, "harness", fmt.Errorf("--offline replays a stored tofu transcript and there is none for the %s arm, so it would measure nothing", opts.arm))
+		}
 		return replayOneRepeat(out, errOut, plan, opts)
 	}
 
+	if err := harness.Fprint(out, plan); err != nil {
+		return fail(errOut, "harness", err)
+	}
+	if !opts.spend {
+		_, _ = fmt.Fprintf(out, "the %s arm printed its plan and ran nothing: executing it spends the owner's account, and --spend is how he says he wants it spent\n", opts.arm)
+		return exitOK
+	}
+	if opts.arm == harness.ArmTofu {
+		return runTofuArm(out, errOut, plan, opts)
+	}
+	return runSubscriptionArm(out, errOut, plan)
+}
+
+func runTofuArm(out, errOut io.Writer, plan harness.Plan, opts harnessOpts) int {
 	bin, cleanup, err := tofuUnderTest(opts.tofuBin)
 	if err != nil {
 		return fail(errOut, "harness", err)
@@ -143,7 +160,26 @@ func benchHarness(out, errOut io.Writer, args []string) int {
 		row, gaps := harness.MeasureTofu(session, harnessSources(plan.Dir, ledgerDir, opts.version), meta)
 		return row, gaps, nil
 	}
+	return runEveryRepeat(out, errOut, plan, ledgerDir, measure)
+}
 
+func runSubscriptionArm(out, errOut io.Writer, plan harness.Plan) int {
+	cli := plan.Command[0] + " --version did not answer, so the version of the command line under test is unrecorded"
+	if named, err := exec.Command(plan.Command[0], "--version").Output(); err == nil {
+		cli = strings.TrimSpace(string(named))
+	}
+	measure := func(execution harness.Execution, meta harness.RunMeta) (harness.Row, []string, error) {
+		meta.CLIVersion, meta.CredentialKind = cli, harness.CredentialKindSubscription
+		sources := harnessSources(plan.Dir, noLedger, plan.Version)
+		if plan.Arm == harness.ArmClaude {
+			return harness.MeasureClaude(execution, sources, meta)
+		}
+		return harness.MeasureCodex(execution, sources, harness.CodexMeta{RunMeta: meta, Model: plan.Model})
+	}
+	return runEveryRepeat(out, errOut, plan, noLedger, measure)
+}
+
+func runEveryRepeat(out, errOut io.Writer, plan harness.Plan, ledgerDir string, measure harness.Measure) int {
 	_, _ = fmt.Fprintf(out, "running %s\neach of %d repeats after staging the v%d seed into %s\n",
 		harness.Shell(plan.Command), plan.Repeats, plan.Version, plan.Dir)
 	repeats, err := harness.RunRepeats(context.Background(), ".", plan, measure)
@@ -152,12 +188,33 @@ func benchHarness(out, errOut io.Writer, args []string) int {
 	}
 	rows := make([]harness.Row, 0, len(repeats))
 	for _, repeat := range repeats {
-		_, _ = fmt.Fprint(out, repeat.Execution.Stdout, repeat.Execution.Stderr)
+		_, _ = fmt.Fprint(out, repeat.Execution.Stderr)
+		if repeat.Row.EndReason != harness.EndReasonDone {
+			_, _ = fmt.Fprintf(out, "this repeat did not end on done, so what the arm printed before it stopped follows\n%s\n", repeat.Execution.Stdout)
+		}
 		_, _ = fmt.Fprintln(out, "\n"+harness.Detail(repeat.Row, repeat.Gaps, repeat.Execution, ledgerDir, harness.LiveSource(repeat.Execution)))
+		path, err := writeRow(repeat.Row)
+		if err != nil {
+			return fail(errOut, "harness", err)
+		}
+		_, _ = fmt.Fprintf(out, "row written to %s\n", path)
 		rows = append(rows, repeat.Row)
 	}
 	_, _ = fmt.Fprint(out, harness.Render(rows))
 	return exitOK
+}
+
+func writeRow(row harness.Row) (string, error) {
+	body, err := json.MarshalIndent(row, "", "  ")
+	if err != nil {
+		return "", err
+	}
+	dir := filepath.Join(".playground", "rows")
+	if err := os.MkdirAll(dir, 0o750); err != nil {
+		return "", err
+	}
+	path := filepath.Join(dir, fmt.Sprintf("%s-v%d-run%d-%s.json", row.Arm, row.Version, row.Run, row.Start.Format("2006-01-02")))
+	return path, report.Write(path, body, 0o600, "row")
 }
 
 func harnessSources(armDir, ledgerDir string, version int) harness.Sources {

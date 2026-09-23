@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"tofu/bench/corpus"
+	"tofu/bench/report"
 	"tofu/internal/judge/jev"
 	"tofu/internal/judge/state"
 )
@@ -164,7 +165,7 @@ func TestLiveBatteryOverEveryRecordedStep(t *testing.T) {
 
 	body := Render(result)
 	path := "report-" + result.GeneratedAt.UTC().Format("2006-01-02") + ".md"
-	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+	if err := report.Write(path, []byte(body), 0o644, "report"); err != nil {
 		t.Fatalf("writing %s: %v", path, err)
 	}
 	t.Logf("wrote bench/stopcheck/%s", path)
