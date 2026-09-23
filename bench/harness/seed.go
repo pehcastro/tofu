@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 
@@ -72,7 +74,25 @@ func Stage(root string, version int, armDir string) (Seed, error) {
 	if err := seed.Check(target); err != nil {
 		return Seed{}, err
 	}
+	if err := commitSeed(target); err != nil {
+		return Seed{}, err
+	}
 	return seed, nil
+}
+
+func commitSeed(dir string) error {
+	steps := [][]string{
+		{"init", "-q"},
+		{"add", "-A"},
+		{"-c", "user.name=bench", "-c", "user.email=bench@localhost", "commit", "-q", "-m", "seed"},
+	}
+	for _, step := range steps {
+		out, err := exec.Command("git", append([]string{"-C", dir}, step...)...).CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("the test and diff-cost gates read the tree against the seed commit, and making that commit in %s failed: %w\n%s", dir, err, out)
+		}
+	}
+	return nil
 }
 
 func copyTree(from, to string) error {
@@ -96,7 +116,7 @@ func copyTree(from, to string) error {
 	})
 }
 
-var unseeded = map[string]bool{".git": true, "node_modules": true, ".tofu": true}
+var unseeded = []string{".git", "node_modules", ".tofu"}
 
 func digestTree(dir string) (Seed, error) {
 	var lines []string
@@ -105,9 +125,12 @@ func digestTree(dir string) (Seed, error) {
 			return err
 		}
 		if entry.IsDir() {
-			if path != dir && unseeded[entry.Name()] {
+			if path != dir && slices.Contains(unseeded, entry.Name()) {
 				return fs.SkipDir
 			}
+			return nil
+		}
+		if slices.Contains(unseeded, entry.Name()) {
 			return nil
 		}
 		body, err := os.ReadFile(path)

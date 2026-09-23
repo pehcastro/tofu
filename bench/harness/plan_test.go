@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 
@@ -169,6 +170,17 @@ func TestEveryArmAsksForTheSameThinkingEffort(t *testing.T) {
 		if !strings.Contains(buf.String(), "effort: "+plan.EffortLine()) {
 			t.Errorf("%s: the printed plan does not say what effort it runs at:\n%s", arm, buf.String())
 		}
+	}
+}
+
+func TestTheTofuArmTurnsItsInstructionWalkOffOnTheCommandLine(t *testing.T) {
+	root := repositoryRoot(t)
+	plan, err := BuildPlan(root, ArmTofu, "hono", 1)
+	if err != nil {
+		t.Fatalf("BuildPlan: %v", err)
+	}
+	if !slices.Contains(plan.Command, "--no-instructions") {
+		t.Errorf("the tofu arm runs %s, which walks up out of the arm tree and reads this repository's own AGENTS.md and CLAUDE.md as though they were the task", Shell(plan.Command))
 	}
 }
 

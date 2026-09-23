@@ -34,8 +34,14 @@ func filesUnder(t *testing.T, dir string) map[string]string {
 	t.Helper()
 	out := map[string]string{}
 	err := filepath.WalkDir(dir, func(path string, entry fs.DirEntry, err error) error {
-		if err != nil || entry.IsDir() {
+		if err != nil {
 			return err
+		}
+		if entry.IsDir() {
+			if entry.Name() == ".git" {
+				return fs.SkipDir
+			}
+			return nil
 		}
 		body, err := os.ReadFile(path)
 		if err != nil {
@@ -67,6 +73,11 @@ func TestStagingProducesATreeWhoseContentsEqualTheSeedForAllFourTasks(t *testing
 		got := filesUnder(t, armDir)
 		if len(want) == 0 {
 			t.Fatalf("%s v%d: the committed seed at %s holds no file", benched.Name, benched.Version, seed.Path)
+		}
+		for _, name := range []string{"AGENTS.md", "CLAUDE.md"} {
+			if _, staged := got[name]; staged {
+				t.Errorf("%s v%d: staging wrote %s, which the seed does not hold, so the three arms' trees are not byte identical", benched.Name, benched.Version, name)
+			}
 		}
 		if len(got) != len(want) {
 			t.Errorf("%s v%d: staged %d files, the seed holds %d", benched.Name, benched.Version, len(got), len(want))

@@ -152,6 +152,7 @@ func BuildPlan(root string, arm Arm, name string, version int) (Plan, error) {
 			"-c", "model_reasoning_effort='" + string(AskedEffort) + "'",
 			"--json",
 			"--sandbox", "workspace-write",
+			"-c", "sandbox_workspace_write.network_access=true",
 			"-C", dir,
 		}
 		plan.Env = []string{"the chatgpt subscription credential codex login already holds"}
@@ -164,6 +165,7 @@ func BuildPlan(root string, arm Arm, name string, version int) (Plan, error) {
 			"--model", tofuArmModel,
 			"--effort", string(AskedEffort),
 			"--max-steps", strconv.Itoa(caps.TurnCap),
+			"--no-instructions",
 		}
 		plan.Env = []string{"OPENROUTER_KEY for the jev gate, the anthropic subscription credential for the model"}
 	default:

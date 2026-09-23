@@ -475,15 +475,8 @@ func committedSeed(t *testing.T, root string, version int) string {
 	if _, err := Stage(root, version, dir); err != nil {
 		t.Fatalf("stage the v%d seed the recorded run started from: %v", version, err)
 	}
-	for _, args := range [][]string{
-		{"init"},
-		{"add", "-A"},
-		{"-c", "user.name=bench", "-c", "user.email=bench@example.com", "commit", "-m", "seed"},
-	} {
-		out, err := exec.Command("git", append([]string{"-C", dir}, args...)...).CombinedOutput()
-		if err != nil {
-			t.Fatalf("git %s in the staged seed: %v\n%s", strings.Join(args, " "), err, out)
-		}
+	if OwnStartCommit(dir) == "" {
+		t.Fatalf("staging v%d left no commit in %s, so the gates have no baseline to read a diff against", version, dir)
 	}
 	return dir
 }
