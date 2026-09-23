@@ -27,6 +27,7 @@ import (
 	"tofu/internal/llm/wire/openrouter"
 	"tofu/internal/recall"
 	"tofu/internal/session"
+	settingspkg "tofu/internal/settings"
 	"tofu/internal/transport"
 	"tofu/internal/turn"
 	"tofu/internal/turn/tools"
@@ -72,6 +73,7 @@ type runOpts struct {
 	turnID           string
 	wire             string
 	dryRun           bool
+	showPrompt       bool
 	gateArm          string
 	noCrew           bool
 	doneArm          string
@@ -91,6 +93,7 @@ type runtime struct {
 	budget   recall.Budget
 	gate     *toolGate
 	sessions *session.Store
+	notify   func(string)
 }
 
 func boundRoles(wire string) (models.Bindings, error) {
@@ -155,6 +158,7 @@ Arguments:
   --loop-guard-repeats <n>     how many repeats of one call with one result stops a turn
   --loop-guard-window <n>      how many recent calls the loop guard remembers
   --dry-run                    print the request that would be sent and send nothing
+  --show-prompt                print the prompt the turn composes, part by part, and send nothing
 `
 
 func runVerb(args []string, out, errOut io.Writer) int {
@@ -167,7 +171,10 @@ func runVerb(args []string, out, errOut io.Writer) int {
 		return runFail(errOut, err)
 	}
 	if opts.maxSteps == 0 {
-		opts.maxSteps = appDecisionCap(cmp.Or(opts.dir, "."))
+		opts.maxSteps = appSetting(cmp.Or(opts.dir, "."), settingspkg.DecisionCap)
+	}
+	if opts.showPrompt {
+		return showPrompt(opts, out, errOut)
 	}
 
 	selected, err := chooseModel(opts)
@@ -188,7 +195,10 @@ func runVerb(args []string, out, errOut io.Writer) int {
 	}
 
 	if opts.dryRun {
-		config, _ := runConfig(opts, built, runtime{spend: turn.SpendSubscription, budget: budget})
+		config, _, err := runConfig(opts, built, runtime{spend: turn.SpendSubscription, budget: budget, notify: writeNotice(errOut)})
+		if err != nil {
+			return runFail(errOut, err)
+		}
 		body, err := dryRunBody(opts, selected.ID, config)
 		if err != nil {
 			return runFail(errOut, err)
@@ -280,7 +290,10 @@ func runTurn(opts runOpts, selected models.Model, built []turn.Tool, budget reca
 		return runFail(errOut, err)
 	}
 
-	config, spawner := runConfig(opts, built, runtime{accounts: held.forTurn(), spend: spend, budget: budget, gate: gate, sessions: sessions})
+	config, spawner, err := runConfig(opts, built, runtime{accounts: held.forTurn(), spend: spend, budget: budget, gate: gate, sessions: sessions, notify: writeNotice(errOut)})
+	if err != nil {
+		return runFail(errOut, err)
+	}
 	if spawner != nil {
 		review, reviewErr := newDoneReview(opts.doneArm)
 		if reviewErr != nil {
@@ -308,11 +321,46 @@ func runTurn(opts runOpts, selected models.Model, built []turn.Tool, budget reca
 	return exitOK
 }
 
-func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn.SpawnTool) {
+func runEnvironment(opts runOpts) (environment, cutNotice string) {
 	home, _ := os.UserHomeDir()
-	environment := turn.Environment(opts.dir, time.Now())
-	if written := turn.ProjectInstructions(opts.dir, home); written != "" {
+	capBytes := turn.InstructionCap(appSetting(opts.dir, settingspkg.ProjectInstructionsCap))
+	environment = turn.Environment(opts.dir, time.Now())
+	written, cut := turn.ProjectInstructions(opts.dir, home, capBytes)
+	if written != "" {
 		environment += "\n\n" + written
+	}
+	if len(cut) == 0 {
+		return environment, ""
+	}
+	return environment, fmt.Sprintf("your instructions were cut at %d bytes and %s never reached the model: raise the cap with tofu settings set %s <bytes>",
+		capBytes, strings.Join(cut, ", "), settingspkg.ProjectInstructionsCap)
+}
+
+func writeNotice(w io.Writer) func(string) {
+	return func(notice string) { _, _ = fmt.Fprintln(w, "tofu: "+notice) }
+}
+
+func composePrompt(opts runOpts, environment string) (turn.Composed, error) {
+	rules, _, err := loadRules("")
+	if err != nil {
+		return turn.Composed{}, err
+	}
+	return turn.Compose(turn.ComposeSpec{
+		Task:         opts.task,
+		Environment:  environment,
+		ToolGuidance: runSystem(opts),
+		Rules:        rules,
+	})
+}
+
+func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn.SpawnTool, error) {
+	environment, cutNotice := runEnvironment(opts)
+	if cutNotice != "" && run.notify != nil {
+		run.notify(cutNotice)
+	}
+	composed, err := composePrompt(opts, environment)
+	if err != nil {
+		return turn.Config{}, nil, err
 	}
 	config := turn.Config{
 		Model:       run.model,
@@ -321,7 +369,7 @@ func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn
 		Tools:       turn.NewRegistry(built...),
 		Task:        opts.task,
 		Wire:        opts.wire,
-		System:      runSystem(opts),
+		System:      composed.System(),
 		Environment: environment,
 		Caps: turn.Caps{
 			MaxSteps:         opts.maxSteps,
@@ -340,11 +388,11 @@ func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn
 	parentID := cmp.Or(opts.turnID, turn.NewID(time.Now()))
 	config.NewID = func() string { return parentID }
 	if opts.noCrew || opts.toolSet == toolSetThree {
-		return config, nil
+		return config, nil, nil
 	}
 	spawner := turn.NewSpawnTool(parentID, childBase(config, opts.child), &crew.Roster{})
 	config.Tools = turn.NewRegistry(append(slices.Clone(built), spawner)...)
-	return config, spawner
+	return config, spawner, nil
 }
 
 func childBase(config turn.Config, child childRole) turn.Config {
@@ -604,6 +652,8 @@ func parseRunArgs(args []string) (runOpts, error) {
 			opts.dir, err = nextArg(args, &i, arg)
 		case "--dry-run":
 			opts.dryRun = true
+		case "--show-prompt":
+			opts.showPrompt = true
 		case "--no-gate":
 			opts.gateArm = gateOff
 		case "--gate":

@@ -516,36 +516,6 @@ func TestWhyPrintsTheStateTheBuilderProduced(t *testing.T) {
 	t.Logf("tofu why on a row carrying its state:\n%s", text)
 }
 
-func TestWhyOnAnElidedRowSaysWhereTheWholeStateIs(t *testing.T) {
-	t.Chdir(t.TempDir())
-	dir, err := sys.LogDir()
-	if err != nil {
-		t.Fatalf("Dir: %v", err)
-	}
-	body := `{"command":"` + strings.Repeat("x", 8*1024) + `","tool":"bash"}`
-	original, _ := writeFixtureLedger(t, dir, func(r *ledger.Row) {
-		r.State = []byte(body)
-	})
-	if original.StateElision == nil {
-		t.Fatalf("a %d byte state was not elided", len(body))
-	}
-
-	var out, errOut bytes.Buffer
-	if code := whyVerb([]string{original.ID}, &out, &errOut, time.Now); code != exitOK {
-		t.Fatalf("exit = %d, stderr %s", code, errOut.String())
-	}
-	text := out.String()
-	if strings.Contains(text, body) {
-		t.Fatalf("the whole elided state was printed anyway, got %d characters", len(text))
-	}
-	for _, want := range []string{"too large for a row", original.StateElision.File, original.StateElision.Head} {
-		if !strings.Contains(text, want) {
-			t.Fatalf("the elision line is missing %q, got:\n%s", want, text)
-		}
-	}
-	t.Logf("tofu why on an elided row:\n%s", text)
-}
-
 func TestWhyOnARowFromBeforeTheStateBodyDoesNotFail(t *testing.T) {
 	t.Chdir(t.TempDir())
 	dir, err := sys.LogDir()

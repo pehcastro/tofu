@@ -114,13 +114,22 @@ func armOpts(t *testing.T, args ...string) runOpts {
 	return opts
 }
 
+func mustConfig(t *testing.T, opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn.SpawnTool) {
+	t.Helper()
+	config, spawner, err := runConfig(opts, built, run)
+	if err != nil {
+		t.Fatalf("runConfig: %v", err)
+	}
+	return config, spawner
+}
+
 func toolNames(t *testing.T, opts runOpts) []string {
 	t.Helper()
 	built, _, err := buildRunTools(opts.dir, opts.toolSet)
 	if err != nil {
 		t.Fatalf("buildRunTools %s: %v", opts.toolSet, err)
 	}
-	config, _ := runConfig(opts, built, runtime{spend: turn.SpendSubscription})
+	config, _ := mustConfig(t, opts, built, runtime{spend: turn.SpendSubscription})
 	var named []string
 	for _, definition := range config.Tools.Definitions() {
 		named = append(named, definition.Name)
@@ -205,8 +214,8 @@ func TestRunConfigKeepsProjectInstructionsOutOfTheCachedSystemPrompt(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	configPlain, _ := runConfig(optsPlain, built, runtime{spend: turn.SpendSubscription})
-	configRuled, _ := runConfig(optsRuled, built, runtime{spend: turn.SpendSubscription})
+	configPlain, _ := mustConfig(t, optsPlain, built, runtime{spend: turn.SpendSubscription})
+	configRuled, _ := mustConfig(t, optsRuled, built, runtime{spend: turn.SpendSubscription})
 
 	if configPlain.System != configRuled.System {
 		t.Fatalf("a directory's own CLAUDE.md changed the cached system prompt:\nplain: %q\nruled: %q", configPlain.System, configRuled.System)
@@ -376,7 +385,7 @@ func TestAChildRunsOnADifferentSubscriptionFromItsParent(t *testing.T) {
 		{Build: "claude-opus-5-20260101", Outcome: llm.OutcomeMessage, Content: "the child reported"},
 	}}
 
-	config, spawner := runConfig(opts, built, runtime{model: parent, spend: turn.SpendSubscription})
+	config, spawner := mustConfig(t, opts, built, runtime{model: parent, spend: turn.SpendSubscription})
 	row, err := turn.Run(context.Background(), config)
 	if err != nil {
 		t.Fatalf("turn.Run: %v", err)
@@ -522,7 +531,7 @@ func TestTheParentTurnRowNamesTheChildItSpawnedAndCarriesItsRowAndCost(t *testin
 		{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "the child did it", Usage: llm.Usage{Cost: 0.08}},
 	}}
 
-	config, spawner := runConfig(opts, built, runtime{model: model, spend: turn.SpendSubscription})
+	config, spawner := mustConfig(t, opts, built, runtime{model: model, spend: turn.SpendSubscription})
 	row, err := turn.Run(context.Background(), config)
 	if err != nil {
 		t.Fatalf("turn.Run: %v", err)
@@ -585,7 +594,7 @@ func TestRunRecordsADenyAuthorityCannotRelaxAndStillRunsTheStep(t *testing.T) {
 		{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "done"},
 	}}
 
-	config, _ := runConfig(opts, registry, runtime{model: model, spend: turn.SpendSubscription, gate: gate})
+	config, _ := mustConfig(t, opts, registry, runtime{model: model, spend: turn.SpendSubscription, gate: gate})
 	row, err := turn.Run(context.Background(), config)
 	if err != nil {
 		t.Fatalf("turn.Run: %v", err)

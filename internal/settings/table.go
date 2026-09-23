@@ -1,5 +1,7 @@
 package settings
 
+import "tofu/internal/konst"
+
 type Kind int
 
 const (
@@ -17,9 +19,10 @@ type Spec struct {
 }
 
 const (
-	ChatShowsTools = "chatShowsTools"
-	FoldHidesShell = "foldHidesShell"
-	DecisionCap    = "decisionCap"
+	ChatShowsTools         = "chatShowsTools"
+	FoldHidesShell         = "foldHidesShell"
+	DecisionCap            = "decisionCap"
+	ProjectInstructionsCap = "projectInstructionsCap"
 )
 
 func Default() []Spec {
@@ -27,5 +30,6 @@ func Default() []Spec {
 		{Key: ChatShowsTools, Label: "chat shows every tool call", Group: "chat", Kind: Bool, Default: 0, Restart: false},
 		{Key: DecisionCap, Label: "decision cap per turn, zero means no cap", Group: "turn", Kind: Int, Default: 0, Restart: true},
 		{Key: FoldHidesShell, Label: "the running line drops the shell count", Group: "chat", Kind: Bool, Default: 0, Restart: false},
+		{Key: ProjectInstructionsCap, Label: "bytes of your instruction files sent each turn, below one restores the default", Group: "turn", Kind: Int, Default: konst.ProjectInstructionsBytesDefault, Restart: true},
 	}
 }

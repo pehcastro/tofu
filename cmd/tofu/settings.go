@@ -22,12 +22,12 @@ func openSettings(dir string) (*settingspkg.Store, error) {
 	return settingspkg.Open(global, project)
 }
 
-func appDecisionCap(dir string) int {
+func appSetting(dir, key string) int {
 	store, err := openSettings(dir)
 	if err != nil {
 		return 0
 	}
-	return store.Int(settingspkg.DecisionCap)
+	return store.Int(key)
 }
 
 func settingsVerb(args []string, out, errOut io.Writer) int {

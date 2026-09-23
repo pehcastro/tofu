@@ -70,7 +70,7 @@ func TestASecondIdenticalReadInOneTurnNeverReachesTheTool(t *testing.T) {
 		{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "read it twice"},
 	}}
 
-	config, _ := runConfig(opts, built, runtime{model: model, spend: turn.SpendSubscription})
+	config, _ := mustConfig(t, opts, built, runtime{model: model, spend: turn.SpendSubscription})
 	row, err := turn.Run(context.Background(), config)
 	if err != nil {
 		t.Fatalf("turn.Run: %v", err)
@@ -207,7 +207,7 @@ func TestARunAtATwentyThousandCeilingCompactsAndTheRecordSaysWhatItDropped(t *te
 	if err != nil {
 		t.Fatalf("contextBudget: %v", err)
 	}
-	config, _ := runConfig(opts, built, runtime{model: &queuedModel{decisions: decisions}, spend: turn.SpendSubscription, budget: budget})
+	config, _ := mustConfig(t, opts, built, runtime{model: &queuedModel{decisions: decisions}, spend: turn.SpendSubscription, budget: budget})
 	config.NoFork = true
 	row, err := turn.Run(context.Background(), config)
 	if err != nil {
@@ -322,7 +322,7 @@ func TestAModelWithNoRecordedWindowCompactsAtTheOperatingCeiling(t *testing.T) {
 			budget, konst.ContextCeilingTokens)
 	}
 	store := session.NewStore(filepath.Join(dir, ".tofu", "sessions"))
-	config, _ := runConfig(opts, built, runtime{model: &queuedModel{decisions: decisions}, spend: turn.SpendSubscription, budget: budget, sessions: store})
+	config, _ := mustConfig(t, opts, built, runtime{model: &queuedModel{decisions: decisions}, spend: turn.SpendSubscription, budget: budget, sessions: store})
 	config.NoFork = true
 	row, err := turn.Run(context.Background(), config)
 	if err != nil {
@@ -370,7 +370,7 @@ func TestTheSpawnToolIsGivenTheSessionStoreBeforeTheTurnStarts(t *testing.T) {
 		{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "the child reported"},
 	}}
 
-	config, _ := runConfig(opts, built, runtime{model: model, spend: turn.SpendSubscription, sessions: store})
+	config, _ := mustConfig(t, opts, built, runtime{model: model, spend: turn.SpendSubscription, sessions: store})
 	row, err := turn.Run(context.Background(), config)
 	if err != nil {
 		t.Fatalf("turn.Run: %v", err)
@@ -467,7 +467,7 @@ func TestAChildLeavesItsRecordWhileTheParentsTurnIsStillRunning(t *testing.T) {
 		{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "the child reported"},
 	}}}
 
-	config, _ := runConfig(opts, built, runtime{model: model, spend: turn.SpendSubscription, sessions: store})
+	config, _ := mustConfig(t, opts, built, runtime{model: model, spend: turn.SpendSubscription, sessions: store})
 	row, err := turn.Run(context.Background(), config)
 	if err != nil {
 		t.Fatalf("turn.Run: %v", err)

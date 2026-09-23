@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -39,6 +40,8 @@ type whyRow struct {
 	isReplay  bool
 	blockedBy string
 	statePath string
+	state     json.RawMessage
+	stateErr  error
 }
 
 func whyVerb(args []string, out, errOut io.Writer, now func() time.Time) int {
@@ -107,6 +110,7 @@ func whyVerb(args []string, out, errOut io.Writer, now func() time.Time) int {
 			}
 			continue
 		}
+		wr.state, wr.stateErr = reader.State(wr.chain)
 		printWhy(out, wr, moment, color, precedents)
 	}
 	return exitOK

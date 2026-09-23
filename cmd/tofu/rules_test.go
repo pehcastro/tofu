@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"tofu/internal/rule"
 	"tofu/internal/sys"
 )
 
@@ -83,13 +84,20 @@ func TestAProjectRulesLibraryOverridesTheOneInTheBinary(t *testing.T) {
 	}
 }
 
-var shippedRuleIDs = []string{
-	"comments", "no_worktree", "ownership", "em_dash",
-	"flake_disagreement", "skipped_test_budget",
-	"test_assertion", "test_boundary_cases", "test_mock_boundary",
+func shippedRules(t *testing.T) []rule.Rule {
+	t.Helper()
+	rules, err := rule.LoadDir(shippedRulesLibraryDir(t))
+	if err != nil {
+		t.Fatalf("loading the shipped rules off disk: %v", err)
+	}
+	if len(rules) == 0 {
+		t.Fatal("the shipped library holds no rule, so nothing here is tested")
+	}
+	return rules
 }
 
 func TestRulesListPrintsEveryShippedRule(t *testing.T) {
+	shipped := shippedRules(t)
 	out := &bytes.Buffer{}
 	errOut := &bytes.Buffer{}
 	code := rulesListVerb([]string{"--library", shippedRulesLibraryDir(t)}, out, errOut)
@@ -97,28 +105,28 @@ func TestRulesListPrintsEveryShippedRule(t *testing.T) {
 		t.Fatalf("exit code = %d, want %d, stderr %q", code, exitOK, errOut.String())
 	}
 	lines := strings.Split(strings.TrimRight(out.String(), "\n"), "\n")
-	if len(lines) != len(shippedRuleIDs)+1 {
-		t.Fatalf("lines = %d, want an origin line and %v: %q", len(lines), shippedRuleIDs, out.String())
+	if len(lines) != len(shipped)+1 {
+		t.Fatalf("lines = %d, want an origin line and the %d rules on disk: %q", len(lines), len(shipped), out.String())
 	}
-	if !strings.HasPrefix(lines[0], strconv.Itoa(len(shippedRuleIDs))+" rules from ") {
+	if !strings.HasPrefix(lines[0], strconv.Itoa(len(shipped))+" rules from ") {
 		t.Fatalf("the first line does not count the rules and name the set: %q", lines[0])
 	}
-	for i, id := range shippedRuleIDs {
-		if !strings.HasPrefix(lines[i+1], id) {
-			t.Fatalf("line %d is %q, want the rule %s", i+1, lines[i+1], id)
+	for i, r := range shipped {
+		line := lines[i+1]
+		if !strings.HasPrefix(line, r.ID) {
+			t.Fatalf("line %d is %q, want the rule %s", i+1, line, r.ID)
 		}
-	}
-	for _, line := range lines[1:] {
-		if !strings.Contains(line, "structural") && !strings.Contains(line, "measured") {
-			t.Fatalf("line %q does not carry a kind", line)
+		if !strings.Contains(line, string(r.Kind)) {
+			t.Fatalf("line %q does not carry the kind %s the rule declares", line, r.Kind)
 		}
-		if !strings.Contains(line, "shadow") {
-			t.Fatalf("line %q does not carry a mode", line)
+		if !strings.Contains(line, r.Mode.String()) {
+			t.Fatalf("line %q does not carry the mode %s the rule declares", line, r.Mode)
 		}
 	}
 }
 
 func TestRulesListJSON(t *testing.T) {
+	shipped := shippedRules(t)
 	out := &bytes.Buffer{}
 	errOut := &bytes.Buffer{}
 	code := rulesListVerb([]string{"--library", shippedRulesLibraryDir(t), "--json"}, out, errOut)
@@ -129,8 +137,13 @@ func TestRulesListJSON(t *testing.T) {
 	if err := json.Unmarshal(out.Bytes(), &report); err != nil {
 		t.Fatalf("unmarshalling json: %v, body %q", err, out.String())
 	}
-	if len(report.Rules) != len(shippedRuleIDs) {
-		t.Fatalf("listing = %d, want %v: %+v", len(report.Rules), shippedRuleIDs, report.Rules)
+	if len(report.Rules) != len(shipped) {
+		t.Fatalf("listing = %d, want the %d rules on disk: %+v", len(report.Rules), len(shipped), report.Rules)
+	}
+	for i, r := range shipped {
+		if report.Rules[i] != (ruleListing{ID: r.ID, Kind: string(r.Kind), Mode: r.Mode.String()}) {
+			t.Fatalf("listing %d is %+v, want the rule %s on disk: %+v", i, report.Rules[i], r.ID, r)
+		}
 	}
 	if report.Origin == "" {
 		t.Fatalf("the report does not name the rule set it used: %+v", report)

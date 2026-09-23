@@ -2,8 +2,10 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"strconv"
 	"strings"
 	"time"
@@ -36,7 +38,7 @@ func printWhy(out io.Writer, wr whyRow, now time.Time, color bool, precedents []
 	printThreshold(out, row)
 	printAuthority(out, row, wr.blockedBy)
 	printMode(out, row)
-	printState(out, row, wr.statePath)
+	printState(out, wr)
 	printPrecedents(out, precedents, now, color)
 }
 
@@ -65,12 +67,13 @@ func printPrecedents(out io.Writer, found []ledger.Precedent, now time.Time, col
 	}
 }
 
-func printState(out io.Writer, row ledger.Row, statePath string) {
-	if e := row.StateElision; e != nil {
-		_, _ = fmt.Fprintf(out, "  state      %d bytes, too large for a row, whole body in %s\n    head     %s\n    tail     %s\n    whole    tofu why %s --state\n", e.Bytes, statePath, e.Head, e.Tail, row.ID)
+func printState(out io.Writer, wr whyRow) {
+	row := wr.chain
+	if wr.stateErr != nil {
+		printUnreadableState(out, row, wr.stateErr, wr.statePath)
 		return
 	}
-	if len(row.State) == 0 {
+	if len(wr.state) == 0 {
 		absence := "absent: this row is schema " + strconv.Itoa(row.Schema) + " and carries no state body"
 		if row.Schema < ledger.StateBodySchema {
 			absence = fmt.Sprintf("absent: this row is schema %d and predates the state body, which rows carry from schema %d onward", row.Schema, ledger.StateBodySchema)
@@ -78,7 +81,30 @@ func printState(out io.Writer, row ledger.Row, statePath string) {
 		_, _ = fmt.Fprintf(out, "  state      %s\n", absence)
 		return
 	}
-	_, _ = fmt.Fprintf(out, "  state      %d bytes\n    %s\n", len(row.State), row.State)
+	body := string(wr.state)
+	if len(body) <= konst.WhyStateBytes {
+		_, _ = fmt.Fprintf(out, "  state      %d bytes\n    %s\n", len(body), body)
+		return
+	}
+	where := ""
+	if wr.statePath != "" {
+		where = ", whole body in " + wr.statePath
+	}
+	_, _ = fmt.Fprintf(out, "  state      %d bytes, first %d shown%s\n    %s\n    rest     tofu why %s --state\n",
+		len(body), konst.WhyStateBytes, where, strings.ToValidUTF8(body[:konst.WhyStateBytes], ""), row.ID)
+}
+
+func printUnreadableState(out io.Writer, row ledger.Row, err error, statePath string) {
+	e := row.StateElision
+	reason := fmt.Sprintf("unreadable: %v", err)
+	var escaping ledger.EscapingStateError
+	switch {
+	case errors.As(err, &escaping):
+		reason = fmt.Sprintf("refused: the row names %s, which is outside the ledger at %s, so it was not read", escaping.File, escaping.Dir)
+	case errors.Is(err, fs.ErrNotExist):
+		reason = fmt.Sprintf("missing: %s is not on disk, so only the excerpt the row carries survives", statePath)
+	}
+	_, _ = fmt.Fprintf(out, "  state      %d bytes recorded, %s\n    head     %s\n    tail     %s\n", e.Bytes, reason, e.Head, e.Tail)
 }
 
 func printThreshold(out io.Writer, row ledger.Row) {

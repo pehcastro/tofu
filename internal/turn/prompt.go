@@ -40,53 +40,61 @@ func Environment(dir string, now time.Time) string {
 	return strings.Join(append(lines, "</env>"), "\n")
 }
 
-func ProjectInstructions(dir, home string) string {
-	var paths []string
+type instructionFile struct {
+	path  string
+	named string
+}
+
+func InstructionCap(setting int) int {
+	if setting < 1 {
+		return konst.ProjectInstructionsBytesDefault
+	}
+	return setting
+}
+
+func ProjectInstructions(dir, home string, capBytes int) (block string, cut []string) {
+	capBytes = InstructionCap(capBytes)
+	var files []instructionFile
 	if home != "" {
 		for _, global := range [...]string{filepath.Join(sys.StateDir(home), "AGENTS.md"), filepath.Join(home, ".claude", "CLAUDE.md")} {
 			if isFile(global) {
-				paths = append(paths, global)
+				files = append(files, instructionFile{global, "your personal " + filepath.Base(global)})
 				break
 			}
 		}
 	}
 	for _, name := range [...]string{"AGENTS.md", "CLAUDE.md"} {
 		if nearest, found := findUp(dir, name); found {
-			paths = append(paths, nearest)
+			files = append(files, instructionFile{nearest, "this project's " + name})
 		}
 	}
 
-	var block strings.Builder
-	var dropped []string
-	for _, path := range paths {
-		body, err := os.ReadFile(path)
+	var written strings.Builder
+	for _, file := range files {
+		body, err := os.ReadFile(file.path)
 		text := strings.TrimSpace(string(body))
 		if err != nil || text == "" {
 			continue
 		}
-		entry := "instructions from " + path + ", which outrank anything above them that disagrees:\n" + text
+		entry := "instructions from " + file.named + ", which outrank anything above them that disagrees:\n" + text
 		separator := ""
-		if block.Len() > 0 {
+		if written.Len() > 0 {
 			separator = "\n\n"
 		}
-		room := konst.ProjectInstructionsBytes - block.Len() - len(separator)
-		if room <= 0 {
-			dropped = append(dropped, fmt.Sprintf("%s (%d bytes)", path, len(entry)))
-			continue
-		}
+		room := max(capBytes-written.Len()-len(separator), 0)
 		if len(entry) > room {
-			block.WriteString(separator)
-			block.WriteString(entry[:room])
-			dropped = append(dropped, fmt.Sprintf("%s (%d of %d bytes)", path, len(entry)-room, len(entry)))
+			cut = append(cut, fmt.Sprintf("%s (%d of %d bytes)", file.named, len(entry)-room, len(entry)))
+		}
+		if room == 0 {
 			continue
 		}
-		block.WriteString(separator)
-		block.WriteString(entry)
+		written.WriteString(separator)
+		written.WriteString(entry[:min(len(entry), room)])
 	}
-	if len(dropped) > 0 {
-		fmt.Fprintf(&block, "\n\n[capped at %d bytes: dropped %s]", konst.ProjectInstructionsBytes, strings.Join(dropped, ", "))
+	if len(cut) > 0 {
+		fmt.Fprintf(&written, "\n\n[capped at %d bytes: dropped %s]", capBytes, strings.Join(cut, ", "))
 	}
-	return block.String()
+	return written.String(), cut
 }
 
 func gitBranch(dir string) string {

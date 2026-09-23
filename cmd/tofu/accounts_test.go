@@ -47,7 +47,7 @@ func TestTheScreenSaysAnAccountMovedAndWhatTheMoveCost(t *testing.T) {
 		},
 	}
 
-	config, _ := runConfig(opts, built, runtime{accounts: held, spend: turn.SpendSubscription})
+	config, _ := mustConfig(t, opts, built, runtime{accounts: held, spend: turn.SpendSubscription})
 	row, err := turn.Run(context.Background(), config)
 	if err != nil {
 		t.Fatalf("turn.Run: %v", err)

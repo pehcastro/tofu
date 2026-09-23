@@ -4,7 +4,10 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+
+	settingspkg "tofu/internal/settings"
 )
 
 func isolatedHomeAndProject(t *testing.T) string {
@@ -33,8 +36,44 @@ func TestSettingsSetPersistsAndGetReadsItBack(t *testing.T) {
 
 func TestDecisionCapDefaultsToNoCap(t *testing.T) {
 	isolatedHomeAndProject(t)
-	if got := appDecisionCap("."); got != 0 {
-		t.Fatalf("appDecisionCap default = %d, want 0, meaning no cap", got)
+	if got := appSetting(".", settingspkg.DecisionCap); got != 0 {
+		t.Fatalf("the decision cap default = %d, want 0, meaning no cap", got)
+	}
+}
+
+func TestTheProjectInstructionCapDefaultsToThirtyTwoKilobytes(t *testing.T) {
+	isolatedHomeAndProject(t)
+	if got := appSetting(".", settingspkg.ProjectInstructionsCap); got != 32*1024 {
+		t.Fatalf("the project instruction cap default = %d, want %d", got, 32*1024)
+	}
+}
+
+func TestAProjectInstructionCapSetOnDiskReachesThePrompt(t *testing.T) {
+	isolatedHomeAndProject(t)
+	dir, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := strings.Repeat("e", 9000)
+	if err := os.WriteFile(filepath.Join(dir, "CLAUDE.md"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var out, errOut bytes.Buffer
+	if code := settingsVerb([]string{"set", "--scope", "project", settingspkg.ProjectInstructionsCap, "4096"}, &out, &errOut); code != exitOK {
+		t.Fatalf("settings set exited %d: %s", code, errOut.String())
+	}
+	opts, err := parseRunArgs([]string{"--dir", dir, "a task"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	environment, cutNotice := runEnvironment(opts)
+	if len(environment) > 4096+500 {
+		t.Fatalf("a cap of 4096 produced a %d byte environment block", len(environment))
+	}
+	for _, want := range []string{"cut at 4096 bytes", "this project's CLAUDE.md", settingspkg.ProjectInstructionsCap} {
+		if !strings.Contains(cutNotice, want) {
+			t.Fatalf("the notice a person reads does not say %q: %q", want, cutNotice)
+		}
 	}
 }
 

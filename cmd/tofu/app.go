@@ -31,6 +31,7 @@ import (
 	"tofu/internal/llm/models"
 	"tofu/internal/llm/quota"
 	sessionstore "tofu/internal/session"
+	settingspkg "tofu/internal/settings"
 	"tofu/internal/shell"
 	"tofu/internal/sys"
 	"tofu/internal/turn"
@@ -601,7 +602,7 @@ func (s *appSession) run(ctx context.Context, wire, task string, emit tui.Called
 		toolSet:          toolSetFull,
 		loopGuardRepeats: konst.TurnLoopGuardRepeats,
 		loopGuardWindow:  konst.TurnLoopGuardWindow,
-		maxSteps:         appDecisionCap(s.dir),
+		maxSteps:         appSetting(s.dir, settingspkg.DecisionCap),
 	}
 	opened, err := s.open(opts)
 	if opened.held != nil {
@@ -656,7 +657,12 @@ func (s *appSession) run(ctx context.Context, wire, task string, emit tui.Called
 		watch.inner = asked
 		return watch, nil
 	}
-	config, spawner := runConfig(opts, built, runtime{accounts: opened.held.forTurn(), spend: opened.spend, budget: budget, gate: gate, sessions: sessions})
+	notify := func(notice string) { emit(tui.Event{Kind: tui.EventNote, Text: notice}) }
+	config, spawner, configErr := runConfig(opts, built, runtime{accounts: opened.held.forTurn(), spend: opened.spend, budget: budget, gate: gate, sessions: sessions, notify: notify})
+	if configErr != nil {
+		fail(configErr)
+		return
+	}
 	config.History = s.carried
 	config.Images = images
 	if s.answers != nil {

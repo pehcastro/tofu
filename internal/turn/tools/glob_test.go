@@ -182,15 +182,17 @@ func TestAProjectInstructionFileIsWalkedEvenWhenAnIgnoreFileExcludesIt(t *testin
 	seed(t, root, "notes.md", "not instructions\n")
 
 	listed := globbed(t, root, `{"pattern":"*.md"}`)
+	instructions, _ := turn.ProjectInstructions(root, "", 0)
 	read := 0
-	for _, line := range strings.Split(turn.ProjectInstructions(root, ""), "\n") {
+	for _, line := range strings.Split(instructions, "\n") {
 		from, isInstructions := strings.CutPrefix(line, "instructions from ")
 		if !isInstructions {
 			continue
 		}
-		path, _, _ := strings.Cut(from, ",")
+		named, _, _ := strings.Cut(from, ",")
+		fields := strings.Fields(named)
 		read++
-		if name := filepath.Base(path); !lists(listed, name) {
+		if name := fields[len(fields)-1]; !lists(listed, name) {
 			t.Fatalf("%s is read by the prompt and the .gitignore hid it from glob:\n%s", name, listed)
 		}
 	}

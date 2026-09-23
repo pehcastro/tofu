@@ -38,6 +38,7 @@ const (
 	StreamLineBytes = 16 << 20
 
 	WhyBarWidthChars   = 20
+	WhyStateBytes      = 2048
 	MeterBarWidthChars = 12
 )
 
@@ -55,22 +56,22 @@ const (
 )
 
 const (
-	TurnAttemptTimeoutMillis      = 30000
-	TurnRetries                   = 4
-	TurnBackoffMillis             = 250
-	TurnMaxBackoffMillis          = 2000
-	TurnBackoffGrowth             = 2
-	TurnBackoffJitterFraction     = 0.2
-	TurnTotalBackoffCeilingMillis = 15000
-	TurnResultBytesCap            = 32768
-	IgnoreFileBytesCap            = 65536
-	GlobPathsResultCap            = 300
-	ProjectInstructionsBytes      = 16384
-	TurnParallelToolCalls         = 4
-	TurnMaxSteps                  = 40
-	TurnLoopGuardRepeats          = 3
-	TurnLoopGuardWindow           = 6
-	SubscriptionCacheTTL          = "1h"
+	TurnAttemptTimeoutMillis        = 30000
+	TurnRetries                     = 4
+	TurnBackoffMillis               = 250
+	TurnMaxBackoffMillis            = 2000
+	TurnBackoffGrowth               = 2
+	TurnBackoffJitterFraction       = 0.2
+	TurnTotalBackoffCeilingMillis   = 15000
+	TurnResultBytesCap              = 32768
+	IgnoreFileBytesCap              = 65536
+	GlobPathsResultCap              = 300
+	ProjectInstructionsBytesDefault = 32768
+	TurnParallelToolCalls           = 4
+	TurnMaxSteps                    = 40
+	TurnLoopGuardRepeats            = 3
+	TurnLoopGuardWindow             = 6
+	SubscriptionCacheTTL            = "1h"
 
 	VerbMaxDepth      = 2
 	VerbTimeoutMillis = 120000

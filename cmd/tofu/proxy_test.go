@@ -95,7 +95,7 @@ func runOneBashCall(t *testing.T, project string) turn.ToolCallRow {
 		}},
 		{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "ran it"},
 	}}
-	config, _ := runConfig(opts, built, runtime{model: model, spend: turn.SpendSubscription})
+	config, _ := mustConfig(t, opts, built, runtime{model: model, spend: turn.SpendSubscription})
 	row, err := turn.Run(context.Background(), config)
 	if err != nil {
 		t.Fatalf("turn.Run: %v", err)

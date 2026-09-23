@@ -60,7 +60,7 @@ func TestTheHashChatDrawsIsTheIDOfTheCallInTheRecord(t *testing.T) {
 		{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "read it"},
 	}}
 	watch := &appWatcher{inner: model, emit: driver.emit, now: time.Now, turnID: opts.turnID, seen: map[string]bool{}}
-	config, _ := runConfig(opts, built, runtime{model: watch, spend: turn.SpendSubscription, sessions: sessions})
+	config, _ := mustConfig(t, opts, built, runtime{model: watch, spend: turn.SpendSubscription, sessions: sessions})
 	row, err := turn.Run(context.Background(), config)
 	if err != nil {
 		t.Fatal(err)

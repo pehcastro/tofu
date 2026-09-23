@@ -72,7 +72,7 @@ func TestProjectInstructionsTakeTheNearerAgentsFileOverTheFurtherOne(t *testing.
 	write(t, filepath.Join(root, "AGENTS.md"), "the further rule")
 	write(t, filepath.Join(nested, "AGENTS.md"), "the nearer rule")
 
-	block := ProjectInstructions(nested, "")
+	block, _ := ProjectInstructions(nested, "", 0)
 
 	if !strings.Contains(block, "the nearer rule") {
 		t.Fatalf("the nearer AGENTS.md is not in the block:\n%s", block)
@@ -86,32 +86,98 @@ func TestProjectInstructionsReadTheClaudeFileInTheWorkingDirectory(t *testing.T)
 	root := t.TempDir()
 	write(t, filepath.Join(root, "CLAUDE.md"), "never an em dash")
 
-	block := ProjectInstructions(root, "")
+	block, _ := ProjectInstructions(root, "", 0)
 
-	if !strings.Contains(block, "never an em dash") || !strings.Contains(block, filepath.Join(root, "CLAUDE.md")) {
+	if !strings.Contains(block, "never an em dash") || !strings.Contains(block, "this project's CLAUDE.md") {
 		t.Fatalf("CLAUDE.md did not reach the prompt:\n%s", block)
 	}
 }
 
 func TestProjectInstructionsAreCappedAndSayWhatWasDropped(t *testing.T) {
 	root := t.TempDir()
-	write(t, filepath.Join(root, "CLAUDE.md"), strings.Repeat("a", konst.ProjectInstructionsBytes+500))
+	write(t, filepath.Join(root, "CLAUDE.md"), strings.Repeat("a", konst.ProjectInstructionsBytesDefault+500))
 
-	block := ProjectInstructions(root, "")
+	block, cut := ProjectInstructions(root, "", 0)
 
-	if len(block) > konst.ProjectInstructionsBytes+200 {
-		t.Fatalf("the block is %d bytes, past the %d cap plus its own notice", len(block), konst.ProjectInstructionsBytes)
+	if len(block) > konst.ProjectInstructionsBytesDefault+200 {
+		t.Fatalf("the block is %d bytes, past the %d cap plus its own notice", len(block), konst.ProjectInstructionsBytesDefault)
 	}
-	if !strings.Contains(block, "capped at "+strconv.Itoa(konst.ProjectInstructionsBytes)+" bytes") || !strings.Contains(block, "dropped") {
+	if !strings.Contains(block, "capped at "+strconv.Itoa(konst.ProjectInstructionsBytesDefault)+" bytes") || !strings.Contains(block, "dropped") {
 		t.Fatalf("the block never says it was capped:\n%s", block)
 	}
-	if !strings.Contains(block, filepath.Join(root, "CLAUDE.md")) {
+	if !strings.Contains(block, "this project's CLAUDE.md") {
 		t.Fatalf("the drop notice never names the file it cut:\n%s", block)
+	}
+	if len(cut) != 1 || !strings.Contains(cut[0], "this project's CLAUDE.md") {
+		t.Fatalf("the caller was told %v, so a person cannot be shown what was cut", cut)
+	}
+}
+
+func TestAnInstructionCapBelowOneFallsBackToTheDefaultRatherThanSendingNothing(t *testing.T) {
+	root := t.TempDir()
+	body := strings.Repeat("c", konst.ProjectInstructionsBytesDefault-500)
+	write(t, filepath.Join(root, "CLAUDE.md"), body)
+
+	for _, refused := range []int{0, -1} {
+		block, cut := ProjectInstructions(root, "", refused)
+		if len(cut) != 0 {
+			t.Fatalf("a cap of %d cut %v, so zero was read as a cap rather than as the default", refused, cut)
+		}
+		if !strings.Contains(block, body) {
+			t.Fatalf("a cap of %d sent %d bytes of a %d byte file", refused, len(block), len(body))
+		}
+	}
+}
+
+func TestAPersonSettingADifferentInstructionCapGetsIt(t *testing.T) {
+	root := t.TempDir()
+	body := strings.Repeat("d", 6000)
+	write(t, filepath.Join(root, "CLAUDE.md"), body)
+
+	for _, capBytes := range []int{4096, 65536} {
+		block, cut := ProjectInstructions(root, "", capBytes)
+		if capBytes > len(body) {
+			if len(cut) != 0 || !strings.Contains(block, body) {
+				t.Fatalf("a cap of %d cut a %d byte file: %v", capBytes, len(body), cut)
+			}
+			continue
+		}
+		if len(block) > capBytes+200 {
+			t.Fatalf("a cap of %d produced %d bytes", capBytes, len(block))
+		}
+		if !strings.Contains(block, "capped at "+strconv.Itoa(capBytes)+" bytes") {
+			t.Fatalf("the notice to the model does not name the cap the person set:\n%s", block[max(len(block)-200, 0):])
+		}
+		if len(cut) != 1 {
+			t.Fatalf("a cap of %d over a %d byte file reported %v", capBytes, len(body), cut)
+		}
+	}
+}
+
+func TestProjectInstructionsNameTheFileWithoutAPathOnThisMachine(t *testing.T) {
+	root, home := t.TempDir(), t.TempDir()
+	write(t, filepath.Join(home, ".claude", "CLAUDE.md"), "the personal rule")
+	write(t, filepath.Join(root, "CLAUDE.md"), strings.Repeat("b", konst.ProjectInstructionsBytesDefault))
+
+	block, _ := ProjectInstructions(root, home, 0)
+
+	for _, host := range []string{root, home, filepath.ToSlash(root), filepath.ToSlash(home)} {
+		if strings.Contains(block, host) {
+			t.Fatalf("the block names %q, a path on this machine:\n%s", host, block[:min(len(block), 400)])
+		}
+	}
+	for _, want := range []string{"your personal CLAUDE.md", "this project's CLAUDE.md"} {
+		if !strings.Contains(block, want) {
+			t.Fatalf("the block never says %q, so the model cannot tell the two files apart", want)
+		}
+	}
+	if !strings.Contains(block, "dropped this project's CLAUDE.md") {
+		t.Fatalf("the drop notice never names the file it cut without its path:\n%s", block[max(len(block)-300, 0):])
 	}
 }
 
 func TestProjectInstructionsAreEmptyWhenTheTreeHasNeitherFile(t *testing.T) {
-	if block := ProjectInstructions(t.TempDir(), t.TempDir()); block != "" {
+	if block, _ := ProjectInstructions(t.TempDir(), t.TempDir(), 0); block != "" {
 		t.Fatalf("a tree with no AGENTS.md and no CLAUDE.md produced:\n%q", block)
 	}
 }
