@@ -77,6 +77,7 @@ type RecordedTurn struct {
 	ContextTarget  int            `json:"context_target,omitempty"`
 	AutoCompaction string         `json:"auto_compaction,omitempty"`
 	Budget         recall.Budget  `json:"budget,omitempty"`
+	Account        int64          `json:"account,omitempty"`
 }
 
 func (t *RecordedTurn) UnmarshalJSON(data []byte) error {
