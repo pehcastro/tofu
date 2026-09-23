@@ -88,7 +88,7 @@ const (
 	SubAgentRetainedRows    = 4
 	SubAgentMissionChars    = 60
 	SubAgentMaxProcessDepth = 1
-	SubAgentCallsWatched    = 5
+	SubAgentCallsWatched    = 17
 )
 
 const (

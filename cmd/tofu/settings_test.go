@@ -116,7 +116,7 @@ func TestAProjectInstructionCapSetOnDiskReachesThePrompt(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	environment, cutNotice := runEnvironment(opts)
+	environment, _, cutNotice := runEnvironment(opts)
 	if len(environment) > 4096+500 {
 		t.Fatalf("a cap of 4096 produced a %d byte environment block", len(environment))
 	}

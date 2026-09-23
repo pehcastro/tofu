@@ -44,6 +44,7 @@ const (
 	pickHint      = "↑↓ pick a child"
 	watchHint     = "pick a child to watch it work"
 	quietChild    = "no tool call yet"
+	rowsHidden    = " earlier rows hidden"
 )
 
 type State int
@@ -148,8 +149,10 @@ func (m Model) View() string {
 	}
 	watchWidth := max(m.width/watchShare, watchMinimum)
 	listWidth := max(m.width-watchWidth-widget.Cells(divider), minimumWidth)
-	list := pane.Fill(m.list(listWidth), m.height, listWidth)
-	watch := pane.Fill(m.watch(watchWidth), m.height, watchWidth)
+	listHead, listBody := m.list(listWidth)
+	watchHead, watchBody := m.watch(watchWidth)
+	list := pane.Fill(keepingTheEnd(listHead, listBody, m.height, listWidth), m.height, listWidth)
+	watch := pane.Fill(keepingTheEnd(watchHead, watchBody, m.height, watchWidth), m.height, watchWidth)
 	rows := make([]string, m.height)
 	for row := range rows {
 		rows[row] = list[row] + theme.Rule().Render(divider) + watch[row]
@@ -162,25 +165,25 @@ func (m Model) nobody() []string {
 	return append(lines, pane.Block("", emptyBody, m.width, theme.Faint())...)
 }
 
-func (m Model) list(width int) []string {
+func (m Model) list(width int) (head []string, body [][]string) {
 	blank := pane.Cell("", width, theme.Text())
-	lines := []string{pane.Cell(title+gap+m.summary(), width, theme.Accent()), blank}
+	head = []string{pane.Cell(title+gap+m.summary(), width, theme.Accent()), blank}
 	for index, child := range m.Children {
 		style := theme.Text()
 		if index+1 == m.pick {
 			style = theme.Accent()
 		}
-		lines = append(lines, pane.Cell(m.row(index, child, width), width, style))
+		head = append(head, pane.Cell(m.row(index, child, width), width, style))
 	}
-	lines = append(lines, blank, pane.Cell(ownershipHead, width, theme.Dim()))
+	body = [][]string{{blank, pane.Cell(ownershipHead, width, theme.Dim())}}
 	for _, held := range regions(m.Children) {
 		style := theme.Path()
 		if len(held.holders) > 1 {
 			style = theme.Warn()
 		}
-		lines = append(lines, pane.Block(indent, held.text(), width, style)...)
+		body = append(body, pane.Block(indent, held.text(), width, style))
 	}
-	return append(lines, blank, pane.Cell(pickHint, width, theme.Faint()))
+	return head, append(body, []string{blank, pane.Cell(pickHint, width, theme.Faint())})
 }
 
 func (m Model) row(index int, child Child, width int) string {
@@ -194,28 +197,59 @@ func (m Model) row(index int, child Child, width int) string {
 	return head + widget.Pad(widget.Fit(child.Doing, room), room) + tail
 }
 
-func (m Model) watch(width int) []string {
+func (m Model) watch(width int) (head []string, body [][]string) {
 	child, picked := m.chosen()
 	if !picked {
-		return pane.Block("", watchHint, width, theme.Faint())
+		return nil, [][]string{pane.Block("", watchHint, width, theme.Faint())}
 	}
-	lines := []string{pane.Cell(child.Name+"  "+child.State.Label(), width, theme.Accent()), pane.Cell("", width, theme.Text())}
+	head = []string{pane.Cell(child.Name+"  "+child.State.Label(), width, theme.Accent()), pane.Cell("", width, theme.Text())}
 	if child.State == Running {
 		line := progress.Line{Label: child.Doing, Since: child.Since, Tick: progress.TickInterval, Live: true}
-		lines = append(lines, pane.Raw(line.View(width), width), pane.Cell("", width, theme.Text()))
+		head = append(head, pane.Raw(line.View(width), width), pane.Cell("", width, theme.Text()))
 	}
 	for _, call := range child.Calls {
-		lines = append(lines, pane.Block(callMarker, call.Tool+gap+call.Text, width, theme.Tool())...)
-		lines = append(lines, pane.Block(resultMarker, call.Result, width, theme.Faint())...)
+		whole := pane.Block(callMarker, strings.TrimSpace(call.Tool+gap+call.Text), width, theme.Tool())
+		if call.Result != "" {
+			whole = append(whole, pane.Block(resultMarker, call.Result, width, theme.Faint())...)
+		}
+		body = append(body, whole)
 	}
 	if len(child.Calls) == 0 {
-		lines = append(lines, pane.Cell(quietChild, width, theme.Faint()))
+		body = append(body, []string{pane.Cell(quietChild, width, theme.Faint())})
 	}
-	if child.Report == "" {
-		return lines
+	if child.Report != "" {
+		prose := append([]string{pane.Cell("", width, theme.Text())}, pane.Block(reportMarker, child.Report, width, theme.Text())...)
+		for _, line := range prose {
+			body = append(body, []string{line})
+		}
 	}
-	lines = append(lines, pane.Cell("", width, theme.Text()))
-	return append(lines, pane.Block(reportMarker, child.Report, width, theme.Text())...)
+	return head, body
+}
+
+func keepingTheEnd(head []string, body [][]string, height, width int) []string {
+	rows := len(head)
+	for _, whole := range body {
+		rows += len(whole)
+	}
+	if rows <= height {
+		for _, whole := range body {
+			head = append(head, whole...)
+		}
+		return head
+	}
+	kept := min(len(head), max(height-1, 0))
+	room, shown, first := max(height-kept-1, 0), 0, len(body)
+	for first > 0 && shown+len(body[first-1]) <= room {
+		first--
+		shown += len(body[first])
+	}
+	cut := make([]string, 0, height)
+	cut = append(cut, head[:kept]...)
+	cut = append(cut, pane.Cell(strconv.Itoa(rows-kept-shown)+rowsHidden, width, theme.Faint()))
+	for _, whole := range body[first:] {
+		cut = append(cut, whole...)
+	}
+	return cut
 }
 
 func (m Model) chosen() (Child, bool) {

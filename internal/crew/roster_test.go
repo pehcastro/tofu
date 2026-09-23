@@ -223,19 +223,53 @@ func TestARunningChildCarriesTheToolNamesOfItsLatestStep(t *testing.T) {
 	}
 }
 
-func TestAtTheBoundAChildCarriesOnlyItsNewestCalls(t *testing.T) {
+func steppingOncePerCall(t *testing.T, calls int) (SubAgent, []string) {
+	t.Helper()
 	roster, start := holdingOneChild(t)
-	var called []string
-	for step := 1; step <= konst.SubAgentCallsWatched+3; step++ {
-		name := "tool" + strconv.Itoa(step)
-		called = append(called, name)
-		roster.Stepped("c1", step, start.Add(time.Duration(step)*time.Second), name)
+	called := make([]string, calls)
+	for step := 1; step <= calls; step++ {
+		called[step-1] = "tool" + strconv.Itoa(step)
+		roster.Stepped("c1", step, start.Add(time.Duration(step)*time.Second), called[step-1])
 	}
+	return roster.SubAgents()[0], called
+}
 
-	held := roster.SubAgents()[0]
-	want := called[len(called)-konst.SubAgentCallsWatched:]
-	if !slices.Equal(held.Calling, want) {
-		t.Fatalf("after %d calls the child carries %v, want the newest %d, %v", len(called), held.Calling, konst.SubAgentCallsWatched, want)
+func TestAtTheBoundARunningChildKeepsItsNewestCallsAndSaysHowManyItDropped(t *testing.T) {
+	held, called := steppingOncePerCall(t, konst.SubAgentCallsWatched+3)
+
+	kept := konst.SubAgentCallsWatched - 1
+	if want := called[len(called)-kept:]; !slices.Equal(held.Calling, want) {
+		t.Fatalf("after %d calls the child carries %v, want the newest %d, %v", len(called), held.Calling, kept, want)
+	}
+	if want := len(called) - kept; held.CallsDropped != want {
+		t.Fatalf("the child dropped %d of %d calls and reports %d", want, len(called), held.CallsDropped)
+	}
+	if rows := len(held.Calling) + 1; rows != konst.SubAgentCallsWatched {
+		t.Fatalf("the calls plus the one line reporting the drop come to %d rows, want the measured %d", rows, konst.SubAgentCallsWatched)
+	}
+}
+
+func TestAChildUnderTheBoundDropsNothing(t *testing.T) {
+	held, called := steppingOncePerCall(t, konst.SubAgentCallsWatched)
+
+	if !slices.Equal(held.Calling, called) {
+		t.Fatalf("a child at exactly the bound carries %v, want all %d of %v", held.Calling, len(called), called)
+	}
+	if held.CallsDropped != 0 {
+		t.Fatalf("a child at exactly the bound reports %d dropped calls, want none", held.CallsDropped)
+	}
+}
+
+func TestAPersonCannotTellARunningChildsHiddenCountFromAFinishedOnes(t *testing.T) {
+	held, called := steppingOncePerCall(t, konst.SubAgentCallsWatched*2)
+
+	finishedHidden := len(called) - konst.SubAgentCallsWatched + 1
+	finishedDrawn := konst.SubAgentCallsWatched - 1
+	if held.CallsDropped != finishedHidden {
+		t.Fatalf("the same %d calls leave a running child with %d hidden and a finished one with %d, so the pane changes its sentence the moment the child stops", len(called), held.CallsDropped, finishedHidden)
+	}
+	if len(held.Calling) != finishedDrawn {
+		t.Fatalf("a running child offers %d call names and a finished one %d, so the cut lands somewhere else", len(held.Calling), finishedDrawn)
 	}
 }
 

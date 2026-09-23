@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -10,7 +11,9 @@ import (
 	"tofu/interface/tui"
 	"tofu/interface/tui/crew"
 	roster "tofu/internal/crew"
+	"tofu/internal/konst"
 	"tofu/internal/llm"
+	"tofu/internal/turn"
 )
 
 func TestTheCrewViewShowsTheStepsAChildHasTakenWhileItIsStillRunning(t *testing.T) {
@@ -143,14 +146,14 @@ func TestARunningChildDrawsTheToolItIsCallingRatherThanNoToolCallYet(t *testing.
 
 func TestTheSpawnersRecordedCallsWinOverTheRostersNamesWheneverItHasAny(t *testing.T) {
 	recorded := []crew.Call{{Tool: "write", Text: "write note.txt", Result: "no such directory"}}
-	if got := recordedOrCalling(recorded, []string{"read", "write"}); !slices.Equal(got, recorded) {
+	if got := recordedOrCalling(recorded, []string{"read", "write"}, 0); !slices.Equal(got, recorded) {
 		t.Fatalf("with both sources holding something the view drew %+v, want the spawner's %+v", got, recorded)
 	}
-	watched := recordedOrCalling(nil, []string{"read", "write"})
+	watched := recordedOrCalling(nil, []string{"read", "write"}, 0)
 	if !slices.Equal(watched, []crew.Call{{Tool: "read"}, {Tool: "write"}}) {
 		t.Fatalf("with only the roster holding names the view drew %+v", watched)
 	}
-	if len(recordedOrCalling(nil, nil)) != 0 {
+	if len(recordedOrCalling(nil, nil, 0)) != 0 {
 		t.Fatal("neither source holds anything and the view was given a call")
 	}
 }
@@ -212,5 +215,107 @@ func TestTheElapsedTimeIsTheChildsOwnAndNotTheViewsClock(t *testing.T) {
 	watch.sendCrew()
 	if since := drawn()[0].Since; since != 30*time.Second {
 		t.Errorf("the child last moved 30s after it started and the finished row reads %s", since)
+	}
+}
+
+func recordedRow(id string, tools ...string) turn.Row {
+	step := turn.StepRow{Index: 1}
+	for _, tool := range tools {
+		step.ToolCalls = append(step.ToolCalls, turn.ToolCallRow{Tool: tool, Command: tool + " it"})
+	}
+	return turn.Row{ID: id, Steps: []turn.StepRow{step}}
+}
+
+func TestAFinishedChildDrawsNoMoreCallsThanTheWatchPaneHoldsAndSaysHowManyItHid(t *testing.T) {
+	ran := make([]string, konst.SubAgentCallsWatched*2)
+	for index := range ran {
+		ran[index] = "tool" + strconv.Itoa(index)
+	}
+	calls := recordedCalls([]turn.Row{recordedRow("turn-1-c1", ran...)}, "turn-1-c1")
+
+	if len(calls) != konst.SubAgentCallsWatched {
+		t.Fatalf("a child that ran %d tools drew %d calls, want at most the %d the pane holds", len(ran), len(calls), konst.SubAgentCallsWatched)
+	}
+	if last := calls[len(calls)-1].Tool; last != ran[len(ran)-1] {
+		t.Fatalf("the newest call is %q and the pane drew %q last: the cut kept the wrong end", ran[len(ran)-1], last)
+	}
+	hidden := len(ran) - konst.SubAgentCallsWatched + 1
+	if want := strconv.Itoa(hidden) + earlierCallsHidden; calls[0].Tool != want {
+		t.Fatalf("the first line reads %q, want %q so a person can tell a cut list from a whole one", calls[0].Tool, want)
+	}
+
+	view := crew.Model{Children: []crew.Child{{Name: "c1", State: crew.Done, Calls: calls}}}
+	view.SetSize(80, 24)
+	view.Key("down")
+	drawn := view.View()
+	if !strings.Contains(drawn, strconv.Itoa(hidden)+earlierCallsHidden) {
+		t.Fatalf("the pane never says how many calls it hid:\n%s", drawn)
+	}
+	if !strings.Contains(drawn, ran[len(ran)-1]) {
+		t.Fatalf("the newest call %q is not on the screen:\n%s", ran[len(ran)-1], drawn)
+	}
+	t.Logf("%d recorded calls draw as %d lines, the first reading %q", len(ran), len(calls), calls[0].Tool)
+}
+
+func runningThroughCalls(t *testing.T, count int) ([]crew.Child, []string) {
+	t.Helper()
+	start := time.Date(2026, 9, 23, 9, 0, 0, 0, time.UTC)
+	held := rosterHolding(t, roster.SubAgent{ID: "turn-1-c1", Mission: "work", Owns: []string{"note.txt"}, Started: start})
+	ran := make([]string, count)
+	for index := range ran {
+		ran[index] = "tool" + strconv.Itoa(index)
+		held.Stepped("turn-1-c1", index+1, start.Add(time.Duration(index)*time.Second), ran[index])
+	}
+	watch, drawn := watching(held, start)
+	watch.sendCrew()
+	return drawn(), ran
+}
+
+func TestARunningChildDrawsHowManyCallsItDroppedAndKeepsTheNewest(t *testing.T) {
+	children, ran := runningThroughCalls(t, konst.SubAgentCallsWatched*2)
+
+	calls := children[0].Calls
+	if len(calls) != konst.SubAgentCallsWatched {
+		t.Fatalf("a running child %d calls in drew %d lines, want the measured %d the pane holds", len(ran), len(calls), konst.SubAgentCallsWatched)
+	}
+	hidden := len(ran) - konst.SubAgentCallsWatched + 1
+	if want := strconv.Itoa(hidden) + earlierCallsHidden; calls[0].Tool != want {
+		t.Fatalf("the first line reads %q, want %q so a person can tell a cut list from a whole one", calls[0].Tool, want)
+	}
+
+	view := crew.Model{Children: children}
+	view.SetSize(80, 24)
+	view.Key("down")
+	pane := view.View()
+	if !strings.Contains(pane, strconv.Itoa(hidden)+earlierCallsHidden) {
+		t.Fatalf("the pane never says how many calls the running child dropped:\n%s", pane)
+	}
+	if !strings.Contains(pane, ran[len(ran)-1]) {
+		t.Fatalf("the newest call %q is not on the screen:\n%s", ran[len(ran)-1], pane)
+	}
+	if strings.Contains(pane, ran[0]) {
+		t.Fatalf("the oldest call %q is still on the screen, so nothing was cut:\n%s", ran[0], pane)
+	}
+}
+
+func TestARunningChildAndAFinishedOneHideTheSameCallsInTheSameWords(t *testing.T) {
+	children, ran := runningThroughCalls(t, konst.SubAgentCallsWatched*2)
+
+	running := children[0].Calls
+	finished := recordedCalls([]turn.Row{recordedRow("turn-1-c1", ran...)}, "turn-1-c1")
+	if len(running) != len(finished) {
+		t.Fatalf("the same %d calls draw %d lines while the child runs and %d once it stops", len(ran), len(running), len(finished))
+	}
+	for index := range running {
+		if running[index].Tool != finished[index].Tool {
+			t.Fatalf("line %d reads %q while the child runs and %q once it stops, so a person can tell which state it is in", index, running[index].Tool, finished[index].Tool)
+		}
+	}
+}
+
+func TestACompleteCallListIsDrawnWholeWithNoHiddenLine(t *testing.T) {
+	calls := recordedCalls([]turn.Row{recordedRow("turn-1-c1", "read", "write")}, "turn-1-c1")
+	if len(calls) != 2 || calls[0].Tool != "read" || calls[1].Text != "write it" {
+		t.Fatalf("two recorded calls drew %+v, want both whole and in order", calls)
 	}
 }

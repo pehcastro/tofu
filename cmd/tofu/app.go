@@ -58,6 +58,7 @@ const (
 	workingDirectory    = "the working directory"
 	changeDirectory     = "cd "
 	moreOfAStoredResult = "more of a stored result"
+	earlierCallsHidden  = " earlier calls hidden"
 	storedNote          = ", first and last part kept"
 	noOutput            = "no output"
 	artifactPrefix      = "artifact "
@@ -967,7 +968,7 @@ func (a *appWatcher) draw(crewed []roster.SubAgent) {
 			Total:  cmp.Or(a.maxSteps, konst.TurnMaxSteps),
 			Tokens: a.spent[agent.ID],
 			State:  drawnState(agent.State),
-			Calls:  recordedOrCalling(a.callsOf(agent.ID), agent.Calling),
+			Calls:  recordedOrCalling(recordedCalls(childRows(a.spawner), agent.ID), agent.Calling, agent.CallsDropped),
 			Report: agent.Report,
 		}
 	}
@@ -992,7 +993,7 @@ func drawnState(state roster.State) crew.State {
 	panic("tofu: unknown sub-agent state " + state.String())
 }
 
-func recordedOrCalling(recorded []crew.Call, calling []string) []crew.Call {
+func recordedOrCalling(recorded []crew.Call, calling []string, dropped int) []crew.Call {
 	if len(recorded) > 0 {
 		return recorded
 	}
@@ -1000,15 +1001,19 @@ func recordedOrCalling(recorded []crew.Call, calling []string) []crew.Call {
 	for index, tool := range calling {
 		watched[index] = crew.Call{Tool: tool}
 	}
-	return watched
+	return hidingEarlier(watched, dropped)
 }
 
-func (a *appWatcher) callsOf(id string) []crew.Call {
-	if a.spawner == nil {
-		return nil
+func hidingEarlier(kept []crew.Call, hidden int) []crew.Call {
+	if hidden <= 0 {
+		return kept
 	}
+	return append([]crew.Call{{Tool: strconv.Itoa(hidden) + earlierCallsHidden}}, kept...)
+}
+
+func recordedCalls(rows []turn.Row, id string) []crew.Call {
 	var calls []crew.Call
-	for _, row := range a.spawner.Children() {
+	for _, row := range rows {
 		if row.ID != id && !strings.HasPrefix(row.ID, id+"-r") {
 			continue
 		}
@@ -1018,7 +1023,11 @@ func (a *appWatcher) callsOf(id string) []crew.Call {
 			}
 		}
 	}
-	return calls
+	if len(calls) <= konst.SubAgentCallsWatched {
+		return calls
+	}
+	hidden := len(calls) - konst.SubAgentCallsWatched + 1
+	return hidingEarlier(calls[hidden:], hidden)
 }
 
 func callIntent(call llm.ToolCall) (string, string) {

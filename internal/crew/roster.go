@@ -44,16 +44,17 @@ func (s State) String() string {
 }
 
 type SubAgent struct {
-	ID      string
-	Mission string
-	Brief   string
-	Owns    []string
-	State   State
-	Report  string
-	Started time.Time
-	Active  time.Time
-	Steps   int
-	Calling []string
+	ID           string
+	Mission      string
+	Brief        string
+	Owns         []string
+	State        State
+	Report       string
+	Started      time.Time
+	Active       time.Time
+	Steps        int
+	Calling      []string
+	CallsDropped int
 }
 
 type CollisionError struct {
@@ -103,8 +104,10 @@ func (r *Roster) Stepped(id string, steps int, at time.Time, calling ...string) 
 		}
 		agent.Steps, agent.Active = steps, at
 		agent.Calling = append(agent.Calling, calling...)
-		if older := len(agent.Calling) - konst.SubAgentCallsWatched; older > 0 {
-			agent.Calling = slices.Delete(agent.Calling, 0, older)
+		if made := len(agent.Calling) + agent.CallsDropped; made > konst.SubAgentCallsWatched {
+			kept := konst.SubAgentCallsWatched - 1
+			agent.Calling = slices.Delete(agent.Calling, 0, len(agent.Calling)-kept)
+			agent.CallsDropped = made - kept
 		}
 		return
 	}
