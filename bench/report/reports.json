@@ -595,6 +595,25 @@
   ],
   "reports": [
     {
+      "package": "calibration",
+      "date": "2026-09-23",
+      "source": "bench/calibration/report-2026-09-23.md",
+      "figure": "20",
+      "built_from": "prose",
+      "sample": "2,780 ledger rows across the .tofu/log day files, of which 1,458 are tool_gate, 1,105 stop_check and 13 shell_sift, with 204 ad hoc judge questions excluded as not a threshold point",
+      "skips": "the 204 inline rows are excluded with the reason stated; ask is counted as zero rows because no writer exists for it, which the report distinguishes from having no labels",
+      "conclusion": [
+        {
+          "text": "unparsed: no heading in this file names its own answer",
+          "withdrawn": false
+        }
+      ],
+      "conclusion_unparsed": true,
+      "state": "stands",
+      "state_source": "",
+      "state_note": ""
+    },
+    {
       "package": "harness",
       "date": "2026-09-23",
       "source": "bench/harness/report-2026-09-23.md",
@@ -1415,12 +1434,12 @@
     }
   ],
   "counts": {
-    "reports": 41,
-    "packages_with_a_dated_report": 25,
+    "reports": 42,
+    "packages_with_a_dated_report": 26,
     "packages_with_no_dated_report": 6,
     "withdrawn_whole_or_in_part": 5,
     "stale": 1,
-    "unparsed": 11
+    "unparsed": 12
   },
   "withdrawals_declared_from_outside_live_in": "bench/report/withdrawals.json",
   "generated_by": "go run ./bench/report/gen"
