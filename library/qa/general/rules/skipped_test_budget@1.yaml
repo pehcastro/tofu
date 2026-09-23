@@ -3,7 +3,6 @@ domain: qa
 kind: measured
 concern: code_rules
 measurement: bench/testquality/flakerun
-mode: shadow
 scope: "**/*_test.go"
 source: library/qa/references/metrics.md
 evidence: 62 of 2202 test names over 70 packages were skipped in every one of 3 runs on 2026-09-21, which is 2.8 percent of the suite reporting nothing while the bar stays green

@@ -10,6 +10,17 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 
 ## Unreleased
 
+### Added
+
+- **`tofu run --effort <level>`** sets how hard the model thinks: `none`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`. The vocabulary is the vendors' own, not a new one. The anthropic wire takes `low` through `max` and refuses `minimal` by name rather than picking a neighbour; the codex wire takes all seven. The openrouter wire sends no level, so `--effort` with `--wire key` is refused instead of being dropped.
+
+### Changed
+
+- **The model picker changes the model, not only the subscription.** Picking `claude-sub/claude-sonnet-5` runs the next turn on that model, through the same check `tofu run --model` goes through, so an excluded model and a model on a subscription the turn cannot reach are still refused. The pick lasts until the app closes.
+- **The picker carries the thinking effort beside the model**, chosen with the left and right keys, because the model and the effort are one choice. It offers only the levels the picked subscription's wire accepts, and an effort the other subscription refuses falls back to `medium` when the pick moves there.
+- **A turn now thinks at `medium` by default.** It ran at none until now, which nobody chose: it was what an unset field did. Every subscription turn, in the terminal interface as well as on the command line, now carries a thinking level, and a turn costs more output tokens than it did.
+- **The anthropic request carries `output_config.effort`** and the `effort-2025-11-24` beta with it. The request field was a bool that nothing ever set and is now a level.
+
 ## 0.4.11 - 2026-09-23
 
 Tofu acts on what it measured. A bash result arrives cut, and one file says what decides what.
