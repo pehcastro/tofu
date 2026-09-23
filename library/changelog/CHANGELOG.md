@@ -10,6 +10,10 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 
 ## Unreleased
 
+## 0.4.13 - 2026-09-23
+
+A file tofu reads cannot crash it, and you can tell it to ignore the house rules.
+
 ### Added
 
 - **`tofu rules list` shows a mode only where the mode decides something.** A threshold rule's mode is read and is shown; a rule with no checker and no off setting had a mode printed beside it that nothing consulted, which read as a setting you could change.
@@ -17,6 +21,7 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 ### Fixed
 
 - **A ledger file, a subscription filename, a credential row, a cached answer and a zero valued message role could each crash tofu rather than being refused.** All five were reachable from a file or a reply rather than from code, none had ever been reached: 2,780 recorded decision rows, 3 credential rows, 75 cached answers and two subscription files were checked and every value was one this build knows. Each is now refused where it is read, and the row that fails says why instead of disappearing.
+- **A credential whose provider tofu cannot read no longer disappears from the list.** It stays, marked disabled with the reason, so an account you cannot use reads differently from an account you never had.
 
 ### Added
 
