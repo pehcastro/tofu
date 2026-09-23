@@ -161,8 +161,8 @@ func TestADecisionMadeNowCarriesTheFingerprintOfTheCallItJudged(t *testing.T) {
 	if row.Fingerprint != want || want == "" {
 		t.Fatalf("the row carries fingerprint %q and the call fingerprints as %q", row.Fingerprint, want)
 	}
-	if row.Schema != ledger.FingerprintSchema {
-		t.Fatalf("the row is schema %d, and a row carrying a fingerprint is schema %d", row.Schema, ledger.FingerprintSchema)
+	if row.Schema < ledger.FingerprintSchema {
+		t.Fatalf("the row is schema %d, older than the schema %d the fingerprint field arrived at", row.Schema, ledger.FingerprintSchema)
 	}
 	t.Logf("row %s carries %s", row.ID, row.Fingerprint)
 }

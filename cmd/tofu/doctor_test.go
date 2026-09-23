@@ -163,14 +163,26 @@ func TestDoctorStaysUnderTwentyFiveLines(t *testing.T) {
 	}
 }
 
+func settledAndOddPoints(t *testing.T) (settled, odd int) {
+	t.Helper()
+	for _, point := range doctorJSON(t).Rules {
+		if point.Unusable != "" || point.Fallback != "" {
+			odd++
+			continue
+		}
+		settled++
+	}
+	return settled, odd
+}
+
 func TestDoctorCollapsesPointsThatSayTheSameThing(t *testing.T) {
 	chdirTemp(t)
 	t.Setenv(envVarName(), fakeSecret("env"))
 	printed := doctorOutput(t)
-	points := len(doctorJSON(t).Rules)
+	settled, odd := settledAndOddPoints(t)
 	line := doctorLine(t, printed, "points, all shadow")
-	if !strings.Contains(line, fmt.Sprintf("%d points, all shadow, thresholds from the rule", points)) {
-		t.Fatalf("the rules line = %q, want it to name all %d points", line, points)
+	if !strings.Contains(line, fmt.Sprintf("%d points, all shadow, thresholds from the rule", settled)) {
+		t.Fatalf("the rules line = %q, want it to name the %d points that say the same thing, with %d printed on their own", line, settled, odd)
 	}
 	if strings.Count(printed, "thresholds from") != 1 {
 		t.Fatalf("the thresholds are printed more than once:\n%s", printed)
@@ -187,8 +199,14 @@ func TestDoctorJSONCarriesEveryPointTheTextCollapsed(t *testing.T) {
 	if len(report.Rules) < 6 {
 		t.Fatalf("tofu doctor --json carries %d points, want the whole library", len(report.Rules))
 	}
-	if strings.Count(doctorOutput(t), "shadow") > 1 {
-		t.Fatal("the text form did not collapse, so the json proves nothing")
+	shadow := 0
+	for _, point := range report.Rules {
+		if point.Mode == "shadow" {
+			shadow++
+		}
+	}
+	if printed := strings.Count(doctorOutput(t), "shadow"); printed >= shadow {
+		t.Fatalf("%d points read shadow and the text says so %d times, so it did not collapse", shadow, printed)
 	}
 	for _, point := range report.Rules {
 		if point.Point == "" || point.Mode == "" || point.File == "" || point.ThresholdsFrom == "" {

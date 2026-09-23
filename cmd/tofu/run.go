@@ -83,6 +83,7 @@ type runOpts struct {
 	loopGuardRepeats int
 	loopGuardWindow  int
 	contextCeiling   int
+	siftArm          string
 	child            childRole
 }
 
@@ -92,6 +93,8 @@ type runtime struct {
 	spend    turn.Spend
 	budget   recall.Budget
 	gate     *toolGate
+	sift     *turn.ShellSift
+	scorer   *shellScorer
 	sessions *session.Store
 	notify   func(string)
 }
@@ -140,7 +143,9 @@ func chooseChild(opts runOpts) (childRole, error) {
 	return childRole{wire: forChild.Wire, id: forChild.Model.ID, windows: forChild.Model.WindowText()}, nil
 }
 
-const runUsage = `tofu run works a task in a directory until it is done.
+func runUsage() string { return fmt.Sprintf(runUsageText, shellSiftCost()) }
+
+const runUsageText = `tofu run works a task in a directory until it is done.
 
 Usage:
   tofu run --dir <path> [arguments] <task>
@@ -152,6 +157,12 @@ Arguments:
   --tools <set>         full, or three for the read, write and bash arm
   --gate <arm>          off, shadow or enforce, otherwise the rule's own mode decides
   --no-gate             the arm that turns the tool gate off
+  --sift <arm>          free or judged, otherwise the method table decides which
+                        one cuts a bash result before the model reads it. free
+                        keeps an error-shaped line and the ends of the output,
+                        drops the rest, costs nothing and makes no call. judged
+                        costs, from library/decisions/methods@1.yaml:
+                        %s
   --no-crew             run without the spawn tool
   --done-review <arm>          the arm that reviews a child's answer
   --max-steps <n>              cap the steps a turn takes, unset means no cap
@@ -163,7 +174,7 @@ Arguments:
 
 func runVerb(args []string, out, errOut io.Writer) int {
 	if slices.Contains(args, "--help") || slices.Contains(args, "-h") {
-		_, _ = fmt.Fprint(out, runUsage)
+		_, _ = fmt.Fprint(out, runUsage())
 		return exitOK
 	}
 	opts, err := parseRunArgs(args)
@@ -289,12 +300,21 @@ func runTurn(opts runOpts, selected models.Model, built []turn.Tool, budget reca
 		}
 	}
 
+	sifter, scorer, err := buildShellSift(opts.siftArm)
+	if err != nil {
+		var contradiction turn.RuleContradictsTheTableError
+		if !errors.As(err, &contradiction) {
+			return runFail(errOut, err)
+		}
+		_, _ = fmt.Fprintln(errOut, "tofu run: no shell result is cut: "+err.Error())
+	}
+
 	sessions, err := session.Open()
 	if err != nil {
 		return runFail(errOut, err)
 	}
 
-	config, spawner, err := runConfig(opts, built, runtime{accounts: held.forTurn(), spend: spend, budget: budget, gate: gate, sessions: sessions, notify: writeNotice(errOut)})
+	config, spawner, err := runConfig(opts, built, runtime{accounts: held.forTurn(), spend: spend, budget: budget, gate: gate, sift: sifter, scorer: scorer, sessions: sessions, notify: writeNotice(errOut)})
 	if err != nil {
 		return runFail(errOut, err)
 	}
@@ -318,6 +338,10 @@ func runTurn(opts runOpts, selected models.Model, built []turn.Tool, budget reca
 	}
 	if gate != nil {
 		_, _ = fmt.Fprintf(out, "gate decisions %d cost $%.6f mode %s\n", gate.decisions, gate.costUSD, config.GateMode)
+	}
+	if scorer != nil {
+		calls, cost := scorer.spend()
+		_, _ = fmt.Fprintf(out, "sift decisions %d cost $%.6f\n", calls, cost)
 	}
 	if runErr != nil {
 		return runFail(errOut, runErr)
@@ -388,6 +412,7 @@ func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn
 		ResultBytesCap: konst.TurnResultBytesCap,
 		Budget:         run.budget,
 		Sessions:       run.sessions,
+		Sift:           run.sift,
 		Proxy:          loadProxySetting(opts.dir).proxy,
 	}
 	if run.gate != nil {
@@ -396,6 +421,9 @@ func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn
 	}
 	parentID := cmp.Or(opts.turnID, turn.NewID(time.Now()))
 	config.NewID = func() string { return parentID }
+	if run.scorer != nil {
+		run.scorer.turnID = parentID
+	}
 	if opts.noCrew || opts.toolSet == toolSetThree {
 		return config, nil, nil
 	}
@@ -667,6 +695,8 @@ func parseRunArgs(args []string) (runOpts, error) {
 			opts.gateArm = gateOff
 		case "--gate":
 			opts.gateArm, err = nextArg(args, &i, arg)
+		case "--sift":
+			opts.siftArm, err = nextArg(args, &i, arg)
 		case "--no-crew":
 			opts.noCrew = true
 		case "--wire":
@@ -715,6 +745,10 @@ func parseRunArgs(args []string) (runOpts, error) {
 	if opts.gateArm != gateFollowsTheRule && !slices.Contains(gateArms(), opts.gateArm) {
 		return runOpts{}, fmt.Errorf("--gate %q is none of %s: with no --gate the rule's own mode decides",
 			opts.gateArm, strings.Join(gateArms(), ", "))
+	}
+	if opts.siftArm != siftFollowsTheTable && !slices.Contains(siftArms(), opts.siftArm) {
+		return runOpts{}, fmt.Errorf("--sift %q is none of %s: with no --sift the method table decides",
+			opts.siftArm, strings.Join(siftArms(), ", "))
 	}
 	if !slices.Contains(doneArms(), opts.doneArm) {
 		return runOpts{}, fmt.Errorf("--done-review %q is none of %s", opts.doneArm, strings.Join(doneArms(), ", "))

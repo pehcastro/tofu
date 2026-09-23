@@ -80,7 +80,7 @@ func judgeVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 	if err != nil {
 		return judgeFail(errOut, err)
 	}
-	client, err := jevClientOn(key)
+	client, err := jevClientOn(key, oneCallAtATime)
 	if err != nil {
 		return judgeFail(errOut, err)
 	}

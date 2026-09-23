@@ -48,7 +48,7 @@ func checkVerb(args []string, out, errOut io.Writer) int {
 	if err != nil {
 		return checkFail(errOut, err)
 	}
-	client, err := jevClientOn(key)
+	client, err := jevClientOn(key, oneCallAtATime)
 	if err != nil {
 		return checkFail(errOut, err)
 	}

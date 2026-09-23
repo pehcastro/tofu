@@ -19,6 +19,8 @@ import (
 	"tofu/internal/turn"
 )
 
+const oneCallAtATime = 1
+
 const (
 	runGatePoint       = "tool_gate@3"
 	judgeEndpointEnvar = "TOFU_JUDGE_ENDPOINT"
@@ -44,7 +46,7 @@ func newToolGate(dir string) (*toolGate, error) {
 	if err != nil {
 		return nil, unusableRule{err}
 	}
-	client, err := newJevClient()
+	client, err := newJevClient(oneCallAtATime)
 	if err != nil {
 		return nil, err
 	}
@@ -101,15 +103,15 @@ func thresholdsInRange(r gate.Rule, set battery) error {
 	return nil
 }
 
-func newJevClient() (*jev.Client, error) {
+func newJevClient(concurrency int) (*jev.Client, error) {
 	key, err := gateKey()
 	if err != nil {
 		return nil, err
 	}
-	return jevClientOn(key)
+	return jevClientOn(key, concurrency)
 }
 
-func jevClientOn(key string) (*jev.Client, error) {
+func jevClientOn(key string, concurrency int) (*jev.Client, error) {
 	wire, err := jevwire.New(jevwire.Config{
 		Key:      key,
 		Endpoint: os.Getenv(judgeEndpointEnvar),
@@ -117,7 +119,7 @@ func jevClientOn(key string) (*jev.Client, error) {
 			AttemptTimeout: time.Duration(konst.JudgeTimeoutMillis) * time.Millisecond,
 			Retries:        konst.JudgeRetries,
 			Backoff:        time.Duration(konst.JudgeBackoffMillis) * time.Millisecond,
-			Concurrency:    1,
+			Concurrency:    concurrency,
 		},
 	})
 	if err != nil {
