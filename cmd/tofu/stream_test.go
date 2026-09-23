@@ -36,7 +36,7 @@ func TestAStreamedResponseDrawsEveryDeltaAndNoDuplicateFinalText(t *testing.T) {
 	dir := scratchProject(t)
 	model := &streamingModel{deltas: []string{"the gate reads ", "toolgate.go "}, content: "the gate reads toolgate.go"}
 	driver := driveApp(t)
-	stubbedTurn(dir, model)(t.Context(), wireSubscription, "explain the gate", driver.emit)
+	stubbedTurn(dir, model)(t.Context(), onTheSubscription, "explain the gate", driver.emit)
 
 	deltas := driver.of(tui.EventTextDelta)
 	if len(deltas) != 2 {
@@ -54,7 +54,7 @@ func TestAWireThatDoesNotStreamDrawsNoDeltaAndBehavesAsBefore(t *testing.T) {
 	dir := scratchProject(t)
 	model := &sendModel{queued: []llm.Decision{{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "the whole answer at once"}}}
 	driver := driveApp(t)
-	stubbedTurn(dir, model)(t.Context(), wireSubscription, "explain the gate", driver.emit)
+	stubbedTurn(dir, model)(t.Context(), onTheSubscription, "explain the gate", driver.emit)
 
 	if deltas := driver.of(tui.EventTextDelta); len(deltas) != 0 {
 		t.Fatalf("a model that never called OnDelta still drew %d deltas", len(deltas))
@@ -70,7 +70,7 @@ func TestACancelledStreamSealsTheEntryItWasWriting(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	model := &streamingModel{deltas: []string{"The **gate** reads ", "`toolgate.go` before the policy."}, cancel: cancel}
 	driver := driveApp(t)
-	stubbedTurn(dir, model)(ctx, wireSubscription, "explain the gate", driver.emit)
+	stubbedTurn(dir, model)(ctx, onTheSubscription, "explain the gate", driver.emit)
 
 	if deltas := driver.of(tui.EventTextDelta); len(deltas) != 2 {
 		t.Fatalf("%d deltas reached the interface before the cancel, want 2", len(deltas))
@@ -91,7 +91,7 @@ func TestACacheHitCarriesTheReadSeparatelyFromTheFreshInput(t *testing.T) {
 		Usage: llm.Usage{InputTokens: 400}, CacheReadTokens: 9603,
 	}}}
 	cachedDriver := driveApp(t)
-	stubbedTurn(cached, cachedModel)(t.Context(), wireSubscription, "explain the gate", cachedDriver.emit)
+	stubbedTurn(cached, cachedModel)(t.Context(), onTheSubscription, "explain the gate", cachedDriver.emit)
 
 	fresh := scratchProject(t)
 	freshModel := &sendModel{queued: []llm.Decision{{
@@ -99,7 +99,7 @@ func TestACacheHitCarriesTheReadSeparatelyFromTheFreshInput(t *testing.T) {
 		Usage: llm.Usage{InputTokens: 400},
 	}}}
 	freshDriver := driveApp(t)
-	stubbedTurn(fresh, freshModel)(t.Context(), wireSubscription, "explain the gate", freshDriver.emit)
+	stubbedTurn(fresh, freshModel)(t.Context(), onTheSubscription, "explain the gate", freshDriver.emit)
 
 	stats := cachedDriver.of(tui.EventStats)
 	if len(stats) == 0 || stats[len(stats)-1].CacheRead != 9603 {
@@ -148,12 +148,12 @@ func recordedEventKinds(t *testing.T, dir string) []sessionstore.EventKind {
 func TestAStreamedTurnRecordsTheSameEventKindsAsAnUnstreamedOne(t *testing.T) {
 	without := scratchProject(t)
 	stubbedTurn(without, &sendModel{queued: []llm.Decision{{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "the answer"}}})(
-		t.Context(), wireSubscription, "explain the gate", func(tui.Event) {})
+		t.Context(), onTheSubscription, "explain the gate", func(tui.Event) {})
 	withoutKinds := recordedEventKinds(t, without)
 
 	streamed := scratchProject(t)
 	stubbedTurn(streamed, &streamingModel{deltas: []string{"the ", "answer"}, content: "the answer"})(
-		t.Context(), wireSubscription, "explain the gate", func(tui.Event) {})
+		t.Context(), onTheSubscription, "explain the gate", func(tui.Event) {})
 	streamedKinds := recordedEventKinds(t, streamed)
 
 	if len(withoutKinds) != len(streamedKinds) {

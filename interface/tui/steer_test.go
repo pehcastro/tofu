@@ -15,7 +15,7 @@ import (
 const steerBuffer = 8
 
 func steeringTurn(steering chan string, started, taken chan<- string, release <-chan struct{}) Turn {
-	return func(_ context.Context, _, task string, emit CalledFromInsideTheTurnAndNeverAfterItReturns) {
+	return func(_ context.Context, _ Pick, task string, emit CalledFromInsideTheTurnAndNeverAfterItReturns) {
 		started <- task
 		<-release
 		for {
@@ -82,7 +82,7 @@ func TestAMessageQueuedAfterTheLastStepStartsTheNextTurn(t *testing.T) {
 	steering := make(chan string, steerBuffer)
 	started := make(chan string, 2)
 	ended := make(chan struct{})
-	app := steerApp(t, steering, func(_ context.Context, _, task string, _ CalledFromInsideTheTurnAndNeverAfterItReturns) {
+	app := steerApp(t, steering, func(_ context.Context, _ Pick, task string, _ CalledFromInsideTheTurnAndNeverAfterItReturns) {
 		started <- task
 		<-ended
 	})

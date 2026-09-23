@@ -98,7 +98,7 @@ func TestARealRecordedAnswerRendersHeadingsBulletsAndInlineCode(t *testing.T) {
 		Branch: "develop",
 		Now:    fixedClock(),
 		Wires:  anthropicAlone,
-		Turn:   func(context.Context, string, string, CalledFromInsideTheTurnAndNeverAfterItReturns) {},
+		Turn:   func(context.Context, Pick, string, CalledFromInsideTheTurnAndNeverAfterItReturns) {},
 	})
 	app.Init()
 	app.Update(tea.WindowSizeMsg{Width: 120, Height: 90})

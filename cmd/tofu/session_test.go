@@ -150,7 +150,7 @@ func TestSessionResumeSendsTheMessagesTheRecordHolds(t *testing.T) {
 		{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "the note is written"},
 	}}
 	var events eventLog
-	stubbedTurn(dir, first)(t.Context(), wireSubscription, "write a note", events.add)
+	stubbedTurn(dir, first)(t.Context(), onTheSubscription, "write a note", events.add)
 
 	store, err := session.Open()
 	if err != nil {
@@ -170,7 +170,7 @@ func TestSessionResumeSendsTheMessagesTheRecordHolds(t *testing.T) {
 
 	second := &sendModel{queued: []llm.Decision{{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "still here"}}}
 	var resumedEvents eventLog
-	resumedTurn(dir, second, nil, carry)(t.Context(), wireSubscription, "what did you write", resumedEvents.add)
+	resumedTurn(dir, second, nil, carry)(t.Context(), onTheSubscription, "what did you write", resumedEvents.add)
 
 	if len(second.requests) != 1 {
 		t.Fatalf("the resumed send asked the model %d times, want once", len(second.requests))
@@ -208,7 +208,7 @@ func TestSlashNewDropsWhatIsCarriedAndSlashResumeTakesTheHeadBack(t *testing.T) 
 	first := &sendModel{queued: []llm.Decision{{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "wrote it"}}}
 	live := liveAppSession(dir, first)
 	var events eventLog
-	live.run(t.Context(), wireSubscription, "write a note", events.add)
+	live.run(t.Context(), onTheSubscription, "write a note", events.add)
 	if live.id == "" || len(live.carried) == 0 {
 		t.Fatalf("one turn left session %q carrying %d messages", live.id, len(live.carried))
 	}
@@ -229,7 +229,7 @@ func TestSlashNewDropsWhatIsCarriedAndSlashResumeTakesTheHeadBack(t *testing.T) 
 	live.open = func(runOpts) (appWire, error) {
 		return wireOn(second), nil
 	}
-	live.run(t.Context(), wireSubscription, "what did you write", events.add)
+	live.run(t.Context(), onTheSubscription, "what did you write", events.add)
 	if len(second.requests) != 1 {
 		t.Fatalf("the resumed turn asked the model %d times, want once", len(second.requests))
 	}

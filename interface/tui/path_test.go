@@ -27,7 +27,7 @@ func pathApp(t *testing.T, entered chan<- string) *App {
 		Now:    fixedClock(),
 		Wires:  anthropicAlone,
 		Paths:  repoPaths,
-		Turn: func(_ context.Context, _, task string, _ CalledFromInsideTheTurnAndNeverAfterItReturns) {
+		Turn: func(_ context.Context, _ Pick, task string, _ CalledFromInsideTheTurnAndNeverAfterItReturns) {
 			entered <- task
 		},
 	})

@@ -53,7 +53,7 @@ func newReel(width, height int) *reel {
 		Wires: func() []tui.Wire {
 			return []tui.Wire{{Name: fixture.Wire, Model: fixture.Model, Provider: fixture.Provider}}
 		},
-		Turn:    func(context.Context, string, string, tui.CalledFromInsideTheTurnAndNeverAfterItReturns) {},
+		Turn:    func(context.Context, tui.Pick, string, tui.CalledFromInsideTheTurnAndNeverAfterItReturns) {},
 		Answers: make(chan tui.Answer, 1),
 	})
 	r.app.Init()

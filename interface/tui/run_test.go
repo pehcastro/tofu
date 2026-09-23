@@ -58,7 +58,7 @@ func startTurn(t *testing.T, at *time.Time, width, height int) *App {
 		Branch: "develop",
 		Now:    func() time.Time { return *at },
 		Wires:  anthropicAlone,
-		Turn:   func(context.Context, string, string, CalledFromInsideTheTurnAndNeverAfterItReturns) {},
+		Turn:   func(context.Context, Pick, string, CalledFromInsideTheTurnAndNeverAfterItReturns) {},
 	})
 	app.Init()
 	app.Update(tea.WindowSizeMsg{Width: width, Height: height})

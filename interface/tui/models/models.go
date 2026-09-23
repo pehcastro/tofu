@@ -1,6 +1,7 @@
 package models
 
 import (
+	"slices"
 	"strconv"
 	"strings"
 
@@ -8,6 +9,7 @@ import (
 
 	"tofu/interface/tui/pane"
 	"tofu/interface/tui/theme"
+	"tofu/internal/llm"
 	library "tofu/internal/llm/models"
 	"tofu/internal/widget"
 )
@@ -19,7 +21,8 @@ const (
 	pickedMark        = "› "
 	plainMark         = "  "
 	title             = "models"
-	pickHint          = "↑↓ choose   enter picks"
+	effortHead        = "effort "
+	pickHint          = "↑↓ choose   ←→ effort   enter picks"
 	emptyTitle        = "the library has no model to pick"
 )
 
@@ -33,18 +36,25 @@ type Row struct {
 func (r Row) excluded() bool { return r.Use == library.UseExcluded }
 
 type Group struct {
-	Source string
-	Rows   []Row
+	Source  string
+	Rows    []Row
+	Efforts []llm.Effort
+}
+
+type Source struct {
+	ID      library.Subscription
+	Efforts []llm.Effort
 }
 
 type Model struct {
 	Groups []Group
 	pick   int
+	effort llm.Effort
 	width  int
 	height int
 }
 
-func Build(loaded library.Library, sources []library.Subscription) Model {
+func Build(loaded library.Library, sources []Source) Model {
 	rows := map[library.Subscription][]Row{}
 	for _, one := range loaded.Models {
 		rows[one.Subscription] = append(rows[one.Subscription], Row{
@@ -56,12 +66,12 @@ func Build(loaded library.Library, sources []library.Subscription) Model {
 	}
 	groups := make([]Group, 0, len(sources))
 	for _, source := range sources {
-		if len(rows[source]) == 0 {
+		if len(rows[source.ID]) == 0 {
 			continue
 		}
-		groups = append(groups, Group{Source: string(source), Rows: rows[source]})
+		groups = append(groups, Group{Source: string(source.ID), Rows: rows[source.ID], Efforts: source.Efforts})
 	}
-	built := Model{Groups: groups, pick: beforeTheFirstRow}
+	built := Model{Groups: groups, pick: beforeTheFirstRow, effort: llm.EffortDefault}
 	built.move(1)
 	return built
 }
@@ -84,32 +94,69 @@ func (m *Model) Key(key string) {
 		m.move(1)
 	case "up", "k":
 		m.move(-1)
+	case "right", "l":
+		m.step(1)
+	case "left", "h":
+		m.step(-1)
+	}
+}
+
+func (m *Model) step(by int) {
+	offered := m.offered()
+	at := slices.Index(offered, m.effort)
+	if at < 0 || at+by < 0 || at+by >= len(offered) {
+		return
+	}
+	m.effort = offered[at+by]
+}
+
+func (m Model) offered() []llm.Effort {
+	_, group, _ := m.rowAt(m.pick)
+	return group.Efforts
+}
+
+func (m Model) Effort() llm.Effort { return m.effort }
+
+func (m *Model) settle() {
+	offered := m.offered()
+	switch {
+	case slices.Contains(offered, m.effort):
+	case slices.Contains(offered, llm.EffortDefault):
+		m.effort = llm.EffortDefault
+	case len(offered) > 0:
+		m.effort = offered[0]
+	default:
+		m.effort = ""
 	}
 }
 
 func (m *Model) move(by int) {
 	for next := m.pick + by; next >= 0 && next < m.count(); next += by {
-		if row, _ := m.rowAt(next); !row.excluded() {
+		if row, _, _ := m.rowAt(next); !row.excluded() {
 			m.pick = next
+			m.settle()
 			return
 		}
 	}
 }
 
-func (m Model) rowAt(at int) (Row, bool) {
+func (m Model) rowAt(at int) (Row, Group, bool) {
 	if at < 0 {
-		return Row{}, false
+		return Row{}, Group{}, false
 	}
 	for _, group := range m.Groups {
 		if at < len(group.Rows) {
-			return group.Rows[at], true
+			return group.Rows[at], group, true
 		}
 		at -= len(group.Rows)
 	}
-	return Row{}, false
+	return Row{}, Group{}, false
 }
 
-func (m Model) Picked() (Row, bool) { return m.rowAt(m.pick) }
+func (m Model) Picked() (Row, bool) {
+	row, _, picked := m.rowAt(m.pick)
+	return row, picked
+}
 
 func (m Model) View() string {
 	if m.count() == 0 {
@@ -135,7 +182,10 @@ func (m Model) summary() string {
 	if m.count() == 1 {
 		count = "1 model"
 	}
-	return count
+	if m.effort == "" {
+		return count
+	}
+	return count + gap + effortHead + string(m.effort)
 }
 
 func (m Model) style(at int, row Row) lipgloss.Style {

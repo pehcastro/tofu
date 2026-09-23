@@ -28,7 +28,7 @@ func TestARuleWithAThresholdOutOfRangeRefusesToStartTheTurn(t *testing.T) {
 
 	model := &sendModel{queued: []llm.Decision{{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "the turn should never reach a model"}}}
 	var events eventLog
-	liveAppSession(dir, model).run(t.Context(), wireSubscription, "write a note", events.add)
+	liveAppSession(dir, model).run(t.Context(), onTheSubscription, "write a note", events.add)
 
 	failure, gateOff := gateEvents(t, events.all())
 	if failure == "" {
@@ -53,7 +53,7 @@ func TestAMissingKeyStartsTheTurnWithTheGateOff(t *testing.T) {
 	dir := scratchProject(t)
 	model := &sendModel{queued: []llm.Decision{{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "wrote it"}}}
 	var events eventLog
-	liveAppSession(dir, model).run(t.Context(), wireSubscription, "write a note", events.add)
+	liveAppSession(dir, model).run(t.Context(), onTheSubscription, "write a note", events.add)
 
 	failure, gateOff := gateEvents(t, events.all())
 	if gateOff == "" {

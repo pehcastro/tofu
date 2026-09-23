@@ -27,7 +27,7 @@ func queueApp(t *testing.T, tasks chan<- string) *App {
 		Branch: "develop",
 		Now:    fixedClock(),
 		Wires:  anthropicAlone,
-		Turn: func(_ context.Context, _, task string, _ CalledFromInsideTheTurnAndNeverAfterItReturns) {
+		Turn: func(_ context.Context, _ Pick, task string, _ CalledFromInsideTheTurnAndNeverAfterItReturns) {
 			tasks <- task
 		},
 	})

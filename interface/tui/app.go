@@ -26,6 +26,7 @@ import (
 	"tofu/interface/tui/theme"
 	"tofu/interface/tui/trace"
 	"tofu/interface/tui/work"
+	"tofu/internal/llm"
 	library "tofu/internal/llm/models"
 	isession "tofu/internal/session"
 	isettings "tofu/internal/settings"
@@ -102,7 +103,13 @@ func (e Event) answered() bool {
 
 type CalledFromInsideTheTurnAndNeverAfterItReturns func(Event)
 
-type Turn func(ctx context.Context, wire, task string, emit CalledFromInsideTheTurnAndNeverAfterItReturns)
+type Pick struct {
+	Wire   string
+	Model  string
+	Effort llm.Effort
+}
+
+type Turn func(ctx context.Context, pick Pick, task string, emit CalledFromInsideTheTurnAndNeverAfterItReturns)
 
 type Answer int
 
@@ -122,6 +129,7 @@ type Wire struct {
 	Name     string
 	Model    string
 	Provider string
+	Efforts  []llm.Effort
 }
 
 type Options struct {
@@ -229,6 +237,8 @@ type App struct {
 	wire           string
 	model          string
 	provider       string
+	picked         string
+	effort         llm.Effort
 	sessionName    string
 	sessionID      string
 	wires          []Wire
@@ -777,7 +787,7 @@ func (a *App) start(task string) tea.Cmd {
 	events := make(chan Event, eventBuffer)
 	a.busy, a.cancel, a.events, a.edits.Busy = true, cancel, events, true
 	a.view.Start()
-	turn, wire := a.options.Turn, a.wire
+	turn, pick := a.options.Turn, Pick{Wire: a.wire, Model: a.picked, Effort: a.effort}
 	deliver := func(event Event) {
 		if !event.snapshot() {
 			events <- event
@@ -789,7 +799,7 @@ func (a *App) start(task string) tea.Cmd {
 		}
 	}
 	go func() {
-		turn(ctx, wire, task, deliver)
+		turn(ctx, pick, task, deliver)
 		cancel()
 		close(events)
 	}()

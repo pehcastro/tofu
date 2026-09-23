@@ -216,7 +216,7 @@ func TestTheKeyIsNeverInAFrameALogOrARecordedSession(t *testing.T) {
 	}}
 	app := firstRunApp(t, 100, 30)
 	var turned eventLog
-	stubbedTurn(dir, model)(t.Context(), wireSubscription, "write a note", turned.add)
+	stubbedTurn(dir, model)(t.Context(), onTheSubscription, "write a note", turned.add)
 	for _, event := range turned.all() {
 		app.Update(event)
 	}

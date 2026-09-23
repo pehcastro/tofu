@@ -43,7 +43,7 @@ func copyApp(t *testing.T, board *stubBoard) *App {
 		Now:    func() time.Time { return at },
 		Wires:  anthropicAlone,
 		Copy:   board.write,
-		Turn:   func(context.Context, string, string, CalledFromInsideTheTurnAndNeverAfterItReturns) {},
+		Turn:   func(context.Context, Pick, string, CalledFromInsideTheTurnAndNeverAfterItReturns) {},
 	})
 	app.Init()
 	app.Update(tea.WindowSizeMsg{Width: 80, Height: 24})

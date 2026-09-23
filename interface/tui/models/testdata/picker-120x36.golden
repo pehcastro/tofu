@@ -1,4 +1,4 @@
-[38;5;39mmodels  17 models                                                                                                       [m
+[38;5;39mmodels  17 models  effort medium                                                                                        [m
 [38;5;252m                                                                                                                        [m
 [38;5;245mclaude-sub                                                                                                              [m
 [38;5;240m  claude-sub/claude-fable-5              the owner on 2026-09-19, not fable or astra for now, those are not cheap. A cu…[m
@@ -21,7 +21,7 @@
 [38;5;240m  codex-sub/gpt-6-astra                  the owner on 2026-09-19, not fable or astra for now, those are not cheap. A cu…[m
 [38;5;240m  codex-sub/gpt-reserve                  nobody has ruled on it, so tofu does not send it until somebody does           [m
 [38;5;252m                                                                                                                        [m
-[38;5;240m↑↓ choose   enter picks                                                                                                 [m
+[38;5;240m↑↓ choose   ←→ effort   enter picks                                                                                     [m
                                                                                                                         
                                                                                                                         
                                                                                                                         

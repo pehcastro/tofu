@@ -77,7 +77,7 @@ func TestAPlanStatedDuringATurnReachesTheView(t *testing.T) {
 		{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "stated"},
 	}}
 	var events eventLog
-	stubbedTurn(dir, model)(t.Context(), wireSubscription, "state a plan and start on it", events.add)
+	stubbedTurn(dir, model)(t.Context(), onTheSubscription, "state a plan and start on it", events.add)
 
 	plan, seen := lastPlan(events.all())
 	if seen == 0 {
@@ -96,7 +96,7 @@ func TestAPlanStatedDuringATurnReachesTheView(t *testing.T) {
 func TestATurnThatStatesNoPlanHandsTheViewNothingToDraw(t *testing.T) {
 	dir := scratchProject(t)
 	var events eventLog
-	stubbedTurn(dir, noteThenStop())(t.Context(), wireSubscription, "write the note", events.add)
+	stubbedTurn(dir, noteThenStop())(t.Context(), onTheSubscription, "write the note", events.add)
 
 	plan, seen := lastPlan(events.all())
 	if seen == 0 {

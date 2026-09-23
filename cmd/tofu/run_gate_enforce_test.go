@@ -97,7 +97,7 @@ func TestInTheAppAnAskUnderEnforceWaitsForThePerson(t *testing.T) {
 			stubJev(t, 200, middlingRiskAskReply)
 			driver := driveApp(t)
 
-			stubbedTurn(dir, noteThenStop(), answered)(t.Context(), wireSubscription, "write the note", driver.emit)
+			stubbedTurn(dir, noteThenStop(), answered)(t.Context(), onTheSubscription, "write the note", driver.emit)
 
 			if len(driver.of(tui.EventAwaitPerson)) != 1 || len(driver.of(tui.EventResumed)) != 1 {
 				t.Fatalf("await %d resumed %d, want one of each around the wait",

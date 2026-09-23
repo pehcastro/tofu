@@ -18,7 +18,7 @@ func turningApp(t *testing.T) (*App, chan struct{}) {
 		Branch: "develop",
 		Now:    fixedClock(),
 		Wires:  anthropicAlone,
-		Turn: func(ctx context.Context, _, _ string, _ CalledFromInsideTheTurnAndNeverAfterItReturns) {
+		Turn: func(ctx context.Context, _ Pick, _ string, _ CalledFromInsideTheTurnAndNeverAfterItReturns) {
 			close(started)
 			<-ctx.Done()
 			close(stopped)

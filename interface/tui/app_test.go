@@ -20,6 +20,7 @@ import (
 	"tofu/interface/tui/session"
 	"tofu/interface/tui/settings"
 	"tofu/interface/tui/shells"
+	"tofu/internal/llm"
 	isettings "tofu/internal/settings"
 )
 
@@ -51,15 +52,19 @@ func containsAPlaceholder(text string) bool {
 	return false
 }
 
+func claudeEfforts() []llm.Effort {
+	return []llm.Effort{llm.EffortLow, llm.EffortMedium, llm.EffortHigh, llm.EffortXHigh, llm.EffortMax}
+}
+
 func bothWires() []Wire {
 	return []Wire{
-		{Name: "codex", Model: "gpt-5.6-sol", Provider: "codex-sub"},
-		{Name: "anthropic", Model: "claude-opus-5", Provider: "claude-sub"},
+		{Name: "codex", Model: "gpt-5.6-sol", Provider: "codex-sub", Efforts: llm.Efforts()},
+		{Name: "anthropic", Model: "claude-opus-5", Provider: "claude-sub", Efforts: claudeEfforts()},
 	}
 }
 
 func anthropicAlone() []Wire {
-	return []Wire{{Name: "anthropic", Model: "claude-opus-5", Provider: "claude-sub"}}
+	return []Wire{{Name: "anthropic", Model: "claude-opus-5", Provider: "claude-sub", Efforts: claudeEfforts()}}
 }
 
 func sessionApp(t *testing.T, width, height int) *App {
@@ -411,7 +416,9 @@ func TestTwoSubscriptionsAskNothingAndTheFirstSignedInRunsTheTurn(t *testing.T) 
 		Branch: "develop",
 		Now:    fixedClock(),
 		Wires:  bothWires,
-		Turn:   func(_ context.Context, wire, _ string, _ CalledFromInsideTheTurnAndNeverAfterItReturns) { ran <- wire },
+		Turn: func(_ context.Context, pick Pick, _ string, _ CalledFromInsideTheTurnAndNeverAfterItReturns) {
+			ran <- pick.Wire
+		},
 	})
 	app.Init()
 	app.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
@@ -1010,7 +1017,7 @@ func TestInterruptStopsTheTurnAndKeepsTheApp(t *testing.T) {
 	app := newTestApp(Options{
 		Repo: testRepo,
 		Now:  fixedClock(),
-		Turn: func(ctx context.Context, _, _ string, emit CalledFromInsideTheTurnAndNeverAfterItReturns) {
+		Turn: func(ctx context.Context, _ Pick, _ string, emit CalledFromInsideTheTurnAndNeverAfterItReturns) {
 			<-ctx.Done()
 			close(cancelled)
 			emit(Event{Kind: EventNote, Text: "stopped by the operator"})
@@ -1229,7 +1236,7 @@ func proseApp(t *testing.T, height int) *App {
 		Branch: "develop",
 		Now:    fixedClock(),
 		Wires:  anthropicAlone,
-		Turn:   func(context.Context, string, string, CalledFromInsideTheTurnAndNeverAfterItReturns) {},
+		Turn:   func(context.Context, Pick, string, CalledFromInsideTheTurnAndNeverAfterItReturns) {},
 	})
 	app.Init()
 	app.Update(tea.WindowSizeMsg{Width: 80, Height: height})

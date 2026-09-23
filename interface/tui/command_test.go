@@ -23,7 +23,7 @@ func commandApp(t *testing.T, entered chan<- string) *App {
 		Paths:      repoPaths,
 		ResumeHead: func() string { return "continuing turn-19a2b3c4d5, 12 messages from 3 steps" },
 		NewSession: func() string { return "the next task starts a new session" },
-		Turn: func(_ context.Context, _, task string, _ CalledFromInsideTheTurnAndNeverAfterItReturns) {
+		Turn: func(_ context.Context, _ Pick, task string, _ CalledFromInsideTheTurnAndNeverAfterItReturns) {
 			entered <- task
 		},
 	})

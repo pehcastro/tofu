@@ -38,7 +38,7 @@ func benchApp() *app.App {
 		Wires:   func() []app.Wire { return []app.Wire{{Name: "anthropic", Model: "claude-opus-5"}} },
 		Paths:   benchRepoPaths,
 		Now:     func() time.Time { return at },
-		Turn:    func(context.Context, string, string, app.CalledFromInsideTheTurnAndNeverAfterItReturns) {},
+		Turn:    func(context.Context, app.Pick, string, app.CalledFromInsideTheTurnAndNeverAfterItReturns) {},
 		Providers: []settings.Provider{
 			{Name: "anthropic", State: "oauth  62% of the 7d window, resets 18:00", Source: "the credential store"},
 			{Name: "openrouter", Key: "sk-or-v1-77c1f0b6e5a94d2f8badc0ffee1234567890abcd", State: "ok", Source: ".env at ~/.tofu/.env"},

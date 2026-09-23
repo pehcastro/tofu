@@ -196,7 +196,7 @@ func TestASentMessageDrawsATreeBeneathItNamingWhatWentWithIt(t *testing.T) {
 		Wires:  anthropicAlone,
 		Now:    func() time.Time { return time.Date(2026, 9, 19, 14, 32, 0, 0, time.UTC) },
 		Paste:  board,
-		Turn:   func(context.Context, string, string, CalledFromInsideTheTurnAndNeverAfterItReturns) {},
+		Turn:   func(context.Context, Pick, string, CalledFromInsideTheTurnAndNeverAfterItReturns) {},
 	})
 	app.Init()
 	app.Update(tea.WindowSizeMsg{Width: pasteWidth, Height: pasteHeight})
@@ -222,7 +222,7 @@ func TestDeletingAPastedImagesTokenDropsItFromTheSentTree(t *testing.T) {
 		Wires:  anthropicAlone,
 		Now:    func() time.Time { return time.Date(2026, 9, 19, 14, 32, 0, 0, time.UTC) },
 		Paste:  board,
-		Turn:   func(context.Context, string, string, CalledFromInsideTheTurnAndNeverAfterItReturns) {},
+		Turn:   func(context.Context, Pick, string, CalledFromInsideTheTurnAndNeverAfterItReturns) {},
 	})
 	app.Init()
 	app.Update(tea.WindowSizeMsg{Width: pasteWidth, Height: pasteHeight})

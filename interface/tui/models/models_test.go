@@ -7,12 +7,16 @@ import (
 	"strings"
 	"testing"
 
+	"tofu/internal/llm"
 	library "tofu/internal/llm/models"
 )
 
 var update = flag.Bool("update", false, "rewrite the golden files")
 
-const shippedRoot = "../../../library"
+const (
+	shippedRoot = "../../../library"
+	claudeSub   = library.Subscription("claude-sub")
+)
 
 func shippedLibrary(t *testing.T) library.Library {
 	t.Helper()
@@ -24,10 +28,17 @@ func shippedLibrary(t *testing.T) library.Library {
 	return loaded
 }
 
-func everySource(loaded library.Library) []library.Subscription {
-	sources := make([]library.Subscription, 0, len(loaded.Subscriptions))
+func sourceEfforts(id library.Subscription) []llm.Effort {
+	if id == claudeSub {
+		return []llm.Effort{llm.EffortLow, llm.EffortMedium, llm.EffortHigh, llm.EffortXHigh, llm.EffortMax}
+	}
+	return llm.Efforts()
+}
+
+func everySource(loaded library.Library) []Source {
+	sources := make([]Source, 0, len(loaded.Subscriptions))
 	for _, spec := range loaded.Subscriptions {
-		sources = append(sources, spec.ID)
+		sources = append(sources, Source{ID: spec.ID, Efforts: sourceEfforts(spec.ID)})
 	}
 	return sources
 }
@@ -145,6 +156,34 @@ func TestAnExcludedModelCannotBePicked(t *testing.T) {
 			}
 			built.Key(key)
 		}
+	}
+}
+
+func TestAnEffortOneSubscriptionRefusesFallsBackOnTheOther(t *testing.T) {
+	built := shippedPicker(t)
+	for range built.count() {
+		if row, _ := built.Picked(); strings.HasPrefix(row.Slug, "codex-sub/") {
+			break
+		}
+		built.Key("down")
+	}
+	if row, _ := built.Picked(); !strings.HasPrefix(row.Slug, "codex-sub/") {
+		t.Skipf("no codex-sub row is offered, so the two effort lists cannot be crossed here")
+	}
+	for range len(llm.Efforts()) {
+		built.Key("left")
+	}
+	if built.Effort() != llm.EffortNone {
+		t.Fatalf("the codex-sub group offers %s and the walk stopped at %q", llm.EffortList(llm.Efforts()), built.Effort())
+	}
+	for range built.count() {
+		if row, _ := built.Picked(); strings.HasPrefix(row.Slug, "claude-sub/") {
+			break
+		}
+		built.Key("up")
+	}
+	if built.Effort() != llm.EffortDefault {
+		t.Fatalf("the pick moved to a group that refuses %s and the effort stayed %q", llm.EffortNone, built.Effort())
 	}
 }
 
