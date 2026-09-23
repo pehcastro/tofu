@@ -88,7 +88,7 @@ func Reduce(units []Unit) ([]Unit, Cut) {
 	kept[0] = units[0]
 	var cut Cut
 	for _, unit := range units[1:] {
-		if (unit.Kind == UnitItem || unit.Kind == UnitRow) && linkOnlyLine(stripMarker(unit.Text)) {
+		if LinkOnly(unit.Kind, unit.Text) {
 			cut.Units++
 			cut.Bytes += len(unit.Text)
 			continue
@@ -96,6 +96,10 @@ func Reduce(units []Unit) ([]Unit, Cut) {
 		kept = append(kept, unit)
 	}
 	return kept, cut
+}
+
+func LinkOnly(kind UnitKind, text string) bool {
+	return (kind == UnitItem || kind == UnitRow) && linkOnlyLine(stripMarker(text))
 }
 
 func stripMarker(text string) string {

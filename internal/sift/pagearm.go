@@ -2,44 +2,18 @@ package sift
 
 import (
 	"fmt"
-	"regexp"
-	"strings"
 
 	"tofu/internal/web"
-)
-
-var (
-	numberedMarker = regexp.MustCompile(`^[0-9]+\. `)
-	pureLink       = regexp.MustCompile(`^[^|()]+\([a-z][a-z0-9+.-]*://[^()\s]+\)$`)
 )
 
 func PageCheap(unit PageUnit) Mark {
 	if unit.Held != NotHeld {
 		return Mark{Keep: true, Reason: string(unit.Held)}
 	}
-	if (unit.Kind == web.UnitItem || unit.Kind == web.UnitRow) && linkOnlyLine(stripMarker(unit.Text)) {
+	if web.LinkOnly(unit.Kind, unit.Text) {
 		return Mark{Reason: "a list item or row that is only a link"}
 	}
 	return Mark{Keep: true}
-}
-
-func stripMarker(text string) string {
-	body := strings.TrimSpace(text)
-	body = strings.TrimPrefix(body, "- ")
-	body = strings.TrimPrefix(body, "> ")
-	return numberedMarker.ReplaceAllString(body, "")
-}
-
-func linkOnlyLine(body string) bool {
-	if body == "" {
-		return false
-	}
-	for _, part := range strings.Split(body, " | ") {
-		if !pureLink.MatchString(strings.TrimSpace(part)) {
-			return false
-		}
-	}
-	return true
 }
 
 type PageUnitState struct {
