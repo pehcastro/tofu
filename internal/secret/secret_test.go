@@ -1,4 +1,4 @@
-package corpus
+package secret
 
 import (
 	"strings"
@@ -6,18 +6,13 @@ import (
 )
 
 func TestScrubbingTwiceGivesTheSameBytesAsScrubbingOnce(t *testing.T) {
-	cases, err := gateFiles.ReadFile("gate/cases.jsonl")
-	if err != nil {
-		t.Fatal(err)
-	}
-	raw := string(cases)
+	raw := "a path F:/localhost/ephem-sh/bob owned by Luiz, and the key is sk-or-v1-0123456789abcdef"
 	first := Scrub(raw)
-	second := Scrub(raw)
-	if first != second {
+	if second := Scrub(raw); first != second {
 		t.Fatal("two runs of Scrub over the same input disagree, so a case recorded tomorrow would not line up with one recorded today")
 	}
 	if again := Scrub(first); again != first {
-		t.Fatal("scrubbing an already scrubbed corpus changed it, so the replacement is not a fixed point")
+		t.Fatal("scrubbing an already scrubbed text changed it, so the replacement is not a fixed point")
 	}
 }
 
@@ -75,12 +70,23 @@ func TestScrubRemovesEveryCredentialMarkerThatLeaksInReports(t *testing.T) {
 }
 
 func TestNothingScrubsIntoSomethingAnotherScrubWouldCatch(t *testing.T) {
-	var all []identitySubstitution
-	all = append(all, identitySubstitutions...)
-	all = append(all, credentialSubstitutions...)
-	for _, substitution := range all {
+	for _, substitution := range append(append([]substitution{}, identitySubstitutions...), credentialSubstitutions...) {
 		if leaks := LeaksIn(substitution.scrubbed); len(leaks) > 0 {
 			t.Errorf("%q is a replacement and it carries %q, so a scrubbed fixture reads as leaking", substitution.scrubbed, leaks)
 		}
+	}
+}
+
+func TestCredentialsInReportsOnlyTheCredentialPatternsAndLeaksInCarriesBoth(t *testing.T) {
+	text := "Luiz ran it and the key is sk-ant-oat01-0123456789 for one call"
+	credentials := CredentialsIn(text)
+	if len(credentials) != 1 || credentials[0] != "sk-ant-oat" {
+		t.Fatalf("CredentialsIn reported %q, want the one anthropic oauth marker", credentials)
+	}
+	if leaks := LeaksIn(text); len(leaks) != 2 {
+		t.Fatalf("LeaksIn reported %q, want the identity and the credential marker", leaks)
+	}
+	if identityOnly := CredentialsIn("Luiz ran it under F:/localhost"); len(identityOnly) != 0 {
+		t.Fatalf("CredentialsIn reported %q over text with an identity and no credential", identityOnly)
 	}
 }
