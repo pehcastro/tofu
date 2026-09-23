@@ -1,0 +1,17 @@
+[
+  {
+    "point": "shell_sift",
+    "file": "internal/turn/shellsift.go",
+    "symbol": "cutShellResult"
+  },
+  {
+    "point": "stop_check",
+    "file": "cmd/tofu/run_done.go",
+    "symbol": "BuildStopCheck"
+  },
+  {
+    "point": "read_worth",
+    "file": "cmd/tofu/sift.go",
+    "symbol": "sift.Length"
+  }
+]

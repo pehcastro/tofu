@@ -7,16 +7,11 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"tofu/internal/judge/method"
 )
 
 const AnswersPath = "bench/report/answers.json"
-
-type InUse string
-
-const (
-	InUseWired    InUse = "yes"
-	InUseNotWired InUse = "not wired"
-)
 
 type Better string
 
@@ -47,19 +42,18 @@ type Method struct {
 }
 
 type Placement struct {
-	Point           string `json:"point"`
-	Question        string `json:"question"`
-	Axis            Axis   `json:"axis"`
-	Free            Method `json:"free_arm"`
-	Judged          Method `json:"judged_arm"`
-	SampleSize      int    `json:"sample_size"`
-	SampleOf        string `json:"sample_of"`
-	InUse           InUse  `json:"wiring"`
-	Since           string `json:"since,omitempty"`
-	SinceFrom       string `json:"since_from,omitempty"`
-	Source          string `json:"source"`
-	Missing         string `json:"unanswerable_because,omitempty"`
-	MissingEvidence string `json:"unanswerable_evidence,omitempty"`
+	Point           string        `json:"point"`
+	Question        string        `json:"question"`
+	Axis            Axis          `json:"axis"`
+	Free            Method        `json:"free_arm"`
+	Judged          Method        `json:"judged_arm"`
+	SampleSize      int           `json:"sample_size"`
+	SampleOf        string        `json:"sample_of"`
+	Decides         string        `json:"decides"`
+	InUse           method.Method `json:"wiring"`
+	Source          string        `json:"source"`
+	Missing         string        `json:"unanswerable_because,omitempty"`
+	MissingEvidence string        `json:"unanswerable_evidence,omitempty"`
 }
 
 type Claim struct {
@@ -137,29 +131,23 @@ func winnerOf(one Placement) string {
 	}
 }
 
-func switchedOn(one Placement) string {
-	if one.InUse == InUseWired {
-		return "yes, since " + one.Since
-	}
-	return string(InUseNotWired)
-}
-
 func readingOf(method Method) Reading {
 	return Reading{Name: method.Name, Does: method.Does, Reading: percentFigure(method.Percent), Percent: method.Percent}
 }
 
-func rowsOf(answers Answers) []JudgmentRow {
+func rowsOf(answers Answers, wiring map[string]Wiring) []JudgmentRow {
 	ordered := append([]Placement{}, answers.Placements...)
 	sort.SliceStable(ordered, func(i, j int) bool { return gapOf(ordered[i]) > gapOf(ordered[j]) })
 	rows := make([]JudgmentRow, 0, len(ordered))
 	for _, one := range ordered {
+		decided := wiring[one.Decides]
 		row := JudgmentRow{
 			Point:       one.Point,
 			Question:    one.Question,
 			Axis:        one.Axis.Sentence(),
 			Sample:      countFigure(one.SampleSize, one.SampleOf),
-			SwitchedOn:  switchedOn(one),
-			Wired:       one.InUse == InUseWired,
+			SwitchedOn:  decided.SwitchedOn,
+			Wired:       decided.On,
 			Source:      one.Source,
 			NotCompared: one.Missing,
 		}
@@ -175,7 +163,7 @@ func rowsOf(answers Answers) []JudgmentRow {
 	return rows
 }
 
-func checkAnswers(answers Answers, tree string, bodies map[string]string) error {
+func checkAnswers(answers Answers, table method.Table, tree string, bodies map[string]string) error {
 	if len(answers.JevCosts) == 0 {
 		return fmt.Errorf("%s: a reader comparing Jev with a regular expression is told what a Jev call costs", AnswersPath)
 	}
@@ -193,7 +181,7 @@ func checkAnswers(answers Answers, tree string, bodies map[string]string) error 
 		return fmt.Errorf("%s names no Jev decision, and that is the one table this project can fill", AnswersPath)
 	}
 	for _, one := range answers.Placements {
-		if err := checkPlacement(one, tree, bodies); err != nil {
+		if err := checkPlacement(one, table, tree, bodies); err != nil {
 			return err
 		}
 	}
@@ -251,21 +239,15 @@ func checkEvidence(evidence, source string, bodies map[string]string) error {
 	return nil
 }
 
-func checkPlacement(one Placement, tree string, bodies map[string]string) error {
+func checkPlacement(one Placement, table method.Table, tree string, bodies map[string]string) error {
 	if one.Point == "" || one.Question == "" {
 		return fmt.Errorf("%s: a decision is listed with no name, or with no plain question a person would ask", AnswersPath)
 	}
 	if one.SampleSize <= 0 || one.SampleOf == "" {
 		return fmt.Errorf("%s: %s states a percentage with no sample, which is the same noise in a different shape", AnswersPath, one.Point)
 	}
-	switch one.InUse {
-	case InUseNotWired:
-	case InUseWired:
-		if err := checkSince(one, tree); err != nil {
-			return err
-		}
-	default:
-		return fmt.Errorf("%s: %s says it is switched on as %q, which is neither yes nor not wired", AnswersPath, one.Point, one.InUse)
+	if err := checkAgainstTheTable(one, table); err != nil {
+		return err
 	}
 	switch one.Axis.BetterWhen {
 	case BetterHigher, BetterLower:
@@ -289,16 +271,13 @@ func checkPlacement(one Placement, tree string, bodies map[string]string) error 
 	return nil
 }
 
-func checkSince(one Placement, tree string) error {
-	if one.Since == "" || one.SinceFrom == "" {
-		return fmt.Errorf("%s: %s is switched on and names no version and no file that records it", AnswersPath, one.Point)
-	}
-	body, err := os.ReadFile(filepath.Join(tree, filepath.FromSlash(one.SinceFrom)))
+func checkAgainstTheTable(one Placement, table method.Table) error {
+	chosen, err := table.Of(one.Decides)
 	if err != nil {
-		return fmt.Errorf("%s: %s cites %s for the version it was switched on in, which is not in the tree", AnswersPath, one.Point, one.SinceFrom)
+		return fmt.Errorf("%s: %s says it decides %q, and %s names no such point", AnswersPath, one.Point, one.Decides, table.File)
 	}
-	if !strings.Contains(string(body), "## "+one.Since+" ") {
-		return fmt.Errorf("%s: %s says it was switched on in %s and %s carries no such release", AnswersPath, one.Point, one.Since, one.SinceFrom)
+	if one.InUse != chosen.Method {
+		return fmt.Errorf("%s: %s says %q decides it and %s:%d says %q", AnswersPath, one.Point, string(one.InUse), table.File, chosen.Line, string(chosen.Method))
 	}
 	return nil
 }

@@ -25,6 +25,7 @@ func Page(d Data) string {
 		{"arms", d.Answers.Arms.Tab, d.Answers.Arms.Question, refusedHTML(d.Answers.Arms)},
 		{"versions", d.Answers.Versions.Tab, d.Answers.Versions.Question, refusedHTML(d.Answers.Versions)},
 		{"judgments", "3. Jev against the cheap way", "Which decisions Jev wins, which it loses, and by how much", judgmentsHTML(d)},
+		{"decides", "4. What decides what today", "What decides what when you run tofu, and what it costs", wiringHTML(d)},
 		{"reports", "Every measurement on disk", "Every dated report under bench/, newest first", reportsHTML(d)},
 	}
 	open := "judgments"
@@ -33,7 +34,7 @@ func Page(d Data) string {
 	page.WriteString("<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n<title>Tofu bench</title>\n")
 	page.WriteString("<style>" + shadcnTokens + shadcnComponents + pageLayout + "</style>\n</head>\n<body>\n<main>\n")
 	page.WriteString("<h1>What bench has measured</h1>\n")
-	page.WriteString("<div role=\"tablist\" class=\"tab-list\" aria-label=\"the three questions\">\n")
+	page.WriteString("<div role=\"tablist\" class=\"tab-list\" aria-label=\"the questions this page answers\">\n")
 	for _, one := range panels {
 		fmt.Fprintf(page, "<button role=\"tab\" class=\"tab-trigger\" id=\"tab-%s\" aria-controls=\"panel-%s\" aria-selected=\"%t\"%s>%s</button>\n",
 			one.id, one.id, one.id == open, unlessOpen(one.id == open, " tabindex=\"-1\""), html.EscapeString(one.tab))
@@ -111,12 +112,34 @@ func refusedHTML(section Refused) string {
 	return body.String()
 }
 
+func wiringHTML(d Data) string {
+	body := &strings.Builder{}
+	fmt.Fprintf(body, "<p class=\"lede\">%s decide anything when you run tofu today, read from <code>%s</code>.</p>\n",
+		figureHTML(d.PointsOn()), html.EscapeString(d.MethodTable))
+	body.WriteString("<div class=\"table-container\"><table class=\"table\">\n<caption class=\"table-caption\">One row per decision point, what decides it now, and what that costs a session.</caption>\n")
+	body.WriteString("<thead><tr class=\"table-row\">")
+	for _, head := range []string{"What decides", "Switched on", "What it costs", "Why", "Called by"} {
+		fmt.Fprintf(body, "<th class=\"table-head\">%s</th>", head)
+	}
+	body.WriteString("</tr></thead>\n<tbody>\n")
+	for _, row := range d.Wiring {
+		fmt.Fprintf(body, "<tr class=\"table-row\"><td class=\"table-cell\"><code>%s</code><span class=\"detail\"><code>%s</code></span></td>",
+			html.EscapeString(row.Point), html.EscapeString(row.Measured))
+		fmt.Fprintf(body, "<td class=\"table-cell\"><span class=\"badge\" data-variant=\"%s\">%s</span></td><td class=\"table-cell\">%s</td>",
+			useVariant(row.On), html.EscapeString(row.SwitchedOn), quoteHTML(row.Costs, d.MethodTable))
+		fmt.Fprintf(body, "<td class=\"table-cell\">%s</td><td class=\"table-cell\"><code>%s</code></td></tr>\n",
+			quoteHTML(row.Why, d.MethodTable), html.EscapeString(row.CalledBy))
+	}
+	body.WriteString("</tbody></table></div>\n")
+	return body.String()
+}
+
 func judgmentsHTML(d Data) string {
 	body := &strings.Builder{}
 	body.WriteString(statCards(append([]Stat{
 		{Label: "Compared", Figure: d.outOfDecisions(d.ComparedDecisions()), Note: "a cheaper method measured beside Jev"},
 		{Label: "Not compared", Figure: d.outOfDecisions(len(d.Judgments) - d.ComparedDecisions()), Note: "no usable score on one side"},
-		{Label: "Switched on", Figure: d.outOfDecisions(d.SwitchedOnDecisions()), Note: "every rule file ships switched off"},
+		{Label: "Switched on", Figure: d.PointsOn(), Note: "read from " + d.MethodTable},
 	}, d.Answers.JevCosts...)))
 	body.WriteString(gapChart(d.Judgments))
 	body.WriteString("<div class=\"table-container\"><table class=\"table\">\n<caption class=\"table-caption\">Each row is one decision, the cheapest method anyone has written for it, and Jev, on the same set of cases.</caption>\n")

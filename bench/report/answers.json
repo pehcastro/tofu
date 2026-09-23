@@ -107,7 +107,8 @@
       },
       "sample_size": 4,
       "sample_of": "file finding questions, against a floor of 30 the recorded sessions could not reach",
-      "wiring": "not wired",
+      "decides": "file_shortlist",
+      "wiring": "unwired",
       "source": "bench/shortlist/report-2026-09-21.md"
     },
     {
@@ -134,7 +135,8 @@
       },
       "sample_size": 34,
       "sample_of": "recorded shell results, one needle planted in each",
-      "wiring": "not wired",
+      "decides": "shell_sift",
+      "wiring": "judged",
       "source": "bench/sift/report-2026-09-21.md"
     },
     {
@@ -161,7 +163,8 @@
       },
       "sample_size": 7,
       "sample_of": "real moments taken from the ticket logs, against the 20 this project uses for a decision of this shape",
-      "wiring": "not wired",
+      "decides": "ask",
+      "wiring": "unwired",
       "source": "bench/ask/report-2026-09-21.md"
     },
     {
@@ -188,7 +191,8 @@
       },
       "sample_size": 78,
       "sample_of": "hand labelled steps, one labeller, no second opinion",
-      "wiring": "not wired",
+      "decides": "stop_check",
+      "wiring": "judged",
       "source": "bench/stopcheck/report-2026-09-21.md"
     },
     {
@@ -211,7 +215,8 @@
       },
       "sample_size": 70,
       "sample_of": "hand labelled paragraphs over 25 tasks, 35 keep and 35 drop",
-      "wiring": "not wired",
+      "decides": "read_worth",
+      "wiring": "cheap",
       "source": "bench/readworth/report-2026-09-21.md"
     },
     {
@@ -238,7 +243,8 @@
       },
       "sample_size": 21,
       "sample_of": "focused pages of a 24 page set, one needle planted in each",
-      "wiring": "not wired",
+      "decides": "page_sift",
+      "wiring": "unwired",
       "source": "bench/websift/report-2026-09-21.md"
     },
     {
@@ -249,7 +255,8 @@
       "judged_arm": {},
       "sample_size": 89,
       "sample_of": "held out cases of a 178 case set",
-      "wiring": "not wired",
+      "decides": "tool_gate",
+      "wiring": "unwired",
       "source": "bench/cost/report-2026-09-19.md",
       "unanswerable_because": "Nobody has a usable score for either side of this one. The only dated report that measured it withdrew every accuracy number in the file on 2026-09-19, because they were scored by a rule the gate does not actually run. It needs one fresh run of Jev and one of the regular expression over the same 89 cases, through the rule the gate really uses, written up as a dated report.",
       "unanswerable_evidence": "Agreement with the label: the Correct, Agreement, Blocks caught and False blocks columns, every row."
@@ -262,7 +269,8 @@
       "judged_arm": {},
       "sample_size": 6,
       "sample_of": "cases written by hand, never recorded from a real turn",
-      "wiring": "not wired",
+      "decides": "tool_gate",
+      "wiring": "unwired",
       "source": "bench/wording/report-2026-09-18.md",
       "unanswerable_because": "There is nothing cheap to compare this against: both sides are Jev, one question against two. The six cases were also written by hand rather than recorded, so nothing here says what would happen on real traffic.",
       "unanswerable_evidence": "The six states are authored, not recorded."

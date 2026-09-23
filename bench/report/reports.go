@@ -5,6 +5,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"tofu/internal/judge/method"
+	shipped "tofu/library"
 )
 
 type Provenance string
@@ -92,10 +95,24 @@ func Build(benchRoot string) (Data, error) {
 	if err := readJSON(filepath.Join(benchRoot, "report", "answers.json"), &data.Answers); err != nil {
 		return Data{}, err
 	}
-	if err := checkAnswers(data.Answers, filepath.Join(benchRoot, ".."), bodies); err != nil {
+	table, err := method.Load(shipped.Files())
+	if err != nil {
 		return Data{}, err
 	}
-	data.Judgments = rowsOf(data.Answers)
+	callers, err := readCallers(filepath.Join(benchRoot, "report", "callers.json"))
+	if err != nil {
+		return Data{}, err
+	}
+	tree := filepath.Join(benchRoot, "..")
+	if err := checkCallers(table, callers, tree); err != nil {
+		return Data{}, err
+	}
+	if err := checkAnswers(data.Answers, table, tree, bodies); err != nil {
+		return Data{}, err
+	}
+	data.Wiring = wiringOf(table, callers)
+	data.MethodTable = table.File
+	data.Judgments = rowsOf(data.Answers, wiringByPoint(data.Wiring))
 	return data, nil
 }
 

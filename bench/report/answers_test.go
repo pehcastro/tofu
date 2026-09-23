@@ -6,6 +6,8 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+
+	"tofu/internal/judge/method"
 )
 
 var (
@@ -78,14 +80,14 @@ func TestADecisionThatCannotNameItsMethodsIsNeverGivenANumber(t *testing.T) {
 	}
 	invented := Placement{
 		Point: "invented", Question: "nothing a person asks",
-		SampleSize: 1, SampleOf: "case", InUse: InUseNotWired,
+		SampleSize: 1, SampleOf: "case", Decides: "ask", InUse: method.Unwired,
 		Axis:   Axis{Name: "accuracy", Unit: "percent", BetterWhen: BetterHigher},
 		Free:   Method{Name: "a regular expression", Does: "matches a pattern", DoesFrom: "bench/report/figure.go", Percent: 50, Hits: 1, OutOf: 2, Evidence: "no such line is in any report"},
 		Judged: Method{Name: "Jev", Does: "scores the state", DoesFrom: "bench/report/figure.go", Percent: 100, Hits: 2, OutOf: 2, Evidence: "nor is this one"},
 		Source: "bench/ask/report-2026-09-21.md",
 	}
 	bodies := map[string]string{"bench/ask/report-2026-09-21.md": "a report that says none of that"}
-	if err := checkPlacement(invented, filepath.Join("..", ".."), bodies); err == nil {
+	if err := checkPlacement(invented, shippedTable(t), filepath.Join("..", ".."), bodies); err == nil {
 		t.Fatal("a percentage citing a line no report carries was accepted")
 	} else {
 		t.Logf("refused, as it must be: %v", err)
@@ -162,38 +164,9 @@ func TestThePageNeverSaysShadow(t *testing.T) {
 		t.Error("the page says shadow, which is not a thing a reader can act on")
 	}
 	for _, row := range built(t).Judgments {
-		if row.SwitchedOn != string(InUseNotWired) && !strings.HasPrefix(row.SwitchedOn, "yes, since ") {
-			t.Errorf("%s reads %q, and the column takes yes with a version or not wired", row.Point, row.SwitchedOn)
+		if row.SwitchedOn != NotWired && !strings.HasPrefix(row.SwitchedOn, "yes, through ") && !strings.HasPrefix(row.SwitchedOn, NotWired+": ") {
+			t.Errorf("%s reads %q, and the column takes yes with a method or not wired", row.Point, row.SwitchedOn)
 		}
-	}
-}
-
-func TestADecisionSwitchedOnNamesTheVersionItWentInAndTheFileThatSaysSo(t *testing.T) {
-	wired := Placement{
-		Point: "tool_gate", Question: "should this command be allowed to run",
-		Axis:       Axis{Name: "agreement with a hand label", Unit: "percent of cases", BetterWhen: BetterHigher},
-		Free:       Method{Name: "a regular expression", Does: "matches a destructive command pattern", DoesFrom: "bench/cost/regex.go", Percent: 100, Hits: 1, OutOf: 1, Evidence: "regexp"},
-		Judged:     Method{Name: "Jev", Does: "scores risk, approval and whether the owner asked", DoesFrom: "bench/cost/gate.go", Percent: 100, Hits: 1, OutOf: 1, Evidence: "regexp"},
-		SampleSize: 1, SampleOf: "case", InUse: InUseWired, Since: "0.3.0", SinceFrom: "CHANGELOG.md",
-		Source: "bench/cost/report-2026-09-18.md",
-	}
-	tree := filepath.Join("..", "..")
-	bodies := map[string]string{"bench/cost/report-2026-09-18.md": "regexp"}
-	if err := checkPlacement(wired, tree, bodies); err != nil {
-		t.Fatalf("a decision switched on in a real release was refused: %v", err)
-	}
-	if got := switchedOn(wired); got != "yes, since 0.3.0" {
-		t.Errorf("a switched on decision reads %q", got)
-	}
-	wired.Since = "9.9.9"
-	if err := checkPlacement(wired, tree, bodies); err == nil {
-		t.Error("a version that is in no release was accepted")
-	} else {
-		t.Logf("refused, as it must be: %v", err)
-	}
-	wired.Since, wired.SinceFrom = "0.3.0", ""
-	if err := checkPlacement(wired, tree, bodies); err == nil {
-		t.Error("a decision switched on with no file recording it was accepted")
 	}
 }
 
@@ -237,7 +210,7 @@ func TestAnAxisIsDeclaredByTheBenchAndNotFixedByTheViewer(t *testing.T) {
 		Axis:       Axis{Name: "tool calls per turn", Unit: "percent of the cheaper method's calls", BetterWhen: BetterLower},
 		Free:       Method{Name: "regex on error lines", Does: "keeps the head and the tail", DoesFrom: "internal/sift/shellarm.go", Percent: 100, Hits: 34, OutOf: 34, Evidence: "34 shell results this harness really returned to a model"},
 		Judged:     Method{Name: "Jev", Does: "scores each chunk", DoesFrom: "bench/sift/arm.go", Percent: 50, Hits: 17, OutOf: 34, Evidence: "34 shell results this harness really returned to a model"},
-		SampleSize: 34, SampleOf: "recorded shell results", InUse: InUseNotWired,
+		SampleSize: 34, SampleOf: "recorded shell results", Decides: "shell_sift", InUse: method.Judged,
 		Source: "bench/sift/report-2026-09-21.md",
 	}
 	before := Page(data)
@@ -245,7 +218,7 @@ func TestAnAxisIsDeclaredByTheBenchAndNotFixedByTheViewer(t *testing.T) {
 		t.Fatalf("the page already renders %q, so adding it proves nothing", added.Axis.Name)
 	}
 	data.Answers.Placements = append(data.Answers.Placements, added)
-	data.Judgments = rowsOf(data.Answers)
+	data.Judgments = rowsOf(data.Answers, wiringByPoint(data.Wiring))
 	after := Page(data)
 	if !strings.Contains(after, html.EscapeString(added.Axis.Sentence())) {
 		t.Errorf("the bench declared %q and the page does not render it", added.Axis.Sentence())

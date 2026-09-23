@@ -13,6 +13,8 @@ const (
 
 type Data struct {
 	Answers           Answers       `json:"answers"`
+	Wiring            []Wiring      `json:"what_decides_what"`
+	MethodTable       string        `json:"what_decides_what_read_from"`
 	Judgments         []JudgmentRow `json:"judgments"`
 	Reports           []Report      `json:"reports"`
 	NoReport          []Package     `json:"benches_with_no_dated_report"`
@@ -31,14 +33,14 @@ func (d Data) ComparedDecisions() int {
 	return compared
 }
 
-func (d Data) SwitchedOnDecisions() int {
+func (d Data) PointsOn() Figure {
 	on := 0
-	for _, row := range d.Judgments {
-		if row.Wired {
+	for _, row := range d.Wiring {
+		if row.On {
 			on++
 		}
 	}
-	return on
+	return countFigure(on, fmt.Sprintf("of %d decision points", len(d.Wiring)))
 }
 
 func (d Data) outOfDecisions(count int) Figure {
@@ -56,8 +58,8 @@ func (d Data) JSON() ([]byte, error) {
 func (d Data) Markdown() string {
 	doc := &strings.Builder{}
 	doc.WriteString("# What bench has measured\n\n")
-	fmt.Fprintf(doc, "%s compared against a cheaper method, %d not compared, %d switched on.",
-		d.outOfDecisions(d.ComparedDecisions()), len(d.Judgments)-d.ComparedDecisions(), d.SwitchedOnDecisions())
+	fmt.Fprintf(doc, "%s compared against a cheaper method, %d not compared.",
+		d.outOfDecisions(d.ComparedDecisions()), len(d.Judgments)-d.ComparedDecisions())
 	for _, stat := range d.Answers.JevCosts {
 		fmt.Fprintf(doc, " %s: %s, %s.", stat.Label, stat.Figure, stat.Note)
 	}
@@ -66,6 +68,7 @@ func (d Data) Markdown() string {
 
 	writeRefused(doc, d.Answers.Arms)
 	writeRefused(doc, d.Answers.Versions)
+	writeWiring(doc, d)
 	writeJudgments(doc, d.Judgments)
 	writeReports(doc, d)
 	return doc.String()
@@ -83,6 +86,17 @@ func writeRefused(doc *strings.Builder, section Refused) {
 		}
 	}
 	fmt.Fprintf(doc, "\nRead from `%s`.\n\n", section.Source)
+}
+
+func writeWiring(doc *strings.Builder, d Data) {
+	doc.WriteString("## What decides what today\n\n")
+	fmt.Fprintf(doc, "%s decide anything when you run tofu today, read from `%s`.\n\n", d.PointsOn(), d.MethodTable)
+	doc.WriteString("| What decides | Switched on | What it costs | Why | Called by | Measured |\n|---|---|---|---|---|---|\n")
+	for _, row := range d.Wiring {
+		fmt.Fprintf(doc, "| `%s` | %s | %s | %s | %s | %s |\n",
+			row.Point, row.SwitchedOn, cell(row.Costs), cell(row.Why), cell(row.CalledBy), cell(row.Measured))
+	}
+	doc.WriteString("\n")
 }
 
 func writeJudgments(doc *strings.Builder, rows []JudgmentRow) {
