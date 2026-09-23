@@ -66,6 +66,8 @@ func askTheShellWhereItIs(shell string, root Root) (string, string, bool) {
 
 const bashToolName = "bash"
 
+const commandExited = "the command exited %d\n"
+
 func (t *BashTool) Name() string { return bashToolName }
 
 func (t *BashTool) Definition() llm.Tool {
@@ -132,7 +134,7 @@ func (t *BashTool) Run(ctx context.Context, raw json.RawMessage) (Result, error)
 		if content != "" {
 			content += "\n"
 		}
-		content += fmt.Sprintf("the command exited %d\n", code)
+		content += fmt.Sprintf(commandExited, code)
 	}
 	return Result{Content: content, Command: args.Command, ExitCode: &code}, nil
 }

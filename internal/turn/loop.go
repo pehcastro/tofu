@@ -69,6 +69,7 @@ type Config struct {
 	System          string
 	Environment     string
 	Caps            Caps
+	Sift            *ShellSift
 	ResultBytesCap  int
 	ArtifactDir     string
 	TruncateResults bool
@@ -129,6 +130,7 @@ func Run(ctx context.Context, config Config) (Row, error) {
 		return Row{}, err
 	}
 	artifacts.preview = artifacts.preview.OnWire(config.Wire)
+	sifter := siftOrNothing(config.Sift)
 	source := config.ToolSource
 	if source == nil {
 		source = func() Registry { return config.Tools }
@@ -350,7 +352,7 @@ func Run(ctx context.Context, config Config) (Row, error) {
 					proxied, proxyRow := config.Proxy.rewrite(ctx, asked)
 					call.Arguments = proxied
 					request := GateRequest{TurnID: row.ID, Task: config.Task, Tool: call.Name, Args: call.Arguments}
-					gated := gatedCall{call: call, asked: asked, proxy: proxyRow, id: session.EventIDFor(origin, call.ID), parent: stepRow.id, author: author}
+					gated := gatedCall{call: call, asked: asked, proxy: proxyRow, id: session.EventIDFor(origin, call.ID), parent: stepRow.id, author: author, sift: sifter, task: config.Task}
 					if config.Gate != nil {
 						verdict, err := config.Gate.Decide(ctx, request)
 						gated.verdict = verdict
@@ -533,6 +535,8 @@ type gatedCall struct {
 	id      string
 	parent  string
 	author  string
+	task    string
+	sift    *ShellSift
 	verdict GateDecision
 	gateErr string
 	refusal string
@@ -574,21 +578,23 @@ func (g gatedCall) execute(ctx context.Context, tools Registry, resultBytesCap i
 		return rejectedCall(call, started, err.Error(), g.id, g.parent, g.author)
 	}
 
-	rendered, handle, storeErr := artifacts.Render(result.Content, resultBytesCap)
+	cut := g.cutShellResult(ctx, call.Name, result)
+	rendered, handle, storeErr := artifacts.Render(cut.Text, resultBytesCap)
 	sum := sha256.Sum256([]byte(result.Content))
 	row := ToolCallRow{
-		ID:            g.id,
-		Parent:        g.parent,
-		Author:        g.author,
-		Tool:          call.Name,
-		Args:          call.Arguments,
-		Command:       result.Command,
-		ExitCode:      result.ExitCode,
-		ResultBytes:   len(result.Content),
-		RenderedBytes: len(rendered),
-		ResultHash:    hex.EncodeToString(sum[:]),
-		ResultHandle:  handle,
-		DurationMS:    time.Since(started).Milliseconds(),
+		ID:             g.id,
+		Parent:         g.parent,
+		Author:         g.author,
+		Tool:           call.Name,
+		Args:           call.Arguments,
+		Command:        result.Command,
+		ExitCode:       result.ExitCode,
+		ResultBytes:    len(result.Content),
+		RenderedBytes:  len(rendered),
+		ResultHash:     hex.EncodeToString(sum[:]),
+		ResultHandle:   handle,
+		SiftSavedBytes: cut.Saved,
+		DurationMS:     time.Since(started).Milliseconds(),
 	}
 	if storeErr != nil {
 		row.ResultHandleError = storeErr.Error()

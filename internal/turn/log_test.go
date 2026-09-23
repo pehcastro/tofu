@@ -209,6 +209,7 @@ func fullyPopulatedRow() Row {
 						ResultHash:        "deadbeef",
 						ResultHandle:      "2a77523db96ec6926b76bc7786734f70",
 						ResultHandleError: "recorded on the same call to prove a failed store write survives the round trip",
+						SiftSavedBytes:    37,
 
 						ParallelBatch:  2,
 						GateDecisionID: "2026-09-18-deadbeef",

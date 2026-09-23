@@ -11,8 +11,11 @@ import (
 	"strings"
 
 	"tofu/internal/crew"
+	"tofu/internal/judge/method"
+	"tofu/internal/judge/state"
 	"tofu/internal/konst"
 	"tofu/internal/llm"
+	shipped "tofu/library"
 )
 
 type DepthLimitError struct {
@@ -85,8 +88,25 @@ func (CheapDoneReview) Review(_ context.Context, child Row) (DoneDecision, error
 	return DoneDecision{Verdict: DoneReopen, Reason: "nothing in the child's row is evidence the work happened: not one tool call ran without failing"}, nil
 }
 
+func (t *SpawnTool) decided(ctx context.Context, first Row) (DoneDecision, error) {
+	table := t.Methods
+	if table.Version == 0 {
+		loaded, err := method.Load(shipped.Files())
+		if err != nil {
+			return DoneDecision{}, err
+		}
+		table = loaded
+	}
+	decision, _, err := method.Run(ctx, table, state.StopCheckPoint, method.Arms[DoneDecision]{
+		Cheap:  func(ctx context.Context) (DoneDecision, error) { return CheapDoneReview{}.Review(ctx, first) },
+		Judged: func(ctx context.Context) (DoneDecision, error) { return t.Review.Review(ctx, first) },
+	})
+	return decision, err
+}
+
 type SpawnTool struct {
 	Review   DoneReview
+	Methods  method.Table
 	parentID string
 	depth    int
 	spawned  int
@@ -187,7 +207,7 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 			owned[i] = ownedShell{tool: tool, boundary: boundary}
 		}
 	}
-	nested := &SpawnTool{Review: t.Review, parentID: childID, depth: t.depth + 1, base: t.base, roster: t.roster}
+	nested := &SpawnTool{Review: t.Review, Methods: t.Methods, parentID: childID, depth: t.depth + 1, base: t.base, roster: t.roster}
 	child := t.base
 	child.Task = args.Task
 	child.Tools = NewRegistry(append(owned, nested)...)
@@ -241,7 +261,7 @@ func (t *SpawnTool) reviewed(ctx context.Context, child Config, first Row) ([]Ro
 	if t.Review == nil {
 		return []Row{first}, crew.InReview
 	}
-	decision, err := t.Review.Review(ctx, first)
+	decision, err := t.decided(ctx, first)
 	if err != nil {
 		first.Warnings = append(first.Warnings, "the done review did not run, so the child's own claim stands: "+err.Error())
 		return []Row{first}, crew.InReview

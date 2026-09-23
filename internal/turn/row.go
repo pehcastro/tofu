@@ -50,6 +50,7 @@ type ToolCallRow struct {
 	ResultHash        string          `json:"result_hash,omitempty"`
 	ResultHandle      string          `json:"result_handle,omitempty"`
 	ResultHandleError string          `json:"result_handle_error,omitempty"`
+	SiftSavedBytes    int             `json:"sift_saved_bytes,omitempty"`
 
 	ParallelBatch  int    `json:"parallel_batch,omitempty"`
 	GateDecisionID string `json:"gate_decision_id,omitempty"`

@@ -5,9 +5,9 @@ schema: shell_sift
 rule_version: 1
 questions: shell_sift
 questions_version: 1
-mode: shadow
+mode: enforced
 sample_floor: 300
-notes: shadow until a lock says otherwise, so the sieve records what it would have removed and the model is given the output whole. this point has one question and one threshold, so it declares its own schema rather than renaming its question into the gate's four roles the way stop_check@1 had to. internal/sift reads it. keep_at is a prior and not a fit, chosen at the middle of the noul range because nothing has been calibrated on shell output yet. a chunk on standard error, the chunk carrying the exit status and the first and last chunk of standard output are never candidates, and that is decided in code rather than here
+notes: enforced, so a shell result reaches the model cut and a line at the end of it says how many bytes were removed and which method removed them. this point has one question and one threshold, so it declares its own schema rather than renaming its question into the gate's four roles the way stop_check@1 had to. internal/sift reads it, and internal/turn refuses to build the sieve when this mode and the method named for shell_sift in decisions/methods@1.yaml disagree. keep_at is still a prior and not a fit, chosen at the middle of the noul range, so what is enforced is an uncalibrated threshold and the bytes saved are the measured number rather than the needles kept. sample_floor is read by the gate's resolver, which this point does not call. a chunk on standard error, the chunk carrying the exit status and the first and last chunk of standard output are never candidates, and that is decided in code rather than here
 
 thresholds:
   keep_at: 0.5

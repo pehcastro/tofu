@@ -1,6 +1,7 @@
 package sift
 
 import (
+	"strings"
 	"testing"
 
 	"tofu/internal/sift"
@@ -30,32 +31,48 @@ func shippedRule(t *testing.T) sift.ShellRule {
 	return r
 }
 
-func TestTheShippedRuleIsShadowAndTheModelIsGivenTheOutputWhole(t *testing.T) {
+func TestTheShippedRuleIsEnforcedAndTheModelIsGivenTheOutputCut(t *testing.T) {
 	pol := shippedRule(t)
-	if pol.Mode != sift.ModeShadow {
-		t.Fatalf("library/tools/shell/rules/shell_sift@1.yaml is %s and nothing has been calibrated on shell output", pol.Mode)
+	if pol.Mode != sift.ModeEnforced {
+		t.Fatalf("library/tools/shell/rules/shell_sift@1.yaml is %s and the model is still given every shell result whole", pol.Mode)
 	}
-	wouldDrop := 0
+	dropped, cutRows, wholeBytes, sentBytes := 0, 0, 0, 0
 	for _, row := range corpusRows(t) {
 		planted, err := Plant(row, 0)
 		if err != nil {
 			t.Fatalf("Plant: %v", err)
 		}
 		marks := make([]sift.Mark, len(planted.Units))
+		rowDropped := 0
 		for i, unit := range planted.Units {
 			marks[i] = sift.ShellCheap(unit)
 			if !marks[i].Keep {
-				wouldDrop++
+				rowDropped++
 			}
 		}
 		whole := sift.JoinUnits(planted.Units)
-		if message := sift.Message(planted.Units, marks, pol.Mode); message != whole {
-			t.Fatalf("%s: shadow gave the model %d bytes of a %d byte output", row.Session, len(message), len(whole))
+		message := sift.Message(planted.Units, marks, pol.Mode)
+		dropped += rowDropped
+		wholeBytes += len(whole)
+		sentBytes += len(message)
+		if rowDropped == 0 {
+			if message != whole {
+				t.Fatalf("%s: no unit was dropped and the model was given something other than the output", row.Session)
+			}
+			continue
+		}
+		cutRows++
+		if !strings.Contains(message, "[sift:") {
+			t.Fatalf("%s: %d units were dropped and the message says nothing about it", row.Session, rowDropped)
 		}
 	}
-	if wouldDrop == 0 {
-		t.Fatal("the sieve would have removed nothing anywhere, so shadow proves nothing")
+	if dropped == 0 {
+		t.Fatal("the sieve removed nothing anywhere, so enforcement proves nothing")
 	}
+	if sentBytes >= wholeBytes {
+		t.Fatalf("the corpus sent %d bytes of %d, so enforcement saved nothing", sentBytes, wholeBytes)
+	}
+	t.Logf("%d rows cut, %d units dropped, %d bytes of %d sent", cutRows, dropped, sentBytes, wholeBytes)
 }
 
 func TestTheFreeArmOverEveryCapturedOutput(t *testing.T) {
