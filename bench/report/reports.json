@@ -671,6 +671,25 @@
       "state_note": ""
     },
     {
+      "package": "rules",
+      "date": "2026-09-23",
+      "source": "bench/rules/report-2026-09-23.md",
+      "figure": "239",
+      "built_from": "prose",
+      "sample": "all 239 fire lines across three rules log files, with all 25 em dash fires and the full target list of the other 214 read by hand",
+      "skips": "0 unreadable lines. The log records a per package finding count rather than a file and line, so the exact test that tripped a rule cannot be named without rerunning the checker, which the report says rather than guesses.",
+      "conclusion": [
+        {
+          "text": "comments: shadow: never fired, so there is no evidence it should enforce or that it should delete; leave it recording until it has a fire to judge.",
+          "withdrawn": false
+        }
+      ],
+      "conclusion_unparsed": false,
+      "state": "stands",
+      "state_source": "",
+      "state_note": ""
+    },
+    {
       "package": "schemas",
       "date": "2026-09-23",
       "source": "bench/schemas/report-2026-09-23.md",
@@ -1434,8 +1453,8 @@
     }
   ],
   "counts": {
-    "reports": 42,
-    "packages_with_a_dated_report": 26,
+    "reports": 43,
+    "packages_with_a_dated_report": 27,
     "packages_with_no_dated_report": 6,
     "withdrawn_whole_or_in_part": 5,
     "stale": 1,

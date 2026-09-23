@@ -10,6 +10,10 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 
 ## Unreleased
 
+### Added
+
+- **When you answer a permission prompt, your answer is written onto that decision's row** in the log tofu already keeps, marked `gate-answer` so it is distinguishable from one typed by hand. Nothing else about the prompt changes. A decision you were never asked about stays unmarked, and so does one allowed by a rule you granted earlier, because neither is a fresh judgment. **This is how a threshold eventually gets calibrated against your own use rather than a number somebody typed**: 1.37 percent of gate decisions ask, so it accumulates over weeks of ordinary use rather than days.
+
 ## 0.4.14 - 2026-09-23
 
 They are sub-agents, and you decide whether a turn may spawn one or edit a file it has not read.
