@@ -272,6 +272,14 @@
     "skips": "1 entry under .tofu/sessions that is not a turn; the two live arm tests stay skipped and their skip message now cites the two against twelve gap"
   },
   {
+    "report": "bench/schemas/report-2026-09-23.md",
+    "figure": "16575",
+    "says": "The tool schemas a turn sends cost 16,575 bytes on every request, about 4,143 tokens for all 18 tools, and deferring them is not worth building. The figure is measured by encoding a real request with and without the tools array and taking the difference; summing the tools individually gives 16,492, and the 83 byte gap is the array's own brackets and commas. Caching is what decides it: on the measured turn the block was written to cache once on step one and never again across eleven steps, and 81.6 percent of that turn's billed input was cache reads. Across the corpus, 24 recorded turns wrote to cache and 23 of them made a second model call and read the write back; at today's 18 tool scale, 14 of 15 did. The deferral mechanism is named and costed rather than assumed: a catalog line plus a fetch before first use would have added 5 round trips to the measured turn to save at most 2,873 tokens, paid once at cache-write price. The only case it would pay is a turn that makes exactly one model call and never returns, which was 1 of 24.",
+    "from": "prose",
+    "sample": "one recorded 11 step turn measured in full, plus 51 of 111 recorded turns carrying cache accounting, of which 24 wrote to cache and 15 are at today's 18 tool scale",
+    "skips": "60 of 111 turns carry no usable cache accounting, either predating it or holding no steps, and the report gives the split. No live model call was made and no account was spent."
+  },
+  {
     "report": "bench/instruction/report-2026-09-23.md",
     "figure": "25",
     "says": "Jev scored 25 of 27 against a regular expression's 24 of 27 on a corpus of real recorded tool results, and a rerun minutes later tied both arms at 24, so the report's conclusion is that the corpus cannot decide this rather than that the judgment won. Both arms score high because this project's recorded sessions carry almost no adversarial instruction-shaped text: what looks like a directive is nearly always the harness's own scaffolding, an oversized-result notice, a bash-timeout caution or a refused-citation notice, never a planted attack. Neither arm's mistakes sit inside the other's: the regular expression's three misses are directive-shaped words inside ordinary Go source or a test assertion rather than text addressed to a reader, and jev's two misses are the same refused-citation caution scored at 0.18, under its own line, which the literal word match caught. The two-task test found no separation, 0.03 to 0.06 apart on three cases, which is the opposite of what the shell sift found. Deciding two arms that both score in the high eighties needs a few hundred labelled cases, and this corpus is 27. It cost $0.000935 over 27 live calls.",
