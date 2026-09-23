@@ -218,6 +218,19 @@ func TestACorruptLineInTheMiddleIsReportedAndSkipped(t *testing.T) {
 	t.Logf("corrupt lines reported: %+v", report.Corrupt)
 }
 
+func TestARowWithAnUnknownVerdictIsCountedCorrupt(t *testing.T) {
+	dir := t.TempDir()
+	bad := `{"id":"2026-09-18-badverdict00000000000000000000","schema":1,"at":"2026-09-18T19:24:34.242Z","point":"tool_gate","questions":"tool_gate","version":1,"verdict":"maybe"}`
+	writeLegacyLine(t, dir, bad)
+	rows, report := readAll(t, dir, Filter{})
+	if len(rows) != 0 {
+		t.Fatalf("a row with an unknown verdict must not be read, got %+v", rows)
+	}
+	if len(report.Corrupt) != 1 || !strings.Contains(report.Corrupt[0].Err.Error(), "unknown verdict") {
+		t.Fatalf("an unknown verdict must be reported corrupt, got %+v", report.Corrupt)
+	}
+}
+
 func TestBackfillChangesOnlyTheOutcomeField(t *testing.T) {
 	dir := t.TempDir()
 	writer := NewWriter(dir)

@@ -1,6 +1,9 @@
 package ledger
 
-import "testing"
+import (
+	"encoding/json"
+	"testing"
+)
 
 func TestVerdictStringFailsOnAnUnknownValue(t *testing.T) {
 	defer func() {
@@ -9,6 +12,68 @@ func TestVerdictStringFailsOnAnUnknownValue(t *testing.T) {
 		}
 	}()
 	_ = Verdict("bogus").String()
+}
+
+func TestModeStringFailsOnAnUnknownValue(t *testing.T) {
+	defer func() {
+		if recover() == nil {
+			t.Fatal("an unknown mode did not panic")
+		}
+	}()
+	_ = Mode("bogus").String()
+}
+
+func TestVerdictUnmarshalRefusesAnUnknownValue(t *testing.T) {
+	var v Verdict
+	err := json.Unmarshal([]byte(`"bogus"`), &v)
+	if err == nil {
+		t.Fatal("an unknown verdict decoded without error")
+	}
+	want := `ledger: unknown verdict "bogus"`
+	if err.Error() != want {
+		t.Fatalf("error = %q, want %q", err.Error(), want)
+	}
+}
+
+func TestModeUnmarshalRefusesAnUnknownValue(t *testing.T) {
+	var m Mode
+	err := json.Unmarshal([]byte(`"bogus"`), &m)
+	if err == nil {
+		t.Fatal("an unknown mode decoded without error")
+	}
+	want := `ledger: unknown mode "bogus"`
+	if err.Error() != want {
+		t.Fatalf("error = %q, want %q", err.Error(), want)
+	}
+}
+
+func TestVerdictAndModeUnmarshalAcceptEveryKnownValue(t *testing.T) {
+	for _, v := range AllVerdicts() {
+		var got Verdict
+		encoded, err := json.Marshal(v)
+		if err != nil {
+			t.Fatalf("Marshal %v: %v", v, err)
+		}
+		if err := json.Unmarshal(encoded, &got); err != nil {
+			t.Fatalf("Unmarshal %v: %v", v, err)
+		}
+		if got != v {
+			t.Fatalf("got %v, want %v", got, v)
+		}
+	}
+	for _, m := range AllModes() {
+		var got Mode
+		encoded, err := json.Marshal(m)
+		if err != nil {
+			t.Fatalf("Marshal %v: %v", m, err)
+		}
+		if err := json.Unmarshal(encoded, &got); err != nil {
+			t.Fatalf("Unmarshal %v: %v", m, err)
+		}
+		if got != m {
+			t.Fatalf("got %v, want %v", got, m)
+		}
+	}
 }
 
 func TestRowCarriesVerdictPolicyAndReasonThroughWriteAndRead(t *testing.T) {

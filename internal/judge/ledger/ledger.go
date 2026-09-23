@@ -49,6 +49,20 @@ func (v Verdict) String() string {
 	panic("ledger: unknown verdict " + string(v))
 }
 
+func (v *Verdict) UnmarshalJSON(data []byte) error {
+	var raw string
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	for _, known := range AllVerdicts() {
+		if Verdict(raw) == known {
+			*v = known
+			return nil
+		}
+	}
+	return fmt.Errorf("ledger: unknown verdict %q", raw)
+}
+
 type Slice struct {
 	Option string  `json:"option"`
 	P      float64 `json:"p"`
@@ -155,6 +169,10 @@ const (
 	ModeEnforced Mode = "enforced"
 )
 
+func AllModes() []Mode {
+	return []Mode{ModeUnknown, ModeShadow, ModeEnforced}
+}
+
 func (m Mode) String() string {
 	switch m {
 	case ModeUnknown:
@@ -165,6 +183,20 @@ func (m Mode) String() string {
 		return "enforced"
 	}
 	panic("ledger: unknown mode " + string(m))
+}
+
+func (m *Mode) UnmarshalJSON(data []byte) error {
+	var raw string
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	for _, known := range AllModes() {
+		if Mode(raw) == known {
+			*m = known
+			return nil
+		}
+	}
+	return fmt.Errorf("ledger: unknown mode %q", raw)
 }
 
 type Outcome struct {
