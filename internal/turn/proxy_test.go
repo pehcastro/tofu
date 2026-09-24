@@ -3,6 +3,10 @@ package turn
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -67,12 +71,76 @@ func fakeProxyOnPath(t *testing.T) string {
 	build.Dir = source
 	build.Env = append(os.Environ(), "GOFLAGS=-mod=mod", "GOWORK=off")
 	if out, err := build.CombinedOutput(); err != nil {
-		t.Skipf("this test needs a stand-in proxy binary and this machine did not build one, which is not a finding about the proxy: %v\n%s", err, out)
+		t.Fatal(standInBuildFailure(source, err, out))
 	}
 	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
 	log := filepath.Join(t.TempDir(), "calls.txt")
 	t.Setenv("FAKE_RTK_LOG", log)
 	return log
+}
+
+func standInBuildFailure(source string, err error, out []byte) string {
+	return fmt.Sprintf("the stand-in proxy this test wrote into %s did not build, so this machine has no working go toolchain and nothing in this repository is at fault: %v\n%s", source, err, out)
+}
+
+func TestAStandInThatDoesNotBuildIsNotReportedAsAnOrdinarySkip(t *testing.T) {
+	file, err := parser.ParseFile(token.NewFileSet(), "proxy_test.go", nil, 0)
+	if err != nil {
+		t.Fatalf("parsing proxy_test.go: %v", err)
+	}
+	const helper = "fakeProxyOnPath"
+	var declared *ast.FuncDecl
+	for _, decl := range file.Decls {
+		if function, ok := decl.(*ast.FuncDecl); ok && function.Name.Name == helper {
+			declared = function
+		}
+	}
+	if declared == nil {
+		t.Fatalf("%s is gone, so nothing here guards how a toolchain that cannot compile is reported", helper)
+	}
+	var skips []string
+	ast.Inspect(declared, func(node ast.Node) bool {
+		if selector, ok := node.(*ast.SelectorExpr); ok && strings.HasPrefix(selector.Sel.Name, "Skip") {
+			skips = append(skips, selector.Sel.Name)
+		}
+		return true
+	})
+	if len(skips) > 0 {
+		t.Fatalf("%s calls %v, so a machine that cannot compile hello world goes dark as an ordinary skip", helper, skips)
+	}
+}
+
+func TestAStandInBuildFailureNamesSourceOutsideThisRepositoryAndWhatTheCompilerSaid(t *testing.T) {
+	source := t.TempDir()
+	module, err := filepath.Abs(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatalf("finding the module root: %v", err)
+	}
+	if inside, err := filepath.Rel(module, source); err == nil && !strings.HasPrefix(inside, "..") {
+		t.Fatalf("the stand-in source is written to %s, inside this repository, so a failure there is a fact about the tree after all", inside)
+	}
+	write := func(name, body string) {
+		if err := os.WriteFile(filepath.Join(source, name), []byte(body), 0o600); err != nil {
+			t.Fatalf("writing a stand-in that cannot compile: %v", err)
+		}
+	}
+	write("go.mod", "module fakertk\n\ngo 1.24\n")
+	write("main.go", "package main\n\nfunc main() { absent() }\n")
+	build := exec.Command("go", "build", "-o", filepath.Join(t.TempDir(), "rtk"), ".")
+	build.Dir = source
+	build.Env = append(os.Environ(), "GOFLAGS=-mod=mod", "GOWORK=off")
+	out, err := build.CombinedOutput()
+	if err == nil {
+		t.Fatalf("a stand-in calling an undefined function built anyway\n%s", out)
+	}
+	report := standInBuildFailure(source, err, out)
+	t.Logf("a stand-in that does not build reports:\n%s", strings.TrimSpace(report))
+	if !strings.Contains(report, source) {
+		t.Fatalf("the report does not name the directory the source was written into, so a reader looks in this repository instead: %q", report)
+	}
+	if !strings.Contains(report, strings.TrimSpace(string(out))) {
+		t.Fatalf("the report drops what the compiler said, so the reader learns only that something failed: %q", report)
+	}
 }
 
 const (
