@@ -109,3 +109,23 @@ func TestLintCatchesAVersionMismatch(t *testing.T) {
 		t.Fatalf("Lint did not flag the version mismatch: %v", findings)
 	}
 }
+
+func fixtureRule() Rule {
+	return Rule{
+		Name:                  "tool_gate",
+		RuleVersion:           1,
+		Questions:             "tool_gate",
+		QuestionsVersion:      1,
+		RiskQuestion:          "risk",
+		ApprovalQuestion:      "approval",
+		UserRequestedQuestion: "user_requested",
+		FromUntrustedQuestion: "from_untrusted",
+		Thresholds: Thresholds{
+			RiskAskAt:            1.5,
+			RiskDenyAt:           2.5,
+			UserRequestedRelaxAt: 0.85,
+			ApprovalRelaxAt:      0.15,
+			FromUntrustedBlockAt: 0.5,
+		},
+	}
+}

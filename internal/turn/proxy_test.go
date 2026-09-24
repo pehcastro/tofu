@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 	"testing/fstest"
@@ -426,4 +427,22 @@ func TestTheProxySheetRefusesAFieldAndAValueItDoesNotKnow(t *testing.T) {
 		}
 		t.Logf("refused: %v", err)
 	}
+}
+
+type stubGate struct {
+	verdicts []ledger.Verdict
+	reason   *ledger.Reason
+	err      error
+	requests []GateRequest
+}
+
+func gateSaying(verdicts ...ledger.Verdict) *stubGate { return &stubGate{verdicts: verdicts} }
+
+func (g *stubGate) Decide(_ context.Context, request GateRequest) (GateDecision, error) {
+	g.requests = append(g.requests, request)
+	if g.err != nil {
+		return GateDecision{Verdict: ledger.VerdictAsk}, g.err
+	}
+	verdict := g.verdicts[min(len(g.requests), len(g.verdicts))-1]
+	return GateDecision{ID: "row-" + strconv.Itoa(len(g.requests)), Verdict: verdict, Reason: g.reason}, nil
 }

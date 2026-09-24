@@ -157,3 +157,15 @@ func report(t *testing.T, arm string, set []labelled, judge func(Part) Mark) {
 	t.Logf("%s arm: %d/%d agree (%.0f%%), %d padding kept, %d answers dropped",
 		arm, agree, len(set), 100*float64(agree)/float64(len(set)), keptWhenDrop, droppedWhenKeep)
 }
+
+func corpusFiles(t *testing.T) []string {
+	t.Helper()
+	paths, err := filepath.Glob(filepath.Join("testdata", "corpus", "*.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(paths) == 0 {
+		t.Fatal("the corpus is empty, so nothing is proved")
+	}
+	return paths
+}

@@ -666,7 +666,7 @@ func (t *BashTool) Run(ctx context.Context, raw json.RawMessage) (Result, error)
 	if ctx.Err() != nil {
 		watch.killed()
 		return Result{
-			Content: capResult(output.String(), konst.TurnResultBytesCap),
+			Content: capResult(output.String()),
 			Command: args.Command,
 			Outcome: ResultAborted,
 			FailureText: fmt.Sprintf("bash: %q was cancelled elsewhere in this turn while it was running, not because the command itself failed. "+
@@ -689,7 +689,7 @@ func (t *BashTool) Run(ctx context.Context, raw json.RawMessage) (Result, error)
 		content += fmt.Sprintf(commandExited, code)
 		outcome = ResultFailed
 	}
-	content = corrected + capResult(content, konst.TurnResultBytesCap)
+	content = corrected + capResult(content)
 	return Result{Content: content, Command: args.Command, ExitCode: &code, FailureText: bashFailureText(code), Outcome: outcome}, nil
 }
 

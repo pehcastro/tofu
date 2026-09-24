@@ -438,3 +438,30 @@ func TestEveryVerbGivesTheModelATofuName(t *testing.T) {
 		})
 	}
 }
+
+func seed(t *testing.T, root, rel, body string) {
+	t.Helper()
+	full := filepath.Join(root, filepath.FromSlash(rel))
+	if err := os.MkdirAll(filepath.Dir(full), 0o750); err != nil {
+		t.Fatalf("seeding %s: %v", rel, err)
+	}
+	if err := os.WriteFile(full, []byte(body), 0o600); err != nil {
+		t.Fatalf("seeding %s: %v", rel, err)
+	}
+}
+
+func loggedRows(t *testing.T, row turn.Row) []turn.ToolCallRow {
+	t.Helper()
+	var called []turn.ToolCallRow
+	for _, step := range row.Steps {
+		called = append(called, step.ToolCalls...)
+	}
+	for _, call := range called {
+		encoded, err := json.Marshal(call)
+		if err != nil {
+			t.Fatalf("encoding the step row: %v", err)
+		}
+		t.Logf("step row: %s", encoded)
+	}
+	return called
+}

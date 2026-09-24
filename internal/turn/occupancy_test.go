@@ -3,8 +3,10 @@ package turn
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"path/filepath"
 	"strconv"
+	"sync"
 	"testing"
 
 	"tofu/internal/llm"
@@ -162,4 +164,71 @@ func TestAStepFromBeforeTheCapsReadsAsAnAbsenceAndCapsOfZeroDoNot(t *testing.T) 
 		}
 		t.Logf("%s: %s", written.name, raw)
 	}
+}
+
+func baseConfig(t *testing.T, model Model, tools Registry) Config {
+	t.Helper()
+	scratch := session.NewStore(t.TempDir())
+	return Config{
+		Model:          model,
+		Spend:          SpendAPIKey,
+		Tools:          tools,
+		Task:           "say pong",
+		Wire:           "anthropic",
+		Caps:           Caps{MaxSteps: 10},
+		ResultBytesCap: 4096,
+		ArtifactDir:    t.TempDir(),
+		EndedSession:   func(row Row) error { return WriteSession(scratch, row) },
+	}
+}
+
+type stubModel struct {
+	decisions []llm.Decision
+	requests  []llm.Request
+	calls     int
+}
+
+func (m *stubModel) Ask(_ context.Context, request llm.Request) (llm.Decision, error) {
+	m.requests = append(m.requests, request)
+	if m.calls >= len(m.decisions) {
+		return llm.Decision{}, errors.New("stubModel: no more decisions queued")
+	}
+	decision := m.decisions[m.calls]
+	m.calls++
+	return decision, nil
+}
+
+type stubTool struct {
+	name    string
+	result  Result
+	err     error
+	varying bool
+	running sync.Mutex
+	calls   int
+}
+
+func (t *stubTool) Name() string { return t.name }
+
+func (t *stubTool) Definition() llm.Tool {
+	return llm.Tool{Name: t.name, Description: "a stub tool", Parameters: map[string]any{"type": "object"}}
+}
+
+func (t *stubTool) Run(_ context.Context, _ json.RawMessage) (Result, error) {
+	t.running.Lock()
+	t.calls++
+	calls := t.calls
+	t.running.Unlock()
+	result := t.result
+	if t.varying {
+		result.Content += " " + strconv.Itoa(calls)
+	}
+	return result, t.err
+}
+
+func toolCallDecision(calls ...llm.ToolCall) llm.Decision {
+	return llm.Decision{Build: "m1", Outcome: llm.OutcomeToolCalls, ToolCalls: calls}
+}
+
+func messageDecision() llm.Decision {
+	return llm.Decision{Build: "m1", Outcome: llm.OutcomeMessage, Content: "done"}
 }

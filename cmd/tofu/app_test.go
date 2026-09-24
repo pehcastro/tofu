@@ -215,7 +215,7 @@ func TestLiveAppRunsATurnOnEachWire(t *testing.T) {
 	}
 }
 
-func storeCredential(t *testing.T, provider cred.Provider) string {
+func storeCredential(t *testing.T, provider cred.Provider) {
 	t.Helper()
 	path, err := cred.Path()
 	if err != nil {
@@ -226,18 +226,16 @@ func storeCredential(t *testing.T, provider cred.Provider) string {
 		t.Fatal(err)
 	}
 	defer func() { _ = store.Close() }()
-	email := string(provider) + "@example.com"
 	credential := cred.Credential{
 		Provider: provider,
 		Kind:     "oauth",
 		Access:   "access-token",
 		Expires:  time.Now().Add(time.Hour),
-		Identity: cred.Identity{Email: email},
+		Identity: cred.Identity{Email: string(provider) + "@example.com"},
 	}
 	if err := store.Save(credential, time.Now()); err != nil {
 		t.Fatal(err)
 	}
-	return email
 }
 
 func storeGateKey(t *testing.T, key string) {
@@ -2064,4 +2062,12 @@ func TestEveryToolInTheRunRegistryRecordsACommandThatDoesNotRepeatItsName(t *tes
 		}
 	}
 	t.Logf("%d tools in the registry, %d not run here: %s", len(built), len(notRun), strings.Join(notRun, "; "))
+}
+
+func emptyHome(t *testing.T) {
+	t.Helper()
+	home := t.TempDir()
+	t.Setenv("USERPROFILE", home)
+	t.Setenv("HOME", home)
+	t.Setenv("OPENROUTER_KEY", "")
 }

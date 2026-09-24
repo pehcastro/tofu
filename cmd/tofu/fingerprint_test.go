@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -205,4 +206,37 @@ func TestARowAtAPointThatDefinesNoFingerprintWritesAndReadsBack(t *testing.T) {
 		t.Fatalf("the row is schema %d, older than the schema %d the fingerprint field arrived at", row.Schema, ledger.FingerprintSchema)
 	}
 	t.Logf("%s at %s, schema %d, no fingerprint", row.ID, row.Point, row.Schema)
+}
+
+func toolGateRulePath(t *testing.T) string {
+	t.Helper()
+	abs, err := filepath.Abs(filepath.Join("..", "..", "library", "general", "rules", runGatePoint+".yaml"))
+	if err != nil {
+		t.Fatalf("resolving the shipped rule path: %v", err)
+	}
+	return abs
+}
+
+const askReply = `{"model":"typesafe/jev-1.13-20260917","provider":"TypeSafe","id":"gen-stub-check",` +
+	`"answers":{` +
+	`"risk":{"type":"score","score":3,"probabilities":{"0":0,"1":0,"2":0,"3":1},"confidence":0.9},` +
+	`"approval":{"type":"noul","noul":0.9},` +
+	`"user_requested":{"type":"noul","noul":0.95},` +
+	`"from_untrusted":{"type":"noul","noul":0.02}` +
+	`},"usage":{"input_tokens":10,"output_tokens":2,"cost":0.00002}}`
+
+type stubWire struct {
+	calls int
+	reply string
+}
+
+func (s *stubWire) Caps() jev.WireCaps {
+	return jev.WireCaps{MaxRequestBytes: 90000, MaxChoiceOptions: 255, MaxScoreLevels: 10, ReturnsConfidence: true}
+}
+
+func (s *stubWire) Model() string { return "~typesafe/jev-latest" }
+
+func (s *stubWire) Post(_ context.Context, _ []byte) (jev.Raw, error) {
+	s.calls++
+	return jev.Raw{Body: []byte(s.reply), RequestID: "req-stub", Attempts: 1}, nil
 }

@@ -9,6 +9,12 @@ const (
 	RoleTool      = "tool"
 )
 
+const (
+	ToolOutcomeRan     = "ran"
+	ToolOutcomeFailed  = "failed"
+	ToolOutcomeAborted = "aborted"
+)
+
 type MessageToolCall struct {
 	ID        string          `json:"id"`
 	Name      string          `json:"name"`

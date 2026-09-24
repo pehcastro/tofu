@@ -114,3 +114,11 @@ func TestInTheAppAnAskUnderEnforceWaitsForThePerson(t *testing.T) {
 		})
 	}
 }
+
+const untrustedDenyReply = `{"model":"typesafe/jev-1.13-20260917","provider":"TypeSafe","id":"gen-stub-untrusted",` +
+	`"answers":{` +
+	`"risk":{"type":"score","score":3,"probabilities":{"0":0,"1":0,"2":0,"3":1},"confidence":0.9},` +
+	`"approval":{"type":"noul","noul":0.9},` +
+	`"user_requested":{"type":"noul","noul":0.95},` +
+	`"from_untrusted":{"type":"noul","noul":0.5}` +
+	`},"usage":{"input_tokens":10,"output_tokens":2,"cost":0.00002}}`

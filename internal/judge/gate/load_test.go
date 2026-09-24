@@ -58,7 +58,7 @@ func projectRuleDir(t *testing.T) (string, string) {
 func TestLoadPointReadsTheEmbeddedRuleWhenTheProjectHasNoLibrary(t *testing.T) {
 	set := shippedQuestionSet(t)
 	t.Chdir(t.TempDir())
-	r, origin, err := LoadPoint(shipped.Files(), "tool_gate@1", set)
+	r, origin, err := LoadPoint(shipped.Files(), "tool_gate@1", set, "")
 	if err != nil {
 		t.Fatalf("LoadPoint: %v", err)
 	}
@@ -78,7 +78,7 @@ func TestLoadPointPrefersTheProjectRuleOverTheEmbeddedOne(t *testing.T) {
 	root, path := projectRuleDir(t)
 	writeFile(t, path, projectToolGateRule)
 	t.Chdir(root)
-	r, origin, err := LoadPoint(shipped.Files(), "tool_gate@1", set)
+	r, origin, err := LoadPoint(shipped.Files(), "tool_gate@1", set, "")
 	if err != nil {
 		t.Fatalf("LoadPoint: %v", err)
 	}
@@ -93,12 +93,43 @@ func TestLoadPointPrefersTheProjectRuleOverTheEmbeddedOne(t *testing.T) {
 	}
 }
 
+func TestLoadPointReadsTheNamedDirectoryRatherThanTheWorkingOne(t *testing.T) {
+	set := shippedQuestionSet(t)
+	root, path := projectRuleDir(t)
+	writeFile(t, path, projectToolGateRule)
+	t.Chdir(t.TempDir())
+	r, origin, err := LoadPoint(shipped.Files(), "tool_gate@1", set, root)
+	if err != nil {
+		t.Fatalf("LoadPoint: %v", err)
+	}
+	if origin != OriginProject || r.Thresholds.RiskAskAt != 0.25 {
+		t.Fatalf("origin = %q risk_ask_at = %v, want the project rule in %s", origin, r.Thresholds.RiskAskAt, root)
+	}
+	if r.File != path {
+		t.Fatalf("file = %q, want %q", r.File, path)
+	}
+}
+
+func TestLoadPointLeavesTheWorkingDirectorysRuleAloneWhenAnotherIsNamed(t *testing.T) {
+	set := shippedQuestionSet(t)
+	standing, path := projectRuleDir(t)
+	writeFile(t, path, projectToolGateRule)
+	t.Chdir(standing)
+	r, origin, err := LoadPoint(shipped.Files(), "tool_gate@1", set, t.TempDir())
+	if err != nil {
+		t.Fatalf("LoadPoint: %v", err)
+	}
+	if origin != OriginBinary || r.Thresholds.RiskAskAt != 1.5 {
+		t.Fatalf("origin = %q risk_ask_at = %v, want the binary rule; the working directory decided instead", origin, r.Thresholds.RiskAskAt)
+	}
+}
+
 func TestLoadPointFailsWhenTheProjectRuleIsUnusable(t *testing.T) {
 	set := shippedQuestionSet(t)
 	root, path := projectRuleDir(t)
 	writeFile(t, path, "name: tool_gate\ndomain: general\nkind: threshold\n\tindented_with_a_tab: 1\n")
 	t.Chdir(root)
-	r, origin, err := LoadPoint(shipped.Files(), "tool_gate@1", set)
+	r, origin, err := LoadPoint(shipped.Files(), "tool_gate@1", set, "")
 	if err == nil {
 		t.Fatalf("LoadPoint fell back to %s with an unusable project rule: %+v", origin, r)
 	}
@@ -112,7 +143,7 @@ func TestLoadPointFailsWhenTheProjectRuleDoesNotMatchTheQuestions(t *testing.T) 
 	root, path := projectRuleDir(t)
 	writeFile(t, path, strings.Replace(projectToolGateRule, "risk_question: risk", "risk_question: danger", 1))
 	t.Chdir(root)
-	if _, _, err := LoadPoint(shipped.Files(), "tool_gate@1", set); err == nil {
+	if _, _, err := LoadPoint(shipped.Files(), "tool_gate@1", set, ""); err == nil {
 		t.Fatal("LoadPoint accepted a project rule naming a question the set does not have")
 	}
 }
@@ -257,5 +288,12 @@ func TestLoadReadsSampleFloorAndDeclaredMode(t *testing.T) {
 	}
 	if r.SampleFloor != 300 {
 		t.Fatalf("sample_floor = %d, want 300", r.SampleFloor)
+	}
+}
+
+func writeFile(t *testing.T, path, content string) {
+	t.Helper()
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatalf("writing %s: %v", path, err)
 	}
 }

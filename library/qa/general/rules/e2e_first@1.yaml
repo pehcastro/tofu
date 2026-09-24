@@ -1,0 +1,6 @@
+id: e2e_first
+domain: qa
+kind: human
+concern: code_rules
+text: prove a feature end to end, not in pieces. drive the real thing the way a person drives it and leave an artifact anybody can check and anybody can produce again: a pasted screen, a recorded run, a file, a number. NEVER offer a unit test as the proof that a feature works.
+notes: an end to end run exercises the wiring, which is where this project's defects have actually been. a unit test passes on code that is never called, on a value nothing writes and on a flag that never reaches the thing it names. the artifact is the point: a claim nobody can reproduce is a claim nobody can check.

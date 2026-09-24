@@ -106,7 +106,7 @@ func rulePoint(ref string, layers []question.Layer) doctorRule {
 	if err != nil {
 		return doctorRule{Point: ref, Unusable: err.Error()}
 	}
-	r, origin, err := gate.LoadPoint(shipped.Files(), ref, set)
+	r, origin, err := gate.LoadPoint(shipped.Files(), ref, set, "")
 	if err != nil {
 		return doctorRule{Point: ref, Unusable: err.Error()}
 	}

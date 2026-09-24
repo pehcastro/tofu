@@ -10,6 +10,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"tofu/internal/konst"
 	"tofu/internal/llm"
 )
 
@@ -32,18 +33,18 @@ type Result struct {
 
 const resultCapMarker = "\n...(%s dropped from the middle of this result, cut at a %d byte cap.)...\n"
 
-func capResult(content string, capBytes int) string {
-	if capBytes <= 0 || len(content) <= capBytes {
+func capResult(content string) string {
+	if len(content) <= konst.TurnResultBytesCap {
 		return content
 	}
-	head := runeSafeHead(content, capBytes/2)
-	tail := runeSafeTail(content, capBytes-len(head))
+	head := runeSafeHead(content, konst.TurnResultBytesCap/2)
+	tail := runeSafeTail(content, konst.TurnResultBytesCap-len(head))
 	dropped := len(content) - len(head) - len(tail)
 	amount := fmt.Sprintf("%d bytes", dropped)
 	if dropped == 1 {
 		amount = "1 byte"
 	}
-	return head + fmt.Sprintf(resultCapMarker, amount, capBytes) + tail
+	return head + fmt.Sprintf(resultCapMarker, amount, konst.TurnResultBytesCap) + tail
 }
 
 func runeSafeHead(s string, n int) string {

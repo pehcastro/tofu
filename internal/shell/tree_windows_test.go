@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -317,4 +318,36 @@ func TestABackgroundTreeDoesNotOutliveTheProgramThatStartedIt(t *testing.T) {
 	if err := waitMembersExited(handles, time.Now().Add(killWait)); err != nil {
 		t.Errorf("the probe exited and the %d processes of its background tree are still running: %v", len(handles), err)
 	}
+}
+
+func registry(t *testing.T) *Registry {
+	t.Helper()
+	return OpenAt(filepath.Join(t.TempDir(), "shells"))
+}
+
+func waitForExit(t *testing.T, r *Registry, name string) Shell {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		entry, err := r.Read(name)
+		if err == nil && entry.State == Exited {
+			return entry
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatalf("%q never reached state %q", name, Exited)
+	return Shell{}
+}
+
+func waitForDescendants(t *testing.T, r *Registry, name string) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		log, err := r.Tail(name, DefaultTail)
+		if err == nil && strings.Contains(log, "listening") {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatalf("%q never wrote its log, so nothing proves its descendants had started", name)
 }

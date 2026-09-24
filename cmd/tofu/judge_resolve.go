@@ -146,5 +146,5 @@ func loadRulePoint(ref, dir string) (gate.Rule, gate.Origin, error) {
 	if err != nil {
 		return gate.Rule{}, "", err
 	}
-	return gate.LoadPoint(shipped.Files(), ref, set)
+	return gate.LoadPoint(shipped.Files(), ref, set, dir)
 }

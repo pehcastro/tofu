@@ -2,6 +2,7 @@ package turn
 
 import (
 	"context"
+	"encoding/json"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -93,4 +94,93 @@ func TestTheStopCheckMethodComesFromTheShippedTableWhenNobodyPassesOne(t *testin
 	if held := onlyChild(t, spawn); held.State != subagent.Finished {
 		t.Fatalf("the accepted verdict left the child %s", held.State)
 	}
+}
+
+func methodTable(t *testing.T, named string) method.Table {
+	t.Helper()
+	rows := "kind: method_table\ntable_version: 1\nnotes: a fixture\nmethods:\n"
+	for _, point := range []string{shellSiftPoint, "stop_check"} {
+		rows += "  " + point + ":\n    method: " + named + "\n    why: a fixture\n"
+		if named != string(method.Unwired) {
+			rows += "    cost: nothing, it is a fixture\n"
+		}
+	}
+	table, err := method.Parse([]byte(rows), "testdata/methods@1.yaml")
+	if err != nil {
+		t.Fatalf("parsing the fixture table: %v", err)
+	}
+	return table
+}
+
+func claimDecision(text string) llm.Decision {
+	return llm.Decision{Build: "m1", Outcome: llm.OutcomeMessage, Content: text}
+}
+
+func spawnCall(id, task string, owns ...string) llm.Decision {
+	args, err := json.Marshal(spawnArgs{Task: task, Owns: owns})
+	if err != nil {
+		panic(err)
+	}
+	return toolCallDecision(llm.ToolCall{ID: id, Name: "spawn", Arguments: args})
+}
+
+func parentTurn(t *testing.T, root string, decisions []llm.Decision) (Config, *SpawnTool) {
+	t.Helper()
+	write, err := NewWriteTool(root)
+	if err != nil {
+		t.Fatalf("building the write tool: %v", err)
+	}
+	read, err := NewReadTool(root)
+	if err != nil {
+		t.Fatalf("building the read tool: %v", err)
+	}
+	const parentID = "turn-parent"
+	base := Config{
+		Model:          &stubModel{decisions: decisions},
+		Spend:          SpendAPIKey,
+		Tools:          NewRegistry(read, write),
+		Caps:           Caps{MaxSteps: 20},
+		ResultBytesCap: 4096,
+		ArtifactDir:    filepath.Join(root, "artifacts"),
+		NewID:          func() string { return parentID },
+	}
+	spawn := NewSpawnTool(parentID, base, &subagent.Roster{})
+	parent := base
+	parent.Task = "hand the work to a child"
+	parent.Tools = NewRegistry(read, write, spawn)
+	return parent, spawn
+}
+
+func onlyChild(t *testing.T, spawn *SpawnTool) subagent.SubAgent {
+	t.Helper()
+	held := spawn.roster.SubAgents()
+	if len(held) != 1 {
+		t.Fatalf("the roster holds %d sub-agents, want 1", len(held))
+	}
+	return held[0]
+}
+
+type stubReview struct {
+	writer   *ledger.Writer
+	verdict  DoneVerdict
+	reviewed int
+}
+
+func (r *stubReview) Review(_ context.Context, child Row) (DoneDecision, error) {
+	r.reviewed++
+	row, err := r.writer.Append(ledger.Row{
+		Point:     "stop_check@1",
+		Questions: "stop_check",
+		Version:   1,
+		Build:     "jev-test",
+		Verdict:   ledger.VerdictAsk,
+		TurnID:    child.ID,
+		Answers: []ledger.Answer{{
+			Question: "work_remains", Wording: 1, Kind: ledger.AnswerNoul, Noul: 0.93,
+		}},
+	})
+	if err != nil {
+		return DoneDecision{}, err
+	}
+	return DoneDecision{ID: row.ID, Verdict: r.verdict, Reason: "work_remains 0.93"}, nil
 }

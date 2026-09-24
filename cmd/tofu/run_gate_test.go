@@ -228,3 +228,51 @@ func TestDoctorAndTheGateAgreeAShadowPointKeepsItsOwnThresholds(t *testing.T) {
 	t.Logf("gate:   %s", got)
 	t.Logf("lock, not applied: %s", pinned)
 }
+
+func envVarName() string { return "OPENROUTER" + "_KEY" }
+
+func fakeSecret(tag string) string { return "fake-test-secret-" + tag }
+
+func isolateHome(t *testing.T) {
+	t.Helper()
+	dir := t.TempDir()
+	t.Setenv("HOME", dir)
+	t.Setenv("USERPROFILE", dir)
+}
+
+func chdirTemp(t *testing.T) string {
+	t.Helper()
+	isolateHome(t)
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	dir := t.TempDir()
+	if err := os.Chdir(dir); err != nil {
+		t.Fatalf("chdir: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(wd) })
+	return dir
+}
+
+func doctorJSON(t *testing.T) doctorReport {
+	t.Helper()
+	out := &bytes.Buffer{}
+	doctor(out, plain, "--json")
+	var report doctorReport
+	if err := json.Unmarshal(out.Bytes(), &report); err != nil {
+		t.Fatalf("tofu doctor --json does not parse: %v\n%s", err, out.String())
+	}
+	return report
+}
+
+func rulePointOf(t *testing.T, point string) doctorRule {
+	t.Helper()
+	for _, candidate := range doctorJSON(t).Rules {
+		if candidate.Point == point {
+			return candidate
+		}
+	}
+	t.Fatalf("no point %s in tofu doctor --json", point)
+	return doctorRule{}
+}

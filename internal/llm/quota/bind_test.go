@@ -116,3 +116,22 @@ func TestTheCatalogRunsNoModelThatSpendsAPerModelWindow(t *testing.T) {
 		}
 	}
 }
+
+var recordedNow = time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)
+
+func recordedBody(t *testing.T, name string) []byte {
+	t.Helper()
+	raw, err := os.ReadFile(filepath.Join("testdata", name))
+	if err != nil {
+		t.Fatalf("reading the recorded body: %v", err)
+	}
+	return raw
+}
+
+func reported(fraction float64, id string, resetsAt time.Time) Window {
+	return Window{ID: id, Used: Used{Fraction: fraction, Reported: true}, ResetsAt: resetsAt}
+}
+
+func claudeAccount(id int64, windows ...Window) Candidate {
+	return Candidate{ID: id, Provider: ClaudeSub, Report: Report{Provider: ClaudeSub, Windows: windows}}
+}

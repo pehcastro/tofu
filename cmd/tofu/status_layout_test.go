@@ -156,3 +156,21 @@ func TestTheListingGoldens(t *testing.T) {
 		golden.Assert(t, "status-"+strconv.Itoa(width)+".golden", statusText(statusFixture(), plain, fixtureMoment(), width))
 	}
 }
+
+func cardOf(t *testing.T, listing, head string) string {
+	t.Helper()
+	var held []string
+	for _, line := range strings.Split(listing, "\n") {
+		switch {
+		case strings.Contains(line, cardTop) && strings.Contains(line, head):
+			held = []string{line}
+		case held == nil:
+		case strings.Contains(line, cardFoot+cardRule):
+			return strings.Join(append(held, line), "\n")
+		default:
+			held = append(held, line)
+		}
+	}
+	t.Fatalf("no card is headed %q:\n%s", head, listing)
+	return ""
+}

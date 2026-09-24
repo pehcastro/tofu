@@ -3,6 +3,7 @@ package anthropic
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -75,4 +76,51 @@ func TestTheEncodedRequestPlacesItsMarkersWhereTheGoldenSays(t *testing.T) {
 	}
 
 	golden.Assert(t, "history-caching.golden", indented.String())
+}
+
+func minimalRequest() Request {
+	return Request{
+		Model:    "claude-opus-4-1-20250805",
+		Messages: []llm.Message{{Role: llm.RoleUser, Content: "say ok"}},
+	}
+}
+
+func exchange(step int, bulk string) []llm.Message {
+	call := fmt.Sprintf("toolu_%d", step)
+	return []llm.Message{
+		{Role: llm.RoleAssistant, ToolCalls: []llm.ToolCall{{ID: call, Name: "read"}}},
+		{Role: llm.RoleTool, ToolCallID: call, Content: bulk},
+	}
+}
+
+func historyRequest(exchanges int) Request {
+	request := minimalRequest()
+	bulk := strings.Repeat("a line of a file that was read\n", 200)
+	for step := 1; step <= exchanges; step++ {
+		request.Messages = append(request.Messages, exchange(step, bulk)...)
+	}
+	return request
+}
+
+func messageBreakpoints(t *testing.T, request Request) []int {
+	t.Helper()
+	body, err := request.Encode(true)
+	if err != nil {
+		t.Fatalf("encoding: %v", err)
+	}
+	var decoded struct {
+		Messages []wireMessage `json:"messages"`
+	}
+	if err := json.Unmarshal(body, &decoded); err != nil {
+		t.Fatalf("decoding: %v", err)
+	}
+	var indexes []int
+	for index, message := range decoded.Messages {
+		for _, block := range message.Content {
+			if block.CacheControl != nil {
+				indexes = append(indexes, index)
+			}
+		}
+	}
+	return indexes
 }

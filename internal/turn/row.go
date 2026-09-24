@@ -143,11 +143,11 @@ func toolOutcomeName(outcome llm.ToolOutcome) string {
 	case llm.ToolOutcomeUnset:
 		return ""
 	case llm.ToolOutcomeRan:
-		return "ran"
+		return session.ToolOutcomeRan
 	case llm.ToolOutcomeFailed:
-		return "failed"
+		return session.ToolOutcomeFailed
 	case llm.ToolOutcomeAborted:
-		return "aborted"
+		return session.ToolOutcomeAborted
 	}
 	panic("turn: unknown tool outcome")
 }
@@ -194,11 +194,11 @@ func messageOf(m MessageRow) (llm.Message, error) {
 	switch m.ToolOutcome {
 	case "":
 		message.ToolOutcome = llm.ToolOutcomeUnset
-	case "ran":
+	case session.ToolOutcomeRan:
 		message.ToolOutcome = llm.ToolOutcomeRan
-	case "failed":
+	case session.ToolOutcomeFailed:
 		message.ToolOutcome = llm.ToolOutcomeFailed
-	case "aborted":
+	case session.ToolOutcomeAborted:
 		message.ToolOutcome = llm.ToolOutcomeAborted
 	default:
 		return llm.Message{}, errors.New("turn: a recorded message names the tool outcome " + strconv.Quote(m.ToolOutcome) + ", which is none this build records")

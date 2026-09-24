@@ -514,3 +514,61 @@ func TestTheWebLibraryComesFromTheDirectoryTheRunNamesNotTheOneItWasStartedIn(t 
 		t.Errorf("--dir %s has no web library and the run obeyed the use: off of the directory it stood in: %v", plain, standing)
 	}
 }
+
+func armOpts(t *testing.T, args ...string) runOpts {
+	t.Helper()
+	opts, err := parseRunArgs(append([]string{"--dir", t.TempDir()}, append(args, "a task")...))
+	if err != nil {
+		t.Fatalf("parseRunArgs %v: %v", args, err)
+	}
+	return opts
+}
+
+func mustConfig(t *testing.T, opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn.SpawnTool) {
+	t.Helper()
+	config, spawner, err := runConfig(opts, built, run)
+	if err != nil {
+		t.Fatalf("runConfig: %v", err)
+	}
+	return config, spawner
+}
+
+func toolNames(t *testing.T, opts runOpts) []string {
+	t.Helper()
+	built, _, err := buildRunTools(opts.dir, opts.toolSet)
+	if err != nil {
+		t.Fatalf("buildRunTools %s: %v", opts.toolSet, err)
+	}
+	config, _ := mustConfig(t, opts, built, runtime{spend: turn.SpendSubscription})
+	var named []string
+	for _, definition := range config.Tools.Definitions() {
+		named = append(named, definition.Name)
+	}
+	return named
+}
+
+func chosenFor(t *testing.T) models.Model {
+	t.Helper()
+	opts, err := parseRunArgs([]string{"--dir", t.TempDir(), "a task"})
+	if err != nil {
+		t.Fatalf("parseRunArgs returned an error: %v", err)
+	}
+	selected, err := chooseModel(opts)
+	if err != nil {
+		t.Fatalf("chooseModel returned an error: %v", err)
+	}
+	return selected
+}
+
+type queuedModel struct {
+	decisions []llm.Decision
+}
+
+func (m *queuedModel) Ask(_ context.Context, _ llm.Request) (llm.Decision, error) {
+	if len(m.decisions) == 0 {
+		return llm.Decision{}, errors.New("queuedModel: no more decisions queued")
+	}
+	next := m.decisions[0]
+	m.decisions = m.decisions[1:]
+	return next, nil
+}

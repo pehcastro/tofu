@@ -21,6 +21,34 @@ const (
 	pinnedCorpusWriter = "TOFU_PIN_ESTIMATE_CORPUS"
 )
 
+type recordedRequest struct {
+	Session      string
+	Day          string
+	Step         int
+	Wire         string
+	Rebuilt      string
+	Conversation recall.Conversation
+	Reported     recall.Bill
+	CachedBefore int
+	Recorded     int
+}
+
+func filler(bytes int) string {
+	if bytes <= 0 {
+		return ""
+	}
+	return strings.Repeat("x", bytes)
+}
+
+func shippedConfig(t *testing.T) recall.Config {
+	t.Helper()
+	cfg, err := recall.LoadConfig()
+	if err != nil {
+		t.Fatalf("load config: %v", err)
+	}
+	return cfg
+}
+
 type recordedCall struct {
 	Args          json.RawMessage `json:"args"`
 	RenderedBytes int             `json:"rendered_bytes"`

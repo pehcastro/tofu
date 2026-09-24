@@ -8,6 +8,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
+
+	"tofu/internal/transport"
 )
 
 func servedFrom(t *testing.T, subscription Subscription, payload string) Served {
@@ -201,4 +204,13 @@ func TestAModelFileCannotCarryAContextWindowAtAll(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "context_tokens: unknown field") {
 		t.Fatalf("a local file still carries an upstream fact, got %v", err)
 	}
+}
+
+func testClient(t *testing.T) *transport.Client {
+	t.Helper()
+	client, err := transport.New(transport.Config{AttemptTimeout: time.Second, Concurrency: 1})
+	if err != nil {
+		t.Fatalf("building the transport: %v", err)
+	}
+	return client
 }

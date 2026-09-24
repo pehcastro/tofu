@@ -39,6 +39,15 @@ func TestTheUndocumentedFieldsSurviveTheRoundTrip(t *testing.T) {
 	}
 }
 
+const gateReply = `{"model":"typesafe/jev-1.13-20260917",
+ "answers":{
+  "act":{"type":"choice","choice":"read","probabilities":{"read":0.8,"write":0.15,"ask":0.05},"confidence":0.75},
+  "risk":{"type":"score","score":0,"legend":{"0":"none"},"probabilities":{"0":1,"1":0,"2":0,"3":0},"confidence":1},
+  "approval":{"type":"noul","noul":0.11}},
+ "usage":{"input_tokens":776,"output_tokens":69,"cost":0.000032592},
+ "id":"gen-dec-1789749261-nXRyUDXmVQe5htOwSK6M",
+ "provider":"TypeSafe"}`
+
 func TestAResponseWithoutTheUndocumentedFieldsDecodes(t *testing.T) {
 	response, err := Decode([]byte(gateReply))
 	if err != nil {

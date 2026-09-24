@@ -22,7 +22,7 @@ const (
 	OriginBinary  Origin = "binary"
 )
 
-const shippedRoot = "library"
+const libraryRoot = "library"
 
 func (o Origin) String() string {
 	switch o {
@@ -34,10 +34,13 @@ func (o Origin) String() string {
 	panic("gate: unknown origin " + string(o))
 }
 
-func LoadPoint(shipped fs.FS, ref string, set question.Set) (Rule, Origin, error) {
-	libraryDir, err := sys.LibraryDir()
-	if err != nil {
-		return Rule{}, "", err
+func LoadPoint(shipped fs.FS, ref string, set question.Set, dir string) (Rule, Origin, error) {
+	libraryDir := sys.Join(dir, libraryRoot)
+	if dir == "" {
+		var err error
+		if libraryDir, err = sys.LibraryDir(); err != nil {
+			return Rule{}, "", err
+		}
 	}
 	isDir, err := sys.IsDir(libraryDir)
 	if err != nil {
@@ -137,10 +140,10 @@ func LoadFS(shipped fs.FS, ref string) (Rule, error) {
 	if err != nil {
 		return Rule{}, err
 	}
-	r, err := parse(data, path.Join(shippedRoot, name))
+	r, err := parse(data, path.Join(libraryRoot, name))
 	if err != nil {
 		if dir := path.Dir(name); dir != "." {
-			return Rule{}, fmt.Errorf("%w (%s was read as a rule because its directory is named %q)", err, path.Join(shippedRoot, dir), "rules")
+			return Rule{}, fmt.Errorf("%w (%s was read as a rule because its directory is named %q)", err, path.Join(libraryRoot, dir), "rules")
 		}
 		return Rule{}, err
 	}

@@ -1,0 +1,6 @@
+id: failure_modes_first
+domain: qa
+kind: human
+concern: code_rules
+text: when a thing genuinely has to be tested on its own, write every way it can fail before you write the code, and include the ways that take thought rather than only the obvious one. the obvious failure is the one the code already handles.
+notes: the list comes first because it is the only part that can disagree with the implementation. after the code exists the list is written from it and contains what it already survives. medium and hard breakages are things like a value arriving from a caller two frames up, a field nothing writes, a flag parsed and never read, an order nobody guarantees, a shared directory another process changed.

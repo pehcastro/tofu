@@ -22,7 +22,3 @@ func (b *bound) kill() error {
 func (b *bound) release() error {
 	return nil
 }
-
-func processAlive(int) bool {
-	return false
-}

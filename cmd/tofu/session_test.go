@@ -675,3 +675,23 @@ func TestTheForkSentenceReadsTheSameInSessionInfoAndInContext(t *testing.T) {
 		t.Fatalf("tofu context says\n%s\nand tofu session info says\n%s", sentence, info)
 	}
 }
+
+func contextRun(t *testing.T, args ...string) string {
+	t.Helper()
+	var out, errOut bytes.Buffer
+	if code := run(append([]string{"context"}, args...), strings.NewReader(""), &out, &errOut); code != exitOK {
+		t.Fatalf("tofu context %v exited %d: %s", args, code, errOut.String())
+	}
+	return out.String()
+}
+
+func forkLineOf(t *testing.T, printed string) string {
+	t.Helper()
+	for _, line := range strings.Split(printed, "\n") {
+		if strings.HasPrefix(line, "forked into ") {
+			return line
+		}
+	}
+	t.Fatalf("nothing printed here is a fork line:\n%s", printed)
+	return ""
+}

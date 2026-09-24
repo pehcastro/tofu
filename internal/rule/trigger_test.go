@@ -143,9 +143,9 @@ func TestTheShippedIndexSaysWhatFiresForATaskAndWhy(t *testing.T) {
 		t.Fatalf("the index opens with %q, want %d of %d for a task naming a go file and a test file", strings.SplitN(out.String(), "\n", 2)[0], unconditional, len(rules))
 	}
 	for _, want := range []string{
-		"fires em_dash             always on, the rule declares no trigger",
-		"fires comments            the language go reached internal/rule/load_test.go",
-		"fires test_assertion      the scope **/*_test.go reached internal/rule/load_test.go",
+		"fires em_dash                 always on, the rule declares no trigger",
+		"fires comments                the language go reached internal/rule/load_test.go",
+		"fires test_assertion          the scope **/*_test.go reached internal/rule/load_test.go",
 	} {
 		if !strings.Contains(out.String(), want) {
 			t.Fatalf("the index does not carry the line %q", want)
@@ -169,7 +169,7 @@ func TestTheShippedIndexSaysWhatFiresForATaskAndWhy(t *testing.T) {
 	if !strings.HasPrefix(prose.String(), fmt.Sprintf("%d of %d rules fire\n", alwaysOn, len(rules))) {
 		t.Fatalf("the index opens with %q, want %d of %d for a task naming one markdown file", strings.SplitN(prose.String(), "\n", 2)[0], alwaysOn, len(rules))
 	}
-	if !strings.Contains(prose.String(), "      comments            no path the task names is go") {
+	if !strings.Contains(prose.String(), "      comments                no path the task names is go") {
 		t.Fatalf("the index does not say why comments was held back:\n%s", prose)
 	}
 }

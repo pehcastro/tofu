@@ -2,8 +2,10 @@ package main
 
 import (
 	"encoding/json"
+	"io"
 	"io/fs"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -262,4 +264,17 @@ func assertKeyAbsent(t *testing.T, where, body, key string) {
 			return
 		}
 	}
+}
+
+func jevStub(t *testing.T, status int, body string, seen *string) {
+	t.Helper()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if seen != nil {
+			*seen = r.Header.Get("Authorization")
+		}
+		w.WriteHeader(status)
+		_, _ = io.WriteString(w, body)
+	}))
+	t.Cleanup(server.Close)
+	t.Setenv(judgeEndpointEnvar, server.URL)
 }
