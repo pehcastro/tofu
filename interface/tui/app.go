@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"context"
 	"os/exec"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -87,10 +88,11 @@ type Event struct {
 
 func (e Event) snapshot() bool {
 	switch e.Kind {
-	case EventContext, EventForkStart, EventForkEnd, EventSubAgent:
+	case EventContext, EventForkStart, EventForkEnd:
 		return true
 	case EventText, EventTextDelta, EventToolCall, EventToolResult, EventNote, EventFailure, EventStats, EventDone,
-		EventDecision, EventGateOff, EventAwaitPerson, EventResumed, EventSteered, EventRequesting, EventPlan, EventSession:
+		EventDecision, EventGateOff, EventAwaitPerson, EventResumed, EventSteered, EventRequesting, EventPlan,
+		EventSession, EventSubAgent:
 		return false
 	}
 	panic("tui: unknown event kind")
@@ -281,6 +283,7 @@ type App struct {
 	pressedAt      time.Time
 	cancel         context.CancelFunc
 	events         chan Event
+	childCalls     []string
 	board          paste.Board
 	minted         int
 	workBeforeTurn int
@@ -848,7 +851,7 @@ func (a *App) keptPartial() string {
 
 func (a *App) start(task string) tea.Cmd {
 	a.view.Follow()
-	a.workBeforeTurn, a.keptAnswer = len(a.work.Entries), ""
+	a.workBeforeTurn, a.keptAnswer, a.childCalls = len(a.work.Entries), "", nil
 	if a.options.Turn == nil {
 		a.view.Append(session.Entry{Kind: session.Failure, Body: "no engine is wired to this app"})
 		return nil
@@ -893,6 +896,9 @@ func (a *App) absorb(event Event) {
 	if event.answered() {
 		a.view.Returned()
 	}
+	if len(a.childCalls) > 0 && (event.Kind == EventText || event.Kind == EventTextDelta) {
+		return
+	}
 	switch event.Kind {
 	case EventRequesting:
 		a.view.Requesting()
@@ -902,9 +908,13 @@ func (a *App) absorb(event Event) {
 		a.view.Stream(event.Text)
 	case EventToolCall:
 		a.running++
+		if event.Promote {
+			a.childCalls = append(a.childCalls, event.ID)
+		}
 		a.view.Append(session.Entry{Kind: session.Tool, ID: event.ID, Head: event.Tool, Body: event.Text, Detail: event.Detail, Promoted: event.Promote})
 		a.work.Append(work.Entry{ID: event.ID, Head: event.Tool + " " + event.Text, Args: event.Detail})
 	case EventToolResult:
+		a.childCalls = slices.DeleteFunc(a.childCalls, func(called string) bool { return called == event.ID })
 		status := event.Text
 		if edit, changed := edits.Changed(event.Agent, a.view.Intent(event.ID), event.Diff, event.Created, event.ID, a.options.Now()); changed {
 			a.edits.Add(edit)

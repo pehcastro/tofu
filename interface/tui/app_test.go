@@ -48,12 +48,7 @@ func fixedClock() func() time.Time {
 }
 
 func containsAPlaceholder(text string) bool {
-	for _, example := range session.PlaceholderExamples {
-		if strings.Contains(text, example) {
-			return true
-		}
-	}
-	return false
+	return strings.Contains(text, session.Placeholder)
 }
 
 func claudeEfforts() []llm.Effort {
@@ -727,6 +722,79 @@ func TestSelectingAChildShowsItsToolCallsAndItsReport(t *testing.T) {
 	app.Update(tea.KeyPressMsg{Code: tea.KeyUp})
 	if picked := ansi.Strip(app.View().Content); picked != before {
 		t.Errorf("stepping back to no child changed the frame\n--- got ---\n%s\n--- want ---\n%s", picked, before)
+	}
+}
+
+func childOf(report string) []subagent.Child {
+	return []subagent.Child{{Name: "c1", Owns: []string{"note.txt"}, Doing: "read note.txt", State: subagent.Done, Report: report}}
+}
+
+func TestAChildsMessageIsDrawnInTheSubAgentsPanelAndNeverSpokenInTheParentsTranscript(t *testing.T) {
+	const childSaid, parentSaid = "the note holds one line", "the child read it for me"
+	app := newTestApp(Options{Repo: testRepo, Branch: "develop", Now: fixedClock(), Wires: bothWires})
+	app.Init()
+	app.Update(tea.WindowSizeMsg{Width: 120, Height: 36})
+	for _, event := range []Event{
+		{Kind: EventText, Text: "handing it to a child"},
+		{Kind: EventToolCall, ID: "s1", Tool: "spawn", Text: "read note.txt", Promote: true},
+		{Kind: EventTextDelta, Text: childSaid},
+		{Kind: EventToolResult, ID: "s1", Text: "spawn c1 finished"},
+		{Kind: EventSubAgent, Children: childOf(childSaid)},
+		{Kind: EventText, Text: parentSaid},
+		{Kind: EventDone, Text: "cooked for"},
+	} {
+		app.Update(event)
+	}
+	transcript := ansi.Strip(app.View().Content)
+	if strings.Contains(transcript, childSaid) {
+		t.Errorf("the child spoke in the parent's transcript with nothing saying it was the child\n%s", transcript)
+	}
+	if !strings.Contains(transcript, parentSaid) {
+		t.Fatalf("the parent's own message is missing from its transcript\n%s", transcript)
+	}
+	app.Update(tea.KeyPressMsg{Code: '4', Mod: tea.ModAlt})
+	app.Update(tea.KeyPressMsg{Code: tea.KeyDown})
+	panel := ansi.Strip(app.View().Content)
+	for _, want := range []string{"c1", childSaid} {
+		if !strings.Contains(panel, want) {
+			t.Errorf("the sub-agents panel does not carry %q\n%s", want, panel)
+		}
+	}
+}
+
+func TestTheLastSubAgentStateReachesThePanelEvenWhenTheChannelIsFull(t *testing.T) {
+	const childSaid = "the note holds one line"
+	app := newTestApp(Options{
+		Repo: testRepo, Branch: "develop", Now: fixedClock(), Wires: bothWires,
+		Turn: func(_ context.Context, _ Pick, _ string, emit CalledFromInsideTheTurnAndNeverAfterItReturns) {
+			for range eventBuffer * 2 {
+				emit(Event{Kind: EventContext, Context: fixture.Context()})
+			}
+			emit(Event{Kind: EventSubAgent, Children: childOf(childSaid)})
+		},
+	})
+	app.Init()
+	app.Update(tea.WindowSizeMsg{Width: 120, Height: 36})
+	for _, letter := range "read the note" {
+		app.Update(tea.KeyPressMsg{Code: letter, Text: string(letter)})
+	}
+	_, started := app.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	for pending := []tea.Cmd{started}; len(pending) > 0; pending = pending[1:] {
+		if pending[0] == nil {
+			continue
+		}
+		switch msg := pending[0]().(type) {
+		case tea.BatchMsg:
+			pending = append(pending, msg...)
+		case Event:
+			_, next := app.Update(msg)
+			pending = append(pending, next)
+		}
+	}
+	app.Update(tea.KeyPressMsg{Code: '4', Mod: tea.ModAlt})
+	app.Update(tea.KeyPressMsg{Code: tea.KeyDown})
+	if panel := ansi.Strip(app.View().Content); !strings.Contains(panel, childSaid) {
+		t.Fatalf("a full channel threw away the child's last state, so the panel never showed it\n%s", panel)
 	}
 }
 
