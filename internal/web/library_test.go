@@ -107,6 +107,27 @@ func TestTheProjectWebFileBeatsTheGlobalWhichBeatsTheShipped(t *testing.T) {
 	}
 }
 
+func TestTheProjectLayerIsTheNamedDirectoryAndNotTheWorkingOne(t *testing.T) {
+	named, standing := t.TempDir(), t.TempDir()
+	writeFetch(t, filepath.Join(named, ".tofu", "web"), "512")
+	writeFetch(t, filepath.Join(standing, ".tofu", "web"), "4096")
+	t.Chdir(standing)
+
+	layers, err := web.LayersIn(library.Files(), named)
+	if err != nil {
+		t.Fatalf("layers in %s: %v", named, err)
+	}
+	config, err := web.Load(layers)
+	if err != nil {
+		t.Fatalf("loading: %v", err)
+	}
+	t.Logf("project layer %q, ceiling %d", layers[2].Origin, config.MaxPageBytes)
+	if config.MaxPageBytes != 512 {
+		t.Fatalf("the library came from %s, the directory the process stood in, and not from %s: %d bytes",
+			standing, named, config.MaxPageBytes)
+	}
+}
+
 func TestTheShippedLibraryResolvesFromAnyWorkingDirectory(t *testing.T) {
 	t.Chdir(t.TempDir())
 	layers, err := web.DefaultLayers(library.Files())

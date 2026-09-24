@@ -492,3 +492,25 @@ func TestAChildLeavesItsRecordWhileTheParentsTurnIsStillRunning(t *testing.T) {
 	}
 	t.Logf("the child's record was on disk at asks %v, and the parent only returned after that", model.found)
 }
+
+func TestTheWebLibraryComesFromTheDirectoryTheRunNamesNotTheOneItWasStartedIn(t *testing.T) {
+	opts, plain := armOpts(t), t.TempDir()
+	off := filepath.Join(opts.dir, ".tofu", "web")
+	if err := os.MkdirAll(off, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(off, "fetch.yaml"), []byte("use: off\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	t.Chdir(plain)
+	if named := toolNames(t, opts); slices.Contains(named, "fetch") {
+		t.Errorf("--dir %s says use: off and the run offered fetch anyway: %v", opts.dir, named)
+	}
+
+	t.Chdir(opts.dir)
+	opts.dir = plain
+	if standing := toolNames(t, opts); !slices.Contains(standing, "fetch") {
+		t.Errorf("--dir %s has no web library and the run obeyed the use: off of the directory it stood in: %v", plain, standing)
+	}
+}

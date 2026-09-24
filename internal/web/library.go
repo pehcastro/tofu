@@ -22,6 +22,19 @@ func DefaultLayers(library fs.FS) ([]Layer, error) {
 	return sys.Layers(shipped, "web")
 }
 
+func LayersIn(library fs.FS, dir string) ([]Layer, error) {
+	layers, err := DefaultLayers(library)
+	if err != nil {
+		return nil, err
+	}
+	for i, layer := range layers {
+		if layer.Name == "project" {
+			layers[i] = sys.DirLayer("project", sys.Join(sys.StateDir(dir), "web"))
+		}
+	}
+	return layers, nil
+}
+
 type Provider struct {
 	Name         string
 	Origin       string

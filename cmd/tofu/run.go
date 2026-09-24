@@ -678,7 +678,7 @@ func assembleRunTools(dir, set string, readBeforeEdit bool, bashTool *turn.BashT
 	if err := cmp.Or(globErr, searchErr, symbolsErr, editErr, projectErr, verbErr, githubErr); err != nil {
 		return nil, nil, err
 	}
-	webTools, webErr := buildWebTools()
+	webTools, webErr := buildWebTools(dir)
 	if webErr != nil {
 		return nil, nil, webErr
 	}
@@ -687,8 +687,8 @@ func assembleRunTools(dir, set string, readBeforeEdit bool, bashTool *turn.BashT
 	return tools.NewMemo().Wrap(append(full, webTools...)), plan, nil
 }
 
-func buildWebTools() ([]turn.Tool, error) {
-	layers, err := web.DefaultLayers(shipped.Files())
+func buildWebTools(dir string) ([]turn.Tool, error) {
+	layers, err := web.LayersIn(shipped.Files(), dir)
 	if err != nil {
 		return nil, err
 	}
