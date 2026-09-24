@@ -8,6 +8,46 @@ Tofu is personal and not released, so the public interface that a version promis
 
 The minor number carries breaking changes, which is what 0.x means, and **there is never a 1.0.0**. The owner decided that on 2026-09-19: this stays 0.x forever, so the promise the version makes is the one 0.x already makes, that anything can break on a minor bump.
 
+## 0.4.17 - 2026-09-24
+
+The screen stopped disagreeing with the record, and then stopped disagreeing with itself.
+
+### Added
+
+- **`tofu drive` takes `--home` and prints the settings it resolved.** Without one it makes an empty home for the run and deletes it after, so every setting is its declared default and a driven screen no longer depends on a settings file the script never named. **Three times a stray file changed a driven answer and twice it made a check pass that should have failed.**
+
+- **`bench corpus` reads your recorded sessions without spending anything.** Session count, when each was recorded, its shape, its steps and messages and reads, and which of them carry an event kind this build does not read. Before this, the only path that read a recorded session went through an arm that pays.
+
+- **A driven script can hold a reply open.** A recorded reply marked `"unfinished"` streams its text and then waits, the way a model still generating does, which is how a check reaches the middle of a turn rather than only its end.
+
+### Changed
+
+- **One `ctrl+c` stops the agent, not everything, and a second always means a second.** With a tool still running, the first press ends the model request and lets the open calls finish. **A turn running a sub-agent now stops on the first press**, because a child is a turn and letting it finish is the opposite of what the press means. The window that used to require the two presses within three seconds is gone from stopping and kept for quitting.
+
+- **A running sub-agent's clock advances.** It was frozen when the event was built, so it moved once per model call and stuck inside one, which on a real wire is most of a child's life.
+
+- **A sub-agent speaks in its own panel rather than in the parent's column.** Before, a child's messages were drawn into the transcript with nothing saying who said them, and its last message could be joined to the parent's first with no break between the two.
+
+- **A timeout above the cap runs at the cap and the result says so.** It was refused, which ended the whole sub-agent that asked, over a number one order of magnitude out. Zero still means the default and a negative still runs at the default, because neither is the same mistake.
+
+- **A background process stops when tofu exits, and the line on the way out names what stopped.** It survives its turn as before.
+
+### Fixed
+
+- **A stopped turn keeps the tool rows it produced.** They were folded away at the default setting, so a turn you interrupted showed nothing of what it had run.
+
+- **A tool call that finished after you stopped the turn shows its result.** The result was only announced when the next model request was assembled, and after a stop there is no next request, so the screen said `no result` while the session file held it.
+
+- **A sub-agent that was stopped reports what it did.** It handed its parent a cancellation instead of its work, and the report called it an error rather than a stop, which are different instructions to the model that reads it.
+
+- **The command in the ledger is the command that ran.** One reader trimmed a tool's name off the front, so `bash script.sh` was recorded as `script.sh`, a command nobody ran. Seventeen places set that field and four of them disagreed about what it meant.
+
+- **A missing judge key reads as a state rather than a failure.** The first line of every session without one was a log message carrying a function name and an absolute path; it now says what to do, and the raw error moves to the work view.
+
+- **A fork leaves a line in the transcript.** The notice existed for two frames and nothing could read it.
+
+- **Columns keep their gap and clocks line up.** A truncated value ran into the text beside it, and a clock wider than its column pushed every row after it out of line.
+
 ## 0.4.16 - 2026-09-24
 
 The interface stops lying about what it is doing, and tofu can now be driven and read by something other than a person.
