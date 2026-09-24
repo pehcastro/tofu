@@ -8,6 +8,8 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -43,6 +45,14 @@ import (
 	"tofu/internal/turn"
 	"tofu/internal/widget"
 )
+
+func TestMain(m *testing.M) {
+	if len(os.Args) > 1 && !strings.HasPrefix(os.Args[1], "-") {
+		_, _ = os.Stdout.WriteString("stand-in tofu ran " + strings.Join(os.Args[1:], " ") + "\n")
+		os.Exit(0)
+	}
+	os.Exit(m.Run())
+}
 
 func TestVerbTableIsUnchanged(t *testing.T) {
 	for _, verb := range []struct {
@@ -1809,7 +1819,7 @@ func TestTheEndOfASessionSaysNothingExtraWhenNothingWasRunning(t *testing.T) {
 
 func TestAChildsCallIsDrawnWithItsToolNameOnce(t *testing.T) {
 	rows := []turn.Row{{ID: "turn-1-c1", Steps: []turn.StepRow{{Index: 1, ToolCalls: []turn.ToolCallRow{
-		{Tool: "read", Command: "read note.txt"},
+		{Tool: "read", Command: "note.txt"},
 		{Tool: "bash", Command: "go test ./..."},
 	}}}}}
 	view := subagent.Model{Children: []subagent.Child{{Name: "c1", State: subagent.Done, Calls: recordedCalls(rows, "turn-1-c1")}}}
@@ -1894,4 +1904,76 @@ func TestTheSpawnRowCarriesItsResultWhenTheTurnIsStoppedAndNeverAsksAgain(t *tes
 		}
 	}
 	t.Fatalf("no result reached the spawn call %q, so its row stays at no result", spawned.ID)
+}
+
+type toolFixture struct {
+	arguments  string
+	notRunHere string
+}
+
+func TestEveryToolInTheRunRegistryRecordsACommandThatDoesNotRepeatItsName(t *testing.T) {
+	dir := t.TempDir()
+	for name, body := range map[string]string{
+		"main.go":  "package main\n\nfunc Greet() string { return \"hi\" }\n",
+		"note.txt": "one\ntwo\nthree\n",
+	} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o600); err != nil {
+			t.Fatalf("seeding %s: %v", name, err)
+		}
+	}
+	page := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
+		writer.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = writer.Write([]byte("<html><body><main><h1>Pools</h1><p>Size the pool from measured use.</p></main></body></html>"))
+	}))
+	t.Cleanup(page.Close)
+
+	fixtures := map[string]toolFixture{
+		"read":               {arguments: `{"path":"note.txt"}`},
+		"write":              {arguments: `{"path":"fresh.txt","content":"a line\n"}`},
+		"bash":               {arguments: `{"command":"echo ran"}`},
+		"plan":               {arguments: `{"op":"set","items":[{"text":"walk the registry"}]}`},
+		"project_report":     {arguments: `{}`},
+		"glob":               {arguments: `{"pattern":"*.go"}`},
+		"search":             {arguments: `{"pattern":"Greet"}`},
+		"symbols":            {arguments: `{"name":"Greet"}`},
+		"edit":               {arguments: `{"path":"note.txt","old_string":"two","new_string":"four"}`},
+		"fetch":              {arguments: `{"url":` + strconv.Quote(page.URL) + `}`},
+		"tofu_lint_comments": {arguments: `{}`},
+		"tofu_rules_check":   {arguments: `{}`},
+		"tofu_judge":         {arguments: `{"state":"the work is done","battery":"stop_check@1"}`},
+		"tofu_why":           {arguments: `{"id":"dec-1"}`},
+		"tofu_replay":        {arguments: `{"point":"tool_gate"}`},
+		"github_pr_diff":     {notRunHere: "it shells out to gh against a real github repository"},
+		"web_search":         {notRunHere: "it reaches a paid search provider over the network"},
+	}
+
+	built, _, err := buildRunTools(dir, toolSetFull)
+	if err != nil {
+		t.Fatalf("building the run tools: %v", err)
+	}
+	var notRun []string
+	for _, tool := range built {
+		name := tool.Name()
+		fixture, known := fixtures[name]
+		if !known {
+			t.Fatalf("%s is in the registry and has no fixture here, so nothing proves its command leaves the tool name out: add one", name)
+		}
+		if fixture.notRunHere != "" {
+			notRun = append(notRun, name+", because "+fixture.notRunHere)
+			continue
+		}
+		result, runErr := tool.Run(context.Background(), json.RawMessage(fixture.arguments))
+		if runErr != nil {
+			t.Errorf("%s did not run against its fixture: %v", name, runErr)
+			continue
+		}
+		t.Logf("%s recorded %q", name, result.Command)
+		if result.Command == "" {
+			t.Errorf("%s recorded an empty command, so the panel and the ledger have nothing of what it did", name)
+		}
+		if result.Command == name || strings.HasPrefix(result.Command, name+" ") {
+			t.Errorf("%s recorded %q, and the tool name belongs in Tool beside it rather than twice", name, result.Command)
+		}
+	}
+	t.Logf("%d tools in the registry, %d not run here: %s", len(built), len(notRun), strings.Join(notRun, "; "))
 }

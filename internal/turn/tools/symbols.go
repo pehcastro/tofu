@@ -70,6 +70,6 @@ func (s Symbols) Run(_ context.Context, raw json.RawMessage) (turn.Result, error
 	}
 	return turn.Result{
 		Content: withNote("symbols "+args.Name+" under "+under+"\n"+graph.Text, listed.note),
-		Command: "symbols " + args.Name + " under " + under,
+		Command: args.Name + " under " + under,
 	}, nil
 }

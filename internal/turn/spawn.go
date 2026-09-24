@@ -261,7 +261,7 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 	if runErr != nil && state != subagent.Parked {
 		return Result{}, fmt.Errorf("spawn: child %s is %s: %w", childID, state, runErr)
 	}
-	return Result{Content: text, Command: "spawn " + childID + " " + state.String() + ": " + agent.Mission}, nil
+	return Result{Content: text, Command: childID + " " + state.String() + ": " + agent.Mission}, nil
 }
 
 func (t *SpawnTool) retain(rows []Row) {

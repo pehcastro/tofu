@@ -135,7 +135,7 @@ func TestSpawnRunsAChildInAScratchTreeAndTheRowsNameEachOther(t *testing.T) {
 		t.Fatalf("child %q is not under parent %q", child.ID, row.ID)
 	}
 	call := firstToolCall(t, row)
-	if call.Command != "spawn "+child.ID+" in_review: write the greeting under mine/" {
+	if call.Command != child.ID+" in_review: write the greeting under mine/" {
 		t.Fatalf("the parent row does not name the child, its state and its mission: %+v", call)
 	}
 	if len(child.Steps) == 0 || len(child.Steps[0].ToolCalls) != 1 {

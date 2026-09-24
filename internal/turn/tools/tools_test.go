@@ -119,7 +119,7 @@ func TestEachNewToolAppliesOnARealFileAndRoundTripsThroughTheStepRow(t *testing.
 		}
 	}
 
-	if !strings.Contains(called[0].Command, "glob *.ts") {
+	if !strings.Contains(called[0].Command, "*.ts") {
 		t.Fatalf("the glob row does not name what it searched: %q", called[0].Command)
 	}
 	after, err := os.ReadFile(filepath.Join(root, "src", "store.ts"))

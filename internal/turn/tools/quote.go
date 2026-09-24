@@ -80,7 +80,7 @@ func (q Quote) Run(_ context.Context, raw json.RawMessage) (turn.Result, error) 
 		hash, quoteSpeaker(said.Role), at+1, len(talk.Said), talk.Session)
 	return turn.Result{
 		Content: withNote(header+"\n"+body+"\n", note),
-		Command: "quote " + hash,
+		Command: hash,
 	}, nil
 }
 

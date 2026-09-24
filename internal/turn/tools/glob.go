@@ -88,7 +88,7 @@ func (g Glob) Run(_ context.Context, raw json.RawMessage) (turn.Result, error) {
 		}
 	}
 
-	command := "glob " + args.Pattern + " under " + under
+	command := args.Pattern + " under " + under
 	if len(found) == 0 {
 		return turn.Result{
 			Content: withNote(fmt.Sprintf("no file under %s matches %q, out of %d files searched. the directory exists and was read: this is an answer, not a failure",

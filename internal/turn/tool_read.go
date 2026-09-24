@@ -86,7 +86,7 @@ func (t *ReadTool) Run(_ context.Context, raw json.RawMessage) (Result, error) {
 	}
 	if args.StartLine <= 0 && args.EndLine <= 0 {
 		t.ledger.Mark(args.Path)
-		return Result{Content: capResult(repair+string(content), konst.TurnResultBytesCap), Command: "read " + args.Path}, nil
+		return Result{Content: capResult(repair+string(content), konst.TurnResultBytesCap), Command: args.Path}, nil
 	}
 
 	lines := strings.Split(strings.TrimSuffix(string(content), "\n"), "\n")
@@ -107,6 +107,6 @@ func (t *ReadTool) Run(_ context.Context, raw json.RawMessage) (Result, error) {
 	t.ledger.Mark(args.Path)
 	return Result{
 		Content: capResult(repair+span+"\n"+strings.Join(lines[start-1:end], "\n"), konst.TurnResultBytesCap),
-		Command: "read " + span,
+		Command: span,
 	}, nil
 }

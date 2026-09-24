@@ -130,6 +130,6 @@ func (t FetchTool) Run(_ context.Context, raw json.RawMessage) (Result, error) {
 	end := min(args.Offset+args.Length, len(body))
 	return Result{
 		Content: string(body[args.Offset:end]),
-		Command: fmt.Sprintf("artifact_fetch %s bytes %d to %d of %d", args.Handle, args.Offset, end, len(body)),
+		Command: fmt.Sprintf("%s bytes %d to %d of %d", args.Handle, args.Offset, end, len(body)),
 	}, nil
 }

@@ -131,5 +131,5 @@ func (t *WriteTool) Run(_ context.Context, raw json.RawMessage) (Result, error) 
 		After:   args.Content,
 		Diff:    transform.Unified(args.Path, before, args.Content),
 	}
-	return Result{Content: preview.Result(), Command: "write " + args.Path}, nil
+	return Result{Content: preview.Result(), Command: args.Path}, nil
 }

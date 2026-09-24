@@ -150,6 +150,6 @@ func (e Edit) Run(_ context.Context, raw json.RawMessage) (turn.Result, error) {
 	e.ledger.Mark(target)
 	return turn.Result{
 		Content: strings.Join(append(repairs, preview.Diff), "\n"),
-		Command: "edit " + target,
+		Command: target,
 	}, nil
 }

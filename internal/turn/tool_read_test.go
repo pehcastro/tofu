@@ -116,6 +116,44 @@ func TestALineRangeReadThatIsCutByTheByteCapStillReportsTheRealTotal(t *testing.
 	}
 }
 
+func TestReadToolReturnsANamedLineRangeSoTheModelNeedNotShellOutToSed(t *testing.T) {
+	root := seedRecordedFixture(t)
+	result, err := readAt(t, root, `{"path":"src/app.test.ts","start_line":11,"end_line":14}`)
+	if err != nil {
+		t.Fatalf("running the tool: %v", err)
+	}
+	want := "src/app.test.ts lines 11-14 of 15\n" +
+		"  it('rejects an over-long title with 400', async () => {\n" +
+		"    const res = await postJson('/tasks', { title: 'x'.repeat(201) })\n" +
+		"    expect(res.status).toBe(400)\n" +
+		"  })"
+	if result.Content != want {
+		t.Fatalf("read returned\n%q\nwanted\n%q", result.Content, want)
+	}
+	if result.Command != "src/app.test.ts lines 11-14 of 15" {
+		t.Fatalf("the step row recorded %q", result.Command)
+	}
+}
+
+func TestReadToolClampsAnEndLinePastTheLastLineAndRefusesAStartLinePastIt(t *testing.T) {
+	root := seedRecordedFixture(t)
+	result, err := readAt(t, root, `{"path":"src/app.test.ts","start_line":14,"end_line":900}`)
+	if err != nil {
+		t.Fatalf("running the tool: %v", err)
+	}
+	if !strings.HasPrefix(result.Content, "src/app.test.ts lines 14-15 of 15\n") {
+		t.Fatalf("read returned %q, wanted the clamped range named in the first line", result.Content)
+	}
+
+	_, err = readAt(t, root, `{"path":"src/app.test.ts","start_line":900}`)
+	if err == nil {
+		t.Fatal("expected a start_line past the end of the file to fail rather than return nothing")
+	}
+	if !strings.Contains(err.Error(), "has 15 lines") {
+		t.Fatalf("the error did not say how long the file is: %v", err)
+	}
+}
+
 func TestSymbolsIsBatchedWithTheOtherReadOnlyCalls(t *testing.T) {
 	registry := NewRegistry(
 		&stubTool{name: "symbols"},

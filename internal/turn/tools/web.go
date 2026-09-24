@@ -64,7 +64,7 @@ func (t webFetch) Run(ctx context.Context, raw json.RawMessage) (turn.Result, er
 	}
 	return turn.Result{
 		Content: message + "\n" + web.Untrusted("the web page "+page.URL, body),
-		Command: "fetch " + page.URL,
+		Command: page.URL,
 	}, nil
 }
 
@@ -104,7 +104,7 @@ func (t webSearch) Run(ctx context.Context, raw json.RawMessage) (turn.Result, e
 	if err != nil {
 		return turn.Result{}, fmt.Errorf("web_search: %w", err)
 	}
-	command := "web_search " + args.Query
+	command := args.Query
 	if len(results) == 0 {
 		return turn.Result{
 			Content: t.config.Provider.Name + " found nothing for " + args.Query + ": ask it something else, or look in the working directory",

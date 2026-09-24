@@ -113,7 +113,7 @@ func (p Project) Run(_ context.Context, raw json.RawMessage) (turn.Result, error
 		note = strings.TrimSpace(note + " " + search.Note(search.Truncated,
 			"limit is "+strconv.Itoa(limit)+" and "+strings.Join(cut, ", ")+": raise limit, or glob the one you want in full"))
 	}
-	return turn.Result{Content: withNote(out.String(), note), Command: "project_report"}, nil
+	return turn.Result{Content: withNote(out.String(), note), Command: strconv.Itoa(len(listed.files)) + " files"}, nil
 }
 
 func shallowestFirst(left, right string) int {

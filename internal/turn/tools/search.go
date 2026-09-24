@@ -90,6 +90,6 @@ func (s Search) Run(_ context.Context, raw json.RawMessage) (turn.Result, error)
 	}
 	return turn.Result{
 		Content: withNote(fmt.Sprintf("search %s under %s\n%s", args.Pattern, under, result.Text), listed.note),
-		Command: "search " + args.Pattern + " under " + under,
+		Command: args.Pattern + " under " + under,
 	}, nil
 }

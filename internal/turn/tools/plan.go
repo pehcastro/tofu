@@ -98,7 +98,7 @@ func (p *Plan) Run(_ context.Context, raw json.RawMessage) (turn.Result, error) 
 		return turn.Result{}, err
 	}
 	p.items = next
-	return turn.Result{Content: planText(p.items), Command: PlanToolName + " " + args.Op}, nil
+	return turn.Result{Content: planText(p.items), Command: args.Op}, nil
 }
 
 func (p *Plan) Items() []PlanItem {

@@ -230,7 +230,7 @@ func TestTheElapsedTimeIsTheChildsOwnAndNotTheViewsClock(t *testing.T) {
 func recordedRow(id string, tools ...string) turn.Row {
 	step := turn.StepRow{Index: 1}
 	for _, tool := range tools {
-		step.ToolCalls = append(step.ToolCalls, turn.ToolCallRow{Tool: tool, Command: tool + " it"})
+		step.ToolCalls = append(step.ToolCalls, turn.ToolCallRow{Tool: tool, Command: "it"})
 	}
 	return turn.Row{ID: id, Steps: []turn.StepRow{step}}
 }

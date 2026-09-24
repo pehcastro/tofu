@@ -149,7 +149,7 @@ func TestAFetchedPageArrivesInTheRowAsUnitsRatherThanMarkup(t *testing.T) {
 			t.Fatalf("the result still carries %q", unwanted)
 		}
 	}
-	if called[0].Command != "fetch "+server.URL+"/docs/pools" {
+	if called[0].Command != server.URL+"/docs/pools" {
 		t.Fatalf("the row does not name what was fetched: %q", called[0].Command)
 	}
 }
