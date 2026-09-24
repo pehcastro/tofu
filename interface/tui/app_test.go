@@ -1565,13 +1565,18 @@ func TestTheEmptyShellsViewSaysNoProcessIsRunning(t *testing.T) {
 	assertGolden(t, "shells-empty-80x24.golden", app.View().Content)
 }
 
-func TestKillingAProcessFromTheShellsViewRemovesIt(t *testing.T) {
+func TestTheShellsViewMovesOnJAndKAndKillsOnCtrlX(t *testing.T) {
 	killed := ""
 	app := sessionApp(t, 120, 36)
 	app.options.KillShell = func(name string) error { killed = name; return nil }
 	app.Update(shellsMsg(shellEntries()))
 	app.Update(tea.KeyPressMsg{Code: '5', Mod: tea.ModAlt})
+	app.Update(tea.KeyPressMsg{Code: 'j'})
 	app.Update(tea.KeyPressMsg{Code: 'k'})
+	if killed != "" {
+		t.Fatalf("a letter that moves the list killed %q", killed)
+	}
+	app.Update(tea.KeyPressMsg{Code: 'x', Mod: tea.ModCtrl})
 	if killed != "dev-server" {
 		t.Fatalf("killing the picked process called KillShell with %q, want dev-server", killed)
 	}
@@ -1649,4 +1654,21 @@ func TestCookedForNamesTheAnswerWhenAToolCallCameAfterIt(t *testing.T) {
 	if chat := ansi.Strip(app.View().Content); !strings.Contains(chat, want) {
 		t.Errorf("no line reads %q\n%s", want, chat)
 	}
+}
+
+func TestAStoppedTurnKeepsItsToolRowsWhileToolsAreFoldedByDefault(t *testing.T) {
+	app, stopped := turningApp(t)
+	app.Update(Event{Kind: EventToolCall, ID: "c1", Tool: "bash", Text: "printf HALFWAY"})
+	app.Update(Event{Kind: EventToolResult, ID: "c1", Text: "HALFWAY", Bytes: 7})
+	interrupt(app, 1)
+	<-stopped
+	app.Update(Closed{})
+
+	chat := ansi.Strip(app.View().Content)
+	for _, line := range strings.Split(chat, "\n") {
+		if strings.Contains(line, "⟩ bash printf HALFWAY") && strings.Count(line, "HALFWAY") == 2 {
+			return
+		}
+	}
+	t.Fatalf("the stopped turn folded away the call and what it printed\n%s", chat)
 }

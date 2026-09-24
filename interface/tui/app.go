@@ -235,6 +235,7 @@ const (
 	setupPoll      = time.Second
 	readyNote      = "type a task and press enter. tofu works in "
 	altPrefix      = "alt+"
+	killShellKey   = "ctrl+x"
 	stoppingNote   = "stopping the turn"
 	stoppingModel  = "stopping the model, and letting the running tools finish"
 	queuedKept     = ", and the queue keeps "
@@ -732,7 +733,7 @@ func (a *App) recordPromotion(row isession.Promotion) {
 }
 
 func (a *App) shellsKey(key string) {
-	if key != "k" {
+	if key != killShellKey {
 		a.shells.Key(key)
 		return
 	}

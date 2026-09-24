@@ -22,7 +22,7 @@ const (
 	gap          = "  "
 	title        = "shells"
 	pickHint     = "↑↓ pick"
-	killHint     = "k kills the selected process"
+	killHint     = "ctrl+x kills the selected process"
 	emptyTitle   = "no process is running in this session"
 	emptyBody    = "a dev server, a build, a test run, anything an agent starts and leaves running appears here to inspect and to kill."
 	watchHint    = "pick a process to read its log"
@@ -89,10 +89,10 @@ func (m *Model) Remove(name string) {
 
 func (m *Model) Key(key string) {
 	switch key {
-	case "up":
-		m.move(-1)
-	case "down":
+	case "down", "j":
 		m.move(1)
+	case "up", "k":
+		m.move(-1)
 	}
 }
 
