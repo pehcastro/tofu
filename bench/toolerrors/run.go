@@ -45,6 +45,12 @@ type Result struct {
 	ByCategory  map[Category]int
 	Worst       ToolRow
 	WorstFound  bool
+
+	RecoveredFromBareExitCode FailingCall
+	RecoveredFound            bool
+
+	OldestTurn      corpus.Turn
+	OldestTurnFound bool
 }
 
 func Run(sessionsDir string) (Result, error) {
@@ -59,6 +65,10 @@ func Run(sessionsDir string) (Result, error) {
 		Sessions:    len(walked.Turns),
 		Skips:       walked.Skipped,
 		ByCategory:  map[Category]int{},
+	}
+	if len(walked.Turns) > 0 {
+		result.OldestTurn = walked.Turns[0]
+		result.OldestTurnFound = true
 	}
 	rows := map[string]*ToolRow{}
 	for _, turn := range walked.Turns {
@@ -75,11 +85,16 @@ func Run(sessionsDir string) (Result, error) {
 					continue
 				}
 				category := Classify(call)
+				failing := FailingCall{
+					Turn: turn.ID, Tool: call.Tool, Command: call.Command,
+					Error: call.Error, ExitCode: call.ExitCode, Category: category,
+				}
 				if row.Failures == 0 {
-					row.Example = FailingCall{
-						Turn: turn.ID, Tool: call.Tool, Command: call.Command,
-						Error: call.Error, ExitCode: call.ExitCode, Category: category,
-					}
+					row.Example = failing
+				}
+				if !result.RecoveredFound && call.Error == "" && category != Unknown {
+					result.RecoveredFromBareExitCode = failing
+					result.RecoveredFound = true
 				}
 				row.Failures++
 				row.ByCategory[category]++

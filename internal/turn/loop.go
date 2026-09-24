@@ -606,6 +606,7 @@ func (g gatedCall) execute(ctx context.Context, tools Registry, resultBytesCap i
 		ResultHandle:   handle,
 		SiftSavedBytes: saved,
 		DurationMS:     time.Since(started).Milliseconds(),
+		Error:          result.FailureText,
 	}
 	if storeErr != nil {
 		row.ResultHandleError = storeErr.Error()

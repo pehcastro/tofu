@@ -19,12 +19,18 @@ const (
 
 var Categories = []Category{BadArguments, NotFoundInEnvironment, Timeout, RefusedByRule, ProviderError, Unknown}
 
+const exitCommandNotFound = 127
+const exitFoundButNotExecutable = 126
+
 func Failed(call corpus.RecordedCall) bool {
 	return call.Error != "" || (call.ExitCode != nil && *call.ExitCode != 0)
 }
 
 func Classify(call corpus.RecordedCall) Category {
 	if call.Error == "" {
+		if code := call.ExitCode; code != nil && (*code == exitCommandNotFound || *code == exitFoundButNotExecutable) {
+			return NotFoundInEnvironment
+		}
 		return Unknown
 	}
 	text := strings.ToLower(call.Error)
@@ -38,7 +44,9 @@ func Classify(call corpus.RecordedCall) Category {
 		strings.Contains(text, "was asked for occurrence"):
 		return BadArguments
 	case strings.Contains(text, "is not a file under the working directory"),
-		strings.Contains(text, "is not a path under the working directory"):
+		strings.Contains(text, "is not a path under the working directory"),
+		strings.Contains(text, "not found in this environment"),
+		strings.Contains(text, "found but not executable"):
 		return NotFoundInEnvironment
 	case strings.Contains(text, "refused"), strings.Contains(text, "denied"), strings.Contains(text, "not allowed"):
 		return RefusedByRule

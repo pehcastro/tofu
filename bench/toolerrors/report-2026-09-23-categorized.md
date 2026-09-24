@@ -1,0 +1,99 @@
+# bench toolerrors, a typed reason for a failed tool call: 2026-09-23
+
+Machine: DESKTOP-AHUN9RO, Windows 10 Pro 19045, go1.27.1 windows/amd64. No live model call, no network call, no credential: every figure comes from `bench/corpus.WalkSessions` read directly against `.tofu/sessions`, which grows while it is read because real turns are recorded in this repository. `go test ./bench/toolerrors/... -count=1` passes, 6 test functions.
+
+## ANSWER
+
+**67 of 1412 recorded tool calls failed (4.7%), and 71.6% of those failures carry no reason this corpus can classify beyond a bare nonzero exit code.** Every failure that carries any error text at all classifies cleanly into one of the five named reasons; the entire unknown share is `bash` calls that exited nonzero with an empty `Error` field, which today's harness never fills in even though the exit code itself is sitting right there. `edit` is the worst tool by failure rate among tools with at least 5 calls, at 20.0%.
+
+## The corpus
+
+`.tofu/sessions`, read at 2026-09-23 21:58 -03:00, through `bench/corpus.WalkSessions` and nothing else: no second file walk, no second JSON decode. 111 entries, 110 read as sessions, 1 skipped.
+
+- skipped: `HEAD`: not a .json file
+
+A call counts as failed when its recorded `Error` field is non-empty or its `ExitCode` is present and nonzero, the same rule `bench/wrongpath` already uses for its own contradiction count.
+
+## Per tool, calls and failures
+
+| tool | calls | failed | rate |
+|---|---|---|---|
+| bash | 424 | 53 | 12.5% |
+| edit | 55 | 11 | 20.0% |
+| read | 296 | 2 | 0.7% |
+| search | 23 | 1 | 4.3% |
+| boji_rules_check | 1 | 0 | 0.0% |
+| glob | 143 | 0 | 0.0% |
+| grep | 47 | 0 | 0.0% |
+| plan | 169 | 0 | 0.0% |
+| project_report | 38 | 0 | 0.0% |
+| artifact_fetch | 71 | 0 | 0.0% |
+| boji_lint_comments | 1 | 0 | 0.0% |
+| tofu_lint_comments | 29 | 0 | 0.0% |
+| tofu_rules_check | 29 | 0 | 0.0% |
+| write | 86 | 0 | 0.0% |
+
+## Failure share by category
+
+| category | count | share of failures |
+|---|---|---|
+| bad arguments | 12 | 17.9% |
+| not found in this environment | 4 | 6.0% |
+| timeout | 3 | 4.5% |
+| refused by a rule | 0 | 0.0% |
+| provider error | 0 | 0.0% |
+| unknown | 48 | 71.6% |
+
+**Unknown share: 71.6%.** Every one of those calls is `bash` with an empty `Error` field and a nonzero `ExitCode` (1, 2, 126 or 127 in this corpus): the harness ran the command, saw it fail, and recorded only the bare number.
+
+## The worst tool
+
+**`edit`**, 11 of 55 calls failed, 20.0%, among tools with at least 5 calls. One real failing call, scrubbed by `bench/corpus.Scrub` on the way in, no token, account id or key present:
+
+```
+turn: turn-18d6a74abeb9c3ec
+error: edit: edit 1 of 1 on src/app.test.ts: until "  })" matches 22 lines (191, 201, 210, 224, 235, 246, 254, 262, 269, 275, 281, 290, 299, 305, 311, 321, 329, 337, 350, 362, 370, 378) and an edit must name exactly one
+category: bad arguments
+```
+
+Every one of the 11 `edit` failures in this corpus is the same shape: an anchor or an occurrence count that no longer matches the file, all of it text the tool already produces today and this ticket only had to read.
+
+## The admin-template case, and what these categories cannot do
+
+Session `turn-18d7f94ce7a62138` under a different repository spent 13 of 18 steps hunting for a Node runtime its shell could not see, and every one of those calls succeeded as a process. **These categories cannot express that shape, and neither can the failure count above.** A call that runs cleanly and returns exit 0 having found nothing never reaches `Failed`, because nothing in `corpus.RecordedCall` records whether a call advanced the task, only whether the process it ran returned nonzero or carried an error string. This project's own corpus holds the same pattern in miniature: `turn-18d6ea32da3230c0` and `turn-18d6e1de4b235b54` both hunt for a `go` binary across several probes, and only the probes that happened to exit nonzero (127 command not found, 126 not executable, 2 from a broken script) land anywhere in this report; the probes that ran clean and printed nothing are invisible to it. **A rate per tool built on exit code alone will always miss a stretch of calls that succeed as processes and fail as work.**
+
+## What a typed failure field would have to carry
+
+**A typed failure field would have to carry a closed category assigned by the harness at the moment of failure rather than sniffed out of free text afterward, the exit code and error text it is built from so the category is checkable, and a separate work-advanced signal, because the exit code and error text this corpus already carries cannot show a call that ran cleanly and did nothing for the task.** That last part is not a bigger version of what this ticket measured: it needs a judgment over the call's result against the intent that asked for it, which is the follow-up ticket's job, not this one's.
+
+## What this cannot answer
+
+- Whether the category set holds on a corpus that is not one person's `go-dev` sessions: every labelled failure here is either a TypeScript `edit` anchor drifting out from under a rewritten file, a Go `read`/`search` naming a path that moved, or a `bash` call with a bare nonzero exit; a session built around a different toolchain could produce failure text this classifier has never seen.
+- Whether refused-by-rule or provider-error ever fire: both sit at zero calls in this corpus, so the category exists on the strength of the proposal, not a recorded instance.
+- Whether the worst-tool floor of 5 calls is the right one: `boji_lint_comments` and `boji_rules_check` each have exactly 1 call and 0 failures, so they were excluded rather than reported as a 0% or 100% tool on one observation.
+
+## What changed: the harness now writes down why, and the unknown share moved
+
+**Before, measured 2026-09-23: 74.6% of failures were unknown.** After this ticket, over the same corpus: **71.6%.** The bash tool now maps exit 127 to `not found in this environment` and exit 126 to `found but not executable` at the moment the call fails, rather than a reader guessing from a bare number afterward; `Classify` also recognises those same two exit codes on a bare, pre-existing record so the improvement shows on the corpus already on disk, not only on calls recorded from now on. Exit codes 1 and 2 carry no reliable meaning on their own and stay `unknown`, honestly, which is most of what is left.
+
+One real `bash` call recovered from a bare exit code, scrubbed, no token, account id or key present:
+
+```
+turn: turn-18d6e1de4b235b54
+exit_code: 127
+error: 
+category: not found in this environment
+```
+
+## Is a work-advanced signal sound
+
+**No, not from anything this corpus already carries, and it should not be guessed.** A call that exits 0 having found nothing, the admin-template shape from TOFU-542, needs a judgment against the intent that asked for the call, which an exit code and an error string cannot supply; inventing that judgment from a model's opinion here would be exactly the kind of thing this project already rejected once. What would carry it, named without building it: whether the result is empty against a call that is not supposed to return empty, whether the result is identical to a previous call's result in the same turn, and whether the command's own output contains a phrase like "not found" or "no such" despite exiting 0. All three are mechanical checks over data already on the record, not a model call, and none of them is wired up here. This ticket built the first half only, as scoped.
+
+## An older session still loads
+
+`turn-18d68bcceb3d56e8`, the oldest turn in this corpus, loads through the same `bench/corpus.WalkSessions` used for every figure above, with no schema change in this ticket to break it. Its first step, scrubbed:
+
+```
+step 1: no tool call and no assistant text
+```
+

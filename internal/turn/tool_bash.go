@@ -13,6 +13,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"tofu/internal/konst"
@@ -25,30 +26,76 @@ type BashTool struct {
 	shell      string
 	shellLabel string
 	note       string
-	toolchain  []interpreterState
+	probe      *toolchainProbe
 }
 
 func NewBashTool(root string) (*BashTool, error) {
-	return newBashToolWithDeps(root, realShellEnv(), realToolchainRunner)
+	return newBashToolWithDeps(root, realShellEnv(), realToolchainRunner, nil)
 }
 
-func newBashToolWithDeps(root string, env shellEnv, run toolchainRunner) (*BashTool, error) {
+func NewBashToolCached(root string, cache *ToolchainCache) (*BashTool, error) {
+	return newBashToolWithDeps(root, realShellEnv(), realToolchainRunner, cache)
+}
+
+func newBashToolWithDeps(root string, env shellEnv, run toolchainRunner, cache *ToolchainCache) (*BashTool, error) {
 	resolved, err := NewRoot(root)
 	if err != nil {
 		return nil, err
 	}
+	probe := cache.probeFor(string(resolved), run, konst.ToolchainProbeTimeoutMillis*time.Millisecond)
 	choice, err := resolveShell(env)
 	if err != nil {
 		return nil, err
 	}
-	toolchain := probeToolchain(string(resolved), run, konst.ToolchainProbeTimeoutMillis*time.Millisecond)
 	return &BashTool{
 		root:       resolved,
 		shell:      choice.Path,
 		shellLabel: choice.Label,
 		note:       choice.Note,
-		toolchain:  toolchain,
+		probe:      probe,
 	}, nil
+}
+
+type toolchainProbe struct {
+	done   chan struct{}
+	states []interpreterState
+}
+
+func startToolchainProbe(dir string, run toolchainRunner, timeout time.Duration) *toolchainProbe {
+	probe := &toolchainProbe{done: make(chan struct{})}
+	go func() {
+		probe.states = probeToolchain(dir, run, timeout)
+		close(probe.done)
+	}()
+	return probe
+}
+
+func (p *toolchainProbe) wait() []interpreterState {
+	<-p.done
+	return p.states
+}
+
+type ToolchainCache struct {
+	mu     sync.Mutex
+	probes map[string]*toolchainProbe
+}
+
+func NewToolchainCache() *ToolchainCache {
+	return &ToolchainCache{probes: make(map[string]*toolchainProbe)}
+}
+
+func (c *ToolchainCache) probeFor(dir string, run toolchainRunner, timeout time.Duration) *toolchainProbe {
+	if c == nil {
+		return startToolchainProbe(dir, run, timeout)
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if probe, ok := c.probes[dir]; ok {
+		return probe
+	}
+	probe := startToolchainProbe(dir, run, timeout)
+	c.probes[dir] = probe
+	return probe
 }
 
 type shellChoice struct {
@@ -309,6 +356,20 @@ const bashToolName = "bash"
 
 const commandExited = "the command exited %d\n"
 
+const exitCommandNotFound = 127
+const exitFoundButNotExecutable = 126
+
+func bashFailureText(code int) string {
+	switch code {
+	case exitCommandNotFound:
+		return fmt.Sprintf("bash: the command exited %d: not found in this environment", code)
+	case exitFoundButNotExecutable:
+		return fmt.Sprintf("bash: the command exited %d: found but not executable", code)
+	default:
+		return ""
+	}
+}
+
 func (t *BashTool) Name() string { return bashToolName }
 
 func (t *BashTool) Definition() llm.Tool {
@@ -321,7 +382,7 @@ func (t *BashTool) Definition() llm.Tool {
 	if t.note != "" {
 		description += " " + t.note
 	}
-	if toolchain := formatToolchain(t.toolchain); toolchain != "" {
+	if toolchain := formatToolchain(t.probe.wait()); toolchain != "" {
 		description += " this project's toolchain, probed once: " + toolchain + "."
 	}
 	return llm.Tool{
@@ -351,7 +412,7 @@ func (t *BashTool) Run(ctx context.Context, raw json.RawMessage) (Result, error)
 	if strings.TrimSpace(args.Command) == "" {
 		return Result{}, errors.New("bash: command is required")
 	}
-	if name, summary, missing := missingInterpreterNamed(args.Command, t.toolchain); missing {
+	if name, summary, missing := missingInterpreterNamed(args.Command, t.probe.wait()); missing {
 		return Result{}, fmt.Errorf("bash: %s is not on this shell's PATH, so this command would just fail not found. %s", name, summary)
 	}
 
@@ -387,5 +448,5 @@ func (t *BashTool) Run(ctx context.Context, raw json.RawMessage) (Result, error)
 		}
 		content += fmt.Sprintf(commandExited, code)
 	}
-	return Result{Content: content, Command: args.Command, ExitCode: &code}, nil
+	return Result{Content: content, Command: args.Command, ExitCode: &code, FailureText: bashFailureText(code)}, nil
 }

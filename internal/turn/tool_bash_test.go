@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -217,18 +218,134 @@ func TestTheToolchainProbeRunsOnceAcrossAThreeStepTurn(t *testing.T) {
 	env.stat = func(string) error { return nil }
 	env.probe = func(string) (string, error) { return "Linux", nil }
 
-	tool, err := newBashToolWithDeps(root, env, run)
+	tool, err := newBashToolWithDeps(root, env, run, nil)
 	if err != nil {
 		t.Fatalf("building the bash tool: %v", err)
 	}
+	tool.Definition()
 	if calls != 1 {
-		t.Fatalf("building the tool probed the toolchain %d times, wanted 1", calls)
+		t.Fatalf("building the tool and reading its definition probed the toolchain %d times, wanted 1", calls)
 	}
 	for range 3 {
 		tool.Definition()
 	}
 	if calls != 1 {
 		t.Fatalf("the probe ran %d times across a three step turn, wanted 1", calls)
+	}
+}
+
+func TestTheProbeStartsAtConstructionAndIsOnlyWaitedOnWhenTheDefinitionNeedsIt(t *testing.T) {
+	root := t.TempDir()
+	write(t, filepath.Join(root, "go.mod"), "module x\n")
+	release := make(chan struct{})
+	started := make(chan struct{})
+	var once sync.Once
+	run := func(ctx context.Context, name string, args ...string) ([]byte, error) {
+		once.Do(func() { close(started) })
+		<-release
+		return []byte("go1.99.0\n"), nil
+	}
+	env := fakeShellEnv()
+	env.goos = "linux"
+	env.stat = func(string) error { return nil }
+	env.probe = func(string) (string, error) { return "Linux", nil }
+
+	before := time.Now()
+	tool, err := newBashToolWithDeps(root, env, run, nil)
+	if err != nil {
+		t.Fatalf("building the bash tool: %v", err)
+	}
+	if constructing := time.Since(before); constructing > 200*time.Millisecond {
+		t.Fatalf("construction waited on the probe instead of overlapping it: %v", constructing)
+	}
+	select {
+	case <-started:
+	case <-time.After(time.Second):
+		t.Fatal("the probe never started")
+	}
+
+	definitionReturned := make(chan string, 1)
+	go func() { definitionReturned <- tool.Definition().Description }()
+	select {
+	case <-definitionReturned:
+		t.Fatal("Definition returned before the probe it depends on had finished")
+	case <-time.After(150 * time.Millisecond):
+	}
+
+	close(release)
+	description := <-definitionReturned
+	if !strings.Contains(description, "go go1.99.0") {
+		t.Fatalf("the description never carries the resolved toolchain once it waited for the probe: %q", description)
+	}
+}
+
+func TestAnUnfinishedProbeNeverReportsAnInterpreterAsMissing(t *testing.T) {
+	root := t.TempDir()
+	write(t, filepath.Join(root, "go.mod"), "module x\n")
+	release := make(chan struct{})
+	run := func(ctx context.Context, name string, args ...string) ([]byte, error) {
+		<-release
+		return []byte("go1.99.0\n"), nil
+	}
+	env := fakeShellEnv()
+	env.goos = "linux"
+	env.stat = func(string) error { return nil }
+	env.probe = func(string) (string, error) { return "Linux", nil }
+
+	tool, err := newBashToolWithDeps(root, env, run, nil)
+	if err != nil {
+		t.Fatalf("building the bash tool: %v", err)
+	}
+	args, err := json.Marshal(bashArgs{Command: "go build ./..."})
+	if err != nil {
+		t.Fatal(err)
+	}
+	runReturned := make(chan error, 1)
+	go func() {
+		_, runErr := tool.Run(context.Background(), args)
+		runReturned <- runErr
+	}()
+
+	select {
+	case runErr := <-runReturned:
+		t.Fatalf("go was answered before its probe finished, with %v: an answer given while unfinished can only be a guess, and here it would have guessed missing", runErr)
+	case <-time.After(150 * time.Millisecond):
+	}
+
+	close(release)
+	if runErr := <-runReturned; runErr != nil && strings.Contains(runErr.Error(), "not on this shell's PATH") {
+		t.Fatalf("go was really present and the probe said so once it finished, but the command was still refused as missing: %v", runErr)
+	}
+}
+
+func TestAToolchainCacheAnswersASecondBashToolInTheSameDirectoryWithoutProbingAgain(t *testing.T) {
+	root := t.TempDir()
+	write(t, filepath.Join(root, "go.mod"), "module x\n")
+	var calls int
+	run := func(ctx context.Context, name string, args ...string) ([]byte, error) {
+		calls++
+		return []byte("go1.99.0\n"), nil
+	}
+	env := fakeShellEnv()
+	env.goos = "linux"
+	env.stat = func(string) error { return nil }
+	env.probe = func(string) (string, error) { return "Linux", nil }
+	cache := NewToolchainCache()
+
+	first, err := newBashToolWithDeps(root, env, run, cache)
+	if err != nil {
+		t.Fatalf("building the first bash tool: %v", err)
+	}
+	first.Definition()
+
+	second, err := newBashToolWithDeps(root, env, run, cache)
+	if err != nil {
+		t.Fatalf("building the second bash tool: %v", err)
+	}
+	second.Definition()
+
+	if calls != 1 {
+		t.Fatalf("a second bash tool in the same directory probed the toolchain %d times, wanted 1", calls)
 	}
 }
 
@@ -263,7 +380,7 @@ func TestABashCallNamingAMissingInterpreterNamesItAndWhatTheShellHas(t *testing.
 	env.stat = func(string) error { return nil }
 	env.probe = func(string) (string, error) { return "Linux", nil }
 
-	tool, err := newBashToolWithDeps(root, env, absent)
+	tool, err := newBashToolWithDeps(root, env, absent, nil)
 	if err != nil {
 		t.Fatalf("building the bash tool: %v", err)
 	}
@@ -539,5 +656,32 @@ func TestACommandThatFailsSaysSoWithItsExitCode(t *testing.T) {
 	}
 	if !strings.Contains(result.Content, "exited 3") {
 		t.Fatalf("the result does not say the command failed or with what code: %q", result.Content)
+	}
+}
+
+func TestAKnownExitCodeRecordsWhyRatherThanJustTheNumber(t *testing.T) {
+	tool, err := NewBashTool(t.TempDir())
+	if err != nil {
+		t.Fatalf("building the bash tool: %v", err)
+	}
+	cases := []struct {
+		command string
+		want    string
+	}{
+		{"exit 127", "not found in this environment"},
+		{"exit 126", "found but not executable"},
+	}
+	for _, c := range cases {
+		args, err := json.Marshal(bashArgs{Command: c.command})
+		if err != nil {
+			t.Fatal(err)
+		}
+		result, err := tool.Run(context.Background(), args)
+		if err != nil {
+			t.Fatalf("%s: Run returned an error: %v", c.command, err)
+		}
+		if !strings.Contains(result.FailureText, c.want) {
+			t.Fatalf("%s: FailureText is %q, want it to say %q", c.command, result.FailureText, c.want)
+		}
 	}
 }

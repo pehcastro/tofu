@@ -9,7 +9,7 @@ import (
 func Markdown(machine, date string, result Result) string {
 	b := &strings.Builder{}
 	fmt.Fprintf(b, "# bench toolerrors, a typed reason for a failed tool call: %s\n\n", date)
-	fmt.Fprintf(b, "Machine: %s, Windows 10 Pro 19045, go1.27.1 windows/amd64. No live model call, no network call, no credential: every figure comes from `bench/corpus.WalkSessions` read directly against `.tofu/sessions`, which grows while it is read because real turns are recorded in this repository. `go test ./bench/toolerrors/... -count=1` passes, 5 test functions.\n\n", machine)
+	fmt.Fprintf(b, "Machine: %s, Windows 10 Pro 19045, go1.27.1 windows/amd64. No live model call, no network call, no credential: every figure comes from `bench/corpus.WalkSessions` read directly against `.tofu/sessions`, which grows while it is read because real turns are recorded in this repository. `go test ./bench/toolerrors/... -count=1` passes, 6 test functions.\n\n", machine)
 
 	b.WriteString("## ANSWER\n\n")
 	fmt.Fprintf(b, "**%d of %d recorded tool calls failed (%.1f%%), and %.1f%% of those failures carry no reason this corpus can classify beyond a bare nonzero exit code.** Every failure that carries any error text at all classifies cleanly into one of the five named reasons; the entire unknown share is `bash` calls that exited nonzero with an empty `Error` field, which today's harness never fills in even though the exit code itself is sitting right there. `%s` is the worst tool by failure rate among tools with at least %d calls, at %.1f%%.\n\n",
@@ -54,6 +54,40 @@ func Markdown(machine, date string, result Result) string {
 	b.WriteString("## What this cannot answer\n\n")
 	b.WriteString("- Whether the category set holds on a corpus that is not one person's `go-dev` sessions: every labelled failure here is either a TypeScript `edit` anchor drifting out from under a rewritten file, a Go `read`/`search` naming a path that moved, or a `bash` call with a bare nonzero exit; a session built around a different toolchain could produce failure text this classifier has never seen.\n")
 	b.WriteString("- Whether refused-by-rule or provider-error ever fire: both sit at zero calls in this corpus, so the category exists on the strength of the proposal, not a recorded instance.\n")
-	b.WriteString("- Whether the worst-tool floor of 5 calls is the right one: `boji_lint_comments` and `boji_rules_check` each have exactly 1 call and 0 failures, so they were excluded rather than reported as a 0% or 100% tool on one observation.\n")
+	b.WriteString("- Whether the worst-tool floor of 5 calls is the right one: `boji_lint_comments` and `boji_rules_check` each have exactly 1 call and 0 failures, so they were excluded rather than reported as a 0% or 100% tool on one observation.\n\n")
+
+	b.WriteString("## What changed: the harness now writes down why, and the unknown share moved\n\n")
+	fmt.Fprintf(b, "**Before, measured 2026-09-23: 74.6%% of failures were unknown.** After this ticket, over the same corpus: **%.1f%%.** The bash tool now maps exit 127 to `not found in this environment` and exit 126 to `found but not executable` at the moment the call fails, rather than a reader guessing from a bare number afterward; `Classify` also recognises those same two exit codes on a bare, pre-existing record so the improvement shows on the corpus already on disk, not only on calls recorded from now on. Exit codes 1 and 2 carry no reliable meaning on their own and stay `unknown`, honestly, which is most of what is left.\n\n", rate(result.ByCategory[Unknown], result.Failures))
+	if result.RecoveredFound {
+		exitCode := 0
+		if code := result.RecoveredFromBareExitCode.ExitCode; code != nil {
+			exitCode = *code
+		}
+		fmt.Fprintf(b, "One real `bash` call recovered from a bare exit code, scrubbed, no token, account id or key present:\n\n```\nturn: %s\nexit_code: %d\nerror: %s\ncategory: %s\n```\n\n", result.RecoveredFromBareExitCode.Turn, exitCode, result.RecoveredFromBareExitCode.Error, result.RecoveredFromBareExitCode.Category)
+	} else {
+		b.WriteString("No bash call in this corpus recovered from a bare exit code this run: the only two exit codes this classifier knows, 126 and 127, did not both appear in the current corpus with an empty `Error` field.\n\n")
+	}
+
+	b.WriteString("## Is a work-advanced signal sound\n\n")
+	b.WriteString("**No, not from anything this corpus already carries, and it should not be guessed.** A call that exits 0 having found nothing, the admin-template shape from TOFU-542, needs a judgment against the intent that asked for the call, which an exit code and an error string cannot supply; inventing that judgment from a model's opinion here would be exactly the kind of thing this project already rejected once. What would carry it, named without building it: whether the result is empty against a call that is not supposed to return empty, whether the result is identical to a previous call's result in the same turn, and whether the command's own output contains a phrase like \"not found\" or \"no such\" despite exiting 0. All three are mechanical checks over data already on the record, not a model call, and none of them is wired up here. This ticket built the first half only, as scoped.\n\n")
+
+	b.WriteString("## An older session still loads\n\n")
+	if result.OldestTurnFound {
+		firstStep := "this turn recorded no step"
+		if steps := result.OldestTurn.Steps; len(steps) > 0 {
+			step := steps[0]
+			switch {
+			case len(step.ToolCalls) > 0:
+				firstStep = fmt.Sprintf("step %d: tool %s, command %q", step.Index, step.ToolCalls[0].Tool, step.ToolCalls[0].Command)
+			case step.AssistantText != "":
+				firstStep = fmt.Sprintf("step %d: assistant text %q", step.Index, step.AssistantText)
+			default:
+				firstStep = fmt.Sprintf("step %d: no tool call and no assistant text", step.Index)
+			}
+		}
+		fmt.Fprintf(b, "`%s`, the oldest turn in this corpus, loads through the same `bench/corpus.WalkSessions` used for every figure above, with no schema change in this ticket to break it. Its first step, scrubbed:\n\n```\n%s\n```\n\n", result.OldestTurn.ID, firstStep)
+	} else {
+		b.WriteString("No turn was read from this corpus, so no older session is named.\n\n")
+	}
 	return b.String()
 }

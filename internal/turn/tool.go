@@ -13,9 +13,10 @@ import (
 )
 
 type Result struct {
-	Content  string
-	Command  string
-	ExitCode *int
+	Content     string
+	Command     string
+	ExitCode    *int
+	FailureText string
 }
 
 type Tool interface {

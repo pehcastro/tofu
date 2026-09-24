@@ -56,6 +56,22 @@ func TestClassifyMatchesTheRealCorpusTextsSeenSoFar(t *testing.T) {
 	}
 }
 
+func TestABareExitCodeStillRecordsWhyRatherThanUnknown(t *testing.T) {
+	cases := []struct {
+		name string
+		code int
+		want Category
+	}{
+		{"exit 127 with no error text", 127, NotFoundInEnvironment},
+		{"exit 126 with no error text", 126, NotFoundInEnvironment},
+	}
+	for _, c := range cases {
+		if got := Classify(exited(c.code)); got != c.want {
+			t.Errorf("%s: Classify = %q, want %q", c.name, got, c.want)
+		}
+	}
+}
+
 func TestRunCountsCallsAndFailuresPerTool(t *testing.T) {
 	result, err := Run(sessionsDir)
 	if err != nil {
