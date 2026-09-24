@@ -110,13 +110,21 @@ func renderSweepSection(b *strings.Builder, result api.Result) {
 	b.WriteString("| Options | Result | Latency | Billed input tokens | Correct | Confidence | Cost |\n|---|---|---|---|---|---|---|\n")
 	for _, s := range result.OptionSweep {
 		if !s.Succeeded {
-			fmt.Fprintf(b, "| %d | failed | | | | | | server message: %s |\n", s.Options, s.ServerError)
+			fmt.Fprintf(b, "| %d | failed: %s | | | | | |\n", s.Options, serverMessageInOneCell(s.ServerError))
 			continue
 		}
 		fmt.Fprintf(b, "| %d | ok | %.0f ms | %d | %v | %.2f | $%.6f |\n",
 			s.Options, s.LatencyMS, s.BilledInput, s.Correct, s.Confidence, s.Cost)
 	}
 	b.WriteString("\n")
+}
+
+func serverMessageInOneCell(message string) string {
+	flattened := strings.Join(strings.Fields(message), " ")
+	if flattened == "" {
+		return "no server message"
+	}
+	return strings.ReplaceAll(flattened, "|", `\|`)
 }
 
 func renderCostSection(b *strings.Builder, result api.Result) {

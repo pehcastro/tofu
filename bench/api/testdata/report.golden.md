@@ -39,7 +39,7 @@ No question straddled 0.50 across these reruns.
 | Options | Result | Latency | Billed input tokens | Correct | Confidence | Cost |
 |---|---|---|---|---|---|---|
 | 8 | ok | 300 ms | 360 | true | 1.00 | $0.000015 |
-| 256 | failed | | | | | | server message: too many choices |
+| 256 | failed: too many choices | | | | | |
 
 ## Cost
 
