@@ -198,6 +198,33 @@ func TestAFinishedChildsCallTextIsTheToolsOwnLabelSoABashArgumentIsKeptWholeAndN
 	t.Logf("the view reads %v, the prose reads %q", shapes, strings.SplitN(report.Text(), "\n", 2)[0])
 }
 
+func TestAChildCutOnASilentStepReportsTheLastStepThatSpoke(t *testing.T) {
+	agent := subagent.SubAgent{ID: "turn-parent-c1", Mission: "read the note"}
+	spokeThenCut := reportOf(agent, []Row{{ID: "turn-parent-c1", Outcome: OutcomeStepCap, Steps: []StepRow{
+		{AssistantText: "the note holds one line and it names SPARROW-7731"},
+		{ToolCalls: []ToolCallRow{{Tool: "read"}}},
+		{ToolCalls: []ToolCallRow{{Tool: "read"}}},
+	}}}, subagent.Parked)
+	neverSpoke := reportOf(agent, []Row{{ID: "turn-parent-c1", Outcome: OutcomeStepCap, Steps: []StepRow{
+		{ToolCalls: []ToolCallRow{{Tool: "read"}}},
+	}}}, subagent.Parked)
+
+	if !strings.Contains(spokeThenCut.Prose, "SPARROW-7731") {
+		t.Fatalf("a child cut on a silent step lost what it said on step one: %q", spokeThenCut.Prose)
+	}
+	if spokeThenCut.Steps != 3 || spokeThenCut.ProseStep != 1 {
+		t.Fatalf("the report says step %d of %d, and a silent step that ran a tool is not a step never reached",
+			spokeThenCut.ProseStep, spokeThenCut.Steps)
+	}
+	if !strings.Contains(spokeThenCut.Text(), "it last spoke at step 1 of 3") {
+		t.Fatalf("the handback quotes the child without saying when it spoke:\n%s", spokeThenCut.Text())
+	}
+	if neverSpoke.Prose != "" || neverSpoke.ProseStep != 0 {
+		t.Fatalf("a child that never spoke reports %q from step %d", neverSpoke.Prose, neverSpoke.ProseStep)
+	}
+	t.Logf("handback:\n%s", spokeThenCut.Text())
+}
+
 func TestEveryOutcomeAndEveryStateIsHandledAndAnUnknownOnePanicsByName(t *testing.T) {
 	for _, outcome := range AllOutcomes() {
 		finding, carries := outcomeFinding(outcome, subagent.InReview)

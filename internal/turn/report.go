@@ -34,6 +34,7 @@ type ChildReport struct {
 	CostUSD    float64             `json:"cost_usd"`
 	Asked      []subagent.Question `json:"asked,omitempty"`
 	Prose      string              `json:"prose,omitempty"`
+	ProseStep  int                 `json:"prose_step,omitempty"`
 }
 
 func reportOf(agent subagent.SubAgent, attempts []Row, state subagent.State) ChildReport {
@@ -68,8 +69,11 @@ func reportOf(agent subagent.SubAgent, attempts []Row, state subagent.State) Chi
 		}
 	}
 	report.Completion = completionOf(state, report.Findings)
-	if len(row.Steps) > 0 {
-		report.Prose = row.Steps[len(row.Steps)-1].AssistantText
+	for i := len(row.Steps) - 1; i >= 0; i-- {
+		if spoken := strings.TrimSpace(row.Steps[i].AssistantText); spoken != "" {
+			report.Prose, report.ProseStep = spoken, i+1
+			break
+		}
 	}
 	return report
 }
@@ -210,6 +214,9 @@ func (r ChildReport) Text() string {
 	}
 	for _, question := range r.Asked {
 		fmt.Fprintf(body, "asks a %s: %s\n", question.Kind, question.Ask)
+	}
+	if r.ProseStep > 0 && r.ProseStep < r.Steps {
+		fmt.Fprintf(body, "it last spoke at step %d of %d:\n", r.ProseStep, r.Steps)
 	}
 	body.WriteString(r.Prose)
 	return body.String()
