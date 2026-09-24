@@ -10,6 +10,8 @@ const RealTask = "write a fix for the flaky test in internal/turn/compose_test.g
 
 const environmentPlaceholder = "excluded from Composed.System(), so its content cannot move the measured bytes"
 
+const RealToolGuidance = turn.EveryToolIsRelativeToTheWorkingDirectory + turn.PreferTheToolOverTheShell + " " + turn.SpawnAddendum
+
 func RealRules() ([]rule.Rule, error) {
 	return rule.LoadFS(shipped.Files(), "library")
 }
@@ -18,7 +20,7 @@ func ComposeSystem(rules []rule.Rule) (string, turn.Composed, error) {
 	composed, err := turn.Compose(turn.ComposeSpec{
 		Task:         RealTask,
 		Environment:  environmentPlaceholder,
-		ToolGuidance: turn.PreferTheToolOverTheShell,
+		ToolGuidance: RealToolGuidance,
 		Rules:        rules,
 	})
 	if err != nil {

@@ -34,9 +34,15 @@ const (
 	SelfDeclared    = "the file's own text"
 	WithdrawalsPath = "bench/report/withdrawals.json"
 	PackagesPath    = "bench/report/packages.json"
+	HandReadPath    = "bench/report/handread.json"
 	Unparsed        = "unparsed: no heading in this file names its own answer"
 	RegenerateWith  = "go run ./bench/report/gen"
 )
+
+var namesNoAnswer = map[string]bool{
+	"bench/promote/report-2026-09-21.md": true,
+	"bench/turn/report-2026-09-18.md":    true,
+}
 
 var datedReport = regexp.MustCompile(`^report-(\d{4}-\d{2}-\d{2})(?:-[a-z0-9-]+)?\.[a-z]+$`)
 
@@ -118,6 +124,18 @@ func readIndex(benchRoot string) (benchIndex, error) {
 	}
 	for path := range withdrawals {
 		return benchIndex{}, fmt.Errorf("%s names %s, which is not a dated report under bench/", WithdrawalsPath, path)
+	}
+	handRead, err := readHandRead(filepath.Join(benchRoot, "report", "handread.json"))
+	if err != nil {
+		return benchIndex{}, err
+	}
+	for i := range index.Entries {
+		entry := &index.Entries[i]
+		read, named := handRead[entry.Path]
+		if !named || entry.Conclusion != Unparsed || namesNoAnswer[entry.Path] {
+			continue
+		}
+		entry.Conclusion = "Hand read from " + HandReadPath + ": " + read.Says
 	}
 	sort.Slice(index.Entries, func(i, j int) bool {
 		if index.Entries[i].Date != index.Entries[j].Date {

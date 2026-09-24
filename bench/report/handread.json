@@ -366,5 +366,29 @@
     "from": "prose",
     "sample": "one real task, write a fix for the flaky test in internal/turn/compose_test.go, against the shipped rule library under library/, composed and encoded directly with no live call and no network call",
     "skips": "0, everything measured runs; TestGeneratorReproducesTheSameBytesTwice composes and measures the same rules twice in process rather than by re-invoking the generator, since report.Generate refuses to overwrite a dated report already on disk"
+  },
+  {
+    "report": "bench/prefix/report-2026-09-23-corrected.md",
+    "figure": "4492 bytes",
+    "says": "TOFU-538 moved the working-directory line and the spawn addendum out of cmd/tofu/run.go into exported names in internal/turn, so bench/prefix.RealToolGuidance now composes the same text a real tofu run sends rather than a subset of it. With that fix, the per-session cache rewrite for the same real task and the same 9 fired rules is 4492 bytes, an estimated 1123 tokens: 357 bytes above the earlier report's 4135, which is exactly the working-directory line and the spawn addendum the earlier report could not reach. The builtin-only arm, no rules fired, now measures 2209 bytes, TOFU-532's floor exactly, so the whole 2283 byte gap above that floor is now the 9 fired rules and nothing else. The earlier report at bench/prefix/report-2026-09-23.md is left in place rather than edited: it is immutable, and this report supersedes its headline figure.",
+    "from": "prose",
+    "sample": "one real task, write a fix for the flaky test in internal/turn/compose_test.go, against the shipped rule library under library/, composed and encoded directly with no live call and no network call",
+    "skips": "0, everything measured runs; TestGeneratorReproducesTheSameBytesTwice composes and measures the same rules twice in process rather than by re-invoking the generator, since report.Generate refuses to overwrite a dated report already on disk"
+  },
+  {
+    "report": "bench/toolerrors/report-2026-09-23.md",
+    "figure": "74.6%",
+    "says": "67 of 1412 recorded tool calls failed, 4.7%, and 74.6% of those failures carry no reason beyond a bare nonzero exit code. Every failure that carries any error text at all classifies cleanly into bad arguments, not found in this environment or timeout; the whole unknown share is bash calls that exited nonzero with an empty Error field, a number the harness already has and never types. edit is the worst tool among those with at least 5 calls, 11 of 55, 20.0%, every one of them an anchor or an occurrence count that no longer matches the file. The categories cannot express the admin-template shape named in the ticket, a run of calls that succeed as a process and fail as work: this project's own corpus holds the same pattern in turn-18d6ea32da3230c0 and turn-18d6e1de4b235b54, hunting for a go binary, and only the probes that happened to exit nonzero land in this report at all.",
+    "from": "prose",
+    "sample": "1412 tool calls over 110 recorded sessions under .tofu/sessions, read once through bench/corpus.WalkSessions, no live call and no network call",
+    "skips": "1 of 111 entries skipped, HEAD, not a .json file; 0 tool calls skipped; 0 of 5 test functions skipped"
+  },
+  {
+    "report": "bench/linenumbers/report-2026-09-23.md",
+    "figure": "0",
+    "says": "There is nothing to save because there is nothing there: tofu's read tool never prefixes a line with its number. A whole read returns the file bytes verbatim and a ranged read prepends one header line. Over 296 read calls in 110 recorded turns, line-number bytes are 0, which is 0.0 percent of 1,016,862 read-tool bytes and 0.0 percent of 9,257,594 cache-read tokens. The threshold was stated first, under 0.5 percent is a no. The pasted claim of 1.6 percent described a harness that numbers every line, which two clones do behind a flag that is off by default, and neither they nor any other clone numbers sparsely.",
+    "from": "prose",
+    "sample": "110 turns read through bench/corpus.WalkSessions, 296 read tool calls, 1 entry skipped as not a .json file, plus the read tool's own source read both ways",
+    "skips": "1 entry under .tofu/sessions that is not a turn, logged as HEAD"
   }
 ]

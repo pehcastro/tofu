@@ -8,6 +8,8 @@ import (
 const TOFU532FloorBytes = 2209
 const TOFU532FloorTokens = 552
 
+const TOFU535WithBillingBytes = 4135
+
 const testFunctionCount = 5
 
 type Report struct {
@@ -21,11 +23,9 @@ type Report struct {
 	Reproduced  [2]RewriteFigure
 }
 
-func (r Report) rulesBytes() int { return r.WithBilling.Bytes - r.BuiltinOnly.Bytes }
-func (r Report) gapBytes() int   { return r.WithBilling.Bytes - TOFU532FloorBytes }
-func (r Report) toolGuidanceShortfall() int {
-	return TOFU532FloorBytes - r.BuiltinOnly.Bytes
-}
+func (r Report) rulesBytes() int       { return r.WithBilling.Bytes - r.BuiltinOnly.Bytes }
+func (r Report) gapBytes() int         { return r.WithBilling.Bytes - TOFU532FloorBytes }
+func (r Report) correctedByBytes() int { return r.WithBilling.Bytes - TOFU535WithBillingBytes }
 
 func (r Report) Render() string {
 	var b strings.Builder
@@ -34,9 +34,10 @@ func (r Report) Render() string {
 	fmt.Fprintf(&b, "`go test ./bench/prefix/... -count=1` passes, %d test functions.\n\n", testFunctionCount)
 
 	b.WriteString("## Headline\n\n")
-	fmt.Fprintf(&b, "**With the real composed system prompt for a real task, %d rules firing on top of the two builtin blocks, the per-session rewrite is %d bytes, an estimated %d tokens.** That is TOFU-532's floor of %d bytes and %d tokens plus a gap of %d bytes: %d of the gap is the %d rules that fired for this task, the rest is %d bytes this package's `ToolGuidance` is short of the production one, because the working-directory prefix and the spawn addendum are private constants in `cmd/tofu/run.go` this package cannot import without copying them.\n\n",
+	fmt.Fprintf(&b, "**With the real composed system prompt for a real task, %d rules firing on top of the two builtin blocks, the per-session rewrite is %d bytes, an estimated %d tokens.** That is TOFU-535's own figure of %d bytes plus %d bytes: TOFU-538 moved the working-directory line and the spawn addendum out of `cmd/tofu/run.go` into exported names in `internal/turn`, so `bench/prefix.RealToolGuidance` composes the real text a `tofu run` sends rather than a subset of it. %d bytes of that correction is the working-directory line and the spawn addendum this package could not reach before; the total gap against TOFU-532's floor of %d bytes and %d tokens is now %d bytes, and %d of it is the %d rules that fired for this task.\n\n",
 		len(r.FiredRules), r.WithBilling.Bytes, r.WithBilling.Tokens,
-		TOFU532FloorBytes, TOFU532FloorTokens, r.gapBytes(), r.rulesBytes(), len(r.FiredRules), r.toolGuidanceShortfall())
+		TOFU535WithBillingBytes, r.correctedByBytes(),
+		r.correctedByBytes(), TOFU532FloorBytes, TOFU532FloorTokens, r.gapBytes(), r.rulesBytes(), len(r.FiredRules))
 
 	b.WriteString("## The task and the rules it fired\n\n")
 	fmt.Fprintf(&b, "Task: %q. %d rules fired: %s.\n\n", r.Task, len(r.FiredRules), strings.Join(r.FiredRules, ", "))

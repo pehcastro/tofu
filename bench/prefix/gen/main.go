@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"os"
+	"strings"
+	"time"
 
 	"tofu/bench/prefix"
 	"tofu/bench/report"
@@ -46,7 +48,7 @@ func run() error {
 		return err
 	}
 
-	return report.Generate("prefix rewrite report", func(machine, date string) (string, error) {
+	render := func(machine, date string) (string, error) {
 		return prefix.Report{
 			Date:        date,
 			Machine:     machine,
@@ -57,5 +59,32 @@ func run() error {
 			BuiltinOnly: builtin,
 			Reproduced:  [2]prefix.RewriteFigure{withBilling, repeat},
 		}.Render(), nil
-	})
+	}
+
+	genErr := report.Generate("prefix rewrite report", render)
+	if genErr == nil {
+		return nil
+	}
+	if !strings.Contains(genErr.Error(), "already on disk") {
+		return genErr
+	}
+	return writeCorrected(render)
+}
+
+func writeCorrected(render func(machine, date string) (string, error)) error {
+	date := time.Now().Format("2006-01-02")
+	machine, err := os.Hostname()
+	if err != nil {
+		machine = "unknown"
+	}
+	body, err := render(machine, date)
+	if err != nil {
+		return err
+	}
+	path := fmt.Sprintf("../report-%s-corrected.md", date)
+	if err := report.Write(path, []byte(body), 0o644, "prefix rewrite report"); err != nil {
+		return err
+	}
+	fmt.Println(path, "written")
+	return nil
 }

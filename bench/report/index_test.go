@@ -118,10 +118,29 @@ func TestAConclusionThatCannotBeParsedIsListedAsUnparsed(t *testing.T) {
 	if len(unparsed) != data.Counts.Unparsed {
 		t.Errorf("%d reports are listed unparsed and the count says %d", len(unparsed), data.Counts.Unparsed)
 	}
-	if len(unparsed) == 0 {
-		t.Fatal("no report is unparsed, so nothing proves an unguessed conclusion is reported as one")
+	want := []string{"bench/promote/report-2026-09-21.md", "bench/turn/report-2026-09-18.md"}
+	if strings.Join(unparsed, ",") != strings.Join(want, ",") {
+		t.Errorf("the reports naming no conclusion are %v, want %v", unparsed, want)
+	}
+	for _, path := range want {
+		if got := find(t, path).Quoted(); got != Unparsed {
+			t.Errorf("%s: this report genuinely names no answer and must keep saying so, got %q", path, got)
+		}
 	}
 	t.Logf("%d of %d reports name no conclusion a reader can find: %s", len(unparsed), len(data.Reports), strings.Join(unparsed, ", "))
+}
+
+func TestAnUnparsedHeadingIsFilledFromTheHandReadEntryInstead(t *testing.T) {
+	report := find(t, "bench/calibration/report-2026-09-23.md")
+	if report.Unparsed {
+		t.Fatal("this report has a handread.json entry and must stop reading unparsed")
+	}
+	if !strings.HasPrefix(report.Quoted(), "Hand read from "+HandReadPath+": ") {
+		t.Errorf("the quoted conclusion does not say it was hand read: %q", report.Quoted())
+	}
+	if !strings.Contains(report.Quoted(), "hand labelling cannot close the gap") {
+		t.Errorf("the quoted conclusion does not carry the hand-read sentence: %q", report.Quoted())
+	}
 }
 
 func TestEveryReportOpensWithAFigureTakenFromTheReportItself(t *testing.T) {

@@ -604,11 +604,11 @@
       "skips": "the 204 inline rows are excluded with the reason stated; ask is counted as zero rows because no writer exists for it, which the report distinguishes from having no labels",
       "conclusion": [
         {
-          "text": "unparsed: no heading in this file names its own answer",
+          "text": "Hand read from bench/report/handread.json: The ledger holds 2,780 decision rows and 20 of them carry an outcome, all hand labelled and all attached to tool_gate. Exactly one labelled row sits near a threshold, within three dead bands of risk_deny_at, and none sits near risk_ask_at; stop_check and shell_sift have none at all. A threshold needs roughly 60 labels near its operating point at a 5 percent false positive budget and 300 at 1 percent, so no point is calibratable at either and tool_gate alone needs 59 more near one threshold and 60 near the other. The reach of three dead bands is argued rather than assumed: one dead band is the tie zone the decision code already uses, so a label sitting inside it proves nothing about where the line should sit. There is no arrival rate, because all 20 outcomes were written in a 78 second window five days ago and nothing since, with nineteen of them inside two seconds, which the report calls consistent with a scripted loop rather than a person. Its conclusion is that hand labelling cannot close the gap and the shadow gate writing outcomes automatically is the path that scales. It also found that the ask point has never written a ledger row at all, which is a missing writer rather than a labelling gap.",
           "withdrawn": false
         }
       ],
-      "conclusion_unparsed": true,
+      "conclusion_unparsed": false,
       "state": "stands",
       "state_source": "",
       "state_note": ""
@@ -643,6 +643,44 @@
       "conclusion": [
         {
           "text": "On this corpus jev beats the regex arm, 25 of 27 against 24 of 27, and the margin is two cases. Both arms score high because this project's own recorded sessions carry almost no adversarial instruction-shaped text: what looks like a directive is nearly always the harness's own scaffolding (an oversized-result notice telling the model to call artifact_fetch, a bash-timeout caution, a refused-citation notice), never a planted attack.",
+          "withdrawn": false
+        }
+      ],
+      "conclusion_unparsed": false,
+      "state": "stands",
+      "state_source": "",
+      "state_note": ""
+    },
+    {
+      "package": "linenumbers",
+      "date": "2026-09-23",
+      "source": "bench/linenumbers/report-2026-09-23.md",
+      "figure": "0",
+      "built_from": "prose",
+      "sample": "110 turns read through bench/corpus.WalkSessions, 296 read tool calls, 1 entry skipped as not a .json file, plus the read tool's own source read both ways",
+      "skips": "1 entry under .tofu/sessions that is not a turn, logged as HEAD",
+      "conclusion": [
+        {
+          "text": "internal/turn/tool_read.go never prefixes a returned line with its number. A whole read (no start_line) returns the file's bytes verbatim; a ranged read prepends one header line naming the span, then the raw lines joined by newlines, still with no per-line number.",
+          "withdrawn": false
+        }
+      ],
+      "conclusion_unparsed": false,
+      "state": "stands",
+      "state_source": "",
+      "state_note": ""
+    },
+    {
+      "package": "prefix",
+      "date": "2026-09-23",
+      "source": "bench/prefix/report-2026-09-23-corrected.md",
+      "figure": "4492 bytes",
+      "built_from": "prose",
+      "sample": "one real task, write a fix for the flaky test in internal/turn/compose_test.go, against the shipped rule library under library/, composed and encoded directly with no live call and no network call",
+      "skips": "0, everything measured runs; TestGeneratorReproducesTheSameBytesTwice composes and measures the same rules twice in process rather than by re-invoking the generator, since report.Generate refuses to overwrite a dated report already on disk",
+      "conclusion": [
+        {
+          "text": "With the real composed system prompt for a real task, 9 rules firing on top of the two builtin blocks, the per-session rewrite is 4492 bytes, an estimated 1123 tokens.",
           "withdrawn": false
         }
       ],
@@ -718,11 +756,11 @@
       "skips": "60 of 111 turns carry no usable cache accounting, either predating it or holding no steps, and the report gives the split. No live model call was made and no account was spent.",
       "conclusion": [
         {
-          "text": "unparsed: no heading in this file names its own answer",
+          "text": "Hand read from bench/report/handread.json: The tool schemas a turn sends cost 16,575 bytes on every request, about 4,143 tokens for all 18 tools, and deferring them is not worth building. The figure is measured by encoding a real request with and without the tools array and taking the difference; summing the tools individually gives 16,492, and the 83 byte gap is the array's own brackets and commas. Caching is what decides it: on the measured turn the block was written to cache once on step one and never again across eleven steps, and 81.6 percent of that turn's billed input was cache reads. Across the corpus, 24 recorded turns wrote to cache and 23 of them made a second model call and read the write back; at today's 18 tool scale, 14 of 15 did. The deferral mechanism is named and costed rather than assumed: a catalog line plus a fetch before first use would have added 5 round trips to the measured turn to save at most 2,873 tokens, paid once at cache-write price. The only case it would pay is a turn that makes exactly one model call and never returns, which was 1 of 24.",
           "withdrawn": false
         }
       ],
-      "conclusion_unparsed": true,
+      "conclusion_unparsed": false,
       "state": "withdrawn in part",
       "state_source": "bench/report/withdrawals.json",
       "state_note": "the cohort section only, withdrawn on 2026-09-23 by TOFU-529 and by this file rather than by an edit to the report. The reader that produced those counts tagged its fields with the older capitalized spellings only, so it decoded 51 of the 58 single file sessions to all zero and classified each of them as predating cache accounting. The shared reader handles both spellings, and on the same corpus the usable turns rise from 51 to 97 and the turns carrying a cache write from 24 to 38. Every count, dollar and percentage in that section was computed over a sample less than half the size it should have been, so the figures fall. The verdict does not: the schema block is still written to cache once and read back on every later step, and the corrected sample makes that stronger rather than weaker. The headline figure of 16,575 bytes and 4,143 tokens is measured from the wire encoder rather than the corpus and stands unchanged, as does the single turn measured in full."
@@ -813,11 +851,11 @@
       "skips": "none: the sweep reads source rather than recorded material, so there is nothing to skip. No live model call and no write to .tofu.",
       "conclusion": [
         {
-          "text": "unparsed: no heading in this file names its own answer",
+          "text": "Hand read from bench/report/handread.json: Five independent readers of the recorded sessions exist where one shared reader is imported by nineteen packages, and three of the four extras have a real reason: one needs per step token fields the shared record does not carry, one needs occupancy and fork and compaction and reads through the session store instead, and one is a byte scan for a quota key rather than a turn parse. Only one re-walks by hand what the shared walker already does, and that is a clean merge. The most repeated shape is the smallest: six separate declarations of a skip record holding a path and a reason, with two pairs sharing a name across different packages. Two apparent duplications are left alone with arguments: a nearest rank percentile over integers is correct where an interpolated float one is not, because a fractional value between two byte counts means nothing. One thing that looks like duplication is named as not being any: four packages sum a cost with the same loop, and each sums a different field on a different struct answering a different question, so a shared helper would save one line per site and put a layer between the reader and the field. Nothing was merged, deleted or rewritten: the deliverable is the list and the judgment.",
           "withdrawn": false
         }
       ],
-      "conclusion_unparsed": true,
+      "conclusion_unparsed": false,
       "state": "stands",
       "state_source": "",
       "state_note": ""
@@ -832,11 +870,11 @@
       "skips": "6 of the 9 artifacts, each named with its turn and its paragraph count against the remaining call budget; both live tests skip unless TOFU_LIVE is set",
       "conclusion": [
         {
-          "text": "unparsed: no heading in this file names its own answer",
+          "text": "Hand read from bench/report/handread.json: The sibling report of the same day measured the judged cut on 8 results that were all under the truncation cap, where fixed truncation never fired. This one reaches the results over it, where the arm genuinely cuts, and the judged cut removes a further 3,367 of 24,619 tokens, 13.7 percent, against the 1.5 percent mechanical floor from TOFU-338. Nine distinct over-cap read and search artifacts were identified in the corpus and 3 were judged inside a stated cap of 250 live calls; 247 calls were made for $0.013247, against 393 calls and $0.040968 for the first run. The worked example is a design document, not a test log: fixed truncation drops 781 bytes from its middle and every one of those bytes falls inside a single paragraph the judgment marked keep, so truncation by position drops exactly the part the judgment says still matters. The 6 unjudged artifacts are each skipped with a named reason, a paragraph count over the remaining call budget, and two of them are 798 paragraph reads that would need roughly 0.18 dollars more to judge.",
           "withdrawn": false
         }
       ],
-      "conclusion_unparsed": true,
+      "conclusion_unparsed": false,
       "state": "stands",
       "state_source": "",
       "state_note": ""
@@ -851,11 +889,11 @@
       "skips": "1 entry under .tofu/sessions that is not a turn; 31 live calls skipped, each named with its reason: a result not split into more than one paragraph, or a paragraph count that would exceed the live call cap",
       "conclusion": [
         {
-          "text": "unparsed: no heading in this file names its own answer",
+          "text": "Hand read from bench/report/handread.json: A judged cut over a read or search result was measured live against fixed truncation, 393 Jev calls for $0.040968, and it removed 402 of 21,569 tokens, 1.9 percent. TOFU-338 measured a mechanical pass at 1.5 percent of recorded result bytes, so the judgment clears that floor and does not clear it widely. The arm it is compared against did not fire on this sample: all 8 measured results are under the 32,768 byte truncation cap and the largest is 12,793 bytes, so the 1.9 percent came off results fixed truncation would have passed through whole. 9 of 39 stored read and search artifacts in the corpus exceed the cap and none fell inside the live call budget, so the arm-firing comparison cannot be made on this sample. Three arms over the corpus total read neither 570,999 tokens, rtk alone 458,199, rtk with the judged cut 457,797, and the last term is not extrapolated past the 8 calls actually judged. Task outcome was not measured, so fewer tokens with the same outcome is not claimed. The point ships off.",
           "withdrawn": false
         }
       ],
-      "conclusion_unparsed": true,
+      "conclusion_unparsed": false,
       "state": "stands",
       "state_source": "",
       "state_note": ""
@@ -870,11 +908,30 @@
       "skips": "none: no live model call and no network call, len(Description) and marshalled len(Parameters) read straight off the registry",
       "conclusion": [
         {
-          "text": "unparsed: no heading in this file names its own answer",
+          "text": "Hand read from bench/report/handread.json: Description bytes are 69.7 percent of the wire schema bytes over all 18 tools, below the 79 percent another harness reports, 11,559 description bytes and 3,987 parameter bytes of a 16,574 byte whole. Seventeen of the eighteen tools measure byte for byte identical to TOFU-520's 16,575; bash alone differs by one byte, because its description embeds the shell's own pwd for the directory the generator ran from, one character shorter here than in bench/schemas/gen, and that is the whole of the gap.",
           "withdrawn": false
         }
       ],
-      "conclusion_unparsed": true,
+      "conclusion_unparsed": false,
+      "state": "stands",
+      "state_source": "",
+      "state_note": ""
+    },
+    {
+      "package": "toolerrors",
+      "date": "2026-09-23",
+      "source": "bench/toolerrors/report-2026-09-23.md",
+      "figure": "74.6%",
+      "built_from": "prose",
+      "sample": "1412 tool calls over 110 recorded sessions under .tofu/sessions, read once through bench/corpus.WalkSessions, no live call and no network call",
+      "skips": "1 of 111 entries skipped, HEAD, not a .json file; 0 tool calls skipped; 0 of 5 test functions skipped",
+      "conclusion": [
+        {
+          "text": "67 of 1412 recorded tool calls failed (4.7%), and 74.6% of those failures carry no reason this corpus can classify beyond a bare nonzero exit code.",
+          "withdrawn": false
+        }
+      ],
+      "conclusion_unparsed": false,
       "state": "stands",
       "state_source": "",
       "state_note": ""
@@ -908,11 +965,11 @@
       "skips": "7 named: 3 live-gated, 2 needing an env-named tree, 1 measuring from a stored turn row, 1 helper process",
       "conclusion": [
         {
-          "text": "unparsed: no heading in this file names its own answer",
+          "text": "Hand read from bench/report/handread.json: Three arms, four tasks and three repeats is 36 runs and 83 minutes of arm time at the median of the recorded rows, gate time on top and never measured. The harness stopped printing a mean over runs: a comparison where either arm has fewer than two passing repeats prints not separable, and a task whose door opens on one repeat and shuts on the next ranks no arm.",
           "withdrawn": false
         }
       ],
-      "conclusion_unparsed": true,
+      "conclusion_unparsed": false,
       "state": "stands",
       "state_source": "",
       "state_note": ""
@@ -1197,11 +1254,11 @@
       "skips": "counted and named in the report's own Skips section; the pin drops every call that named an ignored path",
       "conclusion": [
         {
-          "text": "unparsed: no heading in this file names its own answer",
+          "text": "Hand read from bench/report/handread.json: Replayed against a pinned commit, the safe band for the glob path cap is 207 to 1,222 and 300 sits inside it with nothing in between, so the cap is a judgement rather than a measurement. The cap is unchanged at 300.",
           "withdrawn": false
         }
       ],
-      "conclusion_unparsed": true,
+      "conclusion_unparsed": false,
       "state": "stands",
       "state_source": "",
       "state_note": ""
@@ -1235,11 +1292,11 @@
       "skips": "8 of 110 entries under .tofu/sessions did not parse as a recorded turn",
       "conclusion": [
         {
-          "text": "unparsed: no heading in this file names its own answer",
+          "text": "Hand read from bench/report/handread.json: Replaying 102 recorded turns, the repair rule saves 2 round trips and a derived 16513 ms. Refuse saves nothing by construction and remember saves nothing at all, and remember is not kept.",
           "withdrawn": false
         }
       ],
-      "conclusion_unparsed": true,
+      "conclusion_unparsed": false,
       "state": "stands",
       "state_source": "",
       "state_note": ""
@@ -1277,11 +1334,11 @@
       "skips": "the three-arm table, Claude against Codex against Tofu, has never been run and waits on E4",
       "conclusion": [
         {
-          "text": "unparsed: no heading in this file names its own answer",
+          "text": "Hand read from bench/report/handread.json: The three-arm comparison this package exists for has never been run. The one real figure it produces is a transform measure over 1 recorded turn and its 10 write calls.",
           "withdrawn": false
         }
       ],
-      "conclusion_unparsed": true,
+      "conclusion_unparsed": false,
       "state": "stands",
       "state_source": "",
       "state_note": ""
@@ -1296,11 +1353,11 @@
       "skips": "the after run is not reproduced here and its ticket log is empty, so a board line is the only surviving source",
       "conclusion": [
         {
-          "text": "unparsed: no heading in this file names its own answer",
+          "text": "Hand read from bench/report/handread.json: Mutation efficacy on internal/judge/policy, reproduced today from the committed fixture: 88 killed, 16 lived, 84.62%. The after figures, 95.19 and 100, come from a board entry rather than a rerun.",
           "withdrawn": false
         }
       ],
-      "conclusion_unparsed": true,
+      "conclusion_unparsed": false,
       "state": "stands",
       "state_source": "",
       "state_note": ""
@@ -1353,11 +1410,11 @@
       "skips": "",
       "conclusion": [
         {
-          "text": "unparsed: no heading in this file names its own answer",
+          "text": "Hand read from bench/report/handread.json: Only 3 of 14 recorded writes are the shape a typed edit exists for; the other 11 create a file that did not exist. One changed line in the largest recorded file costs 4,284 output tokens to rewrite and 96 to express typed.",
           "withdrawn": false
         }
       ],
-      "conclusion_unparsed": true,
+      "conclusion_unparsed": false,
       "state": "stands",
       "state_source": "",
       "state_note": ""
@@ -1510,12 +1567,12 @@
     }
   ],
   "counts": {
-    "reports": 46,
-    "packages_with_a_dated_report": 29,
+    "reports": 49,
+    "packages_with_a_dated_report": 31,
     "packages_with_no_dated_report": 6,
     "withdrawn_whole_or_in_part": 6,
     "stale": 1,
-    "unparsed": 14
+    "unparsed": 2
   },
   "withdrawals_declared_from_outside_live_in": "bench/report/withdrawals.json",
   "generated_by": "go run ./bench/report/gen"
