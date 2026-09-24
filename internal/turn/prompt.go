@@ -11,6 +11,11 @@ import (
 	"tofu/internal/sys"
 )
 
+const EveryToolIsRelativeToTheWorkingDirectory = "you are working inside one directory. every path you name is relative to it and nothing above it exists. "
+
+const SpawnAddendum = "spawn hands one piece of work to a child with its own context and its own list of paths it may write, " +
+	"and returns what the child did rather than its transcript: use it when a piece of the task is separable and its paths do not overlap another child's."
+
 const PreferTheToolOverTheShell = "prefer the tool that does the thing over a shell command that imitates it: " +
 	"project_report answers what is this repository in one call, glob finds files by name, " +
 	"search finds text and returns the whole declaration a match sits inside, read reads one file whole, " +
@@ -41,7 +46,24 @@ func Environment(dir string, now time.Time) string {
 	} else {
 		lines = append(lines, "git repository: no")
 	}
+	lines = append(lines, shellLines(dir)...)
 	return strings.Join(append(lines, "</env>"), "\n")
+}
+
+func shellLines(dir string) []string {
+	choice, err := resolveShell(realShellEnv())
+	if err != nil {
+		return []string{"shell: " + err.Error()}
+	}
+	lines := []string{"shell: " + choice.Label}
+	if choice.Note != "" {
+		lines = append(lines, "shell notes: "+choice.Note)
+	}
+	toolchain := probeToolchain(dir, realToolchainRunner, konst.ToolchainProbeTimeoutMillis*time.Millisecond)
+	if summary := formatToolchain(toolchain); summary != "" {
+		lines = append(lines, "toolchain: "+summary)
+	}
+	return lines
 }
 
 type instructionFile struct {

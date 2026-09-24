@@ -594,6 +594,7 @@ func (c codexTurn) Ask(ctx context.Context, request llm.Request) (llm.Decision, 
 		Outcome:          llm.OutcomeAfter(result.Stop, len(result.ToolCalls)),
 		Stop:             result.StopReason,
 		Content:          result.Content,
+		Thinking:         llm.Thinking{Text: result.Thinking, Signature: codex.EncodeReasoning(result.ReasoningID, result.ReasoningEncrypted)},
 		ToolCalls:        result.ToolCalls,
 		Usage:            llm.Usage{InputTokens: result.Usage.Input, OutputTokens: result.Usage.Output},
 		PromptAccounting: llm.PromptAccountingFor(codex.Name),
@@ -617,21 +618,17 @@ func sessionID() (string, error) {
 	return text[:8] + "-" + text[8:12] + "-" + text[12:16] + "-" + text[16:20] + "-" + text[20:], nil
 }
 
-const everyToolIsRelativeToTheWorkingDirectory = "you are working inside one directory. every path you name is relative to it and nothing above it exists. "
-
 func runSystem(opts runOpts) string {
 	if opts.toolSet == toolSetThree {
-		return everyToolIsRelativeToTheWorkingDirectory +
+		return turn.EveryToolIsRelativeToTheWorkingDirectory +
 			"read reads a whole file, write creates one or replaces it whole, and bash runs anything else, " +
 			"including finding a file, searching text and changing part of a file."
 	}
-	system := everyToolIsRelativeToTheWorkingDirectory + turn.PreferTheToolOverTheShell
+	system := turn.EveryToolIsRelativeToTheWorkingDirectory + turn.PreferTheToolOverTheShell
 	if opts.noSubAgents {
 		return system
 	}
-	return system + " " +
-		"spawn hands one piece of work to a child with its own context and its own list of paths it may write, " +
-		"and returns what the child did rather than its transcript: use it when a piece of the task is separable and its paths do not overlap another child's."
+	return system + " " + turn.SpawnAddendum
 }
 
 func buildRunTools(dir, set string) ([]turn.Tool, *tools.Plan, error) {

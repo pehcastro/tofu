@@ -199,6 +199,44 @@ func TestProjectInstructionsAreEmptyWhenTheTreeHasNeitherFile(t *testing.T) {
 	}
 }
 
+func lineWithPrefix(block, prefix string) string {
+	for _, line := range strings.Split(block, "\n") {
+		if strings.HasPrefix(line, prefix) {
+			return line
+		}
+	}
+	return ""
+}
+
+func TestTheEnvironmentBlockNamesTheShellAndItsFamily(t *testing.T) {
+	block := Environment(t.TempDir(), time.Now())
+	line := lineWithPrefix(block, "shell: ")
+	if line == "" {
+		t.Fatalf("the environment block never names the shell:\n%s", block)
+	}
+	t.Logf("on this machine: %s", line)
+}
+
+func TestTheEnvironmentBlockNamesTheProbedToolchainOrItsAbsence(t *testing.T) {
+	root, err := filepath.Abs(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !isFile(filepath.Join(root, "go.mod")) || isFile(filepath.Join(root, "package.json")) {
+		t.Skip("this repository no longer has exactly a go.mod and no package.json at its root")
+	}
+
+	block := Environment(root, time.Now())
+	line := lineWithPrefix(block, "toolchain: ")
+	if !strings.Contains(line, "go ") {
+		t.Fatalf("a directory with a go.mod and no package.json never names go:\n%s", block)
+	}
+	if strings.Contains(line, "node ") || strings.Contains(line, "npm ") {
+		t.Fatalf("a directory with no package.json still probed node or npm:\n%s", block)
+	}
+	t.Logf("on this machine, no package.json: %s", line)
+}
+
 func TestTheRequestCarriesTheEnvironmentAheadOfTheTask(t *testing.T) {
 	root := t.TempDir()
 	write(t, filepath.Join(root, ".git", "HEAD"), "ref: refs/heads/develop\n")

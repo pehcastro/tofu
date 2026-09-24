@@ -80,6 +80,9 @@ const (
 	BashMaxDeadlineMillis = 600000
 	BashWaitDelayMillis   = 1000
 
+	ShellProbeTimeoutMillis     = 2000
+	ToolchainProbeTimeoutMillis = 2000
+
 	ProjectSectionCap = 12
 
 	SubAgentMaxDepth   = 2

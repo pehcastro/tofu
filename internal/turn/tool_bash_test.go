@@ -8,10 +8,280 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
+	"tofu/internal/konst"
 	"tofu/internal/llm"
 	"tofu/internal/subagent"
 )
+
+func fakeShellEnv() shellEnv {
+	return shellEnv{
+		goos:     "windows",
+		getenv:   func(string) string { return "" },
+		lookPath: func(string) (string, error) { return "", os.ErrNotExist },
+		stat:     func(string) error { return os.ErrNotExist },
+		probe:    func(string) (string, error) { return "", os.ErrNotExist },
+	}
+}
+
+func TestGitBashIsFoundThroughGitRatherThanPATHWhenTheOnlyBashOnPathIsTheWSLLauncher(t *testing.T) {
+	env := fakeShellEnv()
+	env.lookPath = func(name string) (string, error) {
+		switch name {
+		case "git":
+			return `C:\Program Files\Git\cmd\git.exe`, nil
+		case "bash":
+			return `C:\Windows\system32\bash.exe`, nil
+		}
+		return "", os.ErrNotExist
+	}
+	env.stat = func(path string) error {
+		if path == `C:\Program Files\Git\bin\bash.exe` {
+			return nil
+		}
+		return os.ErrNotExist
+	}
+	env.probe = func(path string) (string, error) {
+		if path == `C:\Program Files\Git\bin\bash.exe` {
+			return "Msys", nil
+		}
+		return "GNU/Linux", nil
+	}
+
+	choice, err := resolveShell(env)
+	if err != nil {
+		t.Fatalf("resolving the shell: %v", err)
+	}
+	if choice.Path != `C:\Program Files\Git\bin\bash.exe` {
+		t.Fatalf("resolved %q, a machine whose only bash on PATH is the WSL launcher should still find git bash", choice.Path)
+	}
+	if !strings.Contains(choice.Label, "git bash") || !strings.Contains(choice.Label, "Msys") {
+		t.Fatalf("the label does not say git bash on Msys: %q", choice.Label)
+	}
+}
+
+func TestAWSLShapedShellIsNeverChosenImplicitly(t *testing.T) {
+	env := fakeShellEnv()
+	env.lookPath = func(name string) (string, error) {
+		switch name {
+		case "bash":
+			return `C:\Windows\system32\bash.exe`, nil
+		case "pwsh":
+			return `C:\Program Files\PowerShell\7\pwsh.exe`, nil
+		}
+		return "", os.ErrNotExist
+	}
+	env.probe = func(string) (string, error) { return "GNU/Linux", nil }
+
+	choice, err := resolveShell(env)
+	if err != nil {
+		t.Fatalf("resolving the shell: %v", err)
+	}
+	if choice.WSL {
+		t.Fatalf("a WSL-shaped shell was chosen with no setting asking for it: %+v", choice)
+	}
+	if choice.Posix {
+		t.Fatalf("the fallback is not posix, it landed on %+v", choice)
+	}
+	if !strings.Contains(choice.Note, "TOFU_SHELL=wsl") {
+		t.Fatalf("the refusal to auto-pick wsl never says how to opt in: %q", choice.Note)
+	}
+}
+
+func TestWhenNothingResolvesOnWindowsTheRefusalNamesTheOptions(t *testing.T) {
+	_, err := resolveShell(fakeShellEnv())
+	if err == nil {
+		t.Fatal("every candidate was absent and a shell still resolved")
+	}
+	for _, want := range []string{"git bash", "pwsh", "powershell", "TOFU_SHELL"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("the refusal never names %q: %v", want, err)
+		}
+	}
+}
+
+func TestWhenNothingResolvesOnAPosixMachineTheRefusalNamesTheOptions(t *testing.T) {
+	env := fakeShellEnv()
+	env.goos = "linux"
+	_, err := resolveShell(env)
+	if err == nil {
+		t.Fatal("SHELL was unset and /bin/sh was absent, and a shell still resolved")
+	}
+	for _, want := range []string{"SHELL", "/bin/sh"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("the refusal never names %q: %v", want, err)
+		}
+	}
+}
+
+func TestOnAPosixMachineSHELLDecidesTheShell(t *testing.T) {
+	env := fakeShellEnv()
+	env.goos = "linux"
+	env.getenv = func(name string) string {
+		if name == "SHELL" {
+			return "/usr/bin/zsh"
+		}
+		return ""
+	}
+	env.stat = func(path string) error {
+		if path == "/usr/bin/zsh" {
+			return nil
+		}
+		return os.ErrNotExist
+	}
+	env.probe = func(string) (string, error) { return "Linux", nil }
+
+	choice, err := resolveShell(env)
+	if err != nil {
+		t.Fatalf("resolving the shell: %v", err)
+	}
+	if choice.Path != "/usr/bin/zsh" {
+		t.Fatalf("$SHELL said /usr/bin/zsh and tofu resolved %q instead", choice.Path)
+	}
+	if !strings.Contains(choice.Label, "zsh") {
+		t.Fatalf("the label does not name the person's own shell: %q", choice.Label)
+	}
+}
+
+func TestASettingOverridesTheResolution(t *testing.T) {
+	env := fakeShellEnv()
+	env.lookPath = func(name string) (string, error) {
+		if name == "git" {
+			return `C:\Program Files\Git\cmd\git.exe`, nil
+		}
+		return "", os.ErrNotExist
+	}
+	env.stat = func(path string) error {
+		if path == `C:\Program Files\Git\bin\bash.exe` || path == `D:\custom\shell.exe` {
+			return nil
+		}
+		return os.ErrNotExist
+	}
+	env.probe = func(string) (string, error) { return "Msys", nil }
+	env.getenv = func(name string) string {
+		if name == "TOFU_SHELL" {
+			return `D:\custom\shell.exe`
+		}
+		return ""
+	}
+
+	choice, err := resolveShell(env)
+	if err != nil {
+		t.Fatalf("resolving the shell: %v", err)
+	}
+	if choice.Path != `D:\custom\shell.exe` {
+		t.Fatalf("TOFU_SHELL was set and git bash still won: %+v", choice)
+	}
+}
+
+func TestTheSettingOffersWSLOnPurpose(t *testing.T) {
+	env := fakeShellEnv()
+	env.lookPath = func(name string) (string, error) {
+		if name == "bash" {
+			return `C:\Windows\system32\bash.exe`, nil
+		}
+		return "", os.ErrNotExist
+	}
+	env.stat = func(string) error { return nil }
+	env.probe = func(string) (string, error) { return "GNU/Linux", nil }
+	env.getenv = func(name string) string {
+		if name == "TOFU_SHELL" {
+			return "wsl"
+		}
+		return ""
+	}
+
+	choice, err := resolveShell(env)
+	if err != nil {
+		t.Fatalf("resolving the shell: %v", err)
+	}
+	if !choice.WSL {
+		t.Fatalf("TOFU_SHELL=wsl did not choose wsl: %+v", choice)
+	}
+	if !strings.Contains(choice.Note, "wsl") {
+		t.Fatalf("the block never says wsl is in use: %q", choice.Note)
+	}
+}
+
+func TestTheToolchainProbeRunsOnceAcrossAThreeStepTurn(t *testing.T) {
+	root := t.TempDir()
+	write(t, filepath.Join(root, "go.mod"), "module x\n")
+	var calls int
+	run := func(ctx context.Context, name string, args ...string) ([]byte, error) {
+		calls++
+		return []byte("go1.99.0\n"), nil
+	}
+	env := fakeShellEnv()
+	env.goos = "linux"
+	env.stat = func(string) error { return nil }
+	env.probe = func(string) (string, error) { return "Linux", nil }
+
+	tool, err := newBashToolWithDeps(root, env, run)
+	if err != nil {
+		t.Fatalf("building the bash tool: %v", err)
+	}
+	if calls != 1 {
+		t.Fatalf("building the tool probed the toolchain %d times, wanted 1", calls)
+	}
+	for range 3 {
+		tool.Definition()
+	}
+	if calls != 1 {
+		t.Fatalf("the probe ran %d times across a three step turn, wanted 1", calls)
+	}
+}
+
+func TestAHangingProbeDoesNotStallTheTurn(t *testing.T) {
+	dir := t.TempDir()
+	write(t, filepath.Join(dir, "go.mod"), "module x\n")
+	hang := func(ctx context.Context, name string, args ...string) ([]byte, error) {
+		<-ctx.Done()
+		return nil, ctx.Err()
+	}
+
+	started := time.Now()
+	states := probeToolchain(dir, hang, konst.ToolchainProbeTimeoutMillis*time.Millisecond)
+	took := time.Since(started)
+
+	if took > 3*time.Second {
+		t.Fatalf("a hanging probe held the turn for %v", took)
+	}
+	if len(states) != 1 || states[0].Present {
+		t.Fatalf("a probe that never returns should be recorded as absent: %+v", states)
+	}
+}
+
+func TestABashCallNamingAMissingInterpreterNamesItAndWhatTheShellHas(t *testing.T) {
+	root := t.TempDir()
+	write(t, filepath.Join(root, "go.mod"), "module x\n")
+	absent := func(ctx context.Context, name string, args ...string) ([]byte, error) {
+		return nil, exec.ErrNotFound
+	}
+	env := fakeShellEnv()
+	env.goos = "linux"
+	env.stat = func(string) error { return nil }
+	env.probe = func(string) (string, error) { return "Linux", nil }
+
+	tool, err := newBashToolWithDeps(root, env, absent)
+	if err != nil {
+		t.Fatalf("building the bash tool: %v", err)
+	}
+	args, err := json.Marshal(bashArgs{Command: "go build ./..."})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, runErr := tool.Run(context.Background(), args)
+	if runErr == nil {
+		t.Fatal("a command naming a missing interpreter ran anyway")
+	}
+	for _, want := range []string{"go", "not on this shell's PATH", "none of this project's interpreters are on this shell's PATH"} {
+		if !strings.Contains(runErr.Error(), want) {
+			t.Fatalf("the refusal never says %q: %v", want, runErr)
+		}
+	}
+	t.Logf("missing interpreter refusal: %v", runErr)
+}
 
 func bashCall(id, command string) llm.Decision {
 	args, err := json.Marshal(bashArgs{Command: command})
