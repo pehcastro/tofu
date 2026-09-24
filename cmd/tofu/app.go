@@ -762,8 +762,9 @@ func (s *appSession) run(ctx context.Context, pick tui.Pick, task string, emit t
 			Budget: budget.CeilingTokens,
 		}})
 	}
-	config.EndedSession = func(turn.Row) error {
+	config.EndedSession = func(ended turn.Row) error {
 		emit(tui.Event{Kind: tui.EventForkStart})
+		emit(tui.Event{Kind: tui.EventNote, Text: forkWords(ended)})
 		emit(tui.Event{Kind: tui.EventForkEnd})
 		return nil
 	}
@@ -789,6 +790,15 @@ func (s *appSession) run(ctx context.Context, pick tui.Pick, task string, emit t
 		outcome = turn.OutcomeStopped
 	}
 	emit(tui.Event{Kind: tui.EventDone, Text: doneWords(outcome, row.Guard)})
+}
+
+func forkWords(ended turn.Row) string {
+	words := "forked into " + ended.ForkedInto
+	if last := len(ended.Steps) - 1; last >= 0 && ended.Steps[last].Fork != nil {
+		fork := ended.Steps[last].Fork
+		words += fmt.Sprintf(" as a %s at %d tokens, which began at %d", fork.Kind, fork.TokensBefore, fork.TokensAfter)
+	}
+	return words
 }
 
 func doneWords(outcome turn.Outcome, guard *turn.LoopGuardStop) string {

@@ -777,30 +777,20 @@ func TestADrivenTurnNamesTheSessionAndItsIDInTheHeader(t *testing.T) {
 	}
 }
 
-func TestAForkShowsTheNoticeAndThenStopsShowingIt(t *testing.T) {
+func TestAForkLeavesALineOnTheScreenAPersonCanRead(t *testing.T) {
 	dir := scratchProject(t)
 	driver := driveApp(t)
 	overBudget := strings.Repeat("x", recall.ShippedBands().Target()*3)
 	stubbedTurn(dir, noteThenStop())(t.Context(), onTheSubscription, overBudget, driver.emit)
 
-	if len(driver.of(tui.EventForkStart)) != 1 || len(driver.of(tui.EventForkEnd)) != 1 {
-		t.Fatalf("fork events start %d end %d, want one of each",
-			len(driver.of(tui.EventForkStart)), len(driver.of(tui.EventForkEnd)))
+	screen := driver.view()
+	if !strings.Contains(screen, "forked into ") {
+		t.Fatalf("the screen carries no fork line, so a person never learns the turn forked:\n%s", screen)
 	}
-	noticed := -1
-	for index, shown := range driver.frames {
-		if strings.Contains(shown, frame.ForkNotice) {
-			noticed = index
-		}
+	if strings.Contains(screen, frame.ForkNotice) {
+		t.Errorf("the screen still carries the notice a person cannot read %q:\n%s", frame.ForkNotice, screen)
 	}
-	if noticed < 0 {
-		t.Fatalf("no frame carries the fork notice %q:\n%s", frame.ForkNotice, driver.frames[len(driver.frames)-1])
-	}
-	if last := driver.view(); strings.Contains(last, frame.ForkNotice) {
-		t.Errorf("the notice is still on the frame after the fork ended:\n%s", last)
-	}
-	t.Logf("the notice was on frame %d of %d", noticed, len(driver.frames))
-	t.Log("\n" + driver.frames[noticed])
+	t.Log("\n" + screen)
 }
 
 func forkingStep(t *testing.T, store *sessionstore.Store) turn.StepRow {
