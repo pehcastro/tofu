@@ -14,6 +14,24 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 
 - **When you answer a permission prompt, your answer is written onto that decision's row** in the log tofu already keeps, marked `gate-answer` so it is distinguishable from one typed by hand. Nothing else about the prompt changes. A decision you were never asked about stays unmarked, and so does one allowed by a rule you granted earlier, because neither is a fresh judgment. **This is how a threshold eventually gets calibrated against your own use rather than a number somebody typed**: 1.37 percent of gate decisions ask, so it accumulates over weeks of ordinary use rather than days.
 
+- **The prompt now tells the model which shell it has and what that shell can run.** Two lines: the shell and its family, and the project's interpreters with their versions or the word missing, chosen from what the project declares, `go.mod` for go, `package.json` for node and its package manager, `pyproject.toml` for python. Probed once per session with a two second limit each, never per turn. **Absence is the half that matters**: a shell that cannot see `node` now says so before the first step instead of after thirteen.
+
+- **A command naming an interpreter that is not there is refused before it runs**, saying which one is missing and what the shell does have. Before, it spawned and came back with whatever the shell prints, usually `command not found` and an exit code, which a model has to interpret one command at a time.
+
+- **`TOFU_SHELL` picks the shell.** A path uses that shell. The word `wsl` uses WSL on purpose, with a line in the prompt saying its filesystem is separate and its PATH will not see software installed only on Windows.
+
+### Changed
+
+- **On Windows, tofu finds Git Bash through `git` rather than through PATH, and refuses WSL unless you asked for it.** On a machine with Git for Windows, `bash` on PATH is usually `C:\Windows\system32\bash.exe`, which is the WSL launcher: a separate filesystem with its own PATH, where the node you installed on Windows does not exist. **That is a real session: eighteen steps, thirteen of them hunting for a runtime that was reachable the whole time from the shell tofu did not pick.** If no posix shell resolves at all, PowerShell is used and the tool description says the posix syntax no longer applies.
+
+- **The bash tool's description no longer carries your machine's path**, so the tool block is byte identical in every directory and can be cached once rather than per project. It was 16,574 bytes in one directory and 16,575 in another, for a one character difference in an embedded path.
+
+- **A recorded session carries what the model was thinking, and hands it back.** Anthropic requires a thinking block to be returned inside a tool-use turn, and tofu was dropping it: a session file now carries `thinking` and `thinking_signature`, and a codex reasoning item its own `reasoning` object with an id and its encrypted content. **A session recorded before any of this still loads**, including one written before the field existed at all.
+
+### Fixed
+
+- **`--done-review` with `turnMaySpawn` off is refused, and the refusal names the setting.** Before, it quietly turned sub-agents off and ran an arm whose children are never reviewed, which says a check is running that is not. Exit code 2, and the message names the setting rather than a flag you did not type.
+
 ## 0.4.14 - 2026-09-23
 
 They are sub-agents, and you decide whether a turn may spawn one or edit a file it has not read.
