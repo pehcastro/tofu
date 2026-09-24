@@ -8,7 +8,9 @@ Tofu is personal and not released, so the public interface that a version promis
 
 The minor number carries breaking changes, which is what 0.x means, and **there is never a 1.0.0**. The owner decided that on 2026-09-19: this stays 0.x forever, so the promise the version makes is the one 0.x already makes, that anything can break on a minor bump.
 
-## Unreleased
+## 0.4.15 - 2026-09-24
+
+Tofu runs in a shell that can see your project, and stops throwing away what the model already thought.
 
 ### Added
 
