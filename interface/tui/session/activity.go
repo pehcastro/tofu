@@ -21,6 +21,7 @@ const (
 	tokensColumn  = 5
 	ownsFrom      = 72
 	intentLeast   = 12
+	gapCells      = len(gap)
 )
 
 type phase int
@@ -119,19 +120,30 @@ func (m Model) activityLines() []string {
 	rows := m.activityRows()
 	held := m.width >= ownsFrom &&
 		slices.ContainsFunc(rows, func(row activity) bool { return row.owns != "" })
+	elapsed := elapsedColumn
+	for _, row := range rows {
+		elapsed = max(elapsed, widget.Cells(widget.Until(row.since)))
+	}
 	lines := make([]string, 0, len(rows))
 	for _, row := range rows {
-		lines = append(lines, m.activityLine(row, held))
+		lines = append(lines, m.activityLine(row, held, elapsed))
 	}
 	return lines
 }
 
-func (m Model) activityLine(row activity, held bool) string {
-	clock := progress.Spin(row.since, TickInterval) + " " + widget.Pad(widget.Until(row.since), elapsedColumn)
-	name := widget.Pad(widget.Fit(row.name, nameColumn), nameColumn)
+func column(text string, width int) string {
+	if widget.Cells(text) > width {
+		text = widget.Fit(text, width-gapCells)
+	}
+	return widget.Pad(text, width)
+}
+
+func (m Model) activityLine(row activity, held bool, elapsed int) string {
+	clock := progress.Spin(row.since, TickInterval) + " " + widget.Pad(widget.Until(row.since), elapsed)
+	name := column(row.name, nameColumn)
 	who, spent := name, ""
 	if held {
-		who += widget.Pad(widget.Fit(row.owns, ownsColumn), ownsColumn)
+		who += column(row.owns, ownsColumn)
 	}
 	if row.tokens > 0 {
 		spent = gap + widget.Lead(widget.Count(row.tokens), tokensColumn)

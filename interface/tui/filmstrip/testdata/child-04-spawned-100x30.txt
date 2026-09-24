@@ -19,7 +19,7 @@
                                                                                                     
                                                                                                     
                                                                                                     
-⠋ 0s     c1        internal/judge/poli…read the policy loader                                       
+⠋ 0s     c1        internal/judge/po…  read the policy loader                                       
 ⠧ 26s    working                       spawn read internal/judge/policy/resolve.go and say what it …
                                                                                                     
   hey tofu, can you explain this repository to me?                                                  

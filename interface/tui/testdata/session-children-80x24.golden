@@ -12,9 +12,9 @@
                                                                                 
                                                                                 
 [38;5;44m⠦ 2m 14s  go-dev    internal/judge/**   writing policy/toolgate.go          181k[m
-[38;5;44m⠇ 1m 2s  bench     bench/harness/**    go test ./bench/...                  129k[m
-[38;5;44m⠦ 9s     go-docs   docs/**             reading docs/verification.md           4k[m
-[38;5;44m⠼ 1s     working                       bash for d in internal/* interface/* cmd…[m
+[38;5;44m⠇ 1m 2s   bench     bench/harness/**    go test ./bench/...                 129k[m
+[38;5;44m⠦ 9s      go-docs   docs/**             reading docs/verification.md          4k[m
+[38;5;44m⠼ 1s      working                       bash for d in internal/* interface/* cm…[m
 [100m                                                                                [m
 [100m[100m[100m[37;100m  [m[m[100m[38;5;240;100mh[m[m[100m[38;5;240;100mey tofu, can you explain this repository to me?[m[m[100m[100m                              [m
 [100m[100m[38;5;240;100m[37;100m  [m[m[30;100m [m[100m                                                                             [m

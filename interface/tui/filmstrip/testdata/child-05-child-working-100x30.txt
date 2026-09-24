@@ -19,7 +19,7 @@
                                                                                                     
                                                                                                     
                                                                                                     
-⠼ 26s    c1        internal/judge/poli…read the policy loader                                     9k
+⠼ 26s    c1        internal/judge/po…  read the policy loader                                     9k
 ⠙ 52s    working                       read internal/judge/policy/resolve.go                        
                                                                                                     
   hey tofu, can you explain this repository to me?                                                  
