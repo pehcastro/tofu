@@ -57,7 +57,7 @@ func fallbackRow(t *testing.T, dir string, f Fallback, r Rule, state []byte) led
 		Questions:     r.Questions,
 		Version:       r.QuestionsVersion,
 		StateHash:     hash,
-		Verdict:       ledger.Verdict(f.Verdict),
+		Verdict:       f.Verdict.Ledger(),
 		Policy:        r.Name,
 		PolicyVersion: r.RuleVersion,
 		Reason: &ledger.Reason{

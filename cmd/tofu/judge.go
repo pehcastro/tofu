@@ -102,7 +102,7 @@ func judgeExitCode(outcome judgeOutcome) int {
 	if outcome.verdict == ledger.VerdictUnset {
 		return exitOK
 	}
-	if gate.ExitCode(outcome.mode, toGateVerdict(outcome.verdict)) == 1 {
+	if gate.ExitCode(outcome.mode, gate.VerdictOf(outcome.verdict)) == 1 {
 		return exitVerdict
 	}
 	return exitOK

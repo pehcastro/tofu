@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -19,6 +20,16 @@ import (
 	"tofu/internal/sys"
 	"tofu/internal/turn"
 )
+
+func panicOf(call func()) (message string) {
+	defer func() {
+		if raised := recover(); raised != nil {
+			message = fmt.Sprint(raised)
+		}
+	}()
+	call()
+	return ""
+}
 
 const stopCheckWorkRemainsReply = `{"model":"typesafe/jev-1.13-20260917","provider":"TypeSafe","id":"gen-stub-stop-check",` +
 	`"answers":{` +

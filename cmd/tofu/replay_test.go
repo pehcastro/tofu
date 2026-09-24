@@ -100,7 +100,7 @@ func writeReplayFixtureRow(t *testing.T, writer *ledger.Writer, pol gate.Rule, a
 		Questions:     pol.Questions,
 		Version:       pol.QuestionsVersion,
 		Answers:       answers,
-		Verdict:       toLedgerVerdict(verdict),
+		Verdict:       verdict.Ledger(),
 		Policy:        pol.Name,
 		PolicyVersion: pol.RuleVersion,
 	}

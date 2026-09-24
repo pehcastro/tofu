@@ -49,7 +49,7 @@ func TestAnUnreachableEndpointStillLeavesARow(t *testing.T) {
 		Version:       1,
 		Model:         openrouter.Alias,
 		StateHash:     hash,
-		Verdict:       ledger.Verdict(fallback.Verdict),
+		Verdict:       fallback.Verdict.Ledger(),
 		Policy:        "tool_gate",
 		PolicyVersion: 1,
 		Reason: &ledger.Reason{

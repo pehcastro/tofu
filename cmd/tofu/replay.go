@@ -207,7 +207,7 @@ func runReplay(reader *ledger.Reader, filter ledger.Filter, sets map[string]floa
 			return err
 		}
 		result.rescored++
-		after := toLedgerVerdict(verdict)
+		after := verdict.Ledger()
 		if after != row.Verdict {
 			result.changes = append(result.changes, replayChange{row: row, after: after})
 		}

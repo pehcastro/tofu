@@ -180,13 +180,13 @@ func messageOf(m MessageRow) (llm.Message, error) {
 	message := llm.Message{Content: m.Content, ToolCallID: m.ToolCallID, ToolResultBytes: m.ToolResultBytes,
 		Thinking: llm.Thinking{Text: m.Thinking, Signature: signature}}
 	switch m.Role {
-	case "system":
+	case session.RoleSystem:
 		message.Role = llm.RoleSystem
-	case "user":
+	case session.RoleUser:
 		message.Role = llm.RoleUser
-	case "assistant":
+	case session.RoleAssistant:
 		message.Role = llm.RoleAssistant
-	case "tool":
+	case session.RoleTool:
 		message.Role = llm.RoleTool
 	default:
 		return llm.Message{}, errors.New("turn: a recorded message names the role " + strconv.Quote(m.Role) + ", which is none this build sends")

@@ -81,7 +81,7 @@ func appendRow(state any, set battery, in rowInput) (ledger.Row, error) {
 			return ledger.Row{}, err
 		}
 		reason.Mode = set.Mode
-		row.Verdict = toLedgerVerdict(verdict)
+		row.Verdict = verdict.Ledger()
 		row.Policy = set.Rule.Name
 		row.PolicyVersion = set.Rule.RuleVersion
 		row.Reason = toLedgerReason(reason)
@@ -115,7 +115,7 @@ func appendFallbackRow(state json.RawMessage, set battery, in rowInput, cause er
 	}
 	fallback := gate.DecideUnavailable(cause, state)
 	sentence := fallback.Sentence()
-	row.Verdict = toLedgerVerdict(fallback.Verdict)
+	row.Verdict = fallback.Verdict.Ledger()
 	row.Policy, row.PolicyVersion = set.Rule.Name, set.Rule.RuleVersion
 	row.Reason = toLedgerReason(fallback.Reason(*set.Rule, set.Mode))
 	row.Reason.ModeReason = &sentence
@@ -294,10 +294,6 @@ func ledgerAnswersToJev(answers []ledger.Answer) map[string]jev.Answer {
 	}
 	return out
 }
-
-func toLedgerVerdict(v gate.Verdict) ledger.Verdict { return v.Ledger() }
-
-func toGateVerdict(v ledger.Verdict) gate.Verdict { return gate.VerdictOf(v) }
 
 func toLedgerReason(r gate.Reason) *ledger.Reason {
 	return &ledger.Reason{

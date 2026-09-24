@@ -107,7 +107,7 @@ func TestAnAnthropicSignatureStillWritesToTheSignatureField(t *testing.T) {
 }
 
 func TestAMessageRowWrittenBeforeTheReasoningFieldStillLoads(t *testing.T) {
-	preRound2 := MessageRow{Role: "assistant", ToolCalls: []MessageToolCall{{ID: "call_1", Name: "probe"}},
+	preRound2 := MessageRow{Role: session.RoleAssistant, ToolCalls: []MessageToolCall{{ID: "call_1", Name: "probe"}},
 		Thinking: "thinking", ThinkingSignature: codex.EncodeReasoning("rs_1", "opaque")}
 	raw, err := json.Marshal(preRound2)
 	if err != nil {

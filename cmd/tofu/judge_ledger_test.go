@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"testing"
 
 	"tofu/internal/judge/gate"
@@ -11,16 +10,6 @@ import (
 	"tofu/internal/judge/question"
 	"tofu/internal/sys"
 )
-
-func panicOf(call func()) (message string) {
-	defer func() {
-		if raised := recover(); raised != nil {
-			message = fmt.Sprint(raised)
-		}
-	}()
-	call()
-	return ""
-}
 
 func TestTheLedgerReasonCarriesTheModeTheGateRanUnder(t *testing.T) {
 	for _, m := range gate.AllModes() {
