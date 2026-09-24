@@ -788,18 +788,16 @@ func (a *App) interrupt() tea.Cmd {
 	if a.view.Stopping {
 		return nil
 	}
-	within := a.options.Now().Sub(a.pressedAt) <= konst.StopAgainMillis*time.Millisecond
+	withinQuitWindow := a.options.Now().Sub(a.pressedAt) <= konst.QuitAgainMillis*time.Millisecond
 	a.pressedAt = a.options.Now()
 	switch {
 	case !a.busy:
-		if within {
+		if withinQuitWindow {
 			return tea.Quit
 		}
 		a.view.Append(session.Entry{Kind: session.Note, Body: quitAgainNote})
 	case a.view.LettingToolsFinish:
-		if within {
-			a.stopTurn()
-		}
+		a.stopTurn()
 	case a.running == 0 || len(a.childCalls) > 0 || a.view.TakesAnswerDigits():
 		a.stopTurn()
 	default:

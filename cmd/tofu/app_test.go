@@ -1828,3 +1828,70 @@ func TestAChildsCallIsDrawnWithItsToolNameOnce(t *testing.T) {
 		}
 	}
 }
+
+type modelStoppingTheTurnWhileTheChildIsAnswering struct {
+	stop    context.CancelFunc
+	spawn   llm.ToolCall
+	spawned bool
+}
+
+func (m *modelStoppingTheTurnWhileTheChildIsAnswering) Ask(context.Context, llm.Request) (llm.Decision, error) {
+	if !m.spawned {
+		m.spawned = true
+		return llm.Decision{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{m.spawn}}, nil
+	}
+	m.stop()
+	return llm.Decision{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{writeNote("call-2")}}, nil
+}
+
+func childStoppedWhileItAnswered(t *testing.T) *appDriver {
+	t.Helper()
+	dir := scratchProject(t)
+	driver := driveApp(t)
+	ctx, stop := context.WithCancel(t.Context())
+	defer stop()
+	model := &modelStoppingTheTurnWhileTheChildIsAnswering{stop: stop,
+		spawn: llm.ToolCall{ID: "call-1", Name: "spawn", Arguments: json.RawMessage(`{"task":"write note.txt","owns":["note.txt"]}`)}}
+
+	stubbedTurn(dir, model)(ctx, onTheSubscription, "hand the note to a child", driver.emit)
+	return driver
+}
+
+func TestAParkedChildsReportReachesThePanelWhenTheTurnIsStoppedAndNeverAsksAgain(t *testing.T) {
+	driver := childStoppedWhileItAnswered(t)
+
+	sent := driver.of(tui.EventSubAgent)
+	if len(sent) == 0 {
+		t.Fatal("the stopped turn sent no sub-agent event at all")
+	}
+	last := sent[len(sent)-1].Children[0]
+	if last.State != subagent.Parked || last.Report == "" {
+		t.Fatalf("the panel was last told %+v, want a parked child carrying the report the roster holds", last)
+	}
+	screen := driver.view(tea.KeyPressMsg{Code: '4', Mod: tea.ModAlt}, tea.KeyPressMsg{Code: tea.KeyDown})
+	if !strings.Contains(screen, "act_on: the child was stopped") {
+		t.Fatalf("the sub-agent view does not carry the parked report:\n%s", screen)
+	}
+	t.Log("\n" + screen)
+}
+
+func TestTheSpawnRowCarriesItsResultWhenTheTurnIsStoppedAndNeverAsksAgain(t *testing.T) {
+	driver := childStoppedWhileItAnswered(t)
+
+	var spawned tui.Event
+	for _, call := range driver.of(tui.EventToolCall) {
+		if call.Tool == "spawn" {
+			spawned = call
+		}
+	}
+	if spawned.ID == "" {
+		t.Fatal("the stopped turn drew no spawn call")
+	}
+	for _, result := range driver.of(tui.EventToolResult) {
+		if result.ID == spawned.ID && result.Text != "" {
+			t.Log("the spawn row reads " + result.Text)
+			return
+		}
+	}
+	t.Fatalf("no result reached the spawn call %q, so its row stays at no result", spawned.ID)
+}

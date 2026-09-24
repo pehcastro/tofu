@@ -1316,6 +1316,21 @@ func TestASecondInterruptStopsTheRunningToolCallToo(t *testing.T) {
 	}
 }
 
+func TestASecondInterruptStopsTheTurnHoweverLongAfterTheFirstItArrives(t *testing.T) {
+	app, held := callingApp(t, shellCall)
+	app.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
+	app.pressedAt = app.pressedAt.Add(-time.Hour)
+	app.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
+	select {
+	case <-held.Done():
+	case <-time.After(2 * time.Second):
+		t.Fatal("a second ctrl+c an hour after the first stopped nothing and said nothing either")
+	}
+	if plain := ansi.Strip(app.View().Content); !strings.Contains(plain, stoppingNote) {
+		t.Fatalf("the screen does not say the turn was stopped\n%s", plain)
+	}
+}
+
 func TestOneInterruptReachesAChildRunningInsideTheSpawnCall(t *testing.T) {
 	app, held := callingApp(t, childCall)
 	app.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})

@@ -766,6 +766,7 @@ func (s *appSession) run(ctx context.Context, pick tui.Pick, task string, emit t
 		return nil
 	}
 	row, runErr := turn.Run(turn.WithShellRegistry(ctx, s.shells), config)
+	watch.sendSubAgents()
 	stopped := errors.Is(runErr, context.Canceled)
 	if runErr != nil && !stopped {
 		fail(runErr)
