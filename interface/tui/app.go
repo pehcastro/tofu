@@ -88,11 +88,11 @@ type Event struct {
 
 func (e Event) snapshot() bool {
 	switch e.Kind {
-	case EventContext, EventForkStart, EventForkEnd:
+	case EventContext:
 		return true
 	case EventText, EventTextDelta, EventToolCall, EventToolResult, EventNote, EventFailure, EventStats, EventDone,
 		EventDecision, EventGateOff, EventAwaitPerson, EventResumed, EventSteered, EventRequesting, EventPlan,
-		EventSession, EventSubAgent:
+		EventSession, EventSubAgent, EventForkStart, EventForkEnd:
 		return false
 	}
 	panic("tui: unknown event kind")

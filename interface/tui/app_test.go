@@ -762,15 +762,18 @@ func TestAChildsMessageIsDrawnInTheSubAgentsPanelAndNeverSpokenInTheParentsTrans
 	}
 }
 
-func TestTheLastSubAgentStateReachesThePanelEvenWhenTheChannelIsFull(t *testing.T) {
-	const childSaid = "the note holds one line"
+func afterAFullEventChannel(afterwards ...Event) (*App, []Event) {
+	filled := make(chan struct{})
 	app := newTestApp(Options{
 		Repo: testRepo, Branch: "develop", Now: fixedClock(), Wires: bothWires,
 		Turn: func(_ context.Context, _ Pick, _ string, emit CalledFromInsideTheTurnAndNeverAfterItReturns) {
 			for range eventBuffer * 2 {
 				emit(Event{Kind: EventContext, Context: fixture.Context()})
 			}
-			emit(Event{Kind: EventSubAgent, Children: childOf(childSaid)})
+			close(filled)
+			for _, event := range afterwards {
+				emit(event)
+			}
 		},
 	})
 	app.Init()
@@ -779,6 +782,8 @@ func TestTheLastSubAgentStateReachesThePanelEvenWhenTheChannelIsFull(t *testing.
 		app.Update(tea.KeyPressMsg{Code: letter, Text: string(letter)})
 	}
 	_, started := app.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	<-filled
+	var delivered []Event
 	for pending := []tea.Cmd{started}; len(pending) > 0; pending = pending[1:] {
 		if pending[0] == nil {
 			continue
@@ -787,14 +792,46 @@ func TestTheLastSubAgentStateReachesThePanelEvenWhenTheChannelIsFull(t *testing.
 		case tea.BatchMsg:
 			pending = append(pending, msg...)
 		case Event:
+			delivered = append(delivered, msg)
 			_, next := app.Update(msg)
 			pending = append(pending, next)
 		}
 	}
+	return app, delivered
+}
+
+func TestTheLastSubAgentStateReachesThePanelEvenWhenTheChannelIsFull(t *testing.T) {
+	const childSaid = "the note holds one line"
+	app, _ := afterAFullEventChannel(Event{Kind: EventSubAgent, Children: childOf(childSaid)})
 	app.Update(tea.KeyPressMsg{Code: '4', Mod: tea.ModAlt})
 	app.Update(tea.KeyPressMsg{Code: tea.KeyDown})
 	if panel := ansi.Strip(app.View().Content); !strings.Contains(panel, childSaid) {
 		t.Fatalf("a full channel threw away the child's last state, so the panel never showed it\n%s", panel)
+	}
+}
+
+func TestBothForkNoticesReachTheScreenWhenTheChannelIsFull(t *testing.T) {
+	app, _ := afterAFullEventChannel(Event{Kind: EventForkStart})
+	if screen := ansi.Strip(app.View().Content); !strings.Contains(screen, forkNoticeHead) {
+		t.Fatalf("a full channel threw away the fork notice, so the screen never said a fork began\n%s", screen)
+	}
+
+	ended, _ := afterAFullEventChannel(Event{Kind: EventForkStart}, Event{Kind: EventForkEnd})
+	if screen := ansi.Strip(ended.View().Content); strings.Contains(screen, forkNoticeHead) {
+		t.Fatalf("a full channel threw away the end of the fork, so the notice stayed on the screen for a fork that finished\n%s", screen)
+	}
+}
+
+func TestASupersededContextValueIsStillDroppedWhenTheChannelIsFull(t *testing.T) {
+	_, delivered := afterAFullEventChannel()
+	kept := 0
+	for _, event := range delivered {
+		if event.Kind == EventContext {
+			kept++
+		}
+	}
+	if kept != eventBuffer {
+		t.Fatalf("the turn sent %d context values and %d reached the app, want the %d the channel holds", eventBuffer*2, kept, eventBuffer)
 	}
 }
 
