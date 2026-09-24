@@ -21,6 +21,7 @@ type ShellScores interface {
 type ShellSift struct {
 	Methods method.Table
 	KeepAt  float64
+	Mode    sift.Mode
 	Scores  ShellScores
 }
 
@@ -48,7 +49,7 @@ func NewShellSift(scores ShellScores) (ShellSift, error) {
 	if err := ruleAgreesWithTheTable(table, rule); err != nil {
 		return ShellSift{}, err
 	}
-	return ShellSift{Methods: table, KeepAt: rule.KeepAt, Scores: scores}, nil
+	return ShellSift{Methods: table, KeepAt: rule.KeepAt, Mode: rule.Mode, Scores: scores}, nil
 }
 
 func ruleAgreesWithTheTable(table method.Table, rule sift.ShellRule) error {
@@ -115,7 +116,7 @@ func (s ShellSift) Cut(ctx context.Context, shell sift.Shell, task string) (Shel
 	if elided == 0 {
 		return ShellCut{Text: whole, Method: chosen}, nil
 	}
-	cut := sift.Message(units, marks, sift.ModeEnforced) +
+	cut := sift.Message(units, marks, s.Mode) +
 		fmt.Sprintf("[sift: %d of %d bytes of output removed, %s]\n", elided, len(whole), chosen)
 	if len(cut) >= len(whole) {
 		return ShellCut{Text: whole, Method: chosen}, nil

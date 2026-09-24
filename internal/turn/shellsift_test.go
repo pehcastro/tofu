@@ -88,7 +88,7 @@ func resultTheModelSaw(t *testing.T, model *stubModel) string {
 
 func TestAJudgedShellResultReachesTheModelSmallerThanTheRawOutput(t *testing.T) {
 	scores := &fakeScores{needed: map[int]float64{1: 0.08}}
-	sifter := &ShellSift{Methods: methodTable(t, string(method.Judged)), KeepAt: 0.5, Scores: scores}
+	sifter := &ShellSift{Methods: methodTable(t, string(method.Judged)), KeepAt: 0.5, Mode: sift.ModeEnforced, Scores: scores}
 
 	model, row := siftedTurn(t, sifter)
 
@@ -107,9 +107,27 @@ func TestAJudgedShellResultReachesTheModelSmallerThanTheRawOutput(t *testing.T) 
 	t.Logf("%d bytes became %d, %d saved:\n%s", len(raw), len(sent), call.SiftSavedBytes, sent)
 }
 
+func TestARuleDeclaringShadowLeavesTheResultWhole(t *testing.T) {
+	scores := &fakeScores{needed: map[int]float64{1: 0.08}}
+	sifter := &ShellSift{Methods: methodTable(t, string(method.Judged)), KeepAt: 0.5, Mode: sift.ModeShadow, Scores: scores}
+
+	model, row := siftedTurn(t, sifter)
+
+	sent := resultTheModelSaw(t, model)
+	if sent != shellOutput() {
+		t.Fatalf("a rule declaring shadow cut %d of %d bytes:\n%s", len(shellOutput())-len(sent), len(shellOutput()), sent)
+	}
+	if scores.asked == 0 {
+		t.Fatal("shadow asked the judged arm about nothing, so it is unwired by another name")
+	}
+	if saved := row.Steps[0].ToolCalls[0].SiftSavedBytes; saved != 0 {
+		t.Fatalf("shadow reported %d bytes saved", saved)
+	}
+}
+
 func TestAnUnwiredShellSiftLeavesTheResultWhole(t *testing.T) {
 	scores := &fakeScores{needed: map[int]float64{1: 0.08}}
-	sifter := &ShellSift{Methods: methodTable(t, string(method.Unwired)), KeepAt: 0.5, Scores: scores}
+	sifter := &ShellSift{Methods: methodTable(t, string(method.Unwired)), KeepAt: 0.5, Mode: sift.ModeEnforced, Scores: scores}
 
 	model, row := siftedTurn(t, sifter)
 
@@ -128,6 +146,7 @@ func TestACutResultStatesHowManyBytesWereRemoved(t *testing.T) {
 	sifter := &ShellSift{
 		Methods: methodTable(t, string(method.Judged)),
 		KeepAt:  0.5,
+		Mode:    sift.ModeEnforced,
 		Scores:  &fakeScores{needed: map[int]float64{1: 0.08}},
 	}
 
@@ -144,7 +163,7 @@ func TestACutResultStatesHowManyBytesWereRemoved(t *testing.T) {
 }
 
 func TestTheCheapMethodCutsWithNoJudgedArmAtAll(t *testing.T) {
-	sifter := &ShellSift{Methods: methodTable(t, string(method.Cheap)), KeepAt: 0.5}
+	sifter := &ShellSift{Methods: methodTable(t, string(method.Cheap)), KeepAt: 0.5, Mode: sift.ModeEnforced}
 
 	model, row := siftedTurn(t, sifter)
 
@@ -158,7 +177,7 @@ func TestTheCheapMethodCutsWithNoJudgedArmAtAll(t *testing.T) {
 }
 
 func TestAJudgedPointWithNoJudgedArmLeavesTheResultWhole(t *testing.T) {
-	sifter := &ShellSift{Methods: methodTable(t, string(method.Judged)), KeepAt: 0.5}
+	sifter := &ShellSift{Methods: methodTable(t, string(method.Judged)), KeepAt: 0.5, Mode: sift.ModeEnforced}
 
 	model, _ := siftedTurn(t, sifter)
 

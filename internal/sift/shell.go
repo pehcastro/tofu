@@ -115,13 +115,6 @@ func JoinUnits(units []Unit) string {
 	return out.String()
 }
 
-type Mode string
-
-const (
-	ModeShadow   Mode = "shadow"
-	ModeEnforced Mode = "enforced"
-)
-
 func Message(units []Unit, marks []Mark, mode Mode) string {
 	if mode == ModeShadow {
 		return JoinUnits(units)

@@ -7,6 +7,13 @@ import (
 	"tofu/internal/judge/gate"
 )
 
+type Mode = gate.Mode
+
+const (
+	ModeShadow   = gate.ModeShadow
+	ModeEnforced = gate.ModeEnforced
+)
+
 type foreignRule struct {
 	Name             string
 	Schema           string
@@ -40,7 +47,7 @@ func loadForeignRule(shipped fs.FS, ref, schema string) (foreignRule, error) {
 		Questions:        r.Questions,
 		QuestionsVersion: r.QuestionsVersion,
 		KeepAt:           keepAt,
-		Mode:             Mode(r.Mode),
+		Mode:             r.Mode,
 		ModeDeclared:     r.ModeDeclared,
 		SampleFloor:      r.SampleFloor,
 		Notes:            r.Notes,
