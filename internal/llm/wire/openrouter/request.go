@@ -16,64 +16,42 @@ type contentPart struct {
 	CacheControl *cacheControl `json:"cache_control,omitempty"`
 }
 
-type wireFunction struct {
-	Name        string `json:"name"`
-	Description string `json:"description,omitempty"`
-	Parameters  any    `json:"parameters,omitempty"`
-}
-
-type wireTool struct {
-	Type         string        `json:"type"`
-	Function     wireFunction  `json:"function"`
-	CacheControl *cacheControl `json:"cache_control,omitempty"`
-}
-
-type wireToolCall struct {
-	ID       string `json:"id"`
-	Type     string `json:"type"`
-	Function struct {
-		Name      string `json:"name"`
-		Arguments string `json:"arguments"`
-	} `json:"function"`
-}
-
-type wireMessage struct {
-	Role       string          `json:"role"`
-	Content    json.RawMessage `json:"content,omitempty"`
-	ToolCallID string          `json:"tool_call_id,omitempty"`
-	ToolCalls  []wireToolCall  `json:"tool_calls,omitempty"`
-}
-
-type wireUsageOption struct {
-	Include bool `json:"include"`
-}
-
-type wireBody struct {
-	Model    string          `json:"model"`
-	Messages []wireMessage   `json:"messages"`
-	Tools    []wireTool      `json:"tools,omitempty"`
-	Usage    wireUsageOption `json:"usage"`
-}
-
 func MarkStablePrefix(body []byte) ([]byte, error) {
-	var wire wireBody
-	if err := json.Unmarshal(body, &wire); err != nil {
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(body, &fields); err != nil {
 		return nil, transport.Fail("openrouter.MarkStablePrefix", transport.KindBadRequest, err, "the request body did not parse")
 	}
 
+	var messages []map[string]json.RawMessage
+	if raw, present := fields["messages"]; present {
+		if err := json.Unmarshal(raw, &messages); err != nil {
+			return nil, transport.Fail("openrouter.MarkStablePrefix", transport.KindBadRequest, err, "the messages did not parse")
+		}
+	}
+	var tools []map[string]json.RawMessage
+	if raw, present := fields["tools"]; present {
+		if err := json.Unmarshal(raw, &tools); err != nil {
+			return nil, transport.Fail("openrouter.MarkStablePrefix", transport.KindBadRequest, err, "the tools did not parse")
+		}
+	}
+
 	lastSystem := -1
-	for index, message := range wire.Messages {
-		if message.Role == "system" {
+	for index, message := range messages {
+		var role string
+		if err := json.Unmarshal(message["role"], &role); err != nil {
+			return nil, transport.Fail("openrouter.MarkStablePrefix", transport.KindBadRequest, err, "message %d has no readable role", index)
+		}
+		if role == "system" {
 			lastSystem = index
 		}
 	}
-	if lastSystem < 0 && len(wire.Tools) == 0 {
+	if lastSystem < 0 && len(tools) == 0 {
 		return body, nil
 	}
 
 	if lastSystem >= 0 {
 		var text string
-		if err := json.Unmarshal(wire.Messages[lastSystem].Content, &text); err != nil {
+		if err := json.Unmarshal(messages[lastSystem]["content"], &text); err != nil {
 			return nil, transport.Fail("openrouter.MarkStablePrefix", transport.KindBadRequest, err,
 				"the system message content was not a plain string")
 		}
@@ -81,13 +59,21 @@ func MarkStablePrefix(body []byte) ([]byte, error) {
 		if err != nil {
 			return nil, transport.Fail("openrouter.MarkStablePrefix", transport.KindBadRequest, err, "encoding the marked system block")
 		}
-		wire.Messages[lastSystem].Content = marked
+		messages[lastSystem]["content"] = marked
+		if fields["messages"], err = json.Marshal(messages); err != nil {
+			return nil, transport.Fail("openrouter.MarkStablePrefix", transport.KindBadRequest, err, "encoding the marked messages")
+		}
 	}
-	if len(wire.Tools) > 0 {
-		wire.Tools[len(wire.Tools)-1].CacheControl = &cacheControl{Type: "ephemeral"}
+	if len(tools) > 0 {
+		tools[len(tools)-1]["cache_control"] = json.RawMessage(`{"type":"ephemeral"}`)
+		marked, err := json.Marshal(tools)
+		if err != nil {
+			return nil, transport.Fail("openrouter.MarkStablePrefix", transport.KindBadRequest, err, "encoding the marked tools")
+		}
+		fields["tools"] = marked
 	}
 
-	out, err := json.Marshal(wire)
+	out, err := json.Marshal(fields)
 	if err != nil {
 		return nil, transport.Fail("openrouter.MarkStablePrefix", transport.KindBadRequest, err, "encoding the marked request")
 	}
