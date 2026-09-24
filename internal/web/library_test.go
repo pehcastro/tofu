@@ -50,6 +50,58 @@ func TestTheLayersAreTheShippedLibraryThenTheHomeThenTheProject(t *testing.T) {
 	}
 }
 
+func writeFetch(t *testing.T, dir string, maxBytes string) {
+	t.Helper()
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatalf("make %s: %v", dir, err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "fetch.yaml"), []byte("max_bytes: "+maxBytes+"\n"), 0o644); err != nil {
+		t.Fatalf("write %s: %v", dir, err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+}
+
+func TestTheProjectWebFileBeatsTheGlobalWhichBeatsTheShipped(t *testing.T) {
+	found, err := web.DefaultLayers()
+	if err != nil {
+		t.Fatalf("layers: %v", err)
+	}
+	names := []string{found[0].Name, found[1].Name, found[2].Name}
+	t.Logf("layers %v origins %q %q %q", names, found[0].Origin, found[1].Origin, found[2].Origin)
+	if names[0] != "library" || names[1] != "global" || names[2] != "project" {
+		t.Fatalf("the stack is not library, global, project: %v", names)
+	}
+	for _, layer := range found {
+		if filepath.Base(layer.Origin) != "web" {
+			t.Fatalf("the %s layer is not a web directory: %q", layer.Name, layer.Origin)
+		}
+	}
+
+	layers := []web.Layer{shipped(), found[1], found[2]}
+	ceiling := func() int {
+		config, err := web.Load(layers)
+		if err != nil {
+			t.Fatalf("loading: %v", err)
+		}
+		if config.TimeoutMS != 20000 {
+			t.Fatalf("an override of one field dropped the rest: %d ms", config.TimeoutMS)
+		}
+		return config.MaxPageBytes
+	}
+
+	if got := ceiling(); got != 5000000 {
+		t.Fatalf("with nothing overriding it the shipped file lost: %d", got)
+	}
+	writeFetch(t, found[1].Origin, "4096")
+	if got := ceiling(); got != 4096 {
+		t.Fatalf("the global directory did not beat the shipped library: %d", got)
+	}
+	writeFetch(t, found[2].Origin, "512")
+	if got := ceiling(); got != 512 {
+		t.Fatalf("the project directory did not beat the global one: %d", got)
+	}
+}
+
 func TestTheShippedLibraryNamesTheProviderAndTheFetchCeiling(t *testing.T) {
 	config, err := web.Load([]web.Layer{shipped()})
 	if err != nil {

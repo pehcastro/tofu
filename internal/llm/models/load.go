@@ -3,7 +3,6 @@ package models
 import (
 	"fmt"
 	"io/fs"
-	"os"
 	"sort"
 	"strings"
 
@@ -15,26 +14,10 @@ const (
 	subscriptionsDir = "subscriptions"
 )
 
-type Layer struct {
-	Name   string
-	Origin string
-	FS     fs.FS
-}
+type Layer = sys.Layer
 
 func Layers(shipped fs.FS) ([]Layer, error) {
-	home, err := sys.HomeConfigDir()
-	if err != nil {
-		return nil, err
-	}
-	project, err := sys.ProjectStateDir()
-	if err != nil {
-		return nil, err
-	}
-	return []Layer{
-		{Name: "library", Origin: "library", FS: shipped},
-		{Name: "global", Origin: home, FS: os.DirFS(home)},
-		{Name: "project", Origin: project, FS: os.DirFS(project)},
-	}, nil
+	return sys.Layers(shipped, "")
 }
 
 type Broken struct {

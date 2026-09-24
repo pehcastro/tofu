@@ -12,30 +12,10 @@ import (
 	"tofu/internal/sys"
 )
 
-type Layer struct {
-	Origin string
-	FS     fs.FS
-}
+type Layer = sys.Layer
 
 func DefaultLayers() ([]Layer, error) {
-	libraryDir, err := sys.LibraryDir()
-	if err != nil {
-		return nil, err
-	}
-	home, err := sys.HomeConfigDir()
-	if err != nil {
-		return nil, err
-	}
-	project, err := sys.ProjectStateDir()
-	if err != nil {
-		return nil, err
-	}
-	dirs := []string{sys.Join(libraryDir, "web"), sys.Join(home, "web"), sys.Join(project, "web")}
-	layers := make([]Layer, len(dirs))
-	for i, dir := range dirs {
-		layers[i] = Layer{Origin: dir, FS: os.DirFS(dir)}
-	}
-	return layers, nil
+	return sys.DiskLayers("web")
 }
 
 type Provider struct {

@@ -3,7 +3,6 @@ package question
 import (
 	"fmt"
 	"io/fs"
-	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -11,38 +10,14 @@ import (
 	"tofu/internal/sys"
 )
 
-type Layer struct {
-	Name   string
-	Origin string
-	FS     fs.FS
-}
+type Layer = sys.Layer
 
 func DirLayer(name string, dir string) Layer {
-	return Layer{Name: name, Origin: dir, FS: os.DirFS(dir)}
+	return sys.DirLayer(name, dir)
 }
 
-func DefaultLayers(library fs.FS) ([]Layer, error) {
-	dir, err := sys.LibraryDir()
-	if err != nil {
-		return nil, err
-	}
-	shipped := DirLayer("library", sys.Join(dir, "questions"))
-	if library != nil {
-		shipped = Layer{Name: "library", Origin: "library/questions", FS: library}
-	}
-	home, err := sys.HomeConfigDir()
-	if err != nil {
-		return nil, err
-	}
-	project, err := sys.ProjectStateDir()
-	if err != nil {
-		return nil, err
-	}
-	return []Layer{
-		shipped,
-		DirLayer("global", sys.Join(home, "questions")),
-		DirLayer("project", sys.Join(project, "questions")),
-	}, nil
+func DefaultLayers(shipped fs.FS) ([]Layer, error) {
+	return sys.Layers(shipped, "questions")
 }
 
 type Field struct {
