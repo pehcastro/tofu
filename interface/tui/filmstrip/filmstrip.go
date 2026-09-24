@@ -253,15 +253,34 @@ func interruptedTurn() scenario {
 			r.send(call("c1", "read", "internal/turn/loop.go"))
 			r.wait(toolGap)
 		}},
+		beat{"answering", func(r *reel) {
+			r.send(result("c1", "84 lines, 2.1 KB"),
+				delta("the loop reads the policy first, then the wire, because a locked"))
+			r.wait(beatGap)
+		}},
+		beat{"stopping", func(r *reel) {
+			r.app.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
+			r.wait(beatGap)
+		}},
+		beat{"stopped", func(r *reel) {
+			r.send(tui.Event{Kind: tui.EventDone, Text: "cooked for"})
+			r.app.Update(tui.Closed{})
+			r.wait(beatGap)
+		}},
+	)}
+}
+
+func lettingToolsFinish() scenario {
+	return scenario{name: "letting-tools-finish", beats: append(opening(),
+		beat{"tooling", func(r *reel) {
+			r.send(call("c1", "read", "internal/turn/loop.go"))
+			r.wait(toolGap)
+		}},
 		beat{"second-tool", func(r *reel) {
 			r.send(result("c1", "84 lines, 2.1 KB"), call("c2", "bash", "go test ./..."))
 			r.wait(toolGap)
 		}},
-		beat{"streaming", func(r *reel) {
-			r.send(delta("the loop reads the policy first, then the wire, because a locked"))
-			r.wait(beatGap)
-		}},
-		beat{"stopping", func(r *reel) {
+		beat{"stopping-the-model", func(r *reel) {
 			r.app.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
 			r.wait(beatGap)
 		}},
@@ -342,7 +361,7 @@ func childWorking() scenario {
 }
 
 func scenarios() []scenario {
-	return []scenario{plainTurn(), twelveTools(), markdownAnswer(), askingTurn(), interruptedTurn(), failedTurn(), childWorking()}
+	return []scenario{plainTurn(), twelveTools(), markdownAnswer(), askingTurn(), interruptedTurn(), lettingToolsFinish(), failedTurn(), childWorking()}
 }
 
 func frameName(scenarioName string, index int, beatName string) string {

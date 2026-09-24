@@ -1,9 +1,6 @@
-./tofu  ·  develop  ·  claude-sub/claude-opus-5  ·  amber-cedar-otter #3c5f71  ·  8s                
+./tofu  ·  develop  ·  claude-sub/claude-opus-5  ·  amber-cedar-otter #3c5f71  ·  3s                
 [1] chat   [2] work   [3] file edits   [4] sub-agents   [5] shells                                  
-                                                                                                    
-» why does the gate read the policy first?                                                          
-                                                                                                    
-▌ the loop reads the policy first, then the wire, because a locked                                  
+· type a task and press enter. tofu works in tofu                                                   
                                                                                                     
                                                                                                     
                                                                                                     
@@ -20,12 +17,15 @@
                                                                                                     
                                                                                                     
                                                                                                     
-⠇ 4s     working   bash go test ./...                                                               
-                                                                                                    
-  hey tofu, can you explain this repository to me?                                                  
                                                                                                     
                                                                                                     
                                                                                                     
-ctrl+c stops the turn   ⏎ send   ⇧⏎ newline   / commands                                            
+                                                                                                    
+                                                                                                    
+  why does the gate read the policy first?                                                          
+                                                                                                    
+                                                                                                    
+                                                                                                    
+ctrl+c quit   ⏎ send   ⇧⏎ newline   / commands                                                      
 118k/250k ▓▓▓▓▓▓░░░░░░  ·  claude 5h  62%  resets in 3h 27m  ·  claude weekly  31%  resets in 1d 5h 
 284k read  61k write  190k cached  ·  jev 3  ·  tofu 0.4.0                                          

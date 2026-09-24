@@ -1,12 +1,8 @@
-./tofu  ·  develop  ·  claude-sub/claude-opus-5  ·  amber-cedar-otter #3c5f71  ·  10s               
+./tofu  ·  develop  ·  claude-sub/claude-opus-5  ·  amber-cedar-otter #3c5f71  ·  8s                
 [1] chat   [2] work   [3] file edits   [4] sub-agents   [5] shells                                  
                                                                                                     
 » why does the gate read the policy first?                                                          
-· (2) tools · shell (1) · 3s · [#c2]                                                                
 · stopping the model, and letting the running tools finish                                          
-· 64 characters were written and kept in work [#c75001]                                             
-· stopping the turn                                                                                 
-· cooked for 4s · [#c75001]                                                                         
                                                                                                     
                                                                                                     
                                                                                                     
@@ -21,11 +17,15 @@
                                                                                                     
                                                                                                     
                                                                                                     
+                                                                                                    
+                                                                                                    
+                                                                                                    
+⠇ 4s     working   bash go test ./...                                                               
                                                                                                     
   hey tofu, can you explain this repository to me?                                                  
                                                                                                     
                                                                                                     
                                                                                                     
-ctrl+c quit   ⏎ send   ⇧⏎ newline   / commands                                                      
+letting the running tools finish, ctrl+c again stops them                                           
 118k/250k ▓▓▓▓▓▓░░░░░░  ·  claude 5h  62%  resets in 3h 27m  ·  claude weekly  31%  resets in 1d 5h 
 284k read  61k write  190k cached  ·  jev 3  ·  tofu 0.4.0                                          
