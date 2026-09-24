@@ -1806,3 +1806,25 @@ func TestTheEndOfASessionSaysNothingExtraWhenNothingWasRunning(t *testing.T) {
 		t.Fatalf("with no registry the line is %q, want %q", line, sessionEnded)
 	}
 }
+
+func TestAChildsCallIsDrawnWithItsToolNameOnce(t *testing.T) {
+	rows := []turn.Row{{ID: "turn-1-c1", Steps: []turn.StepRow{{Index: 1, ToolCalls: []turn.ToolCallRow{
+		{Tool: "read", Command: "read note.txt"},
+		{Tool: "bash", Command: "go test ./..."},
+	}}}}}
+	view := subagent.Model{Children: []subagent.Child{{Name: "c1", State: subagent.Done, Calls: recordedCalls(rows, "turn-1-c1")}}}
+	view.SetSize(100, 24)
+	view.Key("down")
+
+	drawn := ansi.Strip(view.View())
+	for _, want := range []string{"⟩ read note.txt", "⟩ bash go test ./..."} {
+		if !strings.Contains(drawn, want) {
+			t.Errorf("the panel never draws %q:\n%s", want, drawn)
+		}
+	}
+	for _, line := range strings.Split(drawn, "\n") {
+		if strings.Contains(line, "note.txt") && strings.Count(line, "read") != 1 {
+			t.Errorf("the call row names its tool %d times: %q", strings.Count(line, "read"), strings.TrimSpace(line))
+		}
+	}
+}

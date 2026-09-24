@@ -324,7 +324,7 @@ func TestARunningChildAndAFinishedOneHideTheSameCallsInTheSameWords(t *testing.T
 
 func TestACompleteCallListIsDrawnWholeWithNoHiddenLine(t *testing.T) {
 	calls := recordedCalls([]turn.Row{recordedRow("turn-1-c1", "read", "write")}, "turn-1-c1")
-	if len(calls) != 2 || calls[0].Tool != "read" || calls[1].Text != "write it" {
+	if len(calls) != 2 || calls[0].Tool != "read" || calls[1].Text != "it" {
 		t.Fatalf("two recorded calls drew %+v, want both whole and in order", calls)
 	}
 }

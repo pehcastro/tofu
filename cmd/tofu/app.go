@@ -1086,7 +1086,7 @@ func recordedCalls(rows []turn.Row, id string) []subagent.Call {
 		}
 		for _, step := range row.Steps {
 			for _, ran := range step.ToolCalls {
-				calls = append(calls, subagent.Call{Tool: ran.Tool, Text: ran.Command, Result: ran.Error})
+				calls = append(calls, subagent.Call{Tool: ran.Tool, Text: strings.TrimPrefix(ran.Command, ran.Tool+" "), Result: ran.Error})
 			}
 		}
 	}
