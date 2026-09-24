@@ -31,24 +31,28 @@ type Usage struct {
 }
 
 type Result struct {
-	ID         string
-	Model      string
-	Stop       Stop
-	StopReason string
-	Content    string
-	Refusal    string
-	Thinking   string
-	ToolCalls  []llm.ToolCall
-	Usage      Usage
-	TurnState  string
-	Warnings   []string
+	ID                 string
+	Model              string
+	Stop               Stop
+	StopReason         string
+	Content            string
+	Refusal            string
+	Thinking           string
+	ReasoningID        string
+	ReasoningEncrypted string
+	ToolCalls          []llm.ToolCall
+	Usage              Usage
+	TurnState          string
+	Warnings           []string
 }
 
 type streamItem struct {
-	Type      string `json:"type"`
-	CallID    string `json:"call_id"`
-	Name      string `json:"name"`
-	Arguments string `json:"arguments"`
+	Type             string `json:"type"`
+	ID               string `json:"id"`
+	CallID           string `json:"call_id"`
+	Name             string `json:"name"`
+	Arguments        string `json:"arguments"`
+	EncryptedContent string `json:"encrypted_content"`
 }
 
 type streamEvent struct {
@@ -228,6 +232,11 @@ func (s *streamState) closeItem(event streamEvent) {
 		return
 	}
 	delete(s.open, event.OutputIndex)
+	if item.kind == "reasoning" {
+		s.result.ReasoningID = event.Item.ID
+		s.result.ReasoningEncrypted = event.Item.EncryptedContent
+		return
+	}
 	if item.toolIndex < 0 {
 		return
 	}

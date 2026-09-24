@@ -392,6 +392,80 @@ func TestEncodeSpendsTheFourBreakpointsHeadFirst(t *testing.T) {
 	}
 }
 
+func TestEncodeReplaysAThinkingBlockWithItsSignatureUnchanged(t *testing.T) {
+	request := minimalRequest()
+	request.Messages = append(request.Messages, llm.Message{
+		Role:      llm.RoleAssistant,
+		ToolCalls: []llm.ToolCall{{ID: "toolu_1", Name: "read"}},
+		Thinking:  llm.Thinking{Text: "weighing the options", Signature: "sig_abc123"},
+	})
+	body, err := request.Encode(true)
+	if err != nil {
+		t.Fatalf("encoding: %v", err)
+	}
+	var decoded struct {
+		Messages []wireMessage `json:"messages"`
+	}
+	if err := json.Unmarshal(body, &decoded); err != nil {
+		t.Fatalf("decoding: %v", err)
+	}
+	assistant := decoded.Messages[1]
+	if len(assistant.Content) < 2 || assistant.Content[0].Type != "thinking" {
+		t.Fatalf("the assistant turn is %+v, want a thinking block ahead of the tool_use block", assistant.Content)
+	}
+	if assistant.Content[0].Thinking != "weighing the options" {
+		t.Fatalf("thinking text is %q", assistant.Content[0].Thinking)
+	}
+	if assistant.Content[0].Signature != "sig_abc123" {
+		t.Fatalf("the replayed signature is %q, want it unchanged from what the wire gave us", assistant.Content[0].Signature)
+	}
+}
+
+func TestEncodeOmitsTheThinkingBlockOutsideAToolUseTurn(t *testing.T) {
+	request := minimalRequest()
+	request.Messages = append(request.Messages, llm.Message{
+		Role:     llm.RoleAssistant,
+		Content:  "the answer",
+		Thinking: llm.Thinking{Text: "weighing the options", Signature: "sig_abc123"},
+	})
+	body, err := request.Encode(true)
+	if err != nil {
+		t.Fatalf("encoding: %v", err)
+	}
+	if strings.Contains(string(body), "weighing the options") {
+		t.Fatalf("a thinking block was sent on a turn with no tool call: %s", body)
+	}
+}
+
+func TestReplayGrowsTheRequestByTheEncodedThinkingBlockAndNoMore(t *testing.T) {
+	base := func(thinking llm.Thinking) Request {
+		request := minimalRequest()
+		request.Messages = append(request.Messages,
+			llm.Message{Role: llm.RoleAssistant,
+				ToolCalls: []llm.ToolCall{{ID: "toolu_01write", Name: "write",
+					Arguments: json.RawMessage(`{"path":"hello.txt","content":"hello from boji"}`)}},
+				Thinking: thinking},
+			llm.Message{Role: llm.RoleTool, ToolCallID: "toolu_01write", Content: "wrote hello.txt"},
+		)
+		return request
+	}
+
+	withReplay, err := base(llm.Thinking{Text: "the file needs a greeting", Signature: "sig_recorded_turn_bytes"}).Encode(true)
+	if err != nil {
+		t.Fatalf("encoding with replay: %v", err)
+	}
+	replayOff, err := base(llm.Thinking{}).Encode(true)
+	if err != nil {
+		t.Fatalf("encoding with replay off: %v", err)
+	}
+	added := len(withReplay) - len(replayOff)
+	if added <= 0 {
+		t.Fatalf("replay added %d bytes, want more than zero", added)
+	}
+	t.Logf("second request with replay: %d bytes; with replay off (the arm): %d bytes; the block adds %d bytes",
+		len(withReplay), len(replayOff), added)
+}
+
 func TestEncodeOffArmLeavesTheHistoryAloneAndKeepsTheHead(t *testing.T) {
 	request := historyRequest(2)
 	request.HistoryCacheOff = true

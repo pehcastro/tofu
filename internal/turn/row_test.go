@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 
+	"tofu/internal/llm"
+	"tofu/internal/llm/wire/codex"
 	"tofu/internal/recall"
 	"tofu/internal/session"
 )
@@ -60,6 +62,76 @@ func TestAStepFromBeforeTheOccupancyReadsAsAnAbsenceAndAMeasuredZeroDoesNot(t *t
 		t.Fatalf("the measured zero reads back as %+v", *read.Occupancy)
 	}
 	t.Logf("%d old steps carry no occupancy; a measured zero carries %s", len(steps), written)
+}
+
+func TestACodexReasoningItemWritesAsItsOwnNamedFieldRatherThanTheSignature(t *testing.T) {
+	signature := codex.EncodeReasoning("rs_1", "opaque")
+	row := messageRowOf(llm.Message{Role: llm.RoleAssistant,
+		ToolCalls: []llm.ToolCall{{ID: "call_1", Name: "probe"}},
+		Thinking:  llm.Thinking{Text: "thinking", Signature: signature}})
+	if row.Reasoning == nil || row.Reasoning.ID != "rs_1" || row.Reasoning.EncryptedContent != "opaque" {
+		t.Fatalf("the row reasoning item is %+v", row.Reasoning)
+	}
+	if row.ThinkingSignature != "" {
+		t.Fatalf("a codex reasoning item also wrote the signature field: %q", row.ThinkingSignature)
+	}
+
+	raw, err := json.Marshal(row)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if !strings.Contains(string(raw), `"reasoning":{"id":"rs_1","encrypted_content":"opaque"}`) {
+		t.Fatalf("the row does not write a named reasoning field: %s", raw)
+	}
+
+	message, err := row.Message()
+	if err != nil {
+		t.Fatalf("reading the row back: %v", err)
+	}
+	if message.Thinking.Signature != signature {
+		t.Fatalf("the row read back a different signature than it stored: %q", message.Thinking.Signature)
+	}
+}
+
+func TestAnAnthropicSignatureStillWritesToTheSignatureField(t *testing.T) {
+	row := messageRowOf(llm.Message{Role: llm.RoleAssistant,
+		ToolCalls: []llm.ToolCall{{ID: "call_1", Name: "probe"}},
+		Thinking:  llm.Thinking{Text: "thinking", Signature: "sig_recorded_turn_bytes"}})
+	if row.Reasoning != nil {
+		t.Fatalf("an anthropic signature was read as a codex reasoning item: %+v", row.Reasoning)
+	}
+	if row.ThinkingSignature != "sig_recorded_turn_bytes" {
+		t.Fatalf("the anthropic signature is %q", row.ThinkingSignature)
+	}
+}
+
+func TestAMessageRowWrittenBeforeTheReasoningFieldStillLoads(t *testing.T) {
+	preRound2 := MessageRow{Role: "assistant", ToolCalls: []MessageToolCall{{ID: "call_1", Name: "probe"}},
+		Thinking: "thinking", ThinkingSignature: codex.EncodeReasoning("rs_1", "opaque")}
+	raw, err := json.Marshal(preRound2)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	var row MessageRow
+	if err := json.Unmarshal(raw, &row); err != nil {
+		t.Fatalf("a session written before the reasoning field failed to read: %v", err)
+	}
+	message, err := row.Message()
+	if err != nil {
+		t.Fatalf("turning it into a message: %v", err)
+	}
+	id, encrypted, ok := codex.DecodeReasoning(message.Thinking.Signature)
+	if !ok || id != "rs_1" || encrypted != "opaque" {
+		t.Fatalf("the pre-field session no longer replays: id %q encrypted %q ok %v", id, encrypted, ok)
+	}
+
+	beforeThinkingExisted := `{"role":"assistant","content":"hello"}`
+	if err := json.Unmarshal([]byte(beforeThinkingExisted), &row); err != nil {
+		t.Fatalf("a session written before thinking existed at all failed to read: %v", err)
+	}
+	if _, err := row.Message(); err != nil {
+		t.Fatalf("turning the oldest shape into a message: %v", err)
+	}
 }
 
 func TestARowThatNamesNoRootIsItsOwnRoot(t *testing.T) {

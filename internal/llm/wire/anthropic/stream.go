@@ -30,15 +30,16 @@ type Usage struct {
 }
 
 type Result struct {
-	ID         string
-	Model      string
-	Stop       Stop
-	StopReason string
-	Content    string
-	Thinking   string
-	ToolCalls  []llm.ToolCall
-	Usage      Usage
-	Warnings   []string
+	ID                string
+	Model             string
+	Stop              Stop
+	StopReason        string
+	Content           string
+	Thinking          string
+	ThinkingSignature string
+	ToolCalls         []llm.ToolCall
+	Usage             Usage
+	Warnings          []string
 }
 
 type streamEvent struct {
@@ -50,14 +51,16 @@ type streamEvent struct {
 		Usage wireUsage `json:"usage"`
 	} `json:"message"`
 	ContentBlock struct {
-		Type string `json:"type"`
-		ID   string `json:"id"`
-		Name string `json:"name"`
+		Type      string `json:"type"`
+		ID        string `json:"id"`
+		Name      string `json:"name"`
+		Signature string `json:"signature"`
 	} `json:"content_block"`
 	Delta struct {
 		Type        string `json:"type"`
 		Text        string `json:"text"`
 		Thinking    string `json:"thinking"`
+		Signature   string `json:"signature"`
 		PartialJSON string `json:"partial_json"`
 		StopReason  string `json:"stop_reason"`
 	} `json:"delta"`
@@ -99,7 +102,7 @@ type openBlock struct {
 func ReadStream(body io.Reader, oauth bool, onDelta func(string)) (Result, error) {
 	var result Result
 	open := map[int]*openBlock{}
-	var text, thinking strings.Builder
+	var text, thinking, signature strings.Builder
 	sawStart, sawTerminal, sawStop := false, false, false
 
 	scanner := bufio.NewScanner(body)
@@ -139,6 +142,9 @@ func ReadStream(body io.Reader, oauth bool, onDelta func(string)) (Result, error
 					"received %s before message_start", event.Type)
 			}
 			block := &openBlock{kind: event.ContentBlock.Type, toolIndex: -1}
+			if event.ContentBlock.Signature != "" {
+				signature.WriteString(event.ContentBlock.Signature)
+			}
 			if event.ContentBlock.Type == "tool_use" {
 				block.toolIndex = len(result.ToolCalls)
 				result.ToolCalls = append(result.ToolCalls, llm.ToolCall{
@@ -162,6 +168,8 @@ func ReadStream(body io.Reader, oauth bool, onDelta func(string)) (Result, error
 				}
 			case "thinking_delta":
 				thinking.WriteString(event.Delta.Thinking)
+			case "signature_delta":
+				signature.WriteString(event.Delta.Signature)
 			case "input_json_delta":
 				block.arguments.WriteString(event.Delta.PartialJSON)
 			}
@@ -218,7 +226,7 @@ func ReadStream(body io.Reader, oauth bool, onDelta func(string)) (Result, error
 		closeBlock(&result, block)
 	}
 
-	result.Content, result.Thinking = text.String(), thinking.String()
+	result.Content, result.Thinking, result.ThinkingSignature = text.String(), thinking.String(), signature.String()
 	return result, nil
 }
 

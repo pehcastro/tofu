@@ -2,16 +2,25 @@ package turn
 
 import (
 	"context"
+	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"tofu/internal/llm/wire/anthropic"
+	"tofu/internal/session"
 )
 
 func recordedSubscription(t *testing.T, streams ...string) Subscription {
+	t.Helper()
+	return recordedSubscriptionCapturing(t, nil, streams...)
+}
+
+func recordedSubscriptionCapturing(t *testing.T, requests *[][]byte, streams ...string) Subscription {
 	t.Helper()
 	served := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -19,6 +28,13 @@ func recordedSubscription(t *testing.T, streams ...string) Subscription {
 			t.Errorf("the loop asked for %d turns and only %d streams were recorded", served+1, len(streams))
 			w.WriteHeader(http.StatusInternalServerError)
 			return
+		}
+		if requests != nil {
+			sent, err := io.ReadAll(r.Body)
+			if err != nil {
+				t.Errorf("reading the sent body: %v", err)
+			}
+			*requests = append(*requests, sent)
 		}
 		body, err := os.ReadFile(filepath.Join("testdata", streams[served]))
 		if err != nil {
@@ -98,5 +114,72 @@ func TestTheTurnRowRoundTripsTheStopReasonAndTheTokensOfARecordedSubscriptionStr
 	if second.PromptTokens != 96 || second.CompletionTokens != 14 ||
 		second.CacheReadTokens != 9503 || second.CacheWriteTokens != 0 {
 		t.Fatalf("step 2 tokens are %+v", second)
+	}
+}
+
+func contentBlockTypes(t *testing.T, requestBody []byte) []string {
+	t.Helper()
+	var decoded struct {
+		Messages []struct {
+			Content []struct {
+				Type string `json:"type"`
+			} `json:"content"`
+		} `json:"messages"`
+	}
+	if err := json.Unmarshal(requestBody, &decoded); err != nil {
+		t.Fatalf("the recorded request is not json: %v", err)
+	}
+	var types []string
+	for _, message := range decoded.Messages {
+		for _, block := range message.Content {
+			types = append(types, block.Type)
+		}
+	}
+	return types
+}
+
+func TestAThinkingBlockFromStepOneReachesTheStepTwoRequestWithItsSignature(t *testing.T) {
+	var requests [][]byte
+	tool := &stubTool{name: "write", result: Result{Content: "wrote hello.txt", Command: "write hello.txt"}}
+	gate := gateSaying("allow")
+	store := session.NewStore(t.TempDir())
+	config := Config{
+		Model:          recordedSubscriptionCapturing(t, &requests, "subscription-thinking-tool-use.sse", "subscription-end-turn.sse"),
+		Spend:          SpendSubscription,
+		Tools:          NewRegistry(tool),
+		Gate:           gate,
+		Task:           "write hello.txt",
+		Caps:           Caps{MaxSteps: 10},
+		ResultBytesCap: 4096,
+		ArtifactDir:    t.TempDir(),
+		Sessions:       store,
+	}
+
+	row, err := Run(context.Background(), config)
+	if err != nil {
+		t.Fatalf("Run returned an error: %v", err)
+	}
+
+	if len(requests) != 2 {
+		t.Fatalf("the wire saw %d requests, want 2", len(requests))
+	}
+
+	types := contentBlockTypes(t, requests[1])
+	t.Logf("step 2 encoded content block types, in order: %v", types)
+	if len(types) < 3 || types[1] != "thinking" || types[2] != "tool_use" {
+		t.Fatalf("the step 2 request block types are %v, want a thinking block immediately ahead of the tool_use block", types)
+	}
+	if !strings.Contains(string(requests[1]), "sig_recorded_turn_bytes") {
+		t.Fatal("the step 2 request does not carry the signature the stream reported")
+	}
+
+	sessionFile := filepath.Join(store.Dir(row.ID), "body.jsonl")
+	onDisk, err := os.ReadFile(sessionFile)
+	if err != nil {
+		t.Fatalf("reading the session file: %v", err)
+	}
+	t.Logf("session file at %s", sessionFile)
+	if !strings.Contains(string(onDisk), `"thinking_signature":"sig_recorded_turn_bytes"`) {
+		t.Fatalf("the session file does not carry the thinking signature")
 	}
 }

@@ -324,7 +324,8 @@ func Run(ctx context.Context, config Config) (Row, error) {
 
 		case llm.OutcomeTruncated:
 			if decision.Content != "" || len(decision.ToolCalls) > 0 {
-				messages = append(messages, llm.Message{Role: llm.RoleAssistant, Content: decision.Content, ToolCalls: decision.ToolCalls})
+				messages = append(messages, llm.Message{Role: llm.RoleAssistant, Content: decision.Content,
+					ToolCalls: decision.ToolCalls, Thinking: decision.Thinking})
 			}
 			if len(decision.ToolCalls) == 0 {
 				keep(stepRow)
@@ -340,7 +341,7 @@ func Run(ctx context.Context, config Config) (Row, error) {
 			keep(stepRow)
 
 		case llm.OutcomeToolCalls:
-			messages = append(messages, llm.Message{Role: llm.RoleAssistant, ToolCalls: decision.ToolCalls})
+			messages = append(messages, llm.Message{Role: llm.RoleAssistant, ToolCalls: decision.ToolCalls, Thinking: decision.Thinking})
 			pending, batches := decision.ToolCalls, 0
 			var tripped bool
 			var repeated ToolCallRow

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"tofu/internal/llm"
+	"tofu/internal/llm/wire/codex"
 	"tofu/internal/recall"
 	"tofu/internal/session"
 	"tofu/internal/subagent"
@@ -137,13 +138,21 @@ type MessageToolCall struct {
 	Arguments json.RawMessage `json:"arguments,omitempty"`
 }
 
+type ReasoningItem struct {
+	ID               string `json:"id"`
+	EncryptedContent string `json:"encrypted_content"`
+}
+
 type MessageRow struct {
-	Role            string            `json:"role"`
-	Content         string            `json:"content,omitempty"`
-	ToolCallID      string            `json:"tool_call_id,omitempty"`
-	ToolCalls       []MessageToolCall `json:"tool_calls,omitempty"`
-	ToolOutcome     string            `json:"tool_outcome,omitempty"`
-	ToolResultBytes int               `json:"tool_result_bytes,omitempty"`
+	Role              string            `json:"role"`
+	Content           string            `json:"content,omitempty"`
+	ToolCallID        string            `json:"tool_call_id,omitempty"`
+	ToolCalls         []MessageToolCall `json:"tool_calls,omitempty"`
+	ToolOutcome       string            `json:"tool_outcome,omitempty"`
+	ToolResultBytes   int               `json:"tool_result_bytes,omitempty"`
+	Thinking          string            `json:"thinking,omitempty"`
+	ThinkingSignature string            `json:"thinking_signature,omitempty"`
+	Reasoning         *ReasoningItem    `json:"reasoning,omitempty"`
 }
 
 func toolOutcomeName(outcome llm.ToolOutcome) string {
@@ -165,6 +174,12 @@ func messageRowOf(message llm.Message) MessageRow {
 		ToolCallID:      message.ToolCallID,
 		ToolOutcome:     toolOutcomeName(message.ToolOutcome),
 		ToolResultBytes: message.ToolResultBytes,
+		Thinking:        message.Thinking.Text,
+	}
+	if id, encrypted, ok := codex.DecodeReasoning(message.Thinking.Signature); ok {
+		row.Reasoning = &ReasoningItem{ID: id, EncryptedContent: encrypted}
+	} else {
+		row.ThinkingSignature = message.Thinking.Signature
 	}
 	for _, call := range message.ToolCalls {
 		row.ToolCalls = append(row.ToolCalls, MessageToolCall{ID: call.ID, Name: call.Name, Arguments: call.Arguments})
@@ -173,7 +188,12 @@ func messageRowOf(message llm.Message) MessageRow {
 }
 
 func (m MessageRow) Message() (llm.Message, error) {
-	message := llm.Message{Content: m.Content, ToolCallID: m.ToolCallID, ToolResultBytes: m.ToolResultBytes}
+	signature := m.ThinkingSignature
+	if m.Reasoning != nil {
+		signature = codex.EncodeReasoning(m.Reasoning.ID, m.Reasoning.EncryptedContent)
+	}
+	message := llm.Message{Content: m.Content, ToolCallID: m.ToolCallID, ToolResultBytes: m.ToolResultBytes,
+		Thinking: llm.Thinking{Text: m.Thinking, Signature: signature}}
 	switch m.Role {
 	case "system":
 		message.Role = llm.RoleSystem

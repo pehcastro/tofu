@@ -40,6 +40,7 @@ type Decision struct {
 	Outcome          Outcome
 	Stop             string
 	Content          string
+	Thinking         Thinking
 	ToolCalls        []ToolCall
 	Refusal          string
 	Usage            Usage

@@ -122,18 +122,9 @@ func TestInputCarriesTheToolRoundTrip(t *testing.T) {
 	if decoded["instructions"] != "be brief" {
 		t.Fatalf("instructions are %v", decoded["instructions"])
 	}
-	input, _ := decoded["input"].([]any)
-	if len(input) != 4 {
-		t.Fatalf("input carries %d items:\n%s", len(input), body)
-	}
-	kinds := make([]string, len(input))
-	for index, item := range input {
-		object, _ := item.(map[string]any)
-		kind, _ := object["type"].(string)
-		if kind == "" {
-			kind, _ = object["role"].(string)
-		}
-		kinds[index] = kind
+	kinds := inputItemTypes(t, body)
+	if len(kinds) != 4 {
+		t.Fatalf("input carries %d items:\n%s", len(kinds), body)
 	}
 	want := []string{"user", "message", "function_call", "function_call_output"}
 	for index, kind := range want {
@@ -234,6 +225,88 @@ func TestEncodeKeepsAnExplicitCacheKeyOverTheSessionID(t *testing.T) {
 	}
 	if decodeBody(t, body)["prompt_cache_key"] != "pinned" {
 		t.Fatalf("the pinned key was overwritten: %s", body)
+	}
+}
+
+func inputItemTypes(t *testing.T, body []byte) []string {
+	t.Helper()
+	decoded := decodeBody(t, body)
+	input, _ := decoded["input"].([]any)
+	kinds := make([]string, len(input))
+	for index, item := range input {
+		object, _ := item.(map[string]any)
+		kind, _ := object["type"].(string)
+		if kind == "" {
+			kind, _ = object["role"].(string)
+		}
+		kinds[index] = kind
+	}
+	return kinds
+}
+
+func reasoningCarryingTurn(signature string) []llm.Message {
+	return []llm.Message{
+		{Role: llm.RoleUser, Content: "call probe"},
+		{Role: llm.RoleAssistant, ToolCalls: []llm.ToolCall{
+			{ID: "call_1", Name: "probe", Arguments: json.RawMessage(`{"question":"colour"}`)}},
+			Thinking: llm.Thinking{Signature: signature}},
+		{Role: llm.RoleTool, ToolCallID: "call_1", Content: "chartreuse"},
+	}
+}
+
+func TestAReasoningItemFromStepOneReachesTheStepTwoRequestAheadOfTheFunctionCall(t *testing.T) {
+	stepOne, err := ReadStream(strings.NewReader(sse(
+		reasoningAdded, reasoningDelta, reasoningDone, callItemAdded, callArgsDelta, callItemDone, responseDone)))
+	if err != nil {
+		t.Fatalf("reading the recorded step 1 stream: %v", err)
+	}
+
+	signature := EncodeReasoning(stepOne.ReasoningID, stepOne.ReasoningEncrypted)
+	body := mustEncode(t, Request{Model: "gpt-5.5-codex", Messages: []llm.Message{
+		{Role: llm.RoleUser, Content: "call probe"},
+		{Role: llm.RoleAssistant, ToolCalls: stepOne.ToolCalls, Thinking: llm.Thinking{Signature: signature}},
+		{Role: llm.RoleTool, ToolCallID: stepOne.ToolCalls[0].ID, Content: "chartreuse"},
+	}})
+
+	types := inputItemTypes(t, body)
+	t.Logf("step 2 encoded input item types, in order: %v", types)
+	want := []string{"user", "reasoning", "function_call", "function_call_output"}
+	for index, kind := range want {
+		if types[index] != kind {
+			t.Fatalf("input item %d is %q, want %q: %v", index, types[index], kind, types)
+		}
+	}
+}
+
+func TestReasoningEncryptedContentRoundTripsByteForByte(t *testing.T) {
+	const encrypted = "opaque-fixture-payload-not-a-real-secret"
+	signature := EncodeReasoning("rs_1", encrypted)
+	body := mustEncode(t, Request{Model: "gpt-5.5-codex", Messages: reasoningCarryingTurn(signature)})
+
+	input, _ := decodeBody(t, body)["input"].([]any)
+	var got string
+	for _, item := range input {
+		object, _ := item.(map[string]any)
+		if object["type"] == "reasoning" {
+			got, _ = object["encrypted_content"].(string)
+		}
+	}
+	if got != encrypted {
+		t.Fatalf("the encrypted content round tripped as %q, want %q", got, encrypted)
+	}
+}
+
+func TestReasoningReplayGrowsTheRequestByTheEncodedItemAndNoMore(t *testing.T) {
+	const encrypted = "opaque-fixture-payload-not-a-real-secret"
+	signature := EncodeReasoning("rs_1", encrypted)
+
+	withReplay := mustEncode(t, Request{Model: "gpt-5.5-codex", Messages: reasoningCarryingTurn(signature)})
+	withoutReplay := mustEncode(t, Request{Model: "gpt-5.5-codex", Messages: reasoningCarryingTurn("")})
+
+	t.Logf("second request with replay: %d bytes; with replay off (the arm): %d bytes; the item adds %d bytes",
+		len(withReplay), len(withoutReplay), len(withReplay)-len(withoutReplay))
+	if len(withReplay) <= len(withoutReplay) {
+		t.Fatalf("replay did not grow the request: with %d, without %d", len(withReplay), len(withoutReplay))
 	}
 }
 

@@ -67,6 +67,8 @@ type contentBlock struct {
 	Input     json.RawMessage `json:"input,omitempty"`
 	ToolUseID string          `json:"tool_use_id,omitempty"`
 	Content   string          `json:"content,omitempty"`
+	Thinking  string          `json:"thinking,omitempty"`
+	Signature string          `json:"signature,omitempty"`
 
 	CacheControl *cacheControl `json:"cache_control,omitempty"`
 }
@@ -305,7 +307,11 @@ func encodeMessages(messages []llm.Message, oauth bool) ([]wireMessage, error) {
 				return nil, transport.Fail("anthropic.Encode", transport.KindBadRequest, nil,
 					"message %d is an assistant message with no content and no tool calls", index)
 			}
-			blocks := make([]contentBlock, 0, len(message.ToolCalls)+1)
+			blocks := make([]contentBlock, 0, len(message.ToolCalls)+2)
+			if len(message.ToolCalls) > 0 && !message.Thinking.Empty() {
+				blocks = append(blocks, contentBlock{Type: "thinking",
+					Thinking: message.Thinking.Text, Signature: message.Thinking.Signature})
+			}
 			if message.Content != "" {
 				blocks = append(blocks, contentBlock{Type: "text", Text: message.Content})
 			}

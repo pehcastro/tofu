@@ -43,13 +43,43 @@ type inputPart struct {
 }
 
 type inputItem struct {
-	Type      string      `json:"type,omitempty"`
-	Role      string      `json:"role,omitempty"`
-	Content   []inputPart `json:"content,omitempty"`
-	CallID    string      `json:"call_id,omitempty"`
-	Name      string      `json:"name,omitempty"`
-	Arguments string      `json:"arguments,omitempty"`
-	Output    string      `json:"output,omitempty"`
+	Type             string      `json:"type,omitempty"`
+	ID               string      `json:"id,omitempty"`
+	Role             string      `json:"role,omitempty"`
+	Content          []inputPart `json:"content,omitempty"`
+	CallID           string      `json:"call_id,omitempty"`
+	Name             string      `json:"name,omitempty"`
+	Arguments        string      `json:"arguments,omitempty"`
+	Output           string      `json:"output,omitempty"`
+	EncryptedContent string      `json:"encrypted_content,omitempty"`
+}
+
+type reasoningItem struct {
+	ID               string `json:"id"`
+	Type             string `json:"type"`
+	EncryptedContent string `json:"encrypted_content"`
+}
+
+func EncodeReasoning(id, encryptedContent string) string {
+	if id == "" || encryptedContent == "" {
+		return ""
+	}
+	raw, err := json.Marshal(reasoningItem{ID: id, Type: "reasoning", EncryptedContent: encryptedContent})
+	if err != nil {
+		return ""
+	}
+	return string(raw)
+}
+
+func DecodeReasoning(signature string) (id, encryptedContent string, ok bool) {
+	if signature == "" {
+		return "", "", false
+	}
+	var item reasoningItem
+	if err := json.Unmarshal([]byte(signature), &item); err != nil || item.ID == "" || item.EncryptedContent == "" {
+		return "", "", false
+	}
+	return item.ID, item.EncryptedContent, true
 }
 
 type wireTool struct {
@@ -195,6 +225,9 @@ func encodeInput(messages []llm.Message) ([]inputItem, error) {
 			if message.Content != "" {
 				items = append(items, inputItem{Type: "message", Role: "assistant",
 					Content: []inputPart{{Type: "output_text", Text: message.Content}}})
+			}
+			if id, encrypted, ok := DecodeReasoning(message.Thinking.Signature); ok && len(message.ToolCalls) > 0 {
+				items = append(items, inputItem{Type: "reasoning", ID: id, EncryptedContent: encrypted})
 			}
 			for callIndex, call := range message.ToolCalls {
 				if call.ID == "" || call.Name == "" {

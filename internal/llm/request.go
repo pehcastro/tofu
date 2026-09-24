@@ -61,6 +61,15 @@ type Image struct {
 	Data      []byte
 }
 
+type Thinking struct {
+	Text      string
+	Signature string
+}
+
+func (t Thinking) Empty() bool {
+	return t == Thinking{}
+}
+
 type Message struct {
 	Role            Role
 	Content         string
@@ -69,6 +78,7 @@ type Message struct {
 	ToolCalls       []ToolCall
 	ToolOutcome     ToolOutcome
 	ToolResultBytes int
+	Thinking        Thinking
 }
 
 type Tool struct {

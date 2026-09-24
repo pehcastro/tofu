@@ -26,6 +26,12 @@ const (
 	incompleteDone  = `{"type":"response.incomplete","response":{"id":"resp_2","status":"incomplete","incomplete_details":{"reason":"max_output_tokens"}}}`
 	streamFailed    = `{"type":"response.failed","error":{"type":"server_error","code":"oops","message":"the backend gave up"}}`
 	metadataWithKey = `{"type":"response.metadata","headers":{"x-codex-turn-state":"turn-state-0000"}}`
+
+	reasoningAdded = `{"type":"response.output_item.added","output_index":0,"item":{"type":"reasoning"}}`
+	reasoningDelta = `{"type":"response.reasoning_summary_text.delta","output_index":0,"delta":"thinking"}`
+	reasoningDone  = `{"type":"response.output_item.done","output_index":0,"item":{"id":"rs_1","type":"reasoning","encrypted_content":"opaque"}}`
+
+	reasoningDoneNoContent = `{"type":"response.output_item.done","output_index":0,"item":{"id":"rs_2","type":"reasoning"}}`
 )
 
 func TestDrainedStreamWithNoTerminalEventIsRetryable(t *testing.T) {
@@ -114,6 +120,34 @@ func TestWhitespaceArgumentLoopIsCut(t *testing.T) {
 	}
 	if transport.KindOf(err).Fatal() {
 		t.Fatalf("the whitespace loop failure is fatal rather than retryable: %v", err)
+	}
+}
+
+func TestAReasoningItemIsCapturedWithItsEncryptedContent(t *testing.T) {
+	result, err := ReadStream(strings.NewReader(
+		sse(reasoningAdded, reasoningDelta, reasoningDone, callItemAdded, callArgsDelta, callItemDone, responseDone)))
+	if err != nil {
+		t.Fatalf("reading: %v", err)
+	}
+	if result.ReasoningID != "rs_1" || result.ReasoningEncrypted != "opaque" {
+		t.Fatalf("the reasoning item is %+v", result)
+	}
+	if len(result.ToolCalls) != 1 {
+		t.Fatalf("the tool call was lost alongside the reasoning item: %+v", result.ToolCalls)
+	}
+}
+
+func TestAReasoningItemWithNoEncryptedContentStillCompletesTheTurn(t *testing.T) {
+	result, err := ReadStream(strings.NewReader(
+		sse(reasoningAdded, reasoningDelta, reasoningDoneNoContent, textItemAdded, textDelta, textItemDone, responseDone)))
+	if err != nil {
+		t.Fatalf("a reasoning item with no encrypted content failed the turn: %v", err)
+	}
+	if result.ReasoningID != "rs_2" || result.ReasoningEncrypted != "" {
+		t.Fatalf("the reasoning item is %+v", result)
+	}
+	if result.Content != "ok" {
+		t.Fatalf("the rest of the turn did not complete: %+v", result)
 	}
 }
 
