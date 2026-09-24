@@ -115,7 +115,9 @@ func (e Entry) displayLines() []string {
 	return append(append([]string{}, e.rendered...), e.tail...)
 }
 
-func (e Entry) running() bool { return e.Kind == Tool && e.ID != "" && e.Status == "" }
+func (e Entry) returned() bool { return e.Status != "" }
+
+func (e Entry) running() bool { return e.Kind == Tool && e.ID != "" && !e.returned() }
 
 func (e Entry) sticky() bool {
 	return e.Failed || e.Promoted || (e.Decision != nil && e.Decision.Verdict != Allow)
@@ -299,6 +301,7 @@ func (m *Model) Append(entry Entry) {
 }
 
 func (m *Model) Finish(id string, result Result) {
+	m.seal()
 	ended := m.now()
 	for index := len(m.entries) - 1; index >= 0; index-- {
 		entry := &m.entries[index]
@@ -349,7 +352,7 @@ func (m Model) LastCall() (string, bool) {
 func (m *Model) Decide(decision Decision) {
 	for index := range m.entries {
 		entry := &m.entries[index]
-		if entry.Kind == Tool && entry.Decision == nil && entry.Head == decision.Tool {
+		if entry.Kind == Tool && entry.Decision == nil && entry.Head == decision.Tool && !entry.returned() {
 			entry.Decision = &decision
 			return
 		}
