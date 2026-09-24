@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"tofu/internal/konst"
 	"tofu/internal/llm"
@@ -342,4 +343,45 @@ func TestContextNamingAnUnreadableSessionSaysWhyRatherThanReportingAnAbsence(t *
 		t.Fatalf("tofu context on an unreadable session said %q", said)
 	}
 	t.Logf("exit %d: %s", code, said)
+}
+
+func sessionCarryingAnUnknownKind(t *testing.T) string {
+	t.Helper()
+	t.Chdir(t.TempDir())
+	store, err := session.Open()
+	if err != nil {
+		t.Fatalf("open the scratch store: %v", err)
+	}
+	id := "turn-newerbuild"
+	recorder, err := store.Begin(session.Header{ID: id, Root: id, At: time.Now(), Task: "read a file"}, session.AuthorOrchestrator)
+	if err != nil {
+		t.Fatalf("begin %s: %v", id, err)
+	}
+	appended := []struct {
+		kind session.EventKind
+		body any
+	}{
+		{session.EventPrompt, session.PromptBody{System: "be brief", Tools: []string{"read"}}},
+		{session.EventStep, turn.StepRow{Index: 1}},
+		{"weather", map[string]int{"degrees": 12}},
+		{session.EventStep, turn.StepRow{Index: 2}},
+	}
+	for _, event := range appended {
+		if err := recorder.Append(event.kind, event.body); err != nil {
+			t.Fatalf("append a %s: %v", event.kind, err)
+		}
+	}
+	if err := recorder.End(session.Header{ID: id, Root: id, At: time.Now()}, map[string]string{"outcome": "stopped"}); err != nil {
+		t.Fatalf("end %s: %v", id, err)
+	}
+	return id
+}
+
+func TestContextOnASessionCarryingAKindThisBuildDoesNotKnowStillPrintsItsSteps(t *testing.T) {
+	id := sessionCarryingAnUnknownKind(t)
+	printed := contextRun(t, id)
+	if !strings.Contains(printed, "session "+id+", 2 steps") {
+		t.Fatalf("a session carrying an unknown kind printed:\n%s", printed)
+	}
+	t.Logf("%s", printed)
 }

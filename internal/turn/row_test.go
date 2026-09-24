@@ -3,6 +3,7 @@ package turn
 import (
 	"encoding/json"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -239,4 +240,62 @@ func TestARowThatNamesNoRootIsItsOwnRoot(t *testing.T) {
 	if len(events) != 1 || events[0].Kind != session.EventOutcome {
 		t.Fatalf("a row with no steps produced %d events", len(events))
 	}
+}
+
+func conversationByWalkingEvents(t *testing.T, events []session.Event) []llm.Message {
+	t.Helper()
+	var messages []llm.Message
+	for _, event := range events {
+		if event.Kind != session.EventMessage {
+			continue
+		}
+		var row MessageRow
+		if err := json.Unmarshal(event.Body, &row); err != nil {
+			t.Fatalf("the walk could not read a message event: %v", err)
+		}
+		message, err := row.Message()
+		if err != nil {
+			t.Fatalf("the walk could not turn a message row into a message: %v", err)
+		}
+		messages = append(messages, message)
+	}
+	return Sendable(messages)
+}
+
+func TestTheConversationReadsTheSameThroughTheOneReaderAsThroughTheWalkItReplaces(t *testing.T) {
+	row := Row{ID: "turn-1", Task: "a task", Outcome: OutcomeStopped,
+		System: "prefer the tool over the shell", Tools: []string{"read", "bash"},
+		Conversation: []llm.Message{
+			{Role: llm.RoleUser, Content: "read a.txt"},
+			{Role: llm.RoleAssistant, Content: "reading it",
+				Thinking:  llm.Thinking{Text: "the file is small", Signature: codex.EncodeReasoning("rs_1", "opaque")},
+				ToolCalls: []llm.ToolCall{{ID: "call_1", Name: "read", Arguments: json.RawMessage(`{"path":"a.txt"}`)}}},
+			{Role: llm.RoleTool, ToolCallID: "call_1", Content: "file contents",
+				ToolOutcome: llm.ToolOutcomeRan, ToolResultBytes: 13},
+			{Role: llm.RoleAssistant, Content: "it says file contents",
+				Thinking: llm.Thinking{Text: "answer plainly", Signature: "sig_anthropic"}},
+		}}
+	_, events, err := row.Record()
+	if err != nil {
+		t.Fatalf("record a session: %v", err)
+	}
+	if events[0].Kind != session.EventPrompt {
+		t.Fatalf("the first event is %q, want a prompt", events[0].Kind)
+	}
+
+	before := conversationByWalkingEvents(t, events)
+	after, err := ConversationFrom(events)
+	if err != nil {
+		t.Fatalf("read the conversation back: %v", err)
+	}
+	if len(before) != len(after) {
+		t.Fatalf("the walk read %d messages and the reader read %d", len(before), len(after))
+	}
+	for i := range before {
+		if !reflect.DeepEqual(before[i], after[i]) {
+			t.Fatalf("message %d reads back differently:\nbefore %+v\nafter  %+v", i, before[i], after[i])
+		}
+	}
+	t.Logf("%d messages read identically, the last two carrying the signatures %q and %q",
+		len(after), after[1].Thinking.Signature, after[3].Thinking.Signature)
 }

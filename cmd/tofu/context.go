@@ -210,18 +210,14 @@ func contextBand(tokens, capacity int) contextBandReport {
 }
 
 func contextSteps(events []session.Event) ([]turn.StepRow, error) {
-	var steps []turn.StepRow
-	for i, event := range events {
-		switch event.Kind {
-		case session.EventStep:
-			var step turn.StepRow
-			if err := json.Unmarshal(event.Body, &step); err != nil {
-				return nil, fmt.Errorf("event %d does not read as a step: %w", i+1, err)
-			}
-			steps = append(steps, step)
-		case session.EventOutcome, session.EventMessage, session.EventRead:
-		default:
-			return nil, fmt.Errorf("event %d is of unknown kind %q", i+1, event.Kind)
+	reading, err := session.ReadEvents(events)
+	if err != nil {
+		return nil, err
+	}
+	steps := make([]turn.StepRow, len(reading.Steps))
+	for i, step := range reading.Steps {
+		if err := json.Unmarshal(step.Raw, &steps[i]); err != nil {
+			return nil, fmt.Errorf("step %d does not read as a turn row: %w", i+1, err)
 		}
 	}
 	return steps, nil

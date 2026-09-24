@@ -329,10 +329,16 @@ func sessionDetail(store *session.Store, handle string) (sessionRow, []llm.Messa
 	if err != nil {
 		return sessionRow{}, nil, err
 	}
+	reading, err := session.ReadEvents(events)
+	if err != nil {
+		return sessionRow{}, nil, err
+	}
 	row := sessionRow{
 		ID:               header.ID,
 		At:               header.At,
 		Task:             header.Task,
+		Steps:            len(reading.Steps),
+		Reads:            len(reading.Reads),
 		Carried:          len(messages),
 		Outcome:          header.Outcome,
 		Wire:             header.Wire,
@@ -353,14 +359,6 @@ func sessionDetail(store *session.Store, handle string) (sessionRow, []llm.Messa
 	}
 	if header.Name != nil {
 		row.Name = *header.Name
-	}
-	for _, event := range events {
-		switch event.Kind {
-		case session.EventStep:
-			row.Steps++
-		case session.EventRead:
-			row.Reads++
-		}
 	}
 	return row, messages, nil
 }

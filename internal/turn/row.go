@@ -229,27 +229,22 @@ func (m MessageRow) Message() (llm.Message, error) {
 }
 
 func PromptFrom(events []session.Event) (session.PromptBody, bool, error) {
-	for _, event := range events {
-		if event.Kind != session.EventPrompt {
-			continue
-		}
-		var body session.PromptBody
-		if err := json.Unmarshal(event.Body, &body); err != nil {
-			return session.PromptBody{}, false, err
-		}
-		return body, true, nil
+	reading, err := session.ReadEvents(events)
+	if err != nil || reading.Prompt == nil {
+		return session.PromptBody{}, false, err
 	}
-	return session.PromptBody{}, false, nil
+	return *reading.Prompt, true, nil
 }
 
 func ConversationFrom(events []session.Event) ([]llm.Message, error) {
-	var messages []llm.Message
-	for _, event := range events {
-		if event.Kind != session.EventMessage {
-			continue
-		}
+	reading, err := session.ReadEvents(events)
+	if err != nil {
+		return nil, err
+	}
+	messages := make([]llm.Message, 0, len(reading.Messages))
+	for _, recorded := range reading.Messages {
 		var row MessageRow
-		if err := json.Unmarshal(event.Body, &row); err != nil {
+		if err := json.Unmarshal(recorded.Raw, &row); err != nil {
 			return nil, err
 		}
 		message, err := row.Message()

@@ -128,28 +128,13 @@ func (s Settings) withReads(events []Event) ([]Event, error) {
 }
 
 func (s *Store) ReadsOf(id string) (Reads, error) {
-	events, err := s.Body(id)
+	reading, err := s.Reading(id)
 	if err != nil {
 		return Reads{}, err
 	}
-	reads := Reads{Session: id}
 	happened := 0
-	for _, event := range events {
-		switch event.Kind {
-		case EventRead:
-			var read Read
-			if err := json.Unmarshal(event.Body, &read); err != nil {
-				return Reads{}, fmt.Errorf("session: a read of %s does not parse: %w", id, err)
-			}
-			reads.Reads = append(reads.Reads, read)
-		case EventStep:
-			var step StepBody
-			if err := json.Unmarshal(event.Body, &step); err != nil {
-				return Reads{}, fmt.Errorf("session: a step of %s does not parse: %w", id, err)
-			}
-			happened += len(readsInStep(step, false))
-		}
+	for _, step := range reading.Steps {
+		happened += len(readsInStep(step.StepBody, false))
 	}
-	reads.Unrecorded = max(happened-len(reads.Reads), 0)
-	return reads, nil
+	return Reads{Session: id, Reads: reading.Reads, Unrecorded: max(happened-len(reading.Reads), 0)}, nil
 }

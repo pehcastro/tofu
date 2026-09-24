@@ -164,31 +164,24 @@ func continuationOf(dir string, row turn.Row) turn.Row {
 }
 
 func sessionRow(dir, id string) (turn.Row, error) {
-	events, err := session.NewStore(dir).Body(id)
+	reading, err := session.NewStore(dir).Reading(id)
 	if err != nil {
 		return turn.Row{}, err
 	}
-	var row turn.Row
-	var steps []turn.StepRow
-	for i, event := range events {
-		switch event.Kind {
-		case session.EventStep:
-			var step turn.StepRow
-			if err := json.Unmarshal(event.Body, &step); err != nil {
-				return turn.Row{}, fmt.Errorf("event %d of session %s does not read as a step: %w", i+1, id, err)
-			}
-			steps = append(steps, step)
-		case session.EventOutcome:
-			if err := json.Unmarshal(event.Body, &row); err != nil {
-				return turn.Row{}, fmt.Errorf("the outcome event of session %s does not read as a turn row: %w", id, err)
-			}
-		case session.EventMessage, session.EventRead:
-		default:
-			return turn.Row{}, fmt.Errorf("event %d of session %s is of kind %q, which this bench has no reading for", i+1, id, event.Kind)
-		}
-	}
-	if row.ID == "" {
+	if len(reading.Outcome) == 0 {
 		return turn.Row{}, fmt.Errorf("the body of session %s carries no outcome event, so there is no turn row in it", id)
+	}
+	var row turn.Row
+	if err := json.Unmarshal(reading.Outcome, &row); err != nil {
+		return turn.Row{}, fmt.Errorf("the outcome event of session %s does not read as a turn row: %w", id, err)
+	}
+	var steps []turn.StepRow
+	for i, step := range reading.Steps {
+		var measured turn.StepRow
+		if err := json.Unmarshal(step.Raw, &measured); err != nil {
+			return turn.Row{}, fmt.Errorf("step %d of session %s does not read as a step: %w", i+1, id, err)
+		}
+		steps = append(steps, measured)
 	}
 	row.Steps = steps
 	return row, nil

@@ -1,9 +1,6 @@
 package session
 
-import (
-	"encoding/json"
-	"fmt"
-)
+import "encoding/json"
 
 const (
 	RoleSystem    = "system"
@@ -62,21 +59,14 @@ type Conversation struct {
 }
 
 func (s *Store) Conversation(id string) (Conversation, error) {
-	events, err := s.Body(id)
+	reading, err := s.Reading(id)
 	if err != nil {
 		return Conversation{}, err
 	}
 	talk := Conversation{Session: id}
-	for _, event := range events {
-		if event.Kind != EventMessage {
-			continue
-		}
-		var body MessageBody
-		if err := json.Unmarshal(event.Body, &body); err != nil {
-			return Conversation{}, fmt.Errorf("session: a message of %s does not parse: %w", id, err)
-		}
-		said := Utterance{Event: event.ID, Role: body.Role, Text: body.Content}
-		for _, call := range body.ToolCalls {
+	for _, message := range reading.Messages {
+		said := Utterance{Event: message.Event, Role: message.Role, Text: message.Content}
+		for _, call := range message.ToolCalls {
 			said.Calls = append(said.Calls, Call{ID: call.ID, Name: call.Name, Args: call.Arguments})
 		}
 		talk.Said = append(talk.Said, said)
@@ -84,16 +74,9 @@ func (s *Store) Conversation(id string) (Conversation, error) {
 	if len(talk.Said) > 0 {
 		return talk, nil
 	}
-	for _, event := range events {
-		if event.Kind != EventStep {
-			continue
-		}
-		var body StepBody
-		if err := json.Unmarshal(event.Body, &body); err != nil {
-			return Conversation{}, fmt.Errorf("session: a step of %s does not parse: %w", id, err)
-		}
-		said := Utterance{Event: event.ID, Role: RoleAssistant, Text: body.AssistantText}
-		for _, call := range body.ToolCalls {
+	for _, step := range reading.Steps {
+		said := Utterance{Event: step.Event, Role: RoleAssistant, Text: step.AssistantText}
+		for _, call := range step.ToolCalls {
 			said.Calls = append(said.Calls, Call{Name: call.Tool, Args: call.Args})
 		}
 		talk.Said = append(talk.Said, said)

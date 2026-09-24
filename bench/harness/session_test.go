@@ -137,6 +137,23 @@ func TestLatestSessionStillReadsARecordedSingleFileSession(t *testing.T) {
 	sameWorkMeasured(t, read, billedWithCache)
 }
 
+func TestASessionCarryingAKindThisBuildDoesNotKnowStillReads(t *testing.T) {
+	dir := t.TempDir()
+	written := sessionTheLoopWrites(t, dir, time.Date(2026, 9, 24, 11, 8, 0, 0, time.UTC))
+	unknown := session.EventKind("weather")
+	if err := session.NewStore(dir).AppendEvent(written.ID, unknown, map[string]int{"degrees": 12}); err != nil {
+		t.Fatalf("append an event of a kind a newer build writes and this one has never seen: %v", err)
+	}
+
+	read, err := LatestSession(dir, written.At.Add(-time.Minute))
+	if err != nil {
+		t.Fatalf("LatestSession over a session carrying one %q event: %v", unknown, err)
+	}
+	if !reflect.DeepEqual(read, written) {
+		t.Fatalf("read back\n%+v\nwant every field the session carries for the kinds this build does know\n%+v", read, written)
+	}
+}
+
 func TestADirectoryHoldingBothShapesReturnsTheNewerSession(t *testing.T) {
 	newerIsWritten := t.TempDir()
 	recorded := recordedSingleFileSession(t, newerIsWritten)
