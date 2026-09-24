@@ -252,7 +252,6 @@ type App struct {
 	busy           bool
 	ticking        bool
 	gateOff        bool
-	softStop       bool
 	running        int
 	pressedAt      time.Time
 	cancel         context.CancelFunc
@@ -260,6 +259,7 @@ type App struct {
 	board          paste.Board
 	minted         int
 	workBeforeTurn int
+	keptAnswer     string
 	selection      pick.Selection
 	pressed        pick.Cell
 	holding        bool
@@ -424,7 +424,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case Closed:
 		a.busy, a.cancel, a.events, a.edits.Busy = false, nil, nil, false
-		a.softStop, a.running, a.pressedAt = false, 0, time.Time{}
+		a.running, a.pressedAt = 0, time.Time{}
 		a.view.Stop()
 		a.dropSteering()
 		next := tea.Batch(a.pollQuota(), a.readPaths(), a.pollShells())
@@ -746,6 +746,9 @@ func (a *App) mintID() string {
 }
 
 func (a *App) turnWorkID() string {
+	if a.keptAnswer != "" {
+		return a.keptAnswer
+	}
 	if len(a.work.Entries) <= a.workBeforeTurn {
 		return ""
 	}
@@ -764,15 +767,15 @@ func (a *App) interrupt() tea.Cmd {
 			return tea.Quit
 		}
 		a.view.Append(session.Entry{Kind: session.Note, Body: quitAgainNote})
-	case a.softStop:
+	case a.view.LettingToolsFinish:
 		if within {
 			a.stopTurn()
 		}
 	case a.running == 0 || a.view.TakesAnswerDigits():
 		a.stopTurn()
 	default:
-		a.softStop = true
-		a.view.Append(session.Entry{Kind: session.Note, Body: stoppingModel + a.queueTail()})
+		a.view.LettingToolsFinish = true
+		a.noteStop(stoppingModel + a.queueTail())
 	}
 	return nil
 }
@@ -793,11 +796,14 @@ func (a *App) stopTurn() {
 	if a.view.Stopping {
 		return
 	}
-	note := stoppingNote + a.queueTail()
-	kept := a.keptPartial()
-	a.softStop, a.view.Stopping = false, true
+	a.view.LettingToolsFinish, a.view.Stopping = false, true
 	a.cancel()
 	a.dropSteering()
+	a.noteStop(stoppingNote + a.queueTail())
+}
+
+func (a *App) noteStop(note string) {
+	kept := a.keptPartial()
 	a.view.Append(session.Entry{Kind: session.Note, Body: note})
 	if kept != "" {
 		a.view.Append(session.Entry{Kind: session.Note, Body: kept})
@@ -810,13 +816,14 @@ func (a *App) keptPartial() string {
 		return ""
 	}
 	id := a.mintID()
+	a.keptAnswer = id
 	a.work.Append(work.Entry{ID: id, Head: partialHead, Output: partial, Bytes: len(partial)})
 	return strconv.Itoa(len([]rune(partial))) + charactersKept + " [" + trace.Short(id) + "]"
 }
 
 func (a *App) start(task string) tea.Cmd {
 	a.view.Follow()
-	a.workBeforeTurn = len(a.work.Entries)
+	a.workBeforeTurn, a.keptAnswer = len(a.work.Entries), ""
 	if a.options.Turn == nil {
 		a.view.Append(session.Entry{Kind: session.Failure, Body: "no engine is wired to this app"})
 		return nil
@@ -825,7 +832,7 @@ func (a *App) start(task string) tea.Cmd {
 	ctx, cancel := context.WithCancel(context.Background())
 	events := make(chan Event, eventBuffer)
 	a.busy, a.cancel, a.events, a.edits.Busy = true, cancel, events, true
-	a.softStop, a.running = false, 0
+	a.running = 0
 	a.view.Start()
 	turn, pick := a.options.Turn, Pick{Wire: a.wire, Model: a.picked, Effort: a.effort}
 	deliver := func(event Event) {
@@ -881,7 +888,7 @@ func (a *App) absorb(event Event) {
 		a.view.Finish(event.ID, session.Result{Status: status, Bytes: event.Bytes, Failed: event.Failed})
 		a.work.Finish(event.ID, status, event.Bytes, event.Failed)
 		a.running = max(a.running-1, 0)
-		if a.softStop && a.running == 0 {
+		if a.view.LettingToolsFinish && a.running == 0 {
 			a.stopTurn()
 		}
 	case EventNote:

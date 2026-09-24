@@ -21,6 +21,8 @@ import (
 	"tofu/interface/tui/settings"
 	"tofu/interface/tui/shells"
 	"tofu/interface/tui/subagent"
+	"tofu/interface/tui/trace"
+	"tofu/interface/tui/work"
 	"tofu/internal/llm"
 	isettings "tofu/internal/settings"
 )
@@ -1159,6 +1161,25 @@ func TestASecondInterruptStopsTheRunningToolCallToo(t *testing.T) {
 	}
 }
 
+func TestTheFooterNamesWhatTheSecondInterruptDoesWhileToolsFinish(t *testing.T) {
+	const (
+		stopsTheTurn  = "ctrl+c stops the turn"
+		stopsTheTools = "letting the running tools finish, ctrl+c again stops them"
+	)
+	app, _ := callingApp(t)
+	if before := ansi.Strip(app.View().Content); !strings.Contains(before, stopsTheTurn) {
+		t.Fatalf("the footer before the press does not offer to stop the turn\n%s", before)
+	}
+	app.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
+	after := ansi.Strip(app.View().Content)
+	if !strings.Contains(after, stopsTheTools) {
+		t.Fatalf("the footer during the soft stop does not say what a second ctrl+c does\n%s", after)
+	}
+	if strings.Contains(after, stopsTheTurn) {
+		t.Fatalf("the footer still offers a press that no longer stops the turn\n%s", after)
+	}
+}
+
 func TestAnInterruptKeepsWhatWasTypedWhileTheTurnRan(t *testing.T) {
 	app, _ := callingApp(t)
 	typeAndSend(app, firstTask)
@@ -1516,5 +1537,53 @@ func TestNeitherFileEditsNorShellsTakeChatInput(t *testing.T) {
 	app.Update(tea.KeyPressMsg{Text: "x"})
 	if app.View().Content != before {
 		t.Errorf("a letter typed in the shells view changed what is drawn")
+	}
+}
+
+const halfWritten = "the loop reads the policy first, then the wire, because a locked"
+
+func interruptedAnswer(t *testing.T, app *App) work.Entry {
+	t.Helper()
+	for _, entry := range app.work.Entries {
+		if entry.Head == partialHead {
+			return entry
+		}
+	}
+	t.Fatalf("work holds no interrupted answer\n%s", ansi.Strip(app.View().Content))
+	return work.Entry{}
+}
+
+func TestASoftStopBeforeTheHardStopKeepsTheSameAnswerInWork(t *testing.T) {
+	hard, hardStopped := turningApp(t)
+	hard.Update(Event{Kind: EventTextDelta, Text: halfWritten})
+	interrupt(hard, 1)
+	<-hardStopped
+
+	soft, softStopped := turningApp(t)
+	soft.Update(Event{Kind: EventToolCall, ID: "c1", Tool: "bash", Text: "go test ./..."})
+	soft.Update(Event{Kind: EventTextDelta, Text: halfWritten})
+	interrupt(soft, 2)
+	<-softStopped
+
+	if held := interruptedAnswer(t, soft).Output; held != interruptedAnswer(t, hard).Output {
+		t.Errorf("two stops left %q in work, one stop left the half written answer", held)
+	}
+}
+
+func TestCookedForNamesTheAnswerWhenAToolCallCameAfterIt(t *testing.T) {
+	app, stopped := turningApp(t)
+	app.Update(Event{Kind: EventToolCall, ID: "c1", Tool: "bash", Text: "go test ./..."})
+	app.Update(Event{Kind: EventTextDelta, Text: halfWritten})
+	interrupt(app, 1)
+	app.Update(Event{Kind: EventToolCall, ID: "c2", Tool: "read", Text: "internal/turn/loop.go"})
+	app.Update(Event{Kind: EventToolResult, ID: "c1", Text: "ok"})
+	app.Update(Event{Kind: EventToolResult, ID: "c2", Text: "84 lines"})
+	<-stopped
+	app.Update(Event{Kind: EventDone, Text: "cooked for"})
+	app.Update(Closed{})
+
+	want := "cooked for 0s · [" + trace.Short(interruptedAnswer(t, app).ID) + "]"
+	if chat := ansi.Strip(app.View().Content); !strings.Contains(chat, want) {
+		t.Errorf("no line reads %q\n%s", want, chat)
 	}
 }

@@ -3,10 +3,10 @@
                                                                                                     
 » why does the gate read the policy first?                                                          
 · (2) tools · shell (1) · 3s · [#c2]                                                                
-· stopping the turn                                                                                 
+· stopping the model, and letting the running tools finish                                          
 · 64 characters were written and kept in work [#c75001]                                             
+· stopping the turn                                                                                 
 · cooked for 4s · [#c75001]                                                                         
-                                                                                                    
                                                                                                     
                                                                                                     
                                                                                                     

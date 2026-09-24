@@ -38,6 +38,7 @@ const (
 	quitHint         = "ctrl+c quit"
 	stopHint         = "ctrl+c stops the turn"
 	stoppingHint     = "stopping the turn, ctrl+c will not quit until it ends"
+	lettingHint      = "letting the running tools finish, ctrl+c again stops them"
 	noResult         = "no result"
 	continuation     = "    "
 	composerInset    = "  "
@@ -125,46 +126,47 @@ func (e Entry) label() string { return strings.TrimSpace(e.Head + " " + e.Body) 
 type Prose func(source string, width int) []string
 
 type Model struct {
-	Busy           bool
-	Stopping       bool
-	Commands       []Command
-	Paths          []string
-	Children       []subagent.Child
-	now            func() time.Time
-	waiting        time.Time
-	requested      time.Time
-	answered       time.Time
-	respondedOnce  bool
-	waited         time.Duration
-	phase          phase
-	intent         string
-	shown          time.Time
-	prose          Prose
-	plan           []PlanItem
-	entries        []Entry
-	composer       textarea.Model
-	width          int
-	height         int
-	top            anchor
-	following      bool
-	began          time.Time
-	entered        time.Time
-	turns          int
-	started        bool
-	attached       []paste.Outcome
-	pastes         int
-	picked         int
-	closed         bool
-	queue          []pending
-	queues         int
-	pick           int
-	sent           []string
-	histAt         int
-	draft          string
-	chips          []Chip
-	pending        []pendingPaste
-	ChatShowsTools bool
-	FoldHidesShell bool
+	Busy               bool
+	Stopping           bool
+	LettingToolsFinish bool
+	Commands           []Command
+	Paths              []string
+	Children           []subagent.Child
+	now                func() time.Time
+	waiting            time.Time
+	requested          time.Time
+	answered           time.Time
+	respondedOnce      bool
+	waited             time.Duration
+	phase              phase
+	intent             string
+	shown              time.Time
+	prose              Prose
+	plan               []PlanItem
+	entries            []Entry
+	composer           textarea.Model
+	width              int
+	height             int
+	top                anchor
+	following          bool
+	began              time.Time
+	entered            time.Time
+	turns              int
+	started            bool
+	attached           []paste.Outcome
+	pastes             int
+	picked             int
+	closed             bool
+	queue              []pending
+	queues             int
+	pick               int
+	sent               []string
+	histAt             int
+	draft              string
+	chips              []Chip
+	pending            []pendingPaste
+	ChatShowsTools     bool
+	FoldHidesShell     bool
 }
 
 func New(now func() time.Time, prose Prose) Model {
@@ -410,7 +412,7 @@ func (m *Model) Start() {
 	}
 	at := m.now()
 	m.entered, m.turns = at, m.turns+1
-	m.Busy, m.Stopping, m.began, m.plan = true, false, at, nil
+	m.Busy, m.Stopping, m.LettingToolsFinish, m.began, m.plan = true, false, false, at, nil
 	m.waited, m.phase, m.intent, m.shown = 0, requesting, "", at
 	m.requested, m.answered, m.respondedOnce = at, time.Time{}, false
 }
@@ -444,7 +446,7 @@ func (m *Model) TakePartial() (string, bool) {
 }
 
 func (m *Model) Stop() {
-	m.Busy, m.Stopping = false, false
+	m.Busy, m.Stopping, m.LettingToolsFinish = false, false, false
 	m.requested, m.answered = time.Time{}, time.Time{}
 	m.seal()
 	for index := range m.entries {
@@ -503,6 +505,8 @@ func (m Model) hint(scrollable bool) string {
 	switch {
 	case m.Stopping:
 		line = stoppingHint
+	case m.LettingToolsFinish:
+		line = lettingHint
 	case m.Busy && len(m.queue) > 0:
 		line = stopHint + hintGap + queueHints
 	case m.Busy:

@@ -20,7 +20,7 @@
                                                                                                     
                                                                                                     
                                                                                                     
-⠇ 4s     thinking                                                                                   
+⠇ 4s     working   bash go test ./...                                                               
                                                                                                     
   hey tofu, can you explain this repository to me?                                                  
                                                                                                     

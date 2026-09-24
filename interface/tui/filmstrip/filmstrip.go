@@ -258,7 +258,7 @@ func interruptedTurn() scenario {
 			r.wait(toolGap)
 		}},
 		beat{"streaming", func(r *reel) {
-			r.send(result("c2", "ok tofu/internal/turn 0.42s"), delta("the loop reads the policy first, then the wire, because a locked"))
+			r.send(delta("the loop reads the policy first, then the wire, because a locked"))
 			r.wait(beatGap)
 		}},
 		beat{"stopping", func(r *reel) {
@@ -266,7 +266,7 @@ func interruptedTurn() scenario {
 			r.wait(beatGap)
 		}},
 		beat{"stopped", func(r *reel) {
-			r.send(tui.Event{Kind: tui.EventDone, Text: "cooked for"})
+			r.send(result("c2", "ok tofu/internal/turn 0.42s"), tui.Event{Kind: tui.EventDone, Text: "cooked for"})
 			r.app.Update(tui.Closed{})
 			r.wait(beatGap)
 		}},
