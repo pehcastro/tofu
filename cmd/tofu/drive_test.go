@@ -67,6 +67,64 @@ func TestADrivenScriptSendsATaskAndPrintsWhatTheScreenShowed(t *testing.T) {
 	}
 }
 
+const sleepingCassette = `{"text":"waiting on the shell","tools":[{"name":"bash","args":{"command":"sleep 6"}}]}
+{"text":"THE ANSWER AFTER THE CANCEL"}
+`
+
+func TestTwoInterruptsEndADrivenTurnAndTheCassetteIsNeverAskedAgain(t *testing.T) {
+	dir := drivenProject(t)
+	deck := written(t, dir, "slow.cassette", sleepingCassette)
+	script := written(t, dir, "stop.drive", strings.Join([]string{
+		"wait type a task and press enter",
+		"type wait for me",
+		"key enter",
+		"wait working   bash",
+		"key ctrl+c",
+		"key ctrl+c",
+		"wait cooked for",
+		"screen",
+	}, "\n"))
+	var out, errOut bytes.Buffer
+	code := driveVerb([]string{script, "--cassette", deck, "--plain", "--timeout", "30s"}, strings.NewReader(""), &out, &errOut)
+	if code != exitOK {
+		t.Fatalf("tofu drive exited %d: %s", code, errOut.String())
+	}
+	if !strings.Contains(out.String(), "stopping the turn") {
+		t.Errorf("the screen never says the turn was stopped:\n%s", out.String())
+	}
+	if strings.Contains(out.String(), "THE ANSWER AFTER THE CANCEL") {
+		t.Errorf("the cancelled turn was served the next recorded reply:\n%s", out.String())
+	}
+}
+
+const halfAnswerCassette = `{"text":"the loop reads the policy first, then the wire, because a locked","unfinished":true}
+`
+
+func TestADrivenAnswerArrivesInDeltasSoAnInterruptKeepsTheHalfThatWasWritten(t *testing.T) {
+	dir := drivenProject(t)
+	deck := written(t, dir, "half.cassette", halfAnswerCassette)
+	script := written(t, dir, "half.drive", strings.Join([]string{
+		"wait type a task and press enter",
+		"type why does the loop read the policy first?",
+		"key enter",
+		"wait because a locked",
+		"key ctrl+c",
+		"wait characters were written and kept in work",
+		"key alt+2",
+		"screen",
+	}, "\n"))
+	var out, errOut bytes.Buffer
+	code := driveVerb([]string{script, "--cassette", deck, "--plain", "--timeout", "30s"}, strings.NewReader(""), &out, &errOut)
+	if code != exitOK {
+		t.Fatalf("tofu drive exited %d: %s", code, errOut.String())
+	}
+	for _, want := range []string{"answer, interrupted", "because a locked"} {
+		if !strings.Contains(out.String(), want) {
+			t.Errorf("work never says %q, so the answer arrived as one sealed event:\n%s", want, out.String())
+		}
+	}
+}
+
 func TestAWaitForAStateThatNeverArrivesFailsSayingWhatItWaitedFor(t *testing.T) {
 	dir := drivenProject(t)
 	deck := written(t, dir, "read.cassette", readingCassette)

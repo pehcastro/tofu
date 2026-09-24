@@ -38,9 +38,14 @@ Steps:
   environment  print the environment block the last turn sent to the model
   # NOTE       a note, skipped
 
-The model is a cassette, one recorded reply per line of json:
+The model is a cassette, one recorded reply per line of json. Its text arrives
+the way a model's does, in deltas, so a reply is half written until it returns:
   {"text":"reading it","tools":[{"name":"read","args":{"path":"note.txt"}}]}
   {"text":"the note says a note"}
+  {"text":"half an answer","unfinished":true}
+
+An unfinished reply streams its text and keeps writing until the turn is stopped,
+which is how a driven run reaches an answer interrupted in the middle of itself.
 
 TOFU_DRIVE_CASSETTE names the cassette when --cassette does not. Without one no
 wire opens at all and a turn fails saying so, so a driven run reaches no network.
@@ -59,16 +64,22 @@ const (
 )
 
 type cassetteReply struct {
-	Text  string `json:"text"`
-	Tools []struct {
+	Text       string `json:"text"`
+	Unfinished bool   `json:"unfinished"`
+	Tools      []struct {
 		Name string          `json:"name"`
 		Args json.RawMessage `json:"args"`
 	} `json:"tools"`
 }
 
+type recordedReply struct {
+	decision   llm.Decision
+	unfinished bool
+}
+
 type cassette struct {
 	name    string
-	replies []llm.Decision
+	replies []recordedReply
 	mutex   sync.Mutex
 	asked   int
 	last    llm.Request
@@ -101,7 +112,7 @@ func readCassette(path string) (*cassette, error) {
 				Arguments: one.Args,
 			})
 		}
-		deck.replies = append(deck.replies, decision)
+		deck.replies = append(deck.replies, recordedReply{decision: decision, unfinished: reply.Unfinished})
 	}
 	if len(deck.replies) == 0 {
 		return nil, fmt.Errorf("%s holds no reply", path)
@@ -109,15 +120,27 @@ func readCassette(path string) (*cassette, error) {
 	return deck, nil
 }
 
-func (c *cassette) Ask(_ context.Context, request llm.Request) (llm.Decision, error) {
+func (c *cassette) Ask(ctx context.Context, request llm.Request) (llm.Decision, error) {
+	if err := ctx.Err(); err != nil {
+		return llm.Decision{}, err
+	}
 	c.mutex.Lock()
-	defer c.mutex.Unlock()
 	c.last = request
 	if c.asked >= len(c.replies) {
+		c.mutex.Unlock()
 		return llm.Decision{}, fmt.Errorf("%s holds %d replies and the turn asked for one more", c.name, len(c.replies))
 	}
 	c.asked++
-	return c.replies[c.asked-1], nil
+	reply := c.replies[c.asked-1]
+	c.mutex.Unlock()
+	if request.OnDelta != nil && reply.decision.Content != "" {
+		request.OnDelta(reply.decision.Content)
+	}
+	if !reply.unfinished {
+		return reply.decision, nil
+	}
+	<-ctx.Done()
+	return llm.Decision{}, ctx.Err()
 }
 
 func (c *cassette) environment() string {
