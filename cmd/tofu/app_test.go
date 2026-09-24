@@ -36,6 +36,7 @@ import (
 	"tofu/internal/recall"
 	sessionstore "tofu/internal/session"
 	settingspkg "tofu/internal/settings"
+	"tofu/internal/shell"
 	roster "tofu/internal/subagent"
 	"tofu/internal/sys"
 	"tofu/internal/transport"
@@ -1776,5 +1777,32 @@ func TestEveryVerbBuildsTheAppOptionsInOnePlace(t *testing.T) {
 	}
 	if len(built) > 0 {
 		t.Fatalf("only appOptions may build or hold the app options, or the driven verb and the real verb drift apart: %s", strings.Join(built, "; "))
+	}
+}
+
+func TestTheEndOfASessionNamesEachProcessItStops(t *testing.T) {
+	if testing.Short() {
+		t.Skip("starts a real process")
+	}
+	registry := shell.OpenAt(filepath.Join(t.TempDir(), "shells"))
+	if _, err := registry.Start(t.TempDir(), "dev-server", "sleep 30"); err != nil {
+		t.Fatalf("starting a background process: %v", err)
+	}
+	t.Cleanup(func() { _ = registry.Kill("dev-server") })
+
+	line := sessionEndLine(registry, nil)
+
+	if !strings.Contains(line, "dev-server") || !strings.Contains(line, "sleep 30") {
+		t.Fatalf("the line printed on the way out is %q, and it never names the process that stops with the session", line)
+	}
+}
+
+func TestTheEndOfASessionSaysNothingExtraWhenNothingWasRunning(t *testing.T) {
+	registry := shell.OpenAt(filepath.Join(t.TempDir(), "shells"))
+	if line := sessionEndLine(registry, nil); line != sessionEnded {
+		t.Fatalf("with nothing running the line is %q, want %q", line, sessionEnded)
+	}
+	if line := sessionEndLine(nil, errors.New("no state directory")); line != sessionEnded {
+		t.Fatalf("with no registry the line is %q, want %q", line, sessionEnded)
 	}
 }

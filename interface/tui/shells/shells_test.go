@@ -81,6 +81,13 @@ func TestTheEmptyShellsViewSaysNothingIsRunning(t *testing.T) {
 	}
 }
 
+func TestTheListSaysTheseProcessesStopWhenTofuExits(t *testing.T) {
+	content := viewed([]Entry{devServer()}, 0)
+	if !strings.Contains(content, "stops when tofu exits") {
+		t.Errorf("the shells tab never says a process here stops when tofu exits\n%s", content)
+	}
+}
+
 func TestPickingAProcessShowsItsRecentOutput(t *testing.T) {
 	content := viewed([]Entry{devServer(), build()}, 1)
 	if !strings.Contains(content, "compiling") || !strings.Contains(content, "done") {

@@ -33,23 +33,6 @@ type BashTool struct {
 	note       string
 	probe      *toolchainProbe
 	calls      atomic.Int64
-	startedMu  sync.Mutex
-	started    []backgroundProc
-}
-
-type backgroundProc struct {
-	registry *shell.Registry
-	name     string
-}
-
-func (t *BashTool) StopBackground() {
-	t.startedMu.Lock()
-	procs := t.started
-	t.started = nil
-	t.startedMu.Unlock()
-	for _, p := range procs {
-		_ = p.registry.Kill(p.name)
-	}
 }
 
 type shellRegistryKey struct{}
@@ -570,7 +553,7 @@ func (t *BashTool) Definition() llm.Tool {
 			"properties": map[string]any{
 				"command":    map[string]any{"type": "string", "description": "required unless check_port is set"},
 				"timeout_ms": map[string]any{"type": "integer", "description": fmt.Sprintf("how long the command may run before it is killed, %d by default and %d at most", konst.BashDeadlineMillis, konst.BashMaxDeadlineMillis)},
-				"background": map[string]any{"type": "boolean", "description": "start command and return right away instead of waiting for it to exit; it keeps running until it exits on its own or the turn ends"},
+				"background": map[string]any{"type": "boolean", "description": "start command and return right away instead of waiting for it to exit; it outlives the turn and keeps running until it exits on its own or tofu exits"},
 				"check_port": map[string]any{"type": "integer", "description": "skip command and report whether this port answers on 127.0.0.1, without any http request"},
 			},
 			"required": []string{},
@@ -611,9 +594,6 @@ func (t *BashTool) runBackground(ctx context.Context, args bashArgs) (Result, er
 	if err != nil {
 		return Result{}, fmt.Errorf("bash: %w", err)
 	}
-	t.startedMu.Lock()
-	t.started = append(t.started, backgroundProc{registry: registry, name: name})
-	t.startedMu.Unlock()
 	return Result{
 		Content: fmt.Sprintf("started %s as pid %d, not waited on: it keeps running after this call returns. check it with check_port once it should be up", name, entry.PID),
 		Command: fmt.Sprintf("background %s: %s", name, args.Command),

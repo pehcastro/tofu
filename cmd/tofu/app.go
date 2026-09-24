@@ -50,6 +50,8 @@ const (
 	unreadableSource = "unreadable: "
 	jevName          = "jev"
 	freshSessionNote = "the next task starts a new session and carries nothing from the last one"
+	sessionEnded     = "tofu: session ended"
+	stoppingPrefix   = ", stopping "
 )
 
 const (
@@ -131,8 +133,24 @@ func appVerb(in io.Reader, out, errOut io.Writer, resumed sessionResume) int {
 		_, _ = fmt.Fprintf(errOut, "tofu: %v\n", err)
 		return exitVerdict
 	}
-	_, _ = fmt.Fprintln(out, "tofu: session ended")
+	_, _ = fmt.Fprintln(out, sessionEndLine(openShellRegistry()))
 	return exitOK
+}
+
+func sessionEndLine(registry *shell.Registry, openErr error) string {
+	var stopped []string
+	if openErr == nil {
+		found, _ := registry.List()
+		for _, one := range found {
+			if one.State == shell.Running {
+				stopped = append(stopped, one.Name+" ("+one.Command+")")
+			}
+		}
+	}
+	if len(stopped) == 0 {
+		return sessionEnded
+	}
+	return sessionEnded + stoppingPrefix + strings.Join(stopped, ", ")
 }
 
 func appPaths(dir string) func() []string {

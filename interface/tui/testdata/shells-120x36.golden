@@ -8,7 +8,7 @@
 [38;5;252m                                                         [m[38;5;236m │ [m                                                            
 [38;5;240m↑↓ pick                                                  [m[38;5;236m │ [m                                                            
 [38;5;240mctrl+x kills the selected process                        [m[38;5;236m │ [m                                                            
-                                                         [38;5;236m │ [m                                                            
+[38;5;240mevery process here stops when tofu exits                 [m[38;5;236m │ [m                                                            
                                                          [38;5;236m │ [m                                                            
                                                          [38;5;236m │ [m                                                            
                                                          [38;5;236m │ [m                                                            

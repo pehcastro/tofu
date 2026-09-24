@@ -1001,8 +1001,8 @@ func TestABackgroundCommandReturnsAHandleInsideASecondAndTheTurnContinues(t *tes
 	if err != nil {
 		t.Fatalf("building the bash tool: %v", err)
 	}
-	defer tool.StopBackground()
 	registry := shell.OpenAt(filepath.Join(root, "shells"))
+	defer func() { _ = registry.Kill("bash-1") }()
 	args, err := json.Marshal(bashArgs{Command: "sleep 30", Background: true})
 	if err != nil {
 		t.Fatal(err)
@@ -1028,42 +1028,6 @@ func TestABackgroundCommandReturnsAHandleInsideASecondAndTheTurnContinues(t *tes
 	}
 	if len(shells) != 1 || shells[0].State != shell.Running {
 		t.Fatalf("registered shells: %+v, want exactly one still running", shells)
-	}
-}
-
-func TestStoppingBackgroundLeavesNothingRunning(t *testing.T) {
-	if testing.Short() {
-		t.Skip("spawns a real process that outlives the call")
-	}
-	root := t.TempDir()
-	tool, err := NewBashTool(root)
-	if err != nil {
-		t.Fatalf("building the bash tool: %v", err)
-	}
-	registry := shell.OpenAt(filepath.Join(root, "shells"))
-	args, err := json.Marshal(bashArgs{Command: "sleep 30", Background: true})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, runErr := tool.Run(WithShellRegistry(context.Background(), registry), args); runErr != nil {
-		t.Fatalf("starting a background command: %v", runErr)
-	}
-
-	tool.StopBackground()
-
-	deadline := time.Now().Add(5 * time.Second)
-	for {
-		shells, listErr := registry.List()
-		if listErr != nil {
-			t.Fatal(listErr)
-		}
-		if len(shells) == 1 && shells[0].State == shell.Killed {
-			return
-		}
-		if time.Now().After(deadline) {
-			t.Fatalf("the turn ended and the background process is still %+v", shells)
-		}
-		time.Sleep(50 * time.Millisecond)
 	}
 }
 

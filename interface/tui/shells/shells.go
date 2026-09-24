@@ -23,6 +23,7 @@ const (
 	title        = "shells"
 	pickHint     = "↑↓ pick"
 	killHint     = "ctrl+x kills the selected process"
+	exitHint     = "every process here stops when tofu exits"
 	emptyTitle   = "no process is running in this session"
 	emptyBody    = "a dev server, a build, a test run, anything an agent starts and leaves running appears here to inspect and to kill."
 	watchHint    = "pick a process to read its log"
@@ -139,7 +140,11 @@ func (m Model) list(width int) []string {
 		}
 		lines = append(lines, pane.Cell(m.row(index, entry, width), width, style))
 	}
-	return append(lines, blank, pane.Cell(pickHint, width, theme.Faint()), pane.Cell(killHint, width, theme.Faint()))
+	lines = append(lines, blank)
+	for _, hint := range []string{pickHint, killHint, exitHint} {
+		lines = append(lines, pane.Cell(hint, width, theme.Faint()))
+	}
+	return lines
 }
 
 func (m Model) row(index int, entry Entry, width int) string {
