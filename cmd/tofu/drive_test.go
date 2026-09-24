@@ -2,15 +2,19 @@ package main
 
 import (
 	"bytes"
+	"context"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"tofu/interface/tui/progress"
 	"tofu/internal/konst"
+	"tofu/internal/llm"
 )
 
 func TestADrivenStepSettlesInsideOneProgressTick(t *testing.T) {
@@ -233,6 +237,45 @@ func TestAnUnknownStepAndAnUnknownFlagAreRefusedByName(t *testing.T) {
 	}
 	if !strings.Contains(errOut.String(), "no such flag") {
 		t.Errorf("the refusal never says the flag is unknown:\n%s", errOut.String())
+	}
+}
+
+type cancelledWhenAwaited struct {
+	context.Context
+	awaited chan struct{}
+	once    sync.Once
+}
+
+func (c *cancelledWhenAwaited) Done() <-chan struct{} {
+	c.once.Do(func() { close(c.awaited) })
+	return c.awaited
+}
+
+func (c *cancelledWhenAwaited) Err() error {
+	select {
+	case <-c.awaited:
+		return context.Canceled
+	default:
+		return nil
+	}
+}
+
+func TestACassetteGivesACancelledTurnNoDeltaAndNoReply(t *testing.T) {
+	deck, err := readCassette(written(t, t.TempDir(), "stray.cassette", `{"text":"THE STRAY ANSWER"}`+"\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var drawn []string
+	stopped := &cancelledWhenAwaited{Context: context.Background(), awaited: make(chan struct{})}
+	decision, err := deck.Ask(stopped, llm.Request{OnDelta: func(text string) { drawn = append(drawn, text) }})
+	if !errors.Is(err, context.Canceled) {
+		t.Errorf("a turn stopped while its request was in flight was answered %q with error %v", decision.Content, err)
+	}
+	if len(drawn) != 0 {
+		t.Errorf("a turn stopped while its request was in flight was still drawn %q", drawn)
+	}
+	if decision.Content != "" {
+		t.Errorf("a turn stopped while its request was in flight was still handed %q", decision.Content)
 	}
 }
 

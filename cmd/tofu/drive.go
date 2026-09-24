@@ -47,6 +47,9 @@ the way a model's does, in deltas, so a reply is half written until it returns:
 An unfinished reply streams its text and keeps writing until the turn is stopped,
 which is how a driven run reaches an answer interrupted in the middle of itself.
 
+A recorded reply is in flight for a moment before its first delta, so a turn
+stopped while it is in flight draws nothing at all, as it would on a live wire.
+
 TOFU_DRIVE_CASSETTE names the cassette when --cassette does not. Without one no
 wire opens at all and a turn fails saying so, so a driven run reaches no network.
 
@@ -61,6 +64,7 @@ const (
 	envClose         = "</env>"
 	stdinScript      = "-"
 	noEnvironment    = "no turn has sent an environment block yet"
+	recordedFlight   = konst.DriveSettleMillis * time.Millisecond
 )
 
 type cassetteReply struct {
@@ -121,8 +125,10 @@ func readCassette(path string) (*cassette, error) {
 }
 
 func (c *cassette) Ask(ctx context.Context, request llm.Request) (llm.Decision, error) {
-	if err := ctx.Err(); err != nil {
-		return llm.Decision{}, err
+	select {
+	case <-ctx.Done():
+		return llm.Decision{}, ctx.Err()
+	case <-time.After(recordedFlight):
 	}
 	c.mutex.Lock()
 	c.last = request
