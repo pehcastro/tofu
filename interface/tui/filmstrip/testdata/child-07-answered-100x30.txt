@@ -1,18 +1,18 @@
-./tofu  ·  develop  ·  claude-sub/claude-opus-5  ·  amber-cedar-otter #3c5f71  ·  9s                
+./tofu  ·  develop  ·  claude-sub/claude-opus-5  ·  amber-cedar-otter #3c5f71  ·  1m 23s            
 [1] chat   [2] work   [3] file edits   [4] sub-agents   [5] shells                                  
                                                                                                     
 » why does the gate read the policy first?                                                          
-· (1) tools · 2s · [#c1]                                                                            
                                                                                                     
-▌ the child finished, tested and verified, and the report is in sub-agents.                         
+▌ handing the policy loader to a child                                                              
+                                                                                                    
+⟩ spawn read internal/judge/policy/resolve.go and say what it reads first         3 lines, 199 bytes
+    #42e30c                                                                                         
+· (1) tools · 1m 18s · [#815e77]                                                                    
+                                                                                                    
+▌ the child read it: the loader reads the lock before the mode.                                     
   #d41c08                                                                                           
                                                                                                     
-· cooked for 2s · [#c1]                                                                             
-                                                                                                    
-                                                                                                    
-                                                                                                    
-                                                                                                    
-                                                                                                    
+· cooked for 1m 18s · [#815e77]                                                                     
                                                                                                     
                                                                                                     
                                                                                                     
@@ -27,5 +27,5 @@
                                                                                                     
                                                                                                     
 ctrl+c quit   ⏎ send   ⇧⏎ newline   / commands                                                      
-118k/250k ▓▓▓▓▓▓░░░░░░  ·  claude 5h  62%  resets in 3h 27m  ·  claude weekly  31%  resets in 1d 5h 
+118k/250k ▓▓▓▓▓▓░░░░░░  ·  claude 5h  62%  resets in 3h 26m  ·  claude weekly  31%  resets in 1d 5h 
 284k read  61k write  190k cached  ·  jev 3  ·  tofu 0.4.0                                          

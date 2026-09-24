@@ -1,8 +1,12 @@
-./tofu  ·  develop  ·  claude-sub/claude-opus-5  ·  amber-cedar-otter #3c5f71  ·  8s                
-[1] chat   [2] work   [3] file edits   [4] sub-agents   [5] shells                                  
+./tofu  ·  develop  ·  claude-sub/claude-opus-5  ·  amber-cedar-otter #3c5f71  ·  30s               
+[1] chat   [2] work   [3] file edits   [4] sub-agents (1)   [5] shells                              
                                                                                                     
 » why does the gate read the policy first?                                                          
-· read internal/judge/policy/resolve.go                                                          #c1
+                                                                                                    
+▌ handing the policy loader to a child                                                              
+                                                                                                    
+⟩ spawn read internal/judge/policy/resolve.go and say what it reads first                        26s
+    #42e30c                                                                                         
                                                                                                     
                                                                                                     
                                                                                                     
@@ -15,12 +19,8 @@
                                                                                                     
                                                                                                     
                                                                                                     
-                                                                                                    
-                                                                                                    
-                                                                                                    
-                                                                                                    
-                                                                                                    
-⠇ 4s     thinking                                                                                   
+⠋ 0s     c1        internal/judge/poli…read the policy loader                                       
+⠧ 26s    working                       spawn read internal/judge/policy/resolve.go and say what it …
                                                                                                     
   hey tofu, can you explain this repository to me?                                                  
                                                                                                     
@@ -28,4 +28,4 @@
                                                                                                     
 ctrl+c stops the turn   ⏎ send   ⇧⏎ newline   / commands                                            
 118k/250k ▓▓▓▓▓▓░░░░░░  ·  claude 5h  62%  resets in 3h 27m  ·  claude weekly  31%  resets in 1d 5h 
-284k read  61k write  190k cached  ·  jev 3  ·  tofu 0.4.0                                          
+284k read  61k write  190k cached  ·  jev 3  ·  ●1  ·  tofu 0.4.0                                   

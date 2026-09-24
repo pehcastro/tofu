@@ -11,6 +11,7 @@ import (
 	"tofu/interface/tui/fixture"
 	"tofu/interface/tui/session"
 	"tofu/interface/tui/subagent"
+	"tofu/internal/konst"
 )
 
 const (
@@ -19,6 +20,7 @@ const (
 	beatGap       = 900 * time.Millisecond
 	toolGap       = 1400 * time.Millisecond
 	typingGap     = 3 * time.Second
+	childGap      = 26 * time.Second
 	pushFailure   = "git push origin develop: exit 128\nfatal: could not read from remote repository, make sure you have the right access\ntransport: ssh: connect to host git.silo port 22: connection refused"
 )
 
@@ -314,44 +316,43 @@ func failedTurn() scenario {
 	)}
 }
 
-func childWorking() scenario {
-	working := []subagent.Child{{
-		Name:   "go-dev",
-		Owns:   []string{"internal/judge/**"},
-		Doing:  "reading the policy loader",
-		Since:  42 * time.Second,
-		Steps:  2,
-		Total:  6,
-		Tokens: 18400,
-		State:  subagent.Running,
-	}}
-	finished := []subagent.Child{{
-		Name:   "go-dev",
-		Owns:   []string{"internal/judge/**"},
-		Doing:  "handed back",
-		Since:  3 * time.Minute,
-		Steps:  6,
-		Total:  6,
-		Tokens: 51200,
-		State:  subagent.Done,
-		Report: "the loader reads the lock before the mode, with a test that fails without it.",
-	}}
+func childTurn() scenario {
+	var spawnedAt time.Time
+	child := func(r *reel, state subagent.State, steps, tokens int) tui.Event {
+		return tui.Event{Kind: tui.EventSubAgent, Children: []subagent.Child{{
+			Name:   "c1",
+			Owns:   []string{"internal/judge/policy/**"},
+			Doing:  "read the policy loader",
+			Since:  r.at.Sub(spawnedAt),
+			Steps:  steps,
+			Total:  konst.TurnMaxSteps,
+			Tokens: tokens,
+			State:  state,
+		}}}
+	}
 	return scenario{name: "child", beats: append(opening(),
-		beat{"child-starts", func(r *reel) {
-			r.send(tui.Event{Kind: tui.EventSubAgent, Children: working})
-			r.wait(toolGap)
+		beat{"spawned", func(r *reel) {
+			spawnedAt = r.at
+			r.send(
+				delta("handing the policy loader to a child"),
+				tui.Event{Kind: tui.EventToolCall, ID: "42e30c", Tool: "spawn", Text: "read internal/judge/policy/resolve.go and say what it reads first", Promote: true},
+				child(r, subagent.Running, 1, 0),
+			)
+			r.wait(childGap)
 		}},
 		beat{"child-working", func(r *reel) {
-			r.send(call("c1", "read", "internal/judge/policy/resolve.go"))
-			r.wait(toolGap)
+			r.send(call("815e77", "read", "internal/judge/policy/resolve.go"), child(r, subagent.Running, 2, 9400))
+			r.wait(childGap)
 		}},
-		beat{"child-reports", func(r *reel) {
-			r.send(result("c1", "209 lines, 6.2 KB"), tui.Event{Kind: tui.EventSubAgent, Children: finished})
-			r.wait(beatGap)
+		beat{"child-thinking", func(r *reel) {
+			r.send(result("815e77", "209 lines, 6.2 KB"), child(r, subagent.Running, 2, 18200))
+			r.wait(childGap)
 		}},
 		beat{"answered", func(r *reel) {
 			r.send(
-				tui.Event{Kind: tui.EventText, ID: "d41c08", Text: "the child finished, tested and verified, and the report is in sub-agents."},
+				child(r, subagent.HandedBack, 2, 24600),
+				result("42e30c", "3 lines, 199 bytes"),
+				tui.Event{Kind: tui.EventText, ID: "d41c08", Text: "the child read it: the loader reads the lock before the mode."},
 				tui.Event{Kind: tui.EventDone, Text: "cooked for"},
 			)
 			r.app.Update(tui.Closed{})
@@ -361,7 +362,7 @@ func childWorking() scenario {
 }
 
 func scenarios() []scenario {
-	return []scenario{plainTurn(), twelveTools(), markdownAnswer(), askingTurn(), interruptedTurn(), lettingToolsFinish(), failedTurn(), childWorking()}
+	return []scenario{plainTurn(), twelveTools(), markdownAnswer(), askingTurn(), interruptedTurn(), lettingToolsFinish(), failedTurn(), childTurn()}
 }
 
 func frameName(scenarioName string, index int, beatName string) string {
