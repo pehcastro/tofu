@@ -8,8 +8,10 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"tofu/internal/konst"
+	"tofu/internal/llm"
 	"tofu/internal/recall"
 )
 
@@ -305,6 +307,51 @@ func TestAContentAtTheCapIsWholeAndOneByteOverDropsExactlyOneByte(t *testing.T) 
 	}
 	if kept := len(rendered) - len(marker); kept != testBytesCap {
 		t.Fatalf("one byte over the cap kept %d bytes of content, wanted %d", kept, testBytesCap)
+	}
+}
+
+func TestACutAtTheCapNeverSplitsARune(t *testing.T) {
+	artifacts, err := NewArtifacts(t.TempDir(), false)
+	if err != nil {
+		t.Fatalf("building the artifact store: %v", err)
+	}
+	before := strings.Repeat("x", testBytesCap/2-1)
+	body := before + "€" + strings.Repeat("x", testBytesCap*2)
+	rendered, _, err := artifacts.Render(body, testBytesCap)
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+	if !utf8.ValidString(rendered) {
+		t.Fatalf("the rendered result is not valid utf-8, a rune was split at the cap")
+	}
+	if !strings.HasPrefix(rendered, before) {
+		t.Fatalf("the head cut landed inside the multi-byte character instead of before it: %q", rendered[:len(before)+3])
+	}
+}
+
+type abortingTool struct{}
+
+func (abortingTool) Name() string { return "aborting_tool" }
+
+func (abortingTool) Definition() llm.Tool { return llm.Tool{Name: "aborting_tool"} }
+
+func (abortingTool) Run(context.Context, json.RawMessage) (Result, error) {
+	return Result{Outcome: ResultAborted, FailureText: "this call was cancelled elsewhere in this turn"}, nil
+}
+
+func TestACancelledCallRecordsAnAbortedOutcomeRatherThanAPrefixedString(t *testing.T) {
+	artifacts, err := NewArtifacts(t.TempDir(), true)
+	if err != nil {
+		t.Fatalf("building the artifact store: %v", err)
+	}
+	tools := NewRegistry(abortingTool{})
+	call := gatedCall{call: llm.ToolCall{ID: "1", Name: "aborting_tool", Arguments: json.RawMessage("{}")}}
+	row, answer := call.execute(context.Background(), tools, testBytesCap, artifacts)
+	if answer.ToolOutcome != llm.ToolOutcomeAborted {
+		t.Fatalf("a cancelled call recorded tool outcome %v, wanted aborted", answer.ToolOutcome)
+	}
+	if row.Error != "this call was cancelled elsewhere in this turn" {
+		t.Fatalf("the row still spells the abort as a prefix on the error string instead of leaving it plain: %q", row.Error)
 	}
 }
 

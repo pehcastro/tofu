@@ -11,7 +11,7 @@ import (
 	"tofu/bench/tokencount"
 )
 
-const testFunctionCount = 11
+const testFunctionCount = 16
 
 func main() {
 	if err := run(); err != nil {
@@ -21,30 +21,35 @@ func main() {
 }
 
 func run() error {
+	result, err := tokencount.Run(filepath.Join("..", "..", "..", ".tofu", "sessions"))
+	if err != nil {
+		return err
+	}
 	render := func(machine, date string) (string, error) {
-		sessionsDir := filepath.Join("..", "..", "..", ".tofu", "sessions")
-		result, err := tokencount.Run(sessionsDir)
-		if err != nil {
-			return "", err
+		return tokencount.Render(tokencount.ReportInput{Date: date, Machine: machine, TestCount: testFunctionCount, Result: result}), nil
+	}
+	renderCorrection := func(machine, date string) (string, error) {
+		return tokencount.RenderCorrection(tokencount.ReportInput{Date: date, Machine: machine, TestCount: testFunctionCount, Result: result}), nil
+	}
+	variants := []struct {
+		suffix string
+		render func(machine, date string) (string, error)
+	}{
+		{"", render},
+		{"-accountable", render},
+		{"-corrected", renderCorrection},
+	}
+	var lastErr error
+	for _, v := range variants {
+		lastErr = writeVariant(v.suffix, v.render)
+		if lastErr == nil || !strings.Contains(lastErr.Error(), "already on disk") {
+			return lastErr
 		}
-		return tokencount.Render(tokencount.ReportInput{
-			Date:      date,
-			Machine:   machine,
-			TestCount: testFunctionCount,
-			Result:    result,
-		}), nil
 	}
-	genErr := report.Generate("tokencount report", render)
-	if genErr == nil {
-		return nil
-	}
-	if !strings.Contains(genErr.Error(), "already on disk") {
-		return genErr
-	}
-	return writeAccountable(render)
+	return lastErr
 }
 
-func writeAccountable(render func(machine, date string) (string, error)) error {
+func writeVariant(suffix string, render func(machine, date string) (string, error)) error {
 	date := time.Now().Format("2006-01-02")
 	machine, err := os.Hostname()
 	if err != nil {
@@ -54,7 +59,7 @@ func writeAccountable(render func(machine, date string) (string, error)) error {
 	if err != nil {
 		return err
 	}
-	path := fmt.Sprintf("../report-%s-accountable.md", date)
+	path := fmt.Sprintf("../report-%s%s.md", date, suffix)
 	if err := report.Write(path, []byte(body), 0o644, "tokencount report"); err != nil {
 		return err
 	}

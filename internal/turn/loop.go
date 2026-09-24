@@ -638,10 +638,6 @@ func (g gatedCall) execute(ctx context.Context, tools Registry, resultBytesCap i
 	}
 	rendered, handle, storeErr := artifacts.Render(text, resultBytesCap)
 	sum := sha256.Sum256([]byte(result.Content))
-	errorText := result.FailureText
-	if result.Outcome == ResultAborted && errorText != "" {
-		errorText = "aborted: " + errorText
-	}
 	row := ToolCallRow{
 		ID:             g.id,
 		Parent:         g.parent,
@@ -656,7 +652,7 @@ func (g gatedCall) execute(ctx context.Context, tools Registry, resultBytesCap i
 		ResultHandle:   handle,
 		SiftSavedBytes: saved,
 		DurationMS:     time.Since(started).Milliseconds(),
-		Error:          errorText,
+		Error:          result.FailureText,
 	}
 	if storeErr != nil {
 		row.ResultHandleError = storeErr.Error()
@@ -664,12 +660,16 @@ func (g gatedCall) execute(ctx context.Context, tools Registry, resultBytesCap i
 	if spawning && len(spawner.children) > spawnedBefore {
 		row.ChildID = spawner.children[spawnedBefore].ID
 	}
+	outcome := row.Outcome()
+	if result.Outcome == ResultAborted {
+		outcome = llm.ToolOutcomeAborted
+	}
 	body := rendered
 	if body == "" {
-		switch {
-		case result.Outcome == ResultAborted:
+		switch outcome {
+		case llm.ToolOutcomeAborted:
 			body = theToolWasAbortedAndPrintedNothing
-		case row.Outcome() == llm.ToolOutcomeFailed:
+		case llm.ToolOutcomeFailed:
 			body = theToolFailedAndPrintedNothing
 		default:
 			body = theToolSucceededAndPrintedNothing
@@ -679,7 +679,7 @@ func (g gatedCall) execute(ctx context.Context, tools Registry, resultBytesCap i
 		Role:            llm.RoleTool,
 		ToolCallID:      call.ID,
 		Content:         body,
-		ToolOutcome:     row.Outcome(),
+		ToolOutcome:     outcome,
 		ToolResultBytes: row.ResultBytes,
 	}
 }

@@ -44,11 +44,12 @@ const (
 	ToolOutcomeUnset ToolOutcome = iota
 	ToolOutcomeRan
 	ToolOutcomeFailed
+	ToolOutcomeAborted
 )
 
 func (o ToolOutcome) Failed() bool {
 	switch o {
-	case ToolOutcomeUnset, ToolOutcomeRan:
+	case ToolOutcomeUnset, ToolOutcomeRan, ToolOutcomeAborted:
 		return false
 	case ToolOutcomeFailed:
 		return true

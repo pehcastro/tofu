@@ -26,7 +26,13 @@ const (
 	EventRead       EventKind = "read"
 	EventOutcome    EventKind = "outcome"
 	EventAttachment EventKind = "attachment"
+	EventPrompt     EventKind = "prompt"
 )
+
+type PromptBody struct {
+	System string   `json:"system"`
+	Tools  []string `json:"tools,omitempty"`
+}
 
 type Attachment struct {
 	File   string `json:"file"`

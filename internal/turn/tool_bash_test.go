@@ -1145,15 +1145,57 @@ func TestARowBuiltFromAnAbortedResultNamesTheAbortRatherThanReadingLikeAFailure(
 	}
 
 	call := firstToolCall(t, row)
-	if !strings.HasPrefix(call.Error, "aborted:") {
-		t.Fatalf("row.Error = %q, want it to open by saying the call was aborted rather than reading as a bare failure", call.Error)
+	if strings.HasPrefix(call.Error, "aborted:") {
+		t.Fatalf("row.Error = %q, still spells the abort as a prefix instead of leaving it to the typed outcome", call.Error)
 	}
-	if call.Outcome() != llm.ToolOutcomeFailed {
-		t.Fatalf("an aborted call still has to read as not-ran on the wire, got %v", call.Outcome())
+	var wireOutcome llm.ToolOutcome
+	for _, message := range row.Conversation {
+		if message.ToolCallID == "call-1" {
+			wireOutcome = message.ToolOutcome
+		}
+	}
+	if wireOutcome != llm.ToolOutcomeAborted {
+		t.Fatalf("an aborted call has to carry ToolOutcomeAborted on the wire, got %v", wireOutcome)
 	}
 	last := row.Steps[len(row.Steps)-1]
 	if last.AssistantText != "done" {
 		t.Fatalf("the turn did not go on past the aborted call: %+v", last)
+	}
+}
+
+func TestASessionRecordedAbortRoundTripsWithoutPanicking(t *testing.T) {
+	tool := &stubTool{name: "read", result: Result{Outcome: ResultAborted, FailureText: "cancelled elsewhere in this turn"}}
+	model := &stubModel{decisions: []llm.Decision{
+		toolCallDecision(llm.ToolCall{ID: "call-1", Name: "read", Arguments: json.RawMessage(`{}`)}),
+		messageDecision(),
+	}}
+	config, store := recordingConfig(t, model, NewRegistry(tool))
+
+	row, err := Run(context.Background(), config)
+	if err != nil {
+		t.Fatalf("Run returned an error: %v", err)
+	}
+
+	events, err := store.Body(row.ID)
+	if err != nil {
+		t.Fatalf("reading the record of %s: %v", row.ID, err)
+	}
+	recorded, err := ConversationFrom(events)
+	if err != nil {
+		t.Fatalf("replaying the recorded conversation: %v", err)
+	}
+	var found bool
+	for _, message := range recorded {
+		if message.ToolCallID != "call-1" {
+			continue
+		}
+		found = true
+		if message.ToolOutcome != llm.ToolOutcomeAborted {
+			t.Fatalf("the round tripped message carries outcome %v, want aborted", message.ToolOutcome)
+		}
+	}
+	if !found {
+		t.Fatalf("the recorded conversation never carried the aborted call's result")
 	}
 }
 

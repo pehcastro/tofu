@@ -134,6 +134,100 @@ func TestAMessageRowWrittenBeforeTheReasoningFieldStillLoads(t *testing.T) {
 	}
 }
 
+func TestARecordedSessionCarriesTheSystemPromptAndToolsItSent(t *testing.T) {
+	row := Row{ID: "turn-1", Task: "a task", Outcome: OutcomeStopped,
+		System: "[tool_guidance, from tofu itself]\nprefer the tool over the shell", Tools: []string{"read", "bash"}}
+	_, events, err := row.Record()
+	if err != nil {
+		t.Fatalf("record a row carrying a system prompt: %v", err)
+	}
+	prompt, ok, err := PromptFrom(events)
+	if err != nil {
+		t.Fatalf("read the prompt back: %v", err)
+	}
+	if !ok {
+		t.Fatal("a session that carried a system prompt reads back as one that never did")
+	}
+	if prompt.System != row.System {
+		t.Fatalf("the recorded system prompt is %q, want %q", prompt.System, row.System)
+	}
+	if len(prompt.Tools) != 2 || prompt.Tools[0] != "read" || prompt.Tools[1] != "bash" {
+		t.Fatalf("the recorded tool list is %v, want [read bash]", prompt.Tools)
+	}
+	if events[0].Kind != session.EventPrompt {
+		t.Fatalf("the first event is %q, want the prompt to lead the body the way session_init does upstream", events[0].Kind)
+	}
+}
+
+func TestTwoSessionsWithDifferentPromptsRecordDifferently(t *testing.T) {
+	first := Row{ID: "turn-1", Task: "fix the failing test", Outcome: OutcomeStopped, System: "prefer the tool over the shell"}
+	second := Row{ID: "turn-2", Task: "fix the flaky test", Outcome: OutcomeStopped, System: "prefer the shell over the tool"}
+
+	_, firstEvents, err := first.Record()
+	if err != nil {
+		t.Fatalf("record the first row: %v", err)
+	}
+	_, secondEvents, err := second.Record()
+	if err != nil {
+		t.Fatalf("record the second row: %v", err)
+	}
+
+	firstPrompt, _, err := PromptFrom(firstEvents)
+	if err != nil {
+		t.Fatalf("read the first prompt back: %v", err)
+	}
+	secondPrompt, _, err := PromptFrom(secondEvents)
+	if err != nil {
+		t.Fatalf("read the second prompt back: %v", err)
+	}
+	if firstPrompt.System == secondPrompt.System {
+		t.Fatalf("two sessions with different prompts both recorded %q", firstPrompt.System)
+	}
+}
+
+func TestASessionWrittenBeforeThePromptFieldStillLoads(t *testing.T) {
+	store := session.NewStore(filepath.Join("..", "session", "testdata"))
+	const id = "turn-18d6d295dfac466c-f2"
+
+	header, err := store.Header(id)
+	if err != nil {
+		t.Fatalf("a session written before the prompt field is refused at the header: %v", err)
+	}
+	if header.ID == "" {
+		t.Fatalf("the header of %s reads back empty", id)
+	}
+	events, err := store.Body(id)
+	if err != nil {
+		t.Fatalf("a session written before the prompt field is refused at the body: %v", err)
+	}
+	prompt, ok, err := PromptFrom(events)
+	if err != nil {
+		t.Fatalf("reading a session that never recorded a prompt failed: %v", err)
+	}
+	if ok {
+		t.Fatalf("%s was written before the prompt field existed and should read as absent, not %+v", id, prompt)
+	}
+}
+
+func TestTheRecordedPromptNeverCarriesTheAccountItWasSpentOn(t *testing.T) {
+	row := Row{ID: "turn-1", Task: "a task", Outcome: OutcomeStopped, Account: 424242,
+		System: "prefer the tool over the shell, and nothing about billing"}
+	_, events, err := row.Record()
+	if err != nil {
+		t.Fatalf("record a row with an account and a prompt: %v", err)
+	}
+	prompt, ok, err := PromptFrom(events)
+	if err != nil || !ok {
+		t.Fatalf("read the prompt back: ok=%v err=%v", ok, err)
+	}
+	if prompt.System != row.System {
+		t.Fatalf("the recorded prompt %q is not the byte-identical text that was composed, so something besides the caller's text reached the record", prompt.System)
+	}
+	if strings.Contains(prompt.System, "424242") {
+		t.Fatalf("the recorded prompt %q carries the account number", prompt.System)
+	}
+}
+
 func TestARowThatNamesNoRootIsItsOwnRoot(t *testing.T) {
 	header, events, err := Row{ID: "turn-1", Task: "a task", Outcome: OutcomeStopped}.Record()
 	if err != nil {

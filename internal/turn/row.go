@@ -124,6 +124,8 @@ type Row struct {
 	Guard  *LoopGuardStop `json:"loop_guard,omitempty"`
 
 	Conversation []llm.Message `json:"-"`
+	System       string        `json:"-"`
+	Tools        []string      `json:"-"`
 }
 
 type LoopGuardStop struct {
@@ -163,6 +165,8 @@ func toolOutcomeName(outcome llm.ToolOutcome) string {
 		return "ran"
 	case llm.ToolOutcomeFailed:
 		return "failed"
+	case llm.ToolOutcomeAborted:
+		return "aborted"
 	}
 	panic("turn: unknown tool outcome")
 }
@@ -213,6 +217,8 @@ func (m MessageRow) Message() (llm.Message, error) {
 		message.ToolOutcome = llm.ToolOutcomeRan
 	case "failed":
 		message.ToolOutcome = llm.ToolOutcomeFailed
+	case "aborted":
+		message.ToolOutcome = llm.ToolOutcomeAborted
 	default:
 		return llm.Message{}, errors.New("turn: a recorded message names the tool outcome " + strconv.Quote(m.ToolOutcome) + ", which is none this build records")
 	}
@@ -220,6 +226,20 @@ func (m MessageRow) Message() (llm.Message, error) {
 		message.ToolCalls = append(message.ToolCalls, llm.ToolCall{ID: call.ID, Name: call.Name, Arguments: call.Arguments})
 	}
 	return message, nil
+}
+
+func PromptFrom(events []session.Event) (session.PromptBody, bool, error) {
+	for _, event := range events {
+		if event.Kind != session.EventPrompt {
+			continue
+		}
+		var body session.PromptBody
+		if err := json.Unmarshal(event.Body, &body); err != nil {
+			return session.PromptBody{}, false, err
+		}
+		return body, true, nil
+	}
+	return session.PromptBody{}, false, nil
 }
 
 func ConversationFrom(events []session.Event) ([]llm.Message, error) {
@@ -322,7 +342,14 @@ func (r Row) Record() (session.Header, []session.Event, error) {
 		last = id
 		return event, nil
 	}
-	events := make([]session.Event, 0, len(r.Conversation)+len(r.Steps)+1)
+	events := make([]session.Event, 0, len(r.Conversation)+len(r.Steps)+2)
+	if r.System != "" || len(r.Tools) > 0 {
+		event, err := next(session.EventPrompt, session.FirstAttempt, session.PromptBody{System: r.System, Tools: r.Tools})
+		if err != nil {
+			return session.Header{}, nil, err
+		}
+		events = append(events, event)
+	}
 	for _, message := range r.Conversation {
 		event, err := next(session.EventMessage, session.FirstAttempt, messageRowOf(message))
 		if err != nil {

@@ -40,13 +40,13 @@ func (a Artifacts) Render(content string, bytesCap int) (string, string, error) 
 		return content, "", nil
 	}
 	if !a.handles {
-		return truncateMiddle(content, bytesCap, droppedMarker), "", nil
+		return cutOnRuneBoundary(content, bytesCap, droppedMarker), "", nil
 	}
 	preview := a.preview
 	preview.ElideAboveBytes = bytesCap
 	elided, err := recall.Elide(a.store, preview, []byte(content), true)
 	if err != nil {
-		return truncateMiddle(content, bytesCap, unstoredMarker), "", err
+		return cutOnRuneBoundary(content, bytesCap, unstoredMarker), "", err
 	}
 	reference := elided.Reference
 	return fmt.Sprintf(
@@ -57,14 +57,15 @@ func (a Artifacts) Render(content string, bytesCap int) (string, string, error) 
 	), reference.ID, nil
 }
 
-func truncateMiddle(content string, bytesCap int, marker string) string {
-	dropped := len(content) - bytesCap
+func cutOnRuneBoundary(content string, bytesCap int, marker string) string {
+	head := runeSafeHead(content, bytesCap/2)
+	tail := runeSafeTail(content, bytesCap-len(head))
+	dropped := len(content) - len(head) - len(tail)
 	amount := fmt.Sprintf("%d bytes", dropped)
 	if dropped == 1 {
 		amount = "1 byte"
 	}
-	head := bytesCap / 2
-	return content[:head] + fmt.Sprintf(marker, amount) + content[len(content)-(bytesCap-head):]
+	return head + fmt.Sprintf(marker, amount) + tail
 }
 
 func (a Artifacts) FetchTool() FetchTool {

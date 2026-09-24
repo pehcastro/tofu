@@ -654,6 +654,25 @@
     {
       "package": "tokencount",
       "date": "2026-09-24",
+      "source": "bench/tokencount/report-2026-09-24-corrected.md",
+      "figure": "16.8%",
+      "built_from": "prose",
+      "sample": "the same 118 turns and 635 usable steps as report-2026-09-24.md, split into 348 accountable and 287 unaccountable by TOFU-562's byte floor; the factor is fitted only on the 348",
+      "skips": "same corpus skips as report-2026-09-24.md; the factor is fitted and reported on the same steps, not validated on a held-out set",
+      "conclusion": [
+        {
+          "text": "Fitted per shape on the 348 accountable steps only, the residual median moves from 47.1% to 16.8%, worst 71.2%, 67.0% still out by more than a tenth.",
+          "withdrawn": false
+        }
+      ],
+      "conclusion_unparsed": false,
+      "state": "stands",
+      "state_source": "",
+      "state_note": ""
+    },
+    {
+      "package": "tokencount",
+      "date": "2026-09-24",
       "source": "bench/tokencount/report-2026-09-24.md",
       "figure": "71.2%",
       "built_from": "prose",
@@ -1738,7 +1757,7 @@
     }
   ],
   "counts": {
-    "reports": 58,
+    "reports": 59,
     "packages_with_a_dated_report": 34,
     "packages_with_no_dated_report": 6,
     "withdrawn_whole_or_in_part": 20,
