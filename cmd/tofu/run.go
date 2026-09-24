@@ -211,19 +211,13 @@ func runVerb(args []string, out, errOut io.Writer) int {
 	if err != nil {
 		return runFail(errOut, err)
 	}
+	dir := cmp.Or(opts.dir, ".")
+	say := func(unreadable string) { _, _ = fmt.Fprintln(errOut, "tofu run: "+unreadable) }
 	if opts.maxSteps == 0 {
-		var unreadable string
-		opts.maxSteps, unreadable = appSetting(cmp.Or(opts.dir, "."), settingspkg.DecisionCap)
-		if unreadable != "" {
-			_, _ = fmt.Fprintln(errOut, "tofu run: "+unreadable)
-		}
+		opts.maxSteps = settingInt(dir, settingspkg.DecisionCap, say)
 	}
 	if !opts.noSubAgents {
-		maySpawn, unreadable := appSetting(cmp.Or(opts.dir, "."), settingspkg.TurnMaySpawn)
-		if unreadable != "" {
-			_, _ = fmt.Fprintln(errOut, "tofu run: "+unreadable)
-		}
-		if maySpawn == 0 {
+		if maySpawn := settingInt(dir, settingspkg.TurnMaySpawn, say); maySpawn == 0 {
 			opts.noSubAgents = true
 			if opts.doneArm != doneArmOff {
 				return runFail(errOut, fmt.Errorf(
@@ -232,11 +226,7 @@ func runVerb(args []string, out, errOut io.Writer) int {
 			}
 		}
 	}
-	readBeforeEdit, readUnreadable := appSetting(cmp.Or(opts.dir, "."), settingspkg.ReadBeforeEdit)
-	if readUnreadable != "" {
-		_, _ = fmt.Fprintln(errOut, "tofu run: "+readUnreadable)
-	}
-	opts.readBeforeEdit = readBeforeEdit != 0
+	opts.readBeforeEdit = settingInt(dir, settingspkg.ReadBeforeEdit, say) != 0
 	if opts.showPrompt {
 		return showPrompt(opts, out, errOut)
 	}
@@ -249,11 +239,7 @@ func runVerb(args []string, out, errOut io.Writer) int {
 		return runFail(errOut, err)
 	}
 
-	shellOverride, shellUnreadable := appTextSetting(cmp.Or(opts.dir, "."), settingspkg.Shell)
-	if shellUnreadable != "" {
-		_, _ = fmt.Fprintln(errOut, "tofu run: "+shellUnreadable)
-	}
-	shell, err := turn.ResolveRunShell(shellOverride)
+	shell, err := turn.ResolveRunShell(settingText(dir, settingspkg.Shell, say))
 	if err != nil {
 		return runFail(errOut, err)
 	}
@@ -408,15 +394,6 @@ func runTurn(opts runOpts, selected models.Model, built []turn.Tool, budget reca
 	return exitOK
 }
 
-func appTextSetting(dir, key string) (value string, unreadable string) {
-	store, err := openSettings(dir)
-	if err != nil {
-		fallback := settingspkg.DeclaredDefaultText(key)
-		return fallback, fmt.Sprintf("%s fell back to its default of %q because the settings file could not be read: %v", key, fallback, err)
-	}
-	return store.Text(key), ""
-}
-
 func runEnvironment(opts runOpts) (environment, instructions, notice string) {
 	if opts.shell.Resolved() {
 		environment = turn.EnvironmentFromShell(opts.dir, time.Now(), opts.shell)
@@ -495,11 +472,7 @@ func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn
 	}
 	if run.gate != nil {
 		config.Gate = run.gate
-		prompt, unreadable := appTextSetting(cmp.Or(opts.dir, "."), settingspkg.GatePrompt)
-		if unreadable != "" && run.notify != nil {
-			run.notify(unreadable)
-		}
-		config.GateMode = gateMode(opts.gateArm, prompt)
+		config.GateMode = gateMode(opts.gateArm, settingText(cmp.Or(opts.dir, "."), settingspkg.GatePrompt, run.notify))
 	}
 	parentID := cmp.Or(opts.turnID, turn.NewID(time.Now()))
 	config.NewID = func() string { return parentID }

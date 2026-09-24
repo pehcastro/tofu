@@ -646,26 +646,11 @@ func (s *appSession) run(ctx context.Context, pick tui.Pick, task string, emit t
 		fail(imagesErr)
 		return
 	}
-	maxSteps, unreadable := appSetting(s.dir, settingspkg.DecisionCap)
-	if unreadable != "" {
-		emit(tui.Event{Kind: tui.EventNote, Text: unreadable})
-	}
-	opts := pickedOpts(s.dir, s.pendingID(), task, pick, maxSteps)
-	maySpawn, spawnUnreadable := appSetting(s.dir, settingspkg.TurnMaySpawn)
-	if spawnUnreadable != "" {
-		emit(tui.Event{Kind: tui.EventNote, Text: spawnUnreadable})
-	}
-	opts.noSubAgents = maySpawn == 0
-	readBeforeEdit, readUnreadable := appSetting(s.dir, settingspkg.ReadBeforeEdit)
-	if readUnreadable != "" {
-		emit(tui.Event{Kind: tui.EventNote, Text: readUnreadable})
-	}
-	opts.readBeforeEdit = readBeforeEdit != 0
-	shellOverride, shellUnreadable := appTextSetting(s.dir, settingspkg.Shell)
-	if shellUnreadable != "" {
-		emit(tui.Event{Kind: tui.EventNote, Text: shellUnreadable})
-	}
-	shell, shellErr := turn.ResolveRunShell(shellOverride)
+	say := func(unreadable string) { emit(tui.Event{Kind: tui.EventNote, Text: unreadable}) }
+	opts := pickedOpts(s.dir, s.pendingID(), task, pick, settingInt(s.dir, settingspkg.DecisionCap, say))
+	opts.noSubAgents = settingInt(s.dir, settingspkg.TurnMaySpawn, say) == 0
+	opts.readBeforeEdit = settingInt(s.dir, settingspkg.ReadBeforeEdit, say) != 0
+	shell, shellErr := turn.ResolveRunShell(settingText(s.dir, settingspkg.Shell, say))
 	if shellErr != nil {
 		fail(shellErr)
 		return

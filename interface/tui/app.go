@@ -493,8 +493,8 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return a, a.view.Update(msg)
 }
 
-func jump(key string) (viewID, bool) {
-	for index, view := range namedViews() {
+func (a *App) jump(key string) (viewID, bool) {
+	for index, view := range a.strip.Views {
 		if key == string(view.Digit) {
 			return viewID(index), true
 		}
@@ -508,7 +508,7 @@ func (a *App) show(view viewID) {
 }
 
 func (a *App) step(by int) {
-	views := len(namedViews())
+	views := len(a.strip.Views)
 	a.show(viewID((int(a.current) + by + views) % views))
 }
 
@@ -560,7 +560,7 @@ func (a *App) key(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	}
 	digit, alt := strings.CutPrefix(key, altPrefix)
 	if alt || a.current != viewChat {
-		if jumped, ok := jump(digit); ok {
+		if jumped, ok := a.jump(digit); ok {
 			a.show(jumped)
 			return a, nil
 		}

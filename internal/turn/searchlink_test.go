@@ -41,10 +41,10 @@ func TestSearchLinksNamesTheOfferedPathALaterEditActedIn(t *testing.T) {
 		actCall("e1", "edit", "b.go"),
 		actResult("e1"),
 	}
-	links := searchLinksOf(conversation)
+	links := SearchLinksOf(conversation)
 	want := []SearchLink{{SearchCallID: "s1", Offered: []string{"a.go", "b.go", "c.go"}, ActedCallID: "e1", ActedPath: "b.go", Kind: SearchLinkHit}}
 	if !reflect.DeepEqual(links, want) {
-		t.Fatalf("searchLinksOf = %+v, want %+v", links, want)
+		t.Fatalf("SearchLinksOf = %+v, want %+v", links, want)
 	}
 }
 
@@ -53,10 +53,10 @@ func TestSearchLinksRecordsNoneWhenNothingActsOnAPathAfterwards(t *testing.T) {
 		searchCall("s1", "."),
 		searchResult("s1", "a.go", "b.go"),
 	}
-	links := searchLinksOf(conversation)
+	links := SearchLinksOf(conversation)
 	want := []SearchLink{{SearchCallID: "s1", Offered: []string{"a.go", "b.go"}, Kind: SearchLinkNone}}
 	if !reflect.DeepEqual(links, want) {
-		t.Fatalf("searchLinksOf = %+v, want %+v", links, want)
+		t.Fatalf("SearchLinksOf = %+v, want %+v", links, want)
 	}
 }
 
@@ -67,10 +67,10 @@ func TestSearchLinksRecordsUnofferedWhenTheActedPathWasNeverReturned(t *testing.
 		actCall("w1", "write", "z.go"),
 		actResult("w1"),
 	}
-	links := searchLinksOf(conversation)
+	links := SearchLinksOf(conversation)
 	want := []SearchLink{{SearchCallID: "s1", Offered: []string{"a.go", "b.go"}, ActedCallID: "w1", ActedPath: "z.go", Kind: SearchLinkUnoffered}}
 	if !reflect.DeepEqual(links, want) {
-		t.Fatalf("searchLinksOf = %+v, want %+v", links, want)
+		t.Fatalf("SearchLinksOf = %+v, want %+v", links, want)
 	}
 	if links[0].Kind == SearchLinkHit {
 		t.Fatalf("a path the search never returned must not read as a hit")

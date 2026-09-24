@@ -58,10 +58,6 @@ func callsInOrder(conversation []llm.Message) ([]actingCall, map[string]string) 
 }
 
 func SearchLinksOf(conversation []llm.Message) []SearchLink {
-	return searchLinksOf(conversation)
-}
-
-func searchLinksOf(conversation []llm.Message) []SearchLink {
 	calls, results := callsInOrder(conversation)
 	var links []SearchLink
 	for i, call := range calls {

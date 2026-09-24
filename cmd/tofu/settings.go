@@ -31,6 +31,31 @@ func appSetting(dir, key string) (value int, unreadable string) {
 	return store.Int(key), ""
 }
 
+func appTextSetting(dir, key string) (value string, unreadable string) {
+	store, err := openSettings(dir)
+	if err != nil {
+		fallback := settingspkg.DeclaredDefaultText(key)
+		return fallback, fmt.Sprintf("%s fell back to its default of %q because the settings file could not be read: %v", key, fallback, err)
+	}
+	return store.Text(key), ""
+}
+
+func settingInt(dir, key string, say func(string)) int {
+	value, unreadable := appSetting(dir, key)
+	if unreadable != "" && say != nil {
+		say(unreadable)
+	}
+	return value
+}
+
+func settingText(dir, key string, say func(string)) string {
+	value, unreadable := appTextSetting(dir, key)
+	if unreadable != "" && say != nil {
+		say(unreadable)
+	}
+	return value
+}
+
 func settingsVerb(args []string, out, errOut io.Writer) int {
 	dir, err := os.Getwd()
 	if err != nil {

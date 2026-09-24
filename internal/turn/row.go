@@ -325,43 +325,35 @@ func (r Row) author() string {
 }
 
 func (r Row) Record() (session.Header, []session.Event, error) {
-	r.SearchLinks = searchLinksOf(r.Conversation)
+	r.SearchLinks = SearchLinksOf(r.Conversation)
 	author, last := r.author(), ""
-	next := func(kind session.EventKind, attempt int, body any) (session.Event, error) {
+	events := make([]session.Event, 0, len(r.Conversation)+len(r.Steps)+2)
+	var failed error
+	record := func(kind session.EventKind, attempt int, body any) {
+		if failed != nil {
+			return
+		}
 		raw, err := json.Marshal(body)
 		if err != nil {
-			return session.Event{}, err
+			failed = err
+			return
 		}
 		id := session.NewEventID()
-		event := session.Event{ID: id, Parent: last, Author: author, Attempt: max(attempt, session.FirstAttempt), Kind: kind, Body: raw}
+		events = append(events, session.Event{ID: id, Parent: last, Author: author, Attempt: max(attempt, session.FirstAttempt), Kind: kind, Body: raw})
 		last = id
-		return event, nil
 	}
-	events := make([]session.Event, 0, len(r.Conversation)+len(r.Steps)+2)
 	if r.System != "" || len(r.Tools) > 0 {
-		event, err := next(session.EventPrompt, session.FirstAttempt, session.PromptBody{System: r.System, Tools: r.Tools})
-		if err != nil {
-			return session.Header{}, nil, err
-		}
-		events = append(events, event)
+		record(session.EventPrompt, session.FirstAttempt, session.PromptBody{System: r.System, Tools: r.Tools})
 	}
 	for _, message := range r.Conversation {
-		event, err := next(session.EventMessage, session.FirstAttempt, messageRowOf(message))
-		if err != nil {
-			return session.Header{}, nil, err
-		}
-		events = append(events, event)
+		record(session.EventMessage, session.FirstAttempt, messageRowOf(message))
 	}
 	for _, step := range r.Steps {
-		event, err := next(session.EventStep, step.attempt, step)
-		if err != nil {
-			return session.Header{}, nil, err
-		}
-		events = append(events, event)
+		record(session.EventStep, step.attempt, step)
 	}
-	outcome, err := next(session.EventOutcome, session.FirstAttempt, r.Summary())
-	if err != nil {
-		return session.Header{}, nil, err
+	record(session.EventOutcome, session.FirstAttempt, r.Summary())
+	if failed != nil {
+		return session.Header{}, nil, failed
 	}
-	return r.Header(), append(events, outcome), nil
+	return r.Header(), events, nil
 }

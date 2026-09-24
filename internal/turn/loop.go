@@ -32,13 +32,6 @@ type Caps struct {
 	LoopGuardWindow  int
 }
 
-func (c Caps) exceeded(step int) (Outcome, bool) {
-	if c.MaxSteps > 0 && step > c.MaxSteps {
-		return OutcomeStepCap, true
-	}
-	return OutcomeUnset, false
-}
-
 const theResponseHitTheOutputTokenLimit = "the response hit the output token limit, so its arguments may be truncated. " +
 	"Re-issue the tool call with complete arguments."
 
@@ -299,9 +292,9 @@ func Run(ctx context.Context, config Config) (Row, error) {
 				messages = append(messages, llm.Message{Role: llm.RoleUser, Content: steered})
 			}
 		}
-		if outcome, capped := config.Caps.exceeded(step); capped {
-			lead := "this turn reached its " + outcome.String() + " of " + strconv.Itoa(config.Caps.MaxSteps) + ", and the work is not finished"
-			return endAt(outcome, lead, step, messages), nil
+		if config.Caps.MaxSteps > 0 && step > config.Caps.MaxSteps {
+			lead := "this turn reached its " + OutcomeStepCap.String() + " of " + strconv.Itoa(config.Caps.MaxSteps) + ", and the work is not finished"
+			return endAt(OutcomeStepCap, lead, step, messages), nil
 		}
 
 		stepTools := currentTools()

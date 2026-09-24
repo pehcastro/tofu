@@ -24,7 +24,7 @@ func TestSearchLinksOverTheRecordedSessions(t *testing.T) {
 		if err != nil {
 			t.Fatalf("ConversationFrom(%s): %v", header.ID, err)
 		}
-		for _, link := range searchLinksOf(conversation) {
+		for _, link := range SearchLinksOf(conversation) {
 			searches++
 			switch link.Kind {
 			case SearchLinkHit:
