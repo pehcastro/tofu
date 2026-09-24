@@ -127,7 +127,7 @@ func siftMarks(parts []sift.Part, opts siftOpts) ([]sift.Mark, float64, error) {
 
 func siftJev(parts []sift.Part, opts siftOpts) ([]sift.Mark, float64, error) {
 	marks := make([]sift.Mark, len(parts))
-	set, err := resolveLibrary(siftPoint)
+	set, err := resolveLibrary(siftPoint, "")
 	if err != nil {
 		return nil, 0, err
 	}

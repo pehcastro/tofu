@@ -114,8 +114,8 @@ type runtime struct {
 	now      func() time.Time
 }
 
-func boundRoles(wire string) (models.Bindings, error) {
-	library, err := modelLibrary()
+func boundRoles(wire, dir string) (models.Bindings, error) {
+	library, err := modelLibrary(dir)
 	if err != nil {
 		return nil, err
 	}
@@ -133,7 +133,7 @@ func chooseModel(opts runOpts) (models.Model, error) {
 	if opts.model != "" {
 		return selectModel(opts.wire, opts.model)
 	}
-	bound, err := boundRoles(opts.wire)
+	bound, err := boundRoles(opts.wire, opts.dir)
 	if err != nil {
 		return models.Model{}, err
 	}
@@ -150,7 +150,7 @@ func chooseChild(opts runOpts) (childRole, error) {
 	if opts.wire == wireKey {
 		return childRole{}, nil
 	}
-	bound, err := boundRoles(opts.wire)
+	bound, err := boundRoles(opts.wire, opts.dir)
 	if err != nil {
 		return childRole{}, err
 	}
@@ -688,7 +688,7 @@ func assembleRunTools(dir, set string, readBeforeEdit bool, bashTool *turn.BashT
 }
 
 func buildWebTools(dir string) ([]turn.Tool, error) {
-	layers, err := web.LayersIn(shipped.Files(), dir)
+	layers, err := web.Layers(shipped.Files(), dir)
 	if err != nil {
 		return nil, err
 	}

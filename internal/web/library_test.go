@@ -15,9 +15,9 @@ const absentKey = "TOFU_TEST_SEARCH_KEY_NOBODY_SETS"
 
 func shipped(t *testing.T) web.Layer {
 	t.Helper()
-	layers, err := web.DefaultLayers(library.Files())
+	layers, err := web.Layers(library.Files(), "")
 	if err != nil {
-		t.Fatalf("building the default layers: %v", err)
+		t.Fatalf("building the layers: %v", err)
 	}
 	return layers[0]
 }
@@ -31,9 +31,9 @@ func project(files map[string]string) web.Layer {
 }
 
 func TestTheLayersAreTheShippedLibraryThenTheHomeThenTheProject(t *testing.T) {
-	layers, err := web.DefaultLayers(library.Files())
+	layers, err := web.Layers(library.Files(), "")
 	if err != nil {
-		t.Fatalf("building the default layers: %v", err)
+		t.Fatalf("building the layers: %v", err)
 	}
 	var origins []string
 	for _, layer := range layers {
@@ -68,7 +68,7 @@ func writeFetch(t *testing.T, dir string, maxBytes string) {
 }
 
 func TestTheProjectWebFileBeatsTheGlobalWhichBeatsTheShipped(t *testing.T) {
-	found, err := web.DefaultLayers(library.Files())
+	found, err := web.Layers(library.Files(), "")
 	if err != nil {
 		t.Fatalf("layers: %v", err)
 	}
@@ -113,7 +113,7 @@ func TestTheProjectLayerIsTheNamedDirectoryAndNotTheWorkingOne(t *testing.T) {
 	writeFetch(t, filepath.Join(standing, ".tofu", "web"), "4096")
 	t.Chdir(standing)
 
-	layers, err := web.LayersIn(library.Files(), named)
+	layers, err := web.Layers(library.Files(), named)
 	if err != nil {
 		t.Fatalf("layers in %s: %v", named, err)
 	}
@@ -130,9 +130,9 @@ func TestTheProjectLayerIsTheNamedDirectoryAndNotTheWorkingOne(t *testing.T) {
 
 func TestTheShippedLibraryResolvesFromAnyWorkingDirectory(t *testing.T) {
 	t.Chdir(t.TempDir())
-	layers, err := web.DefaultLayers(library.Files())
+	layers, err := web.Layers(library.Files(), "")
 	if err != nil {
-		t.Fatalf("building the default layers: %v", err)
+		t.Fatalf("building the layers: %v", err)
 	}
 	config, err := web.Load(layers)
 	t.Logf("library layer %q, provider %q, ceiling %d, err %v", layers[0].Origin, config.Provider.Name, config.MaxPageBytes, err)

@@ -19,7 +19,7 @@ type proxySetting struct {
 
 func loadProxySetting(root string) proxySetting {
 	setting := proxySetting{use: "off", layer: "nothing declares it"}
-	layers, err := models.Layers(shipped.Files())
+	layers, err := models.Layers(shipped.Files(), root)
 	if err != nil {
 		setting.refused = append(setting.refused, err)
 		return setting

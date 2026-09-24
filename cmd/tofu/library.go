@@ -6,6 +6,7 @@ import (
 	"io"
 	"io/fs"
 	"os"
+	"slices"
 	"strings"
 
 	"tofu/internal/judge/question"
@@ -16,21 +17,39 @@ import (
 	"tofu/library/questions"
 )
 
-const libraryUsage = "usage: tofu library [resolve <name>]"
+const libraryUsage = "usage: tofu library [resolve <name>] [--dir <path>]"
 
 func libraryVerb(args []string, out, errOut io.Writer) int {
+	dir, rest, err := takeDir(args)
+	if err != nil {
+		_, _ = fmt.Fprintf(errOut, "tofu library: %v\n", err)
+		return exitUsage
+	}
 	switch {
-	case len(args) == 0:
-		return libraryReport(out, errOut)
-	case len(args) == 2 && args[0] == "resolve":
-		return libraryResolve(args[1], out, errOut)
+	case len(rest) == 0:
+		return libraryReport(dir, out, errOut)
+	case len(rest) == 2 && rest[0] == "resolve":
+		return libraryResolve(rest[1], dir, out, errOut)
 	}
 	_, _ = fmt.Fprintln(errOut, "tofu library: "+libraryUsage)
 	return exitUsage
 }
 
-func libraryResolve(name string, out, errOut io.Writer) int {
-	layers, err := question.DefaultLayers(questions.Files())
+func takeDir(args []string) (string, []string, error) {
+	for i, arg := range args {
+		if arg != "--dir" {
+			continue
+		}
+		if i+1 == len(args) {
+			return "", nil, errors.New("--dir names no path")
+		}
+		return args[i+1], slices.Concat(args[:i], args[i+2:]), nil
+	}
+	return "", args, nil
+}
+
+func libraryResolve(name, dir string, out, errOut io.Writer) int {
+	layers, err := question.Layers(questions.Files(), dir)
 	if err != nil {
 		_, _ = fmt.Fprintf(errOut, "tofu library: %v\n", err)
 		return exitUsage
@@ -71,8 +90,8 @@ func printDomains(out io.Writer, domains []rule.Domain) []error {
 	return refused
 }
 
-func libraryReport(out, errOut io.Writer) int {
-	layers, err := models.Layers(shipped.Files())
+func libraryReport(dir string, out, errOut io.Writer) int {
+	layers, err := models.Layers(shipped.Files(), dir)
 	if err != nil {
 		_, _ = fmt.Fprintf(errOut, "tofu library: %v\n", err)
 		return exitUsage
@@ -95,7 +114,7 @@ func libraryReport(out, errOut io.Writer) int {
 	sets, refused := question.LoadAll(questions.Files(), libraryRoot+"/questions")
 	_, _ = fmt.Fprintf(out, "%-14s %3d loaded   the wording a decision point asks, checked by tofu library resolve\n", "questions", len(sets))
 
-	proxy := loadProxySetting(".")
+	proxy := loadProxySetting(dir)
 	refused = append(refused, proxy.refused...)
 	_, _ = fmt.Fprintf(out, "%-14s use %-3s   from %s   required use, timeout_ms\n", "proxy", proxy.use, proxy.layer)
 

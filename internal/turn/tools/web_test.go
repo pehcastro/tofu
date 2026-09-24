@@ -94,7 +94,7 @@ func (g *denyingGate) Decide(_ context.Context, request turn.GateRequest) (turn.
 func toolNames(t *testing.T, key string, projectFiles map[string]string) string {
 	t.Helper()
 	t.Setenv(testSearchKey, key)
-	layers, err := web.DefaultLayers(library.Files())
+	layers, err := web.Layers(library.Files(), "")
 	if err != nil {
 		t.Fatalf("building the web layers: %v", err)
 	}

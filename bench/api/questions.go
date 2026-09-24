@@ -9,7 +9,7 @@ import (
 )
 
 func GateBattery() ([]jev.Question, int, error) {
-	layers, err := question.DefaultLayers(libraryquestions.Files())
+	layers, err := question.Layers(libraryquestions.Files(), "")
 	if err != nil {
 		return nil, 0, err
 	}

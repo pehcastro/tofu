@@ -16,8 +16,8 @@ const (
 
 type Layer = sys.Layer
 
-func Layers(shipped fs.FS) ([]Layer, error) {
-	return sys.Layers(shipped, "")
+func Layers(shipped fs.FS, dir string) ([]Layer, error) {
+	return sys.Layers(shipped, "", dir)
 }
 
 type Broken struct {

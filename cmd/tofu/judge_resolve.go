@@ -41,7 +41,7 @@ func resolveQuestions(input judgeInput) (battery, error) {
 	case input.Library != "" && len(input.Questions) > 0:
 		return battery{}, errors.New("the request names both a library battery and inline questions")
 	case input.Library != "":
-		return resolveLibrary(input.Library)
+		return resolveLibrary(input.Library, "")
 	case len(input.Questions) > 0:
 		return resolveInline(input.Questions)
 	default:
@@ -49,8 +49,8 @@ func resolveQuestions(input judgeInput) (battery, error) {
 	}
 }
 
-func resolveLibrary(ref string) (battery, error) {
-	layers, err := question.DefaultLayers(questions.Files())
+func resolveLibrary(ref, dir string) (battery, error) {
+	layers, err := question.Layers(questions.Files(), dir)
 	if err != nil {
 		return battery{}, err
 	}
@@ -126,7 +126,7 @@ func resolveRule(ref string, set battery) (gate.Rule, error) {
 	if !strings.ContainsRune(ref, '@') {
 		return gate.Rule{}, fmt.Errorf("the rule %q names no version; a rule is named name@version, so it never resolves silently to the wrong one", ref)
 	}
-	r, _, err := loadRulePoint(ref)
+	r, _, err := loadRulePoint(ref, "")
 	if err != nil {
 		return gate.Rule{}, err
 	}
@@ -137,8 +137,8 @@ func resolveRule(ref string, set battery) (gate.Rule, error) {
 	return r, nil
 }
 
-func loadRulePoint(ref string) (gate.Rule, gate.Origin, error) {
-	layers, err := question.DefaultLayers(questions.Files())
+func loadRulePoint(ref, dir string) (gate.Rule, gate.Origin, error) {
+	layers, err := question.Layers(questions.Files(), dir)
 	if err != nil {
 		return gate.Rule{}, "", err
 	}

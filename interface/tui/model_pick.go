@@ -18,7 +18,7 @@ const (
 )
 
 func shippedModels() (library.Library, error) {
-	layers, err := library.Layers(shipped.Files())
+	layers, err := library.Layers(shipped.Files(), "")
 	if err != nil {
 		return library.Library{}, err
 	}

@@ -9,7 +9,7 @@ import (
 )
 
 func TestBareToolGateIsRefusedWithTwoVersionsOnDisk(t *testing.T) {
-	layers, err := question.DefaultLayers(questions.Files())
+	layers, err := question.Layers(questions.Files(), "")
 	if err != nil {
 		t.Fatalf("layers: %v", err)
 	}
@@ -23,7 +23,7 @@ func TestBareToolGateIsRefusedWithTwoVersionsOnDisk(t *testing.T) {
 }
 
 func TestExactToolGateVersionResolvesWithTwoVersionsOnDisk(t *testing.T) {
-	layers, err := question.DefaultLayers(questions.Files())
+	layers, err := question.Layers(questions.Files(), "")
 	if err != nil {
 		t.Fatalf("layers: %v", err)
 	}

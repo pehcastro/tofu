@@ -41,10 +41,29 @@ func probeReason(t *testing.T, layers []Layer) string {
 	return ""
 }
 
+func shippedProbe() fstest.MapFS {
+	return fstest.MapFS{"models/anthropic/probe.yaml": &fstest.MapFile{Data: probeBody("the shipped library")}}
+}
+
+func TestTheModelComesFromTheNamedDirectoryAndNotTheWorkingOne(t *testing.T) {
+	named, standing := t.TempDir(), t.TempDir()
+	writeProbe(t, filepath.Join(named, sys.StateDirName), "the named directory")
+	writeProbe(t, filepath.Join(standing, sys.StateDirName), "the directory the process stood in")
+	t.Chdir(standing)
+
+	layers, err := Layers(shippedProbe(), named)
+	if err != nil {
+		t.Fatalf("layers in %s: %v", named, err)
+	}
+	got := probeReason(t, layers)
+	t.Logf("project layer %q, reason %q", layers[2].Origin, got)
+	if got != "from the named directory" {
+		t.Fatalf("the library came from %s, the directory the process stood in, and not from %s: %q", standing, named, got)
+	}
+}
+
 func TestTheProjectModelBeatsTheGlobalWhichBeatsTheShipped(t *testing.T) {
-	layers, err := Layers(fstest.MapFS{
-		"models/anthropic/probe.yaml": &fstest.MapFile{Data: probeBody("the shipped library")},
-	})
+	layers, err := Layers(shippedProbe(), "")
 	if err != nil {
 		t.Fatalf("layers: %v", err)
 	}

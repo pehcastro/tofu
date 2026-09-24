@@ -42,7 +42,7 @@ func (u unusableRule) Error() string { return u.err.Error() }
 func (u unusableRule) Unwrap() error { return u.err }
 
 func newToolGate(dir string) (*toolGate, error) {
-	set, err := resolvePoint(runGatePoint)
+	set, err := resolvePoint(runGatePoint, dir)
 	if err != nil {
 		return nil, unusableRule{err}
 	}
@@ -53,12 +53,12 @@ func newToolGate(dir string) (*toolGate, error) {
 	return &toolGate{client: client, set: set, cwd: dir}, nil
 }
 
-func resolvePoint(point string) (battery, error) {
-	set, err := resolveLibrary(point)
+func resolvePoint(point, dir string) (battery, error) {
+	set, err := resolveLibrary(point, dir)
 	if err != nil {
 		return battery{}, err
 	}
-	pol, origin, err := loadRulePoint(point)
+	pol, origin, err := loadRulePoint(point, dir)
 	if err != nil {
 		return battery{}, err
 	}

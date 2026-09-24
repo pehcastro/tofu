@@ -91,7 +91,7 @@ func runCheck(ctx context.Context, client *jev.Client, rulePath, command string)
 	if err != nil {
 		return ledger.Row{}, err
 	}
-	set, err := resolveLibrary(runGatePoint)
+	set, err := resolveLibrary(runGatePoint, "")
 	if err != nil {
 		return ledger.Row{}, err
 	}

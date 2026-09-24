@@ -2,14 +2,50 @@ package sys
 
 import (
 	"io/fs"
+	"os"
 	"testing"
 	"testing/fstest"
 )
 
+func writeMark(t *testing.T, dir, saying string) {
+	t.Helper()
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatalf("make %s: %v", dir, err)
+	}
+	if err := os.WriteFile(Join(dir, "mark"), []byte(saying), 0o644); err != nil {
+		t.Fatalf("write %s: %v", dir, err)
+	}
+}
+
+func TestTheProjectLayerIsTheNamedDirectoryAndAnEmptyOneIsTheWorkingDirectory(t *testing.T) {
+	named, standing := t.TempDir(), t.TempDir()
+	writeMark(t, Join(named, StateDirName, "web"), "the named directory")
+	writeMark(t, Join(standing, StateDirName, "web"), "the directory the process stood in")
+	t.Chdir(standing)
+
+	for _, one := range []struct{ dir, want string }{
+		{dir: named, want: "the named directory"},
+		{dir: "", want: "the directory the process stood in"},
+	} {
+		layers, err := Layers(fstest.MapFS{}, "web", one.dir)
+		if err != nil {
+			t.Fatalf("layers for %q: %v", one.dir, err)
+		}
+		body, err := fs.ReadFile(layers[2].FS, "mark")
+		if err != nil {
+			t.Fatalf("the project layer %q reads nothing: %v", layers[2].Origin, err)
+		}
+		t.Logf("dir %q gave the project layer %q saying %q", one.dir, layers[2].Origin, body)
+		if string(body) != one.want {
+			t.Fatalf("dir %q resolved to %q, want %q", one.dir, body, one.want)
+		}
+	}
+}
+
 func TestTheLibraryLayerIsTheEmbeddedFilesystemWhereverTheProcessRuns(t *testing.T) {
 	t.Chdir(t.TempDir())
 	shipped := fstest.MapFS{"fetch.yaml": &fstest.MapFile{Data: []byte("max_bytes: 1\n")}}
-	layers, err := Layers(shipped, "web")
+	layers, err := Layers(shipped, "web", "")
 	if err != nil {
 		t.Fatalf("layers: %v", err)
 	}
@@ -23,11 +59,11 @@ func TestTheLibraryLayerIsTheEmbeddedFilesystemWhereverTheProcessRuns(t *testing
 }
 
 func TestTheSubdirectoryIsAppendedToEveryLayerAndAnEmptyOneIsTheRoot(t *testing.T) {
-	under, err := Layers(fstest.MapFS{}, "questions")
+	under, err := Layers(fstest.MapFS{}, "questions", "")
 	if err != nil {
 		t.Fatalf("under questions: %v", err)
 	}
-	root, err := Layers(fstest.MapFS{}, "")
+	root, err := Layers(fstest.MapFS{}, "", "")
 	if err != nil {
 		t.Fatalf("at the root: %v", err)
 	}

@@ -15,14 +15,16 @@ func DirLayer(name string, dir string) Layer {
 	return Layer{Name: name, Origin: dir, FS: os.DirFS(dir)}
 }
 
-func Layers(shipped fs.FS, sub string) ([]Layer, error) {
+func Layers(shipped fs.FS, sub, dir string) ([]Layer, error) {
 	home, err := HomeConfigDir()
 	if err != nil {
 		return nil, err
 	}
-	project, err := ProjectStateDir()
-	if err != nil {
-		return nil, err
+	project := StateDir(dir)
+	if dir == "" {
+		if project, err = ProjectStateDir(); err != nil {
+			return nil, err
+		}
 	}
 	return []Layer{
 		{Name: "library", Origin: Join("library", sub), FS: shipped},

@@ -14,25 +14,12 @@ import (
 
 type Layer = sys.Layer
 
-func DefaultLayers(library fs.FS) ([]Layer, error) {
+func Layers(library fs.FS, dir string) ([]Layer, error) {
 	shipped, err := fs.Sub(library, "web")
 	if err != nil {
 		return nil, err
 	}
-	return sys.Layers(shipped, "web")
-}
-
-func LayersIn(library fs.FS, dir string) ([]Layer, error) {
-	layers, err := DefaultLayers(library)
-	if err != nil {
-		return nil, err
-	}
-	for i, layer := range layers {
-		if layer.Name == "project" {
-			layers[i] = sys.DirLayer("project", sys.Join(sys.StateDir(dir), "web"))
-		}
-	}
-	return layers, nil
+	return sys.Layers(shipped, "web", dir)
 }
 
 type Provider struct {

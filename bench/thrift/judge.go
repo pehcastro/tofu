@@ -65,7 +65,7 @@ func NewJevClient(envPath string) (*jev.Client, error) {
 }
 
 func ThriftQuestions() ([]jev.Question, error) {
-	layers, err := question.DefaultLayers(questions.Files())
+	layers, err := question.Layers(questions.Files(), "")
 	if err != nil {
 		return nil, err
 	}

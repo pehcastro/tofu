@@ -12,8 +12,8 @@ import (
 
 type Layer = sys.Layer
 
-func DefaultLayers(shipped fs.FS) ([]Layer, error) {
-	return sys.Layers(shipped, "questions")
+func Layers(shipped fs.FS, dir string) ([]Layer, error) {
+	return sys.Layers(shipped, "questions", dir)
 }
 
 type Field struct {

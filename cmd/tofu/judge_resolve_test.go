@@ -10,7 +10,7 @@ import (
 func toolGateBatteryInAScratchProject(t *testing.T) battery {
 	t.Helper()
 	t.Chdir(t.TempDir())
-	set, err := resolveLibrary(replayTestRuleRef)
+	set, err := resolveLibrary(replayTestRuleRef, "")
 	if err != nil {
 		t.Fatalf("resolveLibrary: %v", err)
 	}

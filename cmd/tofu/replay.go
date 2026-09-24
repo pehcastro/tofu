@@ -235,7 +235,7 @@ func replayDecide(ref string) (gate.Rule, gate.Origin, error) {
 	if ref == state.StopCheckRuleRef {
 		return state.StopCheckRule()
 	}
-	pol, origin, err := loadRulePoint(ref)
+	pol, origin, err := loadRulePoint(ref, "")
 	if err != nil || pol.Schema == gate.SchemaGate {
 		return pol, origin, err
 	}

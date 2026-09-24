@@ -59,7 +59,7 @@ func TestJudgeExitCodeFollowsResolvedModeNotVerdictAlone(t *testing.T) {
 	dir := t.TempDir()
 	ruleBody := readShippedFile(t, "library", "general", "rules", "tool_gate@1.yaml")
 	questionsBody := readShippedFile(t, "library", "questions", "tool_gate@1.yaml")
-	set, err := resolveLibrary("tool_gate@1")
+	set, err := resolveLibrary("tool_gate@1", "")
 	if err != nil {
 		t.Fatalf("resolveLibrary: %v", err)
 	}
@@ -101,7 +101,7 @@ func TestJudgeRowRecordsResolvedModeNotDeclaredMode(t *testing.T) {
 	dir := t.TempDir()
 	ruleBody := readShippedFile(t, "library", "general", "rules", "tool_gate@1.yaml")
 	questionsBody := readShippedFile(t, "library", "questions", "tool_gate@1.yaml")
-	set, err := resolveLibrary("tool_gate@1")
+	set, err := resolveLibrary("tool_gate@1", "")
 	if err != nil {
 		t.Fatalf("resolveLibrary: %v", err)
 	}
@@ -156,7 +156,7 @@ func TestJudgeRowCarriesTheSentenceResolveReturned(t *testing.T) {
 	dir := t.TempDir()
 	ruleBody := readShippedFile(t, "library", "general", "rules", "tool_gate@1.yaml")
 	questionsBody := readShippedFile(t, "library", "questions", "tool_gate@1.yaml")
-	set, err := resolveLibrary("tool_gate@1")
+	set, err := resolveLibrary("tool_gate@1", "")
 	if err != nil {
 		t.Fatalf("resolveLibrary: %v", err)
 	}

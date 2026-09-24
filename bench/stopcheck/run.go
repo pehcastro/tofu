@@ -79,7 +79,7 @@ type Battery struct {
 }
 
 func New(root, key string) (Battery, error) {
-	layers, err := question.DefaultLayers(libraryquestions.Files())
+	layers, err := question.Layers(libraryquestions.Files(), "")
 	if err != nil {
 		return Battery{}, err
 	}

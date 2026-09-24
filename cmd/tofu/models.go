@@ -99,8 +99,8 @@ type modelsReport struct {
 	Models        []modelReport `json:"models"`
 }
 
-func modelLibrary() (models.Library, error) {
-	layers, err := models.Layers(shipped.Files())
+func modelLibrary(dir string) (models.Library, error) {
+	layers, err := models.Layers(shipped.Files(), dir)
 	if err != nil {
 		return models.Library{}, err
 	}
@@ -125,7 +125,7 @@ func modelsVerb(args []string, out, errOut io.Writer, shade palette) int {
 	if refresh {
 		return refreshRegistry(context.Background(), out)
 	}
-	library, err := modelLibrary()
+	library, err := modelLibrary("")
 	if err != nil {
 		_, _ = fmt.Fprintf(errOut, "tofu models: %v\n", err)
 		return exitUsage
@@ -335,7 +335,7 @@ func outsideTheLibrary(library models.Library, wire string) error {
 }
 
 func selectModel(wire, want string) (models.Model, error) {
-	library, err := modelLibrary()
+	library, err := modelLibrary("")
 	if err != nil {
 		return models.Model{}, err
 	}

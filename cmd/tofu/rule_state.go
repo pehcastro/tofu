@@ -21,7 +21,7 @@ func readLibrary() (doctorLibrary, []doctorRule) {
 	if err != nil {
 		return doctorLibrary{Dir: dir, Unreadable: err.Error()}, nil
 	}
-	layers, err := question.DefaultLayers(questions.Files())
+	layers, err := question.Layers(questions.Files(), "")
 	if err != nil {
 		return doctorLibrary{Dir: dir, Unreadable: err.Error()}, nil
 	}

@@ -63,7 +63,7 @@ func buildShellSift(arm string) (*turn.ShellSift, *shellScorer, error) {
 	var scorer *shellScorer
 	var scores turn.ShellScores
 	if chosen.Method == method.Judged {
-		set, setErr := resolveLibrary(shellSiftPoint)
+		set, setErr := resolveLibrary(shellSiftPoint, "")
 		if setErr != nil {
 			return nil, nil, setErr
 		}
