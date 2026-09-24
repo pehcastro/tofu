@@ -89,10 +89,7 @@ func (d Decision) lines(width int) []string {
 		return nil
 	}
 	body := max(width-widget.Cells(continuation), 1)
-	label := 0
-	for _, answer := range d.Answers {
-		label = max(label, widget.Cells(answer.label()))
-	}
+	label := widget.Column(d.Answers, Answer.label, 0)
 	bars := min(barColumns, body-label-valueColumns-2*widget.Cells(gap))
 	var lines []string
 	for _, answer := range d.Answers {

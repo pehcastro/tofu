@@ -123,11 +123,8 @@ func summary(shown int) string {
 }
 
 func (m Model) columns(rows []Turn) (int, int) {
-	id, from := 0, 0
-	for _, one := range rows {
-		id = max(id, widget.Cells(trace.Short(one.Event)))
-		from = max(from, widget.Cells(one.From))
-	}
+	id := widget.Column(rows, func(one Turn) string { return trace.Short(one.Event) }, 0)
+	from := widget.Column(rows, func(one Turn) string { return one.From }, 0)
 	return id, min(from, m.width/4)
 }
 

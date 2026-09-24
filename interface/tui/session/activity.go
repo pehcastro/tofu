@@ -120,10 +120,7 @@ func (m Model) activityLines() []string {
 	rows := m.activityRows()
 	held := m.width >= ownsFrom &&
 		slices.ContainsFunc(rows, func(row activity) bool { return row.owns != "" })
-	elapsed := elapsedColumn
-	for _, row := range rows {
-		elapsed = max(elapsed, widget.Cells(widget.Until(row.since)))
-	}
+	elapsed := widget.Column(rows, func(row activity) string { return widget.Until(row.since) }, elapsedColumn)
 	lines := make([]string, 0, len(rows))
 	for _, row := range rows {
 		lines = append(lines, m.activityLine(row, held, elapsed))

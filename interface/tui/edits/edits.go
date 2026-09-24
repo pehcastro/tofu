@@ -239,13 +239,12 @@ type sideRow struct {
 
 func (m Model) sidebar() ([]string, int) {
 	rows := []sideRow{{label: feedLabel, count: strconv.Itoa(len(m.edits))}}
-	width := max(widget.Cells(title), widget.Cells(pickHint), widget.Cells(scrollHint))
 	for _, found := range m.agents() {
 		rows = append(rows, sideRow{label: subagent.Mark(found.state) + found.name, count: strconv.Itoa(found.edits)})
 	}
-	for _, row := range rows {
-		width = max(width, markerRoom+widget.Cells(row.label)+widget.Cells(gap)+widget.Cells(row.count))
-	}
+	least := max(widget.Cells(title), widget.Cells(pickHint), widget.Cells(scrollHint))
+	space := strings.Repeat(" ", markerRoom)
+	width := widget.Column(rows, func(row sideRow) string { return space + row.label + gap + row.count }, least)
 	width = min(width, m.width/sidebarShare)
 	blank := pane.Cell("", width, theme.Text())
 	lines := []string{pane.Cell(title, width, theme.Accent()), blank}

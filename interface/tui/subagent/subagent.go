@@ -168,10 +168,7 @@ func (m Model) nobody() []string {
 func (m Model) list(width int) (head []string, body [][]string) {
 	blank := pane.Cell("", width, theme.Text())
 	head = []string{pane.Cell(title+gap+m.summary(), width, theme.Accent()), blank}
-	clock := sinceLeast
-	for _, child := range m.Children {
-		clock = max(clock, widget.Cells(widget.Until(child.Since)))
-	}
+	clock := widget.Column(m.Children, func(child Child) string { return widget.Until(child.Since) }, sinceLeast)
 	for index, child := range m.Children {
 		style := theme.Text()
 		if index+1 == m.pick {

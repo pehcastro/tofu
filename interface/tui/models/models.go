@@ -201,9 +201,7 @@ func (m Model) style(at int, row Row) lipgloss.Style {
 func (m Model) slugColumn() int {
 	widest := 0
 	for _, group := range m.Groups {
-		for _, row := range group.Rows {
-			widest = max(widest, widget.Cells(row.Slug))
-		}
+		widest = widget.Column(group.Rows, func(row Row) string { return row.Slug }, widest)
 	}
 	return min(widest, m.width/2)
 }

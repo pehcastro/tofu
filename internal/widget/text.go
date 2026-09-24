@@ -51,6 +51,14 @@ func Lead(text string, width int) string {
 	return text
 }
 
+func Column[T any](items []T, text func(T) string, least int) int {
+	width := least
+	for _, item := range items {
+		width = max(width, Cells(text(item)))
+	}
+	return width
+}
+
 func Count(tokens int) string {
 	if tokens < thousand {
 		return strconv.Itoa(tokens)

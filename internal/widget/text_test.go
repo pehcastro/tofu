@@ -269,3 +269,24 @@ func TestPercentRoundsToTheNearestWholeNumber(t *testing.T) {
 		}
 	}
 }
+
+func TestColumnTakesTheWidestValueAndNeverFallsUnderTheFloor(t *testing.T) {
+	itself := func(text string) string { return text }
+	for _, step := range []struct {
+		values []string
+		least  int
+		want   int
+	}{
+		{nil, 5, 5},
+		{[]string{}, 5, 5},
+		{[]string{"9s"}, 5, 5},
+		{[]string{"9s", "52s", "1m 18s"}, 5, 6},
+		{[]string{"10m 30s", "9s"}, 5, 7},
+		{[]string{"日本"}, 1, 4},
+		{[]string{"abc"}, 0, 3},
+	} {
+		if got := Column(step.values, itself, step.least); got != step.want {
+			t.Errorf("Column(%q, %d) = %d, want %d", step.values, step.least, got, step.want)
+		}
+	}
+}

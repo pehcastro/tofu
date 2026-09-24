@@ -130,12 +130,8 @@ func repeats(one Link) string {
 }
 
 func (m Model) columns(rows []Link) (int, int) {
-	from, count := 0, 0
-	for _, one := range rows {
-		from = max(from, widget.Cells(one.From))
-		count = max(count, widget.Cells(repeats(one)))
-	}
-	return min(from, m.width/4), count
+	from := widget.Column(rows, func(one Link) string { return one.From }, 0)
+	return min(from, m.width/4), widget.Column(rows, repeats, 0)
 }
 
 func (m Model) row(index int, one Link, fromRoom, countRoom int) string {
