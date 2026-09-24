@@ -11,8 +11,8 @@ import (
 
 	"tofu/interface/tui/fixture"
 	"tofu/interface/tui/frametime"
-	"tofu/interface/tui/golden"
 	"tofu/interface/tui/progress"
+	"tofu/internal/golden"
 	"tofu/internal/konst"
 )
 

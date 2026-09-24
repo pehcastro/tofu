@@ -12,6 +12,7 @@ import (
 	"tofu/interface/tui/frame"
 	"tofu/interface/tui/settings"
 	"tofu/interface/tui/subagent"
+	roster "tofu/internal/subagent"
 )
 
 const (
@@ -50,7 +51,7 @@ func cjkChildren() []subagent.Child {
 			Since: 2*time.Minute + 14*time.Second,
 			Steps: 5,
 			Total: 7,
-			State: subagent.Running,
+			State: roster.Working,
 			Calls: []subagent.Call{{Tool: "edit", Text: "内部/判断/方針/道具門.go", Result: "+18 -4"}},
 		},
 		{
@@ -58,7 +59,7 @@ func cjkChildren() []subagent.Child {
 			Owns:   []string{"docs/**"},
 			Doing:  "done, 12 files read",
 			Since:  6*time.Minute + 41*time.Second,
-			State:  subagent.Done,
+			State:  roster.Finished,
 			Report: "五つの実装の名前を変えました。地点の呼び出しが一つ、別名で古い名前に届いています。",
 		},
 	}

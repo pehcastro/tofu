@@ -15,7 +15,6 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"tofu/interface/tui/fixture"
-	"tofu/interface/tui/golden"
 	"tofu/interface/tui/pick"
 	"tofu/interface/tui/session"
 	"tofu/interface/tui/settings"
@@ -23,9 +22,11 @@ import (
 	"tofu/interface/tui/subagent"
 	"tofu/interface/tui/trace"
 	"tofu/interface/tui/work"
+	"tofu/internal/golden"
 	"tofu/internal/judge/jev"
 	"tofu/internal/llm"
 	isettings "tofu/internal/settings"
+	roster "tofu/internal/subagent"
 )
 
 const (
@@ -534,7 +535,7 @@ func subAgentChildren() []subagent.Child {
 			Since: 2*time.Minute + 14*time.Second,
 			Steps: 5,
 			Total: 7,
-			State: subagent.Running,
+			State: roster.Working,
 			Calls: []subagent.Call{
 				{Tool: "edit", Text: "internal/judge/policy/toolgate.go", Result: "+18 -4"},
 				{Tool: "bash", Text: "go test ./internal/judge/...", Result: "ok  0.42s"},
@@ -545,7 +546,7 @@ func subAgentChildren() []subagent.Child {
 			Owns:   []string{"docs/**"},
 			Doing:  "done, 12 files read",
 			Since:  6*time.Minute + 41*time.Second,
-			State:  subagent.Done,
+			State:  roster.Finished,
 			Calls:  []subagent.Call{{Tool: "read", Text: "docs/verification.md", Result: "412 lines"}},
 			Report: "renamed the interface and its five implementations. one call site in point still reaches the old name through an alias.",
 		},
@@ -554,7 +555,7 @@ func subAgentChildren() []subagent.Child {
 			Owns:   []string{"internal/judge/policy/**"},
 			Doing:  "handed back to go-dev",
 			Since:  12 * time.Second,
-			State:  subagent.HandedBack,
+			State:  roster.InReview,
 			Report: "internal/judge/policy is already held by go-dev, so the work went there.",
 		},
 	}
@@ -706,7 +707,7 @@ func TestSelectingAChildShowsItsToolCallsAndItsReport(t *testing.T) {
 }
 
 func childOf(report string) []subagent.Child {
-	return []subagent.Child{{Name: "c1", Owns: []string{"note.txt"}, Doing: "read note.txt", State: subagent.Done, Report: report}}
+	return []subagent.Child{{Name: "c1", Owns: []string{"note.txt"}, Doing: "read note.txt", State: roster.Finished, Report: report}}
 }
 
 func TestAChildsMessageIsDrawnInTheSubAgentsPanelAndNeverSpokenInTheParentsTranscript(t *testing.T) {
@@ -1364,8 +1365,8 @@ func TestOneInterruptReachesAChildRunningInsideTheSpawnCall(t *testing.T) {
 func TestAChildStopsReadingAsRunningOnceTheTurnHasEnded(t *testing.T) {
 	app, _ := callingApp(t, childCall)
 	app.Update(Event{Kind: EventSubAgent, Children: []subagent.Child{
-		{Name: "c1", Doing: "write half a file", State: subagent.Running},
-		{Name: "c2", Doing: "read the changelog", State: subagent.WaitingForAnswer},
+		{Name: "c1", Doing: "write half a file", State: roster.Working},
+		{Name: "c2", Doing: "read the changelog", State: roster.WaitingAnswer},
 	}})
 	app.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
 	app.Update(Closed{})
@@ -1373,8 +1374,8 @@ func TestAChildStopsReadingAsRunningOnceTheTurnHasEnded(t *testing.T) {
 		t.Fatalf("the panel still counts %d children running after the turn ended", running)
 	}
 	for _, child := range app.subagents.Children {
-		if child.State != subagent.Parked {
-			t.Fatalf("%s reads as %s after the stop, want parked", child.Name, child.State.Label())
+		if child.State != roster.Parked {
+			t.Fatalf("%s reads as %s after the stop, want parked", child.Name, subagent.Label(child.State))
 		}
 	}
 	app.show(viewSubAgents)

@@ -13,8 +13,8 @@ import (
 	"github.com/charmbracelet/colorprofile"
 	"github.com/charmbracelet/x/ansi"
 
-	"tofu/interface/tui/golden"
 	"tofu/interface/tui/theme"
+	"tofu/internal/golden"
 	"tofu/internal/widget"
 )
 

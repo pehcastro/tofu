@@ -878,11 +878,11 @@ func TestASpawnedChildShowsInTheSubAgentViewWithTheGlobsItHolds(t *testing.T) {
 		t.Fatalf("sub-agent events %d, want one when the child starts, one per step it takes, and one when it reports", len(subAgentEvents))
 	}
 	started := subAgentEvents[0].Children
-	if len(started) != 1 || started[0].State != subagent.Running || !slices.Equal(started[0].Owns, []string{"note.txt"}) {
+	if len(started) != 1 || started[0].State != roster.Working || !slices.Equal(started[0].Owns, []string{"note.txt"}) {
 		t.Fatalf("the first sub-agent event carries %+v, want one running child holding note.txt", started)
 	}
 	ended := subAgentEvents[len(subAgentEvents)-1].Children[0]
-	if ended.State != subagent.HandedBack || ended.Steps != 2 || ended.Report == "" {
+	if ended.State != roster.InReview || ended.Steps != 2 || ended.Report == "" {
 		t.Fatalf("the child ended as %+v, want it in review with the steps and the report the roster carries", ended)
 	}
 	screen := driver.view(tea.KeyPressMsg{Code: '4', Mod: tea.ModAlt})
@@ -1090,7 +1090,7 @@ func (d *appDriver) childClocks(state subagent.State) map[time.Duration]string {
 func TestARunningChildsClockAdvancesWhileItIsHeldInsideOneCall(t *testing.T) {
 	driver := childHeldInsideOneCall(t)
 
-	drawn := driver.childClocks(subagent.Running)
+	drawn := driver.childClocks(roster.Working)
 	var moved []time.Duration
 	for clock := range drawn {
 		if clock > 0 && clock < childHeldFor {
@@ -1112,7 +1112,7 @@ func TestARunningChildsClockAdvancesWhileItIsHeldInsideOneCall(t *testing.T) {
 func TestAChildThatHasHandedBackKeepsTheClockItStoppedAt(t *testing.T) {
 	driver := childHeldInsideOneCall(t)
 
-	drawn := driver.childClocks(subagent.HandedBack)
+	drawn := driver.childClocks(roster.InReview)
 	if len(drawn) == 0 {
 		t.Fatal("no frame carried a child that had handed back")
 	}
@@ -1910,7 +1910,7 @@ func TestAChildsCallIsDrawnWithItsToolNameOnce(t *testing.T) {
 		{Tool: "read", Command: "note.txt"},
 		{Tool: "bash", Command: "go test ./..."},
 	}}}}}
-	view := subagent.Model{Children: []subagent.Child{{Name: "c1", State: subagent.Done, Calls: recordedCalls(rows, "turn-1-c1")}}}
+	view := subagent.Model{Children: []subagent.Child{{Name: "c1", State: roster.Finished, Calls: recordedCalls(rows, "turn-1-c1")}}}
 	view.SetSize(100, 24)
 	view.Key("down")
 
@@ -1963,7 +1963,7 @@ func TestAParkedChildsReportReachesThePanelWhenTheTurnIsStoppedAndNeverAsksAgain
 		t.Fatal("the stopped turn sent no sub-agent event at all")
 	}
 	last := sent[len(sent)-1].Children[0]
-	if last.State != subagent.Parked || last.Report == "" {
+	if last.State != roster.Parked || last.Report == "" {
 		t.Fatalf("the panel was last told %+v, want a parked child carrying the report the roster holds", last)
 	}
 	screen := driver.view(tea.KeyPressMsg{Code: '4', Mod: tea.ModAlt}, tea.KeyPressMsg{Code: tea.KeyDown})

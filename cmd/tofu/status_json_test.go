@@ -2,14 +2,11 @@ package main
 
 import (
 	"bytes"
-	"flag"
-	"os"
-	"path/filepath"
 	"testing"
 	"time"
-)
 
-var update = flag.Bool("update", false, "rewrite the golden files")
+	"tofu/internal/golden"
+)
 
 const (
 	fixtureCodexAccount = "11111111-2222-3333-4444-555555555555"
@@ -90,28 +87,10 @@ func statusFixture() statusReport {
 	}
 }
 
-func assertGolden(t *testing.T, name, got string) {
-	t.Helper()
-	path := filepath.Join("testdata", name)
-	if *update {
-		if err := os.WriteFile(path, []byte(got), 0o644); err != nil {
-			t.Fatal(err)
-		}
-		return
-	}
-	want, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if string(want) != got {
-		t.Errorf("%s does not match the golden file\n--- got ---\n%s\n--- want ---\n%s", name, got, want)
-	}
-}
-
 func TestTheStatusJSONIsUntouchedByTheLayout(t *testing.T) {
 	var out bytes.Buffer
 	if err := writeJSON(&out, statusFixture()); err != nil {
 		t.Fatal(err)
 	}
-	assertGolden(t, "status-report.json.golden", out.String())
+	golden.Assert(t, "status-report.json.golden", out.String())
 }

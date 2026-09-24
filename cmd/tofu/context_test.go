@@ -385,3 +385,53 @@ func TestContextOnASessionCarryingAKindThisBuildDoesNotKnowStillPrintsItsSteps(t
 	}
 	t.Logf("%s", printed)
 }
+
+func forkLineOf(t *testing.T, printed string) string {
+	t.Helper()
+	for _, line := range strings.Split(printed, "\n") {
+		if strings.HasPrefix(line, "forked into ") {
+			return line
+		}
+	}
+	t.Fatalf("nothing printed here is a fork line:\n%s", printed)
+	return ""
+}
+
+func TestTheForkSentenceReadsTheSameFromAStoredReportAndFromALiveRow(t *testing.T) {
+	const into = "turn-18d84c457e555d38-f2"
+	report := contextReport{
+		Session: "turn-18d84c457e555d38",
+		Fork: &contextForkReport{
+			Into:   into,
+			Kind:   string(turn.ForkContinuation),
+			Counts: &contextForkCounts{TokensBefore: 1326, TokensAfter: 1475},
+		},
+	}
+	row := turn.Row{ForkedInto: into, Steps: []turn.StepRow{{Fork: &turn.Fork{
+		Kind: turn.ForkContinuation, Into: into, TokensBefore: 1326, TokensAfter: 1475,
+	}}}}
+
+	const want = "forked into " + into + " as a continuation at 1326 tokens, which began at 1475"
+	fromReport := forkLineOf(t, contextText(report))
+	if fromReport != want {
+		t.Fatalf("tofu context says\n%s\nand the words are\n%s", fromReport, want)
+	}
+	if fromRow := endedForkWords(row); fromRow != fromReport {
+		t.Fatalf("the app says\n%s\nand tofu context says\n%s", fromRow, fromReport)
+	}
+}
+
+func TestAForkNoStepRecordedSaysSoRatherThanNamingCountsItDoesNotHave(t *testing.T) {
+	const into = "turn-18d84c457e555d38-f2"
+	const want = "forked into " + into + ", and no step in this session recorded the counts"
+	fromReport := forkLineOf(t, contextText(contextReport{
+		Session: "turn-18d84c457e555d38",
+		Fork:    &contextForkReport{Into: into},
+	}))
+	if fromReport != want {
+		t.Fatalf("a fork with no counts says\n%s\nand the words are\n%s", fromReport, want)
+	}
+	if fromRow := endedForkWords(turn.Row{ForkedInto: into}); fromRow != fromReport {
+		t.Fatalf("the app says\n%s\nand tofu context says\n%s", fromRow, fromReport)
+	}
+}

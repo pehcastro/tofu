@@ -7,8 +7,9 @@ import (
 
 	"github.com/charmbracelet/x/ansi"
 
-	"tofu/interface/tui/golden"
 	"tofu/interface/tui/subagent"
+	"tofu/internal/golden"
+	roster "tofu/internal/subagent"
 )
 
 const gatePath = "internal/judge/policy/toolgate.go"
@@ -39,8 +40,8 @@ func threeAgentsEditing() Model {
 	m.Root = "/repo"
 	m.Busy = true
 	m.Children = []subagent.Child{
-		{Name: "go-docs", State: subagent.Done},
-		{Name: "go-dev", State: subagent.Running},
+		{Name: "go-docs", State: roster.Finished},
+		{Name: "go-dev", State: roster.Working},
 	}
 	m.Add(changedAt(Self, gatePath, "e1a2b3"))
 	m.Add(changedAt("go-dev", "internal/rule/parse.go", "b7c4d1"))

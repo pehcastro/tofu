@@ -7,7 +7,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"tofu/interface/tui/fixture"
-	"tofu/interface/tui/golden"
+	"tofu/internal/golden"
 )
 
 func TestTheAskBlockCarriesTheNumbersTheParagraphCannotFit(t *testing.T) {

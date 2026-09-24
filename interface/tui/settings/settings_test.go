@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"tofu/interface/tui/golden"
+	"tofu/internal/golden"
 )
 
 func baseRows() []Row {

@@ -42,7 +42,7 @@ func TestAChildIsDrawnFromTheRosterRatherThanFromValuesTypedBesideIt(t *testing.
 		Steps:  2,
 		Total:  konst.TurnMaxSteps,
 		Tokens: 9400,
-		State:  HandedBack,
+		State:  roster.InReview,
 		Calls:  []Call{{Tool: "read"}},
 		Report: "the loader reads the lock before the mode",
 	}}
@@ -57,8 +57,8 @@ func TestARunningChildsClockRunsToNowAndAStoppedOneStopsAtItsLastStep(t *testing
 	held.Stepped(drawnChild, 1, started.Add(10*time.Second))
 	now := started.Add(time.Minute)
 
-	if running := Children(held.SubAgents(), now, 0, nil, nil)[0]; running.Since != time.Minute || running.State != Running {
-		t.Fatalf("a working child reads %s in state %s, want 1m0s while running", running.Since, running.State.Label())
+	if running := Children(held.SubAgents(), now, 0, nil, nil)[0]; running.Since != time.Minute || running.State != roster.Working {
+		t.Fatalf("a working child reads %s in state %s, want 1m0s while running", running.Since, Label(running.State))
 	}
 	held.Reached(drawnChild, roster.Finished, "done")
 	if stopped := Children(held.SubAgents(), now, 0, nil, nil)[0]; stopped.Since != 10*time.Second {

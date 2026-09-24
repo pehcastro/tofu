@@ -25,12 +25,6 @@ const (
 	holderJoin    = " ∩ "
 	holdArrow     = " → "
 	pickedMark    = "›"
-	runningMark   = "● "
-	doneMark      = "✓ "
-	handbackMark  = "⤺ "
-	waitingMark   = "? "
-	parkedMark    = "‖ "
-	erroredMark   = "✗ "
 	filledDot     = "▪"
 	emptyDot      = "▫"
 	callMarker    = "⟩ "
@@ -47,37 +41,34 @@ const (
 	rowsHidden    = " earlier rows hidden"
 )
 
-type State int
+type State = roster.State
 
-const (
-	Running State = iota
-	Done
-	HandedBack
-	WaitingForAnswer
-	Parked
-	Errored
-)
-
-func AllStates() []State {
-	return []State{Running, WaitingForAnswer, HandedBack, Parked, Errored, Done}
+func spelling(state State) (mark, words string) {
+	switch state {
+	case roster.Working:
+		return "● ", "working"
+	case roster.WaitingAnswer:
+		return "? ", "waiting for an answer"
+	case roster.InReview:
+		return "⤺ ", "in review"
+	case roster.Parked:
+		return "‖ ", "parked"
+	case roster.Errored:
+		return "✗ ", "errored"
+	case roster.Finished:
+		return "✓ ", "finished"
+	}
+	panic("subagent: unknown state " + state.String())
 }
 
-func (s State) Label() string {
-	switch s {
-	case Running:
-		return "working"
-	case WaitingForAnswer:
-		return "waiting for an answer"
-	case HandedBack:
-		return "in review"
-	case Parked:
-		return "parked"
-	case Errored:
-		return "errored"
-	case Done:
-		return "finished"
-	}
-	panic("subagent: unknown state")
+func Label(state State) string {
+	_, words := spelling(state)
+	return words
+}
+
+func Mark(state State) string {
+	mark, _ := spelling(state)
+	return mark
 }
 
 type Call struct {
@@ -128,7 +119,7 @@ func (m *Model) move(by int) {
 func (m Model) Running() int {
 	count := 0
 	for _, child := range m.Children {
-		if child.State == Running {
+		if child.State == roster.Working {
 			count++
 		}
 	}
@@ -203,8 +194,8 @@ func (m Model) watch(width int) (head []string, body [][]string) {
 	if !picked {
 		return nil, [][]string{pane.Block("", watchHint, width, theme.Faint())}
 	}
-	head = []string{pane.Cell(child.Name+"  "+child.State.Label(), width, theme.Accent()), pane.Cell("", width, theme.Text())}
-	if child.State == Running {
+	head = []string{pane.Cell(child.Name+"  "+Label(child.State), width, theme.Accent()), pane.Cell("", width, theme.Text())}
+	if child.State == roster.Working {
 		line := progress.Line{Label: child.Doing, Since: child.Since, Tick: progress.TickInterval, Live: true}
 		head = append(head, pane.Raw(line.View(width), width), pane.Cell("", width, theme.Text()))
 	}
@@ -327,26 +318,8 @@ func once(list []string, value string) []string {
 	return append(list, value)
 }
 
-func Mark(state State) string {
-	switch state {
-	case Running:
-		return runningMark
-	case Done:
-		return doneMark
-	case HandedBack:
-		return handbackMark
-	case WaitingForAnswer:
-		return waitingMark
-	case Parked:
-		return parkedMark
-	case Errored:
-		return erroredMark
-	}
-	panic("subagent: unknown child state")
-}
-
 func dots(child Child) string {
-	if child.State != Running || child.Total <= 0 {
+	if child.State != roster.Working || child.Total <= 0 {
 		return ""
 	}
 	filled := min(child.Steps*progressDots/child.Total, progressDots)

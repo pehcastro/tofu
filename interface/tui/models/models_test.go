@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"tofu/interface/tui/golden"
+	"tofu/internal/golden"
 	"tofu/internal/llm"
 	library "tofu/internal/llm/models"
 )

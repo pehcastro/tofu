@@ -9,8 +9,8 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"tofu/interface/tui/golden"
 	"tofu/interface/tui/links"
+	"tofu/internal/golden"
 )
 
 func commandApp(t *testing.T, entered chan<- string) *App {

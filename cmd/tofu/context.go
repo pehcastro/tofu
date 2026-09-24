@@ -247,11 +247,14 @@ func contextText(r contextReport) string {
 	if r.Fork == nil {
 		return out.String()
 	}
-	if r.Fork.Counts == nil {
-		fmt.Fprintf(&out, "forked into %s, and no step in this session recorded the counts\n", r.Fork.Into)
-		return out.String()
-	}
-	fmt.Fprintf(&out, "forked into %s as a %s at %d tokens, which began at %d\n",
-		r.Fork.Into, r.Fork.Kind, r.Fork.Counts.TokensBefore, r.Fork.Counts.TokensAfter)
+	out.WriteString(forkWords(r.Fork.Into, r.Fork.Kind, r.Fork.Counts) + "\n")
 	return out.String()
+}
+
+func forkWords(into, kind string, counts *contextForkCounts) string {
+	if counts == nil {
+		return "forked into " + into + ", and no step in this session recorded the counts"
+	}
+	return fmt.Sprintf("forked into %s as a %s at %d tokens, which began at %d",
+		into, kind, counts.TokensBefore, counts.TokensAfter)
 }

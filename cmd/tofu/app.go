@@ -764,7 +764,7 @@ func (s *appSession) run(ctx context.Context, pick tui.Pick, task string, emit t
 	}
 	config.EndedSession = func(ended turn.Row) error {
 		emit(tui.Event{Kind: tui.EventForkStart})
-		emit(tui.Event{Kind: tui.EventNote, Text: forkWords(ended)})
+		emit(tui.Event{Kind: tui.EventNote, Text: endedForkWords(ended)})
 		emit(tui.Event{Kind: tui.EventForkEnd})
 		return nil
 	}
@@ -792,13 +792,14 @@ func (s *appSession) run(ctx context.Context, pick tui.Pick, task string, emit t
 	emit(tui.Event{Kind: tui.EventDone, Text: doneWords(outcome, row.Guard)})
 }
 
-func forkWords(ended turn.Row) string {
-	words := "forked into " + ended.ForkedInto
-	if last := len(ended.Steps) - 1; last >= 0 && ended.Steps[last].Fork != nil {
-		fork := ended.Steps[last].Fork
-		words += fmt.Sprintf(" as a %s at %d tokens, which began at %d", fork.Kind, fork.TokensBefore, fork.TokensAfter)
+func endedForkWords(ended turn.Row) string {
+	last := len(ended.Steps) - 1
+	if last < 0 || ended.Steps[last].Fork == nil {
+		return forkWords(ended.ForkedInto, "", nil)
 	}
-	return words
+	fork := ended.Steps[last].Fork
+	return forkWords(ended.ForkedInto, string(fork.Kind),
+		&contextForkCounts{TokensBefore: fork.TokensBefore, TokensAfter: fork.TokensAfter})
 }
 
 func doneWords(outcome turn.Outcome, guard *turn.LoopGuardStop) string {
@@ -1055,7 +1056,7 @@ func (a *appWatcher) redrawRunningClocks() {
 	a.shows.Unlock()
 	running := false
 	for index := range moved {
-		if moved[index].State != subagent.Running {
+		if moved[index].State != roster.Working {
 			continue
 		}
 		moved[index].Since += ahead

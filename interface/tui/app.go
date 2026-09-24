@@ -33,6 +33,7 @@ import (
 	library "tofu/internal/llm/models"
 	isession "tofu/internal/session"
 	isettings "tofu/internal/settings"
+	roster "tofu/internal/subagent"
 	"tofu/internal/sys"
 	"tofu/internal/widget"
 )
@@ -838,8 +839,8 @@ func (a *App) showChildren(children []subagent.Child) {
 func (a *App) parkChildrenTheTurnLeftBehind() {
 	parked := slices.Clone(a.subagents.Children)
 	for i, child := range parked {
-		if child.State == subagent.Running || child.State == subagent.WaitingForAnswer {
-			parked[i].State = subagent.Parked
+		if child.State == roster.Working || child.State == roster.WaitingAnswer {
+			parked[i].State = roster.Parked
 		}
 	}
 	a.showChildren(parked)

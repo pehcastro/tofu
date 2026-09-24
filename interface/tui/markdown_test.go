@@ -9,8 +9,8 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"tofu/interface/tui/golden"
 	"tofu/interface/tui/session"
+	"tofu/internal/golden"
 )
 
 func TestAHeadingRendersWhileTheEntryStreams(t *testing.T) {

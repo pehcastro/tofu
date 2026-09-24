@@ -9,7 +9,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"tofu/interface/tui/edits"
-	"tofu/interface/tui/golden"
+	"tofu/internal/golden"
 )
 
 const (

@@ -11,8 +11,8 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"tofu/interface/tui/frametime"
-	"tofu/interface/tui/golden"
 	"tofu/interface/tui/work"
+	"tofu/internal/golden"
 )
 
 func twelveCallTurn(t *testing.T, width, height int) *App {

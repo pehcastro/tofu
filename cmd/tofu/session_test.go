@@ -647,3 +647,31 @@ func TestSessionResumeJSONNamesWhatItCarries(t *testing.T) {
 		t.Errorf("--json reads %+v, want the session it resumes and what it carries", carry)
 	}
 }
+
+func TestTheForkSentenceReadsTheSameInSessionInfoAndInContext(t *testing.T) {
+	store := sessionProject(t)
+	const id, into = "turn-forker", "turn-forker-f2"
+	row := turn.Row{
+		ID: id, Schema: turn.SchemaVersion, At: time.Now(), Task: "read the repo",
+		Root: id, Outcome: turn.OutcomeForked, ForkedInto: into,
+		Steps: []turn.StepRow{{Index: 1, Fork: &turn.Fork{
+			Kind: turn.ForkContinuation, Into: into, TokensBefore: 1326, TokensAfter: 1475,
+		}}},
+	}
+	header, events, err := row.Record()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Write(header, events); err != nil {
+		t.Fatal(err)
+	}
+
+	sentence := forkLineOf(t, contextRun(t, id))
+	info, _, code := sessionRun(t, "session", "info", id)
+	if code != exitOK {
+		t.Fatalf("tofu session info exited %d", code)
+	}
+	if !strings.Contains(strings.Join(strings.Fields(info), " "), sentence) {
+		t.Fatalf("tofu context says\n%s\nand tofu session info says\n%s", sentence, info)
+	}
+}

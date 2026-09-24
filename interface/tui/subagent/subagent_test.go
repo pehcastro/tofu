@@ -49,7 +49,7 @@ func listed(children []Child, terminalHeight int) []string {
 }
 
 func TestARosterOnlyCallDrawsItsToolNameAndNothingUnderIt(t *testing.T) {
-	child := Child{Name: "go-dev", State: Running, Doing: "writing policy/toolgate.go", Since: 2 * time.Minute, Calls: []Call{{Tool: "read"}, {Tool: "bash"}}}
+	child := Child{Name: "go-dev", State: roster.Working, Doing: "writing policy/toolgate.go", Since: 2 * time.Minute, Calls: []Call{{Tool: "read"}, {Tool: "bash"}}}
 	drawn := watched(child, 80, 24)
 	want := []string{callMarker + "read", callMarker + "bash"}
 	first := slices.Index(drawn, want[0])
@@ -66,7 +66,7 @@ func TestARosterOnlyCallDrawsItsToolNameAndNothingUnderIt(t *testing.T) {
 }
 
 func TestACallWithTextKeepsItsTextAndItsResultLine(t *testing.T) {
-	child := Child{Name: "go-dev", State: Done, Calls: []Call{{Tool: "edit", Text: "toolgate.go", Result: "+18 -4"}}}
+	child := Child{Name: "go-dev", State: roster.Finished, Calls: []Call{{Tool: "edit", Text: "toolgate.go", Result: "+18 -4"}}}
 	drawn := watched(child, 80, 24)
 	want := []string{callMarker + "edit toolgate.go", resultMarker + "+18 -4"}
 	first := slices.Index(drawn, want[0])
@@ -80,7 +80,7 @@ func TestHowManyCallLinesFitAChildsRow(t *testing.T) {
 	for index := range calls {
 		calls[index] = Call{Tool: "t" + strconv.Itoa(index)}
 	}
-	child := Child{Name: "go-dev", State: Running, Doing: "writing policy/toolgate.go", Since: 2 * time.Minute, Calls: calls}
+	child := Child{Name: "go-dev", State: roster.Working, Doing: "writing policy/toolgate.go", Since: 2 * time.Minute, Calls: calls}
 	for _, size := range []struct{ width, height int }{{80, 24}, {120, 36}} {
 		fits := 0
 		for _, line := range watched(child, size.width, size.height) {
@@ -95,36 +95,7 @@ func TestHowManyCallLinesFitAChildsRow(t *testing.T) {
 	}
 }
 
-func pairedStates() map[State]roster.State {
-	paired := map[State]roster.State{}
-	for _, held := range roster.States() {
-		paired[stateOf(held)] = held
-	}
-	return paired
-}
-
-func TestTheSubAgentViewDrawsExactlyTheStatesTheRosterCanReach(t *testing.T) {
-	drawn, reachable, paired := AllStates(), roster.States(), pairedStates()
-	if len(drawn) != len(reachable) || len(paired) != len(drawn) {
-		t.Fatalf("the sub-agent view draws %d states, the roster reaches %d and %d are paired", len(drawn), len(reachable), len(paired))
-	}
-	reached := map[roster.State]bool{}
-	for _, state := range drawn {
-		held, pairs := paired[state]
-		if !pairs {
-			t.Fatalf("the sub-agent view draws %q and no roster state is paired with it", state.Label())
-		}
-		reached[held] = true
-		t.Logf("%s%s is the roster's %s", Mark(state), state.Label(), held)
-	}
-	for _, held := range reachable {
-		if !reached[held] {
-			t.Fatalf("the roster reaches %q and the sub-agent view draws nothing for it", held)
-		}
-	}
-}
-
-func TestTheTwoNamesForOneStateAreTheSameWordsInADifferentSpelling(t *testing.T) {
+func TestTheSubAgentViewDrawsItsOwnWordsAndItsOwnMarkForEveryStateTheRosterReaches(t *testing.T) {
 	spelled := map[roster.State]string{
 		roster.Working:       "working",
 		roster.WaitingAnswer: "waiting for an answer",
@@ -133,10 +104,24 @@ func TestTheTwoNamesForOneStateAreTheSameWordsInADifferentSpelling(t *testing.T)
 		roster.Errored:       "errored",
 		roster.Finished:      "finished",
 	}
-	for state, held := range pairedStates() {
-		if state.Label() != spelled[held] {
-			t.Fatalf("the roster's %s reads %q in the sub-agent view, want %q", held, state.Label(), spelled[held])
+	marked := map[string]roster.State{}
+	for _, state := range roster.States() {
+		want, spells := spelled[state]
+		if !spells {
+			t.Fatalf("the roster reaches state %d and the sub-agent view spells nothing for it", int(state))
 		}
+		if Label(state) != want {
+			t.Fatalf("the roster's %s reads %q in the sub-agent view, want %q", state, Label(state), want)
+		}
+		mark := Mark(state)
+		if other, taken := marked[mark]; taken {
+			t.Fatalf("the roster's %s and %s are both drawn as %q, so a person cannot tell them apart", state, other, mark)
+		}
+		marked[mark] = state
+		t.Logf("%s%s is the roster's %s", mark, Label(state), state)
+	}
+	if len(marked) != len(spelled) {
+		t.Fatalf("the roster reaches %d states and the sub-agent view spells %d", len(marked), len(spelled))
 	}
 }
 
@@ -147,7 +132,7 @@ func busyChild(command string) Child {
 	for index := range calls {
 		calls[index] = Call{Tool: "bash", Text: command + strconv.Itoa(index)}
 	}
-	return Child{Name: "go-dev", State: Running, Doing: "writing policy/toolgate.go", Since: 2 * time.Minute, Calls: calls}
+	return Child{Name: "go-dev", State: roster.Working, Doing: "writing policy/toolgate.go", Since: 2 * time.Minute, Calls: calls}
 }
 
 func cutMarker(drawn []string) string {
@@ -241,7 +226,7 @@ func TestTheCutMarkerSurvivesBeingCutItself(t *testing.T) {
 func TestARunningChildsCutReadsLikeAFinishedOnes(t *testing.T) {
 	child := busyChild(wrappingCommand)
 	running := watched(child, 80, 24)
-	child.State, child.Doing, child.Since = Done, "", 0
+	child.State, child.Doing, child.Since = roster.Finished, "", 0
 	finished := watched(child, 80, 24)
 	wording := func(marker string) string { return strings.TrimLeft(marker, "0123456789") }
 	if wording(cutMarker(running)) != wording(cutMarker(finished)) || cutMarker(running) == "" {
@@ -256,7 +241,7 @@ func crowdedChildren() []Child {
 	var children []Child
 	for index := range 6 {
 		name := "go-dev-" + strconv.Itoa(index)
-		children = append(children, Child{Name: name, State: Running, Doing: "writing policy/toolgate.go", Owns: []string{"internal/judge/jev/wire/" + name + "/**", "interface/tui/" + name + "/**"}})
+		children = append(children, Child{Name: name, State: roster.Working, Doing: "writing policy/toolgate.go", Owns: []string{"internal/judge/jev/wire/" + name + "/**", "interface/tui/" + name + "/**"}})
 	}
 	return children
 }
@@ -279,7 +264,7 @@ func TestNoBodyRowIsDrawnWhoseHeadWasCut(t *testing.T) {
 
 func TestALongReportIsCutByRowBecauseItsRowsReadOnTheirOwn(t *testing.T) {
 	child := busyChild(wrappingCommand)
-	child.State, child.Doing, child.Since = Done, "", 0
+	child.State, child.Doing, child.Since = roster.Finished, "", 0
 	child.Report = strings.TrimSpace(strings.Repeat("the ticket is done and the acceptance lines are proven. ", 30))
 	drawn := watched(child, 80, 24)
 	if cutMarker(drawn) == "" {
@@ -300,7 +285,7 @@ func TestTheListColumnSaysWhenItCut(t *testing.T) {
 const ellipsisMark = "…"
 
 func runningFor(name string, since time.Duration) Child {
-	return Child{Name: name, State: Running, Since: since, Doing: strings.Repeat("reading the policy loader ", 4)}
+	return Child{Name: name, State: roster.Working, Since: since, Doing: strings.Repeat("reading the policy loader ", 4)}
 }
 
 func missionEnds(drawn []string) []int {

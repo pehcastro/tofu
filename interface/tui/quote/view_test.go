@@ -6,7 +6,7 @@ import (
 
 	"github.com/charmbracelet/x/ansi"
 
-	"tofu/interface/tui/golden"
+	"tofu/internal/golden"
 )
 
 func picker(t *testing.T, turns []Turn, keys ...string) Model {

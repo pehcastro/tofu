@@ -59,6 +59,7 @@ type sessionRow struct {
 	Parent           string    `json:"parent,omitempty"`
 	Root             string    `json:"root,omitempty"`
 	ForkedInto       string    `json:"forked_into,omitempty"`
+	ForkIntoKind     string    `json:"fork_into_kind,omitempty"`
 	ForkKind         string    `json:"fork_kind,omitempty"`
 	ContextCeiling   int       `json:"context_ceiling,omitempty"`
 	ContextTarget    int       `json:"context_target,omitempty"`
@@ -360,6 +361,17 @@ func sessionDetail(store *session.Store, handle string) (sessionRow, []llm.Messa
 	if header.Name != nil {
 		row.Name = *header.Name
 	}
+	if header.ForkedInto != "" {
+		steps, err := contextSteps(events)
+		if err != nil {
+			return sessionRow{}, nil, err
+		}
+		for _, step := range steps {
+			if step.Fork != nil {
+				row.ForkIntoKind = string(step.Fork.Kind)
+			}
+		}
+	}
 	return row, messages, nil
 }
 
@@ -552,14 +564,11 @@ func sessionLineage(row sessionRow) string {
 		parts = append(parts, "rooted at "+row.Root)
 	}
 	if row.ForkedInto != "" {
-		into := "forked into " + row.ForkedInto
-		if row.ForkKind != "" {
-			into += " as a " + row.ForkKind
+		var counts *contextForkCounts
+		if row.ForkTokensBefore > 0 {
+			counts = &contextForkCounts{TokensBefore: row.ForkTokensBefore, TokensAfter: row.ForkTokensAfter}
 		}
-		parts = append(parts, into)
-	}
-	if row.ForkTokensBefore > 0 {
-		parts = append(parts, strconv.Itoa(row.ForkTokensBefore)+" tokens at the fork, "+strconv.Itoa(row.ForkTokensAfter)+" after it")
+		parts = append(parts, forkWords(row.ForkedInto, row.ForkIntoKind, counts))
 	}
 	return strings.Join(parts, ", ")
 }

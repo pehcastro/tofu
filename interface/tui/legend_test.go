@@ -7,7 +7,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"tofu/interface/tui/golden"
+	"tofu/internal/golden"
 )
 
 const riskSentence = "risk is hard to undo or reaches outside the workspace, so the call is asked about"

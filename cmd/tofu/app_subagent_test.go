@@ -33,7 +33,7 @@ func TestTheSubAgentViewShowsTheStepsAChildHasTakenWhileItIsStillRunning(t *test
 	var stepping []subagent.Child
 	for _, event := range driver.of(tui.EventSubAgent) {
 		for _, child := range event.Children {
-			if child.State == subagent.Running && child.Steps > 0 {
+			if child.State == roster.Working && child.Steps > 0 {
 				stepping = append(stepping, child)
 			}
 		}
@@ -86,7 +86,7 @@ func TestTheSubAgentsDrawnIsTheRosterItselfAndNotACopyBesideIt(t *testing.T) {
 	if len(after) != 2 {
 		t.Fatalf("the view drew %d children, want the roster's two", len(after))
 	}
-	if after[0].State != subagent.Parked || after[0].Report != "the parent ran out of context" {
+	if after[0].State != roster.Parked || after[0].Report != "the parent ran out of context" {
 		t.Errorf("c1 is %s in the roster and the view drew %+v", roster.Parked, after[0])
 	}
 	if after[1].Steps != 4 {
@@ -109,14 +109,14 @@ func TestEveryStateTheRosterCanReachIsDrawnAsItsOwnMark(t *testing.T) {
 		watch.sendSubAgents()
 
 		shown := drawn()[0].State
-		mark := subagent.Mark(shown) + shown.Label()
+		mark := subagent.Mark(shown) + subagent.Label(shown)
 		if other, taken := marks[mark]; taken {
 			t.Errorf("the roster's %s and %s are both drawn as %q, so a person cannot tell them apart", state, other, mark)
 		}
 		marks[mark] = state
 	}
-	if len(marks) != len(subagent.AllStates()) {
-		t.Fatalf("the roster reaches %d marks and the view draws %d states", len(marks), len(subagent.AllStates()))
+	if len(marks) != len(roster.States()) {
+		t.Fatalf("the roster reaches %d marks and the view draws %d states", len(marks), len(roster.States()))
 	}
 	t.Logf("every roster state draws its own mark: %v", marks)
 }
@@ -178,13 +178,13 @@ func childCallsWhileRunningAndOnceFinished(t *testing.T, dir, planted string) (r
 		for _, child := range event.Children {
 			for _, call := range child.Calls {
 				if strings.Contains(call.Tool+call.Text+call.Result, planted) {
-					t.Fatalf("a %s child drew %+v, which carries the argument the child was given", child.State.Label(), call)
+					t.Fatalf("a %s child drew %+v, which carries the argument the child was given", subagent.Label(child.State), call)
 				}
 			}
-			if child.State == subagent.Running && len(child.Calls) > 0 && running == nil {
+			if child.State == roster.Working && len(child.Calls) > 0 && running == nil {
 				running = child.Calls
 			}
-			if child.State != subagent.Running {
+			if child.State != roster.Working {
 				finished = child.Calls
 			}
 		}
@@ -253,7 +253,7 @@ func TestAFinishedChildDrawsNoMoreCallsThanTheWatchPaneHoldsAndSaysHowManyItHid(
 		t.Fatalf("the first line reads %q, want %q so a person can tell a cut list from a whole one", calls[0].Tool, want)
 	}
 
-	view := subagent.Model{Children: []subagent.Child{{Name: "c1", State: subagent.Done, Calls: calls}}}
+	view := subagent.Model{Children: []subagent.Child{{Name: "c1", State: roster.Finished, Calls: calls}}}
 	view.SetSize(80, 24)
 	view.Key("down")
 	drawn := view.View()

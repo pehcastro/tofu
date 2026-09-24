@@ -10,8 +10,8 @@ import (
 
 	"tofu/interface/tui/fixture"
 	"tofu/interface/tui/frametime"
-	"tofu/interface/tui/golden"
 	"tofu/interface/tui/pick"
+	"tofu/internal/golden"
 	"tofu/internal/widget"
 )
 

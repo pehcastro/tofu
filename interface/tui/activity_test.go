@@ -10,9 +10,10 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"tofu/interface/tui/golden"
 	"tofu/interface/tui/subagent"
 	"tofu/interface/tui/theme"
+	"tofu/internal/golden"
+	roster "tofu/internal/subagent"
 )
 
 const (
@@ -151,7 +152,7 @@ func runningChildren() []subagent.Child {
 			Owns:   []string{"internal/judge/**"},
 			Doing:  "writing policy/toolgate.go",
 			Since:  2*time.Minute + 14*time.Second,
-			State:  subagent.Running,
+			State:  roster.Working,
 			Tokens: 181000,
 		},
 		{
@@ -159,7 +160,7 @@ func runningChildren() []subagent.Child {
 			Owns:   []string{"bench/harness/**"},
 			Doing:  "go test ./bench/...",
 			Since:  time.Minute + 2*time.Second,
-			State:  subagent.Running,
+			State:  roster.Working,
 			Tokens: 129100,
 		},
 		{
@@ -167,10 +168,10 @@ func runningChildren() []subagent.Child {
 			Owns:   []string{"docs/**"},
 			Doing:  "reading docs/verification.md",
 			Since:  9 * time.Second,
-			State:  subagent.Running,
+			State:  roster.Working,
 			Tokens: 4200,
 		},
-		{Name: "go-rules", Owns: []string{"library/**"}, Doing: "handed back", State: subagent.HandedBack, Tokens: 900},
+		{Name: "go-rules", Owns: []string{"library/**"}, Doing: "handed back", State: roster.InReview, Tokens: 900},
 	}
 }
 

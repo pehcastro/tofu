@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"tofu/interface/tui/theme"
+	"tofu/internal/golden"
 	"tofu/internal/widget"
 )
 
@@ -152,6 +153,6 @@ func TestEveryWindowBarStartsAtTheSameColumn(t *testing.T) {
 
 func TestTheListingGoldens(t *testing.T) {
 	for _, width := range []int{narrowWidth, wideWidth} {
-		assertGolden(t, "status-"+strconv.Itoa(width)+".golden", statusText(statusFixture(), plain, fixtureMoment(), width))
+		golden.Assert(t, "status-"+strconv.Itoa(width)+".golden", statusText(statusFixture(), plain, fixtureMoment(), width))
 	}
 }

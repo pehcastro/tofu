@@ -9,7 +9,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"tofu/interface/tui/golden"
+	"tofu/internal/golden"
 )
 
 const promptKeys = "[1] allow once   [2] deny   [3] always here"

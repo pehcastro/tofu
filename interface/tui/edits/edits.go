@@ -15,6 +15,7 @@ import (
 	"tofu/interface/tui/subagent"
 	"tofu/interface/tui/theme"
 	"tofu/interface/tui/trace"
+	roster "tofu/internal/subagent"
 	"tofu/internal/widget"
 )
 
@@ -175,9 +176,9 @@ func (m *Model) scroll(by int) {
 }
 
 func (m Model) agents() []agent {
-	self := agent{name: Self, state: subagent.Done}
+	self := agent{name: Self, state: roster.Finished}
 	if m.Busy {
-		self.state = subagent.Running
+		self.state = roster.Working
 	}
 	children := make([]agent, 0, len(m.Children))
 	for _, child := range m.Children {
@@ -198,7 +199,7 @@ func (m Model) agents() []agent {
 }
 
 func running(state subagent.State) int {
-	if state == subagent.Running {
+	if state == roster.Working {
 		return 1
 	}
 	return 0

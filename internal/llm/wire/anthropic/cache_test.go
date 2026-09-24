@@ -3,16 +3,12 @@ package anthropic
 import (
 	"bytes"
 	"encoding/json"
-	"flag"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
+	"tofu/internal/golden"
 	"tofu/internal/llm"
 )
-
-var update = flag.Bool("update", false, "rewrite the golden files")
 
 func TestTheCommittedBreakpointMovesForwardAsTheConversationGrows(t *testing.T) {
 	var anchors, tips []int
@@ -78,18 +74,5 @@ func TestTheEncodedRequestPlacesItsMarkersWhereTheGoldenSays(t *testing.T) {
 		t.Fatalf("indenting: %v", err)
 	}
 
-	path := filepath.Join("testdata", "history-caching.golden")
-	if *update {
-		if err := os.WriteFile(path, indented.Bytes(), 0o644); err != nil {
-			t.Fatal(err)
-		}
-		return
-	}
-	want, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !bytes.Equal(want, indented.Bytes()) {
-		t.Errorf("the encoded request does not match %s\n--- got ---\n%s", path, indented.String())
-	}
+	golden.Assert(t, "history-caching.golden", indented.String())
 }

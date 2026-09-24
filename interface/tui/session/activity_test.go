@@ -8,6 +8,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"tofu/interface/tui/subagent"
+	roster "tofu/internal/subagent"
 	"tofu/internal/widget"
 )
 
@@ -22,7 +23,7 @@ func withRunningChildren(children ...subagent.Child) Model {
 func TestATruncatedOwnsColumnKeepsItsGapBeforeTheMission(t *testing.T) {
 	model := withRunningChildren(subagent.Child{
 		Name:  "c1",
-		State: subagent.Running,
+		State: roster.Working,
 		Owns:  []string{"internal/judge/policy/**"},
 		Doing: "read the policy loader",
 		Since: 26 * time.Second,
@@ -39,8 +40,8 @@ func TestATruncatedOwnsColumnKeepsItsGapBeforeTheMission(t *testing.T) {
 
 func TestAnOverWideElapsedTimeDoesNotMoveTheColumnsAfterIt(t *testing.T) {
 	model := withRunningChildren(
-		subagent.Child{Name: "under", State: subagent.Running, Doing: "read the policy loader", Since: 52 * time.Second},
-		subagent.Child{Name: "over", State: subagent.Running, Doing: "read the policy loader", Since: 78 * time.Second},
+		subagent.Child{Name: "under", State: roster.Working, Doing: "read the policy loader", Since: 52 * time.Second},
+		subagent.Child{Name: "over", State: roster.Working, Doing: "read the policy loader", Since: 78 * time.Second},
 	)
 	lines := model.activityLines()
 	startsAt := func(line, name string) int {

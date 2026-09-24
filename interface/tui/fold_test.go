@@ -10,7 +10,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"tofu/interface/tui/frametime"
-	"tofu/interface/tui/golden"
+	"tofu/internal/golden"
 )
 
 func rawRowHolding(t *testing.T, app *App, text string) string {

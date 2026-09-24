@@ -6,7 +6,7 @@ import (
 
 	"github.com/charmbracelet/x/ansi"
 
-	"tofu/interface/tui/golden"
+	"tofu/internal/golden"
 	isession "tofu/internal/session"
 )
 

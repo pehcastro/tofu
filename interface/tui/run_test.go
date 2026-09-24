@@ -10,9 +10,9 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"tofu/interface/tui/golden"
 	"tofu/interface/tui/session"
 	"tofu/interface/tui/theme"
+	"tofu/internal/golden"
 )
 
 const (

@@ -28,28 +28,10 @@ func Children(agents []roster.SubAgent, now time.Time, steps int, spent map[stri
 			Steps:  agent.Steps,
 			Total:  cmp.Or(steps, konst.TurnMaxSteps),
 			Tokens: spent[agent.ID],
-			State:  stateOf(agent.State),
+			State:  agent.State,
 			Calls:  watched,
 			Report: agent.Report,
 		}
 	}
 	return children
-}
-
-func stateOf(held roster.State) State {
-	switch held {
-	case roster.Working:
-		return Running
-	case roster.WaitingAnswer:
-		return WaitingForAnswer
-	case roster.InReview:
-		return HandedBack
-	case roster.Parked:
-		return Parked
-	case roster.Errored:
-		return Errored
-	case roster.Finished:
-		return Done
-	}
-	panic("subagent: unknown roster state " + held.String())
 }

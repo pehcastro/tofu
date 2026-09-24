@@ -1,14 +1,12 @@
 package harness
 
 import (
-	"flag"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
-)
 
-var updateGolden = flag.Bool("update", false, "update golden files")
+	"tofu/internal/golden"
+)
 
 func gatesOK() []GateResult {
 	return []GateResult{
@@ -75,22 +73,7 @@ func failingEveryRepeat() []Row {
 }
 
 func TestRenderGolden(t *testing.T) {
-	got := Render(routesFixture())
-	path := filepath.Join("testdata", "report", "hono-routes.golden")
-
-	if *updateGolden {
-		if err := os.WriteFile(path, []byte(got), 0o644); err != nil {
-			t.Fatalf("write golden: %v", err)
-		}
-	}
-
-	want, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("read golden: %v", err)
-	}
-	if got != string(want) {
-		t.Fatalf("render does not match golden %s\n--- got ---\n%s\n--- want ---\n%s", path, got, want)
-	}
+	golden.Assert(t, filepath.Join("report", "hono-routes.golden"), Render(routesFixture()))
 }
 
 func TestGateFailureExcludedButShown(t *testing.T) {

@@ -6,8 +6,9 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"tofu/interface/tui/golden"
 	"tofu/interface/tui/subagent"
+	"tofu/internal/golden"
+	roster "tofu/internal/subagent"
 )
 
 func subAgentStateApp(t *testing.T, state subagent.State) *App {
@@ -21,10 +22,10 @@ func subAgentStateApp(t *testing.T, state subagent.State) *App {
 }
 
 func TestASubAgentCarriesAStateFromTheNamedSetAndTheSubAgentViewDrawsIt(t *testing.T) {
-	for _, state := range subagent.AllStates() {
-		t.Run(state.Label(), func(t *testing.T) {
+	for _, state := range roster.States() {
+		t.Run(subagent.Label(state), func(t *testing.T) {
 			content := subAgentStateApp(t, state).View().Content
-			golden.Assert(t, "subagent-state-"+strings.ReplaceAll(state.Label(), " ", "-")+"-80x24.golden", content)
+			golden.Assert(t, "subagent-state-"+strings.ReplaceAll(subagent.Label(state), " ", "-")+"-80x24.golden", content)
 		})
 	}
 }
@@ -35,9 +36,9 @@ func TestSubAgentsCarriesItsExactCountInBracketsOrPlainWithNone(t *testing.T) {
 		t.Fatalf("sub-agents carries a count with no children\n%s", app.strip.Render(app.width))
 	}
 	app.Update(Event{Kind: EventSubAgent, Children: []subagent.Child{
-		{Name: "a", State: subagent.Running},
-		{Name: "b", State: subagent.Running},
-		{Name: "c", State: subagent.Done},
+		{Name: "a", State: roster.Working},
+		{Name: "b", State: roster.Working},
+		{Name: "c", State: roster.Finished},
 	}})
 	strip := app.strip.Render(app.width)
 	if !strings.Contains(strip, "sub-agents (2)") {

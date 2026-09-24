@@ -13,8 +13,8 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"tofu/interface/tui/golden"
 	"tofu/interface/tui/paste"
+	"tofu/internal/golden"
 	"tofu/internal/sys"
 )
 
