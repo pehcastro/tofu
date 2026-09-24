@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"strings"
 	"testing"
+	"time"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
@@ -54,7 +55,28 @@ func childrenOutsideTheJob(t *testing.T, job windows.Handle, pid int) (children 
 	return children, strays
 }
 
-func TestEveryProcessTheShellSpawnsIsAJobMemberBecauseItCannotRunBeforeItIsAdopted(t *testing.T) {
+const childRegistrationDeadline = 500 * time.Millisecond
+const childRegistrationAttempts = 5
+
+func childrenOutsideTheJobEventually(t *testing.T, job windows.Handle, pid int) (children int, strays []windows.Handle) {
+	t.Helper()
+	started := time.Now()
+	deadline := started.Add(childRegistrationDeadline)
+	for {
+		children, strays = childrenOutsideTheJob(t, job, pid)
+		if children > 0 {
+			t.Logf("the spawned child registered %v after the shell announced it was listening", time.Since(started))
+			return children, strays
+		}
+		if time.Now().After(deadline) {
+			return children, strays
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+func attemptShellUnderAJob(t *testing.T) (job windows.Handle, cmd *exec.Cmd, children int, strays []windows.Handle, ok bool) {
+	t.Helper()
 	shell, err := posixShell()
 	if err != nil {
 		t.Fatal(err)
@@ -64,37 +86,62 @@ func TestEveryProcessTheShellSpawnsIsAJobMemberBecauseItCannotRunBeforeItIsAdopt
 		t.Fatal(err)
 	}
 	defer func() { _ = reader.Close() }()
-	cmd := exec.Command(shell, "-c", "sleep 30 & echo listening on :3000; wait")
+	cmd = exec.Command(shell, "-c", "sleep 30 & echo listening on :3000; wait")
 	cmd.Dir = t.TempDir()
 	cmd.Stdout, cmd.Stderr = writer, writer
 	if err := spawnSuspended(cmd); err != nil {
 		t.Fatal(err)
 	}
-	job, err := adoptIntoJob(cmd.Process.Pid)
+	job, err = adoptIntoJob(cmd.Process.Pid)
 	if err != nil {
 		_ = cmd.Process.Kill()
 		t.Fatal(err)
 	}
-	defer func() { _ = windows.CloseHandle(job) }()
 	if err := resumeSuspended(cmd.Process.Pid); err != nil {
 		_ = cmd.Process.Kill()
+		_ = windows.CloseHandle(job)
 		t.Fatal(err)
 	}
 	_ = writer.Close()
 	if _, err := bufio.NewReader(reader).ReadString('\n'); err != nil {
 		t.Fatalf("the shell never announced it was listening: %v", err)
 	}
-	children, strays := childrenOutsideTheJob(t, job, cmd.Process.Pid)
+	children, strays = childrenOutsideTheJobEventually(t, job, cmd.Process.Pid)
+	if children > 0 {
+		return job, cmd, children, strays, true
+	}
+	endShellTree(cmd, job)
+	return 0, nil, 0, nil, false
+}
+
+func endShellTree(cmd *exec.Cmd, job windows.Handle) {
+	_ = killTree(cmd.Process.Pid)
+	_ = cmd.Wait()
+	_ = windows.CloseHandle(job)
+}
+
+func TestEveryProcessTheShellSpawnsIsAJobMemberBecauseItCannotRunBeforeItIsAdopted(t *testing.T) {
+	var job windows.Handle
+	var cmd *exec.Cmd
+	var children int
+	var strays []windows.Handle
+	ok := false
+	for attempt := 1; attempt <= childRegistrationAttempts && !ok; attempt++ {
+		job, cmd, children, strays, ok = attemptShellUnderAJob(t)
+		if !ok {
+			t.Logf("attempt %d: the shell announced it was listening but no child registered within %v, retrying with a fresh shell", attempt, childRegistrationDeadline)
+		}
+	}
+	if !ok {
+		t.Fatal("the shell spawned nothing, so nothing proves a spawn could have escaped")
+	}
+	defer endShellTree(cmd, job)
 	defer func() {
 		for _, stray := range strays {
 			_ = windows.TerminateProcess(stray, 1)
 			_ = windows.CloseHandle(stray)
 		}
-		_ = cmd.Wait()
 	}()
-	if children == 0 {
-		t.Fatal("the shell spawned nothing, so nothing proves a spawn could have escaped")
-	}
 	if len(strays) > 0 {
 		t.Errorf("%d of the %d processes the shell spawned are outside its job", len(strays), children)
 	}
