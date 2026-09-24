@@ -169,7 +169,7 @@ func TestEnterWithNothingRunningQueuesNothing(t *testing.T) {
 	}
 }
 
-func TestStoppingTheTurnDropsTheQueue(t *testing.T) {
+func TestStoppingTheTurnKeepsTheQueue(t *testing.T) {
 	tasks := make(chan string, 4)
 	app := queueApp(t, tasks)
 	typeAndSend(app, firstTask)
@@ -177,11 +177,11 @@ func TestStoppingTheTurnDropsTheQueue(t *testing.T) {
 	typeAndSend(app, secondTask)
 	app.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
 
-	if queued := app.view.Queued(); len(queued) != 0 {
-		t.Fatalf("ctrl+c left %q in the queue", queued)
+	if queued := app.view.Queued(); len(queued) != 1 || queued[0] != secondTask {
+		t.Fatalf("ctrl+c left %q in the queue, want the one message typed while it ran", queued)
 	}
-	if plain := ansi.Strip(app.View().Content); !strings.Contains(plain, stoppingNote+droppedQueue) {
-		t.Errorf("the transcript does not say the queue was dropped\n%s", plain)
+	if plain := ansi.Strip(app.View().Content); !strings.Contains(plain, "1 message"+queuedTyped) {
+		t.Errorf("the transcript does not say what the queue keeps\n%s", plain)
 	}
 }
 

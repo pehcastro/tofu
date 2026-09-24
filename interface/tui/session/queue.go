@@ -75,15 +75,6 @@ func (m *Model) Unqueue() {
 	}
 }
 
-func (m *Model) DropQueue() bool {
-	held := len(m.queue) > 0
-	for len(m.queue) > 0 {
-		m.pick = 0
-		m.Unqueue()
-	}
-	return held
-}
-
 func (m *Model) PickQueued(by int) {
 	if len(m.queue) == 0 {
 		return

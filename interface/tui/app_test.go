@@ -1070,15 +1070,105 @@ func TestInterruptStopsTheTurnAndKeepsTheApp(t *testing.T) {
 	}
 }
 
-func TestInterruptOutsideATurnQuits(t *testing.T) {
+func TestInterruptOutsideATurnAsksBeforeItQuits(t *testing.T) {
 	app := newTestApp(Options{Repo: testRepo, Now: fixedClock()})
 	app.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 	_, cmd := app.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
+	if cmd != nil {
+		t.Fatalf("one ctrl+c at an idle prompt produced %T, want the program still running", cmd())
+	}
+	if plain := ansi.Strip(app.View().Content); !strings.Contains(plain, quitAgainNote) {
+		t.Fatalf("one ctrl+c at an idle prompt asked nothing\n%s", plain)
+	}
+	_, cmd = app.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
 	if cmd == nil {
-		t.Fatal("ctrl+c outside a turn produced no command")
+		t.Fatal("a second ctrl+c produced no command")
 	}
 	if _, quit := cmd().(tea.QuitMsg); !quit {
-		t.Fatal("ctrl+c outside a turn did not quit")
+		t.Fatal("a second ctrl+c did not quit")
+	}
+}
+
+func TestTypingBetweenTwoInterruptsKeepsTheProgramRunning(t *testing.T) {
+	app := newTestApp(Options{Repo: testRepo, Now: fixedClock()})
+	app.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	app.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
+	typeText(app, "no")
+	if _, cmd := app.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl}); cmd != nil {
+		t.Fatalf("typing between the two presses still quit with %T", cmd())
+	}
+}
+
+func callingApp(t *testing.T) (*App, context.Context) {
+	t.Helper()
+	contexts := make(chan context.Context, 1)
+	app := newTestApp(Options{
+		Repo:   testRepo,
+		Branch: "develop",
+		Now:    fixedClock(),
+		Wires:  anthropicAlone,
+		Turn: func(ctx context.Context, _ Pick, _ string, _ CalledFromInsideTheTurnAndNeverAfterItReturns) {
+			contexts <- ctx
+			<-ctx.Done()
+		},
+	})
+	app.Init()
+	app.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	typeText(app, "read the changelog")
+	app.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	var held context.Context
+	select {
+	case held = <-contexts:
+	case <-time.After(2 * time.Second):
+		t.Fatal("the turn never started")
+	}
+	app.Update(Event{Kind: EventToolCall, ID: "c1", Tool: "bash", Text: "sleep 3"})
+	return app, held
+}
+
+func TestTheFirstInterruptLeavesTheRunningToolCallAlive(t *testing.T) {
+	app, held := callingApp(t)
+	app.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
+	select {
+	case <-held.Done():
+		t.Fatal("the first ctrl+c cancelled the context the running tool call holds")
+	case <-time.After(100 * time.Millisecond):
+	}
+	if plain := ansi.Strip(app.View().Content); !strings.Contains(plain, stoppingModel) {
+		t.Fatalf("the screen does not say the running tools are being let finish\n%s", plain)
+	}
+	app.Update(Event{Kind: EventToolResult, ID: "c1", Text: "done"})
+	select {
+	case <-held.Done():
+	case <-time.After(2 * time.Second):
+		t.Fatal("the turn ran on after the tool call it was waiting on reported")
+	}
+}
+
+func TestASecondInterruptStopsTheRunningToolCallToo(t *testing.T) {
+	app, held := callingApp(t)
+	app.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
+	app.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
+	select {
+	case <-held.Done():
+	case <-time.After(2 * time.Second):
+		t.Fatal("a second ctrl+c did not cancel the context the running tool call holds")
+	}
+	if plain := ansi.Strip(app.View().Content); !strings.Contains(plain, stoppingNote) {
+		t.Fatalf("the screen does not say the turn was stopped\n%s", plain)
+	}
+}
+
+func TestAnInterruptKeepsWhatWasTypedWhileTheTurnRan(t *testing.T) {
+	app, _ := callingApp(t)
+	typeAndSend(app, firstTask)
+	typeAndSend(app, secondTask)
+	app.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
+	if queued := app.view.Queued(); len(queued) != 2 {
+		t.Fatalf("ctrl+c left %q in the queue, want both messages", queued)
+	}
+	if plain := ansi.Strip(app.View().Content); !strings.Contains(plain, "2 messages"+queuedTyped) {
+		t.Fatalf("the screen does not say what the queue keeps\n%s", plain)
 	}
 }
 

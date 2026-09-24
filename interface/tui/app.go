@@ -26,6 +26,7 @@ import (
 	"tofu/interface/tui/theme"
 	"tofu/interface/tui/trace"
 	"tofu/interface/tui/work"
+	"tofu/internal/konst"
 	"tofu/internal/llm"
 	library "tofu/internal/llm/models"
 	isession "tofu/internal/session"
@@ -211,7 +212,10 @@ const (
 	gateOffLine    = "the gate is off, so no call on this session is judged."
 	altPrefix      = "alt+"
 	stoppingNote   = "stopping the turn"
-	droppedQueue   = ", and the queue with it"
+	stoppingModel  = "stopping the model, and letting the running tools finish"
+	queuedKept     = ", and the queue keeps "
+	queuedTyped    = " you typed"
+	quitAgainNote  = "press ctrl+c again to quit tofu"
 	toolEventKind  = "tool"
 	failureHead    = "failure"
 	partialHead    = "answer, interrupted"
@@ -248,6 +252,9 @@ type App struct {
 	busy           bool
 	ticking        bool
 	gateOff        bool
+	softStop       bool
+	running        int
+	pressedAt      time.Time
 	cancel         context.CancelFunc
 	events         chan Event
 	board          paste.Board
@@ -417,6 +424,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case Closed:
 		a.busy, a.cancel, a.events, a.edits.Busy = false, nil, nil, false
+		a.softStop, a.running, a.pressedAt = false, 0, time.Time{}
 		a.view.Stop()
 		a.dropSteering()
 		next := tea.Batch(a.pollQuota(), a.readPaths(), a.pollShells())
@@ -486,12 +494,9 @@ func (a *App) key(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return a.setupKey(key)
 	}
 	if key == "ctrl+c" {
-		if !a.busy {
-			return a, tea.Quit
-		}
-		a.stopTurn()
-		return a, nil
+		return a, a.interrupt()
 	}
+	a.pressedAt = time.Time{}
 	if a.current == viewChat && a.view.TakesAnswerDigits() {
 		switch key {
 		case "1":
@@ -747,18 +752,52 @@ func (a *App) turnWorkID() string {
 	return a.work.Entries[len(a.work.Entries)-1].ID
 }
 
+func (a *App) interrupt() tea.Cmd {
+	if a.view.Stopping {
+		return nil
+	}
+	within := a.options.Now().Sub(a.pressedAt) <= konst.StopAgainMillis*time.Millisecond
+	a.pressedAt = a.options.Now()
+	switch {
+	case !a.busy:
+		if within {
+			return tea.Quit
+		}
+		a.view.Append(session.Entry{Kind: session.Note, Body: quitAgainNote})
+	case a.softStop:
+		if within {
+			a.stopTurn()
+		}
+	case a.running == 0 || a.view.TakesAnswerDigits():
+		a.stopTurn()
+	default:
+		a.softStop = true
+		a.view.Append(session.Entry{Kind: session.Note, Body: stoppingModel + a.queueTail()})
+	}
+	return nil
+}
+
+func (a *App) queueTail() string {
+	held := len(a.view.Queued())
+	if held == 0 {
+		return ""
+	}
+	word := " messages"
+	if held == 1 {
+		word = " message"
+	}
+	return queuedKept + strconv.Itoa(held) + word + queuedTyped
+}
+
 func (a *App) stopTurn() {
 	if a.view.Stopping {
 		return
 	}
-	a.view.Stopping = true
+	note := stoppingNote + a.queueTail()
+	kept := a.keptPartial()
+	a.softStop, a.view.Stopping = false, true
 	a.cancel()
 	a.dropSteering()
-	note := stoppingNote
-	if a.view.DropQueue() {
-		note = stoppingNote + droppedQueue
-	}
-	kept := a.keptPartial()
 	a.view.Append(session.Entry{Kind: session.Note, Body: note})
 	if kept != "" {
 		a.view.Append(session.Entry{Kind: session.Note, Body: kept})
@@ -786,6 +825,7 @@ func (a *App) start(task string) tea.Cmd {
 	ctx, cancel := context.WithCancel(context.Background())
 	events := make(chan Event, eventBuffer)
 	a.busy, a.cancel, a.events, a.edits.Busy = true, cancel, events, true
+	a.softStop, a.running = false, 0
 	a.view.Start()
 	turn, pick := a.options.Turn, Pick{Wire: a.wire, Model: a.picked, Effort: a.effort}
 	deliver := func(event Event) {
@@ -829,6 +869,7 @@ func (a *App) absorb(event Event) {
 	case EventTextDelta:
 		a.view.Stream(event.Text)
 	case EventToolCall:
+		a.running++
 		a.view.Append(session.Entry{Kind: session.Tool, ID: event.ID, Head: event.Tool, Body: event.Text, Detail: event.Detail, Promoted: event.Promote})
 		a.work.Append(work.Entry{ID: event.ID, Head: event.Tool + " " + event.Text, Args: event.Detail})
 	case EventToolResult:
@@ -839,6 +880,10 @@ func (a *App) absorb(event Event) {
 		}
 		a.view.Finish(event.ID, session.Result{Status: status, Bytes: event.Bytes, Failed: event.Failed})
 		a.work.Finish(event.ID, status, event.Bytes, event.Failed)
+		a.running = max(a.running-1, 0)
+		if a.softStop && a.running == 0 {
+			a.stopTurn()
+		}
 	case EventNote:
 		a.view.Append(session.Entry{Kind: session.Note, Body: event.Text})
 	case EventDone:
