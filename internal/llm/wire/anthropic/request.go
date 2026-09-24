@@ -210,11 +210,20 @@ func applyHeadCaching(system []systemBlock, tools []wireTool, ttl string) int {
 			placed++
 		}
 	}
-	if last := len(system) - 1; last >= 0 && system[last].CacheControl == nil {
-		system[last].CacheControl = ephemeral(ttl)
+	if anchor := lastStableSystemBlock(system); anchor >= 0 && system[anchor].CacheControl == nil {
+		system[anchor].CacheControl = ephemeral(ttl)
 		placed++
 	}
 	return placed
+}
+
+func lastStableSystemBlock(system []systemBlock) int {
+	for index := len(system) - 1; index >= 0; index-- {
+		if !strings.HasPrefix(system[index].Text, BillingHeaderPrefix) {
+			return index
+		}
+	}
+	return -1
 }
 
 func applyHistoryCaching(messages []wireMessage, ttl string, budget int) {
