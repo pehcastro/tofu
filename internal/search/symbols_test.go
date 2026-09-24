@@ -9,7 +9,7 @@ import (
 	"tofu/internal/search"
 )
 
-func write(t *testing.T, root, rel, body string) {
+func write(t testing.TB, root, rel, body string) {
 	t.Helper()
 	full := filepath.Join(root, filepath.FromSlash(rel))
 	if err := os.MkdirAll(filepath.Dir(full), 0o750); err != nil {

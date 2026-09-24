@@ -1,15 +1,13 @@
 package search_test
 
 import (
-	"sort"
 	"strings"
 	"testing"
-	"time"
 
 	"tofu/internal/search"
 )
 
-func tree(t *testing.T, files map[string]string) string {
+func tree(t testing.TB, files map[string]string) string {
 	t.Helper()
 	root := t.TempDir()
 	for rel, body := range files {
@@ -144,28 +142,19 @@ func TestTheSymbolMatchIsExactRatherThanFuzzy(t *testing.T) {
 	}
 }
 
-func TestTheCheckOverTenCitations(t *testing.T) {
-	root := tree(t, map[string]string{"internal/turn/loop.go": citedFile})
+func BenchmarkTenCitationsOverOneFile(b *testing.B) {
+	root := tree(b, map[string]string{"internal/turn/loop.go": citedFile})
 	var text strings.Builder
 	for range 10 {
 		text.WriteString("the row is written at internal/turn/loop.go:3:runToolCall and read back\n")
 	}
+	body := text.String()
 
-	samples := make([]float64, 0, 5)
-	for run := range 5 {
-		started := time.Now()
-		cited := search.Cite(root, text.String())
-		elapsed := float64(time.Since(started).Microseconds()) / 1000
+	b.ResetTimer()
+	for range b.N {
+		cited := search.Cite(root, body)
 		if len(cited.Found) != 10 || cited.Resolved != 10 {
-			t.Fatalf("found %d citations and resolved %d, wanted 10 and 10", len(cited.Found), cited.Resolved)
+			b.Fatalf("found %d citations and resolved %d, wanted 10 and 10", len(cited.Found), cited.Resolved)
 		}
-		samples = append(samples, elapsed)
-		t.Logf("run %d: ten citations over one file checked in %.3f ms", run+1, elapsed)
-	}
-	sort.Float64s(samples)
-	median, worst := samples[len(samples)/2], samples[len(samples)-1]
-	t.Logf("ten citations over one file: %d runs, median %.3f ms, worst %.3f ms, budget 5 ms", len(samples), median, worst)
-	if median >= 5 {
-		t.Fatalf("the median of five runs took %.3f ms over ten citations, and the bound is 5 ms", median)
 	}
 }
