@@ -26,6 +26,7 @@ import (
 	"tofu/interface/tui/theme"
 	"tofu/interface/tui/trace"
 	"tofu/interface/tui/work"
+	"tofu/internal/judge/jev"
 	"tofu/internal/konst"
 	"tofu/internal/llm"
 	library "tofu/internal/llm/models"
@@ -81,6 +82,7 @@ type Event struct {
 	Created   string
 	Agent     string
 	Promote   bool
+	GateWhy   jev.Why
 }
 
 func (e Event) snapshot() bool {
@@ -202,22 +204,20 @@ const (
 	gateOffKeyUnread   = "the .env file that should carry OPENROUTER_KEY could not be read."
 	gateOffUnexplained = "tofu could not open the judge."
 	gateOffHead        = "gate off"
-	keyErrorNoFile     = "does not exist"
-	keyErrorNoName     = "does not carry it"
-	keyErrorUnreadable = "missing_credential: reading"
 )
 
-func gateOffNote(raw string) string {
-	tail := gateOffUnexplained
-	switch {
-	case strings.Contains(raw, keyErrorNoFile):
-		tail = gateOffNoKey
-	case strings.Contains(raw, keyErrorNoName):
-		tail = gateOffKeyUnnamed
-	case strings.Contains(raw, keyErrorUnreadable):
-		tail = gateOffKeyUnread
+func gateOffNote(why jev.Why) string {
+	switch why {
+	case jev.WhyNoFile:
+		return gateOffLine + " " + gateOffNoKey
+	case jev.WhyFileLacksName:
+		return gateOffLine + " " + gateOffKeyUnnamed
+	case jev.WhyUnreadable:
+		return gateOffLine + " " + gateOffKeyUnread
+	case jev.WhyUnexplained:
+		return gateOffLine + " " + gateOffUnexplained
 	}
-	return gateOffLine + " " + tail
+	panic("tui: unknown gate reason")
 }
 
 const (
@@ -940,7 +940,7 @@ func (a *App) absorb(event Event) {
 			id := a.mintID()
 			a.work.Append(work.Entry{ID: id, Head: gateOffHead, Output: event.Text})
 			a.workBeforeTurn = len(a.work.Entries)
-			a.view.Append(session.Entry{Kind: session.Note, ID: id, Body: gateOffNote(event.Text)})
+			a.view.Append(session.Entry{Kind: session.Note, ID: id, Body: gateOffNote(event.GateWhy)})
 		}
 	case EventContext:
 		a.status.Context = event.Context

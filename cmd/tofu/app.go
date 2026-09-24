@@ -624,6 +624,12 @@ func (s *appSession) resumeHead() string {
 	return "continuing " + carry.Session + ", " + strconv.Itoa(carry.Carried) + " messages from " + sessionSteps(carry.Steps)
 }
 
+func gateOffEvent(gateErr error) tui.Event {
+	var missing jev.MissingKey
+	errors.As(gateErr, &missing)
+	return tui.Event{Kind: tui.EventGateOff, Text: gateErr.Error(), GateWhy: missing.Why}
+}
+
 func pickedOpts(dir, turnID, task string, pick tui.Pick, maxSteps int) runOpts {
 	return runOpts{
 		dir:              dir,
@@ -680,7 +686,7 @@ func (s *appSession) run(ctx context.Context, pick tui.Pick, task string, emit t
 		return
 	}
 	if gateErr != nil {
-		emit(tui.Event{Kind: tui.EventGateOff, Text: gateErr.Error()})
+		emit(gateOffEvent(gateErr))
 	}
 	if gate != nil {
 		gate.watch = func(tool string, gated turn.GateDecision, err error) {

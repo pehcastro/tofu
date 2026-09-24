@@ -23,6 +23,7 @@ import (
 	"tofu/interface/tui/subagent"
 	"tofu/interface/tui/trace"
 	"tofu/interface/tui/work"
+	"tofu/internal/judge/jev"
 	"tofu/internal/llm"
 	isettings "tofu/internal/settings"
 )
@@ -324,10 +325,10 @@ func gateOffApp(t *testing.T, width, height int) *App {
 	app.Init()
 	app.Update(tea.WindowSizeMsg{Width: width, Height: height})
 	for _, event := range []Event{
-		{Kind: EventGateOff, Text: noKeyAtAll()},
+		{Kind: EventGateOff, Text: noKeyAtAll(), GateWhy: jev.WhyNoFile},
 		{Kind: EventToolCall, ID: "c1", Tool: "read", Text: "internal/judge/policy/toolgate.go"},
 		{Kind: EventToolResult, ID: "c1", Text: "412 lines, 11.8 KB"},
-		{Kind: EventGateOff, Text: noKeyAtAll()},
+		{Kind: EventGateOff, Text: noKeyAtAll(), GateWhy: jev.WhyNoFile},
 		{Kind: EventToolCall, ID: "c2", Tool: "bash", Text: "go test ./internal/judge/..."},
 		{Kind: EventToolResult, ID: "c2", Text: "ok tofu/internal/judge 0.42s"},
 	} {
@@ -348,20 +349,38 @@ func TestTheGateOffNoteKeepsThePathAndTheFunctionOutOfTheTranscript(t *testing.T
 	}
 }
 
+type gateOffState struct {
+	why  jev.Why
+	want string
+}
+
+func gateOffStates() []gateOffState {
+	return []gateOffState{
+		{jev.WhyNoFile, gateOffNoKey},
+		{jev.WhyFileLacksName, gateOffKeyUnnamed},
+		{jev.WhyUnreadable, gateOffKeyUnread},
+		{jev.WhyUnexplained, gateOffUnexplained},
+	}
+}
+
 func TestEachGateOffStateGetsItsOwnLine(t *testing.T) {
-	unnamed := `jev.Key: missing_credential: OPENROUTER_KEY is not set and ` + keyEnvPath() + ` does not carry it`
-	unread := `jev.Key: missing_credential: reading ` + keyEnvPath() + `: permission denied`
-	for _, state := range []struct {
-		raw  string
-		want string
-	}{
-		{noKeyAtAll(), gateOffNoKey},
-		{unnamed, gateOffKeyUnnamed},
-		{unread, gateOffKeyUnread},
-		{"jev: the endpoint is not a url", gateOffUnexplained},
-	} {
-		if note := gateOffNote(state.raw); note != gateOffLine+" "+state.want {
-			t.Errorf("%q reads as %q, want the line ending %q", state.raw, note, state.want)
+	for _, state := range gateOffStates() {
+		if note := gateOffNote(state.why); note != gateOffLine+" "+state.want {
+			t.Errorf("reason %d reads as %q, want the line ending %q", state.why, note, state.want)
+		}
+	}
+}
+
+func TestARewordedKeyErrorStillPicksTheSentenceTheReasonAsksFor(t *testing.T) {
+	reworded := `jev.Key: missing_credential: nothing anywhere holds OPENROUTER_KEY, looked at ` + keyEnvPath()
+	for _, state := range gateOffStates() {
+		app := newTestApp(Options{Repo: testRepo, Branch: "develop", Now: fixedClock(), Wires: anthropicAlone})
+		app.Init()
+		app.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+		app.Update(Event{Kind: EventGateOff, Text: reworded, GateWhy: state.why})
+		content := ansi.Strip(app.View().Content)
+		if flat := strings.Join(strings.Fields(content), " "); !strings.Contains(flat, gateOffLine+" "+state.want) {
+			t.Errorf("reason %d shows the wrong sentence, want %q\n%s", state.why, state.want, content)
 		}
 	}
 }

@@ -1,8 +1,13 @@
 package jev
 
 import (
+	"go/ast"
+	"go/parser"
+	"go/token"
+	"io/fs"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -182,6 +187,117 @@ func TestATestThatOptsInByNameReachesTheCredentialAgain(t *testing.T) {
 	if key == "" {
 		t.Fatal("an opted-in test read an empty credential")
 	}
+}
+
+func keyErrorLines(t *testing.T) (paths, lines []string) {
+	t.Helper()
+	t.Setenv(keyName(), "")
+	dir := t.TempDir()
+	unnamed := filepath.Join(dir, "unnamed", ".env")
+	unreadable := filepath.Join(dir, "unreadable", ".env")
+	if err := os.MkdirAll(filepath.Dir(unnamed), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(unnamed, []byte("OTHER=1\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(unreadable, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	paths = []string{filepath.Join(dir, "gone", ".env"), unnamed, unreadable}
+	for _, path := range paths {
+		_, err := Key(path)
+		if err == nil {
+			t.Fatalf("%s was accepted as a key", path)
+		}
+		lines = append(lines, err.Error())
+	}
+	return paths, lines
+}
+
+func TestTheKeyErrorLineIsWordForWordWhatItWas(t *testing.T) {
+	paths, lines := keyErrorLines(t)
+	head := "jev.Key: missing_credential: "
+	want := []string{
+		head + keyName() + " is not set and " + paths[0] + " does not exist",
+		head + keyName() + " is not set and " + paths[1] + " does not carry it",
+		head + "reading " + paths[2] + ": ",
+	}
+	if lines[0] != want[0] || lines[1] != want[1] {
+		t.Errorf("a log line changed:\ngot  %q\nwant %q\ngot  %q\nwant %q", lines[0], want[0], lines[1], want[1])
+	}
+	if !strings.HasPrefix(lines[2], want[2]) {
+		t.Errorf("the unreadable line reads %q, want it to start %q", lines[2], want[2])
+	}
+}
+
+func TestNobodyOutsideTheJudgeMatchesTheKeyErrorText(t *testing.T) {
+	_, lines := keyErrorLines(t)
+	root := sys.SourceRoot()
+	judge := filepath.Join(root, "internal", "judge")
+	var found []string
+	for _, area := range []string{"bench", "cmd", "interface", "internal", "library"} {
+		if err := filepath.WalkDir(filepath.Join(root, area), func(path string, entry fs.DirEntry, err error) error {
+			switch {
+			case err != nil:
+				return err
+			case entry.IsDir() && path == judge:
+				return fs.SkipDir
+			case entry.IsDir() || !strings.HasSuffix(path, ".go"):
+				return nil
+			}
+			matched, matchErr := matchesOn(path, lines)
+			found = append(found, matched...)
+			return matchErr
+		}); err != nil {
+			t.Fatalf("walking %s: %v", area, err)
+		}
+	}
+	if len(found) > 0 {
+		t.Fatalf("%d places read this package's error text instead of its typed reason:\n%s", len(found), strings.Join(found, "\n"))
+	}
+}
+
+func matchesOn(path string, lines []string) ([]string, error) {
+	fileSet := token.NewFileSet()
+	parsed, err := parser.ParseFile(fileSet, path, nil, parser.SkipObjectResolution)
+	if err != nil {
+		return nil, err
+	}
+	var found []string
+	ast.Inspect(parsed, func(node ast.Node) bool {
+		call, ok := node.(*ast.CallExpr)
+		if !ok || !isTextMatcher(call.Fun) {
+			return true
+		}
+		for _, argument := range call.Args {
+			literal, ok := argument.(*ast.BasicLit)
+			if !ok || literal.Kind != token.STRING {
+				continue
+			}
+			text, unquoteErr := strconv.Unquote(literal.Value)
+			if unquoteErr != nil || len(strings.Fields(text)) < 2 {
+				continue
+			}
+			for _, line := range lines {
+				if strings.Contains(line, text) {
+					found = append(found, path+":"+strconv.Itoa(fileSet.Position(literal.Pos()).Line)+" matches "+literal.Value)
+					break
+				}
+			}
+		}
+		return true
+	})
+	return found, nil
+}
+
+func isTextMatcher(fun ast.Expr) bool {
+	selector, ok := fun.(*ast.SelectorExpr)
+	if !ok {
+		return false
+	}
+	pkg, ok := selector.X.(*ast.Ident)
+	return ok && (pkg.Name == "strings" || pkg.Name == "bytes" || pkg.Name == "regexp")
 }
 
 func TestKeyNeverPutsTheValueInAnError(t *testing.T) {

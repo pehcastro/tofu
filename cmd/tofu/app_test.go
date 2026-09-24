@@ -317,6 +317,43 @@ func TestAProviderThatCannotBeReadSaysSo(t *testing.T) {
 	t.Log("\n" + settingsScreen(t, providers))
 }
 
+func TestTheGateOffEventCarriesTheReasonTheKeyLookupFound(t *testing.T) {
+	t.Setenv(envVarName(), "")
+	dir := t.TempDir()
+	unnamed := filepath.Join(dir, "unnamed", ".env")
+	unreadable := filepath.Join(dir, "unreadable", ".env")
+	if err := os.MkdirAll(filepath.Dir(unnamed), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(unnamed, []byte("OTHER=1\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(unreadable, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, state := range []struct {
+		name string
+		path string
+		want jev.Why
+	}{
+		{"no file", filepath.Join(dir, "gone", ".env"), jev.WhyNoFile},
+		{"a file without the name in it", unnamed, jev.WhyFileLacksName},
+		{"a file that will not read", unreadable, jev.WhyUnreadable},
+	} {
+		_, err := jev.Key(state.path)
+		if err == nil {
+			t.Fatalf("%s was accepted as a key", state.name)
+		}
+		event := gateOffEvent(err)
+		if event.Kind != tui.EventGateOff || event.Text != err.Error() {
+			t.Errorf("%s produced %+v, want the gate-off event carrying %q", state.name, event, err.Error())
+		}
+		if event.GateWhy != state.want {
+			t.Errorf("%s reads as reason %d, want %d: %v", state.name, event.GateWhy, state.want, err)
+		}
+	}
+}
+
 func TestGateOffNoteNamesTheLogin(t *testing.T) {
 	const want = "gate off: no tool call is judged until tofu login openrouter stores the key"
 	if gateOffNote != want {
