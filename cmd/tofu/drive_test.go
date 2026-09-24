@@ -7,6 +7,8 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -52,23 +54,10 @@ const readingCassette = `{"text":"reading the note","tools":[{"name":"read","arg
 `
 
 func TestADrivenScriptSendsATaskAndPrintsWhatTheScreenShowed(t *testing.T) {
-	dir := drivenProject(t)
-	deck := written(t, dir, "read.cassette", readingCassette)
-	script := written(t, dir, "read.drive", strings.Join([]string{
-		"wait type a task and press enter",
-		"type read note.txt",
-		"key enter",
-		"wait cooked for",
-		"screen",
-	}, "\n"))
-	var out, errOut bytes.Buffer
-	code := driveVerb([]string{script, "--cassette", deck, "--plain", "--timeout", "30s"}, strings.NewReader(""), &out, &errOut)
-	if code != exitOK {
-		t.Fatalf("tofu drive exited %d: %s", code, errOut.String())
-	}
+	printed := drivenRead(t, drivenProject(t))
 	for _, want := range []string{"read note.txt", "note.txt holds one line", "cooked for"} {
-		if !strings.Contains(out.String(), want) {
-			t.Errorf("the printed screen never says %q:\n%s", want, out.String())
+		if !strings.Contains(printed, want) {
+			t.Errorf("the printed screen never says %q:\n%s", want, printed)
 		}
 	}
 }
@@ -387,12 +376,11 @@ func pollutedHome(t *testing.T) string {
 	return home
 }
 
-func drivenRead(t *testing.T, dir string, args ...string) string {
+func drivenTask(t *testing.T, dir, name, deck, task string, args ...string) string {
 	t.Helper()
-	deck := written(t, dir, "read.cassette", readingCassette)
-	script := written(t, dir, "read.drive", strings.Join([]string{
+	script := written(t, dir, name+".drive", strings.Join([]string{
 		"wait type a task and press enter",
-		"type read note.txt",
+		"type " + task,
 		"key enter",
 		"wait cooked for",
 		"screen",
@@ -403,6 +391,11 @@ func drivenRead(t *testing.T, dir string, args ...string) string {
 		t.Fatalf("tofu drive exited %d: %s", code, errOut.String())
 	}
 	return out.String()
+}
+
+func drivenRead(t *testing.T, dir string, args ...string) string {
+	t.Helper()
+	return drivenTask(t, dir, "read", written(t, dir, "read.cassette", readingCassette), "read note.txt", args...)
 }
 
 func settingsSaid(t *testing.T, printed, key string) string {
@@ -455,5 +448,68 @@ func TestDriveHelpPrintsItsOwnUsage(t *testing.T) {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("the usage never says %q:\n%s", want, out.String())
 		}
+	}
+}
+
+const siftCassette = `{"text":"reading the build log","tools":[{"name":"bash","args":{"command":"cat build.log"}}]}
+{"text":"the build log is read"}
+`
+
+func bulkyLog() string {
+	var log strings.Builder
+	for block := 1; block <= 4; block++ {
+		for line := 1; line <= 20; line++ {
+			log.WriteString("block " + strconv.Itoa(block) + " line " + strconv.Itoa(line) + " of the build log, compiling a package and saying so\n")
+		}
+		log.WriteString("\n")
+	}
+	return log.String()
+}
+
+func drivenSift(t *testing.T, arms ...string) string {
+	t.Helper()
+	dir := drivenProject(t)
+	written(t, dir, "build.log", bulkyLog())
+	deck := written(t, dir, "sift.cassette", siftCassette)
+	return drivenTask(t, dir, "sift", deck, "read the build log", append([]string{"--home", pollutedHome(t)}, arms...)...)
+}
+
+var resultRow = regexp.MustCompile(`(\d+) lines,`)
+
+func linesShown(t *testing.T, screen string) int {
+	t.Helper()
+	found := resultRow.FindStringSubmatch(screen)
+	if found == nil {
+		t.Fatalf("no tool result row on the screen says how many lines it holds:\n%s", screen)
+	}
+	count, err := strconv.Atoi(found[1])
+	if err != nil {
+		t.Fatal(err)
+	}
+	return count
+}
+
+func TestDriveTakesTheRunArmsThatChangeWhatATurnDoes(t *testing.T) {
+	plan, taken := driveArgs([]string{
+		"--sift", siftFree, "--gate", gateShadow, "--tools", toolSetThree,
+		"--no-subagents", "--no-instructions", "--max-steps", "7", "--context-ceiling", "20000",
+	}, io.Discard)
+	if !taken {
+		t.Fatal("tofu drive refused the arms tofu run takes")
+	}
+	want := runOpts{siftArm: siftFree, gateArm: gateShadow, toolSet: toolSetThree, noSubAgents: true, noInstructions: true, maxSteps: 7, contextCeiling: 20000}
+	if plan.arms != want {
+		t.Fatalf("drive parsed %+v, want %+v", plan.arms, want)
+	}
+	if _, took := driveArgs([]string{"--gate", "bogus"}, io.Discard); took {
+		t.Fatal("tofu drive took --gate bogus, which the app would panic on")
+	}
+}
+
+func TestDriveForcesTheFreeSiftArmAndTheAppCutsTheResult(t *testing.T) {
+	whole := linesShown(t, drivenSift(t))
+	cut := linesShown(t, drivenSift(t, "--sift", "free"))
+	if cut >= whole {
+		t.Fatalf("--sift free showed %d lines and no arm at all showed %d: the arm never reached the app", cut, whole)
 	}
 }

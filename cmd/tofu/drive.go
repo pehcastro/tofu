@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -23,10 +24,25 @@ import (
 	"tofu/internal/turn"
 )
 
-const driveUsage = `usage: tofu drive [SCRIPT] [--dir PATH] [--home PATH] [--cassette PATH] [--width N] [--height N] [--timeout 60s] [--plain]
+const driveUsage = `usage: tofu drive [SCRIPT] [--dir PATH] [--home PATH] [--cassette PATH] [--width N] [--height N] [--timeout 60s] [--plain] [ARM]
 
 drives the app the way a person does, with no terminal and no model call.
 SCRIPT is a file of steps, or - for standard input.
+
+An arm is one of tofu run's switches that change what the turn does rather than
+where it reads from, and the app takes it exactly as tofu run does, so a
+mechanism can be driven by hand on a cassette rather than argued about:
+  --sift free|judged        which arm cuts a bash result before the model reads
+                            it, otherwise the method table decides
+  --gate off|shadow|enforce, --no-gate    how a tool call is judged
+  --tools full|three        which tools the turn is given
+  --no-subagents            run without the spawn tool
+  --no-instructions         send no AGENTS.md or CLAUDE.md
+  --max-steps N             cap the steps a turn takes
+  --context-ceiling N       the token ceiling the turn compacts against
+
+Nothing here opens a wire by itself. --sift judged and a judged gate still ask
+jev, so they need a key and fail closed without one, saying so on the screen.
 
 Settings come from the script or from nowhere. Without --home the run makes an
 empty home of its own, reads no settings file you own, and deletes that home
@@ -239,7 +255,7 @@ func driveWire(deck *cassette) func(runOpts) (appWire, error) {
 	}
 }
 
-func drivenApp(dir string, deck *cassette) *tui.App {
+func drivenApp(dir string, deck *cassette, arms runOpts) *tui.App {
 	shown := cassetteBuild
 	if deck != nil {
 		shown = deck.name
@@ -249,7 +265,7 @@ func drivenApp(dir string, deck *cassette) *tui.App {
 		wires:    func() []tui.Wire { return []tui.Wire{{Name: wireSubscription, Model: shown, Provider: cassetteBuild}} },
 		blockers: func() []tui.Requirement { return nil },
 	}
-	return tui.New(appOptions(dir, recorded, sessionResume{}))
+	return tui.New(appOptions(dir, arms, recorded, sessionResume{}))
 }
 
 type driveStep struct {
@@ -292,6 +308,14 @@ type drivePlan struct {
 	height   int
 	timeout  time.Duration
 	plain    bool
+	arms     runOpts
+}
+
+func armIsKnown(flag, taken string, arms []string) error {
+	if taken == "" || slices.Contains(arms, taken) {
+		return nil
+	}
+	return fmt.Errorf("%s %q is none of %s, and without it the app decides as it always does", flag, taken, strings.Join(arms, ", "))
 }
 
 func driveArgs(args []string, errOut io.Writer) (drivePlan, bool) {
@@ -302,10 +326,24 @@ func driveArgs(args []string, errOut io.Writer) (drivePlan, bool) {
 		height:   fixture.Height,
 		timeout:  konst.DriveTimeoutMillis * time.Millisecond,
 	}
+	refuse := func(said string, err error) (drivePlan, bool) {
+		_, _ = fmt.Fprintf(errOut, "tofu drive: %s%v\n\n%s", said, err, driveUsage)
+		return drivePlan{}, false
+	}
 	for index := 0; index < len(args); index++ {
 		flag := args[index]
-		if flag == "--plain" {
+		switch flag {
+		case "--plain":
 			plan.plain = true
+			continue
+		case "--no-gate":
+			plan.arms.gateArm = gateOff
+			continue
+		case "--no-subagents":
+			plan.arms.noSubAgents = true
+			continue
+		case "--no-instructions":
+			plan.arms.noInstructions = true
 			continue
 		}
 		if !strings.HasPrefix(flag, "--") {
@@ -314,8 +352,7 @@ func driveArgs(args []string, errOut io.Writer) (drivePlan, bool) {
 		}
 		index++
 		if index >= len(args) {
-			_, _ = fmt.Fprintf(errOut, "tofu drive: %s wants a value\n\n%s", flag, driveUsage)
-			return drivePlan{}, false
+			return refuse("", fmt.Errorf("%s wants a value", flag))
 		}
 		taken := args[index]
 		var err error
@@ -332,13 +369,29 @@ func driveArgs(args []string, errOut io.Writer) (drivePlan, bool) {
 			plan.height, err = strconv.Atoi(taken)
 		case "--timeout":
 			plan.timeout, err = time.ParseDuration(taken)
+		case "--gate":
+			plan.arms.gateArm = taken
+		case "--sift":
+			plan.arms.siftArm = taken
+		case "--tools":
+			plan.arms.toolSet = taken
+		case "--max-steps":
+			plan.arms.maxSteps, err = strconv.Atoi(taken)
+		case "--context-ceiling":
+			plan.arms.contextCeiling, err = strconv.Atoi(taken)
 		default:
 			err = errors.New("no such flag")
 		}
 		if err != nil {
-			_, _ = fmt.Fprintf(errOut, "tofu drive: %s %q: %v\n\n%s", flag, taken, err, driveUsage)
-			return drivePlan{}, false
+			return refuse(flag+" "+strconv.Quote(taken)+": ", err)
 		}
+	}
+	if err := cmp.Or(
+		armIsKnown("--gate", plan.arms.gateArm, gateArms()),
+		armIsKnown("--sift", plan.arms.siftArm, siftArms()),
+		armIsKnown("--tools", plan.arms.toolSet, []string{toolSetFull, toolSetThree}),
+	); err != nil {
+		return refuse("", err)
 	}
 	return plan, true
 }
@@ -418,7 +471,7 @@ func driveVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 	if err != nil {
 		return driveFail(errOut, err)
 	}
-	driver := filmstrip.Drive(drivenApp(dir, deck), plan.width, plan.height)
+	driver := filmstrip.Drive(drivenApp(dir, deck, plan.arms), plan.width, plan.height)
 	defer driver.Close()
 	for _, step := range steps {
 		driver.Settle()

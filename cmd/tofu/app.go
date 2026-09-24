@@ -80,7 +80,7 @@ type appWiring struct {
 	blockers func() []tui.Requirement
 }
 
-func appOptions(dir string, wiring appWiring, resumed sessionResume) tui.Options {
+func appOptions(dir string, arms runOpts, wiring appWiring, resumed sessionResume) tui.Options {
 	note := ""
 	if _, err := gateKey(); err != nil {
 		note = gateOffNote
@@ -89,6 +89,7 @@ func appOptions(dir string, wiring appWiring, resumed sessionResume) tui.Options
 	steering := make(chan string, queuedMessages)
 	live := newAppSession(dir, wiring.open, answers, time.Now, resumed)
 	live.steer = steering
+	live.arms = arms
 	settingsStore, _ := openSettings(dir)
 	registry, registryErr := openShellRegistry()
 	if registryErr == nil {
@@ -131,7 +132,7 @@ func appVerb(in io.Reader, out, errOut io.Writer, resumed sessionResume) int {
 		return exitVerdict
 	}
 	live := appWiring{open: openAppWire, wires: appWires, blockers: appRequirements}
-	if err := tui.Run(appOptions(dir, live, resumed)); err != nil {
+	if err := tui.Run(appOptions(dir, runOpts{}, live, resumed)); err != nil {
 		_, _ = fmt.Fprintf(errOut, "tofu: %v\n", err)
 		return exitVerdict
 	}
@@ -504,6 +505,7 @@ func commandPlace(command string) string {
 
 type appSession struct {
 	dir     string
+	arms    runOpts
 	open    func(runOpts) (appWire, error)
 	answers <-chan tui.Answer
 	steer   <-chan string
@@ -673,8 +675,10 @@ func (s *appSession) run(ctx context.Context, pick tui.Pick, task string, emit t
 		return
 	}
 	say := func(unreadable string) { emit(tui.Event{Kind: tui.EventNote, Text: unreadable}) }
-	opts := pickedOpts(s.dir, s.pendingID(), task, pick, settingInt(s.dir, settingspkg.DecisionCap, say))
-	opts.noSubAgents = settingInt(s.dir, settingspkg.TurnMaySpawn, say) == 0
+	opts := pickedOpts(s.dir, s.pendingID(), task, pick, cmp.Or(s.arms.maxSteps, settingInt(s.dir, settingspkg.DecisionCap, say)))
+	opts.gateArm, opts.siftArm, opts.noInstructions = s.arms.gateArm, s.arms.siftArm, s.arms.noInstructions
+	opts.toolSet, opts.contextCeiling = cmp.Or(s.arms.toolSet, opts.toolSet), s.arms.contextCeiling
+	opts.noSubAgents = s.arms.noSubAgents || settingInt(s.dir, settingspkg.TurnMaySpawn, say) == 0
 	opts.readBeforeEdit = settingInt(s.dir, settingspkg.ReadBeforeEdit, say) != 0
 	shell, shellErr := turn.ResolveRunShell(settingText(s.dir, settingspkg.Shell, say))
 	if shellErr != nil {
@@ -699,7 +703,11 @@ func (s *appSession) run(ctx context.Context, pick tui.Pick, task string, emit t
 	if name, id := s.label(sessions); id != "" {
 		emit(tui.Event{Kind: tui.EventSession, Text: name, ID: id})
 	}
-	gate, gateErr := newToolGate(s.dir)
+	var gate *toolGate
+	var gateErr error
+	if opts.gateArm != gateOff {
+		gate, gateErr = newToolGate(s.dir)
+	}
 	var unusable unusableRule
 	if errors.As(gateErr, &unusable) {
 		fail(fmt.Errorf("no turn starts while the tool gate rule is unusable: %w", unusable))
@@ -707,6 +715,10 @@ func (s *appSession) run(ctx context.Context, pick tui.Pick, task string, emit t
 	}
 	if gateErr != nil {
 		emit(gateOffEvent(gateErr))
+	}
+	sifter, scorer, siftErr := buildShellSift(opts.siftArm)
+	if siftErr != nil {
+		say("no shell result is cut: " + siftErr.Error())
 	}
 	if gate != nil {
 		gate.watch = func(tool string, gated turn.GateDecision, err error) {
@@ -737,7 +749,7 @@ func (s *appSession) run(ctx context.Context, pick tui.Pick, task string, emit t
 		return watch, nil
 	}
 	notify := func(notice string) { emit(tui.Event{Kind: tui.EventNote, Text: notice}) }
-	config, spawner, configErr := runConfig(opts, built, runtime{accounts: opened.held.forTurn(), spend: opened.spend, budget: budget, gate: gate, sessions: sessions, notify: notify, roster: held, now: s.now})
+	config, spawner, configErr := runConfig(opts, built, runtime{accounts: opened.held.forTurn(), spend: opened.spend, budget: budget, gate: gate, sift: sifter, scorer: scorer, sessions: sessions, notify: notify, roster: held, now: s.now})
 	if configErr != nil {
 		fail(configErr)
 		return
