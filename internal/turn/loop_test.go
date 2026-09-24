@@ -530,6 +530,39 @@ func TestAForkedTurnIsWrittenAsAHeaderAndAJSONLBodyThatNameTheLineage(t *testing
 		len(lineage), ended.Root, row.ID, bands.Identity, bands.Facts, bands.WorkingSet, bands.Recent, bands.Target)
 }
 
+func TestARealTurnRecordsTheSystemPromptAndTheToolsItSent(t *testing.T) {
+	tool := &stubTool{name: "read", result: Result{Content: "file contents", Command: "read a.txt"}}
+	model := &stubModel{decisions: []llm.Decision{messageDecision()}}
+	config := baseConfig(t, model, NewRegistry(tool))
+	config.System = "the rules this turn works under, which are the identity band and nothing else"
+	dir := t.TempDir()
+	store := session.NewStore(dir)
+	config.Sessions = store
+
+	row, err := Run(context.Background(), config)
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	events, err := store.Body(row.ID)
+	if err != nil {
+		t.Fatalf("read the recorded session %s: %v", row.ID, err)
+	}
+	prompt, ok, err := PromptFrom(events)
+	if err != nil {
+		t.Fatalf("read the prompt back: %v", err)
+	}
+	if !ok {
+		t.Fatal("a real recorded turn carries no prompt event, so the assignment did not reach the live recorder")
+	}
+	if prompt.System != config.System {
+		t.Fatalf("the recorded system prompt is %q, want %q", prompt.System, config.System)
+	}
+	if len(prompt.Tools) != 2 || prompt.Tools[0] != "read" || prompt.Tools[1] != "artifact_fetch" {
+		t.Fatalf("the recorded tool list is %v, want [read artifact_fetch]", prompt.Tools)
+	}
+	t.Logf("recorded tools: %v", prompt.Tools)
+}
+
 func TestPackageMakesNoNetworkCallOfItsOwn(t *testing.T) {
 	files, err := filepath.Glob("*.go")
 	if err != nil {

@@ -11,6 +11,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -789,4 +790,116 @@ func TestTheBreadthBoundRefusesAndNamesItsLimit(t *testing.T) {
 		t.Fatalf("the extra child was not refused with %q: %q", want, refusal)
 	}
 	t.Logf("refused: %s", refusal)
+}
+
+type rosterWatchedTurn struct {
+	held           *subagent.Roster
+	queued         []llm.Decision
+	seen           [][]subagent.SubAgent
+	recording      atomic.Bool
+	askedMidRecord chan struct{}
+	entered        chan struct{}
+	release        chan struct{}
+}
+
+func (w *rosterWatchedTurn) Ask(context.Context, llm.Request) (llm.Decision, error) {
+	if w.recording.Load() {
+		select {
+		case w.askedMidRecord <- struct{}{}:
+		default:
+		}
+	}
+	w.seen = append(w.seen, w.held.SubAgents())
+	if len(w.queued) == 0 {
+		return llm.Decision{}, errors.New("rosterWatchedTurn: no more decisions queued")
+	}
+	decision := w.queued[0]
+	w.queued = w.queued[1:]
+	return decision, nil
+}
+
+func (w *rosterWatchedTurn) stepped(StepRow) {
+	if w.entered == nil {
+		return
+	}
+	w.recording.Store(true)
+	close(w.entered)
+	w.entered = nil
+	<-w.release
+	w.recording.Store(false)
+}
+
+const longEnoughForTheLoopToAskItsNextQuestion = 100 * time.Millisecond
+
+func TestAChildsFinishedStepIsOnTheRosterBeforeTheNextQuestionIsAsked(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "mine"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	write, err := NewWriteTool(root)
+	if err != nil {
+		t.Fatalf("building the write tool: %v", err)
+	}
+	held := &subagent.Roster{}
+	entered, release := make(chan struct{}), make(chan struct{})
+	watch := &rosterWatchedTurn{
+		held:           held,
+		entered:        entered,
+		release:        release,
+		askedMidRecord: make(chan struct{}, 1),
+		queued: []llm.Decision{
+			spawnCall("call-1", "write the greeting under mine/", "mine/**"),
+			writeCall("call-2", "mine/hello.txt", "written by the child"),
+			messageDecision(),
+			messageDecision(),
+		},
+	}
+	const parentID = "turn-parent"
+	base := Config{
+		Model:          watch,
+		Spend:          SpendAPIKey,
+		Tools:          NewRegistry(write),
+		Caps:           Caps{MaxSteps: 20},
+		ResultBytesCap: 4096,
+		ArtifactDir:    filepath.Join(root, "artifacts"),
+		NewID:          func() string { return parentID },
+		Step:           watch.stepped,
+	}
+	parent := base
+	parent.Task = "hand the work to a child"
+	parent.Tools = NewRegistry(write, NewSpawnTool(parentID, base, held))
+
+	ran := make(chan struct{})
+	go func() {
+		defer close(ran)
+		if _, err := Run(context.Background(), parent); err != nil {
+			t.Error(err)
+		}
+	}()
+
+	<-entered
+	asked := false
+	select {
+	case <-watch.askedMidRecord:
+		asked = true
+	case <-time.After(longEnoughForTheLoopToAskItsNextQuestion):
+	}
+	close(release)
+	<-ran
+	if asked {
+		t.Fatal("the next question was asked while the child's finished step was still on its way to the roster, so the snapshot that question drives can be a step behind")
+	}
+
+	var calling []string
+	for _, snapshot := range watch.seen {
+		for _, child := range snapshot {
+			if child.State == subagent.Working && child.Steps == 1 {
+				calling = child.Calling
+			}
+		}
+	}
+	if !slices.Equal(calling, []string{"write"}) {
+		t.Fatalf("no question was asked with the child's finished first step on the roster: the snapshots read %+v", watch.seen)
+	}
+	t.Logf("the roster carried step 1 calling %v at the next question", calling)
 }

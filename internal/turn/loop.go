@@ -52,7 +52,7 @@ const theToolWasAbortedAndPrintedNothing = "this call was cancelled elsewhere in
 const andThisIsItsLastStep = " and this is its last step: answer now from what you already have, " +
 	"saying what you did, what is left undone, and what to do next."
 
-type CalledOnItsOwnGoroutineAndAlwaysBeforeRunReturns func(StepRow)
+type CalledAsTheStepIsRecordedAndBeforeTheNextOneIsAsked func(StepRow)
 
 type Config struct {
 	Model           Model
@@ -84,7 +84,7 @@ type Config struct {
 	Budget          recall.Budget
 	Sessions        *session.Store
 	Steering        func() []string
-	Step            CalledOnItsOwnGoroutineAndAlwaysBeforeRunReturns
+	Step            CalledAsTheStepIsRecordedAndBeforeTheNextOneIsAsked
 	EndedSession    func(Row) error
 	Now             func() time.Time
 	NewID           func() string
@@ -141,12 +141,14 @@ func Run(ctx context.Context, config Config) (Row, error) {
 	if source == nil {
 		source = func() Registry { return config.Tools }
 	}
-	currentTools := func() Registry {
-		live := source()
+	withFetchTool := func(tools []Tool) []Tool {
 		if !handles {
-			return live
+			return tools
 		}
-		return NewRegistry(append(slices.Clone(live.tools), artifacts.FetchTool())...)
+		return append(slices.Clone(tools), artifacts.FetchTool())
+	}
+	currentTools := func() Registry {
+		return NewRegistry(withFetchTool(source().tools)...)
 	}
 	now := config.Now
 	if now == nil {
@@ -174,7 +176,12 @@ func Run(ctx context.Context, config Config) (Row, error) {
 	}
 	start := now()
 	origin := newID()
-	row := Row{ID: origin, Schema: SchemaVersion, At: start, Task: config.Task, Wire: config.Wire, Spend: config.Spend, Root: origin, Account: account.ID, SpawnedFrom: config.SpawnedFrom, Budget: budget}
+	sentTools := withFetchTool(config.Tools.tools)
+	usedTools := make([]string, len(sentTools))
+	for i, tool := range sentTools {
+		usedTools[i] = tool.Name()
+	}
+	row := Row{ID: origin, Schema: SchemaVersion, At: start, Task: config.Task, Wire: config.Wire, Spend: config.Spend, Root: origin, Account: account.ID, SpawnedFrom: config.SpawnedFrom, Budget: budget, System: config.System, Tools: usedTools}
 
 	var recorder *session.Recorder
 	if config.Sessions != nil {
@@ -188,6 +195,7 @@ func Run(ctx context.Context, config Config) (Row, error) {
 			recordErrs = append(recordErrs, err.Error())
 		}
 	}
+	note(recorder.Append(session.EventPrompt, session.PromptBody{System: row.System, Tools: row.Tools}))
 
 	messages := make([]llm.Message, 0, len(config.History)+2)
 	if config.System != "" {
@@ -200,21 +208,6 @@ func Run(ctx context.Context, config Config) (Row, error) {
 	var written sync.WaitGroup
 	var forkWrites sync.Mutex
 	var forkWriteErrs []string
-	latest := make(chan StepRow, konst.TurnMaxSteps)
-	var stepping sync.WaitGroup
-	defer func() {
-		close(latest)
-		stepping.Wait()
-	}()
-	if config.Step != nil {
-		stepping.Add(1)
-		go func() {
-			defer stepping.Done()
-			for step := range latest {
-				config.Step(step)
-			}
-		}()
-	}
 	sent := 0
 	flush := func() {
 		if recorder == nil {
@@ -232,16 +225,9 @@ func Run(ctx context.Context, config Config) (Row, error) {
 		flush()
 		note(recorder.AppendAttempt(session.EventStep, step.id, step.attempt, step))
 		row.Steps = append(row.Steps, step)
-		select {
-		case latest <- step:
-			return
-		default:
+		if config.Step != nil {
+			config.Step(step)
 		}
-		select {
-		case <-latest:
-		default:
-		}
-		latest <- step
 	}
 	registry := shellRegistryFrom(ctx)
 	beforeShells := registrySnapshot(registry)

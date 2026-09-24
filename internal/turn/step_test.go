@@ -88,10 +88,18 @@ func TestNoStepReachesTheHookAfterRunHasReturned(t *testing.T) {
 		atReturn, len(row.Steps))
 }
 
-func TestABlockedStepHookHoldsUpOnlyTheEndOfTheTurn(t *testing.T) {
+func TestABlockedStepHookHoldsTheTurnAtTheStepItHolds(t *testing.T) {
 	config, model := longTurnConfig(t)
-	blocked := make(chan struct{})
-	config.Step = func(StepRow) { <-blocked }
+	blocked, held := make(chan struct{}), make(chan struct{})
+	var asksWhenSeen []int64
+	config.Step = func(StepRow) {
+		asks, _ := model.asksAndTheNextWakeUp()
+		asksWhenSeen = append(asksWhenSeen, asks)
+		if len(asksWhenSeen) == 1 {
+			held <- struct{}{}
+			<-blocked
+		}
+	}
 
 	finished := make(chan Row, 1)
 	go func() {
@@ -102,23 +110,35 @@ func TestABlockedStepHookHoldsUpOnlyTheEndOfTheTurn(t *testing.T) {
 		finished <- row
 	}()
 
-	if !model.waitForAnAskAfter(longTurnSteps, time.After(20*time.Second)) {
+	<-held
+	if model.waitForAnAskAfter(1, time.After(longEnoughForTheLoopToAskItsNextQuestion)) {
 		close(blocked)
-		t.Fatalf("the loop stalled on its blocked reader before its %dth model call", longTurnSteps+1)
+		t.Fatal("the loop asked its second question while the hook still held the first step, so whatever the answer reads can be a step behind the turn")
 	}
 	select {
 	case ended := <-finished:
 		close(blocked)
 		t.Fatalf("Run returned %s with %d steps while the hook was still blocked on the first one", ended.Outcome, len(ended.Steps))
-	case <-time.After(200 * time.Millisecond):
+	default:
 	}
 
 	close(blocked)
+	var ended Row
 	select {
-	case ended := <-finished:
-		t.Logf("the loop reached its last model call with the hook blocked, Run waited, and released it finished %s with %d steps",
-			ended.Outcome, len(ended.Steps))
+	case ended = <-finished:
 	case <-time.After(20 * time.Second):
 		t.Fatal("the turn never finished after the hook was released")
 	}
+
+	if len(asksWhenSeen) < 2 {
+		t.Fatalf("the hook saw %d steps once it was released, against %d the turn recorded", len(asksWhenSeen), len(ended.Steps))
+	}
+	for index, asks := range asksWhenSeen {
+		if want := int64(index + 1); asks != want {
+			t.Fatalf("step %d reached the hook after %d questions, want %d: a step that lands late is a step the next answer cannot read",
+				index+1, asks, want)
+		}
+	}
+	t.Logf("the hook held the turn at its first step, and released it finished %s with each of its %d steps seen before the next question",
+		ended.Outcome, len(asksWhenSeen))
 }

@@ -2,6 +2,8 @@ package main
 
 import (
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -158,9 +160,9 @@ func TestTheSpawnersRecordedCallsWinOverTheRostersNamesWheneverItHasAny(t *testi
 	}
 }
 
-func TestAChildsCallsGainTheirTextWhenItFinishesAndItsArgumentsNeverReachTheView(t *testing.T) {
-	const planted = "sk-live-9f3a1c7e4b2d8a6f0e5c3b1a"
-	dir := scratchProject(t)
+func childCallsWhileRunningAndOnceFinished(t *testing.T, dir, planted string) (running, finished []subagent.Call) {
+	t.Helper()
+	_ = os.Remove(filepath.Join(dir, "note.txt"))
 	spawnCall := llm.ToolCall{ID: "call-1", Name: "spawn", Arguments: json.RawMessage(`{"task":"write note.txt","owns":["note.txt"]}`)}
 	secret := llm.ToolCall{ID: "call-2", Name: "write", Arguments: json.RawMessage(`{"path":"note.txt","content":"` + planted + `"}`)}
 	model := &queuedModel{decisions: []llm.Decision{
@@ -172,7 +174,6 @@ func TestAChildsCallsGainTheirTextWhenItFinishesAndItsArgumentsNeverReachTheView
 	driver := driveApp(t)
 	stubbedTurn(dir, model)(t.Context(), onTheSubscription, "hand the note to a child", driver.emit)
 
-	var running, finished []subagent.Call
 	for _, event := range driver.of(tui.EventSubAgent) {
 		for _, child := range event.Children {
 			for _, call := range child.Calls {
@@ -188,6 +189,14 @@ func TestAChildsCallsGainTheirTextWhenItFinishesAndItsArgumentsNeverReachTheView
 			}
 		}
 	}
+	return running, finished
+}
+
+func TestAChildsCallsGainTheirTextWhenItFinishesAndItsArgumentsNeverReachTheView(t *testing.T) {
+	const planted = "sk-live-9f3a1c7e4b2d8a6f0e5c3b1a"
+	dir := scratchProject(t)
+
+	running, finished := childCallsWhileRunningAndOnceFinished(t, dir, planted)
 	if len(running) == 0 {
 		t.Fatal("the child called write and no sub-agent event drew a call while it was still running")
 	}
