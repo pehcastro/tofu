@@ -214,26 +214,6 @@ func TestTheBarCarriesTheReleaseFarRight(t *testing.T) {
 	}
 }
 
-func TestAnUpdateNoticeDrawsWhenTheValueSaysSo(t *testing.T) {
-	quiet := carried()
-	quiet.Release = konst.Version
-	if _, row2 := barLines(quiet, 200); strings.Contains(row2, "→") || strings.Contains(row2, "update") {
-		t.Fatalf("Update left false still draws a notice\n%s", row2)
-	}
-	versioned := carried()
-	versioned.Release = "0.4.2"
-	versioned.Update = Update{Available: true, Current: "0.4.2", Latest: "0.5.0"}
-	if _, row2 := barLines(versioned, 200); !strings.Contains(row2, "tofu 0.4.2 → 0.5.0") {
-		t.Fatalf("an available update does not carry the old and new version\n%s", row2)
-	}
-	restart := carried()
-	restart.Release = "0.4.2"
-	restart.Update = Update{Available: true, Restart: true}
-	if _, row2 := barLines(restart, 200); !strings.Contains(row2, "restart to update") {
-		t.Fatalf("an update that needs a restart does not say so\n%s", row2)
-	}
-}
-
 func TestAZeroContextBudgetNamesTheAbsence(t *testing.T) {
 	status := carried()
 	status.Context = Context{}

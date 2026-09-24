@@ -53,7 +53,6 @@ type rowTwoDrop int
 
 const (
 	rowTwoFull rowTwoDrop = iota
-	rowTwoNoUpdate
 	rowTwoNoRelease
 	rowTwoNoNote
 	rowTwoNoJev
@@ -91,13 +90,6 @@ type Context struct {
 	Budget int
 }
 
-type Update struct {
-	Available bool
-	Current   string
-	Latest    string
-	Restart   bool
-}
-
 type Status struct {
 	Context   Context
 	TokensIn  int
@@ -109,7 +101,6 @@ type Status struct {
 	At        time.Time
 	Note      string
 	Release   string
-	Update    Update
 }
 
 func Release(buildVersion, buildRevision string) string {
@@ -209,7 +200,10 @@ func row2Fields(status Status, drop rowTwoDrop) []string {
 	if drop < rowTwoNoNote {
 		fields = append(fields, status.Note)
 	}
-	return append(fields, releaseText(status.Release, status.Update, drop))
+	if drop < rowTwoNoRelease {
+		fields = append(fields, releaseLabel(status.Release))
+	}
+	return fields
 }
 
 func tokensText(status Status) string {
@@ -220,28 +214,11 @@ func tokensText(status Status) string {
 	return text
 }
 
-func releaseText(release string, update Update, drop rowTwoDrop) string {
-	if release == "" || drop >= rowTwoNoRelease {
+func releaseLabel(release string) string {
+	if release == "" {
 		return ""
 	}
-	text := "tofu " + release
-	if drop < rowTwoNoUpdate {
-		text += updateSuffix(update)
-	}
-	return text
-}
-
-func updateSuffix(update Update) string {
-	switch {
-	case !update.Available:
-		return ""
-	case update.Restart:
-		return "  restart to update"
-	case update.Latest != "":
-		return " → " + update.Latest
-	default:
-		return "  update available"
-	}
+	return "tofu " + release
 }
 
 func contextText(carried Context, drop rowOneDrop) string {
