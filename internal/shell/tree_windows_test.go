@@ -5,8 +5,11 @@ package shell
 import (
 	"bufio"
 	"errors"
+	"fmt"
+	"io"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -222,5 +225,96 @@ func TestAJobNameHeldOpenAfterItsTreeDiedStillReportsGone(t *testing.T) {
 	}
 	if err := killTree(started.PID); !errors.Is(err, ErrTreeGone) {
 		t.Fatalf("killing a named job with no active process returned %v, want %v", err, ErrTreeGone)
+	}
+}
+
+const orphanProbeVar = "TOFU_SHELL_ORPHAN_PROBE"
+
+func orphanProbe(dir string) {
+	started, err := OpenAt(dir).Start(dir, "dev-server", "ping -n 600 127.0.0.1")
+	if err != nil {
+		fmt.Println("probe:", err)
+		os.Exit(1)
+	}
+	fmt.Println(started.PID)
+	_, _ = io.Copy(io.Discard, os.Stdin)
+	os.Exit(0)
+}
+
+func treeMembersOnceADescendantJoined(t *testing.T, pid int) []windows.Handle {
+	t.Helper()
+	deadline := time.Now().Add(childRegistrationDeadline)
+	for {
+		job, err := openJobByName(pid, jobAccessQuery)
+		if err != nil {
+			t.Fatal(err)
+		}
+		active, err := activeProcesses(job)
+		var ids []uint32
+		if err == nil && active > 0 {
+			ids, err = memberIDs(job, active)
+		}
+		_ = windows.CloseHandle(job)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(ids) > 1 {
+			handles := make([]windows.Handle, 0, len(ids))
+			for _, id := range ids {
+				handle, err := windows.OpenProcess(windows.SYNCHRONIZE|windows.PROCESS_TERMINATE, false, id)
+				if err != nil {
+					continue
+				}
+				handles = append(handles, handle)
+			}
+			return handles
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("the probe's tree holds %d processes, so no descendant joined and nothing proves a descendant dies too", len(ids))
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+func TestABackgroundTreeDoesNotOutliveTheProgramThatStartedIt(t *testing.T) {
+	if dir := os.Getenv(orphanProbeVar); dir != "" {
+		orphanProbe(dir)
+	}
+	probe := exec.Command(os.Args[0], "-test.run", t.Name())
+	probe.Env = append(os.Environ(), orphanProbeVar+"="+t.TempDir())
+	stdin, err := probe.StdinPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	stdout, err := probe.StdoutPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := probe.Start(); err != nil {
+		t.Fatal(err)
+	}
+	line, err := bufio.NewReader(stdout).ReadString('\n')
+	if err != nil {
+		t.Fatalf("the probe printed no pid: %v", err)
+	}
+	pid, err := strconv.Atoi(strings.TrimSpace(line))
+	if err != nil {
+		t.Fatalf("the probe printed %q instead of a pid", strings.TrimSpace(line))
+	}
+	handles := treeMembersOnceADescendantJoined(t, pid)
+	defer func() {
+		for _, handle := range handles {
+			if state, err := windows.WaitForSingleObject(handle, 0); err != nil || state != windows.WAIT_OBJECT_0 {
+				_ = windows.TerminateProcess(handle, 1)
+			}
+			_ = windows.CloseHandle(handle)
+		}
+	}()
+	_ = stdin.Close()
+	if err := probe.Wait(); err != nil {
+		t.Fatalf("the probe did not exit cleanly: %v", err)
+	}
+	if err := waitMembersExited(handles, time.Now().Add(killWait)); err != nil {
+		t.Errorf("the probe exited and the %d processes of its background tree are still running: %v", len(handles), err)
 	}
 }
