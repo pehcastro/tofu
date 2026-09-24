@@ -279,6 +279,99 @@ func TestACassetteGivesACancelledTurnNoDeltaAndNoReply(t *testing.T) {
 	}
 }
 
+const addressedCassette = `{"text":"handing it to a child","tools":[{"name":"spawn","args":{"task":"read note.txt and say what it holds","owns":["note.txt"]}}]}
+{"text":"the child read it and the note says a note"}
+{"agent":"c1","text":"reading the note","tools":[{"name":"read","args":{"path":"note.txt"}}]}
+{"agent":"c1","text":"the note says a note"}
+`
+
+func asked(t *testing.T, deck *cassette, task string) string {
+	t.Helper()
+	decision, err := deck.Ask(context.Background(), llm.Request{Messages: []llm.Message{
+		{Role: llm.RoleSystem, Content: "the system prompt both conversations share"},
+		{Role: llm.RoleUser, Content: task},
+	}})
+	if err != nil {
+		t.Fatalf("%q was answered %v", task, err)
+	}
+	return decision.Content
+}
+
+func TestAParentAndAChildEachTakeTheRepliesAddressedToThem(t *testing.T) {
+	deck, err := readCassette(written(t, t.TempDir(), "addressed.cassette", addressedCassette))
+	if err != nil {
+		t.Fatal(err)
+	}
+	const parentTask, childBrief = "ask a child to read the note", "read note.txt and say what it holds"
+	for _, want := range []struct{ conversation, reply string }{
+		{parentTask, "handing it to a child"},
+		{childBrief, "reading the note"},
+		{childBrief, "the note says a note"},
+		{parentTask, "the child read it and the note says a note"},
+	} {
+		if got := asked(t, deck, want.conversation); got != want.reply {
+			t.Errorf("%q was handed %q, which belongs to the other caller, wanted %q", want.conversation, got, want.reply)
+		}
+	}
+}
+
+func TestACassetteWithNoReplyForAChildSaysSoNamingTheChild(t *testing.T) {
+	deck, err := readCassette(written(t, t.TempDir(), "flat.cassette", readingCassette))
+	if err != nil {
+		t.Fatal(err)
+	}
+	asked(t, deck, "the parent task")
+	_, err = deck.Ask(context.Background(), llm.Request{Messages: []llm.Message{{Role: llm.RoleUser, Content: "the child brief"}}})
+	if err == nil {
+		t.Fatal("a child was handed a reply from a cassette that addresses none to it")
+	}
+	if !strings.Contains(err.Error(), "child c1") {
+		t.Errorf("the failure never names the caller that went unanswered: %v", err)
+	}
+}
+
+func TestAnAgentThatIsNotAChildNumberIsRefusedByLine(t *testing.T) {
+	_, err := readCassette(written(t, t.TempDir(), "named.cassette", `{"agent":"the child","text":"hello"}`+"\n"))
+	if err == nil || !strings.Contains(err.Error(), "line 1") {
+		t.Fatalf("an agent that is not c1, c2 and so on was read as %v", err)
+	}
+}
+
+func drivenConversation(t *testing.T, deck, script string) string {
+	t.Helper()
+	var out, errOut bytes.Buffer
+	if code := driveVerb([]string{script, "--cassette", deck, "--plain", "--timeout", "60s"}, strings.NewReader(""), &out, &errOut); code != exitOK {
+		t.Fatalf("tofu drive exited %d: %s", code, errOut.String())
+	}
+	var spoken []string
+	for _, line := range strings.Split(out.String(), "\n") {
+		said := strings.TrimSpace(line)
+		if strings.HasPrefix(said, "▌") || strings.HasPrefix(said, "»") {
+			spoken = append(spoken, said)
+		}
+	}
+	return strings.Join(spoken, "\n")
+}
+
+func TestASpawnDrivenTwiceProducesTheSameConversationBothTimes(t *testing.T) {
+	dir := drivenProject(t)
+	deck := written(t, dir, "spawn.cassette", addressedCassette)
+	script := written(t, dir, "spawn.drive", strings.Join([]string{
+		"wait type a task and press enter",
+		"type ask a child to read the note",
+		"key enter",
+		"wait cooked for",
+		"screen",
+	}, "\n"))
+	first := drivenConversation(t, deck, script)
+	if !strings.Contains(first, "the child read it and the note says a note") {
+		t.Fatalf("the parent never reached the reply addressed to it:\n%s", first)
+	}
+	if second := drivenConversation(t, deck, script); second != first {
+		t.Errorf("the same script ran twice and the two conversations differ:\n%s\n\n%s", first, second)
+	}
+}
+
 func TestDriveHelpPrintsItsOwnUsage(t *testing.T) {
 	var out, errOut bytes.Buffer
 	if code := driveVerb([]string{"--help"}, strings.NewReader(""), &out, &errOut); code != exitOK {

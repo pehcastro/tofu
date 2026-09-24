@@ -47,6 +47,13 @@ the way a model's does, in deltas, so a reply is half written until it returns:
 An unfinished reply streams its text and keeps writing until the turn is stopped,
 which is how a driven run reaches an answer interrupted in the middle of itself.
 
+A reply with no agent is the parent's. A spawned child takes only the replies
+addressed to it, so the two conversations never take each other's:
+  {"agent":"c1","text":"reading it","tools":[{"name":"read","args":{"path":"x"}}]}
+
+c1 is the first caller after the parent, c2 the second, counted in the order they
+first ask, which is the order the parent spawns them.
+
 A recorded reply is in flight for a moment before its first delta, so a turn
 stopped while it is in flight draws nothing at all, as it would on a live wire.
 
@@ -65,10 +72,13 @@ const (
 	stdinScript      = "-"
 	noEnvironment    = "no turn has sent an environment block yet"
 	recordedFlight   = konst.DriveSettleMillis * time.Millisecond
+	parentCaller     = ""
+	childCaller      = "c"
 )
 
 type cassetteReply struct {
 	Text       string `json:"text"`
+	Agent      string `json:"agent"`
 	Unfinished bool   `json:"unfinished"`
 	Tools      []struct {
 		Name string          `json:"name"`
@@ -83,10 +93,23 @@ type recordedReply struct {
 
 type cassette struct {
 	name    string
-	replies []recordedReply
+	decks   map[string][]recordedReply
 	mutex   sync.Mutex
-	asked   int
+	taken   map[string]int
+	callers map[string]string
 	last    llm.Request
+}
+
+func callerName(name string) string {
+	if name == parentCaller {
+		return "the parent"
+	}
+	return "child " + name
+}
+
+func childNumber(agent string) bool {
+	number, err := strconv.Atoi(strings.TrimPrefix(agent, childCaller))
+	return strings.HasPrefix(agent, childCaller) && err == nil && number > 0
 }
 
 func readCassette(path string) (*cassette, error) {
@@ -97,7 +120,12 @@ func readCassette(path string) (*cassette, error) {
 	if err != nil {
 		return nil, err
 	}
-	deck := &cassette{name: filepath.Base(path)}
+	deck := &cassette{
+		name:    filepath.Base(path),
+		decks:   map[string][]recordedReply{},
+		taken:   map[string]int{},
+		callers: map[string]string{},
+	}
 	for number, line := range strings.Split(string(body), "\n") {
 		trimmed := strings.TrimSpace(line)
 		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
@@ -106,6 +134,9 @@ func readCassette(path string) (*cassette, error) {
 		var reply cassetteReply
 		if err := json.Unmarshal([]byte(trimmed), &reply); err != nil {
 			return nil, fmt.Errorf("%s line %d: %w", path, number+1, err)
+		}
+		if reply.Agent != parentCaller && !childNumber(reply.Agent) {
+			return nil, fmt.Errorf("%s line %d: agent %q is none of c1, c2 and so on, counting the callers after the parent in the order they first ask", path, number+1, reply.Agent)
 		}
 		decision := llm.Decision{Build: cassetteBuild, Outcome: llm.OutcomeMessage, Content: reply.Text}
 		for index, one := range reply.Tools {
@@ -116,12 +147,38 @@ func readCassette(path string) (*cassette, error) {
 				Arguments: one.Args,
 			})
 		}
-		deck.replies = append(deck.replies, recordedReply{decision: decision, unfinished: reply.Unfinished})
+		deck.decks[reply.Agent] = append(deck.decks[reply.Agent], recordedReply{decision: decision, unfinished: reply.Unfinished})
 	}
-	if len(deck.replies) == 0 {
+	if len(deck.decks) == 0 {
 		return nil, fmt.Errorf("%s holds no reply", path)
 	}
 	return deck, nil
+}
+
+func (c *cassette) take(request llm.Request) (recordedReply, error) {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+	c.last = request
+	conversation := ""
+	for _, message := range request.Messages {
+		if message.Role == llm.RoleUser {
+			conversation = message.Content
+			break
+		}
+	}
+	name, known := c.callers[conversation]
+	if !known {
+		name = parentCaller
+		if len(c.callers) > 0 {
+			name = childCaller + strconv.Itoa(len(c.callers))
+		}
+		c.callers[conversation] = name
+	}
+	if c.taken[name] >= len(c.decks[name]) {
+		return recordedReply{}, fmt.Errorf("%s holds %d replies for %s and %s asked for one more", c.name, len(c.decks[name]), callerName(name), callerName(name))
+	}
+	c.taken[name]++
+	return c.decks[name][c.taken[name]-1], nil
 }
 
 func (c *cassette) Ask(ctx context.Context, request llm.Request) (llm.Decision, error) {
@@ -130,15 +187,10 @@ func (c *cassette) Ask(ctx context.Context, request llm.Request) (llm.Decision, 
 		return llm.Decision{}, ctx.Err()
 	case <-time.After(recordedFlight):
 	}
-	c.mutex.Lock()
-	c.last = request
-	if c.asked >= len(c.replies) {
-		c.mutex.Unlock()
-		return llm.Decision{}, fmt.Errorf("%s holds %d replies and the turn asked for one more", c.name, len(c.replies))
+	reply, err := c.take(request)
+	if err != nil {
+		return llm.Decision{}, err
 	}
-	c.asked++
-	reply := c.replies[c.asked-1]
-	c.mutex.Unlock()
 	if request.OnDelta != nil && reply.decision.Content != "" {
 		request.OnDelta(reply.decision.Content)
 	}
