@@ -1,4 +1,4 @@
-package openrouter
+package openrouter_test
 
 import (
 	"context"
@@ -7,8 +7,10 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"tofu/internal/judge/jev"
+	"tofu/internal/judge/jev/wire/openrouter"
 	"tofu/internal/konst"
 	"tofu/internal/transport"
 )
@@ -17,7 +19,7 @@ const fastAPIDetail = `{"detail":[{"loc":["body","questions","urgency","score","
 
 func TestAnUnprocessableRequestKeepsTheServersOwnDetail(t *testing.T) {
 	var calls int
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		calls++
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusUnprocessableEntity)
@@ -25,7 +27,11 @@ func TestAnUnprocessableRequestKeepsTheServersOwnDetail(t *testing.T) {
 	}))
 	defer server.Close()
 
-	wire, err := New(wireConfig(server.URL))
+	wire, err := openrouter.New(openrouter.Config{
+		Endpoint:  server.URL,
+		Key:       "test-key",
+		Transport: transport.Config{AttemptTimeout: 2 * time.Second, Retries: 0, Backoff: time.Millisecond, Concurrency: 1},
+	})
 	if err != nil {
 		t.Fatalf("building the wire: %v", err)
 	}
@@ -33,7 +39,10 @@ func TestAnUnprocessableRequestKeepsTheServersOwnDetail(t *testing.T) {
 	if err != nil {
 		t.Fatalf("building the client: %v", err)
 	}
-	_, err = client.Ask(context.Background(), gateBattery())
+	_, err = client.Ask(context.Background(), jev.Request{
+		State:     map[string]any{"tool": "bash", "input": "ls -la"},
+		Questions: []jev.Question{{ID: "risk", Kind: jev.QuestionNoul, Instructions: "how risky is this call", True: "risky", False: "safe"}},
+	})
 	if err == nil {
 		t.Fatal("expected the 422 to reach the caller")
 	}
