@@ -15,6 +15,8 @@ import (
 	"tofu/interface/tui/progress"
 	"tofu/internal/konst"
 	"tofu/internal/llm"
+	settingspkg "tofu/internal/settings"
+	"tofu/internal/sys"
 )
 
 func TestADrivenStepSettlesInsideOneProgressTick(t *testing.T) {
@@ -369,6 +371,78 @@ func TestASpawnDrivenTwiceProducesTheSameConversationBothTimes(t *testing.T) {
 	}
 	if second := drivenConversation(t, deck, script); second != first {
 		t.Errorf("the same script ran twice and the two conversations differ:\n%s\n\n%s", first, second)
+	}
+}
+
+func pollutedHome(t *testing.T) string {
+	t.Helper()
+	home := t.TempDir()
+	t.Setenv("USERPROFILE", home)
+	t.Setenv("HOME", home)
+	state := filepath.Join(home, sys.StateDirName)
+	if err := os.MkdirAll(state, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	written(t, state, settingspkg.FileName, `{"chatShowsTools":1}`)
+	return home
+}
+
+func drivenRead(t *testing.T, dir string, args ...string) string {
+	t.Helper()
+	deck := written(t, dir, "read.cassette", readingCassette)
+	script := written(t, dir, "read.drive", strings.Join([]string{
+		"wait type a task and press enter",
+		"type read note.txt",
+		"key enter",
+		"wait cooked for",
+		"screen",
+	}, "\n"))
+	var out, errOut bytes.Buffer
+	code := driveVerb(append([]string{script, "--cassette", deck, "--plain", "--timeout", "60s"}, args...), strings.NewReader(""), &out, &errOut)
+	if code != exitOK {
+		t.Fatalf("tofu drive exited %d: %s", code, errOut.String())
+	}
+	return out.String()
+}
+
+func settingsSaid(t *testing.T, printed, key string) string {
+	t.Helper()
+	for _, line := range strings.Split(printed, "\n") {
+		if fields := strings.Fields(line); len(fields) >= 2 && fields[0] == key {
+			return strings.Join(fields[1:], " ")
+		}
+	}
+	t.Fatalf("the output never names the setting %s it resolved:\n%s", key, printed)
+	return ""
+}
+
+const foldedToolRow, fullToolRow = "(1) tools", "⟩ read note.txt"
+
+func TestADrivenRunIgnoresASettingsFilePlantedInTheAmbientHome(t *testing.T) {
+	dir := drivenProject(t)
+	pollutedHome(t)
+	printed := drivenRead(t, dir)
+	if strings.Contains(printed, fullToolRow) {
+		t.Errorf("the run drew the full tool row, so it took chatShowsTools from a home the script never named:\n%s", printed)
+	}
+	if !strings.Contains(printed, foldedToolRow) {
+		t.Errorf("the run drew neither the folded count nor the full row, so the screen proves nothing:\n%s", printed)
+	}
+	if said := settingsSaid(t, printed, settingspkg.ChatShowsTools); said != "false default" {
+		t.Errorf("the output says chatShowsTools resolved to %q, wanted the declared default", said)
+	}
+}
+
+func TestADrivenRunReadsTheSettingsOfAHomeTheScriptNamesAndSaysWhere(t *testing.T) {
+	dir := drivenProject(t)
+	home := pollutedHome(t)
+	printed := drivenRead(t, dir, "--home", home)
+	if !strings.Contains(printed, fullToolRow) {
+		t.Errorf("--home named a home holding chatShowsTools and the run folded the tool row anyway:\n%s", printed)
+	}
+	said := settingsSaid(t, printed, settingspkg.ChatShowsTools)
+	if !strings.HasPrefix(said, "true global ") || !strings.Contains(said, home) {
+		t.Errorf("the output says chatShowsTools resolved to %q, wanted true out of a file under %s", said, home)
 	}
 }
 

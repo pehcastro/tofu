@@ -23,10 +23,18 @@ import (
 	"tofu/internal/turn"
 )
 
-const driveUsage = `usage: tofu drive [SCRIPT] [--dir PATH] [--cassette PATH] [--width N] [--height N] [--timeout 60s] [--plain]
+const driveUsage = `usage: tofu drive [SCRIPT] [--dir PATH] [--home PATH] [--cassette PATH] [--width N] [--height N] [--timeout 60s] [--plain]
 
 drives the app the way a person does, with no terminal and no model call.
 SCRIPT is a file of steps, or - for standard input.
+
+Settings come from the script or from nowhere. Without --home the run makes an
+empty home of its own, reads no settings file you own, and deletes that home
+when it ends, so every setting is its declared default and two runs of one
+script answer the same. --home PATH reads PATH/.tofu/settings.json instead,
+which is how you drive the app against a configuration you keep. Either way the
+run prints the settings it resolved before the first step, so a pasted
+transcript carries the conditions it was taken under.
 
 Steps:
   type TEXT    type TEXT into the composer
@@ -70,6 +78,7 @@ const (
 	envOpen          = "<env>"
 	envClose         = "</env>"
 	stdinScript      = "-"
+	driveHomePrefix  = "tofu-drive-home"
 	noEnvironment    = "no turn has sent an environment block yet"
 	recordedFlight   = konst.DriveSettleMillis * time.Millisecond
 	parentCaller     = ""
@@ -277,6 +286,7 @@ func readScript(path string, in io.Reader) ([]driveStep, error) {
 type drivePlan struct {
 	script   string
 	dir      string
+	home     string
 	cassette string
 	width    int
 	height   int
@@ -312,6 +322,8 @@ func driveArgs(args []string, errOut io.Writer) (drivePlan, bool) {
 		switch flag {
 		case "--dir":
 			plan.dir = taken
+		case "--home":
+			plan.home = taken
 		case "--cassette":
 			plan.cassette = taken
 		case "--width":
@@ -329,6 +341,44 @@ func driveArgs(args []string, errOut io.Writer) (drivePlan, bool) {
 		}
 	}
 	return plan, true
+}
+
+func driveHome(named string) (release func(), err error) {
+	home := named
+	if home == "" {
+		if home, err = os.MkdirTemp("", driveHomePrefix); err != nil {
+			return nil, err
+		}
+	}
+	previous := map[string]string{}
+	for _, variable := range []string{"HOME", "USERPROFILE"} {
+		previous[variable] = os.Getenv(variable)
+		if err = os.Setenv(variable, home); err != nil {
+			return nil, err
+		}
+	}
+	return func() {
+		for variable, value := range previous {
+			_ = os.Setenv(variable, value)
+		}
+		if named == "" {
+			_ = os.RemoveAll(home)
+		}
+	}, nil
+}
+
+func printDriveSettings(out io.Writer, dir, named string) {
+	where := "settings: no --home was named, so this run made an empty one and read no settings file of yours"
+	if named != "" {
+		where = "settings: read from the home named by --home " + named
+	}
+	_, _ = fmt.Fprintln(out, where)
+	store, err := openSettings(dir)
+	if err != nil {
+		_, _ = fmt.Fprintf(out, "settings: unreadable, so every setting is its declared default: %v\n", err)
+		return
+	}
+	printSettingsList(out, store)
 }
 
 func driveFail(errOut io.Writer, err error) int {
@@ -354,6 +404,12 @@ func driveVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 	if err != nil {
 		return driveFail(errOut, err)
 	}
+	release, err := driveHome(plan.home)
+	if err != nil {
+		return driveFail(errOut, err)
+	}
+	defer release()
+	printDriveSettings(out, dir, plan.home)
 	steps, err := readScript(plan.script, in)
 	if err != nil {
 		return driveFail(errOut, err)
