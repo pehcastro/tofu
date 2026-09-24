@@ -1,32 +1,77 @@
 package edits
 
 import (
+	"flag"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/charmbracelet/x/ansi"
+
+	"tofu/interface/tui/subagent"
 )
 
 const gatePath = "internal/judge/policy/toolgate.go"
 
-func gateDiff() string {
-	return "--- " + gatePath + "\n" +
-		"+++ " + gatePath + "\n" +
+var update = flag.Bool("update", false, "rewrite the golden files")
+
+func assertGolden(t *testing.T, name, got string) {
+	t.Helper()
+	path := filepath.Join("testdata", name)
+	if *update {
+		if err := os.WriteFile(path, []byte(got), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		return
+	}
+	want, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(want) != got {
+		t.Errorf("%s does not match the golden file\n--- got ---\n%s\n--- want ---\n%s", name, got, want)
+	}
+}
+
+func changedAt(agent, path, id string) Edit {
+	diff := "--- " + path + "\n" +
+		"+++ " + path + "\n" +
 		"@@ -40,6 +40,7 @@\n" +
 		" func Decide(answers Answers) Verdict {\n" +
 		"-\treturn Ask\n" +
 		"+\treturn AskWithReason(answers)\n" +
 		" }\n"
+	edit, _ := Changed(agent, path, diff, "", id, time.Date(2026, 9, 19, 14, 34, 18, 0, time.UTC))
+	return edit
 }
 
 func onePickedEdit(root string) Model {
-	edit, _ := Changed("go-dev", gatePath, gateDiff(), "", "e1a2b3", time.Date(2026, 9, 19, 14, 34, 18, 0, time.UTC))
 	var m Model
 	m.SetSize(120, 24)
 	m.Root = root
-	m.Add(edit)
+	m.Add(changedAt("go-dev", gatePath, "e1a2b3"))
 	return m
+}
+
+func threeAgentsEditing() Model {
+	var m Model
+	m.SetSize(120, 36)
+	m.Root = "/repo"
+	m.Busy = true
+	m.Children = []subagent.Child{
+		{Name: "go-docs", State: subagent.Done},
+		{Name: "go-dev", State: subagent.Running},
+	}
+	m.Add(changedAt(Self, gatePath, "e1a2b3"))
+	m.Add(changedAt("go-dev", "internal/rule/parse.go", "b7c4d1"))
+	m.Add(changedAt("go-docs", "library/changelog/CHANGELOG.md", "44f0aa"))
+	return m
+}
+
+func TestTheSidebarKeepsItsOwnWidth(t *testing.T) {
+	assertGolden(t, "edits-120x36.golden", threeAgentsEditing().View())
 }
 
 func TestAPathIsDrawnAsAnOSC8Hyperlink(t *testing.T) {
