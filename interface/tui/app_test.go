@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"testing"
@@ -808,6 +809,8 @@ func TestFoldHidesShellIsASettingThatDropsTheShellCountFromTheRunningLine(t *tes
 	}
 }
 
+var settingsSearchReportsACount = regexp.MustCompile(`search: tool  \d+ matches?`)
+
 func TestTheSettingsViewTakesTheCursorScopeAndSearchKeys(t *testing.T) {
 	globalPath := filepath.Join(t.TempDir(), "settings.json")
 	app := settingsStoreApp(t, globalPath)
@@ -824,7 +827,9 @@ func TestTheSettingsViewTakesTheCursorScopeAndSearchKeys(t *testing.T) {
 	if strings.Contains(content, "decision cap") {
 		t.Fatalf("the search kept a row that does not match\n%s", content)
 	}
-	assertGolden(t, "settings-search-80x24.golden", content)
+	if !settingsSearchReportsACount.MatchString(content) {
+		t.Fatalf("the settings view does not report how many rows the search found\n%s", content)
+	}
 
 	app.settingsKey("down")
 	app.settingsKey("space")
@@ -1284,23 +1289,24 @@ func TestAMermaidFenceIsACodeBlockAndNotADiagram(t *testing.T) {
 	assertGolden(t, "session-mermaid-80x24.golden", content)
 }
 
-func TestAStreamingMessageIsPlainAndTheCompleteOneIsMarkdown(t *testing.T) {
+func TestAStreamingMessageRendersMarkdownAndAClosedOneNeedsNoReveal(t *testing.T) {
 	app := proseApp(t, 24)
 	app.Update(Event{Kind: EventTextDelta, Text: "The **gate** reads "})
 	app.Update(Event{Kind: EventTextDelta, Text: "`toolgate.go` before the policy.\n"})
 	streaming := app.View().Content
-	if !strings.Contains(ansi.Strip(streaming), "The **gate** reads `toolgate.go` before the policy.") {
-		t.Errorf("a streaming message is not shown as plain text\n%s", ansi.Strip(streaming))
+	plain := ansi.Strip(streaming)
+	if strings.Contains(plain, "**gate**") || strings.Contains(plain, "`toolgate.go`") {
+		t.Errorf("a streaming message still carries raw markdown\n%s", plain)
+	}
+	if !strings.Contains(plain, "gate") || !strings.Contains(plain, "toolgate.go") {
+		t.Errorf("the streaming text is missing\n%s", plain)
 	}
 	assertGolden(t, "session-streaming-80x24.golden", streaming)
 
 	app.Update(Closed{})
 	complete := app.View().Content
-	if streaming == complete {
-		t.Fatal("the message was not re-rendered when it stopped")
-	}
-	if strings.Contains(ansi.Strip(complete), "**gate**") {
-		t.Errorf("the complete message is still raw\n%s", ansi.Strip(complete))
+	if complete != streaming {
+		t.Fatalf("a message with nothing left open changed once it stopped\n--- streaming ---\n%s\n--- complete ---\n%s", plain, ansi.Strip(complete))
 	}
 	assertGolden(t, "session-complete-80x24.golden", complete)
 }

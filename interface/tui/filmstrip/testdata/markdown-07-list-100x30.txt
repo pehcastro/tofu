@@ -6,9 +6,9 @@
 ▌ the gate reads the policy first so that a verdict is never invented.                              
                                                                                                     
   what the policy carries                                                                           
-  - the mode it was declared in                                                                     
-  - the lock that resolved it                                                                       
-  - the thresholds                                                                                  
+  • the mode it was declared in                                                                     
+  • the lock that resolved it                                                                       
+  • the thresholds                                                                                  
                                                                                                     
                                                                                                     
                                                                                                     

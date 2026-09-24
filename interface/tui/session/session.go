@@ -94,6 +94,7 @@ type Entry struct {
 	streaming bool
 	waiting   bool
 	rendered  []string
+	tail      []string
 	stable    int
 	width     int
 }
@@ -106,15 +107,11 @@ type Result struct {
 
 func (e Entry) assistant() bool { return e.Kind == Assistant }
 
-func (e Entry) displayLines(room int) []string {
-	if !e.streaming {
+func (e Entry) displayLines() []string {
+	if !e.streaming || e.tail == nil {
 		return e.rendered
 	}
-	trailing := e.Body[e.stable:]
-	if trailing == "" {
-		return e.rendered
-	}
-	return append(append([]string{}, e.rendered...), widget.Wrap(trailing, room)...)
+	return append(append([]string{}, e.rendered...), e.tail...)
 }
 
 func (e Entry) running() bool { return e.Kind == Tool && e.ID != "" && e.Status == "" }
@@ -245,19 +242,23 @@ func (m Model) rerender(entry *Entry) {
 	}
 	room := max(m.width-widget.Cells(assistantMark), 1)
 	if !entry.streaming {
-		entry.rendered, entry.stable, entry.width = m.prose(entry.Body, room), len(entry.Body), room
+		entry.rendered, entry.stable, entry.width, entry.tail = m.prose(entry.Body, room), len(entry.Body), room, nil
 		return
 	}
 	boundary := max(markdown.Boundary(entry.Body), entry.stable)
-	if boundary == entry.stable && room == entry.width {
-		return
+	if boundary != entry.stable || room != entry.width {
+		entry.width = room
+		if boundary == 0 {
+			entry.rendered, entry.stable = nil, 0
+		} else {
+			entry.rendered, entry.stable = m.prose(entry.Body[:boundary], room), boundary
+		}
 	}
-	entry.width = room
-	if boundary == 0 {
-		entry.rendered, entry.stable = nil, 0
-		return
+	if trailing := entry.Body[entry.stable:]; trailing != "" {
+		entry.tail = m.prose(trailing, room)
+	} else {
+		entry.tail = nil
 	}
-	entry.rendered, entry.stable = m.prose(entry.Body[:boundary], room), boundary
 }
 
 func (m *Model) Stream(text string) {
@@ -583,7 +584,7 @@ func (m Model) render(entry Entry) []string {
 		lines = append(lines, "")
 	}
 	if entry.assistant() {
-		for index, line := range entry.displayLines(room) {
+		for index, line := range entry.displayLines() {
 			prefix := style.Render(marker)
 			if index > 0 {
 				prefix = indent

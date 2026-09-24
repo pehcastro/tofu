@@ -54,27 +54,21 @@ func TestProseIsRenderedOncePerWidth(t *testing.T) {
 	}
 }
 
-func TestStreamingStaysPlainWithNoParagraphBreakYet(t *testing.T) {
+func TestStreamingRendersMarkdownWithNoParagraphBreakYet(t *testing.T) {
 	calls := 0
 	model := New(fixed(), counted(&calls))
 	model.SetSize(80, 24)
 	model.Stream("**Tofu** ")
 	model.Stream("reads `toolgate.go`")
 	streaming := model.View()
-	if calls != 0 {
-		t.Fatalf("nothing has closed yet, the renderer ran %d times, want 0", calls)
+	if calls == 0 {
+		t.Fatalf("the growing tail with no closed block never reached the renderer")
 	}
-	if !strings.Contains(streaming, "**Tofu** reads `toolgate.go`") {
-		t.Errorf("a streaming message with no closed block is not shown as plain text:\n%s", streaming)
+	if !strings.Contains(streaming, "prose at 78: **Tofu** reads `toolgate.go`") {
+		t.Errorf("a streaming message with no closed block is not rendered as markdown:\n%s", streaming)
 	}
 	model.Stop()
 	complete := model.View()
-	if calls != 1 {
-		t.Errorf("a message that stopped called the renderer %d times, want 1", calls)
-	}
-	if streaming == complete {
-		t.Error("the frame is unchanged once the message is complete")
-	}
 	if !strings.Contains(complete, "prose at 78") {
 		t.Errorf("the complete message is not rendered as markdown:\n%s", complete)
 	}
@@ -87,31 +81,75 @@ func TestAHeadingRendersBeforeTheEntryStopsStreaming(t *testing.T) {
 	model.Stream("# Title\n\n")
 	model.Stream("the body is still arriving")
 	mid := model.View()
-	if calls != 1 {
-		t.Fatalf("the closed heading called the renderer %d times while streaming, want 1", calls)
+	if calls != 2 {
+		t.Fatalf("the closed heading plus its growing tail called the renderer %d times while streaming, want 2", calls)
 	}
 	if !strings.Contains(mid, "prose at 78: # Title") {
 		t.Errorf("the heading is not rendered while the entry streams:\n%s", mid)
 	}
-	if !strings.Contains(mid, "the body is still arriving") {
-		t.Errorf("the growing tail is not shown plain while it streams:\n%s", mid)
+	if !strings.Contains(mid, "prose at 78: the body is still arriving") {
+		t.Errorf("the growing tail is not rendered as markdown while it streams:\n%s", mid)
 	}
 }
 
-func TestAnUnterminatedFenceStaysPlainAndBecomesAFenceWhenItCloses(t *testing.T) {
+func TestAnUnclosedFenceIsNotReflowedAndHidesItsBackticks(t *testing.T) {
 	real := new(markdown.Renderer)
 	model := New(fixed(), real.Lines)
 	model.SetSize(80, 24)
 	model.Stream("Before the fence\n\n```go\n")
-	open := model.View()
-	if !strings.Contains(open, "```go") {
-		t.Fatalf("an open fence does not show its own literal backticks:\n%s", open)
-	}
 	model.Stream("line := 1\n")
-	model.Stream("```\n\nafter")
-	closed := model.View()
-	if strings.Contains(closed, "```go") {
-		t.Errorf("the fence still shows its raw marker once it closed:\n%s", closed)
+	model.Stream("line2 := 2\n")
+	frame := ansi.Strip(model.View())
+	if strings.Contains(frame, "```") {
+		t.Fatalf("the open fence's backticks are visible as text:\n%s", frame)
+	}
+	if !strings.Contains(frame, "line := 1") || !strings.Contains(frame, "line2 := 2") {
+		t.Fatalf("the fence content went missing while open:\n%s", frame)
+	}
+	rows := strings.Split(frame, "\n")
+	first, second := lineIndex(rows, "line := 1"), lineIndex(rows, "line2 := 2")
+	if second != first+1 {
+		t.Fatalf("the fence content was reflowed across lines: %d then %d\n%s", first, second, frame)
+	}
+}
+
+func TestAStreamedListNeverShowsARawBacktickOrDash(t *testing.T) {
+	real := new(markdown.Renderer)
+	model := New(fixed(), real.Lines)
+	model.SetSize(80, 24)
+	lines := []string{
+		"- `cmd/tofu/` (121 files): the verbs\n",
+		"- `internal/turn/` (40 files): the loop\n",
+		"- `interface/tui/` (30 files): the screen\n",
+	}
+	for _, line := range lines {
+		model.Stream(line)
+		frame := ansi.Strip(model.View())
+		if strings.Contains(frame, "`") {
+			t.Fatalf("a backtick is visible mid-stream:\n%s", frame)
+		}
+		if strings.Contains(frame, "\n- ") {
+			t.Fatalf("a raw leading dash is visible mid-stream:\n%s", frame)
+		}
+	}
+}
+
+func TestAHalfTypedInlineSpanReadsAsTextThenBecomesASpan(t *testing.T) {
+	real := new(markdown.Renderer)
+	model := New(fixed(), real.Lines)
+	model.SetSize(80, 24)
+	model.Stream("see the file `cmd/tofu")
+	before := ansi.Strip(model.View())
+	if !strings.Contains(before, "`cmd/tofu") {
+		t.Fatalf("an unclosed span does not read as literal text:\n%s", before)
+	}
+	model.Stream("/run.go` for the entry point")
+	after := ansi.Strip(model.View())
+	if strings.Contains(after, "`") {
+		t.Fatalf("the closed span still shows its backticks:\n%s", after)
+	}
+	if !strings.Contains(after, "cmd/tofu/run.go") {
+		t.Fatalf("the span text went missing once closed:\n%s", after)
 	}
 }
 

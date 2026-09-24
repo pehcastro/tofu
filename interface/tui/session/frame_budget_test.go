@@ -49,6 +49,26 @@ func TestFrameBudgetWithMarkdownOnEveryDelta(t *testing.T) {
 	})
 }
 
+func TestOneFlushCostAtTheScreenshotWidth(t *testing.T) {
+	deltas := longStreamedAnswer()
+	renderer := new(markdown.Renderer)
+	model := New(fixed(), renderer.Lines)
+	model.SetSize(80, 24)
+	for _, delta := range deltas[:len(deltas)-1] {
+		model.Stream(delta)
+	}
+	last := deltas[len(deltas)-1]
+	start := time.Now()
+	model.Stream(last)
+	model.View()
+	took := time.Since(start)
+	entry := model.entries[len(model.entries)-1]
+	total := len(entry.Body)
+	tail := total - entry.stable
+	t.Logf("one flush (stream + view) at 80 columns over a %d line, %d byte answer: %v, the tail rendered %d of %d bytes (%.1f%%)",
+		strings.Count(entry.Body, "\n"), total, took, tail, total, 100*float64(tail)/float64(total))
+}
+
 func TestBoundaryScanCostAloneAcrossManyDeltas(t *testing.T) {
 	deltas := longStreamedAnswer()
 	body := ""
