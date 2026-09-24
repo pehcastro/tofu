@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"tofu/internal/judge/question"
+	"tofu/internal/sys"
 	"tofu/library/questions"
 )
 
@@ -51,7 +52,7 @@ func TestAProjectLibraryOverridesTheShippedPageSiftWording(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolve the shipped set: %v", err)
 	}
-	merged, _, err := question.Resolve(pageSiftPoint, pageSiftLayers(t, question.DirLayer("project", dir)))
+	merged, _, err := question.Resolve(pageSiftPoint, pageSiftLayers(t, sys.DirLayer("project", dir)))
 	if err != nil {
 		t.Fatalf("resolve with a project layer: %v", err)
 	}

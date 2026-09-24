@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/fs"
 	"os"
 	"slices"
 	"strconv"
@@ -31,6 +30,7 @@ import (
 	"tofu/internal/turn"
 	"tofu/internal/turn/tools"
 	"tofu/internal/web"
+	shipped "tofu/library"
 )
 
 const (
@@ -688,16 +688,9 @@ func assembleRunTools(dir, set string, readBeforeEdit bool, bashTool *turn.BashT
 }
 
 func buildWebTools() ([]turn.Tool, error) {
-	layers, err := web.DefaultLayers()
+	layers, err := web.DefaultLayers(shipped.Files())
 	if err != nil {
 		return nil, err
-	}
-	carried := slices.ContainsFunc(layers, func(layer web.Layer) bool {
-		_, err := fs.Stat(layer.FS, "fetch.yaml")
-		return err == nil
-	})
-	if !carried {
-		return nil, nil
 	}
 	config, err := web.Load(layers)
 	if err != nil {

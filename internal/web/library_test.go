@@ -8,6 +8,7 @@ import (
 	"testing/fstest"
 
 	"tofu/internal/web"
+	"tofu/library"
 )
 
 const absentKey = "TOFU_TEST_SEARCH_KEY_NOBODY_SETS"
@@ -25,7 +26,7 @@ func project(files map[string]string) web.Layer {
 }
 
 func TestTheLayersAreTheShippedLibraryThenTheHomeThenTheProject(t *testing.T) {
-	layers, err := web.DefaultLayers()
+	layers, err := web.DefaultLayers(library.Files())
 	if err != nil {
 		t.Fatalf("building the default layers: %v", err)
 	}
@@ -62,7 +63,7 @@ func writeFetch(t *testing.T, dir string, maxBytes string) {
 }
 
 func TestTheProjectWebFileBeatsTheGlobalWhichBeatsTheShipped(t *testing.T) {
-	found, err := web.DefaultLayers()
+	found, err := web.DefaultLayers(library.Files())
 	if err != nil {
 		t.Fatalf("layers: %v", err)
 	}
@@ -77,9 +78,8 @@ func TestTheProjectWebFileBeatsTheGlobalWhichBeatsTheShipped(t *testing.T) {
 		}
 	}
 
-	layers := []web.Layer{shipped(), found[1], found[2]}
 	ceiling := func() int {
-		config, err := web.Load(layers)
+		config, err := web.Load(found)
 		if err != nil {
 			t.Fatalf("loading: %v", err)
 		}
@@ -99,6 +99,22 @@ func TestTheProjectWebFileBeatsTheGlobalWhichBeatsTheShipped(t *testing.T) {
 	writeFetch(t, found[2].Origin, "512")
 	if got := ceiling(); got != 512 {
 		t.Fatalf("the project directory did not beat the global one: %d", got)
+	}
+}
+
+func TestTheShippedLibraryResolvesFromAnyWorkingDirectory(t *testing.T) {
+	t.Chdir(t.TempDir())
+	layers, err := web.DefaultLayers(library.Files())
+	if err != nil {
+		t.Fatalf("building the default layers: %v", err)
+	}
+	config, err := web.Load(layers)
+	t.Logf("library layer %q, provider %q, ceiling %d, err %v", layers[0].Origin, config.Provider.Name, config.MaxPageBytes, err)
+	if err != nil {
+		t.Fatalf("loading away from the repository root: %v", err)
+	}
+	if config.Provider.Name != "brave" || config.MaxPageBytes != 5000000 {
+		t.Fatalf("the shipped library did not resolve away from the repository root: %+v", config)
 	}
 }
 

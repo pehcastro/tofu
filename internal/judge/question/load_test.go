@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"tofu/internal/sys"
 )
 
 func layerDir(t *testing.T, name string, body string) Layer {
@@ -13,7 +15,7 @@ func layerDir(t *testing.T, name string, body string) Layer {
 	if err := os.WriteFile(filepath.Join(dir, "tool_gate@1.yaml"), []byte(body), 0o644); err != nil {
 		t.Fatalf("write %s: %v", name, err)
 	}
-	return DirLayer(name, dir)
+	return sys.DirLayer(name, dir)
 }
 
 func fieldFile(t *testing.T, fields []Field, path string) string {
@@ -115,7 +117,7 @@ func twoVersionDiskLayer(t *testing.T) Layer {
 	if err := os.WriteFile(filepath.Join(dir, "tool_gate@2.yaml"), []byte(body2), 0o644); err != nil {
 		t.Fatalf("write @2: %v", err)
 	}
-	return DirLayer("library", dir)
+	return sys.DirLayer("library", dir)
 }
 
 func TestBareNameWithTwoVersionsOnADiskLayerIsRefused(t *testing.T) {

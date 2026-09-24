@@ -1,31 +1,24 @@
 package sys
 
 import (
-	"strings"
+	"io/fs"
 	"testing"
 	"testing/fstest"
 )
 
-func TestAnEmbeddedLibraryLayerAndAnOnDiskOneDifferOnlyInTheLibrary(t *testing.T) {
-	embedded, err := Layers(fstest.MapFS{}, "web")
+func TestTheLibraryLayerIsTheEmbeddedFilesystemWhereverTheProcessRuns(t *testing.T) {
+	t.Chdir(t.TempDir())
+	shipped := fstest.MapFS{"fetch.yaml": &fstest.MapFile{Data: []byte("max_bytes: 1\n")}}
+	layers, err := Layers(shipped, "web")
 	if err != nil {
-		t.Fatalf("embedded: %v", err)
+		t.Fatalf("layers: %v", err)
 	}
-	onDisk, err := DiskLayers("web")
-	if err != nil {
-		t.Fatalf("on disk: %v", err)
+	t.Logf("library layer %q from %T", layers[0].Origin, layers[0].FS)
+	if layers[0].Origin != Join("library", "web") {
+		t.Fatalf("the library layer is not named for the shipped tree: %q", layers[0].Origin)
 	}
-	t.Logf("embedded library %q, on disk library %q", embedded[0].Origin, onDisk[0].Origin)
-	if embedded[0].Origin != Join("library", "web") {
-		t.Fatalf("an embedded library layer is not named for the shipped tree: %q", embedded[0].Origin)
-	}
-	if !strings.HasSuffix(onDisk[0].Origin, Join("library", "web")) || onDisk[0].Origin == embedded[0].Origin {
-		t.Fatalf("an on disk library layer is not an absolute path into the shipped tree: %q", onDisk[0].Origin)
-	}
-	for i := 1; i < 3; i++ {
-		if embedded[i] != onDisk[i] {
-			t.Fatalf("layer %d differs: %+v against %+v", i, embedded[i], onDisk[i])
-		}
+	if _, err := fs.ReadFile(layers[0].FS, "fetch.yaml"); err != nil {
+		t.Fatalf("the library layer does not read its own file away from the repository root: %v", err)
 	}
 }
 

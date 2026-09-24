@@ -419,17 +419,23 @@ func TestWithNoSearchKeyStoredTheTurnIsGivenFetchAndNoWebSearch(t *testing.T) {
 	t.Logf("the tools a turn is given: %v", names)
 }
 
-func TestAProjectCarryingNoWebLibraryStillBuildsItsTools(t *testing.T) {
+func TestAProjectCarryingNoWebLibraryGetsFetchFromTheShippedOne(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
 	built, _, err := buildRunTools(dir, toolSetFull)
 	if err != nil {
 		t.Fatalf("a project carrying no web library could not build its tools: %v", err)
 	}
+	var names []string
 	for _, tool := range built {
-		if tool.Name() == "fetch" || tool.Name() == "web_search" {
-			t.Errorf("a project with no web library was given %s anyway", tool.Name())
-		}
+		names = append(names, tool.Name())
+	}
+	t.Logf("away from the repository root a turn is given: %v", names)
+	if !slices.Contains(names, "fetch") {
+		t.Errorf("the shipped web library did not reach a project of its own: %v", names)
+	}
+	if slices.Contains(names, "web_search") {
+		t.Errorf("web_search is offered with no provider key stored: %v", names)
 	}
 }
 

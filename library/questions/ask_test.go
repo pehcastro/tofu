@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"tofu/internal/judge/question"
+	"tofu/internal/sys"
 	"tofu/library/questions"
 )
 
@@ -61,7 +62,7 @@ func TestAProjectLibraryOverridesTheShippedAskWording(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolve the shipped set: %v", err)
 	}
-	merged, _, err := question.Resolve(askPoint, askLayers(t, question.DirLayer("project", dir)))
+	merged, _, err := question.Resolve(askPoint, askLayers(t, sys.DirLayer("project", dir)))
 	if err != nil {
 		t.Fatalf("resolve with a project layer: %v", err)
 	}

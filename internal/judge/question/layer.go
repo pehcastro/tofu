@@ -12,10 +12,6 @@ import (
 
 type Layer = sys.Layer
 
-func DirLayer(name string, dir string) Layer {
-	return sys.DirLayer(name, dir)
-}
-
 func DefaultLayers(shipped fs.FS) ([]Layer, error) {
 	return sys.Layers(shipped, "questions")
 }

@@ -14,8 +14,12 @@ import (
 
 type Layer = sys.Layer
 
-func DefaultLayers() ([]Layer, error) {
-	return sys.DiskLayers("web")
+func DefaultLayers(library fs.FS) ([]Layer, error) {
+	shipped, err := fs.Sub(library, "web")
+	if err != nil {
+		return nil, err
+	}
+	return sys.Layers(shipped, "web")
 }
 
 type Provider struct {
