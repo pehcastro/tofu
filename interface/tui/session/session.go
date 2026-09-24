@@ -446,12 +446,17 @@ func (m *Model) TakePartial() (string, bool) {
 }
 
 func (m *Model) Stop() {
+	interrupted := m.Stopping || m.LettingToolsFinish
 	m.Busy, m.Stopping, m.LettingToolsFinish = false, false, false
 	m.requested, m.answered = time.Time{}, time.Time{}
 	m.seal()
 	for index := range m.entries {
-		if m.entries[index].running() {
-			m.entries[index].Status, m.entries[index].Ended = noResult, m.now()
+		entry := &m.entries[index]
+		if entry.running() {
+			entry.Status, entry.Ended = noResult, m.now()
+		}
+		if interrupted && entry.Kind == Tool && entry.turn == m.turns {
+			entry.Promoted = true
 		}
 	}
 }

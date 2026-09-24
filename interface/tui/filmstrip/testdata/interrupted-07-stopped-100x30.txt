@@ -2,11 +2,11 @@
 [1] chat   [2] work   [3] file edits   [4] sub-agents   [5] shells                                  
                                                                                                     
 » why does the gate read the policy first?                                                          
-· (1) tools · 2s · [#c1]                                                                            
+⟩ read internal/turn/loop.go                                                        84 lines, 2.1 KB
+    #c1                                                                                             
 · stopping the turn                                                                                 
 · 64 characters were written and kept in work [#a27001]                                             
 · cooked for 3s · [#a27001]                                                                         
-                                                                                                    
                                                                                                     
                                                                                                     
                                                                                                     
