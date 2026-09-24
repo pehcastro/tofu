@@ -1,7 +1,6 @@
 package session
 
 import (
-	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -30,20 +29,15 @@ func TestTypingAndDeletingLeavesThePlaceholderWholeOrNothing(t *testing.T) {
 	}
 }
 
-func TestThreePlaceholderExamplesAndOnePickedPerSession(t *testing.T) {
-	if len(PlaceholderExamples) != 3 {
-		t.Fatalf("there are %d placeholder examples, want 3", len(PlaceholderExamples))
+func TestThePlaceholderIsTheSameWhateverTheClockReads(t *testing.T) {
+	opened := time.Date(2026, 9, 19, 14, 32, 0, 0, time.UTC)
+	seen := map[string]time.Time{}
+	for step := range 3 {
+		at := opened.Add(time.Duration(step))
+		seen[New(func() time.Time { return at }, counted(new(int))).composer.Placeholder] = at
 	}
-	model := New(fixed(), counted(new(int)))
-	model.SetSize(80, 24)
-	first := model.composer.Placeholder
-	model.Update(tea.KeyPressMsg{Code: 'x', Text: "x"})
-	model.Update(tea.KeyPressMsg{Code: tea.KeyBackspace})
-	if second := model.composer.Placeholder; first != second {
-		t.Fatalf("the placeholder changed within one session: %q then %q", first, second)
-	}
-	if !slices.Contains(PlaceholderExamples[:], first) {
-		t.Fatalf("the placeholder %q is not one of the three examples", first)
+	if len(seen) != 1 {
+		t.Fatalf("three clocks a nanosecond apart drew %d placeholders, so the bottom of the screen depends on the clock: %v", len(seen), seen)
 	}
 }
 

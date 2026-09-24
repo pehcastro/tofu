@@ -1,6 +1,9 @@
 package session
 
 import (
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"strconv"
 	"strings"
 	"testing"
@@ -23,6 +26,24 @@ func counted(calls *int) Prose {
 func fixed() func() time.Time {
 	at := time.Date(2026, 9, 19, 14, 32, 0, 0, time.UTC)
 	return func() time.Time { return at }
+}
+
+func TestSessionDeclaresNoPackageLevelVariable(t *testing.T) {
+	parsed, err := parser.ParseFile(token.NewFileSet(), "session.go", nil, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, declared := range parsed.Decls {
+		general, ok := declared.(*ast.GenDecl)
+		if !ok || general.Tok != token.VAR {
+			continue
+		}
+		for _, spec := range general.Specs {
+			for _, name := range spec.(*ast.ValueSpec).Names {
+				t.Errorf("session.go declares %s at package level, which any goroutine in the process can reassign", name.Name)
+			}
+		}
+	}
 }
 
 func TestProseIsRenderedOncePerWidth(t *testing.T) {

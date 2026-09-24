@@ -20,15 +20,6 @@ import (
 	"tofu/internal/sys"
 )
 
-func containsAPlaceholder(text string) bool {
-	for _, example := range session.PlaceholderExamples {
-		if strings.Contains(text, example) {
-			return true
-		}
-	}
-	return false
-}
-
 func firstRunApp(t *testing.T, width, height int) *tui.App {
 	t.Helper()
 	app := tui.New(tui.Options{
@@ -63,7 +54,7 @@ func TestAFirstRunWithNothingStoredDrawsTheSetupAndNotAnError(t *testing.T) {
 			t.Errorf("the first frame carries %q instead of the setup\n%s", absent, narrow)
 		}
 	}
-	if containsAPlaceholder(narrow) {
+	if strings.Contains(narrow, session.Placeholder) {
 		t.Errorf("the first frame carries the composer placeholder instead of the setup\n%s", narrow)
 	}
 	t.Log("\n" + narrow)
@@ -97,7 +88,7 @@ func TestWithBothStoredNoSetupIsDrawnAndTheComposerHasFocus(t *testing.T) {
 			t.Errorf("setup is still drawn with everything stored: %q\n%s", absent, frame)
 		}
 	}
-	if !containsAPlaceholder(frame) {
+	if !strings.Contains(frame, session.Placeholder) {
 		t.Errorf("the composer is not drawn\n%s", frame)
 	}
 	if app.View().Cursor == nil {
@@ -144,7 +135,7 @@ func TestALoginRunInAnotherTerminalMovesTheAppOnWithoutARestart(t *testing.T) {
 			t.Errorf("the app still asks for %q after the login ran elsewhere\n%s", absent, frame)
 		}
 	}
-	if !containsAPlaceholder(frame) {
+	if !strings.Contains(frame, session.Placeholder) {
 		t.Errorf("the app did not reach the composer\n%s", frame)
 	}
 	t.Log("\n" + frame)

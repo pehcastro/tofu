@@ -1,7 +1,6 @@
 package session
 
 import (
-	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -57,15 +56,8 @@ const (
 	wholeErrorInWork = "the whole error is in work"
 	followingState   = "following"
 	scrolledState    = "scrolled back   end returns"
+	Placeholder      = "hey tofu, can you explain this repository to me?"
 )
-
-var PlaceholderExamples = [3]string{
-	"hey tofu, can you explain this repository to me?",
-	"what should we do about the failing test in internal/turn?",
-	"tofu, find where the gate reads its thresholds",
-}
-
-var composerGap = regexp.MustCompile(` +(?:\x1b\[[0-9;]*m)*$`)
 
 type Kind int
 
@@ -173,7 +165,7 @@ type Model struct {
 
 func New(now func() time.Time, prose Prose) Model {
 	composer := textarea.New()
-	composer.Placeholder = PlaceholderExamples[pickPlaceholder(now())]
+	composer.Placeholder = Placeholder
 	composer.ShowLineNumbers = false
 	composer.Prompt = composerInset
 	composer.SetHeight(composerRows)
@@ -182,14 +174,6 @@ func New(now func() time.Time, prose Prose) Model {
 	composer.KeyMap.InsertNewline = key.NewBinding(key.WithKeys("shift+enter", "alt+enter", "ctrl+j"))
 	composer.SetStyles(tintedComposerStyles())
 	return Model{now: now, prose: prose, composer: composer, following: true, began: now()}
-}
-
-func pickPlaceholder(at time.Time) int {
-	offset := at.UnixNano() % int64(len(PlaceholderExamples))
-	if offset < 0 {
-		offset += int64(len(PlaceholderExamples))
-	}
-	return int(offset)
 }
 
 func tintedComposerStyles() textarea.Styles {
@@ -500,12 +484,31 @@ func (m Model) composerView() string {
 }
 
 func tintRow(row string) string {
-	loc := composerGap.FindStringIndex(row)
-	if loc == nil {
+	end := beforeTrailingStyles(row)
+	start := end
+	for start > 0 && row[start-1] == ' ' {
+		start--
+	}
+	if start == end {
 		return row
 	}
-	plain := ansi.Strip(row[loc[0]:loc[1]])
-	return row[:loc[0]] + lipgloss.NewStyle().Background(theme.ComposerColor()).Render(plain)
+	gap := lipgloss.NewStyle().Background(theme.ComposerColor()).Render(strings.Repeat(" ", end-start))
+	return row[:start] + gap
+}
+
+func beforeTrailingStyles(row string) int {
+	end := len(row)
+	for end > 0 && row[end-1] == 'm' {
+		at := end - 1
+		for at > 0 && (row[at-1] == ';' || (row[at-1] >= '0' && row[at-1] <= '9')) {
+			at--
+		}
+		if at < 2 || row[at-1] != '[' || row[at-2] != ansi.ESC {
+			return end
+		}
+		end = at - 2
+	}
+	return end
 }
 
 func (m Model) hint(scrollable bool) string {
