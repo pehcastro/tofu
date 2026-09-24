@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"tofu/internal/sys"
 )
 
 const (
@@ -243,7 +245,7 @@ func TestARecordThatNamesNoRootIsRefused(t *testing.T) {
 	}
 }
 
-func TestTheListingReadsBothShapesNewestFirstAndSkipsNothing(t *testing.T) {
+func TestTheListingReadsBothShapesNewestFirstAndEachSessionNamesItsShape(t *testing.T) {
 	store := chainOfThree(t)
 	old, err := os.ReadFile(filepath.Join("testdata", originID+singleFileSuffix))
 	if err != nil {
@@ -269,6 +271,54 @@ func TestTheListingReadsBothShapesNewestFirstAndSkipsNothing(t *testing.T) {
 	}
 	if len(listing.Skipped) != 0 {
 		t.Errorf("both shapes are readable and %d were skipped: %v", len(listing.Skipped), listing.Skipped)
+	}
+	if shape := store.Shape("c"); shape != ShapeEvents {
+		t.Errorf("c has a body file and reads as %q, want %q", shape, ShapeEvents)
+	}
+	if shape := store.Shape(originID); shape != ShapeSingleFile {
+		t.Errorf("%s is one file and reads as %q, want %q", originID, shape, ShapeSingleFile)
+	}
+}
+
+func TestAnAppendedEventNamesTheLastEventAsItsParent(t *testing.T) {
+	store := NewStore(t.TempDir())
+	if err := store.Write(Header{ID: "a", Root: "a"}, []Event{stepEvent(t, 1)}); err != nil {
+		t.Fatalf("write a: %v", err)
+	}
+
+	for _, file := range []string{"first.md", "second.md"} {
+		if err := store.AppendEvent("a", EventAttachment, Attachment{File: file, Bytes: 12, Format: "text"}); err != nil {
+			t.Fatalf("append %s: %v", file, err)
+		}
+	}
+
+	events, err := store.Body("a")
+	if err != nil {
+		t.Fatalf("body of a: %v", err)
+	}
+	if len(events) != 3 {
+		t.Fatalf("the body holds %d events after one step and two appends", len(events))
+	}
+	first, second := events[1], events[2]
+	if first.ID == "" || second.Parent != first.ID {
+		t.Errorf("the second append names parent %q, want the first append %q", second.Parent, first.ID)
+	}
+	if second.Kind != EventAttachment || second.Author != AuthorOrchestrator || second.Attempt != FirstAttempt {
+		t.Errorf("the appended event is %+v, want an orchestrator attachment on attempt %d", second, FirstAttempt)
+	}
+}
+
+func TestOpenIsTheSessionsOfTheProjectStateDir(t *testing.T) {
+	state, err := sys.ProjectStateDir()
+	if err != nil {
+		t.Fatalf("project state dir: %v", err)
+	}
+	store, err := Open()
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	if want := OpenAt(state).Dir("a"); store.Dir("a") != want {
+		t.Fatalf("Open writes a under %s, want %s", store.Dir("a"), want)
 	}
 }
 

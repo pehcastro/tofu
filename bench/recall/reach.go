@@ -2,8 +2,6 @@ package recall
 
 import (
 	"encoding/json"
-	"os"
-	"path/filepath"
 	"sort"
 
 	"tofu/bench/corpus"
@@ -66,7 +64,7 @@ func WalkCorpusReach(sessionsDir string) (CorpusReach, error) {
 		peak, target, ok := peakOccupancy(steps)
 		if !ok {
 			reason := ReasonNoOccupancy
-			if isSingleFileSession(sessionsDir, header.ID) {
+			if store.Shape(header.ID) == session.ShapeSingleFile {
 				reason = ReasonPreOccupancySchema
 			}
 			reach.Skipped = append(reach.Skipped, corpus.SkippedTurn{Path: header.ID, Reason: reason})
@@ -130,11 +128,6 @@ func peakOccupancy(steps []turn.StepRow) (peak, target int, found bool) {
 		}
 	}
 	return peak, target, found
-}
-
-func isSingleFileSession(sessionsDir, id string) bool {
-	_, err := os.Stat(filepath.Join(sessionsDir, id, "body.jsonl"))
-	return err != nil
 }
 
 func refetchesInto(store *session.Store, childID string, known []rc.CarriedResult) (int, error) {

@@ -39,6 +39,20 @@ func (s *Store) Use(settings Settings) { s.settings = settings }
 
 func (s *Store) Dir(id string) string { return filepath.Join(s.dir, id) }
 
+type Shape string
+
+const (
+	ShapeEvents     Shape = "events"
+	ShapeSingleFile Shape = "single file"
+)
+
+func (s *Store) Shape(id string) Shape {
+	if body, err := os.Stat(filepath.Join(s.Dir(id), bodyName)); err == nil && !body.IsDir() {
+		return ShapeEvents
+	}
+	return ShapeSingleFile
+}
+
 func OpenAt(state string) *Store { return NewStore(filepath.Join(state, "sessions")) }
 
 func Open() (*Store, error) {

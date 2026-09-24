@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"io"
-	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -16,17 +15,12 @@ import (
 type corpusSession struct {
 	ID       string
 	At       time.Time
-	Shape    string
+	Shape    session.Shape
 	Steps    int
 	Messages int
 	Reads    int
 	Unknown  []session.EventKind
 }
-
-const (
-	shapeEvents     = "events"
-	shapeSingleFile = "single file"
-)
 
 type corpus struct {
 	Dir        string
@@ -77,14 +71,10 @@ func readCorpus(dir string) (corpus, error) {
 			read.Unreadable = append(read.Unreadable, fmt.Sprintf("%s: %v", header.ID, err))
 			continue
 		}
-		shape := shapeSingleFile
-		if body, err := os.Stat(filepath.Join(store.Dir(header.ID), "body.jsonl")); err == nil && !body.IsDir() {
-			shape = shapeEvents
-		}
 		read.Sessions = append(read.Sessions, corpusSession{
 			ID:       header.ID,
 			At:       header.At,
-			Shape:    shape,
+			Shape:    store.Shape(header.ID),
 			Steps:    len(reading.Steps),
 			Messages: len(reading.Messages),
 			Reads:    len(reading.Reads),
@@ -102,7 +92,7 @@ func renderCorpus(read corpus) string {
 	var thinned []string
 	for _, one := range read.Sessions {
 		steps, messages, reads = steps+one.Steps, messages+one.Messages, reads+one.Reads
-		if one.Shape == shapeEvents {
+		if one.Shape == session.ShapeEvents {
 			eventFiles++
 		}
 		verdict := "every kind read"
@@ -118,7 +108,7 @@ func renderCorpus(read corpus) string {
 	fmt.Fprintf(body, "\ntotals: sessions %d, steps %d, message events %d, read events %d\n",
 		len(read.Sessions), steps, messages, reads)
 	fmt.Fprintf(body, "recorded as %s: %d, recorded as a %s: %d\n",
-		shapeEvents, eventFiles, shapeSingleFile, len(read.Sessions)-eventFiles)
+		session.ShapeEvents, eventFiles, session.ShapeSingleFile, len(read.Sessions)-eventFiles)
 	fmt.Fprintf(body, "this build reads these kinds: %s\n", kindList(session.Kinds()))
 	if len(thinned) == 0 {
 		fmt.Fprint(body, "no session here carries a kind this build does not read, so nothing was skipped\n")

@@ -7,10 +7,10 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"strings"
 	"time"
 
 	"tofu/internal/recall"
+	"tofu/internal/session"
 )
 
 var ErrNoWallClock = errors.New("bench/corpus: the recorded turn carries no wall clock")
@@ -293,14 +293,8 @@ func ReadTurn(path string) (RecordedTurn, error) {
 	return finishedTurn(recorded, path)
 }
 
-type jsonlLine struct {
-	Kind    string          `json:"kind"`
-	Attempt int             `json:"attempt"`
-	Body    json.RawMessage `json:"body"`
-}
-
 func readTurnDirSegments(dir string) ([]RecordedTurn, error) {
-	body, err := os.ReadFile(filepath.Join(dir, "body.jsonl"))
+	events, err := session.NewStore(filepath.Dir(dir)).Body(filepath.Base(dir))
 	if err != nil {
 		return nil, err
 	}
@@ -312,31 +306,24 @@ func readTurnDirSegments(dir string) ([]RecordedTurn, error) {
 	}
 	var segments []RecordedTurn
 	current := header
-	for _, line := range strings.Split(strings.TrimSpace(string(body)), "\n") {
-		if line == "" {
-			continue
-		}
-		var entry jsonlLine
-		if err := json.Unmarshal([]byte(line), &entry); err != nil {
-			return nil, fmt.Errorf("bench/corpus: %s/body.jsonl is not a recorded line: %w", dir, err)
-		}
-		switch entry.Kind {
-		case "step":
+	for _, event := range events {
+		switch event.Kind {
+		case session.EventStep:
 			var step RecordedStep
-			if err := json.Unmarshal(entry.Body, &step); err != nil {
-				return nil, fmt.Errorf("bench/corpus: %s/body.jsonl step is not the expected shape: %w", dir, err)
+			if err := json.Unmarshal(event.Body, &step); err != nil {
+				return nil, fmt.Errorf("bench/corpus: a recorded step of %s is not the expected shape: %w", dir, err)
 			}
-			step.Attempt = entry.Attempt
+			step.Attempt = event.Attempt
 			current.Steps = append(current.Steps, step)
-		case "message":
+		case session.EventMessage:
 			var message RecordedMessage
-			if err := json.Unmarshal(entry.Body, &message); err != nil {
-				return nil, fmt.Errorf("bench/corpus: %s/body.jsonl message is not the expected shape: %w", dir, err)
+			if err := json.Unmarshal(event.Body, &message); err != nil {
+				return nil, fmt.Errorf("bench/corpus: a recorded message of %s is not the expected shape: %w", dir, err)
 			}
 			current.Messages = append(current.Messages, message)
-		case "outcome":
-			if err := json.Unmarshal(entry.Body, &current); err != nil {
-				return nil, fmt.Errorf("bench/corpus: %s/body.jsonl outcome is not the expected shape: %w", dir, err)
+		case session.EventOutcome:
+			if err := json.Unmarshal(event.Body, &current); err != nil {
+				return nil, fmt.Errorf("bench/corpus: the recorded outcome of %s is not the expected shape: %w", dir, err)
 			}
 			segments = append(segments, current)
 			current = header
