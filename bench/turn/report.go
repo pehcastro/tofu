@@ -3,7 +3,6 @@ package turn
 import (
 	"fmt"
 	"strings"
-	"time"
 
 	"tofu/bench/report"
 )
@@ -83,8 +82,4 @@ func renderFailures(b *strings.Builder, result Result) {
 		fmt.Fprintf(b, "| %s | %s | %d | %s | %s |\n", r.Task, r.Arm, r.Rep, r.Row.Outcome, reason)
 	}
 	b.WriteString("\n")
-}
-
-func Filename(now time.Time) string {
-	return fmt.Sprintf("report-%s.md", now.Format("2006-01-02"))
 }

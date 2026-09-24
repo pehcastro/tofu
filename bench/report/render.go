@@ -184,6 +184,13 @@ func abs(v float64) float64 {
 	return v
 }
 
-func Filename(now time.Time) string {
-	return fmt.Sprintf("api-%s.md", now.Format("2006-01-02"))
+func Filename(prefix string, now time.Time) string {
+	return fmt.Sprintf("%s-%s.md", prefix, now.Format("2006-01-02"))
+}
+
+func TimesTheMean(value, mean float64) string {
+	if mean == 0 {
+		return "unbounded against a mean of zero"
+	}
+	return fmt.Sprintf("%.1f times the mean", value/mean)
 }

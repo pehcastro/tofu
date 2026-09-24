@@ -7,10 +7,7 @@ import (
 	"time"
 
 	"tofu/internal/judge/jev"
-	"tofu/internal/judge/jev/wire/openrouter"
 	"tofu/internal/judge/question"
-	"tofu/internal/konst"
-	"tofu/internal/transport"
 )
 
 const Point = "instruction_trust@1"
@@ -23,18 +20,6 @@ type state struct {
 	Task    string `json:"task"`
 	Source  string `json:"source"`
 	Content string `json:"content"`
-}
-
-func NewWire(key string) (*openrouter.Wire, error) {
-	return openrouter.New(openrouter.Config{
-		Key: key,
-		Transport: transport.Config{
-			AttemptTimeout: time.Duration(konst.JudgeTimeoutMillis) * time.Millisecond,
-			Retries:        konst.JudgeRetries,
-			Backoff:        time.Duration(konst.JudgeBackoffMillis) * time.Millisecond,
-			Concurrency:    konst.SiftConcurrency,
-		},
-	})
 }
 
 type Answered struct {

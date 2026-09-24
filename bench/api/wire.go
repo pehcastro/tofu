@@ -15,8 +15,8 @@ func judgeTransport() transport.Config {
 	return transport.Config{
 		AttemptTimeout: time.Duration(konst.JudgeTimeoutMillis) * time.Millisecond,
 		Retries:        konst.JudgeRetries,
-		Backoff:        250 * time.Millisecond,
-		Concurrency:    1,
+		Backoff:        time.Duration(konst.JudgeBackoffMillis) * time.Millisecond,
+		Concurrency:    konst.SiftConcurrency,
 	}
 }
 

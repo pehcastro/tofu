@@ -9,9 +9,7 @@ import (
 	"tofu/internal/judge/jev"
 	"tofu/internal/judge/jev/wire/openrouter"
 	"tofu/internal/judge/question"
-	"tofu/internal/konst"
 	"tofu/internal/sift"
-	"tofu/internal/transport"
 )
 
 const Point = "page_sift@1"
@@ -69,18 +67,6 @@ func KeepEverything(row Row, planted Planted) Reading {
 		marks[i] = sift.Mark{Keep: true, Reason: "the keep-everything arm keeps everything"}
 	}
 	return read(row, planted, marks)
-}
-
-func NewWire(key string) (*openrouter.Wire, error) {
-	return openrouter.New(openrouter.Config{
-		Key: key,
-		Transport: transport.Config{
-			AttemptTimeout: time.Duration(konst.JudgeTimeoutMillis) * time.Millisecond,
-			Retries:        konst.JudgeRetries,
-			Backoff:        time.Duration(konst.JudgeBackoffMillis) * time.Millisecond,
-			Concurrency:    konst.SiftConcurrency,
-		},
-	})
 }
 
 type Answered struct {

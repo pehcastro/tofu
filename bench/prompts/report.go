@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strings"
 
+	"tofu/bench/report"
 	"tofu/bench/thrift"
 )
 
@@ -34,7 +35,7 @@ func Render(result Result) string {
 	fmt.Fprintf(b, "\n2. can either side separate two arms at all, at %d sessions per arm\n", armSessions)
 	for _, entry := range result.Separables {
 		fmt.Fprintf(b, "%-30s mean %10.2f sd %10.2f smallest visible difference %10.2f, %s\n",
-			entry.Name, entry.Mean, entry.SD, entry.Difference, timesTheMean(entry.Difference, entry.Mean))
+			entry.Name, entry.Mean, entry.SD, entry.Difference, report.TimesTheMean(entry.Difference, entry.Mean))
 	}
 
 	fmt.Fprintf(b, "\n3. the two sides crossed, at a sweep of read-volume thresholds\n%10s %6s %14s %8s %8s %9s %8s\n",
@@ -80,11 +81,4 @@ func number(value float64) string {
 		return "undefined"
 	}
 	return fmt.Sprintf("%.3f", value)
-}
-
-func timesTheMean(value, mean float64) string {
-	if mean == 0 {
-		return "unbounded against a mean of zero"
-	}
-	return fmt.Sprintf("%.1f times the mean", value/mean)
 }

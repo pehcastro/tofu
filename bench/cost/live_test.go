@@ -75,7 +75,7 @@ func TestLiveEveryArmOverTheHeldOutHalf(t *testing.T) {
 		Wire:           openrouter.Name,
 		Date:           result.GeneratedAt.Format("2006-01-02"),
 	})
-	path := filepath.Join("bench", "cost", Filename(result.GeneratedAt))
+	path := filepath.Join("bench", "cost", report.Filename("report", result.GeneratedAt))
 	if err := report.Write(path, []byte(body), 0o644, "report"); err != nil {
 		t.Fatalf("writing %s: %v", path, err)
 	}

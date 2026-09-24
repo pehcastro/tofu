@@ -3,7 +3,6 @@ package wording
 import (
 	"fmt"
 	"strings"
-	"time"
 
 	"tofu/bench/report"
 )
@@ -121,8 +120,4 @@ func renderRecommendation(b *strings.Builder, result Result) {
 	}
 	fmt.Fprintf(b, "The evidence does not decide on its own: %d of %d cases changed verdict between v1 and v2 (%s), which is a real disagreement rather than noise inside the %.2f to %.2f rerun spread, and a six-case corpus is too small to say which wording is right on the cases that moved. Read the disagreements above before adopting `@2`, and grow the corpus before trusting this table as a verdict.\n\n",
 		len(result.ChangedCases), len(result.Cases), strings.Join(result.ChangedCases, ", "), rerunSpreadFloor, rerunSpreadCeiling)
-}
-
-func Filename(now time.Time) string {
-	return fmt.Sprintf("report-%s.md", now.Format("2006-01-02"))
 }

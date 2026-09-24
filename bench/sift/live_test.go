@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"tofu/bench/api"
 	"tofu/internal/judge/jev"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/konst"
@@ -27,7 +28,7 @@ func liveClient(t *testing.T) Asker {
 	if err != nil {
 		t.Fatalf("no credential: %v", err)
 	}
-	wire, err := NewWire(key)
+	wire, err := api.NewWire(key)
 	if err != nil {
 		t.Fatalf("NewWire: %v", err)
 	}

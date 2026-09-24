@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"time"
 
 	"tofu/bench/corpus"
 	"tofu/bench/report"
@@ -228,8 +227,4 @@ func perCorrectCell(arm ArmResult, column ledger.Unit, value float64) string {
 		return "undefined, 0 correct"
 	}
 	return unitCell(arm.Unit, column, value)
-}
-
-func Filename(now time.Time) string {
-	return fmt.Sprintf("report-%s.md", now.Format("2006-01-02"))
 }

@@ -93,7 +93,7 @@ func reportOf(target string) producer {
 			if err != nil {
 				return "", "", err
 			}
-			path := filepath.Join("bench", "report", report.Filename(result.GeneratedAt))
+			path := filepath.Join("bench", "report", report.Filename("api", result.GeneratedAt))
 			return path, report.Render(result, conditions(result.GeneratedAt)), nil
 		}
 	case "cost":
@@ -102,7 +102,7 @@ func reportOf(target string) producer {
 			if err != nil {
 				return "", "", err
 			}
-			path := filepath.Join("bench", "cost", benchcost.Filename(result.GeneratedAt))
+			path := filepath.Join("bench", "cost", report.Filename("report", result.GeneratedAt))
 			return path, benchcost.Render(result, conditions(result.GeneratedAt)), nil
 		}
 	case "wording":
@@ -111,7 +111,7 @@ func reportOf(target string) producer {
 			if err != nil {
 				return "", "", err
 			}
-			path := filepath.Join("bench", "wording", benchwording.Filename(result.GeneratedAt))
+			path := filepath.Join("bench", "wording", report.Filename("report", result.GeneratedAt))
 			return path, benchwording.Render(result, conditions(result.GeneratedAt)), nil
 		}
 	case "turn":
@@ -120,7 +120,7 @@ func reportOf(target string) producer {
 			if err != nil {
 				return "", "", err
 			}
-			path := filepath.Join("bench", "turn", benchturn.Filename(result.GeneratedAt))
+			path := filepath.Join("bench", "turn", report.Filename("report", result.GeneratedAt))
 			return path, benchturn.Render(result, conditions(result.GeneratedAt)), nil
 		}
 	}

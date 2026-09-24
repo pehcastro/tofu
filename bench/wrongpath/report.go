@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+
+	"tofu/bench/report"
 )
 
 const worstSessionsShown = 5
@@ -37,11 +39,11 @@ func Render(result Result) string {
 	b.WriteString("the harness rule in bench/harness/report.go calls a difference smaller than the widest spread no difference\n")
 	for _, shape := range result.Shapes {
 		fmt.Fprintf(b, "\n%s: mean %.2f per session, widest spread %d\n", shape.Name, shape.PerSession.Mean, shape.PerSession.Range)
-		fmt.Fprintf(b, "  under the harness rule two arms must differ by %d per session, which is %s the mean\n",
-			shape.PerSession.Range, timesTheMean(float64(shape.PerSession.Range), shape.PerSession.Mean))
+		fmt.Fprintf(b, "  under the harness rule two arms must differ by %d per session, which is %s\n",
+			shape.PerSession.Range, report.TimesTheMean(float64(shape.PerSession.Range), shape.PerSession.Mean))
 		for _, detectable := range shape.Detectable {
-			fmt.Fprintf(b, "  at %d sessions per arm a difference of %.2f per session is visible, %s the mean%s\n",
-				detectable.ArmSessions, detectable.Difference, timesTheMean(detectable.Difference, shape.PerSession.Mean),
+			fmt.Fprintf(b, "  at %d sessions per arm a difference of %.2f per session is visible, %s%s\n",
+				detectable.ArmSessions, detectable.Difference, report.TimesTheMean(detectable.Difference, shape.PerSession.Mean),
 				verdict(detectable.FractionOfMean))
 		}
 	}
@@ -59,13 +61,6 @@ func Render(result Result) string {
 
 func total(counts Counts) int {
 	return counts.Reverts + counts.ExactUndos + counts.ReReads + counts.IdenticalReReads + counts.Contradictions
-}
-
-func timesTheMean(value, mean float64) string {
-	if mean == 0 {
-		return "unbounded against a mean of zero"
-	}
-	return fmt.Sprintf("%.1f times", value/mean)
 }
 
 func verdict(fraction float64) string {

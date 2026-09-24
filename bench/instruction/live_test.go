@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"tofu/bench/api"
 	"tofu/internal/judge/jev"
 	"tofu/internal/judge/question"
 	libraryquestions "tofu/library/questions"
@@ -28,7 +29,7 @@ func liveClient(t *testing.T) (*jev.Client, question.Set) {
 	if err != nil {
 		t.Fatalf("no credential: %v", err)
 	}
-	wire, err := NewWire(key)
+	wire, err := api.NewWire(key)
 	if err != nil {
 		t.Fatalf("NewWire: %v", err)
 	}

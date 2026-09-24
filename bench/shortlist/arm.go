@@ -6,11 +6,11 @@ import (
 	"strings"
 	"time"
 
+	"tofu/bench/api"
 	"tofu/internal/judge/jev"
-	"tofu/internal/judge/jev/wire/openrouter"
-	"tofu/internal/konst"
-	"tofu/internal/transport"
 )
+
+var NewWire = api.NewWire
 
 const (
 	ShortlistSize = 5
@@ -44,18 +44,6 @@ func head(content string, lines int) string {
 }
 
 func candidateID(i int) string { return fmt.Sprintf("candidate_%d", i) }
-
-func NewWire(key string) (*openrouter.Wire, error) {
-	return openrouter.New(openrouter.Config{
-		Key: key,
-		Transport: transport.Config{
-			AttemptTimeout: time.Duration(konst.JudgeTimeoutMillis) * time.Millisecond,
-			Retries:        konst.JudgeRetries,
-			Backoff:        time.Duration(konst.JudgeBackoffMillis) * time.Millisecond,
-			Concurrency:    konst.SiftConcurrency,
-		},
-	})
-}
 
 type JudgedAnswer struct {
 	Ranked   []Ranked
