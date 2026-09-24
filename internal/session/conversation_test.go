@@ -2,9 +2,11 @@ package session
 
 import (
 	"encoding/json"
+	"slices"
 	"testing"
 	"time"
 
+	"tofu/internal/llm"
 	"tofu/internal/sys"
 )
 
@@ -169,4 +171,28 @@ func TestEveryRecordedSessionWithNoMessageEventReadsWhatAHandDecodeOfItsStepsRea
 		t.Skipf("none of the %d recorded sessions carries steps and no message", len(listing.Sessions))
 	}
 	t.Logf("%d of %d recorded sessions carry steps and no message event", stepsOnly, len(listing.Sessions))
+}
+
+func roleWord(role llm.Role) (word string, named bool) {
+	defer func() {
+		if recover() != nil {
+			word, named = "", false
+		}
+	}()
+	return role.String(), true
+}
+
+func TestTheRoleWordsOnDiskAreTheWordsTheModelPackageWrites(t *testing.T) {
+	var sent []string
+	for role := llm.RoleUnknown + 1; ; role++ {
+		word, named := roleWord(role)
+		if !named {
+			break
+		}
+		sent = append(sent, word)
+	}
+	read := []string{RoleSystem, RoleUser, RoleAssistant, RoleTool}
+	if !slices.Equal(sent, read) {
+		t.Fatalf("llm writes the roles %v, session reads back %v", sent, read)
+	}
 }
