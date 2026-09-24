@@ -533,7 +533,8 @@ func TestAChildThatOutRunsTheBoundCarriesItsNewestCalls(t *testing.T) {
 	t.Logf("%d steps of one call each left %v", steps, seen.Calling)
 }
 
-func TestAParkedChildKeepsTheWorkItHadAlreadyDone(t *testing.T) {
+func parkedChild(t *testing.T) (string, *SpawnTool, Result) {
+	t.Helper()
 	root := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(root, "mine"), 0o750); err != nil {
 		t.Fatal(err)
@@ -548,16 +549,20 @@ func TestAParkedChildKeepsTheWorkItHadAlreadyDone(t *testing.T) {
 		claimDecision("I was asked to stop"),
 	})
 	ctx, stop := context.WithCancel(context.Background())
-	defer stop()
+	t.Cleanup(stop)
 	spawn.base.Tools = NewRegistry(write, &childTool{name: "park", run: func(context.Context) (Result, error) {
 		stop()
 		return Result{Content: "the orchestrator asked this sub-agent to stop"}, nil
 	}})
-
 	result, err := spawn.Run(ctx, spawnArgsJSON(t, spawnArgs{Task: "write half of it and then be stopped", Owns: []string{"mine/**"}}))
 	if err != nil {
 		t.Fatalf("a parked child is not a failed one: %v", err)
 	}
+	return root, spawn, result
+}
+
+func TestAParkedChildKeepsTheWorkItHadAlreadyDone(t *testing.T) {
+	root, spawn, result := parkedChild(t)
 
 	if held := onlyChild(t, spawn); held.State != subagent.Parked {
 		t.Fatalf("a child the orchestrator stopped reads as %s, want parked", held.State)
@@ -574,6 +579,72 @@ func TestAParkedChildKeepsTheWorkItHadAlreadyDone(t *testing.T) {
 		t.Fatalf("the report does not say the child was parked: %q", result.Content)
 	}
 	t.Logf("parked report: %s", result.Content)
+}
+
+func TestAParkedChildsReportSaysStoppedRatherThanErrored(t *testing.T) {
+	_, spawn, result := parkedChild(t)
+
+	headline, _, _ := strings.Cut(result.Content, "\n")
+	if !strings.Contains(headline, "stopped") || strings.Contains(headline, "error") {
+		t.Fatalf("the parent is told the parked child ended on:\n%s", headline)
+	}
+	reports := spawn.Reports()
+	if len(reports) != 1 {
+		t.Fatalf("the parent holds %d reports, want one", len(reports))
+	}
+	if reports[0].Outcome != OutcomeStopped {
+		t.Fatalf("the parked child's report carries the outcome %s, want stopped", reports[0].Outcome)
+	}
+	acted := ""
+	for _, finding := range reports[0].Findings {
+		if finding.Bucket == subagent.ActOn {
+			acted = finding.Reason
+		}
+	}
+	if !strings.Contains(acted, "unfinished") {
+		t.Fatalf("no act_on line says the parked child's work is unfinished: %+v", reports[0].Findings)
+	}
+	if strings.Contains(acted, "error") || strings.Contains(acted, "fail") {
+		t.Fatalf("the act_on line blames the child for a stop it did not choose: %q", acted)
+	}
+	t.Logf("headline: %s\nact_on: %s", headline, acted)
+}
+
+func TestAParkedChildsReportReachesTheParentThatSpawnedIt(t *testing.T) {
+	root := t.TempDir()
+	write, err := NewWriteTool(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	parent, spawn := parentTurn(t, root, []llm.Decision{
+		spawnCall("call-1", "write half of it and then be stopped", "mine/**"),
+		writeCall("call-2", "mine/half.txt", "half the work, done before the stop"),
+		childCall("call-3", "park"),
+	})
+	ctx, stop := context.WithCancel(context.Background())
+	defer stop()
+	spawn.base.Tools = NewRegistry(write, &childTool{name: "park", run: func(context.Context) (Result, error) {
+		stop()
+		return Result{Content: "the orchestrator asked this sub-agent to stop"}, nil
+	}})
+
+	row, runErr := Run(ctx, parent)
+	if !errors.Is(runErr, context.Canceled) {
+		t.Fatalf("the parent of a parked child ended with %v, want context.Canceled", runErr)
+	}
+
+	handed := ""
+	for _, message := range row.Conversation {
+		if message.Role == llm.RoleTool {
+			handed = message.Content
+		}
+	}
+	for _, want := range []string{"is parked", "wrote mine/half.txt"} {
+		if !strings.Contains(handed, want) {
+			t.Fatalf("the parent was handed %q, which never says %q", handed, want)
+		}
+	}
+	t.Logf("the parent was handed:\n%s", handed)
 }
 
 func TestAChildWhoseModelFailsIsRecordedAsErrored(t *testing.T) {

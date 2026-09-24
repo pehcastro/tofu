@@ -288,6 +288,9 @@ func Run(ctx context.Context, config Config) (Row, error) {
 	guard := newLoopGuard(config.Caps)
 	forks, recordedGrants := 0, 0
 	for step := 1; ; step++ {
+		if err := ctx.Err(); err != nil {
+			return finish(OutcomeError), err
+		}
 		if config.Steering != nil {
 			for _, steered := range config.Steering() {
 				messages = append(messages, llm.Message{Role: llm.RoleUser, Content: steered})

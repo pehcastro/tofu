@@ -148,11 +148,11 @@ func TestAFailureTheChildRecoveredFromIsDismissedAndNotADefect(t *testing.T) {
 	recovered := findings(Row{Outcome: OutcomeStopped, Steps: []StepRow{{ToolCalls: []ToolCallRow{
 		{Tool: "bash", Command: "go build ./...", ExitCode: &exit},
 		{Tool: "bash", Command: "go build ./internal/subagent/..."},
-	}}}})
+	}}}}, subagent.InReview)
 	stuck := findings(Row{Outcome: OutcomeStopped, Steps: []StepRow{{ToolCalls: []ToolCallRow{
 		{Tool: "bash", Command: "go build ./...", ExitCode: &exit},
 		{Tool: "read", Error: "no file is at that path"},
-	}}}})
+	}}}}, subagent.InReview)
 
 	if len(recovered) != 1 || recovered[0].Bucket != subagent.Dismissed {
 		t.Fatalf("a command that failed and then ran is not dismissed: %+v", recovered)
@@ -200,7 +200,11 @@ func TestAFinishedChildsCallTextIsTheToolsOwnLabelSoABashArgumentIsKeptWholeAndN
 
 func TestEveryOutcomeAndEveryStateIsHandledAndAnUnknownOnePanicsByName(t *testing.T) {
 	for _, outcome := range AllOutcomes() {
-		finding, carries := outcomeFinding(outcome)
+		finding, carries := outcomeFinding(outcome, subagent.InReview)
+		parked, carriedWhileParked := outcomeFinding(outcome, subagent.Parked)
+		if !carriedWhileParked || strings.Contains(parked.Reason, "error") || !strings.Contains(parked.Reason, "unfinished") {
+			t.Fatalf("outcome %s under a parked child reads %q, and a parked child was stopped rather than broken", outcome, parked.Reason)
+		}
 		if carries && (finding.Reason == "" || strings.Contains(finding.Reason, "\n")) {
 			t.Fatalf("outcome %s gives a finding with no one line reason: %+v", outcome, finding)
 		}
@@ -222,7 +226,7 @@ func TestEveryOutcomeAndEveryStateIsHandledAndAnUnknownOnePanicsByName(t *testin
 		wants string
 	}{
 		{"state", func() string { return completionOf(subagent.State(11), nil).String() }, "unknown sub-agent state 11"},
-		{"outcome", func() string { finding, _ := outcomeFinding(Outcome(12)); return finding.Reason }, "unknown child outcome 12"},
+		{"outcome", func() string { finding, _ := outcomeFinding(Outcome(12), subagent.InReview); return finding.Reason }, "unknown child outcome 12"},
 	} {
 		func() {
 			defer func() {

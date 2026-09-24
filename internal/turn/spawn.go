@@ -258,7 +258,7 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 	t.reports = append(t.reports, report)
 	text := report.Text()
 	t.roster.Reached(childID, state, text)
-	if runErr != nil {
+	if runErr != nil && state != subagent.Parked {
 		return Result{}, fmt.Errorf("spawn: child %s is %s: %w", childID, state, runErr)
 	}
 	return Result{Content: text, Command: "spawn " + childID + " " + state.String() + ": " + agent.Mission}, nil

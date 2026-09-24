@@ -38,20 +38,25 @@ type ChildReport struct {
 
 func reportOf(agent subagent.SubAgent, attempts []Row, state subagent.State) ChildReport {
 	row := attempts[len(attempts)-1]
+	ended := row.Outcome
+	if state == subagent.Parked {
+		ended = OutcomeStopped
+	}
 	report := ChildReport{
 		ID:       row.ID,
 		Mission:  agent.Mission,
 		Owns:     agent.Owns,
 		State:    state.String(),
-		Outcome:  row.Outcome,
+		Outcome:  ended,
 		Steps:    len(row.Steps),
-		Findings: findings(row),
+		Findings: findings(row, state),
 		Learned:  learned(row),
 		CostUSD:  row.TotalCostUSD,
 	}
-	for _, attempt := range attempts {
-		report.Attempts = append(report.Attempts, attemptOf(attempt))
+	for _, earlier := range attempts[:len(attempts)-1] {
+		report.Attempts = append(report.Attempts, attemptOf(earlier, earlier.Outcome))
 	}
+	report.Attempts = append(report.Attempts, attemptOf(row, ended))
 	for _, step := range row.Steps {
 		for _, call := range step.ToolCalls {
 			report.Ran = append(report.Ran, ChildCommand{
@@ -69,7 +74,7 @@ func reportOf(agent subagent.SubAgent, attempts []Row, state subagent.State) Chi
 	return report
 }
 
-func attemptOf(row Row) subagent.Attempt {
+func attemptOf(row Row, ended Outcome) subagent.Attempt {
 	var tools []string
 	for _, step := range row.Steps {
 		for _, call := range step.ToolCalls {
@@ -82,7 +87,7 @@ func attemptOf(row Row) subagent.Attempt {
 	if len(tools) > 0 {
 		tried = strings.Join(tools, ", ")
 	}
-	return subagent.Attempt{ID: row.ID, Tried: tried, Outcome: row.Outcome.String()}
+	return subagent.Attempt{ID: row.ID, Tried: tried, Outcome: ended.String()}
 }
 
 func completionOf(state subagent.State, found []subagent.Finding) subagent.Completion {
@@ -102,9 +107,9 @@ func completionOf(state subagent.State, found []subagent.Finding) subagent.Compl
 	panic("turn: unknown sub-agent state " + strconv.Itoa(int(state)))
 }
 
-func findings(row Row) []subagent.Finding {
+func findings(row Row, state subagent.State) []subagent.Finding {
 	found := []subagent.Finding{}
-	if outcome, carries := outcomeFinding(row.Outcome); carries {
+	if outcome, carries := outcomeFinding(row.Outcome, state); carries {
 		found = append(found, outcome)
 	}
 	var calls []ToolCallRow
@@ -131,7 +136,11 @@ func findings(row Row) []subagent.Finding {
 	return found
 }
 
-func outcomeFinding(outcome Outcome) (subagent.Finding, bool) {
+func outcomeFinding(outcome Outcome, state subagent.State) (subagent.Finding, bool) {
+	if state == subagent.Parked {
+		return subagent.Finding{Bucket: subagent.ActOn,
+			Reason: "the child was stopped from outside partway through, so its work is unfinished and what it did do stands"}, true
+	}
 	switch outcome {
 	case OutcomeUnset, OutcomeStopped:
 		return subagent.Finding{}, false

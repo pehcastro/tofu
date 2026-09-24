@@ -563,6 +563,28 @@ func TestARealTurnRecordsTheSystemPromptAndTheToolsItSent(t *testing.T) {
 	t.Logf("recorded tools: %v", prompt.Tools)
 }
 
+func TestACancelledTurnStopsAtTheNextStepThoughTheModelIgnoresItsContext(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	model := &stubModel{decisions: []llm.Decision{
+		toolCallDecision(llm.ToolCall{ID: "call-1", Name: "read", Arguments: json.RawMessage(`{"path":"a.txt"}`)}),
+		messageDecision(),
+	}}
+
+	row, err := Run(ctx, baseConfig(t, model, NewRegistry(&cancellingTool{cancel: cancel, after: 1})))
+
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("a cancelled turn ended with %v, wanted context.Canceled", err)
+	}
+	if model.calls != 1 {
+		t.Fatalf("the model was asked %d times, so the cancel only stopped the turn because a wire noticed it", model.calls)
+	}
+	if row.Outcome != OutcomeError {
+		t.Fatalf("a cancelled turn ended as %s, wanted %s", row.Outcome, OutcomeError)
+	}
+	t.Logf("the turn ended as %s on %v after %d step", row.Outcome, err, len(row.Steps))
+}
+
 func TestPackageMakesNoNetworkCallOfItsOwn(t *testing.T) {
 	files, err := filepath.Glob("*.go")
 	if err != nil {
