@@ -38,6 +38,40 @@ type RecordedCall struct {
 	GateDecisionID string          `json:"gate_decision_id,omitempty"`
 }
 
+func (c *RecordedCall) UnmarshalJSON(data []byte) error {
+	type alias RecordedCall
+	var lower alias
+	if err := json.Unmarshal(data, &lower); err != nil {
+		return err
+	}
+	*c = RecordedCall(lower)
+	if c.ExitCode != nil && c.ResultBytes != 0 && c.RenderedBytes != 0 && c.ResultHash != "" {
+		return nil
+	}
+	var upper struct {
+		ExitCode      *int   `json:"ExitCode"`
+		ResultBytes   int64  `json:"ResultBytes"`
+		RenderedBytes int64  `json:"RenderedBytes"`
+		ResultHash    string `json:"ResultHash"`
+	}
+	if err := json.Unmarshal(data, &upper); err != nil {
+		return err
+	}
+	if c.ExitCode == nil {
+		c.ExitCode = upper.ExitCode
+	}
+	if c.ResultBytes == 0 {
+		c.ResultBytes = upper.ResultBytes
+	}
+	if c.RenderedBytes == 0 {
+		c.RenderedBytes = upper.RenderedBytes
+	}
+	if c.ResultHash == "" {
+		c.ResultHash = upper.ResultHash
+	}
+	return nil
+}
+
 type RecordedToolCallName struct {
 	ID   string `json:"id,omitempty"`
 	Name string `json:"name,omitempty"`
@@ -69,13 +103,14 @@ func (s *RecordedStep) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	*s = RecordedStep(lower)
-	if s.AssistantText != "" && (s.PromptTokens != 0 || s.CompletionTokens != 0) {
+	if s.AssistantText != "" && (s.PromptTokens != 0 || s.CompletionTokens != 0) && len(s.ToolCalls) > 0 {
 		return nil
 	}
 	var upper struct {
-		AssistantText    string `json:"AssistantText"`
-		PromptTokens     int    `json:"PromptTokens"`
-		CompletionTokens int    `json:"CompletionTokens"`
+		AssistantText    string         `json:"AssistantText"`
+		PromptTokens     int            `json:"PromptTokens"`
+		CompletionTokens int            `json:"CompletionTokens"`
+		ToolCalls        []RecordedCall `json:"ToolCalls"`
 	}
 	if err := json.Unmarshal(data, &upper); err != nil {
 		return err
@@ -86,6 +121,9 @@ func (s *RecordedStep) UnmarshalJSON(data []byte) error {
 	if s.PromptTokens == 0 && s.CompletionTokens == 0 {
 		s.PromptTokens = upper.PromptTokens
 		s.CompletionTokens = upper.CompletionTokens
+	}
+	if len(s.ToolCalls) == 0 {
+		s.ToolCalls = upper.ToolCalls
 	}
 	return nil
 }

@@ -509,6 +509,36 @@ func TestATurnWithStepsAndNoOutcomeLineIsReadAndSaysItsWallClockIsMissing(t *tes
 	t.Logf("%s read with %d steps and no wall clock, skipped %d", name, len(recorded.Steps), len(walked.Skipped))
 }
 
+const olderShapedTurnPath = "../stopcheck/corpus/turn-18d68bcceb3d56e8.json"
+
+func TestAnOlderShapedSessionKeepsItsToolCalls(t *testing.T) {
+	data, err := os.ReadFile(olderShapedTurnPath)
+	if err != nil {
+		t.Fatalf("reading %s: %v", olderShapedTurnPath, err)
+	}
+	var recorded RecordedTurn
+	if err := json.Unmarshal(data, &recorded); err != nil {
+		t.Fatalf("decoding %s: %v", olderShapedTurnPath, err)
+	}
+	if len(recorded.Steps) == 0 {
+		t.Fatalf("%s parsed to no steps", olderShapedTurnPath)
+	}
+	first := recorded.Steps[0]
+	if len(first.ToolCalls) != 1 {
+		t.Fatalf("%s step 0 carries %d tool calls, want 1", olderShapedTurnPath, len(first.ToolCalls))
+	}
+	call := first.ToolCalls[0]
+	if call.Tool != "write" {
+		t.Fatalf("%s step 0's call is tool %q, want write", olderShapedTurnPath, call.Tool)
+	}
+	if call.ResultBytes != 26 || call.RenderedBytes != 26 {
+		t.Fatalf("%s step 0's call carries result_bytes %d, rendered_bytes %d, want 26 and 26", olderShapedTurnPath, call.ResultBytes, call.RenderedBytes)
+	}
+	if call.ResultHash == "" {
+		t.Fatalf("%s step 0's call carries no result hash", olderShapedTurnPath)
+	}
+}
+
 func TestWalkSessionsOverTheRealTreeReportsTheFiveNumbers(t *testing.T) {
 	if _, err := os.Stat(sessionsDir); os.IsNotExist(err) {
 		t.Skip("no .tofu/sessions on this machine")

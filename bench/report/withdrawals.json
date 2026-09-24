@@ -45,5 +45,66 @@
       "Over the 24 turns with a cache write, the cohort billed 103777 fresh input tokens, 675237 cache-write tokens and 5700621 cache-read tokens: 88.0% of everything billed across this whole sample was a cache read.",
       "The one case where deferring would pay is a turn that makes exactly one model call and never returns for a second, which was 1 of 24 turns in this sample: too rare and too cheap a miss to build a mechanism for."
     ]
+  },
+  {
+    "report": "bench/toolerrors/report-2026-09-23.md",
+    "state": "withdrawn in part",
+    "why": "the tool call total and the write row only, withdrawn on 2026-09-23 by TOFU-550 and by this file rather than by an edit to the report. bench/corpus.RecordedStep tagged the tool_calls field with the lower-case spelling only, so a session recorded under the older, fully capitalized schema decoded every step's tool call list to empty. Two real turns in .tofu/sessions carry that shape, turn-18d68bcceb3d56e8 and turn-18d68bcff15ad87c, both dated 2026-09-18, each holding exactly one write call of 26 result bytes and 26 rendered bytes, no exit code, no error. Both calls were already present in the corpus this report read at 2026-09-23 21:17, so the true count that day was 1,414 recorded tool calls and 88 write calls, not 1,412 and 86. Neither call failed, so the failed count of 67, the 4.7% rate (67/1414 still rounds to 4.7%), the unknown share of 74.6% and the edit worst-tool finding of 20.0% all stand: the count moved, the finding did not.",
+    "fell": [
+      "**67 of 1412 recorded tool calls failed (4.7%), and 74.6% of those failures carry no reason this corpus can classify beyond a bare nonzero exit code.** Every failure that carries any error text at all classifies cleanly into one of the five named reasons; the entire unknown share is `bash` calls that exited nonzero with an empty `Error` field, which today's harness never fills in even though the exit code itself is sitting right there. `edit` is the worst tool by failure rate among tools with at least 5 calls, at 20.0%.",
+      "| write | 86 | 0 | 0.0% |"
+    ]
+  },
+  {
+    "report": "bench/toolerrors/report-2026-09-23-categorized.md",
+    "state": "withdrawn in part",
+    "why": "the tool call total, the write row and the closing section on the oldest turn, withdrawn on 2026-09-23 by TOFU-550 and by this file rather than by an edit to the report. This report is only a few hours old and one of its own claims is already wrong, which is what a withdrawal is for. Same cause as the sibling withdrawal on report-2026-09-23.md: bench/corpus.RecordedStep only patched the older capitalized spellings of assistant_text, prompt_tokens and completion_tokens, never tool_calls, so turn-18d68bcceb3d56e8 and turn-18d68bcff15ad87c, both dated 2026-09-18, decoded with no tool calls at all. The true count at read time was 1,414 tool calls and 88 write calls, not 1,412 and 86, and both added calls succeeded, so the failed count, the 4.7% rate, the 71.6% unknown share and the edit finding all stand: the count moved, the finding did not. The closing section is wrong outright rather than just stale: it names turn-18d68bcceb3d56e8 as proof the reader still loads an old session, and quotes that session's first step as carrying no tool call, which the fixed reader no longer does. That step now decodes with its one write call present, so the section's own evidence has reversed.",
+    "fell": [
+      "**67 of 1412 recorded tool calls failed (4.7%), and 71.6% of those failures carry no reason this corpus can classify beyond a bare nonzero exit code.** Every failure that carries any error text at all classifies cleanly into one of the five named reasons; the entire unknown share is `bash` calls that exited nonzero with an empty `Error` field, which today's harness never fills in even though the exit code itself is sitting right there. `edit` is the worst tool by failure rate among tools with at least 5 calls, at 20.0%.",
+      "| write | 86 | 0 | 0.0% |",
+      "`turn-18d68bcceb3d56e8`, the oldest turn in this corpus, loads through the same `bench/corpus.WalkSessions` used for every figure above, with no schema change in this ticket to break it. Its first step, scrubbed:",
+      "step 1: no tool call and no assistant text"
+    ]
+  },
+  {
+    "report": "bench/wrongpath/report-2026-09-22.md",
+    "state": "withdrawn in part",
+    "why": "the raw tool call total and the write-or-edit total only, withdrawn on 2026-09-23 by TOFU-550 and by this file rather than by an edit to the report. Same cause as the toolerrors withdrawals above: turn-18d68bcceb3d56e8 and turn-18d68bcff15ad87c, both dated 2026-09-18 and both already on disk at this report's 2026-09-22 15:58 read, decoded to zero tool calls each, one write call apiece, 26 bytes, no failure. The true count at that read was 1,403 tool calls and 139 write-or-edit calls, not 1,401 and 137. Neither turn gains a second write or edit to the same path, so no revert, undo, re-read or contradiction shape is added, and the 82 of 109 sessions carrying no shape, the five shape tables, the separability arithmetic and the refusal verdict all stand exactly as measured: the count moved, the finding did not.",
+    "fell": [
+      "1401 tool calls, of which 137 write or edit a file, and 82 sessions carry no shape at all",
+      "the 1,401 tool calls and the five totals belong to that same read.",
+      "revert: a second pass over the same file is often a refactor. 137 of the 1,401 calls write or edit anything, so the revert row is built on one tenth of the corpus, and in a session that edits one file six times on purpose it counts five reverts."
+    ]
+  },
+  {
+    "report": "bench/tokens/report-2026-09-21.md",
+    "state": "withdrawn in part",
+    "why": "the write row and the two totals rows only, withdrawn on 2026-09-23 by TOFU-550 and by this file rather than by an edit to the report. Both the 'was' and the 'now' columns in this report were read through the reader before TOFU-550, so both undercount by the same two calls: turn-18d68bcceb3d56e8 and turn-18d68bcff15ad87c, both dated 2026-09-18, each one write call of 26 result bytes with no failure. The corrected write row is 85 calls in both columns and 3,415 bytes in both columns, not 83 and 3,363. The two totals rows each rise by 52 bytes in both columns: total bytes before becomes 54,267,116 (was) and 54,295,474 (now), total bytes after becomes 6,284,613 (was) and 6,313,297 (now). No other row is affected: the two calls are neither glob nor bash nor read, so the glob-share finding, the bash and read shares, and the 88.4% saved figure stand unchanged: the count moved, the finding did not.",
+    "fell": [
+      "| write | 83 | 83 | 3,363 | 3,363 |",
+      "| total bytes before | 54,267,064 | 54,295,422 |",
+      "| total bytes after | 6,284,561 | 6,313,245 |"
+    ]
+  },
+  {
+    "report": "bench/thrift/report-2026-09-21.md",
+    "state": "withdrawn in part",
+    "why": "the corpus-wide call total and the zero-call bucket only, withdrawn on 2026-09-23 by TOFU-550 and by this file rather than by an edit to the report. turn-18d68bcceb3d56e8 and turn-18d68bcff15ad87c, both dated 2026-09-18 and already in the 107-session corpus this report read on 2026-09-21, decoded with zero tool calls each and were counted in the zeros=12 bucket. Each carries exactly one write call, so the true sum is 1,403 calls, not 1,401, zeros falls from 12 to 10, the '0 to 0' band from 12 to 10 sessions and the '1 to 2' band from 24 to 26. The percentile figures (min, p25, median, p75, p90, worst) were not recomputed here and this file does not claim a value for them: two sessions moving from 0 calls to 1 call sit below every quoted percentile boundary and are unlikely to move them, but that is an expectation, not a measurement, and rerunning bench/thrift is the only way to state them with the same confidence as the sum. The volume-case verdict does not depend on the exact percentages quoted and stands: the count moved, the finding did not.",
+    "fell": [
+      "The whole corpus of 107 sessions runs 1,401 calls, so every session ever recorded here, added together, is 15.5 percent of the one hypothetical session the multiplication assumed.",
+      "tool calls       n=107 sum=1401 zeros=12 min=0 p25=2 median=7 p75=20 p90=31 worst=55",
+      "0 to 0           12  ############",
+      "1 to 2           24  ########################"
+    ]
+  },
+  {
+    "report": "bench/thrift/report-2026-09-23.md",
+    "state": "withdrawn in part",
+    "why": "the corpus-wide call total and the zero-call bucket only, withdrawn on 2026-09-23 by TOFU-550 and by this file rather than by an edit to the report. Same two turns as the sibling thrift withdrawal, turn-18d68bcceb3d56e8 and turn-18d68bcff15ad87c, both dated 2026-09-18 and already in the 110-session corpus this report read. Each decoded with zero tool calls and one real write call apiece, so the true sum is 1,414, not 1,412, zeros falls from 14 to 12, the '0 to 0' band from 14 to 12 sessions and the '1 to 2' band from 24 to 26. The remaining percentile figures were not recomputed here, for the same reason given in the 2026-09-21 withdrawal: the count moved, the finding did not.",
+    "fell": [
+      "tool calls       n=110 sum=1412 zeros=14 min=0 p25=2 median=6 p75=20 p90=31 worst=55",
+      "0 to 0           14  ##############",
+      "1 to 2           24  ########################"
+    ]
   }
 ]

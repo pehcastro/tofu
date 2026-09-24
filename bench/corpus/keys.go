@@ -64,9 +64,15 @@ func knownKeys(level string) map[string]bool {
 		known["assistanttext"] = true
 		known["prompttokens"] = true
 		known["completiontokens"] = true
+		known["toolcalls"] = true
 		return known
 	case "call":
-		return taggedKeys(reflect.TypeOf(RecordedCall{}))
+		known := taggedKeys(reflect.TypeOf(RecordedCall{}))
+		known["exitcode"] = true
+		known["resultbytes"] = true
+		known["renderedbytes"] = true
+		known["resulthash"] = true
+		return known
 	case "message":
 		return taggedKeys(reflect.TypeOf(RecordedMessage{}))
 	case "message_call":

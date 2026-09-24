@@ -268,11 +268,11 @@ footer{margin-top:60px;color:var(--muted-foreground);font-size:.8125rem}
 <div role="tabpanel" class="tab-content" id="panel-reports" aria-labelledby="tab-reports" tabindex="0" hidden>
 <h2>Every dated report under bench/, newest first</h2>
 <div class="cards" style="--cols:5">
-<div class="card"><div class="card-header"><p class="card-description">Written up</p></div><div class="card-content"><p class="card-title"><span class="fig" data-figure="49 dated reports">49 dated reports</span></p><p class="card-description">one file each, under bench/</p></div></div>
-<div class="card"><div class="card-header"><p class="card-description">Benches measuring</p></div><div class="card-content"><p class="card-title"><span class="fig" data-figure="31 of 37">31 of 37</span></p><p class="card-description">the rest are named below, not hidden</p></div></div>
-<div class="card"><div class="card-header"><p class="card-description">Withdrawn</p></div><div class="card-content"><p class="card-title"><span class="fig" data-figure="6 of 49">6 of 49</span></p><p class="card-description">struck rather than deleted</p></div></div>
-<div class="card"><div class="card-header"><p class="card-description">Stale</p></div><div class="card-content"><p class="card-title"><span class="fig" data-figure="1 of 49">1 of 49</span></p><p class="card-description">measured against a corpus that moved</p></div></div>
-<div class="card"><div class="card-header"><p class="card-description">Naming no answer</p></div><div class="card-content"><p class="card-title"><span class="fig" data-figure="2 of 49">2 of 49</span></p><p class="card-description">no heading names the file&#39;s own conclusion</p></div></div>
+<div class="card"><div class="card-header"><p class="card-description">Written up</p></div><div class="card-content"><p class="card-title"><span class="fig" data-figure="52 dated reports">52 dated reports</span></p><p class="card-description">one file each, under bench/</p></div></div>
+<div class="card"><div class="card-header"><p class="card-description">Benches measuring</p></div><div class="card-content"><p class="card-title"><span class="fig" data-figure="32 of 38">32 of 38</span></p><p class="card-description">the rest are named below, not hidden</p></div></div>
+<div class="card"><div class="card-header"><p class="card-description">Withdrawn</p></div><div class="card-content"><p class="card-title"><span class="fig" data-figure="12 of 52">12 of 52</span></p><p class="card-description">struck rather than deleted</p></div></div>
+<div class="card"><div class="card-header"><p class="card-description">Stale</p></div><div class="card-content"><p class="card-title"><span class="fig" data-figure="1 of 52">1 of 52</span></p><p class="card-description">measured against a corpus that moved</p></div></div>
+<div class="card"><div class="card-header"><p class="card-description">Naming no answer</p></div><div class="card-content"><p class="card-title"><span class="fig" data-figure="2 of 52">2 of 52</span></p><p class="card-description">no heading names the file&#39;s own conclusion</p></div></div>
 </div>
 <details><summary>calibration, 2026-09-23 <span class="path">bench/calibration/report-2026-09-23.md</span></summary>
 <h3>What it found, in the report's own words</h3>
@@ -379,6 +379,22 @@ footer{margin-top:60px;color:var(--muted-foreground);font-size:.8125rem}
 <blockquote>Skipped: 1 entry under .tofu/sessions that is not a turn, logged as HEAD, not a .json file; the live route tests skip unless TOFU_LIVE is set<cite>bench/sift/report-2026-09-23.md</cite></blockquote>
 <span class="badge" data-variant="outline">built from prose</span>
 </details>
+<details><summary>startup, 2026-09-23 <span class="path">bench/startup/report-2026-09-23-overlapped.md</span></summary>
+<h3>What it found, in the report's own words</h3>
+<blockquote>Shell resolution: median 96.0 ms, worst 102.0 ms, over 12 samples, crosses it.<cite>bench/startup/report-2026-09-23-overlapped.md</cite></blockquote>
+<h3>What it rests on</h3>
+<blockquote>6 rounds per shape on DESKTOP-AHUN9RO, 12 samples for shell resolution, a temporary directory carrying a package.json for the node case, no live model call and no network call<cite>bench/startup/report-2026-09-23-overlapped.md</cite></blockquote>
+<blockquote>Skipped: none: every round completed and no probe reached its 2000 ms limit<cite>bench/startup/report-2026-09-23-overlapped.md</cite></blockquote>
+<span class="badge" data-variant="outline">built from prose</span>
+</details>
+<details><summary>startup, 2026-09-23 <span class="path">bench/startup/report-2026-09-23.md</span></summary>
+<h3>What it found, in the report's own words</h3>
+<blockquote>Shell resolution: median 101.5 ms, worst 135.3 ms, over 12 samples, crosses it.<cite>bench/startup/report-2026-09-23.md</cite></blockquote>
+<h3>What it rests on</h3>
+<blockquote>6 interleaved rounds on DESKTOP-AHUN9RO, 12 baseline samples and 6 project samples each for go and node, no live model call and no network call<cite>bench/startup/report-2026-09-23.md</cite></blockquote>
+<blockquote>Skipped: none: every round completed and no probe reached its 2000 ms limit<cite>bench/startup/report-2026-09-23.md</cite></blockquote>
+<span class="badge" data-variant="outline">built from prose</span>
+</details>
 <details><summary>sweep, 2026-09-23 <span class="path">bench/sweep/report-2026-09-23.md</span></summary>
 <h3>What it found, in the report's own words</h3>
 <blockquote>Hand read from bench/report/handread.json: Five independent readers of the recorded sessions exist where one shared reader is imported by nineteen packages, and three of the four extras have a real reason: one needs per step token fields the shared record does not carry, one needs occupancy and fork and compaction and reads through the session store instead, and one is a byte scan for a quota key rather than a turn parse. Only one re-walks by hand what the shared walker already does, and that is a clean merge. The most repeated shape is the smallest: six separate declarations of a skip record holding a path and a reason, with two pairs sharing a name across different packages. Two apparent duplications are left alone with arguments: a nearest rank percentile over integers is correct where an interpolated float one is not, because a fractional value between two byte counts means nothing. One thing that looks like duplication is named as not being any: four packages sum a cost with the same loop, and each sums a different field on a different struct answering a different question, so a shared helper would save one line per site and put a layer between the reader and the field. Nothing was merged, deleted or rewritten: the deliverable is the list and the judgment.<cite>bench/sweep/report-2026-09-23.md</cite></blockquote>
@@ -395,7 +411,8 @@ footer{margin-top:60px;color:var(--muted-foreground);font-size:.8125rem}
 <blockquote>Skipped: 6 of the 9 artifacts, each named with its turn and its paragraph count against the remaining call budget; both live tests skip unless TOFU_LIVE is set<cite>bench/thrift/report-2026-09-23-overcap.md</cite></blockquote>
 <span class="badge" data-variant="outline">built from prose</span>
 </details>
-<details><summary>thrift, 2026-09-23 <span class="path">bench/thrift/report-2026-09-23.md</span></summary>
+<details><summary>thrift, 2026-09-23 <span class="path">bench/thrift/report-2026-09-23.md</span><span class="badge" data-variant="secondary">withdrawn in part</span></summary>
+<blockquote>the corpus-wide call total and the zero-call bucket only, withdrawn on 2026-09-23 by TOFU-550 and by this file rather than by an edit to the report. Same two turns as the sibling thrift withdrawal, turn-18d68bcceb3d56e8 and turn-18d68bcff15ad87c, both dated 2026-09-18 and already in the 110-session corpus this report read. Each decoded with zero tool calls and one real write call apiece, so the true sum is 1,414, not 1,412, zeros falls from 14 to 12, the &#39;0 to 0&#39; band from 14 to 12 sessions and the &#39;1 to 2&#39; band from 24 to 26. The remaining percentile figures were not recomputed here, for the same reason given in the 2026-09-21 withdrawal: the count moved, the finding did not.<cite>withdrawn in part, said by bench/report/withdrawals.json</cite></blockquote>
 <h3>What it found, in the report's own words</h3>
 <blockquote>Hand read from bench/report/handread.json: A judged cut over a read or search result was measured live against fixed truncation, 393 Jev calls for $0.040968, and it removed 402 of 21,569 tokens, 1.9 percent. TOFU-338 measured a mechanical pass at 1.5 percent of recorded result bytes, so the judgment clears that floor and does not clear it widely. The arm it is compared against did not fire on this sample: all 8 measured results are under the 32,768 byte truncation cap and the largest is 12,793 bytes, so the 1.9 percent came off results fixed truncation would have passed through whole. 9 of 39 stored read and search artifacts in the corpus exceed the cap and none fell inside the live call budget, so the arm-firing comparison cannot be made on this sample. Three arms over the corpus total read neither 570,999 tokens, rtk alone 458,199, rtk with the judged cut 457,797, and the last term is not extrapolated past the 8 calls actually judged. Task outcome was not measured, so fewer tokens with the same outcome is not claimed. The point ships off.<cite>bench/thrift/report-2026-09-23.md</cite></blockquote>
 <h3>What it rests on</h3>
@@ -411,7 +428,17 @@ footer{margin-top:60px;color:var(--muted-foreground);font-size:.8125rem}
 <blockquote>Skipped: none: no live model call and no network call, len(Description) and marshalled len(Parameters) read straight off the registry<cite>bench/tokens/report-2026-09-23.md</cite></blockquote>
 <span class="badge" data-variant="outline">built from prose</span>
 </details>
-<details><summary>toolerrors, 2026-09-23 <span class="path">bench/toolerrors/report-2026-09-23.md</span></summary>
+<details><summary>toolerrors, 2026-09-23 <span class="path">bench/toolerrors/report-2026-09-23-categorized.md</span><span class="badge" data-variant="secondary">withdrawn in part</span></summary>
+<blockquote>the tool call total, the write row and the closing section on the oldest turn, withdrawn on 2026-09-23 by TOFU-550 and by this file rather than by an edit to the report. This report is only a few hours old and one of its own claims is already wrong, which is what a withdrawal is for. Same cause as the sibling withdrawal on report-2026-09-23.md: bench/corpus.RecordedStep only patched the older capitalized spellings of assistant_text, prompt_tokens and completion_tokens, never tool_calls, so turn-18d68bcceb3d56e8 and turn-18d68bcff15ad87c, both dated 2026-09-18, decoded with no tool calls at all. The true count at read time was 1,414 tool calls and 88 write calls, not 1,412 and 86, and both added calls succeeded, so the failed count, the 4.7% rate, the 71.6% unknown share and the edit finding all stand: the count moved, the finding did not. The closing section is wrong outright rather than just stale: it names turn-18d68bcceb3d56e8 as proof the reader still loads an old session, and quotes that session&#39;s first step as carrying no tool call, which the fixed reader no longer does. That step now decodes with its one write call present, so the section&#39;s own evidence has reversed.<cite>withdrawn in part, said by bench/report/withdrawals.json</cite></blockquote>
+<h3>What it found, in the report's own words</h3>
+<blockquote>67 of 1412 recorded tool calls failed (4.7%), and 71.6% of those failures carry no reason this corpus can classify beyond a bare nonzero exit code.<cite>bench/toolerrors/report-2026-09-23-categorized.md</cite></blockquote>
+<h3>What it rests on</h3>
+<blockquote>the same corpus as report-2026-09-23.md: 111 entries under .tofu/sessions, 110 sessions, 1,412 tool calls, 67 failures, 1 entry skipped as not a .json file<cite>bench/toolerrors/report-2026-09-23-categorized.md</cite></blockquote>
+<blockquote>Skipped: 1 entry under .tofu/sessions that is not a turn, logged as HEAD<cite>bench/toolerrors/report-2026-09-23-categorized.md</cite></blockquote>
+<span class="badge" data-variant="outline">built from prose</span>
+</details>
+<details><summary>toolerrors, 2026-09-23 <span class="path">bench/toolerrors/report-2026-09-23.md</span><span class="badge" data-variant="secondary">withdrawn in part</span></summary>
+<blockquote>the tool call total and the write row only, withdrawn on 2026-09-23 by TOFU-550 and by this file rather than by an edit to the report. bench/corpus.RecordedStep tagged the tool_calls field with the lower-case spelling only, so a session recorded under the older, fully capitalized schema decoded every step&#39;s tool call list to empty. Two real turns in .tofu/sessions carry that shape, turn-18d68bcceb3d56e8 and turn-18d68bcff15ad87c, both dated 2026-09-18, each holding exactly one write call of 26 result bytes and 26 rendered bytes, no exit code, no error. Both calls were already present in the corpus this report read at 2026-09-23 21:17, so the true count that day was 1,414 recorded tool calls and 88 write calls, not 1,412 and 86. Neither call failed, so the failed count of 67, the 4.7% rate (67/1414 still rounds to 4.7%), the unknown share of 74.6% and the edit worst-tool finding of 20.0% all stand: the count moved, the finding did not.<cite>withdrawn in part, said by bench/report/withdrawals.json</cite></blockquote>
 <h3>What it found, in the report's own words</h3>
 <blockquote>67 of 1412 recorded tool calls failed (4.7%), and 74.6% of those failures carry no reason this corpus can classify beyond a bare nonzero exit code.<cite>bench/toolerrors/report-2026-09-23.md</cite></blockquote>
 <h3>What it rests on</h3>
@@ -476,7 +503,8 @@ footer{margin-top:60px;color:var(--muted-foreground);font-size:.8125rem}
 <blockquote>Skipped: 80 of 100 named, every described and intent question, skipped by git grep quoted for having no backtick term; 4 gated tests named in the output<cite>bench/tools/report-2026-09-22.md</cite></blockquote>
 <span class="badge" data-variant="outline">built from rerun</span>
 </details>
-<details><summary>wrongpath, 2026-09-22 <span class="path">bench/wrongpath/report-2026-09-22.md</span></summary>
+<details><summary>wrongpath, 2026-09-22 <span class="path">bench/wrongpath/report-2026-09-22.md</span><span class="badge" data-variant="secondary">withdrawn in part</span></summary>
+<blockquote>the raw tool call total and the write-or-edit total only, withdrawn on 2026-09-23 by TOFU-550 and by this file rather than by an edit to the report. Same cause as the toolerrors withdrawals above: turn-18d68bcceb3d56e8 and turn-18d68bcff15ad87c, both dated 2026-09-18 and both already on disk at this report&#39;s 2026-09-22 15:58 read, decoded to zero tool calls each, one write call apiece, 26 bytes, no failure. The true count at that read was 1,403 tool calls and 139 write-or-edit calls, not 1,401 and 137. Neither turn gains a second write or edit to the same path, so no revert, undo, re-read or contradiction shape is added, and the 82 of 109 sessions carrying no shape, the five shape tables, the separability arithmetic and the refusal verdict all stand exactly as measured: the count moved, the finding did not.<cite>withdrawn in part, said by bench/report/withdrawals.json</cite></blockquote>
 <h3>What it found, in the report's own words</h3>
 <blockquote>The measure cannot separate two arms and this line of work stops here.<cite>bench/wrongpath/report-2026-09-22.md</cite></blockquote>
 <h3>What it rests on</h3>
@@ -539,7 +567,8 @@ footer{margin-top:60px;color:var(--muted-foreground);font-size:.8125rem}
 <blockquote>Skipped: one task of ten is not comparable between the arms and is out of the count<cite>bench/testquality/report-2026-09-21.md</cite></blockquote>
 <span class="badge" data-variant="outline">built from prose</span>
 </details>
-<details><summary>thrift, 2026-09-21 <span class="path">bench/thrift/report-2026-09-21.md</span></summary>
+<details><summary>thrift, 2026-09-21 <span class="path">bench/thrift/report-2026-09-21.md</span><span class="badge" data-variant="secondary">withdrawn in part</span></summary>
+<blockquote>the corpus-wide call total and the zero-call bucket only, withdrawn on 2026-09-23 by TOFU-550 and by this file rather than by an edit to the report. turn-18d68bcceb3d56e8 and turn-18d68bcff15ad87c, both dated 2026-09-18 and already in the 107-session corpus this report read on 2026-09-21, decoded with zero tool calls each and were counted in the zeros=12 bucket. Each carries exactly one write call, so the true sum is 1,403 calls, not 1,401, zeros falls from 12 to 10, the &#39;0 to 0&#39; band from 12 to 10 sessions and the &#39;1 to 2&#39; band from 24 to 26. The percentile figures (min, p25, median, p75, p90, worst) were not recomputed here and this file does not claim a value for them: two sessions moving from 0 calls to 1 call sit below every quoted percentile boundary and are unlikely to move them, but that is an expectation, not a measurement, and rerunning bench/thrift is the only way to state them with the same confidence as the sum. The volume-case verdict does not depend on the exact percentages quoted and stands: the count moved, the finding did not.<cite>withdrawn in part, said by bench/report/withdrawals.json</cite></blockquote>
 <h3>What it found, in the report's own words</h3>
 <blockquote>The volume case does not hold. A recorded session runs a median of 7 tool calls and a worst case of 55, not 9,000.<cite>bench/thrift/report-2026-09-21.md</cite></blockquote>
 <h3>What it rests on</h3>
@@ -555,7 +584,8 @@ footer{margin-top:60px;color:var(--muted-foreground);font-size:.8125rem}
 <blockquote>Skipped: counted and named in the report&#39;s own Skips section; the pin drops every call that named an ignored path<cite>bench/tokens/report-2026-09-21-pinned.md</cite></blockquote>
 <span class="badge" data-variant="outline">built from prose</span>
 </details>
-<details><summary>tokens, 2026-09-21 <span class="path">bench/tokens/report-2026-09-21.md</span></summary>
+<details><summary>tokens, 2026-09-21 <span class="path">bench/tokens/report-2026-09-21.md</span><span class="badge" data-variant="secondary">withdrawn in part</span></summary>
+<blockquote>the write row and the two totals rows only, withdrawn on 2026-09-23 by TOFU-550 and by this file rather than by an edit to the report. Both the &#39;was&#39; and the &#39;now&#39; columns in this report were read through the reader before TOFU-550, so both undercount by the same two calls: turn-18d68bcceb3d56e8 and turn-18d68bcff15ad87c, both dated 2026-09-18, each one write call of 26 result bytes with no failure. The corrected write row is 85 calls in both columns and 3,415 bytes in both columns, not 83 and 3,363. The two totals rows each rise by 52 bytes in both columns: total bytes before becomes 54,267,116 (was) and 54,295,474 (now), total bytes after becomes 6,284,613 (was) and 6,313,297 (now). No other row is affected: the two calls are neither glob nor bash nor read, so the glob-share finding, the bash and read shares, and the 88.4% saved figure stand unchanged: the count moved, the finding did not.<cite>withdrawn in part, said by bench/report/withdrawals.json</cite></blockquote>
 <h3>What it found, in the report's own words</h3>
 <blockquote>Yes. glob is 88.7% of every result byte the model read, 48,186,030 of 54,295,422 over 109 recorded turns, and the cap cuts it to 3.2% and the total to 6,313,245 bytes, 88.4% less.<cite>bench/tokens/report-2026-09-21.md</cite></blockquote>
 <h3>What it rests on</h3>

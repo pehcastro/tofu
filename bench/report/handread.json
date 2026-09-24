@@ -390,5 +390,29 @@
     "from": "prose",
     "sample": "110 turns read through bench/corpus.WalkSessions, 296 read tool calls, 1 entry skipped as not a .json file, plus the read tool's own source read both ways",
     "skips": "1 entry under .tofu/sessions that is not a turn, logged as HEAD"
+  },
+  {
+    "report": "bench/startup/report-2026-09-23.md",
+    "figure": "780.7 ms",
+    "says": "Against a 100 ms threshold chosen before measuring, every shape crosses it: shell resolution median 101.5 ms and worst 135.3 ms over 12 samples, the go toolchain probe median 172.9 ms and worst 201.2 ms, the node toolchain probe with node and npm median 780.7 ms and worst 904.7 ms, both over 6 rounds. So a node project waits about eight tenths of a second before the first token, paid once per session, for a line in the environment block. The figures are derived rather than directly timed: NewBashTool is timed on an empty directory and on the project directory back to back, because resolveShell and probeToolchain have no exported seam, and the probe figure is the delta.",
+    "from": "prose",
+    "sample": "6 interleaved rounds on DESKTOP-AHUN9RO, 12 baseline samples and 6 project samples each for go and node, no live model call and no network call",
+    "skips": "none: every round completed and no probe reached its 2000 ms limit"
+  },
+  {
+    "report": "bench/toolerrors/report-2026-09-23-categorized.md",
+    "figure": "71.6%",
+    "says": "Naming the reason at the moment a command exits moves the unclassifiable share of tool failures from 74.6 percent to 71.6, 50 failures to 48, over the same 1,412 calls and 67 failures. The recovery is small on purpose: only 2 of the 50 bare failures carried exit 127 or 126, and the other 48 are exit 1 or 2, which mean nothing on their own and stay unknown. The gain is on calls made from now on, where the harness records not found in this environment or found but not executable rather than a number, and the same fallback reads records already on disk so the corpus improves without a rewrite.",
+    "from": "prose",
+    "sample": "the same corpus as report-2026-09-23.md: 111 entries under .tofu/sessions, 110 sessions, 1,412 tool calls, 67 failures, 1 entry skipped as not a .json file",
+    "skips": "1 entry under .tofu/sessions that is not a turn, logged as HEAD"
+  },
+  {
+    "report": "bench/startup/report-2026-09-23-overlapped.md",
+    "figure": "89.0 ms",
+    "says": "Starting the toolchain probe in the background moves the wait rather than removing it, and the report says so. Constructing the bash tool on a node project is now a median of 0.5 ms and a worst of 6.0, against 780.7 and 904.7 before. Realized, meaning construction plus the first read of the answer in a fresh directory, it is a median of 722.0 ms and a worst of 768.5: the same work, paid when the answer is first needed. What is genuinely saved is a second turn in the same directory sharing one cache, a median of 89.0 ms and a worst of 95.0. Shell resolution is a median of 96.0 ms. A person feels none of this yet, because cmd/tofu/run.go still resolves and probes twice per session and shares no cache.",
+    "from": "prose",
+    "sample": "6 rounds per shape on DESKTOP-AHUN9RO, 12 samples for shell resolution, a temporary directory carrying a package.json for the node case, no live model call and no network call",
+    "skips": "none: every round completed and no probe reached its 2000 ms limit"
   }
 ]
