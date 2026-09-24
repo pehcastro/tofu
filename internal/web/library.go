@@ -38,19 +38,27 @@ type Provider struct {
 	SnippetField string
 }
 
+const (
+	FetchUseOn  = "on"
+	FetchUseOff = "off"
+)
+
 type Config struct {
 	MaxPageBytes int
 	TimeoutMS    int
+	FetchUse     string
 	FetchOrigin  string
 	Provider     Provider
 	searchKey    string
 }
 
+func (c Config) HasFetch() bool { return c.FetchUse != FetchUseOff }
+
 func (c Config) HasSearch() bool {
 	return c.Provider.Endpoint != "" && (c.Provider.KeyVariable == "" || c.searchKey != "")
 }
 
-var fetchFields = map[string]bool{"max_bytes": true, "timeout_ms": true}
+var fetchFields = map[string]bool{"use": true, "max_bytes": true, "timeout_ms": true}
 
 var providerFields = map[string]bool{
 	"use": true, "reason": true, "endpoint": true, "query_param": true, "count_param": true,
@@ -84,7 +92,11 @@ func Load(layers []Layer) (Config, error) {
 		}
 	}
 
-	config := Config{FetchOrigin: fetch.file}
+	config := Config{FetchUse: fetch.values["use"], FetchOrigin: fetch.file}
+	if config.FetchUse != FetchUseOn && config.FetchUse != FetchUseOff {
+		return Config{}, fmt.Errorf("web: %s: use has to be %s or %s, found %q",
+			fetch.file, FetchUseOn, FetchUseOff, config.FetchUse)
+	}
 	var err error
 	if config.MaxPageBytes, err = fetch.number("max_bytes"); err != nil {
 		return Config{}, err

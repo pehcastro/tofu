@@ -13,8 +13,13 @@ import (
 
 const absentKey = "TOFU_TEST_SEARCH_KEY_NOBODY_SETS"
 
-func shipped() web.Layer {
-	return web.Layer{Origin: "library/web", FS: os.DirFS("../../library/web")}
+func shipped(t *testing.T) web.Layer {
+	t.Helper()
+	layers, err := web.DefaultLayers(library.Files())
+	if err != nil {
+		t.Fatalf("building the default layers: %v", err)
+	}
+	return layers[0]
 }
 
 func project(files map[string]string) web.Layer {
@@ -119,7 +124,7 @@ func TestTheShippedLibraryResolvesFromAnyWorkingDirectory(t *testing.T) {
 }
 
 func TestTheShippedLibraryNamesTheProviderAndTheFetchCeiling(t *testing.T) {
-	config, err := web.Load([]web.Layer{shipped()})
+	config, err := web.Load([]web.Layer{shipped(t)})
 	if err != nil {
 		t.Fatalf("loading the shipped library: %v", err)
 	}
@@ -131,11 +136,33 @@ func TestTheShippedLibraryNamesTheProviderAndTheFetchCeiling(t *testing.T) {
 	if config.MaxPageBytes != 5000000 || config.TimeoutMS != 20000 {
 		t.Fatalf("the shipped fetch limits changed: %d bytes, %d ms", config.MaxPageBytes, config.TimeoutMS)
 	}
+	if config.FetchUse != web.FetchUseOn || !config.HasFetch() {
+		t.Fatalf("the shipped default is not fetch on: %q", config.FetchUse)
+	}
+}
+
+func TestAProjectTurnsFetchOffWithoutTouchingSearch(t *testing.T) {
+	t.Setenv(absentKey, "")
+	config, err := web.Load([]web.Layer{shipped(t), project(map[string]string{
+		"fetch.yaml":          "use: off\n",
+		"search/searxng.yaml": "use: default\nendpoint: http://searx.example/search?format=json\n",
+		"search/brave.yaml":   "use: excluded\n",
+	})})
+	if err != nil {
+		t.Fatalf("loading with fetch off: %v", err)
+	}
+	t.Logf("use %q from %s, fetch %v, search %v", config.FetchUse, config.FetchOrigin, config.HasFetch(), config.HasSearch())
+	if config.HasFetch() {
+		t.Fatalf("a project saying use: off still reads as fetch on: %q", config.FetchUse)
+	}
+	if !config.HasSearch() {
+		t.Fatal("turning fetch off took search with it")
+	}
 }
 
 func TestAProjectOverridesTheProviderWithoutTouchingCode(t *testing.T) {
 	t.Setenv(absentKey, "")
-	config, err := web.Load([]web.Layer{shipped(), project(map[string]string{
+	config, err := web.Load([]web.Layer{shipped(t), project(map[string]string{
 		"search/brave.yaml":   "use: excluded\n",
 		"search/searxng.yaml": "use: default\nendpoint: http://searx.example/search?format=json\n",
 		"fetch.yaml":          "max_bytes: 4096\n",
@@ -156,7 +183,7 @@ func TestAProjectOverridesTheProviderWithoutTouchingCode(t *testing.T) {
 }
 
 func TestAProviderWhoseKeyIsMissingIsNotAvailable(t *testing.T) {
-	layers := []web.Layer{shipped(), project(map[string]string{
+	layers := []web.Layer{shipped(t), project(map[string]string{
 		"search/brave.yaml": "key_variable: " + absentKey + "\n",
 	})}
 
@@ -201,6 +228,11 @@ func TestALibraryThatCannotBeTrustedIsRefusedRatherThanGuessed(t *testing.T) {
 			says:  "use has to be default, allowed or excluded",
 		},
 		{
+			name:  "a fetch use nobody defined",
+			files: map[string]string{"fetch.yaml": "use: sometimes\n"},
+			says:  "use has to be on or off",
+		},
+		{
 			name:  "a ceiling that is not a number",
 			files: map[string]string{"fetch.yaml": "max_bytes: plenty\n"},
 			says:  "max_bytes has to be a positive whole number",
@@ -212,7 +244,7 @@ func TestALibraryThatCannotBeTrustedIsRefusedRatherThanGuessed(t *testing.T) {
 		},
 	} {
 		t.Run(broken.name, func(t *testing.T) {
-			_, err := web.Load([]web.Layer{shipped(), project(broken.files)})
+			_, err := web.Load([]web.Layer{shipped(t), project(broken.files)})
 			t.Logf("%s: %v", broken.name, err)
 			if err == nil || !strings.Contains(err.Error(), broken.says) {
 				t.Fatalf("%s was not refused with %q: %v", broken.name, broken.says, err)

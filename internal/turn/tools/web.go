@@ -12,7 +12,10 @@ import (
 
 func NewWeb(config web.Config) []turn.Tool {
 	client := web.NewClient(config)
-	list := []turn.Tool{webFetch{client: client}}
+	var list []turn.Tool
+	if config.HasFetch() {
+		list = append(list, webFetch{client: client})
+	}
 	if config.HasSearch() {
 		list = append(list, webSearch{client: client, config: config})
 	}

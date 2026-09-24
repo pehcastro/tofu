@@ -26,7 +26,7 @@ func searchAgainst(t *testing.T, answer string) (web.Config, func() *http.Reques
 	t.Cleanup(server.Close)
 
 	t.Setenv(absentKey, "a-key-that-is-never-printed")
-	config, err := web.Load([]web.Layer{shipped(), project(map[string]string{
+	config, err := web.Load([]web.Layer{shipped(t), project(map[string]string{
 		"search/brave.yaml": "endpoint: " + server.URL + "/res/v1/web/search\nkey_variable: " + absentKey + "\n",
 	})})
 	if err != nil {

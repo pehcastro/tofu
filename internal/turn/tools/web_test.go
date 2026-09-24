@@ -5,8 +5,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -18,6 +16,7 @@ import (
 	"tofu/internal/turn"
 	"tofu/internal/turn/tools"
 	"tofu/internal/web"
+	"tofu/library"
 )
 
 const testSearchKey = "TOFU_TEST_SEARCH_KEY_NOBODY_SETS"
@@ -92,15 +91,20 @@ func (g *denyingGate) Decide(_ context.Context, request turn.GateRequest) (turn.
 	}, nil
 }
 
-func toolNames(t *testing.T, key string) string {
+func toolNames(t *testing.T, key string, projectFiles map[string]string) string {
 	t.Helper()
 	t.Setenv(testSearchKey, key)
-	config, err := web.Load([]web.Layer{
-		{Origin: "library/web", FS: os.DirFS(filepath.Join("..", "..", "..", "library", "web"))},
-		{Origin: "project", FS: fstest.MapFS{"search/brave.yaml": &fstest.MapFile{
-			Data: []byte("key_variable: " + testSearchKey + "\n"),
-		}}},
-	})
+	layers, err := web.DefaultLayers(library.Files())
+	if err != nil {
+		t.Fatalf("building the web layers: %v", err)
+	}
+	project := fstest.MapFS{"search/brave.yaml": &fstest.MapFile{
+		Data: []byte("key_variable: " + testSearchKey + "\n"),
+	}}
+	for name, body := range projectFiles {
+		project[name] = &fstest.MapFile{Data: []byte(body)}
+	}
+	config, err := web.Load([]web.Layer{layers[0], {Origin: "project", FS: project}})
 	if err != nil {
 		t.Fatalf("loading the web library: %v", err)
 	}
@@ -111,9 +115,22 @@ func toolNames(t *testing.T, key string) string {
 	return strings.Join(names, " ")
 }
 
+func TestAProjectSayingUseOffGetsNoFetchTool(t *testing.T) {
+	key := "a-key-that-is-never-printed"
+	on := toolNames(t, key, nil)
+	off := toolNames(t, key, map[string]string{"fetch.yaml": "use: off\n"})
+	t.Logf("with the shipped default the tools are %q, with use: off they are %q", on, off)
+	if on != "fetch web_search" {
+		t.Fatalf("the shipped default is not fetch on: %q", on)
+	}
+	if off != "web_search" {
+		t.Fatalf("a project saying use: off still gets a fetch tool: %q", off)
+	}
+}
+
 func TestWebSearchIsAbsentFromTheToolListUntilItsKeyIsPresent(t *testing.T) {
-	without := toolNames(t, "")
-	with := toolNames(t, "a-key-that-is-never-printed")
+	without := toolNames(t, "", nil)
+	with := toolNames(t, "a-key-that-is-never-printed", nil)
 	t.Logf("without the key the tools are %q, with it %q", without, with)
 	if without != "fetch" {
 		t.Fatalf("a provider with no key still offers a tool: %q", without)
