@@ -74,7 +74,7 @@ func (s ThriftSift) Cut(ctx context.Context, tool, command, content, task string
 		if decErr != nil {
 			mark = thrift.Mark{Keep: true, Reason: "kept, unanswered: " + decErr.Error()}
 		}
-		marks[i] = sift.Mark{Keep: mark.Keep, Reason: mark.Reason}
+		marks[i] = mark
 		if !mark.Keep {
 			elided += len(part.Text)
 		}

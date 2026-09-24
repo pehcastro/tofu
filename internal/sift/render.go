@@ -7,11 +7,6 @@ import (
 	"strings"
 )
 
-type Mark struct {
-	Keep   bool
-	Reason string
-}
-
 const fenceLine = "--- sift ---"
 
 var (

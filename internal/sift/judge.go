@@ -3,7 +3,13 @@ package sift
 import (
 	"fmt"
 	"strings"
+
+	"tofu/internal/judge/thrift/unit"
 )
+
+const NeededQuestion = unit.NeededQuestion
+
+type Mark = unit.Mark
 
 type State struct {
 	Paragraph   string `json:"paragraph"`
@@ -22,25 +28,11 @@ func BuildState(parts []Part, index int, task string) State {
 		Paragraph:   parts[index].Text,
 		Task:        task,
 		AlreadySaid: said.String(),
-		Position:    position(index, len(parts)),
+		Position:    unit.Position(index, len(parts)),
 	}
-}
-
-func position(index, total int) string {
-	switch index {
-	case 0:
-		return "opening"
-	case total - 1:
-		return "closing"
-	}
-	return "middle"
 }
 
 const answerQuestion = "answers_the_task"
-
-func paddingQuestions() []string {
-	return []string{"preamble", "recap", "hedging", "jargon", "selling"}
-}
 
 type Rule struct {
 	AnswerFloor    float64
@@ -57,7 +49,7 @@ func Decide(scores map[string]float64, rule Rule) (Mark, error) {
 		return Mark{}, err
 	}
 	worstName, worst := "", 0.0
-	for _, name := range paddingQuestions() {
+	for _, name := range []string{"preamble", "recap", "hedging", "jargon", "selling"} {
 		value, err := score(scores, name)
 		if err != nil {
 			return Mark{}, err

@@ -160,7 +160,7 @@ func judgeParagraphs(ctx context.Context, client *jev.Client, jevQuestions []jev
 		if decErr != nil {
 			mark = thrift.Mark{Keep: true, Reason: "kept, unanswered"}
 		}
-		marks[i] = sift.Mark{Keep: mark.Keep, Reason: mark.Reason}
+		marks[i] = mark
 	}
 	return marks, nil
 }

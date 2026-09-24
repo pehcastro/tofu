@@ -1,8 +1,14 @@
 package thrift
 
-import "fmt"
+import (
+	"fmt"
 
-const NeededQuestion = "still_needed"
+	"tofu/internal/judge/thrift/unit"
+)
+
+const NeededQuestion = unit.NeededQuestion
+
+type Mark = unit.Mark
 
 type State struct {
 	Task      string `json:"task"`
@@ -18,23 +24,8 @@ func BuildState(paragraph string, index, total int, tool, command, task string) 
 		Tool:      tool,
 		Command:   command,
 		Paragraph: paragraph,
-		Position:  position(index, total),
+		Position:  unit.Position(index, total),
 	}
-}
-
-func position(index, total int) string {
-	switch index {
-	case 0:
-		return "opening"
-	case total - 1:
-		return "closing"
-	}
-	return "middle"
-}
-
-type Mark struct {
-	Keep   bool
-	Reason string
 }
 
 func Decide(index int, score float64, answered bool, keepAt float64) (Mark, error) {

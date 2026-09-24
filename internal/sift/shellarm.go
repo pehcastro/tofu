@@ -39,8 +39,6 @@ func BuildShellState(result Shell, units []Unit, index int, task string) ShellSt
 	}
 }
 
-const NeededQuestion = "still_needed"
-
 func DecideShell(unit Unit, answers map[string]float64, keepAt float64) (Mark, error) {
 	if unit.Held != NotHeld {
 		return Mark{Keep: true, Reason: string(unit.Held)}, nil
