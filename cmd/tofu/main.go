@@ -46,6 +46,8 @@ readable form collapses: doctor, models, usage, context, rules.
   lint      run a house-rule check over the tree
   rules     list the rule library, run it, read back what fired, or index a task
   frame     print one recorded interface frame, at a width and a height
+  drive     run a script of what a person would do against the real app,
+            with no terminal and no model call, and print the screens it asks for
   settings  list, get or set a declared setting, global or project
   reload    re-read rules from disk without a restart
 `
@@ -83,6 +85,8 @@ func run(args []string, in io.Reader, out io.Writer, errOut io.Writer) int {
 		return whyVerb(args[1:], out, errOut, time.Now)
 	case "frame":
 		return frameVerb(args[1:], out, errOut)
+	case "drive":
+		return driveVerb(args[1:], in, out, errOut)
 	case "run":
 		return runVerb(args[1:], out, errOut)
 	case "judge":

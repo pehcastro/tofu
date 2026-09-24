@@ -70,39 +70,35 @@ const (
 	queuedMessages      = 64
 )
 
-func appVerb(in io.Reader, out, errOut io.Writer, resumed sessionResume) int {
-	file, isFile := in.(*os.File)
-	if !isFile || !term.IsTerminal(file.Fd()) {
-		_, _ = fmt.Fprintln(errOut, noTerminal)
-		return exitUsage
-	}
-	dir, err := os.Getwd()
-	if err != nil {
-		_, _ = fmt.Fprintf(errOut, "tofu: the working directory is unreadable: %v\n", err)
-		return exitVerdict
-	}
+type appWiring struct {
+	open     func(runOpts) (appWire, error)
+	wires    func() []tui.Wire
+	blockers func() []tui.Requirement
+}
+
+func appOptions(dir string, wiring appWiring, resumed sessionResume) tui.Options {
 	note := ""
 	if _, err := gateKey(); err != nil {
 		note = gateOffNote
 	}
 	answers := make(chan tui.Answer, 1)
 	steering := make(chan string, queuedMessages)
-	live := newAppSession(dir, openAppWire, answers, time.Now, resumed)
+	live := newAppSession(dir, wiring.open, answers, time.Now, resumed)
 	live.steer = steering
 	settingsStore, _ := openSettings(dir)
 	registry, registryErr := openShellRegistry()
 	if registryErr == nil {
 		live.shells = registry
 	}
-	if err := tui.Run(tui.Options{
+	return tui.Options{
 		Repo:         filepath.Base(dir),
 		Root:         dir,
 		Branch:       branchOf(dir),
 		Note:         note,
-		Requirements: appRequirements(),
-		Recheck:      appRequirements,
+		Requirements: wiring.blockers(),
+		Recheck:      wiring.blockers,
 		Login:        loginCommand(string(cred.ClaudeSub)),
-		Wires:        appWires,
+		Wires:        wiring.wires,
 		Providers:    appProviders(),
 		Quota:        appQuota,
 		Settings:     settingsStore,
@@ -116,7 +112,22 @@ func appVerb(in io.Reader, out, errOut io.Writer, resumed sessionResume) int {
 		NewSession:   live.startFresh,
 		Shells:       appShells(registry, registryErr),
 		KillShell:    appKillShell(registry, registryErr),
-	}); err != nil {
+	}
+}
+
+func appVerb(in io.Reader, out, errOut io.Writer, resumed sessionResume) int {
+	file, isFile := in.(*os.File)
+	if !isFile || !term.IsTerminal(file.Fd()) {
+		_, _ = fmt.Fprintln(errOut, noTerminal)
+		return exitUsage
+	}
+	dir, err := os.Getwd()
+	if err != nil {
+		_, _ = fmt.Fprintf(errOut, "tofu: the working directory is unreadable: %v\n", err)
+		return exitVerdict
+	}
+	live := appWiring{open: openAppWire, wires: appWires, blockers: appRequirements}
+	if err := tui.Run(appOptions(dir, live, resumed)); err != nil {
 		_, _ = fmt.Fprintf(errOut, "tofu: %v\n", err)
 		return exitVerdict
 	}
@@ -650,6 +661,16 @@ func (s *appSession) run(ctx context.Context, pick tui.Pick, task string, emit t
 		emit(tui.Event{Kind: tui.EventNote, Text: readUnreadable})
 	}
 	opts.readBeforeEdit = readBeforeEdit != 0
+	shellOverride, shellUnreadable := appTextSetting(s.dir, settingspkg.Shell)
+	if shellUnreadable != "" {
+		emit(tui.Event{Kind: tui.EventNote, Text: shellUnreadable})
+	}
+	shell, shellErr := turn.ResolveRunShell(shellOverride)
+	if shellErr != nil {
+		fail(shellErr)
+		return
+	}
+	opts.shell = shell
 	opened, err := s.open(opts)
 	if opened.held != nil {
 		defer opened.held.close()
@@ -658,7 +679,7 @@ func (s *appSession) run(ctx context.Context, pick tui.Pick, task string, emit t
 		fail(err)
 		return
 	}
-	built, plan, builtErr := buildRunToolsReading(s.dir, opts.toolSet, opts.readBeforeEdit)
+	built, plan, builtErr := buildRunToolsForRun(s.dir, opts.toolSet, opts.readBeforeEdit, shell)
 	sessions, sessionsErr := sessionstore.Open()
 	if err := cmp.Or(builtErr, sessionsErr); err != nil {
 		fail(err)

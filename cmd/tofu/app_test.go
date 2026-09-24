@@ -5,6 +5,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -32,6 +35,7 @@ import (
 	"tofu/internal/llm/models"
 	"tofu/internal/recall"
 	sessionstore "tofu/internal/session"
+	settingspkg "tofu/internal/settings"
 	roster "tofu/internal/subagent"
 	"tofu/internal/sys"
 	"tofu/internal/transport"
@@ -1563,5 +1567,106 @@ func TestAwaitPersonUnderAnAlreadyGrantedRuleWritesNoOutcome(t *testing.T) {
 	}
 	if read.Outcome != nil {
 		t.Fatalf("a decision nobody was asked about must stay unlabelled, got %+v", read.Outcome)
+	}
+}
+
+func TestTheAppsBashToolResolvesThroughTheSameShellSettingAsTofuRun(t *testing.T) {
+	dir := scratchProject(t)
+	bogus := filepath.Join(dir, "no-such-shell.exe")
+	var out, errOut bytes.Buffer
+	if code := settingsVerb([]string{"set", "shell", bogus}, &out, &errOut); code != exitOK {
+		t.Fatalf("settings set shell %s exited %d: %s", bogus, code, errOut.String())
+	}
+
+	shellOverride, unreadable := appTextSetting(dir, settingspkg.Shell)
+	if unreadable != "" {
+		t.Fatalf("reading the shell setting: %s", unreadable)
+	}
+	if _, err := turn.ResolveRunShell(shellOverride); err == nil {
+		t.Fatal("tofu run's own resolution did not fail on a shell setting that does not exist, so this test proves nothing")
+	}
+
+	driver := driveApp(t)
+	capture := &toolNamesCapture{}
+	stubbedTurn(dir, capture)(t.Context(), onTheSubscription, "say hello", driver.emit)
+
+	failures := driver.of(tui.EventFailure)
+	if len(failures) != 1 {
+		t.Fatalf("the app resolves its bash tool on its own path rather than the setting tofu run reads, and the turn ran anyway: failures %+v", failures)
+	}
+	if !strings.Contains(failures[0].Text, bogus) {
+		t.Fatalf("the failure %q does not name the shell setting %q that tofu run's own resolution rejects", failures[0].Text, bogus)
+	}
+}
+
+func TestTheAppResolvesTheShellOnceAndSharesItWithTheEnvironmentBlock(t *testing.T) {
+	source, err := os.ReadFile("app.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	start := strings.Index(string(source), "func (s *appSession) run(")
+	if start < 0 {
+		t.Fatal("app.go no longer defines appSession.run, so this test cannot check its wiring")
+	}
+	body := string(source)[start:]
+	if end := strings.Index(body, "\nfunc "); end >= 0 {
+		body = body[:end]
+	}
+	if calls := strings.Count(body, "turn.ResolveRunShell("); calls != 1 {
+		t.Fatalf("appSession.run calls turn.ResolveRunShell %d times, want 1: a second call resolves the shell again instead of sharing the first", calls)
+	}
+	if !strings.Contains(body, "opts.shell = shell") {
+		t.Fatal("appSession.run resolves a shell but never carries it on opts, so buildRunToolsForRun and the environment block cannot share it")
+	}
+	if !strings.Contains(body, "buildRunToolsForRun(") {
+		t.Fatal("appSession.run still builds its tools through a path that resolves its own shell instead of the one already carried on opts")
+	}
+}
+
+func TestEveryVerbBuildsTheAppOptionsInOnePlace(t *testing.T) {
+	entries, err := os.ReadDir(".")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var built []string
+	for _, entry := range entries {
+		name := entry.Name()
+		if !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
+			continue
+		}
+		parsed, err := parser.ParseFile(token.NewFileSet(), name, nil, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, decl := range parsed.Decls {
+			function, isFunction := decl.(*ast.FuncDecl)
+			if !isFunction {
+				continue
+			}
+			where := name + " " + function.Name.Name
+			if where == "app.go appOptions" {
+				continue
+			}
+			ast.Inspect(function, func(node ast.Node) bool {
+				if selector, isSelector := node.(*ast.SelectorExpr); isSelector && selector.Sel.Name == "Options" {
+					if pkg, isIdent := selector.X.(*ast.Ident); isIdent && pkg.Name == "tui" {
+						built = append(built, where+" names tui.Options")
+					}
+				}
+				assign, isAssign := node.(*ast.AssignStmt)
+				if !isAssign || len(assign.Rhs) != 1 {
+					return true
+				}
+				if call, isCall := assign.Rhs[0].(*ast.CallExpr); isCall {
+					if callee, isIdent := call.Fun.(*ast.Ident); isIdent && callee.Name == "appOptions" {
+						built = append(built, where+" holds what appOptions returned instead of passing it on")
+					}
+				}
+				return true
+			})
+		}
+	}
+	if len(built) > 0 {
+		t.Fatalf("only appOptions may build or hold the app options, or the driven verb and the real verb drift apart: %s", strings.Join(built, "; "))
 	}
 }

@@ -43,6 +43,16 @@ const (
 )
 
 const (
+	ProgressTickMillis = 250
+	StopAgainMillis    = 3000
+
+	DriveTimeoutMillis = 60000
+	DriveSettleMillis  = ProgressTickMillis / 2
+	DrivePollMillis    = 5
+	DriveMessageBuffer = 256
+)
+
+const (
 	FrameBudgetMicros   = 16700
 	FrameBudgetAttempts = 3
 	FrameBudgetSamples  = 200
