@@ -647,6 +647,64 @@ func TestAParkedChildsReportReachesTheParentThatSpawnedIt(t *testing.T) {
 	t.Logf("the parent was handed:\n%s", handed)
 }
 
+type holdingModel struct {
+	decisions []llm.Decision
+	calls     int
+	holding   chan struct{}
+}
+
+func (m *holdingModel) Ask(ctx context.Context, _ llm.Request) (llm.Decision, error) {
+	if m.calls < len(m.decisions) {
+		m.calls++
+		return m.decisions[m.calls-1], nil
+	}
+	select {
+	case m.holding <- struct{}{}:
+	default:
+	}
+	<-ctx.Done()
+	return llm.Decision{}, ctx.Err()
+}
+
+func TestAChildHeldInsideItsModelCallReportsToTheParentWhenTheStopArrives(t *testing.T) {
+	root := t.TempDir()
+	parent, spawn := parentTurn(t, root, nil)
+	held := &holdingModel{
+		decisions: []llm.Decision{
+			spawnCall("call-1", "write half of it and keep going", "mine/**"),
+			writeCall("call-2", "mine/half.txt", "half the work, done before the stop"),
+		},
+		holding: make(chan struct{}, 1),
+	}
+	parent.Model, spawn.base.Model = held, held
+	ctx, stop := context.WithCancel(context.Background())
+	defer stop()
+	go func() {
+		<-held.holding
+		stop()
+	}()
+
+	row, runErr := Run(ctx, parent)
+	if !errors.Is(runErr, context.Canceled) {
+		t.Fatalf("the parent of a child cut mid answer ended with %v, want context.Canceled", runErr)
+	}
+	if state := onlyChild(t, spawn).State; state != subagent.Parked {
+		t.Fatalf("a child cut while its model was still answering reads as %s, want parked", state)
+	}
+	handed := ""
+	for _, message := range row.Conversation {
+		if message.Role == llm.RoleTool {
+			handed = message.Content
+		}
+	}
+	for _, want := range []string{"is parked", "stopped", "wrote mine/half.txt"} {
+		if !strings.Contains(handed, want) {
+			t.Fatalf("the parent was handed %q, which never says %q", handed, want)
+		}
+	}
+	t.Logf("the parent was handed:\n%s", handed)
+}
+
 func TestAChildWhoseModelFailsIsRecordedAsErrored(t *testing.T) {
 	root := t.TempDir()
 	_, spawn := parentTurn(t, root, nil)

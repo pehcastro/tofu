@@ -453,6 +453,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case Closed:
 		a.busy, a.cancel, a.events, a.edits.Busy = false, nil, nil, false
 		a.running, a.pressedAt = 0, time.Time{}
+		a.parkChildrenTheTurnLeftBehind()
 		a.view.Stop()
 		a.dropSteering()
 		next := tea.Batch(a.pollQuota(), a.readPaths(), a.pollShells())
@@ -799,7 +800,7 @@ func (a *App) interrupt() tea.Cmd {
 		if within {
 			a.stopTurn()
 		}
-	case a.running == 0 || a.view.TakesAnswerDigits():
+	case a.running == 0 || len(a.childCalls) > 0 || a.view.TakesAnswerDigits():
 		a.stopTurn()
 	default:
 		a.view.LettingToolsFinish = true
@@ -828,6 +829,22 @@ func (a *App) stopTurn() {
 	a.cancel()
 	a.dropSteering()
 	a.noteStop(stoppingNote + a.queueTail())
+}
+
+func (a *App) showChildren(children []subagent.Child) {
+	a.subagents.Children, a.view.Children, a.edits.Children = children, children, children
+	a.status.Agents = a.subagents.Running()
+	a.strip.Views[subAgentsIndex].Name = subAgentsLabel(a.status.Agents)
+}
+
+func (a *App) parkChildrenTheTurnLeftBehind() {
+	parked := slices.Clone(a.subagents.Children)
+	for i, child := range parked {
+		if child.State == subagent.Running || child.State == subagent.WaitingForAnswer {
+			parked[i].State = subagent.Parked
+		}
+	}
+	a.showChildren(parked)
 }
 
 func (a *App) noteStop(note string) {
@@ -955,9 +972,7 @@ func (a *App) absorb(event Event) {
 	case EventContext:
 		a.status.Context = event.Context
 	case EventSubAgent:
-		a.subagents.Children, a.view.Children, a.edits.Children = event.Children, event.Children, event.Children
-		a.status.Agents = a.subagents.Running()
-		a.strip.Views[subAgentsIndex].Name = subAgentsLabel(a.status.Agents)
+		a.showChildren(event.Children)
 	case EventPlan:
 		a.view.SetPlan(event.Plan)
 	case EventAwaitPerson:

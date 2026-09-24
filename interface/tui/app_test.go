@@ -1251,7 +1251,12 @@ func TestTypingBetweenTwoInterruptsKeepsTheProgramRunning(t *testing.T) {
 	}
 }
 
-func callingApp(t *testing.T) (*App, context.Context) {
+var (
+	shellCall = Event{Kind: EventToolCall, ID: "c1", Tool: "bash", Text: "sleep 3"}
+	childCall = Event{Kind: EventToolCall, ID: "c1", Tool: "spawn", Text: "write half a file", Promote: true}
+)
+
+func callingApp(t *testing.T, call Event) (*App, context.Context) {
 	t.Helper()
 	contexts := make(chan context.Context, 1)
 	app := newTestApp(Options{
@@ -1274,12 +1279,12 @@ func callingApp(t *testing.T) (*App, context.Context) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("the turn never started")
 	}
-	app.Update(Event{Kind: EventToolCall, ID: "c1", Tool: "bash", Text: "sleep 3"})
+	app.Update(call)
 	return app, held
 }
 
 func TestTheFirstInterruptLeavesTheRunningToolCallAlive(t *testing.T) {
-	app, held := callingApp(t)
+	app, held := callingApp(t, shellCall)
 	app.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
 	select {
 	case <-held.Done():
@@ -1298,7 +1303,7 @@ func TestTheFirstInterruptLeavesTheRunningToolCallAlive(t *testing.T) {
 }
 
 func TestASecondInterruptStopsTheRunningToolCallToo(t *testing.T) {
-	app, held := callingApp(t)
+	app, held := callingApp(t, shellCall)
 	app.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
 	app.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
 	select {
@@ -1311,12 +1316,47 @@ func TestASecondInterruptStopsTheRunningToolCallToo(t *testing.T) {
 	}
 }
 
+func TestOneInterruptReachesAChildRunningInsideTheSpawnCall(t *testing.T) {
+	app, held := callingApp(t, childCall)
+	app.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
+	select {
+	case <-held.Done():
+	case <-time.After(2 * time.Second):
+		t.Fatal("one ctrl+c left the child running: the spawn call was let finish like a shell command")
+	}
+	if plain := ansi.Strip(app.View().Content); !strings.Contains(plain, stoppingNote) {
+		t.Fatalf("the screen does not say the turn was stopped\n%s", plain)
+	}
+}
+
+func TestAChildStopsReadingAsRunningOnceTheTurnHasEnded(t *testing.T) {
+	app, _ := callingApp(t, childCall)
+	app.Update(Event{Kind: EventSubAgent, Children: []subagent.Child{
+		{Name: "c1", Doing: "write half a file", State: subagent.Running},
+		{Name: "c2", Doing: "read the changelog", State: subagent.WaitingForAnswer},
+	}})
+	app.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
+	app.Update(Closed{})
+	if running := app.subagents.Running(); running != 0 {
+		t.Fatalf("the panel still counts %d children running after the turn ended", running)
+	}
+	for _, child := range app.subagents.Children {
+		if child.State != subagent.Parked {
+			t.Fatalf("%s reads as %s after the stop, want parked", child.Name, child.State.Label())
+		}
+	}
+	app.show(viewSubAgents)
+	if plain := ansi.Strip(app.View().Content); !strings.Contains(plain, "2 children, 0 running") {
+		t.Fatalf("the sub-agents panel goes on claiming a running child\n%s", plain)
+	}
+}
+
 func TestTheFooterNamesWhatTheSecondInterruptDoesWhileToolsFinish(t *testing.T) {
 	const (
 		stopsTheTurn  = "ctrl+c stops the turn"
 		stopsTheTools = "letting the running tools finish, ctrl+c again stops them"
 	)
-	app, _ := callingApp(t)
+	app, _ := callingApp(t, shellCall)
 	if before := ansi.Strip(app.View().Content); !strings.Contains(before, stopsTheTurn) {
 		t.Fatalf("the footer before the press does not offer to stop the turn\n%s", before)
 	}
@@ -1331,7 +1371,7 @@ func TestTheFooterNamesWhatTheSecondInterruptDoesWhileToolsFinish(t *testing.T) 
 }
 
 func TestAnInterruptKeepsWhatWasTypedWhileTheTurnRan(t *testing.T) {
-	app, _ := callingApp(t)
+	app, _ := callingApp(t, shellCall)
 	typeAndSend(app, firstTask)
 	typeAndSend(app, secondTask)
 	app.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
