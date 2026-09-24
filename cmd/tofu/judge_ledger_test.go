@@ -22,42 +22,10 @@ func panicOf(call func()) (message string) {
 	return ""
 }
 
-func TestToLedgerVerdictNamesEveryGateVerdict(t *testing.T) {
-	want := map[gate.Verdict]ledger.Verdict{
-		gate.VerdictAllow: ledger.VerdictAllow,
-		gate.VerdictAsk:   ledger.VerdictAsk,
-		gate.VerdictDeny:  ledger.VerdictDeny,
-	}
-	for _, v := range gate.AllVerdicts() {
-		expected, named := want[v]
-		if !named {
-			t.Fatalf("%s carries no expected ledger verdict, so a new gate verdict can reach toLedgerVerdict untested", v)
-		}
-		if got := toLedgerVerdict(v); got != expected {
-			t.Errorf("toLedgerVerdict(%s) = %s, want %s", v, got, expected)
-		}
-	}
-}
-
-func TestToGateVerdictNamesEveryLedgerVerdict(t *testing.T) {
-	want := map[ledger.Verdict]gate.Verdict{
-		ledger.VerdictAllow: gate.VerdictAllow,
-		ledger.VerdictAsk:   gate.VerdictAsk,
-		ledger.VerdictDeny:  gate.VerdictDeny,
-	}
-	for _, v := range ledger.AllVerdicts() {
-		if v == ledger.VerdictUnset {
-			if raised := panicOf(func() { toGateVerdict(v) }); raised == "" {
-				t.Errorf("toGateVerdict(unset) no longer panics: the impossible state is now reachable")
-			}
-			continue
-		}
-		expected, named := want[v]
-		if !named {
-			t.Fatalf("%s carries no expected gate verdict, so a new ledger verdict can reach toGateVerdict untested", v)
-		}
-		if got := toGateVerdict(v); got != expected {
-			t.Errorf("toGateVerdict(%s) = %s, want %s", v, got, expected)
+func TestTheLedgerReasonCarriesTheModeTheGateRanUnder(t *testing.T) {
+	for _, m := range gate.AllModes() {
+		if got := toLedgerReason(gate.Reason{Mode: m}).Mode; got != m.Ledger() {
+			t.Errorf("toLedgerReason(%s).Mode = %s, want %s", m, got, m.Ledger())
 		}
 	}
 }

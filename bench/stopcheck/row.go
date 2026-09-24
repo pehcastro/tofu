@@ -104,7 +104,7 @@ func appendRow(writer *ledger.Writer, in rowInput) (ledger.Row, error) {
 		StateHash:     hash,
 		StateBuilder:  in.stateBuilder,
 		Answers:       in.answers,
-		Verdict:       ledger.Verdict(verdict),
+		Verdict:       verdict.Ledger(),
 		Policy:        in.pol.Name,
 		PolicyVersion: in.pol.RuleVersion,
 		Reason: &ledger.Reason{
@@ -116,7 +116,7 @@ func appendRow(writer *ledger.Writer, in rowInput) (ledger.Row, error) {
 			RelaxedBy:  reason.RelaxedBy,
 			Blocked:    reason.Blocked,
 			Ambiguous:  reason.Ambiguous,
-			Mode:       ledger.Mode(in.mode),
+			Mode:       in.mode.Ledger(),
 			ModeReason: &in.modeReason,
 		},
 		LatencyMS: in.latencyMS,

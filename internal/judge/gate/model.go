@@ -1,6 +1,10 @@
 package gate
 
-import "fmt"
+import (
+	"fmt"
+
+	"tofu/internal/judge/ledger"
+)
 
 type Verdict string
 
@@ -26,6 +30,30 @@ func (v Verdict) String() string {
 	panic("gate: unknown verdict " + string(v))
 }
 
+func (v Verdict) Ledger() ledger.Verdict {
+	switch v {
+	case VerdictAllow:
+		return ledger.VerdictAllow
+	case VerdictAsk:
+		return ledger.VerdictAsk
+	case VerdictDeny:
+		return ledger.VerdictDeny
+	}
+	panic("gate: unknown verdict " + string(v))
+}
+
+func VerdictOf(v ledger.Verdict) Verdict {
+	switch v {
+	case ledger.VerdictAllow:
+		return VerdictAllow
+	case ledger.VerdictAsk:
+		return VerdictAsk
+	case ledger.VerdictDeny:
+		return VerdictDeny
+	}
+	panic("gate: unknown ledger verdict " + string(v))
+}
+
 func (v Verdict) relax() Verdict {
 	switch v {
 	case VerdictDeny:
@@ -44,6 +72,20 @@ const (
 	ModeShadow   Mode = "shadow"
 	ModeEnforced Mode = "enforced"
 )
+
+func AllModes() []Mode {
+	return []Mode{ModeShadow, ModeEnforced}
+}
+
+func (m Mode) Ledger() ledger.Mode {
+	switch m {
+	case ModeShadow:
+		return ledger.ModeShadow
+	case ModeEnforced:
+		return ledger.ModeEnforced
+	}
+	panic("gate: unknown mode " + string(m))
+}
 
 func (m Mode) String() string {
 	switch m {

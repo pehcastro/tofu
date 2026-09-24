@@ -295,39 +295,9 @@ func ledgerAnswersToJev(answers []ledger.Answer) map[string]jev.Answer {
 	return out
 }
 
-func toLedgerVerdict(v gate.Verdict) ledger.Verdict {
-	switch v {
-	case gate.VerdictAllow:
-		return ledger.VerdictAllow
-	case gate.VerdictAsk:
-		return ledger.VerdictAsk
-	case gate.VerdictDeny:
-		return ledger.VerdictDeny
-	}
-	panic("tofu: unknown gate verdict " + string(v))
-}
+func toLedgerVerdict(v gate.Verdict) ledger.Verdict { return v.Ledger() }
 
-func toGateVerdict(v ledger.Verdict) gate.Verdict {
-	switch v {
-	case ledger.VerdictAllow:
-		return gate.VerdictAllow
-	case ledger.VerdictAsk:
-		return gate.VerdictAsk
-	case ledger.VerdictDeny:
-		return gate.VerdictDeny
-	}
-	panic("tofu: unknown ledger verdict " + string(v))
-}
-
-func toLedgerMode(m gate.Mode) ledger.Mode {
-	switch m {
-	case gate.ModeShadow:
-		return ledger.ModeShadow
-	case gate.ModeEnforced:
-		return ledger.ModeEnforced
-	}
-	panic("tofu: unknown gate mode " + string(m))
-}
+func toGateVerdict(v ledger.Verdict) gate.Verdict { return gate.VerdictOf(v) }
 
 func toLedgerReason(r gate.Reason) *ledger.Reason {
 	return &ledger.Reason{
@@ -339,6 +309,6 @@ func toLedgerReason(r gate.Reason) *ledger.Reason {
 		RelaxedBy:  r.RelaxedBy,
 		Blocked:    r.Blocked,
 		Ambiguous:  r.Ambiguous,
-		Mode:       toLedgerMode(r.Mode),
+		Mode:       r.Mode.Ledger(),
 	}
 }
