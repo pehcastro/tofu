@@ -1038,26 +1038,10 @@ func (a *appWatcher) draw(agents []roster.SubAgent) {
 	if len(agents) == 0 {
 		return
 	}
-	now := a.now()
-	children := make([]subagent.Child, len(agents))
-	for index, agent := range agents {
-		since := agent.Active.Sub(agent.Started)
-		if agent.State == roster.Working {
-			since = now.Sub(agent.Started)
-		}
-		children[index] = subagent.Child{
-			Name:   "c" + strconv.Itoa(index+1),
-			Owns:   agent.Owns,
-			Doing:  agent.Mission,
-			Since:  since,
-			Steps:  agent.Steps,
-			Total:  cmp.Or(a.maxSteps, konst.TurnMaxSteps),
-			Tokens: a.spent[agent.ID],
-			State:  drawnState(agent.State),
-			Calls:  recordedOrCalling(recordedCalls(childRows(a.spawner), agent.ID), agent.Calling, agent.CallsDropped),
-			Report: agent.Report,
-		}
-	}
+	now, rows := a.now(), childRows(a.spawner)
+	children := subagent.Children(agents, now, a.maxSteps, a.spent, func(agent roster.SubAgent) []subagent.Call {
+		return recordedOrCalling(recordedCalls(rows, agent.ID), agent.Calling, agent.CallsDropped)
+	})
 	a.shows.Lock()
 	a.shown, a.shownAt = children, now
 	a.shows.Unlock()
@@ -1102,24 +1086,6 @@ func (a *appWatcher) clockRunningChildren() (stop func()) {
 		close(ticking)
 		<-stopped
 	}
-}
-
-func drawnState(state roster.State) subagent.State {
-	switch state {
-	case roster.Working:
-		return subagent.Running
-	case roster.WaitingAnswer:
-		return subagent.WaitingForAnswer
-	case roster.InReview:
-		return subagent.HandedBack
-	case roster.Parked:
-		return subagent.Parked
-	case roster.Errored:
-		return subagent.Errored
-	case roster.Finished:
-		return subagent.Done
-	}
-	panic("tofu: unknown sub-agent state " + state.String())
 }
 
 func recordedOrCalling(recorded []subagent.Call, calling []string, dropped int) []subagent.Call {

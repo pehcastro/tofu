@@ -11,7 +11,7 @@ import (
 	"tofu/interface/tui/fixture"
 	"tofu/interface/tui/session"
 	"tofu/interface/tui/subagent"
-	"tofu/internal/konst"
+	roster "tofu/internal/subagent"
 )
 
 const (
@@ -21,6 +21,7 @@ const (
 	toolGap       = 1400 * time.Millisecond
 	typingGap     = 3 * time.Second
 	childGap      = 26 * time.Second
+	childID       = "turn-1-c1"
 	pushFailure   = "git push origin develop: exit 128\nfatal: could not read from remote repository, make sure you have the right access\ntransport: ssh: connect to host git.silo port 22: connection refused"
 )
 
@@ -317,40 +318,39 @@ func failedTurn() scenario {
 }
 
 func childTurn() scenario {
-	var spawnedAt time.Time
-	child := func(r *reel, state subagent.State, steps, tokens int) tui.Event {
-		return tui.Event{Kind: tui.EventSubAgent, Children: []subagent.Child{{
-			Name:   "c1",
-			Owns:   []string{"internal/judge/policy/**"},
-			Doing:  "read the policy loader",
-			Since:  r.at.Sub(spawnedAt),
-			Steps:  steps,
-			Total:  konst.TurnMaxSteps,
-			Tokens: tokens,
-			State:  state,
-		}}}
+	held, spent := &roster.Roster{}, map[string]int{}
+	child := func(r *reel, state roster.State, steps, tokens int) tui.Event {
+		held.Stepped(childID, steps, r.at)
+		held.Reached(childID, state, "")
+		spent[childID] = tokens
+		return tui.Event{Kind: tui.EventSubAgent, Children: subagent.Children(held.SubAgents(), r.at, 0, spent, nil)}
 	}
 	return scenario{name: "child", beats: append(opening(),
 		beat{"spawned", func(r *reel) {
-			spawnedAt = r.at
+			_ = held.Hold(roster.SubAgent{
+				ID:      childID,
+				Mission: "read the policy loader",
+				Owns:    []string{"internal/judge/policy/**"},
+				Started: r.at,
+			})
 			r.send(
 				delta("handing the policy loader to a child"),
 				tui.Event{Kind: tui.EventToolCall, ID: "42e30c", Tool: "spawn", Text: "read internal/judge/policy/resolve.go and say what it reads first", Promote: true},
-				child(r, subagent.Running, 1, 0),
+				child(r, roster.Working, 1, 0),
 			)
 			r.wait(childGap)
 		}},
 		beat{"child-working", func(r *reel) {
-			r.send(call("815e77", "read", "internal/judge/policy/resolve.go"), child(r, subagent.Running, 2, 9400))
+			r.send(call("815e77", "read", "internal/judge/policy/resolve.go"), child(r, roster.Working, 2, 9400))
 			r.wait(childGap)
 		}},
 		beat{"child-thinking", func(r *reel) {
-			r.send(result("815e77", "209 lines, 6.2 KB"), child(r, subagent.Running, 2, 18200))
+			r.send(result("815e77", "209 lines, 6.2 KB"), child(r, roster.Working, 2, 18200))
 			r.wait(childGap)
 		}},
 		beat{"answered", func(r *reel) {
 			r.send(
-				child(r, subagent.HandedBack, 2, 24600),
+				child(r, roster.InReview, 2, 24600),
 				result("42e30c", "3 lines, 199 bytes"),
 				tui.Event{Kind: tui.EventText, ID: "d41c08", Text: "the child read it: the loader reads the lock before the mode."},
 				tui.Event{Kind: tui.EventDone, Text: "cooked for"},

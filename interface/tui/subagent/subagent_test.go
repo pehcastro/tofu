@@ -96,14 +96,11 @@ func TestHowManyCallLinesFitAChildsRow(t *testing.T) {
 }
 
 func pairedStates() map[State]roster.State {
-	return map[State]roster.State{
-		Running:          roster.Working,
-		WaitingForAnswer: roster.WaitingAnswer,
-		HandedBack:       roster.InReview,
-		Parked:           roster.Parked,
-		Errored:          roster.Errored,
-		Done:             roster.Finished,
+	paired := map[State]roster.State{}
+	for _, held := range roster.States() {
+		paired[stateOf(held)] = held
 	}
+	return paired
 }
 
 func TestTheSubAgentViewDrawsExactlyTheStatesTheRosterCanReach(t *testing.T) {
