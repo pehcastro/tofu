@@ -4,6 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"io"
 	"os"
 	"os/exec"
@@ -30,6 +33,7 @@ const (
 	slashSlash            = "/" + "/"
 	rulesInTheBinary      = "the binary"
 	rulesInTheProject     = "the project"
+	realTofuPackage       = "./cmd/tofu"
 )
 
 func TestMain(m *testing.M) {
@@ -219,22 +223,76 @@ func TestTheRecursionBoundRefusesANestedRunAtTheLimit(t *testing.T) {
 	}
 }
 
-func standInForwardsToARealTofu(t *testing.T) {
+func moduleRoot(t *testing.T) string {
 	t.Helper()
 	module, err := filepath.Abs(filepath.Join("..", "..", ".."))
 	if err != nil {
 		t.Fatalf("finding the module root: %v", err)
 	}
+	return module
+}
+
+func buildFailureIsATreeFailure(pkg string, err error, out []byte) string {
+	return fmt.Sprintf("%s did not build, so the tree is broken outside this package and the tests here cannot run the real tofu: %v\n%s", pkg, err, out)
+}
+
+func standInForwardsToARealTofu(t *testing.T) {
+	t.Helper()
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
 	real := filepath.Join(t.TempDir(), tofuName())
-	build := exec.Command("go", "build", "-o", real, "./cmd/tofu")
-	build.Dir = module
+	build := exec.Command("go", "build", "-o", real, realTofuPackage)
+	build.Dir = moduleRoot(t)
 	if out, err := build.CombinedOutput(); err != nil {
-		t.Skipf("this test runs the real tofu and the tree does not build it, which is not a finding about this package: %v\n%s", err, out)
+		t.Fatal(buildFailureIsATreeFailure(realTofuPackage, err, out))
 	}
 	t.Setenv(realTofuEnvar, real)
+}
+
+func TestABrokenTreeIsNotReportedAsAnOrdinarySkip(t *testing.T) {
+	file, err := parser.ParseFile(token.NewFileSet(), "verb_test.go", nil, 0)
+	if err != nil {
+		t.Fatalf("parsing verb_test.go: %v", err)
+	}
+	helper := "standInForwardsToARealTofu"
+	var declared *ast.FuncDecl
+	for _, decl := range file.Decls {
+		if function, ok := decl.(*ast.FuncDecl); ok && function.Name.Name == helper {
+			declared = function
+		}
+	}
+	if declared == nil {
+		t.Fatalf("%s is gone, so nothing here guards how a broken tree is reported", helper)
+	}
+	var skips []string
+	ast.Inspect(declared, func(node ast.Node) bool {
+		if selector, ok := node.(*ast.SelectorExpr); ok && strings.HasPrefix(selector.Sel.Name, "Skip") {
+			skips = append(skips, selector.Sel.Name)
+		}
+		return true
+	})
+	if len(skips) > 0 {
+		t.Fatalf("%s calls %v, so a tree that does not build reports itself as an ordinary skip", helper, skips)
+	}
+}
+
+func TestABrokenTreeFailsWithTheNameOfThePackageThatDidNotBuild(t *testing.T) {
+	absent := realTofuPackage + "-no-such-package"
+	build := exec.Command("go", "build", "-o", filepath.Join(t.TempDir(), tofuName()), absent)
+	build.Dir = moduleRoot(t)
+	out, err := build.CombinedOutput()
+	if err == nil {
+		t.Fatalf("a package path that does not exist built anyway, so no broken tree can be reached from here\n%s", out)
+	}
+	report := buildFailureIsATreeFailure(absent, err, out)
+	t.Logf("a broken tree reports:\n%s", strings.TrimSpace(report))
+	if !strings.Contains(report, absent) {
+		t.Fatalf("the report does not name the package that did not build, so a reader looks in this package instead: %q", report)
+	}
+	if !strings.Contains(report, strings.TrimSpace(string(out))) {
+		t.Fatalf("the report drops what the compiler said, so the reader learns only that something failed: %q", report)
+	}
 }
 
 func TestATurnCallsRulesCheckThroughTheToolInATreeThatIsNotThisRepository(t *testing.T) {
