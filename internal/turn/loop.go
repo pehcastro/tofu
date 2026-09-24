@@ -54,6 +54,8 @@ const andThisIsItsLastStep = " and this is its last step: answer now from what y
 
 type CalledAsTheStepIsRecordedAndBeforeTheNextOneIsAsked func(StepRow)
 
+type CalledAsEachToolCallAnswersAndBeforeTheNextRequest func(llm.Message)
+
 type Config struct {
 	Model           Model
 	Accounts        Accounts
@@ -85,6 +87,7 @@ type Config struct {
 	Sessions        *session.Store
 	Steering        func() []string
 	Step            CalledAsTheStepIsRecordedAndBeforeTheNextOneIsAsked
+	ToolResult      CalledAsEachToolCallAnswersAndBeforeTheNextRequest
 	EndedSession    func(Row) error
 	Now             func() time.Time
 	NewID           func() string
@@ -389,6 +392,11 @@ func Run(ctx context.Context, config Config) (Row, error) {
 				stepRow.ToolCalls = append(stepRow.ToolCalls, rows...)
 				messages = append(messages, answers...)
 				flush()
+				if config.ToolResult != nil {
+					for _, answered := range answers {
+						config.ToolResult(answered)
+					}
+				}
 				pending = pending[len(wave):]
 				for _, called := range rows {
 					if called.Proxy != nil && called.Proxy.Note != "" && !slices.Contains(row.Warnings, called.Proxy.Note) {

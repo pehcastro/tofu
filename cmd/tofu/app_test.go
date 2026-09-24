@@ -604,6 +604,77 @@ func TestAToolCallsVendorIDNeverReachesTheScreenAndTheCallStillPairsWithItsResul
 	}
 }
 
+type modelStoppingTheTurnWhileItAnswers struct {
+	stop context.CancelFunc
+	call llm.ToolCall
+}
+
+func (m *modelStoppingTheTurnWhileItAnswers) Ask(context.Context, llm.Request) (llm.Decision, error) {
+	m.stop()
+	return llm.Decision{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{m.call}}, nil
+}
+
+func TestAToolResultThatArrivesAfterTheTurnIsStoppedStillReachesTheView(t *testing.T) {
+	dir := scratchProject(t)
+	driver := driveApp(t)
+	ctx, stop := context.WithCancel(t.Context())
+	defer stop()
+	model := &modelStoppingTheTurnWhileItAnswers{stop: stop, call: writeNote("call-1")}
+
+	stubbedTurn(dir, model)(ctx, onTheSubscription, "write a note", driver.emit)
+
+	calls, results := driver.of(tui.EventToolCall), driver.of(tui.EventToolResult)
+	if len(calls) != 1 || len(results) != 1 {
+		t.Fatalf("the stopped turn emitted %d calls and %d results, want the one write and its result", len(calls), len(results))
+	}
+	if results[0].ID != calls[0].ID {
+		t.Fatalf("the result carries %q and the call %q, so the view cannot pair them", results[0].ID, calls[0].ID)
+	}
+}
+
+func screenAfterTwoInterrupts(t *testing.T, name, command string) string {
+	t.Helper()
+	dir := drivenProject(t)
+	var set, errOut bytes.Buffer
+	if code := settingsVerb([]string{"set", "chatShowsTools", "true"}, &set, &errOut); code != exitOK {
+		t.Fatalf("settings set chatShowsTools true exited %d: %s", code, errOut.String())
+	}
+	deck := written(t, dir, name+".cassette",
+		`{"text":"running the shell","tools":[{"name":"bash","args":{"command":"`+command+`"}}]}`+"\n")
+	script := written(t, dir, name+".drive", strings.Join([]string{
+		"wait type a task and press enter",
+		"type run the shell",
+		"key enter",
+		"wait working   bash",
+		"key ctrl+c",
+		"key ctrl+c",
+		"wait cooked for",
+		"screen",
+	}, "\n"))
+	var out bytes.Buffer
+	if code := driveVerb([]string{script, "--cassette", deck, "--plain", "--timeout", "60s"}, strings.NewReader(""), &out, &errOut); code != exitOK {
+		t.Fatalf("tofu drive exited %d: %s", code, errOut.String())
+	}
+	return out.String()
+}
+
+func TestAShellStoppedPartWayThroughShowsWhatItPrintedAndSaysNoResultOnlyWhenItPrintedNothing(t *testing.T) {
+	printed := screenAfterTwoInterrupts(t, "printing", "printf HALFWAY; sleep 6")
+	if said := strings.Count(printed, "HALFWAY"); said < 2 {
+		t.Errorf("HALFWAY appears %d times, so the call is drawn without the output it had already printed:\n%s", said, printed)
+	}
+	if strings.Contains(printed, "no result") {
+		t.Errorf("the chat says the stopped shell had no result while it printed one:\n%s", printed)
+	}
+	t.Log("\n" + printed)
+
+	silent := screenAfterTwoInterrupts(t, "silent", "sleep 6")
+	if !strings.Contains(silent, "no result") {
+		t.Errorf("a killed shell printed nothing and the chat claims something came back:\n%s", silent)
+	}
+	t.Log("\n" + silent)
+}
+
 func TestATurnDrivenThroughTheAppFillsTheContextMeter(t *testing.T) {
 	dir := scratchProject(t)
 	driver := driveApp(t)

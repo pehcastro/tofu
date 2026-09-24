@@ -740,6 +740,7 @@ func (s *appSession) run(ctx context.Context, pick tui.Pick, task string, emit t
 		config.Steering = func() []string { return steered(s.steer, emit) }
 	}
 	watch.spawner = spawner
+	config.ToolResult = watch.result
 	config.Step = func(step turn.StepRow) {
 		emit(tui.Event{Kind: tui.EventPlan, Plan: statedPlan(plan.Items())})
 		if step.Occupancy == nil {
@@ -907,27 +908,9 @@ type appWatcher struct {
 
 func (a *appWatcher) Ask(ctx context.Context, request llm.Request) (llm.Decision, error) {
 	for _, message := range request.Messages {
-		if message.Role != llm.RoleTool || a.seen[message.ToolCallID] {
-			continue
+		if message.Role == llm.RoleTool {
+			a.result(message)
 		}
-		a.seen[message.ToolCallID] = true
-		result := tui.Event{
-			Kind:   tui.EventToolResult,
-			ID:     sessionstore.EventIDFor(a.turnID, message.ToolCallID),
-			Text:   resultSummary(message.Content),
-			Bytes:  message.ToolResultBytes,
-			Failed: message.ToolOutcome.Failed(),
-		}
-		if !result.Failed {
-			if strings.HasPrefix(message.Content, unifiedDiffHeader) {
-				result.Diff = message.Content
-			}
-			if strings.HasPrefix(message.Content, createdFilePrefix) {
-				result.Created = a.wrote[message.ToolCallID]
-			}
-		}
-		delete(a.wrote, message.ToolCallID)
-		a.emit(result)
 	}
 	a.sendSubAgents()
 
@@ -962,6 +945,31 @@ func (a *appWatcher) Ask(ctx context.Context, request llm.Request) (llm.Decision
 		a.noteWholeFile(call)
 	}
 	return decision, nil
+}
+
+func (a *appWatcher) result(message llm.Message) {
+	killedWithNothingToShow := message.ToolOutcome == llm.ToolOutcomeAborted && message.ToolResultBytes == 0
+	if a.seen[message.ToolCallID] || killedWithNothingToShow {
+		return
+	}
+	a.seen[message.ToolCallID] = true
+	result := tui.Event{
+		Kind:   tui.EventToolResult,
+		ID:     sessionstore.EventIDFor(a.turnID, message.ToolCallID),
+		Text:   resultSummary(message.Content),
+		Bytes:  message.ToolResultBytes,
+		Failed: message.ToolOutcome.Failed(),
+	}
+	if !result.Failed {
+		if strings.HasPrefix(message.Content, unifiedDiffHeader) {
+			result.Diff = message.Content
+		}
+		if strings.HasPrefix(message.Content, createdFilePrefix) {
+			result.Created = a.wrote[message.ToolCallID]
+		}
+	}
+	delete(a.wrote, message.ToolCallID)
+	a.emit(result)
 }
 
 func (a *appWatcher) noteWholeFile(call llm.ToolCall) {

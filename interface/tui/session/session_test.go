@@ -253,6 +253,27 @@ func TestAShellCallCarriesItsOwnColourNotThePlainToolColour(t *testing.T) {
 	}
 }
 
+func TestAResultForACallThatIsNoLongerRunningIsKeptAsItsOwnLine(t *testing.T) {
+	model := New(fixed(), counted(new(int)))
+	model.SetSize(80, 24)
+	model.ChatShowsTools = true
+	model.Append(Entry{Kind: Tool, ID: "c1", Head: "spawn", Body: "write mine/half.txt"})
+	model.Stop()
+	if !strings.Contains(model.View(), noResult) {
+		t.Fatalf("a call left running when the turn stopped is not stamped, so the late result has nothing to miss:\n%s", model.View())
+	}
+
+	model.Finish("c1", Result{Status: "the child is parked and what it wrote stands"})
+
+	drawn := model.View()
+	if !strings.Contains(drawn, "the child is parked and what it wrote stands") {
+		t.Fatalf("a result that arrived after the call was stamped is dropped instead of kept:\n%s", drawn)
+	}
+	if entry := model.entries[len(model.entries)-1]; entry.Kind != Note {
+		t.Fatalf("the late result was kept as a %v rather than a note of its own", entry.Kind)
+	}
+}
+
 func TestABlankLineSitsAboveTheActivityBlock(t *testing.T) {
 	model := New(fixed(), counted(new(int)))
 	model.SetSize(80, 24)

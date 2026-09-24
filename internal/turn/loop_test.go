@@ -585,6 +585,112 @@ func TestACancelledTurnStopsAtTheNextStepThoughTheModelIgnoresItsContext(t *test
 	t.Logf("the turn ended as %s on %v after %d step", row.Outcome, err, len(row.Steps))
 }
 
+type askAndToolClock struct {
+	mu       sync.Mutex
+	asking   bool
+	running  int
+	overlaps []string
+	inner    *stubModel
+}
+
+func (c *askAndToolClock) Name() string { return "read" }
+
+func (c *askAndToolClock) Definition() llm.Tool {
+	return llm.Tool{Name: c.Name(), Description: "a tool that watches the clock", Parameters: map[string]any{"type": "object"}}
+}
+
+func (c *askAndToolClock) Ask(ctx context.Context, request llm.Request) (llm.Decision, error) {
+	c.mu.Lock()
+	if c.running > 0 {
+		c.overlaps = append(c.overlaps, "the model produced text while "+strconv.Itoa(c.running)+" tools were running")
+	}
+	c.asking = true
+	c.mu.Unlock()
+
+	time.Sleep(40 * time.Millisecond)
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.asking = false
+	return c.inner.Ask(ctx, request)
+}
+
+func (c *askAndToolClock) Run(_ context.Context, _ json.RawMessage) (Result, error) {
+	c.mu.Lock()
+	c.running++
+	if c.asking {
+		c.overlaps = append(c.overlaps, "a tool started while the model was still producing text")
+	}
+	c.mu.Unlock()
+
+	time.Sleep(40 * time.Millisecond)
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.running--
+	return Result{Content: "84 lines"}, nil
+}
+
+func TestTextAndARunningToolNeverOverlapBecauseEveryToolRunsAfterTheAskReturns(t *testing.T) {
+	clock := &askAndToolClock{inner: &stubModel{decisions: []llm.Decision{
+		toolCallDecision(
+			llm.ToolCall{ID: "call-1", Name: "read", Arguments: json.RawMessage(`{"path":"a.go"}`)},
+			llm.ToolCall{ID: "call-2", Name: "read", Arguments: json.RawMessage(`{"path":"b.go"}`)},
+		),
+		messageDecision(),
+	}}}
+
+	row, err := Run(context.Background(), baseConfig(t, clock, NewRegistry(clock)))
+	if err != nil {
+		t.Fatalf("Run returned an error: %v", err)
+	}
+	if len(row.Steps) != 2 || len(row.Steps[0].ToolCalls) != 2 {
+		t.Fatalf("the turn did not ask twice and run two tools, it is %+v", row.Steps)
+	}
+	if len(clock.overlaps) > 0 {
+		t.Fatalf("text and a running tool coexisted: %s", strings.Join(clock.overlaps, "; "))
+	}
+}
+
+type modelStoppingTheTurnWhileItAnswers struct {
+	stop     context.CancelFunc
+	decision llm.Decision
+}
+
+func (m *modelStoppingTheTurnWhileItAnswers) Ask(context.Context, llm.Request) (llm.Decision, error) {
+	m.stop()
+	return m.decision, nil
+}
+
+func TestAToolResultIsHandedOverWhenTheCallFinishesAndNotAtTheNextRequest(t *testing.T) {
+	parked := "the child is parked, and what it wrote stands"
+	tool := &stubTool{name: "spawn", result: Result{Content: parked}}
+	ctx, stop := context.WithCancel(context.Background())
+	defer stop()
+	model := &modelStoppingTheTurnWhileItAnswers{
+		stop:     stop,
+		decision: toolCallDecision(llm.ToolCall{ID: "call-1", Name: "spawn", Arguments: json.RawMessage(`{}`)}),
+	}
+
+	config := baseConfig(t, model, NewRegistry(tool))
+	var handed []llm.Message
+	config.ToolResult = func(answered llm.Message) { handed = append(handed, answered) }
+	row, err := Run(ctx, config)
+
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("the turn ended with %v, want the cancellation that makes this the late case", err)
+	}
+	if len(row.Steps) != 1 || len(row.Steps[0].ToolCalls) != 1 {
+		t.Fatalf("the turn recorded %+v, want the one call that finished", row.Steps)
+	}
+	if len(handed) != 1 {
+		t.Fatalf("the stopped turn handed over %d results, want the one the tool produced", len(handed))
+	}
+	if handed[0].Content != parked || handed[0].ToolCallID != "call-1" {
+		t.Fatalf("the result handed over is %+v, want the parked child's own words under its call id", handed[0])
+	}
+}
+
 func TestPackageMakesNoNetworkCallOfItsOwn(t *testing.T) {
 	files, err := filepath.Glob("*.go")
 	if err != nil {
