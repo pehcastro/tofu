@@ -1207,3 +1207,27 @@ func TestCheckPortTellsListeningFromNotWithoutAnHTTPRequest(t *testing.T) {
 		t.Fatalf("checking a closed port returned %q", result.Content)
 	}
 }
+
+func TestAnOutOfRangeTimeoutIsCorrectedAndOnlyAnImpossibleOneIsMentioned(t *testing.T) {
+	for _, corrected := range []struct {
+		requested int
+		deadline  int
+		note      string
+	}{
+		{requested: 0, deadline: konst.BashDeadlineMillis},
+		{requested: 30000, deadline: 30000},
+		{requested: -1, deadline: konst.BashDeadlineMillis, note: "-1"},
+		{requested: 700000, deadline: konst.BashMaxDeadlineMillis, note: "700000"},
+	} {
+		deadline, note := bashDeadline(corrected.requested)
+		if deadline != corrected.deadline {
+			t.Fatalf("timeout_ms %d ran with %d ms, want %d", corrected.requested, deadline, corrected.deadline)
+		}
+		if corrected.note == "" && note != "" {
+			t.Fatalf("timeout_ms %d was corrected for no reason: %q", corrected.requested, note)
+		}
+		if corrected.note != "" && !strings.Contains(note, corrected.note) {
+			t.Fatalf("timeout_ms %d was corrected without naming it: %q", corrected.requested, note)
+		}
+	}
+}

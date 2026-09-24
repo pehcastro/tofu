@@ -3,8 +3,6 @@ package turn
 import (
 	"context"
 	"encoding/json"
-	"os"
-	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
@@ -52,46 +50,24 @@ func TestACommandThatFinishesInsideItsDeadlineIsUnaffected(t *testing.T) {
 	}
 }
 
-func TestATimeoutAboveTheCeilingIsRefusedWithTheCeilingNamed(t *testing.T) {
+func TestATimeoutAboveTheCeilingIsTakenAtTheCeilingAndTheResultSaysSo(t *testing.T) {
 	tool, err := NewBashTool(t.TempDir())
 	if err != nil {
 		t.Fatalf("building the bash tool: %v", err)
 	}
-	_, err = tool.Run(context.Background(), json.RawMessage(`{"command":"echo x","timeout_ms":900000}`))
-	if err == nil || !strings.Contains(err.Error(), "600000") {
-		t.Fatalf("a timeout_ms above the ceiling was taken: %v", err)
+	result, err := tool.Run(context.Background(), json.RawMessage(`{"command":"echo over the cap","timeout_ms":900000}`))
+	if err != nil {
+		t.Fatalf("a timeout_ms above the ceiling ended the call: %v", err)
 	}
-}
-
-const recordedFixture = `import { describe, it, expect } from 'bun:test'
-import { Hono } from 'hono'
-import { app } from './app'
-
-describe('POST /tasks', () => {
-  it('accepts an explicit done flag', async () => {
-    const res = await postJson('/tasks', { title: 'already done', done: true })
-    expect(res.status).toBe(201)
-  })
-
-  it('rejects an over-long title with 400', async () => {
-    const res = await postJson('/tasks', { title: 'x'.repeat(201) })
-    expect(res.status).toBe(400)
-  })
-})
-`
-
-func seedRecordedFixture(t *testing.T) string {
-	t.Helper()
-	root := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(root, "src"), 0o755); err != nil {
-		t.Fatalf("seeding the fixture directory: %v", err)
+	if result.ExitCode == nil || *result.ExitCode != 0 || !strings.Contains(result.Content, "over the cap") {
+		t.Fatalf("the command did not run: %+v", result)
 	}
-	for _, name := range []string{"app.ts", "app.test.ts"} {
-		if err := os.WriteFile(filepath.Join(root, "src", name), []byte(recordedFixture), 0o644); err != nil {
-			t.Fatalf("seeding the fixture: %v", err)
+	for _, want := range []string{"900000", "600000"} {
+		if !strings.Contains(result.Content, want) {
+			t.Fatalf("the result never says %q, so the model cannot tell it did not get what it asked for: %q", want, result.Content)
 		}
 	}
-	return root
+	t.Logf("timeout_ms 900000 returned: %q", result.Content)
 }
 
 func TestBashToolRunsTheRecordedQuotedCommandsThatCmdExeTurnedIntoABackslashQuoteAndZeroBytes(t *testing.T) {

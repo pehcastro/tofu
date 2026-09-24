@@ -552,7 +552,7 @@ func (t *BashTool) Definition() llm.Tool {
 			"type": "object",
 			"properties": map[string]any{
 				"command":    map[string]any{"type": "string", "description": "required unless check_port is set"},
-				"timeout_ms": map[string]any{"type": "integer", "description": fmt.Sprintf("how long the command may run before it is killed, %d by default and %d at most", konst.BashDeadlineMillis, konst.BashMaxDeadlineMillis)},
+				"timeout_ms": map[string]any{"type": "integer", "description": fmt.Sprintf("how long the command may run before it is killed, %d by default and %d at most. a larger number runs at the cap and says so rather than being refused", konst.BashDeadlineMillis, konst.BashMaxDeadlineMillis)},
 				"background": map[string]any{"type": "boolean", "description": "start command and return right away instead of waiting for it to exit; it outlives the turn and keeps running until it exits on its own or tofu exits"},
 				"check_port": map[string]any{"type": "integer", "description": "skip command and report whether this port answers on 127.0.0.1, without any http request"},
 			},
@@ -601,6 +601,21 @@ func (t *BashTool) runBackground(ctx context.Context, args bashArgs) (Result, er
 	}, nil
 }
 
+func bashDeadline(requested int) (deadline int, corrected string) {
+	switch {
+	case requested > konst.BashMaxDeadlineMillis:
+		return konst.BashMaxDeadlineMillis, fmt.Sprintf(
+			"bash: timeout_ms %d is over the cap, so the command ran with the %d ms cap rather than being refused\n",
+			requested, konst.BashMaxDeadlineMillis)
+	case requested < 0:
+		return konst.BashDeadlineMillis, fmt.Sprintf(
+			"bash: timeout_ms %d is not a length of time, so the command ran with the default %d ms\n",
+			requested, konst.BashDeadlineMillis)
+	default:
+		return cmp.Or(requested, konst.BashDeadlineMillis), ""
+	}
+}
+
 func (t *BashTool) Run(ctx context.Context, raw json.RawMessage) (Result, error) {
 	var args bashArgs
 	if err := json.Unmarshal(raw, &args); err != nil {
@@ -619,10 +634,7 @@ func (t *BashTool) Run(ctx context.Context, raw json.RawMessage) (Result, error)
 		return Result{}, fmt.Errorf("bash: %s is not on this shell's PATH, so this command would just fail not found. %s", name, summary)
 	}
 
-	deadline := cmp.Or(args.TimeoutMS, konst.BashDeadlineMillis)
-	if deadline < 1 || deadline > konst.BashMaxDeadlineMillis {
-		return Result{}, fmt.Errorf("bash: timeout_ms is %d and it has to be between 1 and %d", args.TimeoutMS, konst.BashMaxDeadlineMillis)
-	}
+	deadline, corrected := bashDeadline(args.TimeoutMS)
 	ctx, cancel := context.WithTimeout(ctx, time.Duration(deadline)*time.Millisecond)
 	defer cancel()
 
@@ -646,7 +658,7 @@ func (t *BashTool) Run(ctx context.Context, raw json.RawMessage) (Result, error)
 
 	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 		watch.killed()
-		return Result{}, errors.New("bash: " + search.Note(search.Stopped, fmt.Sprintf(
+		return Result{}, errors.New(corrected + "bash: " + search.Note(search.Stopped, fmt.Sprintf(
 			"%q ran %d ms, past the %d ms deadline. do not run it again unchanged: narrow it, or pass timeout_ms up to %d when the command truly needs longer. "+
 				"a question about which files exist or what they contain is answered by project_report, glob or search without a shell and without this cost",
 			args.Command, time.Since(started).Milliseconds(), deadline, konst.BashMaxDeadlineMillis)))
@@ -677,7 +689,7 @@ func (t *BashTool) Run(ctx context.Context, raw json.RawMessage) (Result, error)
 		content += fmt.Sprintf(commandExited, code)
 		outcome = ResultFailed
 	}
-	content = capResult(content, konst.TurnResultBytesCap)
+	content = corrected + capResult(content, konst.TurnResultBytesCap)
 	return Result{Content: content, Command: args.Command, ExitCode: &code, FailureText: bashFailureText(code), Outcome: outcome}, nil
 }
 
