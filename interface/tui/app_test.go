@@ -310,22 +310,85 @@ func TestAnAskedCallShowsEveryAnswerAndTheReason(t *testing.T) {
 	}
 }
 
+func keyEnvPath() string {
+	return `C:\Users\Luiz\AppData\Local\Temp\orch-drive\home\.tofu\.env`
+}
+
+func noKeyAtAll() string {
+	return `jev.Key: missing_credential: OPENROUTER_KEY is not set and ` + keyEnvPath() + ` does not exist`
+}
+
 func gateOffApp(t *testing.T, width, height int) *App {
 	t.Helper()
 	app := newTestApp(Options{Repo: testRepo, Branch: "develop", Now: fixedClock(), Wires: anthropicAlone})
 	app.Init()
 	app.Update(tea.WindowSizeMsg{Width: width, Height: height})
 	for _, event := range []Event{
-		{Kind: EventGateOff, Text: "there is no openrouter key"},
+		{Kind: EventGateOff, Text: noKeyAtAll()},
 		{Kind: EventToolCall, ID: "c1", Tool: "read", Text: "internal/judge/policy/toolgate.go"},
 		{Kind: EventToolResult, ID: "c1", Text: "412 lines, 11.8 KB"},
-		{Kind: EventGateOff, Text: "there is no openrouter key"},
+		{Kind: EventGateOff, Text: noKeyAtAll()},
 		{Kind: EventToolCall, ID: "c2", Tool: "bash", Text: "go test ./internal/judge/..."},
 		{Kind: EventToolResult, ID: "c2", Text: "ok tofu/internal/judge 0.42s"},
 	} {
 		app.Update(event)
 	}
 	return app
+}
+
+func TestTheGateOffNoteKeepsThePathAndTheFunctionOutOfTheTranscript(t *testing.T) {
+	content := ansi.Strip(gateOffApp(t, 80, 24).View().Content)
+	for _, absent := range []string{keyEnvPath(), `\.tofu\.env`, "jev.Key", "missing_credential"} {
+		if strings.Contains(content, absent) {
+			t.Errorf("the transcript pastes %q from the raw error\n%s", absent, content)
+		}
+	}
+	if !strings.Contains(strings.Join(strings.Fields(content), " "), gateOffNoKey) {
+		t.Errorf("the transcript does not say what to do about the missing key\n%s", content)
+	}
+}
+
+func TestEachGateOffStateGetsItsOwnLine(t *testing.T) {
+	unnamed := `jev.Key: missing_credential: OPENROUTER_KEY is not set and ` + keyEnvPath() + ` does not carry it`
+	unread := `jev.Key: missing_credential: reading ` + keyEnvPath() + `: permission denied`
+	for _, state := range []struct {
+		raw  string
+		want string
+	}{
+		{noKeyAtAll(), gateOffNoKey},
+		{unnamed, gateOffKeyUnnamed},
+		{unread, gateOffKeyUnread},
+		{"jev: the endpoint is not a url", gateOffUnexplained},
+	} {
+		if note := gateOffNote(state.raw); note != gateOffLine+" "+state.want {
+			t.Errorf("%q reads as %q, want the line ending %q", state.raw, note, state.want)
+		}
+	}
+}
+
+func TestTheRawGateErrorIsWholeInTheWorkView(t *testing.T) {
+	app := gateOffApp(t, 80, 24)
+	found := false
+	for _, entry := range app.work.Entries {
+		found = found || (entry.Head == gateOffHead && entry.Output == noKeyAtAll())
+	}
+	if !found {
+		t.Fatalf("no work entry carries the raw gate error\n%+v", app.work.Entries)
+	}
+	app.Update(tea.KeyPressMsg{Code: tea.KeyTab})
+	content := ansi.Strip(app.View().Content)
+	if !strings.Contains(content, "missing_credential") || !strings.Contains(content, gateOffHead) {
+		t.Errorf("the work view does not show the raw gate error\n%s", content)
+	}
+}
+
+func TestTheAnswerDoesNotPointAtTheGateNoteForItsWork(t *testing.T) {
+	app := newTestApp(Options{Repo: testRepo, Branch: "develop", Now: fixedClock(), Wires: anthropicAlone})
+	app.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	app.Update(Event{Kind: EventGateOff, Text: noKeyAtAll()})
+	if id := app.turnWorkID(); id != "" {
+		t.Errorf("the answer points at the gate note %q as the work of the turn", id)
+	}
 }
 
 func TestWithTheGateOffTheSessionSaysSoOnceAndNoCallClaimsAVerdict(t *testing.T) {

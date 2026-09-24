@@ -196,6 +196,31 @@ func subAgentsLabel(running int) string {
 }
 
 const (
+	gateOffLine        = "the gate is off, so no call on this session is judged."
+	gateOffNoKey       = "put OPENROUTER_KEY in .tofu/.env and the next session is judged."
+	gateOffKeyUnnamed  = ".tofu/.env carries no OPENROUTER_KEY line: add one and the next session is judged."
+	gateOffKeyUnread   = "the .env file that should carry OPENROUTER_KEY could not be read."
+	gateOffUnexplained = "tofu could not open the judge."
+	gateOffHead        = "gate off"
+	keyErrorNoFile     = "does not exist"
+	keyErrorNoName     = "does not carry it"
+	keyErrorUnreadable = "missing_credential: reading"
+)
+
+func gateOffNote(raw string) string {
+	tail := gateOffUnexplained
+	switch {
+	case strings.Contains(raw, keyErrorNoFile):
+		tail = gateOffNoKey
+	case strings.Contains(raw, keyErrorNoName):
+		tail = gateOffKeyUnnamed
+	case strings.Contains(raw, keyErrorUnreadable):
+		tail = gateOffKeyUnread
+	}
+	return gateOffLine + " " + tail
+}
+
+const (
 	eventBuffer    = 256
 	defaultWidth   = 80
 	defaultHeight  = 24
@@ -209,7 +234,6 @@ const (
 	setupWatch     = "or run the command in another terminal: tofu picks it up here"
 	setupPoll      = time.Second
 	readyNote      = "type a task and press enter. tofu works in "
-	gateOffLine    = "the gate is off, so no call on this session is judged."
 	altPrefix      = "alt+"
 	stoppingNote   = "stopping the turn"
 	stoppingModel  = "stopping the model, and letting the running tools finish"
@@ -912,7 +936,10 @@ func (a *App) absorb(event Event) {
 	case EventGateOff:
 		if !a.gateOff {
 			a.gateOff = true
-			a.view.Append(session.Entry{Kind: session.Note, Body: strings.TrimSpace(gateOffLine + " " + event.Text)})
+			id := a.mintID()
+			a.work.Append(work.Entry{ID: id, Head: gateOffHead, Output: event.Text})
+			a.workBeforeTurn = len(a.work.Entries)
+			a.view.Append(session.Entry{Kind: session.Note, ID: id, Body: gateOffNote(event.Text)})
 		}
 	case EventContext:
 		a.status.Context = event.Context
