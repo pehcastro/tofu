@@ -10,6 +10,7 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
+	"tofu/interface/tui/golden"
 	"tofu/interface/tui/subagent"
 	"tofu/interface/tui/theme"
 )
@@ -69,7 +70,7 @@ func TestTheRunningRowSitsBetweenTheTranscriptAndTheComposer(t *testing.T) {
 	if !strings.Contains(rows[running[0]], "#") {
 		t.Errorf("the transcript's running line carries no id\n%s", rows[running[0]])
 	}
-	assertGolden(t, "session-activity-80x24.golden", view.Content)
+	golden.Assert(t, "session-activity-80x24.golden", view.Content)
 }
 
 func TestWithNothingRunningThereIsNoActivityRow(t *testing.T) {
@@ -78,7 +79,7 @@ func TestWithNothingRunningThereIsNoActivityRow(t *testing.T) {
 	if running := spinningRows(rows); len(running) != 0 {
 		t.Errorf("an idle session draws %d spinning rows on %v\n%s", len(running), running, strings.Join(rows, "\n"))
 	}
-	assertGolden(t, "session-80x24.golden", app.View().Content)
+	golden.Assert(t, "session-80x24.golden", app.View().Content)
 }
 
 func TestTheWholeRunningRowCarriesThePhasesOwnColour(t *testing.T) {
@@ -140,7 +141,7 @@ func TestScrollingTheTranscriptDoesNotMoveTheRunningRow(t *testing.T) {
 		t.Errorf("the running row moved from %v to %v when the transcript scrolled\n%s",
 			before, after, strings.Join(rows, "\n"))
 	}
-	assertGolden(t, "session-activity-scrolled-80x24.golden", view.Content)
+	golden.Assert(t, "session-activity-scrolled-80x24.golden", view.Content)
 }
 
 func runningChildren() []subagent.Child {
@@ -201,7 +202,7 @@ func TestEachRunningChildIsARowCarryingWhatItSpent(t *testing.T) {
 	if strings.Contains(strings.Join(rows[:top], "\n"), "go-rules") {
 		t.Errorf("a child that is not running took a row\n%s", strings.Join(rows, "\n"))
 	}
-	assertGolden(t, "session-children-80x24.golden", view.Content)
+	golden.Assert(t, "session-children-80x24.golden", view.Content)
 }
 
 func turnRow(t *testing.T, app *App) string {

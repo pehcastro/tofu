@@ -10,6 +10,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"tofu/interface/tui/frametime"
+	"tofu/interface/tui/golden"
 )
 
 func rawRowHolding(t *testing.T, app *App, text string) string {
@@ -109,7 +110,7 @@ func TestTheFoldLineNamesToolsJevShellAndTimeWithNoByteFigureOrToolName(t *testi
 			t.Fatalf("the fold line names a tool or a byte figure, got %q in\n%s", unwanted, row)
 		}
 	}
-	assertGolden(t, "session-fold-line-80x24.golden", content)
+	golden.Assert(t, "session-fold-line-80x24.golden", content)
 }
 
 func TestATranscriptLongerThanThePaneAnchorsToTheBottomAndScrolls(t *testing.T) {

@@ -10,6 +10,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
+	"tofu/interface/tui/golden"
 	"tofu/interface/tui/session"
 	"tofu/interface/tui/theme"
 )
@@ -127,7 +128,7 @@ func TestARunOfFourteenCallsDrawsNothingButItsProgressLineWhileItRuns(t *testing
 	calls := fourteenCalls()
 	app := runningApp(t, &at)
 	content := app.View().Content
-	assertGolden(t, "session-run-80x24.golden", content)
+	golden.Assert(t, "session-run-80x24.golden", content)
 	plain := ansi.Strip(content)
 	if strings.Contains(plain, " tools") {
 		t.Errorf("the running run summarises a turn that has not ended\n%s", plain)
@@ -159,7 +160,7 @@ func TestTheProgressLineReplacesItselfAndChangesColourWhenACallFinishes(t *testi
 
 	startCall(app, 0, first)
 	running := app.View().Content
-	assertGolden(t, "session-progress-running-80x24.golden", running)
+	golden.Assert(t, "session-progress-running-80x24.golden", running)
 	if !strings.Contains(ansi.Strip(running), "read internal/turn/loop.go") {
 		t.Fatalf("the running progress line does not name the call\n%s", ansi.Strip(running))
 	}
@@ -167,7 +168,7 @@ func TestTheProgressLineReplacesItselfAndChangesColourWhenACallFinishes(t *testi
 	at = at.Add(callStep)
 	endCall(app, 0, first)
 	finished := app.View().Content
-	assertGolden(t, "session-progress-finished-80x24.golden", finished)
+	golden.Assert(t, "session-progress-finished-80x24.golden", finished)
 	runningOpen := escapeOf(theme.Accent())
 	finishedOpen := escapeOf(theme.Added())
 	if !strings.Contains(running, runningOpen) {
@@ -179,7 +180,7 @@ func TestTheProgressLineReplacesItselfAndChangesColourWhenACallFinishes(t *testi
 
 	startCall(app, 1, second)
 	replaced := app.View().Content
-	assertGolden(t, "session-progress-replaced-80x24.golden", replaced)
+	golden.Assert(t, "session-progress-replaced-80x24.golden", replaced)
 	if strings.Contains(ansi.Strip(replaced), "internal/turn/loop.go") {
 		t.Fatalf("the progress line still names the finished call once a new one starts\n%s", ansi.Strip(replaced))
 	}
@@ -218,7 +219,7 @@ func TestTheCountedLineNeverNamesAToolAcrossSixKinds(t *testing.T) {
 			t.Errorf("the counted line names a tool by kind, got %q\n%s", unwanted, row)
 		}
 	}
-	assertGolden(t, "session-run-six-kinds-80x24.golden", content)
+	golden.Assert(t, "session-run-six-kinds-80x24.golden", content)
 }
 
 func TestTheRunCollapsesToOneDimLineWhenTheTurnEnds(t *testing.T) {
@@ -226,7 +227,7 @@ func TestTheRunCollapsesToOneDimLineWhenTheTurnEnds(t *testing.T) {
 	app := spokenApp(t, &at)
 	finishTurn(app)
 	content := app.View().Content
-	assertGolden(t, "session-run-collapsed-80x24.golden", content)
+	golden.Assert(t, "session-run-collapsed-80x24.golden", content)
 	plain := ansi.Strip(content)
 	if !strings.Contains(plain, "· (14) tools · shell (7) · 42s") {
 		t.Errorf("the collapsed run is not one counted line\n%s", plain)
@@ -247,7 +248,7 @@ func TestCtrlOLeavesChatForWorkAndShowsEveryCall(t *testing.T) {
 		t.Fatal("ctrl+o did not leave chat for work")
 	}
 	content := app.View().Content
-	assertGolden(t, "work-open-80x24.golden", content)
+	golden.Assert(t, "work-open-80x24.golden", content)
 	plain := ansi.Strip(content)
 	if !strings.Contains(plain, "wc -l") {
 		t.Errorf("work does not show the whole command\n%s", plain)
@@ -308,7 +309,7 @@ func TestAGateAskIsNeverFoldedAndTheRunBreaksAroundIt(t *testing.T) {
 	app := wholeRun(t, &at, runWidth, runHeight, askedRun())
 	finishTurn(app)
 	content := app.View().Content
-	assertGolden(t, "session-run-ask-80x24.golden", content)
+	golden.Assert(t, "session-run-ask-80x24.golden", content)
 	plain := ansi.Strip(content)
 	for _, want := range []string{"git push --force origin main", "ask", "risk", "2.00",
 		"risk is hard to undo or reaches outside the workspace"} {
@@ -338,7 +339,7 @@ func TestAFailedCallIsNeverFoldedAndTheRunBreaksAroundIt(t *testing.T) {
 	app := wholeRun(t, &at, runWidth, runHeight, failedRun())
 	finishTurn(app)
 	content := app.View().Content
-	assertGolden(t, "session-run-failure-80x24.golden", content)
+	golden.Assert(t, "session-run-failure-80x24.golden", content)
 	plain := ansi.Strip(content)
 	for _, want := range []string{"go test ./internal/recall/...", "FAIL tofu/internal/recall 0.18s"} {
 		if !strings.Contains(plain, want) {

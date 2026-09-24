@@ -9,6 +9,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
+	"tofu/interface/tui/golden"
 	"tofu/interface/tui/links"
 )
 
@@ -173,7 +174,7 @@ func TestSlashResumeSaysWhatItTookAndSlashNewIsRefusedWhileATurnRuns(t *testing.
 func TestTheOpenMenuGolden(t *testing.T) {
 	app := commandApp(t, make(chan string, 1))
 	typeText(app, "/se")
-	assertGolden(t, "session-menu-80x24.golden", app.View().Content)
+	golden.Assert(t, "session-menu-80x24.golden", app.View().Content)
 }
 
 func TestTheMenuMovesCompletesAndCloses(t *testing.T) {

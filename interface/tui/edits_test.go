@@ -9,6 +9,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"tofu/interface/tui/edits"
+	"tofu/interface/tui/golden"
 )
 
 const (
@@ -211,7 +212,7 @@ func TestTheEditsSidebarSeparatesRunningAgentsFromFinishedOnes(t *testing.T) {
 	if !strings.Contains(content, edits.Self) {
 		t.Errorf("the sidebar does not list the turn itself as an agent\n%s", content)
 	}
-	assertGolden(t, "edits-80x24.golden", app.View().Content)
+	golden.Assert(t, "edits-80x24.golden", app.View().Content)
 }
 
 func TestPickingAnAgentFiltersTheFeedToItsEdits(t *testing.T) {
@@ -234,7 +235,7 @@ func TestPickingAnAgentFiltersTheFeedToItsEdits(t *testing.T) {
 			t.Errorf("picking go-dev left %q in the feed\n%s", gone, picked)
 		}
 	}
-	assertGolden(t, "edits-picked-120x36.golden", app.View().Content)
+	golden.Assert(t, "edits-picked-120x36.golden", app.View().Content)
 }
 
 func TestATurnThatEditsNothingSaysSoRatherThanDrawingAnEmptyFrame(t *testing.T) {
@@ -247,7 +248,7 @@ func TestATurnThatEditsNothingSaysSoRatherThanDrawingAnEmptyFrame(t *testing.T) 
 	if strings.Contains(content, " │ ") {
 		t.Fatalf("the empty file edits view drew a frame instead of saying so\n%s", content)
 	}
-	assertGolden(t, "edits-empty-80x24.golden", app.View().Content)
+	golden.Assert(t, "edits-empty-80x24.golden", app.View().Content)
 }
 
 const measuredEdits = 30

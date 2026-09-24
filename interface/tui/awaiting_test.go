@@ -8,6 +8,8 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
+
+	"tofu/interface/tui/golden"
 )
 
 const promptKeys = "[1] allow once   [2] deny   [3] always here"
@@ -39,7 +41,7 @@ func TestAnAwaitingAskDrawsTheThreeKeysItTakes(t *testing.T) {
 	if !strings.Contains(ansi.Strip(content), promptKeys) {
 		t.Fatalf("the awaiting ask does not offer its keys\n%s", ansi.Strip(content))
 	}
-	assertGolden(t, "session-awaiting-80x24.golden", content)
+	golden.Assert(t, "session-awaiting-80x24.golden", content)
 }
 
 func TestTheAnswerKeysEachSendTheirOwnAnswer(t *testing.T) {

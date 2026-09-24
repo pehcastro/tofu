@@ -9,6 +9,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
+	"tofu/interface/tui/golden"
 	"tofu/interface/tui/session"
 )
 
@@ -27,7 +28,7 @@ func TestAHeadingRendersWhileTheEntryStreams(t *testing.T) {
 	if !strings.Contains(plain, "more of the answer is still arriving") {
 		t.Errorf("the growing tail is missing\n%s", plain)
 	}
-	assertGolden(t, "session-markdown-streaming-80x24.golden", content)
+	golden.Assert(t, "session-markdown-streaming-80x24.golden", content)
 }
 
 func blankRunBefore(lines []string, index int) int {
@@ -69,7 +70,7 @@ func TestABlankLineSeparatesAPersonsMessageFromTheAnswerAbove(t *testing.T) {
 	if gap := blankRunBefore(lines, at); gap < 1 {
 		t.Errorf("no blank line separates the person's message from the answer above it, got %d\n%s", gap, plain)
 	}
-	assertGolden(t, "session-turn-spacing-80x24.golden", content)
+	golden.Assert(t, "session-turn-spacing-80x24.golden", content)
 }
 
 func TestTheBreakBetweenTwoTurnsIsLargerThanAnyBreakInsideOne(t *testing.T) {
@@ -120,7 +121,7 @@ func TestARealRecordedAnswerRendersHeadingsBulletsAndInlineCode(t *testing.T) {
 	if strings.Contains(plain, "`develop`") {
 		t.Errorf("inline code still carries its backticks\n%s", plain)
 	}
-	assertGolden(t, "markdown-real-answer-120x90.golden", content)
+	golden.Assert(t, "markdown-real-answer-120x90.golden", content)
 }
 
 func TestABlankLineSitsAboveTheActivityBlock(t *testing.T) {
@@ -132,5 +133,5 @@ func TestABlankLineSitsAboveTheActivityBlock(t *testing.T) {
 	if !strings.Contains(plain, "working") && !strings.Contains(plain, "requesting") {
 		t.Fatalf("the activity line is missing\n%s", plain)
 	}
-	assertGolden(t, "session-activity-gap-80x24.golden", content)
+	golden.Assert(t, "session-activity-gap-80x24.golden", content)
 }

@@ -13,6 +13,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
+	"tofu/interface/tui/golden"
 	"tofu/interface/tui/paste"
 	"tofu/internal/sys"
 )
@@ -153,7 +154,7 @@ func TestAPastedImageBecomesANumberedChipAtThePositionItWasPasted(t *testing.T) 
 	if got := app.view.Value(); got != "look at [Image #1] and tell me why" {
 		t.Fatalf("the composer holds %q, want the chip at the pasted position", got)
 	}
-	assertGolden(t, "session-paste-image-chip-80x24.golden", app.View().Content)
+	golden.Assert(t, "session-paste-image-chip-80x24.golden", app.View().Content)
 }
 
 func TestTwoImagesPastedInOrderNumberInThatOrder(t *testing.T) {
@@ -185,7 +186,7 @@ func TestALongPastedBlockBecomesATextChip(t *testing.T) {
 	if !strings.Contains(frame, want) {
 		t.Fatalf("the frame does not carry %q:\n%s", want, frame)
 	}
-	assertGolden(t, "session-paste-text-chip-80x24.golden", app.View().Content)
+	golden.Assert(t, "session-paste-text-chip-80x24.golden", app.View().Content)
 }
 
 func TestASentMessageDrawsATreeBeneathItNamingWhatWentWithIt(t *testing.T) {
@@ -211,7 +212,7 @@ func TestASentMessageDrawsATreeBeneathItNamingWhatWentWithIt(t *testing.T) {
 			t.Fatalf("the sent message does not carry %q:\n%s", want, frame)
 		}
 	}
-	assertGolden(t, "session-paste-tree-80x24.golden", app.View().Content)
+	golden.Assert(t, "session-paste-tree-80x24.golden", app.View().Content)
 }
 
 func TestDeletingAPastedImagesTokenDropsItFromTheSentTree(t *testing.T) {

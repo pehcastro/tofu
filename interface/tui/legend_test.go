@@ -6,6 +6,8 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
+
+	"tofu/interface/tui/golden"
 )
 
 const riskSentence = "risk is hard to undo or reaches outside the workspace, so the call is asked about"
@@ -24,5 +26,5 @@ func TestAGateAskDrawsTheWordTheLegendGaveTheScore(t *testing.T) {
 	if strings.Contains(plain, "risk_ask_at") {
 		t.Fatalf("the threshold line still names the constant\n%s", plain)
 	}
-	assertGolden(t, "session-awaiting-120x36.golden", content)
+	golden.Assert(t, "session-awaiting-120x36.golden", content)
 }

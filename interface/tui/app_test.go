@@ -28,8 +28,6 @@ import (
 	isettings "tofu/internal/settings"
 )
 
-var assertGolden = golden.Assert
-
 const (
 	testRelease = fixture.Release
 	testRepo    = fixture.Path
@@ -173,10 +171,10 @@ func TestARunningCallCarriesItsElapsedTimeAndTheFooterSaysWhatIsHappening(t *tes
 	at := time.Date(2026, 9, 19, 14, 32, 0, 0, time.UTC)
 	app := liveApp(t, &at)
 	early := app.View().Content
-	assertGolden(t, "session-running-80x24.golden", early)
+	golden.Assert(t, "session-running-80x24.golden", early)
 	at = at.Add(6 * time.Second)
 	later := app.View().Content
-	assertGolden(t, "session-running-later-80x24.golden", later)
+	golden.Assert(t, "session-running-later-80x24.golden", later)
 
 	if early == later {
 		t.Fatal("six seconds of a running call changed nothing on the screen")
@@ -415,7 +413,7 @@ func TestWithTheGateOffTheSessionSaysSoOnceAndNoCallClaimsAVerdict(t *testing.T)
 			t.Errorf("a call claims the verdict %q with the gate off\n%s", verdict, content)
 		}
 	}
-	assertGolden(t, "session-gate-off-80x24.golden", content)
+	golden.Assert(t, "session-gate-off-80x24.golden", content)
 }
 
 func TestSessionViewGolden(t *testing.T) {
@@ -428,7 +426,7 @@ func TestSessionViewGolden(t *testing.T) {
 		{"session-120x36.golden", 120, 36},
 	} {
 		t.Run(size.name, func(t *testing.T) {
-			assertGolden(t, size.name, sessionApp(t, size.width, size.height).View().Content)
+			golden.Assert(t, size.name, sessionApp(t, size.width, size.height).View().Content)
 		})
 	}
 }
@@ -437,7 +435,7 @@ func TestTheForkNoticeAppearsOnOneLineAndVanishes(t *testing.T) {
 	app := sessionApp(t, 80, 24)
 	quiet := app.View().Content
 	app.Update(Event{Kind: EventForkStart})
-	assertGolden(t, "session-forking-80x24.golden", app.View().Content)
+	golden.Assert(t, "session-forking-80x24.golden", app.View().Content)
 	app.Update(Event{Kind: EventForkEnd})
 	if after := app.View().Content; after != quiet {
 		t.Errorf("the notice did not vanish\n--- after ---\n%s\n--- before ---\n%s", after, quiet)
@@ -496,7 +494,7 @@ func TestTwoSubscriptionsAskNothingAndTheFirstSignedInRunsTheTurn(t *testing.T) 
 	if !containsAPlaceholder(ansi.Strip(opened)) {
 		t.Errorf("the app did not open on a session with a composer\n%s", opened)
 	}
-	assertGolden(t, "chosen-80x24.golden", opened)
+	golden.Assert(t, "chosen-80x24.golden", opened)
 
 	typeText(app, "read one file")
 	app.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
@@ -524,7 +522,7 @@ func TestOneWireNamesItselfInTheHeader(t *testing.T) {
 	if !strings.Contains(content, "claude-sub/claude-opus-5") {
 		t.Errorf("the frame does not name the only wire\n%s", content)
 	}
-	assertGolden(t, "session-one-wire-80x24.golden", content)
+	golden.Assert(t, "session-one-wire-80x24.golden", content)
 }
 
 func subAgentChildren() []subagent.Child {
@@ -576,7 +574,7 @@ func subAgentApp(t *testing.T, width, height int) *App {
 func TestTheSubAgentViewOpensAndEscReturnsToTheSession(t *testing.T) {
 	app := subAgentApp(t, 80, 24)
 	subAgentFrame := app.View().Content
-	assertGolden(t, "subagent-80x24.golden", subAgentFrame)
+	golden.Assert(t, "subagent-80x24.golden", subAgentFrame)
 	if !strings.Contains(subAgentFrame, "go-dev") {
 		t.Fatalf("the sub-agent view does not name its children\n%s", subAgentFrame)
 	}
@@ -591,7 +589,7 @@ func TestTheSubAgentViewOpensAndEscReturnsToTheSession(t *testing.T) {
 	if !strings.Contains(back, "●1") {
 		t.Fatalf("the status bar does not count the one running child\n%s", back)
 	}
-	assertGolden(t, "subagent-return-80x24.golden", back)
+	golden.Assert(t, "subagent-return-80x24.golden", back)
 }
 
 func TestTheSubAgentViewIsAlsoReachedByTabAndByAClick(t *testing.T) {
@@ -624,7 +622,7 @@ func TestWithNoChildrenTheSubAgentViewSaysSoInWords(t *testing.T) {
 	if strings.Contains(content, "ownership") || strings.Contains(content, " │ ") {
 		t.Fatalf("the empty sub-agent view drew a frame instead of saying so\n%s", content)
 	}
-	assertGolden(t, "subagent-empty-80x24.golden", content)
+	golden.Assert(t, "subagent-empty-80x24.golden", content)
 }
 
 func TestSubAgentViewGolden(t *testing.T) {
@@ -643,7 +641,7 @@ func TestSubAgentViewGolden(t *testing.T) {
 					t.Errorf("the sub-agent view does not show %q\n%s", want, content)
 				}
 			}
-			assertGolden(t, size.name, content)
+			golden.Assert(t, size.name, content)
 		})
 	}
 }
@@ -679,7 +677,7 @@ func TestTheSubAgentWatchPaneDrawsTheRunningChildsProgressLine(t *testing.T) {
 	if !strings.Contains(frame, "writing policy/toolgate.go") {
 		t.Fatalf("the watch pane does not draw the running child's progress line\n%s", frame)
 	}
-	assertGolden(t, "subagent-watch-running-120x36.golden", app.View().Content)
+	golden.Assert(t, "subagent-watch-running-120x36.golden", app.View().Content)
 }
 
 func TestSelectingAChildShowsItsToolCallsAndItsReport(t *testing.T) {
@@ -699,7 +697,7 @@ func TestSelectingAChildShowsItsToolCallsAndItsReport(t *testing.T) {
 	if strings.Contains(after, "go test ./internal/judge/...") {
 		t.Errorf("the selected child shows another child's tool call\n%s", after)
 	}
-	assertGolden(t, "subagent-picked-120x36.golden", app.View().Content)
+	golden.Assert(t, "subagent-picked-120x36.golden", app.View().Content)
 	app.Update(tea.KeyPressMsg{Code: tea.KeyUp})
 	app.Update(tea.KeyPressMsg{Code: tea.KeyUp})
 	if picked := ansi.Strip(app.View().Content); picked != before {
@@ -849,7 +847,7 @@ func TestSettingsViewGolden(t *testing.T) {
 		{"settings-120x36.golden", 120, 36},
 	} {
 		t.Run(size.name, func(t *testing.T) {
-			assertGolden(t, size.name, settingsApp(t, size.width, size.height).View().Content)
+			golden.Assert(t, size.name, settingsApp(t, size.width, size.height).View().Content)
 		})
 	}
 }
@@ -1049,7 +1047,7 @@ func TestNoBottomBarDrawsOnTheSubAgentsView(t *testing.T) {
 			t.Fatalf("the sub-agents view still draws %q from the bottom bar\n%s", absent, content)
 		}
 	}
-	assertGolden(t, "subagent-no-bar-80x24.golden", content)
+	golden.Assert(t, "subagent-no-bar-80x24.golden", content)
 }
 
 func TestTabCyclesTheFiveMainViews(t *testing.T) {
@@ -1133,7 +1131,7 @@ func TestSetupViewGolden(t *testing.T) {
 		Recheck:      func() []Requirement { return remaining },
 	})
 	app.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
-	assertGolden(t, "setup-80x24.golden", app.View().Content)
+	golden.Assert(t, "setup-80x24.golden", app.View().Content)
 
 	_, cmd := app.Update(tea.KeyPressMsg{Code: 'r', Text: "r"})
 	if cmd == nil {
@@ -1143,7 +1141,7 @@ func TestSetupViewGolden(t *testing.T) {
 	if len(app.requirements) != 1 {
 		t.Fatalf("the re-check left %d requirements, want 1", len(app.requirements))
 	}
-	assertGolden(t, "setup-one-left-80x24.golden", app.View().Content)
+	golden.Assert(t, "setup-one-left-80x24.golden", app.View().Content)
 }
 
 func TestARequirementRunsItsOwnFix(t *testing.T) {
@@ -1444,17 +1442,17 @@ func transcriptOf(frame string) string {
 func TestALongTranscriptScrollsAWheelAScreenToTheStartAndBackToTheTail(t *testing.T) {
 	app := longApp(t)
 	tail := app.View().Content
-	assertGolden(t, "scroll-tail-80x24.golden", tail)
+	golden.Assert(t, "scroll-tail-80x24.golden", tail)
 
 	app.Update(tea.MouseWheelMsg{Button: tea.MouseWheelUp})
-	assertGolden(t, "scroll-line-80x24.golden", app.View().Content)
+	golden.Assert(t, "scroll-line-80x24.golden", app.View().Content)
 
 	app.Update(tea.KeyPressMsg{Code: tea.KeyPgUp})
-	assertGolden(t, "scroll-screen-80x24.golden", app.View().Content)
+	golden.Assert(t, "scroll-screen-80x24.golden", app.View().Content)
 
 	app.Update(tea.KeyPressMsg{Code: tea.KeyHome})
 	start := app.View().Content
-	assertGolden(t, "scroll-start-80x24.golden", start)
+	golden.Assert(t, "scroll-start-80x24.golden", start)
 	if !strings.Contains(transcriptOf(start), "toolgate.go step 0") {
 		t.Fatalf("home did not reach the first entry\n%s", start)
 	}
@@ -1537,7 +1535,7 @@ func TestAShortTranscriptCannotBeScrolledAndSaysNothingAboutIt(t *testing.T) {
 			t.Errorf("a transcript that fits says %q\n%s", words, before)
 		}
 	}
-	assertGolden(t, "session-one-wire-80x24.golden", before)
+	golden.Assert(t, "session-one-wire-80x24.golden", before)
 }
 
 func TestTheComposerKeepsTheKeysItOwnsWhileItHasText(t *testing.T) {
@@ -1605,7 +1603,7 @@ func TestProseRendersAsMarkdownWithTheGitHubExtensions(t *testing.T) {
 	if !strings.Contains(content, "\x1b[38;5;255;1mgate\x1b[m") {
 		t.Errorf("the bold span is not bold\n%q", content)
 	}
-	assertGolden(t, "session-markdown-80x40.golden", content)
+	golden.Assert(t, "session-markdown-80x40.golden", content)
 }
 
 func TestAMermaidFenceIsACodeBlockAndNotADiagram(t *testing.T) {
@@ -1621,7 +1619,7 @@ func TestAMermaidFenceIsACodeBlockAndNotADiagram(t *testing.T) {
 	if strings.Contains(plain, "```") {
 		t.Errorf("the fence markers are shown\n%s", plain)
 	}
-	assertGolden(t, "session-mermaid-80x24.golden", content)
+	golden.Assert(t, "session-mermaid-80x24.golden", content)
 }
 
 func TestAStreamingMessageRendersMarkdownAndAClosedOneNeedsNoReveal(t *testing.T) {
@@ -1636,14 +1634,14 @@ func TestAStreamingMessageRendersMarkdownAndAClosedOneNeedsNoReveal(t *testing.T
 	if !strings.Contains(plain, "gate") || !strings.Contains(plain, "toolgate.go") {
 		t.Errorf("the streaming text is missing\n%s", plain)
 	}
-	assertGolden(t, "session-streaming-80x24.golden", streaming)
+	golden.Assert(t, "session-streaming-80x24.golden", streaming)
 
 	app.Update(Closed{})
 	complete := app.View().Content
 	if complete != streaming {
 		t.Fatalf("a message with nothing left open changed once it stopped\n--- streaming ---\n%s\n--- complete ---\n%s", plain, ansi.Strip(complete))
 	}
-	assertGolden(t, "session-complete-80x24.golden", complete)
+	golden.Assert(t, "session-complete-80x24.golden", complete)
 }
 
 func TestTheWheelScrollsTheTranscriptAndOnlyInTheSessionView(t *testing.T) {
@@ -1713,7 +1711,7 @@ func TestTheShellsViewListsNamedProcessesWithStateAndRecentOutput(t *testing.T) 
 			t.Errorf("the shells view does not show %q\n%s", want, ansi.Strip(content))
 		}
 	}
-	assertGolden(t, "shells-120x36.golden", content)
+	golden.Assert(t, "shells-120x36.golden", content)
 }
 
 func TestTheEmptyShellsViewSaysNoProcessIsRunning(t *testing.T) {
@@ -1723,7 +1721,7 @@ func TestTheEmptyShellsViewSaysNoProcessIsRunning(t *testing.T) {
 	if !strings.Contains(content, "no process is running") {
 		t.Fatalf("the empty shells view does not say there is nothing to see\n%s", content)
 	}
-	assertGolden(t, "shells-empty-80x24.golden", app.View().Content)
+	golden.Assert(t, "shells-empty-80x24.golden", app.View().Content)
 }
 
 func TestTheShellsViewMovesOnJAndKAndKillsOnCtrlX(t *testing.T) {

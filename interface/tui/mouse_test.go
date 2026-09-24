@@ -10,6 +10,7 @@ import (
 
 	"tofu/interface/tui/fixture"
 	"tofu/interface/tui/frametime"
+	"tofu/interface/tui/golden"
 	"tofu/interface/tui/pick"
 	"tofu/internal/widget"
 )
@@ -99,7 +100,7 @@ func TestADragOverTheTranscriptHighlightsTheCoveredText(t *testing.T) {
 	if ansi.Strip(painted) != ansi.Strip(quiet) {
 		t.Fatal("the highlight changed the text of the frame rather than only its colour")
 	}
-	assertGolden(t, "drag-mid-80x24.golden", painted)
+	golden.Assert(t, "drag-mid-80x24.golden", painted)
 }
 
 func TestReleasingTheButtonPutsTheSelectionOnTheClipboard(t *testing.T) {

@@ -10,6 +10,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"tofu/interface/tui/frametime"
+	"tofu/interface/tui/golden"
 	"tofu/interface/tui/session"
 )
 
@@ -169,7 +170,7 @@ func TestThePlanDrawsInThreeStatesAtEightyColumns(t *testing.T) {
 			app := liveApp(t, &at)
 			app.Update(Event{Kind: EventPlan, Plan: fourItems(state.states...)})
 			content := app.View().Content
-			assertGolden(t, state.name, content)
+			golden.Assert(t, state.name, content)
 			for _, row := range strings.Split(ansi.Strip(content), "\n") {
 				if cells := ansi.StringWidth(row); cells > 80 {
 					t.Errorf("a row is %d cells wide\n%s", cells, row)

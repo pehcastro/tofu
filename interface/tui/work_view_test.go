@@ -11,6 +11,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"tofu/interface/tui/frametime"
+	"tofu/interface/tui/golden"
 	"tofu/interface/tui/work"
 )
 
@@ -78,8 +79,8 @@ func TestChatFoldsTwelveCallsToOneLineAndWorkDrawsEachWhole(t *testing.T) {
 		if !strings.Contains(work, "out   done") {
 			t.Errorf("work at width %d does not draw a result whole\n%s", width, work)
 		}
-		assertGolden(t, chatWorkGoldenName("chat", width, height), chat)
-		assertGolden(t, chatWorkGoldenName("work", width, height), work)
+		golden.Assert(t, chatWorkGoldenName("chat", width, height), chat)
+		golden.Assert(t, chatWorkGoldenName("work", width, height), work)
 	}
 }
 
@@ -168,7 +169,7 @@ func TestABlockInWorkCanBeBroughtIntoChatAsATruncatedReference(t *testing.T) {
 	if !strings.Contains(chat, "glob") && !strings.Contains(chat, "read") && !strings.Contains(chat, "bash") {
 		t.Fatalf("chat did not receive the brought-in reference\n%s", chat)
 	}
-	assertGolden(t, "chat-with-reference-80x24.golden", app.View().Content)
+	golden.Assert(t, "chat-with-reference-80x24.golden", app.View().Content)
 }
 
 func TestTheFrameBudgetHoldsWithWorkOpenOnAFullTurn(t *testing.T) {

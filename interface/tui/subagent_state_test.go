@@ -6,6 +6,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"tofu/interface/tui/golden"
 	"tofu/interface/tui/subagent"
 )
 
@@ -23,7 +24,7 @@ func TestASubAgentCarriesAStateFromTheNamedSetAndTheSubAgentViewDrawsIt(t *testi
 	for _, state := range subagent.AllStates() {
 		t.Run(state.Label(), func(t *testing.T) {
 			content := subAgentStateApp(t, state).View().Content
-			assertGolden(t, "subagent-state-"+strings.ReplaceAll(state.Label(), " ", "-")+"-80x24.golden", content)
+			golden.Assert(t, "subagent-state-"+strings.ReplaceAll(state.Label(), " ", "-")+"-80x24.golden", content)
 		})
 	}
 }
