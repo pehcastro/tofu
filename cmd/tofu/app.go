@@ -10,8 +10,10 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/charmbracelet/x/term"
@@ -765,7 +767,9 @@ func (s *appSession) run(ctx context.Context, pick tui.Pick, task string, emit t
 		emit(tui.Event{Kind: tui.EventForkEnd})
 		return nil
 	}
+	stopClocks := watch.clockRunningChildren()
 	row, runErr := turn.Run(turn.WithShellRegistry(ctx, s.shells), config)
+	stopClocks()
 	watch.sendSubAgents()
 	stopped := errors.Is(runErr, context.Canceled)
 	if runErr != nil && !stopped {
@@ -914,6 +918,9 @@ type appWatcher struct {
 	out       int
 	cacheRead int
 	spent     map[string]int
+	shows     sync.Mutex
+	shown     []subagent.Child
+	shownAt   time.Time
 }
 
 func (a *appWatcher) Ask(ctx context.Context, request llm.Request) (llm.Decision, error) {
@@ -1021,11 +1028,12 @@ func (a *appWatcher) draw(agents []roster.SubAgent) {
 	if len(agents) == 0 {
 		return
 	}
+	now := a.now()
 	children := make([]subagent.Child, len(agents))
 	for index, agent := range agents {
 		since := agent.Active.Sub(agent.Started)
 		if agent.State == roster.Working {
-			since = a.now().Sub(agent.Started)
+			since = now.Sub(agent.Started)
 		}
 		children[index] = subagent.Child{
 			Name:   "c" + strconv.Itoa(index+1),
@@ -1040,7 +1048,50 @@ func (a *appWatcher) draw(agents []roster.SubAgent) {
 			Report: agent.Report,
 		}
 	}
+	a.shows.Lock()
+	a.shown, a.shownAt = children, now
+	a.shows.Unlock()
 	a.emit(tui.Event{Kind: tui.EventSubAgent, Children: children})
+}
+
+func (a *appWatcher) redrawRunningClocks() {
+	a.shows.Lock()
+	ahead := a.now().Sub(a.shownAt)
+	moved := slices.Clone(a.shown)
+	a.shows.Unlock()
+	running := false
+	for index := range moved {
+		if moved[index].State != subagent.Running {
+			continue
+		}
+		moved[index].Since += ahead
+		running = true
+	}
+	if !running {
+		return
+	}
+	a.emit(tui.Event{Kind: tui.EventSubAgent, Children: moved})
+}
+
+func (a *appWatcher) clockRunningChildren() (stop func()) {
+	ticking, stopped := make(chan struct{}), make(chan struct{})
+	go func() {
+		defer close(stopped)
+		every := time.NewTicker(session.TickInterval)
+		defer every.Stop()
+		for {
+			select {
+			case <-ticking:
+				return
+			case <-every.C:
+				a.redrawRunningClocks()
+			}
+		}
+	}()
+	return func() {
+		close(ticking)
+		<-stopped
+	}
 }
 
 func drawnState(state roster.State) subagent.State {

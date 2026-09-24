@@ -8,6 +8,7 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -17,6 +18,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -978,15 +980,22 @@ func TestATurnStartedInTheAppDoesNotOfferSpawnWhenTurnMaySpawnIsOff(t *testing.T
 
 type clockedStep struct {
 	waited   time.Duration
+	holds    time.Duration
 	decision llm.Decision
 }
 
 type clockedModel struct {
-	at    time.Time
+	at    atomic.Int64
 	steps []clockedStep
 }
 
-func (m *clockedModel) clock() time.Time { return m.at }
+func clockedFrom(at time.Time, steps ...clockedStep) *clockedModel {
+	model := &clockedModel{steps: steps}
+	model.at.Store(at.UnixNano())
+	return model
+}
+
+func (m *clockedModel) clock() time.Time { return time.Unix(0, m.at.Load()) }
 
 func (m *clockedModel) Ask(_ context.Context, _ llm.Request) (llm.Decision, error) {
 	if len(m.steps) == 0 {
@@ -994,24 +1003,31 @@ func (m *clockedModel) Ask(_ context.Context, _ llm.Request) (llm.Decision, erro
 	}
 	next := m.steps[0]
 	m.steps = m.steps[1:]
-	m.at = m.at.Add(next.waited)
+	if next.holds == 0 {
+		m.at.Add(int64(next.waited))
+		return next.decision, nil
+	}
+	for range heldSlices {
+		time.Sleep(next.holds / heldSlices)
+		m.at.Add(int64(next.waited) / heldSlices)
+	}
 	return next.decision, nil
 }
 
 func TestAChildRunningForTenSecondsReadsTenSecondsAndWhatItSpent(t *testing.T) {
 	dir := scratchProject(t)
 	spawnCall := llm.ToolCall{ID: "call-1", Name: "spawn", Arguments: json.RawMessage(`{"task":"write note.txt","owns":["note.txt"]}`)}
-	model := &clockedModel{at: time.Date(2026, 9, 20, 9, 0, 0, 0, time.UTC), steps: []clockedStep{
-		{decision: llm.Decision{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{spawnCall}}},
-		{waited: 10 * time.Second, decision: llm.Decision{
+	model := clockedFrom(time.Date(2026, 9, 20, 9, 0, 0, 0, time.UTC),
+		clockedStep{decision: llm.Decision{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{spawnCall}}},
+		clockedStep{waited: 10 * time.Second, decision: llm.Decision{
 			Build:     "stub-model",
 			Outcome:   llm.OutcomeToolCalls,
 			ToolCalls: []llm.ToolCall{writeNote("call-2")},
 			Usage:     llm.Usage{InputTokens: 11000, OutputTokens: 1000},
 		}},
-		{decision: llm.Decision{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "the child wrote it"}},
-		{decision: llm.Decision{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "the child did it"}},
-	}}
+		clockedStep{decision: llm.Decision{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "the child wrote it"}},
+		clockedStep{decision: llm.Decision{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "the child did it"}},
+	)
 	driver := driveApp(t)
 	appTurnOn(dir, func(runOpts) (appWire, error) {
 		return wireOn(model), nil
@@ -1034,6 +1050,88 @@ func TestAChildRunningForTenSecondsReadsTenSecondsAndWhatItSpent(t *testing.T) {
 	}
 	if !strings.Contains(running, "12k") {
 		t.Errorf("the child spent 12000 tokens and its row reads %q", running)
+	}
+}
+
+const (
+	heldInsideOneCall = 700 * time.Millisecond
+	heldSlices        = 7
+	childHeldFor      = 70 * time.Second
+	parentHeldFor     = 30 * time.Second
+)
+
+func childHeldInsideOneCall(t *testing.T) *appDriver {
+	t.Helper()
+	dir := scratchProject(t)
+	spawnCall := llm.ToolCall{ID: "call-1", Name: "spawn", Arguments: json.RawMessage(`{"task":"write note.txt","owns":["note.txt"]}`)}
+	reply := func(text string) llm.Decision {
+		return llm.Decision{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: text}
+	}
+	model := clockedFrom(time.Date(2026, 9, 24, 9, 0, 0, 0, time.UTC),
+		clockedStep{decision: llm.Decision{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{spawnCall}}},
+		clockedStep{decision: llm.Decision{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{writeNote("call-2")}}},
+		clockedStep{waited: childHeldFor, holds: heldInsideOneCall, decision: reply("the child wrote it")},
+		clockedStep{waited: parentHeldFor, holds: heldInsideOneCall, decision: reply("the child did it")},
+	)
+	driver := driveApp(t)
+	appTurnOn(dir, func(runOpts) (appWire, error) {
+		return wireOn(model), nil
+	}, nil, model.clock, sessionResume{})(t.Context(), onTheSubscription, "hand the note to a child", driver.emit)
+	return driver
+}
+
+func (d *appDriver) childClocks(state subagent.State) map[time.Duration]string {
+	d.mutex.Lock()
+	defer d.mutex.Unlock()
+	drawn := map[time.Duration]string{}
+	for index, event := range d.events {
+		if event.Kind != tui.EventSubAgent {
+			continue
+		}
+		for _, child := range event.Children {
+			if child.State == state {
+				drawn[child.Since] = d.frames[index]
+			}
+		}
+	}
+	return drawn
+}
+
+func TestARunningChildsClockAdvancesWhileItIsHeldInsideOneCall(t *testing.T) {
+	driver := childHeldInsideOneCall(t)
+
+	drawn := driver.childClocks(subagent.Running)
+	var moved []time.Duration
+	for clock := range drawn {
+		if clock > 0 && clock < childHeldFor {
+			moved = append(moved, clock)
+		}
+	}
+	if len(moved) == 0 {
+		t.Fatalf("a child held %s inside one call was drawn only at %v: a clock that moves once the call answers says the child is stuck while it works",
+			widget.Until(childHeldFor), slices.Sorted(maps.Keys(drawn)))
+	}
+	t.Logf("the running child was drawn at %v", slices.Sorted(maps.Keys(drawn)))
+	for _, clock := range moved {
+		if reads := widget.Until(clock); !strings.Contains(drawn[clock], reads) {
+			t.Errorf("the child was drawn at %s and no screen of that frame reads it:\n%s", reads, drawn[clock])
+		}
+	}
+}
+
+func TestAChildThatHasHandedBackKeepsTheClockItStoppedAt(t *testing.T) {
+	driver := childHeldInsideOneCall(t)
+
+	drawn := driver.childClocks(subagent.HandedBack)
+	if len(drawn) == 0 {
+		t.Fatal("no frame carried a child that had handed back")
+	}
+	t.Logf("the child that had stopped was drawn at %v", slices.Sorted(maps.Keys(drawn)))
+	for clock := range drawn {
+		if clock != childHeldFor {
+			t.Errorf("the child took %s and was drawn at %s after it stopped: a stopped clock may not keep counting",
+				widget.Until(childHeldFor), widget.Until(clock))
+		}
 	}
 }
 
