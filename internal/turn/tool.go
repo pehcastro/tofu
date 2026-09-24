@@ -8,8 +8,18 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"unicode/utf8"
 
 	"tofu/internal/llm"
+)
+
+type ResultOutcome int
+
+const (
+	ResultUnset ResultOutcome = iota
+	ResultSucceeded
+	ResultFailed
+	ResultAborted
 )
 
 type Result struct {
@@ -17,6 +27,44 @@ type Result struct {
 	Command     string
 	ExitCode    *int
 	FailureText string
+	Outcome     ResultOutcome
+}
+
+const resultCapMarker = "\n...(%s dropped from the middle of this result, cut at a %d byte cap.)...\n"
+
+func capResult(content string, capBytes int) string {
+	if capBytes <= 0 || len(content) <= capBytes {
+		return content
+	}
+	head := runeSafeHead(content, capBytes/2)
+	tail := runeSafeTail(content, capBytes-len(head))
+	dropped := len(content) - len(head) - len(tail)
+	amount := fmt.Sprintf("%d bytes", dropped)
+	if dropped == 1 {
+		amount = "1 byte"
+	}
+	return head + fmt.Sprintf(resultCapMarker, amount, capBytes) + tail
+}
+
+func runeSafeHead(s string, n int) string {
+	if n >= len(s) {
+		return s
+	}
+	for n > 0 && !utf8.RuneStart(s[n]) {
+		n--
+	}
+	return s[:n]
+}
+
+func runeSafeTail(s string, n int) string {
+	if n >= len(s) {
+		return s
+	}
+	start := len(s) - n
+	for start < len(s) && !utf8.RuneStart(s[start]) {
+		start++
+	}
+	return s[start:]
 }
 
 type Tool interface {

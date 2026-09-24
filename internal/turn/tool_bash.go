@@ -1,6 +1,7 @@
 package turn
 
 import (
+	"bytes"
 	"cmp"
 	"context"
 	"encoding/json"
@@ -14,12 +15,16 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"tofu/internal/konst"
 	"tofu/internal/llm"
 	"tofu/internal/search"
+	"tofu/internal/shell"
 )
+
+const shellRegisterAfterMillis = 3000
 
 type BashTool struct {
 	root       Root
@@ -27,6 +32,124 @@ type BashTool struct {
 	shellLabel string
 	note       string
 	probe      *toolchainProbe
+	calls      atomic.Int64
+	startedMu  sync.Mutex
+	started    []backgroundProc
+}
+
+type backgroundProc struct {
+	registry *shell.Registry
+	name     string
+}
+
+func (t *BashTool) StopBackground() {
+	t.startedMu.Lock()
+	procs := t.started
+	t.started = nil
+	t.startedMu.Unlock()
+	for _, p := range procs {
+		_ = p.registry.Kill(p.name)
+	}
+}
+
+type shellRegistryKey struct{}
+
+func WithShellRegistry(ctx context.Context, registry *shell.Registry) context.Context {
+	if registry == nil {
+		return ctx
+	}
+	return context.WithValue(ctx, shellRegistryKey{}, registry)
+}
+
+func shellRegistryFrom(ctx context.Context) *shell.Registry {
+	registry, _ := ctx.Value(shellRegistryKey{}).(*shell.Registry)
+	return registry
+}
+
+type promotable struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+	dst *os.File
+}
+
+func (p *promotable) Write(b []byte) (int, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.buf.Write(b)
+	if p.dst != nil {
+		_, _ = p.dst.Write(b)
+	}
+	return len(b), nil
+}
+
+func (p *promotable) promote(dst *os.File) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if _, err := dst.Write(p.buf.Bytes()); err == nil {
+		p.dst = dst
+	}
+}
+
+func (p *promotable) String() string {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.buf.String()
+}
+
+type bashWatch struct {
+	handle atomic.Pointer[shell.Watch]
+	stopc  chan struct{}
+	wg     sync.WaitGroup
+}
+
+func watchBash(registry *shell.Registry, name, command string, pid int, output *promotable) *bashWatch {
+	if registry == nil {
+		return nil
+	}
+	w := &bashWatch{stopc: make(chan struct{})}
+	w.wg.Add(1)
+	go func() {
+		defer w.wg.Done()
+		select {
+		case <-time.After(shellRegisterAfterMillis * time.Millisecond):
+		case <-w.stopc:
+			return
+		}
+		watch, err := registry.Watch(name, command)
+		if err != nil {
+			return
+		}
+		_ = watch.SetPID(pid)
+		output.promote(watch.Writer())
+		w.handle.Store(watch)
+	}()
+	return w
+}
+
+func (w *bashWatch) stop() {
+	if w == nil {
+		return
+	}
+	close(w.stopc)
+	w.wg.Wait()
+}
+
+func (w *bashWatch) exited(code int) {
+	if w == nil {
+		return
+	}
+	if handle := w.handle.Load(); handle != nil {
+		_ = handle.Finish(code)
+	}
+}
+
+func (w *bashWatch) killed() {
+	if w == nil {
+		return
+	}
+	if handle := w.handle.Load(); handle != nil {
+		_ = handle.Killed()
+	}
 }
 
 func NewBashTool(root string) (*BashTool, error) {
@@ -47,13 +170,11 @@ func newBashToolWithDeps(root string, env shellEnv, run toolchainRunner, cache *
 	if err != nil {
 		return nil, err
 	}
-	return &BashTool{
-		root:       resolved,
-		shell:      choice.Path,
-		shellLabel: choice.Label,
-		note:       choice.Note,
-		probe:      probe,
-	}, nil
+	return newBashTool(resolved, choice, probe), nil
+}
+
+func newBashTool(resolved Root, choice shellChoice, probe *toolchainProbe) *BashTool {
+	return &BashTool{root: resolved, shell: choice.Path, shellLabel: choice.Label, note: choice.Note, probe: probe}
 }
 
 type toolchainProbe struct {
@@ -112,6 +233,7 @@ type shellEnv struct {
 	lookPath func(string) (string, error)
 	stat     func(string) error
 	probe    func(string) (string, error)
+	setting  string
 }
 
 func realShellEnv() shellEnv {
@@ -138,8 +260,11 @@ const posixSyntaxDoesNotApply = "this project's tools assume a posix shell: here
 	"and && and || are a parse error in Windows PowerShell 5.1"
 
 func resolveShell(env shellEnv) (shellChoice, error) {
+	if env.setting != "" {
+		return resolveShellOverride(env, env.setting, "the shell setting")
+	}
 	if override := env.getenv("TOFU_SHELL"); override != "" {
-		return resolveShellOverride(env, override)
+		return resolveShellOverride(env, override, "TOFU_SHELL")
 	}
 	if env.goos == "windows" {
 		return resolveWindowsShell(env)
@@ -147,27 +272,77 @@ func resolveShell(env shellEnv) (shellChoice, error) {
 	return resolvePosixShell(env)
 }
 
-func resolveShellOverride(env shellEnv, setting string) (shellChoice, error) {
+func resolveShellOverride(env shellEnv, setting, source string) (shellChoice, error) {
 	path := setting
 	if setting == "wsl" {
 		found, err := env.lookPath("bash")
 		if err != nil {
-			return shellChoice{}, fmt.Errorf("bash: TOFU_SHELL=wsl but no bash is on PATH: %w", err)
+			return shellChoice{}, fmt.Errorf("bash: %s=wsl but no bash is on PATH: %w", source, err)
 		}
 		path = found
 	}
 	if err := env.stat(path); err != nil {
-		return shellChoice{}, fmt.Errorf("bash: TOFU_SHELL is set to %q and it does not exist: %w", path, err)
+		return shellChoice{}, fmt.Errorf("bash: %s is set to %q and it does not exist: %w", source, path, err)
 	}
 	family, probeErr := env.probe(path)
 	if probeErr != nil {
-		return shellChoice{}, fmt.Errorf("bash: TOFU_SHELL is set to %q and it would not run: %w", path, probeErr)
+		return shellChoice{}, fmt.Errorf("bash: %s is set to %q and it would not run: %w", source, path, probeErr)
 	}
 	if isWSLFamily(family) {
 		return shellChoice{Path: path, Label: "wsl bash on " + family, Posix: true, WSL: true,
-			Note: "wsl, chosen on purpose through TOFU_SHELL: its filesystem is separate from Windows and its PATH will not see software installed only on Windows"}, nil
+			Note: "wsl, chosen on purpose through " + source + ": its filesystem is separate from Windows and its PATH will not see software installed only on Windows"}, nil
 	}
 	return shellChoice{Path: path, Label: filepath.Base(path) + " on " + family, Posix: true}, nil
+}
+
+type RunShell struct {
+	choice shellChoice
+	cache  *ToolchainCache
+	run    *toolchainRunner
+}
+
+func (r RunShell) Resolved() bool { return r.cache != nil }
+
+func (r RunShell) runner() toolchainRunner {
+	if r.run == nil {
+		return realToolchainRunner
+	}
+	return *r.run
+}
+
+func resolveRunShell(env shellEnv, run toolchainRunner) (RunShell, error) {
+	choice, err := resolveShell(env)
+	if err != nil {
+		return RunShell{}, err
+	}
+	return RunShell{choice: choice, cache: NewToolchainCache(), run: &run}, nil
+}
+
+func ResolveRunShell(override string) (RunShell, error) {
+	env := realShellEnv()
+	env.setting = override
+	return resolveRunShell(env, realToolchainRunner)
+}
+
+func NewBashToolFromShell(root string, shell RunShell) (*BashTool, error) {
+	resolved, err := NewRoot(root)
+	if err != nil {
+		return nil, err
+	}
+	probe := shell.cache.probeFor(string(resolved), shell.runner(), konst.ToolchainProbeTimeoutMillis*time.Millisecond)
+	return newBashTool(resolved, shell.choice, probe), nil
+}
+
+func shellLinesFromShell(dir string, shell RunShell) []string {
+	lines := []string{"shell: " + shell.choice.Label}
+	if shell.choice.Note != "" {
+		lines = append(lines, "shell notes: "+shell.choice.Note)
+	}
+	probe := shell.cache.probeFor(dir, shell.runner(), konst.ToolchainProbeTimeoutMillis*time.Millisecond)
+	if summary := formatToolchain(probe.wait()); summary != "" {
+		lines = append(lines, "toolchain: "+summary)
+	}
+	return lines
 }
 
 func resolveWindowsShell(env shellEnv) (shellChoice, error) {
@@ -377,7 +552,9 @@ func (t *BashTool) Definition() llm.Tool {
 		"runs one command in %s. cwd is already the working directory named in the environment block: spell paths that way, no cd. a nonzero exit is reported with its code. "+
 			"a command is killed after %d ms and its output is lost, so a long one has to be narrowed or given a larger timeout_ms, up to %d. "+
 			"do not use it to walk the tree: find, ls -R and wc descend into every ignored directory and take minutes here, "+
-			"while glob, search and project_report skip what .gitignore skips and answer in milliseconds.",
+			"while glob, search and project_report skip what .gitignore skips and answer in milliseconds. "+
+			"a server or any other command that does not exit belongs in background: true, which starts it and returns immediately rather than waiting for it to exit; "+
+			"check whether it is up with check_port, which dials the port on localhost and answers in milliseconds, no http request needed.",
 		t.shellLabel, konst.BashDeadlineMillis, konst.BashMaxDeadlineMillis)
 	if t.note != "" {
 		description += " " + t.note
@@ -391,17 +568,57 @@ func (t *BashTool) Definition() llm.Tool {
 		Parameters: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
-				"command":    map[string]any{"type": "string"},
+				"command":    map[string]any{"type": "string", "description": "required unless check_port is set"},
 				"timeout_ms": map[string]any{"type": "integer", "description": fmt.Sprintf("how long the command may run before it is killed, %d by default and %d at most", konst.BashDeadlineMillis, konst.BashMaxDeadlineMillis)},
+				"background": map[string]any{"type": "boolean", "description": "start command and return right away instead of waiting for it to exit; it keeps running until it exits on its own or the turn ends"},
+				"check_port": map[string]any{"type": "integer", "description": "skip command and report whether this port answers on 127.0.0.1, without any http request"},
 			},
-			"required": []string{"command"},
+			"required": []string{},
 		},
 	}
 }
 
 type bashArgs struct {
-	Command   string `json:"command"`
-	TimeoutMS int    `json:"timeout_ms,omitempty"`
+	Command    string `json:"command"`
+	TimeoutMS  int    `json:"timeout_ms,omitempty"`
+	Background bool   `json:"background,omitempty"`
+	CheckPort  int    `json:"check_port,omitempty"`
+}
+
+func (t *BashTool) checkPort(port int) Result {
+	started := time.Now()
+	open := shell.PortOpen("127.0.0.1", port, konst.PortCheckTimeoutMillis*time.Millisecond)
+	took := time.Since(started).Milliseconds()
+	state, code := "not listening", 1
+	if open {
+		state, code = "listening", 0
+	}
+	return Result{
+		Content:  fmt.Sprintf("port %d is %s on 127.0.0.1, checked in %d ms", port, state, took),
+		Command:  fmt.Sprintf("check_port %d", port),
+		ExitCode: &code,
+		Outcome:  ResultSucceeded,
+	}
+}
+
+func (t *BashTool) runBackground(ctx context.Context, args bashArgs) (Result, error) {
+	registry := shellRegistryFrom(ctx)
+	if registry == nil {
+		return Result{}, errors.New("bash: background needs a shell registry and none is attached to this turn")
+	}
+	name := t.nextShellName()
+	entry, err := registry.Start(string(t.root), name, args.Command)
+	if err != nil {
+		return Result{}, fmt.Errorf("bash: %w", err)
+	}
+	t.startedMu.Lock()
+	t.started = append(t.started, backgroundProc{registry: registry, name: name})
+	t.startedMu.Unlock()
+	return Result{
+		Content: fmt.Sprintf("started %s as pid %d, not waited on: it keeps running after this call returns. check it with check_port once it should be up", name, entry.PID),
+		Command: fmt.Sprintf("background %s: %s", name, args.Command),
+		Outcome: ResultSucceeded,
+	}, nil
 }
 
 func (t *BashTool) Run(ctx context.Context, raw json.RawMessage) (Result, error) {
@@ -409,8 +626,14 @@ func (t *BashTool) Run(ctx context.Context, raw json.RawMessage) (Result, error)
 	if err := json.Unmarshal(raw, &args); err != nil {
 		return Result{}, fmt.Errorf("bash: arguments are not the expected shape: %w", err)
 	}
+	if args.CheckPort != 0 {
+		return t.checkPort(args.CheckPort), nil
+	}
 	if strings.TrimSpace(args.Command) == "" {
-		return Result{}, errors.New("bash: command is required")
+		return Result{}, errors.New("bash: command is required unless check_port is set")
+	}
+	if args.Background {
+		return t.runBackground(ctx, args)
 	}
 	if name, summary, missing := missingInterpreterNamed(args.Command, t.probe.wait()); missing {
 		return Result{}, fmt.Errorf("bash: %s is not on this shell's PATH, so this command would just fail not found. %s", name, summary)
@@ -429,24 +652,55 @@ func (t *BashTool) Run(ctx context.Context, raw json.RawMessage) (Result, error)
 	cmd.Env = append(os.Environ(), subAgentDepthVar+"="+strconv.Itoa(processDepth()+1))
 	cmd.WaitDelay = konst.BashWaitDelayMillis * time.Millisecond
 
-	output, runErr := cmd.CombinedOutput()
+	output := &promotable{}
+	cmd.Stdout, cmd.Stderr = output, output
+	tracked, startErr := shell.StartTracked(cmd)
+	if startErr != nil {
+		return Result{}, fmt.Errorf("bash: %w", startErr)
+	}
+	defer tracked.Release()
+
+	watch := watchBash(shellRegistryFrom(ctx), t.nextShellName(), args.Command, cmd.Process.Pid, output)
+	runErr := cmd.Wait()
+	watch.stop()
+
 	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		watch.killed()
 		return Result{}, errors.New("bash: " + search.Note(search.Stopped, fmt.Sprintf(
 			"%q ran %d ms, past the %d ms deadline. do not run it again unchanged: narrow it, or pass timeout_ms up to %d when the command truly needs longer. "+
 				"a question about which files exist or what they contain is answered by project_report, glob or search without a shell and without this cost",
 			args.Command, time.Since(started).Milliseconds(), deadline, konst.BashMaxDeadlineMillis)))
 	}
+	if ctx.Err() != nil {
+		watch.killed()
+		return Result{
+			Content: capResult(output.String(), konst.TurnResultBytesCap),
+			Command: args.Command,
+			Outcome: ResultAborted,
+			FailureText: fmt.Sprintf("bash: %q was cancelled elsewhere in this turn while it was running, not because the command itself failed. "+
+				"its output so far is kept above", args.Command),
+		}, nil
+	}
 	if cmd.ProcessState == nil {
+		watch.killed()
 		return Result{}, fmt.Errorf("bash: %w", runErr)
 	}
 	code := cmd.ProcessState.ExitCode()
-	content := string(output)
+	watch.exited(code)
+	content := output.String()
+	outcome := ResultSucceeded
 	if code != 0 {
 		content = strings.TrimRight(content, "\n")
 		if content != "" {
 			content += "\n"
 		}
 		content += fmt.Sprintf(commandExited, code)
+		outcome = ResultFailed
 	}
-	return Result{Content: content, Command: args.Command, ExitCode: &code, FailureText: bashFailureText(code)}, nil
+	content = capResult(content, konst.TurnResultBytesCap)
+	return Result{Content: content, Command: args.Command, ExitCode: &code, FailureText: bashFailureText(code), Outcome: outcome}, nil
+}
+
+func (t *BashTool) nextShellName() string {
+	return "bash-" + strconv.FormatInt(t.calls.Add(1), 10)
 }

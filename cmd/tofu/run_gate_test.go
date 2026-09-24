@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -10,6 +11,7 @@ import (
 	"tofu/internal/judge/gate"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/judge/state"
+	settingspkg "tofu/internal/settings"
 	"tofu/internal/sys"
 	"tofu/internal/turn"
 	library "tofu/library"
@@ -118,10 +120,19 @@ func gateScratch(t *testing.T, lockBuild string) (string, gate.Thresholds, gate.
 	t.Helper()
 	dir := chdirTemp(t)
 	t.Setenv(envVarName(), fakeSecret("gate"))
+	enableGateAsking(t)
 	declared := writeGateRuleFixture(t)
 	writeGateLedgerRowFixture(t)
 	pinned := writeGateLockFixture(t, lockBuild)
 	return dir, declared, pinned
+}
+
+func enableGateAsking(t *testing.T) {
+	t.Helper()
+	var out, errOut bytes.Buffer
+	if code := settingsVerb([]string{"set", settingspkg.GatePrompt, settingspkg.GatePromptAsk}, &out, &errOut); code != exitOK {
+		t.Fatalf("settings set %s %s exited %d: %s", settingspkg.GatePrompt, settingspkg.GatePromptAsk, code, errOut.String())
+	}
 }
 
 func TestADecisionMadeNowCarriesTheFingerprintOfTheCallItJudged(t *testing.T) {

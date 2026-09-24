@@ -16,6 +16,7 @@ import (
 	"tofu/internal/llm"
 	"tofu/internal/recall"
 	"tofu/internal/session"
+	"tofu/internal/shell"
 	"tofu/internal/subagent"
 	"tofu/internal/sys"
 	"tofu/internal/transport"
@@ -44,6 +45,9 @@ const theResponseHitTheOutputTokenLimit = "the response hit the output token lim
 const theToolSucceededAndPrintedNothing = "the tool ran, succeeded and printed nothing."
 
 const theToolFailedAndPrintedNothing = "the tool ran, failed and printed nothing."
+
+const theToolWasAbortedAndPrintedNothing = "this call was cancelled elsewhere in the turn before it produced output. " +
+	"it is not a failure of the command itself and does not need to be retried the same way."
 
 const andThisIsItsLastStep = " and this is its last step: answer now from what you already have, " +
 	"saying what you did, what is left undone, and what to do next."
@@ -239,11 +243,16 @@ func Run(ctx context.Context, config Config) (Row, error) {
 		}
 		latest <- step
 	}
+	registry := shellRegistryFrom(ctx)
+	beforeShells := registrySnapshot(registry)
 	finish := func(outcome Outcome) Row {
 		row.Outcome = outcome
 		row.Conversation = messages[afterSystem:]
 		flush()
 		written.Wait()
+		if survivors := backgroundSurvivors(registry, beforeShells); survivors != "" {
+			row.Warnings = append(row.Warnings, survivors)
+		}
 		for _, failed := range forkWriteErrs {
 			row.Warnings = append(row.Warnings, "the session this one forked from was not written: "+failed)
 		}
@@ -511,6 +520,43 @@ func Run(ctx context.Context, config Config) (Row, error) {
 	}
 }
 
+func registrySnapshot(registry *shell.Registry) map[string]bool {
+	if registry == nil {
+		return nil
+	}
+	list, err := registry.List()
+	if err != nil {
+		return nil
+	}
+	names := make(map[string]bool, len(list))
+	for _, entry := range list {
+		names[entry.Name] = true
+	}
+	return names
+}
+
+func backgroundSurvivors(registry *shell.Registry, before map[string]bool) string {
+	if registry == nil {
+		return ""
+	}
+	list, err := registry.List()
+	if err != nil {
+		return ""
+	}
+	var named []string
+	for _, entry := range list {
+		if before[entry.Name] || entry.State != shell.Running {
+			continue
+		}
+		named = append(named, entry.Name+" ("+entry.Command+")")
+	}
+	if len(named) == 0 {
+		return ""
+	}
+	return "this turn started a background process still running now that it has ended: " + strings.Join(named, ", ") +
+		"; see it in the shells tab, or run `tofu shells kill <name>` to stop it"
+}
+
 func NewID(at time.Time) string {
 	return session.IDPrefix + strconv.FormatInt(at.UnixNano(), 16)
 }
@@ -592,6 +638,10 @@ func (g gatedCall) execute(ctx context.Context, tools Registry, resultBytesCap i
 	}
 	rendered, handle, storeErr := artifacts.Render(text, resultBytesCap)
 	sum := sha256.Sum256([]byte(result.Content))
+	errorText := result.FailureText
+	if result.Outcome == ResultAborted && errorText != "" {
+		errorText = "aborted: " + errorText
+	}
 	row := ToolCallRow{
 		ID:             g.id,
 		Parent:         g.parent,
@@ -606,7 +656,7 @@ func (g gatedCall) execute(ctx context.Context, tools Registry, resultBytesCap i
 		ResultHandle:   handle,
 		SiftSavedBytes: saved,
 		DurationMS:     time.Since(started).Milliseconds(),
-		Error:          result.FailureText,
+		Error:          errorText,
 	}
 	if storeErr != nil {
 		row.ResultHandleError = storeErr.Error()
@@ -616,9 +666,13 @@ func (g gatedCall) execute(ctx context.Context, tools Registry, resultBytesCap i
 	}
 	body := rendered
 	if body == "" {
-		body = theToolSucceededAndPrintedNothing
-		if row.Outcome() == llm.ToolOutcomeFailed {
+		switch {
+		case result.Outcome == ResultAborted:
+			body = theToolWasAbortedAndPrintedNothing
+		case row.Outcome() == llm.ToolOutcomeFailed:
 			body = theToolFailedAndPrintedNothing
+		default:
+			body = theToolSucceededAndPrintedNothing
 		}
 	}
 	return row, llm.Message{

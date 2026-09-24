@@ -110,6 +110,85 @@ func TestSetRejectsAnUndeclaredKey(t *testing.T) {
 	}
 }
 
+func TestTheShellSettingIsEmptyByDefault(t *testing.T) {
+	store, _, _ := openTemp(t)
+	if got := store.Text(Shell); got != "" {
+		t.Fatalf("shell default = %q, want empty", got)
+	}
+}
+
+func TestTheGatePromptSettingDefaultsToRunWithoutAsking(t *testing.T) {
+	store, _, _ := openTemp(t)
+	if got := store.Text(GatePrompt); got != GatePromptRun {
+		t.Fatalf("gatePrompt default = %q, want %q, the shipped default is the one he uses", got, GatePromptRun)
+	}
+	if got := DeclaredDefaultText(GatePrompt); got != GatePromptRun {
+		t.Fatalf("DeclaredDefaultText(gatePrompt) = %q, want %q", got, GatePromptRun)
+	}
+}
+
+func TestTheGatePromptSettingCanBeSetToAsk(t *testing.T) {
+	store, _, _ := openTemp(t)
+	if err := store.SetText(Global, GatePrompt, GatePromptAsk); err != nil {
+		t.Fatalf("SetText: %v", err)
+	}
+	if got := store.Text(GatePrompt); got != GatePromptAsk {
+		t.Fatalf("gatePrompt after SetText = %q, want %q", got, GatePromptAsk)
+	}
+}
+
+func TestATextSettingSurvivesARestart(t *testing.T) {
+	store, globalPath, projectPath := openTemp(t)
+	if err := store.SetText(Project, Shell, "wsl"); err != nil {
+		t.Fatalf("SetText: %v", err)
+	}
+	reopened, err := Open(globalPath, projectPath)
+	if err != nil {
+		t.Fatalf("reopen: %v", err)
+	}
+	if got := reopened.Text(Shell); got != "wsl" {
+		t.Fatalf("shell after restart = %q, want wsl", got)
+	}
+	scope, fromFile := reopened.Source(Shell)
+	if scope != Project || !fromFile {
+		t.Fatalf("Source = %v %v, want Project true", scope, fromFile)
+	}
+}
+
+func TestATextSettingAndAnIntSettingShareTheSameFileWithoutColliding(t *testing.T) {
+	store, _, projectPath := openTemp(t)
+	if err := store.SetText(Project, Shell, `D:\custom\shell.exe`); err != nil {
+		t.Fatalf("SetText: %v", err)
+	}
+	if err := store.Set(Project, DecisionCap, 5); err != nil {
+		t.Fatalf("Set: %v", err)
+	}
+	reopened, err := Open("", projectPath)
+	if err != nil {
+		t.Fatalf("reopen: %v", err)
+	}
+	if got := reopened.Text(Shell); got != `D:\custom\shell.exe` {
+		t.Fatalf("shell = %q, want D:\\custom\\shell.exe", got)
+	}
+	if got := reopened.Int(DecisionCap); got != 5 {
+		t.Fatalf("decisionCap = %d, want 5", got)
+	}
+}
+
+func TestATextSettingChangedIsPendingARestart(t *testing.T) {
+	store, _, _ := openTemp(t)
+	if pending := store.RestartPending(); len(pending) != 0 {
+		t.Fatalf("RestartPending before any change = %v, want none", pending)
+	}
+	if err := store.SetText(Global, Shell, "wsl"); err != nil {
+		t.Fatalf("SetText: %v", err)
+	}
+	pending := store.RestartPending()
+	if len(pending) != 1 || pending[0] != Shell {
+		t.Fatalf("RestartPending after changing shell = %v, want [shell]", pending)
+	}
+}
+
 func TestANewSettingIsOneRowInTheTable(t *testing.T) {
 	table := append(Default(), Spec{Key: "wallClockBudget", Label: "wall clock budget in minutes", Group: "turn", Kind: Int, Default: 30, Restart: false})
 	dir := t.TempDir()

@@ -15,7 +15,6 @@ import (
 	"strings"
 	"time"
 
-	"tofu/internal/judge/gate"
 	"tofu/internal/judge/jev"
 	"tofu/internal/konst"
 	"tofu/internal/llm"
@@ -98,6 +97,7 @@ type runOpts struct {
 	siftArm          string
 	noInstructions   bool
 	child            childRole
+	shell            turn.RunShell
 }
 
 type runtime struct {
@@ -249,7 +249,17 @@ func runVerb(args []string, out, errOut io.Writer) int {
 		return runFail(errOut, err)
 	}
 
-	built, _, err := buildRunToolsReading(opts.dir, opts.toolSet, opts.readBeforeEdit)
+	shellOverride, shellUnreadable := appTextSetting(cmp.Or(opts.dir, "."), settingspkg.Shell)
+	if shellUnreadable != "" {
+		_, _ = fmt.Fprintln(errOut, "tofu run: "+shellUnreadable)
+	}
+	shell, err := turn.ResolveRunShell(shellOverride)
+	if err != nil {
+		return runFail(errOut, err)
+	}
+	opts.shell = shell
+
+	built, _, err := buildRunToolsForRun(opts.dir, opts.toolSet, opts.readBeforeEdit, shell)
 	if err != nil {
 		return runFail(errOut, err)
 	}
@@ -398,8 +408,21 @@ func runTurn(opts runOpts, selected models.Model, built []turn.Tool, budget reca
 	return exitOK
 }
 
+func appTextSetting(dir, key string) (value string, unreadable string) {
+	store, err := openSettings(dir)
+	if err != nil {
+		fallback := settingspkg.DeclaredDefaultText(key)
+		return fallback, fmt.Sprintf("%s fell back to its default of %q because the settings file could not be read: %v", key, fallback, err)
+	}
+	return store.Text(key), ""
+}
+
 func runEnvironment(opts runOpts) (environment, instructions, notice string) {
-	environment = turn.Environment(opts.dir, time.Now())
+	if opts.shell.Resolved() {
+		environment = turn.EnvironmentFromShell(opts.dir, time.Now(), opts.shell)
+	} else {
+		environment = turn.Environment(opts.dir, time.Now())
+	}
 	if opts.noInstructions {
 		return environment, "off by request, and " + turn.InstructionsOff, ""
 	}
@@ -472,7 +495,11 @@ func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn
 	}
 	if run.gate != nil {
 		config.Gate = run.gate
-		config.GateMode = gateMode(opts.gateArm, run.gate.set.Mode)
+		prompt, unreadable := appTextSetting(cmp.Or(opts.dir, "."), settingspkg.GatePrompt)
+		if unreadable != "" && run.notify != nil {
+			run.notify(unreadable)
+		}
+		config.GateMode = gateMode(opts.gateArm, prompt)
 	}
 	parentID := cmp.Or(opts.turnID, turn.NewID(time.Now()))
 	config.NewID = func() string { return parentID }
@@ -501,17 +528,14 @@ func childBase(config turn.Config, child childRole) turn.Config {
 
 func gateArms() []string { return []string{gateOff, gateShadow, gateEnforce} }
 
-func gateMode(arm string, declared gate.Mode) turn.GateMode {
+func gateMode(arm string, prompt string) turn.GateMode {
 	switch arm {
 	case gateEnforce:
 		return turn.GateEnforce
 	case gateShadow, gateOff:
 		return turn.GateShadow
 	case gateFollowsTheRule:
-		if declared == gate.ModeEnforced {
-			return turn.GateEnforce
-		}
-		return turn.GateShadow
+		return turn.GateModeFromPrompt(prompt)
 	}
 	panic("tofu run: unknown gate arm " + arm)
 }
@@ -636,10 +660,25 @@ func buildRunTools(dir, set string) ([]turn.Tool, *tools.Plan, error) {
 }
 
 func buildRunToolsReading(dir, set string, readBeforeEdit bool) ([]turn.Tool, *tools.Plan, error) {
+	bashTool, bashErr := turn.NewBashTool(dir)
+	if bashErr != nil {
+		return nil, nil, bashErr
+	}
+	return assembleRunTools(dir, set, readBeforeEdit, bashTool)
+}
+
+func buildRunToolsForRun(dir, set string, readBeforeEdit bool, shell turn.RunShell) ([]turn.Tool, *tools.Plan, error) {
+	bashTool, bashErr := turn.NewBashToolFromShell(dir, shell)
+	if bashErr != nil {
+		return nil, nil, bashErr
+	}
+	return assembleRunTools(dir, set, readBeforeEdit, bashTool)
+}
+
+func assembleRunTools(dir, set string, readBeforeEdit bool, bashTool *turn.BashTool) ([]turn.Tool, *tools.Plan, error) {
 	readTool, readErr := turn.NewReadTool(dir)
 	writeTool, writeErr := turn.NewWriteTool(dir)
-	bashTool, bashErr := turn.NewBashTool(dir)
-	if err := cmp.Or(readErr, writeErr, bashErr); err != nil {
+	if err := cmp.Or(readErr, writeErr); err != nil {
 		return nil, nil, err
 	}
 	var ledger *turn.ReadLedger

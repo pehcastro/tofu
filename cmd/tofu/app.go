@@ -91,6 +91,9 @@ func appVerb(in io.Reader, out, errOut io.Writer, resumed sessionResume) int {
 	live.steer = steering
 	settingsStore, _ := openSettings(dir)
 	registry, registryErr := openShellRegistry()
+	if registryErr == nil {
+		live.shells = registry
+	}
 	if err := tui.Run(tui.Options{
 		Repo:         filepath.Base(dir),
 		Root:         dir,
@@ -479,6 +482,7 @@ type appSession struct {
 	shown   map[string]bool
 	granted map[string]bool
 	pending []pendingImage
+	shells  *shell.Registry
 }
 
 type pendingImage struct {
@@ -730,7 +734,7 @@ func (s *appSession) run(ctx context.Context, pick tui.Pick, task string, emit t
 		emit(tui.Event{Kind: tui.EventForkEnd})
 		return nil
 	}
-	row, runErr := turn.Run(ctx, config)
+	row, runErr := turn.Run(turn.WithShellRegistry(ctx, s.shells), config)
 	stopped := errors.Is(runErr, context.Canceled)
 	if runErr != nil && !stopped {
 		fail(runErr)

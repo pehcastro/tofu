@@ -71,14 +71,27 @@ func (r *Registry) logPath(name string) string   { return filepath.Join(r.dir, n
 
 var ErrRunning = errors.New("shell: already running under that name")
 
-func (r *Registry) Start(root, name, command string) (Shell, error) {
+type Tree struct{ inner tree }
+
+func StartTracked(cmd *exec.Cmd) (Tree, error) {
+	inner, err := startTree(cmd)
+	return Tree{inner: inner}, err
+}
+
+func (t Tree) Release() { t.inner.release() }
+
+func (r *Registry) reserve(name string) error {
 	if strings.TrimSpace(name) == "" {
-		return Shell{}, errors.New("shell: a process needs a name")
+		return errors.New("shell: a process needs a name")
 	}
 	if existing, err := r.Read(name); err == nil && existing.State == Running {
-		return Shell{}, fmt.Errorf("%w: %q", ErrRunning, name)
+		return fmt.Errorf("%w: %q", ErrRunning, name)
 	}
-	if err := os.MkdirAll(r.dir, dirMode); err != nil {
+	return os.MkdirAll(r.dir, dirMode)
+}
+
+func (r *Registry) Start(root, name, command string) (Shell, error) {
+	if err := r.reserve(name); err != nil {
 		return Shell{}, err
 	}
 	shell, err := posixShell()
@@ -221,6 +234,71 @@ func (r *Registry) Tail(name string, lines int) (string, error) {
 		all = all[len(all)-lines:]
 	}
 	return strings.Join(all, "\n"), nil
+}
+
+type Watch struct {
+	r    *Registry
+	name string
+	log  *os.File
+}
+
+func (r *Registry) Watch(name, command string) (*Watch, error) {
+	if err := r.reserve(name); err != nil {
+		return nil, err
+	}
+	logFile, err := os.Create(r.logPath(name))
+	if err != nil {
+		return nil, err
+	}
+	entry := Shell{Name: name, Command: command, State: Running, Started: time.Now()}
+	r.mu.Lock()
+	writeErr := r.writeLocked(entry)
+	if writeErr == nil {
+		r.running[name] = &live{finished: make(chan struct{})}
+	}
+	r.mu.Unlock()
+	if writeErr != nil {
+		_ = logFile.Close()
+		return nil, writeErr
+	}
+	return &Watch{r: r, name: name, log: logFile}, nil
+}
+
+func (w *Watch) Writer() *os.File { return w.log }
+
+func (w *Watch) SetPID(pid int) error {
+	w.r.mu.Lock()
+	defer w.r.mu.Unlock()
+	entry, err := w.r.readLocked(w.name)
+	if err != nil {
+		return err
+	}
+	entry.PID = pid
+	return w.r.writeLocked(entry)
+}
+
+func (w *Watch) Finish(code int) error { return w.conclude(Exited, &code) }
+
+func (w *Watch) Killed() error { return w.conclude(Killed, nil) }
+
+func (w *Watch) conclude(state State, code *int) error {
+	_ = w.log.Close()
+	w.r.mu.Lock()
+	defer w.r.mu.Unlock()
+	entry, err := w.r.readLocked(w.name)
+	if process, ok := w.r.running[w.name]; ok {
+		close(process.finished)
+		delete(w.r.running, w.name)
+	}
+	if err != nil {
+		return err
+	}
+	if entry.State != Running {
+		return nil
+	}
+	ended := time.Now()
+	entry.State, entry.Ended, entry.ExitCode = state, &ended, code
+	return w.r.writeLocked(entry)
 }
 
 var ErrNotRunning = errors.New("shell: not running")

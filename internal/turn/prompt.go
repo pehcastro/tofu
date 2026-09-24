@@ -35,6 +35,14 @@ const InstructionsOff = "sends no instruction file at all: " +
 	"nor your personal AGENTS.md or CLAUDE.md in your home directory"
 
 func Environment(dir string, now time.Time) string {
+	return environmentBlock(dir, now, nil)
+}
+
+func EnvironmentFromShell(dir string, now time.Time, shell RunShell) string {
+	return environmentBlock(dir, now, &shell)
+}
+
+func environmentBlock(dir string, now time.Time, shell *RunShell) string {
 	lines := []string{
 		"<env>",
 		"working directory: " + absolute(dir),
@@ -46,24 +54,20 @@ func Environment(dir string, now time.Time) string {
 	} else {
 		lines = append(lines, "git repository: no")
 	}
-	lines = append(lines, shellLines(dir)...)
+	if shell != nil {
+		lines = append(lines, shellLinesFromShell(dir, *shell)...)
+	} else {
+		lines = append(lines, shellLines(dir)...)
+	}
 	return strings.Join(append(lines, "</env>"), "\n")
 }
 
 func shellLines(dir string) []string {
-	choice, err := resolveShell(realShellEnv())
+	shell, err := resolveRunShell(realShellEnv(), realToolchainRunner)
 	if err != nil {
 		return []string{"shell: " + err.Error()}
 	}
-	lines := []string{"shell: " + choice.Label}
-	if choice.Note != "" {
-		lines = append(lines, "shell notes: "+choice.Note)
-	}
-	toolchain := probeToolchain(dir, realToolchainRunner, konst.ToolchainProbeTimeoutMillis*time.Millisecond)
-	if summary := formatToolchain(toolchain); summary != "" {
-		lines = append(lines, "toolchain: "+summary)
-	}
-	return lines
+	return shellLinesFromShell(dir, shell)
 }
 
 type instructionFile struct {

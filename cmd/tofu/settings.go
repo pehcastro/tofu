@@ -75,10 +75,14 @@ func printSettingsList(out io.Writer, store *settingspkg.Store) {
 }
 
 func settingsDisplay(store *settingspkg.Store, spec settingspkg.Spec) string {
-	if spec.Kind == settingspkg.Bool {
+	switch spec.Kind {
+	case settingspkg.Bool:
 		return strconv.FormatBool(store.Bool(spec.Key))
+	case settingspkg.Text:
+		return store.Text(spec.Key)
+	default:
+		return strconv.Itoa(store.Int(spec.Key))
 	}
-	return strconv.Itoa(store.Int(spec.Key))
 }
 
 func settingsGetVerb(args []string, store *settingspkg.Store, out, errOut io.Writer) int {
@@ -114,15 +118,22 @@ func settingsSetVerb(args []string, store *settingspkg.Store, out, errOut io.Wri
 	if !known {
 		return settingsFail(errOut, fmt.Errorf("%q is not a declared setting", rest[0]))
 	}
-	value, err := parseSettingValue(spec, rest[1])
-	if err != nil {
-		return settingsFail(errOut, err)
-	}
-	if err := store.Set(scope, spec.Key, value); err != nil {
+	if err := writeSetting(store, scope, spec, rest[1]); err != nil {
 		return settingsFail(errOut, err)
 	}
 	_, _ = fmt.Fprintf(out, "%s set to %s in the %s file\n", spec.Key, rest[1], scope)
 	return exitOK
+}
+
+func writeSetting(store *settingspkg.Store, scope settingspkg.Scope, spec settingspkg.Spec, raw string) error {
+	if spec.Kind == settingspkg.Text {
+		return store.SetText(scope, spec.Key, raw)
+	}
+	value, err := parseSettingValue(spec, raw)
+	if err != nil {
+		return err
+	}
+	return store.Set(scope, spec.Key, value)
 }
 
 func specByKey(store *settingspkg.Store, key string) (settingspkg.Spec, bool) {

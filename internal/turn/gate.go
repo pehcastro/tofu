@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	"tofu/internal/judge/ledger"
+	"tofu/internal/settings"
 )
 
 type GateRequest struct {
@@ -35,6 +36,13 @@ const (
 
 func AllGateModes() []GateMode {
 	return []GateMode{GateShadow, GateEnforce}
+}
+
+func GateModeFromPrompt(prompt string) GateMode {
+	if prompt == settings.GatePromptAsk {
+		return GateEnforce
+	}
+	return GateShadow
 }
 
 func (m GateMode) String() string {

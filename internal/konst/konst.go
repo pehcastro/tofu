@@ -82,6 +82,7 @@ const (
 
 	ShellProbeTimeoutMillis     = 2000
 	ToolchainProbeTimeoutMillis = 2000
+	PortCheckTimeoutMillis      = 300
 
 	ProjectSectionCap = 12
 

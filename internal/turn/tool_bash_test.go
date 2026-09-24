@@ -3,6 +3,8 @@ package turn
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -10,9 +12,11 @@ import (
 	"sync"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"tofu/internal/konst"
 	"tofu/internal/llm"
+	"tofu/internal/shell"
 	"tofu/internal/subagent"
 )
 
@@ -205,6 +209,115 @@ func TestTheSettingOffersWSLOnPurpose(t *testing.T) {
 	}
 }
 
+func TestAnEmptySettingResolvesExactlyAsTheEnvironmentVariableDid(t *testing.T) {
+	env := fakeShellEnv()
+	env.lookPath = func(name string) (string, error) {
+		if name == "git" {
+			return `C:\Program Files\Git\cmd\git.exe`, nil
+		}
+		return "", os.ErrNotExist
+	}
+	env.stat = func(path string) error {
+		if path == `C:\Program Files\Git\bin\bash.exe` {
+			return nil
+		}
+		return os.ErrNotExist
+	}
+	env.probe = func(string) (string, error) { return "Msys", nil }
+	env.setting = ""
+
+	choice, err := resolveShell(env)
+	if err != nil {
+		t.Fatalf("resolving the shell: %v", err)
+	}
+	if choice.Path != `C:\Program Files\Git\bin\bash.exe` {
+		t.Fatalf("an empty setting changed the resolution: %+v", choice)
+	}
+}
+
+func TestTheShellSettingWinsOverTOFU_SHELLWhenBothAreSet(t *testing.T) {
+	env := fakeShellEnv()
+	env.stat = func(path string) error {
+		if path == `D:\setting\shell.exe` || path == `D:\envvar\shell.exe` {
+			return nil
+		}
+		return os.ErrNotExist
+	}
+	env.probe = func(string) (string, error) { return "Msys", nil }
+	env.getenv = func(name string) string {
+		if name == "TOFU_SHELL" {
+			return `D:\envvar\shell.exe`
+		}
+		return ""
+	}
+	env.setting = `D:\setting\shell.exe`
+
+	choice, err := resolveShell(env)
+	if err != nil {
+		t.Fatalf("resolving the shell: %v", err)
+	}
+	if choice.Path != `D:\setting\shell.exe` {
+		t.Fatalf("TOFU_SHELL won over the shell setting: %+v", choice)
+	}
+}
+
+func TestTheShellResolvesOnceAcrossARunThatBuildsBothTheEnvironmentAndTheToolRegistry(t *testing.T) {
+	root := t.TempDir()
+	write(t, filepath.Join(root, "go.mod"), "module x\n")
+	var resolves int
+	env := fakeShellEnv()
+	env.goos = "linux"
+	env.stat = func(string) error { return nil }
+	env.probe = func(string) (string, error) { resolves++; return "Linux", nil }
+
+	shell, err := resolveRunShell(env, realToolchainRunner)
+	if err != nil {
+		t.Fatalf("resolving the run shell: %v", err)
+	}
+	tool, err := NewBashToolFromShell(root, shell)
+	if err != nil {
+		t.Fatalf("building the bash tool: %v", err)
+	}
+	tool.Definition()
+	_ = EnvironmentFromShell(root, time.Now(), shell)
+
+	if resolves != 1 {
+		t.Fatalf("the shell resolved %d times across one run, wanted 1", resolves)
+	}
+}
+
+func TestOneToolchainCacheIsSharedByTheBashToolAndTheEnvironmentBlock(t *testing.T) {
+	root := t.TempDir()
+	write(t, filepath.Join(root, "go.mod"), "module x\n")
+	var probes int
+	run := func(ctx context.Context, name string, args ...string) ([]byte, error) {
+		probes++
+		return []byte("go1.99.0\n"), nil
+	}
+	env := fakeShellEnv()
+	env.goos = "linux"
+	env.stat = func(string) error { return nil }
+	env.probe = func(string) (string, error) { return "Linux", nil }
+
+	shell, err := resolveRunShell(env, run)
+	if err != nil {
+		t.Fatalf("resolving the run shell: %v", err)
+	}
+	tool, err := NewBashToolFromShell(root, shell)
+	if err != nil {
+		t.Fatalf("building the bash tool: %v", err)
+	}
+	tool.Definition()
+	block := EnvironmentFromShell(root, time.Now(), shell)
+	if !strings.Contains(block, "go go1.99.0") {
+		t.Fatalf("the environment block never names the probed toolchain: %q", block)
+	}
+
+	if probes != 1 {
+		t.Fatalf("the tool and the environment block probed the toolchain %d times across one run, wanted 1", probes)
+	}
+}
+
 func TestTheToolchainProbeRunsOnceAcrossAThreeStepTurn(t *testing.T) {
 	root := t.TempDir()
 	write(t, filepath.Join(root, "go.mod"), "module x\n")
@@ -316,6 +429,38 @@ func TestAnUnfinishedProbeNeverReportsAnInterpreterAsMissing(t *testing.T) {
 	if runErr := <-runReturned; runErr != nil && strings.Contains(runErr.Error(), "not on this shell's PATH") {
 		t.Fatalf("go was really present and the probe said so once it finished, but the command was still refused as missing: %v", runErr)
 	}
+}
+
+func TestASecondBashToolInTheSameDirectoryAfterTheWiringReusesTheRunCache(t *testing.T) {
+	if testing.Short() {
+		t.Skip("spawns the real shell and probes the real toolchain")
+	}
+	root, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	shell, err := ResolveRunShell("")
+	if err != nil {
+		t.Fatalf("resolving the run shell on this machine: %v", err)
+	}
+
+	first := time.Now()
+	tool1, err := NewBashToolFromShell(root, shell)
+	if err != nil {
+		t.Fatalf("building the first bash tool: %v", err)
+	}
+	tool1.Definition()
+	firstElapsed := time.Since(first)
+
+	second := time.Now()
+	tool2, err := NewBashToolFromShell(root, shell)
+	if err != nil {
+		t.Fatalf("building the second bash tool: %v", err)
+	}
+	tool2.Definition()
+	secondElapsed := time.Since(second)
+
+	t.Logf("first construction+definition (probe pays here): %v, second in the same directory with the shared cache: %v", firstElapsed, secondElapsed)
 }
 
 func TestAToolchainCacheAnswersASecondBashToolInTheSameDirectoryWithoutProbingAgain(t *testing.T) {
@@ -683,5 +828,376 @@ func TestAKnownExitCodeRecordsWhyRatherThanJustTheNumber(t *testing.T) {
 		if !strings.Contains(result.FailureText, c.want) {
 			t.Fatalf("%s: FailureText is %q, want it to say %q", c.command, result.FailureText, c.want)
 		}
+	}
+}
+
+func waitForRunningRow(t *testing.T, registry *shell.Registry, deadline time.Duration) shell.Shell {
+	t.Helper()
+	stop := time.Now().Add(deadline)
+	for time.Now().Before(stop) {
+		found, err := registry.List()
+		if err == nil {
+			for _, one := range found {
+				if one.State == shell.Running {
+					return one
+				}
+			}
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	t.Fatalf("no running row appeared in the registry within %s", deadline)
+	return shell.Shell{}
+}
+
+func TestASlowCommandThroughTheBashToolRegistersAsARunningShell(t *testing.T) {
+	if testing.Short() {
+		t.Skip("spawns the real shell for several seconds")
+	}
+	root := t.TempDir()
+	tool, err := NewBashTool(root)
+	if err != nil {
+		t.Fatalf("building the bash tool: %v", err)
+	}
+	registry := shell.OpenAt(filepath.Join(root, "shells"))
+	args, err := json.Marshal(bashArgs{Command: "sleep 5", TimeoutMS: 8000})
+	if err != nil {
+		t.Fatal(err)
+	}
+	resultCh := make(chan Result, 1)
+	go func() {
+		result, runErr := tool.Run(WithShellRegistry(context.Background(), registry), args)
+		if runErr != nil {
+			t.Errorf("running the command: %v", runErr)
+		}
+		resultCh <- result
+	}()
+
+	row := waitForRunningRow(t, registry, 6*time.Second)
+	if row.Command != "sleep 5" {
+		t.Fatalf("the running row carries command %q, want %q", row.Command, "sleep 5")
+	}
+	if row.Started.IsZero() {
+		t.Fatalf("the running row carries no start time")
+	}
+
+	result := <-resultCh
+	if result.ExitCode == nil || *result.ExitCode != 0 {
+		t.Fatalf("the finished result carries exit code %v, want 0", result.ExitCode)
+	}
+}
+
+func TestARunningRowLeavesWithTheCommandsExitCode(t *testing.T) {
+	if testing.Short() {
+		t.Skip("spawns the real shell for several seconds")
+	}
+	root := t.TempDir()
+	tool, err := NewBashTool(root)
+	if err != nil {
+		t.Fatalf("building the bash tool: %v", err)
+	}
+	registry := shell.OpenAt(filepath.Join(root, "shells"))
+	args, err := json.Marshal(bashArgs{Command: "sleep 4; exit 9", TimeoutMS: 8000})
+	if err != nil {
+		t.Fatal(err)
+	}
+	go func() { _, _ = tool.Run(WithShellRegistry(context.Background(), registry), args) }()
+	row := waitForRunningRow(t, registry, 6*time.Second)
+
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		entry, readErr := registry.Read(row.Name)
+		if readErr != nil {
+			t.Fatalf("reading the row back: %v", readErr)
+		}
+		if entry.State == shell.Exited {
+			if entry.ExitCode == nil || *entry.ExitCode != 9 {
+				t.Fatalf("the exited row carries exit code %v, want 9", entry.ExitCode)
+			}
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("the row never left the running state")
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+}
+
+func TestAKilledBashCommandLeavesTheRegistryRowKilled(t *testing.T) {
+	if testing.Short() {
+		t.Skip("spawns the real shell for several seconds")
+	}
+	root := t.TempDir()
+	tool, err := NewBashTool(root)
+	if err != nil {
+		t.Fatalf("building the bash tool: %v", err)
+	}
+	registry := shell.OpenAt(filepath.Join(root, "shells"))
+	args, err := json.Marshal(bashArgs{Command: "sleep 30", TimeoutMS: 60000})
+	if err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan struct{})
+	go func() {
+		_, _ = tool.Run(WithShellRegistry(context.Background(), registry), args)
+		close(done)
+	}()
+
+	row := waitForRunningRow(t, registry, 6*time.Second)
+	if err := registry.Kill(row.Name); err != nil {
+		t.Fatalf("killing the running row: %v", err)
+	}
+	entry, err := registry.Read(row.Name)
+	if err != nil {
+		t.Fatalf("reading the row back: %v", err)
+	}
+	if entry.State != shell.Killed {
+		t.Fatalf("the row reads as %q right after Kill, want %q", entry.State, shell.Killed)
+	}
+
+	select {
+	case <-done:
+	case <-time.After(10 * time.Second):
+		t.Fatal("the bash tool never returned after its process was killed")
+	}
+	afterExit, err := registry.Read(row.Name)
+	if err != nil {
+		t.Fatalf("reading the row after the tool returned: %v", err)
+	}
+	if afterExit.State != shell.Killed {
+		t.Fatalf("the bash tool's own exit overwrote a kill with %q", afterExit.State)
+	}
+}
+
+func TestAToolResultIsByteIdenticalWithAndWithoutAShellRegistry(t *testing.T) {
+	root := t.TempDir()
+	tool, err := NewBashTool(root)
+	if err != nil {
+		t.Fatalf("building the bash tool: %v", err)
+	}
+	args, err := json.Marshal(bashArgs{Command: "echo the same either way"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	without, err := tool.Run(context.Background(), args)
+	if err != nil {
+		t.Fatalf("running without a registry: %v", err)
+	}
+	registry := shell.OpenAt(filepath.Join(root, "shells"))
+	with, err := tool.Run(WithShellRegistry(context.Background(), registry), args)
+	if err != nil {
+		t.Fatalf("running with a registry attached: %v", err)
+	}
+	if without.Content != with.Content || *without.ExitCode != *with.ExitCode || without.Command != with.Command || without.FailureText != with.FailureText {
+		t.Fatalf("a shell registry in the context changed what the model receives:\nwithout: %+v\nwith:    %+v", without, with)
+	}
+}
+
+func TestABackgroundCommandReturnsAHandleInsideASecondAndTheTurnContinues(t *testing.T) {
+	if testing.Short() {
+		t.Skip("spawns a real process that outlives the call")
+	}
+	root := t.TempDir()
+	tool, err := NewBashTool(root)
+	if err != nil {
+		t.Fatalf("building the bash tool: %v", err)
+	}
+	defer tool.StopBackground()
+	registry := shell.OpenAt(filepath.Join(root, "shells"))
+	args, err := json.Marshal(bashArgs{Command: "sleep 30", Background: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	started := time.Now()
+	result, runErr := tool.Run(WithShellRegistry(context.Background(), registry), args)
+	took := time.Since(started)
+
+	if runErr != nil {
+		t.Fatalf("starting a background command: %v", runErr)
+	}
+	if took > time.Second {
+		t.Fatalf("getting a handle back took %v, want under a second", took)
+	}
+	if !strings.Contains(result.Content, "bash-1") {
+		t.Fatalf("the result %q never names the handle the process runs under", result.Content)
+	}
+
+	shells, err := registry.List()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(shells) != 1 || shells[0].State != shell.Running {
+		t.Fatalf("registered shells: %+v, want exactly one still running", shells)
+	}
+}
+
+func TestStoppingBackgroundLeavesNothingRunning(t *testing.T) {
+	if testing.Short() {
+		t.Skip("spawns a real process that outlives the call")
+	}
+	root := t.TempDir()
+	tool, err := NewBashTool(root)
+	if err != nil {
+		t.Fatalf("building the bash tool: %v", err)
+	}
+	registry := shell.OpenAt(filepath.Join(root, "shells"))
+	args, err := json.Marshal(bashArgs{Command: "sleep 30", Background: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, runErr := tool.Run(WithShellRegistry(context.Background(), registry), args); runErr != nil {
+		t.Fatalf("starting a background command: %v", runErr)
+	}
+
+	tool.StopBackground()
+
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		shells, listErr := registry.List()
+		if listErr != nil {
+			t.Fatal(listErr)
+		}
+		if len(shells) == 1 && shells[0].State == shell.Killed {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("the turn ended and the background process is still %+v", shells)
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+}
+
+func TestAResultOverTheCapIsCutOnARuneBoundaryAndNamesWhatWasDropped(t *testing.T) {
+	head := strings.Repeat("h", 100)
+	multiByte := strings.Repeat("é", 50)
+	tail := strings.Repeat("t", 100)
+	content := head + multiByte + tail
+	capBytes := 50
+
+	cut := capResult(content, capBytes)
+
+	if !utf8.ValidString(cut) {
+		t.Fatalf("the cap sliced a multi-byte rune in half: %q", cut)
+	}
+	if !strings.HasPrefix(cut, "hhhhh") {
+		t.Fatalf("the head is gone from the cut result: %q", cut)
+	}
+	if !strings.HasSuffix(cut, "ttttt") {
+		t.Fatalf("the tail is gone from the cut result: %q", cut)
+	}
+	if !strings.Contains(cut, "dropped from the middle") || !strings.Contains(cut, "byte cap") {
+		t.Fatalf("the cut result carries no marker naming what was dropped: %q", cut)
+	}
+	if len(cut) > capBytes+len(fmt.Sprintf(resultCapMarker, "999 bytes", capBytes)) {
+		t.Fatalf("the cut result is %d bytes, nowhere near the %d byte cap", len(cut), capBytes)
+	}
+}
+
+func TestACancelledBashCallIsRecordedAsAbortedRatherThanFailed(t *testing.T) {
+	if testing.Short() {
+		t.Skip("spawns the real shell for several seconds")
+	}
+	root := t.TempDir()
+	tool, err := NewBashTool(root)
+	if err != nil {
+		t.Fatalf("building the bash tool: %v", err)
+	}
+	args, err := json.Marshal(bashArgs{Command: "sleep 30", TimeoutMS: 60000})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		time.Sleep(300 * time.Millisecond)
+		cancel()
+	}()
+
+	result, err := tool.Run(ctx, args)
+	if err != nil {
+		t.Fatalf("a cancelled call returned a go error instead of a result carrying its own outcome: %v", err)
+	}
+	if result.Outcome != ResultAborted {
+		t.Fatalf("Outcome = %v, want ResultAborted, not folded into an ordinary failure", result.Outcome)
+	}
+	if !strings.Contains(result.FailureText, "cancelled") {
+		t.Fatalf("FailureText %q never says the call was cancelled rather than failed on its own", result.FailureText)
+	}
+
+	failed, err := tool.Run(context.Background(), json.RawMessage(`{"command":"exit 3"}`))
+	if err != nil {
+		t.Fatalf("running a command that exits nonzero: %v", err)
+	}
+	if failed.Outcome != ResultFailed {
+		t.Fatalf("an ordinary nonzero exit carries Outcome %v, want ResultFailed", failed.Outcome)
+	}
+}
+
+func TestARowBuiltFromAnAbortedResultNamesTheAbortRatherThanReadingLikeAFailure(t *testing.T) {
+	tool := &stubTool{name: "read", result: Result{Outcome: ResultAborted, FailureText: "cancelled elsewhere in this turn"}}
+	model := &stubModel{decisions: []llm.Decision{
+		toolCallDecision(llm.ToolCall{ID: "call-1", Name: "read", Arguments: json.RawMessage(`{}`)}),
+		messageDecision(),
+	}}
+
+	row, err := Run(context.Background(), baseConfig(t, model, NewRegistry(tool)))
+	if err != nil {
+		t.Fatalf("Run returned an error: %v", err)
+	}
+
+	call := firstToolCall(t, row)
+	if !strings.HasPrefix(call.Error, "aborted:") {
+		t.Fatalf("row.Error = %q, want it to open by saying the call was aborted rather than reading as a bare failure", call.Error)
+	}
+	if call.Outcome() != llm.ToolOutcomeFailed {
+		t.Fatalf("an aborted call still has to read as not-ran on the wire, got %v", call.Outcome())
+	}
+	last := row.Steps[len(row.Steps)-1]
+	if last.AssistantText != "done" {
+		t.Fatalf("the turn did not go on past the aborted call: %+v", last)
+	}
+}
+
+func TestCheckPortTellsListeningFromNotWithoutAnHTTPRequest(t *testing.T) {
+	root := t.TempDir()
+	tool, err := NewBashTool(root)
+	if err != nil {
+		t.Fatalf("building the bash tool: %v", err)
+	}
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = listener.Close() }()
+	port := listener.Addr().(*net.TCPAddr).Port
+
+	args, err := json.Marshal(bashArgs{CheckPort: port})
+	if err != nil {
+		t.Fatal(err)
+	}
+	started := time.Now()
+	result, err := tool.Run(context.Background(), args)
+	took := time.Since(started)
+	if err != nil {
+		t.Fatalf("checking a listening port: %v", err)
+	}
+	if !strings.Contains(result.Content, "is listening") {
+		t.Fatalf("checking a listening port returned %q", result.Content)
+	}
+	if took > 50*time.Millisecond {
+		t.Fatalf("checking a local port took %v, want well under the %dms timeout", took, konst.PortCheckTimeoutMillis)
+	}
+	t.Logf("check_port on a listening port took %v", took)
+
+	_ = listener.Close()
+	args, err = json.Marshal(bashArgs{CheckPort: port})
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err = tool.Run(context.Background(), args)
+	if err != nil {
+		t.Fatalf("checking a closed port: %v", err)
+	}
+	if !strings.Contains(result.Content, "not listening") {
+		t.Fatalf("checking a closed port returned %q", result.Content)
 	}
 }

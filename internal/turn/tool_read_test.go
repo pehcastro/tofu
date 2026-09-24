@@ -3,6 +3,7 @@ package turn
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -91,6 +92,28 @@ func TestReadRepairsALineRangeAndStillNamesTheSpan(t *testing.T) {
 		t.Fatalf("the repaired range read carries %q", result.Content)
 	}
 	t.Logf("%s", result.Content)
+}
+
+func TestALineRangeReadThatIsCutByTheByteCapStillReportsTheRealTotal(t *testing.T) {
+	root := t.TempDir()
+	const lineCount = 5000
+	var body strings.Builder
+	for i := 1; i <= lineCount; i++ {
+		fmt.Fprintf(&body, "line %d, padded so the whole file is large %s\n", i, strings.Repeat("x", 40))
+	}
+	writeUnder(t, root, "big.txt", body.String())
+
+	result, err := readAt(t, root, `{"path":"big.txt","start_line":1,"end_line":5000}`)
+	if err != nil {
+		t.Fatalf("reading the full range: %v", err)
+	}
+	if len(result.Content) >= body.Len() {
+		t.Fatalf("the result is %d bytes and the file is %d: this test needs the cap to actually cut something", len(result.Content), body.Len())
+	}
+	want := fmt.Sprintf("lines 1-%d of %d", lineCount, lineCount)
+	if !strings.Contains(result.Content, want) {
+		t.Fatalf("a result cut by the byte cap no longer reports the real total: wanted %q in %q", want, result.Content[:min(200, len(result.Content))])
+	}
 }
 
 func TestSymbolsIsBatchedWithTheOtherReadOnlyCalls(t *testing.T) {

@@ -9,6 +9,7 @@ import (
 	"os"
 	"strings"
 
+	"tofu/internal/konst"
 	"tofu/internal/llm"
 )
 
@@ -85,7 +86,7 @@ func (t *ReadTool) Run(_ context.Context, raw json.RawMessage) (Result, error) {
 	}
 	if args.StartLine <= 0 && args.EndLine <= 0 {
 		t.ledger.Mark(args.Path)
-		return Result{Content: repair + string(content), Command: "read " + args.Path}, nil
+		return Result{Content: capResult(repair+string(content), konst.TurnResultBytesCap), Command: "read " + args.Path}, nil
 	}
 
 	lines := strings.Split(strings.TrimSuffix(string(content), "\n"), "\n")
@@ -105,7 +106,7 @@ func (t *ReadTool) Run(_ context.Context, raw json.RawMessage) (Result, error) {
 	span := fmt.Sprintf("%s lines %d-%d of %d", args.Path, start, end, len(lines))
 	t.ledger.Mark(args.Path)
 	return Result{
-		Content: repair + span + "\n" + strings.Join(lines[start-1:end], "\n"),
+		Content: capResult(repair+span+"\n"+strings.Join(lines[start-1:end], "\n"), konst.TurnResultBytesCap),
 		Command: "read " + span,
 	}, nil
 }
