@@ -8,6 +8,32 @@ Tofu is personal and not released, so the public interface that a version promis
 
 The minor number carries breaking changes, which is what 0.x means, and **there is never a 1.0.0**. The owner decided that on 2026-09-19: this stays 0.x forever, so the promise the version makes is the one 0.x already makes, that anything can break on a minor bump.
 
+## 0.4.16 - 2026-09-24
+
+The interface stops lying about what it is doing, and tofu can now be driven and read by something other than a person.
+
+### Added
+
+- **`tofu drive` runs the interface with no terminal and no model call.** It takes a script of what a person does, `type`, `key`, `wait`, `screen` and `environment`, drives the real app, and prints the screen it was asked for. The model is a cassette named by `--cassette` or `TOFU_DRIVE_CASSETTE`, one recorded reply per line of json. **Without a cassette no wire opens at all**, so a driven run cannot reach the network by construction. A `wait` that never arrives exits 1 and prints both what it wanted and the screen it got.
+
+- **`bench corpus` reads your recorded sessions and prints what is in them, spending nothing.** Session count, when each was recorded, its shape, its steps and messages and reads, and which of them carry an event kind this build does not read. Before this, the only path that read a recorded session went through a spending arm.
+
+### Changed
+
+- **One `ctrl+c` stops the agent, not everything.** With a tool still running, the first press ends the model request and lets the open calls finish, and the screen says so. A second press within three seconds stops them too. **Whatever you typed while waiting is kept**, and the note tells you how many messages the queue still holds. At an idle prompt, the first press asks before it quits, and typing anything cancels the question.
+
+- **A session recorded by a newer build still reads.** An event kind this build does not know is skipped rather than refusing the whole file. Every reader that used to refuse one now goes through the same reading, and `tofu context` and the bench corpus stopped disagreeing about what a session is.
+
+### Fixed
+
+- **The interface resolves its shell the way `tofu run` does.** Everything 0.4.15 promised about the shell was true in `tofu run` and false in the app, because the two built their tools through different callers and only one was wired. On this machine the app got WSL and `npm` failed with `Permission denied` at exit 126. The app now reads the `shell` setting, resolves once, and shares that resolution with the environment block.
+
+- **A session recorded since 0.4.15 could not be read back.** `tofu context` exited 1 with `event 1 is of unknown kind "prompt"`, and the bench corpus reader refused the whole session, both because a kind was added and the readers were not told.
+
+- **A resumed session keeps its tool calls and its reasoning.** The reading that replaced four separate readers modelled a message with fewer fields than the turn writes, which would have dropped tool calls, thinking and reasoning items on the way back in.
+
+- **The sub-agents panel no longer shows a child a step behind.** A finished child step was recorded on its own goroutine, so the screen could be drawn before the roster had been told what the child did.
+
 ## 0.4.15 - 2026-09-24
 
 Tofu runs in a shell that can see your project, and stops throwing away what the model already thought.
