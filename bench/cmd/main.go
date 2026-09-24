@@ -35,9 +35,11 @@ Targets:
   wording   the same decision under every wording of its question
   turn      tokens, wall clock and context occupancy for one turn
   harness   run one arm on one task and score it
+  corpus    read the recorded sessions and say what is in them, calling nothing
 
 Arguments:
   --offline   write nothing and call nothing, for api, cost, wording and turn
+  --dir       the sessions directory corpus reads, default the project's own
 `
 
 func main() {
@@ -56,6 +58,8 @@ func run(args []string, out, errOut io.Writer) int {
 		return exitOK
 	case "harness":
 		return benchHarness(out, errOut, rest)
+	case "corpus":
+		return benchCorpus(out, errOut, rest)
 	}
 	produce := reportOf(target)
 	if produce == nil {

@@ -150,15 +150,16 @@ func runTofuArm(out, errOut io.Writer, plan harness.Plan, opts harnessOpts) int 
 		return fail(errOut, "harness", err)
 	}
 	ledgerDir := filepath.Join(state, "log")
+	sessionDir := filepath.Join(state, "sessions")
 
 	measure := func(execution harness.Execution, meta harness.RunMeta) (harness.Row, []string, error) {
 		meta.CLIVersion, meta.Commit = sys.Version(), sys.BuildRevision()
-		session, err := harness.LatestSession(filepath.Join(state, "sessions"), execution.Start)
+		recorded, err := harness.LatestSession(sessionDir, execution.Start)
 		if err != nil {
 			return harness.Row{}, nil, err
 		}
-		row, gaps := harness.MeasureTofu(session, harnessSources(plan.Dir, ledgerDir, opts.version), meta)
-		return row, gaps, nil
+		row, gaps := harness.MeasureTofu(recorded, harnessSources(plan.Dir, ledgerDir, opts.version), meta)
+		return row, append(gaps, skippedEventGaps(sessionDir, recorded.ID)...), nil
 	}
 	return runEveryRepeat(out, errOut, plan, ledgerDir, measure)
 }
