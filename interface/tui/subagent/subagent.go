@@ -15,7 +15,7 @@ import (
 const (
 	minimumWidth  = 20
 	nameColumn    = 10
-	sinceColumn   = 6
+	sinceLeast    = 6
 	progressDots  = 7
 	watchShare    = 3
 	watchMinimum  = 22
@@ -168,12 +168,16 @@ func (m Model) nobody() []string {
 func (m Model) list(width int) (head []string, body [][]string) {
 	blank := pane.Cell("", width, theme.Text())
 	head = []string{pane.Cell(title+gap+m.summary(), width, theme.Accent()), blank}
+	clock := sinceLeast
+	for _, child := range m.Children {
+		clock = max(clock, widget.Cells(widget.Until(child.Since)))
+	}
 	for index, child := range m.Children {
 		style := theme.Text()
 		if index+1 == m.pick {
 			style = theme.Accent()
 		}
-		head = append(head, pane.Cell(m.row(index, child, width), width, style))
+		head = append(head, pane.Cell(m.row(index, child, width, clock), width, style))
 	}
 	body = [][]string{{blank, pane.Cell(ownershipHead, width, theme.Dim())}}
 	for _, held := range regions(m.Children) {
@@ -186,13 +190,13 @@ func (m Model) list(width int) (head []string, body [][]string) {
 	return head, append(body, []string{blank, pane.Cell(pickHint, width, theme.Faint())})
 }
 
-func (m Model) row(index int, child Child, width int) string {
+func (m Model) row(index int, child Child, width, clock int) string {
 	picked := " "
 	if index+1 == m.pick {
 		picked = pickedMark
 	}
 	head := picked + Mark(child.State) + widget.Pad(child.Name, nameColumn)
-	tail := widget.Lead(widget.Until(child.Since), sinceColumn) + gap + widget.Pad(dots(child), progressDots)
+	tail := widget.Lead(widget.Until(child.Since), clock) + gap + widget.Pad(dots(child), progressDots)
 	room := max(width-widget.Cells(head)-widget.Cells(tail), 1)
 	return head + widget.Pad(widget.Fit(child.Doing, room), room) + tail
 }

@@ -11,20 +11,31 @@ import (
 
 	"tofu/internal/konst"
 	roster "tofu/internal/subagent"
+	"tofu/internal/widget"
 )
 
-const chromeRows = 3
+const (
+	chromeRows  = 3
+	listedWidth = 80
+)
 
 func columns(children []Child, terminalWidth, terminalHeight int) (list, watch []string) {
 	model := Model{Children: children, pick: 1}
 	model.SetSize(terminalWidth, terminalHeight-chromeRows)
 	for _, row := range strings.Split(model.View(), "\n") {
 		stripped := ansi.Strip(row)
-		left, _, _ := strings.Cut(stripped, divider)
-		list = append(list, strings.TrimRight(left, " "))
 		watch = append(watch, strings.TrimRight(stripped[strings.LastIndex(stripped, divider)+len(divider):], " "))
 	}
-	return list, watch
+	return listRows(model), watch
+}
+
+func listRows(model Model) []string {
+	var list []string
+	for _, row := range strings.Split(model.View(), "\n") {
+		left, _, _ := strings.Cut(ansi.Strip(row), divider)
+		list = append(list, strings.TrimRight(left, " "))
+	}
+	return list
 }
 
 func watched(child Child, terminalWidth, terminalHeight int) []string {
@@ -32,8 +43,8 @@ func watched(child Child, terminalWidth, terminalHeight int) []string {
 	return watch
 }
 
-func listed(children []Child, terminalWidth, terminalHeight int) []string {
-	list, _ := columns(children, terminalWidth, terminalHeight)
+func listed(children []Child, terminalHeight int) []string {
+	list, _ := columns(children, listedWidth, terminalHeight)
 	return list
 }
 
@@ -217,7 +228,7 @@ func TestTheCutMarkerSurvivesBeingCutItself(t *testing.T) {
 	for _, terminalHeight := range []int{chromeRows + 1, chromeRows + 2, chromeRows + 5, 24} {
 		columns := map[string][]string{
 			"watch": watched(busyChild(wrappingCommand), 80, terminalHeight),
-			"list":  listed(crowdedChildren(), 80, terminalHeight),
+			"list":  listed(crowdedChildren(), terminalHeight),
 		}
 		for column, drawn := range columns {
 			if len(drawn) != terminalHeight-chromeRows {
@@ -283,8 +294,91 @@ func TestALongReportIsCutByRowBecauseItsRowsReadOnTheirOwn(t *testing.T) {
 }
 
 func TestTheListColumnSaysWhenItCut(t *testing.T) {
-	drawn := listed(crowdedChildren(), 80, 24)
+	drawn := listed(crowdedChildren(), 24)
 	if cutMarker(drawn) == "" {
 		t.Fatalf("at 80x24 the list column overflows and drew no line ending %q: %q", rowsHidden, drawn)
+	}
+}
+
+const ellipsisMark = "…"
+
+func runningFor(name string, since time.Duration) Child {
+	return Child{Name: name, State: Running, Since: since, Doing: strings.Repeat("reading the policy loader ", 4)}
+}
+
+func missionEnds(drawn []string) []int {
+	var ends []int
+	for _, line := range drawn {
+		if head, _, cut := strings.Cut(line, ellipsisMark); cut {
+			ends = append(ends, widget.Cells(head))
+		}
+	}
+	return ends
+}
+
+func TestAnOverWideClockDoesNotMoveTheMissionColumn(t *testing.T) {
+	children := []Child{runningFor("go-dev", 9*time.Second), runningFor("bench", 10*time.Minute+30*time.Second)}
+	drawn := listed(children, 24)
+	ends := missionEnds(drawn)
+	if len(ends) != len(children) {
+		t.Fatalf("%d rows truncate their mission, want %d: %q", len(ends), len(children), drawn)
+	}
+	if ends[0] != ends[1] {
+		t.Fatalf("a child at %s ends its mission at cell %d and one at %s at cell %d: %q",
+			widget.Until(children[0].Since), ends[0], widget.Until(children[1].Since), ends[1], drawn)
+	}
+}
+
+func unpicked(rows []string) []string {
+	plain := make([]string, len(rows))
+	for index, row := range rows {
+		plain[index] = strings.TrimPrefix(row, pickedMark)
+	}
+	return plain
+}
+
+func manyChildren() []Child {
+	children := make([]Child, 0, 20)
+	for index := range 19 {
+		children = append(children, runningFor("go-dev-"+strconv.Itoa(index), time.Minute))
+	}
+	return append(children, runningFor("bench", 10*time.Minute+30*time.Second))
+}
+
+func TestTheListCannotScrollSoAPickPastItsBottomRedrawsNothing(t *testing.T) {
+	children := manyChildren()
+	model := Model{Children: children}
+	model.SetSize(80, 24-chromeRows)
+	before := listRows(model)
+	if cutMarker(before) == "" {
+		t.Fatalf("%d children at 80x24 drew no line ending %q, so nothing is cut: %q", len(children), rowsHidden, before)
+	}
+	for range len(children) {
+		model.Key("down")
+	}
+	after := listRows(model)
+	if !slices.Equal(unpicked(before), unpicked(after)) {
+		t.Fatalf("picking the last of %d children redrew the list, so it scrolls: %q then %q", len(children), before, after)
+	}
+}
+
+func TestTheClockColumnIsTheSameWhateverTheListHasRoomToDraw(t *testing.T) {
+	children := manyChildren()
+	want := 0
+	for _, terminalHeight := range []int{60, 36, 24} {
+		drawn := listed(children, terminalHeight)
+		ends := missionEnds(drawn)
+		if len(ends) == 0 {
+			t.Fatalf("at 80x%d no row truncates its mission: %q", terminalHeight, drawn)
+		}
+		if want == 0 {
+			want = ends[0]
+		}
+		for row, end := range ends {
+			if end != want {
+				t.Fatalf("at 80x%d row %d ends its mission at cell %d, want %d: %q", terminalHeight, row, end, want, drawn)
+			}
+		}
+		t.Logf("at 80x%d the list draws %d of %d children and every mission ends at cell %d", terminalHeight, len(ends), len(children), want)
 	}
 }
