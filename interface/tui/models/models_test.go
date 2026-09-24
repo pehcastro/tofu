@@ -1,17 +1,14 @@
 package models
 
 import (
-	"flag"
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
+	"tofu/interface/tui/golden"
 	"tofu/internal/llm"
 	library "tofu/internal/llm/models"
 )
-
-var update = flag.Bool("update", false, "rewrite the golden files")
 
 const (
 	shippedRoot = "../../../library"
@@ -114,26 +111,8 @@ func TestPickWalksEveryRowAndStopsAtTheEnds(t *testing.T) {
 	}
 }
 
-func assertGolden(t *testing.T, name, got string) {
-	t.Helper()
-	path := filepath.Join("testdata", name)
-	if *update {
-		if err := os.WriteFile(path, []byte(got), 0o644); err != nil {
-			t.Fatal(err)
-		}
-		return
-	}
-	want, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if string(want) != got {
-		t.Errorf("%s does not match the golden file\n--- got ---\n%s\n--- want ---\n%s", name, got, want)
-	}
-}
-
 func TestPickerViewGolden(t *testing.T) {
-	assertGolden(t, "picker-120x36.golden", shippedPicker(t).View())
+	golden.Assert(t, "picker-120x36.golden", shippedPicker(t).View())
 }
 
 func TestAnExcludedModelCannotBePicked(t *testing.T) {
@@ -190,5 +169,5 @@ func TestAnEffortOneSubscriptionRefusesFallsBackOnTheOther(t *testing.T) {
 func TestEmptyPickerGolden(t *testing.T) {
 	var empty Model
 	empty.SetSize(120, 36)
-	assertGolden(t, "picker-empty-120x36.golden", empty.View())
+	golden.Assert(t, "picker-empty-120x36.golden", empty.View())
 }

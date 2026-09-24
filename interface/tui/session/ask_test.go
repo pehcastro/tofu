@@ -7,6 +7,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"tofu/interface/tui/fixture"
+	"tofu/interface/tui/golden"
 )
 
 func TestTheAskBlockCarriesTheNumbersTheParagraphCannotFit(t *testing.T) {
@@ -48,7 +49,7 @@ func TestTheAskBlockCarriesTheNumbersTheParagraphCannotFit(t *testing.T) {
 	if !strings.Contains(plain, "risk is hard to undo or reaches outside the workspace") {
 		t.Fatalf("the transcript lost the worded sentence\n%s", plain)
 	}
-	assertGolden(t, "ask-block-80x24.golden", frame)
+	golden.Assert(t, "ask-block-80x24.golden", frame)
 }
 
 func TestAnAskWithNoThresholdFallsBackToWhatTheGateSaid(t *testing.T) {

@@ -7,6 +7,8 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+
+	"tofu/interface/tui/golden"
 )
 
 func TestTypingAndDeletingLeavesThePlaceholderWholeOrNothing(t *testing.T) {
@@ -46,7 +48,7 @@ func TestTheGreetingLeavesOnceTheFirstMessageIsSent(t *testing.T) {
 	model.SetSize(80, 24)
 	model.Append(Entry{Kind: Note, Body: "type a task and press enter. tofu works in scratch"})
 	before := model.View()
-	assertGolden(t, "greeting-before-send-80x24.golden", before)
+	golden.Assert(t, "greeting-before-send-80x24.golden", before)
 	if !strings.Contains(before, "type a task and press enter") {
 		t.Fatalf("the empty session lost its greeting:\n%s", before)
 	}
@@ -54,7 +56,7 @@ func TestTheGreetingLeavesOnceTheFirstMessageIsSent(t *testing.T) {
 	model.Append(Entry{Kind: User, Body: "hey tofu, can you explain this repository to me?"})
 	model.Start()
 	after := model.View()
-	assertGolden(t, "greeting-after-send-80x24.golden", after)
+	golden.Assert(t, "greeting-after-send-80x24.golden", after)
 	if strings.Contains(after, "type a task and press enter") {
 		t.Fatalf("the greeting stayed after the first message:\n%s", after)
 	}

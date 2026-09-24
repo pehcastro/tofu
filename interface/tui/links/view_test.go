@@ -1,36 +1,14 @@
 package links
 
 import (
-	"flag"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/charmbracelet/x/ansi"
 
+	"tofu/interface/tui/golden"
 	isession "tofu/internal/session"
 )
-
-var update = flag.Bool("update", false, "rewrite the golden files")
-
-func assertGolden(t *testing.T, name, got string) {
-	t.Helper()
-	path := filepath.Join("testdata", name)
-	if *update {
-		if err := os.WriteFile(path, []byte(got), 0o644); err != nil {
-			t.Fatal(err)
-		}
-		return
-	}
-	want, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if string(want) != got {
-		t.Errorf("%s does not match the golden file\n--- got ---\n%s\n--- want ---\n%s", name, got, want)
-	}
-}
 
 func carried() []Link {
 	return []Link{
@@ -50,7 +28,7 @@ func picker() Model {
 
 func TestThePickerGolden(t *testing.T) {
 	built := picker()
-	assertGolden(t, "links-80x24.golden", built.View())
+	golden.Assert(t, "links-80x24.golden", built.View())
 }
 
 func TestAnEmptySessionOpensThePickerAndSaysThereAreNoLinks(t *testing.T) {
@@ -64,7 +42,7 @@ func TestAnEmptySessionOpensThePickerAndSaysThereAreNoLinks(t *testing.T) {
 	if picked, any := empty.Picked(); any {
 		t.Fatalf("an empty picker picked %+v", picked)
 	}
-	assertGolden(t, "links-empty-80x24.golden", empty.View())
+	golden.Assert(t, "links-empty-80x24.golden", empty.View())
 }
 
 func TestTypingFiltersAndTheCountFollowsTheFilter(t *testing.T) {

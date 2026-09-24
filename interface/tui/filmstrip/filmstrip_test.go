@@ -1,7 +1,6 @@
 package filmstrip
 
 import (
-	"flag"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -12,11 +11,10 @@ import (
 
 	"tofu/interface/tui/fixture"
 	"tofu/interface/tui/frametime"
+	"tofu/interface/tui/golden"
 	"tofu/interface/tui/progress"
 	"tofu/internal/konst"
 )
-
-var update = flag.Bool("update", false, "rewrite the golden files and their readable siblings")
 
 const (
 	goldenSuffix   = ".golden"
@@ -35,38 +33,14 @@ func shot() []Frame { return All(fixture.Width, fixture.Height) }
 
 func TestEveryFrameOfEverySequenceMatchesItsGolden(t *testing.T) {
 	for _, frame := range shot() {
-		painted := filepath.Join("testdata", stem(frame)+goldenSuffix)
-		readable := filepath.Join("testdata", stem(frame)+readableSuffix)
-		if *update {
-			write(t, painted, frame.Content)
-			write(t, readable, ansi.Strip(frame.Content))
-			continue
-		}
 		t.Run(frame.Name, func(t *testing.T) {
-			if want := read(t, painted); want != frame.Content {
-				t.Errorf("%s does not match\n--- got ---\n%s\n--- want ---\n%s", painted, ansi.Strip(frame.Content), ansi.Strip(want))
-			}
+			golden.Assert(t, stem(frame)+goldenSuffix, frame.Content)
+			golden.Assert(t, stem(frame)+readableSuffix, ansi.Strip(frame.Content))
 		})
 	}
 }
 
-func write(t *testing.T, path, body string) {
-	t.Helper()
-	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
-		t.Fatal(err)
-	}
-}
-
-func read(t *testing.T, path string) string {
-	t.Helper()
-	body, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return string(body)
-}
-
-func TestEveryGoldenHasAReadableSiblingThatAgreesWithIt(t *testing.T) {
+func TestEveryGoldenHasAReadableSiblingWithNoEscapeAndNoVersion(t *testing.T) {
 	goldens, err := filepath.Glob(filepath.Join("testdata", "*"+goldenSuffix))
 	if err != nil {
 		t.Fatal(err)
@@ -76,15 +50,16 @@ func TestEveryGoldenHasAReadableSiblingThatAgreesWithIt(t *testing.T) {
 	}
 	for _, painted := range goldens {
 		readable := strings.TrimSuffix(painted, goldenSuffix) + readableSuffix
-		stripped := ansi.Strip(read(t, painted))
-		if sibling := read(t, readable); sibling != stripped {
-			t.Errorf("%s disagrees with its golden\n--- sibling ---\n%s\n--- golden stripped ---\n%s", readable, sibling, stripped)
+		body, err := os.ReadFile(readable)
+		if err != nil {
+			t.Fatal(err)
 		}
-		if strings.Contains(stripped, "\x1b[") {
-			t.Errorf("%s still carries an escape code after stripping", readable)
+		sibling := string(body)
+		if strings.Contains(sibling, "\x1b[") {
+			t.Errorf("%s carries an escape code", readable)
 		}
-		if strings.Contains(stripped, konst.Version) {
-			t.Errorf("%s carries the version %s, so every release would move it", painted, konst.Version)
+		if strings.Contains(sibling, konst.Version) {
+			t.Errorf("%s carries the version %s, so every release would move it", readable, konst.Version)
 		}
 	}
 }

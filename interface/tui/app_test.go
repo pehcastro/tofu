@@ -2,7 +2,6 @@ package tui
 
 import (
 	"context"
-	"flag"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -16,6 +15,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"tofu/interface/tui/fixture"
+	"tofu/interface/tui/golden"
 	"tofu/interface/tui/pick"
 	"tofu/interface/tui/session"
 	"tofu/interface/tui/settings"
@@ -28,7 +28,7 @@ import (
 	isettings "tofu/internal/settings"
 )
 
-var update = flag.Bool("update", false, "rewrite the golden files")
+var assertGolden = golden.Assert
 
 const (
 	testRelease = fixture.Release
@@ -416,24 +416,6 @@ func TestWithTheGateOffTheSessionSaysSoOnceAndNoCallClaimsAVerdict(t *testing.T)
 		}
 	}
 	assertGolden(t, "session-gate-off-80x24.golden", content)
-}
-
-func assertGolden(t *testing.T, name, got string) {
-	t.Helper()
-	path := filepath.Join("testdata", name)
-	if *update {
-		if err := os.WriteFile(path, []byte(got), 0o644); err != nil {
-			t.Fatal(err)
-		}
-		return
-	}
-	want, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if string(want) != got {
-		t.Errorf("%s does not match the golden file\n--- got ---\n%s\n--- want ---\n%s", name, got, want)
-	}
 }
 
 func TestSessionViewGolden(t *testing.T) {

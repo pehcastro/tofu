@@ -2,9 +2,6 @@ package session
 
 import (
 	"bytes"
-	"flag"
-	"os"
-	"path/filepath"
 	"regexp"
 	"slices"
 	"strconv"
@@ -16,29 +13,10 @@ import (
 	"github.com/charmbracelet/colorprofile"
 	"github.com/charmbracelet/x/ansi"
 
+	"tofu/interface/tui/golden"
 	"tofu/interface/tui/theme"
 	"tofu/internal/widget"
 )
-
-var update = flag.Bool("update", false, "rewrite the golden files")
-
-func assertGolden(t *testing.T, name, got string) {
-	t.Helper()
-	path := filepath.Join("testdata", name)
-	if *update {
-		if err := os.WriteFile(path, []byte(got), 0o644); err != nil {
-			t.Fatal(err)
-		}
-		return
-	}
-	want, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if string(want) != got {
-		t.Errorf("%s does not match the golden file\n--- got ---\n%s\n--- want ---\n%s", name, got, want)
-	}
-}
 
 func downsampled(profile colorprofile.Profile, frame string) string {
 	var buf bytes.Buffer
@@ -61,11 +39,11 @@ func composerFrame(columns int, focus bool, typed string) string {
 }
 
 func TestComposerTintGolden(t *testing.T) {
-	assertGolden(t, "composer-tint-truecolor-80x24.golden", composerFrame(80, true, ""))
+	golden.Assert(t, "composer-tint-truecolor-80x24.golden", composerFrame(80, true, ""))
 }
 
 func TestComposerTintGoldenBlurred(t *testing.T) {
-	assertGolden(t, "composer-tint-blurred-truecolor-80x24.golden", composerFrame(80, false, ""))
+	golden.Assert(t, "composer-tint-blurred-truecolor-80x24.golden", composerFrame(80, false, ""))
 }
 
 func TestABlankTintedRowSitsAboveAndBelowTheComposersText(t *testing.T) {
@@ -73,13 +51,13 @@ func TestABlankTintedRowSitsAboveAndBelowTheComposersText(t *testing.T) {
 	model.SetSize(80, 24)
 	model.Focus()
 	empty := model.View()
-	assertGolden(t, "composer-gap-empty-80x24.golden", empty)
+	golden.Assert(t, "composer-gap-empty-80x24.golden", empty)
 
 	model.Update(tea.KeyPressMsg{Code: 'a', Text: "a"})
 	model.Update(tea.KeyPressMsg{Code: 'j', Mod: tea.ModCtrl})
 	model.Update(tea.KeyPressMsg{Code: 'b', Text: "b"})
 	twoLines := model.View()
-	assertGolden(t, "composer-gap-two-lines-80x24.golden", twoLines)
+	golden.Assert(t, "composer-gap-two-lines-80x24.golden", twoLines)
 
 	rule := strings.Repeat("─", 80)
 	for _, frame := range []string{empty, twoLines} {
@@ -186,7 +164,7 @@ func TestEveryCellOfEveryComposerRowCarriesTheTint(t *testing.T) {
 
 func TestComposerTintReadsAtSixteenColours(t *testing.T) {
 	frame := downsampled(colorprofile.ANSI, composerFrame(80, true, ""))
-	assertGolden(t, "composer-tint-ansi16-80x24.golden", frame)
+	golden.Assert(t, "composer-tint-ansi16-80x24.golden", frame)
 	painted := downsampled(colorprofile.ANSI, lipgloss.NewStyle().Background(theme.ComposerColor()).Render("X"))
 	escape, _, _ := strings.Cut(painted, "X")
 	if !bytes.Contains([]byte(frame), []byte(escape)) {

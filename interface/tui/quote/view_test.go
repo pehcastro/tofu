@@ -1,34 +1,13 @@
 package quote
 
 import (
-	"flag"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/charmbracelet/x/ansi"
+
+	"tofu/interface/tui/golden"
 )
-
-var update = flag.Bool("update", false, "rewrite the golden files")
-
-func assertGolden(t *testing.T, name, got string) {
-	t.Helper()
-	path := filepath.Join("testdata", name)
-	if *update {
-		if err := os.WriteFile(path, []byte(got), 0o644); err != nil {
-			t.Fatal(err)
-		}
-		return
-	}
-	want, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if string(want) != got {
-		t.Errorf("%s does not match the golden file\n--- got ---\n%s\n--- want ---\n%s", name, got, want)
-	}
-}
 
 func picker(t *testing.T, turns []Turn, keys ...string) Model {
 	t.Helper()
@@ -47,7 +26,7 @@ func drawn(t *testing.T, turns []Turn, keys ...string) string {
 }
 
 func TestTheIDAndSpeakerColumnsKeepTheirOwnWidths(t *testing.T) {
-	assertGolden(t, "quote-80x12.golden", picker(t, Collect(talked())).View())
+	golden.Assert(t, "quote-80x12.golden", picker(t, Collect(talked())).View())
 }
 
 func TestAnEmptySessionOpensThePickerAndSaysThereIsNothingToQuote(t *testing.T) {
