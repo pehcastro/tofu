@@ -85,7 +85,7 @@ func TestACodexReasoningItemWritesAsItsOwnNamedFieldRatherThanTheSignature(t *te
 		t.Fatalf("the row does not write a named reasoning field: %s", raw)
 	}
 
-	message, err := row.Message()
+	message, err := messageOf(row)
 	if err != nil {
 		t.Fatalf("reading the row back: %v", err)
 	}
@@ -117,7 +117,7 @@ func TestAMessageRowWrittenBeforeTheReasoningFieldStillLoads(t *testing.T) {
 	if err := json.Unmarshal(raw, &row); err != nil {
 		t.Fatalf("a session written before the reasoning field failed to read: %v", err)
 	}
-	message, err := row.Message()
+	message, err := messageOf(row)
 	if err != nil {
 		t.Fatalf("turning it into a message: %v", err)
 	}
@@ -130,7 +130,7 @@ func TestAMessageRowWrittenBeforeTheReasoningFieldStillLoads(t *testing.T) {
 	if err := json.Unmarshal([]byte(beforeThinkingExisted), &row); err != nil {
 		t.Fatalf("a session written before thinking existed at all failed to read: %v", err)
 	}
-	if _, err := row.Message(); err != nil {
+	if _, err := messageOf(row); err != nil {
 		t.Fatalf("turning the oldest shape into a message: %v", err)
 	}
 }
@@ -253,7 +253,7 @@ func conversationByWalkingEvents(t *testing.T, events []session.Event) []llm.Mes
 		if err := json.Unmarshal(event.Body, &row); err != nil {
 			t.Fatalf("the walk could not read a message event: %v", err)
 		}
-		message, err := row.Message()
+		message, err := messageOf(row)
 		if err != nil {
 			t.Fatalf("the walk could not turn a message row into a message: %v", err)
 		}

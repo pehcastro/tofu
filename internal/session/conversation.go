@@ -15,13 +15,21 @@ type MessageToolCall struct {
 	Arguments json.RawMessage `json:"arguments,omitempty"`
 }
 
+type ReasoningItem struct {
+	ID               string `json:"id"`
+	EncryptedContent string `json:"encrypted_content"`
+}
+
 type MessageBody struct {
-	Role            string            `json:"role"`
-	Content         string            `json:"content,omitempty"`
-	ToolCallID      string            `json:"tool_call_id,omitempty"`
-	ToolCalls       []MessageToolCall `json:"tool_calls,omitempty"`
-	ToolOutcome     string            `json:"tool_outcome,omitempty"`
-	ToolResultBytes int               `json:"tool_result_bytes,omitempty"`
+	Role              string            `json:"role"`
+	Content           string            `json:"content,omitempty"`
+	ToolCallID        string            `json:"tool_call_id,omitempty"`
+	ToolCalls         []MessageToolCall `json:"tool_calls,omitempty"`
+	ToolOutcome       string            `json:"tool_outcome,omitempty"`
+	ToolResultBytes   int               `json:"tool_result_bytes,omitempty"`
+	Thinking          string            `json:"thinking,omitempty"`
+	ThinkingSignature string            `json:"thinking_signature,omitempty"`
+	Reasoning         *ReasoningItem    `json:"reasoning,omitempty"`
 }
 
 type StepToolCall struct {

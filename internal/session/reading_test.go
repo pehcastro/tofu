@@ -138,8 +138,7 @@ func TestASessionCarryingAKindThisBuildDoesNotKnowStillReadsForEverythingElse(t 
 }
 
 func TestAMessageKeepsTheBytesItWasRecordedWithAndNotOnlyTheFieldsThisPackageModels(t *testing.T) {
-	recorded := json.RawMessage(`{"role":"assistant","content":"reading it","thinking":"the file is small",` +
-		`"thinking_signature":"sig_recorded_turn_bytes"}`)
+	recorded := json.RawMessage(`{"role":"assistant","content":"reading it","cache_write_tokens":214}`)
 	reading, err := ReadEvents([]Event{{ID: "message-1", Kind: EventMessage, Body: recorded}})
 	if err != nil {
 		t.Fatalf("read a message carrying a field this package does not model: %v", err)
@@ -153,6 +152,25 @@ func TestAMessageKeepsTheBytesItWasRecordedWithAndNotOnlyTheFieldsThisPackageMod
 	}
 	if string(message.Raw) != string(recorded) {
 		t.Fatalf("the message reads back as %s, and a caller that needs a field beyond MessageBody cannot recover it", message.Raw)
+	}
+}
+
+func TestAMessageRecordedWithThinkingAndReasoningReadsBackWithBoth(t *testing.T) {
+	recorded := json.RawMessage(`{"role":"assistant","content":"reading it","thinking":"the file is small",` +
+		`"reasoning":{"id":"rs_1","encrypted_content":"opaque"}}`)
+	reading, err := ReadEvents([]Event{{ID: "message-1", Kind: EventMessage, Body: recorded}})
+	if err != nil {
+		t.Fatalf("read a message carrying thinking and reasoning: %v", err)
+	}
+	body := reading.Messages[0].MessageBody
+	if body.Thinking != "the file is small" {
+		t.Fatalf("thinking read back as %q", body.Thinking)
+	}
+	if body.Reasoning == nil {
+		t.Fatal("reasoning read back as nothing, so a person reading the session cannot see it")
+	}
+	if body.Reasoning.ID != "rs_1" || body.Reasoning.EncryptedContent != "opaque" {
+		t.Fatalf("reasoning read back as %+v", *body.Reasoning)
 	}
 }
 

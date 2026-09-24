@@ -134,28 +134,9 @@ type LoopGuardStop struct {
 	Repeats int             `json:"repeats"`
 }
 
-type MessageToolCall struct {
-	ID        string          `json:"id"`
-	Name      string          `json:"name"`
-	Arguments json.RawMessage `json:"arguments,omitempty"`
-}
+type MessageToolCall = session.MessageToolCall
 
-type ReasoningItem struct {
-	ID               string `json:"id"`
-	EncryptedContent string `json:"encrypted_content"`
-}
-
-type MessageRow struct {
-	Role              string            `json:"role"`
-	Content           string            `json:"content,omitempty"`
-	ToolCallID        string            `json:"tool_call_id,omitempty"`
-	ToolCalls         []MessageToolCall `json:"tool_calls,omitempty"`
-	ToolOutcome       string            `json:"tool_outcome,omitempty"`
-	ToolResultBytes   int               `json:"tool_result_bytes,omitempty"`
-	Thinking          string            `json:"thinking,omitempty"`
-	ThinkingSignature string            `json:"thinking_signature,omitempty"`
-	Reasoning         *ReasoningItem    `json:"reasoning,omitempty"`
-}
+type MessageRow = session.MessageBody
 
 func toolOutcomeName(outcome llm.ToolOutcome) string {
 	switch outcome {
@@ -181,7 +162,7 @@ func messageRowOf(message llm.Message) MessageRow {
 		Thinking:        message.Thinking.Text,
 	}
 	if id, encrypted, ok := codex.DecodeReasoning(message.Thinking.Signature); ok {
-		row.Reasoning = &ReasoningItem{ID: id, EncryptedContent: encrypted}
+		row.Reasoning = &session.ReasoningItem{ID: id, EncryptedContent: encrypted}
 	} else {
 		row.ThinkingSignature = message.Thinking.Signature
 	}
@@ -191,7 +172,7 @@ func messageRowOf(message llm.Message) MessageRow {
 	return row
 }
 
-func (m MessageRow) Message() (llm.Message, error) {
+func messageOf(m MessageRow) (llm.Message, error) {
 	signature := m.ThinkingSignature
 	if m.Reasoning != nil {
 		signature = codex.EncodeReasoning(m.Reasoning.ID, m.Reasoning.EncryptedContent)
@@ -243,11 +224,7 @@ func ConversationFrom(events []session.Event) ([]llm.Message, error) {
 	}
 	messages := make([]llm.Message, 0, len(reading.Messages))
 	for _, recorded := range reading.Messages {
-		var row MessageRow
-		if err := json.Unmarshal(recorded.Raw, &row); err != nil {
-			return nil, err
-		}
-		message, err := row.Message()
+		message, err := messageOf(recorded.MessageBody)
 		if err != nil {
 			return nil, err
 		}
