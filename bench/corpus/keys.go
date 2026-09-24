@@ -32,7 +32,6 @@ var DeliberatelyUnread = []UnreadKey{
 	{"step", "occupancy", "context-window occupancy at the step; bench/recall reads this from its own fixtures, not RecordedStep"},
 	{"step", "bands", "context-window band split at the step; same as occupancy"},
 	{"step", "fork", "whether this step is where a fork happened; session lineage, see the turn-level fork fields"},
-	{"call", "duration_ms", "how long the call took; no bench point reads it from the corpus yet"},
 	{"call", "gate_verdict", "pointer into the judge ledger, looked up there rather than duplicated here; bench/stopcheck looks up the row by gate_decision_id instead, checked 2026-09-20"},
 	{"call", "rendered_bytes", "how much of the result was shown to the model, distinct from result_bytes which is already read"},
 	{"call", "result_handle", "a pointer to an off-record artifact; no bench point reads it from the corpus yet"},
@@ -58,7 +57,12 @@ func taggedKeys(t reflect.Type) map[string]bool {
 func knownKeys(level string) map[string]bool {
 	switch level {
 	case "turn":
-		return taggedKeys(reflect.TypeOf(RecordedTurn{}))
+		known := taggedKeys(reflect.TypeOf(RecordedTurn{}))
+		known["wallclockms"] = true
+		known["contextceiling"] = true
+		known["contexttarget"] = true
+		known["autocompaction"] = true
+		return known
 	case "step":
 		known := taggedKeys(reflect.TypeOf(RecordedStep{}))
 		known["assistanttext"] = true
@@ -69,12 +73,16 @@ func knownKeys(level string) map[string]bool {
 	case "call":
 		known := taggedKeys(reflect.TypeOf(RecordedCall{}))
 		known["exitcode"] = true
+		known["durationms"] = true
 		known["resultbytes"] = true
 		known["renderedbytes"] = true
 		known["resulthash"] = true
 		return known
 	case "message":
-		return taggedKeys(reflect.TypeOf(RecordedMessage{}))
+		known := taggedKeys(reflect.TypeOf(RecordedMessage{}))
+		known["toolcallid"] = true
+		known["toolcalls"] = true
+		return known
 	case "message_call":
 		return taggedKeys(reflect.TypeOf(RecordedToolCallName{}))
 	}

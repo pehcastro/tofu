@@ -27,6 +27,9 @@ func Labels() map[string]Label {
 		"turn-18d69bfed2bf52a0#9":  {Continue, "the tests had just been written and had not been run against the routes"},
 		"turn-18d69bfed2bf52a0#12": {Continue, "package.json had changed since the tests last ran"},
 		"turn-18d69bfed2bf52a0#13": {Stop, "the turn reported the routes, the tests and the typecheck, and the task asked for nothing more"},
+		"turn-18d68bcceb3d56e8#1":  {Continue, "the file had been written but the turn had not reported back"},
+		"turn-18d68bcceb3d56e8#2":  {Stop, "the turn reported the file was written and the task asked for nothing more"},
+		"turn-18d68bcff15ad87c#1":  {Continue, "the file had been written but the turn had not reported back"},
 	}
 	for _, step := range []int{1, 3, 4, 5, 6, 7, 8, 10, 11} {
 		labels[stepKey("turn-18d69bfed2bf52a0", step)] = Label{Continue, "the turn was reading or writing the files the task asks for"}

@@ -22,23 +22,22 @@ func built(t *testing.T) Data {
 
 func TestEveryDatedReportOnDiskIsInTheIndex(t *testing.T) {
 	var found []string
-	benches, err := os.ReadDir("..")
+	err := filepath.WalkDir("..", func(path string, entry os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if entry.IsDir() || !onDisk.MatchString(entry.Name()) {
+			return nil
+		}
+		rel, err := filepath.Rel("..", path)
+		if err != nil {
+			return err
+		}
+		found = append(found, "bench/"+filepath.ToSlash(rel))
+		return nil
+	})
 	if err != nil {
 		t.Fatal(err)
-	}
-	for _, bench := range benches {
-		if !bench.IsDir() {
-			continue
-		}
-		files, err := os.ReadDir(filepath.Join("..", bench.Name()))
-		if err != nil {
-			t.Fatal(err)
-		}
-		for _, file := range files {
-			if !file.IsDir() && onDisk.MatchString(file.Name()) {
-				found = append(found, "bench/"+bench.Name()+"/"+file.Name())
-			}
-		}
 	}
 	listed := map[string]bool{}
 	for _, report := range built(t).Reports {
@@ -155,6 +154,45 @@ func TestEveryReportOpensWithAFigureTakenFromTheReportItself(t *testing.T) {
 		if !strings.Contains(plain(string(body)), report.Figure) {
 			t.Errorf("%s: the headline %q is not in the report", report.Source, report.Figure)
 		}
+	}
+}
+
+func TestANestedBenchIsItsOwnBenchInTheIndex(t *testing.T) {
+	data := built(t)
+	found := map[string]string{}
+	for _, report := range data.Reports {
+		if strings.HasPrefix(report.Source, "bench/ask/") {
+			found[report.Source] = report.Package
+		}
+	}
+	want := map[string]string{
+		"bench/ask/report-2026-09-21.md":        "ask",
+		"bench/ask/server/report-2026-09-23.md": "ask/server",
+		"bench/ask/server/report-2026-09-24.md": "ask/server",
+	}
+	for path, pkg := range want {
+		if found[path] != pkg {
+			t.Errorf("%s: index carries package %q, want %q", path, found[path], pkg)
+		}
+	}
+	if len(found) != len(want) {
+		t.Errorf("bench/ask/* carries %d reports in the index, want %d: %v", len(found), len(want), found)
+	}
+}
+
+func TestAWithdrawalNamingANestedReportIsAccepted(t *testing.T) {
+	fixture := "fixture_withdrawn_nested.json"
+	body := `[{"report":"bench/ask/server/report-2026-09-23.md","state":"stale","why":"proving TOFU-568's fix accepts a withdrawal naming a nested report"}]`
+	if err := os.WriteFile(fixture, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Remove(fixture) })
+	withdrawals, err := readWithdrawals(fixture)
+	if err != nil {
+		t.Fatalf("a withdrawal naming a nested report was refused: %v", err)
+	}
+	if _, named := withdrawals["bench/ask/server/report-2026-09-23.md"]; !named {
+		t.Fatal("the nested report did not come back out of readWithdrawals")
 	}
 }
 

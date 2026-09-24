@@ -112,6 +112,14 @@
     "skips": "everything: no run has produced a promotion log"
   },
   {
+    "report": "bench/promote/report-2026-09-23.md",
+    "figure": "0 rows",
+    "says": "Recounted two days after the first report: still 0 rows, still 0 distinct turns, still 0 usable labels, 78 short of the floor of 78. No row exists to leak its own answer, because no row exists.",
+    "from": "rerun",
+    "sample": "0 rows against a floor of 78, .tofu/promotions.jsonl absent anywhere under the tree",
+    "skips": "everything: no run has produced a promotion log since the first count"
+  },
+  {
     "report": "bench/readworth/report-2026-09-21.md",
     "figure": "87.1%",
     "says": "A length floor of 15 characters matches jev at 87.1% accuracy and saves more bytes, 12.6% against 9.4%, for no call and no money. The free arm removes more, costs nothing and is not worse.",
@@ -320,6 +328,22 @@
     "skips": "none: no live model call and no network call, len(Description) and marshalled len(Parameters) read straight off the registry"
   },
   {
+    "report": "bench/tokencount/report-2026-09-24.md",
+    "figure": "71.2%",
+    "says": "Bytes over four misses the provider's own completion_tokens by a median of 71.2 percent and 96.7 percent of 635 usable steps are out by more than a tenth, so four is not a good enough estimate on the completion side of this corpus. The comparison is honest about its limit: only what a step itself generates, assistant text or a tool call's own Args, can be checked against completion_tokens, because the bytes a prompt sent are never stored per step. The static tool schema block bench/schemas already measured at 16574 bytes and an estimated 4143 tokens is cited rather than remeasured, and named as unmeasurable here since it never arrives as its own receipt. Tool-call arguments err worse than prose, median 74.1 against 34.6 percent, and several steps carry a completion_tokens far larger than their visible bytes could explain, consistent with a billed reasoning pass the step never writes down. Replacing four costs a real vocabulary and a merge loop this project has no dependency for.",
+    "from": "prose",
+    "sample": "118 turns read through bench/corpus.WalkSessions over both wires in the corpus, anthropic and codex, 1033 steps read and 635 usable",
+    "skips": "1 of 112 entries under .tofu/sessions is not a turn, HEAD; 58 of 118 turns carry no wire field and are excluded from the per-wire table; 398 of 1033 steps skipped, named by reason in the report's own Corpus section"
+  },
+  {
+    "report": "bench/tokencount/report-2026-09-24-accountable.md",
+    "figure": "47.1%",
+    "says": "The earlier aggregate of 71.2 percent buried two different failures. Split on a hard floor, a token is at least one byte so a step billing more tokens than it has visible bytes cannot have produced them at all: 287 of 635 steps fail that floor outright, almost all of them tool-call arguments, 286 of 287, median error 87.2 percent there because the content that would explain the bill is not in the corpus. On the remaining 348 steps, where the byte count at least allows the token count, four still misses, median 47.1 percent overall, 33.9 percent for prose and 49.2 percent for tool-call arguments, one-sided: it undershoots 300 of 300 accountable tool-call samples, because short JSON tokenizes more densely than four bytes per token, a separate and smaller effect from the unaccountable group. TOFU-540 and TOFU-544 landed a typed thinking and reasoning field on 2026-09-23, so the corpus was scanned for it directly: 0 of 1841 assistant messages across the 48 turns that carry a message stream hold a populated thinking or reasoning field, so the theory that unaccountable steps are billing an invisible reasoning pass stays a theory, not confirmed by this corpus. Four is not good enough on either half.",
+    "from": "prose",
+    "sample": "the same 118 turns and 635 usable steps as report-2026-09-24.md, split into 348 accountable and 287 unaccountable by the byte floor, plus 1841 assistant messages scanned across 48 header-plus-jsonl turns for a thinking or reasoning field",
+    "skips": "same corpus skips as report-2026-09-24.md; the thinking scan only covers turns stored in the header-plus-jsonl schema, the only schema with a message stream, 48 of 118 turns"
+  },
+  {
     "report": "bench/instruction/report-2026-09-23.md",
     "figure": "25",
     "says": "Jev scored 25 of 27 against a regular expression's 24 of 27 on a corpus of real recorded tool results, and a rerun minutes later tied both arms at 24, so the report's conclusion is that the corpus cannot decide this rather than that the judgment won. Both arms score high because this project's recorded sessions carry almost no adversarial instruction-shaped text: what looks like a directive is nearly always the harness's own scaffolding, an oversized-result notice, a bash-timeout caution or a refused-citation notice, never a planted attack. Neither arm's mistakes sit inside the other's: the regular expression's three misses are directive-shaped words inside ordinary Go source or a test assertion rather than text addressed to a reader, and jev's two misses are the same refused-citation caution scored at 0.18, under its own line, which the literal word match caught. The two-task test found no separation, 0.03 to 0.06 apart on three cases, which is the opposite of what the shell sift found. Deciding two arms that both score in the high eighties needs a few hundred labelled cases, and this corpus is 27. It cost $0.000935 over 27 live calls.",
@@ -414,5 +438,29 @@
     "from": "prose",
     "sample": "6 rounds per shape on DESKTOP-AHUN9RO, 12 samples for shell resolution, a temporary directory carrying a package.json for the node case, no live model call and no network call",
     "skips": "none: every round completed and no probe reached its 2000 ms limit"
+  },
+  {
+    "report": "bench/calibration/report-2026-09-24.md",
+    "figure": "2785 rows total",
+    "says": "The ledger holds 2,785 decision rows and 20 of them carry an outcome, all hand labelled, which is the same shape the report of 2026-09-23 found with five fewer rows. Nothing automatic has ever written an outcome, so the labelled set is still the only calibration evidence and it is still far under any floor a threshold could be fitted against. The five new rows since the previous count are all tool_gate, all unlabelled, written on this machine at 01:57 on 2026-09-24, so the labelled count, the near threshold counts and every calibratable verdict are unchanged.",
+    "from": "prose",
+    "sample": "2,785 ledger rows read from the day files under .tofu/log, of which 1,463 are tool_gate, with 20 carrying a hand labelled outcome",
+    "skips": "none: every day file parsed"
+  },
+  {
+    "report": "bench/ask/server/report-2026-09-23.md",
+    "figure": "2 of 113",
+    "says": "The free arm, read the project's declared commands and act when one candidate fits, fires on 2 of 113 readable turns and removes 15 of 18 recorded steps in one session and 23 of 24 in the other. The line that decides the ticket splits on a definition: read by literal name against the task's own words, exactly one script matches and it is the wrong one in both sessions, 2 of 2, because start needs a production build neither had where dev was right. Read by what the scripts actually run, two candidates fit and the arm asks instead of choosing, so it never picks wrong because it never picks. The cheap arm loses on this corpus and the one that does not lose needs judgement.",
+    "from": "prose",
+    "sample": "113 turns readable across .tofu/sessions and the admin-template sessions, 2 in the start a server intent domain, both fired, steps counted from the recorded calls",
+    "skips": "none named: every readable turn was classified"
+  },
+  {
+    "report": "bench/ask/server/report-2026-09-24.md",
+    "figure": "2 of 121",
+    "says": "The same measurement after the reader was corrected: the arm fires on 2 of 121 readable turns, 1.65 percent, where the earlier run read 113 turns and 1.77 percent. The denominator moved because corpus.WalkSessions now returns one turn per outcome segment, so six restarted directories yield their real turns. Every finding about the arm itself is unchanged: 15 of 18 steps removed in one session, 23 of 24 in the other, and the literal name reading still picks the wrong script in both.",
+    "from": "prose",
+    "sample": "121 turns readable across both directories after TOFU-560, 2 in the start a server intent domain, both fired",
+    "skips": "none named: every readable turn was classified"
   }
 ]

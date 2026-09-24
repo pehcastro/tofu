@@ -106,5 +106,202 @@
       "0 to 0           14  ##############",
       "1 to 2           24  ########################"
     ]
+  },
+  {
+    "report": "bench/thrift/report-2026-09-21.md",
+    "state": "withdrawn in part",
+    "why": "one descriptive line only, withdrawn on 2026-09-23 by TOFU-551 and by this file rather than by an edit to the report. bench/corpus.RecordedTurn tagged wall_clock_ms, context_ceiling, context_target and auto_compaction with the lower-case spellings only, so a turn recorded under the older, fully capitalized schema decoded with WallClockMS at zero and read as WallClockRecorded: false even though its own file carries a real wall clock. turn-18d68bcceb3d56e8 and turn-18d68bcff15ad87c, both dated 2026-09-18 and both already in the 107-session corpus this report read, are two of the seven this report calls unfinished; both carry a wall clock (6,539 ms and 4,415 ms) and one completed write call each. bench/thrift never drops a turn for this, so the session count of 107 and every call, byte and token figure in this report stand exactly as measured: only the count of turns called unfinished falls, from 7 to 5.",
+    "fell": [
+      "0 sessions skipped for a missing outcome. The shared reader keeps an unfinished turn, because an unfinished turn still made its calls, and marks it `WallClockRecorded: false`. 7 of the 107 are unfinished in that sense. Before TOFU-341 `bench/tokens` dropped them and read 100 turns; it reads 107 now, on the same reader as this table."
+    ]
+  },
+  {
+    "report": "bench/wrongpath/report-2026-09-22.md",
+    "state": "withdrawn in part",
+    "why": "two descriptive lines only, withdrawn on 2026-09-23 by TOFU-551 and by this file rather than by an edit to the report. Same cause as the sibling thrift withdrawal above: turn-18d68bcceb3d56e8 and turn-18d68bcff15ad87c, both dated 2026-09-18 and both already in the 109-session corpus this report read on 2026-09-22, carry a real wall clock (6,539 ms and 4,415 ms) that the unpatched RecordedTurn reader read as zero, so both counted toward the seven turns this report calls carrying no wall clock. bench/wrongpath never drops a turn for this either, so the entries, sessions-read and skipped counts, the raw and write-or-edit totals (already corrected by the sibling TOFU-550 withdrawal above), the five shape tables and the refusal verdict all stand exactly as measured: only the count of turns carrying no wall clock falls, from 7 to 5.",
+    "fell": [
+      "7 of the 109 sessions carry no wall clock. They are counted, not skipped: this measure",
+      "110 entries, 109 read as sessions, 1 skipped, 7 carrying no wall clock"
+    ]
+  },
+  {
+    "report": "bench/turn/report-2026-09-21.md",
+    "state": "withdrawn in part",
+    "why": "the Corpus section's parsed and skipped counts, the two Totals rows, and the two per-turn table rows those two turns were missing from, withdrawn on 2026-09-23 by TOFU-551 and by this file rather than by an edit to the report. bench/turn.ReadCorpus treats a turn corpus.WalkSessions marks WallClockRecorded: false as skipped outright, the same as bench/stopcheck. turn-18d68bcceb3d56e8 and turn-18d68bcff15ad87c, both dated 2026-09-18 and both already in the 110-entry corpus this report read on 2026-09-21, carry a real wall clock (6,539 ms and 4,415 ms, 2 steps and 1 step, one write call each, 26 bytes apiece) that the unpatched RecordedTurn reader read as zero, so both were dropped from this report's 102 parsed turns and listed among its 8 skipped. Corrected: 104 parsed, 6 skipped, the two named rows for these turns gone from the Skipped table. Each turn's contribution is identical on both arms, since neither triggers a retry, a repair or a refusal, so it adds cleanly to both Totals rows: as recorded moves to 1,010 steps, 1,387 calls, 54,267,116 bytes, 11,446,060 ms; with the call memo and the repair rule moves to 1,008 steps, 1,385 calls, 54,260,651 bytes, 11,434,062 ms. Refused, cache hits, retries, repaired, undecided and answers changed are untouched on both rows. The Per turn section gains the two turns' four rows (as recorded and layered, identical on each since nothing repairs or refuses a lone write) and its header count moves from 102 to 104. The `repair` mechanism's derived wall-clock-saved figure of 16,513 ms was not recomputed here: it divides by a corpus mean that depends on the exact 102-turn population this report read, not on the two turns added, and restating it needs a rerun rather than arithmetic. The 45 same-question pairs are untouched, because both added calls are `write`, which `tools.SideEffectFree` excludes, confirmed by TOFU-550's earlier check of the same two turns.",
+    "fell": [
+      "110 entries read under `../../.tofu/sessions`: 102 parsed as a recorded turn, 8 skipped.",
+      "| turn-18d68bcceb3d56e8.json | bench/corpus: ..\\..\\.tofu\\sessions\\turn-18d68bcceb3d56e8.json carries no step and no wall clock: bench/corpus: the recorded turn carries no wall clock |",
+      "| turn-18d68bcff15ad87c.json | bench/corpus: ..\\..\\.tofu\\sessions\\turn-18d68bcff15ad87c.json carries no step and no wall clock: bench/corpus: the recorded turn carries no wall clock |",
+      "| as recorded | 1007 | 1385 | - | - | - | 9 | - | 54267064 | 0 | 11435106 |",
+      "| with the call memo and the repair rule | 1005 | 1383 | 0 | 2 | 2 | 9 | 6 | 54260599 | 2 | 11423108 |",
+      "| repair | 2 | 16513 ms | -6465 | 2 | kept |",
+      "## Per turn, 102 turns"
+    ]
+  },
+  {
+    "report": "bench/stopcheck/report-2026-09-20.md",
+    "state": "withdrawn in part",
+    "why": "the session-skipped count, two named skip rows, the unlabelled-steps count and the per-turn cost mean, withdrawn on 2026-09-23 by TOFU-551 and by this file rather than by an edit to the report. bench/stopcheck.ReadSessions calls corpus.ReadTurn directly and drops any turn that returns ErrNoWallClock. turn-18d68bcceb3d56e8 and turn-18d68bcff15ad87c, both dated 2026-09-18 and both in the frozen 19-file corpus this report reads, carry a real wall clock (6,539 ms and 4,415 ms) that the unpatched RecordedTurn reader read as zero, so both were dropped and listed among the five skipped files. Neither turn's steps carry a hand label in labels.go, so no labelled step, no agreement figure and no verdict moves: 'Which arm won' and every figure in it stand exactly as measured. Corrected: session files skipped falls from 5 to 3, the two named rows for these turns gone from the list, turns entering the cost table rise from 14 to 16 with two new zero-cost rows (turn-18d68bcceb3d56e8: 2 steps, gate 0 decisions 0 ms $0.000000, stop_check 0 decisions 0 ms $0.000000, 0 fresh, 1 gate decision not in the ledger; turn-18d68bcff15ad87c: 1 step, same shape, 1 gate decision not in the ledger), steps with no hand label rises from 1 to 4 (adding turn-18d68bcceb3d56e8#1, turn-18d68bcceb3d56e8#2, turn-18d68bcff15ad87c#1). The whole-corpus gate and stop_check sums are untouched, since both new turns add zero decisions and zero cost, but the mean line divides by turn count: per turn, mean over 16 turns is gate 2017 ms $0.000281, stop_check adds 3418 ms $0.000415, not the 14-turn figures below.",
+    "fell": [
+      "session files skipped: 5",
+      "  turn-18d68bcceb3d56e8.json: bench/corpus: corpus\\turn-18d68bcceb3d56e8.json carries no step and no wall clock",
+      "  turn-18d68bcff15ad87c.json: bench/corpus: corpus\\turn-18d68bcff15ad87c.json carries no step and no wall clock",
+      "steps with no hand label, not decided and not counted: 1: turn-18d6a27c7dfb1644#34",
+      "per turn, mean over 14 turns: gate 2305 ms $0.000321, stop_check adds 3906 ms $0.000475"
+    ]
+  },
+  {
+    "report": "bench/stopcheck/report-2026-09-21.md",
+    "state": "withdrawn in part",
+    "why": "the same figures as the 2026-09-20 withdrawal above, for the same reason: this report's Corpus section is byte-identical to it, read from the same frozen corpus and the same replay cache. Session files skipped falls from 5 to 3, the two named rows for turn-18d68bcceb3d56e8 and turn-18d68bcff15ad87c gone from the list, turns entering the cost table rise from 14 to 16 (turn-18d68bcceb3d56e8: 2 steps, gate 0 decisions 0 ms $0.000000, stop_check 0 decisions 0 ms $0.000000, 0 fresh, 1 gate decision not in the ledger; turn-18d68bcff15ad87c: 1 step, same shape, 1 gate decision not in the ledger), steps with no hand label rises from 1 to 4, and per turn mean over 16 turns is gate 2017 ms $0.000281, stop_check adds 3418 ms $0.000415. 'Which arm won' and every agreement figure stand: neither turn's steps carry a hand label.",
+    "fell": [
+      "session files skipped: 5",
+      "  turn-18d68bcceb3d56e8.json: bench/corpus: corpus\\turn-18d68bcceb3d56e8.json carries no step and no wall clock",
+      "  turn-18d68bcff15ad87c.json: bench/corpus: corpus\\turn-18d68bcff15ad87c.json carries no step and no wall clock",
+      "steps with no hand label, not decided and not counted: 1: turn-18d6a27c7dfb1644#34",
+      "per turn, mean over 14 turns: gate 2305 ms $0.000321, stop_check adds 3906 ms $0.000475"
+    ]
+  },
+  {
+    "report": "bench/toolerrors/report-2026-09-23.md",
+    "state": "withdrawn in part",
+    "why": "the session-read count only, withdrawn on 2026-09-24 by TOFU-560 and by this file rather than by an edit to the report. bench/corpus.ReadTurnDir concatenated a session directory whose body.jsonl carries more than one outcome line into one flattened turn with a repeated step-index sequence, instead of returning one turn per outcome. Six directories under .tofu/sessions do this: turn-18d6ea32da3230c0 (4 outcome lines, so 3 extra turns), turn-18d6f22be5cb6180, turn-18d6f8d9e45f8efc, turn-18d724d865ed9264 and turn-18d7474e7fae090c (2 outcome lines each, 1 extra turn apiece), all dated 2026-09-20 or 2026-09-21 and already in the corpus this report read. corpus.WalkSessions now returns one Turn per outcome segment, so the true count at this report's 111-entry, 110-session read was 117 sessions, not 110. No step or tool call moves between turns and none of the seven added segments was ever skipped, so every call, failure and byte figure in this report is computed from the identical set of calls and stands exactly as measured: the session count moves, nothing else does.",
+    "fell": [
+      "`.tofu/sessions`, read at 2026-09-23 21:17 -03:00, through `bench/corpus.WalkSessions` and nothing else: no second file walk, no second JSON decode. 111 entries, 110 read as sessions, 1 skipped."
+    ]
+  },
+  {
+    "report": "bench/toolerrors/report-2026-09-23-categorized.md",
+    "state": "withdrawn in part",
+    "why": "the session-read count only, withdrawn on 2026-09-24 by TOFU-560 and by this file rather than by an edit to the report, for the same reason as the sibling withdrawal on report-2026-09-23.md: six restart directories that concatenated into one flattened turn each now split into 7 additional turns. The true count at this report's 111-entry read was 117 sessions, not 110. No call or byte figure in this report is affected: the session count moves, nothing else does.",
+    "fell": [
+      "`.tofu/sessions`, read at 2026-09-23 21:58 -03:00, through `bench/corpus.WalkSessions` and nothing else: no second file walk, no second JSON decode. 111 entries, 110 read as sessions, 1 skipped."
+    ]
+  },
+  {
+    "report": "bench/thrift/report-2026-09-21.md",
+    "state": "withdrawn in part",
+    "why": "the session-read count in the corpus line and the n= figure on every percentile row, withdrawn on 2026-09-24 by TOFU-560 and by this file rather than by an edit to the report. Same six restart directories as the toolerrors withdrawal above, all already in the 108-entry corpus this report read. The true session count was 114, not 107. The call and token sums this report already corrected in its 2026-09-23 TOFU-550 withdrawal (1,403 calls) are unchanged by this fix: no step or call moves between turns, only the turn count grows. The zeros, band and percentile figures on every n= line, already stated in that earlier withdrawal for the 1,401-to-1,403 move, were not recomputed here: seven more turns each with their own call count shift every bucket and percentile, and stating them needs a rerun rather than arithmetic.",
+    "fell": [
+      "corpus: ../../.tofu/sessions, 108 entries, 107 read as sessions, 1 skipped",
+      "tool calls       n=107 sum=1401 zeros=12 min=0 p25=2 median=7 p75=20 p90=31 worst=55",
+      "rendered tokens  n=107 sum=570461 zeros=12 min=0 p25=473 median=1589 p75=8759 p90=12612 worst=32864",
+      "raw tokens       n=107 sum=13573343 zeros=12 min=0 p25=632 median=8759 p75=16332 p90=79438 worst=1869098",
+      "bash calls       n=107 sum=419 zeros=35 min=0 p25=0 median=2 p75=4 p90=9 worst=41",
+      "claimed saved    n=107 sum=417324 zeros=35 min=0 p25=0 median=1992 p75=3984 p90=8964 worst=40836",
+      "capped saved     n=107 sum=112593 zeros=36 min=0 p25=0 median=114 p75=948 p90=3885 worst=12281"
+    ]
+  },
+  {
+    "report": "bench/thrift/report-2026-09-23.md",
+    "state": "withdrawn in part",
+    "why": "the session-read count in the corpus line and the n= figure on every percentile row, withdrawn on 2026-09-24 by TOFU-560 and by this file rather than by an edit to the report, for the same reason as the sibling 2026-09-21 withdrawal. The true session count at this report's 111-entry read was 117, not 110. The sum this report already corrected in its own TOFU-550 withdrawal (1,414 calls) is unchanged: the seven added turns carry calls already counted inside the flattened turns they were split from. Zeros, bands and percentiles were not recomputed for the same reason given above.",
+    "fell": [
+      "corpus: ../../.tofu/sessions, 111 entries, 110 read as sessions, 1 skipped",
+      "tool calls       n=110 sum=1412 zeros=14 min=0 p25=2 median=6 p75=20 p90=31 worst=55",
+      "rendered tokens  n=110 sum=570999 zeros=14 min=0 p25=433 median=1264 p75=8400 p90=12612 worst=32864",
+      "raw tokens       n=110 sum=13573881 zeros=14 min=0 p25=473 median=7083 p75=16332 p90=79438 worst=1869098",
+      "bash calls       n=110 sum=424 zeros=37 min=0 p25=0 median=2 p75=4 p90=9 worst=41",
+      "claimed saved    n=110 sum=422304 zeros=37 min=0 p25=0 median=1992 p75=3984 p90=8964 worst=40836",
+      "capped saved     n=110 sum=112800 zeros=38 min=0 p25=0 median=18 p75=678 p90=3885 worst=12281"
+    ]
+  },
+  {
+    "report": "bench/wrongpath/report-2026-09-22.md",
+    "state": "withdrawn in part",
+    "why": "the session-read count only, withdrawn on 2026-09-24 by TOFU-560 and by this file rather than by an edit to the report. Same six restart directories, already in the 110-entry corpus this report read. The true count was 116 sessions, not 109. The raw and write-or-edit call totals this report already corrected in its TOFU-550 withdrawal, the no-wall-clock count of 7 this report already corrected in its TOFU-551 withdrawal, and the five shape tables are all unaffected: no call moves between turns, only the turn count grows. The per-session Spread statistics behind each shape (zeros, mean, median, P90, SD) and the Detectable rows were not recomputed: seven more session rows change every one of them and stating the new values needs a rerun of this bench's own arithmetic over the split corpus, not a number derived by hand from what is already known.",
+    "fell": [
+      "110 entries, 109 read as sessions, 1 skipped, 7 carrying no wall clock"
+    ]
+  },
+  {
+    "report": "bench/tokens/report-2026-09-21.md",
+    "state": "withdrawn in part",
+    "why": "the session-read count only, withdrawn on 2026-09-24 by TOFU-560 and by this file rather than by an edit to the report. Same six restart directories, already in the 110-entry corpus this report read. The true count was 116 turns, not 109. The per-tool Totals table, the write row and totals rows this report already corrected in its TOFU-550 withdrawal, and every glob replay row are unaffected: they sum calls and bytes across the whole corpus regardless of which turn a call belongs to, and no call moves between turns.",
+    "fell": [
+      "**`.tofu/sessions` held 110 entries when this ran and 109 of them read as sessions. The one entry that is not a session is `HEAD`, a pointer file.**",
+      "sessions read: 109 turns under ../../.tofu/sessions, 1 skipped"
+    ]
+  },
+  {
+    "report": "bench/tokens/report-2026-09-21-pinned.md",
+    "state": "withdrawn in part",
+    "why": "the session-read count only, withdrawn on 2026-09-24 by TOFU-560 and by this file rather than by an edit to the report, for the same reason as the sibling report-2026-09-21.md withdrawal. The true count at this report's 110-entry, 20:45 read was 116 turns, not 109. The glob replay table, every `matched`, `returned`, `was bytes` and `now bytes` figure, and the pinned-tree byte totals are unaffected: they read one recorded call at a time and no call moves between turns.",
+    "fell": [
+      "`.tofu/sessions` held 110 entries at 20:45 on 2026-09-21 and 109 of them read as sessions. The one entry that is not a session is `HEAD`, a pointer file."
+    ]
+  },
+  {
+    "report": "bench/linenumbers/report-2026-09-23.md",
+    "state": "withdrawn in part",
+    "why": "the turn-read count only, withdrawn on 2026-09-24 by TOFU-560 and by this file rather than by an edit to the report. Same six restart directories, already in the corpus this report read. The true count was 7 more turns than stated. The read-tool call count, rendered bytes, cache-read step count and cache-read token sum are all unaffected: they are summed per call and per step across the whole corpus, and no call or step moves between turns. The verdict does not move either way: 0 line-number bytes stays 0.0% of any denominator, under the 0.5% floor by construction regardless of the turn count.",
+    "fell": [
+      "`..\\..\\..\\.tofu\\sessions` through `bench/corpus.WalkSessions`: 110 turns read, 1 entries skipped."
+    ]
+  },
+  {
+    "report": "bench/turn/report-2026-09-21.md",
+    "state": "withdrawn in part",
+    "why": "the Corpus section's parsed count only, withdrawn on 2026-09-24 by TOFU-560 and by this file rather than by an edit to the report, layered on top of TOFU-551's own withdrawal of the same line. Same six restart directories as the sibling withdrawals above, all already in the 110-entry corpus this report read, all header-and-jsonl schema. bench/turn.ReadCorpus reads through corpus.WalkSessions, so the parsed count already corrected once by TOFU-551 to 104 moves again, to 111: none of the seven added segments is skipped, so the skipped count TOFU-551 corrected to 6 is unchanged. The 'as recorded' totals (1,010 steps, 1,387 calls, 54,267,116 bytes, 11,446,060 ms per TOFU-551's own correction) sum the identical set of steps and calls now spread across 111 turns instead of 104, so they stand unchanged: no step or call is created or lost by a turn boundary moving. The 'with the call memo and the repair rule' row and the 'repair' row were not recomputed: both same-question memoisation and the repair rule operate within one turn's own step list, and splitting a flattened turn into its real turns removes any pairing the old, wrong boundary let two genuinely different tasks share, which this ticket cannot state a number for without rerunning bench/turn's own replay. The Per turn section's row count and the header above it move with the parsed count; its individual rows are not restated here for the same reason.",
+    "fell": [
+      "110 entries read under `../../.tofu/sessions`: 102 parsed as a recorded turn, 8 skipped."
+    ]
+  },
+  {
+    "report": "bench/schemas/report-2026-09-23.md",
+    "state": "withdrawn in part",
+    "why": "a second, further move of the cohort section already withdrawn once by TOFU-529, withdrawn again on 2026-09-24 by TOFU-560 and by this file rather than by an edit to either the report or the earlier withdrawal. bench/schemas.ReadSessions reads through corpus.WalkSessions, so the usable-turn count TOFU-529's withdrawal already corrected from 51 to 97 moves again with the six restart directories split into their real turns. This ticket does not restate the corrected cohort figures (usable turns, turns with a cache write, the token and dollar sums over that cohort): whether a segment's steps include a second model call, which is what the cohort test asks, is itself a property of the corrected turn boundary, and stating it needs bench/schemas rerun against the split corpus rather than arithmetic on the number already on record. The verdict TOFU-529's withdrawal left standing, that the schema block is written to cache once and read back on every later step, does not depend on the exact cohort size and is not touched here. The line corrected here is stated in TOFU-529's own withdrawal rather than anywhere in the report, whose cohort section fell whole in that earlier entry, so this one strikes nothing further on the page and carries no quoted line.",
+    "fell": [
+      "The same pattern holds across every recorded turn old enough to carry cache fields. 51 of 111 turns under .tofu/sessions carry usable cache accounting (the other 60 predate cache accounting or hold no steps, see the skip counts below); of those, 24 had at least one cache-write step, and 23 of those 24 ran a second model call and so read the write back at least once. Restricted to the 15 turns whose first write is at today's 18-tool scale, 14 of 15 ran a second call."
+    ]
+  },
+  {
+    "report": "bench/sift/report-2026-09-23.md",
+    "state": "withdrawn in part",
+    "why": "the session-read count in the embedded cost_test.go log only, withdrawn on 2026-09-24 by TOFU-560 and by this file rather than by an edit to the report. The six restart directories are already in the 110-session corpus that log reads. The true count was 117 sessions, not 110. The 424-call total this line states is a sum across all calls regardless of turn and is unaffected: no call moves between turns. The per-session percentiles on the same line (p50, p95, worst) and the per-session dollar figures two lines below were not recomputed: seven more session rows shift every one of them and this ticket does not restate a percentile it has not rerun. The report's own central point, that this bench's 13 judged decisions come from one turn and say nothing about session-to-session spread, is untouched by any of this.",
+    "fell": [
+      "cost_test.go:115: sessions: 110 read, 1 skipped, shell results per session p50 2, p95 20, worst 41, 424 in total",
+      "cost_test.go:124: sessions that ran a shell at all: 73 of 110, p50 2, p95 24",
+      "cost_test.go:152: dollars per session: p50 0.000540, p95 0.005454, worst 0.011070, 0.1145 over all 110 sessions"
+    ]
+  },
+  {
+    "report": "bench/shortlist/report-2026-09-23.md",
+    "state": "withdrawn in part",
+    "why": "the turn-read count only, withdrawn on 2026-09-24 by TOFU-560 and by this file rather than by an edit to the report. The six restart directories are already in the 111-entry corpus this report read. The true count was 117 turns, not 110. This ticket does not restate the report's central figure, the count of distinct recordable tasks: three of the six restart directories carry a genuinely different task string on their earlier segment than on the one the old, flattened reader exposed, so the distinct-task count this report states as 2 may itself move, and by how much needs this bench's own dedup logic rerun against the split corpus rather than a guess. The report's verdict, that the corpus cannot reach the floor of 12 either way, is far enough from that floor that this move is very unlikely to reverse it, but that is an expectation and not the measurement this file demands.",
+    "fell": [
+      "111 entries, 110 turns read, 1 unreadable, 0 carry no task, 65 change no file, 37 only create files"
+    ]
+  },
+  {
+    "report": "bench/calibration/report-2026-09-23.md",
+    "state": "withdrawn in part",
+    "why": "the ledger total and the tool_gate row count only, withdrawn on 2026-09-24 by TOFU-563 and by this file rather than by an edit to the report. Five tool_gate rows were written to .tofu/log after this report's read, all unlabelled, dated 2026-09-24 01:57:51 through 01:57:59, same machine. The true count is 2785 total rows and 1463 tool_gate rows, not 2780 and 1458. Every other figure is unaffected: the labelled count stays 20, the near threshold counts stay 1 and 0, and the outcome kinds and times are unchanged, so the reach section, the floor table, every calibratable verdict and the rate section stand exactly as measured.",
+    "fell": [
+      "**2780 rows total.**",
+      "| tool_gate | 1458 | 20 |"
+    ]
+  },
+  {
+    "report": "bench/stopcheck/report-2026-09-20.md",
+    "state": "withdrawn in part",
+    "why": "the cheap arm agreement figures only, withdrawn on 2026-09-24 by TOFU-566 and by this file rather than by an edit to the report. bench/stopcheck/labels.go gained hand labels for the three steps in turn-18d68bcceb3d56e8 and turn-18d68bcff15ad87c that became readable once TOFU-551 gave RecordedTurn back its wall clock (already withdrawn above): two labelled continue, one labelled stop, by the same reading already used for the six other two-step write-then-report turns in the file. Labelled steps rises from 78 to 81, 16 labelled stop and 65 labelled continue, not 15 and 63. The cheap arm agreed with all three new labels, so it now agrees with 71 of 81 labelled steps, 87.7 percent, not 68 of 78 at 87.2 percent. The typed arm's count and the verdict of which arm won were not recomputed here, because scoring the typed arm over the three new steps needs a live Jev call this ticket does not make.",
+    "fell": [
+      "the typed arm won, 71 agreements against 68 out of 78 labelled steps, which on a corpus this size is one labeller's judgement on a handful of steps rather than a result. the class that decides it is stop: the cheap arm caught 14 of 15 and the typed arm caught 11 of 15, so neither arm is fit to end a turn, and the point stays in shadow.",
+      "cheap arm: 68 of 78 labelled steps, 87.2%. of the 15 steps labelled stop it caught 14, of the 63 labelled continue it left 54 alone",
+      "typed arm: 71 of 78 labelled steps, 91.0%. of the 15 steps labelled stop it caught 11, of the 63 labelled continue it left 60 alone",
+      "labelled steps: 78"
+    ]
+  },
+  {
+    "report": "bench/stopcheck/report-2026-09-21.md",
+    "state": "withdrawn in part",
+    "why": "the same figures as the 2026-09-20 withdrawal above, for the same reason: this report's Which arm won and Corpus sections are byte-identical to it. Labelled steps rises from 78 to 81, 16 labelled stop and 65 labelled continue. The cheap arm now agrees with 71 of 81 labelled steps, 87.7 percent, not 68 of 78 at 87.2 percent. The typed arm's count and the verdict were not recomputed, for the same reason given above.",
+    "fell": [
+      "the typed arm won, 71 agreements against 68 out of 78 labelled steps, which on a corpus this size is one labeller's judgement on a handful of steps rather than a result. the class that decides it is stop: the cheap arm caught 14 of 15 and the typed arm caught 11 of 15, so neither arm is fit to end a turn, and the point stays in shadow.",
+      "cheap arm: 68 of 78 labelled steps, 87.2%. of the 15 steps labelled stop it caught 14, of the 63 labelled continue it left 54 alone",
+      "typed arm: 71 of 78 labelled steps, 91.0%. of the 15 steps labelled stop it caught 11, of the 63 labelled continue it left 60 alone",
+      "labelled steps: 78"
+    ]
   }
 ]

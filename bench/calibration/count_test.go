@@ -14,8 +14,8 @@ func TestTheLedgerHasBeenCounted(t *testing.T) {
 		t.Fatalf("Count: %v", err)
 	}
 
-	if counts.TotalRows != 2780 {
-		t.Fatalf("total rows = %d, want 2780; the ledger moved and this report needs a rerun", counts.TotalRows)
+	if counts.TotalRows != 2785 {
+		t.Fatalf("total rows = %d, want 2785; the ledger moved and this report needs a rerun", counts.TotalRows)
 	}
 	if counts.OutcomeByKind["hand-labeled"] != 20 {
 		t.Fatalf("hand-labeled outcomes = %d, want 20", counts.OutcomeByKind["hand-labeled"])
@@ -28,8 +28,8 @@ func TestTheLedgerHasBeenCounted(t *testing.T) {
 	if !ok {
 		t.Fatal("no tool_gate rows in the ledger")
 	}
-	if toolGate.Rows != 1458 {
-		t.Fatalf("tool_gate rows = %d, want 1458", toolGate.Rows)
+	if toolGate.Rows != 1463 {
+		t.Fatalf("tool_gate rows = %d, want 1463", toolGate.Rows)
 	}
 	if toolGate.Labelled != 20 {
 		t.Fatalf("tool_gate labelled = %d, want 20", toolGate.Labelled)

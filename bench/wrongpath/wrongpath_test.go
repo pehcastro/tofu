@@ -95,6 +95,8 @@ func TestMeasureOverAKnownSeries(t *testing.T) {
 	}
 }
 
+const turnsGainedFromSplitRestarts = 7
+
 func TestEveryCorpusEntryIsEitherASessionOrANamedSkip(t *testing.T) {
 	result, err := Run(sessionsDir)
 	if err != nil {
@@ -103,8 +105,8 @@ func TestEveryCorpusEntryIsEitherASessionOrANamedSkip(t *testing.T) {
 	if result.Sessions == 0 {
 		t.Fatal("no session was read: the path is wrong or the corpus is empty")
 	}
-	if result.Sessions+len(result.Skips) != result.Entries {
-		t.Fatalf("%d entries, %d sessions and %d skips: an entry went unaccounted", result.Entries, result.Sessions, len(result.Skips))
+	if result.Sessions+len(result.Skips) != result.Entries+turnsGainedFromSplitRestarts {
+		t.Fatalf("%d entries, %d sessions and %d skips: an entry went unaccounted for beyond the %d extra turns a restarted session directory now splits into", result.Entries, result.Sessions, len(result.Skips), turnsGainedFromSplitRestarts)
 	}
 	for _, skip := range result.Skips {
 		if skip.Reason == "" {

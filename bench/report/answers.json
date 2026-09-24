@@ -86,7 +86,11 @@
     {
       "point": "file_shortlist",
       "question": "which file answers this question",
-      "axis": {"name": "the right file ranked first", "unit": "percent of questions", "better_when": "higher"},
+      "axis": {
+        "name": "the right file ranked first",
+        "unit": "percent of questions",
+        "better_when": "higher"
+      },
       "free_arm": {},
       "judged_arm": {},
       "sample_size": 4,
@@ -100,7 +104,11 @@
     {
       "point": "shell_sift",
       "question": "how much of a shell result to keep",
-      "axis": {"name": "planted needles kept", "unit": "percent of results", "better_when": "higher"},
+      "axis": {
+        "name": "planted needles kept",
+        "unit": "percent of results",
+        "better_when": "higher"
+      },
       "free_arm": {
         "name": "regex on error lines",
         "does": "keeps the head and the tail of the output, keeps any line matching an error pattern, and drops the middle",
@@ -128,7 +136,11 @@
     {
       "point": "ask",
       "question": "should this write be asked about",
-      "axis": {"name": "the right call against what the record shows", "unit": "percent of moments", "better_when": "higher"},
+      "axis": {
+        "name": "the right call against what the record shows",
+        "unit": "percent of moments",
+        "better_when": "higher"
+      },
       "free_arm": {
         "name": "the ownership check",
         "does": "asks now when the path being written is outside the list of paths this agent was given, and carries on when it is inside",
@@ -156,14 +168,18 @@
     {
       "point": "stop_check",
       "question": "should the turn stop here",
-      "axis": {"name": "agreement with a hand label", "unit": "percent of steps", "better_when": "higher"},
+      "axis": {
+        "name": "agreement with a hand label",
+        "unit": "percent of steps",
+        "better_when": "higher"
+      },
       "free_arm": {
         "name": "the repeat check",
         "does": "stops when the step called no tool at all, or when every command in the step already ran earlier in the same turn",
         "does_from": "bench/stopcheck/arm.go",
-        "percent": 87.2,
-        "hits": 68,
-        "out_of": 78,
+        "percent": 87.7,
+        "hits": 71,
+        "out_of": 81,
         "evidence": "cheap arm: 68 of 78 labelled steps, 87.2%"
       },
       "judged_arm": {
@@ -173,7 +189,7 @@
         "percent": 91.0,
         "hits": 71,
         "out_of": 78,
-        "evidence": "typed arm: 71 of 78 labelled steps, 91.0%"
+        "evidence": "typed arm: 71 of 78 labelled steps, 91.0%. of the 15 steps labelled stop it caught 11, of the 63 labelled continue it left 60 alone"
       },
       "sample_size": 78,
       "sample_of": "hand labelled steps, one labeller, no second opinion",
@@ -184,7 +200,11 @@
     {
       "point": "read_worth",
       "question": "is this paragraph worth reading",
-      "axis": {"name": "agreement with a hand label", "unit": "percent of paragraphs", "better_when": "higher"},
+      "axis": {
+        "name": "agreement with a hand label",
+        "unit": "percent of paragraphs",
+        "better_when": "higher"
+      },
       "free_arm": {
         "name": "word counter",
         "does": "drops any paragraph of fewer than 15 words and keeps every longer one",
@@ -208,7 +228,11 @@
     {
       "point": "page_sift",
       "question": "how much of a web page to keep",
-      "axis": {"name": "planted needles kept", "unit": "percent of pages", "better_when": "higher"},
+      "axis": {
+        "name": "planted needles kept",
+        "unit": "percent of pages",
+        "better_when": "higher"
+      },
       "free_arm": {
         "name": "the link stripper",
         "does": "drops any list item or table row that is nothing but a link and keeps every other line. The report calls this the readability rule.",
@@ -236,7 +260,11 @@
     {
       "point": "tool_gate",
       "question": "should this command be allowed to run",
-      "axis": {"name": "agreement with a hand label", "unit": "percent of cases", "better_when": "higher"},
+      "axis": {
+        "name": "agreement with a hand label",
+        "unit": "percent of cases",
+        "better_when": "higher"
+      },
       "free_arm": {},
       "judged_arm": {},
       "sample_size": 89,
@@ -250,7 +278,11 @@
     {
       "point": "tool_gate wording",
       "question": "does splitting one question into two change the answer",
-      "axis": {"name": "verdicts that changed", "unit": "percent of cases", "better_when": "lower"},
+      "axis": {
+        "name": "verdicts that changed",
+        "unit": "percent of cases",
+        "better_when": "lower"
+      },
       "free_arm": {},
       "judged_arm": {},
       "sample_size": 6,

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 )
@@ -509,6 +510,56 @@ func TestATurnWithStepsAndNoOutcomeLineIsReadAndSaysItsWallClockIsMissing(t *tes
 	t.Logf("%s read with %d steps and no wall clock, skipped %d", name, len(recorded.Steps), len(walked.Skipped))
 }
 
+func TestAnOlderShapedTurnKeepsItsWallClockCeilingAndAccount(t *testing.T) {
+	synthetic := `{
+		"ID": "turn-synthetic-old-shape",
+		"At": "2026-09-18T19:46:54Z",
+		"Task": "old shaped turn",
+		"Steps": [{"Index": 1, "ToolCalls": [{"Tool": "write"}]}],
+		"Outcome": 1,
+		"WallClockMS": 1234,
+		"ContextCeiling": 180000,
+		"ContextTarget": 45000,
+		"AutoCompaction": "auto",
+		"Account": 42
+	}`
+	scratch := t.TempDir()
+	path := filepath.Join(scratch, "turn-synthetic-old-shape.json")
+	if err := os.WriteFile(path, []byte(synthetic), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	recorded, err := ReadTurn(path)
+	if err != nil {
+		t.Fatalf("ReadTurn(%s) = %v, want the old-shaped turn read without ErrNoWallClock", path, err)
+	}
+	if recorded.WallClockMS != 1234 {
+		t.Fatalf("wall_clock_ms is %d, want 1234", recorded.WallClockMS)
+	}
+	if recorded.ContextCeiling != 180000 {
+		t.Fatalf("context_ceiling is %d, want 180000", recorded.ContextCeiling)
+	}
+	if recorded.Account != 42 {
+		t.Fatalf("account is %d, want 42", recorded.Account)
+	}
+	if recorded.Outcome != "stopped" {
+		t.Fatalf("outcome is %q, want stopped", recorded.Outcome)
+	}
+}
+
+func TestAnOlderShapedMessageKeepsItsToolCallIDAndToolCalls(t *testing.T) {
+	synthetic := `{"Role":"tool","Content":"ok","ToolCallID":"call_1","ToolCalls":[{"id":"call_2","name":"write"}]}`
+	var message RecordedMessage
+	if err := json.Unmarshal([]byte(synthetic), &message); err != nil {
+		t.Fatalf("decoding the old-shaped message: %v", err)
+	}
+	if message.ToolCallID != "call_1" {
+		t.Fatalf("tool_call_id is %q, want call_1", message.ToolCallID)
+	}
+	if len(message.ToolCalls) != 1 || message.ToolCalls[0].ID != "call_2" || message.ToolCalls[0].Name != "write" {
+		t.Fatalf("tool_calls is %+v, want one call id call_2 name write", message.ToolCalls)
+	}
+}
+
 const olderShapedTurnPath = "../stopcheck/corpus/turn-18d68bcceb3d56e8.json"
 
 func TestAnOlderShapedSessionKeepsItsToolCalls(t *testing.T) {
@@ -536,6 +587,88 @@ func TestAnOlderShapedSessionKeepsItsToolCalls(t *testing.T) {
 	}
 	if call.ResultHash == "" {
 		t.Fatalf("%s step 0's call carries no result hash", olderShapedTurnPath)
+	}
+}
+
+func TestARecordedCallKeepsItsDuration(t *testing.T) {
+	data, err := os.ReadFile(olderShapedTurnPath)
+	if err != nil {
+		t.Fatalf("reading %s: %v", olderShapedTurnPath, err)
+	}
+	var recorded RecordedTurn
+	if err := json.Unmarshal(data, &recorded); err != nil {
+		t.Fatalf("decoding %s: %v", olderShapedTurnPath, err)
+	}
+	if len(recorded.Steps) == 0 || len(recorded.Steps[0].ToolCalls) == 0 {
+		t.Fatalf("%s parsed to no call to check a duration on", olderShapedTurnPath)
+	}
+	call := recorded.Steps[0].ToolCalls[0]
+	if call.DurationMS != 1 {
+		t.Fatalf("%s step 0's call carries duration_ms %d, want 1", olderShapedTurnPath, call.DurationMS)
+	}
+}
+
+func TestTheCorpusCallDurationsHaveAMedianAndAWorst(t *testing.T) {
+	if _, err := os.Stat(sessionsDir); err != nil {
+		t.Skipf("no %s on this machine: %v", sessionsDir, err)
+	}
+	walked, err := WalkSessions(sessionsDir)
+	if err != nil {
+		t.Fatalf("walking %s: %v", sessionsDir, err)
+	}
+	var durations []int64
+	for _, turn := range walked.Turns {
+		for _, step := range turn.Steps {
+			for _, call := range step.ToolCalls {
+				if call.DurationMS > 0 {
+					durations = append(durations, call.DurationMS)
+				}
+			}
+		}
+	}
+	if len(durations) == 0 {
+		t.Fatal("no recorded call on this machine carries a duration")
+	}
+	sort.Slice(durations, func(i, j int) bool { return durations[i] < durations[j] })
+	median := durations[len(durations)/2]
+	worst := durations[len(durations)-1]
+	t.Logf("%d recorded calls carry a duration, median %dms, worst %dms", len(durations), median, worst)
+}
+
+func TestARestartedSessionReadsAsTwoSeparateTurns(t *testing.T) {
+	const restartedDir = "F:/localhost/admin-template/.tofu/sessions/turn-18d7f94ce7a62138"
+	if _, err := os.Stat(restartedDir); err != nil {
+		t.Skipf("no %s on this machine: %v", restartedDir, err)
+	}
+	segments, err := readTurnDirSegments(restartedDir)
+	if err != nil {
+		t.Fatalf("reading %s: %v", restartedDir, err)
+	}
+	if len(segments) != 2 {
+		t.Fatalf("turn-18d7f94ce7a62138 read as %d segment(s), want 2", len(segments))
+	}
+	first, second := segments[0], segments[1]
+	if len(first.Steps) != 8 {
+		t.Fatalf("first segment of turn-18d7f94ce7a62138 carries %d steps, want 8", len(first.Steps))
+	}
+	if len(second.Steps) != 18 {
+		t.Fatalf("second segment of turn-18d7f94ce7a62138 carries %d steps, want 18", len(second.Steps))
+	}
+	if first.Task == second.Task {
+		t.Fatalf("both segments of turn-18d7f94ce7a62138 carry the same task %q, want two different tasks", first.Task)
+	}
+	walked, err := WalkSessions(filepath.Dir(restartedDir))
+	if err != nil {
+		t.Fatalf("walking %s: %v", filepath.Dir(restartedDir), err)
+	}
+	found := 0
+	for _, turn := range walked.Turns {
+		if turn.ID == "turn-18d7f94ce7a62138" {
+			found++
+		}
+	}
+	if found != 2 {
+		t.Fatalf("WalkSessions returned %d turns for turn-18d7f94ce7a62138, want 2", found)
 	}
 }
 

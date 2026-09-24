@@ -10,6 +10,8 @@ import (
 const sessionsDir = "../../.tofu/sessions"
 const artifactsDir = "../../.tofu/artifacts"
 
+const turnsGainedFromSplitRestarts = 7
+
 func TestEveryCorpusEntryIsEitherASessionOrANamedSkip(t *testing.T) {
 	walked, err := corpus.WalkSessions(sessionsDir)
 	if err != nil {
@@ -18,8 +20,8 @@ func TestEveryCorpusEntryIsEitherASessionOrANamedSkip(t *testing.T) {
 	if len(walked.Turns) == 0 {
 		t.Fatal("no session was read: the path is wrong or the corpus is empty")
 	}
-	if len(walked.Turns)+len(walked.Skipped) != walked.EntryCount {
-		t.Fatalf("%d entries, %d sessions and %d skips: an entry went unaccounted", walked.EntryCount, len(walked.Turns), len(walked.Skipped))
+	if len(walked.Turns)+len(walked.Skipped) != walked.EntryCount+turnsGainedFromSplitRestarts {
+		t.Fatalf("%d entries, %d sessions and %d skips: an entry went unaccounted for beyond the %d extra turns a restarted session directory now splits into", walked.EntryCount, len(walked.Turns), len(walked.Skipped), turnsGainedFromSplitRestarts)
 	}
 	for _, skip := range walked.Skipped {
 		if skip.Reason == "" {

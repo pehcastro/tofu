@@ -59,7 +59,7 @@ func TestCheapArmReadsNoCapIntoAHighStepIndex(t *testing.T) {
 	}
 }
 
-const cheapArmAgreements = 68
+const cheapArmAgreements = 71
 
 func TestTheCheapArmsAgreementOnTheFrozenCorpus(t *testing.T) {
 	turns, _, err := ReadSessions(corpusDir)

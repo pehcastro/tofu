@@ -109,7 +109,6 @@ func readIndex(benchRoot string) (benchIndex, error) {
 		}
 		if len(found) > 0 {
 			index.Entries = append(index.Entries, found...)
-			index.Counts.MeasuredPackage++
 			continue
 		}
 		pkg, named := declared[dir.Name()]
@@ -146,6 +145,11 @@ func readIndex(benchRoot string) (benchIndex, error) {
 	sort.Slice(index.NoReport, func(i, j int) bool { return index.NoReport[i].Package < index.NoReport[j].Package })
 	index.Counts.Reports = len(index.Entries)
 	index.Counts.NoReport = len(index.NoReport)
+	measured := map[string]bool{}
+	for _, entry := range index.Entries {
+		measured[entry.Package] = true
+	}
+	index.Counts.MeasuredPackage = len(measured)
 	for _, entry := range index.Entries {
 		switch entry.State {
 		case StateWithdrawn, StateWithdrawnInPart:
@@ -168,8 +172,16 @@ func readPackageReports(benchRoot, pkg string, withdrawals map[string]withdrawal
 	}
 	var entries []datedEntry
 	for _, file := range files {
+		if file.IsDir() {
+			nested, err := readPackageReports(benchRoot, pkg+"/"+file.Name(), withdrawals)
+			if err != nil {
+				return nil, err
+			}
+			entries = append(entries, nested...)
+			continue
+		}
 		match := datedReport.FindStringSubmatch(file.Name())
-		if file.IsDir() || match == nil {
+		if match == nil {
 			continue
 		}
 		path := "bench/" + pkg + "/" + file.Name()

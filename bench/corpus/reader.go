@@ -15,6 +15,8 @@ import (
 
 var ErrNoWallClock = errors.New("bench/corpus: the recorded turn carries no wall clock")
 
+var legacyNumericOutcomes = []string{"unset", "stopped", "step_cap", "cost_cap", "wall_clock_cap", "error"}
+
 type Schema string
 
 const (
@@ -31,6 +33,7 @@ type RecordedCall struct {
 	Command        string          `json:"command,omitempty"`
 	ExitCode       *int            `json:"exit_code,omitempty"`
 	Error          string          `json:"error,omitempty"`
+	DurationMS     int64           `json:"duration_ms,omitempty"`
 	ResultBytes    int64           `json:"result_bytes,omitempty"`
 	RenderedBytes  int64           `json:"rendered_bytes,omitempty"`
 	ResultHandle   string          `json:"result_handle,omitempty"`
@@ -45,11 +48,12 @@ func (c *RecordedCall) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	*c = RecordedCall(lower)
-	if c.ExitCode != nil && c.ResultBytes != 0 && c.RenderedBytes != 0 && c.ResultHash != "" {
+	if c.ExitCode != nil && c.DurationMS != 0 && c.ResultBytes != 0 && c.RenderedBytes != 0 && c.ResultHash != "" {
 		return nil
 	}
 	var upper struct {
 		ExitCode      *int   `json:"ExitCode"`
+		DurationMS    int64  `json:"DurationMS"`
 		ResultBytes   int64  `json:"ResultBytes"`
 		RenderedBytes int64  `json:"RenderedBytes"`
 		ResultHash    string `json:"ResultHash"`
@@ -59,6 +63,9 @@ func (c *RecordedCall) UnmarshalJSON(data []byte) error {
 	}
 	if c.ExitCode == nil {
 		c.ExitCode = upper.ExitCode
+	}
+	if c.DurationMS == 0 {
+		c.DurationMS = upper.DurationMS
 	}
 	if c.ResultBytes == 0 {
 		c.ResultBytes = upper.ResultBytes
@@ -82,6 +89,32 @@ type RecordedMessage struct {
 	Content    string                 `json:"content,omitempty"`
 	ToolCallID string                 `json:"tool_call_id,omitempty"`
 	ToolCalls  []RecordedToolCallName `json:"tool_calls,omitempty"`
+}
+
+func (m *RecordedMessage) UnmarshalJSON(data []byte) error {
+	type alias RecordedMessage
+	var lower alias
+	if err := json.Unmarshal(data, &lower); err != nil {
+		return err
+	}
+	*m = RecordedMessage(lower)
+	if m.ToolCallID != "" && len(m.ToolCalls) > 0 {
+		return nil
+	}
+	var upper struct {
+		ToolCallID string                 `json:"ToolCallID"`
+		ToolCalls  []RecordedToolCallName `json:"ToolCalls"`
+	}
+	if err := json.Unmarshal(data, &upper); err != nil {
+		return err
+	}
+	if m.ToolCallID == "" {
+		m.ToolCallID = upper.ToolCallID
+	}
+	if len(m.ToolCalls) == 0 {
+		m.ToolCalls = upper.ToolCalls
+	}
+	return nil
 }
 
 type RecordedStep struct {
@@ -155,6 +188,43 @@ func (t *RecordedTurn) UnmarshalJSON(data []byte) error {
 	var outcome string
 	if json.Unmarshal(shadow.Outcome, &outcome) == nil {
 		t.Outcome = outcome
+	} else {
+		var numeric int
+		if json.Unmarshal(shadow.Outcome, &numeric) == nil && numeric >= 0 && numeric < len(legacyNumericOutcomes) {
+			t.Outcome = legacyNumericOutcomes[numeric]
+		}
+	}
+	if t.WallClockMS != 0 && t.ContextCeiling != 0 && t.ContextTarget != 0 && t.AutoCompaction != "" && t.Budget != (recall.Budget{}) && t.Account != 0 {
+		return nil
+	}
+	var upper struct {
+		WallClockMS    int64         `json:"WallClockMS"`
+		ContextCeiling int           `json:"ContextCeiling"`
+		ContextTarget  int           `json:"ContextTarget"`
+		AutoCompaction string        `json:"AutoCompaction"`
+		Budget         recall.Budget `json:"Budget"`
+		Account        int64         `json:"Account"`
+	}
+	if err := json.Unmarshal(data, &upper); err != nil {
+		return err
+	}
+	if t.WallClockMS == 0 {
+		t.WallClockMS = upper.WallClockMS
+	}
+	if t.ContextCeiling == 0 {
+		t.ContextCeiling = upper.ContextCeiling
+	}
+	if t.ContextTarget == 0 {
+		t.ContextTarget = upper.ContextTarget
+	}
+	if t.AutoCompaction == "" {
+		t.AutoCompaction = upper.AutoCompaction
+	}
+	if t.Budget == (recall.Budget{}) {
+		t.Budget = upper.Budget
+	}
+	if t.Account == 0 {
+		t.Account = upper.Account
 	}
 	return nil
 }
@@ -229,51 +299,61 @@ type jsonlLine struct {
 	Body    json.RawMessage `json:"body"`
 }
 
-func ReadTurnDir(dir string) (RecordedTurn, error) {
+func readTurnDirSegments(dir string) ([]RecordedTurn, error) {
 	body, err := os.ReadFile(filepath.Join(dir, "body.jsonl"))
 	if err != nil {
-		return RecordedTurn{}, err
+		return nil, err
 	}
-	var recorded RecordedTurn
-	if header, err := os.ReadFile(filepath.Join(dir, "header.json")); err == nil {
-		if err := json.Unmarshal(header, &recorded); err != nil {
-			return RecordedTurn{}, fmt.Errorf("bench/corpus: %s/header.json is not the expected shape: %w", dir, err)
+	var header RecordedTurn
+	if raw, err := os.ReadFile(filepath.Join(dir, "header.json")); err == nil {
+		if err := json.Unmarshal(raw, &header); err != nil {
+			return nil, fmt.Errorf("bench/corpus: %s/header.json is not the expected shape: %w", dir, err)
 		}
 	}
-	outcomeFound := false
+	var segments []RecordedTurn
+	current := header
 	for _, line := range strings.Split(strings.TrimSpace(string(body)), "\n") {
 		if line == "" {
 			continue
 		}
 		var entry jsonlLine
 		if err := json.Unmarshal([]byte(line), &entry); err != nil {
-			return RecordedTurn{}, fmt.Errorf("bench/corpus: %s/body.jsonl is not a recorded line: %w", dir, err)
+			return nil, fmt.Errorf("bench/corpus: %s/body.jsonl is not a recorded line: %w", dir, err)
 		}
 		switch entry.Kind {
 		case "step":
 			var step RecordedStep
 			if err := json.Unmarshal(entry.Body, &step); err != nil {
-				return RecordedTurn{}, fmt.Errorf("bench/corpus: %s/body.jsonl step is not the expected shape: %w", dir, err)
+				return nil, fmt.Errorf("bench/corpus: %s/body.jsonl step is not the expected shape: %w", dir, err)
 			}
 			step.Attempt = entry.Attempt
-			recorded.Steps = append(recorded.Steps, step)
+			current.Steps = append(current.Steps, step)
 		case "message":
 			var message RecordedMessage
 			if err := json.Unmarshal(entry.Body, &message); err != nil {
-				return RecordedTurn{}, fmt.Errorf("bench/corpus: %s/body.jsonl message is not the expected shape: %w", dir, err)
+				return nil, fmt.Errorf("bench/corpus: %s/body.jsonl message is not the expected shape: %w", dir, err)
 			}
-			recorded.Messages = append(recorded.Messages, message)
+			current.Messages = append(current.Messages, message)
 		case "outcome":
-			if err := json.Unmarshal(entry.Body, &recorded); err != nil {
-				return RecordedTurn{}, fmt.Errorf("bench/corpus: %s/body.jsonl outcome is not the expected shape: %w", dir, err)
+			if err := json.Unmarshal(entry.Body, &current); err != nil {
+				return nil, fmt.Errorf("bench/corpus: %s/body.jsonl outcome is not the expected shape: %w", dir, err)
 			}
-			outcomeFound = true
+			segments = append(segments, current)
+			current = header
 		}
 	}
-	if !outcomeFound {
-		return scrubTurn(recorded), fmt.Errorf("bench/corpus: %s/body.jsonl carries no outcome line, so it has no wall clock: %w", dir, ErrNoWallClock)
+	if len(current.Steps) > 0 || len(current.Messages) > 0 || len(segments) == 0 {
+		segments = append(segments, current)
 	}
-	return finishedTurn(recorded, dir)
+	return segments, nil
+}
+
+func ReadTurnDir(dir string) (RecordedTurn, error) {
+	segments, err := readTurnDirSegments(dir)
+	if err != nil {
+		return RecordedTurn{}, err
+	}
+	return finishedTurn(segments[len(segments)-1], dir)
 }
 
 func WalkSessions(dir string) (Walked, error) {
@@ -289,16 +369,28 @@ func WalkSessions(dir string) (Walked, error) {
 			walked.Skipped = append(walked.Skipped, SkippedTurn{Path: name, Reason: "not a .json file"})
 			continue
 		}
-		schema, read := SchemaSingleFile, ReadTurn
-		if entry.IsDir() {
-			schema, read = SchemaHeaderJSONL, ReadTurnDir
+		if !entry.IsDir() {
+			recorded, err := ReadTurn(filepath.Join(dir, name))
+			if err != nil && !errors.Is(err, ErrNoWallClock) {
+				walked.Skipped = append(walked.Skipped, SkippedTurn{Path: name, Reason: err.Error()})
+				continue
+			}
+			walked.Turns = append(walked.Turns, Turn{RecordedTurn: recorded, Schema: SchemaSingleFile, WallClockRecorded: err == nil})
+			continue
 		}
-		recorded, err := read(filepath.Join(dir, name))
-		if err != nil && !errors.Is(err, ErrNoWallClock) {
+		segments, err := readTurnDirSegments(filepath.Join(dir, name))
+		if err != nil {
 			walked.Skipped = append(walked.Skipped, SkippedTurn{Path: name, Reason: err.Error()})
 			continue
 		}
-		walked.Turns = append(walked.Turns, Turn{RecordedTurn: recorded, Schema: schema, WallClockRecorded: err == nil})
+		for _, segment := range segments {
+			recorded, err := finishedTurn(segment, filepath.Join(dir, name))
+			if err != nil && !errors.Is(err, ErrNoWallClock) {
+				walked.Skipped = append(walked.Skipped, SkippedTurn{Path: name, Reason: err.Error()})
+				continue
+			}
+			walked.Turns = append(walked.Turns, Turn{RecordedTurn: recorded, Schema: SchemaHeaderJSONL, WallClockRecorded: err == nil})
+		}
 	}
 	sort.Slice(walked.Turns, func(i, j int) bool { return walked.Turns[i].ID < walked.Turns[j].ID })
 	walked.WalkElapsed = time.Since(started)

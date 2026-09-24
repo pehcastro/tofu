@@ -120,6 +120,61 @@ func TestASentenceAWithdrawalStruckIsNoLongerEvidence(t *testing.T) {
 	}
 }
 
+func withdrawnCorrectionFixture(t *testing.T, why string) (tree string, bodies map[string]string, one Placement) {
+	t.Helper()
+	tree = t.TempDir()
+	const source = "bench/stopcheck/report-2026-09-21.md"
+	const struck = "cheap arm: 68 of 78 labelled steps, 87.2%. of the 15 steps labelled stop it caught 14"
+	report := "# stop_check\n\n" + struck + "\n"
+	if err := os.MkdirAll(filepath.Join(tree, "bench", "stopcheck"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(tree, "bench", "report"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(tree, "bench", "stopcheck", "report-2026-09-21.md"), []byte(report), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(tree, "bench", "stopcheck", "arm.go"), []byte("package stopcheck\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	entry := `[{"report":"` + source + `","state":"withdrawn in part","why":"` + why + `","fell":["` + struck + `"]}]`
+	if err := os.WriteFile(filepath.Join(tree, "bench", "report", "withdrawals.json"), []byte(entry), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	bodies, err := standingText(tree, map[string]string{source: report})
+	if err != nil {
+		t.Fatal(err)
+	}
+	one = Placement{Point: "stop_check", Source: source}
+	return tree, bodies, one
+}
+
+func TestAWithdrawnSentenceIsAcceptedOnlyWhenTheWithdrawalCarriesTheCorrection(t *testing.T) {
+	method := Method{
+		Name: "the repeat check", Does: "stops on a repeated command", DoesFrom: "bench/stopcheck/arm.go",
+		Percent: 87.7, Hits: 71, OutOf: 81,
+		Evidence: "cheap arm: 68 of 78 labelled steps, 87.2%",
+	}
+
+	treeCorrected, bodies, one := withdrawnCorrectionFixture(t, "the cheap arm now agrees with 71 of 81 labelled steps, 87.7 percent, not 68 of 78 at 87.2 percent")
+	if err := checkEvidence(method.Evidence, one.Source, bodies); err == nil {
+		t.Fatal("the struck sentence still reads as standing evidence, so the withdrawal correction path proves nothing")
+	} else {
+		t.Logf("refused by the plain check, as it must be: %v", err)
+	}
+	if err := checkMethod(method, one, treeCorrected, bodies); err != nil {
+		t.Errorf("a withdrawal carrying the corrected figure still refused the citation: %v", err)
+	}
+
+	treeUncorrected, bodies, one := withdrawnCorrectionFixture(t, "the cheap arm figure fell because the corpus grew, and this file does not yet say what it moved to")
+	if err := checkMethod(method, one, treeUncorrected, bodies); err == nil {
+		t.Fatal("a withdrawal naming no correction still let the citation stand")
+	} else {
+		t.Logf("refused, as it must be: %v", err)
+	}
+}
+
 func TestEveryMethodNamedOnThePageSaysWhatItDoes(t *testing.T) {
 	data := built(t)
 	page := Page(data)

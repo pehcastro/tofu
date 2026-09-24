@@ -5,6 +5,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 
@@ -259,6 +260,32 @@ func checkEvidence(evidence, source string, bodies map[string]string) error {
 	return nil
 }
 
+func checkWithdrawnCorrection(method Method, source, tree string) error {
+	withdrawals, err := readWithdrawals(filepath.Join(tree, filepath.FromSlash(WithdrawalsPath)))
+	if err != nil {
+		return err
+	}
+	w, known := withdrawals[source]
+	if !known {
+		return fmt.Errorf("%s: %s cites %q, which is not in the standing part of %s, and %s carries no withdrawal for it", AnswersPath, method.Name, method.Evidence, source, WithdrawalsPath)
+	}
+	evidence := flatten(method.Evidence)
+	if !slices.ContainsFunc(w.Fell, func(fell string) bool { return strings.Contains(flatten(fell), evidence) }) {
+		return fmt.Errorf("%s: %s cites %q, which %s never struck from %s, so nothing says the report ever printed it", AnswersPath, method.Name, method.Evidence, WithdrawalsPath, source)
+	}
+	why := flatten(w.Why)
+	percent := fmt.Sprintf("%.1f", method.Percent)
+	countKnown := method.OutOf <= 0 || strings.Contains(why, fmt.Sprintf("%.0f of %.0f", method.Hits, method.OutOf))
+	if strings.Contains(why, percent) && countKnown {
+		return nil
+	}
+	if strings.Contains(why, "not recomputed") && strings.Contains(evidence, percent) {
+		return nil
+	}
+	return fmt.Errorf("%s: %s cites a sentence %s struck in %s, and the reason given there does not carry the correction for %.0f of %.0f at %.1f%%",
+		AnswersPath, method.Name, WithdrawalsPath, source, method.Hits, method.OutOf, method.Percent)
+}
+
 func checkPlacement(one Placement, table method.Table, tree string, bodies map[string]string) error {
 	if one.Point == "" || one.Question == "" {
 		return fmt.Errorf("%s: a decision is listed with no name, or with no plain question a person would ask", AnswersPath)
@@ -313,7 +340,9 @@ func checkMethod(method Method, one Placement, tree string, bodies map[string]st
 		return fmt.Errorf("%s: %s says %q does %q and points at %s, which is not in the tree", AnswersPath, one.Point, method.Name, method.Does, method.DoesFrom)
 	}
 	if err := checkEvidence(method.Evidence, one.Source, bodies); err != nil {
-		return err
+		if werr := checkWithdrawnCorrection(method, one.Source, tree); werr != nil {
+			return err
+		}
 	}
 	if method.OutOf > 0 {
 		if want := math.Round(method.Hits/method.OutOf*1000) / 10; want != method.Percent {

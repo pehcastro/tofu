@@ -12,8 +12,8 @@ import (
 const (
 	corpusDir         = "corpus"
 	corpusFiles       = 19
-	corpusSteps       = 79
-	corpusLabelled    = 78
+	corpusSteps       = 82
+	corpusLabelled    = 81
 	corpusByteCeiling = 256 << 10
 )
 
@@ -55,21 +55,33 @@ func auditLabels(turns []Turn) labelAudit {
 	return audit
 }
 
-func TestReadSessionsSkipsATurnWrittenBeforeTheOutcomeWasAString(t *testing.T) {
+func TestReadSessionsDecodesATurnWrittenBeforeTheOutcomeWasAString(t *testing.T) {
 	turns, skipped, err := ReadSessions(filepath.Join("testdata", "sessions"))
 	if err != nil {
 		t.Fatalf("ReadSessions: %v", err)
 	}
-	if len(turns) != 1 || turns[0].ID != "turn-modern" {
-		t.Fatalf("read %d turns %v, want only turn-modern", len(turns), turns)
+	if len(skipped) != 0 {
+		t.Fatalf("skipped %v, want none: the shared reader now decodes a numeric outcome and an old-shaped wall clock", skipped)
 	}
-	if len(skipped) != 1 || skipped[0].Path != "turn-legacy.json" {
-		t.Fatalf("skipped %v, want turn-legacy.json", skipped)
+	if len(turns) != 2 || turns[0].ID != "turn-legacy" || turns[1].ID != "turn-modern" {
+		t.Fatalf("read %d turns %v, want turn-legacy and turn-modern", len(turns), turns)
 	}
-	if !strings.Contains(skipped[0].Reason, "no step and no wall clock") {
-		t.Fatalf("the skip reason %q is not the shared reader's reason for a turn the old PascalCase schema wrote with no wall_clock_ms field it can bind to", skipped[0].Reason)
+	legacy := turns[0]
+	if len(legacy.Steps) != 1 || len(legacy.Steps[0].Calls) != 1 {
+		t.Fatalf("turn-legacy read %+v, want its one write call kept", legacy)
 	}
-	t.Logf("skipped: %s: %s", skipped[0].Path, skipped[0].Reason)
+	if call := legacy.Steps[0].Calls[0]; call.Command != "write hello.txt" || call.Failed {
+		t.Fatalf("turn-legacy call = %+v, want write hello.txt with no failure", call)
+	}
+}
+
+func byID(turns []Turn, id string) Turn {
+	for _, turn := range turns {
+		if turn.ID == id {
+			return turn
+		}
+	}
+	return Turn{}
 }
 
 func TestReadSessionsKeepsCommandsFailuresAndGateIDs(t *testing.T) {
@@ -77,7 +89,7 @@ func TestReadSessionsKeepsCommandsFailuresAndGateIDs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ReadSessions: %v", err)
 	}
-	step := turns[0].Steps[0]
+	step := byID(turns, "turn-modern").Steps[0]
 	if len(step.Calls) != 1 {
 		t.Fatalf("step 1 carries %d calls, want 1", len(step.Calls))
 	}
