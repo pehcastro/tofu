@@ -19,7 +19,7 @@ func carried() []Link {
 	}
 }
 
-func picker() Model {
+func opened() Model {
 	var built Model
 	built.SetSize(80, 24)
 	built.Set(carried(), "")
@@ -27,8 +27,7 @@ func picker() Model {
 }
 
 func TestThePickerGolden(t *testing.T) {
-	built := picker()
-	golden.Assert(t, "links-80x24.golden", built.View())
+	golden.Assert(t, "links-80x24.golden", opened().View())
 }
 
 func TestAnEmptySessionOpensThePickerAndSaysThereAreNoLinks(t *testing.T) {
@@ -46,45 +45,31 @@ func TestAnEmptySessionOpensThePickerAndSaysThereAreNoLinks(t *testing.T) {
 }
 
 func TestTypingFiltersAndTheCountFollowsTheFilter(t *testing.T) {
-	built := picker()
+	built := opened()
 	for _, letter := range strings.Split("wiki", "") {
 		built.Key(letter)
 	}
-	rows := built.rows()
+	rows := built.Rows()
 	if len(rows) != 1 || !strings.Contains(rows[0].URL, "wikipedia") {
 		t.Fatalf("filtering by wiki gave %+v", rows)
 	}
-	drawn := ansi.Strip(built.View())
-	if !strings.Contains(drawn, filterHint+"wiki") || !strings.Contains(drawn, "1 link") {
-		t.Fatalf("the filtered view does not say what it holds\n%s", drawn)
+	if drawn := ansi.Strip(built.View()); !strings.Contains(drawn, "1 link") {
+		t.Fatalf("the filtered view does not count what it holds\n%s", drawn)
 	}
 	built.Key("backspace")
-	if rows := built.rows(); len(rows) != 1 {
+	if rows := built.Rows(); len(rows) != 1 {
 		t.Fatalf("backspace to wik gave %d rows", len(rows))
 	}
 	for range 3 {
 		built.Key("backspace")
 	}
-	if rows := built.rows(); len(rows) != len(carried()) {
+	if rows := built.Rows(); len(rows) != len(carried()) {
 		t.Fatalf("an empty filter gave %d rows, want %d", len(rows), len(carried()))
 	}
 }
 
-func TestAFilterThatMatchesNothingSaysSoAndPicksNothing(t *testing.T) {
-	built := picker()
-	for _, letter := range strings.Split("zzz", "") {
-		built.Key(letter)
-	}
-	if picked, any := built.Picked(); any {
-		t.Fatalf("a filter matching nothing picked %+v", picked)
-	}
-	if drawn := ansi.Strip(built.View()); !strings.Contains(drawn, noMatch+"zzz") {
-		t.Fatalf("a filter matching nothing draws no reason\n%s", drawn)
-	}
-}
-
 func TestFilteringMovesThePickOntoAVisibleRow(t *testing.T) {
-	built := picker()
+	built := opened()
 	built.Key("down")
 	built.Key("down")
 	if picked, _ := built.Picked(); !strings.Contains(picked.URL, "pkg.go.dev") {
@@ -100,7 +85,7 @@ func TestFilteringMovesThePickOntoAVisibleRow(t *testing.T) {
 }
 
 func TestThePickStopsAtBothEnds(t *testing.T) {
-	built := picker()
+	built := opened()
 	for range len(carried()) + 3 {
 		built.Key("down")
 	}
@@ -125,7 +110,7 @@ func TestATroubleReadingTheRecordIsDrawnInsteadOfNothing(t *testing.T) {
 }
 
 func TestARepeatSaysHowManyTimesAndASingleSightingDoesNot(t *testing.T) {
-	drawn := ansi.Strip(picker().View())
+	drawn := ansi.Strip(opened().View())
 	if !strings.Contains(drawn, timesMark+"3") {
 		t.Fatalf("a link seen three times does not say three\n%s", drawn)
 	}

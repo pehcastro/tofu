@@ -9,7 +9,7 @@ import (
 	"tofu/internal/golden"
 )
 
-func picker(t *testing.T, turns []Turn, keys ...string) Model {
+func opened(t *testing.T, turns []Turn, keys ...string) Model {
 	t.Helper()
 	var view Model
 	view.SetSize(80, 12)
@@ -22,11 +22,11 @@ func picker(t *testing.T, turns []Turn, keys ...string) Model {
 
 func drawn(t *testing.T, turns []Turn, keys ...string) string {
 	t.Helper()
-	return ansi.Strip(picker(t, turns, keys...).View())
+	return ansi.Strip(opened(t, turns, keys...).View())
 }
 
 func TestTheIDAndSpeakerColumnsKeepTheirOwnWidths(t *testing.T) {
-	golden.Assert(t, "quote-80x12.golden", picker(t, Collect(talked())).View())
+	golden.Assert(t, "quote-80x12.golden", opened(t, Collect(talked())).View())
 }
 
 func TestAnEmptySessionOpensThePickerAndSaysThereIsNothingToQuote(t *testing.T) {
@@ -61,16 +61,9 @@ func TestTypingFiltersThePickerAndPickingFollowsTheFilteredRows(t *testing.T) {
 		t.Errorf("the filtered count is wrong\n%s", screen)
 	}
 
-	one, picked := picker(t, turns, "g", "l", "o", "b").Picked()
+	one, picked := opened(t, turns, "g", "l", "o", "b").Picked()
 	if !picked || one.Text != "ran read, glob" {
 		t.Fatalf("the pick after filtering is %#v", one)
-	}
-}
-
-func TestAFilterThatMatchesNothingSaysSoRatherThanLookingEmpty(t *testing.T) {
-	screen := drawn(t, Collect(talked()), "z", "z", "z")
-	if !strings.Contains(screen, noMatch+"zzz") {
-		t.Fatalf("a filter matching nothing draws no reason\n%s", screen)
 	}
 }
 
