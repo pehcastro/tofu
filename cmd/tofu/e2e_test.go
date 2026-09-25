@@ -31,7 +31,8 @@ func tofuBinary(t *testing.T) string {
 		if sys.OS() == "windows" {
 			path += ".exe"
 		}
-		said, err := exec.Command("go", "build", "-o", path, ".").CombinedOutput()
+		ldflags := "-X tofu/internal/sys.builtGuarded=1"
+		said, err := exec.Command("go", "build", "-ldflags", ldflags, "-o", path, ".").CombinedOutput()
 		if err != nil {
 			builtTofu.err = fmt.Errorf("go build -o %s .: %w: %s", path, err, said)
 			return
@@ -73,28 +74,35 @@ func writeFile(t *testing.T, root, name, body string) {
 	}
 }
 
-func (p project) run(t *testing.T, wantCode int, args ...string) string {
+func runBinary(t *testing.T, dir string, env []string, args ...string) (string, int) {
 	t.Helper()
 	command := exec.Command(tofuBinary(t), args...)
-	command.Dir = p.dir
-	command.Env = []string{
-		"USERPROFILE=" + p.home,
-		"HOME=" + p.home,
-		"TEMP=" + p.home,
-		"TMP=" + p.home,
-		"SystemRoot=" + os.Getenv("SystemRoot"),
-	}
+	command.Dir = dir
+	command.Env = env
 	var said bytes.Buffer
 	command.Stdout, command.Stderr = &said, &said
 	var stopped *exec.ExitError
 	if err := command.Run(); err != nil && !errors.As(err, &stopped) {
 		t.Fatalf("tofu %s: %v\n%s", strings.Join(args, " "), err, said.String())
 	}
-	if code := command.ProcessState.ExitCode(); code != wantCode {
-		t.Fatalf("tofu %s exited %d rather than %d, and a script reads the code rather than the words\n%s",
-			strings.Join(args, " "), code, wantCode, said.String())
+	return said.String(), command.ProcessState.ExitCode()
+}
+
+func (p project) run(t *testing.T, wantCode int, args ...string) string {
+	t.Helper()
+	env := []string{
+		"USERPROFILE=" + p.home,
+		"HOME=" + p.home,
+		"TEMP=" + p.home,
+		"TMP=" + p.home,
+		"SystemRoot=" + os.Getenv("SystemRoot"),
 	}
-	return said.String()
+	said, code := runBinary(t, p.dir, env, args...)
+	if code != wantCode {
+		t.Fatalf("tofu %s exited %d rather than %d, and a script reads the code rather than the words\n%s",
+			strings.Join(args, " "), code, wantCode, said)
+	}
+	return said
 }
 
 func (p project) root(t *testing.T) string {
@@ -104,6 +112,31 @@ func (p project) root(t *testing.T) string {
 		t.Fatal(err)
 	}
 	return resolved
+}
+
+func TestE2ETheCredentialGuardRefusesAPlantedFileWithNoUSERPROFILE(t *testing.T) {
+	plant := filepath.Join(sys.SourceRoot(), "cmd", "tofu", "credential-guard-plant")
+	if err := os.MkdirAll(plant, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.RemoveAll(plant) })
+	writeFile(t, plant, ".env", "OPENROUTER_KEY=planted-not-real\n")
+	plantedEnv, err := filepath.Abs(filepath.Join(plant, ".env"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	env := []string{"SystemRoot=" + os.Getenv("SystemRoot")}
+	printed, code := runBinary(t, plant, env, "check", "--quiet", "true")
+	if code != exitUsage {
+		t.Fatalf("tofu check exited %d rather than %d\n%s", code, exitUsage, printed)
+	}
+	if !strings.Contains(printed, plantedEnv) {
+		t.Fatalf("the refusal does not name the planted path %s:\n%s", plantedEnv, printed)
+	}
+	if strings.Contains(printed, "planted-not-real") {
+		t.Fatalf("the refusal printed the planted value rather than only the path:\n%s", printed)
+	}
 }
 
 func sameText(t *testing.T, what, got, want string) {

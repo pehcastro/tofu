@@ -13,12 +13,14 @@ const (
 	liveCredentialOptIn = "TOFU_TEST_LIVE_CREDENTIAL"
 )
 
+var builtGuarded string
+
 func AllowLiveCredential(tb testing.TB) {
 	tb.Setenv(liveCredentialOptIn, "1")
 }
 
 func CredentialsHiddenFromTests() bool {
-	return testing.Testing() && os.Getenv(liveCredentialOptIn) != "1"
+	return (testing.Testing() || builtGuarded != "") && os.Getenv(liveCredentialOptIn) != "1"
 }
 
 func ReadCredential(path string) ([]byte, error) {
