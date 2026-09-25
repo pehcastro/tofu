@@ -8,6 +8,30 @@ Tofu is personal and not released, so the public interface that a version promis
 
 The minor number carries breaking changes, which is what 0.x means, and **there is never a 1.0.0**. The owner decided that on 2026-09-19: this stays 0.x forever, so the promise the version makes is the one 0.x already makes, that anything can break on a minor bump.
 
+## 0.4.18 - 2026-09-25
+
+The library follows the directory you point tofu at, and the screen stops committing markdown it has not finished reading.
+
+### Added
+
+- **`fetch` can be turned off from the library.** `library/web/fetch.yaml` carries `use: on`, a byte cap and a timeout, so a project that should not reach the network says so in its library rather than in an argument nobody remembers to pass.
+
+### Fixed
+
+- **`--dir` decides every layered library, including the fifth.** Four of the five layered libraries read the directory you named and one read the working directory, so a rule or a question could come from the project you were standing in rather than the project you pointed at. The web library was the one that disagreed.
+
+- **A sift rule declaring `shadow` no longer cuts.** `shadow` means watch and report, and the shell sift read the rule's mode and then cut anyway, which is the one thing a shadow rule must not do. It was passing `ModeEnforced` at the call rather than the mode the rule declared.
+
+- **A table in a streamed reply keeps its columns.** The screen commits the part of a message it considers finished and redraws the rest. A table growing a row at a time could be committed mid-table, which freezes the rows already drawn at their old width and leaves the next row as literal pipes below them.
+
+- **A code block inside a list no longer splits the list in two.** The same cut, made when a fence closed while its list item was still open. The list ended at the fence and the items after it started a new one, with the spacing restarting in the middle.
+
+- **The interface cuts a long shell result the way `tofu run` does.** One of the two carried the sift and the other did not, so the same command filled the screen in the app and was trimmed at the command line.
+
+- **The shipped library travels with the binary.** It was read from the source tree, so a binary run anywhere else fell back to whatever it could find.
+
+- **`bench corpus` reads its own imports and no longer skips itself**, and a failed row in a sweep fits the table it is printed in instead of running past the columns.
+
 ## 0.4.17 - 2026-09-24
 
 The screen stopped disagreeing with the record, and then stopped disagreeing with itself.
