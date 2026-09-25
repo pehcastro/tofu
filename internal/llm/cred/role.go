@@ -20,7 +20,6 @@ const (
 )
 
 type JevKey struct {
-	vendor Vendor
 	secret string
 }
 
@@ -48,7 +47,7 @@ func NewJevKey(vendor Vendor, secret string) (JevKey, error) {
 	if secret == "" {
 		return JevKey{}, fmt.Errorf("cred: the %s key is empty", vendor)
 	}
-	return JevKey{vendor: vendor, secret: secret}, nil
+	return JevKey{secret: secret}, nil
 }
 
 func NewLLMKey(vendor Vendor, secret string) (LLMKey, error) {
@@ -65,9 +64,5 @@ func NewLLMKey(vendor Vendor, secret string) (LLMKey, error) {
 	}
 	return LLMKey{secret: secret}, nil
 }
-
-func (k JevKey) Vendor() Vendor { return k.vendor }
-
-func (k JevKey) Decision() string { return k.secret }
 
 func (k LLMKey) Prompt() string { return k.secret }

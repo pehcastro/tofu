@@ -7,17 +7,7 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
-
-	"tofu/internal/sys"
 )
-
-func Load(path string) (Rule, error) {
-	data, err := sys.ReadFile(path)
-	if err != nil {
-		return Rule{}, err
-	}
-	return parseRule(data, path)
-}
 
 func LoadFS(shipped fs.FS, root string) ([]Rule, error) {
 	var loaded []Rule

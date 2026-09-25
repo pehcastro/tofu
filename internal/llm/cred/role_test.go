@@ -20,12 +20,8 @@ func TestARegisteredJevProviderMayNotSendAPrompt(t *testing.T) {
 }
 
 func TestAJevProviderStillBuysATypedDecision(t *testing.T) {
-	key, err := NewJevKey(TypeSafe, " a-secret-that-is-not-real ")
-	if err != nil {
+	if _, err := NewJevKey(TypeSafe, " a-secret-that-is-not-real "); err != nil {
 		t.Fatalf("NewJevKey: %v", err)
-	}
-	if key.Vendor() != TypeSafe || key.Decision() != "a-secret-that-is-not-real" {
-		t.Fatalf("the key reads %s %q", key.Vendor(), key.Decision())
 	}
 }
 

@@ -12,6 +12,37 @@ import (
 
 const shippedLibrary = "../../library"
 
+func loadTestdataRule(t *testing.T, name string) (Rule, error) {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join("testdata", name))
+	if err != nil {
+		t.Fatalf("reading %s: %v", name, err)
+	}
+	rules, err := LoadFS(fstest.MapFS{name: {Data: data}}, "testdata")
+	if err != nil {
+		return Rule{}, err
+	}
+	if len(rules) != 1 {
+		t.Fatalf("LoadFS on %s returned %d rules, want 1", name, len(rules))
+	}
+	return rules[0], nil
+}
+
+func loadShippedRule(t *testing.T, dir, id string) Rule {
+	t.Helper()
+	rules, err := LoadDir(dir)
+	if err != nil {
+		t.Fatalf("LoadDir %s: %v", dir, err)
+	}
+	for _, r := range rules {
+		if r.ID == id {
+			return r
+		}
+	}
+	t.Fatalf("LoadDir %s did not load a rule named %q", dir, id)
+	return Rule{}
+}
+
 func ruleFilesOnDisk(t *testing.T, library string) (loadable, decisionPoint []string) {
 	t.Helper()
 	err := filepath.WalkDir(library, func(name string, entry fs.DirEntry, err error) error {
@@ -106,16 +137,16 @@ func TestParseRuleRefusesARuleWithNoDomainByName(t *testing.T) {
 }
 
 func TestLoadRejectsAnUnknownModeAsAnError(t *testing.T) {
-	_, err := Load(filepath.Join("testdata", "unknown_mode.yaml"))
+	_, err := loadTestdataRule(t, "unknown_mode.yaml")
 	if err == nil {
-		t.Fatal("Load returned no error for an unknown mode")
+		t.Fatal("LoadFS returned no error for an unknown mode")
 	}
 }
 
 func TestLoadDefaultsToShadowWhenModeIsMissing(t *testing.T) {
-	r, err := Load(filepath.Join("testdata", "no_mode.yaml"))
+	r, err := loadTestdataRule(t, "no_mode.yaml")
 	if err != nil {
-		t.Fatalf("Load: %v", err)
+		t.Fatalf("LoadFS: %v", err)
 	}
 	if r.ModeDeclared {
 		t.Fatal("ModeDeclared = true, want false, no mode key was present")
@@ -159,11 +190,10 @@ func TestLayerLetsAProjectRetuneOneShippedRuleTurnAnotherOffAndAddItsOwn(t *test
 }
 
 func TestLoadReadsTheMeasuredQARules(t *testing.T) {
-	for _, name := range []string{"flake_disagreement@1.yaml", "skipped_test_budget@1.yaml"} {
-		r, err := Load(filepath.Join("..", "..", "library", "qa", "general", "rules", name))
-		if err != nil {
-			t.Fatalf("Load %s: %v", name, err)
-		}
+	dir := filepath.Join("..", "..", "library", "qa", "general", "rules")
+	for _, id := range []string{"flake_disagreement", "skipped_test_budget"} {
+		r := loadShippedRule(t, dir, id)
+		name := id + "@1.yaml"
 		if r.Kind != KindMeasured || r.Domain != "qa" {
 			t.Fatalf("%s is kind %q in domain %q, want %q in qa", name, r.Kind, r.Domain, KindMeasured)
 		}

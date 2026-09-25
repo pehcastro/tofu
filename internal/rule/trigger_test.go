@@ -52,10 +52,7 @@ func TestParseRuleRefusesAScopeTheMatcherCannotRead(t *testing.T) {
 }
 
 func TestAShippedRuleWithNoTriggerIsAlwaysOn(t *testing.T) {
-	r, err := Load(filepath.Join("..", "..", "library", "general", "rules", "em_dash@1.yaml"))
-	if err != nil {
-		t.Fatalf("Load: %v", err)
-	}
+	r := loadShippedRule(t, filepath.Join("..", "..", "library", "general", "rules"), "em_dash")
 	if !r.Trigger.AlwaysOn() {
 		t.Fatalf("the shipped em_dash rule declares a trigger, and this ticket gives it none: %+v", r.Trigger)
 	}

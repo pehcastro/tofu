@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"tofu/bench/api"
@@ -12,18 +13,17 @@ import (
 	"tofu/internal/llm/cred"
 )
 
-func jevKey(t *testing.T, vendor cred.Vendor, variable string) cred.JevKey {
+func jevSecret(t *testing.T, vendor cred.Vendor, variable string) string {
 	t.Helper()
 	jev.AllowLiveCredential(t)
 	secret, err := jev.KeyFor(filepath.Join("..", "..", ".env"), variable)
 	if err != nil {
 		t.Fatalf("no %s credential: %v", vendor, err)
 	}
-	key, err := cred.NewJevKey(vendor, secret)
-	if err != nil {
+	if _, err := cred.NewJevKey(vendor, secret); err != nil {
 		t.Fatalf("building the %s credential: %v", vendor, err)
 	}
-	return key
+	return strings.TrimSpace(secret)
 }
 
 func TestLiveTheSameBatteryThroughBothWires(t *testing.T) {
@@ -31,11 +31,11 @@ func TestLiveTheSameBatteryThroughBothWires(t *testing.T) {
 		t.Skip("set TOFU_LIVE_COMPARE=1 to spend on both jev wires over the gate corpus")
 	}
 
-	throughOpenRouter, err := api.NewWire(jevKey(t, cred.OpenRouter, jev.OpenRouterVariable).Decision())
+	throughOpenRouter, err := api.NewWire(jevSecret(t, cred.OpenRouter, jev.OpenRouterVariable))
 	if err != nil {
 		t.Fatalf("openrouter wire: %v", err)
 	}
-	direct, err := api.NewTypeSafeWire(jevKey(t, cred.TypeSafe, jev.TypeSafeVariable).Decision())
+	direct, err := api.NewTypeSafeWire(jevSecret(t, cred.TypeSafe, jev.TypeSafeVariable))
 	if err != nil {
 		t.Fatalf("typesafe wire: %v", err)
 	}

@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"testing/fstest"
 	"time"
 )
 
@@ -87,10 +88,7 @@ func TestGoQuotationsExemptAStringARuneAndARawStringButKeepAComment(t *testing.T
 }
 
 func TestTheShippedEmDashRuleDeclaresShadowAndTheQuotedException(t *testing.T) {
-	r, err := Load(filepath.Join("..", "..", "library", "general", "rules", "em_dash@1.yaml"))
-	if err != nil {
-		t.Fatalf("Load: %v", err)
-	}
+	r := loadShippedRule(t, filepath.Join("..", "..", "library", "general", "rules"), "em_dash")
 	if !r.ModeDeclared || r.Mode != ModeShadow {
 		t.Fatalf("the shipped rule declares mode %q, declared=%t, want an explicit %q", r.Mode, r.ModeDeclared, ModeShadow)
 	}
@@ -100,12 +98,8 @@ func TestTheShippedEmDashRuleDeclaresShadowAndTheQuotedException(t *testing.T) {
 }
 
 func TestAnUnknownExceptionValueIsRefusedAtLoad(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "bad.yaml")
 	body := "id: x\nkind: structural\nchecker: em_dash\nexcept: whatever\n"
-	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
-		t.Fatalf("writing fixture: %v", err)
-	}
-	if _, err := Load(path); err == nil {
-		t.Fatal("Load accepted an except value no checker understands")
+	if _, err := LoadFS(fstest.MapFS{"bad.yaml": {Data: []byte(body)}}, "test"); err == nil {
+		t.Fatal("LoadFS accepted an except value no checker understands")
 	}
 }
