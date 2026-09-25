@@ -51,6 +51,8 @@ func spelling(state State) (mark, words string) {
 		return "? ", "waiting for an answer"
 	case roster.InReview:
 		return "⤺ ", "in review"
+	case roster.Reopened:
+		return "↻ ", "reopened"
 	case roster.Parked:
 		return "‖ ", "parked"
 	case roster.Errored:
