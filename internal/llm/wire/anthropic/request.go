@@ -317,7 +317,7 @@ func encodeMessages(messages []llm.Message, oauth bool) ([]wireMessage, error) {
 					"message %d is an assistant message with no content and no tool calls", index)
 			}
 			blocks := make([]contentBlock, 0, len(message.ToolCalls)+2)
-			if len(message.ToolCalls) > 0 && !message.Thinking.Empty() {
+			if len(message.ToolCalls) > 0 && message.Thinking.Text != "" {
 				blocks = append(blocks, contentBlock{Type: "thinking",
 					Thinking: message.Thinking.Text, Signature: message.Thinking.Signature})
 			}
