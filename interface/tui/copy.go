@@ -2,10 +2,10 @@ package tui
 
 import (
 	"errors"
+	"strings"
 
 	tea "charm.land/bubbletea/v2"
 
-	"tofu/interface/tui/session"
 	"tofu/internal/sys"
 	"tofu/internal/widget"
 )
@@ -15,9 +15,10 @@ const (
 	answerUnit    = "the last answer"
 	callUnit      = "the tool call"
 	linkUnit      = "the link"
-	copyFailed    = "the copy did not happen: "
+	copyFailed    = " was not copied: "
 	copyWritten   = " copied, "
 	copyHanded    = " handed to the terminal, which does not say whether it took it"
+	sysPrefix     = "sys: "
 )
 
 type copyState int
@@ -35,21 +36,21 @@ type copiedMsg struct {
 	cause string
 }
 
-func (m copiedMsg) entry() session.Entry {
+func (m copiedMsg) note() string {
 	switch m.state {
 	case copyToClipboard:
-		return session.Entry{Kind: session.Note, Body: m.unit + copyWritten + widget.Size(len(m.text))}
+		return m.unit + copyWritten + widget.Size(len(m.text))
 	case copyToTerminal:
-		return session.Entry{Kind: session.Note, Body: m.unit + copyHanded}
+		return m.unit + copyHanded
 	case copyRefused:
-		return session.Entry{Kind: session.Failure, Body: copyFailed + m.cause}
+		return m.unit + copyFailed + strings.TrimPrefix(m.cause, sysPrefix)
 	}
 	panic("tui: unknown copy state")
 }
 
 func (a *App) copy(unit, text string, found bool) tea.Cmd {
 	if !found {
-		a.view.Append(session.Entry{Kind: session.Note, Body: nothingToCopy})
+		a.status.Note = nothingToCopy
 		return nil
 	}
 	write := a.options.Copy

@@ -445,7 +445,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, nil
 
 	case copiedMsg:
-		a.view.Append(msg.entry())
+		a.status.Note = msg.note()
 		if msg.state == copyToTerminal {
 			return a, tea.SetClipboard(msg.text)
 		}
@@ -520,6 +520,7 @@ func (a *App) step(by int) {
 
 func (a *App) key(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	key := msg.String()
+	a.status.Note = ""
 	if len(a.requirements) > 0 {
 		return a.setupKey(key)
 	}
@@ -867,6 +868,7 @@ func (a *App) keptPartial() string {
 
 func (a *App) start(task string) tea.Cmd {
 	a.view.Follow()
+	a.status.Note = ""
 	a.workBeforeTurn, a.keptAnswer, a.childCalls = len(a.work.Entries), "", nil
 	if a.options.Turn == nil {
 		a.view.Append(session.Entry{Kind: session.Failure, Body: "no engine is wired to this app"})
