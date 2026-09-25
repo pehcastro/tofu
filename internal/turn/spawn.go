@@ -256,12 +256,25 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 	report := reportOf(agent, claims, state)
 	report.Asked = asked
 	t.reports = append(t.reports, report)
-	text := report.Text()
+	contract := subagent.BuildContract(agent.Brief, report.Prose, stoppedEarly(state, claims[len(claims)-1].Outcome))
+	contract.Wrote = report.Wrote
+	text := report.Text() + "\n\n" + contract.Block()
 	t.roster.Reached(childID, state, text)
 	if runErr != nil && state != subagent.Parked {
 		return Result{}, fmt.Errorf("spawn: child %s is %s: %w", childID, state, runErr)
 	}
 	return Result{Content: text, Command: childID + " " + state.String() + ": " + agent.Mission}, nil
+}
+
+func stoppedEarly(state subagent.State, outcome Outcome) bool {
+	if state == subagent.Parked {
+		return true
+	}
+	switch outcome {
+	case OutcomeStepCap, OutcomeRetiredCostCap, OutcomeRetiredWallClockCap, OutcomeDecisionCap:
+		return true
+	}
+	return false
 }
 
 func (t *SpawnTool) retain(rows []Row) {
