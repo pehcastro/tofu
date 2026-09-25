@@ -16,6 +16,7 @@ import (
 
 	"tofu/internal/judge/jev"
 	"tofu/internal/judge/ledger"
+	"tofu/internal/konst"
 	"tofu/internal/llm"
 	"tofu/internal/sys"
 	"tofu/internal/turn"
@@ -245,24 +246,33 @@ func TestTheTypedDoneReviewReopensTheChildInsideARunAndWhyPrintsTheChain(t *test
 	if err != nil {
 		t.Fatalf("newTypedDoneReview: %v", err)
 	}
-	spawned := spawnOneChild(t, review, []llm.Decision{
-		{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "I finished the task."},
-		{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "this time I read the file first."},
-		{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "the child reported back"},
-	})
+	rounds := konst.SubAgentMaxRounds
+	queued := make([]llm.Decision, 0, rounds+1)
+	for round := 1; round <= rounds; round++ {
+		queued = append(queued, llm.Decision{Build: "stub-model", Outcome: llm.OutcomeMessage,
+			Content: fmt.Sprintf("attempt %d, I finished the task.", round)})
+	}
+	queued = append(queued, llm.Decision{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "the child reported back"})
+	spawned := spawnOneChild(t, review, queued)
 
-	if len(spawned) != 2 {
-		t.Fatalf("the typed review left %d child rows, want the claim and the re-opened run", len(spawned))
+	if len(spawned) != rounds {
+		t.Fatalf("the typed review left %d child rows, want one per round up to the cap of %d", len(spawned), rounds)
 	}
-	first, second := spawned[0], spawned[1]
-	if len(first.DecisionIDs) != 1 || len(second.DecisionIDs) != 1 || first.DecisionIDs[0] != second.DecisionIDs[0] {
-		t.Fatalf("the decision id reached %v and %v, want the one decision on both rows", first.DecisionIDs, second.DecisionIDs)
+	for i, child := range spawned {
+		if len(child.DecisionIDs) != 1 {
+			t.Fatalf("row %d (%s) carries %d decision ids, want the one review that judged it", i, child.ID, len(child.DecisionIDs))
+		}
 	}
-	if second.ID != first.ID+"-r" {
-		t.Fatalf("the re-opened run is %q, want %q", second.ID, first.ID+"-r")
+	first, second, third := spawned[0], spawned[1], spawned[2]
+	if second.ID != first.ID+"-r2" || third.ID != first.ID+"-r3" {
+		t.Fatalf("the re-opened rounds are %q and %q, want %q and %q", second.ID, third.ID, first.ID+"-r2", first.ID+"-r3")
 	}
 	if !strings.Contains(second.Task, "did not believe you") || !strings.Contains(second.Task, doneReviewPoint) {
 		t.Fatalf("the re-opened child was not told why: %q", second.Task)
+	}
+	capped := strings.Join(third.Warnings, " ")
+	if !strings.Contains(capped, "round cap") {
+		t.Fatalf("the round that hit the cap was not refused with the cap named: %q", capped)
 	}
 
 	var out, errOut bytes.Buffer
