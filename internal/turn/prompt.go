@@ -25,20 +25,6 @@ const ContractAddendum = "if you were spawned as a child and your own brief name
 	"a child spawned with no ticket, or whose brief has no ## Acceptance section, sends no such block. " +
 	"the shape is at library/general/references/contract.md."
 
-const PreferTheToolOverTheShell = "prefer the tool that does the thing over a shell command that imitates it: " +
-	"project_report answers what is this repository in one call, glob finds files by name, " +
-	"search finds text and returns the whole declaration a match sits inside, read reads one file whole, " +
-	"edit replaces one exact stretch of text inside one, and write creates one or replaces it whole. " +
-	"never run find, ls -R, du or wc over the tree. " +
-	"find descends into every directory git ignores, because -not -path filters what it prints and does not stop it walking, " +
-	"so one recorded run on this kind of tree spent 68 seconds on a find and then 153 seconds on another, " +
-	"while glob answered its question in 15 milliseconds. " +
-	"bash is for the project's own commands, its package manager, its build and its tests, " +
-	"and for nothing one of those tools already does, and a command it runs is killed at its deadline and its output is lost. " +
-	"never write a throwaway script to change a file: that is what edit is. " +
-	"tofu_lint_comments, tofu_rules_check and tofu_judge run tofu's own checks with tofu's own parser, " +
-	"so use one of those rather than a shell command or a guess in prose when you want to know whether the work holds up."
-
 const InstructionsOff = "sends no instruction file at all: " +
 	"neither the nearest AGENTS.md or CLAUDE.md at or above the working directory, " +
 	"nor your personal AGENTS.md or CLAUDE.md in your home directory"

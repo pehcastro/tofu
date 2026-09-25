@@ -9,13 +9,11 @@ import (
 	"strings"
 	"unicode"
 
+	"tofu/internal/prompt"
 	"tofu/internal/rule"
 )
 
-const TheFormatContract = "finish by saying what changed, naming every file you wrote, " +
-	"and pasting the real output of every command you ran. " +
-	"a command you did not run is not evidence, and a claim with no command behind it is one the next reader has to redo. " +
-	"say what you could not verify and why in the same answer rather than leaving it out."
+const TheFormatContract = prompt.TheFormatContract
 
 type PromptPart struct {
 	Concern rule.Concern

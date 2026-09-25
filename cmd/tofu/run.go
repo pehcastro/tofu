@@ -22,6 +22,7 @@ import (
 	"tofu/internal/llm/wire/anthropic"
 	"tofu/internal/llm/wire/codex"
 	"tofu/internal/llm/wire/openrouter"
+	"tofu/internal/prompt"
 	"tofu/internal/recall"
 	"tofu/internal/session"
 	settingspkg "tofu/internal/settings"
@@ -621,7 +622,7 @@ func runSystem(opts runOpts) string {
 			"read reads a whole file, write creates one or replaces it whole, and bash runs anything else, " +
 			"including finding a file, searching text and changing part of a file."
 	}
-	system := turn.EveryToolIsRelativeToTheWorkingDirectory + turn.PreferTheToolOverTheShell
+	system := turn.EveryToolIsRelativeToTheWorkingDirectory + prompt.PreferTheToolOverTheShell
 	if opts.noSubAgents {
 		return system
 	}
