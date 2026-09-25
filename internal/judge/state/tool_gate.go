@@ -76,19 +76,3 @@ type toolGateEnvelope struct {
 func ToolGateVersion() string {
 	return deriveVersion(ToolGatePoint, toolGateEnvelope{})
 }
-
-func BuildToolGate(in ToolGateInput) ([]byte, string, error) {
-	if in.Input == nil {
-		in.Input = map[string]any{}
-	}
-	if in.Context.UserRecentMessages == nil {
-		in.Context.UserRecentMessages = []string{}
-	}
-	canon, err := ledger.Canonical(toolGateEnvelope{
-		Agent: in.Agent, Tool: in.Tool, Input: in.Input, Cwd: in.Cwd, Context: in.Context,
-	})
-	if err != nil {
-		return nil, "", err
-	}
-	return canon, ToolGateVersion(), nil
-}

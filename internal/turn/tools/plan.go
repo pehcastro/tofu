@@ -217,24 +217,3 @@ func planText(items []PlanItem) string {
 	}
 	return strings.Join(lines, "\n")
 }
-
-func PlanOverSteps(steps []turn.StepRow) [][]PlanItem {
-	over := make([][]PlanItem, 0, len(steps))
-	var items []PlanItem
-	for _, step := range steps {
-		for _, call := range step.ToolCalls {
-			if call.Tool != PlanToolName || call.Error != "" {
-				continue
-			}
-			args, err := parsePlanArgs(call.Args)
-			if err != nil {
-				continue
-			}
-			if next, err := applyPlan(items, args); err == nil {
-				items = next
-			}
-		}
-		over = append(over, slices.Clone(items))
-	}
-	return over
-}

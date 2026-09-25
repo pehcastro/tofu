@@ -48,24 +48,3 @@ func DecideAsk(action string, determined, determinedLowAt float64) (GateVerdict,
 	}
 	return GateVerdict{Action: action, Effective: effective, Determined: determined, DeterminedLowAt: determinedLowAt}, nil
 }
-
-func (v GateVerdict) Question(state AskState) (Question, bool) {
-	var kind Kind
-	switch v.Effective {
-	case ActionProceed:
-		return Question{}, false
-	case ActionAskNow:
-		kind = Blocking
-	case ActionDefer:
-		kind = Deferred
-	default:
-		panic("subagent: unknown ask action " + v.Effective)
-	}
-	return Question{
-		Kind:  kind,
-		Where: state.Path,
-		Ask: fmt.Sprintf("shadow ask gate: %s, determined %.2f under the %.2f margin",
-			v.Action, v.Determined, v.DeterminedLowAt),
-		Default: "proceeded on the worker's own reading; the gate only recorded a shadow verdict",
-	}, true
-}

@@ -28,19 +28,6 @@ var Gremlins = Tool{
 	},
 }
 
-var changes = map[string]string{
-	"CONDITIONALS_BOUNDARY":   "a comparison boundary moved, > became >=",
-	"CONDITIONALS_NEGATION":   "the condition was negated, == became !=",
-	"ARITHMETIC_BASE":         "an arithmetic operator flipped, + became -",
-	"INVERT_NEGATIVES":        "a negation was dropped, -x became x",
-	"INCREMENT_DECREMENT":     "a step reversed, ++ became --",
-	"INVERT_ASSIGNMENTS":      "a compound assignment flipped, += became -=",
-	"INVERT_BITWISE":          "a bitwise operator flipped, & became |",
-	"INVERT_LOGICAL":          "a logical operator flipped, && became ||",
-	"INVERT_LOOPCTRL":         "a loop control reversed, break became continue",
-	"REMOVE_SELF_ASSIGNMENTS": "a self assignment was removed",
-}
-
 type Outcome struct {
 	Tool    string
 	Package string
@@ -72,22 +59,4 @@ func (t Tool) Run(ctx context.Context, dir, pattern string) (Outcome, error) {
 		return Outcome{}, fmt.Errorf("%s in %s: %w: %s", t.Name, dir, runErr, strings.TrimSpace(output.String()))
 	}
 	return Outcome{Tool: t.Name, Package: pattern, Elapsed: time.Since(started), Mutants: mutants}, nil
-}
-
-func Render(o Outcome) string {
-	score := Tally(o.Mutants)
-	var out strings.Builder
-	fmt.Fprintf(&out, "%s %s %.2f%% efficacy, %d killed, %d survived, %d not covered, %d timed out, %s\n",
-		o.Tool, o.Package, score.Efficacy(), score.Killed, score.Lived, score.NotCovered, score.TimedOut, o.Elapsed.Round(time.Second))
-	for _, m := range Survivors(o.Mutants) {
-		fmt.Fprintf(&out, "  survived  %s:%d:%d  %s\n", m.File, m.Line, m.Column, Change(m.Mutator))
-	}
-	return out.String()
-}
-
-func Change(mutator string) string {
-	if known, ok := changes[mutator]; ok {
-		return known
-	}
-	return mutator
 }

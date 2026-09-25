@@ -209,14 +209,6 @@ func messageOf(m MessageRow) (llm.Message, error) {
 	return message, nil
 }
 
-func PromptFrom(events []session.Event) (session.PromptBody, bool, error) {
-	reading, err := session.ReadEvents(events)
-	if err != nil || reading.Prompt == nil {
-		return session.PromptBody{}, false, err
-	}
-	return *reading.Prompt, true, nil
-}
-
 func ConversationFrom(events []session.Event) ([]llm.Message, error) {
 	reading, err := session.ReadEvents(events)
 	if err != nil {

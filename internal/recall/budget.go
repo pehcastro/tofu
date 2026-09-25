@@ -57,11 +57,6 @@ func (b Bill) Total() int {
 	return b.CacheRead + b.Fresh
 }
 
-func Billed(cachedPrefixTokens, requestTokens int) Bill {
-	read := min(cachedPrefixTokens, requestTokens)
-	return Bill{CacheRead: read, Fresh: requestTokens - read}
-}
-
 type Occupancy struct {
 	Bands      Bands `json:"-"`
 	Identity   int   `json:"identity"`

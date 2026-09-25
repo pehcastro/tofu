@@ -34,10 +34,6 @@ const (
 	GateEnforce
 )
 
-func AllGateModes() []GateMode {
-	return []GateMode{GateShadow, GateEnforce}
-}
-
 func GateModeFromPrompt(prompt string) GateMode {
 	if prompt == settings.GatePromptAsk {
 		return GateEnforce
@@ -62,10 +58,6 @@ const (
 	PersonAllowedOnce
 	PersonAlwaysHere
 )
-
-func AllPersonAnswers() []PersonAnswer {
-	return []PersonAnswer{PersonDenied, PersonAllowedOnce, PersonAlwaysHere}
-}
 
 func (a PersonAnswer) allows() bool {
 	switch a {

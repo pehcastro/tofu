@@ -45,10 +45,6 @@ const (
 	rowOneNoContextBar
 )
 
-func RowOneDropOrder() []string {
-	return []string{"quota bar", "quota reset", "quota label", "context bar"}
-}
-
 type rowTwoDrop int
 
 const (

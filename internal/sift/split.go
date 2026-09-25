@@ -52,15 +52,6 @@ func Split(text string) ([]Part, error) {
 	return parts, nil
 }
 
-func Join(parts []Part) string {
-	var out strings.Builder
-	for _, p := range parts {
-		out.WriteString(p.Text)
-		out.WriteString(p.Sep)
-	}
-	return out.String()
-}
-
 func lines(text string) []string {
 	var out []string
 	start := 0
