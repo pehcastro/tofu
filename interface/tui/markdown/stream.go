@@ -5,34 +5,40 @@ import "strings"
 func Boundary(content string) int {
 	boundary := 0
 	fenceOpen := false
+	lastRealLine := ""
 	start := 0
 	for index := 0; index < len(content); index++ {
 		if content[index] != '\n' {
 			continue
 		}
 		line := content[start:index]
-		closedFence := isFenceLine(line)
-		if closedFence {
+		fenceLine := isFenceLine(line)
+		wasFenceOpen := fenceOpen
+		if fenceLine {
 			fenceOpen = !fenceOpen
 		}
-		lineStart := start
 		end := index + 1
 		start = end
 		switch {
 		case fenceOpen:
-		case closedFence:
+		case fenceLine:
+			if !opensConstruct(lastRealLine) {
+				boundary = end
+			}
+		case strings.TrimSpace(line) == "" && safeBlankBoundary(lastRealLine, content, end):
 			boundary = end
-		case strings.TrimSpace(line) == "" && safeBlankBoundary(content, index, end):
+		case isHeading(line) && !opensConstruct(lastRealLine):
 			boundary = end
-		case isHeading(line) && !opensConstruct(lastNonBlankLine(content[:lineStart])):
-			boundary = end
+		}
+		if !wasFenceOpen && !fenceLine && strings.TrimSpace(line) != "" {
+			lastRealLine = line
 		}
 	}
 	return boundary
 }
 
-func safeBlankBoundary(content string, index, boundary int) bool {
-	if opensConstruct(lastNonBlankLine(content[:index])) {
+func safeBlankBoundary(lastRealLine, content string, boundary int) bool {
+	if opensConstruct(lastRealLine) {
 		return false
 	}
 	return !isSetextUnderline(firstNonBlankLine(content[boundary:]))
@@ -67,16 +73,6 @@ func isHeading(line string) bool {
 		return false
 	}
 	return hashes == len(trimmed) || trimmed[hashes] == ' '
-}
-
-func lastNonBlankLine(s string) string {
-	lines := strings.Split(s, "\n")
-	for index := len(lines) - 1; index >= 0; index-- {
-		if strings.TrimSpace(lines[index]) != "" {
-			return lines[index]
-		}
-	}
-	return ""
 }
 
 func firstNonBlankLine(s string) string {
