@@ -91,10 +91,18 @@ func ProjectStateDir() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if testing.Testing() && InsideSourceTree(wd) {
+	return ProjectStateDirAt(wd)
+}
+
+func ProjectStateDirAt(dir string) (string, error) {
+	full, err := filepath.Abs(dir)
+	if err != nil {
+		return "", err
+	}
+	if testing.Testing() && InsideSourceTree(full) {
 		return StateDir(testStateParent()), nil
 	}
-	return StateDir(wd), nil
+	return StateDir(full), nil
 }
 
 func LibraryDir() (string, error) {

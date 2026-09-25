@@ -3,6 +3,7 @@ package ledger
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strconv"
 	"time"
@@ -280,7 +281,15 @@ func (r Row) Mode() Mode {
 }
 
 func CacheDir() (string, error) {
-	state, err := sys.ProjectStateDir()
+	wd, err := os.Getwd()
+	if err != nil {
+		return "", err
+	}
+	return CacheDirAt(wd)
+}
+
+func CacheDirAt(dir string) (string, error) {
+	state, err := sys.ProjectStateDirAt(dir)
 	if err != nil {
 		return "", err
 	}
