@@ -151,7 +151,7 @@ func runOneBashCall(t *testing.T, project string) turn.ToolCallRow {
 	if err != nil {
 		t.Fatalf("parseRunArgs: %v", err)
 	}
-	built, _, err := buildRunTools(project, opts.toolSet)
+	built, err := buildTestRunTools(project, opts.toolSet)
 	if err != nil {
 		t.Skipf("this machine cannot build the run tools, so no command can be run at all: %v", err)
 	}

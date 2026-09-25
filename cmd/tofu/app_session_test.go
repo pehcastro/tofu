@@ -478,7 +478,7 @@ func TestLiveASecondSendReadsTheCacheOfTheFirst(t *testing.T) {
 		}
 	}
 
-	send := appTurnOn(dir, openAppWire, nil, time.Now, sessionResume{})
+	send := newAppSession(dir, openAppWire, nil, time.Now, sessionResume{}).run
 	var events eventLog
 	send(t.Context(), onTheSubscription, "read loop.md and judge.md and say in one sentence what each is about", events.add)
 	send(t.Context(), onTheSubscription, "without calling any tool, repeat what judge.md was about", events.add)

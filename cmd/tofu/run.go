@@ -628,18 +628,6 @@ func runSystem(opts runOpts) string {
 	return system + " " + turn.SpawnAddendum
 }
 
-func buildRunTools(dir, set string) ([]turn.Tool, *tools.Plan, error) {
-	return buildRunToolsReading(dir, set, false)
-}
-
-func buildRunToolsReading(dir, set string, readBeforeEdit bool) ([]turn.Tool, *tools.Plan, error) {
-	bashTool, bashErr := turn.NewBashTool(dir)
-	if bashErr != nil {
-		return nil, nil, bashErr
-	}
-	return assembleRunTools(dir, set, readBeforeEdit, bashTool)
-}
-
 func buildRunToolsForRun(dir, set string, readBeforeEdit bool, shell turn.RunShell) ([]turn.Tool, *tools.Plan, error) {
 	bashTool, bashErr := turn.NewBashToolFromShell(dir, shell)
 	if bashErr != nil {

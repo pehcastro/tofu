@@ -284,9 +284,9 @@ func spawnOneChild(t *testing.T, review turn.DoneReview, decisions []llm.Decisio
 	dir := t.TempDir()
 	opts := armOpts(t)
 	opts.dir, opts.task, opts.gateArm = dir, "hand the note to a child", gateOff
-	built, _, err := buildRunTools(dir, opts.toolSet)
+	built, err := buildTestRunTools(dir, opts.toolSet)
 	if err != nil {
-		t.Fatalf("buildRunTools: %v", err)
+		t.Fatalf("buildTestRunTools: %v", err)
 	}
 	spawnCall := llm.ToolCall{ID: "call-1", Name: "spawn", Arguments: json.RawMessage(`{"task":"write note.txt","owns":["note.txt"]}`)}
 	queued := append([]llm.Decision{{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{spawnCall}}}, decisions...)

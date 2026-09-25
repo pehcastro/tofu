@@ -57,9 +57,9 @@ func TestTofuRunUnderEnforceDoesNotWriteTheDeniedFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("newToolGate: %v", err)
 	}
-	built, _, err := buildRunTools(dir, toolSetFull)
+	built, err := buildTestRunTools(dir, toolSetFull)
 	if err != nil {
-		t.Fatalf("buildRunTools: %v", err)
+		t.Fatalf("buildTestRunTools: %v", err)
 	}
 	opts := runOpts{
 		dir:              dir,

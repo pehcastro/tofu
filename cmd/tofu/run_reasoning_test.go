@@ -71,9 +71,9 @@ func TestAReasoningItemFromStepOneReachesTheStepTwoCodexRequestAndTheStoredRow(t
 	dir := t.TempDir()
 	opts := armOpts(t, "--tools", toolSetThree)
 	opts.dir, opts.task = dir, "write hello.txt"
-	built, _, err := buildRunTools(dir, opts.toolSet)
+	built, err := buildTestRunTools(dir, opts.toolSet)
 	if err != nil {
-		t.Fatalf("buildRunTools: %v", err)
+		t.Fatalf("buildTestRunTools: %v", err)
 	}
 	store := session.NewStore(t.TempDir())
 	config, _ := mustConfig(t, opts, built, runtime{model: model, spend: turn.SpendSubscription, sessions: store})

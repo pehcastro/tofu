@@ -158,9 +158,9 @@ func TestABashResultReachesTheModelSmallerThanTheOutputItRan(t *testing.T) {
 
 	opts := armOpts(t)
 	opts.dir, opts.task = dir, "find the line that says what failed"
-	built, _, err := buildRunTools(dir, opts.toolSet)
+	built, err := buildTestRunTools(dir, opts.toolSet)
 	if err != nil {
-		t.Fatalf("buildRunTools: %v", err)
+		t.Fatalf("buildTestRunTools: %v", err)
 	}
 	sifter, scorer, err := buildShellSift(siftFollowsTheTable)
 	if err != nil {

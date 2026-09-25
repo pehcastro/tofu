@@ -44,7 +44,7 @@ func TestTheHashChatDrawsIsTheIDOfTheCallInTheRecord(t *testing.T) {
 	}
 	opts := armOpts(t)
 	opts.dir, opts.task, opts.turnID = dir, "read the note", turn.NewID(time.Now())
-	built, _, err := buildRunTools(dir, opts.toolSet)
+	built, err := buildTestRunTools(dir, opts.toolSet)
 	if err != nil {
 		t.Fatal(err)
 	}

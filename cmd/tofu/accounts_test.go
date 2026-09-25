@@ -21,9 +21,9 @@ func TestTheScreenSaysAnAccountMovedAndWhatTheMoveCost(t *testing.T) {
 	}
 	opts := armOpts(t)
 	opts.dir, opts.task, opts.noSubAgents = dir, "read the note", true
-	built, _, err := buildRunTools(dir, opts.toolSet)
+	built, err := buildTestRunTools(dir, opts.toolSet)
 	if err != nil {
-		t.Fatalf("buildRunTools: %v", err)
+		t.Fatalf("buildTestRunTools: %v", err)
 	}
 	onFirst := &queuedModel{decisions: []llm.Decision{
 		{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{

@@ -20,6 +20,15 @@ import (
 	"tofu/internal/turn"
 )
 
+func buildTestRunTools(dir, set string) ([]turn.Tool, error) {
+	shell, err := turn.ResolveRunShell("")
+	if err != nil {
+		return nil, err
+	}
+	built, _, err := buildRunToolsForRun(dir, set, false, shell)
+	return built, err
+}
+
 func TestARealRunOffersSymbolsAndTheOffArmDoesNot(t *testing.T) {
 	full := toolNames(t, armOpts(t))
 	if !slices.Contains(full, "symbols") {
@@ -55,9 +64,9 @@ func TestASecondIdenticalReadInOneTurnNeverReachesTheTool(t *testing.T) {
 	}
 	opts := armOpts(t)
 	opts.dir, opts.task = dir, "read the note twice"
-	built, _, err := buildRunTools(dir, opts.toolSet)
+	built, err := buildTestRunTools(dir, opts.toolSet)
 	if err != nil {
-		t.Fatalf("buildRunTools: %v", err)
+		t.Fatalf("buildTestRunTools: %v", err)
 	}
 	read := func(id string) llm.Decision {
 		return llm.Decision{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{
@@ -99,9 +108,9 @@ func TestASecondIdenticalReadInOneTurnNeverReachesTheTool(t *testing.T) {
 
 func ranTool(t *testing.T, dir, name, args string) turn.Result {
 	t.Helper()
-	built, _, err := buildRunTools(dir, toolSetFull)
+	built, err := buildTestRunTools(dir, toolSetFull)
 	if err != nil {
-		t.Fatalf("buildRunTools: %v", err)
+		t.Fatalf("buildTestRunTools: %v", err)
 	}
 	for _, tool := range built {
 		if tool.Name() != name {
@@ -190,9 +199,9 @@ func TestARunAtATwentyThousandCeilingCompactsAndTheRecordSaysWhatItDropped(t *te
 	if err := os.WriteFile(filepath.Join(dir, "big.txt"), []byte(strings.Repeat("x", 20000)), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	built, _, err := buildRunTools(dir, opts.toolSet)
+	built, err := buildTestRunTools(dir, opts.toolSet)
 	if err != nil {
-		t.Fatalf("buildRunTools: %v", err)
+		t.Fatalf("buildTestRunTools: %v", err)
 	}
 	var decisions []llm.Decision
 	for i := range 8 {
@@ -308,9 +317,9 @@ func TestAModelWithNoRecordedWindowCompactsAtTheOperatingCeiling(t *testing.T) {
 		}})
 	}
 	decisions = append(decisions, llm.Decision{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "read it all"})
-	built, _, err := buildRunTools(dir, opts.toolSet)
+	built, err := buildTestRunTools(dir, opts.toolSet)
 	if err != nil {
-		t.Fatalf("buildRunTools: %v", err)
+		t.Fatalf("buildTestRunTools: %v", err)
 	}
 
 	budget, err := contextBudget(opts, models.Model{ID: "a model no library records"})
@@ -354,9 +363,9 @@ func TestTheSpawnToolIsGivenTheSessionStoreBeforeTheTurnStarts(t *testing.T) {
 	t.Chdir(dir)
 	opts := armOpts(t)
 	opts.dir, opts.task = dir, "hand the work to a child"
-	built, _, err := buildRunTools(dir, opts.toolSet)
+	built, err := buildTestRunTools(dir, opts.toolSet)
 	if err != nil {
-		t.Fatalf("buildRunTools: %v", err)
+		t.Fatalf("buildTestRunTools: %v", err)
 	}
 	store := session.NewStore(filepath.Join(dir, ".tofu", "sessions"))
 	model := &queuedModel{decisions: []llm.Decision{
@@ -422,7 +431,7 @@ func TestWithNoSearchKeyStoredTheTurnIsGivenFetchAndNoWebSearch(t *testing.T) {
 func TestAProjectCarryingNoWebLibraryGetsFetchFromTheShippedOne(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
-	built, _, err := buildRunTools(dir, toolSetFull)
+	built, err := buildTestRunTools(dir, toolSetFull)
 	if err != nil {
 		t.Fatalf("a project carrying no web library could not build its tools: %v", err)
 	}
@@ -457,9 +466,9 @@ func TestAChildLeavesItsRecordWhileTheParentsTurnIsStillRunning(t *testing.T) {
 	t.Chdir(dir)
 	opts := armOpts(t)
 	opts.dir, opts.task, opts.turnID = dir, "hand the work to a child", "turn-parent"
-	built, _, err := buildRunTools(dir, opts.toolSet)
+	built, err := buildTestRunTools(dir, opts.toolSet)
 	if err != nil {
-		t.Fatalf("buildRunTools: %v", err)
+		t.Fatalf("buildTestRunTools: %v", err)
 	}
 	store := session.NewStore(filepath.Join(dir, ".tofu", "sessions"))
 	model := &watchingModel{store: store, child: "turn-parent-c1", inner: &queuedModel{decisions: []llm.Decision{
@@ -535,9 +544,9 @@ func mustConfig(t *testing.T, opts runOpts, built []turn.Tool, run runtime) (tur
 
 func toolNames(t *testing.T, opts runOpts) []string {
 	t.Helper()
-	built, _, err := buildRunTools(opts.dir, opts.toolSet)
+	built, err := buildTestRunTools(opts.dir, opts.toolSet)
 	if err != nil {
-		t.Fatalf("buildRunTools %s: %v", opts.toolSet, err)
+		t.Fatalf("buildTestRunTools %s: %v", opts.toolSet, err)
 	}
 	config, _ := mustConfig(t, opts, built, runtime{spend: turn.SpendSubscription})
 	var named []string

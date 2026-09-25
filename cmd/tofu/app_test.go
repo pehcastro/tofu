@@ -193,7 +193,7 @@ func TestLiveAppRunsATurnOnEachWire(t *testing.T) {
 			task := "create notes.txt holding the single word ready, then read it back and say what it holds"
 			app.Update(tui.Event{Kind: tui.EventText, Text: task})
 			var turned eventLog
-			appTurnOn(dir, openAppWire, nil, time.Now, sessionResume{})(t.Context(), tui.Pick{Wire: wire.Name}, task, turned.add)
+			newAppSession(dir, openAppWire, nil, time.Now, sessionResume{}).run(t.Context(), tui.Pick{Wire: wire.Name}, task, turned.add)
 			answered := ""
 			for _, event := range turned.all() {
 				if event.Model != "" {
@@ -596,9 +596,9 @@ func wireOn(model turn.Model) appWire {
 }
 
 func resumedTurn(dir string, model turn.Model, person chan tui.Answer, resumed sessionResume) tui.Turn {
-	return appTurnOn(dir, func(runOpts) (appWire, error) {
+	return newAppSession(dir, func(runOpts) (appWire, error) {
 		return wireOn(model), nil
-	}, person, time.Now, resumed)
+	}, person, time.Now, resumed).run
 }
 
 func scratchProject(t *testing.T) string {
@@ -1020,9 +1020,9 @@ func TestAChildRunningForTenSecondsReadsTenSecondsAndWhatItSpent(t *testing.T) {
 		clockedStep{decision: llm.Decision{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "the child did it"}},
 	)
 	driver := driveApp(t)
-	appTurnOn(dir, func(runOpts) (appWire, error) {
+	newAppSession(dir, func(runOpts) (appWire, error) {
 		return wireOn(model), nil
-	}, nil, model.clock, sessionResume{})(t.Context(), onTheSubscription, "hand the note to a child", driver.emit)
+	}, nil, model.clock, sessionResume{}).run(t.Context(), onTheSubscription, "hand the note to a child", driver.emit)
 
 	running := ""
 	for _, framed := range driver.frames {
@@ -1065,9 +1065,9 @@ func childHeldInsideOneCall(t *testing.T) *appDriver {
 		clockedStep{waited: parentHeldFor, holds: heldInsideOneCall, decision: reply("the child did it")},
 	)
 	driver := driveApp(t)
-	appTurnOn(dir, func(runOpts) (appWire, error) {
+	newAppSession(dir, func(runOpts) (appWire, error) {
 		return wireOn(model), nil
-	}, nil, model.clock, sessionResume{})(t.Context(), onTheSubscription, "hand the note to a child", driver.emit)
+	}, nil, model.clock, sessionResume{}).run(t.Context(), onTheSubscription, "hand the note to a child", driver.emit)
 	return driver
 }
 
@@ -2036,7 +2036,7 @@ func TestEveryToolInTheRunRegistryRecordsACommandThatDoesNotRepeatItsName(t *tes
 		"web_search":         {notRunHere: "it reaches a paid search provider over the network"},
 	}
 
-	built, _, err := buildRunTools(dir, toolSetFull)
+	built, err := buildTestRunTools(dir, toolSetFull)
 	if err != nil {
 		t.Fatalf("building the run tools: %v", err)
 	}

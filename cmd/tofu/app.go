@@ -536,10 +536,6 @@ func newAppSession(dir string, open func(runOpts) (appWire, error), answers <-ch
 	}
 }
 
-func appTurnOn(dir string, open func(runOpts) (appWire, error), answers <-chan tui.Answer, now func() time.Time, resumed sessionResume) tui.Turn {
-	return newAppSession(dir, open, answers, now, resumed).run
-}
-
 func (s *appSession) startFresh() string {
 	s.id, s.carried = "", nil
 	return freshSessionNote

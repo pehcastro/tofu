@@ -37,9 +37,9 @@ func quotingTurn(t *testing.T, reference string) (turn.Config, turn.Row) {
 	store, recorded := sessionCarryingOneTurn(t)
 	opts := armOpts(t)
 	opts.task, opts.turnID = "say what you meant in [quote"+reference+"]", recorded
-	built, _, err := buildRunTools(opts.dir, opts.toolSet)
+	built, err := buildTestRunTools(opts.dir, opts.toolSet)
 	if err != nil {
-		t.Fatalf("buildRunTools: %v", err)
+		t.Fatalf("buildTestRunTools: %v", err)
 	}
 	model := &scriptedModel{decisions: []llm.Decision{
 		{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{
@@ -93,9 +93,9 @@ func TestTheThreeToolArmStaysThreeToolsWithNoQuoteInIt(t *testing.T) {
 	store, recorded := sessionCarryingOneTurn(t)
 	opts := armOpts(t, "--tools", toolSetThree)
 	opts.turnID = recorded
-	built, _, err := buildRunTools(opts.dir, opts.toolSet)
+	built, err := buildTestRunTools(opts.dir, opts.toolSet)
 	if err != nil {
-		t.Fatalf("buildRunTools: %v", err)
+		t.Fatalf("buildTestRunTools: %v", err)
 	}
 	config, _ := mustConfig(t, opts, built, runtime{spend: turn.SpendSubscription, sessions: store})
 	var named []string
