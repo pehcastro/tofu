@@ -8,6 +8,22 @@ Tofu is personal and not released, so the public interface that a version promis
 
 The minor number carries breaking changes, which is what 0.x means, and **there is never a 1.0.0**. The owner decided that on 2026-09-19: this stays 0.x forever, so the promise the version makes is the one 0.x already makes, that anything can break on a minor bump.
 
+## 0.4.19 - 2026-09-25
+
+A turn of more than one step finishes again, and a sub-agent hands back a contract and stays inside what it owns.
+
+### Added
+
+- **A sub-agent hands back a typed contract.** A child ends its answer with a `claims` list, each line carrying the command it ran, what that printed and whether it was met, and a `blocked` list for what it could not do.
+
+- **A sub-agent is refused a tree-wide command.** A child that runs `gofmt -l .` is told the parent runs it, and reports that rather than working around it.
+
+- **`tofu models` says what kind each row is and what pays for it**, `claude-sub/claude-opus-5 (kind llm, pays subscription)`, so the same model reached two ways reads as two different bills.
+
+### Fixed
+
+- **`tofu run` finishes a turn of more than one step.** A reply carrying a thinking signature and no thinking text was sent back with the text field missing, and Anthropic refused the next request.
+
 ## 0.4.18 - 2026-09-25
 
 The library follows the directory you point tofu at, and the screen stops committing markdown it has not finished reading.
