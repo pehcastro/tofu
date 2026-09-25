@@ -80,7 +80,7 @@ func Headers(options HeaderOptions) []Header {
 		}
 		headers := []Header{
 			{Name: "Accept", Value: accept},
-			{Name: "Accept-Encoding", Value: "gzip, deflate, br, zstd"},
+			{Name: "Accept-Encoding", Value: "gzip, deflate"},
 			{Name: "Connection", Value: "keep-alive"},
 			{Name: "Content-Type", Value: "application/json"},
 			{Name: "anthropic-version", Value: AnthropicAPIVersion},
@@ -125,6 +125,6 @@ func Headers(options HeaderOptions) []Header {
 		Header{Name: "Authorization", Value: "Bearer " + options.Token},
 		Header{Name: "x-app", Value: "cli"},
 		Header{Name: "Connection", Value: "keep-alive"},
-		Header{Name: "Accept-Encoding", Value: "gzip, deflate, br, zstd"},
+		Header{Name: "Accept-Encoding", Value: "gzip, deflate"},
 	)
 }

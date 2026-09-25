@@ -1,10 +1,12 @@
 package anthropic
 
 import (
+	"bytes"
 	"cmp"
 	"compress/flate"
 	"compress/gzip"
 	"context"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -172,37 +174,52 @@ func (w *Wire) post(ctx context.Context, dump Dump, oauth bool, onDelta func(str
 	defer func() { _ = response.Body.Close() }()
 
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		detail, _ := io.ReadAll(io.LimitReader(response.Body, konst.TransportErrorDetailBytes))
 		return Result{}, &transport.Error{
 			Kind:   transport.StatusKind(response.StatusCode),
 			Op:     "anthropic.Ask",
 			Status: response.StatusCode,
-			Detail: strings.TrimSpace(string(detail)),
+			Detail: errorDetail(response),
 		}
 	}
 
-	reader, err := decoded(response)
+	reader, err := decoded(normalizedEncoding(response.Header.Get("Content-Encoding")), response.Body)
 	if err != nil {
-		return Result{}, err
+		return Result{}, transport.Fail("anthropic.Ask", transport.KindProvider, err, "decoding the response")
 	}
 	defer func() { _ = reader.Close() }()
 	return ReadStream(reader, oauth, onDelta)
 }
 
-func decoded(response *http.Response) (io.ReadCloser, error) {
-	switch strings.ToLower(strings.TrimSpace(response.Header.Get("Content-Encoding"))) {
+func normalizedEncoding(header string) string {
+	return strings.ToLower(strings.TrimSpace(header))
+}
+
+func errorDetail(response *http.Response) string {
+	encoding := normalizedEncoding(response.Header.Get("Content-Encoding"))
+	raw, _ := io.ReadAll(io.LimitReader(response.Body, konst.TransportErrorDetailBytes))
+	reader, err := decoded(encoding, io.NopCloser(bytes.NewReader(raw)))
+	var text []byte
+	if err == nil {
+		text, err = io.ReadAll(reader)
+	}
+	if err != nil {
+		return fmt.Sprintf("the body is encoded as %q, %d bytes read, and could not be decoded: %v", encoding, len(raw), err)
+	}
+	return strings.TrimSpace(string(text))
+}
+
+func decoded(encoding string, body io.ReadCloser) (io.ReadCloser, error) {
+	switch encoding {
 	case "", "identity":
-		return response.Body, nil
+		return body, nil
 	case "gzip":
-		reader, err := gzip.NewReader(response.Body)
+		reader, err := gzip.NewReader(body)
 		if err != nil {
-			return nil, transport.Fail("anthropic.Ask", transport.KindProvider, err, "opening the gzip stream")
+			return nil, fmt.Errorf("opening the gzip stream: %w", err)
 		}
 		return reader, nil
 	case "deflate":
-		return flate.NewReader(response.Body), nil
+		return flate.NewReader(body), nil
 	}
-	return nil, transport.Fail("anthropic.Ask", transport.KindProvider, nil,
-		"the response is encoded as %q and this wire decodes only gzip and deflate",
-		response.Header.Get("Content-Encoding"))
+	return nil, fmt.Errorf("this wire decodes only gzip and deflate, not %q", encoding)
 }
