@@ -89,6 +89,39 @@ func (CheapDoneReview) Review(_ context.Context, child Row) (DoneDecision, error
 	return DoneDecision{Verdict: DoneReopen, Reason: "nothing in the child's row is evidence the work happened: not one tool call ran without failing"}, nil
 }
 
+type ContractDoneReview struct{}
+
+func (ContractDoneReview) Review(_ context.Context, child Row) (DoneDecision, error) {
+	contract := ContractOf(child)
+	switch {
+	case contract.NoTicket:
+		return DoneDecision{Verdict: DoneAccepted, Reason: "no ticket, so no acceptance lines and nothing to evaluate"}, nil
+	case contract.Omissions() > 0:
+		var missing []string
+		for _, claim := range contract.Claims {
+			if claim.Omitted() {
+				missing = append(missing, claim.Line)
+			}
+		}
+		reason := fmt.Sprintf("%d of %d acceptance lines carry no command and no output: %s",
+			len(missing), len(contract.Claims), strings.Join(missing, "; "))
+		return DoneDecision{Verdict: DoneReopen, Reason: reason}, nil
+	default:
+		return DoneDecision{Verdict: DoneAccepted, Reason: fmt.Sprintf("all %d acceptance lines carry a command and its output", len(contract.Claims))}, nil
+	}
+}
+
+func ContractOf(child Row) subagent.Contract {
+	prose := ""
+	for i := len(child.Steps) - 1; i >= 0; i-- {
+		if spoken := strings.TrimSpace(child.Steps[i].AssistantText); spoken != "" {
+			prose = spoken
+			break
+		}
+	}
+	return subagent.BuildContract(child.Task, prose, outcomeStoppedEarly(child.Outcome))
+}
+
 func (t *SpawnTool) decided(ctx context.Context, first Row) (DoneDecision, error) {
 	table := t.Methods
 	if table.Version == 0 {
@@ -259,9 +292,10 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 }
 
 func stoppedEarly(state subagent.State, outcome Outcome) bool {
-	if state == subagent.Parked {
-		return true
-	}
+	return state == subagent.Parked || outcomeStoppedEarly(outcome)
+}
+
+func outcomeStoppedEarly(outcome Outcome) bool {
 	switch outcome {
 	case OutcomeStepCap, OutcomeRetiredCostCap, OutcomeRetiredWallClockCap, OutcomeDecisionCap:
 		return true
@@ -309,7 +343,9 @@ func (t *SpawnTool) runRounds(outerCtx, childCtx context.Context, agent subagent
 	history := append(slices.Clone(child.History), resumable(first.Conversation)...)
 	for state == subagent.InReview && t.Review != nil {
 		last := &claims[len(claims)-1]
-		decision, err := t.decided(childCtx, *last)
+		reviewed := *last
+		reviewed.Task = agent.Brief
+		decision, err := t.decided(childCtx, reviewed)
 		if err != nil {
 			last.Warnings = append(last.Warnings, "the done review did not run, so the child's own claim stands: "+err.Error())
 			return claims, subagent.InReview, firstErr

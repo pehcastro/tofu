@@ -15,12 +15,13 @@ import (
 const doneReviewPoint = state.StopCheckRuleRef
 
 const (
-	doneArmOff   = "off"
-	doneArmCheap = "cheap"
-	doneArmTyped = "typed"
+	doneArmOff    = "off"
+	doneArmCheap  = "cheap"
+	doneArmScreen = "screen"
+	doneArmTyped  = "typed"
 )
 
-func doneArms() []string { return []string{doneArmOff, doneArmCheap, doneArmTyped} }
+func doneArms() []string { return []string{doneArmOff, doneArmCheap, doneArmScreen, doneArmTyped} }
 
 func newDoneReview(arm string) (turn.DoneReview, error) {
 	switch arm {
@@ -28,6 +29,8 @@ func newDoneReview(arm string) (turn.DoneReview, error) {
 		return nil, nil
 	case doneArmCheap:
 		return turn.CheapDoneReview{}, nil
+	case doneArmScreen:
+		return turn.ContractDoneReview{}, nil
 	case doneArmTyped:
 		return newTypedDoneReview()
 	}
@@ -78,6 +81,9 @@ func resolveStopCheckPoint() (battery, error) {
 }
 
 func (r typedDoneReview) Review(ctx context.Context, child turn.Row) (turn.DoneDecision, error) {
+	if screened, _ := (turn.ContractDoneReview{}).Review(ctx, child); screened.Verdict == turn.DoneReopen {
+		return screened, nil
+	}
 	built, builder, err := state.BuildStopCheck(doneState(child))
 	if err != nil {
 		return turn.DoneDecision{}, err
