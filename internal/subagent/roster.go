@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"slices"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -16,13 +17,14 @@ const (
 	Working State = iota
 	WaitingAnswer
 	InReview
+	Reopened
 	Parked
 	Errored
 	Finished
 )
 
 func States() []State {
-	return []State{Working, WaitingAnswer, InReview, Parked, Errored, Finished}
+	return []State{Working, WaitingAnswer, InReview, Reopened, Parked, Errored, Finished}
 }
 
 func (s State) String() string {
@@ -33,6 +35,8 @@ func (s State) String() string {
 		return "waiting_answer"
 	case InReview:
 		return "in_review"
+	case Reopened:
+		return "reopened"
 	case Parked:
 		return "parked"
 	case Errored:
@@ -50,11 +54,31 @@ type SubAgent struct {
 	Owns         []string
 	State        State
 	Report       string
+	Round        int
 	Started      time.Time
 	Active       time.Time
 	Steps        int
 	Calling      []string
 	CallsDropped int
+}
+
+type RoundCapError struct {
+	Ticket string
+	Cap    int
+}
+
+func (e RoundCapError) Error() string {
+	name := e.Ticket
+	if name == "" {
+		name = "this child"
+	}
+	return fmt.Sprintf("reopen refused: %s already reached the sub-agent round cap of %d", name, e.Cap)
+}
+
+type ReopenReasonError struct{}
+
+func (ReopenReasonError) Error() string {
+	return "reopen refused: a reopen needs a reason, and none was given"
 }
 
 type CollisionError struct {
@@ -89,9 +113,31 @@ func (r *Roster) Hold(agent SubAgent) error {
 			}
 		}
 	}
-	agent.State, agent.Active = Working, agent.Started
+	agent.State, agent.Active, agent.Round = Working, agent.Started, 1
 	r.agents = append(r.agents, agent)
 	return nil
+}
+
+func (r *Roster) Reopen(id, reason string) (int, error) {
+	reason = strings.TrimSpace(reason)
+	if reason == "" {
+		return 0, ReopenReasonError{}
+	}
+	r.held.Lock()
+	defer r.held.Unlock()
+	for i := range r.agents {
+		agent := &r.agents[i]
+		if agent.ID != id {
+			continue
+		}
+		if agent.Round >= konst.SubAgentMaxRounds {
+			return 0, RoundCapError{Ticket: TicketID(agent.Brief), Cap: konst.SubAgentMaxRounds}
+		}
+		agent.Round++
+		agent.State, agent.Report = Reopened, reason
+		return agent.Round, nil
+	}
+	return 0, fmt.Errorf("subagent: %s is not on the roster, so it cannot be reopened", id)
 }
 
 func (r *Roster) Stepped(id string, steps int, at time.Time, calling ...string) {

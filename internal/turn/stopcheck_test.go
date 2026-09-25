@@ -22,6 +22,7 @@ func reviewedChild(t *testing.T, named string) (*stubReview, []Row) {
 		spawnCall("call-1", "write the greeting under mine/", "mine/**"),
 		claimDecision("all done"),
 		claimDecision("done again"),
+		claimDecision("done a third time"),
 		messageDecision(),
 	})
 	spawn.Review = review
@@ -36,14 +37,18 @@ func reviewedChild(t *testing.T, named string) (*stubReview, []Row) {
 func TestTheTableSendingStopCheckToTheJudgedMethodActsOnTheAnswer(t *testing.T) {
 	review, children := reviewedChild(t, string(method.Judged))
 
-	if review.reviewed != 1 {
-		t.Fatalf("the judged arm ran %d times", review.reviewed)
+	if review.reviewed != 3 {
+		t.Fatalf("the judged arm ran %d times, want 3: a review that always reopens should run out against the round cap, not stop early", review.reviewed)
 	}
-	if len(children) != 2 || children[1].ID != "turn-parent-c1-r" {
-		t.Fatalf("the reopen verdict did not reopen the child: %d rows", len(children))
+	if len(children) != 3 || children[1].ID != "turn-parent-c1-r2" || children[2].ID != "turn-parent-c1-r3" {
+		t.Fatalf("the reopen verdict did not carry the child to the round cap: %d rows", len(children))
 	}
 	if !strings.Contains(children[1].Task, "work_remains 0.93") {
 		t.Fatalf("the reopened child was not told the answer that reopened it: %q", children[1].Task)
+	}
+	warned := strings.Join(children[2].Warnings, " ")
+	if !strings.Contains(warned, "round cap") {
+		t.Fatalf("the fourth round was not refused with the cap named: %q", warned)
 	}
 }
 

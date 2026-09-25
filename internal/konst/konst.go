@@ -103,6 +103,7 @@ const (
 	SubAgentMissionChars    = 60
 	SubAgentMaxProcessDepth = 1
 	SubAgentCallsWatched    = 17
+	SubAgentMaxRounds       = 3
 )
 
 const (

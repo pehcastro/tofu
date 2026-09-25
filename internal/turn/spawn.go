@@ -234,19 +234,11 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 	childCtx, release := context.WithCancel(ctx)
 	defer release()
 	t.spawned++
-	row, runErr := Run(childCtx, child)
-	claims, state := []Row{row}, subagent.InReview
-	switch {
-	case ctx.Err() != nil:
-		state = subagent.Parked
-	case runErr != nil:
-		state = subagent.Errored
-	default:
-		claims, state = t.reviewed(ctx, child, row)
-	}
+	claims, state, runErr := t.runRounds(ctx, childCtx, agent, childID, child)
 	asked := boundary.Asked()
 	if len(asked) > 0 && state != subagent.Errored && state != subagent.Parked {
 		state = subagent.WaitingAnswer
+		t.publish(agent, claims, state)
 	}
 	t.retain(append(claims, nested.children...))
 	for _, claim := range claims {
@@ -286,33 +278,76 @@ func (t *SpawnTool) retain(rows []Row) {
 	}
 }
 
-func (t *SpawnTool) reviewed(ctx context.Context, child Config, first Row) ([]Row, subagent.State) {
-	if t.Review == nil {
-		return []Row{first}, subagent.InReview
+func roundState(outerCtx context.Context, runErr error) subagent.State {
+	switch {
+	case outerCtx.Err() != nil:
+		return subagent.Parked
+	case runErr != nil:
+		return subagent.Errored
+	default:
+		return subagent.InReview
 	}
-	decision, err := t.decided(ctx, first)
-	if err != nil {
-		first.Warnings = append(first.Warnings, "the done review did not run, so the child's own claim stands: "+err.Error())
-		return []Row{first}, subagent.InReview
+}
+
+func resumable(messages []llm.Message) []llm.Message {
+	stripped := slices.Clone(messages)
+	for i := range stripped {
+		stripped[i].Thinking = llm.Thinking{}
 	}
-	if decision.ID != "" {
-		first.DecisionIDs = append(first.DecisionIDs, decision.ID)
-	}
-	switch decision.Verdict {
-	case DoneAccepted:
-		return []Row{first}, subagent.Finished
-	case DoneReopen:
-		child.Task = first.Task + "\n\nYou reported this finished and the done review did not believe you: " + decision.Reason
-		child.NewID = func() string { return first.ID + "-r" }
-		second, err := Run(ctx, child)
+	return Sendable(stripped)
+}
+
+func (t *SpawnTool) publish(agent subagent.SubAgent, claims []Row, state subagent.State) {
+	t.roster.Reached(agent.ID, state, reportOf(agent, claims, state).Text())
+}
+
+func (t *SpawnTool) runRounds(outerCtx, childCtx context.Context, agent subagent.SubAgent, childID string, child Config) ([]Row, subagent.State, error) {
+	first, firstErr := Run(childCtx, child)
+	claims := []Row{first}
+	state := roundState(outerCtx, firstErr)
+	t.publish(agent, claims, state)
+	history := append(slices.Clone(child.History), resumable(first.Conversation)...)
+	for state == subagent.InReview && t.Review != nil {
+		last := &claims[len(claims)-1]
+		decision, err := t.decided(childCtx, *last)
 		if err != nil {
-			first.Warnings = append(first.Warnings, "the child was re-opened and did not run again, so its first claim stands: "+err.Error())
-			return []Row{first}, subagent.Errored
+			last.Warnings = append(last.Warnings, "the done review did not run, so the child's own claim stands: "+err.Error())
+			return claims, subagent.InReview, firstErr
 		}
-		second.DecisionIDs = append(second.DecisionIDs, decision.ID)
-		return []Row{first, second}, subagent.InReview
+		if decision.ID != "" {
+			last.DecisionIDs = append(last.DecisionIDs, decision.ID)
+		}
+		if decision.Verdict == DoneAccepted {
+			state = subagent.Finished
+			t.publish(agent, claims, state)
+			return claims, state, firstErr
+		}
+		if decision.Verdict != DoneReopen {
+			panic("turn: unknown done verdict " + string(decision.Verdict))
+		}
+		next, reopenErr := t.roster.Reopen(childID, decision.Reason)
+		if reopenErr != nil {
+			last.Warnings = append(last.Warnings, reopenErr.Error())
+			t.publish(agent, claims, subagent.InReview)
+			return claims, subagent.InReview, firstErr
+		}
+		t.roster.Reached(childID, subagent.Working, "")
+		child.History = history
+		child.Task = "You reported this finished and the done review did not believe you: " + decision.Reason
+		child.NewID = func() string { return childID + "-r" + strconv.Itoa(next) }
+		reRow, reErr := Run(childCtx, child)
+		claims = append(claims, reRow)
+		history = append(slices.Clone(history), resumable(reRow.Conversation)...)
+		if reErr != nil {
+			claims[len(claims)-1].Warnings = append(claims[len(claims)-1].Warnings,
+				"the child was re-opened and did not run again, so its earlier claim stands: "+reErr.Error())
+			state = subagent.Errored
+		} else {
+			state = roundState(outerCtx, nil)
+		}
+		t.publish(agent, claims, state)
 	}
-	panic("turn: unknown done verdict " + string(decision.Verdict))
+	return claims, state, firstErr
 }
 
 type ownedTool struct {
