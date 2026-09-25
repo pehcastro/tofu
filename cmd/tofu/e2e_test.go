@@ -119,7 +119,7 @@ func TestE2ETheCredentialGuardRefusesAPlantedFileWithNoUSERPROFILE(t *testing.T)
 	if err := os.MkdirAll(plant, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { os.RemoveAll(plant) })
+	t.Cleanup(func() { _ = os.RemoveAll(plant) })
 	writeFile(t, plant, ".env", "OPENROUTER_KEY=planted-not-real\n")
 	plantedEnv, err := filepath.Abs(filepath.Join(plant, ".env"))
 	if err != nil {
