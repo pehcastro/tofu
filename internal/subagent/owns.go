@@ -177,15 +177,35 @@ func globForms(glob string) []string {
 	return []string{glob}
 }
 
+func ownedDirectory(glob string) (string, bool) {
+	if dir, ok := strings.CutSuffix(glob, "/**"); ok {
+		return dir, true
+	}
+	if strings.ContainsAny(glob, "*") {
+		return "", false
+	}
+	return gopath.Dir(glob), true
+}
+
+func withinPackageDirectory(glob, target string) bool {
+	pattern, ok := strings.CutSuffix(target, "/...")
+	if !ok || pattern == "" {
+		return false
+	}
+	dir, ok := ownedDirectory(glob)
+	return ok && dir == pattern
+}
+
 func overlap(a, b string) bool {
-	for _, left := range globForms(normalizePath(a)) {
-		for _, right := range globForms(normalizePath(b)) {
-			if sharesAPath(left, right) {
+	left, right := normalizePath(a), normalizePath(b)
+	for _, l := range globForms(left) {
+		for _, r := range globForms(right) {
+			if sharesAPath(l, r) {
 				return true
 			}
 		}
 	}
-	return false
+	return withinPackageDirectory(left, right) || withinPackageDirectory(right, left)
 }
 
 func Matches(path string, owns []string) (bool, error) {
