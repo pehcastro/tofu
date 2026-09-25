@@ -168,10 +168,14 @@ func TestADatedLibraryIdStillFindsTheUndatedRegistryEntry(t *testing.T) {
 	}
 }
 
-func TestEveryModelTheAccountCanSendTakesAWindowFromTheTable(t *testing.T) {
+func TestEveryChatModelTheAccountCanSendTakesAWindowFromTheTable(t *testing.T) {
 	library, registry := shippedLibrary(t), shippedTable(t)
-	answered := 0
+	answered, chat := 0, 0
 	for _, model := range library.Models {
+		if model.Kind != KindLLM {
+			continue
+		}
+		chat++
 		tokens, source := WindowFor(model, registry, Served{})
 		if tokens > 0 {
 			answered++
@@ -181,10 +185,10 @@ func TestEveryModelTheAccountCanSendTakesAWindowFromTheTable(t *testing.T) {
 		}
 		t.Logf("%-40s %8d %s", model.Slug(), tokens, source)
 	}
-	if answered == len(library.Models) {
-		t.Fatalf("all %d models have a window, and the case worth watching is the one that has none", answered)
+	if answered == chat {
+		t.Fatalf("all %d chat models have a window, and the case worth watching is the one that has none", answered)
 	}
-	t.Logf("%d of %d models the library ships take a window from %s", answered, len(library.Models), registry.From)
+	t.Logf("%d of %d chat models the library ships take a window from %s", answered, chat, registry.From)
 }
 
 func TestReconcileNamesAWindowThePublishedTableDoesNotMatch(t *testing.T) {

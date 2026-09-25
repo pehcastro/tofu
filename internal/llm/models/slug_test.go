@@ -14,10 +14,12 @@ func TestEveryShippedModelPaidBySubscriptionCarriesTheSuffix(t *testing.T) {
 	if len(library.Models) == 0 {
 		t.Fatal("the shipped library loaded no models at all")
 	}
+	checked := 0
 	for _, model := range library.Models {
-		if model.Subscription == "" {
-			t.Fatalf("%s carries no subscription, and every shipped model is paid by one", model.VendorSlug())
+		if model.Pays() != PaysSubscription {
+			continue
 		}
+		checked++
 		if !strings.HasSuffix(string(model.Subscription), "-sub") {
 			t.Fatalf("%s is paid by %q, and a subscription says so in its own name", model.VendorSlug(), model.Subscription)
 		}
@@ -25,6 +27,9 @@ func TestEveryShippedModelPaidBySubscriptionCarriesTheSuffix(t *testing.T) {
 		if model.Slug() != want {
 			t.Fatalf("%s reads %q, want %q", model.VendorSlug(), model.Slug(), want)
 		}
+	}
+	if checked == 0 {
+		t.Fatal("no shipped model is paid by a subscription, so this proves nothing")
 	}
 }
 

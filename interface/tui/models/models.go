@@ -57,6 +57,9 @@ type Model struct {
 func Build(loaded library.Library, sources []Source) Model {
 	rows := map[library.Subscription][]Row{}
 	for _, one := range loaded.Models {
+		if one.Kind != library.KindLLM {
+			continue
+		}
 		rows[one.Subscription] = append(rows[one.Subscription], Row{
 			Slug:   one.Slug(),
 			Use:    one.Use,

@@ -1,6 +1,7 @@
 package models
 
 import (
+	"cmp"
 	"fmt"
 	"io/fs"
 	"sort"
@@ -100,7 +101,7 @@ type Contract struct {
 
 func Contracts() []Contract {
 	return []Contract{
-		{Kind: modelsDir, Required: []string{"use"}, Optional: []string{"subscription", "reason", "window"}},
+		{Kind: modelsDir, Required: []string{"use"}, Optional: []string{"subscription", "reason", "window", "kind"}},
 		{Kind: subscriptionsDir, Required: []string{"provider", "wire", "windows"}, Optional: []string{"not_models"}},
 		{Kind: rolesDir, Required: []string{"model"}},
 	}
@@ -259,8 +260,10 @@ func buildSubscription(id string, from *sheet) (SubscriptionSpec, *Broken) {
 		}
 		return spec, &Broken{File: from.file, Why: fmt.Sprintf("%q is not a subscription this build knows, it knows %s", id, strings.Join(known, ", "))}
 	}
-	if !spec.Provider.valid() {
-		return spec, &Broken{File: from.file, Field: "provider", Why: fmt.Sprintf("the vendor is %s or %s, found %q", Anthropic, OpenAI, spec.Provider)}
+	switch spec.Provider {
+	case Anthropic, OpenAI:
+	default:
+		return spec, &Broken{File: from.file, Field: "provider", Why: fmt.Sprintf("a subscription is backed by %s or %s, found %q", Anthropic, OpenAI, spec.Provider)}
 	}
 	if spec.Wire == "" {
 		return spec, &Broken{File: from.file, Field: "wire", Why: "the subscription names no wire, so tofu cannot tell which credential and which protocol reach it"}
@@ -278,11 +281,15 @@ func buildModel(slug string, from *sheet, known map[Subscription]SubscriptionSpe
 		ID:           name,
 		Subscription: Subscription(from.values["subscription"]),
 		Use:          Use(from.values["use"]),
+		Kind:         Kind(cmp.Or(from.values["kind"], string(KindLLM))),
 		Reason:       from.values["reason"],
 		File:         from.file,
 	}
 	if !model.Provider.valid() {
-		return model, &Broken{File: from.file, Why: fmt.Sprintf("the vendor is %s or %s, found %q", Anthropic, OpenAI, model.Provider)}
+		return model, &Broken{File: from.file, Why: fmt.Sprintf("the vendor is %s, %s, %s or %s, found %q", Anthropic, OpenAI, TypeSafe, OpenRouter, model.Provider)}
+	}
+	if !model.Kind.valid() {
+		return model, &Broken{File: from.file, Field: "kind", Why: fmt.Sprintf("kind is %s or %s, found %q", KindLLM, KindClassifier, model.Kind)}
 	}
 	if model.Subscription != "" {
 		spec, carried := known[model.Subscription]

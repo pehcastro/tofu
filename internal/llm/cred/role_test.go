@@ -7,14 +7,14 @@ import (
 	"testing"
 )
 
-func TestARegisteredJevProviderMayNotSendAPrompt(t *testing.T) {
+func TestARegisteredClassifierVendorMayNotSendAPrompt(t *testing.T) {
 	for _, vendor := range []Vendor{OpenRouter, TypeSafe} {
 		_, err := NewLLMKey(vendor, "a-secret-that-is-not-real")
 		if err == nil {
-			t.Fatalf("%s built a prompting credential, and it is registered as a %s", vendor, JevProvider)
+			t.Fatalf("%s built a prompting credential, and it is registered as %s", vendor, RoleClassifier)
 		}
-		if !strings.Contains(err.Error(), string(JevProvider)) {
-			t.Fatalf("%s refused with %q, and the message must name the role", vendor, err)
+		if !strings.Contains(err.Error(), string(RoleLLM)) || !strings.Contains(err.Error(), string(RoleClassifier)) {
+			t.Fatalf("%s refused with %q, and the message must name both the kind asked for and the kind held", vendor, err)
 		}
 	}
 }

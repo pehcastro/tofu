@@ -8,8 +8,8 @@ import (
 type Role string
 
 const (
-	JevProvider Role = "jev-provider"
-	LLMProvider Role = "llm-provider"
+	RoleClassifier Role = "classifier"
+	RoleLLM        Role = "llm"
 )
 
 type Vendor string
@@ -30,7 +30,7 @@ type LLMKey struct {
 func roleOf(vendor Vendor) (Role, error) {
 	switch vendor {
 	case OpenRouter, TypeSafe:
-		return JevProvider, nil
+		return RoleClassifier, nil
 	}
 	return "", fmt.Errorf("cred: %q is not a registered key vendor", vendor)
 }
@@ -40,8 +40,8 @@ func NewJevKey(vendor Vendor, secret string) (JevKey, error) {
 	if err != nil {
 		return JevKey{}, err
 	}
-	if role != JevProvider {
-		return JevKey{}, fmt.Errorf("cred: %s is registered as a %s and may not buy a typed decision", vendor, role)
+	if role != RoleClassifier {
+		return JevKey{}, fmt.Errorf("cred: %s asked for a %s credential, %s is registered as %s", vendor, RoleClassifier, vendor, role)
 	}
 	secret = strings.TrimSpace(secret)
 	if secret == "" {
@@ -55,8 +55,8 @@ func NewLLMKey(vendor Vendor, secret string) (LLMKey, error) {
 	if err != nil {
 		return LLMKey{}, err
 	}
-	if role != LLMProvider {
-		return LLMKey{}, fmt.Errorf("cred: %s is registered as a %s and may not send a prompt", vendor, role)
+	if role != RoleLLM {
+		return LLMKey{}, fmt.Errorf("cred: %s asked for a %s credential, %s is registered as %s", vendor, RoleLLM, vendor, role)
 	}
 	secret = strings.TrimSpace(secret)
 	if secret == "" {

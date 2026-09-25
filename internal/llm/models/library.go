@@ -8,17 +8,41 @@ import (
 type Provider string
 
 const (
-	Anthropic Provider = "anthropic"
-	OpenAI    Provider = "openai"
+	Anthropic  Provider = "anthropic"
+	OpenAI     Provider = "openai"
+	TypeSafe   Provider = "typesafe"
+	OpenRouter Provider = "openrouter"
 )
 
 func (p Provider) valid() bool {
 	switch p {
-	case Anthropic, OpenAI:
+	case Anthropic, OpenAI, TypeSafe, OpenRouter:
 		return true
 	}
 	return false
 }
+
+type Kind string
+
+const (
+	KindLLM        Kind = "llm"
+	KindClassifier Kind = "classifier"
+)
+
+func (k Kind) valid() bool {
+	switch k {
+	case KindLLM, KindClassifier:
+		return true
+	}
+	return false
+}
+
+type Pays string
+
+const (
+	PaysSubscription Pays = "subscription"
+	PaysKey          Pays = "key"
+)
 
 type Subscription string
 
@@ -71,6 +95,7 @@ type Model struct {
 	Subscription Subscription
 	Windows      []string
 	Use          Use
+	Kind         Kind
 	Reason       string
 	File         string
 }
@@ -83,6 +108,13 @@ func (m Model) Slug() string {
 }
 
 func (m Model) VendorSlug() string { return string(m.Provider) + "/" + m.ID }
+
+func (m Model) Pays() Pays {
+	if m.Subscription != "" {
+		return PaysSubscription
+	}
+	return PaysKey
+}
 
 func (m Model) WindowText() string { return strings.Join(m.Windows, " and ") }
 

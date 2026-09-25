@@ -81,6 +81,8 @@ type modelReport struct {
 	ID            string   `json:"id"`
 	Subscription  string   `json:"subscription"`
 	Use           string   `json:"use"`
+	Kind          string   `json:"kind"`
+	Pays          string   `json:"pays"`
 	Windows       []string `json:"windows"`
 	ContextTokens int      `json:"context_tokens,omitempty"`
 	WindowFrom    string   `json:"window_from,omitempty"`
@@ -177,6 +179,8 @@ func modelsOf(library models.Library, registry models.Registry) modelsReport {
 			ID:            model.ID,
 			Subscription:  string(model.Subscription),
 			Use:           string(model.Use),
+			Kind:          string(model.Kind),
+			Pays:          string(model.Pays()),
 			Windows:       model.Windows,
 			ContextTokens: contextTokens,
 			WindowFrom:    windowFrom,
@@ -206,6 +210,12 @@ func modelsText(library models.Library, report modelsReport, shade palette) stri
 			body.WriteString(line + "\n")
 		}
 	}
+	if lines := keyPaidLines(report); len(lines) > 0 {
+		body.WriteString("\n")
+		for _, line := range lines {
+			body.WriteString(line + "\n")
+		}
+	}
 	body.WriteString("\n")
 	for _, line := range wrapped("windows", strconv.Itoa(report.Windowed)+" of "+strconv.Itoa(len(report.Models))+
 		" models take a context window from "+report.Table+", and "+models.RefreshVerb+" reads the table again") {
@@ -223,10 +233,24 @@ func modelsText(library models.Library, report modelsReport, shade palette) stri
 }
 
 func withRoles(model modelReport) string {
+	named := model.Slug + " (kind " + model.Kind + ", pays " + model.Pays + ")"
 	if len(model.Roles) == 0 {
-		return model.Slug
+		return named
 	}
-	return model.Slug + " [" + strings.Join(model.Roles, " and ") + "]"
+	return named + " [" + strings.Join(model.Roles, " and ") + "]"
+}
+
+func keyPaidLines(report modelsReport) []string {
+	var lines []string
+	label := "key"
+	for _, model := range report.Models {
+		if model.Subscription != "" {
+			continue
+		}
+		lines = append(lines, wrapped(label, withRoles(model)+", use "+model.Use)...)
+		label = ""
+	}
+	return lines
 }
 
 func subscriptionLines(report modelsReport, spec models.SubscriptionSpec) []string {
