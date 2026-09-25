@@ -14,7 +14,16 @@ import (
 const EveryToolIsRelativeToTheWorkingDirectory = "you are working inside one directory. every path you name is relative to it and nothing above it exists. "
 
 const SpawnAddendum = "spawn hands one piece of work to a child with its own context and its own list of paths it may write, " +
-	"and returns what the child did rather than its transcript: use it when a piece of the task is separable and its paths do not overlap another child's."
+	"and returns what the child did rather than its transcript: use it when a piece of the task is separable and its paths do not overlap another child's. " +
+	ContractAddendum
+
+const ContractAddendum = "if you were spawned as a child and your own brief names a ticket with an ## Acceptance section, finish with a fenced json block: " +
+	`{"claims": [{"line": "<an acceptance line, copied exactly as given>", "command": "<the command you ran for it>", "output": "<what that command printed>", "met": true}], "blocked": ["<a line you could not attempt, and why>"]}` +
+	". every acceptance line needs the real command that proved it and the real output it printed, whatever met says: a line with no command and no output behind it is counted as omitted, not as met. " +
+	"an empty output is still a pass when the command ran and printed nothing, such as a formatter finding nothing to complain about. " +
+	"if your reply already shows another fenced json block, such as the contents of a file you edited, put this one after it: the last fenced json block in your reply is read as the contract, and an earlier one is not. " +
+	"a child spawned with no ticket, or whose brief has no ## Acceptance section, sends no such block. " +
+	"the shape is at library/general/references/contract.md."
 
 const PreferTheToolOverTheShell = "prefer the tool that does the thing over a shell command that imitates it: " +
 	"project_report answers what is this repository in one call, glob finds files by name, " +
