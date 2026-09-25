@@ -680,6 +680,8 @@ func TestAToolResultThatArrivesAfterTheTurnIsStoppedStillReachesTheView(t *testi
 	}
 }
 
+const shellStartGraceMillis = 1000
+
 func screenAfterTwoInterrupts(t *testing.T, name, command string) string {
 	t.Helper()
 	dir := drivenProject(t)
@@ -689,16 +691,17 @@ func screenAfterTwoInterrupts(t *testing.T, name, command string) string {
 	}
 	deck := written(t, dir, name+".cassette",
 		`{"text":"running the shell","tools":[{"name":"bash","args":{"command":"`+command+`"}}]}`+"\n")
-	script := written(t, dir, name+".drive", strings.Join([]string{
+	steps := []string{
 		"wait type a task and press enter",
 		"type run the shell",
 		"key enter",
 		"wait working   bash",
-		"key ctrl+c",
-		"key ctrl+c",
-		"wait cooked for",
-		"screen",
-	}, "\n"))
+	}
+	for range shellStartGraceMillis / konst.DriveSettleMillis {
+		steps = append(steps, "wait working   bash")
+	}
+	steps = append(steps, "key ctrl+c", "key ctrl+c", "wait cooked for", "screen")
+	script := written(t, dir, name+".drive", strings.Join(steps, "\n"))
 	var out bytes.Buffer
 	if code := driveVerb([]string{script, "--cassette", deck, "--plain", "--timeout", "60s"}, strings.NewReader(""), &out, &errOut); code != exitOK {
 		t.Fatalf("tofu drive exited %d: %s", code, errOut.String())
