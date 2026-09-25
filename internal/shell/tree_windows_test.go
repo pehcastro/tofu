@@ -90,7 +90,7 @@ func attemptShellUnderAJob(t *testing.T) (job windows.Handle, cmd *exec.Cmd, chi
 		t.Fatal(err)
 	}
 	defer func() { _ = reader.Close() }()
-	cmd = exec.Command(shell, "-c", "sleep 30 & echo listening on :3000; wait")
+	cmd = exec.Command(shell, "-c", "sleep 10 & echo listening on :3000; wait")
 	cmd.Dir = t.TempDir()
 	cmd.Stdout, cmd.Stderr = writer, writer
 	if err := spawnSuspended(cmd); err != nil {
@@ -165,7 +165,7 @@ func TestEveryProcessTheShellSpawnsIsAJobMemberBecauseItCannotRunBeforeItIsAdopt
 
 func TestKillReturnsOnlyAfterEveryProcessOfTheTreeHasExited(t *testing.T) {
 	r := registry(t)
-	started, err := r.Start(t.TempDir(), "dev-server", strings.Repeat("sleep 30 & ", backgroundDescendants)+"echo listening on :3000; wait")
+	started, err := r.Start(t.TempDir(), "dev-server", strings.Repeat("sleep 10 & ", backgroundDescendants)+"echo listening on :3000; wait")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -208,7 +208,7 @@ func TestKillReturnsOnlyAfterEveryProcessOfTheTreeHasExited(t *testing.T) {
 
 func TestAJobNameHeldOpenAfterItsTreeDiedStillReportsGone(t *testing.T) {
 	r := registry(t)
-	started, err := r.Start(t.TempDir(), "dev-server", "sleep 30")
+	started, err := r.Start(t.TempDir(), "dev-server", "sleep 10")
 	if err != nil {
 		t.Fatal(err)
 	}

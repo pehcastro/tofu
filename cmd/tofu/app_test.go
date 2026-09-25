@@ -707,7 +707,7 @@ func screenAfterTwoInterrupts(t *testing.T, name, command string) string {
 }
 
 func TestAShellStoppedPartWayThroughShowsWhatItPrintedAndSaysNoResultOnlyWhenItPrintedNothing(t *testing.T) {
-	printed := screenAfterTwoInterrupts(t, "printing", "printf HALFWAY; sleep 6")
+	printed := screenAfterTwoInterrupts(t, "printing", "printf HALFWAY; sleep 3")
 	if said := strings.Count(printed, "HALFWAY"); said < 2 {
 		t.Errorf("HALFWAY appears %d times, so the call is drawn without the output it had already printed:\n%s", said, printed)
 	}
@@ -716,7 +716,7 @@ func TestAShellStoppedPartWayThroughShowsWhatItPrintedAndSaysNoResultOnlyWhenItP
 	}
 	t.Log("\n" + printed)
 
-	silent := screenAfterTwoInterrupts(t, "silent", "sleep 6")
+	silent := screenAfterTwoInterrupts(t, "silent", "sleep 3")
 	if !strings.Contains(silent, "no result") {
 		t.Errorf("a killed shell printed nothing and the chat claims something came back:\n%s", silent)
 	}
@@ -1881,14 +1881,14 @@ func TestTheEndOfASessionNamesEachProcessItStops(t *testing.T) {
 		t.Skip("starts a real process")
 	}
 	registry := shell.OpenAt(filepath.Join(t.TempDir(), "shells"))
-	if _, err := registry.Start(t.TempDir(), "dev-server", "sleep 30"); err != nil {
+	if _, err := registry.Start(t.TempDir(), "dev-server", "sleep 10"); err != nil {
 		t.Fatalf("starting a background process: %v", err)
 	}
 	t.Cleanup(func() { _ = registry.Kill("dev-server") })
 
 	line := sessionEndLine(registry, nil)
 
-	if !strings.Contains(line, "dev-server") || !strings.Contains(line, "sleep 30") {
+	if !strings.Contains(line, "dev-server") || !strings.Contains(line, "sleep 10") {
 		t.Fatalf("the line printed on the way out is %q, and it never names the process that stops with the session", line)
 	}
 }

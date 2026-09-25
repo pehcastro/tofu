@@ -62,7 +62,7 @@ func TestADrivenScriptSendsATaskAndPrintsWhatTheScreenShowed(t *testing.T) {
 	}
 }
 
-const sleepingCassette = `{"text":"waiting on the shell","tools":[{"name":"bash","args":{"command":"sleep 6"}}]}
+const sleepingCassette = `{"text":"waiting on the shell","tools":[{"name":"bash","args":{"command":"sleep 3"}}]}
 {"text":"THE ANSWER AFTER THE CANCEL"}
 `
 
