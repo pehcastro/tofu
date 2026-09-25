@@ -15,19 +15,27 @@ func Boundary(content string) int {
 		if closedFence {
 			fenceOpen = !fenceOpen
 		}
+		lineStart := start
 		end := index + 1
 		start = end
 		switch {
 		case fenceOpen:
 		case closedFence:
 			boundary = end
-		case strings.TrimSpace(line) == "" && !opensConstruct(lastNonBlankLine(content[:index])):
+		case strings.TrimSpace(line) == "" && safeBlankBoundary(content, index, end):
 			boundary = end
-		case isHeading(line):
+		case isHeading(line) && !opensConstruct(lastNonBlankLine(content[:lineStart])):
 			boundary = end
 		}
 	}
 	return boundary
+}
+
+func safeBlankBoundary(content string, index, boundary int) bool {
+	if opensConstruct(lastNonBlankLine(content[:index])) {
+		return false
+	}
+	return !isSetextUnderline(firstNonBlankLine(content[boundary:]))
 }
 
 func isFenceLine(line string) bool {
@@ -71,6 +79,15 @@ func lastNonBlankLine(s string) string {
 	return ""
 }
 
+func firstNonBlankLine(s string) string {
+	for _, line := range strings.Split(s, "\n") {
+		if strings.TrimSpace(line) != "" {
+			return line
+		}
+	}
+	return ""
+}
+
 func opensConstruct(line string) bool {
 	if strings.HasPrefix(line, "    ") || strings.HasPrefix(line, "\t") {
 		return true
@@ -83,8 +100,29 @@ func opensConstruct(line string) bool {
 		return true
 	case isListMarker(trimmed):
 		return true
+	case strings.ContainsRune(line, '|'):
+		return true
+	case isSetextUnderline(trimmed):
+		return true
 	}
 	return false
+}
+
+func isSetextUnderline(line string) bool {
+	trimmed := strings.TrimSpace(line)
+	if trimmed == "" {
+		return false
+	}
+	char := trimmed[0]
+	if char != '=' && char != '-' {
+		return false
+	}
+	for index := 0; index < len(trimmed); index++ {
+		if trimmed[index] != char {
+			return false
+		}
+	}
+	return true
 }
 
 func isListMarker(line string) bool {
