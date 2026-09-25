@@ -194,6 +194,50 @@ func ScoreRiskCut(pol gate.Rule, rows []AnswerRow, cut float64) (CutScore, error
 	})
 }
 
+const (
+	MissedBlockCost = 10.0
+	FalseBlockCost  = 1.0
+)
+
+func (s CutScore) WeightedCost(missCost, falseCost float64) float64 {
+	missed := s.Blocks - s.CaughtBlock
+	return missCost*float64(missed) + falseCost*float64(s.FalseBlock)
+}
+
+type WeightedFit struct {
+	MissCost  float64
+	FalseCost float64
+	Curve     []CutScore
+	Chosen    float64
+	OnFit     CutScore
+	OnVerify  CutScore
+}
+
+func FitRiskCutWeighted(pol gate.Rule, fit, verify []AnswerRow, missCost, falseCost float64) (WeightedFit, error) {
+	result := WeightedFit{MissCost: missCost, FalseCost: falseCost}
+	curve, err := riskCurve(pol, fit)
+	if err != nil {
+		return WeightedFit{}, err
+	}
+	result.Curve = curve
+	best := curve[0]
+	bestCost := best.WeightedCost(missCost, falseCost)
+	for _, score := range curve[1:] {
+		cost := score.WeightedCost(missCost, falseCost)
+		tie := cost == bestCost && score.FalseBlock < best.FalseBlock
+		if cost < bestCost || tie {
+			best, bestCost = score, cost
+		}
+	}
+	result.Chosen, result.OnFit = best.Cut, best
+	onVerify, err := ScoreRiskCut(pol, verify, best.Cut)
+	if err != nil {
+		return WeightedFit{}, err
+	}
+	result.OnVerify = onVerify
+	return result, nil
+}
+
 type BudgetFit struct {
 	AllowedFalse int
 	Chosen       float64

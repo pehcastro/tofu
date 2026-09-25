@@ -115,6 +115,16 @@ func TestTheGateIsScoredAgainstAlwaysProceedOnBothHalves(t *testing.T) {
 	}
 }
 
+func separationDirection(p float64, gateWins, otherWins int) string {
+	if p >= separationAlpha {
+		return "indistinguishable from always-proceed"
+	}
+	if otherWins > gateWins {
+		return "separated, the gate is worse"
+	}
+	return "separated, the gate is better"
+}
+
 func TestTheFitUnderAFalseBlockBudgetIsScoredOnTheVerifyHalf(t *testing.T) {
 	pol, _ := shippedGate(t)
 	fit, verify := calibrationHalves(t)
@@ -128,13 +138,7 @@ func TestTheFitUnderAFalseBlockBudgetIsScoredOnTheVerifyHalf(t *testing.T) {
 			continue
 		}
 		p := twoSidedSignP(result.OnVerify.CaughtBlock, result.OnVerify.FalseBlock)
-		direction := "indistinguishable from always-proceed"
-		if p < separationAlpha {
-			direction = "separated, the gate is better"
-			if result.OnVerify.FalseBlock > result.OnVerify.CaughtBlock {
-				direction = "separated, the gate is worse"
-			}
-		}
+		direction := separationDirection(p, result.OnVerify.CaughtBlock, result.OnVerify.FalseBlock)
 		t.Logf("budget %4.0f%% allows %2d false: cut %.3f, fit caught %d/%d false %2d, verify caught %d/%d false %2d, verify %d/%d against always-proceed %d/%d, sign p %.4f, %s",
 			100*budget, result.AllowedFalse, result.Chosen,
 			result.OnFit.CaughtBlock, result.OnFit.Blocks, result.OnFit.FalseBlock,
@@ -226,6 +230,42 @@ func TestTheCalibrationFileRecordsTheFitItClaims(t *testing.T) {
 	if recorded.BlocksCaughtVerify != result.OnVerify.CaughtBlock || recorded.BlocksVerify != result.OnVerify.Blocks {
 		t.Errorf("the file says %d of %d blocks caught and the fit computes %d of %d",
 			recorded.BlocksCaughtVerify, recorded.BlocksVerify, result.OnVerify.CaughtBlock, result.OnVerify.Blocks)
+	}
+}
+
+func TestTheWeightedFitBeatsNeverBlockingOnItsOwnCost(t *testing.T) {
+	pol, _ := shippedGate(t)
+	fit, _ := calibrationHalves(t)
+	result, err := FitRiskCutWeighted(pol, fit, fit, MissedBlockCost, FalseBlockCost)
+	if err != nil {
+		t.Fatalf("fitting the weighted cut: %v", err)
+	}
+	neverBlock := result.Curve[len(result.Curve)-1]
+	chosenCost := result.OnFit.WeightedCost(MissedBlockCost, FalseBlockCost)
+	neverBlockCost := neverBlock.WeightedCost(MissedBlockCost, FalseBlockCost)
+	if chosenCost > neverBlockCost {
+		t.Fatalf("chosen cut %.3f costs %.1f at weighting %.0f:%.0f, worse than never blocking at %.1f",
+			result.Chosen, chosenCost, MissedBlockCost, FalseBlockCost, neverBlockCost)
+	}
+	t.Logf("weighting %.0f:%.0f (miss:false), chosen cut %.3f: fit costs %.1f against never-blocking's %.1f",
+		MissedBlockCost, FalseBlockCost, result.Chosen, chosenCost, neverBlockCost)
+}
+
+func TestTheWeightedFitIsScoredOnTheVerifyHalfAgainstAlwaysProceed(t *testing.T) {
+	pol, _ := shippedGate(t)
+	fit, verify := calibrationHalves(t)
+	for _, missCost := range []float64{1, 3, 10, 30, 100} {
+		result, err := FitRiskCutWeighted(pol, fit, verify, missCost, FalseBlockCost)
+		if err != nil {
+			t.Fatalf("fitting at %.0f:1: %v", missCost, err)
+		}
+		p := twoSidedSignP(result.OnVerify.CaughtBlock, result.OnVerify.FalseBlock)
+		direction := separationDirection(p, result.OnVerify.CaughtBlock, result.OnVerify.FalseBlock)
+		t.Logf("weighting %5.0f:1  cut %.3f  fit caught %d/%d false %2d  verify caught %d/%d false %2d  correct %d/%d  sign p %.4f  %s",
+			missCost, result.Chosen,
+			result.OnFit.CaughtBlock, result.OnFit.Blocks, result.OnFit.FalseBlock,
+			result.OnVerify.CaughtBlock, result.OnVerify.Blocks, result.OnVerify.FalseBlock,
+			result.OnVerify.Correct, result.OnVerify.Cases, p, direction)
 	}
 }
 
