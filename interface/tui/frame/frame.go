@@ -50,7 +50,6 @@ type rowTwoDrop int
 const (
 	rowTwoFull rowTwoDrop = iota
 	rowTwoNoRelease
-	rowTwoNoNote
 	rowTwoNoJev
 	rowTwoNoAgent
 	rowTwoNoTokens
@@ -175,31 +174,47 @@ func row1Fields(status Status, drop rowOneDrop) []string {
 
 func row2Text(status Status, width int) string {
 	for drop := rowTwoFull; drop <= rowTwoNoTokens; drop++ {
-		if text := join(row2Fields(status, drop)); widget.Cells(text) <= width {
+		before, after := row2Around(status, drop)
+		if text, fits := row2WithNote(before, status.Note, after, width); fits {
 			return text
 		}
 	}
-	return ""
+	return widget.Fit(status.Note, width)
 }
 
-func row2Fields(status Status, drop rowTwoDrop) []string {
-	var fields []string
+func row2Around(status Status, drop rowTwoDrop) ([]string, []string) {
+	var before []string
 	if drop < rowTwoNoTokens {
-		fields = append(fields, tokensText(status))
+		before = append(before, tokensText(status))
 	}
 	if drop < rowTwoNoJev {
-		fields = append(fields, "jev "+strconv.Itoa(status.Decisions))
+		before = append(before, "jev "+strconv.Itoa(status.Decisions))
 	}
 	if drop < rowTwoNoAgent && status.Agents > 0 {
-		fields = append(fields, agentMark+strconv.Itoa(status.Agents))
+		before = append(before, agentMark+strconv.Itoa(status.Agents))
 	}
-	if drop < rowTwoNoNote {
-		fields = append(fields, status.Note)
-	}
+	var after []string
 	if drop < rowTwoNoRelease {
-		fields = append(fields, releaseLabel(status.Release))
+		if release := releaseLabel(status.Release); release != "" {
+			after = append(after, release)
+		}
 	}
-	return fields
+	return before, after
+}
+
+func row2WithNote(before []string, note string, after []string, width int) (string, bool) {
+	fixed := join(append(append([]string{}, before...), after...))
+	if note == "" {
+		return fixed, widget.Cells(fixed) <= width
+	}
+	available := width
+	if fixed != "" {
+		available -= widget.Cells(fixed) + widget.Cells(separator)
+	}
+	if available < widget.Cells(note) {
+		return "", false
+	}
+	return join(append(append(append([]string{}, before...), note), after...)), true
 }
 
 func tokensText(status Status) string {
