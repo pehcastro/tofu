@@ -2,14 +2,21 @@ package filmstrip
 
 import (
 	"errors"
+	"reflect"
 	"strings"
 	"time"
+	"unicode"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
 	"tofu/interface/tui"
 	"tofu/internal/konst"
+)
+
+const (
+	settleQuiet   = konst.DriveSettleMillis * time.Millisecond
+	settleCeiling = konst.DriveTimeoutMillis * time.Millisecond
 )
 
 var namedKeys = map[string]rune{
@@ -23,6 +30,10 @@ var namedKeys = map[string]rune{
 	"down":      tea.KeyDown,
 	"left":      tea.KeyLeft,
 	"right":     tea.KeyRight,
+	"home":      tea.KeyHome,
+	"end":       tea.KeyEnd,
+	"pgup":      tea.KeyPgUp,
+	"pgdown":    tea.KeyPgDown,
 }
 
 var namedModifiers = map[string]tea.KeyMod{
@@ -31,22 +42,32 @@ var namedModifiers = map[string]tea.KeyMod{
 	"shift+": tea.ModShift,
 }
 
+type delivery struct {
+	message tea.Msg
+	cause   tea.Msg
+}
+
+func (d delivery) rearmedTimer() bool {
+	kind := reflect.TypeOf(d.message)
+	return kind == reflect.TypeOf(d.cause) && kind.Comparable()
+}
+
 type Driver struct {
-	app      *tui.App
-	messages chan tea.Msg
-	stopped  chan struct{}
+	app        *tui.App
+	deliveries chan delivery
+	stopped    chan struct{}
 }
 
 func Drive(app *tui.App, width, height int) *Driver {
-	d := &Driver{app: app, messages: make(chan tea.Msg, konst.DriveMessageBuffer), stopped: make(chan struct{})}
-	d.command(app.Init())
-	d.feed(tea.WindowSizeMsg{Width: width, Height: height})
+	d := &Driver{app: app, deliveries: make(chan delivery, konst.DriveMessageBuffer), stopped: make(chan struct{})}
+	d.command(app.Init(), nil)
+	d.feed(tea.WindowSizeMsg{Width: width, Height: height}, nil)
 	return d
 }
 
 func (d *Driver) Close() { close(d.stopped) }
 
-func (d *Driver) command(cmd tea.Cmd) {
+func (d *Driver) command(cmd tea.Cmd, cause tea.Msg) {
 	if cmd == nil {
 		return
 	}
@@ -56,40 +77,54 @@ func (d *Driver) command(cmd tea.Cmd) {
 			return
 		}
 		select {
-		case d.messages <- message:
+		case d.deliveries <- delivery{message: message, cause: cause}:
 		case <-d.stopped:
 		}
 	}()
 }
 
-func (d *Driver) feed(message tea.Msg) {
+func (d *Driver) feed(message, cause tea.Msg) {
 	if batch, batched := message.(tea.BatchMsg); batched {
 		for _, cmd := range batch {
-			d.command(cmd)
+			d.command(cmd, cause)
 		}
 		return
 	}
 	_, cmd := d.app.Update(message)
-	d.command(cmd)
+	d.command(cmd, message)
 }
 
-func (d *Driver) Settle() {
-	quiet := time.NewTimer(konst.DriveSettleMillis * time.Millisecond)
+func (d *Driver) Settle() error { return d.settle(settleCeiling) }
+
+func (d *Driver) settle(within time.Duration) error {
+	deadline := time.NewTimer(within)
+	defer deadline.Stop()
+	quiet := time.NewTimer(settleQuiet)
 	defer quiet.Stop()
+	var timers []delivery
 	for {
 		select {
-		case message := <-d.messages:
-			d.feed(message)
-			quiet.Reset(konst.DriveSettleMillis * time.Millisecond)
+		case got := <-d.deliveries:
+			if got.rearmedTimer() {
+				timers = append(timers, got)
+				continue
+			}
+			d.feed(got.message, got.cause)
+			quiet.Reset(settleQuiet)
 		case <-quiet.C:
-			return
+			for _, timer := range timers {
+				d.feed(timer.message, timer.cause)
+			}
+			return nil
+		case <-deadline.C:
+			return errors.New("the app was still busy after " + within.String() + ", so the step never had a quiet screen to act on")
 		}
 	}
 }
 
 func (d *Driver) Type(text string) {
 	for _, code := range text {
-		d.feed(tea.KeyPressMsg{Code: code, Text: string(code)})
+		d.feed(tea.KeyPressMsg{Code: code, Text: string(code)}, nil)
 	}
 }
 
@@ -101,19 +136,18 @@ func (d *Driver) Press(name string) error {
 			break
 		}
 	}
-	if code, named := namedKeys[name]; named {
-		d.feed(tea.KeyPressMsg{Code: code, Mod: held})
-		return nil
+	code, named := namedKeys[name]
+	if runes := []rune(name); !named && len(runes) == 1 {
+		code, named = runes[0], true
 	}
-	runes := []rune(name)
-	if len(runes) != 1 {
+	if !named {
 		return errors.New("no key is named " + name)
 	}
-	press := tea.KeyPressMsg{Code: runes[0], Mod: held}
-	if held == 0 {
-		press.Text = name
+	press := tea.KeyPressMsg{Code: code, Mod: held}
+	if held == 0 && unicode.IsPrint(code) {
+		press.Text = string(code)
 	}
-	d.feed(press)
+	d.feed(press, nil)
 	return nil
 }
 
@@ -155,10 +189,12 @@ func (d *Driver) Wheel(x, y int, up bool, notches int) error {
 
 func (d *Driver) pointAtDrawnFrame(message tea.Msg) {
 	d.app.View()
-	d.feed(message)
+	d.feed(message, nil)
 }
 
-func (d *Driver) Resize(width, height int) { d.feed(tea.WindowSizeMsg{Width: width, Height: height}) }
+func (d *Driver) Resize(width, height int) {
+	d.feed(tea.WindowSizeMsg{Width: width, Height: height}, nil)
+}
 
 func (d *Driver) Await(text string, within time.Duration) error {
 	deadline := time.NewTimer(within)
@@ -170,8 +206,8 @@ func (d *Driver) Await(text string, within time.Duration) error {
 			return nil
 		}
 		select {
-		case message := <-d.messages:
-			d.feed(message)
+		case got := <-d.deliveries:
+			d.feed(got.message, got.cause)
 		case <-poll.C:
 		case <-deadline.C:
 			return errors.New("waited " + within.String() + " for " + text + " and it never appeared")

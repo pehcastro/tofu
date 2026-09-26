@@ -1,0 +1,57 @@
+# every screen fits 60x20, 80x24, 104x32 and 140x40
+type agents
+key enter
+type edits
+key enter
+wait cooked for
+resize 60 20
+screen
+key alt+2
+screen
+key alt+3
+screen
+key alt+4
+screen
+key alt+1
+type /settings
+key enter
+screen
+key esc
+resize 80 24
+screen
+key alt+2
+screen
+key alt+3
+screen
+key alt+4
+screen
+key alt+1
+type /settings
+key enter
+screen
+key esc
+resize 104 32
+screen
+key alt+2
+screen
+key alt+3
+screen
+key alt+4
+screen
+key alt+1
+type /settings
+key enter
+screen
+key esc
+resize 140 40
+screen
+key alt+2
+screen
+key alt+3
+screen
+key alt+4
+screen
+key alt+1
+type /settings
+key enter
+screen

@@ -1,0 +1,10 @@
+# a dialog swallows a click on the tabs beneath it
+key alt+k
+wait Jump to a view or run an action
+click 44 0
+absent Sub-agents
+click 53 0
+absent File edits
+click 90 0
+absent tofu settings
+screen

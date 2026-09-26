@@ -1,19 +1,17 @@
-./tofu  ·  develop  ·  claude-sub/claude-opus-5  ·  amber-cedar-otter #3c5f71  ·  9s                
-[1] chat   [2] work   [3] file edits   [4] sub-agents   [5] shells                                  
-                                                                                                    
-» why does the gate read the policy first?                                                          
-⟩ read internal/turn/loop.go                                                        84 lines, 2.1 KB
-    #c1                                                                                             
-⟩ bash go test ./...                                                     ok tofu/internal/turn 0.42s
-    #c2                                                                                             
-· stopping the model, and letting the running tools finish                                          
-· stopping the turn                                                                                 
-· cooked for 3s · [#c2]                                                                             
+ tofu  ./tofu/                     chat   agents   edits   shells                     9s [settings] 
                                                                                                     
                                                                                                     
+    You                                                                  14:32  [message#91ce62]    
+    why does the gate read the policy first?                                                        
                                                                                                     
                                                                                                     
-                                                                                                    
+    ⟩ read internal/turn/loop.go                                                84 lines, 2.1 KB    
+        [tool#c1]                                                                                   
+    ⟩ bash go test ./...                                             ok tofu/internal/turn 0.42s    
+        [tool#c2]                                                                                   
+    · stopping the model, and letting the running tools finish                                      
+    · stopping the turn                                                                             
+    · cooked for 3s | waited 0s [request#c2]                                                        
                                                                                                     
                                                                                                     
                                                                                                     
@@ -22,10 +20,11 @@
                                                                                                     
                                                                                                     
                                                                                                     
-  hey tofu, can you explain this repository to me?                                                  
                                                                                                     
                                                                                                     
+  cooked for 3s  |  waited 0s  [request#c2]                                                         
                                                                                                     
-ctrl+c quit   ⏎ send   ⇧⏎ newline   / commands                                                      
-118k/250k ▓▓▓▓▓▓░░░░░░  ·  claude 5h  62%  resets in 3h 27m  ·  claude weekly  31%  resets in 1d 5h 
-284k read  61k write  190k cached  ·  jev 3  ·  tofu 0.4.0                                          
+                                                                                                    
+  █ Ask tofu to build, inspect, or delegate                                                         
+                                                                                                    
+ ctx 118k/250k  |  claude 5h 62%  [&orchestrator]  ·  claude-sub/claude-opus-5  ·  reasoning medium 

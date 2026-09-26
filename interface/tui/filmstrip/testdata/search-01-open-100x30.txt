@@ -1,0 +1,30 @@
+ tofu  ./tofu/                   chat   agents (1)   edits   shells                   0s [settings] 
+
+    ⟩ spawn read the policy loader                                                 spawned [&c1]
+        [tool#5e01aa]
+    ⟩ spawn write the ledger floor test                                            spawned [&c2]
+        [tool#5e02aa]
+    ⟩ spawn run                                                                     pawned [&c3]
+        [tool#5e  Search                                                       esc  
+    · (1) tools   Screens, agents and events · enter opens                          
+                                                                                    
+                  > Type to filter                                                  
+    [&orchestrat                                                                    sage#9d4f11]
+    three sub-ag  › chat                                                            d its suite.
+    [tool#9d4f10    sub-agents                                                      
+                    file edits                                                      
+    · cooked for    shells                                                          
+                    settings                                                        
+                    &c1  read the policy loader                                     
+                    &c2  write the ledger floor test                                
+                    &c3  run the shell suite                                        
+                                                                                    
+                  1 of 8 results                                                    
+                                                                                    
+  ⠋ 1m 34s  c1        internal/judge/po…  read the policy loader                                 18k
+  cooked for 0s  |  waited 0s  [request#9d4f10]
+
+                                                                                                    
+  ▯ Ask tofu to build, inspect, or delegate                                                         
+                                                                                                    
+ ctx 118k/250k  |  claude 5h 62%  [&orchestrator]  ·  claude-sub/claude-opus-5  ·  reasoning medium 

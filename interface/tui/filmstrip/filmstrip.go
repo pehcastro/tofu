@@ -2,7 +2,10 @@ package filmstrip
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
@@ -11,18 +14,25 @@ import (
 	"tofu/interface/tui/fixture"
 	"tofu/interface/tui/session"
 	"tofu/interface/tui/subagent"
+	"tofu/internal/llm"
+	isettings "tofu/internal/settings"
 	roster "tofu/internal/subagent"
 )
 
 const (
-	nameSeparator = "/"
-	numberDigits  = 2
-	beatGap       = 900 * time.Millisecond
-	toolGap       = 1400 * time.Millisecond
-	typingGap     = 3 * time.Second
-	childGap      = 26 * time.Second
-	childID       = "turn-1-c1"
-	pushFailure   = "git push origin develop: exit 128\nfatal: could not read from remote repository, make sure you have the right access\ntransport: ssh: connect to host git.silo port 22: connection refused"
+	nameSeparator  = "/"
+	numberDigits   = 2
+	beatGap        = 900 * time.Millisecond
+	toolGap        = 1400 * time.Millisecond
+	typingGap      = 3 * time.Second
+	childGap       = 26 * time.Second
+	childID        = "turn-1-c1"
+	homePrefix     = "tofu-filmstrip"
+	workspaceDir   = "tofu"
+	globalSettings = "settings.json"
+	keymapFile     = "keybindings.json"
+	hyperlinksOff  = "off"
+	pushFailure    = "git push origin develop: exit 128\nfatal: could not read from remote repository, make sure you have the right access\ntransport: ssh: connect to host git.silo port 22: connection refused"
 )
 
 type Frame struct {
@@ -38,43 +48,97 @@ type beat struct {
 
 type scenario struct {
 	name  string
+	tune  func(*tui.Options)
 	beats []beat
 }
 
 type reel struct {
-	app *tui.App
-	at  time.Time
+	app     *tui.App
+	driver  *Driver
+	at      time.Time
+	options tui.Options
+	width   int
+	height  int
 }
 
-func newReel(width, height int) *reel {
-	r := &reel{at: fixture.Opened()}
-	r.app = tui.New(tui.Options{
-		Repo:    fixture.Path,
-		Branch:  fixture.Branch,
-		Release: fixture.Release,
-		Now:     func() time.Time { return r.at },
+func workspaceFiles() []string {
+	return []string{"README.md", "go.mod", "internal/turn/loop.go", "internal/judge/policy/resolve.go", "cmd/tofu/main.go"}
+}
+
+func workspace(home string) string {
+	root := filepath.Join(home, workspaceDir)
+	for _, file := range workspaceFiles() {
+		path := filepath.Join(root, filepath.FromSlash(file))
+		if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+			panic(err)
+		}
+		if err := os.WriteFile(path, []byte(file+"\n"), 0o600); err != nil {
+			panic(err)
+		}
+	}
+	return root
+}
+
+func newReel(width, height int, home string, tune func(*tui.Options)) *reel {
+	root := workspace(home)
+	store, err := isettings.Open(filepath.Join(home, globalSettings), filepath.Join(root, ".tofu", globalSettings))
+	if err == nil {
+		err = store.SetText(isettings.Global, isettings.Hyperlinks, hyperlinksOff)
+	}
+	if err != nil {
+		panic(err)
+	}
+	r := &reel{at: fixture.Opened(), width: width, height: height}
+	r.options = tui.Options{
+		Repo:     fixture.Path,
+		Root:     root,
+		Branch:   fixture.Branch,
+		Release:  fixture.Release,
+		Settings: store,
+		Keymap:   filepath.Join(home, keymapFile),
+		Now:      func() time.Time { return r.at },
+		Paths:    workspaceFiles,
 		Wires: func() []tui.Wire {
-			return []tui.Wire{{Name: fixture.Wire, Model: fixture.Model, Provider: fixture.Provider}}
+			return []tui.Wire{{Name: fixture.Wire, Model: fixture.Model, Provider: fixture.Provider, Efforts: []llm.Effort{llm.EffortLow, llm.EffortMedium, llm.EffortHigh}}}
 		},
 		Turn:    func(context.Context, tui.Pick, string, tui.CalledFromInsideTheTurnAndNeverAfterItReturns) {},
 		Answers: make(chan tui.Answer, 1),
-	})
-	r.app.Init()
-	r.app.Update(tea.WindowSizeMsg{Width: width, Height: height})
+		Copy:    func(string) error { return nil },
+	}
+	if tune != nil {
+		tune(&r.options)
+	}
+	r.open()
+	return r
+}
+
+func (r *reel) open() {
+	if r.driver != nil {
+		r.driver.Close()
+	}
+	r.app = tui.New(r.options)
+	r.driver = Drive(r.app, r.width, r.height)
 	r.app.Update(tui.Event{Kind: tui.EventSession, Text: fixture.SessionName, ID: fixture.SessionID})
 	r.app.Update(fixture.Quotas(r.at))
 	r.app.Update(tui.Event{Kind: tui.EventContext, Context: fixture.Context()})
 	r.app.Update(tui.Event{Kind: tui.EventStats, TokensIn: 284000, TokensOut: 61000, CacheRead: 190000, Decisions: 3})
-	return r
+}
+
+func (r *reel) settle() {
+	if err := r.driver.Settle(); err != nil {
+		panic(err)
+	}
+}
+
+func (r *reel) press(keys ...string) {
+	for _, key := range keys {
+		if err := r.driver.Press(key); err != nil {
+			panic(err)
+		}
+	}
 }
 
 func (r *reel) wait(d time.Duration) { r.at = r.at.Add(d) }
-
-func (r *reel) typed(text string) {
-	for _, code := range text {
-		r.app.Update(tea.KeyPressMsg{Code: code, Text: string(code)})
-	}
-}
 
 func (r *reel) send(events ...tui.Event) {
 	for _, event := range events {
@@ -128,7 +192,7 @@ func delta(text string) tui.Event { return tui.Event{Kind: tui.EventTextDelta, T
 func opening() []beat {
 	return []beat{
 		{"fresh", func(r *reel) { r.wait(typingGap) }},
-		{"typing", func(r *reel) { r.typed(fixture.Task); r.wait(beatGap) }},
+		{"typing", func(r *reel) { r.driver.Type(fixture.Task); r.wait(beatGap) }},
 		{"sent", func(r *reel) { r.app.Update(tea.KeyPressMsg{Code: tea.KeyEnter}); r.wait(beatGap) }},
 	}
 }
@@ -362,7 +426,7 @@ func childTurn() scenario {
 }
 
 func scenarios() []scenario {
-	return []scenario{plainTurn(), twelveTools(), markdownAnswer(), askingTurn(), interruptedTurn(), lettingToolsFinish(), failedTurn(), childTurn()}
+	return append([]scenario{plainTurn(), twelveTools(), markdownAnswer(), askingTurn(), interruptedTurn(), lettingToolsFinish(), failedTurn(), childTurn()}, screens()...)
 }
 
 func frameName(scenarioName string, index int, beatName string) string {
@@ -383,26 +447,63 @@ func Names() []string {
 	return names
 }
 
-func All(width, height int) []Frame {
-	var frames []Frame
-	for _, one := range scenarios() {
-		r := newReel(width, height)
-		for index, step := range one.beats {
-			step.play(r)
-			frames = append(frames, Frame{
-				Scenario: one.name,
-				Name:     frameName(one.name, index, step.name),
-				Content:  r.app.View().Content,
-			})
+func stubbedHost(home string) (restore func()) {
+	stub := map[string]string{"TERM_PROGRAM": "zed", "ZED_TERM": "", "VSCODE_PID": "", "WT_SESSION": "", "TERMINAL_EMULATOR": ""}
+	for _, variable := range []string{"APPDATA", "LOCALAPPDATA", "USERPROFILE", "HOME", "XDG_CONFIG_HOME"} {
+		stub[variable] = home
+	}
+	var undo []func()
+	for variable, value := range stub {
+		held, set := os.LookupEnv(variable)
+		undo = append(undo, func() {
+			if set {
+				_ = os.Setenv(variable, held)
+				return
+			}
+			_ = os.Unsetenv(variable)
+		})
+		if err := os.Setenv(variable, value); err != nil {
+			panic(err)
 		}
+	}
+	return func() {
+		for _, step := range undo {
+			step()
+		}
+	}
+}
+
+func play(chosen []scenario, width, height int) []Frame {
+	home, err := os.MkdirTemp("", homePrefix)
+	if err != nil {
+		panic(err)
+	}
+	defer func() { _ = os.RemoveAll(home) }()
+	defer stubbedHost(home)()
+	var frames []Frame
+	for index, one := range chosen {
+		r := newReel(width, height, filepath.Join(home, strconv.Itoa(index)), one.tune)
+		for number, step := range one.beats {
+			step.play(r)
+			frames = append(frames, Frame{Scenario: one.name, Name: frameName(one.name, number, step.name), Content: r.app.View().Content})
+		}
+		r.driver.Close()
 	}
 	return frames
 }
 
+func All(width, height int) []Frame { return play(scenarios(), width, height) }
+
 func Find(name string, width, height int) (Frame, bool) {
-	for _, frame := range All(width, height) {
-		if frame.Name == name {
-			return frame, true
+	scenarioName, _, _ := strings.Cut(name, nameSeparator)
+	for _, one := range scenarios() {
+		if one.name != scenarioName {
+			continue
+		}
+		for _, frame := range play([]scenario{one}, width, height) {
+			if frame.Name == name {
+				return frame, true
+			}
 		}
 	}
 	return Frame{}, false

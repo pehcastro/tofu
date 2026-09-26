@@ -1,0 +1,60 @@
+ tofu  ./tofu/                     chat   agents   edits   shells                     0s [settings] 
+                                                                                                    
+                                                                                                    
+  Sub-agents               [&c2]                                                   1-3/3 · newest   
+  3 agents · live acti…                                                                             
+                           ╭──────────────────────────────────────────────────────────────────╮     
+  OVERVIEW                 │                                                                  │     
+    All activity      8    │  [&c2]  owns                                                     │     
+                           │  internal/judge/ledger/**                                        │     
+  ACTIVE  0                │                                                                  │     
+                           ╰──────────────────────────────────────────────────────────────────╯     
+  WAITING  3                                                                                        
+    [&orchestrator]   .    ╭──────────────────────────────────────────────────────────────────╮     
+    Waiting for request    │                                                                  │     
+    [&c1]             .    │  [&c2]  tool                        just now  [tool#7b2d01]      │     
+    read the policy lo…    │  edit                                                            │     
+  › [&c2]             .    │  internal/judge/ledger/floor.go                                  │     
+    write the ledger f…    │  complete                                                        │     
+                           │    +14 -2                                                        │     
+  DEAD  1                  │                                                                  │     
+    [&c3]             ✗    ╰──────────────────────────────────────────────────────────────────╯     
+    run the shell suite                                                                             
+                           ╭──────────────────────────────────────────────────────────────────╮     
+                           │                                                                  │     
+                           │  [&c2]  report                                                   │     
+                           │  the floor test fails on an empty ledger and passes on one row   │     
+                           │                                                                  │     
+                           ╰──────────────────────────────────────────────────────────────────╯     
+                                                                                                    
+ ctx 118k/250k  |  claude 5h 62%                                                                    
+ tofu  ./tofu/                     chat   agents   edits   shells                     0s [settings] 
+                                                                                                    
+                                                                                                    
+  Sub-agents               [&c2]                                                   1-3/3 · newest   
+  4 agents · live acti…                                                                             
+                           ╭──────────────────────────────────────────────────────────────────╮     
+  OVERVIEW                 │                                                                  │     
+    All activity      9    │  [&c2]  owns                                                     │     
+                           │  internal/judge/ledger/**                                        │     
+  ACTIVE  0                │                                                                  │     
+                           ╰──────────────────────────────────────────────────────────────────╯     
+  WAITING  4                                                                                        
+    [&orchestrator]   .    ╭──────────────────────────────────────────────────────────────────╮     
+    Waiting for request    │                                                                  │     
+    [&c1]             .    │  [&c2]  tool                        just now  [tool#7b2d01]      │     
+    read the policy lo…    │  edit                                                            │     
+  › [&c2]             .    │  internal/judge/ledger/floor.go                                  │     
+    write the ledger f…    │  complete                                                        │     
+    [&c4]             .    │    +14 -2                                                        │     
+    audit the shell re…    │                                                                  │     
+                           ╰──────────────────────────────────────────────────────────────────╯     
+  DEAD  1                                                                                           
+    [&c3]             ✗    ╭──────────────────────────────────────────────────────────────────╮     
+    run the shell suite    │                                                                  │     
+                           │  [&c2]  report                                                   │     
+                           │  the floor test fails on an empty ledger and passes on one row   │     
+                           │                                                                  │     
+                           ╰──────────────────────────────────────────────────────────────────╯     
+                                                                                                    
+ ctx 118k/250k  |  claude 5h 62%                                                                    

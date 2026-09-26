@@ -1,0 +1,30 @@
+ tofu  ./tofu/                     chat   agents   edits   shells                     0s [settings] 
+
+
+
+
+                                                                                                  
+   Select model            ROLES                                       SELECTION                  
+   11 models               enter binds · tab models                                               
+                                                                       turn                       
+   Models  Roles           › turn                                      the turn you asked for     
+                             the turn you asked for                                               
+   PROVIDERS                 child                                     BOUND MODEL                
+     all                     every child a turn spawns                 nothing bound, so the      
+     claude-sub                                                        subscription default runs  
+                                                                                                  
+                                                                       enter chooses a new model  
+                                                                                                  
+                                                                                                  
+                                                                                                  
+                                                                                                  
+                                                                                                  
+                                                                                                  
+                                                                                                  
+                                                                                                  
+                                                                                                  
+
+                                                                                                    
+  ▯ Ask tofu to build, inspect, or delegate                                                         
+                                                                                                    
+ ctx 118k/250k  |  claude 5h 62%  [&orchestrator]  ·  claude-sub/claude-opus-5  ·  reasoning medium 

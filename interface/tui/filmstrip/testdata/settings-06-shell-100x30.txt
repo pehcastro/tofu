@@ -1,0 +1,30 @@
+                                                                                                    
+  tofu settings         Shell                                                       global scope    
+  Global preferences    Choose a row to inspect and change its value.                               
+                                                                                                    
+  CATEGORIES            › Persistent registry                                               ● on    
+    Appearance    05      a running shell outlives tofu and the next launch lists it; off stops…    
+    Models & rol… 02                                                                                
+    Interaction   05      Log tail                                                       500  ▾     
+    Context       05      Lines retained per shell                                                  
+    Files         03                                                                                
+  › Shell         05      Kill confirm                                                      ● on    
+    Turn          02      Confirm process termination                                               
+    Startup       01                                                                                
+                          Shell                                                      default  ▾     
+  NAVIGATE                a path, or the word wsl; empty resolves the person's own shell automa…    
+  ↑↓ setting · ←→                                                                                   
+  section                 Fold hides shell                                                 ○ off    
+  ctrl+k search ·         the running line drops the shell count                                    
+  esc chat                                                                                          
+                        enter change  ·  ctrl+k search  ·  esc chat                                 
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    

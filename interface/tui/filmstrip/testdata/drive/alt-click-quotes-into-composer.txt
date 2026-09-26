@@ -1,0 +1,9 @@
+# Alt+click quotes into the composer and focuses chat
+type agents
+key enter
+key alt+2
+wait All activity
+click 76 22 alt
+wait [quote#9d4f10]
+absent All activity
+screen

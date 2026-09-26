@@ -1,0 +1,9 @@
+# Shift+Tab changes reasoning and the footer shows it
+wait reasoning medium
+key shift+tab
+wait reasoning high
+key shift+tab
+wait reasoning low
+key shift+tab
+wait reasoning medium
+screen

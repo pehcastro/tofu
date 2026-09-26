@@ -1,0 +1,12 @@
+# the sidebar wheel scrolls the feed without changing selection
+type agents
+key enter
+key alt+2
+wait All activity
+click 6 14
+wait [&c1]  owns
+screen
+wheel 10 12 up 2
+screen
+wheel 10 12 down 1
+screen

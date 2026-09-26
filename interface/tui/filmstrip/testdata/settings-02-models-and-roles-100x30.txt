@@ -1,0 +1,30 @@
+                                                                                                    
+  tofu settings         Models & roles                                              global scope    
+  Global preferences    Choose a row to inspect and change its value.                               
+                                                                                                    
+  CATEGORIES            › turn                                                                ▾     
+    Appearance    05      the turn you asked for                                                    
+  › Models & rol… 02                                                                                
+    Interaction   05      child                                                               ▾     
+    Context       05      every child a turn spawns                                                 
+    Files         03                                                                                
+    Shell         05    enter change  ·  ctrl+k search  ·  esc chat                                 
+    Turn          02                                                                                
+    Startup       01                                                                                
+                                                                                                    
+  NAVIGATE                                                                                          
+  ↑↓ setting · ←→                                                                                   
+  section                                                                                           
+  ctrl+k search ·                                                                                   
+  esc chat                                                                                          
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    

@@ -1,0 +1,21 @@
+# a blank sidebar row and blank dialog space activate nothing
+type agents
+key enter
+key alt+2
+wait All activity
+click 10 8
+wait 6-8/8
+click 10 10
+wait 6-8/8
+click 10 18
+wait 6-8/8
+click 10 22
+wait 6-8/8
+screen
+key alt+1
+key alt+k
+wait Jump to a view or run an action
+click 60 9
+click 30 11
+wait Jump to a view or run an action
+screen

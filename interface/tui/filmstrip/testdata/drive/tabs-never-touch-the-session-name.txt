@@ -1,0 +1,19 @@
+# the tabs never touch the session name at any width
+resize 60 20
+screen
+resize 77 24
+screen
+resize 80 24
+screen
+resize 104 30
+screen
+resize 105 30
+screen
+resize 120 36
+screen
+resize 140 40
+screen
+resize 145 40
+screen
+resize 160 40
+screen

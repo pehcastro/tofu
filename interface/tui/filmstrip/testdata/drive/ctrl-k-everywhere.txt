@@ -1,0 +1,23 @@
+# Ctrl+K opens search on every screen, and settings search on settings
+key ctrl+k
+wait Screens, agents and events
+key esc
+key alt+2
+key ctrl+k
+wait Screens, agents and events
+key esc
+key alt+3
+key ctrl+k
+wait Screens, agents and events
+key esc
+key alt+4
+key ctrl+k
+wait Screens, agents and events
+key esc
+key alt+1
+type /settings
+key enter
+key ctrl+k
+wait Search settings
+absent Screens, agents and events
+screen

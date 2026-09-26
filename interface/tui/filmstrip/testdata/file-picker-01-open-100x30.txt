@@ -1,0 +1,30 @@
+ tofu  ./tofu/                     chat   agents   edits   shells                     0s [settings] 
+
+
+                                                                                 
+                     Reference a file                                       esc  
+                     @.                                                          
+                                                                                 
+                     > cmd                                                       
+                       internal                                                  
+                       README.md                                                 
+                       go.mod                                                    
+                                                                                 
+                                                                                 
+                                                                                 
+                                                                                 
+                                                                                 
+                                                                                 
+                                                                                 
+                                                                                 
+                                                                                 
+                                                                                 
+                                                                                 
+                                                                                 
+                     ↑↓ browse  ·  enter select  ·  ← parent                     
+                                                                                 
+                                                                                 
+                                                                                                    
+  read                                                                                              
+                                                                                                    
+ ctx 118k/250k  |  claude 5h 62%  [&orchestrator]  ·  claude-sub/claude-opus-5  ·  reasoning medium 

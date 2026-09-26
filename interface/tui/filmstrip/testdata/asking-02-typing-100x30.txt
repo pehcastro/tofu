@@ -1,6 +1,9 @@
-./tofu  ·  develop  ·  claude-sub/claude-opus-5  ·  amber-cedar-otter #3c5f71  ·  3s                
-[1] chat   [2] work   [3] file edits   [4] sub-agents   [5] shells                                  
-· type a task and press enter. tofu works in tofu                                                   
+ tofu  ./tofu/                     chat   agents   edits   shells                     3s [settings] 
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
                                                                                                     
                                                                                                     
                                                                                                     
@@ -24,8 +27,4 @@
                                                                                                     
   why does the gate read the policy first?                                                          
                                                                                                     
-                                                                                                    
-                                                                                                    
-ctrl+c quit   ⏎ send   ⇧⏎ newline   / commands                                                      
-118k/250k ▓▓▓▓▓▓░░░░░░  ·  claude 5h  62%  resets in 3h 27m  ·  claude weekly  31%  resets in 1d 5h 
-284k read  61k write  190k cached  ·  jev 3  ·  tofu 0.4.0                                          
+ ctx 118k/250k  |  claude 5h 62%  [&orchestrator]  ·  claude-sub/claude-opus-5  ·  reasoning medium 

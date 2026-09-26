@@ -1,0 +1,27 @@
+# ASCII mode leaves no extended glyph, on every screen and dialog
+type agents
+key enter
+type edits
+key enter
+wait cooked for
+screen
+key alt+2
+screen
+key alt+3
+key right
+key enter
+screen
+key alt+4
+screen
+key k
+screen
+key esc
+key alt+1
+key alt+k
+screen
+key esc
+type /settings
+key enter
+screen
+key enter
+screen

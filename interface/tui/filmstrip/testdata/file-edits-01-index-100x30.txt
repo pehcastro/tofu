@@ -1,0 +1,30 @@
+ tofu  ./tofu/                     chat   agents   edits   shells                     0s [settings] 
+                                                                                                    
+                                                                                                    
+  File edits               All changes                                  2 edits · oldest → newest   
+  2 files  ·  2 changes    Select an edit reference to read every changed line.                     
+  1 mod · 1 new · 0 del                                                                             
+  +1.2k  -2 lines                                                                                   
+                             MODIFIED  resolve.go                                [edit#e5a101]      
+  AUTHOR                     internal/judge/policy/resolve.go                                       
+  › All changes       2      +5  -2  ·  @internal/judge/policy/resolve.go                           
+    &tofu     +1.2k  -2                                                                             
+                                                                                                    
+  FILES                                                                                             
+  + [edit#e5a102] floo…      ADDED  floor_rows.go                                [edit#e5a102]      
+  ~ [edit#e5a101] reso…      internal/judge/ledger/floor_rows.go                                    
+                             +1.2k  +0  ·  @internal/judge/ledger/floor_rows.go                     
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+ ctx 118k/250k  |  claude 5h 62%                                                                    

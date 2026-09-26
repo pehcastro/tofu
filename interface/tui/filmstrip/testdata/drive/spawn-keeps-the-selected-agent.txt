@@ -1,0 +1,15 @@
+# a spawn does not steal the selected agent
+type agents
+key enter
+key alt+2
+wait All activity
+click 6 16
+wait [&c2]  owns
+screen
+key alt+1
+type spawn
+key enter
+wait cooked for
+key alt+2
+wait [&c4]
+screen

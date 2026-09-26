@@ -1,0 +1,13 @@
+# a new event does not move the reader off their card
+type agents
+key enter
+key alt+2
+wait All activity
+wheel 60 12 up 2
+screen
+key alt+1
+type more
+key enter
+wait cooked for
+key alt+2
+screen

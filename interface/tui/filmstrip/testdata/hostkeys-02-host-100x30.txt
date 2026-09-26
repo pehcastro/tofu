@@ -1,0 +1,30 @@
+                      
+  tofu se                                                                                  scope
+  Global   Host integration                                                           esc  
+           Detected shortcuts and safe actions                                             
+  CATEGOR                                                                                  d  ▾ 
+    Appea  CURRENT HOST                                                                    
+    Model  Zed  ·  terminal environment                                                    
+  › Inter                                                                                  t  ▾ 
+    Conte  TOFU SHORTCUTS · PROPOSED TERMINAL RULES                                        
+    Files  CTRL+K  Search · Zed keybinding / chord prefix                                  
+    Shell  ALT+K  Commands · ensure tofu receives this shortcut                            d  ▾ 
+    Turn   CTRL+L  Models · ensure tofu receives this shortcut                             
+    Start  CTRL+R  Quote selection · ensure tofu receives this shortcut                    
+           Change: forward these keys only while the terminal is focused.                  n  ▾ 
+  NAVIGAT                                                                                  nfor…
+  ↑↓ sett  SHORTCUT CONFLICTS                                                              
+  section  CTRL+K  tofu Search · Zed keybinding / chord prefix                              ● on
+  ctrl+k                                                                                   
+  esc cha  ZED USER KEYMAP                                                                 
+           Status: keymap missing                                                          
+           Apply adds terminal-only rules after existing rules; Undo removes tofu's        
+           rules.                                                                          
+           >  Apply tofu keybindings                                                       
+             Undo tofu keybindings                                                         
+             Close                                                                         
+                                                                                           
+           ↑↓ choose · enter select · esc close                                            
+                                                                                           
+                      
+                      

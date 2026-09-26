@@ -1,0 +1,18 @@
+# agent and event references go to different screens: an event opens its card, an agent opens its feed, an edit opens its diff
+type agents
+key enter
+wait cooked for
+click 4 18
+wait All activity
+screen
+key alt+1
+click 26 17
+wait [&c1]  owns
+screen
+key alt+1
+type edits
+key enter
+wait holds the 1200 floor rows
+click 46 20
+wait ADDED  ·  2/2 files
+screen

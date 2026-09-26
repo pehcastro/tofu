@@ -1,0 +1,30 @@
+ tofu  ./tofu/                     chat   agents   edits   shells                     0s [settings] 
+
+
+
+                                                                                    
+                  Commands                                                     esc  
+                  Jump to a view or run an action                                   
+                                                                                    
+                  │> Type to filter                                                 
+                                                                                    
+                  >  chat                                                    /chat  
+                    the conversation and the composer                               
+                                                                                    
+                    sub-agents                                         /sub-agents  
+                    every tool call and every child, in one feed                    
+                                                                                    
+                    file-edits                                         /file-edits  
+                    every changed line, who made it and where                       
+                                                                                    
+                    shells                                                 /shells  
+                    the persistent processes an agent left running                  
+                                                                                    
+                    models                                                 /models  
+                    every model the signed subscriptions serve, and which one the   
+                  next turn runs                                                    
+                                                                                    
+                                                                                                    
+  ▯ Ask tofu to build, inspect, or delegate                                                         
+                                                                                                    
+ ctx 118k/250k  |  claude 5h 62%  [&orchestrator]  ·  claude-sub/claude-opus-5  ·  reasoning medium 

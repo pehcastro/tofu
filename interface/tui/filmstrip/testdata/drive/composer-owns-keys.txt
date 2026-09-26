@@ -1,0 +1,15 @@
+# the composer owns printable keys, digits and arrows, and a digit typed is text
+type 12 ab
+key 3
+key 4
+key left
+key left
+key x
+key right
+key y
+wait 12 abx3y4
+absent Sub-agents
+screen
+key alt+2
+wait Sub-agents
+screen

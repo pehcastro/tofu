@@ -1,0 +1,30 @@
+                                                                                                    
+  tofu settings         Interaction                                                 global scope    
+  Global preferences    Choose a row to inspect and change its value.                               
+                                                                                                    
+  CATEGORIES            › Composer                                                  standard  ▾     
+    Appearance    05      Enter sends; Ctrl+J inserts newline                                       
+    Models & rol… 02                                                                                
+  › Interaction   05      Keybindings                                                   edit  ▾     
+    Context       05      Change shortcuts handled inside tofu                                      
+    Files         03                                                                                
+    Shell         05      Host integration                                       inspect Zed  ▾     
+    Turn          02      Detect host shortcut conflicts and available integrations                 
+    Startup       01                                                                                
+                          Confirmations                                                  run  ▾     
+  NAVIGATE                run lets a gated call go, ask waits for you; a rule's shadow or enfor…    
+  ↑↓ setting · ←→                                                                                   
+  section                 Read before edit                                                  ● on    
+  ctrl+k search ·         an edit or a write to a file this turn has not read is refused            
+  esc chat                                                                                          
+                        enter change  ·  ctrl+k search  ·  esc chat                                 
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    

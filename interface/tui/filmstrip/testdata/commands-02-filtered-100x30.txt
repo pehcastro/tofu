@@ -1,0 +1,30 @@
+ tofu  ./tofu/                     chat   agents   edits   shells                     0s [settings] 
+
+
+
+
+
+
+                                                                                    
+                  Commands                                                     esc  
+                  Jump to a view or run an action                                   
+                                                                                    
+                  │> file                                                           
+                                                                                    
+                  >  file-edits                                        /file-edits  
+                    every changed line, who made it and where                       
+                                                                                    
+                    attach                                                 /attach  
+                    reference a file in this workspace                              
+                                                                                    
+                    settings                                             /settings  
+                    appearance, keys, roles, and the file each value came from      
+                                                                                    
+
+
+
+
+                                                                                                    
+  ▯ Ask tofu to build, inspect, or delegate                                                         
+                                                                                                    
+ ctx 118k/250k  |  claude 5h 62%  [&orchestrator]  ·  claude-sub/claude-opus-5  ·  reasoning medium 

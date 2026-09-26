@@ -1,31 +1,30 @@
-./tofu  ·  develop  ·  claude-sub/claude-opus-5  ·  amber-cedar-otter #3c5f71  ·  56s               
-[1] chat   [2] work   [3] file edits   [4] sub-agents (1)   [5] shells                              
+ tofu  ./tofu/                   chat   agents (1)   edits   shells                  56s [settings] 
                                                                                                     
-» why does the gate read the policy first?                                                          
                                                                                                     
-▌ handing the policy loader to a child                                                              
-                                                                                                    
-⟩ spawn read internal/judge/policy/resolve.go and say what it reads first                        52s
-    #42e30c                                                                                         
-⠼ read internal/judge/policy/resolve.go                                                      #815e77
+    You                                                                  14:32  [message#91ce62]    
+    why does the gate read the policy first?                                                        
                                                                                                     
                                                                                                     
                                                                                                     
+    [&orchestrator]                                                                        14:32    
+    handing the policy loader to a child                                                            
                                                                                                     
-                                                                                                    
-                                                                                                    
+    ⟩ spawn read internal/judge/policy/resolve.go and say what it reads first                52s    
+        [tool#42e30c]                                                                               
+    ⠋ read internal/judge/policy/resolve.go                                        [tool#815e77]    
                                                                                                     
                                                                                                     
                                                                                                     
                                                                                                     
                                                                                                     
-⠼ 26s    c1        internal/judge/po…  read the policy loader                                     9k
-⠙ 52s    working                       read internal/judge/policy/resolve.go                        
-                                                                                                    
-  hey tofu, can you explain this repository to me?                                                  
                                                                                                     
                                                                                                     
                                                                                                     
-ctrl+c stops the turn   ⏎ send   ⇧⏎ newline   / commands                                            
-118k/250k ▓▓▓▓▓▓░░░░░░  ·  claude 5h  62%  resets in 3h 27m  ·  claude weekly  31%  resets in 1d 5h 
-284k read  61k write  190k cached  ·  jev 3  ·  ●1  ·  tofu 0.4.0                                   
+                                                                                                    
+  ⠋ 26s    c1        internal/judge/po…  read the policy loader                                   9k
+  ⠋ working  |  52s  [request#91ccaf]                                                               
+                                                                                                    
+                                                                                                    
+  █ Ask tofu to build, inspect, or delegate                                                         
+                                                                                                    
+ ctx 118k/250k  |  claude 5h 62%  [&orchestrator]  ·  claude-sub/claude-opus-5  ·  reasoning medium 

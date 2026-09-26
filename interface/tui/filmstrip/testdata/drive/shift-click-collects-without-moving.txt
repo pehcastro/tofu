@@ -1,0 +1,13 @@
+# Shift+click and Ctrl+Alt+click collect without moving
+type agents
+key enter
+key alt+2
+wait All activity
+click 76 22 shift
+wait All activity
+click 76 11 ctrl alt
+wait All activity
+screen
+key alt+1
+wait [quote#9d4f10] [quote#7c3e01]
+screen

@@ -1,0 +1,5 @@
+# the request line sits two rows above the composer
+type what does the gate read first?
+key enter
+wait cooked for
+screen

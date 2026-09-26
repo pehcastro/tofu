@@ -1,0 +1,23 @@
+# the composer grows to 8 rows
+type one
+screen
+key ctrl+j
+type two
+key ctrl+j
+type three
+screen
+key ctrl+j
+type four
+key ctrl+j
+type five
+key ctrl+j
+type six
+key ctrl+j
+type seven
+key ctrl+j
+type eight
+key ctrl+j
+type nine
+key ctrl+j
+type ten
+screen

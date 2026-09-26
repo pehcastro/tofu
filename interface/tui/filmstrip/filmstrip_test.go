@@ -3,6 +3,7 @@ package filmstrip
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -12,6 +13,7 @@ import (
 	"tofu/interface/tui/fixture"
 	"tofu/interface/tui/frametime"
 	"tofu/interface/tui/progress"
+	"tofu/interface/tui/session"
 	"tofu/internal/golden"
 	"tofu/internal/konst"
 )
@@ -19,9 +21,11 @@ import (
 const (
 	goldenSuffix   = ".golden"
 	readableSuffix = ".txt"
-	headerFields   = "  ·  "
+	settingsLink   = "[settings]"
 	leastScenarios = 5
 	leastPlain     = 7
+	budgetWidth    = 120
+	budgetHeight   = 36
 )
 
 func stem(frame Frame) string {
@@ -64,9 +68,16 @@ func TestEveryGoldenHasAReadableSiblingWithNoEscapeAndNoVersion(t *testing.T) {
 	}
 }
 
-func TestTheClockIsInEveryFrameOfEverySequenceAndNeverGoesDown(t *testing.T) {
+func chatScenarios() []string {
+	return []string{"plain", "twelve-tools", "markdown", "asking", "interrupted", "letting-tools-finish", "failed", "child"}
+}
+
+func TestTheClockIsInEveryChatFrameAndNeverGoesDown(t *testing.T) {
 	session, turn := map[string]int{}, map[string]int{}
 	for _, frame := range shot() {
+		if !slices.Contains(chatScenarios(), frame.Scenario) {
+			continue
+		}
 		lines := strings.Split(ansi.Strip(frame.Content), "\n")
 		seconds, found := headerClock(lines[0])
 		if !found {
@@ -91,8 +102,19 @@ func TestTheClockIsInEveryFrameOfEverySequenceAndNeverGoesDown(t *testing.T) {
 }
 
 func headerClock(row string) (int, bool) {
-	fields := strings.Split(strings.TrimSpace(row), headerFields)
-	return clockSeconds(fields[len(fields)-1])
+	fields := strings.Fields(row)
+	link := slices.Index(fields, settingsLink)
+	start := link
+	for start > 0 {
+		if _, ok := clockSeconds(fields[start-1]); !ok {
+			break
+		}
+		start--
+	}
+	if start == link || link < 0 {
+		return 0, false
+	}
+	return clockSeconds(strings.Join(fields[start:link], " "))
 }
 
 func turnClock(lines []string) (int, bool) {
@@ -135,9 +157,10 @@ func clockSeconds(text string) (int, bool) {
 }
 
 func TestFiveScenariosExistAndThePlainTurnRunsFromEmptyToFinished(t *testing.T) {
+	frames := shot()
 	counted := map[string]int{}
 	order := []string{}
-	for _, frame := range shot() {
+	for _, frame := range frames {
 		if counted[frame.Scenario] == 0 {
 			order = append(order, frame.Scenario)
 		}
@@ -149,45 +172,47 @@ func TestFiveScenariosExistAndThePlainTurnRunsFromEmptyToFinished(t *testing.T) 
 	if counted["plain"] < leastPlain {
 		t.Errorf("the plain turn has %d frames, want at least %d", counted["plain"], leastPlain)
 	}
-	for _, scenario := range order {
+	for _, scenario := range chatScenarios() {
 		if counted[scenario] < 2 {
 			t.Errorf("%s has %d frames, so it is a still and not a sequence", scenario, counted[scenario])
 		}
 	}
-	first, opens := Find("plain/01-fresh", fixture.Width, fixture.Height)
-	if !opens {
-		t.Fatal("the plain turn does not start on an empty session")
+	shown := map[string]string{}
+	for _, frame := range frames {
+		shown[frame.Name] = ansi.Strip(frame.Content)
 	}
-	if !strings.Contains(ansi.Strip(first.Content), "type a task and press enter") {
-		t.Errorf("the first frame of the plain turn is not a fresh session\n%s", ansi.Strip(first.Content))
+	if !strings.Contains(shown["plain/01-fresh"], session.Placeholder) {
+		t.Errorf("the first frame of the plain turn is not a fresh session\n%s", shown["plain/01-fresh"])
 	}
-	done, found := Find("plain/09-answered", fixture.Width, fixture.Height)
-	if !found {
-		t.Fatal("the plain turn does not end on a finished turn")
-	}
-	if !strings.Contains(ansi.Strip(done.Content), "cooked for") {
-		t.Errorf("the last frame of the plain turn is not finished\n%s", ansi.Strip(done.Content))
+	if !strings.Contains(shown["plain/09-answered"], "cooked for") {
+		t.Errorf("the last frame of the plain turn is not finished\n%s", shown["plain/09-answered"])
 	}
 }
 
-func TestEveryFrameNamesTheOneFixtureSet(t *testing.T) {
+func TestEveryChatFrameNamesTheOneFixtureSet(t *testing.T) {
 	for _, frame := range shot() {
-		top := strings.Split(ansi.Strip(frame.Content), "\n")[0]
-		for _, want := range []string{"./" + fixture.Path, fixture.Branch, fixture.Slug, fixture.SessionName, "#3c5f71"} {
-			if !strings.Contains(top, want) {
-				t.Errorf("%s: the top bar does not name %q\n%s", frame.Name, want, top)
-			}
+		if !slices.Contains(chatScenarios(), frame.Scenario) {
+			continue
 		}
-		if !strings.Contains(ansi.Strip(frame.Content), "tofu "+fixture.Release) {
-			t.Errorf("%s: the bottom bar does not name the release %q", frame.Name, fixture.Release)
+		lines := strings.Split(ansi.Strip(frame.Content), "\n")
+		if !strings.Contains(lines[0], "./"+fixture.Path) {
+			t.Errorf("%s: the top bar does not name ./%s\n%s", frame.Name, fixture.Path, lines[0])
+		}
+		if footer := lines[len(lines)-1]; !strings.Contains(footer, fixture.Slug) {
+			t.Errorf("%s: the footer does not name %s\n%s", frame.Name, fixture.Slug, footer)
 		}
 	}
 }
 
-func TestAFrameStaysInsideTheFrameBudget(t *testing.T) {
-	r := newReel(fixture.Width, fixture.Height)
-	for _, step := range twelveTools().beats {
-		step.play(r)
+func TestEveryScreenStaysInsideTheFrameBudget(t *testing.T) {
+	home := t.TempDir()
+	t.Cleanup(stubbedHost(home))
+	for index, one := range append([]scenario{twelveTools()}, screens()...) {
+		r := newReel(budgetWidth, budgetHeight, filepath.Join(home, strconv.Itoa(index)), one.tune)
+		for _, step := range one.beats {
+			step.play(r)
+		}
+		frametime.Frames(t, one.name, func() { _ = r.app.View().Content })
+		r.driver.Close()
 	}
-	frametime.Frames(t, "twelve-tools answered", func() { _ = r.app.View().Content })
 }

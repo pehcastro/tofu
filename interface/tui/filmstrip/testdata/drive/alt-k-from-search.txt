@@ -1,0 +1,7 @@
+# Alt+K from search switches to commands
+key ctrl+k
+wait Screens, agents and events
+key alt+k
+wait Jump to a view or run an action
+absent Screens, agents and events
+screen

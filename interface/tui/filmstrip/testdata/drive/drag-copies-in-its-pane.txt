@@ -1,0 +1,14 @@
+# a drag copies, stays in its pane, skips padding and the scrollbar, and never clicks
+type agents
+key enter
+wait cooked for
+drag 4 17 40 18
+wait the selection copied
+absent Sub-agents
+screen
+key alt+2
+wait All activity
+drag 30 23 99 26
+drag 60 25 5 25
+absent Waiting for request  │
+screen

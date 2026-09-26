@@ -1,0 +1,24 @@
+# Esc peels one dialog and refocuses the composer
+key alt+k
+wait Jump to a view or run an action
+key esc
+absent Jump to a view or run an action
+type back in the composer
+wait back in the composer
+screen
+key alt+k
+key esc
+key backspace
+key enter
+wait noted: back in the compose
+type /settings
+key enter
+key right
+key right
+key down
+key enter
+wait TOFU ACTIONS
+key esc
+absent TOFU ACTIONS
+wait Interaction
+screen

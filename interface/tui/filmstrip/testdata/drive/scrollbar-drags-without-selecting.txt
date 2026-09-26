@@ -1,0 +1,9 @@
+# the scrollbar drags without selecting
+type agents
+key enter
+key alt+2
+wait 6-8/8
+screen
+drag 99 27 99 5
+absent the selection copied
+screen

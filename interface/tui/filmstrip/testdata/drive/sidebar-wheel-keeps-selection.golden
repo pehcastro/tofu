@@ -1,0 +1,90 @@
+ tofu  ./tofu/                     chat   agents   edits   shells                     0s [settings] 
+                                                                                                    
+                                                                                                    
+  Sub-agents               [&c1]                                                   1-3/3 · newest   
+  3 agents · live acti…                                                                             
+                           │                                                                  │    │
+  OVERVIEW                 │  [&c1]  owns                                                     │    ┃
+    All activity      8    │  internal/judge/policy/**                                        │    ┃
+                           │                                                                  │    ┃
+  ACTIVE  0                ╰──────────────────────────────────────────────────────────────────╯    ┃
+                                                                                                   ┃
+  WAITING  3               ╭──────────────────────────────────────────────────────────────────╮    ┃
+    [&orchestrator]   .    │                                                                  │    ┃
+    Waiting for request    │  [&c1]  tool                        just now  [tool#7a1c02]      │    ┃
+  › [&c1]             .    │  read                                                            │    ┃
+    read the policy lo…    │  internal/judge/policy/resolve.go                                │    ┃
+    [&c2]             .    │  complete                                                        │    ┃
+    write the ledger f…    │    209 lines, 6.2 KB                                             │    ┃
+                           │                                                                  │    ┃
+  DEAD  1                  ╰──────────────────────────────────────────────────────────────────╯    ┃
+    [&c3]             ✗                                                                            ┃
+    run the shell suite    ╭──────────────────────────────────────────────────────────────────╮    ┃
+                           │                                                                  │    ┃
+                           │  [&c1]  tool                        just now  [tool#7a1c03]      │    ┃
+                           │  grep                                                            │    ┃
+                           │  Resolve( internal/judge                                         │    ┃
+                           │  running                                                         │    ┃
+                           │                                                                  │    ┃
+                           ╰──────────────────────────────────────────────────────────────────╯    ┃
+ ctx 118k/250k  |  claude 5h 62%                                                                    
+ tofu  ./tofu/                     chat   agents   edits   shells                     0s [settings] 
+                                                                                                    
+                                                                                                    
+  Sub-agents               [&c1]                                                   1-3/3 · newest   
+  3 agents · live acti…                                                                             
+                           ╭──────────────────────────────────────────────────────────────────╮    ┃
+  OVERVIEW                 │                                                                  │    ┃
+    All activity      8    │  [&c1]  owns                                                     │    ┃
+                           │  internal/judge/policy/**                                        │    ┃
+  ACTIVE  0                │                                                                  │    ┃
+                           ╰──────────────────────────────────────────────────────────────────╯    ┃
+  WAITING  3                                                                                       ┃
+    [&orchestrator]   .    ╭──────────────────────────────────────────────────────────────────╮    ┃
+    Waiting for request    │                                                                  │    ┃
+  › [&c1]             .    │  [&c1]  tool                        just now  [tool#7a1c02]      │    ┃
+    read the policy lo…    │  read                                                            │    ┃
+    [&c2]             .    │  internal/judge/policy/resolve.go                                │    ┃
+    write the ledger f…    │  complete                                                        │    ┃
+                           │    209 lines, 6.2 KB                                             │    ┃
+  DEAD  1                  │                                                                  │    ┃
+    [&c3]             ✗    ╰──────────────────────────────────────────────────────────────────╯    ┃
+    run the shell suite                                                                            ┃
+                           ╭──────────────────────────────────────────────────────────────────╮    ┃
+                           │                                                                  │    ┃
+                           │  [&c1]  tool                        just now  [tool#7a1c03]      │    ┃
+                           │  grep                                                            │    ┃
+                           │  Resolve( internal/judge                                         │    ┃
+                           │  running                                                         │    ┃
+                           │                                                                  │    │
+ ctx 118k/250k  |  claude 5h 62%                                                                    
+ tofu  ./tofu/                     chat   agents   edits   shells                     0s [settings] 
+                                                                                                    
+                                                                                                    
+  Sub-agents               [&c1]                                                   1-3/3 · newest   
+  3 agents · live acti…                                                                             
+                           │                                                                  │    │
+  OVERVIEW                 │  [&c1]  owns                                                     │    ┃
+    All activity      8    │  internal/judge/policy/**                                        │    ┃
+                           │                                                                  │    ┃
+  ACTIVE  0                ╰──────────────────────────────────────────────────────────────────╯    ┃
+                                                                                                   ┃
+  WAITING  3               ╭──────────────────────────────────────────────────────────────────╮    ┃
+    [&orchestrator]   .    │                                                                  │    ┃
+    Waiting for request    │  [&c1]  tool                        just now  [tool#7a1c02]      │    ┃
+  › [&c1]             .    │  read                                                            │    ┃
+    read the policy lo…    │  internal/judge/policy/resolve.go                                │    ┃
+    [&c2]             .    │  complete                                                        │    ┃
+    write the ledger f…    │    209 lines, 6.2 KB                                             │    ┃
+                           │                                                                  │    ┃
+  DEAD  1                  ╰──────────────────────────────────────────────────────────────────╯    ┃
+    [&c3]             ✗                                                                            ┃
+    run the shell suite    ╭──────────────────────────────────────────────────────────────────╮    ┃
+                           │                                                                  │    ┃
+                           │  [&c1]  tool                        just now  [tool#7a1c03]      │    ┃
+                           │  grep                                                            │    ┃
+                           │  Resolve( internal/judge                                         │    ┃
+                           │  running                                                         │    ┃
+                           │                                                                  │    ┃
+                           ╰──────────────────────────────────────────────────────────────────╯    ┃
+ ctx 118k/250k  |  claude 5h 62%                                                                    

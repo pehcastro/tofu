@@ -1,0 +1,18 @@
+# a setting choice previews on arrow and wheel, and Esc restores
+type /settings
+key enter
+key down
+key down
+key down
+key enter
+wait 1-3/3
+key down
+wait detailed  ▾
+screen
+wheel 50 12 down
+wait hidden  ▾
+screen
+key esc
+wait compact  ▾
+absent hidden  ▾
+screen

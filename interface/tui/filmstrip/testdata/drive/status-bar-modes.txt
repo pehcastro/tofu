@@ -1,0 +1,34 @@
+# statusBar hidden, detailed and compact change the footer; settings keeps its row between visits
+screen
+type /settings
+key enter
+key down
+key down
+key down
+key enter
+key down
+key enter
+wait detailed  ▾
+key esc
+wait Ask tofu
+screen
+type /settings
+key enter
+key enter
+key down
+key enter
+wait hidden  ▾
+key esc
+wait Ask tofu
+absent claude 5h
+screen
+type /settings
+key enter
+key enter
+key down
+key enter
+wait compact  ▾
+key esc
+wait Ask tofu
+wait claude 5h 62%
+screen

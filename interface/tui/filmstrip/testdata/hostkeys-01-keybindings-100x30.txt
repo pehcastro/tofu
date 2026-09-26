@@ -1,0 +1,30 @@
+                      
+  tofu settings         Interaction                                                 global scope
+  Global preferences    Choose a row to inspect and change its value.
+                      
+  CATEGORIES              Composer                                                  standard  ▾ 
+    Appearance    05      Enter sends; Ctrl+J inserts newline
+    Models & rol… 02  
+  › Interaction                                                                         edit  ▾ 
+    Context       Keybindings                                                  esc  
+    Files         Tofu shortcuts                                                    
+    Shell                                                                           pect Zed  ▾ 
+    Turn          TOFU ACTIONS                                                      
+    Startup       These work after the terminal sends the key to tofu.              
+                  >  Search         ctrl+k                                               run  ▾ 
+  NAVIGATE          Commands       alt+k                                            ow or enfor…
+  ↑↓ setting · ←    Settings       not set                                          
+  section           Models         ctrl+l                                                   ● on
+  ctrl+k search     Quote selection  ctrl+r                                         used
+  esc chat                                                                          
+                  Host editors may still intercept a chosen key.                    
+                                                                                    
+                  ↑↓ choose · enter edit · bksp clear · esc                         
+                                                                                    
+                      
+                      
+                      
+                      
+                      
+                      
+                      

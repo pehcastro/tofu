@@ -1,0 +1,8 @@
+# added and deleted rows are tinted across the whole row, printed with their colours
+type edits
+key enter
+key alt+3
+wait MODIFIED
+click 82 7
+wait lock.Valid(declared)
+screen

@@ -1,0 +1,20 @@
+ tofu        chat   agents   edits   shells   0s [settings] 
+                                                            
+                                                            
+  All activity                      7-8/8 · wheel ↑ older   
+                                                            
+  │    --- FAIL: TestKillTree (0.31s)                 │    │
+  │                                                   │    │
+  ╰───────────────────────────────────────────────────╯    │
+                                                           │
+  ╭───────────────────────────────────────────────────╮    │
+  │                                                   │    │
+  │  [&orchestrator]  tool                            │    │
+  │  just now  [tool#9d4f10]                          │    │
+  │  read                                             │    │
+  │  internal/turn/loop.go                            │    │
+  │  complete                                         │    │
+  │    412 lines, 11.8 KB                             │    │
+  │                                                   │    ┃
+  ╰───────────────────────────────────────────────────╯    ┃
+ ctx 118k/250k  |  claude 5h 62%                            

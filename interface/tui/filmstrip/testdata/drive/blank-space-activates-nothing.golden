@@ -1,0 +1,60 @@
+ tofu  ./tofu/                     chat   agents   edits   shells                     0s [settings] 
+                                                                                                    
+                                                                                                    
+  Sub-agents               All activity                                     6-8/8 · wheel ↑ older   
+  3 agents · live acti…                                                                             
+                           │    spawned [&c3]                                                 │    │
+  OVERVIEW                 │                                                                  │    │
+  › All activity      8    ╰──────────────────────────────────────────────────────────────────╯    │
+                                                                                                   │
+  ACTIVE  0                ╭──────────────────────────────────────────────────────────────────╮    │
+                           │                                                                  │    │
+  WAITING  3               │  [&c3]  tool                        just now  [tool#7c3e01]      │    │
+    [&orchestrator]   .    │  bash                                                            │    │
+    Waiting for request    │  go test ./internal/shell/...                                    │    │
+    [&c1]             .    │  complete                                                        │    │
+    read the policy lo…    │    exit 1                                                        │    │
+    [&c2]             .    │    --- FAIL: TestKillTree (0.31s)                                │    │
+    write the ledger f…    │                                                                  │    │
+                           ╰──────────────────────────────────────────────────────────────────╯    │
+  DEAD  1                                                                                          │
+    [&c3]             ✗    ╭──────────────────────────────────────────────────────────────────╮    │
+    run the shell suite    │                                                                  │    │
+                           │  [&orchestrator]  tool              just now  [tool#9d4f10]      │    ┃
+                           │  read                                                            │    ┃
+                           │  internal/turn/loop.go                                           │    ┃
+                           │  complete                                                        │    ┃
+                           │    412 lines, 11.8 KB                                            │    ┃
+                           │                                                                  │    ┃
+                           ╰──────────────────────────────────────────────────────────────────╯    ┃
+ ctx 118k/250k  |  claude 5h 62%                                                                    
+ tofu  ./tofu/                     chat   agents   edits   shells                     0s [settings] 
+
+                                                                                                  
+    You                                                                  14:32  [message#672866]  
+    agents                                                                                        
+                  Commands                                                     esc                
+                  Jump to a view or run an action                                   
+    ⟩ spawn read                                                                    pawned [&c1]
+        [tool#5e  │> Type to filter                                                 
+    ⟩ spawn writ                                                                    pawned [&c2]
+        [tool#5e  >  chat                                                    /chat  
+    ⟩ spawn run     the conversation and the composer                               pawned [&c3]
+        [tool#5e                                                                    
+    · (1) tools     sub-agents                                         /sub-agents  
+                    every tool call and every child, in one feed                    
+                                                                                    
+    [&orchestrat    file-edits                                         /file-edits  sage#9d4f11]
+    three sub-ag    every changed line, who made it and where                       d its suite.
+    [tool#9d4f10                                                                    
+                    shells                                                 /shells  
+    · cooked for    the persistent processes an agent left running                  
+                                                                                    
+                    models                                                 /models  
+                    every model the signed subscriptions serve, and which one the   
+  cooked for 0s   next turn runs                                                    
+                                                                                    
+                                                                                                    
+  ▯ Ask tofu to build, inspect, or delegate                                                         
+                                                                                                    
+ ctx 118k/250k  |  claude 5h 62%  [&orchestrator]  ·  claude-sub/claude-opus-5  ·  reasoning medium 

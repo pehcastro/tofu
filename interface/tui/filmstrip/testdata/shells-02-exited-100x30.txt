@@ -1,0 +1,30 @@
+ tofu  ./tofu/                     chat   agents   edits   shells                     0s [settings] 
+                                                                                                    
+                                                                                                    
+  Shells                   suite                                                        exited 0    
+  1 running  ·  1          Owned by [&orchestrator]                                                 
+  exited                                                                                            
+                            PROCESS                                                                 
+    dev-serv…  running      PID       17902                                                         
+    pid 18244               Runtime   1m 20s                                                        
+  › suite     exited 0      CWD       .                                                             
+    pid 17902               Command   go test ./internal/judge/...                                  
+                                                                                                    
+                                                                                                    
+                           OUTPUT  ·  wheel / PgUp / PgDn                                           
+                           ok  tofu/internal/judge 0.42s                                            
+                           ok  tofu/internal/judge/policy 0.18s                                     
+                           ok  tofu/internal/judge/ledger 0.09s                                     
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+ ctx 118k/250k  |  claude 5h 62%                                                                    

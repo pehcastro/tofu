@@ -1,0 +1,11 @@
+# a long paste becomes [Text N characters], through Ctrl+V and through the terminal's own paste
+key ctrl+v
+wait [Text 216 characters]
+screen
+key ctrl+j
+paste the gate reads the policy before the wire because a policy that is not resolved cannot say whether a verdict is enforced, and a verdict that is not enforced cannot be trusted by anything
+wait [Text 186 characters]
+key ctrl+j
+paste short paste stays text
+wait short paste stays text
+screen

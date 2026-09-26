@@ -1,0 +1,30 @@
+                                                                                                    
+  tofu settings         Appearance                                                  global scope    
+  Global preferences    Choose a row to inspect and change its value.                               
+                                                                                                    
+  CATEGORIES            › Theme                                                         tofu  ▾     
+  › Appearance    05      tofu uses Zed Nu Disco; choose a palette                                  
+    Models & rol… 02                                                                                
+    Interaction                                                                     fortable  ▾     
+    Context       Search settings                                              esc                  
+    Files         Type to filter · ↑↓ select · enter jump                                           
+    Shell                                                                             subtle  ▾     
+    Turn          › diff█                                                                           
+    Startup                                                                                         
+                  › Interaction / Confirmations                                      compact  ▾     
+  NAVIGATE          Files / Diff context                                                            
+  ↑↓ setting · ←                                                                                    
+  section         1 of 2 results                                                        auto  ▾     
+  ctrl+k search                                                                                     
+  esc chat                                                                                          
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                          Interface preview                                                         
+                          Readable text, quiet surfaces, and bounded focus.                         
+                          ● active    ● attention    ● failed                                       
+                                                                                                    
+                                                                                                    
+                        enter change  ·  ctrl+k search  ·  esc chat                                 
+                                                                                                    
+                                                                                                    

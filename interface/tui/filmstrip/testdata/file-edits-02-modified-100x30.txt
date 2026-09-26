@@ -1,0 +1,30 @@
+ tofu  ./tofu/                     chat   agents   edits   shells                     0s [settings] 
+                                                                                                    
+                                                                                                    
+  File edits               internal/judge/policy/resolve.go                         [edit#e5a101]   
+  2 files  ·  2 changes    MODIFIED  ·  1/2 files  ·  +5  -2  ·  @internal/judge/policy/resolve.go  
+  1 mod · 1 new · 0 del    1-14/14  ·  PgUp/PgDn · n/p                                              
+  +1.2k  -2 lines                                                                                   
+                           @@ -12,9 +12,11 @@ func Resolve(declared Policy, lock Lock)              
+  AUTHOR                   (Resolved, error) {                                                      
+  › All changes       2        12      if lock.Empty() {                                            
+    &tofu     +1.2k  -2        13          return Resolved{Mode: Shadow}, nil                       
+                               14      }                                                            
+  FILES                    -   15      if declared.Mode == Enforced {                               
+  + [edit#e5a102] floo…    -   16          return Resolved{Mode: Enforced}, nil                     
+  ~ [edit#e5a101] reso…    +   15      if declared.Mode == Enforced && lock.Valid(declared) {       
+                           +   16          return Resolved{Mode: Enforced, Lock: lock.ID}, nil      
+                               17      }                                                            
+                           +   18      if declared.Mode == Enforced {                               
+                           +   19          return Resolved{Mode: Shadow, Why: "the lock does not    
+                           match"}, nil                                                             
+                           +   20      }                                                            
+                               21      return Resolved{Mode: declared.Mode}, nil                    
+                               22  }                                                                
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+ ctx 118k/250k  |  claude 5h 62%                                                                    

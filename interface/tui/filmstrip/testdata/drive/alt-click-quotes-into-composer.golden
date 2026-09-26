@@ -1,0 +1,30 @@
+ tofu  ./tofu/                     chat   agents   edits   shells                     0s [settings] 
+                                                                                                    
+                                                                                                    
+    You                                                                  14:32  [message#672866]    
+    agents                                                                                          
+                                                                                                    
+                                                                                                    
+    ⟩ spawn read the policy loader                                                 spawned [&c1]    
+        [tool#5e01aa]                                                                               
+    ⟩ spawn write the ledger floor test                                            spawned [&c2]    
+        [tool#5e02aa]                                                                               
+    ⟩ spawn run the shell suite                                                    spawned [&c3]    
+        [tool#5e03aa]                                                                               
+    · (1) tools · 0s · [tool#9d4f10]                                                                
+                                                                                                    
+                                                                                                    
+    [&orchestrator]                                                      14:32  [message#9d4f11]    
+    three sub-agents run: [&c1] reads the loader, [&c2] waits on review, [&c3] failed its suite.    
+    [tool#9d4f10] is the loop I read.                                                               
+                                                                                                    
+    · cooked for 0s | waited 0s [request#9d4f10]                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+  cooked for 0s  |  waited 0s  [request#9d4f10]                                                     
+                                                                                                    
+                                                                                                    
+  [quote#9d4f10]                                                                                    
+                                                                                                    
+ ctx 118k/250k  |  claude 5h 62%  [&orchestrator]  ·  claude-sub/claude-opus-5  ·  reasoning medium 

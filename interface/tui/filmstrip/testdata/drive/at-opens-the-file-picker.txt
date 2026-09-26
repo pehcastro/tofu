@@ -1,0 +1,16 @@
+# @ opens the file picker, which stays in the workspace
+type read
+key space
+key @
+wait Reference a file
+screen
+key left
+key left
+wait Reference a file
+wait README.md
+screen
+key down
+key down
+key enter
+wait [File @README.md]
+screen

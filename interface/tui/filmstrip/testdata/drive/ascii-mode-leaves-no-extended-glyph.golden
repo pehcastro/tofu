@@ -1,0 +1,240 @@
+ tofu  ./tofu/                     chat   agents   edits   shells                     0s [settings] 
+                                                                                                    
+                                                                                                   |
+                                                                                                   |
+    [&orchestrator]                                                      14:32  [message#9d4f11]   |
+    three sub-agents run: [&c1] reads the loader, [&c2] waits on review, [&c3] failed its suite.   |
+    [tool#9d4f10] is the loop I read.                                                              |
+                                                                                                   |
+    . cooked for 0s | waited 0s [request#9d4f10]                                                   |
+                                                                                                   |
+                                                                                                   |
+                                                                                                   |
+    You                                                                  14:32  [message#672500]   |
+    edits                                                                                          |
+                                                                                                   |
+                                                                                                   |
+    . (2) tools . 0s . [tool#e5a102]                                                               |
+                                                                                                   |
+                                                                                                   |
+    [&orchestrator]                                                      14:32  [message#e5a103]   |
+    the resolver checks the lock now, and [edit#e5a102] holds the 1200 floor rows.                 |
+                                                                                                   |
+    . cooked for 0s | waited 0s [request#e5a102]                                                   |
+                                                                                                    
+  cooked for 0s  |  waited 0s  [request#e5a102]                                                     
+                                                                                                    
+                                                                                                    
+  # Ask tofu to build, inspect, or delegate                                                         
+                                                                                                    
+ ctx 118k/250k  |  claude 5h 62%  [&orchestrator]  .  claude-sub/claude-opus-5  .  reasoning medium 
+ tofu  ./tofu/                     chat   agents   edits   shells                     0s [settings] 
+                                                                                                    
+                                                                                                    
+  Sub-agents               All activity                                   8-10/10 . wheel ^ older   
+  3 agents . live acti.                                                                             
+                           |  complete                                                        |    |
+  OVERVIEW                 |    412 lines, 11.8 KB                                            |    |
+  > All activity     10    |                                                                  |    |
+                           +------------------------------------------------------------------+    |
+  ACTIVE  0                                                                                        |
+                           +------------------------------------------------------------------+    |
+  WAITING  3               |                                                                  |    |
+    [&orchestrator]   .    |  [&orchestrator]  file edit         just now  [edit#e5a101]      |    |
+    Waiting for request    |  edit                                                            |    |
+    [&c1]             .    |  Full diff in File edits. internal/judge/policy/resolve.go       |    |
+    read the policy lo.    |  +5  -2  .  @internal/judge/policy/resolve.go                    |    |
+    [&c2]             .    |    ok                                                            |    |
+    write the ledger f.    |                                                                  |    |
+                           +------------------------------------------------------------------+    |
+  DEAD  1                                                                                          |
+    [&c3]             x    +------------------------------------------------------------------+    |
+    run the shell suite    |                                                                  |    |
+                           |  [&orchestrator]  new file          just now  [edit#e5a102]      |    |
+                           |  write                                                           |    |
+                           |  Full diff in File edits. internal/judge/ledger/floor_rows.go    |    |
+                           |  +1.2k  +0  .  @internal/judge/ledger/floor_rows.go              |    |
+                           |    ok                                                            |    |
+                           |                                                                  |    |
+                           +------------------------------------------------------------------+    |
+ ctx 118k/250k  |  claude 5h 62%                                                                    
+ tofu  ./tofu/                     chat   agents   edits   shells                     0s [settings] 
+                                                                                                    
+                                                                                                    
+  File edits               internal/judge/ledger/floor_rows.go                      [edit#e5a102]   
+  2 files  .  2 changes    ADDED  .  2/2 files  .  +1.2k  +0  .                                     
+  1 mod . 1 new . 0 del    @internal/judge/ledger/floor_rows.go                                     
+  +1.2k  -2 lines          1181-1200/1200  .  PgUp/PgDn . n/p                                       
+                                                                                                   |
+  AUTHOR                   + 1181  var row1181 = floorRow{Question: "risk", Line: 1181}            |
+  > All changes       2    + 1182  var row1182 = floorRow{Question: "risk", Line: 1182}            |
+    &tofu     +1.2k  -2    + 1183  var row1183 = floorRow{Question: "risk", Line: 1183}            |
+                           + 1184  var row1184 = floorRow{Question: "risk", Line: 1184}            |
+  FILES                    + 1185  var row1185 = floorRow{Question: "risk", Line: 1185}            |
+  + [edit#e5a102] floo.    + 1186  var row1186 = floorRow{Question: "risk", Line: 1186}            |
+  ~ [edit#e5a101] reso.    + 1187  var row1187 = floorRow{Question: "risk", Line: 1187}            |
+                           + 1188  var row1188 = floorRow{Question: "risk", Line: 1188}            |
+                           + 1189  var row1189 = floorRow{Question: "risk", Line: 1189}            |
+                           + 1190  var row1190 = floorRow{Question: "risk", Line: 1190}            |
+                           + 1191  var row1191 = floorRow{Question: "risk", Line: 1191}            |
+                           + 1192  var row1192 = floorRow{Question: "risk", Line: 1192}            |
+                           + 1193  var row1193 = floorRow{Question: "risk", Line: 1193}            |
+                           + 1194  var row1194 = floorRow{Question: "risk", Line: 1194}            |
+                           + 1195  var row1195 = floorRow{Question: "risk", Line: 1195}            |
+                           + 1196  var row1196 = floorRow{Question: "risk", Line: 1196}            |
+                           + 1197  var row1197 = floorRow{Question: "risk", Line: 1197}            |
+                           + 1198  var row1198 = floorRow{Question: "risk", Line: 1198}            |
+                           + 1199  var row1199 = floorRow{Question: "risk", Line: 1199}            |
+                           + 1200  var lastRow = floorRow{Question: "risk", Line: 1200}             
+                                                                                                    
+ ctx 118k/250k  |  claude 5h 62%                                                                    
+ tofu  ./tofu/                     chat   agents   edits   shells                     0s [settings] 
+                                                                                                    
+                                                                                                    
+  Shells                   dev-server                                                    running    
+  1 running  .  1          Owned by [&c1]                                                           
+  exited                                                                                            
+                            PROCESS                                                                 
+  > dev-serv.  running      PID       18244                                                         
+    pid 18244               Runtime   7m 00s                                                        
+    suite     exited 0      CWD       internal/serve                                                
+    pid 17902               Command   go run ./cmd/tofu serve --port 7411                           
+                                                                                                    
+                                                                                                    
+                           OUTPUT  .  wheel / PgUp / PgDn                                           
+                           GET /ledger/30 200 3.1ms                                                |
+                           GET /ledger/31 200 4.1ms                                                |
+                           GET /ledger/32 200 5.1ms                                                |
+                           GET /ledger/33 200 6.1ms                                                |
+                           GET /ledger/34 200 7.1ms                                                |
+                           GET /ledger/35 200 1.1ms                                                |
+                           GET /ledger/36 200 2.1ms                                                |
+                           GET /ledger/37 200 3.1ms                                                |
+                           GET /ledger/38 200 4.1ms                                                |
+                           GET /ledger/39 200 5.1ms                                                |
+                           GET /ledger/40 200 6.1ms                                                |
+                           warning: slow request /ledger/floor 812ms                               |
+                                                                                                    
+                           k request kill . confirmation required                                   
+                                                                                                    
+ ctx 118k/250k  |  claude 5h 62%                                                                    
+ tofu  ./tofu/                     chat   agents   edits   shells                     0s [settings] 
+
+                         
+  Shells                   dev-server                                                    running 
+  1 running  .  1          Owned by [&c1]
+  exited                 
+                            PROCESS                                                            
+  > dev-serv.  running      PID       18244                                                    
+    pid 18244               Runtime   7m 00s                                                   
+    suite     exite                                                                            
+    pid 17902        Stop this shell?                                       esc                
+                     The process ends and its log stays.                                       
+                                                                                 
+                      dev-server . go run ./cmd/tofu serve --port 7411           
+                                                                                                   |
+                     >  Stop the process                                                           |
+                       End it now                                                                  |
+                                                                                                   |
+                       Cancel                                                                      |
+                       Leave it running                                                            |
+                                                                                                   |
+                           GET /ledger/37 200 3.1ms                                                |
+                           GET /ledger/38 200 4.1ms                                                |
+                           GET /ledger/39 200 5.1ms                                                |
+                           GET /ledger/40 200 6.1ms                                                |
+                           warning: slow request /ledger/floor 812ms                               |
+                         
+                           k request kill . confirmation required
+                         
+ ctx 118k/250k  |  claude 5h 62%                                                                    
+ tofu  ./tofu/                     chat   agents   edits   shells                     0s [settings] 
+
+                                                                                                   |
+                                                                                                   |
+    [&orchestrat                                                                    sage#9d4f11]   |
+    three sub-ag  Commands                                                     esc  d its suite.   |
+    [tool#9d4f10  Jump to a view or run an action                                                  |
+                                                                                                   |
+    . cooked for  |> Type to filter                                                                |
+                                                                                                   |
+                  >  chat                                                    /chat                 |
+                    the conversation and the composer                                              |
+    You                                                                             sage#672500]   |
+    edits           sub-agents                                         /sub-agents                 |
+                    every tool call and every child, in one feed                                   |
+                                                                                                   |
+    . (2) tools     file-edits                                         /file-edits                 |
+                    every changed line, who made it and where                                      |
+                                                                                                   |
+    [&orchestrat    shells                                                 /shells  sage#e5a103]   |
+    the resolver    the persistent processes an agent left running                                 |
+                                                                                                   |
+    . cooked for    models                                                 /models                 |
+                    every model the signed subscriptions serve, and which one the   
+  cooked for 0s   next turn runs                                                    
+                                                                                    
+                                                                                                    
+  | Ask tofu to build, inspect, or delegate                                                         
+                                                                                                    
+ ctx 118k/250k  |  claude 5h 62%  [&orchestrator]  .  claude-sub/claude-opus-5  .  reasoning medium 
+                                                                                                    
+  tofu settings         Appearance                                                  global scope    
+  Global preferences    Choose a row to inspect and change its value.                               
+                                                                                                    
+  CATEGORIES            > Theme                                                         tofu  v     
+  > Appearance    05      tofu uses Zed Nu Disco; choose a palette                                  
+    Models & rol. 02                                                                                
+    Interaction   05      Density                                                comfortable  v     
+    Context       05      Spacing across lists and panels                                           
+    Files         03                                                                                
+    Shell         05      Animations                                                  subtle  v     
+    Turn          02      Motion for conversational states                                          
+    Startup       01                                                                                
+                          Status bar                                                 compact  v     
+  NAVIGATE                Context, quotas, and runtime counters                                     
+  ^v setting . <>                                                                                   
+  section                 Color mode                                                    auto  v     
+  ctrl+k search .         Terminal color capability                                                 
+  esc chat                                                                                          
+                        LIVE PREVIEW                                                                
+                                                                                                    
+                           tofu    project  .  develop                                              
+                          Interface preview                                                         
+                          Readable text, quiet surfaces, and bounded focus.                         
+                          * active    * attention    * failed                                       
+                                                                                                    
+                                                                                                    
+                        enter change  .  ctrl+k search  .  esc chat                                 
+                                                                                                    
+                                                                                                    
+                                                                                                    
+  tofu settings         Appearance                                                  global scope    
+  Global preferences    Choose a row to inspect and change its value.                               
+                                                                                                    
+  CATEGORIES                                                                            tofu  v     
+  > Appearance    05     Theme                                          esc                         
+    Models & rol. 02     tofu uses Zed Nu Disco; choose a palette                                   
+    Interaction   05                                                             comfortable  v     
+    Context       05     >  tofu                                                                    
+    Files         03                                                                                
+    Shell         05       tofu light                                                 subtle  v     
+    Turn          02                                                                                
+    Startup       01       tofu dusk                                                                
+                                                                                     compact  v     
+  NAVIGATE                 Solarized Light                                                          
+  ^v setting . <>                                                                                   
+  section                  Dracula                                                      auto  v     
+  ctrl+k search .                                                                                   
+  esc chat                 Nord                                                                     
+                                                                                                    
+                           Gruvbox                                                                  
+                                                                                                    
+                           terminal                                                                 
+                                                                                                    
+                         1-8/8 . ^v preview . enter apply . esc cancel                              
+                                                                                                    
+                                                                                                    
+                        enter change  .  ctrl+k search  .  esc chat                                 
+                                                                                                    
+                                                                                                    

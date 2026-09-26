@@ -1,0 +1,11 @@
+# a reference is clickable only on its own cells
+type agents
+key enter
+wait cooked for
+click 17 18
+absent All activity
+click 3 18
+absent All activity
+click 16 18
+wait All activity
+screen

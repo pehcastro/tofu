@@ -1,0 +1,30 @@
+ tofu  ./tofu/                   chat   agents (1)   edits   shells                   0s [settings] 
+                                                                                                    
+                                                                                                    
+  Sub-agents               [&c3]                                                   1-3/3 · newest   
+  3 agents · live acti…                                                                             
+                           ╭──────────────────────────────────────────────────────────────────╮     
+  OVERVIEW                 │                                                                  │     
+    All activity      8    │  [&c3]  owns                                                     │     
+                           │  internal/shell/**                                               │     
+  ACTIVE  1                │                                                                  │     
+    [&c1]             █    ╰──────────────────────────────────────────────────────────────────╯     
+    read the policy lo…                                                                             
+                           ╭──────────────────────────────────────────────────────────────────╮     
+  WAITING  2               │                                                                  │     
+    [&orchestrator]   .    │  [&c3]  tool                        just now  [tool#7c3e01]      │     
+    Waiting for request    │  bash                                                            │     
+    [&c2]             .    │  go test ./internal/shell/...                                    │     
+    write the ledger f…    │  complete                                                        │     
+                           │    exit 1                                                        │     
+  DEAD  1                  │    --- FAIL: TestKillTree (0.31s)                                │     
+  › [&c3]             ✗    │                                                                  │     
+    run the shell suite    ╰──────────────────────────────────────────────────────────────────╯     
+                                                                                                    
+                           ╭──────────────────────────────────────────────────────────────────╮     
+                           │                                                                  │     
+                           │  [&c3]  report                                                   │     
+                           │  exit 1: TestKillTree could not find the job object              │     
+                           │                                                                  │     
+                           ╰──────────────────────────────────────────────────────────────────╯     
+ ctx 118k/250k  |  claude 5h 62%                                                                    

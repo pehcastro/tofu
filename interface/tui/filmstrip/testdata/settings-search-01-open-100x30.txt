@@ -1,0 +1,30 @@
+                                                                                                    
+  tofu settings         Appearance                                                  global scope    
+  Global preferences    Choose a row to inspect and change its value.                               
+                                                                                                    
+  CATEGORIES            › Theme                                                         tofu  ▾     
+  › Appearance    05      tofu uses Zed Nu Disco; choose a palette                                  
+    Models & rol… 02                                                                                
+    Interaction                                                                     fortable  ▾     
+    Context       Search settings                                              esc                  
+    Files         Type to filter · ↑↓ select · enter jump                                           
+    Shell                                                                             subtle  ▾     
+    Turn          › █                                                                               
+    Startup                                                                                         
+                  › Appearance / Theme                                               compact  ▾     
+  NAVIGATE          Appearance / Density                                                            
+  ↑↓ setting · ←    Appearance / Animations                                                         
+  section           Appearance / Status bar                                             auto  ▾     
+  ctrl+k search     Appearance / Color mode                                                         
+  esc chat          Models & roles / turn                                                           
+                    Models & roles / child                                                          
+                                                                                                    
+                  1 of 28 results                                                                   
+                                                                                                    
+                          Readable text, quiet surfaces, and bounded focus.                         
+                          ● active    ● attention    ● failed                                       
+                                                                                                    
+                                                                                                    
+                        enter change  ·  ctrl+k search  ·  esc chat                                 
+                                                                                                    
+                                                                                                    

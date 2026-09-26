@@ -1,0 +1,17 @@
+# the diff's first and last lines are reachable
+type edits
+key enter
+key alt+3
+key right
+key enter
+wait Line: 1200}
+screen
+key home
+wait package ledger
+absent Line: 1200}
+screen
+key end
+wait Line: 1200}
+key pgup
+key pgdown
+wait Line: 1200}

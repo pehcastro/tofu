@@ -1,0 +1,8 @@
+# only the latest user turn is tinted, printed with its colours
+type the first question
+key enter
+wait noted: the first question
+type the second question
+key enter
+wait noted: the second question
+screen

@@ -1,0 +1,29 @@
+# the wheel moves 3 rows on every scrollable screen
+type agents
+key enter
+type tall
+key enter
+wait cooked for
+screen
+wheel 50 10 up
+screen
+key alt+2
+wait All activity
+screen
+wheel 60 12 up
+screen
+key alt+1
+type edits
+key enter
+key alt+3
+key right
+key enter
+wait 1181-1200/1200
+wheel 60 12 up
+wait 1178-1197/1200
+screen
+key alt+4
+wait dev-server
+screen
+wheel 60 16 up
+screen

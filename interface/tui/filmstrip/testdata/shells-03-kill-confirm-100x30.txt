@@ -1,0 +1,30 @@
+ tofu  ./tofu/                     chat   agents   edits   shells                     0s [settings] 
+
+                         
+  Shells                   dev-server                                                    running 
+  1 running  ·  1          Owned by [&c1]
+  exited                 
+                            PROCESS                                                            
+  › dev-serv…  running      PID       18244                                                    
+    pid 18244               Runtime   7m 00s                                                   
+    suite     exite                                                                            
+    pid 17902        Stop this shell?                                       esc                
+                     The process ends and its log stays.                                       
+                                                                                 
+                      dev-server · go run ./cmd/tofu serve --port 7411           
+                                                                                                   │
+                     >  Stop the process                                                           │
+                       End it now                                                                  │
+                                                                                                   │
+                       Cancel                                                                      │
+                       Leave it running                                                            │
+                                                                                                   │
+                           GET /ledger/37 200 3.1ms                                                │
+                           GET /ledger/38 200 4.1ms                                                │
+                           GET /ledger/39 200 5.1ms                                                ┃
+                           GET /ledger/40 200 6.1ms                                                ┃
+                           warning: slow request /ledger/floor 812ms                               ┃
+                         
+                           k request kill · confirmation required
+                         
+ ctx 118k/250k  |  claude 5h 62%                                                                    

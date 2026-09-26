@@ -1,0 +1,17 @@
+# Ctrl+R quotes the selection, and the selected event when there is none
+type agents
+key enter
+wait cooked for
+drag 4 17 40 17
+wait the selection copied
+key ctrl+r
+wait > three sub-agents run
+screen
+key ctrl+j
+key alt+2
+wait All activity
+key right
+key up
+key ctrl+r
+wait [quote#
+screen

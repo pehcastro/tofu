@@ -1,0 +1,15 @@
+# a tall card reads top to bottom: expanded, its last line shows first and the wheel reaches its first
+type tall
+key enter
+wait cooked for
+key alt+2
+wait All activity
+key n
+key enter
+wait line 60 of the tall result
+screen
+wheel 60 12 up 3
+screen
+wheel 60 12 up 20
+wait line 1 of the tall result
+screen
