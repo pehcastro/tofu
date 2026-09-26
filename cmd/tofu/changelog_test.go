@@ -100,29 +100,50 @@ func TestAHeadingThatIsNotAVersionIsNotFiledUnderThePreviousVersion(t *testing.T
 	}
 }
 
-func TestAVersionIsComparedByItsThreeNumbersAndNotAsAString(t *testing.T) {
-	newer, ok := parseSemver("0.3.10")
-	if !ok {
-		t.Fatal("0.3.10 does not parse")
+func TestChangelogOrdersByNumbersThenPrereleaseWithItsDigitsAsNumbers(t *testing.T) {
+	ascending := []string{
+		"0.3.9", "0.3.10", "0.4.19",
+		"0.5.0-rc", "0.5.0-rc-fix1", "0.5.0-rc-fix2", "0.5.0-rc-fix9", "0.5.0-rc-fix10", "0.5.0",
+		"0.5.1-rc-fix99999999999999999999", "0.5.1-rc-fix100000000000000000000", "0.5.1",
 	}
-	older, ok := parseSemver("0.3.9")
-	if !ok {
-		t.Fatal("0.3.9 does not parse")
-	}
-	if !newer.after(older) {
-		t.Fatal("0.3.10 is not newer than 0.3.9, so the compare is a string compare")
-	}
-	if older.after(newer) {
-		t.Fatal("0.3.9 reads as newer than 0.3.10")
+	for i, older := range ascending {
+		low, ok := parseSemver(older)
+		if !ok {
+			t.Fatalf("%s does not parse", older)
+		}
+		if low.after(low) {
+			t.Fatalf("%s reads as newer than itself", older)
+		}
+		for _, newer := range ascending[i+1:] {
+			high, _ := parseSemver(newer)
+			if !high.after(low) || low.after(high) {
+				t.Fatalf("%s is not ordered after %s", newer, older)
+			}
+		}
 	}
 
-	versions := []changelogVersion{
-		{Version: "0.3.10", number: newer},
-		{Version: "0.3.9", number: older},
+	written := "## 0.5.0-rc-fix2 - 2026-09-27\n\nsecond\n\n## 0.5.0-rc-fix1 - 2026-09-26\n\nfirst\n\n## 0.4.19 - 2026-09-25\n\nold\n"
+	parsed := parseChangelog(written)
+	var names []string
+	for _, version := range parsed {
+		names = append(names, version.Version)
 	}
-	shown := changelogSince(versions, "0.3.9")
-	if len(shown) != 1 || shown[0].Version != "0.3.10" {
-		t.Fatalf("since 0.3.9 wants only 0.3.10, got %v", shown)
+	if want := []string{"0.5.0-rc-fix2", "0.5.0-rc-fix1", "0.4.19"}; !slices.Equal(names, want) {
+		t.Fatalf("the headings parse as %v, want %v", names, want)
+	}
+	for seen, want := range map[string][]string{
+		"0.4.19":            {"0.5.0-rc-fix2", "0.5.0-rc-fix1"},
+		"0.5.0-rc-fix1":     {"0.5.0-rc-fix2"},
+		"0.5.0-rc-fix1+dev": {"0.5.0-rc-fix2"},
+		"0.5.0-rc-fix2":     nil,
+	} {
+		var shown []string
+		for _, version := range changelogSince(parsed, seen) {
+			shown = append(shown, version.Version)
+		}
+		if !slices.Equal(shown, want) {
+			t.Fatalf("since %s shows %v, want %v", seen, shown, want)
+		}
 	}
 }
 

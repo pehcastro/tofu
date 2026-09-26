@@ -25,40 +25,63 @@ const (
 )
 
 var (
-	changelogVersionLine = regexp.MustCompile(`^##\s+\[?(\d+\.\d+\.\d+)\]?`)
+	changelogVersionLine = regexp.MustCompile(`^##\s+\[?(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)\]?`)
+	prereleaseRun        = regexp.MustCompile(`\d+|\D+`)
 	markdownLink         = regexp.MustCompile(`\[([^\]]*)\]\([^)]*\)`)
 	markdownBold         = regexp.MustCompile(`\*\*([^*]+)\*\*`)
 	markdownCode         = regexp.MustCompile("`([^`]*)`")
 )
 
-type semverTriple struct {
-	major int
-	minor int
-	patch int
+type semver struct {
+	major      int
+	minor      int
+	patch      int
+	prerelease string
 }
 
-func (t semverTriple) after(other semverTriple) bool {
-	if t.major != other.major {
-		return t.major > other.major
+func (v semver) after(other semver) bool {
+	if v.major != other.major {
+		return v.major > other.major
 	}
-	if t.minor != other.minor {
-		return t.minor > other.minor
+	if v.minor != other.minor {
+		return v.minor > other.minor
 	}
-	return t.patch > other.patch
+	if v.patch != other.patch {
+		return v.patch > other.patch
+	}
+	if v.prerelease == "" || other.prerelease == "" {
+		return v.prerelease == "" && other.prerelease != ""
+	}
+	mine, theirs := prereleaseRun.FindAllString(v.prerelease, -1), prereleaseRun.FindAllString(other.prerelease, -1)
+	for i := range min(len(mine), len(theirs)) {
+		run, other := mine[i], theirs[i]
+		if run[0] >= '0' && run[0] <= '9' && other[0] >= '0' && other[0] <= '9' {
+			run, other = strings.TrimLeft(run, "0"), strings.TrimLeft(other, "0")
+			if len(run) != len(other) {
+				return len(run) > len(other)
+			}
+		}
+		if run != other {
+			return run > other
+		}
+	}
+	return len(mine) > len(theirs)
 }
 
-func parseSemver(text string) (semverTriple, bool) {
-	parts := strings.Split(strings.TrimSpace(text), ".")
+func parseSemver(text string) (semver, bool) {
+	withoutBuild, _, _ := strings.Cut(strings.TrimSpace(text), "+")
+	core, prerelease, _ := strings.Cut(withoutBuild, "-")
+	parts := strings.Split(core, ".")
 	if len(parts) != 3 {
-		return semverTriple{}, false
+		return semver{}, false
 	}
 	major, majorErr := strconv.Atoi(parts[0])
 	minor, minorErr := strconv.Atoi(parts[1])
 	patch, patchErr := strconv.Atoi(parts[2])
 	if majorErr != nil || minorErr != nil || patchErr != nil {
-		return semverTriple{}, false
+		return semver{}, false
 	}
-	return semverTriple{major: major, minor: minor, patch: patch}, true
+	return semver{major: major, minor: minor, patch: patch, prerelease: prerelease}, true
 }
 
 type changelogVersion struct {
@@ -66,7 +89,7 @@ type changelogVersion struct {
 	Heading string `json:"heading"`
 	Body    string `json:"body"`
 
-	number semverTriple
+	number semver
 }
 
 func parseChangelog(markdown string) []changelogVersion {
