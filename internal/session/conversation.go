@@ -48,9 +48,19 @@ type StepToolCall struct {
 }
 
 type StepBody struct {
-	Index         int            `json:"index"`
-	AssistantText string         `json:"assistant_text,omitempty"`
-	ToolCalls     []StepToolCall `json:"tool_calls,omitempty"`
+	Index            int            `json:"index"`
+	AssistantText    string         `json:"assistant_text,omitempty"`
+	ToolCalls        []StepToolCall `json:"tool_calls,omitempty"`
+	Model            string         `json:"model,omitempty"`
+	PromptTokens     int            `json:"prompt_tokens,omitempty"`
+	CompletionTokens int            `json:"completion_tokens,omitempty"`
+	CacheReadTokens  int            `json:"cache_read_tokens,omitempty"`
+	CacheWriteTokens int            `json:"cache_write_tokens,omitempty"`
+	CostUSD          float64        `json:"cost_usd,omitempty"`
+}
+
+func (s StepBody) usage() Usage {
+	return Usage{InputTokens: s.PromptTokens, OutputTokens: s.CompletionTokens, CacheReadTokens: s.CacheReadTokens, CacheWriteTokens: s.CacheWriteTokens}
 }
 
 type Call struct {

@@ -16,6 +16,7 @@ import (
 	"tofu/internal/judge/state"
 	"tofu/internal/konst"
 	"tofu/internal/llm"
+	"tofu/internal/session"
 	"tofu/internal/subagent"
 	shipped "tofu/library"
 )
@@ -150,9 +151,77 @@ type ChildModel struct {
 
 type Spawned struct {
 	ID      string
+	Call    string
 	Agent   string
 	Slug    string
 	Windows string
+}
+
+type spawnSiteKey struct{}
+
+type spawnSite struct {
+	log   *session.Log
+	turn  string
+	agent string
+	call  string
+}
+
+func (r *record) site(call string) spawnSite {
+	if r == nil {
+		return spawnSite{call: call}
+	}
+	return spawnSite{log: r.log, turn: r.turn, agent: r.agent, call: call}
+}
+
+type spawnTrace struct {
+	site       spawnSite
+	definition string
+	model      string
+	mission    string
+	owns       []string
+	depth      int
+}
+
+func (s spawnTrace) run(outer, ctx context.Context, child Config) (Row, error) {
+	id, log, site := child.NewID(), s.site.log, s.site
+	if log == nil {
+		return Run(ctx, child)
+	}
+	var failed []error
+	_, err := log.Append(session.Event{Turn: site.turn, Agent: site.agent, Call: site.call, Kind: session.EventSpawn},
+		session.SpawnBody{Agent: id, Definition: s.definition, Model: s.model, Mission: s.mission, Owns: s.owns, Depth: s.depth})
+	failed = append(failed, err, log.Edit(func(header *session.Header) {
+		header.Agents = append(header.Agents, session.AgentRun{Agent: id, Definition: s.definition, Model: s.model, ParentAgent: site.agent,
+			SpawnCall: site.call, SpawnTurn: site.turn, Depth: s.depth, Status: subagent.Working.String(), StartedAt: time.Now()})
+	}))
+	row, runErr := Run(ctx, child)
+	status := roundState(outer, runErr).String()
+	ended := session.AgentEndBody{Status: status}
+	for _, run := range log.Header().Agents {
+		if run.Agent == id {
+			ended.Usage, ended.CostUSD = run.Usage, run.CostUSD
+		}
+	}
+	_, err = log.Append(session.Event{Turn: site.turn, Agent: id, Kind: session.EventAgentEnd}, ended)
+	failed = append(failed, err, s.settle(id, status))
+	if err := errors.Join(failed...); err != nil {
+		row.Warnings = append(row.Warnings, "this sub-agent run was not wholly recorded: "+err.Error())
+	}
+	return row, runErr
+}
+
+func (s spawnTrace) settle(id, status string) error {
+	if s.site.log == nil {
+		return nil
+	}
+	at := time.Now()
+	return s.site.log.Edit(func(header *session.Header) {
+		for i := range header.Agents {
+			if header.Agents[i].Agent == id {
+				header.Agents[i].Status, header.Agents[i].EndedAt = status, &at
+			}
+		}
+	})
 }
 
 type SubAgents struct {
@@ -320,6 +389,8 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 	}
 	agent := subagent.SubAgent{
 		ID:      t.parentID + "-c" + strconv.Itoa(t.spawned+1),
+		Agent:   definition.Name,
+		Model:   opened.Slug,
 		Mission: args.mission(),
 		Brief:   args.Task,
 		Owns:    args.Owns,
@@ -361,10 +432,16 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 	if definition.Instructions != "" {
 		child.System += "\n\nyou are the " + definition.Name + " sub-agent, and these are your instructions:\n" + definition.Instructions
 	}
+	site, _ := ctx.Value(spawnSiteKey{}).(spawnSite)
+	trace := spawnTrace{site: site, definition: agent.Agent, model: agent.Model, mission: agent.Mission, owns: args.Owns, depth: t.depth + 1}
 	child.Task = args.Task
 	child.Tools = NewRegistry(owned...)
 	child.NewID = func() string { return childID }
 	child.SpawnedFrom = t.parentID
+	child.Session, child.Log, child.Turn, child.SpawnedBy = "", site.log, site.turn, site.call
+	if site.log == nil {
+		child.Sessions = nil
+	}
 	child.Boundary = boundary
 	child.Step = func(step StepRow) {
 		called := make([]string, len(step.ToolCalls))
@@ -380,14 +457,17 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 	childCtx, release := context.WithCancel(ctx)
 	defer release()
 	t.spawned++
-	claims, state, runErr := t.runRounds(ctx, childCtx, agent, childID, child)
+	claims, state, runErr := t.runRounds(ctx, childCtx, agent, childID, child, trace)
 	asked := boundary.Asked()
 	if len(asked) > 0 && state != subagent.Errored && state != subagent.Parked {
 		state = subagent.WaitingAnswer
 		t.publish(agent, claims, state)
 	}
+	if err := trace.settle(claims[len(claims)-1].ID, state.String()); err != nil {
+		claims[len(claims)-1].Warnings = append(claims[len(claims)-1].Warnings, "the sub-agent's last state was not recorded: "+err.Error())
+	}
 	t.retain(append(claims, nested.children...))
-	t.ran = append(append(t.ran, Spawned{ID: childID, Agent: definition.Name, Slug: opened.Slug, Windows: opened.Windows}), nested.ran...)
+	t.ran = append(append(t.ran, Spawned{ID: childID, Call: site.call, Agent: definition.Name, Slug: opened.Slug, Windows: opened.Windows}), nested.ran...)
 	for _, claim := range claims {
 		t.spend += claim.TotalCostUSD
 	}
@@ -452,8 +532,8 @@ func (t *SpawnTool) publish(agent subagent.SubAgent, claims []Row, state subagen
 	t.roster.Reached(agent.ID, state, reportOf(agent, claims, state).Text())
 }
 
-func (t *SpawnTool) runRounds(outerCtx, childCtx context.Context, agent subagent.SubAgent, childID string, child Config) ([]Row, subagent.State, error) {
-	first, firstErr := Run(childCtx, child)
+func (t *SpawnTool) runRounds(outerCtx, childCtx context.Context, agent subagent.SubAgent, childID string, child Config, trace spawnTrace) ([]Row, subagent.State, error) {
+	first, firstErr := trace.run(outerCtx, childCtx, child)
 	claims := []Row{first}
 	state := roundState(outerCtx, firstErr)
 	t.publish(agent, claims, state)
@@ -488,7 +568,7 @@ func (t *SpawnTool) runRounds(outerCtx, childCtx context.Context, agent subagent
 		child.History = history
 		child.Task = "You reported this finished and the done review did not believe you: " + decision.Reason
 		child.NewID = func() string { return childID + "-r" + strconv.Itoa(next) }
-		reRow, reErr := Run(childCtx, child)
+		reRow, reErr := trace.run(outerCtx, childCtx, child)
 		claims = append(claims, reRow)
 		history = append(slices.Clone(history), resumable(reRow.Conversation)...)
 		if reErr != nil {

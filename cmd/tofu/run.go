@@ -73,6 +73,7 @@ type runOpts struct {
 	dir              string
 	task             string
 	turnID           string
+	session          string
 	wire             string
 	dryRun           bool
 	showPrompt       bool
@@ -416,15 +417,15 @@ func runTurn(opts runOpts, selected models.Model, built []turn.Tool, budget reca
 	for _, child := range childRows(spawner) {
 		askedAs, windows := selected.Slug(), selected.WindowText()
 		for _, spawned := range spawner.Spawned() {
-			if child.ID == spawned.ID || strings.HasPrefix(child.ID, spawned.ID+"-r") {
+			if child.ID == spawned.ID || (spawned.Call != "" && child.SpawnedBy == spawned.Call) {
 				askedAs, windows = spawned.Slug, spawned.Windows
 			}
 		}
 		printRunRow(out, child, askedAs, windows)
 	}
-	if row.ID != "" {
-		if headErr := sessions.SetHead(row.ID); headErr != nil {
-			_, _ = fmt.Fprintf(errOut, "tofu run: pointing the head at %s: %v\n", row.ID, headErr)
+	if row.Session != "" {
+		if headErr := sessions.SetHead(row.Session); headErr != nil {
+			_, _ = fmt.Fprintf(errOut, "tofu run: pointing the head at %s: %v\n", row.Session, headErr)
 		}
 	}
 	if gate != nil {
@@ -518,9 +519,9 @@ func composeRun(opts runOpts, built []turn.Tool, run runtime) (composedRun, erro
 }
 
 func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn.SpawnTool, error) {
-	parentID := cmp.Or(opts.turnID, turn.NewID(time.Now()))
+	parentID, sessionID := cmp.Or(opts.turnID, turn.NewID(time.Now())), cmp.Or(opts.session, opts.turnID, session.NewEventID())
 	if run.sessions != nil && opts.toolSet != toolSetThree {
-		built = append(slices.Clone(built), tools.NewQuote(run.sessions, parentID))
+		built = append(slices.Clone(built), tools.NewQuote(run.sessions, sessionID))
 	}
 	prompt, err := composeRun(opts, built, run)
 	if err != nil {
@@ -545,6 +546,7 @@ func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn
 		ResultBytesCap: konst.TurnResultBytesCap,
 		Budget:         run.budget,
 		Sessions:       run.sessions,
+		Session:        sessionID,
 		Sift:           run.sift,
 		Proxy:          loadProxySetting(opts.dir).proxy,
 	}

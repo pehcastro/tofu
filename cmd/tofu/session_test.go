@@ -612,7 +612,7 @@ func TestASessionPastTheLifetimeIsListedAsExpiredAndIsStillOnDisk(t *testing.T) 
 		t.Errorf("the list says nothing about the expired session:\n%s", text)
 	}
 	for _, id := range []string{"turn-old", "turn-young"} {
-		if _, err := os.Stat(filepath.Join(store.Dir(id), "header.json")); err != nil {
+		if _, err := os.Stat(filepath.Join(store.Dir(id), "session.json")); err != nil {
 			t.Fatalf("%s was deleted: %v", id, err)
 		}
 	}

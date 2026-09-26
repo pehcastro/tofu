@@ -42,6 +42,13 @@ func firstReadableEntry(t *testing.T, wantDir bool) (string, bool) {
 	return "", false
 }
 
+func recordedFile(dir, written, older string) string {
+	if _, err := os.Stat(filepath.Join(dir, written)); err == nil {
+		return filepath.Join(dir, written)
+	}
+	return filepath.Join(dir, older)
+}
+
 func copyFile(t *testing.T, src, dst string) {
 	t.Helper()
 	data, err := os.ReadFile(src)
@@ -151,7 +158,7 @@ func TestAPlantedHomePathDoesNotSurviveTheDirRead(t *testing.T) {
 	scratch := t.TempDir()
 	dst := filepath.Join(scratch, name)
 	copyDir(t, filepath.Join(recordedSessionsDir(), name), dst)
-	bodyPath := filepath.Join(dst, "body.jsonl")
+	bodyPath := recordedFile(dst, "events.jsonl", "body.jsonl")
 	body, err := os.ReadFile(bodyPath)
 	if err != nil {
 		t.Fatal(err)
@@ -369,7 +376,7 @@ func TestAPlantedHomePathInAutoCompactionDoesNotSurviveTheDirRead(t *testing.T) 
 	scratch := t.TempDir()
 	dst := filepath.Join(scratch, name)
 	copyDir(t, filepath.Join(recordedSessionsDir(), name), dst)
-	headerPath := filepath.Join(dst, "header.json")
+	headerPath := recordedFile(dst, "session.json", "header.json")
 	header, err := os.ReadFile(headerPath)
 	if err != nil {
 		t.Fatal(err)
@@ -403,7 +410,7 @@ func TestAPlantedHomePathInBudgetSourceDoesNotSurviveTheDirRead(t *testing.T) {
 	scratch := t.TempDir()
 	dst := filepath.Join(scratch, name)
 	copyDir(t, filepath.Join(recordedSessionsDir(), name), dst)
-	bodyPath := filepath.Join(dst, "body.jsonl")
+	bodyPath := recordedFile(dst, "events.jsonl", "body.jsonl")
 	body, err := os.ReadFile(bodyPath)
 	if err != nil {
 		t.Fatal(err)
@@ -471,10 +478,10 @@ func TestATurnWithStepsAndNoOutcomeLineIsReadAndSaysItsWallClockIsMissing(t *tes
 	scratch := t.TempDir()
 	dst := filepath.Join(scratch, name)
 	copyDir(t, filepath.Join(recordedSessionsDir(), name), dst)
-	if err := os.Remove(filepath.Join(dst, "header.json")); err != nil {
+	if err := os.Remove(recordedFile(dst, "session.json", "header.json")); err != nil {
 		t.Fatal(err)
 	}
-	bodyPath := filepath.Join(dst, "body.jsonl")
+	bodyPath := recordedFile(dst, "events.jsonl", "body.jsonl")
 	body, err := os.ReadFile(bodyPath)
 	if err != nil {
 		t.Fatal(err)
@@ -482,7 +489,7 @@ func TestATurnWithStepsAndNoOutcomeLineIsReadAndSaysItsWallClockIsMissing(t *tes
 	lines := strings.Split(strings.TrimSpace(string(body)), "\n")
 	kept := []string{}
 	for _, line := range lines {
-		if !strings.Contains(line, `"kind":"outcome"`) {
+		if !strings.Contains(line, `"kind":"outcome"`) && !strings.Contains(line, `"kind":"turn_end"`) {
 			kept = append(kept, line)
 		}
 	}
@@ -708,8 +715,8 @@ func TestWalkSessionsOverTheRealTreeReportsTheFiveNumbers(t *testing.T) {
 			withWrite++
 		}
 	}
-	t.Logf("entries %d, parsed %d (single file %d, header+jsonl %d), skipped %d, no wall clock %d, carrying a tool call %d, carrying a write %d, walk elapsed %s",
-		walked.EntryCount, len(walked.Turns), bySchema[SchemaSingleFile], bySchema[SchemaHeaderJSONL], len(walked.Skipped), noWallClock, withToolCall, withWrite, walked.WalkElapsed)
+	t.Logf("entries %d, parsed %d (single file %d, header+jsonl %d, session folder %d), skipped %d, no wall clock %d, carrying a tool call %d, carrying a write %d, walk elapsed %s",
+		walked.EntryCount, len(walked.Turns), bySchema[SchemaSingleFile], bySchema[SchemaHeaderJSONL], bySchema[SchemaSession], len(walked.Skipped), noWallClock, withToolCall, withWrite, walked.WalkElapsed)
 	for _, skipped := range walked.Skipped {
 		t.Logf("skipped %s: %s", skipped.Path, skipped.Reason)
 	}

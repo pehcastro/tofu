@@ -2,8 +2,6 @@ package tokencount
 
 import (
 	"encoding/json"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -129,34 +127,16 @@ func TestFilterKeepsMatchingSamples(t *testing.T) {
 }
 
 func TestScanThinkingFindsMessagesInATempFixture(t *testing.T) {
-	dir := t.TempDir()
-	turnDir := filepath.Join(dir, "turn-fixture")
-	if err := os.MkdirAll(turnDir, 0o755); err != nil {
-		t.Fatal(err)
+	turn := corpus.Turn{RecordedTurn: corpus.RecordedTurn{ID: "turn-fixture", Messages: []corpus.RecordedMessage{
+		{Role: "assistant", Content: "no thinking here"},
+		{Role: "assistant", Thinking: "a captured thought"},
+	}}, Schema: corpus.SchemaSession}
+	if total, withThinking := scanThinking(turn); total != 2 || withThinking != 1 {
+		t.Fatalf("total %d with thinking %d, want 2 messages and 1 with thinking", total, withThinking)
 	}
-	body := `{"kind":"message","body":{"role":"assistant","content":"no thinking here"}}
-{"kind":"message","body":{"role":"assistant","thinking":"a captured thought"}}
-{"kind":"step","body":{"index":1}}
-`
-	if err := os.WriteFile(filepath.Join(turnDir, "body.jsonl"), []byte(body), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	turn := corpus.Turn{RecordedTurn: corpus.RecordedTurn{ID: "turn-fixture"}, Schema: corpus.SchemaHeaderJSONL}
-	total, withThinking, err := scanThinking(dir, turn)
-	if err != nil {
-		t.Fatalf("scanThinking: %v", err)
-	}
-	if total != 2 {
-		t.Fatalf("total = %d, want 2 message lines", total)
-	}
-	if withThinking != 1 {
-		t.Fatalf("withThinking = %d, want 1", withThinking)
-	}
-
 	singleFile := corpus.Turn{RecordedTurn: corpus.RecordedTurn{ID: "turn-fixture"}, Schema: corpus.SchemaSingleFile}
-	total2, with2, err := scanThinking(dir, singleFile)
-	if err != nil || total2 != 0 || with2 != 0 {
-		t.Fatalf("single file schema should scan nothing: total=%d with=%d err=%v", total2, with2, err)
+	if total, withThinking := scanThinking(singleFile); total != 0 || withThinking != 0 {
+		t.Fatalf("a single file turn holds no message: total %d with %d", total, withThinking)
 	}
 }
 
@@ -188,16 +168,12 @@ func TestReadWireReadsBothStorageSchemasFromTheRealCorpus(t *testing.T) {
 	}
 	sawSingleFile, sawHeaderJSONL := false, false
 	for _, turn := range walked.Turns {
-		wire, err := readWire(sessionsDir(), turn)
-		if err != nil {
-			t.Fatalf("readWire(%s): %v", turn.ID, err)
-		}
 		switch turn.Schema {
 		case corpus.SchemaSingleFile:
 			sawSingleFile = true
-		case corpus.SchemaHeaderJSONL:
+		case corpus.SchemaHeaderJSONL, corpus.SchemaSession:
 			sawHeaderJSONL = true
-			if wire == "" {
+			if turn.Wire == "" {
 				t.Errorf("%s: header/jsonl turn carries no wire field", turn.ID)
 			}
 		}

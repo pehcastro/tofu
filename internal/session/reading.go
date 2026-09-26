@@ -7,7 +7,8 @@ import (
 )
 
 func Kinds() []EventKind {
-	return []EventKind{EventStep, EventMessage, EventRead, EventOutcome, EventAttachment, EventPrompt}
+	return []EventKind{EventTurnStart, EventPrompt, EventRequest, EventMessage, EventToolCall, EventToolResult, EventSpawn,
+		EventAgentEnd, EventCompaction, EventTurnEnd, EventAttachment, EventOutcome, EventStep, EventRead}
 }
 
 type Step struct {

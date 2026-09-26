@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strconv"
+	"strings"
 	"testing"
 )
 
@@ -32,11 +33,43 @@ func oneOfEachKind(t *testing.T) []Event {
 	}
 }
 
+func oneOfEachWrittenKind(t *testing.T) []Event {
+	t.Helper()
+	asked := func(event Event, call string) Event {
+		event.Request, event.Call = "r1", call
+		return event
+	}
+	return []Event{
+		eventOf(t, EventTurnStart, TurnStart{Task: "read main.go"}),
+		eventOf(t, EventPrompt, PromptBody{System: "be brief", Tools: []string{"read"}}),
+		eventOf(t, EventMessage, MessageBody{Role: RoleUser, Content: "read main.go"}),
+		asked(eventOf(t, EventMessage, MessageBody{Role: RoleAssistant}), ""),
+		asked(eventOf(t, EventToolCall, CallBody{Tool: readTool, Args: json.RawMessage(`{"path":"main.go"}`)}), "c1"),
+		eventOf(t, EventSpawn, SpawnBody{Agent: "go-dev-1"}),
+		eventOf(t, EventAgentEnd, AgentEndBody{Status: "finished"}),
+		asked(eventOf(t, EventToolResult, ResultBody{Content: "package main", ResultBytes: 12}), "c1"),
+		asked(eventOf(t, EventRequest, StepBody{Index: 1, AssistantText: "looking"}), ""),
+		asked(eventOf(t, EventCompaction, map[string]any{"compaction": map[string]int{"step": 1}}), ""),
+		eventOf(t, EventAttachment, Attachment{File: "shot.png", Bytes: 9, Format: "png"}),
+		eventOf(t, EventTurnEnd, map[string]string{"outcome": "stopped"}),
+	}
+}
+
+var tracedOnly = []EventKind{EventTurnStart, EventSpawn, EventAgentEnd}
+
 func readingOf(t *testing.T, reading Reading, kind EventKind) int {
 	t.Helper()
 	switch kind {
-	case EventStep:
+	case EventStep, EventRequest:
 		return len(reading.Steps)
+	case EventCompaction:
+		return strings.Count(string(reading.Steps[0].Raw), `"compaction"`)
+	case EventToolCall:
+		return len(reading.Steps[0].ToolCalls)
+	case EventToolResult:
+		return len(reading.Messages) - 2
+	case EventTurnEnd:
+		return len(reading.Outcome)
 	case EventMessage:
 		return len(reading.Messages)
 	case EventRead:
@@ -56,20 +89,27 @@ func readingOf(t *testing.T, reading Reading, kind EventKind) int {
 }
 
 func TestEveryDeclaredKindHasAReading(t *testing.T) {
-	events := oneOfEachKind(t)
-	reading, err := ReadEvents(events)
-	if err != nil {
-		t.Fatalf("read one event of every kind: %v", err)
-	}
-	if len(reading.Unknown) > 0 {
-		t.Fatalf("a declared kind read as unknown: %v", reading.Unknown)
+	for _, events := range [][]Event{oneOfEachKind(t), oneOfEachWrittenKind(t)} {
+		shown, err := DefaultSettings().view(events)
+		if err != nil {
+			t.Fatalf("view one event of every kind: %v", err)
+		}
+		reading, err := ReadEvents(shown)
+		if err != nil {
+			t.Fatalf("read one event of every kind: %v", err)
+		}
+		if len(reading.Unknown) > 0 {
+			t.Fatalf("a declared kind read as unknown: %v", reading.Unknown)
+		}
+		for _, event := range events {
+			if !slices.Contains(tracedOnly, event.Kind) && readingOf(t, reading, event.Kind) == 0 {
+				t.Fatalf("the kind %q was read and nothing of it survived into the reading", event.Kind)
+			}
+		}
 	}
 	for _, kind := range Kinds() {
-		if !slices.ContainsFunc(events, func(event Event) bool { return event.Kind == kind }) {
+		if !slices.ContainsFunc(append(oneOfEachKind(t), oneOfEachWrittenKind(t)...), func(event Event) bool { return event.Kind == kind }) {
 			t.Fatalf("the kind %q is declared and no event of it was read", kind)
-		}
-		if readingOf(t, reading, kind) == 0 {
-			t.Fatalf("the kind %q was read and nothing of it survived into the reading", kind)
 		}
 	}
 }

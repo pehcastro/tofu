@@ -28,7 +28,7 @@ func ReadCorpus(dir string) (Corpus, error) {
 	}
 	turnCorpus := Corpus{Dir: dir, EntryCount: walked.EntryCount, Skipped: append([]corpus.SkippedTurn{}, walked.Skipped...)}
 	for _, entry := range walked.Turns {
-		isDir := entry.Schema == corpus.SchemaHeaderJSONL
+		isDir := entry.Schema != corpus.SchemaSingleFile
 		if isDir {
 			turnCorpus.JSONLDirsSeen++
 		}

@@ -137,6 +137,7 @@ func appOptions(dir string, arms runOpts, wiring appWiring, launch appLaunch) tu
 		Fresh:        launch.fresh,
 		Resumed:      resumedChat(launch.resumed),
 		Keymap:       shortcuts,
+		Agents:       func() roster.Found { found, _ := discoverAgents(); return found },
 	}
 }
 
@@ -586,7 +587,7 @@ func (s *appSession) startFresh() string {
 
 func (s *appSession) pendingID() string {
 	if s.id == "" {
-		s.id = turn.NewID(s.now())
+		s.id = sessionstore.NewEventID()
 	}
 	return s.id
 }
@@ -596,7 +597,7 @@ func (s *appSession) pendingSessionDir() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return store.Dir(s.pendingID()), nil
+	return store.AttachmentDir(s.pendingID()), nil
 }
 
 func (s *appSession) recordAttachment(index int, name string, bytes int, format string) {
@@ -604,7 +605,7 @@ func (s *appSession) recordAttachment(index int, name string, bytes int, format 
 	if err != nil {
 		return
 	}
-	_ = store.AppendEvent(s.pendingID(), sessionstore.EventAttachment, sessionstore.Attachment{File: name, Bytes: bytes, Format: format})
+	_ = store.AppendEvent(s.pendingID(), sessionstore.EventAttachment, sessionstore.Attachment{File: sessionstore.AttachmentPath(s.pendingID(), name), Bytes: bytes, Format: format})
 	s.pending = append(s.pending, pendingImage{index: index, name: name})
 }
 
@@ -618,11 +619,10 @@ func (s *appSession) takePendingImages(task string) ([]llm.Image, error) {
 	if len(wanted) == 0 {
 		return nil, nil
 	}
-	store, err := sessionstore.Open()
+	dir, err := s.pendingSessionDir()
 	if err != nil {
 		return nil, err
 	}
-	dir := store.Dir(s.pendingID())
 	images := make([]llm.Image, 0, len(wanted))
 	for _, image := range wanted {
 		data, err := os.ReadFile(filepath.Join(dir, image.name))
@@ -706,11 +706,12 @@ func gateOffEvent(gateErr error) tui.Event {
 	return tui.Event{Kind: tui.EventGateOff, Text: gateErr.Error(), GateWhy: missing.Why}
 }
 
-func pickedOpts(dir, turnID, task string, pick tui.Pick, maxSteps int) runOpts {
+func pickedOpts(dir, session, task string, pick tui.Pick, maxSteps int) runOpts {
 	return runOpts{
 		dir:              dir,
 		task:             task,
-		turnID:           turnID,
+		turnID:           turn.NewID(time.Now()),
+		session:          session,
 		wire:             cmp.Or(pick.Wire, wireSubscription),
 		model:            pick.Model,
 		toolSet:          toolSetFull,
@@ -856,9 +857,9 @@ func (s *appSession) run(ctx context.Context, pick tui.Pick, task string, emit t
 	if row.Conversation != nil {
 		s.carried = turn.Sendable(row.Conversation)
 	}
-	if row.ID != "" {
-		s.id = row.ID
-		if headErr := sessions.SetHead(row.ID); headErr != nil {
+	if row.Session != "" {
+		s.id = row.Session
+		if headErr := sessions.SetHead(row.Session); headErr != nil {
 			fail(headErr)
 		}
 	}
@@ -1264,9 +1265,15 @@ func hidingEarlier(kept []subagent.Call, hidden int) []subagent.Call {
 }
 
 func recordedCalls(rows []turn.Row, id string) []subagent.Call {
+	spawnedBy := ""
+	for _, row := range rows {
+		if row.ID == id {
+			spawnedBy = row.SpawnedBy
+		}
+	}
 	var calls []subagent.Call
 	for _, row := range rows {
-		if row.ID != id && !strings.HasPrefix(row.ID, id+"-r") {
+		if row.ID != id && (spawnedBy == "" || row.SpawnedBy != spawnedBy) {
 			continue
 		}
 		for _, step := range row.Steps {

@@ -1,71 +1,187 @@
 package session
 
 import (
+	"bytes"
 	"cmp"
 	"encoding/json"
+	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
+	"sync"
+	"time"
 )
 
-type Recorder struct {
-	store  *Store
-	id     string
-	body   *os.File
-	author string
-	last   string
+type Log struct {
+	store   *Store
+	mu      sync.Mutex
+	file    *os.File
+	header  Header
+	seq     int
+	last    map[string]string
+	prompts map[string]string
 }
 
-func (s *Store) Begin(header Header, author string) (*Recorder, error) {
-	if err := s.Write(header, nil); err != nil {
+func (s *Store) Open(header Header) (*Log, error) {
+	if header.ID == "" {
+		header.ID = NewEventID()
+	}
+	if err := namesOneSession(header.ID); err != nil {
 		return nil, err
 	}
-	body, err := os.OpenFile(filepath.Join(s.Dir(header.ID), bodyName), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	if s.legacy(header.ID) {
+		header.CarriedFrom, header.ID = &Carried{Session: header.ID}, NewEventID()
+	}
+	log := &Log{store: s, last: map[string]string{}, prompts: map[string]string{}}
+	kept, err := s.read(header.ID)
+	switch {
+	case err == nil:
+		log.header = kept
+		if err := log.resume(); err != nil {
+			return nil, err
+		}
+	case errors.Is(err, fs.ErrNotExist):
+		log.header = s.fresh(header)
+	default:
+		return nil, err
+	}
+	if err := os.MkdirAll(s.Dir(log.header.ID), 0o755); err != nil {
+		return nil, err
+	}
+	file, err := os.OpenFile(filepath.Join(s.Dir(log.header.ID), eventsName), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
 	if err != nil {
 		return nil, err
 	}
-	return &Recorder{store: s, id: header.ID, body: body, author: author}, nil
+	log.file = file
+	if err := log.save(); err != nil {
+		_ = file.Close()
+		return nil, err
+	}
+	return log, nil
 }
 
-func (r *Recorder) Append(kind EventKind, body any) error {
-	return r.AppendAttempt(kind, "", FirstAttempt, body)
+func (s *Store) fresh(header Header) Header {
+	header.Schema = SchemaVersion
+	header.Project = cmp.Or(header.Project, s.project)
+	if header.Name == nil {
+		name := newName()
+		header.Name = &name
+	}
+	if header.Root == "" {
+		header.Root = header.ID
+	}
+	if header.At.IsZero() {
+		header.At = time.Now()
+	}
+	return header
 }
 
-func (r *Recorder) AppendAttempt(kind EventKind, id string, attempt int, body any) error {
-	if r == nil {
+func (l *Log) resume() error {
+	path := filepath.Join(l.store.Dir(l.header.ID), eventsName)
+	raw, err := os.ReadFile(path)
+	if errors.Is(err, fs.ErrNotExist) {
 		return nil
 	}
-	raw, err := json.Marshal(body)
 	if err != nil {
 		return err
 	}
-	if id == "" {
-		id = NewEventID()
-	}
-	events, err := r.store.settings.withReads([]Event{{ID: id, Parent: r.last, Author: r.author, Attempt: max(attempt, FirstAttempt), Kind: kind, Body: raw}})
-	if err != nil {
-		return err
-	}
-	var lines []byte
-	for _, event := range events {
-		line, err := json.Marshal(event)
-		if err != nil {
+	if whole := bytes.LastIndexByte(raw, '\n') + 1; whole < len(raw) {
+		if err := os.Truncate(path, int64(whole)); err != nil {
 			return err
 		}
-		lines = append(append(lines, line...), '\n')
+		raw = raw[:whole]
 	}
-	if _, err := r.body.Write(lines); err != nil {
+	events, err := parseEvents(raw, l.header.ID)
+	if err != nil {
 		return err
 	}
-	if len(events) > 0 {
-		r.last = events[len(events)-1].ID
+	for _, event := range events {
+		l.seq = max(l.seq, event.Seq)
+		l.last[event.Agent] = event.ID
+		if event.Kind == EventPrompt {
+			l.prompts[event.Agent] = string(event.Body)
+		}
 	}
 	return nil
 }
 
-func (r *Recorder) End(header Header, outcome any) error {
-	if r == nil {
-		return nil
+func (l *Log) Prompted(agent string, body any) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.prompts[agent] == string(marshalled(body))
+}
+
+func (l *Log) ID() string { return l.header.ID }
+
+func (l *Log) Header() Header {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.header
+}
+
+func (l *Log) Append(event Event, body any) (Event, error) {
+	if body != nil {
+		raw, err := json.Marshal(body)
+		if err != nil {
+			return Event{}, err
+		}
+		event.Body = raw
 	}
-	appended := r.Append(EventOutcome, outcome)
-	return cmp.Or(appended, r.body.Close(), r.store.Write(header, nil))
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.seq++
+	event.Seq = l.seq
+	event.ID = cmp.Or(event.ID, NewEventID())
+	event.Parent = cmp.Or(event.Parent, l.last[event.Agent])
+	if event.At.IsZero() {
+		event.At = time.Now()
+	}
+	line, err := json.Marshal(event)
+	if err != nil {
+		return Event{}, err
+	}
+	if _, err := l.file.Write(append(line, '\n')); err != nil {
+		return Event{}, err
+	}
+	l.last[event.Agent], l.header.Head = event.ID, event.ID
+	if event.Kind == EventPrompt {
+		l.prompts[event.Agent] = string(event.Body)
+	}
+	return event, nil
+}
+
+func (l *Log) Spent(agent, model string, usage Usage, cost float64) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.header.Usage, l.header.CostUSD = l.header.Usage.Plus(usage), l.header.CostUSD+cost
+	if model != "" && !slices.Contains(l.header.Models, model) {
+		l.header.Models = append(l.header.Models, model)
+	}
+	for i := range l.header.Agents {
+		if l.header.Agents[i].Agent == agent {
+			l.header.Agents[i].Usage, l.header.Agents[i].CostUSD = l.header.Agents[i].Usage.Plus(usage), l.header.Agents[i].CostUSD+cost
+		}
+	}
+}
+
+func (l *Log) Edit(change func(*Header)) error {
+	l.mu.Lock()
+	change(&l.header)
+	l.mu.Unlock()
+	return l.save()
+}
+
+func (l *Log) Close() error {
+	saved := l.save()
+	return errors.Join(saved, l.file.Close())
+}
+
+func (l *Log) save() error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if kept, err := l.store.read(l.header.ID); err == nil && kept.Name != nil {
+		l.header.Name = kept.Name
+	}
+	return l.store.writeHeader(l.header)
 }

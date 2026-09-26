@@ -132,14 +132,14 @@ func TestACacheHitCarriesTheReadSeparatelyFromTheFreshInput(t *testing.T) {
 
 func recordedEventKinds(t *testing.T, dir string) []sessionstore.EventKind {
 	t.Helper()
-	matches, err := filepath.Glob(projectSessions(t, dir).Dir("turn-*"))
+	matches, err := filepath.Glob(projectSessions(t, dir).Dir("*-*-*-*-*"))
 	if err != nil {
 		t.Fatalf("globbing for the session directory: %v", err)
 	}
 	if len(matches) != 1 {
 		t.Fatalf("found %d session directories, want 1: %v", len(matches), matches)
 	}
-	raw, err := os.ReadFile(filepath.Join(matches[0], "body.jsonl"))
+	raw, err := os.ReadFile(filepath.Join(matches[0], "events.jsonl"))
 	if err != nil {
 		t.Fatalf("reading the recorded body: %v", err)
 	}

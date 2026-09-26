@@ -7,6 +7,8 @@ import (
 	"sort"
 	"strings"
 	"testing"
+
+	"tofu/internal/session"
 )
 
 func unaccountedKeys(obj map[string]json.RawMessage, level string) []string {
@@ -115,9 +117,17 @@ func walkRealCorpus(t *testing.T, visit corpusVisitor) (singleFileSeen, dirsSeen
 			if header, err := os.ReadFile(filepath.Join(dir, "header.json")); err == nil {
 				visit("header and jsonl", "turn", rawObject(t, header))
 			}
-			body, err := os.ReadFile(filepath.Join(dir, "body.jsonl"))
+			events, err := session.NewStore(recordedSessionsDir()).Body(entry.Name())
 			if err != nil {
 				continue
+			}
+			var body []byte
+			for _, event := range events {
+				line, err := json.Marshal(event)
+				if err != nil {
+					t.Fatal(err)
+				}
+				body = append(append(body, line...), '\n')
 			}
 			dirsSeen++
 			walkBody(t, body, "header and jsonl", visit)

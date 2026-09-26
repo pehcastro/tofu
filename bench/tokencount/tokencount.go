@@ -1,13 +1,8 @@
 package tokencount
 
 import (
-	"encoding/json"
-	"fmt"
 	"math"
-	"os"
-	"path/filepath"
 	"sort"
-	"strings"
 
 	"tofu/bench/corpus"
 	"tofu/internal/konst"
@@ -58,56 +53,14 @@ type Result struct {
 	TurnsScannedForThink int
 }
 
-type header struct {
-	Wire string `json:"wire"`
-}
-
-type messageLine struct {
-	Kind string `json:"kind"`
-	Body struct {
-		Thinking  string          `json:"thinking"`
-		Reasoning json.RawMessage `json:"reasoning"`
-	} `json:"body"`
-}
-
-func scanThinking(sessionsDir string, t corpus.Turn) (total, withThinking int, err error) {
-	if t.Schema != corpus.SchemaHeaderJSONL {
-		return 0, 0, nil
-	}
-	body, err := os.ReadFile(filepath.Join(sessionsDir, t.ID, "body.jsonl"))
-	if err != nil {
-		return 0, 0, err
-	}
-	for _, line := range strings.Split(strings.TrimSpace(string(body)), "\n") {
-		if line == "" {
-			continue
-		}
-		var entry messageLine
-		if json.Unmarshal([]byte(line), &entry) != nil || entry.Kind != "message" {
-			continue
-		}
+func scanThinking(t corpus.Turn) (total, withThinking int) {
+	for _, message := range t.Messages {
 		total++
-		if entry.Body.Thinking != "" || (len(entry.Body.Reasoning) > 0 && string(entry.Body.Reasoning) != "null") {
+		if message.Thinking != "" || (len(message.Reasoning) > 0 && string(message.Reasoning) != "null") {
 			withThinking++
 		}
 	}
-	return total, withThinking, nil
-}
-
-func readWire(sessionsDir string, t corpus.Turn) (string, error) {
-	path := filepath.Join(sessionsDir, t.ID+".json")
-	if t.Schema == corpus.SchemaHeaderJSONL {
-		path = filepath.Join(sessionsDir, t.ID, "header.json")
-	}
-	body, err := os.ReadFile(path)
-	if err != nil {
-		return "", err
-	}
-	var h header
-	if err := json.Unmarshal(body, &h); err != nil {
-		return "", err
-	}
-	return h.Wire, nil
+	return total, withThinking
 }
 
 func measureStep(turnID, wire string, step corpus.RecordedStep) (Sample, string) {
@@ -162,17 +115,13 @@ func Run(sessionsDir string) (Result, error) {
 		TurnsSkipped: walked.Skipped,
 	}
 	for _, turn := range walked.Turns {
-		if total, withThinking, err := scanThinking(sessionsDir, turn); err == nil && total > 0 {
+		if total, withThinking := scanThinking(turn); total > 0 {
 			result.TurnsScannedForThink++
 			result.MessagesScanned += total
 			result.MessagesWithThinking += withThinking
 		}
-		wire, err := readWire(sessionsDir, turn)
-		switch {
-		case err != nil:
-			skipAllSteps(&result, turn, fmt.Sprintf("could not re-read the turn's own wire field: %v", err))
-			continue
-		case wire == "":
+		wire := turn.Wire
+		if wire == "" {
 			result.TurnsNoWire++
 			skipAllSteps(&result, turn, "turn carries no wire field, recorded before it existed")
 			continue

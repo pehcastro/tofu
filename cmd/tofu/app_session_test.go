@@ -311,8 +311,11 @@ func TestAnImagePastedBeforeTheFirstSendLandsInTheSessionThatSendCreates(t *test
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := os.Stat(filepath.Join(store.Dir(live.id), outcome.Name)); err != nil {
-		t.Fatalf("%s is not inside the session send created: %v", outcome.Name, err)
+	if _, err := os.Stat(filepath.Join(store.AttachmentDir(live.id), outcome.Name)); err != nil {
+		t.Fatalf("%s is not kept for the session send created: %v", outcome.Name, err)
+	}
+	if held, err := os.ReadDir(store.Dir(live.id)); err != nil || len(held) != 2 {
+		t.Fatalf("the session folder holds %d entries, want session.json and events.jsonl alone: %v", len(held), err)
 	}
 }
 
@@ -382,8 +385,8 @@ func TestAPasteInARepositoryWithNoRecordedSessionWorks(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := os.Stat(filepath.Join(store.Dir(live.pendingID()), outcome.Name)); err != nil {
-		t.Fatalf("the pasted image did not land beside the pending session: %v", err)
+	if _, err := os.Stat(filepath.Join(store.AttachmentDir(live.pendingID()), outcome.Name)); err != nil {
+		t.Fatalf("the pasted image was not kept for the pending session: %v", err)
 	}
 }
 
@@ -418,7 +421,7 @@ func TestASendRecordsTheAttachmentEventInTheSessionBody(t *testing.T) {
 		if err := json.Unmarshal(event.Body, &attachment); err != nil {
 			t.Fatal(err)
 		}
-		if attachment.File == outcome.Name && attachment.Bytes == outcome.Bytes && attachment.Format == "PNG" {
+		if attachment.File == sessionstore.AttachmentPath(live.id, outcome.Name) && attachment.Bytes == outcome.Bytes && attachment.Format == "PNG" {
 			found = true
 		}
 	}
@@ -426,7 +429,7 @@ func TestASendRecordsTheAttachmentEventInTheSessionBody(t *testing.T) {
 		t.Fatalf("the body of %s carries no attachment event naming %s, %d bytes, PNG", live.id, outcome.Name, outcome.Bytes)
 	}
 
-	raw, err := os.ReadFile(filepath.Join(store.Dir(live.id), "body.jsonl"))
+	raw, err := os.ReadFile(filepath.Join(store.Dir(live.id), "events.jsonl"))
 	if err != nil {
 		t.Fatal(err)
 	}

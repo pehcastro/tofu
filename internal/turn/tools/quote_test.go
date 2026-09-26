@@ -113,7 +113,7 @@ func TestATurnRecordedBeforeEventIDsExistedIsQuotableByItsPlaceInTheSession(t *t
 }
 
 func TestEveryPreEventIDTurnRecordedUnderThisRepositoryResolves(t *testing.T) {
-	store := session.OpenAt(sys.StateDir("../../.."))
+	store := session.NewStore(sys.RecordedStateDir("sessions"))
 	listing, err := store.Listing()
 	if err != nil {
 		t.Skipf("this checkout has no session store to read: %v", err)

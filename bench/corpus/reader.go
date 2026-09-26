@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
@@ -22,10 +23,12 @@ type Schema string
 const (
 	SchemaSingleFile  Schema = "single file"
 	SchemaHeaderJSONL Schema = "header and jsonl"
+	SchemaSession     Schema = "session folder"
 )
 
 type RecordedCall struct {
 	ID             string          `json:"id,omitempty"`
+	Call           string          `json:"call,omitempty"`
 	Parent         string          `json:"parent,omitempty"`
 	Author         string          `json:"author,omitempty"`
 	Tool           string          `json:"tool"`
@@ -89,6 +92,8 @@ type RecordedMessage struct {
 	Content    string                 `json:"content,omitempty"`
 	ToolCallID string                 `json:"tool_call_id,omitempty"`
 	ToolCalls  []RecordedToolCallName `json:"tool_calls,omitempty"`
+	Thinking   string                 `json:"thinking,omitempty"`
+	Reasoning  json.RawMessage        `json:"reasoning,omitempty"`
 }
 
 func (m *RecordedMessage) UnmarshalJSON(data []byte) error {
@@ -164,6 +169,7 @@ func (s *RecordedStep) UnmarshalJSON(data []byte) error {
 type RecordedTurn struct {
 	ID             string            `json:"id"`
 	Task           string            `json:"task"`
+	Wire           string            `json:"wire,omitempty"`
 	At             time.Time         `json:"at"`
 	Steps          []RecordedStep    `json:"steps"`
 	WallClockMS    int64             `json:"wall_clock_ms"`
@@ -294,15 +300,25 @@ func ReadTurn(path string) (RecordedTurn, error) {
 }
 
 func readTurnDirSegments(dir string) ([]RecordedTurn, error) {
-	events, err := session.NewStore(filepath.Dir(dir)).Body(filepath.Base(dir))
-	if err != nil {
+	store, id := session.NewStore(filepath.Dir(dir)), filepath.Base(dir)
+	recorded, err := store.Header(id)
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return nil, err
 	}
-	var header RecordedTurn
-	if raw, err := os.ReadFile(filepath.Join(dir, "header.json")); err == nil {
-		if err := json.Unmarshal(raw, &header); err != nil {
-			return nil, fmt.Errorf("bench/corpus: %s/header.json is not the expected shape: %w", dir, err)
-		}
+	header := RecordedTurn{ID: id, Task: recorded.Task, At: recorded.At, ContextCeiling: recorded.ContextCeiling,
+		ContextTarget: recorded.ContextTarget, AutoCompaction: recorded.AutoCompaction, Account: recorded.Account, Wire: recorded.Wire}
+	segments, err := segmentsOf(store, id, header)
+	for _, run := range recorded.Agents {
+		ran, runErr := segmentsOf(store, id+session.TurnMark+run.Agent, RecordedTurn{ID: run.Agent, At: run.StartedAt, Wire: recorded.Wire})
+		segments, err = append(segments, ran...), errors.Join(err, runErr)
+	}
+	return segments, err
+}
+
+func segmentsOf(store *session.Store, dir string, header RecordedTurn) ([]RecordedTurn, error) {
+	events, err := store.Body(dir)
+	if err != nil {
+		return nil, err
 	}
 	var segments []RecordedTurn
 	current := header
@@ -370,13 +386,17 @@ func WalkSessions(dir string) (Walked, error) {
 			walked.Skipped = append(walked.Skipped, SkippedTurn{Path: name, Reason: err.Error()})
 			continue
 		}
+		schema := SchemaHeaderJSONL
+		if _, err := os.Stat(filepath.Join(dir, name, "session.json")); err == nil {
+			schema = SchemaSession
+		}
 		for _, segment := range segments {
 			recorded, err := finishedTurn(segment, filepath.Join(dir, name))
 			if err != nil && !errors.Is(err, ErrNoWallClock) {
 				walked.Skipped = append(walked.Skipped, SkippedTurn{Path: name, Reason: err.Error()})
 				continue
 			}
-			walked.Turns = append(walked.Turns, Turn{RecordedTurn: recorded, Schema: SchemaHeaderJSONL, WallClockRecorded: err == nil})
+			walked.Turns = append(walked.Turns, Turn{RecordedTurn: recorded, Schema: schema, WallClockRecorded: err == nil})
 		}
 	}
 	sort.Slice(walked.Turns, func(i, j int) bool { return walked.Turns[i].ID < walked.Turns[j].ID })

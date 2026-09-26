@@ -17,15 +17,17 @@ import (
 )
 
 const (
-	IDPrefix         = "turn-"
-	headerName       = "header.json"
-	bodyName         = "body.jsonl"
-	headName         = "HEAD"
-	singleFileSuffix = ".json"
+	IDPrefix        = "turn-"
+	TurnMark        = "#"
+	headerName      = "session.json"
+	eventsName      = "events.jsonl"
+	headName        = "HEAD"
+	attachmentsName = "attachments"
 )
 
 type Store struct {
 	dir      string
+	project  string
 	settings Settings
 	readFile func(path string) ([]byte, error)
 	rename   func(from, to string) error
@@ -39,6 +41,12 @@ func (s *Store) Use(settings Settings) { s.settings = settings }
 
 func (s *Store) Dir(id string) string { return filepath.Join(s.dir, id) }
 
+func (s *Store) AttachmentDir(id string) string {
+	return filepath.Join(filepath.Dir(s.dir), attachmentsName, id)
+}
+
+func AttachmentPath(id, name string) string { return attachmentsName + "/" + id + "/" + name }
+
 type Shape string
 
 const (
@@ -47,10 +55,10 @@ const (
 )
 
 func (s *Store) Shape(id string) Shape {
-	if body, err := os.Stat(filepath.Join(s.Dir(id), bodyName)); err == nil && !body.IsDir() {
-		return ShapeEvents
+	if _, err := os.Stat(filepath.Join(s.dir, id+legacySuffix)); err == nil {
+		return ShapeSingleFile
 	}
-	return ShapeSingleFile
+	return ShapeEvents
 }
 
 func SessionsDir(state string) string { return filepath.Join(state, "sessions") }
@@ -62,66 +70,56 @@ func Open() (*Store, error) {
 	if err != nil {
 		return nil, err
 	}
-	return OpenAt(state), nil
+	store := OpenAt(state)
+	store.project, err = filepath.Abs(".")
+	return store, err
+}
+
+type LegacyError struct {
+	ID string
+}
+
+func (e LegacyError) Error() string {
+	return "session: " + e.ID + " was recorded in the layout before one folder per session, and tofu migrate converts it"
 }
 
 func (s *Store) Write(header Header, events []Event) error {
 	if header.ID == "" {
 		return errors.New("session: a record with no id has nowhere to be written")
 	}
-	if header.Root == "" {
-		return errors.New("session: " + header.ID + " names no root, and the first session of a lineage is its own root")
+	if s.legacy(header.ID) {
+		return LegacyError{ID: header.ID}
 	}
-	header.Schema = SchemaVersion
-	if header.Name == nil {
-		header.Name = s.keptOrNewName(header.ID)
-	}
-	dir := s.Dir(header.ID)
-	recorded, err := s.settings.withReads(events)
+	converted := convertTurns(header, events)
+	log, err := s.Open(header)
 	if err != nil {
 		return err
 	}
-	if err := appendEvents(filepath.Join(dir, bodyName), recorded); err != nil {
+	header.Name = cmp.Or(header.Name, log.header.Name)
+	header.Head, log.header = log.header.Head, s.fresh(header)
+	for _, event := range converted {
+		if _, err := log.Append(event, nil); err != nil {
+			return errors.Join(err, log.Close())
+		}
+	}
+	return log.Close()
+}
+
+func (s *Store) AppendEvent(id string, kind EventKind, body any) error {
+	log, err := s.Open(Header{ID: id})
+	if err != nil {
 		return err
 	}
+	_, err = log.Append(Event{Kind: kind}, body)
+	return errors.Join(err, log.Close())
+}
+
+func (s *Store) writeHeader(header Header) error {
 	body, err := json.MarshalIndent(header, "", "  ")
 	if err != nil {
 		return err
 	}
-	return s.writeWhole(filepath.Join(dir, headerName), body)
-}
-
-func (s *Store) AppendEvent(id string, kind EventKind, body any) error {
-	raw, err := json.Marshal(body)
-	if err != nil {
-		return err
-	}
-	event := Event{ID: NewEventID(), Parent: s.lastEventID(id), Author: AuthorOrchestrator, Attempt: FirstAttempt, Kind: kind, Body: raw}
-	return appendEvents(filepath.Join(s.Dir(id), bodyName), []Event{event})
-}
-
-func (s *Store) lastEventID(id string) string {
-	events, err := s.Body(id)
-	if err != nil || len(events) == 0 {
-		return ""
-	}
-	return events[len(events)-1].ID
-}
-
-func appendEvents(path string, events []Event) error {
-	if len(events) == 0 {
-		return nil
-	}
-	var lines bytes.Buffer
-	for _, event := range events {
-		line, err := json.Marshal(event)
-		if err != nil {
-			return err
-		}
-		lines.Write(line)
-		lines.WriteByte('\n')
-	}
-	return appendLines(path, lines.Bytes())
+	return s.writeWhole(filepath.Join(s.Dir(header.ID), headerName), body)
 }
 
 func appendLines(path string, lines []byte) error {
@@ -157,12 +155,16 @@ func (s *Store) writeWhole(path string, body []byte) error {
 	return err
 }
 
-func (s *Store) keptOrNewName(id string) *string {
-	if kept, err := s.read(id); err == nil && kept.Name != nil {
-		return kept.Name
+func (s *Store) edit(id string, change func(*Header)) (Header, error) {
+	if s.legacy(id) {
+		return Header{}, LegacyError{ID: id}
 	}
-	name := newName()
-	return &name
+	header, err := s.read(id)
+	if err != nil {
+		return Header{}, err
+	}
+	change(&header)
+	return header, s.writeHeader(header)
 }
 
 func (s *Store) SetName(id, given string) (Header, error) {
@@ -170,12 +172,7 @@ func (s *Store) SetName(id, given string) (Header, error) {
 	if err != nil {
 		return Header{}, err
 	}
-	header, err := s.Header(id)
-	if err != nil {
-		return Header{}, err
-	}
-	header.Name = &name
-	return header, s.Write(header, nil)
+	return s.edit(id, func(header *Header) { header.Name = &name })
 }
 
 func (s *Store) End(id string, reason EndReason, at time.Time) (Header, error) {
@@ -184,15 +181,11 @@ func (s *Store) End(id string, reason EndReason, at time.Time) (Header, error) {
 	default:
 		return Header{}, fmt.Errorf("session: %q is not a reason a session ends", string(reason))
 	}
-	header, err := s.Header(id)
-	if err != nil {
-		return Header{}, err
-	}
-	if header.Ended() {
-		return header, nil
-	}
-	header.EndedAt, header.EndReason = &at, reason
-	return header, s.Write(header, nil)
+	return s.edit(id, func(header *Header) {
+		if !header.Ended() {
+			header.EndedAt, header.EndReason = &at, reason
+		}
+	})
 }
 
 type EscapingHandleError struct {
@@ -218,7 +211,7 @@ func (s *Store) Resolve(handle string) ([]Header, error) {
 		return nil, err
 	}
 	for _, id := range []string{handle, IDPrefix + handle} {
-		if header, err := s.Header(id); err == nil {
+		if header, err := s.read(id); err == nil {
 			return []Header{header}, nil
 		}
 	}
@@ -238,33 +231,64 @@ func (s *Store) Resolve(handle string) ([]Header, error) {
 	return named, nil
 }
 
-func (s *Store) Header(id string) (Header, error) {
-	header, err := s.read(id)
-	if err != nil {
-		return Header{}, err
-	}
-	if header.Root != "" {
-		return header, nil
-	}
-	lineage, err := s.Lineage(id)
-	if err != nil {
-		return Header{}, err
-	}
-	return lineage[len(lineage)-1], nil
+func (s *Store) Header(handle string) (Header, error) {
+	id, _ := s.holding(handle)
+	return s.read(id)
 }
 
-func (s *Store) Body(id string) ([]Event, error) {
+func (s *Store) holding(handle string) (string, string) {
+	id, part, _ := strings.Cut(handle, TurnMark)
+	if _, err := s.read(id); part != "" || err == nil {
+		return id, part
+	}
+	listing, err := s.Listing()
+	if err != nil {
+		return id, ""
+	}
+	for _, header := range listing.Sessions {
+		events, err := s.Events(header.ID)
+		if err != nil {
+			continue
+		}
+		for _, event := range events {
+			if event.Turn == id || event.Agent == id {
+				return header.ID, id
+			}
+		}
+	}
+	return id, ""
+}
+
+func (s *Store) Events(id string) ([]Event, error) {
 	if err := namesOneSession(id); err != nil {
 		return nil, err
 	}
-	raw, err := s.readFile(filepath.Join(s.Dir(id), bodyName))
-	if err != nil {
-		_, events, singleErr := s.singleFile(id)
-		if singleErr != nil {
-			return nil, fmt.Errorf("session: %s has no body in either shape: %w", id, errors.Join(err, singleErr))
-		}
-		return events, nil
+	if s.legacy(id) {
+		return s.legacyEvents(id)
 	}
+	raw, err := s.readFile(filepath.Join(s.Dir(id), eventsName))
+	if err != nil {
+		return nil, fmt.Errorf("session: %s has no events: %w", id, err)
+	}
+	return parseEvents(raw, id)
+}
+
+func (s *Store) Body(handle string) ([]Event, error) {
+	id, part := s.holding(handle)
+	events, err := s.Events(id)
+	if err != nil {
+		return nil, err
+	}
+	var kept []Event
+	for _, event := range events {
+		if event.Agent == part || (part != "" && event.Agent == "" && event.Turn == part) {
+			kept = append(kept, event)
+		}
+	}
+	return s.settings.view(kept)
+}
+
+func parseEvents(raw []byte, id string) ([]Event, error) {
 	var events []Event
 	for {
 		line, rest, terminated := bytes.Cut(raw, []byte{'\n'})
@@ -277,58 +301,19 @@ func (s *Store) Body(id string) ([]Event, error) {
 		}
 		var event Event
 		if err := json.Unmarshal(line, &event); err != nil {
-			return nil, fmt.Errorf("session: line %d of the body of %s does not parse: %w", len(events)+1, id, err)
+			return nil, fmt.Errorf("session: line %d of the events of %s does not parse: %w", len(events)+1, id, err)
 		}
 		events = append(events, event)
 	}
 }
 
-func (s *Store) Lineage(id string) ([]Header, error) {
-	walked := map[string]bool{}
-	var chain []Header
-	for id != "" {
-		if walked[id] {
-			return nil, fmt.Errorf("session: the lineage through %s comes back to itself", id)
-		}
-		walked[id] = true
-		header, err := s.read(id)
-		if err != nil {
-			return nil, err
-		}
-		chain = append(chain, header)
-		id = header.Parent
-	}
-	slices.Reverse(chain)
-	for i := range chain {
-		if chain[i].Root == "" {
-			chain[i].Root = chain[0].ID
-		}
-	}
-	return chain, nil
-}
-
 func (s *Store) Listing() (Listing, error) {
-	entries, err := os.ReadDir(s.dir)
-	if errors.Is(err, fs.ErrNotExist) {
-		return Listing{}, nil
-	}
+	ids, err := entryIDs(s.dir)
 	if err != nil {
 		return Listing{}, err
 	}
-	listed := map[string]bool{}
 	var listing Listing
-	for _, entry := range entries {
-		id := entry.Name()
-		if !entry.IsDir() {
-			if filepath.Ext(id) != singleFileSuffix {
-				continue
-			}
-			id = strings.TrimSuffix(id, singleFileSuffix)
-		}
-		if listed[id] {
-			continue
-		}
-		listed[id] = true
+	for _, id := range ids {
 		header, err := s.read(id)
 		if err != nil {
 			listing.Skipped = append(listing.Skipped, Skip{ID: id, Reason: err})
@@ -378,83 +363,15 @@ func (s *Store) read(id string) (Header, error) {
 	if err == nil {
 		var header Header
 		if err := json.Unmarshal(raw, &header); err != nil {
-			return Header{}, fmt.Errorf("session: the header of %s does not parse: %w", id, err)
+			return Header{}, fmt.Errorf("session: the session.json of %s does not parse: %w", id, err)
+		}
+		if header.CarriedFrom != nil {
+			header.Parent = header.CarriedFrom.Session
 		}
 		return header, nil
 	}
-	header, _, singleErr := s.singleFile(id)
-	if singleErr == nil {
-		return header, nil
+	if !errors.Is(err, fs.ErrNotExist) {
+		return Header{}, err
 	}
-	if errors.Is(singleErr, fs.ErrNotExist) {
-		return Header{}, fmt.Errorf("session: %s reads as neither shape: %w", id, errors.Join(err, singleErr))
-	}
-	return Header{}, singleErr
-}
-
-type singleFileRow struct {
-	ID           string            `json:"id"`
-	At           time.Time         `json:"at"`
-	Task         string            `json:"task"`
-	Model        string            `json:"model"`
-	Account      int64             `json:"account"`
-	ForkedFrom   string            `json:"forked_from"`
-	ForkedInto   string            `json:"forked_into"`
-	ForkKind     string            `json:"fork_kind"`
-	Outcome      json.RawMessage   `json:"outcome"`
-	TotalCostUSD float64           `json:"total_cost_usd"`
-	Steps        []json.RawMessage `json:"steps"`
-}
-
-func outcomeName(raw json.RawMessage) (string, error) {
-	if len(raw) == 0 {
-		return "", nil
-	}
-	var name string
-	if json.Unmarshal(raw, &name) == nil {
-		return name, nil
-	}
-	var ordinal int
-	if err := json.Unmarshal(raw, &ordinal); err != nil {
-		return "", fmt.Errorf("the outcome %s is neither a name nor the number an earlier schema wrote", raw)
-	}
-	if ordinal < int(OutcomeUnset) || ordinal >= int(outcomeCount) {
-		return "", fmt.Errorf("the outcome %d is not one this build has a name for", ordinal)
-	}
-	return Outcome(ordinal).String(), nil
-}
-
-func (s *Store) singleFile(id string) (Header, []Event, error) {
-	raw, err := s.readFile(filepath.Join(s.dir, id+singleFileSuffix))
-	if err != nil {
-		return Header{}, nil, err
-	}
-	var row singleFileRow
-	if err := json.Unmarshal(raw, &row); err != nil {
-		return Header{}, nil, fmt.Errorf("session: %s is not a turn row: %w", id, err)
-	}
-	outcome, err := outcomeName(row.Outcome)
-	if err != nil {
-		return Header{}, nil, fmt.Errorf("session: %s: %w", id, err)
-	}
-	header := Header{
-		ID:         cmp.Or(row.ID, id),
-		At:         row.At,
-		Task:       row.Task,
-		Model:      row.Model,
-		Account:    row.Account,
-		Parent:     row.ForkedFrom,
-		ForkedInto: row.ForkedInto,
-		ForkKind:   row.ForkKind,
-		Outcome:    outcome,
-		CostUSD:    row.TotalCostUSD,
-	}
-	if header.Parent == "" {
-		header.Root = header.ID
-	}
-	events := make([]Event, 0, len(row.Steps)+1)
-	for _, step := range row.Steps {
-		events = append(events, Event{Kind: EventStep, Body: step})
-	}
-	return header, append(events, Event{Kind: EventOutcome, Body: raw}), nil
+	return s.legacyHeader(id)
 }

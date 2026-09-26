@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-const SchemaVersion = 3
+const SchemaVersion = 4
 
 const AuthorOrchestrator = "orchestrator"
 
@@ -21,12 +21,20 @@ const FirstAttempt = 1
 type EventKind string
 
 const (
-	EventStep       EventKind = "step"
-	EventMessage    EventKind = "message"
-	EventRead       EventKind = "read"
-	EventOutcome    EventKind = "outcome"
-	EventAttachment EventKind = "attachment"
+	EventTurnStart  EventKind = "turn_start"
 	EventPrompt     EventKind = "prompt"
+	EventRequest    EventKind = "request"
+	EventMessage    EventKind = "message"
+	EventToolCall   EventKind = "tool_call"
+	EventToolResult EventKind = "tool_result"
+	EventSpawn      EventKind = "spawn"
+	EventAgentEnd   EventKind = "agent_end"
+	EventCompaction EventKind = "compaction"
+	EventTurnEnd    EventKind = "turn_end"
+	EventAttachment EventKind = "attachment"
+	EventOutcome    EventKind = "outcome"
+	EventStep       EventKind = "step"
+	EventRead       EventKind = "read"
 )
 
 type PromptBody struct {
@@ -40,6 +48,78 @@ type Attachment struct {
 	Format string `json:"format"`
 }
 
+type TurnStart struct {
+	Task           string `json:"task"`
+	Wire           string `json:"wire,omitempty"`
+	Spend          string `json:"spend,omitempty"`
+	Account        int64  `json:"account,omitempty"`
+	ContextCeiling int    `json:"context_ceiling,omitempty"`
+	ContextTarget  int    `json:"context_target,omitempty"`
+	AutoCompaction string `json:"auto_compaction,omitempty"`
+}
+
+type CallBody struct {
+	Tool string          `json:"tool"`
+	Args json.RawMessage `json:"args,omitempty"`
+}
+
+type ResultBody struct {
+	Content     string `json:"content"`
+	ToolOutcome string `json:"tool_outcome,omitempty"`
+	ResultBytes int    `json:"result_bytes"`
+}
+
+type SpawnBody struct {
+	Agent      string   `json:"agent"`
+	Definition string   `json:"definition,omitempty"`
+	Model      string   `json:"model,omitempty"`
+	Mission    string   `json:"mission,omitempty"`
+	Owns       []string `json:"owns,omitempty"`
+	Depth      int      `json:"depth"`
+}
+
+type AgentEndBody struct {
+	Status  string  `json:"status"`
+	Usage   Usage   `json:"usage"`
+	CostUSD float64 `json:"cost_usd"`
+}
+
+type Usage struct {
+	InputTokens      int `json:"input_tokens"`
+	OutputTokens     int `json:"output_tokens"`
+	CacheReadTokens  int `json:"cache_read_tokens"`
+	CacheWriteTokens int `json:"cache_write_tokens"`
+}
+
+func (u Usage) Plus(other Usage) Usage {
+	return Usage{
+		InputTokens:      u.InputTokens + other.InputTokens,
+		OutputTokens:     u.OutputTokens + other.OutputTokens,
+		CacheReadTokens:  u.CacheReadTokens + other.CacheReadTokens,
+		CacheWriteTokens: u.CacheWriteTokens + other.CacheWriteTokens,
+	}
+}
+
+type AgentRun struct {
+	Agent       string     `json:"agent"`
+	Definition  string     `json:"definition,omitempty"`
+	Model       string     `json:"model,omitempty"`
+	ParentAgent string     `json:"parent_agent,omitempty"`
+	SpawnCall   string     `json:"spawn_call,omitempty"`
+	SpawnTurn   string     `json:"spawn_turn"`
+	Depth       int        `json:"depth"`
+	Status      string     `json:"status"`
+	StartedAt   time.Time  `json:"started_at"`
+	EndedAt     *time.Time `json:"ended_at,omitempty"`
+	Usage       Usage      `json:"usage"`
+	CostUSD     float64    `json:"cost_usd"`
+}
+
+type Carried struct {
+	Session string `json:"session"`
+	Event   string `json:"event,omitempty"`
+}
+
 type EndReason string
 
 const (
@@ -49,12 +129,19 @@ const (
 )
 
 type Event struct {
-	ID      string          `json:"id,omitempty"`
-	Parent  string          `json:"parent,omitempty"`
-	Author  string          `json:"author,omitempty"`
-	Attempt int             `json:"attempt"`
-	Kind    EventKind       `json:"kind"`
-	Body    json.RawMessage `json:"body"`
+	Seq       int             `json:"seq,omitempty"`
+	ID        string          `json:"id,omitempty"`
+	Parent    string          `json:"parent,omitempty"`
+	At        time.Time       `json:"at"`
+	Turn      string          `json:"turn,omitempty"`
+	Agent     string          `json:"agent,omitempty"`
+	SpawnedBy string          `json:"spawned_by,omitempty"`
+	Request   string          `json:"request,omitempty"`
+	Call      string          `json:"call,omitempty"`
+	Author    string          `json:"author,omitempty"`
+	Attempt   int             `json:"attempt,omitempty"`
+	Kind      EventKind       `json:"kind"`
+	Body      json.RawMessage `json:"body,omitempty"`
 }
 
 func NewEventID() string {
@@ -111,24 +198,31 @@ type Header struct {
 	ID               string     `json:"id"`
 	Schema           int        `json:"schema"`
 	Name             *string    `json:"name,omitempty"`
-	At               time.Time  `json:"at"`
-	Task             string     `json:"task,omitempty"`
-	Wire             string     `json:"wire,omitempty"`
-	Model            string     `json:"model,omitempty"`
-	Parent           string     `json:"parent,omitempty"`
-	ContextCeiling   int        `json:"context_ceiling,omitempty"`
-	ContextTarget    int        `json:"context_target,omitempty"`
-	AutoCompaction   string     `json:"auto_compaction,omitempty"`
-	Root             string     `json:"root"`
-	Account          int64      `json:"account,omitempty"`
+	Project          string     `json:"project,omitempty"`
+	At               time.Time  `json:"started_at"`
+	EndedAt          *time.Time `json:"ended_at,omitempty"`
+	EndReason        EndReason  `json:"end_reason,omitempty"`
+	Head             string     `json:"head,omitempty"`
+	CarriedFrom      *Carried   `json:"carried_from,omitempty"`
+	Parent           string     `json:"-"`
 	ForkedInto       string     `json:"forked_into,omitempty"`
 	ForkKind         string     `json:"fork_kind,omitempty"`
 	ForkTokensBefore int        `json:"fork_tokens_before,omitempty"`
 	ForkTokensAfter  int        `json:"fork_tokens_after,omitempty"`
+	Root             string     `json:"root,omitempty"`
+	Task             string     `json:"task,omitempty"`
+	Wire             string     `json:"wire,omitempty"`
+	Model            string     `json:"model,omitempty"`
+	Models           []string   `json:"models,omitempty"`
 	Outcome          string     `json:"outcome,omitempty"`
-	CostUSD          float64    `json:"cost_usd,omitempty"`
-	EndedAt          *time.Time `json:"ended_at,omitempty"`
-	EndReason        EndReason  `json:"end_reason,omitempty"`
+	Account          int64      `json:"account,omitempty"`
+	ContextCeiling   int        `json:"context_ceiling,omitempty"`
+	ContextTarget    int        `json:"context_target,omitempty"`
+	AutoCompaction   string     `json:"auto_compaction,omitempty"`
+	Turns            int        `json:"turns"`
+	Usage            Usage      `json:"usage"`
+	CostUSD          float64    `json:"cost_usd"`
+	Agents           []AgentRun `json:"agents,omitempty"`
 }
 
 func (h Header) Ended() bool { return h.EndedAt != nil }

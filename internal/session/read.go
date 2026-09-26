@@ -102,29 +102,19 @@ func byteSpan(offset, length int) string {
 	return fmt.Sprintf("bytes %d-%d", offset, offset+length-1)
 }
 
-func (s Settings) withReads(events []Event) ([]Event, error) {
+func (s Settings) readsOf(step, author string, body json.RawMessage) ([]Event, error) {
 	if !s.RecordReads {
-		return events, nil
+		return nil, nil
 	}
-	recorded := make([]Event, 0, len(events))
-	for _, event := range events {
-		recorded = append(recorded, event)
-		if event.Kind != EventStep {
-			continue
-		}
-		var step StepBody
-		if err := json.Unmarshal(event.Body, &step); err != nil {
-			return nil, fmt.Errorf("session: a step being recorded does not read back: %w", err)
-		}
-		for _, read := range readsInStep(step, s.RecordReasoning) {
-			body, err := json.Marshal(read)
-			if err != nil {
-				return nil, err
-			}
-			recorded = append(recorded, Event{ID: NewEventID(), Parent: event.ID, Author: event.Author, Attempt: event.Attempt, Kind: EventRead, Body: body})
-		}
+	var parsed StepBody
+	if err := json.Unmarshal(body, &parsed); err != nil {
+		return nil, fmt.Errorf("session: the step %s does not read back: %w", step, err)
 	}
-	return recorded, nil
+	var reads []Event
+	for index, read := range readsInStep(parsed, s.RecordReasoning) {
+		reads = append(reads, Event{ID: EventIDFor(step, "read:"+strconv.Itoa(index)), Parent: step, Author: author, Attempt: FirstAttempt, Kind: EventRead, Body: marshalled(read)})
+	}
+	return reads, nil
 }
 
 func (s *Store) ReadsOf(id string) (Reads, error) {

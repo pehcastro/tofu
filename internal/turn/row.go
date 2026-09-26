@@ -39,12 +39,13 @@ type ToolCallRow struct {
 	ID     string `json:"id,omitempty"`
 	Parent string `json:"parent,omitempty"`
 	Author string `json:"author,omitempty"`
+	Call   string `json:"call,omitempty"`
 
-	Tool              string          `json:"tool"`
+	Tool              string          `json:"tool,omitempty"`
 	Args              json.RawMessage `json:"args,omitempty"`
 	Command           string          `json:"command,omitempty"`
 	Proxy             *ProxyRow       `json:"proxy,omitempty"`
-	ChildID           string          `json:"child_id"`
+	ChildID           string          `json:"child_id,omitempty"`
 	ExitCode          *int            `json:"exit_code,omitempty"`
 	ResultBytes       int             `json:"result_bytes"`
 	RenderedBytes     int             `json:"rendered_bytes"`
@@ -75,6 +76,7 @@ type StepRow struct {
 	Index            int               `json:"index"`
 	ToolCalls        []ToolCallRow     `json:"tool_calls,omitempty"`
 	AssistantText    string            `json:"assistant_text,omitempty"`
+	Model            string            `json:"model,omitempty"`
 	StopReason       string            `json:"stop_reason,omitempty"`
 	PromptTokens     int               `json:"prompt_tokens"`
 	CompletionTokens int               `json:"completion_tokens"`
@@ -99,6 +101,7 @@ const (
 
 type Row struct {
 	ID           string       `json:"id"`
+	Session      string       `json:"session,omitempty"`
 	Schema       int          `json:"schema"`
 	At           time.Time    `json:"at"`
 	Task         string       `json:"task"`
@@ -109,6 +112,7 @@ type Row struct {
 	Root         string       `json:"root,omitempty"`
 	Account      int64        `json:"account,omitempty"`
 	SpawnedFrom  string       `json:"spawned_from,omitempty"`
+	SpawnedBy    string       `json:"spawned_by,omitempty"`
 	ForkedFrom   string       `json:"forked_from,omitempty"`
 	ForkedInto   string       `json:"forked_into,omitempty"`
 	ForkKind     ForkKind     `json:"fork_kind,omitempty"`
@@ -260,13 +264,15 @@ func (r Row) Header() session.Header {
 		Task:       r.Task,
 		Wire:       r.Wire,
 		Model:      r.Model,
-		Parent:     cmp.Or(r.ForkedFrom, r.SpawnedFrom),
 		Root:       cmp.Or(r.Root, r.ID),
 		Account:    r.Account,
 		ForkedInto: r.ForkedInto,
 		ForkKind:   string(r.ForkKind),
 		Outcome:    r.Outcome.String(),
 		CostUSD:    r.TotalCostUSD,
+	}
+	if parent := cmp.Or(r.ForkedFrom, r.SpawnedFrom); parent != "" {
+		header.CarriedFrom = &session.Carried{Session: parent}
 	}
 	if r.Budget != (recall.Budget{}) {
 		header.ContextCeiling = r.Budget.CeilingTokens
@@ -325,4 +331,170 @@ func (r Row) Record() (session.Header, []session.Event, error) {
 		return session.Header{}, nil, failed
 	}
 	return r.Header(), events, nil
+}
+
+type record struct {
+	store     *session.Store
+	log       *session.Log
+	own       bool
+	scope     string
+	turn      string
+	agent     string
+	spawnedBy string
+	said      map[string]string
+	failed    []string
+}
+
+type resultRow struct {
+	ToolCallRow
+	Content     string `json:"content"`
+	ToolOutcome string `json:"tool_outcome,omitempty"`
+}
+
+type compactionRow struct {
+	Compaction *Compaction `json:"compaction,omitempty"`
+	Fork       *Fork       `json:"fork,omitempty"`
+}
+
+func openRecord(config Config, row Row) (*record, error) {
+	opened := &record{store: config.Sessions, log: config.Log, scope: row.ID, turn: row.ID, said: map[string]string{}}
+	switch {
+	case config.Log != nil:
+		opened.turn, opened.agent, opened.spawnedBy = config.Turn, row.ID, config.SpawnedBy
+	case config.Sessions != nil:
+		log, err := config.Sessions.Open(session.Header{ID: config.Session, At: row.At})
+		if err != nil {
+			return nil, err
+		}
+		opened.log, opened.own = log, true
+	default:
+		return nil, nil
+	}
+	return opened, nil
+}
+
+func (r *record) session() string {
+	if r == nil {
+		return ""
+	}
+	return r.log.ID()
+}
+
+func (r *record) note(err error) {
+	if err != nil {
+		r.failed = append(r.failed, err.Error())
+	}
+}
+
+func (r *record) add(event session.Event, body any) {
+	if r == nil {
+		return
+	}
+	event.Turn, event.Agent, event.SpawnedBy = r.turn, r.agent, r.spawnedBy
+	_, err := r.log.Append(event, body)
+	r.note(err)
+}
+
+func (r *record) begin(row Row) {
+	if r == nil {
+		return
+	}
+	start := session.TurnStart{Task: row.Task, Wire: row.Wire, Spend: string(row.Spend), Account: row.Account}
+	if row.Budget != (recall.Budget{}) {
+		start.ContextCeiling, start.ContextTarget, start.AutoCompaction = row.Budget.CeilingTokens, row.Budget.Bands.Target(), row.Budget.Record()
+	}
+	r.add(session.Event{Kind: session.EventTurnStart}, start)
+	if prompt := (session.PromptBody{System: row.System, Tools: row.Tools}); !r.log.Prompted(r.agent, prompt) {
+		r.add(session.Event{Kind: session.EventPrompt}, prompt)
+	}
+	if !r.own {
+		return
+	}
+	r.note(r.log.Edit(func(header *session.Header) {
+		header.Turns++
+		header.Task = cmp.Or(header.Task, row.Task)
+		header.Wire, header.Account = row.Wire, row.Account
+		header.ContextCeiling, header.ContextTarget, header.AutoCompaction = start.ContextCeiling, start.ContextTarget, start.AutoCompaction
+	}))
+}
+
+func (r *record) message(message llm.Message, request string, results map[string]ToolCallRow) {
+	if r == nil {
+		return
+	}
+	switch message.Role {
+	case llm.RoleSystem:
+	case llm.RoleTool:
+		row := results[message.ToolCallID]
+		row.ID, row.Parent, row.Author, row.Call, row.Tool = "", "", "", "", ""
+		if row.Proxy == nil {
+			row.Args = nil
+		}
+		r.add(session.Event{Kind: session.EventToolResult, Call: message.ToolCallID, Request: request},
+			resultRow{ToolCallRow: row, Content: message.Content, ToolOutcome: toolOutcomeName(message.ToolOutcome)})
+	case llm.RoleAssistant:
+		body := messageRowOf(message)
+		body.ToolCalls = nil
+		r.said[request] = message.Content
+		r.add(session.Event{Kind: session.EventMessage, Request: request}, body)
+		for _, call := range message.ToolCalls {
+			r.add(session.Event{ID: session.EventIDFor(r.scope, call.ID), Kind: session.EventToolCall, Call: call.ID, Request: request},
+				session.CallBody{Tool: call.Name, Args: call.Arguments})
+		}
+	default:
+		r.add(session.Event{Kind: session.EventMessage}, messageRowOf(message))
+	}
+}
+
+func (r *record) step(step StepRow) {
+	if r == nil {
+		return
+	}
+	asked := step
+	asked.ToolCalls, asked.Compaction, asked.Fork = nil, nil, nil
+	if asked.AssistantText == r.said[step.id] {
+		asked.AssistantText = ""
+	}
+	r.add(session.Event{ID: step.id, Kind: session.EventRequest, Request: step.id, Attempt: max(step.attempt, session.FirstAttempt)}, asked)
+	if step.Compaction != nil || step.Fork != nil {
+		r.add(session.Event{Kind: session.EventCompaction, Request: step.id}, compactionRow{Compaction: step.Compaction, Fork: step.Fork})
+	}
+	r.log.Spent(r.agent, step.Model, session.Usage{InputTokens: step.PromptTokens, OutputTokens: step.CompletionTokens,
+		CacheReadTokens: step.CacheReadTokens, CacheWriteTokens: step.CacheWriteTokens}, step.CostUSD)
+}
+
+func (r *record) end(row Row) {
+	if r == nil {
+		return
+	}
+	r.add(session.Event{Kind: session.EventTurnEnd}, row.Summary())
+	if !r.own {
+		return
+	}
+	r.note(r.log.Edit(func(header *session.Header) {
+		header.Outcome, header.Model = row.Outcome.String(), cmp.Or(row.Model, header.Model)
+	}))
+	r.note(r.log.Close())
+}
+
+func (r *record) fork(ended, next Row, fork *Fork, at time.Time) {
+	if r == nil || !r.own {
+		return
+	}
+	into, from := session.NewEventID(), r.log.Header()
+	r.add(session.Event{Kind: session.EventTurnEnd}, ended.Summary())
+	r.note(r.log.Edit(func(header *session.Header) {
+		header.Outcome, header.Model, header.ForkedInto = ended.Outcome.String(), cmp.Or(ended.Model, header.Model), into
+		header.EndedAt, header.EndReason = &at, session.EndedByFork
+		header.ForkTokensBefore, header.ForkTokensAfter = fork.TokensBefore, fork.TokensAfter
+	}))
+	r.note(r.log.Close())
+	log, err := r.store.Open(session.Header{ID: into, At: at, ForkKind: string(fork.Kind), Root: cmp.Or(from.Root, from.ID),
+		CarriedFrom: &session.Carried{Session: from.ID, Event: r.log.Header().Head}})
+	if err != nil {
+		r.note(err)
+		return
+	}
+	r.log, r.turn = log, next.ID
+	r.begin(next)
 }

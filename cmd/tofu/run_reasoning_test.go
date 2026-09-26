@@ -117,7 +117,7 @@ func TestAReasoningItemFromStepOneReachesTheStepTwoCodexRequestAndTheStoredRow(t
 		t.Fatalf("the reasoning item is not immediately ahead of the function call: %v", types)
 	}
 
-	sessionFile := filepath.Join(store.Dir(row.ID), "body.jsonl")
+	sessionFile := filepath.Join(store.Dir(row.Session), "events.jsonl")
 	onDisk, err := os.ReadFile(sessionFile)
 	if err != nil {
 		t.Fatalf("reading the session file: %v", err)

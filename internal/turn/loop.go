@@ -78,6 +78,10 @@ type Config struct {
 	NoLastWord      bool
 	Budget          recall.Budget
 	Sessions        *session.Store
+	Session         string
+	Log             *session.Log
+	Turn            string
+	SpawnedBy       string
 	Steering        func() []string
 	Step            CalledAsTheStepIsRecordedAndBeforeTheNextOneIsAsked
 	ToolResult      CalledAsEachToolCallAnswersAndBeforeTheNextRequest
@@ -177,21 +181,14 @@ func Run(ctx context.Context, config Config) (Row, error) {
 	for i, tool := range sentTools {
 		usedTools[i] = tool.Name()
 	}
-	row := Row{ID: origin, Schema: SchemaVersion, At: start, Task: config.Task, Wire: config.Wire, Spend: config.Spend, Root: origin, Account: account.ID, SpawnedFrom: config.SpawnedFrom, Budget: budget, System: config.System, Tools: usedTools}
+	row := Row{ID: origin, Schema: SchemaVersion, At: start, Task: config.Task, Wire: config.Wire, Spend: config.Spend, Root: origin, Account: account.ID, SpawnedFrom: config.SpawnedFrom, SpawnedBy: config.SpawnedBy, Budget: budget, System: config.System, Tools: usedTools}
 
-	var recorder *session.Recorder
-	if config.Sessions != nil {
-		if recorder, err = config.Sessions.Begin(row.Header(), row.author()); err != nil {
-			return Row{}, err
-		}
+	recorded, err := openRecord(config, row)
+	if err != nil {
+		return Row{}, err
 	}
-	var recordErrs []string
-	note := func(err error) {
-		if err != nil {
-			recordErrs = append(recordErrs, err.Error())
-		}
-	}
-	note(recorder.Append(session.EventPrompt, session.PromptBody{System: row.System, Tools: row.Tools}))
+	row.Session = recorded.session()
+	recorded.begin(row)
 
 	messages := make([]llm.Message, 0, len(config.History)+2)
 	if config.System != "" {
@@ -204,22 +201,17 @@ func Run(ctx context.Context, config Config) (Row, error) {
 	var written sync.WaitGroup
 	var forkWrites sync.Mutex
 	var forkWriteErrs []string
-	sent := 0
+	sent, answering := afterSystem+len(config.History), ""
+	results := map[string]ToolCallRow{}
 	flush := func() {
-		if recorder == nil {
-			return
-		}
 		for _, message := range messages[min(sent, len(messages)):] {
-			if message.Role == llm.RoleSystem {
-				continue
-			}
-			note(recorder.Append(session.EventMessage, messageRowOf(message)))
+			recorded.message(message, answering, results)
 		}
 		sent = max(sent, len(messages))
 	}
 	keep := func(step StepRow) {
 		flush()
-		note(recorder.AppendAttempt(session.EventStep, step.id, step.attempt, step))
+		recorded.step(step)
 		row.Steps = append(row.Steps, step)
 		if config.Step != nil {
 			config.Step(step)
@@ -247,12 +239,12 @@ func Run(ctx context.Context, config Config) (Row, error) {
 			}
 		}
 		row.WallClockMS = now().Sub(start).Milliseconds()
-		for _, failed := range recordErrs {
-			row.Warnings = append(row.Warnings, "part of this turn was not recorded as it ran: "+failed)
+		if recorded != nil {
+			for _, failed := range recorded.failed {
+				row.Warnings = append(row.Warnings, "part of this turn was not recorded as it ran: "+failed)
+			}
 		}
-		if err := recorder.End(row.Header(), row.Summary()); err != nil {
-			row.Warnings = append(row.Warnings, "the turn's own record was not closed: "+err.Error())
-		}
+		recorded.end(row)
 		return row
 	}
 	endAt := func(outcome Outcome, lead string, step int, history []llm.Message) Row {
@@ -277,10 +269,13 @@ func Run(ctx context.Context, config Config) (Row, error) {
 			return finish(outcome)
 		}
 		row.Model = decision.Build
+		last := stepFrom(len(row.Steps)+1, attempt, decision)
+		answering = last.id
 		messages = append(messages, llm.Message{Role: llm.RoleAssistant, Content: decision.Content})
-		keep(stepFrom(len(row.Steps)+1, attempt, decision))
+		keep(last)
 		return finish(outcome)
 	}
+	flush()
 	guard := newLoopGuard(config.Caps)
 	forks, recordedGrants := 0, 0
 	for step := 1; ; step++ {
@@ -307,6 +302,7 @@ func Run(ctx context.Context, config Config) (Row, error) {
 		row.TotalCostUSD += decision.Usage.Cost
 
 		stepRow := stepFrom(step, attempt, decision)
+		answering = stepRow.id
 		measuredAgainst := budget.Bands
 		stepRow.Occupancy, stepRow.Bands = &asSent, &measuredAgainst
 
@@ -329,13 +325,14 @@ func Run(ctx context.Context, config Config) (Row, error) {
 				callRow, resultMessage := rejectedCall(call, time.Now(),
 					"tool call "+strconv.Quote(call.Name)+" was not executed: "+theResponseHitTheOutputTokenLimit,
 					session.EventIDFor(origin, call.ID), stepRow.id, row.author())
-				stepRow.ToolCalls = append(stepRow.ToolCalls, callRow)
+				stepRow.ToolCalls, results[call.ID] = append(stepRow.ToolCalls, callRow), callRow
 				messages = append(messages, resultMessage)
 			}
 			keep(stepRow)
 
 		case llm.OutcomeToolCalls:
 			messages = append(messages, llm.Message{Role: llm.RoleAssistant, ToolCalls: decision.ToolCalls, Thinking: decision.Thinking})
+			flush()
 			pending, batches := decision.ToolCalls, 0
 			var tripped bool
 			var repeated ToolCallRow
@@ -349,7 +346,7 @@ func Run(ctx context.Context, config Config) (Row, error) {
 					proxied, proxyRow := config.Proxy.rewrite(ctx, asked)
 					call.Arguments = proxied
 					request := GateRequest{TurnID: row.ID, Task: config.Task, Tool: call.Name, Args: call.Arguments}
-					gated := gatedCall{call: call, asked: asked, proxy: proxyRow, id: session.EventIDFor(origin, call.ID), parent: stepRow.id, author: author, sift: sifter, thrift: thrifter, task: config.Task}
+					gated := gatedCall{call: call, asked: asked, proxy: proxyRow, id: session.EventIDFor(origin, call.ID), parent: stepRow.id, author: author, sift: sifter, thrift: thrifter, task: config.Task, site: recorded.site(call.ID)}
 					if config.Gate != nil {
 						verdict, err := config.Gate.Decide(ctx, request)
 						gated.verdict = verdict
@@ -383,6 +380,9 @@ func Run(ctx context.Context, config Config) (Row, error) {
 					running.Wait()
 				}
 				stepRow.ToolCalls = append(stepRow.ToolCalls, rows...)
+				for i, gated := range wave {
+					results[gated.call.ID] = rows[i]
+				}
 				messages = append(messages, answers...)
 				flush()
 				if config.ToolResult != nil {
@@ -415,7 +415,7 @@ func Run(ctx context.Context, config Config) (Row, error) {
 					callRow, resultMessage := rejectedCall(unanswered, time.Now(),
 						"tool call "+strconv.Quote(unanswered.Name)+" was not executed: "+stopped,
 						session.EventIDFor(origin, unanswered.ID), stepRow.id, author)
-					stepRow.ToolCalls = append(stepRow.ToolCalls, callRow)
+					stepRow.ToolCalls, results[unanswered.ID] = append(stepRow.ToolCalls, callRow), callRow
 					messages = append(messages, resultMessage)
 				}
 				keep(stepRow)
@@ -446,7 +446,6 @@ func Run(ctx context.Context, config Config) (Row, error) {
 					ended := row
 					ended.Outcome, ended.ForkedInto = OutcomeForked, fork.Into
 					ended.WallClockMS = now().Sub(start).Milliseconds()
-					note(recorder.End(ended.Header(), ended.Summary()))
 					if config.EndedSession != nil {
 						written.Add(1)
 						go func() {
@@ -471,7 +470,10 @@ func Run(ctx context.Context, config Config) (Row, error) {
 						ForkedFrom:  ended.ID,
 						ForkKind:    fork.Kind,
 						SpawnedFrom: config.SpawnedFrom,
+						SpawnedBy:   config.SpawnedBy,
 						Budget:      budget,
+						System:      row.System,
+						Tools:       row.Tools,
 					}
 					if moving {
 						row.Account = moved.ID
@@ -481,12 +483,9 @@ func Run(ctx context.Context, config Config) (Row, error) {
 							model = moved.Model
 						}
 					}
+					recorded.fork(ended, row, fork, row.At)
+					row.Session = recorded.session()
 					messages, sent = begun, 0
-					if recorder != nil {
-						next, beginErr := config.Sessions.Begin(row.Header(), row.author())
-						note(beginErr)
-						recorder = next
-					}
 					continue
 				}
 			}
@@ -557,6 +556,7 @@ func stepFrom(index, attempt int, decision llm.Decision) StepRow {
 		attempt:          attempt,
 		Index:            index,
 		AssistantText:    decision.Content,
+		Model:            decision.Build,
 		StopReason:       decision.Stop,
 		PromptTokens:     decision.Usage.InputTokens,
 		CompletionTokens: decision.Usage.OutputTokens,
@@ -577,6 +577,7 @@ type gatedCall struct {
 	task    string
 	sift    *ShellSift
 	thrift  *ThriftSift
+	site    spawnSite
 	verdict GateDecision
 	gateErr string
 	refusal string
@@ -596,7 +597,7 @@ func (g gatedCall) run(ctx context.Context, tools Registry, resultBytesCap int, 
 func (g gatedCall) execute(ctx context.Context, tools Registry, resultBytesCap int, artifacts Artifacts) (ToolCallRow, llm.Message) {
 	call := g.call
 	started := time.Now()
-	ctx = context.WithValue(ctx, shellOwnerKey{}, g.author)
+	ctx = context.WithValue(context.WithValue(ctx, shellOwnerKey{}, g.author), spawnSiteKey{}, g.site)
 	tool, ok := tools.byName[call.Name]
 	if !ok {
 		return rejectedCall(call, started, "unknown tool "+strconv.Quote(call.Name), g.id, g.parent, g.author)
@@ -633,6 +634,7 @@ func (g gatedCall) execute(ctx context.Context, tools Registry, resultBytesCap i
 		ID:             g.id,
 		Parent:         g.parent,
 		Author:         g.author,
+		Call:           call.ID,
 		Tool:           call.Name,
 		Args:           call.Arguments,
 		Command:        result.Command,
@@ -677,7 +679,7 @@ func (g gatedCall) execute(ctx context.Context, tools Registry, resultBytesCap i
 
 func rejectedCall(call llm.ToolCall, started time.Time, reason, id, parent, author string) (ToolCallRow, llm.Message) {
 	content := "error: " + reason
-	row := ToolCallRow{ID: id, Parent: parent, Author: author, Tool: call.Name, Args: call.Arguments, Error: reason, DurationMS: time.Since(started).Milliseconds()}
+	row := ToolCallRow{ID: id, Parent: parent, Author: author, Call: call.ID, Tool: call.Name, Args: call.Arguments, Error: reason, DurationMS: time.Since(started).Milliseconds()}
 	return row, llm.Message{
 		Role:            llm.RoleTool,
 		ToolCallID:      call.ID,

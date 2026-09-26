@@ -19,7 +19,7 @@ import (
 )
 
 const (
-	sessionUsage = "usage: tofu session list | tofu session info <name|id> | tofu session reads <name|id> | tofu session resume <name|id> | tofu session rename <name|id> <new name>, each with --json"
+	sessionUsage = "usage: tofu session list | tofu session info <name|id> | tofu session trace <name|id> | tofu session reads <name|id> | tofu session resume <name|id> | tofu session rename <name|id> <new name>, each with --json"
 
 	sessionNone     = "no session has been recorded in this directory yet"
 	sessionFresh    = "no session is recorded here, so this starts fresh"
@@ -52,6 +52,8 @@ type sessionRow struct {
 	Name             string    `json:"name,omitempty"`
 	At               time.Time `json:"at"`
 	Task             string    `json:"task,omitempty"`
+	Turns            int       `json:"turns"`
+	Agents           int       `json:"sub_agents"`
 	Steps            int       `json:"steps"`
 	Carried          int       `json:"carried_messages"`
 	Outcome          string    `json:"outcome,omitempty"`
@@ -156,6 +158,17 @@ func sessionVerb(args []string, in io.Reader, out, errOut io.Writer, shade palet
 		}
 		row.Expired = settings.Lifetime.Expired(row.lastAt, now)
 		return sessionPrint(out, errOut, asJSON, row, sessionInfoText(row, shade, now))
+	case "trace":
+		if len(handles) != 1 {
+			_, _ = fmt.Fprintln(errOut, "tofu session trace: which session? a name or an id, and tofu session list names them")
+			return exitUsage
+		}
+		report, err := sessionTrace(store, handles[0])
+		if err != nil {
+			_, _ = fmt.Fprintf(errOut, "tofu session trace: %v\n", err)
+			return exitVerdict
+		}
+		return sessionPrint(out, errOut, asJSON, report, sessionTraceText(report))
 	case "reads":
 		if len(handles) != 1 {
 			_, _ = fmt.Fprintln(errOut, "tofu session reads: which session? a name or an id, and tofu session list names them")
@@ -286,15 +299,6 @@ func (carry sessionResume) taskIn(content string) string {
 	return strings.TrimSpace(after)
 }
 
-func latestRecording(messages []llm.Message) []llm.Message {
-	for index := len(messages) - 1; index > 0; index-- {
-		if messages[index].Role == messages[0].Role && messages[index].Content == messages[0].Content {
-			return messages[index:]
-		}
-	}
-	return messages
-}
-
 func sessionRenamed(store *session.Store, handle, to string) (sessionRow, error) {
 	row, _, err := sessionDetail(store, handle)
 	if err != nil {
@@ -352,11 +356,10 @@ func sessionDetail(store *session.Store, handle string) (sessionRow, []llm.Messa
 	if err != nil {
 		return sessionRow{}, nil, err
 	}
-	recorded, err := turn.ConversationFrom(events)
+	messages, err := turn.ConversationFrom(events)
 	if err != nil {
 		return sessionRow{}, nil, err
 	}
-	messages := latestRecording(recorded)
 	reading, err := session.ReadEvents(events)
 	if err != nil {
 		return sessionRow{}, nil, err
@@ -374,6 +377,8 @@ func sessionDetail(store *session.Store, handle string) (sessionRow, []llm.Messa
 		ID:               header.ID,
 		At:               header.At,
 		Task:             header.Task,
+		Turns:            max(header.Turns, len(tasks)),
+		Agents:           len(header.Agents),
 		Steps:            len(reading.Steps),
 		Reads:            len(reading.Reads),
 		Carried:          len(messages),
@@ -557,7 +562,8 @@ func sessionInfoText(row sessionRow, shade palette, now time.Time) string {
 	if row.Task != "" {
 		body.WriteString(paragraph("task", row.Task))
 	}
-	body.WriteString(labelled("counts", sessionSteps(row.Steps)+", "+strconv.Itoa(row.Carried)+" messages a resume would send, "+strconv.Itoa(row.Reads)+" reads recorded") + "\n")
+	body.WriteString(labelled("counts", strconv.Itoa(row.Turns)+" turns, "+sessionSteps(row.Steps)+", "+strconv.Itoa(row.Agents)+" sub-agent runs, "+
+		strconv.Itoa(row.Carried)+" messages a resume would send, "+strconv.Itoa(row.Reads)+" reads recorded") + "\n")
 	if row.EndedAt != nil {
 		body.WriteString(labelled("ended", string(row.EndReason)+", "+row.EndedAt.Format(sessionDate)) + "\n")
 	} else {
@@ -629,6 +635,100 @@ func resumeText(carry sessionResume) string {
 	}
 	if carry.Carried == 0 {
 		body.WriteString(paragraph("resume", sessionEmpty))
+	}
+	return body.String()
+}
+
+type traceRequest struct {
+	Request string        `json:"request"`
+	Agent   string        `json:"agent,omitempty"`
+	Turn    string        `json:"turn"`
+	Model   string        `json:"model,omitempty"`
+	Usage   session.Usage `json:"usage"`
+	CostUSD float64       `json:"cost_usd"`
+}
+
+type traceCall struct {
+	Call    string `json:"call"`
+	Agent   string `json:"agent,omitempty"`
+	Turn    string `json:"turn"`
+	Request string `json:"request,omitempty"`
+	Tool    string `json:"tool"`
+	Result  string `json:"result,omitempty"`
+	Outcome string `json:"outcome,omitempty"`
+	Bytes   int    `json:"result_bytes"`
+}
+
+type sessionTraceReport struct {
+	Session  string             `json:"session"`
+	Name     string             `json:"name,omitempty"`
+	Events   int                `json:"events"`
+	Agents   []session.AgentRun `json:"agents"`
+	Requests []traceRequest     `json:"requests"`
+	Calls    []traceCall        `json:"calls"`
+}
+
+func sessionTrace(store *session.Store, handle string) (sessionTraceReport, error) {
+	header, err := sessionHeader(store, handle)
+	if err != nil {
+		return sessionTraceReport{}, err
+	}
+	events, err := store.Events(header.ID)
+	if err != nil {
+		return sessionTraceReport{}, err
+	}
+	report := sessionTraceReport{Session: header.ID, Events: len(events), Agents: header.Agents}
+	if header.Name != nil {
+		report.Name = *header.Name
+	}
+	placed := map[string]int{}
+	for _, event := range events {
+		switch event.Kind {
+		case session.EventRequest:
+			var step session.StepBody
+			_ = json.Unmarshal(event.Body, &step)
+			report.Requests = append(report.Requests, traceRequest{Request: event.ID, Agent: event.Agent, Turn: event.Turn, Model: step.Model, CostUSD: step.CostUSD,
+				Usage: session.Usage{InputTokens: step.PromptTokens, OutputTokens: step.CompletionTokens, CacheReadTokens: step.CacheReadTokens, CacheWriteTokens: step.CacheWriteTokens}})
+		case session.EventToolCall:
+			var call session.CallBody
+			_ = json.Unmarshal(event.Body, &call)
+			placed[event.Call] = len(report.Calls)
+			report.Calls = append(report.Calls, traceCall{Call: event.Call, Agent: event.Agent, Turn: event.Turn, Request: event.Request, Tool: call.Tool})
+		case session.EventToolResult:
+			var result session.ResultBody
+			_ = json.Unmarshal(event.Body, &result)
+			if at, known := placed[event.Call]; known {
+				report.Calls[at].Result, report.Calls[at].Outcome, report.Calls[at].Bytes = event.ID, result.ToolOutcome, result.ResultBytes
+			}
+		}
+	}
+	return report, nil
+}
+
+func sessionTraceText(report sessionTraceReport) string {
+	var body strings.Builder
+	counted := strconv.Itoa(report.Events) + " events"
+	body.WriteString(headline("trace "+cmp.Or(report.Name, report.Session), counted, len(counted)) + "\n")
+	body.WriteString("\nsub-agents\n")
+	for _, run := range report.Agents {
+		calls := 0
+		for _, call := range report.Calls {
+			if call.Agent == run.Agent {
+				calls++
+			}
+		}
+		fmt.Fprintf(&body, "%s%s  %s on %s, spawned by call %s in %s, %s, %d calls, $%.6f\n", reportIndent, run.Agent,
+			cmp.Or(run.Definition, "unnamed"), cmp.Or(run.Model, "the orchestrator's model"), run.SpawnCall, run.SpawnTurn, run.Status, calls, run.CostUSD)
+	}
+	body.WriteString("\nrequests\n")
+	for _, request := range report.Requests {
+		fmt.Fprintf(&body, "%s%s  %s  %s  in %d out %d  $%.6f\n", reportIndent, cmp.Or(request.Agent, session.AuthorOrchestrator),
+			request.Request, request.Model, request.Usage.InputTokens, request.Usage.OutputTokens, request.CostUSD)
+	}
+	body.WriteString("\ncalls\n")
+	for _, call := range report.Calls {
+		fmt.Fprintf(&body, "%s%s  %s  %s  answered by %s  %s  %d bytes\n", reportIndent, cmp.Or(call.Agent, session.AuthorOrchestrator),
+			call.Call, call.Tool, cmp.Or(call.Result, "nothing"), call.Outcome, call.Bytes)
 	}
 	return body.String()
 }

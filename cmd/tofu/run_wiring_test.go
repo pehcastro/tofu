@@ -398,16 +398,16 @@ func TestTheSpawnToolIsGivenTheSessionStoreBeforeTheTurnStarts(t *testing.T) {
 		t.Fatalf("the parent names %v, want the one child", row.ChildIDs)
 	}
 	childID := row.ChildIDs[0]
-	header, err := store.Header(childID)
+	header, err := store.Header(row.Session)
 	if err != nil {
-		t.Fatalf("the child left no record of its own: %v", err)
+		t.Fatalf("the parent session was not recorded: %v", err)
 	}
-	if header.Parent != row.ID {
-		t.Fatalf("the child record names parent %q, want %q", header.Parent, row.ID)
+	if len(header.Agents) != 1 || header.Agents[0].Agent != childID || header.Agents[0].SpawnTurn != row.ID || header.Agents[0].SpawnCall != "call-1" {
+		t.Fatalf("the session indexes %+v, want %s spawned by call-1 in %s", header.Agents, childID, row.ID)
 	}
-	events, err := store.Body(childID)
+	events, err := store.Body(row.Session + session.TurnMark + childID)
 	if err != nil {
-		t.Fatalf("reading the child body: %v", err)
+		t.Fatalf("reading the child's events from the parent's log: %v", err)
 	}
 	steps := 0
 	for _, event := range events {

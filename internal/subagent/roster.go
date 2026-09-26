@@ -49,6 +49,8 @@ func (s State) String() string {
 
 type SubAgent struct {
 	ID           string
+	Agent        string
+	Model        string
 	Mission      string
 	Brief        string
 	Owns         []string
