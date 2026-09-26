@@ -182,6 +182,12 @@ func (a *App) click(x, y int, mods pointer.Mods) tea.Cmd {
 		a.shells.Click(x, y-bodyTop)
 		return nil
 	case screenChat:
+		cmd := a.follow(ref)
+		if a.current != screenChat {
+			_, id := pointer.SplitReference(ref)
+			a.recordReach(strings.TrimPrefix(id, "#"))
+		}
+		return cmd
 	}
 	return a.follow(ref)
 }

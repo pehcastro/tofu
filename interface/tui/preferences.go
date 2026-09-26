@@ -6,6 +6,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"tofu/interface/tui/feed"
 	"tofu/interface/tui/hostkeys"
 	"tofu/interface/tui/settings"
 	"tofu/internal/keymap"
@@ -171,6 +172,33 @@ func (a *App) recordKindMove(wasInChat bool) {
 	if wasInChat {
 		row.FreeArm, row.Chose = isession.PlaceChat, isession.PlaceWork
 	}
+	a.appendPromotion(row)
+}
+
+func (a *App) recordReach(id string) {
+	at := a.happenedAt(id)
+	if at < 0 || slices.Contains(a.reached, id) {
+		return
+	}
+	event := a.happened[at]
+	if event.Kind != feed.KindTool && event.Kind != feed.KindEdit {
+		return
+	}
+	a.reached = append(a.reached, id)
+	freeArm := isession.PlaceChat
+	if !a.flag(isettings.ChatShowsTools) {
+		freeArm = isession.PlaceWork
+	}
+	a.appendPromotion(isession.Promotion{
+		Action:    isession.ReachedIntoWork,
+		EventID:   id,
+		EventKind: event.Title,
+		FreeArm:   freeArm,
+		Chose:     isession.PlaceChat,
+	})
+}
+
+func (a *App) appendPromotion(row isession.Promotion) {
 	row.At, row.Session = a.options.Now(), a.sessionID
 	if err := a.options.Promotions.Append(row); err != nil {
 		a.notify(err.Error())

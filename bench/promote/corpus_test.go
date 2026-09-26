@@ -34,13 +34,20 @@ func drive(t *testing.T, dir string) {
 	app.Update(tui.Event{Kind: tui.EventToolCall, ID: "r1", Tool: "read", Text: "internal/turn/loop.go"})
 	app.Update(tui.Event{Kind: tui.EventToolResult, ID: "r1", Text: "384 lines"})
 
-	app.Update(tea.KeyPressMsg{Code: '2', Mod: tea.ModAlt})
+	app.Update(tea.KeyPressMsg{Code: tea.KeyTab})
+	app.Update(tea.KeyPressMsg{Code: 'n', Text: "n"})
 	app.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 
 	app.Update(tea.KeyPressMsg{Code: '1', Mod: tea.ModAlt})
 	for _, code := range "/settings" {
 		app.Update(tea.KeyPressMsg{Code: code, Text: string(code)})
 	}
+	app.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	app.Update(tea.KeyPressMsg{Code: 'k', Mod: tea.ModCtrl})
+	for _, code := range "tool detail" {
+		app.Update(tea.KeyPressMsg{Code: code, Text: string(code)})
+	}
+	app.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	app.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	app.Update(tea.KeyPressMsg{Code: tea.KeyDown})
 	app.Update(tea.KeyPressMsg{Code: tea.KeyEnter})

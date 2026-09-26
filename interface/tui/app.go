@@ -227,6 +227,7 @@ type App struct {
 	childCalls     []string
 	children       []subagent.Child
 	happened       []feed.Event
+	reached        []string
 	spawns         int
 	board          paste.Board
 	minted         int

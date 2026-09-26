@@ -227,10 +227,16 @@ func (a *App) shownEffort() llm.Effort {
 func (a *App) screenKey(key string) (tea.Cmd, bool) {
 	switch a.current {
 	case screenAgents:
-		if at := a.happenedAt(a.feed.Selected()); key == "enter" && at >= 0 && a.happened[at].Kind == feed.KindEdit {
-			return a.push(&diffDialog{id: a.happened[at].ID}), true
+		selected := a.feed.Selected()
+		if at := a.happenedAt(selected); key == "enter" && at >= 0 && a.happened[at].Kind == feed.KindEdit {
+			a.recordReach(selected)
+			return a.push(&diffDialog{id: selected}), true
 		}
-		return nil, a.feed.Key(key)
+		taken := a.feed.Key(key)
+		if taken && (key == "enter" || key == "space") {
+			a.recordReach(selected)
+		}
+		return nil, taken
 	case screenEdits:
 		return nil, a.edits.Key(key)
 	case screenShells:
