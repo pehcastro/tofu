@@ -1,0 +1,1 @@
+{"id":"zed","name":"Zed","layer":"editor","source":"https://zed.dev/docs/key-bindings","inspection":"Open Zed's keymap and check Terminal context; user bindings can override defaults.","bindings":[{"key":"ctrl+k","owner":"Zed keybinding / chord prefix","status":"documented-default"}]}

@@ -1,0 +1,1 @@
+{"id":"ghostty","name":"Ghostty","layer":"terminal","source":"https://ghostty.org/docs/config/keybind","inspection":"Run ghostty +list-keybinds --default, then inspect custom keybind entries. No Ctrl+K claim is assumed here.","bindings":[]}

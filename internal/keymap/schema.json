@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Tofu third-party keymap profile",
+  "type": "object",
+  "required": ["id", "name", "layer", "source", "bindings", "inspection"],
+  "properties": {
+    "id": {"type": "string"},
+    "name": {"type": "string"},
+    "layer": {"enum": ["editor", "terminal"]},
+    "source": {"type": "string", "format": "uri"},
+    "inspection": {"type": "string"},
+    "bindings": {"type": "array", "items": {"type": "object", "required": ["key", "owner", "status"], "properties": {"key": {"type": "string"}, "owner": {"type": "string"}, "status": {"enum": ["documented-default", "possible", "not-documented"]}}}}
+  }
+}

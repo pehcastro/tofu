@@ -1,0 +1,1 @@
+{"id":"alacritty","name":"Alacritty","layer":"terminal","source":"https://alacritty.org/config-alacritty-bindings.html","inspection":"Inspect [keyboard] bindings in alacritty.toml; custom mappings can intercept any tofu key. No Ctrl+K default claim is assumed.","bindings":[]}
