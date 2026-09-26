@@ -11,6 +11,8 @@ skills:
   - flake-triage
   - test-plan
 source: library/qa/references/failure-triage.md
+model: inherit
+tools: read, glob, search, symbols, bash
 ---
 
 # QA

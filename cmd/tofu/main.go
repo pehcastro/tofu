@@ -28,9 +28,11 @@ Verbs:
   usage     print every credential's quota windows and when each resets,
             or --history for the readings already recorded, each with its moment
   models    list the models each subscription serves, and why one is excluded
+  agents    list the sub-agents read from .tofu, .agents, .claude and the library,
+            each with where it came from and the model it runs
 
 A verb that reports state takes --json, which carries every field the
-readable form collapses: doctor, models, usage, context, rules.
+readable form collapses: doctor, models, agents, usage, context, rules.
 
   why       explain a ledger row, or the last one
   run       work a task in a directory until it is done
@@ -81,6 +83,8 @@ func run(args []string, in io.Reader, out io.Writer, errOut io.Writer) int {
 		return usageVerb(args[1:], out, errOut, shade)
 	case "models":
 		return modelsVerb(args[1:], out, errOut, shade)
+	case "agents":
+		return agentsVerb(args[1:], out, errOut)
 	case "why":
 		return whyVerb(args[1:], out, errOut, time.Now)
 	case "frame":

@@ -3,6 +3,7 @@ package settings
 import (
 	"slices"
 	"strconv"
+	"strings"
 
 	"tofu/internal/konst"
 )
@@ -25,6 +26,7 @@ type Spec struct {
 	Default     int
 	DefaultText string
 	Choices     []string
+	ListOf      []string
 	Restart     bool
 }
 
@@ -52,6 +54,7 @@ const (
 	FoldHidesShell         = "foldHidesShell"
 	DecisionCap            = "decisionCap"
 	TurnMaySpawn           = "turnMaySpawn"
+	AgentSources           = "agentSources"
 	HideIntroduction       = "hideIntroduction"
 )
 
@@ -97,7 +100,16 @@ func DeclaredDefaultText(key string) string {
 }
 
 func (s Spec) allows(value string) bool {
-	return len(s.Choices) == 0 || slices.Contains(s.Choices, value)
+	if s.ListOf == nil {
+		return len(s.Choices) == 0 || slices.Contains(s.Choices, value)
+	}
+	items := strings.Split(value, ",")
+	for i, item := range items {
+		if !slices.Contains(s.ListOf, item) || slices.Contains(items[:i], item) {
+			return false
+		}
+	}
+	return true
 }
 
 func lineCounts(counts ...int) []string {
@@ -146,6 +158,8 @@ func Default() []Spec {
 		{Key: FoldHidesShell, Label: "Fold hides shell", Description: "the running line drops the shell count", Category: "Shell", Kind: Bool},
 		{Key: DecisionCap, Label: "Decision cap", Description: "decision cap per turn, zero means no cap", Category: "Turn", Kind: Int, Restart: true},
 		{Key: TurnMaySpawn, Label: "Sub-agents", Description: "a turn may spawn a sub-agent", Category: "Turn", Kind: Bool, Default: 1, Restart: true},
+		{Key: AgentSources, Label: "Agent folders", Description: "the folders sub-agents are read from, in order, as a comma list of tofu, agents and claude; the library is always read", Category: "Turn", Kind: Text, DefaultText: "tofu,agents,claude",
+			ListOf: []string{"tofu", "agents", "claude"}},
 		{Key: HideIntroduction, Label: "Hide introduction", Description: "Skip the new-project welcome and open chat directly", Category: "Startup", Kind: Bool},
 	}
 	for i := range specs {

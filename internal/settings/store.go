@@ -171,7 +171,11 @@ func (s *Store) SetText(scope Scope, key, value string) error {
 	if !known {
 		return fmt.Errorf("settings: %q is not a declared setting", key)
 	}
-	if !spec.allows(value) {
+	switch {
+	case spec.allows(value):
+	case spec.ListOf != nil:
+		return fmt.Errorf("settings: %s takes a list of %s, each once, got %q", key, strings.Join(spec.ListOf, ", "), value)
+	default:
 		return fmt.Errorf("settings: %s takes one of %s, got %q", key, strings.Join(spec.Choices, ", "), value)
 	}
 	if s.texts[scope] == nil {
