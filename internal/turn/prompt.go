@@ -79,8 +79,8 @@ func shellLines(dir string) []string {
 }
 
 type instructionFile struct {
-	path  string
 	named string
+	text  string
 }
 
 func InstructionCap(setting int) int {
@@ -90,31 +90,42 @@ func InstructionCap(setting int) int {
 	return setting
 }
 
-func ProjectInstructions(dir, home string, capBytes int) (block string, cut []string) {
+func ProjectInstructionsInOrder(dir, home string, capBytes int, sources []string) (block string, cut, skipped []string) {
 	capBytes = InstructionCap(capBytes)
 	var files []instructionFile
 	if home != "" {
 		for _, global := range [...]string{filepath.Join(sys.StateDir(home), "AGENTS.md"), filepath.Join(home, ".claude", "CLAUDE.md")} {
 			if isFile(global) {
-				files = append(files, instructionFile{global, "your personal " + filepath.Base(global)})
+				files = append(files, instructionFile{"your personal " + filepath.Base(global), readInstructions(global)})
 				break
 			}
 		}
 	}
-	for _, name := range [...]string{"AGENTS.md", "CLAUDE.md"} {
-		if nearest, found := findUp(dir, name); found {
-			files = append(files, instructionFile{nearest, "this project's " + name})
+	chosenIn := map[string]string{}
+	for _, name := range sources {
+		nearest, found := findUp(dir, name)
+		if !found {
+			continue
 		}
+		text := readInstructions(nearest)
+		if text == "" {
+			continue
+		}
+		folder := filepath.Dir(nearest)
+		if first, taken := chosenIn[folder]; taken {
+			skipped = append(skipped, "this project's "+name+", because "+first+" in the same folder comes first")
+			continue
+		}
+		chosenIn[folder] = name
+		files = append(files, instructionFile{"this project's " + name, text})
 	}
 
 	var written strings.Builder
 	for _, file := range files {
-		body, err := os.ReadFile(file.path)
-		text := strings.TrimSpace(string(body))
-		if err != nil || text == "" {
+		if file.text == "" {
 			continue
 		}
-		entry := "instructions from " + file.named + ", which outrank anything above them that disagrees:\n" + text
+		entry := "instructions from " + file.named + ", which outrank anything above them that disagrees:\n" + file.text
 		separator := ""
 		if written.Len() > 0 {
 			separator = "\n\n"
@@ -132,7 +143,15 @@ func ProjectInstructions(dir, home string, capBytes int) (block string, cut []st
 	if len(cut) > 0 {
 		fmt.Fprintf(&written, "\n\n[capped at %d bytes: dropped %s]", capBytes, strings.Join(cut, ", "))
 	}
-	return written.String(), cut
+	return written.String(), cut, skipped
+}
+
+func readInstructions(path string) string {
+	body, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(body))
 }
 
 func gitBranch(dir string) string {

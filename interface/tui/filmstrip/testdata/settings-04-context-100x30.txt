@@ -6,7 +6,7 @@
     Appearance    05      Automatic transcript compaction; not built yet, so no choice changes …    
     Models & rol… 02                                                                                
     Interaction   05      Tool detail                                                      ○ off    
-  › Context       05      chat shows every tool call                                                
+  › Context       06      chat shows every tool call                                                
     Files         03                                                                                
     Shell         05      Agent feeds                                                   full  ▾     
     Turn          03      full keeps every sub-agents event, summary the latest 200, off shows …    
@@ -17,10 +17,10 @@
   section                 Project instructions                                         32768  ▾     
   ctrl+k search ·         bytes of your instruction files sent each turn                            
   esc chat                                                                                          
+                          Instruction files                              AGENTS.md,CLAUDE.md  ▾     
+                          in each folder the first of these that exists is sent and the rest ar…    
+                                                                                                    
                         enter change  ·  ctrl+k search  ·  esc chat                                 
-                                                                                                    
-                                                                                                    
-                                                                                                    
                                                                                                     
                                                                                                     
                                                                                                     

@@ -86,7 +86,7 @@ Select an edit reference to read every changed line.
   › Appearance    05    › Theme                 tofu  ▾     
     Models & rol… 02      tofu uses Zed Nu Disco; choos…    
     Interaction   05                                        
-    Context       05      Density        comfortable  ▾     
+    Context       06      Density        comfortable  ▾     
     Files         03      Spacing across lists and pane…    
     Shell         05                                        
     Turn          03      Animations          subtle  ▾     
@@ -202,7 +202,7 @@ Select an edit reference to read every changed line.
   › Appearance    05      tofu uses Zed Nu Disco; choose a palette              
     Models & rol… 02                                                            
     Interaction   05      Density                            comfortable  ▾     
-    Context       05      Spacing across lists and panels                       
+    Context       06      Spacing across lists and panels                       
     Files         03                                                            
     Shell         05      Animations                              subtle  ▾     
     Turn          03      Motion for conversational states                      
@@ -354,7 +354,7 @@ Select an edit reference to read every changed line.
   › Appearance    05      tofu uses Zed Nu Disco; choose a palette                                      
     Models & rol… 02                                                                                    
     Interaction   05      Density                                                    comfortable  ▾     
-    Context       05      Spacing across lists and panels                                               
+    Context       06      Spacing across lists and panels                                               
     Files         03                                                                                    
     Shell         05      Animations                                                      subtle  ▾     
     Turn          03      Motion for conversational states                                              
@@ -546,7 +546,7 @@ Select an edit reference to read every changed line.
   › Appearance          05      tofu uses Zed Nu Disco; choose a palette                                     choose a palette               
     Models & roles      02                                                                                                                  
     Interaction         05      Density                                                   comfortable  ▾     CURRENT VALUE                  
-    Context             05      Spacing across lists and panels                                               tofu                          
+    Context             06      Spacing across lists and panels                                               tofu                          
     Files               03                                                                                                                  
     Shell               05      Animations                                                     subtle  ▾     HOW IT WORKS                   
     Turn                03      Motion for conversational states                                             Enter opens a focused          

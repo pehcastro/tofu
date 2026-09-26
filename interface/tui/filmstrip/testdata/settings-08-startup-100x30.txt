@@ -6,7 +6,7 @@
     Appearance    05      Skip the new-project welcome and open chat directly                       
     Models & rol… 02                                                                                
     Interaction   05    enter change  ·  ctrl+k search  ·  esc chat                                 
-    Context       05                                                                                
+    Context       06                                                                                
     Files         03                                                                                
     Shell         05                                                                                
     Turn          03                                                                                

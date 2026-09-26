@@ -49,6 +49,7 @@ const (
 	AgentFeeds             = "agentFeeds"
 	Images                 = "images"
 	ProjectInstructionsCap = "projectInstructionsCap"
+	InstructionSources     = "instructionSources"
 	DiffContext            = "diffContext"
 	Hyperlinks             = "hyperlinks"
 	GroupByAgent           = "groupByAgent"
@@ -171,6 +172,8 @@ func Default() []Spec {
 			Choices: []string{ImagesAuto, ImagesInline, ImagesOff}},
 		{Key: ProjectInstructionsCap, Label: "Project instructions", Description: "bytes of your instruction files sent each turn", Category: "Context", Kind: Int, Default: konst.ProjectInstructionsBytesDefault, Restart: true,
 			Least: 1, Most: konst.ProjectInstructionsBytesMost, Unit: "bytes of AGENTS.md and CLAUDE.md sent each turn"},
+		{Key: InstructionSources, Label: "Instruction files", Description: "in each folder the first of these that exists is sent and the rest are skipped, as a comma list of AGENTS.md and CLAUDE.md", Category: "Context", Kind: Text, DefaultText: "AGENTS.md,CLAUDE.md", Restart: true,
+			ListOf: []string{"AGENTS.md", "CLAUDE.md"}},
 		{Key: DiffContext, Label: "Diff context", Description: "Lines around changed hunks, at most the " + strconv.Itoa(konst.DiffContextLinesDefault) + " each diff carries", Category: "Files", Kind: Text, DefaultText: strconv.Itoa(konst.DiffContextLinesDefault),
 			Choices: lineCounts(konst.DiffContextLinesTight, konst.DiffContextLinesDefault, konst.DiffContextLinesWide, konst.DiffContextLinesWidest)},
 		{Key: Hyperlinks, Label: "Hyperlinks", Description: "OSC 8 terminal file links; off prints the bare path", Category: "Files", Kind: Text, DefaultText: LinksAuto,

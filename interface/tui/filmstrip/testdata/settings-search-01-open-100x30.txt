@@ -19,7 +19,7 @@
   esc chat          Models & roles / orchestrator                                                   
                     Models & roles / (unnamed sub-agent)                                            
                                                                                                     
-                  1 of 29 results                                                                   
+                  1 of 30 results                                                                   
                                                                                                     
                           Readable text, quiet surfaces, and bounded focus.                         
                           ● active    ● attention    ● failed                                       
