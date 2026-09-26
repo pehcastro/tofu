@@ -78,10 +78,11 @@ Why the rest are not compared:
 
 ## Every dated report, newest first
 
-59 dated reports over 34 benches. 6 benches carry none. 20 are withdrawn whole or in part, 1 is stale, and 2 reports name no conclusion a reader can find. A withdrawal declared from outside a report lives in `bench/report/withdrawals.json`; every other state is declared by the report's own first lines.
+60 dated reports over 35 benches. 5 benches carry none. 20 are withdrawn whole or in part, 1 is stale, and 2 reports name no conclusion a reader can find. A withdrawal declared from outside a report lives in `bench/report/withdrawals.json`; every other state is declared by the report's own first lines.
 
 | Bench | Date | Report | What it found | Sample | State |
 |---|---|---|---|---|---|
+| tui | 2026-09-26 | `bench/tui/report-2026-09-26.md` | Hand read from bench/report/handread.json: The new interface draws every screen inside the 16.7 ms frame budget on a replay of 30 real turns. Before the frame budget fixes a resize took 97 to 169 ms and the first open of sub-agents 59.6 ms; after them a resize takes 0.3 to 3.2 ms and sub-agents opens in 2.0 ms. The chat scrollbar went from 3.05x the showcase baseline to 0.28x. Every other row that could be built is within 1.5x of the baseline. | the 30 most recent top-level turns of .tofu/sessions, 1,956 events, and a long arm of 116 turns and 6,373 events, at 120x36, one run before and one after TOFU-719 | stands |
 | ask/server | 2026-09-24 | `bench/ask/server/report-2026-09-24.md` | Hand read from bench/report/handread.json: The same measurement after the reader was corrected: the arm fires on 2 of 121 readable turns, 1.65 percent, where the earlier run read 113 turns and 1.77 percent. The denominator moved because corpus.WalkSessions now returns one turn per outcome segment, so six restarted directories yield their real turns. Every finding about the arm itself is unchanged: 15 of 18 steps removed in one session, 23 of 24 in the other, and the literal name reading still picks the wrong script in both. | 121 turns readable across both directories after TOFU-560, 2 in the start a server intent domain, both fired | stands |
 | calibration | 2026-09-24 | `bench/calibration/report-2026-09-24.md` | Hand read from bench/report/handread.json: The ledger holds 2,785 decision rows and 20 of them carry an outcome, all hand labelled, which is the same shape the report of 2026-09-23 found with five fewer rows. Nothing automatic has ever written an outcome, so the labelled set is still the only calibration evidence and it is still far under any floor a threshold could be fitted against. The five new rows since the previous count are all tool_gate, all unlabelled, written on this machine at 01:57 on 2026-09-24, so the labelled count, the near threshold counts and every calibratable verdict are unchanged. | 2,785 ledger rows read from the day files under .tofu/log, of which 1,463 are tool_gate, with 20 carrying a hand labelled outcome | stands |
 | tokencount | 2026-09-24 | `bench/tokencount/report-2026-09-24-accountable.md` | Split by whether the billed tokens could physically come from the step's own visible bytes: on 348 steps where they could, bytes over four still misses by a median of 47.1%, 94.0% out by more than a tenth. | the same 118 turns and 635 usable steps as report-2026-09-24.md, split into 348 accountable and 287 unaccountable by the byte floor, plus 1841 assistant messages scanned across 48 header-plus-jsonl turns for a thinking or reasoning field | stands |
@@ -173,8 +174,7 @@ Why the rest are not compared:
 - `bench/prompts`, measurement with no dated report: a correlation over recorded prompts, owed by TOFU-380, 0 dated reports so far.
 - `bench/report`, runner: this package: the reader over every dated report, the viewer and its data. Measures 0 things of its own.
 - `bench/stat`, library: median, p95 and p99 over a slice of floats, called by every bench that reports a spread.
-- `bench/tui`, measurement with no dated report: Go benchmarks over the session view, run by go test -bench. 0 dated reports, so 0 figures from it are quotable.
 
 ### Where these reports came from
 
-5 of 59 reports are built by running the package's own code again and 54 of 59 from the markdown's own text, which is weaker evidence, and every one of those says so.
+5 of 60 reports are built by running the package's own code again and 55 of 60 from the markdown's own text, which is weaker evidence, and every one of those says so.

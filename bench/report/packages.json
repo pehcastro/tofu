@@ -23,10 +23,5 @@
     "package": "prompts",
     "kind": "measurement with no dated report",
     "note": "a correlation over recorded prompts, owed by TOFU-380, 0 dated reports so far."
-  },
-  {
-    "package": "tui",
-    "kind": "measurement with no dated report",
-    "note": "Go benchmarks over the session view, run by go test -bench. 0 dated reports, so 0 figures from it are quotable."
   }
 ]

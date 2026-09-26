@@ -1,5 +1,13 @@
 [
   {
+    "report": "bench/tui/report-2026-09-26.md",
+    "figure": "2.0 ms",
+    "says": "The new interface draws every screen inside the 16.7 ms frame budget on a replay of 30 real turns. Before the frame budget fixes a resize took 97 to 169 ms and the first open of sub-agents 59.6 ms; after them a resize takes 0.3 to 3.2 ms and sub-agents opens in 2.0 ms. The chat scrollbar went from 3.05x the showcase baseline to 0.28x. Every other row that could be built is within 1.5x of the baseline.",
+    "from": "prose",
+    "sample": "the 30 most recent top-level turns of .tofu/sessions, 1,956 events, and a long arm of 116 turns and 6,373 events, at 120x36, one run before and one after TOFU-719",
+    "skips": "4 work rows cannot be built because tofu has no work screen, ScrollbarPress/shells cannot be built because the one recorded shell has one log line, and 13 component rows run in their own packages"
+  },
+  {
     "report": "bench/sift/report-2026-09-22-rerun.md",
     "figure": "0.027",
     "says": "The rerun spread of the judged shell sift is one needle and 0.4 points of bytes saved over three runs in one sitting, 30, 31 and 30 of 34 needles at 26.4, 26.3 and 26.7 percent. The mean per unit score spread over three runs is 0.027 and 13 of 297 units cross keep_at 0.50. That cannot explain the move from 27 of 34 at 54.0 percent on 2026-09-21, so the model behind the pinned build id changed rather than the measurement being noisy. All 891 calls today and all 764 ledger rows of 2026-09-21 report typesafe/jev-1.13-20260917, so the id did not move. Three runs cannot separate a replaced model from a changed route.",

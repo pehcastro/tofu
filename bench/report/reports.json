@@ -595,6 +595,25 @@
   ],
   "reports": [
     {
+      "package": "tui",
+      "date": "2026-09-26",
+      "source": "bench/tui/report-2026-09-26.md",
+      "figure": "2.0 ms",
+      "built_from": "prose",
+      "sample": "the 30 most recent top-level turns of .tofu/sessions, 1,956 events, and a long arm of 116 turns and 6,373 events, at 120x36, one run before and one after TOFU-719",
+      "skips": "4 work rows cannot be built because tofu has no work screen, ScrollbarPress/shells cannot be built because the one recorded shell has one log line, and 13 component rows run in their own packages",
+      "conclusion": [
+        {
+          "text": "Hand read from bench/report/handread.json: The new interface draws every screen inside the 16.7 ms frame budget on a replay of 30 real turns. Before the frame budget fixes a resize took 97 to 169 ms and the first open of sub-agents 59.6 ms; after them a resize takes 0.3 to 3.2 ms and sub-agents opens in 2.0 ms. The chat scrollbar went from 3.05x the showcase baseline to 0.28x. Every other row that could be built is within 1.5x of the baseline.",
+          "withdrawn": false
+        }
+      ],
+      "conclusion_unparsed": false,
+      "state": "stands",
+      "state_source": "",
+      "state_note": ""
+    },
+    {
       "package": "ask/server",
       "date": "2026-09-24",
       "source": "bench/ask/server/report-2026-09-24.md",
@@ -1749,17 +1768,12 @@
       "package": "stat",
       "kind": "library",
       "note": "median, p95 and p99 over a slice of floats, called by every bench that reports a spread."
-    },
-    {
-      "package": "tui",
-      "kind": "measurement with no dated report",
-      "note": "Go benchmarks over the session view, run by go test -bench. 0 dated reports, so 0 figures from it are quotable."
     }
   ],
   "counts": {
-    "reports": 59,
-    "packages_with_a_dated_report": 34,
-    "packages_with_no_dated_report": 6,
+    "reports": 60,
+    "packages_with_a_dated_report": 35,
+    "packages_with_no_dated_report": 5,
     "withdrawn_whole_or_in_part": 20,
     "stale": 1,
     "unparsed": 2
