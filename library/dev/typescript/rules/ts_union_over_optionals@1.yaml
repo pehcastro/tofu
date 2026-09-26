@@ -1,0 +1,7 @@
+id: ts_union_over_optionals
+domain: dev
+kind: human
+concern: code_rules
+language: typescript
+text: model a value with several states as a union tagged by one literal field, `{ kind: "loading" } | { kind: "ready"; data: T } | { kind: "failed"; error: E }`, not as one object with a flag and optional fields that admits combinations that cannot happen. before you add an optional property, ask whether it only makes sense together with another one: then the two belong to one variant.
+notes: sources: Effective TypeScript, 2nd edition, items 29, 34 and 37; pstack typescript-best-practices, discriminated unions.

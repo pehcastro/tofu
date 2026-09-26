@@ -1,0 +1,6 @@
+id: minimal_diff
+domain: dev
+kind: human
+concern: process_discipline
+text: make the smallest change that does the job. look for something to delete before you add anything, and add no guard, option or layer the task does not need. when you replace an api, move every caller to the new one and delete the old one in the same change: no shim, no old and new path side by side.
+notes: sources: pstack principle-laziness-protocol, principle-subtract-before-you-add and principle-migrate-callers-then-delete-legacy-apis.

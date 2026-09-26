@@ -1,0 +1,7 @@
+id: ts_no_enum
+domain: dev
+kind: human
+concern: code_rules
+language: typescript
+text: write TypeScript that turns into JavaScript by deleting the types. no `enum`: use a union of string literals, or an `as const` object when the values are needed at runtime. no `namespace` that holds values, and no constructor parameter properties. each one emits code, and a build that only strips types, such as Node running a .ts file, refuses it.
+notes: sources: Effective TypeScript, 2nd edition, item 72; the erasableSyntaxOnly compiler flag, which turns this rule into an error where a project enables it.

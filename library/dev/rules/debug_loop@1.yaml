@@ -1,0 +1,7 @@
+id: debug_loop
+domain: dev
+kind: human
+concern: process_discipline
+task: debug
+text: before you form a theory, build one command that reproduces the failure and can go red on this bug, run it and show what it printed. then rule out one hypothesis at a time, each probe changing one thing. when a hypothesis is refuted, revert every change it motivated. after two fixes resting on the same premise have failed, stop fixing and question the premise. the bug is fixed when that same command goes from red to green.
+notes: sources: mattpocock diagnosing-bugs, phase one, the loop that can go red; pstack poteto-mode playbooks/bug-fix.md, which reverts what a refuted hypothesis motivated; pstack principle-attack-the-premise. the regression unit test written after the fix is left out, because tofu never writes a unit test after the code.

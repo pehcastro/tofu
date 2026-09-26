@@ -1,0 +1,7 @@
+id: ts_honest_guard
+domain: dev
+kind: human
+concern: code_rules
+language: typescript
+text: a type guard, `(value: unknown): value is User`, checks everything its return type claims. the compiler takes a guard on trust, so one that checks a single field and claims a whole shape is worse than a cast: the lie sits behind a name that says it is safe. prefer a discriminant check or the schema's own parse to a guard written by hand.
+notes: sources: Effective TypeScript, 2nd edition, item 48, which lists type predicates among the ways a program becomes unsound; pstack typescript-best-practices, type guards.

@@ -1,0 +1,6 @@
+id: boundaries
+domain: dev
+kind: human
+concern: process_discipline
+text: validate data where it enters the program: arguments, config, files, network replies, model output. parse it once into a typed value and trust that value inside without checking it again. handle every variant of a union or an enum and fail on one you do not know. carry an error to the place that can act on it, and never swallow it or swap it for a default.
+notes: sources: pstack principle-boundary-discipline and principle-type-system-discipline.

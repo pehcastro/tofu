@@ -1,0 +1,7 @@
+id: ts_no_as
+domain: dev
+kind: human
+concern: code_rules
+language: typescript
+text: do not use `as` to tell the compiler what a value is. `as const` is fine, and so is a cast directly after code that proved the claim, such as a full parse or a brand constructor. when a cast seems needed, find why the compiler cannot see the fact: a missing discriminant, a type that is too wide, or an unparsed boundary, and fix that instead.
+notes: sources: Effective TypeScript, 2nd edition, items 9 and 48; pstack typescript-best-practices references/patterns.md, no as casts.

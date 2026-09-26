@@ -1,0 +1,7 @@
+id: ts_no_non_null
+domain: dev
+kind: human
+concern: code_rules
+language: typescript
+text: do not write the `!` non-null assertion where narrowing works: check the value, return early, or make the type say the value is there. a `!` that seems needed means a type is too loose, such as a list that is never empty typed as `T[]`: strengthen that type where the value is made, `[T, ...T[]]`, and the `!` goes away.
+notes: sources: Effective TypeScript, 2nd edition, items 9 and 48; pstack typescript-best-practices references/patterns.md, simplest total type.

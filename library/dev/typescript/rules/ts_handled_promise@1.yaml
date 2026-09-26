@@ -1,0 +1,7 @@
+id: ts_handled_promise
+domain: dev
+kind: human
+concern: code_rules
+language: typescript
+text: every promise is awaited, returned, or given a rejection handler. a dropped promise loses its error and finishes in no known order. when fire and forget is the intent, say so: `void send().catch(report)`. never pass an async function where the caller ignores what it returns, such as `forEach` or an event handler that expects nothing back.
+notes: sources: typescript-eslint's no-floating-promises and no-misused-promises rules, which a project may or may not enable; this rule holds either way.

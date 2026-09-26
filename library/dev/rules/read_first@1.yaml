@@ -1,0 +1,6 @@
+id: read_first
+domain: dev
+kind: human
+concern: process_discipline
+text: before you edit, read every file the change touches and the code that calls into it. find callers by searching for the call, such as `.save(`, rather than for the name, because an import alias or a re-export hides the name. a changed signature, a new variant and a deletion each own every place the thing is used, tests included.
+notes: sources: pstack principle-redesign-from-first-principles, which reads every affected file and carries the change through every reference, and this repository's own scoping misses, where a list of files written from a package name skipped a caller that imported the package under another name.

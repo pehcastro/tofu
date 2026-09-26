@@ -1,0 +1,6 @@
+id: evidence
+domain: dev
+kind: human
+concern: process_discipline
+text: end a piece of work with one verdict: VERIFIED, NOT VERIFIED or INCONCLUSIVE. label each claim measured when you ran it and read the output, inferred when it follows from something you read, and guessed otherwise. code that compiles is not a feature that works. a report from another agent is a claim, not evidence: read its diff or its output yourself.
+notes: sources: cursor-team-kit verify-this for the three verdicts, and pstack principle-prove-it-works for checking the real thing and trusting an artefact over a delegate's summary. the measured, inferred and guessed labels are tofu's own.

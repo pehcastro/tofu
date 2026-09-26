@@ -2,6 +2,7 @@ package subagent
 
 import (
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"slices"
@@ -136,9 +137,13 @@ func BenchmarkDefinitionsTwenty(b *testing.B) {
 	}
 	scan := scanOf(b, b.TempDir(), "tofu", "agents", "claude")
 	scan.Project = project
+	library, err := fs.Glob(shipped.Files(), "*/agents/*.md")
+	if err != nil {
+		b.Fatal(err)
+	}
 	for b.Loop() {
-		if found := Definitions(scan); len(found.Definitions) != 21 {
-			b.Fatalf("want 20 definitions and qa, got %d", len(found.Definitions))
+		if found := Definitions(scan); len(found.Definitions) != 20+len(library) {
+			b.Fatalf("want 20 definitions and the library's %d, got %d", len(library), len(found.Definitions))
 		}
 	}
 }

@@ -126,18 +126,19 @@ func TestTheShippedIndexSaysWhatFiresForATaskAndWhy(t *testing.T) {
 	WriteIndex(out, index)
 	t.Log("\n" + out.String())
 
-	unconditional := 0
+	reached := 0
 	for i, m := range index {
-		declaresNoCondition := rules[i].Trigger.condition == nil
-		if m.Fires != declaresNoCondition {
-			t.Fatalf("rule %q fires = %v for a task naming a go file and a test file, and it declares a condition = %v: %s", m.RuleID, m.Fires, !declaresNoCondition, m.Why)
+		trigger := rules[i].Trigger
+		reachesAnUnnamedGoTask := trigger.condition == nil && trigger.verb == VerbNone && (trigger.language == "" || trigger.language == "go")
+		if m.Fires != reachesAnUnnamedGoTask {
+			t.Fatalf("rule %q fires = %v for an unnamed task naming a go file and a test file, and its condition, task and language reach that task = %v: %s", m.RuleID, m.Fires, reachesAnUnnamedGoTask, m.Why)
 		}
-		if declaresNoCondition {
-			unconditional++
+		if reachesAnUnnamedGoTask {
+			reached++
 		}
 	}
-	if !strings.HasPrefix(out.String(), fmt.Sprintf("%d of %d rules fire\n", unconditional, len(rules))) {
-		t.Fatalf("the index opens with %q, want %d of %d for a task naming a go file and a test file", strings.SplitN(out.String(), "\n", 2)[0], unconditional, len(rules))
+	if !strings.HasPrefix(out.String(), fmt.Sprintf("%d of %d rules fire\n", reached, len(rules))) {
+		t.Fatalf("the index opens with %q, want %d of %d for a task naming a go file and a test file", strings.SplitN(out.String(), "\n", 2)[0], reached, len(rules))
 	}
 	for _, want := range []string{
 		"fires em_dash                 always on, the rule declares no trigger",

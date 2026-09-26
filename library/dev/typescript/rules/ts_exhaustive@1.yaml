@@ -1,0 +1,7 @@
+id: ts_exhaustive
+domain: dev
+kind: human
+concern: code_rules
+language: typescript
+text: every switch over a union ends in a default that assigns the value to a `never` binding and throws, `default: { const unhandled: never = shape; throw new Error(String(unhandled)) }`, so a new variant is a compile error at every switch that forgot it. never a bare default that quietly takes whatever arrives next.
+notes: sources: Effective TypeScript, 2nd edition, item 59; pstack typescript-best-practices references/patterns.md, exhaustiveness.

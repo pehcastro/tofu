@@ -1,0 +1,7 @@
+id: review_diff
+domain: dev
+kind: human
+concern: process_discipline
+task: review
+text: review a change twice and report the two apart: once against what it was asked to do, once against the project's own standards. when it adds a value to an enum, a status or a union, read every place that switches on or filters by the values beside it, outside the diff too. name the one fact the change is safe because of and prove it by running code, not by arguing it.
+notes: sources: pstack interrogate references/rubric.md, pstack blast-radius for the one fact the change is safe because of, and gstack review/checklist.md for enum and value completeness.
