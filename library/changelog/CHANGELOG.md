@@ -8,6 +8,16 @@ Tofu is personal and not released, so the public interface that a version promis
 
 The minor number carries breaking changes, which is what 0.x means, and **there is never a 1.0.0**. The owner decided that on 2026-09-19: this stays 0.x forever, so the promise the version makes is the one 0.x already makes, that anything can break on a minor bump.
 
+## 0.5.0-rc-fix2 - 2026-09-26
+
+`tofu --continue` opens on the conversation it continues.
+
+### Fixed
+
+- **`tofu --continue` shows the session it resumes.** Chat holds each task and answer, tools fold into their one line with `[tool#id]`, and the top row names the session. Before, chat opened empty.
+- **A resumed session sends each earlier turn once.** The first turn used to reach the model twice.
+- **The first turn after a resume no longer prints every carried tool result as a note.**
+
 ## 0.5.0-rc-fix1 - 2026-09-26
 
 The new interface: one top row, four screens, a settings screen where every row does what it says, and a cover with a cat.
