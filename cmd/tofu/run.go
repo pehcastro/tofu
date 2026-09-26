@@ -69,14 +69,6 @@ func wireSpend(wire string) turn.Spend {
 	return turn.SpendSubscription
 }
 
-type childRole struct {
-	wire    string
-	id      string
-	windows string
-	held    *accounts
-	spend   turn.Spend
-}
-
 type runOpts struct {
 	dir              string
 	task             string
@@ -97,22 +89,25 @@ type runOpts struct {
 	contextCeiling   int
 	siftArm          string
 	noInstructions   bool
-	child            childRole
+	subAgentList     string
 	shell            turn.RunShell
 }
 
 type runtime struct {
-	model    turn.Model
-	accounts turn.Accounts
-	spend    turn.Spend
-	budget   recall.Budget
-	gate     *toolGate
-	sift     *turn.ShellSift
-	scorer   *shellScorer
-	sessions *session.Store
-	notify   func(string)
-	roster   *subagent.Roster
-	now      func() time.Time
+	model        turn.Model
+	accounts     turn.Accounts
+	spend        turn.Spend
+	budget       recall.Budget
+	gate         *toolGate
+	sift         *turn.ShellSift
+	scorer       *shellScorer
+	sessions     *session.Store
+	notify       func(string)
+	roster       *subagent.Roster
+	now          func() time.Time
+	open         func(runOpts) (appWire, error)
+	wrapChild    func(turn.Model) (turn.Model, error)
+	orchestrator models.Model
 }
 
 func boundRoles(wire, dir string) (models.Bindings, error) {
@@ -138,25 +133,69 @@ func chooseModel(opts runOpts) (models.Model, error) {
 	if err != nil {
 		return models.Model{}, err
 	}
-	forTurn := bound[models.RoleTurn]
-	if forTurn.Wire != opts.wire {
+	orchestrator := bound[models.RoleOrchestrator]
+	if orchestrator.Wire != opts.wire {
 		return models.Model{}, fmt.Errorf(
-			"%s, and --wire %s reaches another subscription: run --wire %s instead, or bind the turn role to a model --wire %s serves",
-			forTurn.Says(), opts.wire, forTurn.Wire, opts.wire)
+			"%s, and --wire %s reaches another subscription: run --wire %s instead, or bind the orchestrator role to a model --wire %s serves",
+			orchestrator.Says(), opts.wire, orchestrator.Wire, opts.wire)
 	}
-	return forTurn.Model, nil
+	return orchestrator.Model, nil
 }
 
-func chooseChild(opts runOpts) (childRole, error) {
+func boundChild(opts runOpts) (string, error) {
 	if opts.wire == wireKey {
-		return childRole{}, nil
+		return "", nil
 	}
 	bound, err := boundRoles(opts.wire, opts.dir)
-	if err != nil {
-		return childRole{}, err
+	if err != nil || bound[models.RoleChild].By != models.BoundByFile {
+		return "", err
 	}
-	forChild := bound[models.RoleChild]
-	return childRole{wire: forChild.Wire, id: forChild.Model.ID, windows: forChild.Model.WindowText()}, nil
+	return bound[models.RoleChild].Model.Slug(), nil
+}
+
+func (r runtime) childOpener(opts runOpts) func(subagent.Definition) (turn.ChildModel, error) {
+	if r.open == nil {
+		return nil
+	}
+	return func(definition subagent.Definition) (turn.ChildModel, error) {
+		child := opts
+		child.effort = cmp.Or(definition.Effort, opts.effort)
+		named := definition.Model
+		if definition.Name == "" {
+			bound, err := boundChild(opts)
+			if err != nil {
+				return turn.ChildModel{}, err
+			}
+			named = bound
+		}
+		asked := cmp.Or(named, r.orchestrator.Slug())
+		if named == "" && child.effort == opts.effort {
+			return turn.ChildModel{Slug: asked, Windows: r.orchestrator.WindowText()}, nil
+		}
+		if named != "" {
+			library, err := modelLibrary(opts.dir)
+			if err != nil {
+				return turn.ChildModel{}, err
+			}
+			model, err := library.Select(named)
+			if err != nil {
+				return turn.ChildModel{}, err
+			}
+			child.model, child.wire = named, library.WireFor(model.Subscription)
+		}
+		if child.wire == wireKey {
+			return turn.ChildModel{}, fmt.Errorf("%s asks for effort %s, and the openrouter wire sends no reasoning effort", definition.Name, child.effort)
+		}
+		opened, err := r.open(child)
+		if err != nil {
+			if opened.held != nil {
+				opened.held.close()
+			}
+			return turn.ChildModel{}, err
+		}
+		opened.held.wrap = r.wrapChild
+		return turn.ChildModel{Slug: asked, Windows: opened.selected.WindowText(), Wire: child.wire, Spend: opened.spend, Accounts: opened.held.forTurn(), Close: opened.held.close}, nil
+	}
 }
 
 func runUsage() string {
@@ -172,7 +211,7 @@ Usage:
 
 Arguments:
   --dir <path>          the directory the task is worked in, required
-  --model <id>          the model to run on, otherwise the one the turn role is bound to
+  --model <id>          the orchestrator's model, otherwise the one the orchestrator role is bound to
   --wire <name>         anthropic, codex or openrouter
   --tools <set>         full, or three for the read, write and bash arm
   --effort <level>      how hard the model thinks: %s.
@@ -201,6 +240,9 @@ Arguments:
   --loop-guard-window <n>      how many recent calls the loop guard remembers
   --dry-run                    print the request that would be sent and send nothing
   --show-prompt                print the prompt the turn composes, part by part, and send nothing
+
+TOFU_DRIVE_CASSETTE names a recorded model, read as tofu drive reads it, and
+then the run opens no live wire for the orchestrator or for any sub-agent.
 `
 
 func runVerb(args []string, out, errOut io.Writer) int {
@@ -236,9 +278,6 @@ func runVerb(args []string, out, errOut io.Writer) int {
 	if err != nil {
 		return runFail(errOut, err)
 	}
-	if opts.child, err = chooseChild(opts); err != nil {
-		return runFail(errOut, err)
-	}
 
 	shell, err := turn.ResolveRunShell(settingText(dir, settingspkg.Shell, say))
 	if err != nil {
@@ -256,7 +295,7 @@ func runVerb(args []string, out, errOut io.Writer) int {
 	}
 
 	if opts.dryRun {
-		config, _, err := runConfig(opts, built, runtime{spend: turn.SpendSubscription, budget: budget, notify: writeNotice(errOut)})
+		config, _, err := runConfig(opts, built, runtime{spend: turn.SpendSubscription, budget: budget, notify: writeNotice(errOut), open: openAppWire, orchestrator: selected})
 		if err != nil {
 			return runFail(errOut, err)
 		}
@@ -315,29 +354,23 @@ func guarded(model turn.Model, budget recall.Budget) (turn.Model, error) {
 }
 
 func runTurn(opts runOpts, selected models.Model, built []turn.Tool, budget recall.Budget, out, errOut io.Writer) int {
-	held, spend, err := openAccounts(opts, selected.ID)
-	if held != nil {
-		defer held.close()
+	open := openAppWire
+	deck, err := readCassette(os.Getenv(cassetteVariable))
+	if err != nil {
+		return runFail(errOut, err)
+	}
+	if deck != nil {
+		open = driveWire(deck)
+	}
+	opened, err := open(opts)
+	if opened.held != nil {
+		defer opened.held.close()
 	}
 	if err != nil {
 		return runFail(errOut, err)
 	}
-	held.wrap = func(model turn.Model) (turn.Model, error) { return guarded(model, budget) }
-
-	askedAs, windows := selected.ID, selected.WindowText()
-	if opts.child.wire != "" && (opts.child.wire != opts.wire || opts.child.id != selected.ID) {
-		asChild := opts
-		asChild.wire = opts.child.wire
-		childHeld, childSpend, childErr := openAccounts(asChild, opts.child.id)
-		if childHeld != nil {
-			defer childHeld.close()
-		}
-		if childErr != nil {
-			return runFail(errOut, childErr)
-		}
-		opts.child.held, opts.child.spend = childHeld, childSpend
-		askedAs, windows = opts.child.id, opts.child.windows
-	}
+	wrap := func(model turn.Model) (turn.Model, error) { return guarded(model, budget) }
+	opened.held.wrap = wrap
 
 	var gate *toolGate
 	if opts.gateArm != gateOff {
@@ -360,7 +393,8 @@ func runTurn(opts runOpts, selected models.Model, built []turn.Tool, budget reca
 		return runFail(errOut, err)
 	}
 
-	config, spawner, err := runConfig(opts, built, runtime{accounts: held.forTurn(), spend: spend, budget: budget, gate: gate, sift: sifter, scorer: scorer, sessions: sessions, notify: writeNotice(errOut)})
+	config, spawner, err := runConfig(opts, built, runtime{accounts: opened.held.forTurn(), spend: opened.spend, budget: budget, gate: gate, sift: sifter, scorer: scorer, sessions: sessions, notify: writeNotice(errOut),
+		open: open, wrapChild: wrap, orchestrator: selected})
 	if err != nil {
 		return runFail(errOut, err)
 	}
@@ -375,8 +409,14 @@ func runTurn(opts runOpts, selected models.Model, built []turn.Tool, budget reca
 	registry, _ := launchShellRegistry(opts.dir)
 	row, runErr := turn.Run(turn.WithShellRegistry(context.Background(), registry), config)
 	leaveShells(registry)
-	printRunRow(out, row, selected.ID, selected.WindowText())
+	printRunRow(out, row, selected.Slug(), selected.WindowText())
 	for _, child := range childRows(spawner) {
+		askedAs, windows := selected.Slug(), selected.WindowText()
+		for _, spawned := range spawner.Spawned() {
+			if child.ID == spawned.ID || strings.HasPrefix(child.ID, spawned.ID+"-r") {
+				askedAs, windows = spawned.Slug, spawned.Windows
+			}
+		}
 		printRunRow(out, child, askedAs, windows)
 	}
 	if row.ID != "" {
@@ -430,28 +470,56 @@ func writeNotice(w io.Writer) func(string) {
 	return func(notice string) { _, _ = fmt.Fprintln(w, "tofu: "+notice) }
 }
 
-func composePrompt(opts runOpts, environment string) (turn.Composed, error) {
+type composedRun struct {
+	opts         runOpts
+	environment  string
+	instructions string
+	composed     turn.Composed
+	defined      []subagent.Definition
+}
+
+func composeRun(opts runOpts, built []turn.Tool, run runtime) (composedRun, error) {
+	found := make(chan subagent.Found, 1)
+	if !opts.noSubAgents && opts.toolSet != toolSetThree && run.open != nil {
+		go func() { found <- scanSubAgents(opts.dir, built) }()
+	} else {
+		found <- subagent.Found{}
+	}
+	say := func(notice string) {
+		if notice != "" && run.notify != nil {
+			run.notify(notice)
+		}
+	}
+	environment, instructions, notice := runEnvironment(opts)
+	say(notice)
+	discovered := <-found
+	opts.subAgentList = turn.SubAgentList(discovered.Definitions)
+	for _, broken := range discovered.Broken {
+		say("the sub-agent in " + broken.Path + " is not offered: " + broken.Reason)
+	}
 	rules, _, err := loadRules("")
 	if err != nil {
-		return turn.Composed{}, err
+		return composedRun{}, err
 	}
-	return turn.Compose(turn.ComposeSpec{
+	composed, err := turn.Compose(turn.ComposeSpec{
 		Task:         opts.task,
 		Environment:  environment,
 		ToolGuidance: runSystem(opts),
 		Rules:        rules,
 	})
+	return composedRun{opts: opts, environment: environment, instructions: instructions, composed: composed, defined: discovered.Definitions}, err
 }
 
 func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn.SpawnTool, error) {
-	environment, _, notice := runEnvironment(opts)
-	if notice != "" && run.notify != nil {
-		run.notify(notice)
+	parentID := cmp.Or(opts.turnID, turn.NewID(time.Now()))
+	if run.sessions != nil && opts.toolSet != toolSetThree {
+		built = append(slices.Clone(built), tools.NewQuote(run.sessions, parentID))
 	}
-	composed, err := composePrompt(opts, environment)
+	prompt, err := composeRun(opts, built, run)
 	if err != nil {
 		return turn.Config{}, nil, err
 	}
+	opts, environment, composed := prompt.opts, prompt.environment, prompt.composed
 	config := turn.Config{
 		Model:       run.model,
 		Now:         run.now,
@@ -477,29 +545,36 @@ func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn
 		config.Gate = run.gate
 		config.GateMode = gateMode(opts.gateArm, settingText(cmp.Or(opts.dir, "."), settingspkg.GatePrompt, run.notify))
 	}
-	parentID := cmp.Or(opts.turnID, turn.NewID(time.Now()))
 	config.NewID = func() string { return parentID }
 	if run.scorer != nil {
 		run.scorer.turnID = parentID
 	}
-	if run.sessions != nil && opts.toolSet != toolSetThree {
-		built = append(slices.Clone(built), tools.NewQuote(run.sessions, parentID))
-		config.Tools = turn.NewRegistry(built...)
-	}
 	if opts.noSubAgents || opts.toolSet == toolSetThree {
 		return config, nil, nil
 	}
-	spawner := turn.NewSpawnTool(parentID, childBase(config, opts.child), cmp.Or(run.roster, &subagent.Roster{}))
+	spawner := turn.NewSpawnTool(parentID, config, cmp.Or(run.roster, &subagent.Roster{}))
+	spawner.SubAgents = turn.SubAgents{Defined: prompt.defined, Open: run.childOpener(opts)}
 	config.Tools = turn.NewRegistry(append(slices.Clone(built), spawner)...)
 	return config, spawner, nil
 }
 
-func childBase(config turn.Config, child childRole) turn.Config {
-	if child.held == nil {
-		return config
+func scanSubAgents(dir string, built []turn.Tool) subagent.Found {
+	names := []string{(&turn.SpawnTool{}).Name()}
+	for _, tool := range built {
+		names = append(names, tool.Name())
 	}
-	config.Model, config.Accounts, config.Spend, config.Wire = nil, child.held.forTurn(), child.spend, child.wire
-	return config
+	dir = cmp.Or(dir, ".")
+	catalog, _ := modelLibrary(dir)
+	home, _ := os.UserHomeDir()
+	library, _, _ := librarySource()
+	return subagent.Definitions(subagent.Scan{
+		Project: dir,
+		Home:    home,
+		Sources: strings.Split(settingText(dir, settingspkg.AgentSources, nil), ","),
+		Library: library,
+		Tools:   names,
+		Catalog: catalog,
+	})
 }
 
 func gateArms() []string { return []string{gateOff, gateShadow, gateEnforce} }
@@ -628,7 +703,11 @@ func runSystem(opts runOpts) string {
 	if opts.noSubAgents {
 		return system
 	}
-	return system + " " + turn.SpawnAddendum
+	system += " " + turn.SpawnAddendum
+	if opts.subAgentList != "" {
+		system += "\n\n" + opts.subAgentList
+	}
+	return system
 }
 
 func buildRunToolsForRun(dir, set string, readBeforeEdit bool, shell turn.RunShell) ([]turn.Tool, *tools.Plan, error) {

@@ -1,6 +1,7 @@
 package models
 
 import (
+	"cmp"
 	"strconv"
 	"strings"
 
@@ -45,7 +46,6 @@ const (
 	effortHint      = "  shift+←→"
 	assignHead      = "Assign to"
 	boundHead       = "Bound model"
-	nothingBound    = "nothing bound, so the subscription default runs"
 	noSelection     = "No model selected"
 	pickHint        = "enter picks the model"
 	bindHint        = "enter binds the model"
@@ -155,7 +155,7 @@ func (m Model) listPane(width, modalHeight int) string {
 	if m.tab == tabRoles {
 		view := look.SectionLabel(rolesHead) + "\n" + look.Faint(rolesHint) + "\n\n"
 		for i, role := range library.RoleIDs() {
-			view += look.CatalogRow(width-rowInset, i == m.cursor, string(role)) + "\n  " + look.Faint(role.What()) + "\n"
+			view += look.CatalogRow(width-rowInset, i == m.cursor, role.Label()) + "\n  " + look.Faint(role.What()) + "\n"
 		}
 		return view
 	}
@@ -192,11 +192,8 @@ func (m Model) detailPane() string {
 	view := look.SectionLabel(selectionHead) + "\n\n"
 	if m.tab == tabRoles {
 		role := library.RoleIDs()[m.cursor]
-		bound := m.bound[role]
-		if bound == "" {
-			bound = nothingBound
-		}
-		return view + look.Title(string(role)) + "\n" + look.Muted(role.What()) + "\n\n" + look.SectionLabel(boundHead) + "\n" + look.Muted(bound) + "\n\n" + look.Faint(rebindHint)
+		bound := cmp.Or(m.bound[role], role.Unbound())
+		return view + look.Title(role.Label()) + "\n" + look.Muted(role.What()) + "\n\n" + look.SectionLabel(boundHead) + "\n" + look.Muted(bound) + "\n\n" + look.Faint(rebindHint)
 	}
 	row, picked := m.Picked()
 	if !picked {
@@ -210,7 +207,7 @@ func (m Model) detailPane() string {
 		view += "\n" + look.SectionLabel(effortHead) + "\n" + look.Title(string(m.effort)) + look.Faint(effortHint) + "\n"
 	}
 	if m.assign != "" {
-		view += "\n" + look.SectionLabel(assignHead) + "\n" + look.Title(string(m.assign)) + "\n"
+		view += "\n" + look.SectionLabel(assignHead) + "\n" + look.Title(m.assign.Label()) + "\n"
 		hint = bindHint
 	}
 	if row.excluded() {

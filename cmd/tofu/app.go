@@ -805,8 +805,13 @@ func (s *appSession) run(ctx context.Context, pick tui.Pick, task string, emit t
 		watch.inner = asked
 		return watch, nil
 	}
+	wrapChild := func(model turn.Model) (turn.Model, error) {
+		asked, guardErr := guarded(model, budget)
+		return watchedChild{watch: watch, inner: asked}, guardErr
+	}
 	notify := func(notice string) { emit(tui.Event{Kind: tui.EventNote, Text: notice}) }
-	config, spawner, configErr := runConfig(opts, built, runtime{accounts: opened.held.forTurn(), spend: opened.spend, budget: budget, gate: gate, sift: sifter, scorer: scorer, sessions: sessions, notify: notify, roster: held, now: s.now})
+	config, spawner, configErr := runConfig(opts, built, runtime{accounts: opened.held.forTurn(), spend: opened.spend, budget: budget, gate: gate, sift: sifter, scorer: scorer, sessions: sessions, notify: notify, roster: held, now: s.now,
+		open: s.open, wrapChild: wrapChild, orchestrator: opened.selected})
 	if configErr != nil {
 		fail(configErr)
 		return
@@ -1004,7 +1009,20 @@ type appWatcher struct {
 	shownAt   time.Time
 }
 
+type watchedChild struct {
+	watch *appWatcher
+	inner turn.Model
+}
+
+func (c watchedChild) Ask(ctx context.Context, request llm.Request) (llm.Decision, error) {
+	return c.watch.askThrough(ctx, c.inner, request)
+}
+
 func (a *appWatcher) Ask(ctx context.Context, request llm.Request) (llm.Decision, error) {
+	return a.askThrough(ctx, a.inner, request)
+}
+
+func (a *appWatcher) askThrough(ctx context.Context, inner turn.Model, request llm.Request) (llm.Decision, error) {
 	_, childAsking := a.runningChild()
 	streamed := false
 	if !childAsking {
@@ -1020,7 +1038,7 @@ func (a *appWatcher) Ask(ctx context.Context, request llm.Request) (llm.Decision
 		}
 	}
 	a.sendSubAgents()
-	decision, err := a.inner.Ask(ctx, request)
+	decision, err := inner.Ask(ctx, request)
 	if err != nil {
 		return decision, err
 	}

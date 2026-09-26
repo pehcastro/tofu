@@ -16,8 +16,8 @@
   ↑↓ setting · ←    Appearance / Animations                                                         
   section           Appearance / Status bar                                             auto  ▾     
   ctrl+k search     Appearance / Color mode                                                         
-  esc chat          Models & roles / turn                                                           
-                    Models & roles / child                                                          
+  esc chat          Models & roles / orchestrator                                                   
+                    Models & roles / (unnamed sub-agent)                                            
                                                                                                     
                   1 of 29 results                                                                   
                                                                                                     

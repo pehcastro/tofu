@@ -54,11 +54,11 @@ func TestBindRoleIsReadBackByLoad(t *testing.T) {
 func TestBindRoleReplacesAnEarlierBindingAndLeavesNoTemporaryFile(t *testing.T) {
 	dir := t.TempDir()
 	for _, slug := range []string{"claude-sub/claude-sonnet-5", "codex-sub/gpt-5.6-sol"} {
-		if err := BindRole(dir, RoleTurn, slug); err != nil {
+		if err := BindRole(dir, RoleOrchestrator, slug); err != nil {
 			t.Fatal(err)
 		}
 	}
-	role, _ := roleNamed(loadWithLayer(t, dir), RoleTurn)
+	role, _ := roleNamed(loadWithLayer(t, dir), RoleOrchestrator)
 	if role.Model.Slug() != "codex-sub/gpt-5.6-sol" {
 		t.Fatalf("the second binding did not replace the first: %s", role.Model.Slug())
 	}
@@ -67,7 +67,7 @@ func TestBindRoleReplacesAnEarlierBindingAndLeavesNoTemporaryFile(t *testing.T) 
 		t.Fatal(err)
 	}
 	if len(entries) != 1 {
-		t.Fatalf("the roles directory holds %d entries, want only turn.yaml", len(entries))
+		t.Fatalf("the roles directory holds %d entries, want only orchestrator.yaml", len(entries))
 	}
 }
 

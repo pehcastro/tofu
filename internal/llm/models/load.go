@@ -160,6 +160,9 @@ func Load(layers []Layer) (Library, error) {
 	})
 	refused = append(refused, library.defaults()...)
 	for _, name := range roles.order {
+		if name == legacyTurnRole && roles.sheets[string(RoleOrchestrator)] != nil {
+			continue
+		}
 		role, bad := buildRole(name, roles.sheets[name], library)
 		if bad != nil {
 			refused = append(refused, *bad)

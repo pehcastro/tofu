@@ -7,14 +7,14 @@
                                                                                                               
            Select model            ROLES                                           SELECTION                  
            20 models               enter binds · tab models                                                   
-                                                                                   turn                       
-           Models  Roles           › turn                                          the turn you asked for     
-                                     the turn you asked for                                                   
-           PROVIDERS                 child                                         BOUND MODEL                
-             all                     every child a turn spawns                     claude-sub/claude-opus-5   
-             claude-sub                                                                                       
-             codex-sub                                                             enter chooses a new model  
-                                                                                                              
+                                                                                   orchestrator               
+           Models  Roles           › orchestrator                                  the model that plans and   
+                                     the model that plans and hands work to sub-   hands work to sub-agents   
+           PROVIDERS               agents                                                                     
+             all                     (unnamed sub-agent)                           BOUND MODEL                
+             claude-sub              a spawn that names no sub-agent               claude-sub/claude-opus-5   
+             codex-sub                                                                                        
+                                                                                   enter chooses a new model  
                                                                                                               
                                                                                                               
                                                                                                               

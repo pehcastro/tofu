@@ -243,7 +243,7 @@ func (a *App) roleRows() []settings.Row {
 	}
 	var rows []settings.Row
 	for _, role := range library.RoleIDs() {
-		rows = append(rows, settings.Row{Key: roleKeyPrefix + string(role), Category: rolesCategory, Label: string(role), Description: role.What(), Value: a.roles[role], Action: settings.RowRole})
+		rows = append(rows, settings.Row{Key: roleKeyPrefix + string(role), Category: rolesCategory, Label: role.Label(), Description: role.What(), Value: a.roles[role], Action: settings.RowRole})
 	}
 	return rows
 }

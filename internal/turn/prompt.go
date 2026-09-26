@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"tofu/internal/konst"
+	"tofu/internal/subagent"
 	"tofu/internal/sys"
 )
 
@@ -24,6 +25,18 @@ const ContractAddendum = "if you were spawned as a child and your own brief name
 	"if your reply already shows another fenced json block, such as the contents of a file you edited, put this one after it: the last fenced json block in your reply is read as the contract, and an earlier one is not. " +
 	"a child spawned with no ticket, or whose brief has no ## Acceptance section, sends no such block. " +
 	"the shape is at library/general/references/contract.md."
+
+func SubAgentList(defined []subagent.Definition) string {
+	enabled := enabledSubAgents(defined)
+	if len(enabled) == 0 {
+		return ""
+	}
+	lines := []string{"these sub-agents are yours to name in spawn's agent field, each on its own model with its own instructions: pick the one whose description fits the piece of work"}
+	for _, definition := range enabled {
+		lines = append(lines, "- "+definition.Name+": "+definition.Description)
+	}
+	return strings.Join(lines, "\n")
+}
 
 const InstructionsOff = "sends no instruction file at all: " +
 	"neither the nearest AGENTS.md or CLAUDE.md at or above the working directory, " +

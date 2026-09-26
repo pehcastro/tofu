@@ -8,11 +8,8 @@ import (
 	"slices"
 	"strings"
 
-	"tofu/internal/llm/models"
-	settingspkg "tofu/internal/settings"
 	"tofu/internal/subagent"
 	"tofu/internal/turn"
-	shipped "tofu/library"
 )
 
 const agentsUsage = "usage: tofu agents [--json]"
@@ -46,37 +43,11 @@ func discoverAgents() (subagent.Found, error) {
 	if err != nil {
 		return subagent.Found{}, err
 	}
-	store, err := openSettings(dir)
+	named, _, err := assembleRunTools(dir, toolSetFull, false, &turn.BashTool{})
 	if err != nil {
 		return subagent.Found{}, err
 	}
-	layers, err := models.Layers(shipped.Files(), dir)
-	if err != nil {
-		return subagent.Found{}, err
-	}
-	catalog, _ := models.Load(layers)
-	bash, err := turn.NewBashTool(dir)
-	if err != nil {
-		return subagent.Found{}, err
-	}
-	built, _, err := assembleRunTools(dir, "", false, bash)
-	if err != nil {
-		return subagent.Found{}, err
-	}
-	tools := make([]string, 0, len(built))
-	for _, tool := range built {
-		tools = append(tools, tool.Name())
-	}
-	home, _ := os.UserHomeDir()
-	library, _, _ := librarySource()
-	return subagent.Definitions(subagent.Scan{
-		Project: dir,
-		Home:    home,
-		Sources: strings.Split(store.Text(settingspkg.AgentSources), ","),
-		Library: library,
-		Tools:   tools,
-		Catalog: catalog,
-	}), nil
+	return scanSubAgents(dir, named), nil
 }
 
 func printAgents(out io.Writer, found subagent.Found) {

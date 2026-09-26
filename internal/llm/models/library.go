@@ -118,10 +118,13 @@ type Model struct {
 }
 
 func (m Model) Slug() string {
-	if m.Subscription != "" {
+	switch {
+	case m.Subscription != "":
 		return string(m.Subscription) + "/" + m.ID
+	case m.Provider != "":
+		return string(m.Provider) + "/" + m.ID
 	}
-	return string(m.Provider) + "/" + m.ID
+	return m.ID
 }
 
 func (m Model) VendorSlug() string { return string(m.Provider) + "/" + m.ID }
@@ -142,7 +145,7 @@ type Library struct {
 	Broken        []Broken
 }
 
-func (c Library) wireFor(id Subscription) string {
+func (c Library) WireFor(id Subscription) string {
 	for _, spec := range c.Subscriptions {
 		if spec.ID == id {
 			return spec.Wire

@@ -7,31 +7,54 @@ import (
 	"tofu/internal/sys"
 )
 
-const rolesDir = "roles"
+const (
+	rolesDir       = "roles"
+	legacyTurnRole = "turn"
+)
 
 type RoleID string
 
 const (
-	RoleTurn  RoleID = "turn"
-	RoleChild RoleID = "child"
+	RoleOrchestrator RoleID = "orchestrator"
+	RoleChild        RoleID = "child"
 )
 
-func RoleIDs() []RoleID { return []RoleID{RoleTurn, RoleChild} }
+func RoleIDs() []RoleID { return []RoleID{RoleOrchestrator, RoleChild} }
 
 func (r RoleID) valid() bool {
 	switch r {
-	case RoleTurn, RoleChild:
+	case RoleOrchestrator, RoleChild:
 		return true
 	}
 	return false
 }
 
+func (r RoleID) Label() string {
+	switch r {
+	case RoleOrchestrator:
+		return string(r)
+	case RoleChild:
+		return "(unnamed sub-agent)"
+	}
+	panic("models: unknown role " + string(r))
+}
+
 func (r RoleID) What() string {
 	switch r {
-	case RoleTurn:
-		return "the turn you asked for"
+	case RoleOrchestrator:
+		return "the model that plans and hands work to sub-agents"
 	case RoleChild:
-		return "every child a turn spawns"
+		return "a spawn that names no sub-agent"
+	}
+	panic("models: unknown role " + string(r))
+}
+
+func (r RoleID) Unbound() string {
+	switch r {
+	case RoleOrchestrator:
+		return "nothing is bound, so it runs on the subscription default"
+	case RoleChild:
+		return "nothing is bound, so it runs on the orchestrator's model"
 	}
 	panic("models: unknown role " + string(r))
 }
@@ -60,9 +83,9 @@ type Binding struct {
 func (b Binding) Says() string {
 	switch b.By {
 	case BoundByFile:
-		return string(b.Role) + " runs " + b.Model.Slug() + ", bound by " + b.File
+		return b.Role.Label() + " runs " + b.Model.Slug() + ", bound by " + b.File
 	case BoundByDefault:
-		return string(b.Role) + " has nothing bound, so it runs " + b.Model.Slug() +
+		return b.Role.Label() + " has nothing bound, so it runs " + b.Model.Slug() +
 			", the " + string(b.Model.Subscription) + " default"
 	}
 	panic("models: unknown binding source")
@@ -87,7 +110,7 @@ func (c Library) Bind(fallback Subscription) (Bindings, error) {
 			}
 			binding.Model = model
 		}
-		binding.Wire = c.wireFor(binding.Model.Subscription)
+		binding.Wire = c.WireFor(binding.Model.Subscription)
 		bound[id] = binding
 	}
 	return bound, nil
@@ -95,9 +118,12 @@ func (c Library) Bind(fallback Subscription) (Bindings, error) {
 
 func buildRole(name string, from *sheet, library Library) (Role, *Broken) {
 	id := RoleID(name)
+	if name == legacyTurnRole {
+		id = RoleOrchestrator
+	}
 	if !id.valid() {
 		return Role{}, &Broken{File: from.file,
-			Why: "a role is " + string(RoleTurn) + " or " + string(RoleChild) + ", and nothing else reads one"}
+			Why: "a role file is " + string(RoleOrchestrator) + ".yaml or " + string(RoleChild) + ".yaml, and nothing else reads one"}
 	}
 	slug := from.values["model"]
 	if slug == "" {
@@ -112,7 +138,7 @@ func buildRole(name string, from *sheet, library Library) (Role, *Broken) {
 
 func BindRole(layerDir string, role RoleID, slug string) error {
 	if !role.valid() {
-		return errors.New("a role is " + string(RoleTurn) + " or " + string(RoleChild) + ", not " + string(role))
+		return errors.New("a role file is " + string(RoleOrchestrator) + ".yaml or " + string(RoleChild) + ".yaml, not " + string(role) + ".yaml")
 	}
 	return sys.WriteFile(filepath.Join(layerDir, rolesDir, string(role)+".yaml"), []byte("model: "+slug+"\n"), 0o644)
 }

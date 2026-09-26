@@ -1,6 +1,7 @@
 package turn
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -138,17 +139,95 @@ func (t *SpawnTool) decided(ctx context.Context, first Row) (DoneDecision, error
 	return decision, err
 }
 
+type ChildModel struct {
+	Slug     string
+	Windows  string
+	Wire     string
+	Spend    Spend
+	Accounts Accounts
+	Close    func()
+}
+
+type Spawned struct {
+	ID      string
+	Agent   string
+	Slug    string
+	Windows string
+}
+
+type SubAgents struct {
+	Defined []subagent.Definition
+	Open    func(subagent.Definition) (ChildModel, error)
+}
+
+type AgentRefusedError struct {
+	Name    string
+	Why     string
+	Enabled []string
+}
+
+func (e AgentRefusedError) Error() string {
+	enabled := "no sub-agent is enabled, so leave agent out"
+	if len(e.Enabled) > 0 {
+		enabled = "the enabled sub-agents are " + strings.Join(e.Enabled, ", ")
+	}
+	return "spawn refused: " + e.Name + " " + e.Why + "; " + enabled
+}
+
+func enabledSubAgents(defined []subagent.Definition) []subagent.Definition {
+	var enabled []subagent.Definition
+	for _, definition := range defined {
+		if definition.Runs == subagent.RunsModel || definition.Runs == subagent.RunsInherit {
+			enabled = append(enabled, definition)
+		}
+	}
+	return enabled
+}
+
+func (s SubAgents) enabledNames() []string {
+	var names []string
+	for _, definition := range enabledSubAgents(s.Defined) {
+		names = append(names, definition.Name)
+	}
+	return names
+}
+
+func (s SubAgents) named(name string) (subagent.Definition, error) {
+	if name == "" {
+		return subagent.Definition{}, nil
+	}
+	why := "is no sub-agent tofu found"
+	for _, definition := range s.Defined {
+		if definition.Name != name {
+			continue
+		}
+		switch definition.Runs {
+		case subagent.RunsModel, subagent.RunsInherit:
+			return definition, nil
+		case subagent.RunsDisabled:
+			why = "is disabled by " + cmp.Or(definition.AssignedIn, definition.Path)
+		case subagent.RunsRefused:
+			why = "cannot run: " + strings.Join(definition.Refused, "; ")
+		default:
+			panic("turn: unknown sub-agent state " + string(definition.Runs))
+		}
+	}
+	return subagent.Definition{}, AgentRefusedError{Name: name, Why: why, Enabled: s.enabledNames()}
+}
+
 type SpawnTool struct {
-	Review   DoneReview
-	Methods  method.Table
-	parentID string
-	depth    int
-	spawned  int
-	spend    float64
-	base     Config
-	roster   *subagent.Roster
-	children []Row
-	reports  []ChildReport
+	Review    DoneReview
+	Methods   method.Table
+	SubAgents SubAgents
+	parentID  string
+	depth     int
+	spawned   int
+	spend     float64
+	base      Config
+	roster    *subagent.Roster
+	children  []Row
+	reports   []ChildReport
+	ran       []Spawned
 }
 
 func NewSpawnTool(parentID string, base Config, roster *subagent.Roster) *SpawnTool {
@@ -161,20 +240,27 @@ func (t *SpawnTool) Children() []Row { return t.children }
 
 func (t *SpawnTool) Reports() []ChildReport { return t.reports }
 
+func (t *SpawnTool) Spawned() []Spawned { return t.ran }
+
 func (t *SpawnTool) Definition() llm.Tool {
+	properties := map[string]any{
+		"task":    map[string]any{"type": "string"},
+		"mission": map[string]any{"type": "string", "description": "the work in a handful of words, as a board entry reads: work on BOJI-395. the task is the brief and is kept whole"},
+		"owns":    map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
+	}
+	if names := t.SubAgents.enabledNames(); len(names) > 0 {
+		properties["agent"] = map[string]any{"type": "string", "enum": names,
+			"description": "the sub-agent that does the work, on its own model with its own instructions. left out, the child runs on the orchestrator's model"}
+	}
 	return llm.Tool{
 		Name: "spawn",
 		Description: "hands one piece of work to a child with its own context and its own conversation, and returns the child's report rather than its transcript. " +
 			"owns lists the paths the child may write, every other path is refused at the write, and no two children may hold overlapping paths. " +
 			"At most " + strconv.Itoa(konst.SubAgentMaxBreadth) + " children per turn, nested at most " + strconv.Itoa(konst.SubAgentMaxDepth) + " deep.",
 		Parameters: map[string]any{
-			"type": "object",
-			"properties": map[string]any{
-				"task":    map[string]any{"type": "string"},
-				"mission": map[string]any{"type": "string", "description": "the work in a handful of words, as a board entry reads: work on BOJI-395. the task is the brief and is kept whole"},
-				"owns":    map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
-			},
-			"required": []string{"task", "owns"},
+			"type":       "object",
+			"properties": properties,
+			"required":   []string{"task", "owns"},
 		},
 	}
 }
@@ -183,6 +269,7 @@ type spawnArgs struct {
 	Task    string   `json:"task"`
 	Mission string   `json:"mission,omitempty"`
 	Owns    []string `json:"owns"`
+	Agent   string   `json:"agent,omitempty"`
 }
 
 func (a spawnArgs) mission() string {
@@ -213,6 +300,19 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 	if t.spawned >= konst.SubAgentMaxBreadth {
 		return Result{}, BreadthLimitError{Spawned: t.spawned, Limit: konst.SubAgentMaxBreadth}
 	}
+	definition, err := t.SubAgents.named(args.Agent)
+	if err != nil {
+		return Result{}, err
+	}
+	var opened ChildModel
+	if t.SubAgents.Open != nil {
+		if opened, err = t.SubAgents.Open(definition); err != nil {
+			return Result{}, fmt.Errorf("spawn: the model for %s did not open: %w", cmp.Or(definition.Name, "the child"), err)
+		}
+	}
+	if opened.Close != nil {
+		defer opened.Close()
+	}
 
 	clock := t.base.Now
 	if clock == nil {
@@ -237,19 +337,32 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 	}
 
 	boundary := &subagent.Boundary{Ticket: childID, Owns: args.Owns}
-	owned := slices.Clone(t.base.Tools.tools)
-	for i, tool := range owned {
-		switch tool.Name() {
-		case "write", "edit":
-			owned[i] = ownedTool{tool: tool, boundary: boundary}
-		case "bash":
-			owned[i] = ownedShell{tool: tool, boundary: boundary}
+	offered := func(name string) bool { return len(definition.Tools) == 0 || slices.Contains(definition.Tools, name) }
+	var owned []Tool
+	for _, tool := range t.base.Tools.tools {
+		switch {
+		case !offered(tool.Name()):
+			continue
+		case tool.Name() == "write" || tool.Name() == "edit":
+			tool = ownedTool{tool: tool, boundary: boundary}
+		case tool.Name() == "bash":
+			tool = ownedShell{tool: tool, boundary: boundary}
 		}
+		owned = append(owned, tool)
 	}
-	nested := &SpawnTool{Review: t.Review, Methods: t.Methods, parentID: childID, depth: t.depth + 1, base: t.base, roster: t.roster}
+	nested := &SpawnTool{Review: t.Review, Methods: t.Methods, SubAgents: t.SubAgents, parentID: childID, depth: t.depth + 1, base: t.base, roster: t.roster}
+	if offered(t.Name()) {
+		owned = append(owned, nested)
+	}
 	child := t.base
+	if opened.Accounts.Pick != nil {
+		child.Model, child.Accounts, child.Spend, child.Wire = nil, opened.Accounts, opened.Spend, opened.Wire
+	}
+	if definition.Instructions != "" {
+		child.System += "\n\nyou are the " + definition.Name + " sub-agent, and these are your instructions:\n" + definition.Instructions
+	}
 	child.Task = args.Task
-	child.Tools = NewRegistry(append(owned, nested)...)
+	child.Tools = NewRegistry(owned...)
 	child.NewID = func() string { return childID }
 	child.SpawnedFrom = t.parentID
 	child.Boundary = boundary
@@ -274,6 +387,7 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 		t.publish(agent, claims, state)
 	}
 	t.retain(append(claims, nested.children...))
+	t.ran = append(append(t.ran, Spawned{ID: childID, Agent: definition.Name, Slug: opened.Slug, Windows: opened.Windows}), nested.ran...)
 	for _, claim := range claims {
 		t.spend += claim.TotalCostUSD
 	}
@@ -284,6 +398,9 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 	contract := subagent.BuildContract(agent.Brief, report.Prose, stoppedEarly(state, claims[len(claims)-1].Outcome))
 	contract.Wrote = report.Wrote
 	text := report.Text() + "\n\n" + contract.Block()
+	if opened.Slug != "" {
+		text = childID + " ran as " + cmp.Or(definition.Name, "the unnamed sub-agent") + " on " + opened.Slug + "\n\n" + text
+	}
 	t.roster.Reached(childID, state, text)
 	if runErr != nil && state != subagent.Parked {
 		return Result{}, fmt.Errorf("spawn: child %s is %s: %w", childID, state, runErr)

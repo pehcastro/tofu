@@ -5,17 +5,20 @@ import (
 	"fmt"
 	"io"
 	"strings"
+
+	"tofu/internal/turn"
 )
 
 func showPrompt(opts runOpts, out, errOut io.Writer) int {
-	environment, instructions, notice := runEnvironment(opts)
-	if notice != "" {
-		writeNotice(errOut)(notice)
-	}
-	composed, err := composePrompt(opts, environment)
+	named, _, err := assembleRunTools(opts.dir, opts.toolSet, opts.readBeforeEdit, &turn.BashTool{})
 	if err != nil {
 		return runFail(errOut, err)
 	}
+	prompt, err := composeRun(opts, named, runtime{notify: writeNotice(errOut), open: openAppWire})
+	if err != nil {
+		return runFail(errOut, err)
+	}
+	opts, environment, instructions, composed := prompt.opts, prompt.environment, prompt.instructions, prompt.composed
 	system := composed.System()
 	firstUser := environment + "\n\n" + opts.task
 	uncomposed := len(runSystem(opts))

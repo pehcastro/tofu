@@ -66,7 +66,7 @@ func testLibrary() library.Library {
 		"claude-opus-4-7", "claude-opus-4-6", "claude-sonnet-4-6", "claude-sonnet-4-5", "claude-opus-4-5", "claude-haiku-3"})
 	add(library.OpenAI, codexSub, []string{"gpt-5.6-sol", "gpt-5.6-luna", "gpt-5.6-terra", "gpt-5.5", "gpt-5.4",
 		"gpt-5.3", "gpt-5.2", "gpt-5.1", "gpt-5", "gpt-reserve"})
-	loaded.Roles = []library.Role{{ID: library.RoleTurn, Model: loaded.Models[0]}}
+	loaded.Roles = []library.Role{{ID: library.RoleOrchestrator, Model: loaded.Models[0]}}
 	return loaded
 }
 

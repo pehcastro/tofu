@@ -2,11 +2,11 @@
   tofu settings         Models & roles                                              global scope    
   Global preferences    Choose a row to inspect and change its value.                               
                                                                                                     
-  CATEGORIES            › turn                                                                ▾     
-    Appearance    05      the turn you asked for                                                    
+  CATEGORIES            › orchestrator                                                        ▾     
+    Appearance    05      the model that plans and hands work to sub-agents                         
   › Models & rol… 02                                                                                
-    Interaction   05      child                                                               ▾     
-    Context       05      every child a turn spawns                                                 
+    Interaction   05      (unnamed sub-agent)                                                 ▾     
+    Context       05      a spawn that names no sub-agent                                           
     Files         03                                                                                
     Shell         05    enter change  ·  ctrl+k search  ·  esc chat                                 
     Turn          03                                                                                

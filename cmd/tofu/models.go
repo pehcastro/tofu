@@ -224,7 +224,8 @@ func modelsText(library models.Library, report modelsReport, shade palette) stri
 	label := "roles"
 	for _, id := range report.Unbound {
 		body.WriteString("\n")
-		for _, line := range wrapped(label, id+" has nothing bound, so "+models.RoleID(id).What()+" takes the subscription default") {
+		role := models.RoleID(id)
+		for _, line := range wrapped(label, role.Label()+": "+role.What()+". "+role.Unbound()) {
 			body.WriteString(line + "\n")
 		}
 		label = ""
@@ -237,7 +238,11 @@ func withRoles(model modelReport) string {
 	if len(model.Roles) == 0 {
 		return named
 	}
-	return named + " [" + strings.Join(model.Roles, " and ") + "]"
+	labels := make([]string, 0, len(model.Roles))
+	for _, role := range model.Roles {
+		labels = append(labels, models.RoleID(role).Label())
+	}
+	return named + " [" + strings.Join(labels, " and ") + "]"
 }
 
 func keyPaidLines(report modelsReport) []string {
