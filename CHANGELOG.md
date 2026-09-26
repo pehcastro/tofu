@@ -8,6 +8,30 @@ Tofu is personal and not released, so the public interface that a version promis
 
 The minor number carries breaking changes, which is what 0.x means, and **there is never a 1.0.0**. The owner decided that on 2026-09-19: this stays 0.x forever, so the promise the version makes is the one 0.x already makes, that anything can break on a minor bump.
 
+## 0.5.0-rc-fix3 - 2026-09-26
+
+Named sub-agents, each on its own model, and the fixes from the first drive of rc-fix2.
+
+### Added
+
+- **`tofu agents` lists the named sub-agents** from `.tofu/agents`, `.agents/agents`, `.claude/agents`, the same folders under the home, and the library. For each it shows the model, the folder it came from, and the tools. The first definition found under a name wins. Claude's model aliases (`sonnet`) and tool names (`Read`, `Grep`) are translated, and a tool tofu does not have is listed as ignored.
+- **A turn spawns a named sub-agent on that sub-agent's own model.** `.tofu/agent-models.yaml` assigns a model per sub-agent, and `none` disables one. The orchestrator is told which sub-agents it may name.
+- **The setting `agentSources`** chooses which of `tofu`, `agents` and `claude` are read.
+- **A number setting opens a dialog when you press Enter or click it.** The dialog shows the current value, the default and what it means, and the range. A value outside the range is refused there, by `+` and `-`, and by `tofu settings set`.
+
+### Changed
+
+- **The roles read `orchestrator` and `(unnamed sub-agent)`**, in settings, the picker and `tofu models`. An old `roles/turn.yaml` still loads.
+- **The Commands list leads with each command's name**, and a long description is cut to one line.
+- **Sub-agents, file edits and shells place their scrollbar as chat does**: in the last column, with one empty row above the footer.
+- **The footer shows only the subscription the orchestrator is using**, and shortens its label before it drops the percentage.
+- **The composer hint says Shift+Enter** inserts a line break.
+
+### Fixed
+
+- **`cooked for` appears once**, in the line above the composer.
+- **An empty composer shows one cursor.**
+
 ## 0.5.0-rc-fix2 - 2026-09-26
 
 `tofu --continue` opens on the conversation it continues.
