@@ -781,7 +781,7 @@ func TestADrivenTurnNamesTheSessionAndItsIDInTheHeader(t *testing.T) {
 	if len(listing.Sessions) != 1 || listing.Sessions[0].Name == nil {
 		t.Fatalf("listing %+v, want the one session with a name", listing.Sessions)
 	}
-	if shown, _, _ := strings.Cut(*listing.Sessions[0].Name, "-"); !strings.Contains(screen, " "+shown+" [session#") {
+	if !strings.Contains(screen, " "+*listing.Sessions[0].Name+" [session#") {
 		t.Fatalf("the header does not carry the session name %q:\n%s", *listing.Sessions[0].Name, screen)
 	}
 }

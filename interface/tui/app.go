@@ -157,6 +157,7 @@ type Options struct {
 	Shells       func() []shells.Entry
 	KillShell    func(name string) error
 	Fresh        bool
+	Pose         string
 	Keymap       string
 }
 
@@ -284,10 +285,11 @@ func New(options Options) *App {
 	app.view.Commands = commands(options)
 	app.settings.SetSearchKey(app.shortcuts[searchAction])
 	app.settings.SetBranch(options.Branch)
-	app.intro = newIntro(options.Fresh && !app.flag(isettings.HideIntroduction), app.text(isettings.Animations) != animationsOff)
+	app.intro = newIntro(options.Fresh && !app.flag(isettings.HideIntroduction), app.text(isettings.Animations) != animationsOff, options.Pose)
 	app.resize(app.width, app.height)
 	app.readWires()
 	app.refreshSettingsRows()
+	app.syncFeed()
 	return app
 }
 
@@ -358,6 +360,7 @@ func (a *App) resize(width, height int) {
 
 func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	cmd := a.update(msg)
+	a.syncFeed()
 	return a, tea.Batch(cmd, a.startPulse())
 }
 

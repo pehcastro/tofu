@@ -87,10 +87,13 @@ func SectionLabel(label string) string {
 
 func Sides(left, right string, width int) string {
 	room := width - lipgloss.Width(left) - lipgloss.Width(right)
-	if room < 1 {
-		return left
+	if room >= 1 {
+		return left + strings.Repeat(" ", room) + right
 	}
-	return left + strings.Repeat(" ", room) + right
+	if kept := width - lipgloss.Width(right) - 1; kept > 0 {
+		return ansi.Truncate(left, kept, "…") + " " + right
+	}
+	return ansi.Truncate(left, width, "…")
 }
 
 func ChromeRow(width int, bg Color, left, right string) string {

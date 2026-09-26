@@ -71,7 +71,11 @@ func (a *App) View() tea.View {
 
 func (a *App) frame() string {
 	if a.intro.shown && len(a.requirements) == 0 {
-		return cover.WelcomeInputView(a.intro.identity, a.width, a.height, a.intro.input.View(), -1, a.coverDetails())
+		welcome := cover.WelcomeInputView(a.intro.identity, a.width, a.height, a.intro.input.View(), -1, a.coverDetails())
+		if a.theme() == look.ThemeTerminal {
+			return look.Apply(welcome, look.ThemeTerminal)
+		}
+		return welcome
 	}
 	base := a.base()
 	if top := a.top(); top != nil {
@@ -138,9 +142,6 @@ func (a *App) body() string {
 		a.view.FoldHidesShell = a.flag(isettings.FoldHidesShell)
 		return a.view.View()
 	case screenAgents:
-		a.feed.SetDensity(a.text(isettings.Density))
-		a.feed.SetRetention(a.retention())
-		a.feed.SetAgents(a.busy, a.agents())
 		return a.feed.View()
 	case screenEdits:
 		a.preferEdits()
@@ -174,12 +175,14 @@ func (a *App) retention() feed.Retention {
 	panic("tui: unknown agent feeds setting " + kept)
 }
 
-func (a *App) agents() []feed.Agent {
+func (a *App) syncFeed() {
 	agents := make([]feed.Agent, len(a.children))
 	for index, child := range a.children {
 		agents[index] = feed.Agent{Name: child.Name, State: child.State, Doing: child.Doing, Since: child.Since, Owns: child.Owns, Report: child.Report}
 	}
-	return agents
+	a.feed.SetDensity(a.text(isettings.Density))
+	a.feed.SetRetention(a.retention())
+	a.feed.SetAgents(a.busy, agents)
 }
 
 func (a *App) setupView(rows int) string {

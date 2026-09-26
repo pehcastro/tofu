@@ -12,13 +12,12 @@ import (
 )
 
 const (
-	fullSessionColumns = 145
-	sessionRefColumns  = 120
-	workspaceColumns   = 105
-	pathColumns        = 77
-	sideGap            = 2
-	settingsLink       = "[settings]"
-	settingsIndex      = -1
+	sessionRefColumns = 120
+	workspaceColumns  = 105
+	pathColumns       = 77
+	sideGap           = 2
+	settingsLink      = "[settings]"
+	settingsIndex     = -1
 )
 
 type Tab struct {
@@ -32,24 +31,25 @@ type Hit struct {
 	Index int
 }
 
-type rightDrop int
+type crowding int
 
 const (
-	dropNothing rightDrop = iota
+	dropNothing crowding = iota
+	dropBranch
+	cutName
 	dropName
 	dropSession
 	dropClock
 )
 
 func Top(head Head, tabs []Tab, current int, width int) (string, []Hit) {
-	left := topLeft(head, width)
 	nav, hits := chips(tabLabels(tabs, width), current)
-	leftWidth, navWidth := cells(left), cells(nav)
-	right := topRight(head, width, dropNothing)
-	for drop := dropName; drop <= dropClock && leftWidth+navWidth+cells(right)+2*sideGap > width; drop++ {
-		right = topRight(head, width, drop)
+	navWidth := cells(nav)
+	left, right := topLeft(head, width, dropNothing), topRight(head, width, dropNothing)
+	for drop := dropBranch; drop <= dropClock && cells(left)+navWidth+cells(right)+2*sideGap > width; drop++ {
+		left, right = topLeft(head, width, drop), topRight(head, width, drop)
 	}
-	rightWidth := cells(right)
+	leftWidth, rightWidth := cells(left), cells(right)
 	start := max(leftWidth+sideGap, (width-navWidth)/2)
 	if start+navWidth+sideGap+rightWidth > width {
 		start = max(leftWidth+sideGap, width-navWidth-sideGap-rightWidth)
@@ -74,7 +74,7 @@ func Top(head Head, tabs []Tab, current int, width int) (string, []Hit) {
 	return row + draw(append([]span{fill(gap, look.Background)}, right...)), append(hits, Hit{Start: linkEnd - len(settingsLink), End: linkEnd, Index: settingsIndex})
 }
 
-func topLeft(head Head, width int) []span {
+func topLeft(head Head, width int, drop crowding) []span {
 	chip := span{text: " tofu ", fg: look.Background, bg: look.Mint}
 	switch {
 	case width < pathColumns:
@@ -83,7 +83,7 @@ func topLeft(head Head, width int) []span {
 		return []span{chip, {text: " ./" + head.Path + "/", fg: look.Text, bg: look.Background}}
 	}
 	left := []span{chip, {text: "  |  ./" + head.Path + "/", fg: look.Text, bg: look.Background}}
-	if head.Fresh || head.Branch == "" {
+	if head.Fresh || head.Branch == "" || drop >= dropBranch {
 		return left
 	}
 	return append(left,
@@ -92,7 +92,7 @@ func topLeft(head Head, width int) []span {
 		span{text: ")", fg: look.MutedColor, bg: look.Background})
 }
 
-func topRight(head Head, width int, drop rightDrop) []span {
+func topRight(head Head, width int, drop crowding) []span {
 	var right []span
 	if drop < dropSession {
 		right = session(head, width, drop)
@@ -114,7 +114,7 @@ func topRight(head Head, width int, drop rightDrop) []span {
 	return append(right, span{text: settingsLink + " ", fg: look.Blue, bg: look.Background})
 }
 
-func session(head Head, width int, drop rightDrop) []span {
+func session(head Head, width int, drop crowding) []span {
 	if head.Notice != "" {
 		return []span{{text: head.Notice, fg: look.Amber, bg: look.Background}}
 	}
@@ -122,7 +122,7 @@ func session(head Head, width int, drop rightDrop) []span {
 		return nil
 	}
 	name := head.SessionName
-	if width >= sessionRefColumns && width < fullSessionColumns {
+	if drop == cutName {
 		name, _, _ = strings.Cut(name, "-")
 	}
 	var parts []span

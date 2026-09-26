@@ -88,7 +88,9 @@ func (m *Model) textOrChip(text string) string {
 	return token
 }
 
-func (m *Model) Quote(text string) { m.composer.InsertString(m.textOrChip(text)) }
+func (m *Model) InsertPaste(text string) tea.Cmd {
+	return m.Update(tea.PasteMsg{Content: m.textOrChip(text)})
+}
 
 func Expand(task string, chips []Chip) string {
 	for _, chip := range chips {

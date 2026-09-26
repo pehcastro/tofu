@@ -12,6 +12,7 @@ import (
 
 	"tofu/interface/tui/look"
 	"tofu/interface/tui/pointer"
+	"tofu/internal/konst"
 	roster "tofu/internal/subagent"
 	"tofu/internal/widget"
 )
@@ -87,7 +88,6 @@ const (
 	comfortableGap = 1
 	spaciousGap    = 2
 	allActivity    = "All activity"
-	recentEvents   = 200
 )
 
 type Retention int
@@ -158,7 +158,7 @@ func (m Model) retained() []Event {
 	case KeepAll:
 		return m.events
 	case KeepRecent:
-		return m.events[max(0, len(m.events)-recentEvents):]
+		return m.events[max(0, len(m.events)-konst.FeedRecentEvents):]
 	case RailOnly:
 		return nil
 	}

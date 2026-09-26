@@ -35,7 +35,7 @@ type pose struct {
 }
 
 var poses = [...]pose{
-	{name: "success sit", cat: cat.Sitting, x: -17, y: 2},
+	{name: "sitting", cat: cat.Sitting, x: -17, y: 2},
 	{name: "lying", cat: cat.Lying, x: -11, y: 6},
 }
 

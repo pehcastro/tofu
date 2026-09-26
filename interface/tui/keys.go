@@ -96,9 +96,7 @@ func (a *App) quoteSelection() tea.Cmd {
 	if a.lastSelection != "" {
 		quoted := quotePrefix + strings.ReplaceAll(a.lastSelection, "\n", "\n"+quotePrefix) + "\n"
 		a.lastSelection = ""
-		cmd := a.show(screenChat)
-		a.view.Quote(quoted)
-		return cmd
+		return tea.Batch(a.show(screenChat), a.view.InsertPaste(quoted))
 	}
 	selected := a.feed.Selected()
 	if a.happenedAt(selected) < 0 {
@@ -184,7 +182,7 @@ func (a *App) pasted(msg tea.PasteMsg) tea.Cmd {
 	switch top := a.top().(type) {
 	case nil:
 		if a.current == screenChat {
-			return a.view.Update(msg)
+			return a.view.InsertPaste(msg.Content)
 		}
 	case *commandsDialog:
 		return top.Paste(msg)

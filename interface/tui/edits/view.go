@@ -150,7 +150,9 @@ func (m *Model) Key(key string) bool {
 		case !m.focusMain:
 			m.focusMain = true
 		case !m.reading:
-			m.reading, m.scroll = true, 0
+			if edit, _, ok := chosen(m.visible(), m.selected); ok {
+				m.open(edit.ID)
+			}
 		default:
 			m.wide = !m.wide
 		}
@@ -385,8 +387,8 @@ func (m Model) sidebar(width int, visible []Edit, selected string) string {
 	}
 	var content strings.Builder
 	content.WriteString(look.PaneTitle(title, !m.focusMain) + "\n")
-	content.WriteString(look.Muted(fmt.Sprintf("%d files  ·  %d changes", len(paths), len(m.edits))) + "\n")
-	content.WriteString(look.Muted(fmt.Sprintf("%d mod  ·  %d new  ·  %d del", kinds[OpModified], kinds[OpAdded], kinds[OpDeleted])) + "\n")
+	content.WriteString(counts(inner, fmt.Sprint(len(paths), " files"), fmt.Sprint(len(m.edits), " changes")) + "\n")
+	content.WriteString(counts(inner, fmt.Sprint(kinds[OpModified], " mod"), fmt.Sprint(kinds[OpAdded], " new"), fmt.Sprint(kinds[OpDeleted], " del")) + "\n")
 	content.WriteString(deltas(added[""], removed[""]) + look.Muted(" lines") + "\n\n")
 	if !m.prefs.NoAuthors {
 		content.WriteString(look.SectionLabel("Author") + "\n")
@@ -413,6 +415,14 @@ func (m Model) sidebar(width int, visible []Edit, selected string) string {
 		m.cache.side, m.cache.sideView = key, view
 	}
 	return view
+}
+
+func counts(width int, parts ...string) string {
+	line := strings.Join(parts, "  ·  ")
+	if ansi.StringWidth(line) > width {
+		line = strings.Join(parts, " · ")
+	}
+	return look.Muted(ansi.Truncate(line, width, "…"))
 }
 
 func (m Model) indexView(width, height int, visible []Edit) string {

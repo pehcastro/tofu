@@ -45,6 +45,7 @@ const (
 const (
 	ProgressTickMillis = 250
 	QuitAgainMillis    = 3000
+	FeedRecentEvents   = 200
 
 	DriveTimeoutMillis = 60000
 	DriveSettleMillis  = ProgressTickMillis / 2

@@ -132,7 +132,7 @@ func (m Model) modal(width, height int) string {
 	if detail > 0 {
 		panes = append(panes, look.ModalPane(detail, modalHeight, look.Panel, 1, m.detailPane()))
 	}
-	return lipgloss.JoinHorizontal(lipgloss.Top, panes...)
+	return lipgloss.NewStyle().MaxHeight(modalHeight).Render(lipgloss.JoinHorizontal(lipgloss.Top, panes...))
 }
 
 func (m Model) sidePane(width int) string {

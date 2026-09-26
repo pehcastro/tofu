@@ -63,7 +63,8 @@ run prints the settings it resolved before the first step, so a pasted
 transcript carries the conditions it was taken under.
 
 Steps:
-  type TEXT    type TEXT into the composer
+  type TEXT    type TEXT into the composer, leading spaces included
+  paste TEXT   paste TEXT the way a terminal's own bracketed paste delivers it
   key NAME     press enter, esc, tab, space, backspace, up, down, left, right,
                any single character, or one of those under ctrl+, alt+ or shift+
                (alt+2 opens sub-agents, alt+4 opens shells, as in the app)
@@ -72,8 +73,10 @@ Steps:
   wheel X Y up|down [N]                  turn the wheel N notches over a cell, 1 if no N
   resize W H                             resize the terminal to W columns and H rows
   wait TEXT    wait until TEXT is on the screen, and fail saying so if it never is
+  absent TEXT  fail if TEXT is on the screen now
   screen       print the screen as it stands
   environment  print the environment block the last turn sent to the model
+  images       print how many images the last request's user message carried
   # NOTE       a note, skipped
 
 X and Y are zero-based cells: X counts columns and Y counts rows of the printed
@@ -113,6 +116,7 @@ const (
 	stdinScript      = "-"
 	driveHomePrefix  = "tofu-drive-home"
 	noEnvironment    = "no turn has sent an environment block yet"
+	noRequest        = "no turn has sent a request yet"
 	recordedFlight   = konst.DriveSettleMillis * time.Millisecond
 	parentCaller     = ""
 	childCaller      = "c"
@@ -259,6 +263,20 @@ func (c *cassette) environment() string {
 	return noEnvironment
 }
 
+func (c *cassette) images() string {
+	if c == nil {
+		return noRequest
+	}
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+	for index := len(c.last.Messages) - 1; index >= 0; index-- {
+		if message := c.last.Messages[index]; message.Role == llm.RoleUser {
+			return "the last user message carried " + strconv.Itoa(len(message.Images)) + " image(s)"
+		}
+	}
+	return noRequest
+}
+
 func driveWire(deck *cassette) func(runOpts) (appWire, error) {
 	return func(opts runOpts) (appWire, error) {
 		if deck == nil {
@@ -295,13 +313,7 @@ func drivenApp(dir string, deck *cassette, plan drivePlan, launch appLaunch) *tu
 	return tui.New(appOptions(dir, plan.arms, recorded, launch))
 }
 
-type driveStep struct {
-	verb string
-	text string
-	line int
-}
-
-func readScript(path string, in io.Reader) ([]driveStep, error) {
+func readScript(path string, in io.Reader) ([]filmstrip.Step, error) {
 	if path != stdinScript {
 		file, err := os.Open(path)
 		if err != nil {
@@ -311,19 +323,7 @@ func readScript(path string, in io.Reader) ([]driveStep, error) {
 		in = file
 	}
 	body, err := io.ReadAll(in)
-	if err != nil {
-		return nil, err
-	}
-	var steps []driveStep
-	for number, line := range strings.Split(string(body), "\n") {
-		trimmed := strings.TrimSpace(line)
-		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
-			continue
-		}
-		verb, text, _ := strings.Cut(trimmed, " ")
-		steps = append(steps, driveStep{verb: verb, text: strings.TrimSpace(text), line: number + 1})
-	}
-	return steps, nil
+	return filmstrip.ReadScript(string(body)), err
 }
 
 type drivePlan struct {
@@ -518,88 +518,31 @@ func driveVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 	driver := filmstrip.Drive(drivenApp(dir, deck, plan, launch), plan.width, plan.height)
 	defer driver.Close()
 	for _, step := range steps {
-		driver.Settle()
-		if code := playStep(driver, deck, step, plan, out, errOut); code != exitOK {
-			return code
+		err := playStep(driver, deck, step, plan, out)
+		if err == nil {
+			continue
 		}
-	}
-	return exitOK
-}
-
-func leadingCells(fields []string, count, least int) ([]int, []string, bool) {
-	if len(fields) < count {
-		return nil, nil, false
-	}
-	cells := make([]int, count)
-	for index := range cells {
-		cell, err := strconv.Atoi(fields[index])
-		if err != nil || cell < least {
-			return nil, nil, false
-		}
-		cells[index] = cell
-	}
-	return cells, fields[count:], true
-}
-
-func pointerStep(driver *filmstrip.Driver, verb string, fields []string) error {
-	switch verb {
-	case "click":
-		if at, mods, ok := leadingCells(fields, 2, 0); ok {
-			return driver.Click(at[0], at[1], mods...)
-		}
-		return errors.New("the step is click X Y [alt] [shift] [ctrl], with X and Y cells from 0")
-	case "drag":
-		if at, mods, ok := leadingCells(fields, 4, 0); ok {
-			return driver.Drag(at[0], at[1], at[2], at[3], mods...)
-		}
-		return errors.New("the step is drag X1 Y1 X2 Y2 [alt] [shift] [ctrl], with every X and Y a cell from 0")
-	case "wheel":
-		at, turn, ok := leadingCells(fields, 2, 0)
-		if ok && len(turn) == 1 {
-			turn = append(turn, "1")
-		}
-		if ok && len(turn) == 2 && (turn[0] == "up" || turn[0] == "down") {
-			if notches, _, counted := leadingCells(turn[1:], 1, 1); counted {
-				return driver.Wheel(at[0], at[1], turn[0] == "up", notches[0])
-			}
-		}
-		return errors.New("the step is wheel X Y up|down [N], with N notches from 1")
-	}
-	size, rest, ok := leadingCells(fields, 2, 1)
-	if !ok || len(rest) > 0 {
-		return errors.New("the step is resize W H, with W columns and H rows from 1")
-	}
-	driver.Resize(size[0], size[1])
-	return nil
-}
-
-func playStep(driver *filmstrip.Driver, deck *cassette, step driveStep, plan drivePlan, out, errOut io.Writer) int {
-	switch step.verb {
-	case "type":
-		driver.Type(step.text)
-	case "key":
-		if err := driver.Press(step.text); err != nil {
-			return driveFail(errOut, fmt.Errorf("line %d: %w", step.line, err))
-		}
-	case "wait":
-		if err := driver.Await(step.text, plan.timeout); err != nil {
-			_, _ = fmt.Fprintf(errOut, "tofu drive: line %d: %v\n\n%s\n", step.line, err, driver.Plain())
+		if step.Verb == "wait" || step.Verb == "absent" {
+			_, _ = fmt.Fprintf(errOut, "tofu drive: line %d: %v\n\n%s\n", step.Line, err, driver.Plain())
 			return exitVerdict
 		}
-	case "screen":
-		screen := driver.Screen()
-		if plan.plain {
-			screen = driver.Plain()
-		}
-		_, _ = fmt.Fprintln(out, screen)
-	case "environment":
-		_, _ = fmt.Fprintln(out, deck.environment())
-	case "click", "drag", "wheel", "resize":
-		if err := pointerStep(driver, step.verb, strings.Fields(step.text)); err != nil {
-			return driveFail(errOut, fmt.Errorf("line %d: %w", step.line, err))
-		}
-	default:
-		return driveFail(errOut, fmt.Errorf("line %d: no step is named %q", step.line, step.verb))
+		return driveFail(errOut, fmt.Errorf("line %d: %w", step.Line, err))
 	}
 	return exitOK
+}
+
+func playStep(driver *filmstrip.Driver, deck *cassette, step filmstrip.Step, plan drivePlan, out io.Writer) error {
+	said := deck.environment
+	switch step.Verb {
+	case "environment":
+	case "images":
+		said = deck.images
+	default:
+		return driver.Play(step, plan.timeout, plan.plain, out)
+	}
+	if err := driver.Settle(); err != nil {
+		return err
+	}
+	_, err := fmt.Fprintln(out, said())
+	return err
 }

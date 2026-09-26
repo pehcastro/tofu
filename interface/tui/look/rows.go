@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 )
 
 func TypedID(kind, id string) string {
@@ -48,7 +49,7 @@ func SidebarEntry(width int, selected bool, label, status, description string) s
 	}
 	line := Sides(Style(name).Bold(selected).Render(marker+label), status, width)
 	first := lipgloss.NewStyle().Width(width).Background(bg.value()).Render(KeepSurfaceBackground(line, bg))
-	return first + "\n  " + Muted(description)
+	return first + "\n  " + Muted(ansi.Truncate(description, width-2, "…"))
 }
 
 func SidebarDeltaItem(width int, selected bool, label string, added, removed int) string {

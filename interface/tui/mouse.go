@@ -1,6 +1,8 @@
 package tui
 
 import (
+	"strings"
+
 	tea "charm.land/bubbletea/v2"
 
 	"tofu/interface/tui/pointer"
@@ -10,6 +12,9 @@ import (
 const (
 	selectionUnit = "the selection"
 	settingsHit   = -1
+	cardEdges     = "│╭╮╰╯─"
+	cardSide      = "│"
+	cardPadding   = "  "
 )
 
 func (a *App) track() (pointer.Track, bool) {
@@ -106,7 +111,34 @@ func (a *App) selectedText() string {
 	if frame == "" {
 		frame = a.frame()
 	}
-	return pointer.SelectedText(frame, a.selection, a.pane())
+	text := pointer.SelectedText(frame, a.selection, a.pane())
+	if a.current != screenAgents && a.current != screenEdits {
+		return text
+	}
+	return unframed(text)
+}
+
+func unframed(text string) string {
+	var kept []string
+	for _, line := range strings.Split(text, "\n") {
+		if strings.ContainsAny(line, cardEdges) && strings.Trim(line, " "+cardEdges) == "" {
+			continue
+		}
+		if rest, bordered := strings.CutPrefix(strings.TrimLeft(line, " "), cardSide); bordered {
+			line = strings.TrimPrefix(rest, cardPadding)
+		}
+		kept = append(kept, strings.TrimRight(strings.TrimSuffix(strings.TrimRight(line, " "), cardSide), " "))
+	}
+	indent := -1
+	for _, line := range kept[min(1, len(kept)):] {
+		if lead := len(line) - len(strings.TrimLeft(line, " ")); line != "" && (indent < 0 || lead < indent) {
+			indent = lead
+		}
+	}
+	for index := 1; index < len(kept); index++ {
+		kept[index] = kept[index][min(len(kept[index]), max(0, indent)):]
+	}
+	return strings.Join(kept, "\n")
 }
 
 func (a *App) click(x, y int, mods pointer.Mods) tea.Cmd {
@@ -118,12 +150,12 @@ func (a *App) click(x, y int, mods pointer.Mods) tea.Cmd {
 	if len(a.dialogs) == 0 && (mods.Alt || mods.Shift || mods.Ctrl) && a.insertReference(ref, !collectOnly) {
 		return a.view.Focus()
 	}
+	if top := a.top(); top != nil {
+		return top.click(a, x, y)
+	}
 	tab, onTab := a.tabAt(x, y)
 	if onTab && tab == settingsHit {
 		return a.show(screenSettings)
-	}
-	if top := a.top(); top != nil {
-		return top.click(a, x, y)
 	}
 	if a.current == screenSettings {
 		return a.applyIntent(a.settings.Click(x, y))

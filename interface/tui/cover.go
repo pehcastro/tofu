@@ -38,7 +38,7 @@ type intro struct {
 	input                              textarea.Model
 }
 
-func newIntro(shown, animated bool) intro {
+func newIntro(shown, animated bool, pose string) intro {
 	input := textarea.New()
 	input.Placeholder, input.Prompt, input.ShowLineNumbers = coverPlaceholder, "", false
 	input.DynamicHeight, input.MinHeight, input.MaxHeight = true, coverMinRows, coverMaxRows
@@ -49,8 +49,11 @@ func newIntro(shown, animated bool) intro {
 	input.SetStyles(styles)
 	input.Focus()
 	identity := cover.NewIdentity(false)
-	if rand.IntN(poses) == 1 {
+	if pose == "" && rand.IntN(poses) == 1 || pose != "" && pose != identity.PoseName() {
 		identity.TogglePose()
+	}
+	if pose != "" && pose != identity.PoseName() {
+		panic("tui: the cover has no pose named " + pose)
 	}
 	return intro{shown: shown, animated: animated, identity: identity, input: input}
 }

@@ -13,7 +13,7 @@ func TestCompactWelcomeKeepsCatAndComposer(t *testing.T) {
 	t.Setenv("TOFU_ASCII", "")
 	t.Setenv("TERM", "xterm-truecolor")
 	identity := NewIdentity(false)
-	for _, pose := range []string{"success sit", "lying"} {
+	for _, pose := range []string{"sitting", "lying"} {
 		view := WelcomeInputView(identity, 60, 20, "draft", 0, "Type to start")
 		if lipgloss.Width(view) > 60 || lipgloss.Height(view) > 20 {
 			t.Fatalf("%s: compact welcome is %dx%d", pose, lipgloss.Width(view), lipgloss.Height(view))

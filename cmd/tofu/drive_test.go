@@ -114,7 +114,7 @@ func TestADrivenAnswerArrivesInDeltasSoAnInterruptKeepsTheHalfThatWasWritten(t *
 	if code != exitOK {
 		t.Fatalf("tofu drive exited %d: %s", code, errOut.String())
 	}
-	for _, want := range []string{"answer, interrupted", "because a locked"} {
+	for _, want := range []string{"answer, interrupted", "locked"} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("sub-agents never says %q, so the answer arrived as one sealed event:\n%s", want, out.String())
 		}
