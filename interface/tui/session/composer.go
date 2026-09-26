@@ -30,13 +30,10 @@ const (
 
 func (m *Model) Cursor() *tea.Cursor {
 	caret := m.composer.Cursor()
-	if caret == nil {
+	if caret == nil || m.composer.Value() == "" {
 		return nil
 	}
 	caret.X += composerPadX
-	if m.composer.Value() == "" {
-		caret.X += cueCells
-	}
 	caret.Y += m.transcriptRows() + m.statusRows() + 1 + len(m.attached) + composerPadTop
 	return caret
 }

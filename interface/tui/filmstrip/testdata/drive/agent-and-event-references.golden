@@ -1,8 +1,8 @@
  tofu  ./tofu/                     chat   agents   edits   shells                     0s [settings] 
                                                                                                     
-                                                                                                    
-  Sub-agents               All activity                                     6-8/8 · wheel ↑ older   
-  3 agents · live acti…                                                                             
+                                                                                                   │
+  Sub-agents               All activity                                     6-8/8 · wheel ↑ older  │
+  3 agents · live acti…                                                                            │
                            │    spawned [&c3]                                                 │    │
   OVERVIEW                 │                                                                  │    │
   › All activity      8    ╰──────────────────────────────────────────────────────────────────╯    │
@@ -19,21 +19,21 @@
                            ╰──────────────────────────────────────────────────────────────────╯    │
   DEAD  1                                                                                          │
     [&c3]             ✗    ╭──────────────────────────────────────────────────────────────────╮    │
-    run the shell suite    │                                                                  │    │
+    run the shell suite    │                                                                  │    ┃
                            │  [&orchestrator]  tool              just now  [tool#9d4f10]      │    ┃
                            │  read                                                            │    ┃
                            │  internal/turn/loop.go                                           │    ┃
                            │  complete                                                        │    ┃
                            │    412 lines, 11.8 KB                                            │    ┃
                            │                                                                  │    ┃
-                           ╰──────────────────────────────────────────────────────────────────╯    ┃
- ctx 118k/250k  |  claude 5h 62%                                                                    
+                           ╰──────────────────────────────────────────────────────────────────╯     
+ ctx 118k/250k  |  claude-sub 5h 62%                                                                
  tofu  ./tofu/                     chat   agents   edits   shells                     0s [settings] 
                                                                                                     
-                                                                                                    
-  Sub-agents               [&c1]                                                   1-3/3 · newest   
-  3 agents · live acti…                                                                             
-                           │                                                                  │    │
+                                                                                                   │
+  Sub-agents               [&c1]                                                   1-3/3 · newest  │
+  3 agents · live acti…                                                                            ┃
+                           │                                                                  │    ┃
   OVERVIEW                 │  [&c1]  owns                                                     │    ┃
     All activity      8    │  internal/judge/policy/**                                        │    ┃
                            │                                                                  │    ┃
@@ -56,15 +56,15 @@
                            │  Resolve( internal/judge                                         │    ┃
                            │  running                                                         │    ┃
                            │                                                                  │    ┃
-                           ╰──────────────────────────────────────────────────────────────────╯    ┃
- ctx 118k/250k  |  claude 5h 62%                                                                    
+                           ╰──────────────────────────────────────────────────────────────────╯     
+ ctx 118k/250k  |  claude-sub 5h 62%                                                                
  tofu  ./tofu/                     chat   agents   edits   shells                     0s [settings] 
                                                                                                     
-                                                                                                    
-  File edits               internal/judge/ledger/floor_rows.go                      [edit#e5a102]   
-  2 files  ·  2 changes    ADDED  ·  2/2 files  ·  +1.2k  +0  ·                                     
-  1 mod · 1 new · 0 del    @internal/judge/ledger/floor_rows.go                                     
-  +1.2k  -2 lines          1181-1200/1200  ·  PgUp/PgDn · n/p                                       
+                                                                                                   │
+  File edits               internal/judge/ledger/floor_rows.go                      [edit#e5a102]  │
+  2 files  ·  2 changes    ADDED  ·  2/2 files  ·  +1.2k  +0  ·                                    │
+  1 mod · 1 new · 0 del    @internal/judge/ledger/floor_rows.go                                    │
+  +1.2k  -2 lines          1181-1200/1200  ·  PgUp/PgDn · n/p                                      │
                                                                                                    │
   AUTHOR                   + 1181  var row1181 = floorRow{Question: "risk", Line: 1181}            │
   › All changes       2    + 1182  var row1182 = floorRow{Question: "risk", Line: 1182}            │
@@ -84,7 +84,7 @@
                            + 1196  var row1196 = floorRow{Question: "risk", Line: 1196}            │
                            + 1197  var row1197 = floorRow{Question: "risk", Line: 1197}            │
                            + 1198  var row1198 = floorRow{Question: "risk", Line: 1198}            │
-                           + 1199  var row1199 = floorRow{Question: "risk", Line: 1199}            ┃
-                           + 1200  var lastRow = floorRow{Question: "risk", Line: 1200}             
+                           + 1199  var row1199 = floorRow{Question: "risk", Line: 1199}            │
+                           + 1200  var lastRow = floorRow{Question: "risk", Line: 1200}            ┃
                                                                                                     
- ctx 118k/250k  |  claude 5h 62%                                                                    
+ ctx 118k/250k  |  claude-sub 5h 62%                                                                

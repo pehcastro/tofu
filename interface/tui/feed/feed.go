@@ -197,7 +197,7 @@ func (m Model) pageHeight() int { return max(1, m.height-headerRows) }
 func (m Model) Track() pointer.Track {
 	_, _, rows := m.layout("")
 	height := m.pageHeight()
-	return pointer.Track{Top: headerRows, Height: height, Total: rows, Visible: height, FromTop: fromTop(rows, height, m.scroll)}
+	return pointer.Track{Total: rows, Visible: height, FromTop: fromTop(rows, height, m.scroll)}
 }
 
 func (m Model) View() string {

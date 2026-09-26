@@ -116,7 +116,7 @@ func (a *App) base() string {
 	top, hits := frame.Top(head, tabs, int(a.tab()), a.width)
 	a.hits = hits
 	status := a.status
-	status.At, status.Mode = head.At, frame.StatusMode(a.text(isettings.StatusBar))
+	status.At, status.Mode, status.InUse = head.At, frame.StatusMode(a.text(isettings.StatusBar)), []string{a.provider}
 	if len(a.requirements) > 0 {
 		status.Mode = frame.StatusHidden
 	}

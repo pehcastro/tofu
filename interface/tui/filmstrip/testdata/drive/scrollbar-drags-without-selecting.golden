@@ -1,8 +1,8 @@
  tofu  ./tofu/                     chat   agents   edits   shells                     0s [settings] 
                                                                                                     
-                                                                                                    
-  Sub-agents               All activity                                     6-8/8 · wheel ↑ older   
-  3 agents · live acti…                                                                             
+                                                                                                   │
+  Sub-agents               All activity                                     6-8/8 · wheel ↑ older  │
+  3 agents · live acti…                                                                            │
                            │    spawned [&c3]                                                 │    │
   OVERVIEW                 │                                                                  │    │
   › All activity      8    ╰──────────────────────────────────────────────────────────────────╯    │
@@ -19,27 +19,27 @@
                            ╰──────────────────────────────────────────────────────────────────╯    │
   DEAD  1                                                                                          │
     [&c3]             ✗    ╭──────────────────────────────────────────────────────────────────╮    │
-    run the shell suite    │                                                                  │    │
+    run the shell suite    │                                                                  │    ┃
                            │  [&orchestrator]  tool              just now  [tool#9d4f10]      │    ┃
                            │  read                                                            │    ┃
                            │  internal/turn/loop.go                                           │    ┃
                            │  complete                                                        │    ┃
                            │    412 lines, 11.8 KB                                            │    ┃
                            │                                                                  │    ┃
-                           ╰──────────────────────────────────────────────────────────────────╯    ┃
- ctx 118k/250k  |  claude 5h 62%                                                                    
+                           ╰──────────────────────────────────────────────────────────────────╯     
+ ctx 118k/250k  |  claude-sub 5h 62%                                                                
  tofu  ./tofu/                     chat   agents   edits   shells                     0s [settings] 
                                                                                                     
-                                                                                                    
-  Sub-agents               All activity                                            1-3/8 · newest   
-  3 agents · live acti…                                                                             
+                                                                                                   ┃
+  Sub-agents               All activity                                            1-3/8 · newest  ┃
+  3 agents · live acti…                                                                            ┃
                            ╭──────────────────────────────────────────────────────────────────╮    ┃
   OVERVIEW                 │                                                                  │    ┃
   › All activity      8    │  [&orchestrator]  message        just now  [message#5e01aa]      │    ┃
                            │  spawn                                                           │    ┃
-  ACTIVE  0                │  read the policy loader                                          │    ┃
-                           │  complete  |  to [&c1]                                           │    ┃
-  WAITING  3               │    spawned [&c1]                                                 │    ┃
+  ACTIVE  0                │  read the policy loader                                          │    │
+                           │  complete  |  to [&c1]                                           │    │
+  WAITING  3               │    spawned [&c1]                                                 │    │
     [&orchestrator]   .    │                                                                  │    │
     Waiting for request    ╰──────────────────────────────────────────────────────────────────╯    │
     [&c1]             .                                                                            │
@@ -56,5 +56,5 @@
                            ╭──────────────────────────────────────────────────────────────────╮    │
                            │                                                                  │    │
                            │  [&c1]  tool                        just now  [tool#7a1c03]      │    │
-                           │  grep                                                            │    │
- ctx 118k/250k  |  claude 5h 62%                                                                    
+                           │  grep                                                            │     
+ ctx 118k/250k  |  claude-sub 5h 62%                                                                

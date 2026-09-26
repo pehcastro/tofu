@@ -20,7 +20,7 @@ clipboard: three sub-agents run: [&c1] reads the loader, [&c2] waits on review, 
     three sub-agents run: [&c1] reads the loader, [&c2] waits on review, [&c3] failed its suite.    
     [tool#9d4f10] is the loop I read.                                                               
                                                                                                     
-    · cooked for 0s | waited 0s [request#9d4f10]                                                    
+                                                                                                    
                                                                                                     
                                                                                                     
                                                                                                     
@@ -37,9 +37,9 @@ complete
 clipboard: complete
  tofu  ./tofu/                     chat   agents   edits   shells                     0s [settings] 
                                                                                                     
-                                                                                                    
-  Sub-agents               All activity                                     6-8/8 · wheel ↑ older   
-  3 agents · live acti…                                                                             
+                                                                                                   │
+  Sub-agents               All activity                                     6-8/8 · wheel ↑ older  │
+  3 agents · live acti…                                                                            │
                            │    spawned [&c3]                                                 │    │
   OVERVIEW                 │                                                                  │    │
   › All activity      8    ╰──────────────────────────────────────────────────────────────────╯    │
@@ -56,12 +56,12 @@ clipboard: complete
                            ╰──────────────────────────────────────────────────────────────────╯    │
   DEAD  1                                                                                          │
     [&c3]             ✗    ╭──────────────────────────────────────────────────────────────────╮    │
-    run the shell suite    │                                                                  │    │
+    run the shell suite    │                                                                  │    ┃
                            │  [&orchestrator]  tool              just now  [tool#9d4f10]      │    ┃
                            │  read                                                            │    ┃
                            │  internal/turn/loop.go                                           │    ┃
                            │  complete                                                        │    ┃
                            │    412 lines, 11.8 KB                                            │    ┃
                            │                                                                  │    ┃
-                           ╰──────────────────────────────────────────────────────────────────╯    ┃
+                           ╰──────────────────────────────────────────────────────────────────╯     
  the selection copied, 8 bytes                                                                      

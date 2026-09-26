@@ -1,9 +1,9 @@
  tofu  ./tofu/                     chat   agents   edits   shells                     0s [settings] 
                                                                                                     
-                                                                                                    
-  Sub-agents               [&c1]                                                   1-3/3 · newest   
-  3 agents · live acti…                                                                             
-                           │                                                                  │    │
+                                                                                                   │
+  Sub-agents               [&c1]                                                   1-3/3 · newest  │
+  3 agents · live acti…                                                                            ┃
+                           │                                                                  │    ┃
   OVERVIEW                 │  [&c1]  owns                                                     │    ┃
     All activity      8    │  internal/judge/policy/**                                        │    ┃
                            │                                                                  │    ┃
@@ -26,13 +26,13 @@
                            │  Resolve( internal/judge                                         │    ┃
                            │  running                                                         │    ┃
                            │                                                                  │    ┃
-                           ╰──────────────────────────────────────────────────────────────────╯    ┃
- ctx 118k/250k  |  claude 5h 62%                                                                    
+                           ╰──────────────────────────────────────────────────────────────────╯     
+ ctx 118k/250k  |  claude-sub 5h 62%                                                                
  tofu  ./tofu/                     chat   agents   edits   shells                     0s [settings] 
                                                                                                     
-                                                                                                    
-  Sub-agents               [&c1]                                                   1-3/3 · newest   
-  3 agents · live acti…                                                                             
+                                                                                                   ┃
+  Sub-agents               [&c1]                                                   1-3/3 · newest  ┃
+  3 agents · live acti…                                                                            ┃
                            ╭──────────────────────────────────────────────────────────────────╮    ┃
   OVERVIEW                 │                                                                  │    ┃
     All activity      8    │  [&c1]  owns                                                     │    ┃
@@ -54,16 +54,16 @@
                            │                                                                  │    ┃
                            │  [&c1]  tool                        just now  [tool#7a1c03]      │    ┃
                            │  grep                                                            │    ┃
-                           │  Resolve( internal/judge                                         │    ┃
-                           │  running                                                         │    ┃
-                           │                                                                  │    │
- ctx 118k/250k  |  claude 5h 62%                                                                    
+                           │  Resolve( internal/judge                                         │    │
+                           │  running                                                         │    │
+                           │                                                                  │     
+ ctx 118k/250k  |  claude-sub 5h 62%                                                                
  tofu  ./tofu/                     chat   agents   edits   shells                     0s [settings] 
                                                                                                     
-                                                                                                    
-  Sub-agents               [&c1]                                                   1-3/3 · newest   
-  3 agents · live acti…                                                                             
-                           │                                                                  │    │
+                                                                                                   │
+  Sub-agents               [&c1]                                                   1-3/3 · newest  │
+  3 agents · live acti…                                                                            ┃
+                           │                                                                  │    ┃
   OVERVIEW                 │  [&c1]  owns                                                     │    ┃
     All activity      8    │  internal/judge/policy/**                                        │    ┃
                            │                                                                  │    ┃
@@ -86,5 +86,5 @@
                            │  Resolve( internal/judge                                         │    ┃
                            │  running                                                         │    ┃
                            │                                                                  │    ┃
-                           ╰──────────────────────────────────────────────────────────────────╯    ┃
- ctx 118k/250k  |  claude 5h 62%                                                                    
+                           ╰──────────────────────────────────────────────────────────────────╯     
+ ctx 118k/250k  |  claude-sub 5h 62%                                                                

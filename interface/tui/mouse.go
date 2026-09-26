@@ -10,11 +10,12 @@ import (
 )
 
 const (
-	selectionUnit = "the selection"
-	settingsHit   = -1
-	cardEdges     = "│╭╮╰╯─"
-	cardSide      = "│"
-	cardPadding   = "  "
+	selectionUnit  = "the selection"
+	settingsHit    = -1
+	cardEdges      = "│╭╮╰╯─"
+	cardSide       = "│"
+	cardPadding    = "  "
+	pageTrackInset = 4
 )
 
 func (a *App) track() (pointer.Track, bool) {
@@ -31,7 +32,10 @@ func (a *App) track() (pointer.Track, bool) {
 	case screenSettings:
 		return track, false
 	}
-	track.Top += bodyTop
+	track.Top = bodyTop
+	if a.current != screenChat {
+		track.Height = a.height - pageTrackInset
+	}
 	return track, len(a.requirements) == 0
 }
 

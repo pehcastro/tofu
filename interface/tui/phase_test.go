@@ -157,6 +157,7 @@ func workedAfterWaiting(t *testing.T, wait, work time.Duration) string {
 	app.Update(Event{Kind: EventStats, Model: "claude-opus-5"})
 	at = at.Add(work)
 	app.Update(Event{Kind: EventDone, Text: "finished in"})
+	app.Update(Closed{})
 	content := ansi.Strip(app.View().Content)
 	for _, line := range strings.Split(content, "\n") {
 		if strings.Contains(line, "finished in") {
@@ -169,7 +170,7 @@ func workedAfterWaiting(t *testing.T, wait, work time.Duration) string {
 
 func TestTheClosingLineIsTheWorkAndCarriesNoQuota(t *testing.T) {
 	line := workedAfterWaiting(t, 5*time.Second, 13*time.Second)
-	if !strings.HasPrefix(line, "· finished in 13s") {
+	if !strings.HasPrefix(line, "finished in 13s") {
 		t.Errorf("the closing line reads %q, want finished in 13s", line)
 	}
 	if strings.Contains(line, "quota") || strings.Contains(line, "ms") {
@@ -191,6 +192,7 @@ func TestAStoppedTurnAndACappedOneSayWhatEndedThem(t *testing.T) {
 		app.Update(Event{Kind: EventStats, Model: "claude-opus-5"})
 		at = at.Add(13 * time.Second)
 		app.Update(Event{Kind: EventDone, Text: words})
+		app.Update(Closed{})
 		content := ansi.Strip(app.View().Content)
 		if !strings.Contains(content, words+" 13s") {
 			t.Errorf("the closing line does not read %q\n%s", words+" 13s", content)

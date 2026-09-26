@@ -1,8 +1,8 @@
  tofu  ./tofu/                     chat   agents   edits   shells                     0s [settings] 
                                                                                                     
-                                                                                                    
-  Sub-agents               All activity                                            1-1/1 · newest   
-  0 agents · live acti…                                                                             
+                                                                                                   │
+  Sub-agents               All activity                                            1-1/1 · newest  │
+  0 agents · live acti…                                                                            │
                            │    line 39 of the tall result                                    │    │
   OVERVIEW                 │    line 40 of the tall result                                    │    │
   › All activity      1    │    line 41 of the tall result                                    │    │
@@ -17,8 +17,8 @@
                            │    line 50 of the tall result                                    │    │
                            │    line 51 of the tall result                                    │    │
                            │    line 52 of the tall result                                    │    │
-                           │    line 53 of the tall result                                    │    │
-                           │    line 54 of the tall result                                    │    │
+                           │    line 53 of the tall result                                    │    ┃
+                           │    line 54 of the tall result                                    │    ┃
                            │    line 55 of the tall result                                    │    ┃
                            │    line 56 of the tall result                                    │    ┃
                            │    line 57 of the tall result                                    │    ┃
@@ -26,13 +26,13 @@
                            │    line 59 of the tall result                                    │    ┃
                            │    line 60 of the tall result                                    │    ┃
                            │                                                                  │    ┃
-                           ╰──────────────────────────────────────────────────────────────────╯    ┃
- ctx 118k/250k  |  claude 5h 62%                                                                    
+                           ╰──────────────────────────────────────────────────────────────────╯     
+ ctx 118k/250k  |  claude-sub 5h 62%                                                                
  tofu  ./tofu/                     chat   agents   edits   shells                     0s [settings] 
                                                                                                     
-                                                                                                    
-  Sub-agents               All activity                                            1-1/1 · newest   
-  0 agents · live acti…                                                                             
+                                                                                                   │
+  Sub-agents               All activity                                            1-1/1 · newest  │
+  0 agents · live acti…                                                                            │
                            │    line 30 of the tall result                                    │    │
   OVERVIEW                 │    line 31 of the tall result                                    │    │
   › All activity      1    │    line 32 of the tall result                                    │    │
@@ -43,8 +43,8 @@
     [&orchestrator]   .    │    line 37 of the tall result                                    │    │
     Waiting for request    │    line 38 of the tall result                                    │    │
                            │    line 39 of the tall result                                    │    │
-  DEAD  0                  │    line 40 of the tall result                                    │    │
-                           │    line 41 of the tall result                                    │    │
+  DEAD  0                  │    line 40 of the tall result                                    │    ┃
+                           │    line 41 of the tall result                                    │    ┃
                            │    line 42 of the tall result                                    │    ┃
                            │    line 43 of the tall result                                    │    ┃
                            │    line 44 of the tall result                                    │    ┃
@@ -52,25 +52,25 @@
                            │    line 46 of the tall result                                    │    ┃
                            │    line 47 of the tall result                                    │    ┃
                            │    line 48 of the tall result                                    │    ┃
-                           │    line 49 of the tall result                                    │    ┃
+                           │    line 49 of the tall result                                    │    │
                            │    line 50 of the tall result                                    │    │
                            │    line 51 of the tall result                                    │    │
                            │    line 52 of the tall result                                    │    │
-                           │    line 53 of the tall result                                    │    │
- ctx 118k/250k  |  claude 5h 62%                                                                    
+                           │    line 53 of the tall result                                    │     
+ ctx 118k/250k  |  claude-sub 5h 62%                                                                
  tofu  ./tofu/                     chat   agents   edits   shells                     0s [settings] 
                                                                                                     
-                                                                                                    
-  Sub-agents               All activity                                            1-1/1 · newest   
-  0 agents · live acti…                                                                             
+                                                                                                   ┃
+  Sub-agents               All activity                                            1-1/1 · newest  ┃
+  0 agents · live acti…                                                                            ┃
                            ╭──────────────────────────────────────────────────────────────────╮    ┃
   OVERVIEW                 │                                                                  │    ┃
   › All activity      1    │  [&orchestrator]  tool              just now  [tool#6f2b01]      │    ┃
                            │  bash                                                            │    ┃
   ACTIVE  0                │  go test -v ./internal/turn/...                                  │    ┃
                            │  complete                                                        │    ┃
-  WAITING  1               │    line 1 of the tall result                                     │    ┃
-    [&orchestrator]   .    │    line 2 of the tall result                                     │    ┃
+  WAITING  1               │    line 1 of the tall result                                     │    │
+    [&orchestrator]   .    │    line 2 of the tall result                                     │    │
     Waiting for request    │    line 3 of the tall result                                     │    │
                            │    line 4 of the tall result                                     │    │
   DEAD  0                  │    line 5 of the tall result                                     │    │
@@ -86,5 +86,5 @@
                            │    line 15 of the tall result                                    │    │
                            │    line 16 of the tall result                                    │    │
                            │    line 17 of the tall result                                    │    │
-                           │    line 18 of the tall result                                    │    │
- ctx 118k/250k  |  claude 5h 62%                                                                    
+                           │    line 18 of the tall result                                    │     
+ ctx 118k/250k  |  claude-sub 5h 62%                                                                

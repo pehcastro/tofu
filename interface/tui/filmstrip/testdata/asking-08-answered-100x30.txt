@@ -15,7 +15,7 @@
     [&orchestrator]                                                      14:32  [message#b7e201]    
     the force push was the only way to move the branch, and it is done.                             
                                                                                                     
-    · cooked for 3s | waited 0s [request#c1]                                                        
+                                                                                                    
                                                                                                     
                                                                                                     
                                                                                                     
@@ -27,4 +27,4 @@
                                                                                                     
   █ Ask tofu to build, inspect, or delegate                                                         
                                                                                                     
- ctx 118k/250k  |  claude 5h 62%  [&orchestrator]  ·  claude-sub/claude-opus-5  ·  reasoning medium 
+ ctx 118k/250k  |  claude 62%     [&orchestrator]  ·  claude-sub/claude-opus-5  ·  reasoning medium 

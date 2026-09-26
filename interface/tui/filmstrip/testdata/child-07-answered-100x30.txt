@@ -17,7 +17,7 @@
     [&orchestrator]                                                      14:33  [message#d41c08]    
     the child read it: the loader reads the lock before the mode.                                   
                                                                                                     
-    · cooked for 1m 18s | waited 0s [request#815e77]                                                
+                                                                                                    
                                                                                                     
                                                                                                     
                                                                                                     
@@ -27,4 +27,4 @@
                                                                                                     
   █ Ask tofu to build, inspect, or delegate                                                         
                                                                                                     
- ctx 118k/250k  |  claude 5h 62%  [&orchestrator]  ·  claude-sub/claude-opus-5  ·  reasoning medium 
+ ctx 118k/250k  |  claude 62%     [&orchestrator]  ·  claude-sub/claude-opus-5  ·  reasoning medium 

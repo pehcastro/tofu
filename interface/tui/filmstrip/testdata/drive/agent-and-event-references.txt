@@ -13,6 +13,6 @@ key alt+1
 type edits
 key enter
 wait holds the 1200 floor rows
-click 46 20
+click 46 22
 wait ADDED  ·  2/2 files
 screen

@@ -7,7 +7,7 @@
                                                                                     
                   Subscription status                                      esc      
                                                                                     
-                   claude                                                           
+                   claude-sub                                                       
                    5h        ━━━━━━━━━━━───────        62% · resets in 3h 28m       
                    weekly    ━━━━━━────────────         31% · resets in 1d 6h       
                                                                                     
@@ -27,4 +27,4 @@
                                                                                                     
   ▯ Ask tofu to build, inspect, or delegate                                                         
                                                                                                     
- ctx 118k/250k  |  claude 5h 62%  [&orchestrator]  ·  claude-sub/claude-opus-5  ·  reasoning medium 
+ ctx 118k/250k  |  claude 62%     [&orchestrator]  ·  claude-sub/claude-opus-5  ·  reasoning medium 

@@ -21,7 +21,6 @@ const (
 	trackGap       = 1
 	entryTop       = 4
 	entryRows      = 2
-	outputTop      = 12
 	outputChrome   = 15
 	outputMinimum  = 4
 	pageMinimum    = 4
@@ -191,7 +190,7 @@ func (m Model) Split() int {
 
 func (m Model) Track() pointer.Track {
 	height, total := m.outputHeight(), m.logLines()
-	return pointer.Track{Top: outputTop + m.extraFactRows(), Height: height, Total: total, Visible: height, FromTop: max(0, total-height-m.scroll)}
+	return pointer.Track{Total: total, Visible: height, FromTop: max(0, total-height-m.scroll)}
 }
 
 func (m Model) outputHeight() int {

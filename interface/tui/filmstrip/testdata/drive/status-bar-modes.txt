@@ -20,7 +20,7 @@ key enter
 wait hidden  ▾
 key esc
 wait Ask tofu
-absent claude 5h
+absent 62%
 screen
 type /settings
 key enter
@@ -30,5 +30,5 @@ key enter
 wait compact  ▾
 key esc
 wait Ask tofu
-wait claude 5h 62%
+wait claude 62%
 screen

@@ -16,18 +16,19 @@ func TestTypingAndDeletingLeavesThePlaceholderWholeOrNothing(t *testing.T) {
 	model.SetSize(80, 24)
 	model.Focus()
 
-	pristine := model.Cursor()
-	if pristine == nil || pristine.Shape != tea.CursorBar {
-		t.Fatalf("the pristine cursor shape is %v, want a bar that never covers a placeholder character", pristine)
+	if pristine := model.Cursor(); pristine != nil {
+		t.Fatalf("the pristine composer sets a terminal cursor %v beside its cue", pristine)
 	}
 	model.Update(tea.KeyPressMsg{Code: 'x', Text: "x"})
+	if typed := model.Cursor(); typed == nil || typed.Shape != tea.CursorBar {
+		t.Fatalf("the typed cursor is %v, want a bar", typed)
+	}
 	model.Update(tea.KeyPressMsg{Code: tea.KeyBackspace})
 	if value := model.Value(); value != "" {
 		t.Fatalf("the composer reads %q after typing and deleting, want empty", value)
 	}
-	after := model.Cursor()
-	if after == nil || after.Shape != tea.CursorBar {
-		t.Fatalf("the cursor shape after delete is %v, want a bar that never covers a placeholder character", after)
+	if after := model.Cursor(); after != nil {
+		t.Fatalf("the emptied composer sets a terminal cursor %v beside its cue", after)
 	}
 }
 

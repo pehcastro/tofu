@@ -333,15 +333,8 @@ func (m Model) Track() pointer.Track {
 	if len(m.edits) == 0 {
 		return pointer.Track{}
 	}
-	top := indexChrome - 1
-	if m.reading {
-		top = indexChrome
-	}
-	if m.Split() > 0 {
-		top++
-	}
 	shown := m.pane()
-	return pointer.Track{Top: top, Height: shown.visible, Total: shown.total, Visible: shown.visible, FromTop: shown.from}
+	return pointer.Track{Total: shown.total, Visible: shown.visible, FromTop: shown.from}
 }
 
 func (m Model) View() string {

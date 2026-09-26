@@ -51,7 +51,7 @@ func (c Commands) modal(width, height int) (modal string, start int, labels []st
 	modalWidth := min(dialogMaxWidth, width-dialogInset)
 	rowWidth := max(rowMinWidth, modalWidth-2*dialogPadding)
 	c.list.input.SetWidth(rowWidth - filterInset)
-	band := lipgloss.NewStyle().Width(rowWidth).Background(lipgloss.Color(string(look.PanelLight))).Border(lipgloss.NormalBorder(), false, false, false, true).BorderForeground(lipgloss.Color(string(look.Mint))).Render(c.list.input.View())
+	band := lipgloss.NewStyle().Width(rowWidth).Background(lipgloss.Color(string(look.PanelLight))).Render(c.list.input.View())
 	start, end := look.VisibleRows(len(c.list.shown), c.list.cursor, max(minVisibleRows, (height-listChrome)/modalRowLines))
 	var rows []string
 	for i := start; i < end; i++ {

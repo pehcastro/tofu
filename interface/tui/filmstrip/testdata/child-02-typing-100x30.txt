@@ -27,4 +27,4 @@
                                                                                                     
   why does the gate read the policy first?                                                          
                                                                                                     
- ctx 118k/250k  |  claude 5h 62%  [&orchestrator]  ·  claude-sub/claude-opus-5  ·  reasoning medium 
+ ctx 118k/250k  |  claude 62%     [&orchestrator]  ·  claude-sub/claude-opus-5  ·  reasoning medium 

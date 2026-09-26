@@ -9,16 +9,20 @@ import (
 	"github.com/charmbracelet/x/ansi"
 )
 
-var closingShape = regexp.MustCompile(`^· .+ \d+s \| waited \d+s\s+\[request#([0-9a-zA-Z-]+)\]$`)
+var closingShape = regexp.MustCompile(`^.+ \d+s\s+\|\s+waited \d+s\s+\[request#([0-9a-zA-Z-]+)\]$`)
 
 func closingID(t *testing.T, app *App) string {
 	t.Helper()
-	for _, line := range strings.Split(ansi.Strip(app.View().Content), "\n") {
+	screen := ansi.Strip(app.View().Content)
+	if closings := strings.Count(screen, "waited "); closings != 1 {
+		t.Fatalf("%d lines close the turn, want one\n%s", closings, screen)
+	}
+	for _, line := range strings.Split(screen, "\n") {
 		if found := closingShape.FindStringSubmatch(strings.TrimSpace(line)); found != nil {
 			return found[1]
 		}
 	}
-	t.Fatalf("no line closes the turn with a duration and an id\n%s", ansi.Strip(app.View().Content))
+	t.Fatalf("no line closes the turn with a duration and an id\n%s", screen)
 	return ""
 }
 

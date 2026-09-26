@@ -47,7 +47,11 @@ func DialogChoice(selected bool, label string) string {
 }
 
 func ModalRow(width int, selected bool, label, description, key string) string {
-	return Sides(DialogChoice(selected, label), Faint(key), width) + "\n  " + Muted(description)
+	name := idleMarker + Style(Text).Render(label)
+	if selected {
+		name = DialogChoice(true, label)
+	}
+	return Sides(name, Faint(key), width) + "\n" + idleMarker + Muted(ansi.Truncate(description, width-len(idleMarker), "…"))
 }
 
 func VisibleRows(count, cursor, limit int) (start, end int) {

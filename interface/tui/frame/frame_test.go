@@ -64,6 +64,7 @@ func BenchmarkTopAndFooter(b *testing.B) {
 	status := Status{
 		Context: Context{Used: 118000, Budget: konst.ContextCeilingTokens},
 		Quotas:  []Quota{{Label: "claude-sub #1", Fraction: 0.62, Reported: true, ResetsAt: testHead.At.Add(3 * time.Hour)}},
+		InUse:   []string{"claude-sub"},
 		At:      testHead.At,
 	}
 	right := ChatRight("claude-sub/claude-opus-5", "high")

@@ -27,7 +27,7 @@
                                                                                                     
   12 abx3y4                                                                                         
                                                                                                     
- ctx 118k/250k  |  claude 5h 62%  [&orchestrator]  ·  claude-sub/claude-opus-5  ·  reasoning medium 
+ ctx 118k/250k  |  claude 62%     [&orchestrator]  ·  claude-sub/claude-opus-5  ·  reasoning medium 
  tofu  ./tofu/                     chat   agents   edits   shells                     0s [settings] 
                                                                                                     
                                                                                                     
@@ -57,4 +57,4 @@
                                                                                                     
                                                                                                     
                                                                                                     
- ctx 118k/250k  |  claude 5h 62%                                                                    
+ ctx 118k/250k  |  claude-sub 5h 62%                                                                

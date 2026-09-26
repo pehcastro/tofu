@@ -15,7 +15,6 @@ import (
 	"tofu/interface/tui/paste"
 	"tofu/interface/tui/progress"
 	"tofu/interface/tui/subagent"
-	"tofu/interface/tui/trace"
 	"tofu/internal/konst"
 	"tofu/internal/widget"
 )
@@ -420,7 +419,7 @@ func (m *Model) Close(words, id string) {
 	if id != "" {
 		m.cookedID = id
 	}
-	m.Append(Entry{Kind: Note, Body: m.cooked + "  [request" + trace.Short(m.cookedID) + "]"})
+	m.seal()
 }
 
 func (m *Model) TakePartial() (string, bool) {

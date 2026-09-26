@@ -56,6 +56,7 @@ type Status struct {
 	CacheRead int
 	Decisions int
 	Quotas    []Quota
+	InUse     []string
 	Agents    int
 	At        time.Time
 	Note      string

@@ -93,8 +93,8 @@ func TestWithBothStoredNoSetupIsDrawnAndTheComposerHasFocus(t *testing.T) {
 	if !strings.Contains(frame, session.Placeholder) {
 		t.Errorf("the composer is not drawn\n%s", frame)
 	}
-	if app.View().Cursor == nil {
-		t.Errorf("the composer has no cursor, so it never took focus\n%s", frame)
+	if !strings.Contains(frame, "█ "+session.Placeholder) {
+		t.Errorf("the composer does not draw its focused cue, so it never took focus\n%s", frame)
 	}
 	t.Log("\n" + frame)
 }

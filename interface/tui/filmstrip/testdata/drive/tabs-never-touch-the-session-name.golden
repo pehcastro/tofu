@@ -17,7 +17,7 @@
                                                             
   █ Ask tofu to build, inspect, or delegate                 
                                                             
- ctx 118k/250k  |  claude 5h 62%                            
+ ctx 118k/250k  |  claude-sub 5h 62%                        
  tofu  ./tofu/         chat   agents   edits   shells          0s [settings] 
                                                                              
                                                                              
@@ -41,7 +41,7 @@
                                                                              
   █ Ask tofu to build, inspect, or delegate                                  
                                                                              
- ctx 118k/250k  |  claude 5h 62%                                             
+ ctx 118k/250k  |  claude-sub 5h 62%                                         
  tofu  ./tofu/           chat   agents   edits   shells           0s [settings] 
                                                                                 
                                                                                 
@@ -65,7 +65,7 @@
                                                                                 
   █ Ask tofu to build, inspect, or delegate                                     
                                                                                 
- ctx 118k/250k  |  claude 5h 62%                                                
+ ctx 118k/250k  |  claude-sub 5h 62%                                            
  tofu  ./tofu/                       chat   agents   edits   shells                       0s [settings] 
                                                                                                         
                                                                                                         
@@ -95,7 +95,7 @@
                                                                                                         
   █ Ask tofu to build, inspect, or delegate                                                             
                                                                                                         
- ctx 118k/250k  |  claude 5h 62%      [&orchestrator]  ·  claude-sub/claude-opus-5  ·  reasoning medium 
+ ctx 118k/250k  |  claude-sub 5h 62%  [&orchestrator]  ·  claude-sub/claude-opus-5  ·  reasoning medium 
  tofu   |  ./tofu/         chat   sub-agents   file edits   shells   amber-cedar-otter  |  0s [settings] 
                                                                                                          
                                                                                                          
@@ -125,7 +125,7 @@
                                                                                                          
   █ Ask tofu to build, inspect, or delegate                                                              
                                                                                                          
- ctx 118k/250k  |  claude 5h 62%       [&orchestrator]  ·  claude-sub/claude-opus-5  ·  reasoning medium 
+ ctx 118k/250k  |  claude-sub 5h 62%   [&orchestrator]  ·  claude-sub/claude-opus-5  ·  reasoning medium 
  tofu   |  ./tofu/         chat   sub-agents   file edits   shells   amber-cedar-otter [session#3c5f71] | 0s [settings] 
                                                                                                                         
                                                                                                                         
@@ -161,7 +161,7 @@
                                                                                                                         
   █ Ask tofu to build, inspect, or delegate                                                                             
                                                                                                                         
- ctx 118k/250k  |  claude 5h 62%                      [&orchestrator]  ·  claude-sub/claude-opus-5  ·  reasoning medium 
+ ctx 118k/250k  |  claude-sub 5h 62%                  [&orchestrator]  ·  claude-sub/claude-opus-5  ·  reasoning medium 
  tofu   |  ./tofu/ (git:develop)               chat   sub-agents   file edits   shells   amber-cedar-otter [session#3c5f71] | 0s [settings] 
                                                                                                                                             
                                                                                                                                             
@@ -201,7 +201,7 @@
                                                                                                                                             
   █ Ask tofu to build, inspect, or delegate                                                                                                 
                                                                                                                                             
- ctx 118k/250k  |  claude 5h 62%                                          [&orchestrator]  ·  claude-sub/claude-opus-5  ·  reasoning medium 
+ ctx 118k/250k  |  claude-sub 5h 62%                                      [&orchestrator]  ·  claude-sub/claude-opus-5  ·  reasoning medium 
  tofu   |  ./tofu/ (git:develop)                    chat   sub-agents   file edits   shells   amber-cedar-otter [session#3c5f71] | 0s [settings] 
                                                                                                                                                  
                                                                                                                                                  
@@ -241,7 +241,7 @@
                                                                                                                                                  
   █ Ask tofu to build, inspect, or delegate                                                                                                      
                                                                                                                                                  
- ctx 118k/250k  |  claude 5h 62%                                               [&orchestrator]  ·  claude-sub/claude-opus-5  ·  reasoning medium 
+ ctx 118k/250k  |  claude-sub 5h 62%                                           [&orchestrator]  ·  claude-sub/claude-opus-5  ·  reasoning medium 
  tofu   |  ./tofu/ (git:develop)                            chat   sub-agents   file edits   shells          amber-cedar-otter [session#3c5f71] | 0s [settings] 
                                                                                                                                                                 
                                                                                                                                                                 
@@ -281,4 +281,4 @@
                                                                                                                                                                 
   █ Ask tofu to build, inspect, or delegate                                                                                                                     
                                                                                                                                                                 
- ctx 118k/250k  |  claude 5h 62%                                                              [&orchestrator]  ·  claude-sub/claude-opus-5  ·  reasoning medium 
+ ctx 118k/250k  |  claude-sub 5h 62%                                                          [&orchestrator]  ·  claude-sub/claude-opus-5  ·  reasoning medium 

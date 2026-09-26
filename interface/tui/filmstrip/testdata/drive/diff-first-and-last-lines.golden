@@ -1,10 +1,10 @@
  tofu  ./tofu/                     chat   agents   edits   shells                     0s [settings] 
                                                                                                     
-                                                                                                    
-  File edits               internal/judge/ledger/floor_rows.go                      [edit#e5a102]   
-  2 files  ·  2 changes    ADDED  ·  2/2 files  ·  +1.2k  +0  ·                                     
-  1 mod · 1 new · 0 del    @internal/judge/ledger/floor_rows.go                                     
-  +1.2k  -2 lines          1181-1200/1200  ·  PgUp/PgDn · n/p                                       
+                                                                                                   │
+  File edits               internal/judge/ledger/floor_rows.go                      [edit#e5a102]  │
+  2 files  ·  2 changes    ADDED  ·  2/2 files  ·  +1.2k  +0  ·                                    │
+  1 mod · 1 new · 0 del    @internal/judge/ledger/floor_rows.go                                    │
+  +1.2k  -2 lines          1181-1200/1200  ·  PgUp/PgDn · n/p                                      │
                                                                                                    │
   AUTHOR                   + 1181  var row1181 = floorRow{Question: "risk", Line: 1181}            │
   › All changes       2    + 1182  var row1182 = floorRow{Question: "risk", Line: 1182}            │
@@ -24,18 +24,18 @@
                            + 1196  var row1196 = floorRow{Question: "risk", Line: 1196}            │
                            + 1197  var row1197 = floorRow{Question: "risk", Line: 1197}            │
                            + 1198  var row1198 = floorRow{Question: "risk", Line: 1198}            │
-                           + 1199  var row1199 = floorRow{Question: "risk", Line: 1199}            ┃
-                           + 1200  var lastRow = floorRow{Question: "risk", Line: 1200}             
+                           + 1199  var row1199 = floorRow{Question: "risk", Line: 1199}            │
+                           + 1200  var lastRow = floorRow{Question: "risk", Line: 1200}            ┃
                                                                                                     
- ctx 118k/250k  |  claude 5h 62%                                                                    
+ ctx 118k/250k  |  claude-sub 5h 62%                                                                
  tofu  ./tofu/                     chat   agents   edits   shells                     0s [settings] 
                                                                                                     
-                                                                                                    
-  File edits               internal/judge/ledger/floor_rows.go                      [edit#e5a102]   
-  2 files  ·  2 changes    ADDED  ·  2/2 files  ·  +1.2k  +0  ·                                     
-  1 mod · 1 new · 0 del    @internal/judge/ledger/floor_rows.go                                     
-  +1.2k  -2 lines          1-20/1200  ·  PgUp/PgDn · n/p                                            
                                                                                                    ┃
+  File edits               internal/judge/ledger/floor_rows.go                      [edit#e5a102]  │
+  2 files  ·  2 changes    ADDED  ·  2/2 files  ·  +1.2k  +0  ·                                    │
+  1 mod · 1 new · 0 del    @internal/judge/ledger/floor_rows.go                                    │
+  +1.2k  -2 lines          1-20/1200  ·  PgUp/PgDn · n/p                                           │
+                                                                                                   │
   AUTHOR                   +    1  package ledger                                                  │
   › All changes       2    +    2  var row2 = floorRow{Question: "risk", Line: 2}                  │
     &tofu     +1.2k  -2    +    3  var row3 = floorRow{Question: "risk", Line: 3}                  │
@@ -55,6 +55,6 @@
                            +   17  var row17 = floorRow{Question: "risk", Line: 17}                │
                            +   18  var row18 = floorRow{Question: "risk", Line: 18}                │
                            +   19  var row19 = floorRow{Question: "risk", Line: 19}                │
-                           +   20  var row20 = floorRow{Question: "risk", Line: 20}                 
+                           +   20  var row20 = floorRow{Question: "risk", Line: 20}                │
                                                                                                     
- ctx 118k/250k  |  claude 5h 62%                                                                    
+ ctx 118k/250k  |  claude-sub 5h 62%                                                                

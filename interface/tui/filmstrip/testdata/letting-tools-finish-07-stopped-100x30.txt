@@ -11,7 +11,7 @@
         [tool#c2]                                                                                   
     · stopping the model, and letting the running tools finish                                      
     · stopping the turn                                                                             
-    · cooked for 3s | waited 0s [request#c2]                                                        
+                                                                                                    
                                                                                                     
                                                                                                     
                                                                                                     
@@ -27,4 +27,4 @@
                                                                                                     
   █ Ask tofu to build, inspect, or delegate                                                         
                                                                                                     
- ctx 118k/250k  |  claude 5h 62%  [&orchestrator]  ·  claude-sub/claude-opus-5  ·  reasoning medium 
+ ctx 118k/250k  |  claude 62%     [&orchestrator]  ·  claude-sub/claude-opus-5  ·  reasoning medium 

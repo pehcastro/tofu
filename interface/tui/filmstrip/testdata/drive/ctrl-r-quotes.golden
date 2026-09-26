@@ -19,7 +19,7 @@ clipboard: three sub-agents run: [&c1] reads the
     three sub-agents run: [&c1] reads the loader, [&c2] waits on review, [&c3] failed its suite.    
     [tool#9d4f10] is the loop I read.                                                               
                                                                                                     
-    · cooked for 0s | waited 0s [request#9d4f10]                                                    
+                                                                                                    
                                                                                                     
                                                                                                     
                                                                                                     
@@ -49,7 +49,7 @@ clipboard: three sub-agents run: [&c1] reads the
     three sub-agents run: [&c1] reads the loader, [&c2] waits on review, [&c3] failed its suite.    
     [tool#9d4f10] is the loop I read.                                                               
                                                                                                     
-    · cooked for 0s | waited 0s [request#9d4f10]                                                    
+                                                                                                    
                                                                                                     
                                                                                                     
   cooked for 0s  |  waited 0s  [request#9d4f10]                                                     

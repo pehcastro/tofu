@@ -13,7 +13,7 @@
     three sub-ag  › chat                                                            d its suite.
     [tool#9d4f10    sub-agents                                                      
                     file edits                                                      
-    · cooked for    shells                                                          
+                    shells                                                          
                     settings                                                        
                     &c1  read the policy loader                                     
                     &c2  write the ledger floor test                                
@@ -27,4 +27,4 @@
                                                                                                     
   ▯ Ask tofu to build, inspect, or delegate                                                         
                                                                                                     
- ctx 118k/250k  |  claude 5h 62%  [&orchestrator]  ·  claude-sub/claude-opus-5  ·  reasoning medium 
+ ctx 118k/250k  |  claude 62%     [&orchestrator]  ·  claude-sub/claude-opus-5  ·  reasoning medium 

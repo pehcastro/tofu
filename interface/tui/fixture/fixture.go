@@ -47,7 +47,7 @@ func RiskLevels() []string {
 
 func Quotas(at time.Time) []frame.Quota {
 	return []frame.Quota{
-		{Label: "claude 5h", Fraction: 0.62, Reported: true, ResetsAt: at.Add(3*time.Hour + 28*time.Minute)},
-		{Label: "claude weekly", Fraction: 0.31, Reported: true, ResetsAt: at.Add(30 * time.Hour)},
+		{Label: Provider + " 5h", Fraction: 0.62, Reported: true, ResetsAt: at.Add(3*time.Hour + 28*time.Minute)},
+		{Label: Provider + " weekly", Fraction: 0.31, Reported: true, ResetsAt: at.Add(30 * time.Hour)},
 	}
 }

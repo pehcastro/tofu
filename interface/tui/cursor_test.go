@@ -73,11 +73,14 @@ func TestTheCursorMovesWithTheCaret(t *testing.T) {
 
 func TestANewlineMovesTheCursorDownOneRow(t *testing.T) {
 	app := cursorApp(t)
-	first := app.View().Cursor
-	if first == nil {
-		t.Fatal("the empty composer reports no cursor")
+	if empty := app.View().Cursor; empty != nil {
+		t.Fatalf("the empty composer sets a terminal cursor at %d,%d beside its cue", empty.X, empty.Y)
 	}
 	typeText(app, "one")
+	first := app.View().Cursor
+	if first == nil {
+		t.Fatal("the typed composer reports no cursor")
+	}
 	app.Update(tea.KeyPressMsg{Code: tea.KeyEnter, Mod: tea.ModShift})
 	typeText(app, "two")
 	view := app.View()

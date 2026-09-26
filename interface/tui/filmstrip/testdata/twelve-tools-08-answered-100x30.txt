@@ -11,7 +11,7 @@
     [&orchestrator]                                                      14:32  [message#a1f3c9]    
     twelve reads and the loop only ever shows the one that is running.                              
                                                                                                     
-    · cooked for 16s | waited 0s [request#c12]                                                      
+                                                                                                    
                                                                                                     
                                                                                                     
                                                                                                     
@@ -27,4 +27,4 @@
                                                                                                     
   █ Ask tofu to build, inspect, or delegate                                                         
                                                                                                     
- ctx 118k/250k  |  claude 5h 62%  [&orchestrator]  ·  claude-sub/claude-opus-5  ·  reasoning medium 
+ ctx 118k/250k  |  claude 62%     [&orchestrator]  ·  claude-sub/claude-opus-5  ·  reasoning medium 
