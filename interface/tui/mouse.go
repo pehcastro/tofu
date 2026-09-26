@@ -12,38 +12,34 @@ const (
 	settingsHit   = -1
 )
 
-type scrolledPane interface {
-	Track() pointer.Track
-	Split() int
-}
-
-func (a *App) scrolledPane() (scrolledPane, bool) {
-	switch a.current {
-	case screenAgents:
-		return a.feed, true
-	case screenEdits:
-		return a.edits, true
-	case screenShells:
-		return a.shells, true
-	case screenChat, screenSettings:
-	}
-	return nil, false
-}
-
 func (a *App) track() (pointer.Track, bool) {
-	scrolled, has := a.scrolledPane()
-	if !has || len(a.requirements) > 0 {
-		return pointer.Track{}, false
+	var track pointer.Track
+	switch a.current {
+	case screenChat:
+		track = a.view.Track()
+	case screenAgents:
+		track = a.feed.Track()
+	case screenEdits:
+		track = a.edits.Track()
+	case screenShells:
+		track = a.shells.Track()
+	case screenSettings:
+		return track, false
 	}
-	track := scrolled.Track()
 	track.Top += bodyTop
-	return track, true
+	return track, len(a.requirements) == 0
 }
 
 func (a *App) pane() pointer.Pane {
 	split := 0
-	if scrolled, has := a.scrolledPane(); has {
-		split = scrolled.Split()
+	switch a.current {
+	case screenAgents:
+		split = a.feed.Split()
+	case screenEdits:
+		split = a.edits.Split()
+	case screenShells:
+		split = a.shells.Split()
+	case screenChat, screenSettings:
 	}
 	return pointer.Pane{Split: split, Width: a.width, Top: bodyTop, Bottom: a.height - 2}
 }
@@ -202,7 +198,7 @@ func (a *App) wheel(msg tea.MouseWheelMsg) tea.Cmd {
 		}
 		a.view.Scroll(turn)
 	case screenAgents:
-		a.feed.Wheel(msg.X, msg.Y-bodyTop, delta)
+		a.feed.Wheel(delta)
 	case screenEdits:
 		a.edits.Wheel(delta < 0)
 	case screenShells:
@@ -214,23 +210,16 @@ func (a *App) wheel(msg tea.MouseWheelMsg) tea.Cmd {
 }
 
 func (a *App) scrollTo(behindNewest int) {
-	track, scrolls := a.track()
-	if !scrolls {
-		return
-	}
-	rows := behindNewest - (track.Total - track.Visible - track.FromTop)
 	switch a.current {
+	case screenChat:
+		a.view.SetScroll(behindNewest)
 	case screenAgents:
-		a.feed.Wheel(0, 0, -rows/wheelRows)
+		a.feed.SetScroll(behindNewest)
 	case screenEdits:
-		for ; rows >= wheelRows; rows -= wheelRows {
-			a.edits.Wheel(true)
-		}
-		for ; rows <= -wheelRows; rows += wheelRows {
-			a.edits.Wheel(false)
-		}
+		a.edits.SetScroll(behindNewest)
 	case screenShells:
-		a.shells.Wheel(-rows)
-	case screenChat, screenSettings:
+		track := a.shells.Track()
+		a.shells.Wheel(track.Total - track.Visible - track.FromTop - behindNewest)
+	case screenSettings:
 	}
 }

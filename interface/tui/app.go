@@ -457,6 +457,7 @@ func (a *App) beat() {
 	a.pulse++
 	if a.text(isettings.Animations) != animationsOff {
 		a.feed.SetFrame(a.pulse)
+		a.view.SetFrame(a.pulse)
 	}
 	if a.status.Note != "" && a.pulse-a.noticeAt > noticePulses {
 		a.status.Note = ""
@@ -468,9 +469,17 @@ func (a *App) notify(note string) {
 }
 
 func (a *App) show(to screen) tea.Cmd {
-	a.current, a.dialogs = to, nil
+	if to != screenSettings && a.settings.CloseDialog().Action == settings.ActionRevert {
+		a.preview = preview{}
+	}
+	a.current = to
 	a.intro.settings = a.intro.settings && to == screenSettings
-	if to == screenChat {
+	return a.clearDialogs()
+}
+
+func (a *App) clearDialogs() tea.Cmd {
+	a.dialogs = nil
+	if a.current == screenChat {
 		return a.view.Focus()
 	}
 	return nil

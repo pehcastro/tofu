@@ -147,8 +147,7 @@ func (d *recordedDialog) chose(a *App, choice palette.SearchChoice) tea.Cmd {
 	case choice.Cancelled:
 		return a.pop()
 	case choice.Done:
-		a.dialogs = nil
-		return tea.Batch(a.view.Focus(), d.choose(a, choice.Result))
+		return tea.Batch(a.clearDialogs(), d.choose(a, choice.Result))
 	}
 	return nil
 }
@@ -185,9 +184,9 @@ func (a *App) quoteDialog() *recordedDialog {
 			return results
 		})},
 		choose: func(a *App, result palette.Result) tea.Cmd {
-			a.current = screenChat
+			cmd := a.show(screenChat)
 			a.view.Insert(result.Reference)
-			return nil
+			return cmd
 		},
 	}
 }

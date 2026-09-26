@@ -114,7 +114,7 @@ func (m *Model) requestLine() string {
 			word, style = stoppingWord, look.Style(look.Amber)
 		}
 		since := m.phaseSince()
-		line += look.Accent(progress.Spin(since, TickInterval)) + " " + style.Render(word) + look.Muted(requestSeparator+widget.Until(since)+metaGap)
+		line += look.Accent(progress.Spin(m.pulse(), TickInterval)) + " " + style.Render(word) + look.Muted(requestSeparator+widget.Until(since)+metaGap)
 		id = m.turnID
 	case m.cooked != "":
 		line += look.Muted(m.cooked + metaGap)
@@ -134,7 +134,7 @@ func (m *Model) activityLines() []string {
 	elapsed := widget.Column(rows, func(row activity) string { return widget.Until(row.since) }, elapsedColumn)
 	lines := make([]string, 0, len(rows))
 	for _, row := range rows {
-		clock := progress.Spin(row.since, TickInterval) + " " + widget.Pad(widget.Until(row.since), elapsed)
+		clock := progress.Spin(m.pulse(), TickInterval) + " " + widget.Pad(widget.Until(row.since), elapsed)
 		name := column(row.name, nameColumn)
 		who, spent := name, ""
 		if held {

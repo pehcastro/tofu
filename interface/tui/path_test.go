@@ -49,44 +49,6 @@ func sent(t *testing.T, entered <-chan string) string {
 	return ""
 }
 
-func TestAnAtListsPathsUnderTheRepositoryAndTypingMoreFiltersThem(t *testing.T) {
-	app := pathApp(t, make(chan string, 1))
-	typeText(app, "@int")
-	listed := ansi.Strip(app.View().Content)
-	for _, want := range []string{"@internal/turn/loop.go", "@interface/tui/app.go"} {
-		if !strings.Contains(listed, want) {
-			t.Errorf("@int does not list %s\n%s", want, listed)
-		}
-	}
-	if strings.Contains(listed, "@CLAUDE.md") {
-		t.Errorf("@int lists a path that does not match\n%s", listed)
-	}
-
-	typeText(app, "ernal")
-	filtered := ansi.Strip(app.View().Content)
-	if !strings.Contains(filtered, "@internal/turn/loop.go") {
-		t.Errorf("@internal does not list the path it matches\n%s", filtered)
-	}
-	if strings.Contains(filtered, "@interface/tui/app.go") {
-		t.Errorf("@internal still lists interface/tui/app.go\n%s", filtered)
-	}
-}
-
-func TestAcceptingACompletionPutsThePathInTheComposerAndSendsNothing(t *testing.T) {
-	entered := make(chan string, 1)
-	app := pathApp(t, entered)
-	typeText(app, "read @int")
-	app.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
-	if typed := app.view.Value(); typed != "read @internal/turn/loop.go" {
-		t.Errorf("accepting the completion left %q in the composer", typed)
-	}
-	select {
-	case task := <-entered:
-		t.Fatalf("accepting the completion sent %q to the model", task)
-	case <-time.After(100 * time.Millisecond):
-	}
-}
-
 func TestAnAtInsideAWordOpensNothing(t *testing.T) {
 	entered := make(chan string, 1)
 	app := pathApp(t, entered)

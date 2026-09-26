@@ -138,7 +138,11 @@ func (m *Model) askLines() []string {
 		keys += look.DialogChoice(false, label)
 	}
 	inner := m.width - 2*askPadX
-	block := spread(look.Style(look.Amber).Render(head), id, inner) + "\n" + spread(keys, look.Faint(stillTakesTyping), inner)
+	typing := look.Faint(stillTakesTyping)
+	if widget.Cells(keys+askGap+stillTakesTyping) > inner {
+		typing = ""
+	}
+	block := spread(look.Style(look.Amber).Render(head), id, inner) + "\n" + spread(keys, typing, inner)
 	return strings.Split(look.Surface(m.width, askBlockRows, look.Panel, askPadX, block), "\n")
 }
 

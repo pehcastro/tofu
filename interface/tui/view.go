@@ -120,7 +120,7 @@ func (a *App) base() string {
 		right = frame.ChatRight(a.slug(), string(a.shownEffort()))
 	}
 	framed := top + "\n" + strings.Repeat(" ", a.width) + "\n" + a.body() + "\n" + frame.Footer(status, a.width, right)
-	if track, scrolls := a.track(); scrolls {
+	if track, scrolls := a.track(); scrolls && a.current != screenChat {
 		return pointer.Overlay(framed, a.width, track)
 	}
 	return framed
@@ -152,7 +152,7 @@ func (a *App) body() string {
 func (a *App) agents() []feed.Agent {
 	agents := make([]feed.Agent, len(a.children))
 	for index, child := range a.children {
-		agents[index] = feed.Agent{Name: child.Name, State: child.State, Doing: child.Doing, Since: child.Since}
+		agents[index] = feed.Agent{Name: child.Name, State: child.State, Doing: child.Doing, Since: child.Since, Owns: child.Owns, Report: child.Report}
 	}
 	return agents
 }

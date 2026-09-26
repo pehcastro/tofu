@@ -216,7 +216,7 @@ func (m *Model) foldSince(end int) time.Duration {
 func (m *Model) progressLine(entry Entry) string {
 	line := progress.Line{Label: entry.label(), Live: entry.running()}
 	if line.Live {
-		line.Since, line.Tick = m.elapsed(entry.Started), TickInterval
+		line.Since, line.Tick = m.pulse(), TickInterval
 	}
 	id := trace.Short(entry.ID)
 	if id == "" {
@@ -231,11 +231,10 @@ func (m *Model) render(index int) []string {
 	entry := m.entries[index]
 	switch entry.Kind {
 	case User:
-		ink := look.Style(look.Text)
+		lines := strings.Split(look.Style(look.Text).Render(strings.Join(widget.Wrap(entry.Body, m.textWidth()), "\n")), "\n")
 		if entry.waiting {
-			ink = look.Style(look.MutedColor)
+			lines = []string{look.Muted(widget.Fit(strings.Join(strings.Fields(entry.Body), " "), m.textWidth()))}
 		}
-		lines := strings.Split(ink.Render(strings.Join(widget.Wrap(entry.Body, m.textWidth()), "\n")), "\n")
 		return m.message(entry, look.Title(you), append(lines, m.chipLines(entry.Chips)...), m.latestUser(index))
 	case Assistant:
 		return m.message(entry, look.AgentRef(orchestrator), entry.displayLines(), false)

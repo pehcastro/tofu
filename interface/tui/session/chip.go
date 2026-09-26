@@ -33,6 +33,7 @@ type Chip struct {
 	Bytes  int
 	Chars  int
 	Token  string
+	Text   string
 }
 
 type pendingPaste struct {
@@ -67,7 +68,7 @@ func (m *Model) Attached(outcome paste.Outcome) {
 		m.replaceToken(held.token, token)
 		m.chips = append(m.chips, Chip{Kind: ImageChip, Name: outcome.Name, Format: outcome.Format(), Bytes: outcome.Bytes, Token: token})
 	case paste.Textual:
-		m.absorbText(held.token, outcome.Text)
+		m.replaceToken(held.token, m.textOrChip(outcome.Text))
 	case paste.Failed:
 		m.replaceToken(held.token, "")
 		m.attached = append(m.attached, outcome)
@@ -77,15 +78,25 @@ func (m *Model) Attached(outcome paste.Outcome) {
 	}
 }
 
-func (m *Model) absorbText(token, text string) {
+func (m *Model) textOrChip(text string) string {
 	chars := len([]rune(text))
 	if chars < textChipThreshold {
-		m.replaceToken(token, text)
-		return
+		return text
 	}
-	replacement := textToken(chars)
-	m.replaceToken(token, replacement)
-	m.chips = append(m.chips, Chip{Kind: TextChip, Chars: chars, Token: replacement})
+	token := textToken(chars)
+	m.chips = append(m.chips, Chip{Kind: TextChip, Chars: chars, Token: token, Text: text})
+	return token
+}
+
+func (m *Model) Quote(text string) { m.composer.InsertString(m.textOrChip(text)) }
+
+func Expand(task string, chips []Chip) string {
+	for _, chip := range chips {
+		if chip.Kind == TextChip {
+			task = strings.Replace(task, chip.Token, chip.Text, 1)
+		}
+	}
+	return task
 }
 
 func (m *Model) replaceToken(token, replacement string) {

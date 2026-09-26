@@ -38,9 +38,11 @@ func (m *Model) Key(key string) bool {
 	return true
 }
 
-func (m *Model) Wheel(x, y, delta int) {
+func (m *Model) Wheel(delta int) {
 	m.scrollBy(-delta * wheelRows)
 }
+
+func (m *Model) SetScroll(behindNewest int) { m.scrollBy(behindNewest - m.scroll) }
 
 func (m *Model) scrollBy(rows int) {
 	_, _, total := m.layout()

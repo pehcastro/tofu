@@ -11,6 +11,7 @@ import (
 	"tofu/interface/tui/models"
 	"tofu/interface/tui/palette"
 	"tofu/interface/tui/quota"
+	"tofu/interface/tui/settings"
 	"tofu/interface/tui/shells"
 	library "tofu/internal/llm/models"
 	"tofu/internal/sys"
@@ -37,6 +38,7 @@ func (a *App) top() dialog {
 
 func (a *App) push(d dialog) tea.Cmd {
 	a.dialogs = append(a.dialogs, d)
+	a.view.Blur()
 	if files, open := d.(*filesDialog); open {
 		return files.init
 	}
@@ -44,13 +46,11 @@ func (a *App) push(d dialog) tea.Cmd {
 }
 
 func (a *App) pop() tea.Cmd {
-	if len(a.dialogs) > 0 {
+	if len(a.dialogs) > 1 {
 		a.dialogs = a.dialogs[:len(a.dialogs)-1]
+		return nil
 	}
-	if len(a.dialogs) == 0 && a.current == screenChat {
-		return a.view.Focus()
-	}
-	return nil
+	return a.clearDialogs()
 }
 
 type commandsDialog struct{ palette.Commands }
@@ -79,8 +79,7 @@ func (a *App) chose(choice palette.Choice) tea.Cmd {
 	case choice.Cancelled:
 		return a.pop()
 	case choice.Done:
-		a.dialogs = nil
-		return tea.Batch(a.view.Focus(), a.runCommand(choice.ID))
+		return tea.Batch(a.clearDialogs(), a.runCommand(choice.ID))
 	}
 	return nil
 }
@@ -109,13 +108,20 @@ func (a *App) found(choice palette.SearchChoice) tea.Cmd {
 	case !choice.Done:
 		return nil
 	case choice.Result.Reference != "":
-		a.dialogs = nil
-		return a.follow(choice.Result.Reference)
+		return tea.Batch(a.clearDialogs(), a.follow(choice.Result.Reference))
 	}
-	return a.show(screen(choice.Result.Screen))
+	cmd := a.show(screen(choice.Result.Screen))
+	for _, row := range a.settings.Rows {
+		if settingLabel(row) == choice.Result.Label {
+			a.settings.Jump(row.Key)
+		}
+	}
+	return cmd
 }
 
 func contains(text, query string) bool { return strings.Contains(strings.ToLower(text), query) }
+
+func settingLabel(row settings.Row) string { return row.Category + " / " + row.Label }
 
 func (a *App) find(query string) []palette.Result {
 	var results []palette.Result
@@ -137,6 +143,11 @@ func (a *App) find(query string) []palette.Result {
 		label := event.Kind.String() + "  " + event.Title + "  " + event.Body
 		if contains(label, query) {
 			results = append(results, palette.Result{Label: label, Reference: "[" + event.Kind.String() + "#" + event.ID + "]"})
+		}
+	}
+	for _, row := range a.settings.Rows {
+		if contains(settingLabel(row)+" "+row.Description, query) {
+			results = append(results, palette.Result{Label: settingLabel(row), Detail: row.Description, Screen: int(screenSettings)})
 		}
 	}
 	return results

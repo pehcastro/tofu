@@ -13,6 +13,7 @@ import (
 	"tofu/interface/tui/look"
 	"tofu/interface/tui/pointer"
 	roster "tofu/internal/subagent"
+	"tofu/internal/widget"
 )
 
 type Kind int
@@ -69,6 +70,8 @@ type Agent struct {
 	State    roster.State
 	Doing    string
 	Since    time.Duration
+	Owns     []string
+	Report   string
 }
 
 const (
@@ -327,7 +330,7 @@ func (m Model) railView() (string, []railTarget) {
 	width := m.Split() - 2*panePadding
 	var b strings.Builder
 	target := func(who identity) railTarget { return railTarget{strings.Count(b.String(), "\n"), who} }
-	b.WriteString("\n" + look.PaneTitle("Sub-agents", m.railFocused) + "\n" + look.Muted(fmt.Sprintf("%d agents · live activity", len(m.agents))) + "\n\n" + look.SectionLabel("Overview") + "\n")
+	b.WriteString("\n" + look.PaneTitle("Sub-agents", m.railFocused) + "\n" + look.Muted(widget.Fit(fmt.Sprintf("%d agents · live activity", len(m.agents)), width)) + "\n\n" + look.SectionLabel("Overview") + "\n")
 	targets := []railTarget{target(identity{})}
 	b.WriteString(look.SidebarItem(width, m.filter == identity{}, allActivity, strconv.Itoa(len(m.events))) + "\n")
 	entries := m.entries()

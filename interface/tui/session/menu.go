@@ -37,11 +37,17 @@ func (m Model) Command() (string, bool) {
 	return typed, true
 }
 
-func pathSigils() [3]string { return [3]string{upSigil, hereSigil, atSigil} }
+func pathSigils() [2]string { return [2]string{upSigil, hereSigil} }
 
 func lastWord(value string) (string, int) {
 	at := strings.LastIndexAny(value, wordBreaks) + 1
 	return value[at:], at
+}
+
+func (m Model) AtWordStart() bool {
+	row := []rune(strings.Split(m.composer.Value(), "\n")[m.composer.Line()])
+	column := min(m.composer.Column(), len(row))
+	return column == 0 || strings.ContainsRune(wordBreaks, row[column-1])
 }
 
 func (m Model) Path() (string, string, bool) {

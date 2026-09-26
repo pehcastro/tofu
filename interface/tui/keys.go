@@ -74,7 +74,7 @@ func (a *App) shortcut(pressed string) (tea.Cmd, bool) {
 	if action == "" {
 		return nil, false
 	}
-	a.dialogs = nil
+	cleared := a.clearDialogs()
 	switch {
 	case action == searchAction && a.current == screenSettings:
 		a.settingsKey(pressed)
@@ -89,7 +89,7 @@ func (a *App) shortcut(pressed string) (tea.Cmd, bool) {
 	case action == quoteAction:
 		return a.quoteSelection(), true
 	}
-	return nil, true
+	return cleared, true
 }
 
 func (a *App) quoteSelection() tea.Cmd {
@@ -97,11 +97,11 @@ func (a *App) quoteSelection() tea.Cmd {
 		quoted := quotePrefix + strings.ReplaceAll(a.lastSelection, "\n", "\n"+quotePrefix) + "\n"
 		a.lastSelection = ""
 		cmd := a.show(screenChat)
-		a.view.Insert(quoted)
+		a.view.Quote(quoted)
 		return cmd
 	}
 	selected := a.feed.Selected()
-	if selected == "" {
+	if a.happenedAt(selected) < 0 {
 		return nil
 	}
 	cmd := a.show(screenChat)
@@ -133,6 +133,10 @@ func (a *App) composerKey(msg tea.KeyPressMsg) (tea.Cmd, bool) {
 		return nil, true
 	case "ctrl+v", "alt+v":
 		return a.view.Paste(a.board), true
+	case "@":
+		if a.view.AtWordStart() {
+			return a.push(a.filesDialog()), true
+		}
 	case "enter":
 		return a.submit(), true
 	case "ctrl+x":
@@ -230,8 +234,7 @@ func (a *App) screenKey(key string) (tea.Cmd, bool) {
 		}
 		return nil, a.feed.Key(key)
 	case screenEdits:
-		a.edits.Key(key)
-		return nil, key != "esc"
+		return nil, a.edits.Key(key)
 	case screenShells:
 		switch a.shells.Key(key) {
 		case shells.IntentKillAsk:

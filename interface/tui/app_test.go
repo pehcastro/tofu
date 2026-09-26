@@ -166,6 +166,7 @@ func TestARunningCallCarriesItsElapsedTimeAndTheFooterSaysWhatIsHappening(t *tes
 	early := app.View().Content
 	golden.Assert(t, "session-running-80x24.golden", early)
 	at = at.Add(6 * time.Second)
+	app.Update(pulseMsg{})
 	later := app.View().Content
 	golden.Assert(t, "session-running-later-80x24.golden", later)
 

@@ -252,15 +252,11 @@ func (m *Model) preview(width int) string {
 	if m.branch != "" {
 		place += "  ·  " + m.branch
 	}
-	block := look.TintedSurface(width, look.PanelLight,
+	return look.TintedSurface(width, look.PanelLight,
 		look.Painted(" tofu ", look.Background, look.Mint)+look.Faint("   "+place)+"\n"+
 			look.Title("Interface preview")+"\n"+
 			look.Muted("Readable text, quiet surfaces, and bounded focus.")+"\n"+
 			look.Accent("● active")+look.Faint("    ")+look.Style(look.Amber).Render("● attention")+look.Faint("    ")+look.Style(look.Red).Render("● failed"))
-	if m.previewTheme == nil {
-		return block
-	}
-	return m.previewTheme(block)
 }
 
 func (m *Model) choiceWindow(row Row) (start, end int) {

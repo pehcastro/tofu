@@ -18,8 +18,7 @@ func (a *App) follow(ref string) tea.Cmd {
 		if !a.feed.SelectAgent(name, instance) {
 			return nil
 		}
-		a.current, a.dialogs = screenAgents, nil
-		return nil
+		return a.show(screenAgents)
 	}
 	kind, id := pointer.SplitReference(ref)
 	id = strings.TrimPrefix(id, "#")
@@ -32,7 +31,9 @@ func (a *App) follow(ref string) tea.Cmd {
 		return nil
 	}
 	if a.happened[at].Kind == feed.KindEdit && kind == feed.KindEdit.String() {
-		return a.show(screenEdits)
+		cmd := a.show(screenEdits)
+		a.edits.Open(id)
+		return cmd
 	}
 	cmd := a.show(screenAgents)
 	a.feed.Focus(id)

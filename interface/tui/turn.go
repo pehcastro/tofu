@@ -69,14 +69,15 @@ func (a *App) send() tea.Cmd {
 		return nil
 	}
 	chips := a.view.Remember(task)
+	whole := session.Expand(task, chips)
 	a.view.Reset()
 	if a.busy {
-		a.view.Queue(task, chips)
-		a.steer(task)
+		a.view.Queue(task, whole, chips)
+		a.steer(whole)
 		return nil
 	}
 	a.view.Append(session.Entry{Kind: session.User, Body: task, Chips: chips})
-	return a.start(task)
+	return a.start(whole)
 }
 
 func idPrefix(task string) (string, bool) {

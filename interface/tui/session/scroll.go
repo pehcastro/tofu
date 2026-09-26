@@ -1,5 +1,7 @@
 package session
 
+import "tofu/interface/tui/pointer"
+
 const (
 	WheelUp    = "wheel up"
 	WheelDown  = "wheel down"
@@ -144,10 +146,27 @@ func (m *Model) Scroll(key string) (int, bool) {
 	default:
 		return 0, false
 	}
+	m.landAt(to, tail)
+	return m.offset(from) - m.offset(m.top), true
+}
+
+func (m *Model) landAt(to, tail anchor) {
 	m.following = !to.before(tail)
 	m.top = to
 	if m.following {
 		m.top = tail
 	}
-	return m.offset(from) - m.offset(m.top), true
+}
+
+func (m *Model) SetScroll(behindNewest int) {
+	_, rows := m.feed()
+	if tail, scrollable := m.tailAnchor(rows); scrollable {
+		m.landAt(m.move(anchor{}, m.offset(tail)-max(0, behindNewest)), tail)
+	}
+}
+
+func (m *Model) Track() pointer.Track {
+	_, rows := m.feed()
+	total, fromTop, _ := m.scrollMetrics(rows)
+	return pointer.Track{Height: rows, Total: total, Visible: rows, FromTop: fromTop}
 }

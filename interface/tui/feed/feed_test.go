@@ -165,7 +165,7 @@ func BenchmarkWheelEventFrame(b *testing.B) {
 		b.ReportAllocs()
 		for i := 0; b.Loop(); i++ {
 			m.scroll = i % 30
-			m.Wheel(70, 10, -1)
+			m.Wheel(-1)
 			_ = m.View()
 		}
 	})

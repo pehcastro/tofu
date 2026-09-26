@@ -138,6 +138,7 @@ type Model struct {
 	draft              string
 	chips              []Chip
 	pending            []pendingPaste
+	frame              int
 	ChatShowsTools     bool
 	FoldHidesShell     bool
 }
@@ -160,6 +161,12 @@ func New(now func() time.Time, prose Prose) Model {
 }
 
 func (m *Model) Focus() tea.Cmd { return m.composer.Focus() }
+
+func (m *Model) Blur() { m.composer.Blur() }
+
+func (m *Model) SetFrame(frame int) { m.frame = frame }
+
+func (m *Model) pulse() time.Duration { return time.Duration(m.frame) * TickInterval }
 
 func (m *Model) Insert(text string) { m.composer.InsertString(text) }
 
@@ -337,7 +344,7 @@ func unescaped(typed string) string {
 }
 
 func escapesASigil(rest string) bool {
-	if strings.HasPrefix(rest, commandPrefix) {
+	if strings.HasPrefix(rest, commandPrefix) || strings.HasPrefix(rest, atSigil) {
 		return true
 	}
 	for _, sigil := range pathSigils() {

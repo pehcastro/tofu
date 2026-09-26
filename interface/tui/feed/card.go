@@ -1,6 +1,7 @@
 package feed
 
 import (
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -9,6 +10,7 @@ import (
 	"charm.land/lipgloss/v2"
 
 	"tofu/interface/tui/look"
+	roster "tofu/internal/subagent"
 )
 
 const (
@@ -21,6 +23,9 @@ const (
 	detailPreview    = 8
 	elapsedPrecision = 100 * time.Millisecond
 	fullDiffNote     = "Full diff in File edits."
+	ownsTitle        = "owns"
+	reportTitle      = "report"
+	overlapWord      = "  overlaps "
 )
 
 type card struct {
@@ -55,20 +60,64 @@ func sameEvent(a, b Event) bool {
 
 func (m Model) cardsFor(width int) []card {
 	events := m.visible()
-	cards := make([]card, len(events))
-	for i, e := range events {
-		cards[i] = m.card(width, e)
+	cards := make([]card, 0, len(events)+2)
+	agent, picked := m.filteredAgent()
+	if picked && len(agent.Owns) > 0 {
+		cards = append(cards, m.card(width, m.aboutFilter(ownsTitle, "", m.ownership(agent.Owns)), renderAgentCard))
+	}
+	for _, e := range events {
+		cards = append(cards, m.card(width, e, renderCard))
+	}
+	if picked && agent.Report != "" {
+		cards = append(cards, m.card(width, m.aboutFilter(reportTitle, agent.Report, nil), renderAgentCard))
 	}
 	return cards
 }
 
-func (m Model) card(width int, e Event) card {
+func (m Model) filteredAgent() (Agent, bool) {
+	at := slices.IndexFunc(m.agents, func(a Agent) bool { return identity{a.Name, a.Instance} == m.filter })
+	if at < 0 {
+		return Agent{}, false
+	}
+	return m.agents[at], true
+}
+
+func (m Model) aboutFilter(title, body string, detail []string) Event {
+	return Event{ID: m.filter.label() + " " + title, Actor: m.filter.name, Instance: m.filter.instance, Title: title, Body: body, Detail: detail}
+}
+
+func (m Model) ownership(owns []string) []string {
+	lines := make([]string, 0, len(owns))
+	for _, glob := range owns {
+		var holders []string
+		for _, other := range m.agents {
+			held := identity{other.Name, other.Instance}
+			if held != m.filter && slices.ContainsFunc(other.Owns, func(theirs string) bool { return overlapping(glob, theirs) }) {
+				holders = append(holders, held.label())
+			}
+		}
+		if len(holders) == 0 {
+			lines = append(lines, look.Muted(glob))
+			continue
+		}
+		lines = append(lines, look.Style(look.Amber).Render(glob+overlapWord+strings.Join(holders, " ")))
+	}
+	return lines
+}
+
+func overlapping(one, other string) bool {
+	var held roster.Roster
+	var collision roster.CollisionError
+	return held.Hold(roster.SubAgent{ID: one, Owns: []string{one}}) == nil && errors.As(held.Hold(roster.SubAgent{ID: other, Owns: []string{other}}), &collision)
+}
+
+func (m Model) card(width int, e Event, render func(Event, cardKey) string) card {
 	key := cardKey{width, !m.railFocused && m.selected == e.ID, m.expanded[e.ID], look.Age(m.now().Sub(e.At))}
 	c := m.cards
 	if cached, ok := c.cards[e.ID]; ok && cached.key == key && sameEvent(cached.event, e) {
 		return card{e.ID, cached.view, cached.height}
 	}
-	view := renderCard(e, key)
+	view := render(e, key)
 	if c.cards == nil {
 		c.cards = make(map[string]cachedCard)
 	}
@@ -131,6 +180,18 @@ func renderCard(e Event, key cardKey) string {
 	if hidden := len(e.Detail) - len(shown); hidden > 0 {
 		lines = append(lines, look.Faint(fmt.Sprintf("  … %d more lines · enter to expand", hidden)))
 	}
+	return framed(lines, key)
+}
+
+func renderAgentCard(e Event, key cardKey) string {
+	lines := append([]string{look.AgentRef(actor(e).label()) + "  " + look.Style(look.Blue).Render(e.Title)}, e.Detail...)
+	if e.Body != "" {
+		lines = append(lines, look.Style(look.Text).Render(e.Body))
+	}
+	return framed(lines, key)
+}
+
+func framed(lines []string, key cardKey) string {
 	border := look.FaintColor
 	if key.selected {
 		border = look.Mint

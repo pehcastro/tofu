@@ -87,8 +87,13 @@ func (m *Model) Add(edit Edit) {
 	}
 }
 
-func (m *Model) Key(key string) {
+func (m *Model) Key(key string) bool {
 	switch key {
+	case "esc":
+		if !m.reading {
+			return false
+		}
+		m.reading, m.scroll = false, 0
 	case "left":
 		m.focusMain = false
 	case "right":
@@ -122,6 +127,7 @@ func (m *Model) Key(key string) {
 	case "f":
 		m.wide, m.focusMain = !m.wide, true
 	}
+	return true
 }
 
 func (m *Model) Wheel(up bool) {
@@ -130,6 +136,20 @@ func (m *Model) Wheel(up bool) {
 		return
 	}
 	m.scrollBy(-wheelRows)
+}
+
+func (m *Model) SetScroll(behindNewest int) { m.scrollBy(behindNewest - m.scroll) }
+
+func (m *Model) Open(id string) bool {
+	at := slices.IndexFunc(m.edits, func(edit Edit) bool { return trace.Short(edit.ID) == trace.Short(id) })
+	if at < 0 {
+		return false
+	}
+	if m.edits[at].Agent != m.author {
+		m.author = ""
+	}
+	m.open(m.edits[at].ID)
+	return true
 }
 
 func (m *Model) Click(x, y int) {
@@ -148,15 +168,8 @@ func (m *Model) Click(x, y int) {
 			}
 		}
 	}
-	kind, id := pointer.SplitReference(pointer.ReferenceAt(view, x, y))
-	if kind != editKind {
-		return
-	}
-	for _, edit := range m.edits {
-		if trace.Short(edit.ID) == id {
-			m.open(edit.ID)
-			return
-		}
+	if kind, id := pointer.SplitReference(pointer.ReferenceAt(view, x, y)); kind == editKind {
+		m.Open(strings.TrimPrefix(id, "#"))
 	}
 }
 

@@ -9,9 +9,9 @@ type pending struct {
 	task string
 }
 
-func (m *Model) Queue(task string, chips []Chip) {
-	m.Append(Entry{Kind: User, Body: task, Chips: chips, waiting: true})
-	m.queue = append(m.queue, pending{id: m.entries[len(m.entries)-1].ID, task: task})
+func (m *Model) Queue(shown, whole string, chips []Chip) {
+	m.Append(Entry{Kind: User, Body: shown, Chips: chips, waiting: true})
+	m.queue = append(m.queue, pending{id: m.entries[len(m.entries)-1].ID, task: whole})
 	m.pick = len(m.queue) - 1
 }
 

@@ -79,7 +79,6 @@ type Model struct {
 	searchKey      string
 	density        string
 	branch         string
-	previewTheme   func(string) string
 	dialog         choiceState
 	search         searchState
 	cache          viewCache
@@ -100,11 +99,6 @@ func (m *Model) SetSearchKey(key string) { m.searchKey = key }
 func (m *Model) SetDensity(density string) { m.density = density }
 
 func (m *Model) SetBranch(branch string) { m.branch = branch }
-
-func (m *Model) SetPreviewTheme(recolour func(string) string) {
-	m.previewTheme = recolour
-	m.cache = viewCache{}
-}
 
 func (m *Model) Searching() bool { return m.search.open }
 
@@ -305,13 +299,25 @@ func (m *Model) matches() []int {
 }
 
 func (m *Model) jump() {
-	found := m.matches()
-	if len(found) == 0 {
-		return
+	if found := m.matches(); len(found) > 0 {
+		m.Jump(m.Rows[found[m.search.cursor]].Key)
 	}
-	target := m.Rows[found[m.search.cursor]]
-	m.search = searchState{}
-	m.Query = ""
-	m.category = slices.Index(m.categories(), target.Category)
-	m.cursor = slices.IndexFunc(m.inCategory(), func(i int) bool { return m.Rows[i].Key == target.Key })
+}
+
+func (m *Model) Jump(key string) bool {
+	at := slices.IndexFunc(m.Rows, func(row Row) bool { return row.Key == key })
+	if at < 0 {
+		return false
+	}
+	m.search, m.Query = searchState{}, ""
+	m.category = slices.Index(m.categories(), m.Rows[at].Category)
+	m.cursor = slices.Index(m.inCategory(), at)
+	return true
+}
+
+func (m *Model) CloseDialog() Intent {
+	if !m.dialog.open {
+		return Intent{}
+	}
+	return m.dialogKey("esc")
 }
