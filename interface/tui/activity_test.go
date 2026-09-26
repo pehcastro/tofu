@@ -8,7 +8,6 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
-	"github.com/charmbracelet/x/ansi"
 
 	"tofu/interface/tui/subagent"
 	"tofu/interface/tui/theme"
@@ -31,11 +30,13 @@ func spinningRows(rows []string) []int {
 	return found
 }
 
-const composerBlockRows = 5
+const (
+	composerBlockRows = 3
+	breathingRows     = 1
+)
 
 func composerTint() string {
-	escape, _, _ := strings.Cut(lipgloss.NewStyle().Background(theme.ComposerColor()).Render("X"), "X")
-	return escape
+	return escapeOf(lipgloss.NewStyle().Background(theme.ComposerColor()))
 }
 
 func composerTopRow(t *testing.T, content string) int {
@@ -61,8 +62,8 @@ func TestTheRunningRowSitsBetweenTheTranscriptAndTheComposer(t *testing.T) {
 	if len(running) != 2 {
 		t.Fatalf("the frame carries %d spinning rows, want two, the progress line and the footer\n%s", len(running), strings.Join(rows, "\n"))
 	}
-	if running[1] != top-1 {
-		t.Errorf("the footer's running row is row %d and the composer begins at row %d, want the row just above it\n%s",
+	if running[1] != top-1-breathingRows {
+		t.Errorf("the request row is row %d and the composer begins at row %d, want one breathing row between them\n%s",
 			running[1], top, strings.Join(rows, "\n"))
 	}
 	if fold := slices.IndexFunc(rows, func(row string) bool { return strings.Contains(row, " tools") }); fold >= 0 {
@@ -83,22 +84,6 @@ func TestWithNothingRunningThereIsNoActivityRow(t *testing.T) {
 	golden.Assert(t, "session-80x24.golden", app.View().Content)
 }
 
-func TestTheWholeRunningRowCarriesThePhasesOwnColour(t *testing.T) {
-	at := fixedStart()
-	line := styledTurnRow(t, liveApp(t, &at))
-	toolOpen, _, _ := strings.Cut(theme.Tool().Render(""), "\x1b[m")
-	if !strings.HasPrefix(line, toolOpen) {
-		t.Errorf("a working row does not open with the tool colour %q\n%q", toolOpen, line)
-	}
-	if painted := colours(line); len(painted) != 2 {
-		t.Errorf("the row is painted with %v, want the phase colour opened once and closed once\n%q", painted, line)
-	}
-	elapsed := strings.Fields(ansi.Strip(line))
-	if len(elapsed) < 2 || !strings.HasSuffix(elapsed[1], "s") {
-		t.Fatalf("the running row carries no elapsed time: %q", ansi.Strip(line))
-	}
-}
-
 func belowTheComposer(t *testing.T, view tea.View) []string {
 	t.Helper()
 	return plainRows(view)[composerTopRow(t, view.Content)+composerBlockRows:]
@@ -116,25 +101,18 @@ func TestNothingUnderTheComposerSaysWhatIsRunning(t *testing.T) {
 	}
 }
 
-func TestCtrlCAppearsOnceWhileATurnRuns(t *testing.T) {
-	at := fixedStart()
-	content := ansi.Strip(liveApp(t, &at).View().Content)
-	if said := strings.Count(content, "ctrl+c"); said != 1 {
-		t.Errorf("ctrl+c appears %d times, want once\n%s", said, content)
-	}
-}
-
 func TestScrollingTheTranscriptDoesNotMoveTheRunningRow(t *testing.T) {
 	at := fixedStart()
 	app := liveApp(t, &at)
 	for step := range 40 {
 		app.Update(Event{Kind: EventNote, Text: "note " + strings.Repeat("x", step%7)})
 	}
-	before := spinningRows(plainRows(app.View()))
+	tail := app.View()
+	before := spinningRows(plainRows(tail))
 	app.Update(tea.KeyPressMsg{Code: tea.KeyPgUp})
 	view := app.View()
 	rows := plainRows(view)
-	if !strings.Contains(ansi.Strip(view.Content), scrolledWords) {
+	if transcriptOf(view.Content) == transcriptOf(tail.Content) {
 		t.Fatalf("pgup did not scroll the transcript back\n%s", strings.Join(rows, "\n"))
 	}
 	after := spinningRows(rows)
@@ -187,7 +165,7 @@ func TestEachRunningChildIsARowCarryingWhatItSpent(t *testing.T) {
 	}
 	running := all[1:]
 	top := composerTopRow(t, view.Content)
-	if running[3] != top-1 || running[0] != top-4 {
+	if running[3] != top-1-breathingRows || running[0] != top-4-breathingRows {
 		t.Errorf("the footer block is on rows %v and the composer begins at row %d\n%s", running, top, strings.Join(rows, "\n"))
 	}
 	for index, want := range []string{"go-dev", "bench", "go-docs", "working"} {
@@ -218,7 +196,14 @@ func turnRow(t *testing.T, app *App) string {
 
 func turnElapsed(t *testing.T, app *App) string {
 	t.Helper()
-	return strings.Fields(turnRow(t, app))[1]
+	fields := strings.Fields(turnRow(t, app))
+	for index, field := range fields {
+		if field == "|" && index+1 < len(fields) {
+			return fields[index+1]
+		}
+	}
+	t.Fatalf("the running row carries no elapsed time: %q", turnRow(t, app))
+	return ""
 }
 
 func TestTheClockTimesTheWholeTurnAndNotTheNewestCall(t *testing.T) {

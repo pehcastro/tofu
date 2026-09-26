@@ -182,7 +182,7 @@ func TestALongPastedBlockBecomesATextChip(t *testing.T) {
 	if strings.Contains(frame, long) {
 		t.Fatalf("a long paste was typed in full instead of becoming a chip:\n%s", frame)
 	}
-	want := "[Text " + strconv.Itoa(len([]rune(long))) + " chars]"
+	want := "[Text " + strconv.Itoa(len([]rune(long))) + " characters]"
 	if !strings.Contains(frame, want) {
 		t.Fatalf("the frame does not carry %q:\n%s", want, frame)
 	}

@@ -55,11 +55,11 @@ func copyApp(t *testing.T, board *stubBoard) *App {
 
 func press(t *testing.T, app *App, key tea.KeyPressMsg) {
 	t.Helper()
-	_, cmd := app.Update(key)
+	cmd := app.update(key)
 	if cmd == nil {
 		t.Fatalf("%v produced no command", key)
 	}
-	app.Update(cmd())
+	app.update(cmd())
 }
 
 func TestAKeyCopiesTheLastAnswer(t *testing.T) {
@@ -111,8 +111,8 @@ func TestSlashCopyIsListedAndCopiesWhatTheKeyCopies(t *testing.T) {
 func TestWithNoLocalClipboardTheTerminalCarriesTheCopyAndIsNotCalledASuccess(t *testing.T) {
 	board := &stubBoard{refuse: sys.ErrNoLocalClipboard}
 	app := copyApp(t, board)
-	_, cmd := app.Update(tea.KeyPressMsg{Code: 'y', Mod: tea.ModCtrl})
-	_, handed := app.Update(cmd())
+	cmd := app.update(tea.KeyPressMsg{Code: 'y', Mod: tea.ModCtrl})
+	handed := app.update(cmd())
 	if handed == nil {
 		t.Fatal("nothing was handed to the terminal")
 	}
@@ -167,19 +167,6 @@ func TestASuccessThenARefusalLeavesNoStaleSuccess(t *testing.T) {
 	}
 	if !strings.Contains(app.status.Note, copyRefusal) {
 		t.Errorf("status.Note = %q, want the refusal", app.status.Note)
-	}
-}
-
-func TestANonCopyKeyClearsAStaleStatusLine(t *testing.T) {
-	board := &stubBoard{}
-	app := copyApp(t, board)
-	press(t, app, tea.KeyPressMsg{Code: 'y', Mod: tea.ModCtrl})
-	if app.status.Note == "" {
-		t.Fatal("the copy left nothing to clear")
-	}
-	app.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
-	if app.status.Note != "" {
-		t.Errorf("status.Note = %q after an unrelated key, want cleared", app.status.Note)
 	}
 }
 

@@ -53,17 +53,18 @@ func TestTheSessionCursorSitsInsideTheComposer(t *testing.T) {
 
 func TestTheCursorMovesWithTheCaret(t *testing.T) {
 	app := cursorApp(t)
+	typeText(app, "t")
 	before := app.View().Cursor
 	if before == nil {
-		t.Fatal("the empty composer reports no cursor")
+		t.Fatal("the composer reports no cursor")
 	}
-	typeText(app, "tofu!")
+	typeText(app, "ofu!")
 	after := app.View().Cursor
 	if after == nil {
 		t.Fatal("the typed composer reports no cursor")
 	}
-	if after.X-before.X != len("tofu!") {
-		t.Fatalf("typing 5 characters moved the cursor %d cells, want 5", after.X-before.X)
+	if after.X-before.X != len("ofu!") {
+		t.Fatalf("typing 4 characters moved the cursor %d cells, want 4", after.X-before.X)
 	}
 	if after.Y != before.Y {
 		t.Fatalf("typing on one line moved the cursor from row %d to row %d", before.Y, after.Y)

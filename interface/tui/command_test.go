@@ -9,7 +9,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"tofu/interface/tui/links"
+	"tofu/interface/tui/palette"
 	"tofu/internal/golden"
 )
 
@@ -48,8 +48,8 @@ func TestSlashSettingsOpensTheViewAndSendsNothingToTheModel(t *testing.T) {
 	typeText(app, "/settings")
 	app.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 
-	if app.current != viewSettings {
-		t.Fatalf("/settings left the app on view %d, want the settings view", app.current)
+	if app.current != screenSettings {
+		t.Fatalf("/settings left the app on screen %d, want the settings screen", app.current)
 	}
 	nothingEntered(t, entered)
 	if left := app.view.Value(); left != "" {
@@ -61,18 +61,17 @@ func TestSlashSettingsOpensTheViewAndSendsNothingToTheModel(t *testing.T) {
 	}
 }
 
-func TestSlashLinksOpensThePickerEvenWhenTheRecordHoldsNone(t *testing.T) {
+func TestSlashLinksOpensTheLinksDialog(t *testing.T) {
 	entered := make(chan string, 1)
 	app := commandApp(t, entered)
 	typeText(app, "/links")
 	app.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 
-	if app.current != viewLinks {
-		t.Fatalf("/links left the app on view %d, want the links picker", app.current)
+	if _, open := app.top().(*recordedDialog); !open {
+		t.Fatalf("/links opened %T, want the links dialog", app.top())
 	}
-	content := ansi.Strip(app.View().Content)
-	if !strings.Contains(content, "0 links") {
-		t.Errorf("the picker does not say it holds nothing\n%s", content)
+	if content := ansi.Strip(app.View().Content); !strings.Contains(content, "Links") {
+		t.Errorf("the links dialog is not drawn\n%s", content)
 	}
 	nothingEntered(t, entered)
 }
@@ -85,22 +84,33 @@ func TestEnterOnAPickedLinkCopiesItAndComesBackToChat(t *testing.T) {
 		Copy: func(text string) error { copied <- text; return nil },
 	})
 	app.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
-	app.links.Set([]links.Link{{URL: "https://go.dev/doc", From: "you", Count: 1}}, "")
-	app.show(viewLinks)
-	_, cmd := app.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	links := app.linksDialog()
+	links.searchDialog = searchDialog{palette.NewSearch("Links", "", func(string) []palette.Result {
+		return []palette.Result{{Label: "https://go.dev/doc", Detail: "you"}}
+	})}
+	app.push(links)
+	cmd := app.update(tea.KeyPressMsg{Code: tea.KeyEnter})
 
-	if cmd == nil {
-		t.Fatal("enter on a picked link ran no command")
+	var copiedLink copiedMsg
+	for pending := []tea.Cmd{cmd}; len(pending) > 0; pending = pending[1:] {
+		if pending[0] == nil {
+			continue
+		}
+		switch msg := pending[0]().(type) {
+		case tea.BatchMsg:
+			pending = append(pending, msg...)
+		case copiedMsg:
+			copiedLink = msg
+		}
 	}
-	msg, isCopy := cmd().(copiedMsg)
-	if !isCopy || msg.text != "https://go.dev/doc" {
-		t.Fatalf("enter produced %#v", msg)
+	if copiedLink.text != "https://go.dev/doc" {
+		t.Fatalf("enter produced %#v", copiedLink)
 	}
 	if got := <-copied; got != "https://go.dev/doc" {
 		t.Fatalf("the clipboard was handed %q", got)
 	}
-	if app.current != viewChat {
-		t.Fatalf("copying a link left the app on view %d, want chat", app.current)
+	if app.current != screenChat || app.top() != nil {
+		t.Fatalf("copying a link left the app on screen %d with %T open, want chat", app.current, app.top())
 	}
 }
 
@@ -109,7 +119,7 @@ func TestASlashListsTheCommandsAndTypingFiltersTheList(t *testing.T) {
 	app := commandApp(t, entered)
 	typeText(app, "/")
 	listed := ansi.Strip(app.View().Content)
-	for _, want := range []string{"/chat", "/work", "/sub-agents", "/settings", "/quit"} {
+	for _, want := range []string{"/chat", "/sub-agents", "/settings", "/quit"} {
 		if !strings.Contains(listed, want) {
 			t.Errorf("a bare slash does not list %s\n%s", want, listed)
 		}
@@ -208,8 +218,8 @@ func TestTheMenuMovesCompletesAndCloses(t *testing.T) {
 	if typed := app.view.Value(); typed != "/copy-call" {
 		t.Errorf("esc changed the text to %q", typed)
 	}
-	if app.current != viewChat {
-		t.Error("esc while the menu was open also switched view")
+	if app.current != screenChat {
+		t.Error("esc while the menu was open also switched screen")
 	}
 	nothingEntered(t, entered)
 }
@@ -220,8 +230,8 @@ func TestTheMenuRunsTheRowThatIsPicked(t *testing.T) {
 	typeText(app, "/se")
 	app.Update(tea.KeyPressMsg{Code: tea.KeyDown})
 	app.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
-	if app.current != viewSettings {
-		t.Fatalf("enter on the picked row left the app on view %d, want settings", app.current)
+	if app.current != screenSettings {
+		t.Fatalf("enter on the picked row left the app on screen %d, want settings", app.current)
 	}
 	nothingEntered(t, entered)
 }
@@ -289,7 +299,7 @@ func TestASlashOnTheSecondLineIsNotACommand(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("the two-line task never reached the model")
 	}
-	if app.current != viewChat {
-		t.Error("the second line opened a view")
+	if app.current != screenChat {
+		t.Error("the second line opened a screen")
 	}
 }

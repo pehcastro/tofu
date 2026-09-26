@@ -33,7 +33,7 @@ func TestAHeadingRendersWhileTheEntryStreams(t *testing.T) {
 
 func blankRunBefore(lines []string, index int) int {
 	count := 0
-	for i := index - 1; i >= 0 && strings.TrimSpace(lines[i]) == ""; i-- {
+	for i := index - 1; i >= 0 && strings.Trim(lines[i], " │┃") == ""; i-- {
 		count++
 	}
 	return count
@@ -67,7 +67,7 @@ func TestABlankLineSeparatesAPersonsMessageFromTheAnswerAbove(t *testing.T) {
 	if at < 0 {
 		t.Fatalf("the second person message is missing\n%s", plain)
 	}
-	if gap := blankRunBefore(lines, at); gap < 1 {
+	if gap := blankRunBefore(lines, at-1); gap < 1 {
 		t.Errorf("no blank line separates the person's message from the answer above it, got %d\n%s", gap, plain)
 	}
 	golden.Assert(t, "session-turn-spacing-80x24.golden", content)
@@ -83,7 +83,7 @@ func TestTheBreakBetweenTwoTurnsIsLargerThanAnyBreakInsideOne(t *testing.T) {
 		t.Fatalf("could not find both markers\n%s", plain)
 	}
 	paragraphGap := blankRunBefore(lines, insideAnswer)
-	turnGap := blankRunBefore(lines, turnBreak)
+	turnGap := blankRunBefore(lines, turnBreak-1)
 	if turnGap <= paragraphGap {
 		t.Errorf("the turn break (%d blank lines) is not larger than the break inside one answer (%d)\n%s", turnGap, paragraphGap, plain)
 	}

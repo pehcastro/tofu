@@ -25,36 +25,26 @@ func shippedModels() (library.Library, error) {
 	return library.Load(layers)
 }
 
-func (a *App) openPicker() {
+func (a *App) openPicker(onRoles bool) {
 	if len(a.wires) == 0 {
-		a.view.Append(session.Entry{Kind: session.Note, Body: noWireToPick})
+		a.notify(noWireToPick)
 		return
 	}
 	loaded, err := a.options.Models()
 	if err != nil {
-		a.view.Append(session.Entry{Kind: session.Failure, Body: err.Error()})
+		a.notify(err.Error())
 		return
 	}
 	sources := make([]models.Source, 0, len(a.wires))
 	for _, wire := range a.wires {
 		sources = append(sources, models.Source{ID: library.Subscription(wire.Provider), Efforts: wire.Efforts})
 	}
-	a.picker = models.Build(loaded, sources)
-	a.picker.SetSize(a.width, a.height-viewChrome)
-	a.show(viewModels)
-}
-
-func (a *App) pickerKey(key string) {
-	if key != "enter" {
-		a.picker.Key(key)
-		return
+	picker := models.Build(loaded, sources)
+	picker.SetSize(a.width, a.height)
+	if onRoles {
+		picker.Key("tab")
 	}
-	row, picked := a.picker.Picked()
-	a.show(viewChat)
-	if !picked || row.Use == library.UseExcluded {
-		return
-	}
-	a.runNextTurnOn(row.Slug, a.picker.Effort())
+	a.push(&modelsDialog{picker})
 }
 
 func (a *App) runNextTurnOn(slug string, effort llm.Effort) {

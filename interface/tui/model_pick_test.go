@@ -8,7 +8,9 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
 
+	"tofu/interface/tui/models"
 	"tofu/internal/llm"
 	library "tofu/internal/llm/models"
 )
@@ -23,17 +25,19 @@ func shippedFixture() (library.Library, error) {
 	return library.Load([]library.Layer{{Name: "library", Origin: "library", FS: os.DirFS(shippedRoot)}})
 }
 
-func pickTheLastModelOffered(app *App) {
-	for range pressesPastEveryRow {
-		app.Update(tea.KeyPressMsg{Code: tea.KeyDown})
+func openPicker(t *testing.T, app *App) *models.Model {
+	t.Helper()
+	dialog, open := app.top().(*modelsDialog)
+	if !open {
+		t.Fatalf("the models dialog is not open, the top dialog is %T", app.top())
 	}
-	app.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	return &dialog.picker
 }
 
 func walkTo(t *testing.T, app *App, slug string) {
 	t.Helper()
 	for range pressesPastEveryRow {
-		if row, picked := app.picker.Picked(); picked && row.Slug == slug {
+		if row, picked := openPicker(t, app).Picked(); picked && row.Slug == slug {
 			return
 		}
 		app.Update(tea.KeyPressMsg{Code: tea.KeyDown})
@@ -41,9 +45,9 @@ func walkTo(t *testing.T, app *App, slug string) {
 	t.Fatalf("the picker never landed on %s", slug)
 }
 
-func pickTheModel(t *testing.T, app *App, slug string) {
+func pickSonnet(t *testing.T, app *App) {
 	t.Helper()
-	walkTo(t, app, slug)
+	walkTo(t, app, sonnet)
 	app.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 }
 
@@ -61,7 +65,7 @@ func pickerApp(t *testing.T, ran chan Pick, wires func() []Wire) *App {
 	})
 	app.Init()
 	app.Update(tea.WindowSizeMsg{Width: 120, Height: 36})
-	app.openPicker()
+	app.openPicker(false)
 	return app
 }
 
@@ -81,7 +85,7 @@ func turnPick(t *testing.T, app *App, ran chan Pick) Pick {
 func TestPickingAModelInsideASubscriptionRunsThatModel(t *testing.T) {
 	ran := make(chan Pick, 1)
 	app := pickerApp(t, ran, bothWires)
-	pickTheModel(t, app, sonnet)
+	pickSonnet(t, app)
 	pick := turnPick(t, app, ran)
 	if pick.Model != sonnet {
 		t.Errorf("the turn ran on model %q, want the picked %s", pick.Model, sonnet)
@@ -98,9 +102,9 @@ func TestThePickerCarriesTheEffortChosenBesideTheModel(t *testing.T) {
 	ran := make(chan Pick, 1)
 	app := pickerApp(t, ran, bothWires)
 	walkTo(t, app, sonnet)
-	app.Update(tea.KeyPressMsg{Code: tea.KeyRight})
-	shown := app.View().Content
-	if !strings.Contains(shown, "effort high") {
+	app.Update(tea.KeyPressMsg{Code: tea.KeyRight, Mod: tea.ModShift})
+	shown := ansi.Strip(app.View().Content)
+	if !strings.Contains(shown, "high  shift+←→") {
 		t.Fatalf("the picker does not say the effort it would send\n%s", shown)
 	}
 	app.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
@@ -113,9 +117,9 @@ func TestTheEffortOffTheEndOfTheListStaysWhereItIs(t *testing.T) {
 	ran := make(chan Pick, 1)
 	app := pickerApp(t, ran, anthropicAlone)
 	for range pressesPastEveryRow {
-		app.Update(tea.KeyPressMsg{Code: tea.KeyLeft})
+		app.Update(tea.KeyPressMsg{Code: tea.KeyLeft, Mod: tea.ModShift})
 	}
-	if lowest := app.picker.Effort(); lowest != llm.EffortLow {
+	if lowest := openPicker(t, app).Effort(); lowest != llm.EffortLow {
 		t.Fatalf("the effort walked to %q, and the anthropic wire offers %s", lowest, llm.EffortList(claudeEfforts()))
 	}
 }
@@ -123,7 +127,7 @@ func TestTheEffortOffTheEndOfTheListStaysWhereItIs(t *testing.T) {
 func TestThePickerNoLongerSaysTheModelDoesNotReachTheTurn(t *testing.T) {
 	ran := make(chan Pick, 1)
 	app := pickerApp(t, ran, bothWires)
-	pickTheModel(t, app, sonnet)
+	pickSonnet(t, app)
 	shown := app.View().Content
 	for _, stopgap := range []string{"does not reach the turn", "not reach the turn yet"} {
 		if strings.Contains(shown, stopgap) {
@@ -154,10 +158,8 @@ func TestPickingAModelFromAnotherSubscriptionReachesTheTurn(t *testing.T) {
 	}
 	typeText(app, "/models")
 	app.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
-	if opened := app.View().Content; !strings.Contains(opened, sonnet) {
-		t.Fatalf("/models did not open a picker naming the models\n%s", opened)
-	}
-	pickTheLastModelOffered(app)
+	openPicker(t, app)
+	pickSonnet(t, app)
 	if app.wire != "anthropic" {
 		t.Fatalf("the pick left the app on wire %q, want anthropic", app.wire)
 	}
@@ -177,15 +179,16 @@ func TestThePickerOffersOnlyTheSubscriptionsTheTurnCanRun(t *testing.T) {
 	app := newTestApp(Options{Repo: testRepo, Now: fixedClock(), Wires: anthropicAlone, Models: shippedFixture})
 	app.Init()
 	app.Update(tea.WindowSizeMsg{Width: 120, Height: 36})
-	app.openPicker()
+	app.openPicker(false)
 	signed := map[string]bool{}
 	for _, wire := range app.wires {
 		signed[wire.Provider] = true
 	}
-	if len(app.picker.Groups) != len(signed) {
-		t.Fatalf("the picker shows %d subscriptions and the turn can run %d", len(app.picker.Groups), len(signed))
+	groups := openPicker(t, app).Groups
+	if len(groups) != len(signed) {
+		t.Fatalf("the picker shows %d subscriptions and the turn can run %d", len(groups), len(signed))
 	}
-	for _, group := range app.picker.Groups {
+	for _, group := range groups {
 		if !signed[group.Source] {
 			t.Errorf("the picker offers %s, which no signed wire runs", group.Source)
 		}
@@ -236,10 +239,10 @@ func TestThePickSurvivesThePickerClosing(t *testing.T) {
 	app := newTestApp(Options{Repo: testRepo, Now: fixedClock(), Wires: bothWires, Models: shippedFixture})
 	app.Init()
 	app.Update(tea.WindowSizeMsg{Width: 120, Height: 36})
-	app.openPicker()
-	pickTheModel(t, app, sonnet)
-	if app.current != viewChat {
-		t.Fatalf("enter left the app on view %d, want chat", app.current)
+	app.openPicker(false)
+	pickSonnet(t, app)
+	if app.current != screenChat || app.top() != nil {
+		t.Fatalf("enter left the app on screen %d with %T open, want chat", app.current, app.top())
 	}
 	app.Update(tea.KeyPressMsg{Code: '4', Mod: tea.ModAlt})
 	app.Update(tea.KeyPressMsg{Code: tea.KeyEscape})

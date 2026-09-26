@@ -240,40 +240,22 @@ func TestTheRunCollapsesToOneDimLineWhenTheTurnEnds(t *testing.T) {
 	}
 }
 
-func TestCtrlOLeavesChatForWorkAndShowsEveryCall(t *testing.T) {
-	at := time.Date(2026, 9, 19, 14, 32, 0, 0, time.UTC)
-	app := spokenApp(t, &at)
-	app.Update(tea.KeyPressMsg{Code: 'o', Mod: tea.ModCtrl})
-	if app.current != viewWork {
-		t.Fatal("ctrl+o did not leave chat for work")
-	}
-	content := app.View().Content
-	golden.Assert(t, "work-open-80x24.golden", content)
-	plain := ansi.Strip(content)
-	if !strings.Contains(plain, "wc -l") {
-		t.Errorf("work does not show the whole command\n%s", plain)
-	}
-	if rows := callRows(plain); rows == 0 {
-		t.Errorf("work drew no call rows\n%s", plain)
-	}
-}
-
-func TestTheWorkRecordStillHoldsEveryCallAfterTheTurn(t *testing.T) {
+func TestTheSubAgentsFeedStillHoldsEveryCallAfterTheTurn(t *testing.T) {
 	at := time.Date(2026, 9, 19, 14, 32, 0, 0, time.UTC)
 	calls := fourteenCalls()
 	app := wholeRun(t, &at, 120, 40, calls)
 	app.Update(Event{Kind: EventText, Text: runAnswer})
 	app.Update(Closed{})
-	if got := len(app.work.Entries); got != len(calls) {
-		t.Fatalf("work holds %d entries, want %d", got, len(calls))
+	if got := len(app.happened); got != len(calls) {
+		t.Fatalf("the feed holds %d events, want %d", got, len(calls))
 	}
 	for index, one := range calls {
-		entry := app.work.Entries[index]
-		if !strings.Contains(entry.Head, one.text) {
-			t.Errorf("entry %d lost the call %q, has %q", index, one.text, entry.Head)
+		event := app.happened[index]
+		if !strings.Contains(event.Title+" "+event.Body, one.text) {
+			t.Errorf("event %d lost the call %q, has %q %q", index, one.text, event.Title, event.Body)
 		}
-		if !strings.Contains(entry.Output, one.result) {
-			t.Errorf("entry %d lost the result %q, has %q", index, one.result, entry.Output)
+		if !strings.Contains(strings.Join(event.Detail, "\n"), one.result) {
+			t.Errorf("event %d lost the result %q, has %q", index, one.result, event.Detail)
 		}
 	}
 }
@@ -349,7 +331,7 @@ func TestAFailedCallIsNeverFoldedAndTheRunBreaksAroundIt(t *testing.T) {
 	if rows := callRows(plain); rows != 1 {
 		t.Errorf("the run drew %d call rows, want the failed one alone\n%s", rows, plain)
 	}
-	if !strings.Contains(content, theme.Fail().Render("FAIL tofu/internal/recall 0.18s")) {
+	if !strings.Contains(content, escapeOf(theme.Fail())+"FAIL tofu/internal/recall 0.18s") {
 		t.Errorf("the failure is drawn like every other result\n%q", content)
 	}
 	if folds := strings.Count(plain, " tools"); folds != 2 {

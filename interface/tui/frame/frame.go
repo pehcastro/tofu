@@ -71,46 +71,6 @@ func Release(buildVersion, buildRevision string) string {
 	return konst.Version
 }
 
-func Header(head Head, width int) string {
-	row, _ := Top(head, nil, 0, width)
-	return row
-}
-
-func Bar(status Status, width int) string {
-	return Footer(status, width, "")
-}
-
-type View struct {
-	Digit rune
-	Name  string
-}
-
-type Strip struct {
-	Views   []View
-	Notice  string
-	Current int
-	hits    []Hit
-}
-
-func (s *Strip) Render(width int) string {
-	labels := make([]string, len(s.Views))
-	for index, view := range s.Views {
-		labels[index] = view.Name
-	}
-	var nav []span
-	nav, s.hits = chips(labels, s.Current)
-	return look.ChromeRow(width, look.Background, draw(nav), look.Painted(s.Notice, look.Amber, look.Background))
-}
-
-func (s Strip) Hit(column int) (int, bool) {
-	for _, hit := range s.hits {
-		if column >= hit.Start && column < hit.End {
-			return hit.Index, true
-		}
-	}
-	return 0, false
-}
-
 type span struct {
 	text    string
 	fg      look.Color

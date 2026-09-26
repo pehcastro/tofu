@@ -1,41 +1,32 @@
 package tui
 
 import (
-	"cmp"
 	"context"
+	"io"
+	"os"
 	"os/exec"
-	"slices"
-	"strconv"
-	"strings"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
-	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 
 	"tofu/interface/tui/edits"
+	"tofu/interface/tui/feed"
 	"tofu/interface/tui/frame"
-	"tofu/interface/tui/links"
 	"tofu/interface/tui/markdown"
-	"tofu/interface/tui/models"
 	"tofu/interface/tui/paste"
-	"tofu/interface/tui/pick"
-	"tofu/interface/tui/quote"
+	"tofu/interface/tui/pointer"
 	"tofu/interface/tui/session"
 	"tofu/interface/tui/settings"
 	"tofu/interface/tui/shells"
 	"tofu/interface/tui/subagent"
-	"tofu/interface/tui/theme"
-	"tofu/interface/tui/trace"
-	"tofu/interface/tui/work"
 	"tofu/internal/judge/jev"
-	"tofu/internal/konst"
+	"tofu/internal/keymap"
 	"tofu/internal/llm"
 	library "tofu/internal/llm/models"
 	isession "tofu/internal/session"
 	isettings "tofu/internal/settings"
-	roster "tofu/internal/subagent"
 	"tofu/internal/sys"
-	"tofu/internal/widget"
 )
 
 type EventKind int
@@ -165,107 +156,52 @@ type Options struct {
 	Now          func() time.Time
 	Shells       func() []shells.Entry
 	KillShell    func(name string) error
+	Fresh        bool
+	Keymap       string
 }
 
-type viewID int
+type screen int
 
 const (
-	viewChat viewID = iota
-	viewWork
-	viewEdits
-	viewSubAgents
-	viewShells
-	viewSettings
-	viewLinks
-	viewQuote
-	viewModels
+	screenChat screen = iota
+	screenAgents
+	screenEdits
+	screenShells
+	screenSettings
 )
 
-const subAgentsIndex = int(viewSubAgents)
-
-func namedViews() []frame.View {
-	return []frame.View{
-		{Digit: '1', Name: "chat"},
-		{Digit: '2', Name: "work"},
-		{Digit: '3', Name: "file edits"},
-		{Digit: '4', Name: subAgentsLabel(0)},
-		{Digit: '5', Name: "shells"},
-	}
-}
-
-func subAgentsLabel(running int) string {
-	if running == 0 {
-		return "sub-agents"
-	}
-	return "sub-agents (" + strconv.Itoa(running) + ")"
-}
-
 const (
-	gateOffLine        = "the gate is off, so no call on this session is judged."
-	gateOffNoKey       = "put OPENROUTER_KEY in .tofu/.env and the next session is judged."
-	gateOffKeyUnnamed  = ".tofu/.env carries no OPENROUTER_KEY line: add one and the next session is judged."
-	gateOffKeyUnread   = "the .env file that should carry OPENROUTER_KEY could not be read."
-	gateOffUnexplained = "tofu could not open the judge."
-	gateOffHead        = "gate off"
-)
-
-func gateOffNote(why jev.Why) string {
-	switch why {
-	case jev.WhyNoFile:
-		return gateOffLine + " " + gateOffNoKey
-	case jev.WhyFileLacksName:
-		return gateOffLine + " " + gateOffKeyUnnamed
-	case jev.WhyUnreadable:
-		return gateOffLine + " " + gateOffKeyUnread
-	case jev.WhyUnexplained:
-		return gateOffLine + " " + gateOffUnexplained
-	}
-	panic("tui: unknown gate reason")
-}
-
-const (
-	eventBuffer    = 256
-	defaultWidth   = 80
-	defaultHeight  = 24
-	viewChrome     = 3
-	headerRows     = 1
-	stripRow       = 1
-	bodyRow        = stripRow + 1
-	setupTitle     = "tofu cannot start a turn yet"
-	setupKeys      = "[1-9] run the fix   [r] check again   [q] quit"
-	setupIndent    = "   "
-	setupWatch     = "or run the command in another terminal: tofu picks it up here"
-	setupPoll      = time.Second
-	readyNote      = "type a task and press enter. tofu works in "
-	altPrefix      = "alt+"
-	killShellKey   = "ctrl+x"
-	stoppingNote   = "stopping the turn"
-	stoppingModel  = "stopping the model, and letting the running tools finish"
-	queuedKept     = ", and the queue keeps "
-	queuedTyped    = " you typed"
-	quitAgainNote  = "press ctrl+c again to quit tofu"
-	toolEventKind  = "tool"
-	failureHead    = "failure"
-	partialHead    = "answer, interrupted"
-	charactersKept = " characters were written and kept in work"
+	eventBuffer   = 256
+	defaultWidth  = 80
+	defaultHeight = 24
+	chromeRows    = 3
+	bodyTop       = 2
+	pulseInterval = 90 * time.Millisecond
+	noticePulses  = 34
+	wheelRows     = 3
+	setupPoll     = time.Second
+	exitReset     = "\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?1016l\x1b[0m" + ansi.ResetBackgroundColor
 )
 
 type App struct {
 	options        Options
 	requirements   []Requirement
-	current        viewID
-	strip          frame.Strip
+	current        screen
 	view           session.Model
-	work           work.Model
-	subagents      subagent.Model
+	feed           feed.Model
 	edits          edits.Model
 	shells         shells.Model
-	links          links.Model
-	quote          quote.Model
-	picker         models.Model
 	settings       settings.Model
-	settingsStore  *isettings.Store
+	store          *isettings.Store
+	preview        preview
+	roles          map[library.RoleID]string
+	shortcuts      map[string]string
+	dialogs        []dialog
+	intro          intro
 	status         frame.Status
+	noticeAt       int
+	pulse          int
+	pulsing        bool
 	wire           string
 	model          string
 	provider       string
@@ -278,21 +214,26 @@ type App struct {
 	height         int
 	started        time.Time
 	busy           bool
-	ticking        bool
+	forking        bool
 	gateOff        bool
 	running        int
 	pressedAt      time.Time
 	cancel         context.CancelFunc
 	events         chan Event
 	childCalls     []string
+	children       []subagent.Child
+	happened       []feed.Event
+	spawns         int
 	board          paste.Board
 	minted         int
-	workBeforeTurn int
+	happenedAtTurn int
 	keptAnswer     string
-	selection      pick.Selection
-	pressed        pick.Cell
-	holding        bool
-	frame          []string
+	selection      pointer.Selection
+	frozen         string
+	drag           pointer.Drag
+	lastSelection  string
+	drawn          string
+	hits           []frame.Hit
 }
 
 type Closed struct{}
@@ -303,7 +244,7 @@ type recheckMsg struct{}
 
 type pathsMsg []string
 
-type tickMsg time.Time
+type pulseMsg struct{}
 
 type shellsMsg []shells.Entry
 
@@ -320,36 +261,34 @@ func New(options Options) *App {
 	if options.Promotions == "" && options.Root != "" {
 		options.Promotions = isession.NewPromotionLog(sys.StateDir(options.Root))
 	}
-	if options.Release == "" {
-		options.Release = frame.Release(sys.Version(), sys.BuildRevision())
+	if options.Keymap == "" {
+		options.Keymap, _ = keymap.ShortcutsPath()
 	}
 	app := &App{
-		options:       options,
-		requirements:  options.Requirements,
-		strip:         frame.Strip{Views: namedViews()},
-		view:          session.New(options.Now, new(markdown.Renderer).Lines),
-		work:          work.New(),
-		edits:         edits.Model{Root: options.Root},
-		settings:      settings.Model{Providers: options.Providers, Scopes: []string{"global", "project"}},
-		settingsStore: options.Settings,
-		width:         defaultWidth,
-		height:        defaultHeight,
-		started:       options.Now(),
-		board:         paste.Default(options.Paste),
+		options:      options,
+		requirements: options.Requirements,
+		view:         session.New(options.Now, new(markdown.Renderer).Lines),
+		feed:         feed.New(options.Now),
+		edits:        edits.Model{Root: options.Root},
+		shells:       shells.New(options.Now),
+		settings:     settings.Model{Providers: options.Providers, Scopes: []string{"global", "project"}},
+		store:        options.Settings,
+		shortcuts:    keymap.LoadShortcuts(options.Keymap),
+		width:        defaultWidth,
+		height:       defaultHeight,
+		started:      options.Now(),
+		board:        paste.Default(options.Paste),
 	}
 	app.status.Note = options.Note
+	app.status.Fresh = options.Fresh
 	app.view.Commands = commands(options)
+	app.settings.SetSearchKey(app.shortcuts[searchAction])
+	app.settings.SetBranch(options.Branch)
+	app.intro = newIntro(options.Fresh && !app.flag(isettings.HideIntroduction), app.text(isettings.Animations) != animationsOff)
 	app.resize(app.width, app.height)
 	app.readWires()
 	app.refreshSettingsRows()
-	if len(app.requirements) == 0 {
-		app.sayWhatToType()
-	}
 	return app
-}
-
-func (a *App) sayWhatToType() {
-	a.view.Append(session.Entry{Kind: session.Note, Body: readyNote + a.options.Repo})
 }
 
 func (a *App) readWires() {
@@ -366,11 +305,12 @@ func (a *App) readWires() {
 
 func Run(options Options) error {
 	_, err := tea.NewProgram(New(options)).Run()
+	_, _ = io.WriteString(os.Stdout, exitReset)
 	return err
 }
 
 func (a *App) Init() tea.Cmd {
-	return tea.Batch(a.view.Focus(), a.pollQuota(), a.readPaths(), a.watchSetup(), a.pollShells())
+	return tea.Batch(a.view.Focus(), a.intro.start(), a.pollQuota(), a.readPaths(), a.watchSetup(), a.pollShells(), a.startPulse())
 }
 
 func (a *App) pollShells() tea.Cmd {
@@ -396,612 +336,6 @@ func (a *App) readPaths() tea.Cmd {
 	return func() tea.Msg { return pathsMsg(under()) }
 }
 
-func (a *App) resize(width, height int) {
-	a.width, a.height = width, height
-	a.view.SetSize(width, height-viewChrome)
-	a.work.SetSize(width, height-viewChrome)
-	a.subagents.SetSize(width, height-viewChrome)
-	a.edits.SetSize(width, height-viewChrome)
-	a.shells.SetSize(width, height-viewChrome)
-	a.links.SetSize(width, height-viewChrome)
-	a.quote.SetSize(width, height-viewChrome)
-	a.picker.SetSize(width, height-viewChrome)
-	a.settings.SetSize(width, height-viewChrome)
-}
-
-func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	switch msg := msg.(type) {
-	case tea.WindowSizeMsg:
-		a.resize(msg.Width, msg.Height)
-		return a, nil
-
-	case tea.KeyPressMsg:
-		return a.key(msg)
-
-	case tea.MouseClickMsg:
-		a.mousePress(msg)
-		return a, nil
-
-	case tea.MouseMotionMsg:
-		a.mouseDrag(msg)
-		return a, nil
-
-	case tea.MouseReleaseMsg:
-		return a, a.mouseRelease()
-
-	case tea.MouseWheelMsg:
-		a.mouseWheel(msg)
-		return a, nil
-
-	case Event:
-		a.absorb(msg)
-		if a.events == nil {
-			return a, a.tick()
-		}
-		return a, tea.Batch(a.waitForEvent(), a.tick())
-
-	case paste.Outcome:
-		a.view.Attached(msg)
-		return a, nil
-
-	case copiedMsg:
-		a.status.Note = msg.note()
-		if msg.state == copyToTerminal {
-			return a, tea.SetClipboard(msg.text)
-		}
-		return a, nil
-
-	case Closed:
-		a.busy, a.cancel, a.events, a.edits.Busy = false, nil, nil, false
-		a.running, a.pressedAt = 0, time.Time{}
-		a.parkChildrenTheTurnLeftBehind()
-		a.view.Stop()
-		a.dropSteering()
-		next := tea.Batch(a.pollQuota(), a.readPaths(), a.pollShells())
-		if task, queued := a.view.Release(); queued {
-			return a, tea.Batch(a.start(task), next)
-		}
-		return a, next
-
-	case pathsMsg:
-		a.view.Paths = msg
-		return a, nil
-
-	case []frame.Quota:
-		a.status.Quotas = msg
-		return a, nil
-
-	case recheckMsg:
-		recheck := a.options.Recheck
-		if recheck == nil {
-			return a, nil
-		}
-		return a, func() tea.Msg { return requirementsMsg(recheck()) }
-
-	case requirementsMsg:
-		cleared := len(a.requirements) > 0 && len(msg) == 0
-		a.requirements = msg
-		a.readWires()
-		if !cleared {
-			return a, a.watchSetup()
-		}
-		a.sayWhatToType()
-		return a, a.view.Focus()
-
-	case tickMsg:
-		a.ticking = false
-		return a, a.tick()
-
-	case shellsMsg:
-		a.shells.Set(msg)
-		return a, nil
-	}
-	return a, a.view.Update(msg)
-}
-
-func (a *App) jump(key string) (viewID, bool) {
-	for index, view := range a.strip.Views {
-		if key == string(view.Digit) {
-			return viewID(index), true
-		}
-	}
-	return viewChat, false
-}
-
-func (a *App) show(view viewID) {
-	a.current = view
-	a.strip.Current = int(view)
-}
-
-func (a *App) step(by int) {
-	views := len(a.strip.Views)
-	a.show(viewID((int(a.current) + by + views) % views))
-}
-
-func (a *App) key(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
-	key := msg.String()
-	a.status.Note = ""
-	if len(a.requirements) > 0 {
-		return a.setupKey(key)
-	}
-	if key == "ctrl+c" {
-		return a, a.interrupt()
-	}
-	a.pressedAt = time.Time{}
-	if a.current == viewChat && a.view.TakesAnswerDigits() {
-		switch key {
-		case "1":
-			a.answer(AllowedOnce)
-			return a, nil
-		case "2":
-			a.answer(Denied)
-			return a, nil
-		case "3":
-			a.answer(AlwaysHere)
-			return a, nil
-		}
-	}
-	if a.current == viewChat {
-		if handled, cmd := a.menuKey(key); handled {
-			return a, cmd
-		}
-	}
-	switch key {
-	case "tab":
-		a.step(1)
-		return a, nil
-	case "shift+tab":
-		a.step(-1)
-		return a, nil
-	case "esc":
-		a.show(viewChat)
-		return a, nil
-	case "ctrl+o":
-		a.show(viewWork)
-		return a, nil
-	case "ctrl+v", "alt+v":
-		if a.current != viewChat {
-			return a, nil
-		}
-		return a, a.view.Paste(a.board)
-	}
-	digit, alt := strings.CutPrefix(key, altPrefix)
-	if alt || a.current != viewChat {
-		if jumped, ok := a.jump(digit); ok {
-			a.show(jumped)
-			return a, nil
-		}
-	}
-	switch a.current {
-	case viewSubAgents:
-		a.subagents.Key(key)
-		return a, nil
-	case viewEdits:
-		a.edits.Key(key)
-		return a, nil
-	case viewShells:
-		a.shellsKey(key)
-		return a, nil
-	case viewSettings:
-		a.settingsKey(key)
-		return a, nil
-	case viewLinks:
-		return a, a.linksKey(key)
-	case viewQuote:
-		a.quoteKey(key)
-		return a, nil
-	case viewModels:
-		a.pickerKey(key)
-		return a, nil
-	case viewWork:
-		a.workKey(key)
-		return a, nil
-	case viewChat:
-	}
-	switch key {
-	case "enter":
-		if name, asked := a.view.Command(); asked {
-			return a, a.runCommand(name)
-		}
-		return a, a.send()
-	case "ctrl+x":
-		a.view.Unqueue()
-		return a, nil
-	case "alt+up":
-		a.view.PickQueued(-1)
-		return a, nil
-	case "alt+down":
-		a.view.PickQueued(1)
-		return a, nil
-	case "ctrl+y":
-		return a, a.copyAnswer()
-	case "alt+y":
-		call, found := a.view.LastCall()
-		return a, a.copy(callUnit, call, found)
-	case "up":
-		if a.view.HistoryUp() {
-			return a, nil
-		}
-	case "down":
-		if a.view.HistoryDown() {
-			return a, nil
-		}
-	}
-	if moved, scrolled := a.view.Scroll(key); scrolled {
-		a.selection.Shift(moved)
-		return a, nil
-	}
-	return a, a.view.Update(msg)
-}
-
-func (a *App) answer(answer Answer) {
-	if a.options.Answers == nil {
-		return
-	}
-	select {
-	case a.options.Answers <- answer:
-		a.view.Resume()
-	default:
-	}
-}
-
-func (a *App) setupKey(key string) (tea.Model, tea.Cmd) {
-	switch key {
-	case "q", "ctrl+c":
-		return a, tea.Quit
-	case "r":
-		return a, func() tea.Msg { return a.checkedRequirements() }
-	}
-	index, err := strconv.Atoi(key)
-	if err != nil || index < 1 || index > len(a.requirements) {
-		return a, nil
-	}
-	run := a.requirements[index-1].Run
-	if run == nil {
-		run = a.options.Login
-	}
-	if run == nil {
-		return a, nil
-	}
-	return a, tea.ExecProcess(run(), func(error) tea.Msg { return a.checkedRequirements() })
-}
-
-func (a *App) send() tea.Cmd {
-	task := a.view.Value()
-	if task == "" {
-		return nil
-	}
-	if prefix, isID := idPrefix(task); isID {
-		a.view.Reset()
-		a.jumpToID(prefix)
-		return nil
-	}
-	chips := a.view.Remember(task)
-	a.view.Reset()
-	if a.busy {
-		a.view.Queue(task, chips)
-		a.steer(task)
-		return nil
-	}
-	a.view.Append(session.Entry{Kind: session.User, Body: task, Chips: chips})
-	return a.start(task)
-}
-
-func idPrefix(task string) (string, bool) {
-	prefix, hasHash := strings.CutPrefix(task, "#")
-	if !hasHash || prefix == "" {
-		return "", false
-	}
-	for _, letter := range prefix {
-		if !strings.ContainsRune("0123456789abcdefABCDEF", letter) {
-			return "", false
-		}
-	}
-	return strings.ToLower(prefix), true
-}
-
-func (a *App) jumpToID(prefix string) {
-	if a.work.JumpTo(prefix) {
-		a.show(viewWork)
-		return
-	}
-	a.view.Append(session.Entry{Kind: session.Note, Body: "nothing in work carries the id #" + prefix})
-}
-
-func (a *App) workKey(key string) {
-	a.work.Key(key)
-	if key != "enter" {
-		return
-	}
-	entry, picked := a.work.Picked()
-	if !picked {
-		return
-	}
-	freeArm := isession.PlaceChat
-	if a.view.FoldedOutOfChat(entry.ID) {
-		freeArm = isession.PlaceWork
-	}
-	a.view.Append(session.Entry{Kind: session.Note, ID: entry.ID, Body: entry.Reference()})
-	a.recordPromotion(isession.Promotion{
-		Action:    isession.ReachedIntoWork,
-		EventID:   entry.ID,
-		EventKind: entry.Kind(),
-		FreeArm:   freeArm,
-		Chose:     isession.PlaceChat,
-	})
-}
-
-func (a *App) recordPromotion(row isession.Promotion) {
-	row.At, row.Session = a.options.Now(), a.sessionID
-	if err := a.options.Promotions.Append(row); err != nil {
-		a.view.Append(session.Entry{Kind: session.Failure, Body: err.Error()})
-	}
-}
-
-func (a *App) shellsKey(key string) {
-	if key != killShellKey {
-		a.shells.Key(key)
-		return
-	}
-	entry, picked := a.shells.Picked()
-	if !picked || a.options.KillShell == nil {
-		return
-	}
-	if err := a.options.KillShell(entry.Name); err != nil {
-		a.view.Append(session.Entry{Kind: session.Failure, Body: err.Error()})
-		return
-	}
-	a.shells.Remove(entry.Name)
-}
-
-func (a *App) steer(task string) {
-	select {
-	case a.options.Steering <- task:
-	default:
-	}
-}
-
-func (a *App) dropSteering() {
-	for {
-		select {
-		case <-a.options.Steering:
-		default:
-			return
-		}
-	}
-}
-
-func (a *App) mintID() string {
-	a.minted++
-	return strconv.FormatInt(a.options.Now().UnixNano(), 16) + strconv.Itoa(a.minted)
-}
-
-func (a *App) turnWorkID() string {
-	if a.keptAnswer != "" {
-		return a.keptAnswer
-	}
-	if len(a.work.Entries) <= a.workBeforeTurn {
-		return ""
-	}
-	return a.work.Entries[len(a.work.Entries)-1].ID
-}
-
-func (a *App) interrupt() tea.Cmd {
-	if a.view.Stopping {
-		return nil
-	}
-	withinQuitWindow := a.options.Now().Sub(a.pressedAt) <= konst.QuitAgainMillis*time.Millisecond
-	a.pressedAt = a.options.Now()
-	switch {
-	case !a.busy:
-		if withinQuitWindow {
-			return tea.Quit
-		}
-		a.view.Append(session.Entry{Kind: session.Note, Body: quitAgainNote})
-	case a.view.LettingToolsFinish:
-		a.stopTurn()
-	case a.running == 0 || len(a.childCalls) > 0 || a.view.TakesAnswerDigits():
-		a.stopTurn()
-	default:
-		a.view.LettingToolsFinish = true
-		a.noteStop(stoppingModel + a.queueTail())
-	}
-	return nil
-}
-
-func (a *App) queueTail() string {
-	held := len(a.view.Queued())
-	if held == 0 {
-		return ""
-	}
-	word := " messages"
-	if held == 1 {
-		word = " message"
-	}
-	return queuedKept + strconv.Itoa(held) + word + queuedTyped
-}
-
-func (a *App) stopTurn() {
-	if a.view.Stopping {
-		return
-	}
-	a.view.LettingToolsFinish, a.view.Stopping = false, true
-	a.cancel()
-	a.dropSteering()
-	a.noteStop(stoppingNote + a.queueTail())
-}
-
-func (a *App) showChildren(children []subagent.Child) {
-	a.subagents.Children, a.view.Children, a.edits.Children = children, children, children
-	a.status.Agents = a.subagents.Running()
-	a.strip.Views[subAgentsIndex].Name = subAgentsLabel(a.status.Agents)
-}
-
-func (a *App) parkChildrenTheTurnLeftBehind() {
-	parked := slices.Clone(a.subagents.Children)
-	for i, child := range parked {
-		if child.State == roster.Working || child.State == roster.WaitingAnswer {
-			parked[i].State = roster.Parked
-		}
-	}
-	a.showChildren(parked)
-}
-
-func (a *App) noteStop(note string) {
-	kept := a.keptPartial()
-	a.view.Append(session.Entry{Kind: session.Note, Body: note})
-	if kept != "" {
-		a.view.Append(session.Entry{Kind: session.Note, Body: kept})
-	}
-}
-
-func (a *App) keptPartial() string {
-	partial, written := a.view.TakePartial()
-	if !written {
-		return ""
-	}
-	id := a.mintID()
-	a.keptAnswer = id
-	a.work.Append(work.Entry{ID: id, Head: partialHead, Output: partial, Bytes: len(partial)})
-	return strconv.Itoa(len([]rune(partial))) + charactersKept + " [" + trace.Short(id) + "]"
-}
-
-func (a *App) start(task string) tea.Cmd {
-	a.view.Follow()
-	a.status.Note = ""
-	a.workBeforeTurn, a.keptAnswer, a.childCalls = len(a.work.Entries), "", nil
-	if a.options.Turn == nil {
-		a.view.Append(session.Entry{Kind: session.Failure, Body: "no engine is wired to this app"})
-		return nil
-	}
-
-	ctx, cancel := context.WithCancel(context.Background())
-	events := make(chan Event, eventBuffer)
-	a.busy, a.cancel, a.events, a.edits.Busy = true, cancel, events, true
-	a.running = 0
-	a.view.Start()
-	turn, pick := a.options.Turn, Pick{Wire: a.wire, Model: a.picked, Effort: a.effort}
-	deliver := func(event Event) {
-		if !event.snapshot() {
-			events <- event
-			return
-		}
-		select {
-		case events <- event:
-		default:
-		}
-	}
-	go func() {
-		turn(ctx, pick, task, deliver)
-		cancel()
-		close(events)
-	}()
-	return tea.Batch(a.waitForEvent(), a.tick())
-}
-
-func (a *App) waitForEvent() tea.Cmd {
-	events := a.events
-	return func() tea.Msg {
-		event, open := <-events
-		if !open {
-			return Closed{}
-		}
-		return event
-	}
-}
-
-func (a *App) absorb(event Event) {
-	if event.answered() {
-		a.view.Returned()
-	}
-	if len(a.childCalls) > 0 && (event.Kind == EventText || event.Kind == EventTextDelta) {
-		return
-	}
-	switch event.Kind {
-	case EventRequesting:
-		a.view.Requesting()
-	case EventText:
-		a.view.Append(session.Entry{Kind: session.Assistant, Body: event.Text, ID: event.ID})
-	case EventTextDelta:
-		a.view.Stream(event.Text)
-	case EventToolCall:
-		a.running++
-		if event.Promote {
-			a.childCalls = append(a.childCalls, event.ID)
-		}
-		a.view.Append(session.Entry{Kind: session.Tool, ID: event.ID, Head: event.Tool, Body: event.Text, Detail: event.Detail, Promoted: event.Promote})
-		a.work.Append(work.Entry{ID: event.ID, Head: event.Tool + " " + event.Text, Args: event.Detail})
-	case EventToolResult:
-		a.childCalls = slices.DeleteFunc(a.childCalls, func(called string) bool { return called == event.ID })
-		status := event.Text
-		if edit, changed := edits.Changed(event.Agent, a.view.Intent(event.ID), event.Diff, event.Created, event.ID, a.options.Now()); changed {
-			a.edits.Add(edit)
-			status = edit.Tally()
-		}
-		a.view.Finish(event.ID, session.Result{Status: status, Bytes: event.Bytes, Failed: event.Failed})
-		a.work.Finish(event.ID, status, event.Bytes, event.Failed)
-		a.running = max(a.running-1, 0)
-		if a.view.LettingToolsFinish && a.running == 0 {
-			a.stopTurn()
-		}
-	case EventNote:
-		a.view.Append(session.Entry{Kind: session.Note, Body: event.Text})
-	case EventDone:
-		a.view.Close(event.Text, a.turnWorkID())
-	case EventFailure:
-		id := cmp.Or(event.ID, a.mintID())
-		a.work.Append(work.Entry{ID: id, Head: strings.TrimSpace(failureHead + " " + event.Tool), Output: event.Text, Failed: true})
-		a.view.Append(session.Entry{Kind: session.Failure, ID: id, Body: event.Text})
-	case EventDecision:
-		if event.Decision != nil {
-			a.view.Decide(*event.Decision)
-			a.work.Decide(event.Decision.Tool, event.Decision.Verdict.String())
-		}
-	case EventSession:
-		if event.ID != a.sessionID {
-			a.started = a.options.Now()
-		}
-		a.sessionName, a.sessionID = event.Text, event.ID
-	case EventGateOff:
-		if !a.gateOff {
-			a.gateOff = true
-			id := a.mintID()
-			a.work.Append(work.Entry{ID: id, Head: gateOffHead, Output: event.Text})
-			a.workBeforeTurn = len(a.work.Entries)
-			a.view.Append(session.Entry{Kind: session.Note, ID: id, Body: gateOffNote(event.GateWhy)})
-		}
-	case EventContext:
-		a.status.Context = event.Context
-	case EventSubAgent:
-		a.showChildren(event.Children)
-	case EventPlan:
-		a.view.SetPlan(event.Plan)
-	case EventAwaitPerson:
-		a.view.Await()
-	case EventResumed:
-		a.view.Resume()
-	case EventSteered:
-		a.view.Delivered(event.Text)
-	case EventForkStart:
-		a.strip.Notice = frame.ForkNotice
-	case EventForkEnd:
-		a.strip.Notice = ""
-	case EventStats:
-		a.status.TokensIn, a.status.TokensOut, a.status.CacheRead = event.TokensIn, event.TokensOut, event.CacheRead
-		a.status.Decisions = event.Decisions
-		if event.Model != "" {
-			a.model = event.Model
-		}
-	}
-}
-
-func (a *App) checkedRequirements() requirementsMsg {
-	if a.options.Recheck == nil {
-		return requirementsMsg(a.requirements)
-	}
-	return requirementsMsg(a.options.Recheck())
-}
-
 func (a *App) pollQuota() tea.Cmd {
 	poll := a.options.Quota
 	if poll == nil {
@@ -1010,190 +344,147 @@ func (a *App) pollQuota() tea.Cmd {
 	return func() tea.Msg { return poll() }
 }
 
-func (a *App) tick() tea.Cmd {
-	if a.ticking || !a.busy {
+func (a *App) resize(width, height int) {
+	a.width, a.height = width, height
+	body := height - chromeRows
+	a.view.SetSize(width, body)
+	a.feed.SetSize(width, body)
+	a.edits.SetSize(width, body)
+	a.shells.SetSize(width, body)
+	a.settings.SetSize(width, height)
+	a.intro.resize(width)
+	a.selection, a.frozen = pointer.Selection{}, ""
+}
+
+func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	cmd := a.update(msg)
+	return a, tea.Batch(cmd, a.startPulse())
+}
+
+func (a *App) update(msg tea.Msg) tea.Cmd {
+	if size, resized := msg.(tea.WindowSizeMsg); resized {
+		a.resize(size.Width, size.Height)
+		cmd, _ := a.toFiles(msg)
+		return cmd
+	}
+	if a.intro.shown && len(a.requirements) == 0 {
+		if cmd, taken := a.coverInput(msg); taken {
+			return cmd
+		}
+	}
+	if a.hostResult(msg) {
 		return nil
 	}
-	a.ticking = true
-	return tea.Tick(session.TickInterval, func(at time.Time) tea.Msg { return tickMsg(at) })
-}
-
-func (a *App) settingsKey(key string) {
-	a.applyIntent(a.settings.Key(key))
-	a.refreshSettingsRows()
-}
-
-func (a *App) applyIntent(intent settings.Intent) {
-	if a.settingsStore == nil {
-		return
-	}
-	switch intent.Action {
-	case settings.ActionNone:
-	case settings.ActionCycleScope:
-		a.settings.Scope = (a.settings.Scope + 1) % len(a.settings.Scopes)
-	case settings.ActionToggle:
-		wasOn := a.settingsStore.Bool(intent.Key)
-		value := 1
-		if wasOn {
-			value = 0
+	switch msg := msg.(type) {
+	case tea.MouseClickMsg:
+		a.press(msg)
+		return nil
+	case tea.MouseMotionMsg:
+		a.motion(msg)
+		return nil
+	case tea.MouseReleaseMsg:
+		return a.release(msg)
+	case tea.MouseWheelMsg:
+		return a.wheel(msg)
+	case tea.KeyPressMsg:
+		return a.key(msg)
+	case tea.PasteMsg:
+		return a.pasted(msg)
+	case pulseMsg:
+		a.beat()
+		return nil
+	case Event:
+		a.absorb(msg)
+		if a.events == nil {
+			return nil
 		}
-		a.setSetting(intent.Key, value)
-		if intent.Key == isettings.ChatShowsTools {
-			a.recordKindMove(wasOn)
+		return a.waitForEvent()
+	case paste.Outcome:
+		a.view.Attached(msg)
+		return nil
+	case copiedMsg:
+		a.notify(msg.note())
+		if msg.state == copyToTerminal {
+			return tea.SetClipboard(msg.text)
 		}
-	case settings.ActionIncrement:
-		a.setSetting(intent.Key, a.settingsStore.Int(intent.Key)+1)
-	case settings.ActionDecrement:
-		a.setSetting(intent.Key, a.settingsStore.Int(intent.Key)-1)
-	default:
-		panic("tui: unknown settings action")
-	}
-}
-
-func (a *App) recordKindMove(wasInChat bool) {
-	row := isession.Promotion{
-		Action:    isession.MovedKind,
-		EventKind: toolEventKind,
-		FreeArm:   isession.PlaceWork,
-		Chose:     isession.PlaceChat,
-	}
-	if wasInChat {
-		row.FreeArm, row.Chose = isession.PlaceChat, isession.PlaceWork
-	}
-	a.recordPromotion(row)
-}
-
-func (a *App) setSetting(key string, value int) {
-	if err := a.settingsStore.Set(isettings.Scope(a.settings.Scope), key, value); err != nil {
-		a.view.Append(session.Entry{Kind: session.Failure, Body: err.Error()})
-	}
-}
-
-func (a *App) refreshSettingsRows() {
-	if a.settingsStore == nil {
-		return
-	}
-	pending := map[string]bool{}
-	for _, key := range a.settingsStore.RestartPending() {
-		pending[key] = true
-	}
-	matches := a.settingsStore.Search(a.settings.Query)
-	rows := make([]settings.Row, 0, len(matches))
-	for _, match := range matches {
-		rows = append(rows, settingsRow(a.settingsStore, pending, match.Spec))
-	}
-	a.settings.SetRows(rows)
-	a.settings.ChatShowsTools = a.settingsStore.Bool(isettings.ChatShowsTools)
-}
-
-func settingsRow(store *isettings.Store, pending map[string]bool, spec isettings.Spec) settings.Row {
-	scope, fromFile := store.Source(spec.Key)
-	source := "default"
-	if fromFile {
-		source = scope.String() + " " + store.Path(scope)
-	}
-	value := strconv.Itoa(store.Int(spec.Key))
-	if spec.Kind == isettings.Bool {
-		value = strconv.FormatBool(store.Bool(spec.Key))
-	}
-	return settings.Row{
-		Key:             spec.Key,
-		Category:        spec.Category,
-		Label:           spec.Label,
-		Value:           value,
-		Kind:            settings.Kind(spec.Kind),
-		Changed:         fromFile,
-		RestartRequired: spec.Restart,
-		RestartPending:  pending[spec.Key],
-		Source:          source,
-	}
-}
-
-func (a *App) View() tea.View {
-	at := a.options.Now()
-	head := frame.Head{
-		Path:        a.options.Repo,
-		Branch:      a.options.Branch,
-		Provider:    a.provider,
-		Model:       a.model,
-		SessionName: a.sessionName,
-		SessionID:   a.sessionID,
-		At:          at,
-		Started:     a.started,
-	}
-	rows := []string{frame.Header(head, a.width)}
-	var caret *tea.Cursor
-	if len(a.requirements) > 0 {
-		rows = append(rows, a.setupView(a.height-headerRows))
-	} else {
-		status := a.status
-		status.At, status.Release = at, a.options.Release
-		a.view.ChatShowsTools = a.settings.ChatShowsTools
-		if a.settingsStore != nil {
-			a.view.FoldHidesShell = a.settingsStore.Bool(isettings.FoldHidesShell)
+		return nil
+	case Closed:
+		return a.closed()
+	case pathsMsg:
+		a.view.Paths = msg
+		return nil
+	case []frame.Quota:
+		a.status.Quotas = msg
+		return nil
+	case recheckMsg:
+		recheck := a.options.Recheck
+		if recheck == nil {
+			return nil
 		}
-		rows = append(rows, a.strip.Render(a.width), a.body())
-		if a.current != viewSubAgents {
-			rows = append(rows, frame.Bar(status, a.width))
+		return func() tea.Msg { return requirementsMsg(recheck()) }
+	case requirementsMsg:
+		cleared := len(a.requirements) > 0 && len(msg) == 0
+		a.requirements = msg
+		a.readWires()
+		if !cleared {
+			return a.watchSetup()
 		}
-		if a.current == viewChat {
-			caret = a.view.Cursor()
-		}
+		return tea.Batch(a.view.Focus(), a.intro.start())
+	case shellsMsg:
+		a.showShells(msg)
+		return nil
 	}
-	if caret != nil {
-		caret.Y += bodyRow
+	if cmd, open := a.toFiles(msg); open {
+		return cmd
 	}
-	a.frame = strings.Split(lipgloss.JoinVertical(lipgloss.Left, rows...), "\n")
-	view := tea.NewView(strings.Join(a.selection.Paint(a.frame), "\n"))
-	view.AltScreen = true
-	view.MouseMode = tea.MouseModeCellMotion
-	view.Cursor = caret
-	return view
+	if a.intro.shown {
+		return a.intro.animate(msg)
+	}
+	return a.view.Update(msg)
 }
 
-func (a *App) body() string {
-	switch a.current {
-	case viewChat:
-		return a.view.View()
-	case viewWork:
-		return a.work.View()
-	case viewSubAgents:
-		return a.subagents.View()
-	case viewEdits:
-		return a.edits.View()
-	case viewShells:
-		return a.shells.View()
-	case viewSettings:
-		return a.settings.View()
-	case viewLinks:
-		return a.links.View()
-	case viewQuote:
-		return a.quote.View()
-	case viewModels:
-		return a.picker.View()
+func (a *App) startPulse() tea.Cmd {
+	moving := a.busy && !a.view.Awaiting() || a.status.Note != ""
+	if a.pulsing || !moving {
+		return nil
 	}
-	panic("tui: unknown view")
+	a.pulsing = true
+	return tea.Tick(pulseInterval, func(time.Time) tea.Msg { return pulseMsg{} })
 }
 
-func (a *App) setupView(rows int) string {
-	lines := []string{theme.Warn().Render(widget.Fit(setupTitle, a.width)), ""}
-	for index, requirement := range a.requirements {
-		number := strconv.Itoa(index + 1)
-		for _, line := range widget.Wrap(number+". "+requirement.What, a.width) {
-			lines = append(lines, theme.Text().Render(line))
-		}
-		fix := "press " + number + " to run   " + requirement.Fix
-		for _, line := range widget.Wrap(fix, a.width-widget.Cells(setupIndent)) {
-			lines = append(lines, theme.Dim().Render(setupIndent+line))
-		}
-		lines = append(lines, "")
+func (a *App) beat() {
+	a.pulsing = false
+	a.pulse++
+	if a.text(isettings.Animations) != animationsOff {
+		a.feed.SetFrame(a.pulse)
 	}
-	if a.options.Recheck != nil {
-		lines = append(lines, theme.Dim().Render(widget.Fit(setupWatch, a.width)), "")
+	if a.status.Note != "" && a.pulse-a.noticeAt > noticePulses {
+		a.status.Note = ""
 	}
-	lines = append(lines, theme.Faint().Render(widget.Fit(setupKeys, a.width)))
-	for len(lines) < rows {
-		lines = append(lines, "")
+}
+
+func (a *App) notify(note string) {
+	a.status.Note, a.noticeAt = note, a.pulse
+}
+
+func (a *App) show(to screen) tea.Cmd {
+	a.current, a.dialogs = to, nil
+	a.intro.settings = a.intro.settings && to == screenSettings
+	if to == screenChat {
+		return a.view.Focus()
 	}
-	return strings.Join(lines, "\n")
+	return nil
+}
+
+func (a *App) closed() tea.Cmd {
+	a.busy, a.cancel, a.events, a.edits.Busy = false, nil, nil, false
+	a.running, a.pressedAt = 0, time.Time{}
+	a.parkChildrenTheTurnLeftBehind()
+	a.view.Stop()
+	a.dropSteering()
+	next := tea.Batch(a.pollQuota(), a.readPaths(), a.pollShells())
+	if task, queued := a.view.Release(); queued {
+		return tea.Batch(a.start(task), next)
+	}
+	return next
 }

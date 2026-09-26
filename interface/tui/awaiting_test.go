@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -12,7 +13,7 @@ import (
 	"tofu/internal/golden"
 )
 
-const promptKeys = "[1] allow once   [2] deny   [3] always here"
+var promptKeys = regexp.MustCompile(`\[1\] allow once\s+\[2\] deny\s+\[3\] always here`)
 
 func awaitingApp(t *testing.T, answers chan Answer) *App {
 	t.Helper()
@@ -38,7 +39,7 @@ func awaitingApp(t *testing.T, answers chan Answer) *App {
 func TestAnAwaitingAskDrawsTheThreeKeysItTakes(t *testing.T) {
 	app := awaitingApp(t, make(chan Answer, 1))
 	content := app.View().Content
-	if !strings.Contains(ansi.Strip(content), promptKeys) {
+	if !promptKeys.MatchString(ansi.Strip(content)) {
 		t.Fatalf("the awaiting ask does not offer its keys\n%s", ansi.Strip(content))
 	}
 	golden.Assert(t, "session-awaiting-80x24.golden", content)
@@ -64,7 +65,7 @@ func TestTheAnswerKeysEachSendTheirOwnAnswer(t *testing.T) {
 		default:
 			t.Errorf("%q sent no answer at all", pressed.key.String())
 		}
-		if strings.Contains(ansi.Strip(app.View().Content), promptKeys) {
+		if promptKeys.MatchString(ansi.Strip(app.View().Content)) {
 			t.Errorf("%q was answered and the prompt is still on the screen", pressed.key.String())
 		}
 	}
@@ -81,7 +82,7 @@ func TestAnAskingTurnStillTakesTypingInChat(t *testing.T) {
 	if typed := app.view.Value(); typed != sentence {
 		t.Errorf("the composer holds %q, want %q", typed, sentence)
 	}
-	if !strings.Contains(ansi.Strip(app.View().Content), promptKeys) {
+	if !promptKeys.MatchString(ansi.Strip(app.View().Content)) {
 		t.Errorf("typing took the question off the screen\n%s", ansi.Strip(app.View().Content))
 	}
 }

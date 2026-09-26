@@ -10,6 +10,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"tofu/interface/tui/frametime"
+	"tofu/interface/tui/look"
 	"tofu/internal/golden"
 )
 
@@ -46,7 +47,7 @@ func TestNoFoldLineDrawsWhileTheTurnRunsAndItArrivesFaintAtTheEnd(t *testing.T) 
 
 	finishTurn(app)
 	final := rawRowHolding(t, app, "(2) tools")
-	if !strings.Contains(final, "\x1b[38;5;240m") {
+	if !strings.Contains(final, escapeOf(look.Style(look.FaintColor))) {
 		t.Fatalf("the fold line is not faint once the turn has ended\n%q", final)
 	}
 }
@@ -118,17 +119,17 @@ func TestATranscriptLongerThanThePaneAnchorsToTheBottomAndScrolls(t *testing.T) 
 	view := app.View()
 	rows := plainRows(view)
 	top := composerTopRow(t, view.Content)
-	for index := 0; index < top; index++ {
+	for index := bodyTop; index < top-breathingRows; index++ {
 		if strings.TrimSpace(rows[index]) == "" {
 			t.Fatalf("row %d above the composer is blank in a transcript longer than the pane\n%s", index, strings.Join(rows, "\n"))
 		}
 	}
 	app.Update(tea.KeyPressMsg{Code: tea.KeyPgUp})
-	if !strings.Contains(app.View().Content, scrolledWords) {
+	if app.View().Content == view.Content {
 		t.Fatal("a long transcript did not scroll on pgup")
 	}
 	app.Update(tea.KeyPressMsg{Code: tea.KeyEnd})
-	if !strings.Contains(app.View().Content, followingWords) {
+	if app.View().Content != view.Content {
 		t.Fatal("end did not return a long transcript to the anchored tail")
 	}
 }

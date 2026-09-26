@@ -53,7 +53,7 @@ func TestAQueuedRowIsUnmarkedWhenTheModelTakesItAndNotWhenItWasQueued(t *testing
 	<-started
 	typeAndSend(app, secondTask)
 
-	if row := rowHolding(t, app, secondTask); !strings.Contains(row, "waiting") {
+	if row := headerOf(t, app, secondTask); !strings.Contains(row, "waiting") {
 		t.Fatalf("the queued row lost its mark before the model took it: %q", row)
 	}
 	if len(app.view.Queued()) != 1 {
@@ -70,7 +70,7 @@ func TestAQueuedRowIsUnmarkedWhenTheModelTakesItAndNotWhenItWasQueued(t *testing
 		event, sent := msg.(Event)
 		delivered = sent && event.Kind == EventSteered
 	}
-	if row := rowHolding(t, app, secondTask); strings.Contains(row, "waiting") {
+	if row := headerOf(t, app, secondTask); strings.Contains(row, "waiting") {
 		t.Errorf("the row is still marked waiting after the model took the message: %q", row)
 	}
 	if queued := app.view.Queued(); len(queued) != 0 {

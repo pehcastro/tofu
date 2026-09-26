@@ -4,6 +4,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"tofu/interface/tui/links"
+	"tofu/interface/tui/palette"
 	"tofu/interface/tui/quote"
 	"tofu/interface/tui/session"
 	isession "tofu/internal/session"
@@ -18,12 +19,13 @@ const (
 func commands(options Options) []session.Command {
 	listed := []session.Command{
 		{Name: "chat", What: "the conversation and the composer"},
-		{Name: "work", What: "every tool call whole, with its arguments and its output"},
-		{Name: "file-edits", What: "a diff feed of every change, who made it and where"},
-		{Name: "sub-agents", What: "the children, what each owns and what each is doing"},
+		{Name: "sub-agents", What: "every tool call and every child, in one feed"},
+		{Name: "file-edits", What: "every changed line, who made it and where"},
 		{Name: "shells", What: "the persistent processes an agent left running"},
 		{Name: "models", What: "every model the signed subscriptions serve, and which one the next turn runs"},
-		{Name: "settings", What: "the providers and the file each value came from"},
+		{Name: "status", What: "each subscription's quota windows and when they reset"},
+		{Name: "attach", What: "reference a file in this workspace"},
+		{Name: "settings", What: "appearance, keys, roles, and the file each value came from"},
 		{Name: "links", What: "every link this conversation carried, newest first"},
 		{Name: "quote", What: "cite a past turn by id, newest first"},
 		{Name: "copy", What: "put the last answer on the clipboard"},
@@ -71,25 +73,25 @@ func (a *App) runCommand(name string) tea.Cmd {
 	a.view.Reset()
 	switch name {
 	case "chat":
-		a.show(viewChat)
-	case "work":
-		a.show(viewWork)
-	case "file-edits":
-		a.show(viewEdits)
+		return a.show(screenChat)
 	case "sub-agents":
-		a.show(viewSubAgents)
+		return a.show(screenAgents)
+	case "file-edits":
+		return a.show(screenEdits)
 	case "shells":
-		a.show(viewShells)
+		return a.show(screenShells)
 	case "models":
-		a.openPicker()
+		a.openPicker(false)
+	case "status":
+		a.push(quotaDialog{})
+	case "attach":
+		return a.push(a.filesDialog())
 	case "settings":
-		a.show(viewSettings)
+		return a.show(screenSettings)
 	case "links":
-		a.links.Set(a.recordedLinks())
-		a.show(viewLinks)
+		a.push(a.linksDialog())
 	case "quote":
-		a.quote.Set(a.recordedTurns())
-		a.show(viewQuote)
+		a.push(a.quoteDialog())
 	case "copy":
 		return a.copyAnswer()
 	case "copy-call":
@@ -126,42 +128,75 @@ func (a *App) recordedTalk() (isession.Conversation, string) {
 	return talk, ""
 }
 
-func (a *App) recordedLinks() ([]links.Link, string) {
+type recordedDialog struct {
+	searchDialog
+	choose func(a *App, result palette.Result) tea.Cmd
+}
+
+func (d *recordedDialog) key(a *App, msg tea.KeyPressMsg) tea.Cmd {
+	choice, cmd := d.Key(msg)
+	return tea.Batch(cmd, d.chose(a, choice))
+}
+
+func (d *recordedDialog) click(a *App, x, y int) tea.Cmd {
+	return d.chose(a, d.Click(x, y, a.width, a.height))
+}
+
+func (d *recordedDialog) chose(a *App, choice palette.SearchChoice) tea.Cmd {
+	switch {
+	case choice.Cancelled:
+		return a.pop()
+	case choice.Done:
+		a.dialogs = nil
+		return tea.Batch(a.view.Focus(), d.choose(a, choice.Result))
+	}
+	return nil
+}
+
+func (a *App) linksDialog() *recordedDialog {
 	talk, trouble := a.recordedTalk()
-	if trouble != "" {
-		return nil, trouble
+	found := links.Collect(talk)
+	return &recordedDialog{
+		searchDialog: searchDialog{palette.NewSearch("Links", troubleOr(trouble, "every link this conversation carried · enter copies"), func(query string) []palette.Result {
+			var results []palette.Result
+			for _, one := range found {
+				if contains(one.URL+" "+one.From, query) {
+					results = append(results, palette.Result{Label: one.URL, Detail: one.From})
+				}
+			}
+			return results
+		})},
+		choose: func(a *App, result palette.Result) tea.Cmd { return a.copy(linkUnit, result.Label, true) },
 	}
-	return links.Collect(talk), ""
 }
 
-func (a *App) recordedTurns() ([]quote.Turn, string) {
+func (a *App) quoteDialog() *recordedDialog {
 	talk, trouble := a.recordedTalk()
+	turns := quote.Collect(talk)
+	return &recordedDialog{
+		searchDialog: searchDialog{palette.NewSearch("Quote", troubleOr(trouble, "cite a past turn by id · enter writes the reference"), func(query string) []palette.Result {
+			var results []palette.Result
+			for _, one := range turns {
+				label := short(one.Event) + "  " + one.From + "  " + one.Text
+				if contains(label, query) {
+					results = append(results, palette.Result{Label: label, Reference: quote.Ref(one.Event)})
+				}
+			}
+			return results
+		})},
+		choose: func(a *App, result palette.Result) tea.Cmd {
+			a.current = screenChat
+			a.view.Insert(result.Reference)
+			return nil
+		},
+	}
+}
+
+func troubleOr(trouble, hint string) string {
 	if trouble != "" {
-		return nil, trouble
+		return trouble
 	}
-	return quote.Collect(talk), ""
-}
-
-func (a *App) linksKey(key string) tea.Cmd {
-	if key != "enter" {
-		a.links.Key(key)
-		return nil
-	}
-	one, picked := a.links.Picked()
-	a.show(viewChat)
-	return a.copy(linkUnit, one.URL, picked)
-}
-
-func (a *App) quoteKey(key string) {
-	if key != "enter" {
-		a.quote.Key(key)
-		return
-	}
-	one, picked := a.quote.Picked()
-	a.show(viewChat)
-	if picked {
-		a.view.Insert(quote.Ref(one.Event))
-	}
+	return hint
 }
 
 func (a *App) reload() {

@@ -1,10 +1,7 @@
 package quote
 
 import (
-	"strings"
 	"testing"
-
-	"github.com/charmbracelet/x/ansi"
 
 	isession "tofu/internal/session"
 	"tofu/internal/sys"
@@ -23,42 +20,6 @@ func recorded(t *testing.T) (*isession.Store, isession.Listing) {
 		t.Skip("this checkout carries no recorded session")
 	}
 	return store, listing
-}
-
-func TestThePickerOverTheRichestSessionRecordedUnderThisRepository(t *testing.T) {
-	store, listing := recorded(t)
-	var richest Model
-	richest.SetSize(100, 18)
-	best, chosen := 0, ""
-	fromSteps, fromMessages := 0, 0
-	for _, header := range listing.Sessions {
-		talk, err := store.Conversation(header.ID)
-		if err != nil {
-			continue
-		}
-		turns := Collect(talk)
-		if len(turns) == 0 {
-			continue
-		}
-		if talk.FromSteps {
-			fromSteps++
-		} else {
-			fromMessages++
-		}
-		if len(turns) > best {
-			best, chosen = len(turns), header.ID
-			richest.Set(turns, "")
-		}
-	}
-	if best == 0 {
-		t.Skipf("none of the %d recorded sessions held a quotable turn", len(listing.Sessions))
-	}
-	screen := ansi.Strip(richest.View())
-	t.Logf("%d sessions read from steps and %d from messages, of %d recorded; the richest is %s with %d turns\n%s",
-		fromSteps, fromMessages, len(listing.Sessions), chosen, best, screen)
-	if !strings.Contains(screen, "#") {
-		t.Fatalf("the picker drew no shortened id over %s\n%s", chosen, screen)
-	}
 }
 
 func TestASessionOnDiskCarryingOnlyStepEventsIsQuotableAndItsIDsResolve(t *testing.T) {

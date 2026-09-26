@@ -63,6 +63,18 @@ func rowHolding(t *testing.T, app *App, text string) string {
 	return ""
 }
 
+func headerOf(t *testing.T, app *App, text string) string {
+	t.Helper()
+	lines := strings.Split(ansi.Strip(app.View().Content), "\n")
+	for index, line := range lines {
+		if strings.Contains(line, text) && index > 0 {
+			return lines[index-1]
+		}
+	}
+	t.Fatalf("no message on the screen holds %q\n%s", text, strings.Join(lines, "\n"))
+	return ""
+}
+
 func TestEnterDuringATurnQueuesTheTextAndClearsTheComposer(t *testing.T) {
 	tasks := make(chan string, 4)
 	app := queueApp(t, tasks)
@@ -75,7 +87,7 @@ func TestEnterDuringATurnQueuesTheTextAndClearsTheComposer(t *testing.T) {
 	if held := app.view.Value(); held != "" {
 		t.Errorf("the composer still holds %q after enter during a turn", held)
 	}
-	if row := rowHolding(t, app, secondTask); !strings.Contains(row, "waiting") {
+	if row := headerOf(t, app, secondTask); !strings.Contains(row, "waiting") {
 		t.Errorf("the queued message is not marked as waiting: %q", row)
 	}
 	select {
@@ -146,10 +158,10 @@ func TestTheFirstQueuedMessageStartsTheNextTurn(t *testing.T) {
 	if queued := app.view.Queued(); len(queued) != 1 || queued[0] != thirdTask {
 		t.Fatalf("the queue holds %q, want the third message alone", queued)
 	}
-	if row := rowHolding(t, app, secondTask); strings.Contains(row, "waiting") {
+	if row := headerOf(t, app, secondTask); strings.Contains(row, "waiting") {
 		t.Errorf("the message that ran is still marked as waiting: %q", row)
 	}
-	if row := rowHolding(t, app, thirdTask); !strings.Contains(row, "waiting") {
+	if row := headerOf(t, app, thirdTask); !strings.Contains(row, "waiting") {
 		t.Errorf("the message still queued lost its mark: %q", row)
 	}
 }
@@ -164,7 +176,7 @@ func TestEnterWithNothingRunningQueuesNothing(t *testing.T) {
 	if queued := app.view.Queued(); len(queued) != 0 {
 		t.Fatalf("a send with nothing running queued %q", queued)
 	}
-	if row := rowHolding(t, app, firstTask); strings.Contains(row, "waiting") {
+	if row := headerOf(t, app, firstTask); strings.Contains(row, "waiting") {
 		t.Errorf("the message that ran at once is marked as waiting: %q", row)
 	}
 }

@@ -46,11 +46,6 @@ func notes(app *App) int {
 	return strings.Count(ansi.Strip(app.View().Content), "· "+stoppingNote)
 }
 
-func footer(app *App) string {
-	lines := strings.Split(ansi.Strip(app.View().Content), "\n")
-	return lines[len(lines)-3]
-}
-
 func TestOneInterruptCancelsTheTurnAndWritesOneNote(t *testing.T) {
 	app, stopped := turningApp(t)
 	interrupt(app, 1)
@@ -77,18 +72,10 @@ func TestSevenInterruptsWriteOneNoteAndNotSeven(t *testing.T) {
 	}
 }
 
-func TestTheFooterSaysWhatASecondInterruptDoes(t *testing.T) {
+func TestACtrlCWhileStoppingWaitsForTheTurn(t *testing.T) {
 	app, _ := turningApp(t)
-	if running := footer(app); !strings.Contains(running, "ctrl+c stops the turn") {
-		t.Errorf("a running turn does not say ctrl+c stops it\n%s", running)
-	}
-	interrupt(app, 1)
-	stopping := footer(app)
-	if !strings.Contains(stopping, "ctrl+c will not quit until it ends") {
-		t.Errorf("the footer does not say what a second ctrl+c does\n%s", stopping)
-	}
-	interrupt(app, 1)
-	if _, cmd := app.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl}); cmd != nil {
-		t.Error("a second ctrl+c while stopping produced a command, so it did not wait for the turn")
+	interrupt(app, 2)
+	if cmd := app.update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl}); cmd != nil {
+		t.Error("a ctrl+c while stopping produced a command, so it did not wait for the turn")
 	}
 }
