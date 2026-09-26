@@ -117,6 +117,49 @@ func (d *Driver) Press(name string) error {
 	return nil
 }
 
+func (d *Driver) Click(x, y int, mods ...string) error {
+	return d.Drag(x, y, x, y, mods...)
+}
+
+func (d *Driver) Drag(x1, y1, x2, y2 int, mods ...string) error {
+	held := tea.KeyMod(0)
+	for _, name := range mods {
+		modifier, named := namedModifiers[name+"+"]
+		if !named {
+			return errors.New("no modifier is named " + name + ", only alt, shift and ctrl")
+		}
+		held |= modifier
+	}
+	d.pointAtDrawnFrame(tea.MouseClickMsg{X: x1, Y: y1, Button: tea.MouseLeft, Mod: held})
+	steps := max(x2-x1, x1-x2, y2-y1, y1-y2)
+	for step := 1; step <= steps; step++ {
+		d.pointAtDrawnFrame(tea.MouseMotionMsg{X: x1 + (x2-x1)*step/steps, Y: y1 + (y2-y1)*step/steps, Button: tea.MouseLeft, Mod: held})
+	}
+	d.pointAtDrawnFrame(tea.MouseReleaseMsg{X: x2, Y: y2, Button: tea.MouseLeft, Mod: held})
+	return nil
+}
+
+func (d *Driver) Wheel(x, y int, up bool, notches int) error {
+	if notches < 1 {
+		return errors.New("a wheel turns at least one notch")
+	}
+	button := tea.MouseWheelDown
+	if up {
+		button = tea.MouseWheelUp
+	}
+	for range notches {
+		d.pointAtDrawnFrame(tea.MouseWheelMsg{X: x, Y: y, Button: button})
+	}
+	return nil
+}
+
+func (d *Driver) pointAtDrawnFrame(message tea.Msg) {
+	d.app.View()
+	d.feed(message)
+}
+
+func (d *Driver) Resize(width, height int) { d.feed(tea.WindowSizeMsg{Width: width, Height: height}) }
+
 func (d *Driver) Await(text string, within time.Duration) error {
 	deadline := time.NewTimer(within)
 	defer deadline.Stop()

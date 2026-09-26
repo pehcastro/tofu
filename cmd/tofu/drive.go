@@ -57,10 +57,17 @@ Steps:
   key NAME     press enter, esc, tab, space, backspace, up, down, left, right,
                any single character, or one of those under ctrl+, alt+ or shift+
                (alt+2 opens work, alt+5 opens shells, as in the app)
+  click X Y [alt] [shift] [ctrl]         press and release the left button on a cell
+  drag X1 Y1 X2 Y2 [alt] [shift] [ctrl]  press, move cell by cell, then release
+  wheel X Y up|down [N]                  turn the wheel N notches over a cell, 1 if no N
+  resize W H                             resize the terminal to W columns and H rows
   wait TEXT    wait until TEXT is on the screen, and fail saying so if it never is
   screen       print the screen as it stands
   environment  print the environment block the last turn sent to the model
   # NOTE       a note, skipped
+
+X and Y are zero-based cells: X counts columns and Y counts rows of the printed
+screen, both from 0 at its top left.
 
 The model is a cassette, one recorded reply per line of json. Its text arrives
 the way a model's does, in deltas, so a reply is half written until it returns:
@@ -482,6 +489,53 @@ func driveVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 	return exitOK
 }
 
+func leadingCells(fields []string, count, least int) ([]int, []string, bool) {
+	if len(fields) < count {
+		return nil, nil, false
+	}
+	cells := make([]int, count)
+	for index := range cells {
+		cell, err := strconv.Atoi(fields[index])
+		if err != nil || cell < least {
+			return nil, nil, false
+		}
+		cells[index] = cell
+	}
+	return cells, fields[count:], true
+}
+
+func pointerStep(driver *filmstrip.Driver, verb string, fields []string) error {
+	switch verb {
+	case "click":
+		if at, mods, ok := leadingCells(fields, 2, 0); ok {
+			return driver.Click(at[0], at[1], mods...)
+		}
+		return errors.New("the step is click X Y [alt] [shift] [ctrl], with X and Y cells from 0")
+	case "drag":
+		if at, mods, ok := leadingCells(fields, 4, 0); ok {
+			return driver.Drag(at[0], at[1], at[2], at[3], mods...)
+		}
+		return errors.New("the step is drag X1 Y1 X2 Y2 [alt] [shift] [ctrl], with every X and Y a cell from 0")
+	case "wheel":
+		at, turn, ok := leadingCells(fields, 2, 0)
+		if ok && len(turn) == 1 {
+			turn = append(turn, "1")
+		}
+		if ok && len(turn) == 2 && (turn[0] == "up" || turn[0] == "down") {
+			if notches, _, counted := leadingCells(turn[1:], 1, 1); counted {
+				return driver.Wheel(at[0], at[1], turn[0] == "up", notches[0])
+			}
+		}
+		return errors.New("the step is wheel X Y up|down [N], with N notches from 1")
+	}
+	size, rest, ok := leadingCells(fields, 2, 1)
+	if !ok || len(rest) > 0 {
+		return errors.New("the step is resize W H, with W columns and H rows from 1")
+	}
+	driver.Resize(size[0], size[1])
+	return nil
+}
+
 func playStep(driver *filmstrip.Driver, deck *cassette, step driveStep, plan drivePlan, out, errOut io.Writer) int {
 	switch step.verb {
 	case "type":
@@ -503,6 +557,10 @@ func playStep(driver *filmstrip.Driver, deck *cassette, step driveStep, plan dri
 		_, _ = fmt.Fprintln(out, screen)
 	case "environment":
 		_, _ = fmt.Fprintln(out, deck.environment())
+	case "click", "drag", "wheel", "resize":
+		if err := pointerStep(driver, step.verb, strings.Fields(step.text)); err != nil {
+			return driveFail(errOut, fmt.Errorf("line %d: %w", step.line, err))
+		}
 	default:
 		return driveFail(errOut, fmt.Errorf("line %d: no step is named %q", step.line, step.verb))
 	}

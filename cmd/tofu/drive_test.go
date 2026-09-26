@@ -231,6 +231,58 @@ func TestAnUnknownStepAndAnUnknownFlagAreRefusedByName(t *testing.T) {
 	}
 }
 
+func TestADrivenMouseStepThatCannotBePlayedFailsNamingItsLine(t *testing.T) {
+	dir := drivenProject(t)
+	for step, named := range map[string]string{
+		"click 3 1 hyper":       "hyper",
+		"drag 0 0 4 4 alt meta": "meta",
+		"click 3":               "click X Y",
+		"click -1 0":            "click X Y",
+		"drag a b c d":          "drag X1 Y1 X2 Y2",
+		"wheel 1 1 sideways":    "wheel X Y up|down",
+		"wheel 1 1 up 0":        "wheel X Y up|down",
+		"wheel 1 1 up 2 3":      "wheel X Y up|down",
+		"resize 60":             "resize W H",
+		"resize 60 20 30":       "resize W H",
+		"resize 0 20":           "resize W H",
+	} {
+		script := written(t, dir, "mouse.drive", "# the step below is line 3\nscreen\n"+step+"\n")
+		var out, errOut bytes.Buffer
+		if code := driveVerb([]string{script}, strings.NewReader(""), &out, &errOut); code != exitUsage {
+			t.Errorf("%q exited %d, wanted %d:\n%s", step, code, exitUsage, errOut.String())
+		}
+		if !strings.Contains(errOut.String(), "line 3:") || !strings.Contains(errOut.String(), named) {
+			t.Errorf("%q failed without naming line 3 and %q:\n%s", step, named, errOut.String())
+		}
+	}
+}
+
+func TestADrivenClickAsTheFirstStepLandsOnTheFrameAPersonWouldSee(t *testing.T) {
+	dir := drivenProject(t)
+	run := func(script string) string {
+		var out, errOut bytes.Buffer
+		if code := driveVerb([]string{written(t, dir, "tab.drive", script), "--plain", "--width", "120", "--height", "30"}, strings.NewReader(""), &out, &errOut); code != exitOK {
+			t.Fatalf("%q exited %d:\n%s", script, code, errOut.String())
+		}
+		return out.String()
+	}
+	label := "[3] file edits"
+	column := -1
+	for _, line := range strings.Split(run("screen\n"), "\n") {
+		if before, _, found := strings.Cut(line, label); found {
+			column = len([]rune(before)) + len("[3] ")
+			break
+		}
+	}
+	if column < 0 {
+		t.Fatalf("no row of the first screen shows %q", label)
+	}
+	shown := run("click " + strconv.Itoa(column) + " 1\nscreen\n")
+	if !strings.Contains(shown, "no file has changed in this session") {
+		t.Errorf("a click on column %d of row 1 before any screen left the file edits view closed:\n%s", column, shown)
+	}
+}
+
 type cancelledWhenAwaited struct {
 	context.Context
 	awaited chan struct{}
@@ -444,7 +496,7 @@ func TestDriveHelpPrintsItsOwnUsage(t *testing.T) {
 	if code := driveVerb([]string{"--help"}, strings.NewReader(""), &out, &errOut); code != exitOK {
 		t.Fatal("tofu drive --help did not exit 0")
 	}
-	for _, want := range []string{"usage: tofu drive", "wait TEXT", "environment", cassetteVariable} {
+	for _, want := range []string{"usage: tofu drive", "wait TEXT", "environment", cassetteVariable, "click X Y", "drag X1 Y1 X2 Y2", "wheel X Y up|down", "resize W H", "zero-based"} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("the usage never says %q:\n%s", want, out.String())
 		}
