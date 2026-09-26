@@ -1098,7 +1098,7 @@ func settingsRow(store *isettings.Store, pending map[string]bool, spec isettings
 	}
 	return settings.Row{
 		Key:             spec.Key,
-		Group:           spec.Group,
+		Category:        spec.Category,
 		Label:           spec.Label,
 		Value:           value,
 		Kind:            settings.Kind(spec.Kind),

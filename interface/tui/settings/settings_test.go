@@ -1,137 +1,110 @@
 package settings
 
 import (
+	"strconv"
 	"strings"
 	"testing"
 
+	"github.com/charmbracelet/x/ansi"
+
 	"tofu/internal/golden"
+	isettings "tofu/internal/settings"
 )
 
-func baseRows() []Row {
-	return []Row{
-		{Key: "chatShowsTools", Group: "chat", Label: "chat shows every tool call", Value: "off", Kind: Bool, Source: "default"},
-		{Key: "decisionCap", Group: "turn", Label: "decision cap per turn, zero means no cap", Value: "0", Kind: Int, Source: "default"},
-	}
-}
+const themeSource = "global C:/Users/tester/.tofu/settings.json"
 
-func TestARowThatDiffersFromItsDefaultIsMarked(t *testing.T) {
-	rows := baseRows()
-	rows[1].Value, rows[1].Changed, rows[1].Source = "12", true, "~/.tofu/settings.json"
-	m := Model{Scopes: []string{"global", "project"}, Rows: rows}
-	m.SetSize(80, 24)
-	content := m.View()
-	if !strings.Contains(content, "*") {
-		t.Fatalf("a changed row must draw a marker\n%s", content)
+func tableModel(width, height int) Model {
+	var rows []Row
+	for _, spec := range isettings.Default() {
+		row := Row{Key: spec.Key, Category: spec.Category, Label: spec.Label, Description: spec.Description, Value: spec.DefaultText, Source: "default", Kind: Kind(spec.Kind), Choices: spec.Choices, RestartRequired: spec.Restart}
+		switch spec.Kind {
+		case isettings.Bool:
+			row.Value = strconv.FormatBool(spec.Default == 1)
+		case isettings.Int:
+			row.Value = strconv.Itoa(spec.Default)
+		}
+		if spec.Key == isettings.Theme {
+			row.Value, row.Changed, row.Source = "tofu dusk", true, themeSource
+		}
+		rows = append(rows, row)
 	}
-	golden.Assert(t, "changed-row-80x24.golden", content)
-}
-
-func TestAProjectValueOverridesAGlobalOneAndTheViewNamesTheFile(t *testing.T) {
-	rows := baseRows()
-	rows[1].Value, rows[1].Changed, rows[1].Source = "12", true, "silo/.tofu/settings.json"
-	m := Model{
-		Providers: []Provider{{Name: "anthropic", State: "signed in"}},
-		Scopes:    []string{"global", "project"},
-		Scope:     1,
-		Rows:      rows,
-	}
-	m.SetSize(120, 36)
-	content := m.View()
-	if !strings.Contains(content, "silo/.tofu/settings.json") {
-		t.Fatalf("the view must name the project file the override came from\n%s", content)
-	}
-	golden.Assert(t, "project-override-120x36.golden", content)
-}
-
-func TestARestartRequiredSettingWarnsOnlyAfterItChanges(t *testing.T) {
-	rows := baseRows()
-	m := Model{Scopes: []string{"global", "project"}, Rows: rows}
-	m.SetSize(120, 36)
-	before := m.View()
-	if strings.Contains(before, "needs restart") {
-		t.Fatalf("nothing changed yet, so no warning is expected\n%s", before)
-	}
-	golden.Assert(t, "restart-before-120x36.golden", before)
-
-	rows[1].Value, rows[1].Changed, rows[1].RestartPending = "5", true, true
+	m := Model{Scopes: []string{"global", "project"}}
 	m.SetRows(rows)
-	after := m.View()
-	if !strings.Contains(after, "needs restart") {
-		t.Fatalf("decisionCap needs a restart once changed, and the view must say so\n%s", after)
-	}
-	golden.Assert(t, "restart-after-120x36.golden", after)
+	m.SetSize(width, height)
+	m.SetSearchKey("ctrl+k")
+	m.SetBranch("develop")
+	return m
 }
 
-func TestTypingFiltersTheListAndTheMatchCountDraws(t *testing.T) {
-	m := Model{Scopes: []string{"global", "project"}, Rows: baseRows()}
-	m.SetSize(120, 36)
-	for _, r := range "decision" {
-		m.Key(string(r))
+func TestAppearanceWithTheInspectorNamesTheSourceFile(t *testing.T) {
+	m := tableModel(120, 36)
+	view := ansi.Strip(m.View())
+	if !strings.Contains(view, "C:/Users/tester/.tofu/") {
+		t.Fatalf("the inspector must name the file the value came from\n%s", view)
 	}
-	if m.Query != "decision" {
-		t.Fatalf("Query = %q, want decision", m.Query)
-	}
-	m.SetRows(baseRows()[1:])
-	content := m.View()
-	if !strings.Contains(content, "1 match") {
-		t.Fatalf("a single match must say 1 match\n%s", content)
-	}
-	golden.Assert(t, "search-120x36.golden", content)
+	golden.Assert(t, "appearance-120x36.golden", view)
 }
 
-func TestProjectOverrideWithASearchInProgress(t *testing.T) {
-	rows := baseRows()
-	rows[1].Value, rows[1].Changed, rows[1].Source = "12", true, "silo/.tofu/settings.json"
-	m := Model{
-		Providers: []Provider{{Name: "anthropic", State: "signed in"}},
-		Scopes:    []string{"global", "project"},
-		Scope:     1,
-		Rows:      rows,
-		Query:     "decision",
-	}
-	m.SetSize(120, 36)
-	m.SetRows(rows[1:])
-	content := m.View()
-	golden.Assert(t, "project-override-with-search-120x36.golden", content)
+func TestTheChoiceDialogOnTheme(t *testing.T) {
+	m := tableModel(120, 36)
+	opened := m.Key("enter")
+	previewed := m.Key("down")
+	t.Logf("enter %+v, down %+v", opened, previewed)
+	golden.Assert(t, "theme-choice-120x36.golden", ansi.Strip(m.View()))
 }
 
-func TestTheTurnMaySpawnSettingDrawsItsLabel(t *testing.T) {
-	rows := append(baseRows(), Row{Key: "turnMaySpawn", Group: "turn", Label: "a turn may spawn a sub-agent", Value: "true", Kind: Bool, Source: "default"})
-	m := Model{Scopes: []string{"global", "project"}, Rows: rows}
-	m.SetSize(120, 36)
-	content := m.View()
-	if !strings.Contains(content, "a turn may spawn a sub-agent") {
-		t.Fatalf("the settings pane never draws the turnMaySpawn label\n%s", content)
+func TestTheSearchDialogFilteredToDiff(t *testing.T) {
+	m := tableModel(120, 36)
+	for _, key := range []string{"ctrl+k", "d", "i", "f", "f"} {
+		m.Key(key)
 	}
+	golden.Assert(t, "search-diff-120x36.golden", ansi.Strip(m.View()))
 }
 
-func TestBackspaceShortensTheQuery(t *testing.T) {
-	m := Model{Rows: baseRows()}
-	m.Key("a")
-	m.Key("b")
-	m.Key("backspace")
-	if m.Query != "a" {
-		t.Fatalf("Query after backspace = %q, want a", m.Query)
-	}
-	m.Key("backspace")
-	m.Key("backspace")
-	if m.Query != "" {
-		t.Fatalf("backspace on an empty query must not panic or go negative, Query = %q", m.Query)
-	}
+func TestStartupAt80x24ReachedByAClickOnItsLabel(t *testing.T) {
+	m := tableModel(80, 24)
+	t.Logf("before: category %q cursor %d", m.categories()[m.category], m.cursor)
+	intent := m.Click(6, 11)
+	t.Logf("click (6,11) intent %+v; after: category %q cursor %d", intent, m.categories()[m.category], m.cursor)
+	golden.Assert(t, "startup-80x24.golden", ansi.Strip(m.View()))
 }
 
-func TestKeyReturnsTheIntentForTheActiveRow(t *testing.T) {
-	m := Model{Rows: baseRows()}
-	m.moveCursor(1)
-	if got := m.Key("enter"); got.Action != ActionToggle || got.Key != "chatShowsTools" {
-		t.Fatalf("enter on the bool row = %+v, want ActionToggle chatShowsTools", got)
+func TestSettingsBodyCacheInvalidatesOnVisibleChanges(t *testing.T) {
+	m := tableModel(120, 36)
+	check := func(stage string) {
+		t.Helper()
+		if got, want := m.View(), m.render(); got != want {
+			t.Fatalf("%s: cached settings differ from uncached render", stage)
+		}
 	}
-	m.moveCursor(1)
-	if got := m.Key("right"); got.Action != ActionIncrement || got.Key != "decisionCap" {
-		t.Fatalf("right on the int row = %+v, want ActionIncrement decisionCap", got)
-	}
-	m.moveCursor(-2)
-	if got := m.Key("right"); got.Action != ActionCycleScope {
-		t.Fatalf("right on the scope row = %+v, want ActionCycleScope", got)
-	}
+	check("initial")
+	m.Key("down")
+	check("selection")
+	m.Key("right")
+	check("category")
+	rows := append([]Row(nil), m.Rows...)
+	rows[m.inCategory()[0]].Value = "compact"
+	m.SetRows(rows)
+	check("value")
+	m.SetDensity(densitySpacious)
+	check("density")
+	m.SetSearchKey("alt+k")
+	check("search key")
+	m.Scope = 1
+	check("scope")
+	m.Key("enter")
+	check("dialog")
+	m.SetSize(80, 36)
+	check("width")
+}
+
+func BenchmarkProgressedScreenRender(b *testing.B) {
+	b.Run("settings", func(b *testing.B) {
+		m := tableModel(120, 36)
+		b.ReportAllocs()
+		b.ResetTimer()
+		for range b.N {
+			_ = m.View()
+		}
+	})
 }

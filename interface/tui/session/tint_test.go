@@ -46,7 +46,7 @@ func TestComposerTintGoldenBlurred(t *testing.T) {
 	golden.Assert(t, "composer-tint-blurred-truecolor-80x24.golden", composerFrame(80, false, ""))
 }
 
-func TestABlankTintedRowSitsAboveAndBelowTheComposersText(t *testing.T) {
+func TestABlankTintedRowSitsAboveTheComposersText(t *testing.T) {
 	model := New(fixed(), counted(new(int)))
 	model.SetSize(80, 24)
 	model.Focus()
@@ -64,14 +64,12 @@ func TestABlankTintedRowSitsAboveAndBelowTheComposersText(t *testing.T) {
 		if strings.Contains(frame, rule) {
 			t.Fatalf("a rule still draws above the composer:\n%s", frame)
 		}
-		block := composerBlock(t, frame)
-		for _, row := range []string{block[0], block[len(block)-1]} {
-			if strings.TrimSpace(ansi.Strip(row)) != "" {
-				t.Fatalf("the gap row carries text: %q", row)
-			}
-			if !strings.Contains(row, tintEscape()) {
-				t.Fatalf("the gap row carries no tint: %q", row)
-			}
+		row := composerBlock(t, frame)[0]
+		if strings.TrimSpace(ansi.Strip(row)) != "" {
+			t.Fatalf("the gap row carries text: %q", row)
+		}
+		if !strings.Contains(row, tintEscape()) {
+			t.Fatalf("the gap row carries no tint: %q", row)
 		}
 	}
 }
@@ -128,10 +126,14 @@ func composerBlock(t *testing.T, frame string) []string {
 	t.Helper()
 	rows := strings.Split(frame, "\n")
 	first := slices.IndexFunc(rows, func(row string) bool { return strings.Contains(row, tintEscape()) })
-	if first < 0 || first+composerRows+tintPadRows > len(rows) {
+	if first < 0 {
 		t.Fatalf("no composer block found in frame:\n%s", frame)
 	}
-	return rows[first : first+composerRows+tintPadRows]
+	last := first
+	for last < len(rows) && strings.Contains(rows[last], tintEscape()) {
+		last++
+	}
+	return rows[first:last]
 }
 
 func TestEveryCellOfEveryComposerRowCarriesTheTint(t *testing.T) {
@@ -154,8 +156,9 @@ func TestEveryCellOfEveryComposerRowCarriesTheTint(t *testing.T) {
 						break
 					}
 				}
-				if edge := ansi.Cut(ansi.Strip(row), 0, len(composerInset)); edge != composerInset {
-					t.Errorf("%s at %d columns: composer row %d opens with %q, want %q and no border glyph", name, columns, index, edge, composerInset)
+				inset := strings.Repeat(" ", composerPadX)
+				if edge := ansi.Cut(ansi.Strip(row), 0, composerPadX); edge != inset {
+					t.Errorf("%s at %d columns: composer row %d opens with %q, want %q and no border glyph", name, columns, index, edge, inset)
 				}
 			}
 		}

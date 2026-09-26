@@ -9,7 +9,7 @@ import (
 
 	"charm.land/lipgloss/v2"
 
-	"tofu/interface/tui/theme"
+	"tofu/interface/tui/look"
 	"tofu/interface/tui/trace"
 	"tofu/internal/widget"
 )
@@ -18,7 +18,8 @@ const (
 	barColumns       = 20
 	valueColumns     = 4
 	gap              = "  "
-	answerKeys       = "[1] allow once   [2] deny   [3] always here"
+	askGap           = "   "
+	askPadX          = 2
 	askMarker        = "? "
 	wantsWord        = " wants "
 	stillTakesTyping = "the chat still takes what you type"
@@ -48,11 +49,11 @@ func (v Verdict) String() string {
 func (v Verdict) style() lipgloss.Style {
 	switch v {
 	case Allow:
-		return theme.Dim()
+		return look.Style(look.MutedColor)
 	case Ask:
-		return theme.Warn()
+		return look.Style(look.Amber)
 	case Deny:
-		return theme.Fail()
+		return look.Style(look.Red)
 	}
 	panic("session: unknown verdict")
 }
@@ -97,17 +98,17 @@ func (d Decision) lines(width int) []string {
 		if bars > 0 {
 			row += gap + widget.Bar(answer.fraction(), bars)
 		}
-		lines = append(lines, theme.Dim().Render(continuation+widget.Fit(row, body)))
+		lines = append(lines, look.Muted(continuation+widget.Fit(row, body)))
 	}
 	for _, sentence := range d.sentences() {
 		for _, line := range widget.Wrap(sentence, body) {
-			lines = append(lines, theme.Faint().Render(continuation+line))
+			lines = append(lines, look.Faint(continuation+line))
 		}
 	}
 	return lines
 }
 
-func (m Model) openAsk() (Entry, bool) {
+func (m *Model) openAsk() (Entry, bool) {
 	if !m.Awaiting() {
 		return Entry{}, false
 	}
@@ -119,28 +120,30 @@ func (m Model) openAsk() (Entry, bool) {
 	return Entry{}, false
 }
 
-func (m Model) askLines() []string {
+func (m *Model) askLines() []string {
 	entry, open := m.openAsk()
 	if !open {
 		return nil
 	}
 	head := askMarker + entry.Decision.Tool + wantsWord + entry.Body
 	if tripped := entry.Decision.tripped(); tripped != "" {
-		head += hintGap + tripped
+		head += askGap + tripped
 	}
 	id := ""
 	if short := trace.Short(entry.ID); short != "" {
-		id = hintGap + theme.ID().Render("["+short+"]")
+		id = askGap + look.TypedID(toolKind, short)
 	}
-	keys := strings.Repeat(" ", widget.Cells(askMarker)) + answerKeys
-	return []string{
-		m.spread(theme.Warn().Render(head), id),
-		m.spread(theme.Warn().Render(keys), theme.Faint().Render(stillTakesTyping)),
+	keys := ""
+	for _, label := range [...]string{"[1] allow once", "[2] deny", "[3] always here"} {
+		keys += look.DialogChoice(false, label)
 	}
+	inner := m.width - 2*askPadX
+	block := spread(look.Style(look.Amber).Render(head), id, inner) + "\n" + spread(keys, look.Faint(stillTakesTyping), inner)
+	return strings.Split(look.Surface(m.width, askBlockRows, look.Panel, askPadX, block), "\n")
 }
 
-func (m Model) spread(left, right string) string {
-	room := max(m.width-widget.Cells(right), 1)
+func spread(left, right string, width int) string {
+	room := max(width-widget.Cells(right), 1)
 	return widget.Pad(widget.Fit(left, room), room) + right
 }
 

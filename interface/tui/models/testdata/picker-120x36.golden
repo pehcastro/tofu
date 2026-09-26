@@ -1,36 +1,35 @@
-[38;5;39mmodels  17 models  effort medium                                                                                        [m
-[38;5;252m                                                                                                                        [m
-[38;5;245mclaude-sub                                                                                                              [m
-[38;5;240m  claude-sub/claude-fable-5              the owner on 2026-09-19, not fable or astra for now, those are not cheap. A cu…[m
-[38;5;240m  claude-sub/claude-fable-5-1            the owner on 2026-09-19, not fable or astra for now, those are not cheap. A cu…[m
-[38;5;39m› claude-sub/claude-haiku-4-5-20251001   5h and 7d                                                                      [m
-[38;5;240m  claude-sub/claude-opus-4-5-20251101    a previous generation the account still serves, superseded by claude-opus-5 an…[m
-[38;5;240m  claude-sub/claude-opus-4-6             a previous generation the account still serves, superseded by claude-opus-5 an…[m
-[38;5;240m  claude-sub/claude-opus-4-7             a previous generation the account still serves, superseded by claude-opus-5 an…[m
-[38;5;240m  claude-sub/claude-opus-4-8             a previous generation the account still serves, superseded by claude-opus-5 an…[m
-[38;5;252m  claude-sub/claude-opus-5               5h and 7d                                                                      [m
-[38;5;240m  claude-sub/claude-sonnet-4-5-20250929  a previous generation the account still serves, superseded by claude-opus-5 an…[m
-[38;5;240m  claude-sub/claude-sonnet-4-6           a previous generation the account still serves, superseded by claude-opus-5 an…[m
-[38;5;252m  claude-sub/claude-sonnet-5             5h and 7d                                                                      [m
-[38;5;252m                                                                                                                        [m
-[38;5;245mcodex-sub                                                                                                               [m
-[38;5;240m  codex-sub/gpt-5.5                      a previous generation the account still serves, superseded by gpt-5.6-sol      [m
-[38;5;252m  codex-sub/gpt-5.6-luna                 5h and 7d                                                                      [m
-[38;5;252m  codex-sub/gpt-5.6-sol                  5h and 7d                                                                      [m
-[38;5;252m  codex-sub/gpt-5.6-terra                5h and 7d                                                                      [m
-[38;5;240m  codex-sub/gpt-6-astra                  the owner on 2026-09-19, not fable or astra for now, those are not cheap. A cu…[m
-[38;5;240m  codex-sub/gpt-reserve                  nobody has ruled on it, so tofu does not send it until somebody does           [m
-[38;5;252m                                                                                                                        [m
-[38;5;240m↑↓ choose   ←→ effort   enter picks                                                                                     [m
-                                                                                                                        
-                                                                                                                        
-                                                                                                                        
-                                                                                                                        
-                                                                                                                        
-                                                                                                                        
-                                                                                                                        
-                                                                                                                        
-                                                                                                                        
-                                                                                                                        
-                                                                                                                        
-                                                                                                                        
+
+
+
+
+
+
+                                                                                                              
+           Select model            CATALOG                                         SELECTION                  
+           20 models               ←→ provider · tab roles                                                    
+                                                                                   claude-opus-5              
+           Models  Roles           > Type to filter                                claude-sub/claude-opus-5   
+                                                                                                              
+           PROVIDERS               › claude-opus-5                                 source  claude-sub         
+           › all                     claude-sub                                    kind    llm                
+             claude-sub              claude-sonnet-5                               pays    subscription       
+             codex-sub               claude-sub                                    window  5h and weekly      
+                                     claude-haiku-4-5                                                         
+                                     claude-sub                                    EFFORT                     
+                                     claude-opus-4-8                               medium  shift+←→           
+                                     claude-sub                                                               
+                                     claude-opus-4-7                               enter picks the model      
+                                     claude-sub                                                               
+                                     claude-opus-4-6                                                          
+                                     claude-sub                                                               
+                                     claude-sonnet-4-6                                                        
+                                     claude-sub                                                               
+                                                                                                              
+                                   Page 1/3  ·  ↑↓ models                                                     
+                                                                                                              
+                                                                                                              
+
+
+
+
+

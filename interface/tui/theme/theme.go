@@ -4,67 +4,44 @@ import (
 	"image/color"
 
 	"charm.land/lipgloss/v2"
+
+	"tofu/interface/tui/look"
 )
 
-const (
-	ink        = "252"
-	speech     = "255"
-	muted      = "245"
-	faint      = "240"
-	accentBlue = "39"
-	toolCyan   = "44"
-	callPurple = "141"
-	pathBlue   = "110"
-	idTan      = "223"
-	warnAmber  = "214"
-	failRed    = "203"
-	addGreen   = "114"
-	dropRed    = "167"
-	panel      = "236"
-	composer   = "8"
-	selected   = "24"
-)
+func paint(c look.Color) color.Color { return lipgloss.Color(string(c)) }
 
-func Text() lipgloss.Style { return lipgloss.NewStyle().Foreground(lipgloss.Color(ink)) }
+func ink(c look.Color) lipgloss.Style { return lipgloss.NewStyle().Foreground(paint(c)) }
 
-func Speech() lipgloss.Style {
-	return lipgloss.NewStyle().Foreground(lipgloss.Color(speech)).Bold(true)
-}
+func Text() lipgloss.Style { return ink(look.Text) }
 
-func Dim() lipgloss.Style { return lipgloss.NewStyle().Foreground(lipgloss.Color(muted)) }
+func Speech() lipgloss.Style { return ink(look.Text).Bold(true) }
 
-func Faint() lipgloss.Style { return lipgloss.NewStyle().Foreground(lipgloss.Color(faint)) }
+func Dim() lipgloss.Style { return ink(look.MutedColor) }
 
-func Accent() lipgloss.Style { return lipgloss.NewStyle().Foreground(lipgloss.Color(accentBlue)) }
+func Faint() lipgloss.Style { return ink(look.FaintColor) }
 
-func Tool() lipgloss.Style { return lipgloss.NewStyle().Foreground(lipgloss.Color(toolCyan)) }
+func Accent() lipgloss.Style { return ink(look.Mint) }
 
-func Call() lipgloss.Style { return lipgloss.NewStyle().Foreground(lipgloss.Color(callPurple)) }
+func Tool() lipgloss.Style { return ink(look.Amber) }
 
-func Path() lipgloss.Style { return lipgloss.NewStyle().Foreground(lipgloss.Color(pathBlue)) }
+func Call() lipgloss.Style { return ink(look.Blue) }
 
-func ID() lipgloss.Style { return lipgloss.NewStyle().Foreground(lipgloss.Color(idTan)) }
+func Path() lipgloss.Style { return ink(look.Blue) }
 
-func Warn() lipgloss.Style { return lipgloss.NewStyle().Foreground(lipgloss.Color(warnAmber)) }
+func ID() lipgloss.Style { return ink(look.ReferenceID) }
 
-func Fail() lipgloss.Style { return lipgloss.NewStyle().Foreground(lipgloss.Color(failRed)) }
+func Warn() lipgloss.Style { return ink(look.Amber) }
 
-func Added() lipgloss.Style { return lipgloss.NewStyle().Foreground(lipgloss.Color(addGreen)) }
+func Fail() lipgloss.Style { return ink(look.Red) }
 
-func Removed() lipgloss.Style { return lipgloss.NewStyle().Foreground(lipgloss.Color(dropRed)) }
+func Added() lipgloss.Style { return ink(look.Mint) }
 
-func Bar() lipgloss.Style {
-	return lipgloss.NewStyle().
-		Foreground(lipgloss.Color(ink)).
-		Background(lipgloss.Color(panel))
-}
+func Removed() lipgloss.Style { return ink(look.Red) }
 
-func Selected() lipgloss.Style {
-	return lipgloss.NewStyle().
-		Foreground(lipgloss.Color(speech)).
-		Background(lipgloss.Color(selected))
-}
+func Bar() lipgloss.Style { return ink(look.Text).Background(paint(look.Panel)) }
 
-func Rule() lipgloss.Style { return lipgloss.NewStyle().Foreground(lipgloss.Color(panel)) }
+func Selected() lipgloss.Style { return ink(look.Text).Background(paint(look.PanelLight)) }
 
-func ComposerColor() color.Color { return lipgloss.Color(composer) }
+func Rule() lipgloss.Style { return ink(look.FaintColor) }
+
+func ComposerColor() color.Color { return paint(look.PanelLight) }

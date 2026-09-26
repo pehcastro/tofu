@@ -7,8 +7,8 @@ import (
 
 	"charm.land/lipgloss/v2"
 
+	"tofu/interface/tui/look"
 	"tofu/interface/tui/progress"
-	"tofu/interface/tui/theme"
 	"tofu/interface/tui/trace"
 	roster "tofu/internal/subagent"
 	"tofu/internal/widget"
@@ -22,6 +22,7 @@ const (
 	ownsFrom      = 72
 	intentLeast   = 12
 	gapCells      = len(gap)
+	stoppingWord  = "stopping"
 )
 
 type phase int
@@ -36,13 +37,13 @@ const (
 func (p phase) drawn() (string, lipgloss.Style) {
 	switch p {
 	case requesting:
-		return "requesting", theme.Dim()
+		return "requesting", look.Style(look.MutedColor)
 	case thinking:
-		return "thinking", theme.Accent()
+		return "thinking", look.Style(look.Mint)
 	case working:
-		return "working", theme.Tool()
+		return "working", look.Style(look.Mint)
 	case waitingOnYou:
-		return "waiting", theme.Warn()
+		return "waiting", look.Style(look.Amber)
 	}
 	panic("session: unknown phase")
 }
@@ -53,41 +54,34 @@ type activity struct {
 	owns   string
 	intent string
 	tokens int
-	style  lipgloss.Style
 }
 
-func (m Model) reached() (phase, string) {
+func (m *Model) reached() phase {
 	if m.Awaiting() {
-		return waitingOnYou, ""
+		return waitingOnYou
 	}
 	if m.inFlight() && !m.respondedOnce {
-		return requesting, ""
+		return requesting
 	}
-	for index := len(m.entries) - 1; index >= 0; index-- {
-		if entry := m.entries[index]; entry.running() {
-			return working, entry.label()
-		}
+	if slices.ContainsFunc(m.entries, Entry.running) {
+		return working
 	}
-	return thinking, ""
+	return thinking
 }
 
 func (m *Model) settle() {
 	if !m.Busy {
 		return
 	}
-	at, intent := m.reached()
-	if at == m.phase && intent == m.intent {
+	at := m.reached()
+	if at == m.phase || m.now().Sub(m.shown) < PhaseDwell {
 		return
 	}
-	if m.now().Sub(m.shown) < PhaseDwell {
-		return
-	}
-	m.phase, m.intent, m.shown = at, intent, m.now()
+	m.phase, m.shown = at, m.now()
 }
 
-func (m Model) activityRows() []activity {
-	rows := make([]activity, 0, len(m.Children)+1)
-	_, busyStyle := working.drawn()
+func (m *Model) activityRows() []activity {
+	rows := make([]activity, 0, len(m.Children))
 	for _, child := range m.Children {
 		if child.State != roster.Working {
 			continue
@@ -98,17 +92,12 @@ func (m Model) activityRows() []activity {
 			owns:   strings.Join(child.Owns, " "),
 			intent: child.Doing,
 			tokens: child.Tokens,
-			style:  busyStyle,
 		})
 	}
-	if !m.Busy {
-		return rows
-	}
-	name, style := m.phase.drawn()
-	return append(rows, activity{since: m.phaseSince(), name: name, intent: m.intent, style: style})
+	return rows
 }
 
-func (m Model) phaseSince() time.Duration {
+func (m *Model) phaseSince() time.Duration {
 	now := m.now()
 	if !m.waiting.IsZero() {
 		now = m.waiting
@@ -116,14 +105,52 @@ func (m Model) phaseSince() time.Duration {
 	return max(now.Sub(m.entered), 0)
 }
 
-func (m Model) activityLines() []string {
+func (m *Model) requestLine() string {
+	line, id := margin, m.cookedID
+	switch {
+	case m.Busy:
+		word, style := m.phase.drawn()
+		if m.Stopping || m.LettingToolsFinish {
+			word, style = stoppingWord, look.Style(look.Amber)
+		}
+		since := m.phaseSince()
+		line += look.Accent(progress.Spin(since, TickInterval)) + " " + style.Render(word) + look.Muted(requestSeparator+widget.Until(since)+metaGap)
+		id = m.turnID
+	case m.cooked != "":
+		line += look.Muted(m.cooked + metaGap)
+	default:
+		return ""
+	}
+	if short := trace.Short(id); short != "" {
+		line += look.TypedID(requestKind, short)
+	}
+	return line
+}
+
+func (m *Model) activityLines() []string {
 	rows := m.activityRows()
-	held := m.width >= ownsFrom &&
-		slices.ContainsFunc(rows, func(row activity) bool { return row.owns != "" })
+	width := m.width - messageMargin
+	held := width >= ownsFrom && slices.ContainsFunc(rows, func(row activity) bool { return row.owns != "" })
 	elapsed := widget.Column(rows, func(row activity) string { return widget.Until(row.since) }, elapsedColumn)
 	lines := make([]string, 0, len(rows))
 	for _, row := range rows {
-		lines = append(lines, m.activityLine(row, held, elapsed))
+		clock := progress.Spin(row.since, TickInterval) + " " + widget.Pad(widget.Until(row.since), elapsed)
+		name := column(row.name, nameColumn)
+		who, spent := name, ""
+		if held {
+			who += column(row.owns, ownsColumn)
+		}
+		if row.tokens > 0 {
+			spent = gap + widget.Lead(widget.Count(row.tokens), tokensColumn)
+		}
+		room := width - widget.Cells(clock+gap+who+spent)
+		if room < intentLeast {
+			who, spent = name, ""
+			room = width - widget.Cells(clock+gap+who)
+		}
+		room = max(room, 1)
+		line := look.Accent(clock) + gap + look.Style(look.Text).Render(who) + look.Muted(widget.Pad(widget.Fit(row.intent, room), room)+spent)
+		lines = append(lines, margin+line)
 	}
 	return lines
 }
@@ -135,48 +162,9 @@ func column(text string, width int) string {
 	return widget.Pad(text, width)
 }
 
-func (m Model) activityLine(row activity, held bool, elapsed int) string {
-	clock := progress.Spin(row.since, TickInterval) + " " + widget.Pad(widget.Until(row.since), elapsed)
-	name := column(row.name, nameColumn)
-	who, spent := name, ""
-	if held {
-		who += column(row.owns, ownsColumn)
-	}
-	if row.tokens > 0 {
-		spent = gap + widget.Lead(widget.Count(row.tokens), tokensColumn)
-	}
-	room := m.width - widget.Cells(clock+gap+who+spent)
-	if room < intentLeast {
-		who, spent = name, ""
-		room = m.width - widget.Cells(clock+gap+who)
-	}
-	room = max(room, 1)
-	return row.style.Render(clock + gap + who + widget.Pad(widget.Fit(row.intent, room), room) + spent)
-}
+func (m *Model) inFlight() bool { return !m.requested.IsZero() && m.answered.IsZero() }
 
-func (m Model) progressLine(end int) string {
-	if end != len(m.entries) || !m.Busy {
-		return ""
-	}
-	entry := m.entries[end-1]
-	if entry.label() == "" {
-		return ""
-	}
-	line := progress.Line{Label: entry.label(), Live: entry.running()}
-	if line.Live {
-		line.Since, line.Tick = m.elapsed(entry.Started), TickInterval
-	}
-	id := trace.Short(entry.ID)
-	if id == "" {
-		return line.View(m.width)
-	}
-	room := max(m.width-widget.Cells(id+gap), 1)
-	return widget.Pad(line.View(room), room) + gap + theme.ID().Render(id)
-}
-
-func (m Model) inFlight() bool { return !m.requested.IsZero() && m.answered.IsZero() }
-
-func (m Model) elapsed(at time.Time) time.Duration {
+func (m *Model) elapsed(at time.Time) time.Duration {
 	now := m.now()
 	if m.inFlight() {
 		now = m.requested

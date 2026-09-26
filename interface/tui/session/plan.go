@@ -6,7 +6,7 @@ import (
 
 	"charm.land/lipgloss/v2"
 
-	"tofu/interface/tui/theme"
+	"tofu/interface/tui/look"
 	"tofu/internal/widget"
 )
 
@@ -37,20 +37,20 @@ type PlanItem struct {
 func (i PlanItem) drawn() (string, lipgloss.Style) {
 	switch i.State {
 	case PlanPending:
-		return planPendingMark, theme.Dim()
+		return planPendingMark, look.Style(look.MutedColor)
 	case PlanRunning:
-		return planRunningMark, theme.Accent()
+		return planRunningMark, look.Style(look.Mint)
 	case PlanDone:
-		return planDoneMark, theme.Faint()
+		return planDoneMark, look.Style(look.FaintColor)
 	case PlanDropped:
-		return planDroppedMark, theme.Faint()
+		return planDroppedMark, look.Style(look.FaintColor)
 	}
 	panic("session: unknown plan state")
 }
 
 func (m *Model) SetPlan(items []PlanItem) { m.plan = items }
 
-func (m Model) planLines() []string {
+func (m *Model) planLines() []string {
 	if len(m.plan) == 0 {
 		return nil
 	}
@@ -77,7 +77,7 @@ func (m Model) planLines() []string {
 	return append(kept, m.planNote(strconv.Itoa(len(lines)-len(kept))+" more"))
 }
 
-func (m Model) feed() ([]string, int) {
+func (m *Model) feed() ([]string, int) {
 	rows := m.transcriptRows()
 	plan := m.planLines()
 	if len(plan) >= rows {
@@ -86,16 +86,16 @@ func (m Model) feed() ([]string, int) {
 	return plan, rows - len(plan)
 }
 
-func (m Model) planNote(words string) string {
-	return theme.Faint().Render(widget.Fit(noteMarker+words, m.width))
+func (m *Model) planNote(words string) string {
+	return look.Faint(widget.Fit(noteMarker+words, m.textWidth()))
 }
 
-func (m Model) planItemLines(items []PlanItem) []string {
+func (m *Model) planItemLines(items []PlanItem) []string {
 	lines := make([]string, 0, len(items)+1)
 	phase := ""
 	for _, item := range items {
 		if item.Phase != "" && item.Phase != phase {
-			lines = append(lines, theme.Faint().Render(widget.Fit(planPhaseIndent+item.Phase, m.width)))
+			lines = append(lines, look.Faint(widget.Fit(planPhaseIndent+item.Phase, m.textWidth())))
 		}
 		phase = item.Phase
 		marker, style := item.drawn()
@@ -103,7 +103,7 @@ func (m Model) planItemLines(items []PlanItem) []string {
 		if item.Phase != "" {
 			indent = planPhaseIndent
 		}
-		lines = append(lines, style.Render(widget.Fit(indent+marker+strings.TrimSpace(item.Text), m.width)))
+		lines = append(lines, style.Render(widget.Fit(indent+marker+strings.TrimSpace(item.Text), m.textWidth())))
 	}
 	return lines
 }

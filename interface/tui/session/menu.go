@@ -3,7 +3,7 @@ package session
 import (
 	"strings"
 
-	"tofu/interface/tui/theme"
+	"tofu/interface/tui/look"
 	"tofu/internal/widget"
 )
 
@@ -54,7 +54,7 @@ func (m Model) Path() (string, string, bool) {
 	return "", "", false
 }
 
-func (m Model) menuRows() ([]Command, string) {
+func (m *Model) menuRows() ([]Command, string) {
 	if m.closed {
 		return nil, ""
 	}
@@ -92,7 +92,7 @@ func pathsHolding(paths []string, typed string) []Command {
 	return rows
 }
 
-func (m Model) pickedRow() (Command, string, bool) {
+func (m *Model) pickedRow() (Command, string, bool) {
 	rows, sigil := m.menuRows()
 	if len(rows) == 0 {
 		return Command{}, "", false
@@ -151,17 +151,17 @@ func (m *Model) Accept() (string, bool) {
 	return "", false
 }
 
-func (m Model) commandLines() []string {
+func (m *Model) commandLines() []string {
 	rows, sigil := m.menuRows()
 	picked := min(m.picked, len(rows)-1)
 	lines := make([]string, 0, len(rows))
 	for index, row := range rows {
-		marker, style := unpickedMarker, theme.Dim()
+		marker, style := unpickedMarker, look.Style(look.MutedColor)
 		if sigil != commandPrefix {
-			style = theme.Path()
+			style = look.Style(look.Blue)
 		}
 		if index == picked {
-			marker, style = pickedMarker, theme.Accent()
+			marker, style = pickedMarker, look.Style(look.Mint)
 		}
 		name := marker + sigil + row.Name
 		if row.What == "" {
@@ -169,7 +169,7 @@ func (m Model) commandLines() []string {
 			continue
 		}
 		what := widget.Fit(row.What, max(m.width-commandColumn, 1))
-		lines = append(lines, style.Render(widget.Pad(name, commandColumn))+theme.Faint().Render(what))
+		lines = append(lines, style.Render(widget.Pad(name, commandColumn))+look.Faint(what))
 	}
 	return lines
 }

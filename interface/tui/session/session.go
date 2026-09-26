@@ -1,7 +1,7 @@
 package session
 
 import (
-	"slices"
+	"hash/fnv"
 	"strconv"
 	"strings"
 	"time"
@@ -9,14 +9,12 @@ import (
 	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/textarea"
 	tea "charm.land/bubbletea/v2"
-	"charm.land/lipgloss/v2"
-	"github.com/charmbracelet/x/ansi"
 
+	"tofu/interface/tui/look"
 	"tofu/interface/tui/markdown"
 	"tofu/interface/tui/paste"
 	"tofu/interface/tui/progress"
 	"tofu/interface/tui/subagent"
-	"tofu/interface/tui/theme"
 	"tofu/interface/tui/trace"
 	"tofu/internal/widget"
 )
@@ -27,36 +25,11 @@ const PhaseDwell = 400 * time.Millisecond
 
 const (
 	entryWindow      = 500
-	composerRows     = 3
-	tintLeadRows     = 1
-	tintPadRows      = 2 * tintLeadRows
-	footerRows       = composerRows + tintPadRows + 1
-	keyHints         = "⏎ send   ⇧⏎ newline   / commands"
-	queueHints       = "⏎ queues   alt+↑↓ picks   ctrl+x unqueues"
-	hintGap          = "   "
-	quitHint         = "ctrl+c quit"
-	stopHint         = "ctrl+c stops the turn"
-	stoppingHint     = "stopping the turn, ctrl+c will not quit until it ends"
-	lettingHint      = "letting the running tools finish, ctrl+c again stops them"
 	noResult         = "no result"
-	continuation     = "    "
-	composerInset    = "  "
-	toolMarker       = "⟩ "
 	shellTool        = "bash"
-	assistantMark    = "▌ "
-	userMarker       = "» "
-	noteMarker       = "· "
-	failureMarker    = "! "
-	treeBranch       = "├─ "
-	treeLast         = "└─ "
 	minimumColumns   = 20
-	statusShare      = 2
-	foldSeparator    = " · "
-	wheelLines       = 3
-	wholeErrorInWork = "the whole error is in work"
-	followingState   = "following"
-	scrolledState    = "scrolled back   end returns"
-	Placeholder      = "hey tofu, can you explain this repository to me?"
+	requestSeparator = "  |  "
+	Placeholder      = "Ask tofu to build, inspect, or delegate"
 )
 
 type Kind int
@@ -84,12 +57,14 @@ type Entry struct {
 	Ended     time.Time
 	Decision  *Decision
 	turn      int
+	intoTurn  time.Duration
 	streaming bool
 	waiting   bool
 	rendered  []string
 	tail      []string
 	stable    int
 	width     int
+	drawn     drawn
 }
 
 type Result struct {
@@ -99,6 +74,8 @@ type Result struct {
 }
 
 func (e Entry) assistant() bool { return e.Kind == Assistant }
+
+func (e Entry) message() bool { return e.Kind == User || e.Kind == Assistant }
 
 func (e Entry) displayLines() []string {
 	if !e.streaming || e.tail == nil {
@@ -133,7 +110,6 @@ type Model struct {
 	respondedOnce      bool
 	waited             time.Duration
 	phase              phase
-	intent             string
 	shown              time.Time
 	prose              Prose
 	plan               []PlanItem
@@ -146,13 +122,16 @@ type Model struct {
 	began              time.Time
 	entered            time.Time
 	turns              int
+	turnID             string
+	cooked             string
+	cookedID           string
+	minted             int
 	started            bool
 	attached           []paste.Outcome
 	pastes             int
 	picked             int
 	closed             bool
 	queue              []pending
-	queues             int
 	pick               int
 	sent               []string
 	histAt             int
@@ -167,55 +146,28 @@ func New(now func() time.Time, prose Prose) Model {
 	composer := textarea.New()
 	composer.Placeholder = Placeholder
 	composer.ShowLineNumbers = false
-	composer.Prompt = composerInset
-	composer.SetHeight(composerRows)
+	composer.Prompt = ""
+	composer.DynamicHeight = true
+	composer.MinHeight = composerMinRows
+	composer.MaxHeight = composerMaxRows
 	composer.CharLimit = 0
 	composer.SetVirtualCursor(false)
 	composer.KeyMap.InsertNewline = key.NewBinding(key.WithKeys("shift+enter", "alt+enter", "ctrl+j"))
-	composer.SetStyles(tintedComposerStyles())
-	return Model{now: now, prose: prose, composer: composer, following: true, began: now()}
-}
-
-func tintedComposerStyles() textarea.Styles {
-	styles := textarea.DefaultDarkStyles()
-	styles.Focused = tintedState(styles.Focused)
-	styles.Blurred = tintedState(styles.Blurred)
+	styles := look.ComposerStyles()
 	styles.Cursor.Shape = tea.CursorBar
-	return styles
-}
-
-func tintedState(state textarea.StyleState) textarea.StyleState {
-	tint := theme.ComposerColor()
-	state.Base = state.Base.Background(tint)
-	state.Text = state.Text.Background(tint)
-	state.LineNumber = state.LineNumber.Background(tint)
-	state.CursorLineNumber = state.CursorLineNumber.Background(tint)
-	state.CursorLine = state.CursorLine.Background(tint)
-	state.EndOfBuffer = state.EndOfBuffer.Background(tint)
-	state.Placeholder = state.Placeholder.Background(tint)
-	state.Prompt = state.Prompt.Background(tint)
-	return state
+	composer.SetStyles(styles)
+	return Model{now: now, prose: prose, composer: composer, following: true, began: now()}
 }
 
 func (m *Model) Focus() tea.Cmd { return m.composer.Focus() }
 
 func (m *Model) Insert(text string) { m.composer.InsertString(text) }
 
-func (m Model) Cursor() *tea.Cursor {
-	caret := m.composer.Cursor()
-	if caret == nil {
-		return nil
-	}
-	caret.Y += m.transcriptRows() + m.activityBlockRows() + len(m.attached) + tintLeadRows
-	return caret
-}
-
 func (m *Model) SetSize(width, height int) {
 	columns := max(width, minimumColumns)
 	rewrap := columns != m.width
 	m.width, m.height = columns, height
-	m.composer.SetWidth(m.width)
-	m.composer.SetHeight(composerRows)
+	m.composer.SetWidth(max(m.width-composerSideCells, 1))
 	if !rewrap {
 		return
 	}
@@ -224,11 +176,13 @@ func (m *Model) SetSize(width, height int) {
 	}
 }
 
-func (m Model) rerender(entry *Entry) {
+func (m *Model) textWidth() int { return max(m.width-2*messageInset, 1) }
+
+func (m *Model) rerender(entry *Entry) {
 	if !entry.assistant() {
 		return
 	}
-	room := max(m.width-widget.Cells(assistantMark), 1)
+	room := m.textWidth()
 	if !entry.streaming {
 		entry.rendered, entry.stable, entry.width, entry.tail = m.prose(entry.Body, room), len(entry.Body), room, nil
 		return
@@ -268,9 +222,19 @@ func (m *Model) seal() {
 	m.rerender(&m.entries[last])
 }
 
+func (m *Model) mint() string {
+	m.minted++
+	sum := fnv.New64a()
+	_, _ = sum.Write([]byte(m.now().String() + strconv.Itoa(m.minted)))
+	return strconv.FormatUint(sum.Sum64(), 16)
+}
+
 func (m *Model) Append(entry Entry) {
 	m.seal()
-	entry.Started, entry.turn = m.now(), m.turns
+	entry.Started, entry.turn, entry.intoTurn = m.now(), m.turns, m.elapsed(m.began)
+	if entry.Kind == User && entry.ID == "" {
+		entry.ID = m.mint()
+	}
 	m.rerender(&entry)
 	m.entries = append(m.entries, entry)
 	if len(m.entries) <= entryWindow {
@@ -398,9 +362,9 @@ func (m *Model) Start() {
 		m.started = true
 	}
 	at := m.now()
-	m.entered, m.turns = at, m.turns+1
+	m.entered, m.turns, m.turnID = at, m.turns+1, m.mint()
 	m.Busy, m.Stopping, m.LettingToolsFinish, m.began, m.plan = true, false, false, at, nil
-	m.waited, m.phase, m.intent, m.shown = 0, requesting, "", at
+	m.waited, m.phase, m.shown = 0, requesting, at
 	m.requested, m.answered, m.respondedOnce = at, time.Time{}, false
 }
 
@@ -411,15 +375,12 @@ func (m *Model) dropGreeting() {
 }
 
 func (m *Model) Close(words, id string) {
-	work := m.elapsed(m.began)
-	line := words + " " + widget.Until(work)
-	if m.waited > work {
-		line += foldSeparator + "waited " + widget.Until(m.waited)
+	m.cooked = words + " " + widget.Until(m.elapsed(m.began)) + requestSeparator + "waited " + widget.Until(m.waited)
+	m.cookedID = m.turnID
+	if id != "" {
+		m.cookedID = id
 	}
-	if short := trace.Short(id); short != "" {
-		line += foldSeparator + "[" + short + "]"
-	}
-	m.Append(Entry{Kind: Note, Body: line})
+	m.Append(Entry{Kind: Note, Body: m.cooked + "  [request" + trace.Short(m.cookedID) + "]"})
 }
 
 func (m *Model) TakePartial() (string, bool) {
@@ -446,265 +407,4 @@ func (m *Model) Stop() {
 			entry.Promoted = true
 		}
 	}
-}
-
-func (m *Model) View() string {
-	m.settle()
-	plan, rows := m.feed()
-	tail, scrollable := m.tailAnchor(rows)
-	from := tail
-	if scrollable && !m.following {
-		from = m.top
-	}
-	content := m.linesFrom(from, rows)
-	for len(content) < rows {
-		content = append(content, "")
-	}
-	lines := slices.Concat(content, plan)
-	footer := []string{strings.Join(lines, "\n")}
-	if block := append(m.activityLines(), m.askLines()...); len(block) > 0 {
-		footer = append(footer, "")
-		footer = append(footer, block...)
-	}
-	for _, attached := range m.attached {
-		footer = append(footer, attached.Render(m.width))
-	}
-	footer = append(footer, m.composerView())
-	footer = append(footer, m.commandLines()...)
-	return lipgloss.JoinVertical(lipgloss.Left, append(footer, m.hint(scrollable))...)
-}
-
-func (m Model) composerView() string {
-	rows := strings.Split(m.composer.View(), "\n")
-	for index, row := range rows {
-		rows[index] = tintRow(row)
-	}
-	pad := tintRow(strings.Repeat(" ", m.width))
-	return strings.Join(append(append([]string{pad}, rows...), pad), "\n")
-}
-
-func tintRow(row string) string {
-	end := beforeTrailingStyles(row)
-	start := end
-	for start > 0 && row[start-1] == ' ' {
-		start--
-	}
-	if start == end {
-		return row
-	}
-	gap := lipgloss.NewStyle().Background(theme.ComposerColor()).Render(strings.Repeat(" ", end-start))
-	return row[:start] + gap
-}
-
-func beforeTrailingStyles(row string) int {
-	end := len(row)
-	for end > 0 && row[end-1] == 'm' {
-		at := end - 1
-		for at > 0 && (row[at-1] == ';' || (row[at-1] >= '0' && row[at-1] <= '9')) {
-			at--
-		}
-		if at < 2 || row[at-1] != '[' || row[at-2] != ansi.ESC {
-			return end
-		}
-		end = at - 2
-	}
-	return end
-}
-
-func (m Model) hint(scrollable bool) string {
-	line := quitHint + hintGap + keyHints
-	switch {
-	case m.Stopping:
-		line = stoppingHint
-	case m.LettingToolsFinish:
-		line = lettingHint
-	case m.Busy && len(m.queue) > 0:
-		line = stopHint + hintGap + queueHints
-	case m.Busy:
-		line = stopHint + hintGap + keyHints
-	}
-	if scrollable {
-		state := followingState
-		if !m.following {
-			state = scrolledState
-		}
-		room := max(m.width-widget.Cells(state), 0)
-		line = widget.Pad(widget.Fit(line, room), room) + state
-	}
-	return theme.Faint().Render(widget.Fit(line, m.width))
-}
-
-func (m Model) transcriptRows() int {
-	rows, _ := m.menuRows()
-	return max(m.height-footerRows-len(m.attached)-m.activityBlockRows()-len(rows), 1)
-}
-
-func (m Model) activityBlockRows() int {
-	rows := len(m.activityRows())
-	if _, open := m.openAsk(); open {
-		rows += askBlockRows
-	}
-	if rows > 0 {
-		rows++
-	}
-	return rows
-}
-
-func (m Model) foldLine(start, end int) string {
-	shell, decisions := 0, 0
-	for _, entry := range m.entries[start:end] {
-		if entry.Head == shellTool {
-			shell++
-		}
-		if entry.Decision != nil {
-			decisions++
-		}
-	}
-	fields := []string{"(" + strconv.Itoa(end-start) + ") tools"}
-	if decisions > 0 {
-		fields = append(fields, "jev "+strconv.Itoa(decisions))
-	}
-	if shell > 0 && !m.FoldHidesShell {
-		fields = append(fields, "shell ("+strconv.Itoa(shell)+")")
-	}
-	fields = append(fields, widget.Until(m.foldSince(end)))
-	if id := trace.Short(m.entries[end-1].ID); id != "" {
-		fields = append(fields, "["+id+"]")
-	}
-	return theme.Faint().Render(widget.Fit(noteMarker+strings.Join(fields, foldSeparator), m.width))
-}
-
-func (m Model) foldSince(end int) time.Duration {
-	if end >= len(m.entries) {
-		return m.elapsed(m.began)
-	}
-	return max(m.entries[end].Started.Sub(m.began), 0)
-}
-
-func (m Model) render(entry Entry) []string {
-	if entry.waiting {
-		return m.queuedLines(entry)
-	}
-	if entry.Kind == Tool {
-		return m.toolLines(entry)
-	}
-	if entry.Kind == Failure {
-		return []string{m.failureLine(entry)}
-	}
-	marker, style := markerOf(entry.Kind)
-	indent := strings.Repeat(" ", widget.Cells(marker))
-	room := max(m.width-widget.Cells(marker), 1)
-	var lines []string
-	if entry.Kind == Assistant || entry.Kind == User {
-		lines = append(lines, "")
-	}
-	if entry.assistant() {
-		for index, line := range entry.displayLines() {
-			prefix := style.Render(marker)
-			if index > 0 {
-				prefix = indent
-			}
-			lines = append(lines, prefix+line)
-		}
-		if !entry.streaming {
-			if id := idLine(entry, indent); id != "" {
-				lines = append(lines, id)
-			}
-			lines = append(lines, "")
-		}
-		return lines
-	}
-	for index, line := range widget.Wrap(entry.Body, room) {
-		prefix := marker
-		if index > 0 {
-			prefix = indent
-		}
-		lines = append(lines, style.Render(prefix+line))
-	}
-	if entry.Kind == User {
-		lines = append(lines, m.chipLines(entry.Chips)...)
-	}
-	if id := idLine(entry, indent); id != "" {
-		lines = append(lines, id)
-	}
-	return lines
-}
-
-func (m Model) failureLine(entry Entry) string {
-	marker, style := markerOf(Failure)
-	tail := ""
-	if short := trace.Short(entry.ID); short != "" {
-		tail = gap + theme.Faint().Render(wholeErrorInWork+" ["+short+"]")
-	}
-	room := max(m.width-widget.Cells(marker+tail), 1)
-	return style.Render(marker+widget.Fit(strings.Join(strings.Fields(entry.Body), " "), room)) + tail
-}
-
-func idLine(entry Entry, indent string) string {
-	id := trace.Short(entry.ID)
-	if id == "" {
-		return ""
-	}
-	return theme.ID().Render(indent + id)
-}
-
-func (m Model) toolLines(entry Entry) []string {
-	marker, style := markerOf(entry.Kind)
-	if entry.Head == shellTool {
-		style = theme.Tool()
-	}
-	verdict, verdictStyle := "", style
-	if entry.Decision != nil {
-		verdict, verdictStyle = entry.Decision.Verdict.String(), entry.Decision.Verdict.style()
-	}
-	status, statusStyle := entry.Status, style
-	switch {
-	case entry.running():
-		status, statusStyle = widget.Until(m.elapsed(entry.Started)), theme.Accent()
-	case entry.Failed:
-		statusStyle = theme.Fail()
-	case status != "":
-		statusStyle = theme.Added()
-	}
-	status = widget.Fit(status, max(m.width/statusShare-widget.Cells(verdict)-widget.Cells(gap), 0))
-	right, columns := "", 0
-	if verdict != "" {
-		right, columns = verdictStyle.Render(verdict), widget.Cells(verdict)
-	}
-	if status != "" {
-		if right != "" {
-			right, columns = right+gap, columns+widget.Cells(gap)
-		}
-		right, columns = right+statusStyle.Render(status), columns+widget.Cells(status)
-	}
-	room := max(m.width-columns-widget.Cells(gap), minimumColumns)
-	lines := []string{style.Render(widget.Pad(widget.Fit(marker+entry.label(), room), room)) + gap + right}
-	if entry.Detail != "" {
-		for _, line := range widget.Wrap(entry.Detail, max(m.width-widget.Cells(continuation), 1)) {
-			lines = append(lines, theme.Faint().Render(continuation+line))
-		}
-	}
-	if entry.Decision != nil {
-		lines = append(lines, entry.Decision.lines(m.width)...)
-	}
-	if id := idLine(entry, continuation); id != "" {
-		lines = append(lines, id)
-	}
-	return lines
-}
-
-func markerOf(kind Kind) (string, lipgloss.Style) {
-	switch kind {
-	case User:
-		return userMarker, theme.Accent()
-	case Assistant:
-		return assistantMark, theme.Speech()
-	case Tool:
-		return toolMarker, theme.Call()
-	case Note:
-		return noteMarker, theme.Faint()
-	case Failure:
-		return failureMarker, theme.Fail()
-	}
-	panic("session: unknown entry kind")
 }

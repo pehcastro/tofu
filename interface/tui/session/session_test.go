@@ -70,7 +70,7 @@ func TestProseIsRenderedOncePerWidth(t *testing.T) {
 	if calls != 2 {
 		t.Errorf("a resize to a new width called the renderer %d times, want 2", calls)
 	}
-	if !strings.Contains(model.View(), "prose at 98") {
+	if !strings.Contains(model.View(), "prose at 92") {
 		t.Errorf("the frame does not carry the message rendered at the new width:\n%s", model.View())
 	}
 }
@@ -85,12 +85,12 @@ func TestStreamingRendersMarkdownWithNoParagraphBreakYet(t *testing.T) {
 	if calls == 0 {
 		t.Fatalf("the growing tail with no closed block never reached the renderer")
 	}
-	if !strings.Contains(streaming, "prose at 78: **Tofu** reads `toolgate.go`") {
+	if !strings.Contains(streaming, "prose at 72: **Tofu** reads `toolgate.go`") {
 		t.Errorf("a streaming message with no closed block is not rendered as markdown:\n%s", streaming)
 	}
 	model.Stop()
 	complete := model.View()
-	if !strings.Contains(complete, "prose at 78") {
+	if !strings.Contains(complete, "prose at 72") {
 		t.Errorf("the complete message is not rendered as markdown:\n%s", complete)
 	}
 }
@@ -105,10 +105,10 @@ func TestAHeadingRendersBeforeTheEntryStopsStreaming(t *testing.T) {
 	if calls != 2 {
 		t.Fatalf("the closed heading plus its growing tail called the renderer %d times while streaming, want 2", calls)
 	}
-	if !strings.Contains(mid, "prose at 78: # Title") {
+	if !strings.Contains(mid, "prose at 72: # Title") {
 		t.Errorf("the heading is not rendered while the entry streams:\n%s", mid)
 	}
-	if !strings.Contains(mid, "prose at 78: the body is still arriving") {
+	if !strings.Contains(mid, "prose at 72: the body is still arriving") {
 		t.Errorf("the growing tail is not rendered as markdown while it streams:\n%s", mid)
 	}
 }
@@ -216,8 +216,8 @@ func TestABlankLineSeparatesAPersonsMessageFromTheAnswerAbove(t *testing.T) {
 	model.SetSize(80, 24)
 	model.Append(Entry{Kind: Assistant, Body: "the first reply."})
 	model.Append(Entry{Kind: User, Body: "a second question"})
-	lines := strings.Split(model.View(), "\n")
-	at := lineIndex(lines, "a second question")
+	lines := strings.Split(ansi.Strip(model.View()), "\n")
+	at := lineIndex(lines, you)
 	if at <= 0 || strings.TrimSpace(lines[at-1]) != "" {
 		t.Fatalf("no blank line separates the person's message from the answer above it\n%s", model.View())
 	}
@@ -231,7 +231,7 @@ func TestTheTurnBreakIsLargerThanAParagraphBreakInsideOneAnswer(t *testing.T) {
 	model.Append(Entry{Kind: User, Body: "a second question"})
 	lines := strings.Split(ansi.Strip(model.View()), "\n")
 	insideAnswer := lineIndex(lines, "paragraph two")
-	turnBreak := lineIndex(lines, "a second question")
+	turnBreak := lineIndex(lines, you)
 	if insideAnswer < 0 || turnBreak < 0 {
 		t.Fatal("could not find both markers")
 	}
@@ -305,7 +305,7 @@ func TestABlankLineSitsAboveTheActivityBlock(t *testing.T) {
 	if strings.TrimSpace(lines[rows]) != "" {
 		t.Fatalf("no blank line sits above the activity block, row %d is %q", rows, lines[rows])
 	}
-	if !strings.Contains(lines[rows+1], "read internal/turn/loop.go") {
+	if !strings.Contains(lines[rows+1], "working") {
 		t.Fatalf("the activity block does not follow the blank line: %q", lines[rows+1])
 	}
 }

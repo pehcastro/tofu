@@ -15,7 +15,7 @@ func (m *Model) Remember(task string) []Chip {
 	return kept
 }
 
-func (m Model) recallable() bool { return m.composer.LineCount() <= 1 }
+func (m *Model) recallable() bool { return m.composer.LineCount() <= 1 }
 
 func (m *Model) HistoryUp() bool {
 	if !m.recallable() || m.histAt == 0 {

@@ -2,33 +2,37 @@ package models
 
 import (
 	"slices"
-	"strconv"
 	"strings"
+	"unicode/utf8"
 
-	"charm.land/lipgloss/v2"
+	"charm.land/bubbles/v2/textinput"
+	"github.com/charmbracelet/x/ansi"
 
-	"tofu/interface/tui/pane"
-	"tofu/interface/tui/theme"
+	"tofu/interface/tui/look"
+	"tofu/interface/tui/pointer"
 	"tofu/internal/llm"
 	library "tofu/internal/llm/models"
-	"tofu/internal/widget"
 )
 
 const (
-	minimumWidth      = 20
-	beforeTheFirstRow = -1
-	gap               = "  "
-	pickedMark        = "› "
-	plainMark         = "  "
-	title             = "models"
-	effortHead        = "effort "
-	pickHint          = "↑↓ choose   ←→ effort   enter picks"
-	emptyTitle        = "the library has no model to pick"
+	minimumWidth = 20
+	tabsTop      = 4
+	providerTop  = 7
+	catalogTop   = 6
+	rolesTop     = 4
+	linesPerRow  = 2
+	allProviders = "all"
+	modelsTab    = "Models"
+	rolesTab     = "Roles"
+	filterPrompt = "> "
+	filterHint   = "Type to filter"
 )
 
 type Row struct {
 	Slug   string
 	Use    library.Use
+	Kind   library.Kind
+	Pays   library.Pays
 	Window string
 	Reason string
 }
@@ -46,12 +50,43 @@ type Source struct {
 	Efforts []llm.Effort
 }
 
+type tab int
+
+const (
+	tabModels tab = iota
+	tabRoles
+	tabCount
+)
+
+type Action int
+
+const (
+	None Action = iota
+	Pick
+	Bind
+	Login
+	Close
+)
+
+type Intent struct {
+	Action Action
+	Slug   string
+	Role   library.RoleID
+	Effort llm.Effort
+}
+
 type Model struct {
-	Groups []Group
-	pick   int
-	effort llm.Effort
-	width  int
-	height int
+	Groups   []Group
+	drawn    *drawn
+	bound    map[library.RoleID]string
+	filter   textinput.Model
+	tab      tab
+	provider int
+	cursor   int
+	assign   library.RoleID
+	effort   llm.Effort
+	width    int
+	height   int
 }
 
 func Build(loaded library.Library, sources []Source) Model {
@@ -63,6 +98,8 @@ func Build(loaded library.Library, sources []Source) Model {
 		rows[one.Subscription] = append(rows[one.Subscription], Row{
 			Slug:   one.Slug(),
 			Use:    one.Use,
+			Kind:   one.Kind,
+			Pays:   one.Pays(),
 			Window: one.WindowText(),
 			Reason: one.Reason,
 		})
@@ -74,8 +111,16 @@ func Build(loaded library.Library, sources []Source) Model {
 		}
 		groups = append(groups, Group{Source: string(source.ID), Rows: rows[source.ID], Efforts: source.Efforts})
 	}
-	built := Model{Groups: groups, pick: beforeTheFirstRow, effort: llm.EffortDefault}
-	built.move(1)
+	bound := map[library.RoleID]string{}
+	for _, role := range loaded.Roles {
+		bound[role.ID] = role.Model.Slug()
+	}
+	filter := textinput.New()
+	filter.Prompt, filter.Placeholder = filterPrompt, filterHint
+	filter.SetStyles(look.FilterStyles())
+	filter.Focus()
+	built := Model{Groups: groups, drawn: &drawn{}, bound: bound, filter: filter, effort: llm.EffortDefault}
+	built.settle()
 	return built
 }
 
@@ -83,25 +128,105 @@ func (m *Model) SetSize(width, height int) {
 	m.width, m.height = max(width, minimumWidth), height
 }
 
-func (m Model) count() int {
-	total := 0
+func (m Model) providers() []string {
+	names := []string{allProviders}
 	for _, group := range m.Groups {
-		total += len(group.Rows)
+		names = append(names, group.Source)
 	}
-	return total
+	return names
 }
 
-func (m *Model) Key(key string) {
-	switch key {
-	case "down", "j":
-		m.move(1)
-	case "up", "k":
-		m.move(-1)
-	case "right", "l":
-		m.step(1)
-	case "left", "h":
-		m.step(-1)
+func (m Model) visible() []Row {
+	query := strings.ToLower(strings.TrimSpace(m.filter.Value()))
+	var rows []Row
+	for i, group := range m.Groups {
+		if m.provider != 0 && m.provider != i+1 {
+			continue
+		}
+		for _, row := range group.Rows {
+			if strings.Contains(strings.ToLower(row.Slug+" "+row.Window), query) {
+				rows = append(rows, row)
+			}
+		}
 	}
+	return rows
+}
+
+func (m Model) Picked() (Row, bool) {
+	rows := m.visible()
+	if m.cursor >= len(rows) {
+		return Row{}, false
+	}
+	return rows[m.cursor], true
+}
+
+func (m Model) Effort() llm.Effort { return m.effort }
+
+func (m *Model) Key(key string) Intent {
+	switch key {
+	case "esc":
+		return Intent{Action: Close}
+	case "enter":
+		return m.choose()
+	case "tab":
+		m.tab = (m.tab + 1) % tabCount
+		m.reset()
+	case "left", "right":
+		count := len(m.providers())
+		switch {
+		case m.tab == tabRoles:
+			m.tab = tabModels
+		case key == "left":
+			m.provider = (m.provider + count - 1) % count
+		default:
+			m.provider = (m.provider + 1) % count
+		}
+		m.reset()
+	case "shift+left":
+		m.step(-1)
+	case "shift+right":
+		m.step(1)
+	case "up":
+		m.move(-1)
+	case "down":
+		m.move(1)
+	case "backspace":
+		value := []rune(m.filter.Value())
+		m.setFilter(string(value[:max(len(value)-1, 0)]))
+	case "space":
+		m.setFilter(m.filter.Value() + " ")
+	default:
+		if utf8.RuneCountInString(key) == 1 {
+			m.setFilter(m.filter.Value() + key)
+		}
+	}
+	return Intent{}
+}
+
+func (m *Model) setFilter(value string) {
+	if m.tab != tabModels {
+		return
+	}
+	m.filter.SetValue(value)
+	m.filter.CursorEnd()
+	m.reset()
+}
+
+func (m *Model) reset() {
+	m.cursor = 0
+	m.settle()
+}
+
+func (m *Model) move(by int) {
+	count := len(library.RoleIDs())
+	if m.tab == tabModels {
+		count = len(m.visible())
+	}
+	if count == 0 {
+		return
+	}
+	m.cursor = (m.cursor + by + count) % count
+	m.settle()
 }
 
 func (m *Model) step(by int) {
@@ -114,11 +239,18 @@ func (m *Model) step(by int) {
 }
 
 func (m Model) offered() []llm.Effort {
-	_, group, _ := m.rowAt(m.pick)
-	return group.Efforts
+	row, picked := m.Picked()
+	if !picked {
+		return nil
+	}
+	source, _, _ := strings.Cut(row.Slug, "/")
+	for _, group := range m.Groups {
+		if group.Source == source {
+			return group.Efforts
+		}
+	}
+	return nil
 }
-
-func (m Model) Effort() llm.Effort { return m.effort }
 
 func (m *Model) settle() {
 	offered := m.offered()
@@ -133,91 +265,82 @@ func (m *Model) settle() {
 	}
 }
 
-func (m *Model) move(by int) {
-	for next := m.pick + by; next >= 0 && next < m.count(); next += by {
-		if row, _, _ := m.rowAt(next); !row.excluded() {
-			m.pick = next
-			m.settle()
-			return
+func (m *Model) choose() Intent {
+	if m.tab == tabRoles {
+		m.assign = library.RoleIDs()[m.cursor]
+		m.tab = tabModels
+		m.filter.Reset()
+		m.reset()
+		return Intent{}
+	}
+	row, picked := m.Picked()
+	switch {
+	case !picked:
+		return Intent{}
+	case row.excluded():
+		return Intent{Action: Login, Slug: row.Slug}
+	case m.assign != "":
+		role := m.assign
+		m.assign = ""
+		m.bound[role] = row.Slug
+		return Intent{Action: Bind, Role: role, Slug: row.Slug}
+	}
+	return Intent{Action: Pick, Slug: row.Slug, Effort: m.effort}
+}
+
+func (m *Model) Click(x, y int) Intent {
+	left, top := origin(m.width, m.height)
+	lines := strings.Split(m.cached(m.width, m.height), "\n")
+	row, at := y-top, x-left
+	if row < 0 || row >= len(lines) || at < 0 {
+		return Intent{}
+	}
+	modalWidth, _ := modelDialogSize(m.width, m.height)
+	side, list, _ := modelPaneWidths(modalWidth)
+	switch {
+	case at < side:
+		m.clickSide(ansi.Strip(ansi.Cut(lines[row], 0, side)), at, row)
+	case at < side+list:
+		return m.clickList(ansi.Strip(ansi.Cut(lines[row], side, side+list)), at-side, row)
+	}
+	return Intent{}
+}
+
+func (m *Model) clickSide(line string, x, row int) {
+	providers := m.providers()
+	switch at := row - providerTop; {
+	case row == tabsTop && pointer.TextHit(line, modelsTab, x):
+		m.tab = tabModels
+	case row == tabsTop && pointer.TextHit(line, rolesTab, x):
+		m.tab = tabRoles
+	case at >= 0 && at < len(providers) && pointer.TextHit(line, providers[at], x):
+		m.provider, m.tab = at, tabModels
+	default:
+		return
+	}
+	m.reset()
+}
+
+func (m *Model) clickList(line string, x, row int) Intent {
+	top, start, labels := rolesTop, 0, []string{}
+	if m.tab == tabRoles {
+		for _, role := range library.RoleIDs() {
+			labels = append(labels, string(role))
+		}
+	} else {
+		var end int
+		top = catalogTop
+		start, end = m.page()
+		for _, one := range m.visible()[start:end] {
+			_, model, _ := strings.Cut(one.Slug, "/")
+			labels = append(labels, model)
 		}
 	}
-}
-
-func (m Model) rowAt(at int) (Row, Group, bool) {
-	if at < 0 {
-		return Row{}, Group{}, false
+	at := (row - top) / linesPerRow
+	if row < top || (row-top)%linesPerRow != 0 || at >= len(labels) || !pointer.TextHit(line, labels[at], x) {
+		return Intent{}
 	}
-	for _, group := range m.Groups {
-		if at < len(group.Rows) {
-			return group.Rows[at], group, true
-		}
-		at -= len(group.Rows)
-	}
-	return Row{}, Group{}, false
-}
-
-func (m Model) Picked() (Row, bool) {
-	row, _, picked := m.rowAt(m.pick)
-	return row, picked
-}
-
-func (m Model) View() string {
-	if m.count() == 0 {
-		return strings.Join(pane.Fill([]string{pane.Cell(emptyTitle, m.width, theme.Faint())}, m.height, m.width), "\n")
-	}
-	lines := []string{pane.Cell(title+gap+m.summary(), m.width, theme.Accent()), pane.Cell("", m.width, theme.Text())}
-	slugRoom := m.slugColumn()
-	at := 0
-	for _, group := range m.Groups {
-		lines = append(lines, pane.Cell(group.Source, m.width, theme.Dim()))
-		for _, row := range group.Rows {
-			lines = append(lines, pane.Cell(m.row(at, row, slugRoom), m.width, m.style(at, row)))
-			at++
-		}
-		lines = append(lines, pane.Cell("", m.width, theme.Text()))
-	}
-	lines = append(lines, pane.Cell(pickHint, m.width, theme.Faint()))
-	return strings.Join(pane.Fill(lines, m.height, m.width), "\n")
-}
-
-func (m Model) summary() string {
-	count := strconv.Itoa(m.count()) + " models"
-	if m.count() == 1 {
-		count = "1 model"
-	}
-	if m.effort == "" {
-		return count
-	}
-	return count + gap + effortHead + string(m.effort)
-}
-
-func (m Model) style(at int, row Row) lipgloss.Style {
-	if row.excluded() {
-		return theme.Faint()
-	}
-	if at == m.pick {
-		return theme.Accent()
-	}
-	return theme.Text()
-}
-
-func (m Model) slugColumn() int {
-	widest := 0
-	for _, group := range m.Groups {
-		widest = widget.Column(group.Rows, func(row Row) string { return row.Slug }, widest)
-	}
-	return min(widest, m.width/2)
-}
-
-func (m Model) row(at int, row Row, slugRoom int) string {
-	mark := plainMark
-	if at == m.pick {
-		mark = pickedMark
-	}
-	tail := row.Window
-	if row.excluded() {
-		tail = row.Reason
-	}
-	tail = widget.Fit(tail, max(m.width-widget.Cells(mark)-slugRoom-widget.Cells(gap), 1))
-	return mark + widget.Pad(widget.Fit(row.Slug, slugRoom), slugRoom) + gap + tail
+	m.cursor = start + at
+	m.settle()
+	return m.choose()
 }

@@ -7,12 +7,17 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"tofu/interface/tui/look"
 	"tofu/interface/tui/paste"
-	"tofu/interface/tui/theme"
 	"tofu/internal/widget"
 )
 
-const textChipThreshold = 300
+const (
+	textChipThreshold = 160
+	textTokenTail     = " characters]"
+	treeBranch        = "├─ "
+	treeLast          = "└─ "
+)
 
 type ChipKind int
 
@@ -35,11 +40,11 @@ type pendingPaste struct {
 	token string
 }
 
-func pastingToken(index int) string { return "[pasting " + strconv.Itoa(index) + "]" }
+func pastingToken(index int) string { return pastingTokenHead + strconv.Itoa(index) + "]" }
 
-func ImageToken(index int) string { return "[Image #" + strconv.Itoa(index) + "]" }
+func ImageToken(index int) string { return imageTokenHead + strconv.Itoa(index) + "]" }
 
-func textToken(chars int) string { return "[Text " + strconv.Itoa(chars) + " chars]" }
+func textToken(chars int) string { return textTokenHead + strconv.Itoa(chars) + textTokenTail }
 
 func (m *Model) Paste(board paste.Board) tea.Cmd {
 	m.pastes++
@@ -74,7 +79,7 @@ func (m *Model) Attached(outcome paste.Outcome) {
 
 func (m *Model) absorbText(token, text string) {
 	chars := len([]rune(text))
-	if chars <= textChipThreshold {
+	if chars < textChipThreshold {
 		m.replaceToken(token, text)
 		return
 	}
@@ -92,19 +97,19 @@ func (c Chip) label() string {
 	case ImageChip:
 		return c.Format + " " + widget.Size(c.Bytes) + " " + c.Name
 	case TextChip:
-		return "text, " + strconv.Itoa(c.Chars) + " chars"
+		return "text, " + strconv.Itoa(c.Chars) + " characters"
 	}
 	panic("session: unknown chip kind")
 }
 
-func (m Model) chipLines(chips []Chip) []string {
+func (m *Model) chipLines(chips []Chip) []string {
 	lines := make([]string, 0, len(chips))
 	for index, chip := range chips {
 		branch := treeBranch
 		if index == len(chips)-1 {
 			branch = treeLast
 		}
-		lines = append(lines, theme.Faint().Render(widget.Fit(branch+chip.label(), m.width)))
+		lines = append(lines, look.Faint(widget.Fit(branch+chip.label(), m.textWidth())))
 	}
 	return lines
 }

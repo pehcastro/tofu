@@ -36,7 +36,7 @@ func TestTheAskBlockCarriesTheNumbersTheParagraphCannotFit(t *testing.T) {
 	plain := ansi.Strip(frame)
 	ask := ""
 	for _, line := range strings.Split(plain, "\n") {
-		if strings.HasPrefix(line, askMarker) {
+		if strings.HasPrefix(strings.TrimLeft(line, " "), askMarker) {
 			ask = line
 		}
 	}

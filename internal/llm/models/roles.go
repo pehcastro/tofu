@@ -1,5 +1,12 @@
 package models
 
+import (
+	"errors"
+	"path/filepath"
+
+	"tofu/internal/sys"
+)
+
 const rolesDir = "roles"
 
 type RoleID string
@@ -101,4 +108,11 @@ func buildRole(name string, from *sheet, library Library) (Role, *Broken) {
 		return Role{}, &Broken{File: from.file, Field: "model", Why: err.Error()}
 	}
 	return Role{ID: id, Model: model, File: from.file}, nil
+}
+
+func BindRole(layerDir string, role RoleID, slug string) error {
+	if !role.valid() {
+		return errors.New("a role is " + string(RoleTurn) + " or " + string(RoleChild) + ", not " + string(role))
+	}
+	return sys.WriteFile(filepath.Join(layerDir, rolesDir, string(role)+".yaml"), []byte("model: "+slug+"\n"), 0o644)
 }

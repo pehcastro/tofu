@@ -3,7 +3,7 @@ package settings
 import (
 	"strings"
 
-	"tofu/interface/tui/theme"
+	"tofu/interface/tui/look"
 	"tofu/internal/widget"
 )
 
@@ -15,43 +15,27 @@ type Provider struct {
 	Source string
 }
 
-func providerLines(providers []Provider, width int) []string {
+func providerBlock(providers []Provider) string {
+	block := look.SectionLabel("Providers")
 	if len(providers) == 0 {
-		return []string{theme.Dim().Render(widget.Fit(indent+"no provider is set up yet", width))}
+		return block + "\n" + look.Muted("no provider is set up yet")
 	}
-	var lines []string
-	for index, provider := range providers {
-		label := ""
-		if index == 0 {
-			label = "providers"
+	for _, provider := range providers {
+		var fields []string
+		if provider.Key != "" {
+			fields = append(fields, "key "+widget.Mask(provider.Key))
 		}
-		lines = append(lines, providerRow(label, provider, width)...)
+		if provider.State != "" {
+			fields = append(fields, provider.State)
+		}
+		value := strings.Join(fields, "  ")
+		if value == "" {
+			value = provider.Fix
+		}
+		block += "\n" + look.Title(provider.Name) + "  " + look.Muted(value)
+		if provider.Source != "" {
+			block += "\n" + look.Faint(provider.Source)
+		}
 	}
-	return lines
-}
-
-func providerRow(label string, provider Provider, width int) []string {
-	head := indent + pad(label, groupColumn) + pad(provider.Name, nameColumn-groupColumn) + providerValue(provider)
-	source := sourceMark + provider.Source
-	if gap, fits := fitsWithSource(head, source, width); fits {
-		return []string{theme.Text().Render(head) + theme.Faint().Render(gap+source)}
-	}
-	return []string{
-		theme.Text().Render(widget.Fit(head, width)),
-		theme.Faint().Render(widget.Fit(indent+pad("", groupColumn)+source, width)),
-	}
-}
-
-func providerValue(provider Provider) string {
-	var fields []string
-	if provider.Key != "" {
-		fields = append(fields, "key "+widget.Mask(provider.Key))
-	}
-	if provider.State != "" {
-		fields = append(fields, provider.State)
-	}
-	if len(fields) == 0 {
-		return provider.Fix
-	}
-	return strings.Join(fields, "  ")
+	return block
 }

@@ -1,0 +1,23 @@
+
+
+                                                                          
+        Keybindings                                                  esc  
+        Tofu shortcuts                                                    
+                                                                          
+        TOFU ACTIONS                                                      
+        These work after the terminal sends the key to tofu.              
+          Search         ctrl+k                                           
+        >  Commands       alt+k                                           
+          Settings       not set                                          
+          Models         ctrl+l                                           
+          Quote selection  ctrl+r                                         
+                                                                          
+        Press a shortcut for Commands                                     
+        Press a shortcut, Esc to cancel, Backspace to clear.              
+                                                                          
+        Host editors may still intercept a chosen key.                    
+                                                                          
+        ↑↓ choose · enter edit · bksp clear · esc                         
+                                                                          
+
+

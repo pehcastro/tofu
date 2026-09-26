@@ -1,8 +1,9 @@
 package session
 
 const (
-	WheelUp   = "wheel up"
-	WheelDown = "wheel down"
+	WheelUp    = "wheel up"
+	WheelDown  = "wheel down"
+	wheelLines = 3
 )
 
 type anchor struct {
@@ -14,8 +15,8 @@ func (a anchor) before(other anchor) bool {
 	return a.entry < other.entry || (a.entry == other.entry && a.line < other.line)
 }
 
-func (m Model) folds(index int) bool {
-	entry := m.entries[index]
+func (m *Model) folds(index int) bool {
+	entry := &m.entries[index]
 	return !m.ChatShowsTools && entry.Kind == Tool && !entry.sticky()
 }
 
@@ -28,7 +29,7 @@ func (m Model) FoldedOutOfChat(id string) bool {
 	return false
 }
 
-func (m Model) blockAt(index int) (int, int) {
+func (m *Model) blockAt(index int) (int, int) {
 	if !m.folds(index) {
 		return index, index + 1
 	}
@@ -42,29 +43,15 @@ func (m Model) blockAt(index int) (int, int) {
 	return start, end
 }
 
-func (m Model) blockLines(start, end int) []string {
-	if !m.folds(start) {
-		return m.render(m.entries[start])
-	}
-	var lines []string
-	if !m.stillRunning(start) {
-		lines = append(lines, m.foldLine(start, end))
-	}
-	if line := m.progressLine(end); line != "" {
-		lines = append(lines, line)
-	}
-	return lines
-}
-
-func (m Model) stillRunning(index int) bool {
+func (m *Model) stillRunning(index int) bool {
 	return m.Busy && m.entries[index].turn == m.turns
 }
 
-func (m Model) tailAnchor(rows int) (anchor, bool) {
+func (m *Model) tailAnchor(rows int) (anchor, bool) {
 	total := 0
 	for index := len(m.entries) - 1; index >= 0; {
 		start, end := m.blockAt(index)
-		total += len(m.blockLines(start, end))
+		total += m.blockRows(start, end)
 		if total >= rows {
 			return anchor{entry: start, line: total - rows}, total > rows || start > 0
 		}
@@ -73,7 +60,7 @@ func (m Model) tailAnchor(rows int) (anchor, bool) {
 	return anchor{}, false
 }
 
-func (m Model) linesFrom(at anchor, rows int) []string {
+func (m *Model) linesFrom(at anchor, rows int) []string {
 	lines := make([]string, 0, rows)
 	skip := at.line
 	for index := at.entry; index < len(m.entries) && len(lines) < rows; {
@@ -93,7 +80,7 @@ func (m Model) linesFrom(at anchor, rows int) []string {
 	return lines
 }
 
-func (m Model) move(at anchor, lines int) anchor {
+func (m *Model) move(at anchor, lines int) anchor {
 	for lines < 0 {
 		if at.line > 0 {
 			step := min(-lines, at.line)
@@ -104,11 +91,11 @@ func (m Model) move(at anchor, lines int) anchor {
 			return anchor{}
 		}
 		start, end := m.blockAt(at.entry - 1)
-		at.entry, at.line = start, len(m.blockLines(start, end))
+		at.entry, at.line = start, m.blockRows(start, end)
 	}
 	for lines > 0 && at.entry < len(m.entries) {
 		start, end := m.blockAt(at.entry)
-		room := len(m.blockLines(start, end)) - at.line
+		room := m.blockRows(start, end) - at.line
 		if lines < room {
 			at.line += lines
 			return at
@@ -119,11 +106,11 @@ func (m Model) move(at anchor, lines int) anchor {
 	return at
 }
 
-func (m Model) offset(at anchor) int {
+func (m *Model) offset(at anchor) int {
 	lines := 0
 	for index := 0; index < at.entry && index < len(m.entries); {
 		start, end := m.blockAt(index)
-		lines += len(m.blockLines(start, end))
+		lines += m.blockRows(start, end)
 		index = end
 	}
 	return lines + at.line

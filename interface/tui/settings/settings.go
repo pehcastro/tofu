@@ -1,21 +1,8 @@
 package settings
 
 import (
-	"strconv"
+	"slices"
 	"strings"
-
-	"tofu/interface/tui/theme"
-	"tofu/internal/widget"
-)
-
-const (
-	groupColumn  = 12
-	nameColumn   = 30
-	sourceMark   = "← "
-	sourceGap    = 2
-	indent       = "  "
-	minimumWidth = 20
-	searchHint   = "search: "
 )
 
 type Kind int
@@ -23,18 +10,59 @@ type Kind int
 const (
 	Bool Kind = iota
 	Int
+	Text
+)
+
+type RowAction int
+
+const (
+	RowValue RowAction = iota
+	RowKeybindings
+	RowHostIntegration
+	RowRole
 )
 
 type Row struct {
-	Key             string
-	Group           string
-	Label           string
-	Value           string
-	Kind            Kind
-	Changed         bool
-	RestartRequired bool
-	RestartPending  bool
-	Source          string
+	Key, Category, Label, Description, Value, Source string
+	Kind                                             Kind
+	Choices                                          []string
+	Changed, RestartRequired, RestartPending         bool
+	Action                                           RowAction
+}
+
+type Action int
+
+const (
+	ActionNone Action = iota
+	ActionPreview
+	ActionCommit
+	ActionRevert
+	ActionToggle
+	ActionIncrement
+	ActionDecrement
+	ActionCycleScope
+	ActionOpenKeybindings
+	ActionOpenHost
+	ActionOpenRole
+	ActionClose
+)
+
+type Intent struct {
+	Action Action
+	Key    string
+	Value  string
+}
+
+type choiceState struct {
+	open     bool
+	key      string
+	cursor   int
+	original string
+}
+
+type searchState struct {
+	open   bool
+	cursor int
 }
 
 type Model struct {
@@ -44,188 +72,246 @@ type Model struct {
 	Scopes         []string
 	Scope          int
 	Query          string
+	category       int
 	cursor         int
 	width          int
 	height         int
+	searchKey      string
+	density        string
+	branch         string
+	previewTheme   func(string) string
+	dialog         choiceState
+	search         searchState
+	cache          viewCache
 }
 
 func (m *Model) SetSize(width, height int) {
-	m.width, m.height = max(width, minimumWidth), height
+	m.width, m.height = max(width, minimumWidth), max(height, minimumHeight)
 }
-
-func (m *Model) ToggleChatShowsTools() { m.ChatShowsTools = !m.ChatShowsTools }
 
 func (m *Model) SetRows(rows []Row) {
 	m.Rows = rows
-	if m.cursor >= len(rows)+1 {
-		m.cursor = max(0, len(rows))
-	}
+	m.category = min(m.category, max(0, len(m.categories())-1))
+	m.cursor = min(m.cursor, max(0, len(m.inCategory())-1))
 }
 
-type Action int
+func (m *Model) SetSearchKey(key string) { m.searchKey = key }
 
-const (
-	ActionNone Action = iota
-	ActionToggle
-	ActionIncrement
-	ActionDecrement
-	ActionCycleScope
-)
+func (m *Model) SetDensity(density string) { m.density = density }
 
-type Intent struct {
-	Action Action
-	Key    string
+func (m *Model) SetBranch(branch string) { m.branch = branch }
+
+func (m *Model) SetPreviewTheme(recolour func(string) string) {
+	m.previewTheme = recolour
+	m.cache = viewCache{}
+}
+
+func (m *Model) Searching() bool { return m.search.open }
+
+func (m *Model) categories() []string {
+	var names []string
+	for _, row := range m.Rows {
+		if !slices.Contains(names, row.Category) {
+			names = append(names, row.Category)
+		}
+	}
+	return names
+}
+
+func (m *Model) inCategory() []int {
+	names := m.categories()
+	if len(names) == 0 {
+		return nil
+	}
+	var indices []int
+	for i, row := range m.Rows {
+		if row.Category == names[m.category] {
+			indices = append(indices, i)
+		}
+	}
+	return indices
+}
+
+func (m *Model) selected() (Row, bool) {
+	indices := m.inCategory()
+	if len(indices) == 0 {
+		return Row{}, false
+	}
+	return m.Rows[indices[m.cursor]], true
 }
 
 func (m *Model) Key(key string) Intent {
+	if m.dialog.open {
+		return m.dialogKey(key)
+	}
+	if m.search.open {
+		return m.searchInput(key)
+	}
+	switch key {
+	case m.searchKey:
+		m.search = searchState{open: true}
+		m.Query = ""
+	case "esc":
+		return Intent{Action: ActionClose}
+	case "left":
+		m.moveCategory(-1)
+	case "right":
+		m.moveCategory(1)
+	case "up":
+		m.moveRow(-1)
+	case "down":
+		m.moveRow(1)
+	case "tab":
+		return Intent{Action: ActionCycleScope}
+	case "+", "=":
+		return m.step(ActionIncrement)
+	case "-":
+		return m.step(ActionDecrement)
+	case "enter", "space":
+		return m.activate()
+	}
+	return Intent{}
+}
+
+func (m *Model) Wheel(delta int) Intent {
+	step := 1
+	if delta < 0 {
+		step = -1
+	}
+	switch {
+	case m.dialog.open:
+		row, _ := m.selected()
+		m.dialog.cursor = min(max(m.dialog.cursor+step, 0), len(row.Choices)-1)
+		return Intent{Action: ActionPreview, Key: row.Key, Value: row.Choices[m.dialog.cursor]}
+	case m.search.open:
+		m.search.cursor = min(max(m.search.cursor+step, 0), max(0, len(m.matches())-1))
+	default:
+		m.moveRow(step)
+	}
+	return Intent{}
+}
+
+func (m *Model) moveRow(by int) {
+	m.cursor = min(max(m.cursor+by, 0), max(0, len(m.inCategory())-1))
+}
+
+func (m *Model) moveCategory(by int) {
+	count := len(m.categories())
+	if count == 0 {
+		return
+	}
+	m.category = (m.category + by + count) % count
+	m.cursor = 0
+}
+
+func (m *Model) step(action Action) Intent {
+	row, ok := m.selected()
+	if !ok || row.Kind != Int {
+		return Intent{}
+	}
+	return Intent{Action: action, Key: row.Key}
+}
+
+func (m *Model) activate() Intent {
+	row, ok := m.selected()
+	if !ok {
+		return Intent{}
+	}
+	switch row.Action {
+	case RowKeybindings:
+		return Intent{Action: ActionOpenKeybindings, Key: row.Key}
+	case RowHostIntegration:
+		return Intent{Action: ActionOpenHost, Key: row.Key}
+	case RowRole:
+		return Intent{Action: ActionOpenRole, Key: row.Key}
+	case RowValue:
+	default:
+		panic("settings: unknown row action")
+	}
+	switch {
+	case row.Kind == Bool:
+		return Intent{Action: ActionToggle, Key: row.Key}
+	case row.Kind == Int:
+		return Intent{Action: ActionIncrement, Key: row.Key}
+	case len(row.Choices) > 0:
+		m.dialog = choiceState{open: true, key: row.Key, cursor: max(0, slices.Index(row.Choices, row.Value)), original: row.Value}
+	}
+	return Intent{}
+}
+
+func (m *Model) dialogKey(key string) Intent {
+	row, _ := m.selected()
+	count := len(row.Choices)
 	switch key {
 	case "up":
-		m.moveCursor(-1)
+		m.dialog.cursor = (m.dialog.cursor + count - 1) % count
 	case "down":
-		m.moveCursor(1)
-	case "left":
-		return m.step(-1)
-	case "right":
-		return m.step(1)
+		m.dialog.cursor = (m.dialog.cursor + 1) % count
 	case "enter", "space":
-		return m.step(1)
-	case "backspace":
-		if m.Query != "" {
-			m.Query = m.Query[:len(m.Query)-1]
-		}
+		return m.commit(row)
+	case "esc":
+		original := m.dialog.original
+		m.dialog = choiceState{}
+		return Intent{Action: ActionRevert, Key: row.Key, Value: original}
 	default:
-		if r, ok := searchRune(key); ok {
-			m.Query += string(r)
+		return Intent{}
+	}
+	return Intent{Action: ActionPreview, Key: row.Key, Value: row.Choices[m.dialog.cursor]}
+}
+
+func (m *Model) commit(row Row) Intent {
+	value := row.Choices[m.dialog.cursor]
+	m.dialog = choiceState{}
+	return Intent{Action: ActionCommit, Key: row.Key, Value: value}
+}
+
+func (m *Model) searchInput(key string) Intent {
+	count := len(m.matches())
+	switch key {
+	case "esc":
+		m.search = searchState{}
+		m.Query = ""
+	case "up":
+		m.search.cursor = (m.search.cursor + count - 1) % max(1, count)
+	case "down":
+		m.search.cursor = (m.search.cursor + 1) % max(1, count)
+	case "enter":
+		m.jump()
+	case "backspace":
+		runes := []rune(m.Query)
+		m.Query = string(runes[:max(0, len(runes)-1)])
+		m.search.cursor = 0
+	default:
+		if key == "space" {
+			key = " "
+		}
+		if runes := []rune(key); len(runes) == 1 && runes[0] >= ' ' {
+			m.Query += key
+			m.search.cursor = 0
 		}
 	}
 	return Intent{}
 }
 
-func searchRune(key string) (rune, bool) {
-	runes := []rune(key)
-	if len(runes) != 1 || runes[0] < ' ' {
-		return 0, false
-	}
-	return runes[0], true
-}
-
-func (m *Model) moveCursor(by int) {
-	last := len(m.Rows)
-	m.cursor = min(max(m.cursor+by, 0), last)
-}
-
-func (m *Model) step(by int) Intent {
-	if m.cursor == 0 {
-		return Intent{Action: ActionCycleScope}
-	}
-	row := m.Rows[m.cursor-1]
-	if row.Kind == Int {
-		if by > 0 {
-			return Intent{Action: ActionIncrement, Key: row.Key}
-		}
-		return Intent{Action: ActionDecrement, Key: row.Key}
-	}
-	return Intent{Action: ActionToggle, Key: row.Key}
-}
-
-func (m Model) View() string {
-	lines := []string{theme.Accent().Render(widget.Fit("settings", m.width)), ""}
-	lines = append(lines, providerLines(m.Providers, m.width)...)
-	lines = append(lines, "", m.scopeLine())
-	lines = append(lines, m.settingLines()...)
-	if pending := m.restartLine(); pending != "" {
-		lines = append(lines, "", theme.Warn().Render(widget.Fit(pending, m.width)))
-	}
-	if m.Query != "" {
-		lines = append(lines, "", theme.Text().Render(widget.Fit(m.searchLine(), m.width)))
-	}
-	for len(lines) < m.height {
-		lines = append(lines, "")
-	}
-	return strings.Join(lines, "\n")
-}
-
-func (m Model) scopeLine() string {
-	parts := make([]string, len(m.Scopes))
-	for i, name := range m.Scopes {
-		if i == m.Scope {
-			parts[i] = "[" + name + "]"
-			continue
-		}
-		parts[i] = name
-	}
-	cursor := " "
-	if m.cursor == 0 {
-		cursor = ">"
-	}
-	return theme.Text().Render(cursor + " scope: " + strings.Join(parts, "  "))
-}
-
-func (m Model) settingLines() []string {
-	var lines []string
-	group := ""
-	for index, row := range m.Rows {
-		if row.Group != group {
-			group = row.Group
-			lines = append(lines, "", theme.Dim().Render(indent+group))
-		}
-		lines = append(lines, m.settingRow(index, row))
-	}
-	return lines
-}
-
-func (m Model) settingRow(index int, row Row) string {
-	cursor := " "
-	if m.cursor == index+1 {
-		cursor = ">"
-	}
-	mark := " "
-	if row.Changed {
-		mark = "*"
-	}
-	warn := ""
-	if row.RestartPending {
-		warn = " (needs restart)"
-	}
-	head := cursor + mark + " " + pad(row.Label, nameColumn) + row.Value + warn
-	source := sourceMark + row.Source
-	if gap, fits := fitsWithSource(head, source, m.width); fits {
-		return theme.Text().Render(head) + theme.Faint().Render(gap+source)
-	}
-	return theme.Text().Render(widget.Fit(head, m.width))
-}
-
-func fitsWithSource(head, source string, width int) (string, bool) {
-	if widget.Cells(head)+sourceGap+widget.Cells(source) > width {
-		return "", false
-	}
-	return strings.Repeat(" ", width-widget.Cells(head)-widget.Cells(source)), true
-}
-
-func (m Model) restartLine() string {
-	var pending []string
-	for _, row := range m.Rows {
-		if row.RestartPending {
-			pending = append(pending, row.Key)
+func (m *Model) matches() []int {
+	query := strings.ToLower(strings.TrimSpace(m.Query))
+	var found []int
+	for i, row := range m.Rows {
+		if strings.Contains(strings.ToLower(row.Category+" "+row.Label+" "+row.Description), query) {
+			found = append(found, i)
 		}
 	}
-	if len(pending) == 0 {
-		return ""
-	}
-	return "restart needed to apply: " + strings.Join(pending, ", ")
+	return found
 }
 
-func (m Model) searchLine() string {
-	word := "matches"
-	if len(m.Rows) == 1 {
-		word = "match"
+func (m *Model) jump() {
+	found := m.matches()
+	if len(found) == 0 {
+		return
 	}
-	return searchHint + m.Query + "  " + strconv.Itoa(len(m.Rows)) + " " + word
-}
-
-func pad(text string, width int) string {
-	if widget.Cells(text) >= width {
-		return text + " "
-	}
-	return text + strings.Repeat(" ", width-widget.Cells(text))
+	target := m.Rows[found[m.search.cursor]]
+	m.search = searchState{}
+	m.Query = ""
+	m.category = slices.Index(m.categories(), target.Category)
+	m.cursor = slices.IndexFunc(m.inCategory(), func(i int) bool { return m.Rows[i].Key == target.Key })
 }

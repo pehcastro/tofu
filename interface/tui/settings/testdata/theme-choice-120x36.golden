@@ -1,0 +1,36 @@
+                                                                                                                        
+  tofu settings           Appearance                                     global scope    SELECTED SETTING               
+  Global preferences      Choose a row to inspect and change its value.                                                 
+                                                                                         Theme                          
+  CATEGORIES              › Theme                                 Solarized Light  ▾     tofu uses Zed Nu Disco;        
+  › Appearance      05      tofu uses Zed Nu Disco; choose a palette                     choose a palette               
+    Interaction     03                                                                                                  
+    Context         05      Densi                                                        CURRENT VALUE                  
+    Files           03      Spaci  Theme                                          esc     Solarized Light               
+    Shell           05             tofu uses Zed Nu Disco; choose a palette                                             
+    Turn            02      Anima                                                        HOW IT WORKS                   
+    Startup         01      Motio    tofu                                                Enter opens a focused          
+                                                                                         choice. Changes preview        
+  NAVIGATE                  Statu    tofu light                                          immediately; Esc keeps the     
+  ↑↓ setting · ←→           Conte                                                        prior value.                   
+  section                            tofu dusk                                                                          
+  ctrl+k search · esc       Color                                                        SCOPE                          
+  chat                      Termi  >  Solarized Light                                    Global · a project value       
+                                                                                         overrides it                   
+                          LIVE PR    Dracula                                             from global                    
+                                                                                         C:/Users/tester/.tofu/setti    
+                             tofu    Nord                                                ngs.json                       
+                            Inter                                                                                       
+                            Reada    Gruvbox                                                                            
+                            ● act                                                                                       
+                                     terminal                                                                           
+                                                                                                                        
+                          enter c  1-8/8 · ↑↓ preview · enter apply · esc cancel                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        

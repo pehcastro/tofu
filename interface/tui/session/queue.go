@@ -1,17 +1,8 @@
 package session
 
-import (
-	"slices"
-	"strconv"
+import "slices"
 
-	"tofu/interface/tui/theme"
-	"tofu/internal/widget"
-)
-
-const (
-	waitingWord = "waiting"
-	queuePrefix = "queued-"
-)
+const waitingWord = "waiting"
 
 type pending struct {
 	id   string
@@ -19,11 +10,9 @@ type pending struct {
 }
 
 func (m *Model) Queue(task string, chips []Chip) {
-	m.queues++
-	row := pending{id: queuePrefix + strconv.Itoa(m.queues), task: task}
-	m.queue = append(m.queue, row)
+	m.Append(Entry{Kind: User, Body: task, Chips: chips, waiting: true})
+	m.queue = append(m.queue, pending{id: m.entries[len(m.entries)-1].ID, task: task})
 	m.pick = len(m.queue) - 1
-	m.Append(Entry{Kind: User, ID: row.id, Body: task, Chips: chips, waiting: true})
 }
 
 func (m Model) Queued() []string {
@@ -34,7 +23,7 @@ func (m Model) Queued() []string {
 	return tasks
 }
 
-func (m Model) queuedAt(id string) int {
+func (m *Model) queuedAt(id string) int {
 	return slices.IndexFunc(m.entries, func(entry Entry) bool { return entry.waiting && entry.ID == id })
 }
 
@@ -82,19 +71,9 @@ func (m *Model) PickQueued(by int) {
 	m.pick = (min(m.pick, len(m.queue)-1) + by + len(m.queue)) % len(m.queue)
 }
 
-func (m Model) pickedQueue() string {
+func (m *Model) pickedQueue() string {
 	if len(m.queue) == 0 {
 		return ""
 	}
 	return m.queue[min(m.pick, len(m.queue)-1)].id
-}
-
-func (m Model) queuedLines(entry Entry) []string {
-	marker, style := userMarker, theme.Dim()
-	if entry.ID == m.pickedQueue() {
-		marker, style = pickedMarker, theme.Accent()
-	}
-	room := max(m.width-widget.Cells(waitingWord+gap), minimumColumns)
-	body := style.Render(widget.Pad(widget.Fit(marker+entry.Body, room), room))
-	return []string{body + gap + theme.Faint().Render(waitingWord)}
 }

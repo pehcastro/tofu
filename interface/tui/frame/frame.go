@@ -1,66 +1,20 @@
 package frame
 
 import (
-	"strconv"
 	"strings"
 	"time"
 
-	"tofu/interface/tui/theme"
-	"tofu/interface/tui/trace"
+	"tofu/interface/tui/look"
 	"tofu/internal/konst"
 	"tofu/internal/sys"
 	"tofu/internal/widget"
 )
 
 const (
-	modelSeparator    = "/"
-	pathPrefix        = "./"
-	separator         = "  ·  "
-	contextUnread     = "context unread"
-	quotaUnread       = "quota unread"
-	agentMark         = "●"
-	ForkNotice        = "⟳ forking"
-	develSuffix       = "+dev"
-	dirtyMark         = "-dirty"
-	quotaPercentCells = 4
+	ForkNotice  = "⟳ forking"
+	develSuffix = "+dev"
+	dirtyMark   = "-dirty"
 )
-
-type headDropped int
-
-const (
-	headNothing headDropped = iota
-	headClock
-	headSession
-	headModel
-	headBranch
-)
-
-type rowOneDrop int
-
-const (
-	rowOneFull rowOneDrop = iota
-	rowOneNoQuotaBar
-	rowOneNoReset
-	rowOneLabelOnly
-	rowOneNoContextBar
-)
-
-type rowTwoDrop int
-
-const (
-	rowTwoFull rowTwoDrop = iota
-	rowTwoNoRelease
-	rowTwoNoJev
-	rowTwoNoAgent
-	rowTwoNoTokens
-)
-
-func Resolved(provider, model string) string {
-	if provider == "" || model == "" {
-		return provider + model
-	}
-	return provider + modelSeparator + model
-}
 
 type Head struct {
 	Path        string
@@ -71,6 +25,8 @@ type Head struct {
 	SessionID   string
 	At          time.Time
 	Started     time.Time
+	Fresh       bool
+	Notice      string
 }
 
 type Quota struct {
@@ -85,6 +41,14 @@ type Context struct {
 	Budget int
 }
 
+type StatusMode string
+
+const (
+	StatusCompact  StatusMode = "compact"
+	StatusDetailed StatusMode = "detailed"
+	StatusHidden   StatusMode = "hidden"
+)
+
 type Status struct {
 	Context   Context
 	TokensIn  int
@@ -96,6 +60,8 @@ type Status struct {
 	At        time.Time
 	Note      string
 	Release   string
+	Mode      StatusMode
+	Fresh     bool
 }
 
 func Release(buildVersion, buildRevision string) string {
@@ -106,180 +72,94 @@ func Release(buildVersion, buildRevision string) string {
 }
 
 func Header(head Head, width int) string {
-	return theme.Bar().Width(width).Render(widget.Fit(headerText(head, width), width))
-}
-
-func headerText(head Head, width int) string {
-	for drop := headNothing; drop < headBranch; drop++ {
-		if text := join(headFields(head, drop)); widget.Cells(text) <= width {
-			return text
-		}
-	}
-	return join(headFields(head, headBranch))
-}
-
-func headFields(head Head, drop headDropped) []string {
-	fields := []string{pathPrefix + head.Path}
-	if drop < headBranch {
-		fields = append(fields, head.Branch)
-	}
-	if drop < headModel {
-		fields = append(fields, Resolved(head.Provider, head.Model))
-	}
-	if drop < headSession {
-		fields = append(fields, sessionText(head))
-	}
-	if drop < headClock && !head.Started.IsZero() {
-		fields = append(fields, widget.Until(head.At.Sub(head.Started)))
-	}
-	return fields
-}
-
-func sessionText(head Head) string {
-	if head.SessionID == "" {
-		return ""
-	}
-	return strings.TrimSpace(head.SessionName + " " + trace.Short(head.SessionID))
+	row, _ := Top(head, nil, 0, width)
+	return row
 }
 
 func Bar(status Status, width int) string {
-	row1, row2 := barLines(status, width)
-	style := theme.Bar().Width(width)
-	return style.Render(widget.Fit(row1, width)) + "\n" + style.Render(widget.Fit(row2, width))
+	return Footer(status, width, "")
 }
 
-func barLines(status Status, width int) (string, string) {
-	return row1Text(status, width), row2Text(status, width)
+type View struct {
+	Digit rune
+	Name  string
 }
 
-func row1Text(status Status, width int) string {
-	for drop := rowOneFull; drop <= rowOneNoContextBar; drop++ {
-		if text := join(row1Fields(status, drop)); widget.Cells(text) <= width {
-			return text
+type Strip struct {
+	Views   []View
+	Notice  string
+	Current int
+	hits    []Hit
+}
+
+func (s *Strip) Render(width int) string {
+	labels := make([]string, len(s.Views))
+	for index, view := range s.Views {
+		labels[index] = view.Name
+	}
+	var nav []span
+	nav, s.hits = chips(labels, s.Current)
+	return look.ChromeRow(width, look.Background, draw(nav), look.Painted(s.Notice, look.Amber, look.Background))
+}
+
+func (s Strip) Hit(column int) (int, bool) {
+	for _, hit := range s.hits {
+		if column >= hit.Start && column < hit.End {
+			return hit.Index, true
 		}
 	}
-	return contextText(status.Context, rowOneNoContextBar)
+	return 0, false
 }
 
-func row1Fields(status Status, drop rowOneDrop) []string {
-	fields := []string{contextText(status.Context, drop)}
-	if len(status.Quotas) == 0 {
-		return append(fields, quotaUnread)
-	}
-	for _, quota := range status.Quotas {
-		fields = append(fields, quotaText(quota, status.At, drop))
-	}
-	return fields
+type span struct {
+	text    string
+	fg      look.Color
+	bg      look.Color
+	session string
 }
 
-func row2Text(status Status, width int) string {
-	for drop := rowTwoFull; drop <= rowTwoNoTokens; drop++ {
-		before, after := row2Around(status, drop)
-		if text, fits := row2WithNote(before, status.Note, after, width); fits {
-			return text
+func fill(cells int, bg look.Color) span {
+	return span{text: strings.Repeat(" ", max(0, cells)), fg: look.Text, bg: bg}
+}
+
+func panel(text string, fg look.Color) span {
+	return span{text: text, fg: fg, bg: look.Panel}
+}
+
+func cells(spans []span) int {
+	total := 0
+	for _, part := range spans {
+		total += widget.Cells(part.text)
+	}
+	return total
+}
+
+func draw(spans []span) string {
+	var out strings.Builder
+	for index := 0; index < len(spans); index++ {
+		run := spans[index]
+		if run.session != "" {
+			out.WriteString(look.TypedID("session", run.session))
+			continue
+		}
+		for index+1 < len(spans) && joins(run, spans[index+1]) {
+			index++
+			if blank(run.text) {
+				run.fg = spans[index].fg
+			}
+			run.text += spans[index].text
+		}
+		if run.text != "" {
+			out.WriteString(look.Painted(run.text, run.fg, run.bg))
 		}
 	}
-	return widget.Fit(status.Note, width)
+	return out.String()
 }
 
-func row2Around(status Status, drop rowTwoDrop) ([]string, []string) {
-	var before []string
-	if drop < rowTwoNoTokens {
-		before = append(before, tokensText(status))
-	}
-	if drop < rowTwoNoJev {
-		before = append(before, "jev "+strconv.Itoa(status.Decisions))
-	}
-	if drop < rowTwoNoAgent && status.Agents > 0 {
-		before = append(before, agentMark+strconv.Itoa(status.Agents))
-	}
-	var after []string
-	if drop < rowTwoNoRelease {
-		if release := releaseLabel(status.Release); release != "" {
-			after = append(after, release)
-		}
-	}
-	return before, after
+func joins(run, next span) bool {
+	return next.session == "" && next.bg == run.bg && (next.fg == run.fg || blank(run.text) || blank(next.text))
 }
 
-func row2WithNote(before []string, note string, after []string, width int) (string, bool) {
-	fixed := join(append(append([]string{}, before...), after...))
-	if note == "" {
-		return fixed, widget.Cells(fixed) <= width
-	}
-	available := width
-	if fixed != "" {
-		available -= widget.Cells(fixed) + widget.Cells(separator)
-	}
-	if available < widget.Cells(note) {
-		return "", false
-	}
-	return join(append(append(append([]string{}, before...), note), after...)), true
-}
-
-func tokensText(status Status) string {
-	text := widget.Count(status.TokensIn) + " read  " + widget.Count(status.TokensOut) + " write"
-	if status.CacheRead > 0 {
-		text += "  " + widget.Count(status.CacheRead) + " cached"
-	}
-	return text
-}
-
-func releaseLabel(release string) string {
-	if release == "" {
-		return ""
-	}
-	return "tofu " + release
-}
-
-func contextText(carried Context, drop rowOneDrop) string {
-	if carried.Budget <= 0 {
-		return contextUnread
-	}
-	numbers := widget.Count(carried.Used) + "/" + widget.Count(carried.Budget)
-	if drop >= rowOneNoContextBar {
-		return numbers
-	}
-	return numbers + " " + widget.Bar(float64(carried.Used)/float64(carried.Budget), konst.MeterBarWidthChars)
-}
-
-func quotaText(quota Quota, at time.Time, drop rowOneDrop) string {
-	if quota.Label == "" {
-		return quotaUnread
-	}
-	if !quota.Reported {
-		return quota.Label + " quota not reported"
-	}
-	if drop >= rowOneLabelOnly {
-		return quota.Label
-	}
-	reading := widget.Lead(widget.Percent(quota.Fraction), quotaPercentCells)
-	if drop < rowOneNoQuotaBar {
-		reading = widget.Bar(quota.Fraction, konst.MeterBarWidthChars) + " " + reading
-	}
-	text := quota.Label + " " + reading
-	if drop < rowOneNoReset {
-		text += resetClause(quota.ResetsAt, at)
-	}
-	return text
-}
-
-func resetClause(resetsAt, at time.Time) string {
-	if resetsAt.IsZero() {
-		return ""
-	}
-	if left := resetsAt.Sub(at); left > 0 {
-		return "  resets in " + widget.Until(left)
-	}
-	return "  resets now"
-}
-
-func join(fields []string) string {
-	kept := make([]string, 0, len(fields))
-	for _, field := range fields {
-		if field != "" {
-			kept = append(kept, field)
-		}
-	}
-	return strings.Join(kept, separator)
+func blank(text string) bool {
+	return strings.TrimLeft(text, " ") == ""
 }
