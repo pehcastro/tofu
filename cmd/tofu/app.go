@@ -566,7 +566,7 @@ func newAppSession(dir string, open func(runOpts) (appWire, error), answers <-ch
 }
 
 func (s *appSession) startFresh() string {
-	s.id, s.carried = "", nil
+	s.id, s.carried, s.pending = "", nil, nil
 	return freshSessionNote
 }
 
@@ -595,10 +595,8 @@ func (s *appSession) recordAttachment(index int, name string, bytes int, format 
 }
 
 func (s *appSession) takePendingImages(task string) ([]llm.Image, error) {
-	pending := s.pending
-	s.pending = nil
 	var wanted []pendingImage
-	for _, image := range pending {
+	for _, image := range s.pending {
 		if strings.Contains(task, session.ImageToken(image.index)) {
 			wanted = append(wanted, image)
 		}

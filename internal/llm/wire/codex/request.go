@@ -3,6 +3,7 @@ package codex
 import (
 	"bytes"
 	"cmp"
+	"encoding/base64"
 	"encoding/json"
 	"slices"
 
@@ -37,9 +38,13 @@ type Request struct {
 	Sampling        Sampling
 }
 
+const imageDetail = "high"
+
 type inputPart struct {
-	Type string `json:"type"`
-	Text string `json:"text"`
+	Type     string `json:"type"`
+	Text     string `json:"text,omitempty"`
+	ImageURL string `json:"image_url,omitempty"`
+	Detail   string `json:"detail,omitempty"`
 }
 
 type inputItem struct {
@@ -192,9 +197,9 @@ func (r Request) RefusedControls() []string {
 func encodeInput(messages []llm.Message) ([]inputItem, error) {
 	items := make([]inputItem, 0, len(messages))
 	for index, message := range messages {
-		if len(message.Images) > 0 {
+		if len(message.Images) > 0 && message.Role != llm.RoleUser {
 			return nil, transport.Fail("codex.Encode", transport.KindBadRequest, nil,
-				"message %d carries an image; the codex wire does not send one", index)
+				"message %d carries an image outside a user message; codex sends images only from the user", index)
 		}
 		switch message.Role {
 		case llm.RoleSystem:
@@ -202,12 +207,19 @@ func encodeInput(messages []llm.Message) ([]inputItem, error) {
 				"message %d is a system message; codex carries those in instructions", index)
 
 		case llm.RoleUser:
-			if message.Content == "" {
+			if message.Content == "" && len(message.Images) == 0 {
 				return nil, transport.Fail("codex.Encode", transport.KindBadRequest, nil,
 					"message %d is a user message with no content", index)
 			}
-			items = append(items, inputItem{Role: "user",
-				Content: []inputPart{{Type: "input_text", Text: message.Content}}})
+			parts := make([]inputPart, 0, len(message.Images)+1)
+			if message.Content != "" {
+				parts = append(parts, inputPart{Type: "input_text", Text: message.Content})
+			}
+			for _, image := range message.Images {
+				parts = append(parts, inputPart{Type: "input_image", Detail: imageDetail,
+					ImageURL: "data:" + image.MediaType + ";base64," + base64.StdEncoding.EncodeToString(image.Data)})
+			}
+			items = append(items, inputItem{Role: "user", Content: parts})
 
 		case llm.RoleTool:
 			if message.ToolCallID == "" {
