@@ -22,7 +22,7 @@ func (m *Model) folds(index int) bool {
 	return !m.ChatShowsTools && entry.Kind == Tool && !entry.sticky()
 }
 
-func (m Model) FoldedOutOfChat(id string) bool {
+func (m *Model) FoldedOutOfChat(id string) bool {
 	for index, entry := range m.entries {
 		if entry.ID == id {
 			return m.folds(index)
@@ -108,14 +108,37 @@ func (m *Model) move(at anchor, lines int) anchor {
 	return at
 }
 
+type rowKey struct {
+	revision, width, turns, entries int
+	showsTools, busy                bool
+}
+
+type rowTable struct {
+	key    rowKey
+	before []int
+}
+
+func (m *Model) rowKey() rowKey {
+	return rowKey{m.revision, m.width, m.turns, len(m.entries), m.ChatShowsTools, m.Busy}
+}
+
 func (m *Model) offset(at anchor) int {
-	lines := 0
-	for index := 0; index < at.entry && index < len(m.entries); {
-		start, end := m.blockAt(index)
-		lines += m.blockRows(start, end)
-		index = end
+	if m.rows.before == nil || m.rows.key != m.rowKey() {
+		before := make([]int, len(m.entries)+1)
+		for index := 0; index < len(m.entries); {
+			start, end := m.blockAt(index)
+			rows := m.lead(start) + 1 + len(m.entries[start].displayLines())
+			if m.wrapped(&m.entries[start]) {
+				rows = m.blockRows(start, end)
+			}
+			for inside := start + 1; inside <= end; inside++ {
+				before[inside] = before[start] + rows
+			}
+			index = end
+		}
+		m.rows = rowTable{key: m.rowKey(), before: before}
 	}
-	return lines + at.line
+	return m.rows.before[min(at.entry, len(m.entries))] + at.line
 }
 
 func (m *Model) Scroll(key string) (int, bool) {
@@ -161,7 +184,7 @@ func (m *Model) landAt(to, tail anchor) {
 func (m *Model) SetScroll(behindNewest int) {
 	_, rows := m.feed()
 	if tail, scrollable := m.tailAnchor(rows); scrollable {
-		m.landAt(m.move(anchor{}, m.offset(tail)-max(0, behindNewest)), tail)
+		m.landAt(m.move(tail, -max(0, behindNewest)), tail)
 	}
 }
 

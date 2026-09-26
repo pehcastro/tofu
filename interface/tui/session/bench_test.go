@@ -89,6 +89,17 @@ func BenchmarkWheelEventFrame(b *testing.B) {
 	})
 }
 
+func BenchmarkResizeFrame(b *testing.B) {
+	b.Run("chat", func(b *testing.B) {
+		model, _ := progressedChat()
+		b.ReportAllocs()
+		for at := 1; b.Loop(); at++ {
+			model.SetSize(120-at%40, 36)
+			_ = model.View()
+		}
+	})
+}
+
 func BenchmarkChatScrollbarMetrics(b *testing.B) {
 	model, anchors := progressedChat()
 	model.top, model.following = anchors[benchSteady], false

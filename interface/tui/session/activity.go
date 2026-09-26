@@ -175,9 +175,9 @@ func (m *Model) elapsed(at time.Time) time.Duration {
 	return max(now.Sub(at), 0)
 }
 
-func (m Model) Awaiting() bool { return !m.waiting.IsZero() }
+func (m *Model) Awaiting() bool { return !m.waiting.IsZero() }
 
-func (m Model) TakesAnswerDigits() bool { return m.Awaiting() && m.composer.Value() == "" }
+func (m *Model) TakesAnswerDigits() bool { return m.Awaiting() && m.composer.Value() == "" }
 
 func (m *Model) markAsked(awaiting bool) {
 	for index := len(m.entries) - 1; index >= 0; index-- {

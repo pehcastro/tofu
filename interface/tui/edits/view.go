@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"charm.land/lipgloss/v2"
+	"github.com/alecthomas/chroma/v2"
 	"github.com/charmbracelet/x/ansi"
 
 	"tofu/interface/tui/look"
@@ -63,6 +64,7 @@ type caches struct {
 	main     look.PaneCache
 	trim     trimKey
 	trimmed  Edit
+	lexers   map[string]chroma.Lexer
 }
 
 type Preferences struct {
@@ -115,6 +117,7 @@ func (m Model) shown(edit Edit) Edit {
 }
 
 func (m *Model) Add(edit Edit) {
+	m.lexer(edit.Path)
 	m.edits = append(m.edits, edit)
 	if len(m.edits) > editWindow {
 		m.edits = m.edits[len(m.edits)-editWindow:]

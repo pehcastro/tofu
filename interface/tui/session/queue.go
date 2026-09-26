@@ -15,7 +15,7 @@ func (m *Model) Queue(shown, whole string, chips []Chip) {
 	m.pick = len(m.queue) - 1
 }
 
-func (m Model) Queued() []string {
+func (m *Model) Queued() []string {
 	tasks := make([]string, 0, len(m.queue))
 	for _, row := range m.queue {
 		tasks = append(tasks, row.task)
@@ -36,6 +36,7 @@ func (m *Model) Release() (string, bool) {
 	m.pick = max(m.pick-1, 0)
 	if at := m.queuedAt(first.id); at >= 0 {
 		m.entries[at].waiting = false
+		m.revision++
 	}
 	return first.task, true
 }
@@ -59,6 +60,7 @@ func (m *Model) Unqueue() {
 		return
 	}
 	m.entries = slices.Delete(m.entries, row, row+1)
+	m.revision++
 	if m.top.entry > row {
 		m.top.entry--
 	}
@@ -69,6 +71,7 @@ func (m *Model) PickQueued(by int) {
 		return
 	}
 	m.pick = (min(m.pick, len(m.queue)-1) + by + len(m.queue)) % len(m.queue)
+	m.revision++
 }
 
 func (m *Model) pickedQueue() string {

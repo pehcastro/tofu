@@ -19,6 +19,7 @@ const (
 	benchLogLines  = 50
 	benchFileLines = 1108
 	commandSettle  = 20 * time.Millisecond
+	bodyRow        = 2
 )
 
 func benchShells(at time.Time) []shells.Entry {
@@ -127,6 +128,16 @@ func BenchmarkScrollbarPress(b *testing.B) {
 				app.Update(click)
 			}
 		})
+	}
+}
+
+func BenchmarkChatScrollbarMetrics(b *testing.B) {
+	app := benchApp(120, 36)
+	app.View()
+	press := tea.MouseClickMsg{X: 0, Y: bodyRow, Button: tea.MouseLeft}
+	b.ReportAllocs()
+	for b.Loop() {
+		app.Update(press)
 	}
 }
 

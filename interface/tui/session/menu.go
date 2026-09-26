@@ -26,7 +26,7 @@ type Command struct {
 	What string
 }
 
-func (m Model) Command() (string, bool) {
+func (m *Model) Command() (string, bool) {
 	typed, sliced := strings.CutPrefix(m.composer.Value(), commandPrefix)
 	if !sliced || strings.HasPrefix(typed, commandPrefix) || strings.HasPrefix(typed, blockPrefix) {
 		return "", false
@@ -44,13 +44,13 @@ func lastWord(value string) (string, int) {
 	return value[at:], at
 }
 
-func (m Model) AtWordStart() bool {
+func (m *Model) AtWordStart() bool {
 	row := []rune(strings.Split(m.composer.Value(), "\n")[m.composer.Line()])
 	column := min(m.composer.Column(), len(row))
 	return column == 0 || strings.ContainsRune(wordBreaks, row[column-1])
 }
 
-func (m Model) Path() (string, string, bool) {
+func (m *Model) Path() (string, string, bool) {
 	word, _ := lastWord(m.composer.Value())
 	for _, sigil := range pathSigils() {
 		if typed, is := strings.CutPrefix(word, sigil); is {
@@ -106,7 +106,7 @@ func (m *Model) pickedRow() (Command, string, bool) {
 	return rows[min(m.picked, len(rows)-1)], sigil, true
 }
 
-func (m Model) Picked() (string, bool) {
+func (m *Model) Picked() (string, bool) {
 	row, _, open := m.pickedRow()
 	return row.Name, open
 }

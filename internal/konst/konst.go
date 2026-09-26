@@ -58,6 +58,10 @@ const (
 	FrameBudgetAttempts = 3
 	FrameBudgetSamples  = 200
 	FrameStallMicros    = 4000
+
+	RewrapFillEntries = 4
+	RewrapKeptWidths  = 4
+	RewrapFillMillis  = 30
 )
 
 const (

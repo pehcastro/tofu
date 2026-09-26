@@ -170,9 +170,9 @@ func (m *Model) SetEvents(events []Event) {
 		m.events = events
 		return
 	}
-	_, _, before := m.layout()
+	_, _, before := m.layout("")
 	m.events = events
-	_, _, after := m.layout()
+	_, _, after := m.layout("")
 	m.scroll += max(0, after-before)
 }
 
@@ -195,7 +195,7 @@ func (m Model) feedWidth() int {
 func (m Model) pageHeight() int { return max(1, m.height-headerRows) }
 
 func (m Model) Track() pointer.Track {
-	_, _, rows := m.layout()
+	_, _, rows := m.layout("")
 	height := m.pageHeight()
 	return pointer.Track{Top: headerRows, Height: height, Total: rows, Visible: height, FromTop: fromTop(rows, height, m.scroll)}
 }
@@ -252,8 +252,19 @@ func fromTop(rows, height, scroll int) int {
 	return max(0, rows-height-min(scroll, max(0, rows-height)))
 }
 
-func (m Model) layout() (cards []card, starts []int, rows int) {
-	cards = m.cardsFor(m.feedWidth())
+func (m Model) layout(through string) (cards []card, starts []int, rows int) {
+	drafts, width := m.drafts(), m.feedWidth()
+	cover, passed, below := m.scroll+2*m.pageHeight(), through == "", 0
+	cards = make([]card, len(drafts))
+	for i := len(drafts) - 1; i >= 0; i-- {
+		if below < cover || !passed {
+			cards[i] = m.card(width, drafts[i])
+		} else {
+			cards[i] = m.sized(width, drafts[i])
+		}
+		passed = passed || cards[i].id == through
+		below += cards[i].height + m.gap
+	}
 	starts = make([]int, len(cards))
 	for i, c := range cards {
 		if i > 0 {
@@ -266,7 +277,7 @@ func (m Model) layout() (cards []card, starts []int, rows int) {
 }
 
 func (m Model) page() page {
-	cards, starts, rows := m.layout()
+	cards, starts, rows := m.layout("")
 	height := m.pageHeight()
 	p := page{total: len(cards)}
 	if len(cards) == 0 {

@@ -34,9 +34,17 @@ func (a *App) text(key string) string {
 		return a.preview.value
 	}
 	if a.store == nil {
-		return isettings.DeclaredDefaultText(key)
+		return a.declared(key).DefaultText
 	}
 	return a.store.Text(key)
+}
+
+func (a *App) declared(key string) isettings.Spec {
+	at := slices.IndexFunc(a.defaults, func(spec isettings.Spec) bool { return spec.Key == key })
+	if at < 0 {
+		return isettings.Spec{}
+	}
+	return a.defaults[at]
 }
 
 func (a *App) flag(key string) bool {
@@ -44,7 +52,7 @@ func (a *App) flag(key string) bool {
 		return a.preview.value == switchOn
 	}
 	if a.store == nil {
-		return isettings.DeclaredDefault(key) != 0
+		return a.declared(key).Default != 0
 	}
 	return a.store.Bool(key)
 }

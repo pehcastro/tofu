@@ -18,6 +18,8 @@ const (
 	cardMinWidth     = 22
 	cardPadX         = 2
 	cardPadY         = 1
+	cardBorderRows   = 2
+	cardFixedRows    = 3
 	headMinWidth     = 16
 	headInset        = 12
 	detailPreview    = 8
@@ -58,20 +60,27 @@ func sameEvent(a, b Event) bool {
 		a.At.Equal(b.At) && a.Elapsed == b.Elapsed && slices.Equal(a.Detail, b.Detail)
 }
 
-func (m Model) cardsFor(width int) []card {
+type draft struct {
+	event  *Event
+	render func(Event, cardKey) string
+}
+
+func (m Model) drafts() []draft {
 	events := m.visible()
-	cards := make([]card, 0, len(events)+2)
+	drafts := make([]draft, 0, len(events)+2)
 	agent, picked := m.filteredAgent()
 	if picked && len(agent.Owns) > 0 {
-		cards = append(cards, m.card(width, m.aboutFilter(ownsTitle, "", m.ownership(agent.Owns)), renderAgentCard))
+		owns := m.aboutFilter(ownsTitle, "", m.ownership(agent.Owns))
+		drafts = append(drafts, draft{&owns, renderAgentCard})
 	}
-	for _, e := range events {
-		cards = append(cards, m.card(width, e, renderCard))
+	for index := range events {
+		drafts = append(drafts, draft{&events[index], renderCard})
 	}
 	if picked && agent.Report != "" {
-		cards = append(cards, m.card(width, m.aboutFilter(reportTitle, agent.Report, nil), renderAgentCard))
+		report := m.aboutFilter(reportTitle, agent.Report, nil)
+		drafts = append(drafts, draft{&report, renderAgentCard})
 	}
-	return cards
+	return drafts
 }
 
 func (m Model) filteredAgent() (Agent, bool) {
@@ -111,13 +120,30 @@ func overlapping(one, other string) bool {
 	return held.Hold(roster.SubAgent{ID: one, Owns: []string{one}}) == nil && errors.As(held.Hold(roster.SubAgent{ID: other, Owns: []string{other}}), &collision)
 }
 
-func (m Model) card(width int, e Event, render func(Event, cardKey) string) card {
-	key := cardKey{width, !m.railFocused && m.selected == e.ID, m.expanded[e.ID], look.Age(m.now().Sub(e.At))}
-	c := m.cards
+func (m Model) cardKey(width int, e *Event) cardKey {
+	return cardKey{width, !m.railFocused && m.selected == e.ID, m.expanded[e.ID], look.Age(m.now().Sub(e.At))}
+}
+
+func (m Model) sized(width int, d draft) card {
+	expanded := m.expanded[d.event.ID]
+	if cached, ok := m.cards.cards[d.event.ID]; ok && cached.key.width == width && cached.key.expanded == expanded && sameEvent(cached.event, *d.event) {
+		return card{id: d.event.ID, height: cached.height}
+	}
+	shown := min(len(d.event.Detail), detailPreview+1)
+	if expanded {
+		shown = len(d.event.Detail)
+	}
+	room := max(cardMinWidth, width-2) - 2*cardPadX
+	prose := (len(d.event.Body) + room - 1) / room
+	return card{id: d.event.ID, height: cardBorderRows + 2*cardPadY + cardFixedRows + shown + prose}
+}
+
+func (m Model) card(width int, d draft) card {
+	e, key, c := *d.event, m.cardKey(width, d.event), m.cards
 	if cached, ok := c.cards[e.ID]; ok && cached.key == key && sameEvent(cached.event, e) {
 		return card{e.ID, cached.view, cached.height}
 	}
-	view := render(e, key)
+	view := d.render(e, key)
 	if c.cards == nil {
 		c.cards = make(map[string]cachedCard)
 	}

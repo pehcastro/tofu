@@ -203,7 +203,7 @@ func TestDiffRowIndexMatchesStyledWrapping(t *testing.T) {
 		m := Model{cache: &caches{}}
 		offsets := m.indexedDiffRows(edit, width)
 		for at, line := range edit.lines {
-			want := strings.Count(lipgloss.Wrap(diffLine(line, edit.numbers[at], edit.lexer), max(wrapFloor, width-wrapGutter), ""), "\n") + 1
+			want := strings.Count(lipgloss.Wrap(diffLine(line, edit.numbers[at], m.lexer(edit.Path)), max(wrapFloor, width-wrapGutter), ""), "\n") + 1
 			if got := offsets[at+1] - offsets[at]; got != want {
 				t.Fatalf("width %d line %q: got %d rows, want %d", width, line, got, want)
 			}

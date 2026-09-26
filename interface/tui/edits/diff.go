@@ -84,7 +84,7 @@ func (m Model) indexedDiffRows(edit Edit, width int) []int {
 		}
 		plain := plainLine(line, edit.numbers[at])
 		if control {
-			plain = diffLine(line, edit.numbers[at], edit.lexer)
+			plain = diffLine(line, edit.numbers[at], m.lexer(edit.Path))
 		}
 		offsets[at+1] = offsets[at] + strings.Count(ansi.Wrap(plain, wrap, ""), "\n") + 1
 	}
@@ -155,7 +155,7 @@ func (m Model) wrappedDiffRows(edit Edit, at, width int) []string {
 			return rows
 		}
 	}
-	rows := strings.Split(lipgloss.Wrap(diffLine(edit.lines[at], edit.numbers[at], edit.lexer), max(wrapFloor, width-wrapGutter), ""), "\n")
+	rows := strings.Split(lipgloss.Wrap(diffLine(edit.lines[at], edit.numbers[at], m.lexer(edit.Path)), max(wrapFloor, width-wrapGutter), ""), "\n")
 	if m.cache != nil {
 		if len(m.cache.rows.wrapped) >= rowCacheBound {
 			clear(m.cache.rows.wrapped)
@@ -226,7 +226,7 @@ func (m Model) dialogRows(edit Edit, width, start, ending int) []string {
 				continue
 			}
 		}
-		row := ansi.Truncate(diffLine(edit.lines[at], edit.numbers[at], edit.lexer), width, "…")
+		row := ansi.Truncate(diffLine(edit.lines[at], edit.numbers[at], m.lexer(edit.Path)), width, "…")
 		if cache != nil {
 			if len(cache.rows) >= rowCacheBound {
 				clear(cache.rows)

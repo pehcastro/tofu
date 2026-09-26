@@ -54,11 +54,10 @@ type Edit struct {
 	numbers []int
 	added   int
 	removed int
-	lexer   chroma.Lexer
 }
 
 func Changed(agent, path, diff, created, id string, when time.Time) (Edit, bool) {
-	edit := Edit{Agent: cmp.Or(agent, Self), Path: path, ID: id, When: when, lexer: cmp.Or(lexers.Match(filepath.Base(path)), lexers.Fallback)}
+	edit := Edit{Agent: cmp.Or(agent, Self), Path: path, ID: id, When: when}
 	switch {
 	case diff != "":
 		for _, header := range []string{fromHeader, intoHeader} {
@@ -140,6 +139,23 @@ func hunkStart(field string) int {
 
 func expand(text string) string {
 	return strings.ReplaceAll(strings.TrimRight(text, "\n"), "\t", tabStop)
+}
+
+func (m Model) lexer(path string) chroma.Lexer {
+	extension := cmp.Or(filepath.Ext(path), filepath.Base(path))
+	if m.cache != nil {
+		if found, known := m.cache.lexers[extension]; known {
+			return found
+		}
+	}
+	found := cmp.Or(lexers.Match(filepath.Base(path)), lexers.Fallback)
+	if m.cache != nil {
+		if m.cache.lexers == nil {
+			m.cache.lexers = map[string]chroma.Lexer{}
+		}
+		m.cache.lexers[extension] = found
+	}
+	return found
 }
 
 func (e Edit) Op() Op          { return e.op }

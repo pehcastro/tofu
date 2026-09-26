@@ -225,6 +225,9 @@ func (m *Model) progressLine(entry Entry) string {
 }
 
 func (m *Model) render(index int) []string {
+	if !m.wrapped(&m.entries[index]) {
+		m.rerender(&m.entries[index])
+	}
 	entry := m.entries[index]
 	switch entry.Kind {
 	case User:

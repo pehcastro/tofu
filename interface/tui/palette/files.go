@@ -13,6 +13,7 @@ import (
 
 const (
 	outsideWorkspace = "File picker stays inside this workspace"
+	emptyDirectory   = "no files here"
 	filesMaxRows     = 15
 	filesMinRows     = 5
 	filesChrome      = 10
@@ -39,7 +40,7 @@ func NewFiles(root string) (Files, tea.Cmd) {
 	picker.Styles.Directory = look.Style(look.Amber)
 	picker.Styles.File = look.Style(look.MutedColor)
 	picker.Styles.Symlink = look.Style(look.Blue)
-	picker.Styles.EmptyDirectory = picker.Styles.EmptyDirectory.Foreground(lipgloss.Color(string(look.FaintColor)))
+	picker.Styles.EmptyDirectory = picker.Styles.EmptyDirectory.Foreground(lipgloss.Color(string(look.FaintColor))).SetString(emptyDirectory)
 	picker.CurrentDirectory = root
 	picker.SetHeight(filesMaxRows)
 	return Files{root: root, picker: picker}, picker.Init()

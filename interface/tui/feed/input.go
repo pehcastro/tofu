@@ -45,7 +45,7 @@ func (m *Model) Wheel(delta int) {
 func (m *Model) SetScroll(behindNewest int) { m.scrollBy(behindNewest - m.scroll) }
 
 func (m *Model) scrollBy(rows int) {
-	_, _, total := m.layout()
+	_, _, total := m.layout("")
 	m.scroll = max(0, min(total-m.pageHeight(), m.scroll+rows))
 	m.railFocused = false
 }
@@ -133,7 +133,7 @@ func (m *Model) step(delta int, wrap bool) {
 
 func (m *Model) reveal(id string) {
 	m.selected, m.railFocused = id, false
-	cards, starts, rows := m.layout()
+	cards, starts, rows := m.layout(id)
 	for i, c := range cards {
 		if c.id == id {
 			m.scroll = max(0, min(rows-m.pageHeight(), rows-starts[i]-c.height))

@@ -22,6 +22,7 @@ import (
 	"tofu/interface/tui/subagent"
 	"tofu/internal/judge/jev"
 	"tofu/internal/keymap"
+	"tofu/internal/konst"
 	"tofu/internal/llm"
 	library "tofu/internal/llm/models"
 	isession "tofu/internal/session"
@@ -194,6 +195,7 @@ type App struct {
 	shells         shells.Model
 	settings       settings.Model
 	store          *isettings.Store
+	defaults       []isettings.Spec
 	preview        preview
 	roles          map[library.RoleID]string
 	shortcuts      map[string]string
@@ -203,6 +205,7 @@ type App struct {
 	noticeAt       int
 	pulse          int
 	pulsing        bool
+	filling        bool
 	wire           string
 	model          string
 	provider       string
@@ -247,6 +250,8 @@ type pathsMsg []string
 
 type pulseMsg struct{}
 
+type fillMsg struct{}
+
 type shellsMsg []shells.Entry
 
 func New(options Options) *App {
@@ -274,6 +279,7 @@ func New(options Options) *App {
 		shells:       shells.New(options.Now),
 		settings:     settings.Model{Providers: options.Providers, Scopes: []string{"global", "project"}},
 		store:        options.Settings,
+		defaults:     isettings.Default(),
 		shortcuts:    keymap.LoadShortcuts(options.Keymap),
 		width:        defaultWidth,
 		height:       defaultHeight,
@@ -368,7 +374,7 @@ func (a *App) update(msg tea.Msg) tea.Cmd {
 	if size, resized := msg.(tea.WindowSizeMsg); resized {
 		a.resize(size.Width, size.Height)
 		cmd, _ := a.toFiles(msg)
-		return cmd
+		return tea.Batch(cmd, a.fillLater())
 	}
 	if a.intro.shown && len(a.requirements) == 0 {
 		if cmd, taken := a.coverInput(msg); taken {
@@ -395,6 +401,12 @@ func (a *App) update(msg tea.Msg) tea.Cmd {
 		return a.pasted(msg)
 	case pulseMsg:
 		a.beat()
+		return nil
+	case fillMsg:
+		a.filling = false
+		if a.view.Fill() {
+			return a.fillLater()
+		}
 		return nil
 	case Event:
 		a.absorb(msg)
@@ -453,6 +465,14 @@ func (a *App) startPulse() tea.Cmd {
 	}
 	a.pulsing = true
 	return tea.Tick(pulseInterval, func(time.Time) tea.Msg { return pulseMsg{} })
+}
+
+func (a *App) fillLater() tea.Cmd {
+	if a.filling {
+		return nil
+	}
+	a.filling = true
+	return tea.Tick(konst.RewrapFillMillis*time.Millisecond, func(time.Time) tea.Msg { return fillMsg{} })
 }
 
 func (a *App) beat() {

@@ -16,6 +16,7 @@ import (
 	"tofu/interface/tui/progress"
 	"tofu/interface/tui/subagent"
 	"tofu/interface/tui/trace"
+	"tofu/internal/konst"
 	"tofu/internal/widget"
 )
 
@@ -64,6 +65,7 @@ type Entry struct {
 	tail      []string
 	stable    int
 	width     int
+	wraps     map[int][]string
 	drawn     drawn
 }
 
@@ -139,6 +141,8 @@ type Model struct {
 	chips              []Chip
 	pending            []pendingPaste
 	frame              int
+	revision           int
+	rows               rowTable
 	ChatShowsTools     bool
 	FoldHidesShell     bool
 }
@@ -169,27 +173,54 @@ func (m *Model) SetFrame(frame int) { m.frame = frame }
 func (m *Model) Insert(text string) { m.composer.InsertString(text) }
 
 func (m *Model) SetSize(width, height int) {
-	columns := max(width, minimumColumns)
-	rewrap := columns != m.width
-	m.width, m.height = columns, height
+	m.width, m.height = max(width, minimumColumns), height
 	m.composer.SetWidth(max(m.width-composerSideCells, 1))
-	if !rewrap {
-		return
-	}
-	for index := range m.entries {
-		m.rerender(&m.entries[index])
-	}
 }
 
 func (m *Model) textWidth() int { return max(m.width-2*messageInset, 1) }
+
+func (m *Model) wrapped(entry *Entry) bool {
+	room := m.textWidth()
+	if !entry.assistant() || entry.width == room {
+		return true
+	}
+	if _, known := entry.wraps[room]; !known || entry.streaming {
+		return false
+	}
+	m.rerender(entry)
+	return true
+}
+
+func (m *Model) Fill() bool {
+	left := konst.RewrapFillEntries
+	for index := len(m.entries) - 1; index >= 0; index-- {
+		if entry := &m.entries[index]; !m.wrapped(entry) {
+			if left == 0 {
+				return true
+			}
+			m.rerender(entry)
+			left--
+		}
+	}
+	return false
+}
 
 func (m *Model) rerender(entry *Entry) {
 	if !entry.assistant() {
 		return
 	}
+	m.revision++
 	room := m.textWidth()
 	if !entry.streaming {
-		entry.rendered, entry.stable, entry.width, entry.tail = m.prose(entry.Body, room), len(entry.Body), room, nil
+		lines, known := entry.wraps[room]
+		if !known {
+			lines = m.prose(entry.Body, room)
+			if entry.wraps == nil || len(entry.wraps) >= konst.RewrapKeptWidths {
+				entry.wraps = map[int][]string{}
+			}
+			entry.wraps[room] = lines
+		}
+		entry.rendered, entry.stable, entry.width, entry.tail = lines, len(entry.Body), room, nil
 		return
 	}
 	boundary := max(markdown.Boundary(entry.Body), entry.stable)
@@ -236,6 +267,7 @@ func (m *Model) mint() string {
 
 func (m *Model) Append(entry Entry) {
 	m.seal()
+	m.revision++
 	entry.Started, entry.turn, entry.intoTurn = m.now(), m.turns, m.elapsed(m.began)
 	if entry.Kind == User && entry.ID == "" {
 		entry.ID = m.mint()
@@ -260,13 +292,14 @@ func (m *Model) Finish(id string, result Result) {
 		entry := &m.entries[index]
 		if entry.running() && entry.ID == id {
 			entry.Status, entry.Bytes, entry.Failed, entry.Ended = result.Status, result.Bytes, result.Failed, ended
+			m.revision++
 			return
 		}
 	}
 	m.Append(Entry{Kind: Note, Body: result.Status})
 }
 
-func (m Model) LastAnswer() (string, bool) {
+func (m *Model) LastAnswer() (string, bool) {
 	for index := len(m.entries) - 1; index >= 0; index-- {
 		if entry := m.entries[index]; entry.Kind == Assistant {
 			return entry.Body, true
@@ -275,7 +308,7 @@ func (m Model) LastAnswer() (string, bool) {
 	return "", false
 }
 
-func (m Model) Intent(id string) string {
+func (m *Model) Intent(id string) string {
 	for index := len(m.entries) - 1; index >= 0; index-- {
 		if entry := m.entries[index]; entry.Kind == Tool && entry.ID == id {
 			return entry.Body
@@ -284,7 +317,7 @@ func (m Model) Intent(id string) string {
 	return ""
 }
 
-func (m Model) LastCall() (string, bool) {
+func (m *Model) LastCall() (string, bool) {
 	for index := len(m.entries) - 1; index >= 0; index-- {
 		entry := m.entries[index]
 		if entry.Kind != Tool {
@@ -307,6 +340,7 @@ func (m *Model) Decide(decision Decision) {
 		entry := &m.entries[index]
 		if entry.Kind == Tool && entry.Decision == nil && entry.Head == decision.Tool && !entry.returned() {
 			entry.Decision = &decision
+			m.revision++
 			return
 		}
 	}
@@ -324,7 +358,7 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 	return cmd
 }
 
-func (m Model) Value() string { return unescaped(strings.TrimSpace(m.composer.Value())) }
+func (m *Model) Value() string { return unescaped(strings.TrimSpace(m.composer.Value())) }
 
 func unescaped(typed string) string {
 	var built strings.Builder
@@ -376,6 +410,7 @@ func (m *Model) Start() {
 func (m *Model) dropGreeting() {
 	if len(m.entries) > 0 && m.entries[0].Kind == Note {
 		m.entries = m.entries[1:]
+		m.revision++
 	}
 }
 
@@ -395,6 +430,7 @@ func (m *Model) TakePartial() (string, bool) {
 	}
 	partial := m.entries[last].Body
 	m.entries = m.entries[:last]
+	m.revision++
 	return partial, true
 }
 
@@ -403,6 +439,7 @@ func (m *Model) Stop() {
 	m.Busy, m.Stopping, m.LettingToolsFinish = false, false, false
 	m.requested, m.answered = time.Time{}, time.Time{}
 	m.seal()
+	m.revision++
 	for index := range m.entries {
 		entry := &m.entries[index]
 		if entry.running() {

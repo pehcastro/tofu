@@ -28,7 +28,7 @@ const (
 	escape            = '\x1b'
 )
 
-func (m Model) Cursor() *tea.Cursor {
+func (m *Model) Cursor() *tea.Cursor {
 	caret := m.composer.Cursor()
 	if caret == nil {
 		return nil
