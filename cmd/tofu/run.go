@@ -406,7 +406,10 @@ func runTurn(opts runOpts, selected models.Model, built []turn.Tool, budget reca
 		spawner.Review = review
 	}
 	_, _ = fmt.Fprintln(out, "context budget "+budget.Record())
-	registry, _ := launchShellRegistry(opts.dir)
+	registry, registryErr := launchShellRegistry(opts.dir)
+	if registryErr == nil {
+		_ = registry.Prune()
+	}
 	row, runErr := turn.Run(turn.WithShellRegistry(context.Background(), registry), config)
 	leaveShells(registry)
 	printRunRow(out, row, selected.Slug(), selected.WindowText())

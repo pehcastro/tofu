@@ -4,8 +4,8 @@
   [1;38;2;225;225;230mShells[m[48;2;25;22;34m                                                                        
   [38;2;164;170;181mNo background processes in this session yet.[m[48;2;25;22;34m                                  
                                                                                 
-                                                                                
-                                                                                
+  [38;2;105;107;119mOnly long work lands here: a dev server, a watcher, a long script.[m[48;2;25;22;34m            
+[38;2;105;107;119m  Never a test, a build or a one-shot command: those end and never show.[m[48;2;25;22;34m        
                                                                                 
                                                                                 
                                                                                 

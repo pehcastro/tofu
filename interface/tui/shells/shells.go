@@ -31,6 +31,7 @@ const (
 	factLabel      = 10
 	title          = "Shells"
 	emptyBody      = "No background processes in this session yet."
+	emptyRule      = "Only long work lands here: a dev server, a watcher, a long script.\n  Never a test, a build or a one-shot command: those end and never show."
 	outputHint     = "  ·  wheel / PgUp / PgDn"
 	killAskHint    = " request kill · confirmation required"
 	killNowHint    = " kill"
@@ -212,7 +213,7 @@ func (m Model) sidebarWindow() (start, end int) {
 
 func (m Model) View() string {
 	if len(m.Entries) == 0 {
-		return look.FixedBlock(m.width, m.height, "\n  "+look.Title(title)+"\n  "+look.Muted(emptyBody))
+		return look.FixedBlock(m.width, m.height, "\n  "+look.Title(title)+"\n  "+look.Muted(emptyBody)+"\n\n  "+look.Faint(emptyRule))
 	}
 	c := m.cache
 	if c == nil {

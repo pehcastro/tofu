@@ -96,6 +96,7 @@ const (
 	BashDeadlineMillis    = 120000
 	BashMaxDeadlineMillis = 600000
 	BashWaitDelayMillis   = 1000
+	BackgroundYieldMillis = 10000
 
 	ShellProbeTimeoutMillis     = 2000
 	ToolchainProbeTimeoutMillis = 2000

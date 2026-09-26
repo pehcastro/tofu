@@ -1,6 +1,7 @@
 package shell
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -8,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -25,6 +27,7 @@ const (
 	logSuffix     = ".log"
 	stateSuffix   = ".json"
 	stagingSuffix = ".writing"
+	claimedPrefix = "bash-"
 	DefaultTail   = 200
 	dirMode       = 0o755
 	fileMode      = 0o644
@@ -67,15 +70,6 @@ func OpenAt(dir string) *Registry {
 	return &Registry{dir: dir, running: map[string]*live{}}
 }
 
-func posixShell() (string, error) {
-	for _, name := range []string{"bash", "sh"} {
-		if path, err := exec.LookPath(name); err == nil {
-			return path, nil
-		}
-	}
-	return "", errors.New("shell: no sh or bash on PATH")
-}
-
 func (r *Registry) statePath(name string) string { return filepath.Join(r.dir, name+stateSuffix) }
 func (r *Registry) logPath(name string) string   { return filepath.Join(r.dir, name+logSuffix) }
 
@@ -100,11 +94,50 @@ func (r *Registry) reserve(name string) error {
 	return os.MkdirAll(r.dir, dirMode)
 }
 
+func (r *Registry) claim() (string, *os.File, error) {
+	if err := os.MkdirAll(r.dir, dirMode); err != nil {
+		return "", nil, err
+	}
+	for number := 1; ; number++ {
+		name := claimedPrefix + strconv.Itoa(number)
+		if exists(r.statePath(name)) {
+			continue
+		}
+		logFile, err := os.OpenFile(r.logPath(name), os.O_CREATE|os.O_EXCL|os.O_WRONLY, fileMode)
+		if errors.Is(err, os.ErrExist) {
+			continue
+		}
+		return name, logFile, err
+	}
+}
+
+func (r *Registry) spawn(cmd *exec.Cmd, logFile *os.File) (tree, <-chan error, error) {
+	cmd.Stdout, cmd.Stderr = logFile, logFile
+	spawned, err := startTree(cmd, r.Lifetime)
+	if err != nil {
+		_ = logFile.Close()
+		return tree{}, nil, err
+	}
+	waited := make(chan error, 1)
+	go func() { waited <- cmd.Wait() }()
+	return spawned, waited, nil
+}
+
+func (r *Registry) keep(entry Shell, spawned tree, waited <-chan error, logFile *os.File) error {
+	process := &live{tree: spawned, finished: make(chan struct{})}
+	r.mu.Lock()
+	r.running[entry.Name] = process
+	err := r.writeLocked(entry)
+	r.mu.Unlock()
+	go r.await(waited, logFile, entry, process)
+	return err
+}
+
 func (r *Registry) Start(root, name, command, owner string) (Shell, error) {
 	if err := r.reserve(name); err != nil {
 		return Shell{}, err
 	}
-	shell, err := posixShell()
+	choice, err := Resolve("")
 	if err != nil {
 		return Shell{}, err
 	}
@@ -112,32 +145,57 @@ func (r *Registry) Start(root, name, command, owner string) (Shell, error) {
 	if err != nil {
 		return Shell{}, err
 	}
-	cmd := exec.Command(shell, "-c", command)
+	cmd := exec.Command(choice.Path, "-c", command)
 	cmd.Dir = root
-	cmd.Stdout, cmd.Stderr = logFile, logFile
-	spawned, err := startTree(cmd, r.Lifetime)
+	spawned, waited, err := r.spawn(cmd, logFile)
 	if err != nil {
-		_ = logFile.Close()
 		return Shell{}, err
 	}
 	entry := Shell{Name: name, Command: command, Dir: root, Owner: owner, PID: cmd.Process.Pid, State: Running, Started: time.Now()}
-	process := &live{tree: spawned, finished: make(chan struct{})}
-	r.mu.Lock()
-	writeErr := r.writeLocked(entry)
-	if writeErr == nil {
-		r.running[name] = process
-	}
-	r.mu.Unlock()
-	if writeErr != nil {
-		_ = logFile.Close()
-		return Shell{}, writeErr
-	}
-	go r.await(cmd, logFile, entry, process)
-	return entry, nil
+	return entry, r.keep(entry, spawned, waited, logFile)
 }
 
-func (r *Registry) await(cmd *exec.Cmd, logFile *os.File, started Shell, process *live) {
-	waitErr := cmd.Wait()
+func (r *Registry) Yield(ctx context.Context, cmd *exec.Cmd, command, owner string, within time.Duration) (Shell, string, error) {
+	name, logFile, err := r.claim()
+	if err != nil {
+		return Shell{}, "", err
+	}
+	spawned, waited, err := r.spawn(cmd, logFile)
+	if err != nil {
+		_ = os.Remove(r.logPath(name))
+		return Shell{}, "", err
+	}
+	entry := Shell{Name: name, Command: command, Dir: cmd.Dir, Owner: owner, PID: cmd.Process.Pid, State: Running, Started: time.Now()}
+	select {
+	case waitErr := <-waited:
+		_ = logFile.Close()
+		spawned.release()
+		output, readErr := os.ReadFile(r.logPath(name))
+		_ = os.Remove(r.logPath(name))
+		ended, code := time.Now(), exitCode(waitErr)
+		entry.State, entry.Ended, entry.ExitCode = Exited, &ended, &code
+		return entry, string(output), readErr
+	case <-time.After(within):
+	case <-ctx.Done():
+	}
+	err = r.keep(entry, spawned, waited, logFile)
+	output, _ := os.ReadFile(r.logPath(name))
+	return entry, string(output), err
+}
+
+func exitCode(waitErr error) int {
+	var exitErr *exec.ExitError
+	switch {
+	case waitErr == nil:
+		return 0
+	case errors.As(waitErr, &exitErr):
+		return exitErr.ExitCode()
+	}
+	return -1
+}
+
+func (r *Registry) await(waited <-chan error, logFile *os.File, started Shell, process *live) {
+	code := exitCode(<-waited)
 	_ = logFile.Close()
 	defer close(process.finished)
 	r.mu.Lock()
@@ -148,16 +206,19 @@ func (r *Registry) await(cmd *exec.Cmd, logFile *os.File, started Shell, process
 		return
 	}
 	ended := time.Now()
-	code := 0
-	if waitErr != nil {
-		code = -1
-		var exitErr *exec.ExitError
-		if errors.As(waitErr, &exitErr) {
-			code = exitErr.ExitCode()
-		}
-	}
 	started.State, started.Ended, started.ExitCode = Exited, &ended, &code
 	_ = r.writeLocked(started)
+}
+
+func (r *Registry) Prune() error {
+	found, err := r.List()
+	for _, one := range found {
+		if one.State != Running {
+			_ = os.Remove(r.statePath(one.Name))
+			_ = os.Remove(r.logPath(one.Name))
+		}
+	}
+	return err
 }
 
 func (r *Registry) writeLocked(entry Shell) error {
@@ -244,71 +305,6 @@ func (r *Registry) Tail(name string, lines int) (string, error) {
 		all = all[len(all)-lines:]
 	}
 	return strings.Join(all, "\n"), nil
-}
-
-type Watch struct {
-	r    *Registry
-	name string
-	log  *os.File
-}
-
-func (r *Registry) Watch(name, command, dir, owner string) (*Watch, error) {
-	if err := r.reserve(name); err != nil {
-		return nil, err
-	}
-	logFile, err := os.Create(r.logPath(name))
-	if err != nil {
-		return nil, err
-	}
-	entry := Shell{Name: name, Command: command, Dir: dir, Owner: owner, State: Running, Started: time.Now()}
-	r.mu.Lock()
-	writeErr := r.writeLocked(entry)
-	if writeErr == nil {
-		r.running[name] = &live{finished: make(chan struct{})}
-	}
-	r.mu.Unlock()
-	if writeErr != nil {
-		_ = logFile.Close()
-		return nil, writeErr
-	}
-	return &Watch{r: r, name: name, log: logFile}, nil
-}
-
-func (w *Watch) Writer() *os.File { return w.log }
-
-func (w *Watch) SetPID(pid int) error {
-	w.r.mu.Lock()
-	defer w.r.mu.Unlock()
-	entry, err := w.r.readLocked(w.name)
-	if err != nil {
-		return err
-	}
-	entry.PID = pid
-	return w.r.writeLocked(entry)
-}
-
-func (w *Watch) Finish(code int) error { return w.conclude(Exited, &code) }
-
-func (w *Watch) Killed() error { return w.conclude(Killed, nil) }
-
-func (w *Watch) conclude(state State, code *int) error {
-	_ = w.log.Close()
-	w.r.mu.Lock()
-	defer w.r.mu.Unlock()
-	entry, err := w.r.readLocked(w.name)
-	if process, ok := w.r.running[w.name]; ok {
-		close(process.finished)
-		delete(w.r.running, w.name)
-	}
-	if err != nil {
-		return err
-	}
-	if entry.State != Running {
-		return nil
-	}
-	ended := time.Now()
-	entry.State, entry.Ended, entry.ExitCode = state, &ended, code
-	return w.r.writeLocked(entry)
 }
 
 var ErrNotRunning = errors.New("shell: not running")

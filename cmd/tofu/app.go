@@ -93,6 +93,9 @@ type appLaunch struct {
 
 func launchOf(dir string, resumed sessionResume, fresh bool) appLaunch {
 	registry, registryErr := launchShellRegistry(dir)
+	if registryErr == nil {
+		_ = registry.Prune()
+	}
 	return appLaunch{resumed: resumed, fresh: fresh, registry: registry, registryErr: registryErr}
 }
 
