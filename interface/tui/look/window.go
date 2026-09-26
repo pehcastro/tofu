@@ -40,12 +40,6 @@ func Window(content string, width, height, offset int) (view string, total, from
 	return lipgloss.NewStyle().Width(inner).Height(height).Render(strings.Join(visible, "\n")), total, fromTop
 }
 
-func WindowTracked(content string, width, height, offset int) string {
-	view, total, fromTop := Window(content, width, height, offset)
-	height = max(1, height)
-	return JoinScrollTrack(view, ScrollTrack(height, total, height, fromTop))
-}
-
 func ScrollTrack(height, total, visible, fromTop int) string {
 	if total <= visible || height < 2 {
 		return strings.Repeat(" \n", max(1, height)-1) + " "
@@ -62,23 +56,4 @@ func ScrollTrack(height, total, visible, fromTop int) string {
 		}
 	}
 	return strings.Join(rows, "\n")
-}
-
-func JoinScrollTrack(view, track string) string {
-	left, right := strings.Split(view, "\n"), strings.Split(track, "\n")
-	pad := strings.Repeat(" ", ansi.StringWidth(right[0]))
-	var out strings.Builder
-	out.Grow(len(view) + len(track))
-	for i, row := range left {
-		if i > 0 {
-			out.WriteByte('\n')
-		}
-		out.WriteString(row)
-		if i < len(right) {
-			out.WriteString(right[i])
-		} else {
-			out.WriteString(pad)
-		}
-	}
-	return out.String()
 }

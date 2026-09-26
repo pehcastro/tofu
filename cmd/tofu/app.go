@@ -55,6 +55,7 @@ const (
 	freshSessionNote = "the next task starts a new session and carries nothing from the last one"
 	sessionEnded     = "tofu: session ended"
 	stoppingPrefix   = ", stopping "
+	leavingPrefix    = ", leaving running for the next launch "
 )
 
 const (
@@ -74,13 +75,13 @@ const (
 	placeWords          = 2
 	queuedMessages      = 64
 	childIDMark         = "-c"
-	imagesNeverSent     = "off"
 )
 
 type appWiring struct {
-	open     func(runOpts) (appWire, error)
-	wires    func() []tui.Wire
-	blockers func() []tui.Requirement
+	open      func(runOpts) (appWire, error)
+	wires     func() []tui.Wire
+	blockers  func() []tui.Requirement
+	clipboard func() (sys.Clipboard, error)
 }
 
 type appLaunch struct {
@@ -90,8 +91,8 @@ type appLaunch struct {
 	registryErr error
 }
 
-func launchOf(resumed sessionResume, fresh bool) appLaunch {
-	registry, registryErr := openShellRegistry()
+func launchOf(dir string, resumed sessionResume, fresh bool) appLaunch {
+	registry, registryErr := launchShellRegistry(dir)
 	return appLaunch{resumed: resumed, fresh: fresh, registry: registry, registryErr: registryErr}
 }
 
@@ -122,7 +123,7 @@ func appOptions(dir string, arms runOpts, wiring appWiring, launch appLaunch) tu
 		Settings:     settingsStore,
 		Reload:       appReload,
 		Turn:         live.run,
-		Paste:        paste.Board{Dir: live.pendingSessionDir, Recorded: live.recordAttachment},
+		Paste:        paste.Board{Read: wiring.clipboard, Dir: live.pendingSessionDir, Recorded: live.recordAttachment},
 		Answers:      answers,
 		Steering:     steering,
 		Paths:        appPaths(dir),
@@ -147,18 +148,18 @@ func appVerb(in io.Reader, out, errOut io.Writer, resumed sessionResume) int {
 		return exitVerdict
 	}
 	live := appWiring{open: openAppWire, wires: appWires, blockers: appRequirements}
-	launch := launchOf(resumed, resumed.Session == "")
+	launch := launchOf(dir, resumed, resumed.Session == "")
 	if err := tui.Run(appOptions(dir, runOpts{}, live, launch)); err != nil {
 		_, _ = fmt.Fprintf(errOut, "tofu: %v\n", err)
 		return exitVerdict
 	}
 	_, _ = fmt.Fprintln(out, sessionEndLine(launch.registry, launch.registryErr))
-	leaveShells(dir, launch.registry)
+	leaveShells(launch.registry)
 	return exitOK
 }
 
-func leaveShells(dir string, registry *shell.Registry) {
-	if registry == nil || settingInt(dir, settingspkg.PersistentRegistry, nil) != 0 {
+func leaveShells(registry *shell.Registry) {
+	if registry == nil || registry.Lifetime == shell.OutlivesTofu {
 		return
 	}
 	found, _ := registry.List()
@@ -170,19 +171,22 @@ func leaveShells(dir string, registry *shell.Registry) {
 }
 
 func sessionEndLine(registry *shell.Registry, openErr error) string {
-	var stopped []string
+	var running []string
 	if openErr == nil {
 		found, _ := registry.List()
 		for _, one := range found {
 			if one.State == shell.Running {
-				stopped = append(stopped, one.Name+" ("+one.Command+")")
+				running = append(running, one.Name+" ("+one.Command+")")
 			}
 		}
 	}
-	if len(stopped) == 0 {
+	if len(running) == 0 {
 		return sessionEnded
 	}
-	return sessionEnded + stoppingPrefix + strings.Join(stopped, ", ")
+	if registry.Lifetime == shell.OutlivesTofu {
+		return sessionEnded + leavingPrefix + strings.Join(running, ", ")
+	}
+	return sessionEnded + stoppingPrefix + strings.Join(running, ", ")
 }
 
 func appPaths(dir string) func() []string {
@@ -618,6 +622,22 @@ func (s *appSession) takePendingImages(task string) ([]llm.Image, error) {
 	return images, nil
 }
 
+func imagesRefused(setting string, model models.Model, attached int) string {
+	held := strconv.Itoa(attached) + " attached image(s) stayed out of this turn"
+	switch setting {
+	case settingspkg.ImagesOff:
+		return "images is off, so " + held
+	case settingspkg.ImagesAuto:
+		if model.Vision == models.VisionBlind {
+			return "images is auto and " + model.Slug() + " cannot see images, so " + held + "; pick a model that can, or set images to inline"
+		}
+		return ""
+	case settingspkg.ImagesInline:
+		return ""
+	}
+	panic("tofu: unknown images setting " + setting)
+}
+
 func imageMediaType(name string) string {
 	ext := strings.ToLower(filepath.Ext(name))
 	switch ext {
@@ -696,10 +716,6 @@ func (s *appSession) run(ctx context.Context, pick tui.Pick, task string, emit t
 		return
 	}
 	say := func(unreadable string) { emit(tui.Event{Kind: tui.EventNote, Text: unreadable}) }
-	if len(images) > 0 && settingText(s.dir, settingspkg.Images, say) == imagesNeverSent {
-		say("images is off, so " + strconv.Itoa(len(images)) + " attached image(s) stayed out of this turn")
-		images = nil
-	}
 	opts := pickedOpts(s.dir, s.pendingID(), task, pick, cmp.Or(s.arms.maxSteps, settingInt(s.dir, settingspkg.DecisionCap, say)))
 	opts.gateArm, opts.siftArm, opts.noInstructions = s.arms.gateArm, s.arms.siftArm, s.arms.noInstructions
 	opts.toolSet, opts.contextCeiling = cmp.Or(s.arms.toolSet, opts.toolSet), s.arms.contextCeiling
@@ -718,6 +734,12 @@ func (s *appSession) run(ctx context.Context, pick tui.Pick, task string, emit t
 	if err != nil {
 		fail(err)
 		return
+	}
+	if len(images) > 0 {
+		if refused := imagesRefused(settingText(s.dir, settingspkg.Images, say), opened.selected, len(images)); refused != "" {
+			say(refused)
+			images = nil
+		}
 	}
 	built, plan, builtErr := buildRunToolsForRun(s.dir, opts.toolSet, opts.readBeforeEdit, shell)
 	sessions, sessionsErr := sessionstore.Open()
@@ -1097,6 +1119,11 @@ func (a *appWatcher) draw(agents []roster.SubAgent) {
 		return
 	}
 	now, rows := a.now(), childRows(a.spawner)
+	for index := range agents {
+		if agents[index].State == roster.InReview && (a.spawner == nil || a.spawner.Review == nil) {
+			agents[index].State = roster.Finished
+		}
+	}
 	a.shows.Lock()
 	asked := maps.Clone(a.asked)
 	a.shows.Unlock()

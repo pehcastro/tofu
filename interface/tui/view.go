@@ -8,6 +8,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"tofu/interface/tui/cover"
+	"tofu/interface/tui/edits"
 	"tofu/interface/tui/feed"
 	"tofu/interface/tui/frame"
 	"tofu/interface/tui/look"
@@ -138,15 +139,39 @@ func (a *App) body() string {
 		return a.view.View()
 	case screenAgents:
 		a.feed.SetDensity(a.text(isettings.Density))
+		a.feed.SetRetention(a.retention())
 		a.feed.SetAgents(a.busy, a.agents())
 		return a.feed.View()
 	case screenEdits:
+		a.preferEdits()
 		return a.edits.View()
 	case screenShells:
 		return a.shells.View()
 	case screenSettings:
 	}
 	panic("tui: unknown screen")
+}
+
+func (a *App) preferEdits() {
+	contextLines, _ := strconv.Atoi(a.text(isettings.DiffContext))
+	a.edits.SetPreferences(edits.Preferences{
+		ContextLines: contextLines,
+		PlainPaths:   a.text(isettings.Hyperlinks) == isettings.LinksOff,
+		NoAuthors:    !a.flag(isettings.GroupByAgent),
+	})
+}
+
+func (a *App) retention() feed.Retention {
+	kept := a.text(isettings.AgentFeeds)
+	switch kept {
+	case isettings.FeedsFull:
+		return feed.KeepAll
+	case isettings.FeedsSummary:
+		return feed.KeepRecent
+	case isettings.FeedsOff:
+		return feed.RailOnly
+	}
+	panic("tui: unknown agent feeds setting " + kept)
 }
 
 func (a *App) agents() []feed.Agent {

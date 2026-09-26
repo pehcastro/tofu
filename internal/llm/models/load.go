@@ -101,7 +101,7 @@ type Contract struct {
 
 func Contracts() []Contract {
 	return []Contract{
-		{Kind: modelsDir, Required: []string{"use"}, Optional: []string{"subscription", "reason", "window", "kind"}},
+		{Kind: modelsDir, Required: []string{"use"}, Optional: []string{"subscription", "reason", "window", "kind", "vision"}},
 		{Kind: subscriptionsDir, Required: []string{"provider", "wire", "windows"}, Optional: []string{"not_models"}},
 		{Kind: rolesDir, Required: []string{"model"}},
 	}
@@ -282,6 +282,7 @@ func buildModel(slug string, from *sheet, known map[Subscription]SubscriptionSpe
 		Subscription: Subscription(from.values["subscription"]),
 		Use:          Use(from.values["use"]),
 		Kind:         Kind(cmp.Or(from.values["kind"], string(KindLLM))),
+		Vision:       Vision(from.values["vision"]),
 		Reason:       from.values["reason"],
 		File:         from.file,
 	}
@@ -290,6 +291,9 @@ func buildModel(slug string, from *sheet, known map[Subscription]SubscriptionSpe
 	}
 	if !model.Kind.valid() {
 		return model, &Broken{File: from.file, Field: "kind", Why: fmt.Sprintf("kind is %s or %s, found %q", KindLLM, KindClassifier, model.Kind)}
+	}
+	if !model.Vision.valid() {
+		return model, &Broken{File: from.file, Field: "vision", Why: fmt.Sprintf("vision is %s or %s, or left out when nobody has checked, found %q", VisionSees, VisionBlind, model.Vision)}
 	}
 	if model.Subscription != "" {
 		spec, carried := known[model.Subscription]

@@ -3,6 +3,7 @@ package look
 import (
 	"fmt"
 	"image/color"
+	"maps"
 	"slices"
 	"strings"
 	"testing"
@@ -68,7 +69,7 @@ func TestApplyThemeMatchesLegacy(t *testing.T) {
 			fixture.WriteString("\x1b[" + sgr(mode, old) + "mX")
 		}
 	}
-	for _, theme := range append(Themes(), "unrecognized") {
+	for _, theme := range append(slices.Collect(maps.Keys(palettes)), ThemeTerminal, "unrecognized") {
 		if got, want := Apply(fixture.String(), theme), applyThemeLegacy(fixture.String(), theme); got != want {
 			t.Errorf("theme %q differs from old mapping", theme)
 		}
@@ -95,9 +96,6 @@ func TestDefaultTofuThemePaintsCanvasAndSyntax(t *testing.T) {
 func TestEveryNamedThemeChangesTheWholeCanvas(t *testing.T) {
 	view := "blank " + Painted("panel", Text, Panel) + "\x1b[m tail"
 	for theme, p := range palettes {
-		if !slices.Contains(Themes(), theme) {
-			t.Errorf("theme %q is not listed by Themes", theme)
-		}
 		for _, role := range sentinelRoles {
 			if p.roles[role] == "" {
 				t.Errorf("theme %q lacks role %q", theme, role)

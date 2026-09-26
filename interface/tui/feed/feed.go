@@ -87,6 +87,15 @@ const (
 	comfortableGap = 1
 	spaciousGap    = 2
 	allActivity    = "All activity"
+	recentEvents   = 200
+)
+
+type Retention int
+
+const (
+	KeepAll Retention = iota
+	KeepRecent
+	RailOnly
 )
 
 type identity struct {
@@ -114,6 +123,7 @@ type Model struct {
 	selected           string
 	expanded           map[string]bool
 	scroll, frame, gap int
+	retention          Retention
 	cards              *cardCache
 	rail, main         *look.PaneCache
 }
@@ -141,6 +151,20 @@ func (m *Model) SetDensity(density string) {
 	}
 }
 
+func (m *Model) SetRetention(retention Retention) { m.retention = retention }
+
+func (m Model) retained() []Event {
+	switch m.retention {
+	case KeepAll:
+		return m.events
+	case KeepRecent:
+		return m.events[max(0, len(m.events)-recentEvents):]
+	case RailOnly:
+		return nil
+	}
+	panic("feed: unknown retention " + strconv.Itoa(int(m.retention)))
+}
+
 func (m *Model) SetEvents(events []Event) {
 	if m.scroll == 0 {
 		m.events = events
@@ -155,6 +179,9 @@ func (m *Model) SetEvents(events []Event) {
 func (m Model) Selected() string { return m.selected }
 
 func (m Model) Split() int {
+	if m.retention == RailOnly {
+		return m.width
+	}
 	if m.width < narrowWidth {
 		return 0
 	}
@@ -174,6 +201,10 @@ func (m Model) Track() pointer.Track {
 }
 
 func (m Model) View() string {
+	if m.retention == RailOnly {
+		rail, _ := m.railView()
+		return m.rail.Surface(m.width, m.height, look.Panel, panePadding, rail)
+	}
 	width := m.feedWidth()
 	p := m.page()
 	heading, hint := allActivity, "newest"
@@ -195,10 +226,10 @@ func (m Model) View() string {
 
 func (m Model) visible() []Event {
 	if m.filter == (identity{}) {
-		return m.events
+		return m.retained()
 	}
 	var events []Event
-	for _, e := range m.events {
+	for _, e := range m.retained() {
 		if actor(e) == m.filter {
 			events = append(events, e)
 		}
@@ -332,7 +363,7 @@ func (m Model) railView() (string, []railTarget) {
 	target := func(who identity) railTarget { return railTarget{strings.Count(b.String(), "\n"), who} }
 	b.WriteString("\n" + look.PaneTitle("Sub-agents", m.railFocused) + "\n" + look.Muted(widget.Fit(fmt.Sprintf("%d agents · live activity", len(m.agents)), width)) + "\n\n" + look.SectionLabel("Overview") + "\n")
 	targets := []railTarget{target(identity{})}
-	b.WriteString(look.SidebarItem(width, m.filter == identity{}, allActivity, strconv.Itoa(len(m.events))) + "\n")
+	b.WriteString(look.SidebarItem(width, m.filter == identity{}, allActivity, strconv.Itoa(len(m.retained()))) + "\n")
 	entries := m.entries()
 	for g, name := range [...]string{"Active", "Waiting", "Dead"} {
 		members := slices.DeleteFunc(slices.Clone(entries), func(e entry) bool { return e.group != group(g) })

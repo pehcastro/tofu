@@ -7,8 +7,6 @@ import (
 	"tofu/internal/konst"
 )
 
-const diffContextLines = 3
-
 type Hunk struct {
 	BeforeStart int
 	AfterStart  int
@@ -90,8 +88,8 @@ func Unified(path, before, after string) string {
 	out := &strings.Builder{}
 	fmt.Fprintf(out, "--- %s\n+++ %s\n", path, path)
 	for _, hunk := range hunks {
-		head := max(hunk.BeforeStart-diffContextLines, 0)
-		tail := min(hunk.BeforeStart+len(hunk.Removed)+diffContextLines, len(old))
+		head := max(hunk.BeforeStart-konst.DiffContextLinesDefault, 0)
+		tail := min(hunk.BeforeStart+len(hunk.Removed)+konst.DiffContextLinesDefault, len(old))
 		lead, trail := hunk.BeforeStart-head, tail-(hunk.BeforeStart+len(hunk.Removed))
 		fmt.Fprintf(out, "@@ -%d,%d +%d,%d @@\n",
 			head+1, tail-head,

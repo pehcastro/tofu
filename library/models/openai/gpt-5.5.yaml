@@ -1,3 +1,4 @@
 subscription: codex-sub
 use: excluded
 reason: a previous generation the account still serves, superseded by gpt-5.6-sol
+vision: yes

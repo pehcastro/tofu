@@ -2,7 +2,6 @@ package look
 
 import (
 	"image/color"
-	"math"
 	"strconv"
 	"strings"
 
@@ -40,8 +39,6 @@ const (
 const (
 	sgrForeground = 38
 	sgrBackground = 48
-	meterMinWidth = 4
-	meterGlyph    = "━"
 	hexShape      = "#rrggbb"
 )
 
@@ -111,12 +108,6 @@ func ChromeRow(width int, bg Color, left, right string) string {
 func FixedBlock(width, height int, content string) string {
 	width, height = max(1, width), max(1, height)
 	return lipgloss.NewStyle().Width(width).MaxWidth(width).Height(height).MaxHeight(height).Render(content)
-}
-
-func Meter(width int, fraction float64, c Color) string {
-	width = max(meterMinWidth, width)
-	filled := int(math.Round(max(0, min(1, fraction)) * float64(width)))
-	return Style(c).Render(strings.Repeat(meterGlyph, filled)) + Style(FaintColor).Render(strings.Repeat(meterGlyph, width-filled))
 }
 
 func ComposerStyles() textarea.Styles {

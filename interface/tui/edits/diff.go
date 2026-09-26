@@ -195,7 +195,7 @@ func (m Model) Panel(width, height int, id string, scroll int) string {
 	if at < 0 {
 		return look.DialogPanel(min(missingWidth, width-dialogMargin), dialogTitle, "", look.Muted(missingBody), "esc close")
 	}
-	edit := m.edits[at]
+	edit := m.shown(m.edits[at])
 	inner := max(diffMinWidth, min(dialogMaxInner, width-dialogMargin))
 	content, rows := max(dialogMinBody, inner-dialogPadding), max(dialogMinRows, height-dialogChrome)
 	start := min(max(0, scroll), max(0, len(edit.lines)-rows))

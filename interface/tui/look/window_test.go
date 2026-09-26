@@ -5,8 +5,6 @@ import (
 	"testing"
 
 	"charm.land/bubbles/v2/viewport"
-	"charm.land/lipgloss/v2"
-	"github.com/charmbracelet/x/ansi"
 )
 
 func viewportWindowOracle(content string, width, height, offset int) (string, int, int) {
@@ -43,28 +41,6 @@ func TestFastWindowDoesNotMutateContent(t *testing.T) {
 	_, _, _ = Window(content, 8, 3, 0)
 	if got, _, _ := Window(content, 120, 3, 0); !strings.Contains(got, "long long") {
 		t.Fatal("windowing mutated source content")
-	}
-}
-
-func TestFastWindowTrackedMatchesViewportComposition(t *testing.T) {
-	for _, content := range []string{"", strings.Repeat("abcdef\n", 30), strings.Repeat("\x1b[32mgreen\x1b[m\n", 30), strings.Repeat("wide ", 50) + "\nend"} {
-		for _, width := range []int{8, 20, 120} {
-			for _, height := range []int{2, 8, 30} {
-				for _, offset := range []int{0, 3, 99} {
-					want, total, top := viewportWindowOracle(content, width, height, offset)
-					want = lipgloss.JoinHorizontal(lipgloss.Top, want, ScrollTrack(height, total, height, top))
-					got := WindowTracked(content, width, height, offset)
-					if got != want {
-						t.Fatalf("tracked viewport changed for width=%d height=%d offset=%d:\n got %q\nwant %q", width, height, offset, got, want)
-					}
-					for row, line := range strings.Split(got, "\n") {
-						if cells := ansi.StringWidth(line); cells != width {
-							t.Fatalf("tracked row %d is %d cells, want %d, for content=%q height=%d offset=%d", row, cells, width, content, height, offset)
-						}
-					}
-				}
-			}
-		}
 	}
 }
 

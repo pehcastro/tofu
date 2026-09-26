@@ -22,13 +22,18 @@ import (
 	"tofu/internal/llm"
 	"tofu/internal/llm/models"
 	sessionstore "tofu/internal/session"
+	"tofu/internal/sys"
 	"tofu/internal/turn"
 )
 
-const driveUsage = `usage: tofu drive [SCRIPT] [--dir PATH] [--home PATH] [--cassette PATH] [--width N] [--height N] [--timeout 60s] [--plain] [--fresh | --continue] [ARM]
+const driveUsage = `usage: tofu drive [SCRIPT] [--dir PATH] [--home PATH] [--cassette PATH] [--clipboard PATH] [--width N] [--height N] [--timeout 60s] [--plain] [--fresh | --continue] [ARM]
 
 drives the app the way a person does, with no terminal and no model call.
 SCRIPT is a file of steps, or - for standard input.
+
+The driven app never reads your clipboard. --clipboard PATH makes it hold that
+file, as a file copied in the explorer does, so ctrl+v attaches it; without it
+the clipboard is empty.
 
 --fresh starts the app as a new session does, on the cover. --continue starts
 it on the session you last worked in, as tofu --continue does. With neither the
@@ -255,19 +260,23 @@ func (c *cassette) environment() string {
 }
 
 func driveWire(deck *cassette) func(runOpts) (appWire, error) {
-	return func(runOpts) (appWire, error) {
+	return func(opts runOpts) (appWire, error) {
 		if deck == nil {
 			return appWire{}, errors.New("tofu drive opens no live wire: name a recorded one with --cassette or " + cassetteVariable)
+		}
+		standingIn := models.Model{ID: cassetteBuild, Windows: []string{cassetteBuild}}
+		if chosen, err := chooseModel(opts); err == nil {
+			standingIn.Subscription, standingIn.Vision = chosen.Subscription, chosen.Vision
 		}
 		return appWire{
 			held:     &accounts{fixed: deck, now: time.Now},
 			spend:    turn.SpendSubscription,
-			selected: models.Model{ID: cassetteBuild, Windows: []string{cassetteBuild}},
+			selected: standingIn,
 		}, nil
 	}
 }
 
-func drivenApp(dir string, deck *cassette, arms runOpts, launch appLaunch) *tui.App {
+func drivenApp(dir string, deck *cassette, plan drivePlan, launch appLaunch) *tui.App {
 	shown := cassetteBuild
 	if deck != nil {
 		shown = deck.name
@@ -276,8 +285,14 @@ func drivenApp(dir string, deck *cassette, arms runOpts, launch appLaunch) *tui.
 		open:     driveWire(deck),
 		wires:    func() []tui.Wire { return []tui.Wire{{Name: wireSubscription, Model: shown, Provider: cassetteBuild}} },
 		blockers: func() []tui.Requirement { return nil },
+		clipboard: func() (sys.Clipboard, error) {
+			if plan.clipboard == "" {
+				return sys.Clipboard{Kind: sys.ClipboardEmpty}, nil
+			}
+			return sys.Clipboard{Kind: sys.ClipboardFiles, Files: []string{plan.clipboard}}, nil
+		},
 	}
-	return tui.New(appOptions(dir, arms, recorded, launch))
+	return tui.New(appOptions(dir, plan.arms, recorded, launch))
 }
 
 type driveStep struct {
@@ -312,17 +327,18 @@ func readScript(path string, in io.Reader) ([]driveStep, error) {
 }
 
 type drivePlan struct {
-	script   string
-	dir      string
-	home     string
-	cassette string
-	width    int
-	height   int
-	timeout  time.Duration
-	plain    bool
-	fresh    bool
-	resume   bool
-	arms     runOpts
+	script    string
+	dir       string
+	home      string
+	cassette  string
+	clipboard string
+	width     int
+	height    int
+	timeout   time.Duration
+	plain     bool
+	fresh     bool
+	resume    bool
+	arms      runOpts
 }
 
 func armIsKnown(flag, taken string, arms []string) error {
@@ -383,6 +399,8 @@ func driveArgs(args []string, errOut io.Writer) (drivePlan, bool) {
 			plan.home = taken
 		case "--cassette":
 			plan.cassette = taken
+		case "--clipboard":
+			plan.clipboard = taken
 		case "--width":
 			plan.width, err = strconv.Atoi(taken)
 		case "--height":
@@ -495,9 +513,9 @@ func driveVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 	if store, err := sessionstore.Open(); err == nil && plan.resume {
 		resumed = continueCarry(store)
 	}
-	launch := launchOf(resumed, plan.fresh)
-	defer leaveShells(dir, launch.registry)
-	driver := filmstrip.Drive(drivenApp(dir, deck, plan.arms, launch), plan.width, plan.height)
+	launch := launchOf(dir, resumed, plan.fresh)
+	defer leaveShells(launch.registry)
+	driver := filmstrip.Drive(drivenApp(dir, deck, plan, launch), plan.width, plan.height)
 	defer driver.Close()
 	for _, step := range steps {
 		driver.Settle()

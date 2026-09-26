@@ -7,13 +7,19 @@ import (
 	"charm.land/lipgloss/v2"
 )
 
+func posed(pose Pose) Model {
+	cat := New(WithPlain(true))
+	cat.SetPose(pose)
+	return cat
+}
+
 func TestApprovedPoseDimensionsStayStable(t *testing.T) {
 	tests := []struct {
 		pose          Pose
 		width, height int
 	}{{Sitting, 26, 12}, {Lying, 36, 12}}
 	for _, test := range tests {
-		cat := New(WithPose(test.pose), WithPlain(true))
+		cat := posed(test.pose)
 		for frame := range 12 {
 			width, height := lipgloss.Size(cat.ViewFrame(frame))
 			if width != test.width || height != test.height {
@@ -25,7 +31,7 @@ func TestApprovedPoseDimensionsStayStable(t *testing.T) {
 
 func TestBothPosesAnimate(t *testing.T) {
 	for _, pose := range []Pose{Sitting, Lying} {
-		cat := New(WithPose(pose), WithPlain(true))
+		cat := posed(pose)
 		first := cat.ViewFrame(0)
 		changed := false
 		for frame := 1; frame < 8; frame++ {
@@ -38,7 +44,7 @@ func TestBothPosesAnimate(t *testing.T) {
 }
 
 func TestSittingCycleNeverUsesTheMalformedLeftTail(t *testing.T) {
-	cat := New(WithPose(Sitting), WithPlain(true))
+	cat := posed(Sitting)
 	if cat.ViewFrame(5) != cat.ViewFrame(0) {
 		t.Fatal("sitting cycle does not return to the approved base frame")
 	}

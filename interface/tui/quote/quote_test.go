@@ -2,8 +2,6 @@ package quote
 
 import (
 	"encoding/json"
-	"errors"
-	"strings"
 	"testing"
 
 	"tofu/interface/tui/trace"
@@ -52,46 +50,6 @@ func TestTheReferenceCarriesTheShortenedIDTheScreenAlreadyUses(t *testing.T) {
 	}
 }
 
-func hashOf(t *testing.T, ref string) string {
-	t.Helper()
-	inside, closed := strings.CutSuffix(strings.TrimPrefix(ref, openMark), closeMark)
-	if !closed {
-		t.Fatalf("%q is not a reference", ref)
-	}
-	return inside
-}
-
-func TestAReferenceResolvesBackToExactlyOneTurn(t *testing.T) {
-	turns := []Turn{Collect(talked())[0]}
-	one, err := Resolve(turns, hashOf(t, Ref(turns[0].Event)))
-	if err != nil {
-		t.Fatalf("the reference this build wrote does not resolve: %v", err)
-	}
-	if one.Event != turns[0].Event {
-		t.Fatalf("the reference resolved to %s, want %s", one.Event, turns[0].Event)
-	}
-}
-
-func TestAShortenedIDSharedByTwoTurnsResolvesToNeither(t *testing.T) {
-	turns := Collect(talked())
-	if trace.Short(turns[0].Event) != trace.Short(turns[1].Event) {
-		t.Fatalf("this fixture no longer holds two turns that shorten alike: %s and %s", turns[0].Event, turns[1].Event)
-	}
-	one, err := Resolve(turns, hashOf(t, Ref(turns[0].Event)))
-	if !errors.Is(err, isession.ErrEventHashAmbiguous) {
-		t.Fatalf("an id matching two turns resolved to %#v with error %v", one, err)
-	}
-	if one.Event != "" {
-		t.Fatalf("an ambiguous reference still handed back %#v", one)
-	}
-}
-
-func TestAnIDNothingCarriesResolvesToNothing(t *testing.T) {
-	if _, err := Resolve(Collect(talked()), "#000000"); !errors.Is(err, isession.ErrEventHashNotFound) {
-		t.Fatalf("an unknown id resolved with %v", err)
-	}
-}
-
 func TestATurnRecordedWithNoIDIsGivenOneDerivedFromTheSessionAndItsPlace(t *testing.T) {
 	talk := isession.Conversation{
 		Session:   "turn-18d6ea32da3230c0",
@@ -107,9 +65,6 @@ func TestATurnRecordedWithNoIDIsGivenOneDerivedFromTheSessionAndItsPlace(t *test
 	}
 	if want := isession.EventIDFor(talk.Session, stepScope+"1"); turns[0].Event != want {
 		t.Fatalf("the newest turn was given %s, want the derived %s", turns[0].Event, want)
-	}
-	if _, err := Resolve(turns, hashOf(t, Ref(turns[0].Event))); err != nil {
-		t.Fatalf("a derived id does not resolve: %v", err)
 	}
 }
 

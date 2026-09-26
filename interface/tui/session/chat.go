@@ -214,10 +214,7 @@ func (m *Model) foldSince(end int) time.Duration {
 }
 
 func (m *Model) progressLine(entry Entry) string {
-	line := progress.Line{Label: entry.label(), Live: entry.running()}
-	if line.Live {
-		line.Since, line.Tick = m.pulse(), TickInterval
-	}
+	line := progress.Line{Label: entry.label(), Frame: m.frame, Live: entry.running()}
 	id := trace.Short(entry.ID)
 	if id == "" {
 		return continuation + line.View(m.textWidth())

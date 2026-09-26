@@ -10,7 +10,7 @@ import (
 
 type tree struct{}
 
-func startTree(cmd *exec.Cmd) (tree, error) {
+func startTree(cmd *exec.Cmd, _ Lifetime) (tree, error) {
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	return tree{}, cmd.Start()
 }

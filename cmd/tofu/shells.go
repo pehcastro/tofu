@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 
+	settingspkg "tofu/internal/settings"
 	"tofu/internal/shell"
 	"tofu/internal/sys"
 )
@@ -38,6 +39,14 @@ func openShellRegistry() (*shell.Registry, error) {
 		return nil, err
 	}
 	return shell.OpenAt(sys.Join(state, "shells")), nil
+}
+
+func launchShellRegistry(dir string) (*shell.Registry, error) {
+	registry, err := openShellRegistry()
+	if err == nil && settingInt(dir, settingspkg.PersistentRegistry, nil) != 0 {
+		registry.Lifetime = shell.OutlivesTofu
+	}
+	return registry, err
 }
 
 func shellsList(registry *shell.Registry, out, errOut io.Writer) int {

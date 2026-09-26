@@ -286,6 +286,7 @@ type diffDialog struct {
 }
 
 func (d *diffDialog) over(a *App, base string) string {
+	a.preferEdits()
 	panel := a.edits.Panel(a.width, a.height, "#"+d.id, d.scroll)
 	return look.Over(look.Dim(base), panel, max(1, (a.width-lipgloss.Width(panel))/2), max(1, (a.height-lipgloss.Height(panel))/2))
 }

@@ -1,3 +1,4 @@
 subscription: claude-sub
 use: excluded
 reason: a previous generation the account still serves, superseded by claude-opus-5 and claude-sonnet-5
+vision: yes

@@ -33,7 +33,7 @@ func jobName(pid int) (*uint16, error) {
 	return windows.UTF16PtrFromString("tofu-shell-" + strconv.Itoa(pid))
 }
 
-func adoptIntoJob(pid int) (windows.Handle, error) {
+func adoptIntoJob(pid int, lifetime Lifetime) (windows.Handle, error) {
 	name, err := jobName(pid)
 	if err != nil {
 		return 0, err
@@ -43,14 +43,19 @@ func adoptIntoJob(pid int) (windows.Handle, error) {
 		return 0, err
 	}
 	var limits windows.JOBOBJECT_EXTENDED_LIMIT_INFORMATION
-	limits.BasicLimitInformation.LimitFlags = windows.JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
+	if lifetime == DiesWithTofu {
+		limits.BasicLimitInformation.LimitFlags = windows.JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
+	}
 	if _, err := windows.SetInformationJobObject(job, windows.JobObjectExtendedLimitInformation, uintptr(unsafe.Pointer(&limits)), uint32(unsafe.Sizeof(limits))); err != nil {
 		_ = windows.CloseHandle(job)
 		return 0, err
 	}
-	process, err := windows.OpenProcess(windows.PROCESS_SET_QUOTA|windows.PROCESS_TERMINATE, false, uint32(pid))
+	process, err := windows.OpenProcess(windows.PROCESS_SET_QUOTA|windows.PROCESS_TERMINATE|windows.PROCESS_DUP_HANDLE, false, uint32(pid))
 	if err == nil {
 		err = windows.AssignProcessToJobObject(job, process)
+		if err == nil && lifetime == OutlivesTofu {
+			err = handJobToShell(job, process)
+		}
 		_ = windows.CloseHandle(process)
 	}
 	if err != nil {
@@ -58,6 +63,11 @@ func adoptIntoJob(pid int) (windows.Handle, error) {
 		return 0, err
 	}
 	return job, nil
+}
+
+func handJobToShell(job, shell windows.Handle) error {
+	var held windows.Handle
+	return windows.DuplicateHandle(windows.CurrentProcess(), job, shell, &held, 0, false, windows.DUPLICATE_SAME_ACCESS)
 }
 
 func spawnSuspended(cmd *exec.Cmd) error {
@@ -88,11 +98,11 @@ func resumeSuspended(pid int) error {
 	return errors.New("shell: the suspended shell had no thread to resume")
 }
 
-func startTree(cmd *exec.Cmd) (tree, error) {
+func startTree(cmd *exec.Cmd, lifetime Lifetime) (tree, error) {
 	if err := spawnSuspended(cmd); err != nil {
 		return tree{}, err
 	}
-	job, err := adoptIntoJob(cmd.Process.Pid)
+	job, err := adoptIntoJob(cmd.Process.Pid, lifetime)
 	if err != nil {
 		_ = cmd.Process.Kill()
 		return tree{}, err

@@ -8,6 +8,7 @@ import (
 
 	"tofu/interface/tui/look"
 	"tofu/interface/tui/pointer"
+	"tofu/internal/widget"
 )
 
 const (
@@ -26,7 +27,9 @@ const (
 	pageMinimum    = 4
 	processMaximum = 70
 	processHeight  = 6
+	processRows    = 5
 	processPadding = 1
+	factLabel      = 10
 	title          = "Shells"
 	emptyBody      = "No background processes in this session yet."
 	outputHint     = "  ·  wheel / PgUp / PgDn"
@@ -188,11 +191,11 @@ func (m Model) Split() int {
 
 func (m Model) Track() pointer.Track {
 	height, total := m.outputHeight(), m.logLines()
-	return pointer.Track{Top: outputTop, Height: height, Total: total, Visible: height, FromTop: max(0, total-height-m.scroll)}
+	return pointer.Track{Top: outputTop + m.extraFactRows(), Height: height, Total: total, Visible: height, FromTop: max(0, total-height-m.scroll)}
 }
 
 func (m Model) outputHeight() int {
-	return max(outputMinimum, m.height-outputChrome)
+	return max(outputMinimum, m.height-outputChrome-m.extraFactRows())
 }
 
 func (m Model) logLines() int {
@@ -245,14 +248,10 @@ func (m Model) detail(c *cache, width int) string {
 	if entry.Owner != "" {
 		owner = look.AgentRef(entry.Owner)
 	}
-	facts := look.SectionLabel("Process") +
-		"\n" + look.Muted("PID       "+strconv.Itoa(entry.PID)) +
-		"\n" + look.Muted("Runtime   "+m.runtime(entry)) +
-		"\n" + look.Muted("CWD       "+entry.Dir) +
-		"\n" + look.Muted("Command   "+entry.Command)
+	facts := m.facts(entry, width)
 	output, _, _ := look.Window(c.styledLog(entry.Log), width, m.outputHeight(), m.scroll)
 	view := look.Sides(look.Title(entry.Name), badge(entry), width) + "\n" + look.Muted("Owned by ") + owner + "\n\n" +
-		c.process.Surface(min(width-2, processMaximum), processHeight, look.PanelLight, processPadding, facts) + "\n\n" +
+		c.process.Surface(processWidth(width), processHeight+len(facts)-processRows, look.PanelLight, processPadding, strings.Join(facts, "\n")) + "\n\n" +
 		look.SectionLabel("Output") + look.Faint(outputHint) + "\n" + output + "\n"
 	if entry.State != Running {
 		return view
@@ -262,6 +261,29 @@ func (m Model) detail(c *cache, width int) string {
 		hint = killNowHint
 	}
 	return view + "\n" + look.Style(look.Red).Render("k") + look.Muted(hint)
+}
+
+func processWidth(detail int) int { return min(detail-2, processMaximum) }
+
+func (m Model) facts(entry Entry, detail int) []string {
+	room := max(1, processWidth(detail)-2*processPadding-factLabel)
+	lines := []string{look.SectionLabel("Process")}
+	for _, fact := range [][2]string{{"PID", strconv.Itoa(entry.PID)}, {"Runtime", m.runtime(entry)}, {"CWD", entry.Dir}, {"Command", entry.Command}} {
+		label := widget.Pad(fact[0], factLabel)
+		for _, part := range widget.Wrap(fact[1], room) {
+			lines = append(lines, look.Muted(label+part))
+			label = strings.Repeat(" ", factLabel)
+		}
+	}
+	return lines
+}
+
+func (m Model) extraFactRows() int {
+	entry, picked := m.Picked()
+	if !picked {
+		return 0
+	}
+	return len(m.facts(entry, m.width-m.Split()-2*panePadding-trackGap)) - processRows
 }
 
 func badge(entry Entry) string {

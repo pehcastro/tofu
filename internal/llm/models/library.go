@@ -80,6 +80,22 @@ func (u Use) valid() bool {
 	return false
 }
 
+type Vision string
+
+const (
+	VisionUnstated Vision = ""
+	VisionSees     Vision = "yes"
+	VisionBlind    Vision = "no"
+)
+
+func (v Vision) valid() bool {
+	switch v {
+	case VisionUnstated, VisionSees, VisionBlind:
+		return true
+	}
+	return false
+}
+
 type SubscriptionSpec struct {
 	ID        Subscription
 	Provider  Provider
@@ -96,6 +112,7 @@ type Model struct {
 	Windows      []string
 	Use          Use
 	Kind         Kind
+	Vision       Vision
 	Reason       string
 	File         string
 }

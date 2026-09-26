@@ -13,7 +13,7 @@ import (
 	"github.com/charmbracelet/colorprofile"
 	"github.com/charmbracelet/x/ansi"
 
-	"tofu/interface/tui/theme"
+	"tofu/interface/tui/look"
 	"tofu/internal/golden"
 	"tofu/internal/widget"
 )
@@ -117,8 +117,12 @@ func afterSGR(background, sequence string) string {
 	return background
 }
 
+func composerTint() lipgloss.Style {
+	return lipgloss.NewStyle().Background(lipgloss.Color(string(look.PanelLight)))
+}
+
 func tintEscape() string {
-	escape, _, _ := strings.Cut(lipgloss.NewStyle().Background(theme.ComposerColor()).Render("X"), "X")
+	escape, _, _ := strings.Cut(composerTint().Render("X"), "X")
 	return escape
 }
 
@@ -168,7 +172,7 @@ func TestEveryCellOfEveryComposerRowCarriesTheTint(t *testing.T) {
 func TestComposerTintReadsAtSixteenColours(t *testing.T) {
 	frame := downsampled(colorprofile.ANSI, composerFrame(80, true, ""))
 	golden.Assert(t, "composer-tint-ansi16-80x24.golden", frame)
-	painted := downsampled(colorprofile.ANSI, lipgloss.NewStyle().Background(theme.ComposerColor()).Render("X"))
+	painted := downsampled(colorprofile.ANSI, composerTint().Render("X"))
 	escape, _, _ := strings.Cut(painted, "X")
 	if !bytes.Contains([]byte(frame), []byte(escape)) {
 		t.Fatalf("the composer tint does not survive a sixteen colour terminal, want %q in:\n%s", escape, frame)

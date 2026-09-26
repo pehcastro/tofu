@@ -69,17 +69,3 @@ func gistOf(one isession.Utterance) string {
 	}
 	return "ran " + strings.Join(names, ", ")
 }
-
-func Resolve(turns []Turn, hash string) (Turn, error) {
-	at := make(map[string]Turn, len(turns))
-	events := make([]isession.Event, 0, len(turns))
-	for _, one := range turns {
-		at[one.Event] = one
-		events = append(events, isession.Event{ID: one.Event})
-	}
-	found, err := isession.FindByHash(events, hash)
-	if err != nil {
-		return Turn{}, err
-	}
-	return at[found.ID], nil
-}

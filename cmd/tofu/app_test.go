@@ -891,8 +891,8 @@ func TestASpawnedChildShowsInTheSubAgentViewWithTheGlobsItHolds(t *testing.T) {
 		t.Fatalf("the first sub-agent event carries %+v, want one running child holding note.txt", started)
 	}
 	ended := subAgentEvents[len(subAgentEvents)-1].Children[0]
-	if ended.State != roster.InReview || ended.Steps != 2 || ended.Report == "" {
-		t.Fatalf("the child ended as %+v, want it in review with the steps and the report the roster carries", ended)
+	if ended.State != roster.Finished || ended.Steps != 2 || ended.Report == "" {
+		t.Fatalf("the child ended as %+v, want it finished, since no done review runs in the app, with the steps and the report the roster carries", ended)
 	}
 	screen := pickedFirstChild(t, driver)
 	for _, want := range []string{"1 agents", "[&c1]", "write note.txt", "owns", "note.txt"} {
@@ -1132,7 +1132,7 @@ func TestARunningChildsClockAdvancesWhileItIsHeldInsideOneCall(t *testing.T) {
 func TestAChildThatHasHandedBackKeepsTheClockItStoppedAt(t *testing.T) {
 	driver := childHeldInsideOneCall(t)
 
-	drawn := driver.childClocks(roster.InReview)
+	drawn := driver.childClocks(roster.Finished)
 	if len(drawn) == 0 {
 		t.Fatal("no frame carried a child that had handed back")
 	}

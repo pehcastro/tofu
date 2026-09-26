@@ -69,7 +69,6 @@ func WithFPS(fps int) Option {
 	}
 }
 
-func WithPose(pose Pose) Option   { return func(m *Model) { m.pose = pose } }
 func WithPlain(plain bool) Option { return func(m *Model) { m.plain = plain } }
 
 func New(options ...Option) Model {

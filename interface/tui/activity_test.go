@@ -9,8 +9,8 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
+	"tofu/interface/tui/look"
 	"tofu/interface/tui/subagent"
-	"tofu/interface/tui/theme"
 	"tofu/internal/golden"
 	roster "tofu/internal/subagent"
 )
@@ -36,7 +36,7 @@ const (
 )
 
 func composerTint() string {
-	return escapeOf(lipgloss.NewStyle().Background(theme.ComposerColor()))
+	return escapeOf(lipgloss.NewStyle().Background(lipgloss.Color(string(look.PanelLight))))
 }
 
 func composerTopRow(t *testing.T, content string) int {

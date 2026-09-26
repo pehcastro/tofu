@@ -46,6 +46,12 @@ type sideKey struct {
 type listKey struct {
 	width, count              int
 	author, first, last, root string
+	plain                     bool
+}
+
+type trimKey struct {
+	id           string
+	contextLines int
 }
 
 type caches struct {
@@ -55,12 +61,21 @@ type caches struct {
 	list     listKey
 	listView string
 	main     look.PaneCache
+	trim     trimKey
+	trimmed  Edit
+}
+
+type Preferences struct {
+	ContextLines int
+	PlainPaths   bool
+	NoAuthors    bool
 }
 
 type Model struct {
 	Children  []subagent.Child
 	Busy      bool
 	Root      string
+	prefs     Preferences
 	edits     []Edit
 	author    string
 	selected  string
@@ -78,6 +93,25 @@ func (m *Model) SetSize(width, height int) {
 	if m.cache == nil {
 		m.cache = &caches{}
 	}
+}
+
+func (m *Model) SetPreferences(prefs Preferences) {
+	m.prefs = prefs
+	if prefs.NoAuthors {
+		m.author = ""
+	}
+}
+
+func (m Model) shown(edit Edit) Edit {
+	key := trimKey{id: edit.ID, contextLines: m.prefs.ContextLines}
+	if m.cache != nil && m.cache.trim == key {
+		return m.cache.trimmed
+	}
+	trimmed := edit.within(m.prefs.ContextLines)
+	if m.cache != nil {
+		m.cache.trim, m.cache.trimmed = key, trimmed
+	}
+	return trimmed
 }
 
 func (m *Model) Add(edit Edit) {
@@ -211,6 +245,9 @@ func (m *Model) scrollBy(rows int) {
 
 func (m Model) authors() []string {
 	names := []string{}
+	if m.prefs.NoAuthors {
+		return names
+	}
 	edited := func(name string) bool {
 		return slices.ContainsFunc(m.edits, func(edit Edit) bool { return edit.Agent == name })
 	}
@@ -279,7 +316,7 @@ func (m Model) pane() window {
 	edit, _, ok := chosen(visible, m.selected)
 	switch {
 	case m.reading && ok:
-		_, shown := m.diffWindow(edit, max(diffMinWidth, m.mainWidth()), max(diffMinHeight, m.height-1))
+		_, shown := m.diffWindow(m.shown(edit), max(diffMinWidth, m.mainWidth()), max(diffMinHeight, m.height-1))
 		return shown
 	case !m.reading:
 		return scrolled(strings.Count(m.indexList(m.mainWidth(), visible), "\n")+1, max(1, m.height-1-indexChrome), m.scroll)
@@ -314,7 +351,7 @@ func (m Model) View() string {
 	case !m.reading:
 		main = m.indexView(width, m.height-1, visible)
 	case ok:
-		main = m.completeFileDiff(width, m.height-1, edit, index, len(visible))
+		main = m.completeFileDiff(width, m.height-1, m.shown(edit), index, len(visible))
 	}
 	if side == 0 {
 		return look.FixedBlock(m.width, m.height, main)
@@ -350,12 +387,16 @@ func (m Model) sidebar(width int, visible []Edit, selected string) string {
 	content.WriteString(look.PaneTitle(title, !m.focusMain) + "\n")
 	content.WriteString(look.Muted(fmt.Sprintf("%d files  ·  %d changes", len(paths), len(m.edits))) + "\n")
 	content.WriteString(look.Muted(fmt.Sprintf("%d mod  ·  %d new  ·  %d del", kinds[OpModified], kinds[OpAdded], kinds[OpDeleted])) + "\n")
-	content.WriteString(deltas(added[""], removed[""]) + look.Muted(" lines") + "\n\n" + look.SectionLabel("Author") + "\n")
-	content.WriteString(look.SidebarItem(inner, m.author == "", allChanges, strconv.Itoa(len(m.edits))) + "\n")
-	for _, name := range authors {
-		content.WriteString(look.SidebarDeltaItem(inner, m.author == name, label(name), added[name], removed[name]) + "\n")
+	content.WriteString(deltas(added[""], removed[""]) + look.Muted(" lines") + "\n\n")
+	if !m.prefs.NoAuthors {
+		content.WriteString(look.SectionLabel("Author") + "\n")
+		content.WriteString(look.SidebarItem(inner, m.author == "", allChanges, strconv.Itoa(len(m.edits))) + "\n")
+		for _, name := range authors {
+			content.WriteString(look.SidebarDeltaItem(inner, m.author == name, label(name), added[name], removed[name]) + "\n")
+		}
+		content.WriteString("\n")
 	}
-	content.WriteString("\n" + look.SectionLabel("Files") + "\n")
+	content.WriteString(look.SectionLabel("Files") + "\n")
 	for at := len(visible) - 1; at >= max(0, len(visible)-m.height); at-- {
 		edit := visible[at]
 		_, sigil, colour := edit.op.mark()
@@ -384,7 +425,7 @@ func (m Model) indexList(width int, visible []Edit) string {
 	if len(visible) == 0 {
 		return look.Muted(noEdits)
 	}
-	key := listKey{width: width, count: len(visible), author: m.author, first: visible[0].ID, last: visible[len(visible)-1].ID, root: m.Root}
+	key := listKey{width: width, count: len(visible), author: m.author, first: visible[0].ID, last: visible[len(visible)-1].ID, root: m.Root, plain: m.prefs.PlainPaths}
 	if m.cache != nil && m.cache.listView != "" && m.cache.list == key {
 		return m.cache.listView
 	}
@@ -392,7 +433,7 @@ func (m Model) indexList(width int, visible []Edit) string {
 	for _, edit := range visible {
 		word, _, colour := edit.op.mark()
 		content := look.Sides(look.Style(colour).Bold(true).Render(strings.ToUpper(word))+"  "+look.Title(filepath.Base(edit.Path)), look.TypedID(editKind, trace.Short(edit.ID)), width-cardInset)
-		content += "\n" + look.Faint(hyperlink(m.Root, edit.Path)) + "\n" + edit.meta()
+		content += "\n" + look.Faint(hyperlink(m.Root, edit.Path, m.prefs.PlainPaths)) + "\n" + edit.meta()
 		cards = append(cards, look.TintedSurface(width-1, look.Panel, content))
 	}
 	list := strings.Join(cards, "\n\n")

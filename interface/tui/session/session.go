@@ -133,9 +133,9 @@ type Model struct {
 	closed             bool
 	queue              []pending
 	pick               int
-	sent               []string
+	sent               []sentEntry
 	histAt             int
-	draft              string
+	draft              sentEntry
 	chips              []Chip
 	pending            []pendingPaste
 	frame              int
@@ -165,8 +165,6 @@ func (m *Model) Focus() tea.Cmd { return m.composer.Focus() }
 func (m *Model) Blur() { m.composer.Blur() }
 
 func (m *Model) SetFrame(frame int) { m.frame = frame }
-
-func (m *Model) pulse() time.Duration { return time.Duration(m.frame) * TickInterval }
 
 func (m *Model) Insert(text string) { m.composer.InsertString(text) }
 
@@ -321,7 +319,7 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 	m.composer = composer
 	if m.composer.Value() != before {
 		m.closed, m.picked = false, 0
-		m.histAt, m.draft = len(m.sent), ""
+		m.histAt, m.draft = len(m.sent), sentEntry{}
 	}
 	return cmd
 }

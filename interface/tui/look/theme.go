@@ -96,10 +96,6 @@ func compileDim() *strings.Replacer {
 	return strings.NewReplacer(pairs...)
 }
 
-func Themes() []Theme {
-	return []Theme{ThemeTofu, ThemeTofuLight, ThemeTofuDusk, ThemeSolarizedLight, ThemeDracula, ThemeNord, ThemeGruvbox, ThemeTerminal}
-}
-
 func Apply(view string, theme Theme) string {
 	if theme == ThemeTerminal {
 		return ansi.Strip(view)

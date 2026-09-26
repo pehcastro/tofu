@@ -3,11 +3,9 @@ package pointer
 import (
 	"strings"
 
-	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
 	"tofu/interface/tui/look"
-	"tofu/internal/sys"
 )
 
 type Selection struct {
@@ -75,16 +73,5 @@ func eachSpan(lines []string, s Selection, pane Pane, visit func(y, left, right 
 		if left = max(0, left); left < right {
 			visit(y, left, right)
 		}
-	}
-}
-
-type Copied struct {
-	Text string
-	Err  error
-}
-
-func Copy(text string) tea.Cmd {
-	return func() tea.Msg {
-		return Copied{Text: text, Err: sys.WriteClipboardText(text)}
 	}
 }

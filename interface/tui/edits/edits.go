@@ -97,6 +97,41 @@ func Changed(agent, path, diff, created, id string, when time.Time) (Edit, bool)
 	return edit, true
 }
 
+func (e Edit) within(contextLines int) Edit {
+	if contextLines <= 0 {
+		return e
+	}
+	near, far := make([]int, len(e.lines)), len(e.lines)+contextLines
+	walk := func(at, distance int) int {
+		switch line := e.lines[at]; {
+		case strings.HasPrefix(line, addedMark), strings.HasPrefix(line, removedMark):
+			return 0
+		case strings.HasPrefix(line, contextMark):
+			return distance + 1
+		case strings.HasPrefix(line, hunkMark):
+			return far
+		}
+		return distance
+	}
+	for at, distance := 0, far; at < len(e.lines); at++ {
+		distance = walk(at, distance)
+		near[at] = distance
+	}
+	for at, distance := len(e.lines)-1, far; at >= 0; at-- {
+		distance = walk(at, distance)
+		near[at] = min(near[at], distance)
+	}
+	trimmed := e
+	trimmed.lines, trimmed.numbers = nil, nil
+	for at, line := range e.lines {
+		if strings.HasPrefix(line, contextMark) && near[at] > contextLines {
+			continue
+		}
+		trimmed.lines, trimmed.numbers = append(trimmed.lines, line), append(trimmed.numbers, e.numbers[at])
+	}
+	return trimmed
+}
+
 func hunkStart(field string) int {
 	start, _, _ := strings.Cut(strings.TrimLeft(field, "+-"), ",")
 	number, _ := strconv.Atoi(start)
@@ -122,7 +157,10 @@ func deltas(added, removed int) string {
 	return look.Accent(look.SignedLines(int64(added))) + "  " + look.Style(look.Red).Render(look.SignedLines(-int64(removed)))
 }
 
-func hyperlink(root, path string) string {
+func hyperlink(root, path string, plain bool) string {
+	if plain {
+		return path
+	}
 	target := path
 	if root != "" && !filepath.IsAbs(path) {
 		target = filepath.ToSlash(filepath.Join(root, path))

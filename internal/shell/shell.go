@@ -49,10 +49,18 @@ type live struct {
 	killed   bool
 }
 
+type Lifetime int
+
+const (
+	DiesWithTofu Lifetime = iota
+	OutlivesTofu
+)
+
 type Registry struct {
-	dir     string
-	mu      sync.Mutex
-	running map[string]*live
+	Lifetime Lifetime
+	dir      string
+	mu       sync.Mutex
+	running  map[string]*live
 }
 
 func OpenAt(dir string) *Registry {
@@ -76,7 +84,7 @@ var ErrRunning = errors.New("shell: already running under that name")
 type Tree struct{ inner tree }
 
 func StartTracked(cmd *exec.Cmd) (Tree, error) {
-	inner, err := startTree(cmd)
+	inner, err := startTree(cmd, DiesWithTofu)
 	return Tree{inner: inner}, err
 }
 
@@ -107,7 +115,7 @@ func (r *Registry) Start(root, name, command, owner string) (Shell, error) {
 	cmd := exec.Command(shell, "-c", command)
 	cmd.Dir = root
 	cmd.Stdout, cmd.Stderr = logFile, logFile
-	spawned, err := startTree(cmd)
+	spawned, err := startTree(cmd, r.Lifetime)
 	if err != nil {
 		_ = logFile.Close()
 		return Shell{}, err

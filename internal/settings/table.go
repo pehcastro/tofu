@@ -60,6 +60,24 @@ const (
 	GatePromptAsk = "ask"
 )
 
+const (
+	FeedsFull    = "full"
+	FeedsSummary = "summary"
+	FeedsOff     = "off"
+)
+
+const (
+	ImagesAuto   = "auto"
+	ImagesInline = "inline"
+	ImagesOff    = "off"
+)
+
+const (
+	LinksAuto = "auto"
+	LinksOn   = "on"
+	LinksOff  = "off"
+)
+
 func DeclaredDefault(key string) int {
 	for _, spec := range Default() {
 		if spec.Key == key {
@@ -107,20 +125,20 @@ func Default() []Spec {
 		{Key: GatePrompt, Label: "Confirmations", Description: "run lets a gated call go, ask waits for you; a rule's shadow or enforced is a different switch", Category: "Interaction", Kind: Text, DefaultText: GatePromptRun,
 			Choices: []string{GatePromptRun, GatePromptAsk}, Restart: true},
 		{Key: ReadBeforeEdit, Label: "Read before edit", Description: "an edit or a write to a file this turn has not read is refused", Category: "Interaction", Kind: Bool, Default: 1, Restart: true},
-		{Key: Compaction, Label: "Compaction", Description: "Automatic transcript compaction", Category: "Context", Kind: Text, DefaultText: "adaptive",
+		{Key: Compaction, Label: "Compaction", Description: "Automatic transcript compaction; not built yet, so no choice changes a turn", Category: "Context", Kind: Text, DefaultText: "adaptive",
 			Choices: []string{"adaptive", "manual", "off"}},
 		{Key: ChatShowsTools, Label: "Tool detail", Description: "chat shows every tool call", Category: "Context", Kind: Bool},
-		{Key: AgentFeeds, Label: "Agent feeds", Description: "Retain authored activity history", Category: "Context", Kind: Text, DefaultText: "full",
-			Choices: []string{"full", "summary", "off"}},
-		{Key: Images, Label: "Images", Description: "Inline terminal image protocol", Category: "Context", Kind: Text, DefaultText: "auto",
-			Choices: []string{"auto", "inline", "off"}},
+		{Key: AgentFeeds, Label: "Agent feeds", Description: "full keeps every sub-agents event, summary the latest 200, off shows only the list of agents", Category: "Context", Kind: Text, DefaultText: FeedsFull,
+			Choices: []string{FeedsFull, FeedsSummary, FeedsOff}},
+		{Key: Images, Label: "Images", Description: "auto sends a pasted image only to a model that can see, inline always sends, off never attaches", Category: "Context", Kind: Text, DefaultText: ImagesAuto,
+			Choices: []string{ImagesAuto, ImagesInline, ImagesOff}},
 		{Key: ProjectInstructionsCap, Label: "Project instructions", Description: "bytes of your instruction files sent each turn, below one restores the default", Category: "Context", Kind: Int, Default: konst.ProjectInstructionsBytesDefault, Restart: true},
-		{Key: DiffContext, Label: "Diff context", Description: "Lines around changed hunks", Category: "Files", Kind: Text, DefaultText: strconv.Itoa(konst.DiffContextLinesDefault),
+		{Key: DiffContext, Label: "Diff context", Description: "Lines around changed hunks, at most the " + strconv.Itoa(konst.DiffContextLinesDefault) + " each diff carries", Category: "Files", Kind: Text, DefaultText: strconv.Itoa(konst.DiffContextLinesDefault),
 			Choices: lineCounts(konst.DiffContextLinesTight, konst.DiffContextLinesDefault, konst.DiffContextLinesWide, konst.DiffContextLinesWidest)},
-		{Key: Hyperlinks, Label: "Hyperlinks", Description: "OSC 8 terminal file links", Category: "Files", Kind: Text, DefaultText: "auto",
-			Choices: []string{"auto", "on", "off"}},
+		{Key: Hyperlinks, Label: "Hyperlinks", Description: "OSC 8 terminal file links; off prints the bare path", Category: "Files", Kind: Text, DefaultText: LinksAuto,
+			Choices: []string{LinksAuto, LinksOn, LinksOff}},
 		{Key: GroupByAgent, Label: "Group by agent", Description: "Author filters in edit feeds", Category: "Files", Kind: Bool, Default: 1},
-		{Key: PersistentRegistry, Label: "Persistent registry", Description: "Keep process metadata", Category: "Shell", Kind: Bool, Default: 1},
+		{Key: PersistentRegistry, Label: "Persistent registry", Description: "a running shell outlives tofu and the next launch lists it; off stops every shell on exit", Category: "Shell", Kind: Bool, Default: 1, Restart: true},
 		{Key: LogTail, Label: "Log tail", Description: "Lines retained per shell", Category: "Shell", Kind: Text, DefaultText: strconv.Itoa(konst.ShellLogTailLinesDefault),
 			Choices: lineCounts(konst.ShellLogTailLinesShort, konst.ShellLogTailLinesDefault, konst.ShellLogTailLinesLong)},
 		{Key: KillConfirm, Label: "Kill confirm", Description: "Confirm process termination", Category: "Shell", Kind: Bool, Default: 1},

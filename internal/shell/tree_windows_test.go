@@ -96,7 +96,7 @@ func attemptShellUnderAJob(t *testing.T) (job windows.Handle, cmd *exec.Cmd, chi
 	if err := spawnSuspended(cmd); err != nil {
 		t.Fatal(err)
 	}
-	job, err = adoptIntoJob(cmd.Process.Pid)
+	job, err = adoptIntoJob(cmd.Process.Pid, DiesWithTofu)
 	if err != nil {
 		_ = cmd.Process.Kill()
 		t.Fatal(err)
@@ -317,6 +317,76 @@ func TestABackgroundTreeDoesNotOutliveTheProgramThatStartedIt(t *testing.T) {
 	}
 	if err := waitMembersExited(handles, time.Now().Add(killWait)); err != nil {
 		t.Errorf("the probe exited and the %d processes of its background tree are still running: %v", len(handles), err)
+	}
+}
+
+const outlivingProbeVar = "TOFU_SHELL_OUTLIVING_PROBE"
+
+func outlivingProbe(dir string) {
+	kept := OpenAt(dir)
+	kept.Lifetime = OutlivesTofu
+	started, err := kept.Start(dir, "dev-server", "ping -n 600 127.0.0.1", "")
+	if err != nil {
+		fmt.Println("probe:", err)
+		os.Exit(1)
+	}
+	fmt.Println(started.PID)
+	_, _ = io.Copy(io.Discard, os.Stdin)
+	os.Exit(0)
+}
+
+func TestATreeStartedToOutliveTofuIsRunningAndKillableFromTheNextLaunch(t *testing.T) {
+	if dir := os.Getenv(outlivingProbeVar); dir != "" {
+		outlivingProbe(dir)
+	}
+	dir := t.TempDir()
+	probe := exec.Command(os.Args[0], "-test.run", t.Name())
+	probe.Env = append(os.Environ(), outlivingProbeVar+"="+dir)
+	stdin, err := probe.StdinPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	stdout, err := probe.StdoutPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := probe.Start(); err != nil {
+		t.Fatal(err)
+	}
+	line, err := bufio.NewReader(stdout).ReadString('\n')
+	if err != nil {
+		t.Fatalf("the probe printed no pid: %v", err)
+	}
+	pid, err := strconv.Atoi(strings.TrimSpace(line))
+	if err != nil {
+		t.Fatalf("the probe printed %q instead of a pid", strings.TrimSpace(line))
+	}
+	handles := treeMembersOnceADescendantJoined(t, pid)
+	defer func() {
+		for _, handle := range handles {
+			if state, err := windows.WaitForSingleObject(handle, 0); err != nil || state != windows.WAIT_OBJECT_0 {
+				_ = windows.TerminateProcess(handle, 1)
+			}
+			_ = windows.CloseHandle(handle)
+		}
+	}()
+	_ = stdin.Close()
+	if err := probe.Wait(); err != nil {
+		t.Fatalf("the probe did not exit cleanly: %v", err)
+	}
+	if err := waitMembersExited(handles, time.Now().Add(killWait)); err == nil {
+		t.Fatalf("the probe exited and took the %d processes of a tree started to outlive it with it", len(handles))
+	}
+	next := OpenAt(dir)
+	listed, err := next.Read("dev-server")
+	if err != nil || listed.State != Running {
+		t.Fatalf("the next launch reads the surviving tree as %q with error %v, want %q", listed.State, err, Running)
+	}
+	if err := next.Kill("dev-server"); err != nil {
+		t.Fatalf("the next launch could not kill the surviving tree: %v", err)
+	}
+	if err := waitMembersExited(handles, time.Now().Add(killWait)); err != nil {
+		t.Errorf("the next launch killed the surviving tree and %d of its processes are still running: %v", len(handles), err)
 	}
 }
 
