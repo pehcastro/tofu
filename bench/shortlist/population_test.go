@@ -7,9 +7,10 @@ import (
 	"testing"
 
 	"tofu/bench/corpus"
+	"tofu/internal/sys"
 )
 
-const sessionsDir = repoRoot + "/.tofu/sessions"
+func sessionsDir() string { return sys.RecordedStateDir("sessions") }
 
 var questionsAShortlistFigureNeeds = NeededQuestions(4, 4, 1, 4)
 
@@ -71,10 +72,10 @@ func countPopulation(turns []corpus.Turn) population {
 }
 
 func TestHowManyShortlistQuestionsTheRecordedSessionsCouldYield(t *testing.T) {
-	if _, err := os.Stat(sessionsDir); err != nil {
-		t.Skipf("no recorded sessions at %s on this machine, so the population cannot be counted here: %v", sessionsDir, err)
+	if _, err := os.Stat(sessionsDir()); err != nil {
+		t.Skipf("no recorded sessions at %s on this machine, so the population cannot be counted here: %v", sessionsDir(), err)
 	}
-	walked, err := corpus.WalkSessions(sessionsDir)
+	walked, err := corpus.WalkSessions(sessionsDir())
 	if err != nil {
 		t.Fatalf("WalkSessions: %v", err)
 	}

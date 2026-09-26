@@ -125,7 +125,7 @@ func TestACopyInterruptedPartWayNeverBecomesTheNewDirectory(t *testing.T) {
 	target := filepath.Join(parent, sys.StateDirName)
 	partial := target + partialSuffix
 
-	if _, err := copyTreeInto(refusingFS{FS: os.DirFS(source), refuse: "log/decisions.jsonl"}, partial); err == nil {
+	if _, _, err := copyTreeInto(refusingFS{FS: os.DirFS(source), refuse: "log/decisions.jsonl"}, ".", partial); err == nil {
 		t.Fatal("the copy reported success over a source it could not read whole")
 	}
 	if _, err := os.Stat(target); !os.IsNotExist(err) {
@@ -213,4 +213,147 @@ func TestWithTheNewDirectoryPresentTheOldOneIsNeverRead(t *testing.T) {
 	if _, err := os.ReadDir(old); err == nil {
 		t.Fatal("the old path is still readable as a directory, so this test proves nothing")
 	}
+}
+
+func projectWithState(t *testing.T) (home, project string) {
+	t.Helper()
+	home, project = t.TempDir(), t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	for path, body := range map[string]string{
+		"agents/go-dev.md":             "---\nname: go-dev\n---\n",
+		"settings.json":                `{"theme":"dark"}`,
+		".env":                         "OPENROUTER_KEY=sk-or-v1-thistestwroteit\n",
+		"sessions/HEAD":                "turn-a\n",
+		"sessions/turn-a/header.json":  `{"id":"turn-a"}`,
+		"sessions/turn-a/events.jsonl": "{\"kind\":\"step\"}\n",
+		"log/decisions.jsonl":          "{\"point\":\"tool_gate\"}\n",
+		"quota/readings.jsonl":         "{\"window\":\"5h\"}\n",
+		"promotions.jsonl":             "{\"turn\":\"turn-a\"}\n",
+	} {
+		full := filepath.Join(project, sys.StateDirName, filepath.FromSlash(path))
+		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(full, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return home, project
+}
+
+func TestTheMoveTakesTheStateAndLeavesWhatThePersonWrote(t *testing.T) {
+	home, project := projectWithState(t)
+	config := filepath.Join(project, sys.StateDirName)
+	before := snapshot(t, config)
+	state, err := sys.ProjectStateDirAt(project)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var out bytes.Buffer
+	if moved, failed := moveProjectState(&out, project); moved != 4 || failed != 0 {
+		t.Fatalf("moved %d and failed %d, want 4 and 0:\n%s", moved, failed, out.String())
+	}
+
+	sameTree(t, map[string]string{
+		"agents/go-dev.md": before["agents/go-dev.md"],
+		"settings.json":    before["settings.json"],
+		".env":             before[".env"],
+	}, snapshot(t, config), "the project's .tofu after the move")
+	sameTree(t, map[string]string{
+		"sessions/HEAD":                before["sessions/HEAD"],
+		"sessions/turn-a/header.json":  before["sessions/turn-a/header.json"],
+		"sessions/turn-a/events.jsonl": before["sessions/turn-a/events.jsonl"],
+		"log/decisions.jsonl":          before["log/decisions.jsonl"],
+		"promotions.jsonl":             before["promotions.jsonl"],
+	}, snapshot(t, state), "the state folder under the home")
+	quota := snapshot(t, filepath.Join(home, sys.StateDirName, sys.QuotaDirName))
+	if quota["readings.jsonl"] != before["quota/readings.jsonl"] {
+		t.Fatalf("the quota readings are not under the home: %v", quota)
+	}
+	if said := out.String(); strings.Count(said, "\n") != 1 || !strings.Contains(said, state) || !strings.Contains(said, "sessions") {
+		t.Fatalf("the notice is not one line naming what moved and where:\n%s", said)
+	}
+
+	var second bytes.Buffer
+	if moved, failed := moveProjectState(&second, project); moved+failed != 0 || second.Len() != 0 {
+		t.Fatalf("the second run moved %d, failed %d and said:\n%s", moved, failed, second.String())
+	}
+}
+
+func TestAFileAlreadyMovedWithOtherBytesKeepsTheOldCopyAndSaysWhy(t *testing.T) {
+	_, project := projectWithState(t)
+	state, err := sys.ProjectStateDirAt(project)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for path, body := range map[string]string{
+		"sessions/turn-a/header.json": `{"id":"turn-a"}`,
+		"log/decisions.jsonl":         "a row the new build wrote first\n",
+	} {
+		full := filepath.Join(state, filepath.FromSlash(path))
+		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(full, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	var out bytes.Buffer
+	moved, failed := moveProjectState(&out, project)
+	if moved != 3 || failed != 1 {
+		t.Fatalf("moved %d and failed %d, want 3 and 1:\n%s", moved, failed, out.String())
+	}
+	old := filepath.Join(project, sys.StateDirName, "log", "decisions.jsonl")
+	if body, err := os.ReadFile(old); err != nil || string(body) != "{\"point\":\"tool_gate\"}\n" {
+		t.Fatalf("the old log was not kept whole: %q, %v", body, err)
+	}
+	if _, err := os.Stat(filepath.Join(project, sys.StateDirName, "sessions")); !os.IsNotExist(err) {
+		t.Fatalf("the sessions held a file already moved with the same bytes and still did not move: %v", err)
+	}
+	if said := out.String(); !strings.Contains(said, "decisions.jsonl") || !strings.Contains(said, "tofu migrate") {
+		t.Fatalf("the notice does not name the conflict and the way out:\n%s", said)
+	}
+}
+
+func TestAProjectThatIsTheHomeMovesItsStateAndLeavesQuotaWhereItIs(t *testing.T) {
+	home, _ := projectWithState(t)
+	project := home
+	if err := os.MkdirAll(filepath.Join(project, sys.StateDirName, sys.QuotaDirName), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(project, sys.StateDirName, sys.QuotaDirName, "readings.jsonl"), []byte("{}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	if moved, failed := moveProjectState(&out, project); failed != 0 || moved != 0 {
+		t.Fatalf("a home holding only quota moved %d and failed %d:\n%s", moved, failed, out.String())
+	}
+	if _, err := os.Stat(filepath.Join(project, sys.StateDirName, sys.QuotaDirName, "readings.jsonl")); err != nil {
+		t.Fatalf("the quota under the home was moved: %v", err)
+	}
+}
+
+func TestADryRunListsTheMoveAndTouchesNothing(t *testing.T) {
+	_, project := projectWithState(t)
+	t.Chdir(project)
+	config := filepath.Join(project, sys.StateDirName)
+	before := snapshot(t, config)
+
+	var out, errOut bytes.Buffer
+	if code := run([]string{"migrate", "--dry-run"}, strings.NewReader(""), &out, &errOut); code != exitOK {
+		t.Fatalf("exit %d: %s", code, errOut.String())
+	}
+	sameTree(t, before, snapshot(t, config), "the dry run changed the project")
+	for _, name := range []string{"sessions", "log", "quota", "promotions.jsonl"} {
+		if !strings.Contains(out.String(), name) {
+			t.Fatalf("the dry run does not list %s:\n%s", name, out.String())
+		}
+	}
+	if strings.Contains(out.String(), "agents") || strings.Contains(out.String(), "settings.json") {
+		t.Fatalf("the dry run lists config as state:\n%s", out.String())
+	}
+	t.Log(out.String())
 }

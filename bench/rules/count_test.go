@@ -3,6 +3,8 @@ package rules
 import (
 	"path/filepath"
 	"testing"
+
+	"tofu/internal/sys"
 )
 
 func realCatalogAndFires(t *testing.T) ([]CatalogRule, []Fire) {
@@ -11,7 +13,7 @@ func realCatalogAndFires(t *testing.T) ([]CatalogRule, []Fire) {
 	if err != nil {
 		t.Fatalf("StructuralCatalog: %v", err)
 	}
-	fires, _, err := ReadDir(filepath.Join(repoRoot, ".tofu", "log"))
+	fires, _, err := ReadDir(sys.RecordedStateDir("log"))
 	if err != nil {
 		t.Fatalf("ReadDir: %v", err)
 	}

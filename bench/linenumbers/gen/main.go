@@ -3,16 +3,15 @@ package main
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 
 	"tofu/bench/linenumbers"
 	"tofu/bench/report"
+	"tofu/internal/sys"
 )
 
 func main() {
 	err := report.Generate("read tool line-number bytes", func(machine, date string) (string, error) {
-		dir := filepath.Join("..", "..", "..", ".tofu", "sessions")
-		result, err := linenumbers.Run(dir)
+		result, err := linenumbers.Run(sys.RecordedStateDir("sessions"))
 		if err != nil {
 			return "", err
 		}

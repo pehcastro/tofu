@@ -22,11 +22,15 @@ func TestNoSourceRootHoldsARecordedStateDirectory(t *testing.T) {
 			if !entry.IsDir() {
 				return nil
 			}
-			if entry.Name() == StateDirName || entry.Name() == LegacyStateDirName {
-				held = append(held, path)
-				return fs.SkipDir
+			if entry.Name() != StateDirName && entry.Name() != LegacyStateDirName {
+				return nil
 			}
-			return nil
+			for _, name := range MovedStateNames() {
+				if _, err := os.Stat(filepath.Join(path, name)); err == nil {
+					held = append(held, filepath.Join(path, name))
+				}
+			}
+			return fs.SkipDir
 		})
 		if err != nil {
 			t.Fatalf("walking %s: %v", walked, err)
@@ -38,33 +42,69 @@ func TestNoSourceRootHoldsARecordedStateDirectory(t *testing.T) {
 }
 
 func TestATestInsideTheSourceTreeGetsAStateDirectoryOutsideIt(t *testing.T) {
-	inside, err := ProjectStateDir()
-	if err != nil {
-		t.Fatal(err)
+	for name, dir := range map[string]func() (string, error){"state": ProjectStateDir, "config": ProjectConfigDir} {
+		inside, err := dir()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if InsideSourceTree(inside) {
+			t.Fatalf("a test working in the source tree was handed the %s directory %s, which is in the source tree", name, inside)
+		}
+		t.Logf("a test working in %s keeps its %s in %s", mustGetwd(t), name, inside)
 	}
-	if InsideSourceTree(inside) {
-		t.Fatalf("a test working in the source tree was handed %s, which is in the source tree", inside)
-	}
-	t.Logf("a test working in %s records into %s", mustGetwd(t), inside)
 
 	t.Chdir(t.TempDir())
-	outside, err := ProjectStateDir()
+	outside, err := ProjectConfigDir()
 	if err != nil {
 		t.Fatal(err)
 	}
 	if want := filepath.Join(mustGetwd(t), StateDirName); outside != want {
-		t.Fatalf("outside the source tree the project state directory is %s, want %s", outside, want)
+		t.Fatalf("outside the source tree the project config directory is %s, want %s", outside, want)
+	}
+}
+
+func TestAProjectsStateLivesUnderTheHomeAndNotInTheProject(t *testing.T) {
+	home, project := t.TempDir(), t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	dir, err := ProjectStateDirAt(project)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := filepath.Join(home, StateDirName, ProjectsDirName, ProjectKey(project)); dir != want {
+		t.Fatalf("the state of %s is %s, want %s", project, dir, want)
+	}
+	if inside(project, dir) {
+		t.Fatalf("the state of %s is inside the project, at %s", project, dir)
+	}
+}
+
+func TestAProjectKeyIsThePathWithEveryOtherCharacterADash(t *testing.T) {
+	cases := map[string]string{
+		`F:\localhost\ephem-sh\bob`:                  "F--localhost-ephem-sh-bob",
+		`F:\localhost\ephem-sh\bob\.local\sources\x`: "F--localhost-ephem-sh-bob--local-sources-x",
+		"/home/luiz/my_project.v2":                   "-home-luiz-my-project-v2",
+	}
+	if OS() == "windows" {
+		cases[`f:\localhost\bob`] = "F--localhost-bob"
+	}
+	for path, want := range cases {
+		if got := ProjectKey(path); got != want {
+			t.Fatalf("ProjectKey(%q) is %q, want %q", path, got, want)
+		}
 	}
 }
 
 func TestATestWorkingAtTheSourceRootItselfGetsAStateDirectoryOutsideIt(t *testing.T) {
 	t.Chdir(SourceRoot())
-	dir, err := ProjectStateDir()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if InsideSourceTree(dir) {
-		t.Fatalf("a test working at the source root was handed %s, which is the owner's own state directory", dir)
+	for _, dir := range []func() (string, error){ProjectStateDir, ProjectConfigDir} {
+		got, err := dir()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if InsideSourceTree(got) || got == OwnerProjectStateDir(SourceRoot()) {
+			t.Fatalf("a test working at the source root was handed %s, which is the owner's own directory", got)
+		}
 	}
 }
 
@@ -80,7 +120,7 @@ func TestTheRedirectedHomeIsNeitherTheOwnersNorTheProjects(t *testing.T) {
 	if dir == StateDir(home) {
 		t.Fatalf("a test that set no home was handed %s, where the live credential and the credential database live", dir)
 	}
-	project, err := ProjectStateDir()
+	project, err := ProjectConfigDir()
 	if err != nil {
 		t.Fatal(err)
 	}

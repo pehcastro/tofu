@@ -7,21 +7,23 @@ import (
 	"testing"
 
 	"tofu/internal/konst"
+	"tofu/internal/sys"
 	"tofu/internal/turn/tools"
 )
 
-const sessionsDir = "../../.tofu/sessions"
+func sessionsDir() string { return sys.RecordedStateDir("sessions") }
+
 const repoRoot = "../.."
 const replayFailuresInTheReport = 6
 
 func replayed(t *testing.T) Result {
 	t.Helper()
-	result, err := Run(sessionsDir, repoRoot)
+	result, err := Run(sessionsDir(), repoRoot)
 	if errors.Is(err, ErrNoPinnedTree) {
 		t.Skipf("skip, named: commit %s is not in this checkout: %v", PinnedCommit, err)
 	}
 	if err != nil {
-		t.Fatalf("Run(%q): %v", sessionsDir, err)
+		t.Fatalf("Run(%q): %v", sessionsDir(), err)
 	}
 	return result
 }

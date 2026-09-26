@@ -3,16 +3,15 @@ package main
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 
 	"tofu/bench/calibration"
 	"tofu/bench/report"
+	"tofu/internal/sys"
 )
 
 func main() {
 	err := report.Generate("calibration count report", func(machine, date string) (string, error) {
-		dir := filepath.Join("..", "..", "..", ".tofu", "log")
-		counts, err := calibration.Count(dir)
+		counts, err := calibration.Count(sys.RecordedStateDir("log"))
 		if err != nil {
 			return "", err
 		}

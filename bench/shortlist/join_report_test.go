@@ -15,10 +15,10 @@ func TestWriteTheJoinReport(t *testing.T) {
 	if os.Getenv("TOFU_LIVE") != "1" {
 		t.Skip("set TOFU_LIVE=1 to write today's dated report; no network call happens here, the gate is only to keep report.Write from being asked to overwrite an existing file on a repeat run")
 	}
-	if _, err := os.Stat(sessionsDir); err != nil {
-		t.Skipf("no recorded sessions at %s, cannot count the join for the report: %v", sessionsDir, err)
+	if _, err := os.Stat(sessionsDir()); err != nil {
+		t.Skipf("no recorded sessions at %s, cannot count the join for the report: %v", sessionsDir(), err)
 	}
-	rows, counts, err := BuildJoinCorpus(sessionsDir)
+	rows, counts, err := BuildJoinCorpus(sessionsDir())
 	if err != nil {
 		t.Fatalf("BuildJoinCorpus: %v", err)
 	}

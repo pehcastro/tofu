@@ -17,8 +17,18 @@ import (
 	"tofu/internal/llm/models"
 	"tofu/internal/recall"
 	"tofu/internal/session"
+	"tofu/internal/sys"
 	"tofu/internal/turn"
 )
+
+func projectSessions(t *testing.T, dir string) *session.Store {
+	t.Helper()
+	state, err := sys.ProjectStateDirAt(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return session.OpenAt(state)
+}
 
 func buildTestRunTools(dir, set string) ([]turn.Tool, error) {
 	shell, err := turn.ResolveRunShell("")
@@ -330,7 +340,7 @@ func TestAModelWithNoRecordedWindowCompactsAtTheOperatingCeiling(t *testing.T) {
 		t.Fatalf("a model nobody has a window for got %+v, want no window and the %d token ceiling tofu operates under",
 			budget, konst.ContextCeilingTokens)
 	}
-	store := session.NewStore(filepath.Join(dir, ".tofu", "sessions"))
+	store := projectSessions(t, dir)
 	config, _ := mustConfig(t, opts, built, runtime{model: &queuedModel{decisions: decisions}, spend: turn.SpendSubscription, budget: budget, sessions: store})
 	config.NoFork = true
 	row, err := turn.Run(context.Background(), config)
@@ -367,7 +377,7 @@ func TestTheSpawnToolIsGivenTheSessionStoreBeforeTheTurnStarts(t *testing.T) {
 	if err != nil {
 		t.Fatalf("buildTestRunTools: %v", err)
 	}
-	store := session.NewStore(filepath.Join(dir, ".tofu", "sessions"))
+	store := projectSessions(t, dir)
 	model := &queuedModel{decisions: []llm.Decision{
 		{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{
 			{ID: "call-1", Name: "spawn", Arguments: json.RawMessage(`{"task":"write note.txt","owns":["note.txt"]}`)},
@@ -470,7 +480,7 @@ func TestAChildLeavesItsRecordWhileTheParentsTurnIsStillRunning(t *testing.T) {
 	if err != nil {
 		t.Fatalf("buildTestRunTools: %v", err)
 	}
-	store := session.NewStore(filepath.Join(dir, ".tofu", "sessions"))
+	store := projectSessions(t, dir)
 	model := &watchingModel{store: store, child: "turn-parent-c1", inner: &queuedModel{decisions: []llm.Decision{
 		{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{
 			{ID: "call-1", Name: "spawn", Arguments: json.RawMessage(`{"task":"write note.txt","owns":["note.txt"]}`)},

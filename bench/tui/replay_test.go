@@ -21,10 +21,10 @@ import (
 	"tofu/internal/session"
 	"tofu/internal/shell"
 	roster "tofu/internal/subagent"
+	"tofu/internal/sys"
 )
 
 const (
-	sessionsDir   = "../../.tofu/sessions"
 	shellsDir     = "F:/localhost/admin-template/.tofu/shells"
 	recentTurns   = 30
 	everyTurn     = 0
@@ -75,13 +75,13 @@ type sitting struct {
 
 func readRecorded(b *testing.B) recorded {
 	b.Helper()
-	store := session.NewStore(sessionsDir)
+	store := session.NewStore(sys.RecordedStateDir("sessions"))
 	listing, err := store.Listing()
 	if err != nil {
 		b.Fatal(err)
 	}
 	if len(listing.Sessions) == 0 {
-		b.Skip("no recorded session under " + sessionsDir)
+		b.Skip("no recorded session under " + sys.RecordedStateDir("sessions"))
 	}
 	headers := slices.Clone(listing.Sessions)
 	slices.Reverse(headers)

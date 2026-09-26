@@ -132,7 +132,7 @@ func TestACacheHitCarriesTheReadSeparatelyFromTheFreshInput(t *testing.T) {
 
 func recordedEventKinds(t *testing.T, dir string) []sessionstore.EventKind {
 	t.Helper()
-	matches, err := filepath.Glob(filepath.Join(dir, ".tofu", "sessions", "turn-*"))
+	matches, err := filepath.Glob(projectSessions(t, dir).Dir("turn-*"))
 	if err != nil {
 		t.Fatalf("globbing for the session directory: %v", err)
 	}

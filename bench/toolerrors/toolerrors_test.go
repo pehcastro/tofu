@@ -5,9 +5,10 @@ import (
 	"testing"
 
 	"tofu/bench/corpus"
+	"tofu/internal/sys"
 )
 
-const sessionsDir = "../../.tofu/sessions"
+func sessionsDir() string { return sys.RecordedStateDir("sessions") }
 
 func exited(code int) corpus.RecordedCall {
 	return corpus.RecordedCall{Tool: "bash", ExitCode: &code}
@@ -73,9 +74,9 @@ func TestABareExitCodeStillRecordsWhyRatherThanUnknown(t *testing.T) {
 }
 
 func TestRunCountsCallsAndFailuresPerTool(t *testing.T) {
-	result, err := Run(sessionsDir)
+	result, err := Run(sessionsDir())
 	if err != nil {
-		t.Fatalf("Run(%q): %v", sessionsDir, err)
+		t.Fatalf("Run(%q): %v", sessionsDir(), err)
 	}
 	if result.Sessions == 0 {
 		t.Fatal("no session was read: the path is wrong or the corpus is empty")
@@ -114,7 +115,7 @@ func TestRunCountsCallsAndFailuresPerTool(t *testing.T) {
 }
 
 func TestWorstToolHasAtLeastTheCallFloor(t *testing.T) {
-	result, err := Run(sessionsDir)
+	result, err := Run(sessionsDir())
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -138,7 +139,7 @@ func TestWorstToolHasAtLeastTheCallFloor(t *testing.T) {
 }
 
 func TestReportOverTheRealCorpus(t *testing.T) {
-	result, err := Run(sessionsDir)
+	result, err := Run(sessionsDir())
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}

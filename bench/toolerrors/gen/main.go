@@ -3,12 +3,12 @@ package main
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
 	"tofu/bench/report"
 	"tofu/bench/toolerrors"
+	"tofu/internal/sys"
 )
 
 func main() {
@@ -19,7 +19,7 @@ func main() {
 }
 
 func run() error {
-	result, err := toolerrors.Run(filepath.Join("..", "..", "..", ".tofu", "sessions"))
+	result, err := toolerrors.Run(sys.RecordedStateDir("sessions"))
 	if err != nil {
 		return err
 	}

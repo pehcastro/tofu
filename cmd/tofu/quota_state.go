@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"path/filepath"
 	"time"
 
 	"tofu/internal/llm/cred"
@@ -17,7 +16,6 @@ const (
 	usageServingState = "serving"
 	noVendorInATest   = "a test may not reach a vendor, so pass pollRows a stub url"
 
-	quotaReadingDirName    = "quota"
 	quotaReadingNotWritten = "the quota reading was not recorded: "
 )
 
@@ -182,10 +180,4 @@ func pollRows(
 	return results, nil
 }
 
-func quotaReadingDir() (string, error) {
-	state, err := sys.ProjectStateDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(state, quotaReadingDirName), nil
-}
+func quotaReadingDir() (string, error) { return sys.QuotaDir() }

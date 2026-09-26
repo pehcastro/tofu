@@ -52,10 +52,15 @@ readable form collapses: doctor, models, agents, usage, context, rules.
             with no terminal and no model call, and print the screens it asks for
   settings  list, get or set a declared setting, global or project
   reload    re-read rules from disk without a restart
+  migrate   move what tofu wrote out of this project's .tofu and into ~/.tofu,
+            or --dry-run to list what would move
 `
 
 func main() {
 	copyLegacyStateDirs(os.Stdout)
+	if wd, err := os.Getwd(); err == nil && (len(os.Args) < 2 || os.Args[1] == "--continue") {
+		moveProjectState(os.Stderr, wd)
+	}
 	os.Exit(run(os.Args[1:], os.Stdin, os.Stdout, os.Stderr))
 }
 
@@ -118,6 +123,8 @@ func run(args []string, in io.Reader, out io.Writer, errOut io.Writer) int {
 		return settingsVerb(args[1:], out, errOut)
 	case "reload":
 		return reloadVerb(out, errOut)
+	case "migrate":
+		return migrateVerb(args[1:], out, errOut)
 	case "help", "-h", "--help":
 		_, _ = fmt.Fprint(out, usage)
 		return exitOK

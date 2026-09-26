@@ -12,27 +12,18 @@ import (
 
 	"tofu/internal/judge/method"
 	"tofu/internal/sift"
+	"tofu/internal/sys"
 )
 
 const recordedSessionFloor = 20
 
 func recordedSessionsDir(t *testing.T) string {
 	t.Helper()
-	dir, err := filepath.Abs(".")
-	if err != nil {
-		t.Fatal(err)
+	sessions := sys.RecordedStateDir("sessions")
+	if info, err := os.Stat(sessions); err != nil || !info.IsDir() {
+		t.Skipf("no recorded sessions at %s, so no recorded turn can be measured", sessions)
 	}
-	for {
-		sessions := filepath.Join(dir, ".tofu", "sessions")
-		if info, err := os.Stat(sessions); err == nil && info.IsDir() {
-			return sessions
-		}
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			t.Skipf("no .tofu/sessions above %s, so no recorded turn can be measured", dir)
-		}
-		dir = parent
-	}
+	return sessions
 }
 
 type recordedShell struct {

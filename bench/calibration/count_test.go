@@ -1,15 +1,13 @@
 package calibration
 
 import (
-	"path/filepath"
 	"testing"
+
+	"tofu/internal/sys"
 )
 
-const repoRoot = "../.."
-
 func TestTheLedgerHasBeenCounted(t *testing.T) {
-	dir := filepath.Join(repoRoot, ".tofu", "log")
-	counts, err := Count(dir)
+	counts, err := Count(sys.RecordedStateDir("log"))
 	if err != nil {
 		t.Fatalf("Count: %v", err)
 	}

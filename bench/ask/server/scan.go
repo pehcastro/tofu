@@ -8,8 +8,6 @@ import (
 
 var taskIntent = regexp.MustCompile(`(?i)\bstart\b.{0,20}\bserver\b|\brun\b.{0,20}\b(server|dev server)\b`)
 
-const BobSessionsDirFromPackage = "../../../.tofu/sessions"
-
 type Share struct {
 	TotalTurns int
 	InDomain   int

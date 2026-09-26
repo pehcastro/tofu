@@ -29,19 +29,19 @@ func TestTheJudgedThriftCutAgainstFixedTruncationAndTheThreeArmReport(t *testing
 	if err != nil {
 		t.Fatalf("ThriftQuestions: %v", err)
 	}
-	walked, err := corpus.WalkSessions(sessionsDir)
+	walked, err := corpus.WalkSessions(sessionsDir())
 	if err != nil {
-		t.Fatalf("WalkSessions(%q): %v", sessionsDir, err)
+		t.Fatalf("WalkSessions(%q): %v", sessionsDir(), err)
 	}
 	if len(walked.Turns) == 0 {
 		t.Fatal("no session was read: the path is wrong or the corpus is empty")
 	}
-	judged := RunJudged(context.Background(), client, jevQuestions, artifactsDir, walked.Turns, liveCallCap)
+	judged := RunJudged(context.Background(), client, jevQuestions, artifactsDir(), walked.Turns, liveCallCap)
 	if len(judged.Rows) == 0 {
 		t.Skip("every sampled read or search call was skipped, nothing to write")
 	}
 
-	result, err := Run(sessionsDir, artifactsDir)
+	result, err := Run(sessionsDir(), artifactsDir())
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}

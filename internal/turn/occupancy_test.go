@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"path/filepath"
 	"strconv"
 	"sync"
 	"testing"
@@ -12,12 +11,11 @@ import (
 	"tofu/internal/llm"
 	"tofu/internal/recall"
 	"tofu/internal/session"
+	"tofu/internal/sys"
 )
 
-const liveSessionsDir = "../../.tofu/sessions"
-
 func TestAStepRowRecordedBeforeThisChangeStillDecodesWithItsWorkingSet(t *testing.T) {
-	store := session.NewStore(filepath.FromSlash(liveSessionsDir))
+	store := session.NewStore(sys.RecordedStateDir("sessions"))
 	listing, err := store.Listing()
 	if err != nil {
 		t.Skipf("the live sessions are not readable from here, so nothing recorded by an earlier build is checked: %v", err)

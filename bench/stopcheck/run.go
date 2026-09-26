@@ -114,7 +114,10 @@ func New(root, key string) (Battery, error) {
 	if err != nil {
 		return Battery{}, err
 	}
-	stateDir := sys.StateDir(root)
+	stateDir, err := sys.ProjectStateDirAt(root)
+	if err != nil {
+		return Battery{}, err
+	}
 	cacheDir := filepath.Join(stateDir, "cache")
 	logDir := filepath.Join(stateDir, "log")
 	questions := make([]jev.Question, 0, len(set.Questions))

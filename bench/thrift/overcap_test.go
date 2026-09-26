@@ -7,11 +7,11 @@ import (
 )
 
 func TestOverCapTargetsMatchTheNineIdentifiedInSectionFour(t *testing.T) {
-	walked, err := corpus.WalkSessions(sessionsDir)
+	walked, err := corpus.WalkSessions(sessionsDir())
 	if err != nil {
-		t.Fatalf("WalkSessions(%q): %v", sessionsDir, err)
+		t.Fatalf("WalkSessions(%q): %v", sessionsDir(), err)
 	}
-	targets, idSkips := OverCapReadAndSearchTargets(artifactsDir, walked.Turns)
+	targets, idSkips := OverCapReadAndSearchTargets(artifactsDir(), walked.Turns)
 	if len(targets)+len(idSkips) != 9 {
 		t.Fatalf("%d over-cap read or search artifacts found, want 9 as report-2026-09-23.md section 4 counts", len(targets)+len(idSkips))
 	}

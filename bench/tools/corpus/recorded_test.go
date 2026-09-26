@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	sessions "tofu/bench/corpus"
+	"tofu/internal/sys"
 )
 
 type recordedArgs struct {
@@ -20,7 +21,7 @@ func TestExtractRecordedTextSearchCalls(t *testing.T) {
 	if os.Getenv("TOFU_TOOLS_EXTRACT") != "1" {
 		t.Skip("set TOFU_TOOLS_EXTRACT=1 to print the search calls .tofu/sessions carries, and the grep calls the sessions recorded before 2026-09-21")
 	}
-	walked, err := sessions.WalkSessions("../../../.tofu/sessions")
+	walked, err := sessions.WalkSessions(sys.RecordedStateDir("sessions"))
 	if err != nil {
 		t.Fatalf("WalkSessions: %v", err)
 	}

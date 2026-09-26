@@ -2,13 +2,13 @@ package recall
 
 import (
 	"context"
-	"path/filepath"
 	"strconv"
 	"testing"
 	"time"
 
 	"tofu/bench/corpus"
 	rc "tofu/internal/recall"
+	"tofu/internal/sys"
 )
 
 const stressForkCeiling = 20000
@@ -23,7 +23,7 @@ type checkpointCase struct {
 
 func readCorpusDirTurn(t *testing.T, id string) corpus.RecordedTurn {
 	t.Helper()
-	turn, err := corpus.ReadTurnDir(filepath.Join(forkRepoRoot, ".tofu", "sessions", id))
+	turn, err := corpus.ReadTurnDir(sys.RecordedStateDir("sessions", id))
 	if err != nil {
 		t.Fatalf("read %s: %v", id, err)
 	}
@@ -32,7 +32,7 @@ func readCorpusDirTurn(t *testing.T, id string) corpus.RecordedTurn {
 
 func readCorpusFileTurn(t *testing.T, id string) corpus.RecordedTurn {
 	t.Helper()
-	turn, err := corpus.ReadTurn(filepath.Join(forkRepoRoot, ".tofu", "sessions", id+".json"))
+	turn, err := corpus.ReadTurn(sys.RecordedStateDir("sessions", id+".json"))
 	if err != nil {
 		t.Fatalf("read %s: %v", id, err)
 	}

@@ -36,7 +36,7 @@ this line is not a reading and tofu has to say so rather than drop it
 `
 )
 
-func TestE2EUsageReadsTheKeyAndTheQuotaHistoryOfTheProjectItRunsIn(t *testing.T) {
+func TestE2EUsageReadsTheKeyOfTheProjectAndTheQuotaHistoryOfTheHome(t *testing.T) {
 	bare := newProject(t, "bare")
 	sameText(t, "a project with no key and no credential",
 		bare.run(t, exitOK, "usage"), usageWithNothingSignedIn)
@@ -45,7 +45,7 @@ func TestE2EUsageReadsTheKeyAndTheQuotaHistoryOfTheProjectItRunsIn(t *testing.T)
 
 	recorded := newProject(t, "recorded")
 	writeFile(t, recorded.dir, ".env", "OPENROUTER_KEY=sk-or-v1-thistestwroteit\n")
-	writeFile(t, recorded.dir, ".tofu/quota/readings.jsonl", recordedQuotaReadings)
+	writeFile(t, recorded.home, ".tofu/quota/readings.jsonl", recordedQuotaReadings)
 	sameText(t, "a project carrying its own key",
 		recorded.run(t, exitOK, "usage"), usageWithAKeyAndNothingSignedIn)
 	sameText(t, "the readings the project recorded",

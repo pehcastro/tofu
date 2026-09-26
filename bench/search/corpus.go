@@ -9,8 +9,6 @@ import (
 	"tofu/bench/corpus"
 )
 
-const SessionsDir = "../../.tofu/sessions"
-
 type Recorded struct {
 	Turn      string
 	Pattern   string

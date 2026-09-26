@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"io/fs"
@@ -31,7 +32,11 @@ func copyLegacyStateDir(out io.Writer, parent string) {
 		return
 	}
 	partial := target + partialSuffix
-	files, err := copyTreeInto(os.DirFS(source), partial)
+	if err := os.RemoveAll(partial); err != nil {
+		_, _ = fmt.Fprintf(out, "tofu: a half copy at %s could not be removed: %v\n", partial, err)
+		return
+	}
+	files, _, err := copyTreeInto(os.DirFS(source), ".", partial)
 	if err == nil {
 		err = os.Rename(partial, target)
 	}
@@ -48,12 +53,8 @@ func copyLegacyStateDir(out io.Writer, parent string) {
 		sys.StateDirName, sys.LegacyStateDirName, source, target, countSessions(source), files, source)
 }
 
-func copyTreeInto(source fs.FS, target string) (int, error) {
-	if err := os.RemoveAll(target); err != nil {
-		return 0, err
-	}
-	files := 0
-	err := fs.WalkDir(source, ".", func(name string, entry fs.DirEntry, err error) error {
+func copyTreeInto(source fs.FS, root, target string) (files int, size int64, err error) {
+	err = fs.WalkDir(source, root, func(name string, entry fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -61,26 +62,39 @@ func copyTreeInto(source fs.FS, target string) (int, error) {
 		if entry.IsDir() {
 			return os.MkdirAll(path, 0o755)
 		}
-		reader, err := source.Open(name)
+		body, err := fs.ReadFile(source, name)
 		if err != nil {
 			return err
 		}
-		defer func() { _ = reader.Close() }()
-		writer, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
-		if err != nil {
+		if err := copyFileOnce(path, body); err != nil {
 			return err
 		}
-		if _, err := io.Copy(writer, reader); err != nil {
-			_ = writer.Close()
-			return err
-		}
-		if err := writer.Close(); err != nil {
-			return err
-		}
-		files++
+		files, size = files+1, size+int64(len(body))
 		return nil
 	})
-	return files, err
+	return files, size, err
+}
+
+func copyFileOnce(path string, body []byte) error {
+	if there, err := os.ReadFile(path); err == nil {
+		if !bytes.Equal(there, body) {
+			return fmt.Errorf("%s is already there with other bytes", path)
+		}
+		return nil
+	}
+	partial := path + partialSuffix
+	if err := os.WriteFile(partial, body, 0o644); err != nil {
+		return err
+	}
+	info, err := os.Stat(partial)
+	if err != nil {
+		return err
+	}
+	if info.Size() != int64(len(body)) {
+		_ = os.Remove(partial)
+		return fmt.Errorf("%s holds %d bytes after the copy, want %d", partial, info.Size(), len(body))
+	}
+	return os.Rename(partial, path)
 }
 
 func countSessions(state string) int {

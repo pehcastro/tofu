@@ -25,6 +25,8 @@ const (
 	StateDirName       = ".tofu"
 	LegacyStateDirName = ".boji"
 	testStateDirName   = "tofu-test-state"
+	ProjectsDirName    = "projects"
+	QuotaDirName       = "quota"
 )
 
 func StateDir(parent string) string {
@@ -86,23 +88,68 @@ func inside(root, path string) bool {
 	return err == nil && !strings.HasPrefix(rel, "..")
 }
 
-func ProjectStateDir() (string, error) {
+func ProjectConfigDir() (string, error) {
 	wd, err := os.Getwd()
 	if err != nil {
 		return "", err
 	}
-	return ProjectStateDirAt(wd)
+	if testing.Testing() && InsideSourceTree(wd) {
+		return StateDir(testStateParent()), nil
+	}
+	return StateDir(wd), nil
 }
+
+func ProjectStateDir() (string, error) { return ProjectStateDirAt(".") }
 
 func ProjectStateDirAt(dir string) (string, error) {
 	full, err := filepath.Abs(dir)
 	if err != nil {
 		return "", err
 	}
-	if testing.Testing() && InsideSourceTree(full) {
-		return StateDir(testStateParent()), nil
+	home, err := HomeConfigDir()
+	if err != nil {
+		return "", err
 	}
-	return StateDir(full), nil
+	return filepath.Join(home, ProjectsDirName, ProjectKey(full)), nil
+}
+
+func OwnerProjectStateDir(project string) string {
+	home := OwnerHomeStateDir()
+	if home == "" {
+		return ""
+	}
+	return filepath.Join(home, ProjectsDirName, ProjectKey(project))
+}
+
+func RecordedStateDir(elem ...string) string {
+	owner := OwnerProjectStateDir(SourceRoot())
+	if owner == "" {
+		return ""
+	}
+	return filepath.Join(append([]string{owner}, elem...)...)
+}
+
+func ProjectKey(path string) string {
+	volume := filepath.VolumeName(path)
+	path = strings.ToUpper(volume) + path[len(volume):]
+	return strings.Map(func(r rune) rune {
+		if 'a' <= r && r <= 'z' || 'A' <= r && r <= 'Z' || '0' <= r && r <= '9' {
+			return r
+		}
+		return '-'
+	}, path)
+}
+
+func MovedStateNames() []string {
+	return []string{"sessions", "log", "artifacts", "cache", "salvage", "calibration", "shells", "promotions.jsonl", QuotaDirName}
+}
+
+func QuotaDir() (string, error) {
+	home, err := HomeConfigDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(home, QuotaDirName), nil
 }
 
 func LibraryDir() (string, error) {

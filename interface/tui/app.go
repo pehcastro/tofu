@@ -267,8 +267,8 @@ func New(options Options) *App {
 	if options.Models == nil {
 		options.Models = shippedModels
 	}
-	if options.Promotions == "" && options.Root != "" {
-		options.Promotions = isession.NewPromotionLog(sys.StateDir(options.Root))
+	if state, err := sys.ProjectStateDirAt(options.Root); err == nil && options.Promotions == "" && options.Root != "" {
+		options.Promotions = isession.NewPromotionLog(state)
 	}
 	if options.Keymap == "" {
 		options.Keymap, _ = keymap.ShortcutsPath()

@@ -4,22 +4,25 @@ import (
 	"os"
 	"testing"
 	"time"
+
+	"tofu/internal/sys"
 )
 
-const sessionsDir = "../../.tofu/sessions"
+func sessionsDir() string { return sys.RecordedStateDir("sessions") }
+
 const regenerateEnvVar = "TOFU_BENCH_TURN_REGENERATE"
 
 func TestReplayOverRealRecordedSessionsMatchesTheDatedReport(t *testing.T) {
-	if _, err := os.Stat(sessionsDir); os.IsNotExist(err) {
-		t.Skipf("no %s on this machine, nothing to replay", sessionsDir)
+	if _, err := os.Stat(sessionsDir()); os.IsNotExist(err) {
+		t.Skipf("no %s on this machine, nothing to replay", sessionsDir())
 	}
 
-	corpus, err := ReadCorpus(sessionsDir)
+	corpus, err := ReadCorpus(sessionsDir())
 	if err != nil {
 		t.Fatalf("reading the corpus: %v", err)
 	}
 	if len(corpus.Turns) < 8 {
-		t.Fatalf("the acceptance line asks for at least 8 real recorded turns, %s only found %d", sessionsDir, len(corpus.Turns))
+		t.Fatalf("the acceptance line asks for at least 8 real recorded turns, %s only found %d", sessionsDir(), len(corpus.Turns))
 	}
 
 	host, err := os.Hostname()
@@ -60,10 +63,10 @@ func TestReplayOverRealRecordedSessionsMatchesTheDatedReport(t *testing.T) {
 
 	if fileHeadline.EntryCount != diskHeadline.EntryCount {
 		t.Skipf("%s was written against %d recorded sessions; %s now holds %d, %d more than the report carries: that drift is the finding, not repaired here, and it is not compared further; a person decides whether it is a withdrawal or a new dated report; set %s=1 to render one alongside the committed file",
-			committed, fileHeadline.EntryCount, sessionsDir, diskHeadline.EntryCount, diskHeadline.EntryCount-fileHeadline.EntryCount, regenerateEnvVar)
+			committed, fileHeadline.EntryCount, sessionsDir(), diskHeadline.EntryCount, diskHeadline.EntryCount-fileHeadline.EntryCount, regenerateEnvVar)
 	}
 	if err := CompareHeadlines(fileHeadline, diskHeadline); err != nil {
-		t.Fatalf("%s no longer follows from what %s replays today: %v", committed, sessionsDir, err)
+		t.Fatalf("%s no longer follows from what %s replays today: %v", committed, sessionsDir(), err)
 	}
 
 	for _, turn := range report.PerTurn {

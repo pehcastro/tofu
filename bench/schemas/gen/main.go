@@ -3,15 +3,15 @@ package main
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 
 	"tofu/bench/report"
 	"tofu/bench/schemas"
+	"tofu/internal/sys"
 )
 
 func main() {
 	err := report.Generate("schemas report", func(machine, date string) (string, error) {
-		sessionsDir := filepath.Join("..", "..", "..", ".tofu", "sessions")
+		sessionsDir := sys.RecordedStateDir("sessions")
 		usable, _, err := schemas.ReadSessions(sessionsDir)
 		if err != nil {
 			return "", err

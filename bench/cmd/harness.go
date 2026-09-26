@@ -13,6 +13,7 @@ import (
 
 	"tofu/bench/harness"
 	"tofu/bench/report"
+	"tofu/internal/session"
 	"tofu/internal/sys"
 )
 
@@ -150,7 +151,7 @@ func runTofuArm(out, errOut io.Writer, plan harness.Plan, opts harnessOpts) int 
 		return fail(errOut, "harness", err)
 	}
 	ledgerDir := filepath.Join(state, "log")
-	sessionDir := filepath.Join(state, "sessions")
+	sessionDir := session.SessionsDir(state)
 
 	measure := func(execution harness.Execution, meta harness.RunMeta) (harness.Row, []string, error) {
 		meta.CLIVersion, meta.Commit = sys.Version(), sys.BuildRevision()

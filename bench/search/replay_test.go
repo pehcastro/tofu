@@ -6,16 +6,18 @@ import (
 	"testing"
 
 	tool "tofu/internal/search"
+	"tofu/internal/sys"
 )
 
 const treeRoot = "../.."
 
 func loadOrSkip(t *testing.T) Corpus {
 	t.Helper()
-	if _, err := os.Stat(SessionsDir); err != nil {
-		t.Skipf("skipped: %s is not on this machine, so there is no recorded search to replay", SessionsDir)
+	sessionsDir := sys.RecordedStateDir("sessions")
+	if _, err := os.Stat(sessionsDir); err != nil {
+		t.Skipf("skipped: %s is not on this machine, so there is no recorded search to replay", sessionsDir)
 	}
-	loaded, err := Load(SessionsDir)
+	loaded, err := Load(sessionsDir)
 	if err != nil {
 		t.Fatal(err)
 	}

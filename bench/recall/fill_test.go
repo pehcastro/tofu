@@ -3,7 +3,6 @@ package recall
 import (
 	"encoding/json"
 	"fmt"
-	"path/filepath"
 	"sort"
 	"strings"
 	"testing"
@@ -11,11 +10,11 @@ import (
 	"tofu/internal/konst"
 	rc "tofu/internal/recall"
 	"tofu/internal/session"
+	"tofu/internal/sys"
 	"tofu/internal/turn"
 )
 
 const (
-	recordedSessionsRoot = "../../.tofu/sessions"
 	fillWatermarkPercent = 40
 	sessionsExpected     = 60
 )
@@ -67,7 +66,7 @@ func fillOf(t *testing.T, header session.Header, events []session.Event) recorde
 
 func recordedFills(t *testing.T) ([]recordedFill, []string) {
 	t.Helper()
-	store := session.NewStore(filepath.FromSlash(recordedSessionsRoot))
+	store := session.NewStore(sys.RecordedStateDir("sessions"))
 	listing, err := store.Listing()
 	if err != nil {
 		t.Fatalf("read the recorded sessions: %v", err)
@@ -98,7 +97,7 @@ func TestHowFullTheRecordedTurnsEverGotAgainstTheOperatingCeilingAndAgainstTheMo
 	billed, unbilled := recordedFills(t)
 	if len(billed)+len(unbilled) < sessionsExpected {
 		t.Fatalf("%d sessions read under %s and %d are on disk: the measurement is over a corpus that is not there",
-			len(billed)+len(unbilled), recordedSessionsRoot, sessionsExpected)
+			len(billed)+len(unbilled), sys.RecordedStateDir("sessions"), sessionsExpected)
 	}
 	ceiling := konst.ContextCeilingTokens
 	target := rc.ShippedBands().Target()

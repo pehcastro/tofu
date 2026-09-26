@@ -4,9 +4,10 @@ import (
 	"context"
 	"fmt"
 	"maps"
-	"path/filepath"
 	"slices"
 	"testing"
+
+	"tofu/internal/sys"
 )
 
 const (
@@ -16,7 +17,7 @@ const (
 )
 
 func TestTheLedgerBuildOnTheDayTheOldFigureWasRecorded(t *testing.T) {
-	days, err := ReadLedgerBuilds(filepath.Join(repoRoot, ".tofu", "log"))
+	days, err := ReadLedgerBuilds(sys.RecordedStateDir("log"))
 	if err != nil {
 		t.Fatalf("ReadLedgerBuilds: %v", err)
 	}

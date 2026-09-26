@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"io"
-	"path/filepath"
 	"slices"
 	"strings"
 	"time"
@@ -45,7 +44,7 @@ func benchCorpus(out, errOut io.Writer, args []string) int {
 		if err != nil {
 			return fail(errOut, "corpus", err)
 		}
-		dir = filepath.Join(state, "sessions")
+		dir = session.SessionsDir(state)
 	}
 	read, err := readCorpus(dir)
 	if err != nil {

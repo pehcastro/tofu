@@ -8,6 +8,7 @@ import (
 
 	"tofu/internal/judge/jev"
 	"tofu/internal/judge/ledger"
+	"tofu/internal/sys"
 )
 
 func TestToLedgerAnswersAndBackCarryTheSameKindAndValue(t *testing.T) {
@@ -31,10 +32,10 @@ type cacheFile struct {
 }
 
 func TestStopCheckCacheOnDiskCarriesNoChoiceAnswer(t *testing.T) {
-	dir := filepath.Join("..", "..", ".tofu", "cache")
+	dir := sys.RecordedStateDir("cache")
 	entries, err := os.ReadDir(dir)
-	if os.IsNotExist(err) {
-		t.Skip(".tofu/cache is not on this machine")
+	if os.IsNotExist(err) || dir == "" {
+		t.Skipf("%s is not on this machine", dir)
 	}
 	if err != nil {
 		t.Fatalf("ReadDir %s: %v", dir, err)
@@ -63,5 +64,5 @@ func TestStopCheckCacheOnDiskCarriesNoChoiceAnswer(t *testing.T) {
 			}
 		}
 	}
-	t.Logf(".tofu/cache holds %d stored answers, %d of them under stop_check, %d of those a choice", total, stopCheck, choice)
+	t.Logf("%s holds %d stored answers, %d of them under stop_check, %d of those a choice", dir, total, stopCheck, choice)
 }

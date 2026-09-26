@@ -72,7 +72,7 @@ func TestErrorPctHandlesZeroActual(t *testing.T) {
 }
 
 func TestRenderCorrectionCoversEveryAcceptanceLine(t *testing.T) {
-	result, err := Run(sessionsDir)
+	result, err := Run(sessionsDir())
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}

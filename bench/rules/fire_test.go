@@ -1,15 +1,15 @@
 package rules
 
 import (
-	"path/filepath"
 	"testing"
+
+	"tofu/internal/sys"
 )
 
 const repoRoot = "../.."
 
 func TestReadDirReadsTheRealLog(t *testing.T) {
-	dir := filepath.Join(repoRoot, ".tofu", "log")
-	fires, unreadable, err := ReadDir(dir)
+	fires, unreadable, err := ReadDir(sys.RecordedStateDir("log"))
 	if err != nil {
 		t.Fatalf("ReadDir: %v", err)
 	}

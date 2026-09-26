@@ -112,7 +112,11 @@ func (a *App) runCommand(name string) tea.Cmd {
 }
 
 func (a *App) recordedTalk() (isession.Conversation, string) {
-	store := isession.OpenAt(sys.StateDir(a.options.Root))
+	state, err := sys.ProjectStateDirAt(a.options.Root)
+	if err != nil {
+		return isession.Conversation{}, err.Error()
+	}
+	store := isession.OpenAt(state)
 	id := a.sessionID
 	if id == "" {
 		head, err := store.Head()

@@ -8,12 +8,10 @@ import (
 	"tofu/bench/stat"
 	"tofu/internal/konst"
 	"tofu/internal/sift"
+	"tofu/internal/sys"
 )
 
 const (
-	ledgerDir  = "../../.tofu/log"
-	sessionDir = "../../.tofu/sessions"
-
 	dollarsPerShellResultTOFU217 = 0.00027
 	dollarsPerDecisionTOFU217    = 0.018 / 594
 	millisPerShellResultTOFU217  = 838.0
@@ -47,6 +45,7 @@ func TestReadLedgerSeesAShellSiftRowWhenThereIsOne(t *testing.T) {
 }
 
 func TestTheShellSiftPointHasBeenMeasured(t *testing.T) {
+	sessionDir := sys.RecordedStateDir("sessions")
 	if _, err := os.Stat(sessionDir); err != nil {
 		t.Skipf("no recorded sessions at %s: %v", sessionDir, err)
 	}
@@ -57,7 +56,7 @@ func TestTheShellSiftPointHasBeenMeasured(t *testing.T) {
 	if len(read.Sessions) < sessionFloor {
 		t.Fatalf("%d recorded sessions, too few to state a median over", len(read.Sessions))
 	}
-	logRead, err := ReadLedger(ledgerDir)
+	logRead, err := ReadLedger(sys.RecordedStateDir("log"))
 	if err != nil {
 		t.Fatalf("ReadLedger: %v", err)
 	}

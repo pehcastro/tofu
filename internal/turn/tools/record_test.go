@@ -13,12 +13,20 @@ import (
 	"tofu/internal/judge/ledger"
 	"tofu/internal/konst"
 	"tofu/internal/recall"
+	"tofu/internal/sys"
 	"tofu/internal/turn/tools"
 )
 
 func recordOneDecision(t *testing.T, root string) ledger.Row {
 	t.Helper()
-	writer := ledger.NewWriter(filepath.Join(root, ".tofu", "log"))
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	state, err := sys.ProjectStateDirAt(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	writer := ledger.NewWriter(filepath.Join(state, "log"))
 	row, err := writer.Append(ledger.Row{
 		Point:         "tool_gate",
 		Questions:     "tool_gate",

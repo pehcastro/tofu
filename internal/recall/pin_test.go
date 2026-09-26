@@ -3,7 +3,6 @@ package recall_test
 import (
 	"encoding/json"
 	"os"
-	"path/filepath"
 	"reflect"
 	"strconv"
 	"strings"
@@ -12,12 +11,12 @@ import (
 
 	"tofu/internal/recall"
 	"tofu/internal/session"
+	"tofu/internal/sys"
 )
 
 const (
 	pinnedCorpusPath   = "testdata/estimate-corpus.jsonl"
 	pinnedCorpusFloor  = 500
-	liveSessionsDir    = "../../.tofu/sessions"
 	pinnedCorpusWriter = "TOFU_PIN_ESTIMATE_CORPUS"
 )
 
@@ -251,7 +250,7 @@ func recordedRequests(t *testing.T) (recall.Config, []recordedRequest) {
 func liveRequests(t *testing.T) ([]recordedRequest, int) {
 	t.Helper()
 	cfg := shippedConfig(t)
-	store := session.NewStore(filepath.FromSlash(liveSessionsDir))
+	store := session.NewStore(sys.RecordedStateDir("sessions"))
 	listing, err := store.Listing()
 	if err != nil {
 		t.Skipf("the live sessions are not readable from here, so the pin cannot be checked against them: %v", err)

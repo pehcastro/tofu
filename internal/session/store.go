@@ -53,7 +53,9 @@ func (s *Store) Shape(id string) Shape {
 	return ShapeSingleFile
 }
 
-func OpenAt(state string) *Store { return NewStore(filepath.Join(state, "sessions")) }
+func SessionsDir(state string) string { return filepath.Join(state, "sessions") }
+
+func OpenAt(state string) *Store { return NewStore(SessionsDir(state)) }
 
 func Open() (*Store, error) {
 	state, err := sys.ProjectStateDir()

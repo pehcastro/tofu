@@ -70,7 +70,7 @@ func TestBenchReadsTheRowsTheInterfaceWrote(t *testing.T) {
 }
 
 func TestTheProjectCorpusIsCountedWhateverItsSize(t *testing.T) {
-	dir := sys.StateDir(filepath.Join("..", ".."))
+	dir := sys.RecordedStateDir()
 	rows, err := Read(dir)
 	if err != nil && !errors.Is(err, fs.ErrNotExist) {
 		t.Fatalf("Read: %v", err)

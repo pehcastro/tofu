@@ -5,9 +5,11 @@ import (
 	"os"
 	"strings"
 	"testing"
+
+	"tofu/internal/sys"
 )
 
-const realLedgerDir = "../../../.tofu/log"
+func realLedgerDir() string { return sys.RecordedStateDir("log") }
 
 func TestSchemaBumpedForTheFingerprint(t *testing.T) {
 	if SchemaVersion < FingerprintSchema {
@@ -68,12 +70,12 @@ func TestTheFingerprintIsReadAgainstTheSchemaThatAddedIt(t *testing.T) {
 }
 
 func TestEveryRowOnDiskReadsAndItsFingerprintFitsItsSchema(t *testing.T) {
-	if _, err := os.Stat(realLedgerDir); err != nil {
-		t.Skipf("skipped, not counted as a pass: this machine has no ledger at %s (%v)", realLedgerDir, err)
+	if _, err := os.Stat(realLedgerDir()); err != nil {
+		t.Skipf("skipped, not counted as a pass: this machine has no ledger at %s (%v)", realLedgerDir(), err)
 	}
 	bySchema := map[int]int{}
 	withFingerprint := 0
-	report, err := NewReader(realLedgerDir).Each(Filter{}, func(row Row) error {
+	report, err := NewReader(realLedgerDir()).Each(Filter{}, func(row Row) error {
 		bySchema[row.Schema]++
 		if row.Fingerprint != "" {
 			withFingerprint++
@@ -81,10 +83,10 @@ func TestEveryRowOnDiskReadsAndItsFingerprintFitsItsSchema(t *testing.T) {
 		return fingerprintFitsSchema(row)
 	})
 	if err != nil {
-		t.Fatalf("walking the real ledger at %s: %v", realLedgerDir, err)
+		t.Fatalf("walking the real ledger at %s: %v", realLedgerDir(), err)
 	}
 	if report.Scanned == 0 {
-		t.Fatalf("%s holds no rows, so this proves nothing", realLedgerDir)
+		t.Fatalf("%s holds no rows, so this proves nothing", realLedgerDir())
 	}
 	if len(report.Corrupt) > 0 {
 		t.Fatalf("%d of %d rows stopped reading, first: %+v", len(report.Corrupt), report.Scanned, report.Corrupt[0])

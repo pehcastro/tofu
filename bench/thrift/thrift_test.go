@@ -5,17 +5,19 @@ import (
 	"testing"
 
 	"tofu/bench/corpus"
+	"tofu/internal/sys"
 )
 
-const sessionsDir = "../../.tofu/sessions"
-const artifactsDir = "../../.tofu/artifacts"
+func sessionsDir() string { return sys.RecordedStateDir("sessions") }
+
+func artifactsDir() string { return sys.RecordedStateDir("artifacts") }
 
 const turnsGainedFromSplitRestarts = 7
 
 func TestEveryCorpusEntryIsEitherASessionOrANamedSkip(t *testing.T) {
-	walked, err := corpus.WalkSessions(sessionsDir)
+	walked, err := corpus.WalkSessions(sessionsDir())
 	if err != nil {
-		t.Fatalf("WalkSessions(%q): %v", sessionsDir, err)
+		t.Fatalf("WalkSessions(%q): %v", sessionsDir(), err)
 	}
 	if len(walked.Turns) == 0 {
 		t.Fatal("no session was read: the path is wrong or the corpus is empty")
@@ -75,7 +77,7 @@ func TestBlankDuplicateAndTrailingBytesNeverOverlap(t *testing.T) {
 }
 
 func TestTheArmNeverKeepsMoreThanTheCapAndNeverKeepsMoreLinesThanExist(t *testing.T) {
-	result, err := Run(sessionsDir, artifactsDir)
+	result, err := Run(sessionsDir(), artifactsDir())
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -96,7 +98,7 @@ func TestTheArmNeverKeepsMoreThanTheCapAndNeverKeepsMoreLinesThanExist(t *testin
 }
 
 func TestRtkCappedSavingNeverExceedsTheClaimedOne(t *testing.T) {
-	result, err := Run(sessionsDir, artifactsDir)
+	result, err := Run(sessionsDir(), artifactsDir())
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -109,7 +111,7 @@ func TestRtkCappedSavingNeverExceedsTheClaimedOne(t *testing.T) {
 }
 
 func TestReportOverTheRealCorpus(t *testing.T) {
-	result, err := Run(sessionsDir, artifactsDir)
+	result, err := Run(sessionsDir(), artifactsDir())
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}

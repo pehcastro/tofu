@@ -7,9 +7,8 @@ import (
 	"testing"
 
 	"tofu/bench/corpus"
+	"tofu/internal/sys"
 )
-
-const sessionsDir = "../../.tofu/sessions"
 
 func call(tool string, rendered int64, args map[string]string) corpus.RecordedCall {
 	encoded, err := json.Marshal(args)
@@ -143,6 +142,7 @@ func TestLeakOfNamesTheTerm(t *testing.T) {
 }
 
 func TestReportOverTheRealCorpus(t *testing.T) {
+	sessionsDir := sys.RecordedStateDir("sessions")
 	if _, err := os.Stat(sessionsDir); err != nil {
 		t.Skipf("skipped, named: the recorded corpus is not on this machine at %s", sessionsDir)
 	}

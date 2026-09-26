@@ -1,14 +1,14 @@
 package recall
 
 import (
-	"path/filepath"
 	"testing"
+
+	"tofu/internal/sys"
 )
 
 func realSessionsDir(t *testing.T) string {
 	t.Helper()
-	dir := filepath.Join("..", "..", ".tofu", "sessions")
-	return dir
+	return sys.RecordedStateDir("sessions")
 }
 
 func TestNoRecordedSessionHasEverCrossedTheCeiling(t *testing.T) {

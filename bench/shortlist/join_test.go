@@ -6,10 +6,10 @@ import (
 )
 
 func TestTheSearchJoinCountedFromRecordedSessions(t *testing.T) {
-	if _, err := os.Stat(sessionsDir); err != nil {
-		t.Skipf("no recorded sessions at %s on this machine: %v", sessionsDir, err)
+	if _, err := os.Stat(sessionsDir()); err != nil {
+		t.Skipf("no recorded sessions at %s on this machine: %v", sessionsDir(), err)
 	}
-	rows, counts, err := BuildJoinCorpus(sessionsDir)
+	rows, counts, err := BuildJoinCorpus(sessionsDir())
 	if err != nil {
 		t.Fatalf("BuildJoinCorpus: %v", err)
 	}

@@ -12,10 +12,11 @@ import (
 
 	"tofu/interface/tui"
 	"tofu/internal/llm"
+	"tofu/internal/sys"
 	"tofu/internal/turn"
 )
 
-const recordedSessionsDir = "../../.tofu/sessions"
+var recordedSessionsDir = sys.RecordedStateDir("sessions")
 
 type recordedLine struct {
 	Kind string          `json:"kind"`

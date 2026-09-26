@@ -11,9 +11,10 @@ import (
 
 	"tofu/internal/judge/ledger"
 	"tofu/internal/konst"
+	"tofu/internal/sys"
 )
 
-const realLedgerDir = "../../../.tofu/log"
+func realLedgerDir() string { return sys.RecordedStateDir("log") }
 
 type recordedCall struct {
 	Tool  string         `json:"tool"`
@@ -23,10 +24,10 @@ type recordedCall struct {
 
 func fingerprintedCopyOfTheRealLedger(t *testing.T) (dir string, rows []ledger.Row, skippedWithoutState int) {
 	t.Helper()
-	if _, err := os.Stat(realLedgerDir); err != nil {
-		t.Skipf("skipped, not counted as a pass: this machine has no ledger at %s (%v)", realLedgerDir, err)
+	if _, err := os.Stat(realLedgerDir()); err != nil {
+		t.Skipf("skipped, not counted as a pass: this machine has no ledger at %s (%v)", realLedgerDir(), err)
 	}
-	report, err := ledger.NewReader(realLedgerDir).Each(ledger.Filter{Point: ToolGatePoint}, func(row ledger.Row) error {
+	report, err := ledger.NewReader(realLedgerDir()).Each(ledger.Filter{Point: ToolGatePoint}, func(row ledger.Row) error {
 		if len(row.State) == 0 {
 			skippedWithoutState++
 			return nil
@@ -44,7 +45,7 @@ func fingerprintedCopyOfTheRealLedger(t *testing.T) (dir string, rows []ledger.R
 		t.Fatalf("reading the real ledger: %v", err)
 	}
 	if len(rows) == 0 {
-		t.Fatalf("%s scanned %d rows and none carried a state body, so this proves nothing", realLedgerDir, report.Scanned)
+		t.Fatalf("%s scanned %d rows and none carried a state body, so this proves nothing", realLedgerDir(), report.Scanned)
 	}
 
 	dir = t.TempDir()

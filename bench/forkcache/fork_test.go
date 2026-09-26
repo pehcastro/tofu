@@ -2,17 +2,16 @@ package forkcache_test
 
 import (
 	"os"
-	"path/filepath"
 	"reflect"
 	"testing"
 
 	"tofu/bench/forkcache"
 	"tofu/internal/session"
+	"tofu/internal/sys"
 )
 
 const (
 	pinnedPairsPath = "testdata/forks.jsonl"
-	liveSessionsDir = "../../.tofu/sessions"
 	pinWriter       = "TOFU_PIN_FORK_CACHE"
 	pinnedPairsMin  = 2
 )
@@ -82,7 +81,7 @@ func TestAnAccountForkIsNotInTheRecordedCorpus(t *testing.T) {
 }
 
 func TestThePinnedForkPairsStillMatchTheLiveSessions(t *testing.T) {
-	store := session.NewStore(filepath.FromSlash(liveSessionsDir))
+	store := session.NewStore(sys.RecordedStateDir("sessions"))
 	live, skipped, err := forkcache.PairsIn(store)
 	if err != nil {
 		t.Skipf("the live sessions are not readable from here, so the pin cannot be checked against them: %v", err)

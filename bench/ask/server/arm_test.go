@@ -3,6 +3,8 @@ package server
 import (
 	"path/filepath"
 	"testing"
+
+	"tofu/internal/sys"
 )
 
 func loadBoth(t *testing.T) (Moment, Moment) {
@@ -63,7 +65,7 @@ func TestShapeMatchAsksAndDoesNotPickWrong(t *testing.T) {
 }
 
 func TestFireShareAcrossTheWholeCorpus(t *testing.T) {
-	share, err := Scan(BobSessionsDirFromPackage, filepath.Dir(Session1Dir))
+	share, err := Scan(sys.RecordedStateDir("sessions"), filepath.Dir(Session1Dir))
 	if err != nil {
 		t.Fatalf("Scan: %v", err)
 	}

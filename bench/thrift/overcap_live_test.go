@@ -29,14 +29,14 @@ func TestTheNineOverCapArtifactsJudgedAgainstFixedTruncation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ThriftQuestions: %v", err)
 	}
-	walked, err := corpus.WalkSessions(sessionsDir)
+	walked, err := corpus.WalkSessions(sessionsDir())
 	if err != nil {
-		t.Fatalf("WalkSessions(%q): %v", sessionsDir, err)
+		t.Fatalf("WalkSessions(%q): %v", sessionsDir(), err)
 	}
 	if len(walked.Turns) == 0 {
 		t.Fatal("no session was read: the path is wrong or the corpus is empty")
 	}
-	targets, idSkips := OverCapReadAndSearchTargets(artifactsDir, walked.Turns)
+	targets, idSkips := OverCapReadAndSearchTargets(artifactsDir(), walked.Turns)
 	if len(targets)+len(idSkips) == 0 {
 		t.Fatal("no over-cap read or search artifact was found in the corpus")
 	}

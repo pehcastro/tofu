@@ -3,14 +3,17 @@ package instruction
 import (
 	"os"
 	"testing"
+
+	"tofu/internal/sys"
 )
 
 func loadOrSkip(t *testing.T) Corpus {
 	t.Helper()
-	if _, err := os.Stat(SessionsDir); err != nil {
-		t.Skipf("skipped: %s is not on this machine, so there is no recorded turn to read", SessionsDir)
+	sessionsDir := sys.RecordedStateDir("sessions")
+	if _, err := os.Stat(sessionsDir); err != nil {
+		t.Skipf("skipped: %s is not on this machine, so there is no recorded turn to read", sessionsDir)
 	}
-	loaded, err := Load(SessionsDir)
+	loaded, err := Load(sessionsDir)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -12,6 +12,7 @@ import (
 	"tofu/bench/report"
 	"tofu/internal/judge/jev"
 	"tofu/internal/judge/state"
+	"tofu/internal/sys"
 )
 
 const repoRoot = "../.."
@@ -118,9 +119,9 @@ func answerValue(a jev.Answer) float64 {
 }
 
 func TestTheTypedOutcomeInTheNextState(t *testing.T) {
-	dir := filepath.Join(repoRoot, ".tofu", "sessions")
+	dir := sys.RecordedStateDir("sessions")
 	if _, err := os.Stat(dir); err != nil {
-		t.Skipf(".tofu/sessions is not on this machine: %v", err)
+		t.Skipf("%s is not on this machine: %v", dir, err)
 	}
 	frozen, _, err := ReadSessions(corpusDir)
 	if err != nil {

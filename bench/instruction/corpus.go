@@ -7,8 +7,6 @@ import (
 	"tofu/bench/corpus"
 )
 
-const SessionsDir = "../../.tofu/sessions"
-
 type Row struct {
 	Turn              string
 	Key               string

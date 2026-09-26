@@ -9,13 +9,10 @@ import (
 	"time"
 
 	"tofu/internal/llm/quota"
+	"tofu/internal/sys"
 )
 
-const (
-	prefixPath = "../forkcache/testdata/forks.jsonl"
-	logDir     = "../../.tofu/log"
-	sessionDir = "../../.tofu/sessions"
-)
+const prefixPath = "../forkcache/testdata/forks.jsonl"
 
 const fullAgain = 1
 
@@ -130,7 +127,7 @@ func TestAReadingMissingAFieldIsSkippedAndNamed(t *testing.T) {
 }
 
 func TestEveryRecordedRowIsEitherAReadingOrANamedSkip(t *testing.T) {
-	corpus, err := Gather(logDir, sessionDir)
+	corpus, err := Gather(sys.RecordedStateDir("log"), sys.RecordedStateDir("sessions"))
 	if err != nil {
 		t.Fatalf("Gather: %v", err)
 	}
@@ -145,7 +142,7 @@ func TestEveryRecordedRowIsEitherAReadingOrANamedSkip(t *testing.T) {
 }
 
 func TestTheReportOverTheRecordedCorpus(t *testing.T) {
-	result, err := Run(prefixPath, logDir, sessionDir)
+	result, err := Run(prefixPath, sys.RecordedStateDir("log"), sys.RecordedStateDir("sessions"))
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}

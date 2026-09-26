@@ -14,10 +14,10 @@ const (
 )
 
 func TestWalkSessionsStillReachesEverySessionTheStoreLists(t *testing.T) {
-	if _, err := os.Stat(sessionsDir); err != nil {
-		t.Skipf("no %s on this machine: %v", sessionsDir, err)
+	if _, err := os.Stat(recordedSessionsDir()); err != nil {
+		t.Skipf("no %s on this machine: %v", recordedSessionsDir(), err)
 	}
-	store := session.NewStore(sessionsDir)
+	store := session.NewStore(recordedSessionsDir())
 	listing, err := store.Listing()
 	if err != nil {
 		t.Fatal(err)
@@ -28,7 +28,7 @@ func TestWalkSessionsStillReachesEverySessionTheStoreLists(t *testing.T) {
 			eventShaped++
 		}
 	}
-	walked, err := WalkSessions(sessionsDir)
+	walked, err := WalkSessions(recordedSessionsDir())
 	if err != nil {
 		t.Fatal(err)
 	}

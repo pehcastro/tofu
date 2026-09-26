@@ -9,8 +9,6 @@ import (
 	"tofu/internal/secret"
 )
 
-const recordedSessionsFromThisPackage = "../../.tofu/sessions"
-
 const valueCharacters = "-_0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
 func readableBytesUnder(t *testing.T, path string) string {
@@ -48,9 +46,9 @@ func valueCharactersAfter(text, marker string) int {
 }
 
 func TestHowManyRecordedTurnsOnThisMachineCarrySomethingCredentialShaped(t *testing.T) {
-	entries, err := os.ReadDir(recordedSessionsFromThisPackage)
+	entries, err := os.ReadDir(recordedSessionsDir())
 	if os.IsNotExist(err) {
-		t.Skip("no .tofu/sessions on this machine, so there is nothing recorded to measure")
+		t.Skipf("no %s on this machine, so there is nothing recorded to measure", recordedSessionsDir())
 	}
 	if err != nil {
 		t.Fatal(err)
@@ -60,7 +58,7 @@ func TestHowManyRecordedTurnsOnThisMachineCarrySomethingCredentialShaped(t *test
 	}
 	flagged, withValueShape := 0, 0
 	for _, entry := range entries {
-		text := readableBytesUnder(t, filepath.Join(recordedSessionsFromThisPackage, entry.Name()))
+		text := readableBytesUnder(t, filepath.Join(recordedSessionsDir(), entry.Name()))
 		markers := secret.CredentialsIn(text)
 		if len(markers) == 0 {
 			continue

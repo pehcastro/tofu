@@ -3,12 +3,12 @@ package main
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
 	"tofu/bench/report"
 	"tofu/bench/tokencount"
+	"tofu/internal/sys"
 )
 
 const testFunctionCount = 16
@@ -21,7 +21,7 @@ func main() {
 }
 
 func run() error {
-	result, err := tokencount.Run(filepath.Join("..", "..", "..", ".tofu", "sessions"))
+	result, err := tokencount.Run(sys.RecordedStateDir("sessions"))
 	if err != nil {
 		return err
 	}

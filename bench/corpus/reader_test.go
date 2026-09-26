@@ -9,21 +9,26 @@ import (
 	"sort"
 	"strings"
 	"testing"
+
+	"tofu/internal/session"
+	"tofu/internal/sys"
 )
 
-const sessionsDir = "../../.tofu/sessions"
+func recordedSessionsDir() string {
+	return session.SessionsDir(sys.OwnerProjectStateDir(sys.SourceRoot()))
+}
 
 func firstReadableEntry(t *testing.T, wantDir bool) (string, bool) {
 	t.Helper()
-	entries, err := os.ReadDir(sessionsDir)
+	entries, err := os.ReadDir(recordedSessionsDir())
 	if err != nil {
-		t.Skipf("no %s on this machine: %v", sessionsDir, err)
+		t.Skipf("no %s on this machine: %v", recordedSessionsDir(), err)
 	}
 	for _, entry := range entries {
 		if entry.IsDir() != wantDir || (!wantDir && filepath.Ext(entry.Name()) != ".json") {
 			continue
 		}
-		full := filepath.Join(sessionsDir, entry.Name())
+		full := filepath.Join(recordedSessionsDir(), entry.Name())
 		if wantDir {
 			if _, err := ReadTurnDir(full); err == nil {
 				return entry.Name(), true
@@ -78,7 +83,7 @@ func TestTheReaderParsesBothSchemas(t *testing.T) {
 		if !ok {
 			t.Skip("no single file turn on this machine")
 		}
-		recorded, err := ReadTurn(filepath.Join(sessionsDir, name))
+		recorded, err := ReadTurn(filepath.Join(recordedSessionsDir(), name))
 		assertParsedTurn(t, name, recorded, err)
 	})
 	t.Run("header and jsonl", func(t *testing.T) {
@@ -86,7 +91,7 @@ func TestTheReaderParsesBothSchemas(t *testing.T) {
 		if !ok {
 			t.Skip("no header and jsonl turn on this machine")
 		}
-		recorded, err := ReadTurnDir(filepath.Join(sessionsDir, name))
+		recorded, err := ReadTurnDir(filepath.Join(recordedSessionsDir(), name))
 		assertParsedTurn(t, name, recorded, err)
 	})
 }
@@ -108,7 +113,7 @@ func TestAPlantedHomePathDoesNotSurviveTheRead(t *testing.T) {
 		t.Skip("no single file turn on this machine")
 	}
 	scratch := t.TempDir()
-	original, err := os.ReadFile(filepath.Join(sessionsDir, name))
+	original, err := os.ReadFile(filepath.Join(recordedSessionsDir(), name))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -145,7 +150,7 @@ func TestAPlantedHomePathDoesNotSurviveTheDirRead(t *testing.T) {
 	}
 	scratch := t.TempDir()
 	dst := filepath.Join(scratch, name)
-	copyDir(t, filepath.Join(sessionsDir, name), dst)
+	copyDir(t, filepath.Join(recordedSessionsDir(), name), dst)
 	bodyPath := filepath.Join(dst, "body.jsonl")
 	body, err := os.ReadFile(bodyPath)
 	if err != nil {
@@ -178,15 +183,15 @@ func hasStepWithText(steps []RecordedStep) bool {
 
 func TestTheReaderCarriesReplyTextOnBothSchemas(t *testing.T) {
 	t.Run("single file", func(t *testing.T) {
-		entries, err := os.ReadDir(sessionsDir)
+		entries, err := os.ReadDir(recordedSessionsDir())
 		if err != nil {
-			t.Skipf("no %s on this machine: %v", sessionsDir, err)
+			t.Skipf("no %s on this machine: %v", recordedSessionsDir(), err)
 		}
 		for _, entry := range entries {
 			if entry.IsDir() || filepath.Ext(entry.Name()) != ".json" {
 				continue
 			}
-			recorded, err := ReadTurn(filepath.Join(sessionsDir, entry.Name()))
+			recorded, err := ReadTurn(filepath.Join(recordedSessionsDir(), entry.Name()))
 			if err != nil {
 				continue
 			}
@@ -197,15 +202,15 @@ func TestTheReaderCarriesReplyTextOnBothSchemas(t *testing.T) {
 		t.Skip("no single file turn on this machine carries reply text")
 	})
 	t.Run("header and jsonl", func(t *testing.T) {
-		entries, err := os.ReadDir(sessionsDir)
+		entries, err := os.ReadDir(recordedSessionsDir())
 		if err != nil {
-			t.Skipf("no %s on this machine: %v", sessionsDir, err)
+			t.Skipf("no %s on this machine: %v", recordedSessionsDir(), err)
 		}
 		for _, entry := range entries {
 			if !entry.IsDir() {
 				continue
 			}
-			recorded, err := ReadTurnDir(filepath.Join(sessionsDir, entry.Name()))
+			recorded, err := ReadTurnDir(filepath.Join(recordedSessionsDir(), entry.Name()))
 			if err != nil {
 				continue
 			}
@@ -223,7 +228,7 @@ func TestAPlantedHomePathInReplyTextDoesNotSurviveTheRead(t *testing.T) {
 		t.Skip("no single file turn on this machine")
 	}
 	scratch := t.TempDir()
-	original, err := os.ReadFile(filepath.Join(sessionsDir, name))
+	original, err := os.ReadFile(filepath.Join(recordedSessionsDir(), name))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -266,15 +271,15 @@ func TestAPlantedHomePathInReplyTextDoesNotSurviveTheRead(t *testing.T) {
 
 func TestTheReaderCarriesTheTypedOutcomeOnBothSchemas(t *testing.T) {
 	t.Run("single file", func(t *testing.T) {
-		entries, err := os.ReadDir(sessionsDir)
+		entries, err := os.ReadDir(recordedSessionsDir())
 		if err != nil {
-			t.Skipf("no %s on this machine: %v", sessionsDir, err)
+			t.Skipf("no %s on this machine: %v", recordedSessionsDir(), err)
 		}
 		for _, entry := range entries {
 			if entry.IsDir() || filepath.Ext(entry.Name()) != ".json" {
 				continue
 			}
-			recorded, err := ReadTurn(filepath.Join(sessionsDir, entry.Name()))
+			recorded, err := ReadTurn(filepath.Join(recordedSessionsDir(), entry.Name()))
 			if err != nil || recorded.Outcome == "" {
 				continue
 			}
@@ -283,15 +288,15 @@ func TestTheReaderCarriesTheTypedOutcomeOnBothSchemas(t *testing.T) {
 		t.Skip("no single file turn on this machine carries an outcome")
 	})
 	t.Run("header and jsonl", func(t *testing.T) {
-		entries, err := os.ReadDir(sessionsDir)
+		entries, err := os.ReadDir(recordedSessionsDir())
 		if err != nil {
-			t.Skipf("no %s on this machine: %v", sessionsDir, err)
+			t.Skipf("no %s on this machine: %v", recordedSessionsDir(), err)
 		}
 		for _, entry := range entries {
 			if !entry.IsDir() {
 				continue
 			}
-			recorded, err := ReadTurnDir(filepath.Join(sessionsDir, entry.Name()))
+			recorded, err := ReadTurnDir(filepath.Join(recordedSessionsDir(), entry.Name()))
 			if err != nil || recorded.Outcome == "" {
 				continue
 			}
@@ -307,7 +312,7 @@ func TestAPlantedHomePathInOutcomeDoesNotSurviveTheRead(t *testing.T) {
 		t.Skip("no single file turn on this machine")
 	}
 	scratch := t.TempDir()
-	original, err := os.ReadFile(filepath.Join(sessionsDir, name))
+	original, err := os.ReadFile(filepath.Join(recordedSessionsDir(), name))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -339,15 +344,15 @@ func TestAPlantedHomePathInOutcomeDoesNotSurviveTheRead(t *testing.T) {
 
 func firstDirWith(t *testing.T, has func(RecordedTurn) bool) (string, bool) {
 	t.Helper()
-	entries, err := os.ReadDir(sessionsDir)
+	entries, err := os.ReadDir(recordedSessionsDir())
 	if err != nil {
-		t.Skipf("no %s on this machine: %v", sessionsDir, err)
+		t.Skipf("no %s on this machine: %v", recordedSessionsDir(), err)
 	}
 	for _, entry := range entries {
 		if !entry.IsDir() {
 			continue
 		}
-		recorded, err := ReadTurnDir(filepath.Join(sessionsDir, entry.Name()))
+		recorded, err := ReadTurnDir(filepath.Join(recordedSessionsDir(), entry.Name()))
 		if err != nil || !has(recorded) {
 			continue
 		}
@@ -363,7 +368,7 @@ func TestAPlantedHomePathInAutoCompactionDoesNotSurviveTheDirRead(t *testing.T) 
 	}
 	scratch := t.TempDir()
 	dst := filepath.Join(scratch, name)
-	copyDir(t, filepath.Join(sessionsDir, name), dst)
+	copyDir(t, filepath.Join(recordedSessionsDir(), name), dst)
 	headerPath := filepath.Join(dst, "header.json")
 	header, err := os.ReadFile(headerPath)
 	if err != nil {
@@ -397,7 +402,7 @@ func TestAPlantedHomePathInBudgetSourceDoesNotSurviveTheDirRead(t *testing.T) {
 	}
 	scratch := t.TempDir()
 	dst := filepath.Join(scratch, name)
-	copyDir(t, filepath.Join(sessionsDir, name), dst)
+	copyDir(t, filepath.Join(recordedSessionsDir(), name), dst)
 	bodyPath := filepath.Join(dst, "body.jsonl")
 	body, err := os.ReadFile(bodyPath)
 	if err != nil {
@@ -421,12 +426,12 @@ func TestAPlantedHomePathInBudgetSourceDoesNotSurviveTheDirRead(t *testing.T) {
 
 func firstCallOffDisk(t *testing.T, wanted func(RecordedCall) bool) (where string, found RecordedCall, ok bool) {
 	t.Helper()
-	if _, err := os.Stat(sessionsDir); err != nil {
-		t.Skipf("no %s on this machine: %v", sessionsDir, err)
+	if _, err := os.Stat(recordedSessionsDir()); err != nil {
+		t.Skipf("no %s on this machine: %v", recordedSessionsDir(), err)
 	}
-	walked, err := WalkSessions(sessionsDir)
+	walked, err := WalkSessions(recordedSessionsDir())
 	if err != nil {
-		t.Fatalf("walking %s: %v", sessionsDir, err)
+		t.Fatalf("walking %s: %v", recordedSessionsDir(), err)
 	}
 	for _, turn := range walked.Turns {
 		for _, step := range turn.Steps {
@@ -465,7 +470,7 @@ func TestATurnWithStepsAndNoOutcomeLineIsReadAndSaysItsWallClockIsMissing(t *tes
 	}
 	scratch := t.TempDir()
 	dst := filepath.Join(scratch, name)
-	copyDir(t, filepath.Join(sessionsDir, name), dst)
+	copyDir(t, filepath.Join(recordedSessionsDir(), name), dst)
 	if err := os.Remove(filepath.Join(dst, "header.json")); err != nil {
 		t.Fatal(err)
 	}
@@ -609,12 +614,12 @@ func TestARecordedCallKeepsItsDuration(t *testing.T) {
 }
 
 func TestTheCorpusCallDurationsHaveAMedianAndAWorst(t *testing.T) {
-	if _, err := os.Stat(sessionsDir); err != nil {
-		t.Skipf("no %s on this machine: %v", sessionsDir, err)
+	if _, err := os.Stat(recordedSessionsDir()); err != nil {
+		t.Skipf("no %s on this machine: %v", recordedSessionsDir(), err)
 	}
-	walked, err := WalkSessions(sessionsDir)
+	walked, err := WalkSessions(recordedSessionsDir())
 	if err != nil {
-		t.Fatalf("walking %s: %v", sessionsDir, err)
+		t.Fatalf("walking %s: %v", recordedSessionsDir(), err)
 	}
 	var durations []int64
 	for _, turn := range walked.Turns {
@@ -673,12 +678,12 @@ func TestARestartedSessionReadsAsTwoSeparateTurns(t *testing.T) {
 }
 
 func TestWalkSessionsOverTheRealTreeReportsTheFiveNumbers(t *testing.T) {
-	if _, err := os.Stat(sessionsDir); os.IsNotExist(err) {
-		t.Skip("no .tofu/sessions on this machine")
+	if _, err := os.Stat(recordedSessionsDir()); os.IsNotExist(err) {
+		t.Skipf("no %s on this machine", recordedSessionsDir())
 	}
-	walked, err := WalkSessions(sessionsDir)
+	walked, err := WalkSessions(recordedSessionsDir())
 	if err != nil {
-		t.Fatalf("walking %s: %v", sessionsDir, err)
+		t.Fatalf("walking %s: %v", recordedSessionsDir(), err)
 	}
 	bySchema := map[Schema]int{}
 	withToolCall, withWrite, noWallClock := 0, 0, 0

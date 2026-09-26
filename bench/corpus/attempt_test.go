@@ -7,16 +7,16 @@ import (
 )
 
 func TestHowManyTurnsInTheCorpusCarryARetry(t *testing.T) {
-	entries, err := os.ReadDir(sessionsDir)
+	entries, err := os.ReadDir(recordedSessionsDir())
 	if err != nil {
-		t.Skipf("no %s on this machine: %v", sessionsDir, err)
+		t.Skipf("no %s on this machine: %v", recordedSessionsDir(), err)
 	}
 	read, retried, unrecorded := 0, 0, 0
 	for _, entry := range entries {
 		if !entry.IsDir() {
 			continue
 		}
-		recorded, err := ReadTurnDir(filepath.Join(sessionsDir, entry.Name()))
+		recorded, err := ReadTurnDir(filepath.Join(recordedSessionsDir(), entry.Name()))
 		if err != nil {
 			continue
 		}

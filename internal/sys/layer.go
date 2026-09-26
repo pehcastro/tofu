@@ -22,7 +22,7 @@ func Layers(shipped fs.FS, sub, dir string) ([]Layer, error) {
 	}
 	project := StateDir(dir)
 	if dir == "" {
-		if project, err = ProjectStateDir(); err != nil {
+		if project, err = ProjectConfigDir(); err != nil {
 			return nil, err
 		}
 	}

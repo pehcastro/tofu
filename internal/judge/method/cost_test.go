@@ -9,16 +9,17 @@ import (
 
 	"tofu/internal/judge/ledger"
 	"tofu/internal/judge/method"
+	"tofu/internal/sys"
 )
 
-const recordedLedger = "../../../.tofu/log"
+func recordedLedger() string { return sys.RecordedStateDir("log") }
 
 func TestTheStopCheckCostTheTableStatesIsTheOneTheRecordedLedgerCarries(t *testing.T) {
-	if _, err := os.Stat(recordedLedger); err != nil {
-		t.Skipf("skipped, and counted: no recorded ledger at %s: %v", recordedLedger, err)
+	if _, err := os.Stat(recordedLedger()); err != nil {
+		t.Skipf("skipped, and counted: no recorded ledger at %s: %v", recordedLedger(), err)
 	}
 	perSession := map[string]float64{}
-	report, err := ledger.NewReader(recordedLedger).Each(
+	report, err := ledger.NewReader(recordedLedger()).Each(
 		ledger.Filter{Point: "stop_check", Origin: ledger.OriginTurn},
 		func(row ledger.Row) error {
 			perSession[row.TurnID] += row.Cost

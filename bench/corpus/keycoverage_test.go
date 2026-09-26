@@ -105,13 +105,13 @@ func walkBody(t *testing.T, body []byte, schema string, visit corpusVisitor) {
 
 func walkRealCorpus(t *testing.T, visit corpusVisitor) (singleFileSeen, dirsSeen int) {
 	t.Helper()
-	entries, err := os.ReadDir(sessionsDir)
+	entries, err := os.ReadDir(recordedSessionsDir())
 	if err != nil {
-		t.Skipf("no %s on this machine: %v", sessionsDir, err)
+		t.Skipf("no %s on this machine: %v", recordedSessionsDir(), err)
 	}
 	for _, entry := range entries {
 		if entry.IsDir() {
-			dir := filepath.Join(sessionsDir, entry.Name())
+			dir := filepath.Join(recordedSessionsDir(), entry.Name())
 			if header, err := os.ReadFile(filepath.Join(dir, "header.json")); err == nil {
 				visit("header and jsonl", "turn", rawObject(t, header))
 			}
@@ -126,7 +126,7 @@ func walkRealCorpus(t *testing.T, visit corpusVisitor) (singleFileSeen, dirsSeen
 		if filepath.Ext(entry.Name()) != ".json" {
 			continue
 		}
-		data, err := os.ReadFile(filepath.Join(sessionsDir, entry.Name()))
+		data, err := os.ReadFile(filepath.Join(recordedSessionsDir(), entry.Name()))
 		if err != nil {
 			t.Fatal(err)
 		}

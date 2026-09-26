@@ -155,10 +155,10 @@ func TestWriteTheSizeReport(t *testing.T) {
 		t.Skip("set TOFU_LIVE=1 to write today's dated report; no network call happens here, the gate is only to keep report.Write from being asked to overwrite an existing file on a repeat run")
 	}
 	rows := corpusRows(t)
-	if _, err := os.Stat(sessionsDir); err != nil {
-		t.Skipf("no recorded sessions at %s, cannot count the population for the report: %v", sessionsDir, err)
+	if _, err := os.Stat(sessionsDir()); err != nil {
+		t.Skipf("no recorded sessions at %s, cannot count the population for the report: %v", sessionsDir(), err)
 	}
-	walked, err := corpus.WalkSessions(sessionsDir)
+	walked, err := corpus.WalkSessions(sessionsDir())
 	if err != nil {
 		t.Fatalf("WalkSessions: %v", err)
 	}

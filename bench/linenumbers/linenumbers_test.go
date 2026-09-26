@@ -9,10 +9,9 @@ import (
 	"strings"
 	"testing"
 
+	"tofu/internal/sys"
 	"tofu/internal/turn"
 )
-
-const sessionsDir = "../../.tofu/sessions"
 
 var numberedLine = regexp.MustCompile(`(?m)^\d+[:\t\x{2192}]`)
 
@@ -51,6 +50,7 @@ func TestNoReadEverEmitsALineNumber(t *testing.T) {
 }
 
 func TestByteTotalsOverTheRealCorpus(t *testing.T) {
+	sessionsDir := sys.RecordedStateDir("sessions")
 	result, err := Run(sessionsDir)
 	if err != nil {
 		t.Fatalf("Run(%q): %v", sessionsDir, err)

@@ -25,7 +25,8 @@ const (
   rules       8 points, all shadow, thresholds from the rule
               tool_gate@3 is the point the gate decides through
               shell_sift@1 shadow, no lock file for shell_sift@1
-  calibration none, no lock in %s
+  calibration none, no lock in
+                %s
   ledger      empty
 `
 
@@ -41,7 +42,8 @@ const (
   rules       7 points, all shadow, thresholds from the rule
               shell_sift@1 shadow, no lock file for shell_sift@1
               tool_gate@3 shadow, no lock file for tool_gate@3
-  calibration none, no lock in %s
+  calibration none, no lock in
+                %s
   ledger      empty
 `
 
@@ -78,7 +80,9 @@ func doctorParts(t *testing.T, printed string) (string, string, string) {
 }
 
 func TestE2EDoctorReadsTheKeyAndTheRuleOfTheProjectItRunsIn(t *testing.T) {
-	calibration := filepath.Join(".tofu", "calibration")
+	calibration := func(p project) string {
+		return filepath.Join(p.home, sys.StateDirName, sys.ProjectsDirName, sys.ProjectKey(p.root(t)), "calibration")
+	}
 	host := reportIndent + sys.GoVersion() + ", " + sys.OS() + "/" + sys.Arch() + ", in "
 
 	headlineOf := regexp.MustCompile(`^tofu \d+\.\d+\.\d+\S* +not ready$`)
@@ -89,7 +93,7 @@ func TestE2EDoctorReadsTheKeyAndTheRuleOfTheProjectItRunsIn(t *testing.T) {
 		t.Fatalf("the headline of a project with nothing signed in is %q", headline)
 	}
 	sameText(t, "a project with no key and no rule of its own", body,
-		fmt.Sprintf(doctorBodyWithNoKeyAndNoProjectRule, calibration))
+		fmt.Sprintf(doctorBodyWithNoKeyAndNoProjectRule, calibration(bare)))
 	sameText(t, "the host line", trailer, host+bare.root(t))
 
 	own := newProject(t, "own")
@@ -100,6 +104,6 @@ func TestE2EDoctorReadsTheKeyAndTheRuleOfTheProjectItRunsIn(t *testing.T) {
 		t.Fatalf("the headline of a project carrying its own key and rule is %q", headline)
 	}
 	sameText(t, "a project carrying its own key and its own tool_gate@3", body,
-		fmt.Sprintf(doctorBodyWithAKeyAndAProjectRule, calibration))
+		fmt.Sprintf(doctorBodyWithAKeyAndAProjectRule, calibration(own)))
 	sameText(t, "the host line", trailer, host+own.root(t))
 }

@@ -3,16 +3,15 @@ package main
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 
 	"tofu/bench/recall"
 	"tofu/bench/report"
+	"tofu/internal/sys"
 )
 
 func main() {
 	err := report.Generate("recall reach report", func(machine, date string) (string, error) {
-		sessionsDir := filepath.Join("..", "..", "..", ".tofu", "sessions")
-		reach, err := recall.WalkCorpusReach(sessionsDir)
+		reach, err := recall.WalkCorpusReach(sys.RecordedStateDir("sessions"))
 		if err != nil {
 			return "", err
 		}
