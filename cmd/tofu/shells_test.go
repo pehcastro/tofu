@@ -12,10 +12,10 @@ import (
 func TestShellsVerbListsReadsAndKillsARealProcess(t *testing.T) {
 	registry := shell.OpenAt(t.TempDir())
 	root := t.TempDir()
-	if _, err := registry.Start(root, "dev-server", "sleep 10 & echo listening on :3000; wait"); err != nil {
+	if _, err := registry.Start(root, "dev-server", "sleep 10 & echo listening on :3000; wait", ""); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := registry.Start(root, "build", "echo compiling && echo done"); err != nil {
+	if _, err := registry.Start(root, "build", "echo compiling && echo done", ""); err != nil {
 		t.Fatal(err)
 	}
 	deadline := time.Now().Add(3 * time.Second)

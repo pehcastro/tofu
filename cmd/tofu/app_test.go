@@ -1884,7 +1884,7 @@ func TestTheEndOfASessionNamesEachProcessItStops(t *testing.T) {
 		t.Skip("starts a real process")
 	}
 	registry := shell.OpenAt(filepath.Join(t.TempDir(), "shells"))
-	if _, err := registry.Start(t.TempDir(), "dev-server", "sleep 10"); err != nil {
+	if _, err := registry.Start(t.TempDir(), "dev-server", "sleep 10", ""); err != nil {
 		t.Fatalf("starting a background process: %v", err)
 	}
 	t.Cleanup(func() { _ = registry.Kill("dev-server") })

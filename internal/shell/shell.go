@@ -34,6 +34,8 @@ const (
 type Shell struct {
 	Name     string     `json:"name"`
 	Command  string     `json:"command"`
+	Dir      string     `json:"dir"`
+	Owner    string     `json:"owner"`
 	PID      int        `json:"pid"`
 	State    State      `json:"state"`
 	Started  time.Time  `json:"started"`
@@ -90,7 +92,7 @@ func (r *Registry) reserve(name string) error {
 	return os.MkdirAll(r.dir, dirMode)
 }
 
-func (r *Registry) Start(root, name, command string) (Shell, error) {
+func (r *Registry) Start(root, name, command, owner string) (Shell, error) {
 	if err := r.reserve(name); err != nil {
 		return Shell{}, err
 	}
@@ -110,7 +112,7 @@ func (r *Registry) Start(root, name, command string) (Shell, error) {
 		_ = logFile.Close()
 		return Shell{}, err
 	}
-	entry := Shell{Name: name, Command: command, PID: cmd.Process.Pid, State: Running, Started: time.Now()}
+	entry := Shell{Name: name, Command: command, Dir: root, Owner: owner, PID: cmd.Process.Pid, State: Running, Started: time.Now()}
 	process := &live{tree: spawned, finished: make(chan struct{})}
 	r.mu.Lock()
 	writeErr := r.writeLocked(entry)
@@ -242,7 +244,7 @@ type Watch struct {
 	log  *os.File
 }
 
-func (r *Registry) Watch(name, command string) (*Watch, error) {
+func (r *Registry) Watch(name, command, dir, owner string) (*Watch, error) {
 	if err := r.reserve(name); err != nil {
 		return nil, err
 	}
@@ -250,7 +252,7 @@ func (r *Registry) Watch(name, command string) (*Watch, error) {
 	if err != nil {
 		return nil, err
 	}
-	entry := Shell{Name: name, Command: command, State: Running, Started: time.Now()}
+	entry := Shell{Name: name, Command: command, Dir: dir, Owner: owner, State: Running, Started: time.Now()}
 	r.mu.Lock()
 	writeErr := r.writeLocked(entry)
 	if writeErr == nil {

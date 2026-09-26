@@ -49,6 +49,13 @@ func shellRegistryFrom(ctx context.Context) *shell.Registry {
 	return registry
 }
 
+type shellOwnerKey struct{}
+
+func shellOwnerFrom(ctx context.Context) string {
+	owner, _ := ctx.Value(shellOwnerKey{}).(string)
+	return owner
+}
+
 type promotable struct {
 	mu  sync.Mutex
 	buf bytes.Buffer
@@ -85,7 +92,7 @@ type bashWatch struct {
 	wg     sync.WaitGroup
 }
 
-func watchBash(registry *shell.Registry, name, command string, pid int, output *promotable) *bashWatch {
+func watchBash(registry *shell.Registry, name, command, dir, owner string, pid int, output *promotable) *bashWatch {
 	if registry == nil {
 		return nil
 	}
@@ -98,7 +105,7 @@ func watchBash(registry *shell.Registry, name, command string, pid int, output *
 		case <-w.stopc:
 			return
 		}
-		watch, err := registry.Watch(name, command)
+		watch, err := registry.Watch(name, command, dir, owner)
 		if err != nil {
 			return
 		}
@@ -590,7 +597,7 @@ func (t *BashTool) runBackground(ctx context.Context, args bashArgs) (Result, er
 		return Result{}, errors.New("bash: background needs a shell registry and none is attached to this turn")
 	}
 	name := t.nextShellName()
-	entry, err := registry.Start(string(t.root), name, args.Command)
+	entry, err := registry.Start(string(t.root), name, args.Command, shellOwnerFrom(ctx))
 	if err != nil {
 		return Result{}, fmt.Errorf("bash: %w", err)
 	}
@@ -652,7 +659,7 @@ func (t *BashTool) Run(ctx context.Context, raw json.RawMessage) (Result, error)
 	}
 	defer tracked.Release()
 
-	watch := watchBash(shellRegistryFrom(ctx), t.nextShellName(), args.Command, cmd.Process.Pid, output)
+	watch := watchBash(shellRegistryFrom(ctx), t.nextShellName(), args.Command, cmd.Dir, shellOwnerFrom(ctx), cmd.Process.Pid, output)
 	runErr := cmd.Wait()
 	watch.stop()
 

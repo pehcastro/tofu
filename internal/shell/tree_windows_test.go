@@ -165,7 +165,7 @@ func TestEveryProcessTheShellSpawnsIsAJobMemberBecauseItCannotRunBeforeItIsAdopt
 
 func TestKillReturnsOnlyAfterEveryProcessOfTheTreeHasExited(t *testing.T) {
 	r := registry(t)
-	started, err := r.Start(t.TempDir(), "dev-server", strings.Repeat("sleep 10 & ", backgroundDescendants)+"echo listening on :3000; wait")
+	started, err := r.Start(t.TempDir(), "dev-server", strings.Repeat("sleep 10 & ", backgroundDescendants)+"echo listening on :3000; wait", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -208,7 +208,7 @@ func TestKillReturnsOnlyAfterEveryProcessOfTheTreeHasExited(t *testing.T) {
 
 func TestAJobNameHeldOpenAfterItsTreeDiedStillReportsGone(t *testing.T) {
 	r := registry(t)
-	started, err := r.Start(t.TempDir(), "dev-server", "sleep 10")
+	started, err := r.Start(t.TempDir(), "dev-server", "sleep 10", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -232,7 +232,7 @@ func TestAJobNameHeldOpenAfterItsTreeDiedStillReportsGone(t *testing.T) {
 const orphanProbeVar = "TOFU_SHELL_ORPHAN_PROBE"
 
 func orphanProbe(dir string) {
-	started, err := OpenAt(dir).Start(dir, "dev-server", "ping -n 600 127.0.0.1")
+	started, err := OpenAt(dir).Start(dir, "dev-server", "ping -n 600 127.0.0.1", "")
 	if err != nil {
 		fmt.Println("probe:", err)
 		os.Exit(1)

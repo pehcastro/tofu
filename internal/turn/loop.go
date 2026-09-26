@@ -596,6 +596,7 @@ func (g gatedCall) run(ctx context.Context, tools Registry, resultBytesCap int, 
 func (g gatedCall) execute(ctx context.Context, tools Registry, resultBytesCap int, artifacts Artifacts) (ToolCallRow, llm.Message) {
 	call := g.call
 	started := time.Now()
+	ctx = context.WithValue(ctx, shellOwnerKey{}, g.author)
 	tool, ok := tools.byName[call.Name]
 	if !ok {
 		return rejectedCall(call, started, "unknown tool "+strconv.Quote(call.Name), g.id, g.parent, g.author)
