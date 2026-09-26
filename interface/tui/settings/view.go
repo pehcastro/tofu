@@ -31,6 +31,8 @@ const (
 	choiceMaxWidth     = 54
 	choiceMargin       = 6
 	choiceChrome       = 9
+	numberMaxWidth     = 72
+	numberMaxDigits    = 12
 	searchMaxWidth     = 68
 	searchMargin       = 8
 	searchMaxHeight    = 15
@@ -50,6 +52,7 @@ type viewKey struct {
 	query                                  string
 	dialog                                 choiceState
 	search                                 searchState
+	number                                 numberState
 }
 
 type viewCache struct {
@@ -62,7 +65,7 @@ type viewCache struct {
 type layout struct{ rail, main, inspector int }
 
 func (m *Model) View() string {
-	key := viewKey{m.width, m.height, m.category, m.cursor, m.Scope, strings.Join(m.Scopes, " "), m.searchKey, m.density, m.branch, m.Query, m.dialog, m.search}
+	key := viewKey{m.width, m.height, m.category, m.cursor, m.Scope, strings.Join(m.Scopes, " "), m.searchKey, m.density, m.branch, m.Query, m.dialog, m.search, m.number}
 	if m.cache.view != "" && m.cache.key == key && slices.EqualFunc(m.cache.rows, m.Rows, sameRow) && slices.Equal(m.cache.providers, m.Providers) {
 		return m.cache.view
 	}
@@ -74,7 +77,7 @@ func (m *Model) View() string {
 func sameRow(a, b Row) bool {
 	return a.Key == b.Key && a.Category == b.Category && a.Label == b.Label && a.Description == b.Description &&
 		a.Value == b.Value && a.Source == b.Source && a.Kind == b.Kind && a.Action == b.Action &&
-		a.Changed == b.Changed && a.RestartRequired == b.RestartRequired && a.RestartPending == b.RestartPending &&
+		a.Number == b.Number && a.Changed == b.Changed && a.RestartRequired == b.RestartRequired && a.RestartPending == b.RestartPending &&
 		slices.Equal(a.Choices, b.Choices)
 }
 
@@ -84,6 +87,8 @@ func (m *Model) render() string {
 		return overlay(m.body(), m.choiceDialog(), m.width, m.height)
 	case m.search.open:
 		return overlay(m.body(), m.searchDialog(), m.width, m.height)
+	case m.number.open:
+		return overlay(m.body(), m.numberDialog(), m.width, m.height)
 	}
 	return m.body()
 }
@@ -232,7 +237,7 @@ func howItWorks(row Row) string {
 	case row.Kind == Bool:
 		how = "Enter or Space switches it on or off and saves it."
 	case row.Kind == Int:
-		how = "Enter or + raises it, - lowers it, and each step saves."
+		how = "Enter opens an input for a typed value. + raises it, - lowers it, and each step saves."
 	case len(row.Choices) > 0:
 		how = "Enter opens a focused choice. Changes preview immediately; Esc keeps the prior value."
 	default:
@@ -272,6 +277,15 @@ func (m *Model) choiceDialog() string {
 	}
 	footer := fmt.Sprintf("%d-%d/%d · ↑↓ preview · enter apply · esc cancel", start+1, end, len(row.Choices))
 	return look.DialogPanel(min(choiceMaxWidth, m.width-choiceMargin), row.Label, row.Description, strings.Join(lines, "\n\n"), footer)
+}
+
+func (m *Model) numberDialog() string {
+	row, _ := m.selected()
+	body := look.Muted("Current  ") + look.Title(row.Value) + "\n" +
+		look.Muted("Default  ") + look.Title(row.Number.DefaultMeaning) + "\n" +
+		look.Muted("Range    ") + look.Title(fmt.Sprintf("%d to %d", row.Number.Least, row.Number.Most)) +
+		"\n\n" + look.Accent("› ") + look.Title(m.number.typed) + look.Accent("█") + "\n" + look.Style(look.Red).Render(m.number.refusal)
+	return look.DialogPanel(min(numberMaxWidth, m.width-choiceMargin), row.Label, row.Description, body, "type digits · enter save · esc keep "+row.Value)
 }
 
 func (m *Model) searchWindow(found []int) (start, end int) {

@@ -2,7 +2,10 @@ package settings
 
 import (
 	"slices"
+	"strconv"
 	"strings"
+
+	isettings "tofu/internal/settings"
 )
 
 type Kind int
@@ -22,10 +25,16 @@ const (
 	RowRole
 )
 
+type Number struct {
+	Least, Most    int
+	DefaultMeaning string
+}
+
 type Row struct {
 	Key, Category, Label, Description, Value, Source string
 	Kind                                             Kind
 	Choices                                          []string
+	Number                                           Number
 	Changed, RestartRequired, RestartPending         bool
 	Action                                           RowAction
 }
@@ -65,6 +74,11 @@ type searchState struct {
 	cursor int
 }
 
+type numberState struct {
+	open           bool
+	typed, refusal string
+}
+
 type Model struct {
 	Providers      []Provider
 	ChatShowsTools bool
@@ -81,6 +95,7 @@ type Model struct {
 	branch         string
 	dialog         choiceState
 	search         searchState
+	number         numberState
 	cache          viewCache
 }
 
@@ -100,7 +115,7 @@ func (m *Model) SetDensity(density string) { m.density = density }
 
 func (m *Model) SetBranch(branch string) { m.branch = branch }
 
-func (m *Model) Searching() bool { return m.search.open }
+func (m *Model) Typing() bool { return m.search.open || m.number.open }
 
 func (m *Model) categories() []string {
 	var names []string
@@ -141,6 +156,9 @@ func (m *Model) Key(key string) Intent {
 	if m.search.open {
 		return m.searchInput(key)
 	}
+	if m.number.open {
+		return m.numberInput(key)
+	}
 	switch key {
 	case m.searchKey:
 		m.search = searchState{open: true}
@@ -179,6 +197,7 @@ func (m *Model) Wheel(delta int) Intent {
 		return Intent{Action: ActionPreview, Key: row.Key, Value: row.Choices[m.dialog.cursor]}
 	case m.search.open:
 		m.search.cursor = min(max(m.search.cursor+step, 0), max(0, len(m.matches())-1))
+	case m.number.open:
 	default:
 		m.moveRow(step)
 	}
@@ -226,7 +245,7 @@ func (m *Model) activate() Intent {
 	case row.Kind == Bool:
 		return Intent{Action: ActionToggle, Key: row.Key}
 	case row.Kind == Int:
-		return Intent{Action: ActionIncrement, Key: row.Key}
+		m.number = numberState{open: true}
 	case len(row.Choices) > 0:
 		m.dialog = choiceState{open: true, key: row.Key, cursor: max(0, slices.Index(row.Choices, row.Value)), original: row.Value}
 	}
@@ -257,6 +276,30 @@ func (m *Model) commit(row Row) Intent {
 	value := row.Choices[m.dialog.cursor]
 	m.dialog = choiceState{}
 	return Intent{Action: ActionCommit, Key: row.Key, Value: value}
+}
+
+func (m *Model) numberInput(key string) Intent {
+	row, _ := m.selected()
+	switch key {
+	case "esc":
+		m.number = numberState{}
+	case "backspace":
+		m.number.typed = m.number.typed[:max(0, len(m.number.typed)-1)]
+	case "enter":
+		value, err := strconv.Atoi(m.number.typed)
+		if err != nil || value < row.Number.Least || value > row.Number.Most {
+			m.number.refusal = isettings.Refusal(m.number.typed, row.Number.Least, row.Number.Most)
+			return Intent{}
+		}
+		m.number = numberState{}
+		return Intent{Action: ActionCommit, Key: row.Key, Value: strconv.Itoa(value)}
+	default:
+		if len(key) == 1 && key[0] >= '0' && key[0] <= '9' && len(m.number.typed) < numberMaxDigits {
+			m.number.typed += key
+			m.number.refusal = ""
+		}
+	}
+	return Intent{}
 }
 
 func (m *Model) searchInput(key string) Intent {
@@ -316,6 +359,7 @@ func (m *Model) Jump(key string) bool {
 }
 
 func (m *Model) CloseDialog() Intent {
+	m.number = numberState{}
 	if !m.dialog.open {
 		return Intent{}
 	}

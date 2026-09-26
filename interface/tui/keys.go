@@ -49,10 +49,10 @@ func (a *App) key(msg tea.KeyPressMsg) tea.Cmd {
 			return cmd
 		}
 	}
-	if key == "tab" && !a.settings.Searching() {
+	if key == "tab" && !a.settings.Typing() {
 		return a.show(screen((int(a.tab()) + 1) % len(tabNames())))
 	}
-	if index, jumps := tabDigit(key); jumps && !a.settings.Searching() {
+	if index, jumps := tabDigit(key); jumps && !a.settings.Typing() {
 		return a.show(screen(index))
 	}
 	if cmd, taken := a.screenKey(key); taken {

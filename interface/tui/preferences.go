@@ -111,7 +111,11 @@ func (a *App) setNumber(key string, by int) {
 	if a.store == nil {
 		return
 	}
-	if err := a.store.Set(isettings.Scope(a.settings.Scope), key, a.store.Int(key)+by); err != nil {
+	spec, known := a.spec(key)
+	if !known {
+		return
+	}
+	if err := a.store.Set(isettings.Scope(a.settings.Scope), key, min(max(a.store.Int(key)+by, spec.Least), spec.Most)); err != nil {
 		a.notify(err.Error())
 	}
 }
@@ -267,10 +271,14 @@ func (a *App) settingRow(spec isettings.Spec, pending bool) settings.Row {
 	case isettings.Bool:
 		row.Value, row.Choices = onOff(a.store.Bool(spec.Key)), []string{switchOff, switchOn}
 	case isettings.Int:
-		row.Kind, row.Value = settings.Int, strconv.Itoa(a.store.Int(spec.Key))
+		row.Kind, row.Value, row.Number = settings.Int, strconv.Itoa(a.store.Int(spec.Key)), numberRange(spec)
 	case isettings.Text:
 	default:
 		panic("tui: unknown setting kind")
 	}
 	return row
+}
+
+func numberRange(spec isettings.Spec) settings.Number {
+	return settings.Number{Least: spec.Least, Most: spec.Most, DefaultMeaning: strconv.Itoa(spec.Default) + " " + spec.Unit}
 }

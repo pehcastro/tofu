@@ -39,6 +39,9 @@ func Open(globalPath, projectPath string) (*Store, error) {
 }
 
 func OpenWith(table []Spec, globalPath, projectPath string) (*Store, error) {
+	if err := checkTable(table); err != nil {
+		return nil, err
+	}
 	store := &Store{table: table, paths: [2]string{globalPath, projectPath}}
 	for scope := Global; scope <= Project; scope++ {
 		ints, texts, err := readValues(store.paths[scope])
@@ -156,8 +159,12 @@ func (s *Store) Source(key string) (scope Scope, fromFile bool) {
 }
 
 func (s *Store) Set(scope Scope, key string, value int) error {
-	if _, known := s.specFor(key); !known {
+	spec, known := s.specFor(key)
+	if !known {
 		return fmt.Errorf("settings: %q is not a declared setting", key)
+	}
+	if err := spec.refuses(value); err != nil {
+		return err
 	}
 	if s.values[scope] == nil {
 		s.values[scope] = map[string]int{}

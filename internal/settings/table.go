@@ -1,6 +1,9 @@
 package settings
 
 import (
+	"cmp"
+	"errors"
+	"fmt"
 	"slices"
 	"strconv"
 	"strings"
@@ -28,6 +31,8 @@ type Spec struct {
 	Choices     []string
 	ListOf      []string
 	Restart     bool
+	Least, Most int
+	Unit        string
 }
 
 const (
@@ -112,6 +117,26 @@ func (s Spec) allows(value string) bool {
 	return true
 }
 
+func Refusal(typed string, least, most int) string {
+	return fmt.Sprintf("refused %s: the value is a whole number from %d to %d", cmp.Or(typed, "nothing"), least, most)
+}
+
+func (s Spec) refuses(value int) error {
+	if s.Kind != Int || (value >= s.Least && value <= s.Most) {
+		return nil
+	}
+	return errors.New(Refusal(strconv.Itoa(value), s.Least, s.Most))
+}
+
+func checkTable(specs []Spec) error {
+	for _, spec := range specs {
+		if spec.Kind == Int && spec.Most <= spec.Least {
+			return fmt.Errorf("settings: %s is a number with no range", spec.Key)
+		}
+	}
+	return nil
+}
+
 func lineCounts(counts ...int) []string {
 	choices := make([]string, len(counts))
 	for i, count := range counts {
@@ -132,7 +157,7 @@ func Default() []Spec {
 			Choices: []string{"compact", "detailed", "hidden"}},
 		{Key: ColorMode, Label: "Color mode", Description: "Terminal color capability", Category: "Appearance", Kind: Text, DefaultText: "auto",
 			Choices: []string{"auto", "truecolor", "256 colors", "ANSI 16"}},
-		{Key: Composer, Label: "Composer", Description: "Enter sends; Ctrl+J inserts newline", Category: "Interaction", Kind: Text, DefaultText: "standard",
+		{Key: Composer, Label: "Composer", Description: "Enter sends; Shift+Enter inserts a line break", Category: "Interaction", Kind: Text, DefaultText: "standard",
 			Choices: []string{"standard", "compact", "expanded"}},
 		{Key: GatePrompt, Label: "Confirmations", Description: "run lets a gated call go, ask waits for you; a rule's shadow or enforced is a different switch", Category: "Interaction", Kind: Text, DefaultText: GatePromptRun,
 			Choices: []string{GatePromptRun, GatePromptAsk}, Restart: true},
@@ -144,7 +169,8 @@ func Default() []Spec {
 			Choices: []string{FeedsFull, FeedsSummary, FeedsOff}},
 		{Key: Images, Label: "Images", Description: "auto sends a pasted image only to a model that can see, inline always sends, off never attaches", Category: "Context", Kind: Text, DefaultText: ImagesAuto,
 			Choices: []string{ImagesAuto, ImagesInline, ImagesOff}},
-		{Key: ProjectInstructionsCap, Label: "Project instructions", Description: "bytes of your instruction files sent each turn, below one restores the default", Category: "Context", Kind: Int, Default: konst.ProjectInstructionsBytesDefault, Restart: true},
+		{Key: ProjectInstructionsCap, Label: "Project instructions", Description: "bytes of your instruction files sent each turn", Category: "Context", Kind: Int, Default: konst.ProjectInstructionsBytesDefault, Restart: true,
+			Least: 1, Most: konst.ProjectInstructionsBytesMost, Unit: "bytes of AGENTS.md and CLAUDE.md sent each turn"},
 		{Key: DiffContext, Label: "Diff context", Description: "Lines around changed hunks, at most the " + strconv.Itoa(konst.DiffContextLinesDefault) + " each diff carries", Category: "Files", Kind: Text, DefaultText: strconv.Itoa(konst.DiffContextLinesDefault),
 			Choices: lineCounts(konst.DiffContextLinesTight, konst.DiffContextLinesDefault, konst.DiffContextLinesWide, konst.DiffContextLinesWidest)},
 		{Key: Hyperlinks, Label: "Hyperlinks", Description: "OSC 8 terminal file links; off prints the bare path", Category: "Files", Kind: Text, DefaultText: LinksAuto,
@@ -156,7 +182,8 @@ func Default() []Spec {
 		{Key: KillConfirm, Label: "Kill confirm", Description: "Confirm process termination", Category: "Shell", Kind: Bool, Default: 1},
 		{Key: Shell, Label: "Shell", Description: "a path, or the word wsl; empty resolves the person's own shell automatically", Category: "Shell", Kind: Text, Restart: true},
 		{Key: FoldHidesShell, Label: "Fold hides shell", Description: "the running line drops the shell count", Category: "Shell", Kind: Bool},
-		{Key: DecisionCap, Label: "Decision cap", Description: "decision cap per turn, zero means no cap", Category: "Turn", Kind: Int, Restart: true},
+		{Key: DecisionCap, Label: "Decision cap", Description: "decision cap per turn, zero means no cap", Category: "Turn", Kind: Int, Restart: true,
+			Least: 0, Most: konst.DecisionCapMost, Unit: "decisions a turn, where 0 means no cap"},
 		{Key: TurnMaySpawn, Label: "Sub-agents", Description: "a turn may spawn a sub-agent", Category: "Turn", Kind: Bool, Default: 1, Restart: true},
 		{Key: AgentSources, Label: "Agent folders", Description: "the folders sub-agents are read from, in order, as a comma list of tofu, agents and claude; the library is always read", Category: "Turn", Kind: Text, DefaultText: "tofu,agents,claude",
 			ListOf: []string{"tofu", "agents", "claude"}},

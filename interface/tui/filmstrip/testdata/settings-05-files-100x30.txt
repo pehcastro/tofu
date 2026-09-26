@@ -9,7 +9,7 @@
     Context       05      OSC 8 terminal file links; off prints the bare path                       
   › Files         03                                                                                
     Shell         05      Group by agent                                                    ● on    
-    Turn          02      Author filters in edit feeds                                              
+    Turn          03      Author filters in edit feeds                                              
     Startup       01                                                                                
                         enter change  ·  ctrl+k search  ·  esc chat                                 
   NAVIGATE                                                                                          

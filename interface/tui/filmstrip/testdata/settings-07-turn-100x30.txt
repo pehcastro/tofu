@@ -8,10 +8,10 @@
     Interaction   05      Sub-agents                                                        ● on    
     Context       05      a turn may spawn a sub-agent                                              
     Files         03                                                                                
-    Shell         05    enter change  ·  ctrl+k search  ·  esc chat                                 
-  › Turn          02                                                                                
+    Shell         05      Agent folders                                   tofu,agents,claude  ▾     
+  › Turn          03      the folders sub-agents are read from, in order, as a comma list of to…    
     Startup       01                                                                                
-                                                                                                    
+                        enter change  ·  ctrl+k search  ·  esc chat                                 
   NAVIGATE                                                                                          
   ↑↓ setting · ←→                                                                                   
   section                                                                                           

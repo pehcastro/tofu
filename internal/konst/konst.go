@@ -82,6 +82,8 @@ const (
 	IgnoreFileBytesCap              = 65536
 	GlobPathsResultCap              = 300
 	ProjectInstructionsBytesDefault = 32768
+	ProjectInstructionsBytesMost    = 262144
+	DecisionCapMost                 = 1000
 	TurnParallelToolCalls           = 4
 	TurnMaxSteps                    = 40
 	TurnLoopGuardRepeats            = 3

@@ -9,7 +9,7 @@
     Context       05      Spacing across lists and panels                                           
     Files         03                                                                                
     Shell         05      Animations                                                  subtle  ▾     
-    Turn          02      Motion for conversational states                                          
+    Turn          03      Motion for conversational states                                          
     Startup       01                                                                                
                           Status bar                                                 compact  ▾     
   NAVIGATE                Context, quotas, and runtime counters                                     

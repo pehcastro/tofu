@@ -16,6 +16,8 @@ func (m *Model) Click(x, y int) Intent {
 	case m.search.open:
 		m.clickResult(x, y)
 		return Intent{}
+	case m.number.open:
+		return Intent{}
 	}
 	geo := m.layout()
 	if x < geo.rail {
