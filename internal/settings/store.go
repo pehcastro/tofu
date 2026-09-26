@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strings"
 
 	"tofu/internal/sys"
 )
@@ -118,11 +119,10 @@ func (s *Store) resolve(key string) (int, Scope, bool) {
 	if !known {
 		return 0, Global, false
 	}
-	if value, present := s.values[Project][key]; present {
-		return value, Project, true
-	}
-	if value, present := s.values[Global][key]; present {
-		return value, Global, true
+	for _, scope := range []Scope{Project, Global} {
+		if value, present := s.values[scope][key]; present {
+			return value, scope, true
+		}
 	}
 	return spec.Default, Global, false
 }
@@ -132,11 +132,10 @@ func (s *Store) resolveText(key string) (string, Scope, bool) {
 	if !known {
 		return "", Global, false
 	}
-	if value, present := s.texts[Project][key]; present {
-		return value, Project, true
-	}
-	if value, present := s.texts[Global][key]; present {
-		return value, Global, true
+	for _, scope := range []Scope{Project, Global} {
+		if value, present := s.texts[scope][key]; present && spec.allows(value) {
+			return value, scope, true
+		}
 	}
 	return spec.DefaultText, Global, false
 }
@@ -168,8 +167,12 @@ func (s *Store) Set(scope Scope, key string, value int) error {
 }
 
 func (s *Store) SetText(scope Scope, key, value string) error {
-	if _, known := s.specFor(key); !known {
+	spec, known := s.specFor(key)
+	if !known {
 		return fmt.Errorf("settings: %q is not a declared setting", key)
+	}
+	if !spec.allows(value) {
+		return fmt.Errorf("settings: %s takes one of %s, got %q", key, strings.Join(spec.Choices, ", "), value)
 	}
 	if s.texts[scope] == nil {
 		s.texts[scope] = map[string]string{}

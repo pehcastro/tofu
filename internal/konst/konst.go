@@ -132,3 +132,14 @@ const (
 	MutateChildMemoryCeilingBytes = 4 * 1024 * 1024 * 1024
 	DiffTableMaxCells             = 10 * 1000 * 1000
 )
+
+const (
+	DiffContextLinesTight   = 2
+	DiffContextLinesDefault = 3
+	DiffContextLinesWide    = 5
+	DiffContextLinesWidest  = 8
+
+	ShellLogTailLinesShort   = 100
+	ShellLogTailLinesDefault = 500
+	ShellLogTailLinesLong    = 1000
+)
