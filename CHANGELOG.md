@@ -8,6 +8,34 @@ Tofu is personal and not released, so the public interface that a version promis
 
 The minor number carries breaking changes, which is what 0.x means, and **there is never a 1.0.0**. The owner decided that on 2026-09-19: this stays 0.x forever, so the promise the version makes is the one 0.x already makes, that anything can break on a minor bump.
 
+## 0.5.0-rc-fix1 - 2026-09-26
+
+The new interface: one top row, four screens, a settings screen where every row does what it says, and a cover with a cat.
+
+### Added
+
+- **One top row and four screens.** The top row holds chat, sub-agents, file edits and shells. Tab cycles them, and `[settings]` in the top row opens settings.
+- **`tofu` opens a new session on the cover**, a pixel cat above the wordmark and a composer; `tofu --continue` goes straight to chat.
+- **Settings is a screen.** Each category is a row list with a live preview. Enter changes a value, arrows preview a choice and Esc restores it, and Ctrl+K searches every setting. Theme offers eight palettes, and `terminal` strips every colour.
+- **Ctrl+K searches screens, agents and events; Alt+K lists commands; `/` opens the command menu; `@` opens a file picker** that stays inside the workspace.
+- **References are links.** `[edit#id]` opens its diff, `[&agent]` selects the agent in sub-agents, and only the reference's own cells are clickable.
+- **The mouse selects inside one pane.** A drag copies without the card's border or padding, Alt+click quotes into the composer, Shift+click and Ctrl+Alt+click collect, and Ctrl+R quotes the selection.
+- **A paste of 160 characters or more becomes `[Text N characters]`** in the composer and is sent whole.
+- **Shift+Tab cycles reasoning effort** on a model that offers levels, and the footer shows it.
+- **Shells show PID, working directory and owner**, and killing one asks first.
+- **codex-sub models take a pasted image**, and a history entry recalled with an image sends it again.
+- **`tofu drive` takes `paste`, `absent` and `images` steps**, and `tofu frame --list` names 99 frames across every screen and dialog.
+
+### Changed
+
+- **Tools stay one line each in chat**, in the new theme, and markdown still renders.
+- **The session name is whole whenever it fits** beside the tabs; the git branch gives way first.
+- **ASCII mode replaces every glyph with one character**, so no row grows past the terminal.
+
+### Removed
+
+- The old views: the picker, the work screen, and the separate links and quote screens. `/links` and `/quote` are now dialogs.
+
 ## 0.4.19 - 2026-09-25
 
 A turn of more than one step finishes again, and a sub-agent hands back a contract and stays inside what it owns.
