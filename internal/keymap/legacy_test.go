@@ -30,10 +30,10 @@ func TestUndoRemovesLegacyBlockExactly(t *testing.T) {
 			t.Fatalf("inspect: %q, %v", state, err)
 		}
 		status, saved, err := Undo(Zed, path)
-		if err != nil || status != "removed tofu Ctrl+K binding" || saved == "" {
+		if err != nil || status != "removed tofu Ctrl+K binding" || len(saved) != 1 {
 			t.Fatalf("undo: %q, %q, %v", status, saved, err)
 		}
-		backup, err := os.ReadFile(saved)
+		backup, err := os.ReadFile(saved[0])
 		if err != nil || string(backup) != tc.applied {
 			t.Fatalf("undo backup not exact: %v", err)
 		}
@@ -41,6 +41,29 @@ func TestUndoRemovesLegacyBlockExactly(t *testing.T) {
 		if err != nil || !bytes.Equal(current, []byte(tc.original)) {
 			t.Fatalf("undo did not restore original bytes: %q", current)
 		}
+	}
+}
+
+func TestUndoOfBothBlocksReturnsTheBackupOfTheOriginalFileToo(t *testing.T) {
+	legacy := "[" + string(legacyBlock(false)) + "]\n"
+	path := writeKeymap(t, legacy)
+	if _, _, err := Apply(Zed, path, DefaultShortcuts()); err != nil {
+		t.Fatal(err)
+	}
+	both, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, saved, err := Undo(Zed, path)
+	if err != nil || len(saved) != 2 {
+		t.Fatalf("undo of both blocks returned backups %q, %v, want two", saved, err)
+	}
+	original, err := os.ReadFile(saved[0])
+	if err != nil || !bytes.Equal(original, both) {
+		t.Fatalf("the first backup is not the file as it stood before undo: %v", err)
+	}
+	if current, _ := os.ReadFile(path); string(current) != "[]\n" {
+		t.Fatalf("undo left %q", current)
 	}
 }
 

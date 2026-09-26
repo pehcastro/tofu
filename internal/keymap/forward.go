@@ -193,13 +193,22 @@ func Apply(host HostName, path string, shortcuts map[string]string) (status, bac
 	return applyManaged(path, ProfileID(host), elements(host, shortcuts))
 }
 
-func Undo(host HostName, path string) (status, backup string, err error) {
-	status, backup, err = undoManaged(path, ProfileID(host))
+func Undo(host HostName, path string) (status string, backups []string, err error) {
+	status, backup, err := undoManaged(path, ProfileID(host))
+	backups = nonEmpty(backups, backup)
 	if err != nil || host != Zed {
-		return status, backup, err
+		return status, backups, err
 	}
-	if legacy, err := legacyState(path); err == nil && legacy == Managed {
-		return legacyUndo(path)
+	if legacy, stateErr := legacyState(path); stateErr != nil || legacy != Managed {
+		return status, backups, nil
 	}
-	return status, backup, nil
+	status, backup, err = legacyUndo(path)
+	return status, nonEmpty(backups, backup), err
+}
+
+func nonEmpty(backups []string, backup string) []string {
+	if backup == "" {
+		return backups
+	}
+	return append(backups, backup)
 }

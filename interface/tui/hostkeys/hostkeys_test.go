@@ -86,7 +86,7 @@ func TestTofuKeybindingsApplyAndUndoFromSettings(t *testing.T) {
 	if cmd == nil || !h.busy {
 		t.Fatal("confirming apply did not start operation")
 	}
-	if !h.Result(cmd()) || h.status != string(keymap.Managed) || h.backup == "" {
+	if !h.Result(cmd()) || h.status != string(keymap.Managed) || len(h.backups) == 0 {
 		t.Fatalf("apply did not complete: %q, %q", h.status, h.feedback)
 	}
 	t.Logf("after apply:\n%s", read(t, path))

@@ -21,8 +21,9 @@ const (
 const unavailable = "unavailable: "
 
 type result struct {
-	status, backup string
-	err            error
+	status  string
+	backups []string
+	err     error
 }
 
 type Host struct {
@@ -33,7 +34,7 @@ type Host struct {
 	status     string
 	pending    operation
 	feedback   string
-	backup     string
+	backups    []string
 	busy       bool
 	cursor     int
 }
@@ -131,11 +132,14 @@ func (h *Host) choose() (tea.Cmd, bool) {
 func (h Host) run() tea.Cmd {
 	op, name, path, bindings := h.pending, h.host.Name, h.path, maps.Clone(h.bindings)
 	return func() tea.Msg {
-		var r result
-		if op == apply {
-			r.status, r.backup, r.err = keymap.Apply(name, path, bindings)
-		} else {
-			r.status, r.backup, r.err = keymap.Undo(name, path)
+		if op == undo {
+			status, backups, err := keymap.Undo(name, path)
+			return result{status: status, backups: backups, err: err}
+		}
+		status, backup, err := keymap.Apply(name, path, bindings)
+		r := result{status: status, err: err}
+		if backup != "" {
+			r.backups = []string{backup}
 		}
 		return r
 	}
@@ -146,7 +150,7 @@ func (h *Host) Result(msg tea.Msg) bool {
 	if !ok {
 		return false
 	}
-	h.busy, h.pending, h.backup, h.cursor = false, "", r.backup, 0
+	h.busy, h.pending, h.backups, h.cursor = false, "", r.backups, 0
 	h.feedback = r.status
 	if r.err != nil {
 		h.feedback = "Could not update keymap: " + r.err.Error()
@@ -206,8 +210,8 @@ func (h Host) dialog(width, height int) string {
 	if h.feedback != "" {
 		body += "\n\n" + look.Muted(h.feedback)
 	}
-	if h.backup != "" {
-		body += "\n" + look.Faint("Backup: "+filepath.Base(h.backup))
+	for _, backup := range h.backups {
+		body += "\n" + look.Faint("Backup: "+filepath.Base(backup))
 	}
 	switch {
 	case h.pending != "":
