@@ -85,9 +85,9 @@ func settingsFail(errOut io.Writer, err error) int {
 }
 
 func printSettingsList(out io.Writer, store *settingspkg.Store) {
-	widest := 0
+	widest, category := 0, 0
 	for _, spec := range store.Table() {
-		widest = max(widest, len(spec.Key))
+		widest, category = max(widest, len(spec.Key)), max(category, len(spec.Category))
 	}
 	for _, spec := range store.Table() {
 		scope, fromFile := store.Source(spec.Key)
@@ -95,7 +95,7 @@ func printSettingsList(out io.Writer, store *settingspkg.Store) {
 		if fromFile {
 			source = scope.String() + " " + store.Path(scope)
 		}
-		_, _ = fmt.Fprintf(out, "%-*s %-6s %s\n", widest, spec.Key, settingsDisplay(store, spec), source)
+		_, _ = fmt.Fprintf(out, "%-*s %-*s %-6s %s\n", category, spec.Category, widest, spec.Key, settingsDisplay(store, spec), source)
 	}
 }
 

@@ -1,7 +1,9 @@
 package frame
 
 import (
+	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	"charm.land/lipgloss/v2"
@@ -48,10 +50,11 @@ func footerLeft(status Status, width int) []span {
 		return append(left, panel("0/"+widget.Count(status.Context.Budget), look.Text), panel(footerSeparator+"new session", look.FaintColor))
 	}
 	left = append(left, panel(widget.Count(status.Context.Used)+"/"+widget.Count(status.Context.Budget), look.Text))
-	if len(status.Quotas) == 0 {
+	shown := fullestPerAccount(status.Quotas)
+	if len(shown) == 0 {
 		left = append(left, panel(footerSeparator+"quota unread", look.FaintColor))
 	}
-	for index, quota := range status.Quotas {
+	for index, quota := range shown {
 		if index > 0 && width < secondAccountColumns {
 			break
 		}
@@ -65,7 +68,7 @@ func footerLeft(status Status, width int) []span {
 	if status.Mode != StatusDetailed {
 		return left
 	}
-	if reset := nextReset(status.Quotas, status.At); reset > 0 {
+	if reset := nextReset(shown, status.At); reset > 0 {
 		left = append(left, panel(footerSeparator+"resets in "+widget.Until(reset), look.Amber))
 	}
 	counters := footerSeparator + widget.Count(status.TokensIn) + " read  " + widget.Count(status.TokensOut) + " write"
@@ -73,6 +76,25 @@ func footerLeft(status Status, width int) []span {
 		counters += "  " + widget.Count(status.CacheRead) + " cached"
 	}
 	return append(left, panel(counters+footerSeparator+"jev "+strconv.Itoa(status.Decisions), look.Text))
+}
+
+func fullestPerAccount(quotas []Quota) []Quota {
+	var shown []Quota
+	for _, quota := range quotas {
+		index := slices.IndexFunc(shown, func(held Quota) bool { return accountOf(held) == accountOf(quota) })
+		switch {
+		case index < 0:
+			shown = append(shown, quota)
+		case quota.Reported && (!shown[index].Reported || quota.Fraction > shown[index].Fraction):
+			shown[index] = quota
+		}
+	}
+	return shown
+}
+
+func accountOf(quota Quota) string {
+	account, _, _ := strings.Cut(quota.Label, " ")
+	return account
 }
 
 func nextReset(quotas []Quota, at time.Time) time.Duration {

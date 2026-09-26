@@ -99,28 +99,6 @@ func TestTheSubAgentsDrawnIsTheRosterItselfAndNotACopyBesideIt(t *testing.T) {
 	}
 }
 
-func TestEveryStateTheRosterCanReachIsDrawnAsItsOwnMark(t *testing.T) {
-	start := time.Date(2026, 9, 23, 9, 0, 0, 0, time.UTC)
-	marks := map[string]roster.State{}
-	for _, state := range roster.States() {
-		held := rosterHolding(t, roster.SubAgent{ID: "turn-1-c1", Mission: "work", Owns: []string{"x"}, Started: start})
-		held.Reached("turn-1-c1", state, "")
-		watch, drawn := watching(held, start)
-		watch.sendSubAgents()
-
-		shown := drawn()[0].State
-		mark := subagent.Mark(shown) + subagent.Label(shown)
-		if other, taken := marks[mark]; taken {
-			t.Errorf("the roster's %s and %s are both drawn as %q, so a person cannot tell them apart", state, other, mark)
-		}
-		marks[mark] = state
-	}
-	if len(marks) != len(roster.States()) {
-		t.Fatalf("the roster reaches %d marks and the view draws %d states", len(marks), len(roster.States()))
-	}
-	t.Logf("every roster state draws its own mark: %v", marks)
-}
-
 func TestARunningChildDrawsTheToolItIsCallingRatherThanNoToolCallYet(t *testing.T) {
 	start := time.Date(2026, 9, 23, 9, 0, 0, 0, time.UTC)
 	held := rosterHolding(t, roster.SubAgent{ID: "turn-1-c1", Mission: "write the note", Owns: []string{"note.txt"}, Started: start})
@@ -138,24 +116,18 @@ func TestARunningChildDrawsTheToolItIsCallingRatherThanNoToolCallYet(t *testing.
 	if !slices.Equal(tools, []string{"read", "write"}) {
 		t.Fatalf("the roster has held read and write since the child's first step and the view drew %v", tools)
 	}
-	view := subagent.Model{Children: drawn()}
-	view.SetSize(100, 24)
-	view.Key("down")
-	if pane := view.View(); strings.Contains(pane, "no tool call yet") {
-		t.Fatalf("a child two tools in reads as quiet:\n%s", pane)
-	}
 }
 
 func TestTheSpawnersRecordedCallsWinOverTheRostersNamesWheneverItHasAny(t *testing.T) {
 	recorded := []subagent.Call{{Tool: "write", Text: "write note.txt", Result: "no such directory"}}
-	if got := recordedOrCalling(recorded, []string{"read", "write"}, 0); !slices.Equal(got, recorded) {
+	if got := recordedOrCalling(recorded, nil, []string{"read", "write"}, 0); !slices.Equal(got, recorded) {
 		t.Fatalf("with both sources holding something the view drew %+v, want the spawner's %+v", got, recorded)
 	}
-	watched := recordedOrCalling(nil, []string{"read", "write"}, 0)
+	watched := recordedOrCalling(nil, nil, []string{"read", "write"}, 0)
 	if !slices.Equal(watched, []subagent.Call{{Tool: "read"}, {Tool: "write"}}) {
 		t.Fatalf("with only the roster holding names the view drew %+v", watched)
 	}
-	if len(recordedOrCalling(nil, nil, 0)) != 0 {
+	if len(recordedOrCalling(nil, nil, nil, 0)) != 0 {
 		t.Fatal("neither source holds anything and the view was given a call")
 	}
 }
@@ -178,7 +150,7 @@ func childCallsWhileRunningAndOnceFinished(t *testing.T, dir, planted string) (r
 		for _, child := range event.Children {
 			for _, call := range child.Calls {
 				if strings.Contains(call.Tool+call.Text+call.Result, planted) {
-					t.Fatalf("a %s child drew %+v, which carries the argument the child was given", subagent.Label(child.State), call)
+					t.Fatalf("a %s child drew %+v, which carries the argument the child was given", child.State, call)
 				}
 			}
 			if child.State == roster.Working && len(child.Calls) > 0 && running == nil {
@@ -252,17 +224,6 @@ func TestAFinishedChildDrawsNoMoreCallsThanTheWatchPaneHoldsAndSaysHowManyItHid(
 	if want := strconv.Itoa(hidden) + earlierCallsHidden; calls[0].Tool != want {
 		t.Fatalf("the first line reads %q, want %q so a person can tell a cut list from a whole one", calls[0].Tool, want)
 	}
-
-	view := subagent.Model{Children: []subagent.Child{{Name: "c1", State: roster.Finished, Calls: calls}}}
-	view.SetSize(80, 24)
-	view.Key("down")
-	drawn := view.View()
-	if !strings.Contains(drawn, strconv.Itoa(hidden)+earlierCallsHidden) {
-		t.Fatalf("the pane never says how many calls it hid:\n%s", drawn)
-	}
-	if !strings.Contains(drawn, ran[len(ran)-1]) {
-		t.Fatalf("the newest call %q is not on the screen:\n%s", ran[len(ran)-1], drawn)
-	}
 	t.Logf("%d recorded calls draw as %d lines, the first reading %q", len(ran), len(calls), calls[0].Tool)
 }
 
@@ -290,20 +251,6 @@ func TestARunningChildDrawsHowManyCallsItDroppedAndKeepsTheNewest(t *testing.T) 
 	hidden := len(ran) - konst.SubAgentCallsWatched + 1
 	if want := strconv.Itoa(hidden) + earlierCallsHidden; calls[0].Tool != want {
 		t.Fatalf("the first line reads %q, want %q so a person can tell a cut list from a whole one", calls[0].Tool, want)
-	}
-
-	view := subagent.Model{Children: children}
-	view.SetSize(80, 24)
-	view.Key("down")
-	pane := view.View()
-	if !strings.Contains(pane, strconv.Itoa(hidden)+earlierCallsHidden) {
-		t.Fatalf("the pane never says how many calls the running child dropped:\n%s", pane)
-	}
-	if !strings.Contains(pane, ran[len(ran)-1]) {
-		t.Fatalf("the newest call %q is not on the screen:\n%s", ran[len(ran)-1], pane)
-	}
-	if strings.Contains(pane, ran[0]) {
-		t.Fatalf("the oldest call %q is still on the screen, so nothing was cut:\n%s", ran[0], pane)
 	}
 }
 

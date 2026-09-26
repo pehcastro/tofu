@@ -9,6 +9,8 @@ import (
 type State = roster.State
 
 type Call struct {
+	ID     string
+	At     time.Time
 	Tool   string
 	Text   string
 	Result string

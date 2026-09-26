@@ -21,13 +21,18 @@ import (
 	"tofu/internal/konst"
 	"tofu/internal/llm"
 	"tofu/internal/llm/models"
+	sessionstore "tofu/internal/session"
 	"tofu/internal/turn"
 )
 
-const driveUsage = `usage: tofu drive [SCRIPT] [--dir PATH] [--home PATH] [--cassette PATH] [--width N] [--height N] [--timeout 60s] [--plain] [ARM]
+const driveUsage = `usage: tofu drive [SCRIPT] [--dir PATH] [--home PATH] [--cassette PATH] [--width N] [--height N] [--timeout 60s] [--plain] [--fresh | --continue] [ARM]
 
 drives the app the way a person does, with no terminal and no model call.
 SCRIPT is a file of steps, or - for standard input.
+
+--fresh starts the app as a new session does, on the cover. --continue starts
+it on the session you last worked in, as tofu --continue does. With neither the
+app opens straight on chat.
 
 An arm is one of tofu run's switches that change what the turn does rather than
 where it reads from, and the app takes it exactly as tofu run does, so a
@@ -56,7 +61,7 @@ Steps:
   type TEXT    type TEXT into the composer
   key NAME     press enter, esc, tab, space, backspace, up, down, left, right,
                any single character, or one of those under ctrl+, alt+ or shift+
-               (alt+2 opens work, alt+5 opens shells, as in the app)
+               (alt+2 opens sub-agents, alt+4 opens shells, as in the app)
   click X Y [alt] [shift] [ctrl]         press and release the left button on a cell
   drag X1 Y1 X2 Y2 [alt] [shift] [ctrl]  press, move cell by cell, then release
   wheel X Y up|down [N]                  turn the wheel N notches over a cell, 1 if no N
@@ -262,7 +267,7 @@ func driveWire(deck *cassette) func(runOpts) (appWire, error) {
 	}
 }
 
-func drivenApp(dir string, deck *cassette, arms runOpts) *tui.App {
+func drivenApp(dir string, deck *cassette, arms runOpts, launch appLaunch) *tui.App {
 	shown := cassetteBuild
 	if deck != nil {
 		shown = deck.name
@@ -272,7 +277,7 @@ func drivenApp(dir string, deck *cassette, arms runOpts) *tui.App {
 		wires:    func() []tui.Wire { return []tui.Wire{{Name: wireSubscription, Model: shown, Provider: cassetteBuild}} },
 		blockers: func() []tui.Requirement { return nil },
 	}
-	return tui.New(appOptions(dir, arms, recorded, sessionResume{}))
+	return tui.New(appOptions(dir, arms, recorded, launch))
 }
 
 type driveStep struct {
@@ -315,6 +320,8 @@ type drivePlan struct {
 	height   int
 	timeout  time.Duration
 	plain    bool
+	fresh    bool
+	resume   bool
 	arms     runOpts
 }
 
@@ -342,6 +349,12 @@ func driveArgs(args []string, errOut io.Writer) (drivePlan, bool) {
 		switch flag {
 		case "--plain":
 			plan.plain = true
+			continue
+		case "--fresh":
+			plan.fresh = true
+			continue
+		case "--continue":
+			plan.resume = true
 			continue
 		case "--no-gate":
 			plan.arms.gateArm = gateOff
@@ -478,7 +491,13 @@ func driveVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 	if err != nil {
 		return driveFail(errOut, err)
 	}
-	driver := filmstrip.Drive(drivenApp(dir, deck, plan.arms), plan.width, plan.height)
+	resumed := sessionResume{}
+	if store, err := sessionstore.Open(); err == nil && plan.resume {
+		resumed = continueCarry(store)
+	}
+	launch := launchOf(resumed, plan.fresh)
+	defer leaveShells(dir, launch.registry)
+	driver := filmstrip.Drive(drivenApp(dir, deck, plan.arms, launch), plan.width, plan.height)
 	defer driver.Close()
 	for _, step := range steps {
 		driver.Settle()

@@ -251,10 +251,12 @@ func storeGateKey(t *testing.T, key string) {
 
 func settingsScreen(t *testing.T, providers []settings.Provider) string {
 	t.Helper()
-	app := tui.New(tui.Options{Repo: "bob", Branch: "develop", Providers: providers})
+	store, _ := openSettings(t.TempDir())
+	app := tui.New(tui.Options{Repo: "bob", Branch: "develop", Providers: providers, Settings: store})
 	app.Init()
-	app.Update(tea.WindowSizeMsg{Width: 100, Height: 20})
+	app.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 	openSettingsMenu(app)
+	app.Update(tea.KeyPressMsg{Code: tea.KeyRight})
 	return app.View().Content
 }
 
@@ -518,7 +520,7 @@ func TestAnOversizeResultNeverPutsTheModelsHandleOnTheScreen(t *testing.T) {
 			t.Errorf("the screen carries %q, which is written for the model\n%s", forbidden, screen)
 		}
 	}
-	for _, want := range []string{"read CLAUDE.md", "12.1 KB" + storedNote} {
+	for _, want := range []string{"read", "CLAUDE.md", "12.1 KB" + storedNote} {
 		if !strings.Contains(screen, want) {
 			t.Errorf("the screen does not name the file and its size with %q\n%s", want, screen)
 		}
@@ -535,10 +537,16 @@ type appDriver struct {
 
 func driveApp(t *testing.T) *appDriver {
 	t.Helper()
+	return driveAppOn(t, nil)
+}
+
+func driveAppOn(t *testing.T, store *settingspkg.Store) *appDriver {
+	t.Helper()
 	app := tui.New(tui.Options{
-		Repo:   "scratch",
-		Branch: "develop",
-		Wires:  func() []tui.Wire { return []tui.Wire{{Name: wireSubscription, Model: "stub-model"}} },
+		Repo:     "scratch",
+		Branch:   "develop",
+		Wires:    func() []tui.Wire { return []tui.Wire{{Name: wireSubscription, Model: "stub-model"}} },
+		Settings: store,
 	})
 	app.Init()
 	app.Update(tea.WindowSizeMsg{Width: 100, Height: 24})
@@ -692,13 +700,13 @@ func screenAfterTwoInterrupts(t *testing.T, name, command string) string {
 	deck := written(t, dir, name+".cassette",
 		`{"text":"running the shell","tools":[{"name":"bash","args":{"command":"`+command+`"}}]}`+"\n")
 	steps := []string{
-		"wait type a task and press enter",
+		"wait " + session.Placeholder,
 		"type run the shell",
 		"key enter",
-		"wait working   bash",
+		"wait working",
 	}
 	for range shellStartGraceMillis / konst.DriveSettleMillis {
-		steps = append(steps, "wait working   bash")
+		steps = append(steps, "wait working")
 	}
 	steps = append(steps, "key ctrl+c", "key ctrl+c", "wait cooked for", "screen")
 	script := written(t, dir, name+".drive", strings.Join(steps, "\n"))
@@ -755,8 +763,8 @@ func TestADrivenTurnNamesTheSessionAndItsIDInTheHeader(t *testing.T) {
 	driver := driveApp(t)
 	stubbedTurn(dir, noteThenStop())(t.Context(), onTheSubscription, "write a note", driver.emit)
 
-	screen := driver.view()
-	if !strings.Contains(screen, "#") {
+	screen := ansi.Strip(driver.view(tea.WindowSizeMsg{Width: 120, Height: 24}))
+	if !strings.Contains(screen, "[session#") {
 		t.Fatalf("the header does not carry the session id:\n%s", screen)
 	}
 	if strings.Contains(screen, "#turn-1") {
@@ -773,7 +781,7 @@ func TestADrivenTurnNamesTheSessionAndItsIDInTheHeader(t *testing.T) {
 	if len(listing.Sessions) != 1 || listing.Sessions[0].Name == nil {
 		t.Fatalf("listing %+v, want the one session with a name", listing.Sessions)
 	}
-	if !strings.Contains(screen, *listing.Sessions[0].Name) {
+	if shown, _, _ := strings.Cut(*listing.Sessions[0].Name, "-"); !strings.Contains(screen, " "+shown+" [session#") {
 		t.Fatalf("the header does not carry the session name %q:\n%s", *listing.Sessions[0].Name, screen)
 	}
 }
@@ -886,13 +894,24 @@ func TestASpawnedChildShowsInTheSubAgentViewWithTheGlobsItHolds(t *testing.T) {
 	if ended.State != roster.InReview || ended.Steps != 2 || ended.Report == "" {
 		t.Fatalf("the child ended as %+v, want it in review with the steps and the report the roster carries", ended)
 	}
-	screen := driver.view(tea.KeyPressMsg{Code: '4', Mod: tea.ModAlt})
-	for _, want := range []string{"1 child", "c1", "note.txt", "ownership", "write note.txt"} {
+	screen := pickedFirstChild(t, driver)
+	for _, want := range []string{"1 agents", "[&c1]", "write note.txt", "owns", "note.txt"} {
 		if !strings.Contains(screen, want) {
 			t.Errorf("the sub-agent view does not show %q:\n%s", want, screen)
 		}
 	}
 	t.Log("\n" + screen)
+}
+
+func pickedFirstChild(t *testing.T, driver *appDriver) string {
+	t.Helper()
+	rail := ansi.Strip(driver.view(tea.WindowSizeMsg{Width: 120, Height: 40}, tea.KeyPressMsg{Code: '2', Mod: tea.ModAlt}))
+	row := slices.IndexFunc(strings.Split(rail, "\n"), func(line string) bool { return strings.HasPrefix(strings.TrimSpace(line), "[&c1]") })
+	if row < 0 {
+		t.Fatalf("the sub-agents rail names no [&c1]:\n%s", rail)
+	}
+	const railColumn = 14
+	return ansi.Strip(driver.view(tea.MouseClickMsg{X: railColumn, Y: row, Button: tea.MouseLeft}, tea.MouseReleaseMsg{X: railColumn, Y: row, Button: tea.MouseLeft}))
 }
 
 type toolNamesCapture struct {
@@ -1191,8 +1210,8 @@ func TestATurnWithNoChildrenSendsNoSubAgentEventAtAll(t *testing.T) {
 	if sent := driver.of(tui.EventSubAgent); len(sent) != 0 {
 		t.Fatalf("sub-agent events %+v, want none: an empty sub-agent view has to keep saying what it says today", sent)
 	}
-	screen := driver.view(tea.KeyPressMsg{Code: '4', Mod: tea.ModAlt})
-	if !strings.Contains(screen, "no child is holding any paths in this session") {
+	screen := driver.view(tea.KeyPressMsg{Code: '2', Mod: tea.ModAlt})
+	if !strings.Contains(screen, "0 agents") {
 		t.Errorf("the sub-agent view is not the empty one:\n%s", screen)
 	}
 }
@@ -1297,6 +1316,21 @@ func TestTheFoldLineOnADrivenTurnNamesTheCountNotTheSize(t *testing.T) {
 
 func editsKey() tea.KeyPressMsg { return tea.KeyPressMsg{Code: '3', Mod: tea.ModAlt} }
 
+func diffRows(feed, sign, text string) int {
+	drawn := 0
+	for _, row := range strings.Split(feed, "\n") {
+		fields, at := strings.Fields(row), len(strings.Fields(text))+2
+		if len(fields) >= at && fields[len(fields)-at] == sign && strings.HasSuffix(strings.TrimSpace(row), text) {
+			drawn++
+		}
+	}
+	return drawn
+}
+
+func readingTheEdit() []tea.Msg {
+	return []tea.Msg{tea.WindowSizeMsg{Width: 120, Height: 40}, editsKey(), tea.KeyPressMsg{Code: tea.KeyEnter}, tea.KeyPressMsg{Code: tea.KeyEnter}}
+}
+
 func TestARealEditReachesTheFileEditsViewAndLeavesOneRowBehind(t *testing.T) {
 	dir := scratchProject(t)
 	disableReadBeforeEdit(t)
@@ -1326,15 +1360,18 @@ func TestARealEditReachesTheFileEditsViewAndLeavesOneRowBehind(t *testing.T) {
 	if strings.Contains(transcript, "a longer note") {
 		t.Errorf("the transcript drew the diff body\n%s", transcript)
 	}
-	worked := driver.view(tea.KeyPressMsg{Code: '2', Mod: tea.ModAlt})
-	if !strings.Contains(worked, "edit note.txt") || !strings.Contains(worked, "+1 -1") {
-		t.Errorf("work does not say which file changed and by how much\n%s", worked)
+	worked := ansi.Strip(driver.view(tea.KeyPressMsg{Code: '2', Mod: tea.ModAlt}))
+	if !strings.Contains(worked, "file edit") || !strings.Contains(worked, "note.txt") || !strings.Contains(worked, "+1  -1") {
+		t.Errorf("the sub-agents feed does not say which file changed and by how much\n%s", worked)
 	}
-	feed := driver.view(editsKey())
-	for _, want := range []string{"note.txt", "+1 -1", "-a note", "+a longer note", "and another"} {
+	feed := ansi.Strip(driver.view(readingTheEdit()...))
+	for _, want := range []string{"MODIFIED", "note.txt", "+1  -1", "and another"} {
 		if !strings.Contains(feed, want) {
 			t.Errorf("the file edits view does not show %q\n%s", want, feed)
 		}
+	}
+	if diffRows(feed, "-", "a note") != 1 || diffRows(feed, "+", "a longer note") != 1 {
+		t.Errorf("the file edits view does not draw the removed and the added line\n%s", feed)
 	}
 	t.Log("\n" + feed)
 }
@@ -1370,17 +1407,15 @@ func TestACreatedFileShowsEveryLineItWroteMarkedAsAdded(t *testing.T) {
 	}}
 	stubbedTurn(dir, model)(t.Context(), onTheSubscription, "write the note", driver.emit)
 
-	feed := ansi.Strip(driver.view(tea.WindowSizeMsg{Width: 100, Height: 40}, editsKey()))
+	feed := ansi.Strip(driver.view(readingTheEdit()...))
 	drawn := 0
-	for _, row := range strings.Split(feed, "\n") {
-		if _, body, sided := strings.Cut(row, " │ "); sided && strings.HasPrefix(strings.TrimSpace(body), "+line ") {
-			drawn++
-		}
+	for line := 1; line <= createdLines; line++ {
+		drawn += diffRows(feed, "+", "line "+strconv.Itoa(line))
 	}
 	if drawn != createdLines {
 		t.Errorf("the feed drew %d added lines for a %d line file\n%s", drawn, createdLines, feed)
 	}
-	for _, want := range []string{"tofu created note.txt", "+16 -0"} {
+	for _, want := range []string{"ADDED", "note.txt", "+16  +0"} {
 		if !strings.Contains(feed, want) {
 			t.Errorf("the file edits view does not show %q\n%s", want, feed)
 		}
@@ -1409,11 +1444,14 @@ func TestAWholeReplacementShowsItsDiffRatherThanItsContent(t *testing.T) {
 	if results[0].Created != "" {
 		t.Errorf("a replacement was carried as a created file: %+v", results[0])
 	}
-	feed := ansi.Strip(driver.view(editsKey()))
-	for _, want := range []string{"tofu edited note.txt", "+1 -1", "-a note", "+a longer note"} {
+	feed := ansi.Strip(driver.view(readingTheEdit()...))
+	for _, want := range []string{"MODIFIED", "+1  -1"} {
 		if !strings.Contains(feed, want) {
 			t.Errorf("the file edits view does not show %q\n%s", want, feed)
 		}
+	}
+	if diffRows(feed, "-", "a note") != 1 || diffRows(feed, "+", "a longer note") != 1 {
+		t.Errorf("a whole replacement is not drawn as its diff\n%s", feed)
 	}
 }
 
@@ -1906,28 +1944,6 @@ func TestTheEndOfASessionSaysNothingExtraWhenNothingWasRunning(t *testing.T) {
 	}
 }
 
-func TestAChildsCallIsDrawnWithItsToolNameOnce(t *testing.T) {
-	rows := []turn.Row{{ID: "turn-1-c1", Steps: []turn.StepRow{{Index: 1, ToolCalls: []turn.ToolCallRow{
-		{Tool: "read", Command: "note.txt"},
-		{Tool: "bash", Command: "go test ./..."},
-	}}}}}
-	view := subagent.Model{Children: []subagent.Child{{Name: "c1", State: roster.Finished, Calls: recordedCalls(rows, "turn-1-c1")}}}
-	view.SetSize(100, 24)
-	view.Key("down")
-
-	drawn := ansi.Strip(view.View())
-	for _, want := range []string{"⟩ read note.txt", "⟩ bash go test ./..."} {
-		if !strings.Contains(drawn, want) {
-			t.Errorf("the panel never draws %q:\n%s", want, drawn)
-		}
-	}
-	for _, line := range strings.Split(drawn, "\n") {
-		if strings.Contains(line, "note.txt") && strings.Count(line, "read") != 1 {
-			t.Errorf("the call row names its tool %d times: %q", strings.Count(line, "read"), strings.TrimSpace(line))
-		}
-	}
-}
-
 type modelStoppingTheTurnWhileTheChildIsAnswering struct {
 	stop    context.CancelFunc
 	spawn   llm.ToolCall
@@ -1967,7 +1983,7 @@ func TestAParkedChildsReportReachesThePanelWhenTheTurnIsStoppedAndNeverAsksAgain
 	if last.State != roster.Parked || last.Report == "" {
 		t.Fatalf("the panel was last told %+v, want a parked child carrying the report the roster holds", last)
 	}
-	screen := driver.view(tea.KeyPressMsg{Code: '4', Mod: tea.ModAlt}, tea.KeyPressMsg{Code: tea.KeyDown})
+	screen := pickedFirstChild(t, driver)
 	if !strings.Contains(screen, "act_on: the child was stopped") {
 		t.Fatalf("the sub-agent view does not carry the parked report:\n%s", screen)
 	}

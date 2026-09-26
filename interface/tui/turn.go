@@ -410,7 +410,7 @@ func (a *App) showChildren(children []subagent.Child) {
 			if call.Result != "" {
 				state = feed.StateComplete
 			}
-			id, seen := child.Name+"-"+strconv.Itoa(step+1), a.options.Now()
+			id, seen := cmp.Or(short(call.ID), child.Name+"-"+strconv.Itoa(step+1)), cmp.Or(call.At, a.options.Now())
 			if at := a.happenedAt(id); at >= 0 {
 				seen = a.happened[at].At
 			}

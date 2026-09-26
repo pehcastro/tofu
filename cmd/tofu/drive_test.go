@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"tofu/interface/tui/progress"
+	"tofu/interface/tui/session"
 	"tofu/internal/konst"
 	"tofu/internal/llm"
 	settingspkg "tofu/internal/settings"
@@ -70,10 +71,10 @@ func TestTwoInterruptsEndADrivenTurnAndTheCassetteIsNeverAskedAgain(t *testing.T
 	dir := drivenProject(t)
 	deck := written(t, dir, "slow.cassette", sleepingCassette)
 	script := written(t, dir, "stop.drive", strings.Join([]string{
-		"wait type a task and press enter",
+		"wait " + session.Placeholder,
 		"type wait for me",
 		"key enter",
-		"wait working   bash",
+		"wait working",
 		"key ctrl+c",
 		"key ctrl+c",
 		"wait cooked for",
@@ -99,12 +100,12 @@ func TestADrivenAnswerArrivesInDeltasSoAnInterruptKeepsTheHalfThatWasWritten(t *
 	dir := drivenProject(t)
 	deck := written(t, dir, "half.cassette", halfAnswerCassette)
 	script := written(t, dir, "half.drive", strings.Join([]string{
-		"wait type a task and press enter",
+		"wait " + session.Placeholder,
 		"type why does the loop read the policy first?",
 		"key enter",
 		"wait because a locked",
 		"key ctrl+c",
-		"wait characters were written and kept in work",
+		"wait characters were written and kept in sub-agents",
 		"key alt+2",
 		"screen",
 	}, "\n"))
@@ -115,7 +116,7 @@ func TestADrivenAnswerArrivesInDeltasSoAnInterruptKeepsTheHalfThatWasWritten(t *
 	}
 	for _, want := range []string{"answer, interrupted", "because a locked"} {
 		if !strings.Contains(out.String(), want) {
-			t.Errorf("work never says %q, so the answer arrived as one sealed event:\n%s", want, out.String())
+			t.Errorf("sub-agents never says %q, so the answer arrived as one sealed event:\n%s", want, out.String())
 		}
 	}
 }
@@ -124,7 +125,7 @@ func TestAWaitForAStateThatNeverArrivesFailsSayingWhatItWaitedFor(t *testing.T) 
 	dir := drivenProject(t)
 	deck := written(t, dir, "read.cassette", readingCassette)
 	script := written(t, dir, "never.drive", strings.Join([]string{
-		"wait type a task and press enter",
+		"wait " + session.Placeholder,
 		"type read note.txt",
 		"key enter",
 		"wait the build is green",
@@ -142,7 +143,7 @@ func TestAWaitForAStateThatNeverArrivesFailsSayingWhatItWaitedFor(t *testing.T) 
 func TestADrivenTurnWithNoCassetteOpensNoWireAndSaysSo(t *testing.T) {
 	dir := drivenProject(t)
 	script := written(t, dir, "bare.drive", strings.Join([]string{
-		"wait type a task and press enter",
+		"wait " + session.Placeholder,
 		"type read note.txt",
 		"key enter",
 		"wait opens no live wire",
@@ -162,7 +163,7 @@ func TestTheCassetteCarriesTheEnvironmentBlockTheTurnSent(t *testing.T) {
 	dir := drivenProject(t)
 	deck := written(t, dir, "read.cassette", readingCassette)
 	script := written(t, dir, "env.drive", strings.Join([]string{
-		"wait type a task and press enter",
+		"wait " + session.Placeholder,
 		"type read note.txt",
 		"key enter",
 		"wait cooked for",
@@ -183,11 +184,11 @@ func TestTheCassetteCarriesTheEnvironmentBlockTheTurnSent(t *testing.T) {
 func TestDriveReadsItsScriptFromStandardInput(t *testing.T) {
 	drivenProject(t)
 	var out, errOut bytes.Buffer
-	code := driveVerb([]string{"-", "--plain", "--timeout", "30s"}, strings.NewReader("wait type a task and press enter\nscreen\n"), &out, &errOut)
+	code := driveVerb([]string{"-", "--plain", "--timeout", "30s"}, strings.NewReader("wait "+session.Placeholder+"\nscreen\n"), &out, &errOut)
 	if code != exitOK {
 		t.Fatalf("tofu drive exited %d: %s", code, errOut.String())
 	}
-	if !strings.Contains(out.String(), "type a task and press enter") {
+	if !strings.Contains(out.String(), session.Placeholder) {
 		t.Errorf("the screen read from standard input is:\n%s", out.String())
 	}
 }
@@ -201,7 +202,7 @@ func (w *watchedInput) Read([]byte) (int, error) {
 
 func TestANamedScriptNeverReadsStandardInput(t *testing.T) {
 	dir := drivenProject(t)
-	script := written(t, dir, "look.drive", "wait type a task and press enter\n")
+	script := written(t, dir, "look.drive", "wait "+session.Placeholder+"\n")
 	var out, errOut bytes.Buffer
 	watched := &watchedInput{}
 	if code := driveVerb([]string{script, "--timeout", "30s"}, watched, &out, &errOut); code != exitOK {
@@ -266,20 +267,23 @@ func TestADrivenClickAsTheFirstStepLandsOnTheFrameAPersonWouldSee(t *testing.T) 
 		}
 		return out.String()
 	}
-	label := "[3] file edits"
-	column := -1
-	for _, line := range strings.Split(run("screen\n"), "\n") {
-		if before, _, found := strings.Cut(line, label); found {
-			column = len([]rune(before)) + len("[3] ")
+	label := "file edits"
+	column, row, top := -1, -1, -1
+	for at, line := range strings.Split(run("screen\n"), "\n") {
+		if top < 0 && strings.HasPrefix(line, " tofu") {
+			top = at
+		}
+		if before, _, found := strings.Cut(line, label); found && top >= 0 {
+			column, row = len([]rune(before))+1, at-top
 			break
 		}
 	}
 	if column < 0 {
 		t.Fatalf("no row of the first screen shows %q", label)
 	}
-	shown := run("click " + strconv.Itoa(column) + " 1\nscreen\n")
+	shown := run("click " + strconv.Itoa(column) + " " + strconv.Itoa(row) + "\nscreen\n")
 	if !strings.Contains(shown, "no file has changed in this session") {
-		t.Errorf("a click on column %d of row 1 before any screen left the file edits view closed:\n%s", column, shown)
+		t.Errorf("a click on column %d of row %d before any screen left the file edits view closed:\n%s", column, row, shown)
 	}
 }
 
@@ -387,9 +391,16 @@ func drivenConversation(t *testing.T, deck, script string) string {
 		t.Fatalf("tofu drive exited %d: %s", code, errOut.String())
 	}
 	var spoken []string
+	speaking := false
 	for _, line := range strings.Split(out.String(), "\n") {
-		said := strings.TrimSpace(line)
-		if strings.HasPrefix(said, "▌") || strings.HasPrefix(said, "»") {
+		said := strings.TrimSpace(strings.TrimRight(strings.TrimSpace(line), "┃│"))
+		switch {
+		case strings.HasPrefix(said, "[&"):
+			speaking = true
+			spoken = append(spoken, strings.Fields(said)[0])
+		case said == "" || strings.HasPrefix(said, "·"):
+			speaking = false
+		case speaking && !strings.HasPrefix(said, "[tool#"):
 			spoken = append(spoken, said)
 		}
 	}
@@ -400,7 +411,7 @@ func TestASpawnDrivenTwiceProducesTheSameConversationBothTimes(t *testing.T) {
 	dir := drivenProject(t)
 	deck := written(t, dir, "spawn.cassette", addressedCassette)
 	script := written(t, dir, "spawn.drive", strings.Join([]string{
-		"wait type a task and press enter",
+		"wait " + session.Placeholder,
 		"type ask a child to read the note",
 		"key enter",
 		"wait cooked for",
@@ -431,7 +442,7 @@ func pollutedHome(t *testing.T) string {
 func drivenTask(t *testing.T, dir, name, deck, task string, args ...string) string {
 	t.Helper()
 	script := written(t, dir, name+".drive", strings.Join([]string{
-		"wait type a task and press enter",
+		"wait " + session.Placeholder,
 		"type " + task,
 		"key enter",
 		"wait cooked for",
@@ -453,8 +464,8 @@ func drivenRead(t *testing.T, dir string, args ...string) string {
 func settingsSaid(t *testing.T, printed, key string) string {
 	t.Helper()
 	for _, line := range strings.Split(printed, "\n") {
-		if fields := strings.Fields(line); len(fields) >= 2 && fields[0] == key {
-			return strings.Join(fields[1:], " ")
+		if fields := strings.Fields(line); len(fields) >= 3 && fields[1] == key {
+			return strings.Join(fields[2:], " ")
 		}
 	}
 	t.Fatalf("the output never names the setting %s it resolved:\n%s", key, printed)

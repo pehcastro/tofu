@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -27,11 +28,11 @@ import (
 	"tofu/interface/tui/subagent"
 	"tofu/internal/judge/jev"
 	"tofu/internal/judge/ledger"
+	"tofu/internal/keymap"
 	"tofu/internal/konst"
 	"tofu/internal/llm"
 	"tofu/internal/llm/cred"
 	"tofu/internal/llm/models"
-	"tofu/internal/llm/quota"
 	sessionstore "tofu/internal/session"
 	settingspkg "tofu/internal/settings"
 	"tofu/internal/shell"
@@ -72,6 +73,8 @@ const (
 	createdFilePrefix   = "created "
 	placeWords          = 2
 	queuedMessages      = 64
+	childIDMark         = "-c"
+	imagesNeverSent     = "off"
 )
 
 type appWiring struct {
@@ -80,21 +83,31 @@ type appWiring struct {
 	blockers func() []tui.Requirement
 }
 
-func appOptions(dir string, arms runOpts, wiring appWiring, resumed sessionResume) tui.Options {
+type appLaunch struct {
+	resumed     sessionResume
+	fresh       bool
+	registry    *shell.Registry
+	registryErr error
+}
+
+func launchOf(resumed sessionResume, fresh bool) appLaunch {
+	registry, registryErr := openShellRegistry()
+	return appLaunch{resumed: resumed, fresh: fresh, registry: registry, registryErr: registryErr}
+}
+
+func appOptions(dir string, arms runOpts, wiring appWiring, launch appLaunch) tui.Options {
 	note := ""
 	if _, err := gateKey(); err != nil {
 		note = gateOffNote
 	}
 	answers := make(chan tui.Answer, 1)
 	steering := make(chan string, queuedMessages)
-	live := newAppSession(dir, wiring.open, answers, time.Now, resumed)
+	live := newAppSession(dir, wiring.open, answers, time.Now, launch.resumed)
 	live.steer = steering
 	live.arms = arms
+	live.shells = launch.registry
 	settingsStore, _ := openSettings(dir)
-	registry, registryErr := openShellRegistry()
-	if registryErr == nil {
-		live.shells = registry
-	}
+	shortcuts, _ := keymap.ShortcutsPath()
 	return tui.Options{
 		Repo:         filepath.Base(dir),
 		Root:         dir,
@@ -115,8 +128,10 @@ func appOptions(dir string, arms runOpts, wiring appWiring, resumed sessionResum
 		Paths:        appPaths(dir),
 		ResumeHead:   live.resumeHead,
 		NewSession:   live.startFresh,
-		Shells:       appShells(registry, registryErr),
-		KillShell:    appKillShell(registry, registryErr),
+		Shells:       appShells(dir, launch.registry, launch.registryErr),
+		KillShell:    appKillShell(launch.registry, launch.registryErr),
+		Fresh:        launch.fresh,
+		Keymap:       shortcuts,
 	}
 }
 
@@ -132,12 +147,26 @@ func appVerb(in io.Reader, out, errOut io.Writer, resumed sessionResume) int {
 		return exitVerdict
 	}
 	live := appWiring{open: openAppWire, wires: appWires, blockers: appRequirements}
-	if err := tui.Run(appOptions(dir, runOpts{}, live, resumed)); err != nil {
+	launch := launchOf(resumed, resumed.Session == "")
+	if err := tui.Run(appOptions(dir, runOpts{}, live, launch)); err != nil {
 		_, _ = fmt.Fprintf(errOut, "tofu: %v\n", err)
 		return exitVerdict
 	}
-	_, _ = fmt.Fprintln(out, sessionEndLine(openShellRegistry()))
+	_, _ = fmt.Fprintln(out, sessionEndLine(launch.registry, launch.registryErr))
+	leaveShells(dir, launch.registry)
 	return exitOK
+}
+
+func leaveShells(dir string, registry *shell.Registry) {
+	if registry == nil || settingInt(dir, settingspkg.PersistentRegistry, nil) != 0 {
+		return
+	}
+	found, _ := registry.List()
+	for _, one := range found {
+		if one.State == shell.Running {
+			_ = registry.Kill(one.Name)
+		}
+	}
 }
 
 func sessionEndLine(registry *shell.Registry, openErr error) string {
@@ -325,7 +354,7 @@ func branchOf(dir string) string {
 	return strings.TrimPrefix(strings.TrimSpace(string(head)), "ref: refs/heads/")
 }
 
-func appShells(registry *shell.Registry, openErr error) func() []shells.Entry {
+func appShells(dir string, registry *shell.Registry, openErr error) func() []shells.Entry {
 	return func() []shells.Entry {
 		if openErr != nil {
 			return nil
@@ -334,9 +363,13 @@ func appShells(registry *shell.Registry, openErr error) func() []shells.Entry {
 		if err != nil {
 			return nil
 		}
+		tail, err := strconv.Atoi(settingText(dir, settingspkg.LogTail, nil))
+		if err != nil {
+			tail = konst.ShellLogTailLinesDefault
+		}
 		entries := make([]shells.Entry, 0, len(found))
 		for _, one := range found {
-			entry := shells.Entry{Name: one.Name, Command: one.Command, Started: one.Started, ExitCode: one.ExitCode}
+			entry := shells.Entry{Name: one.Name, Command: one.Command, Started: one.Started, Ended: one.Ended, ExitCode: one.ExitCode, PID: one.PID, Dir: one.Dir, Owner: ownerName(one.Owner)}
 			switch one.State {
 			case shell.Running:
 				entry.State = shells.Running
@@ -345,11 +378,20 @@ func appShells(registry *shell.Registry, openErr error) func() []shells.Entry {
 			case shell.Killed:
 				entry.State = shells.Killed
 			}
-			entry.Log, _ = registry.Tail(one.Name, shell.DefaultTail)
+			entry.Log, _ = registry.Tail(one.Name, tail)
 			entries = append(entries, entry)
 		}
 		return entries
 	}
+}
+
+func ownerName(owner string) string {
+	at := strings.LastIndex(owner, childIDMark)
+	if at < 0 {
+		return owner
+	}
+	name, _, _ := strings.Cut(owner[at+1:], "-")
+	return name
 }
 
 func appKillShell(registry *shell.Registry, openErr error) func(string) error {
@@ -366,38 +408,21 @@ func appQuota() []frame.Quota {
 	if err != nil {
 		return nil
 	}
-	return quotasFrom(results)
-}
-
-func quotasFrom(results []pollResult) []frame.Quota {
-	quotas := make([]frame.Quota, 0, len(results))
+	var quotas []frame.Quota
 	for _, result := range results {
 		if result.err != nil {
 			continue
 		}
-		if fullest, ok := fullestWindow(result.report); ok {
-			quotas = append(quotas, fullest)
+		for _, window := range result.report.Windows {
+			quotas = append(quotas, frame.Quota{
+				Label:    string(result.report.Provider) + " " + window.ID,
+				Fraction: window.Used.Fraction,
+				Reported: window.Used.Reported,
+				ResetsAt: window.ResetsAt,
+			})
 		}
 	}
 	return quotas
-}
-
-func fullestWindow(report quota.Report) (frame.Quota, bool) {
-	var fullest frame.Quota
-	found := false
-	for _, window := range report.Windows {
-		if !window.Used.Reported || strings.Contains(window.ID, ":") || (found && window.Used.Fraction <= fullest.Fraction) {
-			continue
-		}
-		fullest = frame.Quota{
-			Label:    string(report.Provider) + " " + window.ID,
-			Fraction: window.Used.Fraction,
-			Reported: true,
-			ResetsAt: window.ResetsAt,
-		}
-		found = true
-	}
-	return fullest, found
 }
 
 type appWire struct {
@@ -671,6 +696,10 @@ func (s *appSession) run(ctx context.Context, pick tui.Pick, task string, emit t
 		return
 	}
 	say := func(unreadable string) { emit(tui.Event{Kind: tui.EventNote, Text: unreadable}) }
+	if len(images) > 0 && settingText(s.dir, settingspkg.Images, say) == imagesNeverSent {
+		say("images is off, so " + strconv.Itoa(len(images)) + " attached image(s) stayed out of this turn")
+		images = nil
+	}
 	opts := pickedOpts(s.dir, s.pendingID(), task, pick, cmp.Or(s.arms.maxSteps, settingInt(s.dir, settingspkg.DecisionCap, say)))
 	opts.gateArm, opts.siftArm, opts.noInstructions = s.arms.gateArm, s.arms.siftArm, s.arms.noInstructions
 	opts.toolSet, opts.contextCeiling = cmp.Or(s.arms.toolSet, opts.toolSet), s.arms.contextCeiling
@@ -938,24 +967,27 @@ type appWatcher struct {
 	cacheRead int
 	spent     map[string]int
 	shows     sync.Mutex
+	asked     map[string][]subagent.Call
 	shown     []subagent.Child
 	shownAt   time.Time
 }
 
 func (a *appWatcher) Ask(ctx context.Context, request llm.Request) (llm.Decision, error) {
-	for _, message := range request.Messages {
-		if message.Role == llm.RoleTool {
-			a.result(message)
+	_, childAsking := a.runningChild()
+	streamed := false
+	if !childAsking {
+		for _, message := range request.Messages {
+			if message.Role == llm.RoleTool {
+				a.result(message)
+			}
+		}
+		a.emit(tui.Event{Kind: tui.EventRequesting})
+		request.OnDelta = func(text string) {
+			streamed = true
+			a.emit(tui.Event{Kind: tui.EventTextDelta, Text: text})
 		}
 	}
 	a.sendSubAgents()
-
-	a.emit(tui.Event{Kind: tui.EventRequesting})
-	streamed := false
-	request.OnDelta = func(text string) {
-		streamed = true
-		a.emit(tui.Event{Kind: tui.EventTextDelta, Text: text})
-	}
 	decision, err := a.inner.Ask(ctx, request)
 	if err != nil {
 		return decision, err
@@ -964,13 +996,15 @@ func (a *appWatcher) Ask(ctx context.Context, request llm.Request) (llm.Decision
 	a.in += fresh
 	a.out += decision.Usage.OutputTokens
 	a.cacheRead += decision.CacheReadTokens
-	a.creditRunningChild(fresh + decision.Usage.OutputTokens)
+	a.noteRunningChildsAsk(fresh+decision.Usage.OutputTokens, decision.ToolCalls)
 	stats := tui.Event{Kind: tui.EventStats, Model: decision.Build, TokensIn: a.in, TokensOut: a.out, CacheRead: a.cacheRead}
 	if a.gate != nil {
 		stats.Decisions = a.gate.decisions
 	}
 	a.emit(stats)
-
+	if childAsking {
+		return decision, nil
+	}
 	if text := strings.TrimSpace(decision.Content); text != "" && !streamed {
 		a.emit(tui.Event{Kind: tui.EventText, Text: text})
 	}
@@ -1021,19 +1055,34 @@ func (a *appWatcher) noteWholeFile(call llm.ToolCall) {
 	a.wrote[call.ID] = args.Content
 }
 
-func (a *appWatcher) creditRunningChild(tokens int) {
+func (a *appWatcher) runningChild() (roster.SubAgent, bool) {
 	if a.held == nil {
-		return
+		return roster.SubAgent{}, false
 	}
 	agents := a.held.SubAgents()
 	for index := len(agents) - 1; index >= 0; index-- {
-		if agents[index].State != roster.Working {
-			continue
+		if agents[index].State == roster.Working {
+			return agents[index], true
 		}
-		a.spent[agents[index].ID] += tokens
-		a.draw(agents)
+	}
+	return roster.SubAgent{}, false
+}
+
+func (a *appWatcher) noteRunningChildsAsk(tokens int, calls []llm.ToolCall) {
+	agent, running := a.runningChild()
+	if !running {
 		return
 	}
+	a.spent[agent.ID] += tokens
+	a.shows.Lock()
+	if a.asked == nil {
+		a.asked = map[string][]subagent.Call{}
+	}
+	for _, call := range calls {
+		a.asked[agent.ID] = append(a.asked[agent.ID], subagent.Call{ID: sessionstore.EventIDFor(agent.ID, call.ID), At: a.now(), Tool: call.Name})
+	}
+	a.shows.Unlock()
+	a.draw(a.held.SubAgents())
 }
 
 func (a *appWatcher) sendSubAgents() {
@@ -1048,8 +1097,11 @@ func (a *appWatcher) draw(agents []roster.SubAgent) {
 		return
 	}
 	now, rows := a.now(), childRows(a.spawner)
+	a.shows.Lock()
+	asked := maps.Clone(a.asked)
+	a.shows.Unlock()
 	children := subagent.Children(agents, now, a.maxSteps, a.spent, func(agent roster.SubAgent) []subagent.Call {
-		return recordedOrCalling(recordedCalls(rows, agent.ID), agent.Calling, agent.CallsDropped)
+		return recordedOrCalling(recordedCalls(rows, agent.ID), asked[agent.ID], agent.Calling, agent.CallsDropped)
 	})
 	a.shows.Lock()
 	a.shown, a.shownAt = children, now
@@ -1097,9 +1149,17 @@ func (a *appWatcher) clockRunningChildren() (stop func()) {
 	}
 }
 
-func recordedOrCalling(recorded []subagent.Call, calling []string, dropped int) []subagent.Call {
-	if len(recorded) > 0 {
+func recordedOrCalling(recorded, asked []subagent.Call, calling []string, dropped int) []subagent.Call {
+	for index := range recorded {
+		if at := slices.IndexFunc(asked, func(call subagent.Call) bool { return call.ID == recorded[index].ID }); at >= 0 {
+			recorded[index].At = asked[at].At
+		}
+	}
+	switch {
+	case len(recorded) > 0:
 		return recorded
+	case len(asked) > 0:
+		return inThePane(asked)
 	}
 	watched := make([]subagent.Call, len(calling))
 	for index, tool := range calling {
@@ -1123,10 +1183,14 @@ func recordedCalls(rows []turn.Row, id string) []subagent.Call {
 		}
 		for _, step := range row.Steps {
 			for _, ran := range step.ToolCalls {
-				calls = append(calls, subagent.Call{Tool: ran.Tool, Text: ran.Command, Result: ran.Error})
+				calls = append(calls, subagent.Call{ID: ran.ID, Tool: ran.Tool, Text: ran.Command, Result: cmp.Or(ran.Error, byteSize(ran.ResultBytes))})
 			}
 		}
 	}
+	return inThePane(calls)
+}
+
+func inThePane(calls []subagent.Call) []subagent.Call {
 	if len(calls) <= konst.SubAgentCallsWatched {
 		return calls
 	}

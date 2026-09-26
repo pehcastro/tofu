@@ -8,9 +8,13 @@ import (
 	"strings"
 	"testing"
 
+	tea "charm.land/bubbletea/v2"
+
 	"tofu/interface/tui"
+	"tofu/interface/tui/frame"
 	"tofu/internal/llm"
 	sessionstore "tofu/internal/session"
+	settingspkg "tofu/internal/settings"
 )
 
 type streamingModel struct {
@@ -90,7 +94,14 @@ func TestACacheHitCarriesTheReadSeparatelyFromTheFreshInput(t *testing.T) {
 		Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "the answer",
 		Usage: llm.Usage{InputTokens: 400}, CacheReadTokens: 9603,
 	}}}
-	cachedDriver := driveApp(t)
+	detailed, err := openSettings(cached)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := detailed.SetText(settingspkg.Project, settingspkg.StatusBar, string(frame.StatusDetailed)); err != nil {
+		t.Fatal(err)
+	}
+	cachedDriver := driveAppOn(t, detailed)
 	stubbedTurn(cached, cachedModel)(t.Context(), onTheSubscription, "explain the gate", cachedDriver.emit)
 
 	fresh := scratchProject(t)
@@ -98,15 +109,16 @@ func TestACacheHitCarriesTheReadSeparatelyFromTheFreshInput(t *testing.T) {
 		Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "the answer",
 		Usage: llm.Usage{InputTokens: 400},
 	}}}
-	freshDriver := driveApp(t)
+	freshDriver := driveAppOn(t, detailed)
 	stubbedTurn(fresh, freshModel)(t.Context(), onTheSubscription, "explain the gate", freshDriver.emit)
 
 	stats := cachedDriver.of(tui.EventStats)
 	if len(stats) == 0 || stats[len(stats)-1].CacheRead != 9603 {
 		t.Fatalf("the stats event does not carry the cached read: %+v", stats)
 	}
-	cachedFrame := cachedDriver.view()
-	freshFrame := freshDriver.view()
+	wide := tea.WindowSizeMsg{Width: 160, Height: 24}
+	cachedFrame := cachedDriver.view(wide)
+	freshFrame := freshDriver.view(wide)
 	if !strings.Contains(cachedFrame, "9k cached") {
 		t.Fatalf("a cache hit does not show the cached read beside the fresh input\n%s", cachedFrame)
 	}

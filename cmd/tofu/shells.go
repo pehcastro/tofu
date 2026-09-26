@@ -50,7 +50,7 @@ func shellsList(registry *shell.Registry, out, errOut io.Writer) int {
 		return exitOK
 	}
 	for _, one := range shells {
-		_, _ = fmt.Fprintf(out, "%-16s %-8s pid %-7d %s\n", one.Name, one.State, one.PID, one.Command)
+		_, _ = fmt.Fprintf(out, "%-16s %-8s pid %-7d owner %-12s dir %s  %s\n", one.Name, one.State, one.PID, ownerName(one.Owner), one.Dir, one.Command)
 	}
 	return exitOK
 }
