@@ -53,6 +53,7 @@ const (
 	EventRequesting
 	EventPlan
 	EventSession
+	EventTask
 )
 
 type Event struct {
@@ -85,7 +86,7 @@ func (e Event) snapshot() bool {
 		return true
 	case EventText, EventTextDelta, EventToolCall, EventToolResult, EventNote, EventFailure, EventStats, EventDone,
 		EventDecision, EventGateOff, EventAwaitPerson, EventResumed, EventSteered, EventRequesting, EventPlan,
-		EventSession, EventSubAgent, EventForkStart, EventForkEnd:
+		EventSession, EventSubAgent, EventForkStart, EventForkEnd, EventTask:
 		return false
 	}
 	panic("tui: unknown event kind")
@@ -158,6 +159,7 @@ type Options struct {
 	Shells       func() []shells.Entry
 	KillShell    func(name string) error
 	Fresh        bool
+	Resumed      []Event
 	Pose         string
 	Keymap       string
 }
@@ -294,6 +296,10 @@ func New(options Options) *App {
 	app.settings.SetBranch(options.Branch)
 	app.intro = newIntro(options.Fresh && !app.flag(isettings.HideIntroduction), app.text(isettings.Animations) != animationsOff, options.Pose)
 	app.resize(app.width, app.height)
+	for _, event := range options.Resumed {
+		app.absorb(event)
+	}
+	app.view.Stop()
 	app.readWires()
 	app.refreshSettingsRows()
 	app.syncFeed()

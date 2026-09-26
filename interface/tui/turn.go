@@ -268,6 +268,8 @@ func (a *App) absorb(event Event) {
 	switch event.Kind {
 	case EventRequesting:
 		a.view.Requesting()
+	case EventTask:
+		a.view.Append(session.Entry{Kind: session.User, Body: event.Text})
 	case EventText:
 		a.view.Append(session.Entry{Kind: session.Assistant, Body: event.Text, ID: event.ID})
 	case EventTextDelta:

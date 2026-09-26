@@ -132,6 +132,7 @@ func appOptions(dir string, arms runOpts, wiring appWiring, launch appLaunch) tu
 		Shells:       appShells(dir, launch.registry, launch.registryErr),
 		KillShell:    appKillShell(launch.registry, launch.registryErr),
 		Fresh:        launch.fresh,
+		Resumed:      resumedChat(launch.resumed),
 		Keymap:       shortcuts,
 	}
 }
@@ -553,15 +554,25 @@ type pendingImage struct {
 }
 
 func newAppSession(dir string, open func(runOpts) (appWire, error), answers <-chan tui.Answer, now func() time.Time, resumed sessionResume) *appSession {
-	return &appSession{
+	live := &appSession{
 		dir:     dir,
 		open:    open,
 		answers: answers,
 		now:     now,
 		id:      resumed.Session,
-		carried: resumed.messages,
 		shown:   map[string]bool{},
 		granted: map[string]bool{},
+	}
+	live.carry(resumed.messages)
+	return live
+}
+
+func (s *appSession) carry(messages []llm.Message) {
+	s.carried = messages
+	for _, message := range messages {
+		if message.ToolCallID != "" {
+			s.shown[message.ToolCallID] = true
+		}
 	}
 }
 
@@ -681,7 +692,8 @@ func (s *appSession) resumeHead() string {
 	if carry.Fresh != "" {
 		return carry.Fresh
 	}
-	s.id, s.carried = carry.Session, carry.messages
+	s.id = carry.Session
+	s.carry(carry.messages)
 	return "continuing " + carry.Session + ", " + strconv.Itoa(carry.Carried) + " messages from " + sessionSteps(carry.Steps)
 }
 
@@ -1029,12 +1041,42 @@ func (a *appWatcher) Ask(ctx context.Context, request llm.Request) (llm.Decision
 		a.emit(tui.Event{Kind: tui.EventText, Text: text})
 	}
 	for _, call := range decision.ToolCalls {
-		intent, detail := callIntent(call)
-		promotes := a.spawner != nil && call.Name == a.spawner.Name()
-		a.emit(tui.Event{Kind: tui.EventToolCall, ID: sessionstore.EventIDFor(a.turnID, call.ID), Tool: call.Name, Text: intent, Detail: detail, Promote: promotes})
-		a.noteWholeFile(call)
+		a.called(call)
 	}
 	return decision, nil
+}
+
+func (a *appWatcher) called(call llm.ToolCall) {
+	intent, detail := callIntent(call)
+	promotes := a.spawner != nil && call.Name == a.spawner.Name()
+	a.emit(tui.Event{Kind: tui.EventToolCall, ID: sessionstore.EventIDFor(a.turnID, call.ID), Tool: call.Name, Text: intent, Detail: detail, Promote: promotes})
+	a.noteWholeFile(call)
+}
+
+func resumedChat(carry sessionResume) []tui.Event {
+	if carry.Session == "" {
+		return nil
+	}
+	var chat []tui.Event
+	watch := &appWatcher{emit: func(event tui.Event) { chat = append(chat, event) }, turnID: carry.Session, seen: map[string]bool{}, spawner: &turn.SpawnTool{}}
+	watch.emit(tui.Event{Kind: tui.EventSession, Text: carry.Name, ID: carry.Session})
+	for _, message := range carry.messages {
+		switch message.Role {
+		case llm.RoleUser:
+			watch.emit(tui.Event{Kind: tui.EventTask, Text: carry.taskIn(message.Content)})
+		case llm.RoleAssistant:
+			if text := strings.TrimSpace(message.Content); text != "" {
+				watch.emit(tui.Event{Kind: tui.EventText, Text: text})
+			}
+			for _, call := range message.ToolCalls {
+				watch.called(call)
+			}
+		case llm.RoleTool:
+			watch.result(message)
+		case llm.RoleSystem, llm.RoleUnknown:
+		}
+	}
+	return chat
 }
 
 func (a *appWatcher) result(message llm.Message) {

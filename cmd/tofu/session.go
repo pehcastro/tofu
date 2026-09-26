@@ -2,6 +2,7 @@ package main
 
 import (
 	"cmp"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -76,6 +77,7 @@ type sessionRow struct {
 	Expired    bool              `json:"expired,omitempty"`
 
 	lastAt time.Time
+	tasks  []string
 }
 
 type sessionListReport struct {
@@ -107,6 +109,7 @@ type sessionResume struct {
 	Fresh       string `json:"fresh,omitempty"`
 
 	messages []llm.Message
+	tasks    []string
 }
 
 func sessionVerb(args []string, in io.Reader, out, errOut io.Writer, shade palette) int {
@@ -266,7 +269,30 @@ func resumeOf(store *session.Store, id string) (sessionResume, error) {
 		Steps:    row.Steps,
 		Carried:  row.Carried,
 		messages: messages,
+		tasks:    row.tasks,
 	}, nil
+}
+
+func (carry sessionResume) taskIn(content string) string {
+	if !strings.HasPrefix(content, envOpen) {
+		return content
+	}
+	for _, task := range carry.tasks {
+		if task != "" && strings.HasSuffix(content, task) {
+			return task
+		}
+	}
+	_, after, _ := strings.Cut(content, envClose)
+	return strings.TrimSpace(after)
+}
+
+func latestRecording(messages []llm.Message) []llm.Message {
+	for index := len(messages) - 1; index > 0; index-- {
+		if messages[index].Role == messages[0].Role && messages[index].Content == messages[0].Content {
+			return messages[index:]
+		}
+	}
+	return messages
 }
 
 func sessionRenamed(store *session.Store, handle, to string) (sessionRow, error) {
@@ -326,13 +352,23 @@ func sessionDetail(store *session.Store, handle string) (sessionRow, []llm.Messa
 	if err != nil {
 		return sessionRow{}, nil, err
 	}
-	messages, err := turn.ConversationFrom(events)
+	recorded, err := turn.ConversationFrom(events)
 	if err != nil {
 		return sessionRow{}, nil, err
 	}
+	messages := latestRecording(recorded)
 	reading, err := session.ReadEvents(events)
 	if err != nil {
 		return sessionRow{}, nil, err
+	}
+	var tasks []string
+	for _, event := range events {
+		var outcome struct {
+			Task string `json:"task"`
+		}
+		if event.Kind == session.EventOutcome && json.Unmarshal(event.Body, &outcome) == nil {
+			tasks = append(tasks, outcome.Task)
+		}
 	}
 	row := sessionRow{
 		ID:               header.ID,
@@ -357,6 +393,7 @@ func sessionDetail(store *session.Store, handle string) (sessionRow, []llm.Messa
 		EndedAt:          header.EndedAt,
 		EndReason:        header.EndReason,
 		lastAt:           header.LastAt(),
+		tasks:            tasks,
 	}
 	if header.Name != nil {
 		row.Name = *header.Name
