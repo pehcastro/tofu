@@ -107,6 +107,24 @@ func TestTheIndexAt120x36(t *testing.T) {
 	golden.Assert(t, "edits-index-120x36.golden", session(t, 120, 36).View())
 }
 
+func thirtyEditsOverTwelveFiles(t *testing.T, height int) Model {
+	var m Model
+	m.SetSize(120, height)
+	m.Root = "/repo"
+	order := []string{"app.ts", "cache.ts", "analytics.ts", "app.ts", "query.ts", "smoke.sh", "migrate.ts", "db.ts", "tsconfig.json", "package.json", "index.ts", "app.ts", "analytics.ts", "catalog.ts", "customers.ts", "query.ts", "smoke.sh", "migrate.ts", "db.ts", "cache.ts", "tsconfig.json", "package.json", "index.ts", "catalog.ts", "customers.ts", "query.ts", "analytics.ts", "cache.ts", "db.ts", "app.ts"}
+	for at, name := range order {
+		m.Add(changedAt(t, Self, "web/src/"+name, fmt.Sprintf("call-%06x", 0xa00000+at)))
+	}
+	return m
+}
+
+func TestTheSidebarListsEachFileOnceAndScrollsToItsLastRow(t *testing.T) {
+	golden.Assert(t, "edits-sidebar-120x36.golden", thirtyEditsOverTwelveFiles(t, 36).View())
+	short := thirtyEditsOverTwelveFiles(t, 16)
+	short.Key("end")
+	golden.Assert(t, "edits-sidebar-end-120x16.golden", short.View())
+}
+
 func TestAnOpenDiffAt120x36(t *testing.T) {
 	golden.Assert(t, "edits-diff-120x36.golden", reading(session(t, 120, 36), "call-e1a2b3").View())
 }

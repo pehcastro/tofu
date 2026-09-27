@@ -20,8 +20,8 @@ import (
 const (
 	editWindow   = 500
 	minimumWidth = 20
-	sidebarMax   = 31
-	sidebarShare = 4
+	sidebarMax   = 36
+	sidebarShare = 3
 	narrowWidth  = 86
 	padding      = 2
 	cardInset    = 6
@@ -29,6 +29,7 @@ const (
 	indexChrome  = 4
 	wheelRows    = 3
 	title        = "File edits"
+	editsLabel   = "Edits"
 	allChanges   = "All changes"
 	agentMark    = "&"
 	indexHint    = "Select an edit reference to read every changed line."
@@ -42,6 +43,7 @@ type sideKey struct {
 	author, selected     string
 	first, last, authors string
 	focused              bool
+	from                 int
 }
 
 type listKey struct {
@@ -85,6 +87,7 @@ type Model struct {
 	wide      bool
 	focusMain bool
 	scroll    int
+	sideFrom  int
 	width     int
 	height    int
 	cache     *caches
@@ -140,14 +143,13 @@ func (m *Model) Key(key string) bool {
 	case "down", "j":
 		m.move(-1, 1)
 	case "pgup":
-		m.scrollBy(m.pane().visible)
+		m.scrollFocused(m.pane().visible, -m.sideRows())
 	case "pgdown":
-		m.scrollBy(-m.pane().visible)
+		m.scrollFocused(-m.pane().visible, m.sideRows())
 	case "home":
-		shown := m.pane()
-		m.scroll = max(0, shown.total-shown.visible)
+		m.scrollFocused(m.pane().total, -len(m.edits))
 	case "end":
-		m.scroll = 0
+		m.scrollFocused(-m.scroll, len(m.edits))
 	case "enter":
 		switch {
 		case !m.focusMain:
@@ -171,10 +173,18 @@ func (m *Model) Key(key string) bool {
 
 func (m *Model) Wheel(up bool) {
 	if up {
-		m.scrollBy(wheelRows)
+		m.scrollFocused(wheelRows, -wheelRows)
 		return
 	}
-	m.scrollBy(-wheelRows)
+	m.scrollFocused(-wheelRows, wheelRows)
+}
+
+func (m *Model) scrollFocused(main, side int) {
+	if m.focusMain || m.Split() == 0 {
+		m.scrollBy(main)
+		return
+	}
+	m.sideFrom = min(max(0, m.sideFrom+side), max(0, len(files(m.visible()))-m.sideRows()))
 }
 
 func (m *Model) SetScroll(behindNewest int) { m.scrollBy(behindNewest - m.scroll) }
@@ -193,7 +203,9 @@ func (m *Model) Open(id string) bool {
 
 func (m *Model) Click(x, y int) {
 	view := m.View()
-	if side := m.Split(); x < side {
+	side := m.Split()
+	m.focusMain = x >= side
+	if x < side {
 		lines := strings.Split(view, "\n")
 		if y < 0 || y >= len(lines) {
 			return
@@ -223,7 +235,7 @@ func (m *Model) move(scroll, author int) {
 }
 
 func (m *Model) pickAuthor(name string) {
-	m.author, m.reading, m.scroll = name, false, 0
+	m.author, m.reading, m.scroll, m.sideFrom = name, false, 0, 0
 }
 
 func (m *Model) open(id string) {
@@ -365,13 +377,74 @@ func (m Model) View() string {
 	return look.JoinFixedPanes(m.sidebar(side, visible, selected), pane.Surface(m.width-side, m.height, "", padding, "\n"+main))
 }
 
+type fileRow struct {
+	latest Edit
+	edits  int
+}
+
+func files(visible []Edit) []fileRow {
+	var rows []fileRow
+	at := map[string]int{}
+	for index := len(visible) - 1; index >= 0; index-- {
+		edit := visible[index]
+		if row, seen := at[edit.Path]; seen {
+			rows[row].edits++
+			continue
+		}
+		at[edit.Path] = len(rows)
+		rows = append(rows, fileRow{latest: edit, edits: 1})
+	}
+	return rows
+}
+
+func (m Model) sideRows() int {
+	side := m.Split()
+	if side == 0 {
+		return 0
+	}
+	return max(1, m.height-strings.Count(m.sideHeader(side-2*padding, m.authors()), "\n"))
+}
+
 func (m Model) sidebar(width int, visible []Edit, selected string) string {
 	authors := m.authors()
-	key := sideKey{width: width, height: m.height, count: len(m.edits), author: m.author, selected: selected, first: m.edits[0].ID, last: m.edits[len(m.edits)-1].ID, authors: strings.Join(authors, "\n"), focused: !m.focusMain}
+	key := sideKey{width: width, height: m.height, count: len(m.edits), author: m.author, selected: selected, first: m.edits[0].ID, last: m.edits[len(m.edits)-1].ID, authors: strings.Join(authors, "\n"), focused: !m.focusMain, from: m.sideFrom}
 	if m.cache != nil && m.cache.sideView != "" && m.cache.side == key {
 		return m.cache.sideView
 	}
 	inner := width - 2*padding
+	selectedPath := ""
+	if at := slices.IndexFunc(visible, func(edit Edit) bool { return edit.ID == selected }); at >= 0 {
+		selectedPath = visible[at].Path
+	}
+	var content strings.Builder
+	content.WriteString(m.sideHeader(inner, authors))
+	rows := files(visible)
+	from := min(m.sideFrom, max(0, len(rows)-1))
+	for _, row := range rows[from:min(len(rows), from+m.sideRows())] {
+		_, sigil, colour := row.latest.op.mark()
+		line := look.Style(colour).Render(sigil) + " " + look.TypedID(editKind, trace.Short(row.latest.ID)) + " "
+		count := ""
+		if row.edits > 1 {
+			count = " x" + strconv.Itoa(row.edits)
+		}
+		name := filepath.Base(row.latest.Path)
+		if over := ansi.StringWidth(name) - max(nameFloor, inner-lipgloss.Width(line)-len(count)); over > 0 {
+			name = ansi.TruncateLeft(name, over+1, "…")
+		}
+		background := look.Panel
+		if row.latest.Path == selectedPath {
+			background = look.PanelLight
+		}
+		content.WriteString(lipgloss.NewStyle().Width(inner).Background(lipgloss.Color(string(background))).Render(look.KeepSurfaceBackground(line+look.Faint(name)+look.Muted(count), background)) + "\n")
+	}
+	view := look.Surface(width, m.height, look.Panel, padding, content.String())
+	if m.cache != nil {
+		m.cache.side, m.cache.sideView = key, view
+	}
+	return view
+}
+
+func (m Model) sideHeader(inner int, authors []string) string {
 	paths := map[string]bool{}
 	kinds := map[Op]int{}
 	added, removed := map[string]int{}, map[string]int{}
@@ -382,7 +455,7 @@ func (m Model) sidebar(width int, visible []Edit, selected string) string {
 		added[edit.Agent], removed[edit.Agent] = added[edit.Agent]+edit.added, removed[edit.Agent]+edit.removed
 	}
 	var content strings.Builder
-	content.WriteString(look.PaneTitle(title, !m.focusMain) + "\n")
+	content.WriteString("\n" + look.PaneTitle(title, !m.focusMain) + "\n")
 	content.WriteString(counts(inner, fmt.Sprint(len(paths), " files"), fmt.Sprint(len(m.edits), " changes")) + "\n")
 	content.WriteString(counts(inner, fmt.Sprint(kinds[OpModified], " mod"), fmt.Sprint(kinds[OpAdded], " new"), fmt.Sprint(kinds[OpDeleted], " del")) + "\n")
 	content.WriteString(deltas(added[""], removed[""]) + look.Muted(" lines") + "\n\n")
@@ -394,23 +467,7 @@ func (m Model) sidebar(width int, visible []Edit, selected string) string {
 		}
 		content.WriteString("\n")
 	}
-	content.WriteString(look.SectionLabel("Files") + "\n")
-	for at := len(visible) - 1; at >= max(0, len(visible)-m.height); at-- {
-		edit := visible[at]
-		_, sigil, colour := edit.op.mark()
-		row := look.Style(colour).Render(sigil) + " " + look.TypedID(editKind, trace.Short(edit.ID))
-		name := ansi.Truncate(filepath.Base(edit.Path), max(nameFloor, inner-lipgloss.Width(row)-1), "…")
-		background := look.Panel
-		if edit.ID == selected {
-			background = look.PanelLight
-		}
-		content.WriteString(lipgloss.NewStyle().Width(inner).Background(lipgloss.Color(string(background))).Render(look.KeepSurfaceBackground(row+" "+look.Faint(name), background)) + "\n")
-	}
-	view := look.Surface(width, m.height, look.Panel, padding, "\n"+content.String())
-	if m.cache != nil {
-		m.cache.side, m.cache.sideView = key, view
-	}
-	return view
+	return content.String() + look.SectionLabel(editsLabel) + "\n"
 }
 
 func counts(width int, parts ...string) string {
