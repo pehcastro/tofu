@@ -8,6 +8,37 @@ Tofu is personal and not released, so the public interface that a version promis
 
 The minor number carries breaking changes, which is what 0.x means, and **there is never a 1.0.0**. The owner decided that on 2026-09-19: this stays 0.x forever, so the promise the version makes is the one 0.x already makes, that anything can break on a minor bump.
 
+## 0.5.0-rc-fix7 - 2026-09-27
+
+The orchestrator delegates, the chat is a conversation, and a sub-agent's work shows on its own screen as it happens.
+
+### Changed
+
+- **With sub-agents on, the orchestrator delegates.** It writes docs, plans and config freely. It may change 10 lines of source per turn for a small fix. Past that budget, a source write is refused, and the refusal names the sub-agent to spawn. Five orchestrator-only rules tell it to delegate, keep chat for conversation, announce each spawn, check a child's work and report short.
+- **The chat is a conversation.**
+  - Every tool call is one line, with `[expand]`. A click or ctrl+o opens the command, the gate's answers and the output.
+  - A spawn is one line, "spawning [&qa-1] to <mission>".
+  - Watch-only gate verdicts, the plan and a child's calls no longer appear in chat. The plan shows on the sub-agents screen.
+- **The sub-agents screen shows a child's work as it happens.** Each call goes from running to done. The child ends done, failed or stopped. The spawn is its own card, with the brief rendered as markdown and "waiting on [&qa-1]".
+- **Children are named by their definition**, such as `qa-1`, `ts-dev-2` and `sub-1`.
+- **The status reads "waiting on [&qa-1]"** while the orchestrator only waits on a child. A cancel reads "cancelled at 15m 47s".
+- **The edits sidebar is headed EDITS**, lists each file once with a count, and scrolls.
+
+### Added
+
+- **A TypeScript write or edit returns the project's own tsc errors**, including Node's type-stripping errors, such as a parameter property.
+- **`shell stop|restart|logs <name>`** and **`tofu shells stop|restart`** stop or rerun a whole process tree. Killing a process that tofu started runs as a stop.
+- **Esc on an empty composer stops the running turn.**
+- **The library reference `verify-a-running-service`** covers starting a service, waiting for its port, calling every route, and stopping it. ts-dev and qa both name it.
+
+### Fixed
+
+- **A sub-agent is no longer refused on false paths**, such as `/dev/null`, `console.log` or a URL. qa can write the report it owns.
+- **The shells screen updates during a turn.**
+- **An old session's turns keep their own tool results** when resumed or migrated.
+- **Only `tofu`, `tofu --continue` and `tofu migrate` move or copy project state.** Every other verb leaves it alone.
+- **Ctrl+c no longer forks a stray session.**
+
 ## 0.5.0-rc-fix6 - 2026-09-26
 
 Skills load from your own folders, and claude-sub haiku runs.
