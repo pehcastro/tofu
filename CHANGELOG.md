@@ -14,14 +14,14 @@ The orchestrator delegates, the chat is a conversation, and a sub-agent's work s
 
 ### Changed
 
-- **With sub-agents on, the orchestrator delegates.** It writes docs, plans and config freely. It may change 10 lines of source per turn for a small fix. Past that budget, a source write is refused, and the refusal names the sub-agent to spawn. A shell command that writes source, such as `sed -i`, is always refused for the orchestrator. Five orchestrator-only rules tell it to delegate, keep chat for conversation, announce each spawn, check a child's work and report short.
+- **With sub-agents on, the orchestrator delegates.** It writes docs, plans and config freely. It may change 10 lines of source per turn for a small fix. Past that budget, a source write is refused, and the refusal names the sub-agent to spawn. A shell command that writes source, such as `sed -i`, is always refused for the orchestrator. Five orchestrator-only rules tell it to delegate, keep chat for conversation, announce each spawn, check a sub-agent's work and report short.
 - **The chat is a conversation.**
   - Every tool call is one line, with `[expand]`. A click or ctrl+o opens the command, the gate's answers and the output.
   - A spawn is one line, "spawning [&qa-1] to <mission>".
-  - Watch-only gate verdicts, the plan and a child's calls no longer appear in chat. The plan shows on the sub-agents screen.
-- **The sub-agents screen shows a child's work as it happens.** Each call goes from running to done. The child ends done, failed or stopped. The spawn is its own card, with the brief rendered as markdown and "waiting on [&qa-1]".
-- **Children are named by their definition**, such as `qa-1`, `ts-dev-2` and `sub-1`.
-- **The status reads "waiting on [&qa-1]"** while the orchestrator only waits on a child. A cancel reads "cancelled at 15m 47s".
+  - Watch-only gate verdicts, the plan and a sub-agent's calls no longer appear in chat. The plan shows on the sub-agents screen.
+- **The sub-agents screen shows a sub-agent's work as it happens.** Each call goes from running to done. The sub-agent ends done, failed or stopped. The spawn is its own card, with the brief rendered as markdown and "waiting on [&qa-1]".
+- **Sub-agents are named by their definition**, such as `qa-1`, `ts-dev-2` and `sub-1`.
+- **The status reads "waiting on [&qa-1]"** while the orchestrator only waits on a sub-agent. A cancel reads "cancelled at 15m 47s".
 - **The edits sidebar is headed EDITS**, lists each file once with a count, and scrolls.
 
 ### Added
