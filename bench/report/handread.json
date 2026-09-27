@@ -1,5 +1,13 @@
 [
   {
+    "report": "bench/skills/report-2026-09-26.md",
+    "figure": "2 of 3",
+    "says": "With the skill listing on, the model loaded the matching skill in 2 of 3 tasks and followed it both times. On the third it never loaded the skill and silently ignored the convention. With the listing off, 0 of 3 followed. The listing costs 247 cached tokens per request. Skills earn a place for a person's own conventions, not for library content that must always apply.",
+    "from": "prose",
+    "sample": "three throwaway skills, three tasks, one live run each with the listing on and off, on claude-sub/claude-sonnet-5 at low effort",
+    "skips": "one run per cell, so no rate; per-run token totals were not recorded, only the listing's cost per request"
+  },
+  {
     "report": "bench/tui/report-2026-09-26.md",
     "figure": "2.0 ms",
     "says": "The new interface draws every screen inside the 16.7 ms frame budget on a replay of 30 real turns. Before the frame budget fixes a resize took 97 to 169 ms and the first open of sub-agents 59.6 ms; after them a resize takes 0.3 to 3.2 ms and sub-agents opens in 2.0 ms. The chat scrollbar went from 3.05x the showcase baseline to 0.28x. Every other row that could be built is within 1.5x of the baseline.",

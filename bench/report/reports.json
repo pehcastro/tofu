@@ -595,6 +595,25 @@
   ],
   "reports": [
     {
+      "package": "skills",
+      "date": "2026-09-26",
+      "source": "bench/skills/report-2026-09-26.md",
+      "figure": "2 of 3",
+      "built_from": "prose",
+      "sample": "three throwaway skills, three tasks, one live run each with the listing on and off, on claude-sub/claude-sonnet-5 at low effort",
+      "skips": "one run per cell, so no rate; per-run token totals were not recorded, only the listing's cost per request",
+      "conclusion": [
+        {
+          "text": "Hand read from bench/report/handread.json: With the skill listing on, the model loaded the matching skill in 2 of 3 tasks and followed it both times. On the third it never loaded the skill and silently ignored the convention. With the listing off, 0 of 3 followed. The listing costs 247 cached tokens per request. Skills earn a place for a person's own conventions, not for library content that must always apply.",
+          "withdrawn": false
+        }
+      ],
+      "conclusion_unparsed": false,
+      "state": "stands",
+      "state_source": "",
+      "state_note": ""
+    },
+    {
       "package": "tui",
       "date": "2026-09-26",
       "source": "bench/tui/report-2026-09-26.md",
@@ -1771,8 +1790,8 @@
     }
   ],
   "counts": {
-    "reports": 60,
-    "packages_with_a_dated_report": 35,
+    "reports": 61,
+    "packages_with_a_dated_report": 36,
     "packages_with_no_dated_report": 5,
     "withdrawn_whole_or_in_part": 20,
     "stale": 1,
