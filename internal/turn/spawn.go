@@ -669,12 +669,12 @@ type SourceBudgetError struct {
 }
 
 func (e SourceBudgetError) Error() string {
-	cost := fmt.Sprintf("this change of %d lines", e.Lines)
 	if e.ShellWrite {
-		cost = "a shell write, which cannot be counted before it runs and so costs the whole budget,"
+		return fmt.Sprintf("%s: %s is source code, and the orchestrator never writes source through the shell: use edit for a fix of up to %d lines, or spawn %s with this work",
+			e.Tool, e.Path, konst.OrchestratorSourceLinesPerTurn, strings.Join(e.Spawn, " or "))
 	}
-	return fmt.Sprintf("%s: %s is source code, and %s would pass the orchestrator's budget of %d changed source lines in one turn, %d of which are spent: spawn %s with this work instead",
-		e.Tool, e.Path, cost, konst.OrchestratorSourceLinesPerTurn, e.Spent, strings.Join(e.Spawn, " or "))
+	return fmt.Sprintf("%s: %s is source code, and this change of %d lines would pass the orchestrator's budget of %d changed source lines in one turn, %d of which are spent: spawn %s with this work instead",
+		e.Tool, e.Path, e.Lines, konst.OrchestratorSourceLinesPerTurn, e.Spent, strings.Join(e.Spawn, " or "))
 }
 
 func sourceLanguage(path string) string {
@@ -717,7 +717,7 @@ func (t budgetedTool) Name() string { return t.tool.Name() }
 
 func (t budgetedTool) Definition() llm.Tool {
 	definition := t.tool.Definition()
-	definition.Description += fmt.Sprintf(". as the orchestrator you change at most %d lines of source code in one turn, across write, edit and shell writes together; "+
+	definition.Description += fmt.Sprintf(". as the orchestrator you change at most %d lines of source code in one turn, through write and edit only, and never write source through the shell; "+
 		"markdown, notes, plans, configuration and data are free, and past the budget a source write is refused and goes to a sub-agent", konst.OrchestratorSourceLinesPerTurn)
 	return definition
 }
@@ -741,7 +741,7 @@ func (t budgetedTool) Run(ctx context.Context, raw json.RawMessage) (Result, err
 		}
 		for _, path := range written {
 			if sourceLanguage(path) != "" {
-				args.Path, lines, shellWrite = path, konst.OrchestratorSourceLinesPerTurn, true
+				args.Path, shellWrite = path, true
 			}
 		}
 	}
@@ -749,7 +749,7 @@ func (t budgetedTool) Run(ctx context.Context, raw json.RawMessage) (Result, err
 	if language == "" {
 		return t.tool.Run(ctx, raw)
 	}
-	if t.budget.spent+lines > konst.OrchestratorSourceLinesPerTurn {
+	if shellWrite || t.budget.spent+lines > konst.OrchestratorSourceLinesPerTurn {
 		refusal := SourceBudgetError{Tool: t.Name(), Path: args.Path, Lines: lines, Spent: t.budget.spent, ShellWrite: shellWrite}
 		for _, definition := range t.budget.enabled {
 			if definition.Language == language {
