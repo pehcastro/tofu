@@ -11,7 +11,7 @@
 
 .local
 CLAUDE.md
-.claude
+/.claude/
 .mcp.json
 .playground
 .boji
