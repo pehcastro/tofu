@@ -385,7 +385,7 @@
       "on": false,
       "switched_on": "not wired",
       "costs": "nothing, and no call is made",
-      "why": "nothing is measured, and it waits on one recorded parent and child"
+      "why": "nothing is measured, and it waits on one recorded orchestrator and sub-agent"
     },
     {
       "point": "thrift",
@@ -1774,6 +1774,11 @@
       "note": "the shared reader over recorded sessions and the 6 gate cases. Every bench that reads .tofu/sessions reads it through here."
     },
     {
+      "package": "orchestrator",
+      "kind": "runner",
+      "note": "reads 1 session folder and prints where its time went, with 0 dated reports of its own."
+    },
+    {
       "package": "prompts",
       "kind": "measurement with no dated report",
       "note": "a correlation over recorded prompts, owed by TOFU-380, 0 dated reports so far."
@@ -1792,7 +1797,7 @@
   "counts": {
     "reports": 61,
     "packages_with_a_dated_report": 36,
-    "packages_with_no_dated_report": 5,
+    "packages_with_no_dated_report": 6,
     "withdrawn_whole_or_in_part": 20,
     "stale": 1,
     "unparsed": 2

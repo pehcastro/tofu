@@ -1,6 +1,7 @@
 package harness
 
 import (
+	"bytes"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -76,6 +77,38 @@ func sameWorkMeasured(t *testing.T, row turn.Row, wantInput int64) {
 	t.Logf("%s measures %d turns, one read, %d tokens in and %d out", row.ID, len(row.Steps), input, output)
 }
 
+func sameRowBesidesAssignedIDs(t *testing.T, read, want turn.Row) {
+	t.Helper()
+	for _, step := range read.Steps {
+		for _, call := range step.ToolCalls {
+			if call.ID == "" || call.Call == "" {
+				t.Fatalf("step %d read back a call with id %q and call %q, want both assigned by the reader", step.Index, call.ID, call.Call)
+			}
+		}
+	}
+	settled := func(row turn.Row) turn.Row {
+		steps := make([]turn.StepRow, len(row.Steps))
+		for i, step := range row.Steps {
+			calls := make([]turn.ToolCallRow, len(step.ToolCalls))
+			for j, call := range step.ToolCalls {
+				var args bytes.Buffer
+				if len(call.Args) > 0 && json.Compact(&args, call.Args) == nil {
+					call.Args = args.Bytes()
+				}
+				call.ID, call.Call = "", ""
+				calls[j] = call
+			}
+			step.ToolCalls = calls
+			steps[i] = step
+		}
+		row.Steps = steps
+		return row
+	}
+	if got, expected := settled(read), settled(want); !reflect.DeepEqual(got, expected) {
+		t.Fatalf("read back, ids the reader assigns set aside\n%+v\nwant\n%+v", got, expected)
+	}
+}
+
 const (
 	billedWithoutCache = 797
 	billedWithCache    = 2075
@@ -110,9 +143,7 @@ func TestLatestSessionReadsTheHeaderAndBodyShapeTheLoopWritesNow(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LatestSession over a directory holding one session in the shape tofu writes: %v", err)
 	}
-	if !reflect.DeepEqual(read, written) {
-		t.Fatalf("read back\n%+v\nwant the row that was written\n%+v", read, written)
-	}
+	sameRowBesidesAssignedIDs(t, read, written)
 	sameWorkMeasured(t, read, billedWithoutCache)
 }
 
@@ -131,9 +162,7 @@ func TestLatestSessionStillReadsARecordedSingleFileSession(t *testing.T) {
 		t.Fatalf("read spend %q and wall clock %d ms, want %q and 3999 ms: a recorded session that loses these cannot be measured",
 			read.Spend, read.WallClockMS, turn.SpendSubscription)
 	}
-	if !reflect.DeepEqual(read, recorded) {
-		t.Fatalf("read back\n%+v\nwant every field the fixture recorded\n%+v", read, recorded)
-	}
+	sameRowBesidesAssignedIDs(t, read, recorded)
 	sameWorkMeasured(t, read, billedWithCache)
 }
 
@@ -149,9 +178,7 @@ func TestASessionCarryingAKindThisBuildDoesNotKnowStillReads(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LatestSession over a session carrying one %q event: %v", unknown, err)
 	}
-	if !reflect.DeepEqual(read, written) {
-		t.Fatalf("read back\n%+v\nwant every field the session carries for the kinds this build does know\n%+v", read, written)
-	}
+	sameRowBesidesAssignedIDs(t, read, written)
 }
 
 func TestADirectoryHoldingBothShapesReturnsTheNewerSession(t *testing.T) {

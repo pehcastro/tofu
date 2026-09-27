@@ -54,7 +54,7 @@ Read from `bench/harness/report-2026-09-22.md`.
 | `file_shortlist` | not wired | nothing, and no call is made | the point is parked because three of its four questions name their own answer in their own prompt, so nothing measured there separates a ranking arm from a regular expression pulling a filename out of the task. 8 recordable turns carry 2 distinct tasks in the recorded sessions, against the floor of 12 questions this shape needs. a later join attempt cleared that floor at 13 distinct-task rows, but all 13 name their own answer too, so the corpus is still not built and the point is parked harder than before | not stated | not stated |
 | `tool_gate` | not wired | nothing, and no call is made | the 178 case set carries no free arm, and the 6 of 6 a regular expression scored was over six cases written by something that could see all six | not stated | not stated |
 | `instruction_trust` | not wired | nothing, and no call is made | jev beats a regular expression 25 of 27 against 24 of 27, but the corpus cannot decide it, a rerun minutes later tied both arms at 24 of 27, and 27 cases is a quarter of the few hundred a two-arm gap this size needs | not stated | not stated |
-| `spawn_gate` | not wired | nothing, and no call is made | nothing is measured, and it waits on one recorded parent and child | not stated | not stated |
+| `spawn_gate` | not wired | nothing, and no call is made | nothing is measured, and it waits on one recorded orchestrator and sub-agent | not stated | not stated |
 | `thrift` | not wired | nothing, and no call is made | the point reads library/questions/config/thrift_rule@1.yaml directly, which ships mode off, and nothing is cut until a measurement moves it | not stated | not stated |
 
 ## Which decisions Jev wins, which it loses, and by how much
@@ -78,7 +78,7 @@ Why the rest are not compared:
 
 ## Every dated report, newest first
 
-61 dated reports over 36 benches. 5 benches carry none. 20 are withdrawn whole or in part, 1 is stale, and 2 reports name no conclusion a reader can find. A withdrawal declared from outside a report lives in `bench/report/withdrawals.json`; every other state is declared by the report's own first lines.
+61 dated reports over 36 benches. 6 benches carry none. 20 are withdrawn whole or in part, 1 is stale, and 2 reports name no conclusion a reader can find. A withdrawal declared from outside a report lives in `bench/report/withdrawals.json`; every other state is declared by the report's own first lines.
 
 | Bench | Date | Report | What it found | Sample | State |
 |---|---|---|---|---|---|
@@ -172,6 +172,7 @@ Why the rest are not compared:
 
 - `bench/cmd`, runner: the bench command, package main. Runs the other benches, measures 0 things of its own.
 - `bench/corpus`, library: the shared reader over recorded sessions and the 6 gate cases. Every bench that reads .tofu/sessions reads it through here.
+- `bench/orchestrator`, runner: reads 1 session folder and prints where its time went, with 0 dated reports of its own.
 - `bench/prompts`, measurement with no dated report: a correlation over recorded prompts, owed by TOFU-380, 0 dated reports so far.
 - `bench/report`, runner: this package: the reader over every dated report, the viewer and its data. Measures 0 things of its own.
 - `bench/stat`, library: median, p95 and p99 over a slice of floats, called by every bench that reports a spread.

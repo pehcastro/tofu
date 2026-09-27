@@ -15,6 +15,11 @@
     "note": "this package: the reader over every dated report, the viewer and its data. Measures 0 things of its own."
   },
   {
+    "package": "orchestrator",
+    "kind": "runner",
+    "note": "reads 1 session folder and prints where its time went, with 0 dated reports of its own."
+  },
+  {
     "package": "stat",
     "kind": "library",
     "note": "median, p95 and p99 over a slice of floats, called by every bench that reports a spread."
