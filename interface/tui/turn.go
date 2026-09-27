@@ -275,44 +275,32 @@ func (a *App) absorb(event Event) {
 	case EventTextDelta:
 		a.view.Stream(event.Text)
 	case EventToolCall:
-		a.running++
-		called := feed.Event{ID: short(event.ID), Actor: orchestrator, Kind: feed.KindTool, Title: event.Tool, Body: event.Text, Detail: lines(event.Detail), At: at}
-		if event.Promote {
-			a.childCalls = append(a.childCalls, event.ID)
-			a.spawns++
-			called.Kind, called.Target = feed.KindMessage, "c"+strconv.Itoa(a.spawns)
-		}
-		a.record(called)
-		a.view.Append(session.Entry{Kind: session.Tool, ID: event.ID, Head: event.Tool, Body: event.Text, Detail: event.Detail, Promoted: event.Promote})
+		a.called(event, at)
 	case EventToolResult:
-		a.childCalls = slices.DeleteFunc(a.childCalls, func(called string) bool { return called == event.ID })
-		status := event.Text
-		finished := a.finish(short(event.ID), event.Text, event.Failed, at)
-		if edit, changed := edits.Changed(event.Agent, a.view.Intent(event.ID), event.Diff, event.Created, event.ID, at); changed {
-			a.edits.Add(edit)
-			status = edit.Tally()
-			finished.Kind, finished.Op, finished.Path, finished.Added, finished.Removed = feed.KindEdit, feed.Op(edit.Op()), edit.Path, edit.Added(), edit.Removed()
-			finished.Actor = cmp.Or(event.Agent, orchestrator)
-		}
-		a.record(finished)
-		a.view.Finish(event.ID, session.Result{Status: status, Bytes: event.Bytes, Failed: event.Failed})
-		a.running = max(a.running-1, 0)
-		if a.view.LettingToolsFinish && a.running == 0 {
-			a.stopTurn()
-		}
+		a.answered(event, at)
 	case EventNote:
 		a.view.Append(session.Entry{Kind: session.Note, Body: event.Text})
 	case EventDone:
-		a.view.Close(event.Text, a.turnEventID())
+		if event.Children != nil {
+			a.showChildren(event.Children)
+		}
+		labelled := a.turnEventID()
+		if a.view.Stopping && a.keptAnswer == "" {
+			labelled = ""
+		}
+		a.view.Close(event.Text, labelled)
 	case EventFailure:
 		id := cmp.Or(event.ID, a.mintID())
 		a.record(feed.Event{ID: short(id), Actor: orchestrator, Kind: feed.KindFailure, State: feed.StateFailed, Title: strings.TrimSpace(failureHead + " " + event.Tool), Body: event.Text, At: at})
 		a.view.Append(session.Entry{Kind: session.Failure, ID: id, Body: event.Text})
 	case EventDecision:
-		if event.Decision != nil {
-			a.view.Decide(*event.Decision)
-			a.judged(*event.Decision)
+		if event.Decision == nil {
+			break
 		}
+		if event.Agent == "" && !event.Promote {
+			a.view.Decide(*event.Decision)
+		}
+		a.judged(*event.Decision, cmp.Or(event.Agent, orchestrator))
 	case EventSession:
 		if event.ID != a.sessionID {
 			a.started = at
@@ -351,6 +339,48 @@ func (a *App) absorb(event Event) {
 	}
 }
 
+func (a *App) called(event Event, at time.Time) {
+	call := feed.Event{ID: short(event.ID), Actor: cmp.Or(event.Agent, orchestrator), Kind: feed.KindTool, Title: event.Tool, Body: event.Text, Detail: lines(event.Detail), At: at}
+	if event.Promote {
+		call.Kind, call.Title, call.Body, call.Detail = feed.KindSpawn, event.Text, event.Detail, nil
+	}
+	a.record(call)
+	if event.Agent != "" {
+		return
+	}
+	a.running++
+	if event.Promote {
+		a.childCalls = append(a.childCalls, event.ID)
+		return
+	}
+	a.view.Append(session.Entry{Kind: session.Tool, ID: event.ID, Head: event.Tool, Body: event.Text, Detail: event.Detail})
+}
+
+func (a *App) answered(event Event, at time.Time) {
+	a.childCalls = slices.DeleteFunc(a.childCalls, func(called string) bool { return called == event.ID })
+	status := event.Text
+	finished := a.finish(short(event.ID), event.Text, event.Failed, at)
+	if finished.Kind == feed.KindSpawn && a.view.Stopping {
+		finished.State = feed.StateStopped
+	}
+	if edit, changed := edits.Changed(event.Agent, finished.Body, event.Diff, event.Created, event.ID, at); changed {
+		a.edits.Add(edit)
+		status = edit.Tally()
+		finished.Kind, finished.Op, finished.Path, finished.Added, finished.Removed = feed.KindEdit, feed.Op(edit.Op()), edit.Path, edit.Added(), edit.Removed()
+	}
+	a.record(finished)
+	if event.Agent != "" {
+		return
+	}
+	if finished.Kind != feed.KindSpawn {
+		a.view.Finish(event.ID, session.Result{Status: status, Bytes: event.Bytes, Failed: event.Failed})
+	}
+	a.running = max(a.running-1, 0)
+	if a.view.LettingToolsFinish && a.running == 0 {
+		a.stopTurn()
+	}
+}
+
 func lines(text string) []string {
 	if text == "" {
 		return nil
@@ -368,7 +398,23 @@ func (a *App) record(event feed.Event) {
 	} else {
 		a.happened = append(a.happened, event)
 	}
-	a.feed.SetEvents(slices.Clone(a.happened))
+	a.feedStale = true
+}
+
+func (a *App) flushFeed() {
+	if a.feedStale {
+		a.feed.SetEvents(slices.Clone(a.happened))
+		a.feedStale = false
+	}
+}
+
+func (a *App) stopWhatStillRuns() {
+	for index := range a.happened {
+		if a.happened[index].State == feed.StateRunning {
+			a.happened[index].State = feed.StateStopped
+			a.feedStale = true
+		}
+	}
 }
 
 func (a *App) finish(id, output string, failed bool, at time.Time) feed.Event {
@@ -386,13 +432,13 @@ func (a *App) finish(id, output string, failed bool, at time.Time) feed.Event {
 	return finished
 }
 
-func (a *App) judged(decision session.Decision) {
+func (a *App) judged(decision session.Decision, actor string) {
 	if decision.Verdict == session.Allow {
 		return
 	}
 	for index := len(a.happened) - 1; index >= 0; index-- {
 		held := a.happened[index]
-		if held.Kind == feed.KindTool && held.Title == decision.Tool && held.State == feed.StateRunning {
+		if held.Kind == feed.KindTool && held.Actor == actor && held.Title == decision.Tool && held.State == feed.StateRunning {
 			held.Detail = append(slices.Clone(held.Detail), verdictLine+decision.Verdict.String())
 			a.record(held)
 			return
@@ -407,17 +453,44 @@ func (a *App) showChildren(children []subagent.Child) {
 		if child.State == roster.Working {
 			a.status.Agents++
 		}
-		for step, call := range child.Calls {
-			state := feed.StateRunning
-			if call.Result != "" {
-				state = feed.StateComplete
-			}
-			id, seen := cmp.Or(short(call.ID), child.Name+"-"+strconv.Itoa(step+1)), cmp.Or(call.At, a.options.Now())
-			if at := a.happenedAt(id); at >= 0 {
-				seen = a.happened[at].At
-			}
-			a.record(feed.Event{ID: id, Actor: child.Name, Kind: feed.KindTool, State: state, Title: call.Tool, Body: call.Text, Detail: lines(call.Result), At: seen})
+		a.linkSpawn(child)
+		for _, call := range child.Calls {
+			a.rosterCall(child.Name, call)
 		}
+	}
+}
+
+func (a *App) rosterCall(actor string, call subagent.Call) {
+	id := short(call.ID)
+	if id == "" {
+		return
+	}
+	if at := a.happenedAt(id); at >= 0 && (a.happened[at].State != feed.StateRunning || call.Result == "" || a.view.Stopping) {
+		return
+	}
+	state := feed.StateRunning
+	if call.Result != "" {
+		state = feed.StateComplete
+	}
+	a.record(feed.Event{ID: id, Actor: actor, Kind: feed.KindTool, State: state, Title: call.Tool, Body: call.Text, Detail: lines(call.Result), At: cmp.Or(call.At, a.options.Now())})
+}
+
+func (a *App) linkSpawn(child subagent.Child) {
+	turn := a.happened[min(a.happenedAtTurn, len(a.happened)):]
+	if slices.ContainsFunc(turn, func(held feed.Event) bool { return held.Kind == feed.KindSpawn && held.Target == child.Name }) {
+		return
+	}
+	at := slices.IndexFunc(turn, func(held feed.Event) bool {
+		return held.Kind == feed.KindSpawn && held.State == feed.StateRunning && held.Target == ""
+	})
+	if at < 0 {
+		return
+	}
+	spawn := turn[at]
+	spawn.Target, spawn.Title = child.Name, child.Doing
+	a.record(spawn)
+	if spawn.Actor == orchestrator {
+		a.view.Append(session.Entry{Kind: session.Note, Body: "spawning [&" + child.Name + "] to " + child.Doing})
 	}
 }
 
@@ -432,13 +505,6 @@ func (a *App) parkChildrenTheTurnLeftBehind() {
 }
 
 func (a *App) showShells(entries []shells.Entry) {
-	for index, entry := range entries {
-		for _, child := range a.children {
-			if strings.HasSuffix(entry.Owner, "-"+child.Name) {
-				entries[index].Owner = child.Name
-			}
-		}
-	}
 	a.shells.SetKillConfirm(a.flag(isettings.KillConfirm))
 	a.shells.Set(entries)
 }

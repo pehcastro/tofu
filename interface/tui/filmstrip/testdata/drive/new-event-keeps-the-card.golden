@@ -3,23 +3,23 @@
                                                                                                    │
   Sub-agents               All activity                                     6-8/8 · wheel ↑ older  │
   3 agents · live acti…                                                                            │
-                           ╭──────────────────────────────────────────────────────────────────╮    │
-  OVERVIEW                 │                                                                  │    │
-  › All activity      8    │  [&orchestrator]  message        just now  [message#5e03aa]      │    │
-                           │  spawn                                                           │    │
-  ACTIVE  0                │  run the shell suite                                             │    │
-                           │  complete  |  to [&c3]                                           │    │
+                                                                                                   │
+  OVERVIEW                 ╭──────────────────────────────────────────────────────────────────╮    │
+  › All activity      8    │                                                                  │    │
+                           │  [&orchestrator]  spawn            just now  [spawn#5e03aa]      │    │
+  ACTIVE  0                │  Requesting [&c3] to work on run the shell suite                 │    │
+                           │  done                                                            │    │
   WAITING  3               │    spawned [&c3]                                                 │    │
     [&orchestrator]   .    │                                                                  │    │
     Waiting for request    ╰──────────────────────────────────────────────────────────────────╯    │
     [&c1]             .                                                                            │
-    read the policy lo…    ╭──────────────────────────────────────────────────────────────────╮    │
+    stopped · read the…    ╭──────────────────────────────────────────────────────────────────╮    │
     [&c2]             .    │                                                                  │    │
-    write the ledger f…    │  [&c3]  tool                        just now  [tool#7c3e01]      │    │
+    in review · write …    │  [&c3]  tool                        just now  [tool#7c3e01]      │    ┃
                            │  bash                                                            │    ┃
   DEAD  1                  │  go test ./internal/shell/...                                    │    ┃
     [&c3]             ✗    │  complete                                                        │    ┃
-    run the shell suite    │    exit 1                                                        │    ┃
+    failed · run the s…    │    exit 1                                                        │    ┃
                            │    --- FAIL: TestKillTree (0.31s)                                │    ┃
                            │                                                                  │    ┃
                            ╰──────────────────────────────────────────────────────────────────╯    ┃
@@ -33,23 +33,23 @@
                                                                                                    │
   Sub-agents               All activity                                     6-8/9 · wheel ↑ older  │
   3 agents · live acti…                                                                            │
-                           ╭──────────────────────────────────────────────────────────────────╮    │
-  OVERVIEW                 │                                                                  │    │
-  › All activity      9    │  [&orchestrator]  message        just now  [message#5e03aa]      │    │
-                           │  spawn                                                           │    │
-  ACTIVE  0                │  run the shell suite                                             │    │
-                           │  complete  |  to [&c3]                                           │    │
+                                                                                                   │
+  OVERVIEW                 ╭──────────────────────────────────────────────────────────────────╮    │
+  › All activity      9    │                                                                  │    │
+                           │  [&orchestrator]  spawn            just now  [spawn#5e03aa]      │    │
+  ACTIVE  0                │  Requesting [&c3] to work on run the shell suite                 │    │
+                           │  done                                                            │    │
   WAITING  3               │    spawned [&c3]                                                 │    │
     [&orchestrator]   .    │                                                                  │    │
     Waiting for request    ╰──────────────────────────────────────────────────────────────────╯    │
     [&c1]             .                                                                            │
-    read the policy lo…    ╭──────────────────────────────────────────────────────────────────╮    │
+    stopped · read the…    ╭──────────────────────────────────────────────────────────────────╮    │
     [&c2]             .    │                                                                  │    ┃
-    write the ledger f…    │  [&c3]  tool                        just now  [tool#7c3e01]      │    ┃
+    in review · write …    │  [&c3]  tool                        just now  [tool#7c3e01]      │    ┃
                            │  bash                                                            │    ┃
   DEAD  1                  │  go test ./internal/shell/...                                    │    ┃
     [&c3]             ✗    │  complete                                                        │    ┃
-    run the shell suite    │    exit 1                                                        │    ┃
+    failed · run the s…    │    exit 1                                                        │    ┃
                            │    --- FAIL: TestKillTree (0.31s)                                │    ┃
                            │                                                                  │    │
                            ╰──────────────────────────────────────────────────────────────────╯    │

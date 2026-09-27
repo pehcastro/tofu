@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -74,7 +73,9 @@ const (
 	createdFilePrefix   = "created "
 	placeWords          = 2
 	queuedMessages      = 64
-	childIDMark         = "-c"
+	roundMark           = "-r"
+	childVerdictPrefix  = "sub-agent "
+	cancelledAt         = "cancelled at"
 )
 
 type appWiring struct {
@@ -397,12 +398,14 @@ func appShells(dir string, registry *shell.Registry, openErr error) func() []she
 }
 
 func ownerName(owner string) string {
-	at := strings.LastIndex(owner, childIDMark)
+	at := strings.LastIndex(owner, roundMark)
 	if at < 0 {
 		return owner
 	}
-	name, _, _ := strings.Cut(owner[at+1:], "-")
-	return name
+	if _, err := strconv.Atoi(owner[at+len(roundMark):]); err != nil {
+		return owner
+	}
+	return owner[:at]
 }
 
 func appKillShell(registry *shell.Registry, openErr error) func(string) error {
@@ -785,26 +788,27 @@ func (s *appSession) run(ctx context.Context, pick tui.Pick, task string, emit t
 	if siftErr != nil {
 		say("no shell result is cut: " + siftErr.Error())
 	}
-	if gate != nil {
-		gate.watch = func(tool string, gated turn.GateDecision, err error) {
-			switch {
-			case err != nil:
-				failed := session.Decision{Tool: tool, Verdict: session.Ask, Failure: err.Error()}
-				emit(tui.Event{Kind: tui.EventDecision, Decision: &failed})
-			case gated.Verdict != ledger.VerdictUnset:
-				decided := gateDecision(tool, gated)
-				emit(tui.Event{Kind: tui.EventDecision, Decision: &decided})
-			}
-		}
-	}
-
 	budget, budgetErr := contextBudget(opts, opened.selected)
 	if budgetErr != nil {
 		fail(budgetErr)
 		return
 	}
 	held := &roster.Roster{}
-	watch := &appWatcher{gate: gate, held: held, emit: emit, now: s.now, turnID: opts.turnID, seen: s.shown, maxSteps: opts.maxSteps, spent: map[string]int{}}
+	watch := &appWatcher{gate: gate, held: held, emit: emit, now: s.now, turnID: opts.turnID, seen: s.shown, maxSteps: opts.maxSteps}
+	if gate != nil {
+		gate.watch = func(tool string, gated turn.GateDecision, err error) {
+			decided := session.Decision{Tool: tool, Verdict: session.Ask}
+			switch {
+			case err != nil:
+				decided.Failure = err.Error()
+			case gated.Verdict != ledger.VerdictUnset:
+				decided = gateDecision(tool, gated)
+			default:
+				return
+			}
+			emit(tui.Event{Kind: tui.EventDecision, Decision: &decided, Agent: watch.asker(), Promote: watch.spawning(tool)})
+		}
+	}
 	opened.held.wrap = func(model turn.Model) (turn.Model, error) {
 		asked, guardErr := guarded(model, budget)
 		if guardErr != nil {
@@ -833,7 +837,7 @@ func (s *appSession) run(ctx context.Context, pick tui.Pick, task string, emit t
 		config.Steering = func() []string { return steered(s.steer, emit) }
 	}
 	watch.spawner = spawner
-	config.ToolResult = watch.result
+	config.ToolResult = func(answered llm.Message) { watch.result(answered, "") }
 	config.Step = func(step turn.StepRow) {
 		emit(tui.Event{Kind: tui.EventPlan, Plan: statedPlan(plan.Items())})
 		if step.Occupancy == nil {
@@ -853,7 +857,7 @@ func (s *appSession) run(ctx context.Context, pick tui.Pick, task string, emit t
 	stopClocks := watch.clockRunningChildren()
 	row, runErr := turn.Run(turn.WithShellRegistry(ctx, s.shells), config)
 	stopClocks()
-	watch.sendSubAgents()
+	watch.readCalls()
 	stopped := errors.Is(runErr, context.Canceled)
 	if runErr != nil && !stopped {
 		fail(runErr)
@@ -867,11 +871,11 @@ func (s *appSession) run(ctx context.Context, pick tui.Pick, task string, emit t
 			fail(headErr)
 		}
 	}
-	outcome := row.Outcome
+	words := doneWords(row.Outcome, row.Guard)
 	if stopped {
-		outcome = turn.OutcomeStopped
+		words = cancelledAt
 	}
-	emit(tui.Event{Kind: tui.EventDone, Text: doneWords(outcome, row.Guard)})
+	emit(tui.Event{Kind: tui.EventDone, Text: words, Children: watch.children()})
 }
 
 func endedForkWords(ended turn.Row) string {
@@ -1010,11 +1014,11 @@ type appWatcher struct {
 	in        int
 	out       int
 	cacheRead int
-	spent     map[string]int
 	shows     sync.Mutex
+	spent     map[string]int
 	asked     map[string][]subagent.Call
-	shown     []subagent.Child
-	shownAt   time.Time
+	calls     map[string][]subagent.Call
+	spawns    []string
 }
 
 type watchedChild struct {
@@ -1031,14 +1035,14 @@ func (a *appWatcher) Ask(ctx context.Context, request llm.Request) (llm.Decision
 }
 
 func (a *appWatcher) askThrough(ctx context.Context, inner turn.Model, request llm.Request) (llm.Decision, error) {
-	_, childAsking := a.runningChild()
-	streamed := false
-	if !childAsking {
-		for _, message := range request.Messages {
-			if message.Role == llm.RoleTool {
-				a.result(message)
-			}
+	asker := a.asker()
+	for _, message := range request.Messages {
+		if message.Role == llm.RoleTool {
+			a.result(message, asker)
 		}
+	}
+	streamed := false
+	if asker == "" {
 		a.emit(tui.Event{Kind: tui.EventRequesting})
 		request.OnDelta = func(text string) {
 			streamed = true
@@ -1054,28 +1058,36 @@ func (a *appWatcher) askThrough(ctx context.Context, inner turn.Model, request l
 	a.in += fresh
 	a.out += decision.Usage.OutputTokens
 	a.cacheRead += decision.CacheReadTokens
-	a.noteRunningChildsAsk(fresh+decision.Usage.OutputTokens, decision.ToolCalls)
+	a.noteChildsAsk(asker, fresh+decision.Usage.OutputTokens, decision.ToolCalls)
 	stats := tui.Event{Kind: tui.EventStats, Model: decision.Build, TokensIn: a.in, TokensOut: a.out, CacheRead: a.cacheRead}
 	if a.gate != nil {
 		stats.Decisions = a.gate.decisions
 	}
 	a.emit(stats)
-	if childAsking {
-		return decision, nil
-	}
-	if text := strings.TrimSpace(decision.Content); text != "" && !streamed {
+	if text := strings.TrimSpace(decision.Content); text != "" && !streamed && asker == "" {
 		a.emit(tui.Event{Kind: tui.EventText, Text: text})
 	}
 	for _, call := range decision.ToolCalls {
-		a.called(call)
+		a.called(call, asker)
 	}
 	return decision, nil
 }
 
-func (a *appWatcher) called(call llm.ToolCall) {
+func (a *appWatcher) spawning(tool string) bool {
+	return a.spawner != nil && tool == a.spawner.Name()
+}
+
+func (a *appWatcher) eventID(asker, call string) string {
+	return sessionstore.EventIDFor(cmp.Or(asker, a.turnID), call)
+}
+
+func (a *appWatcher) called(call llm.ToolCall, asker string) {
 	intent, detail := callIntent(call)
-	promotes := a.spawner != nil && call.Name == a.spawner.Name()
-	a.emit(tui.Event{Kind: tui.EventToolCall, ID: sessionstore.EventIDFor(a.turnID, call.ID), Tool: call.Name, Text: intent, Detail: detail, Promote: promotes})
+	id, promotes := a.eventID(asker, call.ID), a.spawning(call.Name)
+	if promotes {
+		a.spawns = append(a.spawns, id)
+	}
+	a.emit(tui.Event{Kind: tui.EventToolCall, ID: id, Tool: call.Name, Text: intent, Detail: detail, Promote: promotes, Agent: asker})
 	a.noteWholeFile(call)
 }
 
@@ -1095,17 +1107,17 @@ func resumedChat(carry sessionResume) []tui.Event {
 				watch.emit(tui.Event{Kind: tui.EventText, Text: text})
 			}
 			for _, call := range message.ToolCalls {
-				watch.called(call)
+				watch.called(call, "")
 			}
 		case llm.RoleTool:
-			watch.result(message)
+			watch.result(message, "")
 		case llm.RoleSystem, llm.RoleUnknown:
 		}
 	}
 	return chat
 }
 
-func (a *appWatcher) result(message llm.Message) {
+func (a *appWatcher) result(message llm.Message, asker string) {
 	killedWithNothingToShow := message.ToolOutcome == llm.ToolOutcomeAborted && message.ToolResultBytes == 0
 	if a.seen[message.ToolCallID] || killedWithNothingToShow {
 		return
@@ -1113,10 +1125,14 @@ func (a *appWatcher) result(message llm.Message) {
 	a.seen[message.ToolCallID] = true
 	result := tui.Event{
 		Kind:   tui.EventToolResult,
-		ID:     sessionstore.EventIDFor(a.turnID, message.ToolCallID),
+		ID:     a.eventID(asker, message.ToolCallID),
 		Text:   resultSummary(message.Content),
 		Bytes:  message.ToolResultBytes,
 		Failed: message.ToolOutcome.Failed(),
+		Agent:  asker,
+	}
+	if verdict, spawned := a.verdictOf(result.ID, message.Content); spawned {
+		result.Text = verdict
 	}
 	if !result.Failed {
 		if strings.HasPrefix(message.Content, unifiedDiffHeader) {
@@ -1143,82 +1159,86 @@ func (a *appWatcher) noteWholeFile(call llm.ToolCall) {
 	a.wrote[call.ID] = args.Content
 }
 
-func (a *appWatcher) runningChild() (roster.SubAgent, bool) {
+func (a *appWatcher) asker() string {
 	if a.held == nil {
-		return roster.SubAgent{}, false
+		return ""
 	}
 	agents := a.held.SubAgents()
 	for index := len(agents) - 1; index >= 0; index-- {
 		if agents[index].State == roster.Working {
-			return agents[index], true
+			return agents[index].ID
 		}
 	}
-	return roster.SubAgent{}, false
+	return ""
 }
 
-func (a *appWatcher) noteRunningChildsAsk(tokens int, calls []llm.ToolCall) {
-	agent, running := a.runningChild()
-	if !running {
+func (a *appWatcher) noteChildsAsk(child string, tokens int, calls []llm.ToolCall) {
+	if child == "" {
 		return
 	}
-	a.spent[agent.ID] += tokens
 	a.shows.Lock()
 	if a.asked == nil {
-		a.asked = map[string][]subagent.Call{}
+		a.spent, a.asked = map[string]int{}, map[string][]subagent.Call{}
 	}
+	a.spent[child] += tokens
 	for _, call := range calls {
-		a.asked[agent.ID] = append(a.asked[agent.ID], subagent.Call{ID: sessionstore.EventIDFor(agent.ID, call.ID), At: a.now(), Tool: call.Name})
+		a.asked[child] = append(a.asked[child], subagent.Call{ID: a.eventID(child, call.ID), At: a.now(), Tool: call.Name})
 	}
 	a.shows.Unlock()
-	a.draw(a.held.SubAgents())
+	a.sendSubAgents()
 }
 
 func (a *appWatcher) sendSubAgents() {
+	a.readCalls()
+	a.draw()
+}
+
+func (a *appWatcher) readCalls() {
 	if a.held == nil {
 		return
 	}
-	a.draw(a.held.SubAgents())
+	rows, agents := childRows(a.spawner), a.held.SubAgents()
+	a.shows.Lock()
+	defer a.shows.Unlock()
+	if a.calls == nil {
+		a.calls = map[string][]subagent.Call{}
+	}
+	for _, agent := range agents {
+		a.calls[agent.ID] = recordedOrCalling(recordedCalls(rows, agent.ID), a.asked[agent.ID], agent.Calling, agent.CallsDropped)
+	}
 }
 
-func (a *appWatcher) draw(agents []roster.SubAgent) {
-	if len(agents) == 0 {
-		return
+func (a *appWatcher) draw() {
+	if children := a.children(); len(children) > 0 {
+		a.emit(tui.Event{Kind: tui.EventSubAgent, Children: children})
 	}
-	now, rows := a.now(), childRows(a.spawner)
+}
+
+func (a *appWatcher) children() []subagent.Child {
+	if a.held == nil {
+		return nil
+	}
+	agents := a.held.SubAgents()
 	for index := range agents {
 		if agents[index].State == roster.InReview && (a.spawner == nil || a.spawner.Review == nil) {
 			agents[index].State = roster.Finished
 		}
 	}
 	a.shows.Lock()
-	asked := maps.Clone(a.asked)
-	a.shows.Unlock()
-	children := subagent.Children(agents, now, a.maxSteps, a.spent, func(agent roster.SubAgent) []subagent.Call {
-		return recordedOrCalling(recordedCalls(rows, agent.ID), asked[agent.ID], agent.Calling, agent.CallsDropped)
-	})
-	a.shows.Lock()
-	a.shown, a.shownAt = children, now
-	a.shows.Unlock()
-	a.emit(tui.Event{Kind: tui.EventSubAgent, Children: children})
+	defer a.shows.Unlock()
+	return subagent.Children(agents, a.now(), a.maxSteps, a.spent, func(agent roster.SubAgent) []subagent.Call { return a.calls[agent.ID] })
 }
 
-func (a *appWatcher) redrawRunningClocks() {
-	a.shows.Lock()
-	ahead := a.now().Sub(a.shownAt)
-	moved := slices.Clone(a.shown)
-	a.shows.Unlock()
-	running := false
-	for index := range moved {
-		if moved[index].State != roster.Working {
-			continue
+func (a *appWatcher) verdictOf(id, report string) (string, bool) {
+	if !slices.Contains(a.spawns, id) {
+		return "", false
+	}
+	for _, line := range strings.Split(report, "\n") {
+		if strings.HasPrefix(line, childVerdictPrefix) {
+			return line, true
 		}
-		moved[index].Since += ahead
-		running = true
 	}
-	if !running {
-		return
-	}
-	a.emit(tui.Event{Kind: tui.EventSubAgent, Children: moved})
+	return "", false
 }
 
 func (a *appWatcher) clockRunningChildren() (stop func()) {
@@ -1232,7 +1252,9 @@ func (a *appWatcher) clockRunningChildren() (stop func()) {
 			case <-ticking:
 				return
 			case <-every.C:
-				a.redrawRunningClocks()
+				if a.asker() != "" {
+					a.draw()
+				}
 			}
 		}
 	}()
@@ -1315,7 +1337,9 @@ func callIntent(call llm.ToolCall) (string, string) {
 	case path != "":
 		return path, ""
 	case task != "":
-		return task, ""
+		brief, _ := fields["task"].(string)
+		first, _, _ := strings.Cut(strings.TrimSpace(brief), "\n")
+		return cmp.Or(text("mission"), strings.TrimSpace(first)), brief
 	case text("handle") != "":
 		return moreOfAStoredResult, ""
 	}

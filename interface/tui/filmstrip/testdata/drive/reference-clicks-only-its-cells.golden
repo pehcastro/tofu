@@ -13,13 +13,13 @@
     [&orchestrator]   .    │  bash                                                            │    │
     Waiting for request    │  go test ./internal/shell/...                                    │    │
     [&c1]             .    │  complete                                                        │    │
-    read the policy lo…    │    exit 1                                                        │    │
+    stopped · read the…    │    exit 1                                                        │    │
     [&c2]             .    │    --- FAIL: TestKillTree (0.31s)                                │    │
-    write the ledger f…    │                                                                  │    │
+    in review · write …    │                                                                  │    │
                            ╰──────────────────────────────────────────────────────────────────╯    │
   DEAD  1                                                                                          │
-    [&c3]             ✗    ╭──────────────────────────────────────────────────────────────────╮    │
-    run the shell suite    │                                                                  │    ┃
+    [&c3]             ✗    ╭──────────────────────────────────────────────────────────────────╮    ┃
+    failed · run the s…    │                                                                  │    ┃
                            │  [&orchestrator]  tool              just now  [tool#9d4f10]      │    ┃
                            │  read                                                            │    ┃
                            │  internal/turn/loop.go                                           │    ┃

@@ -26,7 +26,7 @@ const (
 	toolGap        = 1400 * time.Millisecond
 	typingGap      = 3 * time.Second
 	childGap       = 26 * time.Second
-	childID        = "turn-1-c1"
+	childID        = "qa-1"
 	homePrefix     = "tofu-filmstrip"
 	workspaceDir   = "tofu"
 	globalSettings = "settings.json"

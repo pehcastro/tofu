@@ -1,8 +1,8 @@
  tofu  ./tofu/                     chat   agents   edits   shells                     0s [settings] 
                                                                                                     
-        [tool#5e02aa]                                                                              |
-    > spawn run the shell suite                                                    spawned [&c3]   |
-        [tool#5e03aa]                                                                              |
+    . spawning [&c1] to read the policy loader                                                     |
+    . spawning [&c2] to write the ledger floor test                                                |
+    . spawning [&c3] to run the shell suite                                                        |
     . (1) tools . 0s . [tool#9d4f10]                                                               |
                                                                                                    |
                                                                                                    |
@@ -43,13 +43,13 @@
     [&orchestrator]   .    |  [&orchestrator]  file edit         just now  [edit#e5a101]      |    |
     Waiting for request    |  edit                                                            |    |
     [&c1]             .    |  Full diff in File edits. internal/judge/policy/resolve.go       |    |
-    read the policy lo.    |  +5  -2  .  @internal/judge/policy/resolve.go                    |    |
+    stopped . read the.    |  +5  -2  .  @internal/judge/policy/resolve.go                    |    |
     [&c2]             .    |    ok                                                            |    |
-    write the ledger f.    |                                                                  |    |
+    in review . write .    |                                                                  |    |
                            +------------------------------------------------------------------+    |
   DEAD  1                                                                                          |
     [&c3]             x    +------------------------------------------------------------------+    |
-    run the shell suite    |                                                                  |    |
+    failed . run the s.    |                                                                  |    |
                            |  [&orchestrator]  new file          just now  [edit#e5a102]      |    |
                            |  write                                                           |    |
                            |  Full diff in File edits. internal/judge/ledger/floor_rows.go    |    |
@@ -61,31 +61,31 @@
  tofu  ./tofu/                     chat   agents   edits   shells                     0s [settings] 
                                                                                                     
                                                                                                    |
-  File edits               internal/judge/ledger/floor_rows.go                      [edit#e5a102]  |
-  2 files  .  2 changes    ADDED  .  2/2 files  .  +1.2k  +0  .                                    |
-  1 mod . 1 new . 0 del    @internal/judge/ledger/floor_rows.go                                    |
-  +1.2k  -2 lines          1181-1200/1200  .  PgUp/PgDn . n/p                                      |
+  File edits                       internal/judge/ledger/floor_rows.go              [edit#e5a102]  |
+  2 files  .  2 changes            ADDED  .  2/2 files  .  +1.2k  +0  .                            |
+  1 mod  .  1 new  .  0 del        @internal/judge/ledger/floor_rows.go                            |
+  +1.2k  -2 lines                  1181-1200/1200  .  PgUp/PgDn . n/p                              |
                                                                                                    |
-  AUTHOR                   + 1181  var row1181 = floorRow{Question: "risk", Line: 1181}            |
-  > All changes       2    + 1182  var row1182 = floorRow{Question: "risk", Line: 1182}            |
-    &tofu     +1.2k  -2    + 1183  var row1183 = floorRow{Question: "risk", Line: 1183}            |
-                           + 1184  var row1184 = floorRow{Question: "risk", Line: 1184}            |
-  FILES                    + 1185  var row1185 = floorRow{Question: "risk", Line: 1185}            |
-  + [edit#e5a102] floo.    + 1186  var row1186 = floorRow{Question: "risk", Line: 1186}            |
-  ~ [edit#e5a101] reso.    + 1187  var row1187 = floorRow{Question: "risk", Line: 1187}            |
-                           + 1188  var row1188 = floorRow{Question: "risk", Line: 1188}            |
-                           + 1189  var row1189 = floorRow{Question: "risk", Line: 1189}            |
-                           + 1190  var row1190 = floorRow{Question: "risk", Line: 1190}            |
-                           + 1191  var row1191 = floorRow{Question: "risk", Line: 1191}            |
-                           + 1192  var row1192 = floorRow{Question: "risk", Line: 1192}            |
-                           + 1193  var row1193 = floorRow{Question: "risk", Line: 1193}            |
-                           + 1194  var row1194 = floorRow{Question: "risk", Line: 1194}            |
-                           + 1195  var row1195 = floorRow{Question: "risk", Line: 1195}            |
-                           + 1196  var row1196 = floorRow{Question: "risk", Line: 1196}            |
-                           + 1197  var row1197 = floorRow{Question: "risk", Line: 1197}            |
-                           + 1198  var row1198 = floorRow{Question: "risk", Line: 1198}            |
-                           + 1199  var row1199 = floorRow{Question: "risk", Line: 1199}            |
-                           + 1200  var lastRow = floorRow{Question: "risk", Line: 1200}            |
+  AUTHOR                           + 1181  var row1181 = floorRow{Question: "risk", Line: 1181}    |
+  > All changes               2    + 1182  var row1182 = floorRow{Question: "risk", Line: 1182}    |
+    &tofu             +1.2k  -2    + 1183  var row1183 = floorRow{Question: "risk", Line: 1183}    |
+                                   + 1184  var row1184 = floorRow{Question: "risk", Line: 1184}    |
+  EDITS                            + 1185  var row1185 = floorRow{Question: "risk", Line: 1185}    |
+  + [edit#e5a102] floor_rows.go    + 1186  var row1186 = floorRow{Question: "risk", Line: 1186}    |
+  ~ [edit#e5a101] resolve.go       + 1187  var row1187 = floorRow{Question: "risk", Line: 1187}    |
+                                   + 1188  var row1188 = floorRow{Question: "risk", Line: 1188}    |
+                                   + 1189  var row1189 = floorRow{Question: "risk", Line: 1189}    |
+                                   + 1190  var row1190 = floorRow{Question: "risk", Line: 1190}    |
+                                   + 1191  var row1191 = floorRow{Question: "risk", Line: 1191}    |
+                                   + 1192  var row1192 = floorRow{Question: "risk", Line: 1192}    |
+                                   + 1193  var row1193 = floorRow{Question: "risk", Line: 1193}    |
+                                   + 1194  var row1194 = floorRow{Question: "risk", Line: 1194}    |
+                                   + 1195  var row1195 = floorRow{Question: "risk", Line: 1195}    |
+                                   + 1196  var row1196 = floorRow{Question: "risk", Line: 1196}    |
+                                   + 1197  var row1197 = floorRow{Question: "risk", Line: 1197}    |
+                                   + 1198  var row1198 = floorRow{Question: "risk", Line: 1198}    |
+                                   + 1199  var row1199 = floorRow{Question: "risk", Line: 1199}    |
+                                   + 1200  var lastRow = floorRow{Question: "risk", Line: 1200}    |
                                                                                                     
  ctx 118k/250k  |  claude-sub 5h 62%                                                                
  tofu  ./tofu/                     chat   agents   edits   shells                     0s [settings] 
@@ -150,9 +150,9 @@
  ctx 118k/250k  |  claude-sub 5h 62%                                                                
  tofu  ./tofu/                     chat   agents   edits   shells                     0s [settings] 
 
-        [tool#5e02aa]                                                                              |
-    > spawn run the shell suite                                                    spawned [&c3]   |
-        [tool#5e                                                                                   |
+    . spawning [&c1] to read the policy loader                                                     |
+    . spawning [&c2] to write the ledger floor test                                                |
+    . spawning [                                                                                   |
     . (1) tools   Commands                                                     esc                 |
                   Jump to a view or run an action                                                  |
                                                                                                    |

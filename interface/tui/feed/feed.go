@@ -27,10 +27,11 @@ const (
 	KindFailure
 	KindNote
 	KindDecision
+	KindSpawn
 )
 
 func (k Kind) String() string {
-	return [...]string{"message", "tool", "edit", "request", "failure", "note", "decision"}[k]
+	return [...]string{"message", "tool", "edit", "request", "failure", "note", "decision", "spawn"}[k]
 }
 
 type State int
@@ -39,9 +40,10 @@ const (
 	StateRunning State = iota
 	StateComplete
 	StateFailed
+	StateStopped
 )
 
-func (s State) String() string { return [...]string{"running", "complete", "failed"}[s] }
+func (s State) String() string { return [...]string{"running", "complete", "failed", "stopped"}[s] }
 
 type Op int
 
@@ -172,10 +174,20 @@ func (m *Model) SetEvents(events []Event) {
 		m.events = events
 		return
 	}
-	_, _, before := m.layout("")
+	cards, starts, rows := m.layout("")
+	top, anchor := fromTop(rows, m.pageHeight(), m.scroll), len(cards)-1
+	for anchor > 0 && starts[anchor] > top {
+		anchor--
+	}
 	m.events = events
-	_, _, after := m.layout("")
-	m.scroll += max(0, after-before)
+	if anchor < 0 {
+		return
+	}
+	id, into := cards[anchor].id, top-starts[anchor]
+	cards, starts, rows = m.layout("")
+	if at := slices.IndexFunc(cards, func(c card) bool { return c.id == id }); at >= 0 {
+		m.scroll = max(0, rows-m.pageHeight()-starts[at]-into)
+	}
 }
 
 func (m Model) Selected() string { return m.selected }
@@ -330,6 +342,24 @@ func groupOf(state roster.State) group {
 	panic("feed: unknown sub-agent state " + state.String())
 }
 
+func stateWord(state roster.State) string {
+	switch state {
+	case roster.Working, roster.Reopened:
+		return ""
+	case roster.WaitingAnswer:
+		return "waiting on you"
+	case roster.InReview:
+		return "in review"
+	case roster.Parked:
+		return "stopped"
+	case roster.Errored:
+		return "failed"
+	case roster.Finished:
+		return doneWord
+	}
+	panic("feed: unknown sub-agent state " + state.String())
+}
+
 type entry struct {
 	who          identity
 	group        group
@@ -359,7 +389,11 @@ func (m Model) entries() []entry {
 		if a.State == roster.Errored {
 			glyph = look.Style(look.Red).Render("✗")
 		}
-		all = append(all, entry{identity{a.Name, a.Instance}, g, glyph, a.Doing})
+		doing := a.Doing
+		if word := stateWord(a.State); word != "" {
+			doing = word + " · " + a.Doing
+		}
+		all = append(all, entry{identity{a.Name, a.Instance}, g, glyph, doing})
 	}
 	slices.SortStableFunc(all, func(a, b entry) int { return cmp.Compare(a.group, b.group) })
 	return all

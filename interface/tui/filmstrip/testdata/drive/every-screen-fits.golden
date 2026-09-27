@@ -106,7 +106,7 @@ Select an edit reference to read every changed line.
                                                                                │
                                                                                │
     You                                              14:32  [message#672500]   │
-    edits                                                                      │
+    edits                                                                      ┃
                                                                                ┃
                                                                                ┃
     · (2) tools · 0s · [tool#e5a102]                                           ┃
@@ -220,11 +220,11 @@ Select an edit reference to read every changed line.
                                                                                 
  tofu  ./tofu/                       chat   agents   edits   shells                       0s [settings] 
                                                                                                         
-        [tool#5e01aa]                                                                                  │
-    ⟩ spawn write the ledger floor test                                                spawned [&c2]   │
-        [tool#5e02aa]                                                                                  │
-    ⟩ spawn run the shell suite                                                        spawned [&c3]   │
-        [tool#5e03aa]                                                                                  ┃
+    agents                                                                                             │
+                                                                                                       ┃
+    · spawning [&c1] to read the policy loader                                                         ┃
+    · spawning [&c2] to write the ledger floor test                                                    ┃
+    · spawning [&c3] to run the shell suite                                                            ┃
     · (1) tools · 0s · [tool#9d4f10]                                                                   ┃
                                                                                                        ┃
                                                                                                        ┃
@@ -265,13 +265,13 @@ Select an edit reference to read every changed line.
     [&orchestrator]    .    ╭─────────────────────────────────────────────────────────────────────╮    │
     Waiting for request     │                                                                     │    │
     [&c1]              .    │  [&orchestrator]  file edit            just now  [edit#e5a101]      │    │
-    read the policy loa…    │  edit                                                               │    │
+    stopped · read the …    │  edit                                                               │    │
     [&c2]              .    │  Full diff in File edits. internal/judge/policy/resolve.go          │    │
-    write the ledger fl…    │  +5  -2  ·  @internal/judge/policy/resolve.go                       │    │
+    in review · write t…    │  +5  -2  ·  @internal/judge/policy/resolve.go                       │    │
                             │    ok                                                               │    │
   DEAD  1                   │                                                                     │    │
     [&c3]              ✗    ╰─────────────────────────────────────────────────────────────────────╯    │
-    run the shell suite                                                                                │
+    failed · run the sh…                                                                               │
                             ╭─────────────────────────────────────────────────────────────────────╮    │
                             │                                                                     │    ┃
                             │  [&orchestrator]  new file             just now  [edit#e5a102]      │    ┃
@@ -285,19 +285,19 @@ Select an edit reference to read every changed line.
  tofu  ./tofu/                       chat   agents   edits   shells                       0s [settings] 
                                                                                                         
                                                                                                         
-  File edits                All changes                                     2 edits · oldest → newest   
-  2 files  ·  2 changes     Select an edit reference to read every changed line.                        
-  1 mod · 1 new · 0 del                                                                                 
+  File edits                        All changes                             2 edits · oldest → newest   
+  2 files  ·  2 changes             Select an edit reference to read every changed line.                
+  1 mod  ·  1 new  ·  0 del                                                                             
   +1.2k  -2 lines                                                                                       
-                              MODIFIED  resolve.go                                   [edit#e5a101]      
-  AUTHOR                      internal/judge/policy/resolve.go                                          
-  › All changes        2      +5  -2  ·  @internal/judge/policy/resolve.go                              
-    &tofu      +1.2k  -2                                                                                
+                                      MODIFIED  resolve.go                           [edit#e5a101]      
+  AUTHOR                              internal/judge/policy/resolve.go                                  
+  › All changes                2      +5  -2  ·  @internal/judge/policy/resolve.go                      
+    &tofu              +1.2k  -2                                                                        
                                                                                                         
-  FILES                                                                                                 
-  + [edit#e5a102] floor…      ADDED  floor_rows.go                                   [edit#e5a102]      
-  ~ [edit#e5a101] resol…      internal/judge/ledger/floor_rows.go                                       
-                              +1.2k  +0  ·  @internal/judge/ledger/floor_rows.go                        
+  EDITS                                                                                                 
+  + [edit#e5a102] floor_rows.go       ADDED  floor_rows.go                           [edit#e5a102]      
+  ~ [edit#e5a101] resolve.go          internal/judge/ledger/floor_rows.go                               
+                                      +1.2k  +0  ·  @internal/judge/ledger/floor_rows.go                
                                                                                                         
                                                                                                         
                                                                                                         
@@ -383,12 +383,9 @@ Select an edit reference to read every changed line.
     You                                                                                                          14:32  [message#672866]    
     agents                                                                                                                                  
                                                                                                                                             
-    ⟩ spawn read the policy loader                                                                                         spawned [&c1]    
-        [tool#5e01aa]                                                                                                                       
-    ⟩ spawn write the ledger floor test                                                                                    spawned [&c2]    
-        [tool#5e02aa]                                                                                                                       
-    ⟩ spawn run the shell suite                                                                                            spawned [&c3]    
-        [tool#5e03aa]                                                                                                                       
+    · spawning [&c1] to read the policy loader                                                                                              
+    · spawning [&c2] to write the ledger floor test                                                                                         
+    · spawning [&c3] to run the shell suite                                                                                                 
     · (1) tools · 0s · [tool#9d4f10]                                                                                                        
                                                                                                                                             
                                                                                                                                             
@@ -406,6 +403,9 @@ Select an edit reference to read every changed line.
                                                                                                                                             
     [&orchestrator]                                                                                              14:32  [message#e5a103]    
     the resolver checks the lock now, and [edit#e5a102] holds the 1200 floor rows.                                                          
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
                                                                                                                                             
                                                                                                                                             
                                                                                                                                             
@@ -433,13 +433,13 @@ Select an edit reference to read every changed line.
     [&orchestrator]         .    │  [&orchestrator]  tool                                                just now  [tool#9d4f10]      │    │
     Waiting for request          │  read                                                                                              │    │
     [&c1]                   .    │  internal/turn/loop.go                                                                             │    │
-    read the policy loader       │  complete                                                                                          │    │
+    stopped · read the polic…    │  complete                                                                                          │    │
     [&c2]                   .    │    412 lines, 11.8 KB                                                                              │    │
-    write the ledger floor t…    │                                                                                                    │    │
+    in review · write the le…    │                                                                                                    │    │
                                  ╰────────────────────────────────────────────────────────────────────────────────────────────────────╯    │
   DEAD  1                                                                                                                                  │
     [&c3]                   ✗    ╭────────────────────────────────────────────────────────────────────────────────────────────────────╮    │
-    run the shell suite          │                                                                                                    │    │
+    failed · run the shell s…    │                                                                                                    │    │
                                  │  [&orchestrator]  file edit                                           just now  [edit#e5a101]      │    │
                                  │  edit                                                                                              │    │
                                  │  Full diff in File edits. internal/judge/policy/resolve.go                                         │    │
@@ -461,19 +461,19 @@ Select an edit reference to read every changed line.
  tofu   |  ./tofu/ (git:develop)               chat   sub-agents   file edits   shells   amber-cedar-otter [session#3c5f71] | 0s [settings] 
                                                                                                                                             
                                                                                                                                             
-  File edits                     All changes                                                                    2 edits · oldest → newest   
-  2 files  ·  2 changes          Select an edit reference to read every changed line.                                                       
+  File edits                          All changes                                                               2 edits · oldest → newest   
+  2 files  ·  2 changes               Select an edit reference to read every changed line.                                                  
   1 mod  ·  1 new  ·  0 del                                                                                                                 
   +1.2k  -2 lines                                                                                                                           
-                                   MODIFIED  resolve.go                                                                  [edit#e5a101]      
-  AUTHOR                           internal/judge/policy/resolve.go                                                                         
-  › All changes             2      +5  -2  ·  @internal/judge/policy/resolve.go                                                             
-    &tofu           +1.2k  -2                                                                                                               
+                                        MODIFIED  resolve.go                                                             [edit#e5a101]      
+  AUTHOR                                internal/judge/policy/resolve.go                                                                    
+  › All changes                  2      +5  -2  ·  @internal/judge/policy/resolve.go                                                        
+    &tofu                +1.2k  -2                                                                                                          
                                                                                                                                             
-  FILES                                                                                                                                     
-  + [edit#e5a102] floor_rows…      ADDED  floor_rows.go                                                                  [edit#e5a102]      
-  ~ [edit#e5a101] resolve.go       internal/judge/ledger/floor_rows.go                                                                      
-                                   +1.2k  +0  ·  @internal/judge/ledger/floor_rows.go                                                       
+  EDITS                                                                                                                                     
+  + [edit#e5a102] floor_rows.go         ADDED  floor_rows.go                                                             [edit#e5a102]      
+  ~ [edit#e5a101] resolve.go            internal/judge/ledger/floor_rows.go                                                                 
+                                        +1.2k  +0  ·  @internal/judge/ledger/floor_rows.go                                                  
                                                                                                                                             
                                                                                                                                             
                                                                                                                                             

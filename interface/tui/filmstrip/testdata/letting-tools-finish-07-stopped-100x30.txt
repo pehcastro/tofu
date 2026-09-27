@@ -22,7 +22,7 @@
                                                                                                     
                                                                                                     
                                                                                                     
-  cooked for 3s  |  waited 0s  [request#c2]                                                         
+  cooked for 3s  |  waited 0s  [request#91ccaf]                                                     
                                                                                                     
                                                                                                     
   █ Ask tofu to build, inspect, or delegate                                                         

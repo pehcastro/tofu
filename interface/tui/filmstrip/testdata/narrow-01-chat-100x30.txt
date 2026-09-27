@@ -1,10 +1,10 @@
  tofu        chat   agents   edits   shells   0s [settings] 
                                                             
-    ⟩ spawn write the ledger floor test    spawned [&c2]   │
-        [tool#5e02aa]                                      │
-    ⟩ spawn run the shell suite            spawned [&c3]   │
-        [tool#5e03aa]                                      │
-    · (1) tools · 0s · [tool#9d4f10]                       │
+                                                           │
+    · spawning [&c1] to read the policy loader             │
+    · spawning [&c2] to write the ledger floor test        │
+    · spawning [&c3] to run the shell suite                ┃
+    · (1) tools · 0s · [tool#9d4f10]                       ┃
                                                            ┃
                                                            ┃
     [&orchestrator]              14:32  [message#9d4f11]   ┃

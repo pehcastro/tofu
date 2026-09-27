@@ -2,11 +2,11 @@
 type agents
 key enter
 wait cooked for
-click 4 18
+click 4 15
 wait All activity
 screen
 key alt+1
-click 26 17
+click 26 14
 wait [&c1]  owns
 screen
 key alt+1

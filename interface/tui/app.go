@@ -83,11 +83,11 @@ type Event struct {
 
 func (e Event) snapshot() bool {
 	switch e.Kind {
-	case EventContext:
+	case EventContext, EventSubAgent:
 		return true
 	case EventText, EventTextDelta, EventToolCall, EventToolResult, EventNote, EventFailure, EventStats, EventDone,
 		EventDecision, EventGateOff, EventAwaitPerson, EventResumed, EventSteered, EventRequesting, EventPlan,
-		EventSession, EventSubAgent, EventForkStart, EventForkEnd, EventTask:
+		EventSession, EventForkStart, EventForkEnd, EventTask:
 		return false
 	}
 	panic("tui: unknown event kind")
@@ -186,6 +186,7 @@ const (
 	noticePulses  = 34
 	wheelRows     = 3
 	setupPoll     = time.Second
+	shellPulses   = int(session.TickInterval / pulseInterval)
 	exitReset     = "\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?1016l\x1b[0m" + ansi.ResetBackgroundColor
 )
 
@@ -233,8 +234,8 @@ type App struct {
 	childCalls     []string
 	children       []subagent.Child
 	happened       []feed.Event
+	feedStale      bool
 	reached        []string
-	spawns         int
 	board          paste.Board
 	minted         int
 	happenedAtTurn int
@@ -312,6 +313,7 @@ func New(options Options) *App {
 	app.view.Stop()
 	app.readWires()
 	app.refreshSettingsRows()
+	app.flushFeed()
 	app.syncFeed()
 	return app
 }
@@ -383,6 +385,7 @@ func (a *App) resize(width, height int) {
 
 func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	cmd := a.update(msg)
+	a.flushFeed()
 	a.syncFeed()
 	return a, tea.Batch(cmd, a.startPulse())
 }
@@ -418,6 +421,9 @@ func (a *App) update(msg tea.Msg) tea.Cmd {
 		return a.pasted(msg)
 	case pulseMsg:
 		a.beat()
+		if a.busy && a.pulse%shellPulses == 0 {
+			return a.pollShells()
+		}
 		return nil
 	case fillMsg:
 		a.filling = false
@@ -529,6 +535,7 @@ func (a *App) closed() tea.Cmd {
 	a.busy, a.cancel, a.events, a.edits.Busy = false, nil, nil, false
 	a.running, a.pressedAt = 0, time.Time{}
 	a.parkChildrenTheTurnLeftBehind()
+	a.stopWhatStillRuns()
 	a.view.Stop()
 	a.dropSteering()
 	next := tea.Batch(a.pollQuota(), a.readPaths(), a.pollShells())

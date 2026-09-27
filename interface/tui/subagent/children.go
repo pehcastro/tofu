@@ -2,7 +2,6 @@ package subagent
 
 import (
 	"cmp"
-	"strconv"
 	"time"
 
 	"tofu/internal/konst"
@@ -21,7 +20,7 @@ func Children(agents []roster.SubAgent, now time.Time, steps int, spent map[stri
 			watched = calls(agent)
 		}
 		children[index] = Child{
-			Name:   "c" + strconv.Itoa(index+1),
+			Name:   agent.ID,
 			Agent:  agent.Agent,
 			Model:  agent.Model,
 			Owns:   agent.Owns,

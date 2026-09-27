@@ -11,6 +11,7 @@ import (
 	"charm.land/lipgloss/v2"
 
 	"tofu/interface/tui/look"
+	"tofu/interface/tui/markdown"
 	roster "tofu/internal/subagent"
 )
 
@@ -20,7 +21,9 @@ const (
 	cardPadX         = 2
 	cardPadY         = 1
 	cardBorderRows   = 2
-	cardFixedRows    = 3
+	cardBorderSides  = 2
+	headAndMetaRows  = 2
+	detailIndent     = "  "
 	headMinWidth     = 16
 	headInset        = 12
 	detailPreview    = 8
@@ -31,6 +34,13 @@ const (
 	ownsTitle        = "owns"
 	reportTitle      = "report"
 	overlapWord      = "  overlaps "
+	requesting       = "Requesting "
+	toWorkOn         = " to work on "
+	unnamedChild     = "a sub-agent"
+	metaSeparator    = "  |  "
+	waitingOn        = "waiting on "
+	sentTo           = "to "
+	doneWord         = "done"
 )
 
 type card struct {
@@ -54,6 +64,7 @@ type cachedCard struct {
 type cardCache struct {
 	cards map[string]cachedCard
 	order []string
+	prose markdown.Renderer
 }
 
 func sameEvent(a, b Event) bool {
@@ -64,8 +75,8 @@ func sameEvent(a, b Event) bool {
 }
 
 type draft struct {
-	event  *Event
-	render func(Event, cardKey) string
+	event *Event
+	lines func(*cardCache, Event, cardKey) []string
 }
 
 func (m Model) drafts() []draft {
@@ -74,18 +85,18 @@ func (m Model) drafts() []draft {
 	agent, picked := m.filteredAgent()
 	if picked && agent.Model != "" {
 		runs := m.aboutFilter(runsTitle, cmp.Or(agent.Definition, unnamedAgent)+" on "+agent.Model, nil)
-		drafts = append(drafts, draft{&runs, renderAgentCard})
+		drafts = append(drafts, draft{&runs, agentCardLines})
 	}
 	if picked && len(agent.Owns) > 0 {
 		owns := m.aboutFilter(ownsTitle, "", m.ownership(agent.Owns))
-		drafts = append(drafts, draft{&owns, renderAgentCard})
+		drafts = append(drafts, draft{&owns, agentCardLines})
 	}
 	for index := range events {
-		drafts = append(drafts, draft{&events[index], renderCard})
+		drafts = append(drafts, draft{&events[index], (*cardCache).cardLines})
 	}
 	if picked && agent.Report != "" {
 		report := m.aboutFilter(reportTitle, agent.Report, nil)
-		drafts = append(drafts, draft{&report, renderAgentCard})
+		drafts = append(drafts, draft{&report, agentCardLines})
 	}
 	return drafts
 }
@@ -131,18 +142,35 @@ func (m Model) cardKey(width int, e *Event) cardKey {
 	return cardKey{width, !m.railFocused && m.selected == e.ID, m.expanded[e.ID], look.Age(m.now().Sub(e.At))}
 }
 
+func textWidth(width int) int {
+	return max(cardMinWidth, width-2) - 2*cardPadX - cardBorderSides
+}
+
+func wrappedRows(text string, room int) int {
+	return strings.Count(text, "\n") + 1 + len(text)/room
+}
+
 func (m Model) sized(width int, d draft) card {
-	expanded := m.expanded[d.event.ID]
-	if cached, ok := m.cards.cards[d.event.ID]; ok && cached.key.width == width && cached.key.expanded == expanded && sameEvent(cached.event, *d.event) {
-		return card{id: d.event.ID, height: cached.height}
+	e, expanded := d.event, m.expanded[d.event.ID]
+	if cached, ok := m.cards.cards[e.ID]; ok && cached.key.width == width && cached.key.expanded == expanded && sameEvent(cached.event, *e) {
+		return card{id: e.ID, height: cached.height}
 	}
-	shown := min(len(d.event.Detail), detailPreview+1)
+	room := textWidth(width)
+	height := cardBorderRows + 2*cardPadY + headAndMetaRows + wrappedRows(e.Title, room)
+	if e.Body != "" {
+		height += wrappedRows(e.Body, room)
+	}
+	shown := e.Detail[:min(len(e.Detail), detailPreview)]
 	if expanded {
-		shown = len(d.event.Detail)
+		shown = e.Detail
 	}
-	room := max(cardMinWidth, width-2) - 2*cardPadX
-	prose := (len(d.event.Body) + room - 1) / room
-	return card{id: d.event.ID, height: cardBorderRows + 2*cardPadY + cardFixedRows + shown + prose}
+	for _, line := range shown {
+		height += wrappedRows(line, room-len(detailIndent))
+	}
+	if len(shown) < len(e.Detail) {
+		height++
+	}
+	return card{id: e.ID, height: height}
 }
 
 func (m Model) card(width int, d draft) card {
@@ -150,7 +178,7 @@ func (m Model) card(width int, d draft) card {
 	if cached, ok := c.cards[e.ID]; ok && cached.key == key && sameEvent(cached.event, e) {
 		return card{e.ID, cached.view, cached.height}
 	}
-	view := d.render(e, key)
+	view := framed(d.lines(c, e, key), key)
 	if c.cards == nil {
 		c.cards = make(map[string]cachedCard)
 	}
@@ -185,7 +213,7 @@ func role(e Event) (string, look.Color) {
 	return e.Kind.String(), look.Blue
 }
 
-func renderCard(e Event, key cardKey) string {
+func (c *cardCache) cardLines(e Event, key cardKey) []string {
 	word, colour := role(e)
 	left := look.AgentRef(actor(e).label()) + "  " + look.Style(colour).Render(word)
 	right := look.Faint(key.age+"  ") + look.TypedID(e.Kind.String(), e.ID)
@@ -194,13 +222,22 @@ func renderCard(e Event, key cardKey) string {
 	if lipgloss.Width(left)+lipgloss.Width(right)+1 > headWidth {
 		head = left + "\n" + right
 	}
-	lines := []string{head, look.Title(e.Title)}
-	body := e.Body
-	if e.Kind == KindEdit {
-		body = strings.TrimSpace(fullDiffNote + " " + body)
-	}
-	if body != "" {
-		lines = append(lines, look.Muted(body))
+	lines := []string{head}
+	switch e.Kind {
+	case KindSpawn:
+		asked := look.Title(unnamedChild)
+		if e.Target != "" {
+			asked = look.AgentRef(e.Target)
+		}
+		lines = append(lines, look.Title(requesting)+asked+look.Title(toWorkOn+e.Title))
+		lines = append(lines, c.prose.Lines(e.Body, textWidth(key.width))...)
+	case KindEdit:
+		lines = append(lines, look.Title(e.Title), look.Muted(strings.TrimSpace(fullDiffNote+" "+e.Body)))
+	default:
+		lines = append(lines, look.Title(e.Title))
+		if e.Body != "" {
+			lines = append(lines, look.Muted(e.Body))
+		}
 	}
 	lines = append(lines, metaLine(e))
 	shown := e.Detail
@@ -208,20 +245,20 @@ func renderCard(e Event, key cardKey) string {
 		shown = shown[:detailPreview]
 	}
 	for _, line := range shown {
-		lines = append(lines, "  "+look.OutputLine(line))
+		lines = append(lines, detailIndent+look.OutputLine(line))
 	}
 	if hidden := len(e.Detail) - len(shown); hidden > 0 {
 		lines = append(lines, look.Faint(fmt.Sprintf("  … %d more lines · enter to expand", hidden)))
 	}
-	return framed(lines, key)
+	return lines
 }
 
-func renderAgentCard(e Event, key cardKey) string {
+func agentCardLines(_ *cardCache, e Event, _ cardKey) []string {
 	lines := append([]string{look.AgentRef(actor(e).label()) + "  " + look.Style(look.Blue).Render(e.Title)}, e.Detail...)
 	if e.Body != "" {
 		lines = append(lines, look.Style(look.Text).Render(e.Body))
 	}
-	return framed(lines, key)
+	return lines
 }
 
 func framed(lines []string, key cardKey) string {
@@ -239,11 +276,16 @@ func metaLine(e Event) string {
 		return look.Style(look.Mint).Render(look.SignedLines(int64(e.Added))) + "  " + look.Style(look.Red).Render(look.SignedLines(-int64(e.Removed))) + look.Faint("  ·  @"+e.Path)
 	}
 	meta := look.Faint(e.State.String())
-	if e.Target != "" {
-		meta += look.Faint("  |  to ") + look.AgentRef(e.Target)
+	switch {
+	case e.Kind == KindSpawn && e.State == StateComplete:
+		meta = look.Faint(doneWord)
+	case e.Kind == KindSpawn && e.State == StateRunning && e.Target != "":
+		meta += look.Faint(metaSeparator+waitingOn) + look.AgentRef(e.Target)
+	case e.Kind != KindSpawn && e.Target != "":
+		meta += look.Faint(metaSeparator+sentTo) + look.AgentRef(e.Target)
 	}
 	if e.Elapsed > 0 {
-		meta += look.Faint("  |  " + e.Elapsed.Round(elapsedPrecision).String())
+		meta += look.Faint(metaSeparator + e.Elapsed.Round(elapsedPrecision).String())
 	}
 	return meta
 }

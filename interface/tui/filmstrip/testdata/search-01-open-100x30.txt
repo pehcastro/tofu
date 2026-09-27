@@ -1,17 +1,17 @@
  tofu  ./tofu/                   chat   agents (1)   edits   shells                   0s [settings] 
 
-    ⟩ spawn read the policy loader                                                 spawned [&c1]
-        [tool#5e01aa]
-    ⟩ spawn write the ledger floor test                                            spawned [&c2]
-        [tool#5e02aa]
-    ⟩ spawn run                                                                     pawned [&c3]
-        [tool#5e  Search                                                       esc  
-    · (1) tools   Screens, agents and events · enter opens                          
+    · spawning [&c1] to read the policy loader
+    · spawning [&c2] to write the ledger floor test
+    · spawning [&c3] to run the shell suite
+    · (1) tools · 0s · [tool#9d4f10]
                                                                                     
-                  > Type to filter                                                  
-    [&orchestrat                                                                    sage#9d4f11]
-    three sub-ag  › chat                                                            d its suite.
-    [tool#9d4f10    sub-agents                                                      
+                  Search                                                       esc  
+    [&orchestrat  Screens, agents and events · enter opens                          sage#9d4f11]
+    three sub-ag                                                                    d its suite.
+    [tool#9d4f10  > Type to filter                                                  
+                                                                                    
+                  › chat                                                            
+                    sub-agents                                                      
                     file edits                                                      
                     shells                                                          
                     settings                                                        

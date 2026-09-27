@@ -13,18 +13,18 @@
     [&orchestrator]   .    │                                                                  │    ┃
     Waiting for request    │  [&c1]  tool                        just now  [tool#7a1c02]      │    ┃
   › [&c1]             .    │  read                                                            │    ┃
-    read the policy lo…    │  internal/judge/policy/resolve.go                                │    ┃
+    stopped · read the…    │  internal/judge/policy/resolve.go                                │    ┃
     [&c2]             .    │  complete                                                        │    ┃
-    write the ledger f…    │    209 lines, 6.2 KB                                             │    ┃
+    in review · write …    │    209 lines, 6.2 KB                                             │    ┃
                            │                                                                  │    ┃
   DEAD  1                  ╰──────────────────────────────────────────────────────────────────╯    ┃
     [&c3]             ✗                                                                            ┃
-    run the shell suite    ╭──────────────────────────────────────────────────────────────────╮    ┃
+    failed · run the s…    ╭──────────────────────────────────────────────────────────────────╮    ┃
                            │                                                                  │    ┃
                            │  [&c1]  tool                        just now  [tool#7a1c03]      │    ┃
                            │  grep                                                            │    ┃
                            │  Resolve( internal/judge                                         │    ┃
-                           │  running                                                         │    ┃
+                           │  stopped                                                         │    ┃
                            │                                                                  │    ┃
                            ╰──────────────────────────────────────────────────────────────────╯     
  ctx 118k/250k  |  claude-sub 5h 62%                                                                
@@ -43,19 +43,19 @@
     [&orchestrator]   .    ╭──────────────────────────────────────────────────────────────────╮    ┃
     Waiting for request    │                                                                  │    ┃
   › [&c1]             .    │  [&c1]  tool                        just now  [tool#7a1c02]      │    ┃
-    read the policy lo…    │  read                                                            │    ┃
+    stopped · read the…    │  read                                                            │    ┃
     [&c2]             .    │  internal/judge/policy/resolve.go                                │    ┃
-    write the ledger f…    │  complete                                                        │    ┃
+    in review · write …    │  complete                                                        │    ┃
                            │    209 lines, 6.2 KB                                             │    ┃
   DEAD  1                  │                                                                  │    ┃
     [&c3]             ✗    ╰──────────────────────────────────────────────────────────────────╯    ┃
-    run the shell suite                                                                            ┃
+    failed · run the s…                                                                            ┃
                            ╭──────────────────────────────────────────────────────────────────╮    ┃
                            │                                                                  │    ┃
                            │  [&c1]  tool                        just now  [tool#7a1c03]      │    ┃
                            │  grep                                                            │    ┃
                            │  Resolve( internal/judge                                         │    │
-                           │  running                                                         │    │
+                           │  stopped                                                         │    │
                            │                                                                  │     
  ctx 118k/250k  |  claude-sub 5h 62%                                                                
  tofu  ./tofu/                     chat   agents   edits   shells                     0s [settings] 
@@ -73,18 +73,18 @@
     [&orchestrator]   .    │                                                                  │    ┃
     Waiting for request    │  [&c1]  tool                        just now  [tool#7a1c02]      │    ┃
   › [&c1]             .    │  read                                                            │    ┃
-    read the policy lo…    │  internal/judge/policy/resolve.go                                │    ┃
+    stopped · read the…    │  internal/judge/policy/resolve.go                                │    ┃
     [&c2]             .    │  complete                                                        │    ┃
-    write the ledger f…    │    209 lines, 6.2 KB                                             │    ┃
+    in review · write …    │    209 lines, 6.2 KB                                             │    ┃
                            │                                                                  │    ┃
   DEAD  1                  ╰──────────────────────────────────────────────────────────────────╯    ┃
     [&c3]             ✗                                                                            ┃
-    run the shell suite    ╭──────────────────────────────────────────────────────────────────╮    ┃
+    failed · run the s…    ╭──────────────────────────────────────────────────────────────────╮    ┃
                            │                                                                  │    ┃
                            │  [&c1]  tool                        just now  [tool#7a1c03]      │    ┃
                            │  grep                                                            │    ┃
                            │  Resolve( internal/judge                                         │    ┃
-                           │  running                                                         │    ┃
+                           │  stopped                                                         │    ┃
                            │                                                                  │    ┃
                            ╰──────────────────────────────────────────────────────────────────╯     
  ctx 118k/250k  |  claude-sub 5h 62%                                                                

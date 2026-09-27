@@ -13,13 +13,13 @@
     [&orchestrator]   .    │  bash                                                            │    │
     Waiting for request    │  go test ./internal/shell/...                                    │    │
     [&c1]             .    │  complete                                                        │    │
-    read the policy lo…    │    exit 1                                                        │    │
+    stopped · read the…    │    exit 1                                                        │    │
     [&c2]             .    │    --- FAIL: TestKillTree (0.31s)                                │    │
-    write the ledger f…    │                                                                  │    │
+    in review · write …    │                                                                  │    │
                            ╰──────────────────────────────────────────────────────────────────╯    │
   DEAD  1                                                                                          │
-    [&c3]             ✗    ╭──────────────────────────────────────────────────────────────────╮    │
-    run the shell suite    │                                                                  │    ┃
+    [&c3]             ✗    ╭──────────────────────────────────────────────────────────────────╮    ┃
+    failed · run the s…    │                                                                  │    ┃
                            │  [&orchestrator]  tool              just now  [tool#9d4f10]      │    ┃
                            │  read                                                            │    ┃
                            │  internal/turn/loop.go                                           │    ┃
@@ -35,26 +35,26 @@
   3 agents · live acti…                                                                            ┃
                            ╭──────────────────────────────────────────────────────────────────╮    ┃
   OVERVIEW                 │                                                                  │    ┃
-  › All activity      8    │  [&orchestrator]  message        just now  [message#5e01aa]      │    ┃
-                           │  spawn                                                           │    ┃
-  ACTIVE  0                │  read the policy loader                                          │    │
-                           │  complete  |  to [&c1]                                           │    │
-  WAITING  3               │    spawned [&c1]                                                 │    │
-    [&orchestrator]   .    │                                                                  │    │
-    Waiting for request    ╰──────────────────────────────────────────────────────────────────╯    │
-    [&c1]             .                                                                            │
-    read the policy lo…    ╭──────────────────────────────────────────────────────────────────╮    │
-    [&c2]             .    │                                                                  │    │
-    write the ledger f…    │  [&c1]  tool                        just now  [tool#7a1c02]      │    │
-                           │  read                                                            │    │
-  DEAD  1                  │  internal/judge/policy/resolve.go                                │    │
-    [&c3]             ✗    │  complete                                                        │    │
-    run the shell suite    │    209 lines, 6.2 KB                                             │    │
-                           │                                                                  │    │
+  › All activity      8    │  [&orchestrator]  spawn            just now  [spawn#5e01aa]      │    ┃
+                           │  Requesting [&c1] to work on read the policy loader              │    ┃
+  ACTIVE  0                │  done                                                            │    ┃
+                           │    spawned [&c1]                                                 │    │
+  WAITING  3               │                                                                  │    │
+    [&orchestrator]   .    ╰──────────────────────────────────────────────────────────────────╯    │
+    Waiting for request                                                                            │
+    [&c1]             .    ╭──────────────────────────────────────────────────────────────────╮    │
+    stopped · read the…    │                                                                  │    │
+    [&c2]             .    │  [&c1]  tool                        just now  [tool#7a1c02]      │    │
+    in review · write …    │  read                                                            │    │
+                           │  internal/judge/policy/resolve.go                                │    │
+  DEAD  1                  │  complete                                                        │    │
+    [&c3]             ✗    │    209 lines, 6.2 KB                                             │    │
+    failed · run the s…    │                                                                  │    │
                            ╰──────────────────────────────────────────────────────────────────╯    │
                                                                                                    │
                            ╭──────────────────────────────────────────────────────────────────╮    │
                            │                                                                  │    │
                            │  [&c1]  tool                        just now  [tool#7a1c03]      │    │
-                           │  grep                                                            │     
+                           │  grep                                                            │    │
+                           │  Resolve( internal/judge                                         │     
  ctx 118k/250k  |  claude-sub 5h 62%                                                                

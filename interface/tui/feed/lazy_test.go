@@ -26,7 +26,8 @@ func everyCardDrawn(m Model) string {
 		if index > 0 {
 			rows = append(rows, make([]string, m.gap)...)
 		}
-		rows = append(rows, strings.Split(d.render(*d.event, m.cardKey(m.feedWidth(), d.event)), "\n")...)
+		key := m.cardKey(m.feedWidth(), d.event)
+		rows = append(rows, strings.Split(framed(d.lines(m.cards, *d.event, key), key), "\n")...)
 	}
 	top := fromTop(len(rows), m.pageHeight(), m.scroll)
 	return strings.Join(rows[top:min(len(rows), top+m.pageHeight())], "\n")

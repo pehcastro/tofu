@@ -13,13 +13,13 @@
     [&orchestrator]   .    │  bash                                                            │    │
     Waiting for request    │  go test ./internal/shell/...                                    │    │
     [&c1]             .    │  complete                                                        │    │
-    read the policy lo…    │    exit 1                                                        │    │
+    stopped · read the…    │    exit 1                                                        │    │
     [&c2]             .    │    --- FAIL: TestKillTree (0.31s)                                │    │
-    write the ledger f…    │                                                                  │    │
+    in review · write …    │                                                                  │    │
                            ╰──────────────────────────────────────────────────────────────────╯    │
   DEAD  1                                                                                          │
-    [&c3]             ✗    ╭──────────────────────────────────────────────────────────────────╮    │
-    run the shell suite    │                                                                  │    ┃
+    [&c3]             ✗    ╭──────────────────────────────────────────────────────────────────╮    ┃
+    failed · run the s…    │                                                                  │    ┃
                            │  [&orchestrator]  tool              just now  [tool#9d4f10]      │    ┃
                            │  read                                                            │    ┃
                            │  internal/turn/loop.go                                           │    ┃
@@ -35,18 +35,18 @@
     agents                                                                                        
                   Commands                                                     esc                
                   Jump to a view or run an action                                   
-    ⟩ spawn read                                                                    pawned [&c1]
-        [tool#5e  > Type to filter                                                  
-    ⟩ spawn writ                                                                    pawned [&c2]
-        [tool#5e  >  chat                                                    /chat  
-    ⟩ spawn run     the conversation and the composer                               pawned [&c3]
-        [tool#5e                                                                    
-    · (1) tools     sub-agents                                         /sub-agents  
-                    every tool call and every child, in one feed                    
+    · spawning [                                                                    
+    · spawning [  > Type to filter                                                  
+    · spawning [                                                                    
+    · (1) tools   >  chat                                                    /chat  
+                    the conversation and the composer                               
                                                                                     
-    [&orchestrat    file-edits                                         /file-edits  sage#9d4f11]
-    three sub-ag    every changed line, who made it and where                       d its suite.
+    [&orchestrat    sub-agents                                         /sub-agents  sage#9d4f11]
+    three sub-ag    every tool call and every child, in one feed                    d its suite.
     [tool#9d4f10                                                                    
+                    file-edits                                         /file-edits  
+                    every changed line, who made it and where                       
+                                                                                    
                     shells                                                 /shells  
                     the persistent processes an agent left running                  
                                                                                     

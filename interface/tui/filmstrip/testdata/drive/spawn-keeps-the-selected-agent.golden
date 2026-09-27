@@ -13,13 +13,13 @@
     [&orchestrator]   .    ╭──────────────────────────────────────────────────────────────────╮     
     Waiting for request    │                                                                  │     
     [&c1]             .    │  [&c2]  tool                        just now  [tool#7b2d01]      │     
-    read the policy lo…    │  edit                                                            │     
+    stopped · read the…    │  edit                                                            │     
   › [&c2]             .    │  internal/judge/ledger/floor.go                                  │     
-    write the ledger f…    │  complete                                                        │     
+    in review · write …    │  complete                                                        │     
                            │    +14 -2                                                        │     
   DEAD  1                  │                                                                  │     
     [&c3]             ✗    ╰──────────────────────────────────────────────────────────────────╯     
-    run the shell suite                                                                             
+    failed · run the s…                                                                             
                            ╭──────────────────────────────────────────────────────────────────╮     
                            │                                                                  │     
                            │  [&c2]  report                                                   │     
@@ -43,15 +43,15 @@
     [&orchestrator]   .    ╭──────────────────────────────────────────────────────────────────╮     
     Waiting for request    │                                                                  │     
     [&c1]             .    │  [&c2]  tool                        just now  [tool#7b2d01]      │     
-    read the policy lo…    │  edit                                                            │     
+    stopped · read the…    │  edit                                                            │     
   › [&c2]             .    │  internal/judge/ledger/floor.go                                  │     
-    write the ledger f…    │  complete                                                        │     
+    in review · write …    │  complete                                                        │     
     [&c4]             .    │    +14 -2                                                        │     
-    audit the shell re…    │                                                                  │     
+    stopped · audit th…    │                                                                  │     
                            ╰──────────────────────────────────────────────────────────────────╯     
   DEAD  1                                                                                           
     [&c3]             ✗    ╭──────────────────────────────────────────────────────────────────╮     
-    run the shell suite    │                                                                  │     
+    failed · run the s…    │                                                                  │     
                            │  [&c2]  report                                                   │     
                            │  the floor test fails on an empty ledger and passes on one row   │     
                            │                                                                  │     

@@ -9,13 +9,13 @@
     [&orchestrator]                                                                        14:32    
     handing the policy loader to a child                                                            
                                                                                                     
-    ⟩ spawn read internal/judge/policy/resolve.go and say what it reads fir…  3 lines, 199 bytes    
-        [tool#42e30c]                                                                               
+    · spawning [&qa-1] to read the policy loader                                                    
     · (1) tools · 1m 18s · [tool#815e77]                                                            
                                                                                                     
                                                                                                     
     [&orchestrator]                                                      14:33  [message#d41c08]    
     the child read it: the loader reads the lock before the mode.                                   
+                                                                                                    
                                                                                                     
                                                                                                     
                                                                                                     

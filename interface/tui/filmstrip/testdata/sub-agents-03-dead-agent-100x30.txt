@@ -15,11 +15,11 @@
     [&orchestrator]   .    │  [&c3]  tool                        just now  [tool#7c3e01]      │     
     Waiting for request    │  bash                                                            │     
     [&c2]             .    │  go test ./internal/shell/...                                    │     
-    write the ledger f…    │  complete                                                        │     
+    in review · write …    │  complete                                                        │     
                            │    exit 1                                                        │     
   DEAD  1                  │    --- FAIL: TestKillTree (0.31s)                                │     
   › [&c3]             ✗    │                                                                  │     
-    run the shell suite    ╰──────────────────────────────────────────────────────────────────╯     
+    failed · run the s…    ╰──────────────────────────────────────────────────────────────────╯     
                                                                                                     
                            ╭──────────────────────────────────────────────────────────────────╮     
                            │                                                                  │     

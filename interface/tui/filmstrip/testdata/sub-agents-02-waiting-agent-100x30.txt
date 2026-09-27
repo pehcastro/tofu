@@ -15,11 +15,11 @@
     [&orchestrator]   .    │  [&c2]  tool                        just now  [tool#7b2d01]      │     
     Waiting for request    │  edit                                                            │     
   › [&c2]             .    │  internal/judge/ledger/floor.go                                  │     
-    write the ledger f…    │  complete                                                        │     
+    in review · write …    │  complete                                                        │     
                            │    +14 -2                                                        │     
   DEAD  1                  │                                                                  │     
     [&c3]             ✗    ╰──────────────────────────────────────────────────────────────────╯     
-    run the shell suite                                                                             
+    failed · run the s…                                                                             
                            ╭──────────────────────────────────────────────────────────────────╮     
                            │                                                                  │     
                            │  [&c2]  report                                                   │     

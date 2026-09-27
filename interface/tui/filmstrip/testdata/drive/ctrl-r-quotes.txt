@@ -2,7 +2,7 @@
 type agents
 key enter
 wait cooked for
-drag 4 17 40 17
+drag 4 14 40 14
 wait the selection copied
 key ctrl+r
 wait > three sub-agents run

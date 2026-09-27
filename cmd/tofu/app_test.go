@@ -469,7 +469,8 @@ func TestACallReadsAsIntentAndKeepsTheWholeCommandBehindIt(t *testing.T) {
 		{`{"path":"internal/turn/loop.go"}`, "internal/turn/loop.go", ""},
 		{`{"pattern":"Decide","glob":"*.go"}`, "Decide in *.go", ""},
 		{`{"pattern":"Decide"}`, "Decide in " + workingDirectory, ""},
-		{`{"task":"rename the judge","owns":["internal/judge/**"]}`, "rename the judge", ""},
+		{`{"task":"rename the judge\n\nkeep the wire","owns":["internal/judge/**"]}`, "rename the judge", "rename the judge\n\nkeep the wire"},
+		{`{"task":"rename the judge","mission":"judge rename","owns":["internal/judge/**"]}`, "judge rename", "rename the judge"},
 		{`{"handle":"99248324d40bbf11be9cd47093978332","offset":0,"length":512}`, moreOfAStoredResult, ""},
 	} {
 		intent, detail := callIntent(llm.ToolCall{Arguments: []byte(want.arguments)})
@@ -711,7 +712,7 @@ func screenAfterTwoInterrupts(t *testing.T, name, command string) string {
 	for range shellStartGraceMillis / konst.DriveSettleMillis {
 		steps = append(steps, "wait working")
 	}
-	steps = append(steps, "key ctrl+c", "key ctrl+c", "wait cooked for", "screen")
+	steps = append(steps, "key ctrl+c", "key ctrl+c", "wait "+cancelledAt, "screen")
 	script := written(t, dir, name+".drive", strings.Join(steps, "\n"))
 	var out bytes.Buffer
 	if code := driveVerb([]string{script, "--cassette", deck, "--plain", "--timeout", "60s"}, strings.NewReader(""), &out, &errOut); code != exitOK {
@@ -898,7 +899,7 @@ func TestASpawnedChildShowsInTheSubAgentViewWithTheGlobsItHolds(t *testing.T) {
 		t.Fatalf("the child ended as %+v, want it finished, since no done review runs in the app, with the steps and the report the roster carries", ended)
 	}
 	screen := pickedFirstChild(t, driver)
-	for _, want := range []string{"1 agents", "[&c1]", "write note.txt", "owns", "note.txt"} {
+	for _, want := range []string{"1 agents", "[&sub-1]", "write note.txt", "owns", "note.txt"} {
 		if !strings.Contains(screen, want) {
 			t.Errorf("the sub-agent view does not show %q:\n%s", want, screen)
 		}
@@ -909,9 +910,9 @@ func TestASpawnedChildShowsInTheSubAgentViewWithTheGlobsItHolds(t *testing.T) {
 func pickedFirstChild(t *testing.T, driver *appDriver) string {
 	t.Helper()
 	rail := ansi.Strip(driver.view(tea.WindowSizeMsg{Width: 120, Height: 40}, tea.KeyPressMsg{Code: '2', Mod: tea.ModAlt}))
-	row := slices.IndexFunc(strings.Split(rail, "\n"), func(line string) bool { return strings.HasPrefix(strings.TrimSpace(line), "[&c1]") })
+	row := slices.IndexFunc(strings.Split(rail, "\n"), func(line string) bool { return strings.HasPrefix(strings.TrimSpace(line), "[&sub-1]") })
 	if row < 0 {
-		t.Fatalf("the sub-agents rail names no [&c1]:\n%s", rail)
+		t.Fatalf("the sub-agents rail names no [&sub-1]:\n%s", rail)
 	}
 	const railColumn = 14
 	return ansi.Strip(driver.view(tea.MouseClickMsg{X: railColumn, Y: row, Button: tea.MouseLeft}, tea.MouseReleaseMsg{X: railColumn, Y: row, Button: tea.MouseLeft}))
@@ -1049,7 +1050,7 @@ func TestAChildRunningForTenSecondsReadsTenSecondsAndWhatItSpent(t *testing.T) {
 	running := ""
 	for _, framed := range driver.frames {
 		for _, row := range strings.Split(framed, "\n") {
-			if strings.Contains(row, "c1") && strings.Contains(row, "write note.txt") {
+			if strings.Contains(row, "sub-1") && strings.Contains(row, "write note.txt") && !strings.Contains(row, "spawning") {
 				running = row
 			}
 		}
@@ -1546,7 +1547,7 @@ func TestACancelledTurnReportsStoppedAndCarriesNoGoError(t *testing.T) {
 	if len(done) != 1 {
 		t.Fatalf("the turn closed with %d done events, want one", len(done))
 	}
-	if done[0].Text != doneWords(turn.OutcomeStopped, nil) {
+	if done[0].Text != cancelledAt {
 		t.Errorf("the closing line reads %q, want a turn that reports as stopped", done[0].Text)
 	}
 	screen := driver.view()
@@ -1978,11 +1979,11 @@ func childStoppedWhileItAnswered(t *testing.T) *appDriver {
 func TestAParkedChildsReportReachesThePanelWhenTheTurnIsStoppedAndNeverAsksAgain(t *testing.T) {
 	driver := childStoppedWhileItAnswered(t)
 
-	sent := driver.of(tui.EventSubAgent)
-	if len(sent) == 0 {
-		t.Fatal("the stopped turn sent no sub-agent event at all")
+	done := driver.of(tui.EventDone)
+	if len(done) != 1 || len(done[0].Children) == 0 {
+		t.Fatalf("the stopped turn closed with %+v, want one close carrying the child", done)
 	}
-	last := sent[len(sent)-1].Children[0]
+	last := done[0].Children[0]
 	if last.State != roster.Parked || last.Report == "" {
 		t.Fatalf("the panel was last told %+v, want a parked child carrying the report the roster holds", last)
 	}
@@ -2053,6 +2054,7 @@ func TestEveryToolInTheRunRegistryRecordsACommandThatDoesNotRepeatItsName(t *tes
 		"tofu_replay":        {arguments: `{"point":"tool_gate"}`},
 		"github_pr_diff":     {notRunHere: "it shells out to gh against a real github repository"},
 		"web_search":         {notRunHere: "it reaches a paid search provider over the network"},
+		turn.ShellToolName:   {notRunHere: "it stops, restarts or reads a background shell by name, and this test starts none"},
 	}
 
 	built, err := buildTestRunTools(dir, toolSetFull)
