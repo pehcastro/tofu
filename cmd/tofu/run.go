@@ -713,6 +713,7 @@ func (c codexTurn) Ask(ctx context.Context, request llm.Request) (llm.Decision, 
 		Messages:     messages,
 		Tools:        request.Tools,
 		Effort:       c.effort,
+		OnThinking:   request.OnThinking,
 	})
 	if err != nil {
 		return llm.Decision{}, err

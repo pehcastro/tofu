@@ -96,6 +96,9 @@ the way a model's does, in deltas, so a reply is half written until it returns:
   {"text":"reading it","tools":[{"name":"read","args":{"path":"note.txt"}}]}
   {"text":"the note says a note"}
   {"text":"half an answer","unfinished":true}
+  {"thinking":"the note is short","text":"it says a note"}
+
+A reply's thinking streams before its text and shows only on the sub-agents screen.
 
 An unfinished reply streams its text and keeps writing until the turn is stopped,
 which is how a driven run reaches an answer interrupted in the middle of itself.
@@ -133,6 +136,7 @@ const (
 
 type cassetteReply struct {
 	Text       string `json:"text"`
+	Thinking   string `json:"thinking"`
 	Agent      string `json:"agent"`
 	Unfinished bool   `json:"unfinished"`
 	Tools      []struct {
@@ -143,6 +147,7 @@ type cassetteReply struct {
 
 type recordedReply struct {
 	decision   llm.Decision
+	thinking   string
 	unfinished bool
 }
 
@@ -202,7 +207,7 @@ func readCassette(path string) (*cassette, error) {
 				Arguments: one.Args,
 			})
 		}
-		deck.decks[reply.Agent] = append(deck.decks[reply.Agent], recordedReply{decision: decision, unfinished: reply.Unfinished})
+		deck.decks[reply.Agent] = append(deck.decks[reply.Agent], recordedReply{decision: decision, thinking: reply.Thinking, unfinished: reply.Unfinished})
 	}
 	if len(deck.decks) == 0 {
 		return nil, fmt.Errorf("%s holds no reply", path)
@@ -245,6 +250,9 @@ func (c *cassette) Ask(ctx context.Context, request llm.Request) (llm.Decision, 
 	reply, err := c.take(request)
 	if err != nil {
 		return llm.Decision{}, err
+	}
+	if request.OnThinking != nil && reply.thinking != "" {
+		request.OnThinking(reply.thinking)
 	}
 	if request.OnDelta != nil && reply.decision.Content != "" {
 		request.OnDelta(reply.decision.Content)

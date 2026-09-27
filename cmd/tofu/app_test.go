@@ -31,6 +31,7 @@ import (
 	"tofu/interface/tui/session"
 	"tofu/interface/tui/settings"
 	"tofu/interface/tui/subagent"
+	"tofu/interface/tui/trace"
 	"tofu/internal/judge/jev"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/konst"
@@ -902,7 +903,7 @@ func TestASpawnedSubAgentShowsInTheSubAgentViewWithTheGlobsItHolds(t *testing.T)
 	if ended.State != roster.Finished || ended.Steps != 2 || ended.Report == "" {
 		t.Fatalf("the sub-agent ended as %+v, want it finished, since no done review runs in the app, with the steps and the report the roster carries", ended)
 	}
-	screen := pickedFirstSubAgent(t, driver)
+	screen := feedOf(t, driver, "[&sub-1]")
 	for _, want := range []string{"1 agents", "[&sub-1]", "write note.txt", "owns", "note.txt"} {
 		if !strings.Contains(screen, want) {
 			t.Errorf("the sub-agent view does not show %q:\n%s", want, screen)
@@ -911,15 +912,130 @@ func TestASpawnedSubAgentShowsInTheSubAgentViewWithTheGlobsItHolds(t *testing.T)
 	t.Log("\n" + screen)
 }
 
-func pickedFirstSubAgent(t *testing.T, driver *appDriver) string {
+func feedOf(t *testing.T, driver *appDriver, label string) string {
 	t.Helper()
-	rail := ansi.Strip(driver.view(tea.WindowSizeMsg{Width: 120, Height: 40}, tea.KeyPressMsg{Code: '2', Mod: tea.ModAlt}))
-	row := slices.IndexFunc(strings.Split(rail, "\n"), func(line string) bool { return strings.HasPrefix(strings.TrimSpace(line), "[&sub-1]") })
+	rail := ansi.Strip(driver.view(tea.WindowSizeMsg{Width: 120, Height: 60}, tea.KeyPressMsg{Code: '2', Mod: tea.ModAlt}))
+	row := slices.IndexFunc(strings.Split(rail, "\n"), func(line string) bool { return strings.HasPrefix(strings.TrimSpace(line), label) })
 	if row < 0 {
-		t.Fatalf("the sub-agents rail names no [&sub-1]:\n%s", rail)
+		t.Fatalf("the sub-agents rail names no %s:\n%s", label, rail)
 	}
 	const railColumn = 14
 	return ansi.Strip(driver.view(tea.MouseClickMsg{X: railColumn, Y: row, Button: tea.MouseLeft}, tea.MouseReleaseMsg{X: railColumn, Y: row, Button: tea.MouseLeft}))
+}
+
+type thinkingStep struct {
+	thought  string
+	decision llm.Decision
+	retried  bool
+}
+
+type thinkingModel struct {
+	mutex sync.Mutex
+	steps []thinkingStep
+}
+
+func (m *thinkingModel) Ask(_ context.Context, request llm.Request) (llm.Decision, error) {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+	if len(m.steps) == 0 {
+		return llm.Decision{}, errors.New("thinkingModel: no more steps queued")
+	}
+	next := m.steps[0]
+	m.steps = m.steps[1:]
+	if next.retried {
+		request.OnThinking(abandonedThought)
+		request.OnRetry()
+	}
+	if request.OnThinking != nil {
+		half := len(next.thought) / 2
+		request.OnThinking(next.thought[:half])
+		request.OnThinking(next.thought[half:])
+	}
+	return next.decision, nil
+}
+
+const (
+	leadThought      = "the lead weighs which agent reads the note"
+	firstThought     = "the first one reads the note slowly"
+	secondThought    = "the second one weighs every word"
+	fencedCode       = "fmt.Println(secretCode)"
+	abandonedThought = "a draft the dropped stream wrote"
+)
+
+func thinkingTurn(t *testing.T, dir string, store *settingspkg.Store) *appDriver {
+	t.Helper()
+	spawn := func(id, path string) llm.Decision {
+		return llm.Decision{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{
+			{ID: id, Name: "spawn", Arguments: json.RawMessage(`{"agent":"ts-dev","task":"read ` + path + `","owns":["` + path + `"]}`)}}}
+	}
+	reply := func(text string) llm.Decision {
+		return llm.Decision{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: text}
+	}
+	model := &thinkingModel{steps: []thinkingStep{
+		{"the lead sends the first reader", spawn("call-1", "note.txt"), false},
+		{firstThought, reply("read it once"), false},
+		{"the lead sends a second reader", spawn("call-2", "other.txt"), false},
+		{secondThought + "\n```go\n" + fencedCode + "\n```\nthen it answers", reply("read it twice"), true},
+		{leadThought, reply("both read it"), true},
+	}}
+	driver := driveAppOn(t, store)
+	stubbedTurn(dir, model)(t.Context(), onTheSubscription, "have two readers read the note", driver.emit)
+	return driver
+}
+
+func TestASubAgentsThinkingIsDrawnInItsOwnFeedAndNeverInTheChat(t *testing.T) {
+	driver := thinkingTurn(t, scratchProject(t), nil)
+	for _, framed := range driver.frames {
+		for _, thought := range []string{leadThought, firstThought, secondThought, "thinking#"} {
+			if strings.Contains(ansi.Strip(framed), thought) {
+				t.Fatalf("the chat drew the thought %q:\n%s", thought, ansi.Strip(framed))
+			}
+		}
+	}
+	second := feedOf(t, driver, "[&ts-dev-2]")
+	t.Log("\n" + second)
+	if !strings.Contains(second, secondThought) || !strings.Contains(second, "...") || strings.Contains(second, fencedCode) {
+		t.Errorf("ts-dev-2's feed does not carry its thought whole with the code fence folded to ...:\n%s", second)
+	}
+	if strings.Contains(second, firstThought) || strings.Contains(second, leadThought) || strings.Contains(second, abandonedThought) || strings.Count(second, secondThought) != 1 {
+		t.Errorf("ts-dev-2's feed carries another agent's thought, or the draft its retried stream dropped:\n%s", second)
+	}
+	thoughts := driver.of(tui.EventThinking)
+	lead := strings.TrimPrefix(trace.Short(thoughts[len(thoughts)-1].ID), "#")
+	if closed := ansi.Strip(driver.frames[len(driver.frames)-1]); strings.Contains(closed, lead) {
+		t.Errorf("the chat's closing line points at the orchestrator's thinking #%s:\n%s", lead, closed)
+	}
+	for label, own := range map[string]string{"[&ts-dev-1]": firstThought, "[&orchestrator]": leadThought} {
+		drawn := feedOf(t, driver, label)
+		if !strings.Contains(drawn, own) || strings.Contains(drawn, secondThought) || strings.Contains(drawn, abandonedThought) {
+			t.Errorf("%s's feed should carry %q and not ts-dev-2's thought:\n%s", label, own, drawn)
+		}
+	}
+}
+
+func TestWithShowThinkingOffNoThoughtIsDrawnAndTheKeyBringsItBack(t *testing.T) {
+	dir := scratchProject(t)
+	store, err := openSettings(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Set(settingspkg.Global, settingspkg.ShowThinking, 0); err != nil {
+		t.Fatal(err)
+	}
+	driver := thinkingTurn(t, dir, store)
+	for _, label := range []string{"[&ts-dev-2]", "[&ts-dev-1]", "[&orchestrator]"} {
+		drawn := feedOf(t, driver, label)
+		for _, thought := range []string{leadThought, firstThought, secondThought} {
+			if strings.Contains(drawn, thought) {
+				t.Errorf("showThinking is off and %s's feed drew %q:\n%s", label, thought, drawn)
+			}
+		}
+	}
+	feedOf(t, driver, "[&ts-dev-2]")
+	shown := ansi.Strip(driver.view(tea.KeyPressMsg{Code: 't', Text: "t"}))
+	if !strings.Contains(shown, secondThought) || !store.Bool(settingspkg.ShowThinking) {
+		t.Errorf("t on the sub-agents screen did not turn showThinking back on and draw the kept thought:\n%s", shown)
+	}
 }
 
 type toolNamesCapture struct {
@@ -1050,7 +1166,7 @@ func TestASubAgentRunningForTenSecondsReadsTenSecondsOnItsSpawnLine(t *testing.T
 	for _, framed := range driver.frames {
 		for _, row := range strings.Split(ansi.Strip(framed), "\n") {
 			line := strings.TrimSpace(row)
-			if strings.Contains(line, "spawning [&sub-1] to write note.txt") && !strings.HasPrefix(line, "✓") {
+			if strings.Contains(line, "[&sub-1]") && !strings.HasPrefix(line, "✓") {
 				running = line
 			}
 		}
@@ -1059,7 +1175,7 @@ func TestASubAgentRunningForTenSecondsReadsTenSecondsOnItsSpawnLine(t *testing.T
 		t.Fatal("no frame carried the running sub-agent on its spawn line")
 	}
 	t.Logf("the spawn line read %q", running)
-	if !strings.Contains(running, " 10s  spawning") {
+	if !strings.HasSuffix(running, " 10s") {
 		t.Errorf("the sub-agent ran for ten seconds and its spawn line reads %q", running)
 	}
 }
@@ -1984,7 +2100,7 @@ func TestAParkedSubAgentsReportReachesThePanelWhenTheTurnIsStoppedAndNeverAsksAg
 	if last.State != roster.Parked || last.Report == "" {
 		t.Fatalf("the panel was last told %+v, want a parked sub-agent carrying the report the roster holds", last)
 	}
-	screen := pickedFirstSubAgent(t, driver)
+	screen := feedOf(t, driver, "[&sub-1]")
 	if !strings.Contains(screen, "act_on: the sub-agent was stopped") {
 		t.Fatalf("the sub-agent view does not carry the parked report:\n%s", screen)
 	}

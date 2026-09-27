@@ -49,6 +49,7 @@ const (
 	Compaction             = "compaction"
 	ChatShowsTools         = "chatShowsTools"
 	AgentFeeds             = "agentFeeds"
+	ShowThinking           = "showThinking"
 	Images                 = "images"
 	ProjectInstructionsCap = "projectInstructionsCap"
 	InstructionSources     = "instructionSources"
@@ -178,6 +179,7 @@ func Default() []Spec {
 		{Key: ChatShowsTools, Label: "Tool detail", Description: "chat shows every tool call", Category: "Context", Kind: Bool},
 		{Key: AgentFeeds, Label: "Agent feeds", Description: "full keeps every sub-agents event, summary the latest 200, off shows only the list of agents", Category: "Context", Kind: Text, DefaultText: FeedsFull,
 			Choices: []string{FeedsFull, FeedsSummary, FeedsOff}},
+		{Key: ShowThinking, Label: "Thinking", Description: "thinking shows in each agent's sub-agents feed; t there toggles it", Category: "Context", Kind: Bool, Default: 1},
 		{Key: Images, Label: "Images", Description: "auto sends a pasted image only to a model that can see, inline always sends, off never attaches", Category: "Context", Kind: Text, DefaultText: ImagesAuto,
 			Choices: []string{ImagesAuto, ImagesInline, ImagesOff}},
 		{Key: ProjectInstructionsCap, Label: "Project instructions", Description: "bytes of your instruction files sent each turn", Category: "Context", Kind: Int, Default: konst.ProjectInstructionsBytesDefault, Restart: true,

@@ -7,6 +7,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
+	"tofu/interface/tui/feed"
 	"tofu/interface/tui/hostkeys"
 	"tofu/interface/tui/look"
 	"tofu/interface/tui/models"
@@ -15,6 +16,7 @@ import (
 	"tofu/interface/tui/settings"
 	"tofu/interface/tui/shells"
 	library "tofu/internal/llm/models"
+	isettings "tofu/internal/settings"
 	"tofu/internal/sys"
 )
 
@@ -145,6 +147,9 @@ func (a *App) find(query string) []palette.Result {
 	}
 	for index := len(a.happened) - 1; index >= 0; index-- {
 		event := a.happened[index]
+		if event.Kind == feed.KindThinking && !a.flag(isettings.ShowThinking) {
+			continue
+		}
 		label := event.Kind.String() + "  " + event.Title + "  " + event.Body
 		if contains(label, query) {
 			results = append(results, palette.Result{Label: label, Reference: "[" + event.Kind.String() + "#" + event.ID + "]"})

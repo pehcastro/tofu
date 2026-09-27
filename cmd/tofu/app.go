@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/charmbracelet/x/term"
@@ -1021,6 +1022,7 @@ type appWatcher struct {
 	asked     map[string][]subagent.Call
 	calls     map[string][]subagent.Call
 	spawns    []string
+	thoughts  atomic.Int64
 }
 
 type watchedSubAgent struct {
@@ -1043,16 +1045,20 @@ func (a *appWatcher) askThrough(ctx context.Context, inner turn.Model, request l
 			a.result(message, asker)
 		}
 	}
+	thinking := a.eventID(asker, "thinking "+a.turnID+" "+strconv.FormatInt(a.thoughts.Add(1), 10))
+	request.OnThinking = func(text string) {
+		a.emit(tui.Event{Kind: tui.EventThinking, ID: thinking, Agent: asker, Text: text})
+	}
 	streamed := false
+	request.OnRetry = func() {
+		streamed = false
+		a.emit(tui.Event{Kind: tui.EventStreamReset, ID: thinking, Agent: asker})
+	}
 	if asker == "" {
 		a.emit(tui.Event{Kind: tui.EventRequesting})
 		request.OnDelta = func(text string) {
 			streamed = true
 			a.emit(tui.Event{Kind: tui.EventTextDelta, Text: text})
-		}
-		request.OnRetry = func() {
-			streamed = false
-			a.emit(tui.Event{Kind: tui.EventStreamReset})
 		}
 	}
 	a.sendSubAgents()

@@ -27,10 +27,11 @@ const (
 	KindNote
 	KindDecision
 	KindSpawn
+	KindThinking
 )
 
 func (k Kind) String() string {
-	return [...]string{"message", "tool", "edit", "request", "failure", "note", "decision", "spawn"}[k]
+	return [...]string{"message", "tool", "edit", "request", "failure", "note", "decision", "spawn", "thinking"}[k]
 }
 
 type State int
@@ -129,6 +130,7 @@ type Model struct {
 	expanded           map[string]bool
 	scroll, frame, gap int
 	retention          Retention
+	thinkingHidden     bool
 	cards              *cardCache
 	rail, main         *look.PaneCache
 }
@@ -160,12 +162,18 @@ func (m *Model) SetDensity(density string) {
 
 func (m *Model) SetRetention(retention Retention) { m.retention = retention }
 
+func (m *Model) SetThinking(shown bool) { m.thinkingHidden = !shown }
+
 func (m Model) retained() []Event {
+	events := m.events
+	if m.thinkingHidden {
+		events = slices.DeleteFunc(slices.Clone(events), func(e Event) bool { return e.Kind == KindThinking })
+	}
 	switch m.retention {
 	case KeepAll:
-		return m.events
+		return events
 	case KeepRecent:
-		return m.events[max(0, len(m.events)-konst.FeedRecentEvents):]
+		return events[max(0, len(events)-konst.FeedRecentEvents):]
 	case RailOnly:
 		return nil
 	}

@@ -41,6 +41,8 @@ const (
 	waitingOn        = "waiting on "
 	sentTo           = "to "
 	doneWord         = "done"
+	codeFence        = "```"
+	foldedCode       = "..."
 )
 
 type card struct {
@@ -201,6 +203,8 @@ func role(e Event) (string, look.Color) {
 		return "tool", look.Amber
 	case KindFailure:
 		return "failure", look.Red
+	case KindThinking:
+		return e.Kind.String(), look.FaintColor
 	case KindEdit:
 		switch e.Op {
 		case OpAdded:
@@ -224,6 +228,11 @@ func (c *cardCache) cardLines(e Event, key cardKey) []string {
 	}
 	lines := []string{head}
 	switch e.Kind {
+	case KindThinking:
+		for _, line := range strings.Split(proseOnly(strings.TrimSpace(e.Body)), "\n") {
+			lines = append(lines, look.Style(look.FaintColor).Italic(true).Render(line))
+		}
+		return lines
 	case KindSpawn:
 		asked := look.Title(unnamedSubAgent)
 		if e.Target != "" {
@@ -254,6 +263,24 @@ func (c *cardCache) cardLines(e Event, key cardKey) []string {
 		lines = append(lines, look.Faint(fmt.Sprintf("  … %d more lines · enter to expand", hidden)))
 	}
 	return lines
+}
+
+func proseOnly(thought string) string {
+	var kept []string
+	fenced := false
+	for _, line := range strings.Split(thought, "\n") {
+		if strings.HasPrefix(strings.TrimSpace(line), codeFence) {
+			if !fenced {
+				kept = append(kept, foldedCode)
+			}
+			fenced = !fenced
+			continue
+		}
+		if !fenced {
+			kept = append(kept, line)
+		}
+	}
+	return strings.Join(kept, "\n")
 }
 
 func agentCardLines(_ *cardCache, e Event, _ cardKey) []string {

@@ -6,17 +6,20 @@
     Appearance    05      Automatic transcript compaction; not built yet, so no choice changes …    
     Models & rol… 01                                                                                
     Interaction   05      Tool detail                                                      ○ off    
-  › Context       07      chat shows every tool call                                                
+  › Context       08      chat shows every tool call                                                
     Files         03                                                                                
     Shell         05      Agent feeds                                                   full  ▾     
     Turn          09      full keeps every sub-agents event, summary the latest 200, off shows …    
     Startup       01                                                                                
-                          Images                                                        auto  ▾     
-  NAVIGATE                auto sends a pasted image only to a model that can see, inline always…    
+                          Thinking                                                          ● on    
+  NAVIGATE                thinking shows in each agent's sub-agents feed; t there toggles it        
   ↑↓ setting · ←→                                                                                   
-  section                 Project instructions                                         32768  ▾     
-  ctrl+k search ·         bytes of your instruction files sent each turn                            
+  section                 Images                                                        auto  ▾     
+  ctrl+k search ·         auto sends a pasted image only to a model that can see, inline always…    
   esc chat                                                                                          
+                          Project instructions                                         32768  ▾     
+                          bytes of your instruction files sent each turn                            
+                                                                                                    
                           Instruction files                              AGENTS.md,CLAUDE.md  ▾     
                           in each folder the first of these that exists is sent and the rest ar…    
                                                                                                     
@@ -24,7 +27,4 @@
                           on lists the skills in .tofu, .agents and .claude skill folders to th…    
                                                                                                     
                         enter change  ·  ctrl+k search  ·  esc chat                                 
-                                                                                                    
-                                                                                                    
-                                                                                                    
                                                                                                     

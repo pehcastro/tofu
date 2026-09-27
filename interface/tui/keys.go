@@ -13,6 +13,7 @@ import (
 	"tofu/interface/tui/shells"
 	"tofu/internal/llm"
 	library "tofu/internal/llm/models"
+	isettings "tofu/internal/settings"
 )
 
 const (
@@ -23,6 +24,7 @@ const (
 	quoteAction    = "Quote selection"
 	altPrefix      = "alt+"
 	quotePrefix    = "> "
+	thinkingKey    = "t"
 )
 
 func (a *App) key(msg tea.KeyPressMsg) tea.Cmd {
@@ -250,6 +252,11 @@ func (a *App) shownEffort() llm.Effort {
 func (a *App) screenKey(key string) (tea.Cmd, bool) {
 	switch a.current {
 	case screenAgents:
+		if key == thinkingKey {
+			a.commit(isettings.ShowThinking, onOff(!a.flag(isettings.ShowThinking)))
+			a.refreshSettingsRows()
+			return nil, true
+		}
 		selected := a.feed.Selected()
 		if at := a.happenedAt(selected); key == "enter" && at >= 0 && a.happened[at].Kind == feed.KindEdit {
 			a.recordReach(selected)

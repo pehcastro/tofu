@@ -194,6 +194,7 @@ func (a *App) syncFeed() {
 	}
 	a.feed.SetDensity(a.text(isettings.Density))
 	a.feed.SetRetention(a.retention())
+	a.feed.SetThinking(a.flag(isettings.ShowThinking))
 	a.feed.SetAgents(a.busy, agents)
 }
 

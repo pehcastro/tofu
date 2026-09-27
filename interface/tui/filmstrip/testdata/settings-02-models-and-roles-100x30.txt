@@ -6,7 +6,7 @@
     Appearance    05      the model that plans and hands work to sub-agents                         
   › Models & rol… 01                                                                                
     Interaction   05    enter change  ·  ctrl+k search  ·  esc chat                                 
-    Context       07                                                                                
+    Context       08                                                                                
     Files         03                                                                                
     Shell         05                                                                                
     Turn          09                                                                                

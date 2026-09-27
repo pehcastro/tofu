@@ -142,7 +142,7 @@ func (a *App) turnEventID() string {
 		return a.keptAnswer
 	}
 	for index := len(a.happened) - 1; index >= a.happenedAtTurn; index-- {
-		if a.happened[index].Actor == orchestrator {
+		if a.happened[index].Actor == orchestrator && a.happened[index].Kind != feed.KindThinking {
 			return a.happened[index].ID
 		}
 	}
@@ -275,7 +275,15 @@ func (a *App) absorb(event Event) {
 	case EventTextDelta:
 		a.view.Stream(event.Text)
 	case EventStreamReset:
-		a.view.TakePartial()
+		if event.Agent == "" {
+			a.view.TakePartial()
+		}
+		if at := a.happenedAt(short(event.ID)); event.ID != "" && at >= 0 {
+			a.happened = slices.Delete(a.happened, at, at+1)
+			a.feedStale = true
+		}
+	case EventThinking:
+		a.thought(event, at)
 	case EventToolCall:
 		a.called(event, at)
 	case EventToolResult:
@@ -339,6 +347,16 @@ func (a *App) absorb(event Event) {
 			a.model = event.Model
 		}
 	}
+}
+
+func (a *App) thought(event Event, at time.Time) {
+	id := short(event.ID)
+	thinking := feed.Event{ID: id, Actor: cmp.Or(event.Agent, orchestrator), Kind: feed.KindThinking, State: feed.StateComplete, At: at}
+	if found := a.happenedAt(id); found >= 0 {
+		thinking = a.happened[found]
+	}
+	thinking.Body += event.Text
+	a.record(thinking)
 }
 
 func (a *App) called(event Event, at time.Time) {
