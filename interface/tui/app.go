@@ -72,7 +72,7 @@ type Event struct {
 	Decisions int
 	Decision  *session.Decision
 	Context   frame.Context
-	Children  []subagent.Child
+	SubAgents []subagent.Row
 	Diff      string
 	Plan      []session.PlanItem
 	Created   string
@@ -231,8 +231,8 @@ type App struct {
 	pressedAt      time.Time
 	cancel         context.CancelFunc
 	events         chan Event
-	childCalls     []string
-	children       []subagent.Child
+	subAgentCalls  []string
+	subAgents      []subagent.Row
 	happened       []feed.Event
 	feedStale      bool
 	reached        []string
@@ -534,7 +534,7 @@ func (a *App) clearDialogs() tea.Cmd {
 func (a *App) closed() tea.Cmd {
 	a.busy, a.cancel, a.events, a.edits.Busy = false, nil, nil, false
 	a.running, a.pressedAt = 0, time.Time{}
-	a.parkChildrenTheTurnLeftBehind()
+	a.parkSubAgentsTheTurnLeftBehind()
 	a.stopWhatStillRuns()
 	a.view.Stop()
 	a.dropSteering()

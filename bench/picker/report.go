@@ -25,7 +25,7 @@ func Render(result Result) string {
 
 	b.WriteString("\nthe cost of a forced move, from " + result.PrefixPath + ", child_first.cache_read\n")
 	for _, prefix := range result.FreshPrefix {
-		fmt.Fprintf(b, "  %-26s %7d tokens of fresh prefix\n", prefix.Child, prefix.Tokens)
+		fmt.Fprintf(b, "  %-26s %7d tokens of fresh prefix\n", prefix.SubAgent, prefix.Tokens)
 	}
 
 	b.WriteString("\nthe three arms over the recorded readings\n")

@@ -372,7 +372,7 @@ func TestTheSpawnToolIsGivenTheSessionStoreBeforeTheTurnStarts(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
 	opts := armOpts(t)
-	opts.dir, opts.task = dir, "hand the work to a child"
+	opts.dir, opts.task = dir, "hand the work to a sub-agent"
 	built, err := buildTestRunTools(dir, opts.toolSet)
 	if err != nil {
 		t.Fatalf("buildTestRunTools: %v", err)
@@ -385,8 +385,8 @@ func TestTheSpawnToolIsGivenTheSessionStoreBeforeTheTurnStarts(t *testing.T) {
 		{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{
 			{ID: "call-2", Name: "write", Arguments: json.RawMessage(`{"path":"note.txt","content":"a note"}`)},
 		}},
-		{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "the child wrote it"},
-		{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "the child reported"},
+		{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "the sub-agent wrote it"},
+		{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "the sub-agent reported"},
 	}}
 
 	config, _ := mustConfig(t, opts, built, runtime{model: model, spend: turn.SpendSubscription, sessions: store})
@@ -394,20 +394,20 @@ func TestTheSpawnToolIsGivenTheSessionStoreBeforeTheTurnStarts(t *testing.T) {
 	if err != nil {
 		t.Fatalf("turn.Run: %v", err)
 	}
-	if len(row.ChildIDs) != 1 {
-		t.Fatalf("the parent names %v, want the one child", row.ChildIDs)
+	if len(row.SubAgentIDs) != 1 {
+		t.Fatalf("the orchestrator names %v, want the one sub-agent", row.SubAgentIDs)
 	}
-	childID := row.ChildIDs[0]
+	subAgentID := row.SubAgentIDs[0]
 	header, err := store.Header(row.Session)
 	if err != nil {
-		t.Fatalf("the parent session was not recorded: %v", err)
+		t.Fatalf("the orchestrator session was not recorded: %v", err)
 	}
-	if len(header.Agents) != 1 || header.Agents[0].Agent != childID || header.Agents[0].SpawnTurn != row.ID || header.Agents[0].SpawnCall != "call-1" {
-		t.Fatalf("the session indexes %+v, want %s spawned by call-1 in %s", header.Agents, childID, row.ID)
+	if len(header.Agents) != 1 || header.Agents[0].Agent != subAgentID || header.Agents[0].SpawnTurn != row.ID || header.Agents[0].SpawnCall != "call-1" {
+		t.Fatalf("the session indexes %+v, want %s spawned by call-1 in %s", header.Agents, subAgentID, row.ID)
 	}
-	events, err := store.Body(row.Session + session.TurnMark + childID)
+	events, err := store.Body(row.Session + session.TurnMark + subAgentID)
 	if err != nil {
-		t.Fatalf("reading the child's events from the parent's log: %v", err)
+		t.Fatalf("reading the sub-agent's events from the orchestrator's log: %v", err)
 	}
 	steps := 0
 	for _, event := range events {
@@ -416,9 +416,9 @@ func TestTheSpawnToolIsGivenTheSessionStoreBeforeTheTurnStarts(t *testing.T) {
 		}
 	}
 	if steps != 2 {
-		t.Fatalf("the child record carries %d steps, want the write and the answer once each", steps)
+		t.Fatalf("the sub-agent record carries %d steps, want the write and the answer once each", steps)
 	}
-	t.Logf("child %s recorded %d steps and %d events under a store the spawn tool had before the turn began", childID, steps, len(events))
+	t.Logf("sub-agent %s recorded %d steps and %d events under a store the spawn tool had before the turn began", subAgentID, steps, len(events))
 }
 
 func TestWithNoSearchKeyStoredTheTurnIsGivenFetchAndNoWebSearch(t *testing.T) {
@@ -459,37 +459,37 @@ func TestAProjectCarryingNoWebLibraryGetsFetchFromTheShippedOne(t *testing.T) {
 }
 
 type watchingModel struct {
-	inner turn.Model
-	store *session.Store
-	child string
-	found []bool
+	inner    turn.Model
+	store    *session.Store
+	subAgent string
+	found    []bool
 }
 
 func (m *watchingModel) Ask(ctx context.Context, request llm.Request) (llm.Decision, error) {
-	_, err := m.store.Header(m.child)
+	_, err := m.store.Header(m.subAgent)
 	m.found = append(m.found, err == nil)
 	return m.inner.Ask(ctx, request)
 }
 
-func TestAChildLeavesItsRecordWhileTheParentsTurnIsStillRunning(t *testing.T) {
+func TestASubAgentLeavesItsRecordWhileTheOrchestratorsTurnIsStillRunning(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
 	opts := armOpts(t)
-	opts.dir, opts.task, opts.turnID = dir, "hand the work to a child", "turn-parent"
+	opts.dir, opts.task, opts.turnID = dir, "hand the work to a sub-agent", "turn-orchestrator"
 	built, err := buildTestRunTools(dir, opts.toolSet)
 	if err != nil {
 		t.Fatalf("buildTestRunTools: %v", err)
 	}
 	store := projectSessions(t, dir)
-	model := &watchingModel{store: store, child: "sub-1", inner: &queuedModel{decisions: []llm.Decision{
+	model := &watchingModel{store: store, subAgent: "sub-1", inner: &queuedModel{decisions: []llm.Decision{
 		{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{
 			{ID: "call-1", Name: "spawn", Arguments: json.RawMessage(`{"task":"write note.txt","owns":["note.txt"]}`)},
 		}},
 		{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{
 			{ID: "call-2", Name: "write", Arguments: json.RawMessage(`{"path":"note.txt","content":"a note"}`)},
 		}},
-		{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "the child wrote it"},
-		{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "the child reported"},
+		{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "the sub-agent wrote it"},
+		{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "the sub-agent reported"},
 	}}}
 
 	config, _ := mustConfig(t, opts, built, runtime{model: model, spend: turn.SpendSubscription, sessions: store})
@@ -498,18 +498,18 @@ func TestAChildLeavesItsRecordWhileTheParentsTurnIsStillRunning(t *testing.T) {
 		t.Fatalf("turn.Run: %v", err)
 	}
 	if len(model.found) != 4 {
-		t.Fatalf("the turn asked %d times, want the parent twice and the child twice", len(model.found))
+		t.Fatalf("the turn asked %d times, want the orchestrator twice and the sub-agent twice", len(model.found))
 	}
 	if model.found[0] {
-		t.Errorf("the child's record was on disk before the parent spawned it")
+		t.Errorf("the sub-agent's record was on disk before the orchestrator spawned it")
 	}
 	if !model.found[1] || !model.found[2] {
-		t.Errorf("the child asked twice and its record was on disk %v, want it there for both", model.found)
+		t.Errorf("the sub-agent asked twice and its record was on disk %v, want it there for both", model.found)
 	}
-	if len(row.ChildIDs) != 1 || row.ChildIDs[0] != model.child {
-		t.Fatalf("the parent names %v, want the child %q", row.ChildIDs, model.child)
+	if len(row.SubAgentIDs) != 1 || row.SubAgentIDs[0] != model.subAgent {
+		t.Fatalf("the orchestrator names %v, want the sub-agent %q", row.SubAgentIDs, model.subAgent)
 	}
-	t.Logf("the child's record was on disk at asks %v, and the parent only returned after that", model.found)
+	t.Logf("the sub-agent's record was on disk at asks %v, and the orchestrator only returned after that", model.found)
 }
 
 func TestTheWebLibraryComesFromTheDirectoryTheRunNamesNotTheOneItWasStartedIn(t *testing.T) {

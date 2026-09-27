@@ -62,7 +62,7 @@ func stubJev(t *testing.T, status int, body string) {
 
 func claimedDoneWithNothing() turn.Row {
 	return turn.Row{
-		ID:      "turn-child",
+		ID:      "turn-sub-agent",
 		Task:    "create hello.txt containing the single word hello, then stop",
 		Outcome: turn.OutcomeStopped,
 		Steps:   []turn.StepRow{{Index: 1, AssistantText: "Done, hello.txt is written."}},
@@ -79,14 +79,14 @@ func TestTheDoneReviewIsOffUntilTheCommandLineAsksForIt(t *testing.T) {
 	}
 	review, err := newDoneReview(opts.doneArm)
 	if err != nil || review != nil {
-		t.Fatalf("the off arm built a reviewer %v (err %v), so a child would be judged by default", review, err)
+		t.Fatalf("the off arm built a reviewer %v (err %v), so a sub-agent would be judged by default", review, err)
 	}
 	if _, err := parseRunArgs([]string{"--dir", t.TempDir(), "--done-review", "maybe", "a task"}); err == nil {
 		t.Fatal("tofu run accepted an unknown done review arm rather than refusing it by name")
 	}
 }
 
-func TestADoneReviewIsRefusedOnAnArmThatCanSpawnNoChild(t *testing.T) {
+func TestADoneReviewIsRefusedOnAnArmThatCanSpawnNoSubAgent(t *testing.T) {
 	for _, without := range [][]string{{"--no-subagents"}, {"--tools", toolSetThree}} {
 		args := []string{"--dir", t.TempDir(), "--done-review", doneArmTyped}
 		args = append(append(args, without...), "a task")
@@ -101,7 +101,7 @@ func TestADoneReviewIsRefusedOnAnArmThatCanSpawnNoChild(t *testing.T) {
 	}
 }
 
-func TestTheCheapDoneReviewArmReopensAChildThatRanNoTool(t *testing.T) {
+func TestTheCheapDoneReviewArmReopensASubAgentThatRanNoTool(t *testing.T) {
 	opts, err := parseRunArgs([]string{"--dir", t.TempDir(), "--done-review", doneArmCheap, "a task"})
 	if err != nil {
 		t.Fatalf("parseRunArgs: %v", err)
@@ -118,12 +118,12 @@ func TestTheCheapDoneReviewArmReopensAChildThatRanNoTool(t *testing.T) {
 		t.Fatalf("the cheap arm failed: %v", err)
 	}
 	if decision.Verdict != turn.DoneReopen {
-		t.Fatalf("the cheap arm answered %q for a child with no tool call at all", decision.Verdict)
+		t.Fatalf("the cheap arm answered %q for a sub-agent with no tool call at all", decision.Verdict)
 	}
 	t.Logf("cheap arm: %s, %s", decision.Verdict, decision.Reason)
 }
 
-func TestTheTypedDoneReviewArmReopensAChildAndLogsTheDecision(t *testing.T) {
+func TestTheTypedDoneReviewArmReopensASubAgentAndLogsTheDecision(t *testing.T) {
 	t.Chdir(t.TempDir())
 	stubJev(t, http.StatusOK, stopCheckWorkRemainsReply)
 
@@ -158,8 +158,8 @@ func TestTheTypedDoneReviewArmReopensAChildAndLogsTheDecision(t *testing.T) {
 	if err != nil || !found {
 		t.Fatalf("row %s is not in the ledger at %s (err %v)", decision.ID, dir, err)
 	}
-	if row.Point != "stop_check" || row.Verdict != ledger.VerdictAllow || row.TurnID != "turn-child" {
-		t.Fatalf("the logged row is %s %s for turn %q, want a stop_check allow for the child", row.Point, row.Verdict, row.TurnID)
+	if row.Point != "stop_check" || row.Verdict != ledger.VerdictAllow || row.TurnID != "turn-sub-agent" {
+		t.Fatalf("the logged row is %s %s for turn %q, want a stop_check allow for the sub-agent", row.Point, row.Verdict, row.TurnID)
 	}
 	if len(row.Answers) != 4 || row.StateBuilder == "" {
 		t.Fatalf("the row carries %d answers and state builder %q", len(row.Answers), row.StateBuilder)
@@ -167,7 +167,7 @@ func TestTheTypedDoneReviewArmReopensAChildAndLogsTheDecision(t *testing.T) {
 	t.Logf("typed arm: %s, %s", decision.Verdict, decision.Reason)
 }
 
-func TestTheTypedDoneReviewBelievesAChildThatDidTheWork(t *testing.T) {
+func TestTheTypedDoneReviewBelievesASubAgentThatDidTheWork(t *testing.T) {
 	t.Chdir(t.TempDir())
 	stubJev(t, http.StatusOK, stopCheckWorkDoneReply)
 
@@ -176,8 +176,8 @@ func TestTheTypedDoneReviewBelievesAChildThatDidTheWork(t *testing.T) {
 		t.Fatalf("newTypedDoneReview: %v", err)
 	}
 	exitZero := 0
-	child := turn.Row{
-		ID:      "turn-child",
+	subAgent := turn.Row{
+		ID:      "turn-sub-agent",
 		Task:    "create hello.txt containing the single word hello, then stop",
 		Outcome: turn.OutcomeStopped,
 		Steps: []turn.StepRow{
@@ -186,17 +186,17 @@ func TestTheTypedDoneReviewBelievesAChildThatDidTheWork(t *testing.T) {
 		},
 	}
 
-	decision, err := review.Review(context.Background(), child)
+	decision, err := review.Review(context.Background(), subAgent)
 	if err != nil {
 		t.Fatalf("the typed arm failed: %v", err)
 	}
 	if decision.Verdict != turn.DoneAccepted {
-		t.Fatalf("the typed arm reopened a child that wrote the file and said so: %s", decision.Reason)
+		t.Fatalf("the typed arm reopened a sub-agent that wrote the file and said so: %s", decision.Reason)
 	}
 	t.Logf("typed arm: %s, %s", decision.Verdict, decision.Reason)
 }
 
-func TestAJevErrorLeavesTheChildsClaimStandingAndSaysSoOnTheRow(t *testing.T) {
+func TestAJevErrorLeavesTheSubAgentsClaimStandingAndSaysSoOnTheRow(t *testing.T) {
 	t.Chdir(t.TempDir())
 	stubJev(t, http.StatusInternalServerError, `{"error":{"message":"the route is down"}}`)
 
@@ -204,22 +204,22 @@ func TestAJevErrorLeavesTheChildsClaimStandingAndSaysSoOnTheRow(t *testing.T) {
 	if err != nil {
 		t.Fatalf("newTypedDoneReview: %v", err)
 	}
-	spawned := spawnOneChild(t, review, []llm.Decision{
+	spawned := spawnOneSubAgent(t, review, []llm.Decision{
 		{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "I finished the task."},
-		{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "the child reported back"},
+		{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "the sub-agent reported back"},
 	})
 
 	if len(spawned) != 1 {
-		t.Fatalf("a failed review produced %d child rows, want the child's one claim standing", len(spawned))
+		t.Fatalf("a failed review produced %d sub-agent rows, want the sub-agent's one claim standing", len(spawned))
 	}
-	child := spawned[0]
-	if len(child.Warnings) != 1 || !strings.Contains(child.Warnings[0], "the done review did not run") {
-		t.Fatalf("the child row carries warnings %v, want the reason the review did not run", child.Warnings)
+	subAgent := spawned[0]
+	if len(subAgent.Warnings) != 1 || !strings.Contains(subAgent.Warnings[0], "the done review did not run") {
+		t.Fatalf("the sub-agent row carries warnings %v, want the reason the review did not run", subAgent.Warnings)
 	}
-	if len(child.DecisionIDs) != 0 {
-		t.Fatalf("a review that never answered still put %v on the child row", child.DecisionIDs)
+	if len(subAgent.DecisionIDs) != 0 {
+		t.Fatalf("a review that never answered still put %v on the sub-agent row", subAgent.DecisionIDs)
 	}
-	t.Logf("child warning: %s", child.Warnings[0])
+	t.Logf("sub-agent warning: %s", subAgent.Warnings[0])
 
 	dir, err := sys.LogDir()
 	if err != nil {
@@ -238,7 +238,7 @@ func TestAJevErrorLeavesTheChildsClaimStandingAndSaysSoOnTheRow(t *testing.T) {
 	t.Logf("ledger row %s verdict %s", logged[0].ID, logged[0].Verdict)
 }
 
-func TestTheTypedDoneReviewReopensTheChildInsideARunAndWhyPrintsTheChain(t *testing.T) {
+func TestTheTypedDoneReviewReopensTheSubAgentInsideARunAndWhyPrintsTheChain(t *testing.T) {
 	t.Chdir(t.TempDir())
 	stubJev(t, http.StatusOK, stopCheckWorkRemainsReply)
 
@@ -252,15 +252,15 @@ func TestTheTypedDoneReviewReopensTheChildInsideARunAndWhyPrintsTheChain(t *test
 		queued = append(queued, llm.Decision{Build: "stub-model", Outcome: llm.OutcomeMessage,
 			Content: fmt.Sprintf("attempt %d, I finished the task.", round)})
 	}
-	queued = append(queued, llm.Decision{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "the child reported back"})
-	spawned := spawnOneChild(t, review, queued)
+	queued = append(queued, llm.Decision{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "the sub-agent reported back"})
+	spawned := spawnOneSubAgent(t, review, queued)
 
 	if len(spawned) != rounds {
-		t.Fatalf("the typed review left %d child rows, want one per round up to the cap of %d", len(spawned), rounds)
+		t.Fatalf("the typed review left %d sub-agent rows, want one per round up to the cap of %d", len(spawned), rounds)
 	}
-	for i, child := range spawned {
-		if len(child.DecisionIDs) != 1 {
-			t.Fatalf("row %d (%s) carries %d decision ids, want the one review that judged it", i, child.ID, len(child.DecisionIDs))
+	for i, subAgent := range spawned {
+		if len(subAgent.DecisionIDs) != 1 {
+			t.Fatalf("row %d (%s) carries %d decision ids, want the one review that judged it", i, subAgent.ID, len(subAgent.DecisionIDs))
 		}
 	}
 	first, second, third := spawned[0], spawned[1], spawned[2]
@@ -268,7 +268,7 @@ func TestTheTypedDoneReviewReopensTheChildInsideARunAndWhyPrintsTheChain(t *test
 		t.Fatalf("the re-opened rounds are %q and %q, want %q and %q", second.ID, third.ID, first.ID+"-r2", first.ID+"-r3")
 	}
 	if !strings.Contains(second.Task, "did not believe you") || !strings.Contains(second.Task, doneReviewPoint) {
-		t.Fatalf("the re-opened child was not told why: %q", second.Task)
+		t.Fatalf("the re-opened sub-agent was not told why: %q", second.Task)
 	}
 	capped := strings.Join(third.Warnings, " ")
 	if !strings.Contains(capped, "round cap") {
@@ -289,11 +289,11 @@ func TestTheTypedDoneReviewReopensTheChildInsideARunAndWhyPrintsTheChain(t *test
 	t.Logf("tofu why %s\n%s", first.DecisionIDs[0], printed)
 }
 
-func spawnOneChild(t *testing.T, review turn.DoneReview, decisions []llm.Decision) []turn.Row {
+func spawnOneSubAgent(t *testing.T, review turn.DoneReview, decisions []llm.Decision) []turn.Row {
 	t.Helper()
 	dir := t.TempDir()
 	opts := armOpts(t)
-	opts.dir, opts.task, opts.gateArm = dir, "hand the note to a child", gateOff
+	opts.dir, opts.task, opts.gateArm = dir, "hand the note to a sub-agent", gateOff
 	built, err := buildTestRunTools(dir, opts.toolSet)
 	if err != nil {
 		t.Fatalf("buildTestRunTools: %v", err)
@@ -306,7 +306,7 @@ func spawnOneChild(t *testing.T, review turn.DoneReview, decisions []llm.Decisio
 	if _, err := turn.Run(context.Background(), config); err != nil {
 		t.Fatalf("turn.Run: %v", err)
 	}
-	return spawner.Children()
+	return spawner.SubAgentRows()
 }
 
 func recordedTurn(t *testing.T, name string) turn.Row {
@@ -322,7 +322,7 @@ func recordedTurn(t *testing.T, name string) turn.Row {
 	return row
 }
 
-func TestLiveTheTypedDoneReviewReadsTwoRecordedChildren(t *testing.T) {
+func TestLiveTheTypedDoneReviewReadsTwoRecordedSubAgents(t *testing.T) {
 	if os.Getenv("TOFU_LIVE") != "1" {
 		t.Skip("set TOFU_LIVE=1 to spend a fraction of a cent on two live stop_check@1 decisions")
 	}

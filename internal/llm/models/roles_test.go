@@ -29,15 +29,15 @@ func roleNamed(loaded Library, id RoleID) (Role, bool) {
 
 func TestBindRoleIsReadBackByLoad(t *testing.T) {
 	dir := t.TempDir()
-	if err := BindRole(dir, RoleChild, "claude-sub/claude-sonnet-5"); err != nil {
+	if err := BindRole(dir, RoleSubAgent, "claude-sub/claude-sonnet-5"); err != nil {
 		t.Fatal(err)
 	}
 	loaded := loadWithLayer(t, dir)
-	role, found := roleNamed(loaded, RoleChild)
+	role, found := roleNamed(loaded, RoleSubAgent)
 	if !found || role.Model.Slug() != "claude-sub/claude-sonnet-5" {
-		t.Fatalf("the child role loads as %+v, found %v", role, found)
+		t.Fatalf("the sub-agent role loads as %+v, found %v", role, found)
 	}
-	if role.File != filepath.Join(dir, rolesDir, "child.yaml") {
+	if role.File != filepath.Join(dir, rolesDir, "sub-agent.yaml") {
 		t.Fatalf("the binding is attributed to %s", role.File)
 	}
 	written, err := os.ReadFile(role.File)
@@ -48,7 +48,7 @@ func TestBindRoleIsReadBackByLoad(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Logf("%s holds %q, and the library says: %s", role.File, written, bindings[RoleChild].Says())
+	t.Logf("%s holds %q, and the library says: %s", role.File, written, bindings[RoleSubAgent].Says())
 }
 
 func TestBindRoleReplacesAnEarlierBindingAndLeavesNoTemporaryFile(t *testing.T) {

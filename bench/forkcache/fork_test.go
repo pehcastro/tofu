@@ -52,7 +52,7 @@ func TestTheFirstRequestAfterAForkReadsCacheAndWritesNone(t *testing.T) {
 	for _, pair := range pairs {
 		if fate := pair.Fate(); fate != forkcache.FateRead {
 			t.Errorf("%s, forked from %s, first billed a prefix %s: read %d, write %d",
-				pair.Child, pair.Parent, fate, pair.ChildFirst.CacheRead, pair.ChildFirst.CacheWrite)
+				pair.SubAgent, pair.Parent, fate, pair.SubAgentFirst.CacheRead, pair.SubAgentFirst.CacheWrite)
 		}
 	}
 	t.Logf("\n%s", forkcache.Table(pairs))
@@ -60,12 +60,12 @@ func TestTheFirstRequestAfterAForkReadsCacheAndWritesNone(t *testing.T) {
 
 func TestAForkKeepsLessCachedPrefixThanCarryingOnAndPaysNoRewriteForIt(t *testing.T) {
 	for _, pair := range measurable(t) {
-		if pair.ChildFirst.CacheRead >= pair.PrefixIfContinued() {
+		if pair.SubAgentFirst.CacheRead >= pair.PrefixIfContinued() {
 			t.Errorf("%s read %d cached tokens where carrying on would have presented %d: a fork that loses nothing is not the mechanism this measures",
-				pair.Child, pair.ChildFirst.CacheRead, pair.PrefixIfContinued())
+				pair.SubAgent, pair.SubAgentFirst.CacheRead, pair.PrefixIfContinued())
 		}
-		if pair.ChildFirst.CacheWrite != 0 {
-			t.Errorf("%s wrote %d tokens of cache on its first request, so the lost prefix was re-paid rather than dropped", pair.Child, pair.ChildFirst.CacheWrite)
+		if pair.SubAgentFirst.CacheWrite != 0 {
+			t.Errorf("%s wrote %d tokens of cache on its first request, so the lost prefix was re-paid rather than dropped", pair.SubAgent, pair.SubAgentFirst.CacheWrite)
 		}
 	}
 }

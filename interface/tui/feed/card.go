@@ -36,7 +36,7 @@ const (
 	overlapWord      = "  overlaps "
 	requesting       = "Requesting "
 	toWorkOn         = " to work on "
-	unnamedChild     = "a sub-agent"
+	unnamedSubAgent  = "a sub-agent"
 	metaSeparator    = "  |  "
 	waitingOn        = "waiting on "
 	sentTo           = "to "
@@ -225,7 +225,7 @@ func (c *cardCache) cardLines(e Event, key cardKey) []string {
 	lines := []string{head}
 	switch e.Kind {
 	case KindSpawn:
-		asked := look.Title(unnamedChild)
+		asked := look.Title(unnamedSubAgent)
 		if e.Target != "" {
 			asked = look.AgentRef(e.Target)
 		}
@@ -235,7 +235,10 @@ func (c *cardCache) cardLines(e Event, key cardKey) []string {
 		lines = append(lines, look.Title(e.Title), look.Muted(strings.TrimSpace(fullDiffNote+" "+e.Body)))
 	default:
 		lines = append(lines, look.Title(e.Title))
-		if e.Body != "" {
+		switch {
+		case e.Title == reportTitle:
+			lines = append(lines, c.prose.Lines(e.Body, textWidth(key.width))...)
+		case e.Body != "":
 			lines = append(lines, look.Muted(e.Body))
 		}
 	}

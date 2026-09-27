@@ -73,7 +73,7 @@ type RoundCapError struct {
 func (e RoundCapError) Error() string {
 	name := e.Ticket
 	if name == "" {
-		name = "this child"
+		name = "this sub-agent"
 	}
 	return fmt.Sprintf("reopen refused: %s already reached the sub-agent round cap of %d", name, e.Cap)
 }
@@ -85,7 +85,7 @@ func (ReopenReasonError) Error() string {
 }
 
 type CollisionError struct {
-	Child        string
+	SubAgent     string
 	Glob         string
 	Holder       string
 	HolderGlob   string
@@ -93,7 +93,7 @@ type CollisionError struct {
 }
 
 func (e CollisionError) Error() string {
-	return fmt.Sprintf("%s cannot hold %q: %s already holds %q and the two overlap", e.Child, e.Glob, e.Holder, e.HolderGlob)
+	return fmt.Sprintf("%s cannot hold %q: %s already holds %q and the two overlap", e.SubAgent, e.Glob, e.Holder, e.HolderGlob)
 }
 
 type Roster struct {
@@ -111,7 +111,7 @@ func (r *Roster) Hold(agent SubAgent) error {
 		for _, held := range r.agents {
 			for _, other := range held.Owns {
 				if overlap(glob, other) {
-					return CollisionError{Child: agent.ID, Glob: glob, Holder: held.ID, HolderGlob: other, HolderReport: held.Report}
+					return CollisionError{SubAgent: agent.ID, Glob: glob, Holder: held.ID, HolderGlob: other, HolderReport: held.Report}
 				}
 			}
 		}

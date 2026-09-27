@@ -50,5 +50,5 @@ func walksWithoutAPath(tool string, rest []string) bool {
 
 func treeWideRefusal(tool, field string) string {
 	named := strings.TrimSpace(tool + " " + strings.ReplaceAll(field, "/", " "))
-	return named + " is a tree-wide command: the parent runs it, not a child"
+	return named + " is a tree-wide command: the orchestrator runs it, not a sub-agent"
 }

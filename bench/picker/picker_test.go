@@ -90,7 +90,7 @@ func TestFreshPrefixComesFromTheForkcacheRows(t *testing.T) {
 	}
 	for _, prefix := range prefixes {
 		if prefix.Tokens <= 0 {
-			t.Fatalf("%s reports %d tokens of fresh prefix", prefix.Child, prefix.Tokens)
+			t.Fatalf("%s reports %d tokens of fresh prefix", prefix.SubAgent, prefix.Tokens)
 		}
 	}
 }

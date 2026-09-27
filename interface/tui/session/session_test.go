@@ -284,10 +284,10 @@ func TestAResultForACallThatIsNoLongerRunningIsKeptAsItsOwnLine(t *testing.T) {
 		t.Fatalf("a call left running when the turn stopped is not stamped, so the late result has nothing to miss:\n%s", model.View())
 	}
 
-	model.Finish("c1", Result{Status: "the child is parked and what it wrote stands"})
+	model.Finish("c1", Result{Status: "the sub-agent is parked and what it wrote stands"})
 
 	drawn := model.View()
-	if !strings.Contains(drawn, "the child is parked and what it wrote stands") {
+	if !strings.Contains(drawn, "the sub-agent is parked and what it wrote stands") {
 		t.Fatalf("a result that arrived after the call was stamped is dropped instead of kept:\n%s", drawn)
 	}
 	if entry := model.entries[len(model.entries)-1]; entry.Kind != Note {

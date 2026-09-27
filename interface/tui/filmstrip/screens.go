@@ -27,7 +27,7 @@ func done() []tui.Event {
 }
 
 func agentWork(at time.Time) []tui.Event {
-	children := []subagent.Child{
+	subAgents := []subagent.Row{
 		{Name: "c1", Doing: "read the policy loader", Owns: []string{"internal/judge/policy/**"}, Since: 94 * time.Second, Steps: 3, Total: 40, Tokens: 18200, State: roster.Working,
 			Calls: []subagent.Call{
 				{ID: "7a1c02", At: at, Tool: "read", Text: resolveGoPath, Result: "209 lines, 6.2 KB"},
@@ -41,11 +41,11 @@ func agentWork(at time.Time) []tui.Event {
 			Report: "exit 1: TestKillTree could not find the job object"},
 	}
 	events := []tui.Event{{Kind: tui.EventRequesting}}
-	for index, child := range children {
+	for index, subAgent := range subAgents {
 		id := "5e0" + strconv.Itoa(index+1) + "aa"
-		events = append(events, tui.Event{Kind: tui.EventToolCall, ID: id, Tool: "spawn", Text: child.Doing, Promote: true},
-			tui.Event{Kind: tui.EventSubAgent, Children: children[:index+1]},
-			result(id, "spawned [&"+child.Name+"]"))
+		events = append(events, tui.Event{Kind: tui.EventToolCall, ID: id, Tool: "spawn", Text: subAgent.Doing, Promote: true},
+			tui.Event{Kind: tui.EventSubAgent, SubAgents: subAgents[:index+1]},
+			result(id, "spawned [&"+subAgent.Name+"]"))
 	}
 	events = append(events,
 		call("9d4f10", "read", "internal/turn/loop.go"),

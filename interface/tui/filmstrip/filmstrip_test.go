@@ -69,7 +69,7 @@ func TestEveryGoldenHasAReadableSiblingWithNoEscapeAndNoVersion(t *testing.T) {
 }
 
 func chatScenarios() []string {
-	return []string{"plain", "twelve-tools", "markdown", "asking", "interrupted", "letting-tools-finish", "failed", "child"}
+	return []string{"plain", "twelve-tools", "markdown", "asking", "interrupted", "letting-tools-finish", "failed", "sub-agent"}
 }
 
 func TestTheClockIsInEveryChatFrameAndNeverGoesDown(t *testing.T) {

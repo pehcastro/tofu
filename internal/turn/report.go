@@ -11,14 +11,14 @@ import (
 	"tofu/internal/subagent"
 )
 
-type ChildCommand struct {
+type SubAgentCommand struct {
 	Tool     string `json:"tool"`
 	Command  string `json:"command,omitempty"`
 	ExitCode *int   `json:"exit_code,omitempty"`
 	Error    string `json:"error,omitempty"`
 }
 
-type ChildReport struct {
+type SubAgentReport struct {
 	ID         string              `json:"id"`
 	Mission    string              `json:"mission"`
 	Owns       []string            `json:"owns"`
@@ -30,20 +30,20 @@ type ChildReport struct {
 	Findings   []subagent.Finding  `json:"findings"`
 	Learned    []string            `json:"learned"`
 	Wrote      []string            `json:"wrote,omitempty"`
-	Ran        []ChildCommand      `json:"ran,omitempty"`
+	Ran        []SubAgentCommand   `json:"ran,omitempty"`
 	CostUSD    float64             `json:"cost_usd"`
 	Asked      []subagent.Question `json:"asked,omitempty"`
 	Prose      string              `json:"prose,omitempty"`
 	ProseStep  int                 `json:"prose_step,omitempty"`
 }
 
-func reportOf(agent subagent.SubAgent, attempts []Row, state subagent.State) ChildReport {
+func reportOf(agent subagent.SubAgent, attempts []Row, state subagent.State) SubAgentReport {
 	row := attempts[len(attempts)-1]
 	ended := row.Outcome
 	if state == subagent.Parked {
 		ended = OutcomeStopped
 	}
-	report := ChildReport{
+	report := SubAgentReport{
 		ID:       row.ID,
 		Mission:  agent.Mission,
 		Owns:     agent.Owns,
@@ -60,7 +60,7 @@ func reportOf(agent subagent.SubAgent, attempts []Row, state subagent.State) Chi
 	report.Attempts = append(report.Attempts, attemptOf(row, ended))
 	for _, step := range row.Steps {
 		for _, call := range step.ToolCalls {
-			report.Ran = append(report.Ran, ChildCommand{
+			report.Ran = append(report.Ran, SubAgentCommand{
 				Tool: call.Tool, Command: call.Command, ExitCode: call.ExitCode, Error: call.Error,
 			})
 			if path := writtenPath(call); path != "" {
@@ -143,25 +143,25 @@ func findings(row Row, state subagent.State) []subagent.Finding {
 func outcomeFinding(outcome Outcome, state subagent.State) (subagent.Finding, bool) {
 	if state == subagent.Parked {
 		return subagent.Finding{Bucket: subagent.ActOn,
-			Reason: "the child was stopped from outside partway through, so its work is unfinished and what it did do stands"}, true
+			Reason: "the sub-agent was stopped from outside partway through, so its work is unfinished and what it did do stands"}, true
 	}
 	switch outcome {
 	case OutcomeUnset, OutcomeStopped:
 		return subagent.Finding{}, false
 	case OutcomeStepCap, OutcomeRetiredCostCap, OutcomeRetiredWallClockCap, OutcomeDecisionCap:
 		return subagent.Finding{Bucket: subagent.ActOn,
-			Reason: "the child was stopped by the " + outcome.String() + " and its work is unfinished"}, true
+			Reason: "the sub-agent was stopped by the " + outcome.String() + " and its work is unfinished"}, true
 	case OutcomeError:
-		return subagent.Finding{Bucket: subagent.ActOn, Reason: "the child ended on an error and its work is unfinished"}, true
+		return subagent.Finding{Bucket: subagent.ActOn, Reason: "the sub-agent ended on an error and its work is unfinished"}, true
 	case OutcomeLoopGuard:
-		return subagent.Finding{Bucket: subagent.ActOn, Reason: "the child repeated one call until the loop guard stopped it"}, true
+		return subagent.Finding{Bucket: subagent.ActOn, Reason: "the sub-agent repeated one call until the loop guard stopped it"}, true
 	case OutcomeTruncated:
 		return subagent.Finding{Bucket: subagent.Consider,
-			Reason: "output was truncated, so what the child read may be short of what it asked for"}, true
+			Reason: "output was truncated, so what the sub-agent read may be short of what it asked for"}, true
 	case OutcomeForked:
-		return subagent.Finding{Bucket: subagent.Noted, Reason: "the child forked its conversation and this report is the fork"}, true
+		return subagent.Finding{Bucket: subagent.Noted, Reason: "the sub-agent forked its conversation and this report is the fork"}, true
 	}
-	panic("turn: unknown child outcome " + strconv.Itoa(int(outcome)))
+	panic("turn: unknown sub-agent outcome " + strconv.Itoa(int(outcome)))
 }
 
 func learned(row Row) []string {
@@ -191,7 +191,7 @@ func writtenPath(call ToolCallRow) string {
 	return args.Path
 }
 
-func (r ChildReport) Text() string {
+func (r SubAgentReport) Text() string {
 	body := &strings.Builder{}
 	fmt.Fprintf(body, "sub-agent %s is %s, %s, %s after %d steps and %d tool calls, costing $%.4f\n",
 		r.ID, r.State, r.Completion, r.Outcome, r.Steps, len(r.Ran), r.CostUSD)

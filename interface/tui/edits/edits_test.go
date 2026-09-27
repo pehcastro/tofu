@@ -82,7 +82,7 @@ func session(t testing.TB, width, height int) Model {
 	var m Model
 	m.SetSize(width, height)
 	m.Root = "/repo"
-	m.Children = []subagent.Child{{Name: "c2"}, {Name: "c1"}}
+	m.SubAgents = []subagent.Row{{Name: "c2"}, {Name: "c1"}}
 	m.Add(changedAt(t, Self, gatePath, "call-e1a2b3"))
 	m.Add(mustChange(t, "c1", "internal/rule/generated.go", "", createdFile(largeLines), "call-b7c4d1"))
 	m.Add(mustChange(t, "c1", "internal/rule/legacy.go", deletionDiff("internal/rule/legacy.go", deleteLines), "", "call-44f0aa"))
@@ -288,8 +288,8 @@ func TestFileSidebarCacheInvalidatesOnVisibleChanges(t *testing.T) {
 	check("width")
 	m.Add(changedAt(t, "c3", "internal/turn/budget.go", "call-5a6b7c"))
 	check("new edit")
-	m.Children = []subagent.Child{{Name: "c1"}, {Name: "c2"}}
-	check("children reordered")
+	m.SubAgents = []subagent.Row{{Name: "c1"}, {Name: "c2"}}
+	check("sub-agents reordered")
 	m.Root, m.reading = "/elsewhere", false
 	check("root")
 }

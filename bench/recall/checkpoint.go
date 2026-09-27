@@ -36,7 +36,7 @@ func RawReplayText(turn corpus.RecordedTurn) string {
 	return text.String()
 }
 
-func FreshChildCarry(result ReplayResult) (rc.Carry, bool) {
+func FreshSubAgentCarry(result ReplayResult) (rc.Carry, bool) {
 	if len(result.Forks) == 0 {
 		return rc.Carry{}, false
 	}

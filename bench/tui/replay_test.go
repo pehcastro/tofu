@@ -42,7 +42,7 @@ type recordedCall struct {
 	Tool        string          `json:"tool"`
 	Args        json.RawMessage `json:"args"`
 	Command     string          `json:"command"`
-	ChildID     string          `json:"child_id"`
+	SubAgentID  string          `json:"child_id"`
 	ExitCode    *int            `json:"exit_code"`
 	Error       string          `json:"error"`
 	ResultBytes int             `json:"result_bytes"`
@@ -148,7 +148,7 @@ func (r recorded) sitting(b *testing.B, last int) sitting {
 		}
 		events := []app.Event{{Kind: app.EventSession, Text: name, ID: header.Root}}
 		in, out, cached, call := 0, 0, 0, 0
-		var children []subagent.Child
+		var subAgents []subagent.Row
 		for _, step := range steps {
 			in, out, cached = in+step.PromptTokens, out+step.CompletionTokens, cached+step.CacheReadTokens
 			events = append(events,
@@ -163,9 +163,9 @@ func (r recorded) sitting(b *testing.B, last int) sitting {
 				events = append(events, app.Event{Kind: app.EventToolCall, ID: id, Tool: recordedCall.Tool, Text: recordedCall.Command,
 					Detail: argText(recordedCall.Args, "command"), Promote: recordedCall.Tool == spawnTool})
 				content := resultAt(results, call)
-				if recordedCall.ChildID != "" {
-					children = append(children, r.child(b, recordedCall, len(children)))
-					events = append(events, app.Event{Kind: app.EventSubAgent, Children: slices.Clone(children)})
+				if recordedCall.SubAgentID != "" {
+					subAgents = append(subAgents, r.subAgentRow(b, recordedCall, len(subAgents)))
+					events = append(events, app.Event{Kind: app.EventSubAgent, SubAgents: slices.Clone(subAgents)})
 				}
 				result := app.Event{Kind: app.EventToolResult, ID: id, Text: summary(content, recordedCall.ResultBytes), Bytes: recordedCall.ResultBytes,
 					Failed: recordedCall.Error != "" || recordedCall.ExitCode != nil && *recordedCall.ExitCode != 0}
@@ -192,7 +192,7 @@ func (r recorded) sitting(b *testing.B, last int) sitting {
 	return replayed
 }
 
-func (r recorded) child(b *testing.B, spawn recordedCall, index int) subagent.Child {
+func (r recorded) subAgentRow(b *testing.B, spawn recordedCall, index int) subagent.Row {
 	b.Helper()
 	var args struct {
 		Owns    []string `json:"owns"`
@@ -201,32 +201,32 @@ func (r recorded) child(b *testing.B, spawn recordedCall, index int) subagent.Ch
 	if err := json.Unmarshal(spawn.Args, &args); err != nil {
 		b.Fatal(err)
 	}
-	child := subagent.Child{Name: "c" + strconv.Itoa(index+1), Owns: args.Owns, Doing: args.Mission, Total: konst.TurnMaxSteps, State: roster.Finished}
+	row := subagent.Row{Name: "c" + strconv.Itoa(index+1), Owns: args.Owns, Doing: args.Mission, Total: konst.TurnMaxSteps, State: roster.Finished}
 	if fields := strings.Fields(spawn.Command); len(fields) > 1 {
 		for _, state := range roster.States() {
 			if state.String() == strings.TrimSuffix(fields[1], ":") {
-				child.State = state
+				row.State = state
 			}
 		}
 	}
 	for _, header := range r.headers {
-		if !strings.HasPrefix(header.ID, spawn.ChildID) {
+		if !strings.HasPrefix(header.ID, spawn.SubAgentID) {
 			continue
 		}
 		steps, results := r.read(b, header.ID)
 		call := 0
 		for _, step := range steps {
-			child.Steps++
-			child.Tokens += step.PromptTokens + step.CompletionTokens
-			child.Report = cmp.Or(step.AssistantText, child.Report)
+			row.Steps++
+			row.Tokens += step.PromptTokens + step.CompletionTokens
+			row.Report = cmp.Or(step.AssistantText, row.Report)
 			for _, recordedCall := range step.ToolCalls {
-				child.Calls = append(child.Calls, subagent.Call{ID: session.EventIDFor(header.ID, recordedCall.ID), Tool: recordedCall.Tool,
+				row.Calls = append(row.Calls, subagent.Call{ID: session.EventIDFor(header.ID, recordedCall.ID), Tool: recordedCall.Tool,
 					Text: recordedCall.Command, Result: summary(resultAt(results, call), recordedCall.ResultBytes)})
 				call++
 			}
 		}
 	}
-	return child
+	return row
 }
 
 func resultAt(results []string, call int) string {

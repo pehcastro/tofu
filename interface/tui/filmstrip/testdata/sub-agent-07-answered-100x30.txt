@@ -1,4 +1,4 @@
- tofu  ./tofu/                   chat   agents (1)   edits   shells                  30s [settings] 
+ tofu  ./tofu/                     chat   agents   edits   shells                 1m 23s [settings] 
                                                                                                     
                                                                                                     
     You                                                                  14:32  [message#91ce62]    
@@ -6,9 +6,13 @@
                                                                                                     
                                                                                                     
     [&orchestrator]                                                                        14:32    
-    handing the policy loader to a child                                                            
+    handing the policy loader to a sub-agent                                                        
                                                                                                     
     · spawning [&qa-1] to read the policy loader                                                    
+    · (1) tools · 1m 18s                                                 [tool#815e77]  [expand]    
+                                                                                                    
+    [&orchestrator]                                                      14:33  [message#d41c08]    
+    the sub-agent read it: the loader reads the lock before the mode.                               
                                                                                                     
                                                                                                     
                                                                                                     
@@ -18,11 +22,7 @@
                                                                                                     
                                                                                                     
                                                                                                     
-                                                                                                    
-                                                                                                    
-                                                                                                    
-  ⠋ 0s     qa-1      internal/judge/po…  read the policy loader                                     
-  ⠋ waiting on [&qa-1]  |  26s  [request#91ccaf]                                                    
+  cooked for 1m 18s  |  waited 0s  [request#815e77]                                                 
                                                                                                     
                                                                                                     
   █ Ask tofu to build, inspect, or delegate                                                         

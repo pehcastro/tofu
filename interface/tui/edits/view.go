@@ -76,7 +76,7 @@ type Preferences struct {
 }
 
 type Model struct {
-	Children  []subagent.Child
+	SubAgents []subagent.Row
 	Busy      bool
 	Root      string
 	prefs     Preferences
@@ -271,9 +271,9 @@ func (m Model) authors() []string {
 	if edited(Self) {
 		names = append(names, Self)
 	}
-	for _, child := range m.Children {
-		if edited(child.Name) && !slices.Contains(names, child.Name) {
-			names = append(names, child.Name)
+	for _, subAgent := range m.SubAgents {
+		if edited(subAgent.Name) && !slices.Contains(names, subAgent.Name) {
+			names = append(names, subAgent.Name)
 		}
 	}
 	for _, edit := range m.edits {

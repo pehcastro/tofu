@@ -20,14 +20,14 @@ type Request struct {
 }
 
 type Pair struct {
-	Parent     string  `json:"parent"`
-	Child      string  `json:"child"`
-	Wire       string  `json:"wire"`
-	Model      string  `json:"model"`
-	Day        string  `json:"day"`
-	ForkKind   string  `json:"fork_kind"`
-	ParentLast Request `json:"parent_last"`
-	ChildFirst Request `json:"child_first"`
+	Parent        string  `json:"parent"`
+	SubAgent      string  `json:"child"`
+	Wire          string  `json:"wire"`
+	Model         string  `json:"model"`
+	Day           string  `json:"day"`
+	ForkKind      string  `json:"fork_kind"`
+	ParentLast    Request `json:"parent_last"`
+	SubAgentFirst Request `json:"child_first"`
 }
 
 type PrefixFate string
@@ -41,11 +41,11 @@ const (
 
 func (p Pair) Fate() PrefixFate {
 	switch {
-	case p.ChildFirst.CacheRead > 0 && p.ChildFirst.CacheWrite > 0:
+	case p.SubAgentFirst.CacheRead > 0 && p.SubAgentFirst.CacheWrite > 0:
 		return FateBoth
-	case p.ChildFirst.CacheRead > 0:
+	case p.SubAgentFirst.CacheRead > 0:
 		return FateRead
-	case p.ChildFirst.CacheWrite > 0:
+	case p.SubAgentFirst.CacheWrite > 0:
 		return FateWritten
 	default:
 		return FateNeither
@@ -71,9 +71,9 @@ func PairsIn(store *session.Store) ([]Pair, []session.Skip, error) {
 	}
 	var pairs []Pair
 	skipped := listing.Skipped
-	for _, child := range listing.Sessions {
-		parent, known := byID[child.Parent]
-		if child.Parent == "" || !known {
+	for _, subAgent := range listing.Sessions {
+		parent, known := byID[subAgent.Parent]
+		if subAgent.Parent == "" || !known {
 			continue
 		}
 		parentSteps, err := stepsOf(store, parent.ID)
@@ -81,27 +81,27 @@ func PairsIn(store *session.Store) ([]Pair, []session.Skip, error) {
 			skipped = append(skipped, session.Skip{ID: parent.ID, Reason: err})
 			continue
 		}
-		childSteps, err := stepsOf(store, child.ID)
+		subAgentSteps, err := stepsOf(store, subAgent.ID)
 		if err != nil {
-			skipped = append(skipped, session.Skip{ID: child.ID, Reason: err})
+			skipped = append(skipped, session.Skip{ID: subAgent.ID, Reason: err})
 			continue
 		}
-		if len(parentSteps) == 0 || len(childSteps) == 0 {
-			skipped = append(skipped, session.Skip{ID: child.ID, Reason: fmt.Errorf("forkcache: %d parent steps and %d child steps, so one side of the fork billed no request to read", len(parentSteps), len(childSteps))})
+		if len(parentSteps) == 0 || len(subAgentSteps) == 0 {
+			skipped = append(skipped, session.Skip{ID: subAgent.ID, Reason: fmt.Errorf("forkcache: %d parent steps and %d sub-agent steps, so one side of the fork billed no request to read", len(parentSteps), len(subAgentSteps))})
 			continue
 		}
 		pairs = append(pairs, Pair{
-			Parent:     parent.ID,
-			Child:      child.ID,
-			Wire:       child.Wire,
-			Model:      child.Model,
-			Day:        child.At.Format(time.DateOnly),
-			ForkKind:   child.ForkKind,
-			ParentLast: parentSteps[len(parentSteps)-1],
-			ChildFirst: childSteps[0],
+			Parent:        parent.ID,
+			SubAgent:      subAgent.ID,
+			Wire:          subAgent.Wire,
+			Model:         subAgent.Model,
+			Day:           subAgent.At.Format(time.DateOnly),
+			ForkKind:      subAgent.ForkKind,
+			ParentLast:    parentSteps[len(parentSteps)-1],
+			SubAgentFirst: subAgentSteps[0],
 		})
 	}
-	slices.SortFunc(pairs, func(a, b Pair) int { return strings.Compare(a.Child, b.Child) })
+	slices.SortFunc(pairs, func(a, b Pair) int { return strings.Compare(a.SubAgent, b.SubAgent) })
 	return pairs, skipped, nil
 }
 
@@ -176,12 +176,12 @@ const pairRow = "%-26v %-10v %-11v %-13v %10v %10v %13v %9v %11v %12v  %v\n"
 func Table(pairs []Pair) string {
 	var report strings.Builder
 	fmt.Fprintf(&report, pairRow,
-		"child", "wire", "day", "fork kind", "kept read", "kept write", "if continued", "first in", "first read", "first write", "fate")
+		"sub-agent", "wire", "day", "fork kind", "kept read", "kept write", "if continued", "first in", "first read", "first write", "fate")
 	for _, pair := range pairs {
 		fmt.Fprintf(&report, pairRow,
-			pair.Child, pair.Wire, pair.Day, pair.ForkKind,
+			pair.SubAgent, pair.Wire, pair.Day, pair.ForkKind,
 			pair.ParentLast.CacheRead, pair.ParentLast.CacheWrite, pair.PrefixIfContinued(),
-			pair.ChildFirst.InputTokens, pair.ChildFirst.CacheRead, pair.ChildFirst.CacheWrite, pair.Fate())
+			pair.SubAgentFirst.InputTokens, pair.SubAgentFirst.CacheRead, pair.SubAgentFirst.CacheWrite, pair.Fate())
 	}
 	return report.String()
 }

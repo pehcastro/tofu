@@ -123,8 +123,8 @@ func TestScrollingTheTranscriptDoesNotMoveTheRunningRow(t *testing.T) {
 	golden.Assert(t, "session-activity-scrolled-80x24.golden", view.Content)
 }
 
-func runningChildren() []subagent.Child {
-	return []subagent.Child{
+func runningSubAgents() []subagent.Row {
+	return []subagent.Row{
 		{
 			Name:   "go-dev",
 			Owns:   []string{"internal/judge/**"},
@@ -153,15 +153,15 @@ func runningChildren() []subagent.Child {
 	}
 }
 
-func TestEachRunningChildIsARowCarryingWhatItSpent(t *testing.T) {
+func TestEachRunningSubAgentIsARowCarryingWhatItSpent(t *testing.T) {
 	at := fixedStart()
 	app := liveApp(t, &at)
-	app.Update(Event{Kind: EventSubAgent, Children: runningChildren()})
+	app.Update(Event{Kind: EventSubAgent, SubAgents: runningSubAgents()})
 	view := app.View()
 	rows := plainRows(view)
 	all := spinningRows(rows)
 	if len(all) != 5 {
-		t.Fatalf("a call, three children and a turn draw %d spinning rows, want 5\n%s", len(all), strings.Join(rows, "\n"))
+		t.Fatalf("a call, three sub-agents and a turn draw %d spinning rows, want 5\n%s", len(all), strings.Join(rows, "\n"))
 	}
 	running := all[1:]
 	top := composerTopRow(t, view.Content)
@@ -179,9 +179,9 @@ func TestEachRunningChildIsARowCarryingWhatItSpent(t *testing.T) {
 		}
 	}
 	if strings.Contains(strings.Join(rows[:top], "\n"), "go-rules") {
-		t.Errorf("a child that is not running took a row\n%s", strings.Join(rows, "\n"))
+		t.Errorf("a sub-agent that is not running took a row\n%s", strings.Join(rows, "\n"))
 	}
-	golden.Assert(t, "session-children-80x24.golden", view.Content)
+	golden.Assert(t, "session-sub-agents-80x24.golden", view.Content)
 }
 
 func turnRow(t *testing.T, app *App) string {

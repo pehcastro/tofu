@@ -55,13 +55,13 @@ func (t *transcript) String() string {
 
 func seeds(at time.Time) map[string][]tui.Event {
 	work := agentWork(at)
-	var children []subagent.Child
+	var subAgents []subagent.Row
 	for _, event := range work {
 		if event.Kind == tui.EventSubAgent {
-			children = event.Children
+			subAgents = event.SubAgents
 		}
 	}
-	spawned := slices.Concat(children, []subagent.Child{{Name: "c4", Doing: "audit the shell registry", Owns: []string{"internal/shell/registry.go"}, Since: time.Second, Steps: 1, Total: 40, State: roster.Working}})
+	spawned := slices.Concat(subAgents, []subagent.Row{{Name: "c4", Doing: "audit the shell registry", Owns: []string{"internal/shell/registry.go"}, Since: time.Second, Steps: 1, Total: 40, State: roster.Working}})
 	tall := make([]string, tallLines)
 	for index := range tall {
 		tall[index] = "line " + strconv.Itoa(index+1) + " of the tall result"
@@ -71,7 +71,7 @@ func seeds(at time.Time) map[string][]tui.Event {
 		"edits":  fileWork(),
 		"spawn": append([]tui.Event{
 			{Kind: tui.EventToolCall, ID: "5e04aa", Tool: "spawn", Text: "audit the shell registry", Promote: true},
-			{Kind: tui.EventSubAgent, Children: spawned},
+			{Kind: tui.EventSubAgent, SubAgents: spawned},
 			result("5e04aa", "spawned [&c4]"),
 		}, done()...),
 		"more": append([]tui.Event{call("6f1a01", "read", "internal/turn/budget.go"), result("6f1a01", "88 lines, 2.4 KB")}, done()...),

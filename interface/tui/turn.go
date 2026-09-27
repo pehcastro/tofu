@@ -163,7 +163,7 @@ func (a *App) interrupt() tea.Cmd {
 		a.view.Append(session.Entry{Kind: session.Note, Body: quitAgainNote})
 	case a.view.LettingToolsFinish:
 		a.stopTurn()
-	case a.running == 0 || len(a.childCalls) > 0 || a.view.TakesAnswerDigits():
+	case a.running == 0 || len(a.subAgentCalls) > 0 || a.view.TakesAnswerDigits():
 		a.stopTurn()
 	default:
 		a.view.LettingToolsFinish = true
@@ -217,7 +217,7 @@ func (a *App) start(task string) tea.Cmd {
 	a.view.Follow()
 	a.status.Fresh = false
 	a.intro.shown = false
-	a.happenedAtTurn, a.keptAnswer, a.childCalls = len(a.happened), "", nil
+	a.happenedAtTurn, a.keptAnswer, a.subAgentCalls = len(a.happened), "", nil
 	if a.options.Turn == nil {
 		a.view.Append(session.Entry{Kind: session.Failure, Body: noEngine})
 		return nil
@@ -261,7 +261,7 @@ func (a *App) absorb(event Event) {
 	if event.answered() {
 		a.view.Returned()
 	}
-	if len(a.childCalls) > 0 && (event.Kind == EventText || event.Kind == EventTextDelta) {
+	if len(a.subAgentCalls) > 0 && (event.Kind == EventText || event.Kind == EventTextDelta) {
 		return
 	}
 	at := a.options.Now()
@@ -281,8 +281,8 @@ func (a *App) absorb(event Event) {
 	case EventNote:
 		a.view.Append(session.Entry{Kind: session.Note, Body: event.Text})
 	case EventDone:
-		if event.Children != nil {
-			a.showChildren(event.Children)
+		if event.SubAgents != nil {
+			a.showSubAgents(event.SubAgents)
 		}
 		labelled := a.turnEventID()
 		if a.view.Stopping && a.keptAnswer == "" {
@@ -317,7 +317,7 @@ func (a *App) absorb(event Event) {
 	case EventContext:
 		a.status.Context = event.Context
 	case EventSubAgent:
-		a.showChildren(event.Children)
+		a.showSubAgents(event.SubAgents)
 	case EventPlan:
 		a.feed.SetPlan(planLine(event.Plan))
 	case EventAwaitPerson:
@@ -350,14 +350,14 @@ func (a *App) called(event Event, at time.Time) {
 	}
 	a.running++
 	if event.Promote {
-		a.childCalls = append(a.childCalls, event.ID)
+		a.subAgentCalls = append(a.subAgentCalls, event.ID)
 		return
 	}
 	a.view.Append(session.Entry{Kind: session.Tool, ID: event.ID, Head: event.Tool, Body: event.Text, Detail: event.Detail})
 }
 
 func (a *App) answered(event Event, at time.Time) {
-	a.childCalls = slices.DeleteFunc(a.childCalls, func(called string) bool { return called == event.ID })
+	a.subAgentCalls = slices.DeleteFunc(a.subAgentCalls, func(called string) bool { return called == event.ID })
 	status := event.Text
 	finished := a.finish(short(event.ID), event.Text, event.Failed, at)
 	if finished.Kind == feed.KindSpawn && a.view.Stopping {
@@ -464,16 +464,16 @@ func (a *App) judged(decision session.Decision, actor string) {
 	}
 }
 
-func (a *App) showChildren(children []subagent.Child) {
-	a.children, a.view.Children, a.edits.Children = children, children, children
+func (a *App) showSubAgents(subAgents []subagent.Row) {
+	a.subAgents, a.view.SubAgents, a.edits.SubAgents = subAgents, subAgents, subAgents
 	a.status.Agents = 0
-	for _, child := range children {
-		if child.State == roster.Working {
+	for _, subAgent := range subAgents {
+		if subAgent.State == roster.Working {
 			a.status.Agents++
 		}
-		a.linkSpawn(child)
-		for _, call := range child.Calls {
-			a.rosterCall(child.Name, call)
+		a.linkSpawn(subAgent)
+		for _, call := range subAgent.Calls {
+			a.rosterCall(subAgent.Name, call)
 		}
 	}
 }
@@ -493,9 +493,9 @@ func (a *App) rosterCall(actor string, call subagent.Call) {
 	a.record(feed.Event{ID: id, Actor: actor, Kind: feed.KindTool, State: state, Title: call.Tool, Body: call.Text, Detail: lines(call.Result), At: cmp.Or(call.At, a.options.Now())})
 }
 
-func (a *App) linkSpawn(child subagent.Child) {
+func (a *App) linkSpawn(subAgent subagent.Row) {
 	turn := a.happened[min(a.happenedAtTurn, len(a.happened)):]
-	if slices.ContainsFunc(turn, func(held feed.Event) bool { return held.Kind == feed.KindSpawn && held.Target == child.Name }) {
+	if slices.ContainsFunc(turn, func(held feed.Event) bool { return held.Kind == feed.KindSpawn && held.Target == subAgent.Name }) {
 		return
 	}
 	at := slices.IndexFunc(turn, func(held feed.Event) bool {
@@ -505,21 +505,21 @@ func (a *App) linkSpawn(child subagent.Child) {
 		return
 	}
 	spawn := turn[at]
-	spawn.Target, spawn.Title = child.Name, child.Doing
+	spawn.Target, spawn.Title = subAgent.Name, subAgent.Doing
 	a.record(spawn)
 	if spawn.Actor == orchestrator {
-		a.view.Append(session.Entry{Kind: session.Note, Body: "spawning [&" + child.Name + "] to " + child.Doing})
+		a.view.Append(session.Entry{Kind: session.Note, Body: "spawning [&" + subAgent.Name + "] to " + subAgent.Doing})
 	}
 }
 
-func (a *App) parkChildrenTheTurnLeftBehind() {
-	parked := slices.Clone(a.children)
-	for i, child := range parked {
-		if child.State == roster.Working || child.State == roster.WaitingAnswer {
+func (a *App) parkSubAgentsTheTurnLeftBehind() {
+	parked := slices.Clone(a.subAgents)
+	for i, subAgent := range parked {
+		if subAgent.State == roster.Working || subAgent.State == roster.WaitingAnswer {
 			parked[i].State = roster.Parked
 		}
 	}
-	a.showChildren(parked)
+	a.showSubAgents(parked)
 }
 
 func (a *App) showShells(entries []shells.Entry) {

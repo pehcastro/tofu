@@ -32,7 +32,7 @@ const (
 	thinking
 	working
 	waitingOnYou
-	waitingOnChild
+	waitingOnSubAgent
 )
 
 func (p phase) drawn() (string, lipgloss.Style) {
@@ -45,7 +45,7 @@ func (p phase) drawn() (string, lipgloss.Style) {
 		return "working", look.Style(look.Mint)
 	case waitingOnYou:
 		return "waiting", look.Style(look.Amber)
-	case waitingOnChild:
+	case waitingOnSubAgent:
 		return "waiting on", look.Style(look.Mint)
 	}
 	panic("session: unknown phase")
@@ -70,7 +70,7 @@ func (m *Model) reached() phase {
 		return working
 	}
 	if !m.inFlight() && len(m.activityRows()) > 0 {
-		return waitingOnChild
+		return waitingOnSubAgent
 	}
 	return thinking
 }
@@ -87,17 +87,17 @@ func (m *Model) settle() {
 }
 
 func (m *Model) activityRows() []activity {
-	rows := make([]activity, 0, len(m.Children))
-	for _, child := range m.Children {
-		if child.State != roster.Working {
+	rows := make([]activity, 0, len(m.SubAgents))
+	for _, subAgent := range m.SubAgents {
+		if subAgent.State != roster.Working {
 			continue
 		}
 		rows = append(rows, activity{
-			since:  child.Since,
-			name:   child.Name,
-			owns:   strings.Join(child.Owns, " "),
-			intent: child.Doing,
-			tokens: child.Tokens,
+			since:  subAgent.Since,
+			name:   subAgent.Name,
+			owns:   strings.Join(subAgent.Owns, " "),
+			intent: subAgent.Doing,
+			tokens: subAgent.Tokens,
 		})
 	}
 	return rows
@@ -120,7 +120,7 @@ func (m *Model) requestLine() string {
 		switch {
 		case m.Stopping || m.LettingToolsFinish:
 			word = look.Style(look.Amber).Render(stoppingWord)
-		case m.phase == waitingOnChild:
+		case m.phase == waitingOnSubAgent:
 			for _, row := range m.activityRows() {
 				word += " " + look.AgentRef(row.name)
 			}

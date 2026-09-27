@@ -232,8 +232,8 @@ func Run(ctx context.Context, config Config) (Row, error) {
 		}
 		for _, tool := range currentTools().tools {
 			if spawner, spawning := tool.(*SpawnTool); spawning {
-				for _, child := range spawner.children {
-					row.ChildIDs = append(row.ChildIDs, child.ID)
+				for _, subAgent := range spawner.subAgentRows {
+					row.SubAgentIDs = append(row.SubAgentIDs, subAgent.ID)
 				}
 				row.TotalCostUSD += spawner.spend
 			}
@@ -613,7 +613,7 @@ func (g gatedCall) execute(ctx context.Context, tools Registry, resultBytesCap i
 	spawner, spawning := tool.(*SpawnTool)
 	spawnedBefore := 0
 	if spawning {
-		spawnedBefore = len(spawner.children)
+		spawnedBefore = len(spawner.subAgentRows)
 	}
 
 	result, err := tool.Run(ctx, call.Arguments)
@@ -657,8 +657,8 @@ func (g gatedCall) execute(ctx context.Context, tools Registry, resultBytesCap i
 	if storeErr != nil {
 		row.ResultHandleError = storeErr.Error()
 	}
-	if spawning && len(spawner.children) > spawnedBefore {
-		row.ChildID = spawner.children[spawnedBefore].ID
+	if spawning && len(spawner.subAgentRows) > spawnedBefore {
+		row.SubAgentID = spawner.subAgentRows[spawnedBefore].ID
 	}
 	outcome := row.Outcome()
 	if result.Outcome == ResultAborted {

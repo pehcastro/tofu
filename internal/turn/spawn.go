@@ -28,7 +28,7 @@ type DepthLimitError struct {
 }
 
 func (e DepthLimitError) Error() string {
-	return fmt.Sprintf("spawn refused: a child at depth %d would pass the sub-agent depth limit of %d", e.Depth, e.Limit)
+	return fmt.Sprintf("spawn refused: a sub-agent at depth %d would pass the sub-agent depth limit of %d", e.Depth, e.Limit)
 }
 
 type BreadthLimitError struct {
@@ -37,7 +37,7 @@ type BreadthLimitError struct {
 }
 
 func (e BreadthLimitError) Error() string {
-	return fmt.Sprintf("spawn refused: this turn has already spawned %d children and the sub-agent breadth limit is %d", e.Spawned, e.Limit)
+	return fmt.Sprintf("spawn refused: this turn has already spawned %d sub-agents and the sub-agent breadth limit is %d", e.Spawned, e.Limit)
 }
 
 const (
@@ -76,26 +76,26 @@ type DoneDecision struct {
 }
 
 type DoneReview interface {
-	Review(ctx context.Context, child Row) (DoneDecision, error)
+	Review(ctx context.Context, subAgent Row) (DoneDecision, error)
 }
 
 type CheapDoneReview struct{}
 
-func (CheapDoneReview) Review(_ context.Context, child Row) (DoneDecision, error) {
-	for _, step := range child.Steps {
+func (CheapDoneReview) Review(_ context.Context, subAgent Row) (DoneDecision, error) {
+	for _, step := range subAgent.Steps {
 		for _, call := range step.ToolCalls {
 			if call.Error == "" && (call.ExitCode == nil || *call.ExitCode == 0) {
-				return DoneDecision{Verdict: DoneAccepted, Reason: "the child ran " + call.Tool + " and it did not fail"}, nil
+				return DoneDecision{Verdict: DoneAccepted, Reason: "the sub-agent ran " + call.Tool + " and it did not fail"}, nil
 			}
 		}
 	}
-	return DoneDecision{Verdict: DoneReopen, Reason: "nothing in the child's row is evidence the work happened: not one tool call ran without failing"}, nil
+	return DoneDecision{Verdict: DoneReopen, Reason: "nothing in the sub-agent's row is evidence the work happened: not one tool call ran without failing"}, nil
 }
 
 type ContractDoneReview struct{}
 
-func (ContractDoneReview) Review(_ context.Context, child Row) (DoneDecision, error) {
-	contract := ContractOf(child)
+func (ContractDoneReview) Review(_ context.Context, subAgent Row) (DoneDecision, error) {
+	contract := ContractOf(subAgent)
 	switch {
 	case contract.NoTicket:
 		return DoneDecision{Verdict: DoneAccepted, Reason: "no ticket, so no acceptance lines and nothing to evaluate"}, nil
@@ -114,15 +114,15 @@ func (ContractDoneReview) Review(_ context.Context, child Row) (DoneDecision, er
 	}
 }
 
-func ContractOf(child Row) subagent.Contract {
+func ContractOf(subAgent Row) subagent.Contract {
 	prose := ""
-	for i := len(child.Steps) - 1; i >= 0; i-- {
-		if spoken := strings.TrimSpace(child.Steps[i].AssistantText); spoken != "" {
+	for i := len(subAgent.Steps) - 1; i >= 0; i-- {
+		if spoken := strings.TrimSpace(subAgent.Steps[i].AssistantText); spoken != "" {
 			prose = spoken
 			break
 		}
 	}
-	return subagent.BuildContract(child.Task, prose, outcomeStoppedEarly(child.Outcome))
+	return subagent.BuildContract(subAgent.Task, prose, outcomeStoppedEarly(subAgent.Outcome))
 }
 
 func (t *SpawnTool) decided(ctx context.Context, first Row) (DoneDecision, error) {
@@ -141,7 +141,7 @@ func (t *SpawnTool) decided(ctx context.Context, first Row) (DoneDecision, error
 	return decision, err
 }
 
-type ChildModel struct {
+type SubAgentModel struct {
 	Slug     string
 	Windows  string
 	Wire     string
@@ -183,10 +183,10 @@ type spawnTrace struct {
 	depth      int
 }
 
-func (s spawnTrace) run(outer, ctx context.Context, child Config) (Row, error) {
-	id, log, site := child.NewID(), s.site.log, s.site
+func (s spawnTrace) run(outer, ctx context.Context, subAgent Config) (Row, error) {
+	id, log, site := subAgent.NewID(), s.site.log, s.site
 	if log == nil {
-		return Run(ctx, child)
+		return Run(ctx, subAgent)
 	}
 	var failed []error
 	_, err := log.Append(session.Event{Turn: site.turn, Agent: site.agent, Call: site.call, Kind: session.EventSpawn},
@@ -195,7 +195,7 @@ func (s spawnTrace) run(outer, ctx context.Context, child Config) (Row, error) {
 		header.Agents = append(header.Agents, session.AgentRun{Agent: id, Definition: s.definition, Model: s.model, ParentAgent: site.agent,
 			SpawnCall: site.call, SpawnTurn: site.turn, Depth: s.depth, Status: subagent.Working.String(), StartedAt: time.Now()})
 	}))
-	row, runErr := Run(ctx, child)
+	row, runErr := Run(ctx, subAgent)
 	status := roundState(outer, runErr).String()
 	ended := session.AgentEndBody{Status: status}
 	for _, run := range log.Header().Agents {
@@ -227,7 +227,7 @@ func (s spawnTrace) settle(id, status string) error {
 
 type SubAgents struct {
 	Defined []subagent.Definition
-	Open    func(subagent.Definition) (ChildModel, error)
+	Open    func(subagent.Definition) (SubAgentModel, error)
 	Prompt  ComposeSpec
 }
 
@@ -300,29 +300,29 @@ func (s SubAgents) Named(name string) (subagent.Definition, error) {
 }
 
 type SpawnTool struct {
-	Review    DoneReview
-	Methods   method.Table
-	SubAgents SubAgents
-	parentID  string
-	depth     int
-	spawned   int
-	spend     float64
-	base      Config
-	roster    *subagent.Roster
-	children  []Row
-	reports   []ChildReport
-	ran       []Spawned
+	Review         DoneReview
+	Methods        method.Table
+	SubAgents      SubAgents
+	orchestratorID string
+	depth          int
+	spawned        int
+	spend          float64
+	base           Config
+	roster         *subagent.Roster
+	subAgentRows   []Row
+	reports        []SubAgentReport
+	ran            []Spawned
 }
 
-func NewSpawnTool(parentID string, base Config, roster *subagent.Roster) *SpawnTool {
-	return &SpawnTool{parentID: parentID, base: base, roster: roster}
+func NewSpawnTool(orchestratorID string, base Config, roster *subagent.Roster) *SpawnTool {
+	return &SpawnTool{orchestratorID: orchestratorID, base: base, roster: roster}
 }
 
 func (t *SpawnTool) Name() string { return "spawn" }
 
-func (t *SpawnTool) Children() []Row { return t.children }
+func (t *SpawnTool) SubAgentRows() []Row { return t.subAgentRows }
 
-func (t *SpawnTool) Reports() []ChildReport { return t.reports }
+func (t *SpawnTool) Reports() []SubAgentReport { return t.reports }
 
 func (t *SpawnTool) Spawned() []Spawned { return t.ran }
 
@@ -334,14 +334,14 @@ func (t *SpawnTool) Definition() llm.Tool {
 	}
 	if names := t.SubAgents.enabledNames(); len(names) > 0 {
 		properties["agent"] = map[string]any{"type": "string", "enum": names,
-			"description": "the sub-agent that does the work, on its own model with its own instructions. left out, the child runs on the orchestrator's model"}
+			"description": "the sub-agent that does the work, on its own model with its own instructions. left out, the sub-agent runs on the orchestrator's model"}
 	}
 	return llm.Tool{
 		Name: "spawn",
 		Description: "you plan, spawn and verify, and implementation goes to a sub-agent: spawn one per separable piece of work as soon as the piece is known, rather than writing the code yourself first. " +
-			"hands one piece of work to a child with its own context and its own conversation, and returns the child's report rather than its transcript. " +
-			"owns lists the paths the child may write, every other path is refused at the write, and no two children may hold overlapping paths. " +
-			"At most " + strconv.Itoa(konst.SubAgentMaxBreadth) + " children per turn, nested at most " + strconv.Itoa(konst.SubAgentMaxDepth) + " deep.",
+			"hands one piece of work to a sub-agent with its own context and its own conversation, and returns the sub-agent's report rather than its transcript. " +
+			"owns lists the paths the sub-agent may write, every other path is refused at the write, and no two sub-agents may hold overlapping paths. " +
+			"At most " + strconv.Itoa(konst.SubAgentMaxBreadth) + " sub-agents per turn, nested at most " + strconv.Itoa(konst.SubAgentMaxDepth) + " deep.",
 		Parameters: map[string]any{
 			"type":       "object",
 			"properties": properties,
@@ -377,7 +377,7 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 		return Result{}, errors.New("spawn: task is required")
 	}
 	if len(args.Owns) == 0 {
-		return Result{}, errors.New("spawn: owns is required, and a child holding no paths could write nothing")
+		return Result{}, errors.New("spawn: owns is required, and a sub-agent holding no paths could write nothing")
 	}
 	if t.depth+1 > konst.SubAgentMaxDepth {
 		return Result{}, DepthLimitError{Depth: t.depth + 1, Limit: konst.SubAgentMaxDepth}
@@ -391,12 +391,12 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 	}
 	system, err := t.SubAgents.system(t.base.System, definition, args.Task, args.Owns)
 	if err != nil {
-		return Result{}, fmt.Errorf("spawn: the child's prompt did not compose: %w", err)
+		return Result{}, fmt.Errorf("spawn: the sub-agent's prompt did not compose: %w", err)
 	}
-	var opened ChildModel
+	var opened SubAgentModel
 	if t.SubAgents.Open != nil {
 		if opened, err = t.SubAgents.Open(definition); err != nil {
-			return Result{}, fmt.Errorf("spawn: the model for %s did not open: %w", cmp.Or(definition.Name, "the child"), err)
+			return Result{}, fmt.Errorf("spawn: the model for %s did not open: %w", cmp.Or(definition.Name, "the sub-agent"), err)
 		}
 	}
 	if opened.Close != nil {
@@ -423,18 +423,18 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 		Owns:    args.Owns,
 		Started: clock(),
 	}
-	childID := agent.ID
+	subAgentID := agent.ID
 	if err := t.roster.Hold(agent); err != nil {
 		var collision subagent.CollisionError
 		if errors.As(err, &collision) && collision.HolderReport != "" {
 			return Result{Command: "handback " + collision.Holder, Content: fmt.Sprintf(
-				"no child was started: %s already holds %q, and %q overlaps it. Send this work to %s rather than starting a rival.\n\n%s has reported:\n%s",
+				"no sub-agent was started: %s already holds %q, and %q overlaps it. Send this work to %s rather than starting a rival.\n\n%s has reported:\n%s",
 				collision.Holder, collision.HolderGlob, collision.Glob, collision.Holder, collision.Holder, collision.HolderReport)}, nil
 		}
 		return Result{}, fmt.Errorf("spawn: %w", err)
 	}
 
-	boundary := &subagent.Boundary{Ticket: childID, Owns: args.Owns}
+	boundary := &subagent.Boundary{Ticket: subAgentID, Owns: args.Owns}
 	offered := func(name string) bool { return len(definition.Tools) == 0 || slices.Contains(definition.Tools, name) }
 	var owned []Tool
 	for _, tool := range t.base.Tools.tools {
@@ -448,40 +448,40 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 		}
 		owned = append(owned, tool)
 	}
-	nested := &SpawnTool{Review: t.Review, Methods: t.Methods, SubAgents: t.SubAgents, parentID: childID, depth: t.depth + 1, base: t.base, roster: t.roster}
+	nested := &SpawnTool{Review: t.Review, Methods: t.Methods, SubAgents: t.SubAgents, orchestratorID: subAgentID, depth: t.depth + 1, base: t.base, roster: t.roster}
 	if offered(t.Name()) {
 		owned = append(owned, nested)
 	}
-	child := t.base
+	subAgent := t.base
 	if opened.Accounts.Pick != nil {
-		child.Model, child.Accounts, child.Spend, child.Wire = nil, opened.Accounts, opened.Spend, opened.Wire
+		subAgent.Model, subAgent.Accounts, subAgent.Spend, subAgent.Wire = nil, opened.Accounts, opened.Spend, opened.Wire
 	}
-	child.System = system
+	subAgent.System = system
 	trace := spawnTrace{site: site, definition: agent.Agent, model: agent.Model, mission: agent.Mission, owns: args.Owns, depth: t.depth + 1}
-	child.Task = args.Task
-	child.Tools = NewRegistry(owned...)
-	child.NewID = func() string { return childID }
-	child.SpawnedFrom = t.parentID
-	child.Session, child.Log, child.Turn, child.SpawnedBy = "", site.log, site.turn, site.call
+	subAgent.Task = args.Task
+	subAgent.Tools = NewRegistry(owned...)
+	subAgent.NewID = func() string { return subAgentID }
+	subAgent.SpawnedFrom = t.orchestratorID
+	subAgent.Session, subAgent.Log, subAgent.Turn, subAgent.SpawnedBy = "", site.log, site.turn, site.call
 	if site.log == nil {
-		child.Sessions = nil
+		subAgent.Sessions = nil
 	}
-	child.Boundary = boundary
-	child.Step = func(step StepRow) {
+	subAgent.Boundary = boundary
+	subAgent.Step = func(step StepRow) {
 		called := make([]string, len(step.ToolCalls))
 		for i, call := range step.ToolCalls {
 			called[i] = call.Tool
 		}
-		t.roster.Stepped(childID, step.Index, clock(), called...)
+		t.roster.Stepped(subAgentID, step.Index, clock(), called...)
 		if t.base.Step != nil {
 			t.base.Step(step)
 		}
 	}
 
-	childCtx, release := context.WithCancel(ctx)
+	subAgentCtx, release := context.WithCancel(ctx)
 	defer release()
 	t.spawned++
-	claims, state, runErr := t.runRounds(ctx, childCtx, agent, childID, child, trace)
+	claims, state, runErr := t.runRounds(ctx, subAgentCtx, agent, subAgentID, subAgent, trace)
 	asked := boundary.Asked()
 	if len(asked) > 0 && state != subagent.Errored && state != subagent.Parked {
 		state = subagent.WaitingAnswer
@@ -490,8 +490,8 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 	if err := trace.settle(claims[len(claims)-1].ID, state.String()); err != nil {
 		claims[len(claims)-1].Warnings = append(claims[len(claims)-1].Warnings, "the sub-agent's last state was not recorded: "+err.Error())
 	}
-	t.retain(append(claims, nested.children...))
-	t.ran = append(append(t.ran, Spawned{ID: childID, Call: site.call, Agent: definition.Name, Slug: opened.Slug, Windows: opened.Windows}), nested.ran...)
+	t.retain(append(claims, nested.subAgentRows...))
+	t.ran = append(append(t.ran, Spawned{ID: subAgentID, Call: site.call, Agent: definition.Name, Slug: opened.Slug, Windows: opened.Windows}), nested.ran...)
 	for _, claim := range claims {
 		t.spend += claim.TotalCostUSD
 	}
@@ -503,13 +503,13 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 	contract.Wrote = report.Wrote
 	text := report.Text() + "\n\n" + contract.Block()
 	if opened.Slug != "" {
-		text = childID + " ran as " + cmp.Or(definition.Name, "the unnamed sub-agent") + " on " + opened.Slug + "\n\n" + text
+		text = subAgentID + " ran as " + cmp.Or(definition.Name, "the unnamed sub-agent") + " on " + opened.Slug + "\n\n" + text
 	}
-	t.roster.Reached(childID, state, text)
+	t.roster.Reached(subAgentID, state, text)
 	if runErr != nil && state != subagent.Parked {
-		return Result{}, fmt.Errorf("spawn: child %s is %s: %w", childID, state, runErr)
+		return Result{}, fmt.Errorf("spawn: sub-agent %s is %s: %w", subAgentID, state, runErr)
 	}
-	return Result{Content: text, Command: childID + " " + state.String() + ": " + agent.Mission}, nil
+	return Result{Content: text, Command: subAgentID + " " + state.String() + ": " + agent.Mission}, nil
 }
 
 func stoppedEarly(state subagent.State, outcome Outcome) bool {
@@ -525,11 +525,11 @@ func outcomeStoppedEarly(outcome Outcome) bool {
 }
 
 func (t *SpawnTool) retain(rows []Row) {
-	t.children = append(t.children, rows...)
-	for i := range len(t.children) - konst.SubAgentRetainedRows {
-		released := t.children[i].Summary()
+	t.subAgentRows = append(t.subAgentRows, rows...)
+	for i := range len(t.subAgentRows) - konst.SubAgentRetainedRows {
+		released := t.subAgentRows[i].Summary()
 		released.Conversation = nil
-		t.children[i] = released
+		t.subAgentRows[i] = released
 	}
 }
 
@@ -556,19 +556,19 @@ func (t *SpawnTool) publish(agent subagent.SubAgent, claims []Row, state subagen
 	t.roster.Reached(agent.ID, state, reportOf(agent, claims, state).Text())
 }
 
-func (t *SpawnTool) runRounds(outerCtx, childCtx context.Context, agent subagent.SubAgent, childID string, child Config, trace spawnTrace) ([]Row, subagent.State, error) {
-	first, firstErr := trace.run(outerCtx, childCtx, child)
+func (t *SpawnTool) runRounds(outerCtx, subAgentCtx context.Context, agent subagent.SubAgent, subAgentID string, subAgent Config, trace spawnTrace) ([]Row, subagent.State, error) {
+	first, firstErr := trace.run(outerCtx, subAgentCtx, subAgent)
 	claims := []Row{first}
 	state := roundState(outerCtx, firstErr)
 	t.publish(agent, claims, state)
-	history := append(slices.Clone(child.History), resumable(first.Conversation)...)
+	history := append(slices.Clone(subAgent.History), resumable(first.Conversation)...)
 	for state == subagent.InReview && t.Review != nil {
 		last := &claims[len(claims)-1]
 		reviewed := *last
 		reviewed.Task = agent.Brief
-		decision, err := t.decided(childCtx, reviewed)
+		decision, err := t.decided(subAgentCtx, reviewed)
 		if err != nil {
-			last.Warnings = append(last.Warnings, "the done review did not run, so the child's own claim stands: "+err.Error())
+			last.Warnings = append(last.Warnings, "the done review did not run, so the sub-agent's own claim stands: "+err.Error())
 			return claims, subagent.InReview, firstErr
 		}
 		if decision.ID != "" {
@@ -582,22 +582,22 @@ func (t *SpawnTool) runRounds(outerCtx, childCtx context.Context, agent subagent
 		if decision.Verdict != DoneReopen {
 			panic("turn: unknown done verdict " + string(decision.Verdict))
 		}
-		next, reopenErr := t.roster.Reopen(childID, decision.Reason)
+		next, reopenErr := t.roster.Reopen(subAgentID, decision.Reason)
 		if reopenErr != nil {
 			last.Warnings = append(last.Warnings, reopenErr.Error())
 			t.publish(agent, claims, subagent.InReview)
 			return claims, subagent.InReview, firstErr
 		}
-		t.roster.Reached(childID, subagent.Working, "")
-		child.History = history
-		child.Task = "You reported this finished and the done review did not believe you: " + decision.Reason
-		child.NewID = func() string { return childID + "-r" + strconv.Itoa(next) }
-		reRow, reErr := trace.run(outerCtx, childCtx, child)
+		t.roster.Reached(subAgentID, subagent.Working, "")
+		subAgent.History = history
+		subAgent.Task = "You reported this finished and the done review did not believe you: " + decision.Reason
+		subAgent.NewID = func() string { return subAgentID + "-r" + strconv.Itoa(next) }
+		reRow, reErr := trace.run(outerCtx, subAgentCtx, subAgent)
 		claims = append(claims, reRow)
 		history = append(slices.Clone(history), resumable(reRow.Conversation)...)
 		if reErr != nil {
 			claims[len(claims)-1].Warnings = append(claims[len(claims)-1].Warnings,
-				"the child was re-opened and did not run again, so its earlier claim stands: "+reErr.Error())
+				"the sub-agent was re-opened and did not run again, so its earlier claim stands: "+reErr.Error())
 			state = subagent.Errored
 		} else {
 			state = roundState(outerCtx, nil)
@@ -644,7 +644,7 @@ func (t ownedShell) Definition() llm.Tool {
 	definition := t.tool.Definition()
 	definition.Description += ", and every file the command writes, through a redirect, tee, cp, mv or sed -i, has to be inside the paths this agent holds: " +
 		strings.Join(t.boundary.Owns, ", ") +
-		". Reading anything is fine. A command writing outside them is refused before it runs, and that work goes back to the parent."
+		". Reading anything is fine. A command writing outside them is refused before it runs, and that work goes back to the orchestrator."
 	return definition
 }
 

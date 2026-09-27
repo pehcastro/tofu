@@ -14,11 +14,11 @@ import (
 	shipped "tofu/library"
 )
 
-func reviewedChild(t *testing.T, named string) (*stubReview, []Row) {
+func reviewedSubAgent(t *testing.T, named string) (*stubReview, []Row) {
 	t.Helper()
 	root := t.TempDir()
 	review := &stubReview{writer: ledger.NewWriter(filepath.Join(root, "ledger")), verdict: DoneReopen}
-	parent, spawn := parentTurn(t, root, []llm.Decision{
+	orchestrator, spawn := orchestratorTurn(t, root, []llm.Decision{
 		spawnCall("call-1", "write the greeting under mine/", "mine/**"),
 		claimDecision("all done"),
 		claimDecision("done again"),
@@ -28,42 +28,42 @@ func reviewedChild(t *testing.T, named string) (*stubReview, []Row) {
 	spawn.Review = review
 	spawn.Methods = methodTable(t, named)
 
-	if _, err := Run(context.Background(), parent); err != nil {
+	if _, err := Run(context.Background(), orchestrator); err != nil {
 		t.Fatalf("Run returned an error: %v", err)
 	}
-	return review, spawn.Children()
+	return review, spawn.SubAgentRows()
 }
 
 func TestTheTableSendingStopCheckToTheJudgedMethodActsOnTheAnswer(t *testing.T) {
-	review, children := reviewedChild(t, string(method.Judged))
+	review, subAgents := reviewedSubAgent(t, string(method.Judged))
 
 	if review.reviewed != 3 {
 		t.Fatalf("the judged arm ran %d times, want 3: a review that always reopens should run out against the round cap, not stop early", review.reviewed)
 	}
-	if len(children) != 3 || children[1].ID != "sub-1-r2" || children[2].ID != "sub-1-r3" {
-		t.Fatalf("the reopen verdict did not carry the child to the round cap: %d rows", len(children))
+	if len(subAgents) != 3 || subAgents[1].ID != "sub-1-r2" || subAgents[2].ID != "sub-1-r3" {
+		t.Fatalf("the reopen verdict did not carry the sub-agent to the round cap: %d rows", len(subAgents))
 	}
-	if !strings.Contains(children[1].Task, "work_remains 0.93") {
-		t.Fatalf("the reopened child was not told the answer that reopened it: %q", children[1].Task)
+	if !strings.Contains(subAgents[1].Task, "work_remains 0.93") {
+		t.Fatalf("the reopened sub-agent was not told the answer that reopened it: %q", subAgents[1].Task)
 	}
-	warned := strings.Join(children[2].Warnings, " ")
+	warned := strings.Join(subAgents[2].Warnings, " ")
 	if !strings.Contains(warned, "round cap") {
 		t.Fatalf("the fourth round was not refused with the cap named: %q", warned)
 	}
 }
 
-func TestAnUnwiredStopCheckLeavesTheChildsOwnClaimStanding(t *testing.T) {
-	review, children := reviewedChild(t, string(method.Unwired))
+func TestAnUnwiredStopCheckLeavesTheSubAgentsOwnClaimStanding(t *testing.T) {
+	review, subAgents := reviewedSubAgent(t, string(method.Unwired))
 
 	if review.reviewed != 0 {
 		t.Fatalf("an unwired point still asked: %d times", review.reviewed)
 	}
-	if len(children) != 1 {
-		t.Fatalf("an unwired point reopened the child: %d rows", len(children))
+	if len(subAgents) != 1 {
+		t.Fatalf("an unwired point reopened the sub-agent: %d rows", len(subAgents))
 	}
-	warned := strings.Join(children[0].Warnings, " ")
-	if !strings.Contains(warned, "the child's own claim stands") || !strings.Contains(warned, "unwired") {
-		t.Fatalf("the child does not say why nothing reviewed it: %q", warned)
+	warned := strings.Join(subAgents[0].Warnings, " ")
+	if !strings.Contains(warned, "the sub-agent's own claim stands") || !strings.Contains(warned, "unwired") {
+		t.Fatalf("the sub-agent does not say why nothing reviewed it: %q", warned)
 	}
 	t.Log(warned)
 }
@@ -71,14 +71,14 @@ func TestAnUnwiredStopCheckLeavesTheChildsOwnClaimStanding(t *testing.T) {
 func TestTheStopCheckMethodComesFromTheShippedTableWhenNobodyPassesOne(t *testing.T) {
 	root := t.TempDir()
 	review := &stubReview{writer: ledger.NewWriter(filepath.Join(root, "ledger")), verdict: DoneAccepted}
-	parent, spawn := parentTurn(t, root, []llm.Decision{
+	orchestrator, spawn := orchestratorTurn(t, root, []llm.Decision{
 		spawnCall("call-1", "write the greeting under mine/", "mine/**"),
 		claimDecision("all done"),
 		messageDecision(),
 	})
 	spawn.Review = review
 
-	if _, err := Run(context.Background(), parent); err != nil {
+	if _, err := Run(context.Background(), orchestrator); err != nil {
 		t.Fatalf("Run returned an error: %v", err)
 	}
 
@@ -96,8 +96,8 @@ func TestTheStopCheckMethodComesFromTheShippedTableWhenNobodyPassesOne(t *testin
 	if review.reviewed != 1 {
 		t.Fatalf("the shipped table says judged and the judged arm ran %d times", review.reviewed)
 	}
-	if held := onlyChild(t, spawn); held.State != subagent.Finished {
-		t.Fatalf("the accepted verdict left the child %s", held.State)
+	if held := onlySubAgent(t, spawn); held.State != subagent.Finished {
+		t.Fatalf("the accepted verdict left the sub-agent %s", held.State)
 	}
 }
 
@@ -129,7 +129,7 @@ func spawnCall(id, task string, owns ...string) llm.Decision {
 	return toolCallDecision(llm.ToolCall{ID: id, Name: "spawn", Arguments: args})
 }
 
-func parentTurn(t *testing.T, root string, decisions []llm.Decision) (Config, *SpawnTool) {
+func orchestratorTurn(t *testing.T, root string, decisions []llm.Decision) (Config, *SpawnTool) {
 	t.Helper()
 	write, err := NewWriteTool(root)
 	if err != nil {
@@ -139,7 +139,7 @@ func parentTurn(t *testing.T, root string, decisions []llm.Decision) (Config, *S
 	if err != nil {
 		t.Fatalf("building the read tool: %v", err)
 	}
-	const parentID = "turn-parent"
+	const orchestratorID = "turn-orchestrator"
 	base := Config{
 		Model:          &stubModel{decisions: decisions},
 		Spend:          SpendAPIKey,
@@ -147,16 +147,16 @@ func parentTurn(t *testing.T, root string, decisions []llm.Decision) (Config, *S
 		Caps:           Caps{MaxSteps: 20},
 		ResultBytesCap: 4096,
 		ArtifactDir:    filepath.Join(root, "artifacts"),
-		NewID:          func() string { return parentID },
+		NewID:          func() string { return orchestratorID },
 	}
-	spawn := NewSpawnTool(parentID, base, &subagent.Roster{})
-	parent := base
-	parent.Task = "hand the work to a child"
-	parent.Tools = NewRegistry(read, write, spawn)
-	return parent, spawn
+	spawn := NewSpawnTool(orchestratorID, base, &subagent.Roster{})
+	orchestrator := base
+	orchestrator.Task = "hand the work to a sub-agent"
+	orchestrator.Tools = NewRegistry(read, write, spawn)
+	return orchestrator, spawn
 }
 
-func onlyChild(t *testing.T, spawn *SpawnTool) subagent.SubAgent {
+func onlySubAgent(t *testing.T, spawn *SpawnTool) subagent.SubAgent {
 	t.Helper()
 	held := spawn.roster.SubAgents()
 	if len(held) != 1 {
@@ -171,7 +171,7 @@ type stubReview struct {
 	reviewed int
 }
 
-func (r *stubReview) Review(_ context.Context, child Row) (DoneDecision, error) {
+func (r *stubReview) Review(_ context.Context, subAgent Row) (DoneDecision, error) {
 	r.reviewed++
 	row, err := r.writer.Append(ledger.Row{
 		Point:     "stop_check@1",
@@ -179,7 +179,7 @@ func (r *stubReview) Review(_ context.Context, child Row) (DoneDecision, error) 
 		Version:   1,
 		Build:     "jev-test",
 		Verdict:   ledger.VerdictAsk,
-		TurnID:    child.ID,
+		TurnID:    subAgent.ID,
 		Answers: []ledger.Answer{{
 			Question: "work_remains", Wording: 1, Kind: ledger.AnswerNoul, Noul: 0.93,
 		}},

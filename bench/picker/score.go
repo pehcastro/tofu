@@ -14,14 +14,14 @@ import (
 const leastAccountsThatSeparate = 2
 
 type ForkPrefix struct {
-	Child  string
-	Tokens int
+	SubAgent string
+	Tokens   int
 }
 
 type Cost struct {
-	Child  string
-	Tokens int
-	Total  int
+	SubAgent string
+	Tokens   int
+	Total    int
 }
 
 type Score struct {
@@ -42,9 +42,9 @@ type Result struct {
 }
 
 type forkRow struct {
-	Child      string `json:"child"`
-	Wire       string `json:"wire"`
-	ChildFirst struct {
+	SubAgent      string `json:"child"`
+	Wire          string `json:"wire"`
+	SubAgentFirst struct {
 		CacheRead int `json:"cache_read"`
 	} `json:"child_first"`
 }
@@ -66,7 +66,7 @@ func FreshPrefixIn(path string) ([]ForkPrefix, error) {
 		if row.Wire != "anthropic" {
 			continue
 		}
-		prefixes = append(prefixes, ForkPrefix{Child: row.Child, Tokens: row.ChildFirst.CacheRead})
+		prefixes = append(prefixes, ForkPrefix{SubAgent: row.SubAgent, Tokens: row.SubAgentFirst.CacheRead})
 	}
 	return prefixes, nil
 }
@@ -111,7 +111,7 @@ func replay(arm Arm, snapshots []Snapshot, prefixes []ForkPrefix) Score {
 	}
 	for _, prefix := range prefixes {
 		score.Costs = append(score.Costs, Cost{
-			Child: prefix.Child, Tokens: prefix.Tokens, Total: score.Moves * prefix.Tokens,
+			SubAgent: prefix.SubAgent, Tokens: prefix.Tokens, Total: score.Moves * prefix.Tokens,
 		})
 	}
 	return score

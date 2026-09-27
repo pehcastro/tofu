@@ -26,13 +26,15 @@ type Conversion struct {
 	Head     string
 }
 
+const legacySubAgentKey = "child_id"
+
 type oldEntry struct {
-	id       string
-	header   Header
-	events   []Event
-	parent   string
-	children []string
-	session  string
+	id        string
+	header    Header
+	events    []Event
+	parent    string
+	subAgents []string
+	session   string
 }
 
 func (s *Store) PlanConversion() (Conversion, error) {
@@ -76,7 +78,7 @@ func (s *Store) PlanConversion() (Conversion, error) {
 	for _, id := range order {
 		entries[id].session = EventIDFor("session", rootOf(id))
 		if rootOf(id) != id {
-			entries[entries[id].parent].children = append(entries[entries[id].parent].children, id)
+			entries[entries[id].parent].subAgents = append(entries[entries[id].parent].subAgents, id)
 		}
 	}
 	for _, id := range order {
@@ -126,12 +128,12 @@ func (f *folding) entry(id, agent, turn, spawnedBy string, depth int) []Event {
 	entry := f.entries[id]
 	f.placed[id] = true
 	f.from = append(f.from, id)
-	children := slices.Clone(entry.children)
-	slices.SortStableFunc(children, func(a, b string) int { return f.entries[a].header.At.Compare(f.entries[b].header.At) })
+	subAgents := slices.Clone(entry.subAgents)
+	slices.SortStableFunc(subAgents, func(a, b string) int { return f.entries[a].header.At.Compare(f.entries[b].header.At) })
 	named := map[string]bool{}
 	for _, event := range entry.events {
-		if child := stringField(event.Body, "child_id"); event.Kind == EventToolResult && child != "" {
-			named[child] = true
+		if subAgent := stringField(event.Body, legacySubAgentKey); event.Kind == EventToolResult && subAgent != "" {
+			named[subAgent] = true
 		}
 	}
 	var out []Event
@@ -145,26 +147,26 @@ func (f *folding) entry(id, agent, turn, spawnedBy string, depth int) []Event {
 			attached.File = AttachmentPath(entry.session, filepath.Base(attached.File))
 			event.Body = marshalled(attached)
 		}
-		child := stringField(event.Body, "child_id")
-		if event.Kind == EventToolResult && named[child] && !f.placed[child] {
-			for _, spawned := range group(children, child, named) {
+		subAgent := stringField(event.Body, legacySubAgentKey)
+		if event.Kind == EventToolResult && named[subAgent] && !f.placed[subAgent] {
+			for _, spawned := range group(subAgents, subAgent, named) {
 				out = append(out, f.spawn(spawned, agent, event.Turn, event.Call, depth+1)...)
 			}
 		}
 		out = append(out, event)
 	}
-	for _, child := range children {
-		if !f.placed[child] {
-			out = append(out, f.spawn(child, agent, cmp.Or(turn, lastTurn(out)), "", depth+1)...)
+	for _, subAgent := range subAgents {
+		if !f.placed[subAgent] {
+			out = append(out, f.spawn(subAgent, agent, cmp.Or(turn, lastTurn(out)), "", depth+1)...)
 		}
 	}
 	return out
 }
 
-func group(children []string, named string, called map[string]bool) []string {
-	at := slices.Index(children, named)
+func group(subAgents []string, named string, called map[string]bool) []string {
+	at := slices.Index(subAgents, named)
 	grouped := []string{named}
-	for _, next := range children[at+1:] {
+	for _, next := range subAgents[at+1:] {
 		if called[next] {
 			break
 		}
@@ -182,13 +184,13 @@ func lastTurn(events []Event) string {
 	return ""
 }
 
-func (f *folding) spawn(child, parentAgent, turn, call string, depth int) []Event {
-	header := f.entries[child].header
-	spawned := Event{ID: EventIDFor(child, "spawn"), At: header.At, Turn: turn, Agent: parentAgent, Call: call, Kind: EventSpawn,
-		Body: marshalled(SpawnBody{Agent: child, Model: header.Model, Mission: firstLine(header.Task), Depth: depth})}
-	events := append([]Event{spawned}, f.entry(child, child, turn, call, depth)...)
-	usage, cost := spent(events, child)
-	ended := Event{ID: EventIDFor(child, "agent_end"), At: header.LastAt(), Turn: turn, Agent: child, Kind: EventAgentEnd,
+func (f *folding) spawn(subAgent, orchestratorAgent, turn, call string, depth int) []Event {
+	header := f.entries[subAgent].header
+	spawned := Event{ID: EventIDFor(subAgent, "spawn"), At: header.At, Turn: turn, Agent: orchestratorAgent, Call: call, Kind: EventSpawn,
+		Body: marshalled(SpawnBody{Agent: subAgent, Model: header.Model, Mission: firstLine(header.Task), Depth: depth})}
+	events := append([]Event{spawned}, f.entry(subAgent, subAgent, turn, call, depth)...)
+	usage, cost := spent(events, subAgent)
+	ended := Event{ID: EventIDFor(subAgent, "agent_end"), At: header.LastAt(), Turn: turn, Agent: subAgent, Kind: EventAgentEnd,
 		Body: marshalled(AgentEndBody{Status: header.Outcome, Usage: usage, CostUSD: cost})}
 	return append(events, ended)
 }

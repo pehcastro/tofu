@@ -326,8 +326,8 @@ func TestACassetteGivesACancelledTurnNoDeltaAndNoReply(t *testing.T) {
 	}
 }
 
-const addressedCassette = `{"text":"handing it to a child","tools":[{"name":"spawn","args":{"task":"read note.txt and say what it holds","owns":["note.txt"]}}]}
-{"text":"the child read it and the note says a note"}
+const addressedCassette = `{"text":"handing it to a sub-agent","tools":[{"name":"spawn","args":{"task":"read note.txt and say what it holds","owns":["note.txt"]}}]}
+{"text":"the sub-agent read it and the note says a note"}
 {"agent":"c1","text":"reading the note","tools":[{"name":"read","args":{"path":"note.txt"}}]}
 {"agent":"c1","text":"the note says a note"}
 `
@@ -344,17 +344,17 @@ func asked(t *testing.T, deck *cassette, task string) string {
 	return decision.Content
 }
 
-func TestAParentAndAChildEachTakeTheRepliesAddressedToThem(t *testing.T) {
+func TestAnOrchestratorAndASubAgentEachTakeTheRepliesAddressedToThem(t *testing.T) {
 	deck, err := readCassette(written(t, t.TempDir(), "addressed.cassette", addressedCassette))
 	if err != nil {
 		t.Fatal(err)
 	}
-	const parentTask, childBrief = "ask a child to read the note", "read note.txt and say what it holds"
+	const orchestratorTask, subAgentBrief = "ask a sub-agent to read the note", "read note.txt and say what it holds"
 	for _, want := range []struct{ conversation, reply string }{
-		{parentTask, "handing it to a child"},
-		{childBrief, "reading the note"},
-		{childBrief, "the note says a note"},
-		{parentTask, "the child read it and the note says a note"},
+		{orchestratorTask, "handing it to a sub-agent"},
+		{subAgentBrief, "reading the note"},
+		{subAgentBrief, "the note says a note"},
+		{orchestratorTask, "the sub-agent read it and the note says a note"},
 	} {
 		if got := asked(t, deck, want.conversation); got != want.reply {
 			t.Errorf("%q was handed %q, which belongs to the other caller, wanted %q", want.conversation, got, want.reply)
@@ -362,23 +362,23 @@ func TestAParentAndAChildEachTakeTheRepliesAddressedToThem(t *testing.T) {
 	}
 }
 
-func TestACassetteWithNoReplyForAChildSaysSoNamingTheChild(t *testing.T) {
+func TestACassetteWithNoReplyForASubAgentSaysSoNamingTheSubAgent(t *testing.T) {
 	deck, err := readCassette(written(t, t.TempDir(), "flat.cassette", readingCassette))
 	if err != nil {
 		t.Fatal(err)
 	}
-	asked(t, deck, "the parent task")
-	_, err = deck.Ask(context.Background(), llm.Request{Messages: []llm.Message{{Role: llm.RoleUser, Content: "the child brief"}}})
+	asked(t, deck, "the orchestrator task")
+	_, err = deck.Ask(context.Background(), llm.Request{Messages: []llm.Message{{Role: llm.RoleUser, Content: "the sub-agent brief"}}})
 	if err == nil {
-		t.Fatal("a child was handed a reply from a cassette that addresses none to it")
+		t.Fatal("a sub-agent was handed a reply from a cassette that addresses none to it")
 	}
-	if !strings.Contains(err.Error(), "child c1") {
+	if !strings.Contains(err.Error(), "sub-agent c1") {
 		t.Errorf("the failure never names the caller that went unanswered: %v", err)
 	}
 }
 
-func TestAnAgentThatIsNotAChildNumberIsRefusedByLine(t *testing.T) {
-	_, err := readCassette(written(t, t.TempDir(), "named.cassette", `{"agent":"the child","text":"hello"}`+"\n"))
+func TestAnAgentThatIsNotASubAgentNumberIsRefusedByLine(t *testing.T) {
+	_, err := readCassette(written(t, t.TempDir(), "named.cassette", `{"agent":"the sub-agent","text":"hello"}`+"\n"))
 	if err == nil || !strings.Contains(err.Error(), "line 1") {
 		t.Fatalf("an agent that is not c1, c2 and so on was read as %v", err)
 	}
@@ -412,14 +412,14 @@ func TestASpawnDrivenTwiceProducesTheSameConversationBothTimes(t *testing.T) {
 	deck := written(t, dir, "spawn.cassette", addressedCassette)
 	script := written(t, dir, "spawn.drive", strings.Join([]string{
 		"wait " + session.Placeholder,
-		"type ask a child to read the note",
+		"type ask a sub-agent to read the note",
 		"key enter",
 		"wait cooked for",
 		"screen",
 	}, "\n"))
 	first := drivenConversation(t, deck, script)
-	if !strings.Contains(first, "the child read it and the note says a note") {
-		t.Fatalf("the parent never reached the reply addressed to it:\n%s", first)
+	if !strings.Contains(first, "the sub-agent read it and the note says a note") {
+		t.Fatalf("the orchestrator never reached the reply addressed to it:\n%s", first)
 	}
 	if second := drivenConversation(t, deck, script); second != first {
 		t.Errorf("the same script ran twice and the two conversations differ:\n%s\n\n%s", first, second)
@@ -569,7 +569,7 @@ func TestDriveTakesTheRunArmsThatChangeWhatATurnDoes(t *testing.T) {
 	}
 }
 
-const childOnCodexCassette = `{"text":"reading the note first","tools":[{"name":"read","args":{"path":"note.txt"}}]}
+const subAgentOnCodexCassette = `{"text":"reading the note first","tools":[{"name":"read","args":{"path":"note.txt"}}]}
 {"text":"handing it to go-dev","tools":[{"name":"spawn","args":{"agent":"go-dev","task":"wait a moment, then say done","owns":["note.txt"]}}]}
 {"text":"go-dev is done"}
 {"agent":"c1","text":"waiting","tools":[{"name":"bash","args":{"command":"sleep 8"}}]}
@@ -579,13 +579,13 @@ const childOnCodexCassette = `{"text":"reading the note first","tools":[{"name":
 const bothQuotas = `[{"label":"claude-sub 5h","fraction":0.62,"reported":true,"resetsIn":"3h28m"},
 {"label":"codex-sub 5h","fraction":0.4,"reported":true,"resetsIn":"1h"}]`
 
-func TestADrivenFooterShowsAChildsSubscriptionOnlyWhileTheChildRuns(t *testing.T) {
+func TestADrivenFooterShowsASubAgentsSubscriptionOnlyWhileTheSubAgentRuns(t *testing.T) {
 	dir := drivenProject(t)
 	if err := os.MkdirAll(filepath.Join(dir, ".tofu", "agents"), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	written(t, filepath.Join(dir, ".tofu", "agents"), "go-dev.md", "---\nname: go-dev\ndescription: writes go\nmodel: codex-sub/gpt-5.6-sol\n---\n\nYou write Go.\n")
-	deck := written(t, dir, "codex.cassette", childOnCodexCassette)
+	deck := written(t, dir, "codex.cassette", subAgentOnCodexCassette)
 	script := written(t, dir, "footer.drive", strings.Join([]string{
 		"wait " + session.Placeholder,
 		"type ask go-dev to wait",

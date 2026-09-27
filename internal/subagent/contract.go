@@ -49,7 +49,7 @@ func (c Contract) Block() string {
 	}
 	summary := fmt.Sprintf("contract %s: %d of %d acceptance lines omitted", c.TicketID, c.Omissions(), len(c.Claims))
 	if c.Partial {
-		summary += " (partial: the child was stopped before finishing, so unaddressed lines are not counted as omissions)"
+		summary += " (partial: the sub-agent was stopped before finishing, so unaddressed lines are not counted as omissions)"
 	}
 	data, err := json.MarshalIndent(c, "", "  ")
 	if err != nil {

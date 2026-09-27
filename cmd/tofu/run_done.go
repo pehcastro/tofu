@@ -80,16 +80,16 @@ func resolveStopCheckPoint() (battery, error) {
 	return set, nil
 }
 
-func (r typedDoneReview) Review(ctx context.Context, child turn.Row) (turn.DoneDecision, error) {
-	if screened, _ := (turn.ContractDoneReview{}).Review(ctx, child); screened.Verdict == turn.DoneReopen {
+func (r typedDoneReview) Review(ctx context.Context, subAgent turn.Row) (turn.DoneDecision, error) {
+	if screened, _ := (turn.ContractDoneReview{}).Review(ctx, subAgent); screened.Verdict == turn.DoneReopen {
 		return screened, nil
 	}
-	built, builder, err := state.BuildStopCheck(doneState(child))
+	built, builder, err := state.BuildStopCheck(doneState(subAgent))
 	if err != nil {
 		return turn.DoneDecision{}, err
 	}
 	asked := json.RawMessage(built)
-	in := rowInput{turnID: child.ID, stateBuilder: builder}
+	in := rowInput{turnID: subAgent.ID, stateBuilder: builder}
 
 	decision, askErr := r.client.Ask(ctx, jev.Request{State: asked, Questions: r.set.Questions})
 	if askErr != nil {
@@ -134,21 +134,21 @@ func doneReason(row ledger.Row) string {
 		doneReviewPoint, strings.Join(answered, ", "), row.Verdict.String(), row.ID)
 }
 
-func doneState(child turn.Row) state.StopCheckState {
+func doneState(subAgent turn.Row) state.StopCheckState {
 	built := state.StopCheckState{
-		Task: child.Task,
+		Task: subAgent.Task,
 		Budget: state.StopCheckBudget{
-			AtStepCap:      child.Outcome == turn.OutcomeStepCap,
-			AtDecisionCap:  child.Outcome == turn.OutcomeDecisionCap,
-			AtWallClockCap: child.Outcome == turn.OutcomeRetiredWallClockCap,
+			AtStepCap:      subAgent.Outcome == turn.OutcomeStepCap,
+			AtDecisionCap:  subAgent.Outcome == turn.OutcomeDecisionCap,
+			AtWallClockCap: subAgent.Outcome == turn.OutcomeRetiredWallClockCap,
 		},
 	}
-	for at, step := range child.Steps {
+	for at, step := range subAgent.Steps {
 		recent := state.StopCheckStep{
 			Index:              step.Index,
 			AssistantText:      step.AssistantText,
 			StopReason:         step.StopReason,
-			RepeatsEarlierStep: repeatsEarlierStep(child.Steps, at),
+			RepeatsEarlierStep: repeatsEarlierStep(subAgent.Steps, at),
 		}
 		for _, call := range step.ToolCalls {
 			recent.ToolCalls = append(recent.ToolCalls, state.StopCheckCall{

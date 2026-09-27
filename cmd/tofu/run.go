@@ -110,7 +110,7 @@ type runtime struct {
 	roster       *subagent.Roster
 	now          func() time.Time
 	open         func(runOpts) (appWire, error)
-	wrapChild    func(turn.Model) (turn.Model, error)
+	wrapSubAgent func(turn.Model) (turn.Model, error)
 	orchestrator models.Model
 }
 
@@ -146,59 +146,59 @@ func chooseModel(opts runOpts) (models.Model, error) {
 	return orchestrator.Model, nil
 }
 
-func boundChild(opts runOpts) (string, error) {
+func boundSubAgent(opts runOpts) (string, error) {
 	if opts.wire == wireKey {
 		return "", nil
 	}
 	bound, err := boundRoles(opts.wire, opts.dir)
-	if err != nil || bound[models.RoleChild].By != models.BoundByFile {
+	if err != nil || bound[models.RoleSubAgent].By != models.BoundByFile {
 		return "", err
 	}
-	return bound[models.RoleChild].Model.Slug(), nil
+	return bound[models.RoleSubAgent].Model.Slug(), nil
 }
 
-func (r runtime) childOpener(opts runOpts) func(subagent.Definition) (turn.ChildModel, error) {
+func (r runtime) subAgentOpener(opts runOpts) func(subagent.Definition) (turn.SubAgentModel, error) {
 	if r.open == nil {
 		return nil
 	}
-	return func(definition subagent.Definition) (turn.ChildModel, error) {
-		child := opts
-		child.effort = cmp.Or(definition.Effort, opts.effort)
+	return func(definition subagent.Definition) (turn.SubAgentModel, error) {
+		subAgent := opts
+		subAgent.effort = cmp.Or(definition.Effort, opts.effort)
 		named := definition.Model
 		if definition.Name == "" {
-			bound, err := boundChild(opts)
+			bound, err := boundSubAgent(opts)
 			if err != nil {
-				return turn.ChildModel{}, err
+				return turn.SubAgentModel{}, err
 			}
 			named = bound
 		}
 		asked := cmp.Or(named, r.orchestrator.Slug())
-		if named == "" && child.effort == opts.effort {
-			return turn.ChildModel{Slug: asked, Windows: r.orchestrator.WindowText()}, nil
+		if named == "" && subAgent.effort == opts.effort {
+			return turn.SubAgentModel{Slug: asked, Windows: r.orchestrator.WindowText()}, nil
 		}
 		if named != "" {
 			library, err := modelLibrary(opts.dir)
 			if err != nil {
-				return turn.ChildModel{}, err
+				return turn.SubAgentModel{}, err
 			}
 			model, err := library.Select(named)
 			if err != nil {
-				return turn.ChildModel{}, err
+				return turn.SubAgentModel{}, err
 			}
-			child.model, child.wire = named, library.WireFor(model.Subscription)
+			subAgent.model, subAgent.wire = named, library.WireFor(model.Subscription)
 		}
-		if child.wire == wireKey {
-			return turn.ChildModel{}, fmt.Errorf("%s asks for effort %s, and the openrouter wire sends no reasoning effort", definition.Name, child.effort)
+		if subAgent.wire == wireKey {
+			return turn.SubAgentModel{}, fmt.Errorf("%s asks for effort %s, and the openrouter wire sends no reasoning effort", definition.Name, subAgent.effort)
 		}
-		opened, err := r.open(child)
+		opened, err := r.open(subAgent)
 		if err != nil {
 			if opened.held != nil {
 				opened.held.close()
 			}
-			return turn.ChildModel{}, err
+			return turn.SubAgentModel{}, err
 		}
-		opened.held.wrap = r.wrapChild
-		return turn.ChildModel{Slug: asked, Windows: opened.selected.WindowText(), Wire: child.wire, Spend: opened.spend, Accounts: opened.held.forTurn(), Close: opened.held.close}, nil
+		opened.held.wrap = r.wrapSubAgent
+		return turn.SubAgentModel{Slug: asked, Windows: opened.selected.WindowText(), Wire: subAgent.wire, Spend: opened.spend, Accounts: opened.held.forTurn(), Close: opened.held.close}, nil
 	}
 }
 
@@ -238,7 +238,7 @@ Arguments:
                         there is no flag for it, set it with
                         tofu settings set readBeforeEdit false
   --no-instructions     the arm that %s
-  --done-review <arm>          the arm that reviews a child's answer
+  --done-review <arm>          the arm that reviews a sub-agent's answer
   --max-steps <n>              cap the steps a turn takes, unset means no cap
   --loop-guard-repeats <n>     how many repeats of one call with one result stops a turn
   --loop-guard-window <n>      how many recent calls the loop guard remembers
@@ -269,7 +269,7 @@ func runVerb(args []string, out, errOut io.Writer) int {
 			opts.noSubAgents = true
 			if opts.doneArm != doneArmOff {
 				return runFail(errOut, fmt.Errorf(
-					"--done-review %s with the %s setting off: that arm has no spawn tool, so no child is ever reviewed and the flag would say a check is running that is not",
+					"--done-review %s with the %s setting off: that arm has no spawn tool, so no sub-agent is ever reviewed and the flag would say a check is running that is not",
 					opts.doneArm, settingspkg.TurnMaySpawn))
 			}
 		}
@@ -400,7 +400,7 @@ func runTurn(opts runOpts, selected models.Model, built []turn.Tool, budget reca
 	}
 
 	config, spawner, err := runConfig(opts, built, runtime{accounts: opened.held.forTurn(), spend: opened.spend, budget: budget, gate: gate, sift: sifter, scorer: scorer, sessions: sessions, notify: writeNotice(errOut),
-		open: open, wrapChild: wrap, orchestrator: selected})
+		open: open, wrapSubAgent: wrap, orchestrator: selected})
 	if err != nil {
 		return runFail(errOut, err)
 	}
@@ -419,14 +419,14 @@ func runTurn(opts runOpts, selected models.Model, built []turn.Tool, budget reca
 	row, runErr := turn.Run(turn.WithShellRegistry(context.Background(), registry), config)
 	leaveShells(registry)
 	printRunRow(out, row, selected.Slug(), selected.WindowText())
-	for _, child := range childRows(spawner) {
+	for _, subAgent := range subAgentRows(spawner) {
 		askedAs, windows := selected.Slug(), selected.WindowText()
 		for _, spawned := range spawner.Spawned() {
-			if child.ID == spawned.ID || (spawned.Call != "" && child.SpawnedBy == spawned.Call) {
+			if subAgent.ID == spawned.ID || (spawned.Call != "" && subAgent.SpawnedBy == spawned.Call) {
 				askedAs, windows = spawned.Slug, spawned.Windows
 			}
 		}
-		printRunRow(out, child, askedAs, windows)
+		printRunRow(out, subAgent, askedAs, windows)
 	}
 	if row.Session != "" {
 		if headErr := sessions.SetHead(row.Session); headErr != nil {
@@ -544,7 +544,7 @@ func composeRun(opts runOpts, built []turn.Tool, run runtime) (composedRun, erro
 }
 
 func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn.SpawnTool, error) {
-	parentID, sessionID := cmp.Or(opts.turnID, turn.NewID(time.Now())), cmp.Or(opts.session, opts.turnID, session.NewEventID())
+	orchestratorID, sessionID := cmp.Or(opts.turnID, turn.NewID(time.Now())), cmp.Or(opts.session, opts.turnID, session.NewEventID())
 	if run.sessions != nil && opts.toolSet != toolSetThree {
 		built = append(slices.Clone(built), tools.NewQuote(run.sessions, sessionID))
 	}
@@ -582,16 +582,16 @@ func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn
 		config.Gate = run.gate
 		config.GateMode = gateMode(opts.gateArm, settingText(cmp.Or(opts.dir, "."), settingspkg.GatePrompt, run.notify))
 	}
-	config.NewID = func() string { return parentID }
+	config.NewID = func() string { return orchestratorID }
 	if run.scorer != nil {
-		run.scorer.turnID = parentID
+		run.scorer.turnID = orchestratorID
 	}
 	if opts.noSubAgents || opts.toolSet == toolSetThree {
 		return config, nil, nil
 	}
-	spawner := turn.NewSpawnTool(parentID, config, cmp.Or(run.roster, &subagent.Roster{}))
+	spawner := turn.NewSpawnTool(orchestratorID, config, cmp.Or(run.roster, &subagent.Roster{}))
 	spawner.SubAgents = prompt.subAgents
-	spawner.SubAgents.Open = run.childOpener(opts)
+	spawner.SubAgents.Open = run.subAgentOpener(opts)
 	config.Tools = turn.NewRegistry(append(turn.WithSourceBudget(built, prompt.subAgents.Defined), spawner)...)
 	return config, spawner, nil
 }
@@ -822,8 +822,8 @@ func printRunRow(out io.Writer, row turn.Row, askedAs, windows string) {
 	}
 	_, _ = fmt.Fprintf(out, "turn %s outcome %s model %s asked_as %s %s wall_clock_ms %d\n",
 		row.ID, row.Outcome, row.Model, askedAs, spend, row.WallClockMS)
-	if len(row.ChildIDs) > 0 {
-		_, _ = fmt.Fprintf(out, "turn %s spawned %s\n", row.ID, strings.Join(row.ChildIDs, " "))
+	if len(row.SubAgentIDs) > 0 {
+		_, _ = fmt.Fprintf(out, "turn %s spawned %s\n", row.ID, strings.Join(row.SubAgentIDs, " "))
 	}
 	for _, warning := range row.Warnings {
 		_, _ = fmt.Fprintf(out, "turn %s warning %s\n", row.ID, warning)
@@ -844,17 +844,17 @@ func printRunRow(out io.Writer, row turn.Row, askedAs, windows string) {
 			if call.ExitCode != nil {
 				exitCode = strconv.Itoa(*call.ExitCode)
 			}
-			_, _ = fmt.Fprintf(out, "step %d: tool_call tool=%s command=%q child=%q exit_code=%s gate=%s error=%q\n",
-				step.Index, call.Tool, call.Command, call.ChildID, exitCode, call.GateVerdict, call.Error)
+			_, _ = fmt.Fprintf(out, "step %d: tool_call tool=%s command=%q sub_agent=%q exit_code=%s gate=%s error=%q\n",
+				step.Index, call.Tool, call.Command, call.SubAgentID, exitCode, call.GateVerdict, call.Error)
 		}
 	}
 }
 
-func childRows(spawner *turn.SpawnTool) []turn.Row {
+func subAgentRows(spawner *turn.SpawnTool) []turn.Row {
 	if spawner == nil {
 		return nil
 	}
-	return spawner.Children()
+	return spawner.SubAgentRows()
 }
 
 func runFail(errOut io.Writer, err error) int {
@@ -968,7 +968,7 @@ func parseRunArgs(args []string) (runOpts, error) {
 			opts.toolSet, toolSetFull, toolSetThree)
 	}
 	if without := spawnlessFlag(opts); opts.doneArm != doneArmOff && without != "" {
-		return runOpts{}, fmt.Errorf("--done-review %s with %s: that arm has no spawn tool, so no child is ever reviewed and the flag would say a check is running that is not",
+		return runOpts{}, fmt.Errorf("--done-review %s with %s: that arm has no spawn tool, so no sub-agent is ever reviewed and the flag would say a check is running that is not",
 			opts.doneArm, without)
 	}
 	return opts, nil

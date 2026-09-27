@@ -162,7 +162,7 @@
     [tool#9d4f10    the conversation and the composer                                              |
                                                                                                    |
                     sub-agents                                         /sub-agents                 |
-                    every tool call and every child, in one feed                                   |
+                    every tool call and every sub-agent, in one feed                               |
     You                                                                             sage#672500]   |
     edits           file-edits                                         /file-edits                 |
                     every changed line, who made it and where                                      |

@@ -135,8 +135,8 @@ func (a *App) base() string {
 
 func (a *App) sourcesInUse() []string {
 	sources := []string{a.provider}
-	for _, child := range a.children {
-		if source, _, _ := strings.Cut(child.Model, "/"); child.State == isubagent.Working && source != "" && !slices.Contains(sources, source) {
+	for _, subAgent := range a.subAgents {
+		if source, _, _ := strings.Cut(subAgent.Model, "/"); subAgent.State == isubagent.Working && source != "" && !slices.Contains(sources, source) {
 			sources = append(sources, source)
 		}
 	}
@@ -188,9 +188,9 @@ func (a *App) retention() feed.Retention {
 }
 
 func (a *App) syncFeed() {
-	agents := make([]feed.Agent, len(a.children))
-	for index, child := range a.children {
-		agents[index] = feed.Agent{Name: child.Name, Definition: child.Agent, Model: child.Model, State: child.State, Doing: child.Doing, Since: child.Since, Owns: child.Owns, Report: child.Report}
+	agents := make([]feed.Agent, len(a.subAgents))
+	for index, subAgent := range a.subAgents {
+		agents[index] = feed.Agent{Name: subAgent.Name, Definition: subAgent.Agent, Model: subAgent.Model, State: subAgent.State, Doing: subAgent.Doing, Since: subAgent.Since, Owns: subAgent.Owns, Report: subAgent.Report}
 	}
 	a.feed.SetDensity(a.text(isettings.Density))
 	a.feed.SetRetention(a.retention())

@@ -100,12 +100,12 @@ the way a model's does, in deltas, so a reply is half written until it returns:
 An unfinished reply streams its text and keeps writing until the turn is stopped,
 which is how a driven run reaches an answer interrupted in the middle of itself.
 
-A reply with no agent is the parent's. A spawned child takes only the replies
-addressed to it, so the two conversations never take each other's:
+A reply with no agent is the orchestrator's. A spawned sub-agent takes only the
+replies addressed to it, so the two conversations never take each other's:
   {"agent":"c1","text":"reading it","tools":[{"name":"read","args":{"path":"x"}}]}
 
-c1 is the first caller after the parent, c2 the second, counted in the order they
-first ask, which is the order the parent spawns them.
+c1 is the first caller after the orchestrator, c2 the second, counted in the order
+they first ask, which is the order the orchestrator spawns them.
 
 A recorded reply is in flight for a moment before its first delta, so a turn
 stopped while it is in flight draws nothing at all, as it would on a live wire.
@@ -118,17 +118,17 @@ sits until --timeout. Wait for the failure text instead, or for opens no live wi
 `
 
 const (
-	cassetteVariable = "TOFU_DRIVE_CASSETTE"
-	cassetteBuild    = "cassette"
-	envOpen          = "<env>"
-	envClose         = "</env>"
-	stdinScript      = "-"
-	driveHomePrefix  = "tofu-drive-home"
-	noEnvironment    = "no turn has sent an environment block yet"
-	noRequest        = "no turn has sent a request yet"
-	recordedFlight   = konst.DriveSettleMillis * time.Millisecond
-	parentCaller     = ""
-	childCaller      = "c"
+	cassetteVariable   = "TOFU_DRIVE_CASSETTE"
+	cassetteBuild      = "cassette"
+	envOpen            = "<env>"
+	envClose           = "</env>"
+	stdinScript        = "-"
+	driveHomePrefix    = "tofu-drive-home"
+	noEnvironment      = "no turn has sent an environment block yet"
+	noRequest          = "no turn has sent a request yet"
+	recordedFlight     = konst.DriveSettleMillis * time.Millisecond
+	orchestratorCaller = ""
+	subAgentCaller     = "c"
 )
 
 type cassetteReply struct {
@@ -156,15 +156,15 @@ type cassette struct {
 }
 
 func callerName(name string) string {
-	if name == parentCaller {
-		return "the parent"
+	if name == orchestratorCaller {
+		return "the orchestrator"
 	}
-	return "child " + name
+	return "sub-agent " + name
 }
 
-func childNumber(agent string) bool {
-	number, err := strconv.Atoi(strings.TrimPrefix(agent, childCaller))
-	return strings.HasPrefix(agent, childCaller) && err == nil && number > 0
+func subAgentNumber(agent string) bool {
+	number, err := strconv.Atoi(strings.TrimPrefix(agent, subAgentCaller))
+	return strings.HasPrefix(agent, subAgentCaller) && err == nil && number > 0
 }
 
 func readCassette(path string) (*cassette, error) {
@@ -190,8 +190,8 @@ func readCassette(path string) (*cassette, error) {
 		if err := json.Unmarshal([]byte(trimmed), &reply); err != nil {
 			return nil, fmt.Errorf("%s line %d: %w", path, number+1, err)
 		}
-		if reply.Agent != parentCaller && !childNumber(reply.Agent) {
-			return nil, fmt.Errorf("%s line %d: agent %q is none of c1, c2 and so on, counting the callers after the parent in the order they first ask", path, number+1, reply.Agent)
+		if reply.Agent != orchestratorCaller && !subAgentNumber(reply.Agent) {
+			return nil, fmt.Errorf("%s line %d: agent %q is none of c1, c2 and so on, counting the callers after the orchestrator in the order they first ask", path, number+1, reply.Agent)
 		}
 		decision := llm.Decision{Build: cassetteBuild, Outcome: llm.OutcomeMessage, Content: reply.Text}
 		for index, one := range reply.Tools {
@@ -223,9 +223,9 @@ func (c *cassette) take(request llm.Request) (recordedReply, error) {
 	}
 	name, known := c.callers[conversation]
 	if !known {
-		name = parentCaller
+		name = orchestratorCaller
 		if len(c.callers) > 0 {
-			name = childCaller + strconv.Itoa(len(c.callers))
+			name = subAgentCaller + strconv.Itoa(len(c.callers))
 		}
 		c.callers[conversation] = name
 	}

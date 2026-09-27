@@ -171,7 +171,7 @@ func TestTheVerbToolRunsTheBinaryThatIsRunningAndNotTheOneOnPATH(t *testing.T) {
 		t.Fatalf("the stale tofu on PATH answered for the running one: %q", result.Content)
 	}
 	if !strings.Contains(result.Content, "depth 1") {
-		t.Fatalf("the child was not told its nesting depth: %q", result.Content)
+		t.Fatalf("the sub-agent was not told its nesting depth: %q", result.Content)
 	}
 }
 

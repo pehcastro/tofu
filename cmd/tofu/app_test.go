@@ -878,31 +878,31 @@ func TestTheBarShowsTheRequestAsSentAndTheForkDecidedOnWhatCameBackAfterIt(t *te
 	t.Logf("step %d sent %d tokens, the fork decided on %d, and the %d between them are the call and its results", forking.Index, asSent, decided, appended)
 }
 
-func TestASpawnedChildShowsInTheSubAgentViewWithTheGlobsItHolds(t *testing.T) {
+func TestASpawnedSubAgentShowsInTheSubAgentViewWithTheGlobsItHolds(t *testing.T) {
 	dir := scratchProject(t)
 	spawnCall := llm.ToolCall{ID: "call-1", Name: "spawn", Arguments: json.RawMessage(`{"task":"write note.txt","owns":["note.txt"]}`)}
 	model := &queuedModel{decisions: []llm.Decision{
 		{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{spawnCall}},
 		{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{writeNote("call-2")}},
-		{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "the child wrote it"},
-		{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "the child did it"},
+		{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "the sub-agent wrote it"},
+		{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "the sub-agent did it"},
 	}}
 	driver := driveApp(t)
-	stubbedTurn(dir, model)(t.Context(), onTheSubscription, "hand the note to a child", driver.emit)
+	stubbedTurn(dir, model)(t.Context(), onTheSubscription, "hand the note to a sub-agent", driver.emit)
 
 	subAgentEvents := driver.of(tui.EventSubAgent)
 	if len(subAgentEvents) < 2 {
-		t.Fatalf("sub-agent events %d, want one when the child starts, one per step it takes, and one when it reports", len(subAgentEvents))
+		t.Fatalf("sub-agent events %d, want one when the sub-agent starts, one per step it takes, and one when it reports", len(subAgentEvents))
 	}
-	started := subAgentEvents[0].Children
+	started := subAgentEvents[0].SubAgents
 	if len(started) != 1 || started[0].State != roster.Working || !slices.Equal(started[0].Owns, []string{"note.txt"}) {
-		t.Fatalf("the first sub-agent event carries %+v, want one running child holding note.txt", started)
+		t.Fatalf("the first sub-agent event carries %+v, want one running sub-agent holding note.txt", started)
 	}
-	ended := subAgentEvents[len(subAgentEvents)-1].Children[0]
+	ended := subAgentEvents[len(subAgentEvents)-1].SubAgents[0]
 	if ended.State != roster.Finished || ended.Steps != 2 || ended.Report == "" {
-		t.Fatalf("the child ended as %+v, want it finished, since no done review runs in the app, with the steps and the report the roster carries", ended)
+		t.Fatalf("the sub-agent ended as %+v, want it finished, since no done review runs in the app, with the steps and the report the roster carries", ended)
 	}
-	screen := pickedFirstChild(t, driver)
+	screen := pickedFirstSubAgent(t, driver)
 	for _, want := range []string{"1 agents", "[&sub-1]", "write note.txt", "owns", "note.txt"} {
 		if !strings.Contains(screen, want) {
 			t.Errorf("the sub-agent view does not show %q:\n%s", want, screen)
@@ -911,7 +911,7 @@ func TestASpawnedChildShowsInTheSubAgentViewWithTheGlobsItHolds(t *testing.T) {
 	t.Log("\n" + screen)
 }
 
-func pickedFirstChild(t *testing.T, driver *appDriver) string {
+func pickedFirstSubAgent(t *testing.T, driver *appDriver) string {
 	t.Helper()
 	rail := ansi.Strip(driver.view(tea.WindowSizeMsg{Width: 120, Height: 40}, tea.KeyPressMsg{Code: '2', Mod: tea.ModAlt}))
 	row := slices.IndexFunc(strings.Split(rail, "\n"), func(line string) bool { return strings.HasPrefix(strings.TrimSpace(line), "[&sub-1]") })
@@ -1032,7 +1032,7 @@ func (m *clockedModel) Ask(_ context.Context, _ llm.Request) (llm.Decision, erro
 	return next.decision, nil
 }
 
-func TestAChildRunningForTenSecondsReadsTenSecondsAndWhatItSpent(t *testing.T) {
+func TestASubAgentRunningForTenSecondsReadsTenSecondsAndWhatItSpent(t *testing.T) {
 	dir := scratchProject(t)
 	spawnCall := llm.ToolCall{ID: "call-1", Name: "spawn", Arguments: json.RawMessage(`{"task":"write note.txt","owns":["note.txt"]}`)}
 	model := clockedFrom(time.Date(2026, 9, 20, 9, 0, 0, 0, time.UTC),
@@ -1043,13 +1043,13 @@ func TestAChildRunningForTenSecondsReadsTenSecondsAndWhatItSpent(t *testing.T) {
 			ToolCalls: []llm.ToolCall{writeNote("call-2")},
 			Usage:     llm.Usage{InputTokens: 11000, OutputTokens: 1000},
 		}},
-		clockedStep{decision: llm.Decision{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "the child wrote it"}},
-		clockedStep{decision: llm.Decision{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "the child did it"}},
+		clockedStep{decision: llm.Decision{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "the sub-agent wrote it"}},
+		clockedStep{decision: llm.Decision{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "the sub-agent did it"}},
 	)
 	driver := driveApp(t)
 	newAppSession(dir, func(runOpts) (appWire, error) {
 		return wireOn(model), nil
-	}, nil, model.clock, sessionResume{}).run(t.Context(), onTheSubscription, "hand the note to a child", driver.emit)
+	}, nil, model.clock, sessionResume{}).run(t.Context(), onTheSubscription, "hand the note to a sub-agent", driver.emit)
 
 	running := ""
 	for _, framed := range driver.frames {
@@ -1060,25 +1060,25 @@ func TestAChildRunningForTenSecondsReadsTenSecondsAndWhatItSpent(t *testing.T) {
 		}
 	}
 	if running == "" {
-		t.Fatal("no frame carried the running child at all")
+		t.Fatal("no frame carried the running sub-agent at all")
 	}
 	t.Logf("the activity row read %q", running)
 	if !strings.Contains(running, "10s") {
-		t.Errorf("the child ran for ten seconds and its row reads %q", running)
+		t.Errorf("the sub-agent ran for ten seconds and its row reads %q", running)
 	}
 	if !strings.Contains(running, "12k") {
-		t.Errorf("the child spent 12000 tokens and its row reads %q", running)
+		t.Errorf("the sub-agent spent 12000 tokens and its row reads %q", running)
 	}
 }
 
 const (
-	heldInsideOneCall = 700 * time.Millisecond
-	heldSlices        = 7
-	childHeldFor      = 70 * time.Second
-	parentHeldFor     = 30 * time.Second
+	heldInsideOneCall   = 700 * time.Millisecond
+	heldSlices          = 7
+	subAgentHeldFor     = 70 * time.Second
+	orchestratorHeldFor = 30 * time.Second
 )
 
-func childHeldInsideOneCall(t *testing.T) *appDriver {
+func subAgentHeldInsideOneCall(t *testing.T) *appDriver {
 	t.Helper()
 	dir := scratchProject(t)
 	spawnCall := llm.ToolCall{ID: "call-1", Name: "spawn", Arguments: json.RawMessage(`{"task":"write note.txt","owns":["note.txt"]}`)}
@@ -1088,17 +1088,17 @@ func childHeldInsideOneCall(t *testing.T) *appDriver {
 	model := clockedFrom(time.Date(2026, 9, 24, 9, 0, 0, 0, time.UTC),
 		clockedStep{decision: llm.Decision{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{spawnCall}}},
 		clockedStep{decision: llm.Decision{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{writeNote("call-2")}}},
-		clockedStep{waited: childHeldFor, holds: heldInsideOneCall, decision: reply("the child wrote it")},
-		clockedStep{waited: parentHeldFor, holds: heldInsideOneCall, decision: reply("the child did it")},
+		clockedStep{waited: subAgentHeldFor, holds: heldInsideOneCall, decision: reply("the sub-agent wrote it")},
+		clockedStep{waited: orchestratorHeldFor, holds: heldInsideOneCall, decision: reply("the sub-agent did it")},
 	)
 	driver := driveApp(t)
 	newAppSession(dir, func(runOpts) (appWire, error) {
 		return wireOn(model), nil
-	}, nil, model.clock, sessionResume{}).run(t.Context(), onTheSubscription, "hand the note to a child", driver.emit)
+	}, nil, model.clock, sessionResume{}).run(t.Context(), onTheSubscription, "hand the note to a sub-agent", driver.emit)
 	return driver
 }
 
-func (d *appDriver) childClocks(state subagent.State) map[time.Duration]string {
+func (d *appDriver) subAgentClocks(state subagent.State) map[time.Duration]string {
 	d.mutex.Lock()
 	defer d.mutex.Unlock()
 	drawn := map[time.Duration]string{}
@@ -1106,49 +1106,49 @@ func (d *appDriver) childClocks(state subagent.State) map[time.Duration]string {
 		if event.Kind != tui.EventSubAgent {
 			continue
 		}
-		for _, child := range event.Children {
-			if child.State == state {
-				drawn[child.Since] = d.frames[index]
+		for _, subAgent := range event.SubAgents {
+			if subAgent.State == state {
+				drawn[subAgent.Since] = d.frames[index]
 			}
 		}
 	}
 	return drawn
 }
 
-func TestARunningChildsClockAdvancesWhileItIsHeldInsideOneCall(t *testing.T) {
-	driver := childHeldInsideOneCall(t)
+func TestARunningSubAgentsClockAdvancesWhileItIsHeldInsideOneCall(t *testing.T) {
+	driver := subAgentHeldInsideOneCall(t)
 
-	drawn := driver.childClocks(roster.Working)
+	drawn := driver.subAgentClocks(roster.Working)
 	var moved []time.Duration
 	for clock := range drawn {
-		if clock > 0 && clock < childHeldFor {
+		if clock > 0 && clock < subAgentHeldFor {
 			moved = append(moved, clock)
 		}
 	}
 	if len(moved) == 0 {
-		t.Fatalf("a child held %s inside one call was drawn only at %v: a clock that moves once the call answers says the child is stuck while it works",
-			widget.Until(childHeldFor), slices.Sorted(maps.Keys(drawn)))
+		t.Fatalf("a sub-agent held %s inside one call was drawn only at %v: a clock that moves once the call answers says the sub-agent is stuck while it works",
+			widget.Until(subAgentHeldFor), slices.Sorted(maps.Keys(drawn)))
 	}
-	t.Logf("the running child was drawn at %v", slices.Sorted(maps.Keys(drawn)))
+	t.Logf("the running sub-agent was drawn at %v", slices.Sorted(maps.Keys(drawn)))
 	for _, clock := range moved {
 		if reads := widget.Until(clock); !strings.Contains(drawn[clock], reads) {
-			t.Errorf("the child was drawn at %s and no screen of that frame reads it:\n%s", reads, drawn[clock])
+			t.Errorf("the sub-agent was drawn at %s and no screen of that frame reads it:\n%s", reads, drawn[clock])
 		}
 	}
 }
 
-func TestAChildThatHasHandedBackKeepsTheClockItStoppedAt(t *testing.T) {
-	driver := childHeldInsideOneCall(t)
+func TestASubAgentThatHasHandedBackKeepsTheClockItStoppedAt(t *testing.T) {
+	driver := subAgentHeldInsideOneCall(t)
 
-	drawn := driver.childClocks(roster.Finished)
+	drawn := driver.subAgentClocks(roster.Finished)
 	if len(drawn) == 0 {
-		t.Fatal("no frame carried a child that had handed back")
+		t.Fatal("no frame carried a sub-agent that had handed back")
 	}
-	t.Logf("the child that had stopped was drawn at %v", slices.Sorted(maps.Keys(drawn)))
+	t.Logf("the sub-agent that had stopped was drawn at %v", slices.Sorted(maps.Keys(drawn)))
 	for clock := range drawn {
-		if clock != childHeldFor {
-			t.Errorf("the child took %s and was drawn at %s after it stopped: a stopped clock may not keep counting",
-				widget.Until(childHeldFor), widget.Until(clock))
+		if clock != subAgentHeldFor {
+			t.Errorf("the sub-agent took %s and was drawn at %s after it stopped: a stopped clock may not keep counting",
+				widget.Until(subAgentHeldFor), widget.Until(clock))
 		}
 	}
 }
@@ -1210,7 +1210,7 @@ func TestAFullEventChannelDropsTheSnapshotsAndNeverBlocksTheTurn(t *testing.T) {
 	t.Logf("kept every one of the %d text events and %d of the %d snapshots", texts, contexts, dropped)
 }
 
-func TestATurnWithNoChildrenSendsNoSubAgentEventAtAll(t *testing.T) {
+func TestATurnWithNoSubAgentsSendsNoSubAgentEventAtAll(t *testing.T) {
 	dir := scratchProject(t)
 	driver := driveApp(t)
 	stubbedTurn(dir, noteThenStop())(t.Context(), onTheSubscription, "write the note yourself", driver.emit)
@@ -1765,7 +1765,7 @@ func TestTheSubAgentBarFollowsTheCapTheTurnWasGiven(t *testing.T) {
 			held:     rosterHolding(t, roster.SubAgent{ID: "parent-c1", Mission: "do it", Owns: []string{"x"}}),
 		}
 		watch.sendSubAgents()
-		if got := sent[0].Children[0].Total; got != one.total {
+		if got := sent[0].SubAgents[0].Total; got != one.total {
 			t.Fatalf("a bar under a cap of %d draws %d steps, want %d", one.maxSteps, got, one.total)
 		}
 	}
@@ -1952,13 +1952,13 @@ func TestTheEndOfASessionSaysNothingExtraWhenNothingWasRunning(t *testing.T) {
 	}
 }
 
-type modelStoppingTheTurnWhileTheChildIsAnswering struct {
+type modelStoppingTheTurnWhileTheSubAgentIsAnswering struct {
 	stop    context.CancelFunc
 	spawn   llm.ToolCall
 	spawned bool
 }
 
-func (m *modelStoppingTheTurnWhileTheChildIsAnswering) Ask(context.Context, llm.Request) (llm.Decision, error) {
+func (m *modelStoppingTheTurnWhileTheSubAgentIsAnswering) Ask(context.Context, llm.Request) (llm.Decision, error) {
 	if !m.spawned {
 		m.spawned = true
 		return llm.Decision{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{m.spawn}}, nil
@@ -1967,39 +1967,39 @@ func (m *modelStoppingTheTurnWhileTheChildIsAnswering) Ask(context.Context, llm.
 	return llm.Decision{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{writeNote("call-2")}}, nil
 }
 
-func childStoppedWhileItAnswered(t *testing.T) *appDriver {
+func subAgentStoppedWhileItAnswered(t *testing.T) *appDriver {
 	t.Helper()
 	dir := scratchProject(t)
 	driver := driveApp(t)
 	ctx, stop := context.WithCancel(t.Context())
 	defer stop()
-	model := &modelStoppingTheTurnWhileTheChildIsAnswering{stop: stop,
+	model := &modelStoppingTheTurnWhileTheSubAgentIsAnswering{stop: stop,
 		spawn: llm.ToolCall{ID: "call-1", Name: "spawn", Arguments: json.RawMessage(`{"task":"write note.txt","owns":["note.txt"]}`)}}
 
-	stubbedTurn(dir, model)(ctx, onTheSubscription, "hand the note to a child", driver.emit)
+	stubbedTurn(dir, model)(ctx, onTheSubscription, "hand the note to a sub-agent", driver.emit)
 	return driver
 }
 
-func TestAParkedChildsReportReachesThePanelWhenTheTurnIsStoppedAndNeverAsksAgain(t *testing.T) {
-	driver := childStoppedWhileItAnswered(t)
+func TestAParkedSubAgentsReportReachesThePanelWhenTheTurnIsStoppedAndNeverAsksAgain(t *testing.T) {
+	driver := subAgentStoppedWhileItAnswered(t)
 
 	done := driver.of(tui.EventDone)
-	if len(done) != 1 || len(done[0].Children) == 0 {
-		t.Fatalf("the stopped turn closed with %+v, want one close carrying the child", done)
+	if len(done) != 1 || len(done[0].SubAgents) == 0 {
+		t.Fatalf("the stopped turn closed with %+v, want one close carrying the sub-agent", done)
 	}
-	last := done[0].Children[0]
+	last := done[0].SubAgents[0]
 	if last.State != roster.Parked || last.Report == "" {
-		t.Fatalf("the panel was last told %+v, want a parked child carrying the report the roster holds", last)
+		t.Fatalf("the panel was last told %+v, want a parked sub-agent carrying the report the roster holds", last)
 	}
-	screen := pickedFirstChild(t, driver)
-	if !strings.Contains(screen, "act_on: the child was stopped") {
+	screen := pickedFirstSubAgent(t, driver)
+	if !strings.Contains(screen, "act_on: the sub-agent was stopped") {
 		t.Fatalf("the sub-agent view does not carry the parked report:\n%s", screen)
 	}
 	t.Log("\n" + screen)
 }
 
 func TestTheSpawnRowCarriesItsResultWhenTheTurnIsStoppedAndNeverAsksAgain(t *testing.T) {
-	driver := childStoppedWhileItAnswered(t)
+	driver := subAgentStoppedWhileItAnswered(t)
 
 	var spawned tui.Event
 	for _, call := range driver.of(tui.EventToolCall) {

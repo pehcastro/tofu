@@ -45,7 +45,7 @@ type ToolCallRow struct {
 	Args              json.RawMessage `json:"args,omitempty"`
 	Command           string          `json:"command,omitempty"`
 	Proxy             *ProxyRow       `json:"proxy,omitempty"`
-	ChildID           string          `json:"child_id,omitempty"`
+	SubAgentID        string          `json:"sub_agent_id,omitempty"`
 	ExitCode          *int            `json:"exit_code,omitempty"`
 	ResultBytes       int             `json:"result_bytes"`
 	RenderedBytes     int             `json:"rendered_bytes"`
@@ -117,7 +117,7 @@ type Row struct {
 	ForkedInto   string       `json:"forked_into,omitempty"`
 	ForkKind     ForkKind     `json:"fork_kind,omitempty"`
 	Warnings     []string     `json:"warnings,omitempty"`
-	ChildIDs     []string     `json:"child_ids"`
+	SubAgentIDs  []string     `json:"sub_agent_ids"`
 	Outcome      Outcome      `json:"outcome"`
 	TotalCostUSD float64      `json:"total_cost_usd"`
 	WallClockMS  int64        `json:"wall_clock_ms"`

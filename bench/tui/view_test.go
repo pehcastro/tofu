@@ -243,10 +243,10 @@ func BenchmarkSessionViewAwaitingAnAnswer(b *testing.B) {
 	}
 }
 
-func benchChildren() []subagent.Child {
-	children := make([]subagent.Child, 0, benchSubAgents)
+func benchSubAgentRows() []subagent.Row {
+	rows := make([]subagent.Row, 0, benchSubAgents)
 	for index := range benchSubAgents {
-		child := subagent.Child{
+		row := subagent.Row{
 			Name:   "go-dev-" + strconv.Itoa(index),
 			Owns:   []string{"internal/judge/**", "internal/point/" + strconv.Itoa(index) + "/**"},
 			Doing:  "writing internal/judge/policy/toolgate.go",
@@ -258,20 +258,20 @@ func benchChildren() []subagent.Child {
 			Report: "renamed the interface and its five implementations, and one call site still reaches the old name through an alias.",
 		}
 		for step := range benchSubAgentCalls {
-			child.Calls = append(child.Calls, subagent.Call{
+			row.Calls = append(row.Calls, subagent.Call{
 				Tool:   "edit",
 				Text:   "internal/judge/policy/toolgate.go line " + strconv.Itoa(step),
 				Result: "+18 -4",
 			})
 		}
-		children = append(children, child)
+		rows = append(rows, row)
 	}
-	return children
+	return rows
 }
 
 func BenchmarkSessionViewWithTheActivityBlock(b *testing.B) {
 	built := benchApp(b)
-	built.Update(app.Event{Kind: app.EventSubAgent, Children: benchChildren()})
+	built.Update(app.Event{Kind: app.EventSubAgent, SubAgents: benchSubAgentRows()})
 	built.Update(app.Event{Kind: app.EventToolCall, ID: "live", Tool: "bash", Text: "go test ./internal/..."})
 	if !strings.Contains(built.View().Content, "go-dev-0") {
 		b.Fatal("the bench is not measuring a frame carrying the activity block")
@@ -344,7 +344,7 @@ func BenchmarkSessionViewWithThePathMenuOpen(b *testing.B) {
 
 func BenchmarkSubAgentView(b *testing.B) {
 	built := benchApp(b)
-	built.Update(app.Event{Kind: app.EventSubAgent, Children: benchChildren()})
+	built.Update(app.Event{Kind: app.EventSubAgent, SubAgents: benchSubAgentRows()})
 	onScreen(built, "sub-agents", sitting{})
 	built.Update(tea.KeyPressMsg{Code: tea.KeyDown})
 	if !strings.Contains(built.View().Content, "go-dev-0") {
@@ -370,13 +370,13 @@ const benchEditDiff = "--- internal/judge/policy/toolgate.go\n" +
 func benchEditsApp(b *testing.B) *app.App {
 	b.Helper()
 	built := benchApp(b)
-	built.Update(app.Event{Kind: app.EventSubAgent, Children: benchChildren()})
+	built.Update(app.Event{Kind: app.EventSubAgent, SubAgents: benchSubAgentRows()})
 	for step := range benchTranscript {
 		id := "edit" + strconv.Itoa(step)
 		path := "internal/judge/policy/toolgate" + strconv.Itoa(step) + ".go"
 		built.Update(app.Event{Kind: app.EventToolCall, ID: id, Tool: "edit", Text: path})
 		built.Update(app.Event{Kind: app.EventToolResult, ID: id, Text: "9 lines, 210 bytes",
-			Agent: benchChildren()[step%benchSubAgents].Name, Diff: benchEditDiff})
+			Agent: benchSubAgentRows()[step%benchSubAgents].Name, Diff: benchEditDiff})
 	}
 	key(built, tea.KeyPressMsg{Code: tea.KeyTab}, 2)
 	return built

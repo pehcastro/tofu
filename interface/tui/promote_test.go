@@ -28,7 +28,7 @@ func TestASpawnIsNeverAToolRowInChat(t *testing.T) {
 	}{
 		{"finished", Event{Kind: EventToolResult, ID: "c1", Text: "wrote docs/verification.md"}},
 		{"asked", Event{Kind: EventDecision, Promote: true, Decision: &session.Decision{Tool: "subagent", Verdict: session.Ask}}},
-		{"failed", Event{Kind: EventToolResult, ID: "c1", Text: "the child errored", Failed: true}},
+		{"failed", Event{Kind: EventToolResult, ID: "c1", Text: "the sub-agent errored", Failed: true}},
 	} {
 		app := promoteApp(t, time.Now())
 		app.Update(Event{Kind: EventToolCall, ID: "c1", Tool: "subagent", Text: "go-docs: write the docs", Promote: true})

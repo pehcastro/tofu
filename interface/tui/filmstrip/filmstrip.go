@@ -25,8 +25,8 @@ const (
 	beatGap        = 900 * time.Millisecond
 	toolGap        = 1400 * time.Millisecond
 	typingGap      = 3 * time.Second
-	childGap       = 26 * time.Second
-	childID        = "qa-1"
+	subAgentGap    = 26 * time.Second
+	subAgentID     = "qa-1"
 	homePrefix     = "tofu-filmstrip"
 	workspaceDir   = "tofu"
 	globalSettings = "settings.json"
@@ -381,42 +381,42 @@ func failedTurn() scenario {
 	)}
 }
 
-func childTurn() scenario {
+func subAgentTurn() scenario {
 	held, spent := &roster.Roster{}, map[string]int{}
-	child := func(r *reel, state roster.State, steps, tokens int) tui.Event {
-		held.Stepped(childID, steps, r.at)
-		held.Reached(childID, state, "")
-		spent[childID] = tokens
-		return tui.Event{Kind: tui.EventSubAgent, Children: subagent.Children(held.SubAgents(), r.at, 0, spent, nil)}
+	subAgent := func(r *reel, state roster.State, steps, tokens int) tui.Event {
+		held.Stepped(subAgentID, steps, r.at)
+		held.Reached(subAgentID, state, "")
+		spent[subAgentID] = tokens
+		return tui.Event{Kind: tui.EventSubAgent, SubAgents: subagent.Rows(held.SubAgents(), r.at, 0, spent, nil)}
 	}
-	return scenario{name: "child", beats: append(opening(),
+	return scenario{name: "sub-agent", beats: append(opening(),
 		beat{"spawned", func(r *reel) {
 			_ = held.Hold(roster.SubAgent{
-				ID:      childID,
+				ID:      subAgentID,
 				Mission: "read the policy loader",
 				Owns:    []string{"internal/judge/policy/**"},
 				Started: r.at,
 			})
 			r.send(
-				delta("handing the policy loader to a child"),
+				delta("handing the policy loader to a sub-agent"),
 				tui.Event{Kind: tui.EventToolCall, ID: "42e30c", Tool: "spawn", Text: "read internal/judge/policy/resolve.go and say what it reads first", Promote: true},
-				child(r, roster.Working, 1, 0),
+				subAgent(r, roster.Working, 1, 0),
 			)
-			r.wait(childGap)
+			r.wait(subAgentGap)
 		}},
-		beat{"child-working", func(r *reel) {
-			r.send(call("815e77", "read", "internal/judge/policy/resolve.go"), child(r, roster.Working, 2, 9400))
-			r.wait(childGap)
+		beat{"sub-agent-working", func(r *reel) {
+			r.send(call("815e77", "read", "internal/judge/policy/resolve.go"), subAgent(r, roster.Working, 2, 9400))
+			r.wait(subAgentGap)
 		}},
-		beat{"child-thinking", func(r *reel) {
-			r.send(result("815e77", "209 lines, 6.2 KB"), child(r, roster.Working, 2, 18200))
-			r.wait(childGap)
+		beat{"sub-agent-thinking", func(r *reel) {
+			r.send(result("815e77", "209 lines, 6.2 KB"), subAgent(r, roster.Working, 2, 18200))
+			r.wait(subAgentGap)
 		}},
 		beat{"answered", func(r *reel) {
 			r.send(
-				child(r, roster.InReview, 2, 24600),
+				subAgent(r, roster.InReview, 2, 24600),
 				result("42e30c", "3 lines, 199 bytes"),
-				tui.Event{Kind: tui.EventText, ID: "d41c08", Text: "the child read it: the loader reads the lock before the mode."},
+				tui.Event{Kind: tui.EventText, ID: "d41c08", Text: "the sub-agent read it: the loader reads the lock before the mode."},
 				tui.Event{Kind: tui.EventDone, Text: "cooked for"},
 			)
 			r.app.Update(tui.Closed{})
@@ -426,7 +426,7 @@ func childTurn() scenario {
 }
 
 func scenarios() []scenario {
-	return append([]scenario{plainTurn(), twelveTools(), markdownAnswer(), askingTurn(), interruptedTurn(), lettingToolsFinish(), failedTurn(), childTurn()}, screens()...)
+	return append([]scenario{plainTurn(), twelveTools(), markdownAnswer(), askingTurn(), interruptedTurn(), lettingToolsFinish(), failedTurn(), subAgentTurn()}, screens()...)
 }
 
 func frameName(scenarioName string, index int, beatName string) string {

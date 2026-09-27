@@ -135,9 +135,9 @@ func (a *App) find(query string) []palette.Result {
 			results = append(results, palette.Result{Label: name, Detail: "screen", Screen: index})
 		}
 	}
-	for _, child := range a.children {
-		if contains(child.Name+" "+child.Doing, query) {
-			results = append(results, palette.Result{Label: "&" + child.Name + "  " + child.Doing, Reference: "[&" + child.Name + "]"})
+	for _, subAgent := range a.subAgents {
+		if contains(subAgent.Name+" "+subAgent.Doing, query) {
+			results = append(results, palette.Result{Label: "&" + subAgent.Name + "  " + subAgent.Doing, Reference: "[&" + subAgent.Name + "]"})
 		}
 	}
 	if query == "" {

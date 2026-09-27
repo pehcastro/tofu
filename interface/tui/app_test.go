@@ -512,8 +512,8 @@ func TestOneWireNamesItselfInTheFooter(t *testing.T) {
 	golden.Assert(t, "session-one-wire-100x24.golden", app.View().Content)
 }
 
-func subAgentChildren() []subagent.Child {
-	return []subagent.Child{
+func subAgentRows() []subagent.Row {
+	return []subagent.Row{
 		{
 			Name:  "go-dev",
 			Owns:  []string{"internal/judge/**", "internal/point/**"},
@@ -550,7 +550,7 @@ func subAgentChildren() []subagent.Child {
 func subAgentApp(t *testing.T, width, height int) *App {
 	t.Helper()
 	app := sessionApp(t, width, height)
-	app.Update(Event{Kind: EventSubAgent, Children: subAgentChildren()})
+	app.Update(Event{Kind: EventSubAgent, SubAgents: subAgentRows()})
 	app.Update(tea.KeyPressMsg{Code: '2', Mod: tea.ModAlt})
 	if app.current != screenAgents {
 		t.Fatalf("alt+2 left the app on screen %d, want sub-agents", app.current)
@@ -563,7 +563,7 @@ func TestTheSubAgentViewOpensAndEscReturnsToTheSession(t *testing.T) {
 	subAgentFrame := app.View().Content
 	golden.Assert(t, "subagent-120x36.golden", subAgentFrame)
 	if !strings.Contains(ansi.Strip(subAgentFrame), "go-dev") {
-		t.Fatalf("the sub-agent view does not name its children\n%s", subAgentFrame)
+		t.Fatalf("the sub-agent view does not name its sub-agents\n%s", subAgentFrame)
 	}
 	app.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
 	if app.current != screenChat {
@@ -574,7 +574,7 @@ func TestTheSubAgentViewOpensAndEscReturnsToTheSession(t *testing.T) {
 		t.Fatalf("esc did not return to the session transcript\n%s", back)
 	}
 	if !strings.Contains(back, "sub-agents (1)") {
-		t.Fatalf("the top row does not count the one running child\n%s", back)
+		t.Fatalf("the top row does not count the one running sub-agent\n%s", back)
 	}
 }
 
@@ -592,44 +592,44 @@ func TestTheSubAgentViewIsAlsoReachedByTabAndByAClick(t *testing.T) {
 	}
 }
 
-func TestTheSubAgentRailDrawsTheRunningChildsAction(t *testing.T) {
+func TestTheSubAgentRailDrawsTheRunningSubAgentsAction(t *testing.T) {
 	app := subAgentApp(t, 120, 36)
 	frame := ansi.Strip(app.View().Content)
 	if !strings.Contains(frame, "policy/toolgate.go") {
-		t.Fatalf("the rail does not draw what the running child is doing\n%s", frame)
+		t.Fatalf("the rail does not draw what the running sub-agent is doing\n%s", frame)
 	}
 }
 
-func childOf(report string) []subagent.Child {
-	return []subagent.Child{{Name: "c1", Owns: []string{"note.txt"}, Doing: "read note.txt", State: roster.Finished, Report: report}}
+func subAgentOf(report string) []subagent.Row {
+	return []subagent.Row{{Name: "c1", Owns: []string{"note.txt"}, Doing: "read note.txt", State: roster.Finished, Report: report}}
 }
 
-func TestAChildsMessageIsNeverSpokenInTheParentsTranscript(t *testing.T) {
-	const childSaid, parentSaid = "the note holds one line", "the child read it for me"
+func TestASubAgentsMessageIsNeverSpokenInTheOrchestratorsTranscript(t *testing.T) {
+	const subAgentSaid, orchestratorSaid = "the note holds one line", "the sub-agent read it for me"
 	app := newTestApp(Options{Repo: testRepo, Branch: "develop", Now: fixedClock(), Wires: bothWires})
 	app.Init()
 	app.Update(tea.WindowSizeMsg{Width: 120, Height: 36})
 	for _, event := range []Event{
-		{Kind: EventText, Text: "handing it to a child"},
+		{Kind: EventText, Text: "handing it to a sub-agent"},
 		{Kind: EventToolCall, ID: "s1", Tool: "spawn", Text: "read note.txt", Promote: true},
-		{Kind: EventTextDelta, Text: childSaid},
+		{Kind: EventTextDelta, Text: subAgentSaid},
 		{Kind: EventToolResult, ID: "s1", Text: "spawn c1 finished"},
-		{Kind: EventSubAgent, Children: childOf(childSaid)},
-		{Kind: EventText, Text: parentSaid},
+		{Kind: EventSubAgent, SubAgents: subAgentOf(subAgentSaid)},
+		{Kind: EventText, Text: orchestratorSaid},
 		{Kind: EventDone, Text: "cooked for"},
 	} {
 		app.Update(event)
 	}
 	transcript := ansi.Strip(app.View().Content)
-	if strings.Contains(transcript, childSaid) {
-		t.Errorf("the child spoke in the parent's transcript with nothing saying it was the child\n%s", transcript)
+	if strings.Contains(transcript, subAgentSaid) {
+		t.Errorf("the sub-agent spoke in the orchestrator's transcript with nothing saying it was the sub-agent\n%s", transcript)
 	}
-	if !strings.Contains(transcript, parentSaid) {
-		t.Fatalf("the parent's own message is missing from its transcript\n%s", transcript)
+	if !strings.Contains(transcript, orchestratorSaid) {
+		t.Fatalf("the orchestrator's own message is missing from its transcript\n%s", transcript)
 	}
 	app.Update(tea.KeyPressMsg{Code: '2', Mod: tea.ModAlt})
 	if panel := ansi.Strip(app.View().Content); !strings.Contains(panel, "[&c1]") {
-		t.Errorf("the sub-agents rail does not carry the child\n%s", panel)
+		t.Errorf("the sub-agents rail does not carry the sub-agent\n%s", panel)
 	}
 }
 
@@ -672,10 +672,10 @@ func afterAFullEventChannel(afterwards ...Event) (*App, []Event) {
 }
 
 func TestTheLastSubAgentStateReachesThePanelEvenWhenTheChannelIsFull(t *testing.T) {
-	app, _ := afterAFullEventChannel(Event{Kind: EventSubAgent, Children: childOf("dropped")}, Event{Kind: EventDone, Text: "cooked for", Children: childOf("the note holds one line")})
+	app, _ := afterAFullEventChannel(Event{Kind: EventSubAgent, SubAgents: subAgentOf("dropped")}, Event{Kind: EventDone, Text: "cooked for", SubAgents: subAgentOf("the note holds one line")})
 	app.Update(tea.KeyPressMsg{Code: '2', Mod: tea.ModAlt})
 	if panel := ansi.Strip(app.View().Content); !strings.Contains(panel, "[&c1]") {
-		t.Fatalf("a full channel threw away the child's last state, so the panel never showed it\n%s", panel)
+		t.Fatalf("a full channel threw away the sub-agent's last state, so the panel never showed it\n%s", panel)
 	}
 }
 
@@ -1115,8 +1115,8 @@ func TestTypingBetweenTwoInterruptsKeepsTheProgramRunning(t *testing.T) {
 }
 
 var (
-	shellCall = Event{Kind: EventToolCall, ID: "c1", Tool: "bash", Text: "sleep 3"}
-	childCall = Event{Kind: EventToolCall, ID: "c1", Tool: "spawn", Text: "write half a file", Promote: true}
+	shellCall    = Event{Kind: EventToolCall, ID: "c1", Tool: "bash", Text: "sleep 3"}
+	subAgentCall = Event{Kind: EventToolCall, ID: "c1", Tool: "spawn", Text: "write half a file", Promote: true}
 )
 
 func callingApp(t *testing.T, call Event) (*App, context.Context) {
@@ -1194,39 +1194,39 @@ func TestASecondInterruptStopsTheTurnHoweverLongAfterTheFirstItArrives(t *testin
 	}
 }
 
-func TestOneInterruptReachesAChildRunningInsideTheSpawnCall(t *testing.T) {
-	app, held := callingApp(t, childCall)
+func TestOneInterruptReachesASubAgentRunningInsideTheSpawnCall(t *testing.T) {
+	app, held := callingApp(t, subAgentCall)
 	app.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
 	select {
 	case <-held.Done():
 	case <-time.After(2 * time.Second):
-		t.Fatal("one ctrl+c left the child running: the spawn call was let finish like a shell command")
+		t.Fatal("one ctrl+c left the sub-agent running: the spawn call was let finish like a shell command")
 	}
 	if plain := ansi.Strip(app.View().Content); !strings.Contains(plain, stoppingNote) {
 		t.Fatalf("the screen does not say the turn was stopped\n%s", plain)
 	}
 }
 
-func TestAChildStopsReadingAsRunningOnceTheTurnHasEnded(t *testing.T) {
-	app, _ := callingApp(t, childCall)
+func TestASubAgentStopsReadingAsRunningOnceTheTurnHasEnded(t *testing.T) {
+	app, _ := callingApp(t, subAgentCall)
 	app.Update(tea.WindowSizeMsg{Width: 120, Height: 36})
-	app.Update(Event{Kind: EventSubAgent, Children: []subagent.Child{
+	app.Update(Event{Kind: EventSubAgent, SubAgents: []subagent.Row{
 		{Name: "c1", Doing: "write half a file", State: roster.Working},
 		{Name: "c2", Doing: "read the changelog", State: roster.WaitingAnswer},
 	}})
 	app.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
 	app.Update(Closed{})
 	if app.status.Agents != 0 {
-		t.Fatalf("the top row still counts %d children running after the turn ended", app.status.Agents)
+		t.Fatalf("the top row still counts %d sub-agents running after the turn ended", app.status.Agents)
 	}
-	for _, child := range app.children {
-		if child.State != roster.Parked {
-			t.Fatalf("%s reads as %s after the stop, want parked", child.Name, child.State)
+	for _, subAgent := range app.subAgents {
+		if subAgent.State != roster.Parked {
+			t.Fatalf("%s reads as %s after the stop, want parked", subAgent.Name, subAgent.State)
 		}
 	}
 	app.show(screenAgents)
 	if plain := ansi.Strip(app.View().Content); strings.Contains(plain, "sub-agents (") || !strings.Contains(plain, "ACTIVE  0") {
-		t.Fatalf("the sub-agents screen goes on claiming a running child\n%s", plain)
+		t.Fatalf("the sub-agents screen goes on claiming a running sub-agent\n%s", plain)
 	}
 }
 

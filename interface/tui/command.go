@@ -19,7 +19,7 @@ const (
 func commands(options Options) []session.Command {
 	listed := []session.Command{
 		{Name: "chat", What: "the conversation and the composer"},
-		{Name: "sub-agents", What: "every tool call and every child, in one feed"},
+		{Name: "sub-agents", What: "every tool call and every sub-agent, in one feed"},
 		{Name: "file-edits", What: "every changed line, who made it and where"},
 		{Name: "shells", What: "the persistent processes an agent left running"},
 		{Name: "models", What: "every model the signed subscriptions serve, and which one the next turn runs"},

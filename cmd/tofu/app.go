@@ -74,7 +74,7 @@ const (
 	placeWords          = 2
 	queuedMessages      = 64
 	roundMark           = "-r"
-	childVerdictPrefix  = "sub-agent "
+	subAgentVerdict     = "sub-agent "
 	cancelledAt         = "cancelled at"
 )
 
@@ -803,13 +803,13 @@ func (s *appSession) run(ctx context.Context, pick tui.Pick, task string, emit t
 		watch.inner = asked
 		return watch, nil
 	}
-	wrapChild := func(model turn.Model) (turn.Model, error) {
+	wrapSubAgent := func(model turn.Model) (turn.Model, error) {
 		asked, guardErr := guarded(model, budget)
-		return watchedChild{watch: watch, inner: asked}, guardErr
+		return watchedSubAgent{watch: watch, inner: asked}, guardErr
 	}
 	notify := func(notice string) { emit(tui.Event{Kind: tui.EventNote, Text: notice}) }
 	config, spawner, configErr := runConfig(opts, built, runtime{accounts: opened.held.forTurn(), spend: opened.spend, budget: budget, gate: gate, sift: sifter, scorer: scorer, sessions: sessions, notify: notify, roster: held, now: s.now,
-		open: s.open, wrapChild: wrapChild, orchestrator: opened.selected})
+		open: s.open, wrapSubAgent: wrapSubAgent, orchestrator: opened.selected})
 	if configErr != nil {
 		fail(configErr)
 		return
@@ -855,7 +855,7 @@ func (s *appSession) run(ctx context.Context, pick tui.Pick, task string, emit t
 		emit(tui.Event{Kind: tui.EventForkEnd})
 		return nil
 	}
-	stopClocks := watch.clockRunningChildren()
+	stopClocks := watch.clockRunningSubAgents()
 	row, runErr := turn.Run(turn.WithShellRegistry(ctx, s.shells), config)
 	stopClocks()
 	watch.readCalls()
@@ -876,7 +876,7 @@ func (s *appSession) run(ctx context.Context, pick tui.Pick, task string, emit t
 	if stopped {
 		words = cancelledAt
 	}
-	emit(tui.Event{Kind: tui.EventDone, Text: words, Children: watch.children()})
+	emit(tui.Event{Kind: tui.EventDone, Text: words, SubAgents: watch.subAgents()})
 }
 
 func endedForkWords(ended turn.Row) string {
@@ -1022,12 +1022,12 @@ type appWatcher struct {
 	spawns    []string
 }
 
-type watchedChild struct {
+type watchedSubAgent struct {
 	watch *appWatcher
 	inner turn.Model
 }
 
-func (c watchedChild) Ask(ctx context.Context, request llm.Request) (llm.Decision, error) {
+func (c watchedSubAgent) Ask(ctx context.Context, request llm.Request) (llm.Decision, error) {
 	return c.watch.askThrough(ctx, c.inner, request)
 }
 
@@ -1059,7 +1059,7 @@ func (a *appWatcher) askThrough(ctx context.Context, inner turn.Model, request l
 	a.in += fresh
 	a.out += decision.Usage.OutputTokens
 	a.cacheRead += decision.CacheReadTokens
-	a.noteChildsAsk(asker, fresh+decision.Usage.OutputTokens, decision.ToolCalls)
+	a.noteSubAgentsAsk(asker, fresh+decision.Usage.OutputTokens, decision.ToolCalls)
 	stats := tui.Event{Kind: tui.EventStats, Model: decision.Build, TokensIn: a.in, TokensOut: a.out, CacheRead: a.cacheRead}
 	if a.gate != nil {
 		stats.Decisions = a.gate.decisions
@@ -1174,17 +1174,17 @@ func (a *appWatcher) asker() string {
 	return ""
 }
 
-func (a *appWatcher) noteChildsAsk(child string, tokens int, calls []llm.ToolCall) {
-	if child == "" {
+func (a *appWatcher) noteSubAgentsAsk(subAgent string, tokens int, calls []llm.ToolCall) {
+	if subAgent == "" {
 		return
 	}
 	a.shows.Lock()
 	if a.asked == nil {
 		a.spent, a.asked = map[string]int{}, map[string][]subagent.Call{}
 	}
-	a.spent[child] += tokens
+	a.spent[subAgent] += tokens
 	for _, call := range calls {
-		a.asked[child] = append(a.asked[child], subagent.Call{ID: a.eventID(child, call.ID), At: a.now(), Tool: call.Name})
+		a.asked[subAgent] = append(a.asked[subAgent], subagent.Call{ID: a.eventID(subAgent, call.ID), At: a.now(), Tool: call.Name})
 	}
 	a.shows.Unlock()
 	a.sendSubAgents()
@@ -1199,7 +1199,7 @@ func (a *appWatcher) readCalls() {
 	if a.held == nil {
 		return
 	}
-	rows, agents := childRows(a.spawner), a.held.SubAgents()
+	rows, agents := subAgentRows(a.spawner), a.held.SubAgents()
 	a.shows.Lock()
 	defer a.shows.Unlock()
 	if a.calls == nil {
@@ -1211,12 +1211,12 @@ func (a *appWatcher) readCalls() {
 }
 
 func (a *appWatcher) draw() {
-	if children := a.children(); len(children) > 0 {
-		a.emit(tui.Event{Kind: tui.EventSubAgent, Children: children})
+	if subAgents := a.subAgents(); len(subAgents) > 0 {
+		a.emit(tui.Event{Kind: tui.EventSubAgent, SubAgents: subAgents})
 	}
 }
 
-func (a *appWatcher) children() []subagent.Child {
+func (a *appWatcher) subAgents() []subagent.Row {
 	if a.held == nil {
 		return nil
 	}
@@ -1228,7 +1228,7 @@ func (a *appWatcher) children() []subagent.Child {
 	}
 	a.shows.Lock()
 	defer a.shows.Unlock()
-	return subagent.Children(agents, a.now(), a.maxSteps, a.spent, func(agent roster.SubAgent) []subagent.Call { return a.calls[agent.ID] })
+	return subagent.Rows(agents, a.now(), a.maxSteps, a.spent, func(agent roster.SubAgent) []subagent.Call { return a.calls[agent.ID] })
 }
 
 func (a *appWatcher) verdictOf(id, report string) (string, bool) {
@@ -1236,14 +1236,14 @@ func (a *appWatcher) verdictOf(id, report string) (string, bool) {
 		return "", false
 	}
 	for _, line := range strings.Split(report, "\n") {
-		if strings.HasPrefix(line, childVerdictPrefix) {
+		if strings.HasPrefix(line, subAgentVerdict) {
 			return line, true
 		}
 	}
 	return "", false
 }
 
-func (a *appWatcher) clockRunningChildren() (stop func()) {
+func (a *appWatcher) clockRunningSubAgents() (stop func()) {
 	ticking, stopped := make(chan struct{}), make(chan struct{})
 	go func() {
 		defer close(stopped)

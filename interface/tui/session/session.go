@@ -116,7 +116,7 @@ type Model struct {
 	LettingToolsFinish bool
 	Commands           []Command
 	Paths              []string
-	Children           []subagent.Child
+	SubAgents          []subagent.Row
 	now                func() time.Time
 	waiting            time.Time
 	requested          time.Time

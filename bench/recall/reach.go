@@ -130,12 +130,12 @@ func peakOccupancy(steps []turn.StepRow) (peak, target int, found bool) {
 	return peak, target, found
 }
 
-func refetchesInto(store *session.Store, childID string, known []rc.CarriedResult) (int, error) {
+func refetchesInto(store *session.Store, forkID string, known []rc.CarriedResult) (int, error) {
 	knownKeys := make(map[string]bool, len(known))
 	for _, result := range known {
 		knownKeys[result.Key] = true
 	}
-	steps, err := readSteps(store, childID)
+	steps, err := readSteps(store, forkID)
 	if err != nil {
 		return 0, err
 	}

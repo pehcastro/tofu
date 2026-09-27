@@ -114,24 +114,24 @@ func measure(events []session.Event) role {
 				continue
 			}
 			if slices.Contains([]string{"read", "bash", "search", "glob"}, body.Tool) {
-				for _, child := range measured.spawns {
-					child.verified = child.verified || child.answered
+				for _, spawned := range measured.spawns {
+					spawned.verified = spawned.verified || spawned.answered
 				}
 			}
 		case session.EventSpawn:
 			var body session.SpawnBody
 			_ = json.Unmarshal(event.Body, &body)
-			for _, child := range measured.spawns {
-				if child.call == event.Call {
-					child.agent, child.definition = body.Agent, body.Definition
+			for _, spawned := range measured.spawns {
+				if spawned.call == event.Call {
+					spawned.agent, spawned.definition = body.Agent, body.Definition
 				}
 			}
 		case session.EventToolResult:
 			var result session.ResultBody
 			_ = json.Unmarshal(event.Body, &result)
 			measured.count(event.Turn, calls[event.Call], result.ToolOutcome == "ran")
-			for _, child := range measured.spawns {
-				child.answered = child.answered || child.call == event.Call
+			for _, spawned := range measured.spawns {
+				spawned.answered = spawned.answered || spawned.call == event.Call
 			}
 		}
 	}
@@ -199,20 +199,20 @@ func report(w io.Writer, id string, r role) {
 		line("  calls before the first spawn   %d, %s after the task", r.firstSpawn, r.firstSpawnTook.Round(time.Second))
 	}
 	announced, verified := 0, 0
-	for _, child := range r.spawns {
-		if child.announced {
+	for _, spawned := range r.spawns {
+		if spawned.announced {
 			announced++
 		}
-		if child.verified {
+		if spawned.verified {
 			verified++
 		}
 	}
 	line("  sub-agents spawned             %d", len(r.spawns))
 	line("  text messages                  %d, %d narrate tool work", len(r.texts), r.narrating)
 	line("  spawns announced               %d of %d", announced, len(r.spawns))
-	line("  child results verified         %d of %d", verified, len(r.spawns))
-	for _, child := range r.spawns {
-		line("    %s (%s): announced %t, answered %t, verified %t", child.agent, child.definition, child.announced, child.answered, child.verified)
+	line("  sub-agent results verified     %d of %d", verified, len(r.spawns))
+	for _, spawned := range r.spawns {
+		line("    %s (%s): announced %t, answered %t, verified %t", spawned.agent, spawned.definition, spawned.announced, spawned.answered, spawned.verified)
 	}
 	for i, text := range r.texts {
 		line("  text %d: %s", i+1, strings.ReplaceAll(text, "\n", " "))

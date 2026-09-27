@@ -8,22 +8,23 @@ import (
 )
 
 const (
-	rolesDir       = "roles"
-	legacyTurnRole = "turn"
+	rolesDir           = "roles"
+	legacyTurnRole     = "turn"
+	legacySubAgentRole = "child"
 )
 
 type RoleID string
 
 const (
 	RoleOrchestrator RoleID = "orchestrator"
-	RoleChild        RoleID = "child"
+	RoleSubAgent     RoleID = "sub-agent"
 )
 
-func RoleIDs() []RoleID { return []RoleID{RoleOrchestrator, RoleChild} }
+func RoleIDs() []RoleID { return []RoleID{RoleOrchestrator, RoleSubAgent} }
 
 func (r RoleID) valid() bool {
 	switch r {
-	case RoleOrchestrator, RoleChild:
+	case RoleOrchestrator, RoleSubAgent:
 		return true
 	}
 	return false
@@ -33,7 +34,7 @@ func (r RoleID) Label() string {
 	switch r {
 	case RoleOrchestrator:
 		return string(r)
-	case RoleChild:
+	case RoleSubAgent:
 		return "(unnamed sub-agent)"
 	}
 	panic("models: unknown role " + string(r))
@@ -43,7 +44,7 @@ func (r RoleID) What() string {
 	switch r {
 	case RoleOrchestrator:
 		return "the model that plans and hands work to sub-agents"
-	case RoleChild:
+	case RoleSubAgent:
 		return "a spawn that names no sub-agent"
 	}
 	panic("models: unknown role " + string(r))
@@ -53,7 +54,7 @@ func (r RoleID) Unbound() string {
 	switch r {
 	case RoleOrchestrator:
 		return "nothing is bound, so it runs on the subscription default"
-	case RoleChild:
+	case RoleSubAgent:
 		return "nothing is bound, so it runs on the orchestrator's model"
 	}
 	panic("models: unknown role " + string(r))
@@ -118,12 +119,15 @@ func (c Library) Bind(fallback Subscription) (Bindings, error) {
 
 func buildRole(name string, from *sheet, library Library) (Role, *Broken) {
 	id := RoleID(name)
-	if name == legacyTurnRole {
+	switch name {
+	case legacyTurnRole:
 		id = RoleOrchestrator
+	case legacySubAgentRole:
+		id = RoleSubAgent
 	}
 	if !id.valid() {
 		return Role{}, &Broken{File: from.file,
-			Why: "a role file is " + string(RoleOrchestrator) + ".yaml or " + string(RoleChild) + ".yaml, and nothing else reads one"}
+			Why: "a role file is " + string(RoleOrchestrator) + ".yaml or " + string(RoleSubAgent) + ".yaml, and nothing else reads one"}
 	}
 	slug := from.values["model"]
 	if slug == "" {
@@ -138,7 +142,7 @@ func buildRole(name string, from *sheet, library Library) (Role, *Broken) {
 
 func BindRole(layerDir string, role RoleID, slug string) error {
 	if !role.valid() {
-		return errors.New("a role file is " + string(RoleOrchestrator) + ".yaml or " + string(RoleChild) + ".yaml, not " + string(role) + ".yaml")
+		return errors.New("a role file is " + string(RoleOrchestrator) + ".yaml or " + string(RoleSubAgent) + ".yaml, not " + string(role) + ".yaml")
 	}
 	return sys.WriteFile(filepath.Join(layerDir, rolesDir, string(role)+".yaml"), []byte("model: "+slug+"\n"), 0o644)
 }
