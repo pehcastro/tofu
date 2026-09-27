@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"sort"
 	"strconv"
@@ -157,31 +158,89 @@ func (r *Registry) Start(root, name, command, owner string) (Shell, error) {
 }
 
 func (r *Registry) Yield(ctx context.Context, cmd *exec.Cmd, command, owner string, within time.Duration) (Shell, string, error) {
+	got, err := r.YieldReady(ctx, cmd, command, owner, Wait{Within: within, Poll: within})
+	return got.Shell, got.Output, err
+}
+
+type Readiness string
+
+const (
+	ReadyExited  Readiness = "exited"
+	ReadyPort    Readiness = "its port opened"
+	ReadyLine    Readiness = "it printed a ready line"
+	ReadyWaited  Readiness = "the wait ran out"
+	ReadyStopped Readiness = "the turn stopped"
+)
+
+type Wait struct {
+	Within time.Duration
+	Poll   time.Duration
+	Port   int
+}
+
+type Yielded struct {
+	Shell  Shell
+	Output string
+	Ready  Readiness
+	Took   time.Duration
+}
+
+func (r *Registry) YieldReady(ctx context.Context, cmd *exec.Cmd, command, owner string, wait Wait) (Yielded, error) {
+	if wait.Port > 0 {
+		lookup, cancel := context.WithTimeout(ctx, wait.Within)
+		defer cancel()
+		if err := r.refuseHeld(lookup, wait.Port, wait.Poll); err != nil {
+			return Yielded{}, err
+		}
+	}
 	name, logFile, err := r.claim()
 	if err != nil {
-		return Shell{}, "", err
+		return Yielded{}, err
 	}
 	spawned, waited, err := r.spawn(cmd, logFile)
 	if err != nil {
 		_ = os.Remove(r.logPath(name))
-		return Shell{}, "", err
+		return Yielded{}, err
 	}
-	entry := Shell{Name: name, Command: command, Dir: cmd.Dir, Owner: owner, PID: cmd.Process.Pid, State: Running, Started: time.Now()}
-	select {
-	case waitErr := <-waited:
-		_ = logFile.Close()
-		spawned.release()
-		output, readErr := os.ReadFile(r.logPath(name))
-		_ = os.Remove(r.logPath(name))
-		ended, code := time.Now(), exitCode(waitErr)
-		entry.State, entry.Ended, entry.ExitCode = Exited, &ended, &code
-		return entry, string(output), readErr
-	case <-time.After(within):
-	case <-ctx.Done():
+	got := Yielded{Shell: Shell{Name: name, Command: command, Dir: cmd.Dir, Owner: owner, PID: cmd.Process.Pid, State: Running, Started: time.Now()}}
+	poll := time.NewTicker(wait.Poll)
+	defer poll.Stop()
+	gaveUp := time.After(wait.Within)
+	for got.Ready == "" {
+		select {
+		case waitErr := <-waited:
+			_ = logFile.Close()
+			spawned.release()
+			output, readErr := os.ReadFile(r.logPath(name))
+			_ = os.Remove(r.logPath(name))
+			ended, code := time.Now(), exitCode(waitErr)
+			got.Shell.State, got.Shell.Ended, got.Shell.ExitCode = Exited, &ended, &code
+			got.Output, got.Ready, got.Took = string(output), ReadyExited, time.Since(got.Shell.Started)
+			return got, readErr
+		case <-gaveUp:
+			got.Ready = ReadyWaited
+		case <-ctx.Done():
+			got.Ready = ReadyStopped
+		case <-poll.C:
+			got.Ready = r.readiness(name, wait)
+		}
 	}
-	err = r.keep(entry, spawned, waited, logFile)
+	got.Took = time.Since(got.Shell.Started)
+	err = r.keep(got.Shell, spawned, waited, logFile)
 	output, _ := os.ReadFile(r.logPath(name))
-	return entry, string(output), err
+	got.Output = string(output)
+	return got, err
+}
+
+func (r *Registry) readiness(name string, wait Wait) Readiness {
+	output, _ := os.ReadFile(r.logPath(name))
+	if regexp.MustCompile(`(?i)\b(?:listening|ready|started server)\b|http://`).Match(output) {
+		return ReadyLine
+	}
+	if wait.Port > 0 && slices.ContainsFunc(dialLoopbacks(wait.Port, wait.Poll), func(one Address) bool { return one.Open }) {
+		return ReadyPort
+	}
+	return ""
 }
 
 func exitCode(waitErr error) int {

@@ -299,10 +299,11 @@ func (t *BashTool) Definition() llm.Tool {
 			"background: true is for long work that keeps running and nothing else: a dev server, a watcher, a long-running script. "+
 			"a test, a build, an install, a version check or any other command that ends runs here without background, never in it. "+
 			"a background start waits up to %d ms: a command that ends by then comes back with its output and exit code like any other and is not kept, "+
-			"and one still running is kept on the shells screen and the call returns its name, pid and output so far. "+
+			"and one still running is kept on the shells screen and the call returns its name, pid and output so far, as soon as its port opens or it prints a ready line. "+
+			"a start whose command, env or package script names a port that another process holds on 127.0.0.1 or ::1 is refused, naming the holder and a free port. "+
 			"start the server itself as the whole command, with no & and no nohup, so the process kept is the one that serves. "+
 			"stop, restart and read a kept process with the shell tool by its name, never with kill, taskkill or pkill: a kill of a pid tofu started runs as shell stop. "+
-			"check whether it is up with check_port, which dials the port on localhost and answers in milliseconds, no http request needed.",
+			"check whether a port is taken with check_port, which dials it on 127.0.0.1 and ::1 and names the process holding it, no http request needed.",
 		t.choice.Label, konst.BashDeadlineMillis, konst.BashMaxDeadlineMillis, konst.BackgroundYieldMillis)
 	if t.choice.Note != "" {
 		description += " " + t.choice.Note
@@ -319,7 +320,7 @@ func (t *BashTool) Definition() llm.Tool {
 				"command":    map[string]any{"type": "string", "description": "required unless check_port is set"},
 				"timeout_ms": map[string]any{"type": "integer", "description": fmt.Sprintf("how long the command may run before it is killed, %d by default and %d at most. a larger number runs at the cap and says so rather than being refused", konst.BashDeadlineMillis, konst.BashMaxDeadlineMillis)},
 				"background": map[string]any{"type": "boolean", "description": fmt.Sprintf("only for long work that keeps running: a dev server, a watcher, a long-running script. never a test or a one-shot command. waits up to %d ms, returns the output if it ended by then, and otherwise keeps it running on the shells screen, where it outlives the turn", konst.BackgroundYieldMillis)},
-				"check_port": map[string]any{"type": "integer", "description": "skip command and report whether this port answers on 127.0.0.1, without any http request"},
+				"check_port": map[string]any{"type": "integer", "description": "skip command and report whether this port is free or held on 127.0.0.1 and ::1, with the pid and command line of its holder, without any http request"},
 			},
 			"required": []string{},
 		},
@@ -333,16 +334,21 @@ type bashArgs struct {
 	CheckPort  int    `json:"check_port,omitempty"`
 }
 
-func (t *BashTool) checkPort(port int) Result {
+func (t *BashTool) checkPort(ctx context.Context, port int) Result {
 	started := time.Now()
-	open := shell.PortOpen("127.0.0.1", port, konst.PortCheckTimeoutMillis*time.Millisecond)
-	took := time.Since(started).Milliseconds()
-	state, code := "not listening", 1
-	if open {
-		state, code = "listening", 0
+	lookup, cancel := context.WithTimeout(ctx, konst.PortHolderTimeoutMillis*time.Millisecond)
+	defer cancel()
+	var lines []string
+	for _, address := range shell.Probe(lookup, port, konst.PortCheckTimeoutMillis*time.Millisecond) {
+		state := "free"
+		if address.Open {
+			state = "held by " + address.Holder()
+		}
+		lines = append(lines, address.Host+": "+state)
 	}
+	code := 0
 	return Result{
-		Content:  fmt.Sprintf("port %d is %s on 127.0.0.1, checked in %d ms", port, state, took),
+		Content:  fmt.Sprintf("port %d, checked in %d ms\n%s", port, time.Since(started).Milliseconds(), strings.Join(lines, "\n")),
 		Command:  fmt.Sprintf("check_port %d", port),
 		ExitCode: &code,
 		Outcome:  ResultSucceeded,
@@ -375,19 +381,25 @@ func (t *BashTool) runBackground(ctx context.Context, args bashArgs) (Result, er
 	if registry == nil {
 		return Result{}, errors.New("bash: background needs a shell registry and none is attached to this turn")
 	}
-	ran, output, err := registry.Yield(ctx, t.command(context.Background(), args.Command), args.Command, shellOwnerFrom(ctx), konst.BackgroundYieldMillis*time.Millisecond)
+	cmd := t.command(context.Background(), args.Command)
+	got, err := registry.YieldReady(ctx, cmd, args.Command, shellOwnerFrom(ctx), shell.Wait{
+		Within: konst.BackgroundYieldMillis * time.Millisecond,
+		Poll:   konst.ReadyPollMillis * time.Millisecond,
+		Port:   shell.NamedPort(string(t.root), args.Command, cmd.Env),
+	})
 	if err != nil {
 		return Result{}, fmt.Errorf("bash: %w", err)
 	}
+	ran := got.Shell
 	if ran.State == shell.Running {
 		return Result{
-			Content: capResult(fmt.Sprintf("%s is still running as pid %d in %s, and keeps running after this call: it is listed on the shells screen. check it with check_port once it should be up. its output so far:\n%s",
-				ran.Name, ran.PID, ran.Dir, output)),
+			Content: capResult(fmt.Sprintf("%s is still running as pid %d in %s, and keeps running after this call: it is listed on the shells screen. this call returned after %d ms because %s. its output so far:\n%s",
+				ran.Name, ran.PID, ran.Dir, got.Took.Milliseconds(), got.Ready, got.Output)),
 			Command: "background " + ran.Name + ": " + args.Command,
 			Outcome: ResultSucceeded,
 		}, nil
 	}
-	return exitedResult(args.Command, output, *ran.ExitCode, fmt.Sprintf(
+	return exitedResult(args.Command, got.Output, *ran.ExitCode, fmt.Sprintf(
 		"bash: this ended inside the %d ms a background start waits, so nothing was kept on the shells screen: a command that ends belongs in bash without background\n",
 		konst.BackgroundYieldMillis)), nil
 }
@@ -453,7 +465,7 @@ func (t *BashTool) Run(ctx context.Context, raw json.RawMessage) (Result, error)
 		return Result{}, fmt.Errorf("bash: arguments are not the expected shape: %w", err)
 	}
 	if args.CheckPort != 0 {
-		return t.checkPort(args.CheckPort), nil
+		return t.checkPort(ctx, args.CheckPort), nil
 	}
 	if strings.TrimSpace(args.Command) == "" {
 		return Result{}, errors.New("bash: command is required unless check_port is set")
