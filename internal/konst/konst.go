@@ -120,6 +120,7 @@ const (
 	SubAgentCallsWatched    = 17
 	SubAgentMaxRounds       = 3
 	SubAgentReferenceBytes  = 16384
+	SubAgentWarmMillis      = 8000
 
 	OrchestratorSourceLinesPerTurn = 10
 )

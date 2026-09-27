@@ -331,6 +331,52 @@ type SpawnTool struct {
 	subAgentRows   []Row
 	reports        []SubAgentReport
 	ran            []Spawned
+	warmups        map[string]*warmup
+}
+
+type warmup struct {
+	leader string
+	once   sync.Once
+	ready  chan struct{}
+}
+
+func (w *warmup) warmed() { w.once.Do(func() { close(w.ready) }) }
+
+type warmingModel struct {
+	model  Model
+	warmup *warmup
+}
+
+func (m warmingModel) Ask(ctx context.Context, request llm.Request) (llm.Decision, error) {
+	decision, err := m.model.Ask(ctx, request)
+	m.warmup.warmed()
+	return decision, err
+}
+
+func (w *warmup) stagger(ctx context.Context, call string, subAgent Config) Config {
+	switch {
+	case w == nil:
+	case w.leader == call:
+		if subAgent.Model != nil {
+			subAgent.Model = warmingModel{model: subAgent.Model, warmup: w}
+		}
+		if pick := subAgent.Accounts.Pick; pick != nil {
+			subAgent.Accounts.Pick = func(ctx context.Context) (Account, error) {
+				account, err := pick(ctx)
+				if account.Model != nil {
+					account.Model = warmingModel{model: account.Model, warmup: w}
+				}
+				return account, err
+			}
+		}
+	default:
+		select {
+		case <-w.ready:
+		case <-time.After(konst.SubAgentWarmMillis * time.Millisecond):
+		case <-ctx.Done():
+		}
+	}
+	return subAgent
 }
 
 func NewSpawnTool(orchestratorID string, base Config, roster *subagent.Roster) *SpawnTool {
@@ -370,14 +416,27 @@ func (t *SpawnTool) reserve(limit int) error {
 func (t *SpawnTool) disjointPrefix(calls []llm.ToolCall) int {
 	limit := t.limits().PerTurn
 	var wave subagent.Roster
+	width, firsts, warmups := len(calls), map[string]*warmup{}, map[string]*warmup{}
 	for i, call := range calls {
 		var args spawnArgs
 		if i == limit || call.Name != t.Name() || json.Unmarshal(call.Arguments, &args) != nil ||
 			wave.Hold(subagent.SubAgent{ID: call.ID, Owns: args.Owns}) != nil {
-			return i
+			width = i
+			break
+		}
+		first, sibling := firsts[args.Agent]
+		switch {
+		case args.Agent == "":
+		case sibling:
+			warmups[first.leader], warmups[call.ID] = first, first
+		default:
+			firsts[args.Agent] = &warmup{leader: call.ID, ready: make(chan struct{})}
 		}
 	}
-	return len(calls)
+	t.mu.Lock()
+	t.warmups = warmups
+	t.mu.Unlock()
+	return width
 }
 
 func (t *SpawnTool) limits() SubAgentLimits {
@@ -440,6 +499,13 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 	if err := json.Unmarshal(raw, &args); err != nil {
 		return Result{}, fmt.Errorf("spawn: arguments are not the expected shape: %w", err)
 	}
+	site, _ := ctx.Value(spawnSiteKey{}).(spawnSite)
+	t.mu.Lock()
+	warm := t.warmups[site.call]
+	t.mu.Unlock()
+	if warm != nil && warm.leader == site.call {
+		defer warm.warmed()
+	}
 	if strings.TrimSpace(args.Task) == "" {
 		return Result{}, errors.New("spawn: task is required")
 	}
@@ -483,7 +549,6 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 	if clock == nil {
 		clock = time.Now
 	}
-	site, _ := ctx.Value(spawnSiteKey{}).(spawnSite)
 	var recorded []string
 	if site.log != nil {
 		for _, run := range site.log.Header().Agents {
@@ -561,7 +626,7 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 	subAgentCtx, release := context.WithCancel(ctx)
 	defer release()
 	started = true
-	claims, state, runErr := t.runRounds(ctx, subAgentCtx, agent, subAgentID, subAgent, trace)
+	claims, state, runErr := t.runRounds(ctx, subAgentCtx, agent, subAgentID, warm.stagger(ctx, site.call, subAgent), trace)
 	asked := boundary.Asked()
 	if len(asked) > 0 && state != subagent.Errored && state != subagent.Parked {
 		state = subagent.WaitingAnswer
