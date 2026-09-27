@@ -1,0 +1,7 @@
+id: design_layers
+domain: dev
+kind: human
+concern: process_discipline
+condition: (?i)\b(prd|hld|lld|high[- ]level design|low[- ]level design|design doc(ument)?|architecture doc|product requirements?)\b
+text: keep a PRD, an HLD and an LLD each to its own layer. the PRD says what and why, and names no endpoint, table or library. the HLD decides the choices that are costly to reverse, component boundaries and data flow, each with its reason, and carries no function signature and no parameter value. the LLD gives signatures, data structures, error handling and the numbers: timeouts, retry counts, sizes. a service, endpoint or permission that a lower layer needs and the layer above never decided goes back up as a question to whoever owns that layer, and is not written in. a brief that asks a sub-agent for a design names which of the three it is.
+notes: sources: testany-eng prd-writer, hld-writer and lld-writer SKILL.md, their content boundary sections, and the decision cost principle in hld-writer. no role, so it reaches the orchestrator writing a brief and the sub-agent writing the document.

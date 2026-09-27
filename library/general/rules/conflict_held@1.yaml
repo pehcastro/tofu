@@ -1,0 +1,7 @@
+id: conflict_held
+domain: general
+kind: human
+concern: process_discipline
+condition: (?i)\b(prd|hld|lld|high[- ]level design|low[- ]level design|design doc(ument)?|architecture doc|product requirements?)\b
+text: when two approved documents say opposite things about the same behaviour and neither says it replaces the other, do not pick one by date, layer or preference. hold only the decision that depends on it, quote both sides to the person who owns it, and keep working on the rest.
+notes: sources: testany-eng hld-writer SKILL.md, the paragraph on mutually exclusive approvals in a PRD and an HLD, and references/review-boundaries.md section 3.

@@ -1,0 +1,7 @@
+id: draft_not_approved
+domain: general
+kind: human
+concern: process_discipline
+condition: (?i)\b(prd|hld|lld|high[- ]level design|low[- ]level design|design doc(ument)?|architecture doc|product requirements?)\b
+text: a document you wrote stays a draft until the person who owns it says it is approved, and passing its own checks does not change that. never write an approver, a date or an approved status for them. a document marked approved is checked against who approved which version, not trusted for the word.
+notes: sources: testany-eng references/interview-modes.md, drafts and approval, and uc-interviewer references/checkpoint-gates.md, where content, checks and approval never stand in for each other. the list of things that are not approval lives in review_diff.

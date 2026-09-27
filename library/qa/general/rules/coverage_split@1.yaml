@@ -1,0 +1,6 @@
+id: coverage_split
+domain: qa
+kind: human
+concern: code_rules
+text: report test coverage per kind: requirements, risks, external behaviours, scenarios and non functional targets, each with its own count and its own list of what is not covered. never collapse them into one percentage, and never mix in code coverage.
+notes: sources: testany-eng test-spec-writer SKILL.md, coverage counted per item rather than as one total, and test-reviewer SKILL.md, which refuses code coverage or a single total in a test design review.

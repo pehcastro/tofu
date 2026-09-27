@@ -1,0 +1,7 @@
+id: fact_not_standard
+domain: general
+kind: human
+concern: process_discipline
+condition: (?i)\b(agents\.md|claude\.md|guideline|standard|convention|lint rule)s?\b
+text: what the code does today is a fact, not a rule. before writing a project rule from the code, check that the pattern repeats across modules, that a second source such as the CI config agrees, and that it looks chosen rather than left over. when the code and a written standard disagree, record the drift and ask which one is the target, and never copy the code into the standard to make the conflict go away.
+notes: sources: testany-eng guardrails-writer references/fact-standard.md, its four conditions for promoting a fact to a rule, and references/guardrails-trigger-check.md, which calls a gap between the two drift.

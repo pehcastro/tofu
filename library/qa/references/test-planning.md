@@ -30,6 +30,22 @@ Entry: the build is deployed and the data exists. Exit: the high priority cases 
 
 An automation column filled in optimistically becomes a coverage number that is not true.
 
+## Give every risk a layer
+
+List the risks, then say which layer catches each one: system integration, end to end, regression, compatibility or non functional. A high risk with no layer is a hole in the plan. Unit and code level integration tests belong to whoever writes the code and are a precondition, not part of the plan.
+
+## A stage is a rule, an environment is where it runs
+
+Say which stage a test belongs to first, then where it can run. A test that belongs to a later stage and cannot run yet is blocked or deferred, never failed. Several environments can serve one stage if each can do what the stage needs.
+
+## The contract is tested from outside
+
+An agreed API contract is checked as a black box by whoever verifies the change: paths, fields, status codes, errors, permissions, idempotency, compatibility. A contract suite the developer wrote is extra evidence, never the verdict.
+
+## Name what must not regress
+
+A short list of the capabilities and flows that must keep working, written before testing starts, so the regression pass has a target.
+
 ## The passage this was drawn from
 
 Quoted from *Test Plan Creator*, its inputs list, its entry and exit criteria, and its style rules.
@@ -75,4 +91,4 @@ Quoted from *Test Plan Creator*, its inputs list, its entry and exit criteria, a
 > - Do not overpromise automation coverage.
 > - Mention assumptions instead of pretending missing details are known.
 
-The rest of that document is a twelve section plan template with a sign-off table, written for a team with a release owner and stakeholders. One of its example tables carries a placeholder email address, which is not copied here. The layer table in `library/qa/general/skills/test-plan.md` is ours, not the original's: it ships a list of testing types instead.
+The rest of that document is a twelve section plan template with a sign-off table, written for a team with a release owner and stakeholders. One of its example tables carries a placeholder email address, which is not copied here. The layer table in `library/qa/general/skills/test-plan.md` is ours, not the original's: it ships a list of testing types instead. The four sections from a layer per risk to what must not regress come from testany-eng's test-strategy-writer skill and its strategy template, not from Test Plan Creator.

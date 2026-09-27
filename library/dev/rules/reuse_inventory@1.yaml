@@ -1,0 +1,6 @@
+id: reuse_inventory
+domain: dev
+kind: human
+concern: process_discipline
+text: before building anything new, list what already exists that could do the job, a module in the project, a shared service or a maintained library, each row with the file or document you found it in. a row with no source is a guess and is deleted. when nothing fits, name the paths and terms you searched and say why building anew is the answer.
+notes: sources: testany-eng hld-writer SKILL.md steps 0.5 and 4.5 and its reuse inventory table, where the source column is required, and prd-writer step 0.4, which records the search scope when no capability is found. widened from designs to anything new.

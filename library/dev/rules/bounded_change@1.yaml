@@ -1,0 +1,7 @@
+id: bounded_change
+domain: dev
+kind: human
+concern: process_discipline
+condition: (?i)\b(prd|hld|lld|high[- ]level design|low[- ]level design|design doc(ument)?|architecture doc|product requirements?)\b
+text: before writing a design, decide whether the work is a full design or a bounded change. a bug fix, a compatibility fix or a scoped change to an existing system gets a short note against the documents that already exist: what changes, what must stay the same, and how you checked both. a new feature asked for as a design gets the PRD, HLD and LLD that were asked for. judge by what the change does to responsibility, trust, contracts and failure behaviour, not by its size: a two line change that moves who may delete a record is a design.
+notes: sources: testany-eng references/document-amendments.md and references/review-boundaries.md section 2, formal_design against bounded_change.
