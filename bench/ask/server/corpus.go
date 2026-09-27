@@ -34,7 +34,11 @@ func Load(dir, ideal string) (Moment, error) {
 	if err != nil {
 		return Moment{}, err
 	}
-	scripts, err := declaredScripts(turn)
+	carried, err := corpus.ReadTurnDirSegments(dir)
+	if err != nil {
+		return Moment{}, err
+	}
+	scripts, err := declaredScripts(carried...)
 	if err != nil {
 		return Moment{}, err
 	}
@@ -66,11 +70,13 @@ type packageJSON struct {
 	Scripts map[string]string `json:"scripts"`
 }
 
-func declaredScripts(turn corpus.RecordedTurn) ([]Script, error) {
-	for _, m := range turn.Messages {
-		var pkg packageJSON
-		if json.Unmarshal([]byte(m.Content), &pkg) == nil && len(pkg.Scripts) > 0 {
-			return sortedScripts(pkg.Scripts), nil
+func declaredScripts(turns ...corpus.RecordedTurn) ([]Script, error) {
+	for _, turn := range turns {
+		for _, m := range turn.Messages {
+			var pkg packageJSON
+			if json.Unmarshal([]byte(m.Content), &pkg) == nil && len(pkg.Scripts) > 0 {
+				return sortedScripts(pkg.Scripts), nil
+			}
 		}
 	}
 	return nil, fmt.Errorf("bench/ask/server: no package.json scripts found in the recorded turn")

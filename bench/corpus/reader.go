@@ -299,7 +299,7 @@ func ReadTurn(path string) (RecordedTurn, error) {
 	return finishedTurn(recorded, path)
 }
 
-func readTurnDirSegments(dir string) ([]RecordedTurn, error) {
+func ReadTurnDirSegments(dir string) ([]RecordedTurn, error) {
 	store, id := session.NewStore(filepath.Dir(dir)), filepath.Base(dir)
 	recorded, err := store.Header(id)
 	if err != nil && !errors.Is(err, fs.ErrNotExist) {
@@ -352,7 +352,7 @@ func segmentsOf(store *session.Store, dir string, header RecordedTurn) ([]Record
 }
 
 func ReadTurnDir(dir string) (RecordedTurn, error) {
-	segments, err := readTurnDirSegments(dir)
+	segments, err := ReadTurnDirSegments(dir)
 	if err != nil {
 		return RecordedTurn{}, err
 	}
@@ -381,7 +381,7 @@ func WalkSessions(dir string) (Walked, error) {
 			walked.Turns = append(walked.Turns, Turn{RecordedTurn: recorded, Schema: SchemaSingleFile, WallClockRecorded: err == nil})
 			continue
 		}
-		segments, err := readTurnDirSegments(filepath.Join(dir, name))
+		segments, err := ReadTurnDirSegments(filepath.Join(dir, name))
 		if err != nil {
 			walked.Skipped = append(walked.Skipped, SkippedTurn{Path: name, Reason: err.Error()})
 			continue

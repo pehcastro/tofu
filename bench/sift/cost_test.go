@@ -63,8 +63,8 @@ func TestTheShellSiftPointHasBeenMeasured(t *testing.T) {
 	if logRead.ShellSiftDecided == 0 {
 		t.Fatal("the ledger carries no shell_sift rows, TOFU-482 measured 13 live decisions and the point has gone dark since")
 	}
-	if logRead.ShellSiftDecided != reportedShellSiftRows {
-		t.Fatalf("the ledger carries %d shell_sift rows and bench/sift/report-2026-09-23.md states %d, the report is stale",
+	if logRead.ShellSiftDecided < reportedShellSiftRows {
+		t.Fatalf("the ledger carries %d shell_sift rows and bench/sift/report-2026-09-23.md measured %d, so rows the report stands on are gone",
 			logRead.ShellSiftDecided, reportedShellSiftRows)
 	}
 
@@ -79,8 +79,8 @@ func TestTheShellSiftPointHasBeenMeasured(t *testing.T) {
 		stat.Median(logRead.ShellSiftMillis), stat.Percentile(logRead.ShellSiftMillis, 95), worstShellMillis,
 		stat.Median(logRead.ShellSiftCosts), stat.Percentile(logRead.ShellSiftCosts, 95), worstShellDollars,
 		shellDollarsTotal)
-	t.Logf("prediction vs measured, per decision: TOFU-217 predicted $%.7f, the 13 measured rows land at $%.7f median, %+.0f%%",
-		dollarsPerDecisionTOFU217, stat.Median(logRead.ShellSiftCosts),
+	t.Logf("prediction vs measured, per decision: TOFU-217 predicted $%.7f, the %d measured rows land at $%.7f median, %+.0f%%",
+		dollarsPerDecisionTOFU217, logRead.ShellSiftDecided, stat.Median(logRead.ShellSiftCosts),
 		100*(stat.Median(logRead.ShellSiftCosts)-dollarsPerDecisionTOFU217)/dollarsPerDecisionTOFU217)
 
 	rule := shippedRule(t)

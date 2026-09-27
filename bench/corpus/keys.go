@@ -20,6 +20,7 @@ var DeliberatelyUnread = []UnreadKey{
 	{"turn", "TotalCostUSD", "the same total as total_cost_usd, under the key an older single-file row wrote"},
 	{"turn", "session", "session lineage: the session folder the turn was recorded in"},
 	{"turn", "spawned_by", "session lineage: the call that spawned this sub-agent run"},
+	{"turn", "spawned_from", "session lineage: the turn that spawned this sub-agent run"},
 	{"step", "model", "the build that answered this request; the turn's model is the one a bench point reads"},
 	{"step", "CostUSD", "the same cost as cost_usd, under the key an older single-file row wrote"},
 	{"turn", "decision_ids", "pointers into the judge ledger, looked up there rather than duplicated here"},
@@ -43,8 +44,10 @@ var DeliberatelyUnread = []UnreadKey{
 	{"call", "result_handle", "a pointer to an off-record artifact; no bench point reads it from the corpus yet"},
 	{"call", "child_id", "session lineage: a sub-agent spawned by this call, before rc-fix8"},
 	{"call", "sub_agent_id", "session lineage: a sub-agent spawned by this call"},
+	{"call", "sift_saved_bytes", "the bytes the shell sift kept from the model on this call; bench/sift measures savings on its own corpus, not from this field"},
 	{"call", "parallel_batch", "which parallel batch a call belongs to; no bench point reads it from the corpus yet"},
 	{"message", "tool_outcome", "whether a tool message's own call succeeded; no bench point reads it from the corpus yet"},
+	{"message", "thinking_signature", "the vendor's opaque seal over a thinking block, replayed to the wire and meaningless to a bench"},
 	{"message", "tool_result_bytes", "the size of a tool message's result before rendering; no bench point reads it from the corpus yet"},
 	{"message_call", "arguments", "the raw arguments an assistant message's tool call carried; no bench point reads it from the corpus yet"},
 }

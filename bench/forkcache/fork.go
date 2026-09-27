@@ -73,7 +73,7 @@ func PairsIn(store *session.Store) ([]Pair, []session.Skip, error) {
 	skipped := listing.Skipped
 	for _, subAgent := range listing.Sessions {
 		parent, known := byID[subAgent.Parent]
-		if subAgent.Parent == "" || !known {
+		if subAgent.ForkKind == "" || !known {
 			continue
 		}
 		parentSteps, err := stepsOf(store, parent.ID)

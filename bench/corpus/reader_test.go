@@ -652,7 +652,7 @@ func TestARestartedSessionReadsAsTwoSeparateTurns(t *testing.T) {
 	if _, err := os.Stat(restartedDir); err != nil {
 		t.Skipf("no %s on this machine: %v", restartedDir, err)
 	}
-	segments, err := readTurnDirSegments(restartedDir)
+	segments, err := ReadTurnDirSegments(restartedDir)
 	if err != nil {
 		t.Fatalf("reading %s: %v", restartedDir, err)
 	}
