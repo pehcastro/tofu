@@ -9,21 +9,13 @@ import (
 
 	"tofu/interface/tui/look"
 	"tofu/interface/tui/progress"
+	"tofu/interface/tui/subagent"
 	"tofu/interface/tui/trace"
 	roster "tofu/internal/subagent"
 	"tofu/internal/widget"
 )
 
-const (
-	elapsedColumn = 5
-	nameColumn    = 10
-	ownsColumn    = 20
-	tokensColumn  = 5
-	ownsFrom      = 72
-	intentLeast   = 12
-	gapCells      = len(gap)
-	stoppingWord  = "stopping"
-)
+const stoppingWord = "stopping"
 
 type phase int
 
@@ -51,14 +43,6 @@ func (p phase) drawn() (string, lipgloss.Style) {
 	panic("session: unknown phase")
 }
 
-type activity struct {
-	since  time.Duration
-	name   string
-	owns   string
-	intent string
-	tokens int
-}
-
 func (m *Model) reached() phase {
 	if m.Awaiting() {
 		return waitingOnYou
@@ -69,7 +53,7 @@ func (m *Model) reached() phase {
 	if slices.ContainsFunc(m.entries, Entry.running) {
 		return working
 	}
-	if !m.inFlight() && len(m.activityRows()) > 0 {
+	if !m.inFlight() && len(m.workingSubAgents()) > 0 {
 		return waitingOnSubAgent
 	}
 	return thinking
@@ -86,21 +70,14 @@ func (m *Model) settle() {
 	m.phase, m.shown = at, m.now()
 }
 
-func (m *Model) activityRows() []activity {
-	rows := make([]activity, 0, len(m.SubAgents))
+func (m *Model) workingSubAgents() []string {
+	var names []string
 	for _, subAgent := range m.SubAgents {
-		if subAgent.State != roster.Working {
-			continue
+		if subAgent.State == roster.Working {
+			names = append(names, subAgent.Name)
 		}
-		rows = append(rows, activity{
-			since:  subAgent.Since,
-			name:   subAgent.Name,
-			owns:   strings.Join(subAgent.Owns, " "),
-			intent: subAgent.Doing,
-			tokens: subAgent.Tokens,
-		})
 	}
-	return rows
+	return names
 }
 
 func (m *Model) phaseSince() time.Duration {
@@ -121,8 +98,8 @@ func (m *Model) requestLine() string {
 		case m.Stopping || m.LettingToolsFinish:
 			word = look.Style(look.Amber).Render(stoppingWord)
 		case m.phase == waitingOnSubAgent:
-			for _, row := range m.activityRows() {
-				word += " " + look.AgentRef(row.name)
+			for _, name := range m.workingSubAgents() {
+				word += " " + look.AgentRef(name)
 			}
 		}
 		line += look.Accent(progress.Spin(m.frame)) + " " + word + look.Muted(requestSeparator+widget.Until(m.phaseSince())+metaGap)
@@ -138,39 +115,45 @@ func (m *Model) requestLine() string {
 	return line
 }
 
-func (m *Model) activityLines() []string {
-	rows := m.activityRows()
-	width := m.width - messageMargin
-	held := width >= ownsFrom && slices.ContainsFunc(rows, func(row activity) bool { return row.owns != "" })
-	elapsed := widget.Column(rows, func(row activity) string { return widget.Until(row.since) }, elapsedColumn)
-	lines := make([]string, 0, len(rows))
-	for _, row := range rows {
-		clock := progress.Spin(m.frame) + " " + widget.Pad(widget.Until(row.since), elapsed)
-		name := column(row.name, nameColumn)
-		who, spent := name, ""
-		if held {
-			who += column(row.owns, ownsColumn)
-		}
-		if row.tokens > 0 {
-			spent = gap + widget.Lead(widget.Count(row.tokens), tokensColumn)
-		}
-		room := width - widget.Cells(clock+gap+who+spent)
-		if room < intentLeast {
-			who, spent = name, ""
-			room = width - widget.Cells(clock+gap+who)
-		}
-		room = max(room, 1)
-		line := look.Accent(clock) + gap + look.Style(look.Text).Render(who) + look.Muted(widget.Pad(widget.Fit(row.intent, room), room)+spent)
-		lines = append(lines, margin+line)
+func (m *Model) spawnedBy(entry Entry) (subagent.Row, bool) {
+	at := slices.IndexFunc(m.SubAgents, func(row subagent.Row) bool { return row.Name == entry.SubAgent })
+	if entry.SubAgent == "" || at < 0 {
+		return subagent.Row{}, false
 	}
-	return lines
+	return m.SubAgents[at], true
 }
 
-func column(text string, width int) string {
-	if widget.Cells(text) > width {
-		text = widget.Fit(text, width-gapCells)
+func settledMark(state roster.State) (string, look.Color) {
+	switch state {
+	case roster.Working, roster.Reopened, roster.WaitingAnswer:
+		return "", look.Violet
+	case roster.InReview, roster.Finished:
+		return "✓ ", look.FaintColor
+	case roster.Errored:
+		return "✗ ", look.Red
+	case roster.Parked:
+		return "○ ", look.FaintColor
 	}
-	return widget.Pad(text, width)
+	panic("session: unknown sub-agent state")
+}
+
+func (m *Model) spawnLine(entry Entry, row subagent.Row) string {
+	mark, colour := settledMark(row.State)
+	body := oneLine(entry.Body)
+	if mark != "" {
+		return look.Style(colour).Render(widget.Fit(mark+body, m.textWidth()))
+	}
+	onNow := strings.Join(row.Owns, " ")
+	if len(row.Calls) > 0 {
+		last := row.Calls[len(row.Calls)-1]
+		onNow = oneLine(last.Tool + " " + last.Text)
+	}
+	if onNow != "" {
+		onNow = gap + widget.Fit(onNow, m.textWidth()/statusShare)
+	}
+	room := max(m.textWidth()-widget.Cells(onNow), 1)
+	left := progress.Work(m.frame) + " " + widget.Until(row.Since) + gap + body
+	return look.Style(colour).Render(widget.Pad(widget.Fit(left, room), room) + onNow)
 }
 
 func (m *Model) inFlight() bool { return !m.requested.IsZero() && m.answered.IsZero() }

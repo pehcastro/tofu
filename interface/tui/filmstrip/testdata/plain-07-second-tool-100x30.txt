@@ -5,7 +5,7 @@
     why does the gate read the policy first?                                                        
                                                                                                     
                                                                                                     
-    ⠋ bash go test ./internal/judge/...                                      [tool#c2]  [expand]    
+    ⠁ bash go test ./internal/judge/...                                      [tool#c2]  [expand]    
                                                                                                     
                                                                                                     
                                                                                                     

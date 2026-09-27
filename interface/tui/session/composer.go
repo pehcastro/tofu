@@ -45,7 +45,7 @@ func (m *Model) transcriptRows() int {
 }
 
 func (m *Model) statusRows() int {
-	rows := len(m.activityRows())
+	rows := 0
 	if m.Busy || m.cooked != "" {
 		rows++
 	}
@@ -59,7 +59,7 @@ func (m *Model) statusRows() int {
 }
 
 func (m *Model) footer() []string {
-	lines := m.activityLines()
+	var lines []string
 	if line := m.requestLine(); line != "" {
 		lines = append(lines, line)
 	}

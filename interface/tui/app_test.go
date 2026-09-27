@@ -167,6 +167,7 @@ func TestARunningCallCarriesItsElapsedTimeAndTheFooterSaysWhatIsHappening(t *tes
 	golden.Assert(t, "session-running-80x24.golden", early)
 	at = at.Add(6 * time.Second)
 	app.Update(pulseMsg{})
+	app.Update(pulseMsg{})
 	later := app.View().Content
 	golden.Assert(t, "session-running-later-80x24.golden", later)
 
@@ -185,18 +186,25 @@ func TestARunningCallCarriesItsElapsedTimeAndTheFooterSaysWhatIsHappening(t *tes
 			t.Errorf("the running row does not say what is happening\n%s", frame)
 		}
 	}
-	if spun(plainEarly) == spun(plainLater) {
-		t.Errorf("the spinner did not move between the two moments: %q", spun(plainEarly))
+	before, after := spun(plainEarly), spun(plainLater)
+	if len(before) != 2 || len(after) != len(before) {
+		t.Fatalf("want the running row and the status line spinning at both moments, got %q then %q", string(before), string(after))
+	}
+	for index := range before {
+		if before[index] == after[index] {
+			t.Errorf("spinner %d did not move between the two moments: %q then %q", index, string(before), string(after))
+		}
 	}
 }
 
-func spun(content string) string {
+func spun(content string) []rune {
+	var glyphs []rune
 	for _, line := range strings.Split(content, "\n") {
 		if index := strings.IndexAny(line, spinnerFrames); index >= 0 {
-			return string([]rune(line[index:])[:1])
+			glyphs = append(glyphs, []rune(line[index:])[0])
 		}
 	}
-	return ""
+	return glyphs
 }
 
 func TestTheModelsProseIsDrawnDifferentlyFromToolActivity(t *testing.T) {

@@ -4,13 +4,15 @@ import (
 	"time"
 
 	"tofu/interface/tui/theme"
+	"tofu/internal/konst"
 	"tofu/internal/widget"
 )
 
 const (
-	Frames       = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
+	Frames       = "⠋⠙⠚⠞⠖⠋⠉⠈"
+	WorkFrames   = "⠁⠁⠉⠙⠚⠒⠂⠂⠒⠲⠴⠤⠄⠄⠤⠠⠠⠤⠦⠖⠒⠐⠐⠒⠓⠋⠉⠈⠈"
 	finishedMark = "· "
-	TickInterval = 250 * time.Millisecond
+	TickInterval = konst.ProgressTickMillis * time.Millisecond
 )
 
 type Line struct {
@@ -22,12 +24,16 @@ type Line struct {
 func (l Line) View(width int) string {
 	mark, style := finishedMark, theme.Added()
 	if l.Live {
-		mark, style = Spin(l.Frame)+" ", theme.Accent()
+		mark, style = Work(l.Frame)+" ", theme.Accent()
 	}
 	return style.Render(widget.Fit(mark+l.Label, width))
 }
 
-func Spin(frame int) string {
-	frames := []rune(Frames)
-	return string(frames[frame%len(frames)])
+func Spin(frame int) string { return frameOf(Frames, frame) }
+
+func Work(frame int) string { return frameOf(WorkFrames, frame) }
+
+func frameOf(frames string, frame int) string {
+	runes := []rune(frames)
+	return string(runes[frame%len(runes)])
 }

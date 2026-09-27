@@ -4,12 +4,15 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
 	"tofu/interface/tui/look"
+	"tofu/interface/tui/subagent"
+	roster "tofu/internal/subagent"
 )
 
 func backgroundOf(c look.Color) string {
@@ -94,5 +97,39 @@ func TestChatComposerStartsCompactAndGrowsForMultiline(t *testing.T) {
 	grown := composerRowCount(model.View())
 	if grown <= initial || grown > 9 {
 		t.Fatalf("multiline composer height %d did not grow from %d within the 8-row cap", grown, initial)
+	}
+}
+
+func TestWaitingOnTwoSubAgentsIsOneLineAboveTheComposerAndEachSpawnLineSpinsInDots8(t *testing.T) {
+	at := time.Date(2026, 9, 27, 14, 32, 0, 0, time.UTC)
+	model := New(func() time.Time { return at }, counted(new(int)))
+	model.SetSize(100, 30)
+	model.Append(Entry{Kind: User, Body: "split the routes"})
+	model.Start()
+	model.Returned()
+	model.Append(Entry{Kind: Note, SubAgent: "ts-dev-1", Body: "spawning [&ts-dev-1] to product routes"})
+	model.Append(Entry{Kind: Note, SubAgent: "ts-dev-2", Body: "spawning [&ts-dev-2] to order routes"})
+	model.SubAgents = []subagent.Row{
+		{Name: "ts-dev-1", State: roster.Working, Since: 51 * time.Second, Calls: []subagent.Call{{ID: "r1", Tool: "read", Text: "src/routes/products.ts"}}},
+		{Name: "ts-dev-2", State: roster.Working, Since: 3 * time.Minute, Calls: []subagent.Call{{ID: "r2", Tool: "edit", Text: "src/routes/orders.ts"}}},
+	}
+	at = at.Add(time.Minute)
+	model.View()
+	rows := strings.Split(ansi.Strip(model.View()), "\n")
+	composer := slices.IndexFunc(rows, func(row string) bool { return strings.Contains(row, Placeholder) })
+	var above []string
+	for _, row := range rows[model.transcriptRows():max(composer, 0)] {
+		if strings.TrimSpace(row) != "" {
+			above = append(above, strings.TrimSpace(row))
+		}
+	}
+	if len(above) != 1 || !strings.Contains(above[0], "waiting on [&ts-dev-1] [&ts-dev-2]") {
+		t.Fatalf("the rows above the composer are %q, want exactly the one status line\n%s", above, strings.Join(rows, "\n"))
+	}
+	for name, file := range map[string]string{"ts-dev-1": "src/routes/products.ts", "ts-dev-2": "src/routes/orders.ts"} {
+		spawn := slices.IndexFunc(rows, func(row string) bool { return strings.Contains(row, "spawning [&"+name+"]") })
+		if spawn < 0 || !strings.HasPrefix(strings.TrimSpace(rows[spawn]), "⠁ ") || !strings.Contains(rows[spawn], file) {
+			t.Errorf("the spawn line of %s does not spin in Dots8 on its current file %s\n%s", name, file, strings.Join(rows, "\n"))
+		}
 	}
 }

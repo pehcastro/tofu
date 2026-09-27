@@ -2,6 +2,7 @@ package tui
 
 import (
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -10,15 +11,13 @@ import (
 	"charm.land/lipgloss/v2"
 
 	"tofu/interface/tui/look"
+	"tofu/interface/tui/progress"
 	"tofu/interface/tui/subagent"
 	"tofu/internal/golden"
 	roster "tofu/internal/subagent"
 )
 
-const (
-	spinnerFrames = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
-	activityWidth = 80
-)
+const spinnerFrames = progress.Frames + progress.WorkFrames
 
 func spinningRows(rows []string) []int {
 	var found []int
@@ -126,60 +125,56 @@ func TestScrollingTheTranscriptDoesNotMoveTheRunningRow(t *testing.T) {
 func runningSubAgents() []subagent.Row {
 	return []subagent.Row{
 		{
-			Name:   "go-dev",
-			Owns:   []string{"internal/judge/**"},
-			Doing:  "writing policy/toolgate.go",
-			Since:  2*time.Minute + 14*time.Second,
-			State:  roster.Working,
-			Tokens: 181000,
+			Name:  "go-dev",
+			Owns:  []string{"internal/judge/**"},
+			Doing: "write the tool gate",
+			Since: 2*time.Minute + 14*time.Second,
+			State: roster.Working,
+			Calls: []subagent.Call{{ID: "d1", Tool: "edit", Text: "policy/toolgate.go"}},
 		},
 		{
-			Name:   "bench",
-			Owns:   []string{"bench/harness/**"},
-			Doing:  "go test ./bench/...",
-			Since:  time.Minute + 2*time.Second,
-			State:  roster.Working,
-			Tokens: 129100,
+			Name:  "bench",
+			Owns:  []string{"bench/harness/**"},
+			Doing: "run the bench",
+			Since: time.Minute + 2*time.Second,
+			State: roster.Working,
+			Calls: []subagent.Call{{ID: "b1", Tool: "bash", Text: "go test ./bench/..."}},
 		},
 		{
-			Name:   "go-docs",
-			Owns:   []string{"docs/**"},
-			Doing:  "reading docs/verification.md",
-			Since:  9 * time.Second,
-			State:  roster.Working,
-			Tokens: 4200,
+			Name:  "go-docs",
+			Owns:  []string{"docs/**"},
+			Doing: "check the docs",
+			Since: 9 * time.Second,
+			State: roster.Working,
 		},
-		{Name: "go-rules", Owns: []string{"library/**"}, Doing: "handed back", State: roster.InReview, Tokens: 900},
+		{Name: "go-rules", Owns: []string{"library/**"}, Doing: "tidy the rules", State: roster.InReview},
 	}
 }
 
-func TestEachRunningSubAgentIsARowCarryingWhatItSpent(t *testing.T) {
+func TestSubAgentWorkSpinsOnItsSpawnLineAndOneStatusLineSitsAboveTheComposer(t *testing.T) {
 	at := fixedStart()
 	app := liveApp(t, &at)
-	app.Update(Event{Kind: EventSubAgent, SubAgents: runningSubAgents()})
+	subAgents := runningSubAgents()
+	for index, subAgent := range subAgents {
+		app.Update(Event{Kind: EventToolCall, ID: "5a0" + strconv.Itoa(index), Tool: "spawn", Text: subAgent.Doing, Promote: true})
+		app.Update(Event{Kind: EventSubAgent, SubAgents: subAgents[:index+1]})
+	}
 	view := app.View()
 	rows := plainRows(view)
-	all := spinningRows(rows)
-	if len(all) != 5 {
-		t.Fatalf("a call, three sub-agents and a turn draw %d spinning rows, want 5\n%s", len(all), strings.Join(rows, "\n"))
-	}
-	running := all[1:]
 	top := composerTopRow(t, view.Content)
-	if running[3] != top-1-breathingRows || running[0] != top-4-breathingRows {
-		t.Errorf("the footer block is on rows %v and the composer begins at row %d\n%s", running, top, strings.Join(rows, "\n"))
+	status := top - 1 - breathingRows
+	if !strings.Contains(rows[status], "working") || strings.TrimSpace(rows[status-1]) != "" {
+		t.Errorf("the rows above the composer are %q and %q, want one status line under a blank row\n%s", rows[status-1], rows[status], strings.Join(rows, "\n"))
 	}
-	for index, want := range []string{"go-dev", "bench", "go-docs", "working"} {
-		if !strings.Contains(rows[running[index]], want) {
-			t.Errorf("row %d does not name %q: %q", index, want, rows[running[index]])
+	for name, onNow := range map[string]string{"go-dev": "edit policy/toolgate.go", "bench": "bash go test ./bench/...", "go-docs": "docs/**"} {
+		spawn := slices.IndexFunc(rows, func(row string) bool { return strings.Contains(row, "spawning [&"+name+"]") })
+		if spawn < 0 || !strings.ContainsRune(progress.WorkFrames, []rune(strings.TrimSpace(rows[spawn]))[0]) || !strings.Contains(rows[spawn], onNow) {
+			t.Errorf("the spawn line of %s does not spin in Dots8 on %q\n%s", name, onNow, strings.Join(rows, "\n"))
 		}
 	}
-	for index, want := range []string{"181k", "129k", "4k"} {
-		if !strings.Contains(rows[running[index]], want) {
-			t.Errorf("row %d does not carry the tokens %q: %q", index, want, rows[running[index]])
-		}
-	}
-	if strings.Contains(strings.Join(rows[:top], "\n"), "go-rules") {
-		t.Errorf("a sub-agent that is not running took a row\n%s", strings.Join(rows, "\n"))
+	settled := slices.IndexFunc(rows, func(row string) bool { return strings.Contains(row, "spawning [&go-rules]") })
+	if settled < 0 || !strings.HasPrefix(strings.TrimSpace(rows[settled]), "✓ ") {
+		t.Errorf("the spawn line of a sub-agent in review did not settle to its done mark\n%s", strings.Join(rows, "\n"))
 	}
 	golden.Assert(t, "session-sub-agents-80x24.golden", view.Content)
 }

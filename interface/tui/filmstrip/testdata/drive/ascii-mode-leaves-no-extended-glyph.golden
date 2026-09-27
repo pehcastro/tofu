@@ -2,9 +2,9 @@
                                                                                                     
     agents                                                                                         |
                                                                                                    |
-    . spawning [&c1] to read the policy loader                                                     |
-    . spawning [&c2] to write the ledger floor test                                                |
-    . spawning [&c3] to run the shell suite                                                        |
+    o spawning [&c1] to read the policy loader                                                     |
+    v spawning [&c2] to write the ledger floor test                                                |
+    x spawning [&c3] to run the shell suite                                                        |
     . (1) tools . 0s                                                     [tool#9d4f10]  [expand]   |
                                                                                                    |
     [&orchestrator]                                                      14:32  [message#9d4f11]   |
@@ -152,9 +152,9 @@
 
     agents                                                                                         |
                                                                                                    |
-    . spawning [                                                                                   |
-    . spawning [  Commands                                                     esc                 |
-    . spawning [  Jump to a view or run an action                                                  |
+    o spawning [                                                                                   |
+    v spawning [  Commands                                                     esc                 |
+    x spawning [  Jump to a view or run an action                                                  |
     . (1) tools                                                                     0]  [expand]   |
                   > Type to filter                                                                 |
     [&orchestrat                                                                    sage#9d4f11]   |

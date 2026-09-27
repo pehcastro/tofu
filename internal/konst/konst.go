@@ -44,7 +44,7 @@ const (
 )
 
 const (
-	ProgressTickMillis = 250
+	ProgressTickMillis = 80
 	QuitAgainMillis    = 3000
 	FeedRecentEvents   = 200
 

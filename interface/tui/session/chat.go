@@ -44,7 +44,7 @@ type foldCounts struct {
 
 type drawKey struct {
 	width, lead, body                                    int
-	status, verdict                                      string
+	status, verdict, spawn                               string
 	latest, picked, streaming, waiting, failed, promoted bool
 	fold                                                 foldCounts
 }
@@ -124,7 +124,13 @@ func (m *Model) drawKey(start, end int) (drawKey, bool) {
 	}
 	key.latest = m.latestUser(start)
 	key.picked = entry.waiting && entry.ID == m.pickedQueue()
-	return key, entry.running()
+	row, spawned := m.spawnedBy(*entry)
+	if !spawned {
+		return key, entry.running()
+	}
+	key.spawn = row.State.String()
+	mark, _ := settledMark(row.State)
+	return key, mark == ""
 }
 
 func (m *Model) liveFold(start, end int) bool { return end == len(m.entries) || m.stillRunning(start) }
@@ -256,6 +262,9 @@ func (m *Model) render(index int) []string {
 	case Tool:
 		return []string{continuation + m.toolLine(entry)}
 	case Note:
+		if row, spawned := m.spawnedBy(entry); spawned {
+			return indented([]string{m.spawnLine(entry, row)})
+		}
 		lines := widget.Wrap(entry.Body, max(m.textWidth()-widget.Cells(noteMarker), 1))
 		for index, line := range lines {
 			marker := noteMarker
@@ -322,7 +331,7 @@ func (m *Model) toolLine(entry Entry) string {
 	status, statusStyle := m.callStatus(entry)
 	marker := toolMarker
 	if entry.running() {
-		marker = progress.Spin(m.frame) + " "
+		marker = progress.Work(m.frame) + " "
 	}
 	right := expandMark(entry.ID)
 	if status = widget.Fit(oneLine(status), max(m.textWidth()/statusShare-widget.Cells(right), 0)); status != "" {

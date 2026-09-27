@@ -5,7 +5,7 @@
     why does the gate read the policy first?                                                        
                                                                                                     
                                                                                                     
-    ⠋ bash git push --force origin develop                                     ask  2s  [expand]    
+    ⠁ bash git push --force origin develop                                     ask  2s  [expand]    
                                                                                                     
                                                                                                     
                                                                                                     

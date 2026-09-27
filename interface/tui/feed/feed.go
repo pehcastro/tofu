@@ -8,10 +8,9 @@ import (
 	"strings"
 	"time"
 
-	"charm.land/bubbles/v2/spinner"
-
 	"tofu/interface/tui/look"
 	"tofu/interface/tui/pointer"
+	"tofu/interface/tui/progress"
 	"tofu/internal/konst"
 	roster "tofu/internal/subagent"
 	"tofu/internal/widget"
@@ -373,7 +372,7 @@ type entry struct {
 func (m Model) glyph(g group) string {
 	switch g {
 	case active:
-		return look.Accent(spinner.Pulse.Frames[m.frame%len(spinner.Pulse.Frames)])
+		return look.Accent(progress.Work(m.frame))
 	case waiting:
 		return "."
 	}

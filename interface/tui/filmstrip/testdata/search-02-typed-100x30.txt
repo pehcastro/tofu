@@ -1,8 +1,8 @@
  tofu  ./tofu/                   chat   agents (1)   edits   shells                   0s [settings] 
 
-    · spawning [&c1] to read the policy loader
-    · spawning [&c2] to write the ledger floor test
-    · spawning [&c3] to run the shell suite
+    ⠁ 1m 34s  spawning [&c1] to read the policy loader              grep Resolve( internal/judge
+    ✓ spawning [&c2] to write the ledger floor test
+    ✗ spawning [&c3] to run the shell suite
     · (1) tools · 0s                                                     [tool#9d4f10]  [expand]
 
     [&orchestrator]                                                      14:32  [message#9d4f11]
@@ -21,7 +21,7 @@
                                                                                     
 
 
-  ⠋ 1m 34s  c1        internal/judge/po…  read the policy loader                                 18k
+
   cooked for 0s  |  waited 0s  [request#9d4f10]
 
                                                                                                     

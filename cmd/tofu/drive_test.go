@@ -23,9 +23,6 @@ import (
 )
 
 func TestADrivenStepSettlesInsideOneProgressTick(t *testing.T) {
-	if konst.ProgressTickMillis*time.Millisecond != progress.TickInterval {
-		t.Fatalf("konst calls the progress tick %dms and the app ticks at %s", konst.ProgressTickMillis, progress.TickInterval)
-	}
 	if konst.DriveSettleMillis*time.Millisecond >= progress.TickInterval {
 		t.Fatalf("a driven step waits %dms for quiet and the progress tick repaints every %s, so a running turn never looks quiet and every wait resolves at the timeout instead", konst.DriveSettleMillis, progress.TickInterval)
 	}

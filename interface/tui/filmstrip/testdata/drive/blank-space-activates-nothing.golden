@@ -35,9 +35,9 @@
     agents                                                                                        
                   Commands                                                     esc                
                   Jump to a view or run an action                                   
-    · spawning [                                                                    
-    · spawning [  > Type to filter                                                  
-    · spawning [                                                                    
+    ○ spawning [                                                                    
+    ✓ spawning [  > Type to filter                                                  
+    ✗ spawning [                                                                    
     · (1) tools   >  chat                                                    /chat  0]  [expand]
                     the conversation and the composer                               
     [&orchestrat                                                                    sage#9d4f11]

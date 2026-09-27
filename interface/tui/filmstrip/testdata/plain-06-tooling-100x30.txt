@@ -5,7 +5,7 @@
     why does the gate read the policy first?                                                        
                                                                                                     
                                                                                                     
-    ⠋ read internal/judge/policy/toolgate.go                                 [tool#c1]  [expand]    
+    ⠁ read internal/judge/policy/toolgate.go                                 [tool#c1]  [expand]    
                                                                                                     
                                                                                                     
                                                                                                     

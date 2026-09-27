@@ -508,7 +508,7 @@ func (a *App) linkSpawn(subAgent subagent.Row) {
 	spawn.Target, spawn.Title = subAgent.Name, subAgent.Doing
 	a.record(spawn)
 	if spawn.Actor == orchestrator {
-		a.view.Append(session.Entry{Kind: session.Note, Body: "spawning [&" + subAgent.Name + "] to " + subAgent.Doing})
+		a.view.Append(session.Entry{Kind: session.Note, SubAgent: subAgent.Name, Body: "spawning [&" + subAgent.Name + "] to " + subAgent.Doing})
 	}
 }
 

@@ -182,11 +182,13 @@ const (
 	defaultHeight = 24
 	chromeRows    = 3
 	bodyTop       = 2
-	pulseInterval = 90 * time.Millisecond
-	noticePulses  = 34
+	pulseInterval = session.TickInterval
+	noticeShown   = 3 * time.Second
+	noticePulses  = int(noticeShown / pulseInterval)
 	wheelRows     = 3
 	setupPoll     = time.Second
-	shellPulses   = int(session.TickInterval / pulseInterval)
+	shellPoll     = 250 * time.Millisecond
+	shellPulses   = int(shellPoll / pulseInterval)
 	exitReset     = "\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?1016l\x1b[0m" + ansi.ResetBackgroundColor
 )
 

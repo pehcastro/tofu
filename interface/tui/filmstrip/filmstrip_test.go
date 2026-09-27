@@ -98,6 +98,9 @@ func TestTheClockIsInEveryChatFrameAndNeverGoesDown(t *testing.T) {
 		if seconds == 0 {
 			t.Errorf("%s never advances its session clock, so a fall could not show", scenario)
 		}
+		if _, read := turn[scenario]; !read {
+			t.Errorf("%s never shows a turn clock on its status line, so a fall could not show", scenario)
+		}
 	}
 }
 
@@ -118,21 +121,17 @@ func headerClock(row string) (int, bool) {
 }
 
 func turnClock(lines []string) (int, bool) {
-	seconds, live := 0, false
-	for _, row := range lines {
+	for _, row := range slices.Backward(lines) {
 		trimmed := strings.TrimSpace(row)
 		if trimmed == "" || !strings.ContainsRune(progress.Frames, []rune(trimmed)[0]) {
 			continue
 		}
-		fields := strings.Fields(trimmed)
-		if len(fields) < 2 {
-			continue
-		}
-		if reading, ok := clockSeconds(fields[1]); ok {
-			seconds, live = reading, true
+		if _, after, status := strings.Cut(trimmed, "|"); status {
+			clock, _, _ := strings.Cut(after, "[")
+			return clockSeconds(clock)
 		}
 	}
-	return seconds, live
+	return 0, false
 }
 
 func clockSeconds(text string) (int, bool) {

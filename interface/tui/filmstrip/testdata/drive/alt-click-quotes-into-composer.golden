@@ -5,9 +5,9 @@
     agents                                                                                          
                                                                                                     
                                                                                                     
-    · spawning [&c1] to read the policy loader                                                      
-    · spawning [&c2] to write the ledger floor test                                                 
-    · spawning [&c3] to run the shell suite                                                         
+    ○ spawning [&c1] to read the policy loader                                                      
+    ✓ spawning [&c2] to write the ledger floor test                                                 
+    ✗ spawning [&c3] to run the shell suite                                                         
     · (1) tools · 0s                                                     [tool#9d4f10]  [expand]    
                                                                                                     
     [&orchestrator]                                                      14:32  [message#9d4f11]    
