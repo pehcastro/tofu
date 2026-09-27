@@ -1,13 +1,13 @@
  tofu  ./tofu/                   chat   agents (1)   edits   shells                   0s [settings] 
 
-    ⠁ 1m 34s  spawning [&c1] to read the policy loader              grep Resolve( internal/judge
-    ✓ spawning [&c2] to write the ledger floor test
-    ✗ spawning [&c3] to run the shell suite
+    ⠁ waiting on [&c1]  1m 34s
+    ✓ [&c2]  ✗ [&c3]
     · (1) tools · 0s                                                     [tool#9d4f10]  [expand]
 
     [&orchestrator]                                                      14:32  [message#9d4f11]
     three sub-agents run: [&c1] reads the loader, [&c2] waits on review, [&c3] failed its suite.
-    [tool#9d4f10                                                                    
+    [tool#9d4f10] is the loop I read.
+                                                                                    
                   Search                                                       esc  
                   Screens, agents and events · enter opens                          
                                                                                     

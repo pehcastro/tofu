@@ -124,13 +124,14 @@ func (m *Model) drawKey(start, end int) (drawKey, bool) {
 	}
 	key.latest = m.latestUser(start)
 	key.picked = entry.waiting && entry.ID == m.pickedQueue()
-	row, spawned := m.spawnedBy(*entry)
-	if !spawned {
+	if len(entry.SubAgents) == 0 {
 		return key, entry.running()
 	}
-	key.spawn = row.State.String()
-	mark, _ := settledMark(row.State)
-	return key, mark == ""
+	batch := m.batchOf(entry.SubAgents)
+	for _, row := range batch.settled {
+		key.spawn += row.Name + " " + row.State.String() + " "
+	}
+	return key, len(batch.running) > 0
 }
 
 func (m *Model) liveFold(start, end int) bool { return end == len(m.entries) || m.stillRunning(start) }
@@ -262,8 +263,8 @@ func (m *Model) render(index int) []string {
 	case Tool:
 		return []string{continuation + m.toolLine(entry)}
 	case Note:
-		if row, spawned := m.spawnedBy(entry); spawned {
-			return indented([]string{m.spawnLine(entry, row)})
+		if len(entry.SubAgents) > 0 {
+			return indented(m.batchLines(m.batchOf(entry.SubAgents)))
 		}
 		lines := widget.Wrap(entry.Body, max(m.textWidth()-widget.Cells(noteMarker), 1))
 		for index, line := range lines {

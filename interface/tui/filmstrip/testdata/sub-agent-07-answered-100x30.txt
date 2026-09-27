@@ -8,7 +8,7 @@
     [&orchestrator]                                                                        14:32    
     handing the policy loader to a sub-agent                                                        
                                                                                                     
-    ✓ spawning [&qa-1] to read the policy loader                                                    
+    ✓ [&qa-1]                                                                                       
     · (1) tools · 1m 18s                                                 [tool#815e77]  [expand]    
                                                                                                     
     [&orchestrator]                                                      14:33  [message#d41c08]    

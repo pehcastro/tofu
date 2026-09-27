@@ -1,26 +1,26 @@
  tofu  ./tofu/                     chat   agents   edits   shells                     0s [settings] 
                                                                                                     
-    agents                                                                                         |
-                                                                                                   |
-    o spawning [&c1] to read the policy loader                                                     |
-    v spawning [&c2] to write the ledger floor test                                                |
-    x spawning [&c3] to run the shell suite                                                        |
-    . (1) tools . 0s                                                     [tool#9d4f10]  [expand]   |
-                                                                                                   |
-    [&orchestrator]                                                      14:32  [message#9d4f11]   |
-    three sub-agents run: [&c1] reads the loader, [&c2] waits on review, [&c3] failed its suite.   |
-    [tool#9d4f10] is the loop I read.                                                              |
-                                                                                                   |
-                                                                                                   |
-                                                                                                   |
-    You                                                                  14:32  [message#672500]   |
-    edits                                                                                          |
-                                                                                                   |
-                                                                                                   |
-    . (2) tools . 0s                                                     [tool#e5a102]  [expand]   |
-                                                                                                   |
-    [&orchestrator]                                                      14:32  [message#e5a103]   |
-    the resolver checks the lock now, and [edit#e5a102] holds the 1200 floor rows.                 |
+    You                                                                  14:32  [message#672866]    
+    agents                                                                                          
+                                                                                                    
+    v [&c2]  x [&c3]  o [&c1]                                                                       
+    . (1) tools . 0s                                                     [tool#9d4f10]  [expand]    
+                                                                                                    
+    [&orchestrator]                                                      14:32  [message#9d4f11]    
+    three sub-agents run: [&c1] reads the loader, [&c2] waits on review, [&c3] failed its suite.    
+    [tool#9d4f10] is the loop I read.                                                               
+                                                                                                    
+                                                                                                    
+                                                                                                    
+    You                                                                  14:32  [message#672500]    
+    edits                                                                                           
+                                                                                                    
+                                                                                                    
+    . (2) tools . 0s                                                     [tool#e5a102]  [expand]    
+                                                                                                    
+    [&orchestrator]                                                      14:32  [message#e5a103]    
+    the resolver checks the lock now, and [edit#e5a102] holds the 1200 floor rows.                  
+                                                                                                    
                                                                                                     
   cooked for 0s  |  waited 0s  [request#e5a102]                                                     
                                                                                                     
@@ -150,27 +150,27 @@
  ctx 118k/250k  |  claude-sub 5h 62%                                                                
  tofu  ./tofu/                     chat   agents   edits   shells                     0s [settings] 
 
-    agents                                                                                         |
-                                                                                                   |
-    o spawning [                                                                                   |
-    v spawning [  Commands                                                     esc                 |
-    x spawning [  Jump to a view or run an action                                                  |
-    . (1) tools                                                                     0]  [expand]   |
-                  > Type to filter                                                                 |
-    [&orchestrat                                                                    sage#9d4f11]   |
-    three sub-ag  >  chat                                                    /chat  d its suite.   |
-    [tool#9d4f10    the conversation and the composer                                              |
-                                                                                                   |
-                    sub-agents                                         /sub-agents                 |
-                    every tool call and every sub-agent, in one feed                               |
-    You                                                                             sage#672500]   |
-    edits           file-edits                                         /file-edits                 |
-                    every changed line, who made it and where                                      |
-                                                                                                   |
-    . (2) tools     shells                                                 /shells  2]  [expand]   |
-                    the persistent processes an agent left running                                 |
-    [&orchestrat                                                                    sage#e5a103]   |
-    the resolver    models                                                 /models                 |
+    You                                                                  14:32  [message#672866]
+    agents
+                                                                                    
+    v [&c2]  x [  Commands                                                     esc  
+    . (1) tools   Jump to a view or run an action                                   0]  [expand]
+                                                                                    
+    [&orchestrat  > Type to filter                                                  sage#9d4f11]
+    three sub-ag                                                                    d its suite.
+    [tool#9d4f10  >  chat                                                    /chat  
+                    the conversation and the composer                               
+                                                                                    
+                    sub-agents                                         /sub-agents                
+    You             every tool call and every sub-agent, in one feed                sage#672500]  
+    edits                                                                                         
+                    file-edits                                         /file-edits                
+                    every changed line, who made it and where                       
+    . (2) tools                                                                     2]  [expand]
+                    shells                                                 /shells  
+    [&orchestrat    the persistent processes an agent left running                  sage#e5a103]
+    the resolver                                                                    
+                    models                                                 /models  
                     every model the signed subscriptions serve, and which one the.  
   cooked for 0s                                                                     
 

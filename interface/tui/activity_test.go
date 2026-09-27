@@ -151,7 +151,7 @@ func runningSubAgents() []subagent.Row {
 	}
 }
 
-func TestSubAgentWorkSpinsOnItsSpawnLineAndOneStatusLineSitsAboveTheComposer(t *testing.T) {
+func TestSubAgentWorkSpinsOnOneBatchLineAndOneStatusLineSitsAboveTheComposer(t *testing.T) {
 	at := fixedStart()
 	app := liveApp(t, &at)
 	subAgents := runningSubAgents()
@@ -166,17 +166,60 @@ func TestSubAgentWorkSpinsOnItsSpawnLineAndOneStatusLineSitsAboveTheComposer(t *
 	if !strings.Contains(rows[status], "working") || strings.TrimSpace(rows[status-1]) != "" {
 		t.Errorf("the rows above the composer are %q and %q, want one status line under a blank row\n%s", rows[status-1], rows[status], strings.Join(rows, "\n"))
 	}
-	for name, onNow := range map[string]string{"go-dev": "edit policy/toolgate.go", "bench": "bash go test ./bench/...", "go-docs": "docs/**"} {
-		spawn := slices.IndexFunc(rows, func(row string) bool { return strings.Contains(row, "spawning [&"+name+"]") })
-		if spawn < 0 || !strings.ContainsRune(progress.WorkFrames, []rune(strings.TrimSpace(rows[spawn]))[0]) || !strings.Contains(rows[spawn], onNow) {
-			t.Errorf("the spawn line of %s does not spin in Dots8 on %q\n%s", name, onNow, strings.Join(rows, "\n"))
-		}
+	spawn := slices.IndexFunc(rows, func(row string) bool { return strings.Contains(row, "[&go-dev] [&bench] [&go-docs]") })
+	if spawn < 0 || spawn >= status || !strings.ContainsRune(progress.WorkFrames, []rune(strings.TrimSpace(rows[spawn]))[0]) || strings.Contains(rows[spawn], "toolgate.go") {
+		t.Errorf("the three running sub-agents do not spin in Dots8 on one line without their files\n%s", strings.Join(rows, "\n"))
 	}
-	settled := slices.IndexFunc(rows, func(row string) bool { return strings.Contains(row, "spawning [&go-rules]") })
-	if settled < 0 || !strings.HasPrefix(strings.TrimSpace(rows[settled]), "✓ ") {
-		t.Errorf("the spawn line of a sub-agent in review did not settle to its done mark\n%s", strings.Join(rows, "\n"))
+	if settled := slices.IndexFunc(rows, func(row string) bool { return strings.TrimSpace(row) == "✓ [&go-rules]" }); settled != spawn+1 {
+		t.Errorf("the sub-agent in review did not settle to its done mark under the running line\n%s", strings.Join(rows, "\n"))
 	}
 	golden.Assert(t, "session-sub-agents-80x24.golden", view.Content)
+}
+
+func chatRowsNaming(t *testing.T, app *App, name string) []string {
+	t.Helper()
+	view := app.View()
+	rows := plainRows(view)
+	var named []string
+	for _, row := range rows[:composerTopRow(t, view.Content)-1-breathingRows] {
+		if strings.Contains(row, name) {
+			named = append(named, strings.TrimSpace(row))
+		}
+	}
+	return named
+}
+
+func TestFiveSubAgentsShareOneChatLineAndTheFinishedMoveToOneSettledLine(t *testing.T) {
+	at := fixedStart()
+	app := phaseApp(t, &at)
+	app.Update(tea.WindowSizeMsg{Width: 120, Height: 30})
+	var batch []subagent.Row
+	for index := range 5 {
+		name := "ts-dev-" + strconv.Itoa(index+1)
+		batch = append(batch, subagent.Row{
+			Name: name, Owns: []string{"src/" + name + "/**"}, Doing: "the routes of " + name, Since: time.Minute + 12*time.Second, State: roster.Working,
+			Calls: []subagent.Call{{ID: "r" + name, Tool: "read", Text: "src/" + name + "/index.ts"}},
+		})
+		app.Update(Event{Kind: EventToolCall, ID: "5a" + strconv.Itoa(index), Tool: "spawn", Text: "the routes of " + name, Promote: true})
+		app.Update(Event{Kind: EventSubAgent, SubAgents: slices.Clone(batch)})
+	}
+	running := chatRowsNaming(t, app, "[&ts-dev-")
+	if len(running) != 1 || !strings.Contains(running[0], "waiting on [&ts-dev-1] [&ts-dev-2] [&ts-dev-3] [&ts-dev-4] [&ts-dev-5]") {
+		t.Fatalf("five running sub-agents draw %q in the chat, want one line naming all five", running)
+	}
+	if strings.Contains(running[0], "the routes of") || strings.Contains(running[0], "index.ts") {
+		t.Errorf("the running line carries a mission or a file: %q", running[0])
+	}
+	batch[0].State, batch[3].State = roster.Finished, roster.Finished
+	app.Update(Event{Kind: EventSubAgent, SubAgents: slices.Clone(batch)})
+	lines := chatRowsNaming(t, app, "[&ts-dev-")
+	if len(lines) != 2 || !strings.Contains(lines[0], "waiting on [&ts-dev-2] [&ts-dev-3] [&ts-dev-5]") || strings.Contains(lines[0], "[&ts-dev-1]") || strings.Contains(lines[0], "[&ts-dev-4]") {
+		t.Fatalf("after two finish the chat draws %q, want one running line with three names", lines)
+	}
+	if lines[1] != "✓ [&ts-dev-1] [&ts-dev-4]" {
+		t.Errorf("the settled line reads %q, want the two finished names under one done mark", lines[1])
+	}
+	golden.Assert(t, "session-sub-agents-batch-120x30.golden", app.View().Content)
 }
 
 func turnRow(t *testing.T, app *App) string {

@@ -59,7 +59,7 @@ type Entry struct {
 	Started   time.Time
 	Ended     time.Time
 	Decision  *Decision
-	SubAgent  string
+	SubAgents []string
 	turn      int
 	intoTurn  time.Duration
 	streaming bool

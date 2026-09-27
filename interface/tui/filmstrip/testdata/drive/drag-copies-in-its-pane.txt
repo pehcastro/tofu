@@ -2,7 +2,7 @@
 type agents
 key enter
 wait cooked for
-drag 4 13 40 14
+drag 4 11 40 12
 wait the selection copied
 absent Sub-agents
 screen

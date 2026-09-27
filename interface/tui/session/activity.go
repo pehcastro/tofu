@@ -2,7 +2,6 @@ package session
 
 import (
 	"slices"
-	"strings"
 	"time"
 
 	"charm.land/lipgloss/v2"
@@ -15,7 +14,15 @@ import (
 	"tofu/internal/widget"
 )
 
-const stoppingWord = "stopping"
+const (
+	stoppingWord           = "stopping"
+	spawningWord           = "spawning"
+	waitingWordOnSubAgents = "waiting on"
+	doneMark               = "✓ "
+	failedMark             = "✗ "
+	stoppedMark            = "○ "
+	wrapIndent             = "  "
+)
 
 type phase int
 
@@ -38,7 +45,7 @@ func (p phase) drawn() (string, lipgloss.Style) {
 	case waitingOnYou:
 		return "waiting", look.Style(look.Amber)
 	case waitingOnSubAgent:
-		return "waiting on", look.Style(look.Mint)
+		return waitingWordOnSubAgents, look.Style(look.Mint)
 	}
 	panic("session: unknown phase")
 }
@@ -115,45 +122,102 @@ func (m *Model) requestLine() string {
 	return line
 }
 
-func (m *Model) spawnedBy(entry Entry) (subagent.Row, bool) {
-	at := slices.IndexFunc(m.SubAgents, func(row subagent.Row) bool { return row.Name == entry.SubAgent })
-	if entry.SubAgent == "" || at < 0 {
-		return subagent.Row{}, false
+func (m *Model) Spawned(name string) {
+	for index := len(m.entries) - 1; index >= 0 && !m.entries[index].message(); index-- {
+		if batch := &m.entries[index]; len(batch.SubAgents) > 0 {
+			batch.SubAgents = append(batch.SubAgents, name)
+			m.revision++
+			return
+		}
 	}
-	return m.SubAgents[at], true
+	m.Append(Entry{Kind: Note, SubAgents: []string{name}})
 }
 
-func settledMark(state roster.State) (string, look.Color) {
+type spawnBatch struct {
+	running, settled []subagent.Row
+}
+
+func (m *Model) batchOf(names []string) spawnBatch {
+	var batch spawnBatch
+	for _, name := range names {
+		at := slices.IndexFunc(m.SubAgents, func(row subagent.Row) bool { return row.Name == name })
+		switch {
+		case at < 0:
+		case settledMark(m.SubAgents[at].State) == "":
+			batch.running = append(batch.running, m.SubAgents[at])
+		default:
+			batch.settled = append(batch.settled, m.SubAgents[at])
+		}
+	}
+	return batch
+}
+
+func settledMark(state roster.State) string {
 	switch state {
 	case roster.Working, roster.Reopened, roster.WaitingAnswer:
-		return "", look.Violet
+		return ""
 	case roster.InReview, roster.Finished:
-		return "✓ ", look.FaintColor
+		return doneMark
 	case roster.Errored:
-		return "✗ ", look.Red
+		return failedMark
 	case roster.Parked:
-		return "○ ", look.FaintColor
+		return stoppedMark
 	}
 	panic("session: unknown sub-agent state")
 }
 
-func (m *Model) spawnLine(entry Entry, row subagent.Row) string {
-	mark, colour := settledMark(row.State)
-	body := oneLine(entry.Body)
-	if mark != "" {
-		return look.Style(colour).Render(widget.Fit(mark+body, m.textWidth()))
+func (m *Model) batchLines(batch spawnBatch) []string {
+	var lines []string
+	if len(batch.running) > 0 {
+		word, since, names := waitingWordOnSubAgents, time.Duration(0), []string(nil)
+		for _, row := range batch.running {
+			if len(row.Calls) == 0 {
+				word = spawningWord
+			}
+			since = max(since, row.Since)
+			names = append(names, look.AgentRef(row.Name))
+		}
+		head := look.Style(look.Violet).Render(progress.Work(m.frame) + " " + word)
+		lines = m.wordRows(slices.Concat([]string{head}, names, []string{" " + look.Muted(widget.Until(since))}))
 	}
-	onNow := strings.Join(row.Owns, " ")
-	if len(row.Calls) > 0 {
-		last := row.Calls[len(row.Calls)-1]
-		onNow = oneLine(last.Tool + " " + last.Text)
+	var words []string
+	for _, mark := range []string{doneMark, failedMark, stoppedMark} {
+		colour := look.FaintColor
+		if mark == failedMark {
+			colour = look.Red
+		}
+		lead := look.Style(colour).Render(mark)
+		if words != nil {
+			lead = " " + lead
+		}
+		for _, row := range batch.settled {
+			if settledMark(row.State) == mark {
+				words = append(words, lead+look.AgentRef(row.Name))
+				lead = ""
+			}
+		}
 	}
-	if onNow != "" {
-		onNow = gap + widget.Fit(onNow, m.textWidth()/statusShare)
+	if words != nil {
+		lines = append(lines, m.wordRows(words)...)
 	}
-	room := max(m.textWidth()-widget.Cells(onNow), 1)
-	left := progress.Work(m.frame) + " " + widget.Until(row.Since) + gap + body
-	return look.Style(colour).Render(widget.Pad(widget.Fit(left, room), room) + onNow)
+	return lines
+}
+
+func (m *Model) wordRows(words []string) []string {
+	var rows []string
+	row := ""
+	for _, word := range words {
+		switch {
+		case row == "":
+			row = word
+		case widget.Cells(row)+1+widget.Cells(word) > m.textWidth():
+			rows = append(rows, row)
+			row = wrapIndent + word
+		default:
+			row += " " + word
+		}
+	}
+	return append(rows, row)
 }
 
 func (m *Model) inFlight() bool { return !m.requested.IsZero() && m.answered.IsZero() }

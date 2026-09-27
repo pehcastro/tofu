@@ -100,15 +100,15 @@ func TestChatComposerStartsCompactAndGrowsForMultiline(t *testing.T) {
 	}
 }
 
-func TestWaitingOnTwoSubAgentsIsOneLineAboveTheComposerAndEachSpawnLineSpinsInDots8(t *testing.T) {
+func TestWaitingOnTwoSubAgentsIsOneLineAboveTheComposerAndOneBatchLineSpinsInDots8(t *testing.T) {
 	at := time.Date(2026, 9, 27, 14, 32, 0, 0, time.UTC)
 	model := New(func() time.Time { return at }, counted(new(int)))
 	model.SetSize(100, 30)
 	model.Append(Entry{Kind: User, Body: "split the routes"})
 	model.Start()
 	model.Returned()
-	model.Append(Entry{Kind: Note, SubAgent: "ts-dev-1", Body: "spawning [&ts-dev-1] to product routes"})
-	model.Append(Entry{Kind: Note, SubAgent: "ts-dev-2", Body: "spawning [&ts-dev-2] to order routes"})
+	model.Spawned("ts-dev-1")
+	model.Spawned("ts-dev-2")
 	model.SubAgents = []subagent.Row{
 		{Name: "ts-dev-1", State: roster.Working, Since: 51 * time.Second, Calls: []subagent.Call{{ID: "r1", Tool: "read", Text: "src/routes/products.ts"}}},
 		{Name: "ts-dev-2", State: roster.Working, Since: 3 * time.Minute, Calls: []subagent.Call{{ID: "r2", Tool: "edit", Text: "src/routes/orders.ts"}}},
@@ -126,10 +126,8 @@ func TestWaitingOnTwoSubAgentsIsOneLineAboveTheComposerAndEachSpawnLineSpinsInDo
 	if len(above) != 1 || !strings.Contains(above[0], "waiting on [&ts-dev-1] [&ts-dev-2]") {
 		t.Fatalf("the rows above the composer are %q, want exactly the one status line\n%s", above, strings.Join(rows, "\n"))
 	}
-	for name, file := range map[string]string{"ts-dev-1": "src/routes/products.ts", "ts-dev-2": "src/routes/orders.ts"} {
-		spawn := slices.IndexFunc(rows, func(row string) bool { return strings.Contains(row, "spawning [&"+name+"]") })
-		if spawn < 0 || !strings.HasPrefix(strings.TrimSpace(rows[spawn]), "⠁ ") || !strings.Contains(rows[spawn], file) {
-			t.Errorf("the spawn line of %s does not spin in Dots8 on its current file %s\n%s", name, file, strings.Join(rows, "\n"))
-		}
+	spawn := slices.IndexFunc(rows[:model.transcriptRows()], func(row string) bool { return strings.Contains(row, "waiting on [&ts-dev-1] [&ts-dev-2]") })
+	if spawn < 0 || !strings.HasPrefix(strings.TrimSpace(rows[spawn]), "⠁ ") || !strings.HasSuffix(strings.TrimSpace(rows[spawn]), "3m") || strings.Contains(rows[spawn], "products.ts") {
+		t.Errorf("the chat does not spin one Dots8 line naming both sub-agents under the longest clock\n%s", strings.Join(rows, "\n"))
 	}
 }
