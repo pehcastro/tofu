@@ -27,6 +27,7 @@ type Config struct {
 	HTTP           *http.Client
 	Transport      transport.Config
 	Watchdog       time.Duration
+	StreamIdle     time.Duration
 	InstallationID string
 	SessionID      string
 }
@@ -45,6 +46,9 @@ func New(config Config) (*Wire, error) {
 	}
 	if config.Watchdog <= 0 {
 		config.Watchdog = WatchdogSeconds * time.Second
+	}
+	if config.StreamIdle <= 0 {
+		config.StreamIdle = konst.StreamIdleMillis * time.Millisecond
 	}
 	client := &http.Client{}
 	if config.HTTP != nil {
@@ -122,7 +126,11 @@ func (w *Wire) Ask(ctx context.Context, request Request) (Result, Dump, error) {
 		},
 	}
 
-	result, err := w.post(ctx, dump)
+	sent := time.Now()
+	result, err := llm.RetryQuiet(ctx, w.config.Transport, func() (Result, error) {
+		return w.post(ctx, dump)
+	})
+	result.FirstTokenMS = llm.MillisSince(sent, result.firstDelta)
 	if refused := request.RefusedControls(); len(refused) > 0 {
 		result.Warnings = append([]string{
 			"the codex backend refuses these and they were dropped: " + strings.Join(refused, ", "),
@@ -169,7 +177,9 @@ func (w *Wire) post(ctx context.Context, dump Dump) (Result, error) {
 		}
 	}
 
-	result, err := ReadStream(response.Body)
+	body := llm.WatchIdle(response.Body, w.config.StreamIdle)
+	defer func() { _ = body.Close() }()
+	result, err := ReadStream(body)
 	if turnState := response.Header.Get(HeaderTurnState); turnState != "" {
 		result.TurnState = turnState
 	}

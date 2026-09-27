@@ -720,6 +720,7 @@ func (c codexTurn) Ask(ctx context.Context, request llm.Request) (llm.Decision, 
 		Usage:            llm.Usage{InputTokens: result.Usage.Input, OutputTokens: result.Usage.Output},
 		PromptAccounting: llm.PromptAccountingFor(codex.Name),
 		CacheReadTokens:  result.Usage.CacheRead,
+		FirstTokenMS:     result.FirstTokenMS,
 		Warnings:         result.Warnings,
 	}
 	if decision.Outcome == llm.OutcomeRefusal {

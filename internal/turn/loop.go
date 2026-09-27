@@ -253,7 +253,7 @@ func Run(ctx context.Context, config Config) (Row, error) {
 			return finish(outcome)
 		}
 		messages = append(slices.Clone(history), llm.Message{Role: llm.RoleUser, Content: lead + andThisIsItsLastStep})
-		decision, attempt, err := askCountingAttempts(ctx, model, llm.Request{Messages: messages, Tools: currentTools().Definitions()})
+		decision, timing, err := askCountingAttempts(ctx, model, llm.Request{Messages: messages, Tools: currentTools().Definitions()})
 		row.TotalCostUSD += decision.Usage.Cost
 		reason := ""
 		switch {
@@ -269,7 +269,7 @@ func Run(ctx context.Context, config Config) (Row, error) {
 			return finish(outcome)
 		}
 		row.Model = decision.Build
-		last := stepFrom(len(row.Steps)+1, attempt, decision)
+		last := stepFrom(len(row.Steps)+1, timing, decision)
 		answering = last.id
 		messages = append(messages, llm.Message{Role: llm.RoleAssistant, Content: decision.Content})
 		keep(last)
@@ -294,14 +294,14 @@ func Run(ctx context.Context, config Config) (Row, error) {
 
 		stepTools := currentTools()
 		asSent := recall.Measure(artifacts.preview, budget.Bands, historyOf(messages))
-		decision, attempt, err := askCountingAttempts(ctx, model, llm.Request{Messages: messages, Tools: stepTools.Definitions()})
+		decision, timing, err := askCountingAttempts(ctx, model, llm.Request{Messages: messages, Tools: stepTools.Definitions()})
 		if err != nil {
 			return finish(OutcomeError), err
 		}
 		row.Model = decision.Build
 		row.TotalCostUSD += decision.Usage.Cost
 
-		stepRow := stepFrom(step, attempt, decision)
+		stepRow := stepFrom(step, timing, decision)
 		answering = stepRow.id
 		measuredAgainst := budget.Bands
 		stepRow.Occupancy, stepRow.Bands = &asSent, &measuredAgainst
@@ -557,10 +557,12 @@ func NewID(at time.Time) string {
 	return session.IDPrefix + strconv.FormatInt(at.UnixNano(), 16)
 }
 
-func stepFrom(index, attempt int, decision llm.Decision) StepRow {
+func stepFrom(index int, timing requestTiming, decision llm.Decision) StepRow {
 	return StepRow{
 		id:               session.NewEventID(),
-		attempt:          attempt,
+		attempt:          timing.attempt,
+		DurationMS:       timing.durationMS,
+		FirstTokenMS:     decision.FirstTokenMS,
 		Index:            index,
 		AssistantText:    decision.Content,
 		Model:            decision.Build,

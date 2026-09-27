@@ -28,16 +28,17 @@ const (
 type TokenSource func(ctx context.Context) (string, error)
 
 type Config struct {
-	BaseURL   string
-	Model     string
-	Token     TokenSource
-	HTTP      *http.Client
-	Transport transport.Config
-	Watchdog  time.Duration
-	Proxy     bool
-	SessionID string
-	AccountID string
-	InstallID string
+	BaseURL    string
+	Model      string
+	Token      TokenSource
+	HTTP       *http.Client
+	Transport  transport.Config
+	Watchdog   time.Duration
+	StreamIdle time.Duration
+	Proxy      bool
+	SessionID  string
+	AccountID  string
+	InstallID  string
 }
 
 type Wire struct {
@@ -61,6 +62,9 @@ func New(config Config) (*Wire, error) {
 	}
 	if config.Watchdog <= 0 {
 		config.Watchdog = WatchdogSeconds * time.Second
+	}
+	if config.StreamIdle <= 0 {
+		config.StreamIdle = konst.StreamIdleMillis * time.Millisecond
 	}
 	client := &http.Client{}
 	if config.HTTP != nil {
@@ -135,7 +139,11 @@ func (w *Wire) Ask(ctx context.Context, request Request) (Result, Dump, error) {
 		Attestation: attestation,
 	}
 
-	result, err := w.post(ctx, dump, oauth, request.OnDelta)
+	sent := time.Now()
+	result, err := llm.RetryQuiet(ctx, w.config.Transport, func() (Result, error) {
+		return w.post(ctx, dump, oauth, request.OnDelta)
+	})
+	result.FirstTokenMS = llm.MillisSince(sent, result.firstDelta)
 	result.Warnings = append(warnings, result.Warnings...)
 	return result, dump, err
 }
@@ -182,7 +190,9 @@ func (w *Wire) post(ctx context.Context, dump Dump, oauth bool, onDelta func(str
 		}
 	}
 
-	reader, err := decoded(normalizedEncoding(response.Header.Get("Content-Encoding")), response.Body)
+	body := llm.WatchIdle(response.Body, w.config.StreamIdle)
+	defer func() { _ = body.Close() }()
+	reader, err := decoded(normalizedEncoding(response.Header.Get("Content-Encoding")), body)
 	if err != nil {
 		return Result{}, transport.Fail("anthropic.Ask", transport.KindProvider, err, "decoding the response")
 	}

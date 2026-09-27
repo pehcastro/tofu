@@ -6,6 +6,7 @@ import (
 	"io"
 	"strconv"
 	"strings"
+	"time"
 
 	"tofu/internal/konst"
 	"tofu/internal/llm"
@@ -43,7 +44,10 @@ type Result struct {
 	ToolCalls          []llm.ToolCall
 	Usage              Usage
 	TurnState          string
+	FirstTokenMS       int64
 	Warnings           []string
+
+	firstDelta time.Time
 }
 
 type streamItem struct {
@@ -142,6 +146,9 @@ func ReadStream(body io.Reader) (Result, error) {
 }
 
 func (s *streamState) handle(event streamEvent) error {
+	if s.result.firstDelta.IsZero() && strings.HasSuffix(event.Type, ".delta") {
+		s.result.firstDelta = time.Now()
+	}
 	switch event.Type {
 	case "error", "response.failed":
 		return transport.Fail("codex.ReadStream", transport.KindProvider, nil,

@@ -193,7 +193,7 @@ func readCassette(path string) (*cassette, error) {
 		if reply.Agent != orchestratorCaller && !subAgentNumber(reply.Agent) {
 			return nil, fmt.Errorf("%s line %d: agent %q is none of c1, c2 and so on, counting the callers after the orchestrator in the order they first ask", path, number+1, reply.Agent)
 		}
-		decision := llm.Decision{Build: cassetteBuild, Outcome: llm.OutcomeMessage, Content: reply.Text}
+		decision := llm.Decision{Build: cassetteBuild, Outcome: llm.OutcomeMessage, Content: reply.Text, FirstTokenMS: recordedFlight.Milliseconds()}
 		for index, one := range reply.Tools {
 			decision.Outcome = llm.OutcomeToolCalls
 			decision.ToolCalls = append(decision.ToolCalls, llm.ToolCall{

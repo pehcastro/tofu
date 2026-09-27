@@ -34,8 +34,9 @@ const (
 	TransportErrorDetailBytes = 512
 	TransportRequestIDBytes   = 8
 
-	StreamReadBytes = 64 << 10
-	StreamLineBytes = 16 << 20
+	StreamReadBytes  = 64 << 10
+	StreamLineBytes  = 16 << 20
+	StreamIdleMillis = 60000
 
 	WhyBarWidthChars   = 20
 	WhyStateBytes      = 2048
@@ -104,6 +105,8 @@ const (
 	ShellProbeTimeoutMillis     = 2000
 	ToolchainProbeTimeoutMillis = 2000
 	PortCheckTimeoutMillis      = 300
+	PortHolderTimeoutMillis     = 2000
+	ReadyPollMillis             = 50
 
 	ProjectSectionCap = 12
 

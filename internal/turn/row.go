@@ -83,6 +83,8 @@ type StepRow struct {
 	CacheReadTokens  int               `json:"cache_read_tokens"`
 	CacheWriteTokens int               `json:"cache_write_tokens"`
 	CostUSD          float64           `json:"cost_usd"`
+	DurationMS       int64             `json:"duration_ms"`
+	FirstTokenMS     int64             `json:"first_token_ms"`
 	Warnings         []string          `json:"warnings,omitempty"`
 	Occupancy        *recall.Occupancy `json:"occupancy,omitempty"`
 	Bands            *recall.Bands     `json:"bands,omitempty"`

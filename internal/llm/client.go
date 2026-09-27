@@ -47,7 +47,15 @@ type Decision struct {
 	PromptAccounting PromptAccounting
 	CacheReadTokens  int
 	CacheWriteTokens int
+	FirstTokenMS     int64
 	Warnings         []string
+}
+
+func MillisSince(sent, firstDelta time.Time) int64 {
+	if firstDelta.IsZero() {
+		return 0
+	}
+	return firstDelta.Sub(sent).Milliseconds()
 }
 
 type Client struct {

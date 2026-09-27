@@ -48,6 +48,7 @@ func (s Subscription) Ask(ctx context.Context, request llm.Request) (llm.Decisio
 		PromptAccounting: llm.PromptAccountingFor(anthropic.Name),
 		CacheReadTokens:  result.Usage.CacheRead,
 		CacheWriteTokens: result.Usage.CacheWrite,
+		FirstTokenMS:     result.FirstTokenMS,
 		Warnings:         result.Warnings,
 	}
 	if decision.Outcome == llm.OutcomeRefusal {

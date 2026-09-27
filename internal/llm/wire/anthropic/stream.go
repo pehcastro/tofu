@@ -6,6 +6,7 @@ import (
 	"io"
 	"strconv"
 	"strings"
+	"time"
 
 	"tofu/internal/konst"
 	"tofu/internal/llm"
@@ -39,7 +40,10 @@ type Result struct {
 	ThinkingSignature string
 	ToolCalls         []llm.ToolCall
 	Usage             Usage
+	FirstTokenMS      int64
 	Warnings          []string
+
+	firstDelta time.Time
 }
 
 type streamEvent struct {
@@ -159,6 +163,9 @@ func ReadStream(body io.Reader, oauth bool, onDelta func(string)) (Result, error
 			if block == nil {
 				result.Warnings = append(result.Warnings, "a delta arrived for a block that never started")
 				continue
+			}
+			if result.firstDelta.IsZero() && event.Delta.Type != "signature_delta" {
+				result.firstDelta = time.Now()
 			}
 			switch event.Delta.Type {
 			case "text_delta":

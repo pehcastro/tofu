@@ -59,6 +59,20 @@ func (r retrying) RoundTrip(request *http.Request) (*http.Response, error) {
 	}
 }
 
+func RetryQuiet[T any](ctx context.Context, plan transport.Config, post func() (T, error)) (T, error) {
+	retry := plan.Retry()
+	for attempt := 1; ; attempt++ {
+		result, err := post()
+		if !errors.Is(err, ErrStreamIdle) || ctx.Err() != nil {
+			return result, err
+		}
+		wait, again := retry.Next(attempt, 0, "")
+		if !again || plan.Pause(ctx, wait) != nil {
+			return result, err
+		}
+	}
+}
+
 func worthRepeating(response *http.Response, err error) (time.Duration, bool) {
 	if err != nil {
 		return 0, !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded)

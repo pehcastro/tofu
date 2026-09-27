@@ -5,6 +5,7 @@ import (
 	"net/http/httptrace"
 	"strconv"
 	"sync"
+	"time"
 
 	"tofu/internal/llm"
 	"tofu/internal/session"
@@ -32,14 +33,20 @@ func (r *requestsPerHost) attempt() int {
 	return max(r.sent[r.answered], session.FirstAttempt)
 }
 
-func askCountingAttempts(ctx context.Context, model Model, request llm.Request) (llm.Decision, int, error) {
+type requestTiming struct {
+	attempt    int
+	durationMS int64
+}
+
+func askCountingAttempts(ctx context.Context, model Model, request llm.Request) (llm.Decision, requestTiming, error) {
 	var counted requestsPerHost
 	traced := httptrace.WithClientTrace(ctx, &httptrace.ClientTrace{GetConn: counted.sending})
+	started := time.Now()
 	decision, err := model.Ask(traced, request)
-	sent := counted.attempt()
-	if decision.Attempts > llm.AttemptsUnreported && int(decision.Attempts) != sent {
+	sent := requestTiming{attempt: counted.attempt(), durationMS: time.Since(started).Milliseconds()}
+	if decision.Attempts > llm.AttemptsUnreported && int(decision.Attempts) != sent.attempt {
 		decision.Warnings = append(decision.Warnings,
-			"requests this process put on the wire: "+strconv.Itoa(sent)+
+			"requests this process put on the wire: "+strconv.Itoa(sent.attempt)+
 				", and the wire answered on attempt "+decision.Attempts.String())
 	}
 	return decision, sent, err
