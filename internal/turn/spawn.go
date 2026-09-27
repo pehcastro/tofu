@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"tofu/internal/judge/method"
@@ -320,6 +321,8 @@ type SpawnTool struct {
 	SettingsTool   bool
 	orchestratorID string
 	depth          int
+	mu             sync.Mutex
+	tree           *sync.Mutex
 	spawned        int
 	spend          float64
 	base           Config
@@ -330,16 +333,51 @@ type SpawnTool struct {
 }
 
 func NewSpawnTool(orchestratorID string, base Config, roster *subagent.Roster) *SpawnTool {
-	return &SpawnTool{orchestratorID: orchestratorID, base: base, roster: roster}
+	return &SpawnTool{orchestratorID: orchestratorID, base: base, roster: roster, tree: &sync.Mutex{}}
 }
 
 func (t *SpawnTool) Name() string { return "spawn" }
 
-func (t *SpawnTool) SubAgentRows() []Row { return t.subAgentRows }
+func (t *SpawnTool) SubAgentRows() []Row {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return slices.Clone(t.subAgentRows)
+}
 
-func (t *SpawnTool) Reports() []SubAgentReport { return t.reports }
+func (t *SpawnTool) Reports() []SubAgentReport {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return slices.Clone(t.reports)
+}
 
-func (t *SpawnTool) Spawned() []Spawned { return t.ran }
+func (t *SpawnTool) Spawned() []Spawned {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return slices.Clone(t.ran)
+}
+
+func (t *SpawnTool) reserve(limit int) error {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.spawned >= limit {
+		return BreadthLimitError{Spawned: t.spawned, Limit: limit}
+	}
+	t.spawned++
+	return nil
+}
+
+func (t *SpawnTool) disjointPrefix(calls []llm.ToolCall) int {
+	limit := t.limits().PerTurn
+	var wave subagent.Roster
+	for i, call := range calls {
+		var args spawnArgs
+		if i == limit || call.Name != t.Name() || json.Unmarshal(call.Arguments, &args) != nil ||
+			wave.Hold(subagent.SubAgent{ID: call.ID, Owns: args.Owns}) != nil {
+			return i
+		}
+	}
+	return len(calls)
+}
 
 func (t *SpawnTool) limits() SubAgentLimits {
 	if t.Limits == nil {
@@ -411,9 +449,17 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 	if t.depth+1 > limits.Depth {
 		return Result{}, DepthLimitError{Depth: t.depth + 1, Limit: limits.Depth}
 	}
-	if t.spawned >= limits.PerTurn {
-		return Result{}, BreadthLimitError{Spawned: t.spawned, Limit: limits.PerTurn}
+	if err := t.reserve(limits.PerTurn); err != nil {
+		return Result{}, err
 	}
+	started := false
+	defer func() {
+		if !started {
+			t.mu.Lock()
+			t.spawned--
+			t.mu.Unlock()
+		}
+	}()
 	definition, err := t.SubAgents.Named(args.Agent)
 	if err != nil {
 		return Result{}, err
@@ -443,6 +489,7 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 			recorded = append(recorded, run.Agent)
 		}
 	}
+	t.tree.Lock()
 	agent := subagent.SubAgent{
 		ID:      t.roster.NextID(definition.Name, recorded),
 		Agent:   definition.Name,
@@ -452,8 +499,9 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 		Owns:    args.Owns,
 		Started: clock(),
 	}
-	subAgentID := agent.ID
-	if err := t.roster.Hold(agent); err != nil {
+	subAgentID, held := agent.ID, t.roster.Hold(agent)
+	t.tree.Unlock()
+	if err := held; err != nil {
 		var collision subagent.CollisionError
 		if errors.As(err, &collision) && collision.HolderReport != "" {
 			return Result{Command: "handback " + collision.Holder, Content: fmt.Sprintf(
@@ -477,7 +525,7 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 		}
 		owned = append(owned, tool)
 	}
-	nested := &SpawnTool{Review: t.Review, Methods: t.Methods, SubAgents: t.SubAgents, Limits: t.Limits, orchestratorID: subAgentID, depth: t.depth + 1, base: t.base, roster: t.roster}
+	nested := &SpawnTool{Review: t.Review, Methods: t.Methods, SubAgents: t.SubAgents, Limits: t.Limits, orchestratorID: subAgentID, depth: t.depth + 1, base: t.base, roster: t.roster, tree: t.tree}
 	if offered(t.Name()) {
 		owned = append(owned, nested)
 	}
@@ -503,13 +551,15 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 		}
 		t.roster.Stepped(subAgentID, step.Index, clock(), called...)
 		if t.base.Step != nil {
+			t.tree.Lock()
 			t.base.Step(step)
+			t.tree.Unlock()
 		}
 	}
 
 	subAgentCtx, release := context.WithCancel(ctx)
 	defer release()
-	t.spawned++
+	started = true
 	claims, state, runErr := t.runRounds(ctx, subAgentCtx, agent, subAgentID, subAgent, trace)
 	asked := boundary.Asked()
 	if len(asked) > 0 && state != subagent.Errored && state != subagent.Parked {
@@ -519,15 +569,16 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 	if err := trace.settle(claims[len(claims)-1].ID, state.String()); err != nil {
 		claims[len(claims)-1].Warnings = append(claims[len(claims)-1].Warnings, "the sub-agent's last state was not recorded: "+err.Error())
 	}
-	t.retain(append(claims, nested.subAgentRows...))
-	t.ran = append(append(t.ran, Spawned{ID: subAgentID, Call: site.call, Agent: definition.Name, Slug: opened.Slug, Windows: opened.Windows}), nested.ran...)
+	report := reportOf(agent, claims, state)
+	report.Asked = asked
+	t.mu.Lock()
+	t.retain(append(claims, nested.SubAgentRows()...))
+	t.ran = append(append(t.ran, Spawned{ID: subAgentID, Call: site.call, Agent: definition.Name, Slug: opened.Slug, Windows: opened.Windows}), nested.Spawned()...)
 	for _, claim := range claims {
 		t.spend += claim.TotalCostUSD
 	}
-
-	report := reportOf(agent, claims, state)
-	report.Asked = asked
 	t.reports = append(t.reports, report)
+	t.mu.Unlock()
 	contract := subagent.BuildContract(agent.Brief, report.Prose, stoppedEarly(state, claims[len(claims)-1].Outcome))
 	contract.Wrote = report.Wrote
 	text := report.Text() + "\n\n" + contract.Block()
@@ -538,7 +589,7 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 	if runErr != nil && state != subagent.Parked {
 		return Result{}, fmt.Errorf("spawn: sub-agent %s is %s: %w", subAgentID, state, runErr)
 	}
-	return Result{Content: text, Command: subAgentID + " " + state.String() + ": " + agent.Mission}, nil
+	return Result{Content: text, Command: subAgentID + " " + state.String() + ": " + agent.Mission, SubAgent: subAgentID}, nil
 }
 
 func stoppedEarly(state subagent.State, outcome Outcome) bool {

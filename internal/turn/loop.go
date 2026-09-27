@@ -12,7 +12,6 @@ import (
 	"sync"
 	"time"
 
-	"tofu/internal/konst"
 	"tofu/internal/llm"
 	"tofu/internal/recall"
 	"tofu/internal/session"
@@ -232,10 +231,12 @@ func Run(ctx context.Context, config Config) (Row, error) {
 		}
 		for _, tool := range currentTools().tools {
 			if spawner, spawning := tool.(*SpawnTool); spawning {
-				for _, subAgent := range spawner.subAgentRows {
+				for _, subAgent := range spawner.SubAgentRows() {
 					row.SubAgentIDs = append(row.SubAgentIDs, subAgent.ID)
 				}
+				spawner.mu.Lock()
 				row.TotalCostUSD += spawner.spend
+				spawner.mu.Unlock()
 			}
 		}
 		row.WallClockMS = now().Sub(start).Milliseconds()
@@ -339,7 +340,7 @@ func Run(ctx context.Context, config Config) (Row, error) {
 			var repeats int
 			author := row.author()
 			for len(pending) > 0 && !tripped {
-				width := min(max(stepTools.parallelPrefix(pending), 1), konst.TurnParallelToolCalls)
+				width := max(stepTools.parallelPrefix(pending), 1)
 				wave := make([]gatedCall, 0, width)
 				for _, asked := range pending[:width] {
 					call := asked
@@ -612,12 +613,6 @@ func (g gatedCall) execute(ctx context.Context, tools Registry, resultBytesCap i
 		return rejectedCall(call, started, "unknown tool "+strconv.Quote(call.Name), g.id, g.parent, g.author)
 	}
 
-	spawner, spawning := tool.(*SpawnTool)
-	spawnedBefore := 0
-	if spawning {
-		spawnedBefore = len(spawner.subAgentRows)
-	}
-
 	result, err := tool.Run(ctx, call.Arguments)
 	if err == nil && g.proxy != nil && g.proxy.Ran != "" && proxyPanicked(result.Content) {
 		g.proxy.ProxyBytes = len(result.Content)
@@ -655,12 +650,10 @@ func (g gatedCall) execute(ctx context.Context, tools Registry, resultBytesCap i
 		SiftSavedBytes: saved,
 		DurationMS:     time.Since(started).Milliseconds(),
 		Error:          result.FailureText,
+		SubAgentID:     result.SubAgent,
 	}
 	if storeErr != nil {
 		row.ResultHandleError = storeErr.Error()
-	}
-	if spawning && len(spawner.subAgentRows) > spawnedBefore {
-		row.SubAgentID = spawner.subAgentRows[spawnedBefore].ID
 	}
 	outcome := row.Outcome()
 	if result.Outcome == ResultAborted {

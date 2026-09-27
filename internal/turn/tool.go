@@ -29,6 +29,7 @@ type Result struct {
 	ExitCode    *int
 	FailureText string
 	Outcome     ResultOutcome
+	SubAgent    string
 }
 
 const resultCapMarker = "\n...(%s dropped from the middle of this result, cut at a %d byte cap.)...\n"
@@ -96,12 +97,16 @@ func readOnly(name string) bool {
 }
 
 func (r Registry) parallelPrefix(calls []llm.ToolCall) int {
-	for i, call := range calls {
+	if spawner, spawning := r.byName["spawn"].(*SpawnTool); spawning && calls[0].Name == "spawn" {
+		return spawner.disjointPrefix(calls)
+	}
+	width := min(len(calls), konst.TurnParallelToolCalls)
+	for i, call := range calls[:width] {
 		if _, known := r.byName[call.Name]; !known || !readOnly(call.Name) {
 			return i
 		}
 	}
-	return len(calls)
+	return width
 }
 
 func (r Registry) Definitions() []llm.Tool {
