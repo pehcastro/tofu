@@ -1,6 +1,7 @@
 package subagent
 
 import (
+	"cmp"
 	"fmt"
 	"slices"
 	"strconv"
@@ -118,6 +119,23 @@ func (r *Roster) Hold(agent SubAgent) error {
 	agent.State, agent.Active, agent.Round = Working, agent.Started, 1
 	r.agents = append(r.agents, agent)
 	return nil
+}
+
+func (r *Roster) NextID(definition string, recorded []string) string {
+	prefix := cmp.Or(definition, "sub") + "-"
+	r.held.Lock()
+	defer r.held.Unlock()
+	ids := slices.Clone(recorded)
+	for _, agent := range r.agents {
+		ids = append(ids, agent.ID)
+	}
+	last := 0
+	for _, id := range ids {
+		if n, err := strconv.Atoi(strings.TrimPrefix(id, prefix)); err == nil && strings.HasPrefix(id, prefix) {
+			last = max(last, n)
+		}
+	}
+	return prefix + strconv.Itoa(last+1)
 }
 
 func (r *Roster) Reopen(id, reason string) (int, error) {

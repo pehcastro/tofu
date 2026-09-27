@@ -85,11 +85,11 @@ func (g gatedCall) cutShellResult(ctx context.Context, tool string, result Resul
 		return ShellCut{Text: result.Content}
 	}
 	code := *result.ExitCode
-	shell := sift.Shell{
-		Command:  result.Command,
-		Stdout:   strings.TrimSuffix(result.Content, fmt.Sprintf(commandExited, code)),
-		ExitCode: code,
+	stdout := strings.TrimSuffix(result.Content, fmt.Sprintf(commandExited, code))
+	if stdout != "" && !strings.HasSuffix(stdout, "\n") {
+		stdout += "\n"
 	}
+	shell := sift.Shell{Command: result.Command, Stdout: stdout, ExitCode: code}
 	cut, err := g.sift.Cut(ctx, shell, g.task)
 	if err != nil {
 		return ShellCut{Text: result.Content}

@@ -57,8 +57,11 @@ readable form collapses: doctor, models, agents, usage, context, rules.
 `
 
 func main() {
-	copyLegacyStateDirs(os.Stdout)
-	if wd, err := os.Getwd(); err == nil && (len(os.Args) < 2 || os.Args[1] == "--continue") {
+	opensTheApp := len(os.Args) < 2 || os.Args[1] == "--continue"
+	if opensTheApp || os.Args[1] == "migrate" {
+		copyLegacyStateDirs(os.Stdout)
+	}
+	if wd, err := os.Getwd(); err == nil && opensTheApp {
 		moveProjectState(os.Stderr, wd)
 	}
 	os.Exit(run(os.Args[1:], os.Stdin, os.Stdout, os.Stderr))

@@ -16,6 +16,7 @@ import (
 	"tofu/internal/judge/state"
 	"tofu/internal/konst"
 	"tofu/internal/llm"
+	"tofu/internal/rule"
 	"tofu/internal/session"
 	"tofu/internal/subagent"
 	shipped "tofu/library"
@@ -337,7 +338,8 @@ func (t *SpawnTool) Definition() llm.Tool {
 	}
 	return llm.Tool{
 		Name: "spawn",
-		Description: "hands one piece of work to a child with its own context and its own conversation, and returns the child's report rather than its transcript. " +
+		Description: "you plan, spawn and verify, and implementation goes to a sub-agent: spawn one per separable piece of work as soon as the piece is known, rather than writing the code yourself first. " +
+			"hands one piece of work to a child with its own context and its own conversation, and returns the child's report rather than its transcript. " +
 			"owns lists the paths the child may write, every other path is refused at the write, and no two children may hold overlapping paths. " +
 			"At most " + strconv.Itoa(konst.SubAgentMaxBreadth) + " children per turn, nested at most " + strconv.Itoa(konst.SubAgentMaxDepth) + " deep.",
 		Parameters: map[string]any{
@@ -405,8 +407,15 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 	if clock == nil {
 		clock = time.Now
 	}
+	site, _ := ctx.Value(spawnSiteKey{}).(spawnSite)
+	var recorded []string
+	if site.log != nil {
+		for _, run := range site.log.Header().Agents {
+			recorded = append(recorded, run.Agent)
+		}
+	}
 	agent := subagent.SubAgent{
-		ID:      t.parentID + "-c" + strconv.Itoa(t.spawned+1),
+		ID:      t.roster.NextID(definition.Name, recorded),
 		Agent:   definition.Name,
 		Model:   opened.Slug,
 		Mission: args.mission(),
@@ -430,10 +439,10 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 	var owned []Tool
 	for _, tool := range t.base.Tools.tools {
 		switch {
-		case !offered(tool.Name()):
-			continue
 		case tool.Name() == "write" || tool.Name() == "edit":
 			tool = ownedTool{tool: tool, boundary: boundary}
+		case !offered(tool.Name()):
+			continue
 		case tool.Name() == "bash":
 			tool = ownedShell{tool: tool, boundary: boundary}
 		}
@@ -448,7 +457,6 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 		child.Model, child.Accounts, child.Spend, child.Wire = nil, opened.Accounts, opened.Spend, opened.Wire
 	}
 	child.System = system
-	site, _ := ctx.Value(spawnSiteKey{}).(spawnSite)
 	trace := spawnTrace{site: site, definition: agent.Agent, model: agent.Model, mission: agent.Mission, owns: args.Owns, depth: t.depth + 1}
 	child.Task = args.Task
 	child.Tools = NewRegistry(owned...)
@@ -634,9 +642,9 @@ func (t ownedShell) Name() string { return t.tool.Name() }
 
 func (t ownedShell) Definition() llm.Tool {
 	definition := t.tool.Definition()
-	definition.Description += ", and every path the command names has to be inside the paths this agent holds: " +
+	definition.Description += ", and every file the command writes, through a redirect, tee, cp, mv or sed -i, has to be inside the paths this agent holds: " +
 		strings.Join(t.boundary.Owns, ", ") +
-		". A command naming any path outside them is refused before it runs, and that work goes back to the parent."
+		". Reading anything is fine. A command writing outside them is refused before it runs, and that work goes back to the parent."
 	return definition
 }
 
@@ -645,8 +653,117 @@ func (t ownedShell) Run(ctx context.Context, raw json.RawMessage) (Result, error
 	if err := json.Unmarshal(raw, &args); err != nil {
 		return Result{}, fmt.Errorf("%s: arguments are not the expected shape: %w", t.Name(), err)
 	}
-	if err := t.boundary.Command(args.Command); err != nil {
+	if err := t.boundary.Shell(args.Command); err != nil {
 		return Result{}, fmt.Errorf("%s: %w", t.Name(), err)
 	}
 	return t.tool.Run(ctx, raw)
+}
+
+type SourceBudgetError struct {
+	Tool       string
+	Path       string
+	Lines      int
+	Spent      int
+	Spawn      []string
+	ShellWrite bool
+}
+
+func (e SourceBudgetError) Error() string {
+	cost := fmt.Sprintf("this change of %d lines", e.Lines)
+	if e.ShellWrite {
+		cost = "a shell write, which cannot be counted before it runs and so costs the whole budget,"
+	}
+	return fmt.Sprintf("%s: %s is source code, and %s would pass the orchestrator's budget of %d changed source lines in one turn, %d of which are spent: spawn %s with this work instead",
+		e.Tool, e.Path, cost, konst.OrchestratorSourceLinesPerTurn, e.Spent, strings.Join(e.Spawn, " or "))
+}
+
+func sourceLanguage(path string) string {
+	language := rule.LanguageOf(path)
+	if language == "markdown" || language == "yaml" {
+		return ""
+	}
+	return language
+}
+
+func linesIn(text string) int {
+	if text == "" {
+		return 0
+	}
+	return strings.Count(strings.TrimSuffix(text, "\n"), "\n") + 1
+}
+
+type sourceBudget struct {
+	spent   int
+	enabled []subagent.Definition
+}
+
+type budgetedTool struct {
+	tool   Tool
+	budget *sourceBudget
+}
+
+func WithSourceBudget(tools []Tool, defined []subagent.Definition) []Tool {
+	budget := &sourceBudget{enabled: enabledSubAgents(defined)}
+	wrapped := slices.Clone(tools)
+	for i, tool := range wrapped {
+		if slices.Contains([]string{"write", "edit", "bash"}, tool.Name()) {
+			wrapped[i] = budgetedTool{tool: tool, budget: budget}
+		}
+	}
+	return wrapped
+}
+
+func (t budgetedTool) Name() string { return t.tool.Name() }
+
+func (t budgetedTool) Definition() llm.Tool {
+	definition := t.tool.Definition()
+	definition.Description += fmt.Sprintf(". as the orchestrator you change at most %d lines of source code in one turn, across write, edit and shell writes together; "+
+		"markdown, notes, plans, configuration and data are free, and past the budget a source write is refused and goes to a sub-agent", konst.OrchestratorSourceLinesPerTurn)
+	return definition
+}
+
+func (t budgetedTool) Run(ctx context.Context, raw json.RawMessage) (Result, error) {
+	var args struct {
+		Path    string `json:"path"`
+		Content string `json:"content"`
+		Old     string `json:"old_string"`
+		New     string `json:"new_string"`
+		Command string `json:"command"`
+	}
+	if err := json.Unmarshal(raw, &args); err != nil {
+		return t.tool.Run(ctx, raw)
+	}
+	lines, shellWrite := max(linesIn(args.Content), linesIn(args.Old), linesIn(args.New)), false
+	if t.Name() == "bash" {
+		written, err := subagent.ShellWrites(args.Command)
+		if err != nil {
+			return Result{}, fmt.Errorf("%s: %w", t.Name(), err)
+		}
+		for _, path := range written {
+			if sourceLanguage(path) != "" {
+				args.Path, lines, shellWrite = path, konst.OrchestratorSourceLinesPerTurn, true
+			}
+		}
+	}
+	language := sourceLanguage(args.Path)
+	if language == "" {
+		return t.tool.Run(ctx, raw)
+	}
+	if t.budget.spent+lines > konst.OrchestratorSourceLinesPerTurn {
+		refusal := SourceBudgetError{Tool: t.Name(), Path: args.Path, Lines: lines, Spent: t.budget.spent, ShellWrite: shellWrite}
+		for _, definition := range t.budget.enabled {
+			if definition.Language == language {
+				refusal.Spawn = append(refusal.Spawn, definition.Name)
+			}
+		}
+		if len(refusal.Spawn) == 0 {
+			refusal.Spawn = []string{"a sub-agent"}
+		}
+		return Result{}, refusal
+	}
+	result, err := t.tool.Run(ctx, raw)
+	if err == nil && result.FailureText == "" {
+		t.budget.spent += lines
+	}
+	return result, err
 }

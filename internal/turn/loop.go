@@ -217,7 +217,7 @@ func Run(ctx context.Context, config Config) (Row, error) {
 			config.Step(step)
 		}
 	}
-	registry := shellRegistryFrom(ctx)
+	registry := ShellRegistryFrom(ctx)
 	beforeShells := registrySnapshot(registry)
 	finish := func(outcome Outcome) Row {
 		row.Outcome = outcome
@@ -406,6 +406,10 @@ func Run(ctx context.Context, config Config) (Row, error) {
 				stepRow.Grants = slices.Clone(asked[recordedGrants:])
 				recordedGrants = len(asked)
 			}
+			if err := ctx.Err(); err != nil {
+				keep(stepRow)
+				return finish(OutcomeError), err
+			}
 			if tripped {
 				cause := loopGuardCause(repeated, repeats, guard.window)
 				stopped := "this turn stopped itself because " + cause
@@ -434,6 +438,9 @@ func Run(ctx context.Context, config Config) (Row, error) {
 					}
 				}
 				fork, begun, err := forkHistory(artifacts, budget, config.FirstUserMessage(), messages, forced)
+				if err == nil {
+					err = ctx.Err()
+				}
 				if err != nil {
 					keep(stepRow)
 					return finish(OutcomeError), err
@@ -543,7 +550,7 @@ func backgroundSurvivors(registry *shell.Registry, before map[string]bool) strin
 		return ""
 	}
 	return "this turn started a background process still running now that it has ended: " + strings.Join(named, ", ") +
-		"; see it in the shells tab, or run `tofu shells kill <name>` to stop it"
+		"; see it in the shells tab, or stop it with the " + ShellToolName + " tool's stop, naming it"
 }
 
 func NewID(at time.Time) string {

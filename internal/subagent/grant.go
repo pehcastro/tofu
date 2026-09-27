@@ -32,15 +32,6 @@ func (b *Boundary) Write(path string) error {
 	return err
 }
 
-func (b *Boundary) Command(command string) error {
-	for _, named := range commandPaths(command) {
-		if err := b.Write(named); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 func (b *Boundary) Ask(question Question) {
 	question.Ticket = b.Ticket
 	b.asked = append(b.asked, question)

@@ -481,7 +481,7 @@ func TestAChildLeavesItsRecordWhileTheParentsTurnIsStillRunning(t *testing.T) {
 		t.Fatalf("buildTestRunTools: %v", err)
 	}
 	store := projectSessions(t, dir)
-	model := &watchingModel{store: store, child: "turn-parent-c1", inner: &queuedModel{decisions: []llm.Decision{
+	model := &watchingModel{store: store, child: "sub-1", inner: &queuedModel{decisions: []llm.Decision{
 		{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{
 			{ID: "call-1", Name: "spawn", Arguments: json.RawMessage(`{"task":"write note.txt","owns":["note.txt"]}`)},
 		}},

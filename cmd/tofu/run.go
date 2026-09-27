@@ -589,7 +589,7 @@ func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn
 	spawner := turn.NewSpawnTool(parentID, config, cmp.Or(run.roster, &subagent.Roster{}))
 	spawner.SubAgents = prompt.subAgents
 	spawner.SubAgents.Open = run.childOpener(opts)
-	config.Tools = turn.NewRegistry(append(slices.Clone(built), spawner)...)
+	config.Tools = turn.NewRegistry(append(turn.WithSourceBudget(built, prompt.subAgents.Defined), spawner)...)
 	return config, spawner, nil
 }
 
@@ -796,7 +796,7 @@ func assembleRunTools(dir, set string, readBeforeEdit bool, bashTool *turn.BashT
 		return nil, nil, webErr
 	}
 	plan := tools.NewPlan()
-	full := append([]turn.Tool{read, write, shell, plan, projectTool, globTool, searchTool, symbolsTool, editTool.Reading(ledger), githubTool}, verbTools...)
+	full := append([]turn.Tool{read, write, shell, plan, tools.Shells{}, projectTool, globTool, searchTool, symbolsTool, editTool.Reading(ledger), githubTool}, verbTools...)
 	return tools.NewMemo().Wrap(append(full, webTools...)), plan, nil
 }
 

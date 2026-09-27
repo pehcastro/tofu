@@ -40,7 +40,7 @@ func TestTheTableSendingStopCheckToTheJudgedMethodActsOnTheAnswer(t *testing.T) 
 	if review.reviewed != 3 {
 		t.Fatalf("the judged arm ran %d times, want 3: a review that always reopens should run out against the round cap, not stop early", review.reviewed)
 	}
-	if len(children) != 3 || children[1].ID != "turn-parent-c1-r2" || children[2].ID != "turn-parent-c1-r3" {
+	if len(children) != 3 || children[1].ID != "sub-1-r2" || children[2].ID != "sub-1-r3" {
 		t.Fatalf("the reopen verdict did not carry the child to the round cap: %d rows", len(children))
 	}
 	if !strings.Contains(children[1].Task, "work_remains 0.93") {

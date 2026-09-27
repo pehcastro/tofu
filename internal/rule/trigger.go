@@ -50,6 +50,16 @@ type Task struct {
 
 func KnownLanguage(name string) bool { return languageExtensions()[name] != nil }
 
+func LanguageOf(file string) string {
+	extension := strings.ToLower(path.Ext(file))
+	for language, extensions := range languageExtensions() {
+		if slices.Contains(extensions, extension) {
+			return language
+		}
+	}
+	return ""
+}
+
 type Trigger struct {
 	condition *regexp.Regexp
 	scope     string
