@@ -92,6 +92,7 @@ type Request struct {
 	Messages []Message
 	Tools    []Tool
 	OnDelta  func(string)
+	OnRetry  func()
 }
 
 func (r Request) Encode(model string) ([]byte, error) {

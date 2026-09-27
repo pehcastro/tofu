@@ -127,7 +127,7 @@ func (w *Wire) Ask(ctx context.Context, request Request) (Result, Dump, error) {
 	}
 
 	sent := time.Now()
-	result, err := llm.RetryQuiet(ctx, w.config.Transport, func() (Result, error) {
+	result, err := llm.RetryQuiet(ctx, w.config.Transport, nil, func() (Result, error) {
 		return w.post(ctx, dump)
 	})
 	result.FirstTokenMS = llm.MillisSince(sent, result.firstDelta)

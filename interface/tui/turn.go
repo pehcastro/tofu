@@ -274,6 +274,8 @@ func (a *App) absorb(event Event) {
 		a.view.Append(session.Entry{Kind: session.Assistant, Body: event.Text, ID: event.ID})
 	case EventTextDelta:
 		a.view.Stream(event.Text)
+	case EventStreamReset:
+		a.view.TakePartial()
 	case EventToolCall:
 		a.called(event, at)
 	case EventToolResult:

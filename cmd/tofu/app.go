@@ -1050,6 +1050,10 @@ func (a *appWatcher) askThrough(ctx context.Context, inner turn.Model, request l
 			streamed = true
 			a.emit(tui.Event{Kind: tui.EventTextDelta, Text: text})
 		}
+		request.OnRetry = func() {
+			streamed = false
+			a.emit(tui.Event{Kind: tui.EventStreamReset})
+		}
 	}
 	a.sendSubAgents()
 	decision, err := inner.Ask(ctx, request)
@@ -1248,7 +1252,7 @@ func (a *appWatcher) clockRunningSubAgents() (stop func()) {
 	ticking, stopped := make(chan struct{}), make(chan struct{})
 	go func() {
 		defer close(stopped)
-		every := time.NewTicker(session.TickInterval)
+		every := time.NewTicker(konst.SubAgentRedrawMillis * time.Millisecond)
 		defer every.Stop()
 		for {
 			select {

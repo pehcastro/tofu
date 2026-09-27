@@ -59,7 +59,7 @@ func (r retrying) RoundTrip(request *http.Request) (*http.Response, error) {
 	}
 }
 
-func RetryQuiet[T any](ctx context.Context, plan transport.Config, post func() (T, error)) (T, error) {
+func RetryQuiet[T any](ctx context.Context, plan transport.Config, onRetry func(), post func() (T, error)) (T, error) {
 	retry := plan.Retry()
 	for attempt := 1; ; attempt++ {
 		result, err := post()
@@ -69,6 +69,9 @@ func RetryQuiet[T any](ctx context.Context, plan transport.Config, post func() (
 		wait, again := retry.Next(attempt, 0, "")
 		if !again || plan.Pause(ctx, wait) != nil {
 			return result, err
+		}
+		if onRetry != nil {
+			onRetry()
 		}
 	}
 }

@@ -44,9 +44,10 @@ const (
 )
 
 const (
-	ProgressTickMillis = 80
-	QuitAgainMillis    = 3000
-	FeedRecentEvents   = 200
+	ProgressTickMillis   = 80
+	SubAgentRedrawMillis = 250
+	QuitAgainMillis      = 3000
+	FeedRecentEvents     = 200
 
 	DriveTimeoutMillis = 60000
 	DriveSettleMillis  = ProgressTickMillis / 2

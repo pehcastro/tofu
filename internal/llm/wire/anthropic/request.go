@@ -30,6 +30,7 @@ type Request struct {
 
 	HistoryCacheOff bool
 	OnDelta         func(string)
+	OnRetry         func()
 }
 
 const (

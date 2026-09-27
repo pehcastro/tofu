@@ -55,6 +55,7 @@ const (
 	EventPlan
 	EventSession
 	EventTask
+	EventStreamReset
 )
 
 type Event struct {
@@ -87,7 +88,7 @@ func (e Event) snapshot() bool {
 		return true
 	case EventText, EventTextDelta, EventToolCall, EventToolResult, EventNote, EventFailure, EventStats, EventDone,
 		EventDecision, EventGateOff, EventAwaitPerson, EventResumed, EventSteered, EventRequesting, EventPlan,
-		EventSession, EventForkStart, EventForkEnd, EventTask:
+		EventSession, EventForkStart, EventForkEnd, EventTask, EventStreamReset:
 		return false
 	}
 	panic("tui: unknown event kind")

@@ -31,6 +31,7 @@ func (s Subscription) Ask(ctx context.Context, request llm.Request) (llm.Decisio
 		Effort:   s.Effort,
 		CacheTTL: konst.SubscriptionCacheTTL,
 		OnDelta:  request.OnDelta,
+		OnRetry:  request.OnRetry,
 	})
 	if err != nil {
 		return llm.Decision{}, err
