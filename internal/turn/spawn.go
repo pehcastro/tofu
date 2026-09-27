@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -533,7 +534,7 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 	if opened.Accounts.Pick != nil {
 		subAgent.Model, subAgent.Accounts, subAgent.Spend, subAgent.Wire = nil, opened.Accounts, opened.Spend, opened.Wire
 	}
-	subAgent.System, subAgent.Environment = system, environment
+	subAgent.System, subAgent.Environment = system, environment+t.briefFiles(ctx, args.Task)
 	trace := spawnTrace{site: site, definition: agent.Agent, model: agent.Model, mission: agent.Mission, owns: args.Owns, depth: t.depth + 1}
 	subAgent.Task = args.Task
 	subAgent.Tools = NewRegistry(owned...)
@@ -590,6 +591,37 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 		return Result{}, fmt.Errorf("spawn: sub-agent %s is %s: %w", subAgentID, state, runErr)
 	}
 	return Result{Content: text, Command: subAgentID + " " + state.String() + ": " + agent.Mission, SubAgent: subAgentID}, nil
+}
+
+var briefPath = regexp.MustCompile(`[\w./-]*\w\.[A-Za-z0-9]+`)
+
+func (t *SpawnTool) briefFiles(ctx context.Context, brief string) string {
+	read, readable := t.base.Tools.byName["read"]
+	if !readable {
+		return ""
+	}
+	var text strings.Builder
+	var skipped, named []string
+	for _, path := range briefPath.FindAllString(brief, -1) {
+		if slices.Contains(named, path) {
+			continue
+		}
+		named = append(named, path)
+		raw, _ := json.Marshal(readArgs{Path: path})
+		result, err := read.Run(ctx, raw)
+		if err != nil {
+			continue
+		}
+		if len(skipped) > 0 || text.Len()+len(result.Content) > konst.SubAgentReferenceBytes {
+			skipped = append(skipped, path)
+			continue
+		}
+		text.WriteString("\n\nthe brief names " + path + ", so it is read for you, as a read call shows it:\n" + result.Content)
+	}
+	if len(skipped) > 0 {
+		fmt.Fprintf(&text, "\n\nthe brief also names these files, not read for you to stay within %d bytes, so read them before you change them: %s", konst.SubAgentReferenceBytes, strings.Join(skipped, ", "))
+	}
+	return text.String()
 }
 
 func stoppedEarly(state subagent.State, outcome Outcome) bool {
