@@ -393,7 +393,7 @@ func (c *converter) request(step *pairedStep, said string, callsWritten bool) {
 		return
 	}
 	for index, row := range step.calls {
-		call := cmp.Or(stringField(row, "call"), "step"+strconv.Itoa(step.body.Index)+"."+strconv.Itoa(index+1))
+		call := cmp.Or(stringField(row, "call"), request+"."+strconv.Itoa(index+1))
 		var asked CallBody
 		_ = json.Unmarshal(row, &asked)
 		c.emit(Event{ID: cmp.Or(stringField(row, "id"), EventIDFor(c.turnID, call)), Kind: EventToolCall, Call: call, Request: request, Body: marshalled(asked)})

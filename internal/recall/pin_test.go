@@ -113,7 +113,7 @@ func sessionRequests(t *testing.T, cfg recall.Config, header session.Header, eve
 	for _, event := range events {
 		switch event.Kind {
 		case session.EventOutcome:
-			messages, replayed = nil, []recall.Entry{{Text: header.Task}}
+			replayed = []recall.Entry{{Text: header.Task}}
 		case session.EventMessage:
 			var message recordedMessage
 			if err := json.Unmarshal(event.Body, &message); err != nil {
