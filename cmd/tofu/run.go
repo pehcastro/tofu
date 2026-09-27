@@ -234,7 +234,7 @@ Arguments:
                         the turnMaySpawn setting says; there is no flag that
                         turns spawning on when that setting says off
                         the readBeforeEdit setting, on by default, refuses an
-                        edit or a write to a file this turn has not read;
+                        edit or a write to a file this session has not read;
                         there is no flag for it, set it with
                         tofu settings set readBeforeEdit false
   --no-instructions     the arm that %s
@@ -290,7 +290,7 @@ func runVerb(args []string, out, errOut io.Writer) int {
 	}
 	opts.shell = shell
 
-	built, _, err := buildRunToolsForRun(opts.dir, opts.toolSet, opts.readBeforeEdit, shell)
+	built, _, err := buildRunToolsForRun(opts.dir, opts.toolSet, readsWhen(opts.readBeforeEdit, turn.NewReadLedger()), shell)
 	if err != nil {
 		return runFail(errOut, err)
 	}
@@ -757,23 +757,26 @@ func runSystem(opts runOpts) string {
 	return system
 }
 
-func buildRunToolsForRun(dir, set string, readBeforeEdit bool, shell turn.RunShell) ([]turn.Tool, *tools.Plan, error) {
+func readsWhen(readBeforeEdit bool, reads *turn.ReadLedger) *turn.ReadLedger {
+	if !readBeforeEdit {
+		return nil
+	}
+	return reads
+}
+
+func buildRunToolsForRun(dir, set string, ledger *turn.ReadLedger, shell turn.RunShell) ([]turn.Tool, *tools.Plan, error) {
 	bashTool, bashErr := turn.NewBashToolFromShell(dir, shell)
 	if bashErr != nil {
 		return nil, nil, bashErr
 	}
-	return assembleRunTools(dir, set, readBeforeEdit, bashTool)
+	return assembleRunTools(dir, set, ledger, bashTool)
 }
 
-func assembleRunTools(dir, set string, readBeforeEdit bool, bashTool *turn.BashTool) ([]turn.Tool, *tools.Plan, error) {
+func assembleRunTools(dir, set string, ledger *turn.ReadLedger, bashTool *turn.BashTool) ([]turn.Tool, *tools.Plan, error) {
 	readTool, readErr := turn.NewReadTool(dir)
 	writeTool, writeErr := turn.NewWriteTool(dir)
 	if err := cmp.Or(readErr, writeErr); err != nil {
 		return nil, nil, err
-	}
-	var ledger *turn.ReadLedger
-	if readBeforeEdit {
-		ledger = turn.NewReadLedger()
 	}
 	read := readTool.Reading(ledger)
 	write := writeTool.Reading(ledger)

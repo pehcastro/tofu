@@ -43,7 +43,7 @@ func discoverAgents() (subagent.Found, error) {
 	if err != nil {
 		return subagent.Found{}, err
 	}
-	named, _, err := assembleRunTools(dir, toolSetFull, false, &turn.BashTool{})
+	named, _, err := assembleRunTools(dir, toolSetFull, nil, &turn.BashTool{})
 	if err != nil {
 		return subagent.Found{}, err
 	}

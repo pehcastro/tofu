@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	unreadRefusal      = "has not been read by this turn"
+	unreadRefusal      = "has not been read"
 	typecheckRan       = "typecheck: "
 	backgroundMark     = "background "
 	learnedNothingLine = "learned nothing:"

@@ -169,7 +169,7 @@ func Default() []Spec {
 			Choices: []string{"standard", "compact", "expanded"}},
 		{Key: GatePrompt, Label: "Confirmations", Description: "run lets a gated call go, ask waits for you; a rule's shadow or enforced is a different switch", Category: "Interaction", Kind: Text, DefaultText: GatePromptRun,
 			Choices: []string{GatePromptRun, GatePromptAsk}, Restart: true},
-		{Key: ReadBeforeEdit, Label: "Read before edit", Description: "an edit or a write to a file this turn has not read is refused", Category: "Interaction", Kind: Bool, Default: 1, Restart: true},
+		{Key: ReadBeforeEdit, Label: "Read before edit", Description: "an edit or a write to a file this session has not read, or that changed since it was read, is refused", Category: "Interaction", Kind: Bool, Default: 1, Restart: true},
 		{Key: Compaction, Label: "Compaction", Description: "Automatic transcript compaction; not built yet, so no choice changes a turn", Category: "Context", Kind: Text, DefaultText: "adaptive",
 			Choices: []string{"adaptive", "manual", "off"}},
 		{Key: ChatShowsTools, Label: "Tool detail", Description: "chat shows every tool call", Category: "Context", Kind: Bool},

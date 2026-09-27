@@ -35,7 +35,7 @@ func buildTestRunTools(dir, set string) ([]turn.Tool, error) {
 	if err != nil {
 		return nil, err
 	}
-	built, _, err := buildRunToolsForRun(dir, set, false, shell)
+	built, _, err := buildRunToolsForRun(dir, set, nil, shell)
 	return built, err
 }
 

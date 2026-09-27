@@ -110,9 +110,9 @@ func (e Edit) Run(ctx context.Context, raw json.RawMessage) (turn.Result, error)
 		return turn.Result{}, errors.New("edit: " + search.Note(search.BinarySkipped,
 			target+" holds a null byte, so it is not text and replacing a stretch of it would corrupt it"))
 	}
-	if !e.ledger.Saw(target) {
-		return turn.Result{}, fmt.Errorf("edit: %s has not been read by this turn, so the edit is refused rather than trusted against a guess: "+
-			"read it, then edit the text that is actually there.\n%s", target, turn.RefusalExcerpt(body))
+	if !e.ledger.Saw(target, body) {
+		return turn.Result{}, fmt.Errorf("edit: %s has not been read in this session or has changed since, so the edit is refused rather than trusted against a guess: "+
+			"its current content follows, so edit the text that is actually there.\n%s", target, e.ledger.Refuse(target, body))
 	}
 
 	before := string(body)
@@ -147,7 +147,7 @@ func (e Edit) Run(ctx context.Context, raw json.RawMessage) (turn.Result, error)
 		}
 		return turn.Result{}, fmt.Errorf("edit: %w", err)
 	}
-	e.ledger.Mark(target)
+	e.ledger.Mark(target, []byte(preview.After))
 	return turn.Result{
 		Content: turn.Typechecked(ctx, resolved, strings.Join(append(repairs, preview.Diff), "\n")),
 		Command: target,

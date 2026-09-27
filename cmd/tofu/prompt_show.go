@@ -10,7 +10,7 @@ import (
 )
 
 func showPrompt(opts runOpts, out, errOut io.Writer) int {
-	named, _, err := assembleRunTools(opts.dir, opts.toolSet, opts.readBeforeEdit, &turn.BashTool{})
+	named, _, err := assembleRunTools(opts.dir, opts.toolSet, readsWhen(opts.readBeforeEdit, turn.NewReadLedger()), &turn.BashTool{})
 	if err != nil {
 		return runFail(errOut, err)
 	}
@@ -19,8 +19,8 @@ func showPrompt(opts runOpts, out, errOut io.Writer) int {
 		return runFail(errOut, err)
 	}
 	opts, environment, instructions, composed := prompt.opts, prompt.environment, prompt.instructions, prompt.composed
-	system := composed.System()
-	firstUser := environment + "\n\n" + opts.task
+	system := composed.Head()
+	firstUser := composed.WithTaskRules(environment) + "\n\n" + opts.task
 	uncomposed := len(runSystem(opts))
 
 	fired, widest := 0, 0

@@ -9,7 +9,7 @@ import (
 
 const RealTask = "write a fix for the flaky test in internal/turn/compose_test.go"
 
-const environmentPlaceholder = "excluded from Composed.System(), so its content cannot move the measured bytes"
+const environmentPlaceholder = "excluded from Composed.Head(), so its content cannot move the measured bytes"
 
 const RealToolGuidance = turn.EveryToolIsRelativeToTheWorkingDirectory + prompt.PreferTheToolOverTheShell + " " + turn.SpawnAddendum
 
@@ -27,7 +27,7 @@ func ComposeSystem(rules []rule.Rule) (string, turn.Composed, error) {
 	if err != nil {
 		return "", turn.Composed{}, err
 	}
-	return composed.System(), composed, nil
+	return composed.Head(), composed, nil
 }
 
 func FiredRuleIDs(composed turn.Composed) []string {

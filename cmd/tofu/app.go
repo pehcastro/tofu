@@ -553,6 +553,7 @@ type appSession struct {
 	now     func() time.Time
 	id      string
 	carried []llm.Message
+	reads   *turn.ReadLedger
 	shown   map[string]bool
 	granted map[string]bool
 	pending []pendingImage
@@ -579,7 +580,7 @@ func newAppSession(dir string, open func(runOpts) (appWire, error), answers <-ch
 }
 
 func (s *appSession) carry(messages []llm.Message) {
-	s.carried = messages
+	s.carried, s.reads = messages, turn.NewReadLedger()
 	for _, message := range messages {
 		if message.ToolCallID != "" {
 			s.shown[message.ToolCallID] = true
@@ -588,7 +589,7 @@ func (s *appSession) carry(messages []llm.Message) {
 }
 
 func (s *appSession) startFresh() string {
-	s.id, s.carried, s.pending = "", nil, nil
+	s.id, s.carried, s.pending, s.reads = "", nil, nil, turn.NewReadLedger()
 	return freshSessionNote
 }
 
@@ -762,7 +763,7 @@ func (s *appSession) run(ctx context.Context, pick tui.Pick, task string, emit t
 			images = nil
 		}
 	}
-	built, plan, builtErr := buildRunToolsForRun(s.dir, opts.toolSet, opts.readBeforeEdit, shell)
+	built, plan, builtErr := buildRunToolsForRun(s.dir, opts.toolSet, readsWhen(opts.readBeforeEdit, s.reads), shell)
 	sessions, sessionsErr := sessionstore.Open()
 	if err := cmp.Or(builtErr, sessionsErr); err != nil {
 		fail(err)

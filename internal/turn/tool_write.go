@@ -2,6 +2,7 @@ package turn
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -20,37 +21,39 @@ const writePerm = 0o644
 
 type ReadLedger struct {
 	mutex sync.Mutex
-	seen  map[string]bool
+	seen  map[string][sha256.Size]byte
 }
 
 func NewReadLedger() *ReadLedger {
-	return &ReadLedger{seen: map[string]bool{}}
+	return &ReadLedger{seen: map[string][sha256.Size]byte{}}
 }
 
 func ledgerKey(path string) string {
 	return filepath.ToSlash(filepath.Clean(path))
 }
 
-func (l *ReadLedger) Mark(path string) {
+func (l *ReadLedger) Mark(path string, body []byte) {
 	if l == nil {
 		return
 	}
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
-	l.seen[ledgerKey(path)] = true
+	l.seen[ledgerKey(path)] = sha256.Sum256(body)
 }
 
-func (l *ReadLedger) Saw(path string) bool {
+func (l *ReadLedger) Saw(path string, body []byte) bool {
 	if l == nil {
 		return true
 	}
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
-	return l.seen[ledgerKey(path)]
+	read, ok := l.seen[ledgerKey(path)]
+	return ok && read == sha256.Sum256(body)
 }
 
-func RefusalExcerpt(body []byte) string {
+func (l *ReadLedger) Refuse(path string, body []byte) string {
 	if len(body) <= konst.TurnResultBytesCap {
+		l.Mark(path, body)
 		return string(body)
 	}
 	head := konst.TurnResultBytesCap / 2
@@ -116,14 +119,14 @@ func (t *WriteTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 	if readErr != nil && !errors.Is(readErr, fs.ErrNotExist) {
 		return Result{}, fmt.Errorf("write: reading %s before replacing it: %w", args.Path, readErr)
 	}
-	if readErr == nil && !t.ledger.Saw(args.Path) {
-		return Result{}, fmt.Errorf("write: %s exists and has not been read by this turn, so replacing it whole is refused rather than trusted against a guess: "+
-			"read it, or edit part of it, then write it again with its current content folded in.\n%s", args.Path, RefusalExcerpt(held))
+	if readErr == nil && !t.ledger.Saw(args.Path, held) {
+		return Result{}, fmt.Errorf("write: %s exists and has not been read in this session or has changed since, so replacing it whole is refused rather than trusted against a guess: "+
+			"its current content follows, so write it again with that content folded in.\n%s", args.Path, t.ledger.Refuse(args.Path, held))
 	}
 	if err := sys.WriteFile(resolved, []byte(args.Content), writePerm); err != nil {
 		return Result{}, fmt.Errorf("write: %w", err)
 	}
-	t.ledger.Mark(args.Path)
+	t.ledger.Mark(args.Path, []byte(args.Content))
 	before := string(held)
 	preview := transform.Preview{
 		Path:    args.Path,
