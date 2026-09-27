@@ -286,24 +286,23 @@ func askedRun() []runCall {
 	})
 }
 
-func TestAGateAskIsNeverFoldedAndTheRunBreaksAroundIt(t *testing.T) {
+func TestAShadowAskFoldsWithTheRestOfTheRun(t *testing.T) {
 	at := time.Date(2026, 9, 19, 14, 32, 0, 0, time.UTC)
 	app := wholeRun(t, &at, runWidth, runHeight, askedRun())
 	finishTurn(app)
 	content := app.View().Content
 	golden.Assert(t, "session-run-ask-80x24.golden", content)
 	plain := ansi.Strip(content)
-	for _, want := range []string{"git push --force origin main", "ask", "risk", "2.00",
-		"risk is hard to undo or reaches outside the workspace"} {
-		if !strings.Contains(plain, want) {
-			t.Errorf("the asked call does not show %q without being opened\n%s", want, plain)
+	for _, unwanted := range []string{"git push --force origin main", " ask ", "2.00"} {
+		if strings.Contains(plain, unwanted) {
+			t.Errorf("a shadow ask the person was never asked still draws %q\n%s", unwanted, plain)
 		}
 	}
-	if rows := callRows(plain); rows != 1 {
-		t.Errorf("the run drew %d call rows, want the asked one alone\n%s", rows, plain)
+	if rows := callRows(plain); rows != 0 {
+		t.Errorf("the run drew %d call rows, want every call in the fold\n%s", rows, plain)
 	}
-	if folds := strings.Count(plain, " tools"); folds != 2 {
-		t.Errorf("the run folded into %d lines, want one on each side of the ask\n%s", folds, plain)
+	if !strings.Contains(plain, "(8) tools · jev 1 · shell (1)") {
+		t.Errorf("the one folded line does not count the eight calls and the judged one\n%s", plain)
 	}
 }
 
@@ -323,15 +322,13 @@ func TestAFailedCallIsNeverFoldedAndTheRunBreaksAroundIt(t *testing.T) {
 	content := app.View().Content
 	golden.Assert(t, "session-run-failure-80x24.golden", content)
 	plain := ansi.Strip(content)
-	for _, want := range []string{"go test ./internal/recall/...", "FAIL tofu/internal/recall 0.18s"} {
-		if !strings.Contains(plain, want) {
-			t.Errorf("the failed call does not show %q without being opened\n%s", want, plain)
-		}
+	if !strings.Contains(plain, "⟩ bash go test ./internal/recall/…  FAIL tofu/internal/recall…  [expand]") {
+		t.Errorf("the failed call is not one row cut to eighty columns with its status and [expand]\n%s", plain)
 	}
 	if rows := callRows(plain); rows != 1 {
 		t.Errorf("the run drew %d call rows, want the failed one alone\n%s", rows, plain)
 	}
-	if !strings.Contains(content, escapeOf(theme.Fail())+"FAIL tofu/internal/recall 0.18s") {
+	if !strings.Contains(content, escapeOf(theme.Fail())+"FAIL tofu/internal/recall…") {
 		t.Errorf("the failure is drawn like every other result\n%q", content)
 	}
 	if folds := strings.Count(plain, " tools"); folds != 2 {
