@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 
 	"tofu/internal/llm"
@@ -30,6 +31,7 @@ type Request struct {
 
 	HistoryCacheOff bool
 	OnDelta         func(string)
+	OnThinking      func(string)
 	OnRetry         func()
 }
 
@@ -38,6 +40,9 @@ const (
 	historyCacheMinPrefixChars    = 4096
 	historyCacheCommittedMinChars = 4096
 	cacheBreakpointsPerRequest    = 4
+
+	summarizedThinkingMajor = 4
+	summarizedThinkingMinor = 7
 
 	ImageBytesCap = 5 << 20
 )
@@ -90,6 +95,11 @@ type wireMetadata struct {
 	UserID string `json:"user_id"`
 }
 
+type wireThinking struct {
+	Type    string `json:"type"`
+	Display string `json:"display"`
+}
+
 type wireOutput struct {
 	Effort string `json:"effort"`
 }
@@ -101,6 +111,7 @@ type wireBody struct {
 	Tools     []wireTool    `json:"tools,omitempty"`
 	MaxTokens int           `json:"max_tokens"`
 	Metadata  *wireMetadata `json:"metadata,omitempty"`
+	Thinking  *wireThinking `json:"thinking,omitempty"`
 	Output    *wireOutput   `json:"output_config,omitempty"`
 	Stream    bool          `json:"stream"`
 }
@@ -155,6 +166,7 @@ func (r Request) Encode(oauth bool) ([]byte, error) {
 		Tools:     tools,
 		MaxTokens: maxTokens,
 		Metadata:  metadata,
+		Thinking:  r.summarizedThinking(),
 		Output:    output,
 		Stream:    true,
 	}); err != nil {
@@ -173,6 +185,19 @@ func (r Request) outputConfig() (*wireOutput, error) {
 			r.Effort, llm.EffortList(ReasoningEfforts()))
 	}
 	return &wireOutput{Effort: string(r.Effort)}, nil
+}
+
+func (r Request) summarizedThinking() *wireThinking {
+	version := regexp.MustCompile(`^claude-[a-z]+-(\d+)(?:-(\d{1,2}))?(?:-|$)`).FindStringSubmatch(r.Model)
+	if !r.Effort.Thinks() || version == nil {
+		return nil
+	}
+	major, _ := strconv.Atoi(version[1])
+	minor, _ := strconv.Atoi(version[2])
+	if major < summarizedThinkingMajor || major == summarizedThinkingMajor && minor < summarizedThinkingMinor {
+		return nil
+	}
+	return &wireThinking{Type: "adaptive", Display: "summarized"}
 }
 
 func systemBlocks(prompts []string, oauth bool, firstUserMessage, ttl string) []systemBlock {

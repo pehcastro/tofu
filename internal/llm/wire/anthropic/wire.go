@@ -141,7 +141,7 @@ func (w *Wire) Ask(ctx context.Context, request Request) (Result, Dump, error) {
 
 	sent := time.Now()
 	result, err := llm.RetryQuiet(ctx, w.config.Transport, request.OnRetry, func() (Result, error) {
-		return w.post(ctx, dump, oauth, request.OnDelta)
+		return w.post(ctx, dump, oauth, request.OnDelta, request.OnThinking)
 	})
 	result.FirstTokenMS = llm.MillisSince(sent, result.firstDelta)
 	result.Warnings = append(warnings, result.Warnings...)
@@ -163,7 +163,7 @@ func (w *Wire) endpoint(oauth bool) string {
 	return url
 }
 
-func (w *Wire) post(ctx context.Context, dump Dump, oauth bool, onDelta func(string)) (Result, error) {
+func (w *Wire) post(ctx context.Context, dump Dump, oauth bool, onDelta, onThinking func(string)) (Result, error) {
 	ctx, cancel := context.WithTimeout(ctx, w.config.Watchdog)
 	defer cancel()
 
@@ -197,7 +197,7 @@ func (w *Wire) post(ctx context.Context, dump Dump, oauth bool, onDelta func(str
 		return Result{}, transport.Fail("anthropic.Ask", transport.KindProvider, err, "decoding the response")
 	}
 	defer func() { _ = reader.Close() }()
-	return ReadStream(reader, oauth, onDelta)
+	return ReadStream(reader, oauth, onDelta, onThinking)
 }
 
 func normalizedEncoding(header string) string {

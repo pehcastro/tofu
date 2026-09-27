@@ -36,6 +36,7 @@ type Request struct {
 	TurnState       string
 	MaxOutputTokens int
 	Sampling        Sampling
+	OnThinking      func(string)
 }
 
 const imageDetail = "high"

@@ -103,7 +103,7 @@ type openBlock struct {
 	arguments strings.Builder
 }
 
-func ReadStream(body io.Reader, oauth bool, onDelta func(string)) (Result, error) {
+func ReadStream(body io.Reader, oauth bool, onDelta, onThinking func(string)) (Result, error) {
 	var result Result
 	open := map[int]*openBlock{}
 	var text, thinking, signature strings.Builder
@@ -175,6 +175,9 @@ func ReadStream(body io.Reader, oauth bool, onDelta func(string)) (Result, error
 				}
 			case "thinking_delta":
 				thinking.WriteString(event.Delta.Thinking)
+				if onThinking != nil && event.Delta.Thinking != "" {
+					onThinking(event.Delta.Thinking)
+				}
 			case "signature_delta":
 				signature.WriteString(event.Delta.Signature)
 			case "input_json_delta":

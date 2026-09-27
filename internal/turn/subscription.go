@@ -25,13 +25,14 @@ func (s Subscription) Ask(ctx context.Context, request llm.Request) (llm.Decisio
 	}
 
 	result, _, err := s.Wire.Ask(ctx, anthropic.Request{
-		System:   system,
-		Messages: messages,
-		Tools:    request.Tools,
-		Effort:   s.Effort,
-		CacheTTL: konst.SubscriptionCacheTTL,
-		OnDelta:  request.OnDelta,
-		OnRetry:  request.OnRetry,
+		System:     system,
+		Messages:   messages,
+		Tools:      request.Tools,
+		Effort:     s.Effort,
+		CacheTTL:   konst.SubscriptionCacheTTL,
+		OnDelta:    request.OnDelta,
+		OnThinking: request.OnThinking,
+		OnRetry:    request.OnRetry,
 	})
 	if err != nil {
 		return llm.Decision{}, err

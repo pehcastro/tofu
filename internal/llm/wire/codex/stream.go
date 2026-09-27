@@ -104,13 +104,14 @@ type streamState struct {
 	text        strings.Builder
 	refusal     strings.Builder
 	thinking    strings.Builder
+	onThinking  func(string)
 	blankDeltas int
 	blankBytes  int
 	terminal    bool
 }
 
-func ReadStream(body io.Reader) (Result, error) {
-	state := streamState{open: map[int]*openItem{}}
+func ReadStream(body io.Reader, onThinking func(string)) (Result, error) {
+	state := streamState{open: map[int]*openItem{}, onThinking: onThinking}
 	scanner := bufio.NewScanner(body)
 	scanner.Buffer(make([]byte, 0, konst.StreamReadBytes), konst.StreamLineBytes)
 
@@ -170,10 +171,10 @@ func (s *streamState) handle(event streamEvent) error {
 		s.refusal.WriteString(event.Delta)
 
 	case "response.reasoning_summary_text.delta", "response.reasoning_text.delta":
-		s.thinking.WriteString(event.Delta)
+		s.think(event.Delta)
 
 	case "response.reasoning_summary_part.done":
-		s.thinking.WriteString("\n\n")
+		s.think("\n\n")
 
 	case "response.function_call_arguments.delta":
 		item := s.open[event.OutputIndex]
@@ -216,6 +217,13 @@ func (s *streamState) handle(event streamEvent) error {
 		}
 	}
 	return nil
+}
+
+func (s *streamState) think(text string) {
+	s.thinking.WriteString(text)
+	if s.onThinking != nil && text != "" {
+		s.onThinking(text)
+	}
 }
 
 func (s *streamState) guardWhitespaceLoop(delta string) error {

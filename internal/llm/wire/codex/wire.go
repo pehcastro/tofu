@@ -128,7 +128,7 @@ func (w *Wire) Ask(ctx context.Context, request Request) (Result, Dump, error) {
 
 	sent := time.Now()
 	result, err := llm.RetryQuiet(ctx, w.config.Transport, nil, func() (Result, error) {
-		return w.post(ctx, dump)
+		return w.post(ctx, dump, request.OnThinking)
 	})
 	result.FirstTokenMS = llm.MillisSince(sent, result.firstDelta)
 	if refused := request.RefusedControls(); len(refused) > 0 {
@@ -149,7 +149,7 @@ func (w *Wire) endpoint(subscription bool) string {
 	return KeyBaseURL + KeyPath
 }
 
-func (w *Wire) post(ctx context.Context, dump Dump) (Result, error) {
+func (w *Wire) post(ctx context.Context, dump Dump, onThinking func(string)) (Result, error) {
 	ctx, cancel := context.WithTimeout(ctx, w.config.Watchdog)
 	defer cancel()
 
@@ -179,7 +179,7 @@ func (w *Wire) post(ctx context.Context, dump Dump) (Result, error) {
 
 	body := llm.WatchIdle(response.Body, w.config.StreamIdle)
 	defer func() { _ = body.Close() }()
-	result, err := ReadStream(body)
+	result, err := ReadStream(body, onThinking)
 	if turnState := response.Header.Get(HeaderTurnState); turnState != "" {
 		result.TurnState = turnState
 	}
