@@ -5,7 +5,7 @@
     why does the gate read the policy first?                                                        
                                                                                                     
                                                                                                     
-    ⠋ read internal/turn/step12.go                                                    [tool#c12]    
+    ⠋ read internal/turn/step12.go                                          [tool#c12]  [expand]    
                                                                                                     
                                                                                                     
                                                                                                     

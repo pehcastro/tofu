@@ -5,11 +5,11 @@
     why does the gate read the policy first?                                                        
                                                                                                     
                                                                                                     
-    · (12) tools · 16s · [tool#c12]                                                                 
-                                                                                                    
+    · (12) tools · 16s                                                      [tool#c12]  [expand]    
                                                                                                     
     [&orchestrator]                                                      14:32  [message#a1f3c9]    
     twelve reads and the loop only ever shows the one that is running.                              
+                                                                                                    
                                                                                                     
                                                                                                     
                                                                                                     

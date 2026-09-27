@@ -5,9 +5,9 @@
     why does the gate read the policy first?                                                        
                                                                                                     
                                                                                                     
-    ⟩ bash git push origin develop                                                      exit 128    
-        [tool#c1]                                                                                   
+    ⟩ bash git push origin develop                                            exit 128  [expand]    
     ! git push origin develop: exit 128 fatal: could …  the whole error is in work [tool#a27001]    
+                                                                                                    
                                                                                                     
                                                                                                     
                                                                                                     

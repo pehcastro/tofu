@@ -38,12 +38,12 @@
     · spawning [                                                                    
     · spawning [  > Type to filter                                                  
     · spawning [                                                                    
-    · (1) tools   >  chat                                                    /chat  
+    · (1) tools   >  chat                                                    /chat  0]  [expand]
                     the conversation and the composer                               
+    [&orchestrat                                                                    sage#9d4f11]
+    three sub-ag    sub-agents                                         /sub-agents  d its suite.
+    [tool#9d4f10    every tool call and every child, in one feed                    
                                                                                     
-    [&orchestrat    sub-agents                                         /sub-agents  sage#9d4f11]
-    three sub-ag    every tool call and every child, in one feed                    d its suite.
-    [tool#9d4f10                                                                    
                     file-edits                                         /file-edits  
                     every changed line, who made it and where                       
                                                                                     

@@ -5,7 +5,6 @@
     why does the gate read the policy first?                                                        
                                                                                                     
                                                                                                     
-                                                                                                    
     [&orchestrator]                                                                        14:32    
     the gate reads the policy first so that a verdict is never invented.                            
                                                                                                     
@@ -16,6 +15,7 @@
     • the thresholds                                                                                
                                                                                                     
     none of the three is knowable from the wire alone.                                              
+                                                                                                    
                                                                                                     
                                                                                                     
                                                                                                     

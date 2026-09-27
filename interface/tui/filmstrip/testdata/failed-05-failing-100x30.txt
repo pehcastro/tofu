@@ -5,8 +5,8 @@
     why does the gate read the policy first?                                                        
                                                                                                     
                                                                                                     
-    ⟩ bash git push origin develop                                                      exit 128    
-        [tool#c1]                                                                                   
+    ⟩ bash git push origin develop                                            exit 128  [expand]    
+                                                                                                    
                                                                                                     
                                                                                                     
                                                                                                     

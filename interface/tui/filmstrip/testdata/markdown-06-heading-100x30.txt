@@ -5,11 +5,11 @@
     why does the gate read the policy first?                                                        
                                                                                                     
                                                                                                     
-                                                                                                    
     [&orchestrator]                                                                        14:32    
     the gate reads the policy first so that a verdict is never invented.                            
                                                                                                     
     what the policy carries                                                                         
+                                                                                                    
                                                                                                     
                                                                                                     
                                                                                                     

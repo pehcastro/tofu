@@ -5,12 +5,12 @@
     why does the gate read the policy first?                                                        
                                                                                                     
                                                                                                     
-                                                                                                    
     [&orchestrator]                                                                        14:32    
     handing the policy loader to a child                                                            
                                                                                                     
     · spawning [&qa-1] to read the policy loader                                                    
-    · read internal/judge/policy/resolve.go                                        [tool#815e77]    
+    ⠋ read internal/judge/policy/resolve.go                              [tool#815e77]  [expand]    
+                                                                                                    
                                                                                                     
                                                                                                     
                                                                                                     
@@ -22,7 +22,7 @@
                                                                                                     
                                                                                                     
   ⠋ 52s    qa-1      internal/judge/po…  read the policy loader                                  18k
-  ⠋ thinking  |  1m 18s  [request#91ccaf]                                                           
+  ⠋ waiting on [&qa-1]  |  1m 18s  [request#91ccaf]                                                 
                                                                                                     
                                                                                                     
   █ Ask tofu to build, inspect, or delegate                                                         

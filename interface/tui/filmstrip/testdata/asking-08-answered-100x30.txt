@@ -5,15 +5,15 @@
     why does the gate read the policy first?                                                        
                                                                                                     
                                                                                                     
-    ⟩ bash git push --force origin develop                            ask  everything up to date    
-        risk            2.00  ▓▓▓▓▓▓▓▓▓▓▓▓▓░░░░░░░                                                  
-        user_requested  0.11  ▓▓░░░░░░░░░░░░░░░░░░                                                  
-        risk is hard to undo or reaches outside the workspace, so the call is asked about           
-        [tool#c1]                                                                                   
-                                                                                                    
+    ⟩ bash git push --force origin develop                  ask  everything up to date  [expand]    
                                                                                                     
     [&orchestrator]                                                      14:32  [message#b7e201]    
     the force push was the only way to move the branch, and it is done.                             
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
                                                                                                     
                                                                                                     
                                                                                                     

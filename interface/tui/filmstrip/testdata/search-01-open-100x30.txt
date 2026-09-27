@@ -3,12 +3,12 @@
     · spawning [&c1] to read the policy loader
     · spawning [&c2] to write the ledger floor test
     · spawning [&c3] to run the shell suite
-    · (1) tools · 0s · [tool#9d4f10]
+    · (1) tools · 0s                                                     [tool#9d4f10]  [expand]
                                                                                     
-                  Search                                                       esc  
-    [&orchestrat  Screens, agents and events · enter opens                          sage#9d4f11]
-    three sub-ag                                                                    d its suite.
-    [tool#9d4f10  > Type to filter                                                  
+    [&orchestrat  Search                                                       esc  sage#9d4f11]
+    three sub-ag  Screens, agents and events · enter opens                          d its suite.
+    [tool#9d4f10                                                                    
+                  > Type to filter                                                  
                                                                                     
                   › chat                                                            
                     sub-agents                                                      

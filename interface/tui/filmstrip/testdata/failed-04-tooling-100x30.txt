@@ -5,7 +5,7 @@
     why does the gate read the policy first?                                                        
                                                                                                     
                                                                                                     
-    ⠋ bash git push origin develop                                                     [tool#c1]    
+    ⠋ bash git push origin develop                                           [tool#c1]  [expand]    
                                                                                                     
                                                                                                     
                                                                                                     
