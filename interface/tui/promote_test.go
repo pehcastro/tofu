@@ -21,33 +21,21 @@ func promoteApp(t *testing.T, at time.Time) *App {
 	return app
 }
 
-func TestAFinishedChildPromotesToChatOnTheSwitchAlone(t *testing.T) {
-	app := promoteApp(t, time.Now())
-	app.Update(Event{Kind: EventToolCall, ID: "c1", Tool: "subagent", Text: "go-docs: write the docs", Promote: true})
-	app.Update(Event{Kind: EventToolResult, ID: "c1", Text: "wrote docs/verification.md"})
-	plain := ansi.Strip(app.View().Content)
-	if !strings.Contains(plain, "⟩ subagent go-docs: write the docs") {
-		t.Fatalf("the finished child did not promote to its own row\n%s", plain)
-	}
-}
-
-func TestAnAskedChildPromotesToChatOnTheSwitchAlone(t *testing.T) {
-	app := promoteApp(t, time.Now())
-	app.Update(Event{Kind: EventToolCall, ID: "c1", Tool: "subagent", Text: "go-docs: rewrite the guide", Promote: true})
-	app.Update(Event{Kind: EventDecision, Decision: &session.Decision{Tool: "subagent", Verdict: session.Ask}})
-	plain := ansi.Strip(app.View().Content)
-	if !strings.Contains(plain, "⟩ subagent go-docs: rewrite the guide") {
-		t.Fatalf("the asked child did not promote to its own row\n%s", plain)
-	}
-}
-
-func TestAFailedChildPromotesToChatOnTheSwitchAlone(t *testing.T) {
-	app := promoteApp(t, time.Now())
-	app.Update(Event{Kind: EventToolCall, ID: "c1", Tool: "subagent", Text: "go-docs: write the docs", Promote: true})
-	app.Update(Event{Kind: EventToolResult, ID: "c1", Text: "the child errored", Failed: true})
-	plain := ansi.Strip(app.View().Content)
-	if !strings.Contains(plain, "⟩ subagent go-docs: write the docs") {
-		t.Fatalf("the failed child did not promote to its own row\n%s", plain)
+func TestASpawnIsNeverAToolRowInChat(t *testing.T) {
+	for _, ending := range []struct {
+		name  string
+		event Event
+	}{
+		{"finished", Event{Kind: EventToolResult, ID: "c1", Text: "wrote docs/verification.md"}},
+		{"asked", Event{Kind: EventDecision, Promote: true, Decision: &session.Decision{Tool: "subagent", Verdict: session.Ask}}},
+		{"failed", Event{Kind: EventToolResult, ID: "c1", Text: "the child errored", Failed: true}},
+	} {
+		app := promoteApp(t, time.Now())
+		app.Update(Event{Kind: EventToolCall, ID: "c1", Tool: "subagent", Text: "go-docs: write the docs", Promote: true})
+		app.Update(ending.event)
+		if plain := ansi.Strip(app.View().Content); strings.Contains(plain, "subagent go-docs") {
+			t.Errorf("a %s spawn was drawn as a tool row in chat\n%s", ending.name, plain)
+		}
 	}
 }
 

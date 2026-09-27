@@ -77,7 +77,7 @@ func TestTwoInterruptsEndADrivenTurnAndTheCassetteIsNeverAskedAgain(t *testing.T
 		"wait working",
 		"key ctrl+c",
 		"key ctrl+c",
-		"wait cooked for",
+		"wait cancelled at",
 		"screen",
 	}, "\n"))
 	var out, errOut bytes.Buffer

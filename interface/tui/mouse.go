@@ -242,6 +242,11 @@ func (a *App) wheel(msg tea.MouseWheelMsg) tea.Cmd {
 	case screenAgents:
 		a.feed.Wheel(delta)
 	case screenEdits:
+		pane := "right"
+		if msg.X < a.edits.Split() {
+			pane = "left"
+		}
+		a.edits.Key(pane)
 		a.edits.Wheel(delta < 0)
 	case screenShells:
 		a.shells.Wheel(delta * wheelRows)

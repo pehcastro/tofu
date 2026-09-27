@@ -139,6 +139,11 @@ func (a *App) composerKey(msg tea.KeyPressMsg) (tea.Cmd, bool) {
 		}
 	case "enter":
 		return a.submit(), true
+	case "esc":
+		if a.busy && a.view.Value() == "" {
+			a.stopTurn()
+			return nil, true
+		}
 	case "ctrl+x":
 		a.view.Unqueue()
 		return nil, true

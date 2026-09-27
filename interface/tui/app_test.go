@@ -560,7 +560,7 @@ func TestTheSubAgentViewOpensAndEscReturnsToTheSession(t *testing.T) {
 		t.Fatalf("esc left the app on screen %d, want chat", app.current)
 	}
 	back := ansi.Strip(app.View().Content)
-	if !strings.Contains(back, "ok tofu/internal/judge 0.42s") {
+	if !strings.Contains(back, "reading the gate first") {
 		t.Fatalf("esc did not return to the session transcript\n%s", back)
 	}
 	if !strings.Contains(back, "sub-agents (1)") {
@@ -662,7 +662,7 @@ func afterAFullEventChannel(afterwards ...Event) (*App, []Event) {
 }
 
 func TestTheLastSubAgentStateReachesThePanelEvenWhenTheChannelIsFull(t *testing.T) {
-	app, _ := afterAFullEventChannel(Event{Kind: EventSubAgent, Children: childOf("the note holds one line")})
+	app, _ := afterAFullEventChannel(Event{Kind: EventSubAgent, Children: childOf("dropped")}, Event{Kind: EventDone, Text: "cooked for", Children: childOf("the note holds one line")})
 	app.Update(tea.KeyPressMsg{Code: '2', Mod: tea.ModAlt})
 	if panel := ansi.Strip(app.View().Content); !strings.Contains(panel, "[&c1]") {
 		t.Fatalf("a full channel threw away the child's last state, so the panel never showed it\n%s", panel)
