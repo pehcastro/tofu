@@ -12,6 +12,7 @@ import (
 	"tofu/internal/konst"
 	"tofu/internal/prompt"
 	"tofu/internal/rule"
+	"tofu/internal/skill"
 	"tofu/internal/subagent"
 )
 
@@ -49,7 +50,11 @@ type ComposeSpec struct {
 	ToolGuidance string
 	Rules        []rule.Rule
 	Agent        subagent.Definition
+	Skills       []skill.Skill
+	WindowTokens int
 }
+
+const concernSkills rule.Concern = "skills"
 
 func agentPart(definition subagent.Definition) PromptPart {
 	var text strings.Builder
@@ -61,6 +66,23 @@ func agentPart(definition subagent.Definition) PromptPart {
 		fmt.Fprintf(&text, "\n\nthese references were cut to keep them within %d bytes and are not here: %s", konst.SubAgentReferenceBytes, strings.Join(definition.Cut, ", "))
 	}
 	return PromptPart{Concern: rule.ConcernIdentity, Agent: definition.Name, File: filepath.ToSlash(definition.Path), Text: text.String()}
+}
+
+func autoloadedSkills(definition subagent.Definition, skills []skill.Skill) (string, error) {
+	if definition.Origin == "library" {
+		return "", nil
+	}
+	var text strings.Builder
+	for _, name := range skill.Wanted(definition.Path) {
+		body, err := skill.Load(skills, name, "")
+		switch {
+		case err == nil:
+			text.WriteString("\n\nthe skill " + name + ", loaded before your task:\n" + body)
+		case definition.Origin == ".tofu" || definition.Origin == "~/.tofu":
+			return "", fmt.Errorf("the sub-agent %s names the skill %s: %w", definition.Name, name, err)
+		}
+	}
+	return text.String(), nil
 }
 
 type Composed struct {
@@ -90,7 +112,13 @@ func Compose(spec ComposeSpec) (Composed, error) {
 		composed.Task.Paths = append(composed.Task.Paths, filepath.ToSlash(owned))
 	}
 	if spec.Agent.Name != "" {
-		composed.Parts = append(composed.Parts, agentPart(spec.Agent))
+		loaded, err := autoloadedSkills(spec.Agent, spec.Skills)
+		if err != nil {
+			return Composed{}, err
+		}
+		part := agentPart(spec.Agent)
+		part.Text += loaded
+		composed.Parts = append(composed.Parts, part)
 	}
 	if composed.Task.Language = spec.Agent.Language; composed.Task.Language != "" && !rule.KnownLanguage(composed.Task.Language) {
 		return Composed{}, fmt.Errorf("the sub-agent %s declares the language %q, which no rule knows", spec.Agent.Name, composed.Task.Language)
@@ -127,6 +155,9 @@ func Compose(spec ComposeSpec) (Composed, error) {
 	slices.SortStableFunc(composed.Parts, func(a, b PromptPart) int {
 		return slices.Index(order, a.Concern) - slices.Index(order, b.Concern)
 	})
+	if listing := skill.Listing(spec.Skills, spec.WindowTokens); listing != "" {
+		composed.Parts = append(composed.Parts, PromptPart{Concern: concernSkills, Text: listing})
+	}
 	return composed, nil
 }
 

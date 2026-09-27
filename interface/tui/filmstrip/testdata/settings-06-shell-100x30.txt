@@ -6,7 +6,7 @@
     Appearance    05      a running shell outlives tofu and the next launch lists it; off stops…    
     Models & rol… 01                                                                                
     Interaction   05      Log tail                                                       500  ▾     
-    Context       06      Lines retained per shell                                                  
+    Context       07      Lines retained per shell                                                  
     Files         03                                                                                
   › Shell         05      Kill confirm                                                      ● on    
     Turn          07      Confirm process termination                                               

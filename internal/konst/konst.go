@@ -116,6 +116,13 @@ const (
 )
 
 const (
+	SkillDescriptionCharacters     = 1024
+	SkillListingUnknownCharacters  = 8000
+	SkillListingWindowPercent      = 2
+	SkillListingCharactersPerToken = 4
+)
+
+const (
 	SearchTokenBudget      = 4000
 	SearchBytesPerToken    = 4
 	SearchResultOverhead   = 64

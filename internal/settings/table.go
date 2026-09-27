@@ -63,6 +63,12 @@ const (
 	TurnMaySpawn           = "turnMaySpawn"
 	AgentSources           = "agentSources"
 	HideIntroduction       = "hideIntroduction"
+	Skills                 = "skills"
+)
+
+const (
+	SkillsOn  = "on"
+	SkillsOff = "off"
 )
 
 const (
@@ -175,6 +181,8 @@ func Default() []Spec {
 			Least: 1, Most: konst.ProjectInstructionsBytesMost, Unit: "bytes of AGENTS.md and CLAUDE.md sent each turn"},
 		{Key: InstructionSources, Label: "Instruction files", Description: "in each folder the first of these that exists is sent and the rest are skipped, as a comma list of AGENTS.md and CLAUDE.md", Category: "Context", Kind: Text, DefaultText: "AGENTS.md,CLAUDE.md", Restart: true,
 			ListOf: []string{"AGENTS.md", "CLAUDE.md"}},
+		{Key: Skills, Label: "Skills", Description: "on lists the skills in .tofu, .agents and .claude skill folders to the model and offers the skill tool; off sends neither", Category: "Context", Kind: Text, DefaultText: SkillsOn, Restart: true,
+			Choices: []string{SkillsOn, SkillsOff}},
 		{Key: DiffContext, Label: "Diff context", Description: "Lines around changed hunks, at most the " + strconv.Itoa(konst.DiffContextLinesDefault) + " each diff carries", Category: "Files", Kind: Text, DefaultText: strconv.Itoa(konst.DiffContextLinesDefault),
 			Choices: lineCounts(konst.DiffContextLinesTight, konst.DiffContextLinesDefault, konst.DiffContextLinesWide, konst.DiffContextLinesWidest)},
 		{Key: Hyperlinks, Label: "Hyperlinks", Description: "OSC 8 terminal file links; off prints the bare path", Category: "Files", Kind: Text, DefaultText: LinksAuto,

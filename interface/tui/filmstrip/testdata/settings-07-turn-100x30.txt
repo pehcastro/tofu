@@ -6,7 +6,7 @@
     Appearance    05      decision cap per turn, zero means no cap                                  
     Models & rol… 01                                                                                
     Interaction   05      Sub-agents                                                        ● on    
-    Context       06      a turn may spawn a sub-agent                                              
+    Context       07      a turn may spawn a sub-agent                                              
     Files         03                                                                                
     Shell         05      Agent folders                                   tofu,agents,claude  ▾     
   › Turn          07      the folders sub-agents are read from, in order, as a comma list of to…    

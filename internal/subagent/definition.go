@@ -230,7 +230,7 @@ func read(fsys fs.FS, name string) (Definition, error) {
 	}
 	for key := range fields {
 		switch key {
-		case "name", "description", "model", "tools", "effort", "thinking", "references", "language":
+		case "name", "description", "model", "tools", "effort", "thinking", "references", "language", "skills", "autoloadSkills":
 		default:
 			definition.Ignored = append(definition.Ignored, key)
 		}

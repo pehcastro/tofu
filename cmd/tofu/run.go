@@ -26,6 +26,7 @@ import (
 	"tofu/internal/recall"
 	"tofu/internal/session"
 	settingspkg "tofu/internal/settings"
+	"tofu/internal/skill"
 	"tofu/internal/subagent"
 	"tofu/internal/transport"
 	"tofu/internal/turn"
@@ -486,6 +487,7 @@ type composedRun struct {
 	instructions string
 	composed     turn.Composed
 	subAgents    turn.SubAgents
+	skills       []skill.Skill
 }
 
 func composeRun(opts runOpts, built []turn.Tool, run runtime) (composedRun, error) {
@@ -516,7 +518,16 @@ func composeRun(opts runOpts, built []turn.Tool, run runtime) (composedRun, erro
 	if err != nil {
 		return composedRun{}, err
 	}
-	subAgents := turn.SubAgents{Defined: discovered.Definitions, Prompt: turn.ComposeSpec{Environment: environment, ToolGuidance: runSystem(opts), Rules: rules}}
+	var skills []skill.Skill
+	if opts.toolSet != toolSetThree && settingText(cmp.Or(opts.dir, "."), settingspkg.Skills, run.notify) != settingspkg.SkillsOff {
+		home, _ := os.UserHomeDir()
+		offered := skill.Discover(cmp.Or(opts.dir, "."), home)
+		for _, warning := range offered.Warnings {
+			say(warning)
+		}
+		skills = offered.Skills
+	}
+	subAgents := turn.SubAgents{Defined: discovered.Definitions, Prompt: turn.ComposeSpec{Environment: environment, ToolGuidance: runSystem(opts), Rules: rules, Skills: skills, WindowTokens: run.budget.WindowTokens}}
 	spec := subAgents.Prompt
 	spec.Task = opts.task
 	if opts.agent != "" {
@@ -525,7 +536,7 @@ func composeRun(opts runOpts, built []turn.Tool, run runtime) (composedRun, erro
 		}
 	}
 	composed, err := turn.Compose(spec)
-	return composedRun{opts: opts, environment: environment, instructions: instructions, composed: composed, subAgents: subAgents}, err
+	return composedRun{opts: opts, environment: environment, instructions: instructions, composed: composed, subAgents: subAgents, skills: skills}, err
 }
 
 func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn.SpawnTool, error) {
@@ -536,6 +547,9 @@ func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn
 	prompt, err := composeRun(opts, built, run)
 	if err != nil {
 		return turn.Config{}, nil, err
+	}
+	if len(prompt.skills) > 0 {
+		built = append(slices.Clone(built), tools.NewSkill(prompt.skills))
 	}
 	opts, environment, composed := prompt.opts, prompt.environment, prompt.composed
 	config := turn.Config{

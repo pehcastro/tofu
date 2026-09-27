@@ -19,7 +19,7 @@
   esc chat          Models & roles / Orchestrator model                                             
                     Interaction / Composer                                                          
                                                                                                     
-                  1 of 33 results                                                                   
+                  1 of 34 results                                                                   
                                                                                                     
                           Readable text, quiet surfaces, and bounded focus.                         
                           ● active    ● attention    ● failed                                       
