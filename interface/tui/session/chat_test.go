@@ -10,6 +10,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"tofu/interface/tui/look"
+	"tofu/interface/tui/progress"
 )
 
 func backgroundOf(c look.Color) string {
@@ -65,6 +66,23 @@ func TestOnlyLatestUserMessageIsTintedAndColumnsAlign(t *testing.T) {
 	agent := slices.IndexFunc(plain, func(row string) bool { return strings.Contains(row, "[&orchestrator]") })
 	if you < 0 || agent < 0 || strings.Index(plain[you], "You") != strings.Index(plain[agent], "[&orchestrator]") {
 		t.Fatalf("message columns differ\n%s", strings.Join(plain, "\n"))
+	}
+}
+
+func TestFoldSpinsOnlyWhileACallRuns(t *testing.T) {
+	model := New(fixed(), counted(new(int)))
+	model.SetSize(100, 30)
+	model.Append(Entry{Kind: User, Body: "read it"})
+	model.Start()
+	model.Append(Entry{Kind: Tool, ID: "815e77", Head: "read", Body: "resolve.go"})
+	spinning := progress.Spin(0)
+	if !strings.Contains(ansi.Strip(model.View()), spinning+" read resolve.go") {
+		t.Fatalf("a running call does not spin\n%s", ansi.Strip(model.View()))
+	}
+	model.Finish("815e77", Result{Status: "42 lines"})
+	frame := ansi.Strip(model.View())
+	if !strings.Contains(frame, "read resolve.go") || strings.Contains(frame, spinning+" read resolve.go") {
+		t.Fatalf("a returned call still spins\n%s", frame)
 	}
 }
 

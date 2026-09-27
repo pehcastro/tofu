@@ -1,6 +1,7 @@
 package session
 
 import (
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -98,7 +99,7 @@ func (m *Model) blockLines(start, end int) []string {
 			lines = append(lines, m.foldLine(key.fold))
 		}
 		if progress {
-			lines = append(lines, m.progressLine(m.entries[end-1]))
+			lines = append(lines, m.progressLine(m.entries[start:end]))
 		}
 	} else {
 		lines = append(lines, m.render(start)...)
@@ -206,10 +207,12 @@ func (m *Model) foldSince(end int) time.Duration {
 	return m.entries[end].intoTurn
 }
 
-func (m *Model) progressLine(entry Entry) string {
-	tail := expandTail(entry.ID)
+func (m *Model) progressLine(fold []Entry) string {
+	latest := fold[len(fold)-1]
+	tail := expandTail(latest.ID)
 	room := max(m.textWidth()-widget.Cells(tail), 1)
-	return continuation + widget.Pad(progress.Line{Label: oneLine(entry.label()), Frame: m.frame, Live: true}.View(room), room) + tail
+	live := slices.ContainsFunc(fold, Entry.running)
+	return continuation + widget.Pad(progress.Line{Label: oneLine(latest.label()), Frame: m.frame, Live: live}.View(room), room) + tail
 }
 
 func expandTail(id string) string {
