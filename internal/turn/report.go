@@ -121,21 +121,16 @@ func findings(row Row, state subagent.State) []subagent.Finding {
 		calls = append(calls, step.ToolCalls...)
 	}
 	for i, call := range calls {
-		if call.Outcome() != llm.ToolOutcomeFailed {
+		if call.Outcome() != llm.ToolOutcomeFailed || slices.ContainsFunc(calls[i+1:], func(later ToolCallRow) bool {
+			return later.Tool == call.Tool && later.Outcome() == llm.ToolOutcomeRan
+		}) {
 			continue
-		}
-		bucket, after := subagent.ActOn, "and nothing after it made "+call.Tool+" work"
-		for _, later := range calls[i+1:] {
-			if later.Tool == call.Tool && later.Outcome() == llm.ToolOutcomeRan {
-				bucket, after = subagent.Dismissed, "and "+call.Tool+" ran after it"
-				break
-			}
 		}
 		failure := call.Error
 		if failure == "" {
 			failure = "exit code " + strconv.Itoa(*call.ExitCode)
 		}
-		found = append(found, subagent.Finding{Bucket: bucket, Reason: call.Tool + " failed " + after + ": " + failure})
+		found = append(found, subagent.Finding{Bucket: subagent.ActOn, Reason: call.Tool + " failed and nothing after it made " + call.Tool + " work: " + failure})
 	}
 	return found
 }
@@ -207,9 +202,7 @@ func (r SubAgentReport) Text() string {
 	for _, finding := range r.Findings {
 		fmt.Fprintf(body, "%s: %s\n", finding.Bucket, finding.Reason)
 	}
-	if len(r.Learned) == 0 {
-		body.WriteString("learned nothing: this run raised nothing to carry into the next one\n")
-	} else {
+	if len(r.Learned) > 0 {
 		fmt.Fprintf(body, "learned: %s\n", strings.Join(r.Learned, "; "))
 	}
 	for _, question := range r.Asked {

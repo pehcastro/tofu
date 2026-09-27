@@ -565,7 +565,6 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 	asked := boundary.Asked()
 	if len(asked) > 0 && state != subagent.Errored && state != subagent.Parked {
 		state = subagent.WaitingAnswer
-		t.publish(agent, claims, state)
 	}
 	if err := trace.settle(claims[len(claims)-1].ID, state.String()); err != nil {
 		claims[len(claims)-1].Warnings = append(claims[len(claims)-1].Warnings, "the sub-agent's last state was not recorded: "+err.Error())
@@ -652,7 +651,7 @@ func roundState(outerCtx context.Context, runErr error) subagent.State {
 	case runErr != nil:
 		return subagent.Errored
 	default:
-		return subagent.InReview
+		return subagent.Finished
 	}
 }
 
@@ -664,32 +663,26 @@ func resumable(messages []llm.Message) []llm.Message {
 	return Sendable(stripped)
 }
 
-func (t *SpawnTool) publish(agent subagent.SubAgent, claims []Row, state subagent.State) {
-	t.roster.Reached(agent.ID, state, reportOf(agent, claims, state).Text())
-}
-
 func (t *SpawnTool) runRounds(outerCtx, subAgentCtx context.Context, agent subagent.SubAgent, subAgentID string, subAgent Config, trace spawnTrace) ([]Row, subagent.State, error) {
 	first, firstErr := trace.run(outerCtx, subAgentCtx, subAgent)
 	claims := []Row{first}
 	state := roundState(outerCtx, firstErr)
-	t.publish(agent, claims, state)
 	history := append(slices.Clone(subAgent.History), resumable(first.Conversation)...)
-	for state == subagent.InReview && t.Review != nil {
+	for state == subagent.Finished && t.Review != nil {
+		t.roster.Reached(subAgentID, subagent.InReview, reportOf(agent, claims, subagent.InReview).Text())
 		last := &claims[len(claims)-1]
 		reviewed := *last
 		reviewed.Task = agent.Brief
 		decision, err := t.decided(subAgentCtx, reviewed)
 		if err != nil {
 			last.Warnings = append(last.Warnings, "the done review did not run, so the sub-agent's own claim stands: "+err.Error())
-			return claims, subagent.InReview, firstErr
+			break
 		}
 		if decision.ID != "" {
 			last.DecisionIDs = append(last.DecisionIDs, decision.ID)
 		}
 		if decision.Verdict == DoneAccepted {
-			state = subagent.Finished
-			t.publish(agent, claims, state)
-			return claims, state, firstErr
+			break
 		}
 		if decision.Verdict != DoneReopen {
 			panic("turn: unknown done verdict " + string(decision.Verdict))
@@ -697,8 +690,7 @@ func (t *SpawnTool) runRounds(outerCtx, subAgentCtx context.Context, agent subag
 		next, reopenErr := t.roster.Reopen(subAgentID, decision.Reason)
 		if reopenErr != nil {
 			last.Warnings = append(last.Warnings, reopenErr.Error())
-			t.publish(agent, claims, subagent.InReview)
-			return claims, subagent.InReview, firstErr
+			break
 		}
 		t.roster.Reached(subAgentID, subagent.Working, "")
 		subAgent.History = history
@@ -714,7 +706,6 @@ func (t *SpawnTool) runRounds(outerCtx, subAgentCtx context.Context, agent subag
 		} else {
 			state = roundState(outerCtx, nil)
 		}
-		t.publish(agent, claims, state)
 	}
 	return claims, state, firstErr
 }
