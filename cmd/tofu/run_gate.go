@@ -17,6 +17,7 @@ import (
 	"tofu/internal/sys"
 	"tofu/internal/transport"
 	"tofu/internal/turn"
+	"tofu/internal/turn/tools"
 )
 
 const oneCallAtATime = 1
@@ -145,6 +146,9 @@ func (g *toolGate) Decide(ctx context.Context, request turn.GateRequest) (turn.G
 	decision := turn.GateDecision{ID: row.ID, Verdict: row.Verdict, Answers: row.Answers, Reason: row.Reason}
 	if err != nil {
 		decision = turn.GateDecision{Verdict: ledger.VerdictAsk}
+	}
+	if request.Tool == (tools.Settings{}).Name() && decision.Verdict == ledger.VerdictAllow {
+		decision.Verdict = ledger.VerdictAsk
 	}
 	if g.watch != nil {
 		g.watch(request.Tool, decision, err)

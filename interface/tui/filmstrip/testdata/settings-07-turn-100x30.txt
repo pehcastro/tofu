@@ -8,23 +8,23 @@
     Interaction   05      Sub-agents                                                        ● on    
     Context       07      a turn may spawn a sub-agent                                              
     Files         03                                                                                
-    Shell         05      Agent folders                                   tofu,agents,claude  ▾     
-  › Turn          07      the folders sub-agents are read from, in order, as a comma list of to…    
+    Shell         05      Sub-agents per turn                                             10  ▾     
+  › Turn          09      how many sub-agents one turn may spawn; the next spawn reads the new …    
     Startup       01                                                                                
-                          Genius tier                                                default  ▾     
-  NAVIGATE                the model @genius names, and opus in a shared agent file; empty runs …    
+                          Sub-agent depth                                                  2  ▾     
+  NAVIGATE                how deep a sub-agent may spawn its own sub-agents; the next spawn rea…    
   ↑↓ setting · ←→                                                                                   
-  section                 Smart tier                                                 default  ▾     
-  ctrl+k search ·         the model @smart names, and sonnet in a shared agent file; empty runs…    
+  section                 Agent folders                                   tofu,agents,claude  ▾     
+  ctrl+k search ·         the folders sub-agents are read from, in order, as a comma list of to…    
   esc chat                                                                                          
+                          Genius tier                                                default  ▾     
+                          the model @genius names, and opus in a shared agent file; empty runs …    
+                                                                                                    
+                          Smart tier                                                 default  ▾     
+                          the model @smart names, and sonnet in a shared agent file; empty runs…    
+                                                                                                    
                           Worker tier                                                default  ▾     
                           the model @worker names, and haiku in a shared agent file; empty runs…    
                                                                                                     
-                          Dumb tier                                                  default  ▾     
-                          the model @dumb names; empty runs the orchestrator's model                
-                                                                                                    
                         enter change  ·  ctrl+k search  ·  esc chat                                 
-                                                                                                    
-                                                                                                    
-                                                                                                    
                                                                                                     

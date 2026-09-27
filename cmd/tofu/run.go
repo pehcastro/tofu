@@ -592,7 +592,16 @@ func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn
 	spawner := turn.NewSpawnTool(orchestratorID, config, cmp.Or(run.roster, &subagent.Roster{}))
 	spawner.SubAgents = prompt.subAgents
 	spawner.SubAgents.Open = run.subAgentOpener(opts)
-	config.Tools = turn.NewRegistry(append(turn.WithSourceBudget(built, prompt.subAgents.Defined), spawner)...)
+	dir := cmp.Or(opts.dir, ".")
+	spawner.Limits = func() turn.SubAgentLimits {
+		return turn.SubAgentLimits{PerTurn: settingInt(dir, settingspkg.SubAgentsPerTurn, run.notify), Depth: settingInt(dir, settingspkg.SubAgentDepth, run.notify)}
+	}
+	orchestrating := append(turn.WithSourceBudget(built, prompt.subAgents.Defined), spawner)
+	if run.gate != nil {
+		spawner.SettingsTool = true
+		orchestrating = append(orchestrating, tools.NewSettings(settingsPaths(dir)))
+	}
+	config.Tools = turn.NewRegistry(orchestrating...)
 	return config, spawner, nil
 }
 

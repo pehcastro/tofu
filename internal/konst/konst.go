@@ -110,8 +110,8 @@ const (
 
 	ProjectSectionCap = 12
 
-	SubAgentMaxDepth   = 2
-	SubAgentMaxBreadth = 4
+	SubAgentDepthDefault    = 2
+	SubAgentsPerTurnDefault = 10
 
 	SubAgentRetainedRows    = 4
 	SubAgentMissionChars    = 60

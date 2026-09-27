@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"errors"
 	"fmt"
+	"math"
 	"slices"
 	"strconv"
 	"strings"
@@ -61,6 +62,8 @@ const (
 	FoldHidesShell         = "foldHidesShell"
 	DecisionCap            = "decisionCap"
 	TurnMaySpawn           = "turnMaySpawn"
+	SubAgentsPerTurn       = "subAgentsPerTurn"
+	SubAgentDepth          = "subAgentDepth"
 	AgentSources           = "agentSources"
 	HideIntroduction       = "hideIntroduction"
 	Skills                 = "skills"
@@ -197,6 +200,10 @@ func Default() []Spec {
 		{Key: DecisionCap, Label: "Decision cap", Description: "decision cap per turn, zero means no cap", Category: "Turn", Kind: Int, Restart: true,
 			Least: 0, Most: konst.DecisionCapMost, Unit: "decisions a turn, where 0 means no cap"},
 		{Key: TurnMaySpawn, Label: "Sub-agents", Description: "a turn may spawn a sub-agent", Category: "Turn", Kind: Bool, Default: 1, Restart: true},
+		{Key: SubAgentsPerTurn, Label: "Sub-agents per turn", Description: "how many sub-agents one turn may spawn; the next spawn reads the new value", Category: "Turn", Kind: Int, Default: konst.SubAgentsPerTurnDefault,
+			Least: 1, Most: math.MaxInt32, Unit: "sub-agents a turn"},
+		{Key: SubAgentDepth, Label: "Sub-agent depth", Description: "how deep a sub-agent may spawn its own sub-agents; the next spawn reads the new value", Category: "Turn", Kind: Int, Default: konst.SubAgentDepthDefault,
+			Least: 1, Most: math.MaxInt32, Unit: "levels of sub-agents"},
 		{Key: AgentSources, Label: "Agent folders", Description: "the folders sub-agents are read from, in order, as a comma list of tofu, agents and claude; the library is always read", Category: "Turn", Kind: Text, DefaultText: "tofu,agents,claude",
 			ListOf: []string{"tofu", "agents", "claude"}},
 		{Key: subagent.TierGenius.Setting(), Label: "Genius tier", Description: "the model @genius names, and opus in a shared agent file; empty runs the orchestrator's model", Category: "Turn", Kind: Text},

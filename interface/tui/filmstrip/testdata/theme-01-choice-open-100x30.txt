@@ -9,7 +9,7 @@
     Context       07     >  tofu                                                                    
     Files         03                                                                                
     Shell         05       tofu light                                                 subtle  ▾     
-    Turn          07                                                                                
+    Turn          09                                                                                
     Startup       01       tofu dusk                                                                
                                                                                      compact  ▾     
   NAVIGATE                 Solarized Light                                                          

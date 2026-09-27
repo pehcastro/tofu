@@ -39,13 +39,13 @@
     Context       07      Change shortcuts handled inside tofu                                      
     Files         03                                                                                
     Shell         05      Host integration                                       inspect Zed  ▾     
-    Turn          07      Detect host shortcut conflicts and available integrations                 
+    Turn          09      Detect host shortcut conflicts and available integrations                 
     Startup       01                                                                                
                           Confirmations                                                  run  ▾     
   NAVIGATE                run lets a gated call go, ask waits for you; a rule's shadow or enfor…    
   ↑↓ setting · ←→                                                                                   
   section                 Read before edit                                                  ● on    
-  ctrl+k search ·         an edit or a write to a file this turn has not read is refused            
+  ctrl+k search ·         an edit or a write to a file this session has not read, or that chang…    
   esc chat                                                                                          
                         enter change  ·  ctrl+k search  ·  esc chat                                 
                                                                                                     

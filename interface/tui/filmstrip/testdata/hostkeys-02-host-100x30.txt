@@ -15,7 +15,7 @@
   NAVIGAT                                                                                  nfor…
   ↑↓ sett  SHORTCUT CONFLICTS                                                              
   section  CTRL+K  tofu Search · Zed keybinding / chord prefix                              ● on
-  ctrl+k                                                                                   
+  ctrl+k                                                                                   hang…
   esc cha  ZED USER KEYMAP                                                                 
            Status: keymap missing                                                          
            Apply adds terminal-only rules after existing rules; Undo removes tofu's        

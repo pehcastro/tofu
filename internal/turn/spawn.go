@@ -18,6 +18,7 @@ import (
 	"tofu/internal/llm"
 	"tofu/internal/rule"
 	"tofu/internal/session"
+	"tofu/internal/settings"
 	"tofu/internal/subagent"
 	shipped "tofu/library"
 )
@@ -28,7 +29,8 @@ type DepthLimitError struct {
 }
 
 func (e DepthLimitError) Error() string {
-	return fmt.Sprintf("spawn refused: a sub-agent at depth %d would pass the sub-agent depth limit of %d", e.Depth, e.Limit)
+	return fmt.Sprintf("spawn refused: a sub-agent at depth %d would pass the %s setting of %d, which the person can raise in the settings menu",
+		e.Depth, settings.SubAgentDepth, e.Limit)
 }
 
 type BreadthLimitError struct {
@@ -37,7 +39,8 @@ type BreadthLimitError struct {
 }
 
 func (e BreadthLimitError) Error() string {
-	return fmt.Sprintf("spawn refused: this turn has already spawned %d sub-agents and the sub-agent breadth limit is %d", e.Spawned, e.Limit)
+	return fmt.Sprintf("spawn refused: this turn has already spawned %d sub-agents and the %s setting is %d, which the person can raise in the settings menu",
+		e.Spawned, settings.SubAgentsPerTurn, e.Limit)
 }
 
 const (
@@ -304,10 +307,17 @@ func (s SubAgents) Named(name string) (subagent.Definition, error) {
 	return subagent.Definition{}, AgentRefusedError{Name: name, Why: why, Enabled: s.enabledNames()}
 }
 
+type SubAgentLimits struct {
+	PerTurn int
+	Depth   int
+}
+
 type SpawnTool struct {
 	Review         DoneReview
 	Methods        method.Table
 	SubAgents      SubAgents
+	Limits         func() SubAgentLimits
+	SettingsTool   bool
 	orchestratorID string
 	depth          int
 	spawned        int
@@ -331,7 +341,19 @@ func (t *SpawnTool) Reports() []SubAgentReport { return t.reports }
 
 func (t *SpawnTool) Spawned() []Spawned { return t.ran }
 
+func (t *SpawnTool) limits() SubAgentLimits {
+	if t.Limits == nil {
+		return SubAgentLimits{PerTurn: konst.SubAgentsPerTurnDefault, Depth: konst.SubAgentDepthDefault}
+	}
+	return t.Limits()
+}
+
 func (t *SpawnTool) Definition() llm.Tool {
+	limits := t.limits()
+	raise := "the person can raise either in the settings menu."
+	if t.SettingsTool {
+		raise = "the person can raise either in the settings menu, and you can ask to with the settings tool, which the person answers."
+	}
 	properties := map[string]any{
 		"task":    map[string]any{"type": "string"},
 		"mission": map[string]any{"type": "string", "description": "the work in a handful of words, as a board entry reads: work on BOJI-395. the task is the brief and is kept whole"},
@@ -346,7 +368,8 @@ func (t *SpawnTool) Definition() llm.Tool {
 		Description: "you plan, spawn and verify, and implementation goes to a sub-agent: spawn one per separable piece of work as soon as the piece is known, rather than writing the code yourself first. " +
 			"hands one piece of work to a sub-agent with its own context and its own conversation, and returns the sub-agent's report rather than its transcript. " +
 			"owns lists the paths the sub-agent may write, every other path is refused at the write, and no two sub-agents may hold overlapping paths. " +
-			"At most " + strconv.Itoa(konst.SubAgentMaxBreadth) + " sub-agents per turn, nested at most " + strconv.Itoa(konst.SubAgentMaxDepth) + " deep.",
+			fmt.Sprintf("At most %d sub-agents per turn, nested at most %d deep. These are the person's settings %s and %s: %s",
+				limits.PerTurn, limits.Depth, settings.SubAgentsPerTurn, settings.SubAgentDepth, raise),
 		Parameters: map[string]any{
 			"type":       "object",
 			"properties": properties,
@@ -384,11 +407,12 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 	if len(args.Owns) == 0 {
 		return Result{}, errors.New("spawn: owns is required, and a sub-agent holding no paths could write nothing")
 	}
-	if t.depth+1 > konst.SubAgentMaxDepth {
-		return Result{}, DepthLimitError{Depth: t.depth + 1, Limit: konst.SubAgentMaxDepth}
+	limits := t.limits()
+	if t.depth+1 > limits.Depth {
+		return Result{}, DepthLimitError{Depth: t.depth + 1, Limit: limits.Depth}
 	}
-	if t.spawned >= konst.SubAgentMaxBreadth {
-		return Result{}, BreadthLimitError{Spawned: t.spawned, Limit: konst.SubAgentMaxBreadth}
+	if t.spawned >= limits.PerTurn {
+		return Result{}, BreadthLimitError{Spawned: t.spawned, Limit: limits.PerTurn}
 	}
 	definition, err := t.SubAgents.Named(args.Agent)
 	if err != nil {
@@ -453,7 +477,7 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 		}
 		owned = append(owned, tool)
 	}
-	nested := &SpawnTool{Review: t.Review, Methods: t.Methods, SubAgents: t.SubAgents, orchestratorID: subAgentID, depth: t.depth + 1, base: t.base, roster: t.roster}
+	nested := &SpawnTool{Review: t.Review, Methods: t.Methods, SubAgents: t.SubAgents, Limits: t.Limits, orchestratorID: subAgentID, depth: t.depth + 1, base: t.base, roster: t.roster}
 	if offered(t.Name()) {
 		owned = append(owned, nested)
 	}

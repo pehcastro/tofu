@@ -15,7 +15,7 @@
   NAVIGATE          Commands       alt+k                                            ow or enfor…
   ↑↓ setting · ←    Settings       not set                                          
   section           Models         ctrl+l                                                   ● on
-  ctrl+k search     Quote selection  ctrl+r                                         used
+  ctrl+k search     Quote selection  ctrl+r                                          that chang…
   esc chat                                                                          
                   Host editors may still intercept a chosen key.                    
                                                                                     

@@ -229,6 +229,36 @@ func TestDoctorAndTheGateAgreeAShadowPointKeepsItsOwnThresholds(t *testing.T) {
 	t.Logf("lock, not applied: %s", pinned)
 }
 
+const lowRiskAllowReply = `{"model":"typesafe/jev-1.13-20260917","provider":"TypeSafe","id":"gen-stub-allow",` +
+	`"answers":{` +
+	`"risk":{"type":"score","score":0,"probabilities":{"0":0.97,"1":0.03,"2":0,"3":0},"confidence":0.9},` +
+	`"approval":{"type":"noul","noul":0.05},` +
+	`"user_requested":{"type":"noul","noul":0.95},` +
+	`"from_untrusted":{"type":"noul","noul":0.02}` +
+	`},"usage":{"input_tokens":10,"output_tokens":2,"cost":0.00002}}`
+
+func TestASettingsCallJevAllowsStillReachesThePersonAsAnAsk(t *testing.T) {
+	dir, _, _ := gateScratch(t, gateFixtureBuild)
+	stubJev(t, 200, lowRiskAllowReply)
+	gate, err := newToolGate(dir)
+	if err != nil {
+		t.Fatalf("newToolGate: %v", err)
+	}
+	watched := map[string]ledger.Verdict{}
+	gate.watch = func(tool string, decision turn.GateDecision, _ error) { watched[tool] = decision.Verdict }
+	for tool, want := range map[string]ledger.Verdict{"read": ledger.VerdictAllow, "settings": ledger.VerdictAsk} {
+		decision, err := gate.Decide(t.Context(), turn.GateRequest{
+			TurnID: "turn-settings",
+			Task:   "raise the sub-agent limit to 15",
+			Tool:   tool,
+			Args:   json.RawMessage(`{"key":"subAgentsPerTurn","value":15}`),
+		})
+		if err != nil || decision.Verdict != want || watched[tool] != want {
+			t.Errorf("%s: decided %s, the interface was shown %s, want %s (err %v)", tool, decision.Verdict, watched[tool], want, err)
+		}
+	}
+}
+
 func envVarName() string { return "OPENROUTER" + "_KEY" }
 
 func fakeSecret(tag string) string { return "fake-test-secret-" + tag }
