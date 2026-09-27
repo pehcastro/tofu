@@ -41,9 +41,6 @@ func typecheck(ctx context.Context, resolved string) string {
 		return "typecheck skipped: no tsconfig.json in " + filepath.Dir(resolved) + " or above it"
 	}
 	dir := filepath.Dir(tsconfig)
-	if _, installed := findUp(dir, "node_modules", "typescript", "package.json"); !installed {
-		return "typecheck skipped: typescript is not installed under node_modules, and the check never downloads it"
-	}
 	var manifest packageManifest
 	if at, found := findUp(dir, "package.json"); found {
 		if body, err := os.ReadFile(at); err == nil {
@@ -51,18 +48,12 @@ func typecheck(ctx context.Context, resolved string) string {
 		}
 	}
 	manager := lockfileManager(dir, manifest)
-	var argv []string
-	switch manager {
-	case "bun":
-		argv = []string{"bun", "x", "tsc"}
-	case "pnpm":
-		argv = []string{"pnpm", "exec", "tsc"}
-	case "yarn":
-		argv = []string{"yarn", "tsc"}
-	case "npm":
-		argv = []string{"npm", "exec", "--", "tsc"}
-	default:
-		return "typecheck skipped: packageManager names " + manager + ", and the check runs tsc only through bun, pnpm, yarn or npm"
+	argv, skipped := projectChecker(manager)
+	if _, installed := findUp(dir, "node_modules", "typescript", "package.json"); !installed {
+		argv, skipped = machineChecker(manager)
+	}
+	if skipped != "" {
+		return "typecheck skipped: " + skipped
 	}
 	argv = append(argv, "--noEmit", "--pretty", "false", "-p", tsconfigName)
 	if runsTypeScript(manifest) {
@@ -92,6 +83,33 @@ func typecheck(ctx context.Context, resolved string) string {
 	}
 	relative, _ := filepath.Rel(dir, resolved)
 	return tscReport(output.String(), filepath.ToSlash(relative), fmt.Sprintf("typecheck: %s, %d ms", command, took), failed)
+}
+
+func projectChecker(manager string) ([]string, string) {
+	switch manager {
+	case "bun":
+		return []string{"bun", "x", "tsc"}, ""
+	case "pnpm":
+		return []string{"pnpm", "exec", "tsc"}, ""
+	case "yarn":
+		return []string{"yarn", "tsc"}, ""
+	case "npm":
+		return []string{"npm", "exec", "--", "tsc"}, ""
+	}
+	return nil, "packageManager names " + manager + ", and the check runs tsc only through bun, pnpm, yarn or npm"
+}
+
+func machineChecker(manager string) ([]string, string) {
+	runners := [][]string{{"npx", "-y", "-p", "typescript", "tsc"}, {"bun", "x", "-p", "typescript", "tsc"}}
+	if manager == "bun" {
+		slices.Reverse(runners)
+	}
+	for _, argv := range runners {
+		if _, err := exec.LookPath(argv[0]); err == nil {
+			return argv, ""
+		}
+	}
+	return nil, "typescript is not installed under node_modules, and neither bun nor npx is on PATH to fetch it"
 }
 
 func lockfileManager(dir string, manifest packageManifest) string {
