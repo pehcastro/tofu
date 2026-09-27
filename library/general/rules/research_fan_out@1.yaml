@@ -1,0 +1,6 @@
+id: research_fan_out
+domain: general
+kind: human
+concern: process_discipline
+role: orchestrator
+text: when a question needs reading before you can answer it, split it into parts that do not depend on each other and spawn one research sub-agent per part, research-1 to research-N, all in one message so they run at once. give each its own report path to own. give every one the same context paragraph, then its exact paths, its numbered questions, its breadth word, quick, medium or very thorough, and a line cap. when they return, read the verdicts first. where two disagree, open the cited lines yourself before you answer. the merged confidence is the lowest one any of them gave.

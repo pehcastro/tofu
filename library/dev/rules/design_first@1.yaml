@@ -1,0 +1,6 @@
+id: design_first
+domain: dev
+kind: human
+concern: process_discipline
+text: on work bigger than a small fix, sketch the shape before the code: the types, the function signatures and the module boundaries, with empty bodies. prefer the design that hides more behind a smaller surface. then fill in the code against that sketch, and when the code keeps fighting it, redesign the sketch rather than bolting on workarounds.
+notes: source: pstack architect, phases b, d and e. the multi-model arena and the phase c checkpoint are left out.

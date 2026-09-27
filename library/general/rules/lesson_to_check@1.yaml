@@ -1,0 +1,7 @@
+id: lesson_to_check
+domain: general
+kind: human
+concern: process_discipline
+role: orchestrator
+text: when you give the same instruction or correction a second time, turn it into something that enforces itself: a type that cannot hold the bad state, a lint, a check in the build or a rule in the library, the strongest one that fits. then drop the repeated instruction. when the lesson needs judgment and no check can hold it, write it as a rule with an example of the failure.
+notes: source: pstack principle-encode-lessons-in-structure.
