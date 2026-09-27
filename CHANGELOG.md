@@ -8,6 +8,22 @@ Tofu is personal and not released, so the public interface that a version promis
 
 The minor number carries breaking changes, which is what 0.x means, and **there is never a 1.0.0**. The owner decided that on 2026-09-19: this stays 0.x forever, so the promise the version makes is the one 0.x already makes, that anything can break on a minor bump.
 
+## 0.5.0-rc-fix5 - 2026-09-26
+
+Each sub-agent works with its own rules, references and model tier, and the footer shows every subscription in use.
+
+### Added
+
+- **Model tiers.** Set `modelTier.genius`, `smart`, `worker` and `dumb` with `tofu settings set`. A sub-agent names a tier as `@smart` in `.tofu/agent-models.yaml` or `.tofu/agents`. In a shared `.claude` file, `opus`, `sonnet` and `haiku` map to genius, smart and worker when those tiers are set. An unset tier runs on the orchestrator's model, and `tofu agents` says so.
+- **`tofu run --show-prompt --agent <name>`** shows the prompt a named sub-agent receives.
+- **`tofu drive --source` and `--quota`** name the orchestrator's subscription and read quota readings from a file, so the footer can be checked without a live poll.
+
+### Changed
+
+- **A sub-agent's rules come from its own brief and its own language**, not from the orchestrator's. ts-dev gets the TypeScript rules even when the brief names no `.ts` path. The orchestrator no longer carries them on a task that is not TypeScript.
+- **A sub-agent's named references are in its prompt**, within a size limit that names anything it cuts.
+- **The footer shows every subscription in use**, the orchestrator's and each running sub-agent's. Below 150 columns it shortens them to `claude 62%  |  codex 40%` rather than hide one.
+
 ## 0.5.0-rc-fix4 - 2026-09-26
 
 Sessions become one folder of two files, tofu's own state moves under the home, and background shells work on Windows.
