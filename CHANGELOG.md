@@ -8,6 +8,30 @@ Tofu is personal and not released, so the public interface that a version promis
 
 The minor number carries breaking changes, which is what 0.x means, and **there is never a 1.0.0**. The owner decided that on 2026-09-19: this stays 0.x forever, so the promise the version makes is the one 0.x already makes, that anything can break on a minor bump.
 
+## 0.5.0-rc-fix4 - 2026-09-26
+
+Sessions become one folder of two files, tofu's own state moves under the home, and background shells work on Windows.
+
+### Added
+
+- **Settings, Models & roles, assigns a model to the orchestrator and to each sub-agent.** Each row shows where the definition came from. The picker offers `none (disabled)` and `inherit`, and writes `.tofu/agent-models.yaml` or `~/.tofu/agent-models.yaml`, as the scope tab says. A sub-agents card names the definition and the model it runs.
+- **The library ships a `ts-dev` sub-agent**, seven general coding rules (read first, minimal diff, boundaries, evidence, and on a trigger debug, review and refactor), eleven TypeScript rules, and three TypeScript references.
+- **`tofu migrate`** moves an old project `.tofu` into the home folder and converts old records into sessions. `--dry-run` shows the plan first.
+- **`tofu session trace`** follows a session's calls, sub-agents and results by id.
+- **The setting `instructionSources`** orders AGENTS.md and CLAUDE.md.
+
+### Changed
+
+- **A session is one folder holding `session.json` and `events.jsonl`.** Every turn and every sub-agent run is in that one log, and each message is written once. Images live beside it in `attachments/`. Old records still read, and `tofu migrate` converts them.
+- **Tofu's own state lives under `~/.tofu/projects/<project>`.** A project's `.tofu` holds only what you write: agents, agent-models.yaml, rules and settings.
+- **In a folder with both AGENTS.md and CLAUDE.md, only AGENTS.md is sent**, and a notice names the skipped file.
+- **A background start waits up to 10 seconds.** A command that ends in that time returns its output and leaves no shell entry. Only a process that keeps running is listed, and exited shells are removed at the next launch.
+
+### Fixed
+
+- **Background shells run in Git Bash on Windows**, the same shell as every other command. They ran in WSL before, which could not run Windows `npm`.
+- **The settings inspector fits its pane**, and it scrolls.
+
 ## 0.5.0-rc-fix3 - 2026-09-26
 
 Named sub-agents, each on its own model, and the fixes from the first drive of rc-fix2.
