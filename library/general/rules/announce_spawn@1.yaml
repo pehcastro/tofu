@@ -3,4 +3,4 @@ domain: general
 kind: human
 concern: process_discipline
 role: orchestrator
-text: announce every spawn in one line in the same reply as the spawn call: which sub-agent, and to do what, such as spawning ts-dev to build the order routes over nw.sqlite. one line per child, no brief and no list of paths; the brief goes in the spawn call, where the sub-agents screen shows it.
+text: announce every spawn in one line in the same reply as the spawn call: which sub-agent, and to do what, such as spawning ts-dev to build the order routes over nw.sqlite. one line per sub-agent, no brief and no list of paths; the brief goes in the spawn call, where the sub-agents screen shows it.

@@ -32,7 +32,7 @@ methods:
     why: jev beats a regular expression 25 of 27 against 24 of 27, but the corpus cannot decide it, a rerun minutes later tied both arms at 24 of 27, and 27 cases is a quarter of the few hundred a two-arm gap this size needs
   spawn_gate:
     method: unwired
-    why: nothing is measured, and it waits on one recorded parent and child
+    why: nothing is measured, and it waits on one recorded orchestrator and sub-agent
   thrift:
     method: unwired
     why: the point reads library/questions/config/thrift_rule@1.yaml directly, which ships mode off, and nothing is cut until a measurement moves it

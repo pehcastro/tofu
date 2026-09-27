@@ -7,7 +7,7 @@ found: this repository; this file is a description of what the code does, not a 
 
 # What reaches a screen
 
-A tool's `Result.Command` label is published on purpose and is drawn whole. A call's arguments JSON is never drawn, and a running child carries tool names only.
+A tool's `Result.Command` label is published on purpose and is drawn whole. A call's arguments JSON is never drawn, and a running sub-agent carries tool names only.
 
 ## The three decisions behind it
 
@@ -15,9 +15,9 @@ They were settled one at a time and they are one rule.
 
 The quote tool hands back what was said and the names of the tools that ran. A call's arguments and a tool's output never come back, so a key pasted into a command line is not repeated by a quotation.
 
-A running child carries tool names only. The watcher copies the name of the tool being called and reaches no other field, so a child mid-call shows `bash` and nothing more.
+A running sub-agent carries tool names only. The watcher copies the name of the tool being called and reaches no other field, so a sub-agent mid-call shows `bash` and nothing more.
 
-A finished child's call text is the tool's own label. `Result.Command` is a one line description each tool writes for itself: `read a.txt`, `write hello.txt`, `edit` followed by the path it changed. For `bash` that label is the command line, and that is the point. A person watching a child wants to know it ran the tests for one package, not that it ran `bash`.
+A finished sub-agent's call text is the tool's own label. `Result.Command` is a one line description each tool writes for itself: `read a.txt`, `write hello.txt`, `edit` followed by the path it changed. For `bash` that label is the command line, and that is the point. A person watching a sub-agent wants to know it ran the tests for one package, not that it ran `bash`.
 
 So the one string on a screen that can carry what a person typed is a bash label, and it is there because a reader needs it.
 
