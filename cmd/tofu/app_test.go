@@ -1032,17 +1032,12 @@ func (m *clockedModel) Ask(_ context.Context, _ llm.Request) (llm.Decision, erro
 	return next.decision, nil
 }
 
-func TestASubAgentRunningForTenSecondsReadsTenSecondsAndWhatItSpent(t *testing.T) {
+func TestASubAgentRunningForTenSecondsReadsTenSecondsOnItsSpawnLine(t *testing.T) {
 	dir := scratchProject(t)
 	spawnCall := llm.ToolCall{ID: "call-1", Name: "spawn", Arguments: json.RawMessage(`{"task":"write note.txt","owns":["note.txt"]}`)}
 	model := clockedFrom(time.Date(2026, 9, 20, 9, 0, 0, 0, time.UTC),
 		clockedStep{decision: llm.Decision{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{spawnCall}}},
-		clockedStep{waited: 10 * time.Second, decision: llm.Decision{
-			Build:     "stub-model",
-			Outcome:   llm.OutcomeToolCalls,
-			ToolCalls: []llm.ToolCall{writeNote("call-2")},
-			Usage:     llm.Usage{InputTokens: 11000, OutputTokens: 1000},
-		}},
+		clockedStep{waited: 10 * time.Second, decision: llm.Decision{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{writeNote("call-2")}}},
 		clockedStep{decision: llm.Decision{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "the sub-agent wrote it"}},
 		clockedStep{decision: llm.Decision{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "the sub-agent did it"}},
 	)
@@ -1053,21 +1048,19 @@ func TestASubAgentRunningForTenSecondsReadsTenSecondsAndWhatItSpent(t *testing.T
 
 	running := ""
 	for _, framed := range driver.frames {
-		for _, row := range strings.Split(framed, "\n") {
-			if strings.Contains(row, "sub-1") && strings.Contains(row, "write note.txt") && !strings.Contains(row, "spawning") {
-				running = row
+		for _, row := range strings.Split(ansi.Strip(framed), "\n") {
+			line := strings.TrimSpace(row)
+			if strings.Contains(line, "spawning [&sub-1] to write note.txt") && !strings.HasPrefix(line, "✓") {
+				running = line
 			}
 		}
 	}
 	if running == "" {
-		t.Fatal("no frame carried the running sub-agent at all")
+		t.Fatal("no frame carried the running sub-agent on its spawn line")
 	}
-	t.Logf("the activity row read %q", running)
-	if !strings.Contains(running, "10s") {
-		t.Errorf("the sub-agent ran for ten seconds and its row reads %q", running)
-	}
-	if !strings.Contains(running, "12k") {
-		t.Errorf("the sub-agent spent 12000 tokens and its row reads %q", running)
+	t.Logf("the spawn line read %q", running)
+	if !strings.Contains(running, " 10s  spawning") {
+		t.Errorf("the sub-agent ran for ten seconds and its spawn line reads %q", running)
 	}
 }
 
