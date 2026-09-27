@@ -66,13 +66,15 @@ type Event struct {
 }
 
 type Agent struct {
-	Name     string
-	Instance int
-	State    roster.State
-	Doing    string
-	Since    time.Duration
-	Owns     []string
-	Report   string
+	Name       string
+	Definition string
+	Model      string
+	Instance   int
+	State      roster.State
+	Doing      string
+	Since      time.Duration
+	Owns       []string
+	Report     string
 }
 
 const (

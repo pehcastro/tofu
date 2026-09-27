@@ -82,7 +82,7 @@ func (a *App) coverDetails() string {
 	room := max(coverPathMin, stage-ansi.StringWidth(model)-2*ansi.StringWidth(coverSeparator)-ansi.StringWidth(settingsLink))
 	path := "./" + a.options.Repo
 	if over := ansi.StringWidth(path) - room; over > 0 {
-		path = ansi.TruncateLeft(path, over+len(ellipsis), ellipsis)
+		path = ansi.TruncateLeft(path, over+ansi.StringWidth(ellipsis), ellipsis)
 	}
 	return look.Muted(path) + look.Faint(coverSeparator) + look.Muted(model) + look.Faint(coverSeparator) + look.Style(look.Blue).Render(settingsLink)
 }

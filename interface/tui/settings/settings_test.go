@@ -39,7 +39,7 @@ func tableModel(width, height int) Model {
 func TestAppearanceWithTheInspectorNamesTheSourceFile(t *testing.T) {
 	m := tableModel(120, 36)
 	view := ansi.Strip(m.View())
-	if !strings.Contains(view, "C:/Users/tester/.tofu/") {
+	if !strings.Contains(view, "tester/.tofu/settings.json") {
 		t.Fatalf("the inspector must name the file the value came from\n%s", view)
 	}
 	golden.Assert(t, "appearance-120x36.golden", view)

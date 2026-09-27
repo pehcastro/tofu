@@ -4,7 +4,7 @@
                                                                                                     
   CATEGORIES            › Theme                                                         tofu  ▾     
   › Appearance    05      tofu uses Zed Nu Disco; choose a palette                                  
-    Models & rol… 02                                                                                
+    Models & rol… 01                                                                                
     Interaction                                                                     fortable  ▾     
     Context       Search settings                                              esc                  
     Files         Type to filter · ↑↓ select · enter jump                                           
@@ -16,10 +16,10 @@
   ↑↓ setting · ←    Appearance / Animations                                                         
   section           Appearance / Status bar                                             auto  ▾     
   ctrl+k search     Appearance / Color mode                                                         
-  esc chat          Models & roles / orchestrator                                                   
-                    Models & roles / (unnamed sub-agent)                                            
+  esc chat          Models & roles / Orchestrator model                                             
+                    Interaction / Composer                                                          
                                                                                                     
-                  1 of 30 results                                                                   
+                  1 of 33 results                                                                   
                                                                                                     
                           Readable text, quiet surfaces, and bounded focus.                         
                           ● active    ● attention    ● failed                                       

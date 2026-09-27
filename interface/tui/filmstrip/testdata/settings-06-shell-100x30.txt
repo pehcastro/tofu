@@ -4,12 +4,12 @@
                                                                                                     
   CATEGORIES            › Persistent registry                                               ● on    
     Appearance    05      a running shell outlives tofu and the next launch lists it; off stops…    
-    Models & rol… 02                                                                                
+    Models & rol… 01                                                                                
     Interaction   05      Log tail                                                       500  ▾     
     Context       06      Lines retained per shell                                                  
     Files         03                                                                                
   › Shell         05      Kill confirm                                                      ● on    
-    Turn          03      Confirm process termination                                               
+    Turn          07      Confirm process termination                                               
     Startup       01                                                                                
                           Shell                                                      default  ▾     
   NAVIGATE                a path, or the word wsl; empty resolves the person's own shell automa…    

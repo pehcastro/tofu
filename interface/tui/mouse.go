@@ -246,7 +246,7 @@ func (a *App) wheel(msg tea.MouseWheelMsg) tea.Cmd {
 	case screenShells:
 		a.shells.Wheel(delta * wheelRows)
 	case screenSettings:
-		return a.applyIntent(a.settings.Wheel(delta))
+		return a.applyIntent(a.settings.Wheel(msg.X, delta))
 	}
 	return nil
 }

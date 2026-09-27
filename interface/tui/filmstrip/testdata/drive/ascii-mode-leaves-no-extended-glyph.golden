@@ -184,12 +184,12 @@
                                                                                                     
   CATEGORIES            > Theme                                                         tofu  v     
   > Appearance    05      tofu uses Zed Nu Disco; choose a palette                                  
-    Models & rol. 02                                                                                
+    Models & rol. 01                                                                                
     Interaction   05      Density                                                comfortable  v     
     Context       06      Spacing across lists and panels                                           
     Files         03                                                                                
     Shell         05      Animations                                                  subtle  v     
-    Turn          03      Motion for conversational states                                          
+    Turn          07      Motion for conversational states                                          
     Startup       01                                                                                
                           Status bar                                                 compact  v     
   NAVIGATE                Context, quotas, and runtime counters                                     
@@ -214,12 +214,12 @@
                                                                                                     
   CATEGORIES                                                                            tofu  v     
   > Appearance    05     Theme                                          esc                         
-    Models & rol. 02     tofu uses Zed Nu Disco; choose a palette                                   
+    Models & rol. 01     tofu uses Zed Nu Disco; choose a palette                                   
     Interaction   05                                                             comfortable  v     
     Context       06     >  tofu                                                                    
     Files         03                                                                                
     Shell         05       tofu light                                                 subtle  v     
-    Turn          03                                                                                
+    Turn          07                                                                                
     Startup       01       tofu dusk                                                                
                                                                                      compact  v     
   NAVIGATE                 Solarized Light                                                          

@@ -1,6 +1,7 @@
 package feed
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
 	"slices"
@@ -25,6 +26,8 @@ const (
 	detailPreview    = 8
 	elapsedPrecision = 100 * time.Millisecond
 	fullDiffNote     = "Full diff in File edits."
+	runsTitle        = "runs"
+	unnamedAgent     = "(unnamed sub-agent)"
 	ownsTitle        = "owns"
 	reportTitle      = "report"
 	overlapWord      = "  overlaps "
@@ -67,8 +70,12 @@ type draft struct {
 
 func (m Model) drafts() []draft {
 	events := m.visible()
-	drafts := make([]draft, 0, len(events)+2)
+	drafts := make([]draft, 0, len(events)+3)
 	agent, picked := m.filteredAgent()
+	if picked && agent.Model != "" {
+		runs := m.aboutFilter(runsTitle, cmp.Or(agent.Definition, unnamedAgent)+" on "+agent.Model, nil)
+		drafts = append(drafts, draft{&runs, renderAgentCard})
+	}
 	if picked && len(agent.Owns) > 0 {
 		owns := m.aboutFilter(ownsTitle, "", m.ownership(agent.Owns))
 		drafts = append(drafts, draft{&owns, renderAgentCard})

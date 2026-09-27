@@ -23,6 +23,7 @@ const (
 	RowKeybindings
 	RowHostIntegration
 	RowRole
+	RowSubAgent
 )
 
 type Number struct {
@@ -32,6 +33,7 @@ type Number struct {
 
 type Row struct {
 	Key, Category, Label, Description, Value, Source string
+	Origin, Path                                     string
 	Kind                                             Kind
 	Choices                                          []string
 	Number                                           Number
@@ -79,6 +81,11 @@ type numberState struct {
 	typed, refusal string
 }
 
+type inspectorScroll struct {
+	key string
+	top int
+}
+
 type Model struct {
 	Providers      []Provider
 	ChatShowsTools bool
@@ -96,6 +103,7 @@ type Model struct {
 	dialog         choiceState
 	search         searchState
 	number         numberState
+	scrolled       inspectorScroll
 	cache          viewCache
 }
 
@@ -173,6 +181,10 @@ func (m *Model) Key(key string) Intent {
 		m.moveRow(-1)
 	case "down":
 		m.moveRow(1)
+	case "pgup":
+		m.scrollInspector(-m.height / 2)
+	case "pgdown":
+		m.scrollInspector(m.height / 2)
 	case "tab":
 		return Intent{Action: ActionCycleScope}
 	case "+", "=":
@@ -185,12 +197,15 @@ func (m *Model) Key(key string) Intent {
 	return Intent{}
 }
 
-func (m *Model) Wheel(delta int) Intent {
+func (m *Model) Wheel(x, delta int) Intent {
 	step := 1
 	if delta < 0 {
 		step = -1
 	}
+	geo := m.layout()
 	switch {
+	case !m.dialog.open && !m.search.open && !m.number.open && geo.inspector > 0 && x >= m.width-geo.inspector:
+		m.scrollInspector(step)
 	case m.dialog.open:
 		row, _ := m.selected()
 		m.dialog.cursor = min(max(m.dialog.cursor+step, 0), len(row.Choices)-1)
@@ -235,7 +250,7 @@ func (m *Model) activate() Intent {
 		return Intent{Action: ActionOpenKeybindings, Key: row.Key}
 	case RowHostIntegration:
 		return Intent{Action: ActionOpenHost, Key: row.Key}
-	case RowRole:
+	case RowRole, RowSubAgent:
 		return Intent{Action: ActionOpenRole, Key: row.Key}
 	case RowValue:
 	default:

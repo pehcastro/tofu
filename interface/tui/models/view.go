@@ -1,7 +1,6 @@
 package models
 
 import (
-	"cmp"
 	"strconv"
 	"strings"
 
@@ -9,7 +8,6 @@ import (
 
 	"tofu/interface/tui/look"
 	"tofu/internal/llm"
-	library "tofu/internal/llm/models"
 	"tofu/internal/widget"
 )
 
@@ -38,17 +36,18 @@ const (
 	noMatch         = "No matching models"
 	emptyTitle      = "the library has no model to pick"
 	excludedMark    = " · excluded"
-	rolesHead       = "Roles"
-	rolesHint       = "enter binds · tab models"
+	rolesHead       = "Role presets"
+	rolesHint       = "enter assign · tab"
 	selectionHead   = "Selection"
 	excludedHead    = "Excluded"
 	effortHead      = "Effort"
 	effortHint      = "  shift+←→"
 	assignHead      = "Assign to"
-	boundHead       = "Bound model"
+	boundHead       = "Assigned model"
 	noSelection     = "No model selected"
+	noRoles         = "no role or sub-agent to assign"
 	pickHint        = "enter picks the model"
-	bindHint        = "enter binds the model"
+	bindHint        = "enter assigns the model"
 	loginHint       = "enter starts the login"
 	rebindHint      = "enter chooses a new model"
 )
@@ -58,7 +57,7 @@ type renderKey struct {
 	tab              tab
 	provider, cursor int
 	filter, bound    string
-	assign           library.RoleID
+	assign           *Target
 	effort           llm.Effort
 }
 
@@ -91,7 +90,7 @@ func (m Model) pageSize() int {
 func (m Model) page() (start, end int) {
 	size := m.pageSize()
 	start = m.cursor / size * size
-	return start, min(len(m.visible()), start+size)
+	return start, min(m.count(), start+size)
 }
 
 func origin(width, height int) (int, int) {
@@ -110,9 +109,9 @@ func (m Model) Dialog(base string, width, height int) string {
 }
 
 func (m Model) cached(width, height int) string {
-	bound := make([]string, 0, len(library.RoleIDs()))
-	for _, role := range library.RoleIDs() {
-		bound = append(bound, m.bound[role])
+	bound := make([]string, 0, len(m.targets))
+	for _, target := range m.targets {
+		bound = append(bound, target.Assigned)
 	}
 	key := renderKey{width: width, height: height, tab: m.tab, provider: m.provider, cursor: m.cursor,
 		filter: m.filter.Value(), bound: strings.Join(bound, "\n"), assign: m.assign, effort: m.effort}
@@ -152,10 +151,14 @@ func (m Model) sidePane(width int) string {
 }
 
 func (m Model) listPane(width, modalHeight int) string {
+	start, end := m.page()
 	if m.tab == tabRoles {
 		view := look.SectionLabel(rolesHead) + "\n" + look.Faint(rolesHint) + "\n\n"
-		for i, role := range library.RoleIDs() {
-			view += look.CatalogRow(width-rowInset, i == m.cursor, role.Label()) + "\n  " + look.Faint(role.What()) + "\n"
+		for i, target := range m.targets[start:end] {
+			view += look.CatalogRow(width-rowInset, start+i == m.cursor, target.Name) + "\n  " + look.Faint(widget.Fit(target.Job, width-rowInset)) + "\n"
+		}
+		if len(m.targets) == 0 {
+			view += look.Muted(noRoles)
 		}
 		return view
 	}
@@ -163,9 +166,8 @@ func (m Model) listPane(width, modalHeight int) string {
 	filter.SetWidth(max(filterMinWidth, width-filterInset))
 	view := look.SectionLabel(catalogHead) + "\n" + look.Faint(catalogHint) + "\n\n" + filter.View() + "\n\n"
 	rows := m.visible()
-	start, end := m.page()
 	for i, row := range rows[start:end] {
-		source, model, _ := strings.Cut(row.Slug, "/")
+		source, model := row.name()
 		if row.excluded() {
 			source += excludedMark
 		}
@@ -191,23 +193,33 @@ func field(label, value string) string {
 func (m Model) detailPane() string {
 	view := look.SectionLabel(selectionHead) + "\n\n"
 	if m.tab == tabRoles {
-		role := library.RoleIDs()[m.cursor]
-		bound := cmp.Or(m.bound[role], role.Unbound())
-		return view + look.Title(role.Label()) + "\n" + look.Muted(role.What()) + "\n\n" + look.SectionLabel(boundHead) + "\n" + look.Muted(bound) + "\n\n" + look.Faint(rebindHint)
+		if m.cursor >= len(m.targets) {
+			return view + look.Muted(noRoles)
+		}
+		target := m.targets[m.cursor]
+		assigned := target.Assigned
+		if assigned == "" {
+			assigned = target.Role.Unbound()
+		}
+		return view + look.Title(target.Name) + "\n" + look.Muted(target.Job) + "\n\n" + look.SectionLabel(boundHead) + "\n" + look.Muted(assigned) + "\n\n" + look.Faint(rebindHint)
 	}
 	row, picked := m.Picked()
 	if !picked {
 		return view + look.Muted(noSelection)
 	}
-	source, model, _ := strings.Cut(row.Slug, "/")
-	view += look.Title(model) + "\n" + look.Muted(row.Slug) + "\n\n" +
-		field("source", source) + field("kind", string(row.Kind)) + field("pays", string(row.Pays)) + field("window", row.Window)
+	source, model := row.name()
+	if row.Label != "" {
+		view += look.Title(model) + "\n" + look.Muted(source) + "\n"
+	} else {
+		view += look.Title(model) + "\n" + look.Muted(row.Slug) + "\n\n" +
+			field("source", source) + field("kind", string(row.Kind)) + field("pays", string(row.Pays)) + field("window", row.Window)
+	}
 	hint := pickHint
-	if m.effort != "" {
+	if m.effort != "" && m.assign == nil {
 		view += "\n" + look.SectionLabel(effortHead) + "\n" + look.Title(string(m.effort)) + look.Faint(effortHint) + "\n"
 	}
-	if m.assign != "" {
-		view += "\n" + look.SectionLabel(assignHead) + "\n" + look.Title(m.assign.Label()) + "\n"
+	if m.assign != nil {
+		view += "\n" + look.SectionLabel(assignHead) + "\n" + look.Title(m.assign.Name) + "\n"
 		hint = bindHint
 	}
 	if row.excluded() {

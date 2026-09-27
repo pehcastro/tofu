@@ -425,6 +425,7 @@ func appQuota() []frame.Quota {
 		for _, window := range result.report.Windows {
 			quotas = append(quotas, frame.Quota{
 				Label:    string(result.report.Provider) + " " + window.ID,
+				Account:  "#" + strconv.FormatInt(result.row, 10),
 				Fraction: window.Used.Fraction,
 				Reported: window.Used.Reported,
 				ResetsAt: window.ResetsAt,

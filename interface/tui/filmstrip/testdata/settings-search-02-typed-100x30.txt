@@ -4,7 +4,7 @@
                                                                                                     
   CATEGORIES            › Theme                                                         tofu  ▾     
   › Appearance    05      tofu uses Zed Nu Disco; choose a palette                                  
-    Models & rol… 02                                                                                
+    Models & rol… 01                                                                                
     Interaction                                                                     fortable  ▾     
     Context       Search settings                                              esc                  
     Files         Type to filter · ↑↓ select · enter jump                                           

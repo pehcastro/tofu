@@ -31,6 +31,7 @@ type Head struct {
 
 type Quota struct {
 	Label    string
+	Account  string
 	Fraction float64
 	Reported bool
 	ResetsAt time.Time

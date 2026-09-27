@@ -22,6 +22,8 @@ func Children(agents []roster.SubAgent, now time.Time, steps int, spent map[stri
 		}
 		children[index] = Child{
 			Name:   "c" + strconv.Itoa(index+1),
+			Agent:  agent.Agent,
+			Model:  agent.Model,
 			Owns:   agent.Owns,
 			Doing:  agent.Mission,
 			Since:  since,

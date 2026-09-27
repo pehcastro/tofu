@@ -4,26 +4,26 @@
                                                                                                     
   CATEGORIES            › Decision cap                                                     0  ▾     
     Appearance    05      decision cap per turn, zero means no cap                                  
-    Models & rol… 02                                                                                
+    Models & rol… 01                                                                                
     Interaction   05      Sub-agents                                                        ● on    
     Context       06      a turn may spawn a sub-agent                                              
     Files         03                                                                                
     Shell         05      Agent folders                                   tofu,agents,claude  ▾     
-  › Turn          03      the folders sub-agents are read from, in order, as a comma list of to…    
+  › Turn          07      the folders sub-agents are read from, in order, as a comma list of to…    
     Startup       01                                                                                
-                        enter change  ·  ctrl+k search  ·  esc chat                                 
-  NAVIGATE                                                                                          
+                          Genius tier                                                default  ▾     
+  NAVIGATE                the model @genius names, and opus in a shared agent file; empty runs …    
   ↑↓ setting · ←→                                                                                   
-  section                                                                                           
-  ctrl+k search ·                                                                                   
+  section                 Smart tier                                                 default  ▾     
+  ctrl+k search ·         the model @smart names, and sonnet in a shared agent file; empty runs…    
   esc chat                                                                                          
+                          Worker tier                                                default  ▾     
+                          the model @worker names, and haiku in a shared agent file; empty runs…    
                                                                                                     
+                          Dumb tier                                                  default  ▾     
+                          the model @dumb names; empty runs the orchestrator's model                
                                                                                                     
-                                                                                                    
-                                                                                                    
-                                                                                                    
-                                                                                                    
-                                                                                                    
+                        enter change  ·  ctrl+k search  ·  esc chat                                 
                                                                                                     
                                                                                                     
                                                                                                     

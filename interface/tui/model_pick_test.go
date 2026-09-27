@@ -65,7 +65,7 @@ func pickerApp(t *testing.T, ran chan Pick, wires func() []Wire) *App {
 	})
 	app.Init()
 	app.Update(tea.WindowSizeMsg{Width: 120, Height: 36})
-	app.openPicker(false)
+	app.openPicker("")
 	return app
 }
 
@@ -179,7 +179,7 @@ func TestThePickerOffersOnlyTheSubscriptionsTheTurnCanRun(t *testing.T) {
 	app := newTestApp(Options{Repo: testRepo, Now: fixedClock(), Wires: anthropicAlone, Models: shippedFixture})
 	app.Init()
 	app.Update(tea.WindowSizeMsg{Width: 120, Height: 36})
-	app.openPicker(false)
+	app.openPicker("")
 	signed := map[string]bool{}
 	for _, wire := range app.wires {
 		signed[wire.Provider] = true
@@ -239,7 +239,7 @@ func TestThePickSurvivesThePickerClosing(t *testing.T) {
 	app := newTestApp(Options{Repo: testRepo, Now: fixedClock(), Wires: bothWires, Models: shippedFixture})
 	app.Init()
 	app.Update(tea.WindowSizeMsg{Width: 120, Height: 36})
-	app.openPicker(false)
+	app.openPicker("")
 	pickSonnet(t, app)
 	if app.current != screenChat || app.top() != nil {
 		t.Fatalf("enter left the app on screen %d with %T open, want chat", app.current, app.top())

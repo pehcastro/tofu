@@ -4,12 +4,12 @@
                                                                                                     
   CATEGORIES            › Compaction                                                adaptive  ▾     
     Appearance    05      Automatic transcript compaction; not built yet, so no choice changes …    
-    Models & rol… 02                                                                                
+    Models & rol… 01                                                                                
     Interaction   05      Tool detail                                                      ○ off    
   › Context       06      chat shows every tool call                                                
     Files         03                                                                                
     Shell         05      Agent feeds                                                   full  ▾     
-    Turn          03      full keeps every sub-agents event, summary the latest 200, off shows …    
+    Turn          07      full keeps every sub-agents event, summary the latest 200, off shows …    
     Startup       01                                                                                
                           Images                                                        auto  ▾     
   NAVIGATE                auto sends a pasted image only to a model that can see, inline always…    

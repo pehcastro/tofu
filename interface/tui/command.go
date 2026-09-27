@@ -81,7 +81,7 @@ func (a *App) runCommand(name string) tea.Cmd {
 	case "shells":
 		return a.show(screenShells)
 	case "models":
-		a.openPicker(false)
+		a.openPicker("")
 	case "status":
 		a.push(quotaDialog{})
 	case "attach":

@@ -15,7 +15,7 @@ type Provider struct {
 	Source string
 }
 
-func providerBlock(providers []Provider) string {
+func providerBlock(providers []Provider, width int) string {
 	block := look.SectionLabel("Providers")
 	if len(providers) == 0 {
 		return block + "\n" + look.Muted("no provider is set up yet")
@@ -34,7 +34,7 @@ func providerBlock(providers []Provider) string {
 		}
 		block += "\n" + look.Title(provider.Name) + "  " + look.Muted(value)
 		if provider.Source != "" {
-			block += "\n" + look.Faint(provider.Source)
+			block += "\n" + look.Faint(fitLeft(provider.Source, width))
 		}
 	}
 	return block

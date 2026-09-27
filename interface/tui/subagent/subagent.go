@@ -18,6 +18,8 @@ type Call struct {
 
 type Child struct {
 	Name   string
+	Agent  string
+	Model  string
 	Owns   []string
 	Doing  string
 	Since  time.Duration

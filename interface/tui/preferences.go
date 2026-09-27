@@ -13,19 +13,22 @@ import (
 	library "tofu/internal/llm/models"
 	isession "tofu/internal/session"
 	isettings "tofu/internal/settings"
+	isubagent "tofu/internal/subagent"
 )
 
 const (
-	animationsOff   = "off"
-	switchOn        = "on"
-	switchOff       = "off"
-	rolesCategory   = "Models & roles"
-	roleKeyPrefix   = "role:"
-	keybindingsKey  = "keybindings"
-	hostKey         = "host"
-	toolEventKind   = "tool"
-	defaultSource   = "default"
-	appearanceGroup = "Appearance"
+	animationsOff     = "off"
+	switchOn          = "on"
+	switchOff         = "off"
+	rolesCategory     = "Models & roles"
+	roleKeyPrefix     = "role:"
+	agentKeyPrefix    = "agent:"
+	orchestratorLabel = "Orchestrator model"
+	keybindingsKey    = "keybindings"
+	hostKey           = "host"
+	toolEventKind     = "tool"
+	defaultSource     = "default"
+	appearanceGroup   = "Appearance"
 )
 
 type preview struct{ key, value string }
@@ -93,7 +96,7 @@ func (a *App) applyIntent(intent settings.Intent) tea.Cmd {
 	case settings.ActionOpenHost:
 		cmd = a.push(&hostDialog{hostkeys.NewHost(a.shortcuts)})
 	case settings.ActionOpenRole:
-		a.openPicker(true)
+		a.openPicker(intent.Key)
 	case settings.ActionClose:
 		if a.intro.settings {
 			cmd = a.returnToCover()
@@ -232,18 +235,36 @@ func (a *App) refreshSettingsRows() {
 	a.settings.SetDensity(a.text(isettings.Density))
 }
 
-func (a *App) roleRows() []settings.Row {
-	if a.roles == nil {
-		a.roles = map[library.RoleID]string{}
-		if loaded, err := a.options.Models(); err == nil {
-			for _, role := range loaded.Roles {
-				a.roles[role.ID] = role.Model.Slug()
-			}
+func (a *App) readRoles() {
+	if a.roles != nil {
+		return
+	}
+	a.roles = map[library.RoleID]string{}
+	if loaded, err := a.options.Models(); err == nil {
+		for _, role := range loaded.Roles {
+			a.roles[role.ID] = role.Model.Slug()
 		}
 	}
-	var rows []settings.Row
-	for _, role := range library.RoleIDs() {
-		rows = append(rows, settings.Row{Key: roleKeyPrefix + string(role), Category: rolesCategory, Label: role.Label(), Description: role.What(), Value: a.roles[role], Action: settings.RowRole})
+	a.defined = nil
+	if a.options.Agents != nil {
+		a.defined = a.options.Agents().Definitions
+	}
+}
+
+func runsOn(definition isubagent.Definition) string {
+	if definition.Runs == isubagent.RunsModel {
+		return definition.Model
+	}
+	return string(definition.Runs)
+}
+
+func (a *App) roleRows() []settings.Row {
+	a.readRoles()
+	rows := []settings.Row{{Key: roleKeyPrefix + string(library.RoleOrchestrator), Category: rolesCategory, Label: orchestratorLabel,
+		Description: library.RoleOrchestrator.What(), Value: a.roles[library.RoleOrchestrator], Action: settings.RowRole}}
+	for _, definition := range a.defined {
+		rows = append(rows, settings.Row{Key: agentKeyPrefix + definition.Name, Category: rolesCategory, Label: definition.Name, Origin: definition.Origin,
+			Description: definition.Description, Value: runsOn(definition), Source: definition.AssignedIn, Path: definition.Path, Action: settings.RowSubAgent})
 	}
 	return rows
 }

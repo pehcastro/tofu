@@ -4,12 +4,12 @@
                                                                                                     
   CATEGORIES              Theme                                                         tofu  ▾     
   › Appearance    05      tofu uses Zed Nu Disco; choose a palette                                  
-    Models & rol… 02                                                                                
+    Models & rol… 01                                                                                
     Interaction   05      Density                                                comfortable  ▾     
     Context       06      Spacing across lists and panels                                           
     Files         03                                                                                
     Shell         05     Status bar                                     esc           subtle  ▾     
-    Turn          03     Context, quotas, and runtime counters                                      
+    Turn          07     Context, quotas, and runtime counters                                      
     Startup       01                                                                                
                            compact                                                  detailed  ▾     
   NAVIGATE                                                                                          
@@ -34,12 +34,12 @@
                                                                                                     
   CATEGORIES              Theme                                                         tofu  ▾     
   › Appearance    05      tofu uses Zed Nu Disco; choose a palette                                  
-    Models & rol… 02                                                                                
+    Models & rol… 01                                                                                
     Interaction   05      Density                                                comfortable  ▾     
     Context       06      Spacing across lists and panels                                           
     Files         03                                                                                
     Shell         05     Status bar                                     esc           subtle  ▾     
-    Turn          03     Context, quotas, and runtime counters                                      
+    Turn          07     Context, quotas, and runtime counters                                      
     Startup       01                                                                                
                            compact                                                    hidden  ▾     
   NAVIGATE                                                                                          
@@ -64,12 +64,12 @@
                                                                                                     
   CATEGORIES              Theme                                                         tofu  ▾     
   › Appearance    05      tofu uses Zed Nu Disco; choose a palette                                  
-    Models & rol… 02                                                                                
+    Models & rol… 01                                                                                
     Interaction   05      Density                                                comfortable  ▾     
     Context       06      Spacing across lists and panels                                           
     Files         03                                                                                
     Shell         05      Animations                                                  subtle  ▾     
-    Turn          03      Motion for conversational states                                          
+    Turn          07      Motion for conversational states                                          
     Startup       01                                                                                
                         › Status bar                                                 compact  ▾     
   NAVIGATE                Context, quotas, and runtime counters                                     

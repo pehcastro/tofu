@@ -85,7 +85,7 @@ func (a *App) shortcut(pressed string) (tea.Cmd, bool) {
 	case action == settingsAction:
 		return a.show(screenSettings), true
 	case action == modelsAction:
-		a.openPicker(false)
+		a.openPicker("")
 	case action == quoteAction:
 		return a.quoteSelection(), true
 	}

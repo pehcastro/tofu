@@ -72,7 +72,11 @@ func testLibrary() library.Library {
 
 func testPicker(width, height int) Model {
 	loaded := testLibrary()
-	built := Build(loaded, everySource(loaded))
+	targets := []Target{
+		{Name: "orchestrator", Job: library.RoleOrchestrator.What(), Assigned: loaded.Models[0].Slug(), Role: library.RoleOrchestrator},
+		{Name: "go-dev", Job: "every Go ticket", Assigned: "inherit"},
+	}
+	built := Build(loaded, everySource(loaded), targets)
 	built.SetSize(width, height)
 	return built
 }
@@ -90,7 +94,7 @@ func TestEveryRowSpellsSourceSlashModel(t *testing.T) {
 	for _, one := range loaded.Models {
 		known[paidFor{one.Subscription, one.ID}] = true
 	}
-	for _, group := range Build(loaded, everySource(loaded)).Groups {
+	for _, group := range Build(loaded, everySource(loaded), nil).Groups {
 		for _, row := range group.Rows {
 			source, name, found := strings.Cut(row.Slug, "/")
 			if !found {
@@ -134,22 +138,22 @@ func TestAnEffortOneSubscriptionRefusesFallsBackOnTheOther(t *testing.T) {
 func TestModelsSeparateProvidersAndRoleAssignments(t *testing.T) {
 	m := testPicker(120, 36)
 	m.Key("tab")
-	if m.tab != tabRoles || !strings.Contains(ansi.Strip(m.View()), "ROLES") {
+	if m.tab != tabRoles || !strings.Contains(ansi.Strip(m.View()), "ROLE PRESETS") {
 		t.Fatalf("tab did not switch to roles: tab=%d", m.tab)
 	}
 	m.Key("down")
-	if got := m.Key("enter"); got.Action != None || m.assign != library.RoleChild || m.tab != tabModels {
-		t.Fatalf("the child role did not request a model: %+v, assign %q, tab %d", got, m.assign, m.tab)
+	if got := m.Key("enter"); got.Action != None || m.assign != &m.targets[1] || m.tab != tabModels {
+		t.Fatalf("the go-dev row did not request a model: %+v, assign %+v, tab %d", got, m.assign, m.tab)
 	}
 	for _, key := range strings.Split("gpt-5.6-luna", "") {
 		m.Key(key)
 	}
-	want := Intent{Action: Bind, Role: library.RoleChild, Slug: "codex-sub/gpt-5.6-luna"}
+	want := Intent{Action: Assign, Agent: "go-dev", Slug: "codex-sub/gpt-5.6-luna"}
 	if got := m.Key("enter"); got != want {
-		t.Fatalf("binding returned %+v, want %+v", got, want)
+		t.Fatalf("assigning returned %+v, want %+v", got, want)
 	}
-	if m.bound[library.RoleChild] != want.Slug {
-		t.Fatalf("the roles tab still shows %q for the child", m.bound[library.RoleChild])
+	if m.targets[1].Assigned != want.Slug {
+		t.Fatalf("the roles tab still shows %q for go-dev", m.targets[1].Assigned)
 	}
 }
 
@@ -204,7 +208,7 @@ func TestPickerGoldens(t *testing.T) {
 		"picker-roles-120x36.golden": roles.View(),
 		"picker-60x20.golden":        testPicker(60, 20).View(),
 		"picker-empty-120x36.golden": func() string {
-			empty := Build(library.Library{}, nil)
+			empty := Build(library.Library{}, nil, nil)
 			empty.SetSize(120, 36)
 			return empty.View()
 		}(),

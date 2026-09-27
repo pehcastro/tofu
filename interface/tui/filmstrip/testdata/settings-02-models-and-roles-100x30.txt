@@ -2,14 +2,14 @@
   tofu settings         Models & roles                                              global scope    
   Global preferences    Choose a row to inspect and change its value.                               
                                                                                                     
-  CATEGORIES            › orchestrator                                                        ▾     
+  CATEGORIES            › Orchestrator model                                                  ▾     
     Appearance    05      the model that plans and hands work to sub-agents                         
-  › Models & rol… 02                                                                                
-    Interaction   05      (unnamed sub-agent)                                                 ▾     
-    Context       06      a spawn that names no sub-agent                                           
+  › Models & rol… 01                                                                                
+    Interaction   05    enter change  ·  ctrl+k search  ·  esc chat                                 
+    Context       06                                                                                
     Files         03                                                                                
-    Shell         05    enter change  ·  ctrl+k search  ·  esc chat                                 
-    Turn          03                                                                                
+    Shell         05                                                                                
+    Turn          07                                                                                
     Startup       01                                                                                
                                                                                                     
   NAVIGATE                                                                                          

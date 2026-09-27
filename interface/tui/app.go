@@ -27,6 +27,7 @@ import (
 	library "tofu/internal/llm/models"
 	isession "tofu/internal/session"
 	isettings "tofu/internal/settings"
+	isubagent "tofu/internal/subagent"
 	"tofu/internal/sys"
 )
 
@@ -142,6 +143,7 @@ type Options struct {
 	Login        func() *exec.Cmd
 	Wires        func() []Wire
 	Models       func() (library.Library, error)
+	Agents       func() isubagent.Found
 	Providers    []settings.Provider
 	Quota        func() []frame.Quota
 	Settings     *isettings.Store
@@ -200,6 +202,7 @@ type App struct {
 	defaults       []isettings.Spec
 	preview        preview
 	roles          map[library.RoleID]string
+	defined        []isubagent.Definition
 	shortcuts      map[string]string
 	dialogs        []dialog
 	intro          intro

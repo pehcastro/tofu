@@ -4,7 +4,7 @@
                       
   CATEGORIES              Composer                                                  standard  ▾ 
     Appearance    05      Enter sends; Shift+Enter inserts a line break
-    Models & rol… 02  
+    Models & rol… 01  
   › Interaction                                                                         edit  ▾ 
     Context       Keybindings                                                  esc  
     Files         Tofu shortcuts                                                    

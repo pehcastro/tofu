@@ -254,7 +254,17 @@ func (a *App) choseModel(intent models.Intent) tea.Cmd {
 		a.roles = nil
 		a.refreshSettingsRows()
 		a.notify(string(intent.Role) + " now runs " + intent.Slug)
-		return nil
+		return a.pop()
+	case models.Assign:
+		path, err := a.assignSubAgent(intent.Agent, intent.Slug)
+		if err != nil {
+			a.notify(err.Error())
+			return nil
+		}
+		a.roles = nil
+		a.refreshSettingsRows()
+		a.notify(a.nowRuns(intent.Agent) + ", in " + path)
+		return a.pop()
 	case models.Login:
 		if a.options.Login == nil {
 			return nil

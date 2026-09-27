@@ -20,6 +20,7 @@ const (
 )
 
 type pollResult struct {
+	row       int64
 	report    quota.Report
 	err       error
 	unusable  string
@@ -155,11 +156,11 @@ func pollRows(
 	for _, row := range rows {
 		provider := quota.Provider(row.Credential.Provider)
 		if urls == nil && sys.CredentialsHiddenFromTests() {
-			results = append(results, pollResult{report: quota.Report{Provider: provider}, unusable: noVendorInATest})
+			results = append(results, pollResult{row: row.ID, report: quota.Report{Provider: provider}, unusable: noVendorInATest})
 			continue
 		}
 		if cause := row.Unusable(now()); cause != "" {
-			results = append(results, pollResult{report: quota.Report{Provider: provider}, unusable: cause})
+			results = append(results, pollResult{row: row.ID, report: quota.Report{Provider: provider}, unusable: cause})
 			continue
 		}
 		spec, err := cred.Lookup(string(row.Credential.Provider))
@@ -172,7 +173,7 @@ func pollRows(
 			Row:        row.ID,
 			Credential: cred.NewAccountManager(store, spec, row.ID),
 		})
-		results = append(results, pollResult{report: report, err: err})
+		results = append(results, pollResult{row: row.ID, report: report, err: err})
 	}
 	for index := range results {
 		results[index].recordErr = recordErr

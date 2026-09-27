@@ -26,10 +26,13 @@ const (
 	rolesTab     = "Roles"
 	filterPrompt = "> "
 	filterHint   = "Type to filter"
+	disabledSlug = "none"
+	inheritSlug  = "inherit"
 )
 
 type Row struct {
 	Slug   string
+	Label  string
 	Use    library.Use
 	Kind   library.Kind
 	Pays   library.Pays
@@ -38,6 +41,21 @@ type Row struct {
 }
 
 func (r Row) excluded() bool { return r.Use == library.UseExcluded }
+
+func (r Row) name() (source, model string) {
+	if r.Label != "" {
+		return r.Reason, r.Label
+	}
+	source, model, _ = strings.Cut(r.Slug, "/")
+	return source, model
+}
+
+type Target struct {
+	Name, Job, Assigned string
+	Role                library.RoleID
+}
+
+func (t Target) subAgent() bool { return t.Role == "" }
 
 type Group struct {
 	Source  string
@@ -64,6 +82,7 @@ const (
 	None Action = iota
 	Pick
 	Bind
+	Assign
 	Login
 	Close
 )
@@ -72,24 +91,25 @@ type Intent struct {
 	Action Action
 	Slug   string
 	Role   library.RoleID
+	Agent  string
 	Effort llm.Effort
 }
 
 type Model struct {
 	Groups   []Group
 	drawn    *drawn
-	bound    map[library.RoleID]string
+	targets  []Target
 	filter   textinput.Model
 	tab      tab
 	provider int
 	cursor   int
-	assign   library.RoleID
+	assign   *Target
 	effort   llm.Effort
 	width    int
 	height   int
 }
 
-func Build(loaded library.Library, sources []Source) Model {
+func Build(loaded library.Library, sources []Source, targets []Target) Model {
 	rows := map[library.Subscription][]Row{}
 	for _, one := range loaded.Models {
 		if one.Kind != library.KindLLM {
@@ -111,17 +131,19 @@ func Build(loaded library.Library, sources []Source) Model {
 		}
 		groups = append(groups, Group{Source: string(source.ID), Rows: rows[source.ID], Efforts: source.Efforts})
 	}
-	bound := map[library.RoleID]string{}
-	for _, role := range loaded.Roles {
-		bound[role.ID] = role.Model.Slug()
-	}
 	filter := textinput.New()
 	filter.Prompt, filter.Placeholder = filterPrompt, filterHint
 	filter.SetStyles(look.FilterStyles())
 	filter.Focus()
-	built := Model{Groups: groups, drawn: &drawn{}, bound: bound, filter: filter, effort: llm.EffortDefault}
+	built := Model{Groups: groups, drawn: &drawn{}, targets: targets, filter: filter, effort: llm.EffortDefault}
 	built.settle()
 	return built
+}
+
+func (m *Model) AssignTo(at int) {
+	m.assign, m.tab = &m.targets[at], tabModels
+	m.filter.Reset()
+	m.reset()
 }
 
 func (m *Model) SetSize(width, height int) {
@@ -139,6 +161,16 @@ func (m Model) providers() []string {
 func (m Model) visible() []Row {
 	query := strings.ToLower(strings.TrimSpace(m.filter.Value()))
 	var rows []Row
+	if m.assign != nil && m.assign.subAgent() && m.provider == 0 {
+		for _, row := range []Row{
+			{Slug: disabledSlug, Label: "none (disabled)", Reason: "the orchestrator is never offered it"},
+			{Slug: inheritSlug, Label: "inherit", Reason: "runs on the orchestrator's model"},
+		} {
+			if strings.Contains(row.Label, query) {
+				rows = append(rows, row)
+			}
+		}
+	}
 	for i, group := range m.Groups {
 		if m.provider != 0 && m.provider != i+1 {
 			continue
@@ -217,11 +249,15 @@ func (m *Model) reset() {
 	m.settle()
 }
 
-func (m *Model) move(by int) {
-	count := len(library.RoleIDs())
-	if m.tab == tabModels {
-		count = len(m.visible())
+func (m Model) count() int {
+	if m.tab == tabRoles {
+		return len(m.targets)
 	}
+	return len(m.visible())
+}
+
+func (m *Model) move(by int) {
+	count := m.count()
 	if count == 0 {
 		return
 	}
@@ -267,10 +303,9 @@ func (m *Model) settle() {
 
 func (m *Model) choose() Intent {
 	if m.tab == tabRoles {
-		m.assign = library.RoleIDs()[m.cursor]
-		m.tab = tabModels
-		m.filter.Reset()
-		m.reset()
+		if m.cursor < len(m.targets) {
+			m.AssignTo(m.cursor)
+		}
 		return Intent{}
 	}
 	row, picked := m.Picked()
@@ -279,13 +314,15 @@ func (m *Model) choose() Intent {
 		return Intent{}
 	case row.excluded():
 		return Intent{Action: Login, Slug: row.Slug}
-	case m.assign != "":
-		role := m.assign
-		m.assign = ""
-		m.bound[role] = row.Slug
-		return Intent{Action: Bind, Role: role, Slug: row.Slug}
+	case m.assign == nil:
+		return Intent{Action: Pick, Slug: row.Slug, Effort: m.effort}
 	}
-	return Intent{Action: Pick, Slug: row.Slug, Effort: m.effort}
+	target := m.assign
+	m.assign, target.Assigned = nil, row.Slug
+	if target.subAgent() {
+		return Intent{Action: Assign, Agent: target.Name, Slug: row.Slug}
+	}
+	return Intent{Action: Bind, Role: target.Role, Slug: row.Slug}
 }
 
 func (m *Model) Click(x, y int) Intent {
@@ -322,17 +359,16 @@ func (m *Model) clickSide(line string, x, row int) {
 }
 
 func (m *Model) clickList(line string, x, row int) Intent {
-	top, start, labels := rolesTop, 0, []string{}
+	top, labels := catalogTop, []string{}
+	start, end := m.page()
 	if m.tab == tabRoles {
-		for _, role := range library.RoleIDs() {
-			labels = append(labels, string(role))
+		top = rolesTop
+		for _, target := range m.targets[start:end] {
+			labels = append(labels, target.Name)
 		}
 	} else {
-		var end int
-		top = catalogTop
-		start, end = m.page()
 		for _, one := range m.visible()[start:end] {
-			_, model, _ := strings.Cut(one.Slug, "/")
+			_, model := one.name()
 			labels = append(labels, model)
 		}
 	}

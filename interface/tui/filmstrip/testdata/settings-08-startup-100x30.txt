@@ -4,12 +4,12 @@
                                                                                                     
   CATEGORIES            › Hide introduction                                                ○ off    
     Appearance    05      Skip the new-project welcome and open chat directly                       
-    Models & rol… 02                                                                                
+    Models & rol… 01                                                                                
     Interaction   05    enter change  ·  ctrl+k search  ·  esc chat                                 
     Context       06                                                                                
     Files         03                                                                                
     Shell         05                                                                                
-    Turn          03                                                                                
+    Turn          07                                                                                
   › Startup       01                                                                                
                                                                                                     
   NAVIGATE                                                                                          

@@ -18,6 +18,7 @@ const (
 	chatRightColumns    = 82
 	footerSeparator     = "  |  "
 	subscriptionSuffix  = "-sub"
+	rightSeparator      = "  ·  "
 )
 
 func Footer(status Status, width int, right string) string {
@@ -31,20 +32,46 @@ func Footer(status Status, width int, right string) string {
 	if width < chatRightColumns {
 		right = ""
 	}
-	room := width
-	if right != "" {
-		room = width - lipgloss.Width(right) - 1
+	rights := []string{right}
+	if bare, _ := footerLeft(status, width, noQuota); cells(bare) <= roomBeside(width, right) {
+		for shorter := right; shorter != ""; {
+			shorter = shorterRight(shorter)
+			rights = append(rights, shorter)
+		}
 	}
-	head, tail := footerLeft(status, width, fullLabel)
-	for form := sourceLabel; cells(head) > room && form <= noQuota; form++ {
-		head, tail = footerLeft(status, width, form)
+	for _, kept := range rights {
+		for form := fullLabel; form < noQuota; form++ {
+			if head, tail := footerLeft(status, width, form); cells(head) <= roomBeside(width, kept) {
+				return footerRow(slices.Concat(head, tail), width, kept)
+			}
+		}
 	}
-	spans := slices.Concat(head, tail)
+	head, tail := footerLeft(status, width, noQuota)
+	return footerRow(slices.Concat(head, tail), width, right)
+}
+
+func roomBeside(width int, right string) int {
+	if right == "" {
+		return width
+	}
+	return width - lipgloss.Width(right) - 1
+}
+
+func footerRow(spans []span, width int, right string) string {
 	left := draw(spans)
-	if right != "" && cells(spans) > room {
+	if room := roomBeside(width, right); right != "" && cells(spans) > room {
 		left = ansi.Truncate(left, max(0, room), "…")
 	}
 	return look.ChromeRow(width, look.Panel, left, right)
+}
+
+func shorterRight(right string) string {
+	plain := ansi.Strip(right)
+	at := strings.LastIndex(plain, rightSeparator)
+	if at < 0 {
+		return ""
+	}
+	return ansi.Truncate(right, ansi.StringWidth(plain[:at])+1, "")
 }
 
 type quotaLabel int
@@ -89,7 +116,12 @@ func footerLeft(status Status, width int, form quotaLabel) (head, tail []span) {
 		if form == noQuota || index > 0 && width < secondSourceColumns {
 			break
 		}
-		head = append(head, panel(footerSeparator+form.of(quota)+" ", look.Text))
+		name := form.of(quota)
+		if accountsOf(status.Quotas, sourceOf(quota)) > 1 {
+			first, rest, _ := strings.Cut(name, " ")
+			name = strings.TrimSpace(first + " " + quota.Account + " " + rest)
+		}
+		head = append(head, panel(footerSeparator+name+" ", look.Text))
 		if quota.Reported {
 			head = append(head, panel(widget.Percent(quota.Fraction), look.Amber))
 		} else {
@@ -124,6 +156,16 @@ func fullestPerSource(quotas []Quota, inUse []string) []Quota {
 		}
 	}
 	return shown
+}
+
+func accountsOf(quotas []Quota, source string) int {
+	var accounts []string
+	for _, quota := range quotas {
+		if sourceOf(quota) == source && !slices.Contains(accounts, quota.Account) {
+			accounts = append(accounts, quota.Account)
+		}
+	}
+	return len(accounts)
 }
 
 func sourceOf(quota Quota) string {

@@ -2,6 +2,7 @@ package tui
 
 import (
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -14,6 +15,7 @@ import (
 	"tofu/interface/tui/look"
 	"tofu/interface/tui/pointer"
 	isettings "tofu/internal/settings"
+	isubagent "tofu/internal/subagent"
 	"tofu/internal/widget"
 )
 
@@ -116,7 +118,7 @@ func (a *App) base() string {
 	top, hits := frame.Top(head, tabs, int(a.tab()), a.width)
 	a.hits = hits
 	status := a.status
-	status.At, status.Mode, status.InUse = head.At, frame.StatusMode(a.text(isettings.StatusBar)), []string{a.provider}
+	status.At, status.Mode, status.InUse = head.At, frame.StatusMode(a.text(isettings.StatusBar)), a.sourcesInUse()
 	if len(a.requirements) > 0 {
 		status.Mode = frame.StatusHidden
 	}
@@ -129,6 +131,16 @@ func (a *App) base() string {
 		return pointer.Overlay(framed, a.width, track)
 	}
 	return framed
+}
+
+func (a *App) sourcesInUse() []string {
+	sources := []string{a.provider}
+	for _, child := range a.children {
+		if source, _, _ := strings.Cut(child.Model, "/"); child.State == isubagent.Working && source != "" && !slices.Contains(sources, source) {
+			sources = append(sources, source)
+		}
+	}
+	return sources
 }
 
 func (a *App) body() string {
@@ -178,7 +190,7 @@ func (a *App) retention() feed.Retention {
 func (a *App) syncFeed() {
 	agents := make([]feed.Agent, len(a.children))
 	for index, child := range a.children {
-		agents[index] = feed.Agent{Name: child.Name, State: child.State, Doing: child.Doing, Since: child.Since, Owns: child.Owns, Report: child.Report}
+		agents[index] = feed.Agent{Name: child.Name, Definition: child.Agent, Model: child.Model, State: child.State, Doing: child.Doing, Since: child.Since, Owns: child.Owns, Report: child.Report}
 	}
 	a.feed.SetDensity(a.text(isettings.Density))
 	a.feed.SetRetention(a.retention())

@@ -4,14 +4,14 @@
 
 
                                                                                                   
-   Select model            ROLES                                       SELECTION                  
-   11 models               enter binds · tab models                                               
-                                                                       orchestrator               
-   Models  Roles           › orchestrator                              the model that plans and   
-                             the model that plans and hands work to    hands work to sub-agents   
-   PROVIDERS               sub-agents                                                             
-     all                     (unnamed sub-agent)                       BOUND MODEL                
-     claude-sub              a spawn that names no sub-agent           nothing is bound, so it    
+   Select model            ROLE PRESETS                                SELECTION                  
+   11 models               enter assign · tab                                                     
+                                                                       Orchestrator model         
+   Models  Roles           › Orchestrator model                        the model that plans and   
+                             the model that plans and hands work to …  hands work to sub-agents   
+   PROVIDERS                                                                                      
+     all                                                               ASSIGNED MODEL             
+     claude-sub                                                        nothing is bound, so it    
                                                                        runs on the subscription   
                                                                        default                    
                                                                                                   

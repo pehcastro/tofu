@@ -4,12 +4,12 @@
                                                                                                     
   CATEGORIES                                                                            tofu  ▾     
   › Appearance    05     Theme                                          esc                         
-    Models & rol… 02     tofu uses Zed Nu Disco; choose a palette                                   
+    Models & rol… 01     tofu uses Zed Nu Disco; choose a palette                                   
     Interaction   05                                                             comfortable  ▾     
     Context       06     >  tofu                                                                    
     Files         03                                                                                
     Shell         05       tofu light                                                 subtle  ▾     
-    Turn          03                                                                                
+    Turn          07                                                                                
     Startup       01       tofu dusk                                                                
                                                                                      compact  ▾     
   NAVIGATE                 Solarized Light                                                          

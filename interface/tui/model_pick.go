@@ -1,12 +1,17 @@
 package tui
 
 import (
+	"os"
+	"slices"
 	"strings"
 
 	"tofu/interface/tui/models"
 	"tofu/interface/tui/session"
+	"tofu/interface/tui/settings"
 	"tofu/internal/llm"
 	library "tofu/internal/llm/models"
+	isettings "tofu/internal/settings"
+	isubagent "tofu/internal/subagent"
 	shipped "tofu/library"
 )
 
@@ -25,7 +30,7 @@ func shippedModels() (library.Library, error) {
 	return library.Load(layers)
 }
 
-func (a *App) openPicker(onRoles bool) {
+func (a *App) openPicker(assign string) {
 	if len(a.wires) == 0 {
 		a.notify(noWireToPick)
 		return
@@ -39,12 +44,52 @@ func (a *App) openPicker(onRoles bool) {
 	for _, wire := range a.wires {
 		sources = append(sources, models.Source{ID: library.Subscription(wire.Provider), Efforts: wire.Efforts})
 	}
-	picker := models.Build(loaded, sources)
+	rows := a.roleRows()
+	targets := make([]models.Target, len(rows))
+	for index, row := range rows {
+		targets[index] = models.Target{Name: row.Label, Job: row.Description, Assigned: row.Value}
+		if row.Action == settings.RowRole {
+			targets[index].Role = library.RoleID(strings.TrimPrefix(row.Key, roleKeyPrefix))
+		}
+	}
+	picker := models.Build(loaded, sources, targets)
 	picker.SetSize(a.width, a.height)
-	if onRoles {
-		picker.Key("tab")
+	if at := slices.IndexFunc(rows, func(row settings.Row) bool { return row.Key == assign }); at >= 0 {
+		picker.AssignTo(at)
 	}
 	a.push(&modelsDialog{picker})
+}
+
+func (a *App) assignSubAgent(name, slug string) (string, error) {
+	parent := a.options.Root
+	if isettings.Scope(a.settings.Scope) == isettings.Global {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", err
+		}
+		parent = home
+	}
+	return isubagent.Assign(parent, name, slug)
+}
+
+func (a *App) nowRuns(name string) string {
+	a.readRoles()
+	at := slices.IndexFunc(a.defined, func(definition isubagent.Definition) bool { return definition.Name == name })
+	if at < 0 {
+		return name + " is no longer found"
+	}
+	definition := a.defined[at]
+	switch definition.Runs {
+	case isubagent.RunsModel:
+		return name + " now runs " + definition.Model
+	case isubagent.RunsInherit:
+		return name + " now runs on the orchestrator's model"
+	case isubagent.RunsDisabled:
+		return name + " is disabled"
+	case isubagent.RunsRefused:
+		return name + " is refused: " + strings.Join(definition.Refused, "; ")
+	}
+	panic("tui: unknown sub-agent state " + string(definition.Runs))
 }
 
 func (a *App) runNextTurnOn(slug string, effort llm.Effort) {

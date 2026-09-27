@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 
 	"tofu/interface/tui/look"
 	"tofu/internal/widget"
@@ -44,6 +45,9 @@ const (
 	modelsCategory     = "Models & roles"
 	densityCompact     = "compact"
 	densitySpacious    = "spacious"
+	disabledValue      = "disabled"
+	assignmentFile     = "agent-models.yaml"
+	ellipsis           = "…"
 )
 
 type viewKey struct {
@@ -53,6 +57,7 @@ type viewKey struct {
 	dialog                                 choiceState
 	search                                 searchState
 	number                                 numberState
+	scrolled                               inspectorScroll
 }
 
 type viewCache struct {
@@ -65,7 +70,7 @@ type viewCache struct {
 type layout struct{ rail, main, inspector int }
 
 func (m *Model) View() string {
-	key := viewKey{m.width, m.height, m.category, m.cursor, m.Scope, strings.Join(m.Scopes, " "), m.searchKey, m.density, m.branch, m.Query, m.dialog, m.search, m.number}
+	key := viewKey{m.width, m.height, m.category, m.cursor, m.Scope, strings.Join(m.Scopes, " "), m.searchKey, m.density, m.branch, m.Query, m.dialog, m.search, m.number, m.scrolled}
 	if m.cache.view != "" && m.cache.key == key && slices.EqualFunc(m.cache.rows, m.Rows, sameRow) && slices.Equal(m.cache.providers, m.Providers) {
 		return m.cache.view
 	}
@@ -76,7 +81,7 @@ func (m *Model) View() string {
 
 func sameRow(a, b Row) bool {
 	return a.Key == b.Key && a.Category == b.Category && a.Label == b.Label && a.Description == b.Description &&
-		a.Value == b.Value && a.Source == b.Source && a.Kind == b.Kind && a.Action == b.Action &&
+		a.Value == b.Value && a.Source == b.Source && a.Origin == b.Origin && a.Path == b.Path && a.Kind == b.Kind && a.Action == b.Action &&
 		a.Number == b.Number && a.Changed == b.Changed && a.RestartRequired == b.RestartRequired && a.RestartPending == b.RestartPending &&
 		slices.Equal(a.Choices, b.Choices)
 }
@@ -164,13 +169,17 @@ func (m *Model) body() string {
 	main += look.Faint("enter change  ·  " + m.searchHint("  ·  ") + "esc chat")
 	view := look.JoinFixedPanes(look.Surface(geo.rail, m.height, look.Panel, panePad, "\n"+rail), look.Surface(geo.main, m.height, "", panePad, "\n"+main))
 	if geo.inspector > 0 {
-		view = look.JoinFixedPanes(view, look.Surface(geo.inspector, m.height, look.Panel, panePad, "\n"+m.inspector()))
+		view = look.JoinFixedPanes(view, look.Surface(geo.inspector, m.height, look.Panel, panePad, "\n"+m.inspectorPane()))
 	}
 	return look.FixedBlock(m.width, m.height, view)
 }
 
 func (m *Model) settingRow(width int, selected bool, row Row) string {
-	rendered := look.SettingRow(width, selected, row.Label, widget.Fit(row.Description, width-markerCells), m.display(row))
+	label := row.Label
+	if row.Origin != "" {
+		label += "  " + look.Faint(row.Origin)
+	}
+	rendered := look.SettingRow(width, selected, label, widget.Fit(row.Description, width-markerCells), m.display(row))
 	switch m.density {
 	case densityCompact:
 		return strings.SplitN(rendered, "\n", 2)[0]
@@ -186,7 +195,7 @@ func (m *Model) display(row Row) string {
 		return "edit"
 	case RowHostIntegration:
 		return strings.TrimSpace("inspect " + row.Value)
-	case RowRole:
+	case RowRole, RowSubAgent:
 		return row.Value
 	case RowValue:
 	default:
@@ -205,22 +214,67 @@ func (m *Model) display(row Row) string {
 	return row.Value
 }
 
-func (m *Model) inspector() string {
+func (m *Model) inspectorWindow() (lines []string, top, room int) {
+	inner := inspectorWidth - 2*panePad
+	lines = strings.Split(lipgloss.NewStyle().Width(inner).Render(m.inspector(inner)), "\n")
+	room = max(1, m.height-1)
+	if len(lines) > room {
+		room--
+	}
+	if row, _ := m.selected(); m.scrolled.key == row.Key {
+		top = min(m.scrolled.top, max(0, len(lines)-room))
+	}
+	return lines, top, room
+}
+
+func (m *Model) scrollInspector(by int) {
+	lines, top, room := m.inspectorWindow()
+	row, _ := m.selected()
+	m.scrolled = inspectorScroll{key: row.Key, top: min(max(top+by, 0), max(0, len(lines)-room))}
+}
+
+func (m *Model) inspectorPane() string {
+	lines, top, room := m.inspectorWindow()
+	end := min(len(lines), top+room)
+	pane := strings.Join(lines[top:end], "\n")
+	if len(lines) > room {
+		pane += "\n" + look.Faint(fmt.Sprintf("%d-%d/%d · pgup pgdn", top+1, end, len(lines)))
+	}
+	return pane
+}
+
+func fitLeft(text string, width int) string {
+	if over := ansi.StringWidth(text) - width; over > 0 {
+		return ansi.TruncateLeft(text, over+ansi.StringWidth(ellipsis), ellipsis)
+	}
+	return text
+}
+
+func (m *Model) inspector(width int) string {
 	row, ok := m.selected()
 	if !ok {
 		return look.SectionLabel("Selected setting")
 	}
 	value := m.display(row)
-	scope := "Global · a project value overrides it"
-	if m.Scope > 0 {
-		scope = "Project · overrides the global value"
-	}
 	text := look.SectionLabel("Selected setting") + "\n\n" + look.Title(row.Label) + "\n" + look.Muted(row.Description) +
-		"\n\n" + look.SectionLabel("Current value") + "\n" + look.StateBadge(value, value != "off") +
-		"\n\n" + look.SectionLabel("How it works") + "\n" + look.Muted(howItWorks(row)) +
-		"\n\n" + look.SectionLabel("Scope") + "\n" + look.Muted(scope) + "\n" + look.Faint("from "+row.Source)
+		"\n\n" + look.SectionLabel("Current value") + "\n" + look.StateBadge(value, value != "off" && value != disabledValue) +
+		"\n\n" + look.SectionLabel("How it works") + "\n" + look.Muted(howItWorks(row)) + "\n\n"
+	if row.Action == RowSubAgent {
+		assigned := "not assigned, so the definition's own model line decides. enter writes the " + m.Scopes[m.Scope] + " " + assignmentFile
+		if row.Source != "" {
+			assigned = fitLeft(row.Source, width)
+		}
+		text += look.SectionLabel("Definition") + "\n" + look.Faint(row.Origin) + "\n" + look.Muted(fitLeft(row.Path, width)) +
+			"\n\n" + look.SectionLabel("Assignment") + "\n" + look.Muted(assigned)
+	} else {
+		scope := "Global · a project value overrides it"
+		if m.Scope > 0 {
+			scope = "Project · overrides the global value"
+		}
+		text += look.SectionLabel("Scope") + "\n" + look.Muted(scope) + "\n" + look.Faint(fitLeft("from "+row.Source, width))
+	}
 	if row.Category == modelsCategory {
-		text += "\n\n" + providerBlock(m.Providers)
+		text += "\n\n" + providerBlock(m.Providers, width)
 	}
 	return text
 }
@@ -234,6 +288,8 @@ func howItWorks(row Row) string {
 		how = "Inspect tofu shortcuts and host conflicts. Apply previews terminal-only rules, then confirms a backed-up change. Undo removes tofu rules."
 	case row.Action == RowRole:
 		how = "Enter opens the model picker and binds the choice to this role."
+	case row.Action == RowSubAgent:
+		how = "Enter opens the model picker: a model, inherit to run on the orchestrator's model, or none to disable it. The choice wins over the definition's own model line."
 	case row.Kind == Bool:
 		how = "Enter or Space switches it on or off and saves it."
 	case row.Kind == Int:
