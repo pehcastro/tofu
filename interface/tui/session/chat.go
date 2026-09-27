@@ -1,7 +1,6 @@
 package session
 
 import (
-	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -211,8 +210,7 @@ func (m *Model) progressLine(fold []Entry) string {
 	latest := fold[len(fold)-1]
 	tail := expandTail(latest.ID)
 	room := max(m.textWidth()-widget.Cells(tail), 1)
-	live := slices.ContainsFunc(fold, Entry.running)
-	return continuation + widget.Pad(progress.Line{Label: oneLine(latest.label()), Frame: m.frame, Live: live}.View(room), room) + tail
+	return continuation + widget.Pad(progress.Line{Label: oneLine(latest.label()), Frame: m.frame, Live: true}.View(room), room) + tail
 }
 
 func expandTail(id string) string {

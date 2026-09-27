@@ -9,7 +9,7 @@
     handing the policy loader to a child                                                            
                                                                                                     
     · spawning [&qa-1] to read the policy loader                                                    
-    · read internal/judge/policy/resolve.go                              [tool#815e77]  [expand]    
+    ⠋ read internal/judge/policy/resolve.go                              [tool#815e77]  [expand]    
                                                                                                     
                                                                                                     
                                                                                                     
