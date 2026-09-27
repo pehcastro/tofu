@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strings"
 
+	"tofu/internal/llm"
 	"tofu/internal/sys"
 )
 
@@ -101,7 +102,7 @@ type Contract struct {
 
 func Contracts() []Contract {
 	return []Contract{
-		{Kind: modelsDir, Required: []string{"use"}, Optional: []string{"subscription", "reason", "window", "kind", "vision"}},
+		{Kind: modelsDir, Required: []string{"use"}, Optional: []string{"subscription", "reason", "window", "kind", "vision", "efforts"}},
 		{Kind: subscriptionsDir, Required: []string{"provider", "wire", "windows"}, Optional: []string{"not_models"}},
 		{Kind: rolesDir, Required: []string{"model"}},
 	}
@@ -297,6 +298,13 @@ func buildModel(slug string, from *sheet, known map[Subscription]SubscriptionSpe
 	}
 	if !model.Vision.valid() {
 		return model, &Broken{File: from.file, Field: "vision", Why: fmt.Sprintf("vision is %s or %s, or left out when nobody has checked, found %q", VisionSees, VisionBlind, model.Vision)}
+	}
+	for _, raw := range commas(from.values["efforts"]) {
+		effort, err := llm.ParseEffort(raw)
+		if err != nil {
+			return model, &Broken{File: from.file, Field: "efforts", Why: err.Error()}
+		}
+		model.Efforts = append(model.Efforts, effort)
 	}
 	if model.Subscription != "" {
 		spec, carried := known[model.Subscription]

@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"testing/fstest"
+
+	"tofu/internal/llm"
 )
 
 const shippedRoot = "../../../library"
@@ -314,5 +316,45 @@ func TestSubscriptionsCarryTheQuotaWindowsAndTheModelsDoNot(t *testing.T) {
 	}
 	if strings.Contains(string(body), "provider:") || strings.Contains(string(body), "windows:") {
 		t.Fatalf("a model file still carries a vendor or a quota window:\n%s", body)
+	}
+}
+
+func TestAModelSendsOnlyAnEffortItsEntryNames(t *testing.T) {
+	shipped := shippedLibrary(t)
+	for slug, want := range map[string]llm.Effort{
+		"claude-sub/claude-haiku-4-5-20251001": "",
+		"claude-sub/claude-opus-5":             llm.EffortHigh,
+		"claude-sub/claude-sonnet-5":           llm.EffortHigh,
+		"codex-sub/gpt-5.6-sol":                llm.EffortHigh,
+		"codex-sub/gpt-5.6-luna":               llm.EffortHigh,
+		"codex-sub/gpt-5.6-terra":              llm.EffortHigh,
+	} {
+		model, err := shipped.Select(slug)
+		if err != nil {
+			t.Fatalf("%s: %v", slug, err)
+		}
+		if got := model.EffortTaken(llm.EffortHigh); got != want {
+			t.Fatalf("%s asked for high sends %q, want %q", slug, got, want)
+		}
+	}
+
+	unstated := layerOf("user", withSubscriptions(oneFile("models/anthropic/claude-new.yaml", "subscription: claude-sub\nuse: allowed\n")))
+	overridden := layerOf("user", oneFile("models/anthropic/claude-opus-5.yaml", "use: allowed\n"))
+	stated, _ := Load([]Layer{shippedLayer(), unstated, overridden})
+	for slug, want := range map[string]llm.Effort{"claude-sub/claude-new": "", "claude-sub/claude-opus-5": llm.EffortMedium} {
+		model, err := stated.Select(slug)
+		if err != nil {
+			t.Fatalf("%s: %v", slug, err)
+		}
+		if got := model.EffortTaken(llm.EffortMedium); got != want {
+			t.Fatalf("%s asked for medium sends %q, want %q", slug, got, want)
+		}
+	}
+
+	misspelt := layerOf("user", withSubscriptions(oneFile("models/anthropic/claude-new.yaml", "subscription: claude-sub\nuse: allowed\nefforts: low, hihg\n")))
+	_, err := Load([]Layer{misspelt})
+	var broken *BrokenLibrary
+	if !errors.As(err, &broken) || len(broken.Refused) != 1 || broken.Refused[0].Field != "efforts" {
+		t.Fatalf("a misspelt level loads: %v", err)
 	}
 }

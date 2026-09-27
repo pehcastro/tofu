@@ -215,6 +215,7 @@ type App struct {
 	model          string
 	provider       string
 	picked         string
+	chosen         resolvedModel
 	effort         llm.Effort
 	sessionName    string
 	sessionID      string
@@ -244,6 +245,12 @@ type App struct {
 	lastSelection  string
 	drawn          string
 	hits           []frame.Hit
+}
+
+type resolvedModel struct {
+	slug  string
+	model library.Model
+	known bool
 }
 
 type Closed struct{}

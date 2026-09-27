@@ -122,6 +122,7 @@ func appOptions(dir string, arms runOpts, wiring appWiring, launch appLaunch) tu
 		Recheck:      wiring.blockers,
 		Login:        loginCommand(string(cred.ClaudeSub)),
 		Wires:        wiring.wires,
+		Models:       func() (models.Library, error) { return modelLibrary(dir) },
 		Providers:    appProviders(),
 		Quota:        wiring.quota,
 		Settings:     settingsStore,
@@ -447,6 +448,7 @@ func openAppWire(opts runOpts) (appWire, error) {
 	if err != nil {
 		return appWire{}, err
 	}
+	opts.effort = selected.EffortTaken(opts.effort)
 	held, spend, err := openAccounts(opts, selected.ID)
 	return appWire{held: held, spend: spend, selected: selected}, err
 }

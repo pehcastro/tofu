@@ -1,3 +1,4 @@
 subscription: claude-sub
 use: default
 vision: yes
+efforts: low, medium, high, xhigh, max

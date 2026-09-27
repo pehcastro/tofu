@@ -3,6 +3,8 @@ package models
 import (
 	"fmt"
 	"strings"
+
+	"tofu/internal/llm"
 )
 
 type Provider string
@@ -113,8 +115,16 @@ type Model struct {
 	Use          Use
 	Kind         Kind
 	Vision       Vision
+	Efforts      []llm.Effort
 	Reason       string
 	File         string
+}
+
+func (m Model) EffortTaken(asked llm.Effort) llm.Effort {
+	if len(m.Efforts) == 0 {
+		return ""
+	}
+	return asked
 }
 
 func (m Model) Slug() string {

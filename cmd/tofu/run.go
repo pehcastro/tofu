@@ -299,6 +299,7 @@ func runVerb(args []string, out, errOut io.Writer) int {
 	}
 
 	if opts.dryRun {
+		opts.effort = selected.EffortTaken(opts.effort)
 		config, _, err := runConfig(opts, built, runtime{spend: turn.SpendSubscription, budget: budget, notify: writeNotice(errOut), open: openAppWire, orchestrator: selected})
 		if err != nil {
 			return runFail(errOut, err)

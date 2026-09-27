@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"cmp"
 	"slices"
 	"strconv"
 	"strings"
@@ -11,6 +12,7 @@ import (
 	"tofu/interface/tui/feed"
 	"tofu/interface/tui/shells"
 	"tofu/internal/llm"
+	library "tofu/internal/llm/models"
 )
 
 const (
@@ -208,8 +210,11 @@ func (a *App) cycleEffort() {
 			offered = wire.Efforts
 		}
 	}
+	chosen, known := a.chosenModel()
 	levels := slices.DeleteFunc([]llm.Effort{llm.EffortLow, llm.EffortMedium, llm.EffortHigh, llm.EffortXHigh, llm.EffortMax},
-		func(level llm.Effort) bool { return !slices.Contains(offered, level) })
+		func(level llm.Effort) bool {
+			return !slices.Contains(offered, level) || known && !slices.Contains(chosen.Efforts, level)
+		})
 	if len(levels) == 0 {
 		return
 	}
@@ -217,11 +222,22 @@ func (a *App) cycleEffort() {
 	a.effort = levels[(at+1)%len(levels)]
 }
 
-func (a *App) shownEffort() llm.Effort {
-	if a.effort == "" {
-		return llm.EffortDefault
+func (a *App) chosenModel() (library.Model, bool) {
+	if slug := a.slug(); a.chosen.slug != slug {
+		a.chosen = resolvedModel{slug: slug}
+		if loaded, err := a.options.Models(); err == nil {
+			a.chosen.model, a.chosen.known = loaded.Resolve(slug)
+		}
 	}
-	return a.effort
+	return a.chosen.model, a.chosen.known
+}
+
+func (a *App) shownEffort() llm.Effort {
+	shown := cmp.Or(a.effort, llm.EffortDefault)
+	if chosen, known := a.chosenModel(); known {
+		return chosen.EffortTaken(shown)
+	}
+	return shown
 }
 
 func (a *App) screenKey(key string) (tea.Cmd, bool) {
