@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os/exec"
 	"runtime"
+	"slices"
 	"strconv"
 	"syscall"
 	"time"
@@ -171,6 +172,23 @@ func memberIDs(job windows.Handle, assigned uint32) ([]uint32, error) {
 		ids = append(ids, uint32(member))
 	}
 	return ids, nil
+}
+
+func treeHas(root, pid int) bool {
+	if pid == root {
+		return treeAlive(root)
+	}
+	job, err := openJobByName(root, jobAccessQuery)
+	if err != nil {
+		return false
+	}
+	defer func() { _ = windows.CloseHandle(job) }()
+	active, err := activeProcesses(job)
+	if err != nil || active == 0 {
+		return false
+	}
+	ids, err := memberIDs(job, active)
+	return err == nil && slices.Contains(ids, uint32(pid))
 }
 
 func memberHandles(job windows.Handle, assigned uint32) ([]windows.Handle, error) {

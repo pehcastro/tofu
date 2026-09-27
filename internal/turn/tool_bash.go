@@ -37,10 +37,12 @@ func WithShellRegistry(ctx context.Context, registry *shell.Registry) context.Co
 	return context.WithValue(ctx, shellRegistryKey{}, registry)
 }
 
-func shellRegistryFrom(ctx context.Context) *shell.Registry {
+func ShellRegistryFrom(ctx context.Context) *shell.Registry {
 	registry, _ := ctx.Value(shellRegistryKey{}).(*shell.Registry)
 	return registry
 }
+
+func shellRegistryFrom(ctx context.Context) *shell.Registry { return ShellRegistryFrom(ctx) }
 
 type shellOwnerKey struct{}
 
@@ -185,8 +187,10 @@ func probeArgsFor(name string) []string {
 
 func projectInterpreters(dir string) []string {
 	var want []string
-	if isFile(filepath.Join(dir, "package.json")) {
-		want = append(want, "node", packageManager(dir))
+	if body, err := os.ReadFile(filepath.Join(dir, "package.json")); err == nil {
+		var manifest packageManifest
+		_ = json.Unmarshal(body, &manifest)
+		want = append(want, "node", lockfileManager(dir, manifest))
 	}
 	if isFile(filepath.Join(dir, "go.mod")) {
 		want = append(want, "go")
@@ -195,17 +199,6 @@ func projectInterpreters(dir string) []string {
 		want = append(want, "python")
 	}
 	return want
-}
-
-func packageManager(dir string) string {
-	switch {
-	case isFile(filepath.Join(dir, "pnpm-lock.yaml")):
-		return "pnpm"
-	case isFile(filepath.Join(dir, "yarn.lock")):
-		return "yarn"
-	default:
-		return "npm"
-	}
 }
 
 func probeToolchain(dir string, run toolchainRunner, timeout time.Duration) []interpreterState {
@@ -274,7 +267,10 @@ func missingInterpreterNamed(command string, states []interpreterState) (name, s
 	return "", "", false
 }
 
-const bashToolName = "bash"
+const (
+	bashToolName  = "bash"
+	ShellToolName = "shell"
+)
 
 const commandExited = "the command exited %d\n"
 
@@ -305,6 +301,7 @@ func (t *BashTool) Definition() llm.Tool {
 			"a background start waits up to %d ms: a command that ends by then comes back with its output and exit code like any other and is not kept, "+
 			"and one still running is kept on the shells screen and the call returns its name, pid and output so far. "+
 			"start the server itself as the whole command, with no & and no nohup, so the process kept is the one that serves. "+
+			"stop, restart and read a kept process with the shell tool by its name, never with kill, taskkill or pkill: a kill of a pid tofu started runs as shell stop. "+
 			"check whether it is up with check_port, which dials the port on localhost and answers in milliseconds, no http request needed.",
 		t.choice.Label, konst.BashDeadlineMillis, konst.BashMaxDeadlineMillis, konst.BackgroundYieldMillis)
 	if t.choice.Note != "" {
@@ -395,6 +392,46 @@ func (t *BashTool) runBackground(ctx context.Context, args bashArgs) (Result, er
 		konst.BackgroundYieldMillis)), nil
 }
 
+func OwnShellsCalled(ctx context.Context, request GateRequest) []string {
+	registry := shellRegistryFrom(ctx)
+	var args struct {
+		Command string `json:"command"`
+		Name    string `json:"name"`
+	}
+	if registry == nil || json.Unmarshal(request.Args, &args) != nil {
+		return nil
+	}
+	switch request.Tool {
+	case ShellToolName:
+		if _, err := registry.Read(args.Name); err == nil {
+			return []string{args.Name}
+		}
+	case bashToolName:
+		var names []string
+		for _, one := range registry.Owning(args.Command) {
+			names = append(names, one.Name)
+		}
+		return names
+	}
+	return nil
+}
+
+func stopOwned(registry *shell.Registry, command string, owned []shell.Shell) (Result, error) {
+	names := make([]string, len(owned))
+	for i, one := range owned {
+		if err := registry.Kill(one.Name); err != nil {
+			return Result{}, fmt.Errorf("bash: %q kills %s, which tofu started, so it ran as shell stop, and the stop failed: %w", command, one.Name, err)
+		}
+		names[i] = one.Name
+	}
+	stopped := strings.Join(names, ", ")
+	return Result{
+		Content: fmt.Sprintf("bash: %q kills %s, which tofu started, so it ran as shell stop %s instead: every process in its tree is gone, children included. next time use the shell tool to stop or restart it", command, stopped, stopped),
+		Command: ShellToolName + " stop " + stopped,
+		Outcome: ResultSucceeded,
+	}, nil
+}
+
 func bashDeadline(requested int) (deadline int, corrected string) {
 	switch {
 	case requested > konst.BashMaxDeadlineMillis:
@@ -420,6 +457,11 @@ func (t *BashTool) Run(ctx context.Context, raw json.RawMessage) (Result, error)
 	}
 	if strings.TrimSpace(args.Command) == "" {
 		return Result{}, errors.New("bash: command is required unless check_port is set")
+	}
+	if registry := shellRegistryFrom(ctx); registry != nil {
+		if owned := registry.Owning(args.Command); len(owned) > 0 {
+			return stopOwned(registry, args.Command, owned)
+		}
 	}
 	if name, summary, missing := missingInterpreterNamed(args.Command, t.probe.wait()); missing {
 		return Result{}, fmt.Errorf("bash: %s is not on this shell's PATH, so this command would just fail not found. %s", name, summary)

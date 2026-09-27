@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -201,7 +202,9 @@ func (r *Registry) await(waited <-chan error, logFile *os.File, started Shell, p
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	process.tree.release()
-	delete(r.running, started.Name)
+	if r.running[started.Name] == process {
+		delete(r.running, started.Name)
+	}
 	if process.killed {
 		return
 	}
@@ -324,6 +327,46 @@ func (r *Registry) Kill(name string) error {
 	case <-time.After(killWait):
 	}
 	return nil
+}
+
+func (r *Registry) Restart(name string) (Shell, error) {
+	entry, err := r.Read(name)
+	if err != nil {
+		return Shell{}, err
+	}
+	if err := r.Kill(name); err != nil && !errors.Is(err, ErrNotRunning) {
+		return Shell{}, err
+	}
+	return r.Start(entry.Dir, name, entry.Command, entry.Owner)
+}
+
+func (r *Registry) Owning(command string) []Shell {
+	fields := strings.Fields(command)
+	if len(fields) < 2 || !slices.Contains([]string{"kill", "taskkill", "pkill"}, strings.TrimSuffix(filepath.Base(fields[0]), ".exe")) {
+		return nil
+	}
+	var pids []int
+	for _, field := range fields[1:] {
+		pid, err := strconv.Atoi(field)
+		switch {
+		case err == nil && pid > 0:
+			pids = append(pids, pid)
+		case !strings.HasPrefix(field, "-") && !strings.HasPrefix(field, "/"):
+			return nil
+		}
+	}
+	listed, _ := r.List()
+	var owned []Shell
+	for _, pid := range pids {
+		at := slices.IndexFunc(listed, func(one Shell) bool { return one.State == Running && treeHas(one.PID, pid) })
+		if at < 0 {
+			return nil
+		}
+		if !slices.ContainsFunc(owned, func(one Shell) bool { return one.Name == listed[at].Name }) {
+			owned = append(owned, listed[at])
+		}
+	}
+	return owned
 }
 
 func (r *Registry) terminate(name string) (*live, error) {

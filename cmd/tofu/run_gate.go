@@ -171,6 +171,9 @@ func (g *toolGate) ask(ctx context.Context, request turn.GateRequest) (ledger.Ro
 	}
 	written := rowInput{turnID: request.TurnID, stateBuilder: builder, fingerprint: state.FingerprintOf(call)}
 	builtState := json.RawMessage(built)
+	if own := turn.OwnShellsCalled(ctx, request); len(own) > 0 {
+		return appendOwnShellRow(builtState, g.set, written, own)
+	}
 	decision, err := g.client.Ask(ctx, jev.Request{State: builtState, Questions: g.set.Questions})
 	g.decisions++
 	if err != nil {
@@ -180,4 +183,22 @@ func (g *toolGate) ask(ctx context.Context, request turn.GateRequest) (ledger.Ro
 	written.decision = &decision
 	written.answers = toLedgerAnswers(g.set.QuestionsVersion, decision.Answers)
 	return appendRow(builtState, g.set, written)
+}
+
+func appendOwnShellRow(state json.RawMessage, set battery, in rowInput, own []string) (ledger.Row, error) {
+	dir, err := sys.LogDir()
+	if err != nil {
+		return ledger.Row{}, err
+	}
+	row, err := rowSkeleton(state, set, in)
+	if err != nil {
+		return ledger.Row{}, err
+	}
+	sentence := "the call acts on " + strings.Join(own, ", ") + ", which tofu started, so it is allowed without asking jev, and a kill runs as shell stop"
+	row.Model, row.Answers, row.Verdict = "", []ledger.Answer{}, ledger.VerdictAllow
+	row.Reason = &ledger.Reason{Mode: set.Mode.Ledger(), ModeReason: &sentence}
+	if set.Rule != nil {
+		row.Policy, row.PolicyVersion = set.Rule.Name, set.Rule.RuleVersion
+	}
+	return ledger.NewWriter(dir).Append(row)
 }
