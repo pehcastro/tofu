@@ -8,6 +8,18 @@ Tofu is personal and not released, so the public interface that a version promis
 
 The minor number carries breaking changes, which is what 0.x means, and **there is never a 1.0.0**. The owner decided that on 2026-09-19: this stays 0.x forever, so the promise the version makes is the one 0.x already makes, that anything can break on a minor bump.
 
+## 0.5.0-rc-fix6 - 2026-09-26
+
+Skills load from your own folders, and claude-sub haiku runs.
+
+### Added
+
+- **Skills.** Tofu reads skills from `.tofu/skills`, `.agents/skills` and `.claude/skills`, walking up to the repository root, then from the same folders under the home. The first name found wins. The prompt lists each skill's name and description, and the `skill` tool loads the body when the model asks for it. A sub-agent's `skills:` or `autoloadSkills:` load before its task. `tofu settings set skills off` removes the listing. The library ships no skills: its content stays in rules and references.
+
+### Fixed
+
+- **claude-sub haiku runs.** A reasoning effort is sent only to a model that takes one, so haiku, and the `@worker` or `@dumb` tier set to it, no longer fails with `400 This model does not support the effort parameter`. Shift+Tab cycles only the levels the chosen model takes, and on haiku the footer shows none.
+
 ## 0.5.0-rc-fix5 - 2026-09-26
 
 Each sub-agent works with its own rules, references and model tier, and the footer shows every subscription in use.
