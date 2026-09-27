@@ -65,6 +65,7 @@ func main() {
 		os.Exit(1)
 	}
 	report(os.Stdout, filepath.Base(*dir), measure(events))
+	reportTiming(os.Stdout, timeline(events))
 }
 
 func measure(events []session.Event) role {
@@ -108,7 +109,7 @@ func measure(events []session.Event) role {
 			measured.calls++
 			if body.Tool == "spawn" {
 				if measured.firstSpawn < 0 {
-					measured.firstSpawn, measured.firstSpawnTook = measured.calls-1, event.At.Sub(started)
+					measured.firstSpawn = measured.calls - 1
 				}
 				measured.spawns = append(measured.spawns, &spawn{call: event.Call, announced: texts[event.Request] != ""})
 				continue
@@ -119,6 +120,9 @@ func measure(events []session.Event) role {
 				}
 			}
 		case session.EventSpawn:
+			if measured.firstSpawnTook == 0 {
+				measured.firstSpawnTook = event.At.Sub(started)
+			}
 			var body session.SpawnBody
 			_ = json.Unmarshal(event.Body, &body)
 			for _, spawned := range measured.spawns {
@@ -196,7 +200,7 @@ func report(w io.Writer, id string, r role) {
 	if r.firstSpawn < 0 {
 		line("  calls before the first spawn   none, it never spawned")
 	} else {
-		line("  calls before the first spawn   %d, %s after the task", r.firstSpawn, r.firstSpawnTook.Round(time.Second))
+		line("  calls before the first spawn   %d, %s after the task", r.firstSpawn, clock(r.firstSpawnTook))
 	}
 	announced, verified := 0, 0
 	for _, spawned := range r.spawns {
