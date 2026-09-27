@@ -24,6 +24,7 @@ type PromptPart struct {
 	Agent   string
 	File    string
 	Text    string
+	ByTask  bool
 }
 
 func (p PromptPart) Rule() string {
@@ -135,6 +136,7 @@ func Compose(spec ComposeSpec) (Composed, error) {
 		}
 		composed.Parts = append(composed.Parts, builtin)
 	}
+	withoutTask := rule.Index(spec.Rules, rule.Task{Role: composed.Task.Role, Language: composed.Task.Language})
 	for i, match := range rule.Index(spec.Rules, composed.Task) {
 		if !match.Fires {
 			composed.HeldBack = append(composed.HeldBack, match)
@@ -151,6 +153,7 @@ func Compose(spec ComposeSpec) (Composed, error) {
 			RuleID:  fired.ID,
 			File:    filepath.ToSlash(fired.File),
 			Text:    text,
+			ByTask:  !withoutTask[i].Fires,
 		})
 	}
 	order := composedOrder()
@@ -164,9 +167,21 @@ func Compose(spec ComposeSpec) (Composed, error) {
 }
 
 func (c Composed) System() string {
+	return c.render(func(PromptPart) bool { return true })
+}
+
+func (c Composed) Head() string {
+	return c.render(func(part PromptPart) bool { return !part.ByTask })
+}
+
+func (c Composed) WithTaskRules(environment string) string {
+	return strings.TrimSpace(environment + "\n\n" + c.render(func(part PromptPart) bool { return part.ByTask }))
+}
+
+func (c Composed) render(keep func(PromptPart) bool) string {
 	var block strings.Builder
 	for _, part := range c.Parts {
-		if part.Concern == rule.ConcernEnvironment {
+		if part.Concern == rule.ConcernEnvironment || !keep(part) {
 			continue
 		}
 		if block.Len() > 0 {

@@ -231,17 +231,22 @@ type SubAgents struct {
 	Prompt  ComposeSpec
 }
 
-func (s SubAgents) system(inherited string, definition subagent.Definition, task string, owns []string) (string, error) {
+func (s SubAgents) prompt(inherited Config, definition subagent.Definition, task string, owns []string) (string, string, error) {
+	system, environment := inherited.System, inherited.Environment
 	switch {
 	case s.Prompt.Environment != "":
 		spec := s.Prompt
 		spec.Task, spec.Paths, spec.Agent = task, owns, definition
 		composed, err := Compose(spec)
-		return composed.System(), err
-	case definition.Name == "":
-		return inherited, nil
+		if err != nil {
+			return "", "", err
+		}
+		system, environment = composed.Head(), composed.WithTaskRules(spec.Environment)
+	case definition.Name != "":
+		system += "\n\n" + agentPart(definition).Text
 	}
-	return inherited + "\n\n" + agentPart(definition).Text, nil
+	held := "the paths you hold, and the only ones write, edit and bash may change: " + strings.Join(owns, ", ")
+	return system, strings.TrimSpace(environment + "\n\n" + held), nil
 }
 
 type AgentRefusedError struct {
@@ -389,7 +394,7 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 	if err != nil {
 		return Result{}, err
 	}
-	system, err := t.SubAgents.system(t.base.System, definition, args.Task, args.Owns)
+	system, environment, err := t.SubAgents.prompt(t.base, definition, args.Task, args.Owns)
 	if err != nil {
 		return Result{}, fmt.Errorf("spawn: the sub-agent's prompt did not compose: %w", err)
 	}
@@ -456,7 +461,7 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 	if opened.Accounts.Pick != nil {
 		subAgent.Model, subAgent.Accounts, subAgent.Spend, subAgent.Wire = nil, opened.Accounts, opened.Spend, opened.Wire
 	}
-	subAgent.System = system
+	subAgent.System, subAgent.Environment = system, environment
 	trace := spawnTrace{site: site, definition: agent.Agent, model: agent.Model, mission: agent.Mission, owns: args.Owns, depth: t.depth + 1}
 	subAgent.Task = args.Task
 	subAgent.Tools = NewRegistry(owned...)
@@ -616,7 +621,7 @@ func (t ownedTool) Name() string { return t.tool.Name() }
 
 func (t ownedTool) Definition() llm.Tool {
 	definition := t.tool.Definition()
-	definition.Description += ", and only inside the paths this agent holds: " + strings.Join(t.boundary.Owns, ", ")
+	definition.Description += ", and only inside the paths your first message says you hold"
 	return definition
 }
 
@@ -642,9 +647,8 @@ func (t ownedShell) Name() string { return t.tool.Name() }
 
 func (t ownedShell) Definition() llm.Tool {
 	definition := t.tool.Definition()
-	definition.Description += ", and every file the command writes, through a redirect, tee, cp, mv or sed -i, has to be inside the paths this agent holds: " +
-		strings.Join(t.boundary.Owns, ", ") +
-		". Reading anything is fine. A command writing outside them is refused before it runs, and that work goes back to the orchestrator."
+	definition.Description += ", and every file the command writes, through a redirect, tee, cp, mv or sed -i, has to be inside the paths your first message says you hold. " +
+		"Reading anything is fine. A command writing outside them is refused before it runs, and that work goes back to the orchestrator."
 	return definition
 }
 

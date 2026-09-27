@@ -564,8 +564,8 @@ func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn
 		Tools:       turn.NewRegistry(built...),
 		Task:        opts.task,
 		Wire:        opts.wire,
-		System:      composed.System(),
-		Environment: environment,
+		System:      composed.Head(),
+		Environment: composed.WithTaskRules(environment),
 		Caps: turn.Caps{
 			MaxSteps:         opts.maxSteps,
 			LoopGuardRepeats: opts.loopGuardRepeats,
