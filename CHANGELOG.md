@@ -8,6 +8,34 @@ Tofu is personal and not released, so the public interface that a version promis
 
 The minor number carries breaking changes, which is what 0.x means, and **there is never a 1.0.0**. The owner decided that on 2026-09-19: this stays 0.x forever, so the promise the version makes is the one 0.x already makes, that anything can break on a minor bump.
 
+## 0.5.0-rc-fix8 - 2026-09-27
+
+The same run in less time: sub-agents run at the same time, and the wait, the port clash and the repeated reads are gone.
+
+### Changed
+
+- **Spawns sent in one message run at the same time** when their owns do not overlap. Their results come back in call order.
+- **How many sub-agents a turn may spawn, and how deep, are settings:**
+  - `subAgentsPerTurn` defaults to 10 and `subAgentDepth` to 2, under Turn in the settings menu.
+  - The orchestrator can ask to change them with a settings tool, which always asks the person first.
+- **One status line sits above the composer**, "waiting on [&ts-dev-3]", with a Dots3 spinner. Each sub-agent's live work spins on its own "spawning" line in the chat, in Dots8. Every spinner steps at 80ms.
+- **A dev server start checks the port on both 127.0.0.1 and ::1.** It refuses a port held by a process tofu did not start, and names that process and a free port. `check_port` reports both addresses and who holds them.
+- **A background start returns as soon as its port opens** or it prints a ready line, not after a fixed 10 seconds.
+- **A stream that goes quiet for 60 seconds is sent again.** The retried answer shows once in the chat.
+- **A file read earlier in the session and unchanged since is not refused as unread** by a later write or edit.
+- **A sub-agent starts with the files its brief names already in its first message.**
+- **A TypeScript write is typechecked** when the project has no typescript installed, through `bun x` or `npx`.
+- **A sub-agent report** drops "learned nothing" and failures it retried and passed. A finished sub-agent ends done.
+- **Tofu says sub-agent**, never child, everywhere.
+- **A sub-agent's report renders as markdown**, with highlighted code.
+- **The progress line spins until the turn ends.**
+- **The orchestrator proposes changes** to your scripts, ports or config that you did not ask for, and does not make them.
+
+### Added
+
+- **Every request records `duration_ms` and `first_token_ms`** in the session's events.
+- **`go run ./bench/orchestrator -session <folder>` prints where a session's time went.**
+
 ## 0.5.0-rc-fix7 - 2026-09-27
 
 The orchestrator delegates, the chat is a conversation, and a sub-agent's work shows on its own screen as it happens.
