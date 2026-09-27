@@ -1,0 +1,65 @@
+Tally in stats.go replays a day of transfer events across worker goroutines and returns the totals. Finance noticed the totals are a little lower than the number of events, and differ between runs on the same input. Fix it so Tally is exact, keeping the given number of workers.
+-- go.mod --
+module task
+
+go 1.25
+-- stats.go --
+package task
+
+import "sync"
+
+type Event struct {
+	Upload bool
+	Bytes  int64
+}
+
+type Stats struct {
+	Uploads   int
+	Downloads int
+	Bytes     int64
+}
+
+func Tally(events []Event, workers int) Stats {
+	var s Stats
+	var wg sync.WaitGroup
+	for w := 0; w < workers; w++ {
+		wg.Add(1)
+		go func(w int) {
+			defer wg.Done()
+			for i := w; i < len(events); i += workers {
+				e := events[i]
+				if e.Upload {
+					s.Uploads++
+				} else {
+					s.Downloads++
+				}
+				s.Bytes += e.Bytes
+			}
+		}(w)
+	}
+	wg.Wait()
+	return s
+}
+-- check/zz_check_test.go --
+package task
+
+import "testing"
+
+func TestCheckTallyExact(t *testing.T) {
+	events := make([]Event, 400000)
+	var want Stats
+	for i := range events {
+		events[i] = Event{Upload: i%5 == 0, Bytes: int64(i % 1000)}
+		if events[i].Upload {
+			want.Uploads++
+		} else {
+			want.Downloads++
+		}
+		want.Bytes += events[i].Bytes
+	}
+	for round := 0; round < 5; round++ {
+		if got := Tally(events, 8); got != want {
+			t.Fatalf("round %d: Tally = %+v, want %+v", round, got, want)
+		}
+	}
+}

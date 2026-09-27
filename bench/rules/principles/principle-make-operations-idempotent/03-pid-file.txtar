@@ -1,0 +1,82 @@
+Implement Acquire in pidfile.go. The nightly report job must never run two copies at once. Acquire(path) records the current process id in the file at path and returns a release function that removes it; if another running process already holds path, Acquire returns ErrHeld. The job is started by a scheduler, and the machine's operators sometimes kill it hard, which gives it no chance to clean up.
+-- go.mod --
+module task
+
+go 1.25
+-- pidfile.go --
+package task
+
+import "errors"
+
+var ErrHeld = errors.New("held by another process")
+
+func Acquire(path string) (func() error, error) {
+	return func() error { return nil }, nil
+}
+-- check/zz_check_test.go --
+package task
+
+import (
+	"errors"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strconv"
+	"testing"
+)
+
+func checkDeadPID(t *testing.T) int {
+	t.Helper()
+	cmd := exec.Command("go", "version")
+	if err := cmd.Run(); err != nil {
+		t.Fatal(err)
+	}
+	return cmd.Process.Pid
+}
+
+func TestCheckHeldByLiveProcess(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "job.pid")
+	release, err := Acquire(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Acquire(path); !errors.Is(err, ErrHeld) {
+		t.Fatalf("second Acquire while held = %v, want ErrHeld", err)
+	}
+	if err := release(); err != nil {
+		t.Fatal(err)
+	}
+	again, err := Acquire(path)
+	if err != nil {
+		t.Fatalf("Acquire after release = %v", err)
+	}
+	_ = again()
+}
+
+func TestCheckDeadHolderIsTakenOver(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "job.pid")
+	if err := os.WriteFile(path, []byte(strconv.Itoa(checkDeadPID(t))), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	release, err := Acquire(path)
+	if err != nil {
+		t.Fatalf("Acquire over a file left by a killed run = %v", err)
+	}
+	data, _ := os.ReadFile(path)
+	if string(data) != strconv.Itoa(os.Getpid()) && string(data) != strconv.Itoa(os.Getpid())+"\n" {
+		t.Errorf("file holds %q, want this pid", data)
+	}
+	_ = release()
+}
+
+func TestCheckGarbageFileIsTakenOver(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "job.pid")
+	if err := os.WriteFile(path, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	release, err := Acquire(path)
+	if err != nil {
+		t.Fatalf("Acquire over an empty file left mid-write = %v", err)
+	}
+	_ = release()
+}

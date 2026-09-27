@@ -1,0 +1,67 @@
+Wrap in wrap.go breaks text into lines of at most width characters, counted in runes, but it mangles real input. Make it follow these rules: words are separated by any run of spaces, tabs or single newlines, and come out joined by one space; a blank line, meaning two or more newlines with only spaces or tabs between them, separates paragraphs and comes out as exactly one empty line; a word longer than width goes on a line of its own, unbroken; there is no trailing space on any line and no empty line at the start or end; text with no words gives "". Lines are joined with "\n". Keep the existing tests passing.
+-- go.mod --
+module task
+
+go 1.25
+-- wrap.go --
+package task
+
+import "strings"
+
+func Wrap(text string, width int) string {
+	var lines []string
+	line := ""
+	for _, w := range strings.Split(text, " ") {
+		if len(line)+len(w)+1 > width {
+			lines = append(lines, line)
+			line = ""
+		}
+		line += w + " "
+	}
+	lines = append(lines, line)
+	return strings.Join(lines, "\n")
+}
+-- wrap_test.go --
+package task
+
+import (
+	"strings"
+	"testing"
+)
+
+func TestWrapShort(t *testing.T) {
+	if got := Wrap("hi", 10); strings.TrimSpace(got) != "hi" {
+		t.Errorf("Wrap = %q", got)
+	}
+}
+-- check/zz_check_test.go --
+package task
+
+import "testing"
+
+func TestCheckWrap(t *testing.T) {
+	cases := []struct {
+		text  string
+		width int
+		want  string
+	}{
+		{"hi", 10, "hi"},
+		{"the quick brown fox jumps", 10, "the quick\nbrown fox\njumps"},
+		{"the quick brown", 9, "the quick\nbrown"},
+		{"a  b\t\tc\nd", 80, "a b c d"},
+		{"one\n\ntwo", 80, "one\n\ntwo"},
+		{"one\n \t\n\n\ntwo three", 5, "one\n\ntwo\nthree"},
+		{"\n\n  lead and trail  \n\n", 80, "lead and trail"},
+		{"x supercalifragilistic y", 6, "x\nsupercalifragilistic\ny"},
+		{"ação ação ação", 9, "ação ação\nação"},
+		{"", 10, ""},
+		{" \n\t\n ", 10, ""},
+		{"aa bb", 5, "aa bb"},
+		{"aa bb", 4, "aa\nbb"},
+	}
+	for _, c := range cases {
+		if got := Wrap(c.text, c.width); got != c.want {
+			t.Errorf("Wrap(%q, %d) = %q, want %q", c.text, c.width, got, c.want)
+		}
+	}
+}

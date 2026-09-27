@@ -1,0 +1,76 @@
+Split in fields.go splits one line of comma separated values. Make it handle real files: a field may be wrapped in double quotes, and then it may contain commas, and a doubled "" inside it stands for one quote character; spaces around a field outside quotes are trimmed, while spaces inside quotes are kept; a line with an unterminated quote, or with text after a closing quote other than spaces before the next comma, returns ErrQuote. Split now returns ([]string, error). An empty line is one empty field. Keep the existing tests passing, updating them where the API changed.
+-- go.mod --
+module task
+
+go 1.25
+-- fields.go --
+package task
+
+import (
+	"errors"
+	"strings"
+)
+
+var ErrQuote = errors.New("bad quoting")
+
+func Split(line string) []string {
+	parts := strings.Split(line, ",")
+	for i, p := range parts {
+		parts[i] = strings.TrimSpace(p)
+	}
+	return parts
+}
+-- fields_test.go --
+package task
+
+import (
+	"slices"
+	"testing"
+)
+
+func TestSplit(t *testing.T) {
+	if got := Split("a, b ,c"); !slices.Equal(got, []string{"a", "b", "c"}) {
+		t.Errorf("Split = %q", got)
+	}
+	if got := Split("a,,c"); !slices.Equal(got, []string{"a", "", "c"}) {
+		t.Errorf("Split = %q", got)
+	}
+}
+-- check/zz_check_test.go --
+package task
+
+import (
+	"errors"
+	"slices"
+	"testing"
+)
+
+func TestCheckSplit(t *testing.T) {
+	good := []struct {
+		line string
+		want []string
+	}{
+		{"a, b ,c", []string{"a", "b", "c"}},
+		{"a,,c", []string{"a", "", "c"}},
+		{"", []string{""}},
+		{",", []string{"", ""}},
+		{`"a,b",c`, []string{"a,b", "c"}},
+		{`x, "a ""q"" b" ,y`, []string{"x", `a "q" b`, "y"}},
+		{`"  padded  "`, []string{"  padded  "}},
+		{`""`, []string{""}},
+		{`"",""`, []string{"", ""}},
+		{`""""`, []string{`"`}},
+		{`a,"b`+"\t"+`c", d `, []string{"a", "b\tc", "d"}},
+	}
+	for _, c := range good {
+		got, err := Split(c.line)
+		if err != nil || !slices.Equal(got, c.want) {
+			t.Errorf("Split(%q) = %q, %v; want %q", c.line, got, err, c.want)
+		}
+	}
+	for _, line := range []string{`"abc`, `a,"b`, `"a"b,c`, `"a" x`, `x,"""`} {
+		if _, err := Split(line); !errors.Is(err, ErrQuote) {
+			t.Errorf("Split(%q) error = %v, want ErrQuote", line, err)
+		}
+	}
+}

@@ -1,0 +1,103 @@
+Documents in doc.go move through draft, review and published. Add two things. A reviewer can Reject a document in review, which sends it back to draft and records the reason, readable with Reason() until the document is next submitted. And any document except one already archived can be Archived; an archived document accepts nothing else. State returns draft, review, published or archived. An operation that is not allowed from the current state returns ErrState and changes nothing.
+-- go.mod --
+module task
+
+go 1.25
+-- doc.go --
+package task
+
+import "errors"
+
+var ErrState = errors.New("not allowed in this state")
+
+type Doc struct {
+	inReview  bool
+	published bool
+}
+
+func (d *Doc) Submit() error {
+	if d.inReview || d.published {
+		return ErrState
+	}
+	d.inReview = true
+	return nil
+}
+
+func (d *Doc) Approve() error {
+	if !d.inReview {
+		return ErrState
+	}
+	d.inReview, d.published = false, true
+	return nil
+}
+
+func (d *Doc) State() string {
+	if d.published {
+		return "published"
+	}
+	if d.inReview {
+		return "review"
+	}
+	return "draft"
+}
+-- check/zz_check_test.go --
+package task
+
+import (
+	"errors"
+	"strings"
+	"testing"
+)
+
+func TestCheckWorkflow(t *testing.T) {
+	cases := []struct {
+		ops, state, reason, refused string
+	}{
+		{"", "draft", "", ""},
+		{"approve", "draft", "", "approve"},
+		{"reject", "draft", "", "reject"},
+		{"submit", "review", "", ""},
+		{"submit submit", "review", "", "submit"},
+		{"submit approve", "published", "", ""},
+		{"submit approve submit", "published", "", "submit"},
+		{"submit approve reject", "published", "", "reject"},
+		{"submit reject", "draft", "typos", ""},
+		{"submit reject approve", "draft", "typos", "approve"},
+		{"submit reject submit", "review", "", ""},
+		{"submit reject submit approve", "published", "", ""},
+		{"archive", "archived", "", ""},
+		{"submit archive", "archived", "", ""},
+		{"submit approve archive", "archived", "", ""},
+		{"archive archive", "archived", "", "archive"},
+		{"archive submit", "archived", "", "submit"},
+		{"submit archive approve", "archived", "", "approve"},
+		{"submit archive reject", "archived", "", "reject"},
+	}
+	for _, c := range cases {
+		d := &Doc{}
+		var refused []string
+		for _, op := range strings.Fields(c.ops) {
+			var err error
+			switch op {
+			case "submit":
+				err = d.Submit()
+			case "approve":
+				err = d.Approve()
+			case "reject":
+				err = d.Reject("typos")
+			case "archive":
+				err = d.Archive()
+			}
+			if err != nil {
+				if !errors.Is(err, ErrState) {
+					t.Errorf("%q: %s returned %v", c.ops, op, err)
+				}
+				refused = append(refused, op)
+			}
+		}
+		got := strings.Join(refused, " ")
+		if d.State() != c.state || d.Reason() != c.reason || got != c.refused {
+			t.Errorf("%q: state %s reason %q refused %q; want %s %q %q", c.ops, d.State(), d.Reason(), got, c.state, c.reason, c.refused)
+		}
+	}
+}

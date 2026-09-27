@@ -1,0 +1,114 @@
+Add triangles, given by three side lengths, to the shapes package, and move to constructors while you are there. The package must offer Rect(w, h), Square(side), Circle(r) and Triangle(a, b, c), each returning (Shape, error), where Shape has the methods Area() float64, Perimeter() float64 and String() string. String gives "rect 2x3", "square 2", "circle r=1.5" and "triangle 3,4,5", with numbers printed by %g. A constructor returns ErrShape for any dimension that is zero or negative, and Triangle also returns ErrShape for sides that cannot close a triangle, including a flat one. The old Area, Perimeter and Describe functions can go.
+-- go.mod --
+module task
+
+go 1.25
+-- area.go --
+package task
+
+import (
+	"errors"
+	"math"
+)
+
+var ErrShape = errors.New("not a valid shape")
+
+type Shape struct {
+	Kind string
+	W, H float64
+	R    float64
+}
+
+func Area(s Shape) (float64, error) {
+	switch s.Kind {
+	case "rect":
+		return s.W * s.H, nil
+	case "square":
+		return s.W * s.W, nil
+	case "circle":
+		return math.Pi * s.R * s.R, nil
+	}
+	return 0, ErrShape
+}
+-- perimeter.go --
+package task
+
+import "math"
+
+func Perimeter(s Shape) (float64, error) {
+	switch s.Kind {
+	case "rect":
+		return 2 * (s.W + s.H), nil
+	case "square":
+		return 4 * s.W, nil
+	case "circle":
+		return 2 * math.Pi * s.R, nil
+	}
+	return 0, ErrShape
+}
+-- describe.go --
+package task
+
+import "fmt"
+
+func Describe(s Shape) string {
+	switch s.Kind {
+	case "rect":
+		return fmt.Sprintf("rect %gx%g", s.W, s.H)
+	case "square":
+		return fmt.Sprintf("square %g", s.W)
+	case "circle":
+		return fmt.Sprintf("circle r=%g", s.R)
+	}
+	return "unknown"
+}
+-- check/zz_check_test.go --
+package task
+
+import (
+	"errors"
+	"math"
+	"testing"
+)
+
+func checkNear(a, b float64) bool { return math.Abs(a-b) < 1e-9 }
+
+func TestCheckShapes(t *testing.T) {
+	must := func(s Shape, err error) Shape {
+		t.Helper()
+		if err != nil {
+			t.Fatal(err)
+		}
+		return s
+	}
+	cases := []struct {
+		s            Shape
+		area, perim  float64
+		text         string
+	}{
+		{must(Rect(2, 3)), 6, 10, "rect 2x3"},
+		{must(Square(2)), 4, 8, "square 2"},
+		{must(Circle(1.5)), math.Pi * 2.25, 3 * math.Pi, "circle r=1.5"},
+		{must(Triangle(3, 4, 5)), 6, 12, "triangle 3,4,5"},
+		{must(Triangle(2, 2, 2)), math.Sqrt(3), 6, "triangle 2,2,2"},
+	}
+	for _, c := range cases {
+		if !checkNear(c.s.Area(), c.area) || !checkNear(c.s.Perimeter(), c.perim) || c.s.String() != c.text {
+			t.Errorf("%s: area %v perimeter %v; want %v %v %q", c.s.String(), c.s.Area(), c.s.Perimeter(), c.area, c.perim, c.text)
+		}
+	}
+	bad := []func() (Shape, error){
+		func() (Shape, error) { return Rect(0, 1) },
+		func() (Shape, error) { return Rect(1, -1) },
+		func() (Shape, error) { return Square(0) },
+		func() (Shape, error) { return Circle(-2) },
+		func() (Shape, error) { return Triangle(1, 2, 3) },
+		func() (Shape, error) { return Triangle(1, 1, 5) },
+		func() (Shape, error) { return Triangle(0, 1, 1) },
+	}
+	for i, b := range bad {
+		if _, err := b(); !errors.Is(err, ErrShape) {
+			t.Errorf("bad shape %d: err = %v", i, err)
+		}
+	}
+}

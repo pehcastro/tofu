@@ -1,0 +1,121 @@
+Add Cancel to Job in job.go. A job that is waiting or running can be cancelled; a cancelled job never starts again, Status reports cancelled, and a late Succeed or Fail from the attempt that was running when it was cancelled returns ErrState and changes nothing. Cancelling a job that is done, failed or already cancelled returns ErrState. Everything else keeps working as it does now: a job gets at most 3 attempts, and Status is one of waiting, running, done, failed, cancelled.
+-- go.mod --
+module task
+
+go 1.25
+-- job.go --
+package task
+
+import "errors"
+
+var ErrState = errors.New("not allowed in this state")
+
+const maxAttempts = 3
+
+type Job struct {
+	Attempts int
+	Running  bool
+	Done     bool
+	Failed   bool
+}
+
+func (j *Job) Start() error {
+	if j.Running || j.Done || j.Failed {
+		return ErrState
+	}
+	j.Running = true
+	j.Attempts++
+	return nil
+}
+
+func (j *Job) Succeed() error {
+	if !j.Running {
+		return ErrState
+	}
+	j.Running, j.Done = false, true
+	return nil
+}
+
+func (j *Job) Fail() error {
+	if !j.Running {
+		return ErrState
+	}
+	j.Running = false
+	if j.Attempts >= maxAttempts {
+		j.Failed = true
+	}
+	return nil
+}
+
+func (j *Job) Status() string {
+	switch {
+	case j.Done:
+		return "done"
+	case j.Failed:
+		return "failed"
+	case j.Running:
+		return "running"
+	}
+	return "waiting"
+}
+-- check/zz_check_test.go --
+package task
+
+import (
+	"errors"
+	"strings"
+	"testing"
+)
+
+func TestCheckJob(t *testing.T) {
+	cases := []struct {
+		ops, status, refused string
+	}{
+		{"", "waiting", ""},
+		{"start", "running", ""},
+		{"start succeed", "done", ""},
+		{"start fail", "waiting", ""},
+		{"start fail start fail start fail", "failed", ""},
+		{"start fail start fail start fail start", "failed", "start"},
+		{"start fail start succeed", "done", ""},
+		{"succeed", "waiting", "succeed"},
+		{"start start", "running", "start"},
+		{"cancel", "cancelled", ""},
+		{"cancel start", "cancelled", "start"},
+		{"cancel cancel", "cancelled", "cancel"},
+		{"start cancel", "cancelled", ""},
+		{"start cancel succeed", "cancelled", "succeed"},
+		{"start cancel fail", "cancelled", "fail"},
+		{"start cancel fail start", "cancelled", "fail start"},
+		{"start fail cancel", "cancelled", ""},
+		{"start succeed cancel", "done", "cancel"},
+		{"start fail start fail start fail cancel", "failed", "cancel"},
+	}
+	for _, c := range cases {
+		j := &Job{}
+		var refused []string
+		for _, op := range strings.Fields(c.ops) {
+			var err error
+			switch op {
+			case "start":
+				err = j.Start()
+			case "succeed":
+				err = j.Succeed()
+			case "fail":
+				err = j.Fail()
+			case "cancel":
+				err = j.Cancel()
+			}
+			if err != nil {
+				if !errors.Is(err, ErrState) {
+					t.Errorf("%q: %s returned %v", c.ops, op, err)
+				}
+				refused = append(refused, op)
+			}
+		}
+		got := strings.Join(refused, " ")
+		if j.Status() != c.status || got != c.refused {
+			t.Errorf("%q: status %s refused %q; want %s %q", c.ops, j.Status(), got, c.status, c.refused)
+		}
+	}
+}

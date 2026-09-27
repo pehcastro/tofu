@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 
 	"tofu/bench/report"
-	"tofu/bench/rules"
+	"tofu/bench/rules/fire"
 	"tofu/internal/sys"
 )
 
@@ -14,16 +14,16 @@ func main() {
 	err := report.Generate("rules fire report", func(machine, date string) (string, error) {
 		logDir := sys.RecordedStateDir("log")
 		libraryDir := filepath.Join("..", "..", "..", "library")
-		catalog, err := rules.StructuralCatalog(libraryDir)
+		catalog, err := fire.StructuralCatalog(libraryDir)
 		if err != nil {
 			return "", err
 		}
-		fires, unreadable, err := rules.ReadDir(logDir)
+		fires, unreadable, err := fire.ReadDir(logDir)
 		if err != nil {
 			return "", err
 		}
-		counts := rules.Count(catalog, fires)
-		return rules.Render(machine, date, counts, unreadable), nil
+		counts := fire.Count(catalog, fires)
+		return fire.Render(machine, date, counts, unreadable), nil
 	})
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)

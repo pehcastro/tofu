@@ -1,0 +1,115 @@
+The version package parses only plain MAJOR.MINOR.PATCH. Extend it to the semver rules the release tool needs. Parse accepts an optional leading v and an optional pre-release after a dash, made of dot separated identifiers of letters, digits and dashes, and rejects anything else with ErrVersion, including leading zeros in a number and empty identifiers. String prints without the v. Compare(a, b) returns -1, 0 or 1: numbers compare numerically; a version with a pre-release is lower than the same version without one; pre-release identifiers compare left to right, numeric ones numerically and below alphanumeric ones, others in ASCII order, and a shorter list that is a prefix of a longer one is lower. Bump(v, part) with part major, minor or patch returns the next release version with lower parts zeroed and the pre-release dropped. Keep the existing tests passing.
+-- go.mod --
+module task
+
+go 1.25
+-- version.go --
+package task
+
+import (
+	"errors"
+	"fmt"
+	"strconv"
+	"strings"
+)
+
+var ErrVersion = errors.New("not a version")
+
+type Version struct {
+	Major, Minor, Patch int
+	Pre                 []string
+}
+
+func Parse(s string) (Version, error) {
+	parts := strings.Split(s, ".")
+	if len(parts) != 3 {
+		return Version{}, ErrVersion
+	}
+	var n [3]int
+	for i, p := range parts {
+		v, err := strconv.Atoi(p)
+		if err != nil || v < 0 {
+			return Version{}, ErrVersion
+		}
+		n[i] = v
+	}
+	return Version{Major: n[0], Minor: n[1], Patch: n[2]}, nil
+}
+
+func (v Version) String() string {
+	return fmt.Sprintf("%d.%d.%d", v.Major, v.Minor, v.Patch)
+}
+-- version_test.go --
+package task
+
+import "testing"
+
+func TestParse(t *testing.T) {
+	v, err := Parse("1.2.3")
+	if err != nil || v.String() != "1.2.3" {
+		t.Errorf("Parse = %v, %v", v, err)
+	}
+}
+-- check/zz_check_test.go --
+package task
+
+import (
+	"errors"
+	"testing"
+)
+
+func checkParse(t *testing.T, s string) Version {
+	t.Helper()
+	v, err := Parse(s)
+	if err != nil {
+		t.Fatalf("Parse(%q): %v", s, err)
+	}
+	return v
+}
+
+func TestCheckParse(t *testing.T) {
+	good := map[string]string{"1.2.3": "1.2.3", "v1.2.3": "1.2.3", "0.0.0": "0.0.0", "1.0.0-rc.1": "1.0.0-rc.1", "v2.10.0-alpha-2.x": "2.10.0-alpha-2.x", "1.0.0-0": "1.0.0-0"}
+	for in, want := range good {
+		if got := checkParse(t, in).String(); got != want {
+			t.Errorf("Parse(%q).String() = %q, want %q", in, got, want)
+		}
+	}
+	for _, s := range []string{"", "1.2", "1.2.3.4", "01.2.3", "1.02.3", "1.2.3-", "1.2.3-rc..1", "1.2.3-rc_1", "vv1.2.3", "1.2.-3", "a.b.c", "V1.2.3"} {
+		if _, err := Parse(s); !errors.Is(err, ErrVersion) {
+			t.Errorf("Parse(%q) error = %v", s, err)
+		}
+	}
+}
+
+func TestCheckCompare(t *testing.T) {
+	order := []string{"1.0.0-0", "1.0.0-alpha", "1.0.0-alpha.1", "1.0.0-alpha.beta", "1.0.0-beta", "1.0.0-beta.2", "1.0.0-beta.11", "1.0.0-rc.1", "1.0.0", "1.0.1", "1.1.0", "1.10.0", "2.0.0"}
+	for i := range order {
+		for j := range order {
+			want := 0
+			if i < j {
+				want = -1
+			}
+			if i > j {
+				want = 1
+			}
+			if got := Compare(checkParse(t, order[i]), checkParse(t, order[j])); got != want {
+				t.Errorf("Compare(%s, %s) = %d, want %d", order[i], order[j], got, want)
+			}
+		}
+	}
+	if Compare(checkParse(t, "v1.2.3"), checkParse(t, "1.2.3")) != 0 {
+		t.Error("the v prefix changed the comparison")
+	}
+}
+
+func TestCheckBump(t *testing.T) {
+	cases := []struct{ in, part, want string }{
+		{"1.2.3", "patch", "1.2.4"}, {"1.2.3", "minor", "1.3.0"}, {"1.2.3", "major", "2.0.0"},
+		{"1.2.3-rc.1", "patch", "1.2.4"}, {"0.9.9", "minor", "0.10.0"},
+	}
+	for _, c := range cases {
+		if got := Bump(checkParse(t, c.in), c.part).String(); got != c.want {
+			t.Errorf("Bump(%s, %s) = %s, want %s", c.in, c.part, got, c.want)
+		}
+	}
+}

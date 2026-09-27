@@ -1,0 +1,65 @@
+Cleanup in cleanup.go deletes the *.tmp files in the service's work directory at shutdown. It must now also delete the whole dir/cache directory and everything in it. Other files stay. Shutdown can be interrupted, and the service manager then runs the shutdown sequence again from the beginning.
+-- go.mod --
+module task
+
+go 1.25
+-- cleanup.go --
+package task
+
+import (
+	"os"
+	"path/filepath"
+	"strings"
+)
+
+func Cleanup(dir string) error {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return err
+	}
+	for _, e := range entries {
+		if strings.HasSuffix(e.Name(), ".tmp") {
+			if err := os.Remove(filepath.Join(dir, e.Name())); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+-- check/zz_check_test.go --
+package task
+
+import (
+	"os"
+	"path/filepath"
+	"testing"
+)
+
+func TestCheckCleanupRepeatedAndPartial(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "work")
+	for _, name := range []string{"a.tmp", "b.tmp", "keep.txt", "cache/x", "cache/deep/y"} {
+		p := filepath.Join(dir, filepath.FromSlash(name))
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(name), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for i := 0; i < 3; i++ {
+		if err := Cleanup(dir); err != nil {
+			t.Fatalf("Cleanup call %d: %v", i+1, err)
+		}
+	}
+	left, _ := os.ReadDir(dir)
+	if len(left) != 1 || left[0].Name() != "keep.txt" {
+		t.Errorf("left behind: %v", left)
+	}
+	if err := os.RemoveAll(dir); err != nil {
+		t.Fatal(err)
+	}
+	if err := Cleanup(dir); err != nil {
+		t.Errorf("Cleanup when the work directory does not exist = %v", err)
+	}
+}

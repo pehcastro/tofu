@@ -1,0 +1,129 @@
+Four changes to the calculator package. First, Stack.Pop returns (int, bool) instead of panicking on an empty stack, and Stack gains Peek() (int, bool) and Len() int. Second, Eval returns ErrUnderflow instead of panicking when an operator has too few operands, and ErrLeftover when more than one value is left at the end; an empty expression is ErrUnderflow too. Third, Eval supports dup, which pushes a copy of the top value, and swap, which exchanges the top two. Fourth, division by zero returns ErrDivZero. Keep the existing tests passing, updating them where the API changed.
+-- go.mod --
+module task
+
+go 1.25
+-- stack.go --
+package task
+
+type Stack struct{ items []int }
+
+func (s *Stack) Push(v int) { s.items = append(s.items, v) }
+
+func (s *Stack) Pop() int {
+	v := s.items[len(s.items)-1]
+	s.items = s.items[:len(s.items)-1]
+	return v
+}
+-- rpn.go --
+package task
+
+import (
+	"errors"
+	"strconv"
+	"strings"
+)
+
+var (
+	ErrUnderflow = errors.New("not enough operands")
+	ErrLeftover  = errors.New("values left over")
+	ErrDivZero   = errors.New("division by zero")
+	ErrToken     = errors.New("unknown token")
+)
+
+func Eval(expr string) (int, error) {
+	s := &Stack{}
+	for _, tok := range strings.Fields(expr) {
+		switch tok {
+		case "+", "-", "*", "/":
+			b, a := s.Pop(), s.Pop()
+			switch tok {
+			case "+":
+				s.Push(a + b)
+			case "-":
+				s.Push(a - b)
+			case "*":
+				s.Push(a * b)
+			case "/":
+				s.Push(a / b)
+			}
+		default:
+			n, err := strconv.Atoi(tok)
+			if err != nil {
+				return 0, ErrToken
+			}
+			s.Push(n)
+		}
+	}
+	return s.Pop(), nil
+}
+-- rpn_test.go --
+package task
+
+import "testing"
+
+func TestEval(t *testing.T) {
+	cases := map[string]int{"1 2 +": 3, "5 1 2 + 4 * + 3 -": 14, "7 2 /": 3, "2 3 4 * -": -10}
+	for expr, want := range cases {
+		got, err := Eval(expr)
+		if err != nil || got != want {
+			t.Errorf("Eval(%q) = %d, %v", expr, got, err)
+		}
+	}
+}
+
+func TestStack(t *testing.T) {
+	s := &Stack{}
+	s.Push(1)
+	s.Push(2)
+	if s.Pop() != 2 || s.Pop() != 1 {
+		t.Error("stack order")
+	}
+}
+-- check/zz_check_test.go --
+package task
+
+import (
+	"errors"
+	"testing"
+)
+
+func TestCheckStack(t *testing.T) {
+	s := &Stack{}
+	if _, ok := s.Pop(); ok {
+		t.Error("Pop on empty returned ok")
+	}
+	if _, ok := s.Peek(); ok {
+		t.Error("Peek on empty returned ok")
+	}
+	s.Push(4)
+	s.Push(9)
+	if v, ok := s.Peek(); !ok || v != 9 || s.Len() != 2 {
+		t.Errorf("Peek = %d %v, Len = %d", v, ok, s.Len())
+	}
+	if v, ok := s.Pop(); !ok || v != 9 || s.Len() != 1 {
+		t.Errorf("Pop = %d %v, Len = %d", v, ok, s.Len())
+	}
+}
+
+func TestCheckEval(t *testing.T) {
+	good := map[string]int{
+		"1 2 +": 3, "5 1 2 + 4 * + 3 -": 14, "7 2 /": 3, "2 3 4 * -": -10,
+		"3 dup *": 9, "1 2 swap -": 1, "2 dup dup * *": 8, "10 3 swap /": 0, "42": 42,
+	}
+	for expr, want := range good {
+		got, err := Eval(expr)
+		if err != nil || got != want {
+			t.Errorf("Eval(%q) = %d, %v; want %d", expr, got, err, want)
+		}
+	}
+	bad := map[string]error{
+		"": ErrUnderflow, "+": ErrUnderflow, "1 +": ErrUnderflow, "dup": ErrUnderflow, "1 swap": ErrUnderflow,
+		"1 2": ErrLeftover, "1 dup": ErrLeftover, "1 0 /": ErrDivZero, "1 x +": ErrToken,
+	}
+	for expr, want := range bad {
+		if _, err := Eval(expr); !errors.Is(err, want) {
+			t.Errorf("Eval(%q) error = %v, want %v", expr, err, want)
+		}
+	}
+}

@@ -1,0 +1,70 @@
+Add two roles to perms.go. An auditor can read and export and nothing else. An owner can do everything an admin can, and is the only role that can transfer ownership: add CanTransfer(role string) bool for that. Role names are exact and case sensitive, and any role the package does not know gets no permission at all.
+-- go.mod --
+module task
+
+go 1.25
+-- perms.go --
+package task
+
+func CanRead(role string) bool {
+	return role == "admin" || role == "editor" || role == "viewer"
+}
+
+func CanWrite(role string) bool {
+	return role == "admin" || role == "editor"
+}
+
+func CanDelete(role string) bool {
+	return role == "admin"
+}
+-- sharing.go --
+package task
+
+func CanExport(role string) bool {
+	if role == "viewer" {
+		return false
+	}
+	return role != ""
+}
+
+func CanInvite(role string) bool {
+	switch role {
+	case "admin":
+		return true
+	case "editor":
+		return true
+	}
+	return false
+}
+-- check/zz_check_test.go --
+package task
+
+import "testing"
+
+func TestCheckMatrix(t *testing.T) {
+	checks := []struct {
+		name string
+		can  func(string) bool
+	}{
+		{"read", CanRead}, {"write", CanWrite}, {"delete", CanDelete},
+		{"export", CanExport}, {"invite", CanInvite}, {"transfer", CanTransfer},
+	}
+	want := map[string]string{
+		"owner":   "111111",
+		"admin":   "111110",
+		"editor":  "110110",
+		"viewer":  "100000",
+		"auditor": "100100",
+		"guest":   "000000",
+		"":        "000000",
+		"ADMIN":   "000000",
+		"Owner":   "000000",
+	}
+	for role, bits := range want {
+		for i, c := range checks {
+			if c.can(role) != (bits[i] == '1') {
+				t.Errorf("%s(%q) = %v", c.name, role, c.can(role))
+			}
+		}
+	}
+}

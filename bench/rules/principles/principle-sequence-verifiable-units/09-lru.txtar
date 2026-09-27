@@ -1,0 +1,82 @@
+Cache in cache.go never forgets anything and the service runs out of memory. Turn it into a least recently used cache: New(capacity, onEvict) holds at most capacity entries; Put of a new key when full evicts the least recently used entry and calls onEvict(key, value) for it, if onEvict is not nil; Get and Put both count as a use; Put of an existing key replaces its value without evicting anything; Delete(key) removes an entry without calling onEvict and reports whether it was there; Len() returns the number of entries; Keys() returns the keys from most to least recently used. A capacity below 1 is treated as 1. Keep the existing tests passing, updating them where the API changed.
+-- go.mod --
+module task
+
+go 1.25
+-- cache.go --
+package task
+
+type Cache struct {
+	items map[string]int
+}
+
+func New() *Cache { return &Cache{items: map[string]int{}} }
+
+func (c *Cache) Get(key string) (int, bool) {
+	v, ok := c.items[key]
+	return v, ok
+}
+
+func (c *Cache) Put(key string, value int) { c.items[key] = value }
+-- cache_test.go --
+package task
+
+import "testing"
+
+func TestPutGet(t *testing.T) {
+	c := New()
+	c.Put("a", 1)
+	if v, ok := c.Get("a"); !ok || v != 1 {
+		t.Errorf("Get = %d %v", v, ok)
+	}
+}
+-- check/zz_check_test.go --
+package task
+
+import (
+	"slices"
+	"strings"
+	"testing"
+)
+
+func TestCheckLRU(t *testing.T) {
+	var evicted []string
+	c := New(3, func(key string, value int) { evicted = append(evicted, key) })
+	c.Put("a", 1)
+	c.Put("b", 2)
+	c.Put("c", 3)
+	if _, ok := c.Get("a"); !ok {
+		t.Fatal("a missing")
+	}
+	c.Put("d", 4)
+	if !slices.Equal(evicted, []string{"b"}) {
+		t.Fatalf("evicted %v, want [b]", evicted)
+	}
+	if !slices.Equal(c.Keys(), []string{"d", "a", "c"}) {
+		t.Fatalf("Keys = %v", c.Keys())
+	}
+	c.Put("c", 30)
+	if len(evicted) != 1 || c.Len() != 3 {
+		t.Fatalf("replacing a key evicted: %v, Len %d", evicted, c.Len())
+	}
+	if v, _ := c.Get("c"); v != 30 {
+		t.Fatalf("c = %d", v)
+	}
+	if !c.Delete("a") || c.Delete("a") || c.Len() != 2 || len(evicted) != 1 {
+		t.Fatalf("Delete: Len %d evicted %v", c.Len(), evicted)
+	}
+	c.Put("e", 5)
+	c.Put("f", 6)
+	if strings.Join(evicted, ",") != "b,d" || !slices.Equal(c.Keys(), []string{"f", "e", "c"}) {
+		t.Fatalf("evicted %v Keys %v", evicted, c.Keys())
+	}
+	if _, ok := c.Get("d"); ok {
+		t.Fatal("d still present")
+	}
+	one := New(0, nil)
+	one.Put("x", 1)
+	one.Put("y", 2)
+	if one.Len() != 1 || !slices.Equal(one.Keys(), []string{"y"}) {
+		t.Fatalf("capacity 0 cache: %v", one.Keys())
+	}
+}

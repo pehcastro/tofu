@@ -1,0 +1,112 @@
+The billing package keeps money as float64, and totals are off by a cent now and then. Move it to integer cents: Amount becomes an int64 count of cents, Parse("12.34") returns 1234 and accepts "12", "12.3", "-0.50" and "1,234.56", and returns ErrAmount for anything else including more than two decimals; Format renders cents as "12.34" or "-0.50" or "1,234.56". Total sums line items as quantity times unit price. Discount(a, percent) works out percent of a, rounds that to a whole cent with halves going away from zero, and subtracts it from a. Keep the existing tests passing, updating them where the API changed.
+-- go.mod --
+module task
+
+go 1.25
+-- amount.go --
+package task
+
+import (
+	"errors"
+	"fmt"
+	"strconv"
+	"strings"
+)
+
+var ErrAmount = errors.New("not an amount")
+
+type Amount float64
+
+func Parse(s string) (Amount, error) {
+	f, err := strconv.ParseFloat(strings.ReplaceAll(s, ",", ""), 64)
+	if err != nil {
+		return 0, ErrAmount
+	}
+	return Amount(f), nil
+}
+
+func Format(a Amount) string {
+	return fmt.Sprintf("%.2f", float64(a))
+}
+-- invoice.go --
+package task
+
+type Line struct {
+	Qty  int
+	Unit Amount
+}
+
+func Total(lines []Line) Amount {
+	var t Amount
+	for _, l := range lines {
+		t += Amount(l.Qty) * l.Unit
+	}
+	return t
+}
+
+func Discount(a Amount, percent int) Amount {
+	return a - a*Amount(percent)/100
+}
+-- amount_test.go --
+package task
+
+import "testing"
+
+func TestFormat(t *testing.T) {
+	a, err := Parse("12.34")
+	if err != nil || Format(a) != "12.34" {
+		t.Errorf("round trip = %s, %v", Format(a), err)
+	}
+}
+
+func TestTotal(t *testing.T) {
+	if got := Format(Total([]Line{{2, 1.5}, {1, 0.25}})); got != "3.25" {
+		t.Errorf("Total = %s", got)
+	}
+}
+-- check/zz_check_test.go --
+package task
+
+import (
+	"errors"
+	"reflect"
+	"testing"
+)
+
+func TestCheckCents(t *testing.T) {
+	if reflect.TypeOf(Amount(0)).Kind() != reflect.Int64 {
+		t.Fatalf("Amount is %v, want int64 cents", reflect.TypeOf(Amount(0)).Kind())
+	}
+	parse := map[string]Amount{"12.34": 1234, "12": 1200, "12.3": 1230, "-0.50": -50, "1,234.56": 123456, "0.07": 7, "0.1": 10}
+	for s, want := range parse {
+		got, err := Parse(s)
+		if err != nil || got != want {
+			t.Errorf("Parse(%q) = %d, %v; want %d", s, got, err, want)
+		}
+	}
+	for _, s := range []string{"", "abc", "1.234", "1.2.3", "$5", "1e3"} {
+		if _, err := Parse(s); !errors.Is(err, ErrAmount) {
+			t.Errorf("Parse(%q) error = %v", s, err)
+		}
+	}
+	format := map[Amount]string{1234: "12.34", -50: "-0.50", 123456: "1,234.56", 7: "0.07", 0: "0.00", 100000000: "1,000,000.00", -123456: "-1,234.56"}
+	for a, want := range format {
+		if got := Format(a); got != want {
+			t.Errorf("Format(%d) = %q, want %q", a, got, want)
+		}
+	}
+	lines := []Line{{Qty: 3, Unit: 10}, {Qty: 7, Unit: 20}, {Qty: 1, Unit: 70}}
+	if got := Total(lines); got != 240 {
+		t.Errorf("Total = %d, want 240", got)
+	}
+	discount := []struct {
+		a       Amount
+		percent int
+		want    Amount
+	}{{1000, 10, 900}, {999, 15, 849}, {5, 10, 4}, {-5, 10, -4}, {15, 10, 13}, {1, 50, 0}, {3, 50, 1}}
+	for _, d := range discount {
+		if got := Discount(d.a, d.percent); got != d.want {
+			t.Errorf("Discount(%d, %d) = %d, want %d", d.a, d.percent, got, d.want)
+		}
+	}
+}

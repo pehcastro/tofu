@@ -1,0 +1,58 @@
+Frequencies in words.go counts how often each word appears across a set of documents, one goroutine per document. On large inputs the program dies with a fatal error. Fix it: Frequencies must return the exact count of every word, lower-cased, across all documents, and still process the documents concurrently.
+-- go.mod --
+module task
+
+go 1.25
+-- words.go --
+package task
+
+import (
+	"strings"
+	"sync"
+)
+
+func Frequencies(docs []string) map[string]int {
+	counts := map[string]int{}
+	var wg sync.WaitGroup
+	for _, doc := range docs {
+		wg.Add(1)
+		go func(doc string) {
+			defer wg.Done()
+			for _, w := range strings.Fields(doc) {
+				counts[strings.ToLower(w)]++
+			}
+		}(doc)
+	}
+	wg.Wait()
+	return counts
+}
+-- check/zz_check_test.go --
+package task
+
+import (
+	"fmt"
+	"strings"
+	"testing"
+)
+
+func TestCheckExactCounts(t *testing.T) {
+	var docs []string
+	for d := 0; d < 64; d++ {
+		var words []string
+		for i := 0; i < 5000; i++ {
+			words = append(words, fmt.Sprintf("W%d", i%50))
+		}
+		docs = append(docs, strings.Join(words, " "))
+	}
+	for round := 0; round < 3; round++ {
+		got := Frequencies(docs)
+		if len(got) != 50 {
+			t.Fatalf("round %d: %d distinct words, want 50", round, len(got))
+		}
+		for i := 0; i < 50; i++ {
+			if got[fmt.Sprintf("w%d", i)] != 64*100 {
+				t.Fatalf("round %d: w%d = %d, want %d", round, i, got[fmt.Sprintf("w%d", i)], 64*100)
+			}
+		}
+	}
+}

@@ -1,0 +1,67 @@
+Implement EnsureIndex in ensure.go. The service calls EnsureIndex(db, name, fields) on every start so the index it needs is there. If an index of that name already exists over different fields, EnsureIndex returns ErrConflict and changes nothing. Use the DB API in db.go as it is; do not change db.go.
+-- go.mod --
+module task
+
+go 1.25
+-- db.go --
+package task
+
+import (
+	"errors"
+	"slices"
+)
+
+var ErrExists = errors.New("index exists")
+
+type DB struct{ indexes map[string][]string }
+
+func NewDB() *DB { return &DB{indexes: map[string][]string{}} }
+
+func (db *DB) CreateIndex(name string, fields []string) error {
+	if _, ok := db.indexes[name]; ok {
+		return ErrExists
+	}
+	db.indexes[name] = slices.Clone(fields)
+	return nil
+}
+
+func (db *DB) IndexFields(name string) ([]string, bool) {
+	fields, ok := db.indexes[name]
+	return slices.Clone(fields), ok
+}
+-- ensure.go --
+package task
+
+import "errors"
+
+var ErrConflict = errors.New("index exists with other fields")
+
+func EnsureIndex(db *DB, name string, fields []string) error {
+	return db.CreateIndex(name, fields)
+}
+-- check/zz_check_test.go --
+package task
+
+import (
+	"errors"
+	"slices"
+	"testing"
+)
+
+func TestCheckEnsureOnEveryStart(t *testing.T) {
+	db := NewDB()
+	for i := 0; i < 3; i++ {
+		if err := EnsureIndex(db, "by_email", []string{"email"}); err != nil {
+			t.Fatalf("start %d: %v", i+1, err)
+		}
+	}
+	if err := EnsureIndex(db, "by_email", []string{"email", "name"}); !errors.Is(err, ErrConflict) {
+		t.Fatalf("different fields = %v, want ErrConflict", err)
+	}
+	if fields, _ := db.IndexFields("by_email"); !slices.Equal(fields, []string{"email"}) {
+		t.Fatalf("index changed to %v", fields)
+	}
+	if err := EnsureIndex(db, "by_name", []string{"name"}); err != nil {
+		t.Fatal(err)
+	}
+}

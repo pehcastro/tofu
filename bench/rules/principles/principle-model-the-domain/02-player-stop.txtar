@@ -1,0 +1,124 @@
+Add Stop and Eject to Player in player.go. The full behaviour: Load puts a track into an empty player or replaces the track of a ready one; Play starts a ready or paused player; Pause pauses a playing one; Stop takes a playing or paused player back to ready, keeping its track; Eject empties a ready or paused player, but never a playing one. Status returns empty, ready, playing or paused, and Track returns the loaded track or "". Any call the behaviour does not allow returns ErrInvalid and changes nothing.
+-- go.mod --
+module task
+
+go 1.25
+-- player.go --
+package task
+
+import "errors"
+
+var ErrInvalid = errors.New("not allowed now")
+
+type Player struct {
+	track   string
+	loaded  bool
+	playing bool
+	paused  bool
+}
+
+func (p *Player) Load(track string) error {
+	if p.playing {
+		return ErrInvalid
+	}
+	p.track, p.loaded = track, true
+	return nil
+}
+
+func (p *Player) Play() error {
+	if !p.loaded {
+		return ErrInvalid
+	}
+	p.playing, p.paused = true, false
+	return nil
+}
+
+func (p *Player) Pause() error {
+	if !p.playing {
+		return ErrInvalid
+	}
+	p.paused = true
+	return nil
+}
+
+func (p *Player) Track() string { return p.track }
+
+func (p *Player) Status() string {
+	switch {
+	case p.paused:
+		return "paused"
+	case p.playing:
+		return "playing"
+	case p.loaded:
+		return "ready"
+	}
+	return "empty"
+}
+-- check/zz_check_test.go --
+package task
+
+import (
+	"errors"
+	"strings"
+	"testing"
+)
+
+func TestCheckPlayer(t *testing.T) {
+	cases := []struct {
+		ops, status, track, refused string
+	}{
+		{"", "empty", "", ""},
+		{"play", "empty", "", "play"},
+		{"pause", "empty", "", "pause"},
+		{"stop", "empty", "", "stop"},
+		{"eject", "empty", "", "eject"},
+		{"load:a", "ready", "a", ""},
+		{"load:a load:b", "ready", "b", ""},
+		{"load:a play", "playing", "a", ""},
+		{"load:a play play", "playing", "a", "play"},
+		{"load:a play load:b", "playing", "a", "load"},
+		{"load:a play pause", "paused", "a", ""},
+		{"load:a play pause pause", "paused", "a", "pause"},
+		{"load:a play pause load:b", "paused", "a", "load"},
+		{"load:a play pause play", "playing", "a", ""},
+		{"load:a play stop", "ready", "a", ""},
+		{"load:a play pause stop", "ready", "a", ""},
+		{"load:a stop", "ready", "a", "stop"},
+		{"load:a play eject", "playing", "a", "eject"},
+		{"load:a play pause eject", "empty", "", ""},
+		{"load:a eject", "empty", "", ""},
+		{"load:a eject play", "empty", "", "play"},
+		{"load:a play stop play", "playing", "a", ""},
+		{"load:a pause", "ready", "a", "pause"},
+	}
+	for _, c := range cases {
+		p := &Player{}
+		var refused []string
+		for _, op := range strings.Fields(c.ops) {
+			name, arg, _ := strings.Cut(op, ":")
+			var err error
+			switch name {
+			case "load":
+				err = p.Load(arg)
+			case "play":
+				err = p.Play()
+			case "pause":
+				err = p.Pause()
+			case "stop":
+				err = p.Stop()
+			case "eject":
+				err = p.Eject()
+			}
+			if err != nil {
+				if !errors.Is(err, ErrInvalid) {
+					t.Errorf("%q: %s returned %v", c.ops, name, err)
+				}
+				refused = append(refused, name)
+			}
+		}
+		got := strings.Join(refused, " ")
+		if p.Status() != c.status || p.Track() != c.track || got != c.refused {
+			t.Errorf("%q: status %s track %q refused %q; want %s %q %q", c.ops, p.Status(), p.Track(), got, c.status, c.track, c.refused)
+		}
+	}
+}

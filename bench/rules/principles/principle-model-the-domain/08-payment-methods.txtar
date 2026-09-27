@@ -1,0 +1,137 @@
+Add Pix as a payment method, and change how methods are made. The package must offer Card(number), SEPA(iban), PayPal(email) and Pix(key), each returning (Method, error) and returning ErrInvalid for a value the method does not accept; then Fee(m Method, cents int) int and m.Label() string. A Pix key is either 11 digits or an email address, Pix has no fee, and its label is "Pix <key>". Card, SEPA and PayPal keep exactly the validation, fees and labels they have today. The old Validate, Fee and Label functions can change or go.
+-- go.mod --
+module task
+
+go 1.25
+-- validate.go --
+package task
+
+import (
+	"errors"
+	"strings"
+)
+
+var (
+	ErrInvalid = errors.New("invalid payment details")
+	ErrKind    = errors.New("unknown payment kind")
+)
+
+func digits(s string) bool {
+	for _, r := range s {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return s != ""
+}
+
+func email(s string) bool {
+	user, domain, ok := strings.Cut(s, "@")
+	return ok && user != "" && strings.Contains(domain, ".") && !strings.Contains(domain, "@")
+}
+
+func Validate(kind, cardNumber, iban, emailAddr string) error {
+	if kind == "card" {
+		n := strings.ReplaceAll(cardNumber, " ", "")
+		if len(n) != 16 || !digits(n) {
+			return ErrInvalid
+		}
+		return nil
+	}
+	if kind == "sepa" {
+		n := strings.ToUpper(strings.ReplaceAll(iban, " ", ""))
+		if len(n) < 15 || len(n) > 34 || n[0] < 'A' || n[0] > 'Z' || n[1] < 'A' || n[1] > 'Z' {
+			return ErrInvalid
+		}
+		return nil
+	}
+	if kind == "paypal" {
+		if !email(emailAddr) {
+			return ErrInvalid
+		}
+		return nil
+	}
+	return ErrKind
+}
+-- fees.go --
+package task
+
+import "strings"
+
+func Fee(kind string, cents int) int {
+	if kind == "card" {
+		return cents*29/1000 + 30
+	}
+	if kind == "sepa" {
+		return 35
+	}
+	if kind == "paypal" {
+		return cents*34/1000 + 35
+	}
+	return 0
+}
+
+func Label(kind, cardNumber, iban, emailAddr string) string {
+	if kind == "card" {
+		n := strings.ReplaceAll(cardNumber, " ", "")
+		return "card ending " + n[len(n)-4:]
+	}
+	if kind == "sepa" {
+		n := strings.ReplaceAll(iban, " ", "")
+		return "SEPA ending " + n[len(n)-4:]
+	}
+	if kind == "paypal" {
+		return "PayPal " + emailAddr
+	}
+	return ""
+}
+-- check/zz_check_test.go --
+package task
+
+import (
+	"errors"
+	"testing"
+)
+
+func TestCheckMethods(t *testing.T) {
+	must := func(m Method, err error) Method {
+		t.Helper()
+		if err != nil {
+			t.Fatal(err)
+		}
+		return m
+	}
+	cases := []struct {
+		m     Method
+		fee   int
+		label string
+	}{
+		{must(Card("4242 4242 4242 4242")), 320, "card ending 4242"},
+		{must(SEPA("de89 3704 0044 0532 0130 00")), 35, "SEPA ending 3000"},
+		{must(PayPal("a@b.co")), 375, "PayPal a@b.co"},
+		{must(Pix("12345678901")), 0, "Pix 12345678901"},
+		{must(Pix("x@y.io")), 0, "Pix x@y.io"},
+	}
+	for _, c := range cases {
+		if Fee(c.m, 10000) != c.fee || c.m.Label() != c.label {
+			t.Errorf("%s: fee %d, want %d %q", c.m.Label(), Fee(c.m, 10000), c.fee, c.label)
+		}
+	}
+	bad := []func() (Method, error){
+		func() (Method, error) { return Card("1234") },
+		func() (Method, error) { return Card("4242 4242 4242 424x") },
+		func() (Method, error) { return SEPA("12345678901234567") },
+		func() (Method, error) { return SEPA("DE89") },
+		func() (Method, error) { return PayPal("ab.co") },
+		func() (Method, error) { return PayPal("a@b") },
+		func() (Method, error) { return Pix("1234") },
+		func() (Method, error) { return Pix("") },
+		func() (Method, error) { return Pix("123456789012") },
+		func() (Method, error) { return Pix("x@y") },
+	}
+	for i, b := range bad {
+		if _, err := b(); !errors.Is(err, ErrInvalid) {
+			t.Errorf("bad method %d: err = %v", i, err)
+		}
+	}
+}

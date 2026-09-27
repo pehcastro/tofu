@@ -1,4 +1,4 @@
-package rules
+package fire
 
 import (
 	"testing"
@@ -6,7 +6,7 @@ import (
 	"tofu/internal/sys"
 )
 
-const repoRoot = "../.."
+const repoRoot = "../../.."
 
 func TestReadDirReadsTheRealLog(t *testing.T) {
 	fires, unreadable, err := ReadDir(sys.RecordedStateDir("log"))

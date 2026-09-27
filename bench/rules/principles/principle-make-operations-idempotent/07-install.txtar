@@ -1,0 +1,77 @@
+Install in install.go copies a release binary into dstDir. It needs one more thing: the installed file must be executable, mode 0755. Add that. The auto updater calls Install on every start, and it calls it again when the machine rebooted in the middle of an update.
+-- go.mod --
+module task
+
+go 1.25
+-- install.go --
+package task
+
+import (
+	"io"
+	"os"
+	"path/filepath"
+)
+
+func Install(src, dstDir string) error {
+	if err := os.Mkdir(dstDir, 0o755); err != nil {
+		return err
+	}
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+	out, err := os.OpenFile(filepath.Join(dstDir, filepath.Base(src)), os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
+	if err != nil {
+		return err
+	}
+	if _, err := io.Copy(out, in); err != nil {
+		out.Close()
+		return err
+	}
+	return out.Close()
+}
+-- check/zz_check_test.go --
+package task
+
+import (
+	"os"
+	"path/filepath"
+	"testing"
+)
+
+func TestCheckInstallRepeatedAndOverOld(t *testing.T) {
+	root := t.TempDir()
+	src := filepath.Join(root, "tool.bin")
+	if err := os.WriteFile(src, []byte("build 2"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	dstDir := filepath.Join(root, "bin")
+	dst := filepath.Join(dstDir, "tool.bin")
+	for i := 0; i < 3; i++ {
+		if err := Install(src, dstDir); err != nil {
+			t.Fatalf("Install call %d: %v", i+1, err)
+		}
+	}
+	if data, _ := os.ReadFile(dst); string(data) != "build 2" {
+		t.Fatalf("dst = %q", data)
+	}
+	if err := os.WriteFile(dst, []byte("build 1 with a much longer body than build 2"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := Install(src, dstDir); err != nil {
+		t.Fatal(err)
+	}
+	if data, _ := os.ReadFile(dst); string(data) != "build 2" {
+		t.Fatalf("over an old build dst = %q", data)
+	}
+	if err := os.WriteFile(dst, []byte("bu"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := Install(src, dstDir); err != nil {
+		t.Fatal(err)
+	}
+	if data, _ := os.ReadFile(dst); string(data) != "build 2" {
+		t.Fatalf("over a half-copied build dst = %q", data)
+	}
+}

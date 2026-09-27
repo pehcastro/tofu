@@ -1,0 +1,64 @@
+Implement EnableFeature in feature.go. It turns a feature on in the plain text config file at path: the file holds one key=value per line, and the feature's line is feature.<name>=on. Create the file if it does not exist, keep every other line as it is, and if the feature is already present with another value it becomes on. The deploy pipeline calls EnableFeature on every deploy, and a deploy that times out is retried from the start.
+-- go.mod --
+module task
+
+go 1.25
+-- feature.go --
+package task
+
+func EnableFeature(path, name string) error {
+	return nil
+}
+-- check/zz_check_test.go --
+package task
+
+import (
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
+
+func checkLines(t *testing.T, path string) []string {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return strings.Fields(string(data))
+}
+
+func TestCheckRepeatedCalls(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "app.conf")
+	for i := 0; i < 3; i++ {
+		if err := EnableFeature(path, "search"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got := checkLines(t, path); len(got) != 1 || got[0] != "feature.search=on" {
+		t.Errorf("after three calls: %q", got)
+	}
+}
+
+func TestCheckExistingFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "app.conf")
+	if err := os.WriteFile(path, []byte("port=80\nfeature.search=off\nname=x\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 2; i++ {
+		if err := EnableFeature(path, "search"); err != nil {
+			t.Fatal(err)
+		}
+		if err := EnableFeature(path, "beta"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got := checkLines(t, path)
+	count := map[string]int{}
+	for _, l := range got {
+		count[l]++
+	}
+	if len(got) != 4 || count["port=80"] != 1 || count["name=x"] != 1 || count["feature.search=on"] != 1 || count["feature.beta=on"] != 1 {
+		t.Errorf("file is %q", got)
+	}
+}

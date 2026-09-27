@@ -1,0 +1,127 @@
+Code in this package decides what to do with an error by comparing its text. That breaks as soon as an error is wrapped. Replace every comparison of error text in the package with errors.Is against the sentinel errors declared in errors.go, so that a wrapped error is handled the same as a bare one.
+-- go.mod --
+module task
+
+go 1.25
+-- errors.go --
+package task
+
+import "errors"
+
+var (
+	ErrNotFound = errors.New("not found")
+	ErrExpired  = errors.New("expired")
+	ErrDenied   = errors.New("denied")
+)
+-- cache.go --
+package task
+
+func CacheStatus(err error) string {
+	if err == nil {
+		return "hit"
+	}
+	if err.Error() == "not found" {
+		return "miss"
+	}
+	if err.Error() == "expired" {
+		return "stale"
+	}
+	return "error"
+}
+
+func ShouldRefetch(err error) bool {
+	return err != nil && (err.Error() == "not found" || err.Error() == "expired")
+}
+-- http.go --
+package task
+
+import "strings"
+
+func StatusCode(err error) int {
+	switch {
+	case err == nil:
+		return 200
+	case err.Error() == "not found":
+		return 404
+	case err.Error() == "denied":
+		return 403
+	case strings.Contains(err.Error(), "expired"):
+		return 410
+	}
+	return 500
+}
+
+func Retryable(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	return msg != "denied" && msg != "not found"
+}
+-- audit.go --
+package task
+
+func Severity(err error) int {
+	if err != nil && err.Error() == ErrDenied.Error() {
+		return 3
+	}
+	if err != nil && err.Error() == ErrExpired.Error() {
+		return 1
+	}
+	return 0
+}
+-- check/zz_check_test.go --
+package task
+
+import (
+	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
+	"regexp"
+	"strings"
+	"testing"
+)
+
+func TestCheckNoTextComparison(t *testing.T) {
+	text := regexp.MustCompile(`\.Error\(\)\s*(==|!=)|strings\.Contains\([^)]*\.Error\(\)|msg\s*(==|!=)`)
+	files, _ := filepath.Glob("*.go")
+	for _, f := range files {
+		if strings.HasSuffix(f, "_test.go") {
+			continue
+		}
+		data, err := os.ReadFile(f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if text.Match(data) {
+			t.Errorf("%s still compares error text", f)
+		}
+	}
+}
+
+func TestCheckWrappedErrors(t *testing.T) {
+	wrap := func(err error) error { return fmt.Errorf("layer: %w", err) }
+	other := errors.New("boom")
+	for _, e := range []error{ErrNotFound, wrap(ErrNotFound), wrap(wrap(ErrNotFound))} {
+		if CacheStatus(e) != "miss" || !ShouldRefetch(e) || StatusCode(e) != 404 || Retryable(e) || Severity(e) != 0 {
+			t.Errorf("not found handled wrong for %v", e)
+		}
+	}
+	for _, e := range []error{ErrExpired, wrap(ErrExpired)} {
+		if CacheStatus(e) != "stale" || !ShouldRefetch(e) || StatusCode(e) != 410 || !Retryable(e) || Severity(e) != 1 {
+			t.Errorf("expired handled wrong for %v", e)
+		}
+	}
+	for _, e := range []error{ErrDenied, wrap(ErrDenied)} {
+		if CacheStatus(e) != "error" || ShouldRefetch(e) || StatusCode(e) != 403 || Retryable(e) || Severity(e) != 3 {
+			t.Errorf("denied handled wrong for %v", e)
+		}
+	}
+	if CacheStatus(other) != "error" || ShouldRefetch(other) || StatusCode(other) != 500 || !Retryable(other) || Severity(other) != 0 {
+		t.Error("an unrelated error handled wrong")
+	}
+	if CacheStatus(nil) != "hit" || StatusCode(nil) != 200 || Retryable(nil) || Severity(nil) != 0 {
+		t.Error("nil handled wrong")
+	}
+}

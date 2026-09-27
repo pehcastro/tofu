@@ -1,0 +1,117 @@
+Change clamp so its parameters are (lo, hi, v int) instead of (v, lo, hi int), and update every caller in the package so that every exported function returns exactly what it returns today.
+-- go.mod --
+module task
+
+go 1.25
+-- clamp.go --
+package task
+
+func clamp(v, lo, hi int) int {
+	if v < lo {
+		return lo
+	}
+	if v > hi {
+		return hi
+	}
+	return v
+}
+-- audio.go --
+package task
+
+func Volume(v int) int { return clamp(v, 0, 100) }
+
+func Balance(left, right int) int {
+	return clamp(right-left, -50, 50)
+}
+
+func Mix(a, b int) int {
+	return clamp(clamp(a, 0, 100)+clamp(b, 0, 100), 0, 150)
+}
+-- video.go --
+package task
+
+func Brightness(v int) int { return clamp(v, 10, 90) }
+
+func Contrast(v, max int) int {
+	lo := max / 4
+	return clamp(v,
+		lo,
+		max)
+}
+
+func Frame(width, height int) (int, int) {
+	return clamp(width, 320, 3840), clamp(height, 240, 2160)
+}
+-- ui.go --
+package task
+
+func Scroll(pos, total, page int) int {
+	return clamp(pos, 0, total-page)
+}
+
+func Zoom(level int) int {
+	hi := 400
+	return clamp(level*2, 25, hi)
+}
+
+func Percent(done, total int) int {
+	if total == 0 {
+		return 0
+	}
+	return clamp(done*100/total, 0, 100)
+}
+-- check/zz_check_test.go --
+package task
+
+import "testing"
+
+func TestCheckClampNewOrder(t *testing.T) {
+	if got := clamp(0, 10, 5); got != 5 {
+		t.Errorf("clamp(0, 10, 5) = %d, want 5", got)
+	}
+	if got := clamp(0, 10, -3); got != 0 {
+		t.Errorf("clamp(0, 10, -3) = %d, want 0", got)
+	}
+	if got := clamp(0, 10, 99); got != 10 {
+		t.Errorf("clamp(0, 10, 99) = %d, want 10", got)
+	}
+}
+
+func TestCheckCallersUnchanged(t *testing.T) {
+	cases := []struct {
+		name      string
+		got, want int
+	}{
+		{"Volume(120)", Volume(120), 100},
+		{"Volume(-4)", Volume(-4), 0},
+		{"Volume(40)", Volume(40), 40},
+		{"Balance(0, 80)", Balance(0, 80), 50},
+		{"Balance(80, 0)", Balance(80, 0), -50},
+		{"Balance(10, 20)", Balance(10, 20), 10},
+		{"Mix(90, 90)", Mix(90, 90), 150},
+		{"Mix(120, -5)", Mix(120, -5), 100},
+		{"Mix(30, 40)", Mix(30, 40), 70},
+		{"Brightness(5)", Brightness(5), 10},
+		{"Brightness(95)", Brightness(95), 90},
+		{"Contrast(10, 100)", Contrast(10, 100), 25},
+		{"Contrast(130, 100)", Contrast(130, 100), 100},
+		{"Contrast(60, 100)", Contrast(60, 100), 60},
+		{"Scroll(90, 100, 20)", Scroll(90, 100, 20), 80},
+		{"Scroll(-1, 100, 20)", Scroll(-1, 100, 20), 0},
+		{"Zoom(5)", Zoom(5), 25},
+		{"Zoom(300)", Zoom(300), 400},
+		{"Zoom(50)", Zoom(50), 100},
+		{"Percent(3, 4)", Percent(3, 4), 75},
+		{"Percent(9, 4)", Percent(9, 4), 100},
+		{"Percent(1, 0)", Percent(1, 0), 0},
+	}
+	for _, c := range cases {
+		if c.got != c.want {
+			t.Errorf("%s = %d, want %d", c.name, c.got, c.want)
+		}
+	}
+	w, h := Frame(100, 5000)
+	if w != 320 || h != 2160 {
+		t.Errorf("Frame(100, 5000) = %d, %d, want 320, 2160", w, h)
+	}
+}

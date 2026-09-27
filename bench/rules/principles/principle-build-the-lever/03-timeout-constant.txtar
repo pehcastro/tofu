@@ -1,0 +1,124 @@
+This package spells a thirty second duration inline in many places. Add a package level constant requestTimeout equal to thirty seconds and use it at every one of those places, so the value is written exactly once. No behaviour changes.
+-- go.mod --
+module task
+
+go 1.25
+-- client.go --
+package task
+
+import "time"
+
+type Client struct {
+	Timeout time.Duration
+	Idle    time.Duration
+}
+
+func NewClient() Client {
+	return Client{Timeout: 30 * time.Second, Idle: 30 * time.Minute}
+}
+
+func (c Client) Deadline(start time.Time) time.Time {
+	return start.Add(30*time.Second)
+}
+
+func RetryAfter(attempt int) time.Duration {
+	if attempt > 3 {
+		return time.Second * 30
+	}
+	return time.Duration(attempt) * time.Second
+}
+-- server.go --
+package task
+
+import "time"
+
+type Server struct {
+	Read, Write, Shutdown time.Duration
+}
+
+func NewServer() Server {
+	return Server{
+		Read:     30 * time.Second,
+		Write:    30 * time.Second,
+		Shutdown: 2 * 30 * time.Second,
+	}
+}
+
+func KeepAlive() time.Duration { return 30 * time.Second / 2 }
+-- jobs.go --
+package task
+
+import "time"
+
+func JobTimeout(heavy bool) time.Duration {
+	if heavy {
+		return 4 * (30 * time.Second)
+	}
+	return 30 * time.Second
+}
+
+func PollEvery() time.Duration { return 30000 * time.Millisecond }
+
+func Cooldown() time.Duration { return 30 * time.Minute }
+-- check/zz_check_test.go --
+package task
+
+import (
+	"os"
+	"path/filepath"
+	"regexp"
+	"strings"
+	"testing"
+	"time"
+)
+
+func TestCheckWrittenOnce(t *testing.T) {
+	inline := regexp.MustCompile(`30\s*\*\s*time\.Second|time\.Second\s*\*\s*30|30000\s*\*\s*time\.Millisecond`)
+	found := 0
+	files, _ := filepath.Glob("*.go")
+	for _, f := range files {
+		if strings.HasSuffix(f, "_test.go") {
+			continue
+		}
+		data, err := os.ReadFile(f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		found += len(inline.FindAll(data, -1))
+	}
+	if found != 1 {
+		t.Errorf("thirty seconds is spelled inline %d times, want 1, the constant itself", found)
+	}
+	if requestTimeout != 30*time.Second {
+		t.Errorf("requestTimeout = %v", requestTimeout)
+	}
+}
+
+func TestCheckValuesUnchanged(t *testing.T) {
+	c := NewClient()
+	s := NewServer()
+	start := time.Unix(0, 0)
+	cases := []struct {
+		name      string
+		got, want time.Duration
+	}{
+		{"client timeout", c.Timeout, 30 * time.Second},
+		{"client idle", c.Idle, 30 * time.Minute},
+		{"deadline", c.Deadline(start).Sub(start), 30 * time.Second},
+		{"retry 5", RetryAfter(5), 30 * time.Second},
+		{"retry 2", RetryAfter(2), 2 * time.Second},
+		{"read", s.Read, 30 * time.Second},
+		{"write", s.Write, 30 * time.Second},
+		{"shutdown", s.Shutdown, time.Minute},
+		{"keepalive", KeepAlive(), 15 * time.Second},
+		{"heavy", JobTimeout(true), 2 * time.Minute},
+		{"light", JobTimeout(false), 30 * time.Second},
+		{"poll", PollEvery(), 30 * time.Second},
+		{"cooldown", Cooldown(), 30 * time.Minute},
+	}
+	for _, c := range cases {
+		if c.got != c.want {
+			t.Errorf("%s = %v, want %v", c.name, c.got, c.want)
+		}
+	}
+}

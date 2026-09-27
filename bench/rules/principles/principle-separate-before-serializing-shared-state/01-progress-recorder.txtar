@@ -1,0 +1,125 @@
+Two services on the same host, the indexer and the metrics collector, run as different processes and both record their progress with a Recorder over the same directory. Each service only sets keys that start with its name and a dot. Values set by one service sometimes vanish, and Read now and then fails. Fix it: Read(dir) must return every key either service has set, with the latest value it set. Keep the API in recorder.go.
+-- go.mod --
+module task
+
+go 1.25
+-- recorder.go --
+package task
+
+import (
+	"encoding/json"
+	"errors"
+	"io/fs"
+	"os"
+	"path/filepath"
+)
+
+type Recorder struct {
+	dir   string
+	actor string
+}
+
+func NewRecorder(dir, actor string) *Recorder {
+	return &Recorder{dir: dir, actor: actor}
+}
+
+func (r *Recorder) Set(key, value string) error {
+	m, err := Read(r.dir)
+	if err != nil {
+		return err
+	}
+	m[key] = value
+	out, err := json.Marshal(m)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(r.dir, "state.json"), out, 0o644)
+}
+
+func Read(dir string) (map[string]string, error) {
+	m := map[string]string{}
+	data, err := os.ReadFile(filepath.Join(dir, "state.json"))
+	if errors.Is(err, fs.ErrNotExist) {
+		return m, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return m, json.Unmarshal(data, &m)
+}
+-- check/zz_check_test.go --
+package task
+
+import (
+	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strconv"
+	"testing"
+	"time"
+)
+
+const checkWrites = 300
+
+func TestZZActor(t *testing.T) {
+	actor, dir := os.Getenv("CHECK_ACTOR"), os.Getenv("CHECK_DIR")
+	if actor == "" {
+		t.Skip("run by TestCheckTwoProcesses")
+	}
+	for {
+		if _, err := os.Stat(filepath.Join(dir, "..", "go")); err == nil {
+			break
+		}
+		time.Sleep(time.Millisecond)
+	}
+	r := NewRecorder(dir, actor)
+	for i := 0; i < checkWrites; i++ {
+		if err := r.Set(fmt.Sprintf("%s.k%d", actor, i), strconv.Itoa(i)); err != nil {
+			t.Fatal(err)
+		}
+		if err := r.Set(actor+".last", strconv.Itoa(i)); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+func TestCheckTwoProcesses(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "state")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	var cmds []*exec.Cmd
+	for _, actor := range []string{"indexer", "metrics"} {
+		cmd := exec.Command(os.Args[0], "-test.run=^TestZZActor$", "-test.count=1")
+		cmd.Env = append(os.Environ(), "CHECK_ACTOR="+actor, "CHECK_DIR="+dir)
+		if err := cmd.Start(); err != nil {
+			t.Fatal(err)
+		}
+		cmds = append(cmds, cmd)
+	}
+	if err := os.WriteFile(filepath.Join(root, "go"), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, cmd := range cmds {
+		if err := cmd.Wait(); err != nil {
+			t.Errorf("an actor process failed: %v", err)
+		}
+	}
+	m, err := Read(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, actor := range []string{"indexer", "metrics"} {
+		missing := 0
+		for i := 0; i < checkWrites; i++ {
+			if m[fmt.Sprintf("%s.k%d", actor, i)] != strconv.Itoa(i) {
+				missing++
+			}
+		}
+		if missing > 0 || m[actor+".last"] != strconv.Itoa(checkWrites-1) {
+			t.Errorf("%s: %d of %d keys lost, last = %q", actor, missing, checkWrites, m[actor+".last"])
+		}
+	}
+}

@@ -1,0 +1,107 @@
+The site runs several web server processes on one host, and every page view calls Hit(dir, page) in hits.go. Total(dir, page) is read by the dashboard, and it comes out lower than the number of page views in the access log. Fix it so Total counts every Hit made by any process.
+-- go.mod --
+module task
+
+go 1.25
+-- hits.go --
+package task
+
+import (
+	"errors"
+	"io/fs"
+	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
+)
+
+func Hit(dir, page string) error {
+	n, err := Total(dir, page)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(dir, page+".count"), []byte(strconv.Itoa(n+1)), 0o644)
+}
+
+func Total(dir, page string) (int, error) {
+	data, err := os.ReadFile(filepath.Join(dir, page+".count"))
+	if errors.Is(err, fs.ErrNotExist) {
+		return 0, nil
+	}
+	if err != nil {
+		return 0, err
+	}
+	text := strings.TrimSpace(string(data))
+	if text == "" {
+		return 0, nil
+	}
+	return strconv.Atoi(text)
+}
+-- check/zz_check_test.go --
+package task
+
+import (
+	"os"
+	"os/exec"
+	"path/filepath"
+	"testing"
+	"time"
+)
+
+const checkPerProcess = 400
+
+func TestZZActor(t *testing.T) {
+	dir := os.Getenv("CHECK_DIR")
+	if dir == "" {
+		t.Skip("run by TestCheckEveryHitCounted")
+	}
+	for {
+		if _, err := os.Stat(filepath.Join(dir, "..", "go")); err == nil {
+			break
+		}
+		time.Sleep(time.Millisecond)
+	}
+	for i := 0; i < checkPerProcess; i++ {
+		page := "home"
+		if i%4 == 0 {
+			page = "about"
+		}
+		if err := Hit(dir, page); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+func TestCheckEveryHitCounted(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "hits")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	var cmds []*exec.Cmd
+	for i := 0; i < 3; i++ {
+		cmd := exec.Command(os.Args[0], "-test.run=^TestZZActor$", "-test.count=1")
+		cmd.Env = append(os.Environ(), "CHECK_DIR="+dir)
+		if err := cmd.Start(); err != nil {
+			t.Fatal(err)
+		}
+		cmds = append(cmds, cmd)
+	}
+	if err := os.WriteFile(filepath.Join(root, "go"), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, cmd := range cmds {
+		if err := cmd.Wait(); err != nil {
+			t.Errorf("a server process failed: %v", err)
+		}
+	}
+	for page, want := range map[string]int{"home": 3 * checkPerProcess * 3 / 4, "about": 3 * checkPerProcess / 4} {
+		got, err := Total(dir, page)
+		if err != nil || got != want {
+			t.Errorf("Total(%s) = %d, %v; want %d", page, got, err, want)
+		}
+	}
+	if got, err := Total(dir, "never"); err != nil || got != 0 {
+		t.Errorf("Total(never) = %d, %v", got, err)
+	}
+}

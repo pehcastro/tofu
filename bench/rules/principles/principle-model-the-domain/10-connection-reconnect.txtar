@@ -1,0 +1,142 @@
+Add reconnection to Conn in conn.go. A connection that was lost is now dropped, not idle: Drop moves a connected connection to dropped, and Timeout moves a connecting one to dropped. Reconnect moves a dropped connection back to connecting. After 5 Reconnect calls that never reached connected, the next Reconnect returns ErrGiveUp and the connection is closed; reaching connected starts the count again. Dial only works from idle. Close works from any state except closed, and a closed connection accepts nothing. Status is one of idle, connecting, connected, dropped, closed. Any other call returns ErrState and changes nothing.
+-- go.mod --
+module task
+
+go 1.25
+-- conn.go --
+package task
+
+import "errors"
+
+var (
+	ErrState  = errors.New("not allowed in this state")
+	ErrGiveUp = errors.New("gave up reconnecting")
+)
+
+type Conn struct {
+	connecting bool
+	connected  bool
+	closed     bool
+}
+
+func (c *Conn) Dial() error {
+	if c.closed || c.connected {
+		return ErrState
+	}
+	c.connecting = true
+	return nil
+}
+
+func (c *Conn) Established() error {
+	if !c.connecting {
+		return ErrState
+	}
+	c.connecting, c.connected = false, true
+	return nil
+}
+
+func (c *Conn) Drop() error {
+	if !c.connected {
+		return ErrState
+	}
+	c.connected = false
+	return nil
+}
+
+func (c *Conn) Close() error {
+	if c.closed {
+		return ErrState
+	}
+	c.connecting, c.connected, c.closed = false, false, true
+	return nil
+}
+
+func (c *Conn) Status() string {
+	switch {
+	case c.closed:
+		return "closed"
+	case c.connected:
+		return "connected"
+	case c.connecting:
+		return "connecting"
+	}
+	return "idle"
+}
+-- check/zz_check_test.go --
+package task
+
+import (
+	"errors"
+	"strings"
+	"testing"
+)
+
+func TestCheckConn(t *testing.T) {
+	five := strings.Repeat("reconnect timeout ", 5)
+	cases := []struct {
+		ops, status, refused string
+	}{
+		{"", "idle", ""},
+		{"dial", "connecting", ""},
+		{"dial dial", "connecting", "dial"},
+		{"est", "idle", "est"},
+		{"dial est", "connected", ""},
+		{"dial est dial", "connected", "dial"},
+		{"drop", "idle", "drop"},
+		{"dial drop", "connecting", "drop"},
+		{"dial est drop", "dropped", ""},
+		{"dial est drop dial", "dropped", "dial"},
+		{"dial est drop drop", "dropped", "drop"},
+		{"dial timeout", "dropped", ""},
+		{"timeout", "idle", "timeout"},
+		{"reconnect", "idle", "reconnect"},
+		{"dial est drop reconnect", "connecting", ""},
+		{"dial est drop reconnect reconnect", "connecting", "reconnect"},
+		{"dial est drop reconnect est", "connected", ""},
+		{"dial est drop " + five, "dropped", ""},
+		{"dial est drop " + five + "reconnect", "closed", "giveup"},
+		{"dial est drop " + five + "reconnect dial", "closed", "giveup dial"},
+		{"dial est drop reconnect timeout reconnect est drop " + five, "dropped", ""},
+		{"dial est drop reconnect timeout reconnect est drop " + five + "reconnect", "closed", "giveup"},
+		{"dial timeout " + five + "reconnect", "closed", "giveup"},
+		{"close", "closed", ""},
+		{"close close", "closed", "close"},
+		{"close dial", "closed", "dial"},
+		{"dial est drop close", "closed", ""},
+		{"dial est drop close reconnect", "closed", "reconnect"},
+	}
+	for _, c := range cases {
+		conn := &Conn{}
+		var refused []string
+		for _, op := range strings.Fields(c.ops) {
+			var err error
+			switch op {
+			case "dial":
+				err = conn.Dial()
+			case "est":
+				err = conn.Established()
+			case "drop":
+				err = conn.Drop()
+			case "timeout":
+				err = conn.Timeout()
+			case "reconnect":
+				err = conn.Reconnect()
+			case "close":
+				err = conn.Close()
+			}
+			switch {
+			case err == nil:
+			case errors.Is(err, ErrGiveUp):
+				refused = append(refused, "giveup")
+			case errors.Is(err, ErrState):
+				refused = append(refused, op)
+			default:
+				t.Errorf("%q: %s returned %v", c.ops, op, err)
+			}
+		}
+		got := strings.Join(refused, " ")
+		if conn.Status() != c.status || got != c.refused {
+			t.Errorf("%q: status %s refused %q; want %s %q", c.ops, conn.Status(), got, c.status, c.refused)
+		}
+	}
+}

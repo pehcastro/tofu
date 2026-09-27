@@ -1,0 +1,134 @@
+The package was renamed from store to kv. Every error message the package produces that starts with "store: " must start with "kv: " instead, with the rest of the message unchanged. Messages that do not start with "store: " must not change.
+-- go.mod --
+module task
+
+go 1.25
+-- kv.go --
+package task
+
+import (
+	"errors"
+	"fmt"
+	"strings"
+)
+
+var ErrClosed = errors.New("store: closed")
+
+type KV struct {
+	data   map[string]string
+	closed bool
+}
+
+func New() *KV { return &KV{data: map[string]string{}} }
+
+func (k *KV) Get(key string) (string, error) {
+	if k.closed {
+		return "", ErrClosed
+	}
+	v, ok := k.data[key]
+	if !ok {
+		return "", fmt.Errorf("store: key %q not found", key)
+	}
+	return v, nil
+}
+
+func (k *KV) Put(key, value string) error {
+	if k.closed {
+		return ErrClosed
+	}
+	if key == "" {
+		return errors.New("store: empty key")
+	}
+	if strings.ContainsAny(key, " \t") {
+		return fmt.Errorf("store: key %q has whitespace", key)
+	}
+	if len(value) > 64 {
+		return fmt.Errorf(
+			"store: value for %q is %d bytes, limit %d",
+			key, len(value), 64,
+		)
+	}
+	k.data[key] = value
+	return nil
+}
+
+func (k *KV) Close() error {
+	if k.closed {
+		return fmt.Errorf("store: %w twice", ErrClosed)
+	}
+	k.closed = true
+	return nil
+}
+-- backup.go --
+package task
+
+import (
+	"errors"
+	"fmt"
+	"strings"
+)
+
+func (k *KV) Restore(dump string) error {
+	for i, line := range strings.Split(dump, "\n") {
+		if line == "" {
+			continue
+		}
+		key, value, ok := strings.Cut(line, "=")
+		if !ok {
+			return fmt.Errorf("restore: line %d has no =", i+1)
+		}
+		if err := k.Put(key, value); err != nil {
+			return fmt.Errorf("restore: line %d: %w", i+1, err)
+		}
+	}
+	return nil
+}
+
+func Validate(dump string) error {
+	if dump == "" {
+		return errors.New("store: empty dump")
+	}
+	if !strings.HasSuffix(dump, "\n") {
+		return errors.New("datastore: dump must end in a newline")
+	}
+	return nil
+}
+-- check/zz_check_test.go --
+package task
+
+import (
+	"strings"
+	"testing"
+)
+
+func TestCheckMessages(t *testing.T) {
+	k := New()
+	_, getErr := k.Get("a")
+	cases := []struct {
+		got  error
+		want string
+	}{
+		{getErr, `kv: key "a" not found`},
+		{k.Put("", "x"), "kv: empty key"},
+		{k.Put("a b", "x"), `kv: key "a b" has whitespace`},
+		{k.Put("a", strings.Repeat("x", 65)), `kv: value for "a" is 65 bytes, limit 64`},
+		{k.Restore("a=1\nb\n"), "restore: line 2 has no ="},
+		{k.Restore("c d=1\n"), `restore: line 1: kv: key "c d" has whitespace`},
+		{Validate(""), "kv: empty dump"},
+		{Validate("a=1"), "datastore: dump must end in a newline"},
+	}
+	for i, c := range cases {
+		if c.got == nil || c.got.Error() != c.want {
+			t.Errorf("case %d: got %v, want %q", i, c.got, c.want)
+		}
+	}
+	if err := k.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := k.Close(); err == nil || err.Error() != "kv: kv: closed twice" {
+		t.Errorf("second Close = %v", err)
+	}
+	if _, err := k.Get("a"); err != ErrClosed || err.Error() != "kv: closed" {
+		t.Errorf("Get after Close = %v", err)
+	}
+}

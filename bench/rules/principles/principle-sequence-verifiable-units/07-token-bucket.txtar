@@ -1,0 +1,95 @@
+The limiter in limit.go is a fixed window counter, and clients burst at window edges. Replace it with a token bucket. New(rate, burst) makes a limiter that starts full with burst tokens and refills rate tokens per second, continuously, never above burst. Allow(now) takes one token and returns true if a whole token is available at time now, otherwise returns false and takes nothing. AllowN(now, n) does the same for n tokens at once, and n larger than burst is always false. Tokens(now) float64 reports the tokens available at now. If now is earlier than the latest time the limiter has seen, treat it as no time passing, and do not move the limiter's clock back. Keep the existing tests passing, updating them where the API changed.
+-- go.mod --
+module task
+
+go 1.25
+-- limit.go --
+package task
+
+import "time"
+
+type Limiter struct {
+	limit  int
+	window time.Duration
+	start  time.Time
+	count  int
+}
+
+func New(limit int, window time.Duration) *Limiter {
+	return &Limiter{limit: limit, window: window}
+}
+
+func (l *Limiter) Allow(now time.Time) bool {
+	if now.Sub(l.start) >= l.window {
+		l.start, l.count = now, 0
+	}
+	if l.count >= l.limit {
+		return false
+	}
+	l.count++
+	return true
+}
+-- limit_test.go --
+package task
+
+import (
+	"testing"
+	"time"
+)
+
+func TestAllow(t *testing.T) {
+	l := New(2, time.Second)
+	now := time.Unix(1000, 0)
+	if !l.Allow(now) || !l.Allow(now) || l.Allow(now) {
+		t.Error("the third call in the window should be refused")
+	}
+}
+-- check/zz_check_test.go --
+package task
+
+import (
+	"math"
+	"testing"
+	"time"
+)
+
+func TestCheckBucket(t *testing.T) {
+	start := time.Unix(1000, 0)
+	at := func(ms int) time.Time { return start.Add(time.Duration(ms) * time.Millisecond) }
+	l := New(2, 4)
+	if math.Abs(l.Tokens(start)-4) > 1e-9 {
+		t.Fatalf("a new limiter holds %v tokens, want 4", l.Tokens(start))
+	}
+	for i := 0; i < 4; i++ {
+		if !l.Allow(start) {
+			t.Fatalf("burst call %d refused", i)
+		}
+	}
+	if l.Allow(start) {
+		t.Fatal("fifth call at the same instant allowed")
+	}
+	if l.Allow(at(250)) {
+		t.Fatal("allowed with half a token")
+	}
+	if !l.Allow(at(500)) {
+		t.Fatal("refused with 1 token after half a second at rate 2")
+	}
+	if got := l.Tokens(at(10500)); math.Abs(got-4) > 1e-9 {
+		t.Fatalf("after ten idle seconds Tokens = %v, want the burst of 4", got)
+	}
+	if l.AllowN(at(10500), 5) {
+		t.Fatal("AllowN above burst allowed")
+	}
+	if math.Abs(l.Tokens(at(10500))-4) > 1e-9 {
+		t.Fatal("a refused AllowN took tokens")
+	}
+	if !l.AllowN(at(10500), 3) || l.AllowN(at(10500), 2) || !l.AllowN(at(10500), 1) {
+		t.Fatal("AllowN arithmetic")
+	}
+	if l.Allow(at(9000)) {
+		t.Fatal("an earlier timestamp produced a token")
+	}
+	if got := l.Tokens(at(10750)); math.Abs(got-0.5) > 1e-9 {
+		t.Fatalf("Tokens after 250 ms at rate 2 = %v, want 0.5", got)
+	}
+}

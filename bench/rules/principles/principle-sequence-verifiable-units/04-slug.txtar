@@ -1,0 +1,53 @@
+Slug in slug.go turns a title into a URL slug and needs to cover real titles. The rules: lower-case everything; turn the letters á à â ã ä, é è ê ë, í ì î ï, ó ò ô õ ö, ú ù û ü, ç and ñ, and their capitals, into their plain ASCII letter; every run of characters that are not a to z or 0 to 9 becomes a single dash; no dash at the start or end; and if the slug is longer than 40 characters, cut it back to the last whole word that fits in 40, never leaving a trailing dash, or to the first 40 characters when even the first word is longer. An empty result is "untitled". Keep the existing tests passing.
+-- go.mod --
+module task
+
+go 1.25
+-- slug.go --
+package task
+
+import "strings"
+
+func Slug(title string) string {
+	return strings.ReplaceAll(strings.ToLower(strings.TrimSpace(title)), " ", "-")
+}
+-- slug_test.go --
+package task
+
+import "testing"
+
+func TestSlug(t *testing.T) {
+	if got := Slug("Hello World"); got != "hello-world" {
+		t.Errorf("Slug = %q", got)
+	}
+}
+-- check/zz_check_test.go --
+package task
+
+import (
+	"strings"
+	"testing"
+)
+
+func TestCheckSlug(t *testing.T) {
+	cases := map[string]string{
+		"Hello World":                   "hello-world",
+		"  Hello,   World!  ":           "hello-world",
+		"Ação é Ótima":                  "acao-e-otima",
+		"Crème Brûlée & Café":           "creme-brulee-cafe",
+		"Niño Über":                     "nino-uber",
+		"--Go 1.25 -- released--":       "go-1-25-released",
+		"":                              "untitled",
+		"!!!":                           "untitled",
+		"日本語":                           "untitled",
+		"one two three four five six seven eight nine": "one-two-three-four-five-six-seven-eight",
+		strings.Repeat("a", 50):         strings.Repeat("a", 40),
+		"abc " + strings.Repeat("b", 50): "abc",
+		"exactly forty characters long title here": "exactly-forty-characters-long-title-here",
+	}
+	for in, want := range cases {
+		if got := Slug(in); got != want {
+			t.Errorf("Slug(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

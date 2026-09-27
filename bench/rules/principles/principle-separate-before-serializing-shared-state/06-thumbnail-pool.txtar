@@ -1,0 +1,56 @@
+Sizes in pool.go computes a thumbnail size for every image id using a pool of worker goroutines. Since the worker count went up, the service crashes now and then while running it. Fix it. Sizes must return a result for every id, and keep using the given number of workers.
+-- go.mod --
+module task
+
+go 1.25
+-- pool.go --
+package task
+
+import "sync"
+
+func thumbnail(id int) int {
+	return (id*7919)%1000 + 1
+}
+
+func Sizes(ids []int, workers int) map[int]int {
+	results := map[int]int{}
+	jobs := make(chan int)
+	var wg sync.WaitGroup
+	for w := 0; w < workers; w++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for id := range jobs {
+				results[id] = thumbnail(id)
+			}
+		}()
+	}
+	for _, id := range ids {
+		jobs <- id
+	}
+	close(jobs)
+	wg.Wait()
+	return results
+}
+-- check/zz_check_test.go --
+package task
+
+import "testing"
+
+func TestCheckSizes(t *testing.T) {
+	for round := 0; round < 5; round++ {
+		ids := make([]int, 50000)
+		for i := range ids {
+			ids[i] = i
+		}
+		got := Sizes(ids, 16)
+		if len(got) != len(ids) {
+			t.Fatalf("round %d: %d results for %d ids", round, len(got), len(ids))
+		}
+		for _, id := range ids {
+			if got[id] != thumbnail(id) {
+				t.Fatalf("round %d: size of %d = %d", round, id, got[id])
+			}
+		}
+	}
+}

@@ -1,0 +1,138 @@
+Every error in this package is built as errors.New(fmt.Sprintf(...)). Replace each one with the equivalent fmt.Errorf(...), keeping every message byte for byte the same. The package must still build with no unused imports.
+-- go.mod --
+module task
+
+go 1.25
+-- store.go --
+package task
+
+import (
+	"errors"
+	"fmt"
+)
+
+var ErrClosed = errors.New("store: closed")
+
+func OpenStore(name string) error {
+	if name == "" {
+		return errors.New(fmt.Sprintf("store: empty name"))
+	}
+	return errors.New(fmt.Sprintf("store: %s not found", name))
+}
+
+func StoreFull(used, limit int) error {
+	return errors.New(fmt.Sprintf("store: %d of %d used, 100%% full", used, limit))
+}
+
+func StoreKey(key string, size int) error {
+	return errors.New(fmt.Sprintf("store: key %q is %d bytes", key, size))
+}
+-- user.go --
+package task
+
+import (
+	"errors"
+	"fmt"
+)
+
+func UserAge(age int) error {
+	if age < 0 {
+		return errors.New(fmt.Sprintf("user: age %d below zero", age))
+	}
+	if age > 150 {
+		return errors.New(fmt.Sprintf("user: age %d above %d", age, 150))
+	}
+	return nil
+}
+
+func UserName(name string) error {
+	return errors.New(fmt.Sprintf(
+		"user: name %q has %d runes",
+		name, len([]rune(name)),
+	))
+}
+
+func UserRole(role string) error {
+	return errors.New(fmt.Sprintf("user: role %s unknown", role))
+}
+-- order.go --
+package task
+
+import (
+	"errors"
+	"fmt"
+)
+
+func OrderTotal(cents int) error {
+	return errors.New(fmt.Sprintf("order: total %d.%02d over limit", cents/100, cents%100))
+}
+
+func OrderItems(n int) error {
+	if n == 0 {
+		return errors.New(fmt.Sprintf("order: no items"))
+	}
+	return errors.New(fmt.Sprintf("order: %d items over %d", n, 50))
+}
+
+func OrderState(from, to string) error {
+	return errors.New(fmt.Sprintf("order: cannot go from %s to %s", from, to))
+}
+
+func OrderWrapped(err error) error {
+	return errors.New(fmt.Sprintf("order: %v", err))
+}
+-- check/zz_check_test.go --
+package task
+
+import (
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
+
+func TestCheckNoSprintfInsideErrorsNew(t *testing.T) {
+	files, _ := filepath.Glob("*.go")
+	for _, f := range files {
+		if strings.HasSuffix(f, "_test.go") {
+			continue
+		}
+		data, err := os.ReadFile(f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(strings.Join(strings.Fields(string(data)), ""), "errors.New(fmt.Sprintf(") {
+			t.Errorf("%s still builds an error with errors.New(fmt.Sprintf(", f)
+		}
+	}
+}
+
+func TestCheckMessagesUnchanged(t *testing.T) {
+	cases := []struct {
+		got  error
+		want string
+	}{
+		{ErrClosed, "store: closed"},
+		{OpenStore(""), "store: empty name"},
+		{OpenStore("a"), "store: a not found"},
+		{StoreFull(3, 3), "store: 3 of 3 used, 100% full"},
+		{StoreKey("k", 9), `store: key "k" is 9 bytes`},
+		{UserAge(-1), "user: age -1 below zero"},
+		{UserAge(151), "user: age 151 above 150"},
+		{UserName("ab"), `user: name "ab" has 2 runes`},
+		{UserRole("x"), "user: role x unknown"},
+		{OrderTotal(1205), "order: total 12.05 over limit"},
+		{OrderItems(0), "order: no items"},
+		{OrderItems(51), "order: 51 items over 50"},
+		{OrderState("a", "b"), "order: cannot go from a to b"},
+		{OrderWrapped(ErrClosed), "order: store: closed"},
+	}
+	for i, c := range cases {
+		if c.got == nil || c.got.Error() != c.want {
+			t.Errorf("case %d: got %v, want %q", i, c.got, c.want)
+		}
+	}
+	if UserAge(30) != nil {
+		t.Error("UserAge(30) should be nil")
+	}
+}

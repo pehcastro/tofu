@@ -1,0 +1,95 @@
+Implement Process in inbox.go. Messages arrive as files in dir/inbox. For each one, Process calls handle with the file name and body, writes the string handle returns to dir/done/<name>, and removes the message from dir/inbox. If handle fails for a message, that message stays in the inbox, the others are still processed, and Process returns an error. handle charges the customer's card. The worker runs under a supervisor that restarts it whenever it crashes.
+-- go.mod --
+module task
+
+go 1.25
+-- inbox.go --
+package task
+
+func Process(dir string, handle func(name, body string) (string, error)) error {
+	return nil
+}
+-- check/zz_check_test.go --
+package task
+
+import (
+	"errors"
+	"os"
+	"path/filepath"
+	"testing"
+)
+
+func checkWrite(t *testing.T, path, body string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestCheckCrashAfterResultWritten(t *testing.T) {
+	dir := t.TempDir()
+	checkWrite(t, filepath.Join(dir, "inbox", "a"), "charge 10")
+	checkWrite(t, filepath.Join(dir, "done", "a"), "receipt a")
+	checkWrite(t, filepath.Join(dir, "inbox", "b"), "charge 20")
+	calls := map[string]int{}
+	handle := func(name, body string) (string, error) {
+		calls[name]++
+		return "receipt " + name, nil
+	}
+	if err := Process(dir, handle); err != nil {
+		t.Fatal(err)
+	}
+	if calls["a"] != 0 {
+		t.Errorf("a was charged again after its receipt was already written")
+	}
+	if calls["b"] != 1 {
+		t.Errorf("b charged %d times", calls["b"])
+	}
+	if err := Process(dir, handle); err != nil {
+		t.Fatal(err)
+	}
+	if calls["b"] != 1 {
+		t.Errorf("b charged %d times after a second Process", calls["b"])
+	}
+	left, _ := os.ReadDir(filepath.Join(dir, "inbox"))
+	if len(left) != 0 {
+		t.Errorf("inbox still holds %d messages", len(left))
+	}
+	for _, name := range []string{"a", "b"} {
+		if data, _ := os.ReadFile(filepath.Join(dir, "done", name)); string(data) != "receipt "+name {
+			t.Errorf("done/%s = %q", name, data)
+		}
+	}
+}
+
+func TestCheckFailureKeepsMessage(t *testing.T) {
+	dir := t.TempDir()
+	checkWrite(t, filepath.Join(dir, "inbox", "x"), "charge 5")
+	checkWrite(t, filepath.Join(dir, "inbox", "y"), "charge 6")
+	fail := true
+	handle := func(name, body string) (string, error) {
+		if name == "x" && fail {
+			return "", errors.New("card declined")
+		}
+		return "ok " + name, nil
+	}
+	if err := Process(dir, handle); err == nil {
+		t.Fatal("Process returned nil with a failing message")
+	}
+	if _, err := os.Stat(filepath.Join(dir, "inbox", "x")); err != nil {
+		t.Error("the failed message left the inbox")
+	}
+	if _, err := os.Stat(filepath.Join(dir, "done", "x")); err == nil {
+		t.Error("the failed message has a result")
+	}
+	fail = false
+	if err := Process(dir, handle); err != nil {
+		t.Fatal(err)
+	}
+	if data, _ := os.ReadFile(filepath.Join(dir, "done", "x")); string(data) != "ok x" {
+		t.Errorf("done/x = %q", data)
+	}
+}

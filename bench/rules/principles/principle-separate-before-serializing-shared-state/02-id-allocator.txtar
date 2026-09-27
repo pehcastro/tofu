@@ -1,0 +1,125 @@
+NewID in ids.go hands out ids for uploaded files. Several upload server processes on the same host call it with the same directory, and customers have reported two uploads getting the same id. Fix it. An id must be a non-empty string of letters, digits and dashes that no other call, in any process, has returned. Ids do not need to be sequential or numeric.
+-- go.mod --
+module task
+
+go 1.25
+-- ids.go --
+package task
+
+import (
+	"errors"
+	"io/fs"
+	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
+)
+
+func NewID(dir string) (string, error) {
+	path := filepath.Join(dir, "next")
+	next := 1
+	data, err := os.ReadFile(path)
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return "", err
+	}
+	if err == nil {
+		if next, err = strconv.Atoi(strings.TrimSpace(string(data))); err != nil {
+			return "", err
+		}
+	}
+	if err := os.WriteFile(path, []byte(strconv.Itoa(next+1)), 0o644); err != nil {
+		return "", err
+	}
+	return strconv.Itoa(next), nil
+}
+-- check/zz_check_test.go --
+package task
+
+import (
+	"bufio"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"regexp"
+	"strings"
+	"testing"
+	"time"
+)
+
+const checkPerProcess = 300
+
+func TestZZActor(t *testing.T) {
+	dir, out := os.Getenv("CHECK_DIR"), os.Getenv("CHECK_OUT")
+	if dir == "" {
+		t.Skip("run by TestCheckProcessesNeverShareAnID")
+	}
+	for {
+		if _, err := os.Stat(filepath.Join(dir, "..", "go")); err == nil {
+			break
+		}
+		time.Sleep(time.Millisecond)
+	}
+	var ids []string
+	for i := 0; i < checkPerProcess; i++ {
+		id, err := NewID(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		ids = append(ids, id)
+	}
+	if err := os.WriteFile(out, []byte(strings.Join(ids, "\n")), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestCheckProcessesNeverShareAnID(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "ids")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	var cmds []*exec.Cmd
+	var outs []string
+	for i := 0; i < 3; i++ {
+		out := filepath.Join(root, "out"+string(rune('a'+i)))
+		cmd := exec.Command(os.Args[0], "-test.run=^TestZZActor$", "-test.count=1")
+		cmd.Env = append(os.Environ(), "CHECK_DIR="+dir, "CHECK_OUT="+out)
+		if err := cmd.Start(); err != nil {
+			t.Fatal(err)
+		}
+		cmds, outs = append(cmds, cmd), append(outs, out)
+	}
+	if err := os.WriteFile(filepath.Join(root, "go"), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, cmd := range cmds {
+		if err := cmd.Wait(); err != nil {
+			t.Errorf("a server process failed: %v", err)
+		}
+	}
+	valid := regexp.MustCompile(`^[A-Za-z0-9-]+$`)
+	seen := map[string]bool{}
+	total := 0
+	for _, out := range outs {
+		f, err := os.Open(out)
+		if err != nil {
+			t.Fatal(err)
+		}
+		scanner := bufio.NewScanner(f)
+		for scanner.Scan() {
+			id := scanner.Text()
+			total++
+			if !valid.MatchString(id) {
+				t.Errorf("id %q has characters outside letters, digits and dashes", id)
+			}
+			if seen[id] {
+				t.Errorf("id %q was handed out more than once", id)
+			}
+			seen[id] = true
+		}
+		f.Close()
+	}
+	if total != 3*checkPerProcess {
+		t.Errorf("read %d ids, want %d", total, 3*checkPerProcess)
+	}
+}

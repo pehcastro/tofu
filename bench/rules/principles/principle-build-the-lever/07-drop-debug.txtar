@@ -1,0 +1,136 @@
+Remove the debugf helper and every call to it from the package. The debug output goes away; everything else the package does must stay exactly the same, and the package must build with no unused imports or variables.
+-- go.mod --
+module task
+
+go 1.25
+-- debug.go --
+package task
+
+import (
+	"fmt"
+	"os"
+)
+
+func debugf(format string, args ...any) {
+	fmt.Fprintf(os.Stderr, "debug: "+format+"\n", args...)
+}
+-- parse.go --
+package task
+
+import (
+	"strconv"
+	"strings"
+)
+
+func ParseList(s string) []int {
+	debugf("parse %q", s)
+	var out []int
+	for _, part := range strings.Split(s, ",") {
+		part = strings.TrimSpace(part)
+		debugf("part %q", part)
+		n, err := strconv.Atoi(part)
+		if err != nil {
+			debugf("skip %q: %v", part, err)
+			continue
+		}
+		out = append(out, n)
+	}
+	debugf("parsed %d numbers",
+		len(out))
+	return out
+}
+-- stats.go --
+package task
+
+func Sum(xs []int) int {
+	total := 0
+	for i, x := range xs {
+		debugf("sum %d at %d", x, i)
+		total += x
+	}
+	return total
+}
+
+func Max(xs []int) (int, bool) {
+	if len(xs) == 0 {
+		debugf("max of nothing")
+		return 0, false
+	}
+	best := xs[0]
+	for _, x := range xs[1:] {
+		if x > best {
+			debugf("new max %d", x)
+			best = x
+		}
+	}
+	return best, true
+}
+
+func Mean(xs []int) float64 {
+	if len(xs) == 0 {
+		return 0
+	}
+	sum := Sum(xs)
+	debugf("mean %d/%d", sum, len(xs))
+	return float64(sum) / float64(len(xs))
+}
+-- report.go --
+package task
+
+import "fmt"
+
+func Report(s string) string {
+	xs := ParseList(s)
+	max, ok := Max(xs)
+	label := fmt.Sprintf("n=%d", len(xs))
+	debugf("label %s", label)
+	if !ok {
+		debugf("empty report")
+		return label
+	}
+	debugf("report max=%d mean=%.2f", max, Mean(xs))
+	return fmt.Sprintf("%s max=%d mean=%.2f", label, max, Mean(xs))
+}
+-- check/zz_check_test.go --
+package task
+
+import (
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
+
+func TestCheckDebugGone(t *testing.T) {
+	files, _ := filepath.Glob("*.go")
+	for _, f := range files {
+		if strings.HasSuffix(f, "_test.go") {
+			continue
+		}
+		data, err := os.ReadFile(f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(string(data), "debugf") {
+			t.Errorf("%s still mentions debugf", f)
+		}
+	}
+}
+
+func TestCheckBehaviourUnchanged(t *testing.T) {
+	if got := Report("3, x, 10,4"); got != "n=3 max=10 mean=5.67" {
+		t.Errorf("Report = %q", got)
+	}
+	if got := Report("a,b"); got != "n=0" {
+		t.Errorf("Report(empty) = %q", got)
+	}
+	if got := Sum([]int{1, 2, 3}); got != 6 {
+		t.Errorf("Sum = %d", got)
+	}
+	if got, ok := Max(nil); got != 0 || ok {
+		t.Errorf("Max(nil) = %d %v", got, ok)
+	}
+	if got := Mean(nil); got != 0 {
+		t.Errorf("Mean(nil) = %v", got)
+	}
+}

@@ -1,0 +1,102 @@
+The booking calendar in intervals.go keeps a set of busy time ranges as half-open intervals [Start, End). Add three operations and fix what they need. Normalize(xs) returns the set sorted by Start with overlapping or touching intervals merged and empty or inverted intervals dropped. Add(set, x) returns the normalized set with x added. Remove(set, x) returns the normalized set with the time in x taken out, splitting an interval in two where needed. Free(set, from, to) returns the gaps inside [from, to) not covered by the set, in order. None of them may modify the slice they were given. Keep the existing tests passing.
+-- go.mod --
+module task
+
+go 1.25
+-- intervals.go --
+package task
+
+import "sort"
+
+type Interval struct{ Start, End int }
+
+func Normalize(xs []Interval) []Interval {
+	sort.Slice(xs, func(i, j int) bool { return xs[i].Start < xs[j].Start })
+	var out []Interval
+	for _, x := range xs {
+		if len(out) > 0 && x.Start < out[len(out)-1].End {
+			out[len(out)-1].End = x.End
+			continue
+		}
+		out = append(out, x)
+	}
+	return out
+}
+-- intervals_test.go --
+package task
+
+import (
+	"slices"
+	"testing"
+)
+
+func TestNormalize(t *testing.T) {
+	got := Normalize([]Interval{{5, 8}, {1, 3}, {2, 4}})
+	if !slices.Equal(got, []Interval{{1, 4}, {5, 8}}) {
+		t.Errorf("Normalize = %v", got)
+	}
+}
+-- check/zz_check_test.go --
+package task
+
+import (
+	"slices"
+	"testing"
+)
+
+func TestCheckNormalize(t *testing.T) {
+	in := []Interval{{5, 8}, {1, 3}, {2, 4}, {4, 5}, {10, 10}, {12, 11}, {20, 30}, {21, 22}}
+	orig := slices.Clone(in)
+	got := Normalize(in)
+	if !slices.Equal(got, []Interval{{1, 8}, {20, 30}}) {
+		t.Errorf("Normalize = %v", got)
+	}
+	if !slices.Equal(in, orig) {
+		t.Error("Normalize modified its input")
+	}
+	if got := Normalize(nil); len(got) != 0 {
+		t.Errorf("Normalize(nil) = %v", got)
+	}
+}
+
+func TestCheckAddRemove(t *testing.T) {
+	set := []Interval{{1, 3}, {6, 9}}
+	orig := slices.Clone(set)
+	if got := Add(set, Interval{3, 6}); !slices.Equal(got, []Interval{{1, 9}}) {
+		t.Errorf("Add bridging = %v", got)
+	}
+	if got := Add(set, Interval{10, 12}); !slices.Equal(got, []Interval{{1, 3}, {6, 9}, {10, 12}}) {
+		t.Errorf("Add apart = %v", got)
+	}
+	if got := Remove(set, Interval{7, 8}); !slices.Equal(got, []Interval{{1, 3}, {6, 7}, {8, 9}}) {
+		t.Errorf("Remove split = %v", got)
+	}
+	if got := Remove(set, Interval{2, 7}); !slices.Equal(got, []Interval{{1, 2}, {7, 9}}) {
+		t.Errorf("Remove across = %v", got)
+	}
+	if got := Remove(set, Interval{0, 20}); len(got) != 0 {
+		t.Errorf("Remove all = %v", got)
+	}
+	if got := Remove(set, Interval{3, 6}); !slices.Equal(got, []Interval{{1, 3}, {6, 9}}) {
+		t.Errorf("Remove gap = %v", got)
+	}
+	if !slices.Equal(set, orig) {
+		t.Error("Add or Remove modified the set")
+	}
+}
+
+func TestCheckFree(t *testing.T) {
+	set := []Interval{{9, 10}, {12, 13}, {13, 15}}
+	if got := Free(set, 8, 17); !slices.Equal(got, []Interval{{8, 9}, {10, 12}, {15, 17}}) {
+		t.Errorf("Free = %v", got)
+	}
+	if got := Free(set, 9, 10); len(got) != 0 {
+		t.Errorf("Free inside busy = %v", got)
+	}
+	if got := Free(nil, 1, 4); !slices.Equal(got, []Interval{{1, 4}}) {
+		t.Errorf("Free empty = %v", got)
+	}
+	if got := Free(set, 11, 14); !slices.Equal(got, []Interval{{11, 12}}) {
+		t.Errorf("Free window = %v", got)
+	}
+}

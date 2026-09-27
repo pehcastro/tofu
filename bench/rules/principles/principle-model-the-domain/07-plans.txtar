@@ -1,0 +1,103 @@
+Add an enterprise plan next to free, pro and team. Enterprise has unlimited projects (MaxProjects returns -1), 5000 GB of storage, SSO, priority support, and costs 2500 cents per seat per month. Accounts must now be made with NewAccount(plan string, seats int) (Account, error): plan is one of free, pro, team, enterprise and anything else returns ErrPlan; free and pro have exactly 1 seat and team and enterprise at least 2, otherwise ErrSeats. Every existing plan keeps its current limits and prices.
+-- go.mod --
+module task
+
+go 1.25
+-- account.go --
+package task
+
+import "errors"
+
+var (
+	ErrPlan  = errors.New("unknown plan")
+	ErrSeats = errors.New("wrong number of seats for this plan")
+)
+
+type Account struct {
+	IsPro  bool
+	IsTeam bool
+	Seats  int
+}
+-- limits.go --
+package task
+
+func MaxProjects(a Account) int {
+	if a.IsTeam {
+		return 100
+	}
+	if a.IsPro {
+		return 20
+	}
+	return 3
+}
+
+func MaxStorageGB(a Account) int {
+	if a.IsTeam {
+		return 500
+	}
+	if a.IsPro {
+		return 50
+	}
+	return 1
+}
+-- features.go --
+package task
+
+func HasSSO(a Account) bool { return a.IsTeam }
+
+func PrioritySupport(a Account) bool { return a.IsPro || a.IsTeam }
+-- billing.go --
+package task
+
+func MonthlyPrice(a Account) int {
+	if a.IsTeam {
+		return 900 * a.Seats
+	}
+	if a.IsPro {
+		return 1200
+	}
+	return 0
+}
+-- check/zz_check_test.go --
+package task
+
+import (
+	"errors"
+	"testing"
+)
+
+func TestCheckPlans(t *testing.T) {
+	cases := []struct {
+		plan                     string
+		seats, projects, storage int
+		sso, priority            bool
+		price                    int
+	}{
+		{"free", 1, 3, 1, false, false, 0},
+		{"pro", 1, 20, 50, false, true, 1200},
+		{"team", 4, 100, 500, true, true, 3600},
+		{"enterprise", 10, -1, 5000, true, true, 25000},
+		{"enterprise", 2, -1, 5000, true, true, 5000},
+	}
+	for _, c := range cases {
+		a, err := NewAccount(c.plan, c.seats)
+		if err != nil {
+			t.Fatalf("NewAccount(%s, %d) = %v", c.plan, c.seats, err)
+		}
+		if MaxProjects(a) != c.projects || MaxStorageGB(a) != c.storage || HasSSO(a) != c.sso || PrioritySupport(a) != c.priority || MonthlyPrice(a) != c.price {
+			t.Errorf("%s: projects %d storage %d sso %v priority %v price %d", c.plan, MaxProjects(a), MaxStorageGB(a), HasSSO(a), PrioritySupport(a), MonthlyPrice(a))
+		}
+	}
+	for _, bad := range []struct {
+		plan  string
+		seats int
+		err   error
+	}{
+		{"gold", 1, ErrPlan}, {"", 1, ErrPlan}, {"Pro", 1, ErrPlan},
+		{"free", 2, ErrSeats}, {"pro", 0, ErrSeats}, {"team", 1, ErrSeats}, {"enterprise", 1, ErrSeats}, {"team", -3, ErrSeats},
+	} {
+		if _, err := NewAccount(bad.plan, bad.seats); !errors.Is(err, bad.err) {
+			t.Errorf("NewAccount(%q, %d) = %v, want %v", bad.plan, bad.seats, err, bad.err)
+		}
+	}
+}

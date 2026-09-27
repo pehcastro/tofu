@@ -1,0 +1,70 @@
+Implement Publish in publish.go. Publish(dst, src) writes everything read from src to the file dst. A web server serves dst to customers the whole time, so a customer must only ever get a complete version of the file, the old one or the new one. Reading src can fail partway, and the publisher process can be restarted at any point.
+-- go.mod --
+module task
+
+go 1.25
+-- publish.go --
+package task
+
+import "io"
+
+func Publish(dst string, src io.Reader) error {
+	return nil
+}
+-- check/zz_check_test.go --
+package task
+
+import (
+	"errors"
+	"io"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
+
+type checkFailing struct{ r io.Reader }
+
+func (f *checkFailing) Read(p []byte) (int, error) {
+	n, err := f.r.Read(p)
+	if err == io.EOF {
+		return n, errors.New("connection reset")
+	}
+	return n, err
+}
+
+func TestCheckFailedReadKeepsOldVersion(t *testing.T) {
+	dst := filepath.Join(t.TempDir(), "index.html")
+	if err := Publish(dst, strings.NewReader("version one")); err != nil {
+		t.Fatal(err)
+	}
+	if err := Publish(dst, &checkFailing{strings.NewReader(strings.Repeat("x", 100000))}); err == nil {
+		t.Fatal("Publish with a checkFailing reader returned nil")
+	}
+	data, err := os.ReadFile(dst)
+	if err != nil || string(data) != "version one" {
+		t.Fatalf("after a failed publish dst = %q, %v, want the old version", data[:min(len(data), 20)], err)
+	}
+	if err := Publish(dst, strings.NewReader("version two")); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 2; i++ {
+		if err := Publish(dst, strings.NewReader("version two")); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if data, _ := os.ReadFile(dst); string(data) != "version two" {
+		t.Fatalf("dst = %q", data)
+	}
+}
+
+func TestCheckFirstPublishFailsCleanly(t *testing.T) {
+	dir := t.TempDir()
+	dst := filepath.Join(dir, "index.html")
+	if err := Publish(dst, &checkFailing{strings.NewReader("partial")}); err == nil {
+		t.Fatal("Publish with a checkFailing reader returned nil")
+	}
+	if data, err := os.ReadFile(dst); err == nil {
+		t.Fatalf("a failed first publish left dst holding %q", data)
+	}
+}

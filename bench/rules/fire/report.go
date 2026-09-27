@@ -1,4 +1,4 @@
-package rules
+package fire
 
 import (
 	"fmt"
@@ -8,7 +8,7 @@ import (
 func Render(machine, date string, counts []RuleCount, unreadable int) string {
 	b := &strings.Builder{}
 	fmt.Fprintf(b, "# bench rules: what shadow caught, %s\n\n", date)
-	fmt.Fprintf(b, "Machine: %s. Reads `.tofu/log/*.rules.jsonl` directly, offline, no live model call, no rule mode changed, no rule edited. %d line(s) unreadable. Run: `go test ./bench/rules/ -count=1`.\n\n", machine, unreadable)
+	fmt.Fprintf(b, "Machine: %s. Reads `.tofu/log/*.rules.jsonl` directly, offline, no live model call, no rule mode changed, no rule edited. %d line(s) unreadable. Run: `go test ./bench/rules/fire/ -count=1`.\n\n", machine, unreadable)
 
 	renderTable(b, counts)
 	renderNeverFired(b, counts)

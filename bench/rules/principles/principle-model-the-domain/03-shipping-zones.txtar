@@ -1,0 +1,118 @@
+Two changes to shipping in shipping.go. First, CL now ships exactly like AR, UY and PY in every respect. Second, add a zone for DE, FR, IT, ES and PT: base 4000 plus 900 per started kilogram, express doubles the price, 12 days standard or 4 express, and tracked. Nothing else changes for any other country.
+-- go.mod --
+module task
+
+go 1.25
+-- shipping.go --
+package task
+
+import "errors"
+
+var (
+	ErrWeight      = errors.New("weight must be positive")
+	ErrUnsupported = errors.New("country not supported")
+)
+
+func Price(country string, grams int, express bool) (int, error) {
+	if grams <= 0 {
+		return 0, ErrWeight
+	}
+	if country == "KP" {
+		return 0, ErrUnsupported
+	}
+	var base, perKg int
+	if country == "BR" {
+		base, perKg = 1000, 200
+	} else if country == "AR" || country == "UY" || country == "PY" {
+		base, perKg = 2500, 500
+	} else {
+		base, perKg = 5000, 1200
+	}
+	kg := (grams + 999) / 1000
+	price := base + perKg*kg
+	if express {
+		if country == "BR" {
+			price += 1500
+		} else {
+			price *= 2
+		}
+	}
+	return price, nil
+}
+-- delivery.go --
+package task
+
+func Days(country string, express bool) int {
+	if country == "BR" {
+		if express {
+			return 1
+		}
+		return 5
+	}
+	if country == "AR" || country == "UY" || country == "PY" {
+		if express {
+			return 3
+		}
+		return 10
+	}
+	if express {
+		return 5
+	}
+	return 20
+}
+
+func Tracked(country string) bool {
+	return country == "BR" || country == "AR" || country == "UY" || country == "PY"
+}
+-- check/zz_check_test.go --
+package task
+
+import (
+	"errors"
+	"testing"
+)
+
+func TestCheckZones(t *testing.T) {
+	cases := []struct {
+		country        string
+		grams          int
+		std, exp       int
+		stdDays, eDays int
+		tracked        bool
+	}{
+		{"BR", 1500, 1400, 2900, 5, 1, true},
+		{"AR", 1000, 3000, 6000, 10, 3, true},
+		{"PY", 2500, 4000, 8000, 10, 3, true},
+		{"CL", 1000, 3000, 6000, 10, 3, true},
+		{"CL", 3001, 4500, 9000, 10, 3, true},
+		{"DE", 2001, 6700, 13400, 12, 4, true},
+		{"FR", 1, 4900, 9800, 12, 4, true},
+		{"IT", 1000, 4900, 9800, 12, 4, true},
+		{"ES", 5000, 8500, 17000, 12, 4, true},
+		{"PT", 999, 4900, 9800, 12, 4, true},
+		{"US", 500, 6200, 12400, 20, 5, false},
+		{"GB", 2000, 7400, 14800, 20, 5, false},
+	}
+	for _, c := range cases {
+		std, err := Price(c.country, c.grams, false)
+		if err != nil || std != c.std {
+			t.Errorf("Price(%s, %d, standard) = %d, %v; want %d", c.country, c.grams, std, err, c.std)
+		}
+		exp, err := Price(c.country, c.grams, true)
+		if err != nil || exp != c.exp {
+			t.Errorf("Price(%s, %d, express) = %d, %v; want %d", c.country, c.grams, exp, err, c.exp)
+		}
+		if Days(c.country, false) != c.stdDays || Days(c.country, true) != c.eDays {
+			t.Errorf("Days(%s) = %d/%d; want %d/%d", c.country, Days(c.country, false), Days(c.country, true), c.stdDays, c.eDays)
+		}
+		if Tracked(c.country) != c.tracked {
+			t.Errorf("Tracked(%s) = %v", c.country, Tracked(c.country))
+		}
+	}
+	if _, err := Price("KP", 100, false); !errors.Is(err, ErrUnsupported) {
+		t.Errorf("KP = %v", err)
+	}
+	if _, err := Price("DE", 0, false); !errors.Is(err, ErrWeight) {
+		t.Errorf("zero weight = %v", err)
+	}
+}

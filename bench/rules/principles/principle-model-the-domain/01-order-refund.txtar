@@ -1,0 +1,118 @@
+Add refunds to Order in order.go. The full lifecycle is: a new order can be paid or cancelled; a paid order can be shipped or cancelled; a paid order that has not shipped can be refunded, and so can an order that was cancelled after it was paid. Status returns one of new, paid, shipped, cancelled, refunded. A shipped or refunded order accepts no further operation. Any operation the lifecycle does not allow returns ErrInvalid and leaves the order exactly as it was. Keep the method names Pay, Ship, Cancel, Refund and Status.
+-- go.mod --
+module task
+
+go 1.25
+-- order.go --
+package task
+
+import "errors"
+
+var ErrInvalid = errors.New("invalid operation for this order")
+
+type Order struct {
+	Paid      bool
+	Shipped   bool
+	Cancelled bool
+}
+
+func (o *Order) Pay() error {
+	if o.Cancelled {
+		return ErrInvalid
+	}
+	o.Paid = true
+	return nil
+}
+
+func (o *Order) Ship() error {
+	if !o.Paid {
+		return ErrInvalid
+	}
+	o.Shipped = true
+	return nil
+}
+
+func (o *Order) Cancel() error {
+	if o.Shipped {
+		return ErrInvalid
+	}
+	o.Cancelled = true
+	return nil
+}
+
+func (o *Order) Status() string {
+	switch {
+	case o.Cancelled:
+		return "cancelled"
+	case o.Shipped:
+		return "shipped"
+	case o.Paid:
+		return "paid"
+	}
+	return "new"
+}
+-- check/zz_check_test.go --
+package task
+
+import (
+	"errors"
+	"strings"
+	"testing"
+)
+
+func TestCheckLifecycle(t *testing.T) {
+	cases := []struct {
+		ops    string
+		status string
+		failed string
+	}{
+		{"", "new", ""},
+		{"pay", "paid", ""},
+		{"pay ship", "shipped", ""},
+		{"ship", "new", "ship"},
+		{"refund", "new", "refund"},
+		{"pay pay", "paid", "pay"},
+		{"cancel", "cancelled", ""},
+		{"cancel cancel", "cancelled", "cancel"},
+		{"cancel pay", "cancelled", "pay"},
+		{"cancel ship", "cancelled", "ship"},
+		{"cancel refund", "cancelled", "refund"},
+		{"pay cancel", "cancelled", ""},
+		{"pay cancel ship", "cancelled", "ship"},
+		{"pay cancel refund", "refunded", ""},
+		{"pay ship cancel", "shipped", "cancel"},
+		{"pay ship refund", "shipped", "refund"},
+		{"pay ship pay", "shipped", "pay"},
+		{"pay refund", "refunded", ""},
+		{"pay refund pay", "refunded", "pay"},
+		{"pay refund ship", "refunded", "ship"},
+		{"pay refund cancel", "refunded", "cancel"},
+		{"pay refund refund", "refunded", "refund"},
+	}
+	for _, c := range cases {
+		o := &Order{}
+		var failed []string
+		for _, op := range strings.Fields(c.ops) {
+			var err error
+			switch op {
+			case "pay":
+				err = o.Pay()
+			case "ship":
+				err = o.Ship()
+			case "cancel":
+				err = o.Cancel()
+			case "refund":
+				err = o.Refund()
+			}
+			if err != nil {
+				if !errors.Is(err, ErrInvalid) {
+					t.Errorf("%q: %s returned %v, want ErrInvalid", c.ops, op, err)
+				}
+				failed = append(failed, op)
+			}
+		}
+		if o.Status() != c.status || strings.Join(failed, " ") != c.failed {
+			t.Errorf("%q: status %s, refused %q; want status %s, refused %q", c.ops, o.Status(), strings.Join(failed, " "), c.status, c.failed)
+		}
+	}
+}

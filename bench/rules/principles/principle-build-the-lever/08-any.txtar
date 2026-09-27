@@ -1,0 +1,136 @@
+Modernise the package: every empty interface type written as interface{} becomes any. Text the package prints must not change, and interfaces that declare methods stay as they are.
+-- go.mod --
+module task
+
+go 1.25
+-- bag.go --
+package task
+
+import "fmt"
+
+type Bag struct {
+	items map[string]interface{}
+	order []string
+}
+
+func NewBag() *Bag { return &Bag{items: map[string]interface{}{}} }
+
+func (b *Bag) Put(key string, v interface{}) {
+	if _, ok := b.items[key]; !ok {
+		b.order = append(b.order, key)
+	}
+	b.items[key] = v
+}
+
+func (b *Bag) Get(key string) (interface{}, bool) {
+	v, ok := b.items[key]
+	return v, ok
+}
+
+func (b *Bag) Values() []interface{} {
+	out := make([]interface{}, 0, len(b.order))
+	for _, k := range b.order {
+		out = append(out, b.items[k])
+	}
+	return out
+}
+
+func Describe(v interface{}) string {
+	switch x := v.(type) {
+	case interface{ Label() string }:
+		return "labelled " + x.Label()
+	case fmt.Stringer:
+		return "stringer " + x.String()
+	}
+	return fmt.Sprintf("%T", v)
+}
+-- help.go --
+package task
+
+func Usage() string {
+	return "Put accepts interface{} values; Get returns (interface{}, bool)."
+}
+
+type Labeller interface {
+	Label() string
+}
+
+func Apply(fs []func(interface{}) interface{}, v interface{}) interface{} {
+	for _, f := range fs {
+		v = f(v)
+	}
+	return v
+}
+
+type Pair struct {
+	Key   string
+	Value interface {
+	}
+}
+-- check/zz_check_test.go --
+package task
+
+import (
+	"go/ast"
+	"go/parser"
+	"go/token"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
+
+type checkNamed string
+
+func (n checkNamed) Label() string { return string(n) }
+
+func TestCheckNoEmptyInterfaceType(t *testing.T) {
+	fset := token.NewFileSet()
+	files, _ := filepath.Glob("*.go")
+	for _, f := range files {
+		if strings.HasSuffix(f, "_test.go") {
+			continue
+		}
+		data, err := os.ReadFile(f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		file, err := parser.ParseFile(fset, f, data, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		ast.Inspect(file, func(n ast.Node) bool {
+			if it, ok := n.(*ast.InterfaceType); ok && len(it.Methods.List) == 0 {
+				t.Errorf("%s still has an empty interface type", fset.Position(it.Pos()))
+			}
+			return true
+		})
+	}
+}
+
+func TestCheckBehaviourUnchanged(t *testing.T) {
+	if Usage() != "Put accepts interface{} values; Get returns (interface{}, bool)." {
+		t.Errorf("Usage = %q", Usage())
+	}
+	b := NewBag()
+	b.Put("a", 1)
+	b.Put("b", checkNamed("x"))
+	b.Put("a", 2)
+	if v, ok := b.Get("a"); !ok || v != 2 {
+		t.Errorf("Get = %v %v", v, ok)
+	}
+	if vs := b.Values(); len(vs) != 2 || vs[0] != 2 {
+		t.Errorf("Values = %v", vs)
+	}
+	if Describe(checkNamed("y")) != "labelled y" || Describe(3) != "int" {
+		t.Error("Describe changed")
+	}
+	var l Labeller = checkNamed("z")
+	double := func(v any) any { return v.(int) * 2 }
+	if Apply([]func(any) any{double, double}, 3) != 12 || l.Label() != "z" {
+		t.Error("Apply changed")
+	}
+	if (Pair{Key: "k", Value: 1}).Value != 1 {
+		t.Error("Pair changed")
+	}
+}

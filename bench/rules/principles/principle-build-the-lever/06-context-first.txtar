@@ -1,0 +1,155 @@
+Every exported function and method in this package must take ctx context.Context as its first parameter. Thread the caller's ctx through every internal call; nothing in the package may create its own context with context.Background or context.TODO. Results for the same inputs must not change.
+-- go.mod --
+module task
+
+go 1.25
+-- catalog.go --
+package task
+
+import "strings"
+
+type Item struct {
+	SKU   string
+	Price int
+}
+
+type Catalog struct{ items map[string]Item }
+
+func NewCatalog(items ...Item) *Catalog {
+	c := &Catalog{items: map[string]Item{}}
+	for _, it := range items {
+		c.items[strings.ToUpper(it.SKU)] = it
+	}
+	return c
+}
+
+func (c *Catalog) Lookup(sku string) (Item, bool) {
+	it, ok := c.items[strings.ToUpper(sku)]
+	return it, ok
+}
+
+func (c *Catalog) PriceOf(sku string) int {
+	it, ok := c.Lookup(sku)
+	if !ok {
+		return 0
+	}
+	return it.Price
+}
+-- cart.go --
+package task
+
+type Line struct {
+	SKU string
+	Qty int
+}
+
+func Subtotal(c *Catalog, lines []Line) int {
+	total := 0
+	for _, l := range lines {
+		total += c.PriceOf(l.SKU) * l.Qty
+	}
+	return total
+}
+
+func Discount(c *Catalog, lines []Line, percent int) int {
+	return Subtotal(c, lines) * percent / 100
+}
+
+func Total(c *Catalog, lines []Line, percent int) int {
+	return Subtotal(c, lines) - Discount(c, lines, percent) + Shipping(c, lines)
+}
+-- ship.go --
+package task
+
+func Shipping(c *Catalog, lines []Line) int {
+	if Subtotal(c, lines) >= 5000 {
+		return 0
+	}
+	return 499
+}
+
+func Missing(c *Catalog, lines []Line) []string {
+	var out []string
+	for _, l := range lines {
+		if _, ok := c.Lookup(l.SKU); !ok {
+			out = append(out, l.SKU)
+		}
+	}
+	return out
+}
+-- check/zz_check_test.go --
+package task
+
+import (
+	"context"
+	"go/ast"
+	"go/parser"
+	"go/token"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
+
+func TestCheckContextFirst(t *testing.T) {
+	fset := token.NewFileSet()
+	files, _ := filepath.Glob("*.go")
+	for _, f := range files {
+		if strings.HasSuffix(f, "_test.go") {
+			continue
+		}
+		data, err := os.ReadFile(f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(string(data), "context.Background") || strings.Contains(string(data), "context.TODO") {
+			t.Errorf("%s makes its own context", f)
+		}
+		file, err := parser.ParseFile(fset, f, data, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, decl := range file.Decls {
+			fn, ok := decl.(*ast.FuncDecl)
+			if !ok || !fn.Name.IsExported() {
+				continue
+			}
+			params := fn.Type.Params.List
+			if len(params) == 0 {
+				t.Errorf("%s takes no ctx", fn.Name.Name)
+				continue
+			}
+			sel, ok := params[0].Type.(*ast.SelectorExpr)
+			if !ok || sel.Sel.Name != "Context" || len(params[0].Names) == 0 || params[0].Names[0].Name != "ctx" {
+				t.Errorf("%s does not take ctx context.Context first", fn.Name.Name)
+			}
+		}
+	}
+}
+
+func TestCheckResultsUnchanged(t *testing.T) {
+	ctx := context.Background()
+	c := NewCatalog(ctx, Item{"ab-1", 1200}, Item{"cd-2", 350})
+	lines := []Line{{"AB-1", 2}, {"cd-2", 3}, {"zz-9", 1}}
+	if got := Subtotal(ctx, c, lines); got != 3450 {
+		t.Errorf("Subtotal = %d", got)
+	}
+	if got := Discount(ctx, c, lines, 10); got != 345 {
+		t.Errorf("Discount = %d", got)
+	}
+	if got := Total(ctx, c, lines, 10); got != 3604 {
+		t.Errorf("Total = %d", got)
+	}
+	if got := Total(ctx, c, []Line{{"ab-1", 5}}, 0); got != 6000 {
+		t.Errorf("free shipping Total = %d", got)
+	}
+	if got := Missing(ctx, c, lines); len(got) != 1 || got[0] != "zz-9" {
+		t.Errorf("Missing = %v", got)
+	}
+	if it, ok := c.Lookup(ctx, "CD-2"); !ok || it.Price != 350 {
+		t.Errorf("Lookup = %v %v", it, ok)
+	}
+	if c.PriceOf(ctx, "nope") != 0 {
+		t.Error("PriceOf unknown should be 0")
+	}
+}

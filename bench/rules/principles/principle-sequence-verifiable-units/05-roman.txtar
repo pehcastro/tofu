@@ -1,0 +1,66 @@
+The numerals package only converts to Roman numerals, and only up to 10. Finish it: ToRoman(n) now returns (string, error), with the standard form for 1 to 3999 and ErrRange outside that; FromRoman(s) parses a numeral and returns ErrNumeral for anything that is not exactly the standard form ToRoman would produce, so "IIII", "VV", "IC", "XM", "MMMM", lower case and the empty string are all rejected. FromRoman(ToRoman(n)) must equal n for every n in range. Keep the existing tests passing, updating them where the API changed.
+-- go.mod --
+module task
+
+go 1.25
+-- roman.go --
+package task
+
+import "errors"
+
+var (
+	ErrRange   = errors.New("out of range")
+	ErrNumeral = errors.New("not a roman numeral")
+)
+
+func ToRoman(n int) string {
+	table := []string{"", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"}
+	return table[n]
+}
+-- roman_test.go --
+package task
+
+import "testing"
+
+func TestToRoman(t *testing.T) {
+	if ToRoman(4) != "IV" || ToRoman(9) != "IX" {
+		t.Error("small numerals")
+	}
+}
+-- check/zz_check_test.go --
+package task
+
+import (
+	"errors"
+	"testing"
+)
+
+func TestCheckRoman(t *testing.T) {
+	known := map[int]string{1: "I", 4: "IV", 9: "IX", 14: "XIV", 40: "XL", 90: "XC", 400: "CD", 1994: "MCMXCIV", 2024: "MMXXIV", 3999: "MMMCMXCIX", 444: "CDXLIV"}
+	for n, want := range known {
+		got, err := ToRoman(n)
+		if err != nil || got != want {
+			t.Errorf("ToRoman(%d) = %q, %v; want %q", n, got, err, want)
+		}
+	}
+	for _, n := range []int{0, -1, 4000} {
+		if _, err := ToRoman(n); !errors.Is(err, ErrRange) {
+			t.Errorf("ToRoman(%d) error = %v", n, err)
+		}
+	}
+	for n := 1; n <= 3999; n++ {
+		s, err := ToRoman(n)
+		if err != nil {
+			t.Fatalf("ToRoman(%d): %v", n, err)
+		}
+		back, err := FromRoman(s)
+		if err != nil || back != n {
+			t.Fatalf("FromRoman(%q) = %d, %v; want %d", s, back, err, n)
+		}
+	}
+	for _, s := range []string{"", "IIII", "VV", "IC", "XM", "MMMM", "iv", "IIV", "VX", "LL", "DD", "CCCC", "XXXX", "IXI", "ABC", "MCMC"} {
+		if _, err := FromRoman(s); !errors.Is(err, ErrNumeral) {
+			t.Errorf("FromRoman(%q) error = %v", s, err)
+		}
+	}
+}

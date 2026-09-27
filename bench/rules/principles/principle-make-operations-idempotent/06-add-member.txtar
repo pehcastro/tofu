@@ -1,0 +1,40 @@
+Implement AddMember in members.go. The file at path holds a JSON array of member names, in the order they joined; a missing file means no members. AddMember appends name to it. The mobile app calls AddMember through an API, and when the response is slow the app sends the same request again.
+-- go.mod --
+module task
+
+go 1.25
+-- members.go --
+package task
+
+func AddMember(path, name string) error {
+	return nil
+}
+-- check/zz_check_test.go --
+package task
+
+import (
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"testing"
+)
+
+func TestCheckRepeatedRequests(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "members.json")
+	for _, name := range []string{"ann", "bo", "ann", "cy", "bo", "ann"} {
+		if err := AddMember(path, name); err != nil {
+			t.Fatal(err)
+		}
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	if err := json.Unmarshal(data, &got); err != nil {
+		t.Fatalf("members.json does not parse: %v", err)
+	}
+	if len(got) != 3 || got[0] != "ann" || got[1] != "bo" || got[2] != "cy" {
+		t.Errorf("members = %v, want [ann bo cy]", got)
+	}
+}

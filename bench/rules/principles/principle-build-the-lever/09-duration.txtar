@@ -1,0 +1,97 @@
+Durations in this package are passed around as int milliseconds. Change them to time.Duration: every field or parameter whose name ends in Ms becomes a time.Duration with the Ms suffix dropped (TimeoutMs becomes Timeout, baseMs becomes base, and so on), and every function that returns milliseconds as an int returns a time.Duration instead. Every duration the package computes must stay the same length.
+-- go.mod --
+module task
+
+go 1.25
+-- config.go --
+package task
+
+type Config struct {
+	TimeoutMs int
+	RetryMs   int
+	IdleMs    int
+	Attempts  int
+}
+
+func Defaults() Config {
+	return Config{TimeoutMs: 1500, RetryMs: 200, IdleMs: 60000, Attempts: 3}
+}
+
+func (c Config) Budget() int {
+	return c.TimeoutMs + c.Attempts*c.RetryMs
+}
+-- backoff.go --
+package task
+
+func Backoff(attempt, baseMs int) int {
+	d := baseMs
+	for i := 0; i < attempt; i++ {
+		d *= 2
+	}
+	if d > 10000 {
+		return 10000
+	}
+	return d
+}
+
+func Schedule(c Config) []int {
+	out := make([]int, c.Attempts)
+	for i := range out {
+		out[i] = Backoff(i, c.RetryMs)
+	}
+	return out
+}
+-- deadline.go --
+package task
+
+import "time"
+
+func Deadline(start time.Time, timeoutMs int) time.Time {
+	return start.Add(time.Duration(timeoutMs) * time.Millisecond)
+}
+
+func Expired(start, now time.Time, idleMs int) bool {
+	return now.Sub(start) > time.Duration(idleMs)*time.Millisecond
+}
+
+func Remaining(start, now time.Time, c Config) int {
+	left := Deadline(start, c.TimeoutMs).Sub(now)
+	if left < 0 {
+		return 0
+	}
+	return int(left / time.Millisecond)
+}
+-- check/zz_check_test.go --
+package task
+
+import (
+	"testing"
+	"time"
+)
+
+func TestCheckDurations(t *testing.T) {
+	c := Defaults()
+	if c.Timeout != 1500*time.Millisecond || c.Retry != 200*time.Millisecond || c.Idle != time.Minute || c.Attempts != 3 {
+		t.Errorf("Defaults = %+v", c)
+	}
+	if c.Budget() != 2100*time.Millisecond {
+		t.Errorf("Budget = %v", c.Budget())
+	}
+	if Backoff(3, 100*time.Millisecond) != 800*time.Millisecond || Backoff(9, time.Second) != 10*time.Second {
+		t.Error("Backoff changed")
+	}
+	s := Schedule(c)
+	if len(s) != 3 || s[0] != 200*time.Millisecond || s[2] != 800*time.Millisecond {
+		t.Errorf("Schedule = %v", s)
+	}
+	start := time.Unix(100, 0)
+	if !Deadline(start, 2*time.Second).Equal(time.Unix(102, 0)) {
+		t.Error("Deadline changed")
+	}
+	if Expired(start, start.Add(time.Minute), time.Minute) || !Expired(start, start.Add(61*time.Second), time.Minute) {
+		t.Error("Expired changed")
+	}
+	if Remaining(start, start.Add(time.Second), c) != 500*time.Millisecond || Remaining(start, start.Add(time.Hour), c) != 0 {
+		t.Error("Remaining changed")
+	}
+}

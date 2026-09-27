@@ -1,0 +1,110 @@
+Each batch job runs as its own process and reports its progress with Report(dir, job, status) in status.go; the operations dashboard shows Statuses(dir). Operators see jobs that finished long ago still shown as running, or missing from the dashboard. Fix it: Statuses must show every job that ever reported, with the last status it reported.
+-- go.mod --
+module task
+
+go 1.25
+-- status.go --
+package task
+
+import (
+	"encoding/json"
+	"errors"
+	"io/fs"
+	"os"
+	"path/filepath"
+)
+
+func Report(dir, job, status string) error {
+	all, err := Statuses(dir)
+	if err != nil {
+		return err
+	}
+	all[job] = status
+	out, err := json.MarshalIndent(all, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(dir, "status.json"), out, 0o644)
+}
+
+func Statuses(dir string) (map[string]string, error) {
+	all := map[string]string{}
+	data, err := os.ReadFile(filepath.Join(dir, "status.json"))
+	if errors.Is(err, fs.ErrNotExist) {
+		return all, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return all, json.Unmarshal(data, &all)
+}
+-- check/zz_check_test.go --
+package task
+
+import (
+	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"testing"
+	"time"
+)
+
+func TestZZActor(t *testing.T) {
+	dir, job := os.Getenv("CHECK_DIR"), os.Getenv("CHECK_JOB")
+	if dir == "" {
+		t.Skip("run by TestCheckLastStatusOfEveryJob")
+	}
+	for {
+		if _, err := os.Stat(filepath.Join(dir, "..", "go")); err == nil {
+			break
+		}
+		time.Sleep(time.Millisecond)
+	}
+	for i := 0; i < 200; i++ {
+		if err := Report(dir, job, fmt.Sprintf("running %d%%", i/2)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := Report(dir, job, "done"); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestCheckLastStatusOfEveryJob(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "status")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	jobs := []string{"import", "resize", "backup", "email"}
+	var cmds []*exec.Cmd
+	for _, job := range jobs {
+		cmd := exec.Command(os.Args[0], "-test.run=^TestZZActor$", "-test.count=1")
+		cmd.Env = append(os.Environ(), "CHECK_DIR="+dir, "CHECK_JOB="+job)
+		if err := cmd.Start(); err != nil {
+			t.Fatal(err)
+		}
+		cmds = append(cmds, cmd)
+	}
+	if err := os.WriteFile(filepath.Join(root, "go"), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, cmd := range cmds {
+		if err := cmd.Wait(); err != nil {
+			t.Errorf("a job process failed: %v", err)
+		}
+	}
+	all, err := Statuses(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, job := range jobs {
+		if all[job] != "done" {
+			t.Errorf("%s shows %q, want done", job, all[job])
+		}
+	}
+	if len(all) != len(jobs) {
+		t.Errorf("dashboard shows %d jobs, want %d", len(all), len(jobs))
+	}
+}

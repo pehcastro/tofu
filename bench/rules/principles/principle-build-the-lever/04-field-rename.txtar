@@ -1,0 +1,128 @@
+Rename the User fields Nm to Name and Em to Email, and Acct.Bal to Acct.Balance, everywhere in the package. Existing clients read and write the JSON this package produces, so the JSON must stay exactly as it is today.
+-- go.mod --
+module task
+
+go 1.25
+-- user.go --
+package task
+
+import "strings"
+
+type User struct {
+	Nm   string `json:"nm"`
+	Em   string `json:"em"`
+	Acct Acct   `json:"acct"`
+}
+
+type Acct struct {
+	Bal int `json:"bal"`
+}
+
+func NewUser(nm, em string) User {
+	return User{Nm: strings.TrimSpace(nm), Em: strings.ToLower(em)}
+}
+
+func (u User) Display() string {
+	if u.Nm == "" {
+		return u.Em
+	}
+	return u.Nm + " <" + u.Em + ">"
+}
+
+func (u *User) Deposit(n int) { u.Acct.Bal += n }
+-- ops.go --
+package task
+
+import "sort"
+
+func ByName(users []User) []User {
+	out := append([]User(nil), users...)
+	sort.Slice(out, func(i, j int) bool { return out[i].Nm < out[j].Nm })
+	return out
+}
+
+func Domain(u User) string {
+	for i := len(u.Em) - 1; i >= 0; i-- {
+		if u.Em[i] == '@' {
+			return u.Em[i+1:]
+		}
+	}
+	return ""
+}
+
+func Richest(users []User) User {
+	best := users[0]
+	for _, u := range users[1:] {
+		if u.Acct.Bal > best.Acct.Bal {
+			best = u
+		}
+	}
+	return best
+}
+
+func Rename(u User, nm string) User {
+	u.Nm = nm
+	return u
+}
+-- codec.go --
+package task
+
+import "encoding/json"
+
+func Encode(u User) ([]byte, error) { return json.Marshal(u) }
+
+func Decode(data []byte) (User, error) {
+	var u User
+	err := json.Unmarshal(data, &u)
+	return u, err
+}
+-- check/zz_check_test.go --
+package task
+
+import (
+	"reflect"
+	"testing"
+)
+
+func TestCheckFieldsRenamed(t *testing.T) {
+	user := reflect.TypeOf(User{})
+	for _, name := range []string{"Name", "Email", "Acct"} {
+		if _, ok := user.FieldByName(name); !ok {
+			t.Errorf("User has no field %s", name)
+		}
+	}
+	for _, name := range []string{"Nm", "Em"} {
+		if _, ok := user.FieldByName(name); ok {
+			t.Errorf("User still has field %s", name)
+		}
+	}
+	if _, ok := reflect.TypeOf(Acct{}).FieldByName("Balance"); !ok {
+		t.Error("Acct has no field Balance")
+	}
+}
+
+func TestCheckWireUnchanged(t *testing.T) {
+	u := NewUser("  Ada ", "ADA@Example.org")
+	u.Deposit(7)
+	data, err := Encode(u)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != `{"nm":"Ada","em":"ada@example.org","acct":{"bal":7}}` {
+		t.Errorf("Encode = %s", data)
+	}
+	back, err := Decode([]byte(`{"nm":"Bo","em":"bo@x.io","acct":{"bal":3}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if back.Display() != "Bo <bo@x.io>" || Domain(back) != "x.io" {
+		t.Errorf("Decode lost fields: %+v", back)
+	}
+	if Richest([]User{back, u}).Display() != "Ada <ada@example.org>" {
+		t.Error("Richest picked the wrong user")
+	}
+	sorted := ByName([]User{u, back, Rename(back, "Al")})
+	if sorted[0].Display() != "Ada <ada@example.org>" || sorted[1].Display() != "Al <bo@x.io>" || sorted[2].Display() != "Bo <bo@x.io>" {
+		t.Errorf("ByName = %v", sorted)
+	}
+}

@@ -1,0 +1,95 @@
+Build in build.go renders a page and publishes it into outDir under its name. The static site generator now runs several build processes at once against the same outDir, each building different pages, and some published pages come out holding another page's content. Fix it: every published page must hold exactly its own content, and a reader must never see a half-written page.
+-- go.mod --
+module task
+
+go 1.25
+-- build.go --
+package task
+
+import (
+	"os"
+	"path/filepath"
+	"strings"
+)
+
+func Render(name string) string {
+	return strings.Repeat("<p>"+name+"</p>\n", 200)
+}
+
+func Build(outDir, name string) error {
+	tmp := filepath.Join(outDir, "page.tmp")
+	if err := os.WriteFile(tmp, []byte(Render(name)), 0o644); err != nil {
+		return err
+	}
+	return os.Rename(tmp, filepath.Join(outDir, name+".html"))
+}
+-- check/zz_check_test.go --
+package task
+
+import (
+	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"testing"
+	"time"
+)
+
+const checkPerProcess = 150
+
+func TestZZActor(t *testing.T) {
+	dir, name := os.Getenv("CHECK_DIR"), os.Getenv("CHECK_NAME")
+	if dir == "" {
+		t.Skip("run by TestCheckPagesKeepTheirContent")
+	}
+	for {
+		if _, err := os.Stat(filepath.Join(dir, "..", "go")); err == nil {
+			break
+		}
+		time.Sleep(time.Millisecond)
+	}
+	for i := 0; i < checkPerProcess; i++ {
+		if err := Build(dir, fmt.Sprintf("%s-%d", name, i)); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+func TestCheckPagesKeepTheirContent(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "out")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	names := []string{"a", "b", "c"}
+	var cmds []*exec.Cmd
+	for _, name := range names {
+		cmd := exec.Command(os.Args[0], "-test.run=^TestZZActor$", "-test.count=1")
+		cmd.Env = append(os.Environ(), "CHECK_DIR="+dir, "CHECK_NAME="+name)
+		if err := cmd.Start(); err != nil {
+			t.Fatal(err)
+		}
+		cmds = append(cmds, cmd)
+	}
+	if err := os.WriteFile(filepath.Join(root, "go"), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, cmd := range cmds {
+		if err := cmd.Wait(); err != nil {
+			t.Errorf("a build process failed: %v", err)
+		}
+	}
+	wrong := 0
+	for _, name := range names {
+		for i := 0; i < checkPerProcess; i++ {
+			page := fmt.Sprintf("%s-%d", name, i)
+			data, err := os.ReadFile(filepath.Join(dir, page+".html"))
+			if err != nil || string(data) != Render(page) {
+				wrong++
+			}
+		}
+	}
+	if wrong > 0 {
+		t.Errorf("%d of %d pages missing or holding the wrong content", wrong, len(names)*checkPerProcess)
+	}
+}

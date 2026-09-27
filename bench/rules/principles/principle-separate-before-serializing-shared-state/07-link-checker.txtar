@@ -1,0 +1,71 @@
+Broken in links.go checks links concurrently and returns the ones that fail. On big sites it misses some broken links: the same input gives a different, shorter answer from run to run. Fix it. Broken must return every failing link, in the order the links were given, and keep checking with the given number of goroutines.
+-- go.mod --
+module task
+
+go 1.25
+-- links.go --
+package task
+
+import (
+	"strings"
+	"sync"
+)
+
+func check(link string) bool {
+	return !strings.Contains(link, "404")
+}
+
+func Broken(links []string, workers int) []string {
+	var broken []string
+	var wg sync.WaitGroup
+	chunk := (len(links) + workers - 1) / workers
+	for start := 0; start < len(links); start += chunk {
+		end := min(start+chunk, len(links))
+		wg.Add(1)
+		go func(part []string) {
+			defer wg.Done()
+			for _, link := range part {
+				if !check(link) {
+					broken = append(broken, link)
+				}
+			}
+		}(links[start:end])
+	}
+	wg.Wait()
+	return broken
+}
+-- check/zz_check_test.go --
+package task
+
+import (
+	"fmt"
+	"testing"
+)
+
+func TestCheckEveryBrokenLinkInOrder(t *testing.T) {
+	var links, want []string
+	for i := 0; i < 60000; i++ {
+		link := fmt.Sprintf("https://site/%d", i)
+		if i%3 == 0 {
+			link = fmt.Sprintf("https://site/404/%d", i)
+		}
+		if !check(link) {
+			want = append(want, link)
+		}
+		links = append(links, link)
+	}
+	for round := 0; round < 5; round++ {
+		got := Broken(links, 12)
+		if len(got) != len(want) {
+			t.Fatalf("round %d: %d broken links, want %d", round, len(got), len(want))
+		}
+		for i := range want {
+			if got[i] != want[i] {
+				t.Fatalf("round %d: broken[%d] = %s, want %s", round, i, got[i], want[i])
+			}
+		}
+	}
+	if got := Broken(nil, 4); len(got) != 0 {
+		t.Errorf("Broken(nil) = %v", got)
+	}
+}

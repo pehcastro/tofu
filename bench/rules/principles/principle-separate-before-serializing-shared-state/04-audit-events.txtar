@@ -1,0 +1,116 @@
+Every worker process on the host calls Record(dir, event) in audit.go to keep an audit trail, and the compliance report reads it back with Events(dir). Auditors found events missing from the report. Fix it: Events must return every event any process recorded, and the events recorded by one process must appear in the order that process recorded them. The order between events from different processes does not matter.
+-- go.mod --
+module task
+
+go 1.25
+-- audit.go --
+package task
+
+import (
+	"encoding/json"
+	"errors"
+	"io/fs"
+	"os"
+	"path/filepath"
+)
+
+func Record(dir, event string) error {
+	events, err := Events(dir)
+	if err != nil {
+		return err
+	}
+	out, err := json.Marshal(append(events, event))
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(dir, "audit.json"), out, 0o644)
+}
+
+func Events(dir string) ([]string, error) {
+	var events []string
+	data, err := os.ReadFile(filepath.Join(dir, "audit.json"))
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return events, json.Unmarshal(data, &events)
+}
+-- check/zz_check_test.go --
+package task
+
+import (
+	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"testing"
+	"time"
+)
+
+const checkPerProcess = 250
+
+func TestZZActor(t *testing.T) {
+	dir, name := os.Getenv("CHECK_DIR"), os.Getenv("CHECK_NAME")
+	if dir == "" {
+		t.Skip("run by TestCheckNoEventLost")
+	}
+	for {
+		if _, err := os.Stat(filepath.Join(dir, "..", "go")); err == nil {
+			break
+		}
+		time.Sleep(time.Millisecond)
+	}
+	for i := 0; i < checkPerProcess; i++ {
+		if err := Record(dir, fmt.Sprintf("%s-%d", name, i)); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+func TestCheckNoEventLost(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "audit")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	names := []string{"w1", "w2", "w3"}
+	var cmds []*exec.Cmd
+	for _, name := range names {
+		cmd := exec.Command(os.Args[0], "-test.run=^TestZZActor$", "-test.count=1")
+		cmd.Env = append(os.Environ(), "CHECK_DIR="+dir, "CHECK_NAME="+name)
+		if err := cmd.Start(); err != nil {
+			t.Fatal(err)
+		}
+		cmds = append(cmds, cmd)
+	}
+	if err := os.WriteFile(filepath.Join(root, "go"), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, cmd := range cmds {
+		if err := cmd.Wait(); err != nil {
+			t.Errorf("a worker process failed: %v", err)
+		}
+	}
+	events, err := Events(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	next := map[string]int{}
+	for _, e := range events {
+		name, n, _ := strings.Cut(e, "-")
+		i, err := strconv.Atoi(n)
+		if err != nil || i != next[name] {
+			t.Fatalf("event %q out of order or unknown, expected %s-%d", e, name, next[name])
+		}
+		next[name]++
+	}
+	for _, name := range names {
+		if next[name] != checkPerProcess {
+			t.Errorf("%s: %d of %d events", name, next[name], checkPerProcess)
+		}
+	}
+}
