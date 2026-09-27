@@ -32,6 +32,7 @@ const (
 	thinking
 	working
 	waitingOnYou
+	waitingOnChild
 )
 
 func (p phase) drawn() (string, lipgloss.Style) {
@@ -44,6 +45,8 @@ func (p phase) drawn() (string, lipgloss.Style) {
 		return "working", look.Style(look.Mint)
 	case waitingOnYou:
 		return "waiting", look.Style(look.Amber)
+	case waitingOnChild:
+		return "waiting on", look.Style(look.Mint)
 	}
 	panic("session: unknown phase")
 }
@@ -65,6 +68,9 @@ func (m *Model) reached() phase {
 	}
 	if slices.ContainsFunc(m.entries, Entry.running) {
 		return working
+	}
+	if !m.inFlight() && len(m.activityRows()) > 0 {
+		return waitingOnChild
 	}
 	return thinking
 }
@@ -110,11 +116,16 @@ func (m *Model) requestLine() string {
 	switch {
 	case m.Busy:
 		word, style := m.phase.drawn()
-		if m.Stopping || m.LettingToolsFinish {
-			word, style = stoppingWord, look.Style(look.Amber)
+		word = style.Render(word)
+		switch {
+		case m.Stopping || m.LettingToolsFinish:
+			word = look.Style(look.Amber).Render(stoppingWord)
+		case m.phase == waitingOnChild:
+			for _, row := range m.activityRows() {
+				word += " " + look.AgentRef(row.name)
+			}
 		}
-		since := m.phaseSince()
-		line += look.Accent(progress.Spin(m.frame)) + " " + style.Render(word) + look.Muted(requestSeparator+widget.Until(since)+metaGap)
+		line += look.Accent(progress.Spin(m.frame)) + " " + word + look.Muted(requestSeparator+widget.Until(m.phaseSince())+metaGap)
 		id = m.turnID
 	case m.cooked != "":
 		line += look.Muted(m.cooked + metaGap)
@@ -182,7 +193,7 @@ func (m *Model) TakesAnswerDigits() bool { return m.Awaiting() && m.composer.Val
 func (m *Model) markAsked(awaiting bool) {
 	for index := len(m.entries) - 1; index >= 0; index-- {
 		if decision := m.entries[index].Decision; decision != nil && decision.Verdict == Ask {
-			decision.Awaiting = awaiting
+			decision.Awaiting, decision.asked = awaiting, decision.asked || awaiting
 			return
 		}
 	}

@@ -46,8 +46,8 @@ func TestTheAskBlockCarriesTheNumbersTheParagraphCannotFit(t *testing.T) {
 	if strings.Contains(ask, "…") {
 		t.Fatalf("the ask block truncates at eighty columns: %q", ask)
 	}
-	if !strings.Contains(plain, "risk is hard to undo or reaches outside the workspace") {
-		t.Fatalf("the transcript lost the worded sentence\n%s", plain)
+	if _, body, _ := model.Expansion("c1", 76); !strings.Contains(ansi.Strip(strings.Join(body, "\n")), "risk is hard to undo or reaches outside the workspace") {
+		t.Fatalf("the expanded call lost the worded sentence\n%s", ansi.Strip(strings.Join(body, "\n")))
 	}
 	golden.Assert(t, "ask-block-80x24.golden", frame)
 }

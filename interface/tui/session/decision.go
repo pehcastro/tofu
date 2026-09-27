@@ -83,6 +83,15 @@ type Decision struct {
 	Reason   Reason
 	Failure  string
 	Awaiting bool
+	Enforced bool
+	asked    bool
+}
+
+func (d *Decision) shown() string {
+	if d == nil || d.Verdict == Allow || !d.asked && !d.Enforced {
+		return ""
+	}
+	return d.Verdict.String()
 }
 
 func (d Decision) lines(width int) []string {

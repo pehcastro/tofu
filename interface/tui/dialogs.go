@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"fmt"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
@@ -18,9 +19,13 @@ import (
 )
 
 const (
-	killChoice = "kill"
-	keepChoice = "keep"
-	diffPage   = 12
+	killChoice        = "kill"
+	keepChoice        = "keep"
+	diffPage          = 12
+	callPreviewRows   = 10
+	callDialogWidest  = 120
+	callDialogMargin  = 8
+	callDialogPadding = 4
 )
 
 type dialog interface {
@@ -321,6 +326,62 @@ func (d *diffDialog) key(a *App, msg tea.KeyPressMsg) tea.Cmd {
 }
 
 func (d *diffDialog) click(*App, int, int) tea.Cmd { return nil }
+
+type callDialog struct {
+	id     string
+	scroll int
+}
+
+func (a *App) expand(id string) tea.Cmd {
+	if _, _, found := a.view.Expansion(id, a.width); !found {
+		return nil
+	}
+	return a.push(&callDialog{id: id})
+}
+
+func (d *callDialog) expansion(a *App) (int, string, []string) {
+	outer := max(1, min(callDialogWidest, a.width-callDialogMargin))
+	head, body, _ := a.view.Expansion(d.id, max(1, outer-callDialogPadding))
+	d.scroll = min(max(0, d.scroll), max(0, len(body)-callPreviewRows))
+	return outer, head, body
+}
+
+func (d *callDialog) over(a *App, base string) string {
+	outer, head, body := d.expansion(a)
+	shown := body[d.scroll:min(len(body), d.scroll+callPreviewRows)]
+	shown = append(shown, make([]string, callPreviewRows-len(shown))...)
+	footer := look.Faint(fmt.Sprintf("lines %d-%d/%d · up/down scroll · p/n call · ", d.scroll+1, d.scroll+min(len(body), callPreviewRows), len(body))) + look.Accent("Close")
+	panel := look.TintedSurface(outer, look.Panel, head+"\n\n"+strings.Join(shown, "\n")+"\n\n"+footer)
+	return look.Over(look.Dim(base), panel, max(1, (a.width-lipgloss.Width(panel))/2), max(1, (a.height-lipgloss.Height(panel))/2))
+}
+
+func (d *callDialog) key(a *App, msg tea.KeyPressMsg) tea.Cmd {
+	switch msg.String() {
+	case "esc", "enter", "q":
+		return a.pop()
+	case "up", "k":
+		d.scroll--
+	case "down", "j":
+		d.scroll++
+	case "pgup":
+		d.scroll -= callPreviewRows
+	case "pgdown":
+		d.scroll += callPreviewRows
+	case "home":
+		d.scroll = 0
+	case "end":
+		_, _, body := d.expansion(a)
+		d.scroll = len(body)
+	case "p":
+		d.id, d.scroll = a.view.CallBeside(d.id, -1), 0
+	case "n":
+		d.id, d.scroll = a.view.CallBeside(d.id, 1), 0
+	}
+	d.expansion(a)
+	return nil
+}
+
+func (d *callDialog) click(*App, int, int) tea.Cmd { return nil }
 
 type shortcutsDialog struct{ hostkeys.Shortcuts }
 

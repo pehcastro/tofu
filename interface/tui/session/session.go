@@ -9,6 +9,7 @@ import (
 	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/textarea"
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
 
 	"tofu/interface/tui/look"
 	"tofu/interface/tui/markdown"
@@ -16,6 +17,7 @@ import (
 	"tofu/interface/tui/progress"
 	"tofu/interface/tui/subagent"
 	"tofu/internal/konst"
+	"tofu/internal/turn/tools"
 	"tofu/internal/widget"
 )
 
@@ -49,6 +51,7 @@ type Entry struct {
 	Body      string
 	Detail    string
 	Status    string
+	Output    string
 	Bytes     int
 	Failed    bool
 	Promoted  bool
@@ -70,6 +73,7 @@ type Entry struct {
 
 type Result struct {
 	Status string
+	Output string
 	Bytes  int
 	Failed bool
 }
@@ -79,18 +83,27 @@ func (e Entry) assistant() bool { return e.Kind == Assistant }
 func (e Entry) message() bool { return e.Kind == User || e.Kind == Assistant }
 
 func (e Entry) displayLines() []string {
-	if !e.streaming || e.tail == nil {
-		return e.rendered
+	lines := e.rendered
+	if e.streaming && e.tail != nil {
+		lines = append(append([]string{}, e.rendered...), e.tail...)
 	}
-	return append(append([]string{}, e.rendered...), e.tail...)
+	for len(lines) > 0 && blank(lines[len(lines)-1]) {
+		lines = lines[:len(lines)-1]
+	}
+	for len(lines) > 0 && blank(lines[0]) {
+		lines = lines[1:]
+	}
+	return lines
 }
+
+func blank(line string) bool { return strings.TrimSpace(ansi.Strip(line)) == "" }
 
 func (e Entry) returned() bool { return e.Status != "" }
 
 func (e Entry) running() bool { return e.Kind == Tool && e.ID != "" && !e.returned() }
 
 func (e Entry) sticky() bool {
-	return e.Failed || e.Promoted || (e.Decision != nil && e.Decision.Verdict != Allow)
+	return e.Failed || e.Promoted || e.Decision.shown() != ""
 }
 
 func (e Entry) label() string { return strings.TrimSpace(e.Head + " " + e.Body) }
@@ -113,7 +126,7 @@ type Model struct {
 	phase              phase
 	shown              time.Time
 	prose              Prose
-	plan               []PlanItem
+	unshown            map[string]bool
 	entries            []Entry
 	composer           textarea.Model
 	width              int
@@ -160,7 +173,7 @@ func New(now func() time.Time, prose Prose) Model {
 	styles := look.ComposerStyles()
 	styles.Cursor.Shape = tea.CursorBar
 	composer.SetStyles(styles)
-	return Model{now: now, prose: prose, composer: composer, following: true, began: now()}
+	return Model{now: now, prose: prose, composer: composer, following: true, began: now(), unshown: map[string]bool{}}
 }
 
 func (m *Model) Focus() tea.Cmd { return m.composer.Focus() }
@@ -265,6 +278,12 @@ func (m *Model) mint() string {
 }
 
 func (m *Model) Append(entry Entry) {
+	if entry.Kind == Tool && entry.Head == tools.PlanToolName {
+		if entry.ID != "" {
+			m.unshown[entry.ID] = true
+		}
+		return
+	}
 	m.seal()
 	m.revision++
 	entry.Started, entry.turn, entry.intoTurn = m.now(), m.turns, m.elapsed(m.began)
@@ -285,12 +304,16 @@ func (m *Model) Append(entry Entry) {
 }
 
 func (m *Model) Finish(id string, result Result) {
+	if m.unshown[id] {
+		delete(m.unshown, id)
+		return
+	}
 	m.seal()
 	ended := m.now()
 	for index := len(m.entries) - 1; index >= 0; index-- {
 		entry := &m.entries[index]
 		if entry.running() && entry.ID == id {
-			entry.Status, entry.Bytes, entry.Failed, entry.Ended = result.Status, result.Bytes, result.Failed, ended
+			entry.Status, entry.Output, entry.Bytes, entry.Failed, entry.Ended = result.Status, result.Output, result.Bytes, result.Failed, ended
 			m.revision++
 			return
 		}
@@ -401,7 +424,7 @@ func (m *Model) Start() {
 	}
 	at := m.now()
 	m.entered, m.turns, m.turnID = at, m.turns+1, m.mint()
-	m.Busy, m.Stopping, m.LettingToolsFinish, m.began, m.plan = true, false, false, at, nil
+	m.Busy, m.Stopping, m.LettingToolsFinish, m.began = true, false, false, at
 	m.waited, m.phase, m.shown = 0, requesting, at
 	m.requested, m.answered, m.respondedOnce = at, time.Time{}, false
 }
@@ -414,7 +437,10 @@ func (m *Model) dropGreeting() {
 }
 
 func (m *Model) Close(words, id string) {
-	m.cooked = words + " " + widget.Until(m.elapsed(m.began)) + requestSeparator + "waited " + widget.Until(m.waited)
+	m.cooked = words + " " + widget.Until(m.elapsed(m.began))
+	if !m.Stopping {
+		m.cooked += requestSeparator + "waited " + widget.Until(m.waited)
+	}
 	m.cookedID = m.turnID
 	if id != "" {
 		m.cookedID = id

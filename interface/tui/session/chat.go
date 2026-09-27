@@ -5,6 +5,8 @@ import (
 	"strings"
 	"time"
 
+	"charm.land/lipgloss/v2"
+
 	"tofu/interface/tui/look"
 	"tofu/interface/tui/progress"
 	"tofu/interface/tui/trace"
@@ -18,6 +20,7 @@ const (
 	trackCells       = 1
 	turnGapRows      = 2
 	metaGap          = "  "
+	expandLabel      = "[expand]"
 	clockLayout      = "15:04"
 	you              = "You"
 	orchestrator     = "orchestrator"
@@ -40,10 +43,10 @@ type foldCounts struct {
 }
 
 type drawKey struct {
-	width, lead, body                                           int
-	status                                                      string
-	latest, picked, streaming, waiting, failed, promoted, gated bool
-	fold                                                        foldCounts
+	width, lead, body                                    int
+	status, verdict                                      string
+	latest, picked, streaming, waiting, failed, promoted bool
+	fold                                                 foldCounts
 }
 
 type drawn struct {
@@ -53,12 +56,7 @@ type drawn struct {
 
 func (m *Model) View() string {
 	m.settle()
-	plan, rows := m.feed()
-	lines := m.transcript(rows)
-	for _, line := range plan {
-		lines = append(lines, widget.Pad(continuation+line, m.width))
-	}
-	return strings.Join(append(lines, m.footer()...), "\n")
+	return strings.Join(append(m.transcript(m.transcriptRows()), m.footer()...), "\n")
 }
 
 func (m *Model) transcript(rows int) []string {
@@ -117,9 +115,8 @@ func (m *Model) blockLines(start, end int) []string {
 func (m *Model) drawKey(start, end int) (drawKey, bool) {
 	entry := &m.entries[start]
 	key := drawKey{
-		width: m.width, lead: m.lead(start), body: len(entry.Body), status: entry.Status,
-		streaming: entry.streaming, waiting: entry.waiting, failed: entry.Failed,
-		promoted: entry.Promoted, gated: entry.Decision != nil,
+		width: m.width, lead: m.lead(start), body: len(entry.Body), status: entry.Status, verdict: entry.Decision.shown(),
+		streaming: entry.streaming, waiting: entry.waiting, failed: entry.Failed, promoted: entry.Promoted,
 	}
 	if m.folds(start) {
 		key.fold = m.foldCounts(start, end)
@@ -155,9 +152,9 @@ func (m *Model) lead(start int) int {
 	switch {
 	case start == 0:
 		return 0
-	case m.entries[start].message():
+	case m.entries[start].Kind == User:
 		return turnGapRows
-	case m.entries[start-1].message():
+	case m.entries[start].message() || m.entries[start-1].message():
 		return 1
 	}
 	return 0
@@ -197,13 +194,9 @@ func (m *Model) foldLine(fold foldCounts) string {
 		fields = append(fields, "shell ("+strconv.Itoa(fold.shell)+")")
 	}
 	fields = append(fields, widget.Until(fold.since))
-	text := noteMarker + strings.Join(fields, foldSeparator)
-	if fold.id == "" {
-		return continuation + look.Faint(widget.Fit(text, m.textWidth()))
-	}
-	id := look.TypedID(toolKind, trace.Short(fold.id))
-	room := max(m.textWidth()-widget.Cells(foldSeparator)-widget.Cells(id), 1)
-	return continuation + look.Faint(widget.Fit(text, room)+foldSeparator) + id
+	tail := expandTail(fold.id)
+	room := max(m.textWidth()-widget.Cells(tail), 1)
+	return continuation + look.Faint(widget.Pad(widget.Fit(noteMarker+strings.Join(fields, foldSeparator), room), room)) + tail
 }
 
 func (m *Model) foldSince(end int) time.Duration {
@@ -214,14 +207,35 @@ func (m *Model) foldSince(end int) time.Duration {
 }
 
 func (m *Model) progressLine(entry Entry) string {
-	line := progress.Line{Label: entry.label(), Frame: m.frame, Live: entry.running()}
-	id := trace.Short(entry.ID)
-	if id == "" {
-		return continuation + line.View(m.textWidth())
+	tail := expandTail(entry.ID)
+	room := max(m.textWidth()-widget.Cells(tail), 1)
+	return continuation + widget.Pad(progress.Line{Label: oneLine(entry.label()), Frame: m.frame, Live: true}.View(room), room) + tail
+}
+
+func expandTail(id string) string {
+	if short := trace.Short(id); short != "" {
+		return gap + look.TypedID(toolKind, short) + expandMark(id)
 	}
-	typed := look.TypedID(toolKind, id)
-	room := max(m.textWidth()-widget.Cells(typed)-widget.Cells(gap), 1)
-	return continuation + widget.Pad(line.View(room), room) + gap + typed
+	return ""
+}
+
+func expandMark(id string) string {
+	if trace.Short(id) == "" {
+		return ""
+	}
+	return gap + look.Style(look.Violet).Render(expandLabel)
+}
+
+func oneLine(text string) string { return strings.Join(strings.Fields(text), " ") }
+
+func (m *Model) callStatus(entry Entry) (string, lipgloss.Style) {
+	switch {
+	case entry.running():
+		return widget.Until(m.elapsed(entry.Started)), look.Style(look.Mint)
+	case entry.Failed:
+		return entry.Status, look.Style(look.Red)
+	}
+	return entry.Status, look.Style(look.Mint)
 }
 
 func (m *Model) render(index int) []string {
@@ -233,13 +247,13 @@ func (m *Model) render(index int) []string {
 	case User:
 		lines := strings.Split(look.Style(look.Text).Render(strings.Join(widget.Wrap(entry.Body, m.textWidth()), "\n")), "\n")
 		if entry.waiting {
-			lines = []string{look.Muted(widget.Fit(strings.Join(strings.Fields(entry.Body), " "), m.textWidth()))}
+			lines = []string{look.Muted(widget.Fit(oneLine(entry.Body), m.textWidth()))}
 		}
 		return m.message(entry, look.Title(you), append(lines, m.chipLines(entry.Chips)...), m.latestUser(index))
 	case Assistant:
 		return m.message(entry, look.AgentRef(orchestrator), entry.displayLines(), false)
 	case Tool:
-		return indented(m.toolLines(entry))
+		return []string{continuation + m.toolLine(entry)}
 	case Note:
 		lines := widget.Wrap(entry.Body, max(m.textWidth()-widget.Cells(noteMarker), 1))
 		for index, line := range lines {
@@ -296,51 +310,26 @@ func (m *Model) failureLine(entry Entry) string {
 		tail = gap + look.Faint(wholeErrorInWork) + look.TypedID(toolKind, short)
 	}
 	room := max(m.textWidth()-widget.Cells(failureMarker+tail), 1)
-	return look.Style(look.Red).Render(failureMarker+widget.Fit(strings.Join(strings.Fields(entry.Body), " "), room)) + tail
+	return look.Style(look.Red).Render(failureMarker+widget.Fit(oneLine(entry.Body), room)) + tail
 }
 
-func (m *Model) toolLines(entry Entry) []string {
-	width := m.textWidth()
+func (m *Model) toolLine(entry Entry) string {
 	style := look.Style(look.Blue)
 	if entry.Head == shellTool {
 		style = look.Style(look.Amber)
 	}
-	verdict, verdictStyle := "", style
-	if entry.Decision != nil {
-		verdict, verdictStyle = entry.Decision.Verdict.String(), entry.Decision.Verdict.style()
+	status, statusStyle := m.callStatus(entry)
+	marker := toolMarker
+	if entry.running() {
+		marker = progress.Spin(m.frame) + " "
 	}
-	status, statusStyle := entry.Status, style
-	switch {
-	case entry.running():
-		status, statusStyle = widget.Until(m.elapsed(entry.Started)), look.Style(look.Mint)
-	case entry.Failed:
-		statusStyle = look.Style(look.Red)
-	case status != "":
-		statusStyle = look.Style(look.Mint)
+	right := expandMark(entry.ID)
+	if status = widget.Fit(oneLine(status), max(m.textWidth()/statusShare-widget.Cells(right), 0)); status != "" {
+		right = gap + statusStyle.Render(status) + right
 	}
-	status = widget.Fit(status, max(width/statusShare-widget.Cells(verdict)-widget.Cells(gap), 0))
-	right, columns := "", 0
-	if verdict != "" {
-		right, columns = verdictStyle.Render(verdict), widget.Cells(verdict)
+	if word := entry.Decision.shown(); word != "" {
+		right = gap + entry.Decision.Verdict.style().Render(word) + right
 	}
-	if status != "" {
-		if right != "" {
-			right, columns = right+gap, columns+widget.Cells(gap)
-		}
-		right, columns = right+statusStyle.Render(status), columns+widget.Cells(status)
-	}
-	room := max(width-columns-widget.Cells(gap), 1)
-	lines := []string{style.Render(widget.Pad(widget.Fit(toolMarker+entry.label(), room), room)) + gap + right}
-	if entry.Detail != "" {
-		for _, line := range widget.Wrap(entry.Detail, max(width-widget.Cells(continuation), 1)) {
-			lines = append(lines, look.Faint(continuation+line))
-		}
-	}
-	if entry.Decision != nil {
-		lines = append(lines, entry.Decision.lines(width)...)
-	}
-	if short := trace.Short(entry.ID); short != "" {
-		lines = append(lines, continuation+look.TypedID(toolKind, short))
-	}
-	return lines
+	room := max(m.textWidth()-widget.Cells(right), 1)
+	return style.Render(widget.Pad(widget.Fit(marker+oneLine(entry.label()), room), room)) + right
 }

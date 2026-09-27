@@ -142,7 +142,7 @@ func (m *Model) offset(at anchor) int {
 }
 
 func (m *Model) Scroll(key string) (int, bool) {
-	_, rows := m.feed()
+	rows := m.transcriptRows()
 	tail, scrollable := m.tailAnchor(rows)
 	if !scrollable {
 		return 0, false
@@ -182,14 +182,14 @@ func (m *Model) landAt(to, tail anchor) {
 }
 
 func (m *Model) SetScroll(behindNewest int) {
-	_, rows := m.feed()
+	rows := m.transcriptRows()
 	if tail, scrollable := m.tailAnchor(rows); scrollable {
 		m.landAt(m.move(tail, -max(0, behindNewest)), tail)
 	}
 }
 
 func (m *Model) Track() pointer.Track {
-	_, rows := m.feed()
+	rows := m.transcriptRows()
 	total, fromTop, _ := m.scrollMetrics(rows)
 	return pointer.Track{Height: rows, Total: total, Visible: rows, FromTop: fromTop}
 }

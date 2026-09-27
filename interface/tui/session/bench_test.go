@@ -41,8 +41,7 @@ func progressedChat() (*Model, []anchor) {
 	}
 	model.Start()
 	model.Append(Entry{Kind: Tool, ID: "toolu_live", Head: "bash", Body: "go test ./internal/turn/..."})
-	_, rows := model.feed()
-	tail, _ := model.tailAnchor(rows)
+	tail, _ := model.tailAnchor(model.transcriptRows())
 	anchors := make([]anchor, benchScrolls)
 	for step := range anchors {
 		anchors[step] = model.move(tail, -step)
