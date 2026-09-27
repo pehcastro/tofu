@@ -1,5 +1,6 @@
 ---
 name: research
+domain: general
 description: Answers numbered questions about a repository, a folder or the web, and hands back a verdict with a citation behind every finding. Read-only, except the one report path its brief names. Spawn several at once for independent questions.
 references:
   - research-report
