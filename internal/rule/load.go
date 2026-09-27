@@ -63,6 +63,8 @@ func parseRule(data []byte, path string) (Rule, error) {
 			declares.language = value
 		case "task":
 			declares.task = value
+		case "role":
+			declares.role = value
 		default:
 			return r.setField(key, value, path, line)
 		}

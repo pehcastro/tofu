@@ -21,11 +21,12 @@ type Domain struct {
 	Skills     []Document
 	Agents     []Document
 	References []string
+	Shipped    []string
 	Refused    []error
 }
 
 func (d Domain) Reaches(reference string) bool {
-	return slices.Contains(d.References, reference)
+	return slices.Contains(d.Shipped, reference)
 }
 
 func (d Domain) Unreachable() []string {
@@ -33,7 +34,7 @@ func (d Domain) Unreachable() []string {
 	for _, doc := range slices.Concat(d.Skills, d.Agents) {
 		for _, reference := range doc.References {
 			if !d.Reaches(reference) {
-				missing = append(missing, fmt.Sprintf("%s names the reference %q and the %s domain does not ship it", doc.File, reference, d.Name))
+				missing = append(missing, fmt.Sprintf("%s names the reference %q and no domain ships it", doc.File, reference))
 			}
 		}
 	}
@@ -66,13 +67,17 @@ func LoadDomains(library fs.FS, root string) ([]Domain, error) {
 		return nil, err
 	}
 	names := make([]string, 0, len(byName))
-	for name := range byName {
+	var shipped []string
+	for name, domain := range byName {
 		names = append(names, name)
+		shipped = append(shipped, domain.References...)
 	}
 	slices.Sort(names)
 	out := make([]Domain, 0, len(names))
 	for _, name := range names {
-		out = append(out, *byName[name])
+		domain := *byName[name]
+		domain.Shipped = shipped
+		out = append(out, domain)
 	}
 	return out, nil
 }

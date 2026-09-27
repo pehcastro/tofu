@@ -235,8 +235,8 @@ func TestReferences(t *testing.T) {
 	if !slices.Equal(names, []string{"ts-strict-config", "ts-type-design", "ts-boundaries", "verify-a-running-service"}) || len(tsDev.Cut) != 0 {
 		t.Fatalf("ts-dev carries its four references whole, got %q cut %q", names, tsDev.Cut)
 	}
-	if qa := definitionNamed(t, found, "qa"); len(qa.References) != 4 {
-		t.Fatalf("qa carries its four references from qa/references, got %+v", qa.References)
+	if qa := definitionNamed(t, found, "qa"); len(qa.References) != 5 || len(qa.Cut) != 0 {
+		t.Fatalf("qa carries its five references whole, four from qa and verify-a-running-service from dev, got %+v cut %q", qa.References, qa.Cut)
 	}
 	if foreign := definitionNamed(t, found, "foreign"); len(foreign.References) != 0 || !slices.Contains(foreign.Ignored, "references") {
 		t.Fatalf("references in a .claude file are not Claude's field and are ignored, got %+v", foreign)

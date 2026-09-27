@@ -24,6 +24,7 @@ import (
 	"tofu/internal/llm/wire/openrouter"
 	"tofu/internal/prompt"
 	"tofu/internal/recall"
+	"tofu/internal/rule"
 	"tofu/internal/session"
 	settingspkg "tofu/internal/settings"
 	"tofu/internal/skill"
@@ -535,6 +536,8 @@ func composeRun(opts runOpts, built []turn.Tool, run runtime) (composedRun, erro
 		if spec.Agent, err = subAgents.Named(opts.agent); err != nil {
 			return composedRun{}, err
 		}
+	} else if !opts.noSubAgents && opts.toolSet != toolSetThree {
+		spec.Role = rule.RoleOrchestrator
 	}
 	composed, err := turn.Compose(spec)
 	return composedRun{opts: opts, environment: environment, instructions: instructions, composed: composed, subAgents: subAgents, skills: skills}, err

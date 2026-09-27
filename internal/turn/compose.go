@@ -52,6 +52,7 @@ type ComposeSpec struct {
 	Agent        subagent.Definition
 	Skills       []skill.Skill
 	WindowTokens int
+	Role         rule.Role
 }
 
 const concernSkills rule.Concern = "skills"
@@ -108,6 +109,7 @@ func composedOrder() []rule.Concern {
 
 func Compose(spec ComposeSpec) (Composed, error) {
 	composed := Composed{Task: TaskNamed(spec.Task)}
+	composed.Task.Role = spec.Role
 	for _, owned := range spec.Paths {
 		composed.Task.Paths = append(composed.Task.Paths, filepath.ToSlash(owned))
 	}

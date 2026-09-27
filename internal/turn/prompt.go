@@ -14,13 +14,8 @@ import (
 
 const EveryToolIsRelativeToTheWorkingDirectory = "you are working inside one directory. every path you name is relative to it and nothing above it exists. "
 
-const SpawnAddendum = "unless you were spawned as a child, you are the orchestrator: you plan, spawn and verify, and implementation goes to a sub-agent. " +
-	"spawn hands one piece of work to a child with its own context and its own list of paths it may write, " +
-	"and returns what the child did rather than its transcript: give each separable piece its own child, with paths that do not overlap another child's, " +
-	"and spawn as soon as the piece is known rather than after writing it yourself. " +
-	"as the orchestrator you still write what is not source code, such as markdown, plans, notes, configuration and data, " +
-	"and a fix too small to hand over, within the budget of changed source lines per turn that write and edit state; " +
-	"past that budget a source write is refused and goes to a sub-agent. " +
+const SpawnAddendum = "spawn hands one piece of work to a child with its own context and its own list of paths it may write, " +
+	"and returns what the child did rather than its transcript: give each separable piece its own child, with paths that do not overlap another child's. " +
 	ContractAddendum
 
 const ContractAddendum = "if you were spawned as a child and your own brief names a ticket with an ## Acceptance section, finish with a fenced json block: " +

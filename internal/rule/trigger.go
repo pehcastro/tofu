@@ -41,11 +41,19 @@ func languageExtensions() map[string][]string {
 	}
 }
 
+type Role string
+
+const (
+	RoleAny          Role = ""
+	RoleOrchestrator Role = "orchestrator"
+)
+
 type Task struct {
 	Text     string
 	Paths    []string
 	Verb     Verb
 	Language string
+	Role     Role
 }
 
 func KnownLanguage(name string) bool { return languageExtensions()[name] != nil }
@@ -65,10 +73,11 @@ type Trigger struct {
 	scope     string
 	language  string
 	verb      Verb
+	role      Role
 }
 
 func (t Trigger) AlwaysOn() bool {
-	return t.condition == nil && t.scope == "" && t.language == "" && t.verb == VerbNone
+	return t.condition == nil && t.scope == "" && t.language == "" && t.verb == VerbNone && t.role == RoleAny
 }
 
 type declaredTrigger struct {
@@ -76,10 +85,14 @@ type declaredTrigger struct {
 	scope     string
 	language  string
 	task      string
+	role      string
 }
 
 func newTrigger(d declaredTrigger, file, id string) (Trigger, error) {
-	t := Trigger{scope: d.scope, language: d.language, verb: Verb(d.task)}
+	t := Trigger{scope: d.scope, language: d.language, verb: Verb(d.task), role: Role(d.role)}
+	if t.role != RoleAny && t.role != RoleOrchestrator {
+		return Trigger{}, fmt.Errorf("%s: rule %q declares the role %q, and a role is %s", file, id, d.role, RoleOrchestrator)
+	}
 	if d.condition != "" {
 		pattern, err := regexp.Compile(d.condition)
 		if err != nil {
@@ -108,6 +121,12 @@ func (t Trigger) firesFor(task Task) (bool, string) {
 		return true, "always on, the rule declares no trigger"
 	}
 	var why []string
+	if t.role != RoleAny {
+		if task.Role != t.role {
+			return false, fmt.Sprintf("the prompt is not the %s's", t.role)
+		}
+		why = append(why, fmt.Sprintf("the prompt is the %s's", t.role))
+	}
 	if t.condition != nil {
 		found := t.condition.FindString(task.Text)
 		if found == "" {

@@ -60,11 +60,11 @@ func TestAReferenceUnderADomainIsReachableByItsSkillsAndItsAgents(t *testing.T) 
 	}
 }
 
-func TestAReferenceInAnotherDomainIsNotReachable(t *testing.T) {
+func TestAReferenceInAnotherDomainIsReachableAndOneNoDomainShipsIsNot(t *testing.T) {
 	domains, err := LoadDomains(fstest.MapFS{
 		"qa/references/flakiness.md": {Data: []byte("---\nname: flakiness\n---\n")},
 		"dev/references/golang.md":   {Data: []byte("---\nname: golang\n---\n")},
-		"qa/agents/qa.md":            {Data: []byte("---\nname: qa\ndomain: qa\nreferences:\n  - flakiness\n  - golang\n---\n")},
+		"qa/agents/qa.md":            {Data: []byte("---\nname: qa\ndomain: qa\nreferences:\n  - flakiness\n  - golang\n  - nowhere\n---\n")},
 	}, "library")
 	if err != nil {
 		t.Fatalf("LoadDomains: %v", err)
@@ -74,8 +74,8 @@ func TestAReferenceInAnotherDomainIsNotReachable(t *testing.T) {
 			continue
 		}
 		unreachable := domain.Unreachable()
-		if len(unreachable) != 1 || !strings.Contains(unreachable[0], "golang") {
-			t.Fatalf("unreachable = %v, want the dev reference alone", unreachable)
+		if len(unreachable) != 1 || !strings.Contains(unreachable[0], "nowhere") {
+			t.Fatalf("unreachable = %v, want the reference no domain ships alone", unreachable)
 		}
 		return
 	}
