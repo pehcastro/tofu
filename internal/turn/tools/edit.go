@@ -44,7 +44,7 @@ func (e Edit) Definition() llm.Tool {
 			"new_string is what it becomes, and an empty new_string deletes it. " +
 			"a path that does not exist, or a stretch of text that differs from the file in whitespace alone, is repaired when there is exactly one candidate and refused when there are two, " +
 			"and a repair is named at the top of the result. " +
-			"the result is a unified diff of what changed. " +
+			"the result is a unified diff of what changed, and on a .ts or .tsx file it ends with the errors the project's own tsc finds in that file: fix them before moving on. " +
 			"symbol is the other way to say what is replaced, on a go file only: it names one declaration, spelled Resolve for a function, a type or a value and Root.Resolve for a method, " +
 			"and new_string becomes the whole of it, so the old text is never copied. " +
 			"use symbol when a whole declaration is being rewritten and old_string when part of one is or the file is not go. " +
@@ -71,7 +71,7 @@ type editArgs struct {
 	Symbol string `json:"symbol"`
 }
 
-func (e Edit) Run(_ context.Context, raw json.RawMessage) (turn.Result, error) {
+func (e Edit) Run(ctx context.Context, raw json.RawMessage) (turn.Result, error) {
 	var args editArgs
 	if err := json.Unmarshal(raw, &args); err != nil {
 		return turn.Result{}, fmt.Errorf("edit: arguments are not the expected shape: %w", err)
@@ -149,7 +149,7 @@ func (e Edit) Run(_ context.Context, raw json.RawMessage) (turn.Result, error) {
 	}
 	e.ledger.Mark(target)
 	return turn.Result{
-		Content: strings.Join(append(repairs, preview.Diff), "\n"),
+		Content: turn.Typechecked(ctx, resolved, strings.Join(append(repairs, preview.Diff), "\n")),
 		Command: target,
 	}, nil
 }

@@ -98,6 +98,9 @@ const (
 	BashWaitDelayMillis   = 1000
 	BackgroundYieldMillis = 10000
 
+	TypecheckDeadlineMillis = 15000
+	TypecheckLinesCap       = 20
+
 	ShellProbeTimeoutMillis     = 2000
 	ToolchainProbeTimeoutMillis = 2000
 	PortCheckTimeoutMillis      = 300

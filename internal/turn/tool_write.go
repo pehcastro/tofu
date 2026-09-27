@@ -85,7 +85,8 @@ func (t *WriteTool) Definition() llm.Tool {
 		Name: "write",
 		Description: "writes a file inside the turn's working directory, replacing it whole. " +
 			"the result says the file was created when it was not there before, " +
-			"and is a unified diff of what changed when it was",
+			"and is a unified diff of what changed when it was. " +
+			"a .ts or .tsx file is then typechecked with the project's own tsc, and its errors end the result: fix them before moving on",
 		Parameters: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -102,7 +103,7 @@ type writeArgs struct {
 	Content string `json:"content"`
 }
 
-func (t *WriteTool) Run(_ context.Context, raw json.RawMessage) (Result, error) {
+func (t *WriteTool) Run(ctx context.Context, raw json.RawMessage) (Result, error) {
 	var args writeArgs
 	if err := json.Unmarshal(raw, &args); err != nil {
 		return Result{}, fmt.Errorf("write: arguments are not the expected shape: %w", err)
@@ -131,5 +132,5 @@ func (t *WriteTool) Run(_ context.Context, raw json.RawMessage) (Result, error) 
 		After:   args.Content,
 		Diff:    transform.Unified(args.Path, before, args.Content),
 	}
-	return Result{Content: preview.Result(), Command: args.Path}, nil
+	return Result{Content: Typechecked(ctx, resolved, preview.Result()), Command: args.Path}, nil
 }

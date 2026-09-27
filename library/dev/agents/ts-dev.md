@@ -6,6 +6,7 @@ references:
   - ts-strict-config
   - ts-type-design
   - ts-boundaries
+  - verify-a-running-service
 language: typescript
 model: inherit
 tools: read, glob, search, symbols, edit, write, bash
@@ -29,6 +30,10 @@ If the project has no script, run `<pm> exec tsc --noEmit` (or `tsc -b` with pro
 Detect the package manager from the lockfile: `bun.lock` or `bun.lockb` is bun, `pnpm-lock.yaml` is pnpm, `yarn.lock` is yarn, `package-lock.json` is npm, checked in that order. With no lockfile, read the `packageManager` field in package.json.
 
 A red step is reported with its output. Never turn it green by loosening the config, disabling a lint rule or skipping a test.
+
+A write or edit to a `.ts` or `.tsx` file ends with the errors the project's tsc finds in that file. Fix them before the next change. When the project runs `.ts` with node directly, the check also names what node's type stripping refuses.
+
+A service is not done at a clean typecheck. The done-gate for a service is the drive in verify-a-running-service: start it, call every route it serves, compare its numbers with the data, and stop it.
 
 ## Judgment the compiler cannot make
 
