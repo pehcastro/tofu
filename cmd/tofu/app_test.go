@@ -446,9 +446,13 @@ func stringsIn(value reflect.Value) []string {
 func TestTheSessionFormatsTheNumbersItWasHanded(t *testing.T) {
 	view := session.New(time.Now, new(markdown.Renderer).Lines)
 	view.SetSize(100, 20)
-	view.Append(session.Entry{Kind: session.Tool, Head: "write", Body: "README.md"})
+	view.Append(session.Entry{Kind: session.Tool, ID: "w1", Head: "write", Body: "README.md"})
 	view.Decide(gateDecision("write", recordedGateDecision()))
-	content := view.View()
+	head, body, found := view.Expansion("w1", 100)
+	if !found {
+		t.Fatalf("the call has no expansion\n%s", view.View())
+	}
+	content := head + "\n" + strings.Join(body, "\n")
 	for _, want := range []string{"ask", "risk", "2.00", "approval", "0.75", "▓", "risk 2.00 is over risk_ask_at 1.50"} {
 		if !strings.Contains(content, want) {
 			t.Errorf("the session view does not render %q\n%s", want, content)

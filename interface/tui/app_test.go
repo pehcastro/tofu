@@ -204,7 +204,7 @@ func TestTheModelsProseIsDrawnDifferentlyFromToolActivity(t *testing.T) {
 	app := liveApp(t, &at)
 	app.Update(Event{Kind: EventDecision, Decision: asked()})
 	content := app.View().Content
-	spoken, called := styleOf(content, prose), styleOf(content, "bash "+longIntent)
+	spoken, called := styleOf(content, prose), styleOf(content, "bash for d in internal")
 	if spoken == "" || called == "" {
 		t.Fatalf("the fixture is missing a row: prose %q, tool %q\n%s", spoken, called, content)
 	}
@@ -264,19 +264,29 @@ func TestAnAllowedCallFoldsInChatAndCarriesNoVerdictOrDistributions(t *testing.T
 	if strings.Contains(content, "0.04") {
 		t.Fatalf("the allowed call drew its distributions in chat\n%s", content)
 	}
-	if !strings.Contains(content, "(1) tools · jev 1") {
+	if !strings.Contains(content, "(2) tools · jev 2") {
 		t.Fatalf("the allowed call did not fold into the turn's one running line\n%s", content)
 	}
 }
 
 func TestAnAskedCallShowsEveryAnswerAndTheReason(t *testing.T) {
-	content := sessionApp(t, 120, 36).View().Content
+	app := sessionApp(t, 120, 36)
+	if chat := ansi.Strip(app.View().Content); strings.Contains(chat, "0.75") {
+		t.Fatalf("the asked call drew its bars in chat\n%s", chat)
+	}
+	app.expand("c2")
+	if _, open := app.top().(*callDialog); !open {
+		t.Fatalf("expand c2 opened no call dialog\n%s", ansi.Strip(app.View().Content))
+	}
+	content := ansi.Strip(app.View().Content)
+	app.Update(tea.KeyPressMsg{Code: tea.KeyPgDown})
+	content += ansi.Strip(app.View().Content)
 	for _, want := range []string{
 		"ask", "risk", "2.00", "approval", "0.75", "user_requested", "0.11", "from_untrusted", "0.02",
 		riskSentence,
 	} {
-		if !strings.Contains(content, want) {
-			t.Errorf("the asked call does not show %q\n%s", want, content)
+		if !strings.Contains(strings.Join(strings.Fields(content), " "), want) {
+			t.Errorf("the asked call's expand dialog does not show %q\n%s", want, content)
 		}
 	}
 }
