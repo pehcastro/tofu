@@ -92,6 +92,7 @@ const (
 	comfortableGap = 1
 	spaciousGap    = 2
 	allActivity    = "All activity"
+	orchestrator   = "orchestrator"
 )
 
 type Retention int
@@ -122,6 +123,7 @@ type Model struct {
 	events             []Event
 	agents             []Agent
 	orchestratorBusy   bool
+	plan               string
 	railFocused        bool
 	filter             identity
 	selected           string
@@ -143,6 +145,8 @@ func (m *Model) SetFrame(frame int)        { m.frame = frame }
 func (m *Model) SetAgents(orchestratorBusy bool, agents []Agent) {
 	m.orchestratorBusy, m.agents = orchestratorBusy, agents
 }
+
+func (m *Model) SetPlan(line string) { m.plan = line }
 
 func (m *Model) SetDensity(density string) {
 	switch density {
@@ -377,7 +381,7 @@ func (m Model) glyph(g group) string {
 }
 
 func (m Model) entries() []entry {
-	lead := entry{who: identity{name: "orchestrator"}, group: waiting, doing: "Waiting for request"}
+	lead := entry{who: identity{name: orchestrator}, group: waiting, doing: "Waiting for request"}
 	if m.orchestratorBusy {
 		lead.group, lead.doing = active, "Working"
 	}
@@ -418,6 +422,9 @@ func (m Model) railView() (string, []railTarget) {
 		for _, e := range members {
 			targets = append(targets, target(e.who))
 			b.WriteString(look.SidebarEntry(width, m.filter == e.who, e.who.label(), e.glyph, e.doing) + "\n")
+			if e.who.name == orchestrator && m.plan != "" {
+				b.WriteString("  " + look.Faint(widget.Fit(m.plan, width-2)) + "\n")
+			}
 		}
 	}
 	return b.String(), targets

@@ -153,6 +153,8 @@ func (a *App) composerKey(msg tea.KeyPressMsg) (tea.Cmd, bool) {
 	case "alt+down":
 		a.view.PickQueued(1)
 		return nil, true
+	case "ctrl+o":
+		return a.expand(a.view.CallBeside("", -1)), true
 	case "ctrl+y":
 		return a.copyAnswer(), true
 	case "alt+y":

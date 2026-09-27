@@ -319,7 +319,7 @@ func (a *App) absorb(event Event) {
 	case EventSubAgent:
 		a.showChildren(event.Children)
 	case EventPlan:
-		a.view.SetPlan(event.Plan)
+		a.feed.SetPlan(planLine(event.Plan))
 	case EventAwaitPerson:
 		a.view.Await()
 	case EventResumed:
@@ -373,12 +373,30 @@ func (a *App) answered(event Event, at time.Time) {
 		return
 	}
 	if finished.Kind != feed.KindSpawn {
-		a.view.Finish(event.ID, session.Result{Status: status, Bytes: event.Bytes, Failed: event.Failed})
+		a.view.Finish(event.ID, session.Result{Status: status, Output: event.Detail, Bytes: event.Bytes, Failed: event.Failed})
 	}
 	a.running = max(a.running-1, 0)
 	if a.view.LettingToolsFinish && a.running == 0 {
 		a.stopTurn()
 	}
+}
+
+func planLine(plan []session.PlanItem) string {
+	if len(plan) == 0 {
+		return ""
+	}
+	closed, running, pending := 0, "", ""
+	for _, item := range plan {
+		switch item.State {
+		case session.PlanDone, session.PlanDropped:
+			closed++
+		case session.PlanRunning:
+			running = cmp.Or(running, item.Text)
+		case session.PlanPending:
+			pending = cmp.Or(pending, item.Text)
+		}
+	}
+	return "plan " + strconv.Itoa(closed) + "/" + strconv.Itoa(len(plan)) + " · " + cmp.Or(running, pending, "done")
 }
 
 func lines(text string) []string {

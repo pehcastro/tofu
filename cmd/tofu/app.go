@@ -795,20 +795,6 @@ func (s *appSession) run(ctx context.Context, pick tui.Pick, task string, emit t
 	}
 	held := &roster.Roster{}
 	watch := &appWatcher{gate: gate, held: held, emit: emit, now: s.now, turnID: opts.turnID, seen: s.shown, maxSteps: opts.maxSteps}
-	if gate != nil {
-		gate.watch = func(tool string, gated turn.GateDecision, err error) {
-			decided := session.Decision{Tool: tool, Verdict: session.Ask}
-			switch {
-			case err != nil:
-				decided.Failure = err.Error()
-			case gated.Verdict != ledger.VerdictUnset:
-				decided = gateDecision(tool, gated)
-			default:
-				return
-			}
-			emit(tui.Event{Kind: tui.EventDecision, Decision: &decided, Agent: watch.asker(), Promote: watch.spawning(tool)})
-		}
-	}
 	opened.held.wrap = func(model turn.Model) (turn.Model, error) {
 		asked, guardErr := guarded(model, budget)
 		if guardErr != nil {
@@ -827,6 +813,21 @@ func (s *appSession) run(ctx context.Context, pick tui.Pick, task string, emit t
 	if configErr != nil {
 		fail(configErr)
 		return
+	}
+	if gate != nil {
+		gate.watch = func(tool string, gated turn.GateDecision, err error) {
+			decided := session.Decision{Tool: tool, Verdict: session.Ask}
+			switch {
+			case err != nil:
+				decided.Failure = err.Error()
+			case gated.Verdict != ledger.VerdictUnset:
+				decided = gateDecision(tool, gated)
+				decided.Enforced = config.GateMode == turn.GateEnforce
+			default:
+				return
+			}
+			emit(tui.Event{Kind: tui.EventDecision, Decision: &decided, Agent: watch.asker(), Promote: watch.spawning(tool)})
+		}
 	}
 	config.History = s.carried
 	config.Images = images
@@ -1127,6 +1128,7 @@ func (a *appWatcher) result(message llm.Message, asker string) {
 		Kind:   tui.EventToolResult,
 		ID:     a.eventID(asker, message.ToolCallID),
 		Text:   resultSummary(message.Content),
+		Detail: message.Content,
 		Bytes:  message.ToolResultBytes,
 		Failed: message.ToolOutcome.Failed(),
 		Agent:  asker,
