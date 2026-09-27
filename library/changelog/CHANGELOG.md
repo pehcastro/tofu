@@ -14,7 +14,7 @@ The orchestrator delegates, the chat is a conversation, and a sub-agent's work s
 
 ### Changed
 
-- **With sub-agents on, the orchestrator delegates.** It writes docs, plans and config freely. It may change 10 lines of source per turn for a small fix. Past that budget, a source write is refused, and the refusal names the sub-agent to spawn. Five orchestrator-only rules tell it to delegate, keep chat for conversation, announce each spawn, check a child's work and report short.
+- **With sub-agents on, the orchestrator delegates.** It writes docs, plans and config freely. It may change 10 lines of source per turn for a small fix. Past that budget, a source write is refused, and the refusal names the sub-agent to spawn. A shell command that writes source, such as `sed -i`, is always refused for the orchestrator. Five orchestrator-only rules tell it to delegate, keep chat for conversation, announce each spawn, check a child's work and report short.
 - **The chat is a conversation.**
   - Every tool call is one line, with `[expand]`. A click or ctrl+o opens the command, the gate's answers and the output.
   - A spawn is one line, "spawning [&qa-1] to <mission>".
