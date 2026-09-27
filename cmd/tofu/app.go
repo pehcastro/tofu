@@ -82,6 +82,7 @@ type appWiring struct {
 	wires     func() []tui.Wire
 	blockers  func() []tui.Requirement
 	clipboard func() (sys.Clipboard, error)
+	quota     func() []frame.Quota
 }
 
 type appLaunch struct {
@@ -122,7 +123,7 @@ func appOptions(dir string, arms runOpts, wiring appWiring, launch appLaunch) tu
 		Login:        loginCommand(string(cred.ClaudeSub)),
 		Wires:        wiring.wires,
 		Providers:    appProviders(),
-		Quota:        appQuota,
+		Quota:        wiring.quota,
 		Settings:     settingsStore,
 		Reload:       appReload,
 		Turn:         live.run,
@@ -152,7 +153,7 @@ func appVerb(in io.Reader, out, errOut io.Writer, resumed sessionResume) int {
 		_, _ = fmt.Fprintf(errOut, "tofu: the working directory is unreadable: %v\n", err)
 		return exitVerdict
 	}
-	live := appWiring{open: openAppWire, wires: appWires, blockers: appRequirements}
+	live := appWiring{open: openAppWire, wires: appWires, blockers: appRequirements, quota: appQuota}
 	launch := launchOf(dir, resumed, resumed.Session == "")
 	if err := tui.Run(appOptions(dir, runOpts{}, live, launch)); err != nil {
 		_, _ = fmt.Fprintf(errOut, "tofu: %v\n", err)

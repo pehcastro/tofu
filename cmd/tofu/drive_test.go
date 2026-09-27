@@ -569,6 +569,39 @@ func TestDriveTakesTheRunArmsThatChangeWhatATurnDoes(t *testing.T) {
 	}
 }
 
+const childOnCodexCassette = `{"text":"reading the note first","tools":[{"name":"read","args":{"path":"note.txt"}}]}
+{"text":"handing it to go-dev","tools":[{"name":"spawn","args":{"agent":"go-dev","task":"wait a moment, then say done","owns":["note.txt"]}}]}
+{"text":"go-dev is done"}
+{"agent":"c1","text":"waiting","tools":[{"name":"bash","args":{"command":"sleep 8"}}]}
+{"agent":"c1","text":"done"}
+`
+
+const bothQuotas = `[{"label":"claude-sub 5h","fraction":0.62,"reported":true,"resetsIn":"3h28m"},
+{"label":"codex-sub 5h","fraction":0.4,"reported":true,"resetsIn":"1h"}]`
+
+func TestADrivenFooterShowsAChildsSubscriptionOnlyWhileTheChildRuns(t *testing.T) {
+	dir := drivenProject(t)
+	if err := os.MkdirAll(filepath.Join(dir, ".tofu", "agents"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	written(t, filepath.Join(dir, ".tofu", "agents"), "go-dev.md", "---\nname: go-dev\ndescription: writes go\nmodel: codex-sub/gpt-5.6-sol\n---\n\nYou write Go.\n")
+	deck := written(t, dir, "codex.cassette", childOnCodexCassette)
+	script := written(t, dir, "footer.drive", strings.Join([]string{
+		"wait " + session.Placeholder,
+		"type ask go-dev to wait",
+		"key enter",
+		"wait claude 62%  |  codex 40%",
+		"wait cooked for",
+		"absent codex 40%",
+		"wait claude-sub 5h 62%",
+	}, "\n"))
+	var out, errOut bytes.Buffer
+	args := []string{script, "--cassette", deck, "--plain", "--timeout", "60s", "--width", "140", "--height", "36", "--source", "claude-sub", "--quota", written(t, dir, "q.json", bothQuotas)}
+	if code := driveVerb(args, strings.NewReader(""), &out, &errOut); code != exitOK {
+		t.Fatalf("tofu drive exited %d: %s", code, errOut.String())
+	}
+}
+
 func TestDriveForcesTheFreeSiftArmAndTheAppCutsTheResult(t *testing.T) {
 	whole := linesShown(t, drivenSift(t))
 	cut := linesShown(t, drivenSift(t, "--sift", "free"))

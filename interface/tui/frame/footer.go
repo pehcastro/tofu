@@ -112,8 +112,11 @@ func footerLeft(status Status, width int, form quotaLabel) (head, tail []span) {
 	if len(shown) == 0 && form != noQuota {
 		head = append(head, panel(footerSeparator+"quota unread", look.FaintColor))
 	}
-	for index, quota := range shown {
-		if form == noQuota || index > 0 && width < secondSourceColumns {
+	if len(shown) > 1 && width < secondSourceColumns {
+		form = max(form, vendorLabel)
+	}
+	for _, quota := range shown {
+		if form == noQuota {
 			break
 		}
 		name := form.of(quota)

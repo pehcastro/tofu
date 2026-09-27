@@ -60,6 +60,50 @@ func TestTabsAndTheRightSideNeverTouch(t *testing.T) {
 	}
 }
 
+func twoSourcesInUse() Status {
+	return Status{
+		Context: Context{Used: 118000, Budget: konst.ContextCeilingTokens},
+		Quotas: []Quota{
+			{Label: "claude-sub 5h", Fraction: 0.62, Reported: true},
+			{Label: "codex-sub 5h", Fraction: 0.4, Reported: true},
+		},
+		InUse: []string{"claude-sub", "codex-sub"},
+		At:    testHead.At,
+	}
+}
+
+func TestEverySourceInUseKeepsItsPercentageAtEveryWidth(t *testing.T) {
+	right := ChatRight("claude-sub/claude-opus-5", "medium")
+	for _, width := range []int{160, 150, 149, 140, 120, 110, 100, 90, 82, 81, 60} {
+		line := ansi.Strip(Footer(twoSourcesInUse(), width, right))
+		t.Logf("%3d |%s|", width, line)
+		if got := ansi.StringWidth(line); got != width {
+			t.Errorf("%d-column footer is %d cells: %q", width, got, line)
+		}
+		wanted := []string{"claude 62%", "codex 40%"}
+		if width >= secondSourceColumns {
+			wanted = []string{"claude-sub 5h 62%", "codex-sub 5h 40%"}
+		}
+		for _, want := range wanted {
+			if !strings.Contains(line, want) {
+				t.Errorf("%d-column footer dropped %q while a source it names is in use: %q", width, want, line)
+			}
+		}
+		if !strings.Contains(line, "claude-opus-5") && strings.Contains(line, "reasoning") {
+			t.Errorf("%d-column footer dropped the model and kept the reasoning: %q", width, line)
+		}
+	}
+}
+
+func TestOneSourceInUseKeepsItsFullLabelBelowTheSecondSourceWidth(t *testing.T) {
+	status := twoSourcesInUse()
+	status.InUse = []string{"claude-sub"}
+	line := ansi.Strip(Footer(status, 140, ChatRight("claude-sub/claude-opus-5", "medium")))
+	if !strings.Contains(line, "claude-sub 5h 62%") || strings.Contains(line, "codex") {
+		t.Errorf("one source in use at 140 columns drew %q, want claude-sub 5h 62%% and no codex", line)
+	}
+}
+
 func BenchmarkTopAndFooter(b *testing.B) {
 	status := Status{
 		Context: Context{Used: 118000, Budget: konst.ContextCeilingTokens},

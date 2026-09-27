@@ -18,18 +18,27 @@ import (
 	"tofu/interface/tui"
 	"tofu/interface/tui/filmstrip"
 	"tofu/interface/tui/fixture"
+	"tofu/interface/tui/frame"
 	"tofu/internal/konst"
 	"tofu/internal/llm"
+	"tofu/internal/llm/cred"
 	"tofu/internal/llm/models"
 	sessionstore "tofu/internal/session"
 	"tofu/internal/sys"
 	"tofu/internal/turn"
 )
 
-const driveUsage = `usage: tofu drive [SCRIPT] [--dir PATH] [--home PATH] [--cassette PATH] [--clipboard PATH] [--width N] [--height N] [--timeout 60s] [--plain] [--fresh | --continue] [ARM]
+const driveUsage = `usage: tofu drive [SCRIPT] [--dir PATH] [--home PATH] [--cassette PATH] [--clipboard PATH] [--source NAME] [--quota PATH] [--width N] [--height N] [--timeout 60s] [--plain] [--fresh | --continue] [ARM]
 
 drives the app the way a person does, with no terminal and no model call.
 SCRIPT is a file of steps, or - for standard input.
+
+--source claude-sub|codex-sub names the subscription the orchestrator's model
+reports, while the cassette still answers. Without it the source is cassette.
+
+--quota PATH reads the footer's quota readings from a json file instead of
+asking the vendors, which a fresh home cannot do:
+  [{"label":"claude-sub 5h","fraction":0.62,"reported":true,"resetsIn":"3h28m"}]
 
 The driven app never reads your clipboard. --clipboard PATH makes it hold that
 file, as a file copied in the explorer does, so ctrl+v attaches it; without it
@@ -294,14 +303,55 @@ func driveWire(deck *cassette) func(runOpts) (appWire, error) {
 	}
 }
 
-func drivenApp(dir string, deck *cassette, plan drivePlan, launch appLaunch) *tui.App {
+type quotaReading struct {
+	frame.Quota
+	ResetsIn string `json:"resetsIn"`
+}
+
+func readQuotas(path string) (func() []frame.Quota, error) {
+	if path == "" {
+		return appQuota, nil
+	}
+	body, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	var readings []quotaReading
+	if err := json.Unmarshal(body, &readings); err != nil {
+		return nil, fmt.Errorf("%s: %w", path, err)
+	}
+	resetsIn := make([]time.Duration, len(readings))
+	for index, reading := range readings {
+		if reading.ResetsIn == "" {
+			continue
+		}
+		if resetsIn[index], err = time.ParseDuration(reading.ResetsIn); err != nil {
+			return nil, fmt.Errorf("%s reading %d: %w", path, index+1, err)
+		}
+	}
+	return func() []frame.Quota {
+		now := time.Now()
+		quotas := make([]frame.Quota, len(readings))
+		for index, reading := range readings {
+			quotas[index] = reading.Quota
+			if resetsIn[index] > 0 {
+				quotas[index].ResetsAt = now.Add(resetsIn[index])
+			}
+		}
+		return quotas
+	}, nil
+}
+
+func drivenApp(dir string, deck *cassette, plan drivePlan, launch appLaunch, quotas func() []frame.Quota) *tui.App {
 	shown := cassetteBuild
 	if deck != nil {
 		shown = deck.name
 	}
 	recorded := appWiring{
-		open:     driveWire(deck),
-		wires:    func() []tui.Wire { return []tui.Wire{{Name: wireSubscription, Model: shown, Provider: cassetteBuild}} },
+		open: driveWire(deck),
+		wires: func() []tui.Wire {
+			return []tui.Wire{{Name: wireSubscription, Model: shown, Provider: cmp.Or(plan.source, cassetteBuild)}}
+		},
 		blockers: func() []tui.Requirement { return nil },
 		clipboard: func() (sys.Clipboard, error) {
 			if plan.clipboard == "" {
@@ -309,6 +359,7 @@ func drivenApp(dir string, deck *cassette, plan drivePlan, launch appLaunch) *tu
 			}
 			return sys.Clipboard{Kind: sys.ClipboardFiles, Files: []string{plan.clipboard}}, nil
 		},
+		quota: quotas,
 	}
 	return tui.New(appOptions(dir, plan.arms, recorded, launch))
 }
@@ -332,6 +383,8 @@ type drivePlan struct {
 	home      string
 	cassette  string
 	clipboard string
+	source    string
+	quota     string
 	width     int
 	height    int
 	timeout   time.Duration
@@ -401,6 +454,10 @@ func driveArgs(args []string, errOut io.Writer) (drivePlan, bool) {
 			plan.cassette = taken
 		case "--clipboard":
 			plan.clipboard = taken
+		case "--source":
+			plan.source = taken
+		case "--quota":
+			plan.quota = taken
 		case "--width":
 			plan.width, err = strconv.Atoi(taken)
 		case "--height":
@@ -428,6 +485,7 @@ func driveArgs(args []string, errOut io.Writer) (drivePlan, bool) {
 		armIsKnown("--gate", plan.arms.gateArm, gateArms()),
 		armIsKnown("--sift", plan.arms.siftArm, siftArms()),
 		armIsKnown("--tools", plan.arms.toolSet, []string{toolSetFull, toolSetThree}),
+		armIsKnown("--source", plan.source, []string{string(cred.ClaudeSub), string(cred.CodexSub)}),
 	); err != nil {
 		return refuse("", err)
 	}
@@ -509,13 +567,17 @@ func driveVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 	if err != nil {
 		return driveFail(errOut, err)
 	}
+	quotas, err := readQuotas(plan.quota)
+	if err != nil {
+		return driveFail(errOut, err)
+	}
 	resumed := sessionResume{}
 	if store, err := sessionstore.Open(); err == nil && plan.resume {
 		resumed = continueCarry(store)
 	}
 	launch := launchOf(dir, resumed, plan.fresh)
 	defer leaveShells(launch.registry)
-	driver := filmstrip.Drive(drivenApp(dir, deck, plan, launch), plan.width, plan.height)
+	driver := filmstrip.Drive(drivenApp(dir, deck, plan, launch, quotas), plan.width, plan.height)
 	defer driver.Close()
 	for _, step := range steps {
 		err := playStep(driver, deck, step, plan, out)
