@@ -56,9 +56,18 @@ func printAgents(out io.Writer, found subagent.Found) {
 		if definition.Runs == subagent.RunsModel {
 			model = definition.Model
 		}
-		_, _ = fmt.Fprintf(out, "%-16s %-28s %-9s %s\n  %s\n", definition.Name, model, definition.Origin, definition.Path, definition.Description)
+		_, _ = fmt.Fprintf(out, "%-16s %-28s %-17s %-9s %s\n  %s\n", definition.Name, model, definition.From, definition.Origin, definition.Path, definition.Description)
 		if len(definition.Tools) > 0 {
 			_, _ = fmt.Fprintln(out, "  tools "+strings.Join(definition.Tools, ", "))
+		}
+		for _, reference := range definition.References {
+			_, _ = fmt.Fprintf(out, "  reference %s, %d bytes, %s\n", reference.Name, len(reference.Text), reference.Path)
+		}
+		if len(definition.Cut) > 0 {
+			_, _ = fmt.Fprintln(out, "  cut to stay within the reference budget: "+strings.Join(definition.Cut, ", "))
+		}
+		for _, notice := range definition.Notices {
+			_, _ = fmt.Fprintln(out, "  notice: "+notice)
 		}
 		if len(definition.IgnoredTools) > 0 {
 			_, _ = fmt.Fprintln(out, "  ignores "+strings.Join(definition.IgnoredTools, ", "))

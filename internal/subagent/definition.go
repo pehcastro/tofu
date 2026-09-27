@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync"
 
+	"tofu/internal/konst"
 	"tofu/internal/llm"
 	"tofu/internal/llm/models"
 	"tofu/internal/sys"
@@ -43,12 +44,23 @@ type Definition struct {
 	Written      string       `json:"written_model,omitempty"`
 	AssignedIn   string       `json:"assigned_in,omitempty"`
 	Effort       llm.Effort   `json:"effort,omitempty"`
+	Language     string       `json:"language,omitempty"`
 	Tools        []string     `json:"tools,omitempty"`
 	Instructions string       `json:"instructions"`
 	Refused      []string     `json:"refused,omitempty"`
 	Ignored      []string     `json:"ignored,omitempty"`
 	IgnoredTools []string     `json:"ignored_tools,omitempty"`
 	Shadowed     []Definition `json:"shadowed,omitempty"`
+	From         string       `json:"from,omitempty"`
+	Notices      []string     `json:"notices,omitempty"`
+	References   []Reference  `json:"references,omitempty"`
+	Cut          []string     `json:"cut_references,omitempty"`
+}
+
+type Reference struct {
+	Name string `json:"name"`
+	Path string `json:"path"`
+	Text string `json:"-"`
 }
 
 type Broken struct {
@@ -69,6 +81,7 @@ type Scan struct {
 	Library fs.FS
 	Tools   []string
 	Catalog models.Library
+	Tiers   map[Tier]string
 }
 
 type assignment struct {
@@ -168,18 +181,26 @@ func (s Scan) assignments() (map[string]assignment, []Broken) {
 	return assigned, broken
 }
 
+func frontMatter(data []byte) (header, body string, err error) {
+	rest, opened := strings.CutPrefix(strings.ReplaceAll(string(data), "\r\n", "\n"), "---\n")
+	if !opened {
+		return "", "", errors.New("the file opens with no front matter")
+	}
+	header, body, closed := strings.Cut("\n"+rest, "\n---")
+	if !closed {
+		return "", "", errors.New("the front matter is never closed")
+	}
+	return header, strings.TrimSpace(strings.TrimLeft(body, "-")), nil
+}
+
 func read(fsys fs.FS, name string) (Definition, error) {
 	data, err := fs.ReadFile(fsys, name)
 	if err != nil {
 		return Definition{}, err
 	}
-	rest, opened := strings.CutPrefix(strings.ReplaceAll(string(data), "\r\n", "\n"), "---\n")
-	if !opened {
-		return Definition{}, errors.New("the file opens with no front matter")
-	}
-	header, body, closed := strings.Cut("\n"+rest, "\n---")
-	if !closed {
-		return Definition{}, errors.New("the front matter is never closed")
+	header, body, err := frontMatter(data)
+	if err != nil {
+		return Definition{}, err
 	}
 	fields, err := fieldsOf(header)
 	if err != nil {
@@ -194,7 +215,11 @@ func read(fsys fs.FS, name string) (Definition, error) {
 		Description:  strings.Join(fields["description"], " "),
 		Written:      strings.Join(fields["model"], " "),
 		Effort:       llm.Effort(strings.Join(effort, " ")),
-		Instructions: strings.TrimSpace(strings.TrimLeft(body, "-")),
+		Language:     strings.Join(fields["language"], " "),
+		Instructions: body,
+	}
+	for _, named := range fields["references"] {
+		definition.References = append(definition.References, Reference{Name: named})
 	}
 	for _, item := range fields["tools"] {
 		for tool := range strings.SplitSeq(item, ",") {
@@ -205,7 +230,7 @@ func read(fsys fs.FS, name string) (Definition, error) {
 	}
 	for key := range fields {
 		switch key {
-		case "name", "description", "model", "tools", "effort", "thinking":
+		case "name", "description", "model", "tools", "effort", "thinking", "references", "language":
 		default:
 			definition.Ignored = append(definition.Ignored, key)
 		}
@@ -293,16 +318,56 @@ func (s Scan) resolve(definition *Definition, assigned assignment) {
 			definition.Refused = append(definition.Refused, err.Error())
 		}
 	}
+	s.place(definition, tofuWrote)
 	chosen := definition.Written
+	definition.From = "file"
 	if assigned.model != "" {
-		chosen, definition.AssignedIn = assigned.model, assigned.path
+		chosen, definition.From, definition.AssignedIn = assigned.model, AssignmentFile, assigned.path
 	}
-	var err error
-	if definition.Runs, definition.Model, err = s.runsOn(chosen); err != nil {
+	if err := s.runsOn(definition, chosen, tofuWrote || assigned.model != ""); err != nil {
 		definition.Refused = append(definition.Refused, err.Error())
 	}
 	if len(definition.Refused) > 0 {
 		definition.Runs = RunsRefused
+	}
+}
+
+func (s Scan) place(definition *Definition, tofuWrote bool) {
+	named := definition.References
+	definition.References = nil
+	if !tofuWrote {
+		if len(named) > 0 {
+			definition.Ignored = append(definition.Ignored, "references")
+		}
+		if definition.Language != "" {
+			definition.Ignored, definition.Language = append(definition.Ignored, "language"), ""
+		}
+		slices.Sort(definition.Ignored)
+		return
+	}
+	used := 0
+	for _, reference := range named {
+		found, _ := fs.Glob(s.Library, "*/references/"+reference.Name+".md")
+		deep, _ := fs.Glob(s.Library, "*/*/references/"+reference.Name+".md")
+		found = append(found, deep...)
+		if len(found) == 0 {
+			definition.Refused = append(definition.Refused, fmt.Sprintf("names the reference %q, which the library does not ship", reference.Name))
+			continue
+		}
+		data, err := fs.ReadFile(s.Library, found[0])
+		var text string
+		if err == nil {
+			_, text, err = frontMatter(data)
+		}
+		switch {
+		case err != nil:
+			definition.Refused = append(definition.Refused, fmt.Sprintf("the reference %q does not read: %v", reference.Name, err))
+		case len(definition.Cut) > 0 || used+len(text) > konst.SubAgentReferenceBytes:
+			definition.Cut = append(definition.Cut, reference.Name)
+		default:
+			used += len(text)
+			definition.References = append(definition.References, Reference{Name: reference.Name, Path: libraryOrigin + "/" + found[0], Text: text})
+		}
 	}
 }
 
@@ -330,13 +395,31 @@ func claudeTool(name string) string {
 	return ""
 }
 
-func (s Scan) runsOn(written string) (Runs, string, error) {
-	switch written {
-	case "", inheritModel:
-		return RunsInherit, "", nil
-	case disabledModel:
-		return RunsDisabled, "", nil
-	case "opus", "sonnet", "haiku":
+func (s Scan) runsOn(definition *Definition, written string, tofuFile bool) error {
+	named, isTier := strings.CutPrefix(written, "@")
+	tier := Tier(named)
+	switch {
+	case written == "" || written == inheritModel:
+		definition.Runs = RunsInherit
+		return nil
+	case written == disabledModel:
+		definition.Runs = RunsDisabled
+		return nil
+	case isTier && !slices.Contains(Tiers(), tier):
+		return fmt.Errorf("names the tier %s, and a tier is one of @%s", written, strings.Join(tierNames(), ", @"))
+	case isTier && !tofuFile:
+		return fmt.Errorf("names the tier %s in a shared file, which Claude Code cannot open with it: assign the tier in %s instead", written, AssignmentFile)
+	case !isTier && !tofuFile && s.Tiers[aliasTier(written)] != "":
+		tier, isTier = aliasTier(written), true
+	}
+	slug, unresolved := written, ""
+	switch {
+	case isTier:
+		definition.From, slug = "tier "+string(tier), s.Tiers[tier]
+		if slug == "" {
+			unresolved = fmt.Sprintf("the tier @%s is not set, so %s runs on the orchestrator's model: tofu settings set %s <slug>", tier, definition.Name, tier.Setting())
+		}
+	case aliasTier(written) != "":
 		var matches []string
 		for _, model := range s.Catalog.Models {
 			if model.Subscription == models.ClaudeSub && model.Use != models.UseExcluded && strings.HasPrefix(model.ID, "claude-"+written+"-") {
@@ -344,13 +427,22 @@ func (s Scan) runsOn(written string) (Runs, string, error) {
 			}
 		}
 		if len(matches) != 1 {
-			return RunsRefused, "", fmt.Errorf("the alias %s names %d allowed claude-sub models, not one: %s", written, len(matches), strings.Join(matches, ", "))
+			unresolved = fmt.Sprintf("the alias %s names %d allowed claude-sub models, not one, so %s runs on the orchestrator's model", written, len(matches), definition.Name)
+			break
 		}
-		written = matches[0]
+		slug = matches[0]
 	}
-	model, err := s.Catalog.Select(written)
-	if err != nil {
-		return RunsRefused, "", err
+	if unresolved != "" {
+		definition.Runs, definition.Notices = RunsInherit, append(definition.Notices, unresolved)
+		return nil
 	}
-	return RunsModel, model.Slug(), nil
+	model, err := s.Catalog.Select(slug)
+	switch {
+	case err != nil && isTier:
+		return fmt.Errorf("the tier @%s is %s by the setting %s: %w", tier, slug, tier.Setting(), err)
+	case err != nil:
+		return err
+	}
+	definition.Runs, definition.Model = RunsModel, model.Slug()
+	return nil
 }

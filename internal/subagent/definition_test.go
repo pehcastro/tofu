@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"tofu/internal/konst"
 	"tofu/internal/llm/models"
 	"tofu/internal/sys"
 	shipped "tofu/library"
@@ -121,6 +122,136 @@ func TestDiscoveryFailures(t *testing.T) {
 			t.Fatalf("the library is always read, got %+v", qa)
 		}
 	})
+}
+
+func projectWith(t *testing.T, files map[string]string) string {
+	project := t.TempDir()
+	for name, text := range files {
+		path := filepath.Join(project, filepath.FromSlash(name))
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(text), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return project
+}
+
+func agentFile(name, model string) string {
+	return "---\nname: " + name + "\ndescription: " + name + " for a test\nmodel: " + model + "\n---\nYou are " + name + ".\n"
+}
+
+func TestModelTiers(t *testing.T) {
+	project := projectWith(t, map[string]string{
+		".claude/agents/writer.md":      agentFile("writer", "sonnet"),
+		".claude/agents/shared-tier.md": agentFile("shared-tier", `"@genius"`),
+		".tofu/agents/thinker.md":       agentFile("thinker", "@genius"),
+		".tofu/agents/typo.md":          agentFile("typo", "@brilliant"),
+		".tofu/agents/planner.md":       agentFile("planner", "inherit"),
+		".tofu/agents/assigned.md":      agentFile("assigned", "inherit"),
+		".tofu/agent-models.yaml":       "planner: \"@genius\"\nassigned: sonnet\n",
+	})
+	scan := func(tiers map[Tier]string) Found {
+		s := scanOf(t, "", "tofu", "agents", "claude")
+		s.Project, s.Tiers = project, tiers
+		return Definitions(s)
+	}
+
+	t.Run("no tier set", func(t *testing.T) {
+		found := scan(nil)
+		if writer := definitionNamed(t, found, "writer"); writer.Model != "claude-sub/claude-sonnet-5" || writer.From != "file" {
+			t.Fatalf("with no tier, sonnet resolves through the catalog from the file, got %+v", writer)
+		}
+		for _, name := range []string{"thinker", "planner"} {
+			one := definitionNamed(t, found, name)
+			if one.Runs != RunsInherit || one.From != "tier genius" || len(one.Notices) != 1 || !strings.Contains(one.Notices[0], "modelTier.genius") {
+				t.Fatalf("%s: an unset tier inherits with a notice naming the setting, got %+v", name, one)
+			}
+		}
+		if planner := definitionNamed(t, found, "planner"); planner.AssignedIn == "" {
+			t.Fatalf("the tier came from agent-models.yaml, got %+v", planner)
+		}
+		if shared := definitionNamed(t, found, "shared-tier"); shared.Runs != RunsRefused {
+			t.Fatalf("a tier in a shared .claude file is refused, got %+v", shared)
+		}
+		if typo := definitionNamed(t, found, "typo"); typo.Runs != RunsRefused || !strings.Contains(strings.Join(typo.Refused, ""), "@brilliant") {
+			t.Fatalf("an unknown tier is refused by name, got %+v", typo)
+		}
+	})
+
+	t.Run("tiers set", func(t *testing.T) {
+		found := scan(map[Tier]string{TierSmart: "codex-sub/gpt-5.6-sol", TierGenius: "claude-sub/claude-opus-5"})
+		if writer := definitionNamed(t, found, "writer"); writer.Model != "codex-sub/gpt-5.6-sol" || writer.From != "tier smart" {
+			t.Fatalf("sonnet in a shared file resolves to the smart tier, got %+v", writer)
+		}
+		if thinker := definitionNamed(t, found, "thinker"); thinker.Runs != RunsModel || thinker.Model != "claude-sub/claude-opus-5" || len(thinker.Notices) != 0 {
+			t.Fatalf("@genius resolves to the genius tier, got %+v", thinker)
+		}
+		if assigned := definitionNamed(t, found, "assigned"); assigned.Model != "claude-sub/claude-sonnet-5" || assigned.From != "agent-models.yaml" {
+			t.Fatalf("sonnet in tofu's own agent-models.yaml is the catalog alias, not a tier, got %+v", assigned)
+		}
+	})
+
+	t.Run("a tier set to a model tofu refuses", func(t *testing.T) {
+		thinker := definitionNamed(t, scan(map[Tier]string{TierGenius: "claude-sub/claude-opus-4-8"}), "thinker")
+		if thinker.Runs != RunsRefused || !strings.Contains(strings.Join(thinker.Refused, ""), "modelTier.genius") {
+			t.Fatalf("a tier naming an excluded model is refused naming the setting, got %+v", thinker)
+		}
+	})
+
+	t.Run("an alias that finds no model", func(t *testing.T) {
+		s := scanOf(t, "", "claude")
+		s.Project, s.Catalog = project, models.Library{}
+		writer := definitionNamed(t, Definitions(s), "writer")
+		if writer.Runs != RunsInherit || len(writer.Notices) != 1 {
+			t.Fatalf("an alias with no model inherits with a notice, got %+v", writer)
+		}
+	})
+}
+
+func TestReferences(t *testing.T) {
+	var every []string
+	for _, name := range []string{"ts-strict-config", "ts-type-design", "ts-boundaries", "flakiness", "failure-triage", "metrics", "test-planning"} {
+		every = append(every, "  - "+name)
+	}
+	project := projectWith(t, map[string]string{
+		".claude/agents/foreign.md": "---\nname: foreign\ndescription: d\nreferences:\n  - ts-boundaries\n---\nx\n",
+		".tofu/agents/missing.md":   "---\nname: missing\ndescription: d\nreferences:\n  - no-such-reference\n---\nx\n",
+		".tofu/agents/reader.md":    "---\nname: reader\ndescription: d\nreferences:\n" + strings.Join(every, "\n") + "\n---\nx\n",
+	})
+	s := scanOf(t, "", "tofu", "claude")
+	s.Project = project
+	found := Definitions(s)
+
+	tsDev := definitionNamed(t, found, "ts-dev")
+	var names []string
+	for _, reference := range tsDev.References {
+		names = append(names, reference.Name)
+		if reference.Text == "" || strings.Contains(reference.Text, "\nfound:") || strings.HasPrefix(reference.Text, "---") {
+			t.Fatalf("%s should carry its body without front matter, got %q", reference.Name, reference.Text)
+		}
+	}
+	if !slices.Equal(names, []string{"ts-strict-config", "ts-type-design", "ts-boundaries"}) || len(tsDev.Cut) != 0 {
+		t.Fatalf("ts-dev carries its three references whole, got %q cut %q", names, tsDev.Cut)
+	}
+	if qa := definitionNamed(t, found, "qa"); len(qa.References) != 4 {
+		t.Fatalf("qa carries its four references from qa/references, got %+v", qa.References)
+	}
+	if foreign := definitionNamed(t, found, "foreign"); len(foreign.References) != 0 || !slices.Contains(foreign.Ignored, "references") {
+		t.Fatalf("references in a .claude file are not Claude's field and are ignored, got %+v", foreign)
+	}
+	if missing := definitionNamed(t, found, "missing"); missing.Runs != RunsRefused || !strings.Contains(strings.Join(missing.Refused, ""), "no-such-reference") {
+		t.Fatalf("a tofu file naming a reference the library lacks is refused, got %+v", missing)
+	}
+	reader := definitionNamed(t, found, "reader")
+	total := 0
+	for _, reference := range reader.References {
+		total += len(reference.Text)
+	}
+	if len(reader.Cut) == 0 || total > konst.SubAgentReferenceBytes || len(reader.References)+len(reader.Cut) != 7 {
+		t.Fatalf("seven references pass the budget, so the tail is cut and named: kept %d bytes, cut %q", total, reader.Cut)
+	}
 }
 
 func BenchmarkDefinitionsTwenty(b *testing.B) {

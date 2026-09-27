@@ -227,6 +227,20 @@ func (s spawnTrace) settle(id, status string) error {
 type SubAgents struct {
 	Defined []subagent.Definition
 	Open    func(subagent.Definition) (ChildModel, error)
+	Prompt  ComposeSpec
+}
+
+func (s SubAgents) system(inherited string, definition subagent.Definition, task string, owns []string) (string, error) {
+	switch {
+	case s.Prompt.Environment != "":
+		spec := s.Prompt
+		spec.Task, spec.Paths, spec.Agent = task, owns, definition
+		composed, err := Compose(spec)
+		return composed.System(), err
+	case definition.Name == "":
+		return inherited, nil
+	}
+	return inherited + "\n\n" + agentPart(definition).Text, nil
 }
 
 type AgentRefusedError struct {
@@ -261,7 +275,7 @@ func (s SubAgents) enabledNames() []string {
 	return names
 }
 
-func (s SubAgents) named(name string) (subagent.Definition, error) {
+func (s SubAgents) Named(name string) (subagent.Definition, error) {
 	if name == "" {
 		return subagent.Definition{}, nil
 	}
@@ -369,9 +383,13 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 	if t.spawned >= konst.SubAgentMaxBreadth {
 		return Result{}, BreadthLimitError{Spawned: t.spawned, Limit: konst.SubAgentMaxBreadth}
 	}
-	definition, err := t.SubAgents.named(args.Agent)
+	definition, err := t.SubAgents.Named(args.Agent)
 	if err != nil {
 		return Result{}, err
+	}
+	system, err := t.SubAgents.system(t.base.System, definition, args.Task, args.Owns)
+	if err != nil {
+		return Result{}, fmt.Errorf("spawn: the child's prompt did not compose: %w", err)
 	}
 	var opened ChildModel
 	if t.SubAgents.Open != nil {
@@ -429,9 +447,7 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 	if opened.Accounts.Pick != nil {
 		child.Model, child.Accounts, child.Spend, child.Wire = nil, opened.Accounts, opened.Spend, opened.Wire
 	}
-	if definition.Instructions != "" {
-		child.System += "\n\nyou are the " + definition.Name + " sub-agent, and these are your instructions:\n" + definition.Instructions
-	}
+	child.System = system
 	site, _ := ctx.Value(spawnSiteKey{}).(spawnSite)
 	trace := spawnTrace{site: site, definition: agent.Agent, model: agent.Model, mission: agent.Mission, owns: args.Owns, depth: t.depth + 1}
 	child.Task = args.Task

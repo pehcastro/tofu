@@ -42,10 +42,13 @@ func languageExtensions() map[string][]string {
 }
 
 type Task struct {
-	Text  string
-	Paths []string
-	Verb  Verb
+	Text     string
+	Paths    []string
+	Verb     Verb
+	Language string
 }
+
+func KnownLanguage(name string) bool { return languageExtensions()[name] != nil }
 
 type Trigger struct {
 	condition *regexp.Regexp
@@ -123,6 +126,9 @@ func (t Trigger) firesFor(task Task) (bool, string) {
 				reached = p
 				break
 			}
+		}
+		if reached == "" && task.Language == t.language {
+			reached = "the language the sub-agent declares"
 		}
 		if reached == "" {
 			return false, fmt.Sprintf("no path the task names is %s", t.language)

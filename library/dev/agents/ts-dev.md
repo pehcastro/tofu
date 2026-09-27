@@ -6,6 +6,7 @@ references:
   - ts-strict-config
   - ts-type-design
   - ts-boundaries
+language: typescript
 model: inherit
 tools: read, glob, search, symbols, edit, write, bash
 ---

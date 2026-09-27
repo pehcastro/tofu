@@ -77,6 +77,7 @@ type runOpts struct {
 	wire             string
 	dryRun           bool
 	showPrompt       bool
+	agent            string
 	gateArm          string
 	noSubAgents      bool
 	readBeforeEdit   bool
@@ -241,6 +242,7 @@ Arguments:
   --loop-guard-window <n>      how many recent calls the loop guard remembers
   --dry-run                    print the request that would be sent and send nothing
   --show-prompt                print the prompt the turn composes, part by part, and send nothing
+  --agent <name>               with --show-prompt, print the prompt a spawn of that sub-agent composes for the task
 
 TOFU_DRIVE_CASSETTE names a recorded model, read as tofu drive reads it, and
 then the run opens no live wire for the orchestrator or for any sub-agent.
@@ -483,7 +485,7 @@ type composedRun struct {
 	environment  string
 	instructions string
 	composed     turn.Composed
-	defined      []subagent.Definition
+	subAgents    turn.SubAgents
 }
 
 func composeRun(opts runOpts, built []turn.Tool, run runtime) (composedRun, error) {
@@ -505,17 +507,25 @@ func composeRun(opts runOpts, built []turn.Tool, run runtime) (composedRun, erro
 	for _, broken := range discovered.Broken {
 		say("the sub-agent in " + broken.Path + " is not offered: " + broken.Reason)
 	}
+	for _, definition := range discovered.Definitions {
+		for _, notice := range definition.Notices {
+			say(notice)
+		}
+	}
 	rules, _, err := loadRules("")
 	if err != nil {
 		return composedRun{}, err
 	}
-	composed, err := turn.Compose(turn.ComposeSpec{
-		Task:         opts.task,
-		Environment:  environment,
-		ToolGuidance: runSystem(opts),
-		Rules:        rules,
-	})
-	return composedRun{opts: opts, environment: environment, instructions: instructions, composed: composed, defined: discovered.Definitions}, err
+	subAgents := turn.SubAgents{Defined: discovered.Definitions, Prompt: turn.ComposeSpec{Environment: environment, ToolGuidance: runSystem(opts), Rules: rules}}
+	spec := subAgents.Prompt
+	spec.Task = opts.task
+	if opts.agent != "" {
+		if spec.Agent, err = subAgents.Named(opts.agent); err != nil {
+			return composedRun{}, err
+		}
+	}
+	composed, err := turn.Compose(spec)
+	return composedRun{opts: opts, environment: environment, instructions: instructions, composed: composed, subAgents: subAgents}, err
 }
 
 func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn.SpawnTool, error) {
@@ -562,7 +572,8 @@ func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn
 		return config, nil, nil
 	}
 	spawner := turn.NewSpawnTool(parentID, config, cmp.Or(run.roster, &subagent.Roster{}))
-	spawner.SubAgents = turn.SubAgents{Defined: prompt.defined, Open: run.childOpener(opts)}
+	spawner.SubAgents = prompt.subAgents
+	spawner.SubAgents.Open = run.childOpener(opts)
 	config.Tools = turn.NewRegistry(append(slices.Clone(built), spawner)...)
 	return config, spawner, nil
 }
@@ -576,13 +587,21 @@ func scanSubAgents(dir string, built []turn.Tool) subagent.Found {
 	catalog, _ := modelLibrary(dir)
 	home, _ := os.UserHomeDir()
 	library, _, _ := librarySource()
+	sources, tiers := settingspkg.DeclaredDefaultText(settingspkg.AgentSources), map[subagent.Tier]string{}
+	if store, err := openSettings(dir); err == nil {
+		sources = store.Text(settingspkg.AgentSources)
+		for _, tier := range subagent.Tiers() {
+			tiers[tier] = strings.TrimSpace(store.Text(tier.Setting()))
+		}
+	}
 	return subagent.Definitions(subagent.Scan{
 		Project: dir,
 		Home:    home,
-		Sources: strings.Split(settingText(dir, settingspkg.AgentSources, nil), ","),
+		Sources: strings.Split(sources, ","),
 		Library: library,
 		Tools:   names,
 		Catalog: catalog,
+		Tiers:   tiers,
 	})
 }
 
@@ -843,6 +862,8 @@ func parseRunArgs(args []string) (runOpts, error) {
 			opts.dryRun = true
 		case "--show-prompt":
 			opts.showPrompt = true
+		case "--agent":
+			opts.agent, err = nextArg(args, &i, arg)
 		case "--no-gate":
 			opts.gateArm = gateOff
 		case "--gate":
@@ -897,6 +918,9 @@ func parseRunArgs(args []string) (runOpts, error) {
 	}
 	if strings.TrimSpace(opts.task) == "" {
 		return runOpts{}, errors.New("tofu run needs a task")
+	}
+	if opts.agent != "" && !opts.showPrompt {
+		return runOpts{}, errors.New("--agent prints the prompt a spawn of that sub-agent composes and runs nothing, so it needs --show-prompt")
 	}
 	if !slices.Contains(runWires(), opts.wire) {
 		return runOpts{}, fmt.Errorf("--wire %q is none of %s", opts.wire, strings.Join(runWires(), ", "))

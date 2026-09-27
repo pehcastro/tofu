@@ -9,8 +9,10 @@ import (
 	"strings"
 	"unicode"
 
+	"tofu/internal/konst"
 	"tofu/internal/prompt"
 	"tofu/internal/rule"
+	"tofu/internal/subagent"
 )
 
 const TheFormatContract = prompt.TheFormatContract
@@ -18,29 +20,47 @@ const TheFormatContract = prompt.TheFormatContract
 type PromptPart struct {
 	Concern rule.Concern
 	RuleID  string
+	Agent   string
 	File    string
 	Text    string
 }
 
 func (p PromptPart) Rule() string {
-	if p.RuleID == "" {
-		return "tofu itself"
+	switch {
+	case p.Agent != "":
+		return "the sub-agent " + p.Agent
+	case p.RuleID != "":
+		return "the rule " + p.RuleID
 	}
-	return "the rule " + p.RuleID
+	return "tofu itself"
 }
 
 func (p PromptPart) From() string {
-	if p.RuleID == "" {
-		return "tofu itself"
+	if p.File == "" {
+		return p.Rule()
 	}
 	return p.Rule() + " in " + p.File
 }
 
 type ComposeSpec struct {
 	Task         string
+	Paths        []string
 	Environment  string
 	ToolGuidance string
 	Rules        []rule.Rule
+	Agent        subagent.Definition
+}
+
+func agentPart(definition subagent.Definition) PromptPart {
+	var text strings.Builder
+	text.WriteString("you are the " + definition.Name + " sub-agent, and these are your instructions:\n" + definition.Instructions)
+	for _, reference := range definition.References {
+		text.WriteString("\n\nthe reference " + reference.Name + ", placed here whole from " + reference.Path + ":\n" + reference.Text)
+	}
+	if len(definition.Cut) > 0 {
+		fmt.Fprintf(&text, "\n\nthese references were cut to keep them within %d bytes and are not here: %s", konst.SubAgentReferenceBytes, strings.Join(definition.Cut, ", "))
+	}
+	return PromptPart{Concern: rule.ConcernIdentity, Agent: definition.Name, File: filepath.ToSlash(definition.Path), Text: text.String()}
 }
 
 type Composed struct {
@@ -66,6 +86,15 @@ func composedOrder() []rule.Concern {
 
 func Compose(spec ComposeSpec) (Composed, error) {
 	composed := Composed{Task: TaskNamed(spec.Task)}
+	for _, owned := range spec.Paths {
+		composed.Task.Paths = append(composed.Task.Paths, filepath.ToSlash(owned))
+	}
+	if spec.Agent.Name != "" {
+		composed.Parts = append(composed.Parts, agentPart(spec.Agent))
+	}
+	if composed.Task.Language = spec.Agent.Language; composed.Task.Language != "" && !rule.KnownLanguage(composed.Task.Language) {
+		return Composed{}, fmt.Errorf("the sub-agent %s declares the language %q, which no rule knows", spec.Agent.Name, composed.Task.Language)
+	}
 	for _, builtin := range []PromptPart{
 		{Concern: rule.ConcernEnvironment, Text: spec.Environment},
 		{Concern: rule.ConcernToolGuidance, Text: spec.ToolGuidance},

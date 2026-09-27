@@ -29,6 +29,35 @@ func TestParseRuleReadsAConditionAndAScopeAndBothAreOptional(t *testing.T) {
 	}
 }
 
+func TestADeclaredLanguageReachesItsOwnRulesAndNoOther(t *testing.T) {
+	typescript := Trigger{language: "typescript"}
+	scoped := Trigger{language: "typescript", scope: "src/**"}
+	golang := Trigger{language: "go"}
+	cases := []struct {
+		name    string
+		trigger Trigger
+		task    Task
+		fires   bool
+	}{
+		{"declared, no path", typescript, Task{Text: "fix the failing build", Language: "typescript"}, true},
+		{"declared another language", golang, Task{Text: "fix the failing build", Language: "typescript"}, false},
+		{"a path still reaches its own language", golang, Task{Paths: []string{"main.go"}, Language: "typescript"}, true},
+		{"the scope still has to match", scoped, Task{Paths: []string{"docs/x.md"}, Language: "typescript"}, false},
+		{"nothing declared", typescript, Task{Text: "fix the failing build"}, false},
+	}
+	for _, c := range cases {
+		if fires, why := c.trigger.firesFor(c.task); fires != c.fires {
+			t.Errorf("%s: fires = %v, want %v: %s", c.name, fires, c.fires, why)
+		}
+	}
+}
+
+func TestKnownLanguage(t *testing.T) {
+	if !KnownLanguage("typescript") || KnownLanguage("typscript") || KnownLanguage("") {
+		t.Fatal("KnownLanguage should name typescript and nothing misspelt or empty")
+	}
+}
+
 func TestParseRuleRefusesAnUnparseableConditionByNameAndByField(t *testing.T) {
 	_, err := parseRule([]byte("id: em_dash\ndomain: general\nkind: structural\nchecker: em_dash\nconcern: code_rules\ncondition: (unclosed\n"), "library/general/rules/em_dash@1.yaml")
 	if err == nil {
