@@ -15,7 +15,7 @@ CLAUDE.md
 .mcp.json
 .playground
 .boji
-.tofu
+/.tofu/
 .tofu.partial
 
 bench/harness/testdata/gates/
