@@ -1,6 +1,6 @@
 package konst
 
-const Version = "0.5.0-rc-fix10"
+const Version = "0.5.0-rc-fix11"
 
 const (
 	ContextCeilingTokens = 250000

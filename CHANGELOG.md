@@ -8,6 +8,18 @@ Tofu is personal and not released, so the public interface that a version promis
 
 The minor number carries breaking changes, which is what 0.x means, and **there is never a 1.0.0**. The owner decided that on 2026-09-19: this stays 0.x forever, so the promise the version makes is the one 0.x already makes, that anything can break on a minor bump.
 
+## 0.5.0-rc-fix11 - 2026-09-27
+
+Done looks done, code looks like code, and sub-agents stop waiting on each other.
+
+### Changed
+
+- **Finished sub-agents on the chat's settled line are drawn in a muted green,** so done and running read apart.
+- **Code in a message carries a faint `│` rule on every line,** fenced or indented, and a fence with no language still gets a guessed highlight.
+- **An unset model tier no longer prints a notice in the chat.** The sub-agent runs on the orchestrator's model, and `tofu agents` still says so. A definition file that fails to read still shows.
+- **A sub-agent builds and checks only the paths it holds** and never sleeps waiting for a sibling's file. The orchestrator checks the whole after everyone answers.
+- **The orchestrator reports the checks it ran as a markdown table.**
+
 ## 0.5.0-rc-fix10 - 2026-09-27
 
 One wave again, and the status line counts instead of repeating names.
