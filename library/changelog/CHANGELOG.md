@@ -8,6 +8,17 @@ Tofu is personal and not released, so the public interface that a version promis
 
 The minor number carries breaking changes, which is what 0.x means, and **there is never a 1.0.0**. The owner decided that on 2026-09-19: this stays 0.x forever, so the promise the version makes is the one 0.x already makes, that anything can break on a minor bump.
 
+## 0.5.0-rc-fix13 - 2026-09-28
+
+Tofu runs on its own setup, not on another harness's.
+
+### Changed
+
+- **From your home directory tofu reads only `~/.tofu`:** `~/.tofu/AGENTS.md`, `~/.tofu/skills` and `~/.tofu/agents`. It no longer reads `~/.claude/CLAUDE.md`, `~/.claude/skills`, `~/.claude/agents`, `~/.agents/skills` or `~/.agents/agents`, whatever `instructionSources` and `agentSources` say.
+- **A project's own `AGENTS.md`, `CLAUDE.md`, `.claude` and `.agents` folders are still read,** and AGENTS.md still comes before CLAUDE.md in one folder.
+- **Instruction files are looked up between the working directory and its git root.** With no git, only the working directory counts, so a `CLAUDE.md` in a parent folder is no longer sent.
+- **The welcome art code no longer carries the old cover screen.** Nothing changes on screen.
+
 ## 0.5.0-rc-fix12.1 - 2026-09-28
 
 The welcome art looks as the cover did.
