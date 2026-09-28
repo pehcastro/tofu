@@ -7,8 +7,10 @@ import (
 	"strings"
 	"time"
 
+	"tofu/bench/report"
 	"tofu/bench/stat"
 	"tofu/internal/browser"
+	"tofu/internal/judge/ledger"
 )
 
 const (
@@ -74,6 +76,7 @@ func Write(w io.Writer, recording Recording, readings []Reading, answersFile str
 	fmt.Fprintf(&b, "# bench browser: %s\n\n", conditions.Date)
 	fmt.Fprintf(&b, "Machine: %s. Date: %s. Wire: %s, `%s`. Credential kind: %s. Jev build: %s.\n\n",
 		conditions.Machine, conditions.Date, recording.Caps.Name, recording.Model, conditions.Credential, strings.Join(builds, ", "))
+	b.WriteString(report.CostUnitLine([]ledger.Unit{ledger.UnitMoney, ledger.UnitListPrice}) + "\n\n")
 	fmt.Fprintf(&b, "Rebuilt from `%s`, the answers recorded by one live pass on %s, with no network call. Every page was asked once. No call was discarded as a warm up. The live pass needs the network and `TOFU_LIVE=1`, and is skipped without it.\n\n", answersFile, conditions.Date)
 	fmt.Fprintf(&b, "Wall time is measured around `jevloop.Jev.Choose`, request building included. Dollars are input tokens at tofu's Jev price, $%.3f per million, output free. The %s wire reported $%.6f for the whole pass.\n\n", jevDollarsPerMillionInput, recording.Caps.Name, reported)
 
