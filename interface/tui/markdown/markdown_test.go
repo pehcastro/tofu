@@ -60,3 +60,41 @@ func TestCodeBlocksInAMessageCarryTheCodeRule(t *testing.T) {
 		}
 	}
 }
+
+func TestShortTableStaysCompactWithABoldHeaderAndNoOrange(t *testing.T) {
+	body := "My own verification:\n\n| check | result |\n|---|---|\n| `bunx tsc --noEmit` whole project | 0 errors |\n| orders/999999 | 404 `{\"error\":\"not found\"}` |\n| unknown path | 404 |\n\nVERIFIED."
+	var renderer Renderer
+	lines := renderer.Lines(body, 120)
+	header := -1
+	for index, line := range lines {
+		plain := ansi.Strip(line)
+		if strings.Contains(plain, "check") && strings.Contains(plain, "result") {
+			header = index
+		}
+		if width := ansi.StringWidth(line); width >= 70 && !strings.Contains(plain, "verification") && !strings.Contains(plain, "VERIFIED") {
+			t.Errorf("table line is %d cells wide, want under 70: %q", width, plain)
+		}
+		if orange(line) {
+			t.Errorf("orange escape in %q", line)
+		}
+	}
+	if header < 0 {
+		t.Fatalf("no header line:\n%q", lines)
+	}
+	if !strings.Contains(lines[header], "\x1b[1m") && !strings.Contains(lines[header], "\x1b[1;") && !strings.Contains(lines[header], ";1m") && !strings.Contains(lines[header], ";1;") {
+		t.Errorf("header is not bold: %q", lines[header])
+	}
+}
+
+func orange(line string) bool {
+	for _, part := range strings.Split(line, "\x1b[") {
+		var index, red, green, blue int
+		if n, _ := fmt.Sscanf(part, "38;5;%d", &index); n == 1 && (index == 130 || index == 166 || index == 172 || index == 173 || index == 202 || index == 208 || index == 209 || index == 214 || index == 215 || index == 216) {
+			return true
+		}
+		if n, _ := fmt.Sscanf(part, "38;2;%d;%d;%d", &red, &green, &blue); n == 3 && red > 180 && green > 60 && green < 170 && blue < 90 {
+			return true
+		}
+	}
+	return false
+}

@@ -22,9 +22,17 @@ type Renderer struct {
 	term  *glamour.TermRenderer
 }
 
+type blockKind int
+
+const (
+	proseBlock blockKind = iota
+	codeBlock
+	tableBlock
+)
+
 type block struct {
 	text string
-	code bool
+	kind blockKind
 }
 
 func (r *Renderer) Lines(source string, width int) []string {
@@ -41,28 +49,43 @@ func (r *Renderer) Lines(source string, width int) []string {
 	rule := look.Style(look.FaintColor).Render(codeRule)
 	var lines []string
 	for _, part := range blocks(source) {
-		styled, err := r.term.Render(part.text)
+		var rendered []string
+		var err error
+		switch part.kind {
+		case tableBlock:
+			rendered, err = r.table(part.text, width)
+		case proseBlock, codeBlock:
+			rendered, err = r.render(part.text)
+		}
 		if err != nil {
 			return widget.Wrap(source, width)
-		}
-		rendered := strings.Split(styled, "\n")
-		for len(rendered) > 0 && strings.TrimSpace(ansi.Strip(rendered[0])) == "" {
-			rendered = rendered[1:]
-		}
-		for len(rendered) > 0 && strings.TrimSpace(ansi.Strip(rendered[len(rendered)-1])) == "" {
-			rendered = rendered[:len(rendered)-1]
 		}
 		if len(rendered) > 0 && len(lines) > 0 {
 			lines = append(lines, "")
 		}
 		for _, line := range rendered {
-			if part.code {
+			if part.kind == codeBlock {
 				line = rule + line
 			}
 			lines = append(lines, trimRight(ansi.Truncate(line, width, "")))
 		}
 	}
 	return lines
+}
+
+func (r *Renderer) render(text string) ([]string, error) {
+	styled, err := r.term.Render(text)
+	if err != nil {
+		return nil, err
+	}
+	rendered := strings.Split(styled, "\n")
+	for len(rendered) > 0 && strings.TrimSpace(ansi.Strip(rendered[0])) == "" {
+		rendered = rendered[1:]
+	}
+	for len(rendered) > 0 && strings.TrimSpace(ansi.Strip(rendered[len(rendered)-1])) == "" {
+		rendered = rendered[:len(rendered)-1]
+	}
+	return rendered, nil
 }
 
 func blocks(source string) []block {
@@ -93,6 +116,15 @@ func blocks(source string) []block {
 			for strings.TrimSpace(code[len(code)-1]) == "" {
 				code = code[:len(code)-1]
 			}
+		case opensTable(lines, at):
+			end := at + 2
+			for end < len(lines) && strings.TrimSpace(lines[end]) != "" && strings.Contains(lines[end], "|") {
+				end++
+			}
+			flushProse()
+			parts = append(parts, block{text: strings.Join(lines[at:end], "\n"), kind: tableBlock})
+			at = end - 1
+			continue
 		default:
 			prose = append(prose, lines[at])
 			continue
@@ -102,7 +134,7 @@ func blocks(source string) []block {
 		if language == "" {
 			language = guessLanguage(body)
 		}
-		parts = append(parts, block{text: "```" + language + "\n" + body + "\n```", code: true})
+		parts = append(parts, block{text: "```" + language + "\n" + body + "\n```", kind: codeBlock})
 	}
 	flushProse()
 	return parts
