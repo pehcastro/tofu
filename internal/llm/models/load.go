@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"fmt"
 	"io/fs"
+	"slices"
 	"sort"
 	"strings"
 
@@ -19,7 +20,15 @@ const (
 type Layer = sys.Layer
 
 func Layers(shipped fs.FS, dir string) ([]Layer, error) {
-	return sys.Layers(shipped, "", dir)
+	layers, err := sys.Layers(shipped, "", dir)
+	if err != nil {
+		return nil, err
+	}
+	catalog, err := CatalogDir()
+	if err != nil {
+		return nil, err
+	}
+	return slices.Insert(layers, 1, sys.DirLayer(catalogLayer, catalog)), nil
 }
 
 type Broken struct {
@@ -48,6 +57,7 @@ func (b *BrokenLibrary) Error() string {
 type sheet struct {
 	values map[string]string
 	file   string
+	layer  string
 }
 
 type merged struct {
@@ -57,7 +67,7 @@ type merged struct {
 
 func newMerged() *merged { return &merged{sheets: map[string]*sheet{}} }
 
-func (m *merged) take(key, file, body string, allowed map[string]bool) *Broken {
+func (m *merged) take(key, layer, file, body string, allowed map[string]bool) *Broken {
 	values, bad := fieldsOf(file, body, allowed)
 	if bad != nil {
 		return bad
@@ -67,7 +77,7 @@ func (m *merged) take(key, file, body string, allowed map[string]bool) *Broken {
 		m.order = append(m.order, key)
 	}
 	into := m.sheets[key]
-	into.file = file
+	into.file, into.layer = file, layer
 	for field, value := range values {
 		into.values[field] = value
 	}
@@ -102,7 +112,7 @@ type Contract struct {
 
 func Contracts() []Contract {
 	return []Contract{
-		{Kind: modelsDir, Required: []string{"use"}, Optional: []string{"subscription", "reason", "window", "kind", "vision", "efforts"}},
+		{Kind: modelsDir, Required: []string{"use"}, Optional: []string{"subscription", "reason", "window", "kind", "vision", "efforts", "from", "found"}},
 		{Kind: subscriptionsDir, Required: []string{"provider", "wire", "windows"}, Optional: []string{"not_models"}},
 		{Kind: rolesDir, Required: []string{"model"}},
 	}
@@ -193,7 +203,7 @@ func readFlat(layer Layer, dir, why string, allowed map[string]bool, into *merge
 			continue
 		}
 		at := sys.Join(layer.Origin, dir, entry.Name())
-		if bad := into.take(strings.TrimSuffix(entry.Name(), ".yaml"), at, string(body), allowed); bad != nil {
+		if bad := into.take(strings.TrimSuffix(entry.Name(), ".yaml"), layer.Name, at, string(body), allowed); bad != nil {
 			refused = append(refused, *bad)
 		}
 	}
@@ -224,7 +234,7 @@ func readModels(layer Layer, allowed map[string]bool, into *merged) []Broken {
 			}
 			slug := provider.Name() + "/" + strings.TrimSuffix(entry.Name(), ".yaml")
 			at := sys.Join(layer.Origin, dir, entry.Name())
-			if bad := into.take(slug, at, string(body), allowed); bad != nil {
+			if bad := into.take(slug, layer.Name, at, string(body), allowed); bad != nil {
 				refused = append(refused, *bad)
 			}
 		}
@@ -289,6 +299,9 @@ func buildModel(slug string, from *sheet, known map[Subscription]SubscriptionSpe
 		Vision:       Vision(from.values["vision"]),
 		Reason:       from.values["reason"],
 		File:         from.file,
+		Layer:        from.layer,
+		From:         from.values["from"],
+		Found:        from.values["found"],
 	}
 	if !model.Provider.valid() {
 		return model, &Broken{File: from.file, Why: fmt.Sprintf("the vendor is %s, %s, %s or %s, found %q", Anthropic, OpenAI, TypeSafe, OpenRouter, model.Provider)}

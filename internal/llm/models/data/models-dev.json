@@ -1,20 +1,20 @@
 {
  "anthropic": {
   "models": {
-   "claude-fable-5": { "limit": { "context": 1000000 } },
-   "claude-fable-5-1": { "limit": { "context": 1000000 } },
-   "claude-haiku-4-5": { "limit": { "context": 200000 } },
+   "claude-fable-5": { "limit": { "context": 1000000 }, "tool_call": true, "reasoning": true, "reasoning_options": [{ "type": "effort", "values": ["low", "medium", "high", "xhigh", "max"] }], "modalities": { "input": ["text", "image", "pdf"] } },
+   "claude-fable-5-1": { "limit": { "context": 1000000 }, "tool_call": true, "reasoning": true, "reasoning_options": [{ "type": "effort", "values": ["low", "medium", "high", "xhigh", "max"] }], "modalities": { "input": ["text", "image", "pdf"] } },
+   "claude-haiku-4-5": { "limit": { "context": 200000 }, "tool_call": true, "reasoning": true, "reasoning_options": [{ "type": "budget_tokens", "min": 1024 }], "modalities": { "input": ["text", "image", "pdf"] } },
    "claude-haiku-4-5-20251001": { "limit": { "context": 200000 } },
    "claude-opus-4-5": { "limit": { "context": 200000 } },
    "claude-opus-4-5-20251101": { "limit": { "context": 200000 } },
    "claude-opus-4-6": { "limit": { "context": 1000000 } },
    "claude-opus-4-7": { "limit": { "context": 1000000 } },
    "claude-opus-4-8": { "limit": { "context": 1000000 } },
-   "claude-opus-5": { "limit": { "context": 1000000 } },
+   "claude-opus-5": { "limit": { "context": 1000000 }, "tool_call": true, "reasoning": true, "reasoning_options": [{ "type": "effort", "values": ["low", "medium", "high", "xhigh", "max"] }], "modalities": { "input": ["text", "image", "pdf"] } },
    "claude-sonnet-4-5": { "limit": { "context": 1000000 } },
    "claude-sonnet-4-5-20250929": { "limit": { "context": 1000000 } },
    "claude-sonnet-4-6": { "limit": { "context": 1000000 } },
-   "claude-sonnet-5": { "limit": { "context": 1000000 } }
+   "claude-sonnet-5": { "limit": { "context": 1000000 }, "tool_call": true, "reasoning": true, "reasoning_options": [{ "type": "toggle" }, { "type": "effort", "values": ["low", "medium", "high", "xhigh", "max"] }], "modalities": { "input": ["text", "image", "pdf"] } }
   }
  },
  "openai": {
@@ -48,10 +48,10 @@
    "gpt-5.5": { "limit": { "context": 1050000 } },
    "gpt-5.5-pro": { "limit": { "context": 1050000 } },
    "gpt-5.6": { "limit": { "context": 1050000 } },
-   "gpt-5.6-luna": { "limit": { "context": 1050000 } },
-   "gpt-5.6-sol": { "limit": { "context": 1050000 } },
-   "gpt-5.6-terra": { "limit": { "context": 1050000 } },
-   "gpt-6-astra": { "limit": { "context": 1050000 } },
+   "gpt-5.6-luna": { "limit": { "context": 1050000 }, "tool_call": true, "reasoning": true, "reasoning_options": [{ "type": "effort", "values": ["none", "low", "medium", "high", "xhigh", "max"] }], "modalities": { "input": ["text", "image", "pdf"] } },
+   "gpt-5.6-sol": { "limit": { "context": 1050000 }, "tool_call": true, "reasoning": true, "reasoning_options": [{ "type": "effort", "values": ["none", "low", "medium", "high", "xhigh", "max"] }], "modalities": { "input": ["text", "image", "pdf"] } },
+   "gpt-5.6-terra": { "limit": { "context": 1050000 }, "tool_call": true, "reasoning": true, "reasoning_options": [{ "type": "effort", "values": ["none", "low", "medium", "high", "xhigh", "max"] }], "modalities": { "input": ["text", "image", "pdf"] } },
+   "gpt-6-astra": { "limit": { "context": 1050000 }, "tool_call": true, "reasoning": true, "reasoning_options": [{ "type": "effort", "values": ["low", "medium", "high", "xhigh", "max"] }], "modalities": { "input": ["text", "image", "pdf"] } },
    "gpt-realtime-2.1": { "limit": { "context": 128000 } },
    "o1": { "limit": { "context": 200000 } },
    "o1-pro": { "limit": { "context": 200000 } },

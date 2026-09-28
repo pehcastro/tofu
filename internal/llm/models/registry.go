@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -22,12 +23,20 @@ const (
 	RegistryURLVariable = "TOFU_MODELS_REGISTRY_URL"
 	RefreshVerb         = "tofu models --refresh"
 	datedSuffixDigits   = 8
-	registryFileMode    = 0o644
+	writtenFileMode     = 0o644
 )
 
+type Facts struct {
+	ToolCalls bool     `json:"tool_calls"`
+	Reasoning bool     `json:"reasoning"`
+	Efforts   []string `json:"efforts,omitempty"`
+	Images    bool     `json:"images"`
+}
+
 type Registry struct {
-	From    string         `json:"from"`
-	Windows map[string]int `json:"windows"`
+	From    string           `json:"from"`
+	Windows map[string]int   `json:"windows"`
+	Facts   map[string]Facts `json:"facts,omitempty"`
 }
 
 func ParseRegistry(body []byte, from string) (Registry, error) {
@@ -36,17 +45,37 @@ func ParseRegistry(body []byte, from string) (Registry, error) {
 			Limit struct {
 				Context int `json:"context"`
 			} `json:"limit"`
+			ToolCall         *bool `json:"tool_call"`
+			Reasoning        bool  `json:"reasoning"`
+			ReasoningOptions []struct {
+				Type   string   `json:"type"`
+				Values []string `json:"values"`
+			} `json:"reasoning_options"`
+			Modalities struct {
+				Input []string `json:"input"`
+			} `json:"modalities"`
 		} `json:"models"`
 	}
 	if err := json.Unmarshal(body, &payload); err != nil {
 		return Registry{}, fmt.Errorf("models: %s is not the shape models.dev serves: %w", from, err)
 	}
-	registry := Registry{From: from, Windows: make(map[string]int)}
+	registry := Registry{From: from, Windows: make(map[string]int), Facts: make(map[string]Facts)}
 	for provider, listed := range payload {
 		for id, model := range listed.Models {
+			slug := provider + "/" + id
 			if model.Limit.Context > 0 {
-				registry.Windows[provider+"/"+id] = model.Limit.Context
+				registry.Windows[slug] = model.Limit.Context
 			}
+			if model.ToolCall == nil {
+				continue
+			}
+			facts := Facts{ToolCalls: *model.ToolCall, Reasoning: model.Reasoning, Images: slices.Contains(model.Modalities.Input, "image")}
+			for _, option := range model.ReasoningOptions {
+				if option.Type == "effort" {
+					facts.Efforts = option.Values
+				}
+			}
+			registry.Facts[slug] = facts
 		}
 	}
 	if len(registry.Windows) == 0 {
@@ -76,7 +105,7 @@ func (r Registry) Store(path string) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, body, registryFileMode)
+	return os.WriteFile(path, body, writtenFileMode)
 }
 
 func RegistrySource() string {
@@ -103,6 +132,14 @@ func (r Registry) Window(slug string) int {
 		return tokens
 	}
 	return r.Windows[withoutDatedSuffix(slug)]
+}
+
+func (r Registry) Fact(slug string) (Facts, bool) {
+	if facts, known := r.Facts[slug]; known {
+		return facts, true
+	}
+	facts, known := r.Facts[withoutDatedSuffix(slug)]
+	return facts, known
 }
 
 func withoutDatedSuffix(slug string) string {

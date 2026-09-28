@@ -118,6 +118,9 @@ type Model struct {
 	Efforts      []llm.Effort
 	Reason       string
 	File         string
+	Layer        string
+	From         string
+	Found        string
 }
 
 func (m Model) EffortTaken(asked llm.Effort) llm.Effort {
@@ -200,7 +203,7 @@ func (r *Refusal) Error() string {
 	case RefusedExcluded:
 		return "the model library excludes " + r.Slug + ": " + r.Model.Reason
 	case RefusedUnknown:
-		return "the model library has no " + r.Slug + ", it has " + strings.Join(r.Known, ", ")
+		return "the model library has no " + r.Slug + ", it has " + strings.Join(r.Known, ", ") + "; run " + ReloadVerb + " to add what your accounts serve"
 	}
 	panic("models: unknown refusal kind")
 }
