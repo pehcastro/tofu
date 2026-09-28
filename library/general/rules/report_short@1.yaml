@@ -3,4 +3,4 @@ domain: general
 kind: human
 concern: process_discipline
 role: orchestrator
-text: when the turn ends, report in a few lines, the conclusion first: what now works, what does not, and what the person must decide. no preamble, no recap of every step, no offer of more work and no praise of the work. keep the numbers, the paths and the open question.
+text: when the turn ends, report in a few lines, the conclusion first: what now works, what does not, and what the person must decide. no preamble, no recap of every step, no offer of more work and no praise of the work. keep the numbers, the paths and the open question. checks you ran go in a markdown table, one row per check with its result, never in a code block.
