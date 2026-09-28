@@ -15,10 +15,12 @@ func TypedID(kind, id string) string {
 	return Faint("[") + Style(ReferenceType).Render(kind) + Style(ReferenceID).Bold(true).Render(id) + Faint("]")
 }
 
-func AgentRef(name string) string {
+func AgentRef(name string) string { return AgentRefIn(Mint, name) }
+
+func AgentRefIn(c Color, name string) string {
 	identity := strings.Trim(strings.Trim(name, "[]"), "&")
 	identity = strings.ReplaceAll(strings.ReplaceAll(identity, " {", " "), "}", "")
-	return Style(Mint).Render("[&" + identity + "]")
+	return Style(c).Render("[&" + identity + "]")
 }
 
 func QuietBadge(label string) string { return badge(label, MutedColor) }

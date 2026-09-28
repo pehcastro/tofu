@@ -184,8 +184,11 @@ func (m *Model) batchLines(batch spawnBatch) []string {
 	}
 	var words []string
 	for _, mark := range []string{doneMark, failedMark, stoppedMark} {
-		colour := look.FaintColor
-		if mark == failedMark {
+		colour, named := look.FaintColor, look.Mint
+		switch mark {
+		case doneMark:
+			named = look.MintMuted
+		case failedMark:
 			colour = look.Red
 		}
 		lead := look.Style(colour).Render(mark)
@@ -194,7 +197,7 @@ func (m *Model) batchLines(batch spawnBatch) []string {
 		}
 		for _, row := range batch.settled {
 			if settledMark(row.State) == mark {
-				words = append(words, lead+look.AgentRef(row.Name))
+				words = append(words, lead+look.AgentRefIn(named, row.Name))
 				lead = ""
 			}
 		}

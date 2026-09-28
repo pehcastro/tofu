@@ -33,3 +33,30 @@ func TestReportBodyRendersWithoutMarkup(t *testing.T) {
 		t.Errorf("fence code has no theme string colour:\n%q", lines)
 	}
 }
+
+func TestCodeBlocksInAMessageCarryTheCodeRule(t *testing.T) {
+	rule := look.Style(look.FaintColor).Render(codeRule)
+	for name, body := range map[string]string{
+		"indented": "My own verification:\n\n    tsc exit 0\n    /api/health 200 {\"ok\":true}\n\nAll routes answer.",
+		"fenced":   "My own verification:\n\n```\ntsc exit 0\n/api/health 200 {\"ok\":true}\n```\n\nAll routes answer.",
+	} {
+		var renderer Renderer
+		lines := renderer.Lines(body, 80)
+		ruled := 0
+		for _, line := range lines {
+			plain := ansi.Strip(line)
+			code := strings.Contains(plain, "tsc exit 0") || strings.Contains(plain, "/api/health 200")
+			switch {
+			case code && !strings.HasPrefix(line, rule):
+				t.Errorf("%s: code line %q does not start with the faint code rule", name, line)
+			case code:
+				ruled++
+			case strings.HasPrefix(line, rule):
+				t.Errorf("%s: prose line %q carries the code rule", name, plain)
+			}
+		}
+		if ruled != 2 {
+			t.Errorf("%s: %d code lines carry the rule, want 2:\n%q", name, ruled, lines)
+		}
+	}
+}

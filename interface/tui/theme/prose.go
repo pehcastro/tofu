@@ -27,7 +27,7 @@ func Prose() ansi.StyleConfig {
 	style.Code.Prefix, style.Code.Suffix = "", ""
 	style.Code.Color, style.Code.BackgroundColor = colour(look.Blue), nil
 
-	style.CodeBlock.Color = colour(look.MutedColor)
+	style.CodeBlock.Color, style.CodeBlock.Margin = colour(look.MutedColor), &flush
 	style.CodeBlock.Chroma = &ansi.Chroma{
 		Text:                ansi.StylePrimitive{Color: colour(look.Text)},
 		Error:               ansi.StylePrimitive{Color: colour(look.Red)},

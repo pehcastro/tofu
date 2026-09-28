@@ -9,7 +9,7 @@ import (
 	"testing"
 )
 
-var sentinelRoles = []Color{Background, Panel, PanelLight, Text, MutedColor, FaintColor, Mint, Blue, Amber, Red, Violet, ReferenceType, ReferenceID, DiffAddBackground, DiffDeleteBackground}
+var sentinelRoles = []Color{Background, Panel, PanelLight, Text, MutedColor, FaintColor, Mint, MintMuted, Blue, Amber, Red, Violet, ReferenceType, ReferenceID, DiffAddBackground, DiffDeleteBackground}
 
 var syntaxSentinels = []Color{SyntaxKeyword, SyntaxFunction, SyntaxString, SyntaxComment, SyntaxNumber}
 
@@ -38,7 +38,7 @@ func applyThemeLegacy(view string, theme Theme) string {
 }
 
 func dimUnderlayLegacy(view string) string {
-	for _, fg := range []Color{Text, MutedColor, Mint, Amber, Red, Violet, ReferenceType, ReferenceID, SyntaxKeyword, SyntaxFunction, SyntaxString, SyntaxComment, SyntaxNumber} {
+	for _, fg := range []Color{Text, MutedColor, Mint, MintMuted, Amber, Red, Violet, ReferenceType, ReferenceID, SyntaxKeyword, SyntaxFunction, SyntaxString, SyntaxComment, SyntaxNumber} {
 		view = strings.ReplaceAll(view, sgr(sgrForeground, fg), sgr(sgrForeground, FaintColor))
 	}
 	for _, bg := range []Color{Panel, PanelLight} {

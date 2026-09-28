@@ -511,11 +511,6 @@ func composeRun(opts runOpts, built []turn.Tool, run runtime) (composedRun, erro
 	for _, broken := range discovered.Broken {
 		say("the sub-agent in " + broken.Path + " is not offered: " + broken.Reason)
 	}
-	for _, definition := range discovered.Definitions {
-		for _, notice := range definition.Notices {
-			say(notice)
-		}
-	}
 	rules, _, err := loadRules("")
 	if err != nil {
 		return composedRun{}, err

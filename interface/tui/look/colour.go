@@ -21,6 +21,7 @@ const (
 	MutedColor           Color = "#7f8493"
 	FaintColor           Color = "#4d515d"
 	Mint                 Color = "#40d294"
+	MintMuted            Color = "#308766"
 	Blue                 Color = "#8fb7cc"
 	Amber                Color = "#d4ad78"
 	Red                  Color = "#d38b92"

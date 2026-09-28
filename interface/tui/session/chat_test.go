@@ -135,3 +135,31 @@ func TestWaitingOnThreeSubAgentsCountsThemAboveTheComposerAndNamesThemOnOneBatch
 		t.Errorf("the chat does not spin one Dots8 line naming all three sub-agents under the longest clock\n%s", strings.Join(rows, "\n"))
 	}
 }
+
+func TestSettledSubAgentNameIsDrawnInADifferentColourFromARunningOne(t *testing.T) {
+	model := New(fixed(), counted(new(int)))
+	model.SetSize(100, 30)
+	model.Append(Entry{Kind: User, Body: "split the routes"})
+	model.Start()
+	model.Spawned("ts-dev-1")
+	model.Spawned("ts-dev-2")
+	model.SubAgents = []subagent.Row{
+		{Name: "ts-dev-1", State: roster.Working, Calls: []subagent.Call{{ID: "r1", Tool: "read", Text: "a.ts"}}},
+		{Name: "ts-dev-2", State: roster.Finished},
+	}
+	frame := model.View()
+	colourBefore := func(name string) string {
+		at := strings.Index(frame, name)
+		if at < 0 {
+			t.Fatalf("%s is not drawn\n%s", name, ansi.Strip(frame))
+		}
+		escape := frame[strings.LastIndex(frame[:at], "\x1b["):at]
+		if !strings.Contains(escape, "38;") {
+			t.Fatalf("%s has no foreground colour before it: %q", name, escape)
+		}
+		return escape
+	}
+	if running, settled := colourBefore("[&ts-dev-1]"), colourBefore("[&ts-dev-2]"); running == settled {
+		t.Fatalf("the settled name is drawn as %q, the same as the running name", settled)
+	}
+}

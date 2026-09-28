@@ -7,13 +7,24 @@ import (
 	"github.com/alecthomas/chroma/v2/lexers"
 	"github.com/charmbracelet/x/ansi"
 
+	"tofu/interface/tui/look"
 	"tofu/interface/tui/theme"
 	"tofu/internal/widget"
+)
+
+const (
+	codeRule   = "│ "
+	codeIndent = "    "
 )
 
 type Renderer struct {
 	width int
 	term  *glamour.TermRenderer
+}
+
+type block struct {
+	text string
+	code bool
 }
 
 func (r *Renderer) Lines(source string, width int) []string {
@@ -27,39 +38,90 @@ func (r *Renderer) Lines(source string, width int) []string {
 		}
 		r.width, r.term = width, term
 	}
-	styled, err := r.term.Render(tagBareFences(source))
-	if err != nil {
-		return widget.Wrap(source, width)
-	}
-	lines := strings.Split(styled, "\n")
-	for index, line := range lines {
-		lines[index] = trimRight(ansi.Truncate(line, width, ""))
-	}
-	for len(lines) > 0 && lines[0] == "" {
-		lines = lines[1:]
-	}
-	for len(lines) > 0 && lines[len(lines)-1] == "" {
-		lines = lines[:len(lines)-1]
+	rule := look.Style(look.FaintColor).Render(codeRule)
+	var lines []string
+	for _, part := range blocks(source) {
+		styled, err := r.term.Render(part.text)
+		if err != nil {
+			return widget.Wrap(source, width)
+		}
+		rendered := strings.Split(styled, "\n")
+		for len(rendered) > 0 && strings.TrimSpace(ansi.Strip(rendered[0])) == "" {
+			rendered = rendered[1:]
+		}
+		for len(rendered) > 0 && strings.TrimSpace(ansi.Strip(rendered[len(rendered)-1])) == "" {
+			rendered = rendered[:len(rendered)-1]
+		}
+		if len(rendered) > 0 && len(lines) > 0 {
+			lines = append(lines, "")
+		}
+		for _, line := range rendered {
+			if part.code {
+				line = rule + line
+			}
+			lines = append(lines, trimRight(ansi.Truncate(line, width, "")))
+		}
 	}
 	return lines
 }
 
-func tagBareFences(source string) string {
+func blocks(source string) []block {
+	var parts []block
+	var prose []string
+	flushProse := func() {
+		if text := strings.Join(prose, "\n"); strings.TrimSpace(text) != "" {
+			parts = append(parts, block{text: text})
+		}
+		prose = nil
+	}
 	lines := strings.Split(source, "\n")
-	for open := 0; open < len(lines); open++ {
-		if !isFenceLine(lines[open]) {
+	for at := 0; at < len(lines); at++ {
+		var code []string
+		language := ""
+		switch {
+		case isFenceLine(lines[at]):
+			end := at + 1
+			for end < len(lines) && !isFenceLine(lines[end]) {
+				end++
+			}
+			code, language, at = lines[at+1:min(end, len(lines))], strings.TrimLeft(lines[at], " `~"), end
+		case opensIndentedCode(lines[at], prose):
+			for ; at < len(lines) && (strings.TrimSpace(lines[at]) == "" || indented(lines[at])); at++ {
+				code = append(code, strings.TrimPrefix(strings.TrimPrefix(lines[at], "\t"), codeIndent))
+			}
+			at--
+			for strings.TrimSpace(code[len(code)-1]) == "" {
+				code = code[:len(code)-1]
+			}
+		default:
+			prose = append(prose, lines[at])
 			continue
 		}
-		end := open + 1
-		for end < len(lines) && !isFenceLine(lines[end]) {
-			end++
+		flushProse()
+		body := strings.Join(code, "\n")
+		if language == "" {
+			language = guessLanguage(body)
 		}
-		if strings.TrimLeft(lines[open], " `~") == "" {
-			lines[open] += guessLanguage(strings.Join(lines[open+1:end], "\n"))
-		}
-		open = end
+		parts = append(parts, block{text: "```" + language + "\n" + body + "\n```", code: true})
 	}
-	return strings.Join(lines, "\n")
+	flushProse()
+	return parts
+}
+
+func indented(line string) bool {
+	return strings.HasPrefix(line, codeIndent) || strings.HasPrefix(line, "\t")
+}
+
+func opensIndentedCode(line string, prose []string) bool {
+	if !indented(line) || strings.TrimSpace(line) == "" || (len(prose) > 0 && strings.TrimSpace(prose[len(prose)-1]) != "") {
+		return false
+	}
+	for index := len(prose) - 1; index >= 0; index-- {
+		if strings.TrimSpace(prose[index]) != "" {
+			return !opensConstruct(prose[index])
+		}
+	}
+	return true
 }
 
 func guessLanguage(code string) string {
