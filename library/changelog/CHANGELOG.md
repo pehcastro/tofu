@@ -8,6 +8,15 @@ Tofu is personal and not released, so the public interface that a version promis
 
 The minor number carries breaking changes, which is what 0.x means, and **there is never a 1.0.0**. The owner decided that on 2026-09-19: this stays 0.x forever, so the promise the version makes is the one 0.x already makes, that anything can break on a minor bump.
 
+## 0.5.0-rc-fix12.1 - 2026-09-28
+
+The welcome art looks as the cover did.
+
+### Fixed
+
+- **The welcome art in an empty chat draws cell for cell as the old cover did.** The theme no longer paints a background behind its blank cells, and the orbiting dot keeps its old colour.
+- **The dot moves one step per pulse.** The pulse timer starts once per session, not twice.
+
 ## 0.5.0-rc-fix12 - 2026-09-28
 
 One screen to start, and sub-agents that talk to the orchestrator instead of guessing.
