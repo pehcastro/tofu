@@ -2,17 +2,17 @@
 type agents
 key enter
 wait cooked for
-click 4 14
+click 4 12
 wait All activity
 screen
 key alt+1
-click 26 13
+click 26 11
 wait [&c1]  owns
 screen
 key alt+1
 type edits
 key enter
 wait holds the 1200 floor rows
-click 46 22
+click 46 21
 wait ADDED  ·  2/2 files
 screen
