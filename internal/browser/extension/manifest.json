@@ -1,8 +1,10 @@
 {
   "manifest_version": 3,
   "name": "tofu",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Lets tofu read and drive a tab you share with it.",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA2gwjGB15kxedDL/qo5s3CB5FTMO4H7xyGp7YlgfcxMPT6lkPBseO4DwdHa72njlL/Q5c+rPBr3uXedv1dMGkAv9PFMmdsHg5BgfbGQtH9MsyMghP0P+m6IoFDVMUxUoLQ5uBk0ZxRHjilRtrfC7Hlz7FH4WTzPoiQiRaUnKgktndlPjMWMWHB1PjVhnhc7Fsl3s9ypPfMTs7tAq2HF5i4QfiuPc1IuF/jAR/AvCttR5ZHLO9Vo/4JbtpjGcvwbuYHuLfgh7PRFDBzVvhGb4h7l89m4/5mJ/rnxhlDAdSjBxEVG5zTlprjWVTBkLSFBhb//g9qPllL2GXgRGIf+u1WQIDAQAB",
-  "permissions": ["nativeMessaging", "debugger", "tabs", "activeTab"]
+  "permissions": ["nativeMessaging", "debugger", "tabs", "activeTab"],
+  "background": {"service_worker": "background.js"},
+  "action": {"default_title": "tofu", "default_popup": "popup.html"}
 }
