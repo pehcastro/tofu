@@ -29,14 +29,31 @@ mean the genius, smart and worker tiers when those are set.
   model the orchestrator runs, one line, `model: source/model`. A
   `sub-agent.yaml` beside it names the model a spawn that names no
   sub-agent runs
+- `~/.tofu/catalog/models/<provider>/<model>.yaml`: the models
+  `tofu models reload` found on your accounts that tofu does not ship.
+  Each carries `from`, what listed it, and `found`, the day it was found
 - `~/.tofu/models/<provider>/<model>.yaml`, `.tofu/models/...`: your
   changes to one model, field by field, over the list tofu ships
 - the `modelTier.genius`, `modelTier.smart`, `modelTier.worker` and
   `modelTier.dumb` settings: the model each tier names
-- `~/.tofu/model-windows.json`: the context window table `tofu models --refresh` wrote
+- `~/.tofu/model-windows.json`: the models.dev table `tofu models reload`
+  wrote, with context windows, tool calls, efforts and image input
 
-The project wins over your home, and your home wins over what tofu ships.
-A role with nothing bound runs the subscription's default.
+The project wins over your home, your home wins over the catalog, and the
+catalog wins over what tofu ships. A role with nothing bound runs the
+subscription's default.
+
+## How a new model reaches tofu
+
+`tofu models reload` asks each signed-in account which models it serves,
+reads models.dev for their facts, and writes each id tofu does not know
+into the catalog, allowed and never the default. Efforts and image input
+come from the newest allowed model of its family, so `claude-sonnet-5-5`
+follows `claude-sonnet-5`, else from models.dev. A model without tool
+calls, or one the account stopped serving, is excluded. A catalog file
+for a model tofu now ships is deleted, so the shipped file wins. It
+prints one line per model with the account and the file, then prints any
+model file, role or tier that no longer resolves.
 
 ## Change it
 
@@ -74,12 +91,11 @@ Stop tofu from running a model with a file of your own,
     tofu models
 
 lists the models each subscription serves, the defaults at the top, and
-why a model is excluded. `--json` prints the same with every field.
-
-    tofu models --discover
-
-asks each signed-in subscription which models it serves and compares that
-with the list. `tofu models --refresh` reads the context window table again.
+why a model is excluded, and a model tofu does not ship names its layer.
+`--json` prints every field: `layer` is `library`, `catalog`, `global`
+or `project`, and `from` says what listed a catalog model. After
+`tofu models reload`, a model it found shows `"layer": "catalog"`.
+`--refresh` and `--discover` still run it for one release.
 
     tofu login --status
 
@@ -89,6 +105,8 @@ lists every stored credential with its number and state, and
 ## Undo it
 
 Delete the role file or the model file you wrote; the next layer down
-wins. Delete a `modelTier` line from `settings.json` to empty the tier.
+wins. A reload writes a deleted catalog file again while the account
+serves it, so exclude the model in `~/.tofu/models` to keep it out.
+Delete a `modelTier` line from `settings.json` to empty the tier.
 `tofu login --disable <number>` sets a credential aside without deleting it,
 and `tofu login --enable <number>` brings it back.

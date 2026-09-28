@@ -1,9 +1,11 @@
 package main
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -13,16 +15,20 @@ import (
 	"tofu/internal/konst"
 	"tofu/internal/llm/cred"
 	"tofu/internal/llm/models"
+	"tofu/internal/subagent"
 	"tofu/internal/sys"
 	"tofu/internal/transport"
 	shipped "tofu/library"
 )
 
 const (
-	modelsUsage      = "usage: tofu models [--discover] [--refresh] [--json]"
+	modelsUsage      = "usage: tofu models [reload] [--json]"
 	registryFileName = "model-windows.json"
 	registryDirMode  = 0o755
+	shippedLayer     = "library"
 )
+
+type say func(format string, args ...any)
 
 func registryPath() (string, error) {
 	dir, err := sys.HomeConfigDir()
@@ -40,39 +46,28 @@ func modelRegistry() (models.Registry, error) {
 	return models.RegistryAt(path)
 }
 
-func refreshRegistry(ctx context.Context, out io.Writer) int {
-	refusal := func(err error) int {
-		_, _ = fmt.Fprintf(out, "%s: %v\n", models.RefreshVerb, err)
-		return exitVerdict
-	}
+func refreshRegistry(ctx context.Context, client *transport.Client, said say) (models.Registry, error) {
 	source := models.RegistrySource()
 	path, err := registryPath()
 	if err != nil {
-		return refusal(err)
-	}
-	client, err := transport.New(transport.Config{
-		AttemptTimeout: time.Duration(konst.TurnAttemptTimeoutMillis) * time.Millisecond,
-		Concurrency:    1,
-	})
-	if err != nil {
-		return refusal(err)
+		return models.Registry{}, err
 	}
 	body, err := models.FetchRegistry(ctx, client, source)
 	if err != nil {
-		return refusal(err)
+		return models.Registry{}, err
 	}
 	registry, err := models.ParseRegistry(body, source)
 	if err != nil {
-		return refusal(err)
+		return models.Registry{}, err
 	}
 	if err := os.MkdirAll(filepath.Dir(path), registryDirMode); err != nil {
-		return refusal(err)
+		return models.Registry{}, err
 	}
 	if err := registry.Store(path); err != nil {
-		return refusal(err)
+		return models.Registry{}, err
 	}
-	_, _ = fmt.Fprintf(out, "context windows from %s: %d, written to %s\n", source, len(registry.Windows), path)
-	return exitOK
+	said("models.dev: context windows for %d models from %s, written to %s", len(registry.Windows), source, path)
+	return registry, nil
 }
 
 type modelReport struct {
@@ -88,6 +83,8 @@ type modelReport struct {
 	WindowFrom    string   `json:"window_from,omitempty"`
 	Roles         []string `json:"roles,omitempty"`
 	Reason        string   `json:"reason,omitempty"`
+	Layer         string   `json:"layer"`
+	From          string   `json:"from,omitempty"`
 	File          string   `json:"file"`
 }
 
@@ -110,13 +107,14 @@ func modelLibrary(dir string) (models.Library, error) {
 }
 
 func modelsVerb(args []string, out, errOut io.Writer, shade palette) int {
-	discover, refresh, asJSON := false, false, false
+	reload, asJSON := false, false
 	for _, arg := range args {
 		switch arg {
-		case "--discover":
-			discover = true
-		case "--refresh":
-			refresh = true
+		case "reload":
+			reload = true
+		case "--discover", "--refresh":
+			_, _ = fmt.Fprintf(out, "tofu models %s is now %s, which does both\n", arg, models.ReloadVerb)
+			reload = true
 		case jsonFlag:
 			asJSON = true
 		default:
@@ -124,8 +122,8 @@ func modelsVerb(args []string, out, errOut io.Writer, shade palette) int {
 			return exitUsage
 		}
 	}
-	if refresh {
-		return refreshRegistry(context.Background(), out)
+	if reload {
+		return reloadAccounts(context.Background(), out)
 	}
 	library, err := modelLibrary("")
 	if err != nil {
@@ -136,9 +134,6 @@ func modelsVerb(args []string, out, errOut io.Writer, shade palette) int {
 	if err != nil {
 		_, _ = fmt.Fprintf(errOut, "tofu models: %v\n", err)
 		return exitUsage
-	}
-	if discover {
-		return discoverModels(context.Background(), library, registry, out)
 	}
 	report := modelsOf(library, registry)
 	if !asJSON {
@@ -186,6 +181,8 @@ func modelsOf(library models.Library, registry models.Registry) modelsReport {
 			WindowFrom:    windowFrom,
 			Roles:         bound[model.Slug()],
 			Reason:        model.Reason,
+			Layer:         model.Layer,
+			From:          model.From,
 			File:          model.File,
 		})
 		switch model.Use {
@@ -218,7 +215,7 @@ func modelsText(library models.Library, report modelsReport, shade palette) stri
 	}
 	body.WriteString("\n")
 	for _, line := range wrapped("windows", strconv.Itoa(report.Windowed)+" of "+strconv.Itoa(len(report.Models))+
-		" models take a context window from "+report.Table+", and "+models.RefreshVerb+" reads the table again") {
+		" models take a context window from "+report.Table+", and "+models.ReloadVerb+" reads the table again") {
 		body.WriteString(line + "\n")
 	}
 	label := "roles"
@@ -234,7 +231,11 @@ func modelsText(library models.Library, report modelsReport, shade palette) stri
 }
 
 func withRoles(model modelReport) string {
-	named := model.Slug + " (kind " + model.Kind + ", pays " + model.Pays + ")"
+	named := model.Slug + " (kind " + model.Kind + ", pays " + model.Pays
+	if model.Layer != shippedLayer {
+		named += ", from the " + model.Layer + " layer"
+	}
+	named += ")"
 	if len(model.Roles) == 0 {
 		return named
 	}
@@ -292,69 +293,153 @@ func subscriptionLines(report modelsReport, spec models.SubscriptionSpec) []stri
 	return lines
 }
 
-func discoverModels(ctx context.Context, library models.Library, registry models.Registry, out io.Writer) int {
-	store, client, err := discoveryStore()
+func reloadAccounts(ctx context.Context, out io.Writer) int {
+	path, err := cred.Path()
+	var store *cred.Store
+	if err == nil {
+		store, err = cred.Open(path)
+	}
 	if err != nil {
-		_, _ = fmt.Fprintf(out, "tofu models: %v\n", err)
+		_, _ = fmt.Fprintf(out, "%s: %v\n", models.ReloadVerb, err)
 		return exitVerdict
 	}
 	defer func() { _ = store.Close() }()
-
-	code := exitOK
-	for _, spec := range library.Subscriptions {
-		credential, err := cred.Lookup(string(spec.ID))
+	var accounts []models.Account
+	for _, provider := range cred.AllProviders() {
+		credential, err := cred.Lookup(string(provider))
 		if err != nil {
-			_, _ = fmt.Fprintf(out, "%s: %v\n", spec.ID, err)
-			code = exitVerdict
+			_, _ = fmt.Fprintf(out, "%s: %v\n", provider, err)
 			continue
 		}
-		row, present, err := store.Row(credential.Provider)
-		if err != nil {
-			_, _ = fmt.Fprintf(out, "%s: %v\n", spec.ID, err)
-			code = exitVerdict
-			continue
-		}
-		if !present {
-			_, _ = fmt.Fprintf(out, "%s: no credential, run tofu login %s\n", spec.ID, spec.ID)
-			code = exitVerdict
-			continue
-		}
-		served, err := models.Discover(ctx, client, models.Account{
-			Subscription: spec.ID,
-			AccountID:    row.Credential.Identity.AccountID,
-			Token:        cred.NewManager(store, credential).Access,
-		})
-		if err != nil {
-			_, _ = fmt.Fprintf(out, "%s: discovery failed under %s, so a short list is this pin rather than the account: %v\n",
-				spec.ID, served.Pin, err)
-			code = exitVerdict
-			continue
-		}
-		for _, line := range library.Reconcile(served, registry).Lines() {
-			_, _ = fmt.Fprintln(out, line)
+		row, present, err := store.Row(provider)
+		switch {
+		case err != nil:
+			_, _ = fmt.Fprintf(out, "%s: %v\n", provider, err)
+		case !present:
+			_, _ = fmt.Fprintf(out, "%s: not signed in, so nothing is asked of it; tofu login %s signs in\n", provider, provider)
+		default:
+			accounts = append(accounts, models.Account{
+				Subscription: models.Subscription(provider),
+				AccountID:    row.Credential.Identity.AccountID,
+				Token:        cred.NewManager(store, credential).Access,
+			})
 		}
 	}
-	return code
+	return reloadModels(ctx, accounts, out)
 }
 
-func discoveryStore() (*cred.Store, *transport.Client, error) {
-	path, err := cred.Path()
-	if err != nil {
-		return nil, nil, err
+type reload struct {
+	client   *transport.Client
+	catalog  string
+	registry models.Registry
+	library  models.Library
+	found    string
+	said     say
+}
+
+func reloadModels(ctx context.Context, accounts []models.Account, out io.Writer) int {
+	said := func(format string, args ...any) { _, _ = fmt.Fprintf(out, format+"\n", args...) }
+	refused := func(err error) int {
+		said("%s: %v", models.ReloadVerb, err)
+		return exitVerdict
 	}
-	store, err := cred.Open(path)
+	catalog, err := models.CatalogDir()
 	if err != nil {
-		return nil, nil, err
+		return refused(err)
 	}
 	client, err := transport.New(transport.Config{
 		AttemptTimeout: time.Duration(konst.TurnAttemptTimeoutMillis) * time.Millisecond,
 		Concurrency:    1,
 	})
 	if err != nil {
-		_ = store.Close()
-		return nil, nil, err
+		return refused(err)
 	}
-	return store, client, nil
+	dropShipped(catalog, said)
+	registry, err := refreshRegistry(ctx, client, said)
+	if err != nil {
+		said("models.dev: %v, so the stored table stands", err)
+		if registry, err = modelRegistry(); err != nil {
+			return refused(err)
+		}
+	}
+	library, err := modelLibrary("")
+	if err != nil {
+		return refused(err)
+	}
+	run := reload{client: client, catalog: catalog, registry: registry, library: library, found: time.Now().Format(time.DateOnly), said: said}
+	clean := true
+	for _, account := range accounts {
+		clean = run.write(ctx, account) && clean
+	}
+	if !run.stillResolves() || !clean {
+		return exitVerdict
+	}
+	return exitOK
+}
+
+func dropShipped(catalog string, said say) {
+	files, _ := filepath.Glob(filepath.Join(catalog, "models", "*", "*.yaml"))
+	for _, path := range files {
+		name, _ := filepath.Rel(catalog, path)
+		if _, err := fs.Stat(shipped.Files(), filepath.ToSlash(name)); err != nil {
+			continue
+		}
+		if err := os.Remove(path); err != nil {
+			said("catalog: %v", err)
+			continue
+		}
+		said("catalog: removed %s, tofu ships %s now", path, filepath.ToSlash(name))
+	}
+}
+
+func (r reload) write(ctx context.Context, account models.Account) bool {
+	served, err := models.Discover(ctx, r.client, account)
+	if err != nil {
+		r.said("%s: the account list failed under %s: %v", account.Subscription, served.Pin, err)
+		return false
+	}
+	plan := models.Plan(r.library.Reconcile(served, r.registry), r.registry, r.library, r.found)
+	if err := plan.Write(r.catalog); err != nil {
+		r.said("%s: %v", account.Subscription, err)
+		return false
+	}
+	if len(plan) == 0 {
+		r.said("%s: nothing new in the %d models the account serves under %s", account.Subscription, len(served.IDs), served.Pin)
+	}
+	for _, model := range plan {
+		state := "new"
+		if _, known := r.library.Resolve(model.Slug()); known {
+			state = "changed"
+		}
+		r.said("%s: %s %s, use %s, %s, written to %s", account.Subscription, state, model.Slug(), model.Use,
+			cmp.Or(model.Reason, model.From), filepath.Join(r.catalog, "models", string(model.Provider), model.ID+".yaml"))
+	}
+	return true
+}
+
+func (r reload) stillResolves() bool {
+	library, err := modelLibrary("")
+	if err != nil {
+		r.said("%s: %v", models.ReloadVerb, err)
+		return false
+	}
+	store, err := openSettings(".")
+	if err != nil {
+		r.said("%s: %v", models.ReloadVerb, err)
+		return false
+	}
+	resolves := true
+	for _, tier := range subagent.Tiers() {
+		slug := strings.TrimSpace(store.Text(tier.Setting()))
+		if slug == "" {
+			continue
+		}
+		if _, err := library.Select(slug); err != nil {
+			r.said("tier @%s: %v", tier, err)
+			resolves = false
+		}
+	}
+	return resolves
 }
 
 func outsideTheLibrary(library models.Library, wire string) error {

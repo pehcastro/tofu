@@ -146,6 +146,10 @@
   do: tofu models
   check: tofu models --json
   topic: models
+- ask: use a model my subscription just started serving
+  do: tofu models reload
+  check: tofu models --json
+  topic: models
 - ask: run the next task on another model
   do: /models in the app, then pick a model
   check: tofu models

@@ -21,7 +21,6 @@ const (
 	ShippedRegistryName = "the snapshot of models.dev taken on 2026-09-21"
 	RegistryURL         = "https://models.dev/api.json"
 	RegistryURLVariable = "TOFU_MODELS_REGISTRY_URL"
-	RefreshVerb         = "tofu models --refresh"
 	datedSuffixDigits   = 8
 	writtenFileMode     = 0o644
 )
@@ -95,7 +94,7 @@ func RegistryAt(path string) (Registry, error) {
 	}
 	var stored Registry
 	if err := json.Unmarshal(body, &stored); err != nil || len(stored.Windows) == 0 {
-		return Registry{}, fmt.Errorf("models: %s is not a registry tofu wrote, delete it and run %s", path, RefreshVerb)
+		return Registry{}, fmt.Errorf("models: %s is not a registry tofu wrote, delete it and run %s", path, ReloadVerb)
 	}
 	return stored, nil
 }
