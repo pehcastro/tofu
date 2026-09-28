@@ -1,0 +1,136 @@
+{
+  "principle": "principle-separate-before-serializing-shared-state",
+  "arm": "rule-on",
+  "task": "04-audit-events",
+  "passed": true,
+  "diff_lines": 199,
+  "models_reported": [
+    "claude-opus-5-5"
+  ],
+  "cli_version": "2.1.283 (Claude Code)",
+  "credential_kind": "subscription",
+  "wire": "claude -p",
+  "machine": "DESKTOP-AHUN9RO",
+  "started": "2026-09-27T21:01:09.9629026-03:00",
+  "wall_ms": 48484,
+  "claude_output": {
+    "duration_api_ms": 37686,
+    "stop_reason": "end_turn",
+    "session_id": "019fefbb-6a98-468a-bf36-015558fd052c",
+    "total_cost_usd": 0.323434,
+    "usage": {
+      "input_tokens": 14,
+      "cache_creation_input_tokens": 24391,
+      "cache_read_input_tokens": 234950,
+      "output_tokens": 4063,
+      "output_tokens_details": {
+        "thinking_tokens": 540
+      },
+      "server_tool_use": {
+        "web_search_requests": 0,
+        "web_fetch_requests": 0
+      },
+      "service_tier": "standard",
+      "cache_creation": {
+        "ephemeral_1h_input_tokens": 24391,
+        "ephemeral_5m_input_tokens": 0
+      },
+      "inference_geo": "not_available",
+      "iterations": [
+        {
+          "input_tokens": 2,
+          "output_tokens": 473,
+          "cache_read_input_tokens": 39831,
+          "cache_creation_input_tokens": 126,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 126
+          },
+          "type": "message"
+        }
+      ],
+      "speed": "standard"
+    },
+    "modelUsage": {
+      "claude-opus-5-5": {
+        "inputTokens": 14,
+        "outputTokens": 4063,
+        "cacheReadInputTokens": 234950,
+        "cacheCreationInputTokens": 24391,
+        "webSearchRequests": 0,
+        "costUSD": 0.323434,
+        "contextWindow": 1000000,
+        "maxOutputTokens": 128000,
+        "thinkingTokens": 540,
+        "canonicalModel": "claude-opus-5-5",
+        "provider": "firstParty",
+        "costBasis": "list"
+      }
+    },
+    "permission_denials": [
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_01H3i979xrKv8sqCmRJCoSB8",
+        "tool_input": {
+          "command": "rtk ls -la \u0026\u0026 rtk read audit.go \u0026\u0026 rtk read go.mod 2\u003e/dev/null; rtk ls *_test.go 2\u003e/dev/null"
+        }
+      },
+      {
+        "tool_name": "PowerShell",
+        "tool_use_id": "toolu_016bSk1DGawi8VPLzuSupAqg",
+        "tool_input": {
+          "command": "go vet ./...; go test -race -count=3 ./..."
+        }
+      },
+      {
+        "tool_name": "PowerShell",
+        "tool_use_id": "toolu_01Gp4aK4qLTZBLSVb3MBJcVU",
+        "tool_input": {
+          "command": "go test -count=3 ./..."
+        }
+      }
+    ],
+    "terminal_reason": "completed",
+    "fast_mode_state": "off",
+    "fast_mode_disabled_reason": "sdk_opt_in_required",
+    "subagent_stats": {
+      "spawned": 0,
+      "requested": {
+        "background": 0,
+        "foreground": 0,
+        "unset": 0
+      },
+      "started_in_background": 0,
+      "max_depth": 0,
+      "spawned_by_subagents": 0,
+      "completed": 0,
+      "failed": 0,
+      "killed": {
+        "parent": 0,
+        "user": 0,
+        "system": 0
+      },
+      "refused": {
+        "depth_limit": 0,
+        "concurrency_limit": 0,
+        "budget": 0
+      },
+      "by_type": {}
+    },
+    "is_error": false,
+    "num_turns": 9,
+    "subtype": "success",
+    "api_error_status": null,
+    "result": "I fixed `audit.go`, but I could not run the tests. The permission system blocked `go test`.\n\n**Cause:** `Record` read the whole shared `audit.json`, added one event, and wrote the file back. When two processes did this at the same time, the second write deleted the event from the first.\n\n**Fix:** the processes record separate facts, so they do not need one shared file.\n- Each process now appends to its own file, `audit-\u003cpid\u003e-\u003crandom\u003e.jsonl`, with one JSON string per line. The random part stops a later process that gets the same PID from writing to the same file.\n- A mutex inside the process keeps the order of events from its own goroutines.\n- `Events` reads all the per-process files and puts them together. It also still reads the old `audit.json`, so events recorded before this change stay in the report.\n- `Events` skips a last line that has no newline, because that line is a write that has not finished yet.\n\n**Tests:** I added `audit_test.go`. One test starts 8 real processes that record 200 events each. It checks that `Events` returns all 1600 events and that each process's events are in order. Other tests cover goroutines in one process and the old file. Run `go test -race ./...` to confirm.\n\n**TLDR**\nThe old code rewrote one shared file, so processes deleted each other's events. Now each process appends to its own file, and `Events` reads them all together.\nTests are written but not run: `go test` was blocked.",
+    "ttft_ms": 2913,
+    "type": "result",
+    "duration_ms": 44091,
+    "uuid": "5ef81137-594a-4a67-b89b-637dbc575696",
+    "ttft_stream_ms": 1639,
+    "time_to_request_ms": 645,
+    "first_content_frame_ms": 1639,
+    "queued_turn_count": 0,
+    "result_index": 0
+  },
+  "test_output": "ok  \ttask\t1.695s\n"
+}

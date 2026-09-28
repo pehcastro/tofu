@@ -1,0 +1,203 @@
+{
+  "principle": "principle-build-the-lever",
+  "arm": "rule-on",
+  "task": "01-errorf",
+  "passed": true,
+  "diff_lines": 184,
+  "models_reported": [
+    "claude-opus-5-5"
+  ],
+  "cli_version": "2.1.283 (Claude Code)",
+  "credential_kind": "subscription",
+  "wire": "claude -p",
+  "machine": "DESKTOP-AHUN9RO",
+  "started": "2026-09-27T19:57:30.97623-03:00",
+  "wall_ms": 103456,
+  "claude_output": {
+    "duration_api_ms": 69667,
+    "stop_reason": "end_turn",
+    "session_id": "c4d156e9-34c4-46b2-9171-fd24f2706f9d",
+    "total_cost_usd": 0.5136954000000001,
+    "usage": {
+      "input_tokens": 38,
+      "cache_creation_input_tokens": 29001,
+      "cache_read_input_tokens": 721377,
+      "output_tokens": 6863,
+      "output_tokens_details": {
+        "thinking_tokens": 1483
+      },
+      "server_tool_use": {
+        "web_search_requests": 0,
+        "web_fetch_requests": 0
+      },
+      "service_tier": "standard",
+      "cache_creation": {
+        "ephemeral_1h_input_tokens": 29001,
+        "ephemeral_5m_input_tokens": 0
+      },
+      "inference_geo": "not_available",
+      "iterations": [
+        {
+          "input_tokens": 2,
+          "output_tokens": 548,
+          "cache_read_input_tokens": 44328,
+          "cache_creation_input_tokens": 239,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 239
+          },
+          "type": "message"
+        }
+      ],
+      "speed": "standard"
+    },
+    "modelUsage": {
+      "claude-opus-5-5": {
+        "inputTokens": 38,
+        "outputTokens": 6863,
+        "cacheReadInputTokens": 721377,
+        "cacheCreationInputTokens": 29001,
+        "webSearchRequests": 0,
+        "costUSD": 0.5136954000000001,
+        "contextWindow": 1000000,
+        "maxOutputTokens": 128000,
+        "thinkingTokens": 1483,
+        "canonicalModel": "claude-opus-5-5",
+        "provider": "firstParty",
+        "costBasis": "list"
+      }
+    },
+    "permission_denials": [
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_01CF36o2b47979wNJ2VX7GEW",
+        "tool_input": {
+          "command": "git ls-files \u0026\u0026 rtk grep -rn \"errors.New(fmt.Sprintf\" --include=*.go . | head -50; rtk grep -rc \"errors.New(fmt.Sprintf\" --include=*.go .",
+          "description": "List files and find target call sites"
+        }
+      },
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_01QiMeNCRbYfzuirSJca1HLN",
+        "tool_input": {
+          "command": "rtk read go.mod \u0026\u0026 go version",
+          "description": "Show module file and Go version"
+        }
+      },
+      {
+        "tool_name": "PowerShell",
+        "tool_use_id": "toolu_01RADk3vjuSHsVWkMdQXjUqo",
+        "tool_input": {
+          "command": "Get-Content go.mod; go version",
+          "description": "Show module file and Go version"
+        }
+      },
+      {
+        "tool_name": "PowerShell",
+        "tool_use_id": "toolu_01FuEGW4NdaCEqJ4CytdLijf",
+        "tool_input": {
+          "command": "go version",
+          "description": "Show Go version"
+        }
+      },
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_01CDZg6sQzfwyPmDjZfC47uu",
+        "tool_input": {
+          "command": "cd /c/Users/Luiz/AppData/Local/Temp/tofu-principle-3979019689\ncp user.go /tmp/user.hand.go\ngit checkout -- user.go\ngo run ./tools/errorf user.go store.go order.go\necho \"--- diff tool vs hand:\"; rtk diff /tmp/user.hand.go user.go \u0026\u0026 echo identical\necho \"--- rerun (idempotence):\"; go run ./tools/errorf user.go store.go order.go; rtk git diff --stat\ngo build ./... \u0026\u0026 rtk go vet ./... \u0026\u0026 echo build+vet ok\ngrep -n \"errors\" *.go",
+          "description": "Run codemod, diff against hand edit, build and vet"
+        }
+      },
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_01MqebkdCmuXVfm1wpxyJmft",
+        "tool_input": {
+          "command": "cp /c/Users/Luiz/AppData/Local/Temp/tofu-principle-3979019689/user.go /tmp/user.hand.go",
+          "description": "Save hand-edited user.go"
+        }
+      },
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_01FgkATjpXSvUF7kNXVbyHxQ",
+        "tool_input": {
+          "command": "git -C /c/Users/Luiz/AppData/Local/Temp/tofu-principle-3979019689 checkout -- user.go",
+          "description": "Restore original user.go"
+        }
+      },
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_0151z1rjU3jD5MtgCguy4nYt",
+        "tool_input": {
+          "command": "rtk git -C /c/Users/Luiz/AppData/Local/Temp/tofu-principle-3979019689 show HEAD:user.go",
+          "description": "Show original user.go from last commit"
+        }
+      },
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_01HXDQV1F9i9vuDNfhL3icDG",
+        "tool_input": {
+          "command": "rtk go build ./...",
+          "description": "Build all packages"
+        }
+      },
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_016KHfziAjxWfUPeqYQdW88Z",
+        "tool_input": {
+          "command": "rtk go vet ./...",
+          "description": "Vet all packages"
+        }
+      },
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_0114F422NmnALTeuBDABWodq",
+        "tool_input": {
+          "command": "rtk go build .",
+          "description": "Build the task package"
+        }
+      }
+    ],
+    "terminal_reason": "completed",
+    "fast_mode_state": "off",
+    "fast_mode_disabled_reason": "sdk_opt_in_required",
+    "subagent_stats": {
+      "spawned": 0,
+      "requested": {
+        "background": 0,
+        "foreground": 0,
+        "unset": 0
+      },
+      "started_in_background": 0,
+      "max_depth": 0,
+      "spawned_by_subagents": 0,
+      "completed": 0,
+      "failed": 0,
+      "killed": {
+        "parent": 0,
+        "user": 0,
+        "system": 0
+      },
+      "refused": {
+        "depth_limit": 0,
+        "concurrency_limit": 0,
+        "budget": 0
+      },
+      "by_type": {}
+    },
+    "is_error": false,
+    "num_turns": 25,
+    "subtype": "success",
+    "api_error_status": null,
+    "result": "I rewrote all 12 call sites in `user.go`, `store.go` and `order.go` to `fmt.Errorf(...)`. Every format string and argument is unchanged, and `%v` is still `%v`, not `%w`.\n\n- **Tool:** the codemod is `tools/errorf/main.go`. Rerun it with `go run ./tools/errorf user.go store.go order.go`. It removes the `\"errors\"` import where nothing else uses it, so `user.go` and `order.go` lost it. `store.go` keeps it for `ErrClosed`.\n- **Check:** `user.go` was the site I did by hand. The tool's output is byte-for-byte identical to that edit, which I saved as `tools/errorf/testdata/user.golden`.\n- **Not verified:** the permission settings blocked `go build` and `go vet`, so I could not confirm the build. Git commands were blocked too, so I restored the original `user.go` from an earlier read instead of from git.\n\n**TLDR**\nAll 12 sites now use `fmt.Errorf` with the same messages, and the tool's output matches my hand edit exactly. Please run `go build ./...` and `go vet ./...` yourself, because I could not.",
+    "ttft_ms": 3998,
+    "type": "result",
+    "duration_ms": 97408,
+    "uuid": "b882dca5-43f6-4fef-9dd8-6a9fd09897a2",
+    "ttft_stream_ms": 2255,
+    "time_to_request_ms": 1171,
+    "first_content_frame_ms": 2256,
+    "queued_turn_count": 0,
+    "result_index": 0
+  },
+  "test_output": "ok  \ttask\t0.328s\n?   \ttask/tools/errorf\t[no test files]\n"
+}

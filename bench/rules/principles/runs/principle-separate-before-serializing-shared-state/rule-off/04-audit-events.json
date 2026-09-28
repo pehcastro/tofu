@@ -1,0 +1,147 @@
+{
+  "principle": "principle-separate-before-serializing-shared-state",
+  "arm": "rule-off",
+  "task": "04-audit-events",
+  "passed": true,
+  "diff_lines": 133,
+  "models_reported": [
+    "claude-opus-5-5"
+  ],
+  "cli_version": "2.1.283 (Claude Code)",
+  "credential_kind": "subscription",
+  "wire": "claude -p",
+  "machine": "DESKTOP-AHUN9RO",
+  "started": "2026-09-27T21:02:01.8084467-03:00",
+  "wall_ms": 48245,
+  "claude_output": {
+    "duration_api_ms": 37412,
+    "stop_reason": "end_turn",
+    "session_id": "db48bc75-4462-49f0-bad5-1f0716e314e6",
+    "total_cost_usd": 0.32298299999999996,
+    "usage": {
+      "input_tokens": 16,
+      "cache_creation_input_tokens": 24090,
+      "cache_read_input_tokens": 273495,
+      "output_tokens": 3775,
+      "output_tokens_details": {
+        "thinking_tokens": 940
+      },
+      "server_tool_use": {
+        "web_search_requests": 0,
+        "web_fetch_requests": 0
+      },
+      "service_tier": "standard",
+      "cache_creation": {
+        "ephemeral_1h_input_tokens": 24090,
+        "ephemeral_5m_input_tokens": 0
+      },
+      "inference_geo": "not_available",
+      "iterations": [
+        {
+          "input_tokens": 2,
+          "output_tokens": 430,
+          "cache_read_input_tokens": 39535,
+          "cache_creation_input_tokens": 121,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 121
+          },
+          "type": "message"
+        }
+      ],
+      "speed": "standard"
+    },
+    "modelUsage": {
+      "claude-opus-5-5": {
+        "inputTokens": 16,
+        "outputTokens": 3775,
+        "cacheReadInputTokens": 273495,
+        "cacheCreationInputTokens": 24090,
+        "webSearchRequests": 0,
+        "costUSD": 0.32298299999999996,
+        "contextWindow": 1000000,
+        "maxOutputTokens": 128000,
+        "thinkingTokens": 940,
+        "canonicalModel": "claude-opus-5-5",
+        "provider": "firstParty",
+        "costBasis": "list"
+      }
+    },
+    "permission_denials": [
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_01SnZR8qQgYuiwdnUxcPVAoF",
+        "tool_input": {
+          "command": "cd \"C:/Users/Luiz/AppData/Local/Temp/tofu-principle-2821604083\" \u0026\u0026 rtk ls -la \u0026\u0026 rtk read audit.go \u0026\u0026 rtk read go.mod 2\u003e/dev/null; rtk ls *_test.go 2\u003e/dev/null",
+          "description": "List files and show audit.go"
+        }
+      },
+      {
+        "tool_name": "PowerShell",
+        "tool_use_id": "toolu_01RjKYWcytQhC6qjXXqKCa1i",
+        "tool_input": {
+          "command": "git stash -q; git stash apply -q; go test ./... 2\u003e\u00261 | Select-Object -Last 5",
+          "description": "Run tests"
+        }
+      },
+      {
+        "tool_name": "PowerShell",
+        "tool_use_id": "toolu_01PrAe44misJsWC1zkUtsa2c",
+        "tool_input": {
+          "command": "go test -count=1 ./...",
+          "description": "Run tests"
+        }
+      },
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_018ro45nMbQfdaxAkVW37q73",
+        "tool_input": {
+          "command": "rtk go test -count=1 ./...",
+          "description": "Run tests"
+        }
+      }
+    ],
+    "terminal_reason": "completed",
+    "fast_mode_state": "off",
+    "fast_mode_disabled_reason": "sdk_opt_in_required",
+    "subagent_stats": {
+      "spawned": 0,
+      "requested": {
+        "background": 0,
+        "foreground": 0,
+        "unset": 0
+      },
+      "started_in_background": 0,
+      "max_depth": 0,
+      "spawned_by_subagents": 0,
+      "completed": 0,
+      "failed": 0,
+      "killed": {
+        "parent": 0,
+        "user": 0,
+        "system": 0
+      },
+      "refused": {
+        "depth_limit": 0,
+        "concurrency_limit": 0,
+        "budget": 0
+      },
+      "by_type": {}
+    },
+    "is_error": false,
+    "num_turns": 10,
+    "subtype": "success",
+    "api_error_status": null,
+    "result": "I fixed it in `audit.go`, but I could not run the test. Each `go test` call was blocked at the approval prompt.\n\n**Cause:** `Record` read the whole `audit.json`, added one event, then wrote the whole file back. When two processes did this at the same time, the second write replaced the first, and that process's event was lost.\n\n**Fix:**\n- Each process now appends to its own file, named `audit-\u003cpid\u003e-\u003crandom\u003e.jsonl`, with one JSON line per event. Processes never write to the same file, so they cannot overwrite each other.\n- A lock inside the process keeps its events in the order it recorded them.\n- `Events` reads every per-process file, plus the old `audit.json` so that earlier events stay in the report. It skips a last line that has no newline, because that write is still running or a crash cut it short.\n\nI added `audit_test.go`. It starts 8 child processes that each record 200 events at the same time. Then it checks that every event is present and that each process's events are in order. To run it: `go test -count=1 ./...`\n\n**TLDR**\nProcesses overwrote each other's copy of `audit.json`. Now each process appends to its own file, and `Events` merges them.\nThe new test in `audit_test.go` has not run because the command was blocked. Run `go test -count=1 ./...`.",
+    "ttft_ms": 2924,
+    "type": "result",
+    "duration_ms": 43851,
+    "uuid": "a8493af7-0082-4482-9607-5af421e0e800",
+    "ttft_stream_ms": 1560,
+    "time_to_request_ms": 622,
+    "first_content_frame_ms": 1560,
+    "queued_turn_count": 0,
+    "result_index": 0
+  },
+  "test_output": "ok  \ttask\t1.256s\n"
+}

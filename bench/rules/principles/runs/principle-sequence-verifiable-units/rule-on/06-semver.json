@@ -1,0 +1,155 @@
+{
+  "principle": "principle-sequence-verifiable-units",
+  "arm": "rule-on",
+  "task": "06-semver",
+  "passed": false,
+  "diff_lines": 0,
+  "models_reported": [
+    "claude-opus-5-5"
+  ],
+  "cli_version": "2.1.283 (Claude Code)",
+  "credential_kind": "subscription",
+  "wire": "claude -p",
+  "machine": "DESKTOP-AHUN9RO",
+  "started": "2026-09-27T21:17:51.7521315-03:00",
+  "wall_ms": 28624,
+  "claude_output": {
+    "duration_api_ms": 17472,
+    "stop_reason": "end_turn",
+    "session_id": "626bb033-dc04-4db8-b57e-a57ca8a2d0b8",
+    "total_cost_usd": 0.2519418,
+    "usage": {
+      "input_tokens": 14,
+      "cache_creation_input_tokens": 22239,
+      "cache_read_input_tokens": 231569,
+      "output_tokens": 1383,
+      "output_tokens_details": {
+        "thinking_tokens": 316
+      },
+      "server_tool_use": {
+        "web_search_requests": 0,
+        "web_fetch_requests": 0
+      },
+      "service_tier": "standard",
+      "cache_creation": {
+        "ephemeral_1h_input_tokens": 22239,
+        "ephemeral_5m_input_tokens": 0
+      },
+      "inference_geo": "not_available",
+      "iterations": [
+        {
+          "input_tokens": 2,
+          "output_tokens": 185,
+          "cache_read_input_tokens": 37388,
+          "cache_creation_input_tokens": 417,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 417
+          },
+          "type": "message"
+        }
+      ],
+      "speed": "standard"
+    },
+    "modelUsage": {
+      "claude-opus-5-5": {
+        "inputTokens": 14,
+        "outputTokens": 1383,
+        "cacheReadInputTokens": 231569,
+        "cacheCreationInputTokens": 22239,
+        "webSearchRequests": 0,
+        "costUSD": 0.2519418,
+        "contextWindow": 1000000,
+        "maxOutputTokens": 128000,
+        "thinkingTokens": 316,
+        "canonicalModel": "claude-opus-5-5",
+        "provider": "firstParty",
+        "costBasis": "list"
+      }
+    },
+    "permission_denials": [
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_01MvaBNeXFiK9gSexoaaUxBd",
+        "tool_input": {
+          "command": "git ls-files \u0026\u0026 cat go.mod \u0026\u0026 cat $(git ls-files | grep '\\.go$') \u0026\u0026 go test ./... 2\u003e\u00261",
+          "description": "List files, show sources, run tests"
+        }
+      },
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_01TZeufPPdEUcuXMqTSCVFWr",
+        "tool_input": {
+          "command": "git ls-files \u0026\u0026 rtk go test ./... 2\u003e\u00261",
+          "description": "List files and run tests"
+        }
+      },
+      {
+        "tool_name": "PowerShell",
+        "tool_use_id": "toolu_01HQ2zEcAgvLUcSLkBGseLTp",
+        "tool_input": {
+          "command": "go test ./...",
+          "description": "Run baseline tests"
+        }
+      },
+      {
+        "tool_name": "PowerShell",
+        "tool_use_id": "toolu_01XN8h4cX6jfDHq5pdphpcm8",
+        "tool_input": {
+          "command": "go test",
+          "description": "Run baseline tests"
+        }
+      },
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_01XscQpoiKL2tzJ1rAt31xip",
+        "tool_input": {
+          "command": "rtk go test -count=1 C:/Users/Luiz/AppData/Local/Temp/tofu-principle-126578495",
+          "description": "Run baseline tests"
+        }
+      }
+    ],
+    "terminal_reason": "completed",
+    "fast_mode_state": "off",
+    "fast_mode_disabled_reason": "sdk_opt_in_required",
+    "subagent_stats": {
+      "spawned": 0,
+      "requested": {
+        "background": 0,
+        "foreground": 0,
+        "unset": 0
+      },
+      "started_in_background": 0,
+      "max_depth": 0,
+      "spawned_by_subagents": 0,
+      "completed": 0,
+      "failed": 0,
+      "killed": {
+        "parent": 0,
+        "user": 0,
+        "system": 0
+      },
+      "refused": {
+        "depth_limit": 0,
+        "concurrency_limit": 0,
+        "budget": 0
+      },
+      "by_type": {}
+    },
+    "is_error": false,
+    "num_turns": 10,
+    "subtype": "success",
+    "api_error_status": null,
+    "result": "I haven't changed anything yet. Your rule says to start by running the existing tests and confirming they pass, but every attempt to run `go test` was denied because it needs approval, and this session can't ask for it.\n\nWithout running tests I can't confirm the starting state or check each step, so I've stopped. To continue, allow `go test` (or `rtk go test`) in your permission settings, or approve it when prompted, and I'll do the work one tested step at a time.",
+    "ttft_ms": 3219,
+    "type": "result",
+    "duration_ms": 24324,
+    "uuid": "9e61c6ea-78e3-4255-92ff-8d00cacbf87d",
+    "ttft_stream_ms": 1723,
+    "time_to_request_ms": 677,
+    "first_content_frame_ms": 1724,
+    "queued_turn_count": 0,
+    "result_index": 0
+  },
+  "test_output": "# task [task.test]\n.\\zz_check_test.go:42:14: undefined: Compare\n.\\zz_check_test.go:47:5: undefined: Compare\n.\\zz_check_test.go:58:13: undefined: Bump\nFAIL\ttask [build failed]\nFAIL\n"
+}

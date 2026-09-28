@@ -1,0 +1,143 @@
+{
+  "principle": "principle-separate-before-serializing-shared-state",
+  "arm": "rule-off",
+  "task": "10-word-index",
+  "passed": true,
+  "diff_lines": 26,
+  "models_reported": [
+    "claude-opus-5-5"
+  ],
+  "cli_version": "2.1.283 (Claude Code)",
+  "credential_kind": "subscription",
+  "wire": "claude -p",
+  "machine": "DESKTOP-AHUN9RO",
+  "started": "2026-09-27T21:10:34.1360592-03:00",
+  "wall_ms": 38794,
+  "claude_output": {
+    "duration_api_ms": 28710,
+    "stop_reason": "end_turn",
+    "session_id": "6bd87e12-441f-40f1-b0b0-6bd8bd22ea61",
+    "total_cost_usd": 0.2620424,
+    "usage": {
+      "input_tokens": 16,
+      "cache_creation_input_tokens": 21948,
+      "cache_read_input_tokens": 267872,
+      "output_tokens": 1641,
+      "output_tokens_details": {
+        "thinking_tokens": 78
+      },
+      "server_tool_use": {
+        "web_search_requests": 0,
+        "web_fetch_requests": 0
+      },
+      "service_tier": "standard",
+      "cache_creation": {
+        "ephemeral_1h_input_tokens": 21948,
+        "ephemeral_5m_input_tokens": 0
+      },
+      "inference_geo": "not_available",
+      "iterations": [
+        {
+          "input_tokens": 2,
+          "output_tokens": 194,
+          "cache_read_input_tokens": 37343,
+          "cache_creation_input_tokens": 171,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 171
+          },
+          "type": "message"
+        }
+      ],
+      "speed": "standard"
+    },
+    "modelUsage": {
+      "claude-opus-5-5": {
+        "inputTokens": 16,
+        "outputTokens": 1641,
+        "cacheReadInputTokens": 267872,
+        "cacheCreationInputTokens": 21948,
+        "webSearchRequests": 0,
+        "costUSD": 0.2620424,
+        "contextWindow": 1000000,
+        "maxOutputTokens": 128000,
+        "thinkingTokens": 78,
+        "canonicalModel": "claude-opus-5-5",
+        "provider": "firstParty",
+        "costBasis": "list"
+      }
+    },
+    "permission_denials": [
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_01TbxpRKiYzXzBPb1vVyvuyH",
+        "tool_input": {
+          "command": "cat \u003e tmp_test.go \u003c\u003c'EOF'\npackage task\nimport (\"strings\";\"testing\")\nfunc TestF(t *testing.T){\n docs:=make([]string,2000)\n for i:=range docs{docs[i]=strings.Repeat(\"a B c \",500)}\n m:=Frequencies(docs)\n if m[\"a\"]!=1000000||m[\"b\"]!=1000000||m[\"c\"]!=1000000||len(m)!=3{t.Fatal(m)}\n}\nEOF\ngo vet ./... \u0026\u0026 go test -count=1 ./... ; go test -race -count=1 ./... 2\u003e\u00261 | tail -3; rm tmp_test.go"
+        }
+      },
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_017WTnGFvvGR5n2oPP6Tmvk5",
+        "tool_input": {
+          "command": "rtk go vet ./... \u0026\u0026 rtk go test -count=1 ./...; rtk go test -race -count=1 ./... 2\u003e\u00261 | tail -3; rm tmp_test.go"
+        }
+      },
+      {
+        "tool_name": "PowerShell",
+        "tool_use_id": "toolu_01VqDbpdx7THqNBUpFJoVWZD",
+        "tool_input": {
+          "command": "go test -count=1 ./..."
+        }
+      },
+      {
+        "tool_name": "PowerShell",
+        "tool_use_id": "toolu_01YLEYTthftD8GqzHTTK72Mr",
+        "tool_input": {
+          "command": "Remove-Item tmp_test.go -Confirm:$false"
+        }
+      }
+    ],
+    "terminal_reason": "completed",
+    "fast_mode_state": "off",
+    "fast_mode_disabled_reason": "sdk_opt_in_required",
+    "subagent_stats": {
+      "spawned": 0,
+      "requested": {
+        "background": 0,
+        "foreground": 0,
+        "unset": 0
+      },
+      "started_in_background": 0,
+      "max_depth": 0,
+      "spawned_by_subagents": 0,
+      "completed": 0,
+      "failed": 0,
+      "killed": {
+        "parent": 0,
+        "user": 0,
+        "system": 0
+      },
+      "refused": {
+        "depth_limit": 0,
+        "concurrency_limit": 0,
+        "budget": 0
+      },
+      "by_type": {}
+    },
+    "is_error": false,
+    "num_turns": 9,
+    "subtype": "success",
+    "api_error_status": null,
+    "result": "I fixed it, but I could not run anything to check it: the permission settings blocked both `go test` and the delete.\n\nThe crash was all the goroutines writing to the same map at once, which Go stops with \"concurrent map writes\". In `words.go`, each goroutine now counts its document in its own map, then adds those counts to the shared map while holding a lock. Documents are still processed in parallel.\n\nI left a scratch test at `tmp_test.go`. It checks 2000 documents with mixed case for exact counts. Run `go test -race ./...`, then delete the file.",
+    "ttft_ms": 3243,
+    "type": "result",
+    "duration_ms": 34576,
+    "uuid": "2fa1480b-62d9-4f28-85f7-5265ba0684dd",
+    "ttft_stream_ms": 3008,
+    "time_to_request_ms": 601,
+    "first_content_frame_ms": 3009,
+    "queued_turn_count": 0,
+    "result_index": 0
+  },
+  "test_output": "ok  \ttask\t0.416s\n"
+}

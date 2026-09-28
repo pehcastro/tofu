@@ -1,0 +1,136 @@
+{
+  "principle": "principle-make-operations-idempotent",
+  "arm": "rule-on",
+  "task": "02-init-project",
+  "passed": false,
+  "diff_lines": 100,
+  "models_reported": [
+    "claude-opus-5-5"
+  ],
+  "cli_version": "2.1.283 (Claude Code)",
+  "credential_kind": "subscription",
+  "wire": "claude -p",
+  "machine": "DESKTOP-AHUN9RO",
+  "started": "2026-09-27T20:25:41.7024459-03:00",
+  "wall_ms": 42863,
+  "claude_output": {
+    "duration_api_ms": 31020,
+    "stop_reason": "end_turn",
+    "session_id": "472c446f-de19-4314-97c7-90d187fb01e3",
+    "total_cost_usd": 0.2778286,
+    "usage": {
+      "input_tokens": 14,
+      "cache_creation_input_tokens": 22249,
+      "cache_read_input_tokens": 229403,
+      "output_tokens": 2695,
+      "output_tokens_details": {
+        "thinking_tokens": 454
+      },
+      "server_tool_use": {
+        "web_search_requests": 0,
+        "web_fetch_requests": 0
+      },
+      "service_tier": "standard",
+      "cache_creation": {
+        "ephemeral_1h_input_tokens": 22249,
+        "ephemeral_5m_input_tokens": 0
+      },
+      "inference_geo": "not_available",
+      "iterations": [
+        {
+          "input_tokens": 2,
+          "output_tokens": 289,
+          "cache_read_input_tokens": 37699,
+          "cache_creation_input_tokens": 116,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 116
+          },
+          "type": "message"
+        }
+      ],
+      "speed": "standard"
+    },
+    "modelUsage": {
+      "claude-opus-5-5": {
+        "inputTokens": 14,
+        "outputTokens": 2695,
+        "cacheReadInputTokens": 229403,
+        "cacheCreationInputTokens": 22249,
+        "webSearchRequests": 0,
+        "costUSD": 0.2778286,
+        "contextWindow": 1000000,
+        "maxOutputTokens": 128000,
+        "thinkingTokens": 454,
+        "canonicalModel": "claude-opus-5-5",
+        "provider": "firstParty",
+        "costBasis": "list"
+      }
+    },
+    "permission_denials": [
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_01E1QN4R95aBmXUkmE4gRfNG",
+        "tool_input": {
+          "command": "cd \"C:/Users/Luiz/AppData/Local/Temp/tofu-principle-3938793790\" \u0026\u0026 rtk ls -la \u0026\u0026 rtk read *.go go.mod 2\u003e/dev/null; go version"
+        }
+      },
+      {
+        "tool_name": "PowerShell",
+        "tool_use_id": "toolu_01WYeVPvp5aqxEy923UcSeD4",
+        "tool_input": {
+          "command": "go test ./... ; go vet ./..."
+        }
+      },
+      {
+        "tool_name": "PowerShell",
+        "tool_use_id": "toolu_01THWYDY6ZVf2oqjSudPPHYa",
+        "tool_input": {
+          "command": "go test ./..."
+        }
+      }
+    ],
+    "terminal_reason": "completed",
+    "fast_mode_state": "off",
+    "fast_mode_disabled_reason": "sdk_opt_in_required",
+    "subagent_stats": {
+      "spawned": 0,
+      "requested": {
+        "background": 0,
+        "foreground": 0,
+        "unset": 0
+      },
+      "started_in_background": 0,
+      "max_depth": 0,
+      "spawned_by_subagents": 0,
+      "completed": 0,
+      "failed": 0,
+      "killed": {
+        "parent": 0,
+        "user": 0,
+        "system": 0
+      },
+      "refused": {
+        "depth_limit": 0,
+        "concurrency_limit": 0,
+        "budget": 0
+      },
+      "by_type": {}
+    },
+    "is_error": false,
+    "num_turns": 9,
+    "subtype": "success",
+    "api_error_status": null,
+    "result": "I implemented `Init` in `init.go`, but the tests have not run. The permission prompt blocked `go test ./...`.\n\n- **Folders:** it creates `dir` and `dir/data` only when they are missing.\n- **Existing config:** if `config.json` exists, `Init` does not touch it, so hand edits stay.\n- **New config:** it writes the defaults to `config.json.tmp`, flushes the file to disk, then renames it to `config.json`. A killed run leaves no `config.json` or a complete one, never a half-written one.\n- **Leftover temp file:** the next run overwrites it and renames it.\n\nI also added `init_test.go`. It checks two runs in a row, that user edits survive a rerun, and the leftover temp file case.\n\nNOTE: two installers that run at the same moment in the same folder can conflict on the temp file.",
+    "ttft_ms": 2711,
+    "type": "result",
+    "duration_ms": 37152,
+    "uuid": "6e05d31d-0683-41b4-91c4-1cf952524aa8",
+    "ttft_stream_ms": 1926,
+    "time_to_request_ms": 639,
+    "first_content_frame_ms": 1926,
+    "queued_turn_count": 0,
+    "result_index": 0
+  },
+  "test_output": "--- FAIL: TestCheckRecoversFromKilledWrite (0.00s)\n    zz_check_test.go:62: config.json does not parse: unexpected end of JSON input: \"\"\nFAIL\nFAIL\ttask\t0.480s\nFAIL\n"
+}

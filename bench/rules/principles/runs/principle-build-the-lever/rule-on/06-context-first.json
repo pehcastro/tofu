@@ -1,0 +1,227 @@
+{
+  "principle": "principle-build-the-lever",
+  "arm": "rule-on",
+  "task": "06-context-first",
+  "passed": true,
+  "diff_lines": 255,
+  "models_reported": [
+    "claude-opus-5-5"
+  ],
+  "cli_version": "2.1.283 (Claude Code)",
+  "credential_kind": "subscription",
+  "wire": "claude -p",
+  "machine": "DESKTOP-AHUN9RO",
+  "started": "2026-09-27T20:09:36.5484824-03:00",
+  "wall_ms": 131097,
+  "claude_output": {
+    "duration_api_ms": 106162,
+    "stop_reason": "end_turn",
+    "session_id": "fec7ebd2-f13d-4c7a-bef1-5063b31e7429",
+    "total_cost_usd": 0.7278736000000001,
+    "usage": {
+      "input_tokens": 54,
+      "cache_creation_input_tokens": 35531,
+      "cache_read_input_tokens": 1130548,
+      "output_tokens": 10865,
+      "output_tokens_details": {
+        "thinking_tokens": 2356
+      },
+      "server_tool_use": {
+        "web_search_requests": 0,
+        "web_fetch_requests": 0
+      },
+      "service_tier": "standard",
+      "cache_creation": {
+        "ephemeral_1h_input_tokens": 35531,
+        "ephemeral_5m_input_tokens": 0
+      },
+      "inference_geo": "not_available",
+      "iterations": [
+        {
+          "input_tokens": 2,
+          "output_tokens": 348,
+          "cache_read_input_tokens": 50972,
+          "cache_creation_input_tokens": 125,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 125
+          },
+          "type": "message"
+        }
+      ],
+      "speed": "standard"
+    },
+    "modelUsage": {
+      "claude-opus-5-5": {
+        "inputTokens": 54,
+        "outputTokens": 10865,
+        "cacheReadInputTokens": 1130548,
+        "cacheCreationInputTokens": 35531,
+        "webSearchRequests": 0,
+        "costUSD": 0.7278736000000001,
+        "contextWindow": 1000000,
+        "maxOutputTokens": 128000,
+        "thinkingTokens": 2356,
+        "canonicalModel": "claude-opus-5-5",
+        "provider": "firstParty",
+        "costBasis": "list"
+      }
+    },
+    "permission_denials": [
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_015LNSLFb6nH7UwTR3HB9gSY",
+        "tool_input": {
+          "command": "git ls-files \u0026\u0026 cat go.mod 2\u003e/dev/null; wc -l $(git ls-files '*.go')",
+          "description": "List repo files and sizes"
+        }
+      },
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_01LMu6Ni2F3A6mS5ju318RJs",
+        "tool_input": {
+          "command": "git ls-files \u0026\u0026 rtk read go.mod; git ls-files '*.go' | xargs wc -l",
+          "description": "List repo files and sizes"
+        }
+      },
+      {
+        "tool_name": "PowerShell",
+        "tool_use_id": "toolu_012RJL9DyiNEQer32EEYFjuX",
+        "tool_input": {
+          "command": "go version; go build ./...; go vet ./...",
+          "description": "Check Go toolchain and build"
+        }
+      },
+      {
+        "tool_name": "PowerShell",
+        "tool_use_id": "toolu_01LC8W7bikE7H3qwpEz9oNPf",
+        "tool_input": {
+          "command": "go version",
+          "description": "Check Go toolchain"
+        }
+      },
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_01XcnfAS8YPKzvE13a3NyNJJ",
+        "tool_input": {
+          "command": "mkdir -p /tmp/addctx-hand \u0026\u0026 cp catalog.go /tmp/addctx-hand/catalog.go \u0026\u0026 git checkout -- catalog.go \u0026\u0026 rtk git status --short",
+          "description": "Save hand edit, restore original file"
+        }
+      },
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_014ruMEo2NvBtuiGBofSdmmZ",
+        "tool_input": {
+          "command": "cp catalog.go ../addctx-hand-catalog.go",
+          "description": "Save hand-edited file outside repo"
+        }
+      },
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_019HMM9z4dfDquPxfz3LeviB",
+        "tool_input": {
+          "command": "git checkout -- catalog.go",
+          "description": "Restore original catalog.go"
+        }
+      },
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_015u6GnpcZRAGgmCPfvigyxK",
+        "tool_input": {
+          "command": "go run ./tools/addctx . \u0026\u0026 rtk git diff --no-index --stat .hand/catalog.go.txt catalog.go; rtk git diff --no-index .hand/catalog.go.txt catalog.go",
+          "description": "Run codemod, diff catalog.go against hand edit"
+        }
+      },
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_01Y62X3iQ64En2MbutmLNNPq",
+        "tool_input": {
+          "command": "rtk git diff --no-index .hand/catalog.go.txt catalog.go",
+          "description": "Diff codemod output against hand edit"
+        }
+      },
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_01GHWHL4FEiMSLgEcvG46PDV",
+        "tool_input": {
+          "command": "go run ./tools/addctx .; rtk git status --short",
+          "description": "Rerun codemod to check idempotence"
+        }
+      },
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_011v95aknv5mFYiEtaHKWcj5",
+        "tool_input": {
+          "command": "diff \u003c(grep -v '^ok' .hand/before.txt) \u003c(grep -v '^ok' .hand/after.txt)",
+          "description": "Compare results before and after"
+        }
+      },
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_01LPGWv5vk69ViAbXs271VXM",
+        "tool_input": {
+          "command": "rtk go vet ./...",
+          "description": "Vet the module"
+        }
+      },
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_01Q5gRzhMozHLqemoRSGnPy8",
+        "tool_input": {
+          "command": "rtk go build ./...",
+          "description": "Build all packages"
+        }
+      },
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_01LM7N2WxeY8ZhQZPPinkQw2",
+        "tool_input": {
+          "command": "rtk go test -count=1 ./...",
+          "description": "Compile and test all packages"
+        }
+      }
+    ],
+    "terminal_reason": "completed",
+    "fast_mode_state": "off",
+    "fast_mode_disabled_reason": "sdk_opt_in_required",
+    "subagent_stats": {
+      "spawned": 0,
+      "requested": {
+        "background": 0,
+        "foreground": 0,
+        "unset": 0
+      },
+      "started_in_background": 0,
+      "max_depth": 0,
+      "spawned_by_subagents": 0,
+      "completed": 0,
+      "failed": 0,
+      "killed": {
+        "parent": 0,
+        "user": 0,
+        "system": 0
+      },
+      "refused": {
+        "depth_limit": 0,
+        "concurrency_limit": 0,
+        "budget": 0
+      },
+      "by_type": {}
+    },
+    "is_error": false,
+    "num_turns": 38,
+    "subtype": "success",
+    "api_error_status": null,
+    "result": "All 8 exported functions and methods now take `ctx context.Context` first, and every internal call passes the caller's `ctx` through. Nothing in the package calls `context.Background` or `context.TODO`.\n\n- **Codemod:** I added `tools/addctx/main.go`. Rerun it with `go run ./tools/addctx .`. It skips work that is already done, and it stops with an error when a call has no `ctx` to pass or when code makes its own context.\n- **Check against my hand edit:** I edited `catalog.go` by hand first. The codemod's output for that file matched the hand edit byte for byte.\n- **Results:** A throwaway test gave the same output before and after the change, across 15 input cases. I deleted that test afterwards.\n\nThe permission settings blocked `go build ./...` and `go vet`. The package and the tool both compiled through `go test` and `go run`. I did not commit anything.",
+    "ttft_ms": 3134,
+    "type": "result",
+    "duration_ms": 126632,
+    "uuid": "56262fba-de6c-4657-aa95-57b36c3eb052",
+    "ttft_stream_ms": 1838,
+    "time_to_request_ms": 697,
+    "first_content_frame_ms": 1838,
+    "queued_turn_count": 0,
+    "result_index": 0
+  },
+  "test_output": "ok  \ttask\t0.391s\n?   \ttask/tools/addctx\t[no test files]\n"
+}

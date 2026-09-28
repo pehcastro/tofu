@@ -1,0 +1,143 @@
+{
+  "principle": "principle-separate-before-serializing-shared-state",
+  "arm": "rule-off",
+  "task": "01-progress-recorder",
+  "passed": true,
+  "diff_lines": 83,
+  "models_reported": [
+    "claude-opus-5-5"
+  ],
+  "cli_version": "2.1.283 (Claude Code)",
+  "credential_kind": "subscription",
+  "wire": "claude -p",
+  "machine": "DESKTOP-AHUN9RO",
+  "started": "2026-09-27T20:56:59.002719-03:00",
+  "wall_ms": 61029,
+  "claude_output": {
+    "duration_api_ms": 44861,
+    "stop_reason": "end_turn",
+    "session_id": "15ead1aa-035d-4176-af9a-eeadd7513325",
+    "total_cost_usd": 0.3543888,
+    "usage": {
+      "input_tokens": 18,
+      "cache_creation_input_tokens": 25006,
+      "cache_read_input_tokens": 315244,
+      "output_tokens": 4561,
+      "output_tokens_details": {
+        "thinking_tokens": 1368
+      },
+      "server_tool_use": {
+        "web_search_requests": 0,
+        "web_fetch_requests": 0
+      },
+      "service_tier": "standard",
+      "cache_creation": {
+        "ephemeral_1h_input_tokens": 25006,
+        "ephemeral_5m_input_tokens": 0
+      },
+      "inference_geo": "not_available",
+      "iterations": [
+        {
+          "input_tokens": 2,
+          "output_tokens": 462,
+          "cache_read_input_tokens": 40394,
+          "cache_creation_input_tokens": 178,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 178
+          },
+          "type": "message"
+        }
+      ],
+      "speed": "standard"
+    },
+    "modelUsage": {
+      "claude-opus-5-5": {
+        "inputTokens": 18,
+        "outputTokens": 4561,
+        "cacheReadInputTokens": 315244,
+        "cacheCreationInputTokens": 25006,
+        "webSearchRequests": 0,
+        "costUSD": 0.3543888,
+        "contextWindow": 1000000,
+        "maxOutputTokens": 128000,
+        "thinkingTokens": 1368,
+        "canonicalModel": "claude-opus-5-5",
+        "provider": "firstParty",
+        "costBasis": "list"
+      }
+    },
+    "permission_denials": [
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_01PKW6JGiHpjBCBw9K2AeFLX",
+        "tool_input": {
+          "command": "cd \"C:/Users/Luiz/AppData/Local/Temp/tofu-principle-2608489261\" \u0026\u0026 rtk ls -la \u0026\u0026 rtk read *.go go.mod 2\u003e/dev/null"
+        }
+      },
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_01KYABY86f6zfivTU6AvzR2T",
+        "tool_input": {
+          "command": "cd \"C:/Users/Luiz/AppData/Local/Temp/tofu-principle-2608489261\" \u0026\u0026 cat \u003e zz_test.go \u003c\u003c'EOF'\npackage task\nimport (\"fmt\";\"sync\";\"testing\")\nfunc TestConc(t *testing.T){\n d:=t.TempDir(); var wg sync.WaitGroup\n for _,a:=range []string{\"indexer\",\"metrics\"}{ a:=a; wg.Add(1); go func(){defer wg.Done(); r:=NewRecorder(d,a)\n  for i:=0;i\u003c300;i++{ if err:=r.Set(fmt.Sprintf(\"%s.k%d\",a,i%20),fmt.Sprint(i));err!=nil{t.Error(err)} }}()}\n stop:=make(chan bool); go func(){for{select{case\u003c-stop:return;default:}; if _,err:=Read(d);err!=nil{t.Error(err)}}}()\n wg.Wait(); close(stop)\n m,_:=Read(d); if len(m)!=40||m[\"indexer.k19\"]!=\"299\"||m[\"metrics.k0\"]!=\"280\"{t.Fatal(m)}\n}\nEOF\ngo vet ./... \u0026\u0026 go test -race -count=3 ./... ; rm zz_test.go"
+        }
+      },
+      {
+        "tool_name": "PowerShell",
+        "tool_use_id": "toolu_01GsdbrP3doLEnUfPB6qNwSj",
+        "tool_input": {
+          "command": "go vet ./...; go test -count=3 ./...; Remove-Item zz_test.go -Confirm:$false"
+        }
+      },
+      {
+        "tool_name": "PowerShell",
+        "tool_use_id": "toolu_017nbcRVHFz5MVHPnDQhQ5wS",
+        "tool_input": {
+          "command": "go test -count=3 ./..."
+        }
+      }
+    ],
+    "terminal_reason": "completed",
+    "fast_mode_state": "off",
+    "fast_mode_disabled_reason": "sdk_opt_in_required",
+    "subagent_stats": {
+      "spawned": 0,
+      "requested": {
+        "background": 0,
+        "foreground": 0,
+        "unset": 0
+      },
+      "started_in_background": 0,
+      "max_depth": 0,
+      "spawned_by_subagents": 0,
+      "completed": 0,
+      "failed": 0,
+      "killed": {
+        "parent": 0,
+        "user": 0,
+        "system": 0
+      },
+      "refused": {
+        "depth_limit": 0,
+        "concurrency_limit": 0,
+        "budget": 0
+      },
+      "by_type": {}
+    },
+    "is_error": false,
+    "num_turns": 11,
+    "subtype": "success",
+    "api_error_status": null,
+    "result": "I fixed `recorder.go`, but I could not test it. The permission settings blocked `go test`, so I deleted the scratch test file.\n\n**Cause:** both services read the whole `state.json`, change one key, and write the whole file back. When two writes overlap, the later one deletes the other service's key. `os.WriteFile` also empties the file before it writes, so a `Read` at that moment gets partial JSON and fails.\n\n**Changes:**\n- **One file per service:** each `Recorder` now writes only its own file, `state.\u003cactor\u003e.json`. `Read` merges all of these files. No two processes write the same file, so no update gets lost.\n- **Safe writes:** `Set` writes to a temp file and renames it over the target, so a reader never sees a partial file. If Windows refuses the rename because the other process has the file open, `Set` tries again for up to about 0.5 s.\n- **Old data:** `Read` still reads the old `state.json` first, and values in the per-service files replace it.\n- **Same process:** a mutex for each file protects calls to `Set` from goroutines in one process.\n\nThe API has no change.\n\n**TLDR**\nValues vanished because both services wrote the whole shared file; `Read` failed on half-written files. Now each service writes its own file safely and `Read` merges them. Untested: `go test` needs your permission, so run it yourself.",
+    "ttft_ms": 2923,
+    "type": "result",
+    "duration_ms": 56622,
+    "uuid": "4580f1b6-70fc-4e0b-8c1f-6874a7fbe283",
+    "ttft_stream_ms": 1777,
+    "time_to_request_ms": 695,
+    "first_content_frame_ms": 1778,
+    "queued_turn_count": 0,
+    "result_index": 0
+  },
+  "test_output": "ok  \ttask\t6.829s\n"
+}

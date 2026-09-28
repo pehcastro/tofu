@@ -1,0 +1,131 @@
+{
+  "principle": "principle-build-the-lever",
+  "arm": "rule-off",
+  "task": "02-clamp-order",
+  "passed": true,
+  "diff_lines": 24,
+  "models_reported": [
+    "claude-opus-5-5"
+  ],
+  "cli_version": "2.1.283 (Claude Code)",
+  "credential_kind": "subscription",
+  "wire": "claude -p",
+  "machine": "DESKTOP-AHUN9RO",
+  "started": "2026-09-27T20:01:39.4335132-03:00",
+  "wall_ms": 31100,
+  "claude_output": {
+    "duration_api_ms": 20718,
+    "stop_reason": "end_turn",
+    "session_id": "2072f44b-b96b-4e14-bd33-d26f782e51e9",
+    "total_cost_usd": 0.27157200000000004,
+    "usage": {
+      "input_tokens": 12,
+      "cache_creation_input_tokens": 23519,
+      "cache_read_input_tokens": 199160,
+      "output_tokens": 2177,
+      "output_tokens_details": {
+        "thinking_tokens": 76
+      },
+      "server_tool_use": {
+        "web_search_requests": 0,
+        "web_fetch_requests": 0
+      },
+      "service_tier": "standard",
+      "cache_creation": {
+        "ephemeral_1h_input_tokens": 23519,
+        "ephemeral_5m_input_tokens": 0
+      },
+      "inference_geo": "not_available",
+      "iterations": [
+        {
+          "input_tokens": 2,
+          "output_tokens": 181,
+          "cache_read_input_tokens": 38945,
+          "cache_creation_input_tokens": 140,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 140
+          },
+          "type": "message"
+        }
+      ],
+      "speed": "standard"
+    },
+    "modelUsage": {
+      "claude-opus-5-5": {
+        "inputTokens": 12,
+        "outputTokens": 2177,
+        "cacheReadInputTokens": 199160,
+        "cacheCreationInputTokens": 23519,
+        "webSearchRequests": 0,
+        "costUSD": 0.27157200000000004,
+        "contextWindow": 1000000,
+        "maxOutputTokens": 128000,
+        "thinkingTokens": 76,
+        "canonicalModel": "claude-opus-5-5",
+        "provider": "firstParty",
+        "costBasis": "list"
+      }
+    },
+    "permission_denials": [
+      {
+        "tool_name": "PowerShell",
+        "tool_use_id": "toolu_01DkKAns3M4byoYnZYrMpqfN",
+        "tool_input": {
+          "command": "go vet ./...; go build ./...",
+          "description": "Vet and build the package"
+        }
+      },
+      {
+        "tool_name": "PowerShell",
+        "tool_use_id": "toolu_01QpCYTYu5W7L2GzLqt7ZQ3K",
+        "tool_input": {
+          "command": "go build ./...",
+          "description": "Build the package"
+        }
+      }
+    ],
+    "terminal_reason": "completed",
+    "fast_mode_state": "off",
+    "fast_mode_disabled_reason": "sdk_opt_in_required",
+    "subagent_stats": {
+      "spawned": 0,
+      "requested": {
+        "background": 0,
+        "foreground": 0,
+        "unset": 0
+      },
+      "started_in_background": 0,
+      "max_depth": 0,
+      "spawned_by_subagents": 0,
+      "completed": 0,
+      "failed": 0,
+      "killed": {
+        "parent": 0,
+        "user": 0,
+        "system": 0
+      },
+      "refused": {
+        "depth_limit": 0,
+        "concurrency_limit": 0,
+        "budget": 0
+      },
+      "by_type": {}
+    },
+    "is_error": false,
+    "num_turns": 15,
+    "subtype": "success",
+    "api_error_status": null,
+    "result": "I changed `clamp` to `clamp(lo, hi, v int)` and reordered the arguments at all 12 calls in `audio.go`, `video.go` and `ui.go`. That includes the call split over several lines in `Contrast` and the nested calls in `Mix`.\n\nThe body of `clamp` did not change, so each exported function returns the same values as before. That also holds when `lo \u003e hi`, as in `Scroll` when `total \u003c page`.\n\nI did not build it: `go build` needs your approval, and the package has no tests.",
+    "ttft_ms": 2628,
+    "type": "result",
+    "duration_ms": 26557,
+    "uuid": "c81c3d8c-560b-495f-963c-6ccb0a9277b1",
+    "ttft_stream_ms": 1737,
+    "time_to_request_ms": 674,
+    "first_content_frame_ms": 1738,
+    "queued_turn_count": 0,
+    "result_index": 0
+  },
+  "test_output": "ok  \ttask\t0.312s\n"
+}

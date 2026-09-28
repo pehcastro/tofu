@@ -1,0 +1,16 @@
+{
+  "principle": "principle-build-the-lever",
+  "arm": "rule-on",
+  "task": "04-field-rename",
+  "passed": false,
+  "diff_lines": 148,
+  "models_reported": null,
+  "cli_version": "2.1.283 (Claude Code)",
+  "credential_kind": "subscription",
+  "wire": "claude -p",
+  "machine": "DESKTOP-AHUN9RO",
+  "started": "2026-09-27T20:04:14.9093959-03:00",
+  "wall_ms": 71771,
+  "claude_error": "exit status 0xffffffff",
+  "test_output": "--- FAIL: TestCheckFieldsRenamed (0.00s)\n    zz_check_test.go:12: User has no field Name\n    zz_check_test.go:12: User has no field Email\n    zz_check_test.go:17: User still has field Nm\n    zz_check_test.go:17: User still has field Em\n    zz_check_test.go:21: Acct has no field Balance\nFAIL\nFAIL\ttask\t0.490s\n?   \ttask/tools/renamefield\t[no test files]\nFAIL\n"
+}

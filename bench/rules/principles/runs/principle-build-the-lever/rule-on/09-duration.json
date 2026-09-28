@@ -1,0 +1,267 @@
+{
+  "principle": "principle-build-the-lever",
+  "arm": "rule-on",
+  "task": "09-duration",
+  "passed": true,
+  "diff_lines": 614,
+  "models_reported": [
+    "claude-opus-5-5"
+  ],
+  "cli_version": "2.1.283 (Claude Code)",
+  "credential_kind": "subscription",
+  "wire": "claude -p",
+  "machine": "DESKTOP-AHUN9RO",
+  "started": "2026-09-27T20:16:44.5318522-03:00",
+  "wall_ms": 284992,
+  "claude_output": {
+    "duration_api_ms": 225329,
+    "stop_reason": "end_turn",
+    "session_id": "aabd4398-9a04-459f-86e7-eecda80268b8",
+    "total_cost_usd": 1.1964076000000001,
+    "usage": {
+      "input_tokens": 60,
+      "cache_creation_input_tokens": 50301,
+      "cache_read_input_tokens": 1560298,
+      "output_tokens": 24085,
+      "output_tokens_details": {
+        "thinking_tokens": 10009
+      },
+      "server_tool_use": {
+        "web_search_requests": 0,
+        "web_fetch_requests": 0
+      },
+      "service_tier": "standard",
+      "cache_creation": {
+        "ephemeral_1h_input_tokens": 50301,
+        "ephemeral_5m_input_tokens": 0
+      },
+      "inference_geo": "not_available",
+      "iterations": [
+        {
+          "input_tokens": 2,
+          "output_tokens": 358,
+          "cache_read_input_tokens": 65715,
+          "cache_creation_input_tokens": 152,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 152
+          },
+          "type": "message"
+        }
+      ],
+      "speed": "standard"
+    },
+    "modelUsage": {
+      "claude-opus-5-5": {
+        "inputTokens": 60,
+        "outputTokens": 24085,
+        "cacheReadInputTokens": 1560298,
+        "cacheCreationInputTokens": 50301,
+        "webSearchRequests": 0,
+        "costUSD": 1.1964076000000001,
+        "contextWindow": 1000000,
+        "maxOutputTokens": 128000,
+        "thinkingTokens": 10009,
+        "canonicalModel": "claude-opus-5-5",
+        "provider": "firstParty",
+        "costBasis": "list"
+      }
+    },
+    "permission_denials": [
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_01WVNHRCp8WhMfamHKLUabm7",
+        "tool_input": {
+          "command": "git ls-files \u0026\u0026 cat go.mod 2\u003e/dev/null; wc -l $(git ls-files)",
+          "description": "List repo files"
+        }
+      },
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_01X9kpBUTGv5f8kCaMdi7QCz",
+        "tool_input": {
+          "command": "git ls-files | xargs wc -l",
+          "description": "List repo files with line counts"
+        }
+      },
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_01H5noSauyttL6v4vf1XWMUr",
+        "tool_input": {
+          "command": "git checkout -b ms-to-duration \u0026\u0026 mkdir -p /tmp/hand \u0026\u0026 cat \u003e /tmp/hand/config.go \u003c\u003c'EOF'\npackage task\n\nimport \"time\"\n\ntype Config struct {\n\tTimeout  time.Duration\n\tRetry    time.Duration\n\tIdle     time.Duration\n\tAttempts int\n}\n\nfunc Defaults() Config {\n\treturn Config{Timeout: 1500 * time.Millisecond, Retry: 200 * time.Millisecond, Idle: 60000 * time.Millisecond, Attempts: 3}\n}\n\nfunc (c Config) Budget() time.Duration {\n\treturn c.Timeout + time.Duration(c.Attempts)*c.Retry\n}\nEOF\ncat \u003e /tmp/hand/backoff.go \u003c\u003c'EOF'\npackage task\n\nimport \"time\"\n\nfunc Backoff(attempt int, base time.Duration) time.Duration {\n\td := base\n\tfor i := 0; i \u003c attempt; i++ {\n\t\td *= 2\n\t}\n\tif d \u003e 10000*time.Millisecond {\n\t\treturn 10000 * time.Millisecond\n\t}\n\treturn d\n}\n\nfunc Schedule(c Config) []time.Duration {\n\tout := make([]time.Duration, c.Attempts)\n\tfor i := range out {\n\t\tout[i] = Backoff(i, c.Retry)\n\t}\n\treturn out\n}\nEOF\ncat \u003e /tmp/hand/deadline.go \u003c\u003c'EOF'\npackage task\n\nimport \"time\"\n\nfunc Deadline(start time.Time, timeout time.Duration) time.Time {\n\treturn start.Add(timeout)\n}\n\nfunc Expired(start, now time.Time, idle time.Duration) bool {\n\treturn now.Sub(start) \u003e idle\n}\n\nfunc Remaining(start, now time.Time, c Config) time.Duration {\n\tleft := Deadline(start, c.Timeout).Sub(now)\n\tif left \u003c 0 {\n\t\treturn 0\n\t}\n\treturn left.Truncate(time.Millisecond)\n}\nEOF\ncd /tmp/hand \u0026\u0026 cp /c/Users/Luiz/AppData/Local/Temp/tofu-principle-38043965/go.mod . \u0026\u0026 gofmt -l . ; go vet ./...",
+          "description": "Branch and write the hand-edited reference copy"
+        }
+      },
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_01W2Dw8GtCmkUAzMwaqzopxB",
+        "tool_input": {
+          "command": "git checkout -b ms-to-duration",
+          "description": "Create working branch"
+        }
+      },
+      {
+        "tool_name": "PowerShell",
+        "tool_use_id": "toolu_01XmwkZWnxqcEsvbvuEDqAwP",
+        "tool_input": {
+          "command": "git checkout -b ms-to-duration",
+          "description": "Create working branch"
+        }
+      },
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_01YSLFvxW7hDrEK6MZNg35JU",
+        "tool_input": {
+          "command": "rtk ls /c/Users/Luiz/go/pkg/mod/golang.org/x/ 2\u003e\u00261; rtk ls /c/Users/Luiz/go/pkg/mod/cache/download/golang.org/x/tools/@v/ 2\u003e\u00261 | tail -5",
+          "description": "Check for cached x/tools module"
+        }
+      },
+      {
+        "tool_name": "PowerShell",
+        "tool_use_id": "toolu_01Hv132GzzHoJD7zEpZb7PZu",
+        "tool_input": {
+          "command": "cd tools/msdur; $env:GOPROXY='off'; $env:GOFLAGS='-mod=mod'; go mod tidy; go vet .; go run . ../..",
+          "description": "Tidy, vet and dry-run the codemod on the package"
+        }
+      },
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_0111BqWveP6ayBFEkMJoXiEo",
+        "tool_input": {
+          "command": "cd /c/Users/Luiz/AppData/Local/Temp/tofu-principle-38043965/tools/msdur \u0026\u0026 GOPROXY=off GOFLAGS=-mod=mod go mod tidy \u0026\u0026 rtk go vet . \u0026\u0026 go run . ../..",
+          "description": "Tidy, vet and dry-run the codemod"
+        }
+      },
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_01HDFHn919yC7U4y5pusfECE",
+        "tool_input": {
+          "command": "GOPROXY=off GOFLAGS=-mod=mod go -C /c/Users/Luiz/AppData/Local/Temp/tofu-principle-38043965/tools/msdur mod tidy",
+          "description": "Resolve codemod dependencies from local cache"
+        }
+      },
+      {
+        "tool_name": "PowerShell",
+        "tool_use_id": "toolu_01K8aL7Zg73Kqunt7z9JSv1k",
+        "tool_input": {
+          "command": "go -C tools/msdur mod tidy",
+          "description": "Resolve codemod dependencies"
+        }
+      },
+      {
+        "tool_name": "PowerShell",
+        "tool_use_id": "toolu_01PzEmv3dHRmH98ea93qugTd",
+        "tool_input": {
+          "command": "go version",
+          "description": "Check whether go commands are allowed"
+        }
+      },
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_01RUh856ziaSMiyBBPUG44ib",
+        "tool_input": {
+          "command": "go -C tools/msdur run . -w ../.. ; echo \"exit=$?\"",
+          "description": "Apply the codemod"
+        }
+      },
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_01NUT7xF5uuYqg9B1H1SiJ9u",
+        "tool_input": {
+          "command": "rtk git -C /c/Users/Luiz/AppData/Local/Temp/tofu-principle-38043965 diff --no-index --exit-code .hand/backoff.go backoff.go",
+          "description": "Diff codemod output against hand edit (backoff)"
+        }
+      },
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_01EDPvhhS1sDcSs936p528km",
+        "tool_input": {
+          "command": "rtk git -C /c/Users/Luiz/AppData/Local/Temp/tofu-principle-38043965 diff --no-index --exit-code .hand/config.go config.go",
+          "description": "Diff codemod output against hand edit (config)"
+        }
+      },
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_01E7ExTsLXKBZ86V3T4gUaZ1",
+        "tool_input": {
+          "command": "rtk git -C /c/Users/Luiz/AppData/Local/Temp/tofu-principle-38043965 diff --no-index --exit-code .hand/deadline.go deadline.go",
+          "description": "Diff codemod output against hand edit (deadline)"
+        }
+      },
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_01HX4TtaTvHDty499WJYLgRj",
+        "tool_input": {
+          "command": "rtk diff -r .hand . --exclude=.git --exclude=tools --exclude=go.mod --exclude=.hand",
+          "description": "Diff codemod output against hand edit"
+        }
+      },
+      {
+        "tool_name": "PowerShell",
+        "tool_use_id": "toolu_01Bmcx52nf4BByntnnXbMkCH",
+        "tool_input": {
+          "command": "foreach ($f in 'backoff.go','config.go','deadline.go') { $a = Get-FileHash \".hand\\$f\"; $b = Get-FileHash $f; \"$f same=$($a.Hash -eq $b.Hash)\" }",
+          "description": "Compare codemod output to hand edit by hash"
+        }
+      },
+      {
+        "tool_name": "PowerShell",
+        "tool_use_id": "toolu_01JNT3iEtjB5bxZ9wYDG9X5n",
+        "tool_input": {
+          "command": "Get-FileHash .hand\\backoff.go, backoff.go, .hand\\config.go, config.go, .hand\\deadline.go, deadline.go | Select-Object Hash, Path",
+          "description": "Hash codemod output and hand edit"
+        }
+      },
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_01UJ2VNZBJAkKFtfvqBVPMRV",
+        "tool_input": {
+          "command": "rtk git -C /c/Users/Luiz/AppData/Local/Temp/tofu-principle-38043965 status --short",
+          "description": "Show working tree status"
+        }
+      }
+    ],
+    "terminal_reason": "completed",
+    "fast_mode_state": "off",
+    "fast_mode_disabled_reason": "sdk_opt_in_required",
+    "subagent_stats": {
+      "spawned": 0,
+      "requested": {
+        "background": 0,
+        "foreground": 0,
+        "unset": 0
+      },
+      "started_in_background": 0,
+      "max_depth": 0,
+      "spawned_by_subagents": 0,
+      "completed": 0,
+      "failed": 0,
+      "killed": {
+        "parent": 0,
+        "user": 0,
+        "system": 0
+      },
+      "refused": {
+        "depth_limit": 0,
+        "concurrency_limit": 0,
+        "budget": 0
+      },
+      "by_type": {}
+    },
+    "is_error": false,
+    "num_turns": 43,
+    "subtype": "success",
+    "api_error_status": null,
+    "result": "I converted the package to `time.Duration` with a codemod at `tools/msdur`. It is a separate Go module that depends on `golang.org/x/tools`, so the package's own `go.mod` is unchanged. I made the same change by hand first; the codemod's output was byte-identical to it, `go vet` passes, and a second run changes nothing.\n\n- **Renamed and retyped:** the `Timeout`, `Retry` and `Idle` fields, and the `timeout`, `idle` and `base` parameters.\n- **Return types:** `Backoff`, `Budget` and `Remaining` now return `time.Duration`, and `Schedule` returns `[]time.Duration`.\n- **Same lengths:** the constants become `N*time.Millisecond`. `Remaining` returns `left.Truncate(time.Millisecond)`, so it still drops time below 1 ms, as the old int division did.\n\nI did not commit, and I am on `master`. Creating a branch needed approval.\n\nRerun it with `go -C tools/msdur run . -w ../..`.",
+    "ttft_ms": 2998,
+    "type": "result",
+    "duration_ms": 280928,
+    "uuid": "49dec9a9-1fc3-4526-8604-e2eeeecd94a8",
+    "ttft_stream_ms": 1536,
+    "time_to_request_ms": 588,
+    "first_content_frame_ms": 1536,
+    "queued_turn_count": 0,
+    "result_index": 0
+  },
+  "test_output": "ok  \ttask\t0.368s\n"
+}

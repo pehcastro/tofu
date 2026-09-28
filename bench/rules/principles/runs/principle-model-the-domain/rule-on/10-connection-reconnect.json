@@ -1,0 +1,147 @@
+{
+  "principle": "principle-model-the-domain",
+  "arm": "rule-on",
+  "task": "10-connection-reconnect",
+  "passed": true,
+  "diff_lines": 173,
+  "models_reported": [
+    "claude-opus-5-5"
+  ],
+  "cli_version": "2.1.283 (Claude Code)",
+  "credential_kind": "subscription",
+  "wire": "claude -p",
+  "machine": "DESKTOP-AHUN9RO",
+  "started": "2026-09-27T20:54:34.3266223-03:00",
+  "wall_ms": 43483,
+  "claude_output": {
+    "duration_api_ms": 31254,
+    "stop_reason": "end_turn",
+    "session_id": "def7229f-d052-40a2-9617-f17038381965",
+    "total_cost_usd": 0.312313,
+    "usage": {
+      "input_tokens": 14,
+      "cache_creation_input_tokens": 24372,
+      "cache_read_input_tokens": 236905,
+      "output_tokens": 3495,
+      "output_tokens_details": {
+        "thinking_tokens": 686
+      },
+      "server_tool_use": {
+        "web_search_requests": 0,
+        "web_fetch_requests": 0
+      },
+      "service_tier": "standard",
+      "cache_creation": {
+        "ephemeral_1h_input_tokens": 24372,
+        "ephemeral_5m_input_tokens": 0
+      },
+      "inference_geo": "not_available",
+      "iterations": [
+        {
+          "input_tokens": 2,
+          "output_tokens": 262,
+          "cache_read_input_tokens": 39790,
+          "cache_creation_input_tokens": 148,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 148
+          },
+          "type": "message"
+        }
+      ],
+      "speed": "standard"
+    },
+    "modelUsage": {
+      "claude-opus-5-5": {
+        "inputTokens": 14,
+        "outputTokens": 3495,
+        "cacheReadInputTokens": 236905,
+        "cacheCreationInputTokens": 24372,
+        "webSearchRequests": 0,
+        "costUSD": 0.312313,
+        "contextWindow": 1000000,
+        "maxOutputTokens": 128000,
+        "thinkingTokens": 686,
+        "canonicalModel": "claude-opus-5-5",
+        "provider": "firstParty",
+        "costBasis": "list"
+      }
+    },
+    "permission_denials": [
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_01Q25GSmuy7hdAToS3bzwsdp",
+        "tool_input": {
+          "command": "cd \"C:/Users/Luiz/AppData/Local/Temp/tofu-principle-1187385692\" \u0026\u0026 rtk ls -la \u0026\u0026 rtk read conn.go \u0026\u0026 rtk read *_test.go 2\u003e/dev/null; rtk read go.mod",
+          "description": "List files and show conn.go"
+        }
+      },
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_019VaHvF12uaDnp1fyBZCrDz",
+        "tool_input": {
+          "command": "cd \"C:/Users/Luiz/AppData/Local/Temp/tofu-principle-1187385692\" \u0026\u0026 rtk go vet ./... \u0026\u0026 rtk go test ./...",
+          "description": "Vet and test the package"
+        }
+      },
+      {
+        "tool_name": "PowerShell",
+        "tool_use_id": "toolu_01XmwCkNw5BeVk9Uau6VYwXj",
+        "tool_input": {
+          "command": "go vet ./...; if ($?) { go test ./... }",
+          "description": "Vet and test the package"
+        }
+      },
+      {
+        "tool_name": "PowerShell",
+        "tool_use_id": "toolu_01Xs8aqisMAAEZFquKVaTkSP",
+        "tool_input": {
+          "command": "go test ./...",
+          "description": "Run package tests"
+        }
+      }
+    ],
+    "terminal_reason": "completed",
+    "fast_mode_state": "off",
+    "fast_mode_disabled_reason": "sdk_opt_in_required",
+    "subagent_stats": {
+      "spawned": 0,
+      "requested": {
+        "background": 0,
+        "foreground": 0,
+        "unset": 0
+      },
+      "started_in_background": 0,
+      "max_depth": 0,
+      "spawned_by_subagents": 0,
+      "completed": 0,
+      "failed": 0,
+      "killed": {
+        "parent": 0,
+        "user": 0,
+        "system": 0
+      },
+      "refused": {
+        "depth_limit": 0,
+        "concurrency_limit": 0,
+        "budget": 0
+      },
+      "by_type": {}
+    },
+    "is_error": false,
+    "num_turns": 10,
+    "subtype": "success",
+    "api_error_status": null,
+    "result": "I've rewritten `conn.go`, but I haven't run the tests: the permission check refused `go test`, so run `go test ./...` yourself.\n\n`Conn` now has a single state field instead of three booleans. `conn.go` has a table of every allowed move from each state, and any call the table doesn't list returns `ErrState` without changing anything. I added `Timeout` and `Reconnect`, plus a counter that resets when the connection reaches connected. The 6th `Reconnect` without reaching connected returns `ErrGiveUp` and closes the connection.\n\nI added `conn_test.go` to test the give-up limit, the counter reset and rejected calls.\n\n**Behavior change:** Dial from dropped now returns `ErrState`, because Dial only works from idle.",
+    "ttft_ms": 3162,
+    "type": "result",
+    "duration_ms": 38852,
+    "uuid": "05786d9a-2d00-4a68-a8e2-d4158eae6788",
+    "ttft_stream_ms": 1771,
+    "time_to_request_ms": 760,
+    "first_content_frame_ms": 1771,
+    "queued_turn_count": 0,
+    "result_index": 0
+  },
+  "test_output": "ok  \ttask\t0.438s\n"
+}

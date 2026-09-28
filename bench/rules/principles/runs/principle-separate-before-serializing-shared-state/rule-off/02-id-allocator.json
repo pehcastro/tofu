@@ -1,0 +1,139 @@
+{
+  "principle": "principle-separate-before-serializing-shared-state",
+  "arm": "rule-off",
+  "task": "02-id-allocator",
+  "passed": true,
+  "diff_lines": 67,
+  "models_reported": [
+    "claude-opus-5-5"
+  ],
+  "cli_version": "2.1.283 (Claude Code)",
+  "credential_kind": "subscription",
+  "wire": "claude -p",
+  "machine": "DESKTOP-AHUN9RO",
+  "started": "2026-09-27T20:58:51.9545999-03:00",
+  "wall_ms": 39099,
+  "claude_output": {
+    "duration_api_ms": 27967,
+    "stop_reason": "end_turn",
+    "session_id": "945cbc81-af5a-4427-b454-63600a285a8f",
+    "total_cost_usd": 0.26050419999999996,
+    "usage": {
+      "input_tokens": 10,
+      "cache_creation_input_tokens": 22563,
+      "cache_read_input_tokens": 158601,
+      "output_tokens": 2412,
+      "output_tokens_details": {
+        "thinking_tokens": 734
+      },
+      "server_tool_use": {
+        "web_search_requests": 0,
+        "web_fetch_requests": 0
+      },
+      "service_tier": "standard",
+      "cache_creation": {
+        "ephemeral_1h_input_tokens": 22563,
+        "ephemeral_5m_input_tokens": 0
+      },
+      "inference_geo": "not_available",
+      "iterations": [
+        {
+          "input_tokens": 2,
+          "output_tokens": 413,
+          "cache_read_input_tokens": 37989,
+          "cache_creation_input_tokens": 140,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 140
+          },
+          "type": "message"
+        }
+      ],
+      "speed": "standard"
+    },
+    "modelUsage": {
+      "claude-opus-5-5": {
+        "inputTokens": 10,
+        "outputTokens": 2412,
+        "cacheReadInputTokens": 158601,
+        "cacheCreationInputTokens": 22563,
+        "webSearchRequests": 0,
+        "costUSD": 0.26050419999999996,
+        "contextWindow": 1000000,
+        "maxOutputTokens": 128000,
+        "thinkingTokens": 734,
+        "canonicalModel": "claude-opus-5-5",
+        "provider": "firstParty",
+        "costBasis": "list"
+      }
+    },
+    "permission_denials": [
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_01CFzDQyscVgBPyjxPq9uRWg",
+        "tool_input": {
+          "command": "cd \"C:/Users/Luiz/AppData/Local/Temp/tofu-principle-568345282\" \u0026\u0026 rtk ls -la \u0026\u0026 rtk read ids.go \u0026\u0026 rtk read go.mod 2\u003e/dev/null; rtk ls *_test.go 2\u003e/dev/null",
+          "description": "List files and show ids.go"
+        }
+      },
+      {
+        "tool_name": "PowerShell",
+        "tool_use_id": "toolu_01TwDbBkKFqrqvxLNXbVngjT",
+        "tool_input": {
+          "command": "go vet ./...; go test ./...",
+          "description": "Vet and run tests"
+        }
+      },
+      {
+        "tool_name": "PowerShell",
+        "tool_use_id": "toolu_01FiSSosWXAAHSRKXda8nJyV",
+        "tool_input": {
+          "command": "go test ./...",
+          "description": "Run tests"
+        }
+      }
+    ],
+    "terminal_reason": "completed",
+    "fast_mode_state": "off",
+    "fast_mode_disabled_reason": "sdk_opt_in_required",
+    "subagent_stats": {
+      "spawned": 0,
+      "requested": {
+        "background": 0,
+        "foreground": 0,
+        "unset": 0
+      },
+      "started_in_background": 0,
+      "max_depth": 0,
+      "spawned_by_subagents": 0,
+      "completed": 0,
+      "failed": 0,
+      "killed": {
+        "parent": 0,
+        "user": 0,
+        "system": 0
+      },
+      "refused": {
+        "depth_limit": 0,
+        "concurrency_limit": 0,
+        "budget": 0
+      },
+      "by_type": {}
+    },
+    "is_error": false,
+    "num_turns": 8,
+    "subtype": "success",
+    "api_error_status": null,
+    "result": "I fixed it in `ids.go`, but I could not run the tests because the permission prompt blocked `go test`.\n\nThe duplicates came from how `NewID` used the `next` file. It read the file, added one and wrote it back, with no lock. Two processes could read the same value at the same time and hand out the same id.\n\n`NewID` now returns a random id from `crypto/rand`, in UUID format (for example `3f2a9c1e-...`). It uses no shared file, so processes cannot race. The ids contain dashes, so a new id can never equal one of the old numeric ids. The `dir` parameter stays so that callers do not break, but the function no longer uses it.\n\nThis change has a limit. The uniqueness is random, with 122 random bits, so a repeat is possible in theory but not in practice. If you need a strict guarantee, each id must claim a marker file in `dir`, with one file per id.\n\nI added `ids_test.go`, which calls `NewID` 2000 times at once and checks for duplicates and bad characters.\n\n**TLDR**\nThe cause was an unlocked read and write of the `next` file. `NewID` now returns random UUID-form ids, and old numeric ids cannot collide with them.\nRun `go test ./...`, because I could not.",
+    "ttft_ms": 3407,
+    "type": "result",
+    "duration_ms": 34270,
+    "uuid": "e34fee52-0ce1-4c0e-a7ba-8462ee0df7f5",
+    "ttft_stream_ms": 2304,
+    "time_to_request_ms": 694,
+    "first_content_frame_ms": 2305,
+    "queued_turn_count": 0,
+    "result_index": 0
+  },
+  "test_output": "ok  \ttask\t0.622s\n"
+}

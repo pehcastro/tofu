@@ -1,0 +1,217 @@
+{
+  "principle": "principle-build-the-lever",
+  "arm": "rule-on",
+  "task": "05-errors-is",
+  "passed": true,
+  "diff_lines": 462,
+  "models_reported": [
+    "claude-opus-5-5"
+  ],
+  "cli_version": "2.1.283 (Claude Code)",
+  "credential_kind": "subscription",
+  "wire": "claude -p",
+  "machine": "DESKTOP-AHUN9RO",
+  "started": "2026-09-27T20:06:06.3237555-03:00",
+  "wall_ms": 176932,
+  "claude_output": {
+    "duration_api_ms": 152406,
+    "stop_reason": "end_turn",
+    "session_id": "118e73b5-9472-43c4-a5be-79d3f7c4f526",
+    "total_cost_usd": 0.8503729999999999,
+    "usage": {
+      "input_tokens": 48,
+      "cache_creation_input_tokens": 40692,
+      "cache_read_input_tokens": 1059725,
+      "output_tokens": 15635,
+      "output_tokens_details": {
+        "thinking_tokens": 2990
+      },
+      "server_tool_use": {
+        "web_search_requests": 0,
+        "web_fetch_requests": 0
+      },
+      "service_tier": "standard",
+      "cache_creation": {
+        "ephemeral_1h_input_tokens": 40692,
+        "ephemeral_5m_input_tokens": 0
+      },
+      "inference_geo": "not_available",
+      "iterations": [
+        {
+          "input_tokens": 2,
+          "output_tokens": 652,
+          "cache_read_input_tokens": 56116,
+          "cache_creation_input_tokens": 142,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 142
+          },
+          "type": "message"
+        }
+      ],
+      "speed": "standard"
+    },
+    "modelUsage": {
+      "claude-opus-5-5": {
+        "inputTokens": 48,
+        "outputTokens": 15635,
+        "cacheReadInputTokens": 1059725,
+        "cacheCreationInputTokens": 40692,
+        "webSearchRequests": 0,
+        "costUSD": 0.8503729999999999,
+        "contextWindow": 1000000,
+        "maxOutputTokens": 128000,
+        "thinkingTokens": 2990,
+        "canonicalModel": "claude-opus-5-5",
+        "provider": "firstParty",
+        "costBasis": "list"
+      }
+    },
+    "permission_denials": [
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_01UrfndkqprLNi6EYu89w3L8",
+        "tool_input": {
+          "command": "cd \"C:/Users/Luiz/AppData/Local/Temp/tofu-principle-1386085804\" \u0026\u0026 git ls-files \u0026\u0026 rtk read errors.go \u0026\u0026 rtk grep -rn \"Error()\\|err.Error\\|strings.Contains\" --include=*.go ."
+        }
+      },
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_01K3hw9aRte3XN2v9MPyEm95",
+        "tool_input": {
+          "command": "cd \"C:/Users/Luiz/AppData/Local/Temp/tofu-principle-1386085804\" \u0026\u0026 go version \u0026\u0026 rtk read go.mod"
+        }
+      },
+      {
+        "tool_name": "PowerShell",
+        "tool_use_id": "toolu_01WWBqKqWwiB1byAMHTysN1F",
+        "tool_input": {
+          "command": "Copy-Item cache.go $env:TEMP\\cache.hand.go; git checkout -- cache.go; go run ./tools/errtextfix -w .; \"exit=$LASTEXITCODE\"; git diff --no-index $env:TEMP\\cache.hand.go cache.go; \"diff=$LASTEXITCODE\"",
+          "description": "Run codemod, diff against hand edit"
+        }
+      },
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_01FMeZLsBkJ4g47kBFYEH5xy",
+        "tool_input": {
+          "command": "cd /c/Users/Luiz/AppData/Local/Temp/tofu-principle-1386085804; cp cache.go /tmp/cache.hand.go; git checkout -- cache.go; go run ./tools/errtextfix -w .; echo exit=$?; rtk git diff --no-index /tmp/cache.hand.go cache.go; echo diff=$?",
+          "description": "Run codemod, diff against hand edit"
+        }
+      },
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_01YEnxQanPLmC13D9BSMAtAs",
+        "tool_input": {
+          "command": "cp /c/Users/Luiz/AppData/Local/Temp/tofu-principle-1386085804/cache.go /tmp/cache.hand.go",
+          "description": "Save hand-edited cache.go"
+        }
+      },
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_01GGGs4546h3QzUn17Eg659y",
+        "tool_input": {
+          "command": "git -C /c/Users/Luiz/AppData/Local/Temp/tofu-principle-1386085804 checkout -- cache.go",
+          "description": "Restore original cache.go"
+        }
+      },
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_01F9su6b9DhSAFvAG97Sy6gM",
+        "tool_input": {
+          "command": "rtk git -C /c/Users/Luiz/AppData/Local/Temp/tofu-principle-1386085804 status --short",
+          "description": "Confirm cache.go matches original"
+        }
+      },
+      {
+        "tool_name": "PowerShell",
+        "tool_use_id": "toolu_01GvoYuoDYb32WKas8iYYn2j",
+        "tool_input": {
+          "command": "go run ./tools/errtextfix -w .",
+          "description": "Run codemod on package"
+        }
+      },
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_018HafMzCHLzsY1otsVPnJFT",
+        "tool_input": {
+          "command": "rtk git diff --no-index tools/errtextfix/testdata/cache.hand.go.txt cache.go",
+          "description": "Diff codemod output against hand edit"
+        }
+      },
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_01BZtT4tg3xWctAPAx4WWsvq",
+        "tool_input": {
+          "command": "rtk git diff -- audit.go http.go",
+          "description": "Show codemod changes to other files"
+        }
+      },
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_01KEJtvC6u5xjo2yD1SQ3tGP",
+        "tool_input": {
+          "command": "rtk go vet ./...",
+          "description": "Vet the package"
+        }
+      },
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_01Lo5mtPvq2BH3HYX28muvYu",
+        "tool_input": {
+          "command": "rtk go test ./...",
+          "description": "Build and run tests"
+        }
+      },
+      {
+        "tool_name": "PowerShell",
+        "tool_use_id": "toolu_01JPNuxjAqKKCDWzAxYCUpFf",
+        "tool_input": {
+          "command": "go test ./...",
+          "description": "Build and run tests"
+        }
+      }
+    ],
+    "terminal_reason": "completed",
+    "fast_mode_state": "off",
+    "fast_mode_disabled_reason": "sdk_opt_in_required",
+    "subagent_stats": {
+      "spawned": 0,
+      "requested": {
+        "background": 0,
+        "foreground": 0,
+        "unset": 0
+      },
+      "started_in_background": 0,
+      "max_depth": 0,
+      "spawned_by_subagents": 0,
+      "completed": 0,
+      "failed": 0,
+      "killed": {
+        "parent": 0,
+        "user": 0,
+        "system": 0
+      },
+      "refused": {
+        "depth_limit": 0,
+        "concurrency_limit": 0,
+        "budget": 0
+      },
+      "by_type": {}
+    },
+    "is_error": false,
+    "num_turns": 44,
+    "subtype": "success",
+    "api_error_status": null,
+    "result": "I replaced all 9 error-text comparisons in `cache.go`, `audit.go` and `http.go` with `errors.Is` against `ErrNotFound`, `ErrExpired` and `ErrDenied`. The tests are not run: `go test` and `go vet` need your approval.\n\n- **The tool:** `tools/errtextfix/main.go`. Run it with `go run ./tools/errtextfix -w .`. It prints the location of any `.Error()` call it cannot rewrite.\n- **Check against my hand edit:** I edited `cache.go` by hand first and saved it as `tools/errtextfix/testdata/cache.hand.go.txt`. I then reset the files and ran the tool. Its `cache.go` output is the same as the hand edit. The diff command needed approval, so I compared the two by reading them. A second run on files it had already fixed changed nothing.\n- **New test:** `errors_test.go` checks that a wrapped error gives the same result as a bare one in all five functions.\n- **One change in behavior:** `http.go` used `strings.Contains(err.Error(), \"expired\")`, so any error with \"expired\" in its text returned 410. Now only an error that is or wraps `ErrExpired` returns 410.\n- **Other changes:** `http.go` no longer imports `strings`, and `Retryable` no longer has the `msg` variable.\n\n**TLDR**\nAll 9 comparisons now use `errors.Is`. The tool is `tools/errtextfix`, and its output is the same as my hand edit of `cache.go`.\nTests not run: approve `go test ./...`. `StatusCode` now returns 410 only for `ErrExpired`, not for any error whose text has \"expired\".",
+    "ttft_ms": 2847,
+    "type": "result",
+    "duration_ms": 172483,
+    "uuid": "af6f565c-5943-4d38-8e81-73e44ee13bc4",
+    "ttft_stream_ms": 1983,
+    "time_to_request_ms": 619,
+    "first_content_frame_ms": 1984,
+    "queued_turn_count": 0,
+    "result_index": 0
+  },
+  "test_output": "ok  \ttask\t0.382s\n?   \ttask/tools/errtextfix\t[no test files]\n"
+}

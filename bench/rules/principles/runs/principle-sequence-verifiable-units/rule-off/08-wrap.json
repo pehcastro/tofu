@@ -1,0 +1,146 @@
+{
+  "principle": "principle-sequence-verifiable-units",
+  "arm": "rule-off",
+  "task": "08-wrap",
+  "passed": true,
+  "diff_lines": 91,
+  "models_reported": [
+    "claude-opus-5-5"
+  ],
+  "cli_version": "2.1.283 (Claude Code)",
+  "credential_kind": "subscription",
+  "wire": "claude -p",
+  "machine": "DESKTOP-AHUN9RO",
+  "started": "2026-09-27T21:21:51.5740403-03:00",
+  "wall_ms": 46239,
+  "claude_output": {
+    "duration_api_ms": 35488,
+    "stop_reason": "end_turn",
+    "session_id": "4074084d-e721-4aa7-ae15-1c493b2cd6c1",
+    "total_cost_usd": 0.32460819999999996,
+    "usage": {
+      "input_tokens": 18,
+      "cache_creation_input_tokens": 23835,
+      "cache_read_input_tokens": 311581,
+      "output_tokens": 3577,
+      "output_tokens_details": {
+        "thinking_tokens": 751
+      },
+      "server_tool_use": {
+        "web_search_requests": 0,
+        "web_fetch_requests": 0
+      },
+      "service_tier": "standard",
+      "cache_creation": {
+        "ephemeral_1h_input_tokens": 23835,
+        "ephemeral_5m_input_tokens": 0
+      },
+      "inference_geo": "not_available",
+      "iterations": [
+        {
+          "input_tokens": 2,
+          "output_tokens": 659,
+          "cache_read_input_tokens": 39286,
+          "cache_creation_input_tokens": 115,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 115
+          },
+          "type": "message"
+        }
+      ],
+      "speed": "standard"
+    },
+    "modelUsage": {
+      "claude-opus-5-5": {
+        "inputTokens": 18,
+        "outputTokens": 3577,
+        "cacheReadInputTokens": 311581,
+        "cacheCreationInputTokens": 23835,
+        "webSearchRequests": 0,
+        "costUSD": 0.32460819999999996,
+        "contextWindow": 1000000,
+        "maxOutputTokens": 128000,
+        "thinkingTokens": 751,
+        "canonicalModel": "claude-opus-5-5",
+        "provider": "firstParty",
+        "costBasis": "list"
+      }
+    },
+    "permission_denials": [
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_0186zKgbEHHXoRuemUSDwLaz",
+        "tool_input": {
+          "command": "cd \"C:/Users/Luiz/AppData/Local/Temp/tofu-principle-1197520160\" \u0026\u0026 rtk ls \u0026\u0026 rtk read *.go go.mod 2\u003e/dev/null"
+        }
+      },
+      {
+        "tool_name": "PowerShell",
+        "tool_use_id": "toolu_013oq1iMPVh6YYcyHjBa3j1o",
+        "tool_input": {
+          "command": "go test ./... ; Remove-Item scratch_test.go -Confirm:$false",
+          "description": "Run tests then remove scratch test"
+        }
+      },
+      {
+        "tool_name": "PowerShell",
+        "tool_use_id": "toolu_01S7bgmBPGCtWJGePSK7bTCD",
+        "tool_input": {
+          "command": "go test ./...",
+          "description": "Run tests"
+        }
+      },
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_01Kigdkt2ZzDVHV5kpDJTgUX",
+        "tool_input": {
+          "command": "rtk go test -v",
+          "description": "Run tests"
+        }
+      }
+    ],
+    "terminal_reason": "completed",
+    "fast_mode_state": "off",
+    "fast_mode_disabled_reason": "sdk_opt_in_required",
+    "subagent_stats": {
+      "spawned": 0,
+      "requested": {
+        "background": 0,
+        "foreground": 0,
+        "unset": 0
+      },
+      "started_in_background": 0,
+      "max_depth": 0,
+      "spawned_by_subagents": 0,
+      "completed": 0,
+      "failed": 0,
+      "killed": {
+        "parent": 0,
+        "user": 0,
+        "system": 0
+      },
+      "refused": {
+        "depth_limit": 0,
+        "concurrency_limit": 0,
+        "budget": 0
+      },
+      "by_type": {}
+    },
+    "is_error": false,
+    "num_turns": 12,
+    "subtype": "success",
+    "api_error_status": null,
+    "result": "I rewrote `Wrap` in `wrap.go`, but I have not run any tests. Every `go test` call needed approval, and this session could not get it.\n\nThe new version splits the text into paragraphs of words first, then fills each line and counts length in runes. That covers your rules. I checked it by hand against the cases in `scratch_test.go`, and `TestWrapShort` should still pass.\n\nA carriage return (`\\r`) counts as part of a word, since your rules name only spaces, tabs and newlines. So text with Windows line endings will not wrap correctly.\n\nTo check, run `go test`. `scratch_test.go` is a test file I added with the edge cases. Delete it, or move its cases into `wrap_test.go`.",
+    "ttft_ms": 2538,
+    "type": "result",
+    "duration_ms": 41711,
+    "uuid": "824276be-5c1c-4876-871c-6297133221dd",
+    "ttft_stream_ms": 1432,
+    "time_to_request_ms": 623,
+    "first_content_frame_ms": 1433,
+    "queued_turn_count": 0,
+    "result_index": 0
+  },
+  "test_output": "ok  \ttask\t0.360s\n"
+}

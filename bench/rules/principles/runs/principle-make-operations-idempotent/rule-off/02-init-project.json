@@ -1,0 +1,130 @@
+{
+  "principle": "principle-make-operations-idempotent",
+  "arm": "rule-off",
+  "task": "02-init-project",
+  "passed": false,
+  "diff_lines": 43,
+  "models_reported": [
+    "claude-opus-5-5"
+  ],
+  "cli_version": "2.1.283 (Claude Code)",
+  "credential_kind": "subscription",
+  "wire": "claude -p",
+  "machine": "DESKTOP-AHUN9RO",
+  "started": "2026-09-27T20:25:43.8869501-03:00",
+  "wall_ms": 27262,
+  "claude_output": {
+    "duration_api_ms": 19234,
+    "stop_reason": "end_turn",
+    "session_id": "96c87abf-e28d-475d-9540-41cbee9aff79",
+    "total_cost_usd": 0.2390068,
+    "usage": {
+      "input_tokens": 12,
+      "cache_creation_input_tokens": 21399,
+      "cache_read_input_tokens": 192734,
+      "output_tokens": 1461,
+      "output_tokens_details": {
+        "thinking_tokens": 226
+      },
+      "server_tool_use": {
+        "web_search_requests": 0,
+        "web_fetch_requests": 0
+      },
+      "service_tier": "standard",
+      "cache_creation": {
+        "ephemeral_1h_input_tokens": 21399,
+        "ephemeral_5m_input_tokens": 0
+      },
+      "inference_geo": "not_available",
+      "iterations": [
+        {
+          "input_tokens": 2,
+          "output_tokens": 252,
+          "cache_read_input_tokens": 36778,
+          "cache_creation_input_tokens": 187,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 187
+          },
+          "type": "message"
+        }
+      ],
+      "speed": "standard"
+    },
+    "modelUsage": {
+      "claude-opus-5-5": {
+        "inputTokens": 12,
+        "outputTokens": 1461,
+        "cacheReadInputTokens": 192734,
+        "cacheCreationInputTokens": 21399,
+        "webSearchRequests": 0,
+        "costUSD": 0.2390068,
+        "contextWindow": 1000000,
+        "maxOutputTokens": 128000,
+        "thinkingTokens": 226,
+        "canonicalModel": "claude-opus-5-5",
+        "provider": "firstParty",
+        "costBasis": "list"
+      }
+    },
+    "permission_denials": [
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_01EnAVPmJnXUTRu2YLyN5Bms",
+        "tool_input": {
+          "command": "cd \"C:/Users/Luiz/AppData/Local/Temp/tofu-principle-3364363365\" \u0026\u0026 rtk ls -la \u0026\u0026 rtk read *.go go.mod 2\u003e/dev/null"
+        }
+      },
+      {
+        "tool_name": "PowerShell",
+        "tool_use_id": "toolu_01VM1wM1wxSVXiepPUjtmDyX",
+        "tool_input": {
+          "command": "go vet ./...; go build ./...",
+          "description": "Vet and build the package"
+        }
+      }
+    ],
+    "terminal_reason": "completed",
+    "fast_mode_state": "off",
+    "fast_mode_disabled_reason": "sdk_opt_in_required",
+    "subagent_stats": {
+      "spawned": 0,
+      "requested": {
+        "background": 0,
+        "foreground": 0,
+        "unset": 0
+      },
+      "started_in_background": 0,
+      "max_depth": 0,
+      "spawned_by_subagents": 0,
+      "completed": 0,
+      "failed": 0,
+      "killed": {
+        "parent": 0,
+        "user": 0,
+        "system": 0
+      },
+      "refused": {
+        "depth_limit": 0,
+        "concurrency_limit": 0,
+        "budget": 0
+      },
+      "by_type": {}
+    },
+    "is_error": false,
+    "num_turns": 7,
+    "subtype": "success",
+    "api_error_status": null,
+    "result": "I implemented `Init` in `init.go`, but it is not compiled or tested. The `go vet` / `go build` call needed approval and did not run.\n\n- **Safe to run again:** it creates `dir/data` (and `dir`) with `MkdirAll`. If `config.json` already exists, it leaves the file alone so hand edits are kept.\n- **Safe if killed:** it writes the config to `config.json.tmp`, flushes it to disk, then renames it to `config.json`. A kill during the write leaves no half-written `config.json`. The next run overwrites any leftover `.tmp` file.\n- **Limit:** a `config.json` that a user broke by hand is kept as is. `Init` does not check whether it is valid JSON.",
+    "ttft_ms": 2636,
+    "type": "result",
+    "duration_ms": 22923,
+    "uuid": "9fc9e5fc-8508-4fb2-a542-61b4178c5cac",
+    "ttft_stream_ms": 1896,
+    "time_to_request_ms": 569,
+    "first_content_frame_ms": 1897,
+    "queued_turn_count": 0,
+    "result_index": 0
+  },
+  "test_output": "--- FAIL: TestCheckRecoversFromKilledWrite (0.00s)\n    zz_check_test.go:62: config.json does not parse: unexpected end of JSON input: \"\"\nFAIL\nFAIL\ttask\t0.493s\nFAIL\n"
+}

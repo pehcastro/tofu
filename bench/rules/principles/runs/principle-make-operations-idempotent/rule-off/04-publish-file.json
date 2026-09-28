@@ -1,0 +1,139 @@
+{
+  "principle": "principle-make-operations-idempotent",
+  "arm": "rule-off",
+  "task": "04-publish-file",
+  "passed": true,
+  "diff_lines": 122,
+  "models_reported": [
+    "claude-opus-5-5"
+  ],
+  "cli_version": "2.1.283 (Claude Code)",
+  "credential_kind": "subscription",
+  "wire": "claude -p",
+  "machine": "DESKTOP-AHUN9RO",
+  "started": "2026-09-27T20:30:40.8628714-03:00",
+  "wall_ms": 46077,
+  "claude_output": {
+    "duration_api_ms": 36059,
+    "stop_reason": "end_turn",
+    "session_id": "96446601-f268-41e5-bad7-c17d1b957bcd",
+    "total_cost_usd": 0.305833,
+    "usage": {
+      "input_tokens": 16,
+      "cache_creation_input_tokens": 23420,
+      "cache_read_input_tokens": 271045,
+      "output_tokens": 3210,
+      "output_tokens_details": {
+        "thinking_tokens": 795
+      },
+      "server_tool_use": {
+        "web_search_requests": 0,
+        "web_fetch_requests": 0
+      },
+      "service_tier": "standard",
+      "cache_creation": {
+        "ephemeral_1h_input_tokens": 23420,
+        "ephemeral_5m_input_tokens": 0
+      },
+      "inference_geo": "not_available",
+      "iterations": [
+        {
+          "input_tokens": 2,
+          "output_tokens": 252,
+          "cache_read_input_tokens": 38845,
+          "cache_creation_input_tokens": 141,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 141
+          },
+          "type": "message"
+        }
+      ],
+      "speed": "standard"
+    },
+    "modelUsage": {
+      "claude-opus-5-5": {
+        "inputTokens": 16,
+        "outputTokens": 3210,
+        "cacheReadInputTokens": 271045,
+        "cacheCreationInputTokens": 23420,
+        "webSearchRequests": 0,
+        "costUSD": 0.305833,
+        "contextWindow": 1000000,
+        "maxOutputTokens": 128000,
+        "thinkingTokens": 795,
+        "canonicalModel": "claude-opus-5-5",
+        "provider": "firstParty",
+        "costBasis": "list"
+      }
+    },
+    "permission_denials": [
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_01BPfeKkC9m4Es3wxy9bxjTV",
+        "tool_input": {
+          "command": "rtk ls -la \u0026\u0026 rtk read *.go go.mod 2\u003e/dev/null",
+          "description": "List files and show Go sources"
+        }
+      },
+      {
+        "tool_name": "PowerShell",
+        "tool_use_id": "toolu_01BrfcNmx2C8r65vrYcJtipK",
+        "tool_input": {
+          "command": "go vet ./...; go test ./...",
+          "description": "Vet and test the package"
+        }
+      },
+      {
+        "tool_name": "PowerShell",
+        "tool_use_id": "toolu_01S8YZWUE8poi2UL6w6iYAUg",
+        "tool_input": {
+          "command": "go test ./...",
+          "description": "Run package tests"
+        }
+      }
+    ],
+    "terminal_reason": "completed",
+    "fast_mode_state": "off",
+    "fast_mode_disabled_reason": "sdk_opt_in_required",
+    "subagent_stats": {
+      "spawned": 0,
+      "requested": {
+        "background": 0,
+        "foreground": 0,
+        "unset": 0
+      },
+      "started_in_background": 0,
+      "max_depth": 0,
+      "spawned_by_subagents": 0,
+      "completed": 0,
+      "failed": 0,
+      "killed": {
+        "parent": 0,
+        "user": 0,
+        "system": 0
+      },
+      "refused": {
+        "depth_limit": 0,
+        "concurrency_limit": 0,
+        "budget": 0
+      },
+      "by_type": {}
+    },
+    "is_error": false,
+    "num_turns": 10,
+    "subtype": "success",
+    "api_error_status": null,
+    "result": "`Publish` in `publish.go` writes to a temp file in the same folder as `dst`. It syncs that file to disk, then renames it over `dst`. If reading `src` fails, `dst` does not change and the temp file is deleted. The new file keeps the old file's permissions.\n\nI did not run the tests: `go test` needs your approval. I added `publish_test.go`. It checks that `dst` stays unchanged when a read fails partway.\n\nOpen issues:\n- If the process restarts during a copy, it leaves an orphan `.\u003cname\u003e.tmp-*` file. Customers never see it, but nothing deletes it.\n- On Windows, the rename fails if the web server opens `dst` without delete sharing. Most servers use delete sharing.",
+    "ttft_ms": 3076,
+    "type": "result",
+    "duration_ms": 41697,
+    "uuid": "73fb95c0-369f-43a5-9700-4eae520ac92c",
+    "ttft_stream_ms": 2047,
+    "time_to_request_ms": 618,
+    "first_content_frame_ms": 2047,
+    "queued_turn_count": 0,
+    "result_index": 0
+  },
+  "test_output": "ok  \ttask\t0.442s\n"
+}

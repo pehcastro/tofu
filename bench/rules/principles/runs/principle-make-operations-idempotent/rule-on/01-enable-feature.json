@@ -1,0 +1,139 @@
+{
+  "principle": "principle-make-operations-idempotent",
+  "arm": "rule-on",
+  "task": "01-enable-feature",
+  "passed": true,
+  "diff_lines": 233,
+  "models_reported": [
+    "claude-opus-5-5"
+  ],
+  "cli_version": "2.1.283 (Claude Code)",
+  "credential_kind": "subscription",
+  "wire": "claude -p",
+  "machine": "DESKTOP-AHUN9RO",
+  "started": "2026-09-27T20:23:45.8653346-03:00",
+  "wall_ms": 59988,
+  "claude_output": {
+    "duration_api_ms": 49509,
+    "stop_reason": "end_turn",
+    "session_id": "1170b346-57d9-40d5-b0e0-155e6f9c7f1e",
+    "total_cost_usd": 0.3680782,
+    "usage": {
+      "input_tokens": 16,
+      "cache_creation_input_tokens": 25623,
+      "cache_read_input_tokens": 277651,
+      "output_tokens": 5375,
+      "output_tokens_details": {
+        "thinking_tokens": 1119
+      },
+      "server_tool_use": {
+        "web_search_requests": 0,
+        "web_fetch_requests": 0
+      },
+      "service_tier": "standard",
+      "cache_creation": {
+        "ephemeral_1h_input_tokens": 25623,
+        "ephemeral_5m_input_tokens": 0
+      },
+      "inference_geo": "not_available",
+      "iterations": [
+        {
+          "input_tokens": 2,
+          "output_tokens": 371,
+          "cache_read_input_tokens": 41048,
+          "cache_creation_input_tokens": 141,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 141
+          },
+          "type": "message"
+        }
+      ],
+      "speed": "standard"
+    },
+    "modelUsage": {
+      "claude-opus-5-5": {
+        "inputTokens": 16,
+        "outputTokens": 5375,
+        "cacheReadInputTokens": 277651,
+        "cacheCreationInputTokens": 25623,
+        "webSearchRequests": 0,
+        "costUSD": 0.3680782,
+        "contextWindow": 1000000,
+        "maxOutputTokens": 128000,
+        "thinkingTokens": 1119,
+        "canonicalModel": "claude-opus-5-5",
+        "provider": "firstParty",
+        "costBasis": "list"
+      }
+    },
+    "permission_denials": [
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_01NZ6Ri1ySVZ29uUVrnkCkSW",
+        "tool_input": {
+          "command": "cd \"C:/Users/Luiz/AppData/Local/Temp/tofu-principle-3293939964\" \u0026\u0026 rtk ls -la \u0026\u0026 rtk read *.go go.mod 2\u003e/dev/null",
+          "description": "List files and show Go sources"
+        }
+      },
+      {
+        "tool_name": "PowerShell",
+        "tool_use_id": "toolu_01LopQxWe13KXwdRkbkPqGbJ",
+        "tool_input": {
+          "command": "go vet ./...; go test ./...",
+          "description": "Vet and test the package"
+        }
+      },
+      {
+        "tool_name": "PowerShell",
+        "tool_use_id": "toolu_013EUZ5PjMMEdAPWHgpHj8jJ",
+        "tool_input": {
+          "command": "go test ./...",
+          "description": "Run package tests"
+        }
+      }
+    ],
+    "terminal_reason": "completed",
+    "fast_mode_state": "off",
+    "fast_mode_disabled_reason": "sdk_opt_in_required",
+    "subagent_stats": {
+      "spawned": 0,
+      "requested": {
+        "background": 0,
+        "foreground": 0,
+        "unset": 0
+      },
+      "started_in_background": 0,
+      "max_depth": 0,
+      "spawned_by_subagents": 0,
+      "completed": 0,
+      "failed": 0,
+      "killed": {
+        "parent": 0,
+        "user": 0,
+        "system": 0
+      },
+      "refused": {
+        "depth_limit": 0,
+        "concurrency_limit": 0,
+        "budget": 0
+      },
+      "by_type": {}
+    },
+    "is_error": false,
+    "num_turns": 10,
+    "subtype": "success",
+    "api_error_status": null,
+    "result": "I wrote `EnableFeature` in `feature.go` and added tests in `feature_test.go`, but I have not run them. The environment blocked `go test`, so run `go test ./...` yourself.\n\nHow it handles repeat runs and crashes:\n- **Running twice:** it reads the current file and compares the text. If the feature line already says `on`, it writes nothing.\n- **Crash during a write:** it writes to a temp file and then renames it over the config. A crash leaves the old file or the new one, never a half-written file.\n- **Leftover temp files:** a crashed run can leave a `.\u003cname\u003e.tmp-*` file behind. A later run deletes it once it is over 1 hour old.\n- **Existing lines:** other lines stay exactly as they were, including CRLF line endings. If the feature line is there with another value, it changes in place to `on`. Duplicate lines for the same feature are merged into one.\n\nI did not add a lock. If two runs write *different* keys to the same file at the same moment, one can overwrite the other's change. A retried deploy that sets the same feature is safe, since both runs write the same result.",
+    "ttft_ms": 2819,
+    "type": "result",
+    "duration_ms": 55710,
+    "uuid": "2184a77e-26eb-4a8c-8c55-fb1edecb976e",
+    "ttft_stream_ms": 1428,
+    "time_to_request_ms": 624,
+    "first_content_frame_ms": 1428,
+    "queued_turn_count": 0,
+    "result_index": 0
+  },
+  "test_output": "ok  \ttask\t0.506s\n"
+}

@@ -1,0 +1,146 @@
+{
+  "principle": "principle-sequence-verifiable-units",
+  "arm": "rule-off",
+  "task": "07-token-bucket",
+  "passed": true,
+  "diff_lines": 123,
+  "models_reported": [
+    "claude-opus-5-5"
+  ],
+  "cli_version": "2.1.283 (Claude Code)",
+  "credential_kind": "subscription",
+  "wire": "claude -p",
+  "machine": "DESKTOP-AHUN9RO",
+  "started": "2026-09-27T21:20:16.8192748-03:00",
+  "wall_ms": 46717,
+  "claude_output": {
+    "duration_api_ms": 35773,
+    "stop_reason": "end_turn",
+    "session_id": "531e5477-b76f-4220-8697-a72a006e2636",
+    "total_cost_usd": 0.3227886,
+    "usage": {
+      "input_tokens": 16,
+      "cache_creation_input_tokens": 24191,
+      "cache_read_input_tokens": 275383,
+      "output_tokens": 3706,
+      "output_tokens_details": {
+        "thinking_tokens": 766
+      },
+      "server_tool_use": {
+        "web_search_requests": 0,
+        "web_fetch_requests": 0
+      },
+      "service_tier": "standard",
+      "cache_creation": {
+        "ephemeral_1h_input_tokens": 24191,
+        "ephemeral_5m_input_tokens": 0
+      },
+      "inference_geo": "not_available",
+      "iterations": [
+        {
+          "input_tokens": 2,
+          "output_tokens": 444,
+          "cache_read_input_tokens": 39640,
+          "cache_creation_input_tokens": 117,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 117
+          },
+          "type": "message"
+        }
+      ],
+      "speed": "standard"
+    },
+    "modelUsage": {
+      "claude-opus-5-5": {
+        "inputTokens": 16,
+        "outputTokens": 3706,
+        "cacheReadInputTokens": 275383,
+        "cacheCreationInputTokens": 24191,
+        "webSearchRequests": 0,
+        "costUSD": 0.3227886,
+        "contextWindow": 1000000,
+        "maxOutputTokens": 128000,
+        "thinkingTokens": 766,
+        "canonicalModel": "claude-opus-5-5",
+        "provider": "firstParty",
+        "costBasis": "list"
+      }
+    },
+    "permission_denials": [
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_0176QMUAPY53Qu1bEdUPbgmo",
+        "tool_input": {
+          "command": "cd \"C:/Users/Luiz/AppData/Local/Temp/tofu-principle-4067606324\" \u0026\u0026 rtk ls -la \u0026\u0026 rtk read *.go go.mod 2\u003e/dev/null"
+        }
+      },
+      {
+        "tool_name": "PowerShell",
+        "tool_use_id": "toolu_01PaGPBJvSzDAvQz9qQAeEkv",
+        "tool_input": {
+          "command": "go vet ./...; go test ./...",
+          "description": "Vet and test the package"
+        }
+      },
+      {
+        "tool_name": "PowerShell",
+        "tool_use_id": "toolu_01GF885qmGc7MsAyuwmG2HgE",
+        "tool_input": {
+          "command": "go test ./...",
+          "description": "Run package tests"
+        }
+      },
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_01J78tEjAPqguiGrNRH5LCyK",
+        "tool_input": {
+          "command": "rtk go test ./...",
+          "description": "Run package tests"
+        }
+      }
+    ],
+    "terminal_reason": "completed",
+    "fast_mode_state": "off",
+    "fast_mode_disabled_reason": "sdk_opt_in_required",
+    "subagent_stats": {
+      "spawned": 0,
+      "requested": {
+        "background": 0,
+        "foreground": 0,
+        "unset": 0
+      },
+      "started_in_background": 0,
+      "max_depth": 0,
+      "spawned_by_subagents": 0,
+      "completed": 0,
+      "failed": 0,
+      "killed": {
+        "parent": 0,
+        "user": 0,
+        "system": 0
+      },
+      "refused": {
+        "depth_limit": 0,
+        "concurrency_limit": 0,
+        "budget": 0
+      },
+      "by_type": {}
+    },
+    "is_error": false,
+    "num_turns": 11,
+    "subtype": "success",
+    "api_error_status": null,
+    "result": "I replaced the fixed window in `limit.go` with a token bucket, but I could not run the tests. Every `go test` call needs approval, and this session gets no approval prompt.\n\n**API changes**\n- The signature is now `New(rate float64, burst int)`.\n- `AllowN(now, n)` is new, and `Tokens(now) float64` is new.\n\n**Behavior you did not specify**\n- `AllowN` with `n == 0` returns true and takes nothing. A negative `n` returns false.\n- `Tokens` only reads. It does not move the limiter's clock forward.\n- I did not add a mutex, because the old limiter did not have one. The limiter is not safe to call from several goroutines at once.\n\n**Tests**\n- In `limit_test.go`, I changed `TestAllow` to `New(1, 2)` to match the new signature.\n- I added tests for:\n  - refill and the cap at burst\n  - no burst at a second boundary\n  - an `AllowN` failure that takes nothing\n  - `n` above burst\n  - an earlier `now` that does not move the clock back\n\n**TLDR**\nThe limiter is now a token bucket and `New` takes `(rate float64, burst int)`. I could not run the tests, because `go test` needs an approval that this session cannot give. Run `go test ./...` yourself.",
+    "ttft_ms": 2630,
+    "type": "result",
+    "duration_ms": 42270,
+    "uuid": "73b219ec-55c1-4fe1-992c-ccd79bc24836",
+    "ttft_stream_ms": 1506,
+    "time_to_request_ms": 638,
+    "first_content_frame_ms": 1507,
+    "queued_turn_count": 0,
+    "result_index": 0
+  },
+  "test_output": "ok  \ttask\t0.389s\n"
+}

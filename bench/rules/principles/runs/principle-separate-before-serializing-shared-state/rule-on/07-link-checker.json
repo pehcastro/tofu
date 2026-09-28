@@ -1,0 +1,150 @@
+{
+  "principle": "principle-separate-before-serializing-shared-state",
+  "arm": "rule-on",
+  "task": "07-link-checker",
+  "passed": false,
+  "diff_lines": 48,
+  "models_reported": [
+    "claude-opus-5-5"
+  ],
+  "cli_version": "2.1.283 (Claude Code)",
+  "credential_kind": "subscription",
+  "wire": "claude -p",
+  "machine": "DESKTOP-AHUN9RO",
+  "started": "2026-09-27T21:05:40.7641323-03:00",
+  "wall_ms": 43568,
+  "claude_output": {
+    "duration_api_ms": 30836,
+    "stop_reason": "end_turn",
+    "session_id": "c94e76b3-3644-4f03-b6f1-82fe1061a220",
+    "total_cost_usd": 0.297957,
+    "usage": {
+      "input_tokens": 20,
+      "cache_creation_input_tokens": 22811,
+      "cache_read_input_tokens": 347045,
+      "output_tokens": 2299,
+      "output_tokens_details": {
+        "thinking_tokens": 185
+      },
+      "server_tool_use": {
+        "web_search_requests": 0,
+        "web_fetch_requests": 0
+      },
+      "service_tier": "standard",
+      "cache_creation": {
+        "ephemeral_1h_input_tokens": 22811,
+        "ephemeral_5m_input_tokens": 0
+      },
+      "inference_geo": "not_available",
+      "iterations": [
+        {
+          "input_tokens": 2,
+          "output_tokens": 328,
+          "cache_read_input_tokens": 38158,
+          "cache_creation_input_tokens": 219,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 219
+          },
+          "type": "message"
+        }
+      ],
+      "speed": "standard"
+    },
+    "modelUsage": {
+      "claude-opus-5-5": {
+        "inputTokens": 20,
+        "outputTokens": 2299,
+        "cacheReadInputTokens": 347045,
+        "cacheCreationInputTokens": 22811,
+        "webSearchRequests": 0,
+        "costUSD": 0.297957,
+        "contextWindow": 1000000,
+        "maxOutputTokens": 128000,
+        "thinkingTokens": 185,
+        "canonicalModel": "claude-opus-5-5",
+        "provider": "firstParty",
+        "costBasis": "list"
+      }
+    },
+    "permission_denials": [
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_01LVBQowg2qUVQhTNfhd1pcu",
+        "tool_input": {
+          "command": "cat \u003e links_tmp_test.go \u003c\u003c'EOF'\npackage task\nimport (\"fmt\";\"testing\")\nfunc TestBroken(t *testing.T){\n var in, want []string\n for i:=0;i\u003c100000;i++{ s:=fmt.Sprintf(\"x/%d\",i); if i%3==0 {s=fmt.Sprintf(\"x/404/%d\",i); want=append(want,s)}; in=append(in,s)}\n for r:=0;r\u003c5;r++{ got:=Broken(in,16); if len(got)!=len(want){t.Fatal(len(got))}; for i:=range got{ if got[i]!=want[i]{t.Fatal(i)}}}\n}\nEOF\ngo vet ./... \u0026\u0026 (go test -race ./... 2\u003e\u00261 || go test ./... 2\u003e\u00261); rm links_tmp_test.go"
+        }
+      },
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_01U3ocbH96mPkWY6wsXjaGb5",
+        "tool_input": {
+          "command": "rtk go vet ./... \u0026\u0026 (go test -race ./... 2\u003e\u00261 || rtk go test -count=1 ./... 2\u003e\u00261); rm links_tmp_test.go"
+        }
+      },
+      {
+        "tool_name": "PowerShell",
+        "tool_use_id": "toolu_01YbdbD3gqYi5XaYDiNGEDcU",
+        "tool_input": {
+          "command": "go vet ./...; go test -count=1 ./..."
+        }
+      },
+      {
+        "tool_name": "PowerShell",
+        "tool_use_id": "toolu_012kUaBCmwtdR4qhFQ68PFJs",
+        "tool_input": {
+          "command": "go test -count=1 ./..."
+        }
+      },
+      {
+        "tool_name": "PowerShell",
+        "tool_use_id": "toolu_01PgLZcteDnFc9jjteuo5tNV",
+        "tool_input": {
+          "command": "Remove-Item links_tmp_test.go -Confirm:$false"
+        }
+      }
+    ],
+    "terminal_reason": "completed",
+    "fast_mode_state": "off",
+    "fast_mode_disabled_reason": "sdk_opt_in_required",
+    "subagent_stats": {
+      "spawned": 0,
+      "requested": {
+        "background": 0,
+        "foreground": 0,
+        "unset": 0
+      },
+      "started_in_background": 0,
+      "max_depth": 0,
+      "spawned_by_subagents": 0,
+      "completed": 0,
+      "failed": 0,
+      "killed": {
+        "parent": 0,
+        "user": 0,
+        "system": 0
+      },
+      "refused": {
+        "depth_limit": 0,
+        "concurrency_limit": 0,
+        "budget": 0
+      },
+      "by_type": {}
+    },
+    "is_error": false,
+    "num_turns": 11,
+    "subtype": "success",
+    "api_error_status": null,
+    "result": "I fixed `Broken` in `links.go`, but I could not run any tests. The permission prompts blocked `go test` and every other shell command.\n\n**Cause:** all the goroutines appended to one shared `broken` slice with no lock. When two appends happen at the same time, one of them is lost, which is why big sites gave shorter answers.\n\n**Fix:** the goroutines no longer share anything they write. I added a `failed []bool` with one slot per link, and each goroutine writes only the slots for its own chunk. After `wg.Wait()`, one loop collects the failing links in the order you gave them. The chunking is unchanged, so it still uses the given number of goroutines.\n\nI also wrote a test file, `links_tmp_test.go`, and could not delete it. It checks 100,000 links with 16 goroutines, five runs in a row. To check the fix, run `go test -race ./...`, then delete that file.",
+    "ttft_ms": 2407,
+    "type": "result",
+    "duration_ms": 39400,
+    "uuid": "470f0b32-06f3-4e21-8759-377f8c31ed5d",
+    "ttft_stream_ms": 1537,
+    "time_to_request_ms": 647,
+    "first_content_frame_ms": 1537,
+    "queued_turn_count": 0,
+    "result_index": 0
+  },
+  "test_output": "--- FAIL: TestBroken (0.03s)\n    links_tmp_test.go:21: 33535\nFAIL\nFAIL\ttask\t0.424s\nFAIL\n"
+}

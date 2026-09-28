@@ -1,0 +1,155 @@
+{
+  "principle": "principle-make-operations-idempotent",
+  "arm": "rule-on",
+  "task": "03-pid-file",
+  "passed": false,
+  "diff_lines": 277,
+  "models_reported": [
+    "claude-opus-5-5"
+  ],
+  "cli_version": "2.1.283 (Claude Code)",
+  "credential_kind": "subscription",
+  "wire": "claude -p",
+  "machine": "DESKTOP-AHUN9RO",
+  "started": "2026-09-27T20:26:26.3208227-03:00",
+  "wall_ms": 85424,
+  "claude_output": {
+    "duration_api_ms": 73142,
+    "stop_reason": "end_turn",
+    "session_id": "1908d54b-3839-4754-84a7-6f4c03cfa7c3",
+    "total_cost_usd": 0.4393684,
+    "usage": {
+      "input_tokens": 16,
+      "cache_creation_input_tokens": 28182,
+      "cache_read_input_tokens": 284742,
+      "output_tokens": 7845,
+      "output_tokens_details": {
+        "thinking_tokens": 2858
+      },
+      "server_tool_use": {
+        "web_search_requests": 0,
+        "web_fetch_requests": 0
+      },
+      "service_tier": "standard",
+      "cache_creation": {
+        "ephemeral_1h_input_tokens": 28182,
+        "ephemeral_5m_input_tokens": 0
+      },
+      "inference_geo": "not_available",
+      "iterations": [
+        {
+          "input_tokens": 2,
+          "output_tokens": 552,
+          "cache_read_input_tokens": 43598,
+          "cache_creation_input_tokens": 150,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 150
+          },
+          "type": "message"
+        }
+      ],
+      "speed": "standard"
+    },
+    "modelUsage": {
+      "claude-opus-5-5": {
+        "inputTokens": 16,
+        "outputTokens": 7845,
+        "cacheReadInputTokens": 284742,
+        "cacheCreationInputTokens": 28182,
+        "webSearchRequests": 0,
+        "costUSD": 0.4393684,
+        "contextWindow": 1000000,
+        "maxOutputTokens": 128000,
+        "thinkingTokens": 2858,
+        "canonicalModel": "claude-opus-5-5",
+        "provider": "firstParty",
+        "costBasis": "list"
+      }
+    },
+    "permission_denials": [
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_01G6S42FwAgwAJ3gUqakVWdn",
+        "tool_input": {
+          "command": "rtk ls -la \u0026\u0026 rtk read *.go go.mod 2\u003e/dev/null; go version",
+          "description": "List files and show Go sources"
+        }
+      },
+      {
+        "tool_name": "PowerShell",
+        "tool_use_id": "toolu_01WqhbijAqHfd6MF5UvSQL95",
+        "tool_input": {
+          "command": "go vet ./...; go test -count=1 ./...; $env:GOOS='linux'; go vet ./...; $env:GOOS='darwin'; go build ./...",
+          "description": "Vet and test; cross-check unix builds"
+        }
+      },
+      {
+        "tool_name": "PowerShell",
+        "tool_use_id": "toolu_01CMK6eJnf72WeTFnN96FgpF",
+        "tool_input": {
+          "command": "go vet ./...; go test -count=1 ./...",
+          "description": "Vet and run tests"
+        }
+      },
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_01V1qdJMuR6FouKG2R9g9Ybf",
+        "tool_input": {
+          "command": "GOOS=linux rtk go vet ./... \u0026\u0026 GOOS=darwin rtk go vet ./... \u0026\u0026 echo ok",
+          "description": "Vet the Linux and macOS builds"
+        }
+      },
+      {
+        "tool_name": "PowerShell",
+        "tool_use_id": "toolu_016Fw8ns5bBuCJgEp18JqYxU",
+        "tool_input": {
+          "command": "go test -count=1 ./...",
+          "description": "Run tests"
+        }
+      }
+    ],
+    "terminal_reason": "completed",
+    "fast_mode_state": "off",
+    "fast_mode_disabled_reason": "sdk_opt_in_required",
+    "subagent_stats": {
+      "spawned": 0,
+      "requested": {
+        "background": 0,
+        "foreground": 0,
+        "unset": 0
+      },
+      "started_in_background": 0,
+      "max_depth": 0,
+      "spawned_by_subagents": 0,
+      "completed": 0,
+      "failed": 0,
+      "killed": {
+        "parent": 0,
+        "user": 0,
+        "system": 0
+      },
+      "refused": {
+        "depth_limit": 0,
+        "concurrency_limit": 0,
+        "budget": 0
+      },
+      "by_type": {}
+    },
+    "is_error": false,
+    "num_turns": 13,
+    "subtype": "success",
+    "api_error_status": null,
+    "result": "I implemented `Acquire`, but I could not run it. The permission settings blocked every `go vet` and `go test` call, so nothing is compiled or tested yet.\n\nHow it works:\n- **One copy at a time:** the \"is it held?\" check and the pid write run under an OS lock on `path+\".lock\"`. The OS drops that lock when the process dies, even after a hard kill, so this lock never goes stale. The `.lock` file stays on disk on purpose.\n- **Stale pid file:** a missing file, bad contents, or the pid of a dead process counts as stale, and `Acquire` takes it over. Only a pid that is still running returns `ErrHeld`.\n- **Crash safety:** it writes the pid to `path.tmp` and then renames it onto `path`, so a crash never leaves a half-written pid file.\n- **Running twice:** calling `Acquire` again from the process that holds the file does nothing and succeeds. `release` removes the file only if it still holds our pid, and calling it twice is safe.\n\nNew files: `pidfile_unix.go` and `pidfile_windows.go`, which hold the OS-specific locking and the check for whether a pid is still running. There are no new dependencies. `pidfile_test.go` has tests that start real child processes for the running-holder, hard-kill and late-release cases.\n\nNOTE: if the old holder is dead and the OS reuses its pid for another program, `Acquire` returns `ErrHeld` and that night's report is skipped. It never lets two copies run.\n\nTo check it, run `go test ./...`, plus `GOOS=linux go vet ./...` for the Linux build.",
+    "ttft_ms": 2839,
+    "type": "result",
+    "duration_ms": 81135,
+    "uuid": "94bf65d8-50ea-4016-95a2-a101a6040313",
+    "ttft_stream_ms": 1534,
+    "time_to_request_ms": 582,
+    "first_content_frame_ms": 1534,
+    "queued_turn_count": 0,
+    "result_index": 0
+  },
+  "test_output": "--- FAIL: TestCheckHeldByLiveProcess (0.01s)\n    zz_check_test.go:28: second Acquire while held = \u003cnil\u003e, want ErrHeld\nFAIL\nFAIL\ttask\t0.696s\nFAIL\n"
+}

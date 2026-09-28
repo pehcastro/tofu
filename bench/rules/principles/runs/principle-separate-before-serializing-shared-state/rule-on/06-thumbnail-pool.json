@@ -1,0 +1,143 @@
+{
+  "principle": "principle-separate-before-serializing-shared-state",
+  "arm": "rule-on",
+  "task": "06-thumbnail-pool",
+  "passed": true,
+  "diff_lines": 16,
+  "models_reported": [
+    "claude-opus-5-5"
+  ],
+  "cli_version": "2.1.283 (Claude Code)",
+  "credential_kind": "subscription",
+  "wire": "claude -p",
+  "machine": "DESKTOP-AHUN9RO",
+  "started": "2026-09-27T21:04:31.5451339-03:00",
+  "wall_ms": 37429,
+  "claude_output": {
+    "duration_api_ms": 21969,
+    "stop_reason": "end_turn",
+    "session_id": "51e83037-beb7-4953-9be0-376695644a98",
+    "total_cost_usd": 0.281229,
+    "usage": {
+      "input_tokens": 18,
+      "cache_creation_input_tokens": 22486,
+      "cache_read_input_tokens": 309245,
+      "output_tokens": 1971,
+      "output_tokens_details": {
+        "thinking_tokens": 116
+      },
+      "server_tool_use": {
+        "web_search_requests": 0,
+        "web_fetch_requests": 0
+      },
+      "service_tier": "standard",
+      "cache_creation": {
+        "ephemeral_1h_input_tokens": 22486,
+        "ephemeral_5m_input_tokens": 0
+      },
+      "inference_geo": "not_available",
+      "iterations": [
+        {
+          "input_tokens": 2,
+          "output_tokens": 285,
+          "cache_read_input_tokens": 37870,
+          "cache_creation_input_tokens": 182,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 182
+          },
+          "type": "message"
+        }
+      ],
+      "speed": "standard"
+    },
+    "modelUsage": {
+      "claude-opus-5-5": {
+        "inputTokens": 18,
+        "outputTokens": 1971,
+        "cacheReadInputTokens": 309245,
+        "cacheCreationInputTokens": 22486,
+        "webSearchRequests": 0,
+        "costUSD": 0.281229,
+        "contextWindow": 1000000,
+        "maxOutputTokens": 128000,
+        "thinkingTokens": 116,
+        "canonicalModel": "claude-opus-5-5",
+        "provider": "firstParty",
+        "costBasis": "list"
+      }
+    },
+    "permission_denials": [
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_019kp4RRjwxeoqEts2jBZxfa",
+        "tool_input": {
+          "command": "cd \"C:/Users/Luiz/AppData/Local/Temp/tofu-principle-470959951\" \u0026\u0026 cat \u003e race_tmp_test.go \u003c\u003c'EOF'\npackage task\nimport \"testing\"\nfunc TestSizesRace(t *testing.T) {\n\tids := make([]int, 5000)\n\tfor i := range ids { ids[i] = i }\n\tr := Sizes(ids, 32)\n\tif len(r) != len(ids) { t.Fatal(len(r)) }\n\tfor _, id := range ids { if r[id] != thumbnail(id) { t.Fatal(id) } }\n}\nEOF\ngo vet ./... \u0026\u0026 (go test -race ./... 2\u003e\u00261 || go test ./... 2\u003e\u00261); rm race_tmp_test.go"
+        }
+      },
+      {
+        "tool_name": "PowerShell",
+        "tool_use_id": "toolu_01LgNW6NM3jU3zw7TAysECxe",
+        "tool_input": {
+          "command": "go vet ./...; go test -race -count=3 ./...; if (-not $?) { go test -count=3 ./... }; Remove-Item race_tmp_test.go"
+        }
+      },
+      {
+        "tool_name": "PowerShell",
+        "tool_use_id": "toolu_018fvTPPwnQNQ7SnS8tmnAsL",
+        "tool_input": {
+          "command": "go test -race -count=3 ./..."
+        }
+      },
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_01FEsqwSMBn8JEUFnzknfHUb",
+        "tool_input": {
+          "command": "cd \"C:/Users/Luiz/AppData/Local/Temp/tofu-principle-470959951\" \u0026\u0026 rtk go test -race -count=3 ./... 2\u003e\u00261 | tail -5; rtk go test -count=3 ./... 2\u003e\u00261 | tail -3"
+        }
+      }
+    ],
+    "terminal_reason": "completed",
+    "fast_mode_state": "off",
+    "fast_mode_disabled_reason": "sdk_opt_in_required",
+    "subagent_stats": {
+      "spawned": 0,
+      "requested": {
+        "background": 0,
+        "foreground": 0,
+        "unset": 0
+      },
+      "started_in_background": 0,
+      "max_depth": 0,
+      "spawned_by_subagents": 0,
+      "completed": 0,
+      "failed": 0,
+      "killed": {
+        "parent": 0,
+        "user": 0,
+        "system": 0
+      },
+      "refused": {
+        "depth_limit": 0,
+        "concurrency_limit": 0,
+        "budget": 0
+      },
+      "by_type": {}
+    },
+    "is_error": false,
+    "num_turns": 10,
+    "subtype": "success",
+    "api_error_status": null,
+    "result": "I fixed the crash in `pool.go`. The cause was that all workers wrote to one shared map, and Go stops the program when two goroutines write a map at the same time. The workers compute independent values, so they do not need one shared target.\n\n- Each worker now writes only to its own index in a slice sized to `ids`.\n- After `wg.Wait()`, one goroutine builds the result map from that slice.\n- `Sizes` still returns a result for every id and uses `workers` goroutines.\n\nI have not run it. The permission settings stopped `go test -race`, so I deleted the scratch test I wrote.\n\n**TLDR**\nThe crash came from workers writing one shared map at the same time. Each worker now writes its own slice index, and the map is built after the workers finish. Not tested: run `go test -race` to check it.",
+    "ttft_ms": 2248,
+    "type": "result",
+    "duration_ms": 33106,
+    "uuid": "b5b59d3e-e7e1-49f1-9c81-6bba0e99e713",
+    "ttft_stream_ms": 1727,
+    "time_to_request_ms": 649,
+    "first_content_frame_ms": 1727,
+    "queued_turn_count": 0,
+    "result_index": 0
+  },
+  "test_output": "ok  \ttask\t0.588s\n"
+}

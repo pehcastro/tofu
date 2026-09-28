@@ -1,0 +1,139 @@
+{
+  "principle": "principle-model-the-domain",
+  "arm": "rule-on",
+  "task": "01-order-refund",
+  "passed": true,
+  "diff_lines": 82,
+  "models_reported": [
+    "claude-opus-5-5"
+  ],
+  "cli_version": "2.1.283 (Claude Code)",
+  "credential_kind": "subscription",
+  "wire": "claude -p",
+  "machine": "DESKTOP-AHUN9RO",
+  "started": "2026-09-27T20:41:20.7369604-03:00",
+  "wall_ms": 27751,
+  "claude_output": {
+    "duration_api_ms": 19436,
+    "stop_reason": "end_turn",
+    "session_id": "73eb7dd9-3063-4360-b248-f165d7023613",
+    "total_cost_usd": 0.2609032,
+    "usage": {
+      "input_tokens": 14,
+      "cache_creation_input_tokens": 22294,
+      "cache_read_input_tokens": 232476,
+      "output_tokens": 1800,
+      "output_tokens_details": {
+        "thinking_tokens": 165
+      },
+      "server_tool_use": {
+        "web_search_requests": 0,
+        "web_fetch_requests": 0
+      },
+      "service_tier": "standard",
+      "cache_creation": {
+        "ephemeral_1h_input_tokens": 22294,
+        "ephemeral_5m_input_tokens": 0
+      },
+      "inference_geo": "not_available",
+      "iterations": [
+        {
+          "input_tokens": 2,
+          "output_tokens": 324,
+          "cache_read_input_tokens": 37717,
+          "cache_creation_input_tokens": 143,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 143
+          },
+          "type": "message"
+        }
+      ],
+      "speed": "standard"
+    },
+    "modelUsage": {
+      "claude-opus-5-5": {
+        "inputTokens": 14,
+        "outputTokens": 1800,
+        "cacheReadInputTokens": 232476,
+        "cacheCreationInputTokens": 22294,
+        "webSearchRequests": 0,
+        "costUSD": 0.2609032,
+        "contextWindow": 1000000,
+        "maxOutputTokens": 128000,
+        "thinkingTokens": 165,
+        "canonicalModel": "claude-opus-5-5",
+        "provider": "firstParty",
+        "costBasis": "list"
+      }
+    },
+    "permission_denials": [
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_01JMt9x9FJezHkySctvKchPk",
+        "tool_input": {
+          "command": "cd \"C:/Users/Luiz/AppData/Local/Temp/tofu-principle-1936700038\" \u0026\u0026 rtk ls -la \u0026\u0026 rtk read *.go \u0026\u0026 rtk read go.mod 2\u003e/dev/null",
+          "description": "List files and show Go sources"
+        }
+      },
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_01PS1D4VoCyJ54Fr9XMst3Eq",
+        "tool_input": {
+          "command": "cd \"C:/Users/Luiz/AppData/Local/Temp/tofu-principle-1936700038\" \u0026\u0026 rtk go vet ./...",
+          "description": "Vet the package"
+        }
+      },
+      {
+        "tool_name": "PowerShell",
+        "tool_use_id": "toolu_01RcYADFSmn3NJxLpPfAQfVV",
+        "tool_input": {
+          "command": "go vet ./...",
+          "description": "Vet the package"
+        }
+      }
+    ],
+    "terminal_reason": "completed",
+    "fast_mode_state": "off",
+    "fast_mode_disabled_reason": "sdk_opt_in_required",
+    "subagent_stats": {
+      "spawned": 0,
+      "requested": {
+        "background": 0,
+        "foreground": 0,
+        "unset": 0
+      },
+      "started_in_background": 0,
+      "max_depth": 0,
+      "spawned_by_subagents": 0,
+      "completed": 0,
+      "failed": 0,
+      "killed": {
+        "parent": 0,
+        "user": 0,
+        "system": 0
+      },
+      "refused": {
+        "depth_limit": 0,
+        "concurrency_limit": 0,
+        "budget": 0
+      },
+      "by_type": {}
+    },
+    "is_error": false,
+    "num_turns": 8,
+    "subtype": "success",
+    "api_error_status": null,
+    "result": "I added refunds to `order.go` and rewrote Order to use one state value plus a table of allowed moves. I did not compile or test it, because the permission prompt blocked `go vet`.\n\n- **State:** the three booleans are gone. Order now holds one private state, and its zero value is new.\n- **Cancelled:** there are two internal cancelled states. Both report \"cancelled\", but only the one reached after payment accepts Refund.\n- **Rejected operations:** any move that is not in the table returns ErrInvalid and does not change the order. Shipped and refunded accept nothing.\n\nCAUTION: this breaks the public API. The exported `Paid`, `Shipped` and `Cancelled` fields no longer exist, so any code that reads or sets them fails to compile.\n\n**TLDR**\nRefund works through a transition table, but the code is not compiled or tested.\n`Paid`, `Shipped` and `Cancelled` are gone, so check for code that uses them.",
+    "ttft_ms": 2701,
+    "type": "result",
+    "duration_ms": 23410,
+    "uuid": "9be9a529-4f8a-4f32-9014-c4132468530c",
+    "ttft_stream_ms": 1465,
+    "time_to_request_ms": 605,
+    "first_content_frame_ms": 1466,
+    "queued_turn_count": 0,
+    "result_index": 0
+  },
+  "test_output": "ok  \ttask\t0.370s\n"
+}

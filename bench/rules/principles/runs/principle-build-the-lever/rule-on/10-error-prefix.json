@@ -1,0 +1,187 @@
+{
+  "principle": "principle-build-the-lever",
+  "arm": "rule-on",
+  "task": "10-error-prefix",
+  "passed": true,
+  "diff_lines": 140,
+  "models_reported": [
+    "claude-opus-5-5"
+  ],
+  "cli_version": "2.1.283 (Claude Code)",
+  "credential_kind": "subscription",
+  "wire": "claude -p",
+  "machine": "DESKTOP-AHUN9RO",
+  "started": "2026-09-27T20:21:31.1212567-03:00",
+  "wall_ms": 90991,
+  "claude_output": {
+    "duration_api_ms": 65668,
+    "stop_reason": "end_turn",
+    "session_id": "ee79f968-7230-4bd5-9451-9eb5508728cf",
+    "total_cost_usd": 0.5111284,
+    "usage": {
+      "input_tokens": 36,
+      "cache_creation_input_tokens": 30476,
+      "cache_read_input_tokens": 696582,
+      "output_tokens": 6393,
+      "output_tokens_details": {
+        "thinking_tokens": 1727
+      },
+      "server_tool_use": {
+        "web_search_requests": 0,
+        "web_fetch_requests": 0
+      },
+      "service_tier": "standard",
+      "cache_creation": {
+        "ephemeral_1h_input_tokens": 30476,
+        "ephemeral_5m_input_tokens": 0
+      },
+      "inference_geo": "not_available",
+      "iterations": [
+        {
+          "input_tokens": 2,
+          "output_tokens": 369,
+          "cache_read_input_tokens": 45891,
+          "cache_creation_input_tokens": 151,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 151
+          },
+          "type": "message"
+        }
+      ],
+      "speed": "standard"
+    },
+    "modelUsage": {
+      "claude-opus-5-5": {
+        "inputTokens": 36,
+        "outputTokens": 6393,
+        "cacheReadInputTokens": 696582,
+        "cacheCreationInputTokens": 30476,
+        "webSearchRequests": 0,
+        "costUSD": 0.5111284,
+        "contextWindow": 1000000,
+        "maxOutputTokens": 128000,
+        "thinkingTokens": 1727,
+        "canonicalModel": "claude-opus-5-5",
+        "provider": "firstParty",
+        "costBasis": "list"
+      }
+    },
+    "permission_denials": [
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_01K7Yu8As7yg9L3VwNJyS1Ly",
+        "tool_input": {
+          "command": "rtk read go.mod \u0026\u0026 go version \u0026\u0026 cp kv.go /tmp/kv.hand.go \u0026\u0026 git checkout kv.go",
+          "description": "Show module, save hand edit, restore file"
+        }
+      },
+      {
+        "tool_name": "PowerShell",
+        "tool_use_id": "toolu_01DcDEj1ijF4rPbxjiAADZze",
+        "tool_input": {
+          "command": "Get-Content go.mod; go version; Copy-Item kv.go $env:TEMP\\kv.hand.go; git checkout kv.go",
+          "description": "Show module, save hand edit, restore file"
+        }
+      },
+      {
+        "tool_name": "PowerShell",
+        "tool_use_id": "toolu_01MQdAsrVgCH6FDPcNEDW22G",
+        "tool_input": {
+          "command": "Get-Content go.mod; go version; Copy-Item kv.go C:\\Users\\Luiz\\AppData\\Local\\Temp\\kv.hand.go; git checkout kv.go",
+          "description": "Show module, save hand edit, restore file"
+        }
+      },
+      {
+        "tool_name": "PowerShell",
+        "tool_use_id": "toolu_01Qw2Z6rjR2gbLpy5RAjZi7v",
+        "tool_input": {
+          "command": "Get-Content go.mod; go version; New-Item -ItemType Directory -Force tools\\kvprefix | Out-Null; Copy-Item kv.go tools\\kvprefix\\kv.hand.go.txt; git checkout kv.go",
+          "description": "Show module, save hand edit, restore file"
+        }
+      },
+      {
+        "tool_name": "PowerShell",
+        "tool_use_id": "toolu_01McbaAiyyM4Bo9SWwqWJ6nk",
+        "tool_input": {
+          "command": "Copy-Item kv.go tools\\kvprefix\\kv.hand.txt",
+          "description": "Save hand-edited copy of kv.go"
+        }
+      },
+      {
+        "tool_name": "PowerShell",
+        "tool_use_id": "toolu_01TwJGK9VbBbz2dHMTeWdJ7X",
+        "tool_input": {
+          "command": "git diff -U0 kv.go",
+          "description": "Show hand edit diff"
+        }
+      },
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_01H4p3rFYxsWfL7qLt7G9SUf",
+        "tool_input": {
+          "command": "rtk git diff -U0 kv.go",
+          "description": "Show hand edit diff"
+        }
+      },
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_01TPetA4xWcak79z3m7A8oSG",
+        "tool_input": {
+          "command": "rtk go build -o tools/kvprefix/kvprefix.exe tools/kvprefix/main.go",
+          "description": "Build the rewrite tool"
+        }
+      },
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_01UWGay2Rvi4v4UNvHwepyUB",
+        "tool_input": {
+          "command": "rtk go vet .",
+          "description": "Vet the package"
+        }
+      }
+    ],
+    "terminal_reason": "completed",
+    "fast_mode_state": "off",
+    "fast_mode_disabled_reason": "sdk_opt_in_required",
+    "subagent_stats": {
+      "spawned": 0,
+      "requested": {
+        "background": 0,
+        "foreground": 0,
+        "unset": 0
+      },
+      "started_in_background": 0,
+      "max_depth": 0,
+      "spawned_by_subagents": 0,
+      "completed": 0,
+      "failed": 0,
+      "killed": {
+        "parent": 0,
+        "user": 0,
+        "system": 0
+      },
+      "refused": {
+        "depth_limit": 0,
+        "concurrency_limit": 0,
+        "budget": 0
+      },
+      "by_type": {}
+    },
+    "is_error": false,
+    "num_turns": 26,
+    "subtype": "success",
+    "api_error_status": null,
+    "result": "I renamed all 7 `store: ` messages to `kv: `: 6 in `kv.go` and 1 in `backup.go:27`. The `restore:` messages and the `datastore:` message did not change.\n\nI did not edit the sites by hand. I wrote a rewrite tool at `tools/kvprefix/main.go` and ran it with `go run tools/kvprefix/main.go .`. It only changes the first string passed to `errors.New` or `fmt.Errorf`. The tool's result at `kv.go:9` is the same as my hand edit.\n\nI could not compile or vet the package, because the permission settings blocked `go vet`, `go build` and git.\n\n**TLDR**\nAll 7 messages now start with `kv: `. The tool is `tools/kvprefix/main.go`. The package has not been compiled.",
+    "ttft_ms": 2650,
+    "type": "result",
+    "duration_ms": 86610,
+    "uuid": "e5490ff6-f3e2-422e-81b5-882e76293437",
+    "ttft_stream_ms": 1791,
+    "time_to_request_ms": 621,
+    "first_content_frame_ms": 1792,
+    "queued_turn_count": 0,
+    "result_index": 0
+  },
+  "test_output": "ok  \ttask\t0.340s\n"
+}

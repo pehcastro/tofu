@@ -1,0 +1,138 @@
+{
+  "principle": "principle-model-the-domain",
+  "arm": "rule-on",
+  "task": "02-player-stop",
+  "passed": true,
+  "diff_lines": 139,
+  "models_reported": [
+    "claude-opus-5-5"
+  ],
+  "cli_version": "2.1.283 (Claude Code)",
+  "credential_kind": "subscription",
+  "wire": "claude -p",
+  "machine": "DESKTOP-AHUN9RO",
+  "started": "2026-09-27T20:42:31.1170762-03:00",
+  "wall_ms": 37356,
+  "claude_output": {
+    "duration_api_ms": 27612,
+    "stop_reason": "end_turn",
+    "session_id": "be2c4cc8-c206-4d39-ba53-b03b07bef4df",
+    "total_cost_usd": 0.28348979999999996,
+    "usage": {
+      "input_tokens": 14,
+      "cache_creation_input_tokens": 23162,
+      "cache_read_input_tokens": 233089,
+      "output_tokens": 2576,
+      "output_tokens_details": {
+        "thinking_tokens": 190
+      },
+      "server_tool_use": {
+        "web_search_requests": 0,
+        "web_fetch_requests": 0
+      },
+      "service_tier": "standard",
+      "cache_creation": {
+        "ephemeral_1h_input_tokens": 23162,
+        "ephemeral_5m_input_tokens": 0
+      },
+      "inference_geo": "not_available",
+      "iterations": [
+        {
+          "input_tokens": 2,
+          "output_tokens": 313,
+          "cache_read_input_tokens": 38588,
+          "cache_creation_input_tokens": 140,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 140
+          },
+          "type": "message"
+        }
+      ],
+      "speed": "standard"
+    },
+    "modelUsage": {
+      "claude-opus-5-5": {
+        "inputTokens": 14,
+        "outputTokens": 2576,
+        "cacheReadInputTokens": 233089,
+        "cacheCreationInputTokens": 23162,
+        "webSearchRequests": 0,
+        "costUSD": 0.28348979999999996,
+        "contextWindow": 1000000,
+        "maxOutputTokens": 128000,
+        "thinkingTokens": 190,
+        "canonicalModel": "claude-opus-5-5",
+        "provider": "firstParty",
+        "costBasis": "list"
+      }
+    },
+    "permission_denials": [
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_01LgdciUhAsiHYBJz4DjaifF",
+        "tool_input": {
+          "command": "rtk ls -la \u0026\u0026 rtk read *.go go.mod 2\u003e/dev/null"
+        }
+      },
+      {
+        "tool_name": "PowerShell",
+        "tool_use_id": "toolu_01CqQphKfoN5bS2F9DbtL2Hz",
+        "tool_input": {
+          "command": "go vet ./...; go test ./...",
+          "description": "Vet and run tests"
+        }
+      },
+      {
+        "tool_name": "PowerShell",
+        "tool_use_id": "toolu_01XsVPd7TSSnQ7SBwZJwdYMS",
+        "tool_input": {
+          "command": "go test ./...",
+          "description": "Run tests"
+        }
+      }
+    ],
+    "terminal_reason": "completed",
+    "fast_mode_state": "off",
+    "fast_mode_disabled_reason": "sdk_opt_in_required",
+    "subagent_stats": {
+      "spawned": 0,
+      "requested": {
+        "background": 0,
+        "foreground": 0,
+        "unset": 0
+      },
+      "started_in_background": 0,
+      "max_depth": 0,
+      "spawned_by_subagents": 0,
+      "completed": 0,
+      "failed": 0,
+      "killed": {
+        "parent": 0,
+        "user": 0,
+        "system": 0
+      },
+      "refused": {
+        "depth_limit": 0,
+        "concurrency_limit": 0,
+        "budget": 0
+      },
+      "by_type": {}
+    },
+    "is_error": false,
+    "num_turns": 9,
+    "subtype": "success",
+    "api_error_status": null,
+    "result": "I added Stop and Eject, but I could not run the tests because the permission prompt blocked `go test ./...`. Run it once to check.\n\n`player.go` now keeps one state value (empty, ready, playing or paused) in place of the three booleans. A table lists every allowed move for each call. A call with no entry in the table returns `ErrInvalid` and changes nothing.\n\nThe old code let through three calls your rules forbid. The table now rejects them:\n- Load on a paused player.\n- Play on a player that is already playing.\n- Pause on a player that is already paused.\n\nI also added `player_test.go`. It tries every call from every state and checks the status and the track after each one.\n\n**TLDR**\nStop and Eject are in `player.go`, and one state value replaces the booleans. It now rejects Load while paused, Play while playing and Pause while paused, which the old code allowed. The tests are written but did not run: `go test ./...` needs your approval.",
+    "ttft_ms": 2671,
+    "type": "result",
+    "duration_ms": 33220,
+    "uuid": "19c4329a-cd93-43a8-8c5d-163dd63b0081",
+    "ttft_stream_ms": 1961,
+    "time_to_request_ms": 620,
+    "first_content_frame_ms": 1962,
+    "queued_turn_count": 0,
+    "result_index": 0
+  },
+  "test_output": "ok  \ttask\t0.406s\n"
+}

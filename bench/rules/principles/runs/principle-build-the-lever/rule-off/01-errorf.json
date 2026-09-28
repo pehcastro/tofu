@@ -1,0 +1,147 @@
+{
+  "principle": "principle-build-the-lever",
+  "arm": "rule-off",
+  "task": "01-errorf",
+  "passed": true,
+  "diff_lines": 30,
+  "models_reported": [
+    "claude-opus-5-5"
+  ],
+  "cli_version": "2.1.283 (Claude Code)",
+  "credential_kind": "subscription",
+  "wire": "claude -p",
+  "machine": "DESKTOP-AHUN9RO",
+  "started": "2026-09-27T19:59:18.0087648-03:00",
+  "wall_ms": 33286,
+  "claude_output": {
+    "duration_api_ms": 20828,
+    "stop_reason": "end_turn",
+    "session_id": "b89bacb7-01ba-4045-94ec-8f146a7d6320",
+    "total_cost_usd": 0.2694506,
+    "usage": {
+      "input_tokens": 12,
+      "cache_creation_input_tokens": 23295,
+      "cache_read_input_tokens": 196713,
+      "output_tokens": 2185,
+      "output_tokens_details": {
+        "thinking_tokens": 229
+      },
+      "server_tool_use": {
+        "web_search_requests": 0,
+        "web_fetch_requests": 0
+      },
+      "service_tier": "standard",
+      "cache_creation": {
+        "ephemeral_1h_input_tokens": 23295,
+        "ephemeral_5m_input_tokens": 0
+      },
+      "inference_geo": "not_available",
+      "iterations": [
+        {
+          "input_tokens": 2,
+          "output_tokens": 330,
+          "cache_read_input_tokens": 38537,
+          "cache_creation_input_tokens": 324,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 324
+          },
+          "type": "message"
+        }
+      ],
+      "speed": "standard"
+    },
+    "modelUsage": {
+      "claude-opus-5-5": {
+        "inputTokens": 12,
+        "outputTokens": 2185,
+        "cacheReadInputTokens": 196713,
+        "cacheCreationInputTokens": 23295,
+        "webSearchRequests": 0,
+        "costUSD": 0.2694506,
+        "contextWindow": 1000000,
+        "maxOutputTokens": 128000,
+        "thinkingTokens": 229,
+        "canonicalModel": "claude-opus-5-5",
+        "provider": "firstParty",
+        "costBasis": "list"
+      }
+    },
+    "permission_denials": [
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_01UV6CiFhGGAPxVmn6M1wt8g",
+        "tool_input": {
+          "command": "gofmt -l .; rtk go build ./... \u0026\u0026 rtk go vet ./... \u0026\u0026 echo OK",
+          "description": "Check formatting, build, and vet"
+        }
+      },
+      {
+        "tool_name": "PowerShell",
+        "tool_use_id": "toolu_01QagbqSQ2eFVd9UeTjyt38W",
+        "tool_input": {
+          "command": "go build ./...; if ($?) { go vet ./... }; if ($?) { \"OK\" }",
+          "description": "Build and vet the package"
+        }
+      },
+      {
+        "tool_name": "PowerShell",
+        "tool_use_id": "toolu_01J8GQfcw82fsnYd85wj4e3i",
+        "tool_input": {
+          "command": "go build ./...",
+          "description": "Build the package"
+        }
+      },
+      {
+        "tool_name": "PowerShell",
+        "tool_use_id": "toolu_012MwGUE2GvzDffHwxZoK37o",
+        "tool_input": {
+          "command": "go vet ./...",
+          "description": "Vet the package"
+        }
+      }
+    ],
+    "terminal_reason": "completed",
+    "fast_mode_state": "off",
+    "fast_mode_disabled_reason": "sdk_opt_in_required",
+    "subagent_stats": {
+      "spawned": 0,
+      "requested": {
+        "background": 0,
+        "foreground": 0,
+        "unset": 0
+      },
+      "started_in_background": 0,
+      "max_depth": 0,
+      "spawned_by_subagents": 0,
+      "completed": 0,
+      "failed": 0,
+      "killed": {
+        "parent": 0,
+        "user": 0,
+        "system": 0
+      },
+      "refused": {
+        "depth_limit": 0,
+        "concurrency_limit": 0,
+        "budget": 0
+      },
+      "by_type": {}
+    },
+    "is_error": false,
+    "num_turns": 12,
+    "subtype": "success",
+    "api_error_status": null,
+    "result": "I replaced all 12 calls in `user.go`, `order.go` and `store.go`, and every message is the same text as before. I could not build it: the permission prompts blocked `go build` and `go vet`, so please run `go build ./...` and `go vet ./...`.\n\n- **Imports:** `user.go` and `order.go` no longer import `errors`. `store.go` still needs it for `ErrClosed`.\n- **`OrderWrapped`:** still uses `%v`, not `%w`. With `%w`, `errors.Is` would start matching the error it wraps, which is a change in behavior.\n- **`store.go`:** `100%%` still prints as `100%`.\n\nGmail, Google Calendar and Google Drive need authorizing in your claude.ai connector settings. The `paper` server failed to connect. Neither affected this task.",
+    "ttft_ms": 2717,
+    "type": "result",
+    "duration_ms": 28966,
+    "uuid": "7ae52d58-92de-46a7-a888-10fdc52c8351",
+    "ttft_stream_ms": 1560,
+    "time_to_request_ms": 696,
+    "first_content_frame_ms": 1561,
+    "queued_turn_count": 0,
+    "result_index": 0
+  },
+  "test_output": "ok  \ttask\t0.356s\n"
+}

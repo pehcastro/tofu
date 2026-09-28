@@ -1,0 +1,147 @@
+{
+  "principle": "principle-separate-before-serializing-shared-state",
+  "arm": "rule-off",
+  "task": "09-transfer-stats",
+  "passed": true,
+  "diff_lines": 37,
+  "models_reported": [
+    "claude-opus-5-5"
+  ],
+  "cli_version": "2.1.283 (Claude Code)",
+  "credential_kind": "subscription",
+  "wire": "claude -p",
+  "machine": "DESKTOP-AHUN9RO",
+  "started": "2026-09-27T21:09:21.9739693-03:00",
+  "wall_ms": 34054,
+  "claude_output": {
+    "duration_api_ms": 21852,
+    "stop_reason": "end_turn",
+    "session_id": "819c8fce-3cfe-4806-b938-cff3c3c40651",
+    "total_cost_usd": 0.2785988,
+    "usage": {
+      "input_tokens": 18,
+      "cache_creation_input_tokens": 22360,
+      "cache_read_input_tokens": 305834,
+      "output_tokens": 1924,
+      "output_tokens_details": {
+        "thinking_tokens": 168
+      },
+      "server_tool_use": {
+        "web_search_requests": 0,
+        "web_fetch_requests": 0
+      },
+      "service_tier": "standard",
+      "cache_creation": {
+        "ephemeral_1h_input_tokens": 22360,
+        "ephemeral_5m_input_tokens": 0
+      },
+      "inference_geo": "not_available",
+      "iterations": [
+        {
+          "input_tokens": 2,
+          "output_tokens": 245,
+          "cache_read_input_tokens": 37698,
+          "cache_creation_input_tokens": 228,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 228
+          },
+          "type": "message"
+        }
+      ],
+      "speed": "standard"
+    },
+    "modelUsage": {
+      "claude-opus-5-5": {
+        "inputTokens": 18,
+        "outputTokens": 1924,
+        "cacheReadInputTokens": 305834,
+        "cacheCreationInputTokens": 22360,
+        "webSearchRequests": 0,
+        "costUSD": 0.2785988,
+        "contextWindow": 1000000,
+        "maxOutputTokens": 128000,
+        "thinkingTokens": 168,
+        "canonicalModel": "claude-opus-5-5",
+        "provider": "firstParty",
+        "costBasis": "list"
+      }
+    },
+    "permission_denials": [
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_01PBceKAfQyxQF8QGaEcAYva",
+        "tool_input": {
+          "command": "cd \"C:/Users/Luiz/AppData/Local/Temp/tofu-principle-667601871\" \u0026\u0026 rtk ls -la \u0026\u0026 rtk read stats.go \u0026\u0026 rtk read go.mod 2\u003e/dev/null; rtk ls *_test.go 2\u003e/dev/null",
+          "description": "List files and show stats.go"
+        }
+      },
+      {
+        "tool_name": "PowerShell",
+        "tool_use_id": "toolu_019SdhQjG43Xn9rFBTCoEoNg",
+        "tool_input": {
+          "command": "go test -count=1 ./...; go vet ./...",
+          "description": "Run temp test and vet"
+        }
+      },
+      {
+        "tool_name": "PowerShell",
+        "tool_use_id": "toolu_01XbhHY6UJamtZ5ZHHc4q79b",
+        "tool_input": {
+          "command": "go test -count=1 ./...",
+          "description": "Run temp exactness test"
+        }
+      },
+      {
+        "tool_name": "PowerShell",
+        "tool_use_id": "toolu_01QAcGPrJqDwnUzrkVjFkMoy",
+        "tool_input": {
+          "command": "Remove-Item stats_tmp_test.go -Confirm:$false",
+          "description": "Delete the temporary test file"
+        }
+      }
+    ],
+    "terminal_reason": "completed",
+    "fast_mode_state": "off",
+    "fast_mode_disabled_reason": "sdk_opt_in_required",
+    "subagent_stats": {
+      "spawned": 0,
+      "requested": {
+        "background": 0,
+        "foreground": 0,
+        "unset": 0
+      },
+      "started_in_background": 0,
+      "max_depth": 0,
+      "spawned_by_subagents": 0,
+      "completed": 0,
+      "failed": 0,
+      "killed": {
+        "parent": 0,
+        "user": 0,
+        "system": 0
+      },
+      "refused": {
+        "depth_limit": 0,
+        "concurrency_limit": 0,
+        "budget": 0
+      },
+      "by_type": {}
+    },
+    "is_error": false,
+    "num_turns": 10,
+    "subtype": "success",
+    "api_error_status": null,
+    "result": "I fixed it in `stats.go`, but I could not run the test. All the worker goroutines added to the same `Stats` value without a lock. That is a data race, and it drops increments, so the totals came out low and changed between runs.\n\nNow each worker counts into its own local `Stats`. When it finishes, it adds those counts to the shared total under a `sync.Mutex`. The number of workers is the same.\n\nMy commands to run tests and delete files were blocked. I added `stats_tmp_test.go`, which checks exact totals over 20 runs with 8 workers. Run `go test -race ./...` to check the fix. Then keep the test file, or rename or delete it.",
+    "ttft_ms": 2939,
+    "type": "result",
+    "duration_ms": 29847,
+    "uuid": "a664df5e-d580-4942-9d90-b6ed779f35ae",
+    "ttft_stream_ms": 1452,
+    "time_to_request_ms": 596,
+    "first_content_frame_ms": 1453,
+    "queued_turn_count": 0,
+    "result_index": 0
+  },
+  "test_output": "ok  \ttask\t0.383s\n"
+}

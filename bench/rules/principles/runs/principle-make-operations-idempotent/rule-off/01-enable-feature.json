@@ -1,0 +1,139 @@
+{
+  "principle": "principle-make-operations-idempotent",
+  "arm": "rule-off",
+  "task": "01-enable-feature",
+  "passed": true,
+  "diff_lines": 153,
+  "models_reported": [
+    "claude-opus-5-5"
+  ],
+  "cli_version": "2.1.283 (Claude Code)",
+  "credential_kind": "subscription",
+  "wire": "claude -p",
+  "machine": "DESKTOP-AHUN9RO",
+  "started": "2026-09-27T20:24:47.6636848-03:00",
+  "wall_ms": 52264,
+  "claude_output": {
+    "duration_api_ms": 42024,
+    "stop_reason": "end_turn",
+    "session_id": "2692aa4b-f53e-4b35-8528-8dbfb3d6d7d6",
+    "total_cost_usd": 0.332204,
+    "usage": {
+      "input_tokens": 16,
+      "cache_creation_input_tokens": 24311,
+      "cache_read_input_tokens": 273360,
+      "output_tokens": 4149,
+      "output_tokens_details": {
+        "thinking_tokens": 682
+      },
+      "server_tool_use": {
+        "web_search_requests": 0,
+        "web_fetch_requests": 0
+      },
+      "service_tier": "standard",
+      "cache_creation": {
+        "ephemeral_1h_input_tokens": 24311,
+        "ephemeral_5m_input_tokens": 0
+      },
+      "inference_geo": "not_available",
+      "iterations": [
+        {
+          "input_tokens": 2,
+          "output_tokens": 339,
+          "cache_read_input_tokens": 39736,
+          "cache_creation_input_tokens": 141,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 141
+          },
+          "type": "message"
+        }
+      ],
+      "speed": "standard"
+    },
+    "modelUsage": {
+      "claude-opus-5-5": {
+        "inputTokens": 16,
+        "outputTokens": 4149,
+        "cacheReadInputTokens": 273360,
+        "cacheCreationInputTokens": 24311,
+        "webSearchRequests": 0,
+        "costUSD": 0.332204,
+        "contextWindow": 1000000,
+        "maxOutputTokens": 128000,
+        "thinkingTokens": 682,
+        "canonicalModel": "claude-opus-5-5",
+        "provider": "firstParty",
+        "costBasis": "list"
+      }
+    },
+    "permission_denials": [
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_01YcPq5X7bsvDz3ViJbxF3Hd",
+        "tool_input": {
+          "command": "cd \"C:/Users/Luiz/AppData/Local/Temp/tofu-principle-808455956\" \u0026\u0026 rtk ls -la \u0026\u0026 rtk read feature.go \u0026\u0026 rtk read go.mod 2\u003e/dev/null; rtk ls *_test.go 2\u003e/dev/null",
+          "description": "List files and show feature.go"
+        }
+      },
+      {
+        "tool_name": "PowerShell",
+        "tool_use_id": "toolu_01C2orFzP63FnkN1gU9At4wx",
+        "tool_input": {
+          "command": "go vet ./...; go test ./...",
+          "description": "Vet and test the package"
+        }
+      },
+      {
+        "tool_name": "PowerShell",
+        "tool_use_id": "toolu_018We3M6JeJ5is7DsL148jR8",
+        "tool_input": {
+          "command": "go test ./...",
+          "description": "Run package tests"
+        }
+      }
+    ],
+    "terminal_reason": "completed",
+    "fast_mode_state": "off",
+    "fast_mode_disabled_reason": "sdk_opt_in_required",
+    "subagent_stats": {
+      "spawned": 0,
+      "requested": {
+        "background": 0,
+        "foreground": 0,
+        "unset": 0
+      },
+      "started_in_background": 0,
+      "max_depth": 0,
+      "spawned_by_subagents": 0,
+      "completed": 0,
+      "failed": 0,
+      "killed": {
+        "parent": 0,
+        "user": 0,
+        "system": 0
+      },
+      "refused": {
+        "depth_limit": 0,
+        "concurrency_limit": 0,
+        "budget": 0
+      },
+      "by_type": {}
+    },
+    "is_error": false,
+    "num_turns": 10,
+    "subtype": "success",
+    "api_error_status": null,
+    "result": "I implemented `EnableFeature` in `feature.go`, but I could not run the tests. `go test` needs your approval, so the code is untested.\n\n- **Retries:** if the feature is already `on`, the function does not write the file, so a retried deploy changes nothing.\n- **Timeouts:** it writes a temp file in the same directory and renames it over the config. A deploy that times out mid-write leaves either the old file or the new one, never half a file.\n- **Other lines:** every other line stays byte for byte. The function keeps CRLF line endings and the file permissions. If the feature line appears more than once, every copy becomes `on`.\n- **Bad names:** a name that is empty or contains `=` or a newline returns an error.\n\nI also added `feature_test.go`. It covers a missing file, adding a new line, changing `off` to `on`, and CRLF files, and it calls `EnableFeature` twice on each case to check that the second call changes nothing. Run it with `go test ./...`.",
+    "ttft_ms": 3128,
+    "type": "result",
+    "duration_ms": 48097,
+    "uuid": "580a5d08-bed8-4253-b87e-dd706f1b5410",
+    "ttft_stream_ms": 1973,
+    "time_to_request_ms": 643,
+    "first_content_frame_ms": 1973,
+    "queued_turn_count": 0,
+    "result_index": 0
+  },
+  "test_output": "ok  \ttask\t0.500s\n"
+}

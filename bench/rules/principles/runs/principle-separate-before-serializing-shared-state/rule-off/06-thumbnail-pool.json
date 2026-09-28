@@ -1,0 +1,147 @@
+{
+  "principle": "principle-separate-before-serializing-shared-state",
+  "arm": "rule-off",
+  "task": "06-thumbnail-pool",
+  "passed": true,
+  "diff_lines": 22,
+  "models_reported": [
+    "claude-opus-5-5"
+  ],
+  "cli_version": "2.1.283 (Claude Code)",
+  "credential_kind": "subscription",
+  "wire": "claude -p",
+  "machine": "DESKTOP-AHUN9RO",
+  "started": "2026-09-27T21:05:10.8740137-03:00",
+  "wall_ms": 27993,
+  "claude_output": {
+    "duration_api_ms": 17417,
+    "stop_reason": "end_turn",
+    "session_id": "d005f705-bab8-48db-9a45-edb1b88c9ba5",
+    "total_cost_usd": 0.25464439999999994,
+    "usage": {
+      "input_tokens": 14,
+      "cache_creation_input_tokens": 22014,
+      "cache_read_input_tokens": 231182,
+      "output_tokens": 1612,
+      "output_tokens_details": {
+        "thinking_tokens": 92
+      },
+      "server_tool_use": {
+        "web_search_requests": 0,
+        "web_fetch_requests": 0
+      },
+      "service_tier": "standard",
+      "cache_creation": {
+        "ephemeral_1h_input_tokens": 22014,
+        "ephemeral_5m_input_tokens": 0
+      },
+      "inference_geo": "not_available",
+      "iterations": [
+        {
+          "input_tokens": 2,
+          "output_tokens": 167,
+          "cache_read_input_tokens": 37359,
+          "cache_creation_input_tokens": 221,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 221
+          },
+          "type": "message"
+        }
+      ],
+      "speed": "standard"
+    },
+    "modelUsage": {
+      "claude-opus-5-5": {
+        "inputTokens": 14,
+        "outputTokens": 1612,
+        "cacheReadInputTokens": 231182,
+        "cacheCreationInputTokens": 22014,
+        "webSearchRequests": 0,
+        "costUSD": 0.25464439999999994,
+        "contextWindow": 1000000,
+        "maxOutputTokens": 128000,
+        "thinkingTokens": 92,
+        "canonicalModel": "claude-opus-5-5",
+        "provider": "firstParty",
+        "costBasis": "list"
+      }
+    },
+    "permission_denials": [
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_01AqtvmKtzVUwbxqGcUjb7rA",
+        "tool_input": {
+          "command": "cd \"C:/Users/Luiz/AppData/Local/Temp/tofu-principle-1653676839\" \u0026\u0026 rtk ls -la \u0026\u0026 rtk read pool.go \u0026\u0026 rtk read go.mod 2\u003e/dev/null; rtk ls *_test.go 2\u003e/dev/null",
+          "description": "List files and show pool.go"
+        }
+      },
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_01QDmvz9riU6W3bnAY1ry7wU",
+        "tool_input": {
+          "command": "cat \u003e race_tmp_test.go \u003c\u003c'EOF'\npackage task\nimport \"testing\"\nfunc TestSizesRace(t *testing.T) {\n\tids := make([]int, 5000)\n\tfor i := range ids { ids[i] = i }\n\tfor n := 0; n \u003c 20; n++ {\n\t\tr := Sizes(ids, 32)\n\t\tif len(r) != len(ids) { t.Fatal(len(r)) }\n\t}\n}\nEOF\ngo vet ./... \u0026\u0026 (go test -race ./... 2\u003e\u00261 || go test ./... 2\u003e\u00261); rm race_tmp_test.go",
+          "description": "Run temporary concurrency test, then remove it"
+        }
+      },
+      {
+        "tool_name": "PowerShell",
+        "tool_use_id": "toolu_01H6DKv3sEysmp94wRjyyYL6",
+        "tool_input": {
+          "command": "go test -race ./...",
+          "description": "Run tests with race detector"
+        }
+      },
+      {
+        "tool_name": "PowerShell",
+        "tool_use_id": "toolu_018zhGLTKP1KsEZWGuLBfCKK",
+        "tool_input": {
+          "command": "Remove-Item race_tmp_test.go -Confirm:$false",
+          "description": "Delete temporary test file"
+        }
+      }
+    ],
+    "terminal_reason": "completed",
+    "fast_mode_state": "off",
+    "fast_mode_disabled_reason": "sdk_opt_in_required",
+    "subagent_stats": {
+      "spawned": 0,
+      "requested": {
+        "background": 0,
+        "foreground": 0,
+        "unset": 0
+      },
+      "started_in_background": 0,
+      "max_depth": 0,
+      "spawned_by_subagents": 0,
+      "completed": 0,
+      "failed": 0,
+      "killed": {
+        "parent": 0,
+        "user": 0,
+        "system": 0
+      },
+      "refused": {
+        "depth_limit": 0,
+        "concurrency_limit": 0,
+        "budget": 0
+      },
+      "by_type": {}
+    },
+    "is_error": false,
+    "num_turns": 9,
+    "subtype": "success",
+    "api_error_status": null,
+    "result": "I fixed the crash but could not test it. The workers wrote to the shared `results` map at the same time, and Go stops the program when that happens. In `pool.go`, a mutex now guards each map write. The worker count and the one-result-per-id behavior are unchanged.\n\n`go test -race` needed approval and did not run. I also could not delete `race_tmp_test.go`, a temporary test I wrote. Run `go test -race ./...` to check the fix, then delete that file.",
+    "ttft_ms": 2980,
+    "type": "result",
+    "duration_ms": 23641,
+    "uuid": "09e55720-80b5-4ec4-99f8-c5beb555fdb4",
+    "ttft_stream_ms": 1596,
+    "time_to_request_ms": 749,
+    "first_content_frame_ms": 1596,
+    "queued_turn_count": 0,
+    "result_index": 0
+  },
+  "test_output": "ok  \ttask\t0.709s\n"
+}

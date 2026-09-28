@@ -1,0 +1,139 @@
+{
+  "principle": "principle-model-the-domain",
+  "arm": "rule-off",
+  "task": "10-connection-reconnect",
+  "passed": true,
+  "diff_lines": 152,
+  "models_reported": [
+    "claude-opus-5-5"
+  ],
+  "cli_version": "2.1.283 (Claude Code)",
+  "credential_kind": "subscription",
+  "wire": "claude -p",
+  "machine": "DESKTOP-AHUN9RO",
+  "started": "2026-09-27T20:55:19.6161536-03:00",
+  "wall_ms": 37445,
+  "claude_output": {
+    "duration_api_ms": 26237,
+    "stop_reason": "end_turn",
+    "session_id": "39689ff7-4a0c-4b55-b75a-f0442b470f4a",
+    "total_cost_usd": 0.2848382,
+    "usage": {
+      "input_tokens": 12,
+      "cache_creation_input_tokens": 23531,
+      "cache_read_input_tokens": 196011,
+      "output_tokens": 2867,
+      "output_tokens_details": {
+        "thinking_tokens": 243
+      },
+      "server_tool_use": {
+        "web_search_requests": 0,
+        "web_fetch_requests": 0
+      },
+      "service_tier": "standard",
+      "cache_creation": {
+        "ephemeral_1h_input_tokens": 23531,
+        "ephemeral_5m_input_tokens": 0
+      },
+      "inference_geo": "not_available",
+      "iterations": [
+        {
+          "input_tokens": 2,
+          "output_tokens": 297,
+          "cache_read_input_tokens": 38926,
+          "cache_creation_input_tokens": 171,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 171
+          },
+          "type": "message"
+        }
+      ],
+      "speed": "standard"
+    },
+    "modelUsage": {
+      "claude-opus-5-5": {
+        "inputTokens": 12,
+        "outputTokens": 2867,
+        "cacheReadInputTokens": 196011,
+        "cacheCreationInputTokens": 23531,
+        "webSearchRequests": 0,
+        "costUSD": 0.2848382,
+        "contextWindow": 1000000,
+        "maxOutputTokens": 128000,
+        "thinkingTokens": 243,
+        "canonicalModel": "claude-opus-5-5",
+        "provider": "firstParty",
+        "costBasis": "list"
+      }
+    },
+    "permission_denials": [
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_016Wkoy1q78n3MK12dYUHAQq",
+        "tool_input": {
+          "command": "cd \"C:/Users/Luiz/AppData/Local/Temp/tofu-principle-94415817\" \u0026\u0026 rtk ls -la \u0026\u0026 rtk read conn.go \u0026\u0026 rtk read *_test.go 2\u003e/dev/null | head -100; rtk read go.mod",
+          "description": "List files and show conn.go"
+        }
+      },
+      {
+        "tool_name": "PowerShell",
+        "tool_use_id": "toolu_01QzT6YBMDuewngrtrx3sYVY",
+        "tool_input": {
+          "command": "go vet ./...; go test ./...",
+          "description": "Vet and test package"
+        }
+      },
+      {
+        "tool_name": "PowerShell",
+        "tool_use_id": "toolu_01LVwTR8ooUs5Th3xu6CEwDD",
+        "tool_input": {
+          "command": "go test ./...",
+          "description": "Run package tests"
+        }
+      }
+    ],
+    "terminal_reason": "completed",
+    "fast_mode_state": "off",
+    "fast_mode_disabled_reason": "sdk_opt_in_required",
+    "subagent_stats": {
+      "spawned": 0,
+      "requested": {
+        "background": 0,
+        "foreground": 0,
+        "unset": 0
+      },
+      "started_in_background": 0,
+      "max_depth": 0,
+      "spawned_by_subagents": 0,
+      "completed": 0,
+      "failed": 0,
+      "killed": {
+        "parent": 0,
+        "user": 0,
+        "system": 0
+      },
+      "refused": {
+        "depth_limit": 0,
+        "concurrency_limit": 0,
+        "budget": 0
+      },
+      "by_type": {}
+    },
+    "is_error": false,
+    "num_turns": 9,
+    "subtype": "success",
+    "api_error_status": null,
+    "result": "Reconnection is added to `conn.go`, but I have not run the tests. The `go test ./...` call needs your approval and was not granted.\n\n- **State:** `Conn` now keeps one state field (idle, connecting, connected, dropped, closed) in place of the three booleans. The zero value is still idle.\n- **Retry count:** a counter goes up on each `Reconnect` and resets to 0 when `Established` reaches connected. When the count is already 5, the next `Reconnect` closes the connection and returns `ErrGiveUp`.\n- **Timeout:** the first `Dial`, and a `Timeout` from that first attempt, do not add to the count.\n- **Tests:** I added `conn_test.go`. It checks the give-up after 5 retries, the reset on connected, and that a call in the wrong state returns `ErrState` and changes nothing.",
+    "ttft_ms": 2998,
+    "type": "result",
+    "duration_ms": 33016,
+    "uuid": "3d4adbed-0435-48d3-8a55-909cee126d1e",
+    "ttft_stream_ms": 1608,
+    "time_to_request_ms": 684,
+    "first_content_frame_ms": 1608,
+    "queued_turn_count": 0,
+    "result_index": 0
+  },
+  "test_output": "ok  \ttask\t0.391s\n"
+}

@@ -1,0 +1,139 @@
+{
+  "principle": "principle-model-the-domain",
+  "arm": "rule-off",
+  "task": "09-job-cancel",
+  "passed": true,
+  "diff_lines": 21,
+  "models_reported": [
+    "claude-opus-5-5"
+  ],
+  "cli_version": "2.1.283 (Claude Code)",
+  "credential_kind": "subscription",
+  "wire": "claude -p",
+  "machine": "DESKTOP-AHUN9RO",
+  "started": "2026-09-27T20:53:48.5273736-03:00",
+  "wall_ms": 43867,
+  "claude_output": {
+    "duration_api_ms": 26432,
+    "stop_reason": "end_turn",
+    "session_id": "b037d26f-d5a1-497d-a059-8eb12c860b26",
+    "total_cost_usd": 0.2961506,
+    "usage": {
+      "input_tokens": 18,
+      "cache_creation_input_tokens": 23317,
+      "cache_read_input_tokens": 309013,
+      "output_tokens": 2387,
+      "output_tokens_details": {
+        "thinking_tokens": 382
+      },
+      "server_tool_use": {
+        "web_search_requests": 0,
+        "web_fetch_requests": 0
+      },
+      "service_tier": "standard",
+      "cache_creation": {
+        "ephemeral_1h_input_tokens": 23317,
+        "ephemeral_5m_input_tokens": 0
+      },
+      "inference_geo": "not_available",
+      "iterations": [
+        {
+          "input_tokens": 2,
+          "output_tokens": 160,
+          "cache_read_input_tokens": 38541,
+          "cache_creation_input_tokens": 342,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 342
+          },
+          "type": "message"
+        }
+      ],
+      "speed": "standard"
+    },
+    "modelUsage": {
+      "claude-opus-5-5": {
+        "inputTokens": 18,
+        "outputTokens": 2387,
+        "cacheReadInputTokens": 309013,
+        "cacheCreationInputTokens": 23317,
+        "webSearchRequests": 0,
+        "costUSD": 0.2961506,
+        "contextWindow": 1000000,
+        "maxOutputTokens": 128000,
+        "thinkingTokens": 382,
+        "canonicalModel": "claude-opus-5-5",
+        "provider": "firstParty",
+        "costBasis": "list"
+      }
+    },
+    "permission_denials": [
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_01WEp83kD7RyRjHVXQUArkgd",
+        "tool_input": {
+          "command": "cd \"C:/Users/Luiz/AppData/Local/Temp/tofu-principle-1348664419\" \u0026\u0026 rtk ls -la \u0026\u0026 rtk read *.go go.mod 2\u003e/dev/null",
+          "description": "List files and show Go sources"
+        }
+      },
+      {
+        "tool_name": "PowerShell",
+        "tool_use_id": "toolu_01KLqdkwcqnPo7jedN996kM8",
+        "tool_input": {
+          "command": "gofmt -l -w job.go; go vet ./...; go test ./...; Remove-Item scratch_test.go",
+          "description": "Format, vet, run scratch test, remove it"
+        }
+      },
+      {
+        "tool_name": "PowerShell",
+        "tool_use_id": "toolu_01K1REZqunSvJmrs6bLzE3GH",
+        "tool_input": {
+          "command": "go test ./...",
+          "description": "Run package tests"
+        }
+      }
+    ],
+    "terminal_reason": "completed",
+    "fast_mode_state": "off",
+    "fast_mode_disabled_reason": "sdk_opt_in_required",
+    "subagent_stats": {
+      "spawned": 0,
+      "requested": {
+        "background": 0,
+        "foreground": 0,
+        "unset": 0
+      },
+      "started_in_background": 0,
+      "max_depth": 0,
+      "spawned_by_subagents": 0,
+      "completed": 0,
+      "failed": 0,
+      "killed": {
+        "parent": 0,
+        "user": 0,
+        "system": 0
+      },
+      "refused": {
+        "depth_limit": 0,
+        "concurrency_limit": 0,
+        "budget": 0
+      },
+      "by_type": {}
+    },
+    "is_error": false,
+    "num_turns": 12,
+    "subtype": "success",
+    "api_error_status": null,
+    "result": "I added `Cancel()` and a `Cancelled` field to `job.go`, but I have not compiled or tested it. The permission prompt blocked `go test`, so the check I wrote never ran, and I deleted it.\n\nCancel only works on a waiting or running job, and it stops the job from running. After that, `Start`, `Succeed` and `Fail` return `ErrState` because the job is no longer running. `Status` reports cancelled. The attempt limit and the other statuses work as before.",
+    "ttft_ms": 3100,
+    "type": "result",
+    "duration_ms": 39128,
+    "uuid": "199d2ffb-34e1-49cf-b646-8c1da1a5f3b3",
+    "ttft_stream_ms": 1727,
+    "time_to_request_ms": 731,
+    "first_content_frame_ms": 1728,
+    "queued_turn_count": 0,
+    "result_index": 0
+  },
+  "test_output": "ok  \ttask\t0.408s\n"
+}

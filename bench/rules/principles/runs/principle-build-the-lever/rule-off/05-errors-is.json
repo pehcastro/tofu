@@ -1,0 +1,139 @@
+{
+  "principle": "principle-build-the-lever",
+  "arm": "rule-off",
+  "task": "05-errors-is",
+  "passed": true,
+  "diff_lines": 25,
+  "models_reported": [
+    "claude-opus-5-5"
+  ],
+  "cli_version": "2.1.283 (Claude Code)",
+  "credential_kind": "subscription",
+  "wire": "claude -p",
+  "machine": "DESKTOP-AHUN9RO",
+  "started": "2026-09-27T20:09:04.9005906-03:00",
+  "wall_ms": 29978,
+  "claude_output": {
+    "duration_api_ms": 19255,
+    "stop_reason": "end_turn",
+    "session_id": "2ac7a26e-9adc-4cf8-bf7a-6d15d3e725ce",
+    "total_cost_usd": 0.26809820000000006,
+    "usage": {
+      "input_tokens": 14,
+      "cache_creation_input_tokens": 23084,
+      "cache_read_input_tokens": 234751,
+      "output_tokens": 1821,
+      "output_tokens_details": {
+        "thinking_tokens": 96
+      },
+      "server_tool_use": {
+        "web_search_requests": 0,
+        "web_fetch_requests": 0
+      },
+      "service_tier": "standard",
+      "cache_creation": {
+        "ephemeral_1h_input_tokens": 23084,
+        "ephemeral_5m_input_tokens": 0
+      },
+      "inference_geo": "not_available",
+      "iterations": [
+        {
+          "input_tokens": 2,
+          "output_tokens": 175,
+          "cache_read_input_tokens": 38511,
+          "cache_creation_input_tokens": 139,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 139
+          },
+          "type": "message"
+        }
+      ],
+      "speed": "standard"
+    },
+    "modelUsage": {
+      "claude-opus-5-5": {
+        "inputTokens": 14,
+        "outputTokens": 1821,
+        "cacheReadInputTokens": 234751,
+        "cacheCreationInputTokens": 23084,
+        "webSearchRequests": 0,
+        "costUSD": 0.26809820000000006,
+        "contextWindow": 1000000,
+        "maxOutputTokens": 128000,
+        "thinkingTokens": 96,
+        "canonicalModel": "claude-opus-5-5",
+        "provider": "firstParty",
+        "costBasis": "list"
+      }
+    },
+    "permission_denials": [
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_01QmZwB8243rjL3FxXzuDp89",
+        "tool_input": {
+          "command": "cd \"C:/Users/Luiz/AppData/Local/Temp/tofu-principle-2371562296\" \u0026\u0026 git ls-files \u0026\u0026 rtk read errors.go \u0026\u0026 rtk grep -rn \"Error()\\|err.Error\\|strings.Contains\\|\\.Error() ==\" --include=*.go .",
+          "description": "List files, show errors.go, find error text comparisons"
+        }
+      },
+      {
+        "tool_name": "PowerShell",
+        "tool_use_id": "toolu_01ArsUBYXButXgJTwEZDEBCi",
+        "tool_input": {
+          "command": "go vet ./...; go build ./...",
+          "description": "Vet and build package"
+        }
+      },
+      {
+        "tool_name": "PowerShell",
+        "tool_use_id": "toolu_017ZqC1vJ3KerYodWhfGoGYv",
+        "tool_input": {
+          "command": "go build ./...",
+          "description": "Build package"
+        }
+      }
+    ],
+    "terminal_reason": "completed",
+    "fast_mode_state": "off",
+    "fast_mode_disabled_reason": "sdk_opt_in_required",
+    "subagent_stats": {
+      "spawned": 0,
+      "requested": {
+        "background": 0,
+        "foreground": 0,
+        "unset": 0
+      },
+      "started_in_background": 0,
+      "max_depth": 0,
+      "spawned_by_subagents": 0,
+      "completed": 0,
+      "failed": 0,
+      "killed": {
+        "parent": 0,
+        "user": 0,
+        "system": 0
+      },
+      "refused": {
+        "depth_limit": 0,
+        "concurrency_limit": 0,
+        "budget": 0
+      },
+      "by_type": {}
+    },
+    "is_error": false,
+    "num_turns": 13,
+    "subtype": "success",
+    "api_error_status": null,
+    "result": "I replaced every comparison of error text in `http.go`, `cache.go` and `audit.go` with `errors.Is` against `ErrNotFound`, `ErrExpired` and `ErrDenied`. I could not compile it, because running `go build` needs your approval.\n\nOne behavior change: `StatusCode` used to return 410 for any error whose text contained \"expired\". It now returns 410 only for `ErrExpired`, bare or wrapped. An error that only has \"expired\" in its message now gets 500.",
+    "ttft_ms": 3279,
+    "type": "result",
+    "duration_ms": 25566,
+    "uuid": "5166c7ec-2dc6-41fd-8ea4-5e5ca83f00c3",
+    "ttft_stream_ms": 1757,
+    "time_to_request_ms": 693,
+    "first_content_frame_ms": 1758,
+    "queued_turn_count": 0,
+    "result_index": 0
+  },
+  "test_output": "ok  \ttask\t0.371s\n"
+}

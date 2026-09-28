@@ -1,0 +1,179 @@
+{
+  "principle": "principle-build-the-lever",
+  "arm": "rule-on",
+  "task": "03-timeout-constant",
+  "passed": true,
+  "diff_lines": 56,
+  "models_reported": [
+    "claude-opus-5-5"
+  ],
+  "cli_version": "2.1.283 (Claude Code)",
+  "credential_kind": "subscription",
+  "wire": "claude -p",
+  "machine": "DESKTOP-AHUN9RO",
+  "started": "2026-09-27T20:02:12.1032697-03:00",
+  "wall_ms": 86047,
+  "claude_output": {
+    "duration_api_ms": 69653,
+    "stop_reason": "end_turn",
+    "session_id": "3323f936-e020-46ef-a3ef-3e52dd6f4c41",
+    "total_cost_usd": 0.5004902,
+    "usage": {
+      "input_tokens": 30,
+      "cache_creation_input_tokens": 30055,
+      "cache_read_input_tokens": 571651,
+      "output_tokens": 7280,
+      "output_tokens_details": {
+        "thinking_tokens": 1779
+      },
+      "server_tool_use": {
+        "web_search_requests": 0,
+        "web_fetch_requests": 0
+      },
+      "service_tier": "standard",
+      "cache_creation": {
+        "ephemeral_1h_input_tokens": 30055,
+        "ephemeral_5m_input_tokens": 0
+      },
+      "inference_geo": "not_available",
+      "iterations": [
+        {
+          "input_tokens": 2,
+          "output_tokens": 500,
+          "cache_read_input_tokens": 45186,
+          "cache_creation_input_tokens": 435,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 435
+          },
+          "type": "message"
+        }
+      ],
+      "speed": "standard"
+    },
+    "modelUsage": {
+      "claude-opus-5-5": {
+        "inputTokens": 30,
+        "outputTokens": 7280,
+        "cacheReadInputTokens": 571651,
+        "cacheCreationInputTokens": 30055,
+        "webSearchRequests": 0,
+        "costUSD": 0.5004902,
+        "contextWindow": 1000000,
+        "maxOutputTokens": 128000,
+        "thinkingTokens": 1779,
+        "canonicalModel": "claude-opus-5-5",
+        "provider": "firstParty",
+        "costBasis": "list"
+      }
+    },
+    "permission_denials": [
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_01LABcHbPMz9cSVZVnZP23yH",
+        "tool_input": {
+          "command": "git ls-files \u0026\u0026 rtk grep -rn \"30\" --include=*.go .",
+          "description": "List files and find 30 occurrences"
+        }
+      },
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_01Q7P2SPEGH9YgvJqBbzbHRN",
+        "tool_input": {
+          "command": "go test -run TestDumpValues -v . 2\u003e\u00261 | grep -v '^[=-]' \u003e /tmp/before.txt; cat /tmp/before.txt",
+          "description": "Record baseline duration values"
+        }
+      },
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_01BSiUpDg2y3B6d2zENCphUm",
+        "tool_input": {
+          "command": "rtk go test -count=1 -run TestDumpValues -v .",
+          "description": "Record baseline duration values"
+        }
+      },
+      {
+        "tool_name": "PowerShell",
+        "tool_use_id": "toolu_01SAgUFPUnme9GdqzWT8KbWx",
+        "tool_input": {
+          "command": "go test -count=1 -run TestDumpValues -v .",
+          "description": "Record baseline duration values"
+        }
+      },
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_014uBj9bExuxCzMokJ7bzDQa",
+        "tool_input": {
+          "command": "cp client.go /tmp/client.hand.go \u0026\u0026 git checkout -- client.go \u0026\u0026 python tools/requesttimeout.py \u0026\u0026 rtk diff /tmp/client.hand.go client.go \u0026\u0026 echo SAME \u0026\u0026 python tools/requesttimeout.py \u0026\u0026 echo rerun-done \u0026\u0026 rtk git diff",
+          "description": "Run codemod, diff against hand edit, check idempotence"
+        }
+      },
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_016p5TbppkdvPoRHdUovvtYB",
+        "tool_input": {
+          "command": "cp /c/Users/Luiz/AppData/Local/Temp/tofu-principle-2480239749/client.go /c/Users/Luiz/AppData/Local/Temp/client.hand.go",
+          "description": "Save hand-edited client.go"
+        }
+      },
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_01CZ4EFeNvs7Hy7q1jMhj6Sb",
+        "tool_input": {
+          "command": "git -C /c/Users/Luiz/AppData/Local/Temp/tofu-principle-2480239749 checkout -- client.go",
+          "description": "Restore original client.go"
+        }
+      },
+      {
+        "tool_name": "PowerShell",
+        "tool_use_id": "toolu_01WrcFCUTL9S9vZd174TY5vz",
+        "tool_input": {
+          "command": "python tools/requesttimeout.py",
+          "description": "Run the codemod"
+        }
+      }
+    ],
+    "terminal_reason": "completed",
+    "fast_mode_state": "off",
+    "fast_mode_disabled_reason": "sdk_opt_in_required",
+    "subagent_stats": {
+      "spawned": 0,
+      "requested": {
+        "background": 0,
+        "foreground": 0,
+        "unset": 0
+      },
+      "started_in_background": 0,
+      "max_depth": 0,
+      "spawned_by_subagents": 0,
+      "completed": 0,
+      "failed": 0,
+      "killed": {
+        "parent": 0,
+        "user": 0,
+        "system": 0
+      },
+      "refused": {
+        "depth_limit": 0,
+        "concurrency_limit": 0,
+        "budget": 0
+      },
+      "by_type": {}
+    },
+    "is_error": false,
+    "num_turns": 28,
+    "subtype": "success",
+    "api_error_status": null,
+    "result": "I added `const requestTimeout = 30 * time.Second` in `client.go:5` and replaced all 10 inline 30-second durations with it. The two `30 * time.Minute` values stay as they are, because they are a different duration.\n\nI built the edits but did not run or test them. Every command that runs a program (`go`, `python`, `git checkout`) needed approval, so the codemod `tools/requesttimeout.py` never ran. I made all the edits by hand, `client.go` first as the rule says. I checked by reading the code that each changed expression keeps its value:\n- `2 * 30 * time.Second` becomes `2 * requestTimeout`.\n- `30 * time.Second / 2` becomes `requestTimeout / 2`.\n- `4 * (30 * time.Second)` becomes `4 * requestTimeout`.\n- `30000 * time.Millisecond` becomes `requestTimeout`.\n\nTo check the codemod against my edits:\n1. `git stash`\n2. `python tools/requesttimeout.py`\n3. `git diff stash@{0}`: this should print nothing.\n4. `git checkout .` and then `git stash pop`.\n5. `go build ./...`\n\nNothing is committed.\n\n**TLDR**\nAll 10 sites now use `requestTimeout`, but I edited them by hand and ran nothing. Run the steps above to compare `tools/requesttimeout.py` with my edits and to build.",
+    "ttft_ms": 2724,
+    "type": "result",
+    "duration_ms": 81848,
+    "uuid": "02542a24-53be-4b10-91b0-38f9511a2157",
+    "ttft_stream_ms": 1470,
+    "time_to_request_ms": 644,
+    "first_content_frame_ms": 1471,
+    "queued_turn_count": 0,
+    "result_index": 0
+  },
+  "test_output": "ok  \ttask\t0.371s\n"
+}

@@ -1,0 +1,139 @@
+{
+  "principle": "principle-sequence-verifiable-units",
+  "arm": "rule-on",
+  "task": "09-lru",
+  "passed": true,
+  "diff_lines": 203,
+  "models_reported": [
+    "claude-opus-5-5"
+  ],
+  "cli_version": "2.1.283 (Claude Code)",
+  "credential_kind": "subscription",
+  "wire": "claude -p",
+  "machine": "DESKTOP-AHUN9RO",
+  "started": "2026-09-27T21:22:39.3653778-03:00",
+  "wall_ms": 42063,
+  "claude_output": {
+    "duration_api_ms": 34119,
+    "stop_reason": "end_turn",
+    "session_id": "ea444a9a-e739-469f-8451-5a26caeff0c7",
+    "total_cost_usd": 0.312075,
+    "usage": {
+      "input_tokens": 12,
+      "cache_creation_input_tokens": 24466,
+      "cache_read_input_tokens": 194595,
+      "output_tokens": 3869,
+      "output_tokens_details": {
+        "thinking_tokens": 305
+      },
+      "server_tool_use": {
+        "web_search_requests": 0,
+        "web_fetch_requests": 0
+      },
+      "service_tier": "standard",
+      "cache_creation": {
+        "ephemeral_1h_input_tokens": 24466,
+        "ephemeral_5m_input_tokens": 0
+      },
+      "inference_geo": "not_available",
+      "iterations": [
+        {
+          "input_tokens": 2,
+          "output_tokens": 286,
+          "cache_read_input_tokens": 36876,
+          "cache_creation_input_tokens": 3156,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 3156
+          },
+          "type": "message"
+        }
+      ],
+      "speed": "standard"
+    },
+    "modelUsage": {
+      "claude-opus-5-5": {
+        "inputTokens": 12,
+        "outputTokens": 3869,
+        "cacheReadInputTokens": 194595,
+        "cacheCreationInputTokens": 24466,
+        "webSearchRequests": 0,
+        "costUSD": 0.312075,
+        "contextWindow": 1000000,
+        "maxOutputTokens": 128000,
+        "thinkingTokens": 305,
+        "canonicalModel": "claude-opus-5-5",
+        "provider": "firstParty",
+        "costBasis": "list"
+      }
+    },
+    "permission_denials": [
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_01MFfff26wuPZhUUFJ3BAJS3",
+        "tool_input": {
+          "command": "cd \"C:/Users/Luiz/AppData/Local/Temp/tofu-principle-355177047\" \u0026\u0026 rtk ls -la \u0026\u0026 rtk read *.go go.mod 2\u003e/dev/null; rtk go test ./... 2\u003e\u00261 | tail -20",
+          "description": "List files, show Go sources, run tests"
+        }
+      },
+      {
+        "tool_name": "PowerShell",
+        "tool_use_id": "toolu_01HPGiYspm9JhpuUMRAqa5iv",
+        "tool_input": {
+          "command": "go test ./...",
+          "description": "Run baseline tests"
+        }
+      },
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_018cZh6v9sfRDfChaShdWizr",
+        "tool_input": {
+          "command": "rtk go test ./...",
+          "description": "Run baseline tests"
+        }
+      }
+    ],
+    "terminal_reason": "completed",
+    "fast_mode_state": "off",
+    "fast_mode_disabled_reason": "sdk_opt_in_required",
+    "subagent_stats": {
+      "spawned": 0,
+      "requested": {
+        "background": 0,
+        "foreground": 0,
+        "unset": 0
+      },
+      "started_in_background": 0,
+      "max_depth": 0,
+      "spawned_by_subagents": 0,
+      "completed": 0,
+      "failed": 0,
+      "killed": {
+        "parent": 0,
+        "user": 0,
+        "system": 0
+      },
+      "refused": {
+        "depth_limit": 0,
+        "concurrency_limit": 0,
+        "budget": 0
+      },
+      "by_type": {}
+    },
+    "is_error": false,
+    "num_turns": 10,
+    "subtype": "success",
+    "api_error_status": null,
+    "result": "I haven't run the tests, not even the starting check, because permission for `go test` was denied. That also meant I couldn't check each step before the next, so I wrote the tests and the fix together.\n\n- **`cache.go`:** now a least recently used cache built on a map plus `container/list`. The signature changed to `New(capacity, onEvict)`, and it adds `Delete`, `Len` and `Keys`.\n- **`cache_test.go`:** `TestPutGet` now calls `New(1, nil)`. I added tests for eviction order, `Get`/`Put` counting as a use, replacing a value, a nil `onEvict`, `Delete`, `Keys`, and a capacity below 1.\n\nIt is not safe for use from several goroutines at once, same as the old cache.\n\nRun `go test ./...` to check it.",
+    "ttft_ms": 3285,
+    "type": "result",
+    "duration_ms": 37786,
+    "uuid": "86d2f3dc-60b4-41c9-b2c6-50799f5550dc",
+    "ttft_stream_ms": 1772,
+    "time_to_request_ms": 630,
+    "first_content_frame_ms": 1772,
+    "queued_turn_count": 0,
+    "result_index": 0
+  },
+  "test_output": "ok  \ttask\t0.390s\n"
+}

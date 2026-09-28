@@ -1,0 +1,147 @@
+{
+  "principle": "principle-sequence-verifiable-units",
+  "arm": "rule-on",
+  "task": "04-slug",
+  "passed": false,
+  "diff_lines": 0,
+  "models_reported": [
+    "claude-opus-5-5"
+  ],
+  "cli_version": "2.1.283 (Claude Code)",
+  "credential_kind": "subscription",
+  "wire": "claude -p",
+  "machine": "DESKTOP-AHUN9RO",
+  "started": "2026-09-27T21:15:40.8058269-03:00",
+  "wall_ms": 22876,
+  "claude_output": {
+    "duration_api_ms": 13651,
+    "stop_reason": "end_turn",
+    "session_id": "f4930102-32a1-4c03-9d94-98f827ddc9d1",
+    "total_cost_usd": 0.2294478,
+    "usage": {
+      "input_tokens": 12,
+      "cache_creation_input_tokens": 21323,
+      "cache_read_input_tokens": 194179,
+      "output_tokens": 999,
+      "output_tokens_details": {
+        "thinking_tokens": 194
+      },
+      "server_tool_use": {
+        "web_search_requests": 0,
+        "web_fetch_requests": 0
+      },
+      "service_tier": "standard",
+      "cache_creation": {
+        "ephemeral_1h_input_tokens": 21323,
+        "ephemeral_5m_input_tokens": 0
+      },
+      "inference_geo": "not_available",
+      "iterations": [
+        {
+          "input_tokens": 2,
+          "output_tokens": 285,
+          "cache_read_input_tokens": 36656,
+          "cache_creation_input_tokens": 233,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 233
+          },
+          "type": "message"
+        }
+      ],
+      "speed": "standard"
+    },
+    "modelUsage": {
+      "claude-opus-5-5": {
+        "inputTokens": 12,
+        "outputTokens": 999,
+        "cacheReadInputTokens": 194179,
+        "cacheCreationInputTokens": 21323,
+        "webSearchRequests": 0,
+        "costUSD": 0.2294478,
+        "contextWindow": 1000000,
+        "maxOutputTokens": 128000,
+        "thinkingTokens": 194,
+        "canonicalModel": "claude-opus-5-5",
+        "provider": "firstParty",
+        "costBasis": "list"
+      }
+    },
+    "permission_denials": [
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_019tYdsyaNPAtr6Ge9naKrth",
+        "tool_input": {
+          "command": "cd \"C:/Users/Luiz/AppData/Local/Temp/tofu-principle-2893842538\" \u0026\u0026 rtk ls -la \u0026\u0026 rtk read *.go go.mod 2\u003e/dev/null; rtk go test ./... 2\u003e\u00261 | tail -20",
+          "description": "List files, show Go sources, run tests"
+        }
+      },
+      {
+        "tool_name": "PowerShell",
+        "tool_use_id": "toolu_01AzQ5ZCo4EerSDWQFnVTRxy",
+        "tool_input": {
+          "command": "go test ./...",
+          "description": "Run baseline tests"
+        }
+      },
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_01URgNfnBzNekvEpnm2yRhuQ",
+        "tool_input": {
+          "command": "rtk go test ./...",
+          "description": "Run baseline tests"
+        }
+      },
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_01AM6qrwi6j9gkC4pVJyjyQx",
+        "tool_input": {
+          "command": "rtk go test ./...",
+          "description": "Run baseline tests through rtk"
+        }
+      }
+    ],
+    "terminal_reason": "completed",
+    "fast_mode_state": "off",
+    "fast_mode_disabled_reason": "sdk_opt_in_required",
+    "subagent_stats": {
+      "spawned": 0,
+      "requested": {
+        "background": 0,
+        "foreground": 0,
+        "unset": 0
+      },
+      "started_in_background": 0,
+      "max_depth": 0,
+      "spawned_by_subagents": 0,
+      "completed": 0,
+      "failed": 0,
+      "killed": {
+        "parent": 0,
+        "user": 0,
+        "system": 0
+      },
+      "refused": {
+        "depth_limit": 0,
+        "concurrency_limit": 0,
+        "budget": 0
+      },
+      "by_type": {}
+    },
+    "is_error": false,
+    "num_turns": 8,
+    "subtype": "success",
+    "api_error_status": null,
+    "result": "I can't run `go test`: the approval for it was denied, both directly and through `rtk`. Your rule says each unit starts from a passing baseline, so I haven't changed any code.\n\nI read the current code. `Slug` in `slug.go` only lower-cases, trims and turns spaces into dashes. `slug_test.go` has one test, for \"Hello World\".\n\nPlease approve `go test ./...`. Once it runs, I'll do each rule as its own unit, test first: accents, other characters to one dash, trimming dashes at the ends, the 40-character cut, then \"untitled\".",
+    "ttft_ms": 2894,
+    "type": "result",
+    "duration_ms": 18236,
+    "uuid": "e9490395-317b-47e8-b7a9-3646a45062a8",
+    "ttft_stream_ms": 1482,
+    "time_to_request_ms": 622,
+    "first_content_frame_ms": 1483,
+    "queued_turn_count": 0,
+    "result_index": 0
+  },
+  "test_output": "--- FAIL: TestCheckSlug (0.00s)\n    zz_check_test.go:26: Slug(\"!!!\") = \"!!!\", want \"untitled\"\n    zz_check_test.go:26: Slug(\"日本語\") = \"日本語\", want \"untitled\"\n    zz_check_test.go:26: Slug(\"one two three four five six seven eight nine\") = \"one-two-three-four-five-six-seven-eight-nine\", want \"one-two-three-four-five-six-seven-eight\"\n    zz_check_test.go:26: Slug(\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\") = \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", want \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"\n    zz_check_test.go:26: Slug(\"abc bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\") = \"abc-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\", want \"abc\"\n    zz_check_test.go:26: Slug(\"  Hello,   World!  \") = \"hello,---world!\", want \"hello-world\"\n    zz_check_test.go:26: Slug(\"Ação é Ótima\") = \"ação-é-ótima\", want \"acao-e-otima\"\n    zz_check_test.go:26: Slug(\"Crème Brûlée \u0026 Café\") = \"crème-brûlée-\u0026-café\", want \"creme-brulee-cafe\"\n    zz_check_test.go:26: Slug(\"Niño Über\") = \"niño-über\", want \"nino-uber\"\n    zz_check_test.go:26: Slug(\"--Go 1.25 -- released--\") = \"--go-1.25----released--\", want \"go-1-25-released\"\n    zz_check_test.go:26: Slug(\"\") = \"\", want \"untitled\"\nFAIL\nFAIL\ttask\t0.440s\nFAIL\n"
+}

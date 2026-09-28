@@ -1,0 +1,146 @@
+{
+  "principle": "principle-separate-before-serializing-shared-state",
+  "arm": "rule-on",
+  "task": "01-progress-recorder",
+  "passed": false,
+  "diff_lines": 166,
+  "models_reported": [
+    "claude-opus-5-5"
+  ],
+  "cli_version": "2.1.283 (Claude Code)",
+  "credential_kind": "subscription",
+  "wire": "claude -p",
+  "machine": "DESKTOP-AHUN9RO",
+  "started": "2026-09-27T20:55:58.7882488-03:00",
+  "wall_ms": 52669,
+  "claude_output": {
+    "duration_api_ms": 40418,
+    "stop_reason": "end_turn",
+    "session_id": "d88e97cd-9cd5-4d35-9cf2-d3a13613542a",
+    "total_cost_usd": 0.3433028,
+    "usage": {
+      "input_tokens": 18,
+      "cache_creation_input_tokens": 24539,
+      "cache_read_input_tokens": 315094,
+      "output_tokens": 4195,
+      "output_tokens_details": {
+        "thinking_tokens": 771
+      },
+      "server_tool_use": {
+        "web_search_requests": 0,
+        "web_fetch_requests": 0
+      },
+      "service_tier": "standard",
+      "cache_creation": {
+        "ephemeral_1h_input_tokens": 24539,
+        "ephemeral_5m_input_tokens": 0
+      },
+      "inference_geo": "not_available",
+      "iterations": [
+        {
+          "input_tokens": 2,
+          "output_tokens": 586,
+          "cache_read_input_tokens": 39969,
+          "cache_creation_input_tokens": 136,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 136
+          },
+          "type": "message"
+        }
+      ],
+      "speed": "standard"
+    },
+    "modelUsage": {
+      "claude-opus-5-5": {
+        "inputTokens": 18,
+        "outputTokens": 4195,
+        "cacheReadInputTokens": 315094,
+        "cacheCreationInputTokens": 24539,
+        "webSearchRequests": 0,
+        "costUSD": 0.3433028,
+        "contextWindow": 1000000,
+        "maxOutputTokens": 128000,
+        "thinkingTokens": 771,
+        "canonicalModel": "claude-opus-5-5",
+        "provider": "firstParty",
+        "costBasis": "list"
+      }
+    },
+    "permission_denials": [
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_01UzjPZDoRonngF3dfSGoTyP",
+        "tool_input": {
+          "command": "rtk ls -la \u0026\u0026 rtk read *.go go.mod 2\u003e/dev/null"
+        }
+      },
+      {
+        "tool_name": "PowerShell",
+        "tool_use_id": "toolu_01S8EG7niLGumJZUx7UKVezR",
+        "tool_input": {
+          "command": "go vet ./...; go test -count=3 ./...",
+          "timeout": 300000
+        }
+      },
+      {
+        "tool_name": "PowerShell",
+        "tool_use_id": "toolu_01C6FzkTp3mHXJ7embmYEuKL",
+        "tool_input": {
+          "command": "go test -count=3 ./...",
+          "timeout": 300000
+        }
+      },
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_01QEMH65ZnAWELNwpGgUpHMz",
+        "tool_input": {
+          "command": "rtk go test -count=3 ./...",
+          "timeout": 300000
+        }
+      }
+    ],
+    "terminal_reason": "completed",
+    "fast_mode_state": "off",
+    "fast_mode_disabled_reason": "sdk_opt_in_required",
+    "subagent_stats": {
+      "spawned": 0,
+      "requested": {
+        "background": 0,
+        "foreground": 0,
+        "unset": 0
+      },
+      "started_in_background": 0,
+      "max_depth": 0,
+      "spawned_by_subagents": 0,
+      "completed": 0,
+      "failed": 0,
+      "killed": {
+        "parent": 0,
+        "user": 0,
+        "system": 0
+      },
+      "refused": {
+        "depth_limit": 0,
+        "concurrency_limit": 0,
+        "budget": 0
+      },
+      "by_type": {}
+    },
+    "is_error": false,
+    "num_turns": 10,
+    "subtype": "success",
+    "api_error_status": null,
+    "result": "I fixed `recorder.go`, but I could not run the test: `go test` needs your approval here, and it was not given.\n\n**Cause:** both services wrote one shared `state.json`. Each `Set` read the whole file, added one key and wrote the whole file back. When the two services overlapped, one write erased the other service's key. `Read` failed when it caught a file that was only half written.\n\n**Fix:** the services record separate facts, so each one now gets its own file.\n- `Set` writes only to `\u003cactor\u003e.state.json`. Each file has one writer, so no lock between processes is needed.\n- `Read` merges all the `*.state.json` files. It also reads the old `state.json` first, so values already saved there are kept.\n- Each write goes to a temp file, which is then renamed over the target. A reader sees the old file or the new one, never a half-written file.\n- Reads and renames retry for a short time on permission errors. Windows can give these for a moment while the other process has the file open.\n- A mutex stops two goroutines in one `Recorder` from racing on its own file. It does not cover two `Recorder` objects with the same actor.\n- The public API is unchanged.\n\n**Behavior change:** `Set` now returns an error if the key does not start with `\u003cactor\u003e.`. The services already follow that rule. Enforcing it stops one service from writing the other's keys.\n\nI also added `recorder_test.go`. It starts two real processes that write and read at the same time, then checks that every key has its latest value. Run it with `go test -count=3 ./...`.\n\n**TLDR**\nThe shared `state.json` is gone: each service writes its own file, and `Read` merges them. Writes are atomic, and `Set` now rejects keys outside the service's own prefix.\nUntested: run `go test -count=3 ./...`.",
+    "ttft_ms": 2733,
+    "type": "result",
+    "duration_ms": 48121,
+    "uuid": "f26ae7d5-b9d0-4937-b6b4-1bbd327550fa",
+    "ttft_stream_ms": 1510,
+    "time_to_request_ms": 713,
+    "first_content_frame_ms": 1510,
+    "queued_turn_count": 0,
+    "result_index": 0
+  },
+  "test_output": "--- FAIL: TestTwoProcesses (2.99s)\n    recorder_test.go:39: metrics: exit status 1\n        --- FAIL: TestHelperActor (0.71s)\n            recorder_test.go:24: open C:\\Users\\Luiz\\AppData\\Local\\Temp\\TestTwoProcesses572053526\\001\\indexer.state.json: The process cannot access the file because it is being used by another process.\n        FAIL\n    recorder_test.go:52: metrics.k55 = \"\"\n    recorder_test.go:52: metrics.k56 = \"\"\n    recorder_test.go:52: metrics.k57 = \"\"\n    recorder_test.go:52: metrics.k58 = \"\"\n    recorder_test.go:52: metrics.k59 = \"\"\n    recorder_test.go:52: metrics.k60 = \"\"\n    recorder_test.go:52: metrics.k61 = \"\"\n    recorder_test.go:52: metrics.k62 = \"\"\n    recorder_test.go:52: metrics.k63 = \"\"\n    recorder_test.go:52: metrics.k64 = \"\"\n    recorder_test.go:52: metrics.k65 = \"\"\n    recorder_test.go:52: metrics.k66 = \"\"\n    recorder_test.go:52: metrics.k67 = \"\"\n    recorder_test.go:52: metrics.k68 = \"\"\n    recorder_test.go:52: metrics.k69 = \"\"\n    recorder_test.go:52: metrics.k70 = \"\"\n    recorder_test.go:52: metrics.k71 = \"\"\n    recorder_test.go:52: metrics.k72 = \"\"\n    recorder_test.go:52: metrics.k73 = \"\"\n    recorder_test.go:52: metrics.k74 = \"\"\n    recorder_test.go:52: metrics.k75 = \"\"\n    recorder_test.go:52: metrics.k76 = \"\"\n    recorder_test.go:52: metrics.k77 = \"\"\n    recorder_test.go:52: metrics.k78 = \"\"\n    recorder_test.go:52: metrics.k79 = \"\"\n    recorder_test.go:52: metrics.k80 = \"\"\n    recorder_test.go:52: metrics.k81 = \"\"\n    recorder_test.go:52: metrics.k82 = \"\"\n    recorder_test.go:52: metrics.k83 = \"\"\n    recorder_test.go:52: metrics.k84 = \"\"\n    recorder_test.go:52: metrics.k85 = \"\"\n    recorder_test.go:52: metrics.k86 = \"\"\n    recorder_test.go:52: metrics.k87 = \"\"\n    recorder_test.go:52: metrics.k88 = \"\"\n    recorder_test.go:52: metrics.k89 = \"\"\n    recorder_test.go:52: metrics.k90 = \"\"\n    recorder_test.go:52: metrics.k91 = \"\"\n    recorder_test.go:52: metrics.k92 = \"\"\n    recorder_test.go:52: metrics.k93 = \"\"\n    recorder_test.go:52: metrics.k94 = \"\"\n    recorder_test.go:52: metrics.k95 = \"\"\n    recorder_test.go:52: metrics.k96 = \"\"\n    recorder_test.go:52: metrics.k97 = \"\"\n    recorder_test.go:52: metrics.k98 = \"\"\n    recorder_test.go:52: metrics.k99 = \"\"\n    recorder_test.go:52: metrics.k100 = \"\"\n    recorder_test.go:52: metrics.k101 = \"\"\n    recorder_test.go:52: metrics.k102 = \"\"\n    recorder_test.go:52: metrics.k103 = \"\"\n    recorder_test.go:52: metrics.k104 = \"\"\n    recorder_test.go:52: metrics.k105 = \"\"\n    recorder_test.go:52: metrics.k106 = \"\"\n    recorder_test.go:52: metrics.k107 = \"\"\n    recorder_test.go:52: metrics.k108 = \"\"\n    recorder_test.go:52: metrics.k109 = \"\"\n    recorder_test.go:52: metrics.k110 = \"\"\n    recorder_test.go:52: metrics.k111 = \"\"\n    recorder_test.go:52: metrics.k112 = \"\"\n    recorder_test.go:52: metrics.k113 = \"\"\n    recorder_test.go:52: metrics.k114 = \"\"\n    recorder_test.go:52: metrics.k115 = \"\"\n    recorder_test.go:52: metrics.k116 = \"\"\n    recorder_test.go:52: metrics.k117 = \"\"\n    recorder_test.go:52: metrics.k118 = \"\"\n    recorder_test.go:52: metrics.k119 = \"\"\n    recorder_test.go:52: metrics.k120 = \"\"\n    recorder_test.go:52: metrics.k121 = \"\"\n    recorder_test.go:52: metrics.k122 = \"\"\n    recorder_test.go:52: metrics.k123 = \"\"\n    recorder_test.go:52: metrics.k124 = \"\"\n    recorder_test.go:52: metrics.k125 = \"\"\n    recorder_test.go:52: metrics.k126 = \"\"\n    recorder_test.go:52: metrics.k127 = \"\"\n    recorder_test.go:52: metrics.k128 = \"\"\n    recorder_test.go:52: metrics.k129 = \"\"\n    recorder_test.go:52: metrics.k130 = \"\"\n    recorder_test.go:52: metrics.k131 = \"\"\n    recorder_test.go:52: metrics.k132 = \"\"\n    recorder_test.go:52: metrics.k133 = \"\"\n    recorder_test.go:52: metrics.k134 = \"\"\n    recorder_test.go:52: metrics.k135 = \"\"\n    recorder_test.go:52: metrics.k136 = \"\"\n    recorder_test.go:52: metrics.k137 = \"\"\n    recorder_test.go:52: metrics.k138 = \"\"\n    recorder_test.go:52: metrics.k139 = \"\"\n    recorder_test.go:52: metrics.k140 = \"\"\n    recorder_test.go:52: metrics.k141 = \"\"\n    recorder_test.go:52: metrics.k142 = \"\"\n    recorder_test.go:52: metrics.k143 = \"\"\n    recorder_test.go:52: metrics.k144 = \"\"\n    recorder_test.go:52: metrics.k145 = \"\"\n    recorder_test.go:52: metrics.k146 = \"\"\n    recorder_test.go:52: metrics.k147 = \"\"\n    recorder_test.go:52: metrics.k148 = \"\"\n    recorder_test.go:52: metrics.k149 = \"\"\n    recorder_test.go:52: metrics.k150 = \"\"\n    recorder_test.go:52: metrics.k151 = \"\"\n    recorder_test.go:52: metrics.k152 = \"\"\n    recorder_test.go:52: metrics.k153 = \"\"\n    recorder_test.go:52: metrics.k154 = \"\"\n    recorder_test.go:52: metrics.k155 = \"\"\n    recorder_test.go:52: metrics.k156 = \"\"\n    recorder_test.go:52: metrics.k157 = \"\"\n    recorder_test.go:52: metrics.k158 = \"\"\n    recorder_test.go:52: metrics.k159 = \"\"\n    recorder_test.go:52: metrics.k160 = \"\"\n    recorder_test.go:52: metrics.k161 = \"\"\n    recorder_test.go:52: metrics.k162 = \"\"\n    recorder_test.go:52: metrics.k163 = \"\"\n    recorder_test.go:52: metrics.k164 = \"\"\n    recorder_test.go:52: metrics.k165 = \"\"\n    recorder_test.go:52: metrics.k166 = \"\"\n    recorder_test.go:52: metrics.k167 = \"\"\n    recorder_test.go:52: metrics.k168 = \"\"\n    recorder_test.go:52: metrics.k169 = \"\"\n    recorder_test.go:52: metrics.k170 = \"\"\n    recorder_test.go:52: metrics.k171 = \"\"\n    recorder_test.go:52: metrics.k172 = \"\"\n    recorder_test.go:52: metrics.k173 = \"\"\n    recorder_test.go:52: metrics.k174 = \"\"\n    recorder_test.go:52: metrics.k175 = \"\"\n    recorder_test.go:52: metrics.k176 = \"\"\n    recorder_test.go:52: metrics.k177 = \"\"\n    recorder_test.go:52: metrics.k178 = \"\"\n    recorder_test.go:52: metrics.k179 = \"\"\n    recorder_test.go:52: metrics.k180 = \"\"\n    recorder_test.go:52: metrics.k181 = \"\"\n    recorder_test.go:52: metrics.k182 = \"\"\n    recorder_test.go:52: metrics.k183 = \"\"\n    recorder_test.go:52: metrics.k184 = \"\"\n    recorder_test.go:52: metrics.k185 = \"\"\n    recorder_test.go:52: metrics.k186 = \"\"\n    recorder_test.go:52: metrics.k187 = \"\"\n    recorder_test.go:52: metrics.k188 = \"\"\n    recorder_test.go:52: metrics.k189 = \"\"\n    recorder_test.go:52: metrics.k190 = \"\"\n    recorder_test.go:52: metrics.k191 = \"\"\n    recorder_test.go:52: metrics.k192 = \"\"\n    recorder_test.go:52: metrics.k193 = \"\"\n    recorder_test.go:52: metrics.k194 = \"\"\n    recorder_test.go:52: metrics.k195 = \"\"\n    recorder_test.go:52: metrics.k196 = \"\"\n    recorder_test.go:52: metrics.k197 = \"\"\n    recorder_test.go:52: metrics.k198 = \"\"\n    recorder_test.go:52: metrics.k199 = \"\"\nFAIL\nFAIL\ttask\t6.037s\nFAIL\n"
+}

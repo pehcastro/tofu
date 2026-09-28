@@ -1,0 +1,139 @@
+{
+  "principle": "principle-make-operations-idempotent",
+  "arm": "rule-off",
+  "task": "08-credit",
+  "passed": true,
+  "diff_lines": 150,
+  "models_reported": [
+    "claude-opus-5-5"
+  ],
+  "cli_version": "2.1.283 (Claude Code)",
+  "credential_kind": "subscription",
+  "wire": "claude -p",
+  "machine": "DESKTOP-AHUN9RO",
+  "started": "2026-09-27T20:38:21.248727-03:00",
+  "wall_ms": 38169,
+  "claude_output": {
+    "duration_api_ms": 28087,
+    "stop_reason": "end_turn",
+    "session_id": "26638571-b53e-434d-bcfc-4d27c02a89cf",
+    "total_cost_usd": 0.28373339999999997,
+    "usage": {
+      "input_tokens": 12,
+      "cache_creation_input_tokens": 23044,
+      "cache_read_input_tokens": 194467,
+      "output_tokens": 3022,
+      "output_tokens_details": {
+        "thinking_tokens": 327
+      },
+      "server_tool_use": {
+        "web_search_requests": 0,
+        "web_fetch_requests": 0
+      },
+      "service_tier": "standard",
+      "cache_creation": {
+        "ephemeral_1h_input_tokens": 23044,
+        "ephemeral_5m_input_tokens": 0
+      },
+      "inference_geo": "not_available",
+      "iterations": [
+        {
+          "input_tokens": 2,
+          "output_tokens": 373,
+          "cache_read_input_tokens": 38438,
+          "cache_creation_input_tokens": 172,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 172
+          },
+          "type": "message"
+        }
+      ],
+      "speed": "standard"
+    },
+    "modelUsage": {
+      "claude-opus-5-5": {
+        "inputTokens": 12,
+        "outputTokens": 3022,
+        "cacheReadInputTokens": 194467,
+        "cacheCreationInputTokens": 23044,
+        "webSearchRequests": 0,
+        "costUSD": 0.28373339999999997,
+        "contextWindow": 1000000,
+        "maxOutputTokens": 128000,
+        "thinkingTokens": 327,
+        "canonicalModel": "claude-opus-5-5",
+        "provider": "firstParty",
+        "costBasis": "list"
+      }
+    },
+    "permission_denials": [
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_01U8Nj1hYrZbASBWmVYiUsT6",
+        "tool_input": {
+          "command": "cd \"C:/Users/Luiz/AppData/Local/Temp/tofu-principle-2853186203\" \u0026\u0026 rtk ls -la \u0026\u0026 rtk read *.go go.mod 2\u003e/dev/null",
+          "description": "List files and show Go sources"
+        }
+      },
+      {
+        "tool_name": "PowerShell",
+        "tool_use_id": "toolu_01TgCz1hphpMLYGEXnj2fqHc",
+        "tool_input": {
+          "command": "go test -race ./... ; if (-not $?) { go test ./... }",
+          "description": "Run Go tests"
+        }
+      },
+      {
+        "tool_name": "PowerShell",
+        "tool_use_id": "toolu_015EQWwW19zDGBGUScs4m7ae",
+        "tool_input": {
+          "command": "go test ./...",
+          "description": "Run Go tests"
+        }
+      }
+    ],
+    "terminal_reason": "completed",
+    "fast_mode_state": "off",
+    "fast_mode_disabled_reason": "sdk_opt_in_required",
+    "subagent_stats": {
+      "spawned": 0,
+      "requested": {
+        "background": 0,
+        "foreground": 0,
+        "unset": 0
+      },
+      "started_in_background": 0,
+      "max_depth": 0,
+      "spawned_by_subagents": 0,
+      "completed": 0,
+      "failed": 0,
+      "killed": {
+        "parent": 0,
+        "user": 0,
+        "system": 0
+      },
+      "refused": {
+        "depth_limit": 0,
+        "concurrency_limit": 0,
+        "budget": 0
+      },
+      "by_type": {}
+    },
+    "is_error": false,
+    "num_turns": 9,
+    "subtype": "success",
+    "api_error_status": null,
+    "result": "I finished Credit and Balance in `ledger.go`, but the tests have not run. The tool blocked `go test ./...`, so please run it yourself.\n\n- **Line format:** each line in the ledger is `\u003crequestID\u003e \u003ccents\u003e`.\n- **Retries:** before `Credit` appends, it checks for the request id. If the same id comes back with the same amount, it returns nil and writes nothing. If the same id comes back with a different amount, it returns an error.\n- **Parallel calls:** a lock in the package makes the check and the append happen as one step. That stops two copies of the same request, arriving at the same time, from both getting credited.\n- **Request ids:** ids that are empty or contain spaces or newlines are rejected.\n- **Missing file:** `Balance` returns 0 if the ledger file does not exist yet.\n- **Tests:** I added `ledger_test.go`. It tests a retried request, 20 parallel copies of one request, and a missing file.\n\nNOTE: the lock only works inside one process. Two processes that write to the same file can still credit a request twice. Fixing that needs an OS file lock.",
+    "ttft_ms": 2871,
+    "type": "result",
+    "duration_ms": 33972,
+    "uuid": "d33b4c89-f80f-4804-8e84-b2cafa09839c",
+    "ttft_stream_ms": 1565,
+    "time_to_request_ms": 592,
+    "first_content_frame_ms": 1565,
+    "queued_turn_count": 0,
+    "result_index": 0
+  },
+  "test_output": "ok  \ttask\t0.400s\n"
+}

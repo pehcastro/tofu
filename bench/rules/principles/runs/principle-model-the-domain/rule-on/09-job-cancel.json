@@ -1,0 +1,139 @@
+{
+  "principle": "principle-model-the-domain",
+  "arm": "rule-on",
+  "task": "09-job-cancel",
+  "passed": true,
+  "diff_lines": 151,
+  "models_reported": [
+    "claude-opus-5-5"
+  ],
+  "cli_version": "2.1.283 (Claude Code)",
+  "credential_kind": "subscription",
+  "wire": "claude -p",
+  "machine": "DESKTOP-AHUN9RO",
+  "started": "2026-09-27T20:53:02.4401347-03:00",
+  "wall_ms": 43616,
+  "claude_output": {
+    "duration_api_ms": 31460,
+    "stop_reason": "end_turn",
+    "session_id": "e02d876c-5034-427c-81ff-91d5e38efd86",
+    "total_cost_usd": 0.3102846,
+    "usage": {
+      "input_tokens": 16,
+      "cache_creation_input_tokens": 23798,
+      "cache_read_input_tokens": 273383,
+      "output_tokens": 3258,
+      "output_tokens_details": {
+        "thinking_tokens": 785
+      },
+      "server_tool_use": {
+        "web_search_requests": 0,
+        "web_fetch_requests": 0
+      },
+      "service_tier": "standard",
+      "cache_creation": {
+        "ephemeral_1h_input_tokens": 23798,
+        "ephemeral_5m_input_tokens": 0
+      },
+      "inference_geo": "not_available",
+      "iterations": [
+        {
+          "input_tokens": 2,
+          "output_tokens": 396,
+          "cache_read_input_tokens": 39224,
+          "cache_creation_input_tokens": 140,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 140
+          },
+          "type": "message"
+        }
+      ],
+      "speed": "standard"
+    },
+    "modelUsage": {
+      "claude-opus-5-5": {
+        "inputTokens": 16,
+        "outputTokens": 3258,
+        "cacheReadInputTokens": 273383,
+        "cacheCreationInputTokens": 23798,
+        "webSearchRequests": 0,
+        "costUSD": 0.3102846,
+        "contextWindow": 1000000,
+        "maxOutputTokens": 128000,
+        "thinkingTokens": 785,
+        "canonicalModel": "claude-opus-5-5",
+        "provider": "firstParty",
+        "costBasis": "list"
+      }
+    },
+    "permission_denials": [
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_01AFanhe7tV738oc6RGwPKdq",
+        "tool_input": {
+          "command": "cd \"C:/Users/Luiz/AppData/Local/Temp/tofu-principle-3714558747\" \u0026\u0026 rtk ls -la \u0026\u0026 rtk read *.go go.mod 2\u003e/dev/null",
+          "description": "List files and show Go sources"
+        }
+      },
+      {
+        "tool_name": "PowerShell",
+        "tool_use_id": "toolu_019TYEfZPCC2tJZoMUY7sUr9",
+        "tool_input": {
+          "command": "go test ./...; go vet ./...",
+          "description": "Run tests and vet"
+        }
+      },
+      {
+        "tool_name": "PowerShell",
+        "tool_use_id": "toolu_01DjX59TYabb1gKEgB6r7TGi",
+        "tool_input": {
+          "command": "go test ./...",
+          "description": "Run tests"
+        }
+      }
+    ],
+    "terminal_reason": "completed",
+    "fast_mode_state": "off",
+    "fast_mode_disabled_reason": "sdk_opt_in_required",
+    "subagent_stats": {
+      "spawned": 0,
+      "requested": {
+        "background": 0,
+        "foreground": 0,
+        "unset": 0
+      },
+      "started_in_background": 0,
+      "max_depth": 0,
+      "spawned_by_subagents": 0,
+      "completed": 0,
+      "failed": 0,
+      "killed": {
+        "parent": 0,
+        "user": 0,
+        "system": 0
+      },
+      "refused": {
+        "depth_limit": 0,
+        "concurrency_limit": 0,
+        "budget": 0
+      },
+      "by_type": {}
+    },
+    "is_error": false,
+    "num_turns": 9,
+    "subtype": "success",
+    "api_error_status": null,
+    "result": "I added `Cancel` in `job.go`. I could not run the tests: `go test` needs your approval here.\n\nThe three booleans (`Running`, `Done`, `Failed`) are gone. In their place is one `State` value and a table of allowed moves between states. Done, failed and cancelled have no moves out, so they are final. Every method checks the move against that table, so a late `Succeed` or `Fail` after `Cancel` returns `ErrState` and changes nothing. The limit of 3 attempts and the `Status` strings work as before.\n\nCAUTION: this changes the public API. Code that reads or sets `j.Running`, `j.Done` or `j.Failed` will no longer compile. `Attempts` is still exported.\n\nI also added `job_test.go`. It covers retrying until failed, cancelling a waiting or running job, a late `Succeed`/`Fail`, and `Cancel` on a finished job.\n\n**TLDR**\n`Cancel` is in `job.go`. The three booleans are replaced by one state and a table of allowed moves, which breaks code that uses those fields. The new tests in `job_test.go` have not run: `go test ./...` needs your approval.",
+    "ttft_ms": 2879,
+    "type": "result",
+    "duration_ms": 39013,
+    "uuid": "7c3aa54a-63af-4b3f-bce8-6bcebe6513df",
+    "ttft_stream_ms": 1555,
+    "time_to_request_ms": 690,
+    "first_content_frame_ms": 1555,
+    "queued_turn_count": 0,
+    "result_index": 0
+  },
+  "test_output": "ok  \ttask\t0.490s\n"
+}

@@ -1,0 +1,143 @@
+{
+  "principle": "principle-separate-before-serializing-shared-state",
+  "arm": "rule-on",
+  "task": "09-transfer-stats",
+  "passed": true,
+  "diff_lines": 16,
+  "models_reported": [
+    "claude-opus-5-5"
+  ],
+  "cli_version": "2.1.283 (Claude Code)",
+  "credential_kind": "subscription",
+  "wire": "claude -p",
+  "machine": "DESKTOP-AHUN9RO",
+  "started": "2026-09-27T21:08:45.4597613-03:00",
+  "wall_ms": 35014,
+  "claude_output": {
+    "duration_api_ms": 20853,
+    "stop_reason": "end_turn",
+    "session_id": "32a4a738-3d13-4511-8196-559e54db9f5e",
+    "total_cost_usd": 0.2741354,
+    "usage": {
+      "input_tokens": 16,
+      "cache_creation_input_tokens": 22531,
+      "cache_read_input_tokens": 272517,
+      "output_tokens": 1966,
+      "output_tokens_details": {
+        "thinking_tokens": 23
+      },
+      "server_tool_use": {
+        "web_search_requests": 0,
+        "web_fetch_requests": 0
+      },
+      "service_tier": "standard",
+      "cache_creation": {
+        "ephemeral_1h_input_tokens": 22531,
+        "ephemeral_5m_input_tokens": 0
+      },
+      "inference_geo": "not_available",
+      "iterations": [
+        {
+          "input_tokens": 2,
+          "output_tokens": 227,
+          "cache_read_input_tokens": 37942,
+          "cache_creation_input_tokens": 155,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 155
+          },
+          "type": "message"
+        }
+      ],
+      "speed": "standard"
+    },
+    "modelUsage": {
+      "claude-opus-5-5": {
+        "inputTokens": 16,
+        "outputTokens": 1966,
+        "cacheReadInputTokens": 272517,
+        "cacheCreationInputTokens": 22531,
+        "webSearchRequests": 0,
+        "costUSD": 0.2741354,
+        "contextWindow": 1000000,
+        "maxOutputTokens": 128000,
+        "thinkingTokens": 23,
+        "canonicalModel": "claude-opus-5-5",
+        "provider": "firstParty",
+        "costBasis": "list"
+      }
+    },
+    "permission_denials": [
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_01MeG2X4ceooAEprwn4BL2Tg",
+        "tool_input": {
+          "command": "cat \u003e tally_tmp_test.go \u003c\u003c'EOF'\npackage task\nimport \"testing\"\nfunc TestTallyTmp(t *testing.T) {\n\tev := make([]Event, 100000)\n\tfor i := range ev { ev[i] = Event{Upload: i%3 == 0, Bytes: 7} }\n\tfor r := 0; r \u003c 20; r++ {\n\t\ts := Tally(ev, 8)\n\t\tif s.Uploads+s.Downloads != len(ev) || s.Bytes != 700000 || s.Uploads != 33334 { t.Fatal(s) }\n\t}\n}\nEOF\ngo vet ./... \u0026\u0026 go test -race -count=1 ./... ; rc=$?; rm tally_tmp_test.go; exit $rc"
+        }
+      },
+      {
+        "tool_name": "PowerShell",
+        "tool_use_id": "toolu_0193XYXJx5YaVwMAJapDPDJj",
+        "tool_input": {
+          "command": "go vet ./...; go test -race -count=1 ./...; if (-not $?) { go test -count=1 ./... }"
+        }
+      },
+      {
+        "tool_name": "PowerShell",
+        "tool_use_id": "toolu_019TGj5qhaoUGDxWhZocFKBr",
+        "tool_input": {
+          "command": "go test -race -count=1 ./..."
+        }
+      },
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_014WGpmPZtP2TyvbYV2KeVkS",
+        "tool_input": {
+          "command": "rtk go test -race -count=1 ./... 2\u003e\u00261 || rtk go test -count=1 ./... 2\u003e\u00261"
+        }
+      }
+    ],
+    "terminal_reason": "completed",
+    "fast_mode_state": "off",
+    "fast_mode_disabled_reason": "sdk_opt_in_required",
+    "subagent_stats": {
+      "spawned": 0,
+      "requested": {
+        "background": 0,
+        "foreground": 0,
+        "unset": 0
+      },
+      "started_in_background": 0,
+      "max_depth": 0,
+      "spawned_by_subagents": 0,
+      "completed": 0,
+      "failed": 0,
+      "killed": {
+        "parent": 0,
+        "user": 0,
+        "system": 0
+      },
+      "refused": {
+        "depth_limit": 0,
+        "concurrency_limit": 0,
+        "budget": 0
+      },
+      "by_type": {}
+    },
+    "is_error": false,
+    "num_turns": 10,
+    "subtype": "success",
+    "api_error_status": null,
+    "result": "I fixed `stats.go`, but did not test it. Running `go test` needs your approval, and this session could not get it.\n\nThe cause was a data race. All the worker goroutines did `s.Uploads++` and `s.Bytes += ...` on one shared `Stats`, so some updates overwrote others and got lost. The fix drops the shared total instead of adding a lock:\n\n- **Change:** each worker counts into its own entry in a `partial []Stats` slice.\n- **Merge:** `Tally` adds the entries together once all workers finish.\n- **Workers:** it still uses the number of workers you pass in.\n\nTo check it, run `go test -race ./...` with a test that compares the totals to the event count.",
+    "ttft_ms": 1978,
+    "type": "result",
+    "duration_ms": 30767,
+    "uuid": "1bb571fd-5b5e-4d96-9144-6eb20a647b61",
+    "ttft_stream_ms": 1435,
+    "time_to_request_ms": 577,
+    "first_content_frame_ms": 1435,
+    "queued_turn_count": 0,
+    "result_index": 0
+  },
+  "test_output": "ok  \ttask\t0.356s\n"
+}

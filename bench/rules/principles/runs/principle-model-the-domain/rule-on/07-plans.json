@@ -1,0 +1,139 @@
+{
+  "principle": "principle-model-the-domain",
+  "arm": "rule-on",
+  "task": "07-plans",
+  "passed": true,
+  "diff_lines": 134,
+  "models_reported": [
+    "claude-opus-5-5"
+  ],
+  "cli_version": "2.1.283 (Claude Code)",
+  "credential_kind": "subscription",
+  "wire": "claude -p",
+  "machine": "DESKTOP-AHUN9RO",
+  "started": "2026-09-27T20:48:54.0253531-03:00",
+  "wall_ms": 49400,
+  "claude_output": {
+    "duration_api_ms": 38229,
+    "stop_reason": "end_turn",
+    "session_id": "3f8b870a-087e-4c87-9b15-66b5d9d19249",
+    "total_cost_usd": 0.33603959999999994,
+    "usage": {
+      "input_tokens": 16,
+      "cache_creation_input_tokens": 25138,
+      "cache_read_input_tokens": 276658,
+      "output_tokens": 3977,
+      "output_tokens_details": {
+        "thinking_tokens": 396
+      },
+      "server_tool_use": {
+        "web_search_requests": 0,
+        "web_fetch_requests": 0
+      },
+      "service_tier": "standard",
+      "cache_creation": {
+        "ephemeral_1h_input_tokens": 25138,
+        "ephemeral_5m_input_tokens": 0
+      },
+      "inference_geo": "not_available",
+      "iterations": [
+        {
+          "input_tokens": 2,
+          "output_tokens": 486,
+          "cache_read_input_tokens": 40039,
+          "cache_creation_input_tokens": 665,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 665
+          },
+          "type": "message"
+        }
+      ],
+      "speed": "standard"
+    },
+    "modelUsage": {
+      "claude-opus-5-5": {
+        "inputTokens": 16,
+        "outputTokens": 3977,
+        "cacheReadInputTokens": 276658,
+        "cacheCreationInputTokens": 25138,
+        "webSearchRequests": 0,
+        "costUSD": 0.33603959999999994,
+        "contextWindow": 1000000,
+        "maxOutputTokens": 128000,
+        "thinkingTokens": 396,
+        "canonicalModel": "claude-opus-5-5",
+        "provider": "firstParty",
+        "costBasis": "list"
+      }
+    },
+    "permission_denials": [
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_011Z2gkEaDzw356nX1mcmz2F",
+        "tool_input": {
+          "command": "cd \"C:/Users/Luiz/AppData/Local/Temp/tofu-principle-4287616091\" \u0026\u0026 git ls-files \u0026\u0026 rtk read *.go go.mod 2\u003e/dev/null",
+          "description": "List files and show Go sources"
+        }
+      },
+      {
+        "tool_name": "PowerShell",
+        "tool_use_id": "toolu_01JCkADxCfLHVYiyUSvJwNxz",
+        "tool_input": {
+          "command": "gofmt -w .; go vet ./...; go test ./...",
+          "description": "Format, vet and test"
+        }
+      },
+      {
+        "tool_name": "PowerShell",
+        "tool_use_id": "toolu_01X5VqKNunmiLz2qJj5tHh7E",
+        "tool_input": {
+          "command": "go test ./...",
+          "description": "Run tests"
+        }
+      }
+    ],
+    "terminal_reason": "completed",
+    "fast_mode_state": "off",
+    "fast_mode_disabled_reason": "sdk_opt_in_required",
+    "subagent_stats": {
+      "spawned": 0,
+      "requested": {
+        "background": 0,
+        "foreground": 0,
+        "unset": 0
+      },
+      "started_in_background": 0,
+      "max_depth": 0,
+      "spawned_by_subagents": 0,
+      "completed": 0,
+      "failed": 0,
+      "killed": {
+        "parent": 0,
+        "user": 0,
+        "system": 0
+      },
+      "refused": {
+        "depth_limit": 0,
+        "concurrency_limit": 0,
+        "budget": 0
+      },
+      "by_type": {}
+    },
+    "is_error": false,
+    "num_turns": 17,
+    "subtype": "success",
+    "api_error_status": null,
+    "result": "I added the enterprise plan, and all four plans now live in one table in `account.go`. I could not run the tests because both `go test` calls were denied, so nothing is checked yet.\n\n- **Account:** `IsPro` and `IsTeam` are gone. `Account` now has private `plan` and `seats` fields, so `NewAccount` is the only way to build one. This breaks any outside code that sets `IsPro`/`IsTeam` directly.\n- **Reads:** `MaxProjects`, `MaxStorageGB`, `HasSSO`, `PrioritySupport` and `MonthlyPrice` each return one value from the table. I added `Plan()` and `Seats()` so callers can read those two values.\n- **Prices:** every plan's price is cents per seat times seats. Pro keeps its 1200 because it always has exactly 1 seat.\n- **Tests:** I added `account_test.go` with the limits of all four plans and the `ErrPlan`/`ErrSeats` cases. Run `go test ./...` to check.",
+    "ttft_ms": 3100,
+    "type": "result",
+    "duration_ms": 44996,
+    "uuid": "aaa2e9b2-961a-42e3-a53b-3f220c0942e6",
+    "ttft_stream_ms": 2143,
+    "time_to_request_ms": 655,
+    "first_content_frame_ms": 2143,
+    "queued_turn_count": 0,
+    "result_index": 0
+  },
+  "test_output": "ok  \ttask\t0.435s\n"
+}

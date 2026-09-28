@@ -1,0 +1,131 @@
+{
+  "principle": "principle-build-the-lever",
+  "arm": "rule-off",
+  "task": "10-error-prefix",
+  "passed": true,
+  "diff_lines": 14,
+  "models_reported": [
+    "claude-opus-5-5"
+  ],
+  "cli_version": "2.1.283 (Claude Code)",
+  "credential_kind": "subscription",
+  "wire": "claude -p",
+  "machine": "DESKTOP-AHUN9RO",
+  "started": "2026-09-27T20:23:03.6220665-03:00",
+  "wall_ms": 40743,
+  "claude_output": {
+    "duration_api_ms": 32367,
+    "stop_reason": "end_turn",
+    "session_id": "813437b9-9b71-4767-affc-58bfcc02ae4a",
+    "total_cost_usd": 0.2800714,
+    "usage": {
+      "input_tokens": 12,
+      "cache_creation_input_tokens": 23673,
+      "cache_read_input_tokens": 197797,
+      "output_tokens": 2554,
+      "output_tokens_details": {
+        "thinking_tokens": 724
+      },
+      "server_tool_use": {
+        "web_search_requests": 0,
+        "web_fetch_requests": 0
+      },
+      "service_tier": "standard",
+      "cache_creation": {
+        "ephemeral_1h_input_tokens": 23673,
+        "ephemeral_5m_input_tokens": 0
+      },
+      "inference_geo": "not_available",
+      "iterations": [
+        {
+          "input_tokens": 2,
+          "output_tokens": 315,
+          "cache_read_input_tokens": 39086,
+          "cache_creation_input_tokens": 153,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 153
+          },
+          "type": "message"
+        }
+      ],
+      "speed": "standard"
+    },
+    "modelUsage": {
+      "claude-opus-5-5": {
+        "inputTokens": 12,
+        "outputTokens": 2554,
+        "cacheReadInputTokens": 197797,
+        "cacheCreationInputTokens": 23673,
+        "webSearchRequests": 0,
+        "costUSD": 0.2800714,
+        "contextWindow": 1000000,
+        "maxOutputTokens": 128000,
+        "thinkingTokens": 724,
+        "canonicalModel": "claude-opus-5-5",
+        "provider": "firstParty",
+        "costBasis": "list"
+      }
+    },
+    "permission_denials": [
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_01He9xJsDsW6k69RYhGdjUQ6",
+        "tool_input": {
+          "command": "cd \"C:/Users/Luiz/AppData/Local/Temp/tofu-principle-3371486213\" \u0026\u0026 rtk ls \u0026\u0026 sed -i 's/\"store: /\"kv: /' kv.go backup.go \u0026\u0026 rtk git diff --stat \u0026\u0026 rtk go vet ./... 2\u003e\u00261; rtk go test ./... 2\u003e\u00261 | tail -5",
+          "description": "Replace prefix, check build and tests"
+        }
+      },
+      {
+        "tool_name": "PowerShell",
+        "tool_use_id": "toolu_011syb2EmJBKE63uRuS16wEP",
+        "tool_input": {
+          "command": "go build ./...; go test ./...",
+          "description": "Build and test package"
+        }
+      }
+    ],
+    "terminal_reason": "completed",
+    "fast_mode_state": "off",
+    "fast_mode_disabled_reason": "sdk_opt_in_required",
+    "subagent_stats": {
+      "spawned": 0,
+      "requested": {
+        "background": 0,
+        "foreground": 0,
+        "unset": 0
+      },
+      "started_in_background": 0,
+      "max_depth": 0,
+      "spawned_by_subagents": 0,
+      "completed": 0,
+      "failed": 0,
+      "killed": {
+        "parent": 0,
+        "user": 0,
+        "system": 0
+      },
+      "refused": {
+        "depth_limit": 0,
+        "concurrency_limit": 0,
+        "budget": 0
+      },
+      "by_type": {}
+    },
+    "is_error": false,
+    "num_turns": 13,
+    "subtype": "success",
+    "api_error_status": null,
+    "result": "I changed all seven `\"store: \"` prefixes to `\"kv: \"` in `kv.go` and `backup.go`. I could not build or test: the permission check blocked the `go` commands.\n\nTwo messages don't match your rule exactly:\n\n- **Closing twice:** `Close` wraps `ErrClosed` (`kv.go:51`), so the message was `store: store: closed twice` and is now `kv: kv: closed twice`. It gets the new prefix, but the rest also changes, because `ErrClosed` itself changed.\n- **Restore errors:** `Restore` wraps errors from `Put` (`backup.go:19`). `restore: line 3: store: empty key` does not start with `store: `, but it becomes `restore: line 3: kv: empty key`. Keeping it unchanged would mean putting the old name back into those messages, so I left it.\n\n`restore: ...` and `datastore: ...` messages are unchanged.",
+    "ttft_ms": 3743,
+    "type": "result",
+    "duration_ms": 36409,
+    "uuid": "2dbb3fe3-ca05-4640-a2cc-1cd83e93806e",
+    "ttft_stream_ms": 3364,
+    "time_to_request_ms": 681,
+    "first_content_frame_ms": 3364,
+    "queued_turn_count": 0,
+    "result_index": 0
+  },
+  "test_output": "ok  \ttask\t0.355s\n"
+}

@@ -1,0 +1,139 @@
+{
+  "principle": "principle-sequence-verifiable-units",
+  "arm": "rule-off",
+  "task": "09-lru",
+  "passed": false,
+  "diff_lines": 169,
+  "models_reported": [
+    "claude-opus-5-5"
+  ],
+  "cli_version": "2.1.283 (Claude Code)",
+  "credential_kind": "subscription",
+  "wire": "claude -p",
+  "machine": "DESKTOP-AHUN9RO",
+  "started": "2026-09-27T21:23:23.0736803-03:00",
+  "wall_ms": 38440,
+  "claude_output": {
+    "duration_api_ms": 28286,
+    "stop_reason": "end_turn",
+    "session_id": "b8c2709e-2bca-414d-8e69-dbee6ff6b052",
+    "total_cost_usd": 0.299759,
+    "usage": {
+      "input_tokens": 14,
+      "cache_creation_input_tokens": 23668,
+      "cache_read_input_tokens": 234895,
+      "output_tokens": 3169,
+      "output_tokens_details": {
+        "thinking_tokens": 58
+      },
+      "server_tool_use": {
+        "web_search_requests": 0,
+        "web_fetch_requests": 0
+      },
+      "service_tier": "standard",
+      "cache_creation": {
+        "ephemeral_1h_input_tokens": 23668,
+        "ephemeral_5m_input_tokens": 0
+      },
+      "inference_geo": "not_available",
+      "iterations": [
+        {
+          "input_tokens": 2,
+          "output_tokens": 282,
+          "cache_read_input_tokens": 39094,
+          "cache_creation_input_tokens": 140,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 140
+          },
+          "type": "message"
+        }
+      ],
+      "speed": "standard"
+    },
+    "modelUsage": {
+      "claude-opus-5-5": {
+        "inputTokens": 14,
+        "outputTokens": 3169,
+        "cacheReadInputTokens": 234895,
+        "cacheCreationInputTokens": 23668,
+        "webSearchRequests": 0,
+        "costUSD": 0.299759,
+        "contextWindow": 1000000,
+        "maxOutputTokens": 128000,
+        "thinkingTokens": 58,
+        "canonicalModel": "claude-opus-5-5",
+        "provider": "firstParty",
+        "costBasis": "list"
+      }
+    },
+    "permission_denials": [
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_01HaMHsm9QUyz1wmdukhxrHi",
+        "tool_input": {
+          "command": "cd \"C:/Users/Luiz/AppData/Local/Temp/tofu-principle-714897559\" \u0026\u0026 rtk ls -la \u0026\u0026 rtk read *.go go.mod 2\u003e/dev/null",
+          "description": "List files and show Go sources"
+        }
+      },
+      {
+        "tool_name": "PowerShell",
+        "tool_use_id": "toolu_012td28fge2DYN9o8vGerfd8",
+        "tool_input": {
+          "command": "go vet ./...; go test ./...",
+          "description": "Vet and run tests"
+        }
+      },
+      {
+        "tool_name": "PowerShell",
+        "tool_use_id": "toolu_01LV9c8iJBPVkva7FQP7NVMY",
+        "tool_input": {
+          "command": "go test ./...",
+          "description": "Run tests"
+        }
+      }
+    ],
+    "terminal_reason": "completed",
+    "fast_mode_state": "off",
+    "fast_mode_disabled_reason": "sdk_opt_in_required",
+    "subagent_stats": {
+      "spawned": 0,
+      "requested": {
+        "background": 0,
+        "foreground": 0,
+        "unset": 0
+      },
+      "started_in_background": 0,
+      "max_depth": 0,
+      "spawned_by_subagents": 0,
+      "completed": 0,
+      "failed": 0,
+      "killed": {
+        "parent": 0,
+        "user": 0,
+        "system": 0
+      },
+      "refused": {
+        "depth_limit": 0,
+        "concurrency_limit": 0,
+        "budget": 0
+      },
+      "by_type": {}
+    },
+    "is_error": false,
+    "num_turns": 10,
+    "subtype": "success",
+    "api_error_status": null,
+    "result": "I rewrote `cache.go` as an LRU cache, but the tests have not run. You did not approve the `go test ./...` command, so I could not check that the code compiles or that the tests pass.\n\n- **API change:** `New()` is now `New(capacity, onEvict)`. It uses a map plus a `container/list`. `Delete`, `Len` and `Keys` are new.\n- **Tests:** in `cache_test.go`, `TestPutGet` now calls `New(1, nil)`. I added tests for eviction order, Put counting as a use, replacing a key, `Delete`, capacity below 1, and a nil `onEvict`.\n- **Not safe for concurrent use:** the old cache had no lock either. If the service calls it from more than one goroutine, it needs a mutex.\n\nTo check it, run `go test ./...`.",
+    "ttft_ms": 2900,
+    "type": "result",
+    "duration_ms": 34101,
+    "uuid": "73c610b5-0f30-467c-8caf-763f1f47e5e4",
+    "ttft_stream_ms": 1553,
+    "time_to_request_ms": 572,
+    "first_content_frame_ms": 1553,
+    "queued_turn_count": 0,
+    "result_index": 0
+  },
+  "test_output": "--- FAIL: TestEvictsLeastRecentlyUsed (0.00s)\n    cache_test.go:35: Keys = [c a], want [a c]\nFAIL\nFAIL\ttask\t0.367s\nFAIL\n"
+}

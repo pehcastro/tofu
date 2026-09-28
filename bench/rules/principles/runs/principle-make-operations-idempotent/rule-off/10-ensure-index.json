@@ -1,0 +1,155 @@
+{
+  "principle": "principle-make-operations-idempotent",
+  "arm": "rule-off",
+  "task": "10-ensure-index",
+  "passed": true,
+  "diff_lines": 37,
+  "models_reported": [
+    "claude-opus-5-5"
+  ],
+  "cli_version": "2.1.283 (Claude Code)",
+  "credential_kind": "subscription",
+  "wire": "claude -p",
+  "machine": "DESKTOP-AHUN9RO",
+  "started": "2026-09-27T20:40:41.6722145-03:00",
+  "wall_ms": 37409,
+  "claude_output": {
+    "duration_api_ms": 24923,
+    "stop_reason": "end_turn",
+    "session_id": "86bab703-d315-48d7-baca-8a2281a531ba",
+    "total_cost_usd": 0.2994466,
+    "usage": {
+      "input_tokens": 20,
+      "cache_creation_input_tokens": 22902,
+      "cache_read_input_tokens": 345253,
+      "output_tokens": 2355,
+      "output_tokens_details": {
+        "thinking_tokens": 222
+      },
+      "server_tool_use": {
+        "web_search_requests": 0,
+        "web_fetch_requests": 0
+      },
+      "service_tier": "standard",
+      "cache_creation": {
+        "ephemeral_1h_input_tokens": 22902,
+        "ephemeral_5m_input_tokens": 0
+      },
+      "inference_geo": "not_available",
+      "iterations": [
+        {
+          "input_tokens": 2,
+          "output_tokens": 357,
+          "cache_read_input_tokens": 38252,
+          "cache_creation_input_tokens": 216,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 216
+          },
+          "type": "message"
+        }
+      ],
+      "speed": "standard"
+    },
+    "modelUsage": {
+      "claude-opus-5-5": {
+        "inputTokens": 20,
+        "outputTokens": 2355,
+        "cacheReadInputTokens": 345253,
+        "cacheCreationInputTokens": 22902,
+        "webSearchRequests": 0,
+        "costUSD": 0.2994466,
+        "contextWindow": 1000000,
+        "maxOutputTokens": 128000,
+        "thinkingTokens": 222,
+        "canonicalModel": "claude-opus-5-5",
+        "provider": "firstParty",
+        "costBasis": "list"
+      }
+    },
+    "permission_denials": [
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_013Qqz5EJMngikiLX7uWBrvx",
+        "tool_input": {
+          "command": "cd \"C:/Users/Luiz/AppData/Local/Temp/tofu-principle-3631293310\" \u0026\u0026 rtk ls -la \u0026\u0026 rtk read *.go go.mod 2\u003e/dev/null",
+          "description": "List files and show Go sources"
+        }
+      },
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_01Bg9p7z7e3NHMHCgnaD94E6",
+        "tool_input": {
+          "command": "cd \"C:/Users/Luiz/AppData/Local/Temp/tofu-principle-3631293310\" \u0026\u0026 mkdir -p /tmp/et \u0026\u0026 cat \u003e ensure_tmp_test.go \u003c\u003c'EOF'\npackage task\nimport \"testing\"\nfunc TestEnsure(t *testing.T){\n db:=NewDB()\n if err:=EnsureIndex(db,\"a\",[]string{\"x\",\"y\"});err!=nil{t.Fatal(err)}\n if err:=EnsureIndex(db,\"a\",[]string{\"x\",\"y\"});err!=nil{t.Fatal(err)}\n if err:=EnsureIndex(db,\"a\",[]string{\"y\",\"x\"});err!=ErrConflict{t.Fatal(err)}\n if f,_:=db.IndexFields(\"a\");f[0]!=\"x\"{t.Fatal(f)}\n}\nEOF\ngo test ./... ; rm ensure_tmp_test.go",
+          "description": "Run a throwaway test, then remove it"
+        }
+      },
+      {
+        "tool_name": "PowerShell",
+        "tool_use_id": "toolu_01PncaxNUC8NbeeKNwAzUQyK",
+        "tool_input": {
+          "command": "go test ./...; Remove-Item ensure_tmp_test.go -Confirm:$false",
+          "description": "Run temp test, then delete it"
+        }
+      },
+      {
+        "tool_name": "PowerShell",
+        "tool_use_id": "toolu_01YVcFbWiCqVKsxu1YuAFypw",
+        "tool_input": {
+          "command": "go test ./...",
+          "description": "Run tests"
+        }
+      },
+      {
+        "tool_name": "PowerShell",
+        "tool_use_id": "toolu_01ErCi5hb8NUN6twEjBttG3o",
+        "tool_input": {
+          "command": "Remove-Item ensure_tmp_test.go -Confirm:$false",
+          "description": "Delete temporary test file"
+        }
+      }
+    ],
+    "terminal_reason": "completed",
+    "fast_mode_state": "off",
+    "fast_mode_disabled_reason": "sdk_opt_in_required",
+    "subagent_stats": {
+      "spawned": 0,
+      "requested": {
+        "background": 0,
+        "foreground": 0,
+        "unset": 0
+      },
+      "started_in_background": 0,
+      "max_depth": 0,
+      "spawned_by_subagents": 0,
+      "completed": 0,
+      "failed": 0,
+      "killed": {
+        "parent": 0,
+        "user": 0,
+        "system": 0
+      },
+      "refused": {
+        "depth_limit": 0,
+        "concurrency_limit": 0,
+        "budget": 0
+      },
+      "by_type": {}
+    },
+    "is_error": false,
+    "num_turns": 12,
+    "subtype": "success",
+    "api_error_status": null,
+    "result": "I implemented `EnsureIndex` in `ensure.go`, but I could not run it: the permission settings blocked `go test`. It first tries `CreateIndex`. If the index already exists over the same fields in the same order, it returns nil. If the fields differ, it returns `ErrConflict` and changes nothing. `db.go` is unchanged.\n\nOrder counts, so an index on `[x, y]` does not match one on `[y, x]`.\n\nI wrote a check file, `ensure_tmp_test.go`, and the settings also blocked me from deleting it. Run `go test ./...`, then delete that file.\n\nNOTE: Gmail, Google Calendar and Google Drive need authorization in your claude.ai connector settings. The `paper` server failed to connect.\n\n**TLDR**\n`EnsureIndex` is written in `ensure.go` but not tested, because `go test` was blocked. Run `go test ./...`, then delete `ensure_tmp_test.go`.",
+    "ttft_ms": 2695,
+    "type": "result",
+    "duration_ms": 33024,
+    "uuid": "f072a021-1fe3-4831-b3ad-141aa6f6e1bd",
+    "ttft_stream_ms": 1425,
+    "time_to_request_ms": 606,
+    "first_content_frame_ms": 1426,
+    "queued_turn_count": 0,
+    "result_index": 0
+  },
+  "test_output": "ok  \ttask\t0.383s\n"
+}

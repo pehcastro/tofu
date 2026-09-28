@@ -1,0 +1,139 @@
+{
+  "principle": "principle-build-the-lever",
+  "arm": "rule-off",
+  "task": "03-timeout-constant",
+  "passed": true,
+  "diff_lines": 22,
+  "models_reported": [
+    "claude-opus-5-5"
+  ],
+  "cli_version": "2.1.283 (Claude Code)",
+  "credential_kind": "subscription",
+  "wire": "claude -p",
+  "machine": "DESKTOP-AHUN9RO",
+  "started": "2026-09-27T20:03:39.7946955-03:00",
+  "wall_ms": 33545,
+  "claude_output": {
+    "duration_api_ms": 22606,
+    "stop_reason": "end_turn",
+    "session_id": "22b56247-d6ef-49a7-8f02-227b4ca00bed",
+    "total_cost_usd": 0.285415,
+    "usage": {
+      "input_tokens": 14,
+      "cache_creation_input_tokens": 23906,
+      "cache_read_input_tokens": 239555,
+      "output_tokens": 2310,
+      "output_tokens_details": {
+        "thinking_tokens": 243
+      },
+      "server_tool_use": {
+        "web_search_requests": 0,
+        "web_fetch_requests": 0
+      },
+      "service_tier": "standard",
+      "cache_creation": {
+        "ephemeral_1h_input_tokens": 23906,
+        "ephemeral_5m_input_tokens": 0
+      },
+      "inference_geo": "not_available",
+      "iterations": [
+        {
+          "input_tokens": 2,
+          "output_tokens": 160,
+          "cache_read_input_tokens": 39310,
+          "cache_creation_input_tokens": 162,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 162
+          },
+          "type": "message"
+        }
+      ],
+      "speed": "standard"
+    },
+    "modelUsage": {
+      "claude-opus-5-5": {
+        "inputTokens": 14,
+        "outputTokens": 2310,
+        "cacheReadInputTokens": 239555,
+        "cacheCreationInputTokens": 23906,
+        "webSearchRequests": 0,
+        "costUSD": 0.285415,
+        "contextWindow": 1000000,
+        "maxOutputTokens": 128000,
+        "thinkingTokens": 243,
+        "canonicalModel": "claude-opus-5-5",
+        "provider": "firstParty",
+        "costBasis": "list"
+      }
+    },
+    "permission_denials": [
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_0197nmZZtqPQixbVbPHu5XcK",
+        "tool_input": {
+          "command": "cd \"C:/Users/Luiz/AppData/Local/Temp/tofu-principle-2746502866\" \u0026\u0026 gofmt -l .; rtk go vet ./... \u0026\u0026 rtk go build ./...",
+          "description": "Check formatting, vet, and build"
+        }
+      },
+      {
+        "tool_name": "PowerShell",
+        "tool_use_id": "toolu_01RzAFzFM5vhKNe4QoDee7tL",
+        "tool_input": {
+          "command": "go build ./...; if ($?) { go vet ./... }",
+          "description": "Build and vet the package"
+        }
+      },
+      {
+        "tool_name": "PowerShell",
+        "tool_use_id": "toolu_01WLnNJmYQWXKse8HhT9AH9o",
+        "tool_input": {
+          "command": "go vet ./...",
+          "description": "Vet and type-check the package"
+        }
+      }
+    ],
+    "terminal_reason": "completed",
+    "fast_mode_state": "off",
+    "fast_mode_disabled_reason": "sdk_opt_in_required",
+    "subagent_stats": {
+      "spawned": 0,
+      "requested": {
+        "background": 0,
+        "foreground": 0,
+        "unset": 0
+      },
+      "started_in_background": 0,
+      "max_depth": 0,
+      "spawned_by_subagents": 0,
+      "completed": 0,
+      "failed": 0,
+      "killed": {
+        "parent": 0,
+        "user": 0,
+        "system": 0
+      },
+      "refused": {
+        "depth_limit": 0,
+        "concurrency_limit": 0,
+        "budget": 0
+      },
+      "by_type": {}
+    },
+    "is_error": false,
+    "num_turns": 16,
+    "subtype": "success",
+    "api_error_status": null,
+    "result": "I added `const requestTimeout = 30 * time.Second` in `client.go` and put it in place of all 9 inline 30-second values in `client.go`, `server.go` and `jobs.go`. `PollEvery`'s `30000 * time.Millisecond` was also 30 seconds, so it uses the constant too. I left the `30 * time.Minute` values alone. The code has not been built: the permission prompts blocked `go vet` and `go build`.",
+    "ttft_ms": 2107,
+    "type": "result",
+    "duration_ms": 29079,
+    "uuid": "e4188166-9b09-4a8a-a5bd-b8656004bb15",
+    "ttft_stream_ms": 1502,
+    "time_to_request_ms": 649,
+    "first_content_frame_ms": 1503,
+    "queued_turn_count": 0,
+    "result_index": 0
+  },
+  "test_output": "ok  \ttask\t0.355s\n"
+}

@@ -1,0 +1,138 @@
+{
+  "principle": "principle-model-the-domain",
+  "arm": "rule-on",
+  "task": "04-roles",
+  "passed": true,
+  "diff_lines": 86,
+  "models_reported": [
+    "claude-opus-5-5"
+  ],
+  "cli_version": "2.1.283 (Claude Code)",
+  "credential_kind": "subscription",
+  "wire": "claude -p",
+  "machine": "DESKTOP-AHUN9RO",
+  "started": "2026-09-27T20:45:00.5558394-03:00",
+  "wall_ms": 39200,
+  "claude_output": {
+    "duration_api_ms": 29273,
+    "stop_reason": "end_turn",
+    "session_id": "689f6eb3-bb29-4c92-a8e5-66f2aad2d9a8",
+    "total_cost_usd": 0.292182,
+    "usage": {
+      "input_tokens": 14,
+      "cache_creation_input_tokens": 23145,
+      "cache_read_input_tokens": 236430,
+      "output_tokens": 2984,
+      "output_tokens_details": {
+        "thinking_tokens": 849
+      },
+      "server_tool_use": {
+        "web_search_requests": 0,
+        "web_fetch_requests": 0
+      },
+      "service_tier": "standard",
+      "cache_creation": {
+        "ephemeral_1h_input_tokens": 23145,
+        "ephemeral_5m_input_tokens": 0
+      },
+      "inference_geo": "not_available",
+      "iterations": [
+        {
+          "input_tokens": 2,
+          "output_tokens": 717,
+          "cache_read_input_tokens": 38570,
+          "cache_creation_input_tokens": 141,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 141
+          },
+          "type": "message"
+        }
+      ],
+      "speed": "standard"
+    },
+    "modelUsage": {
+      "claude-opus-5-5": {
+        "inputTokens": 14,
+        "outputTokens": 2984,
+        "cacheReadInputTokens": 236430,
+        "cacheCreationInputTokens": 23145,
+        "webSearchRequests": 0,
+        "costUSD": 0.292182,
+        "contextWindow": 1000000,
+        "maxOutputTokens": 128000,
+        "thinkingTokens": 849,
+        "canonicalModel": "claude-opus-5-5",
+        "provider": "firstParty",
+        "costBasis": "list"
+      }
+    },
+    "permission_denials": [
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_01GJ3sckxMfi1graJWNuhHKV",
+        "tool_input": {
+          "command": "cd \"C:/Users/Luiz/AppData/Local/Temp/tofu-principle-1260946417\" \u0026\u0026 gofmt -l .; rtk go vet ./... \u0026\u0026 rtk go test ./..."
+        }
+      },
+      {
+        "tool_name": "PowerShell",
+        "tool_use_id": "toolu_01YKjG14Gksq1KzHUMB9HBQ5",
+        "tool_input": {
+          "command": "gofmt -l .; go vet ./...; go test ./...",
+          "description": "Format check, vet, and run tests"
+        }
+      },
+      {
+        "tool_name": "PowerShell",
+        "tool_use_id": "toolu_01GMxewNTiVEZq2DPjJ3iFjh",
+        "tool_input": {
+          "command": "go test ./...",
+          "description": "Run package tests"
+        }
+      }
+    ],
+    "terminal_reason": "completed",
+    "fast_mode_state": "off",
+    "fast_mode_disabled_reason": "sdk_opt_in_required",
+    "subagent_stats": {
+      "spawned": 0,
+      "requested": {
+        "background": 0,
+        "foreground": 0,
+        "unset": 0
+      },
+      "started_in_background": 0,
+      "max_depth": 0,
+      "spawned_by_subagents": 0,
+      "completed": 0,
+      "failed": 0,
+      "killed": {
+        "parent": 0,
+        "user": 0,
+        "system": 0
+      },
+      "refused": {
+        "depth_limit": 0,
+        "concurrency_limit": 0,
+        "budget": 0
+      },
+      "by_type": {}
+    },
+    "is_error": false,
+    "num_turns": 11,
+    "subtype": "success",
+    "api_error_status": null,
+    "result": "I added the two roles, but I could not run the tests. The permission prompt blocked `go test` and I cannot approve it here. Run `go test ./...` to check.\n\n- **The table:** each role now maps to one set of permissions in `perms.go`, and every `CanX` function reads that table. A role that is not in the table, or has the wrong case, gets nothing.\n- **Owner:** has everything admin has, plus `CanTransfer(role string) bool`, which only owner passes.\n- **Auditor:** can read and export, and nothing else.\n- **`sharing.go`:** I rewrote `CanExport` and `CanInvite` to read the same table. Before, `CanExport` let any non-empty unknown role export (`\"guest\"`, `\"Admin\"`). That now returns false, which changes behavior for anyone who relied on it.\n- **New file `perms_test.go`:** tests every role against every check, plus unknown and wrong-case names.\n\n**TLDR**\nAdded auditor and owner roles and `CanTransfer`, all driven by one role table in `perms.go`. Unknown roles can no longer export.\nTests not run: approve `go test ./...`.",
+    "ttft_ms": 2300,
+    "type": "result",
+    "duration_ms": 35049,
+    "uuid": "f3a0b0f6-963c-40e2-a548-9d41c22e2783",
+    "ttft_stream_ms": 1528,
+    "time_to_request_ms": 609,
+    "first_content_frame_ms": 1528,
+    "queued_turn_count": 0,
+    "result_index": 0
+  },
+  "test_output": "ok  \ttask\t0.374s\n"
+}

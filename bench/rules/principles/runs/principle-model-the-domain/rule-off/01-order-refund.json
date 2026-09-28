@@ -1,0 +1,146 @@
+{
+  "principle": "principle-model-the-domain",
+  "arm": "rule-off",
+  "task": "01-order-refund",
+  "passed": true,
+  "diff_lines": 68,
+  "models_reported": [
+    "claude-opus-5-5"
+  ],
+  "cli_version": "2.1.283 (Claude Code)",
+  "credential_kind": "subscription",
+  "wire": "claude -p",
+  "machine": "DESKTOP-AHUN9RO",
+  "started": "2026-09-27T20:41:50.1518997-03:00",
+  "wall_ms": 39428,
+  "claude_output": {
+    "duration_api_ms": 27623,
+    "stop_reason": "end_turn",
+    "session_id": "a9f42ee0-5b46-435f-aa87-3af79d0fa0d2",
+    "total_cost_usd": 0.2963142,
+    "usage": {
+      "input_tokens": 16,
+      "cache_creation_input_tokens": 23282,
+      "cache_read_input_tokens": 270971,
+      "output_tokens": 2790,
+      "output_tokens_details": {
+        "thinking_tokens": 631
+      },
+      "server_tool_use": {
+        "web_search_requests": 0,
+        "web_fetch_requests": 0
+      },
+      "service_tier": "standard",
+      "cache_creation": {
+        "ephemeral_1h_input_tokens": 23282,
+        "ephemeral_5m_input_tokens": 0
+      },
+      "inference_geo": "not_available",
+      "iterations": [
+        {
+          "input_tokens": 2,
+          "output_tokens": 303,
+          "cache_read_input_tokens": 38634,
+          "cache_creation_input_tokens": 214,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 214
+          },
+          "type": "message"
+        }
+      ],
+      "speed": "standard"
+    },
+    "modelUsage": {
+      "claude-opus-5-5": {
+        "inputTokens": 16,
+        "outputTokens": 2790,
+        "cacheReadInputTokens": 270971,
+        "cacheCreationInputTokens": 23282,
+        "webSearchRequests": 0,
+        "costUSD": 0.2963142,
+        "contextWindow": 1000000,
+        "maxOutputTokens": 128000,
+        "thinkingTokens": 631,
+        "canonicalModel": "claude-opus-5-5",
+        "provider": "firstParty",
+        "costBasis": "list"
+      }
+    },
+    "permission_denials": [
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_01TP64Si7y3xMjZXxe4SmE5U",
+        "tool_input": {
+          "command": "cd \"C:/Users/Luiz/AppData/Local/Temp/tofu-principle-1006774216\" \u0026\u0026 rtk ls -la \u0026\u0026 rtk read *.go go.mod 2\u003e/dev/null"
+        }
+      },
+      {
+        "tool_name": "PowerShell",
+        "tool_use_id": "toolu_01FFns9esfV2JcXLqeuZgvv4",
+        "tool_input": {
+          "command": "go test ./... ; Remove-Item tmp_order_test.go -Confirm:$false",
+          "description": "Run temp test then remove it"
+        }
+      },
+      {
+        "tool_name": "PowerShell",
+        "tool_use_id": "toolu_01TJP6NRa1DwuEmEvtjStaqq",
+        "tool_input": {
+          "command": "go test ./...",
+          "description": "Run tests"
+        }
+      },
+      {
+        "tool_name": "PowerShell",
+        "tool_use_id": "toolu_0126sbDut9AAy1RcgCZWLQw7",
+        "tool_input": {
+          "command": "Remove-Item tmp_order_test.go -Confirm:$false",
+          "description": "Delete throwaway test file"
+        }
+      }
+    ],
+    "terminal_reason": "completed",
+    "fast_mode_state": "off",
+    "fast_mode_disabled_reason": "sdk_opt_in_required",
+    "subagent_stats": {
+      "spawned": 0,
+      "requested": {
+        "background": 0,
+        "foreground": 0,
+        "unset": 0
+      },
+      "started_in_background": 0,
+      "max_depth": 0,
+      "spawned_by_subagents": 0,
+      "completed": 0,
+      "failed": 0,
+      "killed": {
+        "parent": 0,
+        "user": 0,
+        "system": 0
+      },
+      "refused": {
+        "depth_limit": 0,
+        "concurrency_limit": 0,
+        "budget": 0
+      },
+      "by_type": {}
+    },
+    "is_error": false,
+    "num_turns": 9,
+    "subtype": "success",
+    "api_error_status": null,
+    "result": "I added `Refund` and a `Refunded` field to `order.go`. I could not run the tests because permission for `go test` was denied.\n\nEach method now checks the current status before it changes anything. This also fixes older gaps in the code:\n- Paying twice was allowed.\n- Shipping a cancelled order was allowed.\n- Cancelling an order twice was allowed.\n\nI wrote `tmp_order_test.go` as a temporary test of every operation from every status. I could not delete it because permission was denied. Run `go test ./...`, then delete the file or keep it as a real test.\n\n**TLDR**\nI added `Refund` and a `Refunded` field, and tightened the checks in the other methods. Tests did not run because `go test` was denied. Run `go test ./...`, then delete or keep `tmp_order_test.go`.",
+    "ttft_ms": 2634,
+    "type": "result",
+    "duration_ms": 35302,
+    "uuid": "cf2aba2b-08f8-4a85-bd4d-5e1423212579",
+    "ttft_stream_ms": 1628,
+    "time_to_request_ms": 638,
+    "first_content_frame_ms": 1628,
+    "queued_turn_count": 0,
+    "result_index": 0
+  },
+  "test_output": "ok  \ttask\t0.328s\n"
+}

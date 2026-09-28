@@ -1,0 +1,131 @@
+{
+  "principle": "principle-make-operations-idempotent",
+  "arm": "rule-on",
+  "task": "07-install",
+  "passed": true,
+  "diff_lines": 60,
+  "models_reported": [
+    "claude-opus-5-5"
+  ],
+  "cli_version": "2.1.283 (Claude Code)",
+  "credential_kind": "subscription",
+  "wire": "claude -p",
+  "machine": "DESKTOP-AHUN9RO",
+  "started": "2026-09-27T20:35:36.3065442-03:00",
+  "wall_ms": 31617,
+  "claude_output": {
+    "duration_api_ms": 23533,
+    "stop_reason": "end_turn",
+    "session_id": "538ccc6b-ae20-4432-baac-636e32426311",
+    "total_cost_usd": 0.255119,
+    "usage": {
+      "input_tokens": 10,
+      "cache_creation_input_tokens": 22346,
+      "cache_read_input_tokens": 160755,
+      "output_tokens": 2208,
+      "output_tokens_details": {
+        "thinking_tokens": 667
+      },
+      "server_tool_use": {
+        "web_search_requests": 0,
+        "web_fetch_requests": 0
+      },
+      "service_tier": "standard",
+      "cache_creation": {
+        "ephemeral_1h_input_tokens": 22346,
+        "ephemeral_5m_input_tokens": 0
+      },
+      "inference_geo": "not_available",
+      "iterations": [
+        {
+          "input_tokens": 2,
+          "output_tokens": 315,
+          "cache_read_input_tokens": 37732,
+          "cache_creation_input_tokens": 180,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 180
+          },
+          "type": "message"
+        }
+      ],
+      "speed": "standard"
+    },
+    "modelUsage": {
+      "claude-opus-5-5": {
+        "inputTokens": 10,
+        "outputTokens": 2208,
+        "cacheReadInputTokens": 160755,
+        "cacheCreationInputTokens": 22346,
+        "webSearchRequests": 0,
+        "costUSD": 0.255119,
+        "contextWindow": 1000000,
+        "maxOutputTokens": 128000,
+        "thinkingTokens": 667,
+        "canonicalModel": "claude-opus-5-5",
+        "provider": "firstParty",
+        "costBasis": "list"
+      }
+    },
+    "permission_denials": [
+      {
+        "tool_name": "PowerShell",
+        "tool_use_id": "toolu_01UxjsuVuLsUA2nzGHFidSAQ",
+        "tool_input": {
+          "command": "go vet ./...; go build ./...",
+          "description": "Vet and build the package"
+        }
+      },
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_01XTx7B4k2nZR4qwFTJS8mFm",
+        "tool_input": {
+          "command": "cd \"C:/Users/Luiz/AppData/Local/Temp/tofu-principle-4015289271\" \u0026\u0026 rtk go vet ./...",
+          "description": "Vet the package"
+        }
+      }
+    ],
+    "terminal_reason": "completed",
+    "fast_mode_state": "off",
+    "fast_mode_disabled_reason": "sdk_opt_in_required",
+    "subagent_stats": {
+      "spawned": 0,
+      "requested": {
+        "background": 0,
+        "foreground": 0,
+        "unset": 0
+      },
+      "started_in_background": 0,
+      "max_depth": 0,
+      "spawned_by_subagents": 0,
+      "completed": 0,
+      "failed": 0,
+      "killed": {
+        "parent": 0,
+        "user": 0,
+        "system": 0
+      },
+      "refused": {
+        "depth_limit": 0,
+        "concurrency_limit": 0,
+        "budget": 0
+      },
+      "by_type": {}
+    },
+    "is_error": false,
+    "num_turns": 6,
+    "subtype": "success",
+    "api_error_status": null,
+    "result": "I made the installed file mode 0755. The old code also failed on every second run, so I rewrote `install.go` so it can run any number of times. I could not compile or run it because the permission prompts for `go vet` were blocked.\n\n- **Second run:** it used `os.Mkdir` and `O_EXCL`, which fail when the directory or file already exists. It now uses `MkdirAll`. If the installed file already has the same bytes, it only sets the mode and changes nothing else.\n- **Crash during copy:** it now writes to a fixed temp name `.\u003cname\u003e.tmp` in the same folder, then renames that over the target. A reboot leaves either the old file or the new file, never half of one. The next run overwrites any leftover temp file.\n- **Mode:** it calls `Chmod` after the write, because the mode given at file creation is reduced by umask.\n\nNOTE: on Windows, the rename fails if the binary it replaces is running.",
+    "ttft_ms": 2047,
+    "type": "result",
+    "duration_ms": 27206,
+    "uuid": "7a70c329-bbae-46c0-876a-c1febbf2a2f1",
+    "ttft_stream_ms": 1502,
+    "time_to_request_ms": 700,
+    "first_content_frame_ms": 1502,
+    "queued_turn_count": 0,
+    "result_index": 0
+  },
+  "test_output": "ok  \ttask\t0.375s\n"
+}

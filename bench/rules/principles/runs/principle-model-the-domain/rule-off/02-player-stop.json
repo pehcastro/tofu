@@ -1,0 +1,131 @@
+{
+  "principle": "principle-model-the-domain",
+  "arm": "rule-off",
+  "task": "02-player-stop",
+  "passed": true,
+  "diff_lines": 55,
+  "models_reported": [
+    "claude-opus-5-5"
+  ],
+  "cli_version": "2.1.283 (Claude Code)",
+  "credential_kind": "subscription",
+  "wire": "claude -p",
+  "machine": "DESKTOP-AHUN9RO",
+  "started": "2026-09-27T20:43:10.0356206-03:00",
+  "wall_ms": 26393,
+  "claude_output": {
+    "duration_api_ms": 18692,
+    "stop_reason": "end_turn",
+    "session_id": "8db4b7fa-6860-4f18-89b4-9a845608183f",
+    "total_cost_usd": 0.2403438,
+    "usage": {
+      "input_tokens": 12,
+      "cache_creation_input_tokens": 21668,
+      "cache_read_input_tokens": 193559,
+      "output_tokens": 1412,
+      "output_tokens_details": {
+        "thinking_tokens": 189
+      },
+      "server_tool_use": {
+        "web_search_requests": 0,
+        "web_fetch_requests": 0
+      },
+      "service_tier": "standard",
+      "cache_creation": {
+        "ephemeral_1h_input_tokens": 21668,
+        "ephemeral_5m_input_tokens": 0
+      },
+      "inference_geo": "not_available",
+      "iterations": [
+        {
+          "input_tokens": 2,
+          "output_tokens": 267,
+          "cache_read_input_tokens": 37077,
+          "cache_creation_input_tokens": 157,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 157
+          },
+          "type": "message"
+        }
+      ],
+      "speed": "standard"
+    },
+    "modelUsage": {
+      "claude-opus-5-5": {
+        "inputTokens": 12,
+        "outputTokens": 1412,
+        "cacheReadInputTokens": 193559,
+        "cacheCreationInputTokens": 21668,
+        "webSearchRequests": 0,
+        "costUSD": 0.2403438,
+        "contextWindow": 1000000,
+        "maxOutputTokens": 128000,
+        "thinkingTokens": 189,
+        "canonicalModel": "claude-opus-5-5",
+        "provider": "firstParty",
+        "costBasis": "list"
+      }
+    },
+    "permission_denials": [
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_0131feAwT5JS61m4eLE3fTEU",
+        "tool_input": {
+          "command": "rtk ls -la \u0026\u0026 rtk read *.go go.mod 2\u003e/dev/null",
+          "description": "List files and show Go sources"
+        }
+      },
+      {
+        "tool_name": "PowerShell",
+        "tool_use_id": "toolu_01CNAQRb59qWAiirTuqWWAuH",
+        "tool_input": {
+          "command": "go vet ./...; go build ./...",
+          "description": "Vet and build the package"
+        }
+      }
+    ],
+    "terminal_reason": "completed",
+    "fast_mode_state": "off",
+    "fast_mode_disabled_reason": "sdk_opt_in_required",
+    "subagent_stats": {
+      "spawned": 0,
+      "requested": {
+        "background": 0,
+        "foreground": 0,
+        "unset": 0
+      },
+      "started_in_background": 0,
+      "max_depth": 0,
+      "spawned_by_subagents": 0,
+      "completed": 0,
+      "failed": 0,
+      "killed": {
+        "parent": 0,
+        "user": 0,
+        "system": 0
+      },
+      "refused": {
+        "depth_limit": 0,
+        "concurrency_limit": 0,
+        "budget": 0
+      },
+      "by_type": {}
+    },
+    "is_error": false,
+    "num_turns": 6,
+    "subtype": "success",
+    "api_error_status": null,
+    "result": "I added `Stop` and `Eject` to `player.go` and replaced the four true/false fields with one state field. I could not build or test it: running `go vet` and `go build` needs your approval.\n\nThe old code broke your rules in three places, so I fixed those too:\n- `Load` worked on a paused player. It now fails.\n- `Play` worked on a player that was already playing. It now fails.\n- `Pause` left `playing` set, so a second `Pause` did not fail. It now fails.\n\nLoading `\"\"` gives a ready player whose `Track` returns `\"\"`.\n\n**TLDR**\nI added `Stop` and `Eject`, and replaced the flags with one state field. This also fixes three old cases that broke your rules. Nothing is built or tested yet because `go build` needs your approval.",
+    "ttft_ms": 2920,
+    "type": "result",
+    "duration_ms": 22192,
+    "uuid": "adae46ce-d147-45bc-8be8-e5c0f2d58ac0",
+    "ttft_stream_ms": 1895,
+    "time_to_request_ms": 588,
+    "first_content_frame_ms": 1895,
+    "queued_turn_count": 0,
+    "result_index": 0
+  },
+  "test_output": "ok  \ttask\t0.355s\n"
+}

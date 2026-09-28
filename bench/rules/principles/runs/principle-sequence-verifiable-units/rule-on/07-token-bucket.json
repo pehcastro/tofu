@@ -1,0 +1,139 @@
+{
+  "principle": "principle-sequence-verifiable-units",
+  "arm": "rule-on",
+  "task": "07-token-bucket",
+  "passed": true,
+  "diff_lines": 152,
+  "models_reported": [
+    "claude-opus-5-5"
+  ],
+  "cli_version": "2.1.283 (Claude Code)",
+  "credential_kind": "subscription",
+  "wire": "claude -p",
+  "machine": "DESKTOP-AHUN9RO",
+  "started": "2026-09-27T21:19:18.3786846-03:00",
+  "wall_ms": 56679,
+  "claude_output": {
+    "duration_api_ms": 48331,
+    "stop_reason": "end_turn",
+    "session_id": "5004c3b5-e9a7-42cb-ba00-47d666ffd45c",
+    "total_cost_usd": 0.3505782,
+    "usage": {
+      "input_tokens": 14,
+      "cache_creation_input_tokens": 25402,
+      "cache_read_input_tokens": 234731,
+      "output_tokens": 5018,
+      "output_tokens_details": {
+        "thinking_tokens": 1734
+      },
+      "server_tool_use": {
+        "web_search_requests": 0,
+        "web_fetch_requests": 0
+      },
+      "service_tier": "standard",
+      "cache_creation": {
+        "ephemeral_1h_input_tokens": 25402,
+        "ephemeral_5m_input_tokens": 0
+      },
+      "inference_geo": "not_available",
+      "iterations": [
+        {
+          "input_tokens": 2,
+          "output_tokens": 622,
+          "cache_read_input_tokens": 39610,
+          "cache_creation_input_tokens": 1358,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 1358
+          },
+          "type": "message"
+        }
+      ],
+      "speed": "standard"
+    },
+    "modelUsage": {
+      "claude-opus-5-5": {
+        "inputTokens": 14,
+        "outputTokens": 5018,
+        "cacheReadInputTokens": 234731,
+        "cacheCreationInputTokens": 25402,
+        "webSearchRequests": 0,
+        "costUSD": 0.3505782,
+        "contextWindow": 1000000,
+        "maxOutputTokens": 128000,
+        "thinkingTokens": 1734,
+        "canonicalModel": "claude-opus-5-5",
+        "provider": "firstParty",
+        "costBasis": "list"
+      }
+    },
+    "permission_denials": [
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_01SsXTYT4ipoyvzbuJpyNRTj",
+        "tool_input": {
+          "command": "cd \"C:/Users/Luiz/AppData/Local/Temp/tofu-principle-1688734485\" \u0026\u0026 rtk ls -la \u0026\u0026 rtk read *.go go.mod 2\u003e/dev/null; rtk go test ./... 2\u003e\u00261 | tail -20",
+          "description": "List files, show sources, run tests"
+        }
+      },
+      {
+        "tool_name": "PowerShell",
+        "tool_use_id": "toolu_0134Nh2uvE1nnwQsTsCyu7mm",
+        "tool_input": {
+          "command": "go test ./...",
+          "description": "Run baseline tests"
+        }
+      },
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_017T421ht1cJCajp5ekE8iY4",
+        "tool_input": {
+          "command": "rtk go test ./... 2\u003e\u00261",
+          "description": "Run baseline tests"
+        }
+      }
+    ],
+    "terminal_reason": "completed",
+    "fast_mode_state": "off",
+    "fast_mode_disabled_reason": "sdk_opt_in_required",
+    "subagent_stats": {
+      "spawned": 0,
+      "requested": {
+        "background": 0,
+        "foreground": 0,
+        "unset": 0
+      },
+      "started_in_background": 0,
+      "max_depth": 0,
+      "spawned_by_subagents": 0,
+      "completed": 0,
+      "failed": 0,
+      "killed": {
+        "parent": 0,
+        "user": 0,
+        "system": 0
+      },
+      "refused": {
+        "depth_limit": 0,
+        "concurrency_limit": 0,
+        "budget": 0
+      },
+      "by_type": {}
+    },
+    "is_error": false,
+    "num_turns": 10,
+    "subtype": "success",
+    "api_error_status": null,
+    "result": "I rewrote `limit.go` as a token bucket, but I have not run any tests. Both shells asked for approval before `go test`, and this session could not ask you. So I also skipped the passing baseline and the unit-by-unit checks you asked for.\n\n- **API change:** `New(limit int, window time.Duration)` is now `New(rate float64, burst int)`. `AllowN` and `Tokens` are new.\n- **Rules:** `Tokens` only reports and does not change the limiter. An `AllowN` with a negative n returns false.\n- **Tests:** in `limit_test.go` I updated `TestAllow` for the new API. The new tests cover:\n  - the bucket starting full\n  - continuous refill\n  - the cap at burst\n  - the old burst at the window edge\n  - a refused `AllowN` taking nothing\n  - n above burst\n  - a clock that does not move back\n\nTo check it, run `go test ./...`.",
+    "ttft_ms": 3180,
+    "type": "result",
+    "duration_ms": 52300,
+    "uuid": "0eb4cf24-4ef0-4842-b8e8-579937523673",
+    "ttft_stream_ms": 1680,
+    "time_to_request_ms": 634,
+    "first_content_frame_ms": 1680,
+    "queued_turn_count": 0,
+    "result_index": 0
+  },
+  "test_output": "ok  \ttask\t0.407s\n"
+}

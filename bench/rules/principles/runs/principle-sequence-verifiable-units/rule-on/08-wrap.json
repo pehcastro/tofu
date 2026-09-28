@@ -1,0 +1,147 @@
+{
+  "principle": "principle-sequence-verifiable-units",
+  "arm": "rule-on",
+  "task": "08-wrap",
+  "passed": true,
+  "diff_lines": 83,
+  "models_reported": [
+    "claude-opus-5-5"
+  ],
+  "cli_version": "2.1.283 (Claude Code)",
+  "credential_kind": "subscription",
+  "wire": "claude -p",
+  "machine": "DESKTOP-AHUN9RO",
+  "started": "2026-09-27T21:21:05.2012685-03:00",
+  "wall_ms": 44409,
+  "claude_output": {
+    "duration_api_ms": 35907,
+    "stop_reason": "end_turn",
+    "session_id": "0ae9243c-33c6-4b42-bb07-c20ddc668848",
+    "total_cost_usd": 0.30869260000000004,
+    "usage": {
+      "input_tokens": 14,
+      "cache_creation_input_tokens": 23978,
+      "cache_read_input_tokens": 230963,
+      "output_tokens": 3531,
+      "output_tokens_details": {
+        "thinking_tokens": 1052
+      },
+      "server_tool_use": {
+        "web_search_requests": 0,
+        "web_fetch_requests": 0
+      },
+      "service_tier": "standard",
+      "cache_creation": {
+        "ephemeral_1h_input_tokens": 23978,
+        "ephemeral_5m_input_tokens": 0
+      },
+      "inference_geo": "not_available",
+      "iterations": [
+        {
+          "input_tokens": 2,
+          "output_tokens": 416,
+          "cache_read_input_tokens": 36920,
+          "cache_creation_input_tokens": 2624,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 2624
+          },
+          "type": "message"
+        }
+      ],
+      "speed": "standard"
+    },
+    "modelUsage": {
+      "claude-opus-5-5": {
+        "inputTokens": 14,
+        "outputTokens": 3531,
+        "cacheReadInputTokens": 230963,
+        "cacheCreationInputTokens": 23978,
+        "webSearchRequests": 0,
+        "costUSD": 0.30869260000000004,
+        "contextWindow": 1000000,
+        "maxOutputTokens": 128000,
+        "thinkingTokens": 1052,
+        "canonicalModel": "claude-opus-5-5",
+        "provider": "firstParty",
+        "costBasis": "list"
+      }
+    },
+    "permission_denials": [
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_01RouzaMyYkj416FccvAYvap",
+        "tool_input": {
+          "command": "rtk ls -a \u0026\u0026 rtk read *.go \u0026\u0026 rtk go test ./... 2\u003e\u00261 | tail -20",
+          "description": "List files, show Go code, run tests"
+        }
+      },
+      {
+        "tool_name": "PowerShell",
+        "tool_use_id": "toolu_014JQxrDxfn9iGyWtQq1nuPd",
+        "tool_input": {
+          "command": "go test ./...",
+          "description": "Run baseline tests"
+        }
+      },
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_01NvKvKyNhLNbGzaxSd3Hdkf",
+        "tool_input": {
+          "command": "rtk go test ./...",
+          "description": "Run baseline tests"
+        }
+      },
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_019FH3wmDK5Fg5i8nZYfP1LC",
+        "tool_input": {
+          "command": "rtk proxy go test ./...",
+          "description": "Run baseline tests without filtering"
+        }
+      }
+    ],
+    "terminal_reason": "completed",
+    "fast_mode_state": "off",
+    "fast_mode_disabled_reason": "sdk_opt_in_required",
+    "subagent_stats": {
+      "spawned": 0,
+      "requested": {
+        "background": 0,
+        "foreground": 0,
+        "unset": 0
+      },
+      "started_in_background": 0,
+      "max_depth": 0,
+      "spawned_by_subagents": 0,
+      "completed": 0,
+      "failed": 0,
+      "killed": {
+        "parent": 0,
+        "user": 0,
+        "system": 0
+      },
+      "refused": {
+        "depth_limit": 0,
+        "concurrency_limit": 0,
+        "budget": 0
+      },
+      "by_type": {}
+    },
+    "is_error": false,
+    "num_turns": 10,
+    "subtype": "success",
+    "api_error_status": null,
+    "result": "I rewrote `Wrap` in `wrap.go` and added 17 table tests to `wrap_test.go`, but none of it has been run. Every `go test` call needed approval that this session couldn't give, so I skipped the passing baseline and the one-change-at-a-time checks you asked for.\n\nThe new `Wrap` splits the input on newlines. A line with only spaces or tabs ends the current paragraph. Each paragraph is packed into lines by rune count, with a word longer than `width` put on its own line, and paragraphs are joined with one empty line. I checked the harder test cases by hand, not by running them.\n\n**TLDR**\n`wrap.go` is rewritten and the new tests are in `wrap_test.go`, but nothing ran. Run `go test ./...` to check it.",
+    "ttft_ms": 3292,
+    "type": "result",
+    "duration_ms": 40056,
+    "uuid": "279e44a0-cf9e-49dc-822c-3418894d8a9e",
+    "ttft_stream_ms": 1853,
+    "time_to_request_ms": 614,
+    "first_content_frame_ms": 1853,
+    "queued_turn_count": 0,
+    "result_index": 0
+  },
+  "test_output": "ok  \ttask\t0.483s\n"
+}

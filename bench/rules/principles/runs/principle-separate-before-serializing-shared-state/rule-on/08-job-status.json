@@ -1,0 +1,136 @@
+{
+  "principle": "principle-separate-before-serializing-shared-state",
+  "arm": "rule-on",
+  "task": "08-job-status",
+  "passed": true,
+  "diff_lines": 153,
+  "models_reported": [
+    "claude-opus-5-5"
+  ],
+  "cli_version": "2.1.283 (Claude Code)",
+  "credential_kind": "subscription",
+  "wire": "claude -p",
+  "machine": "DESKTOP-AHUN9RO",
+  "started": "2026-09-27T21:07:01.2062119-03:00",
+  "wall_ms": 46422,
+  "claude_output": {
+    "duration_api_ms": 35937,
+    "stop_reason": "end_turn",
+    "session_id": "46c633b4-5739-497c-93c4-d1ba55b113ea",
+    "total_cost_usd": 0.3137906,
+    "usage": {
+      "input_tokens": 14,
+      "cache_creation_input_tokens": 24173,
+      "cache_read_input_tokens": 234853,
+      "output_tokens": 3669,
+      "output_tokens_details": {
+        "thinking_tokens": 663
+      },
+      "server_tool_use": {
+        "web_search_requests": 0,
+        "web_fetch_requests": 0
+      },
+      "service_tier": "standard",
+      "cache_creation": {
+        "ephemeral_1h_input_tokens": 24173,
+        "ephemeral_5m_input_tokens": 0
+      },
+      "inference_geo": "not_available",
+      "iterations": [
+        {
+          "input_tokens": 2,
+          "output_tokens": 350,
+          "cache_read_input_tokens": 39603,
+          "cache_creation_input_tokens": 136,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 136
+          },
+          "type": "message"
+        }
+      ],
+      "speed": "standard"
+    },
+    "modelUsage": {
+      "claude-opus-5-5": {
+        "inputTokens": 14,
+        "outputTokens": 3669,
+        "cacheReadInputTokens": 234853,
+        "cacheCreationInputTokens": 24173,
+        "webSearchRequests": 0,
+        "costUSD": 0.3137906,
+        "contextWindow": 1000000,
+        "maxOutputTokens": 128000,
+        "thinkingTokens": 663,
+        "canonicalModel": "claude-opus-5-5",
+        "provider": "firstParty",
+        "costBasis": "list"
+      }
+    },
+    "permission_denials": [
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_019Wb4zYy6UQQ1fWkELm2tG4",
+        "tool_input": {
+          "command": "cd \"C:/Users/Luiz/AppData/Local/Temp/tofu-principle-1010478712\" \u0026\u0026 rtk ls -la \u0026\u0026 rtk read status.go \u0026\u0026 rtk read go.mod 2\u003e/dev/null; rtk ls *_test.go 2\u003e/dev/null"
+        }
+      },
+      {
+        "tool_name": "PowerShell",
+        "tool_use_id": "toolu_01PkEW3neAGUwAsYsDh15L6y",
+        "tool_input": {
+          "command": "go vet ./...; go test -count=3 ./..."
+        }
+      },
+      {
+        "tool_name": "PowerShell",
+        "tool_use_id": "toolu_01YAajciJEZKTG8qmSNhjqRm",
+        "tool_input": {
+          "command": "go test -count=3 ./..."
+        }
+      }
+    ],
+    "terminal_reason": "completed",
+    "fast_mode_state": "off",
+    "fast_mode_disabled_reason": "sdk_opt_in_required",
+    "subagent_stats": {
+      "spawned": 0,
+      "requested": {
+        "background": 0,
+        "foreground": 0,
+        "unset": 0
+      },
+      "started_in_background": 0,
+      "max_depth": 0,
+      "spawned_by_subagents": 0,
+      "completed": 0,
+      "failed": 0,
+      "killed": {
+        "parent": 0,
+        "user": 0,
+        "system": 0
+      },
+      "refused": {
+        "depth_limit": 0,
+        "concurrency_limit": 0,
+        "budget": 0
+      },
+      "by_type": {}
+    },
+    "is_error": false,
+    "num_turns": 9,
+    "subtype": "success",
+    "api_error_status": null,
+    "result": "I fixed it in `status.go`, but I could not run the tests because the permission prompt for `go test` was declined.\n\nThe bug: all jobs shared `status.json`, and each `Report` read the file, changed it and wrote it back. When two jobs did this at the same time, the later write erased the other job's update. A dashboard read during a write could also get a half-written file.\n\nThe change:\n- Each job now writes only its own file, `status.d/\u003chex of job name\u003e`. It writes a temporary file and then renames it into place, so a reader never sees a partial status.\n- `Statuses` reads all the job files and merges them. It also still reads the old `status.json`, so jobs that reported before this change still show.\n- On Windows the rename fails while the dashboard has the file open, so it retries for up to 0.5 s.\n- A job must report from only one process at a time. That is now a comment in the code, not something the code enforces.\n\nNew file: `status_test.go`. It starts 20 separate processes that report at once, and it checks the old-file fallback. Run `go test ./...` to check it.",
+    "ttft_ms": 2941,
+    "type": "result",
+    "duration_ms": 42142,
+    "uuid": "4f6fbaf6-29c9-4585-8834-619660ceda5c",
+    "ttft_stream_ms": 1753,
+    "time_to_request_ms": 687,
+    "first_content_frame_ms": 1754,
+    "queued_turn_count": 0,
+    "result_index": 0
+  },
+  "test_output": "ok  \ttask\t1.395s\n"
+}

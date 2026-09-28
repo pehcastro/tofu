@@ -1,0 +1,139 @@
+{
+  "principle": "principle-model-the-domain",
+  "arm": "rule-off",
+  "task": "05-document-workflow",
+  "passed": true,
+  "diff_lines": 114,
+  "models_reported": [
+    "claude-opus-5-5"
+  ],
+  "cli_version": "2.1.283 (Claude Code)",
+  "credential_kind": "subscription",
+  "wire": "claude -p",
+  "machine": "DESKTOP-AHUN9RO",
+  "started": "2026-09-27T20:46:39.9211269-03:00",
+  "wall_ms": 33718,
+  "claude_output": {
+    "duration_api_ms": 22008,
+    "stop_reason": "end_turn",
+    "session_id": "5e64d6d7-1092-46ee-81f2-b661619cce23",
+    "total_cost_usd": 0.2719824,
+    "usage": {
+      "input_tokens": 14,
+      "cache_creation_input_tokens": 22637,
+      "cache_read_input_tokens": 232352,
+      "output_tokens": 2218,
+      "output_tokens_details": {
+        "thinking_tokens": 99
+      },
+      "server_tool_use": {
+        "web_search_requests": 0,
+        "web_fetch_requests": 0
+      },
+      "service_tier": "standard",
+      "cache_creation": {
+        "ephemeral_1h_input_tokens": 22637,
+        "ephemeral_5m_input_tokens": 0
+      },
+      "inference_geo": "not_available",
+      "iterations": [
+        {
+          "input_tokens": 2,
+          "output_tokens": 193,
+          "cache_read_input_tokens": 38063,
+          "cache_creation_input_tokens": 140,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 140
+          },
+          "type": "message"
+        }
+      ],
+      "speed": "standard"
+    },
+    "modelUsage": {
+      "claude-opus-5-5": {
+        "inputTokens": 14,
+        "outputTokens": 2218,
+        "cacheReadInputTokens": 232352,
+        "cacheCreationInputTokens": 22637,
+        "webSearchRequests": 0,
+        "costUSD": 0.2719824,
+        "contextWindow": 1000000,
+        "maxOutputTokens": 128000,
+        "thinkingTokens": 99,
+        "canonicalModel": "claude-opus-5-5",
+        "provider": "firstParty",
+        "costBasis": "list"
+      }
+    },
+    "permission_denials": [
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_01ELbF6FEVbWU7pW9qrsLefb",
+        "tool_input": {
+          "command": "rtk ls -la \u0026\u0026 rtk read *.go \u0026\u0026 rtk read go.mod 2\u003e/dev/null",
+          "description": "List files and show Go sources"
+        }
+      },
+      {
+        "tool_name": "PowerShell",
+        "tool_use_id": "toolu_01GKTH2XK6R3fsyU6BZhWDR5",
+        "tool_input": {
+          "command": "go vet ./...; go test ./...",
+          "description": "Vet and run tests"
+        }
+      },
+      {
+        "tool_name": "PowerShell",
+        "tool_use_id": "toolu_01K513Cba3CGjoRSJpfJVjQ7",
+        "tool_input": {
+          "command": "go test ./...",
+          "description": "Run tests"
+        }
+      }
+    ],
+    "terminal_reason": "completed",
+    "fast_mode_state": "off",
+    "fast_mode_disabled_reason": "sdk_opt_in_required",
+    "subagent_stats": {
+      "spawned": 0,
+      "requested": {
+        "background": 0,
+        "foreground": 0,
+        "unset": 0
+      },
+      "started_in_background": 0,
+      "max_depth": 0,
+      "spawned_by_subagents": 0,
+      "completed": 0,
+      "failed": 0,
+      "killed": {
+        "parent": 0,
+        "user": 0,
+        "system": 0
+      },
+      "refused": {
+        "depth_limit": 0,
+        "concurrency_limit": 0,
+        "budget": 0
+      },
+      "by_type": {}
+    },
+    "is_error": false,
+    "num_turns": 9,
+    "subtype": "success",
+    "api_error_status": null,
+    "result": "I added `Reject(reason)`, `Archive()` and `Reason()` to `doc.go`. I did not run the tests, because the permission prompt for `go test` was not approved.\n\n- **Internal change:** the two booleans in `Doc` are now one state field. `Submit`, `Approve` and `State` behave as before.\n- **Reason:** `Submit` clears it. Archiving a rejected draft keeps the reason, since the document is never submitted again.\n- **Tests:** in the new `doc_test.go`. Run `go test ./...` to check them.",
+    "ttft_ms": 3340,
+    "type": "result",
+    "duration_ms": 29582,
+    "uuid": "1401237c-e7d5-4733-b164-7a4baf530a46",
+    "ttft_stream_ms": 1972,
+    "time_to_request_ms": 750,
+    "first_content_frame_ms": 1973,
+    "queued_turn_count": 0,
+    "result_index": 0
+  },
+  "test_output": "ok  \ttask\t0.408s\n"
+}
