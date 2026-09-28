@@ -114,12 +114,14 @@ type Scroll struct {
 }
 
 type Page struct {
-	URL         string    `json:"url"`
-	Title       string    `json:"title"`
-	Text        string    `json:"text"`
-	Fingerprint string    `json:"fingerprint"`
-	Scroll      Scroll    `json:"scroll"`
-	Elements    []Element `json:"elements"`
+	URL         string           `json:"url"`
+	Title       string           `json:"title"`
+	Text        string           `json:"text"`
+	Fingerprint string           `json:"fingerprint"`
+	Scroll      Scroll           `json:"scroll"`
+	Elements    []Element        `json:"elements"`
+	Guards      map[int]string   `json:"guards"`
+	Names       map[int][]string `json:"names"`
 }
 
 func (p Page) Element(index int) (Element, bool) {

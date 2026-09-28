@@ -158,47 +158,31 @@ func TestSnapshotRefusesAnAnswerThatIsNotAPage(t *testing.T) {
 	}
 }
 
-func TestFreshRefusesAnAnswerThatIsNotABool(t *testing.T) {
-	answers := []string{`"ok":true,"value":true`, `"ok":true,"value":null`, `"ok":true`}
-	tab, _ := sharedTab(t, func(extensionCall) string {
-		answer := answers[0]
-		answers = answers[1:]
-		return answer
-	})
-	page := browser.Page{Fingerprint: "hotel-0"}
-	if fresh, err := tab.Fresh(context.Background(), page); !fresh || err != nil {
-		t.Fatalf("Fresh on true is %v, %v", fresh, err)
-	}
-	for range 2 {
-		if fresh, err := tab.Fresh(context.Background(), page); fresh || err == nil {
-			t.Fatalf("Fresh on an answer that is not a bool is %v, %v; want an error", fresh, err)
-		}
-	}
-}
-
-func TestActSendsTheFingerprintAndReadsStaleAsNotFresh(t *testing.T) {
+func TestActSendsTheTargetGuardAndReadsTheStaleKind(t *testing.T) {
 	answers := map[string]string{
-		"select": `"ok":false,"error":"stale: element 6 is covered at its centre"`,
+		"select": `"ok":true,"value":{"stale":"covered"}`,
 		"fill":   `"ok":false,"error":"element 4 is read-only"`,
-		"scroll": `"ok":true`,
-		"click":  `"ok":true`,
+		"scroll": `"ok":true,"value":{}`,
+		"click":  `"ok":true,"value":{}`,
+		"wait":   `"ok":true,"value":{"stale":"moved"}`,
 	}
 	tab, ext := sharedTab(t, func(call extensionCall) string { return answers[call.Op] })
-	page := browser.Page{Fingerprint: "hotel-0"}
+	page := browser.Page{Fingerprint: "hotel-0", Guards: map[int]string{5: "g5", 6: "g6"}}
 	ctx := context.Background()
 
-	fresh, err := tab.Act(ctx, page, browser.Action{Op: browser.OpSelect, Element: 6, Value: "Design"})
-	if fresh || err != nil {
-		t.Fatalf("Act on a stale answer is %v, %v; want not fresh and no error", fresh, err)
+	if stale, err := tab.Act(ctx, page, browser.Action{Op: browser.OpSelect, Element: 6, Value: "Design"}); stale != browser.StaleCovered || err != nil {
+		t.Fatalf("Act on a covered target is %q, %v; want covered and no error", stale, err)
 	}
-	fresh, err = tab.Act(ctx, page, browser.Action{Op: browser.OpTypeText, Element: 4, Value: "Lisbon"})
-	if fresh || err == nil || !strings.Contains(err.Error(), "read-only") {
-		t.Fatalf("Act on a read-only field is %v, %v; want the error", fresh, err)
+	if _, err := tab.Act(ctx, page, browser.Action{Op: browser.OpTypeText, Element: 4, Value: "Lisbon"}); err == nil || !strings.Contains(err.Error(), "read-only") {
+		t.Fatalf("Act on a read-only field is %v; want the error", err)
 	}
-	for _, op := range []browser.Op{browser.OpScrollUp, browser.OpScrollDown, browser.OpClick} {
-		if fresh, err := tab.Act(ctx, page, browser.Action{Op: op, Element: 5}); !fresh || err != nil {
-			t.Fatalf("Act %s is %v, %v", op, fresh, err)
+	for _, action := range []browser.Action{{Op: browser.OpScrollUp}, {Op: browser.OpScrollDown}, {Op: browser.OpClick, Element: 5}} {
+		if stale, err := tab.Act(ctx, page, action); stale != browser.StaleNone || err != nil {
+			t.Fatalf("Act %s is %q, %v", action.Op, stale, err)
 		}
+	}
+	if _, err := tab.Act(ctx, page, browser.Action{Op: browser.OpWait}); err == nil || !strings.Contains(err.Error(), "moved") {
+		t.Fatalf("an unknown stale kind answered %v, want an error naming it", err)
 	}
 	for _, op := range []browser.Op{browser.OpDone, browser.OpBlocked} {
 		if _, err := tab.Act(ctx, page, browser.Action{Op: op}); err == nil {
@@ -207,11 +191,12 @@ func TestActSendsTheFingerprintAndReadsStaleAsNotFresh(t *testing.T) {
 	}
 
 	ext.sawOnly(t,
-		`tab 7 select {"fingerprint":"hotel-0","element":6,"value":"Design"}`,
-		`tab 7 fill {"fingerprint":"hotel-0","element":4,"value":"Lisbon"}`,
-		`tab 7 scroll {"fingerprint":"hotel-0","direction":"up"}`,
-		`tab 7 scroll {"fingerprint":"hotel-0","direction":"down"}`,
-		`tab 7 click {"fingerprint":"hotel-0","element":5}`,
+		`tab 7 select {"element":6,"guard":"g6","value":"Design"}`,
+		`tab 7 fill {"element":4,"value":"Lisbon"}`,
+		`tab 7 scroll {"direction":"up"}`,
+		`tab 7 scroll {"direction":"down"}`,
+		`tab 7 click {"element":5,"guard":"g5"}`,
+		`tab 7 wait {}`,
 	)
 }
 
@@ -242,17 +227,14 @@ func TestBrowserRunsOneJevStepOnTheSharedTab(t *testing.T) {
 	}
 	snapshot := recordedSnapshot(t)
 	tab, ext := sharedTab(t, func(call extensionCall) string {
-		switch call.Op {
-		case "snapshot":
+		if call.Op == "snapshot" {
 			return snapshot
-		case "fresh":
-			return `"ok":true,"value":true`
 		}
-		return `"ok":true`
+		return `"ok":true,"value":{}`
 	})
 
 	loop := jevloop.Loop{
-		Browser: jevloop.Browser{Snapshot: tab.Snapshot, Fresh: tab.Fresh, Act: tab.Act},
+		Browser: jevloop.Browser{Snapshot: tab.Snapshot, Act: tab.Act},
 		Choose:  jevloop.Jev{Client: client, Set: set}.Choose,
 		Actions: 1,
 	}
@@ -260,15 +242,69 @@ func TestBrowserRunsOneJevStepOnTheSharedTab(t *testing.T) {
 
 	ext.sawOnly(t,
 		"tab 7 snapshot ",
-		`tab 7 fresh {"fingerprint":"hotel-0"}`,
-		`tab 7 select {"fingerprint":"hotel-0","element":6,"value":"Design"}`,
+		`tab 7 select {"element":6,"value":"Design"}`,
 		"tab 7 snapshot ",
-		`tab 7 fresh {"fingerprint":"hotel-0"}`,
 	)
-	if len(result.Steps) != 1 || result.Steps[0].Action != (browser.Action{Op: browser.OpSelect, Element: 6, Value: "Design"}) || result.Steps[0].Stale {
+	if len(result.Steps) != 1 || result.Steps[0].Action != (browser.Action{Op: browser.OpSelect, Element: 6, Value: "Design"}) || result.Steps[0].Stale != browser.StaleNone {
 		t.Fatalf("the loop recorded %+v", result.Steps)
 	}
 	if result.Status != jevloop.StatusBlocked || !strings.Contains(result.Reason, "action budget of 1") {
 		t.Fatalf("the loop stopped %v with %q, want the action budget", result.Status, result.Reason)
+	}
+}
+
+func scripted(actions ...browser.Action) jevloop.Chooser {
+	return func(context.Context, string, browser.Page, []jevloop.Step) (jevloop.Choice, error) {
+		action := actions[0]
+		actions = actions[min(1, len(actions)-1):]
+		return jevloop.Choice{Action: action}, nil
+	}
+}
+
+func TestACoveredTargetStopsBlockedAfterThreeDecisions(t *testing.T) {
+	snapshot := recordedSnapshot(t)
+	tab, _ := sharedTab(t, func(call extensionCall) string {
+		if call.Op == "snapshot" {
+			return snapshot
+		}
+		return `"ok":true,"value":{"stale":"covered"}`
+	})
+	result := jevloop.Loop{
+		Browser: jevloop.Browser{Snapshot: tab.Snapshot, Act: tab.Act},
+		Choose:  scripted(browser.Action{Op: browser.OpClick, Element: 5}),
+		Actions: 30,
+	}.Run(context.Background(), "find stays")
+	t.Logf("stopped %v after %d decisions: %s", result.Status, result.Decisions, result.Reason)
+	if result.Status != jevloop.StatusBlocked || result.Decisions != 3 || !strings.Contains(result.Reason, "covered") {
+		t.Fatalf("stopped %v after %d decisions with %q, want blocked after 3 naming covered", result.Status, result.Decisions, result.Reason)
+	}
+}
+
+func TestAPageWhoseFingerprintAlwaysMovesStillClicksOnceAndIsDone(t *testing.T) {
+	var page map[string]any
+	if err := json.Unmarshal([]byte(strings.TrimPrefix(recordedSnapshot(t), `"ok":true,"value":`)), &page); err != nil {
+		t.Fatal(err)
+	}
+	snapshots := 0
+	tab, ext := sharedTab(t, func(call extensionCall) string {
+		if call.Op == "snapshot" {
+			snapshots++
+			page["fingerprint"] = fmt.Sprint("tick-", snapshots)
+			raw, _ := json.Marshal(page)
+			return `"ok":true,"value":` + string(raw)
+		}
+		return `"ok":true,"value":{}`
+	})
+	result := jevloop.Loop{
+		Browser: jevloop.Browser{Snapshot: tab.Snapshot, Act: tab.Act},
+		Choose:  scripted(browser.Action{Op: browser.OpClick, Element: 5}, browser.Action{Op: browser.OpDone}),
+		Actions: 30,
+	}.Run(context.Background(), "find stays")
+	ext.mu.Lock()
+	clicks := slices.DeleteFunc(slices.Clone(ext.calls), func(call string) bool { return !strings.Contains(call, " click ") })
+	ext.mu.Unlock()
+	t.Logf("stopped %v after %d decisions and %d clicks: %s", result.Status, result.Decisions, len(clicks), result.Reason)
+	if result.Status != jevloop.StatusDone || len(clicks) != 1 || result.Decisions != 2 {
+		t.Fatalf("stopped %v after %d decisions and %d clicks, want done after 2 and 1", result.Status, result.Decisions, len(clicks))
 	}
 }

@@ -1,6 +1,7 @@
 package tools_test
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -36,8 +37,11 @@ const formPage = `{"url":"http://127.0.0.1:8000/form.html","title":"Forma","text
 {"index":5,"role":"select","label":"Room","value":"Single","options":[{"label":"Double","value":"d"}]}]}`
 
 type fakeChrome struct {
-	mu    sync.Mutex
-	calls []string
+	mu     sync.Mutex
+	calls  []string
+	page   string
+	noBody int
+	absent int
 }
 
 func (f *fakeChrome) serve(fromHost io.Reader, toHost io.Writer) {
@@ -56,12 +60,17 @@ func (f *fakeChrome) serve(fromHost io.Reader, toHost io.Writer) {
 		f.mu.Lock()
 		f.calls = append(f.calls, fmt.Sprintf("tab %d %s %s", call.TabID, call.Op, call.Args))
 		f.mu.Unlock()
-		answer := `"ok":true,"value":true`
-		switch call.Op {
-		case "snapshot":
-			answer = `"ok":true,"value":` + formPage
-		case "fill":
-			answer = `"ok":false,"error":"stale: the page changed before the fill"`
+		answer := `"ok":true,"value":{}`
+		switch {
+		case call.Op == "snapshot" && f.absent > 0:
+			f.absent--
+			answer = `"ok":true,"value":{"stale":"no body"}`
+		case call.Op == "snapshot":
+			answer = `"ok":true,"value":` + cmp.Or(f.page, formPage)
+		case call.Op == "click":
+			f.absent = f.noBody
+		case call.Op == "fill" && f.page == "":
+			answer = `"ok":true,"value":{"stale":"changed"}`
 		}
 		if browser.WriteMessage(toHost, fmt.Appendf(nil, `{"t":"result","id":%d,%s}`, call.ID, answer)) != nil {
 			return
@@ -85,7 +94,7 @@ func shortHome(t *testing.T) string {
 	return home
 }
 
-func hostWithTwoTabs(t *testing.T) (string, *fakeChrome) {
+func hostWithTwoTabs(t *testing.T, chrome *fakeChrome) string {
 	t.Helper()
 	home := shortHome(t)
 	manifest := filepath.Join(filepath.Dir(browser.ExtensionDir(home)), browser.HostName+".json")
@@ -117,7 +126,6 @@ func hostWithTwoTabs(t *testing.T) (string, *fakeChrome) {
 	if err := browser.WriteMessage(toHostW, []byte(hello)); err != nil {
 		t.Fatalf("the host did not read hello: %v", err)
 	}
-	chrome := &fakeChrome{}
 	go chrome.serve(fromHostR, toHostW)
 	for deadline := time.Now().Add(5 * time.Second); ; time.Sleep(time.Millisecond) {
 		client, err := browser.Dial(home)
@@ -125,7 +133,7 @@ func hostWithTwoTabs(t *testing.T) (string, *fakeChrome) {
 			tabs, tabsErr := client.Tabs()
 			_ = client.Close()
 			if tabsErr == nil && len(tabs) == 2 {
-				return home, chrome
+				return home
 			}
 		}
 		if time.Now().After(deadline) {
@@ -201,7 +209,8 @@ func TestEveryBrowserToolWithNoHostNamesTheInstall(t *testing.T) {
 }
 
 func TestTheBrowserToolsAgainstAFakeHost(t *testing.T) {
-	home, chrome := hostWithTwoTabs(t)
+	chrome := &fakeChrome{}
+	home := hostWithTwoTabs(t, chrome)
 	offered, err := tools.NewBrowser(drive(home, settings.ChooserModel))
 	if err != nil {
 		t.Fatal(err)
@@ -269,7 +278,7 @@ func TestTheBrowserToolsAgainstAFakeHost(t *testing.T) {
 	}
 	t.Logf("browser_act CLICK: %s, recorded %q", acted.Content, acted.Command)
 	after := chrome.saw()[len(before):]
-	if want := []string{`tab 7 click {"fingerprint":"p1","element":3}`}; !slices.Equal(after, want) {
+	if want := []string{`tab 7 click {"element":3}`}; !slices.Equal(after, want) {
 		t.Fatalf("one act sent\n%s\nwant\n%s", strings.Join(after, "\n"), want[0])
 	}
 
@@ -344,7 +353,8 @@ func TestBrowserDoRunsTheJevLoopOnADriveTab(t *testing.T) {
 		}
 		return browserTool(t, offered, "browser_do")
 	}
-	home, chrome := hostWithTwoTabs(t)
+	chrome := &fakeChrome{}
+	home := hostWithTwoTabs(t, chrome)
 	oneSession := browserDo(home, 30)
 	do := func(judge func() (jevloop.Jev, error), args string) (turn.Result, error) {
 		current = judge
@@ -376,7 +386,7 @@ func TestBrowserDoRunsTheJevLoopOnADriveTab(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Logf("browser_do CLICK then DONE, recorded %q:\n%s", done.Command, done.Content)
-	if got, want := sent(before), []string{`tab 7 click {"fingerprint":"p1","element":3}`}; !slices.Equal(got, want) {
+	if got, want := sent(before), []string{`tab 7 click {"element":3}`}; !slices.Equal(got, want) {
 		t.Fatalf("sent %v, want %v", got, want)
 	}
 	if !strings.HasPrefix(done.Content, "tab 7 done after 2 jev decisions and 1 steps\n") {
@@ -421,7 +431,7 @@ func TestBrowserDoRunsTheJevLoopOnADriveTab(t *testing.T) {
 		`{"tab":7,"goal":"book for Ada","values":{"Guest name":"Ada"}}`); err != nil {
 		t.Fatal(err)
 	}
-	if got, want := sent(before), []string{`tab 7 fill {"fingerprint":"p1","element":1,"value":"Ada"}`}; !slices.Equal(got, want) {
+	if got, want := sent(before), []string{`tab 7 fill {"element":1,"value":"Ada"}`}; !slices.Equal(got, want) {
 		t.Fatalf("sent %v, want %v", got, want)
 	}
 
@@ -435,11 +445,59 @@ func TestBrowserDoRunsTheJevLoopOnADriveTab(t *testing.T) {
 		t.Fatalf("an unlogged decision answered %q, %v, and sent %v", unlogged.Content, err, sent(before))
 	}
 
-	budgetHome, budgetChrome := hostWithTwoTabs(t)
+	budgetChrome := &fakeChrome{}
+	budgetHome := hostWithTwoTabs(t, budgetChrome)
 	current = jevOn(t, &recordedJev{answers: [][]byte{formAnswer("CLICK")}}, shortHome(t))
 	budget, err := browserDo(budgetHome, 1).Run(context.Background(), json.RawMessage(`{"tab":7,"goal":"book"}`))
 	clicks := slices.DeleteFunc(budgetChrome.saw(), func(call string) bool { return !strings.Contains(call, " click ") })
 	if err != nil || !strings.Contains(budget.Content, "action budget of 1") || len(clicks) != 1 {
 		t.Fatalf("browserSteps 1 answered %q, %v, and clicked %v", budget.Content, err, clicks)
+	}
+}
+
+func browserDoOn(t *testing.T, chrome *fakeChrome, answers ...[]byte) turn.Tool {
+	t.Helper()
+	config := drive(hostWithTwoTabs(t, chrome), settings.ChooserJev)
+	config.Judge = jevOn(t, &recordedJev{answers: answers}, shortHome(t))
+	offered, err := tools.NewBrowser(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return browserTool(t, offered, "browser_do")
+}
+
+func TestNoBodyOnTwoSnapshotsAfterAClickStillCompletesTheStep(t *testing.T) {
+	chrome := &fakeChrome{noBody: 2}
+	done, err := browserDoOn(t, chrome, formAnswer("CLICK"), formAnswer("DONE")).Run(context.Background(), json.RawMessage(`{"tab":7,"goal":"book the room"}`))
+	t.Logf("browser_do with no body twice after the click: %v\n%s", err, done.Content)
+	if err != nil || !strings.HasPrefix(done.Content, "tab 7 done after 2 jev decisions and 1 steps\n") || !strings.Contains(done.Content, `1. CLICK "Book"`) {
+		t.Fatalf("browser_do answered %q, %v; want done after one click", done.Content, err)
+	}
+	gone, err := browserDoOn(t, &fakeChrome{noBody: 11}, formAnswer("CLICK")).Run(context.Background(), json.RawMessage(`{"tab":7,"goal":"book the room"}`))
+	t.Logf("browser_do with no body eleven times after the click: %v\n%s", err, gone.Content)
+	if err != nil || !strings.HasPrefix(gone.Content, "tab 7 blocked") || !strings.Contains(gone.Content, "no body on 10 snapshots") || !strings.Contains(gone.Content, `[3] button "Book"`) {
+		t.Fatalf("browser_do answered %q, %v; want blocked on the snapshot with the last page read out", gone.Content, err)
+	}
+}
+
+const ondePage = `{"url":"https://www.airbnb.com.br/","title":"Airbnb","text":"Onde","fingerprint":"a1",
+"scroll":{"up":false,"down":true},"elements":[
+{"index":1,"role":"combobox","label":"Onde"},
+{"index":2,"role":"textbox","label":"Check-in"},
+{"index":3,"role":"button","label":"Pesquisar"},
+{"index":5,"role":"select","label":"Hóspedes","value":"1","options":[{"label":"2","value":"2"}]}]}`
+
+func TestValuesMatchALabelInAnyCaseAndTheOnlyTypeableField(t *testing.T) {
+	for _, arm := range []struct{ page, values, typed string }{
+		{ondePage, `{"onde":"Atibaia"}`, `"element":1,"value":"Atibaia"`},
+		{formPage, `{"who":"Ada"}`, `"element":1,"value":"Ada"`},
+	} {
+		chrome := &fakeChrome{page: arm.page}
+		result, err := browserDoOn(t, chrome, formAnswer("TYPE_TEXT"), formAnswer("DONE")).Run(context.Background(), json.RawMessage(`{"tab":7,"goal":"search","values":`+arm.values+`}`))
+		fills := slices.DeleteFunc(chrome.saw(), func(call string) bool { return !strings.Contains(call, " fill ") })
+		t.Logf("values %s filled %v: %s", arm.values, fills, strings.SplitN(result.Content, "\n", 2)[0])
+		if err != nil || len(fills) != 1 || !strings.Contains(fills[0], arm.typed) {
+			t.Fatalf("values %s filled %v, %v; want one fill carrying %s", arm.values, fills, err, arm.typed)
+		}
 	}
 }

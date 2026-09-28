@@ -186,4 +186,7 @@ const (
 	BrowserDecisionsPerAction = 2
 	BrowserRecentSteps        = 10
 	BrowserNoChangeStop       = 3
+	BrowserStaleStop          = 3
+	BrowserSnapshotAttempts   = 10
+	BrowserSnapshotGapMillis  = 20
 )

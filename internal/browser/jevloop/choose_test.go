@@ -187,3 +187,21 @@ func TestAReadOnlyFieldIsNeverATypeTextCandidate(t *testing.T) {
 		t.Fatalf("TYPE_TEXT offers %v, want only the guest name, element 2", names)
 	}
 }
+
+func TestARepeatedStateMakesNoSecondJevCall(t *testing.T) {
+	wire := &recordedWire{answer: readFixture(t, "hotel_answer.json")}
+	judge := recordedChooser(t, wire)
+	judge.Decided = map[string]Choice{}
+	page := hotelPage(t)
+	first, err := judge.Choose(context.Background(), "goal", page, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	again, err := judge.Choose(context.Background(), "goal", page, nil)
+	if err != nil || again.Action != first.Action || len(wire.posted) != 1 {
+		t.Fatalf("the same state chose %+v then %+v, %v, over %d Jev calls; want one call and the same action", first.Action, again.Action, err, len(wire.posted))
+	}
+	if _, err := judge.Choose(context.Background(), "goal", page, []Step{{Choice: first, Label: "Stay category"}}); err != nil || len(wire.posted) != 2 {
+		t.Fatalf("a state with one more step made %d Jev calls in all, %v; want 2", len(wire.posted), err)
+	}
+}

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"slices"
 	"strings"
 	"sync"
@@ -218,7 +219,7 @@ func (t browserAct) Run(ctx context.Context, raw json.RawMessage) (turn.Result, 
 	if err != nil {
 		return turn.Result{}, fmt.Errorf("browser_act: %w", err)
 	}
-	var fresh bool
+	var stale browser.Stale
 	err = t.session.with(func(client *browser.Client) error {
 		if err := driveTab(client, args.Tab); err != nil {
 			return err
@@ -232,7 +233,7 @@ func (t browserAct) Run(ctx context.Context, raw json.RawMessage) (turn.Result, 
 			return err
 		}
 		delete(t.session.pages, args.Tab)
-		fresh, err = browser.SharedTab{Client: client, ID: args.Tab}.Act(ctx, page, action)
+		stale, err = browser.SharedTab{Client: client, ID: args.Tab}.Act(ctx, page, action)
 		return err
 	})
 	if err != nil {
@@ -242,8 +243,8 @@ func (t browserAct) Run(ctx context.Context, raw json.RawMessage) (turn.Result, 
 	if targets(op) {
 		command += fmt.Sprintf(" element %d", args.Element)
 	}
-	if !fresh {
-		return turn.Result{Content: fmt.Sprintf("tab %d changed since browser_read, so %s did not run: read it again", args.Tab, op), Command: command}, nil
+	if stale != browser.StaleNone {
+		return turn.Result{Content: fmt.Sprintf("tab %d: %s did not run, the target is %s: read it again", args.Tab, op, stale), Command: command}, nil
 	}
 	return turn.Result{Content: fmt.Sprintf("tab %d ran %s: read it again to see what changed", args.Tab, op), Command: command}, nil
 }
@@ -295,7 +296,7 @@ func (t browserDo) Definition() llm.Tool {
 	return llm.Tool{
 		Name: "browser_do",
 		Description: fmt.Sprintf("runs a whole task in a tab shared to drive: jev picks each step, a click, typing, choosing an option, a scroll or a wait, until the goal is done, it is blocked, or %d actions ran. ", t.steps) +
-			"values maps a field's label to the text to type there; when jev picks a field values does not name, the task stops blocked and names the field, so call again with it. " +
+			"values maps a field's label, placeholder or name, in any case, to the text to type there, and one value fills a page's only text field; when jev picks a field values does not name, the task stops blocked and names the field, so call again with it. " +
 			"returns every step and a final read of the tab. " + theModelNeverWritesScript,
 		Parameters: map[string]any{
 			"type": "object",
@@ -311,15 +312,14 @@ func (t browserDo) Definition() llm.Tool {
 
 func (t browserDo) Run(ctx context.Context, raw json.RawMessage) (turn.Result, error) {
 	var args struct {
-		Tab    int               `json:"tab"`
-		Goal   string            `json:"goal"`
-		Values map[string]string `json:"values"`
+		Tab    int         `json:"tab"`
+		Goal   string      `json:"goal"`
+		Values fieldValues `json:"values"`
 	}
 	if err := json.Unmarshal(raw, &args); err != nil {
 		return turn.Result{}, fmt.Errorf("browser_do: arguments are not the expected shape: %w", err)
 	}
 	var result jevloop.Result
-	var page browser.Page
 	err := t.session.with(func(client *browser.Client) error {
 		if err := driveTab(client, args.Tab); err != nil {
 			return err
@@ -328,20 +328,15 @@ func (t browserDo) Run(ctx context.Context, raw json.RawMessage) (turn.Result, e
 		if err != nil {
 			return fmt.Errorf("no action ran, jev is not reachable: %w", err)
 		}
+		judge.Decided = map[string]jevloop.Choice{}
 		tab := browser.SharedTab{Client: client, ID: args.Tab}
 		result = jevloop.Loop{
-			Browser: jevloop.Browser{Snapshot: tab.Snapshot, Fresh: tab.Fresh, Act: tab.Act},
+			Browser: jevloop.Browser{Snapshot: tab.Snapshot, Act: tab.Act},
 			Choose:  judge.Choose,
-			Write: func(_ context.Context, _ string, _ browser.Page, field browser.Element) (string, error) {
-				if text, given := args.Values[field.Label]; given {
-					return text, nil
-				}
-				return "", fmt.Errorf("values names no text for element %d, so call browser_do again with values naming %q", field.Index, field.Label)
-			},
+			Write:   args.Values.write,
 			Actions: t.steps,
 		}.Run(ctx, args.Goal)
-		page, err = tab.Snapshot(ctx)
-		return err
+		return nil
 	})
 	if err != nil {
 		return turn.Result{}, fmt.Errorf("browser_do: %w", err)
@@ -357,8 +352,8 @@ func (t browserDo) Run(ctx context.Context, raw json.RawMessage) (turn.Result, e
 			fmt.Fprintf(&body, " %q", step.Action.Value)
 		}
 		switch {
-		case step.Stale:
-			body.WriteString(": stale, the page moved first and it did not run\n")
+		case step.Stale != browser.StaleNone:
+			fmt.Fprintf(&body, ": did not run, the target is %s\n", step.Stale)
 		case step.Changed:
 			body.WriteString(": changed the page\n")
 		default:
@@ -367,7 +362,28 @@ func (t browserDo) Run(ctx context.Context, raw json.RawMessage) (turn.Result, e
 	}
 	return turn.Result{
 		Content: fmt.Sprintf("tab %d %s after %d jev decisions and %d steps\n%s\n%s", args.Tab, result.Status, result.Decisions, len(result.Steps),
-			web.Untrusted("the reason and the steps, named by the page's own labels", strings.TrimSuffix(body.String(), "\n")), readOut(args.Tab, page)),
+			web.Untrusted("the reason and the steps, named by the page's own labels", strings.TrimSuffix(body.String(), "\n")), readOut(args.Tab, result.Page)),
 		Command: fmt.Sprintf("tab %d goal %q", args.Tab, args.Goal),
 	}, nil
+}
+
+type fieldValues map[string]string
+
+func (values fieldValues) write(_ context.Context, _ string, page browser.Page, field browser.Element) (string, error) {
+	names := append([]string{field.Label}, page.Names[field.Index]...)
+	for key, text := range values {
+		if slices.ContainsFunc(names, func(name string) bool { return strings.EqualFold(name, key) }) {
+			return text, nil
+		}
+	}
+	typeable := 0
+	for _, element := range page.Elements {
+		if browser.OpTypeText.Accepts(element.Role) && !element.ReadOnly {
+			typeable++
+		}
+	}
+	if only := slices.Collect(maps.Values(values)); len(only) == 1 && typeable == 1 {
+		return only[0], nil
+	}
+	return "", fmt.Errorf("values names no text for element %d, so call browser_do again with values naming %q", field.Index, field.Label)
 }

@@ -4,7 +4,10 @@ const DEBUGGER_VERSION = '1.3';
 const RECONNECT_MIN_MS = 1000;
 const RECONNECT_MAX_MS = 30000;
 const WAIT_MS = 500;
-const READ_OPS = ['snapshot', 'fresh'];
+const SETTLE_MS = 50;
+const COMBOBOX_SETTLE_MS = 200;
+const COMMIT_MS = 5000;
+const COMMIT_POLL_MS = 20;
 const DRIVE_OPS = ['click', 'fill', 'select', 'scroll', 'wait'];
 const MODES = ['read', 'drive'];
 const DIRECTIONS = ['up', 'down'];
@@ -21,6 +24,7 @@ let snapshotSource = null;
 const tabInfo = tab => ({id: tab.id, url: tab.url ?? '', title: tab.title ?? ''});
 const post = message => port?.postMessage(message);
 const send = (tabId, method, params) => chrome.debugger.sendCommand({tabId}, method, params);
+const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 function connect() {
   if (port) return;
@@ -51,34 +55,47 @@ async function perform(tabId, op, args) {
   if (op === 'close') return closeOpened(tabId);
   const tab = shared.get(tabId);
   if (!tab) throw new Error(`tab ${tabId} is not shared with tofu`);
-  const fingerprint = String(args.fingerprint ?? '');
-  if (READ_OPS.includes(op)) return evaluate(tabId, {op, fingerprint});
+  if (op === 'snapshot') return evaluate(tabId, {op});
   if (!DRIVE_OPS.includes(op)) throw new Error(`unknown op ${op}`);
   if (tab.mode !== 'drive') throw new Error(`tab ${tabId} is shared for reading only`);
   if (op === 'scroll' && !DIRECTIONS.includes(args.direction)) throw new Error(`no scroll direction ${args.direction}`);
-  const request = {op, fingerprint, element: Number(args.element), value: String(args.value ?? ''), direction: args.direction};
+  const request = {op, element: Number(args.element), guard: String(args.guard ?? ''), value: String(args.value ?? ''), direction: args.direction};
   const target = await evaluate(tabId, request);
-  if (op === 'wait') await new Promise(resolve => setTimeout(resolve, WAIT_MS));
-  if (op !== 'click' && op !== 'fill') return;
-  for (const type of ['mousePressed', 'mouseReleased']) {
-    await send(tabId, 'Input.dispatchMouseEvent', {type, x: target.x, y: target.y, button: 'left', clickCount: 1});
+  if (target.stale) return target;
+  if (op === 'wait') {
+    await sleep(WAIT_MS);
+    return {};
   }
-  if (op !== 'fill') return;
-  const selectAll = {key: 'a', code: 'KeyA', modifiers: SELECT_ALL_MODIFIER};
-  await send(tabId, 'Input.dispatchKeyEvent', {...selectAll, type: 'keyDown', commands: ['selectAll']});
-  await send(tabId, 'Input.dispatchKeyEvent', {...selectAll, type: 'keyUp'});
-  await send(tabId, 'Input.insertText', {text: request.value});
+  if (op === 'click' || op === 'fill') {
+    for (const type of ['mousePressed', 'mouseReleased']) {
+      await send(tabId, 'Input.dispatchMouseEvent', {type, x: target.x, y: target.y, button: 'left', clickCount: 1});
+    }
+  }
+  if (op === 'fill') {
+    const selectAll = {key: 'a', code: 'KeyA', modifiers: SELECT_ALL_MODIFIER};
+    await send(tabId, 'Input.dispatchKeyEvent', {...selectAll, type: 'keyDown', commands: ['selectAll']});
+    await send(tabId, 'Input.dispatchKeyEvent', {...selectAll, type: 'keyUp'});
+    await send(tabId, 'Input.insertText', {text: request.value});
+  }
+  await settle(tabId, request.element, op === 'fill' && target.combobox);
+  return {};
+}
+
+async function settle(tabId, element, combobox) {
+  const wait = combobox ? COMBOBOX_SETTLE_MS : SETTLE_MS;
+  await Promise.race([evaluate(tabId, {op: 'settle', element, combobox, wait}).catch(() => {}), sleep(wait)]);
+  for (const until = Date.now() + COMMIT_MS; Date.now() < until && (await chrome.tabs.get(tabId)).pendingUrl;) {
+    await sleep(COMMIT_POLL_MS);
+  }
 }
 
 async function evaluate(tabId, request) {
   snapshotSource ??= await (await fetch(chrome.runtime.getURL('snapshot.js'))).text();
   const expression = `(${snapshotSource})(${JSON.stringify(request)})`;
-  const {result, exceptionDetails} = await send(tabId, 'Runtime.evaluate', {expression, returnByValue: true});
-  if (exceptionDetails) throw new Error('stale: the page changed while tofu read it');
-  const value = result.value;
-  if (value?.stale) throw new Error(`stale: ${value.stale}`);
-  if (value?.error) throw new Error(value.error);
-  return value;
+  const {result, exceptionDetails} = await send(tabId, 'Runtime.evaluate', {expression, returnByValue: true, awaitPromise: true});
+  if (exceptionDetails) return {stale: 'changed'};
+  if (result.value?.error) throw new Error(result.value.error);
+  return result.value;
 }
 
 async function openTab(url) {

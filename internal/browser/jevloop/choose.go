@@ -17,7 +17,7 @@ import (
 
 const operationQuestion = "operation"
 
-const stateBuilder = "jevloop.stepState@1"
+const stateBuilder = "jevloop.stepState@2"
 
 type Choice struct {
 	Action   browser.Action
@@ -27,9 +27,10 @@ type Choice struct {
 type Chooser func(ctx context.Context, goal string, page browser.Page, steps []Step) (Choice, error)
 
 type Jev struct {
-	Client *jev.Client
-	Set    question.Set
-	Ledger *ledger.Writer
+	Client  *jev.Client
+	Set     question.Set
+	Ledger  *ledger.Writer
+	Decided map[string]Choice
 }
 
 type pageState struct {
@@ -39,11 +40,11 @@ type pageState struct {
 }
 
 type recentAction struct {
-	Action      string `json:"action"`
-	Op          string `json:"op"`
-	Value       string `json:"value,omitempty"`
-	PageChanged bool   `json:"page_changed"`
-	Stale       bool   `json:"stale,omitempty"`
+	Action      string        `json:"action"`
+	Op          string        `json:"op"`
+	Value       string        `json:"value,omitempty"`
+	PageChanged bool          `json:"page_changed"`
+	DidNotRun   browser.Stale `json:"did_not_run,omitempty"`
 }
 
 type stepState struct {
@@ -82,8 +83,16 @@ func (j Jev) Choose(ctx context.Context, goal string, page browser.Page, steps [
 	}
 	for _, step := range recent {
 		state.RecentActions = append(state.RecentActions, recentAction{
-			Action: step.Label, Op: step.Action.Op.String(), Value: step.Action.Value, PageChanged: step.Changed, Stale: step.Stale,
+			Action: step.Label, Op: step.Action.Op.String(), Value: step.Action.Value, PageChanged: step.Changed, DidNotRun: step.Stale,
 		})
+	}
+	body, err := ledger.Canonical(state)
+	if err != nil {
+		return Choice{}, err
+	}
+	hash := ledger.HashOf(body)
+	if choice, seen := j.Decided[hash]; seen {
+		return choice, nil
 	}
 
 	ops := operation.ToJev()
@@ -129,7 +138,7 @@ func (j Jev) Choose(ctx context.Context, goal string, page browser.Page, steps [
 	if err != nil {
 		return Choice{}, err
 	}
-	if err := j.record(state, decision); err != nil {
+	if err := j.record(body, hash, decision); err != nil {
 		return Choice{}, fmt.Errorf("the decision was not logged, so it does not run: %w", err)
 	}
 	op, err := browser.ParseOp(decision.Answers[operationQuestion].Choice)
@@ -140,16 +149,16 @@ func (j Jev) Choose(ctx context.Context, goal string, page browser.Page, steps [
 	if actions, targeted := targets[op]; targeted {
 		action = actions[decision.Answers[targetQuestion(op)].Choice]
 	}
-	return Choice{Action: action, Decision: decision}, nil
+	choice := Choice{Action: action, Decision: decision}
+	if j.Decided != nil {
+		j.Decided[hash] = choice
+	}
+	return choice, nil
 }
 
-func (j Jev) record(state stepState, decision jev.Decision) error {
+func (j Jev) record(body []byte, hash string, decision jev.Decision) error {
 	if j.Ledger == nil {
 		return nil
-	}
-	body, err := ledger.Canonical(state)
-	if err != nil {
-		return err
 	}
 	answers := make([]ledger.Answer, 0, len(decision.Answers))
 	for _, id := range slices.Sorted(maps.Keys(decision.Answers)) {
@@ -160,10 +169,10 @@ func (j Jev) record(state stepState, decision jev.Decision) error {
 		}
 		answers = append(answers, ledger.Answer{Question: id, Wording: j.Set.QuestionsVersion, Kind: ledger.AnswerChoice, Choice: answer.Choice, Dist: dist})
 	}
-	_, err = j.Ledger.Append(ledger.Row{
+	_, err := j.Ledger.Append(ledger.Row{
 		Point: j.Set.Name, Questions: j.Set.Name, Version: j.Set.QuestionsVersion,
 		Build: decision.Build, Model: decision.Alias, RequestID: decision.RequestID,
-		StateHash: ledger.HashOf(body), StateBuilder: stateBuilder, State: body, Answers: answers,
+		StateHash: hash, StateBuilder: stateBuilder, State: body, Answers: answers,
 		LatencyMS: decision.Latency.Milliseconds(), Cost: decision.Usage.Cost,
 	})
 	return err

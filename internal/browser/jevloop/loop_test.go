@@ -14,30 +14,29 @@ type fakeTab struct {
 	page      browser.Page
 	changes   bool
 	staleActs int
-	staleOnce bool
+	snapshots int
+	moveAt    int
 	acts      []browser.Action
 }
 
 func (f *fakeTab) browser() Browser {
 	return Browser{
-		Snapshot: func(context.Context) (browser.Page, error) { return f.page, nil },
-		Fresh: func(context.Context, browser.Page) (bool, error) {
-			if f.staleOnce {
-				f.staleOnce = false
-				return false, nil
+		Snapshot: func(context.Context) (browser.Page, error) {
+			if f.snapshots++; f.snapshots == f.moveAt {
+				f.page.Elements = append(f.page.Elements, browser.Element{Index: 99, Role: browser.RoleButton, Label: "Cookie banner"})
 			}
-			return true, nil
+			return f.page, nil
 		},
-		Act: func(_ context.Context, _ browser.Page, action browser.Action) (bool, error) {
+		Act: func(_ context.Context, _ browser.Page, action browser.Action) (browser.Stale, error) {
 			if f.staleActs > 0 {
 				f.staleActs--
-				return false, nil
+				return browser.StaleCovered, nil
 			}
 			f.acts = append(f.acts, action)
 			if f.changes {
 				f.page.Fingerprint = fmt.Sprint("hotel-", len(f.acts))
 			}
-			return true, nil
+			return browser.StaleNone, nil
 		},
 	}
 }
@@ -54,6 +53,14 @@ func recordedLoop(t *testing.T, tab *fakeTab, wire *recordedWire, actions int) L
 
 func always(action browser.Action) Chooser {
 	return func(context.Context, string, browser.Page, []Step) (Choice, error) {
+		return Choice{Action: action}, nil
+	}
+}
+
+func inTurn(actions ...browser.Action) Chooser {
+	return func(context.Context, string, browser.Page, []Step) (Choice, error) {
+		action := actions[0]
+		actions = actions[min(1, len(actions)-1):]
 		return Choice{Action: action}, nil
 	}
 }
@@ -102,40 +109,45 @@ func TestAJevErrorRunsNoAction(t *testing.T) {
 	}
 }
 
-func TestAStaleElementRetriesOnceWithAFreshDecision(t *testing.T) {
+func TestAStaleStepIsRecordedWithItsReasonAndTheNextStateCarriesIt(t *testing.T) {
 	tab := &fakeTab{changes: true, staleActs: 1}
 	wire := &recordedWire{answer: readFixture(t, "hotel_answer.json")}
 	result := recordedLoop(t, tab, wire, 2).Run(context.Background(), "goal")
 	assertBlocked(t, result, "action budget")
-	if len(tab.acts) != 2 || len(wire.posted) != 4 || len(result.Steps) != 2 || result.Steps[0].Stale {
-		t.Fatalf("ran %d actions over %d decisions into %d steps; want 2 over 4 into 2, none stale", len(tab.acts), len(wire.posted), len(result.Steps))
+	if len(tab.acts) != 2 || len(wire.posted) != 4 || len(result.Steps) != 3 || result.Steps[0].Stale != browser.StaleCovered {
+		t.Fatalf("ran %d actions over %d decisions into %+v; want 2 over 4 into 3, the first covered", len(tab.acts), len(wire.posted), result.Steps)
+	}
+	if !strings.Contains(string(wire.posted[1]), `"did_not_run":"covered"`) {
+		t.Fatalf("the decision after a covered step was asked on %s", wire.posted[1])
 	}
 }
 
-func TestAStaleElementTwiceIsRecordedAsAFailedStep(t *testing.T) {
-	tab := &fakeTab{staleActs: 2}
-	result := recordedLoop(t, tab, &recordedWire{answer: readFixture(t, "hotel_answer.json")}, 60).Run(context.Background(), "goal")
-	assertBlocked(t, result, "changed nothing")
-	if len(result.Steps) != 4 || !result.Steps[0].Stale || result.Steps[1].Stale || len(tab.acts) != 3 {
-		t.Fatalf("%d steps with %d actions, want one stale step then three that ran", len(result.Steps), len(tab.acts))
-	}
-}
-
-func TestAPageThatIsAlwaysStaleStopsAtTheDecisionBudget(t *testing.T) {
-	tab := &fakeTab{staleActs: 1000, changes: true}
+func TestACoveredTargetStopsAfterThreeDecisionsNotTheBudget(t *testing.T) {
+	tab := &fakeTab{staleActs: 1000}
 	wire := &recordedWire{answer: readFixture(t, "hotel_answer.json")}
-	result := recordedLoop(t, tab, wire, 3).Run(context.Background(), "goal")
-	assertBlocked(t, result, "decision budget")
-	if len(tab.acts) != 0 || len(wire.posted) != 6 {
-		t.Fatalf("ran %d actions over %d decisions, want none over 6", len(tab.acts), len(wire.posted))
+	result := recordedLoop(t, tab, wire, 30).Run(context.Background(), "goal")
+	assertBlocked(t, result, "did not run 3 times in a row: covered")
+	if len(tab.acts) != 0 || len(wire.posted) != 3 || result.Decisions != 3 {
+		t.Fatalf("ran %d actions over %d Jev calls and %d decisions, want none over 3", len(tab.acts), len(wire.posted), result.Decisions)
 	}
 }
 
-func TestDoneOnAStalePageIsDecidedAgain(t *testing.T) {
-	tab := &fakeTab{page: browser.Page{Fingerprint: "p"}, staleOnce: true}
+func TestTheStaleCountRestartsOnAnotherTarget(t *testing.T) {
+	tab := &fakeTab{staleActs: 1000}
+	tab.page = hotelPage(t)
+	first, second := browser.Action{Op: browser.OpClick, Element: 8}, browser.Action{Op: browser.OpClick, Element: 9}
+	result := Loop{Browser: tab.browser(), Choose: inTurn(first, first, second, second, second), Actions: 30}.Run(context.Background(), "goal")
+	assertBlocked(t, result, `"View The Glasshouse" did not run 3 times in a row`)
+	if result.Decisions != 5 {
+		t.Fatalf("stopped after %d decisions, want 5", result.Decisions)
+	}
+}
+
+func TestDoneAfterTheElementsMovedIsDecidedAgain(t *testing.T) {
+	tab := &fakeTab{page: browser.Page{Fingerprint: "p"}, moveAt: 2}
 	result := Loop{Browser: tab.browser(), Choose: always(browser.Action{Op: browser.OpDone}), Actions: 5}.Run(context.Background(), "goal")
-	if result.Status != StatusDone || result.Decisions != 2 {
-		t.Fatalf("stopped %v after %d decisions, want done after 2", result.Status, result.Decisions)
+	if result.Status != StatusDone || result.Decisions != 2 || len(result.Page.Elements) != 1 {
+		t.Fatalf("stopped %v after %d decisions on %+v, want done after 2 on the moved page", result.Status, result.Decisions, result.Page)
 	}
 }
 
