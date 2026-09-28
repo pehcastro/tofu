@@ -14,7 +14,14 @@ import (
 
 var ErrNotConnected = errors.New("the tofu extension is not connected: run tofu browser install, then load it in Chrome")
 
+type CallTime struct {
+	Wall      time.Duration
+	Host      time.Duration
+	Extension *Timing
+}
+
 type Client struct {
+	Timed  func(CallTime)
 	mu     sync.Mutex
 	conn   net.Conn
 	out    *json.Encoder
@@ -69,9 +76,13 @@ func (c *Client) Call(tab int, op string, args json.RawMessage) (json.RawMessage
 		return nil, fmt.Errorf("%w (%v)", ErrNotConnected, err)
 	}
 	var answer result
+	started := time.Now()
 	err := c.out.Encode(request{ID: c.lastID, Op: op, Tab: tab, Args: args})
 	if err == nil {
 		err = c.in.Decode(&answer)
+	}
+	if err == nil && c.Timed != nil {
+		c.Timed(CallTime{Wall: time.Since(started), Host: answer.Host, Extension: answer.Timing})
 	}
 	switch {
 	case errors.Is(err, os.ErrDeadlineExceeded):

@@ -177,13 +177,13 @@ func TestHostRelaysAndClaims(t *testing.T) {
 	if _, err := first.Call(7, "navigate", nil); err == nil || !strings.Contains(err.Error(), "unknown browser op") {
 		t.Fatalf("an unknown op returned %v", err)
 	}
-	fresh := callAsync(first, 9, "fresh", nil)
-	freshCall := ext.call()
-	if freshCall.Op != "fresh" || freshCall.TabID != 9 {
-		t.Fatalf("a refused op reached the extension: %+v", freshCall)
+	failed := callAsync(first, 9, "snapshot", nil)
+	failedCall := ext.call()
+	if failedCall.Op != "snapshot" || failedCall.TabID != 9 {
+		t.Fatalf("a refused op reached the extension: %+v", failedCall)
 	}
-	ext.answer(freshCall.ID, `"ok":false,"error":"the page changed"`)
-	if a := <-fresh; a.err == nil || !strings.Contains(a.err.Error(), "the page changed") {
+	ext.answer(failedCall.ID, `"ok":false,"error":"the page changed"`)
+	if a := <-failed; a.err == nil || !strings.Contains(a.err.Error(), "the page changed") {
 		t.Fatalf("a failed result came back as %s, %v", a.value, a.err)
 	}
 

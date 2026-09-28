@@ -25,6 +25,7 @@ type session struct {
 type route struct {
 	session *session
 	id      int64
+	sent    time.Time
 }
 
 type relay struct {
@@ -136,7 +137,7 @@ func (r *relay) receive(message extensionMessage) {
 			return
 		}
 		delete(r.pending, message.ID)
-		message.ID = to.id
+		message.ID, message.Host = to.id, time.Since(to.sent)
 		_ = to.session.out.Encode(message.result)
 	}
 }
@@ -226,9 +227,10 @@ func (r *relay) forward(s *session, req request) error {
 	if err != nil {
 		return err
 	}
+	sent := time.Now()
 	if err := WriteMessage(r.extension, raw); err != nil {
 		return err
 	}
-	r.pending[r.lastID] = route{s, req.ID}
+	r.pending[r.lastID] = route{s, req.ID, sent}
 	return nil
 }

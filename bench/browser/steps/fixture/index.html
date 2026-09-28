@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Stays</title>
+<style>
+body { margin: 0; padding-top: 64px; font: 16px sans-serif; }
+header { position: fixed; top: 0; left: 0; right: 0; height: 64px; background: #fff; border-bottom: 1px solid #ccc; z-index: 10; }
+header.tall { height: 45vh; }
+#places { position: absolute; top: 40px; left: 110px; margin: 0; padding: 0; list-style: none; background: #fff; border: 1px solid #ccc; }
+#places li { padding: 4px 8px; cursor: pointer; }
+.intro { height: 100vh; }
+.stay { display: block; margin-bottom: 30vh; }
+.gap { height: 40vh; }
+.tail { height: 60vh; }
+td[role=gridcell] { padding: 4px 8px; cursor: pointer; }
+</style>
+</head>
+<body>
+<header id="top">
+<label for="destination">Destination</label>
+<input id="destination" role="combobox" aria-controls="places" aria-expanded="false" autocomplete="off">
+<ul id="places" role="listbox" hidden></ul>
+<span id="ticker">Prices checked 0 times</span>
+</header>
+<main>
+<section class="intro"><h1>Find a stay</h1><p id="chosen">No destination yet.</p></section>
+<button class="stay" type="button">Casa Flora</button>
+<button class="stay" type="button">Casa Azul</button>
+<div class="gap"><p id="picked">No stay picked.</p></div>
+<form action="/booked" method="get">
+<table role="grid"><tr>
+<td role="gridcell">10</td><td role="gridcell">11</td><td role="gridcell">12</td><td role="gridcell">13</td><td role="gridcell">14</td><td role="gridcell">15</td><td role="gridcell">16</td>
+</tr></table>
+<label for="guests">Guests</label>
+<select id="guests" name="guests"><option value="1">1 guest</option><option value="2">2 guests</option><option value="3">3 guests</option></select>
+<label for="name">Name</label>
+<input id="name" name="name">
+<button type="submit">Book</button>
+</form>
+<div class="tail"></div>
+</main>
+<script>
+const places = ['Lisbon', 'Lisieux', 'Lima', 'Lyon'];
+const input = document.getElementById('destination');
+const list = document.getElementById('places');
+let debounce = 0;
+input.addEventListener('input', () => {
+  clearTimeout(debounce);
+  debounce = setTimeout(() => {
+    const typed = input.value.toLowerCase();
+    list.replaceChildren(...places.filter(place => typed && place.toLowerCase().startsWith(typed)).map(place => {
+      const item = document.createElement('li');
+      item.setAttribute('role', 'option');
+      item.textContent = place;
+      item.addEventListener('click', () => {
+        input.value = place;
+        list.hidden = true;
+        input.setAttribute('aria-expanded', 'false');
+        document.getElementById('chosen').textContent = 'Stays in ' + place;
+      });
+      return item;
+    }));
+    list.hidden = list.children.length === 0;
+    input.setAttribute('aria-expanded', String(!list.hidden));
+  }, 150);
+});
+let ticks = 0;
+setInterval(() => { document.getElementById('ticker').textContent = 'Prices checked ' + (++ticks) + ' times'; }, 200);
+addEventListener('scroll', () => document.getElementById('top').classList.toggle('tall', scrollY > 0));
+for (const stay of document.querySelectorAll('.stay')) {
+  stay.addEventListener('click', () => { document.getElementById('picked').textContent = 'Picked ' + stay.textContent; });
+}
+for (const day of document.querySelectorAll('td[role=gridcell]')) {
+  day.addEventListener('click', () => {
+    for (const other of document.querySelectorAll('td[role=gridcell]')) other.setAttribute('aria-selected', String(other === day));
+  });
+}
+</script>
+</body>
+</html>

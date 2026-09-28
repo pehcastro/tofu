@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"path/filepath"
+	"time"
 
 	"tofu/internal/konst"
 	"tofu/internal/sys"
@@ -58,11 +59,19 @@ type extensionCall struct {
 	Args  json.RawMessage `json:"args,omitempty"`
 }
 
+type Timing struct {
+	EvaluateMS float64 `json:"evaluate_ms"`
+	SettleMS   float64 `json:"settle_ms"`
+	ActMS      float64 `json:"act_ms"`
+}
+
 type result struct {
-	ID    int64           `json:"id"`
-	OK    bool            `json:"ok"`
-	Value json.RawMessage `json:"value,omitempty"`
-	Error string          `json:"error,omitempty"`
+	ID     int64           `json:"id"`
+	OK     bool            `json:"ok"`
+	Value  json.RawMessage `json:"value,omitempty"`
+	Error  string          `json:"error,omitempty"`
+	Timing *Timing         `json:"timing,omitempty"`
+	Host   time.Duration   `json:"host_ns,omitempty"`
 }
 
 type extensionMessage struct {
@@ -113,7 +122,7 @@ type openArgs struct {
 
 func opMode(op string) (Mode, error) {
 	switch op {
-	case "snapshot", "fresh":
+	case "snapshot":
 		return ModeRead, nil
 	case "click", "fill", "select", "scroll", "wait":
 		return ModeDrive, nil
