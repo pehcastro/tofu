@@ -143,12 +143,11 @@ func (s Scan) layers() ([]sys.Layer, []string) {
 		layers = append(layers, sys.DirLayer("."+source, filepath.Join(s.Project, "."+source, "agents")))
 	}
 	var notices []string
-	if s.Home == "" {
-		notices = append(notices, "no home directory is known, so no personal agent folder was read")
-	} else {
-		for _, source := range s.Sources {
-			layers = append(layers, sys.DirLayer("~/."+source, filepath.Join(s.Home, "."+source, "agents")))
-		}
+	switch {
+	case s.Home == "":
+		notices = append(notices, "no home directory is known, so ~/.tofu/agents, the only agent folder tofu reads from a home, was not read")
+	case slices.Contains(s.Sources, "tofu"):
+		layers = append(layers, sys.DirLayer("~/"+sys.StateDirName, filepath.Join(sys.StateDir(s.Home), "agents")))
 	}
 	return append(layers, sys.Layer{Name: libraryOrigin, Origin: libraryOrigin, FS: s.Library}), notices
 }

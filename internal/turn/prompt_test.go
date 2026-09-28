@@ -23,13 +23,19 @@ func TestInstructionFilesPerFolder(t *testing.T) {
 			agentsFirst, []string{"agents rules"}, []string{"claude rules"}, []string{"this project's CLAUDE.md"}},
 		{"the order setting is read", map[string]string{"work/AGENTS.md": "agents rules", "work/CLAUDE.md": "claude rules"},
 			claudeFirst, []string{"claude rules"}, []string{"agents rules"}, []string{"this project's AGENTS.md"}},
-		{"different folders are both read", map[string]string{"AGENTS.md": "agents rules", "work/CLAUDE.md": "claude rules"},
+		{"different folders are both read", map[string]string{".git/HEAD": "ref", "AGENTS.md": "agents rules", "work/CLAUDE.md": "claude rules"},
 			agentsFirst, []string{"agents rules", "claude rules"}, nil, nil},
+		{"a parent with no git is not read", map[string]string{"CLAUDE.md": "parent rules"},
+			agentsFirst, nil, []string{"parent rules"}, nil},
+		{"another harness's home is not read", map[string]string{"home/.claude/CLAUDE.md": "claude home", "home/.agents/AGENTS.md": "agents home"},
+			agentsFirst, nil, []string{"claude home", "agents home"}, nil},
+		{"the home gives only ~/.tofu/AGENTS.md", map[string]string{"home/.claude/CLAUDE.md": "claude home", "home/.tofu/AGENTS.md": "tofu home"},
+			agentsFirst, []string{"tofu home"}, []string{"claude home"}, nil},
 		{"an empty preferred file does not count", map[string]string{"work/AGENTS.md": " \n", "work/CLAUDE.md": "claude rules"},
 			agentsFirst, []string{"claude rules"}, nil, nil},
 		{"a source left out is never read", map[string]string{"work/AGENTS.md": "agents rules", "work/CLAUDE.md": "claude rules"},
 			[]string{"CLAUDE.md"}, []string{"claude rules"}, []string{"agents rules"}, nil},
-		{"the personal file ignores the setting", map[string]string{"home/.claude/CLAUDE.md": "personal rules", "work/AGENTS.md": "agents rules"},
+		{"the ~/.tofu file ignores the setting", map[string]string{"home/.tofu/AGENTS.md": "personal rules", "work/AGENTS.md": "agents rules"},
 			claudeFirst, []string{"personal rules", "agents rules"}, nil, nil},
 	}
 	for _, c := range cases {
@@ -49,6 +55,9 @@ func TestInstructionFilesPerFolder(t *testing.T) {
 				t.Fatal(err)
 			}
 			block, _, skipped := ProjectInstructionsInOrder(work, filepath.Join(root, "home"), 0, c.sources)
+			if len(c.sent) == 0 && block != "" {
+				t.Errorf("nothing should be sent, got:\n%s", block)
+			}
 			for _, want := range c.sent {
 				if !strings.Contains(block, want) {
 					t.Errorf("%q was not sent:\n%s", want, block)

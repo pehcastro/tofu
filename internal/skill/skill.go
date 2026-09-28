@@ -28,17 +28,15 @@ type Found struct {
 }
 
 func Discover(project, home string) Found {
-	project, _ = filepath.Abs(project)
-	home, _ = filepath.Abs(home)
-	kinds := []string{".tofu", ".agents", ".claude"}
 	var folders []string
-	for _, kind := range kinds {
-		for _, dir := range ancestors(project, home) {
+	projectFolders := ProjectFolders(project, home)
+	for _, kind := range []string{".tofu", ".agents", ".claude"} {
+		for _, dir := range projectFolders {
 			folders = append(folders, filepath.Join(dir, kind, "skills"))
 		}
 	}
-	for _, kind := range kinds {
-		folders = append(folders, filepath.Join(home, kind, "skills"))
+	if home != "" {
+		folders = append(folders, filepath.Join(home, ".tofu", "skills"))
 	}
 	var found Found
 	seen, fileNamed := map[string]bool{}, map[string]string{}
@@ -85,7 +83,8 @@ func Discover(project, home string) Found {
 	return found
 }
 
-func ancestors(project, home string) []string {
+func ProjectFolders(project, home string) []string {
+	project, _ = filepath.Abs(project)
 	var dirs []string
 	for dir := project; ; {
 		if dir != home {

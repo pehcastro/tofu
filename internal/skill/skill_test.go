@@ -38,8 +38,8 @@ func TestDiscoverWalksToTheRepositoryRootClosestFirst(t *testing.T) {
 	write(t, filepath.Join(project, ".claude", "skills", ".hidden", "SKILL.md"), "---\ndescription: dot folder\n---\n")
 	write(t, filepath.Join(project, ".claude", "skills", "stray.md"), "---\ndescription: a file\n---\n")
 	write(t, filepath.Join(project, ".claude", "skills", "quiet", "SKILL.md"), "---\ndescription: \"not listed\"\ndisable-model-invocation: true\n---\nquiet body")
-	write(t, filepath.Join(home, ".claude", "skills", "tests", "SKILL.md"), "---\ndescription: 'home tests'\n---\n")
-	write(t, filepath.Join(home, ".claude", "skills", "header", "SKILL.md"), "---\ndescription: home header\n---\n")
+	write(t, filepath.Join(home, ".tofu", "skills", "tests", "SKILL.md"), "---\ndescription: 'home tests'\n---\n")
+	write(t, filepath.Join(home, ".tofu", "skills", "header", "SKILL.md"), "---\ndescription: home header\n---\n")
 
 	found := Discover(project, home)
 	if got, want := names(found.Skills), "commit=repo header=repo quiet=sub tests=home"; got != want {
@@ -71,11 +71,26 @@ func TestDiscoverWithNoRepositoryReadsOnlyTheWorkingFolder(t *testing.T) {
 	}
 }
 
+func TestTheHomeGivesOnlyTofuSkills(t *testing.T) {
+	root := t.TempDir()
+	project, home := filepath.Join(root, "project"), filepath.Join(root, "home")
+	write(t, filepath.Join(project, "README.md"), "a project")
+	write(t, filepath.Join(home, ".claude", "skills", "x", "SKILL.md"), "---\ndescription: claude home\n---\n")
+	write(t, filepath.Join(home, ".agents", "skills", "z", "SKILL.md"), "---\ndescription: agents home\n---\n")
+	if found := Discover(project, home); len(found.Skills) != 0 {
+		t.Fatalf("another harness's home gave skills %q", names(found.Skills))
+	}
+	write(t, filepath.Join(home, ".tofu", "skills", "s", "SKILL.md"), "---\ndescription: tofu home\n---\n")
+	if got := names(Discover(project, home).Skills); got != "s=home" {
+		t.Fatalf("skills %q, want only ~/.tofu/skills/s", got)
+	}
+}
+
 func TestTheHomeIsReadOnceWhenItIsAnAncestor(t *testing.T) {
 	home := t.TempDir()
 	project := filepath.Join(home, "repo")
 	write(t, filepath.Join(home, ".git", "HEAD"), "ref")
-	write(t, filepath.Join(home, ".claude", "skills", "once", "SKILL.md"), "---\ndescription: once\n---\n")
+	write(t, filepath.Join(home, ".tofu", "skills", "once", "SKILL.md"), "---\ndescription: once\n---\n")
 	found := Discover(project, home)
 	if len(found.Skills) != 1 || len(found.Warnings) != 0 {
 		t.Fatalf("skills %v warnings %v, want one skill and no collision", found.Skills, found.Warnings)

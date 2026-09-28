@@ -4,10 +4,12 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
 	"tofu/internal/konst"
+	"tofu/internal/skill"
 	"tofu/internal/subagent"
 	"tofu/internal/sys"
 )
@@ -39,8 +41,8 @@ func SubAgentList(defined []subagent.Definition) string {
 }
 
 const InstructionsOff = "sends no instruction file at all: " +
-	"neither the nearest AGENTS.md or CLAUDE.md at or above the working directory, " +
-	"nor your personal AGENTS.md or CLAUDE.md in your home directory"
+	"neither the nearest AGENTS.md or CLAUDE.md between the working directory and its git root, " +
+	"nor ~/.tofu/AGENTS.md, the only instruction file tofu reads from your home directory"
 
 func Environment(dir string, now time.Time) string {
 	return environmentBlock(dir, now, nil)
@@ -94,24 +96,20 @@ func ProjectInstructionsInOrder(dir, home string, capBytes int, sources []string
 	capBytes = InstructionCap(capBytes)
 	var files []instructionFile
 	if home != "" {
-		for _, global := range [...]string{filepath.Join(sys.StateDir(home), "AGENTS.md"), filepath.Join(home, ".claude", "CLAUDE.md")} {
-			if isFile(global) {
-				files = append(files, instructionFile{"your personal " + filepath.Base(global), readInstructions(global)})
-				break
-			}
-		}
+		files = append(files, instructionFile{"your ~/.tofu/AGENTS.md", readInstructions(filepath.Join(sys.StateDir(home), "AGENTS.md"))})
 	}
+	folders := skill.ProjectFolders(dir, home)
 	chosenIn := map[string]string{}
 	for _, name := range sources {
-		nearest, found := findUp(dir, name)
-		if !found {
+		at := slices.IndexFunc(folders, func(folder string) bool { return isFile(filepath.Join(folder, name)) })
+		if at < 0 {
 			continue
 		}
-		text := readInstructions(nearest)
+		folder := folders[at]
+		text := readInstructions(filepath.Join(folder, name))
 		if text == "" {
 			continue
 		}
-		folder := filepath.Dir(nearest)
 		if first, taken := chosenIn[folder]; taken {
 			skipped = append(skipped, "this project's "+name+", because "+first+" in the same folder comes first")
 			continue

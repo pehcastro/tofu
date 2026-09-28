@@ -3,6 +3,7 @@ package subagent
 import (
 	"fmt"
 	"io/fs"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -105,8 +106,30 @@ func TestDiscoveryFailures(t *testing.T) {
 				t.Fatalf("home %q: an unknown home is one notice and an absent folder is none, got %q", home, found.Notices)
 			}
 		}
-		if helper := definitionNamed(t, all, "helper"); helper.Origin != "~/.agents" || helper.Runs != RunsInherit {
-			t.Fatalf("the home helper should come from ~/.agents and inherit, got %+v", helper)
+		if slices.ContainsFunc(all.Definitions, func(d Definition) bool { return d.Name == "helper" }) {
+			t.Fatal("the helper in ~/.agents belongs to another harness and should not be read")
+		}
+	})
+
+	t.Run("the home gives only ~/.tofu/agents", func(t *testing.T) {
+		others := map[string]string{".claude/agents/y.md": agentFile("y", "inherit"), ".agents/agents/w.md": agentFile("w", "inherit")}
+		withTofu := map[string]string{".tofu/agents/a.md": agentFile("a", "inherit")}
+		maps.Copy(withTofu, others)
+		for _, c := range []struct {
+			home map[string]string
+			want []string
+		}{{others, nil}, {withTofu, []string{"~/.tofu/a"}}} {
+			scan := scanOf(t, projectWith(t, c.home), "tofu", "agents", "claude")
+			scan.Project = t.TempDir()
+			var read []string
+			for _, found := range Definitions(scan).Definitions {
+				if found.Origin != libraryOrigin {
+					read = append(read, found.Origin+"/"+found.Name)
+				}
+			}
+			if !slices.Equal(read, c.want) {
+				t.Fatalf("read %q, want %q", read, c.want)
+			}
 		}
 	})
 
