@@ -42,12 +42,12 @@ Read from `bench/harness/report-2026-09-22.md`.
 
 ## What decides what today
 
-3 of 11 decision points decide anything when you run tofu today, read from `library/decisions/methods@1.yaml`.
+4 of 11 decision points decide anything when you run tofu today, read from `library/decisions/methods@1.yaml`.
 
 | What decides | Switched on | What it costs | Why | Called by | Measured |
 |---|---|---|---|---|---|
 | `shell_sift` | yes, through the judged method | a median $0.000540 a session, p95 $0.005454, worst $0.011070 over 110 recorded sessions, and p50 361 ms, p95 524 ms, worst 722 ms on 13 real shell_sift ledger decisions | jev keeps 27 of 34 planted needles against the free arm's 18, 1.50x, at equal bytes saved | internal/turn/shellsift.go | not stated |
-| `browser_step` | not wired | nothing, and no call is made | jev picks the right next action on 8 of 8 recorded pages, median 316 ms and 1340 input tokens a decision, and no tool calls the chooser yet. the model arm, the turn's own model calling browser_act, is not measured | not stated | not stated |
+| `browser_step` | yes, through the judged method | a median $0.000056 a decision, $0.000496 reported for 8 decisions, and p50 316 ms, p90 438 ms, worst 683 ms a decision. a task at the default 30 actions asks at most 60 decisions, about $0.0034 at the median | jev picks the right next action on 8 of 8 recorded pages, median 316 ms and 1340 input tokens a decision. the model arm, the turn's own model calling browser_act under browserChooser model, is not measured | internal/turn/tools/browser.go | not stated |
 | `stop_check` | yes, through the judged method | a median $0.000074 a session over the 15 recorded sessions that ran it, worst $0.004574, $0.0087 over the whole recorded ledger, and the call is already made in shadow | jev agrees with 71 of 78 hand labels against the repeat check's 68, 1.04x, and makes a false stop a third as often | cmd/tofu/run_done.go | not stated |
 | `page_sift` | not wired | nothing, and no call is made | web.Reduce strips the same link-only rows at fetch time, so the link stripper elides 0 further bytes on all 24 recorded pages, 0.00 percent, where Reduce itself takes 11.69 percent of the extracted bytes. a second pass of one rule is not a decision point | not stated | not stated |
 | `read_worth` | yes, through the cheap method | nothing, and no call is made | a fifteen word floor agrees with 87.1 percent of the labels, the same as jev, and saves 12.6 percent of bytes against 9.3. a tie goes to the method that costs nothing | cmd/tofu/sift.go | not stated |

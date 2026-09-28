@@ -8,8 +8,9 @@ methods:
     why: jev keeps 27 of 34 planted needles against the free arm's 18, 1.50x, at equal bytes saved
     cost: a median $0.000540 a session, p95 $0.005454, worst $0.011070 over 110 recorded sessions, and p50 361 ms, p95 524 ms, worst 722 ms on 13 real shell_sift ledger decisions
   browser_step:
-    method: unwired
-    why: jev picks the right next action on 8 of 8 recorded pages, median 316 ms and 1340 input tokens a decision, and no tool calls the chooser yet. the model arm, the turn's own model calling browser_act, is not measured
+    method: judged
+    why: jev picks the right next action on 8 of 8 recorded pages, median 316 ms and 1340 input tokens a decision. the model arm, the turn's own model calling browser_act under browserChooser model, is not measured
+    cost: a median $0.000056 a decision, $0.000496 reported for 8 decisions, and p50 316 ms, p90 438 ms, worst 683 ms a decision. a task at the default 30 actions asks at most 60 decisions, about $0.0034 at the median
   stop_check:
     method: judged
     why: jev agrees with 71 of 78 hand labels against the repeat check's 68, 1.04x, and makes a false stop a third as often

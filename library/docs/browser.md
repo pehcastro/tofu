@@ -11,14 +11,33 @@ tofu can read a Chrome tab you share with it, and act in one you share to
 drive. It reaches your own Chrome, with your logins, through a small
 extension. It reaches only a tab you shared with a click.
 
-The model gets three tools:
+The model gets these tools:
 
 - `browser_tabs` lists the tabs you shared, with their mode, title and address.
 - `browser_read` reads one tab: its visible text and a numbered table of the
   controls on screen. Password, file and hidden fields are never listed.
-- `browser_act` runs one step in a tab shared to drive: a click, typing into a
-  field, choosing an option, a scroll, or a wait. It is offered only when the
-  `browser` setting is `drive`.
+- `browser_do` runs a whole task in a tab shared to drive. The model gives it
+  the tab and a goal. Jev, a typed decision model, reads the page and picks
+  each step: a click, typing into a field, choosing an option, a scroll, or a
+  wait. It stops when Jev says the goal is done, when Jev says it is blocked,
+  after three steps in a row that changed nothing, or when the `browserSteps`
+  budget runs out. It answers with done or blocked, the reason, every step
+  it ran, and a fresh read of the tab.
+- `browser_act` runs one step in a tab shared to drive, which the model picks
+  itself from its last `browser_read`.
+
+The model is given `browser_do` or `browser_act`, never both, and only when
+the `browser` setting is `drive`. The `browserChooser` setting picks which.
+
+`browser_do` takes `values`, a map from a field's label to the text to type
+there, for instance `{"Guest name": "Ada"}`. Jev picks the field and tofu
+types the value the model gave; no other model writes text into your page.
+When Jev picks a field the map does not name, nothing is typed: the task
+stops as blocked, names the field, and the model can call again with it.
+
+Each Jev pick is one row in the decision ledger, under the point
+`browser_step`. With no Jev key,
+`browser_do` runs nothing and says so.
 
 What a page says is treated as text to read, never as an instruction.
 
@@ -62,9 +81,14 @@ The settings:
   tool and costs nothing. It is read when tofu opens, so open it again after
   a change.
 - `browserChooser`: jev or model, who picks each step of a browser task. The
-  default is jev.
-- `browserSteps`: how many actions one browser task may take, 1 to 60. The
-  default is 30.
+  default is jev, which gives the model `browser_do`. model gives it
+  `browser_act` instead, and the model picks every step itself.
+- `browserSteps`: how many actions one `browser_do` task may take, 1 to 60.
+  The default is 30. Jev may decide twice as many times, because a page that
+  moved before a step runs is decided again.
+
+    tofu settings set browserChooser model
+    tofu settings set browserSteps 10
 
 ## Check it
 

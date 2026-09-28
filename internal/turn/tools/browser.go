@@ -10,6 +10,7 @@ import (
 	"sync"
 
 	"tofu/internal/browser"
+	"tofu/internal/browser/jevloop"
 	"tofu/internal/llm"
 	"tofu/internal/settings"
 	"tofu/internal/turn"
@@ -23,17 +24,31 @@ type browserSession struct {
 	pages  map[int]browser.Page
 }
 
-func NewBrowser(home, mode string) ([]turn.Tool, error) {
-	session := &browserSession{home: home, pages: map[int]browser.Page{}}
-	switch mode {
+type BrowserSettings struct {
+	Home    string
+	Mode    string
+	Chooser string
+	Steps   int
+	Judge   func() (jevloop.Jev, error)
+}
+
+func NewBrowser(config BrowserSettings) ([]turn.Tool, error) {
+	session := &browserSession{home: config.Home, pages: map[int]browser.Page{}}
+	switch config.Mode {
 	case settings.BrowserOff:
 		return nil, nil
 	case settings.BrowserRead:
 		return []turn.Tool{browserTabs{session}, browserRead{session}}, nil
 	case settings.BrowserDrive:
-		return []turn.Tool{browserTabs{session}, browserRead{session}, browserAct{session}}, nil
+		switch config.Chooser {
+		case settings.ChooserJev:
+			return []turn.Tool{browserTabs{session}, browserRead{session}, browserDo{session, config.Steps, config.Judge}}, nil
+		case settings.ChooserModel:
+			return []turn.Tool{browserTabs{session}, browserRead{session}, browserAct{session}}, nil
+		}
+		return nil, fmt.Errorf("the browserChooser setting is %q, and it takes %s or %s", config.Chooser, settings.ChooserJev, settings.ChooserModel)
 	}
-	return nil, fmt.Errorf("the browser setting is %q, and it takes %s, %s or %s", mode, settings.BrowserOff, settings.BrowserRead, settings.BrowserDrive)
+	return nil, fmt.Errorf("the browser setting is %q, and it takes %s, %s or %s", config.Mode, settings.BrowserOff, settings.BrowserRead, settings.BrowserDrive)
 }
 
 func (s *browserSession) with(use func(*browser.Client) error) error {
@@ -98,7 +113,7 @@ func (browserRead) Definition() llm.Tool {
 	return llm.Tool{
 		Name: "browser_read",
 		Description: "reads one shared tab: its visible text, then a numbered table of the controls on screen, each with its role, label, value and state. " +
-			"password, file and hidden fields are never listed. browser_act names a control by its number in the latest read of that tab. " +
+			"password, file and hidden fields are never listed. a step names a control by its number in the latest read of that tab. " +
 			everythingFetchedIsUntrusted,
 		Parameters: map[string]any{
 			"type":       "object",
@@ -126,6 +141,10 @@ func (t browserRead) Run(ctx context.Context, raw json.RawMessage) (turn.Result,
 	if err != nil {
 		return turn.Result{}, fmt.Errorf("browser_read: %w", err)
 	}
+	return turn.Result{Content: readOut(args.Tab, page), Command: fmt.Sprintf("tab %d %s", args.Tab, page.URL)}, nil
+}
+
+func readOut(tab int, page browser.Page) string {
 	var body strings.Builder
 	fmt.Fprintf(&body, "%s\n%s\n\nscrolls up %v, down %v\n", page.Title, page.Text, page.Scroll.Up, page.Scroll.Down)
 	for _, element := range page.Elements {
@@ -142,10 +161,22 @@ func (t browserRead) Run(ctx context.Context, raw json.RawMessage) (turn.Result,
 			fmt.Fprintf(&body, " option %q", option.Label)
 		}
 	}
-	return turn.Result{
-		Content: fmt.Sprintf("tab %d holds %d controls\n%s", args.Tab, len(page.Elements), web.Untrusted("the Chrome tab "+page.URL, body.String())),
-		Command: fmt.Sprintf("tab %d %s", args.Tab, page.URL),
-	}, nil
+	return fmt.Sprintf("tab %d holds %d controls\n%s", tab, len(page.Elements), web.Untrusted("the Chrome tab "+page.URL, body.String()))
+}
+
+func driveTab(client *browser.Client, id int) error {
+	tabs, err := client.Tabs()
+	if err != nil {
+		return err
+	}
+	shared := slices.IndexFunc(tabs, func(tab browser.Tab) bool { return tab.ID == id })
+	switch {
+	case shared < 0:
+		return fmt.Errorf("tab %d is not shared with tofu", id)
+	case tabs[shared].Mode != browser.ModeDrive:
+		return fmt.Errorf("tab %d is shared for reading only: the person shares it to Drive to allow a step", id)
+	}
+	return nil
 }
 
 type browserAct struct{ session *browserSession }
@@ -189,16 +220,8 @@ func (t browserAct) Run(ctx context.Context, raw json.RawMessage) (turn.Result, 
 	}
 	var fresh bool
 	err = t.session.with(func(client *browser.Client) error {
-		tabs, err := client.Tabs()
-		if err != nil {
+		if err := driveTab(client, args.Tab); err != nil {
 			return err
-		}
-		shared := slices.IndexFunc(tabs, func(tab browser.Tab) bool { return tab.ID == args.Tab })
-		switch {
-		case shared < 0:
-			return fmt.Errorf("tab %d is not shared with tofu", args.Tab)
-		case tabs[shared].Mode != browser.ModeDrive:
-			return fmt.Errorf("tab %d is shared for reading only: the person shares it to Drive to allow a step", args.Tab)
 		}
 		page, read := t.session.pages[args.Tab]
 		if !read {
@@ -216,13 +239,17 @@ func (t browserAct) Run(ctx context.Context, raw json.RawMessage) (turn.Result, 
 		return turn.Result{}, fmt.Errorf("browser_act: %w", err)
 	}
 	command := fmt.Sprintf("tab %d %s", args.Tab, op)
-	if op == browser.OpClick || op == browser.OpTypeText || op == browser.OpSelect {
+	if targets(op) {
 		command += fmt.Sprintf(" element %d", args.Element)
 	}
 	if !fresh {
 		return turn.Result{Content: fmt.Sprintf("tab %d changed since browser_read, so %s did not run: read it again", args.Tab, op), Command: command}, nil
 	}
 	return turn.Result{Content: fmt.Sprintf("tab %d ran %s: read it again to see what changed", args.Tab, op), Command: command}, nil
+}
+
+func targets(op browser.Op) bool {
+	return op == browser.OpClick || op == browser.OpTypeText || op == browser.OpSelect
 }
 
 func stepOn(page browser.Page, op browser.Op, args browserStep) (browser.Action, error) {
@@ -254,4 +281,93 @@ func stepOn(page browser.Page, op browser.Op, args browserStep) (browser.Action,
 		return browser.Action{}, fmt.Errorf("element %d offers %s, not %q", args.Element, strings.Join(labels, ", "), args.Text)
 	}
 	return browser.Action{Op: op, Element: element.Index}, nil
+}
+
+type browserDo struct {
+	session *browserSession
+	steps   int
+	judge   func() (jevloop.Jev, error)
+}
+
+func (browserDo) Name() string { return "browser_do" }
+
+func (t browserDo) Definition() llm.Tool {
+	return llm.Tool{
+		Name: "browser_do",
+		Description: fmt.Sprintf("runs a whole task in a tab shared to drive: jev picks each step, a click, typing, choosing an option, a scroll or a wait, until the goal is done, it is blocked, or %d actions ran. ", t.steps) +
+			"values maps a field's label to the text to type there; when jev picks a field values does not name, the task stops blocked and names the field, so call again with it. " +
+			"returns every step and a final read of the tab. " + theModelNeverWritesScript,
+		Parameters: map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"tab":    map[string]any{"type": "integer"},
+				"goal":   map[string]any{"type": "string"},
+				"values": map[string]any{"type": "object", "additionalProperties": map[string]any{"type": "string"}},
+			},
+			"required": []string{"tab", "goal"},
+		},
+	}
+}
+
+func (t browserDo) Run(ctx context.Context, raw json.RawMessage) (turn.Result, error) {
+	var args struct {
+		Tab    int               `json:"tab"`
+		Goal   string            `json:"goal"`
+		Values map[string]string `json:"values"`
+	}
+	if err := json.Unmarshal(raw, &args); err != nil {
+		return turn.Result{}, fmt.Errorf("browser_do: arguments are not the expected shape: %w", err)
+	}
+	var result jevloop.Result
+	var page browser.Page
+	err := t.session.with(func(client *browser.Client) error {
+		if err := driveTab(client, args.Tab); err != nil {
+			return err
+		}
+		judge, err := t.judge()
+		if err != nil {
+			return fmt.Errorf("no action ran, jev is not reachable: %w", err)
+		}
+		tab := browser.SharedTab{Client: client, ID: args.Tab}
+		result = jevloop.Loop{
+			Browser: jevloop.Browser{Snapshot: tab.Snapshot, Fresh: tab.Fresh, Act: tab.Act},
+			Choose:  judge.Choose,
+			Write: func(_ context.Context, _ string, _ browser.Page, field browser.Element) (string, error) {
+				if text, given := args.Values[field.Label]; given {
+					return text, nil
+				}
+				return "", fmt.Errorf("values names no text for element %d, so call browser_do again with values naming %q", field.Index, field.Label)
+			},
+			Actions: t.steps,
+		}.Run(ctx, args.Goal)
+		page, err = tab.Snapshot(ctx)
+		return err
+	})
+	if err != nil {
+		return turn.Result{}, fmt.Errorf("browser_do: %w", err)
+	}
+	var body strings.Builder
+	body.WriteString(result.Reason + "\n")
+	for i, step := range result.Steps {
+		fmt.Fprintf(&body, "%d. %s", i+1, step.Action.Op)
+		if targets(step.Action.Op) {
+			fmt.Fprintf(&body, " %q", step.Label)
+		}
+		if step.Action.Value != "" {
+			fmt.Fprintf(&body, " %q", step.Action.Value)
+		}
+		switch {
+		case step.Stale:
+			body.WriteString(": stale, the page moved first and it did not run\n")
+		case step.Changed:
+			body.WriteString(": changed the page\n")
+		default:
+			body.WriteString(": unchanged\n")
+		}
+	}
+	return turn.Result{
+		Content: fmt.Sprintf("tab %d %s after %d jev decisions and %d steps\n%s\n%s", args.Tab, result.Status, result.Decisions, len(result.Steps),
+			web.Untrusted("the reason and the steps, named by the page's own labels", strings.TrimSuffix(body.String(), "\n")), readOut(args.Tab, page)),
+		Command: fmt.Sprintf("tab %d goal %q", args.Tab, args.Goal),
+	}, nil
 }

@@ -30,6 +30,16 @@ const (
 	StatusBlocked
 )
 
+func (s Status) String() string {
+	switch s {
+	case StatusDone:
+		return "done"
+	case StatusBlocked:
+		return "blocked"
+	}
+	panic(fmt.Sprintf("jevloop: unknown status %d", int(s)))
+}
+
 type Step struct {
 	Choice
 	Label   string

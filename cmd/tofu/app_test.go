@@ -2173,6 +2173,7 @@ func TestEveryToolInTheRunRegistryRecordsACommandThatDoesNotRepeatItsName(t *tes
 		"browser_tabs":       {notRunHere: "it dials the browser host, which only Chrome starts"},
 		"browser_read":       {notRunHere: "it dials the browser host, which only Chrome starts"},
 		"browser_act":        {notRunHere: "it dials the browser host, which only Chrome starts"},
+		"browser_do":         {notRunHere: "it dials the browser host, which only Chrome starts"},
 	}
 
 	built, err := buildTestRunTools(dir, toolSetFull)
@@ -2266,27 +2267,32 @@ func TestTofuDriveTakesNoDocsAndTheAppItDrivesOffersNoDocs(t *testing.T) {
 	}
 }
 
-func TestTheBrowserSettingReachesTheToolsARunIsGiven(t *testing.T) {
+func TestTheBrowserSettingsReachTheToolsARunIsGiven(t *testing.T) {
 	emptyHome(t)
-	for mode, want := range map[string][]string{
-		"":                       nil,
-		settingspkg.BrowserRead:  {"browser_tabs", "browser_read"},
-		settingspkg.BrowserDrive: {"browser_tabs", "browser_read", "browser_act"},
+	for _, arm := range []struct {
+		mode, chooser string
+		want          []string
+	}{
+		{"", "", nil},
+		{settingspkg.BrowserRead, "", []string{"browser_tabs", "browser_read"}},
+		{settingspkg.BrowserDrive, "", []string{"browser_tabs", "browser_read", "browser_do"}},
+		{settingspkg.BrowserDrive, settingspkg.ChooserModel, []string{"browser_tabs", "browser_read", "browser_act"}},
 	} {
 		opts := armOpts(t)
-		if mode != "" {
-			store, err := openSettings(opts.dir)
-			if err == nil {
-				err = store.SetText(settingspkg.Project, settingspkg.Browser, mode)
-			}
-			if err != nil {
-				t.Fatal(err)
-			}
+		store, err := openSettings(opts.dir)
+		if err == nil && arm.mode != "" {
+			err = store.SetText(settingspkg.Project, settingspkg.Browser, arm.mode)
+		}
+		if err == nil && arm.chooser != "" {
+			err = store.SetText(settingspkg.Project, settingspkg.BrowserChooser, arm.chooser)
+		}
+		if err != nil {
+			t.Fatal(err)
 		}
 		offered := slices.DeleteFunc(toolNames(t, opts), func(name string) bool { return !strings.HasPrefix(name, "browser_") })
-		t.Logf("browser=%q offers %v", mode, offered)
-		if !slices.Equal(offered, want) {
-			t.Fatalf("browser=%q offers %v, want %v", mode, offered, want)
+		t.Logf("browser=%q browserChooser=%q offers %v", arm.mode, arm.chooser, offered)
+		if !slices.Equal(offered, arm.want) {
+			t.Fatalf("browser=%q browserChooser=%q offers %v, want %v", arm.mode, arm.chooser, offered, arm.want)
 		}
 	}
 }

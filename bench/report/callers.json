@@ -5,6 +5,11 @@
     "symbol": "cutShellResult"
   },
   {
+    "point": "browser_step",
+    "file": "internal/turn/tools/browser.go",
+    "symbol": "browserDo"
+  },
+  {
     "point": "stop_check",
     "file": "cmd/tofu/run_done.go",
     "symbol": "BuildStopCheck"

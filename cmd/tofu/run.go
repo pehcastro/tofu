@@ -14,7 +14,10 @@ import (
 	"strings"
 	"time"
 
+	"tofu/internal/browser/jevloop"
 	"tofu/internal/judge/jev"
+	"tofu/internal/judge/ledger"
+	"tofu/internal/judge/question"
 	"tofu/internal/konst"
 	"tofu/internal/llm"
 	"tofu/internal/llm/cred"
@@ -29,11 +32,13 @@ import (
 	settingspkg "tofu/internal/settings"
 	"tofu/internal/skill"
 	"tofu/internal/subagent"
+	"tofu/internal/sys"
 	"tofu/internal/transport"
 	"tofu/internal/turn"
 	"tofu/internal/turn/tools"
 	"tofu/internal/web"
 	shipped "tofu/library"
+	"tofu/library/questions"
 )
 
 const (
@@ -848,13 +853,42 @@ func assembleRunTools(dir, set string, ledger *turn.ReadLedger, bashTool *turn.B
 	}
 	webTools, webErr := buildWebTools(dir)
 	home, _ := os.UserHomeDir()
-	browserTools, browserErr := tools.NewBrowser(home, settingText(cmp.Or(dir, "."), settingspkg.Browser, nil))
+	settingsDir := cmp.Or(dir, ".")
+	browserTools, browserErr := tools.NewBrowser(tools.BrowserSettings{
+		Home:    home,
+		Mode:    settingText(settingsDir, settingspkg.Browser, nil),
+		Chooser: settingText(settingsDir, settingspkg.BrowserChooser, nil),
+		Steps:   settingInt(settingsDir, settingspkg.BrowserSteps, nil),
+		Judge:   func() (jevloop.Jev, error) { return browserJudge(dir) },
+	})
 	if err := cmp.Or(webErr, browserErr); err != nil {
 		return nil, nil, err
 	}
 	plan := tools.NewPlan()
 	full := append([]turn.Tool{read, write, shell, plan, tools.Shells{}, projectTool, globTool, searchTool, symbolsTool, editTool.Reading(ledger), githubTool}, verbTools...)
 	return tools.NewMemo().Wrap(append(append(full, webTools...), browserTools...)), plan, nil
+}
+
+const browserStepPoint = "browser_step@1"
+
+func browserJudge(dir string) (jevloop.Jev, error) {
+	layers, err := question.Layers(questions.Files(), dir)
+	if err != nil {
+		return jevloop.Jev{}, err
+	}
+	set, _, err := question.Resolve(browserStepPoint, layers)
+	if err != nil {
+		return jevloop.Jev{}, err
+	}
+	client, err := newJevClient(oneCallAtATime)
+	if err != nil {
+		return jevloop.Jev{}, err
+	}
+	logDir, err := sys.LogDir()
+	if err != nil {
+		return jevloop.Jev{}, err
+	}
+	return jevloop.Jev{Client: client, Set: set, Ledger: ledger.NewWriter(logDir)}, nil
 }
 
 func buildWebTools(dir string) ([]turn.Tool, error) {

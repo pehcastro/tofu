@@ -3,6 +3,7 @@ package tools_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -14,9 +15,14 @@ import (
 	"time"
 
 	"tofu/internal/browser"
+	"tofu/internal/browser/jevloop"
+	"tofu/internal/judge/jev"
+	"tofu/internal/judge/ledger"
+	"tofu/internal/judge/question"
 	"tofu/internal/settings"
 	"tofu/internal/turn"
 	"tofu/internal/turn/tools"
+	"tofu/library/questions"
 )
 
 const browserFixtureOrigin = "chrome-extension://tofutoolstest/"
@@ -147,33 +153,46 @@ func names(list []turn.Tool) string {
 	return strings.Join(named, " ")
 }
 
-func TestTheBrowserSettingDecidesWhichBrowserToolsAreOffered(t *testing.T) {
-	for mode, want := range map[string]string{
-		settings.BrowserOff:   "",
-		settings.BrowserRead:  "browser_tabs browser_read",
-		settings.BrowserDrive: "browser_tabs browser_read browser_act",
+func drive(home, chooser string) tools.BrowserSettings {
+	return tools.BrowserSettings{Home: home, Mode: settings.BrowserDrive, Chooser: chooser, Steps: 30}
+}
+
+func TestTheBrowserSettingsDecideWhichBrowserToolsAreOffered(t *testing.T) {
+	for _, arm := range []struct{ mode, chooser, want string }{
+		{settings.BrowserOff, settings.ChooserJev, ""},
+		{settings.BrowserRead, settings.ChooserJev, "browser_tabs browser_read"},
+		{settings.BrowserRead, settings.ChooserModel, "browser_tabs browser_read"},
+		{settings.BrowserDrive, settings.ChooserJev, "browser_tabs browser_read browser_do"},
+		{settings.BrowserDrive, settings.ChooserModel, "browser_tabs browser_read browser_act"},
 	} {
-		offered, err := tools.NewBrowser(shortHome(t), mode)
-		if err != nil || names(offered) != want {
-			t.Fatalf("browser=%s offers %q, %v, want %q", mode, names(offered), err, want)
+		offered, err := tools.NewBrowser(tools.BrowserSettings{Home: shortHome(t), Mode: arm.mode, Chooser: arm.chooser, Steps: 30})
+		t.Logf("browser=%s browserChooser=%s offers %q", arm.mode, arm.chooser, names(offered))
+		if err != nil || names(offered) != arm.want {
+			t.Fatalf("browser=%s browserChooser=%s offers %q, %v, want %q", arm.mode, arm.chooser, names(offered), err, arm.want)
 		}
 	}
-	if offered, err := tools.NewBrowser(shortHome(t), "on"); err == nil {
-		t.Fatalf("browser=on offers %q rather than being refused", names(offered))
+	for _, refused := range []tools.BrowserSettings{
+		{Home: shortHome(t), Mode: "on", Chooser: settings.ChooserJev},
+		{Home: shortHome(t), Mode: settings.BrowserDrive, Chooser: "regex"},
+	} {
+		if offered, err := tools.NewBrowser(refused); err == nil {
+			t.Fatalf("%+v offers %q rather than being refused", refused, names(offered))
+		}
 	}
 }
 
 func TestEveryBrowserToolWithNoHostNamesTheInstall(t *testing.T) {
-	offered, err := tools.NewBrowser(shortHome(t), settings.BrowserDrive)
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, call := range []struct{ name, args string }{
-		{"browser_tabs", `{}`},
-		{"browser_read", `{"tab":7}`},
-		{"browser_act", `{"tab":7,"element":3,"op":"CLICK"}`},
+	for _, call := range []struct{ chooser, name, args string }{
+		{settings.ChooserModel, "browser_tabs", `{}`},
+		{settings.ChooserModel, "browser_read", `{"tab":7}`},
+		{settings.ChooserModel, "browser_act", `{"tab":7,"element":3,"op":"CLICK"}`},
+		{settings.ChooserJev, "browser_do", `{"tab":7,"goal":"book a room"}`},
 	} {
-		_, err := browserTool(t, offered, call.name).Run(context.Background(), json.RawMessage(call.args))
+		offered, err := tools.NewBrowser(drive(shortHome(t), call.chooser))
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, err = browserTool(t, offered, call.name).Run(context.Background(), json.RawMessage(call.args))
 		if err == nil || !strings.Contains(err.Error(), "tofu browser install") {
 			t.Fatalf("%s with no host answered %v", call.name, err)
 		}
@@ -183,7 +202,7 @@ func TestEveryBrowserToolWithNoHostNamesTheInstall(t *testing.T) {
 
 func TestTheBrowserToolsAgainstAFakeHost(t *testing.T) {
 	home, chrome := hostWithTwoTabs(t)
-	offered, err := tools.NewBrowser(home, settings.BrowserDrive)
+	offered, err := tools.NewBrowser(drive(home, settings.ChooserModel))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -266,4 +285,161 @@ func TestTheBrowserToolsAgainstAFakeHost(t *testing.T) {
 		t.Fatalf("a stale fill answered %q, %v", stale.Content, err)
 	}
 	t.Logf("browser_act stale: %s", stale.Content)
+}
+
+type recordedJev struct {
+	answers [][]byte
+	posted  int
+}
+
+func (w *recordedJev) Caps() jev.WireCaps {
+	return jev.WireCaps{Name: "recorded", CriteriaKinds: []jev.CriteriaKind{jev.CriteriaString, jev.CriteriaObject}}
+}
+
+func (w *recordedJev) Model() string { return "~typesafe/jev-latest" }
+
+func (w *recordedJev) Post(context.Context, []byte) (jev.Raw, error) {
+	answer := w.answers[min(w.posted, len(w.answers)-1)]
+	w.posted++
+	return jev.Raw{Body: answer, Attempts: 1, Latency: 3 * time.Millisecond}, nil
+}
+
+func formAnswer(op string) []byte {
+	operation := map[string]float64{}
+	for _, other := range []string{"CLICK", "TYPE_TEXT", "SELECT", "SCROLL_DOWN", "WAIT", "DONE", "BLOCKED"} {
+		operation[other] = 0.01
+	}
+	operation[op] = 0.94
+	probabilities, _ := json.Marshal(operation)
+	return fmt.Appendf(nil, `{"model":"jev-1.13.0","provider":"TypeSafe","id":"gen-form-%s","usage":{"input_tokens":900,"output_tokens":60,"cost":0.0001},"answers":{
+"operation":{"type":"choice","choice":%q,"confidence":0.94,"probabilities":%s},
+"click_target":{"type":"choice","choice":"3","confidence":0.9,"probabilities":{"1":0.05,"2":0.05,"3":0.9}},
+"type_text_target":{"type":"choice","choice":"1","confidence":1,"probabilities":{"1":1}},
+"select_target":{"type":"choice","choice":"5:1","confidence":1,"probabilities":{"5:1":1}}}}`, op, op, probabilities)
+}
+
+func jevOn(t *testing.T, wire *recordedJev, ledgerDir string) func() (jevloop.Jev, error) {
+	t.Helper()
+	set, _, err := question.Resolve("browser_step@1", []question.Layer{{Name: "library", Origin: "library/questions", FS: questions.Files()}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	client, err := jev.NewClient(jev.Config{Wire: wire})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return func() (jevloop.Jev, error) {
+		return jevloop.Jev{Client: client, Set: set, Ledger: ledger.NewWriter(ledgerDir)}, nil
+	}
+}
+
+func TestBrowserDoRunsTheJevLoopOnADriveTab(t *testing.T) {
+	var current func() (jevloop.Jev, error)
+	browserDo := func(home string, steps int) turn.Tool {
+		config := drive(home, settings.ChooserJev)
+		config.Judge, config.Steps = func() (jevloop.Jev, error) { return current() }, steps
+		offered, err := tools.NewBrowser(config)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return browserTool(t, offered, "browser_do")
+	}
+	home, chrome := hostWithTwoTabs(t)
+	oneSession := browserDo(home, 30)
+	do := func(judge func() (jevloop.Jev, error), args string) (turn.Result, error) {
+		current = judge
+		return oneSession.Run(context.Background(), json.RawMessage(args))
+	}
+	sent := func(since int) []string {
+		return slices.DeleteFunc(chrome.saw()[since:], func(call string) bool {
+			return strings.Contains(call, " snapshot ") || strings.Contains(call, " fresh ")
+		})
+	}
+
+	unasked := &recordedJev{answers: [][]byte{formAnswer("CLICK")}}
+	if _, err := do(jevOn(t, unasked, shortHome(t)), `{"tab":8,"goal":"pay the bill"}`); err == nil || !strings.Contains(err.Error(), "reading only") {
+		t.Fatalf("browser_do on a read tab answered %v", err)
+	}
+	noJev := func() (jevloop.Jev, error) { return jevloop.Jev{}, errors.New("no OPENROUTER_KEY in .env") }
+	if _, err := do(noJev, `{"tab":7,"goal":"book"}`); err == nil || !strings.Contains(err.Error(), "OPENROUTER_KEY") {
+		t.Fatalf("browser_do with no Jev answered %v", err)
+	}
+	if unasked.posted != 0 || len(sent(0)) != 0 {
+		t.Fatalf("a refused browser_do asked Jev %d times and sent %v", unasked.posted, sent(0))
+	}
+
+	rowsAt := shortHome(t)
+	before := len(chrome.saw())
+	wire := &recordedJev{answers: [][]byte{formAnswer("CLICK"), formAnswer("DONE")}}
+	done, err := do(jevOn(t, wire, rowsAt), `{"tab":7,"goal":"book the room"}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("browser_do CLICK then DONE, recorded %q:\n%s", done.Command, done.Content)
+	if got, want := sent(before), []string{`tab 7 click {"fingerprint":"p1","element":3}`}; !slices.Equal(got, want) {
+		t.Fatalf("sent %v, want %v", got, want)
+	}
+	if !strings.HasPrefix(done.Content, "tab 7 done after 2 jev decisions and 1 steps\n") {
+		t.Fatalf("browser_do opens %q", strings.SplitN(done.Content, "\n", 2)[0])
+	}
+	reason := strings.Index(done.Content, "the chooser chose DONE")
+	step := strings.Index(done.Content, `1. CLICK "Book": unchanged`)
+	ends := strings.Index(done.Content, " ends>>>")
+	read := strings.Index(done.Content, `[3] button "Book"`)
+	if begins := strings.Index(done.Content, " begins>>>"); begins < 0 || reason < begins || step < reason || ends < step || read < ends {
+		t.Fatal("the reason and the steps are not inside the untrusted markers, or the final read is missing")
+	}
+	var rows []ledger.Row
+	if _, err := ledger.NewReader(rowsAt).Each(ledger.Filter{}, func(row ledger.Row) error {
+		rows = append(rows, row)
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != wire.posted {
+		t.Fatalf("%d decisions wrote %d ledger rows", wire.posted, len(rows))
+	}
+	for _, row := range rows {
+		t.Logf("row %s point %s build %s model %s answers %d state %s cost %g", row.ID, row.Point, row.Build, row.Model, len(row.Answers), row.StateHash, row.Cost)
+		if row.Point != "browser_step" || row.Build != "jev-1.13.0" || row.Model != "~typesafe/jev-latest" || len(row.Answers) != 4 || row.StateHash == "" || row.Cost != 0.0001 {
+			t.Fatalf("the row is not a browser_step decision: %+v", row)
+		}
+	}
+
+	before = len(chrome.saw())
+	blocked, err := do(jevOn(t, &recordedJev{answers: [][]byte{formAnswer("TYPE_TEXT")}}, shortHome(t)), `{"tab":7,"goal":"book for Ada"}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("browser_do TYPE_TEXT with no value:\n%s", strings.Join(strings.SplitN(blocked.Content, "\n", 5)[:4], "\n"))
+	if !strings.HasPrefix(blocked.Content, "tab 7 blocked") || !strings.Contains(blocked.Content, `nothing typed into "Guest name"`) || len(sent(before)) != 0 {
+		t.Fatalf("TYPE_TEXT with no value answered %q and sent %v", blocked.Content, sent(before))
+	}
+
+	before = len(chrome.saw())
+	if _, err := do(jevOn(t, &recordedJev{answers: [][]byte{formAnswer("TYPE_TEXT"), formAnswer("DONE")}}, shortHome(t)),
+		`{"tab":7,"goal":"book for Ada","values":{"Guest name":"Ada"}}`); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := sent(before), []string{`tab 7 fill {"fingerprint":"p1","element":1,"value":"Ada"}`}; !slices.Equal(got, want) {
+		t.Fatalf("sent %v, want %v", got, want)
+	}
+
+	unwritable := filepath.Join(shortHome(t), "a file")
+	if err := os.WriteFile(unwritable, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	before = len(chrome.saw())
+	unlogged, err := do(jevOn(t, &recordedJev{answers: [][]byte{formAnswer("CLICK")}}, unwritable), `{"tab":7,"goal":"book"}`)
+	if err != nil || !strings.Contains(unlogged.Content, "not logged") || len(sent(before)) != 0 {
+		t.Fatalf("an unlogged decision answered %q, %v, and sent %v", unlogged.Content, err, sent(before))
+	}
+
+	budgetHome, budgetChrome := hostWithTwoTabs(t)
+	current = jevOn(t, &recordedJev{answers: [][]byte{formAnswer("CLICK")}}, shortHome(t))
+	budget, err := browserDo(budgetHome, 1).Run(context.Background(), json.RawMessage(`{"tab":7,"goal":"book"}`))
+	clicks := slices.DeleteFunc(budgetChrome.saw(), func(call string) bool { return !strings.Contains(call, " click ") })
+	if err != nil || !strings.Contains(budget.Content, "action budget of 1") || len(clicks) != 1 {
+		t.Fatalf("browserSteps 1 answered %q, %v, and clicked %v", budget.Content, err, clicks)
+	}
 }

@@ -3,16 +3,21 @@ package jevloop
 import (
 	"context"
 	"fmt"
+	"maps"
+	"slices"
 	"strconv"
 	"strings"
 
 	"tofu/internal/browser"
 	"tofu/internal/judge/jev"
+	"tofu/internal/judge/ledger"
 	"tofu/internal/judge/question"
 	"tofu/internal/konst"
 )
 
 const operationQuestion = "operation"
+
+const stateBuilder = "jevloop.stepState@1"
 
 type Choice struct {
 	Action   browser.Action
@@ -24,6 +29,7 @@ type Chooser func(ctx context.Context, goal string, page browser.Page, steps []S
 type Jev struct {
 	Client *jev.Client
 	Set    question.Set
+	Ledger *ledger.Writer
 }
 
 type pageState struct {
@@ -123,6 +129,9 @@ func (j Jev) Choose(ctx context.Context, goal string, page browser.Page, steps [
 	if err != nil {
 		return Choice{}, err
 	}
+	if err := j.record(state, decision); err != nil {
+		return Choice{}, fmt.Errorf("the decision was not logged, so it does not run: %w", err)
+	}
 	op, err := browser.ParseOp(decision.Answers[operationQuestion].Choice)
 	if err != nil {
 		return Choice{}, err
@@ -132,6 +141,32 @@ func (j Jev) Choose(ctx context.Context, goal string, page browser.Page, steps [
 		action = actions[decision.Answers[targetQuestion(op)].Choice]
 	}
 	return Choice{Action: action, Decision: decision}, nil
+}
+
+func (j Jev) record(state stepState, decision jev.Decision) error {
+	if j.Ledger == nil {
+		return nil
+	}
+	body, err := ledger.Canonical(state)
+	if err != nil {
+		return err
+	}
+	answers := make([]ledger.Answer, 0, len(decision.Answers))
+	for _, id := range slices.Sorted(maps.Keys(decision.Answers)) {
+		answer := decision.Answers[id]
+		dist := make([]ledger.Slice, 0, len(answer.Probabilities))
+		for _, option := range slices.Sorted(maps.Keys(answer.Probabilities)) {
+			dist = append(dist, ledger.Slice{Option: option, P: answer.Probabilities[option]})
+		}
+		answers = append(answers, ledger.Answer{Question: id, Wording: j.Set.QuestionsVersion, Kind: ledger.AnswerChoice, Choice: answer.Choice, Dist: dist})
+	}
+	_, err = j.Ledger.Append(ledger.Row{
+		Point: j.Set.Name, Questions: j.Set.Name, Version: j.Set.QuestionsVersion,
+		Build: decision.Build, Model: decision.Alias, RequestID: decision.RequestID,
+		StateHash: ledger.HashOf(body), StateBuilder: stateBuilder, State: body, Answers: answers,
+		LatencyMS: decision.Latency.Milliseconds(), Cost: decision.Usage.Cost,
+	})
+	return err
 }
 
 func candidates(op browser.Op, page browser.Page) ([]jev.Option, map[string]browser.Action) {

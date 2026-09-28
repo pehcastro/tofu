@@ -331,10 +331,11 @@
     },
     {
       "point": "browser_step",
-      "on": false,
-      "switched_on": "not wired",
-      "costs": "nothing, and no call is made",
-      "why": "jev picks the right next action on 8 of 8 recorded pages, median 316 ms and 1340 input tokens a decision, and no tool calls the chooser yet. the model arm, the turn's own model calling browser_act, is not measured"
+      "on": true,
+      "switched_on": "yes, through the judged method",
+      "costs": "a median $0.000056 a decision, $0.000496 reported for 8 decisions, and p50 316 ms, p90 438 ms, worst 683 ms a decision. a task at the default 30 actions asks at most 60 decisions, about $0.0034 at the median",
+      "why": "jev picks the right next action on 8 of 8 recorded pages, median 316 ms and 1340 input tokens a decision. the model arm, the turn's own model calling browser_act under browserChooser model, is not measured",
+      "called_by": "internal/turn/tools/browser.go"
     },
     {
       "point": "stop_check",
