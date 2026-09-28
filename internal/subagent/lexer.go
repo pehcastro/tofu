@@ -2,6 +2,9 @@ package subagent
 
 import (
 	"errors"
+	"os"
+	"path"
+	"path/filepath"
 	"regexp"
 	"slices"
 	"strings"
@@ -51,7 +54,7 @@ func (l *shellLexer) next() (shellToken, shellWord, bool) {
 		case c == '\n':
 			l.at++
 			l.skipHeredocs()
-			return tokenBreak, shellWord{}, true
+			return tokenBreak, shellWord{text: "\n"}, true
 		case c == '#':
 			for l.at < len(l.src) && l.src[l.at] != '\n' {
 				l.at++
@@ -59,8 +62,12 @@ func (l *shellLexer) next() (shellToken, shellWord, bool) {
 		case c == '>' || c == '<' || (c == '&' && l.peek(1) == '>'):
 			return l.redirect(), shellWord{}, true
 		case strings.IndexByte(";|&()", c) >= 0:
-			l.at++
-			return tokenBreak, shellWord{}, true
+			operator := l.src[l.at : l.at+1]
+			if (c == '&' || c == '|') && l.peek(1) == c {
+				operator = l.src[l.at : l.at+2]
+			}
+			l.at += len(operator)
+			return tokenBreak, shellWord{text: operator}, true
 		default:
 			word := l.word()
 			if isDigits(word.text) && (l.peek(0) == '>' || l.peek(0) == '<') {
@@ -212,6 +219,7 @@ func (l *shellLexer) expansion() string {
 type simpleCommand struct {
 	words  []shellWord
 	writes []shellWord
+	then   string
 }
 
 func shellCommands(command string) []simpleCommand {
@@ -226,6 +234,7 @@ func shellCommands(command string) []simpleCommand {
 		}
 		switch token {
 		case tokenBreak:
+			current.then = word.text
 			commands, current, awaiting = append(commands, current), simpleCommand{}, tokenWord
 		case tokenWritesTo, tokenReadsFrom:
 			awaiting = token
@@ -331,18 +340,66 @@ func (c simpleCommand) treeWide() error {
 	return nil
 }
 
+func (c simpleCommand) enters(dirs []string, after string, runs bool) ([]string, bool) {
+	tool, args := c.named()
+	found := operands(args)
+	if tool != "cd" || len(found) != 1 || found[0].expands || found[0].text == "" || strings.HasPrefix(found[0].text, "~") {
+		return dirs, false
+	}
+	if after == "|" || c.then == "|" || c.then == "&" {
+		return dirs, false
+	}
+	moved := make([]string, len(dirs))
+	succeeds := runs
+	for i, dir := range dirs {
+		moved[i] = within(dir, found[0].text)
+		info, err := os.Stat(moved[i])
+		succeeds = succeeds && err == nil && info.IsDir()
+	}
+	if succeeds {
+		return moved, true
+	}
+	return append(moved, dirs...), false
+}
+
+func within(dir, target string) string {
+	if dir == "" || path.IsAbs(target) || filepath.IsAbs(target) {
+		return target
+	}
+	return dir + "/" + target
+}
+
 func writesOf(commands []simpleCommand) ([]string, error) {
 	var paths []string
+	var outer [][]string
+	dirs, after, runs := []string{""}, "", true
 	for _, command := range commands {
+		if len(command.words)+len(command.writes) == 0 && command.then == "\n" {
+			continue
+		}
 		for _, target := range command.targets() {
 			switch {
 			case slices.Contains([]string{"/dev/null", "nul", "/dev/stdout", "/dev/stderr"}, strings.ToLower(target.text)):
 			case target.expands:
 				return nil, UnparseablePathError{Path: target.text}
 			default:
-				paths = append(paths, target.text)
+				for _, dir := range dirs {
+					paths = append(paths, within(dir, target.text))
+				}
 			}
 		}
+		var succeeds bool
+		dirs, succeeds = command.enters(dirs, after, runs)
+		switch command.then {
+		case "(":
+			outer = append(outer, dirs)
+		case ")":
+			if len(outer) > 0 {
+				dirs, outer = outer[len(outer)-1], outer[:len(outer)-1]
+			}
+		}
+		after = command.then
+		runs = after == "&&" && succeeds || slices.Contains([]string{"", ";", "\n", "(", "&"}, after)
 	}
 	return paths, nil
 }
