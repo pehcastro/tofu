@@ -14,6 +14,7 @@ import (
 	"tofu/interface/tui/frame"
 	"tofu/interface/tui/look"
 	"tofu/interface/tui/pointer"
+	"tofu/interface/tui/shells"
 	isettings "tofu/internal/settings"
 	isubagent "tofu/internal/subagent"
 	"tofu/internal/widget"
@@ -110,7 +111,7 @@ func (a *App) base() string {
 	if a.forking {
 		head.Notice = frame.ForkNotice
 	}
-	counts := []int{0, a.status.Agents, 0, 0}
+	counts := []int{0, a.status.Agents, 0, a.runningShells()}
 	tabs := make([]frame.Tab, len(counts))
 	for index, name := range tabNames() {
 		tabs[index] = frame.Tab{Label: name, Count: counts[index]}
@@ -131,6 +132,16 @@ func (a *App) base() string {
 		return pointer.Overlay(framed, a.width, track)
 	}
 	return framed
+}
+
+func (a *App) runningShells() int {
+	running := 0
+	for _, entry := range a.shells.Entries {
+		if entry.State == shells.Running {
+			running++
+		}
+	}
+	return running
 }
 
 func (a *App) sourcesInUse() []string {

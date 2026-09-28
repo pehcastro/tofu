@@ -1,6 +1,6 @@
 clipboard: three sub-agents run: [&c1] reads the loader, [&c2] waits on review, [&c3] failed its suite.
     [tool#9d4f10] is the loop I read.
- tofu  ./tofu/                     chat   agents   edits   shells                     0s [settings] 
+ tofu  ./tofu/                   chat   agents   edits   shells (1)                   0s [settings] 
                                                                                                     
                                                                                                     
     You                                                                  14:32  [message#672866]    
@@ -35,7 +35,7 @@ internal/turn/loop.go
 complete
   412 lines, 11.8 KB
 clipboard: complete
- tofu  ./tofu/                     chat   agents   edits   shells                     0s [settings] 
+ tofu  ./tofu/                   chat   agents   edits   shells (1)                   0s [settings] 
                                                                                                     
                                                                                                    │
   Sub-agents               All activity                                     6-8/8 · wheel ↑ older  │

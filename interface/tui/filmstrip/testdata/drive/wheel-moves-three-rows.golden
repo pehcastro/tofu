@@ -1,4 +1,4 @@
- tofu  ./tofu/                     chat   agents   edits   shells                     0s [settings] 
+ tofu  ./tofu/                   chat   agents   edits   shells (1)                   0s [settings] 
                                                                                                     
     You                                                                  14:32  [message#672866]    
     agents                                                                                          
@@ -28,7 +28,7 @@
   █ Ask tofu to build, inspect, or delegate                                                         
                                                                                                     
  ctx 118k/250k  |  claude 62%     [&orchestrator]  ·  claude-sub/claude-opus-5  ·  reasoning medium 
- tofu  ./tofu/                     chat   agents   edits   shells                     0s [settings] 
+ tofu  ./tofu/                   chat   agents   edits   shells (1)                   0s [settings] 
                                                                                                     
     You                                                                  14:32  [message#672866]    
     agents                                                                                          
@@ -58,7 +58,7 @@
   █ Ask tofu to build, inspect, or delegate                                                         
                                                                                                     
  ctx 118k/250k  |  claude 62%     [&orchestrator]  ·  claude-sub/claude-opus-5  ·  reasoning medium 
- tofu  ./tofu/                     chat   agents   edits   shells                     0s [settings] 
+ tofu  ./tofu/                   chat   agents   edits   shells (1)                   0s [settings] 
                                                                                                     
                                                                                                    │
   Sub-agents               All activity                                     8-9/9 · wheel ↑ older  │
@@ -88,7 +88,7 @@
                            │                                                                  │    ┃
                            ╰──────────────────────────────────────────────────────────────────╯     
  ctx 118k/250k  |  claude-sub 5h 62%                                                                
- tofu  ./tofu/                     chat   agents   edits   shells                     0s [settings] 
+ tofu  ./tofu/                   chat   agents   edits   shells (1)                   0s [settings] 
                                                                                                     
                                                                                                    │
   Sub-agents               All activity                                     8-9/9 · wheel ↑ older  │
@@ -118,7 +118,7 @@
                            │    line 7 of the tall result                                     │    │
                            │    line 8 of the tall result                                     │     
  ctx 118k/250k  |  claude-sub 5h 62%                                                                
- tofu  ./tofu/                     chat   agents   edits   shells                     0s [settings] 
+ tofu  ./tofu/                   chat   agents   edits   shells (1)                   0s [settings] 
                                                                                                     
                                                                                                    │
   File edits                       internal/judge/ledger/floor_rows.go              [edit#e5a102]  │
@@ -148,7 +148,7 @@
                                    + 1197  var row1197 = floorRow{Question: "risk", Line: 1197}    │
                                                                                                     
  ctx 118k/250k  |  claude-sub 5h 62%                                                                
- tofu  ./tofu/                     chat   agents   edits   shells                     0s [settings] 
+ tofu  ./tofu/                   chat   agents   edits   shells (1)                   0s [settings] 
                                                                                                     
                                                                                                    │
   Shells                   dev-server                                                    running   │
@@ -178,7 +178,7 @@
                            k request kill · confirmation required                                  ┃
                                                                                                     
  ctx 118k/250k  |  claude-sub 5h 62%                                                                
- tofu  ./tofu/                     chat   agents   edits   shells                     0s [settings] 
+ tofu  ./tofu/                   chat   agents   edits   shells (1)                   0s [settings] 
                                                                                                     
                                                                                                    │
   Shells                   dev-server                                                    running   │

@@ -22,7 +22,7 @@
                                                                                                     
                                                                                                     
                                                                                                     
-  ⠋ waiting on [&qa-1]  |  26s  [request#91ccaf]                                                    
+  ⠋ waiting on (1) sub-agent  |  26s  [request#91ccaf]                                              
                                                                                                     
                                                                                                     
   █ Ask tofu to build, inspect, or delegate                                                         

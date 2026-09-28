@@ -1,5 +1,5 @@
 clipboard: three sub-agents run: [&c1] reads the
- tofu  ./tofu/                     chat   agents   edits   shells                     0s [settings] 
+ tofu  ./tofu/                   chat   agents   edits   shells (1)                   0s [settings] 
                                                                                                     
                                                                                                     
     You                                                                  14:32  [message#672866]    
@@ -29,7 +29,7 @@ clipboard: three sub-agents run: [&c1] reads the
   > three sub-agents run: [&c1] reads the                                                           
                                                                                                     
  the selection copied, 37 bytes   [&orchestrator]  ·  claude-sub/claude-opus-5  ·  reasoning medium 
- tofu  ./tofu/                     chat   agents   edits   shells                     0s [settings] 
+ tofu  ./tofu/                   chat   agents   edits   shells (1)                   0s [settings] 
                                                                                                     
                                                                                                     
     You                                                                  14:32  [message#672866]    

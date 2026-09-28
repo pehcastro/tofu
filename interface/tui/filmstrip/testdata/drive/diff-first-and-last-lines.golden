@@ -1,4 +1,4 @@
- tofu  ./tofu/                     chat   agents   edits   shells                     0s [settings] 
+ tofu  ./tofu/                   chat   agents   edits   shells (1)                   0s [settings] 
                                                                                                     
                                                                                                    │
   File edits                       internal/judge/ledger/floor_rows.go              [edit#e5a102]  │
@@ -28,7 +28,7 @@
                                    + 1200  var lastRow = floorRow{Question: "risk", Line: 1200}    ┃
                                                                                                     
  ctx 118k/250k  |  claude-sub 5h 62%                                                                
- tofu  ./tofu/                     chat   agents   edits   shells                     0s [settings] 
+ tofu  ./tofu/                   chat   agents   edits   shells (1)                   0s [settings] 
                                                                                                     
                                                                                                    ┃
   File edits                       internal/judge/ledger/floor_rows.go              [edit#e5a102]  │

@@ -100,7 +100,7 @@ func TestChatComposerStartsCompactAndGrowsForMultiline(t *testing.T) {
 	}
 }
 
-func TestWaitingOnTwoSubAgentsIsOneLineAboveTheComposerAndOneBatchLineSpinsInDots8(t *testing.T) {
+func TestWaitingOnThreeSubAgentsCountsThemAboveTheComposerAndNamesThemOnOneBatchLine(t *testing.T) {
 	at := time.Date(2026, 9, 27, 14, 32, 0, 0, time.UTC)
 	model := New(func() time.Time { return at }, counted(new(int)))
 	model.SetSize(100, 30)
@@ -109,9 +109,11 @@ func TestWaitingOnTwoSubAgentsIsOneLineAboveTheComposerAndOneBatchLineSpinsInDot
 	model.Returned()
 	model.Spawned("ts-dev-1")
 	model.Spawned("ts-dev-2")
+	model.Spawned("ts-dev-3")
 	model.SubAgents = []subagent.Row{
 		{Name: "ts-dev-1", State: roster.Working, Since: 51 * time.Second, Calls: []subagent.Call{{ID: "r1", Tool: "read", Text: "src/routes/products.ts"}}},
 		{Name: "ts-dev-2", State: roster.Working, Since: 3 * time.Minute, Calls: []subagent.Call{{ID: "r2", Tool: "edit", Text: "src/routes/orders.ts"}}},
+		{Name: "ts-dev-3", State: roster.Working, Since: 2 * time.Minute, Calls: []subagent.Call{{ID: "r3", Tool: "read", Text: "src/routes/users.ts"}}},
 	}
 	at = at.Add(time.Minute)
 	model.View()
@@ -123,11 +125,13 @@ func TestWaitingOnTwoSubAgentsIsOneLineAboveTheComposerAndOneBatchLineSpinsInDot
 			above = append(above, strings.TrimSpace(row))
 		}
 	}
-	if len(above) != 1 || !strings.Contains(above[0], "waiting on [&ts-dev-1] [&ts-dev-2]") {
-		t.Fatalf("the rows above the composer are %q, want exactly the one status line\n%s", above, strings.Join(rows, "\n"))
+	if len(above) != 1 || !strings.Contains(above[0], "waiting on (3) sub-agents") || strings.Contains(above[0], "[&") {
+		t.Fatalf("the rows above the composer are %q, want exactly one status line counting three sub-agents without names\n%s", above, strings.Join(rows, "\n"))
 	}
-	spawn := slices.IndexFunc(rows[:model.transcriptRows()], func(row string) bool { return strings.Contains(row, "waiting on [&ts-dev-1] [&ts-dev-2]") })
+	spawn := slices.IndexFunc(rows[:model.transcriptRows()], func(row string) bool {
+		return strings.Contains(row, "waiting on [&ts-dev-1] [&ts-dev-2] [&ts-dev-3]")
+	})
 	if spawn < 0 || !strings.HasPrefix(strings.TrimSpace(rows[spawn]), "⠁ ") || !strings.HasSuffix(strings.TrimSpace(rows[spawn]), "3m") || strings.Contains(rows[spawn], "products.ts") {
-		t.Errorf("the chat does not spin one Dots8 line naming both sub-agents under the longest clock\n%s", strings.Join(rows, "\n"))
+		t.Errorf("the chat does not spin one Dots8 line naming all three sub-agents under the longest clock\n%s", strings.Join(rows, "\n"))
 	}
 }

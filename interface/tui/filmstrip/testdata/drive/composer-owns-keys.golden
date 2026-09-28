@@ -1,4 +1,4 @@
- tofu  ./tofu/                     chat   agents   edits   shells                     0s [settings] 
+ tofu  ./tofu/                   chat   agents   edits   shells (1)                   0s [settings] 
                                                                                                     
                                                                                                     
                                                                                                     
@@ -28,7 +28,7 @@
   12 abx3y4                                                                                         
                                                                                                     
  ctx 118k/250k  |  claude 62%     [&orchestrator]  ·  claude-sub/claude-opus-5  ·  reasoning medium 
- tofu  ./tofu/                     chat   agents   edits   shells                     0s [settings] 
+ tofu  ./tofu/                   chat   agents   edits   shells (1)                   0s [settings] 
                                                                                                     
                                                                                                     
   Sub-agents               All activity                                            0-0/0 · newest   

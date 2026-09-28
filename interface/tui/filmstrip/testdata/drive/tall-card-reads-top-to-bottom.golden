@@ -1,4 +1,4 @@
- tofu  ./tofu/                     chat   agents   edits   shells                     0s [settings] 
+ tofu  ./tofu/                   chat   agents   edits   shells (1)                   0s [settings] 
                                                                                                     
                                                                                                    │
   Sub-agents               All activity                                            1-1/1 · newest  │
@@ -28,7 +28,7 @@
                            │                                                                  │    ┃
                            ╰──────────────────────────────────────────────────────────────────╯     
  ctx 118k/250k  |  claude-sub 5h 62%                                                                
- tofu  ./tofu/                     chat   agents   edits   shells                     0s [settings] 
+ tofu  ./tofu/                   chat   agents   edits   shells (1)                   0s [settings] 
                                                                                                     
                                                                                                    │
   Sub-agents               All activity                                            1-1/1 · newest  │
@@ -58,7 +58,7 @@
                            │    line 52 of the tall result                                    │    │
                            │    line 53 of the tall result                                    │     
  ctx 118k/250k  |  claude-sub 5h 62%                                                                
- tofu  ./tofu/                     chat   agents   edits   shells                     0s [settings] 
+ tofu  ./tofu/                   chat   agents   edits   shells (1)                   0s [settings] 
                                                                                                     
                                                                                                    ┃
   Sub-agents               All activity                                            1-1/1 · newest  ┃

@@ -1,4 +1,4 @@
- tofu  ./tofu/                     chat   agents   edits   shells                     0s [settings] 
+ tofu  ./tofu/                   chat   agents   edits   shells (1)                   0s [settings] 
                                                                                                     
                                                                                                    │
   Sub-agents               All activity                                     6-8/8 · wheel ↑ older  │
@@ -28,7 +28,7 @@
                            │                                                                  │    │
                            │  [&orchestrator]  tool              just now  [tool#9d4f10]      │     
  ctx 118k/250k  |  claude-sub 5h 62%                                                                
- tofu  ./tofu/                     chat   agents   edits   shells                     0s [settings] 
+ tofu  ./tofu/                   chat   agents   edits   shells (1)                   0s [settings] 
                                                                                                     
                                                                                                    │
   Sub-agents               All activity                                     6-8/9 · wheel ↑ older  │

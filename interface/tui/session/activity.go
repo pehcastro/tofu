@@ -2,6 +2,7 @@ package session
 
 import (
 	"slices"
+	"strconv"
 	"time"
 
 	"charm.land/lipgloss/v2"
@@ -60,7 +61,7 @@ func (m *Model) reached() phase {
 	if slices.ContainsFunc(m.entries, Entry.running) {
 		return working
 	}
-	if !m.inFlight() && len(m.workingSubAgents()) > 0 {
+	if !m.inFlight() && m.workingSubAgents() > 0 {
 		return waitingOnSubAgent
 	}
 	return thinking
@@ -77,14 +78,14 @@ func (m *Model) settle() {
 	m.phase, m.shown = at, m.now()
 }
 
-func (m *Model) workingSubAgents() []string {
-	var names []string
+func (m *Model) workingSubAgents() int {
+	working := 0
 	for _, subAgent := range m.SubAgents {
 		if subAgent.State == roster.Working {
-			names = append(names, subAgent.Name)
+			working++
 		}
 	}
-	return names
+	return working
 }
 
 func (m *Model) phaseSince() time.Duration {
@@ -100,16 +101,17 @@ func (m *Model) requestLine() string {
 	switch {
 	case m.Busy:
 		word, style := m.phase.drawn()
-		word = style.Render(word)
-		switch {
-		case m.Stopping || m.LettingToolsFinish:
-			word = look.Style(look.Amber).Render(stoppingWord)
-		case m.phase == waitingOnSubAgent:
-			for _, name := range m.workingSubAgents() {
-				word += " " + look.AgentRef(name)
+		if m.phase == waitingOnSubAgent {
+			working := m.workingSubAgents()
+			word += " (" + strconv.Itoa(working) + ") sub-agent"
+			if working != 1 {
+				word += "s"
 			}
 		}
-		line += look.Accent(progress.Spin(m.frame)) + " " + word + look.Muted(requestSeparator+widget.Until(m.phaseSince())+metaGap)
+		if m.Stopping || m.LettingToolsFinish {
+			word, style = stoppingWord, look.Style(look.Amber)
+		}
+		line += look.Accent(progress.Spin(m.frame)) + " " + style.Render(word) + look.Muted(requestSeparator+widget.Until(m.phaseSince())+metaGap)
 		id = m.turnID
 	case m.cooked != "":
 		line += look.Muted(m.cooked + metaGap)
