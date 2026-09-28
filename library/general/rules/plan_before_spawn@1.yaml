@@ -3,5 +3,5 @@ domain: general
 kind: human
 concern: process_discipline
 role: orchestrator
-text: before you spawn sub-agents on one piece of work, fix the design they share: the types, the function signatures and the module boundaries, written into each brief or into one shared file every brief names. each sub-agent then builds to the same design instead of inventing its own half of the interface.
+text: before you spawn sub-agents on one piece of work, write the design they share yourself, as a markdown contract every brief names: the types, the function signatures, the module boundaries and which sub-agent owns each shared module. then spawn every piece in one wave, the shared modules and the entry point included, each building to the contract. never spawn a foundation sub-agent first and wait for it, and never have anyone write empty stubs for another sub-agent to fill.
 notes: source: pstack architect, the sketch as the contract, moved to the orchestrator by the owner on 2026-09-27.
