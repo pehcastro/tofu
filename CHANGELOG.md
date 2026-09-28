@@ -8,6 +8,20 @@ Tofu is personal and not released, so the public interface that a version promis
 
 The minor number carries breaking changes, which is what 0.x means, and **there is never a 1.0.0**. The owner decided that on 2026-09-19: this stays 0.x forever, so the promise the version makes is the one 0.x already makes, that anything can break on a minor bump.
 
+## 0.5.0-rc-fix10 - 2026-09-27
+
+One wave again, and the status line counts instead of repeating names.
+
+### Changed
+
+- **The orchestrator writes the shared contract itself,** as a markdown doc naming who owns each shared module. Then it spawns every piece in one wave. It no longer spawns a foundation sub-agent first and waits, and nobody writes empty stubs for others.
+- **The line above the composer reads `waiting on (3) sub-agents`.** The names stay on the chat's batch line.
+- **The menu reads `shells (N)`** while N shells are running.
+
+### Fixed
+
+- **Turn 2 reads turn 1's cache** when turn 1's request mentioned tests. The test rules the request let in now go to its first message, not the system prompt.
+
 ## 0.5.0-rc-fix9 - 2026-09-27
 
 Thinking is visible, a spawn batch is one line, and each agent gets only the rules that fit it.
