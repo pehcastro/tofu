@@ -42,11 +42,12 @@ Read from `bench/harness/report-2026-09-22.md`.
 
 ## What decides what today
 
-3 of 10 decision points decide anything when you run tofu today, read from `library/decisions/methods@1.yaml`.
+3 of 11 decision points decide anything when you run tofu today, read from `library/decisions/methods@1.yaml`.
 
 | What decides | Switched on | What it costs | Why | Called by | Measured |
 |---|---|---|---|---|---|
 | `shell_sift` | yes, through the judged method | a median $0.000540 a session, p95 $0.005454, worst $0.011070 over 110 recorded sessions, and p50 361 ms, p95 524 ms, worst 722 ms on 13 real shell_sift ledger decisions | jev keeps 27 of 34 planted needles against the free arm's 18, 1.50x, at equal bytes saved | internal/turn/shellsift.go | not stated |
+| `browser_step` | not wired | nothing, and no call is made | jev picks the right next action on 8 of 8 recorded pages, median 316 ms and 1340 input tokens a decision, and no tool calls the chooser yet. the model arm, the turn's own model calling browser_act, is not measured | not stated | not stated |
 | `stop_check` | yes, through the judged method | a median $0.000074 a session over the 15 recorded sessions that ran it, worst $0.004574, $0.0087 over the whole recorded ledger, and the call is already made in shadow | jev agrees with 71 of 78 hand labels against the repeat check's 68, 1.04x, and makes a false stop a third as often | cmd/tofu/run_done.go | not stated |
 | `page_sift` | not wired | nothing, and no call is made | web.Reduce strips the same link-only rows at fetch time, so the link stripper elides 0 further bytes on all 24 recorded pages, 0.00 percent, where Reduce itself takes 11.69 percent of the extracted bytes. a second pass of one rule is not a decision point | not stated | not stated |
 | `read_worth` | yes, through the cheap method | nothing, and no call is made | a fifteen word floor agrees with 87.1 percent of the labels, the same as jev, and saves 12.6 percent of bytes against 9.3. a tie goes to the method that costs nothing | cmd/tofu/sift.go | not stated |
@@ -78,10 +79,11 @@ Why the rest are not compared:
 
 ## Every dated report, newest first
 
-61 dated reports over 36 benches. 6 benches carry none. 20 are withdrawn whole or in part, 1 is stale, and 2 reports name no conclusion a reader can find. A withdrawal declared from outside a report lives in `bench/report/withdrawals.json`; every other state is declared by the report's own first lines.
+62 dated reports over 37 benches. 6 benches carry none. 20 are withdrawn whole or in part, 1 is stale, and 2 reports name no conclusion a reader can find. A withdrawal declared from outside a report lives in `bench/report/withdrawals.json`; every other state is declared by the report's own first lines.
 
 | Bench | Date | Report | What it found | Sample | State |
 |---|---|---|---|---|---|
+| browser | 2026-09-28 | `bench/browser/report-2026-09-28.md` | Hand read from bench/report/handread.json: Jev picked the right next browser action on 8 of 8 recorded pages, with a median of 316 ms and 1,340 input tokens a decision, against jev-ultrafast's 178 ms and 5.3k tokens. The whole pass cost $0.000496. The model arm, the turn's own model calling browser_act, is not measured. | 8 recorded pages, jev-ultrafast's hotel form and seven fastbrowse fixtures converted by hand, one live pass through OpenRouter on jev-1.13-20260917 | stands |
 | skills | 2026-09-26 | `bench/skills/report-2026-09-26.md` | Hand read from bench/report/handread.json: With the skill listing on, the model loaded the matching skill in 2 of 3 tasks and followed it both times. On the third it never loaded the skill and silently ignored the convention. With the listing off, 0 of 3 followed. The listing costs 247 cached tokens per request. Skills earn a place for a person's own conventions, not for library content that must always apply. | three throwaway skills, three tasks, one live run each with the listing on and off, on claude-sub/claude-sonnet-5 at low effort | stands |
 | tui | 2026-09-26 | `bench/tui/report-2026-09-26.md` | Hand read from bench/report/handread.json: The new interface draws every screen inside the 16.7 ms frame budget on a replay of 30 real turns. Before the frame budget fixes a resize took 97 to 169 ms and the first open of sub-agents 59.6 ms; after them a resize takes 0.3 to 3.2 ms and sub-agents opens in 2.0 ms. The chat scrollbar went from 3.05x the showcase baseline to 0.28x. Every other row that could be built is within 1.5x of the baseline. | the 30 most recent top-level turns of .tofu/sessions, 1,956 events, and a long arm of 116 turns and 6,373 events, at 120x36, one run before and one after TOFU-719 | stands |
 | ask/server | 2026-09-24 | `bench/ask/server/report-2026-09-24.md` | Hand read from bench/report/handread.json: The same measurement after the reader was corrected: the arm fires on 2 of 121 readable turns, 1.65 percent, where the earlier run read 113 turns and 1.77 percent. The denominator moved because corpus.WalkSessions now returns one turn per outcome segment, so six restarted directories yield their real turns. Every finding about the arm itself is unchanged: 15 of 18 steps removed in one session, 23 of 24 in the other, and the literal name reading still picks the wrong script in both. | 121 turns readable across both directories after TOFU-560, 2 in the start a server intent domain, both fired | stands |
@@ -179,4 +181,4 @@ Why the rest are not compared:
 
 ### Where these reports came from
 
-5 of 61 reports are built by running the package's own code again and 56 of 61 from the markdown's own text, which is weaker evidence, and every one of those says so.
+5 of 62 reports are built by running the package's own code again and 57 of 62 from the markdown's own text, which is weaker evidence, and every one of those says so.

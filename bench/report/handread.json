@@ -8,6 +8,14 @@
     "skips": "one run per cell, so no rate; per-run token totals were not recorded, only the listing's cost per request"
   },
   {
+    "report": "bench/browser/report-2026-09-28.md",
+    "figure": "316 ms",
+    "says": "Jev picked the right next browser action on 8 of 8 recorded pages, with a median of 316 ms and 1,340 input tokens a decision, against jev-ultrafast's 178 ms and 5.3k tokens. The whole pass cost $0.000496. The model arm, the turn's own model calling browser_act, is not measured.",
+    "from": "prose",
+    "sample": "8 recorded pages, jev-ultrafast's hotel form and seven fastbrowse fixtures converted by hand, one live pass through OpenRouter on jev-1.13-20260917",
+    "skips": "the model arm and the live turn against turn run, which need Chrome and a subscription"
+  },
+  {
     "report": "bench/tui/report-2026-09-26.md",
     "figure": "2.0 ms",
     "says": "The new interface draws every screen inside the 16.7 ms frame budget on a replay of 30 real turns. Before the frame budget fixes a resize took 97 to 169 ms and the first open of sub-agents 59.6 ms; after them a resize takes 0.3 to 3.2 ms and sub-agents opens in 2.0 ms. The chat scrollbar went from 3.05x the showcase baseline to 0.28x. Every other row that could be built is within 1.5x of the baseline.",
