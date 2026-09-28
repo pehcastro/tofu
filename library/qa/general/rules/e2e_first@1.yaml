@@ -1,5 +1,6 @@
 id: e2e_first
 domain: qa
+also_reaches: work_on_tests
 kind: human
 concern: code_rules
 text: prove a feature end to end, not in pieces. drive the real thing the way a person drives it and leave an artifact anybody can check and anybody can produce again: a pasted screen, a recorded run, a file, a number. NEVER offer a unit test as the proof that a feature works.

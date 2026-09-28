@@ -138,7 +138,7 @@ func Compose(spec ComposeSpec) (Composed, error) {
 	}
 	agentDomain := cmp.Or(spec.Agent.Domain, rule.DomainDev)
 	reaching := slices.DeleteFunc(slices.Clone(spec.Rules), func(loaded rule.Rule) bool {
-		return (loaded.Domain == rule.DomainQA || loaded.Domain == rule.DomainDev) && loaded.Domain != agentDomain
+		return (loaded.Domain == rule.DomainQA || loaded.Domain == rule.DomainDev) && loaded.Domain != agentDomain && !loaded.ReachesDevFor(composed.Task)
 	})
 	withoutTask := rule.Index(reaching, rule.Task{Role: composed.Task.Role, Language: composed.Task.Language})
 	for i, match := range rule.Index(reaching, composed.Task) {

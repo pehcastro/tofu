@@ -1,5 +1,6 @@
 id: failure_modes_first
 domain: qa
+also_reaches: work_on_tests
 kind: human
 concern: code_rules
 text: when a thing genuinely has to be tested on its own, write every way it can fail before you write the code, and include the ways that take thought rather than only the obvious one. the obvious failure is the one the code already handles.

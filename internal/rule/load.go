@@ -79,6 +79,9 @@ func parseRule(data []byte, path string) (Rule, error) {
 	if r.Domain == "" {
 		return Rule{}, fmt.Errorf("%s: the rule declares no domain, and a domain is %q, %q, %q or a tool name", path, DomainDev, DomainQA, DomainGeneral)
 	}
+	if r.AlsoReaches != ReachQAOnly && r.Domain != DomainQA {
+		return Rule{}, fmt.Errorf("%s: rule %q is domain %s and declares also_reaches, and only a %s rule reaches beyond its own agents", path, r.ID, r.Domain, DomainQA)
+	}
 	if !r.Kind.valid() {
 		return Rule{}, fmt.Errorf("%s: kind is %q, %q, %q or %q, found %q", path, KindStructural, KindDecision, KindHuman, KindMeasured, r.Kind)
 	}
@@ -197,6 +200,11 @@ func (r *Rule) setField(key, value, path string, line int) error {
 			return fmt.Errorf("%s:%d: except is %q, found %q", path, line, ExceptionQuoted, value)
 		}
 		r.Except = e
+	case "also_reaches":
+		if Reach(value) != ReachWorkOnTests {
+			return fmt.Errorf("%s:%d: also_reaches is %q, found %q", path, line, ReachWorkOnTests, value)
+		}
+		r.AlsoReaches = ReachWorkOnTests
 	case "text":
 		r.Text = value
 	case "notes":

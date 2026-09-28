@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"unicode"
 
 	"tofu/internal/subagent"
 )
@@ -54,6 +55,27 @@ type Task struct {
 	Verb     Verb
 	Language string
 	Role     Role
+}
+
+func (t Task) touchesTests() bool {
+	notAWord := func(r rune) bool { return !unicode.IsLetter(r) && !unicode.IsDigit(r) }
+	for _, word := range strings.FieldsFunc(strings.ToLower(t.Text), notAWord) {
+		if slices.Contains([]string{"test", "tests", "spec", "coverage", "e2e"}, word) {
+			return true
+		}
+	}
+	for _, held := range t.Paths {
+		base := path.Base(held)
+		if strings.HasSuffix(base, "_test.go") || strings.Contains(base, ".test.") || strings.Contains(base, ".spec.") {
+			return true
+		}
+		for _, dir := range strings.Split(path.Dir(held), "/") {
+			if slices.Contains([]string{"test", "tests", "__tests__"}, dir) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func KnownLanguage(name string) bool { return languageExtensions()[name] != nil }

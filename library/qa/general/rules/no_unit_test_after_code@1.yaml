@@ -1,5 +1,6 @@
 id: no_unit_test_after_code
 domain: qa
+also_reaches: work_on_tests
 kind: human
 concern: code_rules
 text: NEVER write a unit test after you have written the code, unless the person asked for unit tests in those words. a test written to fit code that already exists asserts what the code does rather than what it should do, and it passes for that reason alone.

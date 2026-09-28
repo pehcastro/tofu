@@ -105,6 +105,23 @@ func (e Exception) valid() bool {
 	return false
 }
 
+type Reach string
+
+const (
+	ReachQAOnly      Reach = ""
+	ReachWorkOnTests Reach = "work_on_tests"
+)
+
+func (r Rule) ReachesDevFor(task Task) bool {
+	switch r.AlsoReaches {
+	case ReachQAOnly:
+		return false
+	case ReachWorkOnTests:
+		return task.touchesTests()
+	}
+	panic("rule: unknown reach " + string(r.AlsoReaches))
+}
+
 type Rule struct {
 	ID           string
 	Kind         Kind
@@ -117,6 +134,7 @@ type Rule struct {
 	Mode         Mode
 	ModeDeclared bool
 	Except       Exception
+	AlsoReaches  Reach
 	Trigger      Trigger
 	Text         string
 	Notes        string
