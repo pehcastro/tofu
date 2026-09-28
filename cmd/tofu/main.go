@@ -59,7 +59,8 @@ readable form collapses: doctor, models, agents, usage, context, rules.
   migrate   move what tofu wrote out of this project's .tofu and into ~/.tofu,
             or --dry-run to list what would move
   browser   list the Chrome tabs you shared with tofu and their mode,
-            or install and uninstall the extension's native host
+            install and uninstall the extension's native host,
+            or open and close a background tab tofu owns
 `
 
 func main() {

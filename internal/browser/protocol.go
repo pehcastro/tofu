@@ -32,10 +32,11 @@ func (m *Mode) UnmarshalJSON(raw []byte) error {
 }
 
 type Tab struct {
-	ID    int    `json:"id"`
-	URL   string `json:"url"`
-	Title string `json:"title"`
-	Mode  Mode   `json:"mode,omitempty"`
+	ID     int    `json:"id"`
+	URL    string `json:"url"`
+	Title  string `json:"title"`
+	Mode   Mode   `json:"mode,omitempty"`
+	Opened bool   `json:"opened,omitempty"`
 }
 
 type messageType string
@@ -100,7 +101,15 @@ func parseExtensionMessage(raw []byte) (extensionMessage, error) {
 	return message, nil
 }
 
-const opTabs = "tabs"
+const (
+	opTabs  = "tabs"
+	opOpen  = "open"
+	opClose = "close"
+)
+
+type openArgs struct {
+	URL string `json:"url"`
+}
 
 func opMode(op string) (Mode, error) {
 	switch op {

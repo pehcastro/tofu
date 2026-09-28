@@ -62,20 +62,33 @@ func TestManifestKeepsTheIDAndNamesEveryShippedFile(t *testing.T) {
 	}
 }
 
+func handler(t *testing.T, background, name string) string {
+	t.Helper()
+	start := strings.Index(background, "async function "+name+"(")
+	if start < 0 {
+		t.Fatalf("background.js has no %s handler", name)
+	}
+	end := strings.Index(background[start:], "\n}\n")
+	if end < 0 {
+		t.Fatalf("the %s handler in background.js does not end", name)
+	}
+	return background[start : start+end]
+}
+
 func TestBackgroundAttachesOnlyInTheShareHandlerAndNeverNavigates(t *testing.T) {
 	background := shipped(t, "background.js")
-	start := strings.Index(background, "async function share(")
-	if start < 0 {
-		t.Fatal("background.js has no share handler")
-	}
-	end := start + strings.Index(background[start:], "\n}\n")
-	if end < start {
-		t.Fatal("the share handler in background.js does not end")
-	}
-	if total, inside := strings.Count(background, "debugger.attach"), strings.Count(background[start:end], "chrome.debugger.attach("); total != 1 || inside != 1 {
+	if total, inside := strings.Count(background, "debugger.attach"), strings.Count(handler(t, background, "share"), "chrome.debugger.attach("); total != 1 || inside != 1 {
 		t.Fatalf("background.js attaches %d times, %d of them in the share handler; want exactly one, in it", total, inside)
 	}
-	for _, never := range []string{"chrome.tabs.update", "chrome.tabs.create", "Page.navigate", "location.href =", "eval(", "new Function", "['attach']", `["attach"]`} {
+	if total, inside := strings.Count(background, "tabs.create"), strings.Count(handler(t, background, "openTab"), "chrome.tabs.create({url, active: false})"); total != 1 || inside != 1 {
+		t.Fatalf("background.js creates a tab %d times, %d of them inactive in the open handler; want exactly one, there", total, inside)
+	}
+	closeOpened := handler(t, background, "closeOpened")
+	check, remove := strings.Index(closeOpened, "if (!opened.has(tabId)) throw"), strings.Index(closeOpened, "chrome.tabs.remove(tabId)")
+	if strings.Count(background, "tabs.remove") != 1 || check < 0 || remove < check {
+		t.Fatalf("background.js removes a tab %d times; want exactly one, in closeOpened after the opened check", strings.Count(background, "tabs.remove"))
+	}
+	for _, never := range []string{"chrome.tabs.update", "Page.navigate", "location.href =", "eval(", "new Function", "['attach']", `["attach"]`} {
 		if strings.Contains(background, never) {
 			t.Errorf("background.js contains %s", never)
 		}

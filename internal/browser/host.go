@@ -7,6 +7,7 @@ import (
 	"io"
 	"maps"
 	"net"
+	"net/url"
 	"os"
 	"path/filepath"
 	"slices"
@@ -181,7 +182,21 @@ func (r *relay) handle(s *session, req request) {
 	}
 }
 
-func (r *relay) forward(s *session, req request) error {
+func (r *relay) admit(s *session, req request) error {
+	switch req.Op {
+	case opOpen:
+		var args openArgs
+		_ = json.Unmarshal(req.Args, &args)
+		if parsed, err := url.Parse(args.URL); err != nil || !slices.Contains([]string{"http", "https", "file"}, parsed.Scheme) {
+			return fmt.Errorf("tofu opens only http, https and file URLs, not %q", args.URL)
+		}
+		return nil
+	case opClose:
+		if !r.tabs[req.Tab].Opened {
+			return fmt.Errorf("tab %d is the person's: tofu closes only tabs it opened", req.Tab)
+		}
+		return nil
+	}
 	mode, err := opMode(req.Op)
 	if err != nil {
 		return err
@@ -198,6 +213,13 @@ func (r *relay) forward(s *session, req request) error {
 			return fmt.Errorf("tab %d is driven by another tofu session", req.Tab)
 		}
 		r.claims[req.Tab] = s
+	}
+	return nil
+}
+
+func (r *relay) forward(s *session, req request) error {
+	if err := r.admit(s, req); err != nil {
+		return err
 	}
 	r.lastID++
 	raw, err := json.Marshal(extensionCall{T: messageCall, ID: r.lastID, TabID: req.Tab, Op: req.Op, Args: req.Args})

@@ -8,9 +8,11 @@ const READ_OPS = ['snapshot', 'fresh'];
 const DRIVE_OPS = ['click', 'fill', 'select', 'scroll', 'wait'];
 const MODES = ['read', 'drive'];
 const DIRECTIONS = ['up', 'down'];
+const OPENABLE_PROTOCOLS = ['http:', 'https:', 'file:'];
 const SELECT_ALL_MODIFIER = navigator.userAgent.includes('Mac') ? 4 : 2;
 
 const shared = new Map();
+const opened = new Set();
 let port = null;
 let hostError = '';
 let reconnectDelay = RECONNECT_MIN_MS;
@@ -45,6 +47,8 @@ async function answer({id, tabId, op, args}) {
 }
 
 async function perform(tabId, op, args) {
+  if (op === 'open') return openTab(String(args.url ?? ''));
+  if (op === 'close') return closeOpened(tabId);
   const tab = shared.get(tabId);
   if (!tab) throw new Error(`tab ${tabId} is not shared with tofu`);
   const fingerprint = String(args.fingerprint ?? '');
@@ -77,15 +81,34 @@ async function evaluate(tabId, request) {
   return value;
 }
 
+async function openTab(url) {
+  if (!OPENABLE_PROTOCOLS.includes(URL.parse(url)?.protocol)) throw new Error(`tofu opens only http, https and file URLs, not ${url}`);
+  const {id} = await chrome.tabs.create({url, active: false});
+  opened.add(id);
+  try {
+    await share(id, 'drive');
+  } catch (error) {
+    await closeOpened(id);
+    throw error;
+  }
+  return id;
+}
+
+async function closeOpened(tabId) {
+  if (!opened.has(tabId)) throw new Error(`tab ${tabId} is the person's: tofu closes only tabs it opened`);
+  await chrome.tabs.remove(tabId);
+}
+
 async function share(tabId, mode) {
   if (!MODES.includes(mode)) throw new Error(`no sharing mode ${mode}`);
-  const tab = tabInfo(await chrome.tabs.get(tabId));
+  const tab = {...tabInfo(await chrome.tabs.get(tabId)), opened: opened.has(tabId)};
   if (!shared.has(tabId)) await chrome.debugger.attach({tabId}, DEBUGGER_VERSION);
   shared.set(tabId, {...tab, mode});
   post({t: 'shared', tab, mode});
 }
 
 async function unshare(tabId) {
+  opened.delete(tabId);
   if (!shared.delete(tabId)) return;
   post({t: 'unshared', tabId});
   await chrome.debugger.detach({tabId}).catch(() => {});

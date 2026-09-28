@@ -25,12 +25,20 @@ func TestBrowserWithNoHostSaysNotConnected(t *testing.T) {
 	t.Cleanup(func() { _ = os.RemoveAll(home) })
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
-	var out, errOut bytes.Buffer
-	if code := run([]string{"browser"}, strings.NewReader(""), &out, &errOut); code != exitUsage {
-		t.Fatalf("tofu browser exited %d, want %d; stderr %q", code, exitUsage, errOut.String())
+	for _, args := range [][]string{{"browser"}, {"browser", "open", "https://example.com/"}, {"browser", "close", "12"}} {
+		var out, errOut bytes.Buffer
+		if code := run(args, strings.NewReader(""), &out, &errOut); code != exitUsage {
+			t.Fatalf("tofu %v exited %d, want %d; stderr %q", args, code, exitUsage, errOut.String())
+		}
+		if !strings.Contains(errOut.String(), browser.ErrNotConnected.Error()) || out.Len() != 0 {
+			t.Fatalf("tofu %v printed %q and %q", args, out.String(), errOut.String())
+		}
 	}
-	if !strings.Contains(errOut.String(), browser.ErrNotConnected.Error()) || out.Len() != 0 {
-		t.Fatalf("tofu browser printed %q and %q", out.String(), errOut.String())
+	for _, args := range [][]string{{"browser", "open"}, {"browser", "close"}, {"browser", "close", "twelve"}, {"browser", "install", "x"}, {"browser", "open", "a", "b"}} {
+		var out, errOut bytes.Buffer
+		if code := run(args, strings.NewReader(""), &out, &errOut); code != exitUsage || !strings.HasPrefix(errOut.String(), "usage: tofu browser") || out.Len() != 0 {
+			t.Fatalf("tofu %v exited %d and printed %q and %q", args, code, out.String(), errOut.String())
+		}
 	}
 }
 

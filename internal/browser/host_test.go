@@ -134,7 +134,7 @@ func TestHostRelaysAndClaims(t *testing.T) {
 
 	first, second := dial(t, home), dial(t, home)
 	tabs, err := first.Tabs()
-	want := []Tab{{7, "https://a.test/", "A", ModeDrive}, {9, "https://b.test/next", "B next", ModeRead}}
+	want := []Tab{{7, "https://a.test/", "A", ModeDrive, false}, {9, "https://b.test/next", "B next", ModeRead, false}}
 	if err != nil || !slices.Equal(tabs, want) {
 		t.Fatalf("Tabs is %v, %v; want %v", tabs, err, want)
 	}
@@ -237,6 +237,57 @@ func TestHostRelaysAndClaims(t *testing.T) {
 	}
 	if _, err := second.Tabs(); !errors.Is(err, ErrNotConnected) {
 		t.Fatalf("a session of a host that ended read %v", err)
+	}
+}
+
+func TestHostOpensAndClosesOnlyTheTabsTofuOpened(t *testing.T) {
+	home := shortHome(t)
+	installFor(t, home, testOrigin)
+	ext, _ := startHost(t, home)
+	ext.send(`{"t":"hello","version":1,"tabs":[{"id":7,"url":"https://mine.test/","title":"Mine","mode":"drive"},{"id":5,"url":"https://kept.test/","title":"Kept","mode":"drive","opened":true}]}`)
+	client := dial(t, home)
+
+	for _, url := range []string{"javascript:alert(1)", "JAVASCRIPT:alert(1)", "chrome://settings", "data:text/html,x", ""} {
+		if _, err := client.Open(url); err == nil || !strings.Contains(err.Error(), "http, https and file") {
+			t.Fatalf("open %q returned %v", url, err)
+		}
+	}
+	for _, tab := range []int{7, 4} {
+		if err := client.CloseTab(tab); err == nil || !strings.Contains(err.Error(), "the person's") {
+			t.Fatalf("close of tab %d returned %v", tab, err)
+		}
+	}
+
+	opened := make(chan answer, 1)
+	go func() {
+		tab, err := client.Open("https://example.com/")
+		opened <- answer{json.RawMessage(strconv.Itoa(tab)), err}
+	}()
+	create := ext.call()
+	if create.Op != "open" || create.TabID != 0 || string(create.Args) != `{"url":"https://example.com/"}` {
+		t.Fatalf("the first call to reach the extension is %+v", create)
+	}
+	ext.send(`{"t":"shared","tab":{"id":12,"url":"","title":"","opened":true},"mode":"drive"}`)
+	ext.answer(create.ID, `"ok":true,"value":12`)
+	if a := <-opened; a.err != nil || string(a.value) != "12" {
+		t.Fatalf("open returned tab %s, %v", a.value, a.err)
+	}
+	tabs, err := client.Tabs()
+	if err != nil || len(tabs) != 3 || tabs[2] != (Tab{12, "", "", ModeDrive, true}) {
+		t.Fatalf("after open, Tabs is %v, %v", tabs, err)
+	}
+
+	for _, tab := range []int{12, 5} {
+		closed := make(chan error, 1)
+		go func() { closed <- client.CloseTab(tab) }()
+		remove := ext.call()
+		if remove.Op != "close" || remove.TabID != tab || remove.Args != nil {
+			t.Fatalf("close of tab %d reached the extension as %+v", tab, remove)
+		}
+		ext.answer(remove.ID, `"ok":true`)
+		if err := <-closed; err != nil {
+			t.Fatalf("close of tab %d returned %v", tab, err)
+		}
 	}
 }
 

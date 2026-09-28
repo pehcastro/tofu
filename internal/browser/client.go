@@ -43,6 +43,24 @@ func (c *Client) Tabs() ([]Tab, error) {
 	return tabs, json.Unmarshal(raw, &tabs)
 }
 
+func (c *Client) Open(url string) (int, error) {
+	args, _ := json.Marshal(openArgs{URL: url})
+	raw, err := c.Call(0, opOpen, args)
+	if err != nil {
+		return 0, err
+	}
+	var tab int
+	if err := json.Unmarshal(raw, &tab); err != nil || tab == 0 {
+		return 0, fmt.Errorf("the extension answered open with %q, not a tab id", raw)
+	}
+	return tab, nil
+}
+
+func (c *Client) CloseTab(tab int) error {
+	_, err := c.Call(tab, opClose, nil)
+	return err
+}
+
 func (c *Client) Call(tab int, op string, args json.RawMessage) (json.RawMessage, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()

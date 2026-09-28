@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strconv"
 
 	"tofu/internal/browser"
 )
@@ -32,8 +33,12 @@ func browserVerb(args []string, out, errOut io.Writer) int {
 	flags := flag.NewFlagSet("browser", flag.ContinueOnError)
 	flags.SetOutput(errOut)
 	hostsKey := flags.String("hosts-key", browser.ChromeHostsKey, "")
-	if err := flags.Parse(args); err != nil || flags.NArg() > 1 {
-		_, _ = fmt.Fprintln(errOut, "usage: tofu browser [install | uninstall]")
+	err := flags.Parse(args)
+	verb, operand := flags.Arg(0), flags.Arg(1)
+	takesOperand := verb == "open" || verb == "close"
+	tabID, badID := strconv.Atoi(operand)
+	if err != nil || flags.NArg() > 2 || takesOperand != (operand != "") || (verb == "close" && badID != nil) {
+		_, _ = fmt.Fprintln(errOut, "usage: tofu browser [install | uninstall | open <url> | close <tab id>]")
 		return exitUsage
 	}
 	home, err := os.UserHomeDir()
@@ -41,9 +46,28 @@ func browserVerb(args []string, out, errOut io.Writer) int {
 		_, _ = fmt.Fprintf(errOut, "tofu browser: %v\n", err)
 		return exitVerdict
 	}
-	switch flags.Arg(0) {
+	switch verb {
 	case "":
-		return browserTabs(home, out, errOut)
+		return withBrowser(home, errOut, func(client *browser.Client) error {
+			tabs, err := client.Tabs()
+			if len(tabs) == 0 && err == nil {
+				_, _ = fmt.Fprintln(out, "the extension is connected and no tab is shared: click the tofu icon on a tab and choose Read or Drive")
+			}
+			for _, tab := range tabs {
+				_, _ = fmt.Fprintf(out, "%-8d %-5s  %s  %s\n", tab.ID, tab.Mode, tab.Title, tab.URL)
+			}
+			return err
+		})
+	case "open":
+		return withBrowser(home, errOut, func(client *browser.Client) error {
+			tab, err := client.Open(operand)
+			if err == nil {
+				_, _ = fmt.Fprintln(out, tab)
+			}
+			return err
+		})
+	case "close":
+		return withBrowser(home, errOut, func(client *browser.Client) error { return client.CloseTab(tabID) })
 	case "install":
 		exe, err := os.Executable()
 		id := ""
@@ -65,26 +89,19 @@ func browserVerb(args []string, out, errOut io.Writer) int {
 		_, _ = fmt.Fprintln(out, "removed the Chrome native host and the unpacked extension; remove the extension from chrome://extensions too")
 		return exitOK
 	}
-	_, _ = fmt.Fprintf(errOut, "tofu browser: unknown argument %q: use install, uninstall, or nothing\n", flags.Arg(0))
+	_, _ = fmt.Fprintf(errOut, "tofu browser: unknown argument %q: use install, uninstall, open, close, or nothing\n", verb)
 	return exitUsage
 }
 
-func browserTabs(home string, out, errOut io.Writer) int {
+func withBrowser(home string, errOut io.Writer, use func(*browser.Client) error) int {
 	client, err := browser.Dial(home)
-	var tabs []browser.Tab
 	if err == nil {
 		defer func() { _ = client.Close() }()
-		tabs, err = client.Tabs()
+		err = use(client)
 	}
 	if err != nil {
 		_, _ = fmt.Fprintf(errOut, "tofu browser: %v\n", err)
 		return exitUsage
-	}
-	if len(tabs) == 0 {
-		_, _ = fmt.Fprintln(out, "the extension is connected and no tab is shared: click the tofu icon on a tab and choose Read or Drive")
-	}
-	for _, tab := range tabs {
-		_, _ = fmt.Fprintf(out, "%-8d %-5s  %s  %s\n", tab.ID, tab.Mode, tab.Title, tab.URL)
 	}
 	return exitOK
 }
