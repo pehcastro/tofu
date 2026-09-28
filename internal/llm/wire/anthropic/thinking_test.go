@@ -83,3 +83,46 @@ func TestOpusFiveAsksForSummarizedThinkingOnlyWhenItThinks(t *testing.T) {
 		}
 	}
 }
+
+func TestThinkingSummarySettingDecidesTheDisplayField(t *testing.T) {
+	for omit, want := range map[bool]string{
+		false: `{"type":"adaptive","display":"summarized"}`,
+		true:  "",
+	} {
+		var sent map[string]json.RawMessage
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			_ = json.NewDecoder(r.Body).Decode(&sent)
+			w.Header().Set("Content-Type", "text/event-stream")
+			for _, event := range []string{
+				`{"type":"message_start","message":{"id":"msg_1","model":"claude-opus-5","usage":{"input_tokens":3}}}`,
+				`{"type":"content_block_start","index":0,"content_block":{"type":"text"}}`,
+				`{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"done"}}`,
+				`{"type":"content_block_stop","index":0}`,
+				`{"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":1}}`,
+				`{"type":"message_stop"}`,
+			} {
+				_, _ = fmt.Fprintf(w, "data: %s\n\n", event)
+			}
+		}))
+		wire, err := anthropic.New(anthropic.Config{
+			BaseURL: server.URL,
+			Model:   "claude-opus-5",
+			Proxy:   true,
+			Token:   func(context.Context) (string, error) { return "sk-ant-api-test", nil },
+		})
+		if err != nil {
+			t.Fatalf("new wire: %v", err)
+		}
+		_, err = turn.Subscription{Wire: wire, Effort: llm.EffortMedium}.Ask(context.Background(), llm.Request{
+			Messages:            []llm.Message{{Role: llm.RoleUser, Content: "hi"}},
+			OmitThinkingSummary: omit,
+		})
+		server.Close()
+		if err != nil {
+			t.Fatalf("ask with omit %v: %v", omit, err)
+		}
+		if got := string(sent["thinking"]); got != want {
+			t.Fatalf("with omit %v the thinking field is %q, not %q", omit, got, want)
+		}
+	}
+}

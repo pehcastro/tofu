@@ -6,7 +6,7 @@
     Appearance    05      Leave a new session's empty chat without the tofu cat and wordmark        
     Models & rol… 01                                                                                
     Interaction   05    enter change  ·  ctrl+k search  ·  esc chat                                 
-    Context       08                                                                                
+    Context       09                                                                                
     Files         03                                                                                
     Shell         05                                                                                
     Turn          09                                                                                

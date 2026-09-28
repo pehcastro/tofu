@@ -6,7 +6,7 @@
   › Appearance    05      tofu uses Zed Nu Disco; choose a palette                                  
     Models & rol… 01                                                                                
     Interaction   05      Density                                                comfortable  ▾     
-    Context       08      Spacing across lists and panels                                           
+    Context       09      Spacing across lists and panels                                           
     Files         03                                                                                
     Shell         05     Status bar                                     esc           subtle  ▾     
     Turn          09     Context, quotas, and runtime counters                                      
@@ -36,7 +36,7 @@
   › Appearance    05      tofu uses Zed Nu Disco; choose a palette                                  
     Models & rol… 01                                                                                
     Interaction   05      Density                                                comfortable  ▾     
-    Context       08      Spacing across lists and panels                                           
+    Context       09      Spacing across lists and panels                                           
     Files         03                                                                                
     Shell         05     Status bar                                     esc           subtle  ▾     
     Turn          09     Context, quotas, and runtime counters                                      
@@ -66,7 +66,7 @@
   › Appearance    05      tofu uses Zed Nu Disco; choose a palette                                  
     Models & rol… 01                                                                                
     Interaction   05      Density                                                comfortable  ▾     
-    Context       08      Spacing across lists and panels                                           
+    Context       09      Spacing across lists and panels                                           
     Files         03                                                                                
     Shell         05      Animations                                                  subtle  ▾     
     Turn          09      Motion for conversational states                                          

@@ -112,6 +112,37 @@ type runtime struct {
 	open         func(runOpts) (appWire, error)
 	wrapSubAgent func(turn.Model) (turn.Model, error)
 	orchestrator models.Model
+
+	omitThinkingSummary bool
+}
+
+type summaryOmitted struct{ inner turn.Model }
+
+func (s summaryOmitted) Ask(ctx context.Context, request llm.Request) (llm.Decision, error) {
+	request.OmitThinkingSummary = true
+	return s.inner.Ask(ctx, request)
+}
+
+func (r runtime) applyThinkingSummary(accounts turn.Accounts) turn.Accounts {
+	if !r.omitThinkingSummary || accounts.Pick == nil || accounts.Next == nil {
+		return accounts
+	}
+	omitted := func(account turn.Account) turn.Account {
+		if account.Model != nil {
+			account.Model = summaryOmitted{account.Model}
+		}
+		return account
+	}
+	return turn.Accounts{
+		Pick: func(ctx context.Context) (turn.Account, error) {
+			account, err := accounts.Pick(ctx)
+			return omitted(account), err
+		},
+		Next: func(ctx context.Context, pinned turn.Account) (turn.Account, bool, error) {
+			account, moved, err := accounts.Next(ctx, pinned)
+			return omitted(account), moved, err
+		},
+	}
 }
 
 func boundRoles(wire, dir string) (models.Bindings, error) {
@@ -198,7 +229,7 @@ func (r runtime) subAgentOpener(opts runOpts) func(subagent.Definition) (turn.Su
 			return turn.SubAgentModel{}, err
 		}
 		opened.held.wrap = r.wrapSubAgent
-		return turn.SubAgentModel{Slug: asked, Windows: opened.selected.WindowText(), Wire: subAgent.wire, Spend: opened.spend, Accounts: opened.held.forTurn(), Close: opened.held.close}, nil
+		return turn.SubAgentModel{Slug: asked, Windows: opened.selected.WindowText(), Wire: subAgent.wire, Spend: opened.spend, Accounts: r.applyThinkingSummary(opened.held.forTurn()), Close: opened.held.close}, nil
 	}
 }
 
@@ -551,10 +582,12 @@ func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn
 		built = append(slices.Clone(built), tools.NewSkill(prompt.skills))
 	}
 	opts, environment, composed := prompt.opts, prompt.environment, prompt.composed
+	dir := cmp.Or(opts.dir, ".")
+	run.omitThinkingSummary = settingText(dir, settingspkg.ThinkingSummary, run.notify) == settingspkg.ThinkingOmitted
 	config := turn.Config{
 		Model:       run.model,
 		Now:         run.now,
-		Accounts:    run.accounts,
+		Accounts:    run.applyThinkingSummary(run.accounts),
 		Spend:       run.spend,
 		Tools:       turn.NewRegistry(built...),
 		Task:        opts.task,
@@ -575,7 +608,7 @@ func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn
 	}
 	if run.gate != nil {
 		config.Gate = run.gate
-		config.GateMode = gateMode(opts.gateArm, settingText(cmp.Or(opts.dir, "."), settingspkg.GatePrompt, run.notify))
+		config.GateMode = gateMode(opts.gateArm, settingText(dir, settingspkg.GatePrompt, run.notify))
 	}
 	config.NewID = func() string { return orchestratorID }
 	if run.scorer != nil {
@@ -587,7 +620,6 @@ func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn
 	spawner := turn.NewSpawnTool(orchestratorID, config, cmp.Or(run.roster, &subagent.Roster{}))
 	spawner.SubAgents = prompt.subAgents
 	spawner.SubAgents.Open = run.subAgentOpener(opts)
-	dir := cmp.Or(opts.dir, ".")
 	spawner.Limits = func() turn.SubAgentLimits {
 		return turn.SubAgentLimits{PerTurn: settingInt(dir, settingspkg.SubAgentsPerTurn, run.notify), Depth: settingInt(dir, settingspkg.SubAgentDepth, run.notify)}
 	}

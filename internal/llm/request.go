@@ -94,6 +94,8 @@ type Request struct {
 	OnDelta    func(string)
 	OnThinking func(string)
 	OnRetry    func()
+
+	OmitThinkingSummary bool
 }
 
 func (r Request) Encode(model string) ([]byte, error) {

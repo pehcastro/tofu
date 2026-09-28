@@ -29,10 +29,11 @@ type Request struct {
 	UserID    string
 	CacheTTL  string
 
-	HistoryCacheOff bool
-	OnDelta         func(string)
-	OnThinking      func(string)
-	OnRetry         func()
+	HistoryCacheOff     bool
+	OmitThinkingSummary bool
+	OnDelta             func(string)
+	OnThinking          func(string)
+	OnRetry             func()
 }
 
 const (
@@ -189,7 +190,7 @@ func (r Request) outputConfig() (*wireOutput, error) {
 
 func (r Request) summarizedThinking() *wireThinking {
 	version := regexp.MustCompile(`^claude-[a-z]+-(\d+)(?:-(\d{1,2}))?(?:-|$)`).FindStringSubmatch(r.Model)
-	if !r.Effort.Thinks() || version == nil {
+	if r.OmitThinkingSummary || !r.Effort.Thinks() || version == nil {
 		return nil
 	}
 	major, _ := strconv.Atoi(version[1])

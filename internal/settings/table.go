@@ -50,6 +50,7 @@ const (
 	ChatShowsTools         = "chatShowsTools"
 	AgentFeeds             = "agentFeeds"
 	ShowThinking           = "showThinking"
+	ThinkingSummary        = "thinkingSummary"
 	Images                 = "images"
 	ProjectInstructionsCap = "projectInstructionsCap"
 	InstructionSources     = "instructionSources"
@@ -73,6 +74,11 @@ const (
 const (
 	SkillsOn  = "on"
 	SkillsOff = "off"
+)
+
+const (
+	ThinkingSummarized = "summarized"
+	ThinkingOmitted    = "omitted"
 )
 
 const (
@@ -180,6 +186,8 @@ func Default() []Spec {
 		{Key: AgentFeeds, Label: "Agent feeds", Description: "full keeps every sub-agents event, summary the latest 200, off shows only the list of agents", Category: "Context", Kind: Text, DefaultText: FeedsFull,
 			Choices: []string{FeedsFull, FeedsSummary, FeedsOff}},
 		{Key: ShowThinking, Label: "Thinking", Description: "thinking shows in each agent's sub-agents feed; t there toggles it", Category: "Context", Kind: Bool, Default: 1},
+		{Key: ThinkingSummary, Label: "Thinking summary", Description: "summarized asks Claude for a summary of its thinking; omitted asks for none, so no thinking reaches the sub-agents feed", Category: "Context", Kind: Text, DefaultText: ThinkingSummarized,
+			Choices: []string{ThinkingSummarized, ThinkingOmitted}},
 		{Key: Images, Label: "Images", Description: "auto sends a pasted image only to a model that can see, inline always sends, off never attaches", Category: "Context", Kind: Text, DefaultText: ImagesAuto,
 			Choices: []string{ImagesAuto, ImagesInline, ImagesOff}},
 		{Key: ProjectInstructionsCap, Label: "Project instructions", Description: "bytes of your instruction files sent each turn", Category: "Context", Kind: Int, Default: konst.ProjectInstructionsBytesDefault, Restart: true,

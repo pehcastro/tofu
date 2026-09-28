@@ -33,6 +33,8 @@ func (s Subscription) Ask(ctx context.Context, request llm.Request) (llm.Decisio
 		OnDelta:    request.OnDelta,
 		OnThinking: request.OnThinking,
 		OnRetry:    request.OnRetry,
+
+		OmitThinkingSummary: request.OmitThinkingSummary,
 	})
 	if err != nil {
 		return llm.Decision{}, err
