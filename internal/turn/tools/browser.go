@@ -31,6 +31,7 @@ type BrowserSettings struct {
 	Chooser string
 	Steps   int
 	Judge   func() (jevloop.Jev, error)
+	Model   func() (turn.Model, string, error)
 }
 
 func NewBrowser(config BrowserSettings) ([]turn.Tool, error) {
@@ -43,7 +44,7 @@ func NewBrowser(config BrowserSettings) ([]turn.Tool, error) {
 	case settings.BrowserDrive:
 		switch config.Chooser {
 		case settings.ChooserJev:
-			return []turn.Tool{browserTabs{session}, browserRead{session}, browserDo{session, config.Steps, config.Judge}}, nil
+			return []turn.Tool{browserTabs{session}, browserRead{session}, browserDo{session, config.Steps, config.Judge, config.Model}}, nil
 		case settings.ChooserModel:
 			return []turn.Tool{browserTabs{session}, browserRead{session}, browserAct{session}}, nil
 		}
@@ -70,7 +71,7 @@ func (s *browserSession) with(use func(*browser.Client) error) error {
 	return err
 }
 
-const theModelNeverWritesScript = "tofu reaches the person's ordinary Chrome tabs, never a chrome:// page, DevTools, an extension or the web store, and never opens, navigates or runs script in one"
+const whatTofuReaches = "tofu reaches the person's ordinary Chrome tabs, never a chrome:// page, DevTools, an extension or the web store, and never runs script the model wrote in one"
 
 type browserTabs struct{ session *browserSession }
 
@@ -79,7 +80,7 @@ func (browserTabs) Name() string { return "browser_tabs" }
 func (browserTabs) Definition() llm.Tool {
 	return llm.Tool{
 		Name:        "browser_tabs",
-		Description: "lists the Chrome tabs tofu can reach, one a line: id, title and address. " + theModelNeverWritesScript,
+		Description: "lists the Chrome tabs tofu can reach, one a line: id, title and address. " + whatTofuReaches,
 		Parameters:  map[string]any{"type": "object", "properties": map[string]any{}},
 	}
 }
@@ -158,6 +159,9 @@ func readOut(tab int, page browser.Page) string {
 		if element.ReadOnly {
 			body.WriteString(" readonly")
 		}
+		if href, linked := page.Links[element.Index]; linked {
+			fmt.Fprintf(&body, " href %q", href)
+		}
 		for _, option := range element.Options {
 			fmt.Fprintf(&body, " option %q", option.Label)
 		}
@@ -185,7 +189,7 @@ func (browserAct) Definition() llm.Tool {
 		Name: "browser_act",
 		Description: "runs one step in a Chrome tab: CLICK, TYPE_TEXT or SELECT on a control numbered in the latest browser_read of that tab, or SCROLL_UP, SCROLL_DOWN or WAIT. " +
 			"text is what TYPE_TEXT types, or the option SELECT picks. every step changes the page, so read the tab again before the next one. " +
-			theModelNeverWritesScript,
+			whatTofuReaches,
 		Parameters: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -284,6 +288,7 @@ type browserDo struct {
 	session *browserSession
 	steps   int
 	judge   func() (jevloop.Jev, error)
+	model   func() (turn.Model, string, error)
 }
 
 func (browserDo) Name() string { return "browser_do" }
@@ -291,51 +296,80 @@ func (browserDo) Name() string { return "browser_do" }
 func (t browserDo) Definition() llm.Tool {
 	return llm.Tool{
 		Name: "browser_do",
-		Description: fmt.Sprintf("runs a whole task in a Chrome tab: jev picks each step, a click, typing, choosing an option, a scroll or a wait, until the goal is done, it is blocked, or %d actions ran. ", t.steps) +
-			"values maps a field's label, placeholder or name, in any case, to the text to type there, and one value fills a page's only text field; when jev picks a field values does not name, the task stops blocked and names the field, so call again with it. " +
-			"returns every step and a final read of the tab. " + theModelNeverWritesScript,
+		Description: "does a whole browsing goal in one call and answers it: give the goal and a url, which it opens in a new background tab, or the tab to work in. " +
+			fmt.Sprintf("jev picks each step, a click, typing, choosing an option, a scroll or a wait, until the goal is done, it is blocked, or %d actions ran. ", t.steps) +
+			"the browser model writes the text a field needs, and reads the final page into the answer. " +
+			"values maps a field's label, placeholder or name, in any case, to the exact text to type there instead. " +
+			"returns the answer first, then the steps. " + whatTofuReaches,
 		Parameters: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
-				"tab":    map[string]any{"type": "integer"},
 				"goal":   map[string]any{"type": "string"},
+				"url":    map[string]any{"type": "string"},
+				"tab":    map[string]any{"type": "integer"},
 				"values": map[string]any{"type": "object", "additionalProperties": map[string]any{"type": "string"}},
 			},
-			"required": []string{"tab", "goal"},
+			"required": []string{"goal"},
 		},
 	}
 }
 
 func (t browserDo) Run(ctx context.Context, raw json.RawMessage) (turn.Result, error) {
 	var args struct {
-		Tab    int         `json:"tab"`
 		Goal   string      `json:"goal"`
+		URL    string      `json:"url"`
+		Tab    int         `json:"tab"`
 		Values fieldValues `json:"values"`
 	}
 	if err := json.Unmarshal(raw, &args); err != nil {
 		return turn.Result{}, fmt.Errorf("browser_do: arguments are not the expected shape: %w", err)
 	}
+	if (args.Tab == 0) == (args.URL == "") {
+		return turn.Result{}, errors.New("browser_do: give a url to open or the tab to work in, one of the two")
+	}
+	model, chosen, err := t.model()
+	if err != nil {
+		return turn.Result{}, fmt.Errorf("browser_do: no action ran, the %s setting names no model tofu can ask: %w", settings.BrowserModel, err)
+	}
 	var result jevloop.Result
-	err := t.session.with(func(client *browser.Client) error {
-		if err := driveTab(client, args.Tab); err != nil {
-			return err
-		}
+	err = t.session.with(func(client *browser.Client) error {
 		judge, err := t.judge()
 		if err != nil {
 			return fmt.Errorf("no action ran, jev is not reachable: %w", err)
+		}
+		if args.URL != "" {
+			args.Tab, err = client.Open(args.URL)
+		} else {
+			err = driveTab(client, args.Tab)
+		}
+		if err != nil {
+			return err
 		}
 		judge.Decided = map[string]jevloop.Choice{}
 		tab := browser.SharedTab{Client: client, ID: args.Tab}
 		result = jevloop.Loop{
 			Browser: jevloop.Browser{Snapshot: tab.Snapshot, Act: tab.Act},
 			Choose:  judge.Choose,
-			Write:   args.Values.write,
+			Write: func(ctx context.Context, goal string, page browser.Page, field browser.Element) (string, error) {
+				if text, named := args.Values.named(page, field); named {
+					return text, nil
+				}
+				return askFor(ctx, model, fmt.Sprintf("a browser task has the goal %q. write the exact text to type into the field %q on this page, and nothing else.\n\n%s",
+					goal, field.Label, web.Untrusted("the Chrome tab "+page.URL, page.Title+"\n"+page.Text)))
+			},
 			Actions: t.steps,
 		}.Run(ctx, args.Goal)
 		return nil
 	})
 	if err != nil {
 		return turn.Result{}, fmt.Errorf("browser_do: %w", err)
+	}
+	answer, err := askFor(ctx, model, fmt.Sprintf("a browser task with the goal %q ended %s: %s\nfrom the page below, answer the goal: the data it asks for, or one line saying why it could not be done. write the answer and nothing else.\n\n%s",
+		args.Goal, result.Status, result.Reason, readOut(args.Tab, result.Page)))
+	if err == nil {
+		answer = web.Untrusted("the browser model's answer to the goal, read from the Chrome tab "+result.Page.URL, answer)
+	} else {
+		answer = "the browser model gave no answer: " + err.Error() + "\n" + readOut(args.Tab, result.Page)
 	}
 	var body strings.Builder
 	body.WriteString(result.Reason + "\n")
@@ -357,19 +391,30 @@ func (t browserDo) Run(ctx context.Context, raw json.RawMessage) (turn.Result, e
 		}
 	}
 	return turn.Result{
-		Content: fmt.Sprintf("tab %d %s after %d jev decisions and %d steps\n%s\n%s", args.Tab, result.Status, result.Decisions, len(result.Steps),
-			web.Untrusted("the reason and the steps, named by the page's own labels", strings.TrimSuffix(body.String(), "\n")), readOut(args.Tab, result.Page)),
+		Content: fmt.Sprintf("%s\n\ntab %d %s after %d jev decisions and %d steps; the browser model is %s\n%s", answer, args.Tab, result.Status, result.Decisions, len(result.Steps), chosen,
+			web.Untrusted("the reason and the steps, named by the page's own labels", strings.TrimSuffix(body.String(), "\n"))),
 		Command: fmt.Sprintf("tab %d goal %q", args.Tab, args.Goal),
 	}, nil
 }
 
+func askFor(ctx context.Context, model turn.Model, prompt string) (string, error) {
+	decision, err := model.Ask(ctx, llm.Request{Messages: []llm.Message{{Role: llm.RoleUser, Content: prompt}}})
+	if err != nil {
+		return "", err
+	}
+	if decision.Outcome != llm.OutcomeMessage || strings.TrimSpace(decision.Content) == "" {
+		return "", fmt.Errorf("the browser model answered %s with no text", decision.Outcome)
+	}
+	return strings.TrimSpace(decision.Content), nil
+}
+
 type fieldValues map[string]string
 
-func (values fieldValues) write(_ context.Context, _ string, page browser.Page, field browser.Element) (string, error) {
+func (values fieldValues) named(page browser.Page, field browser.Element) (string, bool) {
 	names := append([]string{field.Label}, page.Names[field.Index]...)
 	for key, text := range values {
 		if slices.ContainsFunc(names, func(name string) bool { return strings.EqualFold(name, key) }) {
-			return text, nil
+			return text, true
 		}
 	}
 	typeable := 0
@@ -379,7 +424,7 @@ func (values fieldValues) write(_ context.Context, _ string, page browser.Page, 
 		}
 	}
 	if only := slices.Collect(maps.Values(values)); len(only) == 1 && typeable == 1 {
-		return only[0], nil
+		return only[0], true
 	}
-	return "", fmt.Errorf("values names no text for element %d, so call browser_do again with values naming %q", field.Index, field.Label)
+	return "", false
 }

@@ -2460,6 +2460,52 @@ func TestTheBrowserSettingsReachTheToolsARunIsGiven(t *testing.T) {
 	}
 }
 
+func TestBrowserModelResolvesFromTheSettingAndRefusesAnUnknownSlug(t *testing.T) {
+	emptyHome(t)
+	dumb, worker := roster.TierDumb.Setting(), roster.TierWorker.Setting()
+	for _, arm := range []struct {
+		set              map[string]string
+		slug, wire, from string
+		refused          string
+	}{
+		{map[string]string{}, "", "", "the turn's own model", ""},
+		{map[string]string{worker: "claude-sub/claude-haiku-4-5-20251001"}, "claude-sub/claude-haiku-4-5-20251001", wireSubscription, worker, ""},
+		{map[string]string{dumb: "codex-sub/gpt-5.6-luna", worker: "claude-sub/claude-haiku-4-5-20251001"}, "codex-sub/gpt-5.6-luna", wireCodex, dumb, ""},
+		{map[string]string{settingspkg.BrowserModel: "claude-sub/claude-sonnet-5", dumb: "codex-sub/gpt-5.6-luna"}, "claude-sub/claude-sonnet-5", wireSubscription, settingspkg.BrowserModel, ""},
+		{map[string]string{settingspkg.BrowserModel: "claude-sub/claude-sonnet-9"}, "", "", "", "the model library has no claude-sub/claude-sonnet-9, it has "},
+		{map[string]string{dumb: "claude-sub/claude-nano-1"}, "", "", "", "the model library has no claude-sub/claude-nano-1, it has "},
+	} {
+		opts := armOpts(t)
+		store, err := openSettings(opts.dir)
+		for key, slug := range arm.set {
+			if err == nil {
+				err = store.SetText(settingspkg.Project, key, slug)
+			}
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		model, said, err := browserModel(opts.dir)
+		t.Logf("%v resolves to %q, %v", arm.set, said, err)
+		var refusal *models.Refusal
+		switch {
+		case arm.refused != "":
+			if !errors.As(err, &refusal) || !strings.HasPrefix(err.Error(), arm.refused) {
+				t.Fatalf("%v answered %v, want the library's refusal %q", arm.set, err, arm.refused)
+			}
+		case arm.slug == "":
+			if _, running := model.(turn.RunningModel); err != nil || !running || !strings.Contains(said, arm.from) {
+				t.Fatalf("%v resolves to %T %q, %v, want the turn's own model, said so", arm.set, model, said, err)
+			}
+		default:
+			named, opened := model.(subscriptionModel)
+			if err != nil || !opened || named.opts.model != arm.slug || named.opts.wire != arm.wire || said != arm.slug+" from "+arm.from {
+				t.Fatalf("%v resolves to %+v %q, %v, want %s on --wire %s from %s", arm.set, model, said, err, arm.slug, arm.wire, arm.from)
+			}
+		}
+	}
+}
+
 func emptyHome(t *testing.T) {
 	t.Helper()
 	home := t.TempDir()

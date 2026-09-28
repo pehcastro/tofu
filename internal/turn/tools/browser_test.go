@@ -20,9 +20,12 @@ import (
 	"tofu/internal/judge/jev"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/judge/question"
+	"tofu/internal/llm"
+	"tofu/internal/rule"
 	"tofu/internal/settings"
 	"tofu/internal/turn"
 	"tofu/internal/turn/tools"
+	"tofu/library"
 	"tofu/library/questions"
 )
 
@@ -70,6 +73,12 @@ func (f *fakeChrome) serve(fromHost io.Reader, toHost io.Writer) {
 			answer = `"ok":true,"value":{"stale":"no body"}`
 		case call.Op == "snapshot":
 			answer = `"ok":true,"value":` + cmp.Or(f.page, formPage)
+		case call.Op == "open":
+			opened := `{"t":"tabUpdated","tab":{"id":9,"url":"http://127.0.0.1:8000/form.html","title":"Forma","opened":true}}`
+			if browser.WriteMessage(toHost, []byte(opened)) != nil {
+				return
+			}
+			answer = `"ok":true,"value":9`
 		case call.Op == "click":
 			f.absent = f.noBody
 		case call.Op == "fill" && f.page == "":
@@ -164,8 +173,22 @@ func names(list []turn.Tool) string {
 	return strings.Join(named, " ")
 }
 
+type writerStub struct {
+	answers []string
+	asked   []string
+}
+
+func (w *writerStub) Ask(_ context.Context, request llm.Request) (llm.Decision, error) {
+	w.asked = append(w.asked, request.Messages[len(request.Messages)-1].Content)
+	if len(w.answers) == 0 {
+		return llm.Decision{}, errors.New("the stub browser model has nothing to say")
+	}
+	return llm.Decision{Build: "stub", Outcome: llm.OutcomeMessage, Content: w.answers[min(len(w.asked), len(w.answers))-1]}, nil
+}
+
 func drive(home, chooser string) tools.BrowserSettings {
-	return tools.BrowserSettings{Home: home, Mode: settings.BrowserDrive, Chooser: chooser, Steps: 30}
+	return tools.BrowserSettings{Home: home, Mode: settings.BrowserDrive, Chooser: chooser, Steps: 30,
+		Model: func() (turn.Model, string, error) { return &writerStub{}, "a stub", nil }}
 }
 
 func TestTheBrowserSettingsDecideWhichBrowserToolsAreOffered(t *testing.T) {
@@ -300,6 +323,7 @@ func TestTheBrowserToolsAgainstAFakeHost(t *testing.T) {
 type recordedJev struct {
 	answers [][]byte
 	posted  int
+	bodies  []string
 }
 
 func (w *recordedJev) Caps() jev.WireCaps {
@@ -308,7 +332,8 @@ func (w *recordedJev) Caps() jev.WireCaps {
 
 func (w *recordedJev) Model() string { return "~typesafe/jev-latest" }
 
-func (w *recordedJev) Post(context.Context, []byte) (jev.Raw, error) {
+func (w *recordedJev) Post(_ context.Context, body []byte) (jev.Raw, error) {
+	w.bodies = append(w.bodies, string(body))
 	answer := w.answers[min(w.posted, len(w.answers)-1)]
 	w.posted++
 	return jev.Raw{Body: answer, Attempts: 1, Latency: 3 * time.Millisecond}, nil
@@ -390,15 +415,11 @@ func TestBrowserDoRunsTheJevLoopOnADriveTab(t *testing.T) {
 	if got, want := sent(before), []string{`tab 7 click {"element":3}`}; !slices.Equal(got, want) {
 		t.Fatalf("sent %v, want %v", got, want)
 	}
-	if !strings.HasPrefix(done.Content, "tab 7 done after 2 jev decisions and 1 steps\n") {
-		t.Fatalf("browser_do opens %q", strings.SplitN(done.Content, "\n", 2)[0])
-	}
+	status := strings.Index(done.Content, "tab 7 done after 2 jev decisions and 1 steps; the browser model is a stub\n")
 	reason := strings.Index(done.Content, "the chooser chose DONE")
 	step := strings.Index(done.Content, `1. CLICK "Book": unchanged`)
-	ends := strings.Index(done.Content, " ends>>>")
-	read := strings.Index(done.Content, `[3] button "Book"`)
-	if begins := strings.Index(done.Content, " begins>>>"); begins < 0 || reason < begins || step < reason || ends < step || read < ends {
-		t.Fatal("the reason and the steps are not inside the untrusted markers, or the final read is missing")
+	if begins := strings.LastIndex(done.Content, " begins>>>"); status < 0 || begins < status || reason < begins || step < reason || strings.LastIndex(done.Content, " ends>>>") < step {
+		t.Fatal("the status is missing, or the reason and the steps are not inside the untrusted markers")
 	}
 	var rows []ledger.Row
 	if _, err := ledger.NewReader(rowsAt).Each(ledger.Filter{}, func(row ledger.Row) error {
@@ -423,7 +444,7 @@ func TestBrowserDoRunsTheJevLoopOnADriveTab(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Logf("browser_do TYPE_TEXT with no value:\n%s", strings.Join(strings.SplitN(blocked.Content, "\n", 5)[:4], "\n"))
-	if !strings.HasPrefix(blocked.Content, "tab 7 blocked") || !strings.Contains(blocked.Content, `nothing typed into "Guest name"`) || len(sent(before)) != 0 {
+	if !strings.Contains(blocked.Content, "tab 7 blocked") || !strings.Contains(blocked.Content, `nothing typed into "Guest name"`) || len(sent(before)) != 0 {
 		t.Fatalf("TYPE_TEXT with no value answered %q and sent %v", blocked.Content, sent(before))
 	}
 
@@ -471,12 +492,12 @@ func TestNoBodyOnTwoSnapshotsAfterAClickStillCompletesTheStep(t *testing.T) {
 	chrome := &fakeChrome{noBody: 2}
 	done, err := browserDoOn(t, chrome, formAnswer("CLICK"), formAnswer("DONE")).Run(context.Background(), json.RawMessage(`{"tab":7,"goal":"book the room"}`))
 	t.Logf("browser_do with no body twice after the click: %v\n%s", err, done.Content)
-	if err != nil || !strings.HasPrefix(done.Content, "tab 7 done after 2 jev decisions and 1 steps\n") || !strings.Contains(done.Content, `1. CLICK "Book"`) {
+	if err != nil || !strings.Contains(done.Content, "tab 7 done after 2 jev decisions and 1 steps;") || !strings.Contains(done.Content, `1. CLICK "Book"`) {
 		t.Fatalf("browser_do answered %q, %v; want done after one click", done.Content, err)
 	}
 	gone, err := browserDoOn(t, &fakeChrome{noBody: 11}, formAnswer("CLICK")).Run(context.Background(), json.RawMessage(`{"tab":7,"goal":"book the room"}`))
 	t.Logf("browser_do with no body eleven times after the click: %v\n%s", err, gone.Content)
-	if err != nil || !strings.HasPrefix(gone.Content, "tab 7 blocked") || !strings.Contains(gone.Content, "no body on 10 snapshots") || !strings.Contains(gone.Content, `[3] button "Book"`) {
+	if err != nil || !strings.Contains(gone.Content, "tab 7 blocked") || !strings.Contains(gone.Content, "no body on 10 snapshots") || !strings.Contains(gone.Content, `[3] button "Book"`) {
 		t.Fatalf("browser_do answered %q, %v; want blocked on the snapshot with the last page read out", gone.Content, err)
 	}
 }
@@ -500,5 +521,116 @@ func TestValuesMatchALabelInAnyCaseAndTheOnlyTypeableField(t *testing.T) {
 		if err != nil || len(fills) != 1 || !strings.Contains(fills[0], arm.typed) {
 			t.Fatalf("values %s filled %v, %v; want one fill carrying %s", arm.values, fills, err, arm.typed)
 		}
+	}
+}
+
+func TestBrowserDoWithAURLOpensATabAsksTheBrowserModelAndAnswersFirst(t *testing.T) {
+	chrome := &fakeChrome{page: strings.Replace(formPage, `"elements":[`, `"links":{"3":"http://127.0.0.1:8000/rooms/42"},"elements":[`, 1)}
+	var wire *recordedJev
+	var writer turn.Model
+	config := drive(hostWithTwoTabs(t, chrome), settings.ChooserJev)
+	config.Judge = func() (jevloop.Jev, error) { return jevOn(t, wire, shortHome(t))() }
+	config.Model = func() (turn.Model, string, error) {
+		return writer, "claude-sub/claude-haiku-4-5-20251001 from modelTier.dumb", nil
+	}
+	offered, err := tools.NewBrowser(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	do := func(asked turn.Model, args string, answers ...[]byte) (turn.Result, error) {
+		wire, writer = &recordedJev{answers: answers}, asked
+		return browserTool(t, offered, "browser_do").Run(context.Background(), json.RawMessage(args))
+	}
+	sent := func(since int) []string {
+		return slices.DeleteFunc(chrome.saw()[since:], func(call string) bool { return strings.Contains(call, " snapshot ") })
+	}
+
+	for _, args := range []string{`{"goal":"book"}`, `{"tab":7,"url":"http://127.0.0.1:8000/form.html","goal":"book"}`} {
+		_, err := do(&writerStub{}, args, formAnswer("CLICK"))
+		t.Logf("browser_do %s: %v", args, err)
+		if err == nil || len(sent(0)) != 0 {
+			t.Fatalf("browser_do %s answered %v and sent %v", args, err, sent(0))
+		}
+	}
+
+	stub := &writerStub{answers: []string{"Ada", "Booked for Ada, reference AX12"}}
+	done, err := do(stub, `{"url":"http://127.0.0.1:8000/form.html","goal":"book the room for Ada and return the booking reference"}`, formAnswer("TYPE_TEXT"), formAnswer("DONE"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("browser_do with a url, recorded %q:\n%s", done.Command, done.Content)
+	if got, want := sent(0), []string{`tab 0 open {"url":"http://127.0.0.1:8000/form.html"}`, `tab 9 fill {"element":1,"value":"Ada"}`}; !slices.Equal(got, want) {
+		t.Fatalf("sent %v, want %v", got, want)
+	}
+	if len(stub.asked) != 2 || !strings.Contains(stub.asked[0], "Guest name") || !strings.Contains(stub.asked[1], "book the room for Ada") {
+		t.Fatalf("the browser model was asked %q; want the text for Guest name, then the answer to the goal", stub.asked)
+	}
+	if !strings.Contains(stub.asked[1], `[3] button "Book" href "http://127.0.0.1:8000/rooms/42"`) || strings.Contains(strings.Join(wire.bodies, ""), "rooms/42") {
+		t.Fatalf("the answer call was not shown the link, or jev was: %q", stub.asked[1])
+	}
+	if !strings.Contains(done.Content, "tab 9 done after 2 jev decisions and 1 steps; the browser model is claude-sub/claude-haiku-4-5-20251001 from modelTier.dumb\n") {
+		t.Fatal("the status line does not name the browser model and where it came from")
+	}
+	answer := strings.Index(done.Content, "Booked for Ada, reference AX12")
+	steps := strings.Index(done.Content, `1. TYPE_TEXT "Guest name" "Ada"`)
+	if begins := strings.Index(done.Content, " begins>>>"); !strings.HasPrefix(done.Content, "the text between") || answer < begins || steps < answer {
+		t.Fatal("the answer is not the first thing browser_do returns, inside its own untrusted markers, before the steps")
+	}
+
+	before := len(chrome.saw())
+	override := &writerStub{answers: []string{"the booking is for Bea"}}
+	overridden, err := do(override, `{"tab":9,"goal":"book for Bea","values":{"guest name":"Bea"}}`, formAnswer("TYPE_TEXT"), formAnswer("DONE"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("browser_do with values naming the field:\n%s", overridden.Content)
+	if got, want := sent(before), []string{`tab 9 fill {"element":1,"value":"Bea"}`}; !slices.Equal(got, want) || len(override.asked) != 1 {
+		t.Fatalf("values naming the field sent %v and asked the browser model %d times; want %v and one ask, for the answer", got, len(override.asked), want)
+	}
+}
+
+func TestTheBrowseRuleComposesForTheOrchestratorOnly(t *testing.T) {
+	rules, err := rule.LoadFS(library.Files(), "library")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for role, wants := range map[rule.Role]bool{rule.RoleOrchestrator: true, rule.RoleSubAgent: false} {
+		composed, err := turn.Compose(turn.ComposeSpec{Task: "find hotels in Atibaia", Environment: "a project", ToolGuidance: "read before you edit", Rules: rules, Role: role})
+		if err != nil {
+			t.Fatal(err)
+		}
+		carries := strings.Contains(composed.Head(), "browsing is browser_do's job")
+		t.Logf("the %s prompt carries the browse rule: %v", role, carries)
+		if carries != wants {
+			t.Fatalf("the %s prompt carries the browse rule = %v, want %v", role, carries, wants)
+		}
+	}
+}
+
+type allowingGate struct{ asked []string }
+
+func (g *allowingGate) Decide(_ context.Context, request turn.GateRequest) (turn.GateDecision, error) {
+	g.asked = append(g.asked, request.Tool)
+	return turn.GateDecision{Verdict: ledger.VerdictAllow}, nil
+}
+
+func TestTheBrowserReadToolsMakeNoGateCall(t *testing.T) {
+	offered, err := tools.NewBrowser(drive(shortHome(t), settings.ChooserJev))
+	if err != nil {
+		t.Fatal(err)
+	}
+	gate := &allowingGate{}
+	model := &scriptedModel{calls: []llm.ToolCall{
+		{ID: "c1", Name: "browser_tabs", Arguments: json.RawMessage(`{}`)},
+		{ID: "c2", Name: "browser_read", Arguments: json.RawMessage(`{"tab":7}`)},
+		{ID: "c3", Name: "browser_do", Arguments: json.RawMessage(`{"tab":7,"goal":"book"}`)},
+	}}
+	if _, err := turn.Run(context.Background(), turn.Config{Model: model, Spend: turn.SpendSubscription, Tools: turn.NewRegistry(offered...),
+		Gate: gate, GateMode: turn.GateEnforce, Task: "book a room", ResultBytesCap: 4096, ArtifactDir: t.TempDir()}); err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("the gate was asked about %v", gate.asked)
+	if !slices.Equal(gate.asked, []string{"browser_do"}) {
+		t.Fatalf("the gate was asked about %v, want browser_do alone", gate.asked)
 	}
 }

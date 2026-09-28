@@ -26,6 +26,22 @@ type Model interface {
 	Ask(ctx context.Context, request llm.Request) (llm.Decision, error)
 }
 
+type runningModelKey struct{}
+
+type RunningModel struct{}
+
+func (RunningModel) Ask(ctx context.Context, request llm.Request) (llm.Decision, error) {
+	model, running := ctx.Value(runningModelKey{}).(Model)
+	if !running {
+		return llm.Decision{}, errors.New("no turn is running, so there is no turn model to ask")
+	}
+	return model.Ask(ctx, request)
+}
+
+func readsTheBrowser(tool string) bool {
+	return tool == "browser_tabs" || tool == "browser_read"
+}
+
 type Caps struct {
 	MaxSteps         int
 	LoopGuardRepeats int
@@ -355,8 +371,8 @@ func Run(ctx context.Context, config Config) (Row, error) {
 					proxied, proxyRow := config.Proxy.rewrite(ctx, asked)
 					call.Arguments = proxied
 					request := GateRequest{TurnID: row.ID, Task: config.Task, Tool: call.Name, Args: call.Arguments}
-					gated := gatedCall{call: call, asked: asked, proxy: proxyRow, id: session.EventIDFor(origin, call.ID), parent: stepRow.id, author: author, sift: sifter, thrift: thrifter, redact: redactor, task: config.Task, site: recorded.site(call.ID, messages)}
-					if config.Gate != nil {
+					gated := gatedCall{call: call, asked: asked, proxy: proxyRow, id: session.EventIDFor(origin, call.ID), parent: stepRow.id, author: author, sift: sifter, thrift: thrifter, redact: redactor, task: config.Task, site: recorded.site(call.ID, messages), model: model}
+					if config.Gate != nil && !readsTheBrowser(call.Name) {
 						verdict, err := config.Gate.Decide(ctx, request)
 						gated.verdict = verdict
 						if err != nil {
@@ -597,6 +613,7 @@ type gatedCall struct {
 	thrift  *ThriftSift
 	redact  sys.KeyRedactor
 	site    spawnSite
+	model   Model
 	verdict GateDecision
 	gateErr string
 	refusal string
@@ -620,7 +637,7 @@ func (g gatedCall) run(ctx context.Context, tools Registry, resultBytesCap int, 
 func (g gatedCall) execute(ctx context.Context, tools Registry, resultBytesCap int, artifacts Artifacts) (ToolCallRow, llm.Message) {
 	call := g.call
 	started := time.Now()
-	ctx = context.WithValue(context.WithValue(ctx, shellOwnerKey{}, g.author), spawnSiteKey{}, g.site)
+	ctx = context.WithValue(context.WithValue(context.WithValue(ctx, shellOwnerKey{}, g.author), spawnSiteKey{}, g.site), runningModelKey{}, g.model)
 	tool, ok := tools.byName[call.Name]
 	if !ok {
 		return rejectedCall(call, started, "unknown tool "+strconv.Quote(call.Name), g.id, g.parent, g.author)

@@ -72,6 +72,7 @@ const (
 	Browser                = "browser"
 	BrowserChooser         = "browserChooser"
 	BrowserSteps           = "browserSteps"
+	BrowserModel           = "browserModel"
 )
 
 const (
@@ -240,6 +241,7 @@ func Default() []Spec {
 			Choices: []string{ChooserJev, ChooserModel}},
 		{Key: BrowserSteps, Label: "Browser steps", Description: "how many actions one browser task may take", Category: "Browser", Kind: Int, Default: konst.BrowserStepsDefault,
 			Least: 1, Most: konst.BrowserActionCeiling, Unit: "actions a browser task"},
+		{Key: BrowserModel, Label: "Browser model", Description: "the subscription model a browser task asks for the text to type and for its answer, as source/model; empty takes the dumb tier, then the worker tier, then the turn's own model", Category: "Browser", Kind: Text},
 		{Key: HideIntroduction, Label: "Hide welcome art", Description: "Leave a new session's empty chat without the tofu cat and wordmark", Category: "Startup", Kind: Bool},
 	}
 	for i := range specs {

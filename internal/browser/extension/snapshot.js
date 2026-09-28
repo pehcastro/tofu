@@ -94,7 +94,7 @@
   }
 
   if (request.op === 'snapshot') {
-    const elements = [], guards = {}, names = {};
+    const elements = [], guards = {}, names = {}, links = {};
     for (const e of document.querySelectorAll(selector)) {
       const kind = role(e);
       if (!kind || !safe(e) || !visible(e) || disabled(e) || !centre(e)) continue;
@@ -120,6 +120,7 @@
         names[element.index] = ['placeholder', 'name', 'aria-label'].map(key => e.getAttribute(key)).filter(Boolean);
       }
       guards[element.index] = guard(e);
+      if (/^https?:/.test(e.href)) links[element.index] = e.href;
       elements.push(element);
       if (elements.length === ELEMENT_CEILING) break;
     }
@@ -139,7 +140,7 @@
     }
     const text = words.join('\n').slice(0, TEXT_CEILING);
     const height = document.documentElement.scrollHeight;
-    return {url: location.href, title: document.title, text, elements, guards, names,
+    return {url: location.href, title: document.title, text, elements, guards, names, links,
       fingerprint: hash(JSON.stringify([location.href, document.title, text, elements])),
       scroll: {up: scrollY > 0, down: scrollY + innerHeight < height - SCROLL_SLACK_PX}};
   }

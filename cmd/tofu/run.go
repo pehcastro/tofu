@@ -860,6 +860,7 @@ func assembleRunTools(dir, set string, ledger *turn.ReadLedger, bashTool *turn.B
 		Chooser: settingText(settingsDir, settingspkg.BrowserChooser, nil),
 		Steps:   settingInt(settingsDir, settingspkg.BrowserSteps, nil),
 		Judge:   func() (jevloop.Jev, error) { return browserJudge(dir) },
+		Model:   func() (turn.Model, string, error) { return browserModel(settingsDir) },
 	})
 	if err := cmp.Or(webErr, browserErr); err != nil {
 		return nil, nil, err
@@ -867,6 +868,46 @@ func assembleRunTools(dir, set string, ledger *turn.ReadLedger, bashTool *turn.B
 	plan := tools.NewPlan()
 	full := append([]turn.Tool{read, write, shell, plan, tools.Shells{}, projectTool, globTool, searchTool, symbolsTool, editTool.Reading(ledger), githubTool}, verbTools...)
 	return tools.NewMemo().Wrap(append(append(full, webTools...), browserTools...)), plan, nil
+}
+
+type subscriptionModel struct{ opts runOpts }
+
+func (s subscriptionModel) Ask(ctx context.Context, request llm.Request) (llm.Decision, error) {
+	opened, err := openAppWire(s.opts)
+	if opened.held != nil {
+		defer opened.held.close()
+	}
+	if err != nil {
+		return llm.Decision{}, err
+	}
+	account, err := opened.held.forTurn().Pick(ctx)
+	if err != nil {
+		return llm.Decision{}, err
+	}
+	return account.Model.Ask(ctx, request)
+}
+
+func browserModel(dir string) (turn.Model, string, error) {
+	for _, key := range []string{settingspkg.BrowserModel, subagent.TierDumb.Setting(), subagent.TierWorker.Setting()} {
+		slug := strings.TrimSpace(settingText(dir, key, nil))
+		if slug == "" {
+			continue
+		}
+		library, err := modelLibrary(dir)
+		if err != nil {
+			return nil, "", err
+		}
+		model, err := library.Select(slug)
+		if err != nil {
+			return nil, "", err
+		}
+		opts := runOpts{dir: dir, wire: library.WireFor(model.Subscription), model: slug}
+		if len(model.Efforts) > 0 {
+			opts.effort = model.Efforts[0]
+		}
+		return subscriptionModel{opts}, slug + " from " + key, nil
+	}
+	return turn.RunningModel{}, "the turn's own model, as none of " + settingspkg.BrowserModel + ", " + subagent.TierDumb.Setting() + " and " + subagent.TierWorker.Setting() + " is set", nil
 }
 
 const browserStepPoint = "browser_step@1"

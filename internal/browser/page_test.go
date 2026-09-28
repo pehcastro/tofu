@@ -1,6 +1,7 @@
 package browser
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
@@ -26,6 +27,19 @@ func TestParsePageDropsPasswordFileAndHiddenInputs(t *testing.T) {
 	}
 	if len(page.Elements) != 1 || page.Elements[0].Index != 1 {
 		t.Fatalf("elements kept %+v, want only the destination field", page.Elements)
+	}
+}
+
+func TestParsePageKeepsLinksBesideTheElementsJevReads(t *testing.T) {
+	page, err := ParsePage([]byte(`{"url":"https://www.airbnb.com.br/s/Atibaia","fingerprint":"f1","links":{"4":"https://www.airbnb.com.br/rooms/42"},` +
+		`"elements":[{"index":4,"role":"link","label":"Chalé na Serra"}]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	elements, _ := json.Marshal(page.Elements)
+	t.Logf("links %v, elements %s", page.Links, elements)
+	if page.Links[4] != "https://www.airbnb.com.br/rooms/42" || strings.Contains(string(elements), "rooms/42") {
+		t.Fatalf("links %v and elements %s; want the link in Links and nowhere in the elements", page.Links, elements)
 	}
 }
 

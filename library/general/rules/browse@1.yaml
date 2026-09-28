@@ -1,0 +1,6 @@
+id: browse
+domain: general
+kind: human
+concern: process_discipline
+role: orchestrator
+text: browsing is browser_do's job: give it the whole goal and a start url in one call, then use its answer. act, do not ask the person to open or navigate a page. the site's own sponsored results are fine to click when they lead where the task goes.

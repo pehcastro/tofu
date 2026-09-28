@@ -122,6 +122,7 @@ type Page struct {
 	Elements    []Element        `json:"elements"`
 	Guards      map[int]string   `json:"guards"`
 	Names       map[int][]string `json:"names"`
+	Links       map[int]string   `json:"links"`
 }
 
 func (p Page) Element(index int) (Element, bool) {

@@ -195,6 +195,15 @@ func TestSnapshotExcludesPasswordFileAndHiddenInputs(t *testing.T) {
 	}
 }
 
+func TestSnapshotReturnsWebLinksBesideTheElementsAndOutOfTheFingerprint(t *testing.T) {
+	snapshot := shipped(t, "snapshot.js")
+	fingerprint := strings.Index(snapshot, "fingerprint: hash(JSON.stringify([location.href, document.title, text, elements]))")
+	if !strings.Contains(snapshot, "if (/^https?:/.test(e.href)) links[element.index] = e.href;") ||
+		!strings.Contains(snapshot, "elements, guards, names, links,") || fingerprint < 0 {
+		t.Fatal("snapshot.js does not return http and https links in their own map, or hashes more than the elements into the fingerprint")
+	}
+}
+
 func TestNoShippedFileCarriesACommentOrAnEmDash(t *testing.T) {
 	for _, name := range []string{"background.js", "snapshot.js", "manifest.json"} {
 		text := shipped(t, name)

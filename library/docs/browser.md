@@ -13,41 +13,41 @@ tofu never reaches a `chrome://` page, DevTools, an extension's page or the
 Chrome Web Store.
 
 The extension does nothing to a tab until tofu first uses it. Then it
-attaches Chrome's debugger to that tab, and Chrome shows its bar saying the
-tab is being debugged.
+attaches Chrome's debugger, and Chrome shows its bar saying so.
 
 The model gets these tools:
 
 - `browser_tabs` lists your open tabs, with their title and address.
 - `browser_read` reads one tab: its visible text and a numbered table of the
-  controls on screen. Password, file and hidden fields are never listed.
-  Reading never changes the page.
-- `browser_do` runs a whole task in one tab. The model gives it the tab and a
-  goal. Jev, a typed decision model, reads the page and picks each step: a
-  click, typing into a field, choosing an option, a scroll, or a wait. It
-  stops when Jev says the goal is done, when Jev says it is blocked, after
-  three steps in a row that changed nothing, or when the `browserSteps`
-  budget runs out. It answers with done or blocked, the reason, every step
-  it ran, and a fresh read of the tab.
+  controls on screen, with each link's address. Password, file and hidden
+  fields are never listed. Reading never changes the page.
+- `browser_do` does a whole goal in one call and answers it. The model gives
+  it the goal and a url, which tofu opens in a new background tab, or a tab
+  to work in. Jev, a typed decision model, picks each step: a click, typing,
+  choosing an option, a scroll, or a wait. It stops when Jev says done or
+  blocked, after three steps in a row that changed nothing, or when the
+  `browserSteps` budget runs out. The browser model writes the text a field
+  needs, then reads the final page into the answer: the data the goal asked
+  for, or one line saying why not. The answer comes first, then the steps.
 - `browser_act` runs one step in a tab, which the model picks itself from its
   last `browser_read`.
 
 The model is given `browser_do` or `browser_act`, never both, and only when
 the `browser` setting is `drive`. The `browserChooser` setting picks which.
+The orchestrator is told that browsing is `browser_do`'s job: one call with
+the whole goal and a start url, then use its answer.
 
-`browser_do` takes `values`, a map from a field's label to the text to type
-there, for instance `{"Guest name": "Ada"}`. Jev picks the field and tofu
-types the value the model gave; no other model writes text into your page.
-When Jev picks a field the map does not name, nothing is typed: the task
-stops as blocked, names the field, and the model can call again with it.
+`browser_do` takes `values`, a map from a field's label, placeholder or name
+to the exact text to type there, for instance `{"Guest name": "Ada"}`. A
+field it names is typed from the map, and the browser model is not asked.
 
 Each Jev pick is one row in the decision ledger, under the point
 `browser_step`. With no Jev key, `browser_do` runs nothing and says so.
+Reading, `browser_tabs` and `browser_read`, never goes through the gate.
 
 What a page says is treated as text to read, never as an instruction. tofu
-never navigates a tab away from its page, closes a tab it did not open, runs
-JavaScript, a selector or an address the model wrote, or types into a
-read-only field.
+never closes a tab it did not open, runs JavaScript, a selector or an address
+the model wrote, or types into a read-only field.
 
 ## What you see
 
@@ -94,10 +94,13 @@ The settings:
 - `browserSteps`: how many actions one `browser_do` task may take, 1 to 60.
   The default is 30. Jev may decide twice as many times, because a page that
   moved before a step runs is decided again.
+- `browserModel`: the subscription model `browser_do` asks for text and for
+  its answer, as `source/model`. Empty, the default, takes `modelTier.dumb`,
+  then `modelTier.worker`, then the turn's own model; the result names which.
+  A slug the model library does not carry is refused with its message.
 
     tofu settings set browser read
-    tofu settings set browserChooser model
-    tofu settings set browserSteps 10
+    tofu settings set browserModel claude-sub/claude-sonnet-5
 
 ## Check it
 
