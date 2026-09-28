@@ -8,6 +8,27 @@ Tofu is personal and not released, so the public interface that a version promis
 
 The minor number carries breaking changes, which is what 0.x means, and **there is never a 1.0.0**. The owner decided that on 2026-09-19: this stays 0.x forever, so the promise the version makes is the one 0.x already makes, that anything can break on a minor bump.
 
+## 0.5.0-rc-fix12 - 2026-09-28
+
+One screen to start, and sub-agents that talk to the orchestrator instead of guessing.
+
+### Changed
+
+- **A new session opens straight on the chat.** The tofu cat and wordmark sit in the empty transcript until the first message. The separate cover screen is gone. `hideIntroduction` now reads "Hide welcome art".
+- **A table in a message sizes to its content,** with a bold header and faint separators, and no longer stretches across the screen.
+- **Every sub-agent is told what it is:** one worker in a larger build, with its brief as its whole job and its paths as its whole reach.
+- **A sub-agent's `sleep` over 5 seconds is refused,** and so is its `kill`, `pkill` or `taskkill` of a process it did not start.
+- **A finished sub-agent releases the paths it held,** so the next spawn on them is not refused.
+- **The shell ownership check follows a `cd`** in a command, so `cd src/api && sed -i ... x.ts` counts as `src/api/x.ts`.
+- **The design rule carries its template sections** and no longer sends the orchestrator looking for a template file.
+
+### Added
+
+- **Sub-agents can ask the orchestrator.** The `ask` tool is answered from the orchestrator's model and the whole turn so far, for example "no, bash-2 serves it on 3003". If no answer comes, the sub-agent's own default is used, marked assumed.
+- **The orchestrator can message a finished sub-agent** with more work or a correction. The sub-agent keeps its history. This works within one turn.
+- **Asks and messages read as a conversation on the sub-agents screen,** in both agents' feeds, never in the chat.
+- **Setting `thinkingSummary`:** summarized, the default, or omitted, which sends no thinking request.
+
 ## 0.5.0-rc-fix11 - 2026-09-27
 
 Done looks done, code looks like code, and sub-agents stop waiting on each other.

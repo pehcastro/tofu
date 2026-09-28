@@ -569,7 +569,7 @@ func TestDriveTakesTheRunArmsThatChangeWhatATurnDoes(t *testing.T) {
 const subAgentOnCodexCassette = `{"text":"reading the note first","tools":[{"name":"read","args":{"path":"note.txt"}}]}
 {"text":"handing it to go-dev","tools":[{"name":"spawn","args":{"agent":"go-dev","task":"wait a moment, then say done","owns":["note.txt"]}}]}
 {"text":"go-dev is done"}
-{"agent":"c1","text":"waiting","tools":[{"name":"bash","args":{"command":"sleep 8"}}]}
+{"agent":"c1","text":"waiting","tools":[{"name":"bash","args":{"command":"sleep 5"}}]}
 {"agent":"c1","text":"done"}
 `
 
