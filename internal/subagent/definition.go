@@ -45,6 +45,7 @@ type Definition struct {
 	AssignedIn   string       `json:"assigned_in,omitempty"`
 	Effort       llm.Effort   `json:"effort,omitempty"`
 	Language     string       `json:"language,omitempty"`
+	Domain       string       `json:"domain,omitempty"`
 	Tools        []string     `json:"tools,omitempty"`
 	Instructions string       `json:"instructions"`
 	Refused      []string     `json:"refused,omitempty"`
@@ -216,6 +217,7 @@ func read(fsys fs.FS, name string) (Definition, error) {
 		Written:      strings.Join(fields["model"], " "),
 		Effort:       llm.Effort(strings.Join(effort, " ")),
 		Language:     strings.Join(fields["language"], " "),
+		Domain:       strings.Join(fields["domain"], " "),
 		Instructions: body,
 	}
 	for _, named := range fields["references"] {
@@ -230,7 +232,7 @@ func read(fsys fs.FS, name string) (Definition, error) {
 	}
 	for key := range fields {
 		switch key {
-		case "name", "description", "model", "tools", "effort", "thinking", "references", "language", "skills", "autoloadSkills":
+		case "name", "description", "model", "tools", "effort", "thinking", "references", "language", "domain", "skills", "autoloadSkills":
 		default:
 			definition.Ignored = append(definition.Ignored, key)
 		}

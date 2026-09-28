@@ -136,13 +136,17 @@ func Compose(spec ComposeSpec) (Composed, error) {
 		}
 		composed.Parts = append(composed.Parts, builtin)
 	}
-	withoutTask := rule.Index(spec.Rules, rule.Task{Role: composed.Task.Role, Language: composed.Task.Language})
-	for i, match := range rule.Index(spec.Rules, composed.Task) {
+	agentDomain := cmp.Or(spec.Agent.Domain, rule.DomainDev)
+	reaching := slices.DeleteFunc(slices.Clone(spec.Rules), func(loaded rule.Rule) bool {
+		return (loaded.Domain == rule.DomainQA || loaded.Domain == rule.DomainDev) && loaded.Domain != agentDomain
+	})
+	withoutTask := rule.Index(reaching, rule.Task{Role: composed.Task.Role, Language: composed.Task.Language})
+	for i, match := range rule.Index(reaching, composed.Task) {
 		if !match.Fires {
 			composed.HeldBack = append(composed.HeldBack, match)
 			continue
 		}
-		fired := spec.Rules[i]
+		fired := reaching[i]
 		text := cmp.Or(strings.TrimSpace(fired.Text), strings.TrimSpace(fired.Notes))
 		if text == "" {
 			return Composed{}, fmt.Errorf("rule %s fires, %s, and carries no text the prompt can send: %s",
