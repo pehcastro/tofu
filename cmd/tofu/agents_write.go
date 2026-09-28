@@ -112,7 +112,7 @@ func listedAgent(found subagent.Found, name string) (subagent.Definition, bool) 
 }
 
 func printAgentChange(out io.Writer, found subagent.Found, name, what, file, undo string) int {
-	printRuleChange(out, what, file, undo)
+	printChange(out, what, file, undo)
 	if definition, listed := listedAgent(found, name); listed {
 		printAgents(out, subagent.Found{Definitions: []subagent.Definition{definition}})
 	}

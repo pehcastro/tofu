@@ -21,6 +21,12 @@ Topics:
 - settings: every setting, its default, and how to change it
 - rules: add your own rules, switch one off, and see which rules run
 - agents: add your own sub-agents, choose the model each one runs, and remove them
+- models: sign in, name a model, and choose the model a task runs
+- skills: where skills are found, and how to add or turn them off
+- instructions: which AGENTS.md and CLAUDE.md files are sent with every task
+- gate: what jev judges before a tool call, and the OpenRouter key
+- sessions: continue a session, find an old one, and running shells
+- doctor: what tofu doctor prints, and what to do about each line
 
 ## Where it lives
 

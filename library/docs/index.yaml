@@ -85,7 +85,7 @@
 - ask: move old sessions out of the project
   do: tofu migrate
   check: tofu migrate --dry-run
-  topic: files
+  topic: sessions
 - ask: see which sub-agents exist and their models
   do: tofu agents
   check: tofu agents --json
@@ -93,11 +93,11 @@
 - ask: sign in with a subscription
   do: tofu login claude-sub
   check: tofu login --status
-  topic: start
+  topic: models
 - ask: find out why tofu will not start
   do: tofu doctor
   check: tofu doctor
-  topic: start
+  topic: doctor
 - ask: see what changed in this version
   do: tofu changelog
   check: tofu version
@@ -142,3 +142,107 @@
   do: tofu agents add <name> --description "<what it does>" --model <source/model>, once per sub-agent
   check: tofu agents
   topic: agents
+- ask: see which models I can use
+  do: tofu models
+  check: tofu models --json
+  topic: models
+- ask: run the next task on another model
+  do: /models in the app, then pick a model
+  check: tofu models
+  topic: models
+- ask: always run the orchestrator on one model
+  do: write model: <source/model> in ~/.tofu/roles/orchestrator.yaml
+  check: tofu models
+  topic: models
+- ask: stop tofu from using a model
+  do: write use: excluded and a reason in ~/.tofu/models/<provider>/<model>.yaml
+  check: tofu models
+  topic: models
+- ask: how much subscription quota is left
+  do: tofu usage
+  check: tofu usage --history
+  topic: models
+- ask: add a skill for every project
+  do: write ~/.tofu/skills/<name>/SKILL.md with a name and a description
+  check: tofu run --dir . --show-prompt "anything"
+  topic: skills
+- ask: add a skill to this project only
+  do: write .tofu/skills/<name>/SKILL.md with a name and a description
+  check: tofu run --dir . --show-prompt "anything"
+  topic: skills
+- ask: see which skills the model is offered
+  do: tofu run --dir . --show-prompt "anything"
+  check: tofu settings get skills
+  topic: skills
+- ask: give tofu house rules for every project
+  do: write them in ~/.tofu/AGENTS.md
+  check: tofu run --dir . --show-prompt "anything"
+  topic: instructions
+- ask: see which instruction files tofu sends
+  do: tofu run --dir . --show-prompt "anything"
+  check: tofu settings get instructionSources
+  topic: instructions
+- ask: work one task without my instruction files
+  do: tofu run --dir . --no-instructions "<task>"
+  check: tofu run --dir . --no-instructions --show-prompt "<task>"
+  topic: instructions
+- ask: store the openrouter key the gate needs
+  do: tofu login openrouter
+  check: tofu doctor
+  topic: gate
+- ask: why was a tool call refused or asked about
+  do: tofu why --last
+  check: tofu why --last 5
+  topic: gate
+- ask: tell tofu a verdict was wrong
+  do: tofu label --last allow
+  check: tofu why --last
+  topic: gate
+- ask: judge a command without running it
+  do: tofu check "<command>"
+  check: tofu why --last
+  topic: gate
+- ask: see how other thresholds would have decided
+  do: tofu replay --point tool_gate --set risk_ask_at=1.5
+  check: tofu why --last
+  topic: gate
+- ask: work one task with the gate off
+  do: tofu run --dir . --no-gate "<task>"
+  check: tofu doctor
+  topic: gate
+- ask: continue where I left off
+  do: tofu --continue
+  check: tofu session list
+  topic: sessions
+- ask: open an older session
+  do: tofu session resume <name|id>
+  check: tofu session list
+  topic: sessions
+- ask: give a session a name
+  do: tofu session rename <name|id> "<new name>"
+  check: tofu session info <name|id>
+  topic: sessions
+- ask: see how full the context window got
+  do: tofu context
+  check: tofu context --json
+  topic: sessions
+- ask: stop a server an agent left running
+  do: tofu shells stop <name>
+  check: tofu shells list
+  topic: sessions
+- ask: read the output of a running shell
+  do: tofu shells log <name>
+  check: tofu shells list
+  topic: sessions
+- ask: check that tofu can run here
+  do: tofu doctor
+  check: tofu doctor --json
+  topic: doctor
+- ask: check the library files and these pages
+  do: tofu library
+  check: tofu library
+  topic: doctor
+- ask: share a Chrome tab with tofu
+  do: tofu browser install
+  check: tofu browser
+  topic: doctor

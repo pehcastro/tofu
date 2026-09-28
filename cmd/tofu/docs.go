@@ -289,28 +289,53 @@ func settingTakes(spec settingspkg.Spec) string {
 	return "any text"
 }
 
-func docsReport(out io.Writer) []error {
+func docsReport(out io.Writer) []error { return docsCoverage(out, usageVerbs()) }
+
+func usageVerbs() []string {
+	_, listing, _ := strings.Cut(usage, "\nVerbs:\n")
+	var verbs []string
+	for _, line := range strings.Split(listing, "\n") {
+		if name, indented := strings.CutPrefix(line, "  "); indented && name != "" && name[0] != ' ' {
+			verbs = append(verbs, strings.Fields(name)[0])
+		}
+	}
+	return verbs
+}
+
+func docsCoverage(out io.Writer, verbs []string) []error {
 	corpus, err := loadDocs()
 	if err != nil {
 		return []error{fmt.Errorf("docs: %w", err)}
 	}
-	named := map[string]bool{}
+	texts := make([]string, 0, len(corpus.pages)+len(corpus.entries))
 	for _, page := range corpus.pages {
-		for _, word := range docsWords(page.body) {
-			named[word] = true
-		}
+		texts = append(texts, page.body)
 	}
 	for _, entry := range corpus.entries {
-		for _, word := range docsWords(entry.ask + " " + entry.do + " " + entry.check) {
+		texts = append(texts, entry.ask+" "+entry.do+" "+entry.check)
+	}
+	named := map[string]bool{}
+	for _, text := range texts {
+		words := docsWords(text)
+		for i, word := range words {
 			named[word] = true
+			if i > 0 && words[i-1] == "tofu" {
+				named["tofu "+word] = true
+			}
 		}
 	}
-	var missing []error
+	var settingsMissing, verbsMissing []error
 	for _, spec := range settingspkg.Default() {
 		if !named[spec.Key] {
-			missing = append(missing, fmt.Errorf("docs: no page or index entry names the setting %s", spec.Key))
+			settingsMissing = append(settingsMissing, fmt.Errorf("docs: no page or index entry names the setting %s", spec.Key))
 		}
 	}
-	_, _ = fmt.Fprintf(out, "%-14s %3d pages   %d index entries   %d settings missing\n", "docs", len(corpus.pages), len(corpus.entries), len(missing))
-	return missing
+	for _, verb := range verbs {
+		if !named["tofu "+verb] {
+			verbsMissing = append(verbsMissing, fmt.Errorf("docs: no page or index entry names the verb %s as tofu %s", verb, verb))
+		}
+	}
+	_, _ = fmt.Fprintf(out, "%-14s %3d pages   %d index entries   %d settings missing   %d verbs missing\n",
+		"docs", len(corpus.pages), len(corpus.entries), len(settingsMissing), len(verbsMissing))
+	return append(settingsMissing, verbsMissing...)
 }

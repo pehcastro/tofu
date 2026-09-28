@@ -106,7 +106,7 @@ func ruleRuns(id, project string) (bool, error) {
 	return slices.ContainsFunc(running, func(r rule.Rule) bool { return r.ID == id }), err
 }
 
-func printRuleChange(out io.Writer, what, file, undo string) int {
+func printChange(out io.Writer, what, file, undo string) int {
 	_, _ = fmt.Fprintf(out, "%s\nfile: %s\nundo: %s\n", what, file, undo)
 	return exitOK
 }
@@ -139,7 +139,7 @@ func rulesAddVerb(args []string, out, errOut io.Writer) int {
 	if found {
 		what += ", replacing: " + existing.Text
 	}
-	return printRuleChange(out, what, file, "tofu rules remove"+opts.layer.flag+" "+id)
+	return printChange(out, what, file, "tofu rules remove"+opts.layer.flag+" "+id)
 }
 
 func rulesOffVerb(args []string, out, errOut io.Writer) int {
@@ -170,7 +170,7 @@ func rulesOffVerb(args []string, out, errOut io.Writer) int {
 	if err := sys.WriteFile(file, data, 0o644); err != nil {
 		return rulesFail(errOut, err)
 	}
-	return printRuleChange(out, fmt.Sprintf("switched %s off in the %s rules", id, opts.layer.name), file, "tofu rules remove"+opts.layer.flag+" "+id)
+	return printChange(out, fmt.Sprintf("switched %s off in the %s rules", id, opts.layer.name), file, "tofu rules remove"+opts.layer.flag+" "+id)
 }
 
 func rulesRemoveVerb(args []string, out, errOut io.Writer) int {
@@ -200,5 +200,5 @@ func rulesRemoveVerb(args []string, out, errOut io.Writer) int {
 	if existing.Mode == rule.ModeOff {
 		undo = "tofu rules off" + opts.layer.flag + " " + id
 	}
-	return printRuleChange(out, fmt.Sprintf("removed %s from the %s rules", id, opts.layer.name), existing.File, undo)
+	return printChange(out, fmt.Sprintf("removed %s from the %s rules", id, opts.layer.name), existing.File, undo)
 }
