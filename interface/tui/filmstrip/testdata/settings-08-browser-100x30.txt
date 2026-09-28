@@ -1,23 +1,23 @@
                                                                                                     
-  tofu settings         Interaction                                                 global scope    
+  tofu settings         Browser                                                     global scope    
   Global preferences    Choose a row to inspect and change its value.                               
                                                                                                     
-  CATEGORIES            › Composer                                                  standard  ▾     
-    Appearance    05      Enter sends; Shift+Enter inserts a line break                             
+  CATEGORIES            › Browser                                                        off  ▾     
+    Appearance    05      off offers no browser tool; read lets the model read a Chrome tab you…    
     Models & rol… 01                                                                                
-  › Interaction   05      Keybindings                                                   edit  ▾     
-    Context       09      Change shortcuts handled inside tofu                                      
+    Interaction   05      Browser chooser                                                jev  ▾     
+    Context       09      jev picks each step of a browser task; model leaves every step to the…    
     Files         03                                                                                
-    Shell         05      Host integration                                       inspect Zed  ▾     
-    Turn          09      Detect host shortcut conflicts and available integrations                 
-    Browser       03                                                                                
-    Startup       01      Confirmations                                                  run  ▾     
-                          run lets a gated call go, ask waits for you; a rule's shadow or enfor…    
+    Shell         05      Browser steps                                                   30  ▾     
+    Turn          09      how many actions one browser task may take                                
+  › Browser       03                                                                                
+    Startup       01    enter change  ·  ctrl+k search  ·  esc chat                                 
+                                                                                                    
   NAVIGATE                                                                                          
-  ↑↓ setting · ←→         Read before edit                                                  ● on    
-  section                 an edit or a write to a file this session has not read, or that chang…    
+  ↑↓ setting · ←→                                                                                   
+  section                                                                                           
   ctrl+k search ·                                                                                   
-  esc chat              enter change  ·  ctrl+k search  ·  esc chat                                 
+  esc chat                                                                                          
                                                                                                     
                                                                                                     
                                                                                                     

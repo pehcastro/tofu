@@ -9,6 +9,7 @@
     Files         03                                                            
     Shell         05                                                            
     Turn          09                                                            
+    Browser       03                                                            
   › Startup       01                                                            
                                                                                 
   NAVIGATE                                                                      
@@ -16,7 +17,6 @@
   section                                                                       
   ctrl+k search ·                                                               
   esc chat                                                                      
-                                                                                
                                                                                 
                                                                                 
                                                                                 

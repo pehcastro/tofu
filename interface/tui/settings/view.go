@@ -174,12 +174,20 @@ func (m *Model) body() string {
 	return look.FixedBlock(m.width, m.height, view)
 }
 
+func control(row Row) look.SettingControl {
+	onOrOff := len(row.Choices) == 2 && slices.Contains(row.Choices, "on") && slices.Contains(row.Choices, "off")
+	if row.Action == RowValue && (row.Kind == Bool || onOrOff) {
+		return look.ControlSwitch
+	}
+	return look.ControlChoice
+}
+
 func (m *Model) settingRow(width int, selected bool, row Row) string {
 	label := row.Label
 	if row.Origin != "" {
 		label += "  " + look.Faint(row.Origin)
 	}
-	rendered := look.SettingRow(width, selected, label, widget.Fit(row.Description, width-markerCells), m.display(row))
+	rendered := look.SettingRow(width, selected, label, widget.Fit(row.Description, width-markerCells), m.display(row), control(row))
 	switch m.density {
 	case densityCompact:
 		return strings.SplitN(rendered, "\n", 2)[0]

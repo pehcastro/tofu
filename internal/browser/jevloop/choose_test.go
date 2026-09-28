@@ -170,3 +170,20 @@ func TestTheStateCarriesOnlyTheLastTenSteps(t *testing.T) {
 		t.Fatalf("recent actions %+v, want steps 3 to 12", posted.State.Recent)
 	}
 }
+
+func TestAReadOnlyFieldIsNeverATypeTextCandidate(t *testing.T) {
+	page, err := browser.ParsePage([]byte(`{"url":"http://fixture/","fingerprint":"f1","elements":[
+		{"index":1,"role":"textbox","label":"Booking reference","value":"AX12","readonly":true},
+		{"index":2,"role":"textbox","label":"Guest name"}]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	options, _ := candidates(browser.OpTypeText, page)
+	var names []string
+	for _, option := range options {
+		names = append(names, option.Name)
+	}
+	if strings.Join(names, " ") != "2" {
+		t.Fatalf("TYPE_TEXT offers %v, want only the guest name, element 2", names)
+	}
+}

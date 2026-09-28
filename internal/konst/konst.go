@@ -182,6 +182,7 @@ const (
 	BrowserPageTextRunes      = 6000
 	BrowserElementCeiling     = 250
 	BrowserActionCeiling      = 60
+	BrowserStepsDefault       = 30
 	BrowserDecisionsPerAction = 2
 	BrowserRecentSteps        = 10
 	BrowserNoChangeStop       = 3

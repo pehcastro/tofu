@@ -847,12 +847,14 @@ func assembleRunTools(dir, set string, ledger *turn.ReadLedger, bashTool *turn.B
 		return nil, nil, err
 	}
 	webTools, webErr := buildWebTools(dir)
-	if webErr != nil {
-		return nil, nil, webErr
+	home, _ := os.UserHomeDir()
+	browserTools, browserErr := tools.NewBrowser(home, settingText(cmp.Or(dir, "."), settingspkg.Browser, nil))
+	if err := cmp.Or(webErr, browserErr); err != nil {
+		return nil, nil, err
 	}
 	plan := tools.NewPlan()
 	full := append([]turn.Tool{read, write, shell, plan, tools.Shells{}, projectTool, globTool, searchTool, symbolsTool, editTool.Reading(ledger), githubTool}, verbTools...)
-	return tools.NewMemo().Wrap(append(full, webTools...)), plan, nil
+	return tools.NewMemo().Wrap(append(append(full, webTools...), browserTools...)), plan, nil
 }
 
 func buildWebTools(dir string) ([]turn.Tool, error) {

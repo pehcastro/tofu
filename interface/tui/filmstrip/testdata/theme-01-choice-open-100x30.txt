@@ -10,14 +10,14 @@
     Files         03                                                                                
     Shell         05       tofu light                                                 subtle  ▾     
     Turn          09                                                                                
-    Startup       01       tofu dusk                                                                
-                                                                                     compact  ▾     
-  NAVIGATE                 Solarized Light                                                          
-  ↑↓ setting · ←→                                                                                   
-  section                  Dracula                                                      auto  ▾     
-  ctrl+k search ·                                                                                   
-  esc chat                 Nord                                                                     
-                                                                                                    
+    Browser       03       tofu dusk                                                                
+    Startup       01                                                                 compact  ▾     
+                           Solarized Light                                                          
+  NAVIGATE                                                                                          
+  ↑↓ setting · ←→          Dracula                                                      auto  ▾     
+  section                                                                                           
+  ctrl+k search ·          Nord                                                                     
+  esc chat                                                                                          
                            Gruvbox                                                                  
                                                                                                     
                            terminal                                                                 

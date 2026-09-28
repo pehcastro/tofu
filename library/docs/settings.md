@@ -18,6 +18,7 @@ The settings come in groups:
 - Files: diffContext, hyperlinks, groupByAgent
 - Shell: persistentRegistry, logTail, killConfirm, shell, foldHidesShell
 - Turn: decisionCap, turnMaySpawn, subAgentsPerTurn, subAgentDepth, agentSources, modelTier.genius, modelTier.smart, modelTier.worker, modelTier.dumb
+- Browser: browser, browserChooser, browserSteps
 - Startup: hideIntroduction
 
 ## Where it lives

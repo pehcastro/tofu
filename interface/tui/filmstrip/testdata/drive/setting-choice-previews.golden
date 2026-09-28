@@ -10,14 +10,14 @@
     Files         03                                                                                
     Shell         05     Status bar                                     esc           subtle  ▾     
     Turn          09     Context, quotas, and runtime counters                                      
-    Startup       01                                                                                
-                           compact                                                  detailed  ▾     
-  NAVIGATE                                                                                          
-  ↑↓ setting · ←→        >  detailed                                                                
-  section                                                                               auto  ▾     
-  ctrl+k search ·          hidden                                                                   
-  esc chat                                                                                          
-                         1-3/3 · ↑↓ preview · enter apply · esc cancel                              
+    Browser       03                                                                                
+    Startup       01       compact                                                  detailed  ▾     
+                                                                                                    
+  NAVIGATE               >  detailed                                                                
+  ↑↓ setting · ←→                                                                       auto  ▾     
+  section                  hidden                                                                   
+  ctrl+k search ·                                                                                   
+  esc chat               1-3/3 · ↑↓ preview · enter apply · esc cancel                              
                                                                                                     
                            tofu    project  ·  develop                                              
                           Interface preview                                                         
@@ -40,14 +40,14 @@
     Files         03                                                                                
     Shell         05     Status bar                                     esc           subtle  ▾     
     Turn          09     Context, quotas, and runtime counters                                      
-    Startup       01                                                                                
-                           compact                                                    hidden  ▾     
-  NAVIGATE                                                                                          
-  ↑↓ setting · ←→          detailed                                                                 
-  section                                                                               auto  ▾     
-  ctrl+k search ·        >  hidden                                                                  
-  esc chat                                                                                          
-                         1-3/3 · ↑↓ preview · enter apply · esc cancel                              
+    Browser       03                                                                                
+    Startup       01       compact                                                    hidden  ▾     
+                                                                                                    
+  NAVIGATE                 detailed                                                                 
+  ↑↓ setting · ←→                                                                       auto  ▾     
+  section                >  hidden                                                                  
+  ctrl+k search ·                                                                                   
+  esc chat               1-3/3 · ↑↓ preview · enter apply · esc cancel                              
                                                                                                     
                            tofu    project  ·  develop                                              
                           Interface preview                                                         
@@ -70,14 +70,14 @@
     Files         03                                                                                
     Shell         05      Animations                                                  subtle  ▾     
     Turn          09      Motion for conversational states                                          
-    Startup       01                                                                                
-                        › Status bar                                                 compact  ▾     
-  NAVIGATE                Context, quotas, and runtime counters                                     
-  ↑↓ setting · ←→                                                                                   
-  section                 Color mode                                                    auto  ▾     
-  ctrl+k search ·         Terminal color capability                                                 
-  esc chat                                                                                          
-                        LIVE PREVIEW                                                                
+    Browser       03                                                                                
+    Startup       01    › Status bar                                                 compact  ▾     
+                          Context, quotas, and runtime counters                                     
+  NAVIGATE                                                                                          
+  ↑↓ setting · ←→         Color mode                                                    auto  ▾     
+  section                 Terminal color capability                                                 
+  ctrl+k search ·                                                                                   
+  esc chat              LIVE PREVIEW                                                                
                                                                                                     
                            tofu    project  ·  develop                                              
                           Interface preview                                                         

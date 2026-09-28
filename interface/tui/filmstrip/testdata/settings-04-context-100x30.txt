@@ -10,14 +10,14 @@
     Files         03                                                                                
     Shell         05      Agent feeds                                                   full  ▾     
     Turn          09      full keeps every sub-agents event, summary the latest 200, off shows …    
-    Startup       01                                                                                
-                          Thinking                                                          ● on    
-  NAVIGATE                thinking shows in each agent's sub-agents feed; t there toggles it        
-  ↑↓ setting · ←→                                                                                   
-  section                 Thinking summary                                        summarized  ▾     
-  ctrl+k search ·         summarized asks Claude for a summary of its thinking; omitted asks fo…    
-  esc chat                                                                                          
-                          Images                                                        auto  ▾     
+    Browser       03                                                                                
+    Startup       01      Thinking                                                          ● on    
+                          thinking shows in each agent's sub-agents feed; t there toggles it        
+  NAVIGATE                                                                                          
+  ↑↓ setting · ←→         Thinking summary                                        summarized  ▾     
+  section                 summarized asks Claude for a summary of its thinking; omitted asks fo…    
+  ctrl+k search ·                                                                                   
+  esc chat                Images                                                        auto  ▾     
                           auto sends a pasted image only to a model that can see, inline always…    
                                                                                                     
                           Project instructions                                         32768  ▾     

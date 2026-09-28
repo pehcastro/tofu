@@ -145,7 +145,7 @@ func candidates(op browser.Op, page browser.Page) ([]jev.Option, map[string]brow
 		actions[name] = browser.Action{Op: op, Element: element.Index, Value: value}
 	}
 	for _, element := range page.Elements {
-		if !op.Accepts(element.Role) {
+		if !op.Accepts(element.Role) || op == browser.OpTypeText && element.ReadOnly {
 			continue
 		}
 		if op != browser.OpSelect {

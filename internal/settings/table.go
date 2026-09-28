@@ -69,6 +69,20 @@ const (
 	AgentSources           = "agentSources"
 	HideIntroduction       = "hideIntroduction"
 	Skills                 = "skills"
+	Browser                = "browser"
+	BrowserChooser         = "browserChooser"
+	BrowserSteps           = "browserSteps"
+)
+
+const (
+	BrowserOff   = "off"
+	BrowserRead  = "read"
+	BrowserDrive = "drive"
+)
+
+const (
+	ChooserJev   = "jev"
+	ChooserModel = "model"
 )
 
 const (
@@ -220,6 +234,12 @@ func Default() []Spec {
 		{Key: subagent.TierSmart.Setting(), Label: "Smart tier", Description: "the model @smart names, and sonnet in a shared agent file; empty runs the orchestrator's model", Category: "Turn", Kind: Text},
 		{Key: subagent.TierWorker.Setting(), Label: "Worker tier", Description: "the model @worker names, and haiku in a shared agent file; empty runs the orchestrator's model", Category: "Turn", Kind: Text},
 		{Key: subagent.TierDumb.Setting(), Label: "Dumb tier", Description: "the model @dumb names; empty runs the orchestrator's model", Category: "Turn", Kind: Text},
+		{Key: Browser, Label: "Browser", Description: "off offers no browser tool; read lets the model read a Chrome tab you shared; drive also lets it click and type in a tab you shared to drive", Category: "Browser", Kind: Text, DefaultText: BrowserOff,
+			Choices: []string{BrowserOff, BrowserRead, BrowserDrive}, Restart: true},
+		{Key: BrowserChooser, Label: "Browser chooser", Description: "jev picks each step of a browser task; model leaves every step to the turn's own model", Category: "Browser", Kind: Text, DefaultText: ChooserJev,
+			Choices: []string{ChooserJev, ChooserModel}},
+		{Key: BrowserSteps, Label: "Browser steps", Description: "how many actions one browser task may take", Category: "Browser", Kind: Int, Default: konst.BrowserStepsDefault,
+			Least: 1, Most: konst.BrowserActionCeiling, Unit: "actions a browser task"},
 		{Key: HideIntroduction, Label: "Hide welcome art", Description: "Leave a new session's empty chat without the tofu cat and wordmark", Category: "Startup", Kind: Bool},
 	}
 	for i := range specs {

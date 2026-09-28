@@ -9,14 +9,14 @@
     Files           03      Spacing across lists and panels                               tofu dusk                     
     Shell           05                                                                                                  
     Turn            09      Animations                                     subtle  ▾     HOW IT WORKS                   
-    Startup         01      Motion for conversational states                             Enter opens a focused          
-                                                                                         choice. Changes preview        
-  NAVIGATE                  Status bar                                    compact  ▾     immediately; Esc keeps the     
-  ↑↓ setting · ←→           Context, quotas, and runtime counters                        prior value.                   
-  section                                                                                                               
-  ctrl+k search · esc       Color mode                                       auto  ▾     SCOPE                          
-  chat                      Terminal color capability                                    Global · a project value       
-                                                                                         overrides it                   
+    Browser         03      Motion for conversational states                             Enter opens a focused          
+    Startup         01                                                                   choice. Changes preview        
+                            Status bar                                    compact  ▾     immediately; Esc keeps the     
+  NAVIGATE                  Context, quotas, and runtime counters                        prior value.                   
+  ↑↓ setting · ←→                                                                                                       
+  section                   Color mode                                       auto  ▾     SCOPE                          
+  ctrl+k search · esc       Terminal color capability                                    Global · a project value       
+  chat                                                                                   overrides it                   
                           LIVE PREVIEW                                                   …tester/.tofu/settings.json    
                                                                                                                         
                              tofu    project  ·  develop                                                                

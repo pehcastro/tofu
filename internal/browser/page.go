@@ -104,6 +104,7 @@ type Element struct {
 	Checked  string         `json:"checked,omitempty"`
 	Selected string         `json:"selected,omitempty"`
 	Expanded string         `json:"expanded,omitempty"`
+	ReadOnly bool           `json:"readonly,omitempty"`
 	Options  []SelectOption `json:"options,omitempty"`
 }
 

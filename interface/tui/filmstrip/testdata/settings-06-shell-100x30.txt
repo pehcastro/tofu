@@ -10,14 +10,14 @@
     Files         03                                                                                
   › Shell         05      Kill confirm                                                      ● on    
     Turn          09      Confirm process termination                                               
-    Startup       01                                                                                
-                          Shell                                                      default  ▾     
-  NAVIGATE                a path, or the word wsl; empty resolves the person's own shell automa…    
-  ↑↓ setting · ←→                                                                                   
-  section                 Fold hides shell                                                 ○ off    
-  ctrl+k search ·         the running line drops the shell count                                    
-  esc chat                                                                                          
-                        enter change  ·  ctrl+k search  ·  esc chat                                 
+    Browser       03                                                                                
+    Startup       01      Shell                                                      default  ▾     
+                          a path, or the word wsl; empty resolves the person's own shell automa…    
+  NAVIGATE                                                                                          
+  ↑↓ setting · ←→         Fold hides shell                                                 ○ off    
+  section                 the running line drops the shell count                                    
+  ctrl+k search ·                                                                                   
+  esc chat              enter change  ·  ctrl+k search  ·  esc chat                                 
                                                                                                     
                                                                                                     
                                                                                                     

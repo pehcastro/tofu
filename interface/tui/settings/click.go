@@ -38,7 +38,7 @@ func (m *Model) Click(x, y int) Intent {
 		return Intent{}
 	}
 	row := m.Rows[indices[index]]
-	line := ansi.Strip(strings.SplitN(look.SettingRow(geo.main-2*panePad, false, row.Label, row.Description, m.display(row)), "\n", 2)[0])
+	line := ansi.Strip(strings.SplitN(look.SettingRow(geo.main-2*panePad, false, row.Label, row.Description, m.display(row), control(row)), "\n", 2)[0])
 	labelEnd := markerCells + ansi.StringWidth(row.Label)
 	control := ansi.StringWidth(strings.TrimRight(line, " "))
 	controlStart := control - ansi.StringWidth(strings.TrimSpace(ansi.Cut(line, labelEnd, control)))

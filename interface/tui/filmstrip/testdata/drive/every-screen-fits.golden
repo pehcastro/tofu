@@ -90,14 +90,14 @@ Select an edit reference to read every changed line.
     Files         03      Spacing across lists and pane…    
     Shell         05                                        
     Turn          09      Animations          subtle  ▾     
-    Startup       01      Motion for conversational sta…    
-                                                            
-  NAVIGATE                Status bar         compact  ▾     
-  ↑↓ setting · ←→         Context, quotas, and runtime …    
-  section                                                   
-  ctrl+k search ·         Color mode            auto  ▾     
-  esc chat                Terminal color capability         
-                                                            
+    Browser       03      Motion for conversational sta…    
+    Startup       01                                        
+                          Status bar         compact  ▾     
+  NAVIGATE                Context, quotas, and runtime …    
+  ↑↓ setting · ←→                                           
+  section                 Color mode            auto  ▾     
+  ctrl+k search ·         Terminal color capability         
+  esc chat                                                  
  tofu  ./tofu/         chat   agents   edits   shells (1)         0s [settings] 
                                                                                 
     [&orchestrator]                                  14:32  [message#9d4f11]   │
@@ -206,14 +206,14 @@ Select an edit reference to read every changed line.
     Files         03                                                            
     Shell         05      Animations                              subtle  ▾     
     Turn          09      Motion for conversational states                      
-    Startup       01                                                            
-                          Status bar                             compact  ▾     
-  NAVIGATE                Context, quotas, and runtime counters                 
-  ↑↓ setting · ←→                                                               
-  section                 Color mode                                auto  ▾     
-  ctrl+k search ·         Terminal color capability                             
-  esc chat                                                                      
-                        enter change  ·  ctrl+k search  ·  esc chat             
+    Browser       03                                                            
+    Startup       01      Status bar                             compact  ▾     
+                          Context, quotas, and runtime counters                 
+  NAVIGATE                                                                      
+  ↑↓ setting · ←→         Color mode                                auto  ▾     
+  section                 Terminal color capability                             
+  ctrl+k search ·                                                               
+  esc chat              enter change  ·  ctrl+k search  ·  esc chat             
                                                                                 
                                                                                 
                                                                                 
@@ -358,14 +358,14 @@ Select an edit reference to read every changed line.
     Files         03                                                                                    
     Shell         05      Animations                                                      subtle  ▾     
     Turn          09      Motion for conversational states                                              
-    Startup       01                                                                                    
-                          Status bar                                                     compact  ▾     
-  NAVIGATE                Context, quotas, and runtime counters                                         
-  ↑↓ setting · ←→                                                                                       
-  section                 Color mode                                                        auto  ▾     
-  ctrl+k search ·         Terminal color capability                                                     
-  esc chat                                                                                              
-                        LIVE PREVIEW                                                                    
+    Browser       03                                                                                    
+    Startup       01      Status bar                                                     compact  ▾     
+                          Context, quotas, and runtime counters                                         
+  NAVIGATE                                                                                              
+  ↑↓ setting · ←→         Color mode                                                        auto  ▾     
+  section                 Terminal color capability                                                     
+  ctrl+k search ·                                                                                       
+  esc chat              LIVE PREVIEW                                                                    
                                                                                                         
                            tofu    project  ·  develop                                                  
                           Interface preview                                                             
@@ -550,12 +550,12 @@ Select an edit reference to read every changed line.
     Files               03                                                                                                                  
     Shell               05      Animations                                                     subtle  ▾     HOW IT WORKS                   
     Turn                09      Motion for conversational states                                             Enter opens a focused          
-    Startup             01                                                                                   choice. Changes preview        
-                                Status bar                                                    compact  ▾     immediately; Esc keeps the     
-  NAVIGATE                      Context, quotas, and runtime counters                                        prior value.                   
-  ↑↓ setting · ←→ section                                                                                                                   
-  ctrl+k search · esc chat      Color mode                                                       auto  ▾     SCOPE                          
-                                Terminal color capability                                                    Global · a project value       
+    Browser             03                                                                                   choice. Changes preview        
+    Startup             01      Status bar                                                    compact  ▾     immediately; Esc keeps the     
+                                Context, quotas, and runtime counters                                        prior value.                   
+  NAVIGATE                                                                                                                                  
+  ↑↓ setting · ←→ section       Color mode                                                       auto  ▾     SCOPE                          
+  ctrl+k search · esc chat      Terminal color capability                                                    Global · a project value       
                                                                                                              overrides it                   
                               LIVE PREVIEW                                                                   from default                   
                                                                                                                                             

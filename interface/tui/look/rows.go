@@ -63,20 +63,25 @@ func SidebarDeltaItem(width int, selected bool, label string, added, removed int
 	return lipgloss.NewStyle().Width(width).Background(bg.value()).Render(Sides(Style(fg).Render(marker+label), delta, width))
 }
 
-func SettingRow(width int, selected bool, label, description, value string) string {
+type SettingControl int
+
+const (
+	ControlChoice SettingControl = iota
+	ControlSwitch
+)
+
+func SettingRow(width int, selected bool, label, description, value string, control SettingControl) string {
 	marker := idleMarker
 	if selected {
 		marker = Accent(selectedMarker)
 	}
-	var control string
-	switch value {
-	case "on":
-		control = Accent("● on")
-	case "off":
-		control = Faint("○ off")
-	default:
-		control = Style(Blue).Background(PanelLight.value()).Padding(0, 1).Render(value + "  ▾")
+	drawn := Style(Blue).Background(PanelLight.value()).Padding(0, 1).Render(value + "  ▾")
+	switch {
+	case control == ControlSwitch && value == "on":
+		drawn = Accent("● on")
+	case control == ControlSwitch:
+		drawn = Faint("○ off")
 	}
-	first := Style(Text).Width(width).Render(Sides(marker+Title(label), control, width))
+	first := Style(Text).Width(width).Render(Sides(marker+Title(label), drawn, width))
 	return first + "\n" + Style(MutedColor).Width(width).Render("  "+description)
 }

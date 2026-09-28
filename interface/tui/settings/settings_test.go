@@ -1,6 +1,7 @@
 package settings
 
 import (
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -64,9 +65,46 @@ func TestTheSearchDialogFilteredToDiff(t *testing.T) {
 func TestStartupAt80x24ReachedByAClickOnItsLabel(t *testing.T) {
 	m := tableModel(80, 24)
 	t.Logf("before: category %q cursor %d", m.categories()[m.category], m.cursor)
-	intent := m.Click(6, 11)
-	t.Logf("click (6,11) intent %+v; after: category %q cursor %d", intent, m.categories()[m.category], m.cursor)
+	x, y := -1, -1
+	for row, line := range strings.Split(ansi.Strip(m.View()), "\n") {
+		rail := ansi.Cut(line, 0, 20)
+		if at := strings.Index(rail, "Startup"); at >= 0 {
+			x, y = ansi.StringWidth(rail[:at]), row
+			break
+		}
+	}
+	intent := m.Click(x, y)
+	t.Logf("click (%d,%d) intent %+v; after: category %q cursor %d", x, y, intent, m.categories()[m.category], m.cursor)
+	if got := m.categories()[m.category]; got != "Startup" {
+		t.Fatalf("a click on the Startup label opened %q", got)
+	}
 	golden.Assert(t, "startup-80x24.golden", ansi.Strip(m.View()))
+}
+
+func TestAChoiceSetToOffDrawsAsAChoiceAndABoolAsASwitch(t *testing.T) {
+	m := tableModel(120, 36)
+	rows := append([]Row(nil), m.Rows...)
+	for i := range rows {
+		if rows[i].Key == isettings.Animations {
+			rows[i].Value = "off"
+		}
+	}
+	rows = append(rows,
+		Row{Key: "keys", Category: "Appearance", Label: "Shortcut editor", Value: "edit", Action: RowKeybindings},
+		Row{Key: "app-bool", Category: "Appearance", Label: "Switch as the app builds it", Kind: Text, Choices: []string{"off", "on"}, Value: "on"})
+	m.SetRows(rows)
+	lines := strings.Split(ansi.Strip(m.View()), "\n")
+	for label, want := range map[string]string{"Animations": "off  ▾", "Shortcut editor": "edit  ▾", "Switch as the app builds it": "● on"} {
+		at := slices.IndexFunc(lines, func(line string) bool { return strings.Contains(line, label) })
+		if at < 0 || !strings.Contains(lines[at], want) {
+			t.Fatalf("%s does not draw %q:\n%s", label, want, strings.Join(lines, "\n"))
+		}
+	}
+	m.Key("right")
+	m.Key("right")
+	if view := ansi.Strip(m.View()); !strings.Contains(view, "○ off") {
+		t.Fatalf("readBeforeEdit and the other bools no longer draw as a switch:\n%s", view)
+	}
 }
 
 func TestSettingsBodyCacheInvalidatesOnVisibleChanges(t *testing.T) {

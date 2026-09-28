@@ -5,19 +5,19 @@
   CATEGORIES            › Diff context                                                     3  ▾     
     Appearance    05      Lines around changed hunks, at most the 3 each diff carries               
     Models & rol… 01                                                                                
-    Interaction   05      Hyperlinks                                                       ○ off    
+    Interaction   05      Hyperlinks                                                     off  ▾     
     Context       09      OSC 8 terminal file links; off prints the bare path                       
   › Files         03                                                                                
     Shell         05      Group by agent                                                    ● on    
     Turn          09      Author filters in edit feeds                                              
-    Startup       01                                                                                
-                        enter change  ·  ctrl+k search  ·  esc chat                                 
+    Browser       03                                                                                
+    Startup       01    enter change  ·  ctrl+k search  ·  esc chat                                 
+                                                                                                    
   NAVIGATE                                                                                          
   ↑↓ setting · ←→                                                                                   
   section                                                                                           
   ctrl+k search ·                                                                                   
   esc chat                                                                                          
-                                                                                                    
                                                                                                     
                                                                                                     
                                                                                                     

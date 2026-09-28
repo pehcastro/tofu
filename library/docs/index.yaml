@@ -245,4 +245,24 @@
 - ask: share a Chrome tab with tofu
   do: tofu browser install
   check: tofu browser
-  topic: doctor
+  topic: browser
+- ask: let the model read the Chrome tabs I share
+  do: tofu settings set browser read
+  check: tofu settings get browser
+  topic: browser
+- ask: let the model click and type in a tab I share to drive
+  do: tofu settings set browser drive
+  check: tofu settings get browser
+  topic: browser
+- ask: take the browser tools away from the model
+  do: tofu settings set browser off
+  check: tofu settings get browser
+  topic: browser
+- ask: let the model pick each browser step instead of jev
+  do: tofu settings set browserChooser model
+  check: tofu settings get browserChooser
+  topic: browser
+- ask: allow fewer actions in one browser task
+  do: tofu settings set browserSteps 10
+  check: tofu settings get browserSteps
+  topic: browser

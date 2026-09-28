@@ -2170,6 +2170,9 @@ func TestEveryToolInTheRunRegistryRecordsACommandThatDoesNotRepeatItsName(t *tes
 		"github_pr_diff":     {notRunHere: "it shells out to gh against a real github repository"},
 		"web_search":         {notRunHere: "it reaches a paid search provider over the network"},
 		turn.ShellToolName:   {notRunHere: "it stops, restarts or reads a background shell by name, and this test starts none"},
+		"browser_tabs":       {notRunHere: "it dials the browser host, which only Chrome starts"},
+		"browser_read":       {notRunHere: "it dials the browser host, which only Chrome starts"},
+		"browser_act":        {notRunHere: "it dials the browser host, which only Chrome starts"},
 	}
 
 	built, err := buildTestRunTools(dir, toolSetFull)
@@ -2259,6 +2262,31 @@ func TestTofuDriveTakesNoDocsAndTheAppItDrivesOffersNoDocs(t *testing.T) {
 		t.Logf("%v: the app offered %v, tofu_docs offered %v, sentence in the system prompt %v", arm.args, model.tools, offered, told)
 		if len(model.tools) == 0 || offered != arm.docs || told != arm.docs {
 			t.Fatalf("%v: want the tool and the sentence both %v, got tool %v and sentence %v", arm.args, arm.docs, offered, told)
+		}
+	}
+}
+
+func TestTheBrowserSettingReachesTheToolsARunIsGiven(t *testing.T) {
+	emptyHome(t)
+	for mode, want := range map[string][]string{
+		"":                       nil,
+		settingspkg.BrowserRead:  {"browser_tabs", "browser_read"},
+		settingspkg.BrowserDrive: {"browser_tabs", "browser_read", "browser_act"},
+	} {
+		opts := armOpts(t)
+		if mode != "" {
+			store, err := openSettings(opts.dir)
+			if err == nil {
+				err = store.SetText(settingspkg.Project, settingspkg.Browser, mode)
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+		}
+		offered := slices.DeleteFunc(toolNames(t, opts), func(name string) bool { return !strings.HasPrefix(name, "browser_") })
+		t.Logf("browser=%q offers %v", mode, offered)
+		if !slices.Equal(offered, want) {
+			t.Fatalf("browser=%q offers %v, want %v", mode, offered, want)
 		}
 	}
 }

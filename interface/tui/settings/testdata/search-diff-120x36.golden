@@ -9,14 +9,14 @@
     Files           03      Spacing across lists and panels                               tofu dusk                     
     Shell           05                                                                                                  
     Turn            09                                                                        T WORKS                   
-    Startup         01      Search settings                                              esc   opens a focused          
-                            Type to filter · ↑↓ select · enter jump                           e. Changes preview        
-  NAVIGATE                                                                                    iately; Esc keeps the     
-  ↑↓ setting · ←→           › diff█                                                            value.                   
-  section                                                                                                               
-  ctrl+k search · esc       › Interaction / Confirmations                                                               
-  chat                        Files / Diff context                                            l · a project value       
-                                                                                              ides it                   
+    Browser         03      Search settings                                              esc   opens a focused          
+    Startup         01      Type to filter · ↑↓ select · enter jump                           e. Changes preview        
+                                                                                              iately; Esc keeps the     
+  NAVIGATE                  › diff█                                                            value.                   
+  ↑↓ setting · ←→                                                                                                       
+  section                   › Interaction / Confirmations                                                               
+  ctrl+k search · esc         Files / Diff context                                            l · a project value       
+  chat                                                                                        ides it                   
                             1 of 2 results                                                    er/.tofu/settings.json    
                                                                                                                         
                                                                                                                         
