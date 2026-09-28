@@ -456,7 +456,7 @@ func subAgentRefusal(command string) error {
 	for _, match := range regexp.MustCompile(sleepPattern).FindAllStringSubmatch(command, -1) {
 		slept, err := time.ParseDuration(match[1] + cmp.Or(match[2], "s"))
 		if err == nil && slept > konst.SubAgentSleepSeconds*time.Second {
-			return fmt.Errorf("bash: own_paths_only: %q sleeps %s, and a sub-agent never waits on another's files, so no sleep over %d s runs here. "+
+			return fmt.Errorf("bash: sub_agent_boundaries: %q sleeps %s, and a sub-agent never waits on another's files, so no sleep over %d s runs here. "+
 				"work on the paths you own and report what you still need from a sibling instead of waiting for it", command, slept, konst.SubAgentSleepSeconds)
 		}
 	}

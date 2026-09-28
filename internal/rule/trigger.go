@@ -47,6 +47,7 @@ type Role string
 const (
 	RoleAny          Role = ""
 	RoleOrchestrator Role = "orchestrator"
+	RoleSubAgent     Role = "sub-agent"
 )
 
 type Task struct {
@@ -112,8 +113,10 @@ type declaredTrigger struct {
 
 func newTrigger(d declaredTrigger, file, id string) (Trigger, error) {
 	t := Trigger{scope: d.scope, language: d.language, verb: Verb(d.task), role: Role(d.role)}
-	if t.role != RoleAny && t.role != RoleOrchestrator {
-		return Trigger{}, fmt.Errorf("%s: rule %q declares the role %q, and a role is %s", file, id, d.role, RoleOrchestrator)
+	switch t.role {
+	case RoleAny, RoleOrchestrator, RoleSubAgent:
+	default:
+		return Trigger{}, fmt.Errorf("%s: rule %q declares the role %q, and a role is %s or %s", file, id, d.role, RoleOrchestrator, RoleSubAgent)
 	}
 	if d.condition != "" {
 		pattern, err := regexp.Compile(d.condition)

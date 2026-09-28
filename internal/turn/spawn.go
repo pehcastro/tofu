@@ -241,7 +241,7 @@ func (s SubAgents) prompt(inherited Config, definition subagent.Definition, task
 	switch {
 	case s.Prompt.Environment != "":
 		spec := s.Prompt
-		spec.Task, spec.Paths, spec.Agent = task, owns, definition
+		spec.Task, spec.Paths, spec.Agent, spec.Role = task, owns, definition, rule.RoleSubAgent
 		composed, err := Compose(spec)
 		if err != nil {
 			return "", "", err

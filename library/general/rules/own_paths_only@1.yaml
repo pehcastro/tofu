@@ -1,6 +1,0 @@
-id: own_paths_only
-domain: general
-kind: human
-concern: process_discipline
-text: build and check only the paths you hold. when your work depends on a file another sub-agent is writing, code to the contract the brief names and never sleep, poll or wait for that file to appear. an entry point that mounts other modules is checked against the contract, and the orchestrator runs the whole thing after every sub-agent has answered. say in your report what you could not check because it was not yours.
-notes: measured on 2026-09-27 in his hono-app-5 session: the sub-agent holding src/index.ts ran sleep 45, sleep 90 and sleep 60 waiting for its siblings' route files, 195s of a 471s run, and was the last to finish.
