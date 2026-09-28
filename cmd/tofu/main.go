@@ -57,7 +57,8 @@ readable form collapses: doctor, models, agents, usage, context, rules.
   drive     run a script of what a person would do against the real app,
             with no terminal and no model call, and print the screens it asks for
   settings  list, get or set a declared setting, global or project
-  reload    re-read rules from disk without a restart
+  reload    re-read settings, rules, skills, sub-agents, models, roles, tiers,
+            instruction files and keys, and print what changed since the last reload
   migrate   move what tofu wrote out of this project's .tofu and into ~/.tofu,
             or --dry-run to list what would move
   browser   list the Chrome tabs you shared with tofu and their mode,

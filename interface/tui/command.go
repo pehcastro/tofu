@@ -1,12 +1,16 @@
 package tui
 
 import (
+	"slices"
+	"strings"
+
 	tea "charm.land/bubbletea/v2"
 
 	"tofu/interface/tui/links"
 	"tofu/interface/tui/palette"
 	"tofu/interface/tui/quote"
 	"tofu/interface/tui/session"
+	"tofu/internal/keymap"
 	isession "tofu/internal/session"
 	"tofu/internal/sys"
 )
@@ -32,7 +36,7 @@ func commands(options Options) []session.Command {
 		{Name: "copy-call", What: "put the last tool call and its result on the clipboard"},
 	}
 	if options.Reload != nil {
-		listed = append(listed, session.Command{Name: "reload", What: "re-read rules, skills and hooks from disk"})
+		listed = append(listed, session.Command{Name: "reload", What: "re-read settings, rules, skills, sub-agents, models, instructions and keys from disk"})
 	}
 	if options.ResumeHead != nil {
 		listed = append(listed, session.Command{Name: "resume", What: "carry the last session into the next task"})
@@ -203,10 +207,42 @@ func troubleOr(trouble, hint string) string {
 }
 
 func (a *App) reload() {
-	if a.options.Reload == nil {
-		return
+	var said []string
+	if a.options.Reload != nil {
+		said = append(said, a.options.Reload())
 	}
-	a.view.Append(session.Entry{Kind: session.Note, Body: a.options.Reload()})
+	if a.store != nil {
+		if err := a.store.Reread(); err != nil {
+			said = append(said, "the settings file could not be read again: "+err.Error())
+		}
+		a.refreshSettingsRows()
+	}
+	a.shortcuts = keymap.LoadShortcuts(a.options.Keymap)
+	a.settings.SetSearchKey(a.shortcuts[searchAction])
+	picked := a.picked
+	a.readWires()
+	a.picked, a.chosen = "", resolvedModel{}
+	if refused := a.repick(picked); refused != "" {
+		said = append(said, refused)
+	}
+	a.view.Append(session.Entry{Kind: session.Note, Body: strings.Join(said, "\n")})
+}
+
+func (a *App) repick(slug string) string {
+	if slug == "" {
+		return ""
+	}
+	loaded, _ := a.options.Models()
+	if _, err := loaded.Select(slug); err != nil {
+		return "the model picked for the next turn, " + slug + ", is now refused, so the next turn runs " + a.slug() + ": " + err.Error()
+	}
+	source, model, _ := strings.Cut(slug, "/")
+	at := slices.IndexFunc(a.wires, func(wire Wire) bool { return wire.Provider == source })
+	if at < 0 {
+		return "the model picked for the next turn, " + slug + ", has no signed-in subscription now, so the next turn runs " + a.slug()
+	}
+	a.wire, a.provider, a.model, a.picked = a.wires[at].Name, source, model, slug
+	return ""
 }
 
 func (a *App) carry(change func() string) {

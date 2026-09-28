@@ -43,16 +43,29 @@ func OpenWith(table []Spec, globalPath, projectPath string) (*Store, error) {
 		return nil, err
 	}
 	store := &Store{table: table, paths: [2]string{globalPath, projectPath}}
-	for scope := Global; scope <= Project; scope++ {
-		ints, texts, err := readValues(store.paths[scope])
-		if err != nil {
-			return nil, err
-		}
-		store.values[scope] = ints
-		store.texts[scope] = texts
+	if err := store.Reread(); err != nil {
+		return nil, err
 	}
 	store.Snapshot()
 	return store, nil
+}
+
+func (s *Store) Reread() error {
+	for scope := Global; scope <= Project; scope++ {
+		if err := s.reread(scope); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *Store) reread(scope Scope) error {
+	ints, texts, err := readValues(s.paths[scope])
+	if err != nil {
+		return err
+	}
+	s.values[scope], s.texts[scope] = ints, texts
+	return nil
 }
 
 func readValues(path string) (map[string]int, map[string]string, error) {
@@ -166,8 +179,8 @@ func (s *Store) Set(scope Scope, key string, value int) error {
 	if err := spec.refuses(value); err != nil {
 		return err
 	}
-	if s.values[scope] == nil {
-		s.values[scope] = map[string]int{}
+	if err := s.reread(scope); err != nil {
+		return err
 	}
 	s.values[scope][key] = value
 	return s.write(scope)
@@ -185,8 +198,8 @@ func (s *Store) SetText(scope Scope, key, value string) error {
 	default:
 		return fmt.Errorf("settings: %s takes one of %s, got %q", key, strings.Join(spec.Choices, ", "), value)
 	}
-	if s.texts[scope] == nil {
-		s.texts[scope] = map[string]string{}
+	if err := s.reread(scope); err != nil {
+		return err
 	}
 	s.texts[scope][key] = value
 	return s.write(scope)
