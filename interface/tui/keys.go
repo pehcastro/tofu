@@ -201,6 +201,8 @@ func (a *App) pasted(msg tea.PasteMsg) tea.Cmd {
 		return top.Paste(msg)
 	case *recordedDialog:
 		return top.Paste(msg)
+	case *modelsDialog:
+		top.picker.Paste(msg.Content)
 	}
 	return nil
 }

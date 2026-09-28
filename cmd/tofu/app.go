@@ -338,7 +338,7 @@ func openRouterProvider() settings.Provider {
 	if located.Source == jev.SourceEnvironment {
 		row.Source = located.Name + " in the environment"
 	}
-	key, keyErr := gateKey()
+	key, keyErr := jev.Key(sys.CredentialFileName)
 	if err != nil || keyErr != nil {
 		row.Fix = openRouterFix
 		return row

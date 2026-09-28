@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -11,9 +12,11 @@ import (
 	"tofu/internal/judge/gate"
 	"tofu/internal/judge/jev"
 	jevwire "tofu/internal/judge/jev/wire/openrouter"
+	typesafewire "tofu/internal/judge/jev/wire/typesafe"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/judge/state"
 	"tofu/internal/konst"
+	"tofu/internal/llm/models"
 	"tofu/internal/sys"
 	"tofu/internal/transport"
 	"tofu/internal/turn"
@@ -112,8 +115,33 @@ func newJevClient(concurrency int) (*jev.Client, error) {
 	return jevClientOn(key, concurrency)
 }
 
+func boundClassifier() (models.Model, error) {
+	dir, err := os.Getwd()
+	if err != nil {
+		return models.Model{}, err
+	}
+	loaded, err := modelLibrary(dir)
+	var broken *models.BrokenLibrary
+	if err != nil && !errors.As(err, &broken) {
+		return models.Model{}, err
+	}
+	stored, err := sys.StoredKeys()
+	if err != nil {
+		return models.Model{}, err
+	}
+	return loaded.Classifier(stored)
+}
+
 func jevClientOn(key string, concurrency int) (*jev.Client, error) {
-	wire, err := jevwire.New(jevwire.Config{
+	classifier, err := boundClassifier()
+	if err != nil {
+		return nil, err
+	}
+	return jevClientFor(classifier.Provider, key, concurrency)
+}
+
+func jevClientFor(provider models.Provider, key string, concurrency int) (*jev.Client, error) {
+	config := jevwire.Config{
 		Key:      key,
 		Endpoint: os.Getenv(judgeEndpointEnvar),
 		Transport: transport.Config{
@@ -122,7 +150,19 @@ func jevClientOn(key string, concurrency int) (*jev.Client, error) {
 			Backoff:        time.Duration(konst.JudgeBackoffMillis) * time.Millisecond,
 			Concurrency:    concurrency,
 		},
-	})
+	}
+	var wire *jevwire.Wire
+	var err error
+	switch provider {
+	case models.OpenRouter:
+		wire, err = jevwire.New(config)
+	case models.TypeSafe:
+		wire, err = typesafewire.New(config)
+	case models.Anthropic, models.OpenAI:
+		return nil, fmt.Errorf("the classifier is served by %s, and jev is reached through %s or %s", provider, models.OpenRouter, models.TypeSafe)
+	default:
+		panic("tofu: unknown provider " + string(provider))
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -130,7 +170,11 @@ func jevClientOn(key string, concurrency int) (*jev.Client, error) {
 }
 
 func gateKey() (string, error) {
-	return jev.Key(sys.CredentialFileName)
+	classifier, err := boundClassifier()
+	if err != nil {
+		return "", err
+	}
+	return jev.KeyFor(sys.CredentialFileName, classifier.Provider.KeyName())
 }
 
 func (g *toolGate) Decide(ctx context.Context, request turn.GateRequest) (turn.GateDecision, error) {

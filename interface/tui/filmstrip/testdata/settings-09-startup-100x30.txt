@@ -4,13 +4,13 @@
                                                                                                     
   CATEGORIES            › Hide welcome art                                                 ○ off    
     Appearance    05      Leave a new session's empty chat without the tofu cat and wordmark        
-    Models & rol… 01                                                                                
+    Models & rol… 02                                                                                
     Interaction   05    enter change  ·  ctrl+k search  ·  esc chat                                 
     Context       09                                                                                
     Files         03                                                                                
     Shell         05                                                                                
     Turn          09                                                                                
-    Browser       03                                                                                
+    Browser       04                                                                                
   › Startup       01                                                                                
                                                                                                     
   NAVIGATE                                                                                          

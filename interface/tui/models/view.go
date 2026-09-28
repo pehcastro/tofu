@@ -3,6 +3,7 @@ package models
 import (
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"charm.land/lipgloss/v2"
 
@@ -50,6 +51,13 @@ const (
 	bindHint        = "enter assigns the model"
 	loginHint       = "enter starts the login"
 	rebindHint      = "enter chooses a new model"
+	keyHint         = "enter asks for the key"
+	keySetMark      = " · key set"
+	noKeyMark       = " · no key"
+	keyPanelWidth   = 64
+	keyWhy          = "A key pays for this model. It goes to the credential store and is never shown."
+	keyFooter       = "type the key · enter stores it · esc cancels"
+	maskGlyph       = "•"
 )
 
 type renderKey struct {
@@ -59,6 +67,7 @@ type renderKey struct {
 	filter, bound    string
 	assign           *Target
 	effort           llm.Effort
+	entry            keyEntry
 }
 
 type drawn struct {
@@ -114,11 +123,18 @@ func (m Model) cached(width, height int) string {
 		bound = append(bound, target.Assigned)
 	}
 	key := renderKey{width: width, height: height, tab: m.tab, provider: m.provider, cursor: m.cursor,
-		filter: m.filter.Value(), bound: strings.Join(bound, "\n"), assign: m.assign, effort: m.effort}
+		filter: m.filter.Value(), bound: strings.Join(bound, "\n"), assign: m.assign, effort: m.effort, entry: m.entry}
 	if m.drawn.modal == "" || m.drawn.key != key {
 		*m.drawn = drawn{key: key, modal: m.modal(width, height)}
 	}
 	return m.drawn.modal
+}
+
+func (m Model) keyPanel(modal string) string {
+	body := look.Accent("› ") + look.Title(strings.Repeat(maskGlyph, utf8.RuneCountInString(m.entry.typed))) + look.Accent("█") +
+		"\n" + look.Style(look.Red).Render(m.entry.refusal)
+	panel := look.DialogPanel(min(keyPanelWidth, lipgloss.Width(modal)), m.entry.name, keyWhy, body, keyFooter)
+	return look.Over(modal, panel, max(0, (lipgloss.Width(modal)-lipgloss.Width(panel))/2), max(0, (lipgloss.Height(modal)-lipgloss.Height(panel))/2))
 }
 
 func (m Model) modal(width, height int) string {
@@ -131,7 +147,11 @@ func (m Model) modal(width, height int) string {
 	if detail > 0 {
 		panes = append(panes, look.ModalPane(detail, modalHeight, look.Panel, 1, m.detailPane()))
 	}
-	return lipgloss.NewStyle().MaxHeight(modalHeight).Render(lipgloss.JoinHorizontal(lipgloss.Top, panes...))
+	modal := lipgloss.NewStyle().MaxHeight(modalHeight).Render(lipgloss.JoinHorizontal(lipgloss.Top, panes...))
+	if m.entry.name == "" {
+		return modal
+	}
+	return m.keyPanel(modal)
 }
 
 func (m Model) sidePane(width int) string {
@@ -140,7 +160,7 @@ func (m Model) sidePane(width int) string {
 		tabs = look.Muted(modelsTab) + gap + look.Accent(rolesTab)
 	}
 	total := 0
-	for _, group := range m.Groups {
+	for _, group := range m.groups() {
 		total += len(group.Rows)
 	}
 	view := look.Title(dialogTitle) + "\n" + look.Faint(strconv.Itoa(total)+" models") + "\n\n" + tabs + "\n\n" + look.SectionLabel(providersHead) + "\n"
@@ -178,7 +198,7 @@ func (m Model) listPane(width, modalHeight int) string {
 		view += "\n" + look.Faint("Page "+strconv.Itoa(start/size+1)+"/"+strconv.Itoa((len(rows)+size-1)/size)+pageHint)
 	}
 	switch {
-	case len(m.Groups) == 0:
+	case len(m.groups()) == 0:
 		view += look.Muted(emptyTitle)
 	case len(rows) == 0:
 		view += look.Muted(noMatch)
@@ -214,6 +234,13 @@ func (m Model) detailPane() string {
 		view += look.Title(model) + "\n" + look.Muted(row.Slug) + "\n\n" +
 			field("source", source) + field("kind", string(row.Kind)) + field("pays", string(row.Pays)) + field("window", row.Window)
 	}
+	switch group := m.groupOf(row); {
+	case group.Key == "":
+	case group.KeySet:
+		view += field("key", "set")
+	default:
+		view += field("key", "not set")
+	}
 	hint := pickHint
 	if m.effort != "" && m.assign == nil {
 		view += "\n" + look.SectionLabel(effortHead) + "\n" + look.Title(string(m.effort)) + look.Faint(effortHint) + "\n"
@@ -225,6 +252,9 @@ func (m Model) detailPane() string {
 	if row.excluded() {
 		view += "\n" + look.SectionLabel(excludedHead) + "\n" + look.Muted(row.Reason) + "\n"
 		hint = loginHint
+	}
+	if m.missingKey(row) != "" {
+		hint = keyHint
 	}
 	return view + "\n" + look.Faint(hint)
 }

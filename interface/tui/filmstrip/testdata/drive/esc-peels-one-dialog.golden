@@ -34,13 +34,13 @@
                                                                                                     
   CATEGORIES              Composer                                                  standard  ▾     
     Appearance    05      Enter sends; Shift+Enter inserts a line break                             
-    Models & rol… 01                                                                                
+    Models & rol… 02                                                                                
   › Interaction   05    › Keybindings                                                   edit  ▾     
     Context       09      Change shortcuts handled inside tofu                                      
     Files         03                                                                                
     Shell         05      Host integration                                       inspect Zed  ▾     
     Turn          09      Detect host shortcut conflicts and available integrations                 
-    Browser       03                                                                                
+    Browser       04                                                                                
     Startup       01      Confirmations                                                  run  ▾     
                           run lets a gated call go, ask waits for you; a rule's shadow or enfor…    
   NAVIGATE                                                                                          

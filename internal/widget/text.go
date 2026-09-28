@@ -21,6 +21,9 @@ const (
 )
 
 func Mask(secret string) string {
+	if strings.HasPrefix(secret, maskFill) {
+		return secret
+	}
 	runes := []rune(secret)
 	if len(runes) <= tailShownAbove {
 		return maskFill

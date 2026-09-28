@@ -14,6 +14,7 @@ import (
 	isession "tofu/internal/session"
 	isettings "tofu/internal/settings"
 	isubagent "tofu/internal/subagent"
+	"tofu/internal/sys"
 )
 
 const (
@@ -24,6 +25,7 @@ const (
 	roleKeyPrefix     = "role:"
 	agentKeyPrefix    = "agent:"
 	orchestratorLabel = "Orchestrator model"
+	classifierLabel   = "Classifier model"
 	keybindingsKey    = "keybindings"
 	hostKey           = "host"
 	toolEventKind     = "tool"
@@ -240,6 +242,10 @@ func (a *App) readRoles() {
 		for _, role := range loaded.Roles {
 			a.roles[role.ID] = role.Model.Slug()
 		}
+		stored, _ := sys.StoredKeys()
+		if classifier, err := loaded.Classifier(stored); err == nil {
+			a.roles[library.RoleClassifier] = classifier.Slug()
+		}
 	}
 	a.defined = nil
 	if a.options.Agents != nil {
@@ -254,10 +260,13 @@ func runsOn(definition isubagent.Definition) string {
 	return string(definition.Runs)
 }
 
+func (a *App) roleRow(role library.RoleID, label string) settings.Row {
+	return settings.Row{Key: roleKeyPrefix + string(role), Category: rolesCategory, Label: label, Description: role.What(), Value: a.roles[role], Action: settings.RowRole}
+}
+
 func (a *App) roleRows() []settings.Row {
 	a.readRoles()
-	rows := []settings.Row{{Key: roleKeyPrefix + string(library.RoleOrchestrator), Category: rolesCategory, Label: orchestratorLabel,
-		Description: library.RoleOrchestrator.What(), Value: a.roles[library.RoleOrchestrator], Action: settings.RowRole}}
+	rows := []settings.Row{a.roleRow(library.RoleOrchestrator, orchestratorLabel), a.roleRow(library.RoleClassifier, classifierLabel)}
 	for _, definition := range a.defined {
 		rows = append(rows, settings.Row{Key: agentKeyPrefix + definition.Name, Category: rolesCategory, Label: definition.Name, Origin: definition.Origin,
 			Description: definition.Description, Value: runsOn(definition), Source: definition.AssignedIn, Path: definition.Path, Action: settings.RowSubAgent})

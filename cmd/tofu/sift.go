@@ -10,10 +10,8 @@ import (
 	"time"
 
 	"tofu/internal/judge/jev"
-	jevwire "tofu/internal/judge/jev/wire/openrouter"
 	"tofu/internal/konst"
 	"tofu/internal/sift"
-	"tofu/internal/transport"
 )
 
 const siftPoint = "read_worth@1"
@@ -135,19 +133,7 @@ func siftJev(parts []sift.Part, opts siftOpts) ([]sift.Mark, float64, error) {
 	if err != nil {
 		return nil, 0, err
 	}
-	wire, err := jevwire.New(jevwire.Config{
-		Key: key,
-		Transport: transport.Config{
-			AttemptTimeout: time.Duration(konst.JudgeTimeoutMillis) * time.Millisecond,
-			Retries:        konst.JudgeRetries,
-			Backoff:        time.Duration(konst.JudgeBackoffMillis) * time.Millisecond,
-			Concurrency:    konst.SiftConcurrency,
-		},
-	})
-	if err != nil {
-		return nil, 0, err
-	}
-	client, err := jev.NewClient(jev.Config{Wire: wire})
+	client, err := jevClientOn(key, konst.SiftConcurrency)
 	if err != nil {
 		return nil, 0, err
 	}

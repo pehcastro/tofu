@@ -2,16 +2,19 @@ package tui
 
 import (
 	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 
 	"tofu/interface/tui/models"
 	"tofu/interface/tui/session"
 	"tofu/interface/tui/settings"
+	"tofu/internal/judge/jev"
 	"tofu/internal/llm"
 	library "tofu/internal/llm/models"
 	isettings "tofu/internal/settings"
 	isubagent "tofu/internal/subagent"
+	"tofu/internal/sys"
 	shipped "tofu/library"
 )
 
@@ -31,7 +34,7 @@ func shippedModels() (library.Library, error) {
 }
 
 func (a *App) openPicker(assign string) {
-	if len(a.wires) == 0 {
+	if len(a.wires) == 0 && assign != roleKeyPrefix+string(library.RoleClassifier) {
 		a.notify(noWireToPick)
 		return
 	}
@@ -52,7 +55,12 @@ func (a *App) openPicker(assign string) {
 			targets[index].Role = library.RoleID(strings.TrimPrefix(row.Key, roleKeyPrefix))
 		}
 	}
-	picker := models.Build(loaded, sources, targets)
+	envFile := filepath.Join(a.options.Root, sys.CredentialFileName)
+	keys := models.Keys{
+		Set:  func(name string) bool { _, err := jev.KeyFor(envFile, name); return err == nil },
+		Save: sys.SaveKey,
+	}
+	picker := models.Build(loaded, sources, keys, targets)
 	picker.SetSize(a.width, a.height)
 	if at := slices.IndexFunc(rows, func(row settings.Row) bool { return row.Key == assign }); at >= 0 {
 		picker.AssignTo(at)

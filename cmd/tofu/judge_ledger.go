@@ -51,11 +51,15 @@ func rowSkeleton(state any, set battery, in rowInput) (ledger.Row, error) {
 	if err != nil {
 		return ledger.Row{}, err
 	}
+	classifier, err := boundClassifier()
+	if err != nil {
+		return ledger.Row{}, err
+	}
 	return ledger.Row{
 		Point:        set.SetName,
 		Questions:    set.SetName,
 		Version:      set.QuestionsVersion,
-		Model:        openrouter.Alias,
+		Model:        classifier.Slug(),
 		StateHash:    ledger.HashOf(body),
 		Fingerprint:  in.fingerprint,
 		StateBuilder: in.stateBuilder,

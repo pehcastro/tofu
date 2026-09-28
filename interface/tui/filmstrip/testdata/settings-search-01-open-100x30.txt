@@ -4,7 +4,7 @@
                                                                                                     
   CATEGORIES            › Theme                                                         tofu  ▾     
   › Appearance    05      tofu uses Zed Nu Disco; choose a palette                                  
-    Models & rol… 01                                                                                
+    Models & rol… 02                                                                                
     Interaction                                                                     fortable  ▾     
     Context       Search settings                                              esc                  
     Files         Type to filter · ↑↓ select · enter jump                                           
@@ -17,9 +17,9 @@
   ↑↓ setting · ←    Appearance / Status bar                                             auto  ▾     
   section           Appearance / Color mode                                                         
   ctrl+k search     Models & roles / Orchestrator model                                             
-  esc chat          Interaction / Composer                                                          
+  esc chat          Models & roles / Classifier model                                               
                                                                                                     
-                  1 of 41 results                                                                   
+                  1 of 43 results                                                                   
                                                                                                     
                           Readable text, quiet surfaces, and bounded focus.                         
                           ● active    ● attention    ● failed                                       

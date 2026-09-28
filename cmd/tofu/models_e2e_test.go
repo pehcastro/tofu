@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	modelsFromTheBinaryAlone = `claude-sub/claude-opus-5, codex-sub/gpt-5.6-sol 10 of 18 usable
+	modelsFromTheBinaryAlone = `claude-sub/claude-opus-5, codex-sub/gpt-5.6-sol 11 of 19 usable
 
   claude-sub  claude-sub/claude-opus-5 (kind llm, pays subscription) by
                 default on --wire anthropic, a 1000000 token window, spends
@@ -39,9 +39,10 @@ const (
               1 excluded, nobody has ruled on it, so tofu does not send it
                 until somebody does
 
-  key         typesafe/jev-latest (kind classifier, pays key), use allowed
+  key         openrouter/jev-latest (kind classifier, pays key), use allowed
+              typesafe/jev-latest (kind classifier, pays key), use allowed
 
-  windows     16 of 18 models take a context window from the snapshot of
+  windows     16 of 19 models take a context window from the snapshot of
                 models.dev taken on 2026-09-21, and tofu models reload reads
                 the table again
 
@@ -49,11 +50,17 @@ const (
                 sub-agents. nothing is bound, so it runs on the subscription
                 default
 
+              classifier: the typed model that judges the model's calls,
+                shell results, browser steps and stop checks. nothing is
+                bound, so it runs openrouter/jev-latest when an OpenRouter
+                key is stored, else typesafe/jev-latest when a TypeSafe key
+                is stored
+
               (unnamed sub-agent): a spawn that names no sub-agent. nothing
                 is bound, so it runs on the orchestrator's model
 `
 
-	modelsWithAProjectLayerAndAHomeRegistry = `claude-sub/claude-opus-5, codex-sub/gpt-5.6-sol 11 of 18 usable
+	modelsWithAProjectLayerAndAHomeRegistry = `claude-sub/claude-opus-5, codex-sub/gpt-5.6-sol 12 of 19 usable
 
   claude-sub  claude-sub/claude-opus-5 (kind llm, pays subscription) by
                 default on --wire anthropic, a 123456 token window, spends
@@ -79,12 +86,19 @@ const (
               1 excluded, nobody has ruled on it, so tofu does not send it
                 until somebody does
 
-  key         typesafe/jev-latest (kind classifier, pays key), use allowed
+  key         openrouter/jev-latest (kind classifier, pays key), use allowed
+              typesafe/jev-latest (kind classifier, pays key), use allowed
 
-  windows     1 of 18 models take a context window from the table this test
+  windows     1 of 19 models take a context window from the table this test
                 wrote, and tofu models reload reads the table again
 
-  roles       (unnamed sub-agent): a spawn that names no sub-agent. nothing
+  roles       classifier: the typed model that judges the model's calls,
+                shell results, browser steps and stop checks. nothing is
+                bound, so it runs openrouter/jev-latest when an OpenRouter
+                key is stored, else typesafe/jev-latest when a TypeSafe key
+                is stored
+
+              (unnamed sub-agent): a spawn that names no sub-agent. nothing
                 is bound, so it runs on the orchestrator's model
 `
 

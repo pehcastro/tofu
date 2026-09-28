@@ -10,6 +10,7 @@ import (
 	"tofu/internal/golden"
 	"tofu/internal/llm"
 	library "tofu/internal/llm/models"
+	"tofu/internal/sys"
 )
 
 const (
@@ -41,6 +42,10 @@ func everySource(loaded library.Library) []Source {
 		sources = append(sources, Source{ID: spec.ID, Efforts: sourceEfforts(spec.ID)})
 	}
 	return sources
+}
+
+func noKeys() Keys {
+	return Keys{Set: func(string) bool { return false }}
 }
 
 func testLibrary() library.Library {
@@ -76,7 +81,7 @@ func testPicker(width, height int) Model {
 		{Name: "orchestrator", Job: library.RoleOrchestrator.What(), Assigned: loaded.Models[0].Slug(), Role: library.RoleOrchestrator},
 		{Name: "go-dev", Job: "every Go ticket", Assigned: "inherit"},
 	}
-	built := Build(loaded, everySource(loaded), targets)
+	built := Build(loaded, everySource(loaded), noKeys(), targets)
 	built.SetSize(width, height)
 	return built
 }
@@ -94,7 +99,7 @@ func TestEveryRowSpellsSourceSlashModel(t *testing.T) {
 	for _, one := range loaded.Models {
 		known[paidFor{one.Subscription, one.ID}] = true
 	}
-	for _, group := range Build(loaded, everySource(loaded), nil).Groups {
+	for _, group := range Build(loaded, everySource(loaded), noKeys(), nil).Groups {
 		for _, row := range group.Rows {
 			source, name, found := strings.Cut(row.Slug, "/")
 			if !found {
@@ -200,6 +205,106 @@ func TestModelDialogScalesWithTerminal(t *testing.T) {
 	}
 }
 
+func classifierPicker(t *testing.T, loaded library.Library) Model {
+	t.Helper()
+	keys := Keys{
+		Set: func(name string) bool {
+			stored, err := sys.StoredKeys()
+			return err == nil && stored[name] != ""
+		},
+		Save: sys.SaveKey,
+	}
+	targets := []Target{
+		{Name: "orchestrator", Job: library.RoleOrchestrator.What(), Role: library.RoleOrchestrator},
+		{Name: "classifier", Job: library.RoleClassifier.What(), Role: library.RoleClassifier},
+	}
+	built := Build(loaded, everySource(loaded), keys, targets)
+	built.SetSize(120, 36)
+	built.AssignTo(1)
+	return built
+}
+
+func typeInto(m *Model, text string) {
+	for _, key := range strings.Split(text, "") {
+		m.Key(key)
+	}
+}
+
+func TestAKeyModelWithNoKeyAsksForTheKeyMaskedAndEnterStoresIt(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	t.Setenv(sys.TypeSafeKeyName, "")
+	const madeUp = "ts-made-up-4d1e9a7c0b52"
+	m := classifierPicker(t, shippedLibrary(t))
+	view := ansi.Strip(m.View())
+	if strings.Contains(view, "claude-sub/") || !strings.Contains(view, "typesafe · no key") {
+		t.Fatalf("the classifier picker does not list the key providers with their marks\n%s", view)
+	}
+	for range 4 {
+		if row, _ := m.Picked(); row.Slug == "typesafe/jev-latest" {
+			break
+		}
+		m.Key("down")
+	}
+	if got := m.Key("enter"); got.Action != None || !strings.Contains(ansi.Strip(m.View()), sys.TypeSafeKeyName) {
+		t.Fatalf("enter on a model with no key returned %+v and opened no input\n%s", got, ansi.Strip(m.View()))
+	}
+	typeInto(&m, madeUp)
+	shown := ansi.Strip(m.View())
+	for at := 0; at+4 <= len(madeUp); at++ {
+		if strings.Contains(shown, madeUp[at:at+4]) {
+			t.Fatalf("the input echoes %q of the key\n%s", madeUp[at:at+4], shown)
+		}
+	}
+	if got := m.Key("esc"); got.Action != None {
+		t.Fatalf("esc on the input returned %+v, want the picker to stay", got)
+	}
+	if stored, _ := sys.StoredKeys(); len(stored) != 0 {
+		t.Fatalf("esc stored %d keys", len(stored))
+	}
+	if strings.Contains(ansi.Strip(m.View()), keyFooter) {
+		t.Fatal("esc left the input open")
+	}
+	m.Key("enter")
+	if got := m.Key("enter"); got.Action != None {
+		t.Fatalf("enter on an empty input returned %+v", got)
+	}
+	typeInto(&m, madeUp)
+	want := Intent{Action: Bind, Role: library.RoleClassifier, Slug: "typesafe/jev-latest"}
+	if got := m.Key("enter"); got != want {
+		t.Fatalf("enter with a key returned %+v, want %+v", got, want)
+	}
+	stored, err := sys.StoredKeys()
+	if err != nil || stored[sys.TypeSafeKeyName] != madeUp {
+		t.Fatalf("the temp home holds a %s of length %d (%v)", sys.TypeSafeKeyName, len(stored[sys.TypeSafeKeyName]), err)
+	}
+	m.AssignTo(1)
+	if view := ansi.Strip(m.View()); !strings.Contains(view, "typesafe · key set") {
+		t.Fatalf("the mark does not say the key is set\n%s", view)
+	}
+}
+
+func TestAPastedKeyIsStoredWithoutItsNewline(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	t.Setenv(sys.OpenRouterKeyName, "")
+	const madeUp = "or-made-up-7c2a90e1f3d4"
+	m := classifierPicker(t, shippedLibrary(t))
+	m.Key("enter")
+	m.Paste(madeUp + "\r\n")
+	if shown := ansi.Strip(m.View()); strings.Contains(shown, madeUp[len(madeUp)-6:]) {
+		t.Fatalf("the pasted key is on the screen\n%s", shown)
+	}
+	if got := m.Key("enter"); got.Action != Bind {
+		t.Fatalf("enter after a paste returned %+v", got)
+	}
+	if stored, _ := sys.StoredKeys(); stored[sys.OpenRouterKeyName] != madeUp {
+		t.Fatalf("the temp home holds an %s of length %d, want the pasted %d", sys.OpenRouterKeyName, len(stored[sys.OpenRouterKeyName]), len(madeUp))
+	}
+}
+
 func TestPickerGoldens(t *testing.T) {
 	roles := testPicker(120, 36)
 	roles.Key("tab")
@@ -208,7 +313,7 @@ func TestPickerGoldens(t *testing.T) {
 		"picker-roles-120x36.golden": roles.View(),
 		"picker-60x20.golden":        testPicker(60, 20).View(),
 		"picker-empty-120x36.golden": func() string {
-			empty := Build(library.Library{}, nil, nil)
+			empty := Build(library.Library{}, nil, noKeys(), nil)
 			empty.SetSize(120, 36)
 			return empty.View()
 		}(),

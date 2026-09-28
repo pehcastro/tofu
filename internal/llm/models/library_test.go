@@ -222,6 +222,7 @@ func TestTheShippedWiresResolveTheModelsTheyResolvedBefore(t *testing.T) {
 		"codex-sub/gpt-5.6-terra":               "gpt-5.6-terra allowed 5h and 7d",
 		"codex-sub/gpt-6-astra":                 "gpt-6-astra allowed 5h and 7d",
 		"codex-sub/gpt-reserve":                 "gpt-reserve excluded 5h and 7d",
+		"openrouter/jev-latest":                 "jev-latest allowed ",
 		"typesafe/jev-latest":                   "jev-latest allowed ",
 	}
 	if len(library.Models) != len(frozen) {

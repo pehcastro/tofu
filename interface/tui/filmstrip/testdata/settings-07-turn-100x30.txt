@@ -4,13 +4,13 @@
                                                                                                     
   CATEGORIES            › Decision cap                                                     0  ▾     
     Appearance    05      decision cap per turn, zero means no cap                                  
-    Models & rol… 01                                                                                
+    Models & rol… 02                                                                                
     Interaction   05      Sub-agents                                                        ● on    
     Context       09      a turn may spawn a sub-agent                                              
     Files         03                                                                                
     Shell         05      Sub-agents per turn                                             10  ▾     
   › Turn          09      how many sub-agents one turn may spawn; the next spawn reads the new …    
-    Browser       03                                                                                
+    Browser       04                                                                                
     Startup       01      Sub-agent depth                                                  2  ▾     
                           how deep a sub-agent may spawn its own sub-agents; the next spawn rea…    
   NAVIGATE                                                                                          

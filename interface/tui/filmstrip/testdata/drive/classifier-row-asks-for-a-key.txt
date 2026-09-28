@@ -1,0 +1,25 @@
+# settings name the classifier under the orchestrator, and a key model with no key asks for the key without showing it
+type /settings
+key enter
+key right
+wait Classifier model
+screen
+key down
+key enter
+wait typesafe · no key
+key down
+screen
+key enter
+wait TYPESAFE_API_KEY
+type ts-made-up-4d1e9a7c
+absent 4d1e
+screen
+key esc
+absent TYPESAFE_API_KEY
+key enter
+paste ts-made-up-4d1e9a7c
+wait •••••••••••••••••••█
+key enter
+wait classifier now runs typesafe/jev-latest
+absent 4d1e
+screen

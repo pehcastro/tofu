@@ -76,7 +76,7 @@ func judgeVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 		return exitOK
 	}
 
-	key, err := jev.Key(".env")
+	key, err := gateKey()
 	if err != nil {
 		return judgeFail(errOut, err)
 	}

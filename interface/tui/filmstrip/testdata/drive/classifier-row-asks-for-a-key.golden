@@ -1,0 +1,120 @@
+                                                                                                    
+  tofu settings         Models & roles                                              global scope    
+  Global preferences    Choose a row to inspect and change its value.                               
+                                                                                                    
+  CATEGORIES            › Orchestrator model                                                  ▾     
+    Appearance    05      the model that plans and hands work to sub-agents                         
+  › Models & rol… 02                                                                                
+    Interaction   05      Classifier model                             openrouter/jev-latest  ▾     
+    Context       09      the typed model that judges the model's calls, shell results, browser…    
+    Files         03                                                                                
+    Shell         05    enter change  ·  ctrl+k search  ·  esc chat                                 
+    Turn          09                                                                                
+    Browser       04                                                                                
+    Startup       01                                                                                
+                                                                                                    
+  NAVIGATE                                                                                          
+  ↑↓ setting · ←→                                                                                   
+  section                                                                                           
+  ctrl+k search ·                                                                                   
+  esc chat                                                                                          
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                      
+  tofu settings         Models & roles                                              global scope
+  Global preferences    Choose a row to inspect and change its value.
+                      
+  CATEGORIES              Orchestrator model                                                  ▾ 
+                                                                                                  
+   Select model            CATALOG                                     SELECTION                  
+   2 models                ←→ provider · tab roles                                                
+                                                                       jev-latest                 
+   Models  Roles           > Type to filter                            typesafe/jev-latest        
+                                                                                                  
+   PROVIDERS                 jev-latest                                source  typesafe           
+   › all                     openrouter                                kind    classifier         
+     openrouter · no key   › jev-latest                                pays    key                
+     typesafe · no key       typesafe                                  window                     
+                                                                       key     not set            
+                                                                                                  
+                                                                       ASSIGN TO                  
+                                                                       Classifier model           
+                                                                                                  
+                                                                       enter asks for the key     
+                                                                                                  
+                                                                                                  
+                                                                                                  
+                                                                                                  
+                      
+                      
+                      
+                      
+                      
+                      
+  tofu settings         Models & roles                                              global scope
+  Global preferences    Choose a row to inspect and change its value.
+                      
+  CATEGORIES              Orchestrator model                                                  ▾ 
+                                                                                                  
+   Select model            CATALOG                                     SELECTION                  
+   2 models                ←→ provider · tab roles                                                
+                                                                       jev-latest                 
+   Models  Roles           > Type to filter                            typesafe/jev-latest        
+                                                                                                  
+   PROVIDERS        TYPESAFE_API_KEY                                         esc  esafe           
+   › all            A key pays for this model. It goes to the credential store    ssifier         
+     openrouter ·   and is never shown.                                                           
+     typesafe · no                                                                                
+                    › •••••••••••••••••••█                                         set            
+                                                                                                  
+                                                                                                  
+                    type the key · enter stores it · esc cancels                  model           
+                                                                                                  
+                                                                       enter asks for the key     
+                                                                                                  
+                                                                                                  
+                                                                                                  
+                                                                                                  
+                      
+                      
+                      
+                      
+                      
+                                                                                                    
+  tofu settings         Models & roles                                              global scope    
+  Global preferences    Choose a row to inspect and change its value.                               
+                                                                                                    
+  CATEGORIES              Orchestrator model                                                  ▾     
+    Appearance    05      the model that plans and hands work to sub-agents                         
+  › Models & rol… 02                                                                                
+    Interaction   05    › Classifier model                               typesafe/jev-latest  ▾     
+    Context       09      the typed model that judges the model's calls, shell results, browser…    
+    Files         03                                                                                
+    Shell         05    enter change  ·  ctrl+k search  ·  esc chat                                 
+    Turn          09                                                                                
+    Browser       04                                                                                
+    Startup       01                                                                                
+                                                                                                    
+  NAVIGATE                                                                                          
+  ↑↓ setting · ←→                                                                                   
+  section                                                                                           
+  ctrl+k search ·                                                                                   
+  esc chat                                                                                          
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+ classifier now runs typesafe/jev-latest                                                            

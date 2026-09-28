@@ -17,19 +17,18 @@ import (
 	"github.com/charmbracelet/x/term"
 
 	"tofu/internal/judge/jev"
-	jevwire "tofu/internal/judge/jev/wire/openrouter"
-	"tofu/internal/konst"
 	"tofu/internal/llm/cred"
+	"tofu/internal/llm/models"
 	"tofu/internal/sys"
-	"tofu/internal/transport"
 	"tofu/internal/widget"
 )
 
 const (
-	loginUsage = "usage: tofu login <claude-sub|codex-sub|openrouter|brave> [--paste], " +
+	loginUsage = "usage: tofu login <claude-sub|codex-sub|openrouter|typesafe|brave> [--paste], " +
 		"tofu login --status [--json] [--redact], or tofu login --disable|--enable <number>"
 	setAsideCause    = "set aside by hand, run tofu login --enable to bring it back"
-	openRouterName   = "openrouter"
+	openRouterName   = string(models.OpenRouter)
+	typeSafeName     = string(models.TypeSafe)
 	braveName        = "brave"
 	openRouterFix    = "run tofu login openrouter and paste the key when it asks"
 	keyIsNeverTyped  = "a key is read from a prompt and never from an argument: run tofu login %s on its own"
@@ -57,7 +56,7 @@ func loginVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 		}
 		_, _ = fmt.Fprintln(out, line)
 		return exitOK
-	case openRouterName, braveName:
+	case openRouterName, typeSafeName, braveName:
 		if len(args) > 1 {
 			return loginFail(errOut, fmt.Errorf(keyIsNeverTyped, args[0]))
 		}
@@ -68,7 +67,7 @@ func loginVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 		if args[0] == braveName {
 			return storeKey(braveName, sys.BraveSearchKeyName, key, out, errOut)
 		}
-		return loginOpenRouter(context.Background(), key, out, errOut)
+		return loginJev(context.Background(), models.Provider(args[0]), key, out, errOut)
 	}
 	spec, err := cred.Lookup(args[0])
 	if err != nil {
@@ -203,11 +202,11 @@ func login(ctx context.Context, spec cred.Spec, paste bool, in io.Reader, out io
 	return nil
 }
 
-func loginOpenRouter(ctx context.Context, key string, out, errOut io.Writer) int {
-	if err := reachesJev(ctx, key); err != nil {
+func loginJev(ctx context.Context, provider models.Provider, key string, out, errOut io.Writer) int {
+	if err := reachesJev(ctx, provider, key); err != nil {
 		return loginRefused(errOut, "the key did not reach jev, so nothing was written: %v", err)
 	}
-	if code := storeKey(openRouterName, jev.OpenRouterVariable, key, out, errOut); code != exitOK {
+	if code := storeKey(string(provider), provider.KeyName(), key, out, errOut); code != exitOK {
 		return code
 	}
 	_, _ = fmt.Fprintln(out, "jev: ready")
@@ -241,26 +240,13 @@ func promptKey(in io.Reader, out io.Writer, name string) (string, error) {
 	return strings.TrimSpace(string(typed)), nil
 }
 
-func reachesJev(ctx context.Context, key string) error {
-	wire, err := jevwire.New(jevwire.Config{
-		Key:      key,
-		Endpoint: os.Getenv(judgeEndpointEnvar),
-		Transport: transport.Config{
-			AttemptTimeout: time.Duration(konst.JudgeTimeoutMillis) * time.Millisecond,
-			Retries:        konst.JudgeRetries,
-			Backoff:        time.Duration(konst.JudgeBackoffMillis) * time.Millisecond,
-			Concurrency:    1,
-		},
-	})
-	if err != nil {
-		return err
-	}
-	client, err := jev.NewClient(jev.Config{Wire: wire})
+func reachesJev(ctx context.Context, provider models.Provider, key string) error {
+	client, err := jevClientFor(provider, key, oneCallAtATime)
 	if err != nil {
 		return err
 	}
 	_, err = client.Ask(ctx, jev.Request{
-		State: map[string]any{"check": "tofu login openrouter"},
+		State: map[string]any{"check": "tofu login " + string(provider)},
 		Questions: []jev.Question{{
 			ID:           "reachable",
 			Kind:         jev.QuestionNoul,
@@ -278,7 +264,7 @@ func locateGateKey() (jev.Located, error) {
 
 func openRouterStatus() string {
 	located, err := locateGateKey()
-	key, keyErr := gateKey()
+	key, keyErr := jev.Key(sys.CredentialFileName)
 	if err != nil || keyErr != nil {
 		return "no key, so the jev gate is off: " + openRouterFix
 	}

@@ -57,15 +57,43 @@ type Target struct {
 
 func (t Target) subAgent() bool { return t.Role == "" }
 
+func (t Target) takes() library.Kind {
+	if t.subAgent() {
+		return library.KindLLM
+	}
+	return t.Role.Takes()
+}
+
 type Group struct {
 	Source  string
 	Rows    []Row
 	Efforts []llm.Effort
+	Key     string
+	KeySet  bool
+}
+
+func (g Group) label() string {
+	switch {
+	case g.Key == "":
+		return g.Source
+	case g.KeySet:
+		return g.Source + keySetMark
+	}
+	return g.Source + noKeyMark
 }
 
 type Source struct {
 	ID      library.Subscription
 	Efforts []llm.Effort
+}
+
+type Keys struct {
+	Set  func(name string) bool
+	Save func(name, value string) error
+}
+
+type keyEntry struct {
+	name, typed, refusal string
 }
 
 type tab int
@@ -96,33 +124,45 @@ type Intent struct {
 }
 
 type Model struct {
-	Groups   []Group
-	drawn    *drawn
-	targets  []Target
-	filter   textinput.Model
-	tab      tab
-	provider int
-	cursor   int
-	assign   *Target
-	effort   llm.Effort
-	width    int
-	height   int
+	Groups      []Group
+	classifiers []Group
+	keys        Keys
+	entry       keyEntry
+	drawn       *drawn
+	targets     []Target
+	filter      textinput.Model
+	tab         tab
+	provider    int
+	cursor      int
+	assign      *Target
+	effort      llm.Effort
+	width       int
+	height      int
 }
 
-func Build(loaded library.Library, sources []Source, targets []Target) Model {
+func Build(loaded library.Library, sources []Source, keys Keys, targets []Target) Model {
 	rows := map[library.Subscription][]Row{}
+	var classifiers []Group
 	for _, one := range loaded.Models {
-		if one.Kind != library.KindLLM {
-			continue
+		row := Row{Slug: one.Slug(), Use: one.Use, Kind: one.Kind, Pays: one.Pays(), Window: one.WindowText(), Reason: one.Reason}
+		switch one.Kind {
+		case library.KindLLM:
+			rows[one.Subscription] = append(rows[one.Subscription], row)
+		case library.KindClassifier:
+			source, _, _ := strings.Cut(row.Slug, "/")
+			at := slices.IndexFunc(classifiers, func(group Group) bool { return group.Source == source })
+			if at < 0 {
+				group := Group{Source: source}
+				if row.Pays == library.PaysKey {
+					group.Key = one.Provider.KeyName()
+					group.KeySet = keys.Set(group.Key)
+				}
+				classifiers, at = append(classifiers, group), len(classifiers)
+			}
+			classifiers[at].Rows = append(classifiers[at].Rows, row)
+		default:
+			panic("models: unknown model kind " + string(one.Kind))
 		}
-		rows[one.Subscription] = append(rows[one.Subscription], Row{
-			Slug:   one.Slug(),
-			Use:    one.Use,
-			Kind:   one.Kind,
-			Pays:   one.Pays(),
-			Window: one.WindowText(),
-			Reason: one.Reason,
-		})
 	}
 	groups := make([]Group, 0, len(sources))
 	for _, source := range sources {
@@ -135,13 +175,13 @@ func Build(loaded library.Library, sources []Source, targets []Target) Model {
 	filter.Prompt, filter.Placeholder = filterPrompt, filterHint
 	filter.SetStyles(look.FilterStyles())
 	filter.Focus()
-	built := Model{Groups: groups, drawn: &drawn{}, targets: targets, filter: filter, effort: llm.EffortDefault}
+	built := Model{Groups: groups, classifiers: classifiers, keys: keys, drawn: &drawn{}, targets: targets, filter: filter, effort: llm.EffortDefault}
 	built.settle()
 	return built
 }
 
 func (m *Model) AssignTo(at int) {
-	m.assign, m.tab = &m.targets[at], tabModels
+	m.assign, m.tab, m.provider = &m.targets[at], tabModels, 0
 	m.filter.Reset()
 	m.reset()
 }
@@ -150,10 +190,34 @@ func (m *Model) SetSize(width, height int) {
 	m.width, m.height = max(width, minimumWidth), height
 }
 
+func (m Model) groups() []Group {
+	if m.assign != nil && m.assign.takes() == library.KindClassifier {
+		return m.classifiers
+	}
+	return m.Groups
+}
+
+func (m Model) groupOf(row Row) Group {
+	source, _, _ := strings.Cut(row.Slug, "/")
+	for _, group := range m.groups() {
+		if group.Source == source {
+			return group
+		}
+	}
+	return Group{}
+}
+
+func (m Model) missingKey(row Row) string {
+	if group := m.groupOf(row); !group.KeySet {
+		return group.Key
+	}
+	return ""
+}
+
 func (m Model) providers() []string {
 	names := []string{allProviders}
-	for _, group := range m.Groups {
-		names = append(names, group.Source)
+	for _, group := range m.groups() {
+		names = append(names, group.label())
 	}
 	return names
 }
@@ -171,7 +235,7 @@ func (m Model) visible() []Row {
 			}
 		}
 	}
-	for i, group := range m.Groups {
+	for i, group := range m.groups() {
 		if m.provider != 0 && m.provider != i+1 {
 			continue
 		}
@@ -195,6 +259,9 @@ func (m Model) Picked() (Row, bool) {
 func (m Model) Effort() llm.Effort { return m.effort }
 
 func (m *Model) Key(key string) Intent {
+	if m.entry.name != "" {
+		return m.entryKey(key)
+	}
 	switch key {
 	case "esc":
 		return Intent{Action: Close}
@@ -233,6 +300,40 @@ func (m *Model) Key(key string) Intent {
 		}
 	}
 	return Intent{}
+}
+
+func (m *Model) entryKey(key string) Intent {
+	switch key {
+	case "esc":
+		m.entry = keyEntry{}
+	case "enter":
+		if err := m.keys.Save(m.entry.name, m.entry.typed); err != nil {
+			m.entry.refusal = err.Error()
+			return Intent{}
+		}
+		for i := range m.classifiers {
+			m.classifiers[i].KeySet = m.classifiers[i].KeySet || m.classifiers[i].Key == m.entry.name
+		}
+		m.entry = keyEntry{}
+		return m.choose()
+	case "backspace":
+		typed := []rune(m.entry.typed)
+		m.entry.typed = string(typed[:max(len(typed)-1, 0)])
+	default:
+		if utf8.RuneCountInString(key) == 1 {
+			m.entry.typed, m.entry.refusal = m.entry.typed+key, ""
+		}
+	}
+	return Intent{}
+}
+
+func (m *Model) Paste(text string) {
+	text = strings.TrimSpace(text)
+	if m.entry.name == "" {
+		m.setFilter(m.filter.Value() + text)
+		return
+	}
+	m.entry.typed, m.entry.refusal = m.entry.typed+text, ""
 }
 
 func (m *Model) setFilter(value string) {
@@ -279,13 +380,7 @@ func (m Model) offered() []llm.Effort {
 	if !picked {
 		return nil
 	}
-	source, _, _ := strings.Cut(row.Slug, "/")
-	for _, group := range m.Groups {
-		if group.Source == source {
-			return group.Efforts
-		}
-	}
-	return nil
+	return m.groupOf(row).Efforts
 }
 
 func (m *Model) settle() {
@@ -309,11 +404,15 @@ func (m *Model) choose() Intent {
 		return Intent{}
 	}
 	row, picked := m.Picked()
+	missing := m.missingKey(row)
 	switch {
 	case !picked:
 		return Intent{}
 	case row.excluded():
 		return Intent{Action: Login, Slug: row.Slug}
+	case missing != "":
+		m.entry = keyEntry{name: missing}
+		return Intent{}
 	case m.assign == nil:
 		return Intent{Action: Pick, Slug: row.Slug, Effort: m.effort}
 	}
@@ -329,7 +428,7 @@ func (m *Model) Click(x, y int) Intent {
 	left, top := origin(m.width, m.height)
 	lines := strings.Split(m.cached(m.width, m.height), "\n")
 	row, at := y-top, x-left
-	if row < 0 || row >= len(lines) || at < 0 {
+	if m.entry.name != "" || row < 0 || row >= len(lines) || at < 0 {
 		return Intent{}
 	}
 	modalWidth, _ := modelDialogSize(m.width, m.height)

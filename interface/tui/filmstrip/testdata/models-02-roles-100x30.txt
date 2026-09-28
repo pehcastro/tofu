@@ -9,8 +9,8 @@
                                                                        Orchestrator model         
    Models  Roles           › Orchestrator model                        the model that plans and   
                              the model that plans and hands work to …  hands work to sub-agents   
-   PROVIDERS                                                                                      
-     all                                                               ASSIGNED MODEL             
+   PROVIDERS                 Classifier model                                                     
+     all                     the typed model that judges the model's…  ASSIGNED MODEL             
      claude-sub                                                        nothing is bound, so it    
                                                                        runs on the subscription   
                                                                        default                    

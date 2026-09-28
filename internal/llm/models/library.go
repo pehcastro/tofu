@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"tofu/internal/llm"
+	"tofu/internal/sys"
 )
 
 type Provider string
@@ -22,6 +23,18 @@ func (p Provider) valid() bool {
 		return true
 	}
 	return false
+}
+
+func (p Provider) KeyName() string {
+	switch p {
+	case OpenRouter:
+		return sys.OpenRouterKeyName
+	case TypeSafe:
+		return sys.TypeSafeKeyName
+	case Anthropic, OpenAI:
+		return ""
+	}
+	panic("models: unknown provider " + string(p))
 }
 
 type Kind string

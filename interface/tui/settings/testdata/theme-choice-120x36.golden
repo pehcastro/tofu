@@ -9,7 +9,7 @@
     Files           03      Spaci  Theme                                          esc     Solarized Light               
     Shell           05             tofu uses Zed Nu Disco; choose a palette                                             
     Turn            09      Anima                                                        HOW IT WORKS                   
-    Browser         03      Motio    tofu                                                Enter opens a focused          
+    Browser         04      Motio    tofu                                                Enter opens a focused          
     Startup         01                                                                   choice. Changes preview        
                             Statu    tofu light                                          immediately; Esc keeps the     
   NAVIGATE                  Conte                                                        prior value.                   

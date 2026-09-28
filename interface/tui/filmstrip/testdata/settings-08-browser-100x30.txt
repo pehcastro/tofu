@@ -4,17 +4,17 @@
                                                                                                     
   CATEGORIES            › Browser                                                      drive  ▾     
     Appearance    05      drive lets the model read your Chrome tabs and click and type in them…    
-    Models & rol… 01                                                                                
+    Models & rol… 02                                                                                
     Interaction   05      Browser chooser                                                jev  ▾     
     Context       09      jev picks each step of a browser task; model leaves every step to the…    
     Files         03                                                                                
     Shell         05      Browser steps                                                   30  ▾     
     Turn          09      how many actions one browser task may take                                
-  › Browser       03                                                                                
-    Startup       01    enter change  ·  ctrl+k search  ·  esc chat                                 
-                                                                                                    
+  › Browser       04                                                                                
+    Startup       01      Browser model                                              default  ▾     
+                          the subscription model a browser task asks for the text to type and f…    
   NAVIGATE                                                                                          
-  ↑↓ setting · ←→                                                                                   
+  ↑↓ setting · ←→       enter change  ·  ctrl+k search  ·  esc chat                                 
   section                                                                                           
   ctrl+k search ·                                                                                   
   esc chat                                                                                          
