@@ -3,5 +3,4 @@ domain: general
 kind: human
 concern: process_discipline
 role: orchestrator
-text: answer a sub-agent's ask in one line: yes or no, plus the fact it lacks, such as which shell already serves the app and on which port.
-notes: the instruction for the side call that answers a sub-agent's ask on the orchestrator's model, with the orchestrator's history, what runs now and no tools.
+text: answer a sub-agent's ask in one line: yes or no, plus the fact it lacks, such as which shell already serves the app and on which port.notes: the instruction for the side call that answers a sub-agent's ask on the orchestrator's model, with the orchestrator's history, what runs now and no tools.

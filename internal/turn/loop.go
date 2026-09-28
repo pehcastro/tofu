@@ -140,14 +140,20 @@ func Run(ctx context.Context, config Config) (Row, error) {
 	if source == nil {
 		source = func() Registry { return config.Tools }
 	}
-	withFetchTool := func(tools []Tool) []Tool {
-		if !handles {
-			return tools
+	withLoopTools := func(tools []Tool) []Tool {
+		added := slices.Clone(tools)
+		for _, tool := range tools {
+			if spawner, spawning := tool.(*SpawnTool); spawning {
+				added = append(added, messageTool{orchestrator: spawner})
+			}
 		}
-		return append(slices.Clone(tools), artifacts.FetchTool())
+		if handles {
+			added = append(added, artifacts.FetchTool())
+		}
+		return added
 	}
 	currentTools := func() Registry {
-		return NewRegistry(withFetchTool(source().tools)...)
+		return NewRegistry(withLoopTools(source().tools)...)
 	}
 	now := config.Now
 	if now == nil {
@@ -175,7 +181,7 @@ func Run(ctx context.Context, config Config) (Row, error) {
 	}
 	start := now()
 	origin := newID()
-	sentTools := withFetchTool(config.Tools.tools)
+	sentTools := withLoopTools(config.Tools.tools)
 	usedTools := make([]string, len(sentTools))
 	for i, tool := range sentTools {
 		usedTools[i] = tool.Name()

@@ -335,6 +335,7 @@ type SpawnTool struct {
 	reports        []SubAgentReport
 	ran            []Spawned
 	warmups        map[string]*warmup
+	held           map[string]*heldSubAgent
 }
 
 type warmup struct {
@@ -538,11 +539,9 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 	if err != nil {
 		return Result{}, fmt.Errorf("spawn: the sub-agent's prompt did not compose: %w", err)
 	}
-	var opened SubAgentModel
-	if t.SubAgents.Open != nil {
-		if opened, err = t.SubAgents.Open(definition); err != nil {
-			return Result{}, fmt.Errorf("spawn: the model for %s did not open: %w", cmp.Or(definition.Name, "the sub-agent"), err)
-		}
+	opened, err := t.open(definition)
+	if err != nil {
+		return Result{}, fmt.Errorf("spawn: %w", err)
 	}
 	if opened.Close != nil {
 		defer opened.Close()
@@ -568,13 +567,13 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 		Owns:    args.Owns,
 		Started: clock(),
 	}
-	subAgentID, held := agent.ID, t.roster.Hold(agent)
+	subAgentID, holding := agent.ID, t.roster.Hold(agent)
 	t.tree.Unlock()
-	if err := held; err != nil {
+	if err := holding; err != nil {
 		var collision subagent.CollisionError
 		if errors.As(err, &collision) && collision.HolderReport != "" {
 			return Result{Command: "handback " + collision.Holder, Content: fmt.Sprintf(
-				"no sub-agent was started: %s already holds %q, and %q overlaps it. Send this work to %s rather than starting a rival.\n\n%s has reported:\n%s",
+				"no sub-agent was started: %s already holds %q, and %q overlaps it. Send this work to %s with the message tool rather than starting a rival.\n\n%s has reported:\n%s",
 				collision.Holder, collision.HolderGlob, collision.Glob, collision.Holder, collision.Holder, collision.HolderReport)}, nil
 		}
 		return Result{}, fmt.Errorf("spawn: %w", err)
@@ -598,16 +597,8 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 	if offered(t.Name()) {
 		owned = append(owned, nested)
 	}
-	owned = append(owned, askTool{orchestrator: t, asking: agent, conversation: site.conversation})
 	subAgent := t.base
-	if opened.Accounts.Pick != nil {
-		subAgent.Model, subAgent.Accounts, subAgent.Spend, subAgent.Wire = nil, opened.Accounts, opened.Spend, opened.Wire
-	}
 	subAgent.System, subAgent.Environment = system, environment+t.briefFiles(ctx, args.Task)
-	trace := spawnTrace{site: site, definition: agent.Agent, model: agent.Model, mission: agent.Mission, owns: args.Owns, depth: t.depth + 1}
-	subAgent.Task = args.Task
-	subAgent.Tools = NewRegistry(owned...)
-	subAgent.NewID = func() string { return subAgentID }
 	subAgent.SpawnedFrom = t.orchestratorID
 	subAgent.Session, subAgent.Log, subAgent.Turn, subAgent.SpawnedBy = "", site.log, site.turn, site.call
 	if site.log == nil {
@@ -626,39 +617,192 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 			t.tree.Unlock()
 		}
 	}
+	held := &heldSubAgent{agent: agent, definition: definition, config: subAgent, tools: owned, nested: nested,
+		trace: spawnTrace{definition: agent.Agent, model: agent.Model, mission: agent.Mission, owns: args.Owns, depth: t.depth + 1}}
+	t.mu.Lock()
+	if t.held == nil {
+		t.held = map[string]*heldSubAgent{}
+	}
+	t.held[subAgentID] = held
+	t.ran = append(t.ran, Spawned{ID: subAgentID, Call: site.call, Agent: definition.Name, Slug: opened.Slug, Windows: opened.Windows})
+	t.mu.Unlock()
+	subAgent.Task = args.Task
+	subAgent.NewID = func() string { return subAgentID }
+	started = true
+	return t.converse(ctx, held, warm.stagger(ctx, site.call, opened.onto(subAgent)), site)
+}
 
+type heldSubAgent struct {
+	agent      subagent.SubAgent
+	definition subagent.Definition
+	config     Config
+	tools      []Tool
+	nested     *SpawnTool
+	trace      spawnTrace
+	history    []llm.Message
+	messages   int
+	nestedRows int
+	nestedRan  int
+}
+
+func (h *heldSubAgent) remember(round Row) {
+	if len(round.Conversation) > 0 {
+		h.history = resumable(round.Conversation)
+	}
+}
+
+func (t *SpawnTool) open(definition subagent.Definition) (SubAgentModel, error) {
+	if t.SubAgents.Open == nil {
+		return SubAgentModel{}, nil
+	}
+	opened, err := t.SubAgents.Open(definition)
+	if err != nil {
+		return SubAgentModel{}, fmt.Errorf("the model for %s did not open: %w", cmp.Or(definition.Name, "the sub-agent"), err)
+	}
+	return opened, nil
+}
+
+func (m SubAgentModel) onto(subAgent Config) Config {
+	if m.Accounts.Pick != nil {
+		subAgent.Model, subAgent.Accounts, subAgent.Spend, subAgent.Wire = nil, m.Accounts, m.Spend, m.Wire
+	}
+	return subAgent
+}
+
+func (t *SpawnTool) converse(ctx context.Context, held *heldSubAgent, subAgent Config, site spawnSite) (Result, error) {
+	agent, trace := held.agent, held.trace
+	trace.site = site
+	subAgent.Tools = NewRegistry(append(slices.Clone(held.tools), askTool{orchestrator: t, asking: agent, conversation: site.conversation})...)
 	subAgentCtx, release := context.WithCancel(ctx)
 	defer release()
-	started = true
-	claims, state, runErr := t.runRounds(ctx, subAgentCtx, agent, subAgentID, warm.stagger(ctx, site.call, subAgent), trace)
-	asked := boundary.Asked()
+	claims, state, runErr := t.runRounds(ctx, subAgentCtx, held, subAgent, trace)
+	asked := subAgent.Boundary.Asked()
 	if len(asked) > 0 && state != subagent.Errored && state != subagent.Parked {
 		state = subagent.WaitingAnswer
 	}
-	if err := trace.settle(claims[len(claims)-1].ID, state.String()); err != nil {
-		claims[len(claims)-1].Warnings = append(claims[len(claims)-1].Warnings, "the sub-agent's last state was not recorded: "+err.Error())
+	last := &claims[len(claims)-1]
+	if err := trace.settle(last.ID, state.String()); err != nil {
+		last.Warnings = append(last.Warnings, "the sub-agent's last state was not recorded: "+err.Error())
 	}
 	report := reportOf(agent, claims, state)
 	report.Asked = asked
+	nestedRows, nestedRan := held.nested.SubAgentRows(), held.nested.Spawned()
 	t.mu.Lock()
-	t.retain(append(claims, nested.SubAgentRows()...))
-	t.ran = append(append(t.ran, Spawned{ID: subAgentID, Call: site.call, Agent: definition.Name, Slug: opened.Slug, Windows: opened.Windows}), nested.Spawned()...)
+	t.retain(append(claims, nestedRows[held.nestedRows:]...))
+	t.ran = append(t.ran, nestedRan[held.nestedRan:]...)
+	held.nestedRows, held.nestedRan = len(nestedRows), len(nestedRan)
 	for _, claim := range claims {
 		t.spend += claim.TotalCostUSD
 	}
 	t.reports = append(t.reports, report)
 	t.mu.Unlock()
-	contract := subagent.BuildContract(agent.Brief, report.Prose, stoppedEarly(state, claims[len(claims)-1].Outcome))
+	contract := subagent.BuildContract(agent.Brief, report.Prose, stoppedEarly(state, last.Outcome))
 	contract.Wrote = report.Wrote
 	text := report.Text() + "\n\n" + contract.Block()
-	if opened.Slug != "" {
-		text = subAgentID + " ran as " + cmp.Or(definition.Name, "the unnamed sub-agent") + " on " + opened.Slug + "\n\n" + text
+	if agent.Model != "" {
+		text = agent.ID + " ran as " + cmp.Or(agent.Agent, "the unnamed sub-agent") + " on " + agent.Model + "\n\n" + text
 	}
-	t.roster.Reached(subAgentID, state, text)
+	t.roster.Reached(agent.ID, state, text)
 	if runErr != nil && state != subagent.Parked {
-		return Result{}, fmt.Errorf("spawn: sub-agent %s is %s: %w", subAgentID, state, runErr)
+		return Result{}, fmt.Errorf("sub-agent %s is %s: %w", agent.ID, state, runErr)
 	}
-	return Result{Content: text, Command: subAgentID + " " + state.String() + ": " + agent.Mission, SubAgent: subAgentID}, nil
+	return Result{Content: text, Command: agent.ID + " " + state.String() + ": " + agent.Mission, SubAgent: agent.ID}, nil
+}
+
+type messageTool struct {
+	orchestrator *SpawnTool
+}
+
+type messageArgs struct {
+	To   string `json:"to"`
+	Text string `json:"text"`
+}
+
+func (messageTool) Name() string { return "message" }
+
+func (messageTool) Definition() llm.Tool {
+	text := map[string]any{"type": "string"}
+	return llm.Tool{
+		Name: "message",
+		Description: "sends a sub-agent that has stopped more work or a correction, and returns its answer as spawn returns a report. " +
+			"it resumes with its whole conversation and the paths it held, so use it rather than spawning a new sub-agent for those paths. " +
+			"to is the sub-agent's name as its report gives it, such as ts-dev-1",
+		Parameters: map[string]any{
+			"type":       "object",
+			"properties": map[string]any{"to": text, "text": text},
+			"required":   []string{"to", "text"},
+		},
+	}
+}
+
+func (m messageTool) Run(ctx context.Context, raw json.RawMessage) (Result, error) {
+	var args messageArgs
+	if err := json.Unmarshal(raw, &args); err != nil {
+		return Result{}, fmt.Errorf("message: arguments are not the expected shape: %w", err)
+	}
+	if strings.TrimSpace(args.Text) == "" {
+		return Result{}, errors.New("message: text is required")
+	}
+	t := m.orchestrator
+	t.mu.Lock()
+	held := t.held[args.To]
+	t.mu.Unlock()
+	if held == nil {
+		return Result{}, t.unknown(args.To)
+	}
+	opened, err := t.open(held.definition)
+	if err != nil {
+		return Result{}, fmt.Errorf("message: %w", err)
+	}
+	if opened.Close != nil {
+		defer opened.Close()
+	}
+	t.tree.Lock()
+	err = t.rehold(held.agent)
+	t.tree.Unlock()
+	if err != nil {
+		return Result{}, fmt.Errorf("message refused: %w", err)
+	}
+	held.messages++
+	round := held.agent.ID + "-m" + strconv.Itoa(held.messages)
+	site, _ := ctx.Value(spawnSiteKey{}).(spawnSite)
+	subAgent := opened.onto(held.config)
+	subAgent.History, subAgent.Task, subAgent.SpawnedBy = held.history, args.Text, site.call
+	subAgent.NewID = func() string { return round }
+	return t.converse(ctx, held, subAgent, site)
+}
+
+func (t *SpawnTool) unknown(name string) error {
+	var names []string
+	for _, known := range t.roster.SubAgents() {
+		if known.ID == name {
+			return fmt.Errorf("message refused: %s was spawned in an earlier turn, and this turn does not hold its conversation to resume", name)
+		}
+		names = append(names, known.ID)
+	}
+	if len(names) == 0 {
+		return fmt.Errorf("message refused: no sub-agent is named %q, and none has been spawned", name)
+	}
+	return fmt.Errorf("message refused: no sub-agent is named %q; the sub-agents are %s", name, strings.Join(names, ", "))
+}
+
+func (t *SpawnTool) rehold(agent subagent.SubAgent) error {
+	var others subagent.Roster
+	for _, other := range t.roster.SubAgents() {
+		switch {
+		case other.ID != agent.ID:
+			if other.State != subagent.Finished && other.State != subagent.Errored {
+				_ = others.Hold(other)
+			}
+		case other.State == subagent.Working || other.State == subagent.InReview || other.State == subagent.Reopened:
+			return fmt.Errorf("%s is %s, and a running sub-agent cannot take a message until spawns run in the background", agent.ID, other.State)
+		}
+	}
+	if err := others.Hold(agent); err != nil {
+		return err
+	}
+	t.roster.Reached(agent.ID, subagent.Working, "")
+	return nil
 }
 
 var briefPath = regexp.MustCompile(`[\w./-]*\w\.[A-Za-z0-9]+`)
@@ -732,11 +876,12 @@ func resumable(messages []llm.Message) []llm.Message {
 	return Sendable(stripped)
 }
 
-func (t *SpawnTool) runRounds(outerCtx, subAgentCtx context.Context, agent subagent.SubAgent, subAgentID string, subAgent Config, trace spawnTrace) ([]Row, subagent.State, error) {
+func (t *SpawnTool) runRounds(outerCtx, subAgentCtx context.Context, held *heldSubAgent, subAgent Config, trace spawnTrace) ([]Row, subagent.State, error) {
+	agent, subAgentID := held.agent, held.agent.ID
 	first, firstErr := trace.run(outerCtx, subAgentCtx, subAgent)
 	claims := []Row{first}
 	state := roundState(outerCtx, firstErr)
-	history := append(slices.Clone(subAgent.History), resumable(first.Conversation)...)
+	held.remember(first)
 	for state == subagent.Finished && t.Review != nil {
 		t.roster.Reached(subAgentID, subagent.InReview, reportOf(agent, claims, subagent.InReview).Text())
 		last := &claims[len(claims)-1]
@@ -762,12 +907,12 @@ func (t *SpawnTool) runRounds(outerCtx, subAgentCtx context.Context, agent subag
 			break
 		}
 		t.roster.Reached(subAgentID, subagent.Working, "")
-		subAgent.History = history
+		subAgent.History = held.history
 		subAgent.Task = "You reported this finished and the done review did not believe you: " + decision.Reason
 		subAgent.NewID = func() string { return subAgentID + "-r" + strconv.Itoa(next) }
 		reRow, reErr := trace.run(outerCtx, subAgentCtx, subAgent)
 		claims = append(claims, reRow)
-		history = append(slices.Clone(history), resumable(reRow.Conversation)...)
+		held.remember(reRow)
 		if reErr != nil {
 			claims[len(claims)-1].Warnings = append(claims[len(claims)-1].Warnings,
 				"the sub-agent was re-opened and did not run again, so its earlier claim stands: "+reErr.Error())
