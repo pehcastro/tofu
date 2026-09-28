@@ -19,6 +19,7 @@ In your home, `~/.tofu`:
 - `agent.db`: the credentials `tofu login` stores
 - `AGENTS.md`: instructions sent with every task, in every project
 - `agents/`: your own sub-agents, one file each
+- `rules/`: your own rules for every project, written by `tofu rules add --global`
 - `skills/`: your own skills, one folder each
 - `agent-models.yaml`: the model a sub-agent runs, chosen in the app
 - `models/`, `subscriptions/`, `roles/`: your changes to the model list
@@ -31,6 +32,7 @@ In a project:
 
 - `.tofu/settings.json`: settings for this project only
 - `.tofu/agent-models.yaml`: sub-agent models for this project only
+- `.tofu/rules/`: rules for this project only, written by `tofu rules add`
 - `.tofu/agents/`, `.agents/agents/`, `.claude/agents/`: sub-agents, in the order the `agentSources` setting names
 - `.tofu/skills/`, `.agents/skills/`, `.claude/skills/`: skills, from the working directory up to the git root
 - `AGENTS.md` or `CLAUDE.md`: instructions, from the working directory up to the git root, the first of `instructionSources` in each folder

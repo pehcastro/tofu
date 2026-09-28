@@ -134,7 +134,7 @@ func appOptions(dir string, arms runOpts, wiring appWiring, launch appLaunch) tu
 		Providers:    appProviders(),
 		Quota:        wiring.quota,
 		Settings:     settingsStore,
-		Reload:       appReload,
+		Reload:       appReload(dir),
 		Turn:         live.run,
 		Paste:        paste.Board{Read: wiring.clipboard, Dir: live.pendingSessionDir, Recorded: live.recordAttachment},
 		Answers:      answers,

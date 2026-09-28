@@ -102,3 +102,23 @@
   do: tofu changelog
   check: tofu version
   topic: start
+- ask: add a rule for every project
+  do: tofu rules add --global <id> "<text>"
+  check: tofu rules list
+  topic: rules
+- ask: add a rule to this project only
+  do: tofu rules add <id> "<text>"
+  check: tofu rules list
+  topic: rules
+- ask: switch off a rule tofu ships
+  do: tofu rules off <id>
+  check: tofu rules list
+  topic: rules
+- ask: remove a rule I added, or bring back one I switched off
+  do: tofu rules remove <id>
+  check: tofu rules list
+  topic: rules
+- ask: see which rules run and where each one comes from
+  do: tofu rules list
+  check: tofu rules list --json
+  topic: rules

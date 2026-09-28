@@ -130,6 +130,18 @@ func parseRule(data []byte, path string) (Rule, error) {
 	return r, nil
 }
 
+func HumanRuleFile(id string, concern Concern, mode Mode, text string) ([]byte, error) {
+	if id == "" || strings.ContainsFunc(id, func(r rune) bool { return (r < 'a' || r > 'z') && (r < '0' || r > '9') && r != '_' }) {
+		return nil, fmt.Errorf("a rule id is lower case letters, digits and underscores, found %q", id)
+	}
+	if strings.TrimSpace(text) == "" || strings.ContainsAny(text, "\r\n") {
+		return nil, fmt.Errorf("rule %q needs its text on one line", id)
+	}
+	data := fmt.Appendf(nil, "id: %s\ndomain: %s\nkind: %s\nconcern: %s\nmode: %s\ntext: %s\n", id, DomainGeneral, KindHuman, concern, mode, text)
+	_, err := parseRule(data, id+"@1.yaml")
+	return data, err
+}
+
 func LoadDir(dir string) ([]Rule, error) {
 	loaded, err := LoadFS(os.DirFS(dir), dir)
 	if err != nil {

@@ -13,11 +13,10 @@ import (
 )
 
 type rulesIndexOpts struct {
-	text    string
-	paths   []string
-	verb    rule.Verb
-	library string
-	json    bool
+	rulesFlags
+	text  string
+	paths []string
+	verb  rule.Verb
 }
 
 type ruleIndexListing struct {
@@ -43,7 +42,7 @@ func rulesIndexVerb(args []string, out, errOut io.Writer) int {
 	if err != nil {
 		return rulesFail(errOut, err)
 	}
-	rules, origin, err := loadRules(opts.library)
+	rules, origin, err := loadRules(opts.library, opts.dir)
 	if err != nil {
 		return rulesFail(errOut, err)
 	}
@@ -118,12 +117,12 @@ func parseRulesIndexArgs(args []string) (rulesIndexOpts, error) {
 	default:
 		return rulesIndexOpts{}, fmt.Errorf("--task is %s, %s, %s or %s, found %q", rule.VerbDebug, rule.VerbExplore, rule.VerbReview, rule.VerbWrite, verb)
 	}
-	library, asJSON, rest, err := parseRulesFlags(kept)
+	flags, err := parseRulesFlags(kept)
 	if err != nil {
 		return rulesIndexOpts{}, err
 	}
-	if len(rest) == 0 {
+	if len(flags.rest) == 0 {
 		return rulesIndexOpts{}, errors.New("tofu rules index needs the task in words, then the paths the task names")
 	}
-	return rulesIndexOpts{text: rest[0], paths: rest[1:], verb: verb, library: library, json: asJSON}, nil
+	return rulesIndexOpts{rulesFlags: flags, text: flags.rest[0], paths: flags.rest[1:], verb: verb}, nil
 }

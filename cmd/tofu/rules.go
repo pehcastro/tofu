@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -22,21 +23,23 @@ const (
 	rulesFromTheProject = "the project"
 )
 
-type rulesListOpts struct {
-	library string
-	json    bool
+type rulesFlags struct {
+	library, dir string
+	json         bool
+	rest         []string
 }
 
 type rulesCheckOpts struct {
-	path    string
-	library string
-	json    bool
+	rulesFlags
+	path string
 }
 
 type ruleListing struct {
-	ID   string `json:"id"`
-	Kind string `json:"kind"`
-	Mode string `json:"mode,omitempty"`
+	ID     string `json:"id"`
+	Kind   string `json:"kind"`
+	Origin string `json:"origin"`
+	Mode   string `json:"mode,omitempty"`
+	File   string `json:"file,omitempty"`
 }
 
 type ruleFireListing struct {
@@ -69,9 +72,17 @@ type ruleListReport struct {
 
 func rulesVerb(args []string, out, errOut io.Writer) int {
 	if len(args) == 0 {
-		return rulesFail(errOut, errors.New("usage: tofu rules list|check|fired|index [path] [--task kind] [--library dir] [--json]"))
+		return rulesFail(errOut, errors.New(`usage: tofu rules list|check|fired|index [path] [--task kind] [--library dir] [--dir project] [--json]
+       tofu rules add [--global] [--dir project] [--replace] [--concern c] <id> "<text>"
+       tofu rules off|remove [--global] [--dir project] <id>`))
 	}
 	switch args[0] {
+	case "add":
+		return rulesAddVerb(args[1:], out, errOut)
+	case "off":
+		return rulesOffVerb(args[1:], out, errOut)
+	case "remove":
+		return rulesRemoveVerb(args[1:], out, errOut)
 	case "list":
 		return rulesListVerb(args[1:], out, errOut)
 	case "check":
@@ -90,7 +101,26 @@ func rulesFail(errOut io.Writer, err error) int {
 	return exitUsage
 }
 
-func loadRules(override string) ([]rule.Rule, string, error) {
+func loadRules(override, project string) ([]rule.Rule, string, error) {
+	rules, origin, err := baseRules(override)
+	if err != nil {
+		return nil, "", err
+	}
+	layers, err := userRuleLayers(project)
+	if err != nil {
+		return nil, "", err
+	}
+	for _, layer := range layers {
+		over, err := layer.load()
+		if err != nil {
+			return nil, "", err
+		}
+		rules = rule.Layer(rules, over)
+	}
+	return rules, origin, nil
+}
+
+func baseRules(override string) ([]rule.Rule, string, error) {
 	if override != "" {
 		rules, err := rule.LoadDir(override)
 		return rules, override, err
@@ -116,17 +146,26 @@ func rulesListVerb(args []string, out, errOut io.Writer) int {
 	if err != nil {
 		return rulesFail(errOut, err)
 	}
-	rules, origin, err := loadRules(opts.library)
+	rules, origin, err := loadRules(opts.library, opts.dir)
+	if err != nil {
+		return rulesFail(errOut, err)
+	}
+	layers, err := userRuleLayers(opts.dir)
 	if err != nil {
 		return rulesFail(errOut, err)
 	}
 	listing := make([]ruleListing, len(rules))
 	for i, r := range rules {
-		mode := ""
-		if r.Checker != "" || r.Mode == rule.ModeOff {
-			mode = r.Mode.String()
+		listing[i] = ruleListing{ID: r.ID, Kind: string(r.Kind), Origin: "shipped"}
+		if origin != rulesFromTheBinary {
+			listing[i].Origin = "library"
 		}
-		listing[i] = ruleListing{ID: r.ID, Kind: string(r.Kind), Mode: mode}
+		if r.Checker != "" {
+			listing[i].Mode = r.Mode.String()
+		}
+		if at := slices.IndexFunc(layers, func(layer ruleLayer) bool { return strings.HasPrefix(r.File, layer.dir+string(filepath.Separator)) }); at >= 0 {
+			listing[i].Origin, listing[i].File = layers[at].name, r.File
+		}
 	}
 	if opts.json {
 		body, err := json.Marshal(ruleListReport{Origin: origin, Rules: listing})
@@ -140,9 +179,9 @@ func rulesListVerb(args []string, out, errOut io.Writer) int {
 	for _, r := range listing {
 		widest = max(widest, len(r.ID))
 	}
-	_, _ = fmt.Fprintf(out, "%d rules from %s, a mode is shown only where it does something\n", len(listing), origin)
+	_, _ = fmt.Fprintf(out, "%d rules from %s, then your global and project rules, a mode is shown only where it does something\n", len(listing), origin)
 	for _, r := range listing {
-		_, _ = fmt.Fprintln(out, strings.TrimRight(fmt.Sprintf("%-*s %-10s %s", widest, r.ID, r.Kind, r.Mode), " "))
+		_, _ = fmt.Fprintln(out, strings.TrimRight(fmt.Sprintf("%-*s %-10s %-7s %-8s %s", widest, r.ID, r.Kind, r.Origin, r.Mode, r.File), " "))
 	}
 	return exitOK
 }
@@ -152,7 +191,7 @@ func rulesCheckVerb(args []string, out, errOut io.Writer) int {
 	if err != nil {
 		return rulesFail(errOut, err)
 	}
-	rules, origin, err := loadRules(opts.library)
+	rules, origin, err := loadRules(opts.library, opts.dir)
 	if err != nil {
 		return rulesFail(errOut, err)
 	}
@@ -243,49 +282,50 @@ func printRulesCheckJSON(out io.Writer, origin string, fires []rule.Fire, blocke
 	return err
 }
 
-func parseRulesFlags(args []string) (library string, asJSON bool, rest []string, err error) {
+func parseRulesFlags(args []string) (rulesFlags, error) {
+	flags := rulesFlags{dir: "."}
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
+		if arg == "--library" || arg == "--dir" {
+			if i++; i >= len(args) {
+				return rulesFlags{}, fmt.Errorf("%s needs a directory", arg)
+			}
+		}
 		switch {
 		case arg == "--json":
-			asJSON = true
+			flags.json = true
 		case arg == "--library":
-			i++
-			if i >= len(args) {
-				return "", false, nil, errors.New("--library needs a directory")
-			}
-			library = args[i]
+			flags.library = args[i]
+		case arg == "--dir":
+			flags.dir = args[i]
 		case strings.HasPrefix(arg, "-"):
-			return "", false, nil, fmt.Errorf("unknown argument %q", arg)
+			return rulesFlags{}, fmt.Errorf("unknown argument %q", arg)
 		default:
-			rest = append(rest, arg)
+			flags.rest = append(flags.rest, arg)
 		}
 	}
-	return library, asJSON, rest, nil
+	return flags, nil
 }
 
-func parseRulesListArgs(args []string) (rulesListOpts, error) {
-	library, asJSON, rest, err := parseRulesFlags(args)
-	if err != nil {
-		return rulesListOpts{}, err
+func parseRulesListArgs(args []string) (rulesFlags, error) {
+	flags, err := parseRulesFlags(args)
+	if err == nil && len(flags.rest) > 0 {
+		err = fmt.Errorf("unknown argument %q", flags.rest[0])
 	}
-	if len(rest) > 0 {
-		return rulesListOpts{}, fmt.Errorf("unknown argument %q", rest[0])
-	}
-	return rulesListOpts{library: library, json: asJSON}, nil
+	return flags, err
 }
 
 func parseRulesCheckArgs(args []string) (rulesCheckOpts, error) {
-	library, asJSON, rest, err := parseRulesFlags(args)
+	flags, err := parseRulesFlags(args)
 	if err != nil {
 		return rulesCheckOpts{}, err
 	}
-	if len(rest) > 1 {
-		return rulesCheckOpts{}, fmt.Errorf("tofu rules check takes one path, got %q and %q", rest[0], rest[1])
+	if len(flags.rest) > 1 {
+		return rulesCheckOpts{}, fmt.Errorf("tofu rules check takes one path, got %q and %q", flags.rest[0], flags.rest[1])
 	}
-	opts := rulesCheckOpts{library: library, json: asJSON}
-	if len(rest) == 1 {
-		opts.path = rest[0]
+	opts := rulesCheckOpts{rulesFlags: flags}
+	if len(flags.rest) == 1 {
+		opts.path = flags.rest[0]
 	}
 	return opts, nil
 }
