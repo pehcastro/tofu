@@ -171,3 +171,8 @@ const (
 	ShellLogTailLinesDefault = 500
 	ShellLogTailLinesLong    = 1000
 )
+
+const (
+	BrowserHostMessageBytes      = 1024 * 1024
+	BrowserExtensionMessageBytes = 64 * 1024 * 1024
+)
