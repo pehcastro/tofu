@@ -8,6 +8,23 @@ Tofu is personal and not released, so the public interface that a version promis
 
 The minor number carries breaking changes, which is what 0.x means, and **there is never a 1.0.0**. The owner decided that on 2026-09-19: this stays 0.x forever, so the promise the version makes is the one 0.x already makes, that anything can break on a minor bump.
 
+## 0.5.0-rc-fix15 - 2026-09-28
+
+Tofu reads and drives the Chrome tabs you share with it, from inside its own binary.
+
+### Added
+
+- **`tofu browser install`** writes the tofu extension to `~/.tofu/browser/extension` and registers `tofu.exe` as Chrome's native host. There is no second program and no open port. Load the folder once in `chrome://extensions` with Developer mode on.
+- **The tofu extension** shares only a tab you pick from its icon, to read or to drive. It never attaches to other tabs, never navigates a tab, and never runs JavaScript or selectors that a model wrote.
+- **`tofu browser`** lists the shared tabs. `tofu browser open <url>` starts a background tab that tofu owns, and `tofu browser close <id>` closes only such a tab.
+- **The setting `browser`,** off by default. `read` gives the model `browser_tabs` and `browser_read`. `drive` also gives it `browser_do`, where Jev picks each step's action and target from the page, and the model passes the text for any field in `values`.
+- **The setting `browserChooser`:** jev, the default, or model, which gives the model `browser_act` to take each step itself. `browserSteps` caps the actions, 30 by default.
+- **`tofu docs browser`** explains all of it.
+
+### Changed
+
+- **A choice set to off is drawn as a choice in settings,** not as an on/off switch.
+
 ## 0.5.0-rc-fix14 - 2026-09-28
 
 Tofu knows how it works and how to change itself.
