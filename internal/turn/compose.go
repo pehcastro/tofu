@@ -137,8 +137,11 @@ func Compose(spec ComposeSpec) (Composed, error) {
 		composed.Parts = append(composed.Parts, builtin)
 	}
 	agentDomain := cmp.Or(spec.Agent.Domain, rule.DomainDev)
+	outsideAgentDomain := func(loaded rule.Rule) bool {
+		return (loaded.Domain == rule.DomainQA || loaded.Domain == rule.DomainDev) && loaded.Domain != agentDomain
+	}
 	reaching := slices.DeleteFunc(slices.Clone(spec.Rules), func(loaded rule.Rule) bool {
-		return (loaded.Domain == rule.DomainQA || loaded.Domain == rule.DomainDev) && loaded.Domain != agentDomain && !loaded.ReachesDevFor(composed.Task)
+		return outsideAgentDomain(loaded) && !loaded.ReachesDevFor(composed.Task)
 	})
 	withoutTask := rule.Index(reaching, rule.Task{Role: composed.Task.Role, Language: composed.Task.Language})
 	for i, match := range rule.Index(reaching, composed.Task) {
@@ -157,7 +160,7 @@ func Compose(spec ComposeSpec) (Composed, error) {
 			RuleID:  fired.ID,
 			File:    filepath.ToSlash(fired.File),
 			Text:    text,
-			ByTask:  !withoutTask[i].Fires,
+			ByTask:  !withoutTask[i].Fires || outsideAgentDomain(fired),
 		})
 	}
 	order := composedOrder()

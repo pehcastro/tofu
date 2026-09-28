@@ -23,8 +23,9 @@ import (
 
 const (
 	sessionEnvironment = "<env>\nworking directory: F:\\localhost\\hono-app-2\nplatform: windows/amd64\n</env>"
-	firstTurnTask      = "this is a hono app with bun, i need you to check the nw.sqlite and extract its schema, then build a hono api using sub agents in parallel"
+	firstTurnTask      = "this is a hono app with bun, i need you to check the nw.sqlite and extract its schema, then build a hono api using sub agents in parallel, start the dev server for me so i can test too"
 	secondTurnTask     = "debug why bun is running a very wrong project and not this one, its pointing to my portfolio project"
+	thirdTurnTask      = "can you explain what was done to me? can be with lld"
 )
 
 type capturedServer struct {
@@ -215,8 +216,8 @@ func TestSiblingSubAgentsFromOneDefinitionShareTheCachedPrefix(t *testing.T) {
 }
 
 func TestTheNextTurnsFirstRequestReadsTheLastTurnsCachedPrefix(t *testing.T) {
-	config, server := sessionConfig(t, "read", "text", "text")
-	for _, task := range []string{firstTurnTask, secondTurnTask} {
+	config, server := sessionConfig(t, "read", "text", "text", "text")
+	for _, task := range []string{firstTurnTask, secondTurnTask, thirdTurnTask} {
 		composed, err := turn.Compose(sessionSpec(t, task, rule.RoleOrchestrator))
 		if err != nil {
 			t.Fatalf("composing: %v", err)
@@ -228,11 +229,14 @@ func TestTheNextTurnsFirstRequestReadsTheLastTurnsCachedPrefix(t *testing.T) {
 		}
 		config.History = turn.Sendable(row.Conversation)
 	}
-	if len(server.bodies) != 3 {
-		t.Fatalf("two turns sent %d requests, want 2 and 1", len(server.bodies))
+	if len(server.bodies) != 4 {
+		t.Fatalf("three turns sent %d requests, want 2, 1 and 1", len(server.bodies))
 	}
 	assertCachedPrefixCarriesOver(t, server.bodies[1], server.bodies[2])
+	assertFirstMessageCarries(t, server.bodies[0], "[code_rules, from the rule e2e_first]")
 	assertFirstMessageCarries(t, server.bodies[2], "[process_discipline, from the rule debug_loop]\nbefore you form a theory")
+	assertCachedPrefixCarriesOver(t, server.bodies[2], server.bodies[3])
+	assertFirstMessageCarries(t, server.bodies[3], "[task_shaping, from the rule design_docs]")
 }
 
 func assertFirstMessageCarries(t *testing.T, body []byte, wanted ...string) {
