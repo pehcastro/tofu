@@ -51,10 +51,11 @@ var canonicalTofu = [9]string{
 type pulseMsg struct{}
 
 type Identity struct {
-	cat   cat.Model
-	pose  int
-	pulse int
-	ascii bool
+	cat     cat.Model
+	pose    int
+	pulse   int
+	ascii   bool
+	started bool
 }
 
 func NewIdentity(forceASCII bool) Identity {
@@ -65,7 +66,13 @@ func NewIdentity(forceASCII bool) Identity {
 	)}
 }
 
-func (i Identity) Init() tea.Cmd { return tea.Batch(i.cat.Init(), pulse()) }
+func (i *Identity) Init() tea.Cmd {
+	if i.started {
+		return nil
+	}
+	i.started = true
+	return tea.Batch(i.cat.Init(), pulse())
+}
 
 func pulse() tea.Cmd {
 	return tea.Tick(pulseInterval, func(time.Time) tea.Msg { return pulseMsg{} })

@@ -107,9 +107,25 @@ func Apply(view string, theme Theme) string {
 	var out strings.Builder
 	out.Grow(len(view) + len(t.canvas))
 	out.WriteString(t.canvas)
+	for {
+		start, end := strings.Index(view, rawOpen), strings.Index(view, rawClose)
+		if start < 0 || end < start {
+			break
+		}
+		_, _ = t.replacer.WriteString(&out, view[:start])
+		out.WriteString("\x1b[m" + view[start+len(rawOpen):end] + t.canvas)
+		view = view[end+len(rawClose):]
+	}
 	_, _ = t.replacer.WriteString(&out, view)
 	return out.String()
 }
+
+const (
+	rawOpen  = "\x1b_tofu-raw\x1b\\"
+	rawClose = "\x1b_tofu-themed\x1b\\"
+)
+
+func Unthemed(line string) string { return rawOpen + line + rawClose }
 
 func Dim(view string) string { return dimReplacer.Replace(view) }
 

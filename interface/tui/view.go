@@ -157,7 +157,7 @@ func (a *App) body() string {
 		a.view.FoldHidesShell = a.flag(isettings.FoldHidesShell)
 		a.view.Welcome = nil
 		if a.intro.shown {
-			a.view.Welcome = a.intro.identity.Fit
+			a.view.Welcome = a.welcome
 		}
 		return a.view.View()
 	case screenAgents:
@@ -170,6 +170,17 @@ func (a *App) body() string {
 	case screenSettings:
 	}
 	panic("tui: unknown screen")
+}
+
+func (a *App) welcome(width, rows int) []string {
+	art := a.intro.identity.Fit(width, rows)
+	if a.top() != nil {
+		return art
+	}
+	for index, row := range art {
+		art[index] = look.Unthemed(row)
+	}
+	return art
 }
 
 func (a *App) preferEdits() {
