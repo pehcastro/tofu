@@ -8,6 +8,31 @@ Tofu is personal and not released, so the public interface that a version promis
 
 The minor number carries breaking changes, which is what 0.x means, and **there is never a 1.0.0**. The owner decided that on 2026-09-19: this stays 0.x forever, so the promise the version makes is the one 0.x already makes, that anything can break on a minor bump.
 
+## 0.5.0-rc-fix9 - 2026-09-27
+
+Thinking is visible, a spawn batch is one line, and each agent gets only the rules that fit it.
+
+### Changed
+
+- **A spawn batch is one line in the chat:** `⠂ waiting on [&ts-dev-1] [&ts-dev-2]  1m 12s`. Finished sub-agents join one settled line below it: `✓ [&ts-dev-1]`, `✗` for failed, `○` for stopped.
+- **Thinking shows on the sub-agents screen,** in each agent's own feed, the orchestrator's included. It is dim, with code folded to `...`, and never appears in the chat. Setting `showThinking` is on by default, and `t` toggles it. Tofu now asks Opus 4.7 and later for summarized thinking.
+- **Sub-agents of the same kind wait for a warm cache.** The first one starts at once, and its siblings start when its first model call returns, 8 seconds at most.
+- **A rule reaches only the agents of its domain.** qa rules go to qa, and dev rules go to the orchestrator and dev agents. The test rules (e2e_first, failure_modes_first and no_unit_test_after_code) also reach a dev agent whose work touches tests.
+- **debug_loop:** find the root cause, add temporary logging, and read the dev server's output.
+- **minimal_diff:** no throwaway compatibility code during a migration.
+- **test_assertion:** call the code the way its users do.
+- **evidence:** a number says whether it was measured, estimated or not known yet.
+- **review_diff:** scope the change added on its own is removed, not approved.
+
+### Added
+
+- **A `research` sub-agent.** It is read-only apart from its report, puts a citation behind every finding, and writes a fixed report: verdict, findings, confidence, open questions, consulted. The orchestrator can spawn several at once.
+- **New rules:**
+  - always on: reuse_inventory, design_first, data_first;
+  - for the orchestrator: plan_before_spawn, lesson_to_check, guard_context.
+- **Design documents on request.** Asking for a PRD, HLD or LLD fires design_docs, design_layers, bounded_change, draft_not_approved and conflict_held. PRD, HLD and LLD templates come with them. None of these fire on ordinary coding.
+- **A cassette reply takes `thinking`.**
+
 ## 0.5.0-rc-fix8 - 2026-09-27
 
 The same run in less time: sub-agents run at the same time, and the wait, the port clash and the repeated reads are gone.
