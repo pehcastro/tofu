@@ -1,0 +1,16 @@
+{
+  "model": "jev-1.13.0",
+  "provider": "TypeSafe",
+  "id": "gen-hotel-1",
+  "usage": {"input_tokens": 5312, "output_tokens": 370, "cost": 0.00021},
+  "answers": {
+    "operation": {"type": "choice", "choice": "SELECT", "confidence": 0.9,
+      "probabilities": {"CLICK": 0.03, "TYPE_TEXT": 0.04, "SELECT": 0.88, "SCROLL_DOWN": 0.01, "WAIT": 0.01, "DONE": 0.01, "BLOCKED": 0.02}},
+    "click_target": {"type": "choice", "choice": "5", "confidence": 0.7,
+      "probabilities": {"1": 0.01, "2": 0.01, "3": 0.01, "4": 0.05, "5": 0.71, "7": 0.05, "8": 0.12, "9": 0.02, "10": 0.02}},
+    "type_text_target": {"type": "choice", "choice": "4", "confidence": 1,
+      "probabilities": {"4": 1}},
+    "select_target": {"type": "choice", "choice": "6:1", "confidence": 0.9,
+      "probabilities": {"6:2": 0.04, "6:1": 0.93, "6:3": 0.03}}
+  }
+}

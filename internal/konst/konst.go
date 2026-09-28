@@ -175,4 +175,11 @@ const (
 const (
 	BrowserHostMessageBytes      = 1024 * 1024
 	BrowserExtensionMessageBytes = 64 * 1024 * 1024
+
+	BrowserPageTextRunes      = 6000
+	BrowserElementCeiling     = 250
+	BrowserActionCeiling      = 60
+	BrowserDecisionsPerAction = 2
+	BrowserRecentSteps        = 10
+	BrowserNoChangeStop       = 3
 )
