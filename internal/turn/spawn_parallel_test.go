@@ -106,7 +106,7 @@ func TestSpawnsWithOverlappingOwnsRunInOrder(t *testing.T) {
 	if !strings.Contains(answers[0].Content, "finished brief-1") {
 		t.Fatalf("the first spawn did not run: %q", answers[0].Content)
 	}
-	if held := answers[1].Content; !strings.Contains(held, "already holds") || !strings.Contains(held, "overlaps") {
-		t.Fatalf("the second spawn does not say it waited on an overlap: %q", held)
+	if second := answers[1].Content; !strings.Contains(second, "finished brief-2") {
+		t.Fatalf("the second spawn did not run once the first had finished and released its paths: %q", second)
 	}
 }

@@ -1,0 +1,7 @@
+id: ask_before
+domain: general
+kind: human
+concern: process_discipline
+role: sub-agent
+text: before you start a server or a watcher, bind a port, kill a process you did not start, or change a file outside the paths you hold, call ask with the default you would choose. anything inside your brief, just do.
+notes: sub-agents that started servers nobody could ask about left them running. the ask tool answers from a side call on the orchestrator's model, the way oh-my-pi's irc bus auto-replies for a blocked recipient in irc/bus.ts.

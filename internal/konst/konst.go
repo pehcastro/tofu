@@ -122,6 +122,7 @@ const (
 	SubAgentReferenceBytes  = 16384
 	SubAgentWarmMillis      = 8000
 	SubAgentSleepSeconds    = 5
+	SubAgentAskMillis       = 30000
 
 	OrchestratorSourceLinesPerTurn = 10
 )

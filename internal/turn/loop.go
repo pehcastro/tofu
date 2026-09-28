@@ -347,7 +347,7 @@ func Run(ctx context.Context, config Config) (Row, error) {
 					proxied, proxyRow := config.Proxy.rewrite(ctx, asked)
 					call.Arguments = proxied
 					request := GateRequest{TurnID: row.ID, Task: config.Task, Tool: call.Name, Args: call.Arguments}
-					gated := gatedCall{call: call, asked: asked, proxy: proxyRow, id: session.EventIDFor(origin, call.ID), parent: stepRow.id, author: author, sift: sifter, thrift: thrifter, task: config.Task, site: recorded.site(call.ID)}
+					gated := gatedCall{call: call, asked: asked, proxy: proxyRow, id: session.EventIDFor(origin, call.ID), parent: stepRow.id, author: author, sift: sifter, thrift: thrifter, task: config.Task, site: recorded.site(call.ID, messages)}
 					if config.Gate != nil {
 						verdict, err := config.Gate.Decide(ctx, request)
 						gated.verdict = verdict
