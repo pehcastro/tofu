@@ -121,6 +121,7 @@ const (
 	SubAgentMaxRounds       = 3
 	SubAgentReferenceBytes  = 16384
 	SubAgentWarmMillis      = 8000
+	SubAgentSleepSeconds    = 5
 
 	OrchestratorSourceLinesPerTurn = 10
 )

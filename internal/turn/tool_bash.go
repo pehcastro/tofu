@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -19,6 +20,7 @@ import (
 	"tofu/internal/konst"
 	"tofu/internal/llm"
 	"tofu/internal/search"
+	"tofu/internal/session"
 	"tofu/internal/shell"
 )
 
@@ -444,6 +446,27 @@ func stopOwned(registry *shell.Registry, command string, owned []shell.Shell) (R
 	}, nil
 }
 
+const (
+	commandPosition = `(?:^|[;&|(` + "`" + `])\s*`
+	sleepPattern    = commandPosition + `sleep\s+(\d+(?:\.\d+)?)([smh]?)\b`
+	killPattern     = commandPosition + `(?:\S*[/\\])?(?:kill|pkill|taskkill)(?:\.exe)?(?:\s|$)`
+)
+
+func subAgentRefusal(command string) error {
+	for _, match := range regexp.MustCompile(sleepPattern).FindAllStringSubmatch(command, -1) {
+		slept, err := time.ParseDuration(match[1] + cmp.Or(match[2], "s"))
+		if err == nil && slept > konst.SubAgentSleepSeconds*time.Second {
+			return fmt.Errorf("bash: own_paths_only: %q sleeps %s, and a sub-agent never waits on another's files, so no sleep over %d s runs here. "+
+				"work on the paths you own and report what you still need from a sibling instead of waiting for it", command, slept, konst.SubAgentSleepSeconds)
+		}
+	}
+	if regexp.MustCompile(killPattern).MatchString(command) {
+		return fmt.Errorf("bash: %q is refused: a sub-agent kills nothing but a shell tofu started for it, which runs as shell stop. "+
+			"check the app with the framework's in-process request, such as app.request or a test client, and leave servers to the orchestrator", command)
+	}
+	return nil
+}
+
 func bashDeadline(requested int) (deadline int, corrected string) {
 	switch {
 	case requested > konst.BashMaxDeadlineMillis:
@@ -470,9 +493,18 @@ func (t *BashTool) Run(ctx context.Context, raw json.RawMessage) (Result, error)
 	if strings.TrimSpace(args.Command) == "" {
 		return Result{}, errors.New("bash: command is required unless check_port is set")
 	}
+	owner := shellOwnerFrom(ctx)
+	subAgent := owner != "" && owner != session.AuthorOrchestrator
 	if registry := shellRegistryFrom(ctx); registry != nil {
-		if owned := registry.Owning(args.Command); len(owned) > 0 {
+		owned := registry.Owning(args.Command)
+		startedElsewhere := slices.ContainsFunc(owned, func(one shell.Shell) bool { return one.Owner != owner })
+		if len(owned) > 0 && (!subAgent || !startedElsewhere) {
 			return stopOwned(registry, args.Command, owned)
+		}
+	}
+	if subAgent {
+		if err := subAgentRefusal(args.Command); err != nil {
+			return Result{}, err
 		}
 	}
 	if name, summary, missing := missingInterpreterNamed(args.Command, t.probe.wait()); missing {
