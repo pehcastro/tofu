@@ -48,6 +48,16 @@ func (s State) String() string {
 	panic("subagent: unknown sub-agent state " + strconv.Itoa(int(s)))
 }
 
+func (s State) settled() bool {
+	switch s {
+	case Errored, Finished:
+		return true
+	case Working, WaitingAnswer, InReview, Reopened, Parked:
+		return false
+	}
+	panic("subagent: unknown sub-agent state " + strconv.Itoa(int(s)))
+}
+
 type SubAgent struct {
 	ID           string
 	Agent        string
@@ -109,6 +119,9 @@ func (r *Roster) Hold(agent SubAgent) error {
 			return err
 		}
 		for _, held := range r.agents {
+			if held.State.settled() {
+				continue
+			}
 			for _, other := range held.Owns {
 				if overlap(glob, other) {
 					return CollisionError{SubAgent: agent.ID, Glob: glob, Holder: held.ID, HolderGlob: other, HolderReport: held.Report}
