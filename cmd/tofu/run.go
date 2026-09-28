@@ -93,6 +93,7 @@ type runOpts struct {
 	contextCeiling   int
 	siftArm          string
 	noInstructions   bool
+	noDocs           bool
 	subAgentList     string
 	shell            turn.RunShell
 }
@@ -269,6 +270,7 @@ Arguments:
                         there is no flag for it, set it with
                         tofu settings set readBeforeEdit false
   --no-instructions     the arm that %s
+  --no-docs             the arm that drops the tofu_docs tool and the prompt sentence pointing at it
   --done-review <arm>          the arm that reviews a sub-agent's answer
   --max-steps <n>              cap the steps a turn takes, unset means no cap
   --loop-guard-repeats <n>     how many repeats of one call with one result stops a turn
@@ -571,6 +573,9 @@ func composeRun(opts runOpts, built []turn.Tool, run runtime) (composedRun, erro
 
 func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn.SpawnTool, error) {
 	orchestratorID, sessionID := cmp.Or(opts.turnID, turn.NewID(time.Now())), cmp.Or(opts.session, opts.turnID, session.NewEventID())
+	if opts.noDocs {
+		built = slices.DeleteFunc(slices.Clone(built), func(tool turn.Tool) bool { return tool.Name() == tools.DocsToolName })
+	}
 	if run.sessions != nil && opts.toolSet != toolSetThree {
 		built = append(slices.Clone(built), tools.NewQuote(run.sessions, sessionID))
 	}
@@ -777,6 +782,9 @@ func sessionID() (string, error) {
 	return text[:8] + "-" + text[8:12] + "-" + text[12:16] + "-" + text[16:20] + "-" + text[20:], nil
 }
 
+const docsSentence = "for a question about tofu itself, or a request to change its settings, rules, sub-agents or models, call " +
+	tools.DocsToolName + " first, and change tofu only with the tofu command it names."
+
 func runSystem(opts runOpts) string {
 	if opts.toolSet == toolSetThree {
 		return turn.EveryToolIsRelativeToTheWorkingDirectory +
@@ -784,6 +792,9 @@ func runSystem(opts runOpts) string {
 			"including finding a file, searching text and changing part of a file."
 	}
 	system := turn.EveryToolIsRelativeToTheWorkingDirectory + prompt.PreferTheToolOverTheShell
+	if !opts.noDocs {
+		system += " " + docsSentence
+	}
 	if opts.noSubAgents {
 		return system
 	}
@@ -933,6 +944,8 @@ func parseRunArgs(args []string) (runOpts, error) {
 			opts.noSubAgents = true
 		case "--no-instructions":
 			opts.noInstructions = true
+		case "--no-docs":
+			opts.noDocs = true
 		case "--wire":
 			opts.wire, err = nextArg(args, &i, arg)
 		case "--tools":

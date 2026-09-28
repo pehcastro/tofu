@@ -46,6 +46,7 @@ import (
 	"tofu/internal/sys"
 	"tofu/internal/transport"
 	"tofu/internal/turn"
+	"tofu/internal/turn/tools"
 	"tofu/internal/widget"
 )
 
@@ -2165,6 +2166,7 @@ func TestEveryToolInTheRunRegistryRecordsACommandThatDoesNotRepeatItsName(t *tes
 		"tofu_judge":         {arguments: `{"state":"the work is done","battery":"stop_check@1"}`},
 		"tofu_why":           {arguments: `{"id":"dec-1"}`},
 		"tofu_replay":        {arguments: `{"point":"tool_gate"}`},
+		tools.DocsToolName:   {arguments: `{"topic":"settings"}`},
 		"github_pr_diff":     {notRunHere: "it shells out to gh against a real github repository"},
 		"web_search":         {notRunHere: "it reaches a paid search provider over the network"},
 		turn.ShellToolName:   {notRunHere: "it stops, restarts or reads a background shell by name, and this test starts none"},
@@ -2199,6 +2201,66 @@ func TestEveryToolInTheRunRegistryRecordsACommandThatDoesNotRepeatItsName(t *tes
 		}
 	}
 	t.Logf("%d tools in the registry, %d not run here: %s", len(built), len(notRun), strings.Join(notRun, "; "))
+}
+
+func TestTheFullToolSetPointsTheModelAtTheDocsAndTheNoDocsArmDropsBoth(t *testing.T) {
+	emptyHome(t)
+	for _, arm := range []struct {
+		args []string
+		docs bool
+	}{{nil, true}, {[]string{"--no-docs"}, false}, {[]string{"--tools", toolSetThree}, false}} {
+		opts := armOpts(t, arm.args...)
+		built, err := buildTestRunTools(opts.dir, opts.toolSet)
+		if err != nil {
+			t.Fatalf("building the run tools: %v", err)
+		}
+		config, _ := mustConfig(t, opts, built, runtime{spend: turn.SpendSubscription})
+		offered := slices.ContainsFunc(config.Tools.Definitions(), func(tool llm.Tool) bool { return tool.Name == tools.DocsToolName })
+		told := strings.Contains(config.System, docsSentence)
+		t.Logf("%v: tofu_docs offered %v, sentence in the system prompt %v", arm.args, offered, told)
+		if offered != arm.docs || told != arm.docs {
+			t.Fatalf("%v: want the tool and the sentence both %v, got tool %v and sentence %v", arm.args, arm.docs, offered, told)
+		}
+	}
+}
+
+type offeredModel struct{ tools, system []string }
+
+func (m *offeredModel) Ask(_ context.Context, request llm.Request) (llm.Decision, error) {
+	for _, tool := range request.Tools {
+		m.tools = append(m.tools, tool.Name)
+	}
+	for _, message := range request.Messages {
+		if message.Role == llm.RoleSystem {
+			m.system = append(m.system, message.Content)
+		}
+	}
+	return llm.Decision{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "done"}, nil
+}
+
+func TestTofuDriveTakesNoDocsAndTheAppItDrivesOffersNoDocs(t *testing.T) {
+	for _, arm := range []struct {
+		args []string
+		docs bool
+	}{{nil, true}, {[]string{"--no-docs"}, false}} {
+		dir := scratchProject(t)
+		var refused bytes.Buffer
+		plan, taken := driveArgs(arm.args, &refused)
+		if !taken {
+			t.Fatalf("tofu drive refused %v: %s", arm.args, strings.SplitN(refused.String(), "\n", 2)[0])
+		}
+		model := &offeredModel{}
+		live := newAppSession(dir, func(runOpts) (appWire, error) { return wireOn(model), nil }, nil, time.Now, sessionResume{})
+		live.arms = plan.arms
+		driver := driveApp(t)
+		live.run(t.Context(), onTheSubscription, "say done", driver.emit)
+		offered := slices.Contains(model.tools, tools.DocsToolName)
+		told := strings.Contains(strings.Join(model.system, "\n"), docsSentence)
+		t.Logf("%v: the app offered %v, tofu_docs offered %v, sentence in the system prompt %v", arm.args, model.tools, offered, told)
+		if len(model.tools) == 0 || offered != arm.docs || told != arm.docs {
+			t.Fatalf("%v: want the tool and the sentence both %v, got tool %v and sentence %v", arm.args, arm.docs, offered, told)
+		}
+	}
 }
 
 func emptyHome(t *testing.T) {

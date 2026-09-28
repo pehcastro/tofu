@@ -379,8 +379,8 @@ func TestEveryVerbToolSaysWhatItNeedsToRun(t *testing.T) {
 	if err != nil {
 		t.Fatalf("building the verb tools: %v", err)
 	}
-	if len(verbs) != 5 {
-		t.Fatalf("expected five verb tools, got %d", len(verbs))
+	if len(verbs) != 6 {
+		t.Fatalf("expected six verb tools, got %d", len(verbs))
 	}
 	for _, verb := range verbs {
 		description := verb.Definition().Description
@@ -426,7 +426,7 @@ func TestEveryVerbGivesTheModelATofuName(t *testing.T) {
 	}
 	t.Logf("the model is given: %v", given)
 
-	wanted := []string{"tofu_lint_comments", "tofu_rules_check", "tofu_judge", "tofu_why", "tofu_replay"}
+	wanted := []string{"tofu_lint_comments", "tofu_rules_check", "tofu_judge", "tofu_why", "tofu_replay", tools.DocsToolName}
 	if len(given) != len(wanted) {
 		t.Fatalf("the model is given %d verb tools, want exactly %d: %v", len(given), len(wanted), given)
 	}

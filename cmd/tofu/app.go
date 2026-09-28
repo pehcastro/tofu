@@ -746,7 +746,7 @@ func (s *appSession) run(ctx context.Context, pick tui.Pick, task string, emit t
 	}
 	say := func(unreadable string) { emit(tui.Event{Kind: tui.EventNote, Text: unreadable}) }
 	opts := pickedOpts(s.dir, s.pendingID(), task, pick, cmp.Or(s.arms.maxSteps, settingInt(s.dir, settingspkg.DecisionCap, say)))
-	opts.gateArm, opts.siftArm, opts.noInstructions = s.arms.gateArm, s.arms.siftArm, s.arms.noInstructions
+	opts.gateArm, opts.siftArm, opts.noInstructions, opts.noDocs = s.arms.gateArm, s.arms.siftArm, s.arms.noInstructions, s.arms.noDocs
 	opts.toolSet, opts.contextCeiling = cmp.Or(s.arms.toolSet, opts.toolSet), s.arms.contextCeiling
 	opts.noSubAgents = s.arms.noSubAgents || settingInt(s.dir, settingspkg.TurnMaySpawn, say) == 0
 	opts.readBeforeEdit = settingInt(s.dir, settingspkg.ReadBeforeEdit, say) != 0

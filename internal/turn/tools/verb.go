@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"maps"
 	"os"
 	"os/exec"
@@ -17,9 +18,13 @@ import (
 	"tofu/internal/llm"
 	"tofu/internal/search"
 	"tofu/internal/turn"
+	"tofu/library/docs"
 )
 
-const verbDepthEnvar = "TOFU_VERB_DEPTH"
+const (
+	verbDepthEnvar = "TOFU_VERB_DEPTH"
+	DocsToolName   = "tofu_docs"
+)
 
 type verbParam int
 
@@ -30,6 +35,7 @@ const (
 	verbParamID
 	verbParamPoint
 	verbParamSet
+	verbParamTopic
 )
 
 func (p verbParam) about() (name string, describe string, required bool) {
@@ -46,6 +52,8 @@ func (p verbParam) about() (name string, describe string, required bool) {
 		return "point", "the decision point whose recorded rows to rescore, for instance tool_gate or stop_check", true
 	case verbParamSet:
 		return "set", "the thresholds to move, each one as name=value, and more than one separated by commas, for instance risk_ask_at=1.2,risk_deny_at=2.8. leave it out to rescore against the thresholds that were recorded", false
+	case verbParamTopic:
+		return "topic", "one topic, or a few words to match against the asks and the pages. leave it out for the index", false
 	}
 	panic("tools: unknown verb parameter")
 }
@@ -104,7 +112,21 @@ func verbSpecs() []verbSpec {
 			needs:  "it needs the .tofu ledger in the working tree: it rescores the answers that were recorded, so it makes no network call, spends nothing and needs no key",
 			params: []verbParam{verbParamPoint, verbParamSet},
 		},
+		{
+			tool:  DocsToolName,
+			words: []string{"docs"},
+			about: "prints tofu's own documentation: with no topic an index of asks and the tofu command that does each, with a topic that page, with a few words the asks and pages that match. " +
+				"the topics are " + docsTopics() + ". " +
+				"call it before changing tofu's settings, rules, sub-agents or models",
+			needs:  "it needs nothing: the docs travel inside the binary, so it makes no network call",
+			params: []verbParam{verbParamTopic},
+		},
 	}
+}
+
+func docsTopics() string {
+	pages, _ := fs.Glob(docs.Files(), "*.md")
+	return strings.ReplaceAll(strings.Join(pages, ", "), ".md", "")
 }
 
 type judgeRequest struct {
@@ -202,7 +224,7 @@ func (v Verb) Run(ctx context.Context, raw json.RawMessage) (turn.Result, error)
 			state = value
 		case verbParamBattery:
 			battery = value
-		case verbParamID:
+		case verbParamID, verbParamTopic:
 			words = append(words, value)
 		case verbParamPoint:
 			words = append(words, "--point", value)

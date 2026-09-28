@@ -58,6 +58,7 @@ mechanism can be driven by hand on a cassette rather than argued about:
   --tools full|three        which tools the turn is given
   --no-subagents            run without the spawn tool
   --no-instructions         send no AGENTS.md or CLAUDE.md
+  --no-docs                 offer no tofu_docs tool and no sentence pointing at it
   --max-steps N             cap the steps a turn takes
   --context-ceiling N       the token ceiling the turn compacts against
 
@@ -442,6 +443,9 @@ func driveArgs(args []string, errOut io.Writer) (drivePlan, bool) {
 			continue
 		case "--no-instructions":
 			plan.arms.noInstructions = true
+			continue
+		case "--no-docs":
+			plan.arms.noDocs = true
 			continue
 		}
 		if !strings.HasPrefix(flag, "--") {

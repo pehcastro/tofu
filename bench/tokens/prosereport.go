@@ -47,7 +47,7 @@ func (r ProseReport) Render() string {
 	if apart < 0 {
 		apart = -apart
 	}
-	fmt.Fprintf(&b, "TOFU-520 measured the same registry at %d bytes; this run measured %d, %d apart. Seventeen of the eighteen tools are byte for byte identical to that report; `bash` is not, because its description embeds the shell's own `pwd` for the working directory the generator was run from, `runs one command in %%s. cwd is already %%s`, and that string depends on where `go run` was invoked rather than on any tool schema. This generator runs from `bench/tokens/gen`, one character shorter than `bench/schemas/gen`, which is the whole of the gap. Every other tool's bytes are fixed by its own definition and do not move.\n\n", tofu520WireBytes, r.Whole.WireBytes, apart)
+	fmt.Fprintf(&b, "TOFU-520 measured the same registry at %d bytes; this run measured %d, %d apart. Seventeen of the eighteen tools TOFU-520 measured are byte for byte identical to that report; `bash` is not, because its description embeds the shell's own `pwd` for the working directory the generator was run from, `runs one command in %%s. cwd is already %%s`, and that string depends on where `go run` was invoked rather than on any tool schema. This generator runs from `bench/tokens/gen`, one character shorter than `bench/schemas/gen`, which is the whole of the bash gap. Every other tool's bytes are fixed by its own definition and do not move, and a tool added since TOFU-520, such as tofu_docs, is in this run's figure and not in that one, so its bytes are in the gap too.\n\n", tofu520WireBytes, r.Whole.WireBytes, apart)
 
 	b.WriteString("## Against their number\n\n")
 	share := r.Prose.ProseShare()

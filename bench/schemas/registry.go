@@ -34,7 +34,7 @@ func FullRegistry(dir string) iturn.Registry {
 	return iturn.NewRegistry(full...)
 }
 
-const FullToolCount = 18
+const FullToolCount = 19
 
 func Diff(a, b []string) (onlyA, onlyB []string) {
 	inB := map[string]bool{}

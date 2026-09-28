@@ -194,8 +194,8 @@ func TestTheTwoRecordToolsAddAMeasuredCostToEveryRequest(t *testing.T) {
 	if err != nil {
 		t.Fatalf("building the verb tools: %v", err)
 	}
-	if len(verbs) != 5 {
-		t.Fatalf("expected five verb tools, got %d", len(verbs))
+	if len(verbs) != 6 {
+		t.Fatalf("expected six verb tools, got %d", len(verbs))
 	}
 	var allBytes, allTokens, addedBytes, addedTokens int
 	for _, verb := range verbs {
@@ -211,7 +211,7 @@ func TestTheTwoRecordToolsAddAMeasuredCostToEveryRequest(t *testing.T) {
 			t.Logf("%s: %d bytes, %d tokens", verb.Name(), len(encoded), cfg.Tokens(string(encoded)))
 		}
 	}
-	t.Logf("five verb tools are %d bytes and %d tokens; tofu_why and tofu_replay add %d bytes and %d tokens at %d bytes per thousand tokens",
+	t.Logf("six verb tools are %d bytes and %d tokens; tofu_why and tofu_replay add %d bytes and %d tokens at %d bytes per thousand tokens",
 		allBytes, allTokens, addedBytes, addedTokens, cfg.BytesPerThousandTokens)
 	if addedTokens == 0 {
 		t.Fatal("the two new tools measured as nothing, so the names they are matched on are wrong")
