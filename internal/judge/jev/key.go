@@ -16,6 +16,7 @@ const (
 	SourceMissing Source = iota
 	SourceEnvironment
 	SourceDotEnv
+	SourceDatabase
 )
 
 type Located struct {
@@ -26,8 +27,8 @@ type Located struct {
 }
 
 const (
-	OpenRouterVariable = "OPENROUTER_KEY"
-	TypeSafeVariable   = "TYPESAFE_API_KEY"
+	OpenRouterVariable = sys.OpenRouterKeyName
+	TypeSafeVariable   = sys.TypeSafeKeyName
 )
 
 func AllowLiveCredential(tb testing.TB) {
@@ -56,6 +57,7 @@ const (
 	WhyNoFile
 	WhyFileLacksName
 	WhyUnreadable
+	WhyStoreUnreadable
 )
 
 type MissingKey struct {
@@ -73,6 +75,14 @@ func noKey(name, path string, why Why, cause error, format string, args ...any) 
 }
 
 func find(envPath, name string) (string, Located, error) {
+	stored, err := sys.StoredKeys()
+	if err != nil {
+		return noKey(name, "", WhyStoreUnreadable, err, "reading the credential store")
+	}
+	if value := stored[name]; value != "" {
+		path, _ := sys.CredentialStorePath()
+		return value, Located{Name: name, Source: SourceDatabase, Path: path}, nil
+	}
 	hidden := sys.CredentialsHiddenFromTests()
 	value := strings.TrimSpace(os.Getenv(name))
 	if hidden && sys.EqualsOwnerCredential(name, value) {

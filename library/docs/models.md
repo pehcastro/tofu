@@ -24,7 +24,8 @@ mean the genius, smart and worker tiers when those are set.
 
 ## Where it lives
 
-- `~/.tofu/agent.db`: the credentials `tofu login` stores
+- `~/.tofu/agent.db`: the credentials `tofu login` stores, the
+  subscriptions and the openrouter key
 - `~/.tofu/roles/orchestrator.yaml`, `.tofu/roles/orchestrator.yaml`: the
   model the orchestrator runs, one line, `model: source/model`. A
   `sub-agent.yaml` beside it names the model a spawn that names no
@@ -99,7 +100,8 @@ or `project`, and `from` says what listed a catalog model. After
 
     tofu login --status
 
-lists every stored credential with its number and state, and
+lists every stored credential with its number and state, and the
+openrouter key as set or not, by its last four characters at most, and
 `tofu usage` prints each subscription's quota windows and when they reset.
 
 ## Undo it

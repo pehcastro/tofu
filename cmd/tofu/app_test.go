@@ -47,7 +47,9 @@ import (
 	"tofu/internal/transport"
 	"tofu/internal/turn"
 	"tofu/internal/turn/tools"
+	"tofu/internal/web"
 	"tofu/internal/widget"
+	shipped "tofu/library"
 )
 
 func TestMain(m *testing.M) {
@@ -242,13 +244,174 @@ func storeCredential(t *testing.T, provider cred.Provider) {
 
 func storeGateKey(t *testing.T, key string) {
 	t.Helper()
-	path, err := cred.OpenRouterPath()
+	if err := sys.SaveKey(jev.OpenRouterVariable, key); err != nil {
+		t.Fatal(err)
+	}
+}
+
+const loginReachableReply = `{"model":"typesafe/jev-1.13-20260917","provider":"TypeSafe","id":"gen-stub-login",` +
+	`"answers":{"reachable":{"type":"noul","noul":0.9}},"usage":{"input_tokens":10,"output_tokens":2,"cost":0.00002}}`
+
+func assertOnlyTheTail(t *testing.T, where, body, key string) {
+	t.Helper()
+	for at := 0; at+4 < len(key); at++ {
+		if strings.Contains(body, key[at:at+5]) {
+			t.Fatalf("%s holds five characters of the key from position %d:\n%s", where, at, body)
+		}
+	}
+}
+
+func TestLoginOpenRouterStoresTheKeyInTheDatabaseAndPrintsNoMoreThanItsTail(t *testing.T) {
+	scratchProject(t)
+	home, err := sys.HomeConfigDir()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := cred.SaveOpenRouter(path, key); err != nil {
+	const key = "sk-or-v1-made-up-for-this-test-7Qx2"
+	jevStub(t, http.StatusOK, loginReachableReply, nil)
+
+	var out, errOut bytes.Buffer
+	if code := loginVerb([]string{openRouterName}, strings.NewReader(key+"\r\n"), &out, &errOut); code != exitOK {
+		t.Fatalf("login openrouter exited %d: %s", code, errOut.String())
+	}
+	stored, err := sys.StoredKeys()
+	if err != nil || stored[jev.OpenRouterVariable] != key {
+		t.Fatalf("the database holds a value of length %d for the key, and %v", len(stored[jev.OpenRouterVariable]), err)
+	}
+	if _, err := os.Stat(filepath.Join(home, sys.CredentialFileName)); !os.IsNotExist(err) {
+		t.Fatalf("login left a .env under %s: %v", home, err)
+	}
+	var status bytes.Buffer
+	if code := loginVerb([]string{"--status"}, nil, &status, &errOut); code != exitOK {
+		t.Fatalf("login --status exited %d: %s", code, errOut.String())
+	}
+	if !strings.Contains(status.String(), key[len(key)-4:]) {
+		t.Errorf("login --status does not show the last four characters:\n%s", status.String())
+	}
+	var checked bytes.Buffer
+	doctor(&checked, paletteOf(&checked))
+	if !strings.Contains(strings.Join(strings.Fields(checked.String()), " "), "key from the credential store at") {
+		t.Errorf("tofu doctor does not say the key came from the credential store:\n%s", checked.String())
+	}
+	printed := out.String() + errOut.String() + status.String() + checked.String()
+	assertOnlyTheTail(t, "what login printed", printed, key)
+	t.Log("\n" + out.String() + status.String() + checked.String())
+}
+
+func TestLoginBraveStoresTheSearchKeyInTheDatabase(t *testing.T) {
+	scratchProject(t)
+	t.Setenv(sys.BraveSearchKeyName, "")
+	const key = "Xq2Lp9Rz4Tn8Vw3Ks6Gw1"
+	var out, errOut bytes.Buffer
+	if code := loginVerb([]string{"brave"}, strings.NewReader(key+"\n"), &out, &errOut); code != exitOK {
+		t.Fatalf("login brave exited %d: %s", code, errOut.String())
+	}
+	stored, err := sys.StoredKeys()
+	if err != nil || stored[sys.BraveSearchKeyName] != key {
+		t.Fatalf("the database holds a search key of length %d, and %v", len(stored[sys.BraveSearchKeyName]), err)
+	}
+	assertOnlyTheTail(t, "what login brave printed", out.String()+errOut.String(), key)
+
+	storeGateKey(t, gateKeyForTests)
+	var status, asJSON bytes.Buffer
+	if code := loginVerb([]string{"--status"}, nil, &status, &errOut); code != exitOK {
+		t.Fatalf("login --status exited %d: %s", code, errOut.String())
+	}
+	if code := loginVerb([]string{"--status", "--json"}, nil, &asJSON, &errOut); code != exitOK {
+		t.Fatalf("login --status --json exited %d: %s", code, errOut.String())
+	}
+	for _, shown := range []string{status.String(), asJSON.String()} {
+		for _, want := range []string{sys.BraveSearchKeyName, key[len(key)-4:], sys.OpenRouterKeyName, gateKeyForTests[len(gateKeyForTests)-4:], sys.TypeSafeKeyName} {
+			if !strings.Contains(shown, want) {
+				t.Errorf("login --status does not show %q:\n%s", want, shown)
+			}
+		}
+		assertOnlyTheTail(t, "login --status", shown, key)
+		assertOnlyTheTail(t, "login --status", shown, gateKeyForTests)
+	}
+	t.Log("\n" + out.String() + status.String())
+}
+
+func TestAHomeDotEnvMovesIntoTheDatabaseOnStartAndIsRemoved(t *testing.T) {
+	scratchProject(t)
+	home, err := sys.HomeConfigDir()
+	if err != nil {
 		t.Fatal(err)
 	}
+	const key = "sk-or-v1-made-up-for-the-move-3Kd9"
+	dotEnv := filepath.Join(home, sys.CredentialFileName)
+	writeFile(t, home, sys.CredentialFileName, "# written by an older tofu\nOPENROUTER_KEY="+key+"\n")
+
+	var said bytes.Buffer
+	moveHomeKeys(&said)
+	stored, err := sys.StoredKeys()
+	if err != nil || stored[jev.OpenRouterVariable] != key {
+		t.Fatalf("the database holds a value of length %d after the move, and %v", len(stored[jev.OpenRouterVariable]), err)
+	}
+	if _, err := os.Stat(dotEnv); !os.IsNotExist(err) {
+		t.Fatalf("%s is still there after the move: %v", dotEnv, err)
+	}
+	if lines := strings.Count(said.String(), "\n"); lines != 1 || !strings.Contains(said.String(), jev.OpenRouterVariable) {
+		t.Fatalf("the move said %d lines, want one naming %s:\n%s", lines, jev.OpenRouterVariable, said.String())
+	}
+	assertOnlyTheTail(t, "the move line", said.String(), key)
+	t.Log(said.String())
+
+	said.Reset()
+	moveHomeKeys(&said)
+	if said.Len() != 0 {
+		t.Fatalf("a second start said something with nothing to move:\n%s", said.String())
+	}
+}
+
+func TestAHomeDotEnvWithOtherNamesKeepsThemAndLosesOnlyTheKey(t *testing.T) {
+	scratchProject(t)
+	home, err := sys.HomeConfigDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, home, sys.CredentialFileName, "OPENROUTER_KEY=sk-or-v1-made-up-kept-apart-9Zt1\nUNRELATED_SETTING=1\n")
+	var said bytes.Buffer
+	moveHomeKeys(&said)
+	body, err := os.ReadFile(filepath.Join(home, sys.CredentialFileName))
+	if err != nil {
+		t.Fatalf("the file with another name in it is gone: %v", err)
+	}
+	if string(body) != "UNRELATED_SETTING=1\n" {
+		t.Fatalf("the file kept %q, want only the other name", body)
+	}
+}
+
+func TestTheSearchKeyMovesWithTheGateKeyAndWebSearchReadsItFromTheStore(t *testing.T) {
+	scratchProject(t)
+	t.Setenv(sys.BraveSearchKeyName, "")
+	home, err := sys.HomeConfigDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	const search = "made-up-search-key-5Pv7"
+	writeFile(t, home, sys.CredentialFileName, "OPENROUTER_KEY=sk-or-v1-made-up-moved-too-1Lc4\nBRAVE_SEARCH_KEY="+search+"\n")
+	var said bytes.Buffer
+	moveHomeKeys(&said)
+	if _, err := os.Stat(filepath.Join(home, sys.CredentialFileName)); !os.IsNotExist(err) {
+		t.Fatalf("the .env is still there after both keys moved: %v", err)
+	}
+	stored, err := sys.StoredKeys()
+	if err != nil || stored[sys.BraveSearchKeyName] != search {
+		t.Fatalf("the database holds a search key of length %d, and %v", len(stored[sys.BraveSearchKeyName]), err)
+	}
+	layers, err := web.Layers(shipped.Files(), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	config, err := web.Load(layers)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !config.HasSearch() {
+		t.Fatalf("web search is off with the key in the store, provider %q", config.Provider.Name)
+	}
+	t.Log(said.String())
 }
 
 func settingsScreen(t *testing.T, providers []settings.Provider) string {

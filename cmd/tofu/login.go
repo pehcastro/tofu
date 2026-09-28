@@ -26,13 +26,13 @@ import (
 )
 
 const (
-	loginUsage = "usage: tofu login <claude-sub|codex-sub|openrouter> [--paste], " +
+	loginUsage = "usage: tofu login <claude-sub|codex-sub|openrouter|brave> [--paste], " +
 		"tofu login --status [--json] [--redact], or tofu login --disable|--enable <number>"
 	setAsideCause    = "set aside by hand, run tofu login --enable to bring it back"
 	openRouterName   = "openrouter"
+	braveName        = "brave"
 	openRouterFix    = "run tofu login openrouter and paste the key when it asks"
-	keyIsNeverTyped  = "the key is read from a prompt and never from an argument: run tofu login openrouter on its own"
-	envFileName      = ".env"
+	keyIsNeverTyped  = "a key is read from a prompt and never from an argument: run tofu login %s on its own"
 	accountMarkBytes = 2
 )
 
@@ -57,11 +57,18 @@ func loginVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 		}
 		_, _ = fmt.Fprintln(out, line)
 		return exitOK
-	case openRouterName:
+	case openRouterName, braveName:
 		if len(args) > 1 {
-			return loginFail(errOut, errors.New(keyIsNeverTyped))
+			return loginFail(errOut, fmt.Errorf(keyIsNeverTyped, args[0]))
 		}
-		return loginOpenRouter(context.Background(), in, out, errOut)
+		key, err := promptKey(in, out, args[0])
+		if err != nil {
+			return loginFail(errOut, err)
+		}
+		if args[0] == braveName {
+			return storeKey(braveName, sys.BraveSearchKeyName, key, out, errOut)
+		}
+		return loginOpenRouter(context.Background(), key, out, errOut)
 	}
 	spec, err := cred.Lookup(args[0])
 	if err != nil {
@@ -196,28 +203,31 @@ func login(ctx context.Context, spec cred.Spec, paste bool, in io.Reader, out io
 	return nil
 }
 
-func loginOpenRouter(ctx context.Context, in io.Reader, out, errOut io.Writer) int {
-	key, err := promptKey(in, out)
-	if err != nil {
-		return loginFail(errOut, err)
-	}
+func loginOpenRouter(ctx context.Context, key string, out, errOut io.Writer) int {
 	if err := reachesJev(ctx, key); err != nil {
 		return loginRefused(errOut, "the key did not reach jev, so nothing was written: %v", err)
 	}
-	path, err := cred.OpenRouterPath()
-	if err != nil {
-		return loginRefused(errOut, "%v", err)
+	if code := storeKey(openRouterName, jev.OpenRouterVariable, key, out, errOut); code != exitOK {
+		return code
 	}
-	if err := cred.SaveOpenRouter(path, key); err != nil {
-		return loginRefused(errOut, "%v", err)
-	}
-	_, _ = fmt.Fprintf(out, "openrouter: key stored in %s, mode 600 where the platform honours it\n", path)
 	_, _ = fmt.Fprintln(out, "jev: ready")
 	return exitOK
 }
 
-func promptKey(in io.Reader, out io.Writer) (string, error) {
-	_, _ = fmt.Fprintln(out, "paste the openrouter key, it is not echoed, then press enter:")
+func storeKey(name, variable, key string, out, errOut io.Writer) int {
+	if err := sys.SaveKey(variable, key); err != nil {
+		return loginRefused(errOut, "%v", err)
+	}
+	path, err := sys.CredentialStorePath()
+	if err != nil {
+		return loginRefused(errOut, "%v", err)
+	}
+	_, _ = fmt.Fprintf(out, "%s: key %s stored in the credential store at %s\n", name, widget.Mask(key), path)
+	return exitOK
+}
+
+func promptKey(in io.Reader, out io.Writer, name string) (string, error) {
+	_, _ = fmt.Fprintf(out, "paste the %s key, it is not echoed, then press enter:\n", name)
 	file, isFile := in.(*os.File)
 	if !isFile || !term.IsTerminal(file.Fd()) {
 		line, err := readLine(in)
@@ -263,30 +273,24 @@ func reachesJev(ctx context.Context, key string) error {
 }
 
 func locateGateKey() (jev.Located, error) {
-	located, err := jev.Locate(envFileName)
-	if err == nil {
-		return located, nil
-	}
-	home, homeErr := sys.HomeConfigDir()
-	if homeErr != nil {
-		return located, err
-	}
-	stored, storedErr := jev.Locate(sys.Join(home, envFileName))
-	if storedErr != nil {
-		return located, err
-	}
-	return stored, nil
+	return jev.Locate(sys.CredentialFileName)
 }
 
 func openRouterStatus() string {
 	located, err := locateGateKey()
-	if err != nil {
+	key, keyErr := gateKey()
+	if err != nil || keyErr != nil {
 		return "no key, so the jev gate is off: " + openRouterFix
 	}
-	if located.Source == jev.SourceEnvironment {
-		return "key set in the environment"
+	switch located.Source {
+	case jev.SourceDatabase:
+		return "key " + widget.Mask(key) + " set in the credential store"
+	case jev.SourceEnvironment:
+		return "key " + widget.Mask(key) + " set in the environment"
+	case jev.SourceDotEnv:
+		return "key " + widget.Mask(key) + " set in " + located.Path
 	}
-	return "key set in " + located.Path
+	panic("tofu login: unknown key source")
 }
 
 func promptPaste(in io.Reader, out io.Writer) (string, error) {

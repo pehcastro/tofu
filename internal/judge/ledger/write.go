@@ -3,6 +3,7 @@ package ledger
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -28,16 +29,17 @@ const stateInlineCeiling = 4096
 const stateExcerptBytes = 512
 
 type Writer struct {
-	dir string
-	now func() time.Time
+	dir    string
+	now    func() time.Time
+	redact sys.KeyRedactor
 }
 
 func NewWriter(dir string) *Writer {
-	return &Writer{dir: dir, now: time.Now}
+	return NewWriterWithClock(dir, time.Now)
 }
 
 func NewWriterWithClock(dir string, now func() time.Time) *Writer {
-	return &Writer{dir: dir, now: now}
+	return &Writer{dir: dir, now: now, redact: sys.LoadKeyRedactor()}
 }
 
 func (w *Writer) Append(row Row) (Row, error) {
@@ -56,6 +58,9 @@ func (w *Writer) Append(row Row) (Row, error) {
 			return Row{}, err
 		}
 		row.ID = id
+	}
+	if row.State != nil {
+		row.State = json.RawMessage(w.redact.Redact(string(row.State)))
 	}
 	if err := w.elideState(&row); err != nil {
 		return Row{}, err

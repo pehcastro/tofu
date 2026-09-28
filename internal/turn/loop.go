@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"path/filepath"
 	"slices"
@@ -136,6 +137,7 @@ func Run(ctx context.Context, config Config) (Row, error) {
 	artifacts.preview = artifacts.preview.OnWire(config.Wire)
 	sifter := siftOrNothing(config.Sift)
 	thrifter := thriftOrNothing(config.Thrift)
+	redactor := sys.LoadKeyRedactor()
 	source := config.ToolSource
 	if source == nil {
 		source = func() Registry { return config.Tools }
@@ -353,7 +355,7 @@ func Run(ctx context.Context, config Config) (Row, error) {
 					proxied, proxyRow := config.Proxy.rewrite(ctx, asked)
 					call.Arguments = proxied
 					request := GateRequest{TurnID: row.ID, Task: config.Task, Tool: call.Name, Args: call.Arguments}
-					gated := gatedCall{call: call, asked: asked, proxy: proxyRow, id: session.EventIDFor(origin, call.ID), parent: stepRow.id, author: author, sift: sifter, thrift: thrifter, task: config.Task, site: recorded.site(call.ID, messages)}
+					gated := gatedCall{call: call, asked: asked, proxy: proxyRow, id: session.EventIDFor(origin, call.ID), parent: stepRow.id, author: author, sift: sifter, thrift: thrifter, redact: redactor, task: config.Task, site: recorded.site(call.ID, messages)}
 					if config.Gate != nil {
 						verdict, err := config.Gate.Decide(ctx, request)
 						gated.verdict = verdict
@@ -593,6 +595,7 @@ type gatedCall struct {
 	task    string
 	sift    *ShellSift
 	thrift  *ThriftSift
+	redact  sys.KeyRedactor
 	site    spawnSite
 	verdict GateDecision
 	gateErr string
@@ -607,6 +610,10 @@ func (g gatedCall) run(ctx context.Context, tools Registry, resultBytesCap int, 
 	row.GateDecisionID, row.GateVerdict, row.GateError = g.verdict.ID, string(g.verdict.Verdict), g.gateErr
 	row.ParallelBatch = batch
 	row.Proxy = g.proxy
+	row.Command = g.redact.Redact(row.Command)
+	if len(row.Args) > 0 {
+		row.Args = json.RawMessage(g.redact.Redact(string(row.Args)))
+	}
 	return row, answer
 }
 
@@ -627,8 +634,9 @@ func (g gatedCall) execute(ctx context.Context, tools Registry, resultBytesCap i
 		result, err = tool.Run(ctx, call.Arguments)
 	}
 	if err != nil {
-		return rejectedCall(call, started, err.Error(), g.id, g.parent, g.author)
+		return rejectedCall(call, started, g.redact.Redact(err.Error()), g.id, g.parent, g.author)
 	}
+	result.Content, result.FailureText = g.redact.Redact(result.Content), g.redact.Redact(result.FailureText)
 
 	cut := g.cutShellResult(ctx, call.Name, result)
 	thriftCut := g.cutThriftResult(ctx, call.Name, result)

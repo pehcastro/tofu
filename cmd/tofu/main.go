@@ -6,6 +6,8 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"tofu/internal/sys"
 )
 
 const (
@@ -71,7 +73,24 @@ func main() {
 	if wd, err := os.Getwd(); err == nil && opensTheApp {
 		moveProjectState(os.Stderr, wd)
 	}
+	moveHomeKeys(os.Stderr)
 	os.Exit(run(os.Args[1:], os.Stdin, os.Stdout, os.Stderr))
+}
+
+func moveHomeKeys(errOut io.Writer) {
+	migration, err := sys.MigrateHomeKeys()
+	if err != nil {
+		_, _ = fmt.Fprintf(errOut, "tofu: %s stays where it is, the move into the credential store failed: %v\n", migration.From, err)
+		return
+	}
+	if len(migration.Moved) == 0 {
+		return
+	}
+	fate := "removed the file"
+	if !migration.Removed {
+		fate = "left its other lines in place"
+	}
+	_, _ = fmt.Fprintf(errOut, "tofu: moved %s from %s into the credential store and %s\n", strings.Join(migration.Moved, ", "), migration.From, fate)
 }
 
 func run(args []string, in io.Reader, out io.Writer, errOut io.Writer) int {

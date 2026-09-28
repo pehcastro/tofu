@@ -37,6 +37,46 @@ func TestKeyPrefersTheEnvironment(t *testing.T) {
 	}
 }
 
+func freshHome(t *testing.T) string {
+	t.Helper()
+	home := t.TempDir()
+	t.Setenv("USERPROFILE", home)
+	t.Setenv("HOME", home)
+	return home
+}
+
+func TestKeyFindsTheDatabaseBeforeTheEnvironmentAndTheFile(t *testing.T) {
+	freshHome(t)
+	t.Setenv(keyName(), "from-the-environment")
+	path := filepath.Join(t.TempDir(), ".env")
+	if err := os.WriteFile(path, []byte(keyName()+"=from-the-file\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := sys.SaveKey(keyName(), "from-the-database"); err != nil {
+		t.Fatalf("storing the key: %v", err)
+	}
+	got, err := Key(path)
+	if err != nil || got != "from-the-database" {
+		t.Fatalf("expected the database value, got a value of length %d and %v", len(got), err)
+	}
+	located, err := Locate(path)
+	if err != nil || located.Source != SourceDatabase {
+		t.Fatalf("expected SourceDatabase, got %v and %v", located.Source, err)
+	}
+}
+
+func TestReadingTheKeyCreatesNoDatabase(t *testing.T) {
+	home := freshHome(t)
+	t.Setenv(keyName(), "from-the-environment")
+	if _, err := Key(""); err != nil {
+		t.Fatal(err)
+	}
+	stored := filepath.Join(sys.StateDir(home), sys.CredentialStoreName)
+	if _, err := os.Stat(stored); !os.IsNotExist(err) {
+		t.Fatalf("reading the key left %s behind: %v", stored, err)
+	}
+}
+
 func TestKeyFallsBackToTheEnvFile(t *testing.T) {
 	t.Setenv(keyName(), "")
 	dir := t.TempDir()

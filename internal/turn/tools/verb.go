@@ -91,7 +91,7 @@ func verbSpecs() []verbSpec {
 			words: []string{"judge"},
 			about: "asks a typed question battery about a state and prints, for every question, the answer with its distribution, and the verdict the policy reached. " +
 				"use it to get a calibrated answer about the state of the work rather than guessing at one in prose",
-			needs:  "it needs the openrouter key, as OPENROUTER_KEY in the environment or in a .env file at the root of the working tree; without it the verb exits 2 and says so",
+			needs:  "it needs the openrouter key, stored by tofu login openrouter, or set as OPENROUTER_KEY in the environment or in a .env file at the root of the working tree; without it the verb exits 2 and says so",
 			params: []verbParam{verbParamState, verbParamBattery},
 		},
 		{

@@ -44,7 +44,7 @@ func checkVerb(args []string, out, errOut io.Writer) int {
 		rulePath = sys.Join(libraryDir, filepath.FromSlash(found))
 	}
 
-	key, err := jev.Key(".env")
+	key, err := gateKey()
 	if err != nil {
 		return checkFail(errOut, err)
 	}

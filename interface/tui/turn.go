@@ -20,13 +20,15 @@ import (
 	"tofu/internal/konst"
 	isettings "tofu/internal/settings"
 	roster "tofu/internal/subagent"
+	"tofu/internal/sys"
 )
 
 const (
 	gateOffLine        = "the gate is off, so no call on this session is judged."
-	gateOffNoKey       = "put OPENROUTER_KEY in .tofu/.env and the next session is judged."
-	gateOffKeyUnnamed  = ".tofu/.env carries no OPENROUTER_KEY line: add one and the next session is judged."
-	gateOffKeyUnread   = "the .env file that should carry OPENROUTER_KEY could not be read."
+	gateOffNoKey       = "run tofu login openrouter and the next session is judged."
+	gateOffKeyUnnamed  = "the project .env carries no OPENROUTER_KEY line: run tofu login openrouter and the next session is judged."
+	gateOffKeyUnread   = "the project .env file that should carry OPENROUTER_KEY could not be read."
+	gateOffStoreUnread = "the credential store that holds the openrouter key could not be read."
 	gateOffUnexplained = "tofu could not open the judge."
 	gateOffHead        = "gate off"
 	stoppingNote       = "stopping the turn"
@@ -50,6 +52,8 @@ func gateOffNote(why jev.Why) string {
 		return gateOffLine + " " + gateOffKeyUnnamed
 	case jev.WhyUnreadable:
 		return gateOffLine + " " + gateOffKeyUnread
+	case jev.WhyStoreUnreadable:
+		return gateOffLine + " " + gateOffStoreUnread
 	case jev.WhyUnexplained:
 		return gateOffLine + " " + gateOffUnexplained
 	}
@@ -265,6 +269,11 @@ func (a *App) absorb(event Event) {
 		return
 	}
 	at := a.options.Now()
+	switch event.Kind {
+	case EventToolCall, EventToolResult, EventFailure, EventAwaitPerson:
+		redactor := sys.LoadKeyRedactor()
+		event.Text, event.Detail, event.Diff = redactor.Redact(event.Text), redactor.Redact(event.Detail), redactor.Redact(event.Diff)
+	}
 	switch event.Kind {
 	case EventRequesting:
 		a.view.Requesting()

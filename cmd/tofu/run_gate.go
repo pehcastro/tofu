@@ -130,15 +130,7 @@ func jevClientOn(key string, concurrency int) (*jev.Client, error) {
 }
 
 func gateKey() (string, error) {
-	key, err := jev.Key(".env")
-	if err == nil {
-		return key, nil
-	}
-	home, homeErr := sys.HomeConfigDir()
-	if homeErr != nil {
-		return "", err
-	}
-	return jev.Key(sys.Join(home, ".env"))
+	return jev.Key(sys.CredentialFileName)
 }
 
 func (g *toolGate) Decide(ctx context.Context, request turn.GateRequest) (turn.GateDecision, error) {

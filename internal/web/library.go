@@ -4,11 +4,11 @@ import (
 	"fmt"
 	"io/fs"
 	"maps"
-	"os"
 	"slices"
 	"strconv"
 	"strings"
 
+	"tofu/internal/judge/jev"
 	"tofu/internal/sys"
 )
 
@@ -123,7 +123,7 @@ func Load(layers []Layer) (Config, error) {
 		}
 	}
 	if config.Provider.KeyVariable != "" {
-		config.searchKey, _ = credential(config.Provider.KeyVariable)
+		config.searchKey, _ = jev.KeyFor(sys.CredentialFileName, config.Provider.KeyVariable)
 	}
 	return config, nil
 }
@@ -198,24 +198,4 @@ func (s *sheet) provider(name string) (Provider, error) {
 	}
 	built.MaxResults = count
 	return built, nil
-}
-
-func credential(variable string) (string, bool) {
-	if value := strings.TrimSpace(os.Getenv(variable)); value != "" {
-		return value, true
-	}
-	paths := []string{sys.CredentialFileName}
-	if home, err := sys.HomeConfigDir(); err == nil {
-		paths = append(paths, sys.Join(home, sys.CredentialFileName))
-	}
-	for _, path := range paths {
-		raw, err := sys.ReadCredential(path)
-		if err != nil {
-			continue
-		}
-		if value := sys.CredentialAssignment(string(raw), variable); value != "" {
-			return value, true
-		}
-	}
-	return "", false
 }

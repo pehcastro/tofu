@@ -16,7 +16,9 @@ not `~/.agents`. The home gives tofu only `~/.tofu`.
 In your home, `~/.tofu`:
 
 - `settings.json`: your settings, written by `tofu settings set`
-- `agent.db`: the credentials `tofu login` stores
+- `agent.db`: the credentials `tofu login` stores, subscriptions, the
+  openrouter key and the brave search key alike. tofu keeps no `.env` here, and moves an old one
+  into `agent.db` on the next start
 - `AGENTS.md`: instructions sent with every task, in every project
 - `agents/`: your own sub-agents, one file each, written by `tofu agents add --global`
 - `rules/`: your own rules for every project, written by `tofu rules add --global`

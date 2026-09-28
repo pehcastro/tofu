@@ -31,12 +31,24 @@ Every verdict is kept as a row in the decision ledger.
 
 jev is reached through OpenRouter, with a key tofu reads from, in order:
 
+- the credential store, `~/.tofu/agent.db`, which `tofu login openrouter` writes
 - `OPENROUTER_KEY` in the environment
 - an `.env` file in the working directory, as `OPENROUTER_KEY=...`
-- `~/.tofu/.env`, which `tofu login openrouter` writes
 
-tofu never prints the key. It only says where it found it. With no key
-the gate is off: no tool call is judged, and the app says so.
+tofu never prints more of the key than its last four characters. With no
+key the gate is off: no tool call is judged, and the app says so.
+
+An older tofu kept keys in `~/.tofu/.env`. The next start moves
+`OPENROUTER_KEY`, `TYPESAFE_API_KEY` and `BRAVE_SEARCH_KEY` into the
+credential store, removes the file, and prints one line naming what
+moved. A line naming anything else keeps the file in place. The web
+search key reads the same way the gate key does, and
+`tofu login brave` stores it.
+
+A key a tool prints never reaches the model or the session, and a key in
+a judged call never reaches the ledger. Every stored key, and the value
+of any of those three names, reads `[key redacted]` there, even when the
+model runs `env` or `cat .env`.
 
 The ledger is `~/.tofu/projects/<project>/log`, one folder per project.
 `gatePrompt` lives in `settings.json`, like every setting.
@@ -49,6 +61,9 @@ jev, and writes nothing if it does not:
     tofu login openrouter
 
 The key is never an argument, so it never lands in your shell history.
+It can come from a pipe too, `tofu login openrouter < key.txt`. Run it
+again to replace the key, and `tofu login --status` to see which one is
+set, by its last four characters.
 
 Wait for you before a risky call, everywhere or in one project:
 
@@ -64,8 +79,7 @@ Judge one shell command without running it, and log the verdict:
 
     tofu check "git push --force"
 
-`tofu check` reads the key from the environment or the working
-directory's `.env` only.
+`tofu check` reads the key the same way the gate does.
 
 ## Check it
 
@@ -95,5 +109,6 @@ what it should have been onto its row in the ledger:
     tofu label --last allow
     tofu label <id> deny
 
-To take the key away, delete the `OPENROUTER_KEY` line from the `.env`
-that holds it.
+To take away a key set in the environment or an `.env`, delete the
+`OPENROUTER_KEY` line that holds it. A key in the credential store is
+replaced by `tofu login openrouter`; no verb removes it yet.

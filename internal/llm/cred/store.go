@@ -5,21 +5,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
 	"time"
-
-	_ "modernc.org/sqlite"
 
 	"tofu/internal/sys"
 )
 
 const (
-	storeFileName     = "agent.db"
-	storeFileMode     = 0o600
-	storeDirMode      = 0o700
-	connectionPragmas = "?_txlock=immediate&_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)&_pragma=synchronous(NORMAL)"
-	schemaStatements  = `
+	schemaStatements = `
 CREATE TABLE IF NOT EXISTS credentials (
 	id INTEGER PRIMARY KEY AUTOINCREMENT,
 	provider TEXT NOT NULL,
@@ -50,18 +42,11 @@ type Store struct {
 }
 
 func Path() (string, error) {
-	dir, err := sys.HomeConfigDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(dir, storeFileName), nil
+	return sys.CredentialStorePath()
 }
 
 func Open(path string) (*Store, error) {
-	if err := os.MkdirAll(filepath.Dir(path), storeDirMode); err != nil {
-		return nil, err
-	}
-	db, err := sql.Open("sqlite", "file:"+filepath.ToSlash(path)+connectionPragmas)
+	db, err := sys.OpenCredentialStore(path)
 	if err != nil {
 		return nil, err
 	}
@@ -69,7 +54,6 @@ func Open(path string) (*Store, error) {
 		_ = db.Close()
 		return nil, err
 	}
-	_ = os.Chmod(path, storeFileMode)
 	store := &Store{db: db}
 	if err := store.renameRetiredSources(); err != nil {
 		_ = store.Close()

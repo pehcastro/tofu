@@ -11,6 +11,8 @@ import (
 	"slices"
 	"sync"
 	"time"
+
+	"tofu/internal/sys"
 )
 
 type Log struct {
@@ -21,6 +23,7 @@ type Log struct {
 	seq     int
 	last    map[string]string
 	prompts map[string]string
+	redact  sys.KeyRedactor
 }
 
 func (s *Store) Open(header Header) (*Log, error) {
@@ -33,7 +36,7 @@ func (s *Store) Open(header Header) (*Log, error) {
 	if s.legacy(header.ID) {
 		header.CarriedFrom, header.ID = &Carried{Session: header.ID}, NewEventID()
 	}
-	log := &Log{store: s, last: map[string]string{}, prompts: map[string]string{}}
+	log := &Log{store: s, last: map[string]string{}, prompts: map[string]string{}, redact: sys.LoadKeyRedactor()}
 	kept, err := s.read(header.ID)
 	switch {
 	case err == nil:
@@ -127,6 +130,9 @@ func (l *Log) Append(event Event, body any) (Event, error) {
 			return Event{}, err
 		}
 		event.Body = raw
+	}
+	if event.Body != nil {
+		event.Body = json.RawMessage(l.redact.Redact(string(event.Body)))
 	}
 	l.mu.Lock()
 	defer l.mu.Unlock()

@@ -25,6 +25,7 @@ import (
 	"tofu/internal/llm"
 	isettings "tofu/internal/settings"
 	roster "tofu/internal/subagent"
+	"tofu/internal/sys"
 )
 
 const (
@@ -299,8 +300,39 @@ func TestAnAskedCallShowsEveryAnswerAndTheReason(t *testing.T) {
 	}
 }
 
+func TestAKeyInAToolCallIsRedactedInTheChatAndTheFeed(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("USERPROFILE", home)
+	t.Setenv("HOME", home)
+	const key = "sk-or-v1-made-up-Xq2Lp9Rz"
+	if err := sys.SaveKey(sys.OpenRouterKeyName, key); err != nil {
+		t.Fatalf("storing the key: %v", err)
+	}
+	app := newTestApp(Options{Repo: testRepo, Branch: "develop", Now: fixedClock(), Wires: anthropicAlone})
+	app.Init()
+	app.Update(tea.WindowSizeMsg{Width: 200, Height: 40})
+	for _, event := range []Event{
+		{Kind: EventToolCall, ID: "c1", Tool: "bash", Text: "echo " + key, Detail: "echo " + key},
+		{Kind: EventToolResult, ID: "c1", Text: "printed " + key, Detail: "echo " + key},
+		{Kind: EventFailure, ID: "c2", Tool: "bash", Text: "refused " + key},
+	} {
+		app.Update(event)
+	}
+	frames := ansi.Strip(app.View().Content)
+	for _, screen := range []rune{'1', '2', '3', '6'} {
+		app.Update(tea.KeyPressMsg{Code: screen, Mod: tea.ModAlt})
+		frames += ansi.Strip(app.View().Content)
+	}
+	if strings.Contains(frames, key[len(key)-8:]) {
+		t.Fatalf("a frame shows the key:\n%s", strings.ReplaceAll(frames, key, "<THE KEY>"))
+	}
+	if !strings.Contains(frames, sys.KeyRedactedMark) {
+		t.Fatalf("no frame shows %s:\n%s", sys.KeyRedactedMark, frames)
+	}
+}
+
 func keyEnvPath() string {
-	return `C:\Users\Luiz\AppData\Local\Temp\orch-drive\home\.tofu\.env`
+	return `C:\Users\Luiz\AppData\Local\Temp\orch-drive\project\.env`
 }
 
 func noKeyAtAll() string {
@@ -347,6 +379,7 @@ func gateOffStates() []gateOffState {
 		{jev.WhyNoFile, gateOffNoKey},
 		{jev.WhyFileLacksName, gateOffKeyUnnamed},
 		{jev.WhyUnreadable, gateOffKeyUnread},
+		{jev.WhyStoreUnreadable, gateOffStoreUnread},
 		{jev.WhyUnexplained, gateOffUnexplained},
 	}
 }

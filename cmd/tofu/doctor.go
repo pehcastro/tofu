@@ -22,6 +22,7 @@ const (
 	doctorGateDecides = " is the point the gate decides through"
 	doctorGateEnv     = "the environment"
 	doctorGateDotEnv  = "an .env file"
+	doctorGateStore   = "the credential store"
 	doctorGateMissing = "missing"
 
 	doctorWindowColumn = 14
@@ -207,6 +208,8 @@ func gateSource(located jev.Located) string {
 		return doctorGateEnv
 	case jev.SourceDotEnv:
 		return doctorGateDotEnv
+	case jev.SourceDatabase:
+		return doctorGateStore
 	case jev.SourceMissing:
 		return doctorGateMissing
 	}

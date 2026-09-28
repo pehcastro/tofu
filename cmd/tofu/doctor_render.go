@@ -43,11 +43,13 @@ func doctorGroups(report doctorReport) [][]string {
 		}
 		access = append(access, labelled(credential.Provider, credentialText(credential)))
 	}
-	if report.Gate.Source == doctorGateEnv {
+	switch report.Gate.Source {
+	case doctorGateEnv:
 		access = append(access, labelled(jevName, "key from "+report.Gate.Variable+" in the environment"))
-	}
-	if report.Gate.Source == doctorGateDotEnv {
+	case doctorGateDotEnv:
 		access = append(access, line(jevName, "key from "+report.Gate.Path)...)
+	case doctorGateStore:
+		access = append(access, line(jevName, "key from the credential store at "+report.Gate.Path)...)
 	}
 	access = append(access, line("wires", wireText(report.Wires))...)
 	groups = append(groups, access)

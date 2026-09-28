@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"maps"
 	"slices"
 	"strconv"
 	"strings"
@@ -12,6 +13,8 @@ import (
 
 	"tofu/internal/llm/cred"
 	"tofu/internal/llm/quota"
+	"tofu/internal/sys"
+	"tofu/internal/widget"
 )
 
 const (
@@ -25,6 +28,8 @@ const (
 	statusExpired      = "expired"
 	statusUnchosen     = "usable, not chosen"
 	noAccountYet       = "no account captured yet"
+	statusKeyNotStored = "not stored"
+	statusKeyColumn    = 18
 )
 
 type accountReport struct {
@@ -47,7 +52,43 @@ type statusReport struct {
 	State      string         `json:"state"`
 	Sources    []sourceReport `json:"sources"`
 	Gate       string         `json:"jev_key"`
+	Keys       []keyReport    `json:"keys,omitempty"`
 	ReportedAt time.Time      `json:"reported_at"`
+}
+
+type keyReport struct {
+	Name  string `json:"name"`
+	State string `json:"state"`
+}
+
+func storedKeyReports() ([]keyReport, error) {
+	stored, err := sys.StoredKeys()
+	if err != nil {
+		return nil, err
+	}
+	names := sys.KeyNames()
+	for _, name := range slices.Sorted(maps.Keys(stored)) {
+		if !slices.Contains(names, name) {
+			names = append(names, name)
+		}
+	}
+	reports := make([]keyReport, 0, len(names))
+	for _, name := range names {
+		state := statusKeyNotStored
+		if value := stored[name]; value != "" {
+			state = widget.Mask(value) + " in the credential store"
+		}
+		reports = append(reports, keyReport{Name: name, State: state})
+	}
+	return reports, nil
+}
+
+func keyLines(keys []keyReport) string {
+	lines := []string{"", "keys"}
+	for _, key := range keys {
+		lines = append(lines, fmt.Sprintf("%s%-*s %s", reportIndent, statusKeyColumn, key.Name, key.State))
+	}
+	return strings.Join(lines, "\n") + "\n"
 }
 
 func statusVerb(args []string, out, errOut io.Writer, shade palette, now time.Time, urls map[quota.Provider]string) int {
@@ -72,7 +113,7 @@ func statusVerb(args []string, out, errOut io.Writer, shade palette, now time.Ti
 		return exitVerdict
 	}
 	if !asJSON {
-		_, _ = fmt.Fprint(out, statusText(report, shade, now, outputWidth(out)))
+		_, _ = fmt.Fprint(out, statusText(report, shade, now, outputWidth(out))+keyLines(report.Keys))
 	}
 	return exitOK
 }
@@ -84,6 +125,11 @@ func credentialStatus(now time.Time, redact bool, urls map[quota.Provider]string
 		Gate:       openRouterStatus(),
 		ReportedAt: now,
 	}
+	keys, err := storedKeyReports()
+	if err != nil {
+		return report, err
+	}
+	report.Keys = keys
 	store, err := openStoredCredentials()
 	if err != nil || store == nil {
 		return report, err
