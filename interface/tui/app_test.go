@@ -1650,3 +1650,83 @@ func TestAStoppedTurnKeepsItsToolRowsWhileToolsAreFoldedByDefault(t *testing.T) 
 		t.Fatalf("the stopped turn folded away the call and what it printed\n%s", chat)
 	}
 }
+
+func freshApp(t *testing.T, width, height int) *App {
+	t.Helper()
+	t.Setenv("TOFU_ASCII", "")
+	t.Setenv("TERM", "xterm-256color")
+	app := newTestApp(Options{
+		Repo:  testRepo,
+		Now:   fixedClock(),
+		Wires: anthropicAlone,
+		Fresh: true,
+		Pose:  "sitting",
+		Turn:  func(context.Context, Pick, string, CalledFromInsideTheTurnAndNeverAfterItReturns) {},
+	})
+	app.Init()
+	app.Update(tea.WindowSizeMsg{Width: width, Height: height})
+	return app
+}
+
+func artRows(rows []string) []int {
+	var found []int
+	for index, row := range rows {
+		if strings.ContainsAny(row, "▀▄") {
+			found = append(found, index)
+		}
+	}
+	return found
+}
+
+func composerRow(t *testing.T, rows []string) int {
+	t.Helper()
+	for index, row := range rows {
+		if strings.Contains(row, session.Placeholder) {
+			return index
+		}
+	}
+	t.Fatalf("no row holds the chat composer\n%s", strings.Join(rows, "\n"))
+	return 0
+}
+
+func TestAFreshSessionOpensOnTheChatWithTheArtInTheEmptyTranscript(t *testing.T) {
+	t.Run("first frame", func(t *testing.T) {
+		rows := strings.Split(ansi.Strip(freshApp(t, 100, 30).View().Content), "\n")
+		screen := strings.Join(rows, "\n")
+		if strings.Contains(screen, "Type something to start") {
+			t.Fatalf("the cover is still drawn\n%s", screen)
+		}
+		composer := composerRow(t, rows)
+		art := artRows(rows)
+		if len(art) < 3 {
+			t.Fatalf("the wordmark is not in the transcript\n%s", screen)
+		}
+		if art[0] < bodyTop || art[len(art)-1] >= composer {
+			t.Fatalf("art rows %v lie outside the transcript above the composer at row %d\n%s", art, composer, screen)
+		}
+	})
+	t.Run("after one message", func(t *testing.T) {
+		app := freshApp(t, 100, 30)
+		typeText(app, runTask)
+		app.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+		screen := ansi.Strip(app.View().Content)
+		if art := artRows(strings.Split(screen, "\n")); len(art) > 0 {
+			t.Fatalf("art rows %v remain after the first message\n%s", art, screen)
+		}
+	})
+	t.Run("60x20", func(t *testing.T) {
+		rows := strings.Split(ansi.Strip(freshApp(t, 60, 20).View().Content), "\n")
+		screen := strings.Join(rows, "\n")
+		if len(rows) != 20 {
+			t.Fatalf("the frame is %d rows, want 20\n%s", len(rows), screen)
+		}
+		composer := composerRow(t, rows)
+		art := artRows(rows)
+		if len(art) == 0 {
+			t.Fatalf("no art at 60x20\n%s", screen)
+		}
+		if art[0] < bodyTop || art[len(art)-1] >= composer-1 {
+			t.Fatalf("art rows %v reach the composer at row %d\n%s", art, composer, screen)
+		}
+	})
+}

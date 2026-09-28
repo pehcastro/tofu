@@ -18,7 +18,7 @@ const (
 	lyingPose      = "lying"
 	narrowWidth    = 60
 	narrowHeight   = 20
-	coverDraft     = "why does the gate read the policy first?"
+	welcomeDraft   = "why does the gate read the policy first?"
 	resolveGoPath  = "internal/judge/policy/resolve.go"
 )
 
@@ -133,9 +133,9 @@ func screens() []scenario {
 		categories = append(categories, beat{name, step})
 	}
 	return []scenario{
-		{name: "cover", tune: func(options *tui.Options) { options.Fresh, options.Pose = true, sittingPose }, beats: []beat{
+		{name: "welcome", tune: func(options *tui.Options) { options.Fresh, options.Pose = true, sittingPose }, beats: []beat{
 			{"sitting", func(*reel) {}},
-			{"typed", func(r *reel) { r.driver.Type(coverDraft) }},
+			{"typed", func(r *reel) { r.driver.Type(welcomeDraft) }},
 			{"lying", func(r *reel) { r.options.Pose = lyingPose; r.open() }},
 		}},
 		{name: "sub-agents", beats: []beat{
@@ -189,7 +189,7 @@ func screens() []scenario {
 		{name: "narrow", beats: []beat{
 			{"chat", func(r *reel) {
 				r.driver.Resize(narrowWidth, narrowHeight)
-				r.driver.Type(coverDraft)
+				r.driver.Type(welcomeDraft)
 				r.press("enter")
 				r.send(agentWork(r.at)...)
 				r.app.Update(tui.Closed{})

@@ -28,7 +28,7 @@ const (
 	driveDir         = "drive"
 	scriptSuffix     = ".txt"
 	settingsSuffix   = ".settings.json"
-	freshPrefix      = "cover-"
+	freshPrefix      = "fresh-"
 	asciiPrefix      = "ascii-"
 	rawPrefix        = "raw-"
 	driveTimeout     = 10 * time.Second
@@ -206,18 +206,14 @@ func TestEveryThemeRecoloursTheWholeCanvas(t *testing.T) {
 	}
 }
 
-func TestTheTerminalThemeLeavesNoColourOnTheCoverOrTheChat(t *testing.T) {
+func TestTheTerminalThemeLeavesNoColourOnTheFreshChatArt(t *testing.T) {
 	r, out := launch(t, freshPrefix+"theme"+scriptSuffix)
-	playAll(t, r, "key alt+s\nkey enter\nkey up\nkey enter\nkey esc\nwait Type something to start\n", true, out)
+	playAll(t, r, "type /settings\nkey enter\nkey enter\nkey up\nkey enter\nkey esc\nwait ▀\n", true, out)
 	if theme := r.options.Settings.Text(isettings.Theme); theme != "terminal" {
 		t.Fatalf("the drive chose %s, not terminal", theme)
 	}
 	if painted := r.app.View().Content; strings.Contains(painted, "\x1b[") {
-		t.Errorf("the cover still paints colour under the terminal theme")
-	}
-	playAll(t, r, "key enter\nwait Ask tofu\n", true, out)
-	if painted := r.app.View().Content; strings.Contains(painted, "\x1b[") {
-		t.Errorf("the chat still paints colour under the terminal theme")
+		t.Errorf("the fresh chat and its art still paint colour under the terminal theme")
 	}
 }
 

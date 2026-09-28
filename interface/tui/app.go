@@ -383,7 +383,6 @@ func (a *App) resize(width, height int) {
 	a.edits.SetSize(width, body)
 	a.shells.SetSize(width, body)
 	a.settings.SetSize(width, height)
-	a.intro.resize(width)
 	a.selection, a.frozen = pointer.Selection{}, ""
 }
 
@@ -399,11 +398,6 @@ func (a *App) update(msg tea.Msg) tea.Cmd {
 		a.resize(size.Width, size.Height)
 		cmd, _ := a.toFiles(msg)
 		return tea.Batch(cmd, a.fillLater())
-	}
-	if a.intro.shown && len(a.requirements) == 0 {
-		if cmd, taken := a.coverInput(msg); taken {
-			return cmd
-		}
 	}
 	if a.hostResult(msg) {
 		return nil
@@ -480,7 +474,9 @@ func (a *App) update(msg tea.Msg) tea.Cmd {
 		return cmd
 	}
 	if a.intro.shown {
-		return a.intro.animate(msg)
+		var moved tea.Cmd
+		a.intro.identity, moved = a.intro.identity.Update(msg)
+		return tea.Batch(moved, a.view.Update(msg))
 	}
 	return a.view.Update(msg)
 }
@@ -523,7 +519,6 @@ func (a *App) show(to screen) tea.Cmd {
 		a.preview = preview{}
 	}
 	a.current = to
-	a.intro.settings = a.intro.settings && to == screenSettings
 	return a.clearDialogs()
 }
 

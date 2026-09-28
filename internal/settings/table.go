@@ -212,7 +212,7 @@ func Default() []Spec {
 		{Key: subagent.TierSmart.Setting(), Label: "Smart tier", Description: "the model @smart names, and sonnet in a shared agent file; empty runs the orchestrator's model", Category: "Turn", Kind: Text},
 		{Key: subagent.TierWorker.Setting(), Label: "Worker tier", Description: "the model @worker names, and haiku in a shared agent file; empty runs the orchestrator's model", Category: "Turn", Kind: Text},
 		{Key: subagent.TierDumb.Setting(), Label: "Dumb tier", Description: "the model @dumb names; empty runs the orchestrator's model", Category: "Turn", Kind: Text},
-		{Key: HideIntroduction, Label: "Hide introduction", Description: "Skip the new-project welcome and open chat directly", Category: "Startup", Kind: Bool},
+		{Key: HideIntroduction, Label: "Hide welcome art", Description: "Leave a new session's empty chat without the tofu cat and wordmark", Category: "Startup", Kind: Bool},
 	}
 	for i := range specs {
 		specs[i].Group = specs[i].Category

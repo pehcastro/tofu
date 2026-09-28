@@ -158,6 +158,7 @@ type Model struct {
 	rows               rowTable
 	ChatShowsTools     bool
 	FoldHidesShell     bool
+	Welcome            func(width, rows int) []string
 }
 
 func New(now func() time.Time, prose Prose) Model {

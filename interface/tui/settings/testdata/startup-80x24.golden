@@ -2,8 +2,8 @@
   tofu settings         Startup                                 global scope    
   Global preferences    Choose a row to inspect and change its value.           
                                                                                 
-  CATEGORIES            › Hide introduction                            ○ off    
-    Appearance    05      Skip the new-project welcome and open chat direct…    
+  CATEGORIES            › Hide welcome art                             ○ off    
+    Appearance    05      Leave a new session's empty chat without the tofu…    
     Interaction   03                                                            
     Context       08    enter change  ·  ctrl+k search  ·  esc chat             
     Files         03                                                            

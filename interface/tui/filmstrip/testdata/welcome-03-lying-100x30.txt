@@ -1,3 +1,4 @@
+ tofu  ./tofu/                     chat   agents   edits   shells                     0s [settings] 
                                                                                                     
                                                                                                     
                                                                                                     
@@ -14,17 +15,16 @@
                                                                                                     
                                                                                                     
                                                                                                     
-                                                                                                    
-                                   ▀   ▄▄           ▄▄▄▄                                            
-                                     ▀▀▀▀▀▀ ▄▀▀▀▀▄ ▀▀▀▀▀ ▀▀  ▀▀                                     
-                                       ▀▀   ▀▀  ▀▀ ▀▀▄▄  ▀▀  ▀▀                                     
-                                       ▀▀   ▀▀  ▀▀ ▀▀▀▀  ▀▀  ▀▀                                     
-                                       ▀▀▀▀ ▀▀▀▀▀▀ ▀▀    ▀▀▀▀▀▀                                     
-                                                                                                    
-                 ╭────────────────────────────────────────────────────────────────╮                 
-                 │ › Type something to start                                      │                 
-                 ╰────────────────────────────────────────────────────────────────╯                 
-                         ./tofu  ·  claude-sub/claude-opus-5  ·  [settings]                         
+                                  ▀   ▄▄           ▄▄▄▄                                             
+                                    ▀▀▀▀▀▀ ▄▀▀▀▀▄ ▀▀▀▀▀ ▀▀  ▀▀                                      
+                                      ▀▀   ▀▀  ▀▀ ▀▀▄▄  ▀▀  ▀▀                                      
+                                      ▀▀   ▀▀  ▀▀ ▀▀▀▀  ▀▀  ▀▀                                      
+                                      ▀▀▀▀ ▀▀▀▀▀▀ ▀▀    ▀▀▀▀▀▀                                      
                                                                                                     
                                                                                                     
                                                                                                     
+                                                                                                    
+                                                                                                    
+  █ Ask tofu to build, inspect, or delegate                                                         
+                                                                                                    
+ ctx 0/250k  |  new session       [&orchestrator]  ·  claude-sub/claude-opus-5  ·  reasoning medium 

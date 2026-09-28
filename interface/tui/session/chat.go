@@ -62,6 +62,9 @@ func (m *Model) View() string {
 func (m *Model) transcript(rows int) []string {
 	total, fromTop, from := m.scrollMetrics(rows)
 	lines := m.linesFrom(from, rows)
+	if len(m.entries) == 0 && m.Welcome != nil {
+		lines = m.Welcome(m.width-trackCells, rows)
+	}
 	blank := strings.Repeat(" ", m.width-trackCells)
 	for len(lines) < rows {
 		lines = append(lines, blank)

@@ -7,15 +7,12 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 
 	"tofu/interface/tui/cat"
 )
 
-const (
-	Mint        = "#40d294"
-	hintColor   = "#777b86"
-	borderColor = "#3b3f48"
-)
+const mint = "#40d294"
 
 var silver = [...]string{"#aeb4bc", "#9ca3ad", "#8a929d", "#78818d", "#666f7c"}
 
@@ -54,16 +51,15 @@ var canonicalTofu = [9]string{
 type pulseMsg struct{}
 
 type Identity struct {
-	cat    cat.Model
-	pose   int
-	pulse  int
-	active bool
-	ascii  bool
+	cat   cat.Model
+	pose  int
+	pulse int
+	ascii bool
 }
 
 func NewIdentity(forceASCII bool) Identity {
 	ascii := forceASCII || os.Getenv("TOFU_ASCII") != "" || os.Getenv("TERM") == "dumb"
-	return Identity{active: true, ascii: ascii, cat: cat.New(
+	return Identity{ascii: ascii, cat: cat.New(
 		cat.WithFPS(catFPS),
 		cat.WithPlain(ascii || os.Getenv("NO_COLOR") != ""),
 	)}
@@ -77,7 +73,7 @@ func pulse() tea.Cmd {
 
 func (i Identity) Update(msg tea.Msg) (Identity, tea.Cmd) {
 	var pulseCommand, catCommand tea.Cmd
-	if _, ok := msg.(pulseMsg); ok && i.active {
+	if _, ok := msg.(pulseMsg); ok {
 		i.pulse++
 		pulseCommand = pulse()
 	}
@@ -90,29 +86,39 @@ func (i *Identity) TogglePose() {
 	i.cat.SetPose(poses[i.pose].cat)
 }
 
-func (i *Identity) Pause() {
-	i.active = false
-	i.cat.Pause()
-}
-
 func (i Identity) PoseName() string { return poses[i.pose].name }
 
-func (i Identity) View(width int) string { return i.view(width, i.cat.View()) }
-
-func (i Identity) ViewFrame(width, frame int) string {
-	frame = max(0, frame)
-	i.pulse = frame
-	return i.view(width, i.cat.ViewFrame(frame))
+func (i Identity) View(width int) string {
+	current := poses[i.pose]
+	stage := place(width, stageHeight, i.cat.View(), current.x, current.y)
+	return stage + "\n" + lipgloss.PlaceHorizontal(width, lipgloss.Center, i.logo())
 }
 
-func (i Identity) view(width int, catView string) string {
-	current := poses[i.pose]
-	stage := place(width, stageHeight, catView, current.x, current.y)
-	logo := wordmark(i.pulse)
-	if i.ascii {
-		logo = asciiWordmark(i.pulse)
+func (i Identity) Fit(width, rows int) []string {
+	whole := i.View(min(stageWidth, width))
+	for _, art := range []string{whole, compactIdentity(whole), i.logo()} {
+		if lipgloss.Width(art) <= width && lipgloss.Height(art) <= rows {
+			return strings.Split(lipgloss.Place(width, rows, lipgloss.Center, lipgloss.Center, art), "\n")
+		}
 	}
-	return stage + "\n" + lipgloss.PlaceHorizontal(width, lipgloss.Center, logo)
+	return nil
+}
+
+func compactIdentity(view string) string {
+	var rows []string
+	for _, row := range strings.Split(view, "\n") {
+		if strings.TrimSpace(ansi.Strip(row)) != "" || strings.Contains(row, "\x1b[48;") {
+			rows = append(rows, row)
+		}
+	}
+	return strings.Join(rows, "\n")
+}
+
+func (i Identity) logo() string {
+	if i.ascii {
+		return asciiWordmark(i.pulse)
+	}
+	return wordmark(i.pulse)
 }
 
 func place(width, height int, content string, offsetX, offsetY int) string {
@@ -144,7 +150,7 @@ func wordmarkCanvas(frame int) [][]string {
 	}
 	path := orbit(canvasWidth, canvasHeight)
 	point := path[frame%len(path)]
-	canvas[point[1]][point[0]] = Mint
+	canvas[point[1]][point[0]] = mint
 	return canvas
 }
 

@@ -1,7 +1,0 @@
-# hideIntroduction skips only a fresh cover: planted on, a fresh launch opens chat and chat still works
-wait Ask tofu
-absent Type something to start
-type after the skipped cover
-key enter
-wait noted: after the skipped cover
-screen

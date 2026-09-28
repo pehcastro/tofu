@@ -44,9 +44,10 @@ The driven app never reads your clipboard. --clipboard PATH makes it hold that
 file, as a file copied in the explorer does, so ctrl+v attaches it; without it
 the clipboard is empty.
 
---fresh starts the app as a new session does, on the cover. --continue starts
-it on the session you last worked in, as tofu --continue does. With neither the
-app opens straight on chat.
+--fresh starts the app as a new session does: the chat, with the tofu cat and
+wordmark in the empty transcript until the first message. --continue starts it
+on the session you last worked in, as tofu --continue does. With neither the
+app opens on an empty chat without the art.
 
 An arm is one of tofu run's switches that change what the turn does rather than
 where it reads from, and the app takes it exactly as tofu run does, so a

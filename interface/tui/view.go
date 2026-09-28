@@ -8,7 +8,6 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"tofu/interface/tui/cover"
 	"tofu/interface/tui/edits"
 	"tofu/interface/tui/feed"
 	"tofu/interface/tui/frame"
@@ -53,7 +52,7 @@ func (a *App) View() tea.View {
 		content = a.frame()
 	}
 	var caret *tea.Cursor
-	if a.current == screenChat && len(a.dialogs) == 0 && len(a.requirements) == 0 && !a.intro.shown {
+	if a.current == screenChat && len(a.dialogs) == 0 && len(a.requirements) == 0 {
 		caret = a.view.Cursor()
 		if caret != nil {
 			caret.Y += bodyTop
@@ -73,13 +72,6 @@ func (a *App) View() tea.View {
 }
 
 func (a *App) frame() string {
-	if a.intro.shown && len(a.requirements) == 0 {
-		welcome := cover.WelcomeInputView(a.intro.identity, a.width, a.height, a.intro.input.View(), -1, a.coverDetails())
-		if a.theme() == look.ThemeTerminal {
-			return look.Apply(welcome, look.ThemeTerminal)
-		}
-		return welcome
-	}
 	base := a.base()
 	if top := a.top(); top != nil {
 		base = top.over(a, base)
@@ -163,6 +155,10 @@ func (a *App) body() string {
 	case screenChat:
 		a.view.ChatShowsTools = a.flag(isettings.ChatShowsTools)
 		a.view.FoldHidesShell = a.flag(isettings.FoldHidesShell)
+		a.view.Welcome = nil
+		if a.intro.shown {
+			a.view.Welcome = a.intro.identity.Fit
+		}
 		return a.view.View()
 	case screenAgents:
 		return a.feed.View()

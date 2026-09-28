@@ -1,0 +1,10 @@
+# a fresh session opens on the chat with the art in the empty transcript, and the first message takes it away
+wait Ask tofu
+absent Type something to start
+wait ▀
+screen
+type why does the gate read the policy first?
+key enter
+wait noted: why does the gate read the policy first?
+absent ▀
+screen
