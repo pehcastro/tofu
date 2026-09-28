@@ -1,0 +1,104 @@
+- ask: run commands without asking me first
+  do: tofu settings set gatePrompt run
+  check: tofu settings get gatePrompt
+  topic: settings
+- ask: ask me before a gated command runs
+  do: tofu settings set gatePrompt ask
+  check: tofu settings get gatePrompt
+  topic: settings
+- ask: change the colours
+  do: tofu settings set theme Nord
+  check: tofu settings get theme
+  topic: settings
+- ask: stop the animations
+  do: tofu settings set animations off
+  check: tofu settings get animations
+  topic: settings
+- ask: show every tool call in the chat
+  do: tofu settings set chatShowsTools true
+  check: tofu settings get chatShowsTools
+  topic: settings
+- ask: hide the model's thinking
+  do: tofu settings set showThinking false
+  check: tofu settings get showThinking
+  topic: settings
+- ask: let tofu edit a file it has not read
+  do: tofu settings set readBeforeEdit false
+  check: tofu settings get readBeforeEdit
+  topic: settings
+- ask: use another shell, or wsl
+  do: tofu settings set shell wsl
+  check: tofu settings get shell
+  topic: settings
+- ask: stop every shell when tofu exits
+  do: tofu settings set persistentRegistry false
+  check: tofu settings get persistentRegistry
+  topic: settings
+- ask: stop sub-agents from being spawned
+  do: tofu settings set turnMaySpawn false
+  check: tofu settings get turnMaySpawn
+  topic: settings
+- ask: allow more sub-agents in one task
+  do: tofu settings set subAgentsPerTurn 20
+  check: tofu settings get subAgentsPerTurn
+  topic: settings
+- ask: pick the model a sub-agent tier runs
+  do: tofu settings set modelTier.smart claude-sub/claude-sonnet-5
+  check: tofu agents
+  topic: settings
+- ask: read only CLAUDE.md, not AGENTS.md
+  do: tofu settings set instructionSources CLAUDE.md
+  check: tofu settings get instructionSources
+  topic: settings
+- ask: send more of my instruction files each turn
+  do: tofu settings set projectInstructionsCap 65536
+  check: tofu settings get projectInstructionsCap
+  topic: settings
+- ask: read sub-agents only from .tofu
+  do: tofu settings set agentSources tofu
+  check: tofu agents
+  topic: settings
+- ask: turn skills off
+  do: tofu settings set skills off
+  check: tofu settings get skills
+  topic: settings
+- ask: never attach pasted images
+  do: tofu settings set images off
+  check: tofu settings get images
+  topic: settings
+- ask: hide the welcome art
+  do: tofu settings set hideIntroduction true
+  check: tofu settings get hideIntroduction
+  topic: settings
+- ask: change a setting for one project only
+  do: tofu settings set --scope project <key> <value>
+  check: tofu settings
+  topic: settings
+- ask: see every setting and where it came from
+  do: tofu settings
+  check: tofu settings get <key>
+  topic: settings
+- ask: where does tofu keep its files
+  do: tofu docs files
+  check: tofu settings
+  topic: files
+- ask: move old sessions out of the project
+  do: tofu migrate
+  check: tofu migrate --dry-run
+  topic: files
+- ask: see which sub-agents exist and their models
+  do: tofu agents
+  check: tofu agents --json
+  topic: files
+- ask: sign in with a subscription
+  do: tofu login claude-sub
+  check: tofu login --status
+  topic: start
+- ask: find out why tofu will not start
+  do: tofu doctor
+  check: tofu doctor
+  topic: start
+- ask: see what changed in this version
+  do: tofu changelog
+  check: tofu version
+  topic: start

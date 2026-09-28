@@ -23,6 +23,8 @@ Usage:
 Verbs:
   version   print the version, the commit and the Go version
   changelog print what changed since the version you last read
+  docs      print what you can ask tofu and the command that does it,
+            a page with docs <topic>, or the closest answers with docs "a few words"
   doctor    say whether tofu can run here, and what is wrong if it cannot
   login     mint a subscription credential for a provider
   usage     print every credential's quota windows and when each resets,
@@ -83,6 +85,8 @@ func run(args []string, in io.Reader, out io.Writer, errOut io.Writer) int {
 		return version(out)
 	case "changelog":
 		return changelogVerb(args[1:], out, errOut)
+	case "docs":
+		return docsVerb(args[1:], out, errOut)
 	case "doctor":
 		return doctor(out, shade, args[1:]...)
 	case "login":

@@ -117,6 +117,7 @@ func libraryReport(dir string, out, errOut io.Writer) int {
 	proxy := loadProxySetting(dir)
 	refused = append(refused, proxy.refused...)
 	_, _ = fmt.Fprintf(out, "%-14s use %-3s   from %s   required use, timeout_ms\n", "proxy", proxy.use, proxy.layer)
+	refused = append(refused, docsReport(out)...)
 
 	files, dir, origin := librarySource()
 	domains, err := rule.LoadDomains(files, libraryRoot)
