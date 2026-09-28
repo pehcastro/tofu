@@ -1,0 +1,11 @@
+# an ask and its answer read as message lines in the orchestrator's feed and the sub-agent's, and never in the chat
+type ask
+key enter
+wait cooked for
+screen
+key alt+2
+wait All activity
+key down
+screen
+key down
+screen

@@ -219,6 +219,10 @@ func role(e Event) (string, look.Color) {
 
 func (c *cardCache) cardLines(e Event, key cardKey) []string {
 	word, colour := role(e)
+	_, said, talking := talk(e)
+	if talking {
+		word, colour = KindMessage.String(), look.Blue
+	}
 	left := look.AgentRef(actor(e).label()) + "  " + look.Style(colour).Render(word)
 	right := look.Faint(key.age+"  ") + look.TypedID(e.Kind.String(), e.ID)
 	headWidth := max(headMinWidth, key.width-headInset)
@@ -227,6 +231,12 @@ func (c *cardCache) cardLines(e Event, key cardKey) []string {
 		head = left + "\n" + right
 	}
 	lines := []string{head}
+	if talking {
+		for _, line := range said {
+			lines = append(lines, look.Title(line))
+		}
+		return append(lines, metaLine(e))
+	}
 	switch e.Kind {
 	case KindThinking:
 		for _, line := range strings.Split(proseOnly(strings.TrimSpace(e.Body)), "\n") {

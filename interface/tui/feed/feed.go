@@ -93,6 +93,10 @@ const (
 	spaciousGap    = 2
 	allActivity    = "All activity"
 	orchestrator   = "orchestrator"
+	askTool        = "ask"
+	messageTool    = "message"
+	askedWord      = " asked: "
+	toldWord       = ": "
 )
 
 type Retention int
@@ -255,11 +259,30 @@ func (m Model) visible() []Event {
 	}
 	var events []Event
 	for _, e := range m.retained() {
-		if actor(e) == m.filter {
+		if m.shows(e) {
 			events = append(events, e)
 		}
 	}
 	return events
+}
+
+func (m Model) shows(e Event) bool {
+	with, _, talking := talk(e)
+	return m.filter == (identity{}) || actor(e) == m.filter || talking && with == m.filter
+}
+
+func talk(e Event) (with identity, said []string, talking bool) {
+	if e.Kind != KindTool {
+		return identity{}, nil, false
+	}
+	switch e.Title {
+	case askTool:
+		return identity{name: orchestrator}, append([]string{e.Actor + askedWord + e.Body}, e.Detail...), true
+	case messageTool:
+		to, text, _ := strings.Cut(e.Body, toldWord)
+		return identity{name: to}, append([]string{e.Actor + toldWord + text}, e.Detail...), true
+	}
+	return identity{}, nil, false
 }
 
 type hit struct {

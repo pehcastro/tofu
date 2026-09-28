@@ -90,7 +90,7 @@ func (m *Model) Focus(id string) bool {
 	if i < 0 {
 		return false
 	}
-	if m.filter != (identity{}) && m.filter != actor(m.events[i]) {
+	if !m.shows(m.events[i]) {
 		m.filter = identity{}
 	}
 	m.reveal(id)

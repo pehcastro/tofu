@@ -68,6 +68,7 @@ func seeds(at time.Time) map[string][]tui.Event {
 	}
 	return map[string][]tui.Event{
 		"agents": work,
+		"ask":    askWork(),
 		"edits":  fileWork(),
 		"spawn": append([]tui.Event{
 			{Kind: tui.EventToolCall, ID: "5e04aa", Tool: "spawn", Text: "audit the shell registry", Promote: true},

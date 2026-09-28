@@ -77,6 +77,12 @@ const (
 	roundMark           = "-r"
 	subAgentVerdict     = "sub-agent "
 	cancelledAt         = "cancelled at"
+	askTool             = "ask"
+	messageTool         = "message"
+	askAnswered         = "the orchestrator answers: "
+	askAssumed          = "the orchestrator did not answer, so your default stands, assumed and not confirmed: "
+	answeredReply       = "orchestrator: "
+	assumedReply        = "orchestrator did not answer, assumed: "
 )
 
 type appWiring struct {
@@ -1147,6 +1153,9 @@ func (a *appWatcher) result(message llm.Message, asker string) {
 	if verdict, spawned := a.verdictOf(result.ID, message.Content); spawned {
 		result.Text = verdict
 	}
+	if reply, asked := answerOf(message.Content); asked {
+		result.Text = reply
+	}
 	if !result.Failed {
 		if strings.HasPrefix(message.Content, unifiedDiffHeader) {
 			result.Diff = message.Content
@@ -1341,6 +1350,12 @@ func callIntent(call llm.ToolCall) (string, string) {
 		value, _ := fields[key].(string)
 		return oneLine(value)
 	}
+	switch call.Name {
+	case askTool:
+		return text("question"), ""
+	case messageTool:
+		return text("to") + ": " + text("text"), ""
+	}
 	command, pattern, path, task := text("command"), text("pattern"), text("path"), text("task")
 	switch {
 	case command != "":
@@ -1400,6 +1415,17 @@ func resultSummary(content string) string {
 		return "1 line, " + byteSize(len(content))
 	}
 	return strconv.Itoa(lines) + " lines, " + byteSize(len(content))
+}
+
+func answerOf(content string) (string, bool) {
+	first, _, _ := strings.Cut(content, "\n\n")
+	if answer, answered := strings.CutPrefix(first, askAnswered); answered {
+		return answeredReply + oneLine(answer), true
+	}
+	if assumed, wasAssumed := strings.CutPrefix(first, askAssumed); wasAssumed {
+		return assumedReply + oneLine(assumed), true
+	}
+	return "", false
 }
 
 func storedWhole(content string) (int, bool) {
