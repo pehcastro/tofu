@@ -1,4 +1,4 @@
-package cover_test
+package welcome_test
 
 import (
 	"context"
@@ -78,7 +78,7 @@ func TestTheChatDrawsTheWordmarkCellForCellAsTheOldCoverDid(t *testing.T) {
 		for x := oldArtLeft; x < oldArtLeft+artCells; x++ {
 			was, now := want.CellAt(x, y), got.CellAt(x+shift, top+y)
 			if was.Content != now.Content || was.Style != now.Style {
-				t.Errorf("wordmark row %d col %d: old cover %q %+v, chat %q %+v", y, x, was.Content, was.Style, now.Content, now.Style)
+				t.Errorf("wordmark row %d col %d: reference %q %+v, chat %q %+v", y, x, was.Content, was.Style, now.Content, now.Style)
 			}
 		}
 	}
@@ -109,11 +109,11 @@ func dot(t *testing.T, app *tui.App) int {
 
 func TestOnePulseAfterTheSetupClearsMovesTheDotOneStep(t *testing.T) {
 	app := freshApp(t, []tui.Requirement{{What: "sign in", Fix: "tofu login"}})
-	started := app.Init()
+	initial := app.Init()
 	_, recheck := app.Update(tea.KeyPressMsg{Code: 'r', Text: "r"})
 	_, cleared := app.Update(recheck())
 	before := dot(t, app)
-	for _, msg := range messages(tea.Batch(started, cleared)) {
+	for _, msg := range messages(tea.Batch(initial, cleared)) {
 		app.Update(msg)
 	}
 	if moved := dot(t, app) - before; moved != 1 {

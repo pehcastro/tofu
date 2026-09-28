@@ -1,4 +1,4 @@
-package cover
+package welcome
 
 import (
 	"strings"
@@ -8,7 +8,7 @@ import (
 )
 
 func TestIdentityUsesApprovedPoseCompositions(t *testing.T) {
-	identity := NewIdentity(false)
+	identity := NewIdentity()
 	if poses[0].x != -17 || poses[0].y != 2 || poses[1].x != -11 || poses[1].y != 6 {
 		t.Fatal("approved pose placement changed")
 	}
@@ -22,13 +22,14 @@ func TestIdentityUsesApprovedPoseCompositions(t *testing.T) {
 }
 
 func TestIdentityKeepsChosenPoseWhileAnimating(t *testing.T) {
-	identity := NewIdentity(true)
+	t.Setenv("TOFU_ASCII", "1")
+	identity := NewIdentity()
 	identity.TogglePose()
 	for range 100 {
 		identity, _ = identity.Update(pulseMsg{})
 	}
 	if identity.PoseName() != "lying" {
-		t.Fatal("chosen pose changed during the cover animation")
+		t.Fatal("chosen pose changed during the welcome animation")
 	}
 	if identity.cat.ViewFrame(0) == identity.cat.ViewFrame(2) {
 		t.Fatal("lying pose lost its own animated tail frames")

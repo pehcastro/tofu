@@ -465,7 +465,7 @@ func (a *App) update(msg tea.Msg) tea.Cmd {
 		if !cleared {
 			return a.watchSetup()
 		}
-		return tea.Batch(a.view.Focus(), a.intro.start())
+		return a.view.Focus()
 	case shellsMsg:
 		a.showShells(msg)
 		return nil

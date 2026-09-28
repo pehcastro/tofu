@@ -1694,7 +1694,7 @@ func TestAFreshSessionOpensOnTheChatWithTheArtInTheEmptyTranscript(t *testing.T)
 		rows := strings.Split(ansi.Strip(freshApp(t, 100, 30).View().Content), "\n")
 		screen := strings.Join(rows, "\n")
 		if strings.Contains(screen, "Type something to start") {
-			t.Fatalf("the cover is still drawn\n%s", screen)
+			t.Fatalf("the welcome art is still drawn\n%s", screen)
 		}
 		composer := composerRow(t, rows)
 		art := artRows(rows)

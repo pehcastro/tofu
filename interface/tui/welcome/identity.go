@@ -1,4 +1,4 @@
-package cover
+package welcome
 
 import (
 	"os"
@@ -51,26 +51,21 @@ var canonicalTofu = [9]string{
 type pulseMsg struct{}
 
 type Identity struct {
-	cat     cat.Model
-	pose    int
-	pulse   int
-	ascii   bool
-	started bool
+	cat   cat.Model
+	pose  int
+	pulse int
+	ascii bool
 }
 
-func NewIdentity(forceASCII bool) Identity {
-	ascii := forceASCII || os.Getenv("TOFU_ASCII") != "" || os.Getenv("TERM") == "dumb"
+func NewIdentity() Identity {
+	ascii := os.Getenv("TOFU_ASCII") != "" || os.Getenv("TERM") == "dumb"
 	return Identity{ascii: ascii, cat: cat.New(
 		cat.WithFPS(catFPS),
 		cat.WithPlain(ascii || os.Getenv("NO_COLOR") != ""),
 	)}
 }
 
-func (i *Identity) Init() tea.Cmd {
-	if i.started {
-		return nil
-	}
-	i.started = true
+func (i Identity) Init() tea.Cmd {
 	return tea.Batch(i.cat.Init(), pulse())
 }
 

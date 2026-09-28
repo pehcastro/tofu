@@ -98,11 +98,7 @@ func (a *App) applyIntent(intent settings.Intent) tea.Cmd {
 	case settings.ActionOpenRole:
 		a.openPicker(intent.Key)
 	case settings.ActionClose:
-		if a.intro.settings {
-			cmd = a.returnToCover()
-		} else {
-			cmd = a.show(screenChat)
-		}
+		cmd = a.show(screenChat)
 	default:
 		panic("tui: unknown settings action")
 	}
