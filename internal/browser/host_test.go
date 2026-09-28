@@ -19,7 +19,7 @@ const testOrigin = "chrome-extension://abcdefghijklmnopabcdefghijklmnop/"
 type fakeExtension struct {
 	t      *testing.T
 	toHost *io.PipeWriter
-	calls  *io.PipeReader
+	heard  <-chan toExtension
 }
 
 func (f fakeExtension) send(message string) {
@@ -34,17 +34,27 @@ func (f fakeExtension) answer(id int64, fields string) {
 	f.send(`{"t":"result","id":` + strconv.FormatInt(id, 10) + `,` + fields + `}`)
 }
 
-func (f fakeExtension) call() extensionCall {
+func (f fakeExtension) next() toExtension {
 	f.t.Helper()
-	raw, err := ReadMessage(f.calls)
-	if err != nil {
-		f.t.Fatalf("no call reached the extension: %v", err)
+	select {
+	case message, open := <-f.heard:
+		if !open {
+			f.t.Fatal("the host stopped writing to the extension")
+		}
+		return message
+	case <-time.After(5 * time.Second):
+		f.t.Fatal("the host wrote nothing to the extension")
 	}
-	var call extensionCall
-	if err := json.Unmarshal(raw, &call); err != nil || call.T != messageCall {
-		f.t.Fatalf("the extension read %s, %v", raw, err)
+	return toExtension{}
+}
+
+func (f fakeExtension) call() toExtension {
+	f.t.Helper()
+	for {
+		if message := f.next(); message.T == messageCall {
+			return message
+		}
 	}
-	return call
 }
 
 func shortHome(t *testing.T) string {
@@ -92,11 +102,27 @@ func startHost(t *testing.T, home string) (fakeExtension, <-chan error) {
 		_ = stdoutW.Close()
 		done <- err
 	}()
+	heard := make(chan toExtension, 64)
+	go func() {
+		defer close(heard)
+		for {
+			raw, err := ReadMessage(stdoutR)
+			if err != nil {
+				return
+			}
+			var message toExtension
+			if err := json.Unmarshal(raw, &message); err != nil {
+				t.Errorf("the host wrote %s to the extension: %v", raw, err)
+				return
+			}
+			heard <- message
+		}
+	}()
 	t.Cleanup(func() {
 		_ = stdinW.Close()
 		_ = stdoutR.Close()
 	})
-	return fakeExtension{t, stdinW, stdoutR}, done
+	return fakeExtension{t, stdinW, heard}, done
 }
 
 func dial(t *testing.T, home string) *Client {
@@ -127,14 +153,14 @@ func TestHostRelaysAndClaims(t *testing.T) {
 	home := shortHome(t)
 	installFor(t, home, testOrigin)
 	ext, done := startHost(t, home)
-	ext.send(`{"t":"hello","version":1,"tabs":[{"id":7,"url":"https://a.test/","title":"A","mode":"drive"}]}`)
-	ext.send(`{"t":"shared","tab":{"id":9,"url":"https://b.test/","title":"B"},"mode":"read"}`)
+	ext.send(`{"t":"hello","version":2,"tabs":[{"id":7,"url":"https://a.test/","title":"A"},{"id":4,"url":"chrome://settings/","title":"Settings"}]}`)
+	ext.send(`{"t":"tabUpdated","tab":{"id":9,"url":"https://b.test/","title":"B"}}`)
 	ext.send(`{"t":"tabUpdated","tab":{"id":9,"url":"https://b.test/next","title":"B next"}}`)
 	ext.send(`{"t":"result","id":999,"ok":true,"value":"nobody asked"}`)
 
 	first, second := dial(t, home), dial(t, home)
 	tabs, err := first.Tabs()
-	want := []Tab{{7, "https://a.test/", "A", ModeDrive, false}, {9, "https://b.test/next", "B next", ModeRead, false}}
+	want := []Tab{{7, "https://a.test/", "A", false}, {9, "https://b.test/next", "B next", false}}
 	if err != nil || !slices.Equal(tabs, want) {
 		t.Fatalf("Tabs is %v, %v; want %v", tabs, err, want)
 	}
@@ -168,11 +194,8 @@ func TestHostRelaysAndClaims(t *testing.T) {
 	if _, err := second.Call(7, "click", nil); err == nil || !strings.Contains(err.Error(), "another tofu session") {
 		t.Fatalf("a drive op on a tab the first session claimed returned %v", err)
 	}
-	if _, err := first.Call(9, "fill", nil); err == nil || !strings.Contains(err.Error(), "reading") {
-		t.Fatalf("a drive op on a tab shared for reading returned %v", err)
-	}
-	if _, err := first.Call(4, "snapshot", nil); err == nil || !strings.Contains(err.Error(), "not shared") {
-		t.Fatalf("an op on a tab nobody shared returned %v", err)
+	if _, err := first.Call(5, "snapshot", nil); err == nil || !strings.Contains(err.Error(), "no tab 5") {
+		t.Fatalf("an op on a tab Chrome does not have returned %v", err)
 	}
 	if _, err := first.Call(7, "navigate", nil); err == nil || !strings.Contains(err.Error(), "unknown browser op") {
 		t.Fatalf("an unknown op returned %v", err)
@@ -188,13 +211,14 @@ func TestHostRelaysAndClaims(t *testing.T) {
 	}
 
 	_ = first.Close()
-	reached := make(chan extensionCall, 1)
+	reached := make(chan toExtension, 1)
 	go func() {
-		var call extensionCall
-		if raw, err := ReadMessage(ext.calls); err == nil {
-			_ = json.Unmarshal(raw, &call)
+		for message := range ext.heard {
+			if message.T == messageCall {
+				reached <- message
+				return
+			}
 		}
-		reached <- call
 	}()
 	deadline := time.Now().Add(5 * time.Second)
 	for driven := false; !driven; {
@@ -217,10 +241,10 @@ func TestHostRelaysAndClaims(t *testing.T) {
 		}
 	}
 
-	ext.send(`{"t":"unshared","tabId":9}`)
+	ext.send(`{"t":"tabRemoved","tabId":9}`)
 	ext.send(`{"t":"result","id":998,"ok":true}`)
 	if tabs, err := second.Tabs(); err != nil || !slices.Equal(tabs, want[:1]) {
-		t.Fatalf("after unshared, Tabs is %v, %v", tabs, err)
+		t.Fatalf("after tabRemoved, Tabs is %v, %v", tabs, err)
 	}
 
 	_ = ext.toHost.Close()
@@ -244,7 +268,7 @@ func TestHostOpensAndClosesOnlyTheTabsTofuOpened(t *testing.T) {
 	home := shortHome(t)
 	installFor(t, home, testOrigin)
 	ext, _ := startHost(t, home)
-	ext.send(`{"t":"hello","version":1,"tabs":[{"id":7,"url":"https://mine.test/","title":"Mine","mode":"drive"},{"id":5,"url":"https://kept.test/","title":"Kept","mode":"drive","opened":true}]}`)
+	ext.send(`{"t":"hello","version":2,"tabs":[{"id":7,"url":"https://mine.test/","title":"Mine"},{"id":5,"url":"https://kept.test/","title":"Kept","opened":true}]}`)
 	client := dial(t, home)
 
 	for _, url := range []string{"javascript:alert(1)", "JAVASCRIPT:alert(1)", "chrome://settings", "data:text/html,x", ""} {
@@ -267,13 +291,13 @@ func TestHostOpensAndClosesOnlyTheTabsTofuOpened(t *testing.T) {
 	if create.Op != "open" || create.TabID != 0 || string(create.Args) != `{"url":"https://example.com/"}` {
 		t.Fatalf("the first call to reach the extension is %+v", create)
 	}
-	ext.send(`{"t":"shared","tab":{"id":12,"url":"","title":"","opened":true},"mode":"drive"}`)
+	ext.send(`{"t":"tabUpdated","tab":{"id":12,"url":"","title":"","opened":true}}`)
 	ext.answer(create.ID, `"ok":true,"value":12`)
 	if a := <-opened; a.err != nil || string(a.value) != "12" {
 		t.Fatalf("open returned tab %s, %v", a.value, a.err)
 	}
 	tabs, err := client.Tabs()
-	if err != nil || len(tabs) != 3 || tabs[2] != (Tab{12, "", "", ModeDrive, true}) {
+	if err != nil || len(tabs) != 3 || tabs[2] != (Tab{12, "", "", true}) {
 		t.Fatalf("after open, Tabs is %v, %v", tabs, err)
 	}
 
@@ -288,6 +312,66 @@ func TestHostOpensAndClosesOnlyTheTabsTofuOpened(t *testing.T) {
 		if err := <-closed; err != nil {
 			t.Fatalf("close of tab %d returned %v", tab, err)
 		}
+	}
+}
+
+func TestHostDrivesAnyTabWithNoShareStepAndSaysWhatItIsDoing(t *testing.T) {
+	home := shortHome(t)
+	installFor(t, home, testOrigin)
+	ext, _ := startHost(t, home)
+	ext.send(`{"t":"hello","version":2,"tabs":[{"id":9,"url":"https://stays.test/","title":"Stays"},` +
+		`{"id":2,"url":"chrome://settings/","title":"Settings"},{"id":3,"url":"DEVTOOLS://devtools/bundled/inspector.html","title":"DevTools"},` +
+		`{"id":4,"url":"chrome-extension://jednanpboiikklhkkkimnmdmjmgjgphh/x.html","title":"An extension"},` +
+		`{"id":5,"url":"https://chromewebstore.google.com/detail/x","title":"Store"},{"id":6,"url":"https://chrome.google.com/webstore/detail/x","title":"Old store"},` +
+		`{"id":8,"url":"https://leaves.test/","title":"Leaves"}]}`)
+	ext.send(`{"t":"tabUpdated","tab":{"id":8,"url":"chrome://newtab/","title":"New tab"}}`)
+	client := dial(t, home)
+
+	tabs, err := client.Tabs()
+	if err != nil || len(tabs) != 1 || tabs[0] != (Tab{9, "https://stays.test/", "Stays", false}) {
+		t.Fatalf("Tabs is %v, %v; want tab 9 alone", tabs, err)
+	}
+	for _, tab := range []int{2, 3, 4, 5, 6, 8} {
+		for _, op := range []string{"snapshot", "click"} {
+			if _, err := client.Call(tab, op, nil); err == nil || !strings.Contains(err.Error(), "never reads or drives") {
+				t.Fatalf("%s on tab %d returned %v", op, tab, err)
+			}
+		}
+	}
+
+	read := callAsync(client, 9, "snapshot", nil)
+	if heard := ext.next(); heard.T != messageStatus || heard.State != statusReading {
+		t.Fatalf("before the snapshot the extension heard %+v; want the status reading, and no refused op reached it", heard)
+	}
+	snapshot := ext.call()
+	ext.answer(snapshot.ID, `"ok":true,"value":{}`)
+	if a := <-read; a.err != nil {
+		t.Fatal(a.err)
+	}
+	reread := callAsync(client, 9, "snapshot", nil)
+	again := ext.next()
+	if again.T != messageCall {
+		t.Fatalf("a second snapshot sent %+v; want the call alone, with no second reading", again)
+	}
+	ext.answer(again.ID, `"ok":true,"value":{}`)
+	<-reread
+	var timed CallTime
+	client.Timed = func(call CallTime) { timed = call }
+	clicked := callAsync(client, 9, "click", json.RawMessage(`{"element":1}`))
+	if heard := ext.next(); heard.T != messageStatus || heard.State != statusActing {
+		t.Fatalf("before the click the extension heard %+v; want the status acting", heard)
+	}
+	click := ext.call()
+	if click.TabID != 9 || click.Op != "click" {
+		t.Fatalf("the extension got %+v", click)
+	}
+	ext.answer(click.ID, `"ok":true,"value":{},"timing":{"evaluate_ms":1,"settle_ms":2,"act_ms":3}`)
+	if a := <-clicked; a.err != nil || timed.Extension == nil || *timed.Extension != (Timing{1, 2, 3}) {
+		t.Fatalf("the click returned %v with the timing %+v", a.err, timed.Extension)
+	}
+	answered := time.Now()
+	if heard := ext.next(); heard.T != messageStatus || heard.State != statusIdle || time.Since(answered) < idleAfter/2 {
+		t.Fatalf("after the click the extension heard %+v %v later; want the status idle after %v", heard, time.Since(answered), idleAfter)
 	}
 }
 
@@ -318,9 +402,8 @@ func TestHostRefusesAWrongOrigin(t *testing.T) {
 func TestHostFailsOnABadMessage(t *testing.T) {
 	for name, message := range map[string]string{
 		"unknown type": `{"t":"navigate","url":"https://a.test/"}`,
-		"unknown mode": `{"t":"shared","tab":{"id":1},"mode":"write"}`,
-		"old protocol": `{"t":"hello","version":0,"tabs":[]}`,
-		"no mode":      `{"t":"hello","version":1,"tabs":[{"id":1}]}`,
+		"a shared tab": `{"t":"shared","tab":{"id":1},"mode":"drive"}`,
+		"old protocol": `{"t":"hello","version":1,"tabs":[{"id":1,"mode":"drive"}]}`,
 	} {
 		t.Run(name, func(t *testing.T) {
 			home := shortHome(t)
@@ -343,7 +426,7 @@ func TestSecondHostKeepsOffTheSocket(t *testing.T) {
 	home := shortHome(t)
 	installFor(t, home, testOrigin)
 	ext, _ := startHost(t, home)
-	ext.send(`{"t":"hello","version":1,"tabs":[{"id":3,"url":"https://a.test/","title":"A","mode":"read"}]}`)
+	ext.send(`{"t":"hello","version":2,"tabs":[{"id":3,"url":"https://a.test/","title":"A"}]}`)
 	ext.send(`{"t":"result","id":1,"ok":true}`)
 	if err := Host(testOrigin, unreadable{t}, io.Discard, home); err == nil || !strings.Contains(err.Error(), "already") {
 		t.Fatalf("a second host returned %v", err)
@@ -409,7 +492,7 @@ func TestStaleSocketIsNotConnectedAndIsReplaced(t *testing.T) {
 		t.Fatalf("Dial on a socket nobody answers returned %v", err)
 	}
 	ext, _ := startHost(t, home)
-	ext.send(`{"t":"hello","version":1,"tabs":[]}`)
+	ext.send(`{"t":"hello","version":2,"tabs":[]}`)
 	if tabs, err := dial(t, home).Tabs(); err != nil || len(tabs) != 0 {
 		t.Fatalf("a host over a stale socket serves %v, %v", tabs, err)
 	}

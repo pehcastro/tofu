@@ -1,5 +1,5 @@
 const HOST = 'com.ephem.tofu';
-const PROTOCOL_VERSION = 1;
+const PROTOCOL_VERSION = 2;
 const DEBUGGER_VERSION = '1.3';
 const RECONNECT_MIN_MS = 1000;
 const RECONNECT_MAX_MS = 30000;
@@ -9,76 +9,156 @@ const COMBOBOX_SETTLE_MS = 200;
 const COMMIT_MS = 5000;
 const COMMIT_POLL_MS = 20;
 const DRIVE_OPS = ['click', 'fill', 'select', 'scroll', 'wait'];
-const MODES = ['read', 'drive'];
+const IN_PAGE_ACTS = ['scroll', 'select'];
 const DIRECTIONS = ['up', 'down'];
 const OPENABLE_PROTOCOLS = ['http:', 'https:', 'file:'];
 const SELECT_ALL_MODIFIER = navigator.userAgent.includes('Mac') ? 4 : 2;
+const NO_GROUP = -1;
+const GROUP_COLOR = 'orange';
+const BADGES = {
+  idle: {text: 'on', color: '#1a7f37'},
+  reading: {text: 'read', color: '#0969da'},
+  acting: {text: 'act', color: '#d9480f'},
+  off: {text: 'off', color: '#8b8b8b'},
+};
 
-const shared = new Map();
+const attached = new Map();
 const opened = new Set();
+const grouped = new Set();
+const optedOut = new Set();
 let port = null;
 let hostError = '';
 let reconnectDelay = RECONNECT_MIN_MS;
 let snapshotSource = null;
+let groups = null;
+let groupWork = Promise.resolve();
+let acting = false;
 
-const tabInfo = tab => ({id: tab.id, url: tab.url ?? '', title: tab.title ?? ''});
+const tabInfo = tab => ({id: tab.id, url: tab.url ?? tab.pendingUrl ?? '', title: tab.title ?? '', opened: opened.has(tab.id)});
 const post = message => port?.postMessage(message);
 const send = (tabId, method, params) => chrome.debugger.sendCommand({tabId}, method, params);
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+const groupTitle = () => acting ? 'tofu •' : 'tofu';
+const ourGroups = async () => groups ??= (await chrome.storage.session.get({groups: {}})).groups;
 
-function connect() {
+function serially(work) {
+  groupWork = groupWork.then(work).catch(() => {});
+}
+
+async function connect() {
   if (port) return;
   port = chrome.runtime.connectNative(HOST);
   port.onMessage.addListener(message => {
     reconnectDelay = RECONNECT_MIN_MS;
     if (message.t === 'call') void answer(message);
+    if (message.t === 'status') void show(message.state);
   });
   port.onDisconnect.addListener(() => {
     hostError = chrome.runtime.lastError?.message ?? 'the tofu host exited';
     port = null;
+    void show('off');
+    serially(restoreGroups);
+    for (const [tabId, attaching] of attached) attaching.then(() => chrome.debugger.detach({tabId})).catch(() => {});
+    attached.clear();
     setTimeout(connect, reconnectDelay);
     reconnectDelay = Math.min(reconnectDelay * 2, RECONNECT_MAX_MS);
   });
-  post({t: 'hello', version: PROTOCOL_VERSION, tabs: [...shared.values()]});
+  void show('idle');
+  post({t: 'hello', version: PROTOCOL_VERSION, tabs: (await chrome.tabs.query({})).map(tabInfo)});
+}
+
+async function show(state) {
+  const badge = BADGES[state];
+  if (!badge) return;
+  if (acting !== (state === 'acting')) {
+    acting = state === 'acting';
+    serially(async () => {
+      for (const groupId of Object.values(await ourGroups())) await chrome.tabGroups.update(groupId, {title: groupTitle()});
+    });
+  }
+  await chrome.action.setBadgeText({text: badge.text});
+  await chrome.action.setBadgeBackgroundColor({color: badge.color});
+  await chrome.action.setTitle({title: state === 'off' ? `tofu is not connected: ${hostError}` : `tofu is ${state}`});
 }
 
 async function answer({id, tabId, op, args}) {
+  const timing = {evaluate_ms: 0, settle_ms: 0, act_ms: 0};
   try {
-    post({t: 'result', id, ok: true, value: await perform(tabId, op, args ?? {})});
+    post({t: 'result', id, ok: true, value: await perform(tabId, op, args ?? {}, timing), timing});
   } catch (error) {
-    post({t: 'result', id, ok: false, error: error.message});
+    post({t: 'result', id, ok: false, error: error.message, timing});
   }
 }
 
-async function perform(tabId, op, args) {
+async function timed(timing, phase, work) {
+  const start = performance.now();
+  try {
+    return await work();
+  } finally {
+    timing[phase] += performance.now() - start;
+  }
+}
+
+async function perform(tabId, op, args, timing) {
   if (op === 'open') return openTab(String(args.url ?? ''));
   if (op === 'close') return closeOpened(tabId);
-  const tab = shared.get(tabId);
-  if (!tab) throw new Error(`tab ${tabId} is not shared with tofu`);
-  if (op === 'snapshot') return evaluate(tabId, {op});
-  if (!DRIVE_OPS.includes(op)) throw new Error(`unknown op ${op}`);
-  if (tab.mode !== 'drive') throw new Error(`tab ${tabId} is shared for reading only`);
+  if (op !== 'snapshot' && !DRIVE_OPS.includes(op)) throw new Error(`unknown op ${op}`);
   if (op === 'scroll' && !DIRECTIONS.includes(args.direction)) throw new Error(`no scroll direction ${args.direction}`);
+  await attach(tabId);
+  if (op === 'snapshot') return timed(timing, 'evaluate_ms', () => evaluate(tabId, {op}));
+  if (!grouped.has(tabId)) serially(() => groupTab(tabId));
   const request = {op, element: Number(args.element), guard: String(args.guard ?? ''), value: String(args.value ?? ''), direction: args.direction};
-  const target = await evaluate(tabId, request);
+  const target = await timed(timing, IN_PAGE_ACTS.includes(op) ? 'act_ms' : 'evaluate_ms', () => evaluate(tabId, request));
   if (target.stale) return target;
-  if (op === 'wait') {
-    await sleep(WAIT_MS);
-    return {};
-  }
-  if (op === 'click' || op === 'fill') {
-    for (const type of ['mousePressed', 'mouseReleased']) {
-      await send(tabId, 'Input.dispatchMouseEvent', {type, x: target.x, y: target.y, button: 'left', clickCount: 1});
+  await timed(timing, 'act_ms', async () => {
+    if (op === 'wait') await sleep(WAIT_MS);
+    if (op === 'click' || op === 'fill') {
+      for (const type of ['mousePressed', 'mouseReleased']) {
+        await send(tabId, 'Input.dispatchMouseEvent', {type, x: target.x, y: target.y, button: 'left', clickCount: 1});
+      }
     }
-  }
-  if (op === 'fill') {
-    const selectAll = {key: 'a', code: 'KeyA', modifiers: SELECT_ALL_MODIFIER};
-    await send(tabId, 'Input.dispatchKeyEvent', {...selectAll, type: 'keyDown', commands: ['selectAll']});
-    await send(tabId, 'Input.dispatchKeyEvent', {...selectAll, type: 'keyUp'});
-    await send(tabId, 'Input.insertText', {text: request.value});
-  }
-  await settle(tabId, request.element, op === 'fill' && target.combobox);
+    if (op === 'fill') {
+      const selectAll = {key: 'a', code: 'KeyA', modifiers: SELECT_ALL_MODIFIER};
+      await send(tabId, 'Input.dispatchKeyEvent', {...selectAll, type: 'keyDown', commands: ['selectAll']});
+      await send(tabId, 'Input.dispatchKeyEvent', {...selectAll, type: 'keyUp'});
+      await send(tabId, 'Input.insertText', {text: request.value});
+    }
+  });
+  if (op !== 'wait') await timed(timing, 'settle_ms', () => settle(tabId, request.element, op === 'fill' && target.combobox));
   return {};
+}
+
+async function attach(tabId) {
+  if (!attached.has(tabId)) {
+    attached.set(tabId, chrome.debugger.attach({tabId}, DEBUGGER_VERSION).catch(error => {
+      attached.delete(tabId);
+      throw error;
+    }));
+  }
+  await attached.get(tabId);
+}
+
+async function groupTab(tabId) {
+  const tab = await chrome.tabs.get(tabId);
+  const mine = (await ourGroups())[tab.windowId];
+  if (tab.pinned || optedOut.has(tabId) || (tab.groupId !== NO_GROUP && tab.groupId !== mine)) return;
+  const live = mine !== undefined && await chrome.tabGroups.get(mine).then(() => true, () => false);
+  const groupId = await chrome.tabs.group(live ? {tabIds: [tabId], groupId: mine} : {tabIds: [tabId], createProperties: {windowId: tab.windowId}});
+  groups[tab.windowId] = groupId;
+  grouped.add(tabId);
+  if (!live) await chrome.tabGroups.update(groupId, {title: groupTitle(), color: GROUP_COLOR});
+  await chrome.storage.session.set({groups});
+}
+
+async function restoreGroups() {
+  const dissolved = Object.values(await ourGroups());
+  grouped.clear();
+  groups = {};
+  await chrome.storage.session.set({groups});
+  for (const groupId of dissolved) {
+    const ids = (await chrome.tabs.query({groupId})).map(tab => tab.id);
+    if (ids.length > 0) await chrome.tabs.ungroup(ids);
+  }
 }
 
 async function settle(tabId, element, combobox) {
@@ -100,15 +180,11 @@ async function evaluate(tabId, request) {
 
 async function openTab(url) {
   if (!OPENABLE_PROTOCOLS.includes(URL.parse(url)?.protocol)) throw new Error(`tofu opens only http, https and file URLs, not ${url}`);
-  const {id} = await chrome.tabs.create({url, active: false});
-  opened.add(id);
-  try {
-    await share(id, 'drive');
-  } catch (error) {
-    await closeOpened(id);
-    throw error;
-  }
-  return id;
+  const tab = await chrome.tabs.create({url, active: false});
+  opened.add(tab.id);
+  post({t: 'tabUpdated', tab: tabInfo(tab)});
+  serially(() => groupTab(tab.id));
+  return tab.id;
 }
 
 async function closeOpened(tabId) {
@@ -116,45 +192,18 @@ async function closeOpened(tabId) {
   await chrome.tabs.remove(tabId);
 }
 
-async function share(tabId, mode) {
-  if (!MODES.includes(mode)) throw new Error(`no sharing mode ${mode}`);
-  const tab = {...tabInfo(await chrome.tabs.get(tabId)), opened: opened.has(tabId)};
-  if (!shared.has(tabId)) await chrome.debugger.attach({tabId}, DEBUGGER_VERSION);
-  shared.set(tabId, {...tab, mode});
-  post({t: 'shared', tab, mode});
-}
-
-async function unshare(tabId) {
-  opened.delete(tabId);
-  if (!shared.delete(tabId)) return;
-  post({t: 'unshared', tabId});
-  await chrome.debugger.detach({tabId}).catch(() => {});
-}
-
-async function popupAction({t, tabId, mode}) {
-  let failure = '';
-  try {
-    if (t === 'share') await share(tabId, mode);
-    if (t === 'stop') await unshare(tabId);
-  } catch (error) {
-    failure = error.message;
-  }
-  const state = {connected: port !== null, hostError, mode: shared.get(tabId)?.mode ?? '', failure};
-  connect();
-  return state;
-}
-
-chrome.runtime.onMessage.addListener((message, _sender, reply) => {
-  void popupAction(message).then(reply);
-  return true;
+chrome.tabs.onCreated.addListener(tab => post({t: 'tabUpdated', tab: tabInfo(tab)}));
+chrome.tabs.onRemoved.addListener(tabId => {
+  for (const set of [attached, opened, grouped, optedOut]) set.delete(tabId);
+  post({t: 'tabRemoved', tabId});
 });
-chrome.tabs.onRemoved.addListener(tabId => void unshare(tabId));
-chrome.debugger.onDetach.addListener(({tabId}) => void unshare(tabId));
+chrome.debugger.onDetach.addListener(({tabId}) => attached.delete(tabId));
 chrome.tabs.onUpdated.addListener((tabId, change, tab) => {
-  const entry = shared.get(tabId);
-  if (!entry || (change.url === undefined && change.title === undefined)) return;
-  Object.assign(entry, tabInfo(tab));
-  post({t: 'tabUpdated', tab: tabInfo(tab)});
+  if (change.groupId !== undefined && grouped.has(tabId) && change.groupId !== groups?.[tab.windowId]) {
+    grouped.delete(tabId);
+    optedOut.add(tabId);
+  }
+  if (change.url !== undefined || change.title !== undefined) post({t: 'tabUpdated', tab: tabInfo(tab)});
 });
 
 chrome.debugger.getTargets()

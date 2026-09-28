@@ -70,7 +70,7 @@ func (s *browserSession) with(use func(*browser.Client) error) error {
 	return err
 }
 
-const theModelNeverWritesScript = "tofu reaches only a Chrome tab the person shared with a click, and never opens, navigates or runs script in one"
+const theModelNeverWritesScript = "tofu reaches the person's ordinary Chrome tabs, never a chrome:// page, DevTools, an extension or the web store, and never opens, navigates or runs script in one"
 
 type browserTabs struct{ session *browserSession }
 
@@ -79,7 +79,7 @@ func (browserTabs) Name() string { return "browser_tabs" }
 func (browserTabs) Definition() llm.Tool {
 	return llm.Tool{
 		Name:        "browser_tabs",
-		Description: "lists the Chrome tabs the person shared with tofu, one a line: id, mode, title and address. a read tab can only be read, a drive tab can also be acted on. " + theModelNeverWritesScript,
+		Description: "lists the Chrome tabs tofu can reach, one a line: id, title and address. " + theModelNeverWritesScript,
 		Parameters:  map[string]any{"type": "object", "properties": map[string]any{}},
 	}
 }
@@ -94,15 +94,15 @@ func (t browserTabs) Run(context.Context, json.RawMessage) (turn.Result, error) 
 		return turn.Result{}, fmt.Errorf("browser_tabs: %w", err)
 	}
 	if len(tabs) == 0 {
-		return turn.Result{Content: "no tab is shared: the person clicks the tofu icon on a Chrome tab and chooses Read or Drive", Command: "shared tabs"}, nil
+		return turn.Result{Content: "Chrome has no tab tofu can reach: every open tab is a chrome:// page, DevTools, an extension or the web store", Command: "open tabs"}, nil
 	}
 	lines := make([]string, len(tabs))
 	for i, tab := range tabs {
-		lines[i] = fmt.Sprintf("%d %s %s %s", tab.ID, tab.Mode, tab.Title, tab.URL)
+		lines[i] = fmt.Sprintf("%d %s %s", tab.ID, tab.Title, tab.URL)
 	}
 	return turn.Result{
-		Content: fmt.Sprintf("%d shared tabs\n%s", len(tabs), web.Untrusted("the titles of the shared Chrome tabs", strings.Join(lines, "\n"))),
-		Command: "shared tabs",
+		Content: fmt.Sprintf("%d open tabs\n%s", len(tabs), web.Untrusted("the titles of the open Chrome tabs", strings.Join(lines, "\n"))),
+		Command: "open tabs",
 	}, nil
 }
 
@@ -113,7 +113,7 @@ func (browserRead) Name() string { return "browser_read" }
 func (browserRead) Definition() llm.Tool {
 	return llm.Tool{
 		Name: "browser_read",
-		Description: "reads one shared tab: its visible text, then a numbered table of the controls on screen, each with its role, label, value and state. " +
+		Description: "reads one Chrome tab: its visible text, then a numbered table of the controls on screen, each with its role, label, value and state. " +
 			"password, file and hidden fields are never listed. a step names a control by its number in the latest read of that tab. " +
 			everythingFetchedIsUntrusted,
 		Parameters: map[string]any{
@@ -170,12 +170,8 @@ func driveTab(client *browser.Client, id int) error {
 	if err != nil {
 		return err
 	}
-	shared := slices.IndexFunc(tabs, func(tab browser.Tab) bool { return tab.ID == id })
-	switch {
-	case shared < 0:
-		return fmt.Errorf("tab %d is not shared with tofu", id)
-	case tabs[shared].Mode != browser.ModeDrive:
-		return fmt.Errorf("tab %d is shared for reading only: the person shares it to Drive to allow a step", id)
+	if !slices.ContainsFunc(tabs, func(tab browser.Tab) bool { return tab.ID == id }) {
+		return fmt.Errorf("tofu cannot reach tab %d: browser_tabs lists the tabs it can", id)
 	}
 	return nil
 }
@@ -187,7 +183,7 @@ func (browserAct) Name() string { return "browser_act" }
 func (browserAct) Definition() llm.Tool {
 	return llm.Tool{
 		Name: "browser_act",
-		Description: "runs one step in a tab shared to drive: CLICK, TYPE_TEXT or SELECT on a control numbered in the latest browser_read of that tab, or SCROLL_UP, SCROLL_DOWN or WAIT. " +
+		Description: "runs one step in a Chrome tab: CLICK, TYPE_TEXT or SELECT on a control numbered in the latest browser_read of that tab, or SCROLL_UP, SCROLL_DOWN or WAIT. " +
 			"text is what TYPE_TEXT types, or the option SELECT picks. every step changes the page, so read the tab again before the next one. " +
 			theModelNeverWritesScript,
 		Parameters: map[string]any{
@@ -295,7 +291,7 @@ func (browserDo) Name() string { return "browser_do" }
 func (t browserDo) Definition() llm.Tool {
 	return llm.Tool{
 		Name: "browser_do",
-		Description: fmt.Sprintf("runs a whole task in a tab shared to drive: jev picks each step, a click, typing, choosing an option, a scroll or a wait, until the goal is done, it is blocked, or %d actions ran. ", t.steps) +
+		Description: fmt.Sprintf("runs a whole task in a Chrome tab: jev picks each step, a click, typing, choosing an option, a scroll or a wait, until the goal is done, it is blocked, or %d actions ran. ", t.steps) +
 			"values maps a field's label, placeholder or name, in any case, to the text to type there, and one value fills a page's only text field; when jev picks a field values does not name, the task stops blocked and names the field, so call again with it. " +
 			"returns every step and a final read of the tab. " + theModelNeverWritesScript,
 		Parameters: map[string]any{

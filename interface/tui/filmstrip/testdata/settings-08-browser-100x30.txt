@@ -2,8 +2,8 @@
   tofu settings         Browser                                                     global scope    
   Global preferences    Choose a row to inspect and change its value.                               
                                                                                                     
-  CATEGORIES            › Browser                                                        off  ▾     
-    Appearance    05      off offers no browser tool; read lets the model read a Chrome tab you…    
+  CATEGORIES            › Browser                                                      drive  ▾     
+    Appearance    05      drive lets the model read your Chrome tabs and click and type in them…    
     Models & rol… 01                                                                                
     Interaction   05      Browser chooser                                                jev  ▾     
     Context       09      jev picks each step of a browser task; model leaves every step to the…    

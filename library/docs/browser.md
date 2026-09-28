@@ -1,30 +1,36 @@
 ---
 topic: browser
 title: Browser
-summary: share a Chrome tab so tofu can read it or act in it, and what tofu never does there
+summary: how tofu reads and drives your Chrome tabs, the tofu tab group, the badge, and what tofu never does there
 verbs: browser
 ---
 
 ## What it is
 
-tofu can read a Chrome tab you share with it, and act in one you share to
-drive. It reaches your own Chrome, with your logins, through a small
-extension. It reaches only a tab you shared with a click.
+tofu reads and drives your own Chrome, with your logins, through a small
+extension. There is no share step: any ordinary tab can be read or driven.
+tofu never reaches a `chrome://` page, DevTools, an extension's page or the
+Chrome Web Store.
+
+The extension does nothing to a tab until tofu first uses it. Then it
+attaches Chrome's debugger to that tab, and Chrome shows its bar saying the
+tab is being debugged.
 
 The model gets these tools:
 
-- `browser_tabs` lists the tabs you shared, with their mode, title and address.
+- `browser_tabs` lists your open tabs, with their title and address.
 - `browser_read` reads one tab: its visible text and a numbered table of the
   controls on screen. Password, file and hidden fields are never listed.
-- `browser_do` runs a whole task in a tab shared to drive. The model gives it
-  the tab and a goal. Jev, a typed decision model, reads the page and picks
-  each step: a click, typing into a field, choosing an option, a scroll, or a
-  wait. It stops when Jev says the goal is done, when Jev says it is blocked,
-  after three steps in a row that changed nothing, or when the `browserSteps`
+  Reading never changes the page.
+- `browser_do` runs a whole task in one tab. The model gives it the tab and a
+  goal. Jev, a typed decision model, reads the page and picks each step: a
+  click, typing into a field, choosing an option, a scroll, or a wait. It
+  stops when Jev says the goal is done, when Jev says it is blocked, after
+  three steps in a row that changed nothing, or when the `browserSteps`
   budget runs out. It answers with done or blocked, the reason, every step
   it ran, and a fresh read of the tab.
-- `browser_act` runs one step in a tab shared to drive, which the model picks
-  itself from its last `browser_read`.
+- `browser_act` runs one step in a tab, which the model picks itself from its
+  last `browser_read`.
 
 The model is given `browser_do` or `browser_act`, never both, and only when
 the `browser` setting is `drive`. The `browserChooser` setting picks which.
@@ -36,17 +42,25 @@ When Jev picks a field the map does not name, nothing is typed: the task
 stops as blocked, names the field, and the model can call again with it.
 
 Each Jev pick is one row in the decision ledger, under the point
-`browser_step`. With no Jev key,
-`browser_do` runs nothing and says so.
+`browser_step`. With no Jev key, `browser_do` runs nothing and says so.
 
-What a page says is treated as text to read, never as an instruction.
+What a page says is treated as text to read, never as an instruction. tofu
+never navigates a tab away from its page, closes a tab it did not open, runs
+JavaScript, a selector or an address the model wrote, or types into a
+read-only field.
 
-tofu never:
+## What you see
 
-- opens your tabs, or closes one;
-- navigates a tab away from its page;
-- runs JavaScript, a selector or an address the model wrote;
-- types into a read-only field, or acts in a tab you shared to read.
+The tofu icon, a cat, carries a badge: `on` when connected and idle, `read`
+while tofu reads a tab, `act` while it clicks, types or scrolls, and `off`
+when not connected. Hover the icon to read why.
+
+The first time tofu acts in a tab, or opens one, the tab joins an orange tab
+group titled `tofu`, one per window. While tofu is acting the title reads
+`tofu •`. Pinned tabs and tabs in a group of your own are left where they
+are. Drag a tab out of the tofu group and tofu stops putting it back. When
+tofu disconnects, the group dissolves, its tabs stay open, and tofu lets go of
+every tab, so Chrome's debugging bar goes away.
 
 ## Where it lives
 
@@ -64,22 +78,16 @@ It writes the extension and registers tofu with Chrome. Then, once, by hand:
 
 1. Open `chrome://extensions` and turn on Developer mode.
 2. Choose Load unpacked, pick the folder it printed, and check the id matches.
-3. Pin the tofu icon.
+3. Pin the tofu icon, so the badge shows.
 
-Share a tab: on the tab, click the tofu icon and choose Share to read or
-Share to drive. Read lets tofu read the tab. Drive also lets it click and
-type there.
-
-Then give the model the tools. They are off until you turn them on:
-
-    tofu settings set browser read
-    tofu settings set browser drive
+After a tofu update, run `tofu browser install` again and press reload on the
+tofu card in `chrome://extensions`.
 
 The settings:
 
-- `browser`: off, read or drive. The default is off, which offers no browser
-  tool and costs nothing. It is read when tofu opens, so open it again after
-  a change.
+- `browser`: off, read or drive. The default is drive. read gives the model
+  only `browser_tabs` and `browser_read`. off offers no browser tool. It is
+  read when tofu opens, so open it again after a change.
 - `browserChooser`: jev or model, who picks each step of a browser task. The
   default is jev, which gives the model `browser_do`. model gives it
   `browser_act` instead, and the model picks every step itself.
@@ -87,6 +95,7 @@ The settings:
   The default is 30. Jev may decide twice as many times, because a page that
   moved before a step runs is decided again.
 
+    tofu settings set browser read
     tofu settings set browserChooser model
     tofu settings set browserSteps 10
 
@@ -94,8 +103,8 @@ The settings:
 
     tofu browser
 
-lists the tabs you shared and their mode. With no extension running, it says
-the extension is not connected and names `tofu browser install`.
+lists the tabs tofu can reach. With no extension running, it says the
+extension is not connected and names `tofu browser install`.
 
     tofu settings get browser
 
@@ -103,14 +112,6 @@ prints which tools the model is given.
 
 ## Undo it
 
-Stop sharing a tab: click the tofu icon on it and choose Stop sharing.
-
-Take the tools away from the model:
-
-    tofu settings set browser off
-
-Remove it all:
-
-    tofu browser uninstall
-
-then remove the extension from `chrome://extensions`.
+`tofu settings set browser off` takes the tools away from the model.
+`tofu browser uninstall` removes it all; then remove the extension from
+`chrome://extensions`.

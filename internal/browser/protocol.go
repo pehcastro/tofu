@@ -3,40 +3,21 @@ package browser
 import (
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"tofu/internal/konst"
 	"tofu/internal/sys"
 )
 
-const ProtocolVersion = 1
-
-type Mode string
-
-const (
-	ModeRead  Mode = "read"
-	ModeDrive Mode = "drive"
-)
-
-func (m *Mode) UnmarshalJSON(raw []byte) error {
-	var name string
-	if err := json.Unmarshal(raw, &name); err != nil {
-		return err
-	}
-	switch Mode(name) {
-	case ModeRead, ModeDrive:
-		*m = Mode(name)
-		return nil
-	}
-	return fmt.Errorf("unknown tab mode %q", name)
-}
+const ProtocolVersion = 2
 
 type Tab struct {
 	ID     int    `json:"id"`
 	URL    string `json:"url"`
 	Title  string `json:"title"`
-	Mode   Mode   `json:"mode,omitempty"`
 	Opened bool   `json:"opened,omitempty"`
 }
 
@@ -44,19 +25,28 @@ type messageType string
 
 const (
 	messageCall       messageType = "call"
+	messageStatus     messageType = "status"
 	messageHello      messageType = "hello"
-	messageShared     messageType = "shared"
-	messageUnshared   messageType = "unshared"
 	messageTabUpdated messageType = "tabUpdated"
+	messageTabRemoved messageType = "tabRemoved"
 	messageResult     messageType = "result"
 )
 
-type extensionCall struct {
+type status string
+
+const (
+	statusIdle    status = "idle"
+	statusReading status = "reading"
+	statusActing  status = "acting"
+)
+
+type toExtension struct {
 	T     messageType     `json:"t"`
-	ID    int64           `json:"id"`
-	TabID int             `json:"tabId"`
-	Op    string          `json:"op"`
+	ID    int64           `json:"id,omitempty"`
+	TabID int             `json:"tabId,omitempty"`
+	Op    string          `json:"op,omitempty"`
 	Args  json.RawMessage `json:"args,omitempty"`
+	State status          `json:"state,omitempty"`
 }
 
 type Timing struct {
@@ -79,7 +69,6 @@ type extensionMessage struct {
 	Version int         `json:"version"`
 	Tabs    []Tab       `json:"tabs"`
 	Tab     Tab         `json:"tab"`
-	Mode    Mode        `json:"mode"`
 	TabID   int         `json:"tabId"`
 	result
 }
@@ -94,20 +83,23 @@ func parseExtensionMessage(raw []byte) (extensionMessage, error) {
 		if message.Version != ProtocolVersion {
 			return extensionMessage{}, fmt.Errorf("the extension speaks protocol %d and this tofu speaks %d: run tofu browser install and reload the extension", message.Version, ProtocolVersion)
 		}
-		for _, tab := range message.Tabs {
-			if tab.Mode == "" {
-				return extensionMessage{}, fmt.Errorf("the extension said hello with tab %d and no mode", tab.ID)
-			}
-		}
-	case messageShared:
-		if message.Mode == "" {
-			return extensionMessage{}, fmt.Errorf("the extension shared tab %d with no mode", message.Tab.ID)
-		}
-	case messageUnshared, messageTabUpdated, messageResult:
+	case messageTabUpdated, messageTabRemoved, messageResult:
 	default:
 		return extensionMessage{}, fmt.Errorf("the extension sent the unknown message type %q", message.T)
 	}
 	return message, nil
+}
+
+func reachable(address string) bool {
+	parsed, err := url.Parse(address)
+	if err != nil {
+		return false
+	}
+	switch parsed.Scheme {
+	case "chrome", "devtools", "edge", "view-source", "chrome-extension", "chrome-untrusted", "chrome-search":
+		return false
+	}
+	return parsed.Host != "chromewebstore.google.com" && (parsed.Host != "chrome.google.com" || !strings.HasPrefix(parsed.Path, "/webstore"))
 }
 
 const (
@@ -120,12 +112,12 @@ type openArgs struct {
 	URL string `json:"url"`
 }
 
-func opMode(op string) (Mode, error) {
+func opStatus(op string) (status, error) {
 	switch op {
 	case "snapshot":
-		return ModeRead, nil
+		return statusReading, nil
 	case "click", "fill", "select", "scroll", "wait":
-		return ModeDrive, nil
+		return statusActing, nil
 	}
 	return "", fmt.Errorf("unknown browser op %q", op)
 }

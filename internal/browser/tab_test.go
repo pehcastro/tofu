@@ -23,6 +23,7 @@ import (
 const fakeOrigin = "chrome-extension://tofutabtest/"
 
 type extensionCall struct {
+	T     string          `json:"t"`
 	ID    int64           `json:"id"`
 	TabID int             `json:"tabId"`
 	Op    string          `json:"op"`
@@ -42,7 +43,9 @@ func (f *fakeExtension) serve(fromHost io.Reader, toHost io.Writer) {
 			return
 		}
 		var call extensionCall
-		_ = json.Unmarshal(raw, &call)
+		if json.Unmarshal(raw, &call) != nil || call.T != "call" {
+			continue
+		}
 		f.mu.Lock()
 		f.calls = append(f.calls, fmt.Sprintf("tab %d %s %s", call.TabID, call.Op, string(call.Args)))
 		f.mu.Unlock()
@@ -92,7 +95,7 @@ func sharedTab(t *testing.T, answer func(extensionCall) string) (browser.SharedT
 			t.Error("the host did not stop")
 		}
 	})
-	hello := `{"t":"hello","version":1,"tabs":[{"id":7,"url":"http://127.0.0.1:8000/fixture.html","title":"Forma","mode":"drive"}]}`
+	hello := `{"t":"hello","version":2,"tabs":[{"id":7,"url":"http://127.0.0.1:8000/fixture.html","title":"Forma"}]}`
 	if err := browser.WriteMessage(toHostW, []byte(hello)); err != nil {
 		t.Fatalf("the host did not read hello: %v, %v", err, <-hostDone)
 	}
@@ -110,7 +113,7 @@ func sharedTab(t *testing.T, answer func(extensionCall) string) (browser.SharedT
 			break
 		}
 		if time.Now().After(deadline) {
-			t.Fatalf("the host never listed the shared tab: %v, %v", tabs, err)
+			t.Fatalf("the host never listed tab 7: %v, %v", tabs, err)
 		}
 	}
 	return browser.SharedTab{Client: client, ID: 7}, ext

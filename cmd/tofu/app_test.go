@@ -2436,7 +2436,7 @@ func TestTheBrowserSettingsReachTheToolsARunIsGiven(t *testing.T) {
 		mode, chooser string
 		want          []string
 	}{
-		{"", "", nil},
+		{"", "", []string{"browser_tabs", "browser_read", "browser_do"}},
 		{settingspkg.BrowserRead, "", []string{"browser_tabs", "browser_read"}},
 		{settingspkg.BrowserDrive, "", []string{"browser_tabs", "browser_read", "browser_do"}},
 		{settingspkg.BrowserDrive, settingspkg.ChooserModel, []string{"browser_tabs", "browser_read", "browser_act"}},

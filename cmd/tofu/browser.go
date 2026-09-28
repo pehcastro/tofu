@@ -62,10 +62,10 @@ func browserVerb(args []string, out, errOut io.Writer) int {
 		return withBrowser(home, errOut, func(client *browser.Client) error {
 			tabs, err := client.Tabs()
 			if len(tabs) == 0 && err == nil {
-				_, _ = fmt.Fprintln(out, "the extension is connected and no tab is shared: click the tofu icon on a tab and choose Read or Drive")
+				_, _ = fmt.Fprintln(out, "the extension is connected and no open tab is one tofu can reach: chrome:// pages, DevTools, extensions and the web store are never reached")
 			}
 			for _, tab := range tabs {
-				_, _ = fmt.Fprintf(out, "%-8d %-5s  %s  %s\n", tab.ID, tab.Mode, tab.Title, tab.URL)
+				_, _ = fmt.Fprintf(out, "%-8d %s  %s\n", tab.ID, tab.Title, tab.URL)
 			}
 			return err
 		})

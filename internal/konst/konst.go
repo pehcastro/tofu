@@ -178,6 +178,7 @@ const (
 	BrowserDialTimeoutMillis     = 2000
 	BrowserCallTimeoutMillis     = 30000
 	BrowserSocketPathMaxBytes    = 107
+	BrowserIdleAfterMillis       = 1500
 
 	BrowserPageTextRunes      = 6000
 	BrowserElementCeiling     = 250

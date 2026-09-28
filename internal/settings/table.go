@@ -234,7 +234,7 @@ func Default() []Spec {
 		{Key: subagent.TierSmart.Setting(), Label: "Smart tier", Description: "the model @smart names, and sonnet in a shared agent file; empty runs the orchestrator's model", Category: "Turn", Kind: Text},
 		{Key: subagent.TierWorker.Setting(), Label: "Worker tier", Description: "the model @worker names, and haiku in a shared agent file; empty runs the orchestrator's model", Category: "Turn", Kind: Text},
 		{Key: subagent.TierDumb.Setting(), Label: "Dumb tier", Description: "the model @dumb names; empty runs the orchestrator's model", Category: "Turn", Kind: Text},
-		{Key: Browser, Label: "Browser", Description: "off offers no browser tool; read lets the model read a Chrome tab you shared; drive also lets it click and type in a tab you shared to drive", Category: "Browser", Kind: Text, DefaultText: BrowserOff,
+		{Key: Browser, Label: "Browser", Description: "drive lets the model read your Chrome tabs and click and type in them; read lets it only read them; off offers no browser tool", Category: "Browser", Kind: Text, DefaultText: BrowserDrive,
 			Choices: []string{BrowserOff, BrowserRead, BrowserDrive}, Restart: true},
 		{Key: BrowserChooser, Label: "Browser chooser", Description: "jev picks each step of a browser task; model leaves every step to the turn's own model", Category: "Browser", Kind: Text, DefaultText: ChooserJev,
 			Choices: []string{ChooserJev, ChooserModel}},

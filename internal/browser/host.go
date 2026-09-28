@@ -17,6 +17,8 @@ import (
 	"tofu/internal/konst"
 )
 
+const idleAfter = konst.BrowserIdleAfterMillis * time.Millisecond
+
 type session struct {
 	conn net.Conn
 	out  *json.Encoder
@@ -37,6 +39,8 @@ type relay struct {
 	sessions  map[*session]bool
 	lastID    int64
 	closed    bool
+	shown     status
+	idle      *time.Timer
 }
 
 func Host(origin string, stdin io.Reader, stdout io.Writer, home string) error {
@@ -68,7 +72,14 @@ func Host(origin string, stdin io.Reader, stdout io.Writer, home string) error {
 	if err != nil {
 		return err
 	}
-	r := &relay{extension: stdout, tabs: map[int]Tab{}, claims: map[int]*session{}, pending: map[int64]route{}, sessions: map[*session]bool{}}
+	r := &relay{extension: stdout, tabs: map[int]Tab{}, claims: map[int]*session{}, pending: map[int64]route{}, sessions: map[*session]bool{}, shown: statusIdle}
+	r.idle = time.AfterFunc(idleAfter, func() {
+		r.mu.Lock()
+		defer r.mu.Unlock()
+		if !r.closed && len(r.pending) == 0 {
+			r.show(statusIdle)
+		}
+	})
 	go func() {
 		for {
 			conn, err := listener.Accept()
@@ -117,20 +128,14 @@ func (r *relay) receive(message extensionMessage) {
 			r.tabs[tab.ID] = tab
 		}
 		maps.DeleteFunc(r.claims, func(tab int, _ *session) bool {
-			_, shared := r.tabs[tab]
-			return !shared
+			_, open := r.tabs[tab]
+			return !open
 		})
-	case messageShared:
-		message.Tab.Mode = message.Mode
-		r.tabs[message.Tab.ID] = message.Tab
-	case messageUnshared:
+	case messageTabRemoved:
 		delete(r.tabs, message.TabID)
 		delete(r.claims, message.TabID)
 	case messageTabUpdated:
-		if tab, shared := r.tabs[message.Tab.ID]; shared {
-			tab.URL, tab.Title = message.Tab.URL, message.Tab.Title
-			r.tabs[tab.ID] = tab
-		}
+		r.tabs[message.Tab.ID] = message.Tab
 	case messageResult:
 		to, asked := r.pending[message.ID]
 		if !asked {
@@ -139,7 +144,29 @@ func (r *relay) receive(message extensionMessage) {
 		delete(r.pending, message.ID)
 		message.ID, message.Host = to.id, time.Since(to.sent)
 		_ = to.session.out.Encode(message.result)
+		r.idleSoon()
 	}
+}
+
+func (r *relay) idleSoon() {
+	if len(r.pending) == 0 {
+		r.idle.Reset(idleAfter)
+	}
+}
+
+func (r *relay) show(now status) {
+	if now != r.shown {
+		r.shown = now
+		_ = r.tell(toExtension{T: messageStatus, State: now})
+	}
+}
+
+func (r *relay) tell(message toExtension) error {
+	raw, err := json.Marshal(message)
+	if err != nil {
+		return err
+	}
+	return WriteMessage(r.extension, raw)
 }
 
 func (r *relay) serve(conn net.Conn) {
@@ -167,6 +194,7 @@ func (r *relay) serve(conn net.Conn) {
 	delete(r.sessions, s)
 	maps.DeleteFunc(r.claims, func(_ int, owner *session) bool { return owner == s })
 	maps.DeleteFunc(r.pending, func(_ int64, to route) bool { return to.session == s })
+	r.idleSoon()
 	_ = conn.Close()
 }
 
@@ -174,8 +202,9 @@ func (r *relay) handle(s *session, req request) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if req.Op == opTabs {
-		tabs, _ := json.Marshal(slices.SortedFunc(maps.Values(r.tabs), func(a, b Tab) int { return a.ID - b.ID }))
-		_ = s.out.Encode(result{ID: req.ID, OK: true, Value: tabs})
+		tabs := slices.SortedFunc(maps.Values(r.tabs), func(a, b Tab) int { return a.ID - b.ID })
+		listed, _ := json.Marshal(slices.DeleteFunc(tabs, func(tab Tab) bool { return !reachable(tab.URL) }))
+		_ = s.out.Encode(result{ID: req.ID, OK: true, Value: listed})
 		return
 	}
 	if err := r.forward(s, req); err != nil {
@@ -183,52 +212,50 @@ func (r *relay) handle(s *session, req request) {
 	}
 }
 
-func (r *relay) admit(s *session, req request) error {
+func (r *relay) admit(s *session, req request) (status, error) {
 	switch req.Op {
 	case opOpen:
 		var args openArgs
 		_ = json.Unmarshal(req.Args, &args)
 		if parsed, err := url.Parse(args.URL); err != nil || !slices.Contains([]string{"http", "https", "file"}, parsed.Scheme) {
-			return fmt.Errorf("tofu opens only http, https and file URLs, not %q", args.URL)
+			return "", fmt.Errorf("tofu opens only http, https and file URLs, not %q", args.URL)
 		}
-		return nil
+		return r.shown, nil
 	case opClose:
 		if !r.tabs[req.Tab].Opened {
-			return fmt.Errorf("tab %d is the person's: tofu closes only tabs it opened", req.Tab)
+			return "", fmt.Errorf("tab %d is the person's: tofu closes only tabs it opened", req.Tab)
 		}
-		return nil
+		return r.shown, nil
 	}
-	mode, err := opMode(req.Op)
+	now, err := opStatus(req.Op)
 	if err != nil {
-		return err
+		return "", err
 	}
-	tab, shared := r.tabs[req.Tab]
-	if !shared {
-		return fmt.Errorf("tab %d is not shared with tofu", req.Tab)
+	tab, open := r.tabs[req.Tab]
+	switch {
+	case !open:
+		return "", fmt.Errorf("there is no tab %d in Chrome", req.Tab)
+	case !reachable(tab.URL):
+		return "", fmt.Errorf("tab %d shows %s, which tofu never reads or drives", req.Tab, tab.URL)
+	case now == statusReading:
+		return now, nil
 	}
-	if mode == ModeDrive {
-		if tab.Mode != ModeDrive {
-			return fmt.Errorf("tab %d is shared for reading only", req.Tab)
-		}
-		if owner, claimed := r.claims[req.Tab]; claimed && owner != s {
-			return fmt.Errorf("tab %d is driven by another tofu session", req.Tab)
-		}
-		r.claims[req.Tab] = s
+	if owner, claimed := r.claims[req.Tab]; claimed && owner != s {
+		return "", fmt.Errorf("tab %d is driven by another tofu session", req.Tab)
 	}
-	return nil
+	r.claims[req.Tab] = s
+	return now, nil
 }
 
 func (r *relay) forward(s *session, req request) error {
-	if err := r.admit(s, req); err != nil {
-		return err
-	}
-	r.lastID++
-	raw, err := json.Marshal(extensionCall{T: messageCall, ID: r.lastID, TabID: req.Tab, Op: req.Op, Args: req.Args})
+	now, err := r.admit(s, req)
 	if err != nil {
 		return err
 	}
+	r.show(now)
+	r.lastID++
 	sent := time.Now()
-	if err := WriteMessage(r.extension, raw); err != nil {
+	if err := r.tell(toExtension{T: messageCall, ID: r.lastID, TabID: req.Tab, Op: req.Op, Args: req.Args}); err != nil {
 		return err
 	}
 	r.pending[r.lastID] = route{s, req.ID, sent}

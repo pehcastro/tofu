@@ -1,9 +1,13 @@
 package extension_test
 
 import (
+	"bytes"
 	"encoding/base64"
 	"encoding/json"
+	"image/png"
 	"io/fs"
+	"os/exec"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -25,19 +29,18 @@ func shipped(t *testing.T, name string) string {
 	return string(raw)
 }
 
-func TestManifestKeepsTheIDAndNamesEveryShippedFile(t *testing.T) {
+func TestManifestKeepsTheIDHasNoPopupAndCarriesTheIcon(t *testing.T) {
+	text := shipped(t, "manifest.json")
 	var manifest struct {
-		Key        string   `json:"key"`
-		Version    string   `json:"version"`
-		Permission []string `json:"permissions"`
+		Key        string            `json:"key"`
+		Version    string            `json:"version"`
+		Permission []string          `json:"permissions"`
+		Icons      map[string]string `json:"icons"`
 		Background struct {
 			ServiceWorker string `json:"service_worker"`
 		} `json:"background"`
-		Action struct {
-			Popup string `json:"default_popup"`
-		} `json:"action"`
 	}
-	if err := json.Unmarshal([]byte(shipped(t, "manifest.json")), &manifest); err != nil {
+	if err := json.Unmarshal([]byte(text), &manifest); err != nil {
 		t.Fatal(err)
 	}
 	der, err := base64.StdEncoding.DecodeString(manifest.Key)
@@ -47,18 +50,22 @@ func TestManifestKeepsTheIDAndNamesEveryShippedFile(t *testing.T) {
 	if id := browser.ExtensionID(der); id != pinnedExtensionID {
 		t.Fatalf("the extension id is %s, want %s", id, pinnedExtensionID)
 	}
-	if strings.Join(manifest.Permission, " ") != "nativeMessaging debugger tabs activeTab" || manifest.Version == "0.1.0" {
-		t.Fatalf("permissions %v and version %s; want the four permissions kept and the version bumped", manifest.Permission, manifest.Version)
+	if strings.Join(manifest.Permission, " ") != "nativeMessaging debugger tabs tabGroups storage" || manifest.Version == "0.3.0" {
+		t.Fatalf("permissions %v and version %s; want tabGroups and storage added, activeTab gone, and the version bumped", manifest.Permission, manifest.Version)
 	}
-	if manifest.Background.ServiceWorker != "background.js" || manifest.Action.Popup != "popup.html" {
-		t.Fatalf("the service worker is %q and the popup %q", manifest.Background.ServiceWorker, manifest.Action.Popup)
+	if strings.Contains(text, "default_popup") || manifest.Background.ServiceWorker != "background.js" {
+		t.Fatalf("the manifest names a popup, or the service worker is %q", manifest.Background.ServiceWorker)
+	}
+	for _, size := range []int{16, 32, 48, 128} {
+		name := manifest.Icons[strconv.Itoa(size)]
+		config, err := png.DecodeConfig(bytes.NewReader([]byte(shipped(t, name))))
+		if err != nil || config.Width != size || config.Height != size {
+			t.Fatalf("the %d pixel icon %q is %dx%d, %v", size, name, config.Width, config.Height, err)
+		}
 	}
 	names, err := fs.Glob(extension.Files, "*")
-	if err != nil || strings.Join(names, " ") != "background.js manifest.json popup.html popup.js snapshot.js" {
+	if err != nil || strings.Join(names, " ") != "background.js icon-128.png icon-16.png icon-32.png icon-48.png manifest.json snapshot.js" {
 		t.Fatalf("the extension ships %v, %v", names, err)
-	}
-	if !strings.Contains(shipped(t, "popup.html"), `<script src="popup.js">`) {
-		t.Fatal("popup.html does not load popup.js")
 	}
 }
 
@@ -75,23 +82,109 @@ func handler(t *testing.T, background, name string) string {
 	return background[start : start+end]
 }
 
-func TestBackgroundAttachesOnlyInTheShareHandlerAndNeverNavigates(t *testing.T) {
-	background := shipped(t, "background.js")
-	if total, inside := strings.Count(background, "debugger.attach"), strings.Count(handler(t, background, "share"), "chrome.debugger.attach("); total != 1 || inside != 1 {
-		t.Fatalf("background.js attaches %d times, %d of them in the share handler; want exactly one, in it", total, inside)
+func onlyIn(t *testing.T, background, call, name string) {
+	t.Helper()
+	if total, inside := strings.Count(background, call), strings.Count(handler(t, background, name), call); total != 1 || inside != 1 {
+		t.Errorf("background.js calls %s %d times, %d of them in %s; want exactly one, there", call, total, inside, name)
 	}
-	if total, inside := strings.Count(background, "tabs.create"), strings.Count(handler(t, background, "openTab"), "chrome.tabs.create({url, active: false})"); total != 1 || inside != 1 {
-		t.Fatalf("background.js creates a tab %d times, %d of them inactive in the open handler; want exactly one, there", total, inside)
+}
+
+func TestBackgroundAttachesAndGroupsInOnePlaceEachAndNeverNavigates(t *testing.T) {
+	background := shipped(t, "background.js")
+	onlyIn(t, background, "chrome.debugger.attach(", "attach")
+	onlyIn(t, background, "chrome.tabs.group(", "groupTab")
+	onlyIn(t, background, "chrome.tabs.ungroup(", "restoreGroups")
+	onlyIn(t, background, "chrome.tabs.create({url, active: false})", "openTab")
+	onlyIn(t, background, "args.url", "perform")
+	disconnect := strings.Index(background, "port.onDisconnect.addListener(")
+	if disconnect < 0 || !strings.Contains(background[disconnect:disconnect+strings.Index(background[disconnect:], "});")], "restoreGroups") {
+		t.Error("restoreGroups does not run when the port to tofu drops")
+	}
+	if !strings.Contains(background, "const DRIVE_OPS = ['click', 'fill', 'select', 'scroll', 'wait'];") {
+		t.Error("the drive ops are not exactly click, fill, select, scroll and wait")
 	}
 	closeOpened := handler(t, background, "closeOpened")
 	check, remove := strings.Index(closeOpened, "if (!opened.has(tabId)) throw"), strings.Index(closeOpened, "chrome.tabs.remove(tabId)")
 	if strings.Count(background, "tabs.remove") != 1 || check < 0 || remove < check {
-		t.Fatalf("background.js removes a tab %d times; want exactly one, in closeOpened after the opened check", strings.Count(background, "tabs.remove"))
+		t.Errorf("background.js removes a tab %d times; want exactly one, in closeOpened after the opened check", strings.Count(background, "tabs.remove"))
 	}
-	for _, never := range []string{"chrome.tabs.update", "Page.navigate", "location.href =", "eval(", "new Function", "['attach']", `["attach"]`} {
+	for _, never := range []string{"chrome.tabs.update", "Page.navigate", "location.href =", "eval(", "new Function", "['attach']", `["attach"]`, "popup"} {
 		if strings.Contains(background, never) {
 			t.Errorf("background.js contains %s", never)
 		}
+	}
+}
+
+func TestBackgroundInAStubbedChromeAttachesOnFirstUseGroupsAndRestores(t *testing.T) {
+	node, err := exec.LookPath("node")
+	if err != nil {
+		t.Skip("no node on the PATH to run background.js")
+	}
+	var stderr bytes.Buffer
+	stub := exec.Command(node, "testdata/chrome.js", ".")
+	stub.Stderr = &stderr
+	out, err := stub.Output()
+	if err != nil {
+		t.Fatalf("background.js in a stubbed Chrome: %v\n%s", err, stderr.String())
+	}
+	var run struct {
+		Heard    [][]any          `json:"heard"`
+		Posted   []map[string]any `json:"posted"`
+		Grouped  map[string]any   `json:"grouped"`
+		Restored map[string]any   `json:"restored"`
+	}
+	if err := json.Unmarshal(out, &run); err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	heard, first := map[string][]string{}, map[string]int{}
+	for i, entry := range run.Heard {
+		rest, _ := json.Marshal(entry[1:])
+		kind := entry[0].(string)
+		heard[kind] = append(heard[kind], string(rest))
+		if _, seen := first[kind+string(rest)]; !seen {
+			first[kind+string(rest)] = i
+		}
+	}
+	t.Logf("heard %v", heard)
+	for kind, want := range map[string]string{
+		"attach":      "[9] [3] [5] [6] [9]",
+		"group":       "[[9],100] [[6],100] [[9],101]",
+		"groupUpdate": `[100,{"color":"orange","title":"tofu •"}] [100,{"title":"tofu"}] [101,{"color":"orange","title":"tofu"}]`,
+		"ungroup":     "[[9]]",
+		"detach":      "[9] [3] [5] [6]",
+		"badge":       `["on"] ["act"] ["on"] ["off"] ["on"]`,
+	} {
+		if got := strings.Join(heard[kind], " "); got != want {
+			t.Errorf("%s: heard %s, want %s", kind, got, want)
+		}
+	}
+	if attach, click := first["attach[9]"], first[`evaluate[9,"click"]`]; heard["evaluate"][0] != `[9,"click"]` || click < attach {
+		t.Errorf("the first evaluate is %s, at %d, and tab 9 attached at %d; want the click on tab 9 after its attach", heard["evaluate"][0], click, attach)
+	}
+	hello, _ := json.Marshal(run.Posted[0])
+	if !strings.Contains(string(hello), `"t":"hello","tabs":[{"id":9,`) || strings.Contains(string(hello), "mode") {
+		t.Errorf("the extension said %s; want a hello listing every tab with no mode", hello)
+	}
+	results := map[float64]map[string]any{}
+	for _, message := range run.Posted[1:] {
+		if message["t"] == "result" {
+			results[message["id"].(float64)] = message
+		}
+	}
+	for id := 1.0; id <= 7; id++ {
+		timing, _ := results[id]["timing"].(map[string]any)
+		if results[id]["ok"] != true || len(timing) != 3 {
+			t.Errorf("call %v answered %v; want ok with evaluate, settle and act timed", id, results[id])
+		}
+	}
+	if settled := results[1]["timing"].(map[string]any)["settle_ms"].(float64); settled <= 0 {
+		t.Errorf("the click on tab 9 settled for %v ms", settled)
+	}
+	if kept, _ := json.Marshal(run.Grouped); string(kept) != `{"groups":{"1":100}}` {
+		t.Errorf("session storage held %s while connected; want the group of window 1", kept)
+	}
+	if left, _ := json.Marshal(run.Restored); string(left) != `{"groups":{}}` {
+		t.Errorf("session storage held %s after the port dropped", left)
 	}
 }
 
@@ -103,9 +196,9 @@ func TestSnapshotExcludesPasswordFileAndHiddenInputs(t *testing.T) {
 }
 
 func TestNoShippedFileCarriesACommentOrAnEmDash(t *testing.T) {
-	for _, name := range []string{"background.js", "popup.js", "snapshot.js", "popup.html", "manifest.json"} {
+	for _, name := range []string{"background.js", "snapshot.js", "manifest.json"} {
 		text := shipped(t, name)
-		if strings.ContainsRune(text, emDash) || strings.Contains(text, "/*") || strings.Contains(text, "<!--") {
+		if strings.ContainsRune(text, emDash) || strings.Contains(text, "/*") {
 			t.Errorf("%s carries an em dash or a block comment", name)
 		}
 		for number, line := range strings.Split(text, "\n") {

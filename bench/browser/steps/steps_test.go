@@ -81,11 +81,14 @@ func (f *fakeExtension) serve(fromHost io.Reader, toHost io.Writer) {
 			return
 		}
 		var call struct {
+			T    string          `json:"t"`
 			ID   int64           `json:"id"`
 			Op   string          `json:"op"`
 			Args json.RawMessage `json:"args"`
 		}
-		_ = json.Unmarshal(raw, &call)
+		if json.Unmarshal(raw, &call) != nil || call.T != "call" {
+			continue
+		}
 		value, timing := f.answer(call.Op, call.Args)
 		time.Sleep(f.delay.native)
 		message, _ := json.Marshal(map[string]any{"t": "result", "id": call.ID, "ok": true, "value": value, "timing": timing})
@@ -185,7 +188,7 @@ func sharedTab(t *testing.T, ext *fakeExtension) browser.SharedTab {
 		_ = fromHostR.Close()
 		<-hostDone
 	})
-	if err := browser.WriteMessage(toHostW, []byte(`{"t":"hello","version":1,"tabs":[{"id":7,"url":"http://127.0.0.1/","title":"Stays","mode":"drive"}]}`)); err != nil {
+	if err := browser.WriteMessage(toHostW, []byte(`{"t":"hello","version":2,"tabs":[{"id":7,"url":"http://127.0.0.1/","title":"Stays"}]}`)); err != nil {
 		t.Fatal(err)
 	}
 	go ext.serve(fromHostR, toHostW)

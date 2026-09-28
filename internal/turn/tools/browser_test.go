@@ -51,12 +51,15 @@ func (f *fakeChrome) serve(fromHost io.Reader, toHost io.Writer) {
 			return
 		}
 		var call struct {
+			T     string          `json:"t"`
 			ID    int64           `json:"id"`
 			TabID int             `json:"tabId"`
 			Op    string          `json:"op"`
 			Args  json.RawMessage `json:"args"`
 		}
-		_ = json.Unmarshal(raw, &call)
+		if json.Unmarshal(raw, &call) != nil || call.T != "call" {
+			continue
+		}
 		f.mu.Lock()
 		f.calls = append(f.calls, fmt.Sprintf("tab %d %s %s", call.TabID, call.Op, call.Args))
 		f.mu.Unlock()
@@ -120,9 +123,9 @@ func hostWithTwoTabs(t *testing.T, chrome *fakeChrome) string {
 			t.Error("the host did not stop")
 		}
 	})
-	hello := `{"t":"hello","version":1,"tabs":[` +
-		`{"id":7,"url":"http://127.0.0.1:8000/form.html","title":"Forma","mode":"drive"},` +
-		`{"id":8,"url":"http://127.0.0.1:8000/bank.html","title":"Bank","mode":"read"}]}`
+	hello := `{"t":"hello","version":2,"tabs":[` +
+		`{"id":7,"url":"http://127.0.0.1:8000/form.html","title":"Forma"},` +
+		`{"id":8,"url":"chrome://settings/","title":"Settings"}]}`
 	if err := browser.WriteMessage(toHostW, []byte(hello)); err != nil {
 		t.Fatalf("the host did not read hello: %v", err)
 	}
@@ -132,12 +135,12 @@ func hostWithTwoTabs(t *testing.T, chrome *fakeChrome) string {
 		if err == nil {
 			tabs, tabsErr := client.Tabs()
 			_ = client.Close()
-			if tabsErr == nil && len(tabs) == 2 {
+			if tabsErr == nil && len(tabs) == 1 {
 				return home
 			}
 		}
 		if time.Now().After(deadline) {
-			t.Fatalf("the host never listed the two shared tabs: %v", err)
+			t.Fatalf("the host never listed tab 7: %v", err)
 		}
 	}
 }
@@ -224,10 +227,8 @@ func TestTheBrowserToolsAgainstAFakeHost(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Logf("browser_tabs:\n%s", listed.Content)
-	for _, want := range []string{"7 drive Forma http://127.0.0.1:8000/form.html", "8 read Bank http://127.0.0.1:8000/bank.html"} {
-		if !strings.Contains(listed.Content, want) {
-			t.Fatalf("browser_tabs does not list %q", want)
-		}
+	if !strings.Contains(listed.Content, "1 open tabs") || !strings.Contains(listed.Content, "7 Forma http://127.0.0.1:8000/form.html") || strings.Contains(listed.Content, "chrome://") {
+		t.Fatal("browser_tabs does not list tab 7 alone")
 	}
 
 	read, err := run("browser_read", `{"tab":7}`)
@@ -249,11 +250,11 @@ func TestTheBrowserToolsAgainstAFakeHost(t *testing.T) {
 		t.Fatal("the table does not mark the booking reference read-only")
 	}
 
-	if _, err := run("browser_read", `{"tab":8}`); err != nil {
-		t.Fatal(err)
+	if _, err := run("browser_read", `{"tab":8}`); err == nil || !strings.Contains(err.Error(), "never reads or drives") {
+		t.Fatalf("browser_read on a chrome:// tab answered %v", err)
 	}
 	refusals := []struct{ args, says string }{
-		{`{"tab":8,"element":3,"op":"CLICK"}`, "reading only"},
+		{`{"tab":8,"element":3,"op":"CLICK"}`, "cannot reach tab 8"},
 		{`{"tab":7,"element":2,"op":"TYPE_TEXT","text":"BX99"}`, "read-only"},
 		{`{"tab":7,"element":3,"op":"TYPE_TEXT","text":"hi"}`, "button"},
 		{`{"tab":7,"element":4,"op":"CLICK"}`, "no element 4"},
@@ -268,7 +269,7 @@ func TestTheBrowserToolsAgainstAFakeHost(t *testing.T) {
 		t.Logf("browser_act %s: %v", refused.args, err)
 	}
 	before := chrome.saw()
-	if want := []string{"tab 7 snapshot null", "tab 8 snapshot null"}; !slices.Equal(before, want) {
+	if want := []string{"tab 7 snapshot null"}; !slices.Equal(before, want) {
 		t.Fatalf("a refused act reached the extension:\n%s", strings.Join(before, "\n"))
 	}
 
@@ -367,8 +368,8 @@ func TestBrowserDoRunsTheJevLoopOnADriveTab(t *testing.T) {
 	}
 
 	unasked := &recordedJev{answers: [][]byte{formAnswer("CLICK")}}
-	if _, err := do(jevOn(t, unasked, shortHome(t)), `{"tab":8,"goal":"pay the bill"}`); err == nil || !strings.Contains(err.Error(), "reading only") {
-		t.Fatalf("browser_do on a read tab answered %v", err)
+	if _, err := do(jevOn(t, unasked, shortHome(t)), `{"tab":8,"goal":"change a setting"}`); err == nil || !strings.Contains(err.Error(), "cannot reach tab 8") {
+		t.Fatalf("browser_do on a chrome:// tab answered %v", err)
 	}
 	noJev := func() (jevloop.Jev, error) { return jevloop.Jev{}, errors.New("no OPENROUTER_KEY in .env") }
 	if _, err := do(noJev, `{"tab":7,"goal":"book"}`); err == nil || !strings.Contains(err.Error(), "OPENROUTER_KEY") {
