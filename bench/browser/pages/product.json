@@ -1,0 +1,8 @@
+{
+  "url": "http://127.0.0.1:8000/product.html?name=Blue%20Kettle&price=%C2%A334.50",
+  "title": "Product",
+  "text": "Blue Kettle\nPrice:\n£34.50\nIn stock. Ships in 2 days.",
+  "fingerprint": "product-0",
+  "scroll": {"up": false, "down": false},
+  "elements": []
+}

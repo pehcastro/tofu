@@ -1,0 +1,15 @@
+{
+  "url": "http://127.0.0.1:8000/contact.html",
+  "title": "Contact support",
+  "text": "Contact support\nYour name\nEmail\nTopic\nMessage\nSend message",
+  "fingerprint": "contact-0",
+  "scroll": {"up": false, "down": false},
+  "elements": [
+    {"index": 1, "role": "textbox", "label": "Your name", "value": "Ada Lovelace", "input": "text"},
+    {"index": 2, "role": "textbox", "label": "Email", "value": "ada@example.com", "input": "email"},
+    {"index": 3, "role": "select", "label": "Topic", "value": "General",
+     "options": [{"label": "Damaged item", "value": "Damaged item"}, {"label": "Billing", "value": "Billing"}]},
+    {"index": 4, "role": "textbox", "label": "Message", "value": "My kettle arrived broken."},
+    {"index": 5, "role": "button", "label": "Send message", "value": ""}
+  ]
+}

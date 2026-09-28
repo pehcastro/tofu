@@ -1,0 +1,13 @@
+{
+  "url": "http://127.0.0.1:8000/shop.html",
+  "title": "Kettle Shop",
+  "text": "Kettle Shop\nSearch products\nSearch\nAbout us\n·\nContact",
+  "fingerprint": "shop-0",
+  "scroll": {"up": false, "down": false},
+  "elements": [
+    {"index": 1, "role": "searchbox", "label": "Search products", "value": "", "input": "search"},
+    {"index": 2, "role": "button", "label": "Search", "value": ""},
+    {"index": 3, "role": "link", "label": "About us", "value": ""},
+    {"index": 4, "role": "link", "label": "Contact", "value": ""}
+  ]
+}

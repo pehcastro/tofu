@@ -1,0 +1,8 @@
+{
+  "url": "http://127.0.0.1:8000/cities.html",
+  "title": "French cities",
+  "text": "Largest cities in France\nCity\nRegion\nPopulation\nParis\nÎle-de-France\n2,102,650\nMarseille\nProvence-Alpes-Côte d'Azur\n873,076\nLyon\nAuvergne-Rhône-Alpes\n522,250\nToulouse\nOccitanie\n504,078",
+  "fingerprint": "cities-0",
+  "scroll": {"up": false, "down": false},
+  "elements": []
+}

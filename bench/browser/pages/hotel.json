@@ -1,0 +1,22 @@
+{
+  "url": "http://127.0.0.1:8000/fixture.html",
+  "title": "Forma · Find a place to slow down",
+  "text": "forma.\nFind a stay\nReading room\nPLACES WITH CHARACTER\nTHE SLOWER WAY TO STAY\nSomewhere you can exhale.\nSmall, considered places. A little closer to what matters.\nCURATED, NOT CROWDED\nFind stays\nCategory\nFree cancellation\n3 places\nLISBON · DESIGN\nCasa Flora\nFree cancellation · 2 guests\n€145 / night\nView stay ↗\nCOPENHAGEN · DESIGN\nThe Glasshouse\nFree cancellation · 2 guests\n€210 / night\nView stay ↗\nLISBON · NATURE\nSerra Lodge\nNon-refundable · 2 guests\n€120 / night\nView stay ↗",
+  "fingerprint": "hotel-0",
+  "scroll": {"up": false, "down": true},
+  "elements": [
+    {"index": 1, "role": "link", "label": "forma."},
+    {"index": 2, "role": "link", "label": "Find a stay"},
+    {"index": 3, "role": "link", "label": "Reading room"},
+    {"index": 4, "role": "searchbox", "label": "Destination", "value": "", "input": "search"},
+    {"index": 5, "role": "button", "label": "Find stays", "value": "", "input": "submit"},
+    {"index": 6, "role": "select", "label": "Stay category", "value": "All stays",
+     "options": [{"label": "Design", "value": "Design"}, {"label": "Nature", "value": "Nature"}, {"label": "Coastal", "value": "Coastal"}]},
+    {"index": 7, "role": "checkbox", "label": "Free cancellation", "checked": "false", "input": "checkbox"},
+    {"index": 8, "role": "button", "label": "View Casa Flora"},
+    {"index": 9, "role": "button", "label": "View The Glasshouse"},
+    {"index": 10, "role": "button", "label": "View Serra Lodge"},
+    {"index": 11, "role": "textbox", "label": "Account password", "input": "password"},
+    {"index": 12, "role": "textbox", "label": "csrf", "value": "s3cr3t", "input": "hidden"}
+  ]
+}

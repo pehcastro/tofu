@@ -1,0 +1,11 @@
+{
+  "url": "http://127.0.0.1:8000/account.html",
+  "title": "Sign in",
+  "text": "Sign in to see your orders\nEmail\nPassword\nSign in",
+  "fingerprint": "account-0",
+  "scroll": {"up": false, "down": false},
+  "elements": [
+    {"index": 1, "role": "textbox", "label": "Email", "value": "", "input": "email"},
+    {"index": 2, "role": "button", "label": "Sign in", "value": ""}
+  ]
+}

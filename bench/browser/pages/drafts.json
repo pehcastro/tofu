@@ -1,0 +1,11 @@
+{
+  "url": "http://127.0.0.1:8000/drafts.html",
+  "title": "Drafts",
+  "text": "Your drafts\nHoliday post\nDelete\nRecipe notes\nDelete",
+  "fingerprint": "drafts-0",
+  "scroll": {"up": false, "down": false},
+  "elements": [
+    {"index": 1, "role": "button", "label": "Delete", "value": ""},
+    {"index": 2, "role": "button", "label": "Delete", "value": ""}
+  ]
+}

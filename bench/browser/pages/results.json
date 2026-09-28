@@ -1,0 +1,12 @@
+{
+  "url": "http://127.0.0.1:8000/results.html?q=kettle",
+  "title": "Results",
+  "text": "Search results\nRed Kettle\nBlue Kettle\nSteel Kettle",
+  "fingerprint": "results-0",
+  "scroll": {"up": false, "down": false},
+  "elements": [
+    {"index": 1, "role": "link", "label": "Red Kettle", "value": ""},
+    {"index": 2, "role": "link", "label": "Blue Kettle", "value": ""},
+    {"index": 3, "role": "link", "label": "Steel Kettle", "value": ""}
+  ]
+}
