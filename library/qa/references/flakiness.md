@@ -2,7 +2,7 @@
 id: flakiness
 domain: qa
 document: Flaky Test Quarantine, a QA skill written for Playwright and Jest trees
-found: published on qaskills.sh under a contributor account, copied into a local archive on 2026-09-21 and not committed here
+found: published on qaskills.sh under a contributor account, copied into a local archive and not committed here
 ---
 
 # Flakiness

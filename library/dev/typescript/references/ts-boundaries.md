@@ -2,7 +2,7 @@
 id: ts-boundaries
 domain: dev
 document: Effective TypeScript, 2nd edition, by Dan Vanderkam, items 46, 72 and 74; pstack's typescript-best-practices skill and its patterns reference; the Standard Schema interface published at standardschema.dev
-found: the book's published code samples, kept on the owner's machine; pstack in the cursor-plugins collection, read on 2026-09-26
+found: the book's published code samples, kept in a local clone; pstack in the cursor-plugins collection
 ---
 
 # Where types meet the running program

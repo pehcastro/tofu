@@ -2,7 +2,7 @@
 id: metrics
 domain: qa
 document: qa-metrics, a QA skill about what to count and what to do when a number goes red
-found: published on skills.sh under a contributor account, copied into a local archive on 2026-09-21 and not committed here
+found: published on skills.sh under a contributor account, copied into a local archive and not committed here
 ---
 
 # What is worth counting

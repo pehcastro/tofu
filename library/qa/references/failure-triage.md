@@ -2,7 +2,7 @@
 id: failure-triage
 domain: qa
 document: QA Agent for Claude Code, a skill describing a seven step explore to report loop
-found: published on qaskills.sh, copied into a local archive on 2026-09-21 and not committed here
+found: published on qaskills.sh, copied into a local archive and not committed here
 related: a second skill, qa-testing-strategy, published on skills.sh, which says the same thing about weakening a test
 ---
 

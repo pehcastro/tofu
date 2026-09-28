@@ -2,7 +2,7 @@
 id: test-planning
 domain: qa
 document: Test Plan Creator, a skill that produces a test plan template and the rules for filling it in
-found: published on qaskills.sh under a contributor account, copied into a local archive on 2026-09-21 and not committed here
+found: published on qaskills.sh under a contributor account, copied into a local archive and not committed here
 related: a second skill, qa-testing-strategy, published on skills.sh, which orders the layers by where a defect originates
 ---
 

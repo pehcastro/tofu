@@ -1,8 +1,8 @@
 ---
 id: ts-strict-config
 domain: dev
-document: Effective TypeScript, 2nd edition, by Dan Vanderkam, items 2 and 48 on strict mode and unsound lookups; the TypeScript 7 changes as checked against the TypeScript team's announcements on 2026-09-26
-found: the book's published code samples, a clone of the effective-typescript repository kept on the owner's machine and not committed here
+document: Effective TypeScript, 2nd edition, by Dan Vanderkam, items 2 and 48 on strict mode and unsound lookups; the TypeScript 7 changes as checked against the TypeScript team's announcements
+found: the book's published code samples, a clone of the effective-typescript repository kept locally and not committed here
 ---
 
 # What the compiler flags catch

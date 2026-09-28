@@ -94,7 +94,7 @@ func renderHeadline(b *strings.Builder, result Result) {
 	fmt.Fprintf(b, "The two arms left beside it are free and deterministic: a regular expression over the probe string and a constant that always proceeds. They are the baselines that matter, because a typed decision that cannot beat a constant is not buying anything. %s\n\n", ledger.UnitsDoNotAdd)
 }
 
-const retiredFrontierArms = "There is no frontier arm and no ratio in this run. The opus and fable arms were retired on 2026-09-19: the OpenRouter key is scoped to Jev on the account side, and the project's rule is that a frontier comparison runs the vendor's own command line on the owner's subscription rather than paying per token through an API key. Their recorded numbers stand in report-2026-09-18.md and report-2026-09-19.md, which are unedited"
+const retiredFrontierArms = "There is no frontier arm and no ratio in this run. The opus and fable arms are retired: the OpenRouter key is scoped to Jev on the account side, and a frontier comparison runs the vendor's own command line on a subscription rather than paying per token through an API key. Their recorded numbers stand in report-2026-09-18.md and report-2026-09-19.md, which are unedited"
 
 func renderAgreement(b *strings.Builder, result Result) {
 	b.WriteString("## Agreement with the label\n\n")

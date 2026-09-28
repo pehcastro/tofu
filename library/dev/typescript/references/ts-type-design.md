@@ -2,7 +2,7 @@
 id: ts-type-design
 domain: dev
 document: Effective TypeScript, 2nd edition, by Dan Vanderkam, items 29, 32 to 34, 37, 59 and 64; pstack's typescript-best-practices skill and its patterns reference
-found: the book's published code samples, kept on the owner's machine; pstack in the cursor-plugins collection, read on 2026-09-26
+found: the book's published code samples, kept in a local clone; pstack in the cursor-plugins collection
 ---
 
 # Types that only admit valid states

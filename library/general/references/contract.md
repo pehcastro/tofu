@@ -1,7 +1,7 @@
 ---
 id: contract
 domain: general
-document: internal/subagent/contract.go and internal/turn/spawn.go, read in this repository on 2026-09-25
+document: internal/subagent/contract.go and internal/turn/spawn.go, read in this repository
 found: this repository; this file is a description of what the code does, not a quotation
 ---
 

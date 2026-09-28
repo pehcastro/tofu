@@ -15,17 +15,16 @@ import (
 )
 
 const (
-	modelsFromTheBinaryAlone = `claude-sub/claude-opus-5, codex-sub/gpt-5.6-sol 7 of 18 usable
+	modelsFromTheBinaryAlone = `claude-sub/claude-opus-5, codex-sub/gpt-5.6-sol 10 of 18 usable
 
   claude-sub  claude-sub/claude-opus-5 (kind llm, pays subscription) by
                 default on --wire anthropic, a 1000000 token window, spends
                 5h and 7d
-              also allowed, claude-sub/claude-haiku-4-5-20251001 (kind llm,
-                pays subscription), claude-sub/claude-sonnet-5 (kind llm,
-                pays subscription)
-              2 excluded, the owner on 2026-09-19, not fable or astra for
-                now, those are not cheap. A current preference recorded as
-                data, not a permanent rule
+              also allowed, claude-sub/claude-fable-5 (kind llm, pays
+                subscription), claude-sub/claude-fable-5-1 (kind llm, pays
+                subscription), claude-sub/claude-haiku-4-5-20251001 (kind
+                llm, pays subscription), claude-sub/claude-sonnet-5 (kind
+                llm, pays subscription)
               6 excluded, a previous generation the account still serves,
                 superseded by claude-opus-5 and claude-sonnet-5
 
@@ -33,12 +32,10 @@ const (
                 on --wire codex, a 1050000 token window, spends 5h and 7d
               also allowed, codex-sub/gpt-5.6-luna (kind llm, pays
                 subscription), codex-sub/gpt-5.6-terra (kind llm, pays
+                subscription), codex-sub/gpt-6-astra (kind llm, pays
                 subscription)
               1 excluded, a previous generation the account still serves,
                 superseded by gpt-5.6-sol
-              1 excluded, the owner on 2026-09-19, not fable or astra for
-                now, those are not cheap. A current preference recorded as
-                data, not a permanent rule
               1 excluded, nobody has ruled on it, so tofu does not send it
                 until somebody does
 
@@ -56,19 +53,18 @@ const (
                 is bound, so it runs on the orchestrator's model
 `
 
-	modelsWithAProjectLayerAndAHomeRegistry = `claude-sub/claude-opus-5, codex-sub/gpt-5.6-sol 8 of 18 usable
+	modelsWithAProjectLayerAndAHomeRegistry = `claude-sub/claude-opus-5, codex-sub/gpt-5.6-sol 11 of 18 usable
 
   claude-sub  claude-sub/claude-opus-5 (kind llm, pays subscription) by
                 default on --wire anthropic, a 123456 token window, spends
                 5h and 7d
-              also allowed, claude-sub/claude-haiku-4-5-20251001 (kind llm,
-                pays subscription), claude-sub/claude-opus-4-5-20251101
+              also allowed, claude-sub/claude-fable-5 (kind llm, pays
+                subscription), claude-sub/claude-fable-5-1 (kind llm, pays
+                subscription), claude-sub/claude-haiku-4-5-20251001 (kind
+                llm, pays subscription), claude-sub/claude-opus-4-5-20251101
                 (kind llm, pays subscription, from the project layer),
                 claude-sub/claude-sonnet-5 (kind llm, pays subscription)
                 [orchestrator]
-              2 excluded, the owner on 2026-09-19, not fable or astra for
-                now, those are not cheap. A current preference recorded as
-                data, not a permanent rule
               5 excluded, a previous generation the account still serves,
                 superseded by claude-opus-5 and claude-sonnet-5
 
@@ -76,12 +72,10 @@ const (
                 on --wire codex, a 0 token window, spends 5h and 7d
               also allowed, codex-sub/gpt-5.6-luna (kind llm, pays
                 subscription), codex-sub/gpt-5.6-terra (kind llm, pays
+                subscription), codex-sub/gpt-6-astra (kind llm, pays
                 subscription)
               1 excluded, a previous generation the account still serves,
                 superseded by gpt-5.6-sol
-              1 excluded, the owner on 2026-09-19, not fable or astra for
-                now, those are not cheap. A current preference recorded as
-                data, not a permanent rule
               1 excluded, nobody has ruled on it, so tofu does not send it
                 until somebody does
 

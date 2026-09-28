@@ -90,7 +90,7 @@ func TestTheMeteredJevArmReportsItsOwnCostPerCorrectDecision(t *testing.T) {
 		"| jev | money | 6/6 | $0.000245 |  | 0 | $0.000041 |  |",
 		"178 cases: 172 recorded from a real run, 6 authored",
 		"6 carry the owner's label, 172 carry an agent's reading",
-		"The opus and fable arms were retired on 2026-09-19",
+		"The opus and fable arms are retired:",
 		"The avoided quantity is 5824 tokens and stays in tokens.",
 	} {
 		if !strings.Contains(body, want) {

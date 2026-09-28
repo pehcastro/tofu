@@ -48,7 +48,7 @@ A service is not done at a clean typecheck. The done-gate for a service is the d
 
 ## Traps
 
-TypeScript 7, as checked on 2026-09-26:
+TypeScript 7:
 
 - 7.0 is the Go compiler.
 - It removes baseUrl, moduleResolution node, target es5, and outFile.
