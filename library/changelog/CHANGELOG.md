@@ -8,6 +8,23 @@ Tofu is personal and not released, so the public interface that a version promis
 
 The minor number carries breaking changes, which is what 0.x means, and **there is never a 1.0.0**. The owner decided that on 2026-09-19: this stays 0.x forever, so the promise the version makes is the one 0.x already makes, that anything can break on a minor bump.
 
+## 0.5.0-rc-fix14 - 2026-09-28
+
+Tofu knows how it works and how to change itself.
+
+### Added
+
+- **`tofu docs`** prints an index of common asks, each with the command that does it. `tofu docs <topic>` prints a page, and `tofu docs "a few words"` finds the closest. There are 11 pages: start, files, settings, rules, agents, models, skills, instructions, gate, sessions and doctor.
+- **The model reads the same docs through a `tofu_docs` tool,** and is told to change tofu only with the command a page names. `tofu run --no-docs` and `tofu drive --no-docs` turn this off.
+- **`tofu rules add [--global] <id> "<text>"`,** plus `tofu rules off <id>` and `tofu rules remove <id>`. Global rules live in `~/.tofu/rules`, project rules in `.tofu/rules`. `tofu rules list` shows where each rule comes from.
+- **`tofu agents add <name> --description d --model source/model`,** plus `tofu agents set <name> <source/model>` and `tofu agents remove <name>`, globally with `--global` or in the project.
+- **`tofu browser install`** registers tofu as Chrome's native host and writes the tofu extension to load by hand. The model's browser tools come in the next release.
+
+### Changed
+
+- **The prompt, `tofu rules list` and `tofu reload` read the same rules:** shipped, then global, then the project given by `--dir`.
+- **`tofu library` exits 1** when a setting or a verb has no docs page.
+
 ## 0.5.0-rc-fix13 - 2026-09-28
 
 Tofu runs on its own setup, not on another harness's.
