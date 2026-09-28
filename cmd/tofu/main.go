@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -56,6 +57,8 @@ readable form collapses: doctor, models, agents, usage, context, rules.
   reload    re-read rules from disk without a restart
   migrate   move what tofu wrote out of this project's .tofu and into ~/.tofu,
             or --dry-run to list what would move
+  browser   list the Chrome tabs you shared with tofu and their mode,
+            or install and uninstall the extension's native host
 `
 
 func main() {
@@ -72,6 +75,9 @@ func main() {
 func run(args []string, in io.Reader, out io.Writer, errOut io.Writer) int {
 	if len(args) == 0 {
 		return appVerb(in, out, errOut, sessionResume{})
+	}
+	if strings.HasPrefix(args[0], "chrome-extension://") {
+		return hostVerb(args[0], in, out, errOut)
 	}
 	shade := paletteOf(out)
 	switch args[0] {
@@ -132,6 +138,8 @@ func run(args []string, in io.Reader, out io.Writer, errOut io.Writer) int {
 		return reloadVerb(out, errOut)
 	case "migrate":
 		return migrateVerb(args[1:], out, errOut)
+	case "browser":
+		return browserVerb(args[1:], out, errOut)
 	case "help", "-h", "--help":
 		_, _ = fmt.Fprint(out, usage)
 		return exitOK
