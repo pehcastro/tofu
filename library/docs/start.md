@@ -20,6 +20,7 @@ Topics:
 - files: every file tofu reads and writes
 - settings: every setting, its default, and how to change it
 - rules: add your own rules, switch one off, and see which rules run
+- agents: add your own sub-agents, choose the model each one runs, and remove them
 
 ## Where it lives
 

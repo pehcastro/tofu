@@ -12,9 +12,24 @@ import (
 	"tofu/internal/turn"
 )
 
-const agentsUsage = "usage: tofu agents [--json]"
+const (
+	agentsAddUsage    = "tofu agents add [--global] [--dir project] <name> --description d --model source/model [--tools a,b]"
+	agentsSetUsage    = "tofu agents set [--global] [--dir project] <name> <source/model>"
+	agentsRemoveUsage = "tofu agents remove [--global] [--dir project] <name>"
+	agentsUsage       = "usage: tofu agents [--json]\n       " + agentsAddUsage + "\n       " + agentsSetUsage + "\n       " + agentsRemoveUsage
+)
 
 func agentsVerb(args []string, out, errOut io.Writer) int {
+	if len(args) > 0 {
+		switch args[0] {
+		case "add":
+			return agentsAddVerb(args[1:], out, errOut)
+		case "set":
+			return agentsSetVerb(args[1:], out, errOut)
+		case "remove":
+			return agentsRemoveVerb(args[1:], out, errOut)
+		}
+	}
 	asJSON := slices.Equal(args, []string{"--json"})
 	if len(args) > 0 && !asJSON {
 		_, _ = fmt.Fprintln(errOut, "tofu agents: "+agentsUsage)
@@ -43,6 +58,10 @@ func discoverAgents() (subagent.Found, error) {
 	if err != nil {
 		return subagent.Found{}, err
 	}
+	return agentsIn(dir)
+}
+
+func agentsIn(dir string) (subagent.Found, error) {
 	named, _, err := assembleRunTools(dir, toolSetFull, nil, &turn.BashTool{})
 	if err != nil {
 		return subagent.Found{}, err

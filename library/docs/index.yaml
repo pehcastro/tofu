@@ -122,3 +122,23 @@
   do: tofu rules list
   check: tofu rules list --json
   topic: rules
+- ask: add a sub-agent to this project
+  do: tofu agents add <name> --description "<what it does>" --model <source/model>
+  check: tofu agents
+  topic: agents
+- ask: add a sub-agent to every project
+  do: tofu agents add --global <name> --description "<what it does>" --model <source/model>
+  check: tofu agents
+  topic: agents
+- ask: run a sub-agent on another model
+  do: tofu agents set <name> <source/model>
+  check: tofu agents
+  topic: agents
+- ask: remove a sub-agent I added
+  do: tofu agents remove <name>
+  check: tofu agents
+  topic: agents
+- ask: set up three sub-agents at once, each on its own model
+  do: tofu agents add <name> --description "<what it does>" --model <source/model>, once per sub-agent
+  check: tofu agents
+  topic: agents

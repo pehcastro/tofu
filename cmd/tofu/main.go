@@ -32,7 +32,8 @@ Verbs:
             or --history for the readings already recorded, each with its moment
   models    list the models each subscription serves, and why one is excluded
   agents    list the sub-agents read from .tofu, .agents, .claude and the library,
-            each with where it came from and the model it runs
+            each with where it came from and the model it runs,
+            or add, set or remove one
 
 A verb that reports state takes --json, which carries every field the
 readable form collapses: doctor, models, agents, usage, context, rules.
