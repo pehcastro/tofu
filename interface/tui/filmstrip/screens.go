@@ -125,7 +125,7 @@ func openSettings(r *reel) {
 
 func screens() []scenario {
 	var categories []beat
-	for index, name := range []string{"appearance", "models-and-roles", "interaction", "context", "files", "shell", "turn", "browser", "startup"} {
+	for index, name := range []string{"appearance", "models-and-roles", "interaction", "context", "files", "shell", "turn", "browser"} {
 		step := func(r *reel) { r.press("right") }
 		if index == 0 {
 			step = openSettings

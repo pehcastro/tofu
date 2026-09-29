@@ -11,13 +11,13 @@
     Shell         05      Thinking                                                          ● on    
     Turn          09      thinking shows in each agent's sub-agents feed; t there toggles it        
     Browser       04                                                                                
-    Startup       01      Thinking summary                                        summarized  ▾     
-                          summarized asks Claude for a summary of its thinking; omitted asks fo…    
-  NAVIGATE                                                                                          
-  ↑↓ setting · ←→         Images                                                        auto  ▾     
-  section                 auto sends a pasted image only to a model that can see, inline always…    
-  ctrl+k search ·                                                                                   
-  esc chat                Project instructions                                         32768  ▾     
+                          Thinking summary                                        summarized  ▾     
+  NAVIGATE                summarized asks Claude for a summary of its thinking; omitted asks fo…    
+  ↑↓ setting · ←→                                                                                   
+  section                 Images                                                        auto  ▾     
+  ctrl+k search ·         auto sends a pasted image only to a model that can see, inline always…    
+  esc chat                                                                                          
+                          Project instructions                                         32768  ▾     
                           bytes of your instruction files sent each turn                            
                                                                                                     
                         › Instruction files                                     claude-first  ▾     
@@ -41,13 +41,13 @@
     Shell         05     sends CLAUDE.md, both sends both and costs more                    ● on    
     Turn          09     tokens. Read from the working directory up to its   here toggles it        
     Browser       04     git root; the home directory gives only                                    
-    Startup       01     ~/.tofu/AGENTS.md                                        summarized  ▾     
-                                                                             g; omitted asks fo…    
-  NAVIGATE                 agents-first                                                             
-  ↑↓ setting · ←→                                                                       auto  ▾     
-  section                >  claude-first                                     see, inline always…    
-  ctrl+k search ·                                                                                   
-  esc chat                 both                                                        32768  ▾     
+                         ~/.tofu/AGENTS.md                                        summarized  ▾     
+  NAVIGATE                                                                   g; omitted asks fo…    
+  ↑↓ setting · ←→          agents-first                                                             
+  section                                                                               auto  ▾     
+  ctrl+k search ·        >  claude-first                                     see, inline always…    
+  esc chat                                                                                          
+                           both                                                        32768  ▾     
                                                                                                     
                          1-3/3 · ↑↓ preview · enter apply · esc cancel                              
                                                                                 claude-first  ▾     
@@ -71,13 +71,13 @@
     Shell         05     sends CLAUDE.md, both sends both and costs more                    ● on    
     Turn          09     tokens. Read from the working directory up to its   here toggles it        
     Browser       04     git root; the home directory gives only                                    
-    Startup       01     ~/.tofu/AGENTS.md                                        summarized  ▾     
-                                                                             g; omitted asks fo…    
-  NAVIGATE                 agents-first                                                             
-  ↑↓ setting · ←→                                                                       auto  ▾     
-  section                  claude-first                                      see, inline always…    
-  ctrl+k search ·                                                                                   
-  esc chat               >  both                                                       32768  ▾     
+                         ~/.tofu/AGENTS.md                                        summarized  ▾     
+  NAVIGATE                                                                   g; omitted asks fo…    
+  ↑↓ setting · ←→          agents-first                                                             
+  section                                                                               auto  ▾     
+  ctrl+k search ·          claude-first                                      see, inline always…    
+  esc chat                                                                                          
+                         >  both                                                       32768  ▾     
                                                                                                     
                          1-3/3 · ↑↓ preview · enter apply · esc cancel                              
                                                                                         both  ▾     

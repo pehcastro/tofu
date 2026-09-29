@@ -11,13 +11,13 @@
     Shell                                                                             subtle  ▾     
     Turn          › diff█                                                                           
     Browser                                                                                         
-    Startup       › Interaction / Confirmations                                      compact  ▾     
-                    Files / Diff context                                                            
-  NAVIGATE                                                                                          
-  ↑↓ setting · ←  1 of 2 results                                                        auto  ▾     
-  section                                                                                           
+                  › Interaction / Confirmations                                      compact  ▾     
+  NAVIGATE          Files / Diff context                                                            
+  ↑↓ setting · ←                                                                                    
+  section         1 of 2 results                                                        auto  ▾     
   ctrl+k search                                                                                     
   esc chat                                                                                          
+                                                                                                    
                                                                                                     
                                                                                                     
                           Interface preview                                                         

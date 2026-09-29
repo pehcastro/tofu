@@ -11,13 +11,13 @@
     Shell         05      Sub-agents per turn                                             10  ▾     
   › Turn          09      how many sub-agents one turn may spawn; the next spawn reads the new …    
     Browser       04                                                                                
-    Startup       01      Sub-agent depth                                                  2  ▾     
-                          how deep a sub-agent may spawn its own sub-agents; the next spawn rea…    
-  NAVIGATE                                                                                          
-  ↑↓ setting · ←→         Agent folders                                   tofu,agents,claude  ▾     
-  section                 the folders sub-agents are read from, in order, as a comma list of to…    
-  ctrl+k search ·                                                                                   
-  esc chat                Genius tier                                                default  ▾     
+                          Sub-agent depth                                                  2  ▾     
+  NAVIGATE                how deep a sub-agent may spawn its own sub-agents; the next spawn rea…    
+  ↑↓ setting · ←→                                                                                   
+  section                 Agent folders                                   tofu,agents,claude  ▾     
+  ctrl+k search ·         the folders sub-agents are read from, in order, as a comma list of to…    
+  esc chat                                                                                          
+                          Genius tier                                                default  ▾     
                           the model @genius names, and opus in a shared agent file; empty runs …    
                                                                                                     
                           Smart tier                                                 default  ▾     

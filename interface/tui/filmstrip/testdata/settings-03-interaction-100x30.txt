@@ -11,13 +11,13 @@
     Shell         05      Host integration                                       inspect Zed  ▾     
     Turn          09      Detect host shortcut conflicts and available integrations                 
     Browser       04                                                                                
-    Startup       01      Confirmations                                                  run  ▾     
-                          run lets a gated call go, ask waits for you; a rule's shadow or enfor…    
-  NAVIGATE                                                                                          
-  ↑↓ setting · ←→         Read before edit                                                  ● on    
-  section                 an edit or a write to a file this session has not read, or that chang…    
-  ctrl+k search ·                                                                                   
-  esc chat              enter change  ·  shift+tab scope  ·  esc chat                               
+                          Confirmations                                                  run  ▾     
+  NAVIGATE                run lets a gated call go, ask waits for you; a rule's shadow or enfor…    
+  ↑↓ setting · ←→                                                                                   
+  section                 Read before edit                                                  ● on    
+  ctrl+k search ·         an edit or a write to a file this session has not read, or that chang…    
+  esc chat                                                                                          
+                        enter change  ·  shift+tab scope  ·  esc chat                               
                                                                                                     
                                                                                                     
                                                                                                     

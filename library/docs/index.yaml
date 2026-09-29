@@ -66,10 +66,6 @@
   do: tofu settings set images off
   check: tofu settings get images
   topic: settings
-- ask: hide the welcome art
-  do: tofu settings set hideIntroduction true
-  check: tofu settings get hideIntroduction
-  topic: settings
 - ask: change a setting for one project only
   do: tofu settings set --scope project <key> <value>
   check: tofu settings

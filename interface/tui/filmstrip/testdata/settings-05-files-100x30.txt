@@ -11,13 +11,13 @@
     Shell         05      Group by agent                                                    ● on    
     Turn          09      Author filters in edit feeds                                              
     Browser       04                                                                                
-    Startup       01    enter change  ·  shift+tab scope  ·  esc chat                               
-                                                                                                    
+                        enter change  ·  shift+tab scope  ·  esc chat                               
   NAVIGATE                                                                                          
   ↑↓ setting · ←→                                                                                   
   section                                                                                           
   ctrl+k search ·                                                                                   
   esc chat                                                                                          
+                                                                                                    
                                                                                                     
                                                                                                     
                                                                                                     

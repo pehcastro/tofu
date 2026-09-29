@@ -313,7 +313,7 @@ func New(options Options) *App {
 	app.view.Commands = commands(options)
 	app.settings.SetSearchKey(app.shortcuts[searchAction])
 	app.settings.SetBranch(options.Branch)
-	app.intro = newIntro(options.Fresh && !app.flag(isettings.HideIntroduction), app.text(isettings.Animations) != animationsOff, options.Pose)
+	app.intro = newIntro(options.Fresh, app.text(isettings.Animations) != animationsOff, options.Pose)
 	app.resize(app.width, app.height)
 	for _, event := range options.Resumed {
 		app.absorb(event)

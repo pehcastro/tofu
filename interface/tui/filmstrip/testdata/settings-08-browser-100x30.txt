@@ -11,13 +11,13 @@
     Shell         05      Browser steps                                                   30  ▾     
     Turn          09      how many actions one browser task may take                                
   › Browser       04                                                                                
-    Startup       01      Browser model                                              default  ▾     
-                          the subscription model a browser task asks for the text to type and f…    
-  NAVIGATE                                                                                          
-  ↑↓ setting · ←→       enter change  ·  shift+tab scope  ·  esc chat                               
-  section                                                                                           
+                          Browser model                                              default  ▾     
+  NAVIGATE                the subscription model a browser task asks for the text to type and f…    
+  ↑↓ setting · ←→                                                                                   
+  section               enter change  ·  shift+tab scope  ·  esc chat                               
   ctrl+k search ·                                                                                   
   esc chat                                                                                          
+                                                                                                    
                                                                                                     
                                                                                                     
                                                                                                     

@@ -1,7 +1,0 @@
-# hideIntroduction leaves a fresh chat without the art, and chat still works
-wait Ask tofu
-absent ▀
-type after the hidden art
-key enter
-wait noted: after the hidden art
-screen

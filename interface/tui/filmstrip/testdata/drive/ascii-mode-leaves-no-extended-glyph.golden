@@ -191,13 +191,13 @@
     Shell         05      Animations                                                  subtle  v     
     Turn          09      Motion for conversational states                                          
     Browser       04                                                                                
-    Startup       01      Status bar                                                 compact  v     
-                          Context, quotas, and runtime counters                                     
-  NAVIGATE                                                                                          
-  ^v setting . <>         Color mode                                                    auto  v     
-  section                 Terminal color capability                                                 
-  ctrl+k search .                                                                                   
-  esc chat              LIVE PREVIEW                                                                
+                          Status bar                                                 compact  v     
+  NAVIGATE                Context, quotas, and runtime counters                                     
+  ^v setting . <>                                                                                   
+  section                 Color mode                                                    auto  v     
+  ctrl+k search .         Terminal color capability                                                 
+  esc chat                                                                                          
+                        LIVE PREVIEW                                                                
                                                                                                     
                            tofu    project  .  develop                                              
                           Interface preview                                                         
@@ -221,13 +221,13 @@
     Shell         05       tofu light                                                 subtle  v     
     Turn          09                                                                                
     Browser       04       tofu dusk                                                                
-    Startup       01                                                                 compact  v     
-                           Solarized Light                                                          
-  NAVIGATE                                                                                          
-  ^v setting . <>          Dracula                                                      auto  v     
-  section                                                                                           
-  ctrl+k search .          Nord                                                                     
-  esc chat                                                                                          
+                                                                                     compact  v     
+  NAVIGATE                 Solarized Light                                                          
+  ^v setting . <>                                                                                   
+  section                  Dracula                                                      auto  v     
+  ctrl+k search .                                                                                   
+  esc chat                 Nord                                                                     
+                                                                                                    
                            Gruvbox                                                                  
                                                                                                     
                            terminal                                                                 

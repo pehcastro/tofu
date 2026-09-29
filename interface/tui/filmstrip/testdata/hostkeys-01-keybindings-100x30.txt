@@ -11,13 +11,13 @@
     Shell                                                                           pect Zed  ▾ 
     Turn          TOFU ACTIONS                                                      
     Browser       These work after the terminal sends the key to tofu.              
-    Startup       >  Search         ctrl+k                                               run  ▾ 
-                    Commands       alt+k                                            ow or enfor…
-  NAVIGATE          Settings       not set                                          
-  ↑↓ setting · ←    Models         ctrl+l                                                   ● on
-  section           Quote selection  ctrl+r                                          that chang…
-  ctrl+k search                                                                     
-  esc chat        Host editors may still intercept a chosen key.                    
+                  >  Search         ctrl+k                                               run  ▾ 
+  NAVIGATE          Commands       alt+k                                            ow or enfor…
+  ↑↓ setting · ←    Settings       not set                                          
+  section           Models         ctrl+l                                                   ● on
+  ctrl+k search     Quote selection  ctrl+r                                          that chang…
+  esc chat                                                                          
+                  Host editors may still intercept a chosen key.                    
                                                                                     
                   ↑↓ choose · enter edit · bksp clear · esc                         
                                                                                     

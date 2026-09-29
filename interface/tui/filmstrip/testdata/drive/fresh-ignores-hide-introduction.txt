@@ -1,0 +1,4 @@
+# a settings file that still holds the retired hideIntroduction loads, and the fresh chat shows the art anyway
+wait Ask tofu
+wait ▀
+screen

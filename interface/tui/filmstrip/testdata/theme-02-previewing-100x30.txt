@@ -11,13 +11,13 @@
     Shell         05       tofu light                                                 subtle  ▾     
     Turn          09                                                                                
     Browser       04       tofu dusk                                                                
-    Startup       01                                                                 compact  ▾     
-                         >  Solarized Light                                                         
-  NAVIGATE                                                                                          
-  ↑↓ setting · ←→          Dracula                                                      auto  ▾     
-  section                                                                                           
-  ctrl+k search ·          Nord                                                                     
-  esc chat                                                                                          
+                                                                                     compact  ▾     
+  NAVIGATE               >  Solarized Light                                                         
+  ↑↓ setting · ←→                                                                                   
+  section                  Dracula                                                      auto  ▾     
+  ctrl+k search ·                                                                                   
+  esc chat                 Nord                                                                     
+                                                                                                    
                            Gruvbox                                                                  
                                                                                                     
                            terminal                                                                 

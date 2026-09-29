@@ -11,13 +11,13 @@
     Shell         05     Status bar                                     esc           subtle  ▾     
     Turn          09     Context, quotas, and runtime counters                                      
     Browser       04                                                                                
-    Startup       01       compact                                                  detailed  ▾     
-                                                                                                    
-  NAVIGATE               >  detailed                                                                
-  ↑↓ setting · ←→                                                                       auto  ▾     
-  section                  hidden                                                                   
-  ctrl+k search ·                                                                                   
-  esc chat               1-3/3 · ↑↓ preview · enter apply · esc cancel                              
+                           compact                                                  detailed  ▾     
+  NAVIGATE                                                                                          
+  ↑↓ setting · ←→        >  detailed                                                                
+  section                                                                               auto  ▾     
+  ctrl+k search ·          hidden                                                                   
+  esc chat                                                                                          
+                         1-3/3 · ↑↓ preview · enter apply · esc cancel                              
                                                                                                     
                            tofu    project  ·  develop                                              
                           Interface preview                                                         
@@ -41,13 +41,13 @@
     Shell         05     Status bar                                     esc           subtle  ▾     
     Turn          09     Context, quotas, and runtime counters                                      
     Browser       04                                                                                
-    Startup       01       compact                                                    hidden  ▾     
-                                                                                                    
-  NAVIGATE                 detailed                                                                 
-  ↑↓ setting · ←→                                                                       auto  ▾     
-  section                >  hidden                                                                  
-  ctrl+k search ·                                                                                   
-  esc chat               1-3/3 · ↑↓ preview · enter apply · esc cancel                              
+                           compact                                                    hidden  ▾     
+  NAVIGATE                                                                                          
+  ↑↓ setting · ←→          detailed                                                                 
+  section                                                                               auto  ▾     
+  ctrl+k search ·        >  hidden                                                                  
+  esc chat                                                                                          
+                         1-3/3 · ↑↓ preview · enter apply · esc cancel                              
                                                                                                     
                            tofu    project  ·  develop                                              
                           Interface preview                                                         
@@ -71,13 +71,13 @@
     Shell         05      Animations                                                  subtle  ▾     
     Turn          09      Motion for conversational states                                          
     Browser       04                                                                                
-    Startup       01    › Status bar                                                 compact  ▾     
-                          Context, quotas, and runtime counters                                     
-  NAVIGATE                                                                                          
-  ↑↓ setting · ←→         Color mode                                                    auto  ▾     
-  section                 Terminal color capability                                                 
-  ctrl+k search ·                                                                                   
-  esc chat              LIVE PREVIEW                                                                
+                        › Status bar                                                 compact  ▾     
+  NAVIGATE                Context, quotas, and runtime counters                                     
+  ↑↓ setting · ←→                                                                                   
+  section                 Color mode                                                    auto  ▾     
+  ctrl+k search ·         Terminal color capability                                                 
+  esc chat                                                                                          
+                        LIVE PREVIEW                                                                
                                                                                                     
                            tofu    project  ·  develop                                              
                           Interface preview                                                         

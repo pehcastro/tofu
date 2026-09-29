@@ -11,13 +11,13 @@
     Shell  ALT+K  Commands · ensure tofu receives this shortcut                            d  ▾ 
     Turn   CTRL+L  Models · ensure tofu receives this shortcut                             
     Brows  CTRL+R  Quote selection · ensure tofu receives this shortcut                    
-    Start  Change: forward these keys only while the terminal is focused.                  n  ▾ 
-                                                                                           nfor…
-  NAVIGAT  SHORTCUT CONFLICTS                                                              
-  ↑↓ sett  CTRL+K  tofu Search · Zed keybinding / chord prefix                              ● on
-  section                                                                                  hang…
-  ctrl+k   ZED USER KEYMAP                                                                 
-  esc cha  Status: keymap missing                                                          
+           Change: forward these keys only while the terminal is focused.                  n  ▾ 
+  NAVIGAT                                                                                  nfor…
+  ↑↓ sett  SHORTCUT CONFLICTS                                                              
+  section  CTRL+K  tofu Search · Zed keybinding / chord prefix                              ● on
+  ctrl+k                                                                                   hang…
+  esc cha  ZED USER KEYMAP                                                                 
+           Status: keymap missing                                                          
            Apply adds terminal-only rules after existing rules; Undo removes tofu's        
            rules.                                                                          
            >  Apply tofu keybindings                                                       

@@ -62,23 +62,23 @@ func TestTheSearchDialogFilteredToDiff(t *testing.T) {
 	golden.Assert(t, "search-diff-120x36.golden", ansi.Strip(m.View()))
 }
 
-func TestStartupAt80x24ReachedByAClickOnItsLabel(t *testing.T) {
+func TestBrowserAt80x24ReachedByAClickOnItsLabel(t *testing.T) {
 	m := tableModel(80, 24)
 	t.Logf("before: category %q cursor %d", m.categories()[m.category], m.cursor)
 	x, y := -1, -1
 	for row, line := range strings.Split(ansi.Strip(m.View()), "\n") {
 		rail := ansi.Cut(line, 0, 20)
-		if at := strings.Index(rail, "Startup"); at >= 0 {
+		if at := strings.Index(rail, "Browser"); at >= 0 {
 			x, y = ansi.StringWidth(rail[:at]), row
 			break
 		}
 	}
 	intent := m.Click(x, y)
 	t.Logf("click (%d,%d) intent %+v; after: category %q cursor %d", x, y, intent, m.categories()[m.category], m.cursor)
-	if got := m.categories()[m.category]; got != "Startup" {
-		t.Fatalf("a click on the Startup label opened %q", got)
+	if got := m.categories()[m.category]; got != "Browser" {
+		t.Fatalf("a click on the Browser label opened %q", got)
 	}
-	golden.Assert(t, "startup-80x24.golden", ansi.Strip(m.View()))
+	golden.Assert(t, "browser-80x24.golden", ansi.Strip(m.View()))
 }
 
 func TestAChoiceSetToOffDrawsAsAChoiceAndABoolAsASwitch(t *testing.T) {
