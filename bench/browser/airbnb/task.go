@@ -25,13 +25,25 @@ const (
 type Field string
 
 var fieldPatterns = map[Field]*regexp.Regexp{
-	"price":    regexp.MustCompile(`(R\$|US\$|\$|€|£)\s?\d`),
-	"rating":   regexp.MustCompile(`(?i)(nota|avalia\S*|rating|★)\s*[1-5][.,]\d{1,2}|[1-5][.,]\d{1,2}\s*(★|avalia|rating|stars|estrelas)`),
-	"bedrooms": regexp.MustCompile(`(?i)\d+\s*(quartos?|bedrooms?)`),
+	"price": regexp.MustCompile(`(R\$|US\$|\$|€|£)\s?\d`),
+	"rating": regexp.MustCompile(`(?i)(nota|avalia\S*|rating|★)\s*[1-5][.,]\d{1,2}|[1-5][.,]\d{1,2}\s*((de|out of) 5\s*)?(★|avalia|rating|stars|estrelas)` +
+		`|(no (numeric )?(average|rating)|sem (média|nota))(.*)\d+ (avaliaç|coment|review)|\d+ (avaliaç|coment|review)(.*)(no (numeric )?(average|rating)|sem (média|nota))`),
+	"bedrooms": regexp.MustCompile(`(?i)\d+\s*(quartos?|bedrooms?)|bedrooms?\s+\d+`),
 	"pool":     regexp.MustCompile(`(?i)piscina|pool`),
 }
 
-var roomID = regexp.MustCompile(`/rooms/(\d+)`)
+var (
+	roomID    = regexp.MustCompile(`/rooms/(\d+)`)
+	tableRule = regexp.MustCompile(`^\s*\|[\s:|-]+\|\s*$`)
+)
+
+func tableCells(line string) []string {
+	trimmed := strings.TrimSpace(strings.ReplaceAll(line, `\|`, "/"))
+	if len(trimmed) < 2 || !strings.HasPrefix(trimmed, "|") || !strings.HasSuffix(trimmed, "|") {
+		return nil
+	}
+	return strings.Split(trimmed[1:len(trimmed)-1], "|")
+}
 
 type Check struct {
 	Kind   CheckKind         `json:"kind"`
@@ -175,7 +187,21 @@ func snapshotURL(snapshot string) string {
 func namedListings(run Run) map[string]string {
 	opened := openedRooms(run)
 	named := map[string]string{}
-	for line := range strings.Lines(run.Report) {
+	var header []string
+	lines := slices.Collect(strings.Lines(run.Report))
+	for at, line := range lines {
+		cells := tableCells(line)
+		if cells != nil && at+1 < len(lines) && tableRule.MatchString(lines[at+1]) {
+			header = cells
+			continue
+		}
+		if cells != nil && len(cells) == len(header) {
+			var labelled strings.Builder
+			for column, cell := range cells {
+				fmt.Fprintf(&labelled, "%s %s | ", header[column], cell)
+			}
+			line = labelled.String()
+		}
 		for _, match := range roomID.FindAllStringSubmatch(line, -1) {
 			if opened[match[1]] {
 				named[match[1]] += line

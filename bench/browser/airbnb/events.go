@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"regexp"
 	"slices"
 	"strings"
@@ -21,31 +22,42 @@ var (
 	refusedLine    = regexp.MustCompile(`(?m)^\d+\. .*: refused, it would be the`)
 )
 
-func readEvents(path string) ([]session.Event, error) {
-	raw, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-	var events []session.Event
-	for line := range strings.Lines(string(raw)) {
-		var event session.Event
-		if err := json.Unmarshal([]byte(line), &event); err != nil {
-			return nil, fmt.Errorf("%s line %d: %w", path, len(events)+1, err)
+func Lineage(sessions string) ([]string, error) {
+	store := session.NewStore(sessions)
+	head, err := store.Head()
+	var paths []string
+	for id := head.ID; err == nil && id != ""; {
+		if slices.Contains(paths, filepath.Join(store.Dir(id), "events.jsonl")) {
+			return nil, fmt.Errorf("the forks of %s carry each other in a cycle at %s", head.ID, id)
 		}
-		events = append(events, event)
+		paths = append(paths, filepath.Join(store.Dir(id), "events.jsonl"))
+		var header session.Header
+		header, err = store.Header(id)
+		id = header.Parent
 	}
-	if len(events) == 0 {
-		return nil, fmt.Errorf("%s holds no events", path)
-	}
-	return events, nil
+	slices.Reverse(paths)
+	return paths, err
 }
 
-func RunFromEvents(arm Arm, path string) (Run, error) {
-	events, err := readEvents(path)
-	if err != nil {
-		return Run{}, err
+func RunFromEvents(arm Arm, paths ...string) (Run, error) {
+	var events []session.Event
+	for _, path := range paths {
+		raw, err := os.ReadFile(path)
+		if err != nil {
+			return Run{}, err
+		}
+		for at, line := range slices.Collect(strings.Lines(string(raw))) {
+			var event session.Event
+			if err := json.Unmarshal([]byte(line), &event); err != nil {
+				return Run{}, fmt.Errorf("%s line %d: %w", path, at+1, err)
+			}
+			events = append(events, event)
+		}
 	}
-	run := Run{Arm: arm, WallMS: events[len(events)-1].At.Sub(events[0].At).Milliseconds()}
+	if len(events) == 0 {
+		return Run{}, fmt.Errorf("%v hold no events", paths)
+	}
+	run := Run{Arm: arm, Forks: len(paths) - 1, WallMS: events[len(events)-1].At.Sub(events[0].At).Milliseconds()}
 	browserTokens := 0
 	browserAgents, tools, tabAt := map[string]bool{}, map[string]string{}, map[string]int{}
 	var mainBuilds, browserBuilds []string

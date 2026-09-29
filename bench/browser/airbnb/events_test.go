@@ -29,6 +29,43 @@ func TestAnArmThatSpawnedAgainstItsDriverReadsMixedAndTheCredentialComesFromTheS
 	}
 }
 
+func TestAForkedSessionIsReadFromItsRootThroughEveryFork(t *testing.T) {
+	paths, err := Lineage("testdata/forked")
+	if err != nil {
+		t.Fatal(err)
+	}
+	run, err := RunFromEvents(ArmA, paths...)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantVisits := []string{
+		"https://www.google.com/search?q=airbnb",
+		"https://www.airbnb.com.br/",
+		"https://www.airbnb.com.br/s/Atibaia--SP/homes?query=Atibaia%2C%20SP&checkin=2026-10-09&checkout=2026-10-15&adults=2&room_types%5B%5D=Entire%20home%2Fapt&price_max=1500&min_bedrooms=2&amenities%5B%5D=7",
+		"https://www.airbnb.com.br/rooms/10000001",
+		"https://www.airbnb.com.br/rooms/10000002",
+		"https://www.airbnb.com.br/rooms/10000003",
+	}
+	if !slices.Equal(run.Visits, wantVisits) {
+		t.Errorf("visits %q, want %q", run.Visits, wantVisits)
+	}
+	if run.WallMS != 300000 || run.Forks != 2 || run.MainTokens != 6600 {
+		t.Errorf("wall %d ms, %d forks, %d main tokens, want 300000, 2 and 6600", run.WallMS, run.Forks, run.MainTokens)
+	}
+	task, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	table, err := Render([]Row{Score(task, run)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Log("\n" + table)
+	if !strings.Contains(table, "| forks |") || !strings.Contains(table, "| A | as set | 12 of 12 | 300 s | 2 |") {
+		t.Error("the row does not carry the whole lineage")
+	}
+}
+
 func TestASubAgentSessionReadsBackAsARunThatScoresTwelve(t *testing.T) {
 	run, err := RunFromEvents(ArmB1, "testdata/events/b1.jsonl")
 	if err != nil {

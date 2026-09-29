@@ -17,6 +17,7 @@ type Row struct {
 	Steps         []Result
 	Passed        int
 	Wall          time.Duration
+	Forks         int
 	MainTokens    int
 	BrowserTokens *int
 	TabsOpened    int
@@ -27,7 +28,7 @@ type Row struct {
 }
 
 func Score(task Task, run Run) Row {
-	row := Row{Arm: run.Arm, Conditions: run.Conditions, Wall: time.Duration(run.WallMS) * time.Millisecond, MainTokens: run.MainTokens, BrowserTokens: run.BrowserTokens, TabsOpened: len(run.Tabs), Repeated: run.Repeated, Refused: run.Refused, Mixed: run.Mixed, TabsClosed: run.TabsClosed}
+	row := Row{Arm: run.Arm, Conditions: run.Conditions, Wall: time.Duration(run.WallMS) * time.Millisecond, Forks: run.Forks, MainTokens: run.MainTokens, BrowserTokens: run.BrowserTokens, TabsOpened: len(run.Tabs), Repeated: run.Repeated, Refused: run.Refused, Mixed: run.Mixed, TabsClosed: run.TabsClosed}
 	for _, step := range task.Steps {
 		passed := passes(step.Check, run)
 		if passed {
@@ -40,8 +41,8 @@ func Score(task Task, run Run) Row {
 
 func Render(rows []Row) (string, error) {
 	var table strings.Builder
-	table.WriteString("| arm | mode | steps | wall | main tokens | browser tokens | tabs closed before | tabs opened | repeated | refused | failed steps | main build | browser build | main credential | browser credential | wire | machine | date |\n")
-	table.WriteString("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n")
+	table.WriteString("| arm | mode | steps | wall | forks | main tokens | browser tokens | tabs closed before | tabs opened | repeated | refused | failed steps | main build | browser build | main credential | browser credential | wire | machine | date |\n")
+	table.WriteString("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n")
 	for _, row := range rows {
 		if row.Conditions.Credential != rows[0].Conditions.Credential {
 			return "", fmt.Errorf("the main model of arm %s ran on a %s credential and that of arm %s on %s, and the two are not compared", row.Arm, row.Conditions.Credential, rows[0].Arm, rows[0].Conditions.Credential)
@@ -60,8 +61,8 @@ func Render(rows []Row) (string, error) {
 		if row.Mixed {
 			mode = "mixed"
 		}
-		fmt.Fprintf(&table, "| %s | %s | %d of %d | %.0f s | %d | %s | %d | %d | %d | %d | %s | %s | %s | %s | %s | %s | %s | %s |\n",
-			row.Arm, mode, row.Passed, len(row.Steps), row.Wall.Seconds(), row.MainTokens, browserTokens, row.TabsClosed, row.TabsOpened, row.Repeated, row.Refused,
+		fmt.Fprintf(&table, "| %s | %s | %d of %d | %.0f s | %d | %d | %s | %d | %d | %d | %d | %s | %s | %s | %s | %s | %s | %s | %s |\n",
+			row.Arm, mode, row.Passed, len(row.Steps), row.Wall.Seconds(), row.Forks, row.MainTokens, browserTokens, row.TabsClosed, row.TabsOpened, row.Repeated, row.Refused,
 			strings.Join(failed, " "), conditions.MainBuild, conditions.BrowserBuild, conditions.Credential, conditions.BrowserCredential, conditions.Wire, conditions.Machine, conditions.Date)
 	}
 	return table.String(), nil

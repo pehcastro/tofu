@@ -1,0 +1,1 @@
+{"id": "fork-2", "schema": 4, "started_at": "2026-09-29T10:04:00Z", "carried_from": {"session": "fork-1", "event": "f9"}, "fork_kind": "continuation", "root": "root", "turns": 1, "usage": {}, "cost_usd": 0}

@@ -76,6 +76,7 @@ type Run struct {
 	Arm           Arm        `json:"arm"`
 	Conditions    Conditions `json:"conditions"`
 	WallMS        int64      `json:"wall_ms"`
+	Forks         int        `json:"forks"`
 	MainTokens    int        `json:"main_tokens"`
 	BrowserTokens *int       `json:"browser_tokens"`
 	Repeated      int        `json:"repeated"`
