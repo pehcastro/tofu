@@ -1,5 +1,5 @@
 | # | Name | Total price | Bedrooms | Pool | Rating |
 |---|---|---|---|---|---|
-| 1 | Chalé Aurora (`/rooms/10000001`) | R$ 1.380 total | 2 quartos | Yes | 4,87 |
-| 2 | Sobrado das Pedras (`/rooms/10000002`) | R$ 1.240 total | 3 quartos |  | 4,76 |
-| 3 | Casa do Farol Inventado (`/rooms/10000003`) | R$ 1.490 total | 3 quartos | not checked | 4,91 |
+| 1 | Chalé Aurora, Atibaia (`/rooms/10000001`) | R$ 3.380 total | 2 quartos | Yes | 4,87 |
+| 2 | Sobrado das Pedras, Atibaia (`/rooms/10000002`) | R$ 3.240 total | 3 quartos |  | 4,76 |
+| 3 | Casa do Farol Inventado, Atibaia (`/rooms/10000003`) | R$ 3.490 total | 3 quartos | not checked | 4,91 |

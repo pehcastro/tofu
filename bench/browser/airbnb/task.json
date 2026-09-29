@@ -1,12 +1,12 @@
 {
-  "prompt": "1. Open Airbnb from Google search, not by directly navigating to it.\n2. Search for Atibaia, São Paulo.\n3. Set check-in to October 9, 2026 and checkout to October 15, 2026.\n4. Set guests to 2 adults.\n5. Apply the \"Entire home\" accommodation type.\n6. Apply a price filter with a maximum of R$1,500 total.\n7. Require at least 2 bedrooms.\n8. Require a swimming pool.\n9. Sort/browse the resulting listings.\n10. Open the first 3 listings that match the filters.\n11. For each one, inspect the listing page and report:\n    - name\n    - total price shown\n    - number of bedrooms\n    - whether it has a pool\n    - rating\n12. Leave the browser on the third listing without booking anything.",
+  "prompt": "1. Open Airbnb from Google search, not by directly navigating to it.\n2. Search for Atibaia, São Paulo.\n3. Set check-in to October 9, 2026 and checkout to October 15, 2026.\n4. Set guests to 2 adults.\n5. Apply the \"Entire home\" accommodation type.\n6. Apply a price filter with a maximum of R$4,000 total.\n7. Require at least 2 bedrooms.\n8. Require a swimming pool.\n9. Sort/browse the resulting listings.\n10. Open the first 3 listings that match the filters.\n11. For each one, inspect the listing page and report:\n    - name\n    - total price shown\n    - number of bedrooms\n    - whether it has a pool\n    - rating\n12. Leave the browser on the third listing without booking anything.",
   "steps": [
     {"step": 1, "says": "Airbnb was reached from a Google search", "check": {"kind": "searched_first", "from": "google.", "value": "airbnb."}},
-    {"step": 2, "says": "the search is for Atibaia", "check": {"kind": "search_query", "value": "Atibaia"}},
+    {"step": 2, "says": "every reported listing is in Atibaia", "check": {"kind": "listings_in", "value": "Atibaia"}},
     {"step": 3, "says": "check-in is 2026-10-09 and checkout 2026-10-15", "check": {"kind": "search_params", "params": {"checkin": "2026-10-09", "checkout": "2026-10-15"}}},
     {"step": 4, "says": "2 adults", "check": {"kind": "search_params", "params": {"adults": "2"}}},
     {"step": 5, "says": "entire home only", "check": {"kind": "search_params", "params": {"room_types[]": "Entire home/apt"}}},
-    {"step": 6, "says": "a maximum price of 1500", "check": {"kind": "search_params", "params": {"price_max": "1500"}}},
+    {"step": 6, "says": "a maximum of 4000 on the total price", "check": {"kind": "search_params", "params": {"price_max": "4000"}, "any_of": {"display_total_price": "true", "price_filter_input_type": "2"}}},
     {"step": 7, "says": "at least 2 bedrooms", "check": {"kind": "search_params", "params": {"min_bedrooms": "2"}}},
     {"step": 8, "says": "the pool filter is on", "check": {"kind": "search_params", "params": {"amenities[]": "7"}}},
     {"step": 9, "says": "3 listings opened", "check": {"kind": "rooms_opened", "count": 3}},

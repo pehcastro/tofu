@@ -12,7 +12,7 @@
   "visits": [
     "https://www.google.com/search?q=airbnb",
     "https://www.airbnb.com.br/",
-    "https://www.airbnb.com.br/s/Atibaia--SP/homes?query=Atibaia%2C%20SP&checkin=2026-10-09&checkout=2026-10-15&adults=2&room_types%5B%5D=Entire%20home%2Fapt&price_max=1500&min_bedrooms=2&amenities%5B%5D=7",
+    "https://www.airbnb.com.br/s/Atibaia--SP/homes?query=Atibaia%2C%20SP&checkin=2026-10-09&checkout=2026-10-15&adults=2&room_types%5B%5D=Entire%20home%2Fapt&price_max=4000&display_total_price=true&min_bedrooms=2&amenities%5B%5D=7",
     "https://www.airbnb.com.br/rooms/20000001?adults=2",
     "https://www.airbnb.com.br/rooms/20000002?adults=2",
     "https://www.airbnb.com.br/rooms/20000003?adults=2",

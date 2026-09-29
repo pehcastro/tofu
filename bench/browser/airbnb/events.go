@@ -62,6 +62,7 @@ func RunFromEvents(arm Arm, paths ...string) (Run, error) {
 	browserTokens := 0
 	browserAgents, tools, tabAt, wires := map[string]bool{}, map[string]string{}, map[string]int{}, map[string]string{}
 	var mainBuilds, browserBuilds []string
+	var modelMS, browserMS []int64
 	see := func(tab, url string) {
 		if len(run.Visits) == 0 || run.Visits[len(run.Visits)-1] != url {
 			run.Visits = append(run.Visits, url)
@@ -98,6 +99,7 @@ func RunFromEvents(arm Arm, paths ...string) (Run, error) {
 			if err := json.Unmarshal(event.Body, &step); err != nil {
 				return Run{}, fmt.Errorf("request %d: %w", event.Seq, err)
 			}
+			modelMS = append(modelMS, durationOf(event.Body))
 			tokens := llm.PromptAccountingFor(wires[event.Agent]).BilledTokens(step.PromptTokens, step.CacheReadTokens) + step.CompletionTokens + step.CacheWriteTokens
 			if browserAgents[event.Agent] {
 				browserTokens += tokens
@@ -116,7 +118,11 @@ func RunFromEvents(arm Arm, paths ...string) (Run, error) {
 			if err := json.Unmarshal(event.Body, &result); err != nil {
 				return Run{}, fmt.Errorf("tool result %d: %w", event.Seq, err)
 			}
-			switch tools[event.Agent+"/"+event.Call] {
+			tool := tools[event.Agent+"/"+event.Call]
+			if strings.HasPrefix(tool, "browser_") {
+				browserMS = append(browserMS, durationOf(event.Body))
+			}
+			switch tool {
 			case "browser_observe", "browser_act":
 				run.Repeated += len(repeatedLine.FindAllString(result.Content, -1))
 				run.Refused += len(refusedLine.FindAllString(result.Content, -1))
@@ -144,6 +150,7 @@ func RunFromEvents(arm Arm, paths ...string) (Run, error) {
 		}
 	}
 	run.Conditions.Wire, run.Conditions.MainBuild, run.Conditions.BrowserBuild = wires[""], strings.Join(mainBuilds, " "), strings.Join(browserBuilds, " ")
+	run.Phases = Phases{WallMS: run.WallMS, ModelMS: sum(modelMS), BrowserMS: sum(browserMS), Steps: len(modelMS), ModelMedianMS: median(modelMS), BrowserMedianMS: median(browserMS)}
 	settings, err := arm.Settings()
 	if err != nil {
 		return Run{}, err
@@ -153,6 +160,34 @@ func RunFromEvents(arm Arm, paths ...string) (Run, error) {
 		run.BrowserTokens = &browserTokens
 	}
 	return run, nil
+}
+
+func durationOf(body json.RawMessage) int64 {
+	var timed struct {
+		DurationMS int64 `json:"duration_ms"`
+	}
+	_ = json.Unmarshal(body, &timed)
+	return timed.DurationMS
+}
+
+func sum(durations []int64) int64 {
+	var total int64
+	for _, duration := range durations {
+		total += duration
+	}
+	return total
+}
+
+func median(durations []int64) int64 {
+	if len(durations) == 0 {
+		return 0
+	}
+	sorted := slices.Sorted(slices.Values(durations))
+	middle := len(sorted) / 2
+	if len(sorted)%2 == 1 {
+		return sorted[middle]
+	}
+	return (sorted[middle-1] + sorted[middle]) / 2
 }
 
 func appendNew(builds []string, build string) []string {

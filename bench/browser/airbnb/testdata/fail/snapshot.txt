@@ -1,4 +1,4 @@
-tab 1 https://www.airbnb.com.br/s/Atibaia--SP/homes?checkin=2026-10-09&checkout=2026-10-12&adults=2&price_max=1500&min_bedrooms=2 "Atibaia, hospedagens"
+tab 1 https://www.airbnb.com.br/s/Atibaia--SP/homes?checkin=2026-10-09&checkout=2026-10-12&adults=2&price_max=4000&display_total_price=true&min_bedrooms=2 "Atibaia, hospedagens"
 - button "Filtros" [ref=e3]
 - link "Chalé Aurora" [ref=e9]
 - link "Sobrado das Pedras" [ref=e11]

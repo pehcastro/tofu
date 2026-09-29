@@ -41,7 +41,7 @@ func TestAForkedSessionIsReadFromItsRootThroughEveryFork(t *testing.T) {
 	wantVisits := []string{
 		"https://www.google.com/search?q=airbnb",
 		"https://www.airbnb.com.br/",
-		"https://www.airbnb.com.br/s/Atibaia--SP/homes?query=Atibaia%2C%20SP&checkin=2026-10-09&checkout=2026-10-15&adults=2&room_types%5B%5D=Entire%20home%2Fapt&price_max=1500&min_bedrooms=2&amenities%5B%5D=7",
+		"https://www.airbnb.com.br/s/Atibaia--SP/homes?query=Atibaia%2C%20SP&checkin=2026-10-09&checkout=2026-10-15&adults=2&room_types%5B%5D=Entire%20home%2Fapt&price_max=4000&display_total_price=true&min_bedrooms=2&amenities%5B%5D=7",
 		"https://www.airbnb.com.br/rooms/10000001",
 		"https://www.airbnb.com.br/rooms/10000002",
 		"https://www.airbnb.com.br/rooms/10000003",
@@ -63,6 +63,28 @@ func TestAForkedSessionIsReadFromItsRootThroughEveryFork(t *testing.T) {
 	t.Log("\n" + table)
 	if !strings.Contains(table, "| forks main+sub |") || !strings.Contains(table, "| A | as set | 12 of 12 | 300 s | 6600 | - | 2+0 |") {
 		t.Error("the row does not carry the whole lineage")
+	}
+}
+
+func TestARunSplitsItsWallIntoModelBrowserAndOtherTime(t *testing.T) {
+	run, err := RunFromEvents(ArmA, "testdata/events/timing.jsonl")
+	if err != nil {
+		t.Fatal(err)
+	}
+	phases := run.Phases
+	if run.WallMS != 60000 || phases.ModelMS != 15000 || phases.BrowserMS != 10000 || phases.OtherMS() != 35000 || phases.Steps != 2 {
+		t.Errorf("wall %d, model %d, browser %d, other %d ms over %d steps, want 60000, 15000, 10000, 35000 over 2", run.WallMS, phases.ModelMS, phases.BrowserMS, phases.OtherMS(), phases.Steps)
+	}
+	if phases.ModelMedianMS != 7500 || phases.BrowserMedianMS != 5000 {
+		t.Errorf("median model %d and browser %d ms, want 7500 and 5000", phases.ModelMedianMS, phases.BrowserMedianMS)
+	}
+	table, err := Render([]Row{Score(Task{}, run)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Log("\n" + table)
+	if !strings.Contains(table, "| model s | browser s | other s | steps |") || !strings.Contains(table, "| 15 (7.5) | 10 (5.0) | 35 | 2 |") {
+		t.Error("the row does not carry the phase columns")
 	}
 }
 
@@ -113,7 +135,7 @@ func TestASubAgentSessionReadsBackAsARunThatScoresTwelve(t *testing.T) {
 		"https://www.google.com/search?q=airbnb",
 		"https://www.airbnb.com.br/",
 		"https://www.airbnb.com.br/s/Atibaia--SP/homes?query=Atibaia%2C%20SP&checkin=2026-10-09&checkout=2026-10-15&adults=2",
-		"https://www.airbnb.com.br/s/Atibaia--SP/homes?query=Atibaia%2C%20SP&checkin=2026-10-09&checkout=2026-10-15&adults=2&room_types%5B%5D=Entire%20home%2Fapt&price_max=1500&min_bedrooms=2&amenities%5B%5D=7",
+		"https://www.airbnb.com.br/s/Atibaia--SP/homes?query=Atibaia%2C%20SP&checkin=2026-10-09&checkout=2026-10-15&adults=2&room_types%5B%5D=Entire%20home%2Fapt&price_max=4000&display_total_price=true&min_bedrooms=2&amenities%5B%5D=7",
 		"https://www.airbnb.com.br/rooms/10000001?adults=2",
 		"https://www.airbnb.com.br/rooms/10000002?adults=2",
 		"https://www.airbnb.com.br/rooms/10000003?adults=2",

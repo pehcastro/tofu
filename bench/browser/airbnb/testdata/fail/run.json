@@ -7,16 +7,16 @@
   "repeated": 120,
   "refused": 0,
   "tabs": [
-    {"id": "t1", "url": "https://www.airbnb.com.br/s/Atibaia--SP/homes?checkin=2026-10-09&checkout=2026-10-12&adults=2&price_max=1500&min_bedrooms=2"},
+    {"id": "t1", "url": "https://www.airbnb.com.br/s/Atibaia--SP/homes?checkin=2026-10-09&checkout=2026-10-12&adults=2&price_max=4000&display_total_price=true&min_bedrooms=2"},
     {"id": "t2", "url": "https://www.airbnb.com.br/rooms/10000001?adults=2"},
     {"id": "t3", "url": "https://www.airbnb.com.br/rooms/10000002?adults=2"}
   ],
   "visits": [
     "https://www.airbnb.com.br/",
     "https://www.google.com/search?q=airbnb",
-    "https://www.airbnb.com.br/s/Atibaia--SP/homes?checkin=2026-10-09&checkout=2026-10-12&adults=2&price_max=1500&min_bedrooms=2",
+    "https://www.airbnb.com.br/s/Atibaia--SP/homes?checkin=2026-10-09&checkout=2026-10-12&adults=2&price_max=4000&display_total_price=true&min_bedrooms=2",
     "https://www.airbnb.com.br/rooms/10000001?adults=2",
     "https://www.airbnb.com.br/rooms/10000002?adults=2",
-    "https://www.airbnb.com.br/s/Atibaia--SP/homes?checkin=2026-10-09&checkout=2026-10-12&adults=2&price_max=1500&min_bedrooms=2"
+    "https://www.airbnb.com.br/s/Atibaia--SP/homes?checkin=2026-10-09&checkout=2026-10-12&adults=2&price_max=4000&display_total_price=true&min_bedrooms=2"
   ]
 }

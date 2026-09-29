@@ -94,6 +94,17 @@ type Tab struct {
 	URL string `json:"url"`
 }
 
+type Phases struct {
+	WallMS          int64 `json:"wall_ms"`
+	ModelMS         int64 `json:"model_ms"`
+	BrowserMS       int64 `json:"browser_ms"`
+	Steps           int   `json:"steps"`
+	ModelMedianMS   int64 `json:"model_median_ms"`
+	BrowserMedianMS int64 `json:"browser_median_ms"`
+}
+
+func (p Phases) OtherMS() int64 { return p.WallMS - p.ModelMS - p.BrowserMS }
+
 type Run struct {
 	Arm           Arm        `json:"arm"`
 	Conditions    Conditions `json:"conditions"`
@@ -106,6 +117,7 @@ type Run struct {
 	Refused       int        `json:"refused"`
 	Mixed         bool       `json:"mixed"`
 	Capped        bool       `json:"capped"`
+	Phases        Phases     `json:"phases"`
 	TabsClosed    int        `json:"tabs_closed_before"`
 	Tabs          []Tab      `json:"tabs"`
 	Visits        []string   `json:"visits"`

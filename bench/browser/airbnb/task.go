@@ -14,7 +14,7 @@ type CheckKind string
 
 const (
 	SearchedFirst     CheckKind = "searched_first"
-	SearchQuery       CheckKind = "search_query"
+	ListingsIn        CheckKind = "listings_in"
 	SearchParams      CheckKind = "search_params"
 	RoomsOpened       CheckKind = "rooms_opened"
 	FinalIsNthListing CheckKind = "final_is_nth_listing"
@@ -78,6 +78,7 @@ type Check struct {
 	From   string            `json:"from"`
 	Value  string            `json:"value"`
 	Params map[string]string `json:"params"`
+	AnyOf  map[string]string `json:"any_of"`
 	Count  int               `json:"count"`
 	Fields []Field           `json:"fields"`
 }
@@ -106,7 +107,7 @@ func Load() (Task, error) {
 			return task, fmt.Errorf("task.json: step %d sits at position %d", step.Step, at+1)
 		}
 		switch step.Check.Kind {
-		case SearchedFirst, SearchQuery, RoomsOpened, ReportListings:
+		case SearchedFirst, ListingsIn, RoomsOpened, ReportListings:
 		case FinalIsNthListing:
 			if step.Check.Count < 1 {
 				return task, fmt.Errorf("task.json: step %d names no listing by its place in the visit order", step.Step)
@@ -141,16 +142,27 @@ func passes(check Check, run Run) bool {
 			return err == nil && strings.Contains(parsed.Host, check.Value)
 		})
 		return searched >= 0 && searched < reached
-	case SearchQuery:
-		named := strings.ToLower(check.Value)
-		return search != nil && (strings.Contains(strings.ToLower(search.Path), named) || strings.Contains(strings.ToLower(search.Query().Get("query")), named))
-	case SearchParams:
-		for key, value := range check.Params {
-			if search == nil || !slices.Contains(search.Query()[key], value) {
+	case ListingsIn:
+		reported := listings(run)
+		for _, listing := range reported {
+			if !strings.Contains(strings.ToLower(listing.Line), strings.ToLower(check.Value)) {
 				return false
 			}
 		}
-		return true
+		return len(reported) > 0
+	case SearchParams:
+		carries := func(key, value string) bool { return search != nil && slices.Contains(search.Query()[key], value) }
+		for key, value := range check.Params {
+			if !carries(key, value) {
+				return false
+			}
+		}
+		for key, value := range check.AnyOf {
+			if carries(key, value) {
+				return true
+			}
+		}
+		return len(check.AnyOf) == 0
 	case RoomsOpened:
 		return len(openedRooms(run)) >= check.Count
 	case FinalIsNthListing:
