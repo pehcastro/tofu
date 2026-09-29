@@ -520,8 +520,7 @@ func runEnvironment(opts runOpts) (environment, instructions, notice string) {
 	home, _ := os.UserHomeDir()
 	setting, unreadable := appSetting(opts.dir, settingspkg.ProjectInstructionsCap)
 	capBytes := turn.InstructionCap(setting)
-	sources := strings.Split(settingText(opts.dir, settingspkg.InstructionSources, nil), ",")
-	written, cut, skipped := turn.ProjectInstructionsInOrder(opts.dir, home, capBytes, sources)
+	written, cut, skipped := turn.ProjectInstructionsInOrder(opts.dir, home, capBytes, settingText(opts.dir, settingspkg.InstructionSources, nil))
 	instructions = "on, and neither an AGENTS.md nor a CLAUDE.md was found to send"
 	if written != "" {
 		instructions = fmt.Sprintf("on, %d bytes", len(written))
@@ -536,7 +535,8 @@ func runEnvironment(opts runOpts) (environment, instructions, notice string) {
 			capBytes, strings.Join(cut, ", "), settingspkg.ProjectInstructionsCap))
 	}
 	if len(skipped) > 0 {
-		notices = append(notices, fmt.Sprintf("skipped %s: change the order with tofu settings set %s", strings.Join(skipped, "; "), settingspkg.InstructionSources))
+		notices = append(notices, fmt.Sprintf("skipped %s: choose with tofu settings set %s %s, %s or %s", strings.Join(skipped, "; "), settingspkg.InstructionSources,
+			settingspkg.InstructionsAgentsFirst, settingspkg.InstructionsClaudeFirst, settingspkg.InstructionsBoth))
 	}
 	return environment, instructions, strings.Join(notices, "; ")
 }

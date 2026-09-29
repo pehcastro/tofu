@@ -38,7 +38,9 @@ writes your file. Add `--scope project` to write the project's instead:
 
 A true or false setting takes `true` or `false`. A list takes commas and no
 spaces, like `tofu,claude`. A value the setting does not take is refused and
-nothing is written. In the app, type `/settings` for the same list
+nothing is written. An older value a setting used to take, like
+`AGENTS.md,CLAUDE.md` for `instructionSources`, is read and written as the
+choice it became. In the app, type `/settings` for the same list
 with a search.
 
 A setting marked (on the next start) is read once when tofu opens, so quit

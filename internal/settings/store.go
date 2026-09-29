@@ -1,6 +1,7 @@
 package settings
 
 import (
+	"cmp"
 	"encoding/json"
 	"fmt"
 	"sort"
@@ -149,7 +150,8 @@ func (s *Store) resolveText(key string) (string, Scope, bool) {
 		return "", Global, false
 	}
 	for _, scope := range []Scope{Project, Global} {
-		if value, present := s.texts[scope][key]; present && spec.allows(value) {
+		value, present := s.texts[scope][key]
+		if value = cmp.Or(spec.Aliases[value], value); present && spec.allows(value) {
 			return value, scope, true
 		}
 	}
@@ -191,6 +193,7 @@ func (s *Store) SetText(scope Scope, key, value string) error {
 	if !known {
 		return fmt.Errorf("settings: %q is not a declared setting", key)
 	}
+	value = cmp.Or(spec.Aliases[value], value)
 	switch {
 	case spec.allows(value):
 	case spec.ListOf != nil:

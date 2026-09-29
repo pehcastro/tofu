@@ -37,7 +37,7 @@ In a project:
 - `.tofu/rules/`: rules for this project only, written by `tofu rules add`
 - `.tofu/agents/`, `.agents/agents/`, `.claude/agents/`: sub-agents, in the order the `agentSources` setting names. `tofu agents add` writes into `.tofu/agents/`
 - `.tofu/skills/`, `.agents/skills/`, `.claude/skills/`: skills, from the working directory up to the git root
-- `AGENTS.md` or `CLAUDE.md`: instructions, from the working directory up to the git root, the first of `instructionSources` in each folder
+- `AGENTS.md` or `CLAUDE.md`: instructions, from the working directory up to the git root, and in a folder with both, `instructionSources` picks one or both
 - `.tofu/models/`, `.tofu/subscriptions/`, `.tofu/roles/`: model changes for this project only
 - `library/`: when the working directory has a folder of this name, its rules replace the ones tofu ships
 

@@ -32,6 +32,7 @@ type Spec struct {
 	DefaultText string
 	Choices     []string
 	ListOf      []string
+	Aliases     map[string]string
 	Restart     bool
 	Least, Most int
 	Unit        string
@@ -85,6 +86,19 @@ const (
 	ChooserJev   = "jev"
 	ChooserModel = "model"
 )
+
+const (
+	InstructionsAgentsFirst = "agents-first"
+	InstructionsClaudeFirst = "claude-first"
+	InstructionsBoth        = "both"
+)
+
+func InstructionFiles(choice string) []string {
+	if choice == InstructionsClaudeFirst {
+		return []string{"CLAUDE.md", "AGENTS.md"}
+	}
+	return []string{"AGENTS.md", "CLAUDE.md"}
+}
 
 const (
 	SkillsOn  = "on"
@@ -207,8 +221,9 @@ func Default() []Spec {
 			Choices: []string{ImagesAuto, ImagesInline, ImagesOff}},
 		{Key: ProjectInstructionsCap, Label: "Project instructions", Description: "bytes of your instruction files sent each turn", Category: "Context", Kind: Int, Default: konst.ProjectInstructionsBytesDefault,
 			Least: 1, Most: konst.ProjectInstructionsBytesMost, Unit: "bytes of AGENTS.md and CLAUDE.md sent each turn"},
-		{Key: InstructionSources, Label: "Instruction files", Description: "in each folder the first of these that exists is sent and the rest are skipped, as a comma list of AGENTS.md and CLAUDE.md, read from the working directory up to its git root; the home directory gives only ~/.tofu/AGENTS.md", Category: "Context", Kind: Text, DefaultText: "AGENTS.md,CLAUDE.md",
-			ListOf: []string{"AGENTS.md", "CLAUDE.md"}},
+		{Key: InstructionSources, Label: "Instruction files", Description: "a folder with both AGENTS.md and CLAUDE.md sends one: agents-first sends AGENTS.md, claude-first sends CLAUDE.md, both sends both and costs more tokens. Read from the working directory up to its git root; the home directory gives only ~/.tofu/AGENTS.md", Category: "Context", Kind: Text, DefaultText: InstructionsAgentsFirst,
+			Choices: []string{InstructionsAgentsFirst, InstructionsClaudeFirst, InstructionsBoth},
+			Aliases: map[string]string{"AGENTS.md,CLAUDE.md": InstructionsAgentsFirst, "AGENTS.md": InstructionsAgentsFirst, "CLAUDE.md,AGENTS.md": InstructionsClaudeFirst, "CLAUDE.md": InstructionsClaudeFirst}},
 		{Key: Skills, Label: "Skills", Description: "on lists the skills in .tofu, .agents and .claude skill folders to the model and offers the skill tool; off sends neither. The project gives all three, the home directory only ~/.tofu/skills", Category: "Context", Kind: Text, DefaultText: SkillsOn,
 			Choices: []string{SkillsOn, SkillsOff}},
 		{Key: DiffContext, Label: "Diff context", Description: "Lines around changed hunks, at most the " + strconv.Itoa(konst.DiffContextLinesDefault) + " each diff carries", Category: "Files", Kind: Text, DefaultText: strconv.Itoa(konst.DiffContextLinesDefault),

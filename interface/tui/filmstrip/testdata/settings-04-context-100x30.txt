@@ -23,8 +23,8 @@
                           Project instructions                                         32768  ▾     
                           bytes of your instruction files sent each turn                            
                                                                                                     
-                          Instruction files                              AGENTS.md,CLAUDE.md  ▾     
-                          in each folder the first of these that exists is sent and the rest ar…    
+                          Instruction files                                     agents-first  ▾     
+                          a folder with both AGENTS.md and CLAUDE.md sends one: agents-first se…    
                                                                                                     
                         enter change  ·  ctrl+k search  ·  esc chat                                 
                                                                                                     

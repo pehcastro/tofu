@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"tofu/internal/konst"
+	"tofu/internal/settings"
 	"tofu/internal/skill"
 	"tofu/internal/subagent"
 	"tofu/internal/sys"
@@ -92,7 +93,7 @@ func InstructionCap(setting int) int {
 	return setting
 }
 
-func ProjectInstructionsInOrder(dir, home string, capBytes int, sources []string) (block string, cut, skipped []string) {
+func ProjectInstructionsInOrder(dir, home string, capBytes int, choice string) (block string, cut, skipped []string) {
 	capBytes = InstructionCap(capBytes)
 	var files []instructionFile
 	if home != "" {
@@ -100,7 +101,7 @@ func ProjectInstructionsInOrder(dir, home string, capBytes int, sources []string
 	}
 	folders := skill.ProjectFolders(dir, home)
 	chosenIn := map[string]string{}
-	for _, name := range sources {
+	for _, name := range settings.InstructionFiles(choice) {
 		at := slices.IndexFunc(folders, func(folder string) bool { return isFile(filepath.Join(folder, name)) })
 		if at < 0 {
 			continue
@@ -110,7 +111,7 @@ func ProjectInstructionsInOrder(dir, home string, capBytes int, sources []string
 		if text == "" {
 			continue
 		}
-		if first, taken := chosenIn[folder]; taken {
+		if first, taken := chosenIn[folder]; taken && choice != settings.InstructionsBoth {
 			skipped = append(skipped, "this project's "+name+", because "+first+" in the same folder comes first")
 			continue
 		}

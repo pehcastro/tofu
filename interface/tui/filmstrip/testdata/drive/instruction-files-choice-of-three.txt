@@ -1,0 +1,22 @@
+# instruction files is a choice of three, and the old comma value CLAUDE.md,AGENTS.md reads as claude-first
+type /settings
+key enter
+key right
+key right
+key right
+wait Instruction files
+key down
+key down
+key down
+key down
+key down
+key down
+key down
+wait claude-first  ▾
+screen
+key enter
+wait 1-3/3
+screen
+key down
+wait both  ▾
+screen

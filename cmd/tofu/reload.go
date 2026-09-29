@@ -115,8 +115,8 @@ func takeInventory(dir string) ([]reloadPart, error) {
 	instructions := map[string]string{}
 	candidates := []string{filepath.Join(sys.StateDir(home), "AGENTS.md")}
 	for _, folder := range skill.ProjectFolders(dir, home) {
-		for _, name := range strings.Split(store.Text(settingspkg.InstructionSources), ",") {
-			candidates = append(candidates, filepath.Join(folder, strings.TrimSpace(name)))
+		for _, name := range settingspkg.InstructionFiles(store.Text(settingspkg.InstructionSources)) {
+			candidates = append(candidates, filepath.Join(folder, name))
 		}
 	}
 	for _, path := range candidates {

@@ -20,9 +20,11 @@ there. Outside a git repository it looks in the working directory alone.
 
 - It takes the nearest `AGENTS.md` on that way up, and the nearest
   `CLAUDE.md`.
-- When both sit in the same folder, only the one named first in the
-  `instructionSources` setting is sent, `AGENTS.md` by default, and tofu
-  says which one it skipped.
+- When both sit in the same folder, the `instructionSources` setting
+  decides. `agents-first`, the default, sends `AGENTS.md` and skips
+  `CLAUDE.md`. `claude-first` sends `CLAUDE.md` and skips `AGENTS.md`.
+  `both` sends both, which costs more tokens. tofu says which one it
+  skipped.
 - When they sit in different folders, both are sent.
 - An empty file is not sent.
 
@@ -42,10 +44,16 @@ names it.
 Write house rules for every project in `~/.tofu/AGENTS.md`, and for one
 project in its `AGENTS.md` or `CLAUDE.md`.
 
-Read only `CLAUDE.md`, or put it first:
+Send `CLAUDE.md` where a folder has both, or send both:
 
-    tofu settings set instructionSources CLAUDE.md
-    tofu settings set instructionSources CLAUDE.md,AGENTS.md
+    tofu settings set instructionSources claude-first
+    tofu settings set instructionSources both
+
+In the app, `/settings`, then Context, then Instruction files offers the
+same three.
+
+An older value, a comma list such as `CLAUDE.md,AGENTS.md`, is read as
+the choice whose file comes first in it.
 
 Send more of a long file each task, up to 262144 bytes:
 
@@ -53,7 +61,7 @@ Send more of a long file each task, up to 262144 bytes:
 
 Change either one for a single project with `--scope project`:
 
-    tofu settings set --scope project instructionSources CLAUDE.md
+    tofu settings set --scope project instructionSources claude-first
 
 Work one task with no instruction file at all:
 
@@ -79,7 +87,7 @@ print the two settings.
 Delete the file you wrote, or the line you added to it. Set a setting
 back with its default:
 
-    tofu settings set instructionSources AGENTS.md,CLAUDE.md
+    tofu settings set instructionSources agents-first
     tofu settings set projectInstructionsCap 32768
 
 or delete its line from `settings.json`.
