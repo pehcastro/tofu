@@ -26,9 +26,9 @@ func Layers(shipped fs.FS, dir string) ([]Layer, error) {
 	if err != nil {
 		return nil, err
 	}
-	catalog, err := CatalogDir()
-	if err != nil {
-		return nil, err
+	catalog, homeless := CatalogDir()
+	if homeless != nil {
+		return layers, nil
 	}
 	return slices.Insert(layers, 1, sys.DirLayer(catalogLayer, catalog)), nil
 }

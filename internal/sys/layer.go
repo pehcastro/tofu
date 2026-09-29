@@ -16,19 +16,16 @@ func DirLayer(name string, dir string) Layer {
 }
 
 func Layers(shipped fs.FS, sub, dir string) ([]Layer, error) {
-	home, err := HomeConfigDir()
-	if err != nil {
-		return nil, err
-	}
 	project := StateDir(dir)
 	if dir == "" {
+		var err error
 		if project, err = ProjectConfigDir(); err != nil {
 			return nil, err
 		}
 	}
-	return []Layer{
-		{Name: "library", Origin: Join("library", sub), FS: shipped},
-		DirLayer("global", Join(home, sub)),
-		DirLayer("project", Join(project, sub)),
-	}, nil
+	layers := []Layer{{Name: "library", Origin: Join("library", sub), FS: shipped}}
+	if home, homeless := HomeConfigDir(); homeless == nil {
+		layers = append(layers, DirLayer("global", Join(home, sub)))
+	}
+	return append(layers, DirLayer("project", Join(project, sub))), nil
 }

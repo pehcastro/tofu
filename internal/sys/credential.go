@@ -172,9 +172,9 @@ func SaveKey(name, value string) error {
 }
 
 func StoredKeys() (map[string]string, error) {
-	path, err := CredentialStorePath()
-	if err != nil {
-		return nil, err
+	path, homeless := CredentialStorePath()
+	if homeless != nil {
+		return nil, nil
 	}
 	if refuseOwnerCredential(path) != nil {
 		return nil, nil
@@ -211,9 +211,9 @@ type KeyMigration struct {
 }
 
 func MigrateHomeKeys() (KeyMigration, error) {
-	home, err := HomeConfigDir()
-	if err != nil {
-		return KeyMigration{}, err
+	home, homeless := HomeConfigDir()
+	if homeless != nil {
+		return KeyMigration{}, nil
 	}
 	migration := KeyMigration{From: filepath.Join(home, CredentialFileName)}
 	present, err := Exists(migration.From)

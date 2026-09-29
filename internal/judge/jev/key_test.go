@@ -77,6 +77,27 @@ func TestReadingTheKeyCreatesNoDatabase(t *testing.T) {
 	}
 }
 
+func TestWithNoHomeTheEnvironmentKeyIsFoundAndNoDatabaseIsOpened(t *testing.T) {
+	temp := t.TempDir()
+	t.Setenv("TEMP", temp)
+	t.Setenv("TMP", temp)
+	t.Setenv("USERPROFILE", "")
+	t.Setenv("HOME", "")
+	t.Setenv(keyName(), "made-up-environment-key")
+	located, err := Locate("")
+	if err != nil || located.Source != SourceEnvironment {
+		t.Fatalf("expected SourceEnvironment with no home, got %v and %v", located.Source, err)
+	}
+	if err := filepath.WalkDir(temp, func(path string, entry fs.DirEntry, err error) error {
+		if err == nil && entry.Name() == sys.CredentialStoreName {
+			t.Errorf("reading the key with no home opened %s", path)
+		}
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestKeyFallsBackToTheEnvFile(t *testing.T) {
 	t.Setenv(keyName(), "")
 	dir := t.TempDir()

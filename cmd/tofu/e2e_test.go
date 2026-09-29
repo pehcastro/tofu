@@ -139,6 +139,19 @@ func TestE2ETheCredentialGuardRefusesAPlantedFileWithNoUSERPROFILE(t *testing.T)
 	}
 }
 
+func TestModelsLoadAndBindAClassifierWithNoHome(t *testing.T) {
+	t.Chdir(t.TempDir())
+	t.Setenv("USERPROFILE", "")
+	t.Setenv("HOME", "")
+	classifier, err := boundClassifier()
+	if err != nil {
+		t.Fatalf("with no home the model library did not load: %v", err)
+	}
+	if classifier.Provider.KeyName() == "" {
+		t.Fatalf("with no home the classifier %q names no key", classifier.ID)
+	}
+}
+
 func sameText(t *testing.T, what, got, want string) {
 	t.Helper()
 	if got == want {
