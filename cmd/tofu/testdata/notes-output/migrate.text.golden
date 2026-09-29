@@ -1,0 +1,13 @@
+exit 0
+--- stdout
+Migrate · ~/project/.tofu                                ✓ 2 moved · 1 converted
+
+moved
+  ~ sessions  4 files  149 bytes  ~/.tofu/projects/KEY/sessions
+  ~ log       1 file   22 bytes   ~/.tofu/projects/KEY/log
+
+sessions
+  + 93981171-c019-49ef-8317-dc1e760e652e  1 turn  2 events  from turn-a
+  ⚠ turn-b                                session: the header of turn-b does not parse: invalid character 'n' looking for beginning of object key string
+  head      93981171-c019-49ef-8317-dc1e760e652e
+--- stderr

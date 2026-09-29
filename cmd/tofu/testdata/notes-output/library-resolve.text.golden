@@ -1,0 +1,14 @@
+exit 0
+--- stdout
+Question set · probe                                                    8 fields
+
+~/project/.tofu/questions/probe@1.yaml
+  1   name                             probe
+  2   domain                           fetch
+  3   questions_version                1
+  6   state[0]                         task
+  10  questions.needed.type            noul
+  11  questions.needed.instructions    Is the unit needed for the task.
+  15  questions.needed.criteria.true   it is
+  16  questions.needed.criteria.false  it is not
+--- stderr

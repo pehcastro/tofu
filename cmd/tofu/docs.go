@@ -397,8 +397,6 @@ func settingTakes(spec settingspkg.Spec) string {
 	return "any text"
 }
 
-func docsReport(out io.Writer) []error { return docsCoverage(out, usageVerbs()) }
-
 func usageVerbs() []string {
 	_, listing, _ := strings.Cut(usage, "\nVerbs:\n")
 	var verbs []string
@@ -410,10 +408,10 @@ func usageVerbs() []string {
 	return verbs
 }
 
-func docsCoverage(out io.Writer, verbs []string) []error {
+func docsCoverage(verbs []string) (docsCorpus, []error) {
 	corpus, err := loadDocs()
 	if err != nil {
-		return []error{fmt.Errorf("docs: %w", err)}
+		return corpus, []error{fmt.Errorf("docs: %w", err)}
 	}
 	texts := make([]string, 0, len(corpus.Pages)+len(corpus.Entries))
 	for _, page := range corpus.Pages {
@@ -432,18 +430,16 @@ func docsCoverage(out io.Writer, verbs []string) []error {
 			}
 		}
 	}
-	var settingsMissing, verbsMissing []error
+	var missing []error
 	for _, spec := range settingspkg.Default() {
 		if !named[spec.Key] {
-			settingsMissing = append(settingsMissing, fmt.Errorf("docs: no page or index entry names the setting %s", spec.Key))
+			missing = append(missing, fmt.Errorf("docs: no page or index entry names the setting %s", spec.Key))
 		}
 	}
 	for _, verb := range verbs {
 		if !named["tofu "+verb] {
-			verbsMissing = append(verbsMissing, fmt.Errorf("docs: no page or index entry names the verb %s as tofu %s", verb, verb))
+			missing = append(missing, fmt.Errorf("docs: no page or index entry names the verb %s as tofu %s", verb, verb))
 		}
 	}
-	_, _ = fmt.Fprintf(out, "%-14s %3d pages   %d index entries   %d settings missing   %d verbs missing\n",
-		"docs", len(corpus.Pages), len(corpus.Entries), len(settingsMissing), len(verbsMissing))
-	return append(settingsMissing, verbsMissing...)
+	return corpus, missing
 }

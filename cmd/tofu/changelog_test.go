@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"tofu/interface/cli"
 	"tofu/internal/konst"
 	"tofu/internal/widget"
 	"tofu/library/changelog"
@@ -35,7 +36,7 @@ func currentHeading(t *testing.T) string {
 	t.Helper()
 	for _, version := range parseChangelog(changelog.Markdown) {
 		if version.Version == konst.Version {
-			return version.Heading
+			return strings.Replace(version.Heading, " - ", " · ", 1)
 		}
 	}
 	t.Fatalf("the changelog carries no entry for %s, which is the version this binary reports", konst.Version)
@@ -152,10 +153,15 @@ func TestTheJSONFormCarriesOneObjectPerVersion(t *testing.T) {
 	if code := run([]string{"changelog", "--json"}, strings.NewReader(""), &out, &errOut); code != exitOK {
 		t.Fatalf("tofu changelog --json exited %d: %s", code, errOut.String())
 	}
-	var versions []changelogVersion
-	if err := json.Unmarshal(out.Bytes(), &versions); err != nil {
+	var envelope struct {
+		Data struct {
+			Versions []changelogVersion `json:"versions"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(out.Bytes(), &envelope); err != nil {
 		t.Fatalf("the json does not parse: %v\n%s", err, out.String())
 	}
+	versions := envelope.Data.Versions
 	if len(versions) != len(parseChangelog(changelog.Markdown)) {
 		t.Fatalf("the json carries %d objects and the file has %d versions", len(versions), len(parseChangelog(changelog.Markdown)))
 	}
@@ -168,8 +174,8 @@ func TestTheJSONFormCarriesOneObjectPerVersion(t *testing.T) {
 
 func TestTheRenderedFormWrapsToTheWidthAndCarriesNoRawMarkdown(t *testing.T) {
 	const width = konst.ProseWidthChars
-	text := changelogText("tofu", parseChangelog(changelog.Markdown), width)
-	for _, line := range strings.Split(text, "\n") {
+	page := cli.Detect(&bytes.Buffer{}, nil)
+	for _, line := range changelogLines(page, true, "", parseChangelog(changelog.Markdown)) {
 		if widget.Cells(line) > width {
 			t.Fatalf("a line is %d cells wide at width %d:\n%s", widget.Cells(line), width, line)
 		}
@@ -203,8 +209,8 @@ func TestChangelogShowsTheCurrentVersionOnceAndThenSaysNothingIsNew(t *testing.T
 	if code := run([]string{"changelog"}, strings.NewReader(""), &first, &errOut); code != exitOK {
 		t.Fatalf("the first run exited %d: %s", code, errOut.String())
 	}
-	if headlineOf(first.String()) != changelogHeadline(1, "") {
-		t.Fatalf("the first run leads with %q, want %q", headlineOf(first.String()), changelogHeadline(1, ""))
+	if !strings.HasSuffix(headlineOf(first.String()), "● 1 unread") {
+		t.Fatalf("the first run leads with %q, want 1 unread", headlineOf(first.String()))
 	}
 	if want := []string{currentHeading(t)}; !slices.Equal(headingsIn(first.String()), want) {
 		t.Fatalf("the first run printed the entries %v, want %v", headingsIn(first.String()), want)
@@ -217,8 +223,8 @@ func TestChangelogShowsTheCurrentVersionOnceAndThenSaysNothingIsNew(t *testing.T
 	if code := run([]string{"changelog"}, strings.NewReader(""), &second, &errOut); code != exitOK {
 		t.Fatalf("the second run exited %d: %s", code, errOut.String())
 	}
-	if headlineOf(second.String()) != changelogHeadline(0, konst.Version) {
-		t.Fatalf("the second run leads with %q, want %q", headlineOf(second.String()), changelogHeadline(0, konst.Version))
+	if !strings.HasSuffix(headlineOf(second.String()), "✓ nothing new since "+konst.Version) {
+		t.Fatalf("the second run leads with %q, want nothing new since %s", headlineOf(second.String()), konst.Version)
 	}
 	if entries := headingsIn(second.String()); entries != nil {
 		t.Fatalf("the second run repeated the entries %v", entries)
@@ -236,7 +242,7 @@ func TestAllPrintsEveryVersionAndDoesNotRecordAnything(t *testing.T) {
 	}
 	var want []string
 	for _, version := range parseChangelog(changelog.Markdown) {
-		want = append(want, version.Heading)
+		want = append(want, strings.Replace(version.Heading, " - ", " · ", 1))
 	}
 	if !slices.Equal(headingsIn(out.String()), want) {
 		t.Fatalf("--all printed the entries %v, want %v", headingsIn(out.String()), want)
@@ -252,9 +258,6 @@ func TestDownAPipeTheChangelogWrapsToTheProseWidth(t *testing.T) {
 	t.Setenv("USERPROFILE", home)
 
 	var out, errOut bytes.Buffer
-	if width := outputWidth(&out); width != konst.ProseWidthChars {
-		t.Fatalf("a writer that is no terminal wraps at %d, want the prose width %d", width, konst.ProseWidthChars)
-	}
 	if code := run([]string{"changelog", "--all"}, strings.NewReader(""), &out, &errOut); code != exitOK {
 		t.Fatalf("tofu changelog --all exited %d: %s", code, errOut.String())
 	}
@@ -275,7 +278,7 @@ func TestAnUnknownFlagIsRefused(t *testing.T) {
 	if code := run([]string{"changelog", "--every"}, strings.NewReader(""), &out, &errOut); code != exitUsage {
 		t.Fatalf("an unknown flag exited %d, want %d", code, exitUsage)
 	}
-	if !strings.Contains(errOut.String(), changelogFlags) {
+	if !strings.Contains(errOut.String(), changelogUsage) {
 		t.Fatalf("the refusal does not name the flags: %s", errOut.String())
 	}
 }

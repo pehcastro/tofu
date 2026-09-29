@@ -1,21 +1,21 @@
 package main
 
 import (
-	"fmt"
+	"errors"
 	"io"
 	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
 
+	"tofu/interface/cli"
 	"tofu/internal/konst"
 	"tofu/internal/sys"
 	"tofu/internal/widget"
-	"tofu/library/changelog"
 )
 
 const (
-	changelogFlags       = "usage: tofu changelog [--all] [--json]"
+	changelogUsage       = "tofu changelog [--all] [--json]"
 	changelogAllFlag     = "--all"
 	changelogSeenFile    = "changelog-seen"
 	changelogSeenMode    = 0o600
@@ -170,7 +170,7 @@ func changelogBody(markdown string, width int) []string {
 		case text == "":
 			gap = len(lines) > 0
 		case strings.HasPrefix(text, changelogSectionMark):
-			lines = append(lines, "", reportIndent+strings.TrimPrefix(text, changelogSectionMark), "")
+			lines = append(lines, "", reportIndent+strings.TrimPrefix(text, changelogSectionMark))
 			gap = false
 		case strings.HasPrefix(text, changelogBulletMark):
 			lines = append(lines, changelogWrap(strings.TrimPrefix(text, changelogBulletMark), deep+changelogBulletMark, deep+reportIndent, width)...)
@@ -189,25 +189,22 @@ func changelogBody(markdown string, width int) []string {
 	return lines
 }
 
-func changelogText(headline string, versions []changelogVersion, width int) string {
-	body := strings.Builder{}
-	body.WriteString(headline + "\n")
-	for _, version := range versions {
-		body.WriteString("\n" + version.Heading + "\n\n")
-		body.WriteString(strings.Join(changelogBody(version.Body, width), "\n") + "\n")
+func changelogLines(page cli.Page, all bool, seen string, shown []changelogVersion) []string {
+	verdict := cli.Verdict{Mark: cli.Active, Text: strconv.Itoa(len(shown)) + " unread"}
+	switch {
+	case all:
+		verdict = cli.Verdict{Text: plural(len(shown), "version")}
+	case len(shown) == 0 && seen == "":
+		verdict = cli.Verdict{Mark: cli.Done, Text: "nothing new"}
+	case len(shown) == 0:
+		verdict = cli.Verdict{Mark: cli.Done, Text: "nothing new since " + seen}
 	}
-	return body.String()
-}
-
-func changelogHeadline(count int, seen string) string {
-	head := "tofu " + konst.Version + ", "
-	switch count {
-	case 0:
-		return head + "nothing new since " + seen
-	case 1:
-		return head + "1 version you have not read"
+	lines := page.Title("Changelog", []string{"tofu " + konst.Version}, verdict)
+	for _, version := range shown {
+		lines = append(lines, "", page.Subject(strings.Replace(version.Heading, " - ", " · ", 1)))
+		lines = append(lines, changelogBody(version.Body, page.Width)...)
 	}
-	return head + strconv.Itoa(count) + " versions you have not read"
+	return lines
 }
 
 func changelogSeen() string {
@@ -230,37 +227,33 @@ func recordChangelogSeen() error {
 	return sys.WriteFile(filepath.Join(dir, changelogSeenFile), []byte(konst.Version+"\n"), changelogSeenMode)
 }
 
-func changelogVerb(args []string, out, errOut io.Writer) int {
-	all, asJSON := false, false
+func changelogVerb(args []string, markdown string, out, errOut io.Writer) int {
+	o := verbOutput{verb: "changelog", usageLine: changelogUsage, out: out, errOut: errOut}
+	all := false
 	for _, arg := range args {
 		switch arg {
 		case changelogAllFlag:
 			all = true
 		case jsonFlag:
-			asJSON = true
+			o.asJSON = true
 		default:
-			_, _ = fmt.Fprintln(errOut, changelogFlags)
-			return exitUsage
+			return o.usage(errors.New("unknown argument " + strconv.Quote(arg)))
 		}
 	}
-	versions := parseChangelog(changelog.Markdown)
-	if asJSON {
-		if err := writeJSON(out, versions); err != nil {
-			_, _ = fmt.Fprintf(errOut, "tofu changelog: %v\n", err)
-			return exitVerdict
-		}
-		return exitOK
+	versions := parseChangelog(markdown)
+	if o.asJSON {
+		return o.done(true, struct {
+			Versions []changelogVersion `json:"versions"`
+		}{versions}, nil)
 	}
-	width := outputWidth(out)
 	if all {
-		_, _ = fmt.Fprint(out, changelogText("tofu "+konst.Version+", every version", versions, width))
-		return exitOK
+		return o.done(true, nil, func(page cli.Page) []string { return changelogLines(page, true, "", versions) })
 	}
 	seen := changelogSeen()
-	shown := changelogSince(versions, seen)
-	_, _ = fmt.Fprint(out, changelogText(changelogHeadline(len(shown), seen), shown, width))
 	if err := recordChangelogSeen(); err != nil {
-		_, _ = fmt.Fprintf(errOut, "tofu changelog: the version you read was not recorded: %v\n", err)
+		o.errorLine(cli.Problem{What: "the version you read was not recorded: " + err.Error()})
 	}
-	return exitOK
+	return o.done(true, nil, func(page cli.Page) []string {
+		return changelogLines(page, false, seen, changelogSince(versions, seen))
+	})
 }

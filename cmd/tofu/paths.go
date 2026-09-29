@@ -7,9 +7,12 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 
+	"tofu/interface/cli"
 	"tofu/internal/session"
 	"tofu/internal/sys"
+	"tofu/internal/widget"
 )
 
 const partialSuffix = ".partial"
@@ -31,26 +34,24 @@ func copyLegacyStateDir(out io.Writer, parent string) {
 	if somethingAtTarget || !sourceIsADir {
 		return
 	}
+	page := cli.Detect(out, os.Environ())
 	partial := target + partialSuffix
 	if err := os.RemoveAll(partial); err != nil {
-		_, _ = fmt.Fprintf(out, "tofu: a half copy at %s could not be removed: %v\n", partial, err)
+		_ = printUncut(page, out, page.ErrorLine("the half copy "+page.Path(partial)+" was not removed: "+err.Error(), ""))
 		return
 	}
-	files, _, err := copyTreeInto(os.DirFS(source), ".", partial)
+	files, size, err := copyTreeInto(os.DirFS(source), ".", partial)
 	if err == nil {
 		err = os.Rename(partial, target)
 	}
 	if err != nil {
 		_ = os.RemoveAll(partial)
-		_, _ = fmt.Fprintf(out, "tofu: copying %s to %s failed: %v\n"+
-			"      %s is untouched and is still the directory being read.\n\n", source, target, err, source)
+		_ = printUncut(page, out, page.ErrorLine(sys.LegacyStateDirName+" not copied to "+sys.StateDirName+", still read from "+page.Path(source)+": "+err.Error(), ""))
 		return
 	}
-	_, _ = fmt.Fprintf(out, "tofu: the data directory is now %s, and this run found only %s.\n"+
-		"      copied %s\n          to %s\n"+
-		"      %d sessions, %d files\n"+
-		"      %s was read and not touched. it is still there, and deleting it is yours to do.\n\n",
-		sys.StateDirName, sys.LegacyStateDirName, source, target, countSessions(source), files, source)
+	copied := strings.Join([]string{sys.LegacyStateDirName + " copied to " + sys.StateDirName, plural(countSessions(source), "session"),
+		plural(files, "file"), widget.Size(int(size)), sys.LegacyStateDirName + " kept"}, " · ")
+	_ = printUncut(page, out, []string{page.Receipt(cli.Added, copied, target)})
 }
 
 func copyTreeInto(source fs.FS, root, target string) (files int, size int64, err error) {

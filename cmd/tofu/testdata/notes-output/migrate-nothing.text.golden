@@ -1,0 +1,7 @@
+exit 0
+--- stdout
+Migrate · ~/project/.tofu                                   ✓ nothing to migrate
+
+sessions
+  ⚠ turn-b  session: the header of turn-b does not parse: invalid character 'n' looking for beginning of object key string
+--- stderr

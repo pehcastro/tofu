@@ -1,0 +1,15 @@
+exit 1
+--- stdout
+{
+  "tofu": "VERSION",
+  "verb": "library resolve",
+  "ok": false,
+  "at": "AT",
+  "data": null,
+  "problems": [
+    {
+      "what": "no question set named \"nope\" in any layer"
+    }
+  ]
+}
+--- stderr

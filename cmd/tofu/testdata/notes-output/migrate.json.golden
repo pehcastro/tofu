@@ -1,0 +1,49 @@
+exit 0
+--- stdout
+{
+  "tofu": "VERSION",
+  "verb": "migrate",
+  "ok": true,
+  "at": "AT",
+  "data": {
+    "dry_run": false,
+    "from": "HOME/project/.tofu",
+    "moves": [
+      {
+        "name": "sessions",
+        "from": "HOME/project/.tofu/sessions",
+        "to": "HOME/.tofu/projects/KEY/sessions",
+        "files": 4,
+        "bytes": 149
+      },
+      {
+        "name": "log",
+        "from": "HOME/project/.tofu/log",
+        "to": "HOME/.tofu/projects/KEY/log",
+        "files": 1,
+        "bytes": 22
+      }
+    ],
+    "sessions": [
+      {
+        "id": "93981171-c019-49ef-8317-dc1e760e652e",
+        "turns": 1,
+        "events": 2,
+        "sub_agent_runs": 0,
+        "from": [
+          "turn-a"
+        ]
+      }
+    ],
+    "skipped": [
+      {
+        "id": "turn-b",
+        "reason": "session: the header of turn-b does not parse: invalid character 'n' looking for beginning of object key string"
+      }
+    ],
+    "head": "93981171-c019-49ef-8317-dc1e760e652e",
+    "written": 1
+  },
+  "problems": []
+}
+--- stderr

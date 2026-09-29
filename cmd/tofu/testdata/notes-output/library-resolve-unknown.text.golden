@@ -1,0 +1,4 @@
+exit 1
+--- stdout
+--- stderr
+✗ tofu library resolve: no question set named "nope" in any layer

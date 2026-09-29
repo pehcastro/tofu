@@ -37,15 +37,10 @@ func TestDocsReportsARoutedVerbNoPageNames(t *testing.T) {
 			t.Errorf("tofu routes %q and the docs check never asks for its page", verb)
 		}
 	}
-	var out bytes.Buffer
-	missing := docsCoverage(&out, append(listed, "frobnicate"))
+	_, missing := docsCoverage(append(listed, "frobnicate"))
 	if len(missing) != 1 || !strings.Contains(missing[0].Error(), "the verb frobnicate") {
 		t.Fatalf("a routed verb no page names produced %v, want one line naming frobnicate", missing)
 	}
-	if !strings.Contains(out.String(), "1 verbs missing") {
-		t.Fatalf("the docs line does not count the missing verb: %q", out.String())
-	}
-	t.Logf("docs line: %s", strings.TrimSpace(out.String()))
 	t.Logf("refused: %v", missing[0])
 }
 

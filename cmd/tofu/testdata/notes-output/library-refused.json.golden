@@ -1,0 +1,91 @@
+exit 1
+--- stdout
+{
+  "tofu": "VERSION",
+  "verb": "library",
+  "ok": false,
+  "at": "AT",
+  "data": {
+    "layers": [
+      {
+        "name": "library",
+        "origin": "library"
+      },
+      {
+        "name": "catalog",
+        "origin": "HOME/.tofu/catalog"
+      },
+      {
+        "name": "global",
+        "origin": "HOME/.tofu"
+      },
+      {
+        "name": "project",
+        "origin": "refused\\.tofu"
+      }
+    ],
+    "models": 24,
+    "subscriptions": 2,
+    "roles": 0,
+    "questions": 14,
+    "doc_pages": 12,
+    "doc_entries": 67,
+    "proxy": "off",
+    "proxy_from": "library library",
+    "domains_from": "the binary",
+    "domains_dir": "library",
+    "domains": [
+      {
+        "name": "dev",
+        "rules": 26,
+        "thresholds": 0,
+        "skills": 0,
+        "agents": 1,
+        "references": 8,
+        "refused": 0
+      },
+      {
+        "name": "fetch",
+        "rules": 0,
+        "thresholds": 1,
+        "skills": 0,
+        "agents": 0,
+        "references": 0,
+        "refused": 0
+      },
+      {
+        "name": "general",
+        "rules": 20,
+        "thresholds": 7,
+        "skills": 0,
+        "agents": 1,
+        "references": 4,
+        "refused": 0
+      },
+      {
+        "name": "qa",
+        "rules": 9,
+        "thresholds": 0,
+        "skills": 2,
+        "agents": 1,
+        "references": 4,
+        "refused": 0
+      },
+      {
+        "name": "shell",
+        "rules": 0,
+        "thresholds": 1,
+        "skills": 0,
+        "agents": 0,
+        "references": 0,
+        "refused": 0
+      }
+    ]
+  },
+  "problems": [
+    {
+      "what": "turn: refused\\.tofu/tools/shell/proxy.yaml: use has to be off or rtk, found \"maybe\""
+    }
+  ]
+}
+--- stderr

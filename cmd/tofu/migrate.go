@@ -1,32 +1,53 @@
 package main
 
 import (
-	"cmp"
-	"fmt"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
+	"time"
 
+	"tofu/interface/cli"
 	"tofu/internal/session"
 	"tofu/internal/sys"
+	"tofu/internal/widget"
 )
 
-const migrateUsage = `usage: tofu migrate [--dry-run]
-
-Moves what tofu wrote about its own runs out of this project's .tofu and into
-the home folder: sessions, log, artifacts, cache, salvage, calibration, shells
-and promotions go to ~/.tofu/projects/<key>, and quota readings to ~/.tofu/quota.
-What a person wrote stays. Then it converts every session recorded in the old
-layout, a turn-<id> folder or a single turn file, into one folder per session
-holding session.json and events.jsonl: a sub-agent's run joins the session that
-spawned it, a fork becomes a session carried from the one it left, and a
-message a later turn repeated is kept once. --dry-run lists the move and the
-sessions it would build, and touches nothing.`
+const migrateUsage = "tofu migrate [--dry-run] [--json]"
 
 type stateMove struct {
-	name, from, to string
+	Name    string `json:"name"`
+	From    string `json:"from"`
+	To      string `json:"to"`
+	Files   int    `json:"files"`
+	Bytes   int64  `json:"bytes"`
+	Failure string `json:"failure,omitempty"`
+}
+
+type migratedSession struct {
+	ID           string   `json:"id"`
+	Turns        int      `json:"turns"`
+	Events       int      `json:"events"`
+	SubAgentRuns int      `json:"sub_agent_runs"`
+	From         []string `json:"from"`
+}
+
+type skippedSession struct {
+	ID     string `json:"id"`
+	Reason string `json:"reason"`
+}
+
+type migrateReport struct {
+	DryRun   bool              `json:"dry_run"`
+	From     string            `json:"from"`
+	Moves    []stateMove       `json:"moves"`
+	Sessions []migratedSession `json:"sessions"`
+	Skipped  []skippedSession  `json:"skipped"`
+	Head     string            `json:"head,omitempty"`
+	Written  int               `json:"written"`
 }
 
 func plannedStateMoves(project string) (config string, moves []stateMove, err error) {
@@ -40,131 +61,193 @@ func plannedStateMoves(project string) (config string, moves []stateMove, err er
 		return "", nil, err
 	}
 	for _, name := range sys.MovedStateNames() {
-		move := stateMove{name: name, from: filepath.Join(config, name), to: filepath.Join(state, name)}
+		move := stateMove{Name: name, From: filepath.Join(config, name), To: filepath.Join(state, name)}
 		if name == sys.QuotaDirName {
-			move.to = quota
+			move.To = quota
 		}
-		if _, err := os.Stat(move.from); err == nil && move.from != move.to {
+		if _, err := os.Stat(move.From); err == nil && move.From != move.To {
 			moves = append(moves, move)
 		}
 	}
 	return config, moves, nil
 }
 
-func moveProjectState(out io.Writer, project string) (moved, failed int) {
-	config, moves, err := plannedStateMoves(project)
-	if err != nil {
-		_, _ = fmt.Fprintf(out, "tofu: the state in %s was not moved: %v\n", sys.StateDir(project), err)
-		return 0, 1
+func moveStates(moves []stateMove) []stateMove {
+	for i, move := range moves {
+		files, size, err := copyTreeInto(os.DirFS(filepath.Dir(move.From)), move.Name, filepath.Dir(move.To))
+		if err == nil {
+			err = os.RemoveAll(move.From)
+		}
+		if err != nil {
+			moves[i].Failure = err.Error()
+			continue
+		}
+		moves[i].Files, moves[i].Bytes = files, size
 	}
+	return moves
+}
+
+func moveProjectState(out io.Writer, project string) []stateMove {
+	page := cli.Detect(out, os.Environ())
+	_, moves, err := plannedStateMoves(project)
+	if err != nil {
+		_ = printUncut(page, out, page.ErrorLine("the state in "+page.Path(sys.StateDir(project))+" was not moved: "+err.Error(), ""))
+		return nil
+	}
+	moves = moveStates(moves)
 	var names, targets []string
 	var files int
 	var size int64
+	var lines []string
 	for _, move := range moves {
-		copied, bytes, err := copyTreeInto(os.DirFS(config), move.name, filepath.Dir(move.to))
-		if err == nil {
-			err = os.RemoveAll(move.from)
-		}
-		if err != nil {
-			failed++
-			_, _ = fmt.Fprintf(out, "tofu: %s stays in %s and is unread until tofu migrate moves it: %v\n", move.name, config, err)
+		if move.Failure != "" {
+			lines = append(lines, page.Glyph(cli.Warn)+" "+move.Name+" stays in "+page.Path(filepath.Dir(move.From))+": "+move.Failure+cli.Gap+page.Hint("tofu migrate"))
 			continue
 		}
-		moved, files, size = moved+1, files+copied, size+bytes
-		names = append(names, move.name)
-		if target := filepath.Dir(move.to); !slices.Contains(targets, target) {
+		names, files, size = append(names, move.Name), files+move.Files, size+move.Bytes
+		if target := page.Path(filepath.Dir(move.To)); !slices.Contains(targets, target) {
 			targets = append(targets, target)
 		}
 	}
-	if moved > 0 {
-		_, _ = fmt.Fprintf(out, "tofu: moved %s (%d files, %d bytes) out of %s into %s\n",
-			strings.Join(names, ", "), files, size, config, strings.Join(targets, " and "))
+	if len(names) > 0 {
+		moved := strings.Join([]string{"moved " + strings.Join(names, ", "), plural(files, "file"), widget.Size(int(size))}, " · ")
+		lines = append([]string{page.Glyph(cli.Changed) + " " + moved + cli.Gap + page.Label(strings.Join(targets, ", "))}, lines...)
 	}
-	return moved, failed
+	_ = printUncut(page, out, lines)
+	return moves
 }
 
 func migrateVerb(args []string, out, errOut io.Writer) int {
-	dryRun := false
+	o := verbOutput{verb: "migrate", usageLine: migrateUsage, out: out, errOut: errOut}
+	report := migrateReport{Moves: []stateMove{}, Sessions: []migratedSession{}, Skipped: []skippedSession{}}
 	for _, arg := range args {
-		if arg != "--dry-run" {
-			_, _ = fmt.Fprintf(errOut, "tofu migrate: unknown argument %q\n\n%s\n", arg, migrateUsage)
-			return exitUsage
+		switch arg {
+		case "--dry-run":
+			report.DryRun = true
+		case jsonFlag:
+			o.asJSON = true
+		default:
+			return o.usage(errors.New("unknown argument " + strconv.Quote(arg)))
 		}
-		dryRun = true
 	}
 	project, err := os.Getwd()
-	var config, state string
+	var state string
 	var moves []stateMove
 	if err == nil {
-		config, moves, err = plannedStateMoves(project)
+		report.From, moves, err = plannedStateMoves(project)
 	}
 	if err == nil {
 		state, err = sys.ProjectStateDirAt(project)
 	}
 	if err != nil {
-		_, _ = fmt.Fprintf(errOut, "tofu migrate: %v\n", err)
-		return exitVerdict
-	}
-	switch {
-	case len(moves) == 0:
-		_, _ = fmt.Fprintf(out, "tofu migrate: %s holds no state, so there is nothing to move\n", config)
-	case dryRun:
-		_, _ = fmt.Fprintf(out, "tofu migrate --dry-run: would move out of %s\n", config)
-		for _, move := range moves {
-			files, size := treeSize(move.from)
-			_, _ = fmt.Fprintf(out, "  %-16s -> %s  (%d files, %d bytes)\n", move.name, move.to, files, size)
-		}
-	default:
-		if _, failed := moveProjectState(out, project); failed > 0 {
-			return exitVerdict
-		}
+		return o.fail(err)
 	}
 	sessions := session.OpenAt(state)
+	if report.DryRun {
+		for i, move := range moves {
+			moves[i].Files, moves[i].Bytes = treeSize(move.From)
+			if move.Name == "sessions" {
+				sessions = session.NewStore(move.From)
+			}
+		}
+	} else {
+		moves = moveStates(moves)
+	}
+	report.Moves = append(report.Moves, moves...)
+	var problems []cli.Problem
 	for _, move := range moves {
-		if dryRun && move.name == "sessions" {
-			sessions = session.NewStore(move.from)
+		if move.Failure != "" {
+			problems = append(problems, cli.Problem{What: move.Name + " stays in " + report.From + ": " + move.Failure})
 		}
 	}
-	return convertSessions(out, errOut, sessions, dryRun)
-}
-
-func convertSessions(out, errOut io.Writer, sessions *session.Store, dryRun bool) int {
-	plan, err := sessions.PlanConversion()
-	if err != nil {
-		_, _ = fmt.Fprintf(errOut, "tofu migrate: the sessions in the old layout were not read: %v\n", err)
-		return exitVerdict
+	if len(problems) == 0 {
+		problems = convertSessions(sessions, &report)
 	}
-	for _, skipped := range plan.Skipped {
-		_, _ = fmt.Fprintf(out, "tofu migrate: %s stays in the old layout, it does not read: %v\n", skipped.ID, skipped.Reason)
+	if o.asJSON {
+		err = writeJSON(out, cli.Envelope{Verb: o.verb, OK: len(problems) == 0, At: time.Now(), Data: report, Problems: problems})
+	} else {
+		page := cli.Detect(out, os.Environ())
+		err = printUncut(page, out, migrateLines(page, report, len(problems)))
+		for _, problem := range problems {
+			o.errorLine(problem)
+		}
 	}
-	if len(plan.Sessions) == 0 {
-		_, _ = fmt.Fprintln(out, "tofu migrate: no session is recorded in the old layout, so there is nothing to convert")
-		return exitOK
-	}
-	entries, turns, events, agents := 0, 0, 0, 0
-	lead := "tofu migrate --dry-run: would convert"
-	if !dryRun {
-		lead = "tofu migrate: converting"
-	}
-	_, _ = fmt.Fprintf(out, "%s %d sessions:\n", lead, len(plan.Sessions))
-	for _, converted := range plan.Sessions {
-		header := converted.Header
-		entries, turns, events, agents = entries+len(converted.From), turns+header.Turns, events+len(converted.Events), agents+len(header.Agents)
-		_, _ = fmt.Fprintf(out, "  %s  %d turns  %d events  %d sub-agent runs  from %s\n",
-			header.ID, header.Turns, len(converted.Events), len(header.Agents), strings.Join(converted.From, " "))
-	}
-	_, _ = fmt.Fprintf(out, "  %d old entries, %d sessions, %d turns, %d events, %d sub-agent runs; head %s\n",
-		entries, len(plan.Sessions), turns, events, agents, cmp.Or(plan.Head, "unchanged"))
-	if dryRun {
-		return exitOK
-	}
-	written, err := sessions.Convert(plan)
-	_, _ = fmt.Fprintf(out, "tofu migrate: wrote %d of %d sessions\n", written, len(plan.Sessions))
-	if err != nil {
-		_, _ = fmt.Fprintf(errOut, "tofu migrate: %v\n", err)
+	if err != nil || len(problems) > 0 {
 		return exitVerdict
 	}
 	return exitOK
+}
+
+func convertSessions(sessions *session.Store, report *migrateReport) []cli.Problem {
+	plan, err := sessions.PlanConversion()
+	if err != nil {
+		return []cli.Problem{{What: "the sessions in the old layout were not read: " + err.Error()}}
+	}
+	for _, skipped := range plan.Skipped {
+		report.Skipped = append(report.Skipped, skippedSession{ID: skipped.ID, Reason: skipped.Reason.Error()})
+	}
+	for _, converted := range plan.Sessions {
+		header := converted.Header
+		report.Sessions = append(report.Sessions, migratedSession{ID: header.ID, Turns: header.Turns, Events: len(converted.Events), SubAgentRuns: len(header.Agents), From: converted.From})
+	}
+	report.Head = plan.Head
+	if report.DryRun || len(plan.Sessions) == 0 {
+		return nil
+	}
+	report.Written, err = sessions.Convert(plan)
+	if err != nil {
+		return []cli.Problem{{What: err.Error()}}
+	}
+	return nil
+}
+
+func migrateLines(page cli.Page, report migrateReport, failed int) []string {
+	facts := []string{page.Path(report.From)}
+	moveSection, sessionSection, verdict := "moved", "converted", cli.Verdict{Mark: cli.Done}
+	var said []string
+	if report.DryRun {
+		facts = append(facts, "dry run")
+		moveSection, sessionSection, verdict = "would move", "would convert", cli.Verdict{Mark: cli.Idle}
+	}
+	var moved []cli.Row
+	for _, move := range report.Moves {
+		if move.Failure == "" {
+			moved = append(moved, cli.Row{Mark: cli.Changed, Cells: []string{move.Name, plural(move.Files, "file"), widget.Size(int(move.Bytes))}, Detail: page.Path(move.To)})
+		}
+	}
+	if len(moved) > 0 {
+		said = append(said, strconv.Itoa(len(moved))+" "+moveSection)
+	}
+	if len(report.Sessions) > 0 {
+		said = append(said, strconv.Itoa(len(report.Sessions))+" "+sessionSection)
+	}
+	verdict.Text = strings.Join(said, " · ")
+	switch {
+	case failed > 0:
+		verdict = cli.Verdict{Mark: cli.Fail, Text: strconv.Itoa(failed) + " failed"}
+	case len(said) == 0:
+		verdict = cli.Verdict{Mark: cli.Done, Text: "nothing to migrate"}
+	}
+	lines := page.Title("Migrate", facts, verdict)
+	if len(moved) > 0 {
+		lines = append(append(lines, "", page.Section(moveSection, cli.Verdict{})), cli.Indent(page.Rows(moved)...)...)
+	}
+	var rows []cli.Row
+	for _, converted := range report.Sessions {
+		detail := "from " + strings.Join(converted.From, " ")
+		if converted.SubAgentRuns > 0 {
+			detail = plural(converted.SubAgentRuns, "sub-agent run") + " · " + detail
+		}
+		rows = append(rows, cli.Row{Mark: cli.Added, Cells: []string{converted.ID, plural(converted.Turns, "turn"), plural(converted.Events, "event")}, Detail: detail})
+	}
+	for _, skipped := range report.Skipped {
+		rows = append(rows, cli.Row{Mark: cli.Warn, Cells: []string{skipped.ID}, Detail: strings.ReplaceAll(skipped.Reason, "\n", "; ")})
+	}
+	if len(rows) == 0 {
+		return lines
+	}
+	lines = append(append(lines, "", page.Section("sessions", cli.Verdict{})), cli.Indent(page.Rows(rows)...)...)
+	return append(lines, cli.Indent(page.Facts([]cli.Fact{{Label: "head", Text: report.Head}})...)...)
 }
 
 func treeSize(root string) (files int, size int64) {

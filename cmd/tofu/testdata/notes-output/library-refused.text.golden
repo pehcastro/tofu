@@ -1,0 +1,27 @@
+exit 1
+--- stdout
+Library · 4 layers                                                   ✗ 1 refused
+
+  models         24
+  subscriptions  2
+  questions      14
+  docs           12 pages · 67 index entries
+  proxy          off · library
+
+layers
+  library   library
+  catalog   ~/.tofu/catalog
+  global    ~/.tofu
+  project   refused\.tofu
+
+domains · the binary
+  ✓ dev      26 rules · 1 agent · 8 references
+  ✓ fetch    1 threshold
+  ✓ general  20 rules · 7 thresholds · 1 agent · 4 references
+  ✓ qa       9 rules · 2 skills · 1 agent · 4 references
+  ✓ shell    1 threshold
+
+refused
+  ✗ turn: refused\.tofu/tools/shell/proxy.yaml: use has to be off or rtk, found
+    "maybe"
+--- stderr

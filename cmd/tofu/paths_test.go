@@ -81,7 +81,7 @@ func TestTheFirstRunCopiesTheOldDirectoryAndLeavesItByteForByte(t *testing.T) {
 	sameTree(t, before, snapshot(t, filepath.Join(parent, sys.StateDirName)), "the copy does not match the old directory")
 
 	said := out.String()
-	for _, want := range []string{".tofu", ".boji", "2 sessions", "5 files", "still there"} {
+	for _, want := range []string{".tofu", ".boji", "2 sessions", "5 files", ".boji kept"} {
 		if !strings.Contains(said, want) {
 			t.Errorf("the sentence does not say %q:\n%s", want, said)
 		}
@@ -252,7 +252,7 @@ func TestTheMoveTakesTheStateAndLeavesWhatThePersonWrote(t *testing.T) {
 	}
 
 	var out bytes.Buffer
-	if moved, failed := moveProjectState(&out, project); moved != 4 || failed != 0 {
+	if moved, failed := movedAndFailed(moveProjectState(&out, project)); moved != 4 || failed != 0 {
 		t.Fatalf("moved %d and failed %d, want 4 and 0:\n%s", moved, failed, out.String())
 	}
 
@@ -272,14 +272,25 @@ func TestTheMoveTakesTheStateAndLeavesWhatThePersonWrote(t *testing.T) {
 	if quota["readings.jsonl"] != before["quota/readings.jsonl"] {
 		t.Fatalf("the quota readings are not under the home: %v", quota)
 	}
-	if said := out.String(); strings.Count(said, "\n") != 1 || !strings.Contains(said, state) || !strings.Contains(said, "sessions") {
+	if said := out.String(); strings.Count(said, "\n") != 1 || !strings.Contains(said, "~/.tofu/projects/"+filepath.Base(state)) || !strings.Contains(said, "sessions") {
 		t.Fatalf("the notice is not one line naming what moved and where:\n%s", said)
 	}
 
 	var second bytes.Buffer
-	if moved, failed := moveProjectState(&second, project); moved+failed != 0 || second.Len() != 0 {
-		t.Fatalf("the second run moved %d, failed %d and said:\n%s", moved, failed, second.String())
+	if moves := moveProjectState(&second, project); len(moves) != 0 || second.Len() != 0 {
+		t.Fatalf("the second run planned %v and said:\n%s", moves, second.String())
 	}
+}
+
+func movedAndFailed(moves []stateMove) (moved, failed int) {
+	for _, move := range moves {
+		if move.Failure != "" {
+			failed++
+			continue
+		}
+		moved++
+	}
+	return moved, failed
 }
 
 func TestAFileAlreadyMovedWithOtherBytesKeepsTheOldCopyAndSaysWhy(t *testing.T) {
@@ -302,7 +313,7 @@ func TestAFileAlreadyMovedWithOtherBytesKeepsTheOldCopyAndSaysWhy(t *testing.T) 
 	}
 
 	var out bytes.Buffer
-	moved, failed := moveProjectState(&out, project)
+	moved, failed := movedAndFailed(moveProjectState(&out, project))
 	if moved != 3 || failed != 1 {
 		t.Fatalf("moved %d and failed %d, want 3 and 1:\n%s", moved, failed, out.String())
 	}
@@ -328,8 +339,8 @@ func TestAProjectThatIsTheHomeMovesItsStateAndLeavesQuotaWhereItIs(t *testing.T)
 		t.Fatal(err)
 	}
 	var out bytes.Buffer
-	if moved, failed := moveProjectState(&out, project); failed != 0 || moved != 0 {
-		t.Fatalf("a home holding only quota moved %d and failed %d:\n%s", moved, failed, out.String())
+	if moves := moveProjectState(&out, project); len(moves) != 0 {
+		t.Fatalf("a home holding only quota planned %v:\n%s", moves, out.String())
 	}
 	if _, err := os.Stat(filepath.Join(project, sys.StateDirName, sys.QuotaDirName, "readings.jsonl")); err != nil {
 		t.Fatalf("the quota under the home was moved: %v", err)

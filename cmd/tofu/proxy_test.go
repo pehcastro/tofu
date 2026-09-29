@@ -15,6 +15,7 @@ import (
 	"strings"
 	"testing"
 
+	"tofu/interface/cli"
 	"tofu/internal/llm"
 	"tofu/internal/turn"
 )
@@ -205,43 +206,53 @@ func TestTheShippedDefaultRecordsNoProxyAndSpawnsNothing(t *testing.T) {
 }
 
 func TestLibraryNamesTheProxySettingAndTheLayerItCameFrom(t *testing.T) {
+	isolateHome(t)
 	project := projectWithProxySheet(t, "use: rtk\ntimeout_ms: 5000\n")
 
-	var out, errOut bytes.Buffer
-	if code := libraryVerb(nil, &out, &errOut); code != exitOK {
-		t.Fatalf("tofu library exited %d: %s\n%s", code, errOut.String(), out.String())
+	code, report, text := libraryJSON(t)
+	if code != exitOK {
+		t.Fatalf("tofu library exited %d:\n%s", code, text)
 	}
-	line := proxyLine(t, out.String())
-	if !strings.Contains(line, "use rtk") || !strings.Contains(line, "project ") || !strings.Contains(line, filepath.Base(project)) {
-		t.Fatalf("tofu library does not name the setting and the layer: %q", line)
+	if report.Data.Proxy != "rtk" || !strings.HasPrefix(report.Data.ProxyFrom, "project ") || !strings.Contains(report.Data.ProxyFrom, filepath.Base(project)) {
+		t.Fatalf("tofu library does not name the setting and the layer: %+v", report.Data)
 	}
-	t.Logf("tofu library\n%s", line)
+	t.Logf("proxy %s from %s", report.Data.Proxy, report.Data.ProxyFrom)
 }
 
 func TestLibraryNamesARefusedProxyFileAndTheFieldThatFailed(t *testing.T) {
+	isolateHome(t)
 	projectWithProxySheet(t, "use: maybe\ntimeout_ms: 5000\n")
 
-	var out, errOut bytes.Buffer
-	if code := libraryVerb(nil, &out, &errOut); code != exitVerdict {
-		t.Fatalf("a refused proxy file must fail the verb, got %d\n%s", code, out.String())
+	code, report, text := libraryJSON(t)
+	if code != exitVerdict || report.OK {
+		t.Fatalf("a refused proxy file must fail the verb, got %d\n%s", code, text)
 	}
-	text := out.String()
-	if !strings.Contains(text, "proxy.yaml") || !strings.Contains(text, "use has to be") {
+	named := false
+	for _, problem := range report.Problems {
+		named = named || strings.Contains(problem.What, "proxy.yaml") && strings.Contains(problem.What, "use has to be")
+	}
+	if !named {
 		t.Fatalf("tofu library does not name the refused file and the field:\n%s", text)
 	}
-	if !strings.Contains(proxyLine(t, text), "use off") {
+	if report.Data.Proxy != "off" {
 		t.Fatalf("a refused file did not leave the setting off:\n%s", text)
 	}
-	t.Logf("tofu library\n%s", text)
+	t.Logf("tofu library --json\n%s", text)
 }
 
-func proxyLine(t *testing.T, text string) string {
+type libraryEnvelope struct {
+	OK       bool          `json:"ok"`
+	Data     libraryReport `json:"data"`
+	Problems []cli.Problem `json:"problems"`
+}
+
+func libraryJSON(t *testing.T) (int, libraryEnvelope, string) {
 	t.Helper()
-	for _, line := range strings.Split(text, "\n") {
-		if strings.HasPrefix(line, "proxy ") {
-			return line
-		}
+	var out, errOut bytes.Buffer
+	code := libraryVerb([]string{jsonFlag}, &out, &errOut)
+	var report libraryEnvelope
+	if err := json.Unmarshal(out.Bytes(), &report); err != nil || errOut.Len() != 0 {
+		t.Fatalf("tofu library --json is not one document, or wrote stderr %q: %v\n%s", errOut.String(), err, out.String())
 	}
-	t.Fatalf("tofu library says nothing about the proxy:\n%s", text)
-	return ""
+	return code, report, out.String()
 }

@@ -1,0 +1,18 @@
+exit 0
+--- stdout
+Changelog · tofu VERSION                                       2 versions
+
+VERSION · 2026-09-29
+  One sentence for the version.
+
+  Added
+    - bold stays, code stays, and a link keeps its text
+    - a bullet long enough to wrap across the width of a piped page a bullet
+      long enough to wrap across the width of a piped page
+
+  Changed
+    - one change
+
+0.0.1 · 2026-01-01
+  the first one
+--- stderr

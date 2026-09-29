@@ -1,0 +1,23 @@
+exit 0
+--- stdout
+{
+  "tofu": "VERSION",
+  "verb": "migrate",
+  "ok": true,
+  "at": "AT",
+  "data": {
+    "dry_run": false,
+    "from": "HOME/project/.tofu",
+    "moves": [],
+    "sessions": [],
+    "skipped": [
+      {
+        "id": "turn-b",
+        "reason": "session: the header of turn-b does not parse: invalid character 'n' looking for beginning of object key string"
+      }
+    ],
+    "written": 0
+  },
+  "problems": []
+}
+--- stderr

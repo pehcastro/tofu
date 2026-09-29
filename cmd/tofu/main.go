@@ -7,7 +7,9 @@ import (
 	"strings"
 	"time"
 
+	"tofu/interface/cli"
 	"tofu/internal/sys"
+	"tofu/library/changelog"
 )
 
 const (
@@ -69,7 +71,7 @@ readable form collapses: doctor, models, agents, usage, context, rules.
 func main() {
 	opensTheApp := len(os.Args) < 2 || os.Args[1] == "--continue"
 	if opensTheApp || os.Args[1] == "migrate" {
-		copyLegacyStateDirs(os.Stdout)
+		copyLegacyStateDirs(os.Stderr)
 	}
 	if wd, err := os.Getwd(); err == nil && opensTheApp {
 		moveProjectState(os.Stderr, wd)
@@ -80,18 +82,19 @@ func main() {
 
 func moveHomeKeys(errOut io.Writer) {
 	migration, err := sys.MigrateHomeKeys()
+	page := cli.Detect(errOut, os.Environ())
 	if err != nil {
-		_, _ = fmt.Fprintf(errOut, "tofu: %s stays where it is, the move into the credential store failed: %v\n", migration.From, err)
+		_ = printUncut(page, errOut, page.ErrorLine(page.Path(migration.From)+" not moved into the credential store: "+err.Error(), ""))
 		return
 	}
 	if len(migration.Moved) == 0 {
 		return
 	}
-	fate := "removed the file"
+	fate := "file removed"
 	if !migration.Removed {
-		fate = "left its other lines in place"
+		fate = "other lines kept"
 	}
-	_, _ = fmt.Fprintf(errOut, "tofu: moved %s from %s into the credential store and %s\n", strings.Join(migration.Moved, ", "), migration.From, fate)
+	_ = printUncut(page, errOut, []string{page.Receipt(cli.Changed, strings.Join(migration.Moved, ", ")+" moved into the credential store · "+fate, migration.From)})
 }
 
 func run(args []string, in io.Reader, out io.Writer, errOut io.Writer) int {
@@ -112,7 +115,7 @@ func run(args []string, in io.Reader, out io.Writer, errOut io.Writer) int {
 	case "version":
 		return version(args[1:], out, errOut)
 	case "changelog":
-		return changelogVerb(args[1:], out, errOut)
+		return changelogVerb(args[1:], changelog.Markdown, out, errOut)
 	case "docs":
 		return docsVerb(args[1:], out, errOut)
 	case "doctor":

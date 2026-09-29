@@ -1,0 +1,5 @@
+exit 2
+--- stdout
+--- stderr
+✗ tofu changelog: unknown argument "--every"
+  → tofu changelog [--all] [--json]

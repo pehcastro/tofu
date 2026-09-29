@@ -1,0 +1,63 @@
+exit 0
+--- stdout
+{
+  "tofu": "VERSION",
+  "verb": "library resolve",
+  "ok": true,
+  "at": "AT",
+  "data": {
+    "name": "probe",
+    "fields": [
+      {
+        "path": "name",
+        "value": "probe",
+        "file": "HOME/project/.tofu/questions/probe@1.yaml",
+        "line": 1
+      },
+      {
+        "path": "domain",
+        "value": "fetch",
+        "file": "HOME/project/.tofu/questions/probe@1.yaml",
+        "line": 2
+      },
+      {
+        "path": "questions_version",
+        "value": "1",
+        "file": "HOME/project/.tofu/questions/probe@1.yaml",
+        "line": 3
+      },
+      {
+        "path": "state[0]",
+        "value": "task",
+        "file": "HOME/project/.tofu/questions/probe@1.yaml",
+        "line": 6
+      },
+      {
+        "path": "questions.needed.type",
+        "value": "noul",
+        "file": "HOME/project/.tofu/questions/probe@1.yaml",
+        "line": 10
+      },
+      {
+        "path": "questions.needed.instructions",
+        "value": "Is the unit needed for the task.",
+        "file": "HOME/project/.tofu/questions/probe@1.yaml",
+        "line": 11
+      },
+      {
+        "path": "questions.needed.criteria.true",
+        "value": "it is",
+        "file": "HOME/project/.tofu/questions/probe@1.yaml",
+        "line": 15
+      },
+      {
+        "path": "questions.needed.criteria.false",
+        "value": "it is not",
+        "file": "HOME/project/.tofu/questions/probe@1.yaml",
+        "line": 16
+      }
+    ]
+  },
+  "problems": []
+}
+--- stderr

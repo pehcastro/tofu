@@ -1,0 +1,24 @@
+exit 0
+--- stdout
+{
+  "tofu": "VERSION",
+  "verb": "changelog",
+  "ok": true,
+  "at": "AT",
+  "data": {
+    "versions": [
+      {
+        "version": "VERSION",
+        "heading": "VERSION - 2026-09-29",
+        "body": "One sentence for the version.\n\n### Added\n\n- **bold** stays, `code` stays, and [a link](x.md) keeps its text\n- a bullet long enough to wrap across the width of a piped page a bullet long enough to wrap across the width of a piped page \n\n### Changed\n\n- one change"
+      },
+      {
+        "version": "0.0.1",
+        "heading": "0.0.1 - 2026-01-01",
+        "body": "the first one"
+      }
+    ]
+  },
+  "problems": []
+}
+--- stderr

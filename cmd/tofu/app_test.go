@@ -77,7 +77,7 @@ func TestVerbTableIsUnchanged(t *testing.T) {
 		{[]string{"check", "--nope"}, exitUsage, "tofu check: "},
 		{[]string{"label", "--nope"}, exitUsage, "tofu label: "},
 		{[]string{"replay", "--nope"}, exitUsage, "tofu replay: "},
-		{[]string{"library", "--nope"}, exitUsage, "tofu library: usage"},
+		{[]string{"library", "--nope"}, exitUsage, "tofu library: unknown argument"},
 		{[]string{"lint", "--nope"}, exitUsage, "tofu lint: usage"},
 		{[]string{"rules", "--nope"}, exitUsage, "tofu rules: "},
 		{[]string{"nosuchverb"}, exitUsage, "unknown verb"},
