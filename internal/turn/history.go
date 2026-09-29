@@ -1,6 +1,7 @@
 package turn
 
 import (
+	"strconv"
 	"time"
 
 	"tofu/internal/llm"
@@ -56,7 +57,7 @@ func historyOf(messages []llm.Message) recall.Conversation {
 	return conversation
 }
 
-func forkHistory(artifacts Artifacts, budget recall.Budget, task string, messages []llm.Message, forced ForkKind) (*Fork, []llm.Message, error) {
+func forkHistory(artifacts Artifacts, budget recall.Budget, task string, messages []llm.Message, forced ForkKind, number, most int) (*Fork, []llm.Message, error) {
 	ended := historyOf(messages)
 	kind := forced
 	if kind == "" {
@@ -70,6 +71,11 @@ func forkHistory(artifacts Artifacts, budget recall.Budget, task string, message
 	if err != nil {
 		return nil, nil, err
 	}
+	counted := "this is fork " + strconv.Itoa(number)
+	if most > 0 {
+		counted += " of at most " + strconv.Itoa(most) + ", and the turn stops at the cap"
+	}
+	carry.Text = counted + ".\n" + carry.Text
 	var begun []llm.Message
 	for _, message := range messages {
 		if message.Role == llm.RoleSystem {

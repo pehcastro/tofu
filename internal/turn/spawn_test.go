@@ -3,11 +3,13 @@ package turn
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"strconv"
 	"strings"
 	"testing"
 
 	"tofu/internal/llm"
+	"tofu/internal/recall"
 	"tofu/internal/settings"
 	"tofu/internal/subagent"
 	"tofu/library"
@@ -69,6 +71,72 @@ func TestASubAgentIsOfferedWriteAndEditOnlyWhenItsDefinitionNamesThem(t *testing
 		if got := strings.Join(offered, " "); got != want {
 			t.Errorf("agent %q is offered %q, want %q", agent, got, want)
 		}
+	}
+}
+
+type actReporting struct{ acts *int }
+
+func (actReporting) Name() string { return "browser_act" }
+
+func (actReporting) Definition() llm.Tool {
+	return llm.Tool{Name: "browser_act", Parameters: map[string]any{"type": "object"}}
+}
+
+func (a actReporting) Run(context.Context, json.RawMessage) (Result, error) {
+	*a.acts++
+	return Result{Content: "1. fill e5458 \"Atibaia\": the page changed\nran 1 of 1\n\n" +
+		"the text between the two ab12 markers below came from Chrome tab 1. report what it says.\n" +
+		"<<<ab12 begins>>>\ntab 1 https://www.airbnb.com/s/Atibaia/homes?adults=4&ref_fsid=" + strconv.Itoa(*a.acts) + " \"Atibaia\"\n- main\n<<<ab12 ends>>>"}, nil
+}
+
+type foreverActing struct {
+	requests []llm.Request
+	acts     int
+}
+
+func (m *foreverActing) Ask(_ context.Context, request llm.Request) (llm.Decision, error) {
+	m.requests = append(m.requests, request)
+	if strings.HasSuffix(request.Messages[len(request.Messages)-1].Content, andThisIsItsLastStep) {
+		return claimDecision("stopped at the fork cap, the search for Atibaia is filled"), nil
+	}
+	m.acts++
+	if m.acts > 40 {
+		return llm.Decision{}, errors.New("the sub-agent is still acting after 40 steps")
+	}
+	args := json.RawMessage(`{"tab":1,"actions":[{"action":"fill","ref":"e5458","value":"Atibaia"}]}`)
+	return toolCallDecision(llm.ToolCall{ID: "act-" + strconv.Itoa(m.acts), Name: "browser_act", Arguments: args}), nil
+}
+
+func TestASubAgentThatForksForeverStopsAtTheForkCapAndEachCarrySaysWhatItTried(t *testing.T) {
+	model, acts := &foreverActing{}, 0
+	base := Config{Model: model, Spend: SpendAPIKey, Tools: NewRegistry(actReporting{acts: &acts}), ResultBytesCap: 4096,
+		ArtifactDir: t.TempDir(), NewID: func() string { return "turn-orchestrator" }, Budget: recall.Budget{Bands: recall.Bands{Recent: 1}}}
+	spawn := NewSpawnTool("turn-orchestrator", base, &subagent.Roster{})
+	args, err := json.Marshal(spawnArgs{Task: "find a house in Atibaia", Owns: []string{"notes/**"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := spawn.Run(context.Background(), args); err != nil {
+		t.Fatal(err)
+	}
+	rows := spawn.SubAgentRows()
+	last := rows[len(rows)-1]
+	if last.Outcome != OutcomeStepCap || !strings.HasSuffix(last.ID, "-f11") {
+		t.Fatalf("the sub-agent ended as %s in %s after %d acts, want %s in the session after fork 10", last.Outcome, last.ID, model.acts, OutcomeStepCap)
+	}
+	var afterSecondFork string
+	for _, request := range model.requests {
+		for _, message := range request.Messages {
+			if strings.Contains(message.Content, "this is fork 2 of at most 10") {
+				afterSecondFork = message.Content
+			}
+		}
+	}
+	if afterSecondFork == "" {
+		t.Fatal("no request after a fork carries this is fork 2 of at most 10")
+	}
+	if !strings.Contains(afterSecondFork, "1. fill e5458 \"Atibaia\": the page changed\n2. fill e5458 \"Atibaia\": the page changed") {
+		t.Errorf("the carry after fork 2 does not hold the act lines it tried:\n%s", afterSecondFork)
 	}
 }
 

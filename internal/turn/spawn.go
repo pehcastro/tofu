@@ -598,6 +598,7 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 		owned = append(owned, nested)
 	}
 	subAgent := t.base
+	subAgent.Caps.MaxSteps, subAgent.Caps.MaxForks = cmp.Or(subAgent.Caps.MaxSteps, konst.SubAgentMaxSteps), konst.SubAgentMaxForks
 	subAgent.System, subAgent.Environment = system, environment+t.briefFiles(ctx, args.Task)
 	subAgent.SpawnedFrom = t.orchestratorID
 	subAgent.Session, subAgent.Log, subAgent.Turn, subAgent.SpawnedBy = "", site.log, site.turn, site.call

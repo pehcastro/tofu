@@ -64,14 +64,14 @@ type toolArgs struct {
 	URL     string `json:"url"`
 }
 
-func sourceOf(entry Entry) string {
+func sourceOf(entry Entry, fetched map[string]string) string {
 	_, args, _ := strings.Cut(entry.SupersedeKey, " ")
 	whole := oneLine(entry.SupersedeKey, konst.CarrySignpostBytes)
 	var parsed toolArgs
 	if json.Unmarshal([]byte(args), &parsed) != nil {
 		return whole
 	}
-	return cmp.Or(parsed.Path, parsed.Handle, parsed.Pattern, parsed.Command, parsed.URL, shownPage(entry), whole)
+	return cmp.Or(parsed.Path, fetched[parsed.Handle], parsed.Handle, parsed.Pattern, parsed.Command, stableURL(parsed.URL), shownPage(entry), whole)
 }
 
 func shownPage(entry Entry) string {
@@ -82,7 +82,25 @@ func shownPage(entry Entry) string {
 	if json.Unmarshal([]byte(args), &parsed) != nil || parsed.Tab == nil {
 		return ""
 	}
-	return pageURL(entry.Text)
+	return stableURL(pageURL(entry.Text))
+}
+
+func stableURL(raw string) string {
+	page, query, found := strings.Cut(raw, "?")
+	if !found {
+		return raw
+	}
+	var kept []string
+	for _, pair := range strings.Split(query, "&") {
+		name, _, _ := strings.Cut(strings.ToLower(pair), "=")
+		if !slices.Contains(strings.Fields(konst.CarryVolatileQueryKeys), name) && !strings.Contains(name, konst.CarryVolatileQueryPart) {
+			kept = append(kept, pair)
+		}
+	}
+	if len(kept) == 0 {
+		return page
+	}
+	return page + "?" + strings.Join(kept, "&")
 }
 
 func supersedeKey(entry Entry) string {
@@ -121,7 +139,11 @@ func pageURL(text string) string {
 
 func signpostOf(text, source string, limit int) string {
 	lead, _, body := unwrapped(text)
-	return oneLine(strings.Replace(lead+body, source, "", 1), limit)
+	content := lead + body
+	if shown := pageURL(text); shown != "" {
+		content = strings.Replace(content, shown, "", 1)
+	}
+	return oneLine(strings.Replace(content, source, "", 1), limit)
 }
 
 func worthKeeping(entry Entry) bool {
@@ -157,8 +179,12 @@ func knownFacts(c Conversation) []string {
 func Distil(store *Store, c Conversation, signpostBytes int) ([]string, []CarriedResult, error) {
 	sheet := knownFacts(c)
 	at := make(map[string]int, len(sheet))
+	fetched := make(map[string]string, len(sheet))
 	for i, line := range sheet {
 		at[factSource(line)] = i
+		if handle := factHandle(line); handle != "" {
+			fetched[handle] = factSource(line)
+		}
 	}
 	newest := make(map[string]int, len(c.Entries))
 	sources := make([]string, len(c.Entries))
@@ -166,7 +192,7 @@ func Distil(store *Store, c Conversation, signpostBytes int) ([]string, []Carrie
 		if !worthKeeping(entry) {
 			continue
 		}
-		sources[i] = sourceOf(entry)
+		sources[i] = sourceOf(entry, fetched)
 		newest[sources[i]] = i
 	}
 	var kept []CarriedResult

@@ -44,6 +44,7 @@ func readsTheBrowser(tool string) bool {
 
 type Caps struct {
 	MaxSteps         int
+	MaxForks         int
 	LoopGuardRepeats int
 	LoopGuardWindow  int
 }
@@ -462,13 +463,18 @@ func Run(ctx context.Context, config Config) (Row, error) {
 						moved, moving, forced = next, true, ForkAccountSpent
 					}
 				}
-				fork, begun, err := forkHistory(artifacts, budget, config.FirstUserMessage(), messages, forced)
+				fork, begun, err := forkHistory(artifacts, budget, config.FirstUserMessage(), messages, forced, forks+1, config.Caps.MaxForks)
 				if err == nil {
 					err = ctx.Err()
 				}
 				if err != nil {
 					keep(stepRow)
 					return finish(OutcomeError), err
+				}
+				if fork != nil && config.Caps.MaxForks > 0 && forks >= config.Caps.MaxForks {
+					keep(stepRow)
+					lead := "this turn reached its cap of " + strconv.Itoa(config.Caps.MaxForks) + " forks, and the work is not finished"
+					return endAt(OutcomeStepCap, lead, step, messages), nil
 				}
 				if fork != nil {
 					forks++

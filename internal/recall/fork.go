@@ -1,6 +1,7 @@
 package recall
 
 import (
+	"strconv"
 	"strings"
 	"unicode"
 
@@ -32,6 +33,32 @@ const carryPreamble = "this session continues one that reached its context budge
 
 const carryLastWord = "the last thing it said or did:\n"
 
+const (
+	carryActs = "the last browser actions it took, oldest first, each with what it did to the page:\n"
+	actTool   = "browser_act"
+)
+
+func lastActs(c Conversation) []string {
+	var acts []string
+	for _, entry := range c.Entries {
+		lines := ""
+		switch entry.Tool {
+		case "":
+			_, carried, _ := strings.Cut(entry.Text, carryActs)
+			lines, _, _ = strings.Cut(carried, carryLastWord)
+		case actTool:
+			lines, _, _ = unwrapped(entry.Text)
+		}
+		for _, line := range strings.Split(lines, "\n") {
+			number, act, numbered := strings.Cut(line, ". ")
+			if _, err := strconv.Atoi(number); numbered && err == nil {
+				acts = append(acts, act)
+			}
+		}
+	}
+	return acts[max(0, len(acts)-konst.CarryActLines):]
+}
+
 func HandleCarry(store *Store, cfg Config, c Conversation) (Carry, error) {
 	return buildCarry(store, c, konst.FactSignpostBytes)
 }
@@ -50,6 +77,12 @@ func buildCarry(store *Store, c Conversation, signpostBytes int) (Carry, error) 
 	for _, line := range facts {
 		text.WriteString(line)
 		text.WriteString("\n")
+	}
+	if acts := lastActs(c); len(acts) > 0 {
+		text.WriteString(carryActs)
+		for i, act := range acts {
+			text.WriteString(strconv.Itoa(i+1) + ". " + act + "\n")
+		}
 	}
 	text.WriteString(carryLastWord)
 	text.WriteString(lastWord(c))

@@ -16,6 +16,10 @@ const (
 	CarrySignpostBytes = 120
 	FactSignpostBytes  = 64
 	FactSheetLines     = 64
+	CarryActLines      = 10
+
+	CarryVolatileQueryKeys = "ref_fsid source_impression_id federated_search_session_id"
+	CarryVolatileQueryPart = "session"
 )
 
 const (
@@ -120,6 +124,8 @@ const (
 	SubAgentWarmMillis      = 8000
 	SubAgentSleepSeconds    = 5
 	SubAgentAskMillis       = 30000
+	SubAgentMaxForks        = 10
+	SubAgentMaxSteps        = 150
 
 	OrchestratorSourceLinesPerTurn = 10
 )
@@ -234,3 +240,5 @@ const (
 	MotionEmptyTileGrey         = 0xdd
 	MotionCompareTakesAdvised   = 3
 )
+
+const BrowserDeltaWholePercent = 70

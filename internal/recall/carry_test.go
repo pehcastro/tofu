@@ -54,3 +54,29 @@ func TestEachListingReadOnOneTabSurvivesAForkWithItsWholeUrlAndItsContent(t *tes
 		}
 	}
 }
+
+func TestAPageReadTwiceUnderAFreshRefFsidAndItsArtifactFetchKeyAsOnePage(t *testing.T) {
+	page := "https://www.airbnb.com/s/Atibaia/homes?adults=4&place_id=ChIJ&ref_fsid="
+	observe := func(step int, fsid string) recall.Entry {
+		return recall.Entry{Step: step, Tool: "browser_observe", SupersedeKey: `browser_observe {"tab":1}`,
+			Text: web.Untrusted("Chrome tab 1", "tab 1 "+page+fsid+" \"Atibaia\"\n- heading \"Houses in Atibaia\"")}
+	}
+	store := recall.NewStore(t.TempDir())
+	first, _, err := recall.Distil(store, recall.Conversation{Entries: []recall.Entry{observe(0, "a1")}}, 120)
+	if err != nil {
+		t.Fatal(err)
+	}
+	handle := strings.TrimPrefix(strings.Split(strings.Split(first[0], ", artifact ")[1], ",")[0], " ")
+	fetch := recall.Entry{Step: 2, Tool: "artifact_fetch", SupersedeKey: `artifact_fetch {"handle":"` + handle + `","offset":0,"length":400}`, Text: "tab 1 houses in Atibaia"}
+	sheet, _, err := recall.Distil(store, recall.Conversation{Facts: first, Entries: []recall.Entry{observe(1, "b2"), fetch}}, 120)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(sheet) != 1 {
+		t.Errorf("one page read under two ref_fsid values and fetched once holds %d fact lines, want 1:\n%s", len(sheet), strings.Join(sheet, "\n"))
+	}
+	if other, _, _ := recall.Distil(store, recall.Conversation{Entries: []recall.Entry{observe(0, "a1"), {Step: 1, Tool: "browser_observe", SupersedeKey: `browser_observe {"tab":1}`,
+		Text: web.Untrusted("Chrome tab 1", "tab 1 "+strings.Replace(page, "ChIJ", "Other", 1)+"a1 \"Elsewhere\"")}}}, 120); len(other) != 2 {
+		t.Errorf("two places told apart only by place_id key as one:\n%s", strings.Join(other, "\n"))
+	}
+}
