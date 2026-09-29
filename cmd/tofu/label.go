@@ -25,8 +25,8 @@ type labelReceipt struct {
 }
 
 func labelVerb(args []string, out, errOut io.Writer, now func() time.Time) int {
-	o := verbOutput{verb: "label", usageLine: labelUsage, asJSON: slices.Contains(args, jsonFlag), out: out, errOut: errOut}
-	args = slices.DeleteFunc(slices.Clone(args), func(arg string) bool { return arg == jsonFlag })
+	o := verbOutput{verb: "label", usageLine: labelUsage, asJSON: jsonAsked(args), out: out, errOut: errOut}
+	args = withoutJSON(args)
 	last := slices.Contains(args, "--last")
 	args = slices.DeleteFunc(args, func(arg string) bool { return arg == "--last" })
 	operands := 2

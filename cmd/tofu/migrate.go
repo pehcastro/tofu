@@ -118,14 +118,13 @@ func moveProjectState(out io.Writer, project string) []stateMove {
 }
 
 func migrateVerb(args []string, out, errOut io.Writer) int {
-	o := verbOutput{verb: "migrate", usageLine: migrateUsage, out: out, errOut: errOut}
+	o := verbOutput{verb: "migrate", usageLine: migrateUsage, asJSON: jsonAsked(args), out: out, errOut: errOut}
 	report := migrateReport{Moves: []stateMove{}, Sessions: []migratedSession{}, Skipped: []skippedSession{}}
 	for _, arg := range args {
 		switch arg {
 		case "--dry-run":
 			report.DryRun = true
 		case jsonFlag:
-			o.asJSON = true
 		default:
 			return o.usage(errors.New("unknown argument " + strconv.Quote(arg)))
 		}

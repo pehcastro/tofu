@@ -96,18 +96,25 @@ func (p Page) verdict(v Verdict) string {
 }
 
 func (p Page) Title(subject string, facts []string, v Verdict) []string {
-	left := p.Subject(subject)
-	if len(facts) > 0 {
-		left += p.Label(detailSeparator + strings.Join(facts, detailSeparator))
+	head, right, detail := p.Subject(subject), p.verdict(v), strings.Join(facts, detailSeparator)
+	withFacts := head
+	if detail != "" {
+		withFacts += p.Label(detailSeparator + detail)
 	}
-	right := p.verdict(v)
+	beside := func(left string) (string, bool) {
+		room := p.Width - widget.Cells(left) - widget.Cells(right)
+		return left + strings.Repeat(" ", max(room, 0)) + right, room >= len(Gap)
+	}
 	if right == "" {
-		return []string{left}
+		return []string{withFacts}
 	}
-	if room := p.Width - widget.Cells(left) - widget.Cells(right); room >= len(Gap) {
-		return []string{left + strings.Repeat(" ", room) + right}
+	if line, fits := beside(withFacts); fits {
+		return []string{line}
 	}
-	return []string{left, right}
+	if line, fits := beside(head); fits && detail != "" {
+		return []string{line, indent + p.Label(detail)}
+	}
+	return []string{withFacts, right}
 }
 
 func (p Page) Section(name string, v Verdict) string {

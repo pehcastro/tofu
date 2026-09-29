@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -127,15 +128,14 @@ type doctorReport struct {
 }
 
 func doctor(args []string, out, errOut io.Writer) int {
-	asJSON, imports := false, false
+	asJSON, imports := jsonAsked(args), false
 	for _, arg := range args {
 		switch arg {
 		case jsonFlag:
-			asJSON = true
 		case importsFlag:
 			imports = true
 		default:
-			return printFailure(errOut, exitUsage, "tofu doctor: unknown argument "+strconv.Quote(arg), doctorUsage)
+			return verbOutput{verb: "doctor", usageLine: doctorUsage, asJSON: asJSON, out: out, errOut: errOut}.usage(errors.New("unknown argument " + strconv.Quote(arg)))
 		}
 	}
 	if imports {
@@ -160,6 +160,7 @@ func doctor(args []string, out, errOut io.Writer) int {
 	return exitVerdict
 }
 
+//nolint:unparam
 func printFailure(errOut io.Writer, code int, what, hint string) int {
 	page := cli.Detect(errOut, os.Environ())
 	_ = page.Print(errOut, page.ErrorLine(what, hint))

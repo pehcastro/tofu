@@ -47,7 +47,7 @@ func jevCases() []jevCase {
 		{name: "sift-empty", args: []string{"sift"}, code: exitUsage, coloured: true},
 		{name: "sift-usage", args: []string{"sift", "--arm", "nope"}, code: exitUsage, usage: true, coloured: true},
 		{name: "lint", args: []string{"lint", "comments", "dirty"}, code: exitVerdict},
-		{name: "lint-clean", args: []string{"lint", "comments", "clean"}, code: exitOK},
+		{name: "lint-clean", args: []string{"lint", "comments", "clean"}, code: exitOK, coloured: true},
 		{name: "lint-usage", args: []string{"lint"}, code: exitUsage, usage: true, coloured: true},
 	}
 }

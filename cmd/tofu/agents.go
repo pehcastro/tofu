@@ -4,7 +4,6 @@ import (
 	"errors"
 	"io"
 	"os"
-	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -33,9 +32,9 @@ func agentsVerb(args []string, out, errOut io.Writer) int {
 			return agentsRemoveVerb(args[1:], out, errOut)
 		}
 	}
-	o := verbOutput{verb: "agents", usageLine: agentsUsage, asJSON: slices.Equal(args, []string{jsonFlag}), out: out, errOut: errOut}
-	if len(args) > 0 && !o.asJSON {
-		return o.usage(errors.New("unknown argument " + strconv.Quote(args[0])))
+	o := verbOutput{verb: "agents", usageLine: agentsUsage, asJSON: jsonAsked(args), out: out, errOut: errOut}
+	if unknown := withoutJSON(args); len(unknown) > 0 {
+		return o.usage(errors.New("unknown argument " + strconv.Quote(unknown[0])))
 	}
 	found, err := discoverAgents()
 	if err != nil {

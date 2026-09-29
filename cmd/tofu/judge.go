@@ -31,7 +31,6 @@ type judgeOpts struct {
 	dryRun   bool
 	noCache  bool
 	noRule   bool
-	asJSON   bool
 	lintPath string
 }
 
@@ -51,12 +50,11 @@ type questionFinding struct {
 }
 
 func judgeVerb(args []string, in io.Reader, out, errOut io.Writer) int {
-	o := verbOutput{verb: "judge", usageLine: judgeUsage, out: out, errOut: errOut}
+	o := verbOutput{verb: "judge", usageLine: judgeUsage, asJSON: jsonAsked(args), out: out, errOut: errOut}
 	opts, err := parseJudgeArgs(args)
 	if err != nil {
 		return o.usage(err)
 	}
-	o.asJSON = opts.asJSON
 	if opts.lintPath != "" {
 		o.verb = "judge --lint"
 		return judgeLint(o, opts.lintPath)
@@ -142,7 +140,6 @@ func parseJudgeArgs(args []string) (judgeOpts, error) {
 		case "--no-rule":
 			opts.noRule = true
 		case jsonFlag:
-			opts.asJSON = true
 		case "--lint":
 			i++
 			if i >= len(args) {

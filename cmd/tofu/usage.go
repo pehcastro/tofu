@@ -3,9 +3,10 @@ package main
 import (
 	"cmp"
 	"context"
+	"errors"
 	"fmt"
 	"io"
-	"os"
+	"slices"
 	"strconv"
 	"time"
 
@@ -62,47 +63,25 @@ type usageReport struct {
 	Fullest    string             `json:"fullest_window,omitempty"`
 	Providers  []credentialReport `json:"providers"`
 	SpendLimit string             `json:"spend_limit"`
+	Missing    []doctorBlocker    `json:"missing,omitempty"`
 }
 
 func usageVerb(args []string, out, errOut io.Writer) int {
-	asJSON, history := false, false
+	o := verbOutput{verb: "usage", usageLine: usageFlags, asJSON: jsonAsked(args), out: out, errOut: errOut}
 	for _, arg := range args {
-		switch arg {
-		case jsonFlag:
-			asJSON = true
-		case historyFlag:
-			history = true
-		default:
-			return printFailure(errOut, exitUsage, "tofu usage: unknown argument "+strconv.Quote(arg), usageFlags)
+		if arg != jsonFlag && arg != historyFlag {
+			return o.usage(errors.New("unknown argument " + strconv.Quote(arg)))
 		}
 	}
-	if history {
-		return usageHistoryVerb(out, errOut, asJSON)
+	if slices.Contains(args, historyFlag) {
+		return usageHistoryVerb(out, errOut, o.asJSON)
 	}
 	now := time.Now()
 	report, err := readUsage(now)
 	if err != nil {
-		return usageFail(errOut, err)
+		return o.fail(err)
 	}
-	var problems []cli.Problem
-	for _, provider := range report.Providers {
-		if provider.State != usageServingState {
-			problems = append(problems, cli.Problem{What: provider.Provider + ": " + provider.State})
-		}
-	}
-	if report.State == usageNone {
-		problems = blockerProblems(doctorBlockers())
-	}
-	if asJSON {
-		err = writeJSON(out, cli.Envelope{Verb: "usage", OK: len(problems) == 0, At: now, Data: report, Problems: problems})
-	} else {
-		page := cli.Detect(out, os.Environ())
-		err = page.Print(out, usagePage(page, report, now))
-	}
-	if err != nil {
-		return usageFail(errOut, err)
-	}
-	return exitOK
+	return o.done(true, report, func(page cli.Page) []string { return usagePage(page, report, now) })
 }
 
 func usageFail(errOut io.Writer, err error) int {
@@ -116,7 +95,7 @@ func readUsage(now time.Time) (usageReport, error) {
 	}
 	report := usageReport{State: usageServing, Providers: credentialReports(results, now), SpendLimit: quota.SpendLimitLine()}
 	if len(results) == 0 {
-		report.State = usageNone
+		report.State, report.Missing = usageNone, doctorBlockers()
 		return report, nil
 	}
 	fullest := -1.0
@@ -141,7 +120,7 @@ func usagePage(page cli.Page, report usageReport, now time.Time) []string {
 		verdict.Mark = cli.Warn
 	case usageNone:
 		lines := append(page.Title("Usage", nil, cli.Verdict{Mark: cli.Idle, Text: "none signed in"}), "")
-		return append(lines, blockerRows(page, doctorBlockers())...)
+		return append(lines, blockerRows(page, report.Missing)...)
 	}
 	lines := page.Title("Usage", []string{strconv.Itoa(len(report.Providers)) + " signed in"}, verdict)
 	for i, provider := range report.Providers {

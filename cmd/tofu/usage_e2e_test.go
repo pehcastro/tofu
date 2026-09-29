@@ -23,19 +23,21 @@ const (
 	usageEnvelopeWithAKeyAndNothingSignedIn = `{
   "tofu": "VERSION",
   "verb": "usage",
-  "ok": false,
+  "ok": true,
   "at": "AT",
   "data": {
     "state": "none",
     "providers": [],
-    "spend_limit": "spend limit: tofu sets none, an api key's spending limit is the provider's, set on the account that issued the key"
+    "spend_limit": "spend limit: tofu sets none, an api key's spending limit is the provider's, set on the account that issued the key",
+    "missing": [
+      {
+        "label": "claude-sub",
+        "what": "no subscription is signed in, so no model can answer",
+        "command": "tofu login claude-sub"
+      }
+    ]
   },
-  "problems": [
-    {
-      "what": "claude-sub: no subscription is signed in, so no model can answer",
-      "hint": "tofu login claude-sub"
-    }
-  ]
+  "problems": []
 }
 `
 

@@ -21,7 +21,8 @@ func pieces(page Page) map[string][]string {
 		"title": append(append(
 			page.Title("Model reload", nil, Verdict{Warn, "2 new · 1 changed · 1 failed"}),
 			page.Title("Accounts", []string{"3 signed in"}, Verdict{Warn, "1 needs attention"})...),
-			page.Title("A subject long enough that the verdict cannot share its line at eighty columns wide", nil, Verdict{Done, "installed"})...),
+			append(page.Title("A subject long enough that the verdict cannot share its line at eighty columns wide", nil, Verdict{Done, "installed"}),
+				page.Title("Reload", []string{page.Path(sampleHome + "/AppData/Local/Temp/claude/F--localhost-ephem-sh-bob/872cba54-4f40-466d-99dd-a6580cd53089/scratchpad/drive17-proj-2593")}, Verdict{Done, "first reload"})...)...),
 		"section": {
 			page.Section("claude-sub", Verdict{Done, "23 served"}),
 			page.Section("keys", Verdict{}),

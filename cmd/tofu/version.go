@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"io"
 	"os"
 	"strconv"
@@ -18,12 +19,9 @@ type versionReport struct {
 }
 
 func version(args []string, out, errOut io.Writer) int {
-	asJSON := false
-	for _, arg := range args {
-		if arg != jsonFlag {
-			return printFailure(errOut, exitUsage, "tofu version: unknown argument "+strconv.Quote(arg), "tofu version [--json]")
-		}
-		asJSON = true
+	asJSON := jsonAsked(args)
+	if unknown := withoutJSON(args); len(unknown) > 0 {
+		return verbOutput{verb: "version", usageLine: "tofu version [--json]", asJSON: asJSON, out: out, errOut: errOut}.usage(errors.New("unknown argument " + strconv.Quote(unknown[0])))
 	}
 	report := versionReport{Version: frame.Release(sys.Version(), sys.BuildRevision()), Commit: sys.BuildRevision(), Go: sys.GoVersion()}
 	var err error

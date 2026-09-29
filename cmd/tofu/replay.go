@@ -34,7 +34,6 @@ type replayOpts struct {
 	sets    map[string]float64
 	since   time.Duration
 	verbose bool
-	json    bool
 }
 
 type replayRule struct {
@@ -77,12 +76,11 @@ type replayReport struct {
 }
 
 func replayVerb(args []string, out, errOut io.Writer, now func() time.Time) int {
-	o := verbOutput{verb: "replay", usageLine: replayUsage, out: out, errOut: errOut}
+	o := verbOutput{verb: "replay", usageLine: replayUsage, asJSON: jsonAsked(args), out: out, errOut: errOut}
 	opts, err := parseReplayArgs(args)
 	if err != nil {
 		return o.usage(err)
 	}
-	o.asJSON = opts.json
 	dir, err := sys.LogDir()
 	if err != nil {
 		return o.fail(err)
@@ -108,7 +106,6 @@ func parseReplayArgs(args []string) (replayOpts, error) {
 			opts.verbose = true
 			continue
 		case jsonFlag:
-			opts.json = true
 			continue
 		case "--point", "--set", "--since":
 		default:

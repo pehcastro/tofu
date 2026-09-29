@@ -78,7 +78,7 @@ func TestCommentViolations(t *testing.T) {
 }
 
 func TestTreeCommentViolationsSelf(t *testing.T) {
-	violations, err := TreeCommentViolations(".")
+	violations, _, err := TreeCommentViolations(".")
 	if err != nil {
 		t.Fatalf("TreeCommentViolations: %v", err)
 	}

@@ -23,7 +23,6 @@ const checkUsage = `tofu check "<command>" [--quiet] [--json]`
 type checkOpts struct {
 	command string
 	quiet   bool
-	asJSON  bool
 }
 
 type checkReport struct {
@@ -33,12 +32,11 @@ type checkReport struct {
 }
 
 func checkVerb(args []string, out, errOut io.Writer) int {
-	o := verbOutput{verb: "check", usageLine: checkUsage, out: out, errOut: errOut}
+	o := verbOutput{verb: "check", usageLine: checkUsage, asJSON: jsonAsked(args), out: out, errOut: errOut}
 	opts, err := parseCheckArgs(args)
 	if err != nil {
 		return o.usage(err)
 	}
-	o.asJSON = opts.asJSON
 	row, err := checkedRow(opts.command)
 	if err != nil {
 		return failed(o, err)
@@ -103,7 +101,6 @@ func parseCheckArgs(args []string) (checkOpts, error) {
 		case arg == "--quiet":
 			opts.quiet = true
 		case arg == jsonFlag:
-			opts.asJSON = true
 		case strings.HasPrefix(arg, "--"):
 			return checkOpts{}, fmt.Errorf("unknown argument %q", arg)
 		case opts.command != "":

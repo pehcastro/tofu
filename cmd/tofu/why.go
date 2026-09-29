@@ -60,12 +60,11 @@ func (l whyListing) decision() ledger.Row {
 }
 
 func whyVerb(args []string, out, errOut io.Writer, now func() time.Time) int {
-	o := verbOutput{verb: "why", usageLine: whyUsage, out: out, errOut: errOut}
+	o := verbOutput{verb: "why", usageLine: whyUsage, asJSON: jsonAsked(args), out: out, errOut: errOut}
 	opts, err := parseWhyArgs(args)
 	if err != nil {
 		return o.usage(err)
 	}
-	o.asJSON = opts.json
 	dir, err := sys.LogDir()
 	if err != nil {
 		return o.fail(err)

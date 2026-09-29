@@ -110,9 +110,9 @@ func sessionOperands(subcommand string) (string, int, bool) {
 }
 
 func sessionVerb(args []string, in io.Reader, out, errOut io.Writer) int {
-	handles, asJSON, err := verbArgs(args[min(1, len(args)):])
-	o := verbOutput{verb: "session", usageLine: sessionSubcommands, asJSON: asJSON, out: out, errOut: errOut}
-	if len(args) == 0 {
+	handles, _, err := verbArgs(args[min(1, len(args)):])
+	o := verbOutput{verb: "session", usageLine: sessionSubcommands, asJSON: jsonAsked(args), out: out, errOut: errOut}
+	if len(withoutJSON(args)) == 0 {
 		return o.usage(errors.New("no subcommand"))
 	}
 	operands, wanted, known := sessionOperands(args[0])

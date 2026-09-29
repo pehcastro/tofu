@@ -17,9 +17,9 @@ import (
 const shellsSubcommands = "tofu shells list|log|stop|restart <name> [--json]"
 
 func shellsVerb(args []string, out, errOut io.Writer) int {
-	names, asJSON, err := verbArgs(args[min(1, len(args)):])
-	o := verbOutput{verb: "shells", usageLine: shellsSubcommands, asJSON: asJSON, out: out, errOut: errOut}
-	if len(args) == 0 {
+	names, _, err := verbArgs(args[min(1, len(args)):])
+	o := verbOutput{verb: "shells", usageLine: shellsSubcommands, asJSON: jsonAsked(args), out: out, errOut: errOut}
+	if len(withoutJSON(args)) == 0 {
 		return o.usage(errors.New("no subcommand"))
 	}
 	wanted := 1

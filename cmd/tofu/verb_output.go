@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"slices"
 	"strings"
 	"time"
 
@@ -15,6 +16,12 @@ const (
 	reportIndent = "  "
 	jsonFlag     = "--json"
 )
+
+func jsonAsked(args []string) bool { return slices.Contains(args, jsonFlag) }
+
+func withoutJSON(args []string) []string {
+	return slices.DeleteFunc(slices.Clone(args), func(arg string) bool { return arg == jsonFlag })
+}
 
 func relativeToRoot(root, text string) string {
 	return strings.ReplaceAll(text, root+string(os.PathSeparator), "")
@@ -38,8 +45,7 @@ type verbOutput struct {
 }
 
 func (o verbOutput) usage(err error) int {
-	o.errorLine(cli.Problem{What: err.Error(), Hint: o.usageLine})
-	return exitUsage
+	return o.refuse(exitUsage, cli.Problem{What: err.Error(), Hint: o.usageLine})
 }
 
 func (o verbOutput) fail(err error) int {
@@ -48,12 +54,16 @@ func (o verbOutput) fail(err error) int {
 	if errors.As(err, &hinted) {
 		problem = cli.Problem(hinted)
 	}
+	return o.refuse(exitVerdict, problem)
+}
+
+func (o verbOutput) refuse(code int, problem cli.Problem) int {
 	if o.asJSON {
 		_ = writeJSON(o.out, cli.Envelope{Verb: o.verb, At: time.Now(), Problems: []cli.Problem{problem}})
-		return exitVerdict
+		return code
 	}
 	o.errorLine(problem)
-	return exitVerdict
+	return code
 }
 
 func (o verbOutput) errorLine(problem cli.Problem) {

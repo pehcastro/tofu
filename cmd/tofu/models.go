@@ -26,7 +26,7 @@ import (
 )
 
 const (
-	modelsUsage      = "usage: tofu models [reload] [--json]"
+	modelsUsage      = "tofu models [reload] [--json]"
 	registryFileName = "model-windows.json"
 	registryDirMode  = 0o755
 	shippedLayer     = "library"
@@ -131,7 +131,7 @@ func verbFailed(out, errOut io.Writer, verb string, asJSON bool, err error) int 
 }
 
 func modelsVerb(args []string, out, errOut io.Writer) int {
-	reload, asJSON := false, false
+	reload, asJSON := false, jsonAsked(args)
 	for _, arg := range args {
 		switch arg {
 		case "reload":
@@ -140,10 +140,8 @@ func modelsVerb(args []string, out, errOut io.Writer) int {
 			_, _ = fmt.Fprintf(errOut, "tofu models %s is now %s\n", arg, models.ReloadVerb)
 			reload = true
 		case jsonFlag:
-			asJSON = true
 		default:
-			_, _ = fmt.Fprintf(errOut, "tofu models: unknown flag %q, %s\n", arg, modelsUsage)
-			return exitUsage
+			return verbOutput{verb: "models", usageLine: modelsUsage, asJSON: asJSON, out: out, errOut: errOut}.usage(errors.New("unknown flag " + strconv.Quote(arg)))
 		}
 	}
 	if reload {

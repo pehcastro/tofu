@@ -6,6 +6,7 @@ exit 1
   "ok": false,
   "at": "AT",
   "data": {
+    "files": 1,
     "findings": [
       {
         "file": "dirty/a.go",

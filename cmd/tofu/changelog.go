@@ -228,14 +228,13 @@ func recordChangelogSeen() error {
 }
 
 func changelogVerb(args []string, markdown string, out, errOut io.Writer) int {
-	o := verbOutput{verb: "changelog", usageLine: changelogUsage, out: out, errOut: errOut}
+	o := verbOutput{verb: "changelog", usageLine: changelogUsage, asJSON: jsonAsked(args), out: out, errOut: errOut}
 	all := false
 	for _, arg := range args {
 		switch arg {
 		case changelogAllFlag:
 			all = true
 		case jsonFlag:
-			o.asJSON = true
 		default:
 			return o.usage(errors.New("unknown argument " + strconv.Quote(arg)))
 		}

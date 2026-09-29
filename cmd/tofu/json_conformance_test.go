@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -39,49 +40,37 @@ func conformanceHome(t *testing.T) {
 
 func conformanceGroups() []conformanceGroup {
 	home := conformanceGroup{fixture: conformanceHome}
-	for _, args := range [][]string{{"version"}, {"doctor"}, {"usage"}, {"usage", "--history"}, {"models"}, {"login", "--status"}, {"reload"}, {"browser"}} {
+	for _, args := range [][]string{{"version"}, {"doctor"}, {"usage"}, {"usage", "--history"}, {"models"}, {"login", "--status"}, {"reload"}, {"browser"}, {"usage", "--nope"}, {"reload", "--nope"}, {"doctor", "--nope"}, {"version", "--nope"}, {"models", "--nope"}, {"rules"}, {"session"}, {"shells"}} {
 		home.cases = append(home.cases, conformanceCase{strings.Join(args, " "), args, inProcess})
 	}
 	rules := conformanceGroup{fixture: func(t *testing.T) { outputProject(t) }}
 	for _, c := range outputCases() {
-		if c.code != exitUsage {
-			rules.cases = append(rules.cases, conformanceCase{c.name, c.args, inProcess})
-		}
+		rules.cases = append(rules.cases, conformanceCase{c.name, c.args, inProcess})
 	}
 	lists := conformanceGroup{fixture: func(t *testing.T) { listProject(t) }}
 	for _, c := range listCases() {
-		if c.code != exitUsage {
-			lists.cases = append(lists.cases, conformanceCase{c.name, c.args, inProcess})
-		}
+		lists.cases = append(lists.cases, conformanceCase{c.name, c.args, inProcess})
 	}
 	jev := conformanceGroup{fixture: jevProject}
 	for _, c := range jevCases() {
-		if !c.usage {
-			jev.cases = append(jev.cases, conformanceCase{c.name, c.args, func(t *testing.T, args []string) (int, string, string) { return runJevCase(t, c, args) }})
-		}
+		jev.cases = append(jev.cases, conformanceCase{c.name, c.args, func(t *testing.T, args []string) (int, string, string) { return runJevCase(t, c, args) }})
 	}
 	sessions := conformanceGroup{fixture: func(t *testing.T) { sessionOutputProject(t) }}
-	for _, c := range sessionOutputCases() {
-		if c.code != exitUsage {
-			sessions.cases = append(sessions.cases, conformanceCase{c.name, c.args, inProcess})
-		}
+	for _, c := range slices.DeleteFunc(sessionOutputCases(), func(c outputCase) bool { return c.name == "session-resume" || c.name == "continue" }) {
+		sessions.cases = append(sessions.cases, conformanceCase{c.name, c.args, inProcess})
 	}
 	ledger := conformanceGroup{fixture: whyLedger}
 	for _, c := range whyCases() {
-		if c.code != exitUsage {
-			ledger.cases = append(ledger.cases, conformanceCase{c.name, c.args, func(_ *testing.T, args []string) (int, string, string) { return runWhyVerb(args) }})
-		}
+		ledger.cases = append(ledger.cases, conformanceCase{c.name, c.args, func(_ *testing.T, args []string) (int, string, string) { return runWhyVerb(args) }})
 	}
 	notes := conformanceGroup{fixture: func(t *testing.T) { notesProject(t) }}
 	for _, c := range notesCases() {
-		if c.code != exitUsage {
-			notes.cases = append(notes.cases, conformanceCase{c.name, c.args, func(_ *testing.T, args []string) (int, string, string) { return runNote(args) }})
-		}
+		notes.cases = append(notes.cases, conformanceCase{c.name, c.args, func(_ *testing.T, args []string) (int, string, string) { return runNote(args) }})
 	}
 	return []conformanceGroup{home, rules, lists, jev, sessions, ledger, notes}
 }
 
-func envelopeFault(printed string) (string, string) {
+func envelopeFault(printed string, code int) (string, string) {
 	decoder := json.NewDecoder(strings.NewReader(printed))
 	var fields map[string]json.RawMessage
 	if err := decoder.Decode(&fields); err != nil {
@@ -104,10 +93,14 @@ func envelopeFault(printed string) (string, string) {
 	if err := json.Unmarshal(fields["verb"], &verb); err != nil || verb == "" {
 		return "", "the verb is not a name"
 	}
+	var ok bool
+	if err := json.Unmarshal(fields["ok"], &ok); err != nil || ok != (code == exitOK) {
+		return "", "ok is " + string(fields["ok"]) + " and the exit code is " + strconv.Itoa(code)
+	}
 	return verb, ""
 }
 
-func TestEveryStateVerbPrintsOneEnvelopeAndNoEscapeUnderNoColour(t *testing.T) {
+func TestEveryVerbAndUsageErrorPrintsOneEnvelopeAndNoEscapeUnderNoColour(t *testing.T) {
 	var covered []string
 	for _, group := range conformanceGroups() {
 		textCodes := map[string]int{}
@@ -128,7 +121,7 @@ func TestEveryStateVerbPrintsOneEnvelopeAndNoEscapeUnderNoColour(t *testing.T) {
 					textCodes[c.name] = code
 					continue
 				}
-				verb, fault := envelopeFault(out)
+				verb, fault := envelopeFault(out, code)
 				switch {
 				case fault != "":
 					t.Errorf("tofu %s: %s\n%s", strings.Join(args, " "), fault, out)

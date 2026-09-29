@@ -71,8 +71,8 @@ type ruleListReport struct {
 }
 
 func rulesVerb(args []string, out, errOut io.Writer) int {
-	bare := verbOutput{verb: "rules", usageLine: rulesSubcommands, errOut: errOut}
-	if len(args) == 0 {
+	bare := verbOutput{verb: "rules", usageLine: rulesSubcommands, asJSON: jsonAsked(args), out: out, errOut: errOut}
+	if len(withoutJSON(args)) == 0 {
 		return bare.usage(errors.New("no subcommand"))
 	}
 	switch args[0] {
@@ -150,7 +150,7 @@ func listingMark(mode rule.Mode) cli.Mark {
 }
 
 func rulesListVerb(args []string, out, errOut io.Writer) int {
-	o := verbOutput{verb: "rules list", usageLine: rulesListUsage, out: out, errOut: errOut}
+	o := verbOutput{verb: "rules list", usageLine: rulesListUsage, asJSON: jsonAsked(args), out: out, errOut: errOut}
 	opts, err := parseRulesFlags(args)
 	if err == nil && len(opts.rest) > 0 {
 		err = fmt.Errorf("unknown argument %q", opts.rest[0])
@@ -158,7 +158,6 @@ func rulesListVerb(args []string, out, errOut io.Writer) int {
 	if err != nil {
 		return o.usage(err)
 	}
-	o.asJSON = opts.json
 	rules, origin, err := loadRules(opts.library, opts.dir)
 	if err != nil {
 		return o.fail(err)
@@ -219,7 +218,7 @@ func (report ruleListReport) lines(page cli.Page) []string {
 }
 
 func rulesCheckVerb(args []string, out, errOut io.Writer) int {
-	o := verbOutput{verb: "rules check", usageLine: rulesCheckUsage, out: out, errOut: errOut}
+	o := verbOutput{verb: "rules check", usageLine: rulesCheckUsage, asJSON: jsonAsked(args), out: out, errOut: errOut}
 	opts, err := parseRulesFlags(args)
 	if err == nil && len(opts.rest) > 1 {
 		err = fmt.Errorf("one path, got %q and %q", opts.rest[0], opts.rest[1])
@@ -227,7 +226,6 @@ func rulesCheckVerb(args []string, out, errOut io.Writer) int {
 	if err != nil {
 		return o.usage(err)
 	}
-	o.asJSON = opts.json
 	rules, origin, err := loadRules(opts.library, opts.dir)
 	if err != nil {
 		return o.fail(err)

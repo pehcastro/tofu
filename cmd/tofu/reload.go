@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"io/fs"
 	"os"
@@ -15,7 +14,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"time"
 
 	"tofu/interface/cli"
 	"tofu/internal/keymap"
@@ -28,7 +26,7 @@ import (
 
 const (
 	reloadFileName = "reload.json"
-	reloadUsage    = "usage: tofu reload [--json]"
+	reloadUsage    = "tofu reload [--json]"
 )
 
 type reloadPart struct {
@@ -296,13 +294,9 @@ func (d reloadDiff) note() string {
 }
 
 func reloadVerb(args []string, out, errOut io.Writer) int {
-	asJSON := false
-	for _, arg := range args {
-		if arg != jsonFlag {
-			_, _ = fmt.Fprintf(errOut, "tofu reload: unknown flag %q, %s\n", arg, reloadUsage)
-			return exitUsage
-		}
-		asJSON = true
+	o := verbOutput{verb: "reload", usageLine: reloadUsage, asJSON: jsonAsked(args), out: out, errOut: errOut}
+	if unknown := withoutJSON(args); len(unknown) > 0 {
+		return o.usage(errors.New("unknown flag " + strconv.Quote(unknown[0])))
 	}
 	var report reloadDiff
 	dir, err := os.Getwd()
@@ -310,9 +304,9 @@ func reloadVerb(args []string, out, errOut io.Writer) int {
 		report, err = reloadReport(dir)
 	}
 	if err != nil {
-		return verbFailed(out, errOut, "reload", asJSON, err)
+		return o.fail(err)
 	}
-	return show(out, asJSON, cli.Envelope{Verb: "reload", OK: true, At: time.Now(), Data: report}, report.lines)
+	return o.done(true, report, report.lines)
 }
 
 func appReload(project string) func() string {

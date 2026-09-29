@@ -53,8 +53,9 @@ func FileCommentViolations(path string) ([]Comment, error) {
 	return violationsOf(comments), nil
 }
 
-func TreeCommentViolations(root string) ([]Comment, error) {
+func TreeCommentViolations(root string) ([]Comment, int, error) {
 	var all []Comment
+	files := 0
 	err := WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -67,10 +68,11 @@ func TreeCommentViolations(root string) ([]Comment, error) {
 			return ferr
 		}
 		all = append(all, violations...)
+		files++
 		return nil
 	})
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
-	return all, nil
+	return all, files, nil
 }

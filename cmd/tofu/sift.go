@@ -75,12 +75,11 @@ func siftVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 		_, _ = io.WriteString(out, siftUsage)
 		return exitOK
 	}
-	o := verbOutput{verb: "sift", usageLine: siftUsageLine, out: out, errOut: errOut}
+	o := verbOutput{verb: "sift", usageLine: siftUsageLine, asJSON: jsonAsked(args), out: out, errOut: errOut}
 	opts, err := parseSiftArgs(args)
 	if err != nil {
 		return o.usage(err)
 	}
-	o.asJSON = opts.asJSON
 	raw, err := io.ReadAll(in)
 	if err != nil {
 		return failed(o, fmt.Errorf("reading standard input: %w", err))
