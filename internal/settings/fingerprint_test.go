@@ -17,7 +17,9 @@ import (
 	"tofu/internal/llm"
 	"tofu/internal/llm/quota"
 	"tofu/internal/llm/wire/anthropic"
+	"tofu/internal/llm/wire/codex"
 	"tofu/internal/settings"
+	"tofu/internal/transport"
 )
 
 const versionTooOldBody = `{"type":"error","error":{"type":"invalid_request_error","message":"Claude Code %s does not support this model; version %s or newer is required. Update Claude Code.","details":{"error_code":"claude_code_version_too_old"}}}`
@@ -200,5 +202,78 @@ func TestAProjectScopeSubFingerprintIsNotRead(t *testing.T) {
 	}
 	if got := server.sentVersions(); len(got) != 1 || got[0] != claimed("2.1.280") {
 		t.Fatalf("a project file raised the version: the requests claimed %q", got)
+	}
+}
+
+func npmServing(t *testing.T, claudeCode string) string {
+	t.Helper()
+	latest := map[string]string{
+		"/" + anthropic.ClaudeCodePackage + "/latest": claudeCode,
+		"/" + codex.CodexPackage + "/latest":          codex.PinnedCodexClientVersion,
+	}
+	listening := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		version, known := latest[r.URL.Path]
+		if !known {
+			http.NotFound(w, r)
+			return
+		}
+		_, _ = fmt.Fprintf(w, `{"name":"made-up","version":%q}`, version)
+	}))
+	t.Cleanup(listening.Close)
+	return listening.URL
+}
+
+func latestFrom(t *testing.T, registry string) (settings.Fingerprint, error) {
+	t.Helper()
+	client, err := transport.New(transport.Config{AttemptTimeout: time.Second, Concurrency: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return settings.LatestFingerprint(context.Background(), client, registry)
+}
+
+func TestANewerNpmReleaseRaisesTheGlobalFileAndAnyOtherLeavesItAsItIs(t *testing.T) {
+	for _, row := range []struct{ held, npm, raised string }{
+		{"2.1.280", "2.1.300", "2.1.300"},
+		{"2.1.280", "2.1.200", ""},
+		{"2.1.280", "2.1.280", ""},
+		{"2.1.290", "2.1.285", ""},
+		{"2.1.280", "2.1.300-beta.1", ""},
+		{"2.1.280", "latest", ""},
+	} {
+		held := `{"theme":"light","subFingerprint":{"claudeCode":"` + row.held + `"}}`
+		store := homeWith(t, held, "")
+		latest, err := latestFrom(t, npmServing(t, row.npm))
+		if err != nil {
+			t.Fatalf("npm at %s: the fetch failed: %v", row.npm, err)
+		}
+		raised, err := store.RaiseFingerprint(latest)
+		if err != nil {
+			t.Fatalf("npm at %s over %s: the raise failed: %v", row.npm, row.held, err)
+		}
+		written, _ := os.ReadFile(store.Path(settings.Global))
+		if row.raised == "" {
+			if len(raised) != 0 || string(written) != held {
+				t.Errorf("npm at %s over %s raised %v and the file became %s", row.npm, row.held, raised, written)
+			}
+			continue
+		}
+		want := []settings.RaisedVersion{{Key: settings.FingerprintClaudeCode, From: row.held, To: row.raised}}
+		if fmt.Sprint(raised) != fmt.Sprint(want) || !strings.Contains(string(written), `"claudeCode": "`+row.raised+`"`) || !strings.Contains(string(written), `"theme": "light"`) {
+			t.Errorf("npm at %s over %s raised %v, not %v, and the file became\n%s", row.npm, row.held, raised, want, written)
+		}
+	}
+}
+
+func TestARegistryThatIsDownOrMissingAPackageGivesNoVersions(t *testing.T) {
+	listening := httptest.NewServer(http.NotFoundHandler())
+	down := listening.URL
+	listening.Close()
+	missing := httptest.NewServer(http.NotFoundHandler())
+	t.Cleanup(missing.Close)
+	for _, registry := range []string{down, missing.URL} {
+		if latest, err := latestFrom(t, registry); err == nil {
+			t.Errorf("a registry at %s gave %+v rather than an error", registry, latest)
+		}
 	}
 }

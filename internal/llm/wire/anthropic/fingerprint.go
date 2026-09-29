@@ -8,7 +8,10 @@ import (
 	"tofu/internal/llm"
 )
 
+//go:generate go run ../pins
+
 const (
+	ClaudeCodePackage             = "@anthropic-ai/claude-code"
 	PinnedClaudeCodeVersion       = "2.1.280"
 	PinnedAnthropicSDKVersion     = "0.112.1"
 	PinnedNodeRuntimeVersion      = "v26.3.0"

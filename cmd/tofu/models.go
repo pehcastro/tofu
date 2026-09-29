@@ -18,6 +18,7 @@ import (
 	"tofu/internal/konst"
 	"tofu/internal/llm/cred"
 	"tofu/internal/llm/models"
+	settingspkg "tofu/internal/settings"
 	"tofu/internal/subagent"
 	"tofu/internal/sys"
 	"tofu/internal/transport"
@@ -321,6 +322,13 @@ type modelReload struct {
 	Unshadowed     []string       `json:"removed_from_catalog,omitempty"`
 	Sources        []reloadSource `json:"sources"`
 	Unresolved     []string       `json:"unresolved_tiers,omitempty"`
+	Versions       versionCheck   `json:"versions"`
+}
+
+type versionCheck struct {
+	Raised  []settingspkg.RaisedVersion `json:"raised,omitempty"`
+	Skipped string                      `json:"skipped,omitempty"`
+	Error   string                      `json:"error,omitempty"`
 }
 
 type reloadSource struct {
@@ -382,6 +390,11 @@ func reloadSignedIn(ctx context.Context) (modelReload, error) {
 		return modelReload{}, err
 	}
 	defer func() { _ = store.Close() }()
+	client, err := reloadClient()
+	if err != nil {
+		return modelReload{}, err
+	}
+	checked := raiseVersions(ctx, client)
 	var accounts []models.Account
 	var settled []reloadSource
 	versions, _ := subFingerprint(".")
@@ -407,7 +420,25 @@ func reloadSignedIn(ctx context.Context) (modelReload, error) {
 			})
 		}
 	}
-	return reloadModels(ctx, accounts, settled)
+	report, err := reloadModels(ctx, client, accounts, settled)
+	report.Versions = checked
+	return report, err
+}
+
+func raiseVersions(ctx context.Context, client *transport.Client) versionCheck {
+	latest, err := settingspkg.LatestFingerprint(ctx, client, settingspkg.NpmRegistry())
+	if err != nil {
+		return versionCheck{Skipped: "unreachable, the version check was skipped", Error: err.Error()}
+	}
+	store, err := openSettings(".")
+	if err != nil {
+		return versionCheck{Skipped: "settings unreadable, the version check was skipped", Error: err.Error()}
+	}
+	raised, err := store.RaiseFingerprint(latest)
+	if err != nil {
+		return versionCheck{Raised: raised, Skipped: "settings unwritable, the rest of the version check was skipped", Error: err.Error()}
+	}
+	return versionCheck{Raised: raised}
 }
 
 type reloadRun struct {
@@ -418,15 +449,15 @@ type reloadRun struct {
 	found    string
 }
 
-func reloadModels(ctx context.Context, accounts []models.Account, settled []reloadSource) (modelReload, error) {
-	catalog, err := models.CatalogDir()
-	if err != nil {
-		return modelReload{}, err
-	}
-	client, err := transport.New(transport.Config{
+func reloadClient() (*transport.Client, error) {
+	return transport.New(transport.Config{
 		AttemptTimeout: time.Duration(konst.TurnAttemptTimeoutMillis) * time.Millisecond,
 		Concurrency:    1,
 	})
+}
+
+func reloadModels(ctx context.Context, client *transport.Client, accounts []models.Account, settled []reloadSource) (modelReload, error) {
+	catalog, err := models.CatalogDir()
 	if err != nil {
 		return modelReload{}, err
 	}
@@ -540,6 +571,13 @@ func reloadLines(page cli.Page, report modelReload) []string {
 		}
 	}
 	said := countsSaid(counts, []markNoun{{cli.Added, "new"}, {cli.Changed, "changed"}, {cli.Removed, "dropped"}, {cli.Fail, "failed"}})
+	if raised := len(report.Versions.Raised); raised > 0 {
+		noun := " versions raised"
+		if raised == 1 {
+			noun = " version raised"
+		}
+		said = strings.TrimPrefix(said+" · "+strconv.Itoa(raised)+noun, " · ")
+	}
 	verdict := cli.Verdict{Mark: cli.Done, Text: cmp.Or(said, "nothing changed")}
 	if counts[cli.Fail] > 0 {
 		verdict.Mark = cli.Warn
@@ -549,6 +587,12 @@ func reloadLines(page cli.Page, report modelReload) []string {
 		table = cli.Verdict{Mark: cli.Warn, Text: "unreachable, the stored table stands"}
 	}
 	lines := append(page.Title("Model reload", nil, verdict), "", page.Status("models.dev", table))
+	for _, raised := range report.Versions.Raised {
+		lines = append(lines, page.Status("npm", cli.Verdict{Mark: cli.Done, Text: raised.Key + " raised from " + raised.From + " to " + raised.To}))
+	}
+	if report.Versions.Skipped != "" {
+		lines = append(lines, page.Status("npm", cli.Verdict{Mark: cli.Warn, Text: report.Versions.Skipped}))
+	}
 	if removed := len(report.Unshadowed); removed > 0 {
 		noun := " files removed"
 		if removed == 1 {

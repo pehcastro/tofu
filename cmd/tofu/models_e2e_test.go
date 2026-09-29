@@ -15,6 +15,9 @@ import (
 
 	"tofu/interface/cli"
 	"tofu/internal/llm/models"
+	"tofu/internal/llm/wire/anthropic"
+	"tofu/internal/llm/wire/codex"
+	settingspkg "tofu/internal/settings"
 )
 
 const (
@@ -149,9 +152,10 @@ codex-sub       ✗ model list refused (403)
   → tofu login codex-sub
 `
 
-	reloadWithNobodySignedIn = `Model reload                                                   ✓ nothing changed
+	reloadWithNobodySignedIn = `Model reload                                                  ✓ 1 version raised
 
   models.dev    ✓ 2 context windows
+  npm           ✓ claudeCode raised from 2.1.280 to 2.1.300
 
 claude-sub      ○ not signed in
   → tofu login claude-sub
@@ -222,6 +226,35 @@ func stubbedHome(t *testing.T) {
 	t.Helper()
 	chdirTemp(t)
 	t.Setenv(models.RegistryURLVariable, stubbed(t, http.StatusOK, registryOfTwoWindows))
+	npm := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		version := codex.PinnedCodexClientVersion
+		if strings.Contains(r.URL.Path, anthropic.ClaudeCodePackage) {
+			version = "2.1.300"
+		}
+		_, _ = w.Write([]byte(`{"version":"` + version + `"}`))
+	}))
+	t.Cleanup(npm.Close)
+	t.Setenv(settingspkg.NpmRegistryVariable, npm.URL)
+}
+
+func TestModelsReloadWithNpmDownPassesAndSaysTheVersionCheckWasSkipped(t *testing.T) {
+	stubbedHome(t)
+	down := httptest.NewServer(http.NotFoundHandler())
+	down.Close()
+	t.Setenv(settingspkg.NpmRegistryVariable, down.URL)
+	var text, errOut bytes.Buffer
+	if code := run([]string{"models", "reload"}, strings.NewReader(""), &text, &errOut); code != exitOK || !strings.Contains(text.String(), "npm           ⚠ unreachable, the version check was skipped") {
+		t.Fatalf("tofu models reload with npm down exited %d\n%s%s", code, text.String(), errOut.String())
+	}
+	var printed bytes.Buffer
+	if code := run([]string{"models", "reload", jsonFlag}, strings.NewReader(""), &printed, &errOut); code != exitOK {
+		t.Fatalf("tofu models reload --json with npm down exited %d\n%s%s", code, printed.String(), errOut.String())
+	}
+	var envelope envelopeOf[modelReload]
+	oneEnvelope(t, printed.String(), &envelope)
+	if !envelope.OK || !strings.Contains(envelope.Data.Versions.Skipped, "skipped") || len(envelope.Data.Versions.Raised) != 0 {
+		t.Fatalf("the envelope does not say the version check was skipped\n%s", printed.String())
+	}
 }
 
 func TestModelsReloadShowsANewModelAndARefusedAccountWithTheVendorBodyOnlyInJSON(t *testing.T) {
@@ -237,7 +270,11 @@ func TestModelsReloadShowsANewModelAndARefusedAccountWithTheVendorBodyOnlyInJSON
 		{Subscription: models.ClaudeSub, Token: token, BaseURL: stubbed(t, http.StatusOK, `{"data":[{"id":"claude-opus-5"},{"id":"claude-sonnet-5"},{"id":"claude-sonnet-5-5"}]}`)},
 		{Subscription: models.CodexSub, Token: token, BaseURL: stubbed(t, http.StatusForbidden, vendorBody)},
 	}
-	report, err := reloadModels(context.Background(), accounts, nil)
+	client, err := reloadClient()
+	if err != nil {
+		t.Fatal(err)
+	}
+	report, err := reloadModels(context.Background(), client, accounts, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -289,6 +326,10 @@ func TestModelsReloadWithNobodySignedInSaysSoInTextAndInJSON(t *testing.T) {
 		t.Fatalf("tofu models reload exited %d\n%s%s", code, text.String(), errOut.String())
 	}
 	sameText(t, "a reload with no account signed in", text.String(), reloadWithNobodySignedIn)
+	global, _ := settingsPaths(".")
+	if written, _ := os.ReadFile(global); !strings.Contains(string(written), `"claudeCode": "2.1.300"`) {
+		t.Fatalf("npm at 2.1.300 did not raise the global file:\n%s", written)
+	}
 
 	var printed bytes.Buffer
 	if code := run([]string{"models", "reload", jsonFlag}, strings.NewReader(""), &printed, &errOut); code != exitOK {
