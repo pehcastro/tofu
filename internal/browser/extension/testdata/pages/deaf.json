@@ -1,0 +1,11 @@
+{
+  "url": "https://example.test/",
+  "title": "Example Domain",
+  "loader": "L1",
+  "deaf": true,
+  "nodes": [
+    {"id": 1, "role": "RootWebArea", "name": "Example Domain", "children": [2, 3]},
+    {"id": 2, "role": "link", "name": "Learn more", "href": "https://iana.test/help", "box": [10, 10, 100, 20], "fires": "iana"},
+    {"id": 3, "role": "textbox", "name": "Search", "box": [10, 40, 200, 20]}
+  ]
+}

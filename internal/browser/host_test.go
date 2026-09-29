@@ -509,6 +509,25 @@ func TestStaleSocketIsNotConnectedAndIsReplaced(t *testing.T) {
 	}
 }
 
+func TestTheFocusEmulationCallsPassTheRelay(t *testing.T) {
+	home := shortHome(t)
+	installFor(t, home, testOrigin)
+	ext, _ := startHost(t, home)
+	ext.send(`{"t":"hello","version":2,"tabs":[{"id":7,"url":"https://a.test/","title":"A"}]}`)
+	client := dial(t, home)
+	for _, method := range []string{"Emulation.setFocusEmulationEnabled", "Page.setWebLifecycleState"} {
+		sent := callAsync(client, 7, opCDP, json.RawMessage(`{"calls":[{"method":"`+method+`"}]}`))
+		call := ext.call()
+		if call.Op != opCDP || !strings.Contains(string(call.Args), method) {
+			t.Fatalf("%s reached the extension as %+v", method, call)
+		}
+		ext.answer(call.ID, `"ok":true,"value":[{"result":{}}]`)
+		if answer := <-sent; answer.err != nil {
+			t.Fatalf("%s was refused: %v", method, answer.err)
+		}
+	}
+}
+
 func TestAnOlderClientIsRefusedAndTheCurrentRelayKeepsServing(t *testing.T) {
 	home := shortHome(t)
 	installFor(t, home, testOrigin)

@@ -177,7 +177,7 @@ func cdpStatus(raw json.RawMessage) (status, error) {
 		switch call.Method {
 		case "Accessibility.getFullAXTree", "Accessibility.getPartialAXTree", "Page.getFrameTree",
 			"DOM.getDocument", "DOM.querySelectorAll", "DOM.describeNode", "DOM.resolveNode", "DOM.getBoxModel", "DOM.scrollIntoViewIfNeeded",
-			"Runtime.evaluate", "Runtime.callFunctionOn":
+			"Runtime.evaluate", "Runtime.callFunctionOn", "Emulation.setFocusEmulationEnabled", "Page.setWebLifecycleState":
 		case "Input.dispatchMouseEvent", "Input.dispatchKeyEvent", "Input.insertText":
 			now = statusActing
 		default:

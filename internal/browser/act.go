@@ -37,6 +37,7 @@ type Moved struct {
 	Covered     string `json:"covered,omitempty"`
 	Close       string `json:"close,omitempty"`
 	Folded      int    `json:"folded,omitempty"`
+	Via         string `json:"via,omitempty"`
 	Value       string `json:"value,omitempty"`
 	Opened      int    `json:"opened,omitempty"`
 	URLChanged  bool   `json:"url_changed"`
@@ -98,16 +99,19 @@ const pendingRequests = `(() => {
   return {pending: pending.length, loading: document.readyState !== 'complete'};
 })()`
 
-const pageStateScript = `({url: location.href, count: document.getElementsByTagName('*').length, text: document.body ? document.body.innerText : ''})`
+const pageStateScript = `({url: location.href, count: document.getElementsByTagName('*').length, text: document.body ? document.body.innerText : '',
+  controls: Array.from(document.querySelectorAll('input, select, textarea, [aria-checked], [aria-expanded], [aria-pressed], [aria-selected]'),
+    e => [e.checked, e.value, e.getAttribute('aria-checked'), e.getAttribute('aria-expanded'), e.getAttribute('aria-pressed'), e.getAttribute('aria-selected')].join(',')).join('|')})`
 
 func mouse(kind, button string, x, y float64) cdpCall {
 	return cdpCall{Method: "Input.dispatchMouseEvent", Params: map[string]any{"type": kind, "x": x, "y": y, "button": button, "clickCount": 1}}
 }
 
 type pageState struct {
-	URL   string `json:"url"`
-	Count int    `json:"count"`
-	Text  string `json:"text"`
+	URL      string `json:"url"`
+	Count    int    `json:"count"`
+	Text     string `json:"text"`
+	Controls string `json:"controls"`
 }
 
 func (d *Driver) state(deadline time.Time) (pageState, []Tab, error) {
@@ -126,6 +130,13 @@ func (d *Driver) state(deadline time.Time) (pageState, []Tab, error) {
 const Unchanged = "the page did not change"
 
 func (m Moved) String() string {
+	if m.Via != "" {
+		return m.said() + ", through " + m.Via + " after the mouse and keys did nothing"
+	}
+	return m.said()
+}
+
+func (m Moved) said() string {
 	switch {
 	case m.Covered != "" && m.Close != "":
 		return "did not run, covered by " + m.Covered + ": close it first with " + m.Close
@@ -156,7 +167,7 @@ func (d *Driver) Use(tab int) {
 func (d *Driver) Fingerprint() (string, error) {
 	var page pageState
 	err := d.value(time.Now().Add(konst.BrowserActTimeoutMillis*time.Millisecond), false, evaluate(pageStateScript), &page)
-	text := sha256.Sum256([]byte(page.Text))
+	text := sha256.Sum256([]byte(page.Text + "\x00" + page.Controls))
 	return fmt.Sprintf("%s %d %x", page.URL, page.Count, text[:8]), err
 }
 
@@ -201,6 +212,42 @@ func (d *Driver) do(deadline time.Time, move Move) (Moved, error) {
 	if err != nil || moved.Covered != "" {
 		return moved, err
 	}
+	moved, err = d.measure(deadline, move, before, tabsBefore, moved)
+	if err == nil && !moved.PageChanged && moved.Opened == 0 {
+		if via := d.fallback(deadline, move); via != "" {
+			moved, err = d.measure(deadline, move, before, tabsBefore, moved)
+			if moved.PageChanged || moved.Opened != 0 {
+				moved.Via = via
+			}
+		}
+	}
+	return moved, err
+}
+
+const submitFocused = `(() => {
+  const form = document.activeElement && document.activeElement.form;
+  if (!form) return false;
+  if (form.requestSubmit) form.requestSubmit(); else form.submit();
+  return true;
+})()`
+
+func (d *Driver) fallback(deadline time.Time, move Move) string {
+	switch {
+	case move.Kind == MoveClick:
+		object, err := d.resolve(deadline, move.Ref)
+		if err == nil && d.act(deadline, callOn(object, "function() { this.click(); }", true)) == nil {
+			return "click()"
+		}
+	case move.Kind == MovePress && strings.EqualFold(move.Value, "enter"):
+		var submitted bool
+		if d.value(deadline, true, evaluate(submitFocused), &submitted) == nil && submitted {
+			return "the field's form submit"
+		}
+	}
+	return ""
+}
+
+func (d *Driver) measure(deadline time.Time, move Move, before pageState, tabsBefore []Tab, moved Moved) (Moved, error) {
 	d.settle(deadline)
 	if move.Kind == MoveNavigate || move.Kind == MoveBack {
 		d.quiet(deadline)

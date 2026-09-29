@@ -243,6 +243,26 @@ func TestBackgroundInAStubbedChromeAttachesOnFirstUseGroupsAndRestores(t *testin
 	}
 }
 
+func TestEveryAttachTurnsOnFocusEmulationSoABackgroundTabTakesClicks(t *testing.T) {
+	run := inStubbedChrome(t, "groups")
+	var focus []float64
+	for _, entry := range run.Heard {
+		if entry[0] == "input" && entry[2] == "Emulation.setFocusEmulationEnabled" {
+			focus = append(focus, entry[1].(float64))
+		}
+	}
+	t.Logf("focus emulation was turned on for tabs %v", focus)
+	for _, tab := range []float64{9, 3, 5, 6} {
+		if !slices.Contains(focus, tab) {
+			t.Errorf("tab %v was attached with no focus emulation; focus went to %v", tab, focus)
+		}
+	}
+	background := shipped(t, "background.js")
+	if strings.Contains(background, "active: true") || strings.Contains(background, "chrome.tabs.update(tabId, {active") {
+		t.Error("background.js activates a tab")
+	}
+}
+
 func TestTheGroupTitleAlwaysCarriesItsStateAndChangesOnlyWithIt(t *testing.T) {
 	run := inStubbedChrome(t, "groups")
 	last := map[float64]string{}

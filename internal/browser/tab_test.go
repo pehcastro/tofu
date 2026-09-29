@@ -313,6 +313,7 @@ type fakePage struct {
 	Loader   string      `json:"loader"`
 	Nodes    []*fakeNode `json:"nodes"`
 	Ours     bool        `json:"ours"`
+	Deaf     bool        `json:"deaf"`
 	scrolled map[int]float64
 	tagged   []int
 	fired    []string
@@ -509,6 +510,9 @@ func (p *fakePage) cdp(method string, params map[string]any, opened func(int, st
 			return value(found), nil
 		case strings.Contains(script, "removeAttribute"):
 			return value(len(p.tagged)), nil
+		case strings.Contains(script, "requestSubmit"):
+			p.fired = append(p.fired, "submit")
+			return value(true), nil
 		case strings.Contains(script, "getEntriesByType"):
 			return value(map[string]any{"pending": 0, "loading": false}), nil
 		case strings.Contains(script, "innerText"):
@@ -519,6 +523,14 @@ func (p *fakePage) cdp(method string, params map[string]any, opened func(int, st
 		args, _ := params["arguments"].([]any)
 		number := func(i int) float64 { return args[i].(map[string]any)["value"].(float64) }
 		switch {
+		case strings.Contains(script, "this.click()"):
+			for n := target; n != nil; n = p.parent(n.ID) {
+				if n.Fires != "" {
+					p.fired = append(p.fired, n.Fires)
+					break
+				}
+			}
+			return value(nil), nil
 		case strings.Contains(script, "closest('a[href]')"):
 			return value(p.href(target)), nil
 		case strings.Contains(script, "this.href"):
@@ -532,8 +544,10 @@ func (p *fakePage) cdp(method string, params map[string]any, opened func(int, st
 			p.scrolled[target.ID] = min(max(p.scrolled[target.ID]+number(1), 0), target.Scrollable-target.Box[3])
 			return value(nil), nil
 		}
+	case "Input.dispatchKeyEvent", "Input.insertText":
+		return map[string]any{}, nil
 	case "Input.dispatchMouseEvent":
-		if params["type"] != "mouseReleased" {
+		if params["type"] != "mouseReleased" || p.Deaf {
 			return map[string]any{}, nil
 		}
 		for n := p.hit(params["x"].(float64), params["y"].(float64)); n != nil; n = p.parent(n.ID) {
@@ -843,6 +857,23 @@ func TestATaskOnThePersonsTabCreatesOneTabAndStaysInIt(t *testing.T) {
 		t.Fatalf("the task ends on tab %d; want 30, the one tab it created", driver.Tab)
 	}
 	page.sawTabOps(t, "open 0 https://www.google.test/search?q=airbnb", "navigate 30 https://www.airbnb.test/", "navigate 30 https://www.airbnb.test/rooms/123")
+}
+
+func TestAClickTheBackgroundTabIgnoresFallsBackToTheElementsOwnClick(t *testing.T) {
+	driver, page := drivenPage(t, "deaf")
+	snapshot := observe(t, driver, true)
+	moved, err := driver.Do(browser.Move{Ref: refOf(t, snapshot, "link", "Learn more"), Kind: browser.MoveClick})
+	t.Logf("the click says: %s", moved)
+	if err != nil || !moved.PageChanged || moved.Via != "click()" || !strings.Contains(moved.String(), "click()") {
+		t.Fatalf("a click the page ignored returned %+v, %v; want the page changed through the element's own click()", moved, err)
+	}
+	page.sawFired(t, "iana")
+	moved, err = driver.Do(browser.Move{Kind: browser.MovePress, Value: "Enter"})
+	t.Logf("Enter says: %s", moved)
+	if err != nil || !moved.PageChanged || moved.Via == "" {
+		t.Fatalf("an Enter the page ignored returned %+v, %v; want the form submitted", moved, err)
+	}
+	page.sawFired(t, "iana", "submit")
 }
 
 func TestAPageWhoseFingerprintAlwaysMovesStillClicksOnceAndIsDone(t *testing.T) {

@@ -150,10 +150,13 @@ async function perform(tabId, op, args, timing) {
 
 async function attach(tabId) {
   if (!attached.has(tabId)) {
-    attached.set(tabId, chrome.debugger.attach({tabId}, DEBUGGER_VERSION).catch(error => {
-      attached.delete(tabId);
-      throw error;
-    }));
+    attached.set(tabId, chrome.debugger.attach({tabId}, DEBUGGER_VERSION)
+      .then(() => send(tabId, 'Emulation.setFocusEmulationEnabled', {enabled: true}))
+      .then(() => send(tabId, 'Page.setWebLifecycleState', {state: 'active'}).catch(() => {}))
+      .catch(error => {
+        attached.delete(tabId);
+        throw error;
+      }));
   }
   await attached.get(tabId);
 }
