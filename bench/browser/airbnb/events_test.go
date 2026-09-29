@@ -61,7 +61,7 @@ func TestAForkedSessionIsReadFromItsRootThroughEveryFork(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Log("\n" + table)
-	if !strings.Contains(table, "| forks |") || !strings.Contains(table, "| A | as set | 12 of 12 | 300 s | 2 |") {
+	if !strings.Contains(table, "| forks |") || !strings.Contains(table, "| A | as set | 12 of 12 | 300 s | 6600 | - | 2 |") {
 		t.Error("the row does not carry the whole lineage")
 	}
 }

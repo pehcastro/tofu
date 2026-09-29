@@ -17,15 +17,21 @@ import (
 )
 
 func main() {
-	arm := flag.String("arm", "", "A, B1, B2 or C")
+	arm := flag.String("arm", "", "A, B1, B2, B3, B4 or C")
+	browserModel := flag.String("browser-model", "", "a browser sub-agent arm on this source/model instead of a named arm")
 	out := flag.String("out", "", "the folder each run writes into")
 	tofu := flag.String("tofu", "tofu", "the installed tofu binary")
 	again := flag.String("rescore", "", "a run folder to score again from its sessions, running nothing")
 	flag.Parse()
 	var err error
-	if *again != "" {
+	switch {
+	case *again != "":
 		err = rescore(*again)
-	} else {
+	case *browserModel != "" && *arm != "":
+		err = fmt.Errorf("-arm %s and -browser-model %s both name the arm: give one", *arm, *browserModel)
+	case *browserModel != "":
+		err = run(airbnb.BrowserArm(*browserModel), *out, *tofu)
+	default:
 		err = run(airbnb.Arm(*arm), *out, *tofu)
 	}
 	if err != nil {
@@ -56,9 +62,31 @@ func closeTofuTabs() (int, error) {
 	return closed, err
 }
 
-func run(arm airbnb.Arm, out, tofu string) error {
+func tofuAt(tofu, project string, log io.Writer, args ...string) error {
+	command := exec.Command(tofu, args...)
+	command.Dir, command.Stdout, command.Stderr = project, io.MultiWriter(os.Stdout, log), io.MultiWriter(os.Stderr, log)
+	return command.Run()
+}
+
+func configure(arm airbnb.Arm, tofuIn func(args ...string) error) error {
 	settings, err := arm.Settings()
 	if err != nil {
+		return err
+	}
+	set := [][2]string{{"browser", "drive"}, {"browserDriver", settings.Driver}}
+	if settings.BrowserModel != "" {
+		set = append(set, [2]string{"browserModel", settings.BrowserModel})
+	}
+	for _, setting := range set {
+		if err := tofuIn("settings", "set", "--scope", "project", setting[0], setting[1]); err != nil {
+			return fmt.Errorf("setting %s in the project: %w", setting[0], err)
+		}
+	}
+	return nil
+}
+
+func run(arm airbnb.Arm, out, tofu string) error {
+	if _, err := arm.Settings(); err != nil {
 		return err
 	}
 	task, err := airbnb.Load()
@@ -69,7 +97,7 @@ func run(arm airbnb.Arm, out, tofu string) error {
 		return fmt.Errorf("-out names the folder the run writes into")
 	}
 	started := time.Now()
-	dir, err := filepath.Abs(filepath.Join(out, string(arm)+"-"+started.Format("20060102-150405")))
+	dir, err := filepath.Abs(filepath.Join(out, arm.Folder()+"-"+started.Format("20060102-150405")))
 	if err != nil {
 		return err
 	}
@@ -82,19 +110,9 @@ func run(arm airbnb.Arm, out, tofu string) error {
 		return err
 	}
 	defer func() { _ = log.Close() }()
-	tofuIn := func(args ...string) error {
-		command := exec.Command(tofu, args...)
-		command.Dir, command.Stdout, command.Stderr = project, io.MultiWriter(os.Stdout, log), io.MultiWriter(os.Stderr, log)
-		return command.Run()
-	}
-	set := [][2]string{{"browser", "drive"}, {"browserDriver", settings.Driver}}
-	if settings.BrowserModel != "" {
-		set = append(set, [2]string{"browserModel", settings.BrowserModel})
-	}
-	for _, setting := range set {
-		if err := tofuIn("settings", "set", "--scope", "project", setting[0], setting[1]); err != nil {
-			return fmt.Errorf("setting %s in the project: %w", setting[0], err)
-		}
+	tofuIn := func(args ...string) error { return tofuAt(tofu, project, log, args...) }
+	if err := configure(arm, tofuIn); err != nil {
+		return err
 	}
 	closed, err := closeTofuTabs()
 	if err != nil {

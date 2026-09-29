@@ -1,7 +1,10 @@
 package airbnb
 
 import (
+	"cmp"
 	"fmt"
+	"math"
+	"slices"
 	"strings"
 	"time"
 )
@@ -39,11 +42,28 @@ func Score(task Task, run Run) Row {
 	return row
 }
 
+func (r Row) TotalTokens() (int, bool) {
+	if r.BrowserTokens == nil {
+		return 0, false
+	}
+	return r.MainTokens + *r.BrowserTokens, true
+}
+
 func Render(rows []Row) (string, error) {
+	sorted := slices.Clone(rows)
+	unknownLast := func(row Row) int {
+		if total, known := row.TotalTokens(); known {
+			return total
+		}
+		return math.MaxInt
+	}
+	slices.SortStableFunc(sorted, func(a, b Row) int {
+		return cmp.Or(cmp.Compare(b.Passed, a.Passed), cmp.Compare(unknownLast(a), unknownLast(b)))
+	})
 	var table strings.Builder
-	table.WriteString("| arm | mode | steps | wall | forks | main tokens | browser tokens | tabs closed before | tabs opened | repeated | refused | failed steps | main build | browser build | main credential | browser credential | wire | machine | date |\n")
-	table.WriteString("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n")
-	for _, row := range rows {
+	table.WriteString("| arm | mode | steps | wall | total tokens | usd | forks | main tokens | browser tokens | tabs closed before | tabs opened | repeated | refused | failed steps | main build | browser build | main credential | browser credential | wire | machine | date |\n")
+	table.WriteString("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n")
+	for _, row := range sorted {
 		if row.Conditions.Credential != rows[0].Conditions.Credential {
 			return "", fmt.Errorf("the main model of arm %s ran on a %s credential and that of arm %s on %s, and the two are not compared", row.Arm, row.Conditions.Credential, rows[0].Arm, rows[0].Conditions.Credential)
 		}
@@ -53,16 +73,16 @@ func Render(rows []Row) (string, error) {
 				failed = append(failed, fmt.Sprint(result.Step))
 			}
 		}
-		browserTokens := "not recorded"
-		if row.BrowserTokens != nil {
-			browserTokens = fmt.Sprint(*row.BrowserTokens)
+		browserTokens, totalTokens := "not recorded", "not recorded"
+		if total, known := row.TotalTokens(); known {
+			browserTokens, totalTokens = fmt.Sprint(*row.BrowserTokens), fmt.Sprint(total)
 		}
 		conditions, mode := row.Conditions, "as set"
 		if row.Mixed {
 			mode = "mixed"
 		}
-		fmt.Fprintf(&table, "| %s | %s | %d of %d | %.0f s | %d | %d | %s | %d | %d | %d | %d | %s | %s | %s | %s | %s | %s | %s | %s |\n",
-			row.Arm, mode, row.Passed, len(row.Steps), row.Wall.Seconds(), row.Forks, row.MainTokens, browserTokens, row.TabsClosed, row.TabsOpened, row.Repeated, row.Refused,
+		fmt.Fprintf(&table, "| %s | %s | %d of %d | %.0f s | %s | - | %d | %d | %s | %d | %d | %d | %d | %s | %s | %s | %s | %s | %s | %s | %s |\n",
+			row.Arm, mode, row.Passed, len(row.Steps), row.Wall.Seconds(), totalTokens, row.Forks, row.MainTokens, browserTokens, row.TabsClosed, row.TabsOpened, row.Repeated, row.Refused,
 			strings.Join(failed, " "), conditions.MainBuild, conditions.BrowserBuild, conditions.Credential, conditions.BrowserCredential, conditions.Wire, conditions.Machine, conditions.Date)
 	}
 	return table.String(), nil

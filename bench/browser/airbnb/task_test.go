@@ -43,6 +43,26 @@ func TestTheRecordedRunsScoreTwelveAndTheRightLowerCount(t *testing.T) {
 	}
 }
 
+func TestTheTableAddsMainAndBrowserTokensAndSortsByStepsThenTotal(t *testing.T) {
+	browser, heavier := 900, 5000
+	table, err := Render([]Row{
+		{Arm: ArmC, Passed: 9, Steps: make([]Result, 12), MainTokens: 7000},
+		{Arm: ArmB2, Passed: 12, Steps: make([]Result, 12), MainTokens: 100, BrowserTokens: &heavier},
+		{Arm: ArmB3, Passed: 12, Steps: make([]Result, 12), MainTokens: 100, BrowserTokens: &browser},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Log("\n" + table)
+	b3, b2, c := strings.Index(table, "| B3 |"), strings.Index(table, "| B2 |"), strings.Index(table, "| C |")
+	if !strings.Contains(table, "| B3 | as set | 12 of 12 | 0 s | 1000 | - |") || !(b3 < b2 && b2 < c) {
+		t.Errorf("want B3 with total 1000 first, then B2, then C")
+	}
+	if !strings.Contains(table, "| C | as set | 9 of 12 | 0 s | not recorded | - |") {
+		t.Errorf("a row with no browser tokens printed a total")
+	}
+}
+
 func TestEachArmIsStampedWithTheCredentialOfTheModelThatRanItsBrowserTurns(t *testing.T) {
 	for arm, want := range map[Arm]string{ArmA: "subscription", ArmB1: "key", ArmB2: "subscription", ArmC: "subscription"} {
 		run := Run{Conditions: Conditions{BrowserModel: map[Arm]string{ArmB1: "meta/muse-spark-1.3-contributor", ArmB2: "claude-sub/claude-sonnet-5"}[arm]}}

@@ -15,8 +15,23 @@ const (
 	ArmA  Arm = "A"
 	ArmB1 Arm = "B1"
 	ArmB2 Arm = "B2"
+	ArmB3 Arm = "B3"
+	ArmB4 Arm = "B4"
 	ArmC  Arm = "C"
 )
+
+const browserArmPrefix = "B:"
+
+func BrowserArm(slug string) Arm { return Arm(browserArmPrefix + slug) }
+
+func (a Arm) Folder() string {
+	return strings.Map(func(r rune) rune {
+		if 'a' <= r && r <= 'z' || 'A' <= r && r <= 'Z' || '0' <= r && r <= '9' || r == '.' {
+			return r
+		}
+		return '-'
+	}, string(a))
+}
 
 const MainModel = "claude-sub/claude-opus-5"
 
@@ -33,10 +48,17 @@ func (a Arm) Settings() (ArmSettings, error) {
 		return ArmSettings{Driver: "subagent", BrowserModel: "meta/muse-spark-1.3-contributor"}, nil
 	case ArmB2:
 		return ArmSettings{Driver: "subagent", BrowserModel: "claude-sub/claude-sonnet-5-5"}, nil
+	case ArmB3:
+		return ArmSettings{Driver: "subagent", BrowserModel: "codex-sub/gpt-5.6-sol"}, nil
+	case ArmB4:
+		return ArmSettings{Driver: "subagent", BrowserModel: "codex-sub/gpt-5.6-luna"}, nil
 	case ArmC:
 		return ArmSettings{Driver: "goal"}, nil
 	}
-	return ArmSettings{}, fmt.Errorf("unknown arm %q: A, B1, B2 or C", a)
+	if slug, named := strings.CutPrefix(string(a), browserArmPrefix); named && strings.Contains(slug, "/") {
+		return ArmSettings{Driver: "subagent", BrowserModel: slug}, nil
+	}
+	return ArmSettings{}, fmt.Errorf("unknown arm %q: A, B1, B2, B3, B4, C, or a browser model as -browser-model source/model", a)
 }
 
 type Conditions struct {
