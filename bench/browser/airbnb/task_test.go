@@ -7,7 +7,7 @@ import (
 )
 
 func TestTheRecordedRunsScoreTwelveAndTheRightLowerCount(t *testing.T) {
-	task, err := LoadTask("task.json")
+	task, err := Load()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -38,13 +38,25 @@ func TestTheRecordedRunsScoreTwelveAndTheRightLowerCount(t *testing.T) {
 	}
 }
 
-func TestTheReportRefusesRowsFromTwoCredentialKinds(t *testing.T) {
-	task, err := LoadTask("task.json")
+func TestEachArmIsStampedWithItsBrowserModelsCredentialKind(t *testing.T) {
+	for arm, want := range map[Arm]string{ArmA: "subscription", ArmB1: "key", ArmB2: "subscription", ArmC: "subscription"} {
+		var run Run
+		if err := arm.Stamp(&run, "2026-09-29", "fixture-machine"); err != nil {
+			t.Fatal(err)
+		}
+		if run.Conditions.Credential != "subscription" || run.Conditions.BrowserCredential != want {
+			t.Errorf("arm %s is stamped main %q and browser %q, want subscription and %s", arm, run.Conditions.Credential, run.Conditions.BrowserCredential, want)
+		}
+	}
+}
+
+func TestTheReportComparesBrowserCredentialsAndRefusesTwoMainOnes(t *testing.T) {
+	task, err := Load()
 	if err != nil {
 		t.Fatal(err)
 	}
 	var rows []Row
-	for _, dir := range []string{"testdata/pass", "testdata/fail"} {
+	for _, dir := range []string{"testdata/pass", "testdata/fail", "testdata/first"} {
 		run, err := LoadRun(dir)
 		if err != nil {
 			t.Fatal(err)
@@ -56,11 +68,13 @@ func TestTheReportRefusesRowsFromTwoCredentialKinds(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Log("\n" + table)
-	if !strings.Contains(table, "| steps | 12 of 12 |") || !strings.Contains(table, "| goal | 5 of 12 |") {
-		t.Errorf("the table does not carry both rows")
+	for _, want := range []string{"browser credential |", "| A | 12 of 12 |", "| C | 5 of 12 |", "| B1 | 11 of 12 |", "| subscription | key |"} {
+		if !strings.Contains(table, want) {
+			t.Errorf("the table lacks %q", want)
+		}
 	}
 	rows[1].Conditions.Credential = "key"
 	if _, err := Render(rows); err == nil {
-		t.Error("a subscription row and a key row were printed side by side")
+		t.Error("two main models on different credential kinds were printed side by side")
 	}
 }

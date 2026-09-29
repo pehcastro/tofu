@@ -1,27 +1,70 @@
 package airbnb
 
 import (
+	"cmp"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 type Arm string
 
 const (
-	ArmGoal     Arm = "goal"
-	ArmSteps    Arm = "steps"
-	ArmSubagent Arm = "subagent"
+	ArmA  Arm = "A"
+	ArmB1 Arm = "B1"
+	ArmB2 Arm = "B2"
+	ArmC  Arm = "C"
 )
 
+const MainModel = "claude-sub/claude-opus-5"
+
+type ArmSettings struct {
+	Driver       string
+	BrowserModel string
+}
+
+func (a Arm) Settings() (ArmSettings, error) {
+	switch a {
+	case ArmA:
+		return ArmSettings{Driver: "steps"}, nil
+	case ArmB1:
+		return ArmSettings{Driver: "subagent", BrowserModel: "meta/muse-spark-1.3-contributor"}, nil
+	case ArmB2:
+		return ArmSettings{Driver: "subagent", BrowserModel: "claude-sub/claude-sonnet-5-5"}, nil
+	case ArmC:
+		return ArmSettings{Driver: "goal"}, nil
+	}
+	return ArmSettings{}, fmt.Errorf("unknown arm %q: A, B1, B2 or C", a)
+}
+
 type Conditions struct {
-	Date         string `json:"date"`
-	Machine      string `json:"machine"`
-	Credential   string `json:"credential"`
-	Wire         string `json:"wire"`
-	MainBuild    string `json:"main_build"`
-	BrowserBuild string `json:"browser_build"`
+	Date              string `json:"date"`
+	Machine           string `json:"machine"`
+	Credential        string `json:"credential"`
+	BrowserCredential string `json:"browser_credential"`
+	Wire              string `json:"wire"`
+	MainBuild         string `json:"main_build"`
+	BrowserBuild      string `json:"browser_build"`
+}
+
+func credentialOf(slug string) string {
+	source, _, _ := strings.Cut(slug, "/")
+	if strings.HasSuffix(source, "-sub") {
+		return "subscription"
+	}
+	return "key"
+}
+
+func (a Arm) Stamp(run *Run, date, machine string) error {
+	settings, err := a.Settings()
+	if err != nil {
+		return err
+	}
+	run.Conditions.Date, run.Conditions.Machine = date, machine
+	run.Conditions.Credential, run.Conditions.BrowserCredential = credentialOf(MainModel), credentialOf(cmp.Or(settings.BrowserModel, MainModel))
+	return nil
 }
 
 type Tab struct {
@@ -34,7 +77,7 @@ type Run struct {
 	Conditions    Conditions `json:"conditions"`
 	WallMS        int64      `json:"wall_ms"`
 	MainTokens    int        `json:"main_tokens"`
-	BrowserTokens int        `json:"browser_tokens"`
+	BrowserTokens *int       `json:"browser_tokens"`
 	Repeated      int        `json:"repeated"`
 	Refused       int        `json:"refused"`
 	Tabs          []Tab      `json:"tabs"`
@@ -52,10 +95,8 @@ func LoadRun(dir string) (Run, error) {
 	if err := json.Unmarshal(raw, &run); err != nil {
 		return run, fmt.Errorf("%s: %w", dir, err)
 	}
-	switch run.Arm {
-	case ArmGoal, ArmSteps, ArmSubagent:
-	default:
-		return run, fmt.Errorf("%s: unknown arm %q", dir, run.Arm)
+	if _, err := run.Arm.Settings(); err != nil {
+		return run, fmt.Errorf("%s: %w", dir, err)
 	}
 	snapshot, err := os.ReadFile(filepath.Join(dir, "snapshot.txt"))
 	if err != nil {
@@ -64,4 +105,17 @@ func LoadRun(dir string) (Run, error) {
 	report, err := os.ReadFile(filepath.Join(dir, "report.txt"))
 	run.Snapshot, run.Report = string(snapshot), string(report)
 	return run, err
+}
+
+func SaveRun(dir string, run Run) error {
+	raw, err := json.MarshalIndent(run, "", "  ")
+	if err != nil {
+		return err
+	}
+	for name, body := range map[string]string{"run.json": string(raw) + "\n", "snapshot.txt": run.Snapshot, "report.txt": run.Report} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o644); err != nil {
+			return err
+		}
+	}
+	return nil
 }

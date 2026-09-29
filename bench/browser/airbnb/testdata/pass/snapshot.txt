@@ -1,7 +1,5 @@
-tab: t4
-url: https://www.airbnb.com.br/rooms/10000003?adults=2&check_in=2026-10-09
-title: Casa do Farol Inventado
-- heading "Casa do Farol Inventado" [ref=e1]
+tab 4 https://www.airbnb.com.br/rooms/10000003?adults=2&check_in=2026-10-09 "Casa do Farol Inventado"
+- heading "Casa do Farol Inventado"
 - text "3 quartos, 2 banheiros"
 - text "4,91 avaliação"
 - text "Piscina"

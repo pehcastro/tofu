@@ -1,1 +1,1 @@
-Written by hand, not recorded. Every url, title, listing and price is made up. The snapshot follows the header and line shape planned in TOFU-860: `tab:`, `url:`, `title:`, then `- role "name" [ref=eN]`.
+Written by hand, not recorded. Every url, title, listing, price and token count is made up. A snapshot starts with the header `browser_observe` prints, `tab <id> <url> "<title>"`, then one `- role "name" [ref=eN]` line a node. `events/b1.jsonl` follows the shape of a session's events.jsonl.

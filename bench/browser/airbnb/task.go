@@ -1,10 +1,10 @@
 package airbnb
 
 import (
+	_ "embed"
 	"encoding/json"
 	"fmt"
 	"net/url"
-	"os"
 	"regexp"
 	"slices"
 	"strings"
@@ -53,37 +53,36 @@ type Task struct {
 	Steps  []Step `json:"steps"`
 }
 
-func LoadTask(path string) (Task, error) {
+//go:embed task.json
+var taskJSON []byte
+
+func Load() (Task, error) {
 	var task Task
-	raw, err := os.ReadFile(path)
-	if err != nil {
-		return task, err
-	}
-	if err := json.Unmarshal(raw, &task); err != nil {
-		return task, fmt.Errorf("%s: %w", path, err)
+	if err := json.Unmarshal(taskJSON, &task); err != nil {
+		return task, fmt.Errorf("task.json: %w", err)
 	}
 	for at, step := range task.Steps {
 		if step.Step != at+1 {
-			return task, fmt.Errorf("%s: step %d sits at position %d", path, step.Step, at+1)
+			return task, fmt.Errorf("task.json: step %d sits at position %d", step.Step, at+1)
 		}
 		switch step.Check.Kind {
 		case SearchedFirst, SearchQuery, RoomsOpened, ReportListings:
 		case FinalIsNthListing:
 			if step.Check.Count < 1 {
-				return task, fmt.Errorf("%s: step %d names no listing by its place in the visit order", path, step.Step)
+				return task, fmt.Errorf("task.json: step %d names no listing by its place in the visit order", step.Step)
 			}
 		case SearchParams:
 			if len(step.Check.Params) == 0 {
-				return task, fmt.Errorf("%s: step %d checks no params", path, step.Step)
+				return task, fmt.Errorf("task.json: step %d checks no params", step.Step)
 			}
 		case ReportFields:
 			for _, field := range step.Check.Fields {
 				if fieldPatterns[field] == nil {
-					return task, fmt.Errorf("%s: step %d names unknown field %q", path, step.Step, field)
+					return task, fmt.Errorf("task.json: step %d names unknown field %q", step.Step, field)
 				}
 			}
 		default:
-			return task, fmt.Errorf("%s: step %d has unknown check %q", path, step.Step, step.Check.Kind)
+			return task, fmt.Errorf("task.json: step %d has unknown check %q", step.Step, step.Check.Kind)
 		}
 	}
 	return task, nil
@@ -167,10 +166,8 @@ func openedRooms(run Run) map[string]bool {
 }
 
 func snapshotURL(snapshot string) string {
-	for line := range strings.Lines(snapshot) {
-		if after, found := strings.CutPrefix(line, "url: "); found {
-			return strings.TrimSpace(after)
-		}
+	if header := snapshotHeader.FindStringSubmatch(snapshot); header != nil {
+		return header[2]
 	}
 	return ""
 }

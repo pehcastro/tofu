@@ -18,7 +18,7 @@ type Row struct {
 	Passed        int
 	Wall          time.Duration
 	MainTokens    int
-	BrowserTokens int
+	BrowserTokens *int
 	TabsOpened    int
 	Repeated      int
 	Refused       int
@@ -38,11 +38,11 @@ func Score(task Task, run Run) Row {
 
 func Render(rows []Row) (string, error) {
 	var table strings.Builder
-	table.WriteString("| arm | steps | wall | main tokens | browser tokens | tabs opened | repeated | refused | failed steps | main build | browser build | credential | wire | machine | date |\n")
-	table.WriteString("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n")
+	table.WriteString("| arm | steps | wall | main tokens | browser tokens | tabs opened | repeated | refused | failed steps | main build | browser build | main credential | browser credential | wire | machine | date |\n")
+	table.WriteString("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n")
 	for _, row := range rows {
 		if row.Conditions.Credential != rows[0].Conditions.Credential {
-			return "", fmt.Errorf("arm %s ran on a %s credential and arm %s on %s, and the two are not compared", row.Arm, row.Conditions.Credential, rows[0].Arm, rows[0].Conditions.Credential)
+			return "", fmt.Errorf("the main model of arm %s ran on a %s credential and that of arm %s on %s, and the two are not compared", row.Arm, row.Conditions.Credential, rows[0].Arm, rows[0].Conditions.Credential)
 		}
 		var failed []string
 		for _, result := range row.Steps {
@@ -50,10 +50,14 @@ func Render(rows []Row) (string, error) {
 				failed = append(failed, fmt.Sprint(result.Step))
 			}
 		}
+		browserTokens := "not recorded"
+		if row.BrowserTokens != nil {
+			browserTokens = fmt.Sprint(*row.BrowserTokens)
+		}
 		conditions := row.Conditions
-		fmt.Fprintf(&table, "| %s | %d of %d | %.0f s | %d | %d | %d | %d | %d | %s | %s | %s | %s | %s | %s | %s |\n",
-			row.Arm, row.Passed, len(row.Steps), row.Wall.Seconds(), row.MainTokens, row.BrowserTokens, row.TabsOpened, row.Repeated, row.Refused,
-			strings.Join(failed, " "), conditions.MainBuild, conditions.BrowserBuild, conditions.Credential, conditions.Wire, conditions.Machine, conditions.Date)
+		fmt.Fprintf(&table, "| %s | %d of %d | %.0f s | %d | %s | %d | %d | %d | %s | %s | %s | %s | %s | %s | %s | %s |\n",
+			row.Arm, row.Passed, len(row.Steps), row.Wall.Seconds(), row.MainTokens, browserTokens, row.TabsOpened, row.Repeated, row.Refused,
+			strings.Join(failed, " "), conditions.MainBuild, conditions.BrowserBuild, conditions.Credential, conditions.BrowserCredential, conditions.Wire, conditions.Machine, conditions.Date)
 	}
 	return table.String(), nil
 }
