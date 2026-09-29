@@ -2,6 +2,7 @@ package models
 
 import (
 	"context"
+	"errors"
 	"slices"
 	"strings"
 	"unicode/utf8"
@@ -71,6 +72,7 @@ func (t Target) takes() library.Kind {
 
 type Group struct {
 	Source  string
+	Display string
 	Rows    []Row
 	Efforts []llm.Effort
 	Key     string
@@ -82,9 +84,9 @@ func (g Group) label() string {
 	case g.Key == "":
 		return g.Source
 	case g.KeySet:
-		return g.Source + keySetMark
+		return g.Display + keySetMark
 	}
-	return g.Source + noKeyMark
+	return g.Display + noKeyMark
 }
 
 type Source struct {
@@ -98,8 +100,8 @@ type Keys struct {
 }
 
 type keyEntry struct {
-	name, typed, refusal string
-	checking             int
+	name, provider, slug, typed, refusal string
+	checking                             int
 }
 
 type tab int
@@ -194,7 +196,7 @@ func inKeyGroup(groups []Group, one library.Model, row Row, keys Keys) []Group {
 	if at < 0 {
 		group := Group{Source: source, Efforts: one.Efforts}
 		if row.Pays == library.PaysKey {
-			group.Key = one.Provider.KeyName()
+			group.Key, group.Display = one.Provider.KeyName(), one.Provider.Display()
 			group.KeySet = keys.Set(group.Key)
 		}
 		groups, at = append(groups, group), len(groups)
@@ -378,6 +380,9 @@ func (m *Model) Checked(result KeyChecked) Intent {
 	}
 	if result.err != nil {
 		m.entry.checking, m.entry.refusal = 0, result.err.Error()
+		if refused := (*library.KeyRefused)(nil); errors.As(result.err, &refused) {
+			m.entry.refusal = refused.Brief()
+		}
 		return Intent{}
 	}
 	for _, groups := range [][]Group{m.classifiers, m.Groups} {
@@ -474,7 +479,7 @@ func (m *Model) choose() Intent {
 	case row.excluded():
 		return Intent{Action: Login, Slug: row.Slug}
 	case missing != "":
-		m.entry = keyEntry{name: missing}
+		m.entry = keyEntry{name: missing, provider: m.groupOf(row).Display, slug: row.Slug}
 		return Intent{}
 	case m.assign == nil:
 		return Intent{Action: Pick, Slug: row.Slug, Effort: m.effort}

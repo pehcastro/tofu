@@ -40,6 +40,22 @@ func (p Provider) KeyName() string {
 	panic("models: unknown provider " + string(p))
 }
 
+func (p Provider) Display() string {
+	switch p {
+	case Anthropic:
+		return "Anthropic"
+	case OpenAI:
+		return "OpenAI"
+	case TypeSafe:
+		return "TypeSafe"
+	case OpenRouter:
+		return "OpenRouter"
+	case Meta:
+		return "Meta"
+	}
+	panic("models: unknown provider " + string(p))
+}
+
 type Kind string
 
 const (

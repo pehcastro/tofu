@@ -249,7 +249,7 @@ func TestAKeyModelWithNoKeyAsksForTheKeyMaskedAndEnterStoresIt(t *testing.T) {
 	const madeUp = "ts-made-up-4d1e9a7c0b52"
 	m := classifierPicker(t, shippedLibrary(t))
 	view := ansi.Strip(m.View())
-	if strings.Contains(view, "claude-sub/") || !strings.Contains(view, "typesafe · no key") {
+	if strings.Contains(view, "claude-sub/") || !strings.Contains(view, "TypeSafe · no key") {
 		t.Fatalf("the classifier picker does not list the key providers with their marks\n%s", view)
 	}
 	for range 4 {
@@ -258,7 +258,7 @@ func TestAKeyModelWithNoKeyAsksForTheKeyMaskedAndEnterStoresIt(t *testing.T) {
 		}
 		m.Key("down")
 	}
-	if got := m.Key("enter"); got.Action != None || !strings.Contains(ansi.Strip(m.View()), sys.TypeSafeKeyName) {
+	if got := m.Key("enter"); got.Action != None || !strings.Contains(ansi.Strip(m.View()), "TypeSafe key") {
 		t.Fatalf("enter on a model with no key returned %+v and opened no input\n%s", got, ansi.Strip(m.View()))
 	}
 	typeInto(&m, madeUp)
@@ -274,7 +274,7 @@ func TestAKeyModelWithNoKeyAsksForTheKeyMaskedAndEnterStoresIt(t *testing.T) {
 	if stored, _ := sys.StoredKeys(); len(stored) != 0 {
 		t.Fatalf("esc stored %d keys", len(stored))
 	}
-	if strings.Contains(ansi.Strip(m.View()), keyFooter) {
+	if strings.Contains(ansi.Strip(m.View()), keyHints) {
 		t.Fatal("esc left the input open")
 	}
 	m.Key("enter")
@@ -291,7 +291,7 @@ func TestAKeyModelWithNoKeyAsksForTheKeyMaskedAndEnterStoresIt(t *testing.T) {
 		t.Fatalf("the temp home holds a %s of length %d (%v)", sys.TypeSafeKeyName, len(stored[sys.TypeSafeKeyName]), err)
 	}
 	m.AssignTo(1)
-	if view := ansi.Strip(m.View()); !strings.Contains(view, "typesafe · key set") {
+	if view := ansi.Strip(m.View()); !strings.Contains(view, "TypeSafe · key set") {
 		t.Fatalf("the mark does not say the key is set\n%s", view)
 	}
 }

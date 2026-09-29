@@ -12,7 +12,7 @@
    PROVIDERS                 Classifier model                                                     
      all                     the typed model that judges the model's…  ASSIGNED MODEL             
      claude-sub                                                        nothing is bound, so it    
-     meta · no key                                                     runs on the subscription   
+     Meta · no key                                                     runs on the subscription   
                                                                        default                    
    f5 reloads models                                                                              
                                                                        enter chooses a new model  

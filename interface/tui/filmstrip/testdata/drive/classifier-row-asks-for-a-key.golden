@@ -41,8 +41,8 @@
                                                                                                   
    PROVIDERS                 jev-latest                                source  typesafe           
    › all                     openrouter                                kind    classifier         
-     openrouter · no key   › jev-latest                                pays    key                
-     typesafe · no key       typesafe                                  window                     
+     OpenRouter · no key   › jev-latest                                pays    key                
+     TypeSafe · no key       typesafe                                  window                     
                                                                        layer   library            
    f5 reloads models                                                   key     not set            
                                                                                                   
@@ -67,17 +67,17 @@
    Select model            CATALOG                                     SELECTION                  
    2 models                ←→ provider · tab roles                                                
                                                                        jev-latest                 
-   Models  Roles           > Type to filter                            typesafe/jev-latest        
-                                                                                                  
-   PROVIDERS        TYPESAFE_API_KEY                                         esc  esafe           
-   › all            A key pays for this model. It goes to the credential store    ssifier         
-     openrouter ·   and is never shown.                                                           
-     typesafe · no                                                                                
-                    › •••••••••••••••••••█                                        rary            
-   f5 reloads mode                                                                 set            
-                                                                                                  
-                    type the key · enter stores it · esc cancels                                  
-                                                                                  model           
+   Models  Roles             TypeSafe key                       esc    typesafe/jev-latest        
+                             for typesafe/jev-latest                                              
+   PROVIDERS                                                           source  typesafe           
+   › all                     ╭────────────────────────────────────╮    kind    classifier         
+     OpenRouter · no key     │ › •••••••••••••••••••█             │    pays    key                
+     TypeSafe · no key       ╰────────────────────────────────────╯    window                     
+                                                                       layer   library            
+   f5 reloads models         stored in the credential store, never     key     not set            
+                             shown                                                                
+                                                                       ASSIGN TO                  
+                             enter save · esc cancel                   Classifier model           
                                                                                                   
                                                                        enter asks for the key     
                                                                                                   

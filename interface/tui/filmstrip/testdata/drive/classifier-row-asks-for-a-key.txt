@@ -6,16 +6,16 @@ wait Classifier model
 screen
 key down
 key enter
-wait typesafe · no key
+wait TypeSafe · no key
 key down
 screen
 key enter
-wait TYPESAFE_API_KEY
+wait TypeSafe key
 type ts-made-up-4d1e9a7c
 absent 4d1e
 screen
 key esc
-absent TYPESAFE_API_KEY
+absent TypeSafe key
 key enter
 paste ts-made-up-4d1e9a7c
 wait •••••••••••••••••••█

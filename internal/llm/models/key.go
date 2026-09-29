@@ -4,10 +4,10 @@ import (
 	"cmp"
 	"context"
 	"errors"
-	"fmt"
 	"net/http"
 	"os"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -32,21 +32,41 @@ func StoreMetaKey(ctx context.Context, key string) error {
 		AttemptTimeout: time.Duration(konst.TurnAttemptTimeoutMillis) * time.Millisecond,
 		Concurrency:    1,
 	})
-	if err == nil {
-		_, err = client.Do(ctx, transport.Request{
-			Method: http.MethodGet,
-			URL:    MetaBaseURL() + codex.ModelsPath,
-			Header: http.Header{"Authorization": {"Bearer " + key}, "Accept": {"application/json"}},
-		})
-	}
-	var answered *transport.Error
-	if errors.As(err, &answered) && answered.Status != 0 {
-		err = fmt.Errorf("meta answered %d %s", answered.Status, answered.Detail)
-	}
 	if err != nil {
-		return errors.New("the key did not reach meta, so nothing was written: " + strings.TrimSpace(strings.ReplaceAll(err.Error(), key, sys.KeyRedactedMark)))
+		return err
+	}
+	_, err = client.Do(ctx, transport.Request{
+		Method: http.MethodGet,
+		URL:    MetaBaseURL() + codex.ModelsPath,
+		Header: http.Header{"Authorization": {"Bearer " + key}, "Accept": {"application/json"}},
+	})
+	if err != nil {
+		refused := &KeyRefused{Provider: Meta, Detail: err.Error()}
+		var answered *transport.Error
+		if errors.As(err, &answered) && answered.Status != 0 {
+			refused.Status, refused.Detail = answered.Status, answered.Detail
+		}
+		refused.Detail = strings.TrimSpace(strings.ReplaceAll(refused.Detail, key, sys.KeyRedactedMark))
+		return refused
 	}
 	return sys.SaveKey(sys.MetaMuseKeyName, key)
+}
+
+type KeyRefused struct {
+	Provider Provider
+	Status   int
+	Detail   string
+}
+
+func (e *KeyRefused) Brief() string {
+	if e.Status == 0 {
+		return "could not reach " + e.Provider.Display()
+	}
+	return e.Provider.Display() + " refused the key (" + strconv.Itoa(e.Status) + ")"
+}
+
+func (e *KeyRefused) Error() string {
+	return e.Brief() + ", so nothing was written: " + e.Detail
 }
 
 func (c Library) KeyDefault(provider Provider) (Model, error) {

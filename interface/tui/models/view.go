@@ -58,11 +58,17 @@ const (
 	keyHint         = "enter asks for the key"
 	keySetMark      = " · key set"
 	noKeyMark       = " · no key"
-	keyPanelWidth   = 64
-	keyWhy          = "A key pays for this model. It goes to the credential store and is never shown."
-	keyFooter       = "type the key · enter stores it · esc cancels"
-	keyChecking     = "checking the key with its provider"
-	checkingFooter  = "esc cancels the check"
+	keyInset        = 1
+	keyPanelPad     = 2
+	keyBoxChrome    = 4
+	keyTitle        = " key"
+	keyFor          = "for "
+	keyStored       = "stored in the credential store, never shown"
+	keyHints        = "enter save · esc cancel"
+	keyChecking     = "checking with "
+	checkingHints   = "esc cancel"
+	promptGlyph     = "› "
+	caretGlyph      = "█"
 	maskGlyph       = "•"
 )
 
@@ -137,15 +143,20 @@ func (m Model) cached(width, height int) string {
 	return m.drawn.modal
 }
 
-func (m Model) keyPanel(modal string) string {
-	body := look.Accent("› ") + look.Title(strings.Repeat(maskGlyph, utf8.RuneCountInString(m.entry.typed))) + look.Accent("█") +
-		"\n" + look.Style(look.Red).Render(m.entry.refusal)
-	footer := keyFooter
-	if m.entry.checking != 0 {
-		body, footer = body+look.Muted(keyChecking), checkingFooter
+func (m Model) keyDialog(width int) string {
+	inner := width - 2*keyPanelPad
+	input, hints := look.Muted(keyChecking+m.entry.provider), checkingHints
+	if m.entry.checking == 0 {
+		shown := min(utf8.RuneCountInString(m.entry.typed), inner-keyBoxChrome-utf8.RuneCountInString(promptGlyph+caretGlyph))
+		input, hints = look.Accent(promptGlyph)+look.Title(strings.Repeat(maskGlyph, max(0, shown)))+look.Accent(caretGlyph), keyHints
 	}
-	panel := look.DialogPanel(min(keyPanelWidth, lipgloss.Width(modal)), m.entry.name, keyWhy, body, footer)
-	return look.Over(modal, panel, max(0, (lipgloss.Width(modal)-lipgloss.Width(panel))/2), max(0, (lipgloss.Height(modal)-lipgloss.Height(panel))/2))
+	body := lipgloss.NewStyle().Width(inner).Padding(0, 1).Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color(string(look.FaintColor))).Render(input)
+	if m.entry.refusal != "" {
+		body += "\n" + look.Style(look.Red).Width(inner).Render(m.entry.refusal)
+	}
+	body += "\n\n" + look.Muted(keyStored)
+	return look.DialogPanel(width, m.entry.provider+keyTitle, keyFor+m.entry.slug, body, hints)
 }
 
 func (m Model) modal(width, height int) string {
@@ -158,11 +169,12 @@ func (m Model) modal(width, height int) string {
 	if detail > 0 {
 		panes = append(panes, look.ModalPane(detail, modalHeight, look.Panel, 1, m.detailPane()))
 	}
-	modal := lipgloss.NewStyle().MaxHeight(modalHeight).Render(lipgloss.JoinHorizontal(lipgloss.Top, panes...))
-	if m.entry.name == "" {
-		return modal
+	modal := lipgloss.JoinHorizontal(lipgloss.Top, panes...)
+	if m.entry.name != "" {
+		dialog := m.keyDialog(list - 2*keyInset)
+		modal = look.Over(look.Dim(modal), dialog, side+keyInset, max(0, (modalHeight-lipgloss.Height(dialog))/2))
 	}
-	return m.keyPanel(modal)
+	return lipgloss.NewStyle().MaxHeight(modalHeight).Render(modal)
 }
 
 func (m Model) sidePane(width int) string {

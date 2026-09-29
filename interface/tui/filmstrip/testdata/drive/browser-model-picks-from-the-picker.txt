@@ -15,19 +15,19 @@ key down
 key enter
 wait ASSIGN TO
 type muse-spark-1.3
-wait meta · no key
+wait Meta · no key
 absent jev-latest
 screen
 key enter
-wait META_MUSE_API_KEY
+wait Meta key
 type meta-made-up-silent-0a9f
 key enter
-wait checking the key with its provider
-wait esc cancels the check
+wait checking with Meta
+wait esc cancel
 absent 0a9f
 screen
 key esc
-absent checking the key
+absent checking with Meta
 wait ASSIGN TO
 key enter
 paste meta-made-up-accepted-3d7e
