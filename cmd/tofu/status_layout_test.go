@@ -1,176 +1,146 @@
 package main
 
 import (
+	"bytes"
+	"net/http"
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
-	"tofu/interface/tui/theme"
+	"github.com/charmbracelet/colorprofile"
+
+	"tofu/interface/cli"
 	"tofu/internal/golden"
-	"tofu/internal/widget"
+	"tofu/internal/llm/cred"
+	"tofu/internal/sys"
 )
 
 const (
-	barRunes    = "▓░"
-	narrowWidth = 80
-	wideWidth   = 120
+	fixtureHome      = "/home/sample"
+	fixtureMaxCells  = 100
+	madeUpGateKey    = "sk-or-v1-made-up-for-the-receipt-7Qx2"
+	madeUpVendorBody = `{"error":{"message":"No auth credentials found for sk-or-v1-made-up"}}`
 )
 
-func renderedAt(width int) []string {
-	return strings.Split(strings.TrimSuffix(statusText(statusFixture(), plain, fixtureMoment(), width), "\n"), "\n")
-}
+func fixtureMoment() time.Time { return time.Date(2026, 9, 29, 12, 0, 0, 0, time.UTC) }
 
-func headAt(lines []string, number string) int {
-	for at, line := range lines {
-		if strings.Contains(line, cardTop) && strings.Contains(line, number) {
-			return at
-		}
-	}
-	return -1
-}
-
-func barColumn(line string) int {
-	at := strings.IndexAny(line, barRunes)
-	if at < 0 {
-		return -1
-	}
-	return widget.Cells(line[:at])
-}
-
-func TestNoRenderedLineCollidesTheAccountIDWithTheState(t *testing.T) {
-	for _, width := range []int{narrowWidth, wideWidth} {
-		lines := renderedAt(width)
-		head, state := "", ""
-		for _, line := range lines {
-			if strings.Contains(line, fixtureCodexAccount) {
-				head = line
+func statusFixture() statusData {
+	at := fixtureMoment()
+	return statusData{
+		Subscriptions: []subscriptionStatus{
+			{Source: "claude-sub", Accounts: []accountStatus{
+				{ID: 1, Account: "ada@example.com", State: stateInUse, Login: "oauth", ReloginBy: time.Date(2026, 10, 27, 9, 0, 0, 0, time.UTC), Windows: []windowStatus{
+					{ID: "5h", ResetsAt: at.Add(4*time.Hour + 28*time.Minute)},
+					{ID: "7d", Used: 0.67, ResetsAt: at.Add(22 * time.Hour)},
+					{ID: "7d:opus", Only: []string{"opus-5", "opus-5-5"}},
+				}},
+				{ID: 2, Account: "lin.marsh@example.org", State: stateStandby, Login: "oauth", ReloginBy: time.Date(2026, 11, 3, 9, 0, 0, 0, time.UTC), Windows: []windowStatus{
+					{ID: "5h", Used: 0.92, ResetsAt: at.Add(51 * time.Minute)},
+				}},
+				{ID: 3, Account: "ops@example.net", State: stateRefreshFailed, Login: "oauth"},
+			}},
+			{Source: "codex-sub", Accounts: []accountStatus{
+				{ID: 4, Account: "11111111-2222-3333-4444-555555555555", State: stateSpent, Login: "oauth", Plan: "pro", Windows: []windowStatus{
+					{ID: "5h", Used: 1, ResetsAt: at.Add(2 * time.Hour)},
+				}},
+			}},
+		},
+		Keys: keyStatuses(func(variable string) string {
+			if variable == sys.OpenRouterKeyName {
+				return "sk-or-v1-made-up-000000003498"
 			}
-			if strings.Contains(line, fixtureSpentState) {
-				state = line
-			}
-		}
-		if head == "" || state == "" {
-			t.Fatalf("at %d columns the account or its state is missing:\n%s", width, strings.Join(lines, "\n"))
-		}
-		if head == state {
-			t.Fatalf("at %d columns the account id and the state share a line: %q", width, head)
-		}
-		if !strings.HasSuffix(head, fixtureCodexAccount) {
-			t.Fatalf("at %d columns something follows the account id: %q", width, head)
-		}
-		if fields := strings.Fields(state); len(fields) < 2 || fields[1] != factState {
-			t.Fatalf("at %d columns the state carries no label: %q", width, state)
-		}
+			return ""
+		}),
 	}
 }
 
-func TestNothingInTheListingTruncatesOrRunsPastTheEdge(t *testing.T) {
-	for _, width := range []int{narrowWidth, wideWidth} {
-		for _, line := range renderedAt(width) {
-			if strings.Contains(line, "…") {
-				t.Errorf("at %d columns a line truncates: %q", width, line)
-			}
-			if cells := widget.Cells(line); cells > width {
-				t.Errorf("at %d columns a line is %d cells wide: %q", width, cells, line)
-			}
-		}
-	}
-}
-
-func TestTwoAccountsUnderOneSubscriptionAreVisiblySeparated(t *testing.T) {
-	for _, width := range []int{narrowWidth, wideWidth} {
-		lines := renderedAt(width)
-		first, second := headAt(lines, "#1"), headAt(lines, "#2")
-		if first < 0 || second <= first {
-			t.Fatalf("at %d columns the two accounts are not both drawn:\n%s", width, strings.Join(lines, "\n"))
-		}
-		between := lines[first+1 : second]
-		closed, aired := false, false
-		for _, line := range between {
-			closed = closed || strings.HasPrefix(strings.TrimSpace(line), cardFoot)
-			aired = aired || strings.TrimSpace(line) == ""
-		}
-		if !closed || !aired {
-			t.Fatalf("at %d columns the first account is closed=%v and followed by air=%v:\n%s",
-				width, closed, aired, strings.Join(between, "\n"))
-		}
-	}
-}
-
-func TestTheAccountTheTurnPassedOverSaysSoWithoutAskingForAttention(t *testing.T) {
-	painted := statusText(statusFixture(), coloured, fixtureMoment(), narrowWidth)
-	unchosen := cardOf(t, painted, "#2")
-	if !strings.Contains(unchosen, statusUnchosen) {
-		t.Fatalf("the account the picker passed over does not say so:\n%s", unchosen)
-	}
-	if strings.Contains(unchosen, theme.Warn().Render(statusUnchosen)) {
-		t.Fatalf("an account with room that simply was not chosen is drawn as a warning:\n%s", unchosen)
-	}
-	if !strings.Contains(cardOf(t, painted, "#1"), statusInUse) {
-		t.Fatalf("the chosen account does not say it is the one in use:\n%s", painted)
-	}
-}
-
-func TestAnAccountThatNeedsNoAttentionCarriesNoAttentionColour(t *testing.T) {
-	painted := statusText(statusFixture(), coloured, fixtureMoment(), narrowWidth)
-	calm := cardOf(t, painted, "#4")
-	if strings.Contains(calm, theme.Warn().Render(statusInUse)) {
-		t.Fatalf("an account in use is drawn as a warning:\n%s", calm)
-	}
-	if warn, _, _ := strings.Cut(theme.Warn().Render("x"), "x"); warn != "" && strings.Contains(calm, warn) {
-		t.Fatalf("an account that needs no attention carries the warning colour:\n%s", calm)
-	}
-	if loud := cardOf(t, painted, "#3"); !strings.Contains(loud, theme.Warn().Render(fixtureSpentState)) {
-		t.Fatalf("the spent account is not drawn as a warning:\n%s", loud)
-	}
-}
-
-func TestEveryWindowBarStartsAtTheSameColumn(t *testing.T) {
-	for _, width := range []int{narrowWidth, wideWidth} {
-		column, bars, sawWidestLabel := -1, 0, false
-		for _, line := range renderedAt(width) {
-			at := barColumn(line)
-			if at < 0 {
-				continue
-			}
-			bars++
-			sawWidestLabel = sawWidestLabel || strings.Contains(line, fixtureWidestWindow)
-			if column < 0 {
-				column = at
-			}
-			if at != column {
-				t.Fatalf("at %d columns a bar starts at %d and another at %d: %q", width, column, at, line)
-			}
-		}
-		if bars != fixtureBars {
-			t.Fatalf("at %d columns %d bars are drawn, want %d", width, bars, fixtureBars)
-		}
-		if !sawWidestLabel {
-			t.Fatalf("at %d columns %s is not drawn", width, fixtureWidestWindow)
-		}
-	}
-}
-
-func TestTheListingGoldens(t *testing.T) {
-	for _, width := range []int{narrowWidth, wideWidth} {
-		golden.Assert(t, "status-"+strconv.Itoa(width)+".golden", statusText(statusFixture(), plain, fixtureMoment(), width))
-	}
-}
-
-func cardOf(t *testing.T, listing, head string) string {
+func printedStatus(t *testing.T, page cli.Page) string {
 	t.Helper()
-	var held []string
-	for _, line := range strings.Split(listing, "\n") {
-		switch {
-		case strings.Contains(line, cardTop) && strings.Contains(line, head):
-			held = []string{line}
-		case held == nil:
-		case strings.Contains(line, cardFoot+cardRule):
-			return strings.Join(append(held, line), "\n")
-		default:
-			held = append(held, line)
+	var out bytes.Buffer
+	if err := page.Print(&out, statusLines(page, statusFixture(), fixtureMoment())); err != nil {
+		t.Fatal(err)
+	}
+	return out.String()
+}
+
+func TestTheStatusGoldensFollowTheAccountsMockAtEightyAndOneTwenty(t *testing.T) {
+	for _, columns := range []int{80, 120} {
+		page := cli.Page{Profile: colorprofile.NoTTY, Width: min(columns, fixtureMaxCells), Home: fixtureHome}
+		golden.Assert(t, "status-"+strconv.Itoa(columns)+".golden", printedStatus(t, page))
+	}
+}
+
+func TestNoColourStatusWritesNoEscapeAndAColourTerminalDoes(t *testing.T) {
+	terminal := []string{"TTY_FORCE=1", "COLORTERM=truecolor", "TERM=xterm-256color"}
+	for _, c := range []struct {
+		environ []string
+		escape  bool
+	}{{terminal, true}, {append(terminal, "NO_COLOR=1"), false}} {
+		printed := printedStatus(t, cli.Detect(&bytes.Buffer{}, c.environ))
+		if got := strings.IndexByte(printed, 0x1b) >= 0; got != c.escape {
+			t.Errorf("%v: an ESC byte written %v, want %v", c.environ, got, c.escape)
 		}
 	}
-	t.Fatalf("no card is headed %q:\n%s", head, listing)
-	return ""
+}
+
+func TestLoginOpenRouterAgainstAStubPrintsOneReceiptLine(t *testing.T) {
+	scratchProject(t)
+	jevStub(t, http.StatusOK, loginReachableReply, nil)
+	var out, errOut bytes.Buffer
+	if code := loginVerb([]string{openRouterName}, strings.NewReader(madeUpGateKey+"\n"), &out, &errOut); code != exitOK {
+		t.Fatalf("login openrouter exited %d:\n%s", code, errOut.String())
+	}
+	if want := "✓ OpenRouter key ····7Qx2 checked and stored  ~/.tofu/agent.db\n"; out.String() != want {
+		t.Fatalf("login openrouter printed\n%q\nwant\n%q", out.String(), want)
+	}
+}
+
+func TestLoginOpenRouterRefusedWithA401PrintsOneErrorLineAndNoVendorBody(t *testing.T) {
+	scratchProject(t)
+	jevStub(t, http.StatusUnauthorized, madeUpVendorBody, nil)
+	var out, errOut bytes.Buffer
+	if code := loginVerb([]string{openRouterName}, strings.NewReader(madeUpGateKey+"\n"), &out, &errOut); code != exitVerdict {
+		t.Fatalf("a refused key exited %d, want %d", code, exitVerdict)
+	}
+	lines := strings.Split(strings.TrimSuffix(errOut.String(), "\n"), "\n")
+	want := []string{"paste the openrouter key, it is not echoed, then press enter:", "✗ OpenRouter refused the key (401)", "  → tofu login openrouter"}
+	if out.String() != "" || strings.Join(lines, "\n") != strings.Join(want, "\n") {
+		t.Fatalf("a 401 printed out %q and err\n%s\nwant err\n%s", out.String(), errOut.String(), strings.Join(want, "\n"))
+	}
+}
+
+func TestDisableAndEnablePrintOneReceiptLineEach(t *testing.T) {
+	scratchProject(t)
+	savedAccount(t)
+	for _, c := range []struct{ flag, want string }{
+		{"--disable", "✓ #1 claude-sub ada@example.com set aside  ~/.tofu/agent.db\n"},
+		{"--enable", "✓ #1 claude-sub ada@example.com enabled  ~/.tofu/agent.db\n"},
+	} {
+		var out, errOut bytes.Buffer
+		if code := loginVerb([]string{c.flag, "1"}, nil, &out, &errOut); code != exitOK {
+			t.Fatalf("login %s 1 exited %d:\n%s", c.flag, code, errOut.String())
+		}
+		if out.String() != c.want {
+			t.Errorf("login %s 1 printed\n%q\nwant\n%q", c.flag, out.String(), c.want)
+		}
+	}
+}
+
+func savedAccount(t *testing.T) {
+	t.Helper()
+	path, err := cred.Path()
+	if err != nil {
+		t.Fatal(err)
+	}
+	store, err := cred.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = store.Close() }()
+	credential := cred.Credential{Provider: cred.ClaudeSub, Kind: "oauth", Access: "made-up-access", Refresh: "made-up-refresh",
+		Expires: fixtureMoment().Add(time.Hour), Authorized: fixtureMoment(), Identity: cred.Identity{Email: "ada@example.com"}}
+	if err := store.Save(credential, fixtureMoment()); err != nil {
+		t.Fatal(err)
+	}
 }

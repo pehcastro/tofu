@@ -5,145 +5,107 @@ import (
 	"strings"
 	"time"
 
+	"tofu/interface/cli"
 	"tofu/internal/widget"
 )
 
-const (
-	accountNumberColumn = 4
-	factGap             = 2
-	factTextFloor       = 24
-	cardTop             = "┌ "
-	cardSide            = "│ "
-	cardFoot            = "└"
-	cardRule            = "─"
-	factState           = "state"
-	factLogin           = "login"
-	factPlan            = "plan"
-	factWindows         = "windows"
-)
+const reloginDay = "2 Jan"
 
-type layout struct {
-	shade  palette
-	now    time.Time
-	column int
-	width  int
+func (s accountState) look() (cli.Verdict, string) {
+	switch s {
+	case stateInUse:
+		return cli.Verdict{Mark: cli.Active, Text: "in use"}, ""
+	case stateStandby:
+		return cli.Verdict{Mark: cli.Idle, Text: "standby"}, ""
+	case stateUnchecked:
+		return cli.Verdict{Mark: cli.Idle, Text: "not checked"}, ""
+	case stateSpent:
+		return cli.Verdict{Mark: cli.Warn, Text: "spent"}, ""
+	case stateRateLimited:
+		return cli.Verdict{Mark: cli.Warn, Text: "rate limited"}, ""
+	case stateUnread:
+		return cli.Verdict{Mark: cli.Warn, Text: "usage unread"}, ""
+	case stateSetAside:
+		return cli.Verdict{Mark: cli.Fail, Text: "set aside"}, "set aside by hand"
+	case stateRefreshFailed:
+		return cli.Verdict{Mark: cli.Fail, Text: "set aside"}, "refresh failed, sign in again"
+	case stateExpired:
+		return cli.Verdict{Mark: cli.Fail, Text: "expired"}, "login expired, sign in again"
+	case stateRefused:
+		return cli.Verdict{Mark: cli.Fail, Text: "signed out"}, "the token was refused, sign in again"
+	}
+	panic("tofu login: unknown account state " + string(s))
 }
 
-func statusText(report statusReport, shade palette, now time.Time, width int) string {
-	page := layout{shade: shade, now: now, column: factColumn(report), width: width}
-	lines := headlineLines(report, page)
-	for _, source := range report.Sources {
-		lines = append(lines, "", source.Subscription)
-		for _, account := range source.Accounts {
-			lines = append(lines, "")
-			lines = append(lines, accountCard(account, page)...)
+func statusLines(page cli.Page, data statusData, now time.Time) []string {
+	signedIn, attention := 0, 0
+	var body []string
+	for _, sub := range data.Subscriptions {
+		body = append(body, "", page.Section(sub.Source, cli.Verdict{}))
+		for i, account := range sub.Accounts {
+			if i > 0 {
+				body = append(body, "")
+			}
+			card, calm := accountCard(page, sub.Source, account, now)
+			body = append(body, card...)
+			signedIn++
+			if !calm {
+				attention++
+			}
 		}
 	}
-	lines = append(lines, "", jevName)
-	for _, line := range wrapHard(report.Gate, max(width-len(reportIndent), factTextFloor)) {
-		lines = append(lines, reportIndent+line)
+	verdict := cli.Verdict{Mark: cli.Idle, Text: "none signed in"}
+	var facts []string
+	switch {
+	case attention == 1:
+		verdict = cli.Verdict{Mark: cli.Warn, Text: "1 needs attention"}
+	case attention > 1:
+		verdict = cli.Verdict{Mark: cli.Warn, Text: strconv.Itoa(attention) + " need attention"}
+	case signedIn > 0:
+		verdict = cli.Verdict{Mark: cli.Done, Text: "all ready"}
 	}
-	return strings.Join(lines, "\n") + "\n"
+	if signedIn > 0 {
+		facts = []string{strconv.Itoa(signedIn) + " signed in"}
+	}
+	rows := make([]cli.Row, len(data.Keys))
+	for i, key := range data.Keys {
+		rows[i] = cli.Row{Mark: cli.Done, Cells: []string{spoken(key.Role), key.name, key.Key}, Detail: key.use}
+		if key.Key == "" {
+			rows[i].Mark, rows[i].Cells[2], rows[i].Hint = cli.Idle, "not set", key.hint
+		}
+	}
+	lines := append(page.Title("Accounts", facts, verdict), body...)
+	lines = append(lines, "", page.Section("keys", cli.Verdict{}))
+	return append(lines, cli.Indent(page.Rows(rows)...)...)
 }
 
-func headlineLines(report statusReport, page layout) []string {
-	painted := page.shade.settled(report.State)
-	if report.State != statusServing {
-		painted = page.shade.unsettled(report.State)
+func accountCard(page cli.Page, source string, account accountStatus, now time.Time) ([]string, bool) {
+	verdict, reason := account.State.look()
+	id := strconv.FormatInt(account.ID, 10)
+	login, hint := account.Login, ""
+	switch {
+	case account.State == stateSetAside:
+		login, hint = reason, "tofu login --enable "+id
+	case reason != "":
+		login, hint = reason, "tofu login "+source
+	case !account.ReloginBy.IsZero():
+		login += " · re-login by " + account.ReloginBy.UTC().Format(reloginDay)
 	}
-	if gap := page.width - widget.Cells(report.Headline) - len(report.State); gap >= factGap {
-		return []string{report.Headline + strings.Repeat(" ", gap) + painted}
-	}
-	return []string{report.Headline, painted}
-}
-
-func accountCard(account accountReport, page layout) []string {
-	paint := page.shade.settled
-	if account.Attention {
-		paint = page.shade.unsettled
-	}
-	body := factLines(factState, account.State, page, paint)
-	body = append(body, factLines(factLogin, account.Login, page, nil)...)
-	body = append(body, factLines(factPlan, account.Plan, page, nil)...)
-	reported := false
+	facts := []cli.Fact{{Label: "login", Text: login}, {Label: "plan", Text: account.Plan}}
 	for _, window := range account.Windows {
-		if !window.Reported {
-			continue
-		}
-		reported = true
-		body = append(body, widget.Pad(window.ID, page.column)+
-			page.shade.full(window.Used, widget.Quota(window.Used, window.ResetsAt, page.now)))
-	}
-	if !reported {
-		body = append(body, factLines(factWindows, usageNoWindowReported, page, nil)...)
-	}
-	head := widget.Pad("#"+strconv.FormatInt(account.ID, 10), accountNumberColumn) + account.Account
-	return card(head, body, page)
-}
-
-func card(head string, body []string, page layout) []string {
-	lines := []string{reportIndent + page.shade.rule(cardTop) + head}
-	widest := widget.Cells(cardTop) + widget.Cells(head)
-	for _, line := range body {
-		lines = append(lines, reportIndent+page.shade.rule(cardSide)+line)
-		widest = max(widest, widget.Cells(cardSide)+widget.Cells(line))
-	}
-	foot := min(widest, max(page.width-len(reportIndent), 1))
-	return append(lines, reportIndent+page.shade.rule(cardFoot+strings.Repeat(cardRule, foot-1)))
-}
-
-func factColumn(report statusReport) int {
-	widest := max(len(factState), len(factLogin), len(factPlan), len(factWindows))
-	for _, source := range report.Sources {
-		for _, account := range source.Accounts {
-			for _, window := range account.Windows {
-				if window.Reported {
-					widest = max(widest, len(window.ID))
-				}
-			}
-		}
-	}
-	return widest + factGap
-}
-
-func factLines(label, text string, page layout, paint func(string) string) []string {
-	if text == "" {
-		return nil
-	}
-	room := max(page.width-len(reportIndent)-widget.Cells(cardSide)-page.column, factTextFloor)
-	var lines []string
-	for _, line := range wrapHard(text, room) {
-		if paint != nil {
-			line = paint(line)
-		}
-		lines = append(lines, widget.Pad(label, page.column)+line)
-		label = ""
-	}
-	return lines
-}
-
-func wrapHard(text string, width int) []string {
-	var lines []string
-	line := ""
-	for _, word := range strings.Fields(text) {
-		for widget.Cells(word) > width {
-			if line != "" {
-				lines = append(lines, line)
-				line = ""
-			}
-			runes := []rune(word)
-			lines = append(lines, string(runes[:width]))
-			word = string(runes[width:])
-		}
+		text := page.Bar(window.Used)
 		switch {
-		case line == "":
-			line = word
-		case widget.Cells(line)+1+widget.Cells(word) <= width:
-			line += " " + word
-		default:
-			lines = append(lines, line)
-			line = word
+		case len(window.Only) > 0:
+			text += cli.Gap + page.Label("only "+strings.Join(window.Only, ", "))
+		case !window.ResetsAt.IsZero():
+			text += cli.Gap + page.Label("resets in "+widget.Until(window.ResetsAt.Sub(now)))
 		}
+		facts = append(facts, cli.Fact{Label: window.ID, Text: text})
 	}
-	return append(lines, line)
+	lines := page.Facts(facts)
+	if hint != "" {
+		lines = append(lines, page.Hint(hint))
+	}
+	head := page.Label("#"+id) + cli.Gap + page.Subject(account.Account)
+	return page.Card(head, verdict, lines), verdict.Mark != cli.Warn && verdict.Mark != cli.Fail
 }

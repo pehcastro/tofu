@@ -7,91 +7,152 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
-	"fmt"
 	"io"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/charmbracelet/x/term"
 
+	"tofu/interface/cli"
 	"tofu/internal/judge/jev"
 	"tofu/internal/llm/cred"
 	"tofu/internal/llm/models"
 	"tofu/internal/sys"
+	"tofu/internal/transport"
 	"tofu/internal/widget"
 )
 
 const (
-	loginUsage = "usage: tofu login <claude-sub|codex-sub|openrouter|typesafe|meta|brave> [--paste], " +
-		"tofu login --status [--json] [--redact], or tofu login --disable|--enable <number>"
+	loginUsage       = "tofu login <claude-sub|codex-sub|openrouter|typesafe|meta|brave> [--paste] [--json]"
+	asideUsage       = "tofu login --disable|--enable <number from tofu login --status>"
 	setAsideCause    = "set aside by hand, run tofu login --enable to bring it back"
 	openRouterName   = string(models.OpenRouter)
 	typeSafeName     = string(models.TypeSafe)
 	metaName         = string(models.Meta)
 	braveName        = "brave"
+	braveDisplay     = "Brave"
 	openRouterFix    = "run tofu login openrouter and paste the key when it asks"
-	keyIsNeverTyped  = "a key is read from a prompt and never from an argument: run tofu login %s on its own"
 	accountMarkBytes = 2
+	changeSignedIn   = "signed_in"
+	changeSetAside   = "set_aside"
+	changeEnabled    = "enabled"
 )
 
+type loginRefusal struct {
+	problem cli.Problem
+	code    int
+}
+
+type loginReceipt struct {
+	text string
+	data any
+}
+
+type accountReceipt struct {
+	ID      int64  `json:"id"`
+	Source  string `json:"source"`
+	Account string `json:"account"`
+	Change  string `json:"change"`
+}
+
+func usageRefusal(what, hint string) *loginRefusal {
+	return &loginRefusal{cli.Problem{What: what, Hint: hint}, exitUsage}
+}
+
+func failure(what, hint string) *loginRefusal {
+	return &loginRefusal{cli.Problem{What: what, Hint: hint}, exitVerdict}
+}
+
+func refusedBy(display, name string, err error) *loginRefusal {
+	var refused *models.KeyRefused
+	var answered *transport.Error
+	what := err.Error()
+	switch {
+	case errors.As(err, &refused):
+		what = refused.Brief()
+	case errors.As(err, &answered) && answered.Status != 0:
+		what = display + " refused the key (" + strconv.Itoa(answered.Status) + ")"
+	case errors.As(err, &answered):
+		what = "could not reach " + display
+	}
+	return failure(what, "tofu login "+name)
+}
+
 func loginVerb(args []string, in io.Reader, out, errOut io.Writer) int {
+	now := time.Now()
+	if len(args) > 0 && args[0] == "--status" {
+		return statusVerb(args[1:], out, errOut, now, nil)
+	}
+	asJSON := slices.Contains(args, jsonFlag)
+	args = slices.DeleteFunc(slices.Clone(args), func(arg string) bool { return arg == jsonFlag })
+	verb := "login"
+	if len(args) > 0 {
+		verb += " " + args[0]
+	}
+	receipt, refusal := login(args, in, errOut, now)
+	if refusal != nil {
+		return loginFailed(verb, refusal, asJSON, out, errOut, now)
+	}
+	if asJSON {
+		return jsonExit(out, cli.Envelope{Verb: verb, OK: true, At: now, Data: receipt.data})
+	}
+	path, _ := cred.Path()
+	page := cli.Detect(out, os.Environ())
+	if page.Print(out, []string{page.Receipt(cli.Done, receipt.text, path)}) != nil {
+		return exitVerdict
+	}
+	return exitOK
+}
+
+func login(args []string, in io.Reader, prompts io.Writer, now time.Time) (loginReceipt, *loginRefusal) {
 	if len(args) == 0 {
-		return loginFail(errOut, errors.New(loginUsage))
+		return loginReceipt{}, usageRefusal("no provider named", loginUsage)
 	}
 	switch args[0] {
-	case "--status":
-		return statusVerb(args[1:], out, errOut, paletteOf(out), time.Now(), nil)
 	case "--disable", "--enable":
 		if len(args) != 2 {
-			return loginFail(errOut, errors.New(loginUsage))
+			return loginReceipt{}, usageRefusal("want one credential number", asideUsage)
 		}
-		cause := setAsideCause
-		if args[0] == "--enable" {
-			cause = ""
-		}
-		line, err := setCredentialAside(args[1], cause, time.Now())
-		if err != nil {
-			return loginRefused(errOut, "%v", err)
-		}
-		_, _ = fmt.Fprintln(out, line)
-		return exitOK
+		return setCredentialAside(args[0] == "--disable", args[1], now)
 	case openRouterName, typeSafeName, metaName, braveName:
 		if len(args) > 1 {
-			return loginFail(errOut, fmt.Errorf(keyIsNeverTyped, args[0]))
+			return loginReceipt{}, usageRefusal("a key is read from a prompt, never from an argument", "tofu login "+args[0])
 		}
-		key, err := promptKey(in, out, args[0])
-		if err != nil {
-			return loginFail(errOut, err)
-		}
-		switch args[0] {
-		case braveName:
-			return storeKey(braveName, sys.BraveSearchKeyName, key, out, errOut)
-		case metaName:
-			if err := models.StoreMetaKey(context.Background(), key); err != nil {
-				return loginRefused(errOut, "%v", err)
-			}
-			return saidStored(metaName, key, out, errOut)
-		}
-		return loginJev(context.Background(), models.Provider(args[0]), key, out, errOut)
+		return loginKey(args[0], in, prompts)
 	}
 	spec, err := cred.Lookup(args[0])
 	if err != nil {
-		return loginFail(errOut, fmt.Errorf("%v, %s", err, loginUsage))
+		return loginReceipt{}, usageRefusal("unknown provider "+args[0], loginUsage)
 	}
 	paste := false
 	for _, arg := range args[1:] {
 		if arg != "--paste" {
-			return loginFail(errOut, fmt.Errorf("unknown flag %q, %s", arg, loginUsage))
+			return loginReceipt{}, usageRefusal("unknown flag "+arg, loginUsage)
 		}
 		paste = true
 	}
 	if args[0] != string(spec.Provider) {
-		_, _ = fmt.Fprintf(out, "tofu login %s is now tofu login %s\n", args[0], spec.Provider)
+		_, _ = io.WriteString(prompts, "tofu login "+args[0]+" is now tofu login "+string(spec.Provider)+"\n")
 	}
-	if err := login(context.Background(), spec, paste, in, out); err != nil {
-		return loginRefused(errOut, "%v", err)
+	return signIn(spec, paste, in, prompts, now)
+}
+
+func loginFailed(verb string, refusal *loginRefusal, asJSON bool, out, errOut io.Writer, now time.Time) int {
+	if asJSON {
+		_ = writeJSON(out, cli.Envelope{Verb: verb, At: now, Problems: []cli.Problem{refusal.problem}})
+		return refusal.code
+	}
+	page := cli.Detect(errOut, os.Environ())
+	_ = page.Print(errOut, page.ErrorLine(refusal.problem.What, refusal.problem.Hint))
+	return refusal.code
+}
+
+func jsonExit(out io.Writer, envelope cli.Envelope) int {
+	if writeJSON(out, envelope) != nil {
+		return exitVerdict
 	}
 	return exitOK
 }
@@ -117,134 +178,120 @@ func maskedAccount(identity cred.Identity) string {
 	return widget.Mask(account) + "#" + hex.EncodeToString(sum[:accountMarkBytes])
 }
 
-func credentialLine(row cred.Row, now time.Time) string {
-	return fmt.Sprintf("#%d %s %s", row.ID, maskedAccount(row.Credential.Identity), row.State(now))
+func receiptOf(row cred.Row, change string) loginReceipt {
+	account := accountReceipt{ID: row.ID, Source: string(row.Credential.Provider), Account: accountName(row.Credential.Identity, false), Change: change}
+	text := "#" + strconv.FormatInt(account.ID, 10) + " " + account.Source + " " + account.Account + " " + spoken(change)
+	return loginReceipt{text: text, data: account}
 }
 
-func credentialByID(rows []cred.Row, id int64) (cred.Row, bool) {
-	for _, row := range rows {
-		if row.ID == id {
-			return row, true
-		}
-	}
-	return cred.Row{}, false
-}
+func spoken(code string) string { return strings.ReplaceAll(code, "_", " ") }
 
-func setCredentialAside(number, cause string, now time.Time) (string, error) {
+func setCredentialAside(disable bool, number string, now time.Time) (loginReceipt, *loginRefusal) {
 	id, err := strconv.ParseInt(number, 10, 64)
 	if err != nil {
-		return "", fmt.Errorf("want a credential number as tofu login --status prints it, not %q", number)
+		return loginReceipt{}, usageRefusal("not a credential number: "+number, asideUsage)
 	}
+	missing := failure("no credential is numbered "+number, "tofu login --status")
 	store, err := openStoredCredentials()
 	if err != nil {
-		return "", err
+		return loginReceipt{}, failure(err.Error(), "")
 	}
-	missing := fmt.Errorf("no stored credential is numbered %d, tofu login --status lists them", id)
 	if store == nil {
-		return "", missing
+		return loginReceipt{}, missing
 	}
 	defer func() { _ = store.Close() }()
-	rows, err := store.List()
-	if err != nil {
-		return "", err
+	row, held, err := store.RowByID(id)
+	switch {
+	case err != nil:
+		return loginReceipt{}, failure(err.Error(), "")
+	case !held:
+		return loginReceipt{}, missing
 	}
-	if _, held := credentialByID(rows, id); !held {
-		return "", missing
-	}
-	if cause == "" {
-		err = store.Enable(id, now)
+	change := changeEnabled
+	if disable {
+		change, err = changeSetAside, store.Disable(id, setAsideCause, now)
 	} else {
-		err = store.Disable(id, cause, now)
+		err = store.Enable(id, now)
 	}
 	if err != nil {
-		return "", err
+		return loginReceipt{}, failure(err.Error(), "")
 	}
-	rows, err = store.List()
-	if err != nil {
-		return "", err
-	}
-	row, _ := credentialByID(rows, id)
-	return credentialLine(row, now), nil
+	return receiptOf(row, change), nil
 }
 
-func loginFail(errOut io.Writer, err error) int {
-	_, _ = fmt.Fprintf(errOut, "tofu login: %v\n", err)
-	return exitUsage
-}
-
-func loginRefused(errOut io.Writer, format string, args ...any) int {
-	_, _ = fmt.Fprintf(errOut, "tofu login: "+format+"\n", args...)
-	return exitVerdict
-}
-
-func login(ctx context.Context, spec cred.Spec, paste bool, in io.Reader, out io.Writer) error {
+func signIn(spec cred.Spec, paste bool, in io.Reader, prompts io.Writer, now time.Time) (loginReceipt, *loginRefusal) {
 	path, err := cred.Path()
 	if err != nil {
-		return err
+		return loginReceipt{}, failure(err.Error(), "")
 	}
 	store, err := cred.Open(path)
 	if err != nil {
-		return err
+		return loginReceipt{}, failure(err.Error(), "")
 	}
 	defer func() { _ = store.Close() }()
-
-	options := cred.LoginOptions{
-		Spec:     spec,
-		Announce: func(line string) { _, _ = fmt.Fprintln(out, line) },
-		Open:     cred.OpenBrowser,
-	}
+	name := string(spec.Provider)
+	options := cred.LoginOptions{Spec: spec, Announce: func(line string) { _, _ = io.WriteString(prompts, line+"\n") }, Open: cred.OpenBrowser}
 	if paste {
 		options.Open = nil
-		options.Paste = func() (string, error) { return promptPaste(in, out) }
+		options.Paste = func() (string, error) { return promptPaste(in, prompts) }
 	}
-	credential, err := cred.Login(ctx, options)
+	credential, err := cred.Login(context.Background(), options)
 	if err != nil {
-		return err
+		return loginReceipt{}, refusedBy(name, name, err)
 	}
-	if err := store.Save(credential, time.Now()); err != nil {
-		return err
+	if err := store.Save(credential, now); err != nil {
+		return loginReceipt{}, failure(err.Error(), "")
 	}
-	_, _ = fmt.Fprintf(out, "stored at %s\n", path)
-	_, _ = fmt.Fprintf(out, "credentials: %s\n", cred.Report([]cred.Row{{Credential: credential}}, time.Now()))
-	return nil
-}
-
-func loginJev(ctx context.Context, provider models.Provider, key string, out, errOut io.Writer) int {
-	if err := reachesJev(ctx, provider, key); err != nil {
-		return loginRefused(errOut, "the key did not reach jev, so nothing was written: %v", err)
-	}
-	if code := storeKey(string(provider), provider.KeyName(), key, out, errOut); code != exitOK {
-		return code
-	}
-	_, _ = fmt.Fprintln(out, "jev: ready")
-	return exitOK
-}
-
-func storeKey(name, variable, key string, out, errOut io.Writer) int {
-	if err := sys.SaveKey(variable, key); err != nil {
-		return loginRefused(errOut, "%v", err)
-	}
-	return saidStored(name, key, out, errOut)
-}
-
-func saidStored(name, key string, out, errOut io.Writer) int {
-	path, err := sys.CredentialStorePath()
+	rows, err := store.List()
 	if err != nil {
-		return loginRefused(errOut, "%v", err)
+		return loginReceipt{}, failure(err.Error(), "")
 	}
-	_, _ = fmt.Fprintf(out, "%s: key %s stored in the credential store at %s\n", name, widget.Mask(key), path)
-	return exitOK
+	for _, row := range rows {
+		if row.Credential.Provider == spec.Provider && row.Credential.Identity == credential.Identity {
+			return receiptOf(row, changeSignedIn), nil
+		}
+	}
+	return loginReceipt{}, failure("the sign-in was stored and then not found", "tofu login --status")
 }
 
-func promptKey(in io.Reader, out io.Writer, name string) (string, error) {
-	_, _ = fmt.Fprintf(out, "paste the %s key, it is not echoed, then press enter:\n", name)
+func loginKey(name string, in io.Reader, prompts io.Writer) (loginReceipt, *loginRefusal) {
+	key, err := promptKey(in, prompts, name)
+	if err != nil {
+		return loginReceipt{}, failure(err.Error(), "tofu login "+name)
+	}
+	var stored keyStatus
+	for _, status := range keyStatuses(func(string) string { return key }) {
+		if status.Provider == name {
+			stored = status
+		}
+	}
+	done := " checked and stored"
+	switch name {
+	case braveName:
+		done = " stored"
+	case metaName:
+		err = models.StoreMetaKey(context.Background(), key)
+	default:
+		err = reachesJev(context.Background(), models.Provider(name), key)
+	}
+	if err != nil {
+		return loginReceipt{}, refusedBy(stored.name, name, err)
+	}
+	if err := sys.SaveKey(stored.Variable, key); err != nil {
+		return loginReceipt{}, failure(err.Error(), "tofu login "+name)
+	}
+	return loginReceipt{text: stored.name + " key " + stored.Key + done, data: stored}, nil
+}
+
+func promptKey(in io.Reader, prompts io.Writer, name string) (string, error) {
+	_, _ = io.WriteString(prompts, "paste the "+name+" key, it is not echoed, then press enter:\n")
 	file, isFile := in.(*os.File)
 	if !isFile || !term.IsTerminal(file.Fd()) {
 		line, err := readLine(in)
 		return strings.TrimSpace(line), err
 	}
 	typed, err := term.ReadPassword(file.Fd())
-	_, _ = fmt.Fprintln(out)
+	_, _ = io.WriteString(prompts, "\n")
 	if err != nil {
 		return "", err
 	}
@@ -273,25 +320,8 @@ func locateGateKey() (jev.Located, error) {
 	return jev.Locate(sys.CredentialFileName)
 }
 
-func openRouterStatus() string {
-	located, err := locateGateKey()
-	key, keyErr := jev.Key(sys.CredentialFileName)
-	if err != nil || keyErr != nil {
-		return "no key, so the jev gate is off: " + openRouterFix
-	}
-	switch located.Source {
-	case jev.SourceDatabase:
-		return "key " + widget.Mask(key) + " set in the credential store"
-	case jev.SourceEnvironment:
-		return "key " + widget.Mask(key) + " set in the environment"
-	case jev.SourceDotEnv:
-		return "key " + widget.Mask(key) + " set in " + located.Path
-	}
-	panic("tofu login: unknown key source")
-}
-
-func promptPaste(in io.Reader, out io.Writer) (string, error) {
-	_, _ = fmt.Fprintln(out, "paste the final redirect URL or the authorization code, then press enter:")
+func promptPaste(in io.Reader, prompts io.Writer) (string, error) {
+	_, _ = io.WriteString(prompts, "paste the final redirect URL or the authorization code, then press enter:\n")
 	return readLine(in)
 }
 

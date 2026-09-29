@@ -48,7 +48,7 @@ func (r Row) Unusable(now time.Time) string {
 	if r.DisabledCause != "" {
 		return "disabled: " + strings.ReplaceAll(r.DisabledCause, "\n", " ")
 	}
-	deadline, dated := r.reloginBy()
+	deadline, dated := r.ReloginBy()
 	if !dated || now.Before(deadline) {
 		return ""
 	}
@@ -56,7 +56,7 @@ func (r Row) Unusable(now time.Time) string {
 		", run tofu login " + string(r.Credential.Provider)
 }
 
-func (r Row) reloginBy() (time.Time, bool) {
+func (r Row) ReloginBy() (time.Time, bool) {
 	spec, err := Lookup(string(r.Credential.Provider))
 	if err != nil || spec.GrantLife == 0 || r.Credential.Authorized.IsZero() {
 		return time.Time{}, false
@@ -70,7 +70,7 @@ func (r Row) State(now time.Time) string {
 		return line + ", " + cause
 	}
 	line += ", expires " + r.Credential.Expires.UTC().Format(time.RFC3339)
-	deadline, dated := r.reloginBy()
+	deadline, dated := r.ReloginBy()
 	if !dated {
 		return line
 	}
