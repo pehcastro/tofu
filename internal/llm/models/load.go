@@ -17,6 +17,7 @@ const (
 	modelsDir        = "models"
 	subscriptionsDir = "subscriptions"
 	windowsDir       = "windows"
+	pricesDir        = "prices"
 )
 
 type Layer = sys.Layer
@@ -219,7 +220,7 @@ func readFlat(layer Layer, dir, why string, allowed map[string]bool, into *merge
 func readModels(layer Layer, allowed map[string]bool, into *merged) []Broken {
 	var refused []Broken
 	for _, provider := range entriesOf(layer.FS, modelsDir) {
-		if provider.Name() == windowsDir {
+		if provider.Name() == windowsDir || provider.Name() == pricesDir {
 			continue
 		}
 		if !provider.IsDir() {

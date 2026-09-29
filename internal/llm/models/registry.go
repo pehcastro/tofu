@@ -4,23 +4,33 @@ import (
 	"context"
 	_ "embed"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io/fs"
 	"net/http"
 	"os"
+	"path"
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"tofu/internal/transport"
+	"tofu/library"
 )
+
+//go:generate go run ./data/snapshot anthropic openai meta
 
 //go:embed data/models-dev.json
 var shippedRegistry []byte
 
+//go:embed data/models-dev.taken
+var shippedRegistryTaken string
+
 const (
-	ShippedRegistryName = "the snapshot of models.dev taken on 2026-09-21"
 	RegistryURL         = "https://models.dev/api.json"
 	RegistryURLVariable = "TOFU_MODELS_REGISTRY_URL"
+	pricesGlob          = modelsDir + "/" + pricesDir + "/*.yaml"
 	datedSuffixDigits   = 8
 	writtenFileMode     = 0o644
 )
@@ -32,10 +42,52 @@ type Facts struct {
 	Images    bool     `json:"images"`
 }
 
+type Rates struct {
+	Input      float64 `json:"input"`
+	Output     float64 `json:"output"`
+	CacheRead  float64 `json:"cache_read,omitempty"`
+	CacheWrite float64 `json:"cache_write,omitempty"`
+}
+
+type Tier struct {
+	Rates
+	AboveTokens int `json:"above_tokens"`
+}
+
+type Price struct {
+	Rates
+	Tiers []Tier `json:"tiers,omitempty"`
+	From  string `json:"from"`
+	Taken string `json:"taken,omitempty"`
+}
+
 type Registry struct {
 	From    string           `json:"from"`
 	Windows map[string]int   `json:"windows"`
 	Facts   map[string]Facts `json:"facts,omitempty"`
+	Prices  map[string]Price `json:"prices,omitempty"`
+}
+
+type modelsDevCost struct {
+	Rates
+	Tiers []struct {
+		Rates
+		Tier struct {
+			Type string `json:"type"`
+			Size int    `json:"size"`
+		} `json:"tier"`
+	} `json:"tiers"`
+}
+
+func (c modelsDevCost) price(from string) (Price, bool) {
+	price := Price{Rates: c.Rates, From: from}
+	for _, tier := range c.Tiers {
+		if tier.Tier.Type != "context" {
+			return Price{}, false
+		}
+		price.Tiers = append(price.Tiers, Tier{Rates: tier.Rates, AboveTokens: tier.Tier.Size})
+	}
+	return price, true
 }
 
 func ParseRegistry(body []byte, from string) (Registry, error) {
@@ -53,17 +105,23 @@ func ParseRegistry(body []byte, from string) (Registry, error) {
 			Modalities struct {
 				Input []string `json:"input"`
 			} `json:"modalities"`
+			Cost *modelsDevCost `json:"cost"`
 		} `json:"models"`
 	}
 	if err := json.Unmarshal(body, &payload); err != nil {
 		return Registry{}, fmt.Errorf("models: %s is not the shape models.dev serves: %w", from, err)
 	}
-	registry := Registry{From: from, Windows: make(map[string]int), Facts: make(map[string]Facts)}
+	registry := Registry{From: from, Windows: make(map[string]int), Facts: make(map[string]Facts), Prices: make(map[string]Price)}
 	for provider, listed := range payload {
 		for id, model := range listed.Models {
 			slug := provider + "/" + id
 			if model.Limit.Context > 0 {
 				registry.Windows[slug] = model.Limit.Context
+			}
+			if model.Cost != nil {
+				if price, priced := model.Cost.price(from); priced {
+					registry.Prices[slug] = price
+				}
 			}
 			if model.ToolCall == nil {
 				continue
@@ -84,7 +142,12 @@ func ParseRegistry(body []byte, from string) (Registry, error) {
 }
 
 func ShippedRegistry() (Registry, error) {
-	return ParseRegistry(shippedRegistry, ShippedRegistryName)
+	taken := strings.TrimSpace(shippedRegistryTaken)
+	registry, err := ParseRegistry(shippedRegistry, "the snapshot of models.dev taken on "+taken)
+	if err != nil {
+		return Registry{}, err
+	}
+	return withPriceOverrides(registry.takenOn(taken), library.Files())
 }
 
 func RegistryAt(path string) (Registry, error) {
@@ -92,11 +155,83 @@ func RegistryAt(path string) (Registry, error) {
 	if err != nil {
 		return ShippedRegistry()
 	}
+	written, err := os.Stat(path)
 	var stored Registry
-	if err := json.Unmarshal(body, &stored); err != nil || len(stored.Windows) == 0 {
+	if err != nil || json.Unmarshal(body, &stored) != nil || len(stored.Windows) == 0 {
 		return Registry{}, fmt.Errorf("models: %s is not a registry tofu wrote, delete it and run %s", path, ReloadVerb)
 	}
-	return stored, nil
+	return withPriceOverrides(stored.takenOn(written.ModTime().Format(time.DateOnly)), library.Files())
+}
+
+func (r Registry) takenOn(day string) Registry {
+	for slug, price := range r.Prices {
+		if price.Taken == "" {
+			price.Taken = day
+			r.Prices[slug] = price
+		}
+	}
+	return r
+}
+
+func withPriceOverrides(r Registry, overrides fs.FS) (Registry, error) {
+	files, err := fs.Glob(overrides, pricesGlob)
+	if err != nil {
+		return Registry{}, err
+	}
+	if r.Prices == nil {
+		r.Prices = make(map[string]Price)
+	}
+	for _, file := range files {
+		body, err := fs.ReadFile(overrides, file)
+		if err != nil {
+			return Registry{}, err
+		}
+		vendor := strings.TrimSuffix(path.Base(file), ".yaml")
+		for line := range strings.Lines(string(body)) {
+			if strings.TrimSpace(line) == "" {
+				continue
+			}
+			id, card, _ := strings.Cut(line, ":")
+			price, err := priceCard(card, "library/"+file)
+			if err != nil {
+				return Registry{}, fmt.Errorf("models: %s, %s: %w", file, strings.TrimSpace(id), err)
+			}
+			r.Prices[vendor+"/"+strings.TrimSpace(id)] = price
+		}
+	}
+	return r, nil
+}
+
+func priceCard(card, from string) (Price, error) {
+	price, named := Price{From: from}, map[string]bool{}
+	for _, field := range strings.Split(card, ",") {
+		name, value, _ := strings.Cut(strings.TrimSpace(field), " ")
+		if name == "taken" {
+			price.Taken = value
+			continue
+		}
+		rate, err := strconv.ParseFloat(value, 64)
+		if err != nil {
+			return Price{}, fmt.Errorf("%s is not a price per million tokens: %q", name, value)
+		}
+		switch name {
+		case "input":
+			price.Input = rate
+		case "output":
+			price.Output = rate
+		case "cache_read":
+			price.CacheRead = rate
+		case "cache_write":
+			price.CacheWrite = rate
+		default:
+			return Price{}, fmt.Errorf("unknown field %q, a card names input, output, cache_read, cache_write and taken", name)
+		}
+		named[name] = true
+	}
+	if !named["input"] || !named["output"] {
+		return Price{}, errors.New("a card names input and output at least")
+	}
+	return price, nil
 }
 
 func (r Registry) Store(path string) error {
