@@ -8,6 +8,32 @@ Tofu is personal and not released, so the public interface that a version promis
 
 The minor number carries breaking changes, which is what 0.x means, and **there is never a 1.0.0**. The owner decided that on 2026-09-19: this stays 0.x forever, so the promise the version makes is the one 0.x already makes, that anything can break on a minor bump.
 
+## 0.5.0-rc-fix16 - 2026-09-28
+
+Faster, surer browsing, models that arrive by themselves, keys that stay hidden, and a reload that re-reads everything.
+
+### Changed
+
+- **A browser step no longer loops on a page it wrongly thinks changed.** A covered link stops after 3 tries and says why, the page settles after a click, and `values` matches a field by label, placeholder or name in any case. On his recorded session this cuts Jev decisions per finished action from 48 to 7.
+- **`browser_do` takes a whole goal and answers it:** `browser_do {goal, url}` opens its own tab, types what the browser model writes, and returns the answer with links first.
+- **No share step.** Tofu can read and drive any open tab. The tabs it works in sit in an orange tofu group, the icon shows reading, acting or idle, and `browser` is on by default.
+- **Fable and Astra models are allowed.** No text tofu shows names a person or a date.
+- **Instruction files is a choice:** agents-first, claude-first or both, in settings or `tofu settings set instructionSources`.
+- **Settings read on every turn no longer say they need a restart.** Only `persistentRegistry` does.
+
+### Added
+
+- **`tofu models reload`** asks each signed-in account which models it serves, and adds the new ones, such as `claude-sub/claude-sonnet-5-5`, into `~/.tofu/catalog`. The model picker shows where each model came from, f5 there reloads, and a stale list reloads itself at start.
+- **Meta Muse Spark:** `tofu login meta`, then `meta/muse-spark-1.3`. The contributor models are marked as models Meta may train on. You can also pick one in the model picker and paste the key there.
+- **Settings `browserModel`** (falls back to `modelTier.dumb`, then `worker`) and a **Classifier model** row, which picks Jev on OpenRouter or TypeSafe.
+- **`tofu reload` and `/reload`** re-read settings, rules, skills, sub-agents, models and keys, and print what was added, removed or changed.
+- **`tofu browser bench`** times each phase of a browser step.
+
+### Security
+
+- **API keys live in the credential store,** never in `~/.tofu/.env`. On first start that file's keys move there and the file is removed. `tofu login openrouter|typesafe|brave|meta` stores a key, and `tofu login --status` lists them by their last four characters.
+- **A key value never reaches a tool result, the chat, the session log or the ledger.**
+
 ## 0.5.0-rc-fix15 - 2026-09-28
 
 Tofu reads and drives the Chrome tabs you share with it, from inside its own binary.
