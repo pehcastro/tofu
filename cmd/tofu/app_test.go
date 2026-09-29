@@ -2654,3 +2654,21 @@ func emptyHome(t *testing.T) {
 	t.Setenv("HOME", home)
 	t.Setenv("OPENROUTER_KEY", "")
 }
+
+func TestABrowserModelWhoseLowestEffortIsMinimalRunsAtLow(t *testing.T) {
+	emptyHome(t)
+	dir := t.TempDir()
+	store, err := openSettings(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SetText(settingspkg.Project, settingspkg.BrowserModel, "meta/muse-spark"); err != nil {
+		t.Fatal(err)
+	}
+	catalog := models.Library{Models: []models.Model{{Provider: models.Meta, ID: "muse-spark", Use: models.UseAllowed,
+		Efforts: []llm.Effort{llm.EffortMinimal, llm.EffortLow, llm.EffortHigh}}}}
+	found := onBrowserModel(dir, roster.Found{Definitions: []roster.Definition{{Name: browserAgent, Origin: "library", Runs: roster.RunsInherit}}}, catalog)
+	if got := found.Definitions[0].Effort; got != llm.EffortLow {
+		t.Errorf("the browser sub-agent runs at %q, want %q: %+v", got, llm.EffortLow, found.Definitions[0])
+	}
+}

@@ -940,7 +940,7 @@ func browserModel(dir string) (turn.Model, string, error) {
 	}
 	opts := runOpts{dir: dir, wire: library.WireOf(model), model: slug}
 	if len(model.Efforts) > 0 {
-		opts.effort = model.Efforts[0]
+		opts.effort = defaultEffort(model.Efforts)
 	}
 	return subscriptionModel{opts}, slug + " from " + key, nil
 }
@@ -970,9 +970,15 @@ func onBrowserModel(dir string, found subagent.Found, catalog models.Library) su
 	}
 	agent.Runs, agent.Model, agent.From = subagent.RunsModel, model.Slug(), key
 	if len(model.Efforts) > 0 {
-		agent.Effort = model.Efforts[0]
+		agent.Effort = defaultEffort(model.Efforts)
 	}
 	return found
+}
+
+func defaultEffort(offered []llm.Effort) llm.Effort {
+	floor := slices.Index(llm.Efforts(), llm.EffortLow)
+	at := slices.IndexFunc(offered, func(effort llm.Effort) bool { return slices.Index(llm.Efforts(), effort) >= floor })
+	return offered[max(at, 0)]
 }
 
 const (

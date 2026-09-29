@@ -28,10 +28,11 @@ func Compact(store *Store, cfg Config, bands Bands, c Conversation) (Conversatio
 		return c, nil, nil
 	}
 	entries := slices.Clone(c.Entries)
+	keys := make([]string, len(entries))
 	newest := make(map[string]int)
 	for i, entry := range entries {
-		if entry.SupersedeKey != "" {
-			newest[entry.SupersedeKey] = i
+		if keys[i] = supersedeKey(entry); keys[i] != "" {
+			newest[keys[i]] = i
 		}
 	}
 
@@ -44,7 +45,7 @@ func Compact(store *Store, cfg Config, bands Bands, c Conversation) (Conversatio
 		if entry.Tool == "" || entry.Handle != "" || AlreadyDropped(entry.Text) || len(entry.Text) < cfg.CompactFloorBytes {
 			continue
 		}
-		if entry.SupersedeKey != "" && newest[entry.SupersedeKey] != i {
+		if keys[i] != "" && newest[keys[i]] != i {
 			superseded = append(superseded, victim{i, DroppedSuperseded})
 			continue
 		}

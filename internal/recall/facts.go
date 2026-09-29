@@ -61,6 +61,7 @@ type toolArgs struct {
 	Handle  string `json:"handle"`
 	Pattern string `json:"pattern"`
 	Command string `json:"command"`
+	URL     string `json:"url"`
 }
 
 func sourceOf(entry Entry) string {
@@ -70,7 +71,57 @@ func sourceOf(entry Entry) string {
 	if json.Unmarshal([]byte(args), &parsed) != nil {
 		return whole
 	}
-	return cmp.Or(parsed.Path, parsed.Handle, parsed.Pattern, parsed.Command, whole)
+	return cmp.Or(parsed.Path, parsed.Handle, parsed.Pattern, parsed.Command, parsed.URL, shownPage(entry), whole)
+}
+
+func shownPage(entry Entry) string {
+	_, args, _ := strings.Cut(entry.SupersedeKey, " ")
+	var parsed struct {
+		Tab *int `json:"tab"`
+	}
+	if json.Unmarshal([]byte(args), &parsed) != nil || parsed.Tab == nil {
+		return ""
+	}
+	return pageURL(entry.Text)
+}
+
+func supersedeKey(entry Entry) string {
+	return cmp.Or(shownPage(entry), entry.SupersedeKey)
+}
+
+const (
+	untrustedOpen   = "<<<"
+	untrustedBegins = " begins>>>\n"
+)
+
+func unwrapped(text string) (lead, preamble, body string) {
+	before, body, found := strings.Cut(text, untrustedBegins)
+	opens := strings.LastIndex(before, untrustedOpen)
+	if !found || opens < 0 {
+		return "", "", text
+	}
+	before = before[:opens]
+	preambleAt := strings.LastIndex(strings.TrimSuffix(before, "\n"), "\n") + 1
+	if ends := strings.LastIndex(body, "\n"+untrustedOpen); ends >= 0 {
+		body = body[:ends]
+	}
+	return before[:preambleAt], before[preambleAt:], body
+}
+
+func pageURL(text string) string {
+	_, preamble, body := unwrapped(text)
+	first, _, _ := strings.Cut(body, "\n")
+	for _, field := range strings.Fields(first + " " + preamble) {
+		if strings.HasPrefix(field, "https://") || strings.HasPrefix(field, "http://") {
+			return strings.TrimSuffix(field, ".")
+		}
+	}
+	return ""
+}
+
+func signpostOf(text, source string, limit int) string {
+	lead, _, body := unwrapped(text)
+	return oneLine(strings.Replace(lead+body, source, "", 1), limit)
 }
 
 func worthKeeping(entry Entry) bool {
@@ -123,7 +174,7 @@ func Distil(store *Store, c Conversation, signpostBytes int) ([]string, []Carrie
 		if !worthKeeping(entry) || newest[sources[i]] != i {
 			continue
 		}
-		source, signpost := sources[i], oneLine(entry.Text, signpostBytes)
+		source, signpost := sources[i], signpostOf(entry.Text, sources[i], signpostBytes)
 		handle := entry.Handle
 		standing, known := at[source]
 		if known && headOf(sheet[standing]) == factHead(entry.Tool, source, len(entry.Text)) {
