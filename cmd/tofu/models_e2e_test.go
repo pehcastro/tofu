@@ -155,7 +155,7 @@ codex-sub       ✗ model list refused (403)
 	reloadWithNobodySignedIn = `Model reload                                                  ✓ 1 version raised
 
   models.dev    ✓ 2 context windows
-  npm           ✓ claudeCode raised from 2.1.280 to 2.1.300
+  npm           ✓ claudeCode raised from PIN to NPM
 
 claude-sub      ○ not signed in
   → tofu login claude-sub
@@ -222,6 +222,12 @@ func stubbed(t *testing.T, status int, body string) string {
 	return server.URL
 }
 
+func npmClaudeCodeAbovePin() string {
+	cut := strings.LastIndex(anthropic.PinnedClaudeCodeVersion, ".") + 1
+	patch, _ := strconv.Atoi(anthropic.PinnedClaudeCodeVersion[cut:])
+	return anthropic.PinnedClaudeCodeVersion[:cut] + strconv.Itoa(patch+16)
+}
+
 func stubbedHome(t *testing.T) {
 	t.Helper()
 	chdirTemp(t)
@@ -229,7 +235,7 @@ func stubbedHome(t *testing.T) {
 	npm := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		version := codex.PinnedCodexClientVersion
 		if strings.Contains(r.URL.Path, anthropic.ClaudeCodePackage) {
-			version = "2.1.300"
+			version = npmClaudeCodeAbovePin()
 		}
 		_, _ = w.Write([]byte(`{"version":"` + version + `"}`))
 	}))
@@ -325,10 +331,11 @@ func TestModelsReloadWithNobodySignedInSaysSoInTextAndInJSON(t *testing.T) {
 	if code := run([]string{"models", "reload"}, strings.NewReader(""), &text, &errOut); code != exitOK {
 		t.Fatalf("tofu models reload exited %d\n%s%s", code, text.String(), errOut.String())
 	}
-	sameText(t, "a reload with no account signed in", text.String(), reloadWithNobodySignedIn)
+	npm := npmClaudeCodeAbovePin()
+	sameText(t, "a reload with no account signed in", text.String(), strings.NewReplacer("PIN", anthropic.PinnedClaudeCodeVersion, "NPM", npm).Replace(reloadWithNobodySignedIn))
 	global, _ := settingsPaths(".")
-	if written, _ := os.ReadFile(global); !strings.Contains(string(written), `"claudeCode": "2.1.300"`) {
-		t.Fatalf("npm at 2.1.300 did not raise the global file:\n%s", written)
+	if written, _ := os.ReadFile(global); !strings.Contains(string(written), `"claudeCode": "`+npm+`"`) {
+		t.Fatalf("npm at %s did not raise the global file:\n%s", npm, written)
 	}
 
 	var printed bytes.Buffer

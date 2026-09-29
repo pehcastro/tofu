@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -30,6 +31,13 @@ type versionServer struct {
 	mu       sync.Mutex
 	requests []sent
 	accepts  string
+	requires string
+}
+
+func pinPlus(patches int) string {
+	cut := strings.LastIndex(anthropic.PinnedClaudeCodeVersion, ".") + 1
+	patch, _ := strconv.Atoi(anthropic.PinnedClaudeCodeVersion[cut:])
+	return anthropic.PinnedClaudeCodeVersion[:cut] + strconv.Itoa(patch+patches)
 }
 
 func (s *versionServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -41,7 +49,7 @@ func (s *versionServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	s.mu.Unlock()
 	if !strings.Contains(agent, "claude-cli/"+s.accepts+" ") {
 		w.WriteHeader(http.StatusBadRequest)
-		_, _ = fmt.Fprintf(w, versionTooOldBody, billed[1], "2.1.300")
+		_, _ = fmt.Fprintf(w, versionTooOldBody, billed[1], s.requires)
 		return
 	}
 	w.Header().Set("Content-Type", "text/event-stream")
@@ -95,7 +103,7 @@ func homeWith(t *testing.T, global, project string) *settings.Store {
 
 func askThrough(t *testing.T, store *settings.Store, accepts string) (*versionServer, *anthropic.Wire) {
 	t.Helper()
-	server := &versionServer{accepts: accepts}
+	server := &versionServer{accepts: accepts, requires: pinPlus(16)}
 	listening := httptest.NewServer(server)
 	t.Cleanup(listening.Close)
 	wire, err := anthropic.New(anthropic.Config{
@@ -121,26 +129,27 @@ func ask(wire *anthropic.Wire) error {
 
 func TestAVersionTooOldRejectionRaisesTheGlobalFileAndRetriesOnceAtTheRequiredVersion(t *testing.T) {
 	store := homeWith(t, `{"theme":"light"}`, "")
-	server, wire := askThrough(t, store, "2.1.300")
+	required := pinPlus(16)
+	server, wire := askThrough(t, store, required)
 	if err := ask(wire); err != nil {
 		t.Fatalf("the retry at the required version failed: %v", err)
 	}
-	if got, want := server.sentVersions(), []string{claimed("2.1.280"), claimed("2.1.300")}; fmt.Sprint(got) != fmt.Sprint(want) {
+	if got, want := server.sentVersions(), []string{claimed(anthropic.PinnedClaudeCodeVersion), claimed(required)}; fmt.Sprint(got) != fmt.Sprint(want) {
 		t.Fatalf("the requests claimed %q, not %q", got, want)
 	}
 	written, _ := os.ReadFile(store.Path(settings.Global))
-	if !strings.Contains(string(written), `"claudeCode": "2.1.300"`) || !strings.Contains(string(written), `"theme": "light"`) {
+	if !strings.Contains(string(written), `"claudeCode": "`+required+`"`) || !strings.Contains(string(written), `"theme": "light"`) {
 		t.Fatalf("the global file does not hold the adopted version beside what it had:\n%s", written)
 	}
 	if err := ask(wire); err != nil {
 		t.Fatalf("a second ask on the same wire failed: %v", err)
 	}
-	if got := server.sentVersions(); len(got) != 3 || got[2] != claimed("2.1.300") {
-		t.Fatalf("the next ask on the same wire claimed %q rather than going straight to 2.1.300", got)
+	if got := server.sentVersions(); len(got) != 3 || got[2] != claimed(required) {
+		t.Fatalf("the next ask on the same wire claimed %q rather than going straight to %s", got, required)
 	}
 	reopened, err := settings.Open(store.Path(settings.Global), store.Path(settings.Project))
-	if err != nil || reopened.Fingerprint().ClaudeCode != "2.1.300" {
-		t.Fatalf("a fresh read of the global file resolves %q (%v), not 2.1.300", reopened.Fingerprint().ClaudeCode, err)
+	if err != nil || reopened.Fingerprint().ClaudeCode != required {
+		t.Fatalf("a fresh read of the global file resolves %q (%v), not %s", reopened.Fingerprint().ClaudeCode, err, required)
 	}
 }
 
@@ -150,18 +159,21 @@ func TestARejectionAtEveryVersionSendsExactlyTwoRequestsAndReturnsTheError(t *te
 	if err == nil || !strings.Contains(err.Error(), anthropic.VersionTooOldCode) {
 		t.Fatalf("the rejection did not come back as the error: %v", err)
 	}
-	if got, want := server.sentVersions(), []string{claimed("2.1.280"), claimed("2.1.300")}; fmt.Sprint(got) != fmt.Sprint(want) {
+	if got, want := server.sentVersions(), []string{claimed(anthropic.PinnedClaudeCodeVersion), claimed(server.requires)}; fmt.Sprint(got) != fmt.Sprint(want) {
 		t.Fatalf("the requests claimed %q, not %q", got, want)
 	}
 }
 
 func TestTheSentVersionIsTheHigherOfThePinAndTheGlobalFile(t *testing.T) {
+	pin := anthropic.PinnedClaudeCodeVersion
+	cut := strings.LastIndex(pin, ".") + 1
+	olderButLexicallyHigher := pin[:cut] + strings.Repeat("9", len(pin)-cut-1)
 	for declared, want := range map[string]string{
-		`{"subFingerprint":{"claudeCode":"2.1.290"}}`: "2.1.290",
-		`{"subFingerprint":{"claudeCode":"2.1.100"}}`: "2.1.280",
-		`{"subFingerprint":{"claudeCode":"banana"}}`:  "2.1.280",
-		`{"subFingerprint":{"claudeCode":7}}`:         "2.1.280",
-		`{"subFingerprint":{"claudeCode":"2.1.99"}}`:  "2.1.280",
+		`{"subFingerprint":{"claudeCode":"` + pinPlus(6) + `"}}`:              pinPlus(6),
+		`{"subFingerprint":{"claudeCode":"` + pinPlus(-84) + `"}}`:            pin,
+		`{"subFingerprint":{"claudeCode":"banana"}}`:                          pin,
+		`{"subFingerprint":{"claudeCode":7}}`:                                 pin,
+		`{"subFingerprint":{"claudeCode":"` + olderButLexicallyHigher + `"}}`: pin,
 	} {
 		server, wire := askThrough(t, homeWith(t, declared, ""), want)
 		if err := ask(wire); err != nil {
@@ -178,7 +190,8 @@ type madeUpToken struct{}
 func (madeUpToken) Access(context.Context) (string, error) { return "sk-ant-oat01-made-up", nil }
 
 func TestTheUsagePollClaimsTheRaisedGlobalVersion(t *testing.T) {
-	store := homeWith(t, `{"subFingerprint":{"claudeCode":"2.1.999"}}`, "")
+	raised := pinPlus(715)
+	store := homeWith(t, `{"subFingerprint":{"claudeCode":"`+raised+`"}}`, "")
 	var agent string
 	listening := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		agent = r.Header.Get("User-Agent")
@@ -190,17 +203,18 @@ func TestTheUsagePollClaimsTheRaisedGlobalVersion(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, _ = poller.Poll(context.Background(), quota.Account{Provider: quota.ClaudeSub, Credential: madeUpToken{}, ClientVersion: store.Fingerprint().ClaudeCode})
-	if agent != anthropic.ClaudeCodeUserAgent("2.1.999") {
-		t.Fatalf("the usage poll claimed %q, not 2.1.999", agent)
+	if agent != anthropic.ClaudeCodeUserAgent(raised) {
+		t.Fatalf("the usage poll claimed %q, not %s", agent, raised)
 	}
 }
 
 func TestAProjectScopeSubFingerprintIsNotRead(t *testing.T) {
-	server, wire := askThrough(t, homeWith(t, "", `{"subFingerprint":{"claudeCode":"2.1.999"}}`), "2.1.280")
+	pin := anthropic.PinnedClaudeCodeVersion
+	server, wire := askThrough(t, homeWith(t, "", `{"subFingerprint":{"claudeCode":"`+pinPlus(715)+`"}}`), pin)
 	if err := ask(wire); err != nil {
 		t.Fatalf("the ask failed: %v", err)
 	}
-	if got := server.sentVersions(); len(got) != 1 || got[0] != claimed("2.1.280") {
+	if got := server.sentVersions(); len(got) != 1 || got[0] != claimed(pin) {
 		t.Fatalf("a project file raised the version: the requests claimed %q", got)
 	}
 }
@@ -233,13 +247,14 @@ func latestFrom(t *testing.T, registry string) (settings.Fingerprint, error) {
 }
 
 func TestANewerNpmReleaseRaisesTheGlobalFileAndAnyOtherLeavesItAsItIs(t *testing.T) {
+	pin := anthropic.PinnedClaudeCodeVersion
 	for _, row := range []struct{ held, npm, raised string }{
-		{"2.1.280", "2.1.300", "2.1.300"},
-		{"2.1.280", "2.1.200", ""},
-		{"2.1.280", "2.1.280", ""},
-		{"2.1.290", "2.1.285", ""},
-		{"2.1.280", "2.1.300-beta.1", ""},
-		{"2.1.280", "latest", ""},
+		{pin, pinPlus(16), pinPlus(16)},
+		{pin, pinPlus(-84), ""},
+		{pin, pin, ""},
+		{pinPlus(6), pinPlus(1), ""},
+		{pin, pinPlus(16) + "-beta.1", ""},
+		{pin, "latest", ""},
 	} {
 		held := `{"theme":"light","subFingerprint":{"claudeCode":"` + row.held + `"}}`
 		store := homeWith(t, held, "")
