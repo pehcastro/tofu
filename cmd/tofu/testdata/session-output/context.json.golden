@@ -1,0 +1,50 @@
+exit 0
+--- stdout
+{
+  "tofu": "VERSION",
+  "verb": "context",
+  "ok": true,
+  "at": "AT",
+  "data": {
+    "session": "turn-one",
+    "name": "store-walk",
+    "task": "explain the session store",
+    "steps": 1,
+    "occupancy": {
+      "step": 1,
+      "identity": {
+        "tokens": 3300,
+        "cap": 12000,
+        "fill_percent": 27
+      },
+      "facts": {
+        "tokens": 1200,
+        "cap": 3000,
+        "fill_percent": 40
+      },
+      "working_set": {
+        "tokens": 9000,
+        "cap": 18000,
+        "fill_percent": 50
+      },
+      "recent": {
+        "tokens": 4000,
+        "cap": 30000,
+        "fill_percent": 13
+      },
+      "total": 17500,
+      "mark": 50000,
+      "caps_recorded": false
+    },
+    "skipped": [
+      {
+        "session": "turn-broken",
+        "reason": "session: the header of turn-broken does not parse: invalid character 'n' looking for beginning of object key string"
+      }
+    ],
+    "ceiling": 250000,
+    "bytes_per_thousand_tokens": 2310
+  },
+  "problems": []
+}
+--- stderr

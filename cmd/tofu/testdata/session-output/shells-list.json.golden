@@ -1,0 +1,35 @@
+exit 0
+--- stdout
+{
+  "tofu": "VERSION",
+  "verb": "shells list",
+  "ok": true,
+  "at": "AT",
+  "data": {
+    "shells": [
+      {
+        "name": "build",
+        "command": "go build ./...",
+        "dir": "HOME/project",
+        "owner": "",
+        "pid": 4242,
+        "state": "exited",
+        "started": "AT",
+        "ended": "AT",
+        "exit_code": 0
+      },
+      {
+        "name": "web",
+        "command": "npm run dev",
+        "dir": "HOME/project",
+        "owner": "tofu",
+        "pid": 4343,
+        "state": "killed",
+        "started": "AT",
+        "ended": "AT"
+      }
+    ]
+  },
+  "problems": []
+}
+--- stderr

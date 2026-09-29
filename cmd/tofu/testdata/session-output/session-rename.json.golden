@@ -1,0 +1,23 @@
+exit 0
+--- stdout
+{
+  "tofu": "VERSION",
+  "verb": "session rename",
+  "ok": true,
+  "at": "AT",
+  "data": {
+    "id": "turn-two",
+    "name": "older-work",
+    "at": "AT",
+    "task": "the older task",
+    "turns": 0,
+    "sub_agents": 0,
+    "steps": 0,
+    "carried_messages": 0,
+    "outcome": "done",
+    "root": "turn-two",
+    "reads": 0
+  },
+  "problems": []
+}
+--- stderr

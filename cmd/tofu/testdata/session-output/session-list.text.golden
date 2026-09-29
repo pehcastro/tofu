@@ -1,0 +1,10 @@
+exit 0
+--- stdout
+Sessions · 2 sessions                                          ● head store-walk
+
+  ● store-walk  10m ago  1 step   stopped  explain the session store
+  ○ older-task  3h ago   0 steps  done     the older task
+
+unreadable      ✗ 1
+  ✗ turn-broken  session: the header of turn-broken does not parse: invalid cha…
+--- stderr

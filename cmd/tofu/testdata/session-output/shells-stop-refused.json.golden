@@ -1,0 +1,16 @@
+exit 1
+--- stdout
+{
+  "tofu": "VERSION",
+  "verb": "shells stop",
+  "ok": false,
+  "at": "AT",
+  "data": null,
+  "problems": [
+    {
+      "what": "build is not running",
+      "hint": "tofu shells restart build"
+    }
+  ]
+}
+--- stderr

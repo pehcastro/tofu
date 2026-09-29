@@ -1,0 +1,5 @@
+exit 0
+--- stdout
+~ renamed turn-two to older-work
+  → tofu session info older-work
+--- stderr

@@ -5,30 +5,19 @@ import (
 	"fmt"
 	"io"
 	"strconv"
-	"strings"
 
+	"tofu/interface/cli"
 	"tofu/internal/konst"
 	"tofu/internal/recall"
 	"tofu/internal/session"
 	"tofu/internal/turn"
 )
 
-const contextUsage = "usage: tofu context [<session-id>] [--json]"
-
-const contextNeverMeasured = "no band was measured: this session was recorded before the occupancy reached the step row"
-
-const contextCapsRecorded = "the caps above are the ones the step measured itself against, totalling"
-
-const contextCapsUnrecorded = "this step recorded no caps, only a mark of"
-
-const contextNoSession = "no session has been recorded in this directory, so there is no context to report: run tofu run here first"
-
-const contextNoneReadable = "no session in this directory could be read, so there is no context to report"
-
-type contextSkipReport struct {
-	Session string `json:"session"`
-	Reason  string `json:"reason"`
-}
+const (
+	contextNeverMeasured = "recorded before occupancy was kept"
+	contextNoSession     = "no session recorded here"
+	contextNoneReadable  = "no session here reads"
+)
 
 type contextBandReport struct {
 	Tokens  int `json:"tokens"`
@@ -60,12 +49,13 @@ type contextForkReport struct {
 
 type contextReport struct {
 	Session                string                  `json:"session,omitempty"`
+	Name                   string                  `json:"name,omitempty"`
 	Task                   string                  `json:"task,omitempty"`
 	Steps                  int                     `json:"steps,omitempty"`
 	Occupancy              *contextOccupancyReport `json:"occupancy,omitempty"`
 	Unmeasured             string                  `json:"unmeasured,omitempty"`
 	Fork                   *contextForkReport      `json:"fork,omitempty"`
-	Skipped                []contextSkipReport     `json:"skipped,omitempty"`
+	Skipped                []sessionSkip           `json:"skipped,omitempty"`
 	Ceiling                int                     `json:"ceiling,omitempty"`
 	BytesPerThousandTokens int                     `json:"bytes_per_thousand_tokens,omitempty"`
 
@@ -73,48 +63,38 @@ type contextReport struct {
 }
 
 func contextVerb(args []string, out, errOut io.Writer) int {
-	id, asJSON := "", false
-	for _, arg := range args {
-		switch {
-		case arg == jsonFlag:
-			asJSON = true
-		case strings.HasPrefix(arg, "-") || id != "":
-			_, _ = fmt.Fprintln(errOut, contextUsage)
-			return exitUsage
-		default:
-			id = arg
-		}
+	handles, asJSON, err := verbArgs(args)
+	o := verbOutput{verb: "context", usageLine: "tofu context [<name|id>] [--json]", asJSON: asJSON, out: out, errOut: errOut}
+	if err == nil && len(handles) > 1 {
+		err = fmt.Errorf("%d sessions, want one at most", len(handles))
+	}
+	if err != nil {
+		return o.usage(err)
+	}
+	handle := ""
+	if len(handles) == 1 {
+		handle = handles[0]
 	}
 	store, err := session.Open()
+	var report contextReport
+	if err == nil {
+		report, err = contextOf(store, handle, recall.ShippedBands())
+	}
 	if err != nil {
-		_, _ = fmt.Fprintf(errOut, "tofu context: %v\n", err)
-		return exitVerdict
+		return o.fail(err)
 	}
-	report, err := contextOf(store, id, recall.ShippedBands())
-	if err != nil {
-		_, _ = fmt.Fprintf(errOut, "tofu context: %v\n", err)
-		return exitVerdict
-	}
-	if !asJSON {
-		_, _ = fmt.Fprint(out, contextText(report), contextSkipText(report.Skipped))
-		return exitOK
-	}
-	if err := writeJSON(out, report); err != nil {
-		_, _ = fmt.Fprintf(errOut, "tofu context: %v\n", err)
-		return exitVerdict
-	}
-	return exitOK
+	return o.done(true, report, func(page cli.Page) []string { return contextLines(page, report) })
 }
 
-func contextOf(store *session.Store, id string, build recall.Bands) (contextReport, error) {
-	var skipped []contextSkipReport
-	if id == "" {
+func contextOf(store *session.Store, handle string, build recall.Bands) (contextReport, error) {
+	var skipped []sessionSkip
+	if handle == "" {
 		listing, err := store.Listing()
 		if err != nil {
 			return contextReport{}, err
 		}
 		for _, skip := range listing.Skipped {
-			skipped = append(skipped, contextSkipReport{Session: skip.ID, Reason: skip.Reason.Error()})
+			skipped = append(skipped, sessionSkip{Session: skip.ID, Reason: skip.Reason.Error()})
 		}
 		if len(listing.Sessions) == 0 {
 			absence := contextNoSession
@@ -123,13 +103,13 @@ func contextOf(store *session.Store, id string, build recall.Bands) (contextRepo
 			}
 			return contextReport{Unmeasured: absence, Skipped: skipped}, nil
 		}
-		id = listing.Sessions[0].ID
+		handle = listing.Sessions[0].ID
 	}
-	header, err := store.Header(id)
+	header, err := sessionHeader(store, handle)
 	if err != nil {
 		return contextReport{}, err
 	}
-	events, err := store.Body(id)
+	events, err := store.Body(header.ID)
 	if err != nil {
 		return contextReport{}, err
 	}
@@ -149,6 +129,9 @@ func contextOf(store *session.Store, id string, build recall.Bands) (contextRepo
 		Ceiling:                konst.ContextCeilingTokens,
 		BytesPerThousandTokens: cfg.BytesPerThousandTokens,
 		Skipped:                skipped,
+	}
+	if header.Name != nil {
+		report.Name = *header.Name
 	}
 	for _, step := range steps {
 		if step.Occupancy != nil {
@@ -189,22 +172,6 @@ func contextOf(store *session.Store, id string, build recall.Bands) (contextRepo
 	return report, nil
 }
 
-func contextSkipText(skipped []contextSkipReport) string {
-	if len(skipped) == 0 {
-		return ""
-	}
-	ids := make([]string, len(skipped))
-	for i, skip := range skipped {
-		ids[i] = skip.Session
-	}
-	noun := " session that could not be read: "
-	if len(ids) > 1 {
-		noun = " sessions that could not be read: "
-	}
-	return "\nstepped over " + strconv.Itoa(len(ids)) + noun + strings.Join(ids, ", ") +
-		"\nrun tofu context " + ids[0] + " to see why\n"
-}
-
 func contextBand(tokens, capacity int) contextBandReport {
 	return contextBandReport{Tokens: tokens, Cap: capacity, Percent: recall.FillPercent(tokens, capacity)}
 }
@@ -223,32 +190,56 @@ func contextSteps(events []session.Event) ([]turn.StepRow, error) {
 	return steps, nil
 }
 
-func contextText(r contextReport) string {
+func contextLines(page cli.Page, r contextReport) []string {
 	if r.Session == "" {
-		return r.Unmeasured + "\n"
-	}
-	var out strings.Builder
-	fmt.Fprintf(&out, "session %s, %d steps\n", r.Session, r.Steps)
-	if r.Task != "" {
-		fmt.Fprintf(&out, "task: %s\n", r.Task)
-	}
-	if r.measured == nil {
-		out.WriteString(r.Unmeasured + "\n")
-	} else {
-		fmt.Fprintf(&out, "the occupancy step %d recorded\n\n%s", r.Occupancy.Step, recall.OccupancyTable(*r.measured))
-		if r.Occupancy.CapsRecorded {
-			fmt.Fprintf(&out, "\n%s %d\n", contextCapsRecorded, r.measured.Bands.Target())
-		} else {
-			fmt.Fprintf(&out, "\n%s %d, so the caps above are this build's, totalling %d\n",
-				contextCapsUnrecorded, r.Occupancy.Mark, r.measured.Bands.Target())
+		mark := cli.Idle
+		if len(r.Skipped) > 0 {
+			mark = cli.Fail
 		}
+		return append(page.Title("Context", nil, cli.Verdict{Mark: mark, Text: r.Unmeasured}), skippedLines(page, r.Skipped)...)
 	}
-	fmt.Fprintf(&out, "%d bytes per thousand tokens, from the recall library\n", r.BytesPerThousandTokens)
-	if r.Fork == nil {
-		return out.String()
+	verdict := cli.Verdict{Mark: cli.Idle, Text: "not measured"}
+	facts := []cli.Fact{{Label: "task", Text: oneLine(r.Task)}}
+	if o := r.Occupancy; o != nil {
+		verdict = cli.Verdict{Mark: cli.Done, Text: "step " + strconv.Itoa(o.Step)}
+		caps := "recorded by the step"
+		if !o.CapsRecorded {
+			caps = "this build's, the step marked " + strconv.Itoa(o.Mark)
+		}
+		for _, band := range []struct {
+			name string
+			band contextBandReport
+		}{
+			{"identity", o.Identity},
+			{"facts", o.Facts},
+			{"working set", o.WorkingSet},
+			{"recent", o.Recent},
+			{"total", contextBand(o.Total, r.measured.Bands.Target())},
+			{"ceiling", contextBand(o.Total, r.Ceiling)},
+		} {
+			facts = append(facts, cli.Fact{Label: band.name, Text: page.Bar(float64(band.band.Percent)/100) + cli.Gap +
+				page.Label(strconv.Itoa(band.band.Tokens)+" / "+strconv.Itoa(band.band.Cap))})
+		}
+		facts = append(facts, cli.Fact{Label: "caps", Text: caps})
+	} else {
+		facts = append(facts, cli.Fact{Label: "occupancy", Text: r.Unmeasured})
 	}
-	out.WriteString(forkWords(r.Fork.Into, r.Fork.Kind, r.Fork.Counts) + "\n")
-	return out.String()
+	facts = append(facts,
+		cli.Fact{Label: "bytes", Text: strconv.Itoa(r.BytesPerThousandTokens) + " per thousand tokens"},
+		cli.Fact{Label: "fork", Text: forkFact(r.Fork)})
+	lines := append(page.Title("Context", []string{sessionHandle(r.Session, r.Name), sessionSteps(r.Steps)}, verdict), "")
+	lines = append(lines, cli.Indent(page.Facts(facts)...)...)
+	return append(lines, skippedLines(page, r.Skipped)...)
+}
+
+func forkFact(fork *contextForkReport) string {
+	switch {
+	case fork == nil:
+		return ""
+	case fork.Counts == nil:
+		return "into " + fork.Into + " · counts not recorded"
+	}
+	return "into " + fork.Into + " · " + fork.Kind + " · " + strconv.Itoa(fork.Counts.TokensBefore) + " → " + strconv.Itoa(fork.Counts.TokensAfter) + " tokens"
 }
 
 func forkWords(into, kind string, counts *contextForkCounts) string {

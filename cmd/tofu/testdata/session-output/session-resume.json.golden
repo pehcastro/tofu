@@ -1,0 +1,18 @@
+exit 0
+--- stdout
+{
+  "tofu": "VERSION",
+  "verb": "session resume",
+  "ok": true,
+  "at": "AT",
+  "data": {
+    "session": "turn-one",
+    "name": "store-walk",
+    "task": "explain the session store",
+    "outcome": "stopped",
+    "steps": 1,
+    "carried_messages": 3
+  },
+  "problems": []
+}
+--- stderr

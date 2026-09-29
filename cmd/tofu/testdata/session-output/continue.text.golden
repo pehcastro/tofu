@@ -1,0 +1,9 @@
+exit 2
+--- stdout
+Resume · store-walk                                                    ● stopped
+
+  id        turn-one
+  task      explain the session store
+  carried   3 messages · 1 step
+--- stderr
+tofu: the app needs a terminal. with input redirected, use tofu run --dir <dir> <task>

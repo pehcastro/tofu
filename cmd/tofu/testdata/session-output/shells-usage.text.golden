@@ -1,0 +1,5 @@
+exit 2
+--- stdout
+--- stderr
+✗ tofu shells log: 0 names, want 1
+  → tofu shells list|log|stop|restart <name> [--json]

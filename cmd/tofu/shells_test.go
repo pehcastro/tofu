@@ -38,7 +38,7 @@ func TestShellsVerbListsReadsAndKillsARealProcess(t *testing.T) {
 	}
 
 	var list, log, kill bytes.Buffer
-	if code := shellsList(registry, &list, &list); code != exitOK {
+	if code := shellsList(verbOutput{verb: "shells list", out: &list, errOut: &list}, registry); code != exitOK {
 		t.Fatalf("shellsList exited %d\n%s", code, list.String())
 	}
 	t.Logf("tofu shells list\n%s", list.String())
@@ -48,7 +48,7 @@ func TestShellsVerbListsReadsAndKillsARealProcess(t *testing.T) {
 		}
 	}
 
-	if code := shellsLog(registry, []string{"build"}, &log, &log); code != exitOK {
+	if code := shellsLog(verbOutput{verb: "shells log", out: &log, errOut: &log}, registry, "build"); code != exitOK {
 		t.Fatalf("shellsLog exited %d\n%s", code, log.String())
 	}
 	t.Logf("tofu shells log build\n%s", log.String())
@@ -56,11 +56,11 @@ func TestShellsVerbListsReadsAndKillsARealProcess(t *testing.T) {
 		t.Errorf("tofu shells log build does not show its output\n%s", log.String())
 	}
 
-	if code := shellsKill(registry, []string{"dev-server"}, &kill, &kill); code != exitOK {
-		t.Fatalf("shellsKill exited %d\n%s", code, kill.String())
+	if code := shellsStop(verbOutput{verb: "shells stop", out: &kill, errOut: &kill}, registry, "dev-server"); code != exitOK {
+		t.Fatalf("shellsStop exited %d\n%s", code, kill.String())
 	}
-	t.Logf("tofu shells kill dev-server\n%s", kill.String())
-	if !strings.Contains(kill.String(), "dev-server killed") {
+	t.Logf("tofu shells stop dev-server\n%s", kill.String())
+	if !strings.Contains(kill.String(), "stopped dev-server") {
 		t.Errorf("tofu shells kill dev-server does not confirm it\n%s", kill.String())
 	}
 

@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"tofu/interface/cli"
+	"tofu/internal/konst"
 	"tofu/internal/llm"
 	"tofu/internal/llm/wire/anthropic"
 	"tofu/internal/llm/wire/codex"
@@ -45,6 +47,19 @@ func sessionProject(t *testing.T) *session.Store {
 		t.Fatal(err)
 	}
 	return store
+}
+
+func envelopeData(t *testing.T, printed string, into any) {
+	t.Helper()
+	var envelope struct {
+		Data json.RawMessage `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(printed), &envelope); err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(envelope.Data, into); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func sessionRun(t *testing.T, args ...string) (string, string, int) {
@@ -97,7 +112,7 @@ func TestASessionTheStoreCannotParseIsCountedAndNamed(t *testing.T) {
 	if code != exitOK {
 		t.Fatalf("tofu session list exited %d with one unreadable session, and one bad row is not a failed list", code)
 	}
-	if !strings.Contains(out, "1 session the store could not read") {
+	if !strings.Contains(out, "unreadable") || !strings.Contains(out, "✗ 1") {
 		t.Errorf("the list does not count the session it stepped over")
 	}
 	if !strings.Contains(out, "turn-broken") || !strings.Contains(out, "does not parse") {
@@ -109,9 +124,7 @@ func TestASessionTheStoreCannotParseIsCountedAndNamed(t *testing.T) {
 
 	asJSON, _, _ := sessionRun(t, "session", "list", jsonFlag)
 	var report sessionListReport
-	if err := json.Unmarshal([]byte(asJSON), &report); err != nil {
-		t.Fatal(err)
-	}
+	envelopeData(t, asJSON, &report)
 	if len(report.Skipped) != 1 || report.Skipped[0].Session != "turn-broken" || report.Skipped[0].Reason == "" {
 		t.Errorf("--json carries %d skipped sessions, want the one with its reason", len(report.Skipped))
 	}
@@ -135,9 +148,7 @@ func TestSessionInfoPrintsTheHeaderAndTheCounts(t *testing.T) {
 
 	asJSON, _, _ := sessionRun(t, "session", "info", "one", jsonFlag)
 	var row sessionRow
-	if err := json.Unmarshal([]byte(asJSON), &row); err != nil {
-		t.Fatal(err)
-	}
+	envelopeData(t, asJSON, &row)
 	if row.ID != "turn-one" || row.Steps != 1 || row.Carried != 2 || row.Root != "turn-one" {
 		t.Errorf("--json reads %+v, want the whole header and the counts", row)
 	}
@@ -341,9 +352,7 @@ func TestSessionListJSONCarriesWhatTheLineCollapsed(t *testing.T) {
 		t.Fatalf("tofu session list --json exited %d", code)
 	}
 	var report sessionListReport
-	if err := json.Unmarshal([]byte(asJSON), &report); err != nil {
-		t.Fatal(err)
-	}
+	envelopeData(t, asJSON, &report)
 	if len(report.Sessions) != 1 || report.Sessions[0].Task != long {
 		t.Fatalf("--json reads %d sessions, want the one with its whole task", len(report.Sessions))
 	}
@@ -379,9 +388,7 @@ func TestASessionListedNowCarriesAGeneratedNameAndTheIDIsStillInJSON(t *testing.
 
 	asJSON, _, _ := sessionRun(t, "session", "list", jsonFlag)
 	var report sessionListReport
-	if err := json.Unmarshal([]byte(asJSON), &report); err != nil {
-		t.Fatal(err)
-	}
+	envelopeData(t, asJSON, &report)
 	if len(report.Sessions) != 1 || report.Sessions[0].ID != "turn-one" || report.Sessions[0].Name != name {
 		t.Errorf("--json reads %+v, want the id and the name together", report.Sessions)
 	}
@@ -422,9 +429,7 @@ func TestRenameThenInfoAndResumeFindTheSessionByTheNewName(t *testing.T) {
 
 	asJSON, _, _ := sessionRun(t, "session", "resume", "the-gate-work", jsonFlag)
 	var carry sessionResume
-	if err := json.Unmarshal([]byte(asJSON), &carry); err != nil {
-		t.Fatal(err)
-	}
+	envelopeData(t, asJSON, &carry)
 	if carry.Session != "turn-one" || carry.Name != "the-gate-work" {
 		t.Errorf("--json reads %+v, want the id and the name together", carry)
 	}
@@ -445,9 +450,7 @@ func TestTwoSessionsSharingANameAreBothListedWithTheirDatesRatherThanOneBeingPic
 	if code == exitOK {
 		t.Fatal("an ambiguous name was answered with one session, and it names two")
 	}
-	for _, want := range []string{"2 sessions are called gate", "turn-older", "turn-newer",
-		now.Add(-3 * time.Hour).Format(sessionDate), now.Add(-time.Minute).Format(sessionDate),
-		"the older gate work", "the newer gate work"} {
+	for _, want := range []string{"2 sessions are called gate", "turn-older (3h ago)", "turn-newer (1m ago)", "name one by id"} {
 		if !strings.Contains(errOut, want) {
 			t.Errorf("the refusal does not say %q:\n%s", want, errOut)
 		}
@@ -477,7 +480,7 @@ func TestTheSessionsAlreadyOnDiskListWithNoNameRatherThanFailing(t *testing.T) {
 			unnamed++
 		}
 	}
-	text := sessionListText(report, plain, time.Now())
+	text := strings.Join(sessionListLines(cli.Page{Width: konst.ProseWidthChars}, report, time.Now()), "\n")
 	t.Logf("%d sessions, %d of them written before the name, %d skipped\n%s",
 		len(report.Sessions), unnamed, len(report.Skipped), text)
 	if unnamed == 0 {
@@ -534,9 +537,7 @@ func TestSessionReadsJSONCarriesThePathTheSizeAndWhereTheReasoningCameFrom(t *te
 		t.Fatalf("tofu session reads --json exited %d", code)
 	}
 	var report sessionReadsReport
-	if err := json.Unmarshal([]byte(out), &report); err != nil {
-		t.Fatal(err)
-	}
+	envelopeData(t, out, &report)
 	if len(report.Reads) != 1 {
 		t.Fatalf("--json carries %d reads, want 1", len(report.Reads))
 	}
@@ -563,17 +564,13 @@ func TestASessionEndedIsMarkedEndedAnOpenOneIsNotAndTheEndedOneStillResumes(t *t
 		t.Fatalf("tofu session info exited %d", code)
 	}
 	var endedRow sessionRow
-	if err := json.Unmarshal([]byte(ended), &endedRow); err != nil {
-		t.Fatal(err)
-	}
+	envelopeData(t, ended, &endedRow)
 	if endedRow.EndedAt == nil || endedRow.EndReason != session.EndedByNew {
 		t.Errorf("the ended session reads %+v, want an end time and the reason new", endedRow)
 	}
 	open, _, _ := sessionRun(t, "session", "info", "turn-open", jsonFlag)
 	var openRow sessionRow
-	if err := json.Unmarshal([]byte(open), &openRow); err != nil {
-		t.Fatal(err)
-	}
+	envelopeData(t, open, &openRow)
 	if openRow.EndedAt != nil {
 		t.Errorf("a session nobody ended reads %+v", openRow)
 	}
@@ -607,8 +604,8 @@ func TestASessionPastTheLifetimeIsListedAsExpiredAndIsStillOnDisk(t *testing.T) 
 	if report.Expired != 1 {
 		t.Errorf("the list counts %d expired, want 1", report.Expired)
 	}
-	text := sessionListText(report, plain, now)
-	if !strings.Contains(text, "1 past the 30d lifetime") || !strings.Contains(text, "never deleted") {
+	text := strings.Join(sessionListLines(cli.Page{Width: konst.ProseWidthChars}, report, now), "\n")
+	if !strings.Contains(text, "1 past 30d, kept") {
 		t.Errorf("the list says nothing about the expired session:\n%s", text)
 	}
 	for _, id := range []string{"turn-old", "turn-young"} {
@@ -640,9 +637,7 @@ func TestSessionResumeJSONNamesWhatItCarries(t *testing.T) {
 
 	out, _, _ := sessionRun(t, "session", "resume", "turn-one", jsonFlag)
 	var carry sessionResume
-	if err := json.Unmarshal([]byte(out), &carry); err != nil {
-		t.Fatal(err)
-	}
+	envelopeData(t, out, &carry)
 	if carry.Session != "turn-one" || carry.Carried != 1 || carry.Steps != 1 {
 		t.Errorf("--json reads %+v, want the session it resumes and what it carries", carry)
 	}
@@ -688,8 +683,8 @@ func contextRun(t *testing.T, args ...string) string {
 func forkLineOf(t *testing.T, printed string) string {
 	t.Helper()
 	for _, line := range strings.Split(printed, "\n") {
-		if strings.HasPrefix(line, "forked into ") {
-			return line
+		if label, fact, found := strings.Cut(strings.TrimSpace(line), " "); found && label == "fork" {
+			return strings.TrimSpace(fact)
 		}
 	}
 	t.Fatalf("nothing printed here is a fork line:\n%s", printed)

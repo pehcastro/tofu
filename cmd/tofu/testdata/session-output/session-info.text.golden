@@ -1,0 +1,15 @@
+exit 0
+--- stdout
+store-walk                                                             ● stopped
+
+  id        turn-one
+  when      10m ago
+  task      explain the session store
+  counts    1 step · 1 sub-agent run · 1 read
+  carried   3 messages
+  ended     open
+  wire      anthropic claude-opus-5
+  cost      $0.005400
+
+  → tofu --continue
+--- stderr

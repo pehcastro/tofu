@@ -1,0 +1,5 @@
+exit 1
+--- stdout
+--- stderr
+✗ tofu session info: no session nope here
+  → tofu session list

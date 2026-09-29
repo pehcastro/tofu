@@ -1,0 +1,53 @@
+exit 0
+--- stdout
+{
+  "tofu": "VERSION",
+  "verb": "session list",
+  "ok": true,
+  "at": "AT",
+  "data": {
+    "head": "turn-one",
+    "lifetime": "never",
+    "expired": 0,
+    "sessions": [
+      {
+        "id": "turn-one",
+        "name": "store-walk",
+        "at": "AT",
+        "task": "explain the session store",
+        "turns": 0,
+        "sub_agents": 1,
+        "steps": 1,
+        "carried_messages": 3,
+        "outcome": "stopped",
+        "wire": "anthropic",
+        "model": "claude-opus-5",
+        "root": "turn-one",
+        "cost_usd": 0.0054,
+        "head": true,
+        "reads": 1
+      },
+      {
+        "id": "turn-two",
+        "name": "older-task",
+        "at": "AT",
+        "task": "the older task",
+        "turns": 0,
+        "sub_agents": 0,
+        "steps": 0,
+        "carried_messages": 0,
+        "outcome": "done",
+        "root": "turn-two",
+        "reads": 0
+      }
+    ],
+    "skipped": [
+      {
+        "session": "turn-broken",
+        "reason": "session: the header of turn-broken does not parse: invalid character 'n' looking for beginning of object key string"
+      }
+    ]
+  },
+  "problems": []
+}
+--- stderr

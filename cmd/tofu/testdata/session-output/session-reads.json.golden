@@ -1,0 +1,25 @@
+exit 0
+--- stdout
+{
+  "tofu": "VERSION",
+  "verb": "session reads",
+  "ok": true,
+  "at": "AT",
+  "data": {
+    "session": "turn-one",
+    "name": "store-walk",
+    "reads": [
+      {
+        "step": 1,
+        "tool": "read",
+        "source": "internal/session/store.go",
+        "bytes": 2048,
+        "reasoning": "looking at the store",
+        "reasoning_source": "assistant_text"
+      }
+    ],
+    "unrecorded": 0
+  },
+  "problems": []
+}
+--- stderr

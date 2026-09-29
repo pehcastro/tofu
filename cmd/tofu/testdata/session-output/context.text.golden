@@ -1,0 +1,17 @@
+exit 0
+--- stdout
+Context · store-walk · 1 step                                           ✓ step 1
+
+  task         explain the session store
+  identity     ▓▓▓░░░░░░░░░  27%  3300 / 12000
+  facts        ▓▓▓▓▓░░░░░░░  40%  1200 / 3000
+  working set  ▓▓▓▓▓▓░░░░░░  50%  9000 / 18000
+  recent       ▓▓░░░░░░░░░░  13%  4000 / 30000
+  total        ▓▓▓░░░░░░░░░  27%  17500 / 63000
+  ceiling      ▓░░░░░░░░░░░   7%  17500 / 250000
+  caps         this build's, the step marked 50000
+  bytes        2310 per thousand tokens
+
+unreadable      ✗ 1
+  ✗ turn-broken  session: the header of turn-broken does not parse: invalid cha…
+--- stderr

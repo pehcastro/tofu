@@ -1,0 +1,5 @@
+exit 2
+--- stdout
+--- stderr
+✗ tofu session info: 0 operands, want <name|id>
+  → tofu session info <name|id> [--json]

@@ -1,0 +1,17 @@
+exit 0
+--- stdout
+{
+  "tofu": "VERSION",
+  "verb": "shells log",
+  "ok": true,
+  "at": "AT",
+  "data": {
+    "name": "build",
+    "lines": [
+      "compiling",
+      "done"
+    ]
+  },
+  "problems": []
+}
+--- stderr

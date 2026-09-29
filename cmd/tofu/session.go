@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"tofu/internal/konst"
+	"tofu/interface/cli"
 	"tofu/internal/llm"
 	"tofu/internal/session"
 	"tofu/internal/turn"
@@ -19,27 +19,12 @@ import (
 )
 
 const (
-	sessionUsage = "usage: tofu session list | tofu session info <name|id> | tofu session trace <name|id> | tofu session reads <name|id> | tofu session resume <name|id> | tofu session rename <name|id> <new name>, each with --json"
-
-	sessionNone     = "no session has been recorded in this directory yet"
-	sessionFresh    = "no session is recorded here, so this starts fresh"
-	sessionDerived  = "no head is written, so this is the newest session nothing continues"
-	sessionEmpty    = "the record holds no message, so this starts the work again rather than continuing it"
-	sessionNoReads  = "this session read nothing, or was recorded before reads were kept"
-	sessionKeptWhen = "an expired session is listed and never deleted: delete one yourself when you want it gone"
-)
-
-const (
-	sessionHandleColumn   = 19
-	sessionIDColumn       = 22
-	sessionWhenColumn     = 9
-	sessionStepsColumn    = 8
-	sessionOutcomeColumn  = 14
-	sessionReadToolColumn = 15
-	sessionDay            = 24 * time.Hour
-	sessionWeek           = 7 * sessionDay
-	sessionClock          = "Mon 15:04"
-	sessionDate           = "2 Jan 15:04"
+	sessionSubcommands = "tofu session list|info|trace|reads|resume|rename <name|id> [--json]"
+	sessionFresh       = "no session recorded here"
+	sessionDay         = 24 * time.Hour
+	sessionWeek        = 7 * sessionDay
+	sessionClock       = "Mon 15:04"
+	sessionDate        = "2 Jan 15:04"
 )
 
 type sessionSkip struct {
@@ -89,7 +74,6 @@ type sessionListReport struct {
 	Expired     int              `json:"expired"`
 	Sessions    []sessionRow     `json:"sessions"`
 	Skipped     []sessionSkip    `json:"skipped,omitempty"`
-	ReportedAt  time.Time        `json:"reported_at"`
 }
 
 type sessionReadsReport struct {
@@ -97,7 +81,6 @@ type sessionReadsReport struct {
 	Name       string         `json:"name,omitempty"`
 	Reads      []session.Read `json:"reads"`
 	Unrecorded int            `json:"unrecorded"`
-	ReportedAt time.Time      `json:"reported_at"`
 }
 
 type sessionResume struct {
@@ -114,114 +97,104 @@ type sessionResume struct {
 	tasks    []string
 }
 
-func sessionVerb(args []string, in io.Reader, out, errOut io.Writer, shade palette) int {
-	if len(args) == 0 {
-		_, _ = fmt.Fprintln(errOut, sessionUsage)
-		return exitUsage
+func sessionOperands(subcommand string) (string, int, bool) {
+	switch subcommand {
+	case "list":
+		return "", 0, true
+	case "info", "trace", "reads", "resume":
+		return "<name|id>", 1, true
+	case "rename":
+		return "<name|id> <new name>", 2, true
 	}
-	handles, asJSON, err := sessionArgs(args[1:])
+	return "", 0, false
+}
+
+func sessionVerb(args []string, in io.Reader, out, errOut io.Writer, _ palette) int {
+	handles, asJSON, err := verbArgs(args[min(1, len(args)):])
+	o := verbOutput{verb: "session", usageLine: sessionSubcommands, asJSON: asJSON, out: out, errOut: errOut}
+	if len(args) == 0 {
+		return o.usage(errors.New("no subcommand"))
+	}
+	operands, wanted, known := sessionOperands(args[0])
+	if !known {
+		return o.usage(fmt.Errorf("there is no subcommand %q", args[0]))
+	}
+	o.verb, o.usageLine = "session "+args[0], strings.TrimSpace("tofu session "+args[0]+" "+operands)+" [--json]"
+	if err == nil && len(handles) != wanted {
+		err = fmt.Errorf("%d operands, want %s", len(handles), cmp.Or(operands, "none"))
+	}
 	if err != nil {
-		_, _ = fmt.Fprintf(errOut, "tofu session: %v\n%s\n", err, sessionUsage)
-		return exitUsage
+		return o.usage(err)
 	}
 	store, err := session.Open()
 	if err != nil {
-		_, _ = fmt.Fprintf(errOut, "tofu session: %v\n", err)
-		return exitVerdict
+		return o.fail(err)
 	}
 	now := time.Now()
-	settings := session.DefaultSettings()
+	lifetime := session.DefaultSettings().Lifetime
 	switch args[0] {
 	case "list":
-		if len(handles) != 0 {
-			_, _ = fmt.Fprintf(errOut, "tofu session list: %q, and the list takes no session: tofu session info %s\n", handles[0], handles[0])
-			return exitUsage
-		}
-		report, err := sessionListing(store, settings.Lifetime, now)
+		report, err := sessionListing(store, lifetime, now)
 		if err != nil {
-			_, _ = fmt.Fprintf(errOut, "tofu session list: %v\n", err)
-			return exitVerdict
+			return o.fail(err)
 		}
-		return sessionPrint(out, errOut, asJSON, report, sessionListText(report, shade, now))
+		return o.done(true, report, func(page cli.Page) []string { return sessionListLines(page, report, now) })
 	case "info":
-		if len(handles) != 1 {
-			_, _ = fmt.Fprintln(errOut, "tofu session info: which session? a name or an id, and tofu session list names them")
-			return exitUsage
-		}
 		row, _, err := sessionDetail(store, handles[0])
 		if err != nil {
-			_, _ = fmt.Fprintf(errOut, "tofu session info: %v\n", err)
-			return exitVerdict
+			return o.fail(err)
 		}
 		if head, headErr := store.Head(); headErr == nil {
 			row.Head = head.ID == row.ID
 		}
-		row.Expired = settings.Lifetime.Expired(row.lastAt, now)
-		return sessionPrint(out, errOut, asJSON, row, sessionInfoText(row, shade, now))
+		row.Expired = lifetime.Expired(row.lastAt, now)
+		return o.done(true, row, func(page cli.Page) []string { return sessionInfoLines(page, row, now) })
 	case "trace":
-		if len(handles) != 1 {
-			_, _ = fmt.Fprintln(errOut, "tofu session trace: which session? a name or an id, and tofu session list names them")
-			return exitUsage
-		}
 		report, err := sessionTrace(store, handles[0])
 		if err != nil {
-			_, _ = fmt.Fprintf(errOut, "tofu session trace: %v\n", err)
-			return exitVerdict
+			return o.fail(err)
 		}
-		return sessionPrint(out, errOut, asJSON, report, sessionTraceText(report))
+		return o.done(true, report, func(page cli.Page) []string { return sessionTraceLines(page, report) })
 	case "reads":
-		if len(handles) != 1 {
-			_, _ = fmt.Fprintln(errOut, "tofu session reads: which session? a name or an id, and tofu session list names them")
-			return exitUsage
-		}
-		report, err := sessionReads(store, handles[0], now)
+		report, err := sessionReads(store, handles[0])
 		if err != nil {
-			_, _ = fmt.Fprintf(errOut, "tofu session reads: %v\n", err)
-			return exitVerdict
+			return o.fail(err)
 		}
-		return sessionPrint(out, errOut, asJSON, report, sessionReadsText(report, shade))
+		return o.done(true, report, func(page cli.Page) []string { return sessionReadsLines(page, report) })
 	case "rename":
-		if len(handles) != 2 {
-			_, _ = fmt.Fprintln(errOut, "tofu session rename: which session, and what to call it? tofu session rename <name|id> <new name>")
-			return exitUsage
-		}
 		row, err := sessionRenamed(store, handles[0], handles[1])
 		if err != nil {
-			_, _ = fmt.Fprintf(errOut, "tofu session rename: %v\n", err)
-			return exitVerdict
+			return o.fail(err)
 		}
-		return sessionPrint(out, errOut, asJSON, row, sessionInfoText(row, shade, now))
-	case "resume":
-		if len(handles) != 1 {
-			_, _ = fmt.Fprintln(errOut, "tofu session resume: which session? a name or an id, and tofu --continue takes the head")
-			return exitUsage
-		}
-		carry, err := resumeOf(store, handles[0])
-		if err != nil {
-			_, _ = fmt.Fprintf(errOut, "tofu session resume: %v\n", err)
-			return exitVerdict
-		}
-		return startResumed(carry, asJSON, in, out, errOut)
+		return o.done(true, row, func(page cli.Page) []string {
+			return append([]string{page.Glyph(cli.Changed) + " renamed " + row.ID + " to " + row.Name},
+				cli.Indent(page.Hint("tofu session info "+row.Name))...)
+		})
 	}
-	_, _ = fmt.Fprintf(errOut, "tofu session: there is no subcommand %q\n%s\n", args[0], sessionUsage)
-	return exitUsage
+	carry, err := resumeOf(store, handles[0])
+	if err != nil {
+		return o.fail(err)
+	}
+	return startResumed(o, carry, in)
 }
 
 func continueVerb(args []string, in io.Reader, out, errOut io.Writer) int {
-	handles, asJSON, err := sessionArgs(args)
-	if err != nil || len(handles) != 0 {
-		_, _ = fmt.Fprintln(errOut, "usage: tofu --continue takes the head, and tofu session resume <name|id> takes any other")
-		return exitUsage
+	handles, asJSON, err := verbArgs(args)
+	o := verbOutput{verb: "--continue", usageLine: "tofu --continue [--json], or tofu session resume <name|id>", asJSON: asJSON, out: out, errOut: errOut}
+	if err == nil && len(handles) != 0 {
+		err = fmt.Errorf("takes the head, not %q", handles[0])
+	}
+	if err != nil {
+		return o.usage(err)
 	}
 	store, err := session.Open()
 	if err != nil {
-		_, _ = fmt.Fprintf(errOut, "tofu --continue: %v\n", err)
-		return exitVerdict
+		return o.fail(err)
 	}
-	return startResumed(continueCarry(store), asJSON, in, out, errOut)
+	return startResumed(o, continueCarry(store), in)
 }
 
-func sessionArgs(args []string) ([]string, bool, error) {
+func verbArgs(args []string) ([]string, bool, error) {
 	var handles []string
 	asJSON := false
 	for _, arg := range args {
@@ -237,23 +210,11 @@ func sessionArgs(args []string) ([]string, bool, error) {
 	return handles, asJSON, nil
 }
 
-func sessionPrint(out, errOut io.Writer, asJSON bool, report any, text string) int {
-	if !asJSON {
-		_, _ = fmt.Fprint(out, text)
-		return exitOK
-	}
-	if err := writeJSON(out, report); err != nil {
-		_, _ = fmt.Fprintf(errOut, "tofu session: %v\n", err)
-		return exitVerdict
-	}
-	return exitOK
-}
-
-func startResumed(carry sessionResume, asJSON bool, in io.Reader, out, errOut io.Writer) int {
-	if code := sessionPrint(out, errOut, asJSON, carry, resumeText(carry)); code != exitOK {
+func startResumed(o verbOutput, carry sessionResume, in io.Reader) int {
+	if code := o.done(true, carry, func(page cli.Page) []string { return resumeLines(page, carry) }); code != exitOK || o.asJSON {
 		return code
 	}
-	return appVerb(in, out, errOut, carry)
+	return appVerb(in, o.out, o.errOut, carry)
 }
 
 func continueCarry(store *session.Store) sessionResume {
@@ -263,7 +224,7 @@ func continueCarry(store *session.Store) sessionResume {
 	}
 	carry, err := resumeOf(store, head.ID)
 	if err != nil {
-		return sessionResume{Fresh: "the head " + head.ID + " does not read, so this starts fresh: " + err.Error()}
+		return sessionResume{Fresh: "the head " + head.ID + " does not read: " + err.Error()}
 	}
 	carry.HeadDerived = head.Derived
 	return carry
@@ -315,18 +276,22 @@ func sessionRenamed(store *session.Store, handle, to string) (sessionRow, error)
 func sessionHeader(store *session.Store, handle string) (session.Header, error) {
 	matched, err := store.Resolve(handle)
 	if errors.Is(err, fs.ErrNotExist) {
-		return session.Header{}, fmt.Errorf("there is no session %s here, and tofu session list names the ones there are", handle)
+		return session.Header{}, problemError{What: "no session " + handle + " here", Hint: "tofu session list"}
 	}
 	if err != nil {
 		return session.Header{}, err
 	}
 	if len(matched) > 1 {
-		return session.Header{}, errors.New(sessionAmbiguous(handle, matched))
+		ids := make([]string, len(matched))
+		for i, header := range matched {
+			ids[i] = header.ID + " (" + sessionWhen(header.At, time.Now()) + ")"
+		}
+		return session.Header{}, problemError{What: strconv.Itoa(len(matched)) + " sessions are called " + handle + ": " + strings.Join(ids, ", "), Hint: "name one by id"}
 	}
 	return matched[0], nil
 }
 
-func sessionReads(store *session.Store, handle string, now time.Time) (sessionReadsReport, error) {
+func sessionReads(store *session.Store, handle string) (sessionReadsReport, error) {
 	header, err := sessionHeader(store, handle)
 	if err != nil {
 		return sessionReadsReport{}, err
@@ -335,12 +300,7 @@ func sessionReads(store *session.Store, handle string, now time.Time) (sessionRe
 	if err != nil {
 		return sessionReadsReport{}, err
 	}
-	report := sessionReadsReport{
-		Session:    header.ID,
-		Reads:      reads.Reads,
-		Unrecorded: reads.Unrecorded,
-		ReportedAt: now,
-	}
+	report := sessionReadsReport{Session: header.ID, Reads: append([]session.Read{}, reads.Reads...), Unrecorded: reads.Unrecorded}
 	if header.Name != nil {
 		report.Name = *header.Name
 	}
@@ -422,7 +382,7 @@ func sessionListing(store *session.Store, lifetime session.Lifetime, now time.Ti
 	if err != nil {
 		return sessionListReport{}, err
 	}
-	report := sessionListReport{Lifetime: lifetime, ReportedAt: now}
+	report := sessionListReport{Lifetime: lifetime, Sessions: []sessionRow{}}
 	if head, err := store.Head(); err == nil {
 		report.Head, report.HeadDerived = head.ID, head.Derived
 	}
@@ -445,199 +405,165 @@ func sessionListing(store *session.Store, lifetime session.Lifetime, now time.Ti
 	return report, nil
 }
 
-func sessionListText(report sessionListReport, shade palette, now time.Time) string {
+func sessionListLines(page cli.Page, report sessionListReport, now time.Time) []string {
 	if len(report.Sessions) == 0 && len(report.Skipped) == 0 {
-		return sessionNone + "\n"
+		return page.Title("Sessions", nil, cli.Verdict{Mark: cli.Idle, Text: "none recorded"})
 	}
-	headID := sessionShortID(report.Head)
-	counted := strconv.Itoa(len(report.Sessions)) + " sessions, newest first"
-	if len(report.Sessions) == 1 {
-		counted = "1 session"
-	}
-	var body strings.Builder
-	body.WriteString(headline(counted, shade.settled(headID), len(headID)) + "\n\n")
-	for _, row := range report.Sessions {
-		body.WriteString(sessionLine(row, shade, now) + "\n")
-	}
-	if report.HeadDerived {
-		body.WriteString("\n" + reportIndent + sessionDerived + "\n")
-	}
+	facts := []string{countOf(len(report.Sessions), "session")}
 	if report.Expired > 0 {
-		body.WriteString("\n" + reportIndent + strconv.Itoa(report.Expired) + " past the " + report.Lifetime.String() + " lifetime. " + sessionKeptWhen + "\n")
+		facts = append(facts, strconv.Itoa(report.Expired)+" past "+report.Lifetime.String()+", kept")
 	}
-	return body.String() + sessionSkipText(report.Skipped)
-}
-
-func sessionReadsText(report sessionReadsReport, shade palette) string {
-	counted := strconv.Itoa(len(report.Reads)) + " reads"
-	if len(report.Reads) == 1 {
-		counted = "1 read"
-	}
-	var body strings.Builder
-	handle := cmp.Or(report.Name, sessionShortID(report.Session))
-	body.WriteString(headline(counted, shade.settled(handle), len(handle)) + "\n\n")
-	said := ""
-	for _, read := range report.Reads {
-		columns := column("step "+strconv.Itoa(read.Step), sessionStepsColumn) +
-			column(read.Tool, sessionReadToolColumn) +
-			column(widget.Size(read.Bytes), sessionWhenColumn)
-		source := strings.TrimRight(read.Source+" "+read.Span, " ")
-		body.WriteString(reportIndent + columns + widget.Fit(source, konst.ProseWidthChars-len(reportIndent)-widget.Cells(columns)) + "\n")
-		if read.Reasoning != "" && read.Reasoning != said {
-			body.WriteString(paragraph("said", read.Reasoning))
+	var verdict cli.Verdict
+	rows := make([]cli.Row, len(report.Sessions))
+	for i, row := range report.Sessions {
+		rows[i] = cli.Row{Mark: cli.Idle, Cells: []string{sessionHandle(row.ID, row.Name), sessionWhen(row.At, now), sessionSteps(row.Steps), row.Outcome}, Detail: oneLine(row.Task)}
+		switch {
+		case row.Head && report.HeadDerived:
+			verdict = cli.Verdict{Mark: cli.Idle, Text: "newest " + rows[i].Cells[0]}
+		case row.Head:
+			rows[i].Mark, verdict = cli.Active, cli.Verdict{Mark: cli.Active, Text: "head " + rows[i].Cells[0]}
+		case row.Expired:
+			rows[i].Mark = cli.Warn
 		}
-		said = read.Reasoning
 	}
-	if len(report.Reads) == 0 {
-		body.WriteString(reportIndent + sessionNoReads + "\n")
+	lines := append(page.Title("Sessions", facts, verdict), "")
+	lines = append(lines, cli.Indent(page.Rows(rows)...)...)
+	return append(lines, skippedLines(page, report.Skipped)...)
+}
+
+func skippedLines(page cli.Page, skipped []sessionSkip) []string {
+	if len(skipped) == 0 {
+		return nil
 	}
+	rows := make([]cli.Row, len(skipped))
+	for i, skip := range skipped {
+		rows[i] = cli.Row{Mark: cli.Fail, Cells: []string{skip.Session}, Detail: skip.Reason}
+	}
+	lines := []string{"", page.Section("unreadable", cli.Verdict{Mark: cli.Fail, Text: strconv.Itoa(len(skipped))})}
+	return append(lines, cli.Indent(page.Rows(rows)...)...)
+}
+
+func sessionReadsLines(page cli.Page, report sessionReadsReport) []string {
+	var verdict cli.Verdict
 	if report.Unrecorded > 0 {
-		body.WriteString("\n" + reportIndent + strconv.Itoa(report.Unrecorded) + " reads happened in this session and were not recorded as reads\n")
+		verdict = cli.Verdict{Mark: cli.Warn, Text: strconv.Itoa(report.Unrecorded) + " not recorded"}
 	}
-	return body.String()
+	lines := append(page.Title("Reads", []string{sessionHandle(report.Session, report.Name), countOf(len(report.Reads), "read")}, verdict), "")
+	if len(report.Reads) == 0 {
+		return append(lines, cli.Indent(page.Label("none recorded"))...)
+	}
+	rows := make([]cli.Row, len(report.Reads))
+	for i, read := range report.Reads {
+		rows[i] = cli.Row{Cells: []string{"step " + strconv.Itoa(read.Step), read.Tool, widget.Size(read.Bytes), strings.TrimSpace(read.Source + " " + read.Span)}}
+	}
+	said := ""
+	for i, row := range page.Rows(rows) {
+		lines = append(lines, cli.Indent(row)...)
+		if reasoning := report.Reads[i].Reasoning; reasoning != "" && reasoning != said {
+			lines = append(lines, cli.Indent(cli.Indent(page.Label(oneLine(reasoning)))...)...)
+		}
+		said = report.Reads[i].Reasoning
+	}
+	return lines
 }
 
-func sessionAmbiguous(handle string, matched []session.Header) string {
-	body := strconv.Itoa(len(matched)) + " sessions are called " + handle + ", so say which by id:"
-	for _, header := range matched {
-		line := "\n" + reportIndent + column(header.ID, sessionIDColumn) + column(header.At.Format(sessionDate), sessionWhenColumn)
-		body += line + widget.Fit(oneLine(header.Task), konst.ProseWidthChars-widget.Cells(line))
+func sessionInfoLines(page cli.Page, row sessionRow, now time.Time) []string {
+	verdict := cli.Verdict{Mark: cli.Idle, Text: cmp.Or(row.Outcome, "open")}
+	hint := "tofu session resume " + sessionHandle(row.ID, row.Name)
+	switch {
+	case row.Head:
+		verdict.Mark, hint = cli.Active, "tofu --continue"
+	case row.Expired:
+		verdict = cli.Verdict{Mark: cli.Warn, Text: verdict.Text + ", past its lifetime"}
 	}
-	return body
+	var counts []string
+	for _, count := range []struct {
+		n    int
+		noun string
+	}{{row.Turns, "turn"}, {row.Steps, "step"}, {row.Agents, "sub-agent run"}, {row.Reads, "read"}} {
+		if count.n > 0 {
+			counts = append(counts, countOf(count.n, count.noun))
+		}
+	}
+	carried := "none, a resume starts over"
+	if row.Carried > 0 {
+		carried = countOf(row.Carried, "message")
+	}
+	ended := "open"
+	if row.EndedAt != nil {
+		ended = string(row.EndReason) + " · " + sessionWhen(*row.EndedAt, now)
+	}
+	parent := row.Parent
+	if row.ForkKind != "" {
+		parent += " · continues it"
+	}
+	facts := []cli.Fact{
+		{Label: "id", Text: row.ID},
+		{Label: "when", Text: sessionWhen(row.At, now)},
+		{Label: "task", Text: oneLine(row.Task)},
+		{Label: "counts", Text: strings.Join(counts, " · ")},
+		{Label: "carried", Text: carried},
+		{Label: "ended", Text: ended},
+		{Label: "wire", Text: strings.TrimSpace(row.Wire + " " + row.Model)},
+		{Label: "parent", Text: parent},
+	}
+	if row.CostUSD > 0 {
+		facts = append(facts, cli.Fact{Label: "cost", Text: dollars(row.CostUSD)})
+	}
+	if row.Root != row.ID && row.Root != row.Parent {
+		facts = append(facts, cli.Fact{Label: "root", Text: row.Root})
+	}
+	if row.ForkedInto != "" {
+		fork := &contextForkReport{Into: row.ForkedInto, Kind: row.ForkIntoKind}
+		if row.ForkTokensBefore > 0 {
+			fork.Counts = &contextForkCounts{TokensBefore: row.ForkTokensBefore, TokensAfter: row.ForkTokensAfter}
+		}
+		facts = append(facts, cli.Fact{Label: "fork", Text: forkFact(fork)})
+	}
+	if row.AutoCompaction != "" {
+		facts = append(facts, cli.Fact{Label: "context", Text: strconv.Itoa(row.ContextCeiling) + " ceiling · " +
+			strconv.Itoa(row.ContextTarget) + " target · compaction " + row.AutoCompaction})
+	}
+	lines := append(page.Title(sessionHandle(row.ID, row.Name), nil, verdict), "")
+	lines = append(lines, cli.Indent(page.Facts(facts)...)...)
+	return append(append(lines, ""), cli.Indent(page.Hint(hint))...)
 }
 
-func sessionLine(row sessionRow, shade palette, now time.Time) string {
-	handle := sessionShortID(row.ID)
-	if row.Name != "" {
-		handle = widget.Fit(row.Name, sessionHandleColumn)
+func resumeLines(page cli.Page, carry sessionResume) []string {
+	if carry.Fresh != "" {
+		lines := append(page.Title("Resume", nil, cli.Verdict{Mark: cli.Idle, Text: "starts fresh"}), "")
+		return append(lines, cli.Indent(page.Facts([]cli.Fact{{Label: "reason", Text: carry.Fresh}})...)...)
 	}
-	if row.Head {
-		handle = shade.settled(handle)
+	carried, head := "none, starts over", ""
+	if carry.Carried > 0 {
+		carried = countOf(carry.Carried, "message") + " · " + sessionSteps(carry.Steps)
 	}
-	columns := column(handle, sessionHandleColumn) +
-		column(sessionWhen(row.At, now), sessionWhenColumn) +
-		column(sessionSteps(row.Steps), sessionStepsColumn) +
-		column(row.Outcome, sessionOutcomeColumn)
-	task := widget.Fit(oneLine(row.Task), konst.ProseWidthChars-len(reportIndent)-widget.Cells(columns))
-	return reportIndent + strings.TrimRight(columns+task, " ")
+	if carry.HeadDerived {
+		head = "none written, took the newest"
+	}
+	lines := append(page.Title("Resume", []string{sessionHandle(carry.Session, carry.Name)}, cli.Verdict{Mark: cli.Active, Text: cmp.Or(carry.Outcome, "open")}), "")
+	return append(lines, cli.Indent(page.Facts([]cli.Fact{
+		{Label: "id", Text: carry.Session},
+		{Label: "task", Text: oneLine(carry.Task)},
+		{Label: "carried", Text: carried},
+		{Label: "head", Text: head},
+	})...)...)
 }
 
-func column(text string, width int) string {
-	return widget.Pad(text, width) + "  "
-}
-
-func paragraph(label, text string) string {
-	return strings.Join(wrapped(label, text), "\n") + "\n"
-}
-
-func sessionSteps(steps int) string {
-	if steps == 1 {
-		return "1 step"
+func countOf(n int, noun string) string {
+	if n == 1 {
+		return "1 " + noun
 	}
-	return strconv.Itoa(steps) + " steps"
+	return strconv.Itoa(n) + " " + noun + "s"
 }
+
+func sessionSteps(steps int) string { return countOf(steps, "step") }
+
+func dollars(usd float64) string { return fmt.Sprintf("$%.6f", usd) }
 
 func sessionShortID(id string) string { return strings.TrimPrefix(id, session.IDPrefix) }
 
-func sessionSkipText(skipped []sessionSkip) string {
-	if len(skipped) == 0 {
-		return ""
-	}
-	noun := " sessions the store could not read:\n"
-	if len(skipped) == 1 {
-		noun = " session the store could not read:\n"
-	}
-	body := "\n" + strconv.Itoa(len(skipped)) + noun
-	for _, skip := range skipped {
-		body += reportIndent + skip.Session + "  " + skip.Reason + "\n"
-	}
-	return body
-}
-
-func sessionInfoText(row sessionRow, shade palette, now time.Time) string {
-	var body strings.Builder
-	body.WriteString(headline(cmp.Or(row.Name, row.ID), shade.settled(row.Outcome), len(row.Outcome)) + "\n\n")
-	body.WriteString(labelled("id", row.ID) + "\n")
-	body.WriteString(labelled("when", row.At.Format(sessionDate)+", "+sessionWhen(row.At, now)) + "\n")
-	if row.Task != "" {
-		body.WriteString(paragraph("task", row.Task))
-	}
-	body.WriteString(labelled("counts", strconv.Itoa(row.Turns)+" turns, "+sessionSteps(row.Steps)+", "+strconv.Itoa(row.Agents)+" sub-agent runs, "+
-		strconv.Itoa(row.Carried)+" messages a resume would send, "+strconv.Itoa(row.Reads)+" reads recorded") + "\n")
-	if row.EndedAt != nil {
-		body.WriteString(labelled("ended", string(row.EndReason)+", "+row.EndedAt.Format(sessionDate)) + "\n")
-	} else {
-		body.WriteString(labelled("ended", "no, this session is open and a resume continues it") + "\n")
-	}
-	if row.Expired {
-		body.WriteString(paragraph("expired", "past its lifetime. "+sessionKeptWhen))
-	}
-	if row.Wire != "" {
-		body.WriteString(labelled("wire", strings.TrimSuffix(row.Wire+" "+row.Model, " ")) + "\n")
-	}
-	if row.CostUSD > 0 {
-		body.WriteString(labelled("cost", fmt.Sprintf("$%.6f", row.CostUSD)) + "\n")
-	}
-	if lineage := sessionLineage(row); lineage != "" {
-		body.WriteString(paragraph("lineage", lineage))
-	}
-	if row.AutoCompaction != "" {
-		body.WriteString(paragraph("context", strconv.Itoa(row.ContextCeiling)+" token ceiling, "+
-			strconv.Itoa(row.ContextTarget)+" token target, automatic compaction "+row.AutoCompaction))
-	}
-	if row.Head {
-		body.WriteString(labelled("head", "tofu --continue resumes this one") + "\n")
-	}
-	if row.Carried == 0 {
-		body.WriteString(paragraph("resume", sessionEmpty))
-	}
-	return body.String()
-}
-
-func sessionLineage(row sessionRow) string {
-	var parts []string
-	if row.Parent != "" {
-		began := "spawned by "
-		if row.ForkKind != "" {
-			began = "continues "
-		}
-		parts = append(parts, began+row.Parent)
-	}
-	if row.Root != "" && row.Root != row.ID && row.Root != row.Parent {
-		parts = append(parts, "rooted at "+row.Root)
-	}
-	if row.ForkedInto != "" {
-		var counts *contextForkCounts
-		if row.ForkTokensBefore > 0 {
-			counts = &contextForkCounts{TokensBefore: row.ForkTokensBefore, TokensAfter: row.ForkTokensAfter}
-		}
-		parts = append(parts, forkWords(row.ForkedInto, row.ForkIntoKind, counts))
-	}
-	return strings.Join(parts, ", ")
-}
-
-func resumeText(carry sessionResume) string {
-	if carry.Fresh != "" {
-		return carry.Fresh + "\n"
-	}
-	state := cmp.Or(carry.Outcome, "resumable")
-	var body strings.Builder
-	body.WriteString(headline("continuing "+cmp.Or(carry.Name, carry.Session), state, len(state)) + "\n\n")
-	if carry.Name != "" {
-		body.WriteString(labelled("id", carry.Session) + "\n")
-	}
-	if carry.Task != "" {
-		body.WriteString(paragraph("task", carry.Task))
-	}
-	body.WriteString(labelled("carried", strconv.Itoa(carry.Carried)+" messages from "+sessionSteps(carry.Steps)) + "\n")
-	if carry.HeadDerived {
-		body.WriteString(labelled("head", sessionDerived) + "\n")
-	}
-	if carry.Carried == 0 {
-		body.WriteString(paragraph("resume", sessionEmpty))
-	}
-	return body.String()
-}
+func sessionHandle(id, name string) string { return cmp.Or(name, sessionShortID(id)) }
 
 type traceRequest struct {
 	Request string        `json:"request"`
@@ -677,7 +603,7 @@ func sessionTrace(store *session.Store, handle string) (sessionTraceReport, erro
 	if err != nil {
 		return sessionTraceReport{}, err
 	}
-	report := sessionTraceReport{Session: header.ID, Events: len(events), Agents: header.Agents}
+	report := sessionTraceReport{Session: header.ID, Events: len(events), Agents: append([]session.AgentRun{}, header.Agents...), Requests: []traceRequest{}, Calls: []traceCall{}}
 	if header.Name != nil {
 		report.Name = *header.Name
 	}
@@ -705,32 +631,40 @@ func sessionTrace(store *session.Store, handle string) (sessionTraceReport, erro
 	return report, nil
 }
 
-func sessionTraceText(report sessionTraceReport) string {
-	var body strings.Builder
-	counted := strconv.Itoa(report.Events) + " events"
-	body.WriteString(headline("trace "+cmp.Or(report.Name, report.Session), counted, len(counted)) + "\n")
-	body.WriteString("\nsub-agents\n")
-	for _, run := range report.Agents {
+func sessionTraceLines(page cli.Page, report sessionTraceReport) []string {
+	agents := make([]cli.Row, len(report.Agents))
+	for i, run := range report.Agents {
 		calls := 0
 		for _, call := range report.Calls {
 			if call.Agent == run.Agent {
 				calls++
 			}
 		}
-		fmt.Fprintf(&body, "%s%s  %s on %s, spawned by call %s in %s, %s, %d calls, $%.6f\n", reportIndent, run.Agent,
-			cmp.Or(run.Definition, "unnamed"), cmp.Or(run.Model, "the orchestrator's model"), run.SpawnCall, run.SpawnTurn, run.Status, calls, run.CostUSD)
+		agents[i] = cli.Row{Mark: cli.Idle, Cells: []string{run.Agent, cmp.Or(run.Definition, "unnamed"), cmp.Or(run.Model, "orchestrator's model"), run.Status, countOf(calls, "call"), dollars(run.CostUSD)},
+			Detail: "spawned by " + run.SpawnCall + " in " + run.SpawnTurn}
 	}
-	body.WriteString("\nrequests\n")
-	for _, request := range report.Requests {
-		fmt.Fprintf(&body, "%s%s  %s  %s  in %d out %d  $%.6f\n", reportIndent, cmp.Or(request.Agent, session.AuthorOrchestrator),
-			request.Request, request.Model, request.Usage.InputTokens, request.Usage.OutputTokens, request.CostUSD)
+	requests := make([]cli.Row, len(report.Requests))
+	for i, request := range report.Requests {
+		requests[i] = cli.Row{Mark: cli.Idle, Cells: []string{cmp.Or(request.Agent, session.AuthorOrchestrator), request.Request, request.Model,
+			"in " + strconv.Itoa(request.Usage.InputTokens) + " · out " + strconv.Itoa(request.Usage.OutputTokens), dollars(request.CostUSD)}}
 	}
-	body.WriteString("\ncalls\n")
-	for _, call := range report.Calls {
-		fmt.Fprintf(&body, "%s%s  %s  %s  answered by %s  %s  %d bytes\n", reportIndent, cmp.Or(call.Agent, session.AuthorOrchestrator),
-			call.Call, call.Tool, cmp.Or(call.Result, "nothing"), call.Outcome, call.Bytes)
+	calls := make([]cli.Row, len(report.Calls))
+	for i, call := range report.Calls {
+		calls[i] = cli.Row{Mark: cli.Done, Cells: []string{cmp.Or(call.Agent, session.AuthorOrchestrator), call.Call, call.Tool, call.Outcome, widget.Size(call.Bytes)}, Detail: call.Result}
+		if call.Result == "" {
+			calls[i].Mark, calls[i].Cells[3] = cli.Warn, "unanswered"
+		}
 	}
-	return body.String()
+	lines := page.Title("Trace", []string{sessionHandle(report.Session, report.Name), countOf(report.Events, "event")}, cli.Verdict{})
+	for _, section := range []struct {
+		name string
+		rows []cli.Row
+	}{{"sub-agents", agents}, {"requests", requests}, {"calls", calls}} {
+		if len(section.rows) > 0 {
+			lines = append(append(lines, "", page.Section(section.name, cli.Verdict{})), cli.Indent(page.Rows(section.rows)...)...)
+		}
+	}
+	return lines
 }
 
 func sessionWhen(at, now time.Time) string {
