@@ -23,8 +23,8 @@ type Choice struct {
 	Headroom Headroom
 }
 
-func Left(report Report, now time.Time) Headroom {
-	bound := report.binding()
+func Left(report Report, spends []string, now time.Time) Headroom {
+	bound := report.binding(spends)
 	rooms := make([]Headroom, 0, len(bound))
 	for _, window := range bound {
 		if !window.Used.Reported {
@@ -44,20 +44,20 @@ func Left(report Report, now time.Time) Headroom {
 	})
 }
 
-func Spent(report Report, now time.Time) bool {
+func Spent(report Report, spends []string, now time.Time) bool {
 	if report.CreditOverage {
 		return false
 	}
-	return report.LimitReached || Left(report, now).Fraction <= 0
+	return report.LimitReached || Left(report, spends, now).Fraction <= 0
 }
 
-func Pick(candidates []Candidate, provider Provider, now time.Time) (Choice, bool) {
+func Pick(candidates []Candidate, provider Provider, spends []string, now time.Time) (Choice, bool) {
 	ranked := make([]Choice, 0, len(candidates))
 	for _, candidate := range candidates {
 		if candidate.Provider != provider {
 			continue
 		}
-		ranked = append(ranked, Choice{ID: candidate.ID, Headroom: Left(candidate.Report, now)})
+		ranked = append(ranked, Choice{ID: candidate.ID, Headroom: Left(candidate.Report, spends, now)})
 	}
 	if len(ranked) == 0 {
 		return Choice{}, false

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"tofu/internal/llm/cred"
+	"tofu/internal/llm/models"
 	"tofu/internal/llm/quota"
 	"tofu/internal/sys"
 	"tofu/internal/widget"
@@ -53,7 +54,54 @@ type statusReport struct {
 	Sources    []sourceReport `json:"sources"`
 	Gate       string         `json:"jev_key"`
 	Keys       []keyReport    `json:"keys,omitempty"`
+	Scoped     []scopedReport `json:"scoped_windows,omitempty"`
 	ReportedAt time.Time      `json:"reported_at"`
+}
+
+type scopedReport struct {
+	Window string `json:"window"`
+	Binds  string `json:"binds"`
+}
+
+func scopedReports(results []pollResult) []scopedReport {
+	var windows []quota.Window
+	for _, result := range results {
+		for _, window := range result.report.Windows {
+			if !window.Binds(nil) && !slices.ContainsFunc(windows, func(seen quota.Window) bool { return seen.ID == window.ID }) {
+				windows = append(windows, window)
+			}
+		}
+	}
+	if len(windows) == 0 {
+		return nil
+	}
+	library, err := modelLibrary("")
+	scoped := make([]scopedReport, 0, len(windows))
+	for _, window := range windows {
+		var bound []string
+		for _, model := range library.Models {
+			if model.Use != models.UseExcluded && window.Binds(model.Windows) {
+				bound = append(bound, model.Slug())
+			}
+		}
+		binds := cmp.Or(strings.Join(bound, ", "), "no model in the library")
+		if err != nil {
+			binds = "unknown, the model library did not load: " + err.Error()
+		}
+		scoped = append(scoped, scopedReport{Window: window.ID, Binds: binds})
+	}
+	return scoped
+}
+
+func scopedLines(scoped []scopedReport) string {
+	if len(scoped) == 0 {
+		return ""
+	}
+	lines := []string{"", "scoped windows"}
+	for _, window := range scoped {
+		lines = append(lines, reportIndent+window.Window+" binds "+window.Binds)
+	}
+	return strings.Join(lines, "\n") + "\n"
 }
 
 type keyReport struct {
@@ -113,7 +161,7 @@ func statusVerb(args []string, out, errOut io.Writer, shade palette, now time.Ti
 		return exitVerdict
 	}
 	if !asJSON {
-		_, _ = fmt.Fprint(out, statusText(report, shade, now, outputWidth(out))+keyLines(report.Keys))
+		_, _ = fmt.Fprint(out, statusText(report, shade, now, outputWidth(out))+scopedLines(report.Scoped)+keyLines(report.Keys))
 	}
 	return exitOK
 }
@@ -144,6 +192,7 @@ func credentialStatus(now time.Time, redact bool, urls map[quota.Provider]string
 		return report, err
 	}
 	report.Sources = statusSources(rows, results, redact, now)
+	report.Scoped = scopedReports(results)
 	report.Headline, report.State = statusHeadline(report.Sources)
 	return report, nil
 }
@@ -158,7 +207,7 @@ func statusSources(rows []cred.Row, results []pollResult, redact bool, now time.
 	sources := make([]sourceReport, 0, len(order))
 	for _, provider := range order {
 		source := sourceReport{Subscription: string(provider)}
-		chosen, _ := quota.Pick(statusCandidates(provider, rows, results, now), quota.Provider(provider), now)
+		chosen, _ := quota.Pick(statusCandidates(provider, rows, results, now), quota.Provider(provider), nil, now)
 		for index, row := range rows {
 			if row.Credential.Provider == provider {
 				source.Accounts = append(source.Accounts, accountOf(row, results[index], row.ID != chosen.ID, redact, now))

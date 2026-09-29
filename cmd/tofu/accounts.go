@@ -22,6 +22,7 @@ type accounts struct {
 	spec     cred.Spec
 	store    *cred.Store
 	modelID  string
+	spends   []string
 	effort   llm.Effort
 	urls     map[quota.Provider]string
 	now      func() time.Time
@@ -55,7 +56,7 @@ func (a *accounts) pick(ctx context.Context) (turn.Account, error) {
 	if err != nil {
 		return turn.Account{}, err
 	}
-	choice, found := quota.Pick(candidates, quota.Provider(a.provider), a.now())
+	choice, found := quota.Pick(candidates, quota.Provider(a.provider), a.spends, a.now())
 	if !found {
 		return turn.Account{}, fmt.Errorf("no %s subscription credential, run tofu login %s", a.provider, a.provider)
 	}
@@ -71,9 +72,9 @@ func (a *accounts) next(ctx context.Context, pinned turn.Account) (turn.Account,
 		return turn.Account{}, false, err
 	}
 	serving := slices.ContainsFunc(candidates, func(candidate quota.Candidate) bool {
-		return candidate.ID == pinned.ID && !quota.Spent(candidate.Report, a.now())
+		return candidate.ID == pinned.ID && !quota.Spent(candidate.Report, a.spends, a.now())
 	})
-	choice, found := quota.Pick(candidates, quota.Provider(a.provider), a.now())
+	choice, found := quota.Pick(candidates, quota.Provider(a.provider), a.spends, a.now())
 	if serving || !found || choice.ID == pinned.ID {
 		return turn.Account{}, false, nil
 	}
@@ -174,7 +175,8 @@ func metaModel(modelID string, effort llm.Effort) (turn.Model, error) {
 	return codexTurn{wire: wire, effort: effort}, err
 }
 
-func openAccounts(opts runOpts, modelID string) (*accounts, turn.Spend, error) {
+func openAccounts(opts runOpts, selected models.Model) (*accounts, turn.Spend, error) {
+	modelID := selected.ID
 	spend := wireSpend(opts.wire)
 	if opts.wire == wireKey {
 		model, err := keyModel(modelID)
@@ -200,5 +202,5 @@ func openAccounts(opts runOpts, modelID string) (*accounts, turn.Spend, error) {
 	if err != nil {
 		return nil, spend, err
 	}
-	return &accounts{provider: provider, spec: spec, store: store, modelID: modelID, effort: opts.effort, now: time.Now}, spend, nil
+	return &accounts{provider: provider, spec: spec, store: store, modelID: modelID, spends: selected.Windows, effort: opts.effort, now: time.Now}, spend, nil
 }

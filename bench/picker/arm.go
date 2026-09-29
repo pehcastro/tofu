@@ -27,7 +27,7 @@ type Snapshot struct {
 func choose(arm Arm, snap Snapshot, held int64) (int64, bool) {
 	usable := make([]quota.Candidate, 0, len(snap.Candidates))
 	for _, candidate := range snap.Candidates {
-		if !quota.Spent(candidate.Report, snap.At) {
+		if !quota.Spent(candidate.Report, nil, snap.At) {
 			usable = append(usable, candidate)
 		}
 	}
@@ -46,7 +46,7 @@ func choose(arm Arm, snap Snapshot, held int64) (int64, bool) {
 		}
 		return usable[0].ID, true
 	case Headroom:
-		choice, found := quota.Pick(usable, snap.Provider, snap.At)
+		choice, found := quota.Pick(usable, snap.Provider, nil, snap.At)
 		return choice.ID, found
 	}
 	panic("unknown arm " + string(arm))

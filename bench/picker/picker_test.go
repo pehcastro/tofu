@@ -67,7 +67,7 @@ func TestAWindowPastItsResetCountsAsFullAgain(t *testing.T) {
 	past := fixtureStart.Add(-time.Hour)
 	future := fixtureStart.Add(time.Hour)
 	spentButReset := account(1, 0.95, past)
-	if left := quota.Left(spentButReset.Report, fixtureStart); left.Fraction != fullAgain {
+	if left := quota.Left(spentButReset.Report, nil, fixtureStart); left.Fraction != fullAgain {
 		t.Fatalf("a window 95 percent used whose reset has passed has headroom %v, want %v", left.Fraction, fullAgain)
 	}
 	reset := snapshot(0, spentButReset, account(2, 0.40, future))

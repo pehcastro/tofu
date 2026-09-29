@@ -1,6 +1,7 @@
 package quota
 
 import (
+	"slices"
 	"strings"
 	"time"
 
@@ -36,7 +37,17 @@ type Window struct {
 
 const windowModelMark = ":"
 
-func (w Window) Binds() bool { return !strings.Contains(w.ID, windowModelMark) }
+func (w Window) Binds(spends []string) bool {
+	period, scope, scoped := strings.Cut(w.ID, windowModelMark)
+	if !scoped {
+		return true
+	}
+	return slices.ContainsFunc(spends, func(spend string) bool {
+		spendPeriod, spendScope, ok := strings.Cut(spend, windowModelMark)
+		return ok && spendScope != "" && spendPeriod == period &&
+			strings.Contains(strings.ToLower(scope), strings.ToLower(spendScope))
+	})
+}
 
 func (w Window) State() State {
 	switch {
@@ -57,10 +68,10 @@ type Report struct {
 	FetchedAt     time.Time
 }
 
-func (r Report) binding() []Window {
+func (r Report) binding(spends []string) []Window {
 	bound := make([]Window, 0, len(r.Windows))
 	for _, window := range r.Windows {
-		if window.Binds() {
+		if window.Binds(spends) {
 			bound = append(bound, window)
 		}
 	}
@@ -74,7 +85,7 @@ func (r Report) Exhausted() bool {
 	if r.LimitReached {
 		return true
 	}
-	for _, window := range r.binding() {
+	for _, window := range r.binding(nil) {
 		if window.State() == StateExhausted {
 			return true
 		}
@@ -87,7 +98,7 @@ func (r Report) WaitUntil(now time.Time) (time.Time, bool) {
 		return time.Time{}, false
 	}
 	var latest time.Time
-	for _, window := range r.binding() {
+	for _, window := range r.binding(nil) {
 		if window.State() != StateExhausted {
 			continue
 		}
@@ -124,7 +135,7 @@ func Diagnose(report Report, err error) Condition {
 	switch {
 	case report.Exhausted():
 		return ConditionWindowSpent
-	case len(report.binding()) == 0:
+	case len(report.binding(nil)) == 0:
 		return ConditionUnknown
 	}
 	return ConditionServing

@@ -542,7 +542,7 @@ func openAppWire(opts runOpts) (appWire, error) {
 		return appWire{}, err
 	}
 	opts.effort = selected.EffortTaken(opts.effort)
-	held, spend, err := openAccounts(opts, selected.ID)
+	held, spend, err := openAccounts(opts, selected)
 	return appWire{held: held, spend: spend, selected: selected}, err
 }
 
