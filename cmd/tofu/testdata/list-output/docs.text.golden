@@ -17,11 +17,11 @@ agents  add a sub-agent for every project or for one, choose the model it
 
 browser  how tofu reads and drives your Chrome tabs, the tofu tab group, the
   badge, and what tofu never does there
-  share a Chrome tab with tofu
+  connect tofu to Chrome
     → tofu browser install
-  let the model read the Chrome tabs I share
+  let the model read the Chrome tabs tofu can reach
     → tofu settings set browser read
-  let the model click and type in a tab I share to drive
+  let the model click and type in the tabs tofu can reach
     → tofu settings set browser drive
   take the browser tools away from the model
     → tofu settings set browser off

@@ -9,8 +9,8 @@ verbs: doctor, library, usage, version, frame, drive, lint, sift, browser
 
 `tofu doctor` says whether tofu can run in this directory, and what is
 wrong when it cannot. It changes no setting and no file of yours. The
-first line is the version and `ready` or `not ready`; it exits 0 when
-ready and 1 when not.
+first line names the version, Go and the system, and ends `✓ ready` or
+`✗ not ready`; it exits 0 when ready and 1 when not.
 
 ## Where it lives
 
@@ -22,49 +22,56 @@ from each subscription, under `~/.tofu/quota/`.
 
 ## Change it
 
-Every line below says what to run. The lines come in groups.
+A `✓` line needs nothing, a `⚠` line needs a look, and a `✗` line stops
+tofu. A line with `→` names the command that fixes it.
 
-What stops tofu, printed first, each with the command that fixes it:
+What stops tofu, printed first:
 
-- `claude-sub  no subscription is signed in`: run `tofu login claude-sub`,
-  or `tofu login codex-sub`.
-- `jev  there is no openrouter key`: run `tofu login openrouter`. Until
-  then no tool call is judged. `tofu docs gate` says more.
+    ✗ claude-sub  no subscription is signed in, so no model can answer
+      → tofu login claude-sub
+    ✗ jev  there is no openrouter key, so jev judges no tool call
+      → tofu login openrouter
 
-What tofu can reach:
+`tofu login codex-sub` also clears the first. `tofu docs gate` says more
+about the second.
 
-- One line per stored credential. `5h 12%  7d 40%` is the share of each
-  quota window used, and nothing needs doing.
-- `every window is spent, back at <time>`: wait, or sign in the other
-  subscription.
-- `the credential is broken, run tofu login <source>`: run it.
-- `signed in, no window reported`: the subscription answered without a
-  quota reading, so tofu cannot say how much is left.
-- `not polled, ...`: the credential cannot be used, and the rest of the
-  line says why and what to run.
-- `jev  key from ...`: where the key was found. The key is never printed.
-- `wires`: which ways of reaching a model spend subscription quota, and
-  which spend money.
+Under `access`, what tofu can reach:
 
-What tofu decides with:
+- `✓ claude-sub  5h 12% · 7d 40%`: the share of each quota window used.
+- `⚠ ... every window is spent, back at <time>`: wait, or sign in the
+  other subscription.
+- `⚠ ... the credential is broken, run tofu login <source>`: run it.
+- `⚠ ... signed in, no window reported`: the subscription answered
+  without a quota reading, so tofu cannot say how much is left.
+- `⚠ ... not polled, ...`: the credential cannot be used, and the rest of
+  the line says why and what to run.
+- `✓ jev  key · credential store`: where the key was found. The key is
+  never printed.
+- one line per wire, ending `subscription` or `money`: what a model call
+  that way spends.
 
-- `library`: `the one in the binary` is normal. `the project's own` means
-  a `library/` folder here replaces some decision points.
-- `rules`: jev's decision points, not the rules `tofu docs rules`
-  describes, each with its mode, `shadow` or `enforced`, and where its
-  thresholds come from. A point whose file asks for one mode and runs in
-  the other says why. A point `unusable` says what is wrong with its file;
-  fix that file or delete it.
-- `calibration`: the points with a calibration lock, or `none`.
-- `ledger`: how many decisions are recorded here, over how many days.
-  `unreadable lines` counts lines of the ledger that could not be read.
+Under `rules`, what tofu decides with:
+
+- `library  binary · <n> points` is normal. `project · <n> of <m> points`
+  means a `library/` folder here replaces some decision points.
+- jev's decision points, not the rules `tofu docs rules` describes, grouped
+  by mode, `○ shadow` or `● enforced`, and where the thresholds come from.
+  A `⚠` point runs in another mode than its file asks, and says why. A `✗`
+  point is `unusable` and says what is wrong; fix that file or delete it.
+
+Under `state`, `calibration` names the points with a calibration lock, or
+`none`, and `ledger` how many decisions are recorded here, over how many
+days, with any unreadable lines.
 
 ## Check it
 
     tofu doctor
     tofu doctor --json
 
-The second prints every field, including ones the first folds away.
+The second prints one JSON document, `{tofu, verb, ok, at, data,
+problems}`, with every field the first folds away and each blocker in
+`problems`. Every verb below takes `--json` the same way, except `frame`
+and `drive`, which print screens.
 
 Other verbs that each check one thing:
 
@@ -82,8 +89,8 @@ Other verbs that each check one thing:
 - `tofu lint comments <path>` lists every comment in the Go source under
   a path.
 - `tofu sift` marks which paragraphs of standard input are worth reading.
-- `tofu browser` lists the Chrome tabs you shared with tofu.
-  `tofu browser install` sets up the extension's native host.
+- `tofu browser` lists the Chrome tabs tofu can reach.
+  `tofu browser install` sets up the extension and its native host.
 
 ## Undo it
 

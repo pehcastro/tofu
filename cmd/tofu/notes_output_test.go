@@ -135,7 +135,7 @@ func startUpNotes(t *testing.T, home string) string {
 	return notes.String()
 }
 
-func TestTheStartUpNotesAreOneLineEach(t *testing.T) {
+func TestTheStartUpNotesMatchTheirGolden(t *testing.T) {
 	var notes string
 	t.Run("in the project", func(t *testing.T) {
 		home := notesProject(t)

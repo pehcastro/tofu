@@ -20,7 +20,7 @@ Meta may train on; `tofu models` says so beside each contributor model.
 
 The orchestrator is the model you talk to. A sub-agent runs its own model,
 and a tier is a name for a model a sub-agent file can point at:
-`@genius`, `@smart`, `@worker` and `@dumb`. A file shared with Claude Code,
+`@genius`, `@smart`, `@worker` and `@dumb`. A file Claude Code also reads,
 in `.claude/agents`, may say `opus`, `sonnet` or `haiku` instead, which
 mean the genius, smart and worker tiers when those are set.
 
@@ -57,8 +57,9 @@ come from the newest allowed model of its family, so `claude-sonnet-5-5`
 follows `claude-sonnet-5`, else from models.dev. A model without tool
 calls, or one the account stopped serving, is excluded. A catalog file
 for a model tofu now ships is deleted, so the shipped file wins. It
-prints one line per model with the account and the file, then prints any
-model file, role or tier that no longer resolves.
+prints a section per account, `✓ <n> served`, or `✗` and the command that
+fixes it, a row per model, `+` new, `~` changed, `-` dropped, and a `✗`
+line per tier that no longer resolves.
 
 ## Change it
 
@@ -81,11 +82,9 @@ orchestrator in the same list, which writes
 
 in `~/.tofu/roles/orchestrator.yaml`. `tofu run` takes `--model` for one run.
 
-Point a tier at a model:
+Point a tier at a model; a tier left empty runs the orchestrator's model:
 
     tofu settings set modelTier.smart claude-sub/claude-sonnet-5
-
-A tier left empty runs the orchestrator's model.
 
 Stop tofu from running a model with a file of your own,
 `~/.tofu/models/anthropic/claude-sonnet-4-6.yaml`:
@@ -97,18 +96,19 @@ Stop tofu from running a model with a file of your own,
 
     tofu models
 
-lists the models each subscription and key serves, the defaults at the
-top, why a model is excluded, and the layer of one tofu does not ship.
-`--json` prints every field: `layer` is `library`, `catalog`, `global`
-or `project`, and `from` says what listed a catalog model. After
-`tofu models reload`, a model it found shows `"layer": "catalog"`.
+prints a section per subscription and keys, a row per model with its use
+and window, `●` default, `✓` allowed, `○` excluded, `⚠` a notice, then
+the roles and where the windows came from. `--json` prints one document
+whose `data` carries every field, the reason a model is excluded among
+them: `layer` is `library`, `catalog`, `global` or `project`, and `from`
+says what listed a catalog model.
 `--refresh` and `--discover` still run it for one release.
 
     tofu login --status
 
-lists every stored credential with its number and state, and each key as
-set or not, by its last four characters at most, and `tofu usage` prints
-each subscription's quota windows and when they reset.
+prints a card per credential with a bar per quota window, then each key,
+`✓` by its last four characters or `○ not set`. `tofu usage` prints the
+quota windows and when they reset. Both take `--json`.
 
 ## Undo it
 

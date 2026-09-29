@@ -64,24 +64,28 @@ A model tofu does not know, a tool it does not have, a name that is not
 one plain word, and a name that already has a file in the same place are
 all refused, and nothing is written.
 
-Every write prints what changed, the file, the command that undoes it, and
-the sub-agent as `tofu agents` now shows it:
+Every write prints what changed, `+` added, `~` changed or `-` removed,
+the file, and the command that undoes it:
 
-    added planner to the project sub-agents
-    file: C:\code\shop\.tofu\agents\planner.md
-    undo: tofu agents remove planner
+    + sub-agent planner  ~/code/shop/.tofu/agents/planner.md
+      → undo: tofu agents remove planner
+
+A refusal prints one `✗` line on stderr and the command to run instead,
+and exits 1. With `--json`, a write prints one document instead.
 
 ## Check it
 
     tofu agents
 
-lists every sub-agent: its name, the model it runs, where that model was
-chosen, where it was read from, and its file. A line with `refused` says
-why the sub-agent cannot run.
+opens with `Sub-agents · <n> defined`, then a row per sub-agent: `●` when
+its model is set, `○` when it inherits, its name, its model, where it was
+read from, `project`, `global` or `library`, and its description, with its
+tools and references below. A file that cannot be read goes under
+`broken` with a `✗` and the reason, and the command exits 1.
 
     tofu agents --json
 
-prints the same as JSON.
+prints one JSON document, whose `data` carries every field.
 
 ## Undo it
 
@@ -96,4 +100,4 @@ A sub-agent tofu ships cannot be removed, since it is not a file of yours.
 `tofu agents remove qa` refuses and names `tofu agents set qa` instead.
 
 To undo a `set`, run `set` again with the model it had before, which the
-`undo:` line names.
+`→ undo:` line names.

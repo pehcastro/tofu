@@ -8,7 +8,7 @@ verbs: browser
 ## What it is
 
 tofu reads and drives your own Chrome, with your logins, through a small
-extension. There is no share step: any ordinary tab can be read or driven.
+extension. There is no share step: tofu can read and drive any ordinary tab.
 tofu never reaches a `chrome://` page, DevTools, an extension's page or the
 Chrome Web Store.
 
@@ -74,19 +74,20 @@ Install it once:
 
     tofu browser install
 
-It writes the extension, registers tofu with Chrome, and prints the folder,
-the id and the steps left. Then, once, in Chrome:
+It writes the extension, registers tofu with Chrome, and prints the rest:
 
-1. Open `chrome://extensions` and turn on Developer mode.
-2. Load unpacked, pick the folder it printed, check the id matches.
-3. Pin the tofu icon so its badge shows.
-
-After a tofu update, run `tofu browser install`, then reload the tofu card
-in `chrome://extensions`.
+    Chrome extension                        ✓ installed
+      folder   ~/.tofu/browser/extension
+      id       jednanpboiikklhkkkimnmdmjmgjgphh
+    next, once in Chrome
+      1  open chrome://extensions and turn on Developer mode
+      2  Load unpacked, pick the folder above, check the id matches
+      3  pin the tofu icon so its badge shows
+      → after a tofu update: tofu browser install, then reload the tofu card
 
 The settings:
 
-- `browser`: off, read or drive, default drive. read gives only
+- `browser`: `off`, `read` or `drive`, default `drive`. `read` gives only
   `browser_tabs` and `browser_read`. It is read when tofu opens.
 - `browserChooser`: jev or model, who picks each step of a browser task. The
   default is jev, which gives the model `browser_do`. model gives it
@@ -104,17 +105,14 @@ The settings:
 
     tofu browser
 
-lists the tabs tofu can reach, one row each, with `●` on the tabs tofu
-opened; `--json` gives the same as one document. With no extension running,
-it prints one line saying the extension is not connected, then
-`→ tofu browser install`, and exits 1.
-
-    tofu settings get browser
-
-prints which tools the model is given.
+opens with `Chrome tabs · <n> reachable` and `✓ connected`, then a row
+per tab with its id, site and title, `●` on the tabs tofu opened and `○`
+on yours. `--json` prints one document with the tabs in `data.tabs`. With
+no extension running, it prints one `✗` line and `→ tofu browser install`,
+and exits 1. `tofu settings get browser` prints `off`, `read` or `drive`.
 
 ## Undo it
 
 `tofu settings set browser off` takes the tools away from the model.
-`tofu browser uninstall` removes the host and the folder; then remove the
-tofu card in `chrome://extensions`.
+`tofu browser uninstall` removes the host and the folder, prints
+`○ removed`, and ends `→ remove the tofu card in chrome://extensions`.

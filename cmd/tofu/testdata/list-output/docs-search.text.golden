@@ -44,9 +44,9 @@ Docs · "change the colours"                                           31 matche
     → tofu shells log <name>
   check the library files and these pages
     → tofu library
-  let the model read the Chrome tabs I share
+  let the model read the Chrome tabs tofu can reach
     → tofu settings set browser read
-  let the model click and type in a tab I share to drive
+  let the model click and type in the tabs tofu can reach
     → tofu settings set browser drive
   take the browser tools away from the model
     → tofu settings set browser off

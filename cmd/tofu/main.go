@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -38,10 +39,6 @@ Verbs:
   agents    list the sub-agents read from .tofu, .agents, .claude and the library,
             each with where it came from and the model it runs,
             or add, set or remove one
-
-A verb that reports state takes --json, which carries every field the
-readable form collapses: doctor, models, agents, usage, context, rules.
-
   why       explain a ledger row, or the last one
   run       work a task in a directory until it is done
   judge     read a state and a question battery, print the answers
@@ -63,9 +60,10 @@ readable form collapses: doctor, models, agents, usage, context, rules.
             instruction files and keys, and print what changed since the last reload
   migrate   move what tofu wrote out of this project's .tofu and into ~/.tofu,
             or --dry-run to list what would move
-  browser   list the Chrome tabs you shared with tofu and their mode,
-            install and uninstall the extension's native host,
+  browser   list the Chrome tabs tofu can reach, install or uninstall the extension,
             or open and close a background tab tofu owns
+
+Every verb that reports state takes --json and prints one JSON document.
 `
 
 func main() {
@@ -170,7 +168,8 @@ func run(args []string, in io.Reader, out io.Writer, errOut io.Writer) int {
 		_, _ = fmt.Fprint(out, usage)
 		return exitOK
 	default:
-		_, _ = fmt.Fprintf(errOut, "tofu: unknown verb %q\n\n%s", args[0], usage)
+		page := cli.Detect(errOut, os.Environ())
+		_ = page.Print(errOut, page.ErrorLine("tofu: unknown verb "+strconv.Quote(args[0]), "tofu help"))
 		return exitUsage
 	}
 }

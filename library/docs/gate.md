@@ -33,7 +33,7 @@ jev is reached through OpenRouter, with a key tofu reads from, in order:
 
 - the credential store, `~/.tofu/agent.db`, which `tofu login openrouter` writes
 - `OPENROUTER_KEY` in the environment
-- an `.env` file in the working directory, as `OPENROUTER_KEY=...`
+- an `.env` file in the working directory, as an `OPENROUTER_KEY` line
 
 tofu never prints more of the key than its last four characters. With no
 key the gate is off: no tool call is judged, and the app says so.
@@ -79,7 +79,9 @@ Judge one shell command without running it, and log the verdict:
 
     tofu check "git push --force"
 
-`tofu check` reads the key the same way the gate does.
+`tofu check` reads the key the same way the gate does, and prints one
+line, the verdict, the command and the ledger row, like
+`⚠ ask  git push --force  <row>`.
 
 ## Check it
 
@@ -98,6 +100,7 @@ says where the key came from, and whether the gate is ready.
 scores the recorded rows again against thresholds you name and shows
 which verdicts would change, with no call to jev. `tofu judge` asks any
 question set about a state you pipe in, for testing a question by hand.
+Each of these takes `--json` and prints one JSON document.
 
 ## Undo it
 

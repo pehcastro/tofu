@@ -242,15 +242,15 @@
   do: tofu library
   check: tofu library
   topic: doctor
-- ask: share a Chrome tab with tofu
+- ask: connect tofu to Chrome
   do: tofu browser install
   check: tofu browser
   topic: browser
-- ask: let the model read the Chrome tabs I share
+- ask: let the model read the Chrome tabs tofu can reach
   do: tofu settings set browser read
   check: tofu settings get browser
   topic: browser
-- ask: let the model click and type in a tab I share to drive
+- ask: let the model click and type in the tabs tofu can reach
   do: tofu settings set browser drive
   check: tofu settings get browser
   topic: browser

@@ -49,11 +49,14 @@ and open it again.
 
     tofu settings
 
-prints every setting, its value, and the file it came from, or `default`.
+prints every setting by group, its value, and `project`, `global` or
+`default` for where it came from, with `●` on the ones you set.
 
     tofu settings get <key>
 
-prints one value.
+prints one value. Both take `--json` and print one JSON document. `set`
+prints one `~` line with the file and `→ undo:` with the command that puts
+the old value back.
 
 ## Undo it
 

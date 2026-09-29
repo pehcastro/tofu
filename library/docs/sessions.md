@@ -68,24 +68,33 @@ Stop or restart a shell an agent left running:
 
     tofu session list
 
-lists this project's sessions, newest first, with the head's id at the top.
+lists this project's sessions, newest first, `●` on the head and `○` on
+the rest, each with its age, steps, state and task:
+
+    Sessions · 2 sessions                    ● head store-walk
+      ● store-walk  10m ago  1 step   stopped  explain the session store
+      ○ older-task  3h ago   0 steps  done     the older task
+
+A session that cannot be read goes under `unreadable` with a `✗`.
 
     tofu session info <name|id>
 
-prints one session: its task, its counts, whether it ended, and its model.
-`tofu session trace <name|id>` lists every request and tool call in it,
-and `tofu session reads <name|id>` every file it read. Each takes `--json`.
+prints one session: its id, task, counts, whether it ended, its model and
+cost, and the command that continues it, `→ tofu --continue` for the head. `tofu session trace
+<name|id>` lists every request and tool call in it, and `tofu session
+reads <name|id>` every file it read.
 
     tofu context
 
-prints how full the context window of the newest session was, and what
-filled it. Name a session id to see another one.
+prints a bar per context band of the newest session, how full it was and
+what filled it. Name a session id to see another one.
 
     tofu shells list
     tofu shells log <name>
 
-list the running shells, and print one's output. In the app, `/shells`
-shows the same.
+list the shells, each with its state, pid and command, and print one's
+output. In the app, `/shells` shows the same. Every verb here takes
+`--json` and prints one JSON document.
 
 ## Undo it
 

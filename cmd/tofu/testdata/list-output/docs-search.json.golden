@@ -93,11 +93,11 @@ exit 0
         "do": "tofu library"
       },
       {
-        "text": "let the model read the Chrome tabs I share",
+        "text": "let the model read the Chrome tabs tofu can reach",
         "do": "tofu settings set browser read"
       },
       {
-        "text": "let the model click and type in a tab I share to drive",
+        "text": "let the model click and type in the tabs tofu can reach",
         "do": "tofu settings set browser drive"
       },
       {

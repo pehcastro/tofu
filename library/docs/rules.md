@@ -56,12 +56,14 @@ Switch a rule off, for this project or with `--global` everywhere:
     tofu rules off em_dash
     tofu rules off --global em_dash
 
-Every write prints what changed, the file it wrote, and the command that
-undoes it:
+Every write prints what changed, `+` added, `~` switched off or `-`
+removed, the file it wrote, and the command that undoes it:
 
-    added no_yaml to the global rules
-    file: C:\Users\you\.tofu\rules\no_yaml@1.yaml
-    undo: tofu rules remove --global no_yaml
+    + rule no_yaml  ~/.tofu/rules/no_yaml@1.yaml
+      → undo: tofu rules remove --global no_yaml
+
+A refusal prints one `✗` line on stderr and the command to run instead,
+and exits 1. With `--json`, a write prints one document instead.
 
 A rule added with `--concern` is placed with that group in the prompt. The
 groups are code_rules, the default, process_discipline, domain_knowledge,
@@ -71,13 +73,17 @@ task_shaping and identity.
 
     tofu rules list
 
-prints every rule that runs, its kind, and where it came from: `shipped`,
-`global` or `project`, with the file for your own. A rule switched off is
-not in the list.
+opens with `Rules · <n> run` and a count of `shadow` and `enforced`, then
+a row per rule that runs, grouped by where it came from, `shipped`,
+`library`, `global` or `project`, with its kind, its mode and the file for
+your own: `●` enforced, `○` shadow, `✓` a rule with no checker. A rule
+switched off is not in the list.
 
     tofu rules list --json
 
-prints the same as JSON.
+prints one JSON document, whose `data` carries every field.
+`tofu rules check` and `tofu rules fired` print a `✗` row per blocked
+finding and a `⚠` row per shadow one.
 
     tofu reload
 
