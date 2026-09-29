@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"tofu/internal/konst"
+	"tofu/internal/sys"
 )
 
 const idleAfter = konst.BrowserIdleAfterMillis * time.Millisecond
@@ -41,10 +42,13 @@ type relay struct {
 	closed    bool
 	shown     status
 	idle      *time.Timer
+
+	extensionDir string
+	builds       Builds
 }
 
 func Host(origin string, stdin io.Reader, stdout io.Writer, home string) error {
-	_, manifestPath := installPaths(home)
+	extensionDir, manifestPath := installPaths(home)
 	var installed hostManifest
 	raw, err := os.ReadFile(manifestPath)
 	if err == nil {
@@ -52,6 +56,10 @@ func Host(origin string, stdin io.Reader, stdout io.Writer, home string) error {
 	}
 	if err != nil || !slices.Contains(installed.AllowedOrigins, origin) {
 		return fmt.Errorf("%s is not the extension installed in %s: run tofu browser install", origin, manifestPath)
+	}
+	tofu, err := Build()
+	if err != nil {
+		return err
 	}
 
 	path, err := socketPath(home)
@@ -72,7 +80,7 @@ func Host(origin string, stdin io.Reader, stdout io.Writer, home string) error {
 	if err != nil {
 		return err
 	}
-	r := &relay{extension: stdout, tabs: map[int]Tab{}, claims: map[int]*session{}, pending: map[int64]route{}, sessions: map[*session]bool{}, shown: statusIdle}
+	r := &relay{extension: stdout, tabs: map[int]Tab{}, claims: map[int]*session{}, pending: map[int64]route{}, sessions: map[*session]bool{}, shown: statusIdle, extensionDir: extensionDir, builds: Builds{Tofu: tofu}}
 	r.idle = time.AfterFunc(idleAfter, func() {
 		r.mu.Lock()
 		defer r.mu.Unlock()
@@ -131,6 +139,7 @@ func (r *relay) receive(message extensionMessage) {
 			_, open := r.tabs[tab]
 			return !open
 		})
+		r.adopt(message.Build)
 	case messageTabRemoved:
 		delete(r.tabs, message.TabID)
 		delete(r.claims, message.TabID)
@@ -146,6 +155,31 @@ func (r *relay) receive(message extensionMessage) {
 		_ = to.session.out.Encode(message.result)
 		r.idleSoon()
 	}
+}
+
+func (r *relay) adopt(running string) {
+	r.builds.Extension = running
+	updatedFrom := filepath.Join(filepath.Dir(r.extensionDir), "updated-from")
+	switch running {
+	case "":
+		return
+	case r.builds.Tofu:
+		if stale, err := os.ReadFile(updatedFrom); err == nil {
+			r.builds.UpdatedFrom = string(stale)
+			_ = os.Remove(updatedFrom)
+		}
+		return
+	}
+	err := writeExtension(r.extensionDir)
+	if err == nil {
+		err = sys.WriteFile(updatedFrom, []byte(running), 0o644)
+	}
+	if err != nil {
+		r.builds.Problem = fmt.Sprintf("the extension in %s runs build %s and this tofu ships %s, and tofu could not rewrite it: %v: run tofu browser install, then reload the tofu card", r.extensionDir, running, r.builds.Tofu, err)
+		return
+	}
+	r.builds.Problem = fmt.Sprintf("the extension is reloading from build %s to %s: try again in a second", running, r.builds.Tofu)
+	_ = r.tell(toExtension{T: messageReload})
 }
 
 func (r *relay) idleSoon() {
@@ -207,6 +241,11 @@ func (r *relay) handle(s *session, req request) {
 		_ = s.out.Encode(result{ID: req.ID, OK: true, Value: listed})
 		return
 	}
+	if req.Op == opBuilds {
+		builds, _ := json.Marshal(r.builds)
+		_ = s.out.Encode(result{ID: req.ID, OK: true, Value: builds})
+		return
+	}
 	if err := r.forward(s, req); err != nil {
 		_ = s.out.Encode(result{ID: req.ID, Error: err.Error()})
 	}
@@ -251,6 +290,9 @@ func (r *relay) admit(s *session, req request) (status, error) {
 }
 
 func (r *relay) forward(s *session, req request) error {
+	if r.builds.Problem != "" {
+		return errors.New(r.builds.Problem)
+	}
 	now, err := r.admit(s, req)
 	if err != nil {
 		return err

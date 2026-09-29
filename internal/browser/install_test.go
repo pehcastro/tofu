@@ -9,12 +9,14 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"testing"
 
 	"golang.org/x/sys/windows/registry"
 
 	"tofu/internal/browser/extension"
+	"tofu/internal/konst"
 )
 
 const shippedExtensionID = "jednanpboiikklhkkkimnmdmjmgjgphh"
@@ -90,8 +92,17 @@ func TestInstallWritesTheHostManifestAndKeyAndUninstallRemovesBoth(t *testing.T)
 
 	copied, err := os.ReadFile(filepath.Join(home, ".tofu", "browser", "extension", "manifest.json"))
 	shipped, _ := extension.Files.ReadFile("manifest.json")
-	if err != nil || string(copied) != string(shipped) {
-		t.Fatalf("the unpacked extension manifest is %q, %v", copied, err)
+	build, _ := Build()
+	var unpacked, want map[string]any
+	if err == nil {
+		err = errors.Join(json.Unmarshal(copied, &unpacked), json.Unmarshal(shipped, &want))
+	}
+	if err != nil {
+		t.Fatalf("the unpacked extension manifest is %s: %v", copied, err)
+	}
+	want["version"], want["version_name"] = chromeVersion(konst.Version), konst.Version+" · "+build
+	if !reflect.DeepEqual(unpacked, want) {
+		t.Fatalf("the unpacked extension manifest is %s; want the shipped one with version %s and version_name %s", copied, want["version"], want["version_name"])
 	}
 
 	if err := Uninstall(home, hosts); err != nil {

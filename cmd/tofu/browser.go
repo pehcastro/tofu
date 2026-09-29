@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"errors"
 	"flag"
@@ -83,12 +84,20 @@ func browserVerb(args []string, out, errOut io.Writer) int {
 	switch verb {
 	case "":
 		var tabs []browser.Tab
-		if err := withBrowser(home, func(client *browser.Client) (err error) { tabs, err = client.Tabs(); return err }); err != nil {
+		var builds *browser.Builds
+		err := withBrowser(home, func(client *browser.Client) (err error) {
+			if tabs, err = client.Tabs(); err == nil {
+				builds, err = client.Builds()
+			}
+			return err
+		})
+		if err != nil {
 			return o.fail(err)
 		}
 		return o.show(struct {
-			Tabs []browser.Tab `json:"tabs"`
-		}{append([]browser.Tab{}, tabs...)}, tabsPage(page, tabs))
+			Tabs   []browser.Tab   `json:"tabs"`
+			Builds *browser.Builds `json:"builds,omitempty"`
+		}{append([]browser.Tab{}, tabs...), builds}, tabsPage(page, tabs, builds))
 	case "open":
 		var tab int
 		if err := withBrowser(home, func(client *browser.Client) (err error) { tab, err = client.Open(operand); return err }); err != nil {
@@ -213,7 +222,7 @@ func (o browserOutput) fail(err error) int {
 	return exitVerdict
 }
 
-func tabsPage(page cli.Page, tabs []browser.Tab) []string {
+func tabsPage(page cli.Page, tabs []browser.Tab, builds *browser.Builds) []string {
 	facts, opened := []string{strconv.Itoa(len(tabs)) + " reachable"}, 0
 	rows := make([]cli.Row, len(tabs))
 	for i, tab := range tabs {
@@ -230,7 +239,23 @@ func tabsPage(page cli.Page, tabs []browser.Tab) []string {
 	if opened > 0 {
 		facts = append(facts, strconv.Itoa(opened)+" opened by tofu")
 	}
-	lines := append(page.Title("Chrome tabs", facts, cli.Verdict{Mark: cli.Done, Text: "connected"}), "")
+	verdict, hint := cli.Verdict{Mark: cli.Done, Text: "connected"}, ""
+	if builds != nil {
+		extensionBuild := cmp.Or(builds.Extension, "unknown")
+		facts = append(facts, "extension "+extensionBuild, "tofu "+builds.Tofu)
+		switch {
+		case builds.Problem != "":
+			verdict, hint = cli.Verdict{Mark: cli.Fail, Text: "stale"}, builds.Problem
+		case builds.Extension == "":
+			verdict, hint = cli.Verdict{Mark: cli.Warn, Text: "stale"}, "this extension cannot update itself: tofu browser install, then reload the tofu card once"
+		case builds.UpdatedFrom != "":
+			verdict = cli.Verdict{Mark: cli.Done, Text: "updated from " + builds.UpdatedFrom}
+		}
+	}
+	lines := append(page.Title("Chrome tabs", facts, verdict), "")
+	if hint != "" {
+		lines = append(append(lines, cli.Indent(page.Hint(hint))...), "")
+	}
 	if len(tabs) == 0 {
 		return append(lines, cli.Indent(page.Label("chrome:// pages, DevTools, extensions and the web store are never listed"))...)
 	}

@@ -6,11 +6,16 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"unicode"
 
 	"tofu/internal/browser/extension"
+	"tofu/internal/konst"
 	"tofu/internal/sys"
 )
 
@@ -37,6 +42,32 @@ func ExtensionID(publicKeyDER []byte) string {
 	}, hex.EncodeToString(sum[:16]))
 }
 
+func Build() (string, error) {
+	hash := sha256.New()
+	_, _ = fmt.Fprintln(hash, konst.Version)
+	err := fs.WalkDir(extension.Files, ".", func(name string, entry fs.DirEntry, err error) error {
+		if err != nil || entry.IsDir() {
+			return err
+		}
+		raw, err := extension.Files.ReadFile(name)
+		_, _ = fmt.Fprintf(hash, "%s %d\n%s", name, len(raw), raw)
+		return err
+	})
+	return hex.EncodeToString(hash.Sum(nil)[:6]), err
+}
+
+func chromeVersion(tofu string) string {
+	end := strings.IndexFunc(tofu, func(r rune) bool { return r != '.' && !unicode.IsDigit(r) })
+	if end < 0 {
+		return tofu
+	}
+	fix, isFix := strings.CutPrefix(strings.TrimPrefix(tofu[end:], "-rc"), "-fix")
+	if number, err := strconv.ParseUint(fix, 10, 16); isFix && err == nil {
+		return tofu[:end] + "." + strconv.FormatUint(number, 10)
+	}
+	return tofu[:end]
+}
+
 func Install(home, exe, hostsKey string) (string, error) {
 	raw, err := extension.Files.ReadFile("manifest.json")
 	if err != nil {
@@ -55,10 +86,7 @@ func Install(home, exe, hostsKey string) (string, error) {
 	id := ExtensionID(der)
 
 	extensionDir, manifestPath := installPaths(home)
-	if err := os.RemoveAll(extensionDir); err != nil {
-		return "", err
-	}
-	if err := os.CopyFS(extensionDir, extension.Files); err != nil {
+	if err := writeExtension(extensionDir); err != nil {
 		return "", err
 	}
 	manifest, err := json.MarshalIndent(hostManifest{
@@ -75,6 +103,53 @@ func Install(home, exe, hostsKey string) (string, error) {
 		return "", err
 	}
 	return id, register(hostsKey+`\`+HostName, manifestPath)
+}
+
+func writeExtension(extensionDir string) error {
+	build, err := Build()
+	var raw []byte
+	if err == nil {
+		raw, err = extension.Files.ReadFile("manifest.json")
+	}
+	var manifest map[string]json.RawMessage
+	if err == nil {
+		err = json.Unmarshal(raw, &manifest)
+	}
+	if err != nil {
+		return err
+	}
+	manifest["version"], _ = json.Marshal(chromeVersion(konst.Version))
+	manifest["version_name"], _ = json.Marshal(konst.Version + " · " + build)
+	stamped, err := json.MarshalIndent(manifest, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	parent := filepath.Dir(extensionDir)
+	if err := os.MkdirAll(parent, 0o755); err != nil {
+		return err
+	}
+	fresh, err := os.MkdirTemp(parent, filepath.Base(extensionDir)+"-new-")
+	if err != nil {
+		return err
+	}
+	defer func() { _ = os.RemoveAll(fresh) }()
+	if err := os.CopyFS(fresh, extension.Files); err != nil {
+		return err
+	}
+	if err := os.WriteFile(filepath.Join(fresh, "manifest.json"), stamped, 0o644); err != nil {
+		return err
+	}
+	retired := fresh + "-old"
+	if err := os.Rename(extensionDir, retired); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	if err := os.Rename(fresh, extensionDir); err != nil {
+		_ = os.Rename(retired, extensionDir)
+		return err
+	}
+	_ = os.RemoveAll(retired)
+	return nil
 }
 
 func Uninstall(home, hostsKey string) error {

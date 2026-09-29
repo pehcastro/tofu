@@ -23,6 +23,8 @@ const BADGES = {
   off: {text: 'off', color: '#8b8b8b'},
 };
 
+const BUILD = fetch(chrome.runtime.getURL('manifest.json')).then(response => response.text()).then(text => (JSON.parse(text).version_name ?? '').split(' ').pop());
+
 const attached = new Map();
 const opened = new Set();
 const grouped = new Set();
@@ -62,6 +64,7 @@ async function connect() {
     reconnectDelay = RECONNECT_MIN_MS;
     if (message.t === 'call') void answer(message);
     if (message.t === 'status') void show(message.state);
+    if (message.t === 'reload') chrome.runtime.reload();
   });
   port.onDisconnect.addListener(() => {
     hostError = chrome.runtime.lastError?.message ?? 'the tofu host exited';
@@ -74,7 +77,7 @@ async function connect() {
     reconnectDelay = Math.min(reconnectDelay * 2, RECONNECT_MAX_MS);
   });
   void show('idle');
-  post({t: 'hello', version: PROTOCOL_VERSION, tabs: (await chrome.tabs.query({})).map(tabInfo)});
+  post({t: 'hello', version: PROTOCOL_VERSION, build: await BUILD, tabs: (await chrome.tabs.query({})).map(tabInfo)});
 }
 
 async function show(state) {

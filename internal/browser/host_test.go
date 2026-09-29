@@ -12,6 +12,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"tofu/internal/konst"
 )
 
 const testOrigin = "chrome-extension://abcdefghijklmnopabcdefghijklmnop/"
@@ -495,5 +497,189 @@ func TestStaleSocketIsNotConnectedAndIsReplaced(t *testing.T) {
 	ext.send(`{"t":"hello","version":2,"tabs":[]}`)
 	if tabs, err := dial(t, home).Tabs(); err != nil || len(tabs) != 0 {
 		t.Fatalf("a host over a stale socket serves %v, %v", tabs, err)
+	}
+}
+
+func staleInstall(t *testing.T, home string) string {
+	t.Helper()
+	extensionDir, _ := installPaths(home)
+	if err := os.MkdirAll(extensionDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	stale := filepath.Join(extensionDir, "stale.js")
+	if err := os.WriteFile(stale, []byte("old"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return stale
+}
+
+func helloFrom(ext fakeExtension, build string) {
+	ext.send(`{"t":"hello","version":2,"build":"` + build + `","tabs":[{"id":7,"url":"https://a.test/","title":"A"}]}`)
+	ext.send(`{"t":"result","id":999,"ok":true}`)
+}
+
+func buildsOf(t *testing.T, client *Client) Builds {
+	t.Helper()
+	builds, err := client.Builds()
+	if err != nil || builds == nil {
+		t.Fatalf("the host answered builds with %v, %v", builds, err)
+	}
+	return *builds
+}
+
+func snapshotGoesThrough(t *testing.T, ext fakeExtension, client *Client) {
+	t.Helper()
+	read := callAsync(client, 7, "snapshot", nil)
+	if heard := ext.next(); heard.T != messageStatus {
+		t.Fatalf("before the snapshot the extension heard %+v; want the status reading and no reload", heard)
+	}
+	ext.answer(ext.call().ID, `"ok":true,"value":{}`)
+	if a := <-read; a.err != nil {
+		t.Fatalf("the snapshot returned %v", a.err)
+	}
+}
+
+func TestHostRewritesAnOldBuildReloadsItAndAcceptsTheReconnect(t *testing.T) {
+	home := shortHome(t)
+	installFor(t, home, testOrigin)
+	stale := staleInstall(t, home)
+	tofu, err := Build()
+	if err != nil || tofu == "" {
+		t.Fatalf("Build is %q, %v", tofu, err)
+	}
+
+	ext, done := startHost(t, home)
+	ext.send(`{"t":"hello","version":2,"build":"0ld","tabs":[{"id":7,"url":"https://a.test/","title":"A"}]}`)
+	if heard := ext.next(); heard.T != messageReload {
+		t.Fatalf("an extension on build 0ld heard %+v; want reload", heard)
+	}
+	if _, err := os.Stat(stale); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("the install directory was not rewritten before the reload: %v", err)
+	}
+	raw, err := os.ReadFile(filepath.Join(filepath.Dir(stale), "manifest.json"))
+	var manifest struct {
+		Key         string `json:"key"`
+		Version     string `json:"version"`
+		VersionName string `json:"version_name"`
+	}
+	if err == nil {
+		err = json.Unmarshal(raw, &manifest)
+	}
+	if err != nil || manifest.VersionName != konst.Version+" · "+tofu || manifest.Version != chromeVersion(konst.Version) || manifest.Key == "" {
+		t.Fatalf("the rewritten manifest is %s, %v; want version %s and version_name %s · %s beside the key", raw, err, chromeVersion(konst.Version), konst.Version, tofu)
+	}
+	if _, err := dial(t, home).Call(7, "snapshot", nil); err == nil || !strings.Contains(err.Error(), "reloading") {
+		t.Fatalf("a snapshot on the stale extension returned %v; want it refused while it reloads", err)
+	}
+	_ = ext.toHost.Close()
+	if err := <-done; err != nil {
+		t.Fatalf("the stale host ended with %v when the extension reloaded", err)
+	}
+
+	for _, updatedFrom := range []string{"0ld", ""} {
+		ext, done = startHost(t, home)
+		helloFrom(ext, tofu)
+		client := dial(t, home)
+		if got, want := buildsOf(t, client), (Builds{Extension: tofu, Tofu: tofu, UpdatedFrom: updatedFrom}); got != want {
+			t.Fatalf("the reconnected host reports %+v; want %+v", got, want)
+		}
+		snapshotGoesThrough(t, ext, client)
+		_ = ext.toHost.Close()
+		<-done
+	}
+}
+
+func TestChromeVersionIsUpToFourDottedIntegers(t *testing.T) {
+	for tofu, chrome := range map[string]string{
+		"0.5.0-rc-fix17":    "0.5.0.17",
+		"0.5.0":             "0.5.0",
+		"0.4.9-fix1":        "0.4.9.1",
+		"0.5.0-rc-fix07":    "0.5.0.7",
+		"0.4.5+dev":         "0.4.5",
+		"0.5.0-beta":        "0.5.0",
+		"0.5.0-rc-fixes":    "0.5.0",
+		"0.5.0-rc-fix":      "0.5.0",
+		"0.5.0-rc-fix-3":    "0.5.0",
+		"0.5.0-rc-fix70000": "0.5.0",
+		"0.5.0-rc-fix17+x":  "0.5.0",
+	} {
+		if got := chromeVersion(tofu); got != chrome {
+			t.Errorf("chromeVersion(%q) is %q; want %q", tofu, got, chrome)
+		}
+	}
+}
+
+func TestHostOnTheSameBuildNeitherRewritesNorReloads(t *testing.T) {
+	home := shortHome(t)
+	installFor(t, home, testOrigin)
+	stale := staleInstall(t, home)
+	tofu, err := Build()
+	if err != nil {
+		t.Fatal(err)
+	}
+	ext, _ := startHost(t, home)
+	helloFrom(ext, tofu)
+	client := dial(t, home)
+	snapshotGoesThrough(t, ext, client)
+	if _, err := os.Stat(stale); err != nil {
+		t.Fatalf("the install directory was rewritten on the same build: %v", err)
+	}
+	if got, want := buildsOf(t, client), (Builds{Extension: tofu, Tofu: tofu}); got != want {
+		t.Fatalf("the host reports %+v; want %+v", got, want)
+	}
+}
+
+func TestHostWithAnUnwritableInstallSaysSoAndNeverReloads(t *testing.T) {
+	home := shortHome(t)
+	installFor(t, home, testOrigin)
+	stale := staleInstall(t, home)
+	extensionDir := filepath.Dir(stale)
+	kept := filepath.Join(extensionDir, "kept.js")
+	if err := os.WriteFile(kept, []byte("kept"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	held, err := os.Open(stale)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ext, done := startHost(t, home)
+	browserDir := filepath.Dir(extensionDir)
+	if err := os.Chmod(browserDir, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_ = held.Close()
+		_ = os.Chmod(browserDir, 0o700)
+	})
+	helloFrom(ext, "0ld")
+	client := dial(t, home)
+	var refusals []string
+	for range 2 {
+		_, err := client.Call(7, "snapshot", nil)
+		if err == nil || !strings.Contains(err.Error(), extensionDir) || !strings.Contains(err.Error(), "tofu browser install") {
+			t.Fatalf("a snapshot on a stale extension tofu could not rewrite returned %v", err)
+		}
+		refusals = append(refusals, err.Error())
+	}
+	if builds := buildsOf(t, client); refusals[0] != refusals[1] || builds.Problem != refusals[0] || builds.Extension != "0ld" {
+		t.Fatalf("the refusals are %q and the host reports %+v; want one error, the same everywhere", refusals, builds)
+	}
+	for path, want := range map[string]string{stale: "old", kept: "kept"} {
+		if got, err := os.ReadFile(path); err != nil || string(got) != want {
+			t.Errorf("after a failed rewrite %s reads %q, %v; want the old %q", path, got, err, want)
+		}
+	}
+	if entries, err := os.ReadDir(extensionDir); err != nil || len(entries) != 2 {
+		t.Errorf("after a failed rewrite the extension directory holds %v, %v; want only the two old files", entries, err)
+	}
+	if left, _ := filepath.Glob(extensionDir + "?*"); len(left) != 0 {
+		t.Errorf("a failed rewrite left %v beside the extension directory", left)
+	}
+	select {
+	case heard := <-ext.heard:
+		t.Fatalf("the host wrote %+v to an extension it could not update", heard)
+	case err := <-done:
+		t.Fatalf("the host exited with %v, so Chrome would relaunch it in a loop", err)
+	default:
 	}
 }

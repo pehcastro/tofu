@@ -30,7 +30,24 @@ const (
 	messageTabUpdated messageType = "tabUpdated"
 	messageTabRemoved messageType = "tabRemoved"
 	messageResult     messageType = "result"
+	messageReload     messageType = "reload"
 )
+
+type Builds struct {
+	Extension   string `json:"extension"`
+	Tofu        string `json:"tofu"`
+	UpdatedFrom string `json:"updated_from,omitempty"`
+	Problem     string `json:"problem,omitempty"`
+}
+
+func (c *Client) Builds() (*Builds, error) {
+	raw, err := c.Call(0, opBuilds, nil)
+	if err != nil {
+		return nil, err
+	}
+	var builds *Builds
+	return builds, json.Unmarshal(raw, &builds)
+}
 
 type status string
 
@@ -67,6 +84,7 @@ type result struct {
 type extensionMessage struct {
 	T       messageType `json:"t"`
 	Version int         `json:"version"`
+	Build   string      `json:"build"`
 	Tabs    []Tab       `json:"tabs"`
 	Tab     Tab         `json:"tab"`
 	TabID   int         `json:"tabId"`
@@ -103,9 +121,10 @@ func reachable(address string) bool {
 }
 
 const (
-	opTabs  = "tabs"
-	opOpen  = "open"
-	opClose = "close"
+	opTabs   = "tabs"
+	opBuilds = "builds"
+	opOpen   = "open"
+	opClose  = "close"
 )
 
 type openArgs struct {
