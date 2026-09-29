@@ -11,7 +11,7 @@ const (
 	ModelsPath          = "/models"
 
 	CodexPackage             = "@openai/codex"
-	PinnedCodexClientVersion = "0.153.0"
+	PinnedCodexClientVersion = "0.159.0"
 	Originator               = "tofu"
 	UserAgentPrefix          = "tofu/"
 	BetaResponsesSSE         = "responses=experimental"

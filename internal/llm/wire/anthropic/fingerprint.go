@@ -12,7 +12,7 @@ import (
 
 const (
 	ClaudeCodePackage             = "@anthropic-ai/claude-code"
-	PinnedClaudeCodeVersion       = "2.1.280"
+	PinnedClaudeCodeVersion       = "2.1.284"
 	PinnedAnthropicSDKVersion     = "0.112.1"
 	PinnedNodeRuntimeVersion      = "v26.3.0"
 	PinnedStainlessTimeoutSeconds = "600"

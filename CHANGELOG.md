@@ -22,9 +22,12 @@ One look for every command, `--json` that always means one JSON document, and sh
 - **The API key input is its own dialog** and no longer draws over the model picker.
 - **`browser_do` waits for its tab to load**, reuses its own tab, follows a tab the page opens, and answers from every page it saw.
 - **The undo after `tofu rules add --replace`** puts the old rule text back.
+- **`tofu models reload` checks npm for the latest Claude Code and Codex releases** and raises the versions tofu claims. It stores them in `subFingerprint` in `~/.tofu/settings.json`, where you can also raise them by hand. The higher of that value and the built-in one wins.
+- **`--json` on a usage error prints one JSON error** and exits 2.
 
 ### Fixed
 
+- **A new Claude model no longer fails with `claude_code_version_too_old`.** tofu claims Claude Code 2.1.284 and Codex 0.159.0. When Anthropic asks for a newer version, tofu saves it and retries once.
 - **Every process tofu starts ends when tofu ends**, even when tofu is killed.
 - **A quit ends only this tofu's shells.** Shells left by an older tofu show as leftover in the shells screen, where you can end them.
 
