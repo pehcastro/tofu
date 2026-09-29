@@ -47,12 +47,12 @@ func NewBrowser(config BrowserSettings) ([]turn.Tool, error) {
 	session := &browserSession{home: config.Home, hosts: map[string]int{}}
 	var reads, acts turn.Tool
 	switch config.Driver {
-	case settings.DriverSteps:
+	case settings.DriverSteps, settings.DriverSubagent:
 		reads, acts = browserObserve{session}, browserAct{session}
 	case settings.DriverGoal:
 		reads, acts = browserRead{session}, browserDo{session, config.Steps, config.Judge, config.Model}
 	default:
-		return nil, fmt.Errorf("the %s setting is %q, and it takes %s or %s", settings.BrowserDriver, config.Driver, settings.DriverSteps, settings.DriverGoal)
+		return nil, fmt.Errorf("the %s setting is %q, and it takes %s, %s or %s", settings.BrowserDriver, config.Driver, settings.DriverSteps, settings.DriverGoal, settings.DriverSubagent)
 	}
 	switch config.Mode {
 	case settings.BrowserRead:

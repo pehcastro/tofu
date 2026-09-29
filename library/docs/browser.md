@@ -80,15 +80,15 @@ The settings:
   `browser_tabs` and the reading tool. It is read when tofu opens.
 - `browserDriver`: `steps`, the default, gives the model `browser_observe`
   and `browser_act`, and it picks every step itself. `goal` gives it
-  `browser_do`, where Jev picks each step toward the whole goal. The old
-  values `model` and `jev` are read as `steps` and `goal`.
+  `browser_do`, where Jev picks each step toward the whole goal. `subagent`
+  gives the step tools to the `browser` sub-agent on `browserModel`, which
+  the model spawns with the task and the tab. Old `model`, `jev` still read.
 - `browserSteps`: how many actions one `browser_do` task may take, 1 to 60.
   The default is 30.
-- `browserModel`: the subscription model `browser_do` asks for text and for
-  its answer, as `source/model`. Empty, the default, takes `modelTier.dumb`,
-  then `modelTier.worker`, then the turn's own model.
+- `browserModel`: the model `browser_do` and the `browser` sub-agent run on,
+  as `source/model`. Empty, the default, takes `modelTier.dumb`, then
+  `modelTier.worker`, then the turn's own model.
 
-    tofu settings set browser read
     tofu settings set browserModel claude-sub/claude-sonnet-5
 
 ## Check it
@@ -108,10 +108,10 @@ The same steps the model takes are verbs, each on one tab:
     tofu browser fill e3 "Lisboa" --tab 123
 
 and `select <ref> <option>`, `press <key>`, `scroll [<ref>] [up|down]` and
-`back` the same way. `--all` makes `observe` print the whole tree. An action looks at the tab first, so on a page that has not changed a ref
-from your last `observe` names the same element; it then prints what changed and the fresh
-snapshot. `--json` prints one document with `data.snapshot`, and
-`data.moved` after an action.
+`back` the same way. `--all` makes `observe` print the whole tree. An
+action looks first, so a ref from your last `observe` of an unchanged page
+names the same element, then prints what changed and the fresh snapshot,
+which `--json` carries as `data.snapshot`, with `data.moved`.
 
 ## Undo it
 

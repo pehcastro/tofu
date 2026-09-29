@@ -657,7 +657,11 @@ func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn
 	spawner.Limits = func() turn.SubAgentLimits {
 		return turn.SubAgentLimits{PerTurn: settingInt(dir, settingspkg.SubAgentsPerTurn, run.notify), Depth: settingInt(dir, settingspkg.SubAgentDepth, run.notify)}
 	}
-	orchestrating := append(turn.WithSourceBudget(built, prompt.subAgents.Defined), spawner)
+	own := built
+	if settingText(dir, settingspkg.BrowserDriver, run.notify) == settingspkg.DriverSubagent {
+		own = slices.DeleteFunc(slices.Clone(built), func(tool turn.Tool) bool { return strings.HasPrefix(tool.Name(), "browser_") })
+	}
+	orchestrating := append(turn.WithSourceBudget(own, prompt.subAgents.Defined), spawner)
 	if run.gate != nil {
 		spawner.SettingsTool = true
 		orchestrating = append(orchestrating, tools.NewSettings(settingsPaths(dir)))
@@ -682,7 +686,7 @@ func scanSubAgents(dir string, built []turn.Tool) subagent.Found {
 			tiers[tier] = strings.TrimSpace(store.Text(tier.Setting()))
 		}
 	}
-	return subagent.Definitions(subagent.Scan{
+	return onBrowserModel(dir, subagent.Definitions(subagent.Scan{
 		Project: dir,
 		Home:    home,
 		Sources: strings.Split(sources, ","),
@@ -690,7 +694,7 @@ func scanSubAgents(dir string, built []turn.Tool) subagent.Found {
 		Tools:   names,
 		Catalog: catalog,
 		Tiers:   tiers,
-	})
+	}), catalog)
 }
 
 func gateArms() []string { return []string{gateOff, gateShadow, gateEnforce} }
@@ -912,30 +916,58 @@ func (s subscriptionModel) Ask(ctx context.Context, request llm.Request) (llm.De
 	return account.Model.Ask(ctx, request)
 }
 
-func browserModel(dir string) (turn.Model, string, error) {
+func browserSlug(dir string) (slug, key string) {
 	for _, key := range []string{settingspkg.BrowserModel, subagent.TierDumb.Setting(), subagent.TierWorker.Setting()} {
-		slug := strings.TrimSpace(settingText(dir, key, nil))
-		if slug == "" {
-			continue
+		if slug := strings.TrimSpace(settingText(dir, key, nil)); slug != "" {
+			return slug, key
 		}
-		library, err := modelLibrary(dir)
-		if err != nil {
-			return nil, "", err
-		}
-		model, err := library.Select(slug)
-		if err != nil {
-			return nil, "", err
-		}
-		opts := runOpts{dir: dir, wire: library.WireOf(model), model: slug}
-		if len(model.Efforts) > 0 {
-			opts.effort = model.Efforts[0]
-		}
-		return subscriptionModel{opts}, slug + " from " + key, nil
 	}
-	return turn.RunningModel{}, "the turn's own model, as none of " + settingspkg.BrowserModel + ", " + subagent.TierDumb.Setting() + " and " + subagent.TierWorker.Setting() + " is set", nil
+	return "", ""
 }
 
-const browserStepPoint = "browser_step@1"
+func browserModel(dir string) (turn.Model, string, error) {
+	slug, key := browserSlug(dir)
+	if slug == "" {
+		return turn.RunningModel{}, "the turn's own model, as none of " + settingspkg.BrowserModel + ", " + subagent.TierDumb.Setting() + " and " + subagent.TierWorker.Setting() + " is set", nil
+	}
+	library, err := modelLibrary(dir)
+	if err != nil {
+		return nil, "", err
+	}
+	model, err := library.Select(slug)
+	if err != nil {
+		return nil, "", err
+	}
+	opts := runOpts{dir: dir, wire: library.WireOf(model), model: slug}
+	if len(model.Efforts) > 0 {
+		opts.effort = model.Efforts[0]
+	}
+	return subscriptionModel{opts}, slug + " from " + key, nil
+}
+
+func onBrowserModel(dir string, found subagent.Found, catalog models.Library) subagent.Found {
+	slug, key := browserSlug(dir)
+	at := slices.IndexFunc(found.Definitions, func(d subagent.Definition) bool { return d.Name == browserAgent && d.Origin == "library" })
+	if slug == "" || at < 0 || found.Definitions[at].Runs == subagent.RunsRefused {
+		return found
+	}
+	agent := &found.Definitions[at]
+	model, err := catalog.Select(slug)
+	if err != nil {
+		agent.Runs, agent.Refused = subagent.RunsRefused, append(agent.Refused, fmt.Sprintf("%s is %s: %v", key, slug, err))
+		return found
+	}
+	agent.Runs, agent.Model, agent.From = subagent.RunsModel, model.Slug(), key
+	if len(model.Efforts) > 0 {
+		agent.Effort = model.Efforts[0]
+	}
+	return found
+}
+
+const (
+	browserStepPoint = "browser_step@1"
+	browserAgent     = "browser"
+)
 
 func browserJudge(dir string) (jevloop.Jev, error) {
 	layers, err := question.Layers(questions.Files(), dir)

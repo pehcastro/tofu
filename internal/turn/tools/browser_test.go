@@ -24,6 +24,7 @@ import (
 	"tofu/internal/llm"
 	"tofu/internal/rule"
 	"tofu/internal/settings"
+	"tofu/internal/subagent"
 	"tofu/internal/turn"
 	"tofu/internal/turn/tools"
 	"tofu/library"
@@ -429,6 +430,115 @@ func TestABatchStopsAtTheActThatChangesTheURLAndSaysWhatItSkipped(t *testing.T) 
 	acted := run("browser_act", `{"tab":7,"actions":[{"ref":"e1","action":"click"},{"ref":"e2","action":"click"},{"ref":"e2","action":"click"}]}`)
 	if page.releases() != 1 || !strings.Contains(acted, "ran 1 of 3") || !strings.Contains(acted, "2 skipped") || !strings.Contains(acted, "https://stays.test/page-2") {
 		t.Fatalf("the batch clicked %d times and said the above; want 1 click, ran 1 of 3, 2 skipped, and the new page", page.releases())
+	}
+}
+
+type spawnScript struct {
+	mu        sync.Mutex
+	decisions []llm.Decision
+	asked     []llm.Request
+}
+
+func (s *spawnScript) Ask(_ context.Context, request llm.Request) (llm.Decision, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.asked = append(s.asked, request)
+	if len(s.decisions) == 0 {
+		return llm.Decision{}, errors.New("the script ran out of decisions")
+	}
+	next := s.decisions[0]
+	s.decisions = s.decisions[1:]
+	return next, nil
+}
+
+func calls(name, args string) llm.Decision {
+	return llm.Decision{Build: "cassette", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{{ID: "call-" + name, Name: name, Arguments: json.RawMessage(args)}}}
+}
+
+func TestTheBrowserSubAgentObservesActsObservesAndReportsItsTab(t *testing.T) {
+	page := &cdpPage{url: "https://stays.test/", next: "https://stays.test/page-2"}
+	home := shortHome(t)
+	manifest := filepath.Join(filepath.Dir(browser.ExtensionDir(home)), browser.HostName+".json")
+	if err := os.MkdirAll(filepath.Dir(manifest), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(manifest, []byte(`{"allowed_origins":["`+browserFixtureOrigin+`"]}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	toHostR, toHostW := io.Pipe()
+	fromHostR, fromHostW := io.Pipe()
+	go func() {
+		_ = browser.Host(browserFixtureOrigin, toHostR, fromHostW, home)
+		_ = fromHostW.Close()
+	}()
+	t.Cleanup(func() {
+		_ = toHostW.Close()
+		_ = fromHostR.Close()
+	})
+	if err := browser.WriteMessage(toHostW, []byte(`{"t":"hello","version":2,"tabs":[{"id":7,"url":"https://stays.test/","title":"Stays"}]}`)); err != nil {
+		t.Fatal(err)
+	}
+	go page.serve(fromHostR, toHostW)
+
+	offered, err := tools.NewBrowser(drive(home, settings.DriverSubagent))
+	if err != nil {
+		t.Fatal(err)
+	}
+	names := []string{"spawn"}
+	for _, tool := range offered {
+		names = append(names, tool.Name())
+	}
+	found := subagent.Definitions(subagent.Scan{Library: library.Files(), Tools: names})
+	defined := slices.IndexFunc(found.Definitions, func(d subagent.Definition) bool { return d.Name == "browser" })
+	if defined < 0 || found.Definitions[defined].Runs == subagent.RunsRefused {
+		t.Fatalf("the library defines no browser sub-agent that runs: %+v", found)
+	}
+	script := &spawnScript{decisions: []llm.Decision{
+		calls("spawn", `{"agent":"browser","task":"on tab 7, go to the next page of stays and say what it shows","owns":["notes/**"]}`),
+		calls("browser_observe", `{"tab":7}`),
+		calls("browser_act", `{"tab":7,"actions":[{"ref":"e1","action":"click"}]}`),
+		calls("browser_observe", `{"tab":7}`),
+		{Build: "cassette", Outcome: llm.OutcomeMessage, Content: "clicked Next on tab 7; it shows page 2 of the stays; tab 7 is left open on https://stays.test/page-2"},
+		{Build: "cassette", Outcome: llm.OutcomeMessage, Content: "the browser sub-agent reached page 2 on tab 7"},
+	}}
+	base := turn.Config{Model: script, Spend: turn.SpendSubscription, Tools: turn.NewRegistry(offered...), Caps: turn.Caps{MaxSteps: 8},
+		ResultBytesCap: 8192, ArtifactDir: t.TempDir(), NewID: func() string { return "turn-orchestrator" }}
+	spawner := turn.NewSpawnTool("turn-orchestrator", base, &subagent.Roster{})
+	spawner.SubAgents = turn.SubAgents{Defined: found.Definitions}
+	orchestrator := base
+	orchestrator.Task = "find what the next page of stays shows"
+	orchestrator.Tools = turn.NewRegistry(spawner)
+	if _, err := turn.Run(context.Background(), orchestrator); err != nil {
+		t.Fatal(err)
+	}
+
+	var subAgentTools, spawnResult string
+	for _, asked := range script.asked {
+		var offeredNames []string
+		for _, tool := range asked.Tools {
+			offeredNames = append(offeredNames, tool.Name)
+		}
+		if !slices.Contains(offeredNames, "spawn") {
+			subAgentTools = strings.Join(offeredNames, " ")
+		}
+		if last := asked.Messages[len(asked.Messages)-1]; last.Role == llm.RoleTool && last.ToolCallID == "call-spawn" {
+			spawnResult = last.Content
+		}
+	}
+	t.Logf("the sub-agent was offered %s, and the orchestrator read:\n%s", subAgentTools, spawnResult)
+	if page.releases() != 1 {
+		t.Fatalf("the page saw %d clicks, want the sub-agent's one", page.releases())
+	}
+	for _, want := range []string{"browser_observe", "browser_act", "browser_tabs"} {
+		if !strings.Contains(subAgentTools, want) {
+			t.Fatalf("the sub-agent was offered %q, without %s", subAgentTools, want)
+		}
+	}
+	if fields := strings.Fields(subAgentTools); slices.Contains(fields, "bash") || slices.Contains(fields, "fetch") || slices.Contains(fields, "spawn") || slices.Contains(fields, "write") || slices.Contains(fields, "edit") {
+		t.Fatalf("the sub-agent was offered %q, more than the browser tools", subAgentTools)
+	}
+	if !strings.Contains(spawnResult, "tab 7 is left open on https://stays.test/page-2") {
+		t.Fatalf("the orchestrator never read a report naming the tab:\n%s", spawnResult)
 	}
 }
 

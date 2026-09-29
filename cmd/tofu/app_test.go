@@ -2505,6 +2505,56 @@ func TestAnOldBrowserChooserIsReadAsItsDriverAndTheNextSaveWritesTheNewKey(t *te
 	}
 }
 
+func TestTheSubAgentDriverHandsTheBrowserToolsToASubAgentOnTheBrowserModel(t *testing.T) {
+	emptyHome(t)
+	for _, slug := range []string{"meta/muse-spark-1.3-contributor", "claude-sub/claude-sonnet-5-5", "claude-sub/claude-sonnet-5"} {
+		opts := armOpts(t)
+		store, err := openSettings(opts.dir)
+		if err == nil {
+			err = store.SetText(settingspkg.Project, settingspkg.BrowserDriver, settingspkg.DriverSubagent)
+		}
+		if err == nil {
+			err = store.SetText(settingspkg.Project, settingspkg.BrowserModel, slug)
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		offered := slices.DeleteFunc(toolNames(t, opts), func(name string) bool { return !strings.HasPrefix(name, "browser_") })
+		built, err := buildTestRunTools(opts.dir, opts.toolSet)
+		if err != nil {
+			t.Fatal(err)
+		}
+		found := scanSubAgents(opts.dir, built)
+		at := slices.IndexFunc(found.Definitions, func(d roster.Definition) bool { return d.Name == "browser" })
+		if at < 0 {
+			t.Fatalf("browserModel %s: no browser sub-agent is defined", slug)
+		}
+		agent := found.Definitions[at]
+		t.Logf("browserModel %s: the orchestrator is offered %v, and the browser sub-agent runs %s on %q from %s, refused %v", slug, offered, agent.Runs, agent.Model, agent.From, agent.Refused)
+		if len(offered) != 0 {
+			t.Fatalf("browserModel %s: the orchestrator still holds %v", slug, offered)
+		}
+		if _, selectErr := mustLibrary(t, opts.dir).Select(slug); selectErr != nil {
+			if agent.Runs != roster.RunsRefused || !strings.Contains(strings.Join(agent.Refused, " "), slug) {
+				t.Fatalf("browserModel %s is not in the library, and the sub-agent runs %s rather than being refused naming it", slug, agent.Runs)
+			}
+			continue
+		}
+		if agent.Runs != roster.RunsModel || agent.Model != slug || agent.From != settingspkg.BrowserModel || !slices.Equal(agent.Tools, []string{"browser_tabs", "browser_observe", "browser_act"}) {
+			t.Fatalf("browserModel %s: the browser sub-agent is %+v", slug, agent)
+		}
+	}
+}
+
+func mustLibrary(t *testing.T, dir string) models.Library {
+	t.Helper()
+	library, err := modelLibrary(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return library
+}
+
 func TestBrowserModelResolvesFromTheSettingAndRefusesAnUnknownSlug(t *testing.T) {
 	emptyHome(t)
 	dumb, worker := roster.TierDumb.Setting(), roster.TierWorker.Setting()

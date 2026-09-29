@@ -584,10 +584,10 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 	var owned []Tool
 	for _, tool := range t.base.Tools.tools {
 		switch {
-		case tool.Name() == "write" || tool.Name() == "edit":
-			tool = ownedTool{tool: tool, boundary: boundary}
 		case !offered(tool.Name()):
 			continue
+		case tool.Name() == "write" || tool.Name() == "edit":
+			tool = ownedTool{tool: tool, boundary: boundary}
 		case tool.Name() == "bash":
 			tool = ownedShell{tool: tool, boundary: boundary}
 		}

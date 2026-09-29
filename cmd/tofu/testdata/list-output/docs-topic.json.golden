@@ -295,9 +295,9 @@ exit 0
         "key": "browserDriver",
         "category": "Browser",
         "default": "steps",
-        "takes": "one of steps, goal",
+        "takes": "one of steps, goal, subagent",
         "restart": false,
-        "description": "steps gives the model browser_observe and browser_act, to see a tab and act on one ref at a time; goal gives it browser_do, where jev picks each step toward a whole goal"
+        "description": "steps gives the model browser_observe and browser_act, to see a tab and act on one ref at a time; goal gives it browser_do, where jev picks each step toward a whole goal; subagent gives the steps to a browser sub-agent on browserModel, which the model spawns"
       },
       {
         "key": "browserSteps",
