@@ -12,7 +12,12 @@ import (
 	"tofu/internal/konst"
 )
 
-var ErrNotConnected = errors.New("the tofu extension is not connected: run tofu browser install, then load it in Chrome")
+const (
+	NotConnected = "the tofu extension is not connected"
+	InstallHint  = "tofu browser install, then load it in Chrome"
+)
+
+var ErrNotConnected = errors.New(NotConnected + ": run " + InstallHint)
 
 type CallTime struct {
 	Wall      time.Duration

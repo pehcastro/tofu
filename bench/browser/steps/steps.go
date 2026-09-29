@@ -160,7 +160,21 @@ func Write(w io.Writer, rows []Row) error {
 	return nil
 }
 
-func Table(w io.Writer, rows []Row) error {
+type Phase struct {
+	Name string  `json:"phase"`
+	P50  float64 `json:"p50"`
+	P90  float64 `json:"p90"`
+}
+
+type Summary struct {
+	Steps     int     `json:"steps"`
+	DidNotRun int     `json:"did_not_run"`
+	Failed    int     `json:"failed"`
+	Untimed   int     `json:"untimed"`
+	Phases    []Phase `json:"phases"`
+}
+
+func Summarise(rows []Row) Summary {
 	columns := []struct {
 		name  string
 		value func(Row) float64
@@ -175,30 +189,38 @@ func Table(w io.Writer, rows []Row) error {
 		{"jev input tokens", func(r Row) float64 { return float64(r.InputTokens) }},
 		{"jev output tokens", func(r Row) float64 { return float64(r.OutputTokens) }},
 	}
-	var b strings.Builder
-	fmt.Fprintf(&b, "%-18s %10s %10s\n", "phase", "p50", "p90")
+	summary := Summary{Steps: len(rows)}
 	for _, column := range columns {
 		values := make([]float64, len(rows))
 		for i, row := range rows {
 			values[i] = column.value(row)
 		}
-		fmt.Fprintf(&b, "%-18s %10.2f %10.2f\n", column.name, stat.Percentile(values, 50), stat.Percentile(values, 90))
+		summary.Phases = append(summary.Phases, Phase{column.name, stat.Percentile(values, 50), stat.Percentile(values, 90)})
 	}
-	stale, failed, untimed := 0, 0, 0
 	for _, row := range rows {
 		if row.Stale != browser.StaleNone {
-			stale++
+			summary.DidNotRun++
 		}
 		if row.Error != "" {
-			failed++
+			summary.Failed++
 		}
 		if !row.ExtensionTimed {
-			untimed++
+			summary.Untimed++
 		}
 	}
-	fmt.Fprintf(&b, "%d steps, %d did not run, %d failed\n", len(rows), stale, failed)
-	if untimed > 0 {
-		fmt.Fprintf(&b, "the extension timed no phase on %d steps: evaluate, settle and act read 0 there, and native holds them\n", untimed)
+	return summary
+}
+
+func Table(w io.Writer, rows []Row) error {
+	summary := Summarise(rows)
+	var b strings.Builder
+	fmt.Fprintf(&b, "%-18s %10s %10s\n", "phase", "p50", "p90")
+	for _, phase := range summary.Phases {
+		fmt.Fprintf(&b, "%-18s %10.2f %10.2f\n", phase.Name, phase.P50, phase.P90)
+	}
+	fmt.Fprintf(&b, "%d steps, %d did not run, %d failed\n", summary.Steps, summary.DidNotRun, summary.Failed)
+	if summary.Untimed > 0 {
+		fmt.Fprintf(&b, "the extension timed no phase on %d steps: evaluate, settle and act read 0 there, and native holds them\n", summary.Untimed)
 	}
 	_, err := io.WriteString(w, b.String())
 	return err
