@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"net/url"
 	"os"
-	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -16,10 +15,7 @@ import (
 	"tofu/internal/konst"
 )
 
-const (
-	cursorTag     = "data-tofu-ci"
-	urlQueryRunes = 80
-)
+const cursorTag = "data-tofu-ci"
 
 const cursorScan = `(() => {
   const results = [];
@@ -116,8 +112,7 @@ func (d *Driver) observe(deadline time.Time, interactive bool) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	urls, err := d.linkURLs(deadline, top, frames.FrameTree.Frame.URL)
-	if err != nil {
+	if err := d.linkURLs(deadline, top, frames.FrameTree.Frame.URL); err != nil {
 		return "", err
 	}
 	title := ""
@@ -126,34 +121,31 @@ func (d *Driver) observe(deadline time.Time, interactive bool) (string, error) {
 	}
 	var out strings.Builder
 	fmt.Fprintf(&out, "tab %d %s %s\n", d.Tab, frames.FrameTree.Frame.URL, strconv.Quote(title))
+	all := view{interactive: interactive, frames: children, skip: -1}
 	modal := slices.IndexFunc(tree.Nodes, axNode.isModal)
 	if modal < 0 || top[modal].role == "" {
 		for _, root := range roots {
-			render(&out, top, root, 0, interactive, children)
+			render(&out, top, root, 0, all)
 		}
-		return capSnapshot(withURLs(out.String(), urls)), nil
+		return capSnapshot(out.String()), nil
 	}
-	render(&out, top, modal, 0, interactive, children)
-	behind := slices.Clone(top)
-	behind[modal] = treeNode{}
-	var page strings.Builder
-	for _, root := range roots {
-		render(&page, behind, root, 0, interactive, children)
-	}
-	hidden := withURLs(page.String(), urls)
-	for _, ref := range regexp.MustCompile(`ref=(e\d+)`).FindAllStringSubmatch(hidden, -1) {
-		delete(d.refs.entries, ref[1])
-	}
-	for _, strip := range []string{` \[ref=e\d+\]`, `ref=e\d+, `, `, ref=e\d+`} {
-		hidden = regexp.MustCompile(strip).ReplaceAllString(hidden, "")
-	}
+	render(&out, top, modal, 0, all)
 	fmt.Fprintf(&out, "behind dialog %s, no ref here acts until it closes:\n", strconv.Quote(top[modal].name))
-	for _, line := range strings.SplitAfter(hidden, "\n") {
-		if line != "" {
-			out.WriteString("  " + strings.Replace(line, "* ", "- ", 1))
+	behind := all
+	behind.behind, behind.skip = true, modal
+	for _, root := range roots {
+		render(&out, top, root, 1, behind)
+	}
+	inside := map[int]bool{}
+	for queue := []int{modal}; len(queue) > 0; queue = append(queue[1:], top[queue[0]].children...) {
+		inside[queue[0]] = true
+	}
+	for i, node := range top {
+		if node.ref != "" && !inside[i] {
+			delete(d.refs.entries, node.ref)
 		}
 	}
-	return capSnapshot(withURLs(out.String(), urls)), nil
+	return capSnapshot(out.String()), nil
 }
 
 func (n axNode) isModal() bool {
@@ -169,57 +161,48 @@ func (n axNode) isModal() bool {
 	return false
 }
 
-func withURLs(snapshot string, urls map[string]string) string {
-	for ref, url := range urls {
-		snapshot = strings.Replace(snapshot, "ref="+ref+"]", "ref="+ref+", url="+url+"]", 1)
-	}
-	return snapshot
-}
-
-func (d *Driver) linkURLs(deadline time.Time, top []treeNode, page string) (map[string]string, error) {
-	var refs []string
+func (d *Driver) linkURLs(deadline time.Time, top []treeNode, page string) error {
+	var links []int
 	var calls []cdpCall
-	for _, node := range top {
+	for i, node := range top {
 		if node.role == "link" && node.ref != "" && node.backend != 0 {
-			refs = append(refs, node.ref)
+			links = append(links, i)
 			calls = append(calls, byBackend("DOM.resolveNode", node.backend))
 		}
 	}
-	urls := map[string]string{}
 	if len(calls) == 0 {
-		return urls, nil
+		return nil
 	}
 	answers, err := d.cdp(deadline, false, calls...)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	var owners []string
+	var owners []int
 	calls = nil
 	for n, answer := range answers {
 		var resolved struct {
 			Object remoteObject `json:"object"`
 		}
 		if answer.into(&resolved) == nil && resolved.Object.ObjectID != "" {
-			owners = append(owners, refs[n])
+			owners = append(owners, links[n])
 			calls = append(calls, callOn(resolved.Object.ObjectID, "function() { return this.href || ''; }", true))
 		}
 	}
 	if len(calls) == 0 {
-		return urls, nil
+		return nil
 	}
 	if answers, err = d.cdp(deadline, false, calls...); err != nil {
-		return nil, err
+		return err
 	}
 	base, _ := url.Parse(page)
 	for n, answer := range answers {
 		var href string
 		object, err := answer.object()
-		if err != nil || json.Unmarshal(object.Value, &href) != nil || href == "" {
-			continue
+		if err == nil && json.Unmarshal(object.Value, &href) == nil && href != "" {
+			top[owners[n]].url = shortURL(href, base)
 		}
-		urls[owners[n]] = shortURL(href, base)
 	}
-	return urls, nil
+	return nil
 }
 
 func shortURL(href string, page *url.URL) string {
@@ -232,7 +215,7 @@ func shortURL(href string, page *url.URL) string {
 		short = link.Scheme + "://" + link.Host + short
 	}
 	if query := []rune(link.RawQuery); len(query) > 0 {
-		short += "?" + string(query[:min(len(query), urlQueryRunes)])
+		short += "?" + string(query[:min(len(query), konst.BrowserURLQueryRunes)])
 	}
 	return short
 }
@@ -344,7 +327,7 @@ func (d *Driver) childFrames(deadline time.Time, top []treeNode, loaders map[str
 		nodes, roots := d.refs.snapshot(frameIDs[n], loaders[frameIDs[n]], tree.Nodes, cursors)
 		var out strings.Builder
 		for _, root := range roots {
-			render(&out, nodes, root, 0, interactive, nil)
+			render(&out, nodes, root, 0, view{interactive: interactive, skip: -1})
 		}
 		rendered[frameOwners[n]] = out.String()
 	}

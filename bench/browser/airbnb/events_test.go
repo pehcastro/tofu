@@ -2,8 +2,32 @@ package airbnb
 
 import (
 	"slices"
+	"strings"
 	"testing"
 )
+
+func TestAnArmThatSpawnedAgainstItsDriverReadsMixedAndTheCredentialComesFromTheSpawn(t *testing.T) {
+	for arm, mixed := range map[Arm]bool{ArmA: true, ArmB1: false, ArmC: true} {
+		run, err := RunFromEvents(arm, "testdata/events/b1.jsonl")
+		if err == nil {
+			err = arm.Stamp(&run, "2026-09-29", "test")
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		table, err := Render([]Row{Score(Task{}, run)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Logf("arm %s:\n%s", arm, table)
+		if run.Mixed != mixed || strings.Contains(table, "| mixed |") != mixed {
+			t.Errorf("arm %s, which spawned browser, reads mixed = %v in the run and %v in the table, want %v", arm, run.Mixed, strings.Contains(table, "| mixed |"), mixed)
+		}
+		if run.Conditions.BrowserCredential != "subscription" {
+			t.Errorf("arm %s: the browser turns ran on claude-sub/claude-haiku-5, and the row says %q", arm, run.Conditions.BrowserCredential)
+		}
+	}
+}
 
 func TestASubAgentSessionReadsBackAsARunThatScoresTwelve(t *testing.T) {
 	run, err := RunFromEvents(ArmB1, "testdata/events/b1.jsonl")

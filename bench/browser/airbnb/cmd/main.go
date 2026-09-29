@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"tofu/bench/browser/airbnb"
+	"tofu/internal/browser"
 	"tofu/internal/session"
 	"tofu/internal/sys"
 )
@@ -23,6 +24,28 @@ func main() {
 		fmt.Fprintln(os.Stderr, "airbnb bench:", err)
 		os.Exit(1)
 	}
+}
+
+func closeTofuTabs() (int, error) {
+	home, err := os.UserHomeDir()
+	var client *browser.Client
+	if err == nil {
+		client, err = browser.Dial(home)
+	}
+	if err != nil {
+		return 0, err
+	}
+	defer func() { _ = client.Close() }()
+	tabs, err := client.Tabs()
+	closed := 0
+	for _, tab := range tabs {
+		if err == nil && tab.Opened {
+			if err = client.CloseTab(tab.ID); err == nil {
+				closed++
+			}
+		}
+	}
+	return closed, err
 }
 
 func run(arm airbnb.Arm, out, tofu string) error {
@@ -50,7 +73,7 @@ func run(arm airbnb.Arm, out, tofu string) error {
 	if err != nil {
 		return err
 	}
-	defer log.Close()
+	defer func() { _ = log.Close() }()
 	tofuIn := func(args ...string) error {
 		command := exec.Command(tofu, args...)
 		command.Dir, command.Stdout, command.Stderr = project, io.MultiWriter(os.Stdout, log), io.MultiWriter(os.Stderr, log)
@@ -64,6 +87,10 @@ func run(arm airbnb.Arm, out, tofu string) error {
 		if err := tofuIn("settings", "set", "--scope", "project", setting[0], setting[1]); err != nil {
 			return fmt.Errorf("setting %s in the project: %w", setting[0], err)
 		}
+	}
+	closed, err := closeTofuTabs()
+	if err != nil {
+		return fmt.Errorf("closing the tabs an earlier arm opened, before arm %s: %w", arm, err)
 	}
 	ranErr := tofuIn("run", "--dir", project, "--model", airbnb.MainModel, task.Prompt)
 	state, err := sys.ProjectStateDirAt(project)
@@ -79,6 +106,7 @@ func run(arm airbnb.Arm, out, tofu string) error {
 	if err != nil {
 		return err
 	}
+	recorded.TabsClosed = closed
 	machine, _ := os.Hostname()
 	if err := arm.Stamp(&recorded, started.Format(time.DateOnly), machine); err != nil {
 		return err

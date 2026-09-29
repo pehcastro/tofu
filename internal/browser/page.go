@@ -265,9 +265,15 @@ type treeNode struct {
 	attrs             []string
 	backend           int
 	children          []int
-	ref               string
+	ref, url          string
 	fresh             bool
 	cursor            *cursorInfo
+}
+
+type view struct {
+	interactive, behind bool
+	frames              map[int]string
+	skip                int
 }
 
 func buildTree(nodes []axNode) ([]treeNode, []int) {
@@ -417,33 +423,39 @@ func snapshotName(name string) string {
 	}, name)
 }
 
-func render(out *strings.Builder, tree []treeNode, i, indent int, interactive bool, frames map[int]string) {
+func render(out *strings.Builder, tree []treeNode, i, indent int, v view) {
 	node := tree[i]
+	if i == v.skip {
+		return
+	}
 	passThrough := node.role == "" || node.role == "RootWebArea" || node.role == "WebArea" ||
 		node.role == "generic" && node.ref == "" && len(node.children) <= 1 ||
 		node.role == "StaticText" && strings.TrimSpace(snapshotName(node.name)) == "" ||
-		interactive && node.ref == ""
+		v.interactive && node.ref == ""
 	if passThrough {
 		for _, child := range node.children {
-			render(out, tree, child, indent, interactive, frames)
+			render(out, tree, child, indent, v)
 		}
 		return
 	}
 	bullet := "- "
-	if node.fresh {
+	if node.fresh && !v.behind {
 		bullet = "* "
 	}
 	out.WriteString(strings.Repeat("  ", indent) + bullet + node.role)
 	name := node.name
-	if name == "" && interactive && node.cursor != nil {
+	if name == "" && v.interactive && node.cursor != nil {
 		name = node.cursor.Text
 	}
 	if name != "" {
 		out.WriteString(" " + strconv.Quote(snapshotName(name)))
 	}
-	attrs := node.attrs
-	if node.ref != "" {
-		attrs = append(slices.Clone(attrs), "ref="+node.ref)
+	attrs := slices.Clone(node.attrs)
+	if node.ref != "" && !v.behind {
+		attrs = append(attrs, "ref="+node.ref)
+	}
+	if node.url != "" {
+		attrs = append(attrs, "url="+node.url)
 	}
 	if len(attrs) > 0 {
 		out.WriteString(" [" + strings.Join(attrs, ", ") + "]")
@@ -455,13 +467,13 @@ func render(out *strings.Builder, tree []treeNode, i, indent int, interactive bo
 		out.WriteString(": " + node.value)
 	}
 	out.WriteString("\n")
-	for _, line := range strings.SplitAfter(frames[i], "\n") {
+	for _, line := range strings.SplitAfter(v.frames[i], "\n") {
 		if line != "" {
 			out.WriteString(strings.Repeat("  ", indent+1) + line)
 		}
 	}
 	for _, child := range node.children {
-		render(out, tree, child, indent+1, interactive, frames)
+		render(out, tree, child, indent+1, v)
 	}
 }
 

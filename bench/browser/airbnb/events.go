@@ -71,6 +71,7 @@ func RunFromEvents(arm Arm, path string) (Run, error) {
 			var spawned session.SpawnBody
 			if json.Unmarshal(event.Body, &spawned) == nil && spawned.Definition == browserAgentDefinition {
 				browserAgents[spawned.Agent] = true
+				run.Conditions.BrowserModel = spawned.Model
 			}
 		case session.EventRequest:
 			var step session.StepBody
@@ -123,6 +124,11 @@ func RunFromEvents(arm Arm, path string) (Run, error) {
 		}
 	}
 	run.Conditions.MainBuild, run.Conditions.BrowserBuild = strings.Join(mainBuilds, " "), strings.Join(browserBuilds, " ")
+	settings, err := arm.Settings()
+	if err != nil {
+		return Run{}, err
+	}
+	run.Mixed = (len(browserAgents) > 0) != (settings.Driver == "subagent")
 	if arm != ArmC {
 		run.BrowserTokens = &browserTokens
 	}

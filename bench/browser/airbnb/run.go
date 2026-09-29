@@ -44,6 +44,7 @@ type Conditions struct {
 	Machine           string `json:"machine"`
 	Credential        string `json:"credential"`
 	BrowserCredential string `json:"browser_credential"`
+	BrowserModel      string `json:"browser_model,omitempty"`
 	Wire              string `json:"wire"`
 	MainBuild         string `json:"main_build"`
 	BrowserBuild      string `json:"browser_build"`
@@ -58,12 +59,11 @@ func credentialOf(slug string) string {
 }
 
 func (a Arm) Stamp(run *Run, date, machine string) error {
-	settings, err := a.Settings()
-	if err != nil {
+	if _, err := a.Settings(); err != nil {
 		return err
 	}
 	run.Conditions.Date, run.Conditions.Machine = date, machine
-	run.Conditions.Credential, run.Conditions.BrowserCredential = credentialOf(MainModel), credentialOf(cmp.Or(settings.BrowserModel, MainModel))
+	run.Conditions.Credential, run.Conditions.BrowserCredential = credentialOf(MainModel), credentialOf(cmp.Or(run.Conditions.BrowserModel, MainModel))
 	return nil
 }
 
@@ -80,6 +80,8 @@ type Run struct {
 	BrowserTokens *int       `json:"browser_tokens"`
 	Repeated      int        `json:"repeated"`
 	Refused       int        `json:"refused"`
+	Mixed         bool       `json:"mixed"`
+	TabsClosed    int        `json:"tabs_closed_before"`
 	Tabs          []Tab      `json:"tabs"`
 	Visits        []string   `json:"visits"`
 	Snapshot      string     `json:"-"`

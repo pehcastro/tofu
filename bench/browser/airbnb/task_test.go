@@ -38,9 +38,9 @@ func TestTheRecordedRunsScoreTwelveAndTheRightLowerCount(t *testing.T) {
 	}
 }
 
-func TestEachArmIsStampedWithItsBrowserModelsCredentialKind(t *testing.T) {
+func TestEachArmIsStampedWithTheCredentialOfTheModelThatRanItsBrowserTurns(t *testing.T) {
 	for arm, want := range map[Arm]string{ArmA: "subscription", ArmB1: "key", ArmB2: "subscription", ArmC: "subscription"} {
-		var run Run
+		run := Run{Conditions: Conditions{BrowserModel: map[Arm]string{ArmB1: "meta/muse-spark-1.3-contributor", ArmB2: "claude-sub/claude-sonnet-5"}[arm]}}
 		if err := arm.Stamp(&run, "2026-09-29", "fixture-machine"); err != nil {
 			t.Fatal(err)
 		}
@@ -68,7 +68,7 @@ func TestTheReportComparesBrowserCredentialsAndRefusesTwoMainOnes(t *testing.T) 
 		t.Fatal(err)
 	}
 	t.Log("\n" + table)
-	for _, want := range []string{"browser credential |", "| A | 12 of 12 |", "| C | 5 of 12 |", "| B1 | 11 of 12 |", "| subscription | key |"} {
+	for _, want := range []string{"browser credential |", "| A | as set | 12 of 12 |", "| C | as set | 5 of 12 |", "| B1 | as set | 11 of 12 |", "| subscription | key |"} {
 		if !strings.Contains(table, want) {
 			t.Errorf("the table lacks %q", want)
 		}

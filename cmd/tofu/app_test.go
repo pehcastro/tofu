@@ -2546,6 +2546,32 @@ func TestTheSubAgentDriverHandsTheBrowserToolsToASubAgentOnTheBrowserModel(t *te
 	}
 }
 
+func TestOnlyTheSubAgentDriverOffersTheBrowserSubAgentToSpawn(t *testing.T) {
+	emptyHome(t)
+	for driver, offered := range map[string]bool{settingspkg.DriverSteps: false, settingspkg.DriverGoal: false, settingspkg.DriverSubagent: true} {
+		opts := armOpts(t)
+		store, err := openSettings(opts.dir)
+		if err == nil {
+			err = store.SetText(settingspkg.Project, settingspkg.BrowserDriver, driver)
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		built, err := buildTestRunTools(opts.dir, opts.toolSet)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var spawnable []string
+		for _, definition := range offeredToSpawn(opts.dir, scanSubAgents(opts.dir, built)).Definitions {
+			spawnable = append(spawnable, definition.Name)
+		}
+		t.Logf("browserDriver %s: the spawnable agents are %v", driver, spawnable)
+		if slices.Contains(spawnable, "browser") != offered || !slices.Contains(spawnable, "research") {
+			t.Fatalf("browserDriver %s: the spawnable agents are %v, want browser offered = %v, and the others kept", driver, spawnable, offered)
+		}
+	}
+}
+
 func mustLibrary(t *testing.T, dir string) models.Library {
 	t.Helper()
 	library, err := modelLibrary(dir)

@@ -557,7 +557,7 @@ type composedRun struct {
 func composeRun(opts runOpts, built []turn.Tool, run runtime) (composedRun, error) {
 	found := make(chan subagent.Found, 1)
 	if !opts.noSubAgents && opts.toolSet != toolSetThree && run.open != nil {
-		go func() { found <- scanSubAgents(opts.dir, built) }()
+		go func() { found <- offeredToSpawn(cmp.Or(opts.dir, "."), scanSubAgents(opts.dir, built)) }()
 	} else {
 		found <- subagent.Found{}
 	}
@@ -945,9 +945,20 @@ func browserModel(dir string) (turn.Model, string, error) {
 	return subscriptionModel{opts}, slug + " from " + key, nil
 }
 
+func isBrowserAgent(definition subagent.Definition) bool {
+	return definition.Name == browserAgent && definition.Origin == "library"
+}
+
+func offeredToSpawn(dir string, found subagent.Found) subagent.Found {
+	if settingText(dir, settingspkg.BrowserDriver, nil) != settingspkg.DriverSubagent {
+		found.Definitions = slices.DeleteFunc(found.Definitions, isBrowserAgent)
+	}
+	return found
+}
+
 func onBrowserModel(dir string, found subagent.Found, catalog models.Library) subagent.Found {
+	at := slices.IndexFunc(found.Definitions, isBrowserAgent)
 	slug, key := browserSlug(dir)
-	at := slices.IndexFunc(found.Definitions, func(d subagent.Definition) bool { return d.Name == browserAgent && d.Origin == "library" })
 	if slug == "" || at < 0 || found.Definitions[at].Runs == subagent.RunsRefused {
 		return found
 	}
