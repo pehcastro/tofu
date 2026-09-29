@@ -39,7 +39,7 @@ func (RunningModel) Ask(ctx context.Context, request llm.Request) (llm.Decision,
 }
 
 func readsTheBrowser(tool string) bool {
-	return tool == "browser_tabs" || tool == "browser_read"
+	return tool == "browser_tabs" || tool == "browser_read" || tool == "browser_observe"
 }
 
 type Caps struct {

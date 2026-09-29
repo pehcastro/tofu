@@ -1,6 +1,7 @@
 package browser
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -123,6 +124,37 @@ func (d *Driver) state(deadline time.Time) (pageState, []int, error) {
 		ids[i] = tab.ID
 	}
 	return page, ids, err
+}
+
+const Unchanged = "the page did not change"
+
+func (m Moved) String() string {
+	switch {
+	case m.Covered != "":
+		return "did not run, covered by " + m.Covered
+	case m.Opened != 0:
+		return fmt.Sprintf("opened tab %d, which the next actions use", m.Opened)
+	case m.URLChanged:
+		return "the url changed"
+	case m.PageChanged && m.Value != "":
+		return "the page changed, the field reads " + strconv.Quote(m.Value)
+	case m.PageChanged:
+		return "the page changed"
+	}
+	return Unchanged
+}
+
+func (d *Driver) Use(tab int) {
+	if tab != d.Tab {
+		d.Tab, d.refs = tab, refMap{next: d.refs.next}
+	}
+}
+
+func (d *Driver) Fingerprint() (string, error) {
+	var page pageState
+	err := d.value(time.Now().Add(konst.BrowserActTimeoutMillis*time.Millisecond), false, evaluate(pageStateScript), &page)
+	text := sha256.Sum256([]byte(page.Text))
+	return fmt.Sprintf("%s %d %x", page.URL, page.Count, text[:8]), err
 }
 
 func (d *Driver) Do(move Move) (Moved, error) {

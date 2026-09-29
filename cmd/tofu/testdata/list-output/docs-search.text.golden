@@ -50,8 +50,8 @@ Docs · "change the colours"                                           31 matche
     → tofu settings set browser drive
   take the browser tools away from the model
     → tofu settings set browser off
-  let the model pick each browser step instead of jev
-    → tofu settings set browserChooser model
+  let jev pick each browser step toward a whole goal instead of the model
+    → tofu settings set browserDriver goal
   Files tofu reads and writes
     → tofu docs files
   Instruction files

@@ -9,11 +9,13 @@ import (
 	"maps"
 	"net/url"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 
 	"tofu/internal/browser"
 	"tofu/internal/browser/jevloop"
+	"tofu/internal/konst"
 	"tofu/internal/llm"
 	"tofu/internal/settings"
 	"tofu/internal/turn"
@@ -24,36 +26,56 @@ type browserSession struct {
 	home   string
 	mu     sync.Mutex
 	client *browser.Client
-	pages  map[int]browser.Page
+	driver *browser.Driver
+	recent []string
 	hosts  map[string]int
 }
 
 type BrowserSettings struct {
-	Home    string
-	Mode    string
-	Chooser string
-	Steps   int
-	Judge   func() (jevloop.Jev, error)
-	Model   func() (turn.Model, string, error)
+	Home   string
+	Mode   string
+	Driver string
+	Steps  int
+	Judge  func() (jevloop.Jev, error)
+	Model  func() (turn.Model, string, error)
 }
 
 func NewBrowser(config BrowserSettings) ([]turn.Tool, error) {
-	session := &browserSession{home: config.Home, pages: map[int]browser.Page{}, hosts: map[string]int{}}
-	switch config.Mode {
-	case settings.BrowserOff:
+	if config.Mode == settings.BrowserOff {
 		return nil, nil
+	}
+	session := &browserSession{home: config.Home, hosts: map[string]int{}}
+	var reads, acts turn.Tool
+	switch config.Driver {
+	case settings.DriverSteps:
+		reads, acts = browserObserve{session}, browserAct{session}
+	case settings.DriverGoal:
+		reads, acts = browserRead{session}, browserDo{session, config.Steps, config.Judge, config.Model}
+	default:
+		return nil, fmt.Errorf("the %s setting is %q, and it takes %s or %s", settings.BrowserDriver, config.Driver, settings.DriverSteps, settings.DriverGoal)
+	}
+	switch config.Mode {
 	case settings.BrowserRead:
-		return []turn.Tool{browserTabs{session}, browserRead{session}}, nil
+		return []turn.Tool{browserTabs{session}, reads}, nil
 	case settings.BrowserDrive:
-		switch config.Chooser {
-		case settings.ChooserJev:
-			return []turn.Tool{browserTabs{session}, browserRead{session}, browserDo{session, config.Steps, config.Judge, config.Model}}, nil
-		case settings.ChooserModel:
-			return []turn.Tool{browserTabs{session}, browserRead{session}, browserAct{session}}, nil
-		}
-		return nil, fmt.Errorf("the browserChooser setting is %q, and it takes %s or %s", config.Chooser, settings.ChooserJev, settings.ChooserModel)
+		return []turn.Tool{browserTabs{session}, reads, acts}, nil
 	}
 	return nil, fmt.Errorf("the browser setting is %q, and it takes %s, %s or %s", config.Mode, settings.BrowserOff, settings.BrowserRead, settings.BrowserDrive)
+}
+
+func (s *browserSession) drive(tab int, use func(*browser.Driver) error) error {
+	return s.with(func(client *browser.Client) error {
+		if s.driver == nil || s.driver.Client != client {
+			s.driver = &browser.Driver{Client: client}
+		}
+		if tab != 0 {
+			s.driver.Use(tab)
+		}
+		if s.driver.Tab == 0 {
+			return errors.New("name the tab: browser_tabs lists the tabs tofu can reach")
+		}
+		return use(s.driver)
+	})
 }
 
 func (s *browserSession) with(use func(*browser.Client) error) error {
@@ -138,9 +160,6 @@ func (t browserRead) Run(ctx context.Context, raw json.RawMessage) (turn.Result,
 	var page browser.Page
 	err := t.session.with(func(client *browser.Client) (err error) {
 		page, err = browser.SharedTab{Client: client, ID: args.Tab}.Snapshot(ctx)
-		if err == nil {
-			t.session.pages[args.Tab] = page
-		}
 		return err
 	})
 	if err != nil {
@@ -185,6 +204,51 @@ func driveTab(client *browser.Client, id int) (browser.Tab, error) {
 	return browser.Tab{}, fmt.Errorf("tofu cannot reach tab %d: browser_tabs lists the tabs it can", id)
 }
 
+const howToBrowse = "observe the tab first, act on the refs it shows, and observe again after anything changes. " +
+	"close a popup, a cookie banner or a dialog in the way before anything else. apply the page's filters before reading its results. " +
+	"do not open a tab to research: work in the tab you have. a sponsored or ad result is not the organic one. "
+
+type browserObserve struct{ session *browserSession }
+
+func (browserObserve) Name() string { return "browser_observe" }
+
+func (browserObserve) Definition() llm.Tool {
+	return llm.Tool{
+		Name: "browser_observe",
+		Description: "shows one Chrome tab as an accessibility snapshot: a line a node, indented, as role \"name\" [state, ref=e5], a value after a colon. " +
+			"a ref names one element for browser_act. interactive, the default, shows only nodes with a ref; false shows the whole tree. " +
+			"scrollable marks a container browser_act can scroll by its ref. * marks a ref new since the last observe of this page. " +
+			"tab defaults to the tab tofu last worked in. " + howToBrowse + everythingFetchedIsUntrusted,
+		Parameters: map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"tab":         map[string]any{"type": "integer"},
+				"interactive": map[string]any{"type": "boolean"},
+			},
+		},
+	}
+}
+
+func (t browserObserve) Run(_ context.Context, raw json.RawMessage) (turn.Result, error) {
+	var args struct {
+		Tab         int   `json:"tab"`
+		Interactive *bool `json:"interactive"`
+	}
+	if err := json.Unmarshal(raw, &args); err != nil {
+		return turn.Result{}, fmt.Errorf("browser_observe: arguments are not the expected shape: %w", err)
+	}
+	var snapshot string
+	err := t.session.drive(args.Tab, func(driver *browser.Driver) (err error) {
+		args.Tab = driver.Tab
+		snapshot, err = driver.Observe(args.Interactive == nil || *args.Interactive)
+		return err
+	})
+	if err != nil {
+		return turn.Result{}, fmt.Errorf("browser_observe: %w", err)
+	}
+	return turn.Result{Content: web.Untrusted(fmt.Sprintf("Chrome tab %d", args.Tab), snapshot), Command: fmt.Sprintf("tab %d observe", args.Tab)}, nil
+}
+
 type browserAct struct{ session *browserSession }
 
 func (browserAct) Name() string { return "browser_act" }
@@ -192,101 +256,145 @@ func (browserAct) Name() string { return "browser_act" }
 func (browserAct) Definition() llm.Tool {
 	return llm.Tool{
 		Name: "browser_act",
-		Description: "runs one step in a Chrome tab: CLICK, TYPE_TEXT or SELECT on a control numbered in the latest browser_read of that tab, or SCROLL_UP, SCROLL_DOWN or WAIT. " +
-			"text is what TYPE_TEXT types, or the option SELECT picks. every step changes the page, so read the tab again before the next one. " +
-			whatTofuReaches,
+		Description: fmt.Sprintf("runs up to %d actions in one Chrome tab, in order, each on a ref from the latest browser_observe. ", konst.BrowserActBatchMax) +
+			"click takes a ref. fill takes a ref and the text as value, and answers the value it reads back. select takes a ref and the option as value. " +
+			"press takes a key as value, Enter or Escape or a letter. scroll takes up or down as value, and a ref to scroll that container instead of the page. " +
+			"navigate sends the tab to the url in value, and works only on a tab tofu opened. open opens the url in value in a new tab of tofu's own. back goes back, on a tab tofu opened. " +
+			"wait takes a number of milliseconds, or text to wait for, as value. " +
+			"the batch stops at the first action that changes the url or opens a tab, and says which actions it skipped. " +
+			"a click that another element covers does not run, and says what covers it. the same action on an unchanged page is flagged, then refused. " +
+			"the result ends with a fresh interactive snapshot of the tab it ends in. " + howToBrowse + whatTofuReaches,
 		Parameters: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
-				"tab":     map[string]any{"type": "integer"},
-				"element": map[string]any{"type": "integer"},
-				"op":      map[string]any{"type": "string", "enum": []string{"CLICK", "TYPE_TEXT", "SELECT", "SCROLL_UP", "SCROLL_DOWN", "WAIT"}},
-				"text":    map[string]any{"type": "string"},
+				"tab": map[string]any{"type": "integer"},
+				"actions": map[string]any{
+					"type":     "array",
+					"maxItems": konst.BrowserActBatchMax,
+					"items": map[string]any{
+						"type": "object",
+						"properties": map[string]any{
+							"ref":    map[string]any{"type": "string"},
+							"action": map[string]any{"type": "string", "enum": []string{"click", "fill", "select", "press", "scroll", "navigate", "open", "back", "wait"}},
+							"value":  map[string]any{"type": "string"},
+						},
+						"required": []string{"action"},
+					},
+				},
 			},
-			"required": []string{"tab", "op"},
+			"required": []string{"actions"},
 		},
 	}
 }
 
 type browserStep struct {
-	Tab     int    `json:"tab"`
-	Element int    `json:"element"`
-	Op      string `json:"op"`
-	Text    string `json:"text"`
+	Ref    string `json:"ref"`
+	Action string `json:"action"`
+	Value  string `json:"value"`
 }
 
-func (t browserAct) Run(ctx context.Context, raw json.RawMessage) (turn.Result, error) {
-	var args browserStep
+func (s browserStep) move() browser.Move {
+	if s.Action == "open" {
+		return browser.Move{Kind: browser.MoveNavigate, Value: s.Value, NewTab: true}
+	}
+	return browser.Move{Ref: s.Ref, Kind: browser.MoveKind(s.Action), Value: s.Value}
+}
+
+func (s browserStep) normalised() string {
+	switch s.Action {
+	case "click":
+		return "click " + s.Ref
+	case "fill":
+		return "fill " + s.Ref + " " + strings.ToLower(strings.TrimSpace(s.Value))
+	case "navigate", "open":
+		return "navigate " + s.Value
+	case "scroll":
+		return "scroll " + cmp.Or(s.Value, "down") + " " + s.Ref
+	}
+	return s.Action + " " + s.Ref + " " + s.Value
+}
+
+func (s *browserSession) repeats(key string) int {
+	count := 0
+	for _, recent := range s.recent {
+		if recent == key {
+			count++
+		}
+	}
+	return count
+}
+
+func (s browserStep) String() string {
+	said := strings.TrimSpace(s.Action + " " + s.Ref)
+	if s.Value != "" {
+		said += " " + strconv.Quote(s.Value)
+	}
+	return said
+}
+
+func (t browserAct) Run(_ context.Context, raw json.RawMessage) (turn.Result, error) {
+	var args struct {
+		Tab     int           `json:"tab"`
+		Actions []browserStep `json:"actions"`
+	}
 	if err := json.Unmarshal(raw, &args); err != nil {
 		return turn.Result{}, fmt.Errorf("browser_act: arguments are not the expected shape: %w", err)
 	}
-	op, err := browser.ParseOp(args.Op)
-	if err != nil {
-		return turn.Result{}, fmt.Errorf("browser_act: %w", err)
+	if len(args.Actions) == 0 || len(args.Actions) > konst.BrowserActBatchMax {
+		return turn.Result{}, fmt.Errorf("browser_act: give 1 to %d actions, not %d", konst.BrowserActBatchMax, len(args.Actions))
 	}
-	var stale browser.Stale
-	err = t.session.with(func(client *browser.Client) error {
-		if _, err := driveTab(client, args.Tab); err != nil {
-			return err
+	var report strings.Builder
+	var snapshot string
+	ran := 0
+	err := t.session.drive(args.Tab, func(driver *browser.Driver) error {
+		for _, step := range args.Actions {
+			fingerprint, err := driver.Fingerprint()
+			if err != nil {
+				return err
+			}
+			key := step.normalised() + " on " + fingerprint
+			repeats := t.session.repeats(key) + 1
+			if repeats >= konst.BrowserRepeatRefuse {
+				fmt.Fprintf(&report, "%d. %s: refused, it would be the %dth time on a page that did not change: try another ref, another action, or observe what blocks it\n", ran+1, step, repeats)
+				break
+			}
+			t.session.recent = append(t.session.recent, key)
+			t.session.recent = t.session.recent[max(0, len(t.session.recent)-konst.BrowserLoopWindow):]
+			moved, err := driver.Do(step.move())
+			line := moved.String()
+			switch {
+			case err != nil:
+				line = "failed: " + err.Error()
+			case repeats < konst.BrowserRepeatNotice:
+			case line == browser.Unchanged:
+				line = fmt.Sprintf("repeated %d times, the page did not change", repeats)
+			default:
+				line += fmt.Sprintf(", after %d tries on the same page", repeats)
+			}
+			fmt.Fprintf(&report, "%d. %s: %s\n", ran+1, step, line)
+			ran++
+			if err != nil || moved.Covered != "" || moved.URLChanged || moved.Opened != 0 {
+				break
+			}
 		}
-		page, read := t.session.pages[args.Tab]
-		if !read {
-			return fmt.Errorf("tab %d has no browser_read since its last step: read it, then act on that table", args.Tab)
-		}
-		action, err := stepOn(page, op, args)
-		if err != nil {
-			return err
-		}
-		delete(t.session.pages, args.Tab)
-		stale, err = browser.SharedTab{Client: client, ID: args.Tab}.Act(ctx, page, action)
+		var err error
+		args.Tab = driver.Tab
+		snapshot, err = driver.Observe(true)
 		return err
 	})
 	if err != nil {
 		return turn.Result{}, fmt.Errorf("browser_act: %w", err)
 	}
-	command := fmt.Sprintf("tab %d %s", args.Tab, op)
-	if targets(op) {
-		command += fmt.Sprintf(" element %d", args.Element)
+	fmt.Fprintf(&report, "ran %d of %d", ran, len(args.Actions))
+	if skipped := len(args.Actions) - ran; skipped > 0 {
+		fmt.Fprintf(&report, ", %d skipped: observe the page as it is now and act again", skipped)
 	}
-	if stale != browser.StaleNone {
-		return turn.Result{Content: fmt.Sprintf("tab %d: %s did not run, the target is %s: read it again", args.Tab, op, stale), Command: command}, nil
-	}
-	return turn.Result{Content: fmt.Sprintf("tab %d ran %s: read it again to see what changed", args.Tab, op), Command: command}, nil
+	report.WriteString("\n\n")
+	return turn.Result{Content: report.String() + web.Untrusted(fmt.Sprintf("Chrome tab %d", args.Tab), snapshot), Command: fmt.Sprintf("tab %d act %d", args.Tab, ran)}, nil
 }
 
 func targets(op browser.Op) bool {
 	return op == browser.OpClick || op == browser.OpTypeText || op == browser.OpSelect
-}
-
-func stepOn(page browser.Page, op browser.Op, args browserStep) (browser.Action, error) {
-	switch op {
-	case browser.OpScrollUp, browser.OpScrollDown, browser.OpWait:
-		return browser.Action{Op: op}, nil
-	case browser.OpDone, browser.OpBlocked:
-		return browser.Action{}, fmt.Errorf("%s ends a browser task and is not a step a tab can run", op)
-	case browser.OpClick, browser.OpTypeText, browser.OpSelect:
-	}
-	element, found := page.Element(args.Element)
-	switch {
-	case !found:
-		return browser.Action{}, fmt.Errorf("tab %d has no element %d in its last read", args.Tab, args.Element)
-	case !op.Accepts(element.Role):
-		return browser.Action{}, fmt.Errorf("%s does not take a %s, and element %d is one", op, element.Role, args.Element)
-	case op == browser.OpTypeText && element.ReadOnly:
-		return browser.Action{}, fmt.Errorf("element %d is read-only", args.Element)
-	case op == browser.OpTypeText:
-		return browser.Action{Op: op, Element: element.Index, Value: args.Text}, nil
-	case op == browser.OpSelect:
-		labels := make([]string, len(element.Options))
-		for i, option := range element.Options {
-			if args.Text == option.Label || args.Text == option.Value {
-				return browser.Action{Op: op, Element: element.Index, Value: option.Value}, nil
-			}
-			labels[i] = fmt.Sprintf("%q", option.Label)
-		}
-		return browser.Action{}, fmt.Errorf("element %d offers %s, not %q", args.Element, strings.Join(labels, ", "), args.Text)
-	}
-	return browser.Action{Op: op, Element: element.Index}, nil
 }
 
 type browserDo struct {

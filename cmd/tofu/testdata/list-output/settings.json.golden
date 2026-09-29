@@ -220,9 +220,9 @@ exit 0
         "source": "default"
       },
       {
-        "key": "browserChooser",
+        "key": "browserDriver",
         "category": "Browser",
-        "value": "jev",
+        "value": "steps",
         "source": "default"
       },
       {

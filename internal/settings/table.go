@@ -33,6 +33,7 @@ type Spec struct {
 	Choices     []string
 	ListOf      []string
 	Aliases     map[string]string
+	Formerly    string
 	Restart     bool
 	Least, Most int
 	Unit        string
@@ -70,7 +71,7 @@ const (
 	AgentSources           = "agentSources"
 	Skills                 = "skills"
 	Browser                = "browser"
-	BrowserChooser         = "browserChooser"
+	BrowserDriver          = "browserDriver"
 	BrowserSteps           = "browserSteps"
 	BrowserModel           = "browserModel"
 )
@@ -82,8 +83,8 @@ const (
 )
 
 const (
-	ChooserJev   = "jev"
-	ChooserModel = "model"
+	DriverSteps = "steps"
+	DriverGoal  = "goal"
 )
 
 const (
@@ -251,8 +252,8 @@ func Default() []Spec {
 		{Key: subagent.TierDumb.Setting(), Label: "Dumb tier", Description: "the model @dumb names; empty runs the orchestrator's model", Category: "Turn", Kind: Text},
 		{Key: Browser, Label: "Browser", Description: "drive lets the model read your Chrome tabs and click and type in them; read lets it only read them; off offers no browser tool", Category: "Browser", Kind: Text, DefaultText: BrowserDrive,
 			Choices: []string{BrowserOff, BrowserRead, BrowserDrive}},
-		{Key: BrowserChooser, Label: "Browser chooser", Description: "jev picks each step of a browser task; model leaves every step to the turn's own model", Category: "Browser", Kind: Text, DefaultText: ChooserJev,
-			Choices: []string{ChooserJev, ChooserModel}},
+		{Key: BrowserDriver, Label: "Browser driver", Description: "steps gives the model browser_observe and browser_act, to see a tab and act on one ref at a time; goal gives it browser_do, where jev picks each step toward a whole goal", Category: "Browser", Kind: Text, DefaultText: DriverSteps,
+			Choices: []string{DriverSteps, DriverGoal}, Aliases: map[string]string{"jev": DriverGoal, "model": DriverSteps}, Formerly: "browserChooser"},
 		{Key: BrowserSteps, Label: "Browser steps", Description: "how many actions one browser task may take", Category: "Browser", Kind: Int, Default: konst.BrowserStepsDefault,
 			Least: 1, Most: konst.BrowserActionCeiling, Unit: "actions a browser task"},
 		{Key: BrowserModel, Label: "Browser model", Description: "the subscription model a browser task asks for the text to type and for its answer, as source/model; empty takes the dumb tier, then the worker tier, then the turn's own model", Category: "Browser", Kind: Text},

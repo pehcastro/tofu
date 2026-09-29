@@ -40,7 +40,7 @@ func conformanceHome(t *testing.T) {
 
 func conformanceGroups() []conformanceGroup {
 	home := conformanceGroup{fixture: conformanceHome}
-	for _, args := range [][]string{{"version"}, {"doctor"}, {"usage"}, {"usage", "--history"}, {"models"}, {"login", "--status"}, {"reload"}, {"browser"}, {"usage", "--nope"}, {"reload", "--nope"}, {"doctor", "--nope"}, {"version", "--nope"}, {"models", "--nope"}, {"rules"}, {"session"}, {"shells"}} {
+	for _, args := range [][]string{{"version"}, {"doctor"}, {"usage"}, {"usage", "--history"}, {"models"}, {"login", "--status"}, {"reload"}, {"browser"}, {"browser", "observe", "--tab", "7"}, {"usage", "--nope"}, {"reload", "--nope"}, {"doctor", "--nope"}, {"version", "--nope"}, {"models", "--nope"}, {"rules"}, {"session"}, {"shells"}} {
 		home.cases = append(home.cases, conformanceCase{strings.Join(args, " "), args, inProcess})
 	}
 	rules := conformanceGroup{fixture: func(t *testing.T) { outputProject(t) }}
@@ -137,5 +137,10 @@ func TestEveryVerbAndUsageErrorPrintsOneEnvelopeAndNoEscapeUnderNoColour(t *test
 		}
 	}
 	slices.Sort(covered)
+	for _, verb := range []string{"browser", "browser observe"} {
+		if !slices.Contains(covered, verb) {
+			t.Errorf("tofu %s --json is not covered by a case that printed one envelope", verb)
+		}
+	}
 	t.Logf("%d verbs, each checked for one envelope, an empty stderr, the text exit code and no ESC:\n%s", len(covered), strings.Join(covered, "\n"))
 }

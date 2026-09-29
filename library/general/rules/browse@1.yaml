@@ -3,4 +3,4 @@ domain: general
 kind: human
 concern: process_discipline
 role: orchestrator
-text: browsing is browser_do's job: give it the whole goal and a start url in one call, then use its answer. its result names its tab, so a follow-up passes that tab, and a url without a tab opens or reuses a tofu tab. if it comes back blocked, call it once more on the tab it named. act, do not ask the person to open or navigate a page. prefer the site's own search to an ad.
+text: browse in steps. browser_observe the tab, act with browser_act on the refs that snapshot shows, then read the fresh snapshot the act returns before the next step, never a ref from an older one. close a popup or dialog in the way first, and apply the site's filters before reading its results. work in the tab you have and do not open one to research. act, do not ask the person to open or navigate a page. prefer the site's own search to an ad, and a sponsored result is not the organic one.

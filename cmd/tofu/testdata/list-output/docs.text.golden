@@ -25,8 +25,8 @@ browser  how tofu reads and drives your Chrome tabs, the tofu tab group, the
     → tofu settings set browser drive
   take the browser tools away from the model
     → tofu settings set browser off
-  let the model pick each browser step instead of jev
-    → tofu settings set browserChooser model
+  let jev pick each browser step toward a whole goal instead of the model
+    → tofu settings set browserDriver goal
   allow fewer actions in one browser task
     → tofu settings set browserSteps 10
 

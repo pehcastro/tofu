@@ -105,8 +105,8 @@ exit 0
         "do": "tofu settings set browser off"
       },
       {
-        "text": "let the model pick each browser step instead of jev",
-        "do": "tofu settings set browserChooser model"
+        "text": "let jev pick each browser step toward a whole goal instead of the model",
+        "do": "tofu settings set browserDriver goal"
       },
       {
         "text": "Files tofu reads and writes",

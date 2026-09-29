@@ -50,7 +50,7 @@ Turn
 
 Browser
     browser                 drive               default
-    browserChooser          jev                 default
+    browserDriver           steps               default
     browserSteps            30                  default
     browserModel            empty               default
 

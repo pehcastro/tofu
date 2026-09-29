@@ -71,6 +71,14 @@ func (s *Store) reread(scope Scope) error {
 	if err != nil {
 		return err
 	}
+	for _, spec := range s.table {
+		if old, present := texts[spec.Formerly]; present && spec.Formerly != "" {
+			delete(texts, spec.Formerly)
+			if _, set := texts[spec.Key]; !set {
+				texts[spec.Key] = cmp.Or(spec.Aliases[old], old)
+			}
+		}
+	}
 	s.values[scope], s.texts[scope], s.objects[scope] = ints, texts, objects
 	return nil
 }

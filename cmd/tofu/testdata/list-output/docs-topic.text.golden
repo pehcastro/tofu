@@ -19,7 +19,7 @@ What it is
   - Turn: decisionCap, turnMaySpawn, subAgentsPerTurn, subAgentDepth,
     agentSources, modelTier.genius, modelTier.smart, modelTier.worker,
     modelTier.dumb
-  - Browser: browser, browserChooser, browserSteps
+  - Browser: browser, browserDriver, browserSteps
 
 Where it lives
 
@@ -205,10 +205,11 @@ Browser
       one of off, read, drive
       drive lets the model read your Chrome tabs and click and type in them;
       read lets it only read them; off offers no browser tool
-    browserChooser          jev
-      one of jev, model
-      jev picks each step of a browser task; model leaves every step to the
-      turn's own model
+    browserDriver           steps
+      one of steps, goal
+      steps gives the model browser_observe and browser_act, to see a tab and
+      act on one ref at a time; goal gives it browser_do, where jev picks each
+      step toward a whole goal
     browserSteps            30
       1 to 60 actions a browser task
       how many actions one browser task may take

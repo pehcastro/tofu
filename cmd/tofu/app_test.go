@@ -2339,6 +2339,7 @@ func TestEveryToolInTheRunRegistryRecordsACommandThatDoesNotRepeatItsName(t *tes
 		turn.ShellToolName:   {notRunHere: "it stops, restarts or reads a background shell by name, and this test starts none"},
 		"browser_tabs":       {notRunHere: "it dials the browser host, which only Chrome starts"},
 		"browser_read":       {notRunHere: "it dials the browser host, which only Chrome starts"},
+		"browser_observe":    {notRunHere: "it dials the browser host, which only Chrome starts"},
 		"browser_act":        {notRunHere: "it dials the browser host, which only Chrome starts"},
 		"browser_do":         {notRunHere: "it dials the browser host, which only Chrome starts"},
 	}
@@ -2437,29 +2438,69 @@ func TestTofuDriveTakesNoDocsAndTheAppItDrivesOffersNoDocs(t *testing.T) {
 func TestTheBrowserSettingsReachTheToolsARunIsGiven(t *testing.T) {
 	emptyHome(t)
 	for _, arm := range []struct {
-		mode, chooser string
-		want          []string
+		mode, driver string
+		want         []string
 	}{
-		{"", "", []string{"browser_tabs", "browser_read", "browser_do"}},
-		{settingspkg.BrowserRead, "", []string{"browser_tabs", "browser_read"}},
-		{settingspkg.BrowserDrive, "", []string{"browser_tabs", "browser_read", "browser_do"}},
-		{settingspkg.BrowserDrive, settingspkg.ChooserModel, []string{"browser_tabs", "browser_read", "browser_act"}},
+		{"", "", []string{"browser_tabs", "browser_observe", "browser_act"}},
+		{settingspkg.BrowserRead, "", []string{"browser_tabs", "browser_observe"}},
+		{settingspkg.BrowserDrive, settingspkg.DriverGoal, []string{"browser_tabs", "browser_read", "browser_do"}},
+		{settingspkg.BrowserDrive, "jev", []string{"browser_tabs", "browser_read", "browser_do"}},
+		{settingspkg.BrowserDrive, "model", []string{"browser_tabs", "browser_observe", "browser_act"}},
 	} {
 		opts := armOpts(t)
 		store, err := openSettings(opts.dir)
 		if err == nil && arm.mode != "" {
 			err = store.SetText(settingspkg.Project, settingspkg.Browser, arm.mode)
 		}
-		if err == nil && arm.chooser != "" {
-			err = store.SetText(settingspkg.Project, settingspkg.BrowserChooser, arm.chooser)
+		if err == nil && arm.driver != "" {
+			err = store.SetText(settingspkg.Project, settingspkg.BrowserDriver, arm.driver)
 		}
 		if err != nil {
 			t.Fatal(err)
 		}
 		offered := slices.DeleteFunc(toolNames(t, opts), func(name string) bool { return !strings.HasPrefix(name, "browser_") })
-		t.Logf("browser=%q browserChooser=%q offers %v", arm.mode, arm.chooser, offered)
+		t.Logf("browser=%q browserDriver=%q offers %v", arm.mode, arm.driver, offered)
 		if !slices.Equal(offered, arm.want) {
-			t.Fatalf("browser=%q browserChooser=%q offers %v, want %v", arm.mode, arm.chooser, offered, arm.want)
+			t.Fatalf("browser=%q browserDriver=%q offers %v, want %v", arm.mode, arm.driver, offered, arm.want)
+		}
+	}
+}
+
+func TestAnOldBrowserChooserIsReadAsItsDriverAndTheNextSaveWritesTheNewKey(t *testing.T) {
+	emptyHome(t)
+	for old, arm := range map[string]struct {
+		driver string
+		want   []string
+	}{
+		"model": {settingspkg.DriverSteps, []string{"browser_tabs", "browser_observe", "browser_act"}},
+		"jev":   {settingspkg.DriverGoal, []string{"browser_tabs", "browser_read", "browser_do"}},
+	} {
+		opts := armOpts(t)
+		store, err := openSettings(opts.dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		path := store.Path(settingspkg.Project)
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(`{"browserChooser":"`+old+`"}`), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		offered := slices.DeleteFunc(toolNames(t, opts), func(name string) bool { return !strings.HasPrefix(name, "browser_") })
+		if !slices.Equal(offered, arm.want) {
+			t.Fatalf("a file holding browserChooser %q offers %v, want %v", old, offered, arm.want)
+		}
+		if store, err = openSettings(opts.dir); err == nil {
+			err = store.SetText(settingspkg.Project, settingspkg.Browser, settingspkg.BrowserDrive)
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		written, _ := os.ReadFile(path)
+		t.Logf("browserChooser %q offers %v and saves as\n%s", old, offered, written)
+		if strings.Contains(string(written), "browserChooser") || !strings.Contains(string(written), `"browserDriver": "`+arm.driver+`"`) {
+			t.Fatalf("the next save of a file holding browserChooser %q wrote\n%s\nwant browserDriver %q and no browserChooser", old, written, arm.driver)
 		}
 	}
 }

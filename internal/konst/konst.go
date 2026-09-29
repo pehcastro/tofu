@@ -201,6 +201,10 @@ const (
 	BrowserWaitMaxMillis        = 10000
 	BrowserScrollPixels         = 300
 	BrowserCursorTextRunes      = 100
+	BrowserActBatchMax          = 5
+	BrowserLoopWindow           = 20
+	BrowserRepeatNotice         = 3
+	BrowserRepeatRefuse         = 5
 )
 
 const (

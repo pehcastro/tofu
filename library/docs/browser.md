@@ -15,38 +15,27 @@ Chrome Web Store.
 The extension does nothing to a tab until tofu first uses it. Then it
 attaches Chrome's debugger, and Chrome shows its bar saying so.
 
-The model gets these tools:
+The model gets these tools under `browserDriver` `steps`, the default:
 
 - `browser_tabs` lists your open tabs, with their title and address.
-- `browser_read` reads one tab: its visible text and a numbered table of the
-  controls on screen, with each link's address. Password, file and hidden
-  fields are never listed. Reading never changes the page.
-- `browser_do` does a whole goal in one call and answers it. The model gives
-  it the goal and a url, a tab to work in, or both:
-  - a url alone opens a background tab of tofu's own and waits for the page
-    to load, or reuses the tab tofu already has on that site;
-  - a tab alone works in that tab as it is;
-  - a tab and a url send a tab tofu opened to the url. Your own tabs are
-    never sent anywhere.
+- `browser_observe` shows one tab as an accessibility snapshot, a line a
+  node, such as `- button "Buscar" [ref=e5]`, where a ref names one element.
+  `scrollable` marks a container it can scroll, and `*` a ref new since the
+  last look at the same page. Observing never changes the page.
+- `browser_act` runs up to 5 actions in one tab, each on a ref: click, fill,
+  select, press, scroll, navigate, open, back or wait. A covered click does
+  not run and says what covers it. The batch stops at the first action that
+  changes the address or opens a tab, says what it skipped, and ends with a
+  fresh snapshot. The third same action on an unchanged page says
+  `repeated 3 times, the page did not change`; the fifth is refused.
 
-  Jev, a typed decision model, picks each step: a click, typing, choosing an
-  option, a scroll, or a wait, never on an empty page. It stops when Jev
-  says done or blocked, after three steps that changed nothing, or when
-  `browserSteps` runs out. A tab a click opens joins the tofu group and the
-  task carries on there. The browser model writes the text a field needs,
-  then answers from every page the task saw, and the result names its tab.
-  A tab tofu opened for a task that took no step is closed.
-- `browser_act` runs one step in a tab, which the model picks itself from its
-  last `browser_read`.
+Under `browserDriver` `goal`, the model gets `browser_read`, a tab's text
+and a numbered table of its controls, and `browser_do`, which takes a whole
+goal with a url or a tab and answers it. Jev picks each step, one ledger row
+under `browser_step`, until done, blocked, or `browserSteps` runs out.
 
-The model is given `browser_do` or `browser_act`, never both, and only when
-the `browser` setting is `drive`; `browserChooser` picks which.
-`browser_do` takes `values`, a map from a field's label, placeholder or name
-to the exact text to type, for instance `{"Guest name": "Ada"}`.
-
-Each Jev pick is one row in the decision ledger, under `browser_step`. With
-no Jev key, `browser_do` runs nothing and says so. Reading never goes
-through the gate.
+Only `browser` `drive` gives `browser_act` or `browser_do`. Observing and
+reading never go through the gate.
 
 What a page says is treated as text to read, never as an instruction. tofu
 never closes or navigates a tab it did not open, runs JavaScript, a selector or an address
@@ -88,10 +77,11 @@ It writes the extension, registers tofu with Chrome, and prints the rest:
 The settings:
 
 - `browser`: `off`, `read` or `drive`, default `drive`. `read` gives only
-  `browser_tabs` and `browser_read`. It is read when tofu opens.
-- `browserChooser`: jev or model, who picks each step of a browser task. The
-  default is jev, which gives the model `browser_do`. model gives it
-  `browser_act` instead, and the model picks every step itself.
+  `browser_tabs` and the reading tool. It is read when tofu opens.
+- `browserDriver`: `steps`, the default, gives the model `browser_observe`
+  and `browser_act`, and it picks every step itself. `goal` gives it
+  `browser_do`, where Jev picks each step toward the whole goal. The old
+  values `model` and `jev` are read as `steps` and `goal`.
 - `browserSteps`: how many actions one `browser_do` task may take, 1 to 60.
   The default is 30.
 - `browserModel`: the subscription model `browser_do` asks for text and for
@@ -110,6 +100,18 @@ per tab with its id, site and title, `●` on the tabs tofu opened and `○`
 on yours. `--json` prints one document with the tabs in `data.tabs`. With
 no extension running, it prints one `✗` line and `→ tofu browser install`,
 and exits 1. `tofu settings get browser` prints `off`, `read` or `drive`.
+
+The same steps the model takes are verbs, each on one tab:
+
+    tofu browser observe --tab 123
+    tofu browser click e5 --tab 123
+    tofu browser fill e3 "Lisboa" --tab 123
+
+and `select <ref> <option>`, `press <key>`, `scroll [<ref>] [up|down]` and
+`back` the same way. `--all` makes `observe` print the whole tree. An action looks at the tab first, so on a page that has not changed a ref
+from your last `observe` names the same element; it then prints what changed and the fresh
+snapshot. `--json` prints one document with `data.snapshot`, and
+`data.moved` after an action.
 
 ## Undo it
 

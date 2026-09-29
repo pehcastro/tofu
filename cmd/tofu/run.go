@@ -880,12 +880,12 @@ func assembleRunTools(dir, set string, ledger *turn.ReadLedger, bashTool *turn.B
 	home, _ := os.UserHomeDir()
 	settingsDir := cmp.Or(dir, ".")
 	browserTools, browserErr := tools.NewBrowser(tools.BrowserSettings{
-		Home:    home,
-		Mode:    settingText(settingsDir, settingspkg.Browser, nil),
-		Chooser: settingText(settingsDir, settingspkg.BrowserChooser, nil),
-		Steps:   settingInt(settingsDir, settingspkg.BrowserSteps, nil),
-		Judge:   func() (jevloop.Jev, error) { return browserJudge(dir) },
-		Model:   func() (turn.Model, string, error) { return browserModel(settingsDir) },
+		Home:   home,
+		Mode:   settingText(settingsDir, settingspkg.Browser, nil),
+		Driver: settingText(settingsDir, settingspkg.BrowserDriver, nil),
+		Steps:  settingInt(settingsDir, settingspkg.BrowserSteps, nil),
+		Judge:  func() (jevloop.Jev, error) { return browserJudge(dir) },
+		Model:  func() (turn.Model, string, error) { return browserModel(settingsDir) },
 	})
 	if err := cmp.Or(webErr, browserErr); err != nil {
 		return nil, nil, err

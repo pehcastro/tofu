@@ -59,30 +59,45 @@ func hostVerb(origin string, in io.Reader, out, errOut io.Writer) int {
 }
 
 func browserVerb(args []string, out, errOut io.Writer) int {
-	asJSON := slices.Contains(args, jsonFlag)
-	args = slices.DeleteFunc(slices.Clone(args), func(arg string) bool { return arg == jsonFlag })
+	asJSON, all := slices.Contains(args, jsonFlag), slices.Contains(args, "--all")
+	args = slices.DeleteFunc(slices.Clone(args), func(arg string) bool { return arg == jsonFlag || arg == "--all" })
+	tab, tabErr := 0, error(nil)
+	if at := slices.Index(args, "--tab"); at >= 0 {
+		tabErr = errors.New("--tab takes a tab id")
+		if at+1 < len(args) {
+			tab, tabErr = strconv.Atoi(args[at+1])
+		}
+		args = slices.Delete(args, at, min(at+2, len(args)))
+	}
 	flags := flag.NewFlagSet("browser", flag.ContinueOnError)
 	flags.SetOutput(errOut)
 	hostsKey := flags.String("hosts-key", browser.ChromeHostsKey, "")
 	err := flags.Parse(args)
-	verb, operand := flags.Arg(0), flags.Arg(1)
+	verb, operands := flags.Arg(0), flags.Args()[min(1, flags.NArg()):]
 	page := cli.Detect(out, os.Environ())
 	o := browserOutput{page: page, asJSON: asJSON, verb: strings.TrimSpace("browser " + verb), out: out, errOut: errOut}
 	if err == nil && verb == "bench" {
-		return o.bench(flags.Args()[1:])
+		return o.bench(operands)
 	}
-	takesOperand := verb == "open" || verb == "close"
+	arity, known := map[string][2]int{"": {0, 0}, "tabs": {0, 0}, "install": {0, 0}, "uninstall": {0, 0}, "open": {1, 1}, "close": {1, 1},
+		"observe": {0, 0}, "click": {1, 1}, "fill": {2, 2}, "select": {2, 2}, "press": {1, 1}, "scroll": {0, 2}, "back": {0, 0}}[verb]
+	stepVerb := slices.Contains([]string{"observe", "click", "fill", "select", "press", "scroll", "back"}, verb)
+	operand := strings.Join(operands, " ")
 	tabID, badID := strconv.Atoi(operand)
-	if err != nil || flags.NArg() > 2 || takesOperand != (operand != "") || (verb == "close" && badID != nil) {
-		_, _ = fmt.Fprintln(errOut, "usage: tofu browser [install | uninstall | open <url> | close <tab id> | bench [--jev] [--n 12] [--rows file]] [--json]")
+	if err != nil || tabErr != nil || known && (len(operands) < arity[0] || len(operands) > arity[1]) || verb == "close" && badID != nil || stepVerb && tab == 0 {
+		_, _ = fmt.Fprintln(errOut, "usage: tofu browser [install | uninstall | tabs | open <url> | close <tab id> | bench [--jev] [--n 12] [--rows file]] [--json]\n"+
+			"       tofu browser observe [--all] | click <ref> | fill <ref> <text> | select <ref> <option> | press <key> | scroll [<ref>] [up|down] | back   --tab <id> [--json]")
 		return exitUsage
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return o.fail(err)
 	}
+	if stepVerb {
+		return o.step(home, tab, verb, operands, all)
+	}
 	switch verb {
-	case "":
+	case "", "tabs":
 		var tabs []browser.Tab
 		var builds *browser.Builds
 		err := withBrowser(home, func(client *browser.Client) (err error) {
@@ -132,8 +147,63 @@ func browserVerb(args []string, out, errOut io.Writer) int {
 		removed := removedExtension(home)
 		return o.show(removed, extensionPage(page, removed))
 	}
-	_, _ = fmt.Fprintf(errOut, "tofu browser: unknown argument %q: use install, uninstall, open, close, bench, or nothing\n", verb)
+	_, _ = fmt.Fprintf(errOut, "tofu browser: unknown argument %q: use install, uninstall, tabs, open, close, observe, click, fill, select, press, scroll, back, bench, or nothing\n", verb)
 	return exitUsage
+}
+
+func (o browserOutput) step(home string, tab int, verb string, operands []string, all bool) int {
+	move := browser.Move{Kind: browser.MoveKind(verb)}
+	switch verb {
+	case "click":
+		move.Ref = operands[0]
+	case "fill", "select":
+		move.Ref, move.Value = operands[0], operands[1]
+	case "press":
+		move.Value = operands[0]
+	case "scroll":
+		for _, operand := range operands {
+			if operand == "up" || operand == "down" {
+				move.Value = operand
+			} else {
+				move.Ref = operand
+			}
+		}
+	}
+	var snapshot string
+	var moved *browser.Moved
+	err := withBrowser(home, func(client *browser.Client) error {
+		driver := &browser.Driver{Client: client, Tab: tab}
+		var err error
+		if verb != "observe" {
+			if _, err = driver.Observe(true); err == nil {
+				var did browser.Moved
+				did, err = driver.Do(move)
+				moved = &did
+			}
+		}
+		if err == nil {
+			snapshot, err = driver.Observe(verb != "observe" || !all)
+		}
+		tab = driver.Tab
+		return err
+	})
+	if err != nil {
+		return o.fail(err)
+	}
+	var lines []string
+	if moved != nil {
+		mark := cli.Changed
+		if moved.Covered != "" {
+			mark = cli.Warn
+		}
+		lines = append(lines, o.page.Glyph(mark)+" "+strings.TrimSpace(verb+" "+strings.Join(operands, " "))+": "+moved.String(), "")
+	}
+	lines = append(lines, cli.Indent(strings.Split(strings.TrimSuffix(snapshot, "\n"), "\n")...)...)
+	return o.show(struct {
+		Tab      int            `json:"tab"`
+		Moved    *browser.Moved `json:"moved,omitempty"`
+		Snapshot string         `json:"snapshot"`
+	}{tab, moved, snapshot}, lines)
 }
 
 func (o browserOutput) bench(args []string) int {

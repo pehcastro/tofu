@@ -20,6 +20,7 @@ import (
 	"tofu/internal/judge/jev"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/judge/question"
+	"tofu/internal/konst"
 	"tofu/internal/llm"
 	"tofu/internal/rule"
 	"tofu/internal/settings"
@@ -204,28 +205,28 @@ func (w *writerStub) Ask(_ context.Context, request llm.Request) (llm.Decision, 
 	return llm.Decision{Build: "stub", Outcome: llm.OutcomeMessage, Content: w.answers[min(len(w.asked), len(w.answers))-1]}, nil
 }
 
-func drive(home, chooser string) tools.BrowserSettings {
-	return tools.BrowserSettings{Home: home, Mode: settings.BrowserDrive, Chooser: chooser, Steps: 30,
+func drive(home, driver string) tools.BrowserSettings {
+	return tools.BrowserSettings{Home: home, Mode: settings.BrowserDrive, Driver: driver, Steps: 30,
 		Model: func() (turn.Model, string, error) { return &writerStub{}, "a stub", nil }}
 }
 
 func TestTheBrowserSettingsDecideWhichBrowserToolsAreOffered(t *testing.T) {
-	for _, arm := range []struct{ mode, chooser, want string }{
-		{settings.BrowserOff, settings.ChooserJev, ""},
-		{settings.BrowserRead, settings.ChooserJev, "browser_tabs browser_read"},
-		{settings.BrowserRead, settings.ChooserModel, "browser_tabs browser_read"},
-		{settings.BrowserDrive, settings.ChooserJev, "browser_tabs browser_read browser_do"},
-		{settings.BrowserDrive, settings.ChooserModel, "browser_tabs browser_read browser_act"},
+	for _, arm := range []struct{ mode, driver, want string }{
+		{settings.BrowserOff, settings.DriverGoal, ""},
+		{settings.BrowserRead, settings.DriverGoal, "browser_tabs browser_read"},
+		{settings.BrowserRead, settings.DriverSteps, "browser_tabs browser_observe"},
+		{settings.BrowserDrive, settings.DriverGoal, "browser_tabs browser_read browser_do"},
+		{settings.BrowserDrive, settings.DriverSteps, "browser_tabs browser_observe browser_act"},
 	} {
-		offered, err := tools.NewBrowser(tools.BrowserSettings{Home: shortHome(t), Mode: arm.mode, Chooser: arm.chooser, Steps: 30})
-		t.Logf("browser=%s browserChooser=%s offers %q", arm.mode, arm.chooser, names(offered))
+		offered, err := tools.NewBrowser(tools.BrowserSettings{Home: shortHome(t), Mode: arm.mode, Driver: arm.driver, Steps: 30})
+		t.Logf("browser=%s browserDriver=%s offers %q", arm.mode, arm.driver, names(offered))
 		if err != nil || names(offered) != arm.want {
-			t.Fatalf("browser=%s browserChooser=%s offers %q, %v, want %q", arm.mode, arm.chooser, names(offered), err, arm.want)
+			t.Fatalf("browser=%s browserDriver=%s offers %q, %v, want %q", arm.mode, arm.driver, names(offered), err, arm.want)
 		}
 	}
 	for _, refused := range []tools.BrowserSettings{
-		{Home: shortHome(t), Mode: "on", Chooser: settings.ChooserJev},
-		{Home: shortHome(t), Mode: settings.BrowserDrive, Chooser: "regex"},
+		{Home: shortHome(t), Mode: "on", Driver: settings.DriverGoal},
+		{Home: shortHome(t), Mode: settings.BrowserDrive, Driver: "regex"},
 	} {
 		if offered, err := tools.NewBrowser(refused); err == nil {
 			t.Fatalf("%+v offers %q rather than being refused", refused, names(offered))
@@ -234,13 +235,14 @@ func TestTheBrowserSettingsDecideWhichBrowserToolsAreOffered(t *testing.T) {
 }
 
 func TestEveryBrowserToolWithNoHostNamesTheInstall(t *testing.T) {
-	for _, call := range []struct{ chooser, name, args string }{
-		{settings.ChooserModel, "browser_tabs", `{}`},
-		{settings.ChooserModel, "browser_read", `{"tab":7}`},
-		{settings.ChooserModel, "browser_act", `{"tab":7,"element":3,"op":"CLICK"}`},
-		{settings.ChooserJev, "browser_do", `{"tab":7,"goal":"book a room"}`},
+	for _, call := range []struct{ driver, name, args string }{
+		{settings.DriverSteps, "browser_tabs", `{}`},
+		{settings.DriverSteps, "browser_observe", `{"tab":7}`},
+		{settings.DriverSteps, "browser_act", `{"tab":7,"actions":[{"ref":"e1","action":"click"}]}`},
+		{settings.DriverGoal, "browser_read", `{"tab":7}`},
+		{settings.DriverGoal, "browser_do", `{"tab":7,"goal":"book a room"}`},
 	} {
-		offered, err := tools.NewBrowser(drive(shortHome(t), call.chooser))
+		offered, err := tools.NewBrowser(drive(shortHome(t), call.driver))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -255,7 +257,7 @@ func TestEveryBrowserToolWithNoHostNamesTheInstall(t *testing.T) {
 func TestTheBrowserToolsAgainstAFakeHost(t *testing.T) {
 	chrome := &fakeChrome{}
 	home := hostWithTwoTabs(t, chrome)
-	offered, err := tools.NewBrowser(drive(home, settings.ChooserModel))
+	offered, err := tools.NewBrowser(drive(home, settings.DriverGoal))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -294,48 +296,157 @@ func TestTheBrowserToolsAgainstAFakeHost(t *testing.T) {
 	if _, err := run("browser_read", `{"tab":8}`); err == nil || !strings.Contains(err.Error(), "never reads or drives") {
 		t.Fatalf("browser_read on a chrome:// tab answered %v", err)
 	}
-	refusals := []struct{ args, says string }{
-		{`{"tab":8,"element":3,"op":"CLICK"}`, "cannot reach tab 8"},
-		{`{"tab":7,"element":2,"op":"TYPE_TEXT","text":"BX99"}`, "read-only"},
-		{`{"tab":7,"element":3,"op":"TYPE_TEXT","text":"hi"}`, "button"},
-		{`{"tab":7,"element":4,"op":"CLICK"}`, "no element 4"},
-		{`{"tab":7,"element":5,"op":"SELECT","text":"Suite"}`, "Double"},
-		{`{"tab":7,"op":"DONE"}`, "DONE"},
-	}
-	for _, refused := range refusals {
-		_, err := run("browser_act", refused.args)
-		if err == nil || !strings.Contains(err.Error(), refused.says) {
-			t.Fatalf("browser_act %s answered %v, want a refusal naming %q", refused.args, err, refused.says)
-		}
-		t.Logf("browser_act %s: %v", refused.args, err)
-	}
-	before := chrome.saw()
-	if want := []string{"tab 7 snapshot null"}; !slices.Equal(before, want) {
-		t.Fatalf("a refused act reached the extension:\n%s", strings.Join(before, "\n"))
-	}
+}
 
-	acted, err := run("browser_act", `{"tab":7,"element":3,"op":"CLICK"}`)
+type cdpPage struct {
+	mu       sync.Mutex
+	url      string
+	next     string
+	released int
+}
+
+func (p *cdpPage) answer(method string, params map[string]any) any {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	script := fmt.Sprint(params["expression"], params["functionDeclaration"])
+	value := func(v any) any { return map[string]any{"result": map[string]any{"type": "object", "value": v}} }
+	switch method {
+	case "Page.getFrameTree":
+		return map[string]any{"frameTree": map[string]any{"frame": map[string]any{"id": "main", "loaderId": "L " + p.url, "url": p.url}}}
+	case "Accessibility.getFullAXTree":
+		node := func(id int, role, name string, children ...string) map[string]any {
+			return map[string]any{"nodeId": fmt.Sprint(id), "backendDOMNodeId": id, "childIds": children,
+				"role": map[string]any{"value": role}, "name": map[string]any{"value": name}}
+		}
+		return map[string]any{"nodes": []any{node(1, "RootWebArea", "Stays", "2", "3"), node(2, "button", "Next"), node(3, "button", "Buy")}}
+	case "Runtime.evaluate":
+		switch {
+		case strings.Contains(script, "querySelectorAll('*')"):
+			return value([]any{})
+		case strings.Contains(script, "getEntriesByType"):
+			return value(map[string]any{"pending": 0, "loading": false})
+		case strings.Contains(script, "getElementsByTagName"):
+			return value(map[string]any{"url": p.url, "count": 3, "text": "Stays"})
+		}
+	case "DOM.scrollIntoViewIfNeeded", "Input.dispatchMouseEvent":
+		if params["type"] == "mouseReleased" {
+			p.released++
+			p.url = cmp.Or(p.next, p.url)
+		}
+		return map[string]any{}
+	case "DOM.getBoxModel":
+		return map[string]any{"model": map[string]any{"content": []float64{0, 0, 10, 0, 10, 10, 0, 10}}}
+	case "DOM.resolveNode":
+		return map[string]any{"object": map[string]any{"objectId": fmt.Sprint("node-", params["backendNodeId"])}}
+	case "Runtime.callFunctionOn":
+		return value(nil)
+	}
+	return value(nil)
+}
+
+func (p *cdpPage) serve(fromHost io.Reader, toHost io.Writer) {
+	for {
+		raw, err := browser.ReadMessage(fromHost)
+		if err != nil {
+			return
+		}
+		var call struct {
+			T    string `json:"t"`
+			ID   int64  `json:"id"`
+			Args struct {
+				Calls []struct {
+					Method string         `json:"method"`
+					Params map[string]any `json:"params"`
+				} `json:"calls"`
+			} `json:"args"`
+		}
+		if json.Unmarshal(raw, &call) != nil || call.T != "call" {
+			continue
+		}
+		answers := []any{}
+		for _, command := range call.Args.Calls {
+			answers = append(answers, map[string]any{"result": p.answer(command.Method, command.Params)})
+		}
+		answer, _ := json.Marshal(map[string]any{"t": "result", "id": call.ID, "ok": true, "value": answers})
+		if browser.WriteMessage(toHost, answer) != nil {
+			return
+		}
+	}
+}
+
+func (p *cdpPage) releases() int {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.released
+}
+
+func stepsOn(t *testing.T, page *cdpPage) func(name, args string) string {
+	t.Helper()
+	home := shortHome(t)
+	manifest := filepath.Join(filepath.Dir(browser.ExtensionDir(home)), browser.HostName+".json")
+	if err := os.MkdirAll(filepath.Dir(manifest), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(manifest, []byte(`{"allowed_origins":["`+browserFixtureOrigin+`"]}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	toHostR, toHostW := io.Pipe()
+	fromHostR, fromHostW := io.Pipe()
+	go func() {
+		_ = browser.Host(browserFixtureOrigin, toHostR, fromHostW, home)
+		_ = fromHostW.Close()
+	}()
+	t.Cleanup(func() {
+		_ = toHostW.Close()
+		_ = fromHostR.Close()
+	})
+	if err := browser.WriteMessage(toHostW, []byte(`{"t":"hello","version":2,"tabs":[{"id":7,"url":"https://stays.test/","title":"Stays"}]}`)); err != nil {
+		t.Fatal(err)
+	}
+	go page.serve(fromHostR, toHostW)
+	offered, err := tools.NewBrowser(drive(home, settings.DriverSteps))
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Logf("browser_act CLICK: %s, recorded %q", acted.Content, acted.Command)
-	after := chrome.saw()[len(before):]
-	if want := []string{`tab 7 click {"element":3}`}; !slices.Equal(after, want) {
-		t.Fatalf("one act sent\n%s\nwant\n%s", strings.Join(after, "\n"), want[0])
+	return func(name, args string) string {
+		t.Helper()
+		result, err := browserTool(t, offered, name).Run(context.Background(), json.RawMessage(args))
+		if err != nil {
+			t.Fatalf("%s %s: %v", name, args, err)
+		}
+		t.Logf("%s %s:\n%s", name, args, result.Content)
+		return result.Content
 	}
+}
 
-	if _, err := run("browser_act", `{"tab":7,"element":3,"op":"CLICK"}`); err == nil || !strings.Contains(err.Error(), "browser_read") {
-		t.Fatalf("a second act on the page the first one changed answered %v", err)
+func TestABatchStopsAtTheActThatChangesTheURLAndSaysWhatItSkipped(t *testing.T) {
+	page := &cdpPage{url: "https://stays.test/", next: "https://stays.test/page-2"}
+	run := stepsOn(t, page)
+	observed := run("browser_observe", `{"tab":7}`)
+	if !strings.Contains(observed, `button "Next" [ref=e1]`) || !strings.Contains(observed, `button "Buy" [ref=e2]`) {
+		t.Fatal("the observe does not carry the two refs")
 	}
+	acted := run("browser_act", `{"tab":7,"actions":[{"ref":"e1","action":"click"},{"ref":"e2","action":"click"},{"ref":"e2","action":"click"}]}`)
+	if page.releases() != 1 || !strings.Contains(acted, "ran 1 of 3") || !strings.Contains(acted, "2 skipped") || !strings.Contains(acted, "https://stays.test/page-2") {
+		t.Fatalf("the batch clicked %d times and said the above; want 1 click, ran 1 of 3, 2 skipped, and the new page", page.releases())
+	}
+}
 
-	if _, err := run("browser_read", `{"tab":7}`); err != nil {
-		t.Fatal(err)
+func TestTheSameClickOnTheSamePageIsFlaggedThenRefused(t *testing.T) {
+	page := &cdpPage{url: "https://stays.test/"}
+	run := stepsOn(t, page)
+	run("browser_observe", `{"tab":7}`)
+	for try := 1; try <= konst.BrowserRepeatRefuse; try++ {
+		acted := run("browser_act", `{"tab":7,"actions":[{"ref":"e2","action":"click"}]}`)
+		repeated := strings.Contains(acted, fmt.Sprintf("repeated %d times, the page did not change", try))
+		refused := strings.Contains(acted, "refused")
+		if repeated != (try >= konst.BrowserRepeatNotice && try < konst.BrowserRepeatRefuse) || refused != (try == konst.BrowserRepeatRefuse) {
+			t.Fatalf("try %d said repeated %v and refused %v", try, repeated, refused)
+		}
 	}
-	stale, err := run("browser_act", `{"tab":7,"element":1,"op":"TYPE_TEXT","text":"Ada"}`)
-	if err != nil || !strings.Contains(stale.Content, "changed") {
-		t.Fatalf("a stale fill answered %q, %v", stale.Content, err)
+	if page.releases() != konst.BrowserRepeatRefuse-1 {
+		t.Fatalf("the page saw %d clicks; want %d, the refused one never sent", page.releases(), konst.BrowserRepeatRefuse-1)
 	}
-	t.Logf("browser_act stale: %s", stale.Content)
 }
 
 type recordedJev struct {
@@ -397,7 +508,7 @@ func jevOn(t *testing.T, wire *recordedJev, ledgerDir string) func() (jevloop.Je
 func TestBrowserDoRunsTheJevLoopOnADriveTab(t *testing.T) {
 	var current func() (jevloop.Jev, error)
 	browserDo := func(home string, steps int) turn.Tool {
-		config := drive(home, settings.ChooserJev)
+		config := drive(home, settings.DriverGoal)
 		config.Judge, config.Steps = func() (jevloop.Jev, error) { return current() }, steps
 		offered, err := tools.NewBrowser(config)
 		if err != nil {
@@ -505,7 +616,7 @@ func TestBrowserDoRunsTheJevLoopOnADriveTab(t *testing.T) {
 
 func browserDoOn(t *testing.T, chrome *fakeChrome, wire *recordedJev, writer *writerStub) turn.Tool {
 	t.Helper()
-	config := drive(hostWithTwoTabs(t, chrome), settings.ChooserJev)
+	config := drive(hostWithTwoTabs(t, chrome), settings.DriverGoal)
 	config.Judge = jevOn(t, wire, shortHome(t))
 	config.Model = func() (turn.Model, string, error) { return writer, "a stub", nil }
 	offered, err := tools.NewBrowser(config)
@@ -634,7 +745,7 @@ func TestBrowserDoWithAURLOpensATabAsksTheBrowserModelAndAnswersFirst(t *testing
 	chrome := &fakeChrome{page: strings.Replace(formPage, `"elements":[`, `"links":{"3":"http://127.0.0.1:8000/rooms/42"},"elements":[`, 1)}
 	var wire *recordedJev
 	var writer turn.Model
-	config := drive(hostWithTwoTabs(t, chrome), settings.ChooserJev)
+	config := drive(hostWithTwoTabs(t, chrome), settings.DriverGoal)
 	config.Judge = func() (jevloop.Jev, error) { return jevOn(t, wire, shortHome(t))() }
 	config.Model = func() (turn.Model, string, error) {
 		return writer, "claude-sub/claude-haiku-4-5-20251001 from modelTier.dumb", nil
@@ -705,7 +816,7 @@ func TestTheBrowseRuleComposesForTheOrchestratorOnly(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		carries := strings.Contains(composed.Head(), "browsing is browser_do's job")
+		carries := strings.Contains(composed.Head(), "browse in steps. browser_observe the tab")
 		t.Logf("the %s prompt carries the browse rule: %v", role, carries)
 		if carries != wants {
 			t.Fatalf("the %s prompt carries the browse rule = %v, want %v", role, carries, wants)
@@ -721,22 +832,30 @@ func (g *allowingGate) Decide(_ context.Context, request turn.GateRequest) (turn
 }
 
 func TestTheBrowserReadToolsMakeNoGateCall(t *testing.T) {
-	offered, err := tools.NewBrowser(drive(shortHome(t), settings.ChooserJev))
-	if err != nil {
-		t.Fatal(err)
-	}
-	gate := &allowingGate{}
-	model := &scriptedModel{calls: []llm.ToolCall{
-		{ID: "c1", Name: "browser_tabs", Arguments: json.RawMessage(`{}`)},
-		{ID: "c2", Name: "browser_read", Arguments: json.RawMessage(`{"tab":7}`)},
-		{ID: "c3", Name: "browser_do", Arguments: json.RawMessage(`{"tab":7,"goal":"book"}`)},
-	}}
-	if _, err := turn.Run(context.Background(), turn.Config{Model: model, Spend: turn.SpendSubscription, Tools: turn.NewRegistry(offered...),
-		Gate: gate, GateMode: turn.GateEnforce, Task: "book a room", ResultBytesCap: 4096, ArtifactDir: t.TempDir()}); err != nil {
-		t.Fatal(err)
-	}
-	t.Logf("the gate was asked about %v", gate.asked)
-	if !slices.Equal(gate.asked, []string{"browser_do"}) {
-		t.Fatalf("the gate was asked about %v, want browser_do alone", gate.asked)
+	for driver, calls := range map[string][]llm.ToolCall{
+		settings.DriverGoal: {
+			{ID: "c1", Name: "browser_tabs", Arguments: json.RawMessage(`{}`)},
+			{ID: "c2", Name: "browser_read", Arguments: json.RawMessage(`{"tab":7}`)},
+			{ID: "c3", Name: "browser_do", Arguments: json.RawMessage(`{"tab":7,"goal":"book"}`)},
+		},
+		settings.DriverSteps: {
+			{ID: "c1", Name: "browser_tabs", Arguments: json.RawMessage(`{}`)},
+			{ID: "c2", Name: "browser_observe", Arguments: json.RawMessage(`{"tab":7}`)},
+			{ID: "c3", Name: "browser_act", Arguments: json.RawMessage(`{"tab":7,"actions":[{"ref":"e1","action":"click"}]}`)},
+		},
+	} {
+		offered, err := tools.NewBrowser(drive(shortHome(t), driver))
+		if err != nil {
+			t.Fatal(err)
+		}
+		gate := &allowingGate{}
+		if _, err := turn.Run(context.Background(), turn.Config{Model: &scriptedModel{calls: calls}, Spend: turn.SpendSubscription, Tools: turn.NewRegistry(offered...),
+			Gate: gate, GateMode: turn.GateEnforce, Task: "book a room", ResultBytesCap: 4096, ArtifactDir: t.TempDir()}); err != nil {
+			t.Fatal(err)
+		}
+		t.Logf("%s: the gate was asked about %v", driver, gate.asked)
+		if want := []string{calls[2].Name}; !slices.Equal(gate.asked, want) {
+			t.Fatalf("%s: the gate was asked about %v, want %v alone", driver, gate.asked, want)
+		}
 	}
 }
