@@ -89,13 +89,18 @@ func onlyIn(t *testing.T, background, call, name string) {
 	}
 }
 
-func TestBackgroundAttachesAndGroupsInOnePlaceEachAndNeverNavigates(t *testing.T) {
+func TestBackgroundAttachesGroupsAndNavigatesInOnePlaceEach(t *testing.T) {
 	background := shipped(t, "background.js")
 	onlyIn(t, background, "chrome.debugger.attach(", "attach")
 	onlyIn(t, background, "chrome.tabs.group(", "groupTab")
 	onlyIn(t, background, "chrome.tabs.ungroup(", "restoreGroups")
 	onlyIn(t, background, "chrome.tabs.create({url, active: false})", "openTab")
+	onlyIn(t, background, "chrome.tabs.update(tabId, {url})", "navigateOpened")
 	onlyIn(t, background, "args.url", "perform")
+	navigate := handler(t, background, "navigateOpened")
+	if check, update := strings.Index(navigate, "ownOnly(tabId"), strings.Index(navigate, "chrome.tabs.update("); check < 0 || update < check {
+		t.Error("navigateOpened does not refuse a tab tofu did not open before it navigates")
+	}
 	disconnect := strings.Index(background, "port.onDisconnect.addListener(")
 	if disconnect < 0 || !strings.Contains(background[disconnect:disconnect+strings.Index(background[disconnect:], "});")], "restoreGroups") {
 		t.Error("restoreGroups does not run when the port to tofu drops")
@@ -104,38 +109,92 @@ func TestBackgroundAttachesAndGroupsInOnePlaceEachAndNeverNavigates(t *testing.T
 		t.Error("the drive ops are not exactly click, fill, select, scroll and wait")
 	}
 	closeOpened := handler(t, background, "closeOpened")
-	check, remove := strings.Index(closeOpened, "if (!opened.has(tabId)) throw"), strings.Index(closeOpened, "chrome.tabs.remove(tabId)")
+	check, remove := strings.Index(closeOpened, "ownOnly(tabId"), strings.Index(closeOpened, "chrome.tabs.remove(tabId)")
 	if strings.Count(background, "tabs.remove") != 1 || check < 0 || remove < check {
 		t.Errorf("background.js removes a tab %d times; want exactly one, in closeOpened after the opened check", strings.Count(background, "tabs.remove"))
 	}
-	for _, never := range []string{"chrome.tabs.update", "Page.navigate", "location.href =", "eval(", "new Function", "['attach']", `["attach"]`, "popup"} {
+	if strings.Count(background, "tabs.update(") != 1 {
+		t.Errorf("background.js updates a tab %d times; want once, in navigateOpened", strings.Count(background, "tabs.update("))
+	}
+	for _, never := range []string{"Page.navigate", "location.href =", "eval(", "new Function", "['attach']", `["attach"]`, "popup"} {
 		if strings.Contains(background, never) {
 			t.Errorf("background.js contains %s", never)
 		}
 	}
 }
 
-func TestBackgroundInAStubbedChromeAttachesOnFirstUseGroupsAndRestores(t *testing.T) {
+type stubRun struct {
+	Heard    [][]any          `json:"heard"`
+	Posted   []map[string]any `json:"posted"`
+	Grouped  map[string]any   `json:"grouped"`
+	Restored map[string]any   `json:"restored"`
+}
+
+func inStubbedChrome(t *testing.T, scenario string) stubRun {
+	t.Helper()
 	node, err := exec.LookPath("node")
 	if err != nil {
 		t.Skip("no node on the PATH to run background.js")
 	}
 	var stderr bytes.Buffer
-	stub := exec.Command(node, "testdata/chrome.js", ".")
+	stub := exec.Command(node, "testdata/chrome.js", ".", scenario)
 	stub.Stderr = &stderr
 	out, err := stub.Output()
 	if err != nil {
 		t.Fatalf("background.js in a stubbed Chrome: %v\n%s", err, stderr.String())
 	}
-	var run struct {
-		Heard    [][]any          `json:"heard"`
-		Posted   []map[string]any `json:"posted"`
-		Grouped  map[string]any   `json:"grouped"`
-		Restored map[string]any   `json:"restored"`
-	}
+	var run stubRun
 	if err := json.Unmarshal(out, &run); err != nil {
 		t.Fatalf("%v\n%s", err, out)
 	}
+	return run
+}
+
+func (run stubRun) results() map[float64]map[string]any {
+	results := map[float64]map[string]any{}
+	for _, message := range run.Posted {
+		if message["t"] == "result" {
+			results[message["id"].(float64)] = message
+		}
+	}
+	return results
+}
+
+func (run stubRun) at(want ...any) int {
+	wanted, _ := json.Marshal(want)
+	for i, entry := range run.Heard {
+		if got, _ := json.Marshal(entry); string(got) == string(wanted) {
+			return i
+		}
+	}
+	return -1
+}
+
+func TestBackgroundWaitsForTheLoadFollowsTabsItsTabOpensAndNavigatesOnlyItsOwn(t *testing.T) {
+	run := inStubbedChrome(t, "open")
+	results := run.results()
+	complete, answered := run.at("complete", 20), run.at("post", "result", 1)
+	t.Logf("tab 20 complete at %d, the open answered at %d with %v", complete, answered, results[1])
+	if results[1]["value"] != 20.0 || complete < 0 || answered < complete {
+		t.Errorf("open answered %v at %d and the tab completed at %d; want tab 20, after complete", results[1], answered, complete)
+	}
+	followed, _ := json.Marshal(results[2]["value"])
+	if string(followed) != `{"opened":21}` || run.at("group", []any{21}, 100) < 0 || run.at("complete", 21) > run.at("post", "result", 2) {
+		t.Errorf("the click on tab 20 answered %s; want tab 21 opened, grouped and loaded before the answer", followed)
+	}
+	for _, message := range run.Posted {
+		if tab, _ := message["tab"].(map[string]any); message["t"] == "tabUpdated" && tab["id"] == 21.0 && tab["opened"] != true {
+			t.Errorf("tab 21 was posted as %v, not as tofu's", tab)
+		}
+	}
+	refused, _ := results[4]["error"].(string)
+	if results[3]["ok"] != true || run.at("navigate", 20, "https://stays.test/other") < 0 || results[4]["ok"] != false || !strings.Contains(refused, "person's") || run.at("navigate", 9, "https://stays.test/other") >= 0 {
+		t.Errorf("navigate answered %v on tofu's tab and %v on the person's; want the first run and the second refused", results[3], results[4])
+	}
+}
+
+func TestBackgroundInAStubbedChromeAttachesOnFirstUseGroupsAndRestores(t *testing.T) {
+	run := inStubbedChrome(t, "groups")
 	heard, first := map[string][]string{}, map[string]int{}
 	for i, entry := range run.Heard {
 		rest, _ := json.Marshal(entry[1:])
@@ -165,12 +224,7 @@ func TestBackgroundInAStubbedChromeAttachesOnFirstUseGroupsAndRestores(t *testin
 	if !strings.Contains(string(hello), `"t":"hello","tabs":[{"id":9,`) || strings.Contains(string(hello), "mode") {
 		t.Errorf("the extension said %s; want a hello listing every tab with no mode", hello)
 	}
-	results := map[float64]map[string]any{}
-	for _, message := range run.Posted[1:] {
-		if message["t"] == "result" {
-			results[message["id"].(float64)] = message
-		}
-	}
+	results := run.results()
 	for id := 1.0; id <= 7; id++ {
 		timing, _ := results[id]["timing"].(map[string]any)
 		if results[id]["ok"] != true || len(timing) != 3 {

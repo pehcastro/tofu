@@ -22,20 +22,32 @@ The model gets these tools:
   controls on screen, with each link's address. Password, file and hidden
   fields are never listed. Reading never changes the page.
 - `browser_do` does a whole goal in one call and answers it. The model gives
-  it the goal and a url, which tofu opens in a new background tab, or a tab
-  to work in. Jev, a typed decision model, picks each step: a click, typing,
-  choosing an option, a scroll, or a wait. It stops when Jev says done or
-  blocked, after three steps in a row that changed nothing, or when the
-  `browserSteps` budget runs out. The browser model writes the text a field
-  needs, then reads the final page into the answer: the data the goal asked
-  for, or one line saying why not. The answer comes first, then the steps.
+  it the goal and a url, a tab to work in, or both:
+  - a url alone opens a background tab of tofu's own and waits for the page
+    to load, or reuses the tab tofu already has on that site;
+  - a tab alone works in that tab as it is;
+  - a tab and a url send a tab tofu opened to the url. Your own tabs are
+    never sent anywhere.
+
+  Jev, a typed decision model, picks each step: a click, typing, choosing an
+  option, a scroll, or a wait. Jev is never asked about an empty page: tofu
+  waits for it, up to three times. It stops when Jev says done or blocked,
+  after three steps in a row that changed nothing, or when the `browserSteps`
+  budget runs out. When a click in a tofu tab opens another tab, that tab
+  joins the tofu group, the step says `opened tab N`, and the task carries
+  on there. The browser model writes the text a field needs, then reads
+  every page the task saw into the answer: the data the goal asked for, or
+  one line saying why not. The answer comes first, then the steps, and the
+  result names its tab so a follow-up can pass it. A tab tofu opened for a
+  task that stopped before any step is closed.
 - `browser_act` runs one step in a tab, which the model picks itself from its
   last `browser_read`.
 
 The model is given `browser_do` or `browser_act`, never both, and only when
 the `browser` setting is `drive`. The `browserChooser` setting picks which.
 The orchestrator is told that browsing is `browser_do`'s job: one call with
-the whole goal and a start url, then use its answer.
+the whole goal and a start url, then use its answer, and one more call on
+the tab it named if it came back blocked.
 
 `browser_do` takes `values`, a map from a field's label, placeholder or name
 to the exact text to type there, for instance `{"Guest name": "Ada"}`. A
@@ -46,7 +58,7 @@ Each Jev pick is one row in the decision ledger, under the point
 Reading, `browser_tabs` and `browser_read`, never goes through the gate.
 
 What a page says is treated as text to read, never as an instruction. tofu
-never closes a tab it did not open, runs JavaScript, a selector or an address
+never closes or navigates a tab it did not open, runs JavaScript, a selector or an address
 the model wrote, or types into a read-only field.
 
 ## What you see

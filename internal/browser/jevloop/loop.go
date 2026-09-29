@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"slices"
 
 	"tofu/internal/browser"
 	"tofu/internal/konst"
@@ -12,6 +13,7 @@ import (
 type Browser struct {
 	Snapshot func(ctx context.Context) (browser.Page, error)
 	Act      func(ctx context.Context, page browser.Page, action browser.Action) (browser.Stale, error)
+	Tab      func() int
 }
 
 type Writer func(ctx context.Context, goal string, page browser.Page, field browser.Element) (string, error)
@@ -45,6 +47,7 @@ type Step struct {
 	Label   string
 	Changed bool
 	Stale   browser.Stale
+	Opened  int
 }
 
 type Result struct {
@@ -53,6 +56,18 @@ type Result struct {
 	Steps     []Step
 	Decisions int
 	Page      browser.Page
+	Pages     []browser.Page
+}
+
+func empty(page browser.Page) bool {
+	return page.URL == "about:blank" || len(page.Elements) == 0 && page.Text == ""
+}
+
+func (l Loop) tab() int {
+	if l.Browser.Tab == nil {
+		return 0
+	}
+	return l.Browser.Tab()
 }
 
 func (l Loop) Run(ctx context.Context, goal string) Result {
@@ -61,14 +76,39 @@ func (l Loop) Run(ctx context.Context, goal string) Result {
 		result.Reason = fmt.Sprintf(format, args...)
 		return result
 	}
+	see := func() error {
+		page, err := l.Browser.Snapshot(ctx)
+		if err != nil {
+			return err
+		}
+		result.Page = page
+		if !empty(page) && !slices.ContainsFunc(result.Pages, func(seen browser.Page) bool { return seen.URL == page.URL && seen.Text == page.Text }) {
+			result.Pages = append(result.Pages, page)
+			result.Pages = result.Pages[max(0, len(result.Pages)-konst.BrowserRecentSteps):]
+		}
+		return nil
+	}
 	budget := min(l.Actions, konst.BrowserActionCeiling)
 	decisions := budget * konst.BrowserDecisionsPerAction
-	var err error
-	if result.Page, err = l.Browser.Snapshot(ctx); err != nil {
+	if err := see(); err != nil {
 		return stop("no snapshot: %v", err)
 	}
-	acted, unchanged, refused, refusedOn := 0, 0, 0, 0
+	acted, unchanged, refused, refusedOn, waited := 0, 0, 0, 0, 0
 	for {
+		if empty(result.Page) {
+			if waited == konst.BrowserNoChangeStop {
+				return stop("the page stayed empty after %d waits", waited)
+			}
+			waited++
+			if _, err := l.Browser.Act(ctx, result.Page, browser.Action{Op: browser.OpWait}); err != nil {
+				return stop("no wait on the empty page: %v", err)
+			}
+			if err := see(); err != nil {
+				return stop("no snapshot after a wait on the empty page: %v", err)
+			}
+			continue
+		}
+		waited = 0
 		if result.Decisions >= decisions {
 			return stop("the decision budget of %d ran out", decisions)
 		}
@@ -88,12 +128,10 @@ func (l Loop) Run(ctx context.Context, goal string) Result {
 		case op == browser.OpBlocked:
 			return stop("the chooser chose BLOCKED")
 		case op == browser.OpDone:
-			next, err := l.Browser.Snapshot(ctx)
-			if err != nil {
+			if err := see(); err != nil {
 				return stop("no snapshot to confirm DONE: %v", err)
 			}
-			result.Page = next
-			if page.URL == next.URL && reflect.DeepEqual(page.Elements, next.Elements) {
+			if page.URL == result.Page.URL && reflect.DeepEqual(page.Elements, result.Page.Elements) {
 				result.Status = StatusDone
 				return stop("the chooser chose DONE")
 			}
@@ -107,16 +145,25 @@ func (l Loop) Run(ctx context.Context, goal string) Result {
 			}
 			choice.Action.Value = text
 		}
-		stale, err := l.Browser.Act(ctx, page, choice.Action)
-		if err != nil {
-			return stop("%s on %q failed: %v", op, label, err)
+		from := l.tab()
+		var stale browser.Stale
+		for retried := false; ; retried = true {
+			if stale, err = l.Browser.Act(ctx, page, choice.Action); err != nil {
+				return stop("%s on %q failed: %v", op, label, err)
+			}
+			if err := see(); err != nil {
+				return stop("no snapshot after %s on %q: %v", op, label, err)
+			}
+			same := slices.DeleteFunc(slices.Clone(result.Page.Elements), func(e browser.Element) bool { return e.Role != element.Role || e.Label != element.Label })
+			if retried || stale != browser.StaleChanged || len(same) != 1 {
+				break
+			}
+			page, choice.Action.Element = result.Page, same[0].Index
 		}
-		next, err := l.Browser.Snapshot(ctx)
-		if err != nil {
-			return stop("no snapshot after %s on %q: %v", op, label, err)
+		step := Step{Choice: choice, Label: label, Changed: result.Page.Fingerprint != page.Fingerprint, Stale: stale}
+		if to := l.tab(); to != from {
+			step.Opened, step.Changed = to, true
 		}
-		result.Page = next
-		step := Step{Choice: choice, Label: label, Changed: next.Fingerprint != page.Fingerprint, Stale: stale}
 		result.Steps = append(result.Steps, step)
 		if stale != browser.StaleNone {
 			if refusedOn != choice.Action.Element {

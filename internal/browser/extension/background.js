@@ -8,6 +8,7 @@ const SETTLE_MS = 50;
 const COMBOBOX_SETTLE_MS = 200;
 const COMMIT_MS = 5000;
 const COMMIT_POLL_MS = 20;
+const LOAD_MS = 15000;
 const DRIVE_OPS = ['click', 'fill', 'select', 'scroll', 'wait'];
 const IN_PAGE_ACTS = ['scroll', 'select'];
 const DIRECTIONS = ['up', 'down'];
@@ -26,6 +27,7 @@ const attached = new Map();
 const opened = new Set();
 const grouped = new Set();
 const optedOut = new Set();
+const children = new Map();
 let port = null;
 let hostError = '';
 let reconnectDelay = RECONNECT_MIN_MS;
@@ -40,6 +42,14 @@ const send = (tabId, method, params) => chrome.debugger.sendCommand({tabId}, met
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 const groupTitle = () => acting ? 'tofu •' : 'tofu';
 const ourGroups = async () => groups ??= (await chrome.storage.session.get({groups: {}})).groups;
+
+function openable(url) {
+  if (!OPENABLE_PROTOCOLS.includes(URL.parse(url)?.protocol)) throw new Error(`tofu opens only http, https and file URLs, not ${url}`);
+}
+
+function ownOnly(tabId, verb) {
+  if (!opened.has(tabId)) throw new Error(`tab ${tabId} is the person's: tofu ${verb} only tabs it opened`);
+}
 
 function serially(work) {
   groupWork = groupWork.then(work).catch(() => {});
@@ -100,7 +110,9 @@ async function timed(timing, phase, work) {
 }
 
 async function perform(tabId, op, args, timing) {
-  if (op === 'open') return openTab(String(args.url ?? ''));
+  const url = String(args.url ?? '');
+  if (op === 'open') return openTab(url);
+  if (op === 'navigate') return navigateOpened(tabId, url);
   if (op === 'close') return closeOpened(tabId);
   if (op !== 'snapshot' && !DRIVE_OPS.includes(op)) throw new Error(`unknown op ${op}`);
   if (op === 'scroll' && !DIRECTIONS.includes(args.direction)) throw new Error(`no scroll direction ${args.direction}`);
@@ -110,6 +122,7 @@ async function perform(tabId, op, args, timing) {
   const request = {op, element: Number(args.element), guard: String(args.guard ?? ''), value: String(args.value ?? ''), direction: args.direction};
   const target = await timed(timing, IN_PAGE_ACTS.includes(op) ? 'act_ms' : 'evaluate_ms', () => evaluate(tabId, request));
   if (target.stale) return target;
+  children.delete(tabId);
   await timed(timing, 'act_ms', async () => {
     if (op === 'wait') await sleep(WAIT_MS);
     if (op === 'click' || op === 'fill') {
@@ -125,7 +138,10 @@ async function perform(tabId, op, args, timing) {
     }
   });
   if (op !== 'wait') await timed(timing, 'settle_ms', () => settle(tabId, request.element, op === 'fill' && target.combobox));
-  return {};
+  const child = children.get(tabId);
+  if (child === undefined) return {};
+  await loaded(child);
+  return {opened: child};
 }
 
 async function attach(tabId) {
@@ -178,23 +194,46 @@ async function evaluate(tabId, request) {
   return result.value;
 }
 
+async function loaded(tabId) {
+  for (const until = Date.now() + LOAD_MS; Date.now() < until; await sleep(COMMIT_POLL_MS)) {
+    const tab = await chrome.tabs.get(tabId);
+    if (tab.status === 'complete' && !tab.pendingUrl && tab.url && tab.url !== 'about:blank') return;
+  }
+}
+
 async function openTab(url) {
-  if (!OPENABLE_PROTOCOLS.includes(URL.parse(url)?.protocol)) throw new Error(`tofu opens only http, https and file URLs, not ${url}`);
+  openable(url);
   const tab = await chrome.tabs.create({url, active: false});
   opened.add(tab.id);
   post({t: 'tabUpdated', tab: tabInfo(tab)});
   serially(() => groupTab(tab.id));
+  await loaded(tab.id);
   return tab.id;
 }
 
+async function navigateOpened(tabId, url) {
+  openable(url);
+  ownOnly(tabId, 'navigates');
+  await chrome.tabs.update(tabId, {url});
+  await loaded(tabId);
+  return tabId;
+}
+
 async function closeOpened(tabId) {
-  if (!opened.has(tabId)) throw new Error(`tab ${tabId} is the person's: tofu closes only tabs it opened`);
+  ownOnly(tabId, 'closes');
   await chrome.tabs.remove(tabId);
 }
 
-chrome.tabs.onCreated.addListener(tab => post({t: 'tabUpdated', tab: tabInfo(tab)}));
+chrome.tabs.onCreated.addListener(tab => {
+  if (opened.has(tab.openerTabId)) {
+    opened.add(tab.id);
+    children.set(tab.openerTabId, tab.id);
+    serially(() => groupTab(tab.id));
+  }
+  post({t: 'tabUpdated', tab: tabInfo(tab)});
+});
 chrome.tabs.onRemoved.addListener(tabId => {
-  for (const set of [attached, opened, grouped, optedOut]) set.delete(tabId);
+  for (const set of [attached, opened, grouped, optedOut, children]) set.delete(tabId);
   post({t: 'tabRemoved', tabId});
 });
 chrome.debugger.onDetach.addListener(({tabId}) => attached.delete(tabId));

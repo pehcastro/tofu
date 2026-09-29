@@ -197,7 +197,7 @@ func TestHostRelaysAndClaims(t *testing.T) {
 	if _, err := first.Call(5, "snapshot", nil); err == nil || !strings.Contains(err.Error(), "no tab 5") {
 		t.Fatalf("an op on a tab Chrome does not have returned %v", err)
 	}
-	if _, err := first.Call(7, "navigate", nil); err == nil || !strings.Contains(err.Error(), "unknown browser op") {
+	if _, err := first.Call(7, "reload", nil); err == nil || !strings.Contains(err.Error(), "unknown browser op") {
 		t.Fatalf("an unknown op returned %v", err)
 	}
 	failed := callAsync(first, 9, "snapshot", nil)

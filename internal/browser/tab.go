@@ -33,16 +33,23 @@ type opArgs struct {
 	Direction string `json:"direction,omitempty"`
 }
 
+type Acted struct {
+	Stale  Stale `json:"stale"`
+	Opened int   `json:"opened"`
+}
+
+const opNavigate = "navigate"
+
 func (t SharedTab) Snapshot(ctx context.Context) (Page, error) {
 	for attempt := 1; ; attempt++ {
-		raw, stale, err := t.call("snapshot", nil)
+		raw, acted, err := t.call("snapshot", nil)
 		switch {
 		case err != nil:
 			return Page{}, err
-		case stale == StaleNone:
+		case acted.Stale == StaleNone:
 			return ParsePage(raw)
 		case attempt == konst.BrowserSnapshotAttempts:
-			return Page{}, fmt.Errorf("tab %d answered %s on %d snapshots in a row", t.ID, stale, attempt)
+			return Page{}, fmt.Errorf("tab %d answered %s on %d snapshots in a row", t.ID, acted.Stale, attempt)
 		}
 		select {
 		case <-ctx.Done():
@@ -52,7 +59,18 @@ func (t SharedTab) Snapshot(ctx context.Context) (Page, error) {
 	}
 }
 
+func (t SharedTab) Navigate(url string) error {
+	args, _ := json.Marshal(openArgs{URL: url})
+	_, err := t.Client.Call(t.ID, opNavigate, args)
+	return err
+}
+
 func (t SharedTab) Act(_ context.Context, page Page, action Action) (Stale, error) {
+	acted, err := t.Drive(page, action)
+	return acted.Stale, err
+}
+
+func (t SharedTab) Drive(page Page, action Action) (Acted, error) {
 	args := opArgs{Element: action.Element, Guard: page.Guards[action.Element], Value: action.Value}
 	var op string
 	switch action.Op {
@@ -69,27 +87,25 @@ func (t SharedTab) Act(_ context.Context, page Page, action Action) (Stale, erro
 	case OpWait:
 		op = "wait"
 	case OpDone, OpBlocked:
-		return StaleNone, fmt.Errorf("%s is not an action a tab can run", action.Op)
+		return Acted{}, fmt.Errorf("%s is not an action a tab can run", action.Op)
 	}
 	raw, _ := json.Marshal(args)
-	_, stale, err := t.call(op, raw)
-	return stale, err
+	_, acted, err := t.call(op, raw)
+	return acted, err
 }
 
-func (t SharedTab) call(op string, args json.RawMessage) (json.RawMessage, Stale, error) {
+func (t SharedTab) call(op string, args json.RawMessage) (json.RawMessage, Acted, error) {
 	raw, err := t.Client.Call(t.ID, op, args)
 	if err != nil {
-		return nil, StaleNone, err
+		return nil, Acted{}, err
 	}
-	var answer struct {
-		Stale Stale `json:"stale"`
+	var acted Acted
+	if err := json.Unmarshal(raw, &acted); err != nil {
+		return nil, Acted{}, fmt.Errorf("the extension answered %s on tab %d with %q", op, t.ID, raw)
 	}
-	if err := json.Unmarshal(raw, &answer); err != nil {
-		return nil, StaleNone, fmt.Errorf("the extension answered %s on tab %d with %q", op, t.ID, raw)
-	}
-	switch answer.Stale {
+	switch acted.Stale {
 	case StaleNone, StaleCovered, StaleHidden, StaleNoSize, StaleDetached, StaleChanged, StaleNoBody:
-		return raw, answer.Stale, nil
+		return raw, acted, nil
 	}
-	return nil, StaleNone, fmt.Errorf("the extension answered %s on tab %d with the unknown stale kind %q", op, t.ID, answer.Stale)
+	return nil, Acted{}, fmt.Errorf("the extension answered %s on tab %d with the unknown stale kind %q", op, t.ID, acted.Stale)
 }

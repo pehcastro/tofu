@@ -71,7 +71,7 @@
   };
   const contexts = new Map();
   const guard = e => {
-    const context = e.closest('form,dialog,[role="dialog"],tr,[role="row"]') || e.parentElement;
+    const context = e.closest('tr,[role="row"]') || (e.closest('dialog,[role="dialog"]') ? e : e.closest('form')) || e.parentElement;
     if (!contexts.has(context)) contexts.set(context, (context?.innerText ?? '').slice(0, TEXT_CEILING));
     return hash(JSON.stringify([role(e), name(e), e.value ?? null, e.checked ?? null, e.selectedIndex ?? null, readonly(e),
       ...['expanded', 'checked', 'selected'].map(key => e.getAttribute('aria-' + key)), e.getAttribute('href'), contexts.get(context)]));

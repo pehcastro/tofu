@@ -1,9 +1,11 @@
 package jevloop
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 
@@ -14,6 +16,8 @@ type fakeTab struct {
 	page      browser.Page
 	changes   bool
 	staleActs int
+	staleKind browser.Stale
+	blanks    int
 	snapshots int
 	moveAt    int
 	acts      []browser.Action
@@ -22,6 +26,10 @@ type fakeTab struct {
 func (f *fakeTab) browser() Browser {
 	return Browser{
 		Snapshot: func(context.Context) (browser.Page, error) {
+			if f.blanks > 0 {
+				f.blanks--
+				return browser.Page{URL: "about:blank", Fingerprint: "blank"}, nil
+			}
 			if f.snapshots++; f.snapshots == f.moveAt {
 				f.page.Elements = append(f.page.Elements, browser.Element{Index: 99, Role: browser.RoleButton, Label: "Cookie banner"})
 			}
@@ -30,7 +38,7 @@ func (f *fakeTab) browser() Browser {
 		Act: func(_ context.Context, _ browser.Page, action browser.Action) (browser.Stale, error) {
 			if f.staleActs > 0 {
 				f.staleActs--
-				return browser.StaleCovered, nil
+				return cmp.Or(f.staleKind, browser.StaleCovered), nil
 			}
 			f.acts = append(f.acts, action)
 			if f.changes {
@@ -82,7 +90,7 @@ func TestThreeActionsThatChangedNothingStopAsBlocked(t *testing.T) {
 }
 
 func TestWaitThatChangedNothingIsNotCountedAsNoChange(t *testing.T) {
-	tab := &fakeTab{page: browser.Page{Fingerprint: "still"}}
+	tab := &fakeTab{page: browser.Page{Fingerprint: "still", Text: "Stays"}}
 	result := Loop{Browser: tab.browser(), Choose: always(browser.Action{Op: browser.OpWait}), Actions: 5}.Run(context.Background(), "goal")
 	assertBlocked(t, result, "action budget")
 	if len(tab.acts) != 5 {
@@ -144,7 +152,7 @@ func TestTheStaleCountRestartsOnAnotherTarget(t *testing.T) {
 }
 
 func TestDoneAfterTheElementsMovedIsDecidedAgain(t *testing.T) {
-	tab := &fakeTab{page: browser.Page{Fingerprint: "p"}, moveAt: 2}
+	tab := &fakeTab{page: browser.Page{Fingerprint: "p", Text: "Stays"}, moveAt: 2}
 	result := Loop{Browser: tab.browser(), Choose: always(browser.Action{Op: browser.OpDone}), Actions: 5}.Run(context.Background(), "goal")
 	if result.Status != StatusDone || result.Decisions != 2 || len(result.Page.Elements) != 1 {
 		t.Fatalf("stopped %v after %d decisions on %+v, want done after 2 on the moved page", result.Status, result.Decisions, result.Page)
@@ -160,5 +168,40 @@ func TestATextErrorTypesNothing(t *testing.T) {
 	assertBlocked(t, result, "the text model refused")
 	if len(tab.acts) != 0 {
 		t.Fatalf("typed %d times", len(tab.acts))
+	}
+}
+
+func TestABlankPageIsWaitedOutAndJevNeverSeesIt(t *testing.T) {
+	var seen []string
+	done := func(_ context.Context, _ string, page browser.Page, _ []Step) (Choice, error) {
+		seen = append(seen, page.URL)
+		return Choice{Action: browser.Action{Op: browser.OpDone}}, nil
+	}
+	tab := &fakeTab{blanks: 2}
+	tab.page = hotelPage(t)
+	result := Loop{Browser: tab.browser(), Choose: done, Actions: 5}.Run(context.Background(), "goal")
+	if result.Status != StatusDone || slices.Contains(seen, "about:blank") || len(result.Steps) != 0 || len(tab.acts) != 2 {
+		t.Fatalf("stopped %v with %q after the chooser saw %v, %d steps and %d acts; want done, never about:blank, no steps and 2 waits", result.Status, result.Reason, seen, len(result.Steps), len(tab.acts))
+	}
+	seen = nil
+	result = Loop{Browser: (&fakeTab{blanks: 1000}).browser(), Choose: done, Actions: 5}.Run(context.Background(), "goal")
+	assertBlocked(t, result, "stayed empty")
+	if len(seen) != 0 || len(result.Steps) != 0 {
+		t.Fatalf("an empty page was shown to the chooser %d times and ran %d steps", len(seen), len(result.Steps))
+	}
+}
+
+func TestOneStaleChangedOnTheSameLabelIsRetriedAndTheClickRuns(t *testing.T) {
+	cell := browser.Page{Fingerprint: "p", Elements: []browser.Element{{Index: 4, Role: browser.RoleGridCell, Label: "9"}}}
+	click := browser.Action{Op: browser.OpClick, Element: 4}
+	tab := &fakeTab{page: cell, changes: true, staleActs: 1, staleKind: browser.StaleChanged}
+	result := Loop{Browser: tab.browser(), Choose: inTurn(click, browser.Action{Op: browser.OpDone}), Actions: 5}.Run(context.Background(), "goal")
+	if result.Status != StatusDone || len(tab.acts) != 1 || len(result.Steps) != 1 || result.Steps[0].Stale != browser.StaleNone || result.Decisions != 2 {
+		t.Fatalf("stopped %v after %d decisions, %d clicks and steps %+v; want done after 2, one click, one step that ran", result.Status, result.Decisions, len(tab.acts), result.Steps)
+	}
+	tab = &fakeTab{page: cell, staleActs: 2, staleKind: browser.StaleChanged}
+	result = Loop{Browser: tab.browser(), Choose: inTurn(click, browser.Action{Op: browser.OpDone}), Actions: 5}.Run(context.Background(), "goal")
+	if len(tab.acts) != 0 || len(result.Steps) != 1 || result.Steps[0].Stale != browser.StaleChanged {
+		t.Fatalf("a second changed ran %d clicks into steps %+v; want one retry only, recorded as changed", len(tab.acts), result.Steps)
 	}
 }

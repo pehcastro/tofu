@@ -1,11 +1,13 @@
 package tools
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"maps"
+	"net/url"
 	"slices"
 	"strings"
 	"sync"
@@ -23,6 +25,7 @@ type browserSession struct {
 	mu     sync.Mutex
 	client *browser.Client
 	pages  map[int]browser.Page
+	hosts  map[string]int
 }
 
 type BrowserSettings struct {
@@ -35,7 +38,7 @@ type BrowserSettings struct {
 }
 
 func NewBrowser(config BrowserSettings) ([]turn.Tool, error) {
-	session := &browserSession{home: config.Home, pages: map[int]browser.Page{}}
+	session := &browserSession{home: config.Home, pages: map[int]browser.Page{}, hosts: map[string]int{}}
 	switch config.Mode {
 	case settings.BrowserOff:
 		return nil, nil
@@ -169,15 +172,17 @@ func readOut(tab int, page browser.Page) string {
 	return fmt.Sprintf("tab %d holds %d controls\n%s", tab, len(page.Elements), web.Untrusted("the Chrome tab "+page.URL, body.String()))
 }
 
-func driveTab(client *browser.Client, id int) error {
+func driveTab(client *browser.Client, id int) (browser.Tab, error) {
 	tabs, err := client.Tabs()
 	if err != nil {
-		return err
+		return browser.Tab{}, err
 	}
-	if !slices.ContainsFunc(tabs, func(tab browser.Tab) bool { return tab.ID == id }) {
-		return fmt.Errorf("tofu cannot reach tab %d: browser_tabs lists the tabs it can", id)
+	for _, tab := range tabs {
+		if tab.ID == id {
+			return tab, nil
+		}
 	}
-	return nil
+	return browser.Tab{}, fmt.Errorf("tofu cannot reach tab %d: browser_tabs lists the tabs it can", id)
 }
 
 type browserAct struct{ session *browserSession }
@@ -221,7 +226,7 @@ func (t browserAct) Run(ctx context.Context, raw json.RawMessage) (turn.Result, 
 	}
 	var stale browser.Stale
 	err = t.session.with(func(client *browser.Client) error {
-		if err := driveTab(client, args.Tab); err != nil {
+		if _, err := driveTab(client, args.Tab); err != nil {
 			return err
 		}
 		page, read := t.session.pages[args.Tab]
@@ -296,9 +301,11 @@ func (browserDo) Name() string { return "browser_do" }
 func (t browserDo) Definition() llm.Tool {
 	return llm.Tool{
 		Name: "browser_do",
-		Description: "does a whole browsing goal in one call and answers it: give the goal and a url, which it opens in a new background tab, or the tab to work in. " +
+		Description: "does a whole browsing goal in one call and answers it. call it once with the whole goal, and again on the tab it named if it comes back blocked. " +
+			"a url without a tab opens it in a background tab of tofu's own, or reuses the tab tofu already has on that site. a tab alone works in that tab as it is; " +
+			"a tab and a url send a tab tofu opened to the url, and a person's tab is never sent anywhere. the result names its tab, so a follow-up passes that tab. " +
 			fmt.Sprintf("jev picks each step, a click, typing, choosing an option, a scroll or a wait, until the goal is done, it is blocked, or %d actions ran. ", t.steps) +
-			"the browser model writes the text a field needs, and reads the final page into the answer. " +
+			"a tab the page opens is followed. the browser model writes the text a field needs, and reads every page the run saw into the answer. " +
 			"values maps a field's label, placeholder or name, in any case, to the exact text to type there instead. " +
 			"returns the answer first, then the steps. " + whatTofuReaches,
 		Parameters: map[string]any{
@@ -324,32 +331,41 @@ func (t browserDo) Run(ctx context.Context, raw json.RawMessage) (turn.Result, e
 	if err := json.Unmarshal(raw, &args); err != nil {
 		return turn.Result{}, fmt.Errorf("browser_do: arguments are not the expected shape: %w", err)
 	}
-	if (args.Tab == 0) == (args.URL == "") {
-		return turn.Result{}, errors.New("browser_do: give a url to open or the tab to work in, one of the two")
+	if args.Tab == 0 && args.URL == "" {
+		return turn.Result{}, errors.New("browser_do: give a url to open, the tab to work in, or both to send a tab tofu opened to the url")
 	}
 	model, chosen, err := t.model()
 	if err != nil {
 		return turn.Result{}, fmt.Errorf("browser_do: no action ran, the %s setting names no model tofu can ask: %w", settings.BrowserModel, err)
 	}
 	var result jevloop.Result
+	closed := false
 	err = t.session.with(func(client *browser.Client) error {
 		judge, err := t.judge()
 		if err != nil {
 			return fmt.Errorf("no action ran, jev is not reachable: %w", err)
 		}
-		if args.URL != "" {
-			args.Tab, err = client.Open(args.URL)
-		} else {
-			err = driveTab(client, args.Tab)
-		}
+		id, ours, err := t.session.aim(client, args.Tab, args.URL)
 		if err != nil {
 			return err
 		}
 		judge.Decided = map[string]jevloop.Choice{}
-		tab := browser.SharedTab{Client: client, ID: args.Tab}
+		at := id
 		result = jevloop.Loop{
-			Browser: jevloop.Browser{Snapshot: tab.Snapshot, Act: tab.Act},
-			Choose:  judge.Choose,
+			Browser: jevloop.Browser{
+				Snapshot: func(ctx context.Context) (browser.Page, error) {
+					return browser.SharedTab{Client: client, ID: at}.Snapshot(ctx)
+				},
+				Act: func(_ context.Context, page browser.Page, action browser.Action) (browser.Stale, error) {
+					acted, err := browser.SharedTab{Client: client, ID: at}.Drive(page, action)
+					if acted.Opened != 0 {
+						at = acted.Opened
+					}
+					return acted.Stale, err
+				},
+				Tab: func() int { return at },
+			},
+			Choose: judge.Choose,
 			Write: func(ctx context.Context, goal string, page browser.Page, field browser.Element) (string, error) {
 				if text, named := args.Values.named(page, field); named {
 					return text, nil
@@ -359,17 +375,32 @@ func (t browserDo) Run(ctx context.Context, raw json.RawMessage) (turn.Result, e
 			},
 			Actions: t.steps,
 		}.Run(ctx, args.Goal)
+		args.Tab = at
+		if ours && result.Status == jevloop.StatusBlocked && len(result.Steps) == 0 {
+			closed = client.CloseTab(id) == nil
+			maps.DeleteFunc(t.session.hosts, func(_ string, kept int) bool { return kept == id })
+		}
 		return nil
 	})
 	if err != nil {
 		return turn.Result{}, fmt.Errorf("browser_do: %w", err)
 	}
-	answer, err := askFor(ctx, model, fmt.Sprintf("a browser task with the goal %q ended %s: %s\nfrom the page below, answer the goal: the data it asks for, or one line saying why it could not be done. write the answer and nothing else.\n\n%s",
-		args.Goal, result.Status, result.Reason, readOut(args.Tab, result.Page)))
+	var earlier strings.Builder
+	for _, page := range result.Pages {
+		if page.URL != result.Page.URL || page.Text != result.Page.Text {
+			fmt.Fprintf(&earlier, "%s %s\n%s\n\n", page.Title, page.URL, page.Text)
+		}
+	}
+	pages := readOut(args.Tab, result.Page)
+	if earlier.Len() > 0 {
+		pages = web.Untrusted("the pages this run saw before its last one", earlier.String()) + "\n\nthen the last page: " + pages
+	}
+	answer, err := askFor(ctx, model, fmt.Sprintf("a browser task with the goal %q ended %s: %s\nfrom the pages below, answer the goal: the data it asks for, or one line saying why it could not be done. write the answer and nothing else.\n\n%s",
+		args.Goal, result.Status, result.Reason, pages))
 	if err == nil {
 		answer = web.Untrusted("the browser model's answer to the goal, read from the Chrome tab "+result.Page.URL, answer)
 	} else {
-		answer = "the browser model gave no answer: " + err.Error() + "\n" + readOut(args.Tab, result.Page)
+		answer = "the browser model gave no answer: " + err.Error() + "\n" + pages
 	}
 	var body strings.Builder
 	body.WriteString(result.Reason + "\n")
@@ -384,17 +415,50 @@ func (t browserDo) Run(ctx context.Context, raw json.RawMessage) (turn.Result, e
 		switch {
 		case step.Stale != browser.StaleNone:
 			fmt.Fprintf(&body, ": did not run, the target is %s\n", step.Stale)
+		case step.Opened != 0:
+			fmt.Fprintf(&body, ": opened tab %d\n", step.Opened)
 		case step.Changed:
 			body.WriteString(": changed the page\n")
 		default:
 			body.WriteString(": unchanged\n")
 		}
 	}
+	if closed {
+		fmt.Fprintf(&body, "tab %d is closed: tofu opened it and no step ran there\n", args.Tab)
+	}
 	return turn.Result{
 		Content: fmt.Sprintf("%s\n\ntab %d %s after %d jev decisions and %d steps; the browser model is %s\n%s", answer, args.Tab, result.Status, result.Decisions, len(result.Steps), chosen,
 			web.Untrusted("the reason and the steps, named by the page's own labels", strings.TrimSuffix(body.String(), "\n"))),
 		Command: fmt.Sprintf("tab %d goal %q", args.Tab, args.Goal),
 	}, nil
+}
+
+func (s *browserSession) aim(client *browser.Client, tab int, address string) (int, bool, error) {
+	if address == "" {
+		found, err := driveTab(client, tab)
+		return tab, found.Opened, err
+	}
+	var host string
+	if parsed, err := url.Parse(address); err == nil {
+		host = parsed.Host
+	}
+	if tab == 0 {
+		if known, err := driveTab(client, s.hosts[host]); err == nil && known.Opened {
+			tab = known.ID
+		}
+	} else if found, err := driveTab(client, tab); err != nil || !found.Opened {
+		return 0, false, cmp.Or(err, fmt.Errorf("tab %d is the person's: browser_do sends only a tab tofu opened to a url", tab))
+	}
+	var err error
+	if tab == 0 {
+		tab, err = client.Open(address)
+	} else {
+		err = browser.SharedTab{Client: client, ID: tab}.Navigate(address)
+	}
+	if err == nil {
+		s.hosts[host] = tab
+	}
+	return tab, true, err
 }
 
 func askFor(ctx context.Context, model turn.Model, prompt string) (string, error) {
