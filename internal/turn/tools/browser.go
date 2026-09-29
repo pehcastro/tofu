@@ -206,7 +206,8 @@ func driveTab(client *browser.Client, id int) (browser.Tab, error) {
 
 const howToBrowse = "observe the tab first, act on the refs it shows, and observe again after anything changes. " +
 	"close a popup, a cookie banner or a dialog in the way before anything else. apply the page's filters before reading its results. " +
-	"do not open a tab to research: work in the tab you have. a sponsored or ad result is not the organic one. "
+	"a task works in one tab from start to end: open listings one after another in it with a link's url= or a click, and go back between them. " +
+	"when an act is covered by a dialog, close that dialog with the ref it names. a sponsored or ad result is not the organic one. "
 
 type browserObserve struct{ session *browserSession }
 
@@ -259,7 +260,7 @@ func (browserAct) Definition() llm.Tool {
 		Description: fmt.Sprintf("runs up to %d actions in one Chrome tab, in order, each on a ref from the latest browser_observe. ", konst.BrowserActBatchMax) +
 			"click takes a ref. fill takes a ref and the text as value, and answers the value it reads back. select takes a ref and the option as value. " +
 			"press takes a key as value, Enter or Escape or a letter. scroll takes up or down as value, and a ref to scroll that container instead of the page. " +
-			"navigate sends the tab to the url in value, and works only on a tab tofu opened. open opens the url in value in a new tab of tofu's own. back goes back, on a tab tofu opened. " +
+			"navigate loads the url in value in the task's one tab: on the person's own tab it opens that one tab of tofu's first, and every later navigate loads there, whatever the site. back goes back in it. a popup the page opens is loaded into that tab and closed. " +
 			"wait takes a number of milliseconds, or text to wait for, as value. " +
 			"the batch stops at the first action that changes the url or opens a tab, and says which actions it skipped. " +
 			"a click that another element covers does not run, and says what covers it. the same action on an unchanged page is flagged, then refused. " +
@@ -275,7 +276,7 @@ func (browserAct) Definition() llm.Tool {
 						"type": "object",
 						"properties": map[string]any{
 							"ref":    map[string]any{"type": "string"},
-							"action": map[string]any{"type": "string", "enum": []string{"click", "fill", "select", "press", "scroll", "navigate", "open", "back", "wait"}},
+							"action": map[string]any{"type": "string", "enum": []string{"click", "fill", "select", "press", "scroll", "navigate", "back", "wait"}},
 							"value":  map[string]any{"type": "string"},
 						},
 						"required": []string{"action"},
@@ -294,9 +295,6 @@ type browserStep struct {
 }
 
 func (s browserStep) move() browser.Move {
-	if s.Action == "open" {
-		return browser.Move{Kind: browser.MoveNavigate, Value: s.Value, NewTab: true}
-	}
 	return browser.Move{Ref: s.Ref, Kind: browser.MoveKind(s.Action), Value: s.Value}
 }
 
@@ -306,7 +304,7 @@ func (s browserStep) normalised() string {
 		return "click " + s.Ref
 	case "fill":
 		return "fill " + s.Ref + " " + strings.ToLower(strings.TrimSpace(s.Value))
-	case "navigate", "open":
+	case "navigate":
 		return "navigate " + s.Value
 	case "scroll":
 		return "scroll " + cmp.Or(s.Value, "down") + " " + s.Ref

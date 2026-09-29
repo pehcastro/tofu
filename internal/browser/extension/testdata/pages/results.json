@@ -1,0 +1,16 @@
+{
+  "url": "https://stays.test/s/atibaia",
+  "title": "Stays",
+  "loader": "L1",
+  "nodes": [
+    {"id": 1, "role": "RootWebArea", "name": "Stays", "children": [2, 10, 11, 50]},
+    {"id": 2, "role": "button", "name": "Filtros", "box": [10, 10, 80, 30], "fires": "open filters", "toggles": 50},
+    {"id": 10, "role": "link", "name": "Casa ⋅ Atibaia", "href": "https://stays.test/rooms/123?adults=2&check_in=2026-10-09", "box": [10, 100, 300, 300], "fires": "listing 123"},
+    {"id": 11, "role": "link", "name": "Chalé ⋅ Jarinu", "href": "https://stays.test/rooms/456", "box": [320, 100, 300, 300], "fires": "listing 456"},
+    {"id": 50, "role": "dialog", "name": "Filtros", "modal": true, "hidden": true, "children": [55, 51, 52, 53], "box": [0, 0, 800, 600], "z": 2},
+    {"id": 55, "role": "generic", "box": [0, 0, 800, 600], "z": 2},
+    {"id": 51, "role": "checkbox", "name": "Wi-Fi", "box": [100, 100, 20, 20], "z": 2},
+    {"id": 52, "role": "button", "name": "Fechar", "box": [760, 10, 30, 30], "z": 2, "fires": "close filters", "toggles": 50},
+    {"id": 53, "role": "button", "name": "Mostrar 1.000 lugares", "box": [600, 550, 190, 40], "z": 2}
+  ]
+}

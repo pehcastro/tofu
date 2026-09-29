@@ -1,0 +1,11 @@
+{
+  "url": "https://stays.test/s/atibaia",
+  "title": "Stays",
+  "loader": "L1",
+  "nodes": [
+    {"id": 1, "role": "RootWebArea", "name": "Stays", "children": [60]},
+    {"id": 60, "role": "generic", "children": [61, 62], "box": [10, 100, 300, 300]},
+    {"id": 61, "role": "link", "name": "Casa ⋅ Atibaia", "href": "https://stays.test/rooms/123", "box": [10, 320, 300, 30]},
+    {"id": 62, "role": "link", "name": "Casa ⋅ Atibaia", "href": "https://stays.test/rooms/123", "box": [10, 100, 300, 300], "z": 1, "fires": "listing 123"}
+  ]
+}

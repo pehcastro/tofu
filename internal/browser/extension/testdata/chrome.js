@@ -130,6 +130,7 @@ const scenarios = {groups: async () => {
   await quiet();
   const restored = structuredClone(storage);
   await new Promise(resolve => setTimeout(resolve, 1000));
+  listeners.message({t: 'status', state: 'acting'});
   call(7, 9, 'click', {element: 1});
   await quiet();
   return {grouped, restored};

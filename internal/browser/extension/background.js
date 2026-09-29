@@ -17,10 +17,10 @@ const SELECT_ALL_MODIFIER = navigator.userAgent.includes('Mac') ? 4 : 2;
 const NO_GROUP = -1;
 const GROUP_COLOR = 'orange';
 const BADGES = {
-  idle: {text: 'on', color: '#1a7f37'},
-  reading: {text: 'read', color: '#0969da'},
-  acting: {text: 'act', color: '#d9480f'},
-  off: {text: 'off', color: '#8b8b8b'},
+  idle: {text: 'on', color: '#1a7f37', group: 'tofu ⏸️'},
+  reading: {text: 'read', color: '#0969da', group: 'tofu 👀'},
+  acting: {text: 'act', color: '#d9480f', group: 'tofu 🔄'},
+  off: {text: 'off', color: '#8b8b8b', group: 'tofu ✅'},
 };
 
 const BUILD = fetch(chrome.runtime.getURL('manifest.json')).then(response => response.text()).then(text => (JSON.parse(text).version_name ?? '').split(' ').pop());
@@ -36,13 +36,12 @@ let reconnectDelay = RECONNECT_MIN_MS;
 let snapshotSource = null;
 let groups = null;
 let groupWork = Promise.resolve();
-let acting = false;
+let groupTitle = 'tofu ⏸️';
 
 const tabInfo = tab => ({id: tab.id, url: tab.url ?? tab.pendingUrl ?? '', title: tab.title ?? '', opened: opened.has(tab.id)});
 const post = message => port?.postMessage(message);
 const send = (tabId, method, params) => chrome.debugger.sendCommand({tabId}, method, params);
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
-const groupTitle = () => acting ? 'tofu •' : 'tofu';
 const ourGroups = async () => groups ??= (await chrome.storage.session.get({groups: {}})).groups;
 
 function openable(url) {
@@ -83,10 +82,10 @@ async function connect() {
 async function show(state) {
   const badge = BADGES[state];
   if (!badge) return;
-  if (acting !== (state === 'acting')) {
-    acting = state === 'acting';
+  if (groupTitle !== badge.group) {
+    const title = groupTitle = badge.group;
     serially(async () => {
-      for (const groupId of Object.values(await ourGroups())) await chrome.tabGroups.update(groupId, {title: groupTitle()});
+      for (const groupId of Object.values(await ourGroups())) await chrome.tabGroups.update(groupId, {title});
     });
   }
   await chrome.action.setBadgeText({text: badge.text});
@@ -167,7 +166,7 @@ async function groupTab(tabId) {
   const groupId = await chrome.tabs.group(live ? {tabIds: [tabId], groupId: mine} : {tabIds: [tabId], createProperties: {windowId: tab.windowId}});
   groups[tab.windowId] = groupId;
   grouped.add(tabId);
-  if (!live) await chrome.tabGroups.update(groupId, {title: groupTitle(), color: GROUP_COLOR});
+  if (!live) await chrome.tabGroups.update(groupId, {title: groupTitle, color: GROUP_COLOR});
   await chrome.storage.session.set({groups});
 }
 

@@ -28,14 +28,15 @@ const (
 )
 
 type Move struct {
-	Ref    string
-	Kind   MoveKind
-	Value  string
-	NewTab bool
+	Ref   string
+	Kind  MoveKind
+	Value string
 }
 
 type Moved struct {
 	Covered     string `json:"covered,omitempty"`
+	Close       string `json:"close,omitempty"`
+	Folded      int    `json:"folded,omitempty"`
 	Value       string `json:"value,omitempty"`
 	Opened      int    `json:"opened,omitempty"`
 	URLChanged  bool   `json:"url_changed"`
@@ -109,7 +110,7 @@ type pageState struct {
 	Text  string `json:"text"`
 }
 
-func (d *Driver) state(deadline time.Time) (pageState, []int, error) {
+func (d *Driver) state(deadline time.Time) (pageState, []Tab, error) {
 	raw, err := d.Client.callBy(deadline, 0, opTabs, nil)
 	var tabs []Tab
 	if err == nil {
@@ -119,19 +120,21 @@ func (d *Driver) state(deadline time.Time) (pageState, []int, error) {
 	if err == nil {
 		err = d.value(deadline, false, evaluate(pageStateScript), &page)
 	}
-	ids := make([]int, len(tabs))
-	for i, tab := range tabs {
-		ids[i] = tab.ID
-	}
-	return page, ids, err
+	return page, tabs, err
 }
 
 const Unchanged = "the page did not change"
 
 func (m Moved) String() string {
 	switch {
+	case m.Covered != "" && m.Close != "":
+		return "did not run, covered by " + m.Covered + ": close it first with " + m.Close
+	case strings.HasPrefix(m.Covered, "dialog") || strings.HasPrefix(m.Covered, "alertdialog"):
+		return "did not run, covered by " + m.Covered + ": close it first"
 	case m.Covered != "":
 		return "did not run, covered by " + m.Covered
+	case m.Folded != 0:
+		return fmt.Sprintf("the page opened a popup, so tofu loaded its url in this tab and closed popup tab %d", m.Folded)
 	case m.Opened != 0:
 		return fmt.Sprintf("opened tab %d, which the next actions use", m.Opened)
 	case m.URLChanged:
@@ -177,7 +180,7 @@ func (d *Driver) do(deadline time.Time, move Move) (Moved, error) {
 	var moved Moved
 	switch move.Kind {
 	case MoveClick:
-		moved.Covered, err = d.click(deadline, move.Ref)
+		moved, err = d.click(deadline, move.Ref)
 	case MoveFill:
 		moved.Value, err = d.fill(deadline, move.Ref, move.Value)
 	case MoveSelect:
@@ -187,7 +190,7 @@ func (d *Driver) do(deadline time.Time, move Move) (Moved, error) {
 	case MoveScroll:
 		err = d.scroll(deadline, move.Ref, move.Value)
 	case MoveNavigate:
-		moved.Opened, err = d.navigate(deadline, move.Value, move.NewTab)
+		err = d.navigate(deadline, move.Value, tabsBefore)
 	case MoveBack:
 		_, err = d.Client.callBy(deadline, d.Tab, opBack, nil)
 	case MoveWait:
@@ -204,18 +207,36 @@ func (d *Driver) do(deadline time.Time, move Move) (Moved, error) {
 		return moved, err
 	}
 	moved.URLChanged, moved.PageChanged = after.URL != before.URL, after != before
-	for _, tab := range tabsAfter {
-		if moved.Opened == 0 && !slices.Contains(tabsBefore, tab) {
-			moved.Opened = tab
+	if move.Kind != MoveNavigate {
+		for _, tab := range tabsAfter {
+			if !slices.ContainsFunc(tabsBefore, func(held Tab) bool { return held.ID == tab.ID }) {
+				moved.Opened = tab.ID
+				moved.Folded = d.fold(deadline, tab)
+			}
 		}
 	}
-	if moved.Opened != 0 {
-		d.Tab = moved.Opened
-	}
-	if moved.URLChanged || moved.Opened != 0 {
+	switch {
+	case moved.Folded != 0:
+		moved.Opened, moved.URLChanged, moved.PageChanged = 0, true, true
+		d.refs = refMap{next: d.refs.next}
+	case moved.Opened != 0:
+		d.Use(moved.Opened)
+	case moved.URLChanged:
 		d.refs = refMap{next: d.refs.next}
 	}
 	return moved, nil
+}
+
+func (d *Driver) fold(deadline time.Time, popup Tab) int {
+	if !popup.Opened || popup.URL == "" {
+		return 0
+	}
+	args, _ := json.Marshal(openArgs{URL: popup.URL})
+	if _, err := d.Client.callBy(deadline, d.Tab, opNavigate, args); err != nil {
+		return 0
+	}
+	_, _ = d.Client.callBy(deadline, popup.ID, opClose, nil)
+	return popup.ID
 }
 
 func (d *Driver) center(deadline time.Time, ref string) (int, float64, float64, error) {
@@ -255,47 +276,129 @@ func (d *Driver) resolve(deadline time.Time, ref string) (string, error) {
 	return resolved.Object.ObjectID, err
 }
 
-func (d *Driver) click(deadline time.Time, ref string) (string, error) {
+func (d *Driver) click(deadline time.Time, ref string) (Moved, error) {
 	backend, x, y, err := d.center(deadline, ref)
 	if err != nil {
-		return "", err
+		return Moved{}, err
 	}
 	covered, err := d.blocker(deadline, backend, x, y)
-	if err != nil || covered != "" {
+	if err != nil || covered.Covered != "" {
 		return covered, err
 	}
-	return "", d.act(deadline, mouse("mouseMoved", "none", x, y), mouse("mousePressed", "left", x, y), mouse("mouseReleased", "left", x, y))
+	return Moved{}, d.act(deadline, mouse("mouseMoved", "none", x, y), mouse("mousePressed", "left", x, y), mouse("mouseReleased", "left", x, y))
 }
 
-func (d *Driver) blocker(deadline time.Time, backend int, x, y float64) (string, error) {
+const linkOf = "function() { const link = this.closest && this.closest('a[href]'); return link ? link.href : ''; }"
+
+type axTreeNode struct {
+	axNode
+	ParentID string `json:"parentId"`
+}
+
+func (d *Driver) blocker(deadline time.Time, backend int, x, y float64) (Moved, error) {
 	answer, err := d.one(deadline, false, byBackend("DOM.resolveNode", backend))
 	var resolved struct {
 		Object remoteObject `json:"object"`
 	}
 	if err != nil || answer.into(&resolved) != nil {
-		return "", err
+		return Moved{}, err
 	}
 	if answer, err = d.one(deadline, false, callOn(resolved.Object.ObjectID, blockerAt, false, x, y)); err != nil {
-		return "", err
+		return Moved{}, err
 	}
 	hit, err := answer.object()
 	if err != nil || hit.ObjectID == "" {
-		return "", nil
+		return Moved{}, nil
 	}
-	answer, err = d.one(deadline, false, cdpCall{Method: "Accessibility.getPartialAXTree", Params: map[string]any{"objectId": hit.ObjectID, "fetchRelatives": false}})
-	var tree struct {
-		Nodes []axNode `json:"nodes"`
-	}
+	answers, err := d.cdp(deadline, false, callOn(resolved.Object.ObjectID, linkOf, true), callOn(hit.ObjectID, linkOf, true),
+		cdpCall{Method: "DOM.describeNode", Params: map[string]any{"objectId": hit.ObjectID}}, cdpCall{Method: "Accessibility.getFullAXTree"})
 	if err != nil {
-		return "", err
+		return Moved{}, err
 	}
-	if answer.into(&tree) != nil || len(tree.Nodes) == 0 {
-		return "an element without a role", nil
+	var links [2]string
+	for i := range links {
+		if object, err := answers[i].object(); err == nil {
+			_ = json.Unmarshal(object.Value, &links[i])
+		}
 	}
-	if name := tree.Nodes[0].Name.text(); name != "" {
-		return tree.Nodes[0].Role.text() + " " + strconv.Quote(name), nil
+	if links[0] != "" && links[0] == links[1] {
+		return Moved{}, nil
 	}
-	return tree.Nodes[0].Role.text(), nil
+	var described struct {
+		Node struct {
+			BackendNodeID int `json:"backendNodeId"`
+		} `json:"node"`
+	}
+	var tree struct {
+		Nodes []axTreeNode `json:"nodes"`
+	}
+	if answers[2].into(&described) != nil || answers[3].into(&tree) != nil {
+		return Moved{Covered: "an element tofu cannot name"}, nil
+	}
+	return d.cover(tree.Nodes, described.Node.BackendNodeID), nil
+}
+
+func (d *Driver) cover(nodes []axTreeNode, backend int) Moved {
+	byID := map[string]int{}
+	at := -1
+	for i, node := range nodes {
+		byID[node.NodeID] = i
+		if node.Backend == backend {
+			at = i
+		}
+	}
+	if at < 0 {
+		return Moved{Covered: "an element tofu cannot name"}
+	}
+	named := at
+	for i, known := at, true; known; i, known = byID[nodes[i].ParentID] {
+		node := nodes[i]
+		anonymous := slices.Contains([]string{"", "generic", "none", "presentation", "StaticText", "InlineTextBox", "RootWebArea", "WebArea"}, node.Role.text())
+		if !anonymous && !node.Ignored && node.Name.text() != "" {
+			named = i
+			break
+		}
+	}
+	cover := nodes[named]
+	moved := Moved{Covered: cover.Role.text()}
+	if name := cover.Name.text(); name != "" {
+		moved.Covered += " " + strconv.Quote(name)
+	}
+	if role := cover.Role.text(); role == "dialog" || role == "alertdialog" {
+		moved.Close = d.closeRef(nodes, byID, named)
+	}
+	return moved
+}
+
+func (d *Driver) closeRef(nodes []axTreeNode, byID map[string]int, dialog int) string {
+	queue := slices.Clone(nodes[dialog].ChildIDs)
+	for len(queue) > 0 {
+		at, known := byID[queue[0]]
+		queue = queue[1:]
+		if !known {
+			continue
+		}
+		node := nodes[at]
+		queue = append(queue, node.ChildIDs...)
+		name := strings.ToLower(strings.TrimSpace(node.Name.text()))
+		closes := name == "x" || name == "×" || name == "✕" || slices.ContainsFunc([]string{"close", "fechar", "cerrar", "fermer", "schließen", "chiudi", "sluiten"}, func(word string) bool { return strings.Contains(name, word) })
+		if node.Ignored || node.Role.text() != "button" || !closes || node.Backend == 0 {
+			continue
+		}
+		nth := 0
+		for _, earlier := range nodes[:at] {
+			if !earlier.Ignored && earlier.Role.text() == "button" && earlier.Name.text() == node.Name.text() {
+				nth++
+			}
+		}
+		if d.refs.entries == nil {
+			d.refs.entries = map[string]refEntry{}
+		}
+		ref := d.refs.allocate(d.refs.documents[""], false, &treeNode{backend: node.Backend})
+		d.refs.entries[ref] = refEntry{backend: node.Backend, role: "button", name: node.Name.text(), nth: nth}
+		return ref
+	}
+	return ""
 }
 
 func (d *Driver) fill(deadline time.Time, ref, text string) (string, error) {
@@ -410,18 +513,21 @@ func (d *Driver) scroll(deadline time.Time, ref, direction string) error {
 	return d.act(deadline, callOn(object, "function(dx, dy) { this.scrollBy(dx, dy); }", true, 0, pixels))
 }
 
-func (d *Driver) navigate(deadline time.Time, url string, newTab bool) (int, error) {
+func (d *Driver) navigate(deadline time.Time, url string, tabs []Tab) error {
 	args, _ := json.Marshal(openArgs{URL: url})
-	if !newTab {
+	if slices.ContainsFunc(tabs, func(tab Tab) bool { return tab.ID == d.Tab && tab.Opened }) {
 		_, err := d.Client.callBy(deadline, d.Tab, opNavigate, args)
-		return 0, err
+		return err
 	}
 	raw, err := d.Client.callBy(deadline, 0, opOpen, args)
 	var tab int
 	if err == nil {
 		err = json.Unmarshal(raw, &tab)
 	}
-	return tab, err
+	if err == nil {
+		d.Use(tab)
+	}
+	return err
 }
 
 func (d *Driver) wait(deadline time.Time, value string) error {

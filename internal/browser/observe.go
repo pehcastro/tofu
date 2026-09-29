@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -14,7 +16,10 @@ import (
 	"tofu/internal/konst"
 )
 
-const cursorTag = "data-tofu-ci"
+const (
+	cursorTag     = "data-tofu-ci"
+	urlQueryRunes = 80
+)
 
 const cursorScan = `(() => {
   const results = [];
@@ -111,16 +116,125 @@ func (d *Driver) observe(deadline time.Time, interactive bool) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	urls, err := d.linkURLs(deadline, top, frames.FrameTree.Frame.URL)
+	if err != nil {
+		return "", err
+	}
 	title := ""
 	if len(roots) > 0 {
 		title = top[roots[0]].name
 	}
 	var out strings.Builder
 	fmt.Fprintf(&out, "tab %d %s %s\n", d.Tab, frames.FrameTree.Frame.URL, strconv.Quote(title))
-	for _, root := range roots {
-		render(&out, top, root, 0, interactive, children)
+	modal := slices.IndexFunc(tree.Nodes, axNode.isModal)
+	if modal < 0 || top[modal].role == "" {
+		for _, root := range roots {
+			render(&out, top, root, 0, interactive, children)
+		}
+		return capSnapshot(withURLs(out.String(), urls)), nil
 	}
-	return capSnapshot(out.String()), nil
+	render(&out, top, modal, 0, interactive, children)
+	behind := slices.Clone(top)
+	behind[modal] = treeNode{}
+	var page strings.Builder
+	for _, root := range roots {
+		render(&page, behind, root, 0, interactive, children)
+	}
+	hidden := withURLs(page.String(), urls)
+	for _, ref := range regexp.MustCompile(`ref=(e\d+)`).FindAllStringSubmatch(hidden, -1) {
+		delete(d.refs.entries, ref[1])
+	}
+	for _, strip := range []string{` \[ref=e\d+\]`, `ref=e\d+, `, `, ref=e\d+`} {
+		hidden = regexp.MustCompile(strip).ReplaceAllString(hidden, "")
+	}
+	fmt.Fprintf(&out, "behind dialog %s, no ref here acts until it closes:\n", strconv.Quote(top[modal].name))
+	for _, line := range strings.SplitAfter(hidden, "\n") {
+		if line != "" {
+			out.WriteString("  " + strings.Replace(line, "* ", "- ", 1))
+		}
+	}
+	return capSnapshot(withURLs(out.String(), urls)), nil
+}
+
+func (n axNode) isModal() bool {
+	role := n.Role.text()
+	if role != "dialog" && role != "alertdialog" {
+		return false
+	}
+	for _, property := range n.Properties {
+		if property.Name == "modal" && property.Value.text() == "true" {
+			return true
+		}
+	}
+	return false
+}
+
+func withURLs(snapshot string, urls map[string]string) string {
+	for ref, url := range urls {
+		snapshot = strings.Replace(snapshot, "ref="+ref+"]", "ref="+ref+", url="+url+"]", 1)
+	}
+	return snapshot
+}
+
+func (d *Driver) linkURLs(deadline time.Time, top []treeNode, page string) (map[string]string, error) {
+	var refs []string
+	var calls []cdpCall
+	for _, node := range top {
+		if node.role == "link" && node.ref != "" && node.backend != 0 {
+			refs = append(refs, node.ref)
+			calls = append(calls, byBackend("DOM.resolveNode", node.backend))
+		}
+	}
+	urls := map[string]string{}
+	if len(calls) == 0 {
+		return urls, nil
+	}
+	answers, err := d.cdp(deadline, false, calls...)
+	if err != nil {
+		return nil, err
+	}
+	var owners []string
+	calls = nil
+	for n, answer := range answers {
+		var resolved struct {
+			Object remoteObject `json:"object"`
+		}
+		if answer.into(&resolved) == nil && resolved.Object.ObjectID != "" {
+			owners = append(owners, refs[n])
+			calls = append(calls, callOn(resolved.Object.ObjectID, "function() { return this.href || ''; }", true))
+		}
+	}
+	if len(calls) == 0 {
+		return urls, nil
+	}
+	if answers, err = d.cdp(deadline, false, calls...); err != nil {
+		return nil, err
+	}
+	base, _ := url.Parse(page)
+	for n, answer := range answers {
+		var href string
+		object, err := answer.object()
+		if err != nil || json.Unmarshal(object.Value, &href) != nil || href == "" {
+			continue
+		}
+		urls[owners[n]] = shortURL(href, base)
+	}
+	return urls, nil
+}
+
+func shortURL(href string, page *url.URL) string {
+	link, err := url.Parse(href)
+	if err != nil {
+		return href
+	}
+	short := link.EscapedPath()
+	if page == nil || link.Host != page.Host {
+		short = link.Scheme + "://" + link.Host + short
+	}
+	if query := []rune(link.RawQuery); len(query) > 0 {
+		short += "?" + string(query[:min(len(query), urlQueryRunes)])
+	}
+	return short
 }
 
 func (d *Driver) cursors(deadline time.Time, found []cursorInfo) (map[int]cursorInfo, error) {

@@ -1,0 +1,11 @@
+{
+  "url": "https://stays.test/s/atibaia",
+  "title": "Stays",
+  "loader": "L1",
+  "ours": true,
+  "nodes": [
+    {"id": 1, "role": "RootWebArea", "name": "Stays", "children": [41, 42]},
+    {"id": 41, "role": "link", "name": "Casa em Lisboa", "box": [10, 10, 200, 30], "fires": "listing", "opens": 21, "opensURL": "https://stays.test/rooms/123"},
+    {"id": 42, "role": "link", "name": "Mapa", "box": [10, 50, 200, 30], "fires": "map", "opens": 22, "opensURL": "https://maps.test/atibaia"}
+  ]
+}

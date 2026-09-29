@@ -7,6 +7,7 @@ import (
 	"image/png"
 	"io/fs"
 	"os/exec"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -208,10 +209,10 @@ func TestBackgroundInAStubbedChromeAttachesOnFirstUseGroupsAndRestores(t *testin
 	for kind, want := range map[string]string{
 		"attach":      "[9] [3] [5] [6] [9]",
 		"group":       "[[9],100] [[6],100] [[9],101]",
-		"groupUpdate": `[100,{"color":"orange","title":"tofu •"}] [100,{"title":"tofu"}] [101,{"color":"orange","title":"tofu"}]`,
+		"groupUpdate": `[100,{"color":"orange","title":"tofu 🔄"}] [100,{"title":"tofu ⏸️"}] [100,{"title":"tofu ✅"}] [101,{"color":"orange","title":"tofu 🔄"}]`,
 		"ungroup":     "[[9]]",
 		"detach":      "[9] [3] [5] [6]",
-		"badge":       `["on"] ["act"] ["on"] ["off"] ["on"]`,
+		"badge":       `["on"] ["act"] ["on"] ["off"] ["on"] ["act"]`,
 	} {
 		if got := strings.Join(heard[kind], " "); got != want {
 			t.Errorf("%s: heard %s, want %s", kind, got, want)
@@ -239,6 +240,32 @@ func TestBackgroundInAStubbedChromeAttachesOnFirstUseGroupsAndRestores(t *testin
 	}
 	if left, _ := json.Marshal(run.Restored); string(left) != `{"groups":{}}` {
 		t.Errorf("session storage held %s after the port dropped", left)
+	}
+}
+
+func TestTheGroupTitleAlwaysCarriesItsStateAndChangesOnlyWithIt(t *testing.T) {
+	run := inStubbedChrome(t, "groups")
+	last := map[float64]string{}
+	var titles []string
+	for _, entry := range run.Heard {
+		if entry[0] != "groupUpdate" {
+			continue
+		}
+		group, _ := entry[1].(float64)
+		changed, _ := entry[2].(map[string]any)
+		title, _ := changed["title"].(string)
+		titles = append(titles, title)
+		if !strings.HasPrefix(title, "tofu ") || len(title) <= len("tofu ") {
+			t.Errorf("group %v was titled %q; want tofu and a state emoji, never tofu alone", group, title)
+		}
+		if last[group] == title {
+			t.Errorf("group %v was set to %q again with no change of state", group, title)
+		}
+		last[group] = title
+	}
+	t.Logf("the group titles, in order: %q", titles)
+	if want := []string{"tofu 🔄", "tofu ⏸️", "tofu ✅", "tofu 🔄"}; !slices.Equal(titles, want) {
+		t.Errorf("working, waiting, finished and working again titled the groups %q; want %q", titles, want)
 	}
 }
 

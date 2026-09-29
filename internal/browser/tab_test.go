@@ -1,6 +1,7 @@
 package browser_test
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -298,6 +299,11 @@ type fakeNode struct {
 	Scrollable float64   `json:"scrollable"`
 	Fires      string    `json:"fires"`
 	Opens      int       `json:"opens"`
+	Href       string    `json:"href"`
+	Modal      bool      `json:"modal"`
+	Hidden     bool      `json:"hidden"`
+	Toggles    int       `json:"toggles"`
+	OpensURL   string    `json:"opensURL"`
 }
 
 type fakePage struct {
@@ -306,10 +312,12 @@ type fakePage struct {
 	Title    string      `json:"title"`
 	Loader   string      `json:"loader"`
 	Nodes    []*fakeNode `json:"nodes"`
+	Ours     bool        `json:"ours"`
 	scrolled map[int]float64
 	tagged   []int
 	fired    []string
 	methods  []string
+	tabOps   []string
 }
 
 func loadPage(t *testing.T, name string) *fakePage {
@@ -363,10 +371,28 @@ func (p *fakePage) rect(n *fakeNode) (x, top, w, bottom float64) {
 	return x, top, w, bottom
 }
 
+func (p *fakePage) shown(n *fakeNode) bool {
+	for ; n != nil; n = p.parent(n.ID) {
+		if n.Hidden {
+			return false
+		}
+	}
+	return true
+}
+
+func (p *fakePage) href(n *fakeNode) string {
+	for ; n != nil; n = p.parent(n.ID) {
+		if n.Href != "" {
+			return n.Href
+		}
+	}
+	return ""
+}
+
 func (p *fakePage) hit(x, y float64) *fakeNode {
 	var hit *fakeNode
 	for _, n := range p.Nodes {
-		if len(n.Box) != 4 {
+		if len(n.Box) != 4 || !p.shown(n) {
 			continue
 		}
 		left, top, w, bottom := p.rect(n)
@@ -393,8 +419,13 @@ func (p *fakePage) axNode(n *fakeNode) map[string]any {
 	for _, child := range n.Children {
 		ids = append(ids, strconv.Itoa(child))
 	}
-	return map[string]any{"nodeId": strconv.Itoa(n.ID), "ignored": false, "backendDOMNodeId": n.ID, "childIds": ids,
-		"role": map[string]any{"type": "role", "value": n.Role}, "name": map[string]any{"type": "computedString", "value": n.Name}}
+	node := map[string]any{"nodeId": strconv.Itoa(n.ID), "ignored": false, "backendDOMNodeId": n.ID, "childIds": ids,
+		"role": map[string]any{"type": "role", "value": n.Role}, "name": map[string]any{"type": "computedString", "value": n.Name},
+		"properties": []any{map[string]any{"name": "modal", "value": map[string]any{"type": "boolean", "value": n.Modal}}}}
+	if parent := p.parent(n.ID); parent != nil {
+		node["parentId"] = strconv.Itoa(parent.ID)
+	}
+	return node
 }
 
 func (p *fakePage) byObject(params map[string]any) *fakeNode {
@@ -414,7 +445,7 @@ func value(v any) map[string]any {
 	return map[string]any{"result": map[string]any{"type": "object", "value": v}}
 }
 
-func (p *fakePage) cdp(method string, params map[string]any, opened func(int)) (any, error) {
+func (p *fakePage) cdp(method string, params map[string]any, opened func(int, string)) (any, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.methods = append(p.methods, method)
@@ -425,7 +456,9 @@ func (p *fakePage) cdp(method string, params map[string]any, opened func(int)) (
 	case "Accessibility.getFullAXTree":
 		nodes := []any{}
 		for _, n := range p.Nodes {
-			nodes = append(nodes, p.axNode(n))
+			if p.shown(n) {
+				nodes = append(nodes, p.axNode(n))
+			}
 		}
 		return map[string]any{"nodes": nodes}, nil
 	case "Accessibility.getPartialAXTree":
@@ -439,6 +472,9 @@ func (p *fakePage) cdp(method string, params map[string]any, opened func(int)) (
 		}
 		return map[string]any{"nodeIds": ids}, nil
 	case "DOM.describeNode":
+		if n := p.byObject(params); n != nil {
+			return map[string]any{"node": map[string]any{"backendNodeId": n.ID}}, nil
+		}
 		id, _ := params["nodeId"].(float64)
 		index := slices.Index(p.tagged, int(id)-1000)
 		return map[string]any{"node": map[string]any{"backendNodeId": int(id) - 1000, "attributes": []string{"data-tofu-ci", strconv.Itoa(index)}}}, nil
@@ -483,6 +519,10 @@ func (p *fakePage) cdp(method string, params map[string]any, opened func(int)) (
 		args, _ := params["arguments"].([]any)
 		number := func(i int) float64 { return args[i].(map[string]any)["value"].(float64) }
 		switch {
+		case strings.Contains(script, "closest('a[href]')"):
+			return value(p.href(target)), nil
+		case strings.Contains(script, "this.href"):
+			return value(target.Href), nil
 		case strings.Contains(script, "elementFromPoint"):
 			if hit := p.hit(number(0), number(1)); hit != nil && !p.related(hit, target) {
 				return map[string]any{"result": map[string]any{"type": "object", "objectId": "node-" + strconv.Itoa(hit.ID)}}, nil
@@ -500,7 +540,10 @@ func (p *fakePage) cdp(method string, params map[string]any, opened func(int)) (
 			if n.Fires != "" {
 				p.fired = append(p.fired, n.Fires)
 				if n.Opens != 0 {
-					opened(n.Opens)
+					opened(n.Opens, n.OpensURL)
+				}
+				if toggled := p.node(n.Toggles); toggled != nil {
+					toggled.Hidden = !toggled.Hidden
 				}
 				break
 			}
@@ -544,12 +587,14 @@ func drivenPage(t *testing.T, name string) (*browser.Driver, *fakePage) {
 		_ = toHostW.Close()
 		_ = fromHostR.Close()
 	})
-	if err := browser.WriteMessage(toHostW, []byte(`{"t":"hello","version":2,"tabs":[{"id":7,"url":"https://stays.test/","title":"Stays"}]}`)); err != nil {
+	hello, _ := json.Marshal(map[string]any{"t": "hello", "version": 2, "tabs": []any{map[string]any{"id": 7, "url": cmp.Or(page.URL, "https://stays.test/"), "title": "Stays", "opened": page.Ours}}})
+	if err := browser.WriteMessage(toHostW, hello); err != nil {
 		t.Fatal(err)
 	}
 	go func() {
-		opened := func(tab int) {
-			_ = browser.WriteMessage(toHostW, fmt.Appendf(nil, `{"t":"tabUpdated","tab":{"id":%d,"url":"https://stays.test/listing","title":"Listing"}}`, tab))
+		opened := func(tab int, url string) {
+			update, _ := json.Marshal(map[string]any{"t": "tabUpdated", "tab": map[string]any{"id": tab, "url": cmp.Or(url, "https://stays.test/listing"), "title": "Listing", "opened": page.Ours}})
+			_ = browser.WriteMessage(toHostW, update)
 		}
 		for {
 			raw, err := browser.ReadMessage(fromHostR)
@@ -557,10 +602,12 @@ func drivenPage(t *testing.T, name string) (*browser.Driver, *fakePage) {
 				return
 			}
 			var call struct {
-				T    string `json:"t"`
-				ID   int64  `json:"id"`
-				Op   string `json:"op"`
-				Args struct {
+				T     string `json:"t"`
+				ID    int64  `json:"id"`
+				TabID int    `json:"tabId"`
+				Op    string `json:"op"`
+				Args  struct {
+					URL   string `json:"url"`
 					Calls []struct {
 						Method string         `json:"method"`
 						Params map[string]any `json:"params"`
@@ -568,6 +615,27 @@ func drivenPage(t *testing.T, name string) (*browser.Driver, *fakePage) {
 				} `json:"args"`
 			}
 			if json.Unmarshal(raw, &call) != nil || call.T != "call" {
+				continue
+			}
+			if call.Op != "cdp" {
+				page.mu.Lock()
+				page.tabOps = append(page.tabOps, fmt.Sprintf("%s %d %s", call.Op, call.TabID, call.Args.URL))
+				if call.Op == "navigate" {
+					page.URL = call.Args.URL
+				}
+				page.mu.Unlock()
+				if call.Op == "close" {
+					_ = browser.WriteMessage(toHostW, fmt.Appendf(nil, `{"t":"tabRemoved","tabId":%d}`, call.TabID))
+				}
+				value := call.TabID
+				if call.Op == "open" {
+					value = 30
+					update, _ := json.Marshal(map[string]any{"t": "tabUpdated", "tab": map[string]any{"id": value, "url": call.Args.URL, "title": "Opened", "opened": true}})
+					_ = browser.WriteMessage(toHostW, update)
+				}
+				if browser.WriteMessage(toHostW, fmt.Appendf(nil, `{"t":"result","id":%d,"ok":true,"value":%d}`, call.ID, value)) != nil {
+					return
+				}
 				continue
 			}
 			answers := []any{}
@@ -685,6 +753,96 @@ func TestAClickThatOpensATabReturnsItAndDrivesItNext(t *testing.T) {
 		t.Fatalf("the click returned %+v, %v, and the driver is on tab %d; want tab 21 opened and driven", moved, err, driver.Tab)
 	}
 	page.sawFired(t, "listing")
+}
+
+func TestAModalDialogNamesItselfAsTheCoverHidesThePageBehindItAndClosesByItsRef(t *testing.T) {
+	driver, page := drivenPage(t, "results")
+	before := observe(t, driver, true)
+	card, filters := refOf(t, before, "link", "Casa ⋅ Atibaia"), refOf(t, before, "button", "Filtros")
+	if !strings.Contains(before, `link "Casa ⋅ Atibaia" [ref=`+card+`, url=/rooms/123?adults=2&check_in=2026-10-09]`) {
+		t.Fatalf("the card link carries no url:\n%s", before)
+	}
+	if _, err := driver.Do(browser.Move{Ref: filters, Kind: browser.MoveClick}); err != nil {
+		t.Fatal(err)
+	}
+	covered, err := driver.Do(browser.Move{Ref: card, Kind: browser.MoveClick})
+	if err != nil || covered.Covered != `dialog "Filtros"` || covered.Close == "" {
+		t.Fatalf("a click on the card under the open dialog returned %+v, %v; want covered by dialog \"Filtros\" and its close ref", covered, err)
+	}
+	t.Logf("the covered click says: %s", covered)
+
+	under := observe(t, driver, true)
+	behind := strings.Index(under, `behind dialog "Filtros"`)
+	if behind < 0 || refOf(t, under, "button", "Fechar") != covered.Close || strings.Contains(under[behind:], "ref=") || !strings.Contains(under[behind:], `link "Casa ⋅ Atibaia"`) {
+		t.Fatalf("the snapshot under the dialog does not list the cards behind it without refs, or the close ref differs from %s:\n%s", covered.Close, under)
+	}
+	if _, err := driver.Do(browser.Move{Ref: card, Kind: browser.MoveClick}); err == nil {
+		t.Fatal("a ref behind the modal is still actionable")
+	}
+	if _, err := driver.Do(browser.Move{Ref: covered.Close, Kind: browser.MoveClick}); err != nil {
+		t.Fatal(err)
+	}
+	after := observe(t, driver, true)
+	if refOf(t, after, "link", "Casa ⋅ Atibaia") != card {
+		t.Fatalf("after the dialog closed the card is not %s again:\n%s", card, after)
+	}
+	if moved, err := driver.Do(browser.Move{Ref: card, Kind: browser.MoveClick}); err != nil || moved.Covered != "" {
+		t.Fatalf("the click on the card after closing returned %+v, %v", moved, err)
+	}
+	page.sawFired(t, "open filters", "close filters", "listing 123")
+}
+
+func TestACardsFullAreaAnchorOverItsTitleLinkLetsTheClickThrough(t *testing.T) {
+	driver, page := drivenPage(t, "card")
+	snapshot := observe(t, driver, true)
+	title := refOf(t, snapshot, "link", "Casa ⋅ Atibaia")
+	if moved, err := driver.Do(browser.Move{Ref: title, Kind: browser.MoveClick}); err != nil || moved.Covered != "" {
+		t.Fatalf("the click on the title under the card's own anchor returned %+v, %v", moved, err)
+	}
+	page.sawFired(t, "listing 123")
+}
+
+func (p *fakePage) sawTabOps(t *testing.T, want ...string) {
+	t.Helper()
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if !slices.Equal(p.tabOps, want) {
+		t.Fatalf("the tabs saw %q; want %q", p.tabOps, want)
+	}
+}
+
+func TestATaskWorksInOneTabAPopupOnAnySiteLoadsThereAndIsClosed(t *testing.T) {
+	driver, page := drivenPage(t, "popup")
+	for _, link := range []struct {
+		name  string
+		popup int
+		url   string
+	}{{"Casa em Lisboa", 21, "https://stays.test/rooms/123"}, {"Mapa", 22, "https://maps.test/atibaia"}} {
+		if _, err := driver.Do(browser.Move{Kind: browser.MoveNavigate, Value: "https://stays.test/s/atibaia"}); err != nil {
+			t.Fatal(err)
+		}
+		moved, err := driver.Do(browser.Move{Ref: refOf(t, observe(t, driver, true), "link", link.name), Kind: browser.MoveClick})
+		if err != nil || moved.Opened != 0 || moved.Folded != link.popup || driver.Tab != 7 || !moved.URLChanged {
+			t.Fatalf("a popup to %s returned %+v, %v, on tab %d; want it loaded into tab 7 and closed", link.url, moved, err, driver.Tab)
+		}
+		t.Logf("the click on %s says: %s", link.name, moved)
+	}
+	page.sawTabOps(t,
+		"navigate 7 https://stays.test/s/atibaia", "navigate 7 https://stays.test/rooms/123", "close 21 ",
+		"navigate 7 https://stays.test/s/atibaia", "navigate 7 https://maps.test/atibaia", "close 22 ")
+}
+
+func TestATaskOnThePersonsTabCreatesOneTabAndStaysInIt(t *testing.T) {
+	driver, page := drivenPage(t, "newtab")
+	for _, url := range []string{"https://www.google.test/search?q=airbnb", "https://www.airbnb.test/", "https://www.airbnb.test/rooms/123"} {
+		if moved, err := driver.Do(browser.Move{Kind: browser.MoveNavigate, Value: url}); err != nil {
+			t.Fatalf("navigate to %s returned %+v, %v", url, moved, err)
+		}
+	}
+	if driver.Tab != 30 {
+		t.Fatalf("the task ends on tab %d; want 30, the one tab it created", driver.Tab)
+	}
+	page.sawTabOps(t, "open 0 https://www.google.test/search?q=airbnb", "navigate 30 https://www.airbnb.test/", "navigate 30 https://www.airbnb.test/rooms/123")
 }
 
 func TestAPageWhoseFingerprintAlwaysMovesStillClicksOnceAndIsDone(t *testing.T) {
