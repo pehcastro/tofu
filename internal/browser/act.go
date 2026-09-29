@@ -295,11 +295,11 @@ func (d *Driver) fold(deadline time.Time, popup Tab) int {
 	if !popup.Opened || popup.URL == "" {
 		return 0
 	}
-	args, _ := json.Marshal(openArgs{URL: popup.URL})
-	if _, err := d.Client.callBy(deadline, d.Tab, opNavigate, args); err != nil {
+	if _, err := d.Client.callBy(deadline, popup.ID, opClose, nil); err != nil {
 		return 0
 	}
-	_, _ = d.Client.callBy(deadline, popup.ID, opClose, nil)
+	args, _ := json.Marshal(openArgs{URL: popup.URL})
+	_, _ = d.Client.callBy(deadline, d.Tab, opNavigate, args)
 	return popup.ID
 }
 

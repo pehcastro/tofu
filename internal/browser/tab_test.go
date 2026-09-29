@@ -844,8 +844,8 @@ func TestATaskWorksInOneTabAPopupOnAnySiteLoadsThereAndIsClosed(t *testing.T) {
 		t.Logf("the click on %s says: %s", link.name, moved)
 	}
 	page.sawTabOps(t,
-		"navigate 7 https://stays.test/s/atibaia", "navigate 7 https://stays.test/rooms/123", "close 21 ",
-		"navigate 7 https://stays.test/s/atibaia", "navigate 7 https://maps.test/atibaia", "close 22 ")
+		"navigate 7 https://stays.test/s/atibaia", "close 21 ", "navigate 7 https://stays.test/rooms/123",
+		"navigate 7 https://stays.test/s/atibaia", "close 22 ", "navigate 7 https://maps.test/atibaia")
 }
 
 func TestATaskOnThePersonsTabCreatesOneTabAndStaysInIt(t *testing.T) {

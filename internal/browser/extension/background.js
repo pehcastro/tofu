@@ -41,7 +41,7 @@ let snapshotSource = null;
 let groups = null;
 let groupWork = Promise.resolve();
 let groupTitle = 'tofu ⏸️';
-let lastClick = {tabId: 0, windowId: 0, at: 0};
+let lastAct = {tabId: 0, windowId: 0, at: 0};
 
 const tabInfo = tab => ({id: tab.id, url: tab.url ?? tab.pendingUrl ?? '', title: tab.title ?? '', opened: opened.has(tab.id)});
 const post = message => port?.postMessage(message);
@@ -121,6 +121,9 @@ async function timed(timing, phase, work) {
 
 async function perform(tabId, op, args, timing, cursor) {
   const url = String(args.url ?? '');
+  if (opened.has(tabId) && (DRIVE_OPS.includes(op) || (op === 'cdp' && args.act))) {
+    lastAct = {tabId, windowId: (await chrome.tabs.get(tabId)).windowId, at: Date.now()};
+  }
   if (op === 'open') return openTab(url);
   if (op === 'navigate') return navigateOpened(tabId, url);
   if (op === 'close') return closeOpened(tabId);
@@ -161,6 +164,7 @@ async function attach(tabId) {
     attached.set(tabId, chrome.debugger.attach({tabId}, DEBUGGER_VERSION)
       .then(() => send(tabId, 'Emulation.setFocusEmulationEnabled', {enabled: true}))
       .then(() => send(tabId, 'Page.setWebLifecycleState', {state: 'active'}).catch(() => {}))
+      .then(() => opened.has(tabId) && keepNavigationIn(tabId).catch(() => {}))
       .catch(error => {
         attached.delete(tabId);
         throw error;
@@ -245,10 +249,9 @@ async function relay(tabId, {calls, act}, cursor) {
   await attach(tabId);
   if (act && !grouped.has(tabId)) serially(() => groupTab(tabId));
   const click = calls.find(({method}) => method === 'Input.dispatchMouseEvent');
-  if (click && opened.has(tabId)) {
-    lastClick = {tabId, windowId: (await chrome.tabs.get(tabId)).windowId, at: Date.now()};
+  if (cursor && click && opened.has(tabId)) {
     const {x, y} = click.params;
-    if (cursor) send(tabId, 'Runtime.evaluate', {expression: `(${paintCursor})(${x}, ${y}, ${CURSOR_GLIDE_MS}, ${CURSOR_RING_MS}, ${CURSOR_IDLE_MS})`}).catch(() => {});
+    send(tabId, 'Runtime.evaluate', {expression: `(${paintCursor})(${x}, ${y}, ${CURSOR_GLIDE_MS}, ${CURSOR_RING_MS}, ${CURSOR_IDLE_MS})`}).catch(() => {});
   }
   return Promise.all(calls.map(({method, params}) => send(tabId, method, params).then(result => ({result}), error => ({error: error.message}))));
 }
@@ -281,6 +284,42 @@ function paintCursor(x, y, glideMs, ringMs, idleMs) {
   host.fade = setTimeout(() => { cursor.style.opacity = '0'; }, idleMs);
 }
 
+async function keepNavigationIn(tabId) {
+  const source = `(${keepInTab})()`;
+  await send(tabId, 'Page.enable', {});
+  await send(tabId, 'Page.addScriptToEvaluateOnNewDocument', {source});
+  await send(tabId, 'Runtime.evaluate', {expression: source});
+}
+
+function keepInTab() {
+  const mark = Symbol.for('tofu-keep');
+  if (window[mark]) return;
+  window[mark] = true;
+  const leaves = target => target !== '' && !['_self', '_top', '_parent'].includes(target.toLowerCase()) && frames[target] === undefined;
+  const stay = (element, key) => {
+    if (leaves(element[key] || document.querySelector('base[target]')?.target || '')) element[key] = '_self';
+  };
+  window.addEventListener('click', event => {
+    const link = event.composedPath().find(node => node.tagName === 'A' || node.tagName === 'AREA');
+    if (link) stay(link, 'target');
+  }, true);
+  window.addEventListener('submit', ({target, submitter}) => {
+    if (submitter?.formTarget) stay(submitter, 'formTarget');
+    else stay(target, 'target');
+  }, true);
+  const submit = HTMLFormElement.prototype.submit;
+  HTMLFormElement.prototype.submit = function () {
+    stay(this, 'target');
+    return submit.call(this);
+  };
+  const open = window.open;
+  window.open = function (url, target, ...features) {
+    if (!url || !leaves(target || '_blank')) return open.call(this, url, target, ...features);
+    location.assign(new URL(url, location.href).href);
+    return window;
+  };
+}
+
 function removeCursor() {
   document.querySelector('[data-tofu-cursor]')?.remove();
   return 'tofu-cursor-remove';
@@ -292,10 +331,10 @@ async function closeOpened(tabId) {
 }
 
 chrome.tabs.onCreated.addListener(tab => {
-  const orphan = tab.openerTabId === undefined && lastClick.windowId === tab.windowId && Date.now() - lastClick.at < ORPHAN_MS;
+  const orphan = tab.openerTabId === undefined && lastAct.windowId === tab.windowId && Date.now() - lastAct.at < ORPHAN_MS;
   if (opened.has(tab.openerTabId) || orphan) {
     opened.add(tab.id);
-    children.set(orphan ? lastClick.tabId : tab.openerTabId, tab.id);
+    children.set(orphan ? lastAct.tabId : tab.openerTabId, tab.id);
     serially(() => groupTab(tab.id));
   }
   post({t: 'tabUpdated', tab: tabInfo(tab)});

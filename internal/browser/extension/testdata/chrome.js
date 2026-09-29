@@ -5,6 +5,8 @@ const vm = require('node:vm');
 const [dir, scenario = 'groups'] = process.argv.slice(2);
 const LOAD_AFTER_MS = 100;
 let popupOpener = 20;
+let release = 'opens';
+let nextTab = 21;
 const heard = [];
 const posted = [];
 const storage = {};
@@ -23,6 +25,42 @@ const loadLater = (id, url) => setTimeout(() => {
   Object.assign(tabs.get(id), {status: 'complete', url, pendingUrl: undefined});
   note('complete', id);
 }, LOAD_AFTER_MS);
+const createTab = (url, openerTabId) => {
+  const id = nextTab++;
+  tabs.set(id, {id, windowId: 1, openerTabId, url: '', pendingUrl: url, status: 'loading', pinned: false, groupId: -1});
+  note('created', id);
+  listeners.created({...tabs.get(id)});
+  loadLater(id, url);
+};
+const documents = new Map();
+const documentOf = tabId => {
+  if (!documents.has(tabId)) {
+    const window = {
+      listeners: [],
+      addEventListener: (type, listener) => window.listeners.push({type, listener}),
+      open: url => createTab(url, undefined),
+      location: {href: 'https://stays.test/', assign: url => note('load', tabId, url)},
+      frames: {},
+      document: {querySelector: () => null},
+      HTMLFormElement: class {},
+      URL,
+    };
+    window.window = window;
+    documents.set(tabId, vm.createContext(window));
+  }
+  return documents.get(tabId);
+};
+const pageActs = {
+  opens: () => createTab('https://stays.test/listing', popupOpener),
+  link: page => {
+    const link = {tagName: 'A', target: '_blank', href: 'https://stays.test/rooms/1'};
+    const click = {type: 'click', composedPath: () => [link, page.document, page.window]};
+    for (const {type, listener} of page.listeners) if (type === 'click') listener(click);
+    if (link.target === '_blank') createTab(link.href, undefined);
+    else page.location.assign(link.href);
+  },
+  windowOpen: page => page.window.open('/rooms/2'),
+};
 const page = {snapshot: {url: 'https://stays.test/', title: 'Stays', text: '', elements: []}, click: {x: 10, y: 20}, settle: {}};
 
 const chrome = {
@@ -42,13 +80,14 @@ const chrome = {
         note('cursor', tabId, params.expression.includes('tofu-cursor-remove') ? 'remove' : 'move');
         return {};
       }
+      if (method === 'Page.addScriptToEvaluateOnNewDocument' || params.expression?.includes('tofu-keep')) {
+        note('keep', tabId, method);
+        vm.runInContext(params.expression ?? '', documentOf(tabId));
+        return {};
+      }
       if (method !== 'Runtime.evaluate') {
         note('input', tabId, method);
-        if (tabId === 20 && params.type === 'mouseReleased') {
-          tabs.set(21, {id: 21, windowId: 1, openerTabId: popupOpener, url: '', pendingUrl: 'https://stays.test/listing', status: 'loading', pinned: false, groupId: -1});
-          listeners.created({...tabs.get(21)});
-          loadLater(21, 'https://stays.test/listing');
-        }
+        if (tabId === 20 && params.type === 'mouseReleased') pageActs[release](documentOf(tabId));
         return {};
       }
       const request = JSON.parse(params.expression.slice(params.expression.lastIndexOf(')(') + 2, -1));
@@ -146,8 +185,23 @@ const scenarios = {groups: async () => {
   const release = {method: 'Input.dispatchMouseEvent', params: {type: 'mouseReleased', x: 40, y: 60, button: 'left'}};
   listeners.message({t: 'call', id: 2, tabId: 20, op: 'cdp', args: {calls: [release], act: true}});
   await new Promise(resolve => setTimeout(resolve, 3000));
+  call(3, 20, 'click', {element: 1, guard: 'g'});
+  await quiet();
+  await new Promise(resolve => setTimeout(resolve, 3000));
   tabs.set(40, {id: 40, windowId: 1, url: 'https://news.test/', title: 'News', pinned: false, groupId: -1});
   listeners.created({...tabs.get(40)});
+  await quiet();
+  return {};
+}, keep: async () => {
+  call(1, 0, 'open', {url: 'https://stays.test/new'});
+  await quiet();
+  const click = {method: 'Input.dispatchMouseEvent', params: {type: 'mouseReleased', x: 40, y: 60, button: 'left'}};
+  for (const [id, act] of [[2, 'link'], [3, 'windowOpen']]) {
+    release = act;
+    listeners.message({t: 'call', id, tabId: 20, op: 'cdp', args: {calls: [click], act: true}});
+    await quiet();
+  }
+  call(4, 9, 'snapshot');
   await quiet();
   return {};
 }, cursor: async () => {

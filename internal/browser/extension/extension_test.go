@@ -252,8 +252,27 @@ func TestATabTheSiteOpensWithNoOpenerDuringTofusClickIsTofus(t *testing.T) {
 		}
 	}
 	t.Logf("tabs posted as tofu's: %v", ours)
-	if !ours[21] || ours[40] {
-		t.Fatalf("tab 21, opened with no opener by tofu's click, is tofu's = %v; tab 40, opened later by the person, is tofu's = %v", ours[21], ours[40])
+	if !ours[21] || !ours[22] || ours[40] {
+		t.Fatalf("tab 21 from tofu's relayed click is tofu's = %v; tab 22 from tofu's click op = %v; tab 40, opened later by the person, = %v", ours[21], ours[22], ours[40])
+	}
+}
+
+func TestALinkToABlankTargetAndWindowOpenLoadInTofusTabAndCreateNoTab(t *testing.T) {
+	run := inStubbedChrome(t, "keep")
+	t.Logf("heard: %v", run.Heard)
+	if created := run.at("created", 21); created >= 0 {
+		t.Errorf("a page act in tofu's tab created tab 21 at %d", created)
+	}
+	if run.at("load", 20, "https://stays.test/rooms/1") < 0 {
+		t.Error("the target=_blank link did not load its href in tofu's tab 20")
+	}
+	if run.at("load", 20, "https://stays.test/rooms/2") < 0 {
+		t.Error("window.open did not load its url in tofu's tab 20")
+	}
+	for _, entry := range run.Heard {
+		if entry[0] == "keep" && entry[1] == 9.0 {
+			t.Fatalf("the person's tab 9 got the keep script: %v", entry)
+		}
 	}
 }
 
