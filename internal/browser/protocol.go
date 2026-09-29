@@ -12,7 +12,10 @@ import (
 	"tofu/internal/sys"
 )
 
-const ProtocolVersion = 2
+const (
+	ProtocolVersion = 2
+	relayRestarting = "the relay restarts on the dialling tofu's build"
+)
 
 type Tab struct {
 	ID     int    `json:"id"`
@@ -126,6 +129,7 @@ const (
 	opOpen   = "open"
 	opClose  = "close"
 	opBack   = "back"
+	opHello  = "hello"
 	opCDP    = "cdp"
 )
 

@@ -20,6 +20,7 @@ import (
 	"tofu/interface/cli"
 	"tofu/internal/browser"
 	"tofu/internal/browser/jevloop"
+	"tofu/internal/konst"
 	"tofu/internal/sys"
 	"tofu/internal/widget"
 )
@@ -79,13 +80,13 @@ func browserVerb(args []string, out, errOut io.Writer) int {
 	if err == nil && verb == "bench" {
 		return o.bench(operands)
 	}
-	arity, known := map[string][2]int{"": {0, 0}, "tabs": {0, 0}, "install": {0, 0}, "uninstall": {0, 0}, "open": {1, 1}, "close": {1, 1},
+	arity, known := map[string][2]int{"": {0, 0}, "tabs": {0, 0}, "build": {0, 0}, "install": {0, 0}, "uninstall": {0, 0}, "open": {1, 1}, "close": {1, 1},
 		"observe": {0, 0}, "click": {1, 1}, "fill": {2, 2}, "select": {2, 2}, "press": {1, 1}, "scroll": {0, 2}, "back": {0, 0}}[verb]
 	stepVerb := slices.Contains([]string{"observe", "click", "fill", "select", "press", "scroll", "back"}, verb)
 	operand := strings.Join(operands, " ")
 	tabID, badID := strconv.Atoi(operand)
 	if err != nil || tabErr != nil || known && (len(operands) < arity[0] || len(operands) > arity[1]) || verb == "close" && badID != nil || stepVerb && tab == 0 {
-		_, _ = fmt.Fprintln(errOut, "usage: tofu browser [install | uninstall | tabs | open <url> | close <tab id> | bench [--jev] [--n 12] [--rows file]] [--json]\n"+
+		_, _ = fmt.Fprintln(errOut, "usage: tofu browser [install | uninstall | tabs | build | open <url> | close <tab id> | bench [--jev] [--n 12] [--rows file]] [--json]\n"+
 			"       tofu browser observe [--all] | click <ref> | fill <ref> <text> | select <ref> <option> | press <key> | scroll [<ref>] [up|down] | back   --tab <id> [--json]")
 		return exitUsage
 	}
@@ -97,10 +98,18 @@ func browserVerb(args []string, out, errOut io.Writer) int {
 		return o.step(home, tab, verb, operands, all)
 	}
 	switch verb {
+	case "build":
+		build, err := browser.Build()
+		if err != nil {
+			return o.fail(err)
+		}
+		return o.show(struct {
+			Build string `json:"build"`
+		}{build}, []string{build})
 	case "", "tabs":
 		var tabs []browser.Tab
 		var builds *browser.Builds
-		err := withBrowser(home, func(client *browser.Client) (err error) {
+		err := o.withBrowser(home, func(client *browser.Client) (err error) {
 			if tabs, err = client.Tabs(); err == nil {
 				builds, err = client.Builds()
 			}
@@ -115,7 +124,7 @@ func browserVerb(args []string, out, errOut io.Writer) int {
 		}{append([]browser.Tab{}, tabs...), builds}, tabsPage(page, tabs, builds))
 	case "open":
 		var tab int
-		if err := withBrowser(home, func(client *browser.Client) (err error) { tab, err = client.Open(operand); return err }); err != nil {
+		if err := o.withBrowser(home, func(client *browser.Client) (err error) { tab, err = client.Open(operand); return err }); err != nil {
 			return o.fail(err)
 		}
 		return o.show(struct {
@@ -123,7 +132,7 @@ func browserVerb(args []string, out, errOut io.Writer) int {
 			URL string `json:"url"`
 		}{tab, operand}, []string{page.Receipt(cli.Added, "opened tab "+strconv.Itoa(tab), operand)})
 	case "close":
-		if err := withBrowser(home, func(client *browser.Client) error { return client.CloseTab(tabID) }); err != nil {
+		if err := o.withBrowser(home, func(client *browser.Client) error { return client.CloseTab(tabID) }); err != nil {
 			return o.fail(err)
 		}
 		return o.show(struct {
@@ -147,7 +156,7 @@ func browserVerb(args []string, out, errOut io.Writer) int {
 		removed := removedExtension(home)
 		return o.show(removed, extensionPage(page, removed))
 	}
-	_, _ = fmt.Fprintf(errOut, "tofu browser: unknown argument %q: use install, uninstall, tabs, open, close, observe, click, fill, select, press, scroll, back, bench, or nothing\n", verb)
+	_, _ = fmt.Fprintf(errOut, "tofu browser: unknown argument %q: use install, uninstall, tabs, build, open, close, observe, click, fill, select, press, scroll, back, bench, or nothing\n", verb)
 	return exitUsage
 }
 
@@ -171,7 +180,7 @@ func (o browserOutput) step(home string, tab int, verb string, operands []string
 	}
 	var snapshot string
 	var moved *browser.Moved
-	err := withBrowser(home, func(client *browser.Client) error {
+	err := o.withBrowser(home, func(client *browser.Client) error {
 		driver := &browser.Driver{Client: client, Tab: tab}
 		var err error
 		if verb != "observe" {
@@ -236,7 +245,7 @@ func (o browserOutput) bench(args []string) int {
 	if report.RowsFile == "" {
 		report.RowsFile = filepath.Join(home, sys.StateDirName, "bench", "browser-steps-"+time.Now().Format("20060102-150405")+".jsonl")
 	}
-	err = withBrowser(home, func(client *browser.Client) error {
+	err = o.withBrowser(home, func(client *browser.Client) error {
 		tab, err := client.Open(address)
 		if err != nil {
 			return err
@@ -256,8 +265,16 @@ func (o browserOutput) bench(args []string) int {
 	return o.show(report, benchPage(o.page, report))
 }
 
-func withBrowser(home string, use func(*browser.Client) error) error {
+func (o browserOutput) withBrowser(home string, use func(*browser.Client) error) error {
 	client, err := browser.Dial(home)
+	if errors.Is(err, browser.ErrRelayRestarting) && !o.asJSON {
+		_, _ = fmt.Fprintln(o.out, o.page.Glyph(cli.Changed)+" updating: the relay restarts on this build")
+	}
+	restarting := errors.Is(err, browser.ErrRelayRestarting)
+	for until := time.Now().Add(konst.BrowserCallTimeoutMillis * time.Millisecond); restarting && err != nil && time.Now().Before(until); {
+		time.Sleep(konst.BrowserDialTimeoutMillis * time.Millisecond)
+		client, err = browser.Dial(home)
+	}
 	if err != nil {
 		return err
 	}

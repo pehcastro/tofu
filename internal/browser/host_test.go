@@ -95,11 +95,20 @@ func socketOf(t *testing.T, home string) string {
 
 func startHost(t *testing.T, home string) (fakeExtension, <-chan error) {
 	t.Helper()
+	build, err := Build()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return startHostOn(t, home, build)
+}
+
+func startHostOn(t *testing.T, home, build string) (fakeExtension, <-chan error) {
+	t.Helper()
 	stdinR, stdinW := io.Pipe()
 	stdoutR, stdoutW := io.Pipe()
 	done := make(chan error, 1)
 	go func() {
-		err := Host(testOrigin, stdinR, stdoutW, home)
+		err := host(testOrigin, stdinR, stdoutW, home, build, func(string) (string, error) { return Build() })
 		_ = stdinR.CloseWithError(errors.New("the host returned"))
 		_ = stdoutW.Close()
 		done <- err
@@ -498,6 +507,65 @@ func TestStaleSocketIsNotConnectedAndIsReplaced(t *testing.T) {
 	if tabs, err := dial(t, home).Tabs(); err != nil || len(tabs) != 0 {
 		t.Fatalf("a host over a stale socket serves %v, %v", tabs, err)
 	}
+}
+
+func TestAnOlderClientIsRefusedAndTheCurrentRelayKeepsServing(t *testing.T) {
+	home := shortHome(t)
+	installFor(t, home, testOrigin)
+	ext, done := startHost(t, home)
+	helloFrom(ext, "")
+	client := dial(t, home)
+	if _, err := client.Call(0, opHello, json.RawMessage(`{"build":"0ld"}`)); err == nil || !strings.Contains(err.Error(), "this tofu is older than the relay: restart it") {
+		t.Fatalf("a client on build 0ld said hello to the current relay and got %v; want it refused as older", err)
+	}
+	select {
+	case err := <-done:
+		t.Fatalf("the current relay exited with %v when an older client dialled it", err)
+	case <-time.After(200 * time.Millisecond):
+	}
+	if tabs, err := dial(t, home).Tabs(); err != nil || len(tabs) != 1 {
+		t.Fatalf("after the older client, the relay serves %v, %v", tabs, err)
+	}
+}
+
+func TestANewerClientRestartsAStaleRelayAndTheReconnectRewrites(t *testing.T) {
+	home := shortHome(t)
+	installFor(t, home, testOrigin)
+	stale := staleInstall(t, home)
+	old, oldDone := startHostOn(t, home, "0ld")
+	helloFrom(old, "0ld")
+
+	if client, err := Dial(home); !errors.Is(err, ErrRelayRestarting) {
+		if client != nil {
+			_ = client.Close()
+		}
+		t.Fatalf("a client on this build dialled a relay on build 0ld and got %v; want ErrRelayRestarting", err)
+	}
+	select {
+	case err := <-oldDone:
+		if err != nil {
+			t.Fatalf("the stale relay exited with %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the stale relay kept serving after a newer client dialled it")
+	}
+	if _, err := os.Stat(socketOf(t, home)); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("the stale relay left its socket: %v", err)
+	}
+
+	fresh, _ := startHost(t, home)
+	fresh.send(`{"t":"hello","version":2,"build":"0ld","tabs":[]}`)
+	if heard := fresh.next(); heard.T != messageReload {
+		t.Fatalf("the extension reconnected to the new relay and heard %+v; want reload", heard)
+	}
+	if _, err := os.Stat(stale); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("the new relay did not rewrite the extension: %v", err)
+	}
+	client, err := Dial(home)
+	if err != nil {
+		t.Fatalf("a client on the relay's own build was refused: %v", err)
+	}
+	_ = client.Close()
 }
 
 func staleInstall(t *testing.T, home string) string {

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -17,7 +18,10 @@ const (
 	InstallHint  = "tofu browser install, then load it in Chrome"
 )
 
-var ErrNotConnected = errors.New(NotConnected + ": run " + InstallHint)
+var (
+	ErrNotConnected    = errors.New(NotConnected + ": run " + InstallHint)
+	ErrRelayRestarting = errors.New("the tofu relay runs another build and restarts on this one")
+)
 
 type CallTime struct {
 	Wall      time.Duration
@@ -43,7 +47,24 @@ func Dial(home string) (*Client, error) {
 	if err != nil {
 		return nil, fmt.Errorf("%w (%v)", ErrNotConnected, err)
 	}
-	return &Client{conn: conn, out: json.NewEncoder(conn), in: json.NewDecoder(conn)}, nil
+	client := &Client{conn: conn, out: json.NewEncoder(conn), in: json.NewDecoder(conn)}
+	build, err := Build()
+	var hello []byte
+	if err == nil {
+		hello, err = json.Marshal(map[string]string{"build": build})
+	}
+	if err == nil {
+		_, err = client.Call(0, opHello, hello)
+	}
+	if err != nil && strings.HasPrefix(err.Error(), relayRestarting) {
+		_ = client.Close()
+		return nil, fmt.Errorf("%w (%v)", ErrRelayRestarting, err)
+	}
+	if err != nil && !strings.Contains(err.Error(), fmt.Sprintf("unknown browser op %q", opHello)) {
+		_ = client.Close()
+		return nil, err
+	}
+	return client, nil
 }
 
 func (c *Client) Tabs() ([]Tab, error) {

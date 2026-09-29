@@ -1,6 +1,7 @@
 package browser
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -9,6 +10,7 @@ import (
 	"net"
 	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"sync"
@@ -45,21 +47,45 @@ type relay struct {
 
 	extensionDir string
 	builds       Builds
+	restart      chan struct{}
+	installed    func() (string, error)
 }
 
 func Host(origin string, stdin io.Reader, stdout io.Writer, home string) error {
-	extensionDir, manifestPath := installPaths(home)
-	var installed hostManifest
-	raw, err := os.ReadFile(manifestPath)
-	if err == nil {
-		err = json.Unmarshal(raw, &installed)
-	}
-	if err != nil || !slices.Contains(installed.AllowedOrigins, origin) {
-		return fmt.Errorf("%s is not the extension installed in %s: run tofu browser install", origin, manifestPath)
-	}
 	tofu, err := Build()
 	if err != nil {
 		return err
+	}
+	return host(origin, stdin, stdout, home, tofu, installedBuild)
+}
+
+func installedBuild(exe string) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), konst.BrowserDialTimeoutMillis*time.Millisecond)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, exe, "browser", "build", "--json").Output()
+	var envelope struct {
+		Data struct {
+			Build string `json:"build"`
+		} `json:"data"`
+	}
+	if err == nil {
+		err = json.Unmarshal(out, &envelope)
+	}
+	if err == nil && envelope.Data.Build == "" {
+		err = fmt.Errorf("%s browser build printed no build", exe)
+	}
+	return envelope.Data.Build, err
+}
+
+func host(origin string, stdin io.Reader, stdout io.Writer, home, tofu string, installed func(exe string) (string, error)) error {
+	extensionDir, manifestPath := installPaths(home)
+	var installedHost hostManifest
+	raw, err := os.ReadFile(manifestPath)
+	if err == nil {
+		err = json.Unmarshal(raw, &installedHost)
+	}
+	if err != nil || !slices.Contains(installedHost.AllowedOrigins, origin) {
+		return fmt.Errorf("%s is not the extension installed in %s: run tofu browser install", origin, manifestPath)
 	}
 
 	path, err := socketPath(home)
@@ -80,7 +106,8 @@ func Host(origin string, stdin io.Reader, stdout io.Writer, home string) error {
 	if err != nil {
 		return err
 	}
-	r := &relay{extension: stdout, tabs: map[int]Tab{}, claims: map[int]*session{}, pending: map[int64]route{}, sessions: map[*session]bool{}, shown: statusIdle, extensionDir: extensionDir, builds: Builds{Tofu: tofu}}
+	r := &relay{extension: stdout, tabs: map[int]Tab{}, claims: map[int]*session{}, pending: map[int64]route{}, sessions: map[*session]bool{}, shown: statusIdle, extensionDir: extensionDir, builds: Builds{Tofu: tofu}, restart: make(chan struct{}, 1),
+		installed: func() (string, error) { return installed(installedHost.Path) }}
 	r.idle = time.AfterFunc(idleAfter, func() {
 		r.mu.Lock()
 		defer r.mu.Unlock()
@@ -98,7 +125,12 @@ func Host(origin string, stdin io.Reader, stdout io.Writer, home string) error {
 		}
 	}()
 
-	err = r.readExtension(stdin)
+	read := make(chan error, 1)
+	go func() { read <- r.readExtension(stdin) }()
+	select {
+	case err = <-read:
+	case <-r.restart:
+	}
 	_ = listener.Close()
 	r.mu.Lock()
 	r.closed = true
@@ -239,6 +271,26 @@ func (r *relay) handle(s *session, req request) {
 		tabs := slices.SortedFunc(maps.Values(r.tabs), func(a, b Tab) int { return a.ID - b.ID })
 		listed, _ := json.Marshal(slices.DeleteFunc(tabs, func(tab Tab) bool { return !reachable(tab.URL) }))
 		_ = s.out.Encode(result{ID: req.ID, OK: true, Value: listed})
+		return
+	}
+	if req.Op == opHello {
+		var hello struct {
+			Build string `json:"build"`
+		}
+		if json.Unmarshal(req.Args, &hello) != nil || hello.Build == r.builds.Tofu {
+			_ = s.out.Encode(result{ID: req.ID, OK: true})
+			return
+		}
+		current, err := r.installed()
+		if err != nil || current == r.builds.Tofu {
+			_ = s.out.Encode(result{ID: req.ID, Error: fmt.Sprintf("this tofu is older than the relay: restart it (the relay runs build %s, the installed tofu, and this tofu runs %s)", r.builds.Tofu, hello.Build)})
+			return
+		}
+		_ = s.out.Encode(result{ID: req.ID, Error: fmt.Sprintf("%s: this relay runs build %s, the installed tofu is %s, and the tofu that dialled it runs %s", relayRestarting, r.builds.Tofu, current, hello.Build)})
+		select {
+		case r.restart <- struct{}{}:
+		default:
+		}
 		return
 	}
 	if req.Op == opBuilds {
