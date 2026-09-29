@@ -42,6 +42,7 @@ const (
 	selectionHead   = "Selection"
 	excludedHead    = "Excluded"
 	fromHead        = "From"
+	noticeHead      = "Notice"
 	reloadHint      = "f5 reloads models"
 	reloadingHint   = "reloading models"
 	effortHead      = "Effort"
@@ -60,6 +61,8 @@ const (
 	keyPanelWidth   = 64
 	keyWhy          = "A key pays for this model. It goes to the credential store and is never shown."
 	keyFooter       = "type the key · enter stores it · esc cancels"
+	keyChecking     = "checking the key with its provider"
+	checkingFooter  = "esc cancels the check"
 	maskGlyph       = "•"
 )
 
@@ -137,7 +140,11 @@ func (m Model) cached(width, height int) string {
 func (m Model) keyPanel(modal string) string {
 	body := look.Accent("› ") + look.Title(strings.Repeat(maskGlyph, utf8.RuneCountInString(m.entry.typed))) + look.Accent("█") +
 		"\n" + look.Style(look.Red).Render(m.entry.refusal)
-	panel := look.DialogPanel(min(keyPanelWidth, lipgloss.Width(modal)), m.entry.name, keyWhy, body, keyFooter)
+	footer := keyFooter
+	if m.entry.checking != 0 {
+		body, footer = body+look.Muted(keyChecking), checkingFooter
+	}
+	panel := look.DialogPanel(min(keyPanelWidth, lipgloss.Width(modal)), m.entry.name, keyWhy, body, footer)
 	return look.Over(modal, panel, max(0, (lipgloss.Width(modal)-lipgloss.Width(panel))/2), max(0, (lipgloss.Height(modal)-lipgloss.Height(panel))/2))
 }
 
@@ -226,7 +233,7 @@ func (m Model) detailPane() string {
 		}
 		target := m.targets[m.cursor]
 		assigned := target.Assigned
-		if assigned == "" {
+		if assigned == "" && target.Role != "" {
 			assigned = target.Role.Unbound()
 		}
 		return view + look.Title(target.Name) + "\n" + look.Muted(target.Job) + "\n\n" + look.SectionLabel(boundHead) + "\n" + look.Muted(assigned) + "\n\n" + look.Faint(rebindHint)
@@ -248,6 +255,9 @@ func (m Model) detailPane() string {
 		view += field("key", "set")
 	default:
 		view += field("key", "not set")
+	}
+	if row.Notice != "" {
+		view += "\n" + look.SectionLabel(noticeHead) + "\n" + look.Muted(row.Notice) + "\n"
 	}
 	if row.From != "" {
 		view += "\n" + look.SectionLabel(fromHead) + "\n" + look.Muted(row.From) + "\n"

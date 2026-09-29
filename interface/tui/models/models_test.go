@@ -1,9 +1,11 @@
 package models
 
 import (
+	"context"
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/charmbracelet/x/ansi"
 
@@ -93,12 +95,13 @@ func TestEveryRowSpellsSourceSlashModel(t *testing.T) {
 		t.Fatal("the shipped library carries no model")
 	}
 	type paidFor struct {
-		source library.Subscription
+		source string
 		id     string
 	}
 	known := map[paidFor]bool{}
 	for _, one := range loaded.Models {
-		known[paidFor{one.Subscription, one.ID}] = true
+		source, _, _ := strings.Cut(one.Slug(), "/")
+		known[paidFor{source, one.ID}] = true
 	}
 	for _, group := range Build(loaded, everySource(loaded), noKeys(), nil).Groups {
 		for _, row := range group.Rows {
@@ -109,8 +112,8 @@ func TestEveryRowSpellsSourceSlashModel(t *testing.T) {
 			if source != group.Source {
 				t.Errorf("%s: the source is %q, want the subscription %q that pays for it", row.Slug, source, group.Source)
 			}
-			if !known[paidFor{library.Subscription(source), name}] {
-				t.Errorf("%s: the library has no %q under the %q subscription, and a slug names the money", row.Slug, name, source)
+			if !known[paidFor{source, name}] {
+				t.Errorf("%s: the library has no %q paid by %q, and a slug names the money", row.Slug, name, source)
 			}
 		}
 	}
@@ -213,7 +216,7 @@ func classifierPicker(t *testing.T, loaded library.Library) Model {
 			stored, err := sys.StoredKeys()
 			return err == nil && stored[name] != ""
 		},
-		Save: sys.SaveKey,
+		Save: func(_ context.Context, name, value string) error { return sys.SaveKey(name, value) },
 	}
 	targets := []Target{
 		{Name: "orchestrator", Job: library.RoleOrchestrator.What(), Role: library.RoleOrchestrator},
@@ -223,6 +226,13 @@ func classifierPicker(t *testing.T, loaded library.Library) Model {
 	built.SetSize(120, 36)
 	built.AssignTo(1)
 	return built
+}
+
+func entered(m *Model) Intent {
+	if got := m.Key("enter"); got.Action != CheckKey {
+		return got
+	}
+	return m.Checked(m.KeyCheck(context.Background()))
 }
 
 func typeInto(m *Model, text string) {
@@ -268,12 +278,12 @@ func TestAKeyModelWithNoKeyAsksForTheKeyMaskedAndEnterStoresIt(t *testing.T) {
 		t.Fatal("esc left the input open")
 	}
 	m.Key("enter")
-	if got := m.Key("enter"); got.Action != None {
+	if got := entered(&m); got.Action != None {
 		t.Fatalf("enter on an empty input returned %+v", got)
 	}
 	typeInto(&m, madeUp)
 	want := Intent{Action: Bind, Role: library.RoleClassifier, Slug: "typesafe/jev-latest"}
-	if got := m.Key("enter"); got != want {
+	if got := entered(&m); got != want {
 		t.Fatalf("enter with a key returned %+v, want %+v", got, want)
 	}
 	stored, err := sys.StoredKeys()
@@ -283,6 +293,28 @@ func TestAKeyModelWithNoKeyAsksForTheKeyMaskedAndEnterStoresIt(t *testing.T) {
 	m.AssignTo(1)
 	if view := ansi.Strip(m.View()); !strings.Contains(view, "typesafe · key set") {
 		t.Fatalf("the mark does not say the key is set\n%s", view)
+	}
+}
+
+func TestAKeyCheckThatNeverAnswersLeavesThePickerLiveAndEscCancelsIt(t *testing.T) {
+	never := make(chan struct{})
+	t.Cleanup(func() { close(never) })
+	m := classifierPicker(t, shippedLibrary(t))
+	m.keys.Save = func(context.Context, string, string) error { <-never; return nil }
+	m.Key("enter")
+	typeInto(&m, "or-made-up-silent-51c0")
+	answered := make(chan Intent, 1)
+	go func() { answered <- m.Key("enter") }()
+	select {
+	case <-answered:
+	case <-time.After(2 * time.Second):
+		t.Fatal("enter waited 2s on a key check that never answers, so the screen froze")
+	}
+	if view := ansi.Strip(m.View()); !strings.Contains(view, keyChecking) {
+		t.Fatalf("the input does not say the key is being checked\n%s", view)
+	}
+	if got := m.Key("esc"); got.Action != CancelCheck || strings.Contains(ansi.Strip(m.View()), keyChecking) {
+		t.Fatalf("esc during the check returned %+v and left\n%s", got, ansi.Strip(m.View()))
 	}
 }
 
@@ -298,7 +330,7 @@ func TestAPastedKeyIsStoredWithoutItsNewline(t *testing.T) {
 	if shown := ansi.Strip(m.View()); strings.Contains(shown, madeUp[len(madeUp)-6:]) {
 		t.Fatalf("the pasted key is on the screen\n%s", shown)
 	}
-	if got := m.Key("enter"); got.Action != Bind {
+	if got := entered(&m); got.Action != Bind {
 		t.Fatalf("enter after a paste returned %+v", got)
 	}
 	if stored, _ := sys.StoredKeys(); stored[sys.OpenRouterKeyName] != madeUp {

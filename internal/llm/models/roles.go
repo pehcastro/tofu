@@ -144,7 +144,7 @@ func (c Library) Bind(fallback Subscription) (Bindings, error) {
 			}
 			binding.Model = model
 		}
-		binding.Wire = c.WireFor(binding.Model.Subscription)
+		binding.Wire = c.WireOf(binding.Model)
 		bound[id] = binding
 	}
 	return bound, nil

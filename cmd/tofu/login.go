@@ -9,7 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net/http"
 	"os"
 	"strconv"
 	"strings"
@@ -18,12 +17,9 @@ import (
 	"github.com/charmbracelet/x/term"
 
 	"tofu/internal/judge/jev"
-	"tofu/internal/konst"
 	"tofu/internal/llm/cred"
 	"tofu/internal/llm/models"
-	"tofu/internal/llm/wire/codex"
 	"tofu/internal/sys"
-	"tofu/internal/transport"
 	"tofu/internal/widget"
 )
 
@@ -73,7 +69,10 @@ func loginVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 		case braveName:
 			return storeKey(braveName, sys.BraveSearchKeyName, key, out, errOut)
 		case metaName:
-			return loginMeta(context.Background(), key, out, errOut)
+			if err := models.StoreMetaKey(context.Background(), key); err != nil {
+				return loginRefused(errOut, "%v", err)
+			}
+			return saidStored(metaName, key, out, errOut)
 		}
 		return loginJev(context.Background(), models.Provider(args[0]), key, out, errOut)
 	}
@@ -221,29 +220,14 @@ func loginJev(ctx context.Context, provider models.Provider, key string, out, er
 	return exitOK
 }
 
-func loginMeta(ctx context.Context, key string, out, errOut io.Writer) int {
-	client, err := transport.New(transport.Config{
-		AttemptTimeout: time.Duration(konst.TurnAttemptTimeoutMillis) * time.Millisecond,
-		Concurrency:    1,
-	})
-	if err == nil {
-		_, err = client.Do(ctx, transport.Request{
-			Method: http.MethodGet,
-			URL:    metaBaseURL() + codex.ModelsPath,
-			Header: http.Header{"Authorization": {"Bearer " + key}, "Accept": {"application/json"}},
-		})
-	}
-	if err != nil {
-		return loginRefused(errOut, "the key did not reach meta, so nothing was written: %s",
-			strings.ReplaceAll(err.Error(), key, sys.KeyRedactedMark))
-	}
-	return storeKey(metaName, models.Meta.KeyName(), key, out, errOut)
-}
-
 func storeKey(name, variable, key string, out, errOut io.Writer) int {
 	if err := sys.SaveKey(variable, key); err != nil {
 		return loginRefused(errOut, "%v", err)
 	}
+	return saidStored(name, key, out, errOut)
+}
+
+func saidStored(name, key string, out, errOut io.Writer) int {
 	path, err := sys.CredentialStorePath()
 	if err != nil {
 		return loginRefused(errOut, "%v", err)

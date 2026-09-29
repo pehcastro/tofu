@@ -173,6 +173,9 @@ func chooseModel(opts runOpts) (models.Model, error) {
 		if err != nil {
 			return models.Model{}, err
 		}
+		if opts.model == "" {
+			return library.KeyDefault(models.Meta)
+		}
 		return library.Select(opts.model)
 	}
 	if opts.model != "" {
@@ -189,6 +192,17 @@ func chooseModel(opts runOpts) (models.Model, error) {
 			orchestrator.Says(), opts.wire, orchestrator.Wire, opts.wire)
 	}
 	return orchestrator.Model, nil
+}
+
+func onTheBoundKeyWire(opts runOpts) runOpts {
+	if opts.model != "" || wireSpend(opts.wire) == turn.SpendAPIKey {
+		return opts
+	}
+	bound, err := boundRoles(opts.wire, opts.dir)
+	if orchestrator := bound[models.RoleOrchestrator]; err == nil && orchestrator.Wire == wireMeta {
+		opts.wire, opts.model = wireMeta, orchestrator.Model.Slug()
+	}
+	return opts
 }
 
 func boundSubAgent(opts runOpts) (string, error) {
@@ -306,6 +320,7 @@ func runVerb(args []string, out, errOut io.Writer) int {
 	if err != nil {
 		return runFail(errOut, err)
 	}
+	opts = onTheBoundKeyWire(opts)
 	dir := cmp.Or(opts.dir, ".")
 	say := func(unreadable string) { _, _ = fmt.Fprintln(errOut, "tofu run: "+unreadable) }
 	if opts.maxSteps == 0 {
@@ -910,7 +925,7 @@ func browserModel(dir string) (turn.Model, string, error) {
 		if err != nil {
 			return nil, "", err
 		}
-		opts := runOpts{dir: dir, wire: library.WireFor(model.Subscription), model: slug}
+		opts := runOpts{dir: dir, wire: library.WireOf(model), model: slug}
 		if len(model.Efforts) > 0 {
 			opts.effort = model.Efforts[0]
 		}

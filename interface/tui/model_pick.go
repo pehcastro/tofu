@@ -1,6 +1,8 @@
 package tui
 
 import (
+	"cmp"
+	"context"
 	"os"
 	"path/filepath"
 	"slices"
@@ -19,10 +21,12 @@ import (
 )
 
 const (
-	pickedHead   = "the next turn runs "
-	pickedEffort = " at effort "
-	pickedOnce   = ", and a restart starts again on the bound model"
-	noWireToPick = "no subscription is signed in, so there is no model to pick"
+	pickedHead    = "the next turn runs "
+	pickedEffort  = " at effort "
+	pickedOnce    = ", and a restart starts again on the bound model"
+	noWireToPick  = "no subscription is signed in, so there is no model to pick"
+	noWireForPick = " has no signed-in subscription or stored key, so the next turn keeps its model"
+	notSet        = "not set"
 )
 
 func shippedModels() (library.Library, error) {
@@ -34,10 +38,6 @@ func shippedModels() (library.Library, error) {
 }
 
 func (a *App) openPicker(assign string) {
-	if len(a.wires) == 0 && assign != roleKeyPrefix+string(library.RoleClassifier) {
-		a.notify(noWireToPick)
-		return
-	}
 	loaded, err := a.options.Models()
 	if err != nil {
 		a.notify(err.Error())
@@ -55,17 +55,37 @@ func (a *App) openPicker(assign string) {
 			targets[index].Role = library.RoleID(strings.TrimPrefix(row.Key, roleKeyPrefix))
 		}
 	}
+	if spec, isSetting := a.pickedSetting(assign); isSetting {
+		rows = append(rows, settings.Row{Key: assign})
+		targets = append(targets, models.Target{Name: spec.Label, Job: spec.Description, Assigned: cmp.Or(a.store.Text(assign), notSet), Setting: assign})
+	}
 	envFile := filepath.Join(a.options.Root, sys.CredentialFileName)
 	keys := models.Keys{
-		Set:  func(name string) bool { _, err := jev.KeyFor(envFile, name); return err == nil },
-		Save: sys.SaveKey,
+		Set: func(name string) bool { _, err := jev.KeyFor(envFile, name); return err == nil },
+		Save: func(ctx context.Context, name, value string) error {
+			if name == library.Meta.KeyName() {
+				return library.StoreMetaKey(ctx, value)
+			}
+			return sys.SaveKey(name, value)
+		},
 	}
 	picker := models.Build(loaded, sources, keys, targets)
+	if len(picker.Groups) == 0 && assign != roleKeyPrefix+string(library.RoleClassifier) {
+		a.notify(noWireToPick)
+		return
+	}
 	picker.SetSize(a.width, a.height)
 	if at := slices.IndexFunc(rows, func(row settings.Row) bool { return row.Key == assign }); at >= 0 {
 		picker.AssignTo(at)
 	}
-	a.push(&modelsDialog{picker})
+	a.push(&modelsDialog{picker: picker})
+}
+
+func (a *App) pickedSetting(key string) (isettings.Spec, bool) {
+	if a.store == nil || key != isettings.BrowserModel {
+		return isettings.Spec{}, false
+	}
+	return a.spec(key)
 }
 
 func (a *App) assignSubAgent(name, slug string) (string, error) {
@@ -102,6 +122,9 @@ func (a *App) nowRuns(name string) string {
 
 func (a *App) runNextTurnOn(slug string, effort llm.Effort) {
 	source, model, _ := strings.Cut(slug, "/")
+	if !slices.ContainsFunc(a.wires, func(wire Wire) bool { return wire.Provider == source }) {
+		a.readWires()
+	}
 	for _, wire := range a.wires {
 		if wire.Provider != source {
 			continue
@@ -115,4 +138,5 @@ func (a *App) runNextTurnOn(slug string, effort llm.Effort) {
 		a.view.Append(session.Entry{Kind: session.Note, Body: note + pickedOnce})
 		return
 	}
+	a.notify(slug + noWireForPick)
 }

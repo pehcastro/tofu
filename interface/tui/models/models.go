@@ -1,6 +1,7 @@
 package models
 
 import (
+	"context"
 	"slices"
 	"strings"
 	"unicode/utf8"
@@ -38,6 +39,7 @@ type Row struct {
 	Pays   library.Pays
 	Window string
 	Reason string
+	Notice string
 	Layer  string
 	From   string
 }
@@ -55,12 +57,13 @@ func (r Row) name() (source, model string) {
 type Target struct {
 	Name, Job, Assigned string
 	Role                library.RoleID
+	Setting             string
 }
 
-func (t Target) subAgent() bool { return t.Role == "" }
+func (t Target) subAgent() bool { return t.Role == "" && t.Setting == "" }
 
 func (t Target) takes() library.Kind {
-	if t.subAgent() {
+	if t.Role == "" {
 		return library.KindLLM
 	}
 	return t.Role.Takes()
@@ -91,11 +94,12 @@ type Source struct {
 
 type Keys struct {
 	Set  func(name string) bool
-	Save func(name, value string) error
+	Save func(ctx context.Context, name, value string) error
 }
 
 type keyEntry struct {
 	name, typed, refusal string
+	checking             int
 }
 
 type tab int
@@ -116,14 +120,18 @@ const (
 	Login
 	Close
 	Reload
+	CheckKey
+	CancelCheck
+	Set
 )
 
 type Intent struct {
-	Action Action
-	Slug   string
-	Role   library.RoleID
-	Agent  string
-	Effort llm.Effort
+	Action  Action
+	Slug    string
+	Role    library.RoleID
+	Agent   string
+	Setting string
+	Effort  llm.Effort
 }
 
 type Model struct {
@@ -133,6 +141,7 @@ type Model struct {
 	keys        Keys
 	reloading   bool
 	entry       keyEntry
+	checks      int
 	drawn       *drawn
 	targets     []Target
 	filter      textinput.Model
@@ -147,36 +156,29 @@ type Model struct {
 
 func Build(loaded library.Library, sources []Source, keys Keys, targets []Target) Model {
 	rows := map[library.Subscription][]Row{}
-	var classifiers []Group
+	var classifiers, keyed []Group
 	for _, one := range loaded.Models {
 		row := Row{Slug: one.Slug(), Use: one.Use, Kind: one.Kind, Pays: one.Pays(), Window: one.WindowText(), Reason: one.Reason,
-			Layer: one.Layer, From: one.From}
-		switch one.Kind {
-		case library.KindLLM:
-			rows[one.Subscription] = append(rows[one.Subscription], row)
-		case library.KindClassifier:
-			source, _, _ := strings.Cut(row.Slug, "/")
-			at := slices.IndexFunc(classifiers, func(group Group) bool { return group.Source == source })
-			if at < 0 {
-				group := Group{Source: source}
-				if row.Pays == library.PaysKey {
-					group.Key = one.Provider.KeyName()
-					group.KeySet = keys.Set(group.Key)
-				}
-				classifiers, at = append(classifiers, group), len(classifiers)
-			}
-			classifiers[at].Rows = append(classifiers[at].Rows, row)
-		default:
+			Notice: one.Notice, Layer: one.Layer, From: one.From}
+		switch {
+		case one.Kind == library.KindClassifier:
+			classifiers = inKeyGroup(classifiers, one, row, keys)
+		case one.Kind != library.KindLLM:
 			panic("models: unknown model kind " + string(one.Kind))
+		case row.Pays == library.PaysKey:
+			keyed = inKeyGroup(keyed, one, row, keys)
+		default:
+			rows[one.Subscription] = append(rows[one.Subscription], row)
 		}
 	}
-	groups := make([]Group, 0, len(sources))
+	groups := make([]Group, 0, len(sources)+len(keyed))
 	for _, source := range sources {
 		if len(rows[source.ID]) == 0 {
 			continue
 		}
 		groups = append(groups, Group{Source: string(source.ID), Rows: rows[source.ID], Efforts: source.Efforts})
 	}
+	groups = append(groups, keyed...)
 	filter := textinput.New()
 	filter.Prompt, filter.Placeholder = filterPrompt, filterHint
 	filter.SetStyles(look.FilterStyles())
@@ -184,6 +186,21 @@ func Build(loaded library.Library, sources []Source, keys Keys, targets []Target
 	built := Model{Groups: groups, classifiers: classifiers, sources: sources, keys: keys, drawn: &drawn{}, targets: targets, filter: filter, effort: llm.EffortDefault}
 	built.settle()
 	return built
+}
+
+func inKeyGroup(groups []Group, one library.Model, row Row, keys Keys) []Group {
+	source, _, _ := strings.Cut(row.Slug, "/")
+	at := slices.IndexFunc(groups, func(group Group) bool { return group.Source == source })
+	if at < 0 {
+		group := Group{Source: source, Efforts: one.Efforts}
+		if row.Pays == library.PaysKey {
+			group.Key = one.Provider.KeyName()
+			group.KeySet = keys.Set(group.Key)
+		}
+		groups, at = append(groups, group), len(groups)
+	}
+	groups[at].Rows = append(groups[at].Rows, row)
+	return groups
 }
 
 func (m Model) Rebuild(loaded library.Library) Model {
@@ -323,20 +340,19 @@ func (m *Model) Key(key string) Intent {
 }
 
 func (m *Model) entryKey(key string) Intent {
-	switch key {
-	case "esc":
+	checking := m.entry.checking != 0
+	switch {
+	case key == "esc":
 		m.entry = keyEntry{}
-	case "enter":
-		if err := m.keys.Save(m.entry.name, m.entry.typed); err != nil {
-			m.entry.refusal = err.Error()
-			return Intent{}
+		if checking {
+			return Intent{Action: CancelCheck}
 		}
-		for i := range m.classifiers {
-			m.classifiers[i].KeySet = m.classifiers[i].KeySet || m.classifiers[i].Key == m.entry.name
-		}
-		m.entry = keyEntry{}
-		return m.choose()
-	case "backspace":
+	case checking:
+	case key == "enter":
+		m.checks++
+		m.entry.checking, m.entry.refusal = m.checks, ""
+		return Intent{Action: CheckKey}
+	case key == "backspace":
 		typed := []rune(m.entry.typed)
 		m.entry.typed = string(typed[:max(len(typed)-1, 0)])
 	default:
@@ -347,13 +363,40 @@ func (m *Model) entryKey(key string) Intent {
 	return Intent{}
 }
 
+type KeyChecked struct {
+	check int
+	err   error
+}
+
+func (m Model) KeyCheck(ctx context.Context) KeyChecked {
+	return KeyChecked{check: m.entry.checking, err: m.keys.Save(ctx, m.entry.name, m.entry.typed)}
+}
+
+func (m *Model) Checked(result KeyChecked) Intent {
+	if result.check == 0 || result.check != m.entry.checking {
+		return Intent{}
+	}
+	if result.err != nil {
+		m.entry.checking, m.entry.refusal = 0, result.err.Error()
+		return Intent{}
+	}
+	for _, groups := range [][]Group{m.classifiers, m.Groups} {
+		for i := range groups {
+			groups[i].KeySet = groups[i].KeySet || groups[i].Key == m.entry.name
+		}
+	}
+	m.entry = keyEntry{}
+	return m.choose()
+}
+
 func (m *Model) Paste(text string) {
 	text = strings.TrimSpace(text)
-	if m.entry.name == "" {
+	switch {
+	case m.entry.name == "":
 		m.setFilter(m.filter.Value() + text)
-		return
+	case m.entry.checking == 0:
+		m.entry.typed, m.entry.refusal = m.entry.typed+text, ""
 	}
-	m.entry.typed, m.entry.refusal = m.entry.typed+text, ""
 }
 
 func (m *Model) setFilter(value string) {
@@ -438,7 +481,10 @@ func (m *Model) choose() Intent {
 	}
 	target := m.assign
 	m.assign, target.Assigned = nil, row.Slug
-	if target.subAgent() {
+	switch {
+	case target.Setting != "":
+		return Intent{Action: Set, Setting: target.Setting, Agent: target.Name, Slug: row.Slug}
+	case target.subAgent():
 		return Intent{Action: Assign, Agent: target.Name, Slug: row.Slug}
 	}
 	return Intent{Action: Bind, Role: target.Role, Slug: row.Slug}

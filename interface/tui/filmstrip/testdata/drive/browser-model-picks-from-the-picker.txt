@@ -1,0 +1,38 @@
+# the browser model setting opens the model picker on language models, a meta key check that never answers says checking while the screen stays live, esc cancels it, and the pick writes the setting
+type /settings
+key enter
+key right
+key right
+key right
+key right
+key right
+key right
+key right
+wait Browser model
+key down
+key down
+key down
+key enter
+wait ASSIGN TO
+type muse-spark-1.3
+wait meta · no key
+absent jev-latest
+screen
+key enter
+wait META_MUSE_API_KEY
+type meta-made-up-silent-0a9f
+key enter
+wait checking the key with its provider
+wait esc cancels the check
+absent 0a9f
+screen
+key esc
+absent checking the key
+wait ASSIGN TO
+key enter
+paste meta-made-up-accepted-3d7e
+key enter
+wait Browser model now runs meta/muse-spark-1.3
+wait meta/muse-spark-1.3  ▾
+absent 3d7e
+screen

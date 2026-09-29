@@ -24,6 +24,7 @@ const (
 	RowHostIntegration
 	RowRole
 	RowSubAgent
+	RowModel
 )
 
 type Number struct {
@@ -250,7 +251,7 @@ func (m *Model) activate() Intent {
 		return Intent{Action: ActionOpenKeybindings, Key: row.Key}
 	case RowHostIntegration:
 		return Intent{Action: ActionOpenHost, Key: row.Key}
-	case RowRole, RowSubAgent:
+	case RowRole, RowSubAgent, RowModel:
 		return Intent{Action: ActionOpenRole, Key: row.Key}
 	case RowValue:
 	default:

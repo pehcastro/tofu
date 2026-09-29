@@ -319,7 +319,22 @@ func appWires() []tui.Wire {
 			Efforts:  wireEfforts(known.wire),
 		})
 	}
-	return wires
+	return append(wires, keyWires()...)
+}
+
+func keyWires() []tui.Wire {
+	if _, err := jev.KeyFor(sys.CredentialFileName, models.Meta.KeyName()); err != nil {
+		return nil
+	}
+	library, err := modelLibrary("")
+	if err != nil {
+		return nil
+	}
+	chosen, err := library.KeyDefault(models.Meta)
+	if err != nil {
+		return nil
+	}
+	return []tui.Wire{{Name: wireMeta, Model: chosen.ID, Provider: string(models.Meta), Efforts: chosen.Efforts}}
 }
 
 type startBlocker struct {
@@ -790,7 +805,7 @@ func gateOffEvent(gateErr error) tui.Event {
 }
 
 func pickedOpts(dir, session, task string, pick tui.Pick, maxSteps int) runOpts {
-	return runOpts{
+	return onTheBoundKeyWire(runOpts{
 		dir:              dir,
 		task:             task,
 		turnID:           turn.NewID(time.Now()),
@@ -802,7 +817,7 @@ func pickedOpts(dir, session, task string, pick tui.Pick, maxSteps int) runOpts 
 		loopGuardRepeats: konst.TurnLoopGuardRepeats,
 		loopGuardWindow:  konst.TurnLoopGuardWindow,
 		maxSteps:         maxSteps,
-	}
+	})
 }
 
 func (s *appSession) run(ctx context.Context, pick tui.Pick, task string, emit tui.CalledFromInsideTheTurnAndNeverAfterItReturns) {

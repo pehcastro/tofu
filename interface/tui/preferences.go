@@ -293,6 +293,9 @@ func (a *App) settingRow(spec isettings.Spec, pending bool) settings.Row {
 		RestartPending:  pending,
 		Source:          source,
 	}
+	if _, picked := a.pickedSetting(spec.Key); picked {
+		row.Action = settings.RowModel
+	}
 	switch spec.Kind {
 	case isettings.Bool:
 		row.Value, row.Choices = onOff(a.store.Bool(spec.Key)), []string{switchOff, switchOn}

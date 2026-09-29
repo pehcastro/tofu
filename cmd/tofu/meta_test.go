@@ -14,6 +14,7 @@ import (
 	"sync"
 	"testing"
 
+	"tofu/interface/tui"
 	"tofu/internal/llm/models"
 	"tofu/internal/sys"
 	"tofu/internal/turn"
@@ -82,7 +83,7 @@ func metaStub(t *testing.T, answer func(heardMeta, http.ResponseWriter)) *[]hear
 		answer(request, w)
 	}))
 	t.Cleanup(server.Close)
-	t.Setenv(metaBaseURLVariable, server.URL)
+	t.Setenv(models.MetaBaseURLVariable, server.URL)
 	return heard
 }
 
@@ -195,6 +196,37 @@ func TestAMetaTurnSendsTheKeyAndTheModelAndRunsTheStreamedToolCall(t *testing.T)
 		}
 	}
 	t.Log("\n" + out.String())
+}
+
+func TestABoundMetaOrchestratorRunsOnMetaWithNoModelAndTheAppListsItsWire(t *testing.T) {
+	_, project := metaHome(t)
+	if wires := keyWires(); len(wires) != 0 {
+		t.Errorf("with no meta key the app lists %+v", wires)
+	}
+	if err := sys.SaveKey(sys.MetaMuseKeyName, madeUpMetaKey); err != nil {
+		t.Fatal(err)
+	}
+	if err := models.BindRole(sys.StateDir(project), models.RoleOrchestrator, "meta/muse-spark-1.3-contributor"); err != nil {
+		t.Fatal(err)
+	}
+	heard := metaStub(t, func(_ heardMeta, w http.ResponseWriter) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = io.WriteString(w, metaAnswer)
+	})
+	var out, errOut bytes.Buffer
+	if code := runVerb([]string{"--dir", project, "--no-gate", "--sift", siftFree, "--tools", toolSetThree, "say ok"}, &out, &errOut); code != exitOK {
+		t.Fatalf("tofu run with the orchestrator bound to meta exited %d\n%s", code, errOut.String())
+	}
+	if len(*heard) == 0 || !strings.Contains((*heard)[0].body, `"model":"muse-spark-1.3-contributor"`) {
+		t.Errorf("the bound meta model was not what the run asked for: %d requests", len(*heard))
+	}
+	if opts := pickedOpts(project, "", "say ok", tui.Pick{Wire: wireSubscription}, 1); opts.wire != wireMeta || opts.model != "meta/muse-spark-1.3-contributor" {
+		t.Errorf("the app runs a bound meta orchestrator on wire %q model %q", opts.wire, opts.model)
+	}
+	wires := keyWires()
+	if len(wires) != 1 || wires[0].Name != wireMeta || wires[0].Model != "muse-spark-1.3" {
+		t.Errorf("with a meta key the app lists %+v, want the meta wire on muse-spark-1.3", wires)
+	}
 }
 
 func TestAMetaTurnWithNoKeySaysHowToStoreOne(t *testing.T) {

@@ -3,6 +3,8 @@ package filmstrip
 import (
 	"context"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"slices"
@@ -19,6 +21,7 @@ import (
 	"tofu/interface/tui/paste"
 	"tofu/interface/tui/subagent"
 	"tofu/internal/golden"
+	library "tofu/internal/llm/models"
 	isettings "tofu/internal/settings"
 	roster "tofu/internal/subagent"
 	"tofu/internal/sys"
@@ -34,6 +37,8 @@ const (
 	driveTimeout     = 10 * time.Second
 	tallLines        = 60
 	clipboardRepeats = 6
+	acceptedMetaKey  = "meta-made-up-accepted"
+	silentMetaKey    = "meta-made-up-silent"
 )
 
 type transcript struct {
@@ -110,8 +115,25 @@ func launch(t *testing.T, path string) (*reel, *transcript) {
 			t.Fatal(err)
 		}
 	}
+	metaModels := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch authorization := r.Header.Get("Authorization"); {
+		case strings.HasPrefix(authorization, "Bearer "+silentMetaKey):
+			<-r.Context().Done()
+		case !strings.HasPrefix(authorization, "Bearer "+acceptedMetaKey):
+			w.WriteHeader(http.StatusUnauthorized)
+		}
+	}))
+	t.Cleanup(metaModels.Close)
+	t.Setenv(library.MetaBaseURLVariable, metaModels.URL)
 	out := &transcript{}
 	r := newReel(fixture.Width, fixture.Height, home, func(options *tui.Options) {
+		signed := options.Wires
+		options.Wires = func() []tui.Wire {
+			if stored, _ := sys.StoredKeys(); stored[library.Meta.KeyName()] != "" {
+				return append(signed(), tui.Wire{Name: string(library.Meta), Model: "muse-spark-1.3", Provider: string(library.Meta)})
+			}
+			return signed()
+		}
 		options.Fresh = strings.HasPrefix(name, freshPrefix)
 		options.Turn = seededTurn(options.Now())
 		options.Copy = func(text string) error {

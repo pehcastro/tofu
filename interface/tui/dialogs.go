@@ -2,6 +2,7 @@ package tui
 
 import (
 	"cmp"
+	"context"
 	"fmt"
 	"strings"
 
@@ -198,6 +199,13 @@ func (d *filesDialog) update(a *App, msg tea.Msg) tea.Cmd {
 }
 
 func (a *App) toFiles(msg tea.Msg) (tea.Cmd, bool) {
+	if checked, isCheck := msg.(models.KeyChecked); isCheck {
+		picking, isPicker := a.top().(*modelsDialog)
+		if !isPicker {
+			return nil, true
+		}
+		return a.choseModel(picking.picker.Checked(checked)), true
+	}
 	files, open := a.top().(*filesDialog)
 	if !open {
 		return nil, false
@@ -235,7 +243,10 @@ func (d *confirmDialog) decide(a *App, choice palette.Choice) tea.Cmd {
 	return a.pop()
 }
 
-type modelsDialog struct{ picker models.Model }
+type modelsDialog struct {
+	picker models.Model
+	cancel context.CancelFunc
+}
 
 func (d *modelsDialog) over(a *App, base string) string {
 	return d.picker.Dialog(base, a.width, a.height)
@@ -278,6 +289,25 @@ func (a *App) choseModel(intent models.Intent) tea.Cmd {
 		a.refreshSettingsRows()
 		a.notify(a.nowRuns(intent.Agent) + ", in " + path)
 		return a.pop()
+	case models.Set:
+		a.commit(intent.Setting, intent.Slug)
+		a.refreshSettingsRows()
+		a.notify(intent.Agent + " now runs " + intent.Slug)
+		return a.pop()
+	case models.CheckKey:
+		open, isPicker := a.top().(*modelsDialog)
+		if !isPicker {
+			return nil
+		}
+		ctx, cancel := context.WithCancel(context.Background())
+		open.cancel = cancel
+		picker := open.picker
+		return func() tea.Msg { return picker.KeyCheck(ctx) }
+	case models.CancelCheck:
+		if open, isPicker := a.top().(*modelsDialog); isPicker && open.cancel != nil {
+			open.cancel()
+		}
+		return nil
 	case models.Login:
 		if a.options.Login == nil {
 			return nil

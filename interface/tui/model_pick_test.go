@@ -3,6 +3,7 @@ package tui
 import (
 	"context"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -184,7 +185,7 @@ func TestThePickerOffersOnlyTheSubscriptionsTheTurnCanRun(t *testing.T) {
 	for _, wire := range app.wires {
 		signed[wire.Provider] = true
 	}
-	groups := openPicker(t, app).Groups
+	groups := slices.DeleteFunc(openPicker(t, app).Groups, func(group models.Group) bool { return group.Key != "" })
 	if len(groups) != len(signed) {
 		t.Fatalf("the picker shows %d subscriptions and the turn can run %d", len(groups), len(signed))
 	}

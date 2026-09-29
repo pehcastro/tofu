@@ -205,7 +205,7 @@ func (m *Model) display(row Row) string {
 		return strings.TrimSpace("inspect " + row.Value)
 	case RowRole, RowSubAgent:
 		return row.Value
-	case RowValue:
+	case RowValue, RowModel:
 	default:
 		panic("settings: unknown row action")
 	}
@@ -296,6 +296,8 @@ func howItWorks(row Row) string {
 		how = "Inspect tofu shortcuts and host conflicts. Apply previews terminal-only rules, then confirms a backed-up change. Undo removes tofu rules."
 	case row.Action == RowRole:
 		how = "Enter opens the model picker and binds the choice to this role."
+	case row.Action == RowModel:
+		how = "Enter opens the model picker and saves the model it picks to this setting."
 	case row.Action == RowSubAgent:
 		how = "Enter opens the model picker: a model, inherit to run on the orchestrator's model, or none to disable it. The choice wins over the definition's own model line."
 	case row.Kind == Bool:
