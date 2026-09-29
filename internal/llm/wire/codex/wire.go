@@ -30,6 +30,7 @@ type Config struct {
 	StreamIdle     time.Duration
 	InstallationID string
 	SessionID      string
+	ClientVersion  string
 }
 
 type Wire struct {
@@ -113,6 +114,7 @@ func (w *Wire) Ask(ctx context.Context, request Request) (Result, Dump, error) {
 				Identity:     identity,
 				TurnMetadata: metadataHeader,
 				TurnState:    request.TurnState,
+				Version:      w.config.ClientVersion,
 			}),
 			Body: body,
 			Identifiers: []string{

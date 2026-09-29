@@ -148,6 +148,7 @@ func pollRows(
 	if err != nil {
 		return nil, err
 	}
+	versions, _ := subFingerprint(".")
 	for _, row := range rows {
 		provider := quota.Provider(row.Credential.Provider)
 		if urls == nil && sys.CredentialsHiddenFromTests() {
@@ -163,10 +164,11 @@ func pollRows(
 			return nil, err
 		}
 		report, err := poller.Poll(ctx, quota.Account{
-			Provider:   provider,
-			AccountID:  row.Credential.Identity.AccountID,
-			Row:        row.ID,
-			Credential: cred.NewAccountManager(store, spec, row.ID),
+			Provider:      provider,
+			AccountID:     row.Credential.Identity.AccountID,
+			Row:           row.ID,
+			Credential:    cred.NewAccountManager(store, spec, row.ID),
+			ClientVersion: clientVersion(versions, row.Credential.Provider),
 		})
 		results = append(results, pollResult{row: row.ID, report: report, err: err})
 	}

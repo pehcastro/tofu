@@ -1,14 +1,20 @@
 package anthropic
 
-import "tofu/internal/llm"
+import (
+	"slices"
+	"strconv"
+	"strings"
+
+	"tofu/internal/llm"
+)
 
 const (
-	PinnedClaudeCodeVersion       = "2.1.257"
+	PinnedClaudeCodeVersion       = "2.1.280"
 	PinnedAnthropicSDKVersion     = "0.112.1"
 	PinnedNodeRuntimeVersion      = "v26.3.0"
 	PinnedStainlessTimeoutSeconds = "600"
 
-	ClaudeCodeUserAgent      = "claude-cli/" + PinnedClaudeCodeVersion + " (external, cli)"
+	VersionTooOldCode        = "claude_code_version_too_old"
 	ClaudeCodeSystemIdentity = "You are Claude Code, Anthropic's official CLI for Claude."
 	ClaudeCodeToolPrefix     = "_"
 	ClaudeCodeMaxTokens      = 64000
@@ -32,6 +38,38 @@ const (
 	ExtendedCacheTTLBeta = "extended-cache-ttl-2025-04-11"
 	NeverAdvertisedBeta  = "context-1m-2025-08-07"
 )
+
+func ClaudeCodeUserAgent(version string) string {
+	return "claude-cli/" + version + " (external, cli)"
+}
+
+func NewerVersion(held, offered string) string {
+	offeredParts, valid := versionParts(offered)
+	if !valid {
+		return held
+	}
+	heldParts, _ := versionParts(held)
+	if slices.Compare(offeredParts, heldParts) > 0 {
+		return offered
+	}
+	return held
+}
+
+func versionParts(version string) ([]int, bool) {
+	fields := strings.Split(version, ".")
+	if len(fields) != 3 {
+		return nil, false
+	}
+	parts := make([]int, 0, len(fields))
+	for _, field := range fields {
+		number, err := strconv.Atoi(field)
+		if err != nil || field[0] < '0' || field[0] > '9' {
+			return nil, false
+		}
+		parts = append(parts, number)
+	}
+	return parts, true
+}
 
 func BillingFingerprintSourceIndexes() [3]int { return [3]int{4, 7, 20} }
 

@@ -1,6 +1,7 @@
 package quota
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -8,13 +9,13 @@ import (
 	"sync"
 	"time"
 
+	"tofu/internal/llm/wire/anthropic"
 	"tofu/internal/transport"
 )
 
 const (
 	anthropicUsageURL = "https://api.anthropic.com/api/oauth/usage"
 	codexUsageURL     = "https://chatgpt.com/backend-api/wham/usage"
-	claudeUserAgent   = "claude-cli/2.1.257 (external, cli)"
 	pollTimeout       = 15 * time.Second
 	pollMinInterval   = 5 * time.Minute
 )
@@ -24,10 +25,11 @@ type Credential interface {
 }
 
 type Account struct {
-	Provider   Provider
-	AccountID  string
-	Row        int64
-	Credential Credential
+	Provider      Provider
+	AccountID     string
+	Row           int64
+	Credential    Credential
+	ClientVersion string
 }
 
 type Poller struct {
@@ -109,7 +111,7 @@ func (p *Poller) fetch(ctx context.Context, account Account) (Report, error) {
 	request.Header.Set("Accept", "application/json")
 	switch account.Provider {
 	case ClaudeSub:
-		request.Header.Set("User-Agent", claudeUserAgent)
+		request.Header.Set("User-Agent", anthropic.ClaudeCodeUserAgent(cmp.Or(account.ClientVersion, anthropic.PinnedClaudeCodeVersion)))
 	case CodexSub:
 		request.Header.Set("User-Agent", "tofu")
 		if account.AccountID != "" {

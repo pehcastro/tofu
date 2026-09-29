@@ -1,6 +1,8 @@
 package codex
 
 import (
+	"cmp"
+
 	"tofu/internal/llm"
 	"tofu/internal/sys"
 )
@@ -16,6 +18,7 @@ type HeaderOptions struct {
 	Identity     Identity
 	TurnMetadata string
 	TurnState    string
+	Version      string
 }
 
 func routingHint(model, serviceTier string) string {
@@ -43,7 +46,7 @@ func Headers(options HeaderOptions) []Header {
 	headers = append(headers,
 		Header{Name: HeaderBeta, Value: BetaResponsesSSE},
 		Header{Name: HeaderOriginator, Value: Originator},
-		Header{Name: HeaderVersion, Value: PinnedCodexClientVersion},
+		Header{Name: HeaderVersion, Value: cmp.Or(options.Version, PinnedCodexClientVersion)},
 		Header{Name: HeaderUserAgent, Value: UserAgentPrefix + sys.Version()},
 	)
 	if options.Identity.SessionID != "" {

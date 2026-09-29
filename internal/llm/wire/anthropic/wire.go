@@ -6,10 +6,13 @@ import (
 	"compress/flate"
 	"compress/gzip"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"tofu/internal/konst"
@@ -39,11 +42,16 @@ type Config struct {
 	SessionID  string
 	AccountID  string
 	InstallID  string
+
+	ClaudeCodeVersion string
+	AdoptVersion      func(version string) error
 }
 
 type Wire struct {
-	config Config
-	http   *http.Client
+	config  Config
+	http    *http.Client
+	mu      sync.Mutex
+	version string
 }
 
 func New(config Config) (*Wire, error) {
@@ -71,7 +79,7 @@ func New(config Config) (*Wire, error) {
 		*client = *config.HTTP
 	}
 	client.Transport = llm.Retrying(client.Transport, config.Transport)
-	return &Wire{config: config, http: client}, nil
+	return &Wire{config: config, http: client, version: cmp.Or(config.ClaudeCodeVersion, PinnedClaudeCodeVersion)}, nil
 }
 
 type Dump struct {
@@ -100,6 +108,43 @@ func (w *Wire) Ask(ctx context.Context, request Request) (Result, Dump, error) {
 		}
 	}
 
+	w.mu.Lock()
+	request.ClaudeCodeVersion = w.version
+	w.mu.Unlock()
+	result, dump, err := w.send(ctx, request, token, oauth)
+	required := requiredVersion(err)
+	if NewerVersion(request.ClaudeCodeVersion, required) == request.ClaudeCodeVersion {
+		return result, dump, err
+	}
+
+	w.mu.Lock()
+	w.version = NewerVersion(w.version, required)
+	w.mu.Unlock()
+	var unsaved error
+	if w.config.AdoptVersion != nil {
+		unsaved = w.config.AdoptVersion(required)
+	}
+	request.ClaudeCodeVersion = required
+	result, dump, err = w.send(ctx, request, token, oauth)
+	if unsaved != nil {
+		result.Warnings = append(result.Warnings, "claude code "+required+" is claimed for this session and was not saved: "+unsaved.Error())
+	}
+	return result, dump, err
+}
+
+func requiredVersion(err error) string {
+	var failure *transport.Error
+	if !errors.As(err, &failure) || !strings.Contains(failure.Detail, VersionTooOldCode) {
+		return ""
+	}
+	required := regexp.MustCompile(`version (\d+\.\d+\.\d+) or newer is required`).FindStringSubmatch(failure.Detail)
+	if required == nil {
+		return ""
+	}
+	return required[1]
+}
+
+func (w *Wire) send(ctx context.Context, request Request, token string, oauth bool) (Result, Dump, error) {
 	body, err := request.Encode(oauth)
 	if err != nil {
 		return Result{}, Dump{}, err
@@ -126,6 +171,7 @@ func (w *Wire) Ask(ctx context.Context, request Request) (Result, Dump, error) {
 				Thinking:     request.Effort.Thinks(),
 				SessionID:    request.SessionID,
 				ExtraBetas:   request.extraBetas(oauth),
+				Version:      request.ClaudeCodeVersion,
 			}),
 			Body: body,
 			Identifiers: []string{

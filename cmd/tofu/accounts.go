@@ -13,11 +13,13 @@ import (
 	"tofu/internal/llm/quota"
 	"tofu/internal/llm/wire/anthropic"
 	"tofu/internal/llm/wire/codex"
+	settingspkg "tofu/internal/settings"
 	"tofu/internal/sys"
 	"tofu/internal/turn"
 )
 
 type accounts struct {
+	dir      string
 	provider cred.Provider
 	spec     cred.Spec
 	store    *cred.Store
@@ -135,6 +137,7 @@ func (a *accounts) modelOn(row cred.Row) (turn.Model, error) {
 	if err != nil {
 		return nil, err
 	}
+	versions, adopt := subFingerprint(a.dir)
 	if a.provider == cred.CodexSub {
 		wire, err := codex.New(codex.Config{
 			Model:          a.modelID,
@@ -142,6 +145,7 @@ func (a *accounts) modelOn(row cred.Row) (turn.Model, error) {
 			InstallationID: session,
 			SessionID:      session,
 			Transport:      turnTransportConfig(),
+			ClientVersion:  versions.Codex,
 		})
 		if err != nil {
 			return nil, err
@@ -154,11 +158,31 @@ func (a *accounts) modelOn(row cred.Row) (turn.Model, error) {
 		SessionID: session,
 		AccountID: row.Credential.Identity.AccountID,
 		Transport: turnTransportConfig(),
+
+		ClaudeCodeVersion: versions.ClaudeCode,
+		AdoptVersion:      adopt,
 	})
 	if err != nil {
 		return nil, err
 	}
 	return turn.Subscription{Wire: wire, Effort: a.effort}, nil
+}
+
+func clientVersion(versions settingspkg.Fingerprint, provider cred.Provider) string {
+	if provider == cred.CodexSub {
+		return versions.Codex
+	}
+	return versions.ClaudeCode
+}
+
+func subFingerprint(dir string) (settingspkg.Fingerprint, func(version string) error) {
+	store, err := openSettings(dir)
+	if err != nil {
+		return settingspkg.PinnedFingerprint(), nil
+	}
+	return store.Fingerprint(), func(version string) error {
+		return store.Save(settingspkg.Global, settingspkg.Write{Kind: settingspkg.WriteFingerprint, Key: settingspkg.FingerprintClaudeCode, Value: version})
+	}
 }
 
 func metaModel(modelID string, effort llm.Effort) (turn.Model, error) {
@@ -202,5 +226,5 @@ func openAccounts(opts runOpts, selected models.Model) (*accounts, turn.Spend, e
 	if err != nil {
 		return nil, spend, err
 	}
-	return &accounts{provider: provider, spec: spec, store: store, modelID: modelID, spends: selected.Windows, effort: opts.effort, now: time.Now}, spend, nil
+	return &accounts{dir: opts.dir, provider: provider, spec: spec, store: store, modelID: modelID, spends: selected.Windows, effort: opts.effort, now: time.Now}, spend, nil
 }

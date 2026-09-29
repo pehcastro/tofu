@@ -384,6 +384,7 @@ func reloadSignedIn(ctx context.Context) (modelReload, error) {
 	defer func() { _ = store.Close() }()
 	var accounts []models.Account
 	var settled []reloadSource
+	versions, _ := subFingerprint(".")
 	for _, provider := range cred.AllProviders() {
 		source := reloadSource{Source: string(provider), State: sourceNotSignedIn, Hint: "tofu login " + string(provider)}
 		credential, err := cred.Lookup(string(provider))
@@ -399,9 +400,10 @@ func reloadSignedIn(ctx context.Context) (modelReload, error) {
 			settled = append(settled, source)
 		default:
 			accounts = append(accounts, models.Account{
-				Subscription: models.Subscription(provider),
-				AccountID:    row.Credential.Identity.AccountID,
-				Token:        cred.NewManager(store, credential).Access,
+				Subscription:  models.Subscription(provider),
+				AccountID:     row.Credential.Identity.AccountID,
+				Token:         cred.NewManager(store, credential).Access,
+				ClientVersion: clientVersion(versions, provider),
 			})
 		}
 	}

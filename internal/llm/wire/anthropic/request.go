@@ -2,6 +2,7 @@ package anthropic
 
 import (
 	"bytes"
+	"cmp"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
@@ -29,6 +30,7 @@ type Request struct {
 	UserID    string
 	CacheTTL  string
 
+	ClaudeCodeVersion   string
 	HistoryCacheOff     bool
 	OmitThinkingSummary bool
 	OnDelta             func(string)
@@ -138,7 +140,7 @@ func (r Request) Encode(oauth bool) ([]byte, error) {
 		maxTokens = ClaudeCodeMaxTokens
 	}
 
-	system := systemBlocks(r.System, oauth, firstUserText(r.Messages), r.CacheTTL)
+	system := systemBlocks(r.System, oauth, BillingSystemBlock(firstUserText(r.Messages), cmp.Or(r.ClaudeCodeVersion, PinnedClaudeCodeVersion)), r.CacheTTL)
 	head := applyHeadCaching(system, tools, r.CacheTTL)
 	if !r.HistoryCacheOff {
 		applyHistoryCaching(messages, r.CacheTTL, cacheBreakpointsPerRequest-head)
@@ -201,7 +203,7 @@ func (r Request) summarizedThinking() *wireThinking {
 	return &wireThinking{Type: "adaptive", Display: "summarized"}
 }
 
-func systemBlocks(prompts []string, oauth bool, firstUserMessage, ttl string) []systemBlock {
+func systemBlocks(prompts []string, oauth bool, billing, ttl string) []systemBlock {
 	kept := make([]string, 0, len(prompts))
 	for _, prompt := range prompts {
 		if trimmed := strings.TrimSpace(prompt); trimmed != "" {
@@ -212,7 +214,7 @@ func systemBlocks(prompts []string, oauth bool, firstUserMessage, ttl string) []
 	blocks := make([]systemBlock, 0, len(kept)+2)
 	if oauth && !alreadyBilled {
 		blocks = append(blocks,
-			systemBlock{Type: "text", Text: BillingSystemBlock(firstUserMessage)},
+			systemBlock{Type: "text", Text: billing},
 			systemBlock{Type: "text", Text: ClaudeCodeSystemIdentity, CacheControl: ephemeral(ttl)},
 		)
 	}

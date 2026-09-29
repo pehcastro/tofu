@@ -717,7 +717,8 @@ func dryRunBody(opts runOpts, model string, config turn.Config) ([]byte, error) 
 	case wireCodex, wireMeta:
 		return codex.Request{Model: model, Instructions: config.System, Messages: messages, Tools: tools, Effort: opts.effort}.Encode(nil)
 	}
-	return anthropic.Request{Model: model, System: []string{config.System}, Messages: messages, Tools: tools, Effort: opts.effort}.Encode(true)
+	versions, _ := subFingerprint(opts.dir)
+	return anthropic.Request{Model: model, System: []string{config.System}, Messages: messages, Tools: tools, Effort: opts.effort, ClaudeCodeVersion: versions.ClaudeCode}.Encode(true)
 }
 
 func turnTransportConfig() transport.Config {

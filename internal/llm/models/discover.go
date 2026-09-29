@@ -17,15 +17,26 @@ import (
 
 const (
 	anthropicModelsURL = anthropic.OfficialBaseURL + "/v1/models?limit=100"
-	codexModelsURL     = codex.SubscriptionBaseURL + "/codex/models?client_version=" + codex.PinnedCodexClientVersion
+	codexModelsURL     = codex.SubscriptionBaseURL + "/codex/models?client_version="
 	oauthBeta          = "oauth-2025-04-20"
 )
 
 type Account struct {
-	Subscription Subscription
-	AccountID    string
-	Token        func(context.Context) (string, error)
-	BaseURL      string
+	Subscription  Subscription
+	AccountID     string
+	Token         func(context.Context) (string, error)
+	BaseURL       string
+	ClientVersion string
+}
+
+func (a Account) clientVersion() string {
+	switch a.Subscription {
+	case ClaudeSub:
+		return cmp.Or(a.ClientVersion, anthropic.PinnedClaudeCodeVersion)
+	case CodexSub:
+		return cmp.Or(a.ClientVersion, codex.PinnedCodexClientVersion)
+	}
+	panic("models: unknown subscription " + string(a.Subscription))
 }
 
 type Served struct {
@@ -36,7 +47,11 @@ type Served struct {
 }
 
 func Discover(ctx context.Context, client *transport.Client, account Account) (Served, error) {
-	served := Served{Subscription: account.Subscription, Pin: pinOf(account.Subscription)}
+	pin := "codex client version "
+	if account.Subscription == ClaudeSub {
+		pin = "claude-cli "
+	}
+	served := Served{Subscription: account.Subscription, Pin: pin + account.clientVersion()}
 	token, err := account.Token(ctx)
 	if err != nil {
 		return served, err
@@ -58,16 +73,6 @@ func Discover(ctx context.Context, client *transport.Client, account Account) (S
 	return served, nil
 }
 
-func pinOf(subscription Subscription) string {
-	switch subscription {
-	case ClaudeSub:
-		return "claude-cli " + anthropic.PinnedClaudeCodeVersion
-	case CodexSub:
-		return "codex client version " + codex.PinnedCodexClientVersion
-	}
-	panic("models: unknown subscription " + string(subscription))
-}
-
 func discoveryRequest(account Account, token string) llm.Dump {
 	headers := []llm.Header{
 		{Name: "Authorization", Value: "Bearer " + token},
@@ -80,16 +85,16 @@ func discoveryRequest(account Account, token string) llm.Dump {
 		headers = append(headers,
 			llm.Header{Name: "anthropic-version", Value: anthropic.AnthropicAPIVersion},
 			llm.Header{Name: "anthropic-beta", Value: oauthBeta},
-			llm.Header{Name: "User-Agent", Value: anthropic.ClaudeCodeUserAgent})
+			llm.Header{Name: "User-Agent", Value: anthropic.ClaudeCodeUserAgent(account.clientVersion())})
 	case CodexSub:
-		url = codexModelsURL
+		url = codexModelsURL + account.clientVersion()
 		if account.AccountID != "" {
 			headers = append(headers, llm.Header{Name: codex.HeaderAccountID, Value: account.AccountID})
 		}
 		headers = append(headers,
 			llm.Header{Name: codex.HeaderBeta, Value: codex.BetaResponsesSSE},
 			llm.Header{Name: codex.HeaderOriginator, Value: codex.Originator},
-			llm.Header{Name: codex.HeaderVersion, Value: codex.PinnedCodexClientVersion})
+			llm.Header{Name: codex.HeaderVersion, Value: account.clientVersion()})
 	default:
 		panic("models: unknown subscription " + string(account.Subscription))
 	}

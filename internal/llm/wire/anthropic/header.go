@@ -1,6 +1,7 @@
 package anthropic
 
 import (
+	"cmp"
 	"runtime"
 	"slices"
 	"strings"
@@ -18,6 +19,7 @@ type HeaderOptions struct {
 	Thinking     bool
 	SessionID    string
 	ExtraBetas   []string
+	Version      string
 }
 
 func IsOfficialBaseURL(baseURL string) bool {
@@ -101,7 +103,7 @@ func Headers(options HeaderOptions) []Header {
 	headers := []Header{
 		{Name: "Accept", Value: "application/json"},
 		{Name: "Content-Type", Value: "application/json"},
-		{Name: "User-Agent", Value: ClaudeCodeUserAgent},
+		{Name: "User-Agent", Value: ClaudeCodeUserAgent(cmp.Or(options.Version, PinnedClaudeCodeVersion))},
 	}
 	if options.SessionID != "" {
 		headers = append(headers, Header{Name: "X-Claude-Code-Session-Id", Value: options.SessionID})

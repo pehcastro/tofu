@@ -1,6 +1,7 @@
 package settings
 
 import (
+	"bytes"
 	"cmp"
 	"encoding/json"
 	"fmt"
@@ -35,6 +36,7 @@ type Store struct {
 	paths        [2]string
 	values       [2]map[string]int
 	texts        [2]map[string]string
+	objects      [2]map[string]json.RawMessage
 	snapshot     map[string]int
 	textSnapshot map[string]string
 }
@@ -65,33 +67,36 @@ func (s *Store) Reread() error {
 }
 
 func (s *Store) reread(scope Scope) error {
-	ints, texts, err := readValues(s.paths[scope])
+	ints, texts, objects, err := readValues(s.paths[scope])
 	if err != nil {
 		return err
 	}
-	s.values[scope], s.texts[scope] = ints, texts
+	s.values[scope], s.texts[scope], s.objects[scope] = ints, texts, objects
 	return nil
 }
 
-func readValues(path string) (map[string]int, map[string]string, error) {
+func readValues(path string) (map[string]int, map[string]string, map[string]json.RawMessage, error) {
+	ints, texts, objects := map[string]int{}, map[string]string{}, map[string]json.RawMessage{}
 	if path == "" {
-		return map[string]int{}, map[string]string{}, nil
+		return ints, texts, objects, nil
 	}
 	present, err := sys.Exists(path)
 	if err != nil || !present {
-		return map[string]int{}, map[string]string{}, err
+		return ints, texts, objects, err
 	}
 	data, err := sys.ReadFile(path)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	raw := map[string]json.RawMessage{}
 	if err := json.Unmarshal(data, &raw); err != nil {
-		return nil, nil, fmt.Errorf("settings: %s: %w", path, err)
+		return nil, nil, nil, fmt.Errorf("settings: %s: %w", path, err)
 	}
-	ints := map[string]int{}
-	texts := map[string]string{}
 	for key, value := range raw {
+		if bytes.HasPrefix(value, []byte("{")) {
+			objects[key] = value
+			continue
+		}
 		var asInt int
 		if err := json.Unmarshal(value, &asInt); err == nil {
 			ints[key] = asInt
@@ -102,9 +107,9 @@ func readValues(path string) (map[string]int, map[string]string, error) {
 			texts[key] = asText
 			continue
 		}
-		return nil, nil, fmt.Errorf("settings: %s: %s is neither a number nor a string", path, key)
+		return nil, nil, nil, fmt.Errorf("settings: %s: %s is neither a number, a string nor an object", path, key)
 	}
-	return ints, texts, nil
+	return ints, texts, objects, nil
 }
 
 func (s *Store) Table() []Spec { return s.table }
@@ -218,6 +223,7 @@ const (
 	WriteValue WriteKind = iota
 	WriteRole
 	WriteSubAgent
+	WriteFingerprint
 )
 
 type Write struct {
@@ -247,6 +253,8 @@ func (s *Store) Save(scope Scope, write Write) error {
 	case WriteSubAgent:
 		_, err := subagent.Assign(filepath.Dir(stateDir), write.Key, write.Value)
 		return err
+	case WriteFingerprint:
+		return s.saveFingerprint(scope, write.Key, write.Value)
 	}
 	panic("settings: unknown write kind")
 }
@@ -261,6 +269,9 @@ func (s *Store) write(scope Scope) error {
 		merged[key] = value
 	}
 	for key, value := range s.texts[scope] {
+		merged[key] = value
+	}
+	for key, value := range s.objects[scope] {
 		merged[key] = value
 	}
 	data, err := json.MarshalIndent(merged, "", "  ")

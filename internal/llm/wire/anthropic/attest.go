@@ -29,7 +29,7 @@ func (a Attestation) String() string {
 	panic("anthropic: unknown attestation " + strconv.Itoa(int(a)))
 }
 
-func BillingSystemBlock(firstUserMessage string) string {
+func BillingSystemBlock(firstUserMessage, version string) string {
 	units := utf16.Encode([]rune(firstUserMessage))
 	sources := BillingFingerprintSourceIndexes()
 	picked := make([]rune, 0, len(sources))
@@ -40,10 +40,10 @@ func BillingSystemBlock(firstUserMessage string) string {
 		}
 		picked = append(picked, utf16.Decode(units[index:index+1])...)
 	}
-	sum := sha256.Sum256([]byte(BillingFingerprintSalt + string(picked) + PinnedClaudeCodeVersion))
+	sum := sha256.Sum256([]byte(BillingFingerprintSalt + string(picked) + version))
 	suffix := hex.EncodeToString(sum[:])[:BillingFingerprintHexChars]
 
-	return BillingHeaderPrefix + " cc_version=" + PinnedClaudeCodeVersion + "." + suffix +
+	return BillingHeaderPrefix + " cc_version=" + version + "." + suffix +
 		"; cc_entrypoint=cli; " + BillingCheckPlaceholder + ";"
 }
 
