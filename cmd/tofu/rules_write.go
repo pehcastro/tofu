@@ -141,10 +141,14 @@ func rulesAddVerb(args []string, out, errOut io.Writer) int {
 		return o.fail(err)
 	}
 	change := fileChange{Change: changeAdded, What: "rule " + id, File: file}
-	if found {
-		change.Change = changeChanged
+	undo := "tofu rules remove" + opts.layer.flag + " " + id
+	switch {
+	case found && existing.Mode == rule.ModeOff:
+		change.Change, undo = changeChanged, undo+"; tofu rules off"+opts.layer.flag+" "+id
+	case found:
+		change.Change, undo = changeChanged, fmt.Sprintf("tofu rules add --replace%s --concern %s %s %q", opts.layer.flag, existing.Concern, id, existing.Text)
 	}
-	return o.receipt(writeReceipt{Changes: []fileChange{change}, Undo: "tofu rules remove" + opts.layer.flag + " " + id})
+	return o.receipt(writeReceipt{Changes: []fileChange{change}, Undo: undo})
 }
 
 func rulesOffVerb(args []string, out, errOut io.Writer) int {
@@ -205,7 +209,7 @@ func rulesRemoveVerb(args []string, out, errOut io.Writer) int {
 	if err := os.Remove(existing.File); err != nil {
 		return o.fail(err)
 	}
-	undo := fmt.Sprintf("tofu rules add%s %s %q", opts.layer.flag, id, existing.Text)
+	undo := fmt.Sprintf("tofu rules add%s --concern %s %s %q", opts.layer.flag, existing.Concern, id, existing.Text)
 	if existing.Mode == rule.ModeOff {
 		undo = "tofu rules off" + opts.layer.flag + " " + id
 	}

@@ -84,7 +84,7 @@ func moveHomeKeys(errOut io.Writer) {
 	migration, err := sys.MigrateHomeKeys()
 	page := cli.Detect(errOut, os.Environ())
 	if err != nil {
-		_ = printUncut(page, errOut, page.ErrorLine(page.Path(migration.From)+" not moved into the credential store: "+err.Error(), ""))
+		_ = page.Print(errOut, page.ErrorLine(page.Path(migration.From)+" not moved into the credential store: "+err.Error(), ""))
 		return
 	}
 	if len(migration.Moved) == 0 {
@@ -94,7 +94,7 @@ func moveHomeKeys(errOut io.Writer) {
 	if !migration.Removed {
 		fate = "other lines kept"
 	}
-	_ = printUncut(page, errOut, []string{page.Receipt(cli.Changed, strings.Join(migration.Moved, ", ")+" moved into the credential store · "+fate, migration.From)})
+	_ = page.Print(errOut, []string{page.Receipt(cli.Changed, strings.Join(migration.Moved, ", ")+" moved into the credential store · "+fate, migration.From)})
 }
 
 func run(args []string, in io.Reader, out io.Writer, errOut io.Writer) int {
@@ -104,12 +104,11 @@ func run(args []string, in io.Reader, out io.Writer, errOut io.Writer) int {
 	if strings.HasPrefix(args[0], "chrome-extension://") {
 		return hostVerb(args[0], in, out, errOut)
 	}
-	shade := paletteOf(out)
 	switch args[0] {
 	case "--continue":
 		return continueVerb(args[1:], in, out, errOut)
 	case "session":
-		return sessionVerb(args[1:], in, out, errOut, shade)
+		return sessionVerb(args[1:], in, out, errOut)
 	case "shells":
 		return shellsVerb(args[1:], out, errOut)
 	case "version":
@@ -125,7 +124,7 @@ func run(args []string, in io.Reader, out io.Writer, errOut io.Writer) int {
 	case "usage":
 		return usageVerb(args[1:], out, errOut)
 	case "models":
-		return modelsVerb(args[1:], out, errOut, shade)
+		return modelsVerb(args[1:], out, errOut)
 	case "agents":
 		return agentsVerb(args[1:], out, errOut)
 	case "why":

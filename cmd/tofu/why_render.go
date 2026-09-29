@@ -205,41 +205,7 @@ func stateFacts(page cli.Page, listing whyListing) ([]cli.Fact, string, string) 
 	}
 	body, hint := string(listing.state), ""
 	if len(body) > konst.WhyStateBytes || widget.Cells(body)+2*len(cli.Gap) > page.Width {
-		body, hint = strings.ToValidUTF8(body[:min(len(body), konst.WhyStateBytes)], ""), "tofu why "+row.ID+" --state"
+		body, hint = widget.Fit(body, page.Width-2*len(cli.Gap)), "tofu why "+row.ID+" --state"
 	}
 	return []cli.Fact{{Label: "state", Text: widget.Size(len(listing.state))}}, body, hint
-}
-
-func colorVerdict(v ledger.Verdict, color bool) string {
-	label := strings.ToUpper(string(v))
-	if !color {
-		return label
-	}
-	code := ""
-	switch v {
-	case ledger.VerdictAllow:
-		code = "32"
-	case ledger.VerdictAsk:
-		code = "33"
-	case ledger.VerdictDeny:
-		code = "31"
-	case ledger.VerdictUnset:
-		return label
-	}
-	return "\x1b[" + code + "m" + label + "\x1b[0m"
-}
-
-func agoString(d time.Duration) string {
-	switch {
-	case d < time.Second:
-		return fmt.Sprintf("%d ms", d.Milliseconds())
-	case d < time.Minute:
-		return fmt.Sprintf("%.0f s", d.Seconds())
-	case d < time.Hour:
-		return fmt.Sprintf("%.0f m", d.Minutes())
-	case d < 24*time.Hour:
-		return fmt.Sprintf("%.0f h", d.Hours())
-	default:
-		return fmt.Sprintf("%.0f d", d.Hours()/24)
-	}
 }

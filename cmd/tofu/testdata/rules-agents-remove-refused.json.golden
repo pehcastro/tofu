@@ -9,7 +9,7 @@ exit 1
   "problems": [
     {
       "what": "qa ships with tofu, so there is no file of yours to remove",
-      "hint": "tofu agents set qa \u003csource/model\u003e"
+      "hint": "tofu agents set qa <source/model>"
     }
   ]
 }

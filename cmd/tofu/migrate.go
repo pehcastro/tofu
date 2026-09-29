@@ -91,7 +91,7 @@ func moveProjectState(out io.Writer, project string) []stateMove {
 	page := cli.Detect(out, os.Environ())
 	_, moves, err := plannedStateMoves(project)
 	if err != nil {
-		_ = printUncut(page, out, page.ErrorLine("the state in "+page.Path(sys.StateDir(project))+" was not moved: "+err.Error(), ""))
+		_ = page.Print(out, page.ErrorLine("the state in "+page.Path(sys.StateDir(project))+" was not moved: "+err.Error(), ""))
 		return nil
 	}
 	moves = moveStates(moves)
@@ -113,7 +113,7 @@ func moveProjectState(out io.Writer, project string) []stateMove {
 		moved := strings.Join([]string{"moved " + strings.Join(names, ", "), plural(files, "file"), widget.Size(int(size))}, " · ")
 		lines = append([]string{page.Glyph(cli.Changed) + " " + moved + cli.Gap + page.Label(strings.Join(targets, ", "))}, lines...)
 	}
-	_ = printUncut(page, out, lines)
+	_ = page.Print(out, lines)
 	return moves
 }
 
@@ -167,7 +167,7 @@ func migrateVerb(args []string, out, errOut io.Writer) int {
 		err = writeJSON(out, cli.Envelope{Verb: o.verb, OK: len(problems) == 0, At: time.Now(), Data: report, Problems: problems})
 	} else {
 		page := cli.Detect(out, os.Environ())
-		err = printUncut(page, out, migrateLines(page, report, len(problems)))
+		err = page.Print(out, migrateLines(page, report, len(problems)))
 		for _, problem := range problems {
 			o.errorLine(problem)
 		}

@@ -16,10 +16,6 @@ func Accent() lipgloss.Style { return ink(look.Mint) }
 
 func Tool() lipgloss.Style { return ink(look.Amber) }
 
-func Warn() lipgloss.Style { return ink(look.Amber) }
-
 func Fail() lipgloss.Style { return ink(look.Red) }
 
 func Added() lipgloss.Style { return ink(look.Mint) }
-
-func Rule() lipgloss.Style { return ink(look.FaintColor) }

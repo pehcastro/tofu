@@ -20,6 +20,7 @@ const (
 	nameCells       = 16
 	factLabelCells  = 10
 	detailSeparator = " · "
+	hintArrow       = "→"
 	cardTop         = "┌ "
 	cardSide        = "│ "
 	cardFoot        = "└"
@@ -100,6 +101,9 @@ func (p Page) Title(subject string, facts []string, v Verdict) []string {
 		left += p.Label(detailSeparator + strings.Join(facts, detailSeparator))
 	}
 	right := p.verdict(v)
+	if right == "" {
+		return []string{left}
+	}
 	if room := p.Width - widget.Cells(left) - widget.Cells(right); room >= len(Gap) {
 		return []string{left + strings.Repeat(" ", room) + right}
 	}
@@ -141,7 +145,7 @@ func (p Page) Card(head string, v Verdict, body []string) []string {
 	}
 	lines := []string{indent + p.rule(cardTop) + head + " " + p.rule(strings.Repeat(cardRule, max(fill, 1))) + right}
 	for _, line := range body {
-		lines = append(lines, indent+p.rule(cardSide)+widget.Fit(line, width-widget.Cells(cardSide)))
+		lines = append(lines, indent+p.rule(cardSide)+line)
 	}
 	return append(lines, indent+p.rule(cardFoot+strings.Repeat(cardRule, width-1)))
 }
@@ -199,7 +203,7 @@ func (p Page) Steps(steps []string) []string {
 	return lines
 }
 
-func (p Page) Hint(text string) string { return p.paint(look.Style(look.Blue), "→ "+text) }
+func (p Page) Hint(text string) string { return p.paint(look.Style(look.Blue), hintArrow+" "+text) }
 
 func (p Page) ErrorLine(what, hint string) []string {
 	lines := []string{p.verdict(Verdict{Fail, what})}

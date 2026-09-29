@@ -1,5 +1,6 @@
 exit 2
 --- stdout
 --- stderr
-✗ tofu sift: "nope" is not an arm; the arms are length, signpost, brevity and jev
+✗ tofu sift: "nope" is not an arm; the arms are length, signpost, brevity and
+  jev
   → tofu sift [--arm length|signpost|brevity|jev] [--task text] [--restore] [--no-log] [--json] < text

@@ -37,7 +37,7 @@ func copyLegacyStateDir(out io.Writer, parent string) {
 	page := cli.Detect(out, os.Environ())
 	partial := target + partialSuffix
 	if err := os.RemoveAll(partial); err != nil {
-		_ = printUncut(page, out, page.ErrorLine("the half copy "+page.Path(partial)+" was not removed: "+err.Error(), ""))
+		_ = page.Print(out, page.ErrorLine("the half copy "+page.Path(partial)+" was not removed: "+err.Error(), ""))
 		return
 	}
 	files, size, err := copyTreeInto(os.DirFS(source), ".", partial)
@@ -46,12 +46,12 @@ func copyLegacyStateDir(out io.Writer, parent string) {
 	}
 	if err != nil {
 		_ = os.RemoveAll(partial)
-		_ = printUncut(page, out, page.ErrorLine(sys.LegacyStateDirName+" not copied to "+sys.StateDirName+", still read from "+page.Path(source)+": "+err.Error(), ""))
+		_ = page.Print(out, page.ErrorLine(sys.LegacyStateDirName+" not copied to "+sys.StateDirName+", still read from "+page.Path(source)+": "+err.Error(), ""))
 		return
 	}
 	copied := strings.Join([]string{sys.LegacyStateDirName + " copied to " + sys.StateDirName, plural(countSessions(source), "session"),
 		plural(files, "file"), widget.Size(int(size)), sys.LegacyStateDirName + " kept"}, " · ")
-	_ = printUncut(page, out, []string{page.Receipt(cli.Added, copied, target)})
+	_ = page.Print(out, []string{page.Receipt(cli.Added, copied, target)})
 }
 
 func copyTreeInto(source fs.FS, root, target string) (files int, size int64, err error) {

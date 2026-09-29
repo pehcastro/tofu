@@ -38,7 +38,6 @@ const (
 	StreamLineBytes  = 16 << 20
 	StreamIdleMillis = 60000
 
-	WhyBarWidthChars   = 20
 	WhyStateBytes      = 2048
 	MeterBarWidthChars = 12
 )
@@ -67,9 +66,7 @@ const (
 )
 
 const (
-	ReportWidthChars       = 62
-	ReportLabelColumnChars = 12
-	ProseWidthChars        = 80
+	ProseWidthChars = 80
 )
 
 const (

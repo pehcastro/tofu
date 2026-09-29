@@ -105,15 +105,6 @@ func (p project) run(t *testing.T, wantCode int, args ...string) string {
 	return said
 }
 
-func (p project) root(t *testing.T) string {
-	t.Helper()
-	resolved, err := filepath.EvalSymlinks(p.dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return resolved
-}
-
 func TestE2ETheCredentialGuardRefusesAPlantedFileWithNoUSERPROFILE(t *testing.T) {
 	plant := filepath.Join(sys.SourceRoot(), "cmd", "tofu", "credential-guard-plant")
 	if err := os.MkdirAll(plant, 0o755); err != nil {

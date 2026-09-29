@@ -1,6 +1,6 @@
 exit 0
 --- stdout
-Shells · 2 shells                                                               
+Shells · 2 shells
 
   ○ build  exited 0  pid 4242        go build ./... · ~/project
   ○ web    killed    pid 4343  tofu  npm run dev · ~/project

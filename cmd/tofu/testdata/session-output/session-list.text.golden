@@ -6,5 +6,6 @@ Sessions · 2 sessions                                          ● head store-w
   ○ older-task  3h ago   0 steps  done     the older task
 
 unreadable      ✗ 1
-  ✗ turn-broken  session: the header of turn-broken does not parse: invalid cha…
+  ✗ turn-broken  session: the header of turn-broken does not parse: invalid
+    character 'n' looking for beginning of object key string
 --- stderr

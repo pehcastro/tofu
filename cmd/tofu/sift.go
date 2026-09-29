@@ -120,7 +120,7 @@ func siftVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 	}
 	if !opts.asJSON {
 		page := cli.Detect(errOut, os.Environ())
-		_ = printUncut(page, errOut, []string{page.Label(report.Arm) + cli.Gap + fmt.Sprintf("%d/%d paragraphs kept · %d/%d words · %dms · $%.6f",
+		_ = page.Print(errOut, []string{page.Label(report.Arm) + cli.Gap + fmt.Sprintf("%d/%d paragraphs kept · %d/%d words · %dms · $%.6f",
 			report.Kept, report.Paragraphs, report.KeptWords, report.Words, report.ElapsedMS, report.Cost)})
 	}
 	return protocol(o, exitOK, report, report.Text)

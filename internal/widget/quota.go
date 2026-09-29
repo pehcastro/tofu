@@ -4,14 +4,11 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"tofu/internal/konst"
 )
 
 const (
 	filledRune       = "▓"
 	emptyRune        = "░"
-	percentCells     = 4
 	hoursPerDay      = 24
 	minutesPerHour   = 60
 	secondsPerMinute = 60
@@ -27,17 +24,6 @@ func Bar(fraction float64, width int) string {
 
 func Percent(fraction float64) string {
 	return strconv.Itoa(int(fraction*100+0.5)) + "%"
-}
-
-func Quota(fraction float64, resetsAt, now time.Time) string {
-	meter := Bar(fraction, konst.MeterBarWidthChars) + " " + Lead(Percent(fraction), percentCells)
-	if resetsAt.IsZero() {
-		return meter
-	}
-	if left := resetsAt.Sub(now); left > 0 {
-		return meter + "  resets in " + Until(left)
-	}
-	return meter + "  resets now"
 }
 
 func Until(d time.Duration) string {

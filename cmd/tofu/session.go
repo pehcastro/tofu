@@ -109,7 +109,7 @@ func sessionOperands(subcommand string) (string, int, bool) {
 	return "", 0, false
 }
 
-func sessionVerb(args []string, in io.Reader, out, errOut io.Writer, _ palette) int {
+func sessionVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 	handles, asJSON, err := verbArgs(args[min(1, len(args)):])
 	o := verbOutput{verb: "session", usageLine: sessionSubcommands, asJSON: asJSON, out: out, errOut: errOut}
 	if len(args) == 0 {

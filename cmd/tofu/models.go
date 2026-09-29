@@ -130,7 +130,7 @@ func verbFailed(out, errOut io.Writer, verb string, asJSON bool, err error) int 
 	return exitVerdict
 }
 
-func modelsVerb(args []string, out, errOut io.Writer, _ palette) int {
+func modelsVerb(args []string, out, errOut io.Writer) int {
 	reload, asJSON := false, false
 	for _, arg := range args {
 		switch arg {

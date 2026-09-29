@@ -54,7 +54,7 @@ exit 0
       },
       {
         "text": "change a setting for one project only",
-        "do": "tofu settings set --scope project \u003ckey\u003e \u003cvalue\u003e"
+        "do": "tofu settings set --scope project <key> <value>"
       },
       {
         "text": "move old sessions out of the project",
@@ -66,7 +66,7 @@ exit 0
       },
       {
         "text": "always run the orchestrator on one model",
-        "do": "write model: \u003csource/model\u003e in ~/.tofu/roles/orchestrator.yaml"
+        "do": "write model: <source/model> in ~/.tofu/roles/orchestrator.yaml"
       },
       {
         "text": "see which skills the model is offered",
@@ -78,7 +78,7 @@ exit 0
       },
       {
         "text": "work one task with the gate off",
-        "do": "tofu run --dir . --no-gate \"\u003ctask\u003e\""
+        "do": "tofu run --dir . --no-gate \"<task>\""
       },
       {
         "text": "see how full the context window got",
@@ -86,7 +86,7 @@ exit 0
       },
       {
         "text": "read the output of a running shell",
-        "do": "tofu shells log \u003cname\u003e"
+        "do": "tofu shells log <name>"
       },
       {
         "text": "check the library files and these pages",

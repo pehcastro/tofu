@@ -13,7 +13,7 @@ exit 0
         "file": "HOME/.tofu/rules/g1@1.yaml"
       }
     ],
-    "undo": "tofu rules remove --global g1"
+    "undo": "tofu rules add --replace --global --concern code_rules g1 \"never write yaml by hand\""
   },
   "problems": []
 }

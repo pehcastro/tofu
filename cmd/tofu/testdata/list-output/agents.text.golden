@@ -2,22 +2,32 @@ exit 1
 --- stdout
 Sub-agents · 6 defined                                                ✗ 1 broken
 
-  ○ idle      inherit                   project  runs on the orchestrator's mod…
+  ○ idle      inherit                   project  runs on the orchestrator's
+    model
   ● planner   claude-sub/claude-opus-5  project  plans the work
     tools      read, search
   ● reviewer  codex-sub/gpt-5.6-sol     global   reviews a diff
-  ○ ts-dev    inherit                   library  Writes and fixes TypeScript in…
+  ○ ts-dev    inherit                   library  Writes and fixes TypeScript
+    in the project it is given. Reads before it edits, changes the least it can,
+    and is done only when the project's own typecheck, lint and tests pass.
     tools      read, glob, search, symbols, edit, write, bash
     reference  ts-strict-config  2.8 KB
     reference  ts-type-design  3.0 KB
     reference  ts-boundaries  2.4 KB
     reference  verify-a-running-service  2.4 KB
-  ○ research  inherit                   library  Answers numbered questions abo…
+  ○ research  inherit                   library  Answers numbered questions
+    about a repository, a folder or the web, and hands back a verdict with a
+    citation behind every finding. Read-only, except the one report path its
+    brief names. Spawn several at once for independent questions.
     tools      read, glob, search, symbols, bash, fetch, write
     from       tier worker
     reference  research-report  1.5 KB
-    notice     the tier @worker is not set, so research runs on the orchestrato…
-  ○ qa        inherit                   library  Verifies that a change does wh…
+    notice     the tier @worker is not set, so research runs on the
+      orchestrator's model: tofu settings set modelTier.worker <slug>
+  ○ qa        inherit                   library  Verifies that a change does
+    what it claims and reports what it found. Runs tests, triages what failed,
+    measures what disagreed with itself, and files what is wrong instead of
+    editing it away.
     tools      read, glob, search, symbols, bash, write
     reference  flakiness  4.2 KB
     reference  failure-triage  2.6 KB

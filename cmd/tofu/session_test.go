@@ -458,13 +458,15 @@ func TestTwoSessionsSharingANameAreBothListedWithTheirDatesRatherThanOneBeingPic
 }
 
 func TestTheSessionsAlreadyOnDiskListWithNoNameRatherThanFailing(t *testing.T) {
-	store := session.OpenAt(sys.OwnerProjectStateDir(sys.SourceRoot()))
-	listing, err := store.Listing()
-	if err != nil {
-		t.Fatalf("listing the recorded sessions: %v", err)
-	}
-	if len(listing.Sessions) == 0 {
-		t.Skip("skipped: this working copy has no recorded sessions to read")
+	store := sessionProject(t)
+	recorded(t, store, "turn-named", "written with a name", time.Now())
+	for name, body := range map[string]string{
+		"header.json": `{"id":"turn-old","at":"2026-09-01T10:00:00Z","task":"written before the name","root":"turn-old"}`,
+		"body.jsonl":  `{"at":"2026-09-01T10:00:01Z","kind":"step","body":{"index":1}}` + "\n",
+	} {
+		if err := sys.WriteFile(filepath.Join(store.Dir("turn-old"), name), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
 	}
 
 	report, err := sessionListing(store, session.DefaultSettings().Lifetime, time.Now())

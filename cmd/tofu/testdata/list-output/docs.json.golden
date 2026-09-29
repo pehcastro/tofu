@@ -173,14 +173,14 @@ exit 0
       },
       {
         "ask": "change a setting for one project only",
-        "do": "tofu settings set --scope project \u003ckey\u003e \u003cvalue\u003e",
+        "do": "tofu settings set --scope project <key> <value>",
         "check": "tofu settings",
         "topic": "settings"
       },
       {
         "ask": "see every setting and where it came from",
         "do": "tofu settings",
-        "check": "tofu settings get \u003ckey\u003e",
+        "check": "tofu settings get <key>",
         "topic": "settings"
       },
       {
@@ -221,25 +221,25 @@ exit 0
       },
       {
         "ask": "add a rule for every project",
-        "do": "tofu rules add --global \u003cid\u003e \"\u003ctext\u003e\"",
+        "do": "tofu rules add --global <id> \"<text>\"",
         "check": "tofu rules list",
         "topic": "rules"
       },
       {
         "ask": "add a rule to this project only",
-        "do": "tofu rules add \u003cid\u003e \"\u003ctext\u003e\"",
+        "do": "tofu rules add <id> \"<text>\"",
         "check": "tofu rules list",
         "topic": "rules"
       },
       {
         "ask": "switch off a rule tofu ships",
-        "do": "tofu rules off \u003cid\u003e",
+        "do": "tofu rules off <id>",
         "check": "tofu rules list",
         "topic": "rules"
       },
       {
         "ask": "remove a rule I added, or bring back one I switched off",
-        "do": "tofu rules remove \u003cid\u003e",
+        "do": "tofu rules remove <id>",
         "check": "tofu rules list",
         "topic": "rules"
       },
@@ -251,31 +251,31 @@ exit 0
       },
       {
         "ask": "add a sub-agent to this project",
-        "do": "tofu agents add \u003cname\u003e --description \"\u003cwhat it does\u003e\" --model \u003csource/model\u003e",
+        "do": "tofu agents add <name> --description \"<what it does>\" --model <source/model>",
         "check": "tofu agents",
         "topic": "agents"
       },
       {
         "ask": "add a sub-agent to every project",
-        "do": "tofu agents add --global \u003cname\u003e --description \"\u003cwhat it does\u003e\" --model \u003csource/model\u003e",
+        "do": "tofu agents add --global <name> --description \"<what it does>\" --model <source/model>",
         "check": "tofu agents",
         "topic": "agents"
       },
       {
         "ask": "run a sub-agent on another model",
-        "do": "tofu agents set \u003cname\u003e \u003csource/model\u003e",
+        "do": "tofu agents set <name> <source/model>",
         "check": "tofu agents",
         "topic": "agents"
       },
       {
         "ask": "remove a sub-agent I added",
-        "do": "tofu agents remove \u003cname\u003e",
+        "do": "tofu agents remove <name>",
         "check": "tofu agents",
         "topic": "agents"
       },
       {
         "ask": "set up three sub-agents at once, each on its own model",
-        "do": "tofu agents add \u003cname\u003e --description \"\u003cwhat it does\u003e\" --model \u003csource/model\u003e, once per sub-agent",
+        "do": "tofu agents add <name> --description \"<what it does>\" --model <source/model>, once per sub-agent",
         "check": "tofu agents",
         "topic": "agents"
       },
@@ -299,13 +299,13 @@ exit 0
       },
       {
         "ask": "always run the orchestrator on one model",
-        "do": "write model: \u003csource/model\u003e in ~/.tofu/roles/orchestrator.yaml",
+        "do": "write model: <source/model> in ~/.tofu/roles/orchestrator.yaml",
         "check": "tofu models",
         "topic": "models"
       },
       {
         "ask": "stop tofu from using a model",
-        "do": "write use: excluded and a reason in ~/.tofu/models/\u003cprovider\u003e/\u003cmodel\u003e.yaml",
+        "do": "write use: excluded and a reason in ~/.tofu/models/<provider>/<model>.yaml",
         "check": "tofu models",
         "topic": "models"
       },
@@ -317,13 +317,13 @@ exit 0
       },
       {
         "ask": "add a skill for every project",
-        "do": "write ~/.tofu/skills/\u003cname\u003e/SKILL.md with a name and a description",
+        "do": "write ~/.tofu/skills/<name>/SKILL.md with a name and a description",
         "check": "tofu run --dir . --show-prompt \"anything\"",
         "topic": "skills"
       },
       {
         "ask": "add a skill to this project only",
-        "do": "write .tofu/skills/\u003cname\u003e/SKILL.md with a name and a description",
+        "do": "write .tofu/skills/<name>/SKILL.md with a name and a description",
         "check": "tofu run --dir . --show-prompt \"anything\"",
         "topic": "skills"
       },
@@ -347,8 +347,8 @@ exit 0
       },
       {
         "ask": "work one task without my instruction files",
-        "do": "tofu run --dir . --no-instructions \"\u003ctask\u003e\"",
-        "check": "tofu run --dir . --no-instructions --show-prompt \"\u003ctask\u003e\"",
+        "do": "tofu run --dir . --no-instructions \"<task>\"",
+        "check": "tofu run --dir . --no-instructions --show-prompt \"<task>\"",
         "topic": "instructions"
       },
       {
@@ -371,7 +371,7 @@ exit 0
       },
       {
         "ask": "judge a command without running it",
-        "do": "tofu check \"\u003ccommand\u003e\"",
+        "do": "tofu check \"<command>\"",
         "check": "tofu why --last",
         "topic": "gate"
       },
@@ -383,7 +383,7 @@ exit 0
       },
       {
         "ask": "work one task with the gate off",
-        "do": "tofu run --dir . --no-gate \"\u003ctask\u003e\"",
+        "do": "tofu run --dir . --no-gate \"<task>\"",
         "check": "tofu doctor",
         "topic": "gate"
       },
@@ -395,14 +395,14 @@ exit 0
       },
       {
         "ask": "open an older session",
-        "do": "tofu session resume \u003cname|id\u003e",
+        "do": "tofu session resume <name|id>",
         "check": "tofu session list",
         "topic": "sessions"
       },
       {
         "ask": "give a session a name",
-        "do": "tofu session rename \u003cname|id\u003e \"\u003cnew name\u003e\"",
-        "check": "tofu session info \u003cname|id\u003e",
+        "do": "tofu session rename <name|id> \"<new name>\"",
+        "check": "tofu session info <name|id>",
         "topic": "sessions"
       },
       {
@@ -413,13 +413,13 @@ exit 0
       },
       {
         "ask": "stop a server an agent left running",
-        "do": "tofu shells stop \u003cname\u003e",
+        "do": "tofu shells stop <name>",
         "check": "tofu shells list",
         "topic": "sessions"
       },
       {
         "ask": "read the output of a running shell",
-        "do": "tofu shells log \u003cname\u003e",
+        "do": "tofu shells log <name>",
         "check": "tofu shells list",
         "topic": "sessions"
       },

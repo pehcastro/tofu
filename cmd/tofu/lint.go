@@ -11,7 +11,7 @@ import (
 
 const lintUsage = "tofu lint comments [path] [--json]"
 
-var lintRoots = []string{"bench", "cmd/tofu", "interface", "library", "internal"}
+func sourceRoots() []string { return []string{"bench", "cmd/tofu", "interface", "library", "internal"} }
 
 type lintFinding struct {
 	File   string `json:"file"`
@@ -30,7 +30,11 @@ func lintVerb(args []string, out, errOut io.Writer) int {
 		return o.usage(err)
 	}
 	o.asJSON = asJSON
-	violations, err := commentViolations(path)
+	targets := sourceRoots()
+	if path != "" {
+		targets = []string{path}
+	}
+	violations, err := commentViolations(targets)
 	if err != nil {
 		return failed(o, err)
 	}
@@ -49,11 +53,7 @@ func lintVerb(args []string, out, errOut io.Writer) int {
 	}{findings}, text)
 }
 
-func commentViolations(path string) ([]sys.Comment, error) {
-	targets := lintRoots
-	if path != "" {
-		targets = []string{path}
-	}
+func commentViolations(targets []string) ([]sys.Comment, error) {
 	var all []sys.Comment
 	for _, target := range targets {
 		present, err := sys.Exists(target)

@@ -1,6 +1,6 @@
 exit 0
 --- stdout
-Reads · store-walk · 1 read                                                     
+Reads · store-walk · 1 read
 
     step 1  read  2.0 KB  internal/session/store.go
     looking at the store

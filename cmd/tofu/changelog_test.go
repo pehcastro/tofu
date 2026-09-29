@@ -268,9 +268,6 @@ func TestDownAPipeTheChangelogWrapsToTheProseWidth(t *testing.T) {
 	if widest > konst.ProseWidthChars {
 		t.Fatalf("the widest line is %d cells, over the prose width %d", widest, konst.ProseWidthChars)
 	}
-	if widest <= konst.ReportWidthChars {
-		t.Fatalf("the widest line is %d cells, so the report width %d decided rather than the prose width", widest, konst.ReportWidthChars)
-	}
 }
 
 func TestAnUnknownFlagIsRefused(t *testing.T) {

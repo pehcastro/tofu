@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bytes"
 	"encoding/json"
 	"io"
 	"os"
@@ -59,7 +60,10 @@ func (p Page) Colour() bool { return p.Profile > colorprofile.ASCII }
 func (p Page) Print(out io.Writer, lines []string) error {
 	var text strings.Builder
 	for _, line := range lines {
-		text.WriteString(widget.Fit(line, p.Width))
+		if widget.Cells(line) > p.Width && !strings.Contains(line, hintArrow) {
+			line = p.wrap(line)
+		}
+		text.WriteString(line)
 		text.WriteByte('\n')
 	}
 	written := text.String()
@@ -68,6 +72,26 @@ func (p Page) Print(out io.Writer, lines []string) error {
 	}
 	_, err := (&colorprofile.Writer{Forward: out, Profile: p.Profile}).Write([]byte(written))
 	return err
+}
+
+func (p Page) wrap(line string) string {
+	body := strings.TrimLeft(line, " ")
+	lead := line[:len(line)-len(body)]
+	room := p.Width - len(lead) - len(Gap)
+	rows := []string{""}
+	for _, word := range strings.Split(strings.TrimRight(body, " "), " ") {
+		last := &rows[len(rows)-1]
+		switch {
+		case *last == "":
+			*last = word
+		case widget.Cells(*last+" "+word) <= room:
+			*last += " " + word
+		default:
+			*last = strings.TrimRight(*last, " ")
+			rows = append(rows, word)
+		}
+	}
+	return lead + strings.Join(rows, "\n"+lead+Gap)
 }
 
 func (p Page) Path(path string) string {
@@ -106,7 +130,10 @@ type Envelope struct {
 }
 
 func (e Envelope) MarshalJSON() ([]byte, error) {
-	return json.Marshal(struct {
+	var document bytes.Buffer
+	encoder := json.NewEncoder(&document)
+	encoder.SetEscapeHTML(false)
+	err := encoder.Encode(struct {
 		Tofu     string    `json:"tofu"`
 		Verb     string    `json:"verb"`
 		OK       bool      `json:"ok"`
@@ -114,4 +141,5 @@ func (e Envelope) MarshalJSON() ([]byte, error) {
 		Data     any       `json:"data"`
 		Problems []Problem `json:"problems"`
 	}{konst.Version, e.Verb, e.OK, e.At.UTC().Format(time.RFC3339), e.Data, append([]Problem{}, e.Problems...)})
+	return document.Bytes(), err
 }

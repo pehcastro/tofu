@@ -105,18 +105,36 @@ func TestNoColourWritesNoEscapeAndDumbWritesOnlyASCII(t *testing.T) {
 	}
 }
 
-func TestAPipedPageIsEightyWideAndLinesNeverPassTheWidth(t *testing.T) {
+func TestAPipedPageWrapsADetailAndNeverCutsAHintAReceiptOrALongWord(t *testing.T) {
 	var out bytes.Buffer
 	page := Detect(&out, nil)
 	if page.Width != 80 {
 		t.Fatalf("a piped page is %d wide, want 80", page.Width)
 	}
-	if err := page.Print(&out, page.Title("x", nil, Verdict{Done, string(bytes.Repeat([]byte("y"), 200))})); err != nil {
+	detail := strings.Repeat("a detail word ", 20)
+	command := "tofu rules add --replace --dir " + strings.Repeat("/deep", 20) + " g1 \"<text>\""
+	path := sampleHome + strings.Repeat("/nested", 15) + "/g1@1.yaml"
+	long := strings.Repeat("y", 120)
+	lines := append(page.Title("Rules", []string{"3 run"}, Verdict{}), Indent(page.ErrorLine(detail, command)...)...)
+	lines = append(lines, page.Receipt(Added, "rule g1", path), page.Status("x", Verdict{Done, long}))
+	if err := page.Print(&out, lines); err != nil {
 		t.Fatal(err)
 	}
-	for _, line := range bytes.Split(bytes.TrimSuffix(out.Bytes(), []byte("\n")), []byte("\n")) {
-		if cells := len([]rune(string(line))); cells > page.Width {
-			t.Errorf("a line is %d cells on an %d page: %q", cells, page.Width, line)
+	printed := out.String()
+	for _, whole := range []string{"→ " + command, path, long} {
+		if !strings.Contains(printed, whole) {
+			t.Errorf("the page cut %q:\n%s", whole, printed)
+		}
+	}
+	if got := strings.Join(strings.Fields(printed), " "); !strings.Contains(got, strings.TrimSpace(detail)) {
+		t.Errorf("the detail lost a word when it wrapped:\n%s", printed)
+	}
+	for _, line := range strings.Split(strings.TrimSuffix(printed, "\n"), "\n") {
+		if strings.HasSuffix(line, " ") {
+			t.Errorf("a line ends in a space: %q", line)
+		}
+		if strings.Contains(line, "a detail word") && (len([]rune(line)) > page.Width || !strings.HasPrefix(line, "  ")) {
+			t.Errorf("a wrapped detail line is %d cells or lost its indent on an %d page: %q", len([]rune(line)), page.Width, line)
 		}
 	}
 }

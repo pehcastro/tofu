@@ -13,5 +13,6 @@ Context · store-walk · 1 step                                           ✓ st
   bytes        2310 per thousand tokens
 
 unreadable      ✗ 1
-  ✗ turn-broken  session: the header of turn-broken does not parse: invalid cha…
+  ✗ turn-broken  session: the header of turn-broken does not parse: invalid
+    character 'n' looking for beginning of object key string
 --- stderr

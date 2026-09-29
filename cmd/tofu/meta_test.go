@@ -313,7 +313,7 @@ func TestModelsListsTheFiveMetaModelsWithTheirWindowAndTheContributorNotice(t *t
 	home, _ := metaHome(t)
 	listed := func() map[string]modelReport {
 		var out bytes.Buffer
-		if code := modelsVerb([]string{jsonFlag}, &out, io.Discard, 0); code != exitOK {
+		if code := modelsVerb([]string{jsonFlag}, &out, io.Discard); code != exitOK {
 			t.Fatalf("tofu models --json exited %d", code)
 		}
 		var envelope struct {
