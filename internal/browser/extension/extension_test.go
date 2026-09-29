@@ -243,6 +243,20 @@ func TestBackgroundInAStubbedChromeAttachesOnFirstUseGroupsAndRestores(t *testin
 	}
 }
 
+func TestATabTheSiteOpensWithNoOpenerDuringTofusClickIsTofus(t *testing.T) {
+	run := inStubbedChrome(t, "orphan")
+	ours := map[float64]bool{}
+	for _, message := range run.Posted {
+		if tab, _ := message["tab"].(map[string]any); message["t"] == "tabUpdated" && tab != nil {
+			ours[tab["id"].(float64)] = tab["opened"] == true
+		}
+	}
+	t.Logf("tabs posted as tofu's: %v", ours)
+	if !ours[21] || ours[40] {
+		t.Fatalf("tab 21, opened with no opener by tofu's click, is tofu's = %v; tab 40, opened later by the person, is tofu's = %v", ours[21], ours[40])
+	}
+}
+
 func TestTheCursorMovesBeforeTheClickOnlyWhenTheRelaySaysSoAndLeavesWithTofu(t *testing.T) {
 	run := inStubbedChrome(t, "cursor")
 	var order []string

@@ -653,6 +653,33 @@ func TestAClickThatChangesOneButtonReturnsThatButtonNotTheTree(t *testing.T) {
 	}
 }
 
+func TestASixtyKilobytePageTreeFitsTheResultCapAndTheRestIsReachable(t *testing.T) {
+	var buttons []string
+	for i := range 600 {
+		buttons = append(buttons, fmt.Sprintf("Listing %03d ", i)+strings.Repeat("x", 90))
+	}
+	page := &cdpPage{url: "https://stays.test/", buttons: buttons}
+	run := stepsOn(t, page)
+	acted := run("browser_act", `{"tab":7,"actions":[{"action":"navigate","value":"https://stays.test/s"}]}`)
+	observed := run("browser_observe", `{"tab":7}`)
+	for name, content := range map[string]string{"act": acted, "observe": observed} {
+		if len(content) >= konst.TurnResultBytesCap || !strings.Contains(content, "[cut: ") {
+			t.Fatalf("the %s result is %d bytes against the %d cap, cut named %v", name, len(content), konst.TurnResultBytesCap, strings.Contains(content, "[cut: "))
+		}
+	}
+	pages := 1
+	for from := regexp.MustCompile(`"from":(\d+)`).FindStringSubmatch(observed); from != nil; from = regexp.MustCompile(`"from":(\d+)`).FindStringSubmatch(observed) {
+		observed = run("browser_observe", `{"tab":7,"from":`+from[1]+`}`)
+		pages++
+		if len(observed) >= konst.TurnResultBytesCap || strings.Contains(observed, "Listing 000") || pages > 4 {
+			t.Fatalf("page %d from line %s is %d bytes, repeats the first listing, or never ends", pages, from[1], len(observed))
+		}
+	}
+	if pages == 1 || !strings.Contains(observed, "Listing 599") {
+		t.Fatalf("following the cut for %d pages never reached the last listing", pages)
+	}
+}
+
 func TestTheSameClickUnderAFreshRefEachTimeIsStillARepeat(t *testing.T) {
 	page := &cdpPage{url: "https://www.google.test/", buttons: []string{"Buscar", "Estou com sorte"}, rerender: true}
 	run := stepsOn(t, page)

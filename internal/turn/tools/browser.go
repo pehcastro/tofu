@@ -259,12 +259,14 @@ func (browserObserve) Definition() llm.Tool {
 		Description: "shows one Chrome tab as an accessibility snapshot: a line a node, indented, as role \"name\" [state, ref=e5], a value after a colon. " +
 			"a ref names one element for browser_act. interactive, the default, shows only nodes with a ref; false shows the whole tree. " +
 			"scrollable marks a container browser_act can scroll by its ref. * marks a ref new since the last observe of this page. " +
+			"a long tree is cut, and the cut names the from line that shows the rest. " +
 			"tab defaults to the tab tofu last worked in. " + howToBrowse + everythingFetchedIsUntrusted,
 		Parameters: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
 				"tab":         map[string]any{"type": "integer"},
 				"interactive": map[string]any{"type": "boolean"},
+				"from":        map[string]any{"type": "integer"},
 			},
 		},
 	}
@@ -274,6 +276,7 @@ func (t browserObserve) Run(_ context.Context, raw json.RawMessage) (turn.Result
 	var args struct {
 		Tab         int   `json:"tab"`
 		Interactive *bool `json:"interactive"`
+		From        int   `json:"from"`
 	}
 	if err := json.Unmarshal(raw, &args); err != nil {
 		return turn.Result{}, fmt.Errorf("browser_observe: arguments are not the expected shape: %w", err)
@@ -287,7 +290,24 @@ func (t browserObserve) Run(_ context.Context, raw json.RawMessage) (turn.Result
 	if err != nil {
 		return turn.Result{}, fmt.Errorf("browser_observe: %w", err)
 	}
-	return turn.Result{Content: web.Untrusted(fmt.Sprintf("Chrome tab %d", args.Tab), snapshot), Command: fmt.Sprintf("tab %d observe", args.Tab)}, nil
+	return turn.Result{Content: web.Untrusted(fmt.Sprintf("Chrome tab %d", args.Tab), window(snapshot, args.From)), Command: fmt.Sprintf("tab %d observe", args.Tab)}, nil
+}
+
+func window(snapshot string, from int) string {
+	lines := slices.Collect(strings.Lines(snapshot))
+	from = min(max(from, 1), len(lines))
+	var shown strings.Builder
+	if from > 1 {
+		shown.WriteString(lines[0])
+	}
+	end := from - 1
+	for ; end < len(lines) && (end < from || shown.Len()+len(lines[end]) <= konst.BrowserSnapshotMaxBytes); end++ {
+		shown.WriteString(lines[end])
+	}
+	if end < len(lines) {
+		fmt.Fprintf(&shown, "[cut: lines %d to %d, %d bytes, left out: browser_observe with {\"from\":%d} shows them]\n", end+1, len(lines), len(snapshot)-len(strings.Join(lines[:end], "")), end+1)
+	}
+	return shown.String()
 }
 
 type browserAct struct{ session *browserSession }
@@ -420,7 +440,7 @@ func (t browserAct) Run(_ context.Context, raw json.RawMessage) (turn.Result, er
 			case err != nil:
 				line = "failed: " + err.Error()
 			case repeats < konst.BrowserRepeatNotice:
-			case line == browser.Unchanged:
+			case strings.HasPrefix(line, browser.Unchanged):
 				line = fmt.Sprintf("repeated %d times, the page did not change", repeats)
 			default:
 				line += fmt.Sprintf(", after %d tries on the same page", repeats)
@@ -450,7 +470,7 @@ func (t browserAct) Run(_ context.Context, raw json.RawMessage) (turn.Result, er
 		fmt.Fprintf(&report, ", %d skipped: observe the page as it is now and act again", skipped)
 	}
 	report.WriteString("\n\n")
-	return turn.Result{Content: report.String() + web.Untrusted(fmt.Sprintf("Chrome tab %d", args.Tab), snapshot), Command: fmt.Sprintf("tab %d act %d", args.Tab, ran)}, nil
+	return turn.Result{Content: report.String() + web.Untrusted(fmt.Sprintf("Chrome tab %d", args.Tab), window(snapshot, 1)), Command: fmt.Sprintf("tab %d act %d", args.Tab, ran)}, nil
 }
 
 func targets(op browser.Op) bool {

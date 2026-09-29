@@ -199,17 +199,16 @@ const (
 	BrowserSnapshotAttempts   = 10
 	BrowserSnapshotGapMillis  = 20
 
-	BrowserSnapshotMaxChars     = 40000
+	BrowserSnapshotMaxBytes     = 24576
 	BrowserActTimeoutMillis     = 8000
 	BrowserObserveTimeoutMillis = 20000
 	BrowserSettlePollMillis     = 300
-	BrowserSettleMaxMillis      = 3000
 	BrowserWaitMaxMillis        = 10000
 	BrowserScrollPixels         = 300
 	BrowserCursorTextRunes      = 100
 	BrowserURLQueryRunes        = 80
-	BrowserDOMQuietMillis       = 500
-	BrowserDOMQuietMaxMillis    = 4000
+	BrowserDOMQuietMillis       = 300
+	BrowserDOMQuietMaxMillis    = 1500
 	BrowserActBatchMax          = 5
 	BrowserLoopWindow           = 20
 	BrowserRepeatNotice         = 3
@@ -242,3 +241,5 @@ const (
 )
 
 const BrowserDeltaWholePercent = 70
+
+const BrowserSettleTickMillis = 50

@@ -179,7 +179,7 @@ func (d *Driver) observe(deadline time.Time, interactive bool) (string, error) {
 		for _, root := range roots {
 			render(&out, top, root, 0, all)
 		}
-		return capSnapshot(out.String()), nil
+		return out.String(), nil
 	}
 	render(&out, top, modal, 0, all)
 	fmt.Fprintf(&out, "behind dialog %s, no ref here acts until it closes:\n", strconv.Quote(top[modal].name))
@@ -197,7 +197,7 @@ func (d *Driver) observe(deadline time.Time, interactive bool) (string, error) {
 			delete(d.refs.entries, node.ref)
 		}
 	}
-	return capSnapshot(out.String()), nil
+	return out.String(), nil
 }
 
 func (n axNode) isModal() bool {

@@ -4,6 +4,7 @@ const vm = require('node:vm');
 
 const [dir, scenario = 'groups'] = process.argv.slice(2);
 const LOAD_AFTER_MS = 100;
+let popupOpener = 20;
 const heard = [];
 const posted = [];
 const storage = {};
@@ -44,7 +45,7 @@ const chrome = {
       if (method !== 'Runtime.evaluate') {
         note('input', tabId, method);
         if (tabId === 20 && params.type === 'mouseReleased') {
-          tabs.set(21, {id: 21, windowId: 1, openerTabId: 20, url: '', pendingUrl: 'https://stays.test/listing', status: 'loading', pinned: false, groupId: -1});
+          tabs.set(21, {id: 21, windowId: 1, openerTabId: popupOpener, url: '', pendingUrl: 'https://stays.test/listing', status: 'loading', pinned: false, groupId: -1});
           listeners.created({...tabs.get(21)});
           loadLater(21, 'https://stays.test/listing');
         }
@@ -138,6 +139,17 @@ const scenarios = {groups: async () => {
   call(7, 9, 'click', {element: 1});
   await quiet();
   return {grouped, restored};
+}, orphan: async () => {
+  popupOpener = undefined;
+  call(1, 0, 'open', {url: 'https://stays.test/new'});
+  await quiet();
+  const release = {method: 'Input.dispatchMouseEvent', params: {type: 'mouseReleased', x: 40, y: 60, button: 'left'}};
+  listeners.message({t: 'call', id: 2, tabId: 20, op: 'cdp', args: {calls: [release], act: true}});
+  await new Promise(resolve => setTimeout(resolve, 3000));
+  tabs.set(40, {id: 40, windowId: 1, url: 'https://news.test/', title: 'News', pinned: false, groupId: -1});
+  listeners.created({...tabs.get(40)});
+  await quiet();
+  return {};
 }, cursor: async () => {
   const clicks = [['mouseMoved', 'none'], ['mousePressed', 'left'], ['mouseReleased', 'left']].map(([type, button]) => ({method: 'Input.dispatchMouseEvent', params: {type, x: 40, y: 60, button}}));
   listeners.message({t: 'call', id: 1, tabId: 9, op: 'cdp', args: {calls: clicks, act: true}, cursor: true});

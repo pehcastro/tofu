@@ -38,6 +38,7 @@ type Moved struct {
 	Close       string `json:"close,omitempty"`
 	Folded      int    `json:"folded,omitempty"`
 	Via         string `json:"via,omitempty"`
+	SettledMS   int    `json:"settled_ms"`
 	Value       string `json:"value,omitempty"`
 	Opened      int    `json:"opened,omitempty"`
 	URLChanged  bool   `json:"url_changed"`
@@ -130,10 +131,14 @@ func (d *Driver) state(deadline time.Time) (pageState, []Tab, error) {
 const Unchanged = "the page did not change"
 
 func (m Moved) String() string {
+	said := m.said()
 	if m.Via != "" {
-		return m.said() + ", through " + m.Via + " after the mouse and keys did nothing"
+		said += ", through " + m.Via + " after the mouse and keys did nothing"
 	}
-	return m.said()
+	if m.Covered == "" {
+		said += fmt.Sprintf(" (settled in %d ms)", m.SettledMS)
+	}
+	return said
 }
 
 func (m Moved) said() string {
@@ -256,10 +261,11 @@ func (d *Driver) fallback(deadline time.Time, move Move) string {
 }
 
 func (d *Driver) measure(deadline time.Time, move Move, before pageState, tabsBefore []Tab, moved Moved) (Moved, error) {
-	d.settle(deadline)
+	quiet := 0
 	if move.Kind == MoveNavigate || move.Kind == MoveBack {
-		d.quiet(deadline)
+		quiet = konst.BrowserDOMQuietMillis
 	}
+	moved.SettledMS = d.settle(deadline, quiet)
 	after, tabsAfter, err := d.state(deadline)
 	if err != nil {
 		return moved, err
@@ -608,28 +614,33 @@ func (d *Driver) wait(deadline time.Time, value string) error {
 	}
 }
 
-const domQuiet = `new Promise(resolve => {
-  let quiet = null, cap = null;
-  const done = settled => { observer.disconnect(); clearTimeout(quiet); clearTimeout(cap); resolve(settled); };
-  const observer = new MutationObserver(() => { clearTimeout(quiet); quiet = setTimeout(() => done(true), %[1]d); });
+const settleScript = `new Promise(resolve => {
+  const started = performance.now();
+  let changed = started;
+  const observer = new MutationObserver(() => { changed = performance.now(); });
   observer.observe(document, {subtree: true, childList: true, characterData: true, attributes: true});
-  quiet = setTimeout(() => done(true), %[1]d);
-  cap = setTimeout(() => done(false), %[2]d);
+  const pending = () => {
+    const entries = %[4]s;
+    return entries.pending > 0 || entries.loading;
+  };
+  const tick = () => {
+    const now = performance.now();
+    if ((now - changed >= %[1]d && !pending()) || now - started >= %[2]d) {
+      observer.disconnect();
+      resolve(Math.round(now - started));
+      return;
+    }
+    setTimeout(tick, %[3]d);
+  };
+  tick();
 })`
 
-func (d *Driver) quiet(deadline time.Time) {
-	var settled bool
-	_ = d.value(deadline, false, evaluate(fmt.Sprintf(domQuiet, konst.BrowserDOMQuietMillis, konst.BrowserDOMQuietMaxMillis)), &settled)
+func settleExpression(quietMS int) string {
+	return fmt.Sprintf(settleScript, quietMS, konst.BrowserDOMQuietMaxMillis, konst.BrowserSettleTickMillis, pendingRequests)
 }
 
-func (d *Driver) settle(deadline time.Time) {
-	for until := time.Now().Add(konst.BrowserSettleMaxMillis * time.Millisecond); time.Now().Before(until); time.Sleep(konst.BrowserSettlePollMillis * time.Millisecond) {
-		var busy struct {
-			Pending int  `json:"pending"`
-			Loading bool `json:"loading"`
-		}
-		if d.value(deadline, false, evaluate(pendingRequests), &busy) == nil && busy.Pending == 0 && !busy.Loading {
-			return
-		}
-	}
+func (d *Driver) settle(deadline time.Time, quietMS int) int {
+	var settled int
+	_ = d.value(deadline, false, evaluate(settleExpression(quietMS)), &settled)
+	return settled
 }

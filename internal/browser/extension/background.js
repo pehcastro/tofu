@@ -17,6 +17,7 @@ const SELECT_ALL_MODIFIER = navigator.userAgent.includes('Mac') ? 4 : 2;
 const CURSOR_GLIDE_MS = 150;
 const CURSOR_RING_MS = 250;
 const CURSOR_IDLE_MS = 3000;
+const ORPHAN_MS = 2000;
 const NO_GROUP = -1;
 const GROUP_COLOR = 'orange';
 const BADGES = {
@@ -40,6 +41,7 @@ let snapshotSource = null;
 let groups = null;
 let groupWork = Promise.resolve();
 let groupTitle = 'tofu ⏸️';
+let lastClick = {tabId: 0, windowId: 0, at: 0};
 
 const tabInfo = tab => ({id: tab.id, url: tab.url ?? tab.pendingUrl ?? '', title: tab.title ?? '', opened: opened.has(tab.id)});
 const post = message => port?.postMessage(message);
@@ -243,9 +245,10 @@ async function relay(tabId, {calls, act}, cursor) {
   await attach(tabId);
   if (act && !grouped.has(tabId)) serially(() => groupTab(tabId));
   const click = calls.find(({method}) => method === 'Input.dispatchMouseEvent');
-  if (cursor && click && opened.has(tabId)) {
+  if (click && opened.has(tabId)) {
+    lastClick = {tabId, windowId: (await chrome.tabs.get(tabId)).windowId, at: Date.now()};
     const {x, y} = click.params;
-    send(tabId, 'Runtime.evaluate', {expression: `(${paintCursor})(${x}, ${y}, ${CURSOR_GLIDE_MS}, ${CURSOR_RING_MS}, ${CURSOR_IDLE_MS})`}).catch(() => {});
+    if (cursor) send(tabId, 'Runtime.evaluate', {expression: `(${paintCursor})(${x}, ${y}, ${CURSOR_GLIDE_MS}, ${CURSOR_RING_MS}, ${CURSOR_IDLE_MS})`}).catch(() => {});
   }
   return Promise.all(calls.map(({method, params}) => send(tabId, method, params).then(result => ({result}), error => ({error: error.message}))));
 }
@@ -289,9 +292,10 @@ async function closeOpened(tabId) {
 }
 
 chrome.tabs.onCreated.addListener(tab => {
-  if (opened.has(tab.openerTabId)) {
+  const orphan = tab.openerTabId === undefined && lastClick.windowId === tab.windowId && Date.now() - lastClick.at < ORPHAN_MS;
+  if (opened.has(tab.openerTabId) || orphan) {
     opened.add(tab.id);
-    children.set(tab.openerTabId, tab.id);
+    children.set(orphan ? lastClick.tabId : tab.openerTabId, tab.id);
     serially(() => groupTab(tab.id));
   }
   post({t: 'tabUpdated', tab: tabInfo(tab)});

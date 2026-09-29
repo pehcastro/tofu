@@ -7,7 +7,6 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-	"unicode/utf8"
 
 	"tofu/internal/konst"
 )
@@ -476,15 +475,4 @@ func render(out *strings.Builder, tree []treeNode, i, indent int, v view) {
 	for _, child := range node.children {
 		render(out, tree, child, indent+1, v)
 	}
-}
-
-func capSnapshot(text string) string {
-	runes := []rune(text)
-	if len(runes) <= konst.BrowserSnapshotMaxChars {
-		return text
-	}
-	head := string(runes[:konst.BrowserSnapshotMaxChars])
-	head = head[:strings.LastIndexByte(head, '\n')+1]
-	left := text[len(head):]
-	return head + fmt.Sprintf("[cut: %d more lines, %d characters, left out]\n", strings.Count(left, "\n"), utf8.RuneCountInString(left))
 }
