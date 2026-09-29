@@ -31,6 +31,11 @@ func (t tree) release() {}
 
 func treeAlive(pid int) bool { return syscall.Kill(-pid, 0) == nil }
 
+func processAlive(pid int) bool {
+	err := syscall.Kill(pid, 0)
+	return err == nil || errors.Is(err, syscall.EPERM)
+}
+
 func treeHas(root, pid int) bool {
 	group, err := syscall.Getpgid(pid)
 	return err == nil && group == root

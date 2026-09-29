@@ -45,6 +45,15 @@ func TestShellsViewGolden(t *testing.T) {
 	golden.Assert(t, "shells-120x36.golden", testModel().View())
 }
 
+func TestALeftOverShellIsMarkedAndOfferedForEnding(t *testing.T) {
+	m := testModel()
+	m.Entries[0].State, m.Entries[0].Owner = LeftOver, ""
+	golden.Assert(t, "shells-left-over-120x36.golden", m.View())
+	if intent := m.Key("k"); intent != IntentKillAsk {
+		t.Fatalf("k on a left over shell gives intent %d, want the confirmation", intent)
+	}
+}
+
 func TestStyledShellSurfaceMatchesLipgloss(t *testing.T) {
 	logLines := strings.Split((&cache{}).styledLog(testModel().Entries[0].Log), "\n")
 	content := "\n" + strings.Join(logLines[:min(20, len(logLines))], "\n")

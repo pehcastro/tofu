@@ -162,6 +162,16 @@ func treeAlive(pid int) bool {
 	return err == nil && active > 0
 }
 
+func processAlive(pid int) bool {
+	process, err := windows.OpenProcess(windows.SYNCHRONIZE, false, uint32(pid))
+	if err != nil {
+		return errors.Is(err, windows.ERROR_ACCESS_DENIED)
+	}
+	defer func() { _ = windows.CloseHandle(process) }()
+	state, err := windows.WaitForSingleObject(process, 0)
+	return err == nil && state == uint32(windows.WAIT_TIMEOUT)
+}
+
 func memberIDs(job windows.Handle, assigned uint32) ([]uint32, error) {
 	list := make([]jobProcessIDList, assigned)
 	if err := windows.QueryInformationJobObject(job, windows.JobObjectBasicProcessIdList, uintptr(unsafe.Pointer(&list[0])), uint32(len(list))*uint32(unsafe.Sizeof(list[0])), nil); err != nil {

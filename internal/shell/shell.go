@@ -41,6 +41,7 @@ type Shell struct {
 	Command  string     `json:"command"`
 	Dir      string     `json:"dir"`
 	Owner    string     `json:"owner"`
+	TofuPID  int        `json:"tofu_pid,omitempty"`
 	PID      int        `json:"pid"`
 	State    State      `json:"state"`
 	Started  time.Time  `json:"started"`
@@ -64,12 +65,22 @@ const (
 type Registry struct {
 	Lifetime Lifetime
 	dir      string
+	self     int
 	mu       sync.Mutex
 	running  map[string]*live
 }
 
 func OpenAt(dir string) *Registry {
-	return &Registry{dir: dir, running: map[string]*live{}}
+	return &Registry{dir: dir, self: os.Getpid(), running: map[string]*live{}}
+}
+
+func (s Shell) LeftOver() bool {
+	return s.State == Running && (s.TofuPID <= 0 || !processAlive(s.TofuPID))
+}
+
+func (r *Registry) Own() []Shell {
+	found, _ := r.List()
+	return slices.DeleteFunc(found, func(one Shell) bool { return one.State != Running || one.TofuPID != r.self })
 }
 
 func (r *Registry) statePath(name string) string { return filepath.Join(r.dir, name+stateSuffix) }
@@ -153,7 +164,7 @@ func (r *Registry) Start(root, name, command, owner string) (Shell, error) {
 	if err != nil {
 		return Shell{}, err
 	}
-	entry := Shell{Name: name, Command: command, Dir: root, Owner: owner, PID: cmd.Process.Pid, State: Running, Started: time.Now()}
+	entry := Shell{Name: name, Command: command, Dir: root, Owner: owner, TofuPID: r.self, PID: cmd.Process.Pid, State: Running, Started: time.Now()}
 	return entry, r.keep(entry, spawned, waited, logFile)
 }
 
@@ -202,7 +213,7 @@ func (r *Registry) YieldReady(ctx context.Context, cmd *exec.Cmd, command, owner
 		_ = os.Remove(r.logPath(name))
 		return Yielded{}, err
 	}
-	got := Yielded{Shell: Shell{Name: name, Command: command, Dir: cmd.Dir, Owner: owner, PID: cmd.Process.Pid, State: Running, Started: time.Now()}}
+	got := Yielded{Shell: Shell{Name: name, Command: command, Dir: cmd.Dir, Owner: owner, TofuPID: r.self, PID: cmd.Process.Pid, State: Running, Started: time.Now()}}
 	poll := time.NewTicker(wait.Poll)
 	defer poll.Stop()
 	gaveUp := time.After(wait.Within)

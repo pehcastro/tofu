@@ -30,8 +30,8 @@
   do: tofu settings set shell wsl
   check: tofu settings get shell
   topic: settings
-- ask: stop every shell when tofu exits
-  do: tofu settings set persistentRegistry false
+- ask: keep shells running after tofu exits
+  do: tofu settings set persistentRegistry true
   check: tofu settings get persistentRegistry
   topic: settings
 - ask: stop sub-agents from being spawned

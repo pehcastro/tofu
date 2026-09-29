@@ -42,10 +42,13 @@ const (
 type State string
 
 const (
-	Running State = "running"
-	Exited  State = "exited"
-	Killed  State = "killed"
+	Running  State = "running"
+	LeftOver State = "left over"
+	Exited   State = "exited"
+	Killed   State = "killed"
 )
+
+func (s State) Endable() bool { return s == Running || s == LeftOver }
 
 type Intent int
 
@@ -138,7 +141,7 @@ func (m *Model) Key(key string) Intent {
 func (m *Model) kill() Intent {
 	entry, picked := m.Picked()
 	switch {
-	case !picked || entry.State != Running:
+	case !picked || !entry.State.Endable():
 		return IntentNone
 	case m.killNow:
 		return IntentKillNow
@@ -227,14 +230,22 @@ func (m Model) View() string {
 }
 
 func (m Model) sidebar(width int) string {
-	running := 0
+	running, leftOver := 0, 0
 	for _, entry := range m.Entries {
-		if entry.State == Running {
+		switch entry.State {
+		case Running:
 			running++
+		case LeftOver:
+			leftOver++
+		case Exited, Killed:
 		}
 	}
+	summary := strconv.Itoa(running) + " running  ·  " + strconv.Itoa(len(m.Entries)-running) + " exited"
+	if leftOver > 0 {
+		summary = strconv.Itoa(running) + " running  ·  " + strconv.Itoa(leftOver) + " left over"
+	}
 	var out strings.Builder
-	out.WriteString(look.PaneTitle(title, true) + "\n" + look.Faint(strconv.Itoa(running)+" running  ·  "+strconv.Itoa(len(m.Entries)-running)+" exited") + "\n\n")
+	out.WriteString(look.PaneTitle(title, true) + "\n" + look.Faint(summary) + "\n\n")
 	start, end := m.sidebarWindow()
 	for index, entry := range m.Entries[start:end] {
 		out.WriteString(look.SidebarEntry(width, start+index == m.pick, entry.Name, badge(entry), "pid "+strconv.Itoa(entry.PID)) + "\n")
@@ -253,7 +264,7 @@ func (m Model) detail(c *cache, width int) string {
 	view := look.Sides(look.Title(entry.Name), badge(entry), width) + "\n" + look.Muted("Owned by ") + owner + "\n\n" +
 		c.process.Surface(processWidth(width), processHeight+len(facts)-processRows, look.PanelLight, processPadding, strings.Join(facts, "\n")) + "\n\n" +
 		look.SectionLabel("Output") + look.Faint(outputHint) + "\n" + output + "\n"
-	if entry.State != Running {
+	if !entry.State.Endable() {
 		return view
 	}
 	hint := killAskHint
@@ -295,7 +306,7 @@ func badge(entry Entry) string {
 			return look.StateBadge(string(entry.State)+" "+strconv.Itoa(*entry.ExitCode), false)
 		}
 		return look.StateBadge(string(entry.State), false)
-	case Killed:
+	case Killed, LeftOver:
 		return look.StateBadge(string(entry.State), false)
 	}
 	panic("shells: unknown state " + string(entry.State))
@@ -306,7 +317,7 @@ func (m Model) runtime(entry Entry) string {
 	switch {
 	case entry.Ended != nil:
 		end = *entry.Ended
-	case entry.State != Running:
+	case !entry.State.Endable():
 		return unknownRuntime
 	case m.now != nil:
 		end = m.now()

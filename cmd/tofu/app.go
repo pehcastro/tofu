@@ -56,6 +56,9 @@ const (
 	sessionEnded     = "tofu: session ended"
 	stoppingPrefix   = ", stopping "
 	leavingPrefix    = ", leaving running for the next launch "
+	leftOverNote     = "shells left over from an earlier tofu: "
+	leftOverFix      = ", end them in the shells screen"
+	noteSeparator    = "  ·  "
 )
 
 const (
@@ -99,21 +102,29 @@ type appLaunch struct {
 	fresh       bool
 	registry    *shell.Registry
 	registryErr error
+	note        string
 }
 
 func launchOf(dir string, resumed sessionResume, fresh bool) appLaunch {
 	registry, registryErr := launchShellRegistry(dir)
-	if registryErr == nil {
-		_ = registry.Prune()
+	launch := appLaunch{resumed: resumed, fresh: fresh, registry: registry, registryErr: registryErr}
+	if registryErr != nil {
+		return launch
 	}
-	return appLaunch{resumed: resumed, fresh: fresh, registry: registry, registryErr: registryErr}
+	_ = registry.Prune()
+	found, _ := registry.List()
+	if leftOver := len(slices.DeleteFunc(found, func(one shell.Shell) bool { return !one.LeftOver() })); leftOver > 0 {
+		launch.note = leftOverNote + strconv.Itoa(leftOver) + leftOverFix
+	}
+	return launch
 }
 
 func appOptions(dir string, arms runOpts, wiring appWiring, launch appLaunch) tui.Options {
-	note := ""
+	notes := []string{launch.note}
 	if _, err := gateKey(); err != nil {
-		note = gateOffNote
+		notes = append(notes, gateOffNote)
 	}
+	note := strings.Join(slices.DeleteFunc(notes, func(one string) bool { return one == "" }), noteSeparator)
 	answers := make(chan tui.Answer, 1)
 	steering := make(chan string, queuedMessages)
 	live := newAppSession(dir, wiring.open, answers, time.Now, launch.resumed)
@@ -245,22 +256,16 @@ func leaveShells(registry *shell.Registry) {
 	if registry == nil || registry.Lifetime == shell.OutlivesTofu {
 		return
 	}
-	found, _ := registry.List()
-	for _, one := range found {
-		if one.State == shell.Running {
-			_ = registry.Kill(one.Name)
-		}
+	for _, one := range registry.Own() {
+		_ = registry.Kill(one.Name)
 	}
 }
 
 func sessionEndLine(registry *shell.Registry, openErr error) string {
 	var running []string
 	if openErr == nil {
-		found, _ := registry.List()
-		for _, one := range found {
-			if one.State == shell.Running {
-				running = append(running, one.Name+" ("+one.Command+")")
-			}
+		for _, one := range registry.Own() {
+			running = append(running, one.Name+" ("+one.Command+")")
 		}
 	}
 	if len(running) == 0 {
@@ -475,6 +480,9 @@ func appShells(dir string, registry *shell.Registry, openErr error) func() []she
 			switch one.State {
 			case shell.Running:
 				entry.State = shells.Running
+				if one.LeftOver() {
+					entry.State = shells.LeftOver
+				}
 			case shell.Exited:
 				entry.State = shells.Exited
 			case shell.Killed:
