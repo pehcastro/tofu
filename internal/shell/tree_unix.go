@@ -11,8 +11,11 @@ import (
 
 type tree struct{}
 
-func startTree(cmd *exec.Cmd, _ Lifetime) (tree, error) {
+func startTree(cmd *exec.Cmd, lifetime Lifetime) (tree, error) {
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	if lifetime == DiesWithTofu {
+		endWithParent(cmd.SysProcAttr)
+	}
 	if cmd.Cancel != nil {
 		cmd.Cancel = func() error {
 			if err := killTree(cmd.Process.Pid); !errors.Is(err, ErrTreeGone) {

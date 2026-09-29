@@ -13,8 +13,9 @@ back, or give it a name. The session you last worked in is the head, and
 that is the one `tofu --continue` opens.
 
 A shell an agent started, like a dev server, keeps running after the task
-and after tofu exits, until you stop it. With the `persistentRegistry`
-setting off, every shell stops when tofu exits.
+and stops when tofu exits, with every process it started. That holds when
+tofu is killed too. With the `persistentRegistry` setting on, a shell keeps
+running after tofu exits, until you stop it, and the next launch lists it.
 
 ## Where it lives
 

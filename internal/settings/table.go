@@ -231,7 +231,7 @@ func Default() []Spec {
 		{Key: Hyperlinks, Label: "Hyperlinks", Description: "OSC 8 terminal file links; off prints the bare path", Category: "Files", Kind: Text, DefaultText: LinksAuto,
 			Choices: []string{LinksAuto, LinksOn, LinksOff}},
 		{Key: GroupByAgent, Label: "Group by agent", Description: "Author filters in edit feeds", Category: "Files", Kind: Bool, Default: 1},
-		{Key: PersistentRegistry, Label: "Persistent registry", Description: "a running shell outlives tofu and the next launch lists it; off stops every shell on exit", Category: "Shell", Kind: Bool, Default: 1, Restart: true},
+		{Key: PersistentRegistry, Label: "Persistent registry", Description: "a running shell outlives tofu and the next launch lists it; off stops every shell on exit, even when tofu is killed", Category: "Shell", Kind: Bool, Restart: true},
 		{Key: LogTail, Label: "Log tail", Description: "Lines retained per shell", Category: "Shell", Kind: Text, DefaultText: strconv.Itoa(konst.ShellLogTailLinesDefault),
 			Choices: lineCounts(konst.ShellLogTailLinesShort, konst.ShellLogTailLinesDefault, konst.ShellLogTailLinesLong)},
 		{Key: KillConfirm, Label: "Kill confirm", Description: "Confirm process termination", Category: "Shell", Kind: Bool, Default: 1},
