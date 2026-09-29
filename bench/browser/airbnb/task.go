@@ -24,18 +24,46 @@ const (
 
 type Field string
 
-var fieldPatterns = map[Field]*regexp.Regexp{
-	"price": regexp.MustCompile(`(R\$|US\$|\$|€|£)\s?\d`),
-	"rating": regexp.MustCompile(`(?i)(nota|avalia\S*|rating|★)\s*[1-5][.,]\d{1,2}|[1-5][.,]\d{1,2}\s*((de|out of) 5\s*)?(★|avalia|rating|stars|estrelas)` +
-		`|(no (numeric )?(average|rating)|sem (média|nota))(.*)\d+ (avaliaç|coment|review)|\d+ (avaliaç|coment|review)(.*)(no (numeric )?(average|rating)|sem (média|nota))`),
-	"bedrooms": regexp.MustCompile(`(?i)\d+\s*(quartos?|bedrooms?)|bedrooms?\s+\d+`),
+const noRating = `|(?i)\b[0-2] (avaliaç\S*|coment\S*|reviews?)\b|no score|no reviews?|sem avaliaç|novo anúncio|\bnovo\b`
+
+var linePatterns = map[Field]*regexp.Regexp{
+	"price":    regexp.MustCompile(`(R\$|US\$|\$|€|£)\s?\d`),
+	"rating":   regexp.MustCompile(`(?i)(nota|avalia\S*|rating|★)\s*[1-5][.,]\d{1,2}|[1-5][.,]\d{1,2}\s*((de|out of) 5\s*)?(★|avalia|rating|stars|estrelas)` + noRating),
+	"bedrooms": regexp.MustCompile(`(?i)\d+\s*(quartos?|bedrooms?)`),
 	"pool":     regexp.MustCompile(`(?i)piscina|pool`),
+}
+
+var cellPatterns = map[Field]*regexp.Regexp{
+	"price":    linePatterns["price"],
+	"rating":   regexp.MustCompile(`^\W*[1-5][.,]\d{1,2}` + noRating),
+	"bedrooms": regexp.MustCompile(`\d`),
+	"pool":     regexp.MustCompile(`(?i)^\W*(yes|no|sim|não|nao)\b`),
+}
+
+var columnOf = map[Field]*regexp.Regexp{
+	"price":    regexp.MustCompile(`(?i)price|preço|total`),
+	"rating":   regexp.MustCompile(`(?i)rating|avalia|nota`),
+	"bedrooms": regexp.MustCompile(`(?i)bedroom|quarto`),
+	"pool":     regexp.MustCompile(`(?i)pool|piscina`),
 }
 
 var (
 	roomID    = regexp.MustCompile(`/rooms/(\d+)`)
 	tableRule = regexp.MustCompile(`^\s*\|[\s:|-]+\|\s*$`)
 )
+
+type Listing struct {
+	ID    string
+	Line  string
+	Cells map[Field]string
+}
+
+func (l Listing) Answers(field Field) bool {
+	if cell, inTable := l.Cells[field]; inTable {
+		return cellPatterns[field].MatchString(strings.TrimSpace(cell))
+	}
+	return linePatterns[field].MatchString(l.Line)
+}
 
 func tableCells(line string) []string {
 	trimmed := strings.TrimSpace(strings.ReplaceAll(line, `\|`, "/"))
@@ -89,7 +117,7 @@ func Load() (Task, error) {
 			}
 		case ReportFields:
 			for _, field := range step.Check.Fields {
-				if fieldPatterns[field] == nil {
+				if linePatterns[field] == nil {
 					return task, fmt.Errorf("task.json: step %d names unknown field %q", step.Step, field)
 				}
 			}
@@ -126,26 +154,21 @@ func passes(check Check, run Run) bool {
 	case RoomsOpened:
 		return len(openedRooms(run)) >= check.Count
 	case FinalIsNthListing:
-		var visitOrder []string
-		for _, visited := range run.Visits {
-			if match := roomID.FindStringSubmatch(visited); match != nil && !slices.Contains(visitOrder, match[1]) {
-				visitOrder = append(visitOrder, match[1])
-			}
-		}
+		reported := listings(run)
 		final := roomID.FindStringSubmatch(snapshotURL(run.Snapshot))
-		return final != nil && len(visitOrder) >= check.Count && visitOrder[check.Count-1] == final[1]
+		return final != nil && len(reported) >= check.Count && reported[check.Count-1].ID == final[1]
 	case ReportListings:
-		return len(namedListings(run)) >= check.Count
+		return len(listings(run)) >= check.Count
 	case ReportFields:
-		named := namedListings(run)
-		for _, block := range named {
+		reported := listings(run)
+		for _, listing := range reported {
 			for _, field := range check.Fields {
-				if !fieldPatterns[field].MatchString(block) {
+				if !listing.Answers(field) {
 					return false
 				}
 			}
 		}
-		return len(named) > 0
+		return len(reported) > 0
 	}
 	panic(fmt.Sprintf("unknown check %q", check.Kind))
 }
@@ -184,29 +207,39 @@ func snapshotURL(snapshot string) string {
 	return ""
 }
 
-func namedListings(run Run) map[string]string {
+func listings(run Run) []Listing {
 	opened := openedRooms(run)
-	named := map[string]string{}
+	var rows, lines []Listing
 	var header []string
-	lines := slices.Collect(strings.Lines(run.Report))
-	for at, line := range lines {
+	report := slices.Collect(strings.Lines(run.Report))
+	for at, line := range report {
 		cells := tableCells(line)
-		if cells != nil && at+1 < len(lines) && tableRule.MatchString(lines[at+1]) {
+		if cells != nil && at+1 < len(report) && tableRule.MatchString(report[at+1]) {
 			header = cells
 			continue
 		}
-		if cells != nil && len(cells) == len(header) {
-			var labelled strings.Builder
-			for column, cell := range cells {
-				fmt.Fprintf(&labelled, "%s %s | ", header[column], cell)
-			}
-			line = labelled.String()
+		match := roomID.FindStringSubmatch(line)
+		if match == nil || !opened[match[1]] {
+			continue
 		}
-		for _, match := range roomID.FindAllStringSubmatch(line, -1) {
-			if opened[match[1]] {
-				named[match[1]] += line
+		if cells == nil || len(cells) != len(header) {
+			if !slices.ContainsFunc(lines, func(listing Listing) bool { return listing.ID == match[1] }) {
+				lines = append(lines, Listing{ID: match[1], Line: line})
+			}
+			continue
+		}
+		row := Listing{ID: match[1], Line: line, Cells: map[Field]string{}}
+		for column, name := range header {
+			for field, pattern := range columnOf {
+				if pattern.MatchString(name) {
+					row.Cells[field] = cells[column]
+				}
 			}
 		}
+		rows = append(rows, row)
 	}
-	return named
+	if len(rows) > 0 {
+		return rows
+	}
+	return lines
 }

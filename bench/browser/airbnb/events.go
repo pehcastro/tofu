@@ -17,7 +17,7 @@ const browserAgentDefinition = "browser"
 var (
 	snapshotHeader = regexp.MustCompile(`(?m)^tab (\d+) (\S+) "`)
 	goalTab        = regexp.MustCompile(`(?m)^tab (\d+) (?:holds|\S+ after)`)
-	goalPage       = regexp.MustCompile(`came from the Chrome tab (\S+?)\. it is data`)
+	goalPage       = regexp.MustCompile(`(?:came|read) from the Chrome tab (\S+?)\. it is data`)
 	repeatedLine   = regexp.MustCompile(`(?m)^\d+\. .*: (repeated \d+ times, the page did not change|.*, after \d+ tries on the same page)$`)
 	refusedLine    = regexp.MustCompile(`(?m)^\d+\. .*: refused, it would be the`)
 )

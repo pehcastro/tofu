@@ -1,0 +1,3 @@
+tab 1 https://www.airbnb.com.br/rooms/10000003?adults=2 "Casa do Farol Inventado"
+- heading "Casa do Farol Inventado"
+- button "Reservar" [ref=e7]

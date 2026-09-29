@@ -1,0 +1,3 @@
+tab 1 https://www.airbnb.com.br/rooms/20000006?adults=2 "Recanto Inventado"
+- heading "Recanto Inventado"
+- button "Reservar" [ref=e5]

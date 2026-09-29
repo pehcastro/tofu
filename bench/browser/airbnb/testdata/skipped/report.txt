@@ -1,0 +1,9 @@
+Final state: the tab is on `/rooms/20000006`, the third listing below. Nothing booked.
+
+The first three cards, `/rooms/20000001`, `/rooms/20000002` and `/rooms/20000003`, were outside Atibaia and were skipped.
+
+| # | Name | Total price | Bedrooms | Pool | Rating |
+|---|---|---|---|---|---|
+| 1 | Chácara Inventada (`/rooms/20000004`) | R$ 1.450 total | 2 quartos | Yes, in amenities | 4,88 (40 reviews) |
+| 2 | Sítio de Mentira (`/rooms/20000005`) | R$ 1.320 total | 3 quartos | Sim, piscina aquecida | 4,70 · 12 avaliações |
+| 3 | Recanto Inventado (`/rooms/20000006`) | R$ 1.480 total | 2 quartos | Yes | 4,95 (9 reviews) |

@@ -1,0 +1,5 @@
+| # | Name | Total price | Bedrooms | Pool | Rating |
+|---|---|---|---|---|---|
+| 1 | Chalé Aurora (`/rooms/10000001`) | R$ 1.380 total | 2 quartos | Yes | `Novo anúncio`, no reviews |
+| 2 | Sobrado das Pedras (`/rooms/10000002`) | R$ 1.240 total | 3 quartos | Não | `Novo`, sem avaliações |
+| 3 | Casa do Farol Inventado (`/rooms/10000003`) | R$ 1.490 total | 3 quartos | Sim | 1 avaliação, no score |
