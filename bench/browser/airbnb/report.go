@@ -21,6 +21,7 @@ type Row struct {
 	Passed        int
 	Wall          time.Duration
 	Forks         int
+	SubForks      int
 	MainTokens    int
 	BrowserTokens *int
 	TabsOpened    int
@@ -31,7 +32,7 @@ type Row struct {
 }
 
 func Score(task Task, run Run) Row {
-	row := Row{Arm: run.Arm, Conditions: run.Conditions, Wall: time.Duration(run.WallMS) * time.Millisecond, Forks: run.Forks, MainTokens: run.MainTokens, BrowserTokens: run.BrowserTokens, TabsOpened: len(run.Tabs), Repeated: run.Repeated, Refused: run.Refused, Mixed: run.Mixed, TabsClosed: run.TabsClosed}
+	row := Row{Arm: run.Arm, Conditions: run.Conditions, Wall: time.Duration(run.WallMS) * time.Millisecond, Forks: run.Forks, SubForks: run.SubForks, MainTokens: run.MainTokens, BrowserTokens: run.BrowserTokens, TabsOpened: len(run.Tabs), Repeated: run.Repeated, Refused: run.Refused, Mixed: run.Mixed, TabsClosed: run.TabsClosed}
 	for _, step := range task.Steps {
 		passed := passes(step.Check, run)
 		if passed {
@@ -61,7 +62,7 @@ func Render(rows []Row) (string, error) {
 		return cmp.Or(cmp.Compare(b.Passed, a.Passed), cmp.Compare(unknownLast(a), unknownLast(b)))
 	})
 	var table strings.Builder
-	table.WriteString("| arm | mode | steps | wall | total tokens | usd | forks | main tokens | browser tokens | tabs closed before | tabs opened | repeated | refused | failed steps | main build | browser build | main credential | browser credential | wire | machine | date |\n")
+	table.WriteString("| arm | mode | steps | wall | total tokens | usd | forks main+sub | main tokens | browser tokens | tabs closed before | tabs opened | repeated | refused | failed steps | main build | browser build | main credential | browser credential | wire | machine | date |\n")
 	table.WriteString("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n")
 	for _, row := range sorted {
 		if row.Conditions.Credential != rows[0].Conditions.Credential {
@@ -81,8 +82,8 @@ func Render(rows []Row) (string, error) {
 		if row.Mixed {
 			mode = "mixed"
 		}
-		fmt.Fprintf(&table, "| %s | %s | %d of %d | %.0f s | %s | - | %d | %d | %s | %d | %d | %d | %d | %s | %s | %s | %s | %s | %s | %s | %s |\n",
-			row.Arm, mode, row.Passed, len(row.Steps), row.Wall.Seconds(), totalTokens, row.Forks, row.MainTokens, browserTokens, row.TabsClosed, row.TabsOpened, row.Repeated, row.Refused,
+		fmt.Fprintf(&table, "| %s | %s | %d of %d | %.0f s | %s | - | %d+%d | %d | %s | %d | %d | %d | %d | %s | %s | %s | %s | %s | %s | %s | %s |\n",
+			row.Arm, mode, row.Passed, len(row.Steps), row.Wall.Seconds(), totalTokens, row.Forks, row.SubForks, row.MainTokens, browserTokens, row.TabsClosed, row.TabsOpened, row.Repeated, row.Refused,
 			strings.Join(failed, " "), conditions.MainBuild, conditions.BrowserBuild, conditions.Credential, conditions.BrowserCredential, conditions.Wire, conditions.Machine, conditions.Date)
 	}
 	return table.String(), nil

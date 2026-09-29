@@ -99,6 +99,7 @@ type Run struct {
 	Conditions    Conditions `json:"conditions"`
 	WallMS        int64      `json:"wall_ms"`
 	Forks         int        `json:"forks"`
+	SubForks      int        `json:"sub_agent_forks"`
 	MainTokens    int        `json:"main_tokens"`
 	BrowserTokens *int       `json:"browser_tokens"`
 	Repeated      int        `json:"repeated"`

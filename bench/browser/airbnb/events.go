@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strings"
 
+	"tofu/internal/llm"
 	"tofu/internal/session"
 )
 
@@ -59,7 +60,7 @@ func RunFromEvents(arm Arm, paths ...string) (Run, error) {
 	}
 	run := Run{Arm: arm, Forks: len(paths) - 1, WallMS: events[len(events)-1].At.Sub(events[0].At).Milliseconds()}
 	browserTokens := 0
-	browserAgents, tools, tabAt := map[string]bool{}, map[string]string{}, map[string]int{}
+	browserAgents, tools, tabAt, wires := map[string]bool{}, map[string]string{}, map[string]int{}, map[string]string{}
 	var mainBuilds, browserBuilds []string
 	see := func(tab, url string) {
 		if len(run.Visits) == 0 || run.Visits[len(run.Visits)-1] != url {
@@ -76,8 +77,15 @@ func RunFromEvents(arm Arm, paths ...string) (Run, error) {
 		switch event.Kind {
 		case session.EventTurnStart:
 			var start session.TurnStart
-			if json.Unmarshal(event.Body, &start) == nil && event.Agent == "" {
-				run.Conditions.Wire = start.Wire
+			if json.Unmarshal(event.Body, &start) == nil {
+				wires[event.Agent] = start.Wire
+			}
+		case session.EventCompaction:
+			var compacted struct {
+				Fork json.RawMessage `json:"fork"`
+			}
+			if json.Unmarshal(event.Body, &compacted) == nil && compacted.Fork != nil && event.Agent != "" {
+				run.SubForks++
 			}
 		case session.EventSpawn:
 			var spawned session.SpawnBody
@@ -90,7 +98,7 @@ func RunFromEvents(arm Arm, paths ...string) (Run, error) {
 			if err := json.Unmarshal(event.Body, &step); err != nil {
 				return Run{}, fmt.Errorf("request %d: %w", event.Seq, err)
 			}
-			tokens := step.PromptTokens + step.CompletionTokens + step.CacheReadTokens + step.CacheWriteTokens
+			tokens := llm.PromptAccountingFor(wires[event.Agent]).BilledTokens(step.PromptTokens, step.CacheReadTokens) + step.CompletionTokens + step.CacheWriteTokens
 			if browserAgents[event.Agent] {
 				browserTokens += tokens
 				browserBuilds = appendNew(browserBuilds, step.Model)
@@ -135,7 +143,7 @@ func RunFromEvents(arm Arm, paths ...string) (Run, error) {
 			}
 		}
 	}
-	run.Conditions.MainBuild, run.Conditions.BrowserBuild = strings.Join(mainBuilds, " "), strings.Join(browserBuilds, " ")
+	run.Conditions.Wire, run.Conditions.MainBuild, run.Conditions.BrowserBuild = wires[""], strings.Join(mainBuilds, " "), strings.Join(browserBuilds, " ")
 	settings, err := arm.Settings()
 	if err != nil {
 		return Run{}, err

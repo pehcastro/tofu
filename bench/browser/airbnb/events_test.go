@@ -61,8 +61,29 @@ func TestAForkedSessionIsReadFromItsRootThroughEveryFork(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Log("\n" + table)
-	if !strings.Contains(table, "| forks |") || !strings.Contains(table, "| A | as set | 12 of 12 | 300 s | 6600 | - | 2 |") {
+	if !strings.Contains(table, "| forks main+sub |") || !strings.Contains(table, "| A | as set | 12 of 12 | 300 s | 6600 | - | 2+0 |") {
 		t.Error("the row does not carry the whole lineage")
+	}
+}
+
+func TestEachWireCountsItsCacheReadsOnceAndSubAgentForksAreCounted(t *testing.T) {
+	run, err := RunFromEvents(ArmB1, "testdata/events/meta.jsonl")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if run.BrowserTokens == nil {
+		t.Fatal("a sub-agent arm recorded no browser tokens")
+	}
+	if run.MainTokens != 1550 || *run.BrowserTokens != 3300 || run.Forks != 0 || run.SubForks != 1 {
+		t.Errorf("main %d, browser %d, forks %d+%d, want 1550, 3300 and 0+1", run.MainTokens, *run.BrowserTokens, run.Forks, run.SubForks)
+	}
+	table, err := Render([]Row{Score(Task{}, run)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Log("\n" + table)
+	if !strings.Contains(table, "| 4850 | - | 0+1 | 1550 | 3300 |") {
+		t.Error("the row does not print the total and both fork counts")
 	}
 }
 
