@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"io/fs"
 	"net/http"
@@ -21,13 +22,19 @@ import (
 const (
 	madeUpMetaKey = "meta-made-up-3c9e71b04d2f"
 	metaNotice    = "Meta may train on what you send to this model"
-	metaToolCall  = `data: {"type":"response.output_item.added","output_index":0,"item":{"type":"function_call","id":"fc_1","call_id":"call_1","name":"read"}}
+	metaToolCall  = `data: {"type":"response.output_item.added","output_index":0,"item":{"type":"reasoning"}}
 
-data: {"type":"response.function_call_arguments.delta","output_index":0,"delta":"{\"path\":"}
+data: {"type":"response.reasoning_summary_text.delta","output_index":0,"delta":"the note holds the answer"}
 
-data: {"type":"response.function_call_arguments.delta","output_index":0,"delta":"\"note.txt\"}"}
+data: {"type":"response.output_item.done","output_index":0,"item":{"id":"rs_1","type":"reasoning","encrypted_content":"opaque"}}
 
-data: {"type":"response.output_item.done","output_index":0,"item":{"type":"function_call","id":"fc_1","call_id":"call_1","name":"read"}}
+data: {"type":"response.output_item.added","output_index":1,"item":{"type":"function_call","id":"fc_1","call_id":"call_1","name":"read"}}
+
+data: {"type":"response.function_call_arguments.delta","output_index":1,"delta":"{\"path\":"}
+
+data: {"type":"response.function_call_arguments.delta","output_index":1,"delta":"\"note.txt\"}"}
+
+data: {"type":"response.output_item.done","output_index":1,"item":{"type":"function_call","id":"fc_1","call_id":"call_1","name":"read"}}
 
 data: {"type":"response.completed","response":{"id":"resp_1","model":"muse-spark-1.3","status":"completed","usage":{"input_tokens":50,"output_tokens":9,"total_tokens":59}}}
 
@@ -67,9 +74,9 @@ func metaStub(t *testing.T, answer func(heardMeta, http.ResponseWriter)) *[]hear
 		mu.Lock()
 		*heard = append(*heard, request)
 		mu.Unlock()
-		if tool := toolWithANullInItsSchema(body); tool != "" {
+		if refusal := refusedAsMetaRefuses(body); refusal != "" {
 			w.WriteHeader(http.StatusBadRequest)
-			_, _ = io.WriteString(w, `{"error":{"message":"Invalid JSON schema: null is not of type \"array\"","param":"parameters","tool":"`+tool+`"}}`)
+			_, _ = io.WriteString(w, refusal)
 			return
 		}
 		answer(request, w)
@@ -79,8 +86,9 @@ func metaStub(t *testing.T, answer func(heardMeta, http.ResponseWriter)) *[]hear
 	return heard
 }
 
-func toolWithANullInItsSchema(body []byte) string {
+func refusedAsMetaRefuses(body []byte) string {
 	var request struct {
+		Input []map[string]any `json:"input"`
 		Tools []struct {
 			Name       string `json:"name"`
 			Parameters any    `json:"parameters"`
@@ -88,6 +96,11 @@ func toolWithANullInItsSchema(body []byte) string {
 	}
 	if json.Unmarshal(body, &request) != nil {
 		return ""
+	}
+	for index, item := range request.Input {
+		if _, summarised := item["summary"]; item["type"] == "reasoning" && !summarised {
+			return fmt.Sprintf(`{"error":{"message":"`+"`input[%d]`"+` missing required field `+"`summary`"+`","param":"input[%d]"}}`, index, index)
+		}
 	}
 	var holdsNull func(any) bool
 	holdsNull = func(value any) bool {
@@ -111,7 +124,7 @@ func toolWithANullInItsSchema(body []byte) string {
 	}
 	for _, tool := range request.Tools {
 		if holdsNull(tool.Parameters) {
-			return tool.Name
+			return `{"error":{"message":"Invalid JSON schema: null is not of type \"array\"","param":"parameters","tool":"` + tool.Name + `"}}`
 		}
 	}
 	return ""

@@ -58,6 +58,7 @@ type inputItem struct {
 	Arguments        string      `json:"arguments,omitempty"`
 	Output           string      `json:"output,omitempty"`
 	EncryptedContent string      `json:"encrypted_content,omitempty"`
+	Summary          []inputPart `json:"summary,omitzero"`
 }
 
 type reasoningItem struct {
@@ -240,7 +241,7 @@ func encodeInput(messages []llm.Message) ([]inputItem, error) {
 					Content: []inputPart{{Type: "output_text", Text: message.Content}}})
 			}
 			if id, encrypted, ok := DecodeReasoning(message.Thinking.Signature); ok && len(message.ToolCalls) > 0 {
-				items = append(items, inputItem{Type: "reasoning", ID: id, EncryptedContent: encrypted})
+				items = append(items, inputItem{Type: "reasoning", ID: id, EncryptedContent: encrypted, Summary: []inputPart{}})
 			}
 			for callIndex, call := range message.ToolCalls {
 				if call.ID == "" || call.Name == "" {
