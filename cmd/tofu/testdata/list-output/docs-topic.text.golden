@@ -205,12 +205,12 @@ Browser
       one of off, read, drive
       drive lets the model read your Chrome tabs and click and type in them;
       read lets it only read them; off offers no browser tool
-    browserDriver           steps
-      one of steps, goal, subagent
-      steps gives the model browser_observe and browser_act, to see a tab and
-      act on one ref at a time; goal gives it browser_do, where jev picks each
-      step toward a whole goal; subagent gives the steps to a browser sub-agent
-      on browserModel, which the model spawns
+    browserDriver           subagent
+      one of subagent, steps, goal
+      subagent gives the browser steps to a browser sub-agent on browserModel,
+      which the model spawns with a task and a tab; steps gives the model
+      browser_observe and browser_act itself; goal gives it browser_do, where
+      jev picks each step toward a whole goal
     browserSteps            30
       1 to 60 actions a browser task
       how many actions one browser task may take

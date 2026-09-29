@@ -222,7 +222,7 @@ exit 0
       {
         "key": "browserDriver",
         "category": "Browser",
-        "value": "steps",
+        "value": "subagent",
         "source": "default"
       },
       {

@@ -15,7 +15,10 @@ Chrome Web Store.
 The extension does nothing to a tab until tofu first uses it. Then it
 attaches Chrome's debugger, and Chrome shows its bar saying so.
 
-The model gets these tools under `browserDriver` `steps`, the default:
+Under `browserDriver` `subagent`, the default, the model hands a browsing
+task and its tab to the `browser` sub-agent with `spawn`, and reads its
+report. The sub-agent runs on `browserModel` and holds these tools; under
+`steps` the model holds them itself:
 
 - `browser_tabs` lists your open tabs, with their title and address.
 - `browser_observe` shows one tab as an accessibility snapshot, a line a
@@ -23,16 +26,14 @@ The model gets these tools under `browserDriver` `steps`, the default:
   `scrollable` marks a container it can scroll, and `*` a ref new since the
   last look at the same page. Observing never changes the page.
 - `browser_act` runs up to 5 actions in one tab, each on a ref: click, fill,
-  select, press, scroll, navigate, open, back or wait. A covered click does
+  select, press, scroll, navigate, back or wait, all in one tab. A covered click does
   not run and says what covers it. The batch stops at the first action that
   changes the address or opens a tab, says what it skipped, and ends with a
   fresh snapshot. The third same action on an unchanged page says
   `repeated 3 times, the page did not change`; the fifth is refused.
 
-Under `browserDriver` `goal`, the model gets `browser_read`, a tab's text
-and a numbered table of its controls, and `browser_do`, which takes a whole
-goal with a url or a tab and answers it. Jev picks each step, one ledger row
-under `browser_step`, until done, blocked, or `browserSteps` runs out.
+Under `goal`, the model gets `browser_read` and `browser_do`, which takes a
+whole goal and answers it; Jev picks each step until `browserSteps` runs out.
 
 Only `browser` `drive` gives `browser_act` or `browser_do`. Observing and
 reading never go through the gate.
@@ -78,16 +79,15 @@ The settings:
 
 - `browser`: `off`, `read` or `drive`, default `drive`. `read` gives only
   `browser_tabs` and the reading tool. It is read when tofu opens.
-- `browserDriver`: `steps`, the default, gives the model `browser_observe`
-  and `browser_act`, and it picks every step itself. `goal` gives it
-  `browser_do`, where Jev picks each step toward the whole goal. `subagent`
-  gives the step tools to the `browser` sub-agent on `browserModel`, which
-  the model spawns with the task and the tab. Old `model`, `jev` still read.
+- `browserDriver`: `subagent`, the default, gives the step tools to the
+  `browser` sub-agent on `browserModel`. `steps` gives them to the model,
+  and `goal` gives it `browser_do`, where Jev picks each step.
 - `browserSteps`: how many actions one `browser_do` task may take, 1 to 60.
   The default is 30.
-- `browserModel`: the model `browser_do` and the `browser` sub-agent run on,
-  as `source/model`. Empty, the default, takes `modelTier.dumb`, then
-  `modelTier.worker`, then the turn's own model.
+- `browserModel`: the model the `browser` sub-agent and `browser_do` run
+  on, as `source/model`, any model you have. No model is the default:
+  empty takes `modelTier.dumb`, then `modelTier.worker`, then the turn's
+  own model.
 
     tofu settings set browserModel claude-sub/claude-sonnet-5
 

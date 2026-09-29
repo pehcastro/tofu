@@ -50,7 +50,7 @@ Turn
 
 Browser
     browser                 drive               default
-    browserDriver           steps               default
+    browserDriver           subagent            default
     browserSteps            30                  default
     browserModel            empty               default
 

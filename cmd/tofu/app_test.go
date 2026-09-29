@@ -2441,8 +2441,9 @@ func TestTheBrowserSettingsReachTheToolsARunIsGiven(t *testing.T) {
 		mode, driver string
 		want         []string
 	}{
-		{"", "", []string{"browser_tabs", "browser_observe", "browser_act"}},
-		{settingspkg.BrowserRead, "", []string{"browser_tabs", "browser_observe"}},
+		{"", "", nil},
+		{settingspkg.BrowserDrive, settingspkg.DriverSteps, []string{"browser_tabs", "browser_observe", "browser_act"}},
+		{settingspkg.BrowserRead, settingspkg.DriverSteps, []string{"browser_tabs", "browser_observe"}},
 		{settingspkg.BrowserDrive, settingspkg.DriverGoal, []string{"browser_tabs", "browser_read", "browser_do"}},
 		{settingspkg.BrowserDrive, "jev", []string{"browser_tabs", "browser_read", "browser_do"}},
 		{settingspkg.BrowserDrive, "model", []string{"browser_tabs", "browser_observe", "browser_act"}},
@@ -2543,6 +2544,25 @@ func TestTheSubAgentDriverHandsTheBrowserToolsToASubAgentOnTheBrowserModel(t *te
 		if agent.Runs != roster.RunsModel || agent.Model != slug || agent.From != settingspkg.BrowserModel || !slices.Equal(agent.Tools, []string{"browser_tabs", "browser_observe", "browser_act"}) {
 			t.Fatalf("browserModel %s: the browser sub-agent is %+v", slug, agent)
 		}
+	}
+}
+
+func TestAFreshHomeHandsTheBrowserToTheSubAgent(t *testing.T) {
+	emptyHome(t)
+	opts := armOpts(t)
+	driver := settingText(opts.dir, settingspkg.BrowserDriver, nil)
+	built, err := buildTestRunTools(opts.dir, opts.toolSet)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var spawnable []string
+	for _, definition := range offeredToSpawn(opts.dir, scanSubAgents(opts.dir, built)).Definitions {
+		spawnable = append(spawnable, definition.Name)
+	}
+	driving := slices.DeleteFunc(toolNames(t, opts), func(name string) bool { return !strings.HasPrefix(name, "browser_") })
+	t.Logf("a fresh home resolves browserDriver to %q, offers the orchestrator %v and the spawnable agents %v", driver, driving, spawnable)
+	if driver != settingspkg.DriverSubagent || len(driving) != 0 || !slices.Contains(spawnable, "browser") {
+		t.Fatalf("a fresh home resolves browserDriver to %q, gives the orchestrator %v and spawns %v; want subagent, no browser tool, and the browser sub-agent", driver, driving, spawnable)
 	}
 }
 
