@@ -83,6 +83,7 @@ type modelReport struct {
 	WindowFrom    string   `json:"window_from,omitempty"`
 	Roles         []string `json:"roles,omitempty"`
 	Reason        string   `json:"reason,omitempty"`
+	Notice        string   `json:"notice,omitempty"`
 	Layer         string   `json:"layer"`
 	From          string   `json:"from,omitempty"`
 	File          string   `json:"file"`
@@ -94,6 +95,7 @@ type modelsReport struct {
 	Usable        int           `json:"usable"`
 	Table         string        `json:"table"`
 	Windowed      int           `json:"windowed"`
+	Published     int           `json:"published_windows"`
 	Unbound       []string      `json:"unbound_roles,omitempty"`
 	Models        []modelReport `json:"models"`
 }
@@ -165,8 +167,11 @@ func modelsOf(library models.Library, registry models.Registry) modelsReport {
 	}
 	for _, model := range library.Models {
 		contextTokens, windowFrom := models.WindowFor(model, registry, models.Served{})
-		if contextTokens > 0 {
+		switch {
+		case registry.Window(model.VendorSlug()) > 0:
 			report.Windowed++
+		case contextTokens > 0:
+			report.Published++
 		}
 		report.Models = append(report.Models, modelReport{
 			Slug:          model.Slug(),
@@ -181,6 +186,7 @@ func modelsOf(library models.Library, registry models.Registry) modelsReport {
 			WindowFrom:    windowFrom,
 			Roles:         bound[model.Slug()],
 			Reason:        model.Reason,
+			Notice:        model.Notice,
 			Layer:         model.Layer,
 			From:          model.From,
 			File:          model.File,
@@ -214,8 +220,11 @@ func modelsText(library models.Library, report modelsReport, shade palette) stri
 		}
 	}
 	body.WriteString("\n")
-	for _, line := range wrapped("windows", strconv.Itoa(report.Windowed)+" of "+strconv.Itoa(len(report.Models))+
-		" models take a context window from "+report.Table+", and "+models.ReloadVerb+" reads the table again") {
+	windows := strconv.Itoa(report.Windowed) + " of " + strconv.Itoa(len(report.Models)) + " models take a context window from " + report.Table
+	if report.Published > 0 {
+		windows += ", " + strconv.Itoa(report.Published) + " from the window their vendor publishes"
+	}
+	for _, line := range wrapped("windows", windows+", and "+models.ReloadVerb+" reads the table again") {
 		body.WriteString(line + "\n")
 	}
 	label := "roles"
@@ -253,7 +262,11 @@ func keyPaidLines(report modelsReport) []string {
 		if model.Subscription != "" {
 			continue
 		}
-		lines = append(lines, wrapped(label, withRoles(model)+", use "+model.Use)...)
+		said := withRoles(model) + ", use " + model.Use
+		if model.Notice != "" {
+			said += ", " + model.Notice
+		}
+		lines = append(lines, wrapped(label, said)...)
 		label = ""
 	}
 	return lines

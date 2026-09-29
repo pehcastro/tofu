@@ -2,7 +2,6 @@ package models
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -13,9 +12,8 @@ import (
 )
 
 const (
-	catalogLayer   = "catalog"
-	ReloadVerb     = "tofu models reload"
-	catalogDirMode = 0o755
+	catalogLayer = "catalog"
+	ReloadVerb   = "tofu models reload"
 )
 
 type CatalogPlan []Model
@@ -135,9 +133,6 @@ func (p CatalogPlan) Write(dir string) error {
 	}
 	for _, model := range p {
 		path := filepath.Join(dir, modelsDir, string(model.Provider), model.ID+".yaml")
-		if err := os.MkdirAll(filepath.Dir(path), catalogDirMode); err != nil {
-			return err
-		}
 		var body strings.Builder
 		for _, field := range [][2]string{
 			{"subscription", string(model.Subscription)},
@@ -152,7 +147,7 @@ func (p CatalogPlan) Write(dir string) error {
 				body.WriteString(field[0] + ": " + field[1] + "\n")
 			}
 		}
-		if err := os.WriteFile(path, []byte(body.String()), writtenFileMode); err != nil {
+		if err := sys.WriteFile(path, []byte(body.String()), writtenFileMode); err != nil {
 			return err
 		}
 	}

@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 
 	"tofu/internal/llm"
@@ -15,6 +16,7 @@ import (
 const (
 	modelsDir        = "models"
 	subscriptionsDir = "subscriptions"
+	windowsDir       = "windows"
 )
 
 type Layer = sys.Layer
@@ -96,7 +98,7 @@ func fieldsOf(file, body string, allowed map[string]bool) (map[string]string, *B
 			return nil, &Broken{File: file, Why: fmt.Sprintf("line %d expects key: value, found %q", i+1, line)}
 		}
 		key := strings.TrimSpace(line[:at])
-		if !allowed[key] {
+		if allowed != nil && !allowed[key] {
 			return nil, &Broken{File: file, Field: key, Why: "unknown field"}
 		}
 		values[key] = strings.Trim(strings.TrimSpace(line[at+1:]), `"`)
@@ -112,7 +114,7 @@ type Contract struct {
 
 func Contracts() []Contract {
 	return []Contract{
-		{Kind: modelsDir, Required: []string{"use"}, Optional: []string{"subscription", "reason", "window", "kind", "vision", "efforts", "from", "found"}},
+		{Kind: modelsDir, Required: []string{"use"}, Optional: []string{"subscription", "reason", "notice", "window", "kind", "vision", "efforts", "from", "found"}},
 		{Kind: subscriptionsDir, Required: []string{"provider", "wire", "windows"}, Optional: []string{"not_models"}},
 		{Kind: rolesDir, Required: []string{"model"}},
 	}
@@ -134,13 +136,14 @@ func allowedFields(kind string) map[string]bool {
 
 func Load(layers []Layer) (Library, error) {
 	var refused []Broken
-	subscriptions, models, roles := newMerged(), newMerged(), newMerged()
+	subscriptions, models, windows, roles := newMerged(), newMerged(), newMerged(), newMerged()
 	subscriptionFields := allowedFields(subscriptionsDir)
 	modelFields := allowedFields(modelsDir)
 	roleFields := allowedFields(rolesDir)
 	for _, layer := range layers {
 		refused = append(refused, readFlat(layer, subscriptionsDir, "a subscription is one yaml file named after itself", subscriptionFields, subscriptions)...)
 		refused = append(refused, readModels(layer, modelFields, models)...)
+		refused = append(refused, readFlat(layer, modelsDir+"/"+windowsDir, "a window table is one yaml file named after the vendor, a model id and its tokens per line", nil, windows)...)
 		refused = append(refused, readFlat(layer, rolesDir, "a role is one yaml file named after the role", roleFields, roles)...)
 	}
 
@@ -157,6 +160,9 @@ func Load(layers []Layer) (Library, error) {
 	}
 	for _, slug := range models.order {
 		model, bad := buildModel(slug, models.sheets[slug], known)
+		if bad == nil {
+			model.Published, bad = publishedWindow(windows.sheets[string(model.Provider)], model.ID)
+		}
 		if bad != nil {
 			refused = append(refused, *bad)
 			continue
@@ -213,6 +219,9 @@ func readFlat(layer Layer, dir, why string, allowed map[string]bool, into *merge
 func readModels(layer Layer, allowed map[string]bool, into *merged) []Broken {
 	var refused []Broken
 	for _, provider := range entriesOf(layer.FS, modelsDir) {
+		if provider.Name() == windowsDir {
+			continue
+		}
 		if !provider.IsDir() {
 			refused = append(refused, Broken{
 				File: modelsDir + "/" + provider.Name(),
@@ -242,12 +251,23 @@ func readModels(layer Layer, allowed map[string]bool, into *merged) []Broken {
 	return refused
 }
 
+func publishedWindow(table *sheet, id string) (PublishedWindow, *Broken) {
+	if table == nil || table.values[id] == "" {
+		return PublishedWindow{}, nil
+	}
+	tokens, err := strconv.Atoi(table.values[id])
+	if err != nil || tokens <= 0 {
+		return PublishedWindow{}, &Broken{File: table.file, Field: id, Why: fmt.Sprintf("a window is a count of tokens above zero, found %q", table.values[id])}
+	}
+	return PublishedWindow{Tokens: tokens, File: table.file}, nil
+}
+
 func entriesOf(fsys fs.FS, dir string) []fs.DirEntry {
 	entries, err := fs.ReadDir(fsys, dir)
 	if err != nil {
 		return nil
 	}
-	return entries
+	return slices.DeleteFunc(entries, func(entry fs.DirEntry) bool { return strings.HasPrefix(entry.Name(), ".") })
 }
 
 func notAYAMLFile(entry fs.DirEntry, file, why string) *Broken {
@@ -298,13 +318,14 @@ func buildModel(slug string, from *sheet, known map[Subscription]SubscriptionSpe
 		Kind:         Kind(cmp.Or(from.values["kind"], string(KindLLM))),
 		Vision:       Vision(from.values["vision"]),
 		Reason:       from.values["reason"],
+		Notice:       from.values["notice"],
 		File:         from.file,
 		Layer:        from.layer,
 		From:         from.values["from"],
 		Found:        from.values["found"],
 	}
 	if !model.Provider.valid() {
-		return model, &Broken{File: from.file, Why: fmt.Sprintf("the vendor is %s, %s, %s or %s, found %q", Anthropic, OpenAI, TypeSafe, OpenRouter, model.Provider)}
+		return model, &Broken{File: from.file, Why: fmt.Sprintf("the vendor is %s, %s, %s, %s or %s, found %q", Anthropic, OpenAI, TypeSafe, OpenRouter, Meta, model.Provider)}
 	}
 	if !model.Kind.valid() {
 		return model, &Broken{File: from.file, Field: "kind", Why: fmt.Sprintf("kind is %s or %s, found %q", KindLLM, KindClassifier, model.Kind)}

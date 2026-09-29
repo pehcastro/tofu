@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"strconv"
 	"strings"
@@ -17,18 +18,22 @@ import (
 	"github.com/charmbracelet/x/term"
 
 	"tofu/internal/judge/jev"
+	"tofu/internal/konst"
 	"tofu/internal/llm/cred"
 	"tofu/internal/llm/models"
+	"tofu/internal/llm/wire/codex"
 	"tofu/internal/sys"
+	"tofu/internal/transport"
 	"tofu/internal/widget"
 )
 
 const (
-	loginUsage = "usage: tofu login <claude-sub|codex-sub|openrouter|typesafe|brave> [--paste], " +
+	loginUsage = "usage: tofu login <claude-sub|codex-sub|openrouter|typesafe|meta|brave> [--paste], " +
 		"tofu login --status [--json] [--redact], or tofu login --disable|--enable <number>"
 	setAsideCause    = "set aside by hand, run tofu login --enable to bring it back"
 	openRouterName   = string(models.OpenRouter)
 	typeSafeName     = string(models.TypeSafe)
+	metaName         = string(models.Meta)
 	braveName        = "brave"
 	openRouterFix    = "run tofu login openrouter and paste the key when it asks"
 	keyIsNeverTyped  = "a key is read from a prompt and never from an argument: run tofu login %s on its own"
@@ -56,7 +61,7 @@ func loginVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 		}
 		_, _ = fmt.Fprintln(out, line)
 		return exitOK
-	case openRouterName, typeSafeName, braveName:
+	case openRouterName, typeSafeName, metaName, braveName:
 		if len(args) > 1 {
 			return loginFail(errOut, fmt.Errorf(keyIsNeverTyped, args[0]))
 		}
@@ -64,8 +69,11 @@ func loginVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 		if err != nil {
 			return loginFail(errOut, err)
 		}
-		if args[0] == braveName {
+		switch args[0] {
+		case braveName:
 			return storeKey(braveName, sys.BraveSearchKeyName, key, out, errOut)
+		case metaName:
+			return loginMeta(context.Background(), key, out, errOut)
 		}
 		return loginJev(context.Background(), models.Provider(args[0]), key, out, errOut)
 	}
@@ -211,6 +219,25 @@ func loginJev(ctx context.Context, provider models.Provider, key string, out, er
 	}
 	_, _ = fmt.Fprintln(out, "jev: ready")
 	return exitOK
+}
+
+func loginMeta(ctx context.Context, key string, out, errOut io.Writer) int {
+	client, err := transport.New(transport.Config{
+		AttemptTimeout: time.Duration(konst.TurnAttemptTimeoutMillis) * time.Millisecond,
+		Concurrency:    1,
+	})
+	if err == nil {
+		_, err = client.Do(ctx, transport.Request{
+			Method: http.MethodGet,
+			URL:    metaBaseURL() + codex.ModelsPath,
+			Header: http.Header{"Authorization": {"Bearer " + key}, "Accept": {"application/json"}},
+		})
+	}
+	if err != nil {
+		return loginRefused(errOut, "the key did not reach meta, so nothing was written: %s",
+			strings.ReplaceAll(err.Error(), key, sys.KeyRedactedMark))
+	}
+	return storeKey(metaName, models.Meta.KeyName(), key, out, errOut)
 }
 
 func storeKey(name, variable, key string, out, errOut io.Writer) int {

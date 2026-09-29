@@ -1,18 +1,24 @@
 package main
 
 import (
+	"cmp"
 	"context"
 	"fmt"
+	"os"
 	"slices"
 	"time"
 
+	"tofu/internal/judge/jev"
 	"tofu/internal/llm"
 	"tofu/internal/llm/cred"
 	"tofu/internal/llm/quota"
 	"tofu/internal/llm/wire/anthropic"
 	"tofu/internal/llm/wire/codex"
+	"tofu/internal/sys"
 	"tofu/internal/turn"
 )
+
+const metaBaseURLVariable = "TOFU_META_BASE_URL"
 
 type accounts struct {
 	provider cred.Provider
@@ -157,10 +163,32 @@ func (a *accounts) modelOn(row cred.Row) (turn.Model, error) {
 	return turn.Subscription{Wire: wire, Effort: a.effort}, nil
 }
 
+func metaBaseURL() string {
+	return cmp.Or(os.Getenv(metaBaseURLVariable), codex.MetaBaseURL)
+}
+
+func metaModel(modelID string, effort llm.Effort) (turn.Model, error) {
+	key, err := jev.KeyFor(sys.CredentialFileName, sys.MetaMuseKeyName)
+	if err != nil {
+		return nil, fmt.Errorf("%w: run tofu login meta", err)
+	}
+	wire, err := codex.New(codex.Config{
+		BaseURL:   metaBaseURL() + codex.KeyPath,
+		Model:     modelID,
+		Token:     func(context.Context) (string, error) { return key, nil },
+		Transport: turnTransportConfig(),
+	})
+	return codexTurn{wire: wire, effort: effort}, err
+}
+
 func openAccounts(opts runOpts, modelID string) (*accounts, turn.Spend, error) {
 	spend := wireSpend(opts.wire)
 	if opts.wire == wireKey {
 		model, err := keyModel(modelID)
+		return &accounts{modelID: modelID, now: time.Now, fixed: model}, spend, err
+	}
+	if opts.wire == wireMeta {
+		model, err := metaModel(modelID, opts.effort)
 		return &accounts{modelID: modelID, now: time.Now, fixed: model}, spend, err
 	}
 	provider := cred.ClaudeSub

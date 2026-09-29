@@ -15,11 +15,12 @@ const (
 	OpenAI     Provider = "openai"
 	TypeSafe   Provider = "typesafe"
 	OpenRouter Provider = "openrouter"
+	Meta       Provider = "meta"
 )
 
 func (p Provider) valid() bool {
 	switch p {
-	case Anthropic, OpenAI, TypeSafe, OpenRouter:
+	case Anthropic, OpenAI, TypeSafe, OpenRouter, Meta:
 		return true
 	}
 	return false
@@ -31,6 +32,8 @@ func (p Provider) KeyName() string {
 		return sys.OpenRouterKeyName
 	case TypeSafe:
 		return sys.TypeSafeKeyName
+	case Meta:
+		return sys.MetaMuseKeyName
 	case Anthropic, OpenAI:
 		return ""
 	}
@@ -130,10 +133,17 @@ type Model struct {
 	Vision       Vision
 	Efforts      []llm.Effort
 	Reason       string
+	Notice       string
 	File         string
 	Layer        string
 	From         string
 	Found        string
+	Published    PublishedWindow
+}
+
+type PublishedWindow struct {
+	Tokens int
+	File   string
 }
 
 func (m Model) EffortTaken(asked llm.Effort) llm.Effort {
@@ -178,6 +188,13 @@ func (c Library) WireFor(id Subscription) string {
 		}
 	}
 	return ""
+}
+
+func (c Library) WireOf(model Model) string {
+	if model.Pays() == PaysKey {
+		return string(model.Provider)
+	}
+	return c.WireFor(model.Subscription)
 }
 
 func (c Library) ForWire(wire string) (SubscriptionSpec, bool) {

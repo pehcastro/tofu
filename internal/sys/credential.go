@@ -21,6 +21,7 @@ const (
 	OpenRouterKeyName      = "OPENROUTER_KEY"
 	TypeSafeKeyName        = "TYPESAFE_API_KEY"
 	BraveSearchKeyName     = "BRAVE_SEARCH_KEY"
+	MetaMuseKeyName        = "META_MUSE_API_KEY"
 	KeyRedactedMark        = "[key redacted]"
 	liveCredentialOptIn    = "TOFU_TEST_LIVE_CREDENTIAL"
 	credentialStoreMode    = 0o600
@@ -120,7 +121,7 @@ func assignedTo(line, name string) string {
 }
 
 func KeyNames() []string {
-	return []string{OpenRouterKeyName, TypeSafeKeyName, BraveSearchKeyName}
+	return []string{OpenRouterKeyName, TypeSafeKeyName, BraveSearchKeyName, MetaMuseKeyName}
 }
 
 func CredentialStorePath() (string, error) {

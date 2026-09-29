@@ -81,6 +81,9 @@ func TestEveryFileUnderModelsIsAModel(t *testing.T) {
 		filed[model.VendorSlug()+".yaml"] = true
 	}
 	for _, provider := range providers {
+		if provider.Name() == windowsDir {
+			continue
+		}
 		if !provider.IsDir() {
 			t.Fatalf("%s is not a provider directory, so it is not a model", provider.Name())
 		}
@@ -222,6 +225,11 @@ func TestTheShippedWiresResolveTheModelsTheyResolvedBefore(t *testing.T) {
 		"codex-sub/gpt-5.6-terra":               "gpt-5.6-terra allowed 5h and 7d",
 		"codex-sub/gpt-6-astra":                 "gpt-6-astra allowed 5h and 7d",
 		"codex-sub/gpt-reserve":                 "gpt-reserve excluded 5h and 7d",
+		"meta/muse-spark-1.1":                   "muse-spark-1.1 allowed ",
+		"meta/muse-spark-1.2":                   "muse-spark-1.2 allowed ",
+		"meta/muse-spark-1.2-contributor":       "muse-spark-1.2-contributor allowed ",
+		"meta/muse-spark-1.3":                   "muse-spark-1.3 allowed ",
+		"meta/muse-spark-1.3-contributor":       "muse-spark-1.3-contributor allowed ",
 		"openrouter/jev-latest":                 "jev-latest allowed ",
 		"typesafe/jev-latest":                   "jev-latest allowed ",
 	}

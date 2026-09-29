@@ -13,8 +13,10 @@ subscription, and `codex-sub/gpt-5.6-sol` is GPT-5.6 Sol paid by your Codex
 subscription. The same model reached two ways bills two ways, so the source
 is always written.
 
-tofu speaks to a model only through a subscription you signed in to. Each
-subscription has one default model, used when nothing else is chosen.
+tofu speaks through a subscription, with one default model each, or a key,
+which spends money. The `meta` key reaches `meta/muse-spark-1.3`, `-1.2`
+and `-1.1`, and the cheaper `-1.3-contributor` and `-1.2-contributor`, which
+Meta may train on; `tofu models` says so beside each contributor model.
 
 The orchestrator is the model you talk to. A sub-agent runs its own model,
 and a tier is a name for a model a sub-agent file can point at:
@@ -25,7 +27,9 @@ mean the genius, smart and worker tiers when those are set.
 ## Where it lives
 
 - `~/.tofu/agent.db`: the credentials `tofu login` stores, the
-  subscriptions and the openrouter key
+  subscriptions, the openrouter key and the meta key, `META_MUSE_API_KEY`
+- `models/windows/<provider>.yaml`, shipped: the window a vendor publishes
+  for a model models.dev lacks; a reload never erases it
 - `~/.tofu/roles/orchestrator.yaml`, `.tofu/roles/orchestrator.yaml`: the
   model the orchestrator runs, one line, `model: source/model`. A
   `sub-agent.yaml` beside it names the model a spawn that names no
@@ -64,11 +68,13 @@ Sign in, once per subscription. It opens the browser:
     tofu login codex-sub
 
 When the browser cannot reach tofu, add `--paste` and paste the address
-or the code it shows.
+or the code it shows. `tofu login meta` asks for a Meta Model API key,
+unechoed, stores it only when Meta's model list accepts it, and prints its
+last four characters; `tofu run --model meta/muse-spark-1.3` then uses it.
 
 Run the next task on another model: in the app, type `/models`, pick a
-model. That lasts until tofu restarts. To make it stay,
-bind the orchestrator in the same list, which writes
+model. That lasts until tofu restarts. To make it stay, bind the
+orchestrator in the same list, which writes
 `.tofu/roles/orchestrator.yaml` in the project. By hand, for every project:
 
     model: claude-sub/claude-sonnet-5
@@ -91,8 +97,8 @@ Stop tofu from running a model with a file of your own,
 
     tofu models
 
-lists the models each subscription serves, the defaults at the top, and
-why a model is excluded, and a model tofu does not ship names its layer.
+lists the models each subscription and key serves, the defaults at the
+top, why a model is excluded, and the layer of one tofu does not ship.
 `--json` prints every field: `layer` is `library`, `catalog`, `global`
 or `project`, and `from` says what listed a catalog model. After
 `tofu models reload`, a model it found shows `"layer": "catalog"`.
@@ -100,9 +106,9 @@ or `project`, and `from` says what listed a catalog model. After
 
     tofu login --status
 
-lists every stored credential with its number and state, and the
-openrouter key as set or not, by its last four characters at most, and
-`tofu usage` prints each subscription's quota windows and when they reset.
+lists every stored credential with its number and state, and each key as
+set or not, by its last four characters at most, and `tofu usage` prints
+each subscription's quota windows and when they reset.
 
 ## Undo it
 

@@ -7,6 +7,8 @@ const (
 	SubscriptionPath    = "/codex/responses"
 	KeyBaseURL          = "https://api.openai.com/v1"
 	KeyPath             = "/responses"
+	MetaBaseURL         = "https://api.meta.ai/v1"
+	ModelsPath          = "/models"
 
 	PinnedCodexClientVersion = "0.153.0"
 	Originator               = "tofu"

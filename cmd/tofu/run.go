@@ -45,6 +45,7 @@ const (
 	wireSubscription = "anthropic"
 	wireCodex        = "codex"
 	wireKey          = openrouter.Name
+	wireMeta         = string(models.Meta)
 
 	toolSetFull  = "full"
 	toolSetThree = "three"
@@ -70,7 +71,7 @@ func wireEfforts(wire string) []llm.Effort {
 }
 
 func wireSpend(wire string) turn.Spend {
-	if wire == wireKey {
+	if wire == wireKey || wire == wireMeta {
 		return turn.SpendAPIKey
 	}
 	return turn.SpendSubscription
@@ -167,6 +168,13 @@ func chooseModel(opts runOpts) (models.Model, error) {
 	if opts.wire == wireKey {
 		return models.Model{ID: cmp.Or(opts.model, openRouterDefaultModel)}, nil
 	}
+	if opts.wire == wireMeta {
+		library, err := modelLibrary(opts.dir)
+		if err != nil {
+			return models.Model{}, err
+		}
+		return library.Select(opts.model)
+	}
 	if opts.model != "" {
 		return selectModel(opts.wire, opts.model)
 	}
@@ -184,7 +192,7 @@ func chooseModel(opts runOpts) (models.Model, error) {
 }
 
 func boundSubAgent(opts runOpts) (string, error) {
-	if opts.wire == wireKey {
+	if wireSpend(opts.wire) == turn.SpendAPIKey {
 		return "", nil
 	}
 	bound, err := boundRoles(opts.wire, opts.dir)
@@ -222,7 +230,7 @@ func (r runtime) subAgentOpener(opts runOpts) func(subagent.Definition) (turn.Su
 			if err != nil {
 				return turn.SubAgentModel{}, err
 			}
-			subAgent.model, subAgent.wire = named, library.WireFor(model.Subscription)
+			subAgent.model, subAgent.wire = named, library.WireOf(model)
 		}
 		if subAgent.wire == wireKey {
 			return turn.SubAgentModel{}, fmt.Errorf("%s asks for effort %s, and the openrouter wire sends no reasoning effort", definition.Name, subAgent.effort)
@@ -252,7 +260,8 @@ Usage:
 
 Arguments:
   --dir <path>          the directory the task is worked in, required
-  --model <id>          the orchestrator's model, otherwise the one the orchestrator role is bound to
+  --model <id>          the orchestrator's model, otherwise the one the orchestrator role is bound to;
+                        a meta/ model is paid by the key tofu login meta stores and picks its own wire
   --wire <name>         anthropic, codex or openrouter
   --tools <set>         full, or three for the read, write and bash arm
   --effort <level>      how hard the model thinks: %s.
@@ -690,7 +699,7 @@ func dryRunBody(opts runOpts, model string, config turn.Config) ([]byte, error) 
 	case wireKey:
 		system := append([]llm.Message{{Role: llm.RoleSystem, Content: config.System}}, messages...)
 		return llm.Request{Messages: system, Tools: tools}.Encode(model)
-	case wireCodex:
+	case wireCodex, wireMeta:
 		return codex.Request{Model: model, Instructions: config.System, Messages: messages, Tools: tools, Effort: opts.effort}.Encode(nil)
 	}
 	return anthropic.Request{Model: model, System: []string{config.System}, Messages: messages, Tools: tools, Effort: opts.effort}.Encode(true)
@@ -1073,6 +1082,12 @@ func parseRunArgs(args []string) (runOpts, error) {
 	}
 	if !slices.Contains(runWires(), opts.wire) {
 		return runOpts{}, fmt.Errorf("--wire %q is none of %s", opts.wire, strings.Join(runWires(), ", "))
+	}
+	if source, _, _ := strings.Cut(opts.model, "/"); source == wireMeta {
+		if slices.Contains(args, "--wire") {
+			return runOpts{}, fmt.Errorf("--model %s is paid by the %s key and reaches its own wire, so it takes no --wire", opts.model, wireMeta)
+		}
+		opts.wire = wireMeta
 	}
 	if opts.wire == wireKey && opts.effort != "" {
 		return runOpts{}, fmt.Errorf("--effort %s with --wire %s: the openrouter wire sends no reasoning effort, so the level would be dropped without a word",

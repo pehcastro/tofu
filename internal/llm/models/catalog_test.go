@@ -207,6 +207,44 @@ func TestWriteRefusesAnIdThatLeavesTheCatalog(t *testing.T) {
 	}
 }
 
+func TestWriteReplacesACatalogFileWholeRatherThanRewritingItInPlace(t *testing.T) {
+	dir := t.TempDir()
+	written := filepath.Join(dir, modelsDir, string(Anthropic), "claude-mythos-1.yaml")
+	plan := CatalogPlan{{Provider: Anthropic, ID: "claude-mythos-1", Subscription: ClaudeSub, Use: UseAllowed}}
+	if err := plan.Write(dir); err != nil {
+		t.Fatal(err)
+	}
+	before, _ := os.ReadFile(written)
+	alias := filepath.Join(dir, "alias.yaml")
+	if err := os.Link(written, alias); err != nil {
+		t.Skipf("this filesystem makes no hard link: %v", err)
+	}
+	plan[0].Use, plan[0].Reason = UseExcluded, "the account no longer serves it"
+	if err := plan.Write(dir); err != nil {
+		t.Fatal(err)
+	}
+	if kept, _ := os.ReadFile(alias); string(kept) != string(before) {
+		t.Fatalf("the old file was rewritten in place, so a quit halfway leaves it half written: it now reads %q", kept)
+	}
+	if after, _ := os.ReadFile(written); !strings.Contains(string(after), "use: excluded") {
+		t.Fatalf("the new file reads %q", after)
+	}
+}
+
+func TestATemporaryFileLeftByAQuitWriteDoesNotBreakTheNextLoad(t *testing.T) {
+	dir := t.TempDir()
+	plan := CatalogPlan{{Provider: Anthropic, ID: "claude-mythos-1", Subscription: ClaudeSub, Use: UseAllowed}}
+	if err := plan.Write(dir); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, modelsDir, string(Anthropic), ".tofu-4071"), []byte("subscr"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Load([]Layer{shippedLayer(), sys.DirLayer(catalogLayer, dir)}); err != nil {
+		t.Fatalf("a temporary file a quit write left behind breaks the next start: %v", err)
+	}
+}
+
 func TestModelsDevFactsAreReadAndAnAbsentToolCallIsNotAFalseOne(t *testing.T) {
 	registry := registryOf(t, `{"anthropic":{"models":{`+
 		`"sees":{"tool_call":true,"reasoning":true,"reasoning_options":[{"type":"budget_tokens","min":1024},{"type":"effort","values":["low","high"]}],"modalities":{"input":["text","image"]},"limit":{"context":1}},`+

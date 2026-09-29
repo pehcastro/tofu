@@ -143,6 +143,9 @@ func WindowFor(model Model, registry Registry, served Served) (int, string) {
 	if tokens := registry.Window(model.VendorSlug()); tokens > 0 {
 		return tokens, "as " + registry.From + " lists " + model.VendorSlug()
 	}
+	if model.Published.Tokens > 0 {
+		return model.Published.Tokens, "as " + string(model.Provider) + " publishes it, in " + model.Published.File
+	}
 	if tokens := served.Windows[model.ID]; tokens > 0 {
 		return tokens, "as the " + string(served.Subscription) + " account reports it under " + served.Pin
 	}

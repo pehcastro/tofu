@@ -53,7 +53,7 @@ const (
 )
 
 func PromptAccountingFor(wire string) PromptAccounting {
-	if wire == WireCodex || wire == WireOpenRouter {
+	if wire == WireCodex || wire == WireOpenRouter || wire == "meta" {
 		return PromptIncludesCacheReads
 	}
 	return PromptExcludesCacheReads
