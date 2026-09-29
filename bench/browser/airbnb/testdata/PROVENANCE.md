@@ -1,0 +1,1 @@
+Written by hand, not recorded. Every url, title, listing and price is made up. The snapshot follows the header and line shape planned in TOFU-860: `tab:`, `url:`, `title:`, then `- role "name" [ref=eN]`.

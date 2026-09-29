@@ -1,0 +1,8 @@
+tab: t2
+url: https://www.airbnb.com.br/rooms/10000001?adults=2&check_in=2026-10-09
+title: Chalé Aurora
+- heading "Chalé Aurora" [ref=e1]
+- text "2 quartos, 1 banheiro"
+- text "4,87 avaliação"
+- text "Piscina"
+- button "Reservar" [ref=e7]
