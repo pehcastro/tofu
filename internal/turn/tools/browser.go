@@ -206,6 +206,8 @@ func driveTab(client *browser.Client, id int) (browser.Tab, error) {
 
 const howToBrowse = "observe the tab first, act on the refs it shows, and observe again after anything changes. " +
 	"close a popup, a cookie banner or a dialog in the way before anything else. apply the page's filters before reading its results. " +
+	"before opening a result, check the results match the task, the place and whether a price cap is per night or for the whole stay, and report a mismatch rather than open a wrong result. " +
+	"after two ways to reach a state fail, build the url from the site's own parameters, navigate to it and say so; call a task blocked only after that fails too. " +
 	"a task works in one tab from start to end: open listings one after another in it with a link's url= or a click, and go back between them. " +
 	"when an act is covered by a dialog, close that dialog with the ref it names. a sponsored or ad result is not the organic one. "
 

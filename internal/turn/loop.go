@@ -594,6 +594,7 @@ func stepFrom(index int, timing requestTiming, decision llm.Decision) StepRow {
 		StopReason:       decision.Stop,
 		PromptTokens:     decision.Usage.InputTokens,
 		CompletionTokens: decision.Usage.OutputTokens,
+		ReasoningTokens:  decision.Usage.ReasoningTokens,
 		CacheReadTokens:  decision.CacheReadTokens,
 		CacheWriteTokens: decision.CacheWriteTokens,
 		CostUSD:          decision.Usage.Cost,

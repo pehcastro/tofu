@@ -34,9 +34,10 @@ func (o Outcome) String() string {
 }
 
 type Usage struct {
-	InputTokens  int
-	OutputTokens int
-	Cost         float64
+	InputTokens     int
+	OutputTokens    int
+	ReasoningTokens int
+	Cost            float64
 }
 
 const (

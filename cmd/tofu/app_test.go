@@ -8,6 +8,7 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"io"
 	"maps"
 	"net/http"
 	"net/http/httptest"
@@ -38,6 +39,7 @@ import (
 	"tofu/internal/llm"
 	"tofu/internal/llm/cred"
 	"tofu/internal/llm/models"
+	"tofu/internal/llm/wire/codex"
 	"tofu/internal/recall"
 	sessionstore "tofu/internal/session"
 	settingspkg "tofu/internal/settings"
@@ -2670,5 +2672,114 @@ func TestABrowserModelWhoseLowestEffortIsMinimalRunsAtLow(t *testing.T) {
 	found := onBrowserModel(dir, roster.Found{Definitions: []roster.Definition{{Name: browserAgent, Origin: "library", Runs: roster.RunsInherit}}}, catalog)
 	if got := found.Definitions[0].Effort; got != llm.EffortLow {
 		t.Errorf("the browser sub-agent runs at %q, want %q: %+v", got, llm.EffortLow, found.Definitions[0])
+	}
+}
+
+func TestAMessagedOrReopenedSubAgentRoundIsLabelledWithTheModelItAskedFor(t *testing.T) {
+	spawned := []turn.Spawned{{ID: "browser-1", Call: "call_spawn", Agent: browserAgent, Slug: "codex-sub/gpt-5.6-sol", Windows: "5h"}}
+	for _, row := range []turn.Row{
+		{ID: "browser-1", SpawnedBy: "call_spawn"},
+		{ID: "browser-1-m1", SpawnedBy: "call_message"},
+		{ID: "browser-1-r2", SpawnedBy: "call_spawn"},
+		{ID: "browser-1-m2-r3", SpawnedBy: "call_message_2"},
+	} {
+		if askedAs, _ := askedAsOf(row, spawned, "claude-sub/claude-opus-5", "5h and 7d"); askedAs != "codex-sub/gpt-5.6-sol" {
+			t.Errorf("round %s is labelled asked_as %s, want codex-sub/gpt-5.6-sol", row.ID, askedAs)
+		}
+	}
+	if askedAs, _ := askedAsOf(turn.Row{ID: "browser-10", SpawnedBy: "call_other"}, spawned, "claude-sub/claude-opus-5", ""); askedAs != "claude-sub/claude-opus-5" {
+		t.Errorf("an unrelated sub-agent browser-10 is labelled asked_as %s, want the orchestrator's", askedAs)
+	}
+}
+
+func TestACodexTurnRecordsItsReasoningTokensInTheDecision(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = io.WriteString(w, `data: {"type":"response.output_item.added","output_index":0,"item":{"type":"message","id":"msg_1"}}
+
+data: {"type":"response.output_text.delta","output_index":0,"delta":"done"}
+
+data: {"type":"response.output_item.done","output_index":0,"item":{"type":"message","id":"msg_1"}}
+
+data: {"type":"response.completed","response":{"id":"resp_1","model":"gpt-5.6-sol","status":"completed","usage":{"input_tokens":20,"output_tokens":90,"output_tokens_details":{"reasoning_tokens":73}}}}
+
+`)
+	}))
+	t.Cleanup(server.Close)
+	wire, err := codex.New(codex.Config{Model: "gpt-5.6-sol", BaseURL: server.URL,
+		Token: func(context.Context) (string, error) { return "stub-token-not-a-real-credential", nil }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	decision, err := codexTurn{wire: wire}.Ask(context.Background(), llm.Request{Messages: []llm.Message{{Role: llm.RoleUser, Content: "go"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if decision.Usage.ReasoningTokens != 73 || decision.Usage.OutputTokens != 90 {
+		t.Errorf("the decision holds %+v, want 73 reasoning tokens of 90 output", decision.Usage)
+	}
+	dir := t.TempDir()
+	opts := armOpts(t, "--tools", toolSetThree)
+	opts.dir, opts.task = dir, "go"
+	built, err := buildTestRunTools(dir, opts.toolSet)
+	if err != nil {
+		t.Fatal(err)
+	}
+	store := sessionstore.NewStore(t.TempDir())
+	config, _ := mustConfig(t, opts, built, runtime{model: codexTurn{wire: wire}, spend: turn.SpendSubscription, sessions: store})
+	row, err := turn.Run(context.Background(), config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	events, err := os.ReadFile(filepath.Join(store.Dir(row.Session), "events.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if row.Steps[0].ReasoningTokens != 73 {
+		t.Errorf("the step row holds %d reasoning tokens, want 73", row.Steps[0].ReasoningTokens)
+	}
+	if !strings.Contains(string(events), `"reasoning_tokens":73`) {
+		t.Errorf("the request event does not carry the 73 reasoning tokens:\n%s", events)
+	}
+}
+
+func TestASubAgentAskingForAnEffortOnTheOpenrouterKeySpawnsWithoutItAndSaysSoOnce(t *testing.T) {
+	var said []string
+	orchestrator := models.Model{Provider: models.Anthropic, ID: "claude-opus-5"}
+	refuse := func(runOpts) (appWire, error) {
+		return appWire{}, errors.New("the opener must not open a wire of its own")
+	}
+	run := runtime{orchestrator: orchestrator, notify: func(notice string) { said = append(said, notice) }, open: refuse}
+	open := run.subAgentOpener(runOpts{dir: t.TempDir(), wire: wireKey, model: orchestrator.Slug()})
+	for _, name := range []string{browserAgent, browserAgent, "research"} {
+		opened, err := open(roster.Definition{Name: name, Origin: "library", Runs: roster.RunsInherit, Effort: llm.EffortMedium})
+		if err != nil {
+			t.Fatalf("%s did not spawn on the openrouter key: %v", name, err)
+		}
+		if opened.Slug != orchestrator.Slug() {
+			t.Errorf("%s asked for %s, want the orchestrator's %s", name, opened.Slug, orchestrator.Slug())
+		}
+	}
+	if len(said) != 2 || !strings.Contains(said[0], browserAgent) || !strings.Contains(said[1], "research") {
+		t.Errorf("the fallback was said %d times, want once per sub-agent:\n%s", len(said), strings.Join(said, "\n"))
+	}
+}
+
+func TestABrowserSubAgentWhoseDefinitionSetsMediumRunsAtMedium(t *testing.T) {
+	emptyHome(t)
+	dir := t.TempDir()
+	store, err := openSettings(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SetText(settingspkg.Project, settingspkg.BrowserModel, "codex-sub/gpt-5.6-sol"); err != nil {
+		t.Fatal(err)
+	}
+	catalog := models.Library{Models: []models.Model{{Subscription: "codex-sub", ID: "gpt-5.6-sol", Use: models.UseAllowed,
+		Efforts: []llm.Effort{llm.EffortMinimal, llm.EffortLow, llm.EffortMedium}}}}
+	definition := roster.Definition{Name: browserAgent, Origin: "library", Runs: roster.RunsInherit, Effort: llm.EffortMedium}
+	found := onBrowserModel(dir, roster.Found{Definitions: []roster.Definition{definition}}, catalog)
+	if got := found.Definitions[0].Effort; got != llm.EffortMedium {
+		t.Errorf("the browser sub-agent runs at %q, want the %q its definition sets: %+v", got, llm.EffortMedium, found.Definitions[0])
 	}
 }

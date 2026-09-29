@@ -12,6 +12,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"tofu/internal/browser/jevloop"
@@ -220,9 +221,9 @@ func (r runtime) subAgentOpener(opts runOpts) func(subagent.Definition) (turn.Su
 	if r.open == nil {
 		return nil
 	}
+	var told sync.Map
 	return func(definition subagent.Definition) (turn.SubAgentModel, error) {
 		subAgent := opts
-		subAgent.effort = cmp.Or(definition.Effort, opts.effort)
 		named := definition.Model
 		if definition.Name == "" {
 			bound, err := boundSubAgent(opts)
@@ -232,9 +233,7 @@ func (r runtime) subAgentOpener(opts runOpts) func(subagent.Definition) (turn.Su
 			named = bound
 		}
 		asked := cmp.Or(named, r.orchestrator.Slug())
-		if named == "" && subAgent.effort == opts.effort {
-			return turn.SubAgentModel{Slug: asked, Windows: r.orchestrator.WindowText()}, nil
-		}
+		offered := r.orchestrator.Efforts
 		if named != "" {
 			library, err := modelLibrary(opts.dir)
 			if err != nil {
@@ -244,10 +243,23 @@ func (r runtime) subAgentOpener(opts runOpts) func(subagent.Definition) (turn.Su
 			if err != nil {
 				return turn.SubAgentModel{}, err
 			}
-			subAgent.model, subAgent.wire = named, library.WireOf(model)
+			subAgent.model, subAgent.wire, offered = named, library.WireOf(model), model.Efforts
 		}
 		if subAgent.wire == wireKey {
-			return turn.SubAgentModel{}, fmt.Errorf("%s asks for effort %s, and the openrouter wire sends no reasoning effort", definition.Name, subAgent.effort)
+			offered = nil
+		}
+		subAgent.effort = cmp.Or(definition.Effort, opts.effort)
+		if definition.Effort != "" && !slices.Contains(offered, definition.Effort) {
+			subAgent.effort = ""
+			if len(offered) > 0 {
+				subAgent.effort = defaultEffort(offered)
+			}
+			if _, said := told.LoadOrStore(definition.Name, true); !said && r.notify != nil {
+				r.notify(fmt.Sprintf("%s asks for effort %s, which %s does not take, so it runs at %s", definition.Name, definition.Effort, asked, cmp.Or(string(subAgent.effort), "no effort")))
+			}
+		}
+		if named == "" && subAgent.effort == opts.effort {
+			return turn.SubAgentModel{Slug: asked, Windows: r.orchestrator.WindowText()}, nil
 		}
 		opened, err := r.open(subAgent)
 		if err != nil {
@@ -482,12 +494,7 @@ func runTurn(opts runOpts, selected models.Model, built []turn.Tool, budget reca
 	leaveShells(registry)
 	printRunRow(out, row, selected.Slug(), selected.WindowText())
 	for _, subAgent := range subAgentRows(spawner) {
-		askedAs, windows := selected.Slug(), selected.WindowText()
-		for _, spawned := range spawner.Spawned() {
-			if subAgent.ID == spawned.ID || (spawned.Call != "" && subAgent.SpawnedBy == spawned.Call) {
-				askedAs, windows = spawned.Slug, spawned.Windows
-			}
-		}
+		askedAs, windows := askedAsOf(subAgent, spawner.Spawned(), selected.Slug(), selected.WindowText())
 		printRunRow(out, subAgent, askedAs, windows)
 	}
 	if row.Session != "" {
@@ -793,7 +800,7 @@ func (c codexTurn) Ask(ctx context.Context, request llm.Request) (llm.Decision, 
 		Content:          result.Content,
 		Thinking:         llm.Thinking{Text: result.Thinking, Signature: codex.EncodeReasoning(result.ReasoningID, result.ReasoningEncrypted)},
 		ToolCalls:        result.ToolCalls,
-		Usage:            llm.Usage{InputTokens: result.Usage.Input, OutputTokens: result.Usage.Output},
+		Usage:            llm.Usage{InputTokens: result.Usage.Input, OutputTokens: result.Usage.Output, ReasoningTokens: result.Usage.Reasoning},
 		PromptAccounting: llm.PromptAccountingFor(codex.Name),
 		CacheReadTokens:  result.Usage.CacheRead,
 		FirstTokenMS:     result.FirstTokenMS,
@@ -969,7 +976,7 @@ func onBrowserModel(dir string, found subagent.Found, catalog models.Library) su
 		return found
 	}
 	agent.Runs, agent.Model, agent.From = subagent.RunsModel, model.Slug(), key
-	if len(model.Efforts) > 0 {
+	if len(model.Efforts) > 0 && !slices.Contains(model.Efforts, agent.Effort) {
 		agent.Effort = defaultEffort(model.Efforts)
 	}
 	return found
@@ -1016,6 +1023,15 @@ func buildWebTools(dir string) ([]turn.Tool, error) {
 		return nil, err
 	}
 	return tools.NewWeb(config), nil
+}
+
+func askedAsOf(row turn.Row, spawned []turn.Spawned, slug, windows string) (string, string) {
+	for _, one := range spawned {
+		if row.ID == one.ID || strings.HasPrefix(row.ID, one.ID+"-") || (one.Call != "" && row.SpawnedBy == one.Call) {
+			slug, windows = one.Slug, one.Windows
+		}
+	}
+	return slug, windows
 }
 
 func printRunRow(out io.Writer, row turn.Row, askedAs, windows string) {

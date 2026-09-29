@@ -80,6 +80,7 @@ type StepRow struct {
 	StopReason       string            `json:"stop_reason,omitempty"`
 	PromptTokens     int               `json:"prompt_tokens"`
 	CompletionTokens int               `json:"completion_tokens"`
+	ReasoningTokens  int               `json:"reasoning_tokens,omitempty"`
 	CacheReadTokens  int               `json:"cache_read_tokens"`
 	CacheWriteTokens int               `json:"cache_write_tokens"`
 	CostUSD          float64           `json:"cost_usd"`
