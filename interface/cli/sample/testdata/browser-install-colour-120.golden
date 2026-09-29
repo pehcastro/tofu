@@ -1,0 +1,12 @@
+[1mChrome extension[m                                                                         [38;2;64;210;148m✓ installed[m
+
+  [38;2;127;132;147mfolder[m    ~/.tofu/browser/extension
+  [38;2;127;132;147mid[m        jednanpboiikklhkkkimnmdmjmgjgphh
+  [38;2;127;132;147mhost[m      ~/.local/bin/tofu.exe
+
+[1mnext, once in Chrome[m
+  [38;2;127;132;147m1[m  open chrome://extensions and turn on Developer mode
+  [38;2;127;132;147m2[m  Load unpacked, pick the folder above, check the id matches
+  [38;2;127;132;147m3[m  pin the tofu icon so its badge shows
+
+  [38;2;143;183;204m→ after a tofu update: tofu browser install, then reload the tofu card[m

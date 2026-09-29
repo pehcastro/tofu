@@ -8,6 +8,7 @@ import (
 
 	"github.com/charmbracelet/x/term"
 
+	"tofu/interface/cli"
 	"tofu/interface/tui/theme"
 	"tofu/internal/konst"
 )
@@ -15,9 +16,6 @@ import (
 const (
 	reportIndent = "  "
 	jsonFlag     = "--json"
-
-	quotaWarnFraction = 0.5
-	quotaFullFraction = 0.8
 )
 
 type palette int
@@ -28,8 +26,7 @@ const (
 )
 
 func paletteOf(out io.Writer) palette {
-	file, isFile := out.(*os.File)
-	if isFile && term.IsTerminal(file.Fd()) {
+	if cli.Detect(out, os.Environ()).Colour() {
 		return coloured
 	}
 	return plain
@@ -79,9 +76,9 @@ func outputWidth(out io.Writer) int {
 
 func (p palette) full(fraction float64, text string) string {
 	switch {
-	case p == plain, fraction < quotaWarnFraction:
+	case p == plain, fraction < cli.WarnFraction:
 		return text
-	case fraction < quotaFullFraction:
+	case fraction < cli.FullFraction:
 		return theme.Warn().Render(text)
 	}
 	return theme.Fail().Render(text)

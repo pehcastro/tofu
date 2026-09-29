@@ -1,0 +1,11 @@
+Model reload                                                          ⚠ 2 new · 1 changed · 1 failed
+
+  models.dev    ✓ 812 context windows
+
+claude-sub      ✓ 23 served
+  + claude-sonnet-5-5  allowed
+  + claude-opus-5-5    allowed
+  ~ claude-haiku-4-5   context 200k to 1M
+
+codex-sub       ✗ model list refused (403)
+  → tofu login codex-sub

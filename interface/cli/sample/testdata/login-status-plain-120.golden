@@ -1,0 +1,25 @@
+Accounts · 3 signed in                                                           ⚠ 1 needs attention
+
+claude-sub
+  ┌ #1  ada@example.com ─────────────────────────────────────────────────────────────────── ● in use
+  │ login     oauth · re-login by 27 Oct
+  │ 5h        ░░░░░░░░░░░░   0%  resets in 4h 28m
+  │ 7d        ▓▓▓▓▓▓▓▓░░░░  67%  resets in 22h
+  │ 7d:opus   ░░░░░░░░░░░░   0%  only opus-5, opus-5-5
+  └─────────────────────────────────────────────────────────────────────────────────────────────────
+
+  ┌ #2  lin.marsh@example.org ──────────────────────────────────────────────────────────── ○ standby
+  │ login     oauth · re-login by 3 Nov
+  │ 5h        ▓▓▓▓▓▓▓▓▓▓▓░  92%  resets in 51m
+  └─────────────────────────────────────────────────────────────────────────────────────────────────
+
+  ┌ #3  ops@example.net ──────────────────────────────────────────────────────────────── ✗ set aside
+  │ login     refresh failed, sign in again
+  │ → tofu login claude-sub
+  └─────────────────────────────────────────────────────────────────────────────────────────────────
+
+keys
+  ✓ classifier   OpenRouter  ····3498  judges tool calls with jev-latest
+  ○ classifier   TypeSafe    not set   used only without OpenRouter
+  ○ web search   Brave       not set   → tofu login brave
+  ○ meta models  Meta        not set   → tofu login meta

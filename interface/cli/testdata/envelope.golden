@@ -1,0 +1,10 @@
+{
+  "tofu": "VERSION",
+  "verb": "models reload",
+  "ok": true,
+  "at": "2026-09-29T15:00:00Z",
+  "data": {
+    "served": 23
+  },
+  "problems": []
+}

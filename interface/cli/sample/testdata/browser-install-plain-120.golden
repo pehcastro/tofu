@@ -1,0 +1,12 @@
+Chrome extension                                                                         ✓ installed
+
+  folder    ~/.tofu/browser/extension
+  id        jednanpboiikklhkkkimnmdmjmgjgphh
+  host      ~/.local/bin/tofu.exe
+
+next, once in Chrome
+  1  open chrome://extensions and turn on Developer mode
+  2  Load unpacked, pick the folder above, check the id matches
+  3  pin the tofu icon so its badge shows
+
+  → after a tofu update: tofu browser install, then reload the tofu card

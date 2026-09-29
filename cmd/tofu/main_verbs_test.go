@@ -44,6 +44,7 @@ func TestUsageTextNamesEveryVerb(t *testing.T) {
 	notInUsage := map[string]string{
 		"help":    "help prints the usage text rather than appearing in it",
 		"catalog": "catalog is a rename shim that prints where library went",
+		"preview": "preview is a hidden design sample, left out of the usage text on purpose",
 	}
 	for _, verb := range routedVerbs(t) {
 		if _, exempt := notInUsage[verb]; exempt {

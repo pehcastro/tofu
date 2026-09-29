@@ -162,6 +162,8 @@ func run(args []string, in io.Reader, out io.Writer, errOut io.Writer) int {
 		return migrateVerb(args[1:], out, errOut)
 	case "browser":
 		return browserVerb(args[1:], out, errOut)
+	case "preview":
+		return previewVerb(args[1:], out, errOut)
 	case "help", "-h", "--help":
 		_, _ = fmt.Fprint(out, usage)
 		return exitOK
