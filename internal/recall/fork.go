@@ -1,6 +1,7 @@
 package recall
 
 import (
+	"encoding/json"
 	"strconv"
 	"strings"
 	"unicode"
@@ -37,6 +38,51 @@ const (
 	carryActs = "the last browser actions it took, oldest first, each with what it did to the page:\n"
 	actTool   = "browser_act"
 )
+
+const carrySnapshots = "the last snapshot of each tab it worked in, as it came back, so the page need not be observed again before acting:\n"
+
+func lastSnapshots(c Conversation) []string {
+	var tabs []string
+	newest := make(map[string]string)
+	for _, entry := range c.Entries {
+		lead, _, body := unwrapped(entry.Text)
+		first, _, _ := strings.Cut(body, "\n")
+		fields := strings.Fields(first)
+		if !interactiveSnapshot(entry) || len(fields) < 2 || fields[0] != "tab" {
+			continue
+		}
+		tab := fields[1]
+		if _, seen := newest[tab]; !seen {
+			tabs = append(tabs, tab)
+		}
+		newest[tab] = strings.TrimPrefix(entry.Text, lead)
+	}
+	snapshots := make([]string, len(tabs))
+	for i, tab := range tabs {
+		snapshots[i] = newest[tab]
+	}
+	return snapshots
+}
+
+func interactiveSnapshot(entry Entry) bool {
+	_, args, _ := strings.Cut(entry.SupersedeKey, " ")
+	var parsed struct {
+		Tab         *int  `json:"tab"`
+		Interactive *bool `json:"interactive"`
+		Actions     []struct {
+			Action string `json:"action"`
+		} `json:"actions"`
+	}
+	if json.Unmarshal([]byte(args), &parsed) != nil || parsed.Tab == nil || parsed.Interactive != nil && !*parsed.Interactive {
+		return false
+	}
+	for _, act := range parsed.Actions {
+		if act.Action == "navigate" || act.Action == "back" || act.Action == "wait" {
+			return false
+		}
+	}
+	return true
+}
 
 func lastActs(c Conversation) []string {
 	var acts []string
@@ -77,6 +123,12 @@ func buildCarry(store *Store, c Conversation, signpostBytes int) (Carry, error) 
 	for _, line := range facts {
 		text.WriteString(line)
 		text.WriteString("\n")
+	}
+	if snapshots := lastSnapshots(c); len(snapshots) > 0 {
+		text.WriteString(carrySnapshots)
+		for _, snapshot := range snapshots {
+			text.WriteString(snapshot + "\n")
+		}
 	}
 	if acts := lastActs(c); len(acts) > 0 {
 		text.WriteString(carryActs)

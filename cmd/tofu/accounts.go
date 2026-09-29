@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"sync"
 	"time"
 
 	"tofu/internal/judge/jev"
@@ -30,6 +31,10 @@ type accounts struct {
 	now      func() time.Time
 	wrap     func(turn.Model) (turn.Model, error)
 	fixed    turn.Model
+
+	polling   sync.Once
+	poller    *quota.Poller
+	pollerErr error
 }
 
 func (a *accounts) forTurn() turn.Accounts {
@@ -96,7 +101,11 @@ func (a *accounts) read(ctx context.Context) ([]quota.Candidate, map[int64]cred.
 			mine = append(mine, row)
 		}
 	}
-	results, err := pollRows(ctx, a.store, mine, a.now, a.urls)
+	a.polling.Do(func() { a.poller, a.pollerErr = quota.NewPoller(nil, a.now, a.urls, recordQuotaReading) })
+	if a.pollerErr != nil {
+		return nil, nil, a.pollerErr
+	}
+	results, err := pollRowsOn(ctx, a.store, mine, a.now, a.urls, a.poller)
 	if err != nil {
 		return nil, nil, err
 	}

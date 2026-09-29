@@ -140,6 +140,22 @@ func TestASubAgentThatForksForeverStopsAtTheForkCapAndEachCarrySaysWhatItTried(t
 	}
 }
 
+func TestABrowserSpawnWithNoOwnsStartsAndAWriterWithNoOwnsIsStillRefused(t *testing.T) {
+	names := []string{"browser_tabs", "browser_observe", "browser_act", "read", "write", "edit", "glob", "search", "symbols", "bash", "fetch", "spawn"}
+	found := subagent.Definitions(subagent.Scan{Library: library.Files(), Tools: names})
+	for agent, starts := range map[string]bool{"browser": true, "ts-dev": false} {
+		model := &stubModel{decisions: []llm.Decision{claimDecision("done")}}
+		base := Config{Model: model, Spend: SpendAPIKey, Tools: NewRegistry(namedTool("browser_observe"), namedTool("write")), ResultBytesCap: 4096,
+			ArtifactDir: t.TempDir(), NewID: func() string { return "turn-orchestrator" }}
+		spawn := NewSpawnTool("turn-orchestrator", base, &subagent.Roster{})
+		spawn.SubAgents = SubAgents{Defined: found.Definitions}
+		_, err := spawn.Run(context.Background(), json.RawMessage(`{"agent":"`+agent+`","task":"read the tab"}`))
+		if started := err == nil; started != starts {
+			t.Errorf("%s spawned with no owns: started %v, want %v: %v", agent, started, starts, err)
+		}
+	}
+}
+
 func TestTheSpawnAtTheSettingRunsAndTheOnePastItIsRefusedNamingIt(t *testing.T) {
 	const perTurn = 15
 	decisions := make([]llm.Decision, perTurn)

@@ -55,6 +55,37 @@ func TestEachListingReadOnOneTabSurvivesAForkWithItsWholeUrlAndItsContent(t *tes
 	}
 }
 
+func TestAForkCarriesTheLastInteractiveSnapshotOfEachTabWithItsUrl(t *testing.T) {
+	snapshot := func(step int, tool, args, page string) recall.Entry {
+		return recall.Entry{Step: step, Tool: tool, SupersedeKey: tool + " " + args, Text: web.Untrusted("Chrome tab", page)}
+	}
+	entries := []recall.Entry{
+		snapshot(0, "browser_observe", `{"tab":1}`, "tab 1 https://www.airbnb.com/s/Atibaia/homes \"Search\"\n- button \"Filters\" [ref=e1]"),
+		snapshot(1, "browser_observe", `{"tab":2}`, "tab 2 https://www.airbnb.com/rooms/222 \"Sunny flat\"\n- button \"Reserve\" [ref=e7]"),
+		snapshot(2, "browser_act", `{"tab":1,"actions":[{"action":"click","ref":"e1"}]}`, "tab 1 https://www.airbnb.com/s/Atibaia/homes?adults=4 \"Filters\"\n- dialog \"Filters\"\n  - button \"Show 27 places\" [ref=e9]"),
+		snapshot(3, "browser_observe", `{"tab":1,"interactive":false}`, "tab 1 https://www.airbnb.com/s/Atibaia/homes?adults=4 \"Filters\"\n- heading \"the whole tree, too long to carry\""),
+	}
+	carry, err := recall.DistilledCarry(recall.NewStore(t.TempDir()), recall.Config{}, recall.Conversation{Entries: entries})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, snapshots, _ := strings.Cut(carry.Text, "the last snapshot of each tab")
+	for _, want := range []string{
+		"tab 1 https://www.airbnb.com/s/Atibaia/homes?adults=4 \"Filters\"\n- dialog \"Filters\"\n  - button \"Show 27 places\" [ref=e9]",
+		"tab 2 https://www.airbnb.com/rooms/222 \"Sunny flat\"\n- button \"Reserve\" [ref=e7]",
+		"came from Chrome tab",
+	} {
+		if !strings.Contains(snapshots, want) {
+			t.Errorf("the carry's snapshots do not hold %q:\n%s", want, carry.Text)
+		}
+	}
+	for _, stale := range []string{"button \"Filters\" [ref=e1]", "the whole tree, too long to carry"} {
+		if strings.Contains(snapshots, stale) {
+			t.Errorf("the carry's snapshots hold %q, which is not the last interactive snapshot of its tab:\n%s", stale, carry.Text)
+		}
+	}
+}
+
 func TestAPageReadTwiceUnderAFreshRefFsidAndItsArtifactFetchKeyAsOnePage(t *testing.T) {
 	page := "https://www.airbnb.com/s/Atibaia/homes?adults=4&place_id=ChIJ&ref_fsid="
 	observe := func(step int, fsid string) recall.Entry {

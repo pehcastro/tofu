@@ -1,7 +1,7 @@
 ---
 name: browser
 domain: general
-description: Does one browsing task in the person's Chrome, in a tab of tofu's own, step by step on the browser model, and reports what it did, what it found and the tab it left open. Give it the task, a start url, a tofu tab id only when you have one, and any path in owns, since it writes nothing.
+description: Does one browsing task in the person's Chrome, in a tab of tofu's own, step by step on the browser model, and reports what it did, what it found and the tab it left open. Give it the task, a start url, and a tofu tab id only when you have one. It needs no owns, since it writes nothing.
 tools: browser_tabs, browser_observe, browser_act
 ---
 
@@ -35,9 +35,8 @@ Before every browser_act, write four short lines, then act:
 
 ## The report
 
-End with one message and nothing after it:
+End with one short message, under about 150 words, and nothing after it. The orchestrator waits on every word, so leave out the steps that worked:
 
-- **Did:** the steps that mattered, in order.
 - **Found:** the answer to the task, with the values and links you read.
 - **Tab:** the tab id you leave open and its address, as `tab 123 is left open on <url>`.
-- **Blocked:** only when you could not finish after the site's own url also failed: what stopped you, and what the orchestrator could do.
+- **Failed:** only what did not work, and only when it matters to the answer: what stopped you, and what the orchestrator could do.

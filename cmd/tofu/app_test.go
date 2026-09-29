@@ -39,6 +39,7 @@ import (
 	"tofu/internal/llm"
 	"tofu/internal/llm/cred"
 	"tofu/internal/llm/models"
+	"tofu/internal/llm/quota"
 	"tofu/internal/llm/wire/codex"
 	"tofu/internal/recall"
 	sessionstore "tofu/internal/session"
@@ -2726,6 +2727,47 @@ func TestAMessagedOrReopenedSubAgentRoundIsLabelledWithTheModelItAskedFor(t *tes
 	}
 	if askedAs, _ := askedAsOf(turn.Row{ID: "browser-10", SpawnedBy: "call_other"}, spawned, "claude-sub/claude-opus-5", ""); askedAs != "claude-sub/claude-opus-5" {
 		t.Errorf("an unrelated sub-agent browser-10 is labelled asked_as %s, want the orchestrator's", askedAs)
+	}
+}
+
+func TestFiftyStepsOnOneAccountPollItsQuotaAtMostTwice(t *testing.T) {
+	emptyHome(t)
+	var polls atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		polls.Add(1)
+		_, _ = io.WriteString(w, `{"plan_type":"plus","rate_limit":{"limit_reached":false,"primary_window":{"used_percent":10,"limit_window_seconds":18000,"reset_after_seconds":600}}}`)
+	}))
+	t.Cleanup(server.Close)
+	path, err := cred.Path()
+	if err != nil {
+		t.Fatal(err)
+	}
+	store, err := cred.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	if err := store.Save(cred.Credential{Provider: cred.CodexSub, Kind: "oauth", Access: "access-token", Expires: time.Now().Add(time.Hour),
+		Identity: cred.Identity{Email: "codex@example.com", AccountID: "account-1"}}, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	spec, err := cred.Lookup(string(cred.CodexSub))
+	if err != nil {
+		t.Fatal(err)
+	}
+	held := &accounts{dir: t.TempDir(), provider: cred.CodexSub, spec: spec, store: store, modelID: "gpt-5.6-sol", now: time.Now,
+		urls: map[quota.Provider]string{quota.CodexSub: server.URL}}
+	pinned, err := held.pick(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for range 50 {
+		if _, _, err := held.next(context.Background(), pinned); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got := polls.Load(); got > 2 {
+		t.Errorf("a pick and 50 steps polled the quota %d times, want at most 2", got)
 	}
 }
 

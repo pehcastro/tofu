@@ -135,7 +135,6 @@ func pollRows(
 	now func() time.Time,
 	urls map[quota.Provider]string,
 ) ([]pollResult, error) {
-	results := make([]pollResult, 0, len(rows))
 	readings, recordErr := quotaReadingDir()
 	record := func(reading quota.Reading) error {
 		if recordErr != nil {
@@ -148,6 +147,22 @@ func pollRows(
 	if err != nil {
 		return nil, err
 	}
+	results, err := pollRowsOn(ctx, store, rows, now, urls, poller)
+	for index := range results {
+		results[index].recordErr = recordErr
+	}
+	return results, err
+}
+
+func pollRowsOn(
+	ctx context.Context,
+	store *cred.Store,
+	rows []cred.Row,
+	now func() time.Time,
+	urls map[quota.Provider]string,
+	poller *quota.Poller,
+) ([]pollResult, error) {
+	results := make([]pollResult, 0, len(rows))
 	versions, _ := subFingerprint(".")
 	for _, row := range rows {
 		provider := quota.Provider(row.Credential.Provider)
@@ -172,10 +187,15 @@ func pollRows(
 		})
 		results = append(results, pollResult{row: row.ID, report: report, err: err})
 	}
-	for index := range results {
-		results[index].recordErr = recordErr
-	}
 	return results, nil
 }
 
 func quotaReadingDir() (string, error) { return sys.QuotaDir() }
+
+func recordQuotaReading(reading quota.Reading) error {
+	readings, err := quotaReadingDir()
+	if err != nil {
+		return err
+	}
+	return quota.AppendReading(readings, reading)
+}

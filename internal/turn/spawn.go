@@ -443,6 +443,8 @@ func (t *SpawnTool) disjointPrefix(calls []llm.ToolCall) int {
 	return width
 }
 
+func writesPaths(tool string) bool { return tool == "write" || tool == "edit" || tool == "bash" }
+
 func (t *SpawnTool) limits() SubAgentLimits {
 	if t.Limits == nil {
 		return SubAgentLimits{PerTurn: konst.SubAgentsPerTurnDefault, Depth: konst.SubAgentDepthDefault}
@@ -469,13 +471,13 @@ func (t *SpawnTool) Definition() llm.Tool {
 		Name: "spawn",
 		Description: "you plan, spawn and verify, and implementation goes to a sub-agent: spawn one per separable piece of work as soon as the piece is known, rather than writing the code yourself first. " +
 			"hands one piece of work to a sub-agent with its own context and its own conversation, and returns the sub-agent's report rather than its transcript. " +
-			"owns lists the paths the sub-agent may write, every other path is refused at the write, and no two sub-agents may hold overlapping paths. " +
+			"owns lists the paths the sub-agent may write, every other path is refused at the write, and no two sub-agents may hold overlapping paths; a sub-agent offered no write, edit or bash needs none. " +
 			fmt.Sprintf("At most %d sub-agents per turn, nested at most %d deep. These are the person's settings %s and %s: %s",
 				limits.PerTurn, limits.Depth, settings.SubAgentsPerTurn, settings.SubAgentDepth, raise),
 		Parameters: map[string]any{
 			"type":       "object",
 			"properties": properties,
-			"required":   []string{"task", "owns"},
+			"required":   []string{"task"},
 		},
 	}
 }
@@ -513,9 +515,6 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 	if strings.TrimSpace(args.Task) == "" {
 		return Result{}, errors.New("spawn: task is required")
 	}
-	if len(args.Owns) == 0 {
-		return Result{}, errors.New("spawn: owns is required, and a sub-agent holding no paths could write nothing")
-	}
 	limits := t.limits()
 	if t.depth+1 > limits.Depth {
 		return Result{}, DepthLimitError{Depth: t.depth + 1, Limit: limits.Depth}
@@ -534,6 +533,9 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 	definition, err := t.SubAgents.Named(args.Agent)
 	if err != nil {
 		return Result{}, err
+	}
+	if len(args.Owns) == 0 && (len(definition.Tools) == 0 || slices.ContainsFunc(definition.Tools, writesPaths)) {
+		return Result{}, errors.New("spawn: owns is required, and a sub-agent holding no paths could write nothing")
 	}
 	system, environment, err := t.SubAgents.prompt(t.base, definition, args.Task, args.Owns)
 	if err != nil {

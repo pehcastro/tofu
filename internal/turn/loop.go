@@ -38,8 +38,8 @@ func (RunningModel) Ask(ctx context.Context, request llm.Request) (llm.Decision,
 	return model.Ask(ctx, request)
 }
 
-func readsTheBrowser(tool string) bool {
-	return tool == "browser_tabs" || tool == "browser_read" || tool == "browser_observe"
+func gateExempt(tool string) bool {
+	return tool == "browser_tabs" || tool == "browser_read" || tool == "browser_observe" || tool == "artifact_fetch"
 }
 
 type Caps struct {
@@ -222,7 +222,9 @@ func Run(ctx context.Context, config Config) (Row, error) {
 	messages = append(messages, config.History...)
 	messages = append(messages, llm.Message{Role: llm.RoleUser, Content: config.FirstUserMessage(), Images: config.Images})
 
-	var written sync.WaitGroup
+	var written, shadowed sync.WaitGroup
+	var shadows sync.Mutex
+	var shadowIDs, shadowErrs []string
 	var forkWrites sync.Mutex
 	var forkWriteErrs []string
 	sent, answering := afterSystem+len(config.History), ""
@@ -248,6 +250,9 @@ func Run(ctx context.Context, config Config) (Row, error) {
 		row.Conversation = messages[afterSystem:]
 		flush()
 		written.Wait()
+		shadowed.Wait()
+		row.DecisionIDs = append(row.DecisionIDs, shadowIDs...)
+		row.Warnings = append(row.Warnings, shadowErrs...)
 		if survivors := backgroundSurvivors(registry, beforeShells); survivors != "" {
 			row.Warnings = append(row.Warnings, survivors)
 		}
@@ -373,7 +378,28 @@ func Run(ctx context.Context, config Config) (Row, error) {
 					call.Arguments = proxied
 					request := GateRequest{TurnID: row.ID, Task: config.Task, Tool: call.Name, Args: call.Arguments}
 					gated := gatedCall{call: call, asked: asked, proxy: proxyRow, id: session.EventIDFor(origin, call.ID), parent: stepRow.id, author: author, sift: sifter, thrift: thrifter, redact: redactor, task: config.Task, site: recorded.site(call.ID, messages), model: model}
-					if config.Gate != nil && !readsTheBrowser(call.Name) {
+					switch {
+					case config.Gate == nil || gateExempt(call.Name):
+					case config.GateMode == GateShadow:
+						judged := make(chan shadowVerdict, 1)
+						gated.shadow = judged
+						shadowed.Add(1)
+						go func() {
+							defer shadowed.Done()
+							verdict, err := config.Gate.Decide(context.WithoutCancel(ctx), request)
+							shadows.Lock()
+							defer shadows.Unlock()
+							if verdict.ID != "" {
+								shadowIDs = append(shadowIDs, verdict.ID)
+							}
+							shadow := shadowVerdict{decision: verdict}
+							if err != nil {
+								shadow.err = err.Error()
+								shadowErrs = append(shadowErrs, "the shadow gate could not judge "+request.Tool+": "+shadow.err)
+							}
+							judged <- shadow
+						}()
+					default:
 						verdict, err := config.Gate.Decide(ctx, request)
 						gated.verdict = verdict
 						if err != nil {
@@ -623,7 +649,13 @@ type gatedCall struct {
 	model   Model
 	verdict GateDecision
 	gateErr string
+	shadow  <-chan shadowVerdict
 	refusal string
+}
+
+type shadowVerdict struct {
+	decision GateDecision
+	err      string
 }
 
 func (g gatedCall) run(ctx context.Context, tools Registry, resultBytesCap int, artifacts Artifacts, batch int) (ToolCallRow, llm.Message) {
@@ -631,7 +663,13 @@ func (g gatedCall) run(ctx context.Context, tools Registry, resultBytesCap int, 
 	if g.refusal == "" {
 		row, answer = g.execute(ctx, tools, resultBytesCap, artifacts)
 	}
-	row.GateDecisionID, row.GateVerdict, row.GateError = g.verdict.ID, string(g.verdict.Verdict), g.gateErr
+	verdict, gateErr := g.verdict, g.gateErr
+	select {
+	case judged := <-g.shadow:
+		verdict, gateErr = judged.decision, judged.err
+	default:
+	}
+	row.GateDecisionID, row.GateVerdict, row.GateError = verdict.ID, string(verdict.Verdict), gateErr
 	row.ParallelBatch = batch
 	row.Proxy = g.proxy
 	row.Command = g.redact.Redact(row.Command)
