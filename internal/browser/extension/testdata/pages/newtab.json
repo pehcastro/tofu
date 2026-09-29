@@ -1,0 +1,9 @@
+{
+  "url": "https://stays.test/",
+  "title": "Stays",
+  "loader": "L1",
+  "nodes": [
+    {"id": 1, "role": "RootWebArea", "name": "Stays", "children": [41]},
+    {"id": 41, "role": "link", "name": "Casa em Lisboa", "box": [10, 10, 200, 30], "fires": "listing", "opens": 21}
+  ]
+}

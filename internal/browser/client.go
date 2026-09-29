@@ -74,16 +74,25 @@ func (c *Client) CloseTab(tab int) error {
 }
 
 func (c *Client) Call(tab int, op string, args json.RawMessage) (json.RawMessage, error) {
+	value, err := c.callBy(time.Now().Add(konst.BrowserCallTimeoutMillis*time.Millisecond), tab, op, args)
+	if errors.Is(err, os.ErrDeadlineExceeded) {
+		return nil, fmt.Errorf("the browser did not answer %s on tab %d within %d ms", op, tab, konst.BrowserCallTimeoutMillis)
+	}
+	return value, err
+}
+
+func (c *Client) callBy(deadline time.Time, tab int, op string, args json.RawMessage) (json.RawMessage, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.lastID++
-	if err := c.conn.SetDeadline(time.Now().Add(konst.BrowserCallTimeoutMillis * time.Millisecond)); err != nil {
+	if err := c.conn.SetDeadline(deadline); err != nil {
 		return nil, fmt.Errorf("%w (%v)", ErrNotConnected, err)
 	}
 	var answer result
 	started := time.Now()
 	err := c.out.Encode(request{ID: c.lastID, Op: op, Tab: tab, Args: args})
-	if err == nil {
+	for err == nil && answer.ID < c.lastID {
+		answer = result{}
 		err = c.in.Decode(&answer)
 	}
 	if err == nil && c.Timed != nil {
@@ -91,7 +100,7 @@ func (c *Client) Call(tab int, op string, args json.RawMessage) (json.RawMessage
 	}
 	switch {
 	case errors.Is(err, os.ErrDeadlineExceeded):
-		return nil, fmt.Errorf("the browser did not answer %s on tab %d within %d ms", op, tab, konst.BrowserCallTimeoutMillis)
+		return nil, err
 	case err != nil:
 		return nil, fmt.Errorf("%w (%v)", ErrNotConnected, err)
 	case answer.ID != c.lastID:

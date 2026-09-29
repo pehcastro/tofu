@@ -192,4 +192,38 @@ const (
 	BrowserStaleStop          = 3
 	BrowserSnapshotAttempts   = 10
 	BrowserSnapshotGapMillis  = 20
+
+	BrowserSnapshotMaxChars     = 40000
+	BrowserActTimeoutMillis     = 8000
+	BrowserObserveTimeoutMillis = 20000
+	BrowserSettlePollMillis     = 300
+	BrowserSettleMaxMillis      = 3000
+	BrowserWaitMaxMillis        = 10000
+	BrowserScrollPixels         = 300
+	BrowserCursorTextRunes      = 100
+)
+
+const (
+	MotionRecordCeilingMillis   = 10000
+	MotionWatchCeiling          = 10
+	MotionBeforeMillisDefault   = 300
+	MotionAfterMillisDefault    = 800
+	MotionTakesDefault          = 3
+	MotionViewportWidthDefault  = 960
+	MotionViewportHeightDefault = 720
+	MotionFrameLagMillis        = 30
+	MotionGeometryThresholdPx   = 0.5
+	MotionSheetMaxPx            = 2000
+	MotionSheetMaxBytes         = 4718592
+	MotionSheetGapPx            = 4
+	MotionInspectColumns        = 4
+	MotionInspectTilePx         = 400
+	MotionInspectLabelScale     = 3
+	MotionCompareColumns        = 8
+	MotionCompareTilePx         = 240
+	MotionCompareLabelScale     = 2
+	MotionLabelInsetPx          = 6
+	MotionLabelShadeAlpha       = 178
+	MotionEmptyTileGrey         = 0xdd
+	MotionCompareTakesAdvised   = 3
 )

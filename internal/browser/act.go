@@ -1,0 +1,425 @@
+package browser
+
+import (
+	"encoding/json"
+	"errors"
+	"fmt"
+	"os"
+	"slices"
+	"strconv"
+	"strings"
+	"time"
+
+	"tofu/internal/konst"
+)
+
+type MoveKind string
+
+const (
+	MoveClick    MoveKind = "click"
+	MoveFill     MoveKind = "fill"
+	MoveSelect   MoveKind = "select"
+	MovePress    MoveKind = "press"
+	MoveScroll   MoveKind = "scroll"
+	MoveNavigate MoveKind = "navigate"
+	MoveBack     MoveKind = "back"
+	MoveWait     MoveKind = "wait"
+)
+
+type Move struct {
+	Ref    string
+	Kind   MoveKind
+	Value  string
+	NewTab bool
+}
+
+type Moved struct {
+	Covered     string `json:"covered,omitempty"`
+	Value       string `json:"value,omitempty"`
+	Opened      int    `json:"opened,omitempty"`
+	URLChanged  bool   `json:"url_changed"`
+	PageChanged bool   `json:"page_changed"`
+}
+
+const blockerAt = `function(x, y) {
+  let doc = this.ownerDocument || document;
+  while (doc.defaultView && doc.defaultView.frameElement) doc = doc.defaultView.frameElement.ownerDocument;
+  let hit = doc.elementFromPoint(x, y);
+  while (hit && (hit.tagName === 'IFRAME' || hit.tagName === 'FRAME') && hit.contentDocument && hit !== this) {
+    const r = hit.getBoundingClientRect();
+    x -= r.x + hit.clientLeft;
+    y -= r.y + hit.clientTop;
+    hit = hit.contentDocument.elementFromPoint(x, y);
+  }
+  if (!hit || hit === this) return null;
+  const up = n => n.parentNode || n.host || null;
+  for (let n = hit; n; n = up(n)) if (n === this) return null;
+  for (let n = this; n; n = up(n)) if (n === hit) return null;
+  const hitLabel = hit.closest ? hit.closest('label') : null;
+  if (hitLabel && (hitLabel.control === this || hitLabel.contains(this))) return null;
+  const ownLabel = this.closest ? this.closest('label') : null;
+  if (ownLabel && ownLabel.contains(hit)) return null;
+  return hit;
+}`
+
+const clearValue = `function() {
+  this.select && this.select();
+  this.value = '';
+  this.dispatchEvent(new Event('input', {bubbles: true}));
+}`
+
+const selectOption = `function(values) {
+  const normalize = value => String(value ?? '').replace(new RegExp('[' + String.fromCharCode(0x200B, 0x200C, 0x200D, 0x2060, 0xFEFF) + ']', 'g'), '').replace(/\s+/g, ' ').trim();
+  const options = Array.from(this.options || []);
+  const available = () => 'no option matched ' + JSON.stringify(values) + ', the options are: ' + options.map(o => o.value + ' ("' + normalize(o.label) + '")').join(', ');
+  const wanted = new Set();
+  for (const value of values) {
+    let matches = options.filter(o => value === o.value || value === o.label.trim() || value === o.textContent.trim());
+    if (matches.length === 0) matches = options.filter(o => normalize(o.label) === normalize(value));
+    if (matches.length > 1 && !matches.some(o => value === o.value)) return {error: 'more than one option matched ' + JSON.stringify(value)};
+    if (matches.length === 0) return {error: available()};
+    matches.forEach(o => wanted.add(o));
+  }
+  for (const o of options) o.selected = wanted.has(o);
+  this.dispatchEvent(new Event('change', {bubbles: true}));
+  return {matched: wanted.size};
+}`
+
+const pendingRequests = `(() => {
+  const now = performance.now();
+  const noise = ['doubleclick.net', 'googlesyndication.com', 'googletagmanager.com', 'facebook.net', 'analytics', 'ads', 'tracking', 'pixel', 'hotjar.com', 'clarity.ms', 'mixpanel.com', 'segment.com', 'demdex.net', 'omtrdc.net', 'adobedtm.com', 'ensighten.com', 'newrelic.com', 'nr-data.net', 'google-analytics.com', 'connect.facebook.net', 'platform.twitter.com', 'platform.linkedin.com', '.cloudfront.net/image/', '.akamaized.net/image/', '/tracker/', '/collector/', '/beacon/', '/telemetry/', '/log/', '/events/', '/eventBatch', '/track.', '/metrics/'];
+  const pending = performance.getEntriesByType('resource').filter(entry => {
+    const url = entry.name, age = now - entry.startTime;
+    const minor = ['img', 'image', 'icon', 'font'].includes(entry.initiatorType) || /\.(jpg|jpeg|png|gif|webp|svg|ico)(\?|$)/i.test(url);
+    return entry.responseEnd === 0 && !noise.some(part => url.includes(part)) && !url.startsWith('data:') && url.length <= 500 && age <= 10000 && !(minor && age > 3000);
+  });
+  return {pending: pending.length, loading: document.readyState !== 'complete'};
+})()`
+
+const pageStateScript = `({url: location.href, count: document.getElementsByTagName('*').length, text: document.body ? document.body.innerText : ''})`
+
+func mouse(kind, button string, x, y float64) cdpCall {
+	return cdpCall{Method: "Input.dispatchMouseEvent", Params: map[string]any{"type": kind, "x": x, "y": y, "button": button, "clickCount": 1}}
+}
+
+type pageState struct {
+	URL   string `json:"url"`
+	Count int    `json:"count"`
+	Text  string `json:"text"`
+}
+
+func (d *Driver) state(deadline time.Time) (pageState, []int, error) {
+	raw, err := d.Client.callBy(deadline, 0, opTabs, nil)
+	var tabs []Tab
+	if err == nil {
+		err = json.Unmarshal(raw, &tabs)
+	}
+	var page pageState
+	if err == nil {
+		err = d.value(deadline, false, evaluate(pageStateScript), &page)
+	}
+	ids := make([]int, len(tabs))
+	for i, tab := range tabs {
+		ids[i] = tab.ID
+	}
+	return page, ids, err
+}
+
+func (d *Driver) Do(move Move) (Moved, error) {
+	budget := konst.BrowserActTimeoutMillis * time.Millisecond
+	if move.Kind == MoveWait {
+		budget += konst.BrowserWaitMaxMillis * time.Millisecond
+	}
+	moved, err := d.do(time.Now().Add(budget), move)
+	if errors.Is(err, os.ErrDeadlineExceeded) {
+		return Moved{}, fmt.Errorf("%s on tab %d did not finish within %d ms, and tofu did not retry it", move.Kind, d.Tab, budget.Milliseconds())
+	}
+	return moved, err
+}
+
+func (d *Driver) do(deadline time.Time, move Move) (Moved, error) {
+	before, tabsBefore, err := d.state(deadline)
+	if err != nil {
+		return Moved{}, err
+	}
+	var moved Moved
+	switch move.Kind {
+	case MoveClick:
+		moved.Covered, err = d.click(deadline, move.Ref)
+	case MoveFill:
+		moved.Value, err = d.fill(deadline, move.Ref, move.Value)
+	case MoveSelect:
+		err = d.pick(deadline, move.Ref, move.Value)
+	case MovePress:
+		err = d.press(deadline, move.Value)
+	case MoveScroll:
+		err = d.scroll(deadline, move.Ref, move.Value)
+	case MoveNavigate:
+		moved.Opened, err = d.navigate(deadline, move.Value, move.NewTab)
+	case MoveBack:
+		_, err = d.Client.callBy(deadline, d.Tab, opBack, nil)
+	case MoveWait:
+		err = d.wait(deadline, move.Value)
+	default:
+		return Moved{}, fmt.Errorf("there is no browser move %q", move.Kind)
+	}
+	if err != nil || moved.Covered != "" {
+		return moved, err
+	}
+	d.settle(deadline)
+	after, tabsAfter, err := d.state(deadline)
+	if err != nil {
+		return moved, err
+	}
+	moved.URLChanged, moved.PageChanged = after.URL != before.URL, after != before
+	for _, tab := range tabsAfter {
+		if moved.Opened == 0 && !slices.Contains(tabsBefore, tab) {
+			moved.Opened = tab
+		}
+	}
+	if moved.Opened != 0 {
+		d.Tab = moved.Opened
+	}
+	if moved.URLChanged || moved.Opened != 0 {
+		d.refs = refMap{next: d.refs.next}
+	}
+	return moved, nil
+}
+
+func (d *Driver) center(deadline time.Time, ref string) (int, float64, float64, error) {
+	var box struct {
+		Model struct {
+			Content []float64 `json:"content"`
+		} `json:"model"`
+	}
+	backend, err := d.onNode(deadline, ref, func(backend int) error {
+		answers, err := d.cdp(deadline, false, byBackend("DOM.scrollIntoViewIfNeeded", backend), byBackend("DOM.getBoxModel", backend))
+		if err != nil {
+			return err
+		}
+		return answers[1].into(&box)
+	})
+	quad := box.Model.Content
+	if err == nil && len(quad) < 8 {
+		err = fmt.Errorf("the ref %s has no box on tab %d", ref, d.Tab)
+	}
+	if err != nil {
+		return 0, 0, 0, err
+	}
+	return backend, (quad[0] + quad[2] + quad[4] + quad[6]) / 4, (quad[1] + quad[3] + quad[5] + quad[7]) / 4, nil
+}
+
+func (d *Driver) resolve(deadline time.Time, ref string) (string, error) {
+	var resolved struct {
+		Object remoteObject `json:"object"`
+	}
+	_, err := d.onNode(deadline, ref, func(backend int) error {
+		answer, err := d.one(deadline, false, byBackend("DOM.resolveNode", backend))
+		if err != nil {
+			return err
+		}
+		return answer.into(&resolved)
+	})
+	return resolved.Object.ObjectID, err
+}
+
+func (d *Driver) click(deadline time.Time, ref string) (string, error) {
+	backend, x, y, err := d.center(deadline, ref)
+	if err != nil {
+		return "", err
+	}
+	covered, err := d.blocker(deadline, backend, x, y)
+	if err != nil || covered != "" {
+		return covered, err
+	}
+	return "", d.act(deadline, mouse("mouseMoved", "none", x, y), mouse("mousePressed", "left", x, y), mouse("mouseReleased", "left", x, y))
+}
+
+func (d *Driver) blocker(deadline time.Time, backend int, x, y float64) (string, error) {
+	answer, err := d.one(deadline, false, byBackend("DOM.resolveNode", backend))
+	var resolved struct {
+		Object remoteObject `json:"object"`
+	}
+	if err != nil || answer.into(&resolved) != nil {
+		return "", err
+	}
+	if answer, err = d.one(deadline, false, callOn(resolved.Object.ObjectID, blockerAt, false, x, y)); err != nil {
+		return "", err
+	}
+	hit, err := answer.object()
+	if err != nil || hit.ObjectID == "" {
+		return "", nil
+	}
+	answer, err = d.one(deadline, false, cdpCall{Method: "Accessibility.getPartialAXTree", Params: map[string]any{"objectId": hit.ObjectID, "fetchRelatives": false}})
+	var tree struct {
+		Nodes []axNode `json:"nodes"`
+	}
+	if err != nil {
+		return "", err
+	}
+	if answer.into(&tree) != nil || len(tree.Nodes) == 0 {
+		return "an element without a role", nil
+	}
+	if name := tree.Nodes[0].Name.text(); name != "" {
+		return tree.Nodes[0].Role.text() + " " + strconv.Quote(name), nil
+	}
+	return tree.Nodes[0].Role.text(), nil
+}
+
+func (d *Driver) fill(deadline time.Time, ref, text string) (string, error) {
+	object, err := d.resolve(deadline, ref)
+	if err == nil {
+		err = d.act(deadline, callOn(object, "function() { this.focus(); }", true), callOn(object, clearValue, true), cdpCall{Method: "Input.insertText", Params: map[string]any{"text": text}})
+	}
+	var value string
+	if err == nil {
+		err = d.value(deadline, false, callOn(object, "function() { return this.value ?? this.textContent; }", true), &value)
+	}
+	return value, err
+}
+
+func (d *Driver) pick(deadline time.Time, ref, option string) error {
+	object, err := d.resolve(deadline, ref)
+	var picked struct {
+		Error string `json:"error"`
+	}
+	if err == nil {
+		err = d.value(deadline, true, callOn(object, selectOption, true, []string{option}), &picked)
+	}
+	if err == nil && picked.Error != "" {
+		err = errors.New(picked.Error)
+	}
+	return err
+}
+
+func keyInfo(key string) (name, code string, keyCode int) {
+	switch strings.ToLower(key) {
+	case "enter", "return":
+		return "Enter", "Enter", 13
+	case "tab":
+		return "Tab", "Tab", 9
+	case "escape", "esc":
+		return "Escape", "Escape", 27
+	case "backspace":
+		return "Backspace", "Backspace", 8
+	case "delete":
+		return "Delete", "Delete", 46
+	case "arrowup", "up":
+		return "ArrowUp", "ArrowUp", 38
+	case "arrowdown", "down":
+		return "ArrowDown", "ArrowDown", 40
+	case "arrowleft", "left":
+		return "ArrowLeft", "ArrowLeft", 37
+	case "arrowright", "right":
+		return "ArrowRight", "ArrowRight", 39
+	case "home":
+		return "Home", "Home", 36
+	case "end":
+		return "End", "End", 35
+	case "pageup":
+		return "PageUp", "PageUp", 33
+	case "pagedown":
+		return "PageDown", "PageDown", 34
+	case "space", " ":
+		return " ", "Space", 32
+	}
+	if len(key) != 1 {
+		return key, key, 0
+	}
+	upper := strings.ToUpper(key)
+	switch char := key[0]; {
+	case char >= 'a' && char <= 'z' || char >= 'A' && char <= 'Z':
+		return key, "Key" + upper, int(upper[0])
+	case char >= '0' && char <= '9':
+		return key, "Digit" + key, int(char)
+	}
+	for _, punctuation := range []struct {
+		keys, code string
+		keyCode    int
+	}{{";:", "Semicolon", 186}, {"=+", "Equal", 187}, {",<", "Comma", 188}, {"-_", "Minus", 189}, {".>", "Period", 190}, {"/?", "Slash", 191},
+		{"`~", "Backquote", 192}, {"[{", "BracketLeft", 219}, {"\\|", "Backslash", 220}, {"]}", "BracketRight", 221}, {"'\"", "Quote", 222}} {
+		if strings.Contains(punctuation.keys, key) {
+			return key, punctuation.code, punctuation.keyCode
+		}
+	}
+	return key, "", 0
+}
+
+func (d *Driver) press(deadline time.Time, key string) error {
+	name, code, keyCode := keyInfo(key)
+	down := map[string]any{"type": "keyDown", "key": name, "code": code, "windowsVirtualKeyCode": keyCode, "nativeVirtualKeyCode": keyCode}
+	text := map[string]string{"Enter": "\r", "Tab": "\t"}[name]
+	if len(name) == 1 {
+		text = name
+	}
+	if text != "" {
+		down["text"], down["unmodifiedText"] = text, text
+	}
+	up := map[string]any{"type": "keyUp", "key": name, "code": code, "windowsVirtualKeyCode": keyCode, "nativeVirtualKeyCode": keyCode}
+	return d.act(deadline, cdpCall{Method: "Input.dispatchKeyEvent", Params: down}, cdpCall{Method: "Input.dispatchKeyEvent", Params: up})
+}
+
+func (d *Driver) scroll(deadline time.Time, ref, direction string) error {
+	pixels := konst.BrowserScrollPixels
+	switch direction {
+	case "up":
+		pixels = -pixels
+	case "", "down":
+	default:
+		return fmt.Errorf("scroll goes up or down, not %q", direction)
+	}
+	if ref == "" {
+		return d.act(deadline, evaluate(fmt.Sprintf("window.scrollBy(0, %d)", pixels)))
+	}
+	object, err := d.resolve(deadline, ref)
+	if err != nil {
+		return err
+	}
+	return d.act(deadline, callOn(object, "function(dx, dy) { this.scrollBy(dx, dy); }", true, 0, pixels))
+}
+
+func (d *Driver) navigate(deadline time.Time, url string, newTab bool) (int, error) {
+	args, _ := json.Marshal(openArgs{URL: url})
+	if !newTab {
+		_, err := d.Client.callBy(deadline, d.Tab, opNavigate, args)
+		return 0, err
+	}
+	raw, err := d.Client.callBy(deadline, 0, opOpen, args)
+	var tab int
+	if err == nil {
+		err = json.Unmarshal(raw, &tab)
+	}
+	return tab, err
+}
+
+func (d *Driver) wait(deadline time.Time, value string) error {
+	if millis, err := strconv.Atoi(value); err == nil {
+		time.Sleep(time.Duration(min(millis, konst.BrowserWaitMaxMillis)) * time.Millisecond)
+		return nil
+	}
+	quoted, _ := json.Marshal(value)
+	for until := time.Now().Add(konst.BrowserWaitMaxMillis * time.Millisecond); ; time.Sleep(konst.BrowserSettlePollMillis * time.Millisecond) {
+		var shown bool
+		if err := d.value(deadline, false, evaluate("document.body !== null && document.body.innerText.includes("+string(quoted)+")"), &shown); err != nil {
+			return err
+		}
+		if shown {
+			return nil
+		}
+		if time.Now().After(until) {
+			return fmt.Errorf("%q did not appear on tab %d within %d ms", value, d.Tab, konst.BrowserWaitMaxMillis)
+		}
+	}
+}
+
+func (d *Driver) settle(deadline time.Time) {
+	for until := time.Now().Add(konst.BrowserSettleMaxMillis * time.Millisecond); time.Now().Before(until); time.Sleep(konst.BrowserSettlePollMillis * time.Millisecond) {
+		var busy struct {
+			Pending int  `json:"pending"`
+			Loading bool `json:"loading"`
+		}
+		if d.value(deadline, false, evaluate(pendingRequests), &busy) == nil && busy.Pending == 0 && !busy.Loading {
+			return
+		}
+	}
+}

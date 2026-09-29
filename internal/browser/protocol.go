@@ -125,20 +125,62 @@ const (
 	opBuilds = "builds"
 	opOpen   = "open"
 	opClose  = "close"
+	opBack   = "back"
+	opCDP    = "cdp"
 )
 
 type openArgs struct {
 	URL string `json:"url"`
 }
 
-func opStatus(op string) (status, error) {
-	switch op {
+func opStatus(req request) (status, error) {
+	switch req.Op {
 	case "snapshot":
 		return statusReading, nil
 	case "click", "fill", "select", "scroll", "wait":
 		return statusActing, nil
+	case opCDP:
+		return cdpStatus(req.Args)
 	}
-	return "", fmt.Errorf("unknown browser op %q", op)
+	return "", fmt.Errorf("unknown browser op %q", req.Op)
+}
+
+type cdpCall struct {
+	Method string `json:"method"`
+	Params any    `json:"params,omitempty"`
+}
+
+type cdpArgs struct {
+	Calls []cdpCall `json:"calls"`
+	Act   bool      `json:"act,omitempty"`
+}
+
+type cdpAnswer struct {
+	Result json.RawMessage `json:"result"`
+	Error  string          `json:"error"`
+}
+
+func cdpStatus(raw json.RawMessage) (status, error) {
+	var args cdpArgs
+	if err := json.Unmarshal(raw, &args); err != nil || len(args.Calls) == 0 {
+		return "", fmt.Errorf("a cdp op carries no calls: %s", raw)
+	}
+	now := statusReading
+	if args.Act {
+		now = statusActing
+	}
+	for _, call := range args.Calls {
+		switch call.Method {
+		case "Accessibility.getFullAXTree", "Accessibility.getPartialAXTree", "Page.getFrameTree",
+			"DOM.getDocument", "DOM.querySelectorAll", "DOM.describeNode", "DOM.resolveNode", "DOM.getBoxModel", "DOM.scrollIntoViewIfNeeded",
+			"Runtime.evaluate", "Runtime.callFunctionOn":
+		case "Input.dispatchMouseEvent", "Input.dispatchKeyEvent", "Input.insertText":
+			now = statusActing
+		default:
+			return "", fmt.Errorf("tofu does not pass the CDP method %q to Chrome", call.Method)
+		}
+	}
+	return now, nil
 }
 
 type request struct {

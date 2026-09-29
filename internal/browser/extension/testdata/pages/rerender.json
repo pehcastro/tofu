@@ -1,0 +1,11 @@
+{
+  "url": "https://stays.test/",
+  "title": "Stays",
+  "loader": "L1",
+  "nodes": [
+    {"id": 1, "role": "RootWebArea", "name": "Stays", "children": [31, 32, 33]},
+    {"id": 31, "role": "button", "name": "Adicionar", "box": [10, 10, 80, 30], "fires": "add 1"},
+    {"id": 32, "role": "button", "name": "Adicionar", "box": [10, 50, 80, 30], "fires": "add 2"},
+    {"id": 33, "role": "button", "name": "Adicionar", "box": [10, 90, 80, 30], "fires": "add 3"}
+  ]
+}

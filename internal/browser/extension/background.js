@@ -117,6 +117,8 @@ async function perform(tabId, op, args, timing) {
   if (op === 'open') return openTab(url);
   if (op === 'navigate') return navigateOpened(tabId, url);
   if (op === 'close') return closeOpened(tabId);
+  if (op === 'back') return goBack(tabId);
+  if (op === 'cdp') return relay(tabId, args);
   if (op !== 'snapshot' && !DRIVE_OPS.includes(op)) throw new Error(`unknown op ${op}`);
   if (op === 'scroll' && !DIRECTIONS.includes(args.direction)) throw new Error(`no scroll direction ${args.direction}`);
   await attach(tabId);
@@ -220,6 +222,19 @@ async function navigateOpened(tabId, url) {
   await chrome.tabs.update(tabId, {url});
   await loaded(tabId);
   return tabId;
+}
+
+async function goBack(tabId) {
+  ownOnly(tabId, 'navigates');
+  await chrome.tabs.goBack(tabId);
+  await loaded(tabId);
+  return tabId;
+}
+
+async function relay(tabId, {calls, act}) {
+  await attach(tabId);
+  if (act && !grouped.has(tabId)) serially(() => groupTab(tabId));
+  return Promise.all(calls.map(({method, params}) => send(tabId, method, params).then(result => ({result}), error => ({error: error.message}))));
 }
 
 async function closeOpened(tabId) {

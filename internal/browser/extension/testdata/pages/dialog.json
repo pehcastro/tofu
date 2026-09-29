@@ -1,0 +1,14 @@
+{
+  "url": "https://stays.test/",
+  "title": "Stays",
+  "loader": "L1",
+  "nodes": [
+    {"id": 1, "role": "RootWebArea", "name": "Stays", "children": [10]},
+    {"id": 10, "role": "dialog", "name": "Filtros", "children": [11, 12, 20], "box": [100, 50, 400, 500], "scrollable": 900},
+    {"id": 11, "role": "StaticText", "name": "Quartos", "box": [110, 520, 100, 30], "in": 10},
+    {"id": 12, "role": "button", "name": "+", "children": [13], "box": [400, 520, 30, 30], "in": 10, "fires": "rooms +1"},
+    {"id": 13, "role": "generic", "box": [405, 525, 20, 20], "in": 10},
+    {"id": 20, "role": "contentinfo", "children": [21], "box": [100, 500, 400, 50], "z": 1},
+    {"id": 21, "role": "button", "name": "Mostrar 1.000 lugares", "box": [300, 505, 190, 40], "z": 1, "fires": "show"}
+  ]
+}

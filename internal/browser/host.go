@@ -268,8 +268,13 @@ func (r *relay) admit(s *session, req request) (status, error) {
 			return "", fmt.Errorf("tab %d is the person's: tofu closes only tabs it opened", req.Tab)
 		}
 		return r.shown, nil
+	case opBack:
+		if !r.tabs[req.Tab].Opened {
+			return "", fmt.Errorf("tab %d is the person's: tofu navigates only tabs it opened", req.Tab)
+		}
+		return r.shown, nil
 	}
-	now, err := opStatus(req.Op)
+	now, err := opStatus(req)
 	if err != nil {
 		return "", err
 	}

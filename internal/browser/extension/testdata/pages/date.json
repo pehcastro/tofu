@@ -1,0 +1,14 @@
+{
+  "url": "https://stays.test/",
+  "title": "Stays",
+  "loader": "L1",
+  "nodes": [
+    {"id": 1, "role": "RootWebArea", "name": "Stays", "children": [2]},
+    {"id": 2, "role": "generic", "children": [3, 5, 7], "box": [0, 0, 800, 600]},
+    {"id": 3, "role": "generic", "children": [4], "box": [10, 10, 40, 40], "cursor": true, "text": "11", "fires": "day 11"},
+    {"id": 4, "role": "StaticText", "name": "11"},
+    {"id": 5, "role": "generic", "children": [6], "box": [60, 10, 40, 40], "cursor": true, "text": "12", "fires": "day 12"},
+    {"id": 6, "role": "StaticText", "name": "12"},
+    {"id": 7, "role": "heading", "name": "Setembro 2026", "box": [10, 60, 200, 20]}
+  ]
+}

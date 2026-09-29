@@ -7,7 +7,9 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -281,6 +283,408 @@ func TestACoveredTargetStopsBlockedAfterThreeDecisions(t *testing.T) {
 	if result.Status != jevloop.StatusBlocked || result.Decisions != 3 || !strings.Contains(result.Reason, "covered") {
 		t.Fatalf("stopped %v after %d decisions with %q, want blocked after 3 naming covered", result.Status, result.Decisions, result.Reason)
 	}
+}
+
+type fakeNode struct {
+	ID         int       `json:"id"`
+	Role       string    `json:"role"`
+	Name       string    `json:"name"`
+	Children   []int     `json:"children"`
+	Box        []float64 `json:"box"`
+	In         int       `json:"in"`
+	Z          int       `json:"z"`
+	Cursor     bool      `json:"cursor"`
+	Text       string    `json:"text"`
+	Scrollable float64   `json:"scrollable"`
+	Fires      string    `json:"fires"`
+	Opens      int       `json:"opens"`
+}
+
+type fakePage struct {
+	mu       sync.Mutex
+	URL      string      `json:"url"`
+	Title    string      `json:"title"`
+	Loader   string      `json:"loader"`
+	Nodes    []*fakeNode `json:"nodes"`
+	scrolled map[int]float64
+	tagged   []int
+	fired    []string
+	methods  []string
+}
+
+func loadPage(t *testing.T, name string) *fakePage {
+	t.Helper()
+	raw, err := os.ReadFile("extension/testdata/pages/" + name + ".json")
+	page := &fakePage{scrolled: map[int]float64{}}
+	if err == nil {
+		err = json.Unmarshal(raw, page)
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	return page
+}
+
+func (p *fakePage) node(id int) *fakeNode {
+	for _, n := range p.Nodes {
+		if n.ID == id {
+			return n
+		}
+	}
+	return nil
+}
+
+func (p *fakePage) parent(id int) *fakeNode {
+	for _, n := range p.Nodes {
+		if slices.Contains(n.Children, id) {
+			return n
+		}
+	}
+	return nil
+}
+
+func (p *fakePage) related(a, b *fakeNode) bool {
+	for _, pair := range [][2]*fakeNode{{a, b}, {b, a}} {
+		for n := pair[0]; n != nil; n = p.parent(n.ID) {
+			if n == pair[1] {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func (p *fakePage) rect(n *fakeNode) (x, top, w, bottom float64) {
+	x, top, w, bottom = n.Box[0], n.Box[1], n.Box[2], n.Box[1]+n.Box[3]
+	if container := p.node(n.In); container != nil {
+		top, bottom = top-p.scrolled[n.In], bottom-p.scrolled[n.In]
+		top, bottom = max(top, container.Box[1]), min(bottom, container.Box[1]+container.Box[3])
+	}
+	return x, top, w, bottom
+}
+
+func (p *fakePage) hit(x, y float64) *fakeNode {
+	var hit *fakeNode
+	for _, n := range p.Nodes {
+		if len(n.Box) != 4 {
+			continue
+		}
+		left, top, w, bottom := p.rect(n)
+		if x >= left && x <= left+w && y >= top && y <= bottom && (hit == nil || n.Z >= hit.Z) {
+			hit = n
+		}
+	}
+	return hit
+}
+
+func (p *fakePage) rerender() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	for _, n := range p.Nodes {
+		n.ID += 100
+		for i := range n.Children {
+			n.Children[i] += 100
+		}
+	}
+}
+
+func (p *fakePage) axNode(n *fakeNode) map[string]any {
+	ids := []string{}
+	for _, child := range n.Children {
+		ids = append(ids, strconv.Itoa(child))
+	}
+	return map[string]any{"nodeId": strconv.Itoa(n.ID), "ignored": false, "backendDOMNodeId": n.ID, "childIds": ids,
+		"role": map[string]any{"type": "role", "value": n.Role}, "name": map[string]any{"type": "computedString", "value": n.Name}}
+}
+
+func (p *fakePage) byObject(params map[string]any) *fakeNode {
+	id, _ := strconv.Atoi(strings.TrimPrefix(fmt.Sprint(params["objectId"]), "node-"))
+	return p.node(id)
+}
+
+func (p *fakePage) byBackend(params map[string]any) (*fakeNode, error) {
+	backend, _ := params["backendNodeId"].(float64)
+	if n := p.node(int(backend)); n != nil {
+		return n, nil
+	}
+	return nil, fmt.Errorf("No node with given id found")
+}
+
+func value(v any) map[string]any {
+	return map[string]any{"result": map[string]any{"type": "object", "value": v}}
+}
+
+func (p *fakePage) cdp(method string, params map[string]any, opened func(int)) (any, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.methods = append(p.methods, method)
+	script := fmt.Sprint(params["expression"], params["functionDeclaration"])
+	switch method {
+	case "Page.getFrameTree":
+		return map[string]any{"frameTree": map[string]any{"frame": map[string]any{"id": "main", "loaderId": p.Loader, "url": p.URL}}}, nil
+	case "Accessibility.getFullAXTree":
+		nodes := []any{}
+		for _, n := range p.Nodes {
+			nodes = append(nodes, p.axNode(n))
+		}
+		return map[string]any{"nodes": nodes}, nil
+	case "Accessibility.getPartialAXTree":
+		return map[string]any{"nodes": []any{p.axNode(p.byObject(params))}}, nil
+	case "DOM.getDocument":
+		return map[string]any{"root": map[string]any{"nodeId": 1000}}, nil
+	case "DOM.querySelectorAll":
+		ids := []int{}
+		for _, id := range p.tagged {
+			ids = append(ids, id+1000)
+		}
+		return map[string]any{"nodeIds": ids}, nil
+	case "DOM.describeNode":
+		id, _ := params["nodeId"].(float64)
+		index := slices.Index(p.tagged, int(id)-1000)
+		return map[string]any{"node": map[string]any{"backendNodeId": int(id) - 1000, "attributes": []string{"data-tofu-ci", strconv.Itoa(index)}}}, nil
+	case "DOM.scrollIntoViewIfNeeded", "DOM.getBoxModel", "DOM.resolveNode":
+		n, err := p.byBackend(params)
+		if err != nil {
+			return nil, err
+		}
+		if method == "DOM.resolveNode" {
+			return map[string]any{"object": map[string]any{"objectId": "node-" + strconv.Itoa(n.ID)}}, nil
+		}
+		if _, top, _, bottom := p.rect(n); method == "DOM.scrollIntoViewIfNeeded" && n.In != 0 && bottom <= top {
+			p.scrolled[n.In] = n.Box[1] - p.node(n.In).Box[1]
+		}
+		if method == "DOM.scrollIntoViewIfNeeded" {
+			return map[string]any{}, nil
+		}
+		x, y := n.Box[0], n.Box[1]-p.scrolled[n.In]
+		w, h := n.Box[2], n.Box[3]
+		return map[string]any{"model": map[string]any{"content": []float64{x, y, x + w, y, x + w, y + h, x, y + h}}}, nil
+	case "Runtime.evaluate":
+		switch {
+		case strings.Contains(script, "querySelectorAll('*')"):
+			found := []any{}
+			p.tagged = nil
+			for _, n := range p.Nodes {
+				if n.Cursor || n.Scrollable > 0 {
+					p.tagged = append(p.tagged, n.ID)
+					found = append(found, map[string]any{"text": n.Text, "hasCursorPointer": n.Cursor, "isScrollable": n.Scrollable > 0})
+				}
+			}
+			return value(found), nil
+		case strings.Contains(script, "removeAttribute"):
+			return value(len(p.tagged)), nil
+		case strings.Contains(script, "getEntriesByType"):
+			return value(map[string]any{"pending": 0, "loading": false}), nil
+		case strings.Contains(script, "innerText"):
+			return value(map[string]any{"url": p.URL, "count": len(p.Nodes), "text": strings.Join(p.fired, ",")}), nil
+		}
+	case "Runtime.callFunctionOn":
+		target := p.byObject(params)
+		args, _ := params["arguments"].([]any)
+		number := func(i int) float64 { return args[i].(map[string]any)["value"].(float64) }
+		switch {
+		case strings.Contains(script, "elementFromPoint"):
+			if hit := p.hit(number(0), number(1)); hit != nil && !p.related(hit, target) {
+				return map[string]any{"result": map[string]any{"type": "object", "objectId": "node-" + strconv.Itoa(hit.ID)}}, nil
+			}
+			return map[string]any{"result": map[string]any{"type": "object", "subtype": "null", "value": nil}}, nil
+		case strings.Contains(script, "scrollBy"):
+			p.scrolled[target.ID] = min(max(p.scrolled[target.ID]+number(1), 0), target.Scrollable-target.Box[3])
+			return value(nil), nil
+		}
+	case "Input.dispatchMouseEvent":
+		if params["type"] != "mouseReleased" {
+			return map[string]any{}, nil
+		}
+		for n := p.hit(params["x"].(float64), params["y"].(float64)); n != nil; n = p.parent(n.ID) {
+			if n.Fires != "" {
+				p.fired = append(p.fired, n.Fires)
+				if n.Opens != 0 {
+					opened(n.Opens)
+				}
+				break
+			}
+		}
+		return map[string]any{}, nil
+	}
+	return nil, fmt.Errorf("the fake page has no %s for %.60s", method, script)
+}
+
+func (p *fakePage) sawFired(t *testing.T, want ...string) {
+	t.Helper()
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if !slices.Equal(p.fired, want) {
+		t.Fatalf("the page fired %q; want %q", p.fired, want)
+	}
+}
+
+func drivenPage(t *testing.T, name string) (*browser.Driver, *fakePage) {
+	t.Helper()
+	page := loadPage(t, name)
+	home, err := os.MkdirTemp("", "tb")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(home) })
+	manifest := filepath.Join(filepath.Dir(browser.ExtensionDir(home)), browser.HostName+".json")
+	if err := os.MkdirAll(filepath.Dir(manifest), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(manifest, []byte(`{"allowed_origins":["`+fakeOrigin+`"]}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	toHostR, toHostW := io.Pipe()
+	fromHostR, fromHostW := io.Pipe()
+	go func() {
+		_ = browser.Host(fakeOrigin, toHostR, fromHostW, home)
+		_ = fromHostW.Close()
+	}()
+	t.Cleanup(func() {
+		_ = toHostW.Close()
+		_ = fromHostR.Close()
+	})
+	if err := browser.WriteMessage(toHostW, []byte(`{"t":"hello","version":2,"tabs":[{"id":7,"url":"https://stays.test/","title":"Stays"}]}`)); err != nil {
+		t.Fatal(err)
+	}
+	go func() {
+		opened := func(tab int) {
+			_ = browser.WriteMessage(toHostW, fmt.Appendf(nil, `{"t":"tabUpdated","tab":{"id":%d,"url":"https://stays.test/listing","title":"Listing"}}`, tab))
+		}
+		for {
+			raw, err := browser.ReadMessage(fromHostR)
+			if err != nil {
+				return
+			}
+			var call struct {
+				T    string `json:"t"`
+				ID   int64  `json:"id"`
+				Op   string `json:"op"`
+				Args struct {
+					Calls []struct {
+						Method string         `json:"method"`
+						Params map[string]any `json:"params"`
+					} `json:"calls"`
+				} `json:"args"`
+			}
+			if json.Unmarshal(raw, &call) != nil || call.T != "call" {
+				continue
+			}
+			answers := []any{}
+			for _, command := range call.Args.Calls {
+				result, err := page.cdp(command.Method, command.Params, opened)
+				if err != nil {
+					answers = append(answers, map[string]any{"error": err.Error()})
+					continue
+				}
+				answers = append(answers, map[string]any{"result": result})
+			}
+			answer, _ := json.Marshal(map[string]any{"t": "result", "id": call.ID, "ok": call.Op == "cdp", "value": answers, "error": "the fake page speaks only cdp"})
+			if browser.WriteMessage(toHostW, answer) != nil {
+				return
+			}
+		}
+	}()
+	client, err := browser.Dial(home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = client.Close() })
+	for deadline := time.Now().Add(5 * time.Second); ; time.Sleep(time.Millisecond) {
+		if tabs, err := client.Tabs(); err == nil && len(tabs) == 1 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the host never listed tab 7")
+		}
+	}
+	return &browser.Driver{Client: client, Tab: 7}, page
+}
+
+func refOf(t *testing.T, snapshot, role, name string) string {
+	t.Helper()
+	match := regexp.MustCompile(`(?m)^\s*[-*] ` + regexp.QuoteMeta(role) + ` "` + regexp.QuoteMeta(name) + `" \[(?:[^\]]*, )?ref=(e\d+)`).FindStringSubmatch(snapshot)
+	if match == nil {
+		t.Fatalf("no %s %q with a ref in\n%s", role, name, snapshot)
+	}
+	return match[1]
+}
+
+func observe(t *testing.T, driver *browser.Driver, interactive bool) string {
+	t.Helper()
+	snapshot, err := driver.Observe(interactive)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("observed\n%s", snapshot)
+	return snapshot
+}
+
+func TestADivWithOnlyAPointerCursorHasARefAndItsClickFires(t *testing.T) {
+	driver, page := drivenPage(t, "date")
+	snapshot := observe(t, driver, true)
+	if !strings.Contains(snapshot, "tab 7") || !strings.Contains(snapshot, "https://stays.test/") || strings.Contains(snapshot, "StaticText") {
+		t.Fatalf("the interactive snapshot has no header or carries plain text:\n%s", snapshot)
+	}
+	moved, err := driver.Do(browser.Move{Ref: refOf(t, snapshot, "generic", "12"), Kind: browser.MoveClick})
+	if err != nil || moved.Covered != "" {
+		t.Fatalf("the click on day 12 returned %+v, %v", moved, err)
+	}
+	page.sawFired(t, "day 12")
+	if !moved.PageChanged || moved.URLChanged || moved.Opened != 0 {
+		t.Fatalf("the click reported %+v; want the page changed and nothing else", moved)
+	}
+}
+
+func TestAStickyFooterCoversThePlusUntilTheDialogScrolls(t *testing.T) {
+	driver, page := drivenPage(t, "dialog")
+	snapshot := observe(t, driver, false)
+	plus, dialog := refOf(t, snapshot, "button", "+"), refOf(t, snapshot, "dialog", "Filtros")
+	if !regexp.MustCompile(`dialog "Filtros" \[ref=` + dialog + `\].* scrollable`).MatchString(snapshot) {
+		t.Fatalf("the dialog is not marked scrollable:\n%s", snapshot)
+	}
+
+	moved, err := driver.Do(browser.Move{Ref: plus, Kind: browser.MoveClick})
+	if err != nil || moved.Covered != `button "Mostrar 1.000 lugares"` {
+		t.Fatalf("the first click on + returned %+v, %v; want covered by the footer button", moved, err)
+	}
+	page.sawFired(t)
+	if _, err := driver.Do(browser.Move{Ref: dialog, Kind: browser.MoveScroll, Value: "down"}); err != nil {
+		t.Fatal(err)
+	}
+	moved, err = driver.Do(browser.Move{Ref: plus, Kind: browser.MoveClick})
+	if err != nil || moved.Covered != "" {
+		t.Fatalf("the click on + after the dialog scrolled returned %+v, %v", moved, err)
+	}
+	page.sawFired(t, "rooms +1")
+}
+
+func TestARefTakenBeforeAReRenderClicksTheSameNthElement(t *testing.T) {
+	driver, page := drivenPage(t, "rerender")
+	snapshot := observe(t, driver, true)
+	refs := regexp.MustCompile(`button "Adicionar" \[[^\]]*ref=(e\d+)`).FindAllStringSubmatch(snapshot, -1)
+	if len(refs) != 3 {
+		t.Fatalf("want three Adicionar refs in\n%s", snapshot)
+	}
+	page.rerender()
+	if moved, err := driver.Do(browser.Move{Ref: refs[1][1], Kind: browser.MoveClick}); err != nil || moved.Covered != "" {
+		t.Fatalf("the click on the second Adicionar after a re-render returned %+v, %v", moved, err)
+	}
+	page.sawFired(t, "add 2")
+	again := observe(t, driver, true)
+	if again == snapshot || strings.Contains(again, "* button") == false {
+		t.Fatalf("after a re-render in the same document the new nodes are not marked new:\n%s", again)
+	}
+}
+
+func TestAClickThatOpensATabReturnsItAndDrivesItNext(t *testing.T) {
+	driver, page := drivenPage(t, "newtab")
+	snapshot := observe(t, driver, true)
+	moved, err := driver.Do(browser.Move{Ref: refOf(t, snapshot, "link", "Casa em Lisboa"), Kind: browser.MoveClick})
+	if err != nil || moved.Opened != 21 || driver.Tab != 21 {
+		t.Fatalf("the click returned %+v, %v, and the driver is on tab %d; want tab 21 opened and driven", moved, err, driver.Tab)
+	}
+	page.sawFired(t, "listing")
 }
 
 func TestAPageWhoseFingerprintAlwaysMovesStillClicksOnceAndIsDone(t *testing.T) {
