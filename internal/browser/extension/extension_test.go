@@ -243,6 +243,33 @@ func TestBackgroundInAStubbedChromeAttachesOnFirstUseGroupsAndRestores(t *testin
 	}
 }
 
+func TestTheCursorMovesBeforeTheClickOnlyWhenTheRelaySaysSoAndLeavesWithTofu(t *testing.T) {
+	run := inStubbedChrome(t, "cursor")
+	var order []string
+	for _, entry := range run.Heard {
+		switch {
+		case entry[0] == "cursor":
+			order = append(order, "cursor "+entry[2].(string))
+		case entry[0] == "input" && entry[2] == "Input.dispatchMouseEvent":
+			order = append(order, "mouse")
+		}
+	}
+	t.Logf("heard %v", order)
+	want := []string{"mouse", "mouse", "mouse", "cursor move", "mouse", "mouse", "mouse", "mouse", "mouse", "mouse", "cursor remove", "cursor remove"}
+	if !slices.Equal(order, want) {
+		t.Fatalf("heard %v, want %v: no cursor in the person's tab 9, the cursor before the click in tofu's tab 20, none when the call carries no cursor, and removed from both when tofu leaves", order, want)
+	}
+	background := shipped(t, "background.js")
+	for _, must := range []string{"pointer-events: none", "aria-hidden", "mode: 'closed'", "2147483647"} {
+		if !strings.Contains(background, must) {
+			t.Errorf("the cursor overlay lacks %q", must)
+		}
+	}
+	if strings.Contains(background, "await moveCursor") {
+		t.Error("the act waits for the cursor")
+	}
+}
+
 func TestEveryAttachTurnsOnFocusEmulationSoABackgroundTabTakesClicks(t *testing.T) {
 	run := inStubbedChrome(t, "groups")
 	var focus []float64

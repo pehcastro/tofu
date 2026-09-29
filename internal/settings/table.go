@@ -75,6 +75,7 @@ const (
 	BrowserSteps           = "browserSteps"
 	BrowserModel           = "browserModel"
 	BrowserEffort          = "browserEffort"
+	BrowserCursor          = "browserCursor"
 )
 
 const (
@@ -261,6 +262,7 @@ func Default() []Spec {
 		{Key: BrowserModel, Label: "Browser model", Description: "the subscription model a browser task asks for the text to type and for its answer, as source/model; empty takes the dumb tier, then the worker tier, then the turn's own model", Category: "Browser", Kind: Text},
 		{Key: BrowserEffort, Label: "Browser effort", Description: "the effort the browser sub-agent runs at, when its model lists it; empty runs it at the model's own default, the lowest it lists at or above low", Category: "Browser", Kind: Text,
 			Choices: []string{"", "low", "medium", "high", "xhigh", "max"}},
+		{Key: BrowserCursor, Label: "Browser cursor", Description: "a small cursor labelled tofu glides to each click in tofu's own tab, so you can see where it acts; it is drawn only, and never changes what tofu reads or clicks; read when Chrome starts the relay", Category: "Browser", Kind: Bool, Default: 1},
 	}
 	for i := range specs {
 		specs[i].Group = specs[i].Category

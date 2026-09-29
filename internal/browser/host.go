@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"tofu/internal/konst"
+	"tofu/internal/settings"
 	"tofu/internal/sys"
 )
 
@@ -49,6 +50,7 @@ type relay struct {
 	builds       Builds
 	restart      chan struct{}
 	installed    func() (string, error)
+	cursor       bool
 }
 
 func Host(origin string, stdin io.Reader, stdout io.Writer, home string) error {
@@ -75,6 +77,14 @@ func installedBuild(exe string) (string, error) {
 		err = fmt.Errorf("%s browser build printed no build", exe)
 	}
 	return envelope.Data.Build, err
+}
+
+func cursorOn(home string) bool {
+	store, err := settings.Open(filepath.Join(sys.StateDir(home), settings.FileName), "")
+	if err != nil {
+		return settings.DeclaredDefault(settings.BrowserCursor) != 0
+	}
+	return store.Bool(settings.BrowserCursor)
 }
 
 func host(origin string, stdin io.Reader, stdout io.Writer, home, tofu string, installed func(exe string) (string, error)) error {
@@ -107,7 +117,7 @@ func host(origin string, stdin io.Reader, stdout io.Writer, home, tofu string, i
 		return err
 	}
 	r := &relay{extension: stdout, tabs: map[int]Tab{}, claims: map[int]*session{}, pending: map[int64]route{}, sessions: map[*session]bool{}, shown: statusIdle, extensionDir: extensionDir, builds: Builds{Tofu: tofu}, restart: make(chan struct{}, 1),
-		installed: func() (string, error) { return installed(installedHost.Path) }}
+		installed: func() (string, error) { return installed(installedHost.Path) }, cursor: cursorOn(home)}
 	r.idle = time.AfterFunc(idleAfter, func() {
 		r.mu.Lock()
 		defer r.mu.Unlock()
@@ -357,7 +367,7 @@ func (r *relay) forward(s *session, req request) error {
 	r.show(now)
 	r.lastID++
 	sent := time.Now()
-	if err := r.tell(toExtension{T: messageCall, ID: r.lastID, TabID: req.Tab, Op: req.Op, Args: req.Args}); err != nil {
+	if err := r.tell(toExtension{T: messageCall, ID: r.lastID, TabID: req.Tab, Op: req.Op, Args: req.Args, Cursor: r.cursor && req.Op == opCDP}); err != nil {
 		return err
 	}
 	r.pending[r.lastID] = route{s, req.ID, sent}

@@ -14,6 +14,9 @@ const IN_PAGE_ACTS = ['scroll', 'select'];
 const DIRECTIONS = ['up', 'down'];
 const OPENABLE_PROTOCOLS = ['http:', 'https:', 'file:'];
 const SELECT_ALL_MODIFIER = navigator.userAgent.includes('Mac') ? 4 : 2;
+const CURSOR_GLIDE_MS = 150;
+const CURSOR_RING_MS = 250;
+const CURSOR_IDLE_MS = 3000;
 const NO_GROUP = -1;
 const GROUP_COLOR = 'orange';
 const BADGES = {
@@ -70,7 +73,10 @@ async function connect() {
     port = null;
     void show('off');
     serially(restoreGroups);
-    for (const [tabId, attaching] of attached) attaching.then(() => chrome.debugger.detach({tabId})).catch(() => {});
+    for (const [tabId, attaching] of attached) {
+      attaching.then(() => send(tabId, 'Runtime.evaluate', {expression: `(${removeCursor})()`}).catch(() => {}))
+        .then(() => chrome.debugger.detach({tabId})).catch(() => {});
+    }
     attached.clear();
     setTimeout(connect, reconnectDelay);
     reconnectDelay = Math.min(reconnectDelay * 2, RECONNECT_MAX_MS);
@@ -93,10 +99,10 @@ async function show(state) {
   await chrome.action.setTitle({title: state === 'off' ? `tofu is not connected: ${hostError}` : `tofu is ${state}`});
 }
 
-async function answer({id, tabId, op, args}) {
+async function answer({id, tabId, op, args, cursor}) {
   const timing = {evaluate_ms: 0, settle_ms: 0, act_ms: 0};
   try {
-    post({t: 'result', id, ok: true, value: await perform(tabId, op, args ?? {}, timing), timing});
+    post({t: 'result', id, ok: true, value: await perform(tabId, op, args ?? {}, timing, cursor), timing});
   } catch (error) {
     post({t: 'result', id, ok: false, error: error.message, timing});
   }
@@ -111,13 +117,13 @@ async function timed(timing, phase, work) {
   }
 }
 
-async function perform(tabId, op, args, timing) {
+async function perform(tabId, op, args, timing, cursor) {
   const url = String(args.url ?? '');
   if (op === 'open') return openTab(url);
   if (op === 'navigate') return navigateOpened(tabId, url);
   if (op === 'close') return closeOpened(tabId);
   if (op === 'back') return goBack(tabId);
-  if (op === 'cdp') return relay(tabId, args);
+  if (op === 'cdp') return relay(tabId, args, cursor);
   if (op !== 'snapshot' && !DRIVE_OPS.includes(op)) throw new Error(`unknown op ${op}`);
   if (op === 'scroll' && !DIRECTIONS.includes(args.direction)) throw new Error(`no scroll direction ${args.direction}`);
   await attach(tabId);
@@ -233,10 +239,48 @@ async function goBack(tabId) {
   return tabId;
 }
 
-async function relay(tabId, {calls, act}) {
+async function relay(tabId, {calls, act}, cursor) {
   await attach(tabId);
   if (act && !grouped.has(tabId)) serially(() => groupTab(tabId));
+  const click = calls.find(({method}) => method === 'Input.dispatchMouseEvent');
+  if (cursor && click && opened.has(tabId)) {
+    const {x, y} = click.params;
+    send(tabId, 'Runtime.evaluate', {expression: `(${paintCursor})(${x}, ${y}, ${CURSOR_GLIDE_MS}, ${CURSOR_RING_MS}, ${CURSOR_IDLE_MS})`}).catch(() => {});
+  }
   return Promise.all(calls.map(({method, params}) => send(tabId, method, params).then(result => ({result}), error => ({error: error.message}))));
+}
+
+function paintCursor(x, y, glideMs, ringMs, idleMs) {
+  let host = document.querySelector('[data-tofu-cursor]');
+  if (!host) {
+    host = document.createElement('div');
+    host.setAttribute('data-tofu-cursor', '');
+    host.setAttribute('aria-hidden', 'true');
+    host.style.cssText = 'position: fixed; left: 0; top: 0; z-index: 2147483647; pointer-events: none;';
+    host.tofu = host.attachShadow({mode: 'closed'});
+    host.tofu.innerHTML = `<style>
+      .c { position: fixed; left: 0; top: 0; display: flex; gap: 2px; pointer-events: none; transition: transform ${glideMs}ms ease-out, opacity 400ms ease-out; }
+      .c span { margin-top: 10px; padding: 1px 5px; border-radius: 6px; background: rgba(38, 38, 38, 0.7); color: #fff; font: 500 10px/14px system-ui, sans-serif; }
+      .r { position: fixed; left: -8px; top: -8px; width: 16px; height: 16px; box-sizing: border-box; border-radius: 50%; border: 1px solid rgba(38, 38, 38, 0.3); opacity: 0; pointer-events: none; }
+      .r.on { animation: ring ${ringMs}ms ease-out ${glideMs}ms both; }
+      @keyframes ring { from { opacity: 0.3; transform: scale(0.5); } to { opacity: 0; transform: scale(1); } }
+    </style><div class="c"><svg width="11" height="12" viewBox="0 0 11 12"><path d="M1 1v9l2.6-2.2 1.8 3.7 1.4-.7-1.8-3.6h3.4z" fill="#262626" stroke="#fff" stroke-width=".8"/></svg><span>tofu</span></div><i class="r"></i>`;
+    document.documentElement.append(host);
+  }
+  const cursor = host.tofu.querySelector('.c'), ring = host.tofu.querySelector('.r');
+  cursor.style.opacity = '1';
+  cursor.style.transform = `translate(${x}px, ${y}px)`;
+  ring.style.translate = `${x}px ${y}px`;
+  ring.classList.remove('on');
+  void ring.offsetWidth;
+  ring.classList.add('on');
+  clearTimeout(host.fade);
+  host.fade = setTimeout(() => { cursor.style.opacity = '0'; }, idleMs);
+}
+
+function removeCursor() {
+  document.querySelector('[data-tofu-cursor]')?.remove();
+  return 'tofu-cursor-remove';
 }
 
 async function closeOpened(tabId) {

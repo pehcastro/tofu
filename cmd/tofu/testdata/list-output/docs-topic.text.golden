@@ -223,4 +223,9 @@ Browser
       one of , low, medium, high, xhigh, max
       the effort the browser sub-agent runs at, when its model lists it; empty
       runs it at the model's own default, the lowest it lists at or above low
+    browserCursor           true
+      true or false
+      a small cursor labelled tofu glides to each click in tofu's own tab, so
+      you can see where it acts; it is drawn only, and never changes what tofu
+      reads or clicks; read when Chrome starts the relay
 --- stderr

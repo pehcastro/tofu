@@ -509,6 +509,27 @@ func TestStaleSocketIsNotConnectedAndIsReplaced(t *testing.T) {
 	}
 }
 
+func TestTheCursorSettingRidesOnEveryCDPCallAndOffSendsNone(t *testing.T) {
+	for setting, want := range map[string]bool{"": true, `{"browserCursor": 0}`: false} {
+		home := shortHome(t)
+		installFor(t, home, testOrigin)
+		if setting != "" {
+			if err := os.WriteFile(filepath.Join(home, ".tofu", "settings.json"), []byte(setting), 0o600); err != nil {
+				t.Fatal(err)
+			}
+		}
+		ext, _ := startHost(t, home)
+		ext.send(`{"t":"hello","version":2,"tabs":[{"id":7,"url":"https://a.test/","title":"A"}]}`)
+		sent := callAsync(dial(t, home), 7, opCDP, json.RawMessage(`{"calls":[{"method":"Input.dispatchMouseEvent","params":{"type":"mousePressed","x":5,"y":5}}],"act":true}`))
+		call := ext.call()
+		ext.answer(call.ID, `"ok":true,"value":[{"result":{}}]`)
+		<-sent
+		if call.Cursor != want {
+			t.Fatalf("with the settings file %q the call carried cursor = %v, want %v", setting, call.Cursor, want)
+		}
+	}
+}
+
 func TestTheFocusEmulationCallsPassTheRelay(t *testing.T) {
 	home := shortHome(t)
 	installFor(t, home, testOrigin)

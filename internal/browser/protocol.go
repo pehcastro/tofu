@@ -61,12 +61,13 @@ const (
 )
 
 type toExtension struct {
-	T     messageType     `json:"t"`
-	ID    int64           `json:"id,omitempty"`
-	TabID int             `json:"tabId,omitempty"`
-	Op    string          `json:"op,omitempty"`
-	Args  json.RawMessage `json:"args,omitempty"`
-	State status          `json:"state,omitempty"`
+	Cursor bool            `json:"cursor,omitempty"`
+	T      messageType     `json:"t"`
+	ID     int64           `json:"id,omitempty"`
+	TabID  int             `json:"tabId,omitempty"`
+	Op     string          `json:"op,omitempty"`
+	Args   json.RawMessage `json:"args,omitempty"`
+	State  status          `json:"state,omitempty"`
 }
 
 type Timing struct {

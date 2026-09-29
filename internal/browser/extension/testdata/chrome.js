@@ -37,6 +37,10 @@ const chrome = {
     attach: async ({tabId}) => note('attach', tabId),
     detach: async ({tabId}) => note('detach', tabId),
     sendCommand: async ({tabId}, method, params) => {
+      if (method === 'Runtime.evaluate' && params.expression.includes('data-tofu-cursor')) {
+        note('cursor', tabId, params.expression.includes('tofu-cursor-remove') ? 'remove' : 'move');
+        return {};
+      }
       if (method !== 'Runtime.evaluate') {
         note('input', tabId, method);
         if (tabId === 20 && params.type === 'mouseReleased') {
@@ -134,6 +138,19 @@ const scenarios = {groups: async () => {
   call(7, 9, 'click', {element: 1});
   await quiet();
   return {grouped, restored};
+}, cursor: async () => {
+  const clicks = [['mouseMoved', 'none'], ['mousePressed', 'left'], ['mouseReleased', 'left']].map(([type, button]) => ({method: 'Input.dispatchMouseEvent', params: {type, x: 40, y: 60, button}}));
+  listeners.message({t: 'call', id: 1, tabId: 9, op: 'cdp', args: {calls: clicks, act: true}, cursor: true});
+  await quiet();
+  call(2, 0, 'open', {url: 'https://stays.test/new'});
+  await quiet();
+  listeners.message({t: 'call', id: 3, tabId: 20, op: 'cdp', args: {calls: clicks, act: true}, cursor: true});
+  await quiet();
+  listeners.message({t: 'call', id: 4, tabId: 20, op: 'cdp', args: {calls: clicks, act: true}});
+  await quiet();
+  listeners.disconnect();
+  await quiet();
+  return {};
 }, open: async () => {
   call(1, 0, 'open', {url: 'https://stays.test/new'});
   await quiet();

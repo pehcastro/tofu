@@ -242,6 +242,12 @@ exit 0
         "category": "Browser",
         "value": "",
         "source": "default"
+      },
+      {
+        "key": "browserCursor",
+        "category": "Browser",
+        "value": true,
+        "source": "default"
       }
     ]
   },

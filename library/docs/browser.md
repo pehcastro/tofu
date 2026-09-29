@@ -86,6 +86,8 @@ The settings:
   on, as `source/model`, any model you have. Empty takes `modelTier.dumb`,
   then `modelTier.worker`, then the turn's own model. `browserEffort` sets
   its effort when the model lists it; empty is the model's default.
+- `browserCursor`, on by default: a small cursor labelled `tofu` glides to
+  each click in tofu's own tab. It is drawn only, and never read or hit.
 
     tofu settings set browserModel claude-sub/claude-sonnet-5
 

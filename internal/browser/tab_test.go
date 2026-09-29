@@ -304,6 +304,8 @@ type fakeNode struct {
 	Hidden     bool      `json:"hidden"`
 	Toggles    int       `json:"toggles"`
 	OpensURL   string    `json:"opensURL"`
+	Ignored    bool      `json:"ignored"`
+	Passive    bool      `json:"passive"`
 }
 
 type fakePage struct {
@@ -393,7 +395,7 @@ func (p *fakePage) href(n *fakeNode) string {
 func (p *fakePage) hit(x, y float64) *fakeNode {
 	var hit *fakeNode
 	for _, n := range p.Nodes {
-		if len(n.Box) != 4 || !p.shown(n) {
+		if len(n.Box) != 4 || !p.shown(n) || n.Passive {
 			continue
 		}
 		left, top, w, bottom := p.rect(n)
@@ -420,7 +422,7 @@ func (p *fakePage) axNode(n *fakeNode) map[string]any {
 	for _, child := range n.Children {
 		ids = append(ids, strconv.Itoa(child))
 	}
-	node := map[string]any{"nodeId": strconv.Itoa(n.ID), "ignored": false, "backendDOMNodeId": n.ID, "childIds": ids,
+	node := map[string]any{"nodeId": strconv.Itoa(n.ID), "ignored": n.Ignored, "backendDOMNodeId": n.ID, "childIds": ids,
 		"role": map[string]any{"type": "role", "value": n.Role}, "name": map[string]any{"type": "computedString", "value": n.Name},
 		"properties": []any{map[string]any{"name": "modal", "value": map[string]any{"type": "boolean", "value": n.Modal}}}}
 	if parent := p.parent(n.ID); parent != nil {
@@ -874,6 +876,28 @@ func TestAClickTheBackgroundTabIgnoresFallsBackToTheElementsOwnClick(t *testing.
 		t.Fatalf("an Enter the page ignored returned %+v, %v; want the form submitted", moved, err)
 	}
 	page.sawFired(t, "iana", "submit")
+}
+
+func TestTheCursorOverlayChangesNoSnapshotAndNoHitTest(t *testing.T) {
+	var snapshots []string
+	for _, overlay := range []bool{true, false} {
+		driver, page := drivenPage(t, "cursor")
+		if !overlay {
+			page.Nodes = page.Nodes[:len(page.Nodes)-1]
+			page.Nodes[0].Children = page.Nodes[0].Children[:2]
+		}
+		for _, interactive := range []bool{true, false} {
+			snapshots = append(snapshots, observe(t, driver, interactive))
+		}
+		moved, err := driver.Do(browser.Move{Ref: refOf(t, snapshots[len(snapshots)-2], "button", "Buscar"), Kind: browser.MoveClick})
+		if err != nil || moved.Covered != "" || moved.Via != "" {
+			t.Fatalf("with the overlay %v the click returned %+v, %v; want it to land by the mouse", overlay, moved, err)
+		}
+		page.sawFired(t, "search")
+	}
+	if snapshots[0] != snapshots[2] || snapshots[1] != snapshots[3] || strings.Contains(snapshots[1], "tofu") {
+		t.Fatalf("the overlay changed the snapshot:\nwith\n%s\nwithout\n%s", snapshots[1], snapshots[3])
+	}
 }
 
 func TestAPageWhoseFingerprintAlwaysMovesStillClicksOnceAndIsDone(t *testing.T) {
