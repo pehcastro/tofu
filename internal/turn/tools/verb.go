@@ -169,7 +169,7 @@ func (v Verb) Name() string { return v.spec.tool }
 
 func (v Verb) Definition() llm.Tool {
 	properties := make(map[string]any, len(v.spec.params))
-	var required []string
+	required := []string{}
 	for _, param := range v.spec.params {
 		name, describe, must := param.about()
 		properties[name] = map[string]any{"type": "string", "description": describe}

@@ -67,11 +67,54 @@ func metaStub(t *testing.T, answer func(heardMeta, http.ResponseWriter)) *[]hear
 		mu.Lock()
 		*heard = append(*heard, request)
 		mu.Unlock()
+		if tool := toolWithANullInItsSchema(body); tool != "" {
+			w.WriteHeader(http.StatusBadRequest)
+			_, _ = io.WriteString(w, `{"error":{"message":"Invalid JSON schema: null is not of type \"array\"","param":"parameters","tool":"`+tool+`"}}`)
+			return
+		}
 		answer(request, w)
 	}))
 	t.Cleanup(server.Close)
 	t.Setenv(metaBaseURLVariable, server.URL)
 	return heard
+}
+
+func toolWithANullInItsSchema(body []byte) string {
+	var request struct {
+		Tools []struct {
+			Name       string `json:"name"`
+			Parameters any    `json:"parameters"`
+		} `json:"tools"`
+	}
+	if json.Unmarshal(body, &request) != nil {
+		return ""
+	}
+	var holdsNull func(any) bool
+	holdsNull = func(value any) bool {
+		switch typed := value.(type) {
+		case nil:
+			return true
+		case map[string]any:
+			for _, field := range typed {
+				if holdsNull(field) {
+					return true
+				}
+			}
+		case []any:
+			for _, item := range typed {
+				if holdsNull(item) {
+					return true
+				}
+			}
+		}
+		return false
+	}
+	for _, tool := range request.Tools {
+		if holdsNull(tool.Parameters) {
+			return tool.Name
+		}
+	}
+	return ""
 }
 
 func TestAMetaTurnSendsTheKeyAndTheModelAndRunsTheStreamedToolCall(t *testing.T) {
@@ -92,7 +135,7 @@ func TestAMetaTurnSendsTheKeyAndTheModelAndRunsTheStreamedToolCall(t *testing.T)
 	})
 
 	var out, errOut bytes.Buffer
-	code := runVerb([]string{"--dir", project, "--model", "meta/muse-spark-1.3", "--no-gate", "--sift", siftFree, "--no-subagents", "--tools", toolSetThree, "read note.txt"}, &out, &errOut)
+	code := runVerb([]string{"--dir", project, "--model", "meta/muse-spark-1.3", "--no-gate", "--sift", siftFree, "read note.txt"}, &out, &errOut)
 	if code != exitOK {
 		t.Fatalf("tofu run exited %d\n%s\n%s", code, out.String(), errOut.String())
 	}
