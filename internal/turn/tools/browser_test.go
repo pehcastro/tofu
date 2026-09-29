@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"sync"
@@ -306,6 +307,10 @@ type cdpPage struct {
 	released int
 	loaded   time.Time
 	price    time.Duration
+	buttons  []string
+	renamed  string
+	rerender bool
+	renders  int
 }
 
 func (p *cdpPage) answer(method string, params map[string]any) any {
@@ -322,6 +327,20 @@ func (p *cdpPage) answer(method string, params map[string]any) any {
 				"role": map[string]any{"value": role}, "name": map[string]any{"value": name}}
 		}
 		nodes := []any{node(1, "RootWebArea", "Stays", "2", "3", "4"), node(2, "button", "Next"), node(3, "button", "Buy")}
+		if len(p.buttons) > 0 {
+			offset := 0
+			if p.rerender {
+				p.renders++
+				offset = 100 * p.renders
+			}
+			var children []string
+			nodes = nil
+			for i, name := range p.buttons {
+				children = append(children, fmt.Sprint(offset+i+2))
+				nodes = append(nodes, node(offset+i+2, "button", name))
+			}
+			nodes = append([]any{node(1, "RootWebArea", "Stays", children...)}, nodes...)
+		}
 		if p.price > 0 && time.Since(p.loaded) >= p.price {
 			nodes = append(nodes, node(4, "StaticText", "Total R$ 4.667"))
 		}
@@ -339,6 +358,9 @@ func (p *cdpPage) answer(method string, params map[string]any) any {
 		if params["type"] == "mouseReleased" {
 			p.released++
 			p.url = cmp.Or(p.next, p.url)
+			if p.renamed != "" {
+				p.buttons[1] = p.renamed
+			}
 		}
 		return map[string]any{}
 	case "DOM.getBoxModel":
@@ -573,6 +595,38 @@ func TestANavigateThenAWaitReturnsTheTextThePageRendersLate(t *testing.T) {
 	}
 	if !strings.Contains(acted, "Total R$ 4.667") {
 		t.Fatal("the act result holds no page text, so the price the page rendered after 1.5 s is missing")
+	}
+}
+
+func TestAClickThatChangesOneButtonReturnsThatButtonNotTheTree(t *testing.T) {
+	page := &cdpPage{url: "https://stays.test/", buttons: []string{"Next", "Buy", "Filtros", "Mapa", "Favoritos", "Compartilhar", "Ajuda"}, renamed: "Buy, 1 no carrinho"}
+	run := stepsOn(t, page)
+	observed := run("browser_observe", `{"tab":7}`)
+	buy := regexp.MustCompile(`button "Buy" \[ref=(e\d+)\]`).FindStringSubmatch(observed)
+	if buy == nil {
+		t.Fatal("no Buy ref")
+	}
+	acted := run("browser_act", `{"tab":7,"actions":[{"ref":"`+buy[1]+`","action":"click"}]}`)
+	if !strings.Contains(acted, `button "Buy, 1 no carrinho" [ref=`+buy[1]+`]`) || strings.Contains(acted, `"Filtros"`) || !strings.Contains(acted, "changed since the last snapshot") {
+		t.Fatal("the act did not return a delta of the one button that changed")
+	}
+}
+
+func TestTheSameClickUnderAFreshRefEachTimeIsStillARepeat(t *testing.T) {
+	page := &cdpPage{url: "https://www.google.test/", buttons: []string{"Buscar", "Estou com sorte"}, rerender: true}
+	run := stepsOn(t, page)
+	snapshot := run("browser_observe", `{"tab":7}`)
+	var refs []string
+	for try := 1; try <= 3; try++ {
+		buscar := regexp.MustCompile(`button "Buscar" \[ref=(e\d+)\]`).FindStringSubmatch(snapshot)
+		if buscar == nil || slices.Contains(refs, buscar[1]) {
+			t.Fatalf("try %d: no fresh ref for Buscar in\n%s", try, snapshot)
+		}
+		refs = append(refs, buscar[1])
+		snapshot = run("browser_act", `{"tab":7,"actions":[{"ref":"`+buscar[1]+`","action":"click"}]}`)
+		if repeated := strings.Contains(snapshot, "repeated 3 times"); repeated != (try == 3) {
+			t.Fatalf("try %d on ref %s said repeated = %v", try, buscar[1], repeated)
+		}
 	}
 }
 

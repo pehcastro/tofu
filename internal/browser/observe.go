@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -77,7 +78,58 @@ func (d *Driver) Observe(interactive bool) (string, error) {
 	if errors.Is(err, os.ErrDeadlineExceeded) {
 		return "", fmt.Errorf("observe on tab %d did not finish within %d ms", d.Tab, konst.BrowserObserveTimeoutMillis)
 	}
+	if err == nil && interactive {
+		d.refs.shown = snapshot
+	}
 	return snapshot, err
+}
+
+func (d *Driver) ObserveChanges() (string, error) {
+	before := d.refs.shown
+	snapshot, err := d.Observe(true)
+	if err != nil || before == "" {
+		return snapshot, err
+	}
+	return changes(before, snapshot), nil
+}
+
+func changes(before, after string) string {
+	refLine := regexp.MustCompile(`ref=(e\d+)[,\]]`)
+	lines := func(snapshot string) ([]string, map[string]string) {
+		var order []string
+		byRef := map[string]string{}
+		for line := range strings.Lines(snapshot) {
+			if found := refLine.FindStringSubmatch(line); found != nil {
+				order = append(order, found[1])
+				byRef[found[1]] = strings.TrimSpace(line)
+			}
+		}
+		return order, byRef
+	}
+	oldOrder, old := lines(before)
+	newOrder, now := lines(after)
+	var shown []string
+	for _, ref := range newOrder {
+		switch was, known := old[ref]; {
+		case !known:
+			shown = append(shown, "+ "+now[ref])
+		case was != now[ref]:
+			shown = append(shown, "~ "+now[ref])
+		}
+	}
+	for _, ref := range oldOrder {
+		if _, kept := now[ref]; !kept {
+			shown = append(shown, "x gone: "+old[ref])
+		}
+	}
+	if len(shown)*100 >= konst.BrowserDeltaWholePercent*max(len(newOrder), 1) {
+		return after
+	}
+	header, _, _ := strings.Cut(after, "\n")
+	if len(shown) == 0 {
+		return header + "\nnothing changed since the last snapshot; every ref in it still stands\n"
+	}
+	return header + fmt.Sprintf("\nchanged since the last snapshot, %d of %d refs; every other ref still stands (+ new, ~ changed, x gone):\n", len(shown), len(newOrder)) + strings.Join(shown, "\n") + "\n"
 }
 
 func (d *Driver) observe(deadline time.Time, interactive bool) (string, error) {

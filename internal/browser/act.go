@@ -158,6 +158,14 @@ func (m Moved) said() string {
 	return Unchanged
 }
 
+func (d *Driver) Target(ref string) string {
+	entry, known := d.refs.entries[ref]
+	if !known {
+		return ref
+	}
+	return entry.role + " " + strconv.Quote(entry.name)
+}
+
 func (d *Driver) Use(tab int) {
 	if tab != d.Tab {
 		d.Tab, d.refs = tab, refMap{next: d.refs.next}

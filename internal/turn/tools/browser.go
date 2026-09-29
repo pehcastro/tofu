@@ -265,8 +265,9 @@ func (browserAct) Definition() llm.Tool {
 			"navigate loads the url in value in the task's one tab: on the person's own tab it opens that one tab of tofu's first, and every later navigate loads there, whatever the site. back goes back in it. a popup the page opens is loaded into that tab and closed. " +
 			"wait takes a number of milliseconds, or text to wait for, as value. " +
 			"the batch stops at the first action that changes the url or opens a tab, and says which actions it skipped. " +
-			"a click that another element covers does not run, and says what covers it. the same action on an unchanged page is flagged, then refused. " +
-			"the result ends with a fresh interactive snapshot of the tab it ends in. " + howToBrowse + whatTofuReaches,
+			"a click that another element covers does not run, and says what covers it. " +
+			"after a navigate, back or wait the result ends with the page's full tree, with its text. after any other act it lists only the refs that changed since the last snapshot, + new, ~ changed, x gone, and every other ref still stands; when most of the page changed it ends with the whole interactive snapshot. " +
+			"the same action on the same role and name, on a page that did not change, is flagged, then refused, whatever its ref. " + howToBrowse + whatTofuReaches,
 		Parameters: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -300,18 +301,18 @@ func (s browserStep) move() browser.Move {
 	return browser.Move{Ref: s.Ref, Kind: browser.MoveKind(s.Action), Value: s.Value}
 }
 
-func (s browserStep) normalised() string {
+func (s browserStep) normalised(target string) string {
 	switch s.Action {
 	case "click":
-		return "click " + s.Ref
+		return "click " + target
 	case "fill":
-		return "fill " + s.Ref + " " + strings.ToLower(strings.TrimSpace(s.Value))
+		return "fill " + target + " " + strings.ToLower(strings.TrimSpace(s.Value))
 	case "navigate":
 		return "navigate " + s.Value
 	case "scroll":
-		return "scroll " + cmp.Or(s.Value, "down") + " " + s.Ref
+		return "scroll " + cmp.Or(s.Value, "down") + " " + target
 	}
-	return s.Action + " " + s.Ref + " " + s.Value
+	return s.Action + " " + target + " " + s.Value
 }
 
 func (s *browserSession) repeats(key string) int {
@@ -356,7 +357,7 @@ func (t browserAct) Run(_ context.Context, raw json.RawMessage) (turn.Result, er
 			if err != nil {
 				return err
 			}
-			key := step.normalised() + " on " + fingerprint
+			key := step.normalised(driver.Target(step.Ref)) + " on " + fingerprint
 			repeats := t.session.repeats(key) + 1
 			if repeats >= konst.BrowserRepeatRefuse {
 				fmt.Fprintf(&report, "%d. %s: refused, it would be the %dth time on a page that did not change: try another ref, another action, or observe what blocks it\n", ran+1, step, repeats)
@@ -385,7 +386,11 @@ func (t browserAct) Run(_ context.Context, raw json.RawMessage) (turn.Result, er
 		}
 		var err error
 		args.Tab = driver.Tab
-		snapshot, err = driver.Observe(!loads)
+		if loads {
+			snapshot, err = driver.Observe(false)
+		} else {
+			snapshot, err = driver.ObserveChanges()
+		}
 		return err
 	})
 	if err != nil {

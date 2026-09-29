@@ -350,6 +350,7 @@ type refMap struct {
 	entries   map[string]refEntry
 	documents map[string]*document
 	next      int
+	shown     string
 }
 
 func (r *refMap) document(frame, loader string) (*document, bool) {
