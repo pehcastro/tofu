@@ -272,8 +272,8 @@ func TestTheMoveTakesTheStateAndLeavesWhatThePersonWrote(t *testing.T) {
 	if quota["readings.jsonl"] != before["quota/readings.jsonl"] {
 		t.Fatalf("the quota readings are not under the home: %v", quota)
 	}
-	if said := out.String(); strings.Count(said, "\n") != 1 || !strings.Contains(said, "~/.tofu/projects/"+filepath.Base(state)) || !strings.Contains(said, "sessions") {
-		t.Fatalf("the notice is not one line naming what moved and where:\n%s", said)
+	if said := out.String(); strings.Count(said, "~ moved") != 1 || !strings.Contains(said, "~/.tofu/projects/"+filepath.Base(state)) || !strings.Contains(said, "sessions") {
+		t.Fatalf("the notice is not one receipt naming what moved and where:\n%s", said)
 	}
 
 	var second bytes.Buffer

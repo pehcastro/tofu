@@ -8,6 +8,30 @@ Tofu is personal and not released, so the public interface that a version promis
 
 The minor number carries breaking changes, which is what 0.x means, and **there is never a 1.0.0**. The owner decided that on 2026-09-19: this stays 0.x forever, so the promise the version makes is the one 0.x already makes, that anything can break on a minor bump.
 
+## 0.5.0-rc-fix17 - 2026-09-29
+
+One look for every command, `--json` that always means one JSON document, and shells, settings and the browser that do what they say.
+
+### Changed
+
+- **Every verb prints the same way:** a title with a verdict, labelled sections, `✓ ● ○ ⚠ ✗` marks, `~ + -` receipts for a write, and a `→` line with the next command. Colour follows the terminal, and `NO_COLOR` turns it off.
+- **`--json` works on every verb that reports state** and prints one document: `{tofu, verb, ok, at, data, problems}`, with the same exit code as the text form.
+- **A long line wraps and is never cut.** A command in a hint always prints whole.
+- **An unknown verb prints one error line and `→ tofu help`**, not the whole usage text.
+- **Settings save to the scope the header names.** shift+tab switches between global and project.
+- **The API key input is its own dialog** and no longer draws over the model picker.
+- **`browser_do` waits for its tab to load**, reuses its own tab, follows a tab the page opens, and answers from every page it saw.
+- **The undo after `tofu rules add --replace`** puts the old rule text back.
+
+### Fixed
+
+- **Every process tofu starts ends when tofu ends**, even when tofu is killed.
+- **A quit ends only this tofu's shells.** Shells left by an older tofu show as leftover in the shells screen, where you can end them.
+
+### Removed
+
+- **The hide welcome art setting** and its Startup category.
+
 ## 0.5.0-rc-fix16 - 2026-09-28
 
 Faster, surer browsing, models that arrive by themselves, keys that stay hidden, and a reload that re-reads everything.
