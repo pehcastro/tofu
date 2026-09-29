@@ -288,12 +288,10 @@ func chdirTemp(t *testing.T) string {
 func doctorJSON(t *testing.T) doctorReport {
 	t.Helper()
 	out := &bytes.Buffer{}
-	doctor(out, plain, "--json")
-	var report doctorReport
-	if err := json.Unmarshal(out.Bytes(), &report); err != nil {
-		t.Fatalf("tofu doctor --json does not parse: %v\n%s", err, out.String())
-	}
-	return report
+	doctor([]string{jsonFlag}, out, out)
+	var envelope struct{ Data doctorReport }
+	oneEnvelope(t, out.String(), &envelope)
+	return envelope.Data
 }
 
 func rulePointOf(t *testing.T, point string) doctorRule {

@@ -1,0 +1,5 @@
+exit 0
+--- stdout
++ sub-agent planner  ~/project/.tofu/agents/planner.md
+  → undo: tofu agents remove planner
+--- stderr

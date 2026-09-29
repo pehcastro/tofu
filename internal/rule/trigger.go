@@ -3,7 +3,6 @@ package rule
 import (
 	"cmp"
 	"fmt"
-	"io"
 	"maps"
 	"path"
 	"regexp"
@@ -211,22 +210,4 @@ func Index(rules []Rule, task Task) []Match {
 		index[i] = Match{RuleID: r.ID, Fires: fires, Why: why}
 	}
 	return index
-}
-
-func WriteIndex(w io.Writer, index []Match) {
-	firing, widest := 0, 0
-	for _, m := range index {
-		if m.Fires {
-			firing++
-		}
-		widest = max(widest, len(m.RuleID))
-	}
-	_, _ = fmt.Fprintf(w, "%d of %d rules fire\n", firing, len(index))
-	for _, m := range index {
-		mark := "     "
-		if m.Fires {
-			mark = "fires"
-		}
-		_, _ = fmt.Fprintf(w, "%s %-*s %s\n", mark, widest, m.RuleID, m.Why)
-	}
 }

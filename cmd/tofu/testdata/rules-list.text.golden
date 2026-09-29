@@ -1,0 +1,10 @@
+exit 0
+--- stdout
+Rules · 4 run · from lib                                 ● 2 shadow · 1 enforced
+
+library
+  ○ comments  structural  shadow
+  ○ release   structural  shadow
+  ✓ brevity   human
+  ● em_dash   structural  enforced
+--- stderr

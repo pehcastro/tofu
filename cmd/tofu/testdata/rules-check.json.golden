@@ -1,0 +1,30 @@
+exit 1
+--- stdout
+{
+  "tofu": "VERSION",
+  "verb": "rules check",
+  "ok": false,
+  "at": "AT",
+  "data": {
+    "origin": "lib",
+    "fires": [
+      {
+        "rule_id": "em_dash",
+        "target": "docs/a.md",
+        "mode": "enforced",
+        "blocked": true,
+        "findings": 1
+      },
+      {
+        "rule_id": "em_dash",
+        "target": "docs/b.md",
+        "mode": "enforced",
+        "blocked": true,
+        "findings": 1
+      }
+    ],
+    "blocked": 2
+  },
+  "problems": []
+}
+--- stderr

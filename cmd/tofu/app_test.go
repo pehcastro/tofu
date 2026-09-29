@@ -66,10 +66,10 @@ func TestVerbTableIsUnchanged(t *testing.T) {
 		code int
 		says string
 	}{
-		{[]string{"version"}, exitOK, "version: "},
+		{[]string{"version"}, exitOK, "version  "},
 		{[]string{"doctor", "--nope"}, exitUsage, "tofu doctor: unknown argument"},
-		{[]string{"login", "--nope"}, exitUsage, "tofu login: "},
-		{[]string{"usage", "--nope"}, exitUsage, "usage: tofu usage"},
+		{[]string{"login", "--nope"}, exitUsage, "unknown provider --nope"},
+		{[]string{"usage", "--nope"}, exitUsage, "tofu usage: unknown argument"},
 		{[]string{"models", "--nope"}, exitUsage, "tofu models: unknown flag"},
 		{[]string{"why", "--nope"}, exitUsage, "tofu why: "},
 		{[]string{"run", "--nope"}, exitUsage, "tofu run: "},
@@ -289,8 +289,8 @@ func TestLoginOpenRouterStoresTheKeyInTheDatabaseAndPrintsNoMoreThanItsTail(t *t
 		t.Errorf("login --status does not show the last four characters:\n%s", status.String())
 	}
 	var checked bytes.Buffer
-	doctor(&checked, paletteOf(&checked))
-	if !strings.Contains(strings.Join(strings.Fields(checked.String()), " "), "key from the credential store at") {
+	doctor(nil, &checked, &errOut)
+	if !strings.Contains(strings.Join(strings.Fields(checked.String()), " "), "jev key · credential store") {
 		t.Errorf("tofu doctor does not say the key came from the credential store:\n%s", checked.String())
 	}
 	printed := out.String() + errOut.String() + status.String() + checked.String()
@@ -320,8 +320,12 @@ func TestLoginBraveStoresTheSearchKeyInTheDatabase(t *testing.T) {
 	if code := loginVerb([]string{"--status", "--json"}, nil, &asJSON, &errOut); code != exitOK {
 		t.Fatalf("login --status --json exited %d: %s", code, errOut.String())
 	}
-	for _, shown := range []string{status.String(), asJSON.String()} {
-		for _, want := range []string{sys.BraveSearchKeyName, key[len(key)-4:], sys.OpenRouterKeyName, gateKeyForTests[len(gateKeyForTests)-4:], sys.TypeSafeKeyName} {
+	tails := []string{key[len(key)-4:], gateKeyForTests[len(gateKeyForTests)-4:]}
+	for shown, names := range map[string][]string{
+		status.String(): {"Brave", "OpenRouter", "TypeSafe"},
+		asJSON.String(): {sys.BraveSearchKeyName, sys.OpenRouterKeyName, sys.TypeSafeKeyName},
+	} {
+		for _, want := range append(names, tails...) {
 			if !strings.Contains(shown, want) {
 				t.Errorf("login --status does not show %q:\n%s", want, shown)
 			}

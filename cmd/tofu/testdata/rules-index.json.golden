@@ -1,0 +1,53 @@
+exit 0
+--- stdout
+{
+  "tofu": "VERSION",
+  "verb": "rules index",
+  "ok": true,
+  "at": "AT",
+  "data": {
+    "origin": "lib",
+    "task": "rename a field",
+    "task_kind": "",
+    "paths": [
+      "internal/rule/trigger.go"
+    ],
+    "firing": 3,
+    "rules": [
+      {
+        "rule_id": "comments",
+        "fires": true,
+        "why": "the scope internal/**/*.go reached internal/rule/trigger.go",
+        "concern": "code_rules",
+        "kind": "structural",
+        "mode": "shadow"
+      },
+      {
+        "rule_id": "release",
+        "fires": false,
+        "why": "the condition (?i)\\brelease\\b matches nothing in the task",
+        "concern": "code_rules",
+        "kind": "structural",
+        "mode": "shadow"
+      },
+      {
+        "rule_id": "brevity",
+        "fires": true,
+        "why": "always on, the rule declares no trigger",
+        "concern": "output_shape",
+        "kind": "human",
+        "mode": "shadow"
+      },
+      {
+        "rule_id": "em_dash",
+        "fires": true,
+        "why": "always on, the rule declares no trigger",
+        "concern": "output_shape",
+        "kind": "structural",
+        "mode": "enforced"
+      }
+    ]
+  },
+  "problems": []
+}
+--- stderr

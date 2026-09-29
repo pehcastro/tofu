@@ -1,0 +1,20 @@
+exit 0
+--- stdout
+{
+  "tofu": "VERSION",
+  "verb": "agents set",
+  "ok": true,
+  "at": "AT",
+  "data": {
+    "changes": [
+      {
+        "change": "changed",
+        "what": "sub-agent planner runs codex-sub/gpt-5.6-sol",
+        "file": "HOME/project/.tofu/agent-models.yaml"
+      }
+    ],
+    "undo": "tofu agents set planner claude-sub/claude-opus-5"
+  },
+  "problems": []
+}
+--- stderr

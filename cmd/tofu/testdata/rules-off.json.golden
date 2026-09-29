@@ -1,0 +1,20 @@
+exit 0
+--- stdout
+{
+  "tofu": "VERSION",
+  "verb": "rules off",
+  "ok": true,
+  "at": "AT",
+  "data": {
+    "changes": [
+      {
+        "change": "changed",
+        "what": "rule em_dash off",
+        "file": "HOME/project/.tofu/rules/em_dash@1.yaml"
+      }
+    ],
+    "undo": "tofu rules remove em_dash"
+  },
+  "problems": []
+}
+--- stderr

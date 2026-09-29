@@ -5,8 +5,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
+	"strconv"
 	"strings"
+	"time"
+
+	"tofu/interface/cli"
 )
 
 type importRule struct {
@@ -61,10 +66,21 @@ func under(path, prefix string) bool {
 	return path == prefix || strings.HasPrefix(path, prefix+"/")
 }
 
-type importEdge struct {
-	from string
-	to   string
-	rule importRule
+func (r importRule) short() string {
+	if len(r.allow) == 0 {
+		return "never " + r.scope
+	}
+	names := make([]string, len(r.allow))
+	for i, allowed := range r.allow {
+		names[i] = strings.TrimPrefix(allowed, r.scope+"/")
+	}
+	return r.scope + " only " + strings.Join(names, ", ")
+}
+
+type importViolation struct {
+	From string `json:"from"`
+	To   string `json:"to"`
+	Rule string `json:"rule"`
 }
 
 type packageImports struct {
@@ -93,37 +109,88 @@ func moduleImports(dir string) ([]packageImports, error) {
 	return pkgs, nil
 }
 
-func brokenEdges(pkgs []packageImports, rules []importRule) []importEdge {
-	var broken []importEdge
+type importsReport struct {
+	Packages   int               `json:"packages"`
+	Rules      []string          `json:"rules"`
+	Violations []importViolation `json:"violations"`
+}
+
+func readImports(dir string) (importsReport, error) {
+	pkgs, err := moduleImports(dir)
+	if err != nil {
+		return importsReport{}, err
+	}
+	report := importsReport{Packages: len(pkgs), Violations: []importViolation{}}
+	rules := importRules()
+	for _, rule := range rules {
+		report.Rules = append(report.Rules, rule.String())
+	}
 	for _, pkg := range pkgs {
 		for _, imported := range pkg.Imports {
 			for _, rule := range rules {
 				if rule.broken(pkg.ImportPath, imported) {
-					broken = append(broken, importEdge{from: pkg.ImportPath, to: imported, rule: rule})
+					report.Violations = append(report.Violations, importViolation{From: pkg.ImportPath, To: imported, Rule: rule.String()})
 				}
 			}
 		}
 	}
-	return broken
+	return report, nil
 }
 
-func doctorImports(dir string, out io.Writer) int {
-	pkgs, err := moduleImports(dir)
+func doctorImports(dir string, asJSON bool, out, errOut io.Writer) int {
+	now := time.Now()
+	report, err := readImports(dir)
 	if err != nil {
-		_, _ = fmt.Fprintf(out, "imports: unreadable: %v\n", err)
-		return exitUsage
+		return printFailure(errOut, exitUsage, "tofu doctor --imports: unreadable: "+err.Error(), "")
 	}
-	rules := importRules()
-	for _, rule := range rules {
-		_, _ = fmt.Fprintf(out, "rule: %s\n", rule)
+	if asJSON {
+		err = writeJSON(out, cli.Envelope{Verb: "doctor --imports", OK: len(report.Violations) == 0, At: now, Data: report, Problems: importProblems(report)})
+	} else {
+		page := cli.Detect(out, os.Environ())
+		err = page.Print(out, importsPage(page, report))
 	}
-	broken := brokenEdges(pkgs, rules)
-	for _, edge := range broken {
-		_, _ = fmt.Fprintf(out, "violation: %s imports %s, and %s\n", edge.from, edge.to, edge.rule)
-	}
-	_, _ = fmt.Fprintf(out, "imports: %d packages, %d rules, %d violations\n", len(pkgs), len(rules), len(broken))
-	if len(broken) > 0 {
+	switch {
+	case err != nil:
+		return printFailure(errOut, exitVerdict, "tofu doctor --imports: "+err.Error(), "")
+	case len(report.Violations) > 0:
 		return exitVerdict
 	}
 	return exitOK
+}
+
+func importProblems(report importsReport) []cli.Problem {
+	problems := make([]cli.Problem, len(report.Violations))
+	for i, violation := range report.Violations {
+		problems[i] = cli.Problem{What: violation.From + " imports " + violation.To + ", and " + violation.Rule}
+	}
+	return problems
+}
+
+func importsPage(page cli.Page, report importsReport) []string {
+	verdict := cli.Verdict{Mark: cli.Done, Text: "no violations"}
+	if broken := len(report.Violations); broken > 0 {
+		verdict = cli.Verdict{Mark: cli.Fail, Text: strconv.Itoa(broken) + " violations"}
+	}
+	facts := []string{strconv.Itoa(report.Packages) + " packages", strconv.Itoa(len(report.Rules)) + " rules"}
+	lines := append(page.Title("Imports", facts, verdict), "", page.Section("rules", cli.Verdict{}))
+	rows := make([]cli.Row, 0, len(report.Rules))
+	for _, rule := range importRules() {
+		row := cli.Row{Mark: cli.Done, Cells: []string{rule.from, rule.short()}}
+		for _, violation := range report.Violations {
+			if violation.Rule == rule.String() {
+				row.Mark = cli.Fail
+			}
+		}
+		rows = append(rows, row)
+	}
+	lines = append(lines, cli.Indent(page.Rows(rows)...)...)
+	if len(report.Violations) == 0 {
+		return lines
+	}
+	rows = make([]cli.Row, len(report.Violations))
+	for i, violation := range report.Violations {
+		rows[i] = cli.Row{Mark: cli.Fail, Cells: []string{violation.From, "imports " + violation.To}}
+	}
+	lines = append(lines, "", page.Section("violations", cli.Verdict{}))
+	return append(lines, cli.Indent(page.Rows(rows)...)...)
 }

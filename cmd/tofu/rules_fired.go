@@ -6,7 +6,9 @@ import (
 	"strings"
 	"time"
 
+	"tofu/interface/cli"
 	"tofu/internal/sys"
+	"tofu/internal/widget"
 )
 
 type ruleFiredReport struct {
@@ -16,34 +18,34 @@ type ruleFiredReport struct {
 }
 
 func rulesFiredVerb(args []string, out, errOut io.Writer) int {
-	asJSON := false
+	o := verbOutput{verb: "rules fired", usageLine: "tofu rules fired [2006-01-02] [--json]", out: out, errOut: errOut}
 	day := ""
 	for _, arg := range args {
 		switch {
 		case arg == jsonFlag:
-			asJSON = true
+			o.asJSON = true
 		case strings.HasPrefix(arg, "-"):
-			return rulesFail(errOut, fmt.Errorf("unknown argument %q", arg))
+			return o.usage(fmt.Errorf("unknown argument %q", arg))
 		case day != "":
-			return rulesFail(errOut, fmt.Errorf("tofu rules fired takes one date, got %q and %q", day, arg))
+			return o.usage(fmt.Errorf("one date, got %q and %q", day, arg))
 		default:
 			day = arg
 		}
 	}
 	if day != "" {
 		if _, err := time.Parse(time.DateOnly, day); err != nil {
-			return rulesFail(errOut, fmt.Errorf("%q is not a date in the form 2006-01-02", day))
+			return o.usage(fmt.Errorf("%q is not a date in the form 2006-01-02", day))
 		}
 	}
 	dir, err := sys.LogDir()
 	if err != nil {
-		return rulesFail(errOut, err)
+		return o.fail(err)
 	}
 	fires, unreadable, err := jsonlRecords[ruleFireRecord](dir, func(name string) bool {
 		return strings.HasSuffix(name, rulesFireSuffix) && strings.HasPrefix(name, day)
 	})
 	if err != nil {
-		return rulesFail(errOut, err)
+		return o.fail(err)
 	}
 	report := ruleFiredReport{Fires: fires, Unreadable: unreadable}
 	for _, fire := range fires {
@@ -51,19 +53,25 @@ func rulesFiredVerb(args []string, out, errOut io.Writer) int {
 			report.Blocked++
 		}
 	}
-	if asJSON {
-		if err := writeJSON(out, report); err != nil {
-			return rulesFail(errOut, err)
-		}
-		return exitOK
+	now := time.Now()
+	return o.done(true, report, func(page cli.Page) []string { return report.lines(page, day, now) })
+}
+
+func (report ruleFiredReport) lines(page cli.Page, day string, now time.Time) []string {
+	var facts []string
+	if day != "" {
+		facts = []string{day}
 	}
-	_, _ = fmt.Fprintf(out, "%d fires recorded, %d blocked\n", len(report.Fires), report.Blocked)
-	for _, fire := range report.Fires {
-		_, _ = fmt.Fprintf(out, "%s  %s  %s  %s  blocked=%t\n",
-			fire.At.UTC().Format(time.RFC3339), fire.RuleID, fire.Target, fire.Mode, fire.Blocked)
+	lines := page.Title("Rules fired", facts, firesVerdict(len(report.Fires), report.Blocked))
+	rows := make([]cli.Row, len(report.Fires))
+	for i, fire := range report.Fires {
+		rows[i] = fire.row(page, widget.Until(now.Sub(fire.At))+" ago")
+	}
+	if len(rows) > 0 {
+		lines = append(append(lines, ""), page.Rows(rows)...)
 	}
 	if report.Unreadable > 0 {
-		_, _ = fmt.Fprintf(out, "%d unreadable lines skipped\n", report.Unreadable)
+		lines = append(lines, "", page.Status("unreadable", cli.Verdict{Mark: cli.Warn, Text: plural(report.Unreadable, "line") + " skipped"}))
 	}
-	return exitOK
+	return lines
 }

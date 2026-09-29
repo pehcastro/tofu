@@ -1,0 +1,6 @@
+exit 0
+--- stdout
+- sub-agent planner  ~/project/.tofu/agents/planner.md
+- model line planner: codex-sub/gpt-5.6-sol  ~/project/.tofu/agent-models.yaml
+  → undo: tofu agents add planner --description "plans the work" --model claude-sub/claude-opus-5 --tools read,search
+--- stderr

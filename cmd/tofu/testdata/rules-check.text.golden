@@ -1,0 +1,7 @@
+exit 1
+--- stdout
+Rules check · from lib                                     ✗ 2 fired · 2 blocked
+
+✗ em_dash  docs/a.md  enforced  1 finding
+✗ em_dash  docs/b.md  enforced  1 finding
+--- stderr

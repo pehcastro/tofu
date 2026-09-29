@@ -1,22 +1,23 @@
 package main
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"io"
+	"os"
 	"strconv"
-	"strings"
 	"time"
 
+	"tofu/interface/cli"
 	"tofu/internal/llm/quota"
+	"tofu/internal/widget"
 )
 
 const (
-	usageFlags            = "usage: tofu usage [--history] [--json]"
+	usageFlags            = "tofu usage [--history] [--json]"
 	historyFlag           = "--history"
-	usageNoCredential     = "no subscription credential is stored"
 	usageNoWindowReported = "no window is reporting use"
-	spendLimitPrefix      = "spend limit: "
 )
 
 type usageState int
@@ -60,12 +61,10 @@ type usageReport struct {
 	State      usageState         `json:"state"`
 	Fullest    string             `json:"fullest_window,omitempty"`
 	Providers  []credentialReport `json:"providers"`
-	Blockers   []doctorBlocker    `json:"blockers,omitempty"`
 	SpendLimit string             `json:"spend_limit"`
-	ReportedAt time.Time          `json:"reported_at"`
 }
 
-func usageVerb(args []string, out, errOut io.Writer, shade palette) int {
+func usageVerb(args []string, out, errOut io.Writer) int {
 	asJSON, history := false, false
 	for _, arg := range args {
 		switch arg {
@@ -74,8 +73,7 @@ func usageVerb(args []string, out, errOut io.Writer, shade palette) int {
 		case historyFlag:
 			history = true
 		default:
-			_, _ = fmt.Fprintln(errOut, usageFlags)
-			return exitUsage
+			return printFailure(errOut, exitUsage, "tofu usage: unknown argument "+strconv.Quote(arg), usageFlags)
 		}
 	}
 	if history {
@@ -86,19 +84,29 @@ func usageVerb(args []string, out, errOut io.Writer, shade palette) int {
 	if err != nil {
 		return usageFail(errOut, err)
 	}
-	if !asJSON {
-		_, _ = fmt.Fprint(out, usageText(report, shade, now))
-		return exitOK
+	var problems []cli.Problem
+	for _, provider := range report.Providers {
+		if provider.State != usageServingState {
+			problems = append(problems, cli.Problem{What: provider.Provider + ": " + provider.State})
+		}
 	}
-	if err := writeJSON(out, report); err != nil {
+	if report.State == usageNone {
+		problems = blockerProblems(doctorBlockers())
+	}
+	if asJSON {
+		err = writeJSON(out, cli.Envelope{Verb: "usage", OK: len(problems) == 0, At: now, Data: report, Problems: problems})
+	} else {
+		page := cli.Detect(out, os.Environ())
+		err = page.Print(out, usagePage(page, report, now))
+	}
+	if err != nil {
 		return usageFail(errOut, err)
 	}
 	return exitOK
 }
 
 func usageFail(errOut io.Writer, err error) int {
-	_, _ = fmt.Fprintf(errOut, "tofu usage: %v\n", err)
-	return exitVerdict
+	return printFailure(errOut, exitVerdict, "tofu usage: "+err.Error(), "")
 }
 
 func readUsage(now time.Time) (usageReport, error) {
@@ -106,14 +114,9 @@ func readUsage(now time.Time) (usageReport, error) {
 	if err != nil {
 		return usageReport{}, err
 	}
-	report := usageReport{
-		State:      usageServing,
-		Providers:  credentialReports(results, now),
-		SpendLimit: quota.SpendLimitLine(),
-		ReportedAt: now,
-	}
+	report := usageReport{State: usageServing, Providers: credentialReports(results, now), SpendLimit: quota.SpendLimitLine()}
 	if len(results) == 0 {
-		report.State, report.Blockers = usageNone, doctorBlockers()
+		report.State = usageNone
 		return report, nil
 	}
 	fullest := -1.0
@@ -122,61 +125,47 @@ func readUsage(now time.Time) (usageReport, error) {
 			report.State = usageAttention
 		}
 		for _, window := range provider.Windows {
-			if !window.Reported || window.Used <= fullest {
-				continue
+			if window.Reported && window.Used > fullest {
+				fullest, report.Fullest = window.Used, provider.Provider+" "+window.ID
 			}
-			fullest = window.Used
-			report.Fullest = provider.Provider + " " + window.ID
 		}
 	}
 	return report, nil
 }
 
-func usageText(report usageReport, shade palette, now time.Time) string {
-	state := report.State.String()
-	painted := shade.settled(state)
-	if report.State != usageServing {
-		painted = shade.unsettled(state)
+func usagePage(page cli.Page, report usageReport, now time.Time) []string {
+	verdict := cli.Verdict{Mark: cli.Done, Text: report.State.String()}
+	switch report.State {
+	case usageServing:
+	case usageAttention:
+		verdict.Mark = cli.Warn
+	case usageNone:
+		lines := append(page.Title("Usage", nil, cli.Verdict{Mark: cli.Idle, Text: "none signed in"}), "")
+		return append(lines, blockerRows(page, doctorBlockers())...)
 	}
-	var body strings.Builder
-	for _, provider := range report.Providers {
-		label := provider.Provider
+	lines := page.Title("Usage", []string{strconv.Itoa(len(report.Providers)) + " signed in"}, verdict)
+	for i, provider := range report.Providers {
+		lines = append(lines, "")
+		if i == 0 || provider.Provider != report.Providers[i-1].Provider {
+			lines = append(lines, page.Section(provider.Provider, cli.Verdict{}))
+		}
+		cardVerdict := cli.Verdict{Mark: cli.Active, Text: usageServingState}
+		var facts []cli.Fact
 		if provider.State != usageServingState {
-			body.WriteString(strings.Join(wrapped(label, provider.State), "\n") + "\n")
-			continue
+			cardVerdict = cli.Verdict{Mark: cli.Warn, Text: usageAttention.String()}
+			facts = append(facts, cli.Fact{Label: "state", Text: provider.State})
 		}
 		for _, window := range provider.Windows {
-			if !window.Reported {
-				continue
-			}
-			shown := plain
-			if provider.Provider+" "+window.ID == report.Fullest {
-				shown = shade
-			}
-			body.WriteString(labelled(label, window.text(shown, now)) + "\n")
-			label = ""
-		}
-	}
-	for _, blocker := range report.Blockers {
-		body.WriteString(strings.Join(blockerLines(blocker.Label, blocker.What, blocker.Command), "\n") + "\n")
-	}
-	limit := wrapped("spend", strings.TrimPrefix(report.SpendLimit, spendLimitPrefix))
-	return headline(usageHeadline(report), painted, len(state)) + "\n\n" + body.String() + "\n" + strings.Join(limit, "\n") + "\n"
-}
-
-func usageHeadline(report usageReport) string {
-	switch report.State {
-	case usageNone:
-		return usageNoCredential
-	case usageServing, usageAttention:
-		for _, provider := range report.Providers {
-			for _, window := range provider.Windows {
-				if window.Reported && provider.Provider+" "+window.ID == report.Fullest {
-					return report.Fullest + " is the fullest at " + window.percent()
+			text := page.Label(window.percent())
+			if window.Reported {
+				text = page.Bar(window.Used)
+				if left := window.ResetsAt.Sub(now); left > 0 {
+					text += cli.Gap + page.Label("resets in "+widget.Until(left))
 				}
 			}
+			facts = append(facts, cli.Fact{Label: window.ID, Text: text})
 		}
-		return usageNoWindowReported
+		lines = append(lines, page.Card(page.Subject(cmp.Or(provider.Plan, "plan not reported")), cardVerdict, page.Facts(facts))...)
 	}
-	panic("tofu usage: unknown state")
+	return lines
 }

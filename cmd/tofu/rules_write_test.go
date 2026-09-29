@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"slices"
@@ -18,18 +19,20 @@ func tofuRules(t *testing.T, args ...string) (int, string, string) {
 	return code, out.String(), errOut.String()
 }
 
-func listedRule(t *testing.T, id string) string {
+func listedRule(t *testing.T, id string) ruleListing {
 	t.Helper()
-	code, out, errOut := tofuRules(t, "list")
-	if code != exitOK {
-		t.Fatalf("rules list exited %d: %s", code, errOut)
+	code, out, errOut := tofuRules(t, "list", jsonFlag)
+	var envelope struct {
+		Data ruleListReport `json:"data"`
 	}
-	for _, line := range strings.Split(out, "\n") {
-		if fields := strings.Fields(line); len(fields) > 0 && fields[0] == id {
-			return line
-		}
+	if err := json.Unmarshal([]byte(out), &envelope); code != exitOK || err != nil {
+		t.Fatalf("rules list --json exited %d, %v: %s", code, err, errOut)
 	}
-	return ""
+	at := slices.IndexFunc(envelope.Data.Rules, func(r ruleListing) bool { return r.ID == id })
+	if at < 0 {
+		return ruleListing{}
+	}
+	return envelope.Data.Rules[at]
 }
 
 func TestRulesAddOffAndRemoveWriteTheHomeAndTheProjectLayers(t *testing.T) {
@@ -40,15 +43,15 @@ func TestRulesAddOffAndRemoveWriteTheHomeAndTheProjectLayers(t *testing.T) {
 		t.Fatalf("add --global exited %d, out %q, err %q", code, out, errOut)
 	}
 	globalFile := filepath.Join(home, ".tofu", "rules", "g1@1.yaml")
-	if line := listedRule(t, "g1"); !slices.Contains(strings.Fields(line), "global") || !strings.Contains(line, globalFile) {
-		t.Errorf("rules list shows g1 as %q, want global and %s", line, globalFile)
+	if listed := listedRule(t, "g1"); listed.Origin != "global" || listed.File != globalFile {
+		t.Errorf("rules list shows g1 as %+v, want global and %s", listed, globalFile)
 	}
 
 	if code, _, errOut := tofuRules(t, "add", "p1", "read the ticket first"); code != exitOK {
 		t.Fatalf("add exited %d: %s", code, errOut)
 	}
-	if line := listedRule(t, "p1"); !slices.Contains(strings.Fields(line), "project") || !strings.Contains(line, filepath.Join(project, ".tofu", "rules", "p1@1.yaml")) {
-		t.Errorf("rules list shows p1 as %q, want project and its file", line)
+	if listed := listedRule(t, "p1"); listed.Origin != "project" || listed.File != filepath.Join(project, ".tofu", "rules", "p1@1.yaml") {
+		t.Errorf("rules list shows p1 as %+v, want project and its file", listed)
 	}
 	if code, _, errOut := tofuRules(t, "add", "p1", "something else"); code == exitOK || !strings.Contains(errOut, "--replace") {
 		t.Errorf("a second add of p1 exited %d, err %q, want a refusal naming --replace", code, errOut)
@@ -60,20 +63,20 @@ func TestRulesAddOffAndRemoveWriteTheHomeAndTheProjectLayers(t *testing.T) {
 		t.Error("remove without --global deleted a rule from the home layer")
 	}
 
-	if listedRule(t, "em_dash") == "" {
+	if listedRule(t, "em_dash").ID == "" {
 		t.Fatal("em_dash is not listed before the off, so the test proves nothing")
 	}
 	if code, _, errOut := tofuRules(t, "off", "em_dash"); code != exitOK {
 		t.Fatalf("off exited %d: %s", code, errOut)
 	}
-	if line := listedRule(t, "em_dash"); line != "" {
-		t.Errorf("em_dash is still listed after off: %q", line)
+	if listed := listedRule(t, "em_dash"); listed.ID != "" {
+		t.Errorf("em_dash is still listed after off: %+v", listed)
 	}
 	if code, _, errOut := tofuRules(t, "remove", "em_dash"); code != exitOK {
 		t.Fatalf("remove of the off exited %d: %s", code, errOut)
 	}
-	if line := listedRule(t, "em_dash"); !slices.Contains(strings.Fields(line), "shipped") {
-		t.Errorf("em_dash after remove is listed as %q, want shipped", line)
+	if listed := listedRule(t, "em_dash"); listed.Origin != "shipped" {
+		t.Errorf("em_dash after remove is listed as %+v, want shipped", listed)
 	}
 	if code, _, errOut := tofuRules(t, "remove", "em_dash"); code == exitOK || !strings.Contains(errOut, "tofu rules off em_dash") {
 		t.Errorf("remove of a shipped rule exited %d, err %q, want a refusal naming off", code, errOut)
@@ -103,19 +106,18 @@ func TestRunWithDirCarriesThatProjectsRulesFromAnotherDirectory(t *testing.T) {
 
 func TestThePromptAndReloadSeeTheSameProjectRule(t *testing.T) {
 	project := chdirTemp(t)
-	before, err := runReload(project)
-	if err != nil {
+	if _, err := reloadReport(project); err != nil {
 		t.Fatal(err)
 	}
 	if code, _, errOut := tofuRules(t, "add", "p1", "answer in one line"); code != exitOK {
 		t.Fatalf("add exited %d: %s", code, errOut)
 	}
-	after, err := runReload(project)
+	after, err := reloadReport(project)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if after != before+1 {
-		t.Errorf("reload counted %d rules before the add and %d after, want one more", before, after)
+	if at := slices.IndexFunc(after.Parts, func(part partDiff) bool { return part.Name == "rules" }); at < 0 || !slices.Equal(after.Parts[at].Added, []string{"p1"}) {
+		t.Errorf("reload after the add reads %+v, want the rules part to add p1 alone", after.Parts)
 	}
 	prompt, err := composeRun(runOpts{dir: project}, nil, runtime{open: openAppWire})
 	if err != nil {

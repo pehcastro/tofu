@@ -1,0 +1,38 @@
+exit 0
+--- stdout
+{
+  "tofu": "VERSION",
+  "verb": "rules list",
+  "ok": true,
+  "at": "AT",
+  "data": {
+    "origin": "lib",
+    "rules": [
+      {
+        "id": "comments",
+        "kind": "structural",
+        "origin": "library",
+        "mode": "shadow"
+      },
+      {
+        "id": "release",
+        "kind": "structural",
+        "origin": "library",
+        "mode": "shadow"
+      },
+      {
+        "id": "brevity",
+        "kind": "human",
+        "origin": "library"
+      },
+      {
+        "id": "em_dash",
+        "kind": "structural",
+        "origin": "library",
+        "mode": "enforced"
+      }
+    ]
+  },
+  "problems": []
+}
+--- stderr

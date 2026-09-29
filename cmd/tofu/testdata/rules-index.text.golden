@@ -1,0 +1,13 @@
+exit 0
+--- stdout
+Rules index · from lib                                             ● 3 of 4 fire
+
+  task      rename a field
+  paths     internal/rule/trigger.go
+  concerns  code_rules, output_shape
+
+● comments  the scope internal/**/*.go reached internal/rule/trigger.go
+○ release   the condition (?i)\brelease\b matches nothing in the task
+● brevity   always on, the rule declares no trigger
+● em_dash   always on, the rule declares no trigger
+--- stderr

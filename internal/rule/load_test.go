@@ -1,7 +1,6 @@
 package rule
 
 import (
-	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -313,15 +312,16 @@ func TestAnAddedRuleMovesEveryCountAndBreaksNothingElse(t *testing.T) {
 	}
 
 	task := Task{Text: "add a table test for the loader", Paths: []string{"internal/rule/load_test.go"}}
-	fired := 0
-	for _, m := range Index(shipped, task) {
-		if m.Fires {
-			fired++
+	firing := func(rules []Rule) int {
+		fired := 0
+		for _, m := range Index(rules, task) {
+			if m.Fires {
+				fired++
+			}
 		}
+		return fired
 	}
-	out := &strings.Builder{}
-	WriteIndex(out, Index(grownRules, task))
-	if !strings.HasPrefix(out.String(), fmt.Sprintf("%d of %d rules fire\n", fired+1, len(shipped)+1)) {
-		t.Fatalf("the grown index opens with %q, want %d of %d", strings.SplitN(out.String(), "\n", 2)[0], fired+1, len(shipped)+1)
+	if shippedFired, grownFired := firing(shipped), firing(grownRules); grownFired != shippedFired+1 {
+		t.Fatalf("the grown index fires %d rules, want the %d shipped ones and the one added", grownFired, shippedFired)
 	}
 }

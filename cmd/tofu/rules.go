@@ -8,11 +8,14 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
+	"tofu/interface/cli"
 	"tofu/internal/rule"
 	"tofu/internal/sys"
+	"tofu/internal/widget"
 	shipped "tofu/library"
 )
 
@@ -21,17 +24,15 @@ const (
 	rulesFireSuffix     = ".rules.jsonl"
 	rulesFromTheBinary  = "the binary"
 	rulesFromTheProject = "the project"
+	rulesSubcommands    = "tofu rules list|check|fired|index|add|off|remove"
+	rulesListUsage      = "tofu rules list [--library dir] [--dir project] [--json]"
+	rulesCheckUsage     = "tofu rules check [path] [--library dir] [--dir project] [--json]"
 )
 
 type rulesFlags struct {
 	library, dir string
 	json         bool
 	rest         []string
-}
-
-type rulesCheckOpts struct {
-	rulesFlags
-	path string
 }
 
 type ruleListing struct {
@@ -56,7 +57,7 @@ type ruleFireRecord struct {
 }
 
 func fireListing(f rule.Fire) ruleFireListing {
-	return ruleFireListing{RuleID: f.RuleID, Target: f.Target, Mode: f.Mode.String(), Blocked: f.Blocked, Findings: len(f.Findings)}
+	return ruleFireListing{RuleID: f.RuleID, Target: filepath.ToSlash(f.Target), Mode: f.Mode.String(), Blocked: f.Blocked, Findings: len(f.Findings)}
 }
 
 type ruleCheckReport struct {
@@ -70,11 +71,117 @@ type ruleListReport struct {
 	Rules  []ruleListing `json:"rules"`
 }
 
+type problemError cli.Problem
+
+func (e problemError) Error() string { return e.What }
+
+type verbOutput struct {
+	verb, usageLine string
+	asJSON          bool
+	out, errOut     io.Writer
+}
+
+func (o verbOutput) usage(err error) int {
+	o.errorLine(cli.Problem{What: err.Error(), Hint: o.usageLine})
+	return exitUsage
+}
+
+func (o verbOutput) fail(err error) int {
+	problem := cli.Problem{What: err.Error()}
+	var hinted problemError
+	if errors.As(err, &hinted) {
+		problem = cli.Problem(hinted)
+	}
+	if o.asJSON {
+		_ = writeJSON(o.out, cli.Envelope{Verb: o.verb, At: time.Now(), Problems: []cli.Problem{problem}})
+		return exitVerdict
+	}
+	o.errorLine(problem)
+	return exitVerdict
+}
+
+func (o verbOutput) errorLine(problem cli.Problem) {
+	page := cli.Detect(o.errOut, os.Environ())
+	_ = printUncut(page, o.errOut, page.ErrorLine("tofu "+o.verb+": "+problem.What, problem.Hint))
+}
+
+func printUncut(page cli.Page, out io.Writer, lines []string) error {
+	for _, line := range lines {
+		page.Width = max(page.Width, widget.Cells(line))
+	}
+	return page.Print(out, lines)
+}
+
+func (o verbOutput) path(file string) string { return cli.Detect(o.errOut, os.Environ()).Path(file) }
+
+func (o verbOutput) done(ok bool, data any, lines func(cli.Page) []string) int {
+	code := exitOK
+	if !ok {
+		code = exitVerdict
+	}
+	if o.asJSON {
+		if err := writeJSON(o.out, cli.Envelope{Verb: o.verb, OK: ok, At: time.Now(), Data: data}); err != nil {
+			return exitVerdict
+		}
+		return code
+	}
+	page := cli.Detect(o.out, os.Environ())
+	if err := page.Print(o.out, lines(page)); err != nil {
+		return exitVerdict
+	}
+	return code
+}
+
+type changeKind string
+
+const (
+	changeAdded   changeKind = "added"
+	changeChanged changeKind = "changed"
+	changeRemoved changeKind = "removed"
+)
+
+func (c changeKind) mark() cli.Mark {
+	switch c {
+	case changeAdded:
+		return cli.Added
+	case changeChanged:
+		return cli.Changed
+	case changeRemoved:
+		return cli.Removed
+	}
+	panic("tofu: unknown change " + string(c))
+}
+
+type fileChange struct {
+	Change changeKind `json:"change"`
+	What   string     `json:"what"`
+	File   string     `json:"file"`
+}
+
+type writeReceipt struct {
+	Changes []fileChange `json:"changes"`
+	Undo    string       `json:"undo"`
+}
+
+func (o verbOutput) receipt(r writeReceipt) int {
+	if o.asJSON {
+		return o.done(true, r, nil)
+	}
+	page := cli.Detect(o.out, os.Environ())
+	var lines []string
+	for _, c := range r.Changes {
+		lines = append(lines, page.Receipt(c.Change.mark(), c.What, c.File))
+	}
+	if err := printUncut(page, o.out, append(lines, cli.Indent(page.Hint("undo: "+r.Undo))...)); err != nil {
+		return exitVerdict
+	}
+	return exitOK
+}
+
 func rulesVerb(args []string, out, errOut io.Writer) int {
+	bare := verbOutput{verb: "rules", usageLine: rulesSubcommands, errOut: errOut}
 	if len(args) == 0 {
-		return rulesFail(errOut, errors.New(`usage: tofu rules list|check|fired|index [path] [--task kind] [--library dir] [--dir project] [--json]
-       tofu rules add [--global] [--dir project] [--replace] [--concern c] <id> "<text>"
-       tofu rules off|remove [--global] [--dir project] <id>`))
+		return bare.usage(errors.New("no subcommand"))
 	}
 	switch args[0] {
 	case "add":
@@ -92,13 +199,8 @@ func rulesVerb(args []string, out, errOut io.Writer) int {
 	case "index":
 		return rulesIndexVerb(args[1:], out, errOut)
 	default:
-		return rulesFail(errOut, fmt.Errorf("unknown subcommand %q", args[0]))
+		return bare.usage(fmt.Errorf("unknown subcommand %q", args[0]))
 	}
-}
-
-func rulesFail(errOut io.Writer, err error) int {
-	_, _ = fmt.Fprintf(errOut, "tofu rules: %v\n", err)
-	return exitUsage
 }
 
 func loadRules(override, project string) ([]rule.Rule, string, error) {
@@ -141,18 +243,37 @@ func baseRules(override string) ([]rule.Rule, string, error) {
 	return rules, rulesFromTheBinary, err
 }
 
-func rulesListVerb(args []string, out, errOut io.Writer) int {
-	opts, err := parseRulesListArgs(args)
-	if err != nil {
-		return rulesFail(errOut, err)
+func listingMark(mode rule.Mode) cli.Mark {
+	switch mode {
+	case "":
+		return cli.Done
+	case rule.ModeEnforced:
+		return cli.Active
+	case rule.ModeShadow:
+		return cli.Idle
+	case rule.ModeOff:
+		return cli.Removed
 	}
+	panic("tofu: unknown rule mode " + string(mode))
+}
+
+func rulesListVerb(args []string, out, errOut io.Writer) int {
+	o := verbOutput{verb: "rules list", usageLine: rulesListUsage, out: out, errOut: errOut}
+	opts, err := parseRulesFlags(args)
+	if err == nil && len(opts.rest) > 0 {
+		err = fmt.Errorf("unknown argument %q", opts.rest[0])
+	}
+	if err != nil {
+		return o.usage(err)
+	}
+	o.asJSON = opts.json
 	rules, origin, err := loadRules(opts.library, opts.dir)
 	if err != nil {
-		return rulesFail(errOut, err)
+		return o.fail(err)
 	}
 	layers, err := userRuleLayers(opts.dir)
 	if err != nil {
-		return rulesFail(errOut, err)
+		return o.fail(err)
 	}
 	listing := make([]ruleListing, len(rules))
 	for i, r := range rules {
@@ -167,81 +288,131 @@ func rulesListVerb(args []string, out, errOut io.Writer) int {
 			listing[i].Origin, listing[i].File = layers[at].name, r.File
 		}
 	}
-	if opts.json {
-		body, err := json.Marshal(ruleListReport{Origin: origin, Rules: listing})
-		if err != nil {
-			return rulesFail(errOut, err)
+	report := ruleListReport{Origin: origin, Rules: listing}
+	return o.done(true, report, report.lines)
+}
+
+func (report ruleListReport) lines(page cli.Page) []string {
+	var origins []string
+	checks := map[string]int{}
+	for _, r := range report.Rules {
+		if !slices.Contains(origins, r.Origin) {
+			origins = append(origins, r.Origin)
 		}
-		_, _ = fmt.Fprintln(out, string(body))
-		return exitOK
+		checks[r.Mode]++
 	}
-	widest := 0
-	for _, r := range listing {
-		widest = max(widest, len(r.ID))
+	verdict := cli.Verdict{Mark: cli.Done, Text: "no checks"}
+	var counts []string
+	for _, mode := range []rule.Mode{rule.ModeShadow, rule.ModeEnforced} {
+		if count := checks[mode.String()]; count > 0 {
+			verdict.Mark = listingMark(mode)
+			counts = append(counts, strconv.Itoa(count)+" "+mode.String())
+		}
 	}
-	_, _ = fmt.Fprintf(out, "%d rules from %s, then your global and project rules, a mode is shown only where it does something\n", len(listing), origin)
-	for _, r := range listing {
-		_, _ = fmt.Fprintln(out, strings.TrimRight(fmt.Sprintf("%-*s %-10s %-7s %-8s %s", widest, r.ID, r.Kind, r.Origin, r.Mode, r.File), " "))
+	if len(counts) > 0 {
+		verdict.Text = strings.Join(counts, " · ")
 	}
-	return exitOK
+	lines := page.Title("Rules", []string{strconv.Itoa(len(report.Rules)) + " run", "from " + page.Path(report.Origin)}, verdict)
+	for _, name := range origins {
+		var rows []cli.Row
+		for _, r := range report.Rules {
+			if r.Origin == name {
+				rows = append(rows, cli.Row{Mark: listingMark(rule.Mode(r.Mode)), Cells: []string{r.ID, r.Kind, r.Mode}, Detail: page.Path(r.File)})
+			}
+		}
+		lines = append(lines, "", page.Section(name, cli.Verdict{}))
+		lines = append(lines, cli.Indent(page.Rows(rows)...)...)
+	}
+	return lines
 }
 
 func rulesCheckVerb(args []string, out, errOut io.Writer) int {
-	opts, err := parseRulesCheckArgs(args)
-	if err != nil {
-		return rulesFail(errOut, err)
+	o := verbOutput{verb: "rules check", usageLine: rulesCheckUsage, out: out, errOut: errOut}
+	opts, err := parseRulesFlags(args)
+	if err == nil && len(opts.rest) > 1 {
+		err = fmt.Errorf("one path, got %q and %q", opts.rest[0], opts.rest[1])
 	}
+	if err != nil {
+		return o.usage(err)
+	}
+	o.asJSON = opts.json
 	rules, origin, err := loadRules(opts.library, opts.dir)
 	if err != nil {
-		return rulesFail(errOut, err)
+		return o.fail(err)
 	}
 	roots := lintRoots
-	if opts.path != "" {
-		roots = []string{opts.path}
+	if len(opts.rest) == 1 {
+		roots = opts.rest
 	}
 
 	var fires []rule.Fire
 	for _, root := range roots {
 		present, err := sys.Exists(root)
 		if err != nil {
-			return rulesFail(errOut, err)
+			return o.fail(err)
 		}
 		if !present {
 			continue
 		}
 		found, err := rule.CheckTree(rules, rule.Builtins(), root, time.Now)
 		if err != nil {
-			return rulesFail(errOut, err)
+			return o.fail(err)
 		}
 		fires = append(fires, found...)
 	}
 
 	logDir, err := sys.LogDir()
 	if err != nil {
-		return rulesFail(errOut, err)
+		return o.fail(err)
 	}
-	blocked := 0
-	for _, f := range fires {
+	report := ruleCheckReport{Origin: origin, Fires: make([]ruleFireListing, len(fires))}
+	for i, f := range fires {
 		if err := appendRuleFire(logDir, f); err != nil {
-			return rulesFail(errOut, err)
+			return o.fail(err)
 		}
+		report.Fires[i] = fireListing(f)
 		if f.Blocked {
-			blocked++
+			report.Blocked++
 		}
 	}
+	return o.done(report.Blocked == 0, report, report.lines)
+}
 
-	if opts.json {
-		if err := printRulesCheckJSON(out, origin, fires, blocked); err != nil {
-			return rulesFail(errOut, err)
-		}
-	} else {
-		printRulesCheck(out, origin, fires, blocked)
+func (report ruleCheckReport) lines(page cli.Page) []string {
+	lines := page.Title("Rules check", []string{"from " + page.Path(report.Origin)}, firesVerdict(len(report.Fires), report.Blocked))
+	rows := make([]cli.Row, len(report.Fires))
+	for i, f := range report.Fires {
+		rows[i] = f.row(page, plural(f.Findings, "finding"))
 	}
+	if len(rows) > 0 {
+		lines = append(append(lines, ""), page.Rows(rows)...)
+	}
+	return lines
+}
 
-	if blocked > 0 {
-		return exitVerdict
+func firesVerdict(fired, blocked int) cli.Verdict {
+	switch {
+	case fired == 0:
+		return cli.Verdict{Mark: cli.Done, Text: "nothing fired"}
+	case blocked == 0:
+		return cli.Verdict{Mark: cli.Warn, Text: strconv.Itoa(fired) + " fired"}
 	}
-	return exitOK
+	return cli.Verdict{Mark: cli.Fail, Text: strconv.Itoa(fired) + " fired · " + strconv.Itoa(blocked) + " blocked"}
+}
+
+func (f ruleFireListing) row(page cli.Page, detail string) cli.Row {
+	mark := cli.Warn
+	if f.Blocked {
+		mark = cli.Fail
+	}
+	return cli.Row{Mark: mark, Cells: []string{f.RuleID, page.Path(f.Target), f.Mode}, Detail: detail}
+}
+
+func plural(count int, noun string) string {
+	if count == 1 {
+		return "1 " + noun
+	}
+	return strconv.Itoa(count) + " " + noun + "s"
 }
 
 func appendRuleFire(dir string, f rule.Fire) error {
@@ -262,26 +433,6 @@ func appendRuleFire(dir string, f rule.Fire) error {
 	return err
 }
 
-func printRulesCheck(out io.Writer, origin string, fires []rule.Fire, blocked int) {
-	_, _ = fmt.Fprintf(out, "%d blocked of %d fires, rules from %s\n", blocked, len(fires), origin)
-	for _, f := range fires {
-		_, _ = fmt.Fprintf(out, "%s  %s  %s  blocked=%t\n", f.RuleID, f.Target, f.Mode, f.Blocked)
-	}
-}
-
-func printRulesCheckJSON(out io.Writer, origin string, fires []rule.Fire, blocked int) error {
-	listing := make([]ruleFireListing, len(fires))
-	for i, f := range fires {
-		listing[i] = fireListing(f)
-	}
-	body, err := json.Marshal(ruleCheckReport{Origin: origin, Fires: listing, Blocked: blocked})
-	if err != nil {
-		return err
-	}
-	_, err = fmt.Fprintln(out, string(body))
-	return err
-}
-
 func parseRulesFlags(args []string) (rulesFlags, error) {
 	flags := rulesFlags{dir: "."}
 	for i := 0; i < len(args); i++ {
@@ -292,7 +443,7 @@ func parseRulesFlags(args []string) (rulesFlags, error) {
 			}
 		}
 		switch {
-		case arg == "--json":
+		case arg == jsonFlag:
 			flags.json = true
 		case arg == "--library":
 			flags.library = args[i]
@@ -305,27 +456,4 @@ func parseRulesFlags(args []string) (rulesFlags, error) {
 		}
 	}
 	return flags, nil
-}
-
-func parseRulesListArgs(args []string) (rulesFlags, error) {
-	flags, err := parseRulesFlags(args)
-	if err == nil && len(flags.rest) > 0 {
-		err = fmt.Errorf("unknown argument %q", flags.rest[0])
-	}
-	return flags, err
-}
-
-func parseRulesCheckArgs(args []string) (rulesCheckOpts, error) {
-	flags, err := parseRulesFlags(args)
-	if err != nil {
-		return rulesCheckOpts{}, err
-	}
-	if len(flags.rest) > 1 {
-		return rulesCheckOpts{}, fmt.Errorf("tofu rules check takes one path, got %q and %q", flags.rest[0], flags.rest[1])
-	}
-	opts := rulesCheckOpts{rulesFlags: flags}
-	if len(flags.rest) == 1 {
-		opts.path = flags.rest[0]
-	}
-	return opts, nil
 }

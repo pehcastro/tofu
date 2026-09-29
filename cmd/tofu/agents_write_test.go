@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -19,7 +20,7 @@ func agentsLine(t *testing.T, name string) string {
 	t.Helper()
 	_, out, _ := tofuAgents(t)
 	for _, line := range strings.Split(out, "\n") {
-		if fields := strings.Fields(line); len(fields) > 0 && fields[0] == name {
+		if slices.Contains(strings.Fields(line), name) {
 			return line
 		}
 	}
@@ -37,13 +38,16 @@ func TestAgentsAddSetAndRemoveWriteTheHomeAndTheProjectLayers(t *testing.T) {
 		}
 	}
 	for name, model := range added {
-		file := filepath.Join(project, ".tofu", "agents", name+".md")
-		if line := agentsLine(t, name); !strings.Contains(line, model) || !strings.Contains(line, file) {
-			t.Errorf("tofu agents shows %s as %q, want %s and %s", name, line, model, file)
+		if _, err := os.Stat(filepath.Join(project, ".tofu", "agents", name+".md")); err != nil {
+			t.Errorf("add %s wrote no file in the project: %v", name, err)
+		}
+		if line := agentsLine(t, name); !strings.Contains(line, model) || !slices.Contains(strings.Fields(line), "project") {
+			t.Errorf("tofu agents shows %s as %q, want %s and project", name, line, model)
 		}
 	}
-	if _, out, _ := tofuAgents(t); !strings.Contains(out, `plans: "the work"`) || !strings.Contains(out, "tools read, search") {
-		t.Errorf("the description or the tools did not survive the round trip:\n%s", out)
+	found, err := agentsIn(project)
+	if planner, listed := listedAgent(found, "planner"); err != nil || !listed || planner.Description != `plans: "the work"` || !slices.Equal(planner.Tools, []string{"read", "search"}) {
+		t.Errorf("the description or the tools did not survive the round trip: %+v, %v", planner, err)
 	}
 
 	if code, _, errOut := tofuAgents(t, "add", "planner", "--description", "again", "--model", "claude-sub/claude-opus-5"); code != exitVerdict || !strings.Contains(errOut, "planner") {
@@ -70,8 +74,8 @@ func TestAgentsAddSetAndRemoveWriteTheHomeAndTheProjectLayers(t *testing.T) {
 	if code, out, errOut := tofuAgents(t, "set", "planner", "codex-sub/gpt-5.6-sol"); code != exitOK || !strings.Contains(out, "undo: tofu agents set planner claude-sub/claude-opus-5") {
 		t.Fatalf("set exited %d, out %q, err %q", code, out, errOut)
 	}
-	if line := agentsLine(t, "planner"); !strings.Contains(line, "codex-sub/gpt-5.6-sol") || !strings.Contains(line, "agent-models.yaml") {
-		t.Errorf("after set, tofu agents shows planner as %q", line)
+	if line := agentsLine(t, "planner"); !strings.Contains(line, "codex-sub/gpt-5.6-sol") || !slices.Contains(strings.Fields(line), "project") {
+		t.Errorf("after set, tofu agents shows planner as %q, want codex-sub/gpt-5.6-sol and project", line)
 	}
 	assigned, err := os.ReadFile(filepath.Join(project, ".tofu", "agent-models.yaml"))
 	if err != nil || !strings.Contains(string(assigned), "planner: codex-sub/gpt-5.6-sol") {
@@ -104,8 +108,11 @@ func TestAgentsAddSetAndRemoveWriteTheHomeAndTheProjectLayers(t *testing.T) {
 	if code, _, errOut := tofuAgents(t, "add", "--global", "reviewer", "--description", "reviews", "--model", "claude-sub/claude-opus-5"); code != exitOK {
 		t.Fatalf("add --global exited %d: %s", code, errOut)
 	}
-	if line := agentsLine(t, "reviewer"); !strings.Contains(line, filepath.Join(home, ".tofu", "agents", "reviewer.md")) {
-		t.Errorf("tofu agents shows reviewer as %q, want the home file", line)
+	if _, err := os.Stat(filepath.Join(home, ".tofu", "agents", "reviewer.md")); err != nil {
+		t.Errorf("add --global wrote no file in the home: %v", err)
+	}
+	if line := agentsLine(t, "reviewer"); !slices.Contains(strings.Fields(line), "global") {
+		t.Errorf("tofu agents shows reviewer as %q, want global", line)
 	}
 	if code, _, _ := tofuAgents(t, "remove", "reviewer"); code == exitOK {
 		t.Error("remove without --global deleted an agent from the home layer")

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"io"
@@ -8,118 +9,189 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
+	"tofu/interface/cli"
 	"tofu/internal/llm/models"
 )
 
 const (
-	modelsFromTheBinaryAlone = `claude-sub/claude-opus-5, codex-sub/gpt-5.6-sol 16 of 24 usable
+	modelsFromTheBinaryAlone = `Models · 24 known                                                    ✓ 16 usable
 
-  claude-sub  claude-sub/claude-opus-5 (kind llm, pays subscription) by
-                default on --wire anthropic, a 1000000 token window, spends
-                5h and 7d
-              also allowed, claude-sub/claude-fable-5 (kind llm, pays
-                subscription), claude-sub/claude-fable-5-1 (kind llm, pays
-                subscription), claude-sub/claude-haiku-4-5-20251001 (kind
-                llm, pays subscription), claude-sub/claude-sonnet-5 (kind
-                llm, pays subscription)
-              6 excluded, a previous generation the account still serves,
-                superseded by claude-opus-5 and claude-sonnet-5
+claude-sub
+  ✓ claude-sub/claude-fable-5              allowed   1M
+  ✓ claude-sub/claude-fable-5-1            allowed   1M
+  ✓ claude-sub/claude-haiku-4-5-20251001   allowed   200k
+  ○ claude-sub/claude-opus-4-5-20251101    excluded  200k
+  ○ claude-sub/claude-opus-4-6             excluded  1M
+  ○ claude-sub/claude-opus-4-7             excluded  1M
+  ○ claude-sub/claude-opus-4-8             excluded  1M
+  ● claude-sub/claude-opus-5               default   1M
+  ○ claude-sub/claude-sonnet-4-5-20250929  excluded  1M
+  ○ claude-sub/claude-sonnet-4-6           excluded  1M
+  ✓ claude-sub/claude-sonnet-5             allowed   1M
 
-  codex-sub   codex-sub/gpt-5.6-sol (kind llm, pays subscription) by default
-                on --wire codex, a 1050000 token window, spends 5h and 7d
-              also allowed, codex-sub/gpt-5.6-luna (kind llm, pays
-                subscription), codex-sub/gpt-5.6-terra (kind llm, pays
-                subscription), codex-sub/gpt-6-astra (kind llm, pays
-                subscription)
-              1 excluded, a previous generation the account still serves,
-                superseded by gpt-5.6-sol
-              1 excluded, nobody has ruled on it, so tofu does not send it
-                until somebody does
+codex-sub
+  ○ codex-sub/gpt-5.5        excluded  1.05M
+  ✓ codex-sub/gpt-5.6-luna   allowed   1.05M
+  ● codex-sub/gpt-5.6-sol    default   1.05M
+  ✓ codex-sub/gpt-5.6-terra  allowed   1.05M
+  ✓ codex-sub/gpt-6-astra    allowed   1.05M
+  ○ codex-sub/gpt-reserve    excluded
 
-  key         meta/muse-spark-1.1 (kind llm, pays key), use allowed
-              meta/muse-spark-1.2 (kind llm, pays key), use allowed
-              meta/muse-spark-1.2-contributor (kind llm, pays key), use
-                allowed, Meta may train on what you send to this model
-              meta/muse-spark-1.3 (kind llm, pays key), use allowed
-              meta/muse-spark-1.3-contributor (kind llm, pays key), use
-                allowed, Meta may train on what you send to this model
-              openrouter/jev-latest (kind classifier, pays key), use allowed
-              typesafe/jev-latest (kind classifier, pays key), use allowed
+api key
+  ✓ meta/muse-spark-1.1              allowed  1.05M
+  ✓ meta/muse-spark-1.2              allowed  1.05M
+  ⚠ meta/muse-spark-1.2-contributor  allowed  1.05M
+  ✓ meta/muse-spark-1.3              allowed  1.05M
+  ⚠ meta/muse-spark-1.3-contributor  allowed  1.05M
+  ✓ openrouter/jev-latest            allowed
+  ✓ typesafe/jev-latest              allowed
+  ⚠ Meta may train on what you send to this model
 
-  windows     16 of 24 models take a context window from the snapshot of
-                models.dev taken on 2026-09-21, 5 from the window their
-                vendor publishes, and tofu models reload reads the table
-                again
+roles
+  ○ orchestrator         unbound
+  ○ classifier           unbound
+  ○ (unnamed sub-agent)  unbound
 
-  roles       orchestrator: the model that plans and hands work to
-                sub-agents. nothing is bound, so it runs on the subscription
-                default
-
-              classifier: the typed model that judges the model's calls,
-                shell results, browser steps and stop checks. nothing is
-                bound, so it runs openrouter/jev-latest when an OpenRouter
-                key is stored, else typesafe/jev-latest when a TypeSafe key
-                is stored
-
-              (unnamed sub-agent): a spawn that names no sub-agent. nothing
-                is bound, so it runs on the orchestrator's model
+windows
+  table      the snapshot of models.dev taken on 2026-09-21
+  listed     16
+  published  5
+  → tofu models reload
 `
 
-	modelsWithAProjectLayerAndAHomeRegistry = `claude-sub/claude-opus-5, codex-sub/gpt-5.6-sol 17 of 24 usable
+	modelsWithAProjectLayerAndAHomeRegistry = `Models · 24 known                                                    ✓ 17 usable
 
-  claude-sub  claude-sub/claude-opus-5 (kind llm, pays subscription) by
-                default on --wire anthropic, a 123456 token window, spends
-                5h and 7d
-              also allowed, claude-sub/claude-fable-5 (kind llm, pays
-                subscription), claude-sub/claude-fable-5-1 (kind llm, pays
-                subscription), claude-sub/claude-haiku-4-5-20251001 (kind
-                llm, pays subscription), claude-sub/claude-opus-4-5-20251101
-                (kind llm, pays subscription, from the project layer),
-                claude-sub/claude-sonnet-5 (kind llm, pays subscription)
-                [orchestrator]
-              5 excluded, a previous generation the account still serves,
-                superseded by claude-opus-5 and claude-sonnet-5
+claude-sub
+  ✓ claude-sub/claude-fable-5              allowed
+  ✓ claude-sub/claude-fable-5-1            allowed
+  ✓ claude-sub/claude-haiku-4-5-20251001   allowed
+  ✓ claude-sub/claude-opus-4-5-20251101    allowed         project layer
+  ○ claude-sub/claude-opus-4-6             excluded
+  ○ claude-sub/claude-opus-4-7             excluded
+  ○ claude-sub/claude-opus-4-8             excluded
+  ● claude-sub/claude-opus-5               default   123k
+  ○ claude-sub/claude-sonnet-4-5-20250929  excluded
+  ○ claude-sub/claude-sonnet-4-6           excluded
+  ✓ claude-sub/claude-sonnet-5             allowed         orchestrator
 
-  codex-sub   codex-sub/gpt-5.6-sol (kind llm, pays subscription) by default
-                on --wire codex, a 0 token window, spends 5h and 7d
-              also allowed, codex-sub/gpt-5.6-luna (kind llm, pays
-                subscription), codex-sub/gpt-5.6-terra (kind llm, pays
-                subscription), codex-sub/gpt-6-astra (kind llm, pays
-                subscription)
-              1 excluded, a previous generation the account still serves,
-                superseded by gpt-5.6-sol
-              1 excluded, nobody has ruled on it, so tofu does not send it
-                until somebody does
+codex-sub
+  ○ codex-sub/gpt-5.5        excluded
+  ✓ codex-sub/gpt-5.6-luna   allowed
+  ● codex-sub/gpt-5.6-sol    default
+  ✓ codex-sub/gpt-5.6-terra  allowed
+  ✓ codex-sub/gpt-6-astra    allowed
+  ○ codex-sub/gpt-reserve    excluded
 
-  key         meta/muse-spark-1.1 (kind llm, pays key), use allowed
-              meta/muse-spark-1.2 (kind llm, pays key), use allowed
-              meta/muse-spark-1.2-contributor (kind llm, pays key), use
-                allowed, Meta may train on what you send to this model
-              meta/muse-spark-1.3 (kind llm, pays key), use allowed
-              meta/muse-spark-1.3-contributor (kind llm, pays key), use
-                allowed, Meta may train on what you send to this model
-              openrouter/jev-latest (kind classifier, pays key), use allowed
-              typesafe/jev-latest (kind classifier, pays key), use allowed
+api key
+  ✓ meta/muse-spark-1.1              allowed  1.05M
+  ✓ meta/muse-spark-1.2              allowed  1.05M
+  ⚠ meta/muse-spark-1.2-contributor  allowed  1.05M
+  ✓ meta/muse-spark-1.3              allowed  1.05M
+  ⚠ meta/muse-spark-1.3-contributor  allowed  1.05M
+  ✓ openrouter/jev-latest            allowed
+  ✓ typesafe/jev-latest              allowed
+  ⚠ Meta may train on what you send to this model
 
-  windows     1 of 24 models take a context window from the table this test
-                wrote, 5 from the window their vendor publishes, and tofu
-                models reload reads the table again
+roles
+  ● orchestrator         claude-sub/claude-sonnet-5
+  ○ classifier           unbound
+  ○ (unnamed sub-agent)  unbound
 
-  roles       classifier: the typed model that judges the model's calls,
-                shell results, browser steps and stop checks. nothing is
-                bound, so it runs openrouter/jev-latest when an OpenRouter
-                key is stored, else typesafe/jev-latest when a TypeSafe key
-                is stored
+windows
+  table      the table this test wrote
+  listed     1
+  published  5
+  → tofu models reload
+`
 
-              (unnamed sub-agent): a spawn that names no sub-agent. nothing
-                is bound, so it runs on the orchestrator's model
+	modelsJSONWithAProjectLayer = `models ok true problems 0
+claude-sub/claude-fable-5 allowed 0 library
+claude-sub/claude-fable-5-1 allowed 0 library
+claude-sub/claude-haiku-4-5-20251001 allowed 0 library
+claude-sub/claude-opus-4-5-20251101 allowed 0 project
+claude-sub/claude-opus-4-6 excluded 0 library
+claude-sub/claude-opus-4-7 excluded 0 library
+claude-sub/claude-opus-4-8 excluded 0 library
+claude-sub/claude-opus-5 default 123456 library
+claude-sub/claude-sonnet-4-5-20250929 excluded 0 library
+claude-sub/claude-sonnet-4-6 excluded 0 library
+claude-sub/claude-sonnet-5 allowed 0 library orchestrator
+codex-sub/gpt-5.5 excluded 0 library
+codex-sub/gpt-5.6-luna allowed 0 library
+codex-sub/gpt-5.6-sol default 0 library
+codex-sub/gpt-5.6-terra allowed 0 library
+codex-sub/gpt-6-astra allowed 0 library
+codex-sub/gpt-reserve excluded 0 library
+meta/muse-spark-1.1 allowed 1048576 library
+meta/muse-spark-1.2 allowed 1048576 library
+meta/muse-spark-1.2-contributor allowed 1048576 library
+meta/muse-spark-1.3 allowed 1048576 library
+meta/muse-spark-1.3-contributor allowed 1048576 library
+openrouter/jev-latest allowed 0 library
+typesafe/jev-latest allowed 0 library
 `
 
 	homeRegistryOfOneWindow = `{"from":"the table this test wrote","windows":{"anthropic/claude-opus-5":123456}}`
+
+	reloadOfANewModelAndARefusedAccount = `Model reload                                                  ⚠ 1 new · 1 failed
+
+  models.dev    ✓ 2 context windows
+  catalog       ✓ 1 file removed
+
+claude-sub      ✓ 3 served
+  + claude-sonnet-5-5  allowed
+
+codex-sub       ✗ model list refused (403)
+  → tofu login codex-sub
+`
+
+	reloadWithNobodySignedIn = `Model reload                                                   ✓ nothing changed
+
+  models.dev    ✓ 2 context windows
+
+claude-sub      ○ not signed in
+  → tofu login claude-sub
+
+codex-sub       ○ not signed in
+  → tofu login codex-sub
+`
+
+	registryOfTwoWindows = `{"anthropic":{"models":{"claude-sonnet-5-5":{"limit":{"context":1000000},"tool_call":true},"claude-opus-5":{"limit":{"context":1000000},"tool_call":true}}}}`
+	vendorBody           = `{"error":{"message":"the vendor refused this account"}}`
 )
+
+type envelopeOf[T any] struct {
+	Verb     string        `json:"verb"`
+	OK       bool          `json:"ok"`
+	Data     T             `json:"data"`
+	Problems []cli.Problem `json:"problems"`
+}
+
+func oneEnvelope(t *testing.T, printed string, into any) {
+	t.Helper()
+	decoder := json.NewDecoder(strings.NewReader(printed))
+	if err := decoder.Decode(into); err != nil {
+		t.Fatalf("stdout is not a JSON envelope: %v\n%s", err, printed)
+	}
+	if decoder.More() {
+		t.Fatalf("stdout holds more than one JSON document\n%s", printed)
+	}
+}
+
+func modelsJSONLines(t *testing.T, printed string) string {
+	t.Helper()
+	var envelope envelopeOf[modelsReport]
+	oneEnvelope(t, printed, &envelope)
+	lines := []string{envelope.Verb + " ok " + strconv.FormatBool(envelope.OK) + " problems " + strconv.Itoa(len(envelope.Problems))}
+	for _, model := range envelope.Data.Models {
+		lines = append(lines, strings.TrimSpace(strings.Join([]string{model.Slug, model.Use, strconv.Itoa(model.ContextTokens), model.Layer, strings.Join(model.Roles, "+")}, " ")))
+	}
+	return strings.Join(lines, "\n") + "\n"
+}
 
 func TestE2EModelsMergesTheProjectLayerOverTheBinaryAndReadsTheRegistryFromHome(t *testing.T) {
 	shipped := newProject(t, "shipped")
@@ -132,66 +204,125 @@ func TestE2EModelsMergesTheProjectLayerOverTheBinaryAndReadsTheRegistryFromHome(
 	writeFile(t, layered.home, ".tofu/model-windows.json", homeRegistryOfOneWindow)
 	sameText(t, "a project that allows one excluded model, binds the orchestrator through the legacy turn.yaml, and carries its own window table",
 		layered.run(t, exitOK, "models"), modelsWithAProjectLayerAndAHomeRegistry)
+	sameText(t, "the same project as one --json envelope",
+		modelsJSONLines(t, layered.run(t, exitOK, "models", "--json")), modelsJSONWithAProjectLayer)
 }
 
-func stubbed(t *testing.T, body string) string {
+func stubbed(t *testing.T, status int, body string) string {
 	t.Helper()
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(status)
 		_, _ = w.Write([]byte(body))
 	}))
 	t.Cleanup(server.Close)
 	return server.URL
 }
 
-func TestModelsReloadWritesWhatTheAccountServesIntoTheCatalog(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("USERPROFILE", home)
-	t.Setenv("HOME", home)
-	t.Setenv(models.RegistryURLVariable, stubbed(t, `{"anthropic":{"models":{"claude-sonnet-5-5":{"limit":{"context":1000000},"tool_call":true}}}}`))
+func stubbedHome(t *testing.T) {
+	t.Helper()
+	chdirTemp(t)
+	t.Setenv(models.RegistryURLVariable, stubbed(t, http.StatusOK, registryOfTwoWindows))
+}
+
+func TestModelsReloadShowsANewModelAndARefusedAccountWithTheVendorBodyOnlyInJSON(t *testing.T) {
+	stubbedHome(t)
 	catalog, err := models.CatalogDir()
 	if err != nil {
 		t.Fatal(err)
 	}
 	shadowing := filepath.Join(catalog, "models", "anthropic", "claude-opus-5.yaml")
 	writeFile(t, catalog, "models/anthropic/claude-opus-5.yaml", "subscription: claude-sub\nuse: allowed\n")
-
-	account := models.Account{
-		Subscription: models.ClaudeSub,
-		Token:        func(context.Context) (string, error) { return "stub", nil },
-		BaseURL:      stubbed(t, `{"data":[{"id":"claude-opus-5"},{"id":"claude-sonnet-5"},{"id":"claude-sonnet-5-5"}]}`),
+	token := func(context.Context) (string, error) { return "stub", nil }
+	accounts := []models.Account{
+		{Subscription: models.ClaudeSub, Token: token, BaseURL: stubbed(t, http.StatusOK, `{"data":[{"id":"claude-opus-5"},{"id":"claude-sonnet-5"},{"id":"claude-sonnet-5-5"}]}`)},
+		{Subscription: models.CodexSub, Token: token, BaseURL: stubbed(t, http.StatusForbidden, vendorBody)},
 	}
-	var said strings.Builder
-	if code := reloadModels(context.Background(), []models.Account{account}, &said); code != exitOK {
-		t.Fatalf("reload exited %d\n%s", code, said.String())
-	}
-	if _, err := os.Stat(filepath.Join(catalog, "models", "anthropic", "claude-sonnet-5-5.yaml")); err != nil {
-		t.Fatalf("the served id is not in the catalog: %v\n%s", err, said.String())
-	}
-	if _, err := os.Stat(shadowing); !os.IsNotExist(err) {
-		t.Fatalf("the catalog file for an id tofu ships is still there, so it shadows the shipped file\n%s", said.String())
-	}
-
-	var listed strings.Builder
-	if code := modelsVerb([]string{jsonFlag}, &listed, io.Discard, 0); code != exitOK {
-		t.Fatalf("tofu models --json exited %d\n%s", code, listed.String())
-	}
-	var report modelsReport
-	if err := json.Unmarshal([]byte(listed.String()), &report); err != nil {
+	report, err := reloadModels(context.Background(), accounts, nil)
+	if err != nil {
 		t.Fatal(err)
 	}
-	layer := "absent"
-	for _, model := range report.Models {
-		if model.Slug == "claude-sub/claude-sonnet-5-5" {
-			layer = model.Layer
+	var text bytes.Buffer
+	if err := (cli.Page{Width: 80}).Print(&text, reloadLines(cli.Page{Width: 80}, report)); err != nil {
+		t.Fatal(err)
+	}
+	sameText(t, "a reload where one account serves a new model and the other is refused", text.String(), reloadOfANewModelAndARefusedAccount)
+
+	var printed bytes.Buffer
+	if err := writeJSON(&printed, report.envelope()); err != nil {
+		t.Fatal(err)
+	}
+	var envelope envelopeOf[modelReload]
+	oneEnvelope(t, printed.String(), &envelope)
+	if envelope.Verb != "models reload" || envelope.OK || len(envelope.Problems) != 1 || envelope.Problems[0].Hint != "tofu login codex-sub" {
+		t.Errorf("the envelope does not carry one problem for the refused account with its login hint\n%s", printed.String())
+	}
+	states := map[string]string{}
+	for _, source := range envelope.Data.Sources {
+		states[source.Source] = source.State
+		if source.Source == "codex-sub" && !strings.Contains(source.Error, "the vendor refused this account") {
+			t.Errorf("the JSON drops the vendor body for the refused account: %q", source.Error)
 		}
 	}
-	if layer != "catalog" {
-		t.Fatalf("tofu models --json shows claude-sub/claude-sonnet-5-5 with layer %s rather than catalog\n%s", layer, said.String())
+	if states["claude-sub"] != sourceReloaded || states["codex-sub"] != sourceRefused {
+		t.Errorf("the sources are %v, want claude-sub %s and codex-sub %s", states, sourceReloaded, sourceRefused)
 	}
 
-	var refreshed strings.Builder
-	if code := modelsVerb([]string{"--refresh"}, &refreshed, io.Discard, 0); code != exitOK || !strings.Contains(refreshed.String(), models.ReloadVerb) {
-		t.Fatalf("tofu models --refresh exited %d and does not name %s\n%s", code, models.ReloadVerb, refreshed.String())
+	if _, err := os.Stat(filepath.Join(catalog, "models", "anthropic", "claude-sonnet-5-5.yaml")); err != nil {
+		t.Fatalf("the served id is not in the catalog: %v", err)
 	}
-	t.Log("\n" + said.String() + refreshed.String())
+	if _, err := os.Stat(shadowing); !os.IsNotExist(err) {
+		t.Fatal("the catalog file for an id tofu ships is still there, so it shadows the shipped file")
+	}
+	var listed bytes.Buffer
+	if code := run([]string{"models", jsonFlag}, strings.NewReader(""), &listed, io.Discard); code != exitOK {
+		t.Fatalf("tofu models --json exited %d\n%s", code, listed.String())
+	}
+	if !strings.Contains(modelsJSONLines(t, listed.String()), "claude-sub/claude-sonnet-5-5 allowed 1000000 catalog") {
+		t.Fatalf("tofu models --json does not show claude-sub/claude-sonnet-5-5 from the catalog\n%s", listed.String())
+	}
+}
+
+func TestModelsReloadWithNobodySignedInSaysSoInTextAndInJSON(t *testing.T) {
+	stubbedHome(t)
+	var text, errOut bytes.Buffer
+	if code := run([]string{"models", "reload"}, strings.NewReader(""), &text, &errOut); code != exitOK {
+		t.Fatalf("tofu models reload exited %d\n%s%s", code, text.String(), errOut.String())
+	}
+	sameText(t, "a reload with no account signed in", text.String(), reloadWithNobodySignedIn)
+
+	var printed bytes.Buffer
+	if code := run([]string{"models", "reload", jsonFlag}, strings.NewReader(""), &printed, &errOut); code != exitOK {
+		t.Fatalf("tofu models reload --json exited %d\n%s%s", code, printed.String(), errOut.String())
+	}
+	var envelope envelopeOf[modelReload]
+	oneEnvelope(t, printed.String(), &envelope)
+	if !envelope.OK || len(envelope.Data.Sources) != 2 {
+		t.Fatalf("the envelope is not ok with two sources\n%s", printed.String())
+	}
+	for _, source := range envelope.Data.Sources {
+		if source.State != sourceNotSignedIn || source.Hint != "tofu login "+source.Source {
+			t.Errorf("%s is %q with hint %q, want %q with its login hint", source.Source, source.State, source.Hint, sourceNotSignedIn)
+		}
+	}
+}
+
+func TestNoColourWritesNoEscapeWhereForcedColourWritesOne(t *testing.T) {
+	stubbedHome(t)
+	t.Setenv("FORCE_COLOR", "1")
+	verbs := [][]string{{"models"}, {"models", "reload"}, {"reload"}}
+	for _, verb := range verbs {
+		var forced bytes.Buffer
+		run(verb, strings.NewReader(""), &forced, io.Discard)
+		if !strings.Contains(forced.String(), "\x1b[") {
+			t.Fatalf("tofu %s with FORCE_COLOR wrote no escape, so the NO_COLOR half proves nothing\n%s", strings.Join(verb, " "), forced.String())
+		}
+	}
+	t.Setenv("NO_COLOR", "1")
+	for _, verb := range verbs {
+		var plain bytes.Buffer
+		run(verb, strings.NewReader(""), &plain, &plain)
+		if strings.Contains(plain.String(), "\x1b") {
+			t.Errorf("tofu %s under NO_COLOR wrote an escape\n%q", strings.Join(verb, " "), plain.String())
+		}
+	}
 }

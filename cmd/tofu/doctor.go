@@ -6,9 +6,9 @@ import (
 	"io"
 	"os"
 	"strconv"
-	"strings"
 	"time"
 
+	"tofu/interface/cli"
 	"tofu/interface/tui/frame"
 	"tofu/internal/judge/jev"
 	"tofu/internal/llm/cred"
@@ -18,15 +18,13 @@ import (
 )
 
 const (
-	doctorFlags       = "the flags are --json and --imports"
-	doctorGateDecides = " is the point the gate decides through"
+	doctorUsage       = "tofu doctor [--imports] [--json]"
+	importsFlag       = "--imports"
 	doctorGateEnv     = "the environment"
 	doctorGateDotEnv  = "an .env file"
 	doctorGateStore   = "the credential store"
 	doctorGateMissing = "missing"
-
-	doctorWindowColumn = 14
-	doctorUnreadable   = "unreadable: "
+	doctorUnreadable  = "unreadable: "
 )
 
 type doctorVerdict int
@@ -128,28 +126,52 @@ type doctorReport struct {
 	OS          string             `json:"os"`
 }
 
-func doctor(out io.Writer, shade palette, args ...string) int {
-	joined := strings.Join(args, " ")
-	if joined == "--imports" {
-		return doctorImports(".", out)
-	}
-	if joined != "" && joined != jsonFlag {
-		_, _ = fmt.Fprintf(out, "tofu doctor: unknown argument %q, %s\n", joined, doctorFlags)
-		return exitUsage
-	}
-	report := doctorState(time.Now())
-	if joined == jsonFlag {
-		if err := writeJSON(out, report); err != nil {
-			_, _ = fmt.Fprintf(out, "tofu doctor: %v\n", err)
-			return exitVerdict
+func doctor(args []string, out, errOut io.Writer) int {
+	asJSON, imports := false, false
+	for _, arg := range args {
+		switch arg {
+		case jsonFlag:
+			asJSON = true
+		case importsFlag:
+			imports = true
+		default:
+			return printFailure(errOut, exitUsage, "tofu doctor: unknown argument "+strconv.Quote(arg), doctorUsage)
 		}
+	}
+	if imports {
+		return doctorImports(".", asJSON, out, errOut)
+	}
+	now := time.Now()
+	report := doctorState(now)
+	ready := report.Verdict == doctorReady
+	var err error
+	if asJSON {
+		err = writeJSON(out, cli.Envelope{Verb: "doctor", OK: ready, At: now, Data: report, Problems: blockerProblems(report.Blockers)})
 	} else {
-		_, _ = fmt.Fprint(out, doctorText(report, shade))
+		page := cli.Detect(out, os.Environ())
+		err = page.Print(out, doctorPage(page, report))
 	}
-	if report.Verdict == doctorNotReady {
-		return exitVerdict
+	switch {
+	case err != nil:
+		return printFailure(errOut, exitVerdict, "tofu doctor: "+err.Error(), "")
+	case ready:
+		return exitOK
 	}
-	return exitOK
+	return exitVerdict
+}
+
+func printFailure(errOut io.Writer, code int, what, hint string) int {
+	page := cli.Detect(errOut, os.Environ())
+	_ = page.Print(errOut, page.ErrorLine(what, hint))
+	return code
+}
+
+func blockerProblems(blockers []doctorBlocker) []cli.Problem {
+	problems := make([]cli.Problem, len(blockers))
+	for i, blocker := range blockers {
+		problems[i] = cli.Problem{What: blocker.Label + ": " + blocker.What, Hint: blocker.Command}
+	}
+	return problems
 }
 
 func doctorState(now time.Time) doctorReport {

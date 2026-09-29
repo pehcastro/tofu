@@ -1,0 +1,5 @@
+exit 1
+--- stdout
+--- stderr
+✗ tofu rules add: the global rules already carry g1
+  → tofu rules add --replace --global g1 "<text>"

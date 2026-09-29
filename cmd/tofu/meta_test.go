@@ -316,12 +316,14 @@ func TestModelsListsTheFiveMetaModelsWithTheirWindowAndTheContributorNotice(t *t
 		if code := modelsVerb([]string{jsonFlag}, &out, io.Discard, 0); code != exitOK {
 			t.Fatalf("tofu models --json exited %d", code)
 		}
-		var report modelsReport
-		if err := json.Unmarshal(out.Bytes(), &report); err != nil {
+		var envelope struct {
+			Data modelsReport `json:"data"`
+		}
+		if err := json.Unmarshal(out.Bytes(), &envelope); err != nil {
 			t.Fatal(err)
 		}
 		meta := map[string]modelReport{}
-		for _, model := range report.Models {
+		for _, model := range envelope.Data.Models {
 			if model.Provider == string(models.Meta) {
 				meta[model.Slug] = model
 			}

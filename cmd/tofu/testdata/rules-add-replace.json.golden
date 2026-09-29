@@ -1,0 +1,20 @@
+exit 0
+--- stdout
+{
+  "tofu": "VERSION",
+  "verb": "rules add",
+  "ok": true,
+  "at": "AT",
+  "data": {
+    "changes": [
+      {
+        "change": "changed",
+        "what": "rule g1",
+        "file": "HOME/.tofu/rules/g1@1.yaml"
+      }
+    ],
+    "undo": "tofu rules remove --global g1"
+  },
+  "problems": []
+}
+--- stderr

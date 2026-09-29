@@ -12,28 +12,49 @@ import (
 	"tofu/interface/tui"
 )
 
-func reloadLine(t *testing.T, said, part string) string {
+const (
+	reloadAfterASkillAModelAndARemovedSubAgent = `Reload · ~/proj                                            ✓ 3 added · 1 removed
+
+skills
+  + deploy
+
+sub-agents
+  - reviewer
+
+models
+  + claude-sub/claude-sonnet-9
+
+usable models
+  + claude-sub/claude-sonnet-9
+`
+
+	reloadOverTheSameDisk = `Reload · ~/proj                                                ✓ nothing changed
+`
+)
+
+func projectInHome(t *testing.T) string {
 	t.Helper()
-	for _, line := range strings.Split(said, "\n") {
-		if strings.HasPrefix(line, part+" ") {
-			return line
-		}
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	project := filepath.Join(home, "proj")
+	if err := os.MkdirAll(project, 0o755); err != nil {
+		t.Fatal(err)
 	}
-	t.Fatalf("tofu reload printed no %s line:\n%s", part, said)
-	return ""
+	t.Chdir(project)
+	return project
 }
 
-func TestReloadPrintsWhatWasAddedAndRemovedSinceTheLastRun(t *testing.T) {
-	project := chdirTemp(t)
+func TestReloadPrintsOnlyThePartsThatChangedSinceTheLastRun(t *testing.T) {
+	project := projectInHome(t)
 	var out, errOut bytes.Buffer
 	if code := run([]string{"agents", "add", "reviewer", "--description", "reviews a diff", "--model", "claude-sub/claude-opus-5"}, strings.NewReader(""), &out, &errOut); code != exitOK {
 		t.Fatalf("agents add exited %d: %s", code, errOut.String())
 	}
 	out.Reset()
-	if code := reloadVerb(&out, &errOut); code != exitOK {
+	if code := reloadVerb(nil, &out, &errOut); code != exitOK {
 		t.Fatalf("the first reload exited %d: %s", code, errOut.String())
 	}
-	first := out.String()
 
 	writeFile(t, project, ".tofu/skills/deploy/SKILL.md", "---\nname: deploy\ndescription: ship the build\n---\nsteps\n")
 	writeFile(t, project, ".tofu/models/anthropic/claude-sonnet-9.yaml", "subscription: claude-sub\nuse: allowed\n")
@@ -41,24 +62,44 @@ func TestReloadPrintsWhatWasAddedAndRemovedSinceTheLastRun(t *testing.T) {
 		t.Fatal(err)
 	}
 	out.Reset()
-	if code := reloadVerb(&out, &errOut); code != exitOK {
+	if code := reloadVerb(nil, &out, &errOut); code != exitOK {
 		t.Fatalf("the second reload exited %d: %s", code, errOut.String())
 	}
-	second := out.String()
-	t.Log(second)
-
-	for part, want := range map[string]string{"skills": "+1 added: deploy", "models": "+1 added: claude-sub/claude-sonnet-9", "sub-agents": "-1 removed: reviewer"} {
-		if line := reloadLine(t, second, part); !strings.Contains(line, want) {
-			t.Errorf("the %s line is %q, want %q\nfirst run:\n%s", part, line, want, first)
-		}
-	}
-	if line := reloadLine(t, second, "rules"); strings.ContainsAny(line, "+-") {
-		t.Errorf("rules did not change and the line says %q", line)
-	}
+	sameText(t, "a reload after a new skill, a new model and a removed sub-agent", out.String(), reloadAfterASkillAModelAndARemovedSubAgent)
 
 	out.Reset()
-	if code := reloadVerb(&out, &errOut); code != exitOK || strings.Contains(out.String(), " added: ") || strings.Contains(out.String(), " removed: ") {
-		t.Errorf("a third reload over the same disk exited %d and still reports a change:\n%s", code, out.String())
+	if code := reloadVerb(nil, &out, &errOut); code != exitOK {
+		t.Fatalf("the third reload exited %d: %s", code, errOut.String())
+	}
+	sameText(t, "a reload over the same disk", out.String(), reloadOverTheSameDisk)
+}
+
+func TestReloadJSONIsOneEnvelopeWithEveryPartAndItsChanges(t *testing.T) {
+	project := projectInHome(t)
+	var out, errOut bytes.Buffer
+	if code := reloadVerb([]string{jsonFlag}, &out, &errOut); code != exitOK {
+		t.Fatalf("the first reload exited %d: %s", code, errOut.String())
+	}
+	writeFile(t, project, ".tofu/skills/deploy/SKILL.md", "---\nname: deploy\ndescription: ship the build\n---\nsteps\n")
+	out.Reset()
+	if code := reloadVerb([]string{jsonFlag}, &out, &errOut); code != exitOK {
+		t.Fatalf("the second reload exited %d: %s", code, errOut.String())
+	}
+	var envelope envelopeOf[reloadDiff]
+	oneEnvelope(t, out.String(), &envelope)
+	if envelope.Verb != "reload" || !envelope.OK || envelope.Data.First || envelope.Data.Project != project {
+		t.Fatalf("the envelope is not an ok second reload of %s\n%s", project, out.String())
+	}
+	for _, part := range envelope.Data.Parts {
+		if part.Name == "skills" && (part.Count != 1 || len(part.Added) != 1 || part.Added[0] != "deploy") {
+			t.Errorf("the skills part is %+v, want one skill and deploy added", part)
+		}
+	}
+	if len(envelope.Data.Parts) < 10 {
+		t.Errorf("the JSON carries %d parts, want every part, changed or not", len(envelope.Data.Parts))
+	}
+	if code := reloadVerb([]string{"--nope"}, &out, &errOut); code != exitUsage {
+		t.Errorf("an unknown flag exited %d rather than %d", code, exitUsage)
 	}
 }
 
@@ -82,8 +123,8 @@ func TestReloadInTheAppPicksUpAKeymapEdit(t *testing.T) {
 		app.Update(tea.KeyPressMsg{Code: letter, Text: string(letter)})
 	}
 	app.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
-	if !strings.Contains(app.View().Content, "usable models") {
-		t.Errorf("the /reload note does not show the inventory\n%s", app.View().Content)
+	if !strings.Contains(app.View().Content, "reloaded, the first reload here") {
+		t.Errorf("the /reload note is not the one short line\n%s", app.View().Content)
 	}
 	app.Update(ctrlO)
 	if !strings.Contains(app.View().Content, searchHint) {

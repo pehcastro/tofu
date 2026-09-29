@@ -110,17 +110,17 @@ func run(args []string, in io.Reader, out io.Writer, errOut io.Writer) int {
 	case "shells":
 		return shellsVerb(args[1:], out, errOut)
 	case "version":
-		return version(out)
+		return version(args[1:], out, errOut)
 	case "changelog":
 		return changelogVerb(args[1:], out, errOut)
 	case "docs":
 		return docsVerb(args[1:], out, errOut)
 	case "doctor":
-		return doctor(out, shade, args[1:]...)
+		return doctor(args[1:], out, errOut)
 	case "login":
 		return loginVerb(args[1:], in, out, errOut)
 	case "usage":
-		return usageVerb(args[1:], out, errOut, shade)
+		return usageVerb(args[1:], out, errOut)
 	case "models":
 		return modelsVerb(args[1:], out, errOut, shade)
 	case "agents":
@@ -157,7 +157,7 @@ func run(args []string, in io.Reader, out io.Writer, errOut io.Writer) int {
 	case "settings":
 		return settingsVerb(args[1:], out, errOut)
 	case "reload":
-		return reloadVerb(out, errOut)
+		return reloadVerb(args[1:], out, errOut)
 	case "migrate":
 		return migrateVerb(args[1:], out, errOut)
 	case "browser":

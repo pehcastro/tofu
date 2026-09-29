@@ -1,0 +1,32 @@
+exit 0
+--- stdout
+{
+  "tofu": "VERSION",
+  "verb": "rules fired",
+  "ok": true,
+  "at": "AT",
+  "data": {
+    "fires": [
+      {
+        "rule_id": "em_dash",
+        "target": "docs/a.md",
+        "mode": "enforced",
+        "blocked": true,
+        "findings": 1,
+        "at": "AT"
+      },
+      {
+        "rule_id": "comments",
+        "target": "internal/x.go",
+        "mode": "shadow",
+        "blocked": false,
+        "findings": 2,
+        "at": "AT"
+      }
+    ],
+    "blocked": 1,
+    "unreadable_lines": 1
+  },
+  "problems": []
+}
+--- stderr

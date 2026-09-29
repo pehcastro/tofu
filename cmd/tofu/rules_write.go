@@ -14,12 +14,18 @@ import (
 	"tofu/internal/sys"
 )
 
+const (
+	rulesAddUsage = `tofu rules add [--global] [--dir project] [--replace] [--concern c] [--json] <id> "<text>"`
+	rulesIDUsage  = "tofu rules off|remove [--global] [--dir project] [--json] <id>"
+)
+
 type ruleLayer struct{ name, dir, flag string }
 
 type ruleWriteOpts struct {
 	layer   ruleLayer
 	dir     string
 	replace bool
+	json    bool
 	concern rule.Concern
 	rest    []string
 }
@@ -72,6 +78,8 @@ func parseRuleWriteArgs(args []string) (ruleWriteOpts, error) {
 			global = true
 		case arg == "--replace":
 			opts.replace = true
+		case arg == jsonFlag:
+			opts.json = true
 		case arg == "--concern":
 			opts.concern = rule.Concern(args[i])
 		case arg == "--dir":
@@ -93,10 +101,10 @@ func parseRuleWriteArgs(args []string) (ruleWriteOpts, error) {
 	return opts, nil
 }
 
-func parseRuleIDArgs(verb string, args []string) (ruleWriteOpts, error) {
+func parseRuleIDArgs(args []string) (ruleWriteOpts, error) {
 	opts, err := parseRuleWriteArgs(args)
 	if err == nil && (len(opts.rest) != 1 || opts.replace || opts.concern != "") {
-		err = fmt.Errorf("usage: tofu rules %s [--global] [--dir project] <id>", verb)
+		err = errors.New("one id, and no --replace or --concern")
 	}
 	return opts, err
 }
@@ -106,99 +114,100 @@ func ruleRuns(id, project string) (bool, error) {
 	return slices.ContainsFunc(running, func(r rule.Rule) bool { return r.ID == id }), err
 }
 
-func printChange(out io.Writer, what, file, undo string) int {
-	_, _ = fmt.Fprintf(out, "%s\nfile: %s\nundo: %s\n", what, file, undo)
-	return exitOK
-}
-
 func rulesAddVerb(args []string, out, errOut io.Writer) int {
+	o := verbOutput{verb: "rules add", usageLine: rulesAddUsage, out: out, errOut: errOut}
 	opts, err := parseRuleWriteArgs(args)
 	if err == nil && len(opts.rest) != 2 {
-		err = errors.New(`usage: tofu rules add [--global] [--dir project] [--replace] [--concern c] <id> "<text>"`)
+		err = errors.New("an id and its text")
 	}
 	if err != nil {
-		return rulesFail(errOut, err)
+		return o.usage(err)
 	}
+	o.asJSON = opts.json
 	id, text := opts.rest[0], opts.rest[1]
 	data, err := rule.HumanRuleFile(id, cmp.Or(opts.concern, rule.ConcernCodeRules), rule.ModeShadow, text)
 	if err != nil {
-		return rulesFail(errOut, err)
+		return o.usage(err)
 	}
 	existing, found, err := opts.layer.find(id)
 	if err != nil {
-		return rulesFail(errOut, err)
+		return o.fail(err)
 	}
 	if found && !opts.replace {
-		return rulesFail(errOut, fmt.Errorf("the %s rules already carry %s in %s, add --replace to write over it", opts.layer.name, id, existing.File))
+		return o.fail(problemError{What: "the " + opts.layer.name + " rules already carry " + id, Hint: "tofu rules add --replace" + opts.layer.flag + " " + id + " \"<text>\""})
 	}
 	file := cmp.Or(existing.File, filepath.Join(opts.layer.dir, id+"@1.yaml"))
 	if err := sys.WriteFile(file, data, 0o644); err != nil {
-		return rulesFail(errOut, err)
+		return o.fail(err)
 	}
-	what := fmt.Sprintf("added %s to the %s rules", id, opts.layer.name)
+	change := fileChange{Change: changeAdded, What: "rule " + id, File: file}
 	if found {
-		what += ", replacing: " + existing.Text
+		change.Change = changeChanged
 	}
-	return printChange(out, what, file, "tofu rules remove"+opts.layer.flag+" "+id)
+	return o.receipt(writeReceipt{Changes: []fileChange{change}, Undo: "tofu rules remove" + opts.layer.flag + " " + id})
 }
 
 func rulesOffVerb(args []string, out, errOut io.Writer) int {
-	opts, err := parseRuleIDArgs("off", args)
+	o := verbOutput{verb: "rules off", usageLine: rulesIDUsage, out: out, errOut: errOut}
+	opts, err := parseRuleIDArgs(args)
 	if err != nil {
-		return rulesFail(errOut, err)
+		return o.usage(err)
 	}
+	o.asJSON = opts.json
 	id := opts.rest[0]
-	existing, found, err := opts.layer.find(id)
+	_, found, err := opts.layer.find(id)
 	if err != nil {
-		return rulesFail(errOut, err)
+		return o.fail(err)
 	}
 	if found {
-		return rulesFail(errOut, fmt.Errorf("the %s rules already carry %s in %s, and tofu rules remove%s %s deletes that file", opts.layer.name, id, existing.File, opts.layer.flag, id))
+		return o.fail(problemError{What: "the " + opts.layer.name + " rules already carry " + id, Hint: "tofu rules remove" + opts.layer.flag + " " + id})
 	}
 	runs, err := ruleRuns(id, opts.dir)
 	if err != nil {
-		return rulesFail(errOut, err)
+		return o.fail(err)
 	}
 	if !runs {
-		return rulesFail(errOut, fmt.Errorf("no rule %s runs, so there is nothing to switch off. tofu rules list names every rule that runs", id))
+		return o.fail(problemError{What: "no rule " + id + " runs", Hint: "tofu rules list"})
 	}
 	data, err := rule.HumanRuleFile(id, rule.ConcernCodeRules, rule.ModeOff, "switched off by tofu rules off")
 	if err != nil {
-		return rulesFail(errOut, err)
+		return o.fail(err)
 	}
 	file := filepath.Join(opts.layer.dir, id+"@1.yaml")
 	if err := sys.WriteFile(file, data, 0o644); err != nil {
-		return rulesFail(errOut, err)
+		return o.fail(err)
 	}
-	return printChange(out, fmt.Sprintf("switched %s off in the %s rules", id, opts.layer.name), file, "tofu rules remove"+opts.layer.flag+" "+id)
+	return o.receipt(writeReceipt{Changes: []fileChange{{Change: changeChanged, What: "rule " + id + " off", File: file}}, Undo: "tofu rules remove" + opts.layer.flag + " " + id})
 }
 
 func rulesRemoveVerb(args []string, out, errOut io.Writer) int {
-	opts, err := parseRuleIDArgs("remove", args)
+	o := verbOutput{verb: "rules remove", usageLine: rulesIDUsage, out: out, errOut: errOut}
+	opts, err := parseRuleIDArgs(args)
 	if err != nil {
-		return rulesFail(errOut, err)
+		return o.usage(err)
 	}
+	o.asJSON = opts.json
 	id := opts.rest[0]
 	existing, found, err := opts.layer.find(id)
 	if err != nil {
-		return rulesFail(errOut, err)
+		return o.fail(err)
 	}
 	if !found {
 		runs, err := ruleRuns(id, opts.dir)
 		if err != nil {
-			return rulesFail(errOut, err)
+			return o.fail(err)
 		}
 		if runs {
-			return rulesFail(errOut, fmt.Errorf("%s has no file in the %s rules, so there is nothing to remove there. tofu rules off%s %s switches it off", id, opts.layer.name, opts.layer.flag, id))
+			return o.fail(problemError{What: id + " has no file in the " + opts.layer.name + " rules", Hint: "tofu rules off" + opts.layer.flag + " " + id})
 		}
-		return rulesFail(errOut, fmt.Errorf("no rule %s is in the %s rules", id, opts.layer.name))
+		return o.fail(problemError{What: "no rule " + id + " in the " + opts.layer.name + " rules", Hint: "tofu rules list"})
 	}
 	if err := os.Remove(existing.File); err != nil {
-		return rulesFail(errOut, err)
+		return o.fail(err)
 	}
 	undo := fmt.Sprintf("tofu rules add%s %s %q", opts.layer.flag, id, existing.Text)
 	if existing.Mode == rule.ModeOff {
 		undo = "tofu rules off" + opts.layer.flag + " " + id
 	}
-	return printChange(out, fmt.Sprintf("removed %s from the %s rules", id, opts.layer.name), existing.File, undo)
+	return o.receipt(writeReceipt{Changes: []fileChange{{Change: changeRemoved, What: "rule " + id, File: existing.File}}, Undo: undo})
 }

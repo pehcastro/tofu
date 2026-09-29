@@ -1,0 +1,16 @@
+exit 1
+--- stdout
+{
+  "tofu": "VERSION",
+  "verb": "rules remove",
+  "ok": false,
+  "at": "AT",
+  "data": null,
+  "problems": [
+    {
+      "what": "em_dash has no file in the project rules",
+      "hint": "tofu rules off em_dash"
+    }
+  ]
+}
+--- stderr

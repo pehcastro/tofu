@@ -1,0 +1,25 @@
+exit 0
+--- stdout
+{
+  "tofu": "VERSION",
+  "verb": "agents remove",
+  "ok": true,
+  "at": "AT",
+  "data": {
+    "changes": [
+      {
+        "change": "removed",
+        "what": "sub-agent planner",
+        "file": "HOME/project/.tofu/agents/planner.md"
+      },
+      {
+        "change": "removed",
+        "what": "model line planner: codex-sub/gpt-5.6-sol",
+        "file": "HOME/project/.tofu/agent-models.yaml"
+      }
+    ],
+    "undo": "tofu agents add planner --description \"plans the work\" --model claude-sub/claude-opus-5 --tools read,search"
+  },
+  "problems": []
+}
+--- stderr

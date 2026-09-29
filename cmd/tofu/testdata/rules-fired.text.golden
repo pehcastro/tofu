@@ -1,0 +1,9 @@
+exit 0
+--- stdout
+Rules fired · 2026-09-28                                   ✗ 2 fired · 1 blocked
+
+✗ em_dash   docs/a.md      enforced  2h ago
+⚠ comments  internal/x.go  shadow    2h ago
+
+  unreadable    ⚠ 1 line skipped
+--- stderr

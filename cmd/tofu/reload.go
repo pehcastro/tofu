@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cmp"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -14,7 +15,9 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
+	"tofu/interface/cli"
 	"tofu/internal/keymap"
 	"tofu/internal/llm/models"
 	settingspkg "tofu/internal/settings"
@@ -23,7 +26,10 @@ import (
 	"tofu/internal/sys"
 )
 
-const reloadFileName = "reload.json"
+const (
+	reloadFileName = "reload.json"
+	reloadUsage    = "usage: tofu reload [--json]"
+)
 
 type reloadPart struct {
 	Name   string            `json:"name"`
@@ -31,9 +37,20 @@ type reloadPart struct {
 	Items  map[string]string `json:"items"`
 }
 
-func runReload(project string) (int, error) {
-	rules, _, err := loadRules("", project)
-	return len(rules), err
+type partDiff struct {
+	Name    string   `json:"name"`
+	Detail  string   `json:"detail,omitempty"`
+	Count   int      `json:"count"`
+	Added   []string `json:"added,omitempty"`
+	Removed []string `json:"removed,omitempty"`
+	Changed []string `json:"changed,omitempty"`
+}
+
+type reloadDiff struct {
+	Project    string     `json:"project"`
+	First      bool       `json:"first"`
+	Unreadable string     `json:"last_unreadable,omitempty"`
+	Parts      []partDiff `json:"parts"`
 }
 
 func digest(parts ...string) string {
@@ -151,97 +168,159 @@ func takeInventory(dir string) ([]reloadPart, error) {
 	}, nil
 }
 
-func describeReload(now, last []reloadPart) []string {
-	lines := make([]string, 0, len(now))
+func describeReload(now, last []reloadPart) []partDiff {
+	diffs := make([]partDiff, 0, len(now))
 	for _, part := range now {
-		line := part.Name + " " + strconv.Itoa(len(part.Items))
-		if part.Detail != "" {
-			line += " (" + part.Detail + ")"
-		}
-		at := slices.IndexFunc(last, func(was reloadPart) bool { return was.Name == part.Name })
-		if at < 0 {
-			lines = append(lines, line)
-			continue
-		}
-		before := last[at].Items
-		var added, removed, changed []string
-		for name, fingerprint := range part.Items {
-			was, had := before[name]
-			switch {
-			case !had:
-				added = append(added, name)
-			case was != fingerprint:
-				changed = append(changed, name)
+		diff := partDiff{Name: part.Name, Detail: part.Detail, Count: len(part.Items)}
+		if at := slices.IndexFunc(last, func(was reloadPart) bool { return was.Name == part.Name }); at >= 0 {
+			before := last[at].Items
+			for name, fingerprint := range part.Items {
+				was, had := before[name]
+				switch {
+				case !had:
+					diff.Added = append(diff.Added, name)
+				case was != fingerprint:
+					diff.Changed = append(diff.Changed, name)
+				}
+			}
+			for name := range before {
+				if _, kept := part.Items[name]; !kept {
+					diff.Removed = append(diff.Removed, name)
+				}
 			}
 		}
-		for name := range before {
-			if _, kept := part.Items[name]; !kept {
-				removed = append(removed, name)
-			}
-		}
-		for _, change := range []struct {
-			mark, word string
-			names      []string
-		}{{"+", "added", added}, {"-", "removed", removed}, {"", "changed", changed}} {
-			if len(change.names) > 0 {
-				sort.Strings(change.names)
-				line += fmt.Sprintf(", %s%d %s: %s", change.mark, len(change.names), change.word, strings.Join(change.names, ", "))
-			}
-		}
-		lines = append(lines, line)
+		sort.Strings(diff.Added)
+		sort.Strings(diff.Removed)
+		sort.Strings(diff.Changed)
+		diffs = append(diffs, diff)
 	}
-	return lines
+	return diffs
 }
 
-func reloadReport(dir string) (string, error) {
+func reloadReport(dir string) (reloadDiff, error) {
 	now, err := takeInventory(dir)
 	if err != nil {
-		return "", err
+		return reloadDiff{}, err
 	}
 	state, err := sys.ProjectStateDirAt(dir)
 	if err != nil {
-		return "", err
+		return reloadDiff{}, err
 	}
 	path := filepath.Join(state, reloadFileName)
-	header := "re-read " + dir + ", against the last reload"
+	report := reloadDiff{Project: dir}
 	var last []reloadPart
 	data, err := os.ReadFile(path)
 	switch {
 	case errors.Is(err, fs.ErrNotExist):
-		header = "re-read " + dir + ", the first reload here, so nothing to compare against"
+		report.First = true
 	case err != nil || json.Unmarshal(data, &last) != nil:
-		header, last = "re-read "+dir+", and the last reload in "+path+" could not be read, so nothing to compare against", nil
+		report.Unreadable, last = path, nil
 	}
 	encoded, err := json.MarshalIndent(now, "", "  ")
 	if err != nil {
-		return "", err
+		return reloadDiff{}, err
 	}
 	if err := sys.WriteFile(path, encoded, 0o600); err != nil {
-		return "", err
+		return reloadDiff{}, err
 	}
-	return header + "\n" + strings.Join(describeReload(now, last), "\n"), nil
+	report.Parts = describeReload(now, last)
+	return report, nil
 }
 
-func reloadVerb(out, errOut io.Writer) int {
-	said := ""
+type partSide struct {
+	mark  cli.Mark
+	sign  string
+	names []string
+}
+
+func (p partDiff) sides() []partSide {
+	return []partSide{{cli.Added, "+", p.Added}, {cli.Removed, "-", p.Removed}, {cli.Changed, "~", p.Changed}}
+}
+
+func (d reloadDiff) lines(page cli.Page) []string {
+	title := func(verdict cli.Verdict) []string {
+		return page.Title("Reload", []string{page.Path(d.Project)}, verdict)
+	}
+	if d.First || d.Unreadable != "" {
+		verdict := cli.Verdict{Mark: cli.Done, Text: "first reload"}
+		if !d.First {
+			verdict = cli.Verdict{Mark: cli.Warn, Text: "last reload unreadable"}
+		}
+		var counted []cli.Fact
+		for _, part := range d.Parts {
+			counted = append(counted, cli.Fact{Label: part.Name, Text: nonZero(part.Count)})
+		}
+		return append(append(title(verdict), ""), cli.Indent(page.Facts(counted)...)...)
+	}
+	var body []string
+	counts := map[cli.Mark]int{}
+	for _, part := range d.Parts {
+		var rows []cli.Row
+		for _, side := range part.sides() {
+			counts[side.mark] += len(side.names)
+			for _, name := range side.names {
+				rows = append(rows, cli.Row{Mark: side.mark, Cells: []string{name}})
+			}
+		}
+		if len(rows) > 0 {
+			body = append(append(body, "", page.Section(part.Name, cli.Verdict{})), cli.Indent(page.Rows(rows)...)...)
+		}
+	}
+	said := countsSaid(counts, []markNoun{{cli.Added, "added"}, {cli.Removed, "removed"}, {cli.Changed, "changed"}})
+	return append(title(cli.Verdict{Mark: cli.Done, Text: cmp.Or(said, "nothing changed")}), body...)
+}
+
+func (d reloadDiff) note() string {
+	switch {
+	case d.First:
+		return "reloaded, the first reload here"
+	case d.Unreadable != "":
+		return "reloaded, the last reload could not be read"
+	}
+	var parts []string
+	for _, part := range d.Parts {
+		said := ""
+		for _, side := range part.sides() {
+			if len(side.names) > 0 {
+				said += " " + side.sign + strconv.Itoa(len(side.names))
+			}
+		}
+		if said != "" {
+			parts = append(parts, part.Name+said)
+		}
+	}
+	if len(parts) == 0 {
+		return "reloaded, nothing changed"
+	}
+	return "reloaded: " + strings.Join(parts, " · ")
+}
+
+func reloadVerb(args []string, out, errOut io.Writer) int {
+	asJSON := false
+	for _, arg := range args {
+		if arg != jsonFlag {
+			_, _ = fmt.Fprintf(errOut, "tofu reload: unknown flag %q, %s\n", arg, reloadUsage)
+			return exitUsage
+		}
+		asJSON = true
+	}
+	var report reloadDiff
 	dir, err := os.Getwd()
 	if err == nil {
-		said, err = reloadReport(dir)
+		report, err = reloadReport(dir)
 	}
 	if err != nil {
-		_, _ = fmt.Fprintf(errOut, "tofu reload: %v\n", err)
-		return exitVerdict
+		return verbFailed(out, errOut, "reload", asJSON, err)
 	}
-	_, _ = fmt.Fprintln(out, said)
-	return exitOK
+	return show(out, asJSON, cli.Envelope{Verb: "reload", OK: true, At: time.Now(), Data: report}, report.lines)
 }
 
 func appReload(project string) func() string {
 	return func() string {
-		said, err := reloadReport(project)
+		report, err := reloadReport(project)
 		if err != nil {
 			return "reload failed: " + err.Error()
 		}
-		return said
+		return report.note()
 	}
 }

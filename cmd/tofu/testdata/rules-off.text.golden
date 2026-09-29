@@ -1,0 +1,5 @@
+exit 0
+--- stdout
+~ rule em_dash off  ~/project/.tofu/rules/em_dash@1.yaml
+  → undo: tofu rules remove em_dash
+--- stderr

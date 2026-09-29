@@ -1,0 +1,16 @@
+exit 1
+--- stdout
+{
+  "tofu": "VERSION",
+  "verb": "agents remove",
+  "ok": false,
+  "at": "AT",
+  "data": null,
+  "problems": [
+    {
+      "what": "qa ships with tofu, so there is no file of yours to remove",
+      "hint": "tofu agents set qa \u003csource/model\u003e"
+    }
+  ]
+}
+--- stderr

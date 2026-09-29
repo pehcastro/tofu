@@ -1,0 +1,5 @@
+exit 1
+--- stdout
+--- stderr
+✗ tofu agents remove: qa ships with tofu, so there is no file of yours to remove
+  → tofu agents set qa <source/model>

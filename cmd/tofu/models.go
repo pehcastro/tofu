@@ -3,21 +3,25 @@ package main
 import (
 	"cmp"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
 
+	"tofu/interface/cli"
 	"tofu/internal/konst"
 	"tofu/internal/llm/cred"
 	"tofu/internal/llm/models"
 	"tofu/internal/subagent"
 	"tofu/internal/sys"
 	"tofu/internal/transport"
+	"tofu/internal/widget"
 	shipped "tofu/library"
 )
 
@@ -26,9 +30,21 @@ const (
 	registryFileName = "model-windows.json"
 	registryDirMode  = 0o755
 	shippedLayer     = "library"
+	tokensPerMillion = 1_000_000
 )
 
-type say func(format string, args ...any)
+const (
+	sourceReloaded    = "reloaded"
+	sourceRefused     = "refused"
+	sourceFailed      = "failed"
+	sourceNotSignedIn = "not signed in"
+)
+
+const (
+	modelAdded   = "added"
+	modelChanged = "changed"
+	modelDropped = "dropped"
+)
 
 func registryPath() (string, error) {
 	dir, err := sys.HomeConfigDir()
@@ -46,7 +62,7 @@ func modelRegistry() (models.Registry, error) {
 	return models.RegistryAt(path)
 }
 
-func refreshRegistry(ctx context.Context, client *transport.Client, said say) (models.Registry, error) {
+func refreshRegistry(ctx context.Context, client *transport.Client) (models.Registry, error) {
 	source := models.RegistrySource()
 	path, err := registryPath()
 	if err != nil {
@@ -63,11 +79,7 @@ func refreshRegistry(ctx context.Context, client *transport.Client, said say) (m
 	if err := os.MkdirAll(filepath.Dir(path), registryDirMode); err != nil {
 		return models.Registry{}, err
 	}
-	if err := registry.Store(path); err != nil {
-		return models.Registry{}, err
-	}
-	said("models.dev: context windows for %d models from %s, written to %s", len(registry.Windows), source, path)
-	return registry, nil
+	return registry, registry.Store(path)
 }
 
 type modelReport struct {
@@ -108,14 +120,24 @@ func modelLibrary(dir string) (models.Library, error) {
 	return models.Load(layers)
 }
 
-func modelsVerb(args []string, out, errOut io.Writer, shade palette) int {
+func verbFailed(out, errOut io.Writer, verb string, asJSON bool, err error) int {
+	if asJSON {
+		_ = writeJSON(out, cli.Envelope{Verb: verb, At: time.Now(), Problems: []cli.Problem{{What: err.Error()}}})
+		return exitVerdict
+	}
+	page := cli.Detect(errOut, os.Environ())
+	_ = page.Print(errOut, page.ErrorLine("tofu "+verb+": "+err.Error(), ""))
+	return exitVerdict
+}
+
+func modelsVerb(args []string, out, errOut io.Writer, _ palette) int {
 	reload, asJSON := false, false
 	for _, arg := range args {
 		switch arg {
 		case "reload":
 			reload = true
 		case "--discover", "--refresh":
-			_, _ = fmt.Fprintf(out, "tofu models %s is now %s, which does both\n", arg, models.ReloadVerb)
+			_, _ = fmt.Fprintf(errOut, "tofu models %s is now %s\n", arg, models.ReloadVerb)
 			reload = true
 		case jsonFlag:
 			asJSON = true
@@ -125,25 +147,31 @@ func modelsVerb(args []string, out, errOut io.Writer, shade palette) int {
 		}
 	}
 	if reload {
-		return reloadAccounts(context.Background(), out)
+		report, err := reloadSignedIn(context.Background())
+		return showReload(out, errOut, asJSON, report, err)
 	}
 	library, err := modelLibrary("")
 	if err != nil {
-		_, _ = fmt.Fprintf(errOut, "tofu models: %v\n", err)
-		return exitUsage
+		return verbFailed(out, errOut, "models", asJSON, err)
 	}
 	registry, err := modelRegistry()
 	if err != nil {
-		_, _ = fmt.Fprintf(errOut, "tofu models: %v\n", err)
-		return exitUsage
+		return verbFailed(out, errOut, "models", asJSON, err)
 	}
 	report := modelsOf(library, registry)
-	if !asJSON {
-		_, _ = fmt.Fprint(out, modelsText(library, report, shade))
-		return exitOK
+	return show(out, asJSON, cli.Envelope{Verb: "models", OK: true, At: time.Now(), Data: report},
+		func(page cli.Page) []string { return modelsLines(page, report) })
+}
+
+func show(out io.Writer, asJSON bool, envelope cli.Envelope, lines func(cli.Page) []string) int {
+	var err error
+	if asJSON {
+		err = writeJSON(out, envelope)
+	} else {
+		page := cli.Detect(out, os.Environ())
+		err = page.Print(out, lines(page))
 	}
-	if err := writeJSON(out, report); err != nil {
-		_, _ = fmt.Fprintf(errOut, "tofu models: %v\n", err)
+	if err != nil || !envelope.OK {
 		return exitVerdict
 	}
 	return exitOK
@@ -203,133 +231,174 @@ func modelsOf(library models.Library, registry models.Registry) modelsReport {
 	return report
 }
 
-func modelsText(library models.Library, report modelsReport, shade palette) string {
-	count := strconv.Itoa(report.Usable) + " of " + strconv.Itoa(len(report.Models)) + " usable"
-	var body strings.Builder
-	body.WriteString(headline(strings.Join(report.Defaults, ", "), shade.settled(count), len(count)) + "\n")
-	for _, spec := range library.Subscriptions {
-		body.WriteString("\n")
-		for _, line := range subscriptionLines(report, spec) {
-			body.WriteString(line + "\n")
-		}
-	}
-	if lines := keyPaidLines(report); len(lines) > 0 {
-		body.WriteString("\n")
-		for _, line := range lines {
-			body.WriteString(line + "\n")
-		}
-	}
-	body.WriteString("\n")
-	windows := strconv.Itoa(report.Windowed) + " of " + strconv.Itoa(len(report.Models)) + " models take a context window from " + report.Table
-	if report.Published > 0 {
-		windows += ", " + strconv.Itoa(report.Published) + " from the window their vendor publishes"
-	}
-	for _, line := range wrapped("windows", windows+", and "+models.ReloadVerb+" reads the table again") {
-		body.WriteString(line + "\n")
-	}
-	label := "roles"
-	for _, id := range report.Unbound {
-		body.WriteString("\n")
-		role := models.RoleID(id)
-		for _, line := range wrapped(label, role.Label()+": "+role.What()+". "+role.Unbound()) {
-			body.WriteString(line + "\n")
-		}
-		label = ""
-	}
-	return body.String()
-}
-
-func withRoles(model modelReport) string {
-	named := model.Slug + " (kind " + model.Kind + ", pays " + model.Pays
-	if model.Layer != shippedLayer {
-		named += ", from the " + model.Layer + " layer"
-	}
-	named += ")"
-	if len(model.Roles) == 0 {
-		return named
-	}
-	labels := make([]string, 0, len(model.Roles))
-	for _, role := range model.Roles {
-		labels = append(labels, models.RoleID(role).Label())
-	}
-	return named + " [" + strings.Join(labels, " and ") + "]"
-}
-
-func keyPaidLines(report modelsReport) []string {
-	var lines []string
-	label := "key"
-	for _, model := range report.Models {
-		if model.Subscription != "" {
-			continue
-		}
-		said := withRoles(model) + ", use " + model.Use
-		if model.Notice != "" {
-			said += ", " + model.Notice
-		}
-		lines = append(lines, wrapped(label, said)...)
-		label = ""
-	}
-	return lines
-}
-
-func subscriptionLines(report modelsReport, spec models.SubscriptionSpec) []string {
-	var allowed, reasons []string
-	excluded := map[string]int{}
-	var lines []string
-	label := string(spec.ID)
-	for _, model := range report.Models {
-		if model.Subscription != string(spec.ID) {
-			continue
-		}
-		switch models.Use(model.Use) {
-		case models.UseDefault:
-			lines = append(lines, wrapped(label, withRoles(model)+" by default on --wire "+spec.Wire+
-				", a "+strconv.Itoa(model.ContextTokens)+" token window, spends "+strings.Join(model.Windows, " and "))...)
-			label = ""
-		case models.UseAllowed:
-			allowed = append(allowed, withRoles(model))
-		case models.UseExcluded:
-			if excluded[model.Reason] == 0 {
-				reasons = append(reasons, model.Reason)
+func modelsLines(page cli.Page, report modelsReport) []string {
+	lines := page.Title("Models", []string{strconv.Itoa(len(report.Models)) + " known"}, cli.Verdict{Mark: cli.Done, Text: strconv.Itoa(report.Usable) + " usable"})
+	bound := map[models.RoleID]string{}
+	for _, subscription := range append(slices.Clone(report.Subscriptions), "") {
+		var rows []cli.Row
+		var notices []string
+		for _, model := range report.Models {
+			if model.Subscription == subscription {
+				rows = append(rows, modelRow(model))
+				if model.Notice != "" && !slices.Contains(notices, model.Notice) {
+					notices = append(notices, model.Notice)
+				}
 			}
-			excluded[model.Reason]++
+			for _, role := range model.Roles {
+				bound[models.RoleID(role)] = model.Slug
+			}
+		}
+		if len(rows) > 0 {
+			lines = append(lines, "", page.Section(cmp.Or(subscription, "api key"), cli.Verdict{}))
+			lines = append(lines, cli.Indent(page.Rows(rows)...)...)
+		}
+		for _, notice := range notices {
+			lines = append(lines, cli.Indent(page.Glyph(cli.Warn)+" "+notice)...)
 		}
 	}
-	if len(allowed) > 0 {
-		lines = append(lines, wrapped(label, "also allowed, "+strings.Join(allowed, ", "))...)
-		label = ""
+	var roles []cli.Row
+	for _, id := range models.RoleIDs() {
+		row := cli.Row{Mark: cli.Active, Cells: []string{id.Label(), bound[id]}}
+		if row.Cells[1] == "" {
+			row.Mark, row.Cells[1] = cli.Idle, "unbound"
+		}
+		roles = append(roles, row)
 	}
-	for _, reason := range reasons {
-		lines = append(lines, wrapped(label, strconv.Itoa(excluded[reason])+" excluded, "+reason)...)
-		label = ""
+	lines = append(lines, "", page.Section("roles", cli.Verdict{}))
+	lines = append(lines, cli.Indent(page.Rows(roles)...)...)
+	lines = append(lines, "", page.Section("windows", cli.Verdict{}))
+	lines = append(lines, cli.Indent(page.Facts([]cli.Fact{
+		{Label: "table", Text: report.Table},
+		{Label: "listed", Text: nonZero(report.Windowed)},
+		{Label: "published", Text: nonZero(report.Published)},
+	})...)...)
+	return append(lines, cli.Indent(page.Hint(models.ReloadVerb))...)
+}
+
+func nonZero(count int) string {
+	if count == 0 {
+		return ""
 	}
-	return lines
+	return strconv.Itoa(count)
+}
+
+func modelRow(model modelReport) cli.Row {
+	var detail []string
+	for _, role := range model.Roles {
+		detail = append(detail, models.RoleID(role).Label())
+	}
+	if model.Layer != shippedLayer {
+		detail = append(detail, model.Layer+" layer")
+	}
+	row := cli.Row{Cells: []string{model.Slug, model.Use, windowShort(model.ContextTokens)}, Detail: strings.Join(detail, " · ")}
+	switch {
+	case model.Notice != "":
+		row.Mark = cli.Warn
+	case models.Use(model.Use) == models.UseDefault:
+		row.Mark = cli.Active
+	case models.Use(model.Use) == models.UseAllowed:
+		row.Mark = cli.Done
+	case models.Use(model.Use) == models.UseExcluded:
+		row.Mark = cli.Idle
+	default:
+		panic("tofu: unknown model use " + model.Use)
+	}
+	return row
+}
+
+func windowShort(tokens int) string {
+	switch {
+	case tokens == 0:
+		return ""
+	case tokens >= tokensPerMillion:
+		return strings.TrimRight(strings.TrimRight(strconv.FormatFloat(float64(tokens)/tokensPerMillion, 'f', 2, 64), "0"), ".") + "M"
+	}
+	return widget.Count(tokens)
+}
+
+type modelReload struct {
+	ContextWindows int            `json:"context_windows"`
+	Table          string         `json:"table"`
+	TableError     string         `json:"table_error,omitempty"`
+	Unshadowed     []string       `json:"removed_from_catalog,omitempty"`
+	Sources        []reloadSource `json:"sources"`
+	Unresolved     []string       `json:"unresolved_tiers,omitempty"`
+}
+
+type reloadSource struct {
+	Source  string        `json:"source"`
+	State   string        `json:"state"`
+	Served  int           `json:"served"`
+	Changes []modelChange `json:"changes"`
+	Failure string        `json:"failure,omitempty"`
+	Error   string        `json:"error,omitempty"`
+	Hint    string        `json:"hint,omitempty"`
+}
+
+type modelChange struct {
+	Model  string `json:"model"`
+	Slug   string `json:"slug"`
+	Change string `json:"change"`
+	Use    string `json:"use"`
+	Reason string `json:"reason,omitempty"`
+	File   string `json:"file"`
+}
+
+func (c modelChange) mark() cli.Mark {
+	switch c.Change {
+	case modelAdded:
+		return cli.Added
+	case modelChanged:
+		return cli.Changed
+	case modelDropped:
+		return cli.Removed
+	}
+	panic("tofu: unknown model change " + c.Change)
+}
+
+func (s reloadSource) failed(what string, err error) reloadSource {
+	s.State, s.Failure, s.Error = sourceFailed, what, err.Error()
+	var refused *transport.Error
+	if errors.As(err, &refused) && refused.Status != 0 {
+		s.State, s.Failure = sourceRefused, "model list refused ("+strconv.Itoa(refused.Status)+")"
+	}
+	switch transport.KindOf(err) {
+	case transport.KindAuth, transport.KindMissingCredential:
+		s.Hint = "tofu login " + s.Source
+	}
+	return s
 }
 
 func reloadAccounts(ctx context.Context, out io.Writer) int {
+	report, err := reloadSignedIn(ctx)
+	return showReload(out, out, false, report, err)
+}
+
+func reloadSignedIn(ctx context.Context) (modelReload, error) {
 	path, err := cred.Path()
 	var store *cred.Store
 	if err == nil {
 		store, err = cred.Open(path)
 	}
 	if err != nil {
-		_, _ = fmt.Fprintf(out, "%s: %v\n", models.ReloadVerb, err)
-		return exitVerdict
+		return modelReload{}, err
 	}
 	defer func() { _ = store.Close() }()
 	var accounts []models.Account
+	var settled []reloadSource
 	for _, provider := range cred.AllProviders() {
+		source := reloadSource{Source: string(provider), State: sourceNotSignedIn, Hint: "tofu login " + string(provider)}
 		credential, err := cred.Lookup(string(provider))
 		if err != nil {
-			_, _ = fmt.Fprintf(out, "%s: %v\n", provider, err)
+			settled = append(settled, source.failed("sign-in unreadable", err))
 			continue
 		}
 		row, present, err := store.Row(provider)
 		switch {
 		case err != nil:
-			_, _ = fmt.Fprintf(out, "%s: %v\n", provider, err)
+			settled = append(settled, source.failed("sign-in unreadable", err))
 		case !present:
-			_, _ = fmt.Fprintf(out, "%s: not signed in, so nothing is asked of it; tofu login %s signs in\n", provider, provider)
+			settled = append(settled, source)
 		default:
 			accounts = append(accounts, models.Account{
 				Subscription: models.Subscription(provider),
@@ -338,121 +407,199 @@ func reloadAccounts(ctx context.Context, out io.Writer) int {
 			})
 		}
 	}
-	return reloadModels(ctx, accounts, out)
+	return reloadModels(ctx, accounts, settled)
 }
 
-type reload struct {
+type reloadRun struct {
 	client   *transport.Client
 	catalog  string
 	registry models.Registry
 	library  models.Library
 	found    string
-	said     say
 }
 
-func reloadModels(ctx context.Context, accounts []models.Account, out io.Writer) int {
-	said := func(format string, args ...any) { _, _ = fmt.Fprintf(out, format+"\n", args...) }
-	refused := func(err error) int {
-		said("%s: %v", models.ReloadVerb, err)
-		return exitVerdict
-	}
+func reloadModels(ctx context.Context, accounts []models.Account, settled []reloadSource) (modelReload, error) {
 	catalog, err := models.CatalogDir()
 	if err != nil {
-		return refused(err)
+		return modelReload{}, err
 	}
 	client, err := transport.New(transport.Config{
 		AttemptTimeout: time.Duration(konst.TurnAttemptTimeoutMillis) * time.Millisecond,
 		Concurrency:    1,
 	})
 	if err != nil {
-		return refused(err)
+		return modelReload{}, err
 	}
-	dropShipped(catalog, said)
-	registry, err := refreshRegistry(ctx, client, said)
+	report := modelReload{Unshadowed: dropShipped(catalog), Sources: settled}
+	registry, err := refreshRegistry(ctx, client)
 	if err != nil {
-		said("models.dev: %v, so the stored table stands", err)
+		report.TableError = err.Error()
 		if registry, err = modelRegistry(); err != nil {
-			return refused(err)
+			return report, err
 		}
 	}
+	report.ContextWindows, report.Table = len(registry.Windows), registry.From
 	library, err := modelLibrary("")
 	if err != nil {
-		return refused(err)
+		return report, err
 	}
-	run := reload{client: client, catalog: catalog, registry: registry, library: library, found: time.Now().Format(time.DateOnly), said: said}
-	clean := true
+	run := reloadRun{client: client, catalog: catalog, registry: registry, library: library, found: time.Now().Format(time.DateOnly)}
 	for _, account := range accounts {
-		clean = run.write(ctx, account) && clean
+		report.Sources = append(report.Sources, run.account(ctx, account))
 	}
-	if !run.stillResolves() || !clean {
-		return exitVerdict
-	}
-	return exitOK
+	slices.SortStableFunc(report.Sources, func(a, b reloadSource) int { return strings.Compare(a.Source, b.Source) })
+	report.Unresolved, err = unresolvedTiers()
+	return report, err
 }
 
-func dropShipped(catalog string, said say) {
+func dropShipped(catalog string) []string {
+	var dropped []string
 	files, _ := filepath.Glob(filepath.Join(catalog, "models", "*", "*.yaml"))
 	for _, path := range files {
 		name, _ := filepath.Rel(catalog, path)
-		if _, err := fs.Stat(shipped.Files(), filepath.ToSlash(name)); err != nil {
-			continue
+		if _, err := fs.Stat(shipped.Files(), filepath.ToSlash(name)); err == nil && os.Remove(path) == nil {
+			dropped = append(dropped, filepath.ToSlash(name))
 		}
-		if err := os.Remove(path); err != nil {
-			said("catalog: %v", err)
-			continue
-		}
-		said("catalog: removed %s, tofu ships %s now", path, filepath.ToSlash(name))
 	}
+	return dropped
 }
 
-func (r reload) write(ctx context.Context, account models.Account) bool {
+func (r reloadRun) account(ctx context.Context, account models.Account) reloadSource {
+	source := reloadSource{Source: string(account.Subscription), State: sourceReloaded}
 	served, err := models.Discover(ctx, r.client, account)
 	if err != nil {
-		r.said("%s: the account list failed under %s: %v", account.Subscription, served.Pin, err)
-		return false
+		return source.failed("model list failed", err)
 	}
 	plan := models.Plan(r.library.Reconcile(served, r.registry), r.registry, r.library, r.found)
 	if err := plan.Write(r.catalog); err != nil {
-		r.said("%s: %v", account.Subscription, err)
-		return false
+		return source.failed("catalog write failed", err)
 	}
-	if len(plan) == 0 {
-		r.said("%s: nothing new in the %d models the account serves under %s", account.Subscription, len(served.IDs), served.Pin)
-	}
+	source.Served = len(served.IDs)
 	for _, model := range plan {
-		state := "new"
-		if _, known := r.library.Resolve(model.Slug()); known {
-			state = "changed"
+		change := modelChange{Model: model.ID, Slug: model.Slug(), Change: modelAdded, Use: string(model.Use), Reason: model.Reason,
+			File: filepath.Join(r.catalog, "models", string(model.Provider), model.ID+".yaml")}
+		if was, known := r.library.Resolve(model.Slug()); known {
+			change.Change = modelChanged
+			if model.Use == models.UseExcluded && was.Use != models.UseExcluded {
+				change.Change = modelDropped
+			}
 		}
-		r.said("%s: %s %s, use %s, %s, written to %s", account.Subscription, state, model.Slug(), model.Use,
-			cmp.Or(model.Reason, model.From), filepath.Join(r.catalog, "models", string(model.Provider), model.ID+".yaml"))
+		source.Changes = append(source.Changes, change)
 	}
-	return true
+	return source
 }
 
-func (r reload) stillResolves() bool {
+func unresolvedTiers() ([]string, error) {
 	library, err := modelLibrary("")
 	if err != nil {
-		r.said("%s: %v", models.ReloadVerb, err)
-		return false
+		return nil, err
 	}
 	store, err := openSettings(".")
 	if err != nil {
-		r.said("%s: %v", models.ReloadVerb, err)
-		return false
+		return nil, err
 	}
-	resolves := true
+	var unresolved []string
 	for _, tier := range subagent.Tiers() {
-		slug := strings.TrimSpace(store.Text(tier.Setting()))
-		if slug == "" {
-			continue
-		}
-		if _, err := library.Select(slug); err != nil {
-			r.said("tier @%s: %v", tier, err)
-			resolves = false
+		if slug := strings.TrimSpace(store.Text(tier.Setting())); slug != "" {
+			if _, err := library.Select(slug); err != nil {
+				unresolved = append(unresolved, "tier @"+string(tier)+": "+err.Error())
+			}
 		}
 	}
-	return resolves
+	return unresolved, nil
+}
+
+func (r modelReload) envelope() cli.Envelope {
+	var problems []cli.Problem
+	for _, source := range r.Sources {
+		if source.Failure != "" {
+			problems = append(problems, cli.Problem{What: source.Source + ": " + source.Failure, Hint: source.Hint})
+		}
+	}
+	for _, tier := range r.Unresolved {
+		problems = append(problems, cli.Problem{What: tier})
+	}
+	return cli.Envelope{Verb: "models reload", OK: len(problems) == 0, At: time.Now(), Data: r, Problems: problems}
+}
+
+func showReload(out, errOut io.Writer, asJSON bool, report modelReload, err error) int {
+	if err != nil {
+		return verbFailed(out, errOut, "models reload", asJSON, err)
+	}
+	return show(out, asJSON, report.envelope(), func(page cli.Page) []string { return reloadLines(page, report) })
+}
+
+func reloadLines(page cli.Page, report modelReload) []string {
+	counts := map[cli.Mark]int{cli.Fail: len(report.Unresolved)}
+	for _, source := range report.Sources {
+		for _, change := range source.Changes {
+			counts[change.mark()]++
+		}
+		if source.Failure != "" {
+			counts[cli.Fail]++
+		}
+	}
+	said := countsSaid(counts, []markNoun{{cli.Added, "new"}, {cli.Changed, "changed"}, {cli.Removed, "dropped"}, {cli.Fail, "failed"}})
+	verdict := cli.Verdict{Mark: cli.Done, Text: cmp.Or(said, "nothing changed")}
+	if counts[cli.Fail] > 0 {
+		verdict.Mark = cli.Warn
+	}
+	table := cli.Verdict{Mark: cli.Done, Text: strconv.Itoa(report.ContextWindows) + " context windows"}
+	if report.TableError != "" {
+		table = cli.Verdict{Mark: cli.Warn, Text: "unreachable, the stored table stands"}
+	}
+	lines := append(page.Title("Model reload", nil, verdict), "", page.Status("models.dev", table))
+	if removed := len(report.Unshadowed); removed > 0 {
+		noun := " files removed"
+		if removed == 1 {
+			noun = " file removed"
+		}
+		lines = append(lines, page.Status("catalog", cli.Verdict{Mark: cli.Done, Text: strconv.Itoa(removed) + noun}))
+	}
+	for _, source := range report.Sources {
+		lines = append(lines, "")
+		switch source.State {
+		case sourceReloaded:
+			rows := make([]cli.Row, len(source.Changes))
+			for i, change := range source.Changes {
+				rows[i] = cli.Row{Mark: change.mark(), Cells: []string{change.Model}, Detail: change.Use}
+			}
+			lines = append(lines, page.Section(source.Source, cli.Verdict{Mark: cli.Done, Text: strconv.Itoa(source.Served) + " served"}))
+			lines = append(lines, cli.Indent(page.Rows(rows)...)...)
+		case sourceNotSignedIn:
+			lines = append(lines, page.Section(source.Source, cli.Verdict{Mark: cli.Idle, Text: source.State}))
+			lines = append(lines, cli.Indent(page.Hint(source.Hint))...)
+		case sourceRefused, sourceFailed:
+			lines = append(lines, page.Section(source.Source, cli.Verdict{Mark: cli.Fail, Text: source.Failure}))
+			if source.Hint != "" {
+				lines = append(lines, cli.Indent(page.Hint(source.Hint))...)
+			}
+		default:
+			panic("tofu: unknown reload state " + source.State)
+		}
+	}
+	if len(report.Unresolved) > 0 {
+		lines = append(lines, "")
+	}
+	for _, tier := range report.Unresolved {
+		lines = append(lines, page.ErrorLine(tier, "")...)
+	}
+	return lines
+}
+
+type markNoun struct {
+	mark cli.Mark
+	noun string
+}
+
+func countsSaid(counts map[cli.Mark]int, nouns []markNoun) string {
+	var parts []string
+	for _, each := range nouns {
+		if counts[each.mark] > 0 {
+			parts = append(parts, strconv.Itoa(counts[each.mark])+" "+each.noun)
+		}
+	}
+	return strings.Join(parts, " · ")
 }
 
 func outsideTheLibrary(library models.Library, wire string) error {

@@ -1,0 +1,16 @@
+exit 1
+--- stdout
+{
+  "tofu": "VERSION",
+  "verb": "rules add",
+  "ok": false,
+  "at": "AT",
+  "data": null,
+  "problems": [
+    {
+      "what": "the global rules already carry g1",
+      "hint": "tofu rules add --replace --global g1 \"\u003ctext\u003e\""
+    }
+  ]
+}
+--- stderr

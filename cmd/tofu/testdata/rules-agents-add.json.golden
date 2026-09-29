@@ -1,0 +1,20 @@
+exit 0
+--- stdout
+{
+  "tofu": "VERSION",
+  "verb": "agents add",
+  "ok": true,
+  "at": "AT",
+  "data": {
+    "changes": [
+      {
+        "change": "added",
+        "what": "sub-agent planner",
+        "file": "HOME/project/.tofu/agents/planner.md"
+      }
+    ],
+    "undo": "tofu agents remove planner"
+  },
+  "problems": []
+}
+--- stderr

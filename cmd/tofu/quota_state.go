@@ -12,7 +12,6 @@ import (
 )
 
 const (
-	usageWindowColumn = 10
 	usageServingState = "serving"
 	noVendorInATest   = "a test may not reach a vendor, so pass pollRows a stub url"
 
@@ -39,10 +38,6 @@ func (w windowReport) percent() string {
 		return "use not reported"
 	}
 	return widget.Percent(w.Used)
-}
-
-func (w windowReport) text(shade palette, now time.Time) string {
-	return widget.Pad(w.ID, usageWindowColumn) + shade.full(w.Used, widget.Quota(w.Used, w.ResetsAt, now))
 }
 
 type credentialReport struct {

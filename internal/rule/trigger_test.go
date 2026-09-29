@@ -1,7 +1,6 @@
 package rule
 
 import (
-	"fmt"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -127,77 +126,38 @@ func TestIndexFiresEveryRuleThatMatchesAndHoldsBackTheRestWithAReason(t *testing
 	}
 }
 
-func TestWriteIndexShowsEveryRuleItsVerdictAndTheReason(t *testing.T) {
-	rules, err := LoadFS(fstest.MapFS{
-		"dev/rules/comments@1.yaml": {Data: []byte("id: comments\ndomain: dev\nkind: structural\nchecker: comments\nconcern: code_rules\nscope: internal/**/*.go\n")},
-		"dev/rules/release@1.yaml":  {Data: []byte("id: release\ndomain: dev\nkind: structural\nchecker: comments\nconcern: code_rules\ncondition:(?i)\\brelease\\b\n")},
-	}, "library")
-	if err != nil {
-		t.Fatalf("LoadFS: %v", err)
-	}
-	out := &strings.Builder{}
-	WriteIndex(out, Index(rules, Task{Text: "rename a field", Paths: []string{"internal/rule/trigger.go"}}))
-	want := "1 of 2 rules fire\n" +
-		"fires comments the scope internal/**/*.go reached internal/rule/trigger.go\n" +
-		"      release  the condition (?i)\\brelease\\b matches nothing in the task\n"
-	if out.String() != want {
-		t.Fatalf("WriteIndex wrote\n%s\nwant\n%s", out, want)
-	}
-}
-
 func TestTheShippedIndexSaysWhatFiresForATaskAndWhy(t *testing.T) {
 	rules, err := LoadDir(shippedLibrary)
 	if err != nil {
 		t.Fatalf("LoadDir: %v", err)
 	}
 	index := Index(rules, Task{Text: "add a table test for the loader", Paths: []string{"internal/rule/load_test.go", "internal/rule/load.go"}})
-	out := &strings.Builder{}
-	WriteIndex(out, index)
-	t.Log("\n" + out.String())
-
-	reached := 0
+	why := map[string]string{}
 	for i, m := range index {
+		why[m.RuleID] = m.Why
 		trigger := rules[i].Trigger
 		reachesAnUnnamedGoTask := trigger.condition == nil && trigger.verb == VerbNone && (trigger.language == "" || trigger.language == "go") && trigger.role == RoleAny
 		if m.Fires != reachesAnUnnamedGoTask {
 			t.Fatalf("rule %q fires = %v for an unnamed task naming a go file and a test file, and its condition, task and language reach that task = %v: %s", m.RuleID, m.Fires, reachesAnUnnamedGoTask, m.Why)
 		}
-		if reachesAnUnnamedGoTask {
-			reached++
-		}
 	}
-	if !strings.HasPrefix(out.String(), fmt.Sprintf("%d of %d rules fire\n", reached, len(rules))) {
-		t.Fatalf("the index opens with %q, want %d of %d for a task naming a go file and a test file", strings.SplitN(out.String(), "\n", 2)[0], reached, len(rules))
-	}
-	for _, want := range []string{
-		"fires em_dash                 always on, the rule declares no trigger",
-		"fires comments                the language go reached internal/rule/load_test.go",
-		"fires test_assertion          the scope **/*_test.go reached internal/rule/load_test.go",
+	for id, want := range map[string]string{
+		"em_dash":        "always on, the rule declares no trigger",
+		"comments":       "the language go reached internal/rule/load_test.go",
+		"test_assertion": "the scope **/*_test.go reached internal/rule/load_test.go",
 	} {
-		if !strings.Contains(out.String(), want) {
-			t.Fatalf("the index does not carry the line %q", want)
+		if why[id] != want {
+			t.Fatalf("the index says %s fires because %q, want %q", id, why[id], want)
 		}
 	}
 
-	onProse := Index(rules, Task{Text: "rewrite the changelog entry", Paths: []string{"CHANGELOG.md"}})
-	prose := &strings.Builder{}
-	WriteIndex(prose, onProse)
-	t.Log("\n" + prose.String())
-
-	alwaysOn := 0
-	for i, m := range onProse {
+	for i, m := range Index(rules, Task{Text: "rewrite the changelog entry", Paths: []string{"CHANGELOG.md"}}) {
 		if m.Fires != rules[i].Trigger.AlwaysOn() {
 			t.Fatalf("rule %q fires = %v for a task naming one markdown file, and it is always on = %v: %s", m.RuleID, m.Fires, rules[i].Trigger.AlwaysOn(), m.Why)
 		}
-		if m.Fires {
-			alwaysOn++
+		if m.RuleID == "comments" && m.Why != "no path the task names is go" {
+			t.Fatalf("the index says comments was held back because %q, want no path the task names is go", m.Why)
 		}
-	}
-	if !strings.HasPrefix(prose.String(), fmt.Sprintf("%d of %d rules fire\n", alwaysOn, len(rules))) {
-		t.Fatalf("the index opens with %q, want %d of %d for a task naming one markdown file", strings.SplitN(prose.String(), "\n", 2)[0], alwaysOn, len(rules))
-	}
-	if !strings.Contains(prose.String(), "      comments                no path the task names is go") {
-		t.Fatalf("the index does not say why comments was held back:\n%s", prose)
 	}
 }
 

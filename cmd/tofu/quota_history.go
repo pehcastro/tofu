@@ -1,11 +1,13 @@
 package main
 
 import (
-	"fmt"
 	"io"
+	"os"
+	"strconv"
 	"strings"
 	"time"
 
+	"tofu/interface/cli"
 	"tofu/internal/llm/quota"
 	"tofu/internal/widget"
 )
@@ -23,6 +25,7 @@ type quotaHistoryReport struct {
 }
 
 func usageHistoryVerb(out, errOut io.Writer, asJSON bool) int {
+	now := time.Now()
 	dir, err := quotaReadingDir()
 	if err != nil {
 		return usageFail(errOut, err)
@@ -33,30 +36,40 @@ func usageHistoryVerb(out, errOut io.Writer, asJSON bool) int {
 	if err != nil {
 		return usageFail(errOut, err)
 	}
-	report := quotaHistoryReport{Unreadable: unreadable}
+	report := quotaHistoryReport{Readings: []quotaHistoryRow{}, Unreadable: unreadable}
 	for _, reading := range recorded {
 		for _, window := range reading.Windows {
-			report.Readings = append(report.Readings, quotaHistoryRow{
-				At:       reading.At.UTC(),
-				Provider: string(reading.Provider),
-				Window:   window.ID,
-				Used:     window.Used,
-			})
+			report.Readings = append(report.Readings, quotaHistoryRow{At: reading.At.UTC(), Provider: string(reading.Provider), Window: window.ID, Used: window.Used})
 		}
+	}
+	var problems []cli.Problem
+	if unreadable > 0 {
+		problems = []cli.Problem{{What: strconv.Itoa(unreadable) + " unreadable lines skipped"}}
 	}
 	if asJSON {
-		if err := writeJSON(out, report); err != nil {
-			return usageFail(errOut, err)
-		}
-		return exitOK
+		err = writeJSON(out, cli.Envelope{Verb: "usage --history", OK: len(problems) == 0, At: now, Data: report, Problems: problems})
+	} else {
+		page := cli.Detect(out, os.Environ())
+		err = page.Print(out, historyPage(page, report, now))
 	}
-	_, _ = fmt.Fprintf(out, "%d readings recorded\n", len(report.Readings))
-	for _, reading := range report.Readings {
-		_, _ = fmt.Fprintf(out, "%s  %s  %s  %s\n",
-			reading.At.Format(time.RFC3339), reading.Provider, reading.Window, widget.Percent(reading.Used))
-	}
-	if report.Unreadable > 0 {
-		_, _ = fmt.Fprintf(out, "%d unreadable lines skipped\n", report.Unreadable)
+	if err != nil {
+		return usageFail(errOut, err)
 	}
 	return exitOK
+}
+
+func historyPage(page cli.Page, report quotaHistoryReport, now time.Time) []string {
+	verdict := cli.Verdict{Mark: cli.Done, Text: "all read"}
+	switch {
+	case report.Unreadable > 0:
+		verdict = cli.Verdict{Mark: cli.Warn, Text: strconv.Itoa(report.Unreadable) + " unreadable lines"}
+	case len(report.Readings) == 0:
+		return page.Title("Usage history", nil, cli.Verdict{Mark: cli.Idle, Text: "none recorded"})
+	}
+	rows := make([]cli.Row, len(report.Readings))
+	for i, reading := range report.Readings {
+		rows[i] = cli.Row{Cells: []string{reading.Provider, reading.Window, page.Bar(reading.Used)}, Detail: widget.Until(now.Sub(reading.At)) + " ago"}
+	}
+	lines := append(page.Title("Usage history", []string{strconv.Itoa(len(report.Readings)) + " readings"}, verdict), "")
+	return append(lines, page.Rows(rows)...)
 }
