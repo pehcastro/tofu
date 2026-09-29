@@ -38,6 +38,8 @@ type Row struct {
 	Pays   library.Pays
 	Window string
 	Reason string
+	Layer  string
+	From   string
 }
 
 func (r Row) excluded() bool { return r.Use == library.UseExcluded }
@@ -113,6 +115,7 @@ const (
 	Assign
 	Login
 	Close
+	Reload
 )
 
 type Intent struct {
@@ -126,7 +129,9 @@ type Intent struct {
 type Model struct {
 	Groups      []Group
 	classifiers []Group
+	sources     []Source
 	keys        Keys
+	reloading   bool
 	entry       keyEntry
 	drawn       *drawn
 	targets     []Target
@@ -144,7 +149,8 @@ func Build(loaded library.Library, sources []Source, keys Keys, targets []Target
 	rows := map[library.Subscription][]Row{}
 	var classifiers []Group
 	for _, one := range loaded.Models {
-		row := Row{Slug: one.Slug(), Use: one.Use, Kind: one.Kind, Pays: one.Pays(), Window: one.WindowText(), Reason: one.Reason}
+		row := Row{Slug: one.Slug(), Use: one.Use, Kind: one.Kind, Pays: one.Pays(), Window: one.WindowText(), Reason: one.Reason,
+			Layer: one.Layer, From: one.From}
 		switch one.Kind {
 		case library.KindLLM:
 			rows[one.Subscription] = append(rows[one.Subscription], row)
@@ -175,9 +181,17 @@ func Build(loaded library.Library, sources []Source, keys Keys, targets []Target
 	filter.Prompt, filter.Placeholder = filterPrompt, filterHint
 	filter.SetStyles(look.FilterStyles())
 	filter.Focus()
-	built := Model{Groups: groups, classifiers: classifiers, keys: keys, drawn: &drawn{}, targets: targets, filter: filter, effort: llm.EffortDefault}
+	built := Model{Groups: groups, classifiers: classifiers, sources: sources, keys: keys, drawn: &drawn{}, targets: targets, filter: filter, effort: llm.EffortDefault}
 	built.settle()
 	return built
+}
+
+func (m Model) Rebuild(loaded library.Library) Model {
+	fresh := Build(loaded, m.sources, m.keys, m.targets)
+	fresh.SetSize(m.width, m.height)
+	fresh.assign = m.assign
+	fresh.settle()
+	return fresh
 }
 
 func (m *Model) AssignTo(at int) {
@@ -267,6 +281,12 @@ func (m *Model) Key(key string) Intent {
 		return Intent{Action: Close}
 	case "enter":
 		return m.choose()
+	case "f5":
+		if m.reloading {
+			return Intent{}
+		}
+		m.reloading = true
+		return Intent{Action: Reload}
 	case "tab":
 		m.tab = (m.tab + 1) % tabCount
 		m.reset()

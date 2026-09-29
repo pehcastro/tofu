@@ -14,12 +14,12 @@
            › all                     claude-sub                                    kind    llm                
              claude-sub              claude-sonnet-5                               pays    subscription       
              codex-sub               claude-sub                                    window  5h and weekly      
-                                     claude-haiku-4-5                                                         
-                                     claude-sub                                    EFFORT                     
-                                     claude-opus-4-8                               medium  shift+←→           
-                                     claude-sub                                                               
-                                     claude-opus-4-7                               enter picks the model      
-                                     claude-sub                                                               
+                                     claude-haiku-4-5                              layer   library            
+           f5 reloads models         claude-sub                                                               
+                                     claude-opus-4-8                               EFFORT                     
+                                     claude-sub                                    medium  shift+←→           
+                                     claude-opus-4-7                                                          
+                                     claude-sub                                    enter picks the model      
                                      claude-opus-4-6                                                          
                                      claude-sub                                                               
                                      claude-sonnet-4-6                                                        

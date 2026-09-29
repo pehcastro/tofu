@@ -13,7 +13,7 @@
      all                     the typed model that judges the model's…  ASSIGNED MODEL             
      claude-sub                                                        nothing is bound, so it    
                                                                        runs on the subscription   
-                                                                       default                    
+   f5 reloads models                                                   default                    
                                                                                                   
                                                                        enter chooses a new model  
                                                                                                   

@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"cmp"
 	"fmt"
 	"strings"
 
@@ -28,6 +29,8 @@ const (
 	callDialogWidest  = 120
 	callDialogMargin  = 8
 	callDialogPadding = 4
+	noNewModel        = "the models reload found no new model"
+	noModelsReload    = "this session has no models reload"
 )
 
 type dialog interface {
@@ -280,8 +283,31 @@ func (a *App) choseModel(intent models.Intent) tea.Cmd {
 			return nil
 		}
 		return tea.ExecProcess(a.options.Login(), nil)
+	case models.Reload:
+		reload := a.options.ReloadModels
+		if reload == nil {
+			return func() tea.Msg { return pickerReloadedMsg(noModelsReload) }
+		}
+		return func() tea.Msg { return pickerReloadedMsg(cmp.Or(reload(), noNewModel)) }
 	}
 	panic("tui: unknown model intent")
+}
+
+type pickerReloadedMsg string
+
+func (a *App) pickerReloaded(note string) tea.Cmd {
+	a.notify(note)
+	open, isPicker := a.top().(*modelsDialog)
+	if !isPicker {
+		return nil
+	}
+	loaded, err := a.options.Models()
+	if err != nil {
+		a.notify(err.Error())
+		return a.pop()
+	}
+	open.picker = open.picker.Rebuild(loaded)
+	return nil
 }
 
 type quotaDialog struct{}

@@ -151,6 +151,8 @@ type Options struct {
 	Settings     *isettings.Store
 	Promotions   isession.PromotionLog
 	Reload       func() string
+	ReloadModels func() string
+	ModelsStale  bool
 	Turn         Turn
 	Answers      chan<- Answer
 	Steering     chan string
@@ -272,6 +274,8 @@ type fillMsg struct{}
 
 type shellsMsg []shells.Entry
 
+type modelsReloadedMsg string
+
 func New(options Options) *App {
 	if options.Now == nil {
 		options.Now = time.Now
@@ -341,7 +345,15 @@ func Run(options Options) error {
 }
 
 func (a *App) Init() tea.Cmd {
-	return tea.Batch(a.view.Focus(), a.intro.start(), a.pollQuota(), a.readPaths(), a.watchSetup(), a.pollShells(), a.startPulse())
+	return tea.Batch(a.view.Focus(), a.intro.start(), a.pollQuota(), a.readPaths(), a.watchSetup(), a.pollShells(), a.startPulse(), a.reloadStaleModels())
+}
+
+func (a *App) reloadStaleModels() tea.Cmd {
+	reload := a.options.ReloadModels
+	if !a.options.ModelsStale || reload == nil {
+		return nil
+	}
+	return func() tea.Msg { return modelsReloadedMsg(reload()) }
 }
 
 func (a *App) pollShells() tea.Cmd {
@@ -468,6 +480,13 @@ func (a *App) update(msg tea.Msg) tea.Cmd {
 		return a.view.Focus()
 	case shellsMsg:
 		a.showShells(msg)
+		return nil
+	case pickerReloadedMsg:
+		return a.pickerReloaded(string(msg))
+	case modelsReloadedMsg:
+		if msg != "" {
+			a.notify(string(msg))
+		}
 		return nil
 	}
 	if cmd, open := a.toFiles(msg); open {

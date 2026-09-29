@@ -91,6 +91,7 @@ type appWiring struct {
 	blockers  func() []tui.Requirement
 	clipboard func() (sys.Clipboard, error)
 	quota     func() []frame.Quota
+	reload    func(ctx context.Context, out io.Writer) int
 }
 
 type appLaunch struct {
@@ -135,6 +136,8 @@ func appOptions(dir string, arms runOpts, wiring appWiring, launch appLaunch) tu
 		Quota:        wiring.quota,
 		Settings:     settingsStore,
 		Reload:       appReload(dir),
+		ReloadModels: modelsReload(dir, wiring.reload),
+		ModelsStale:  catalogStale(time.Now()),
 		Turn:         live.run,
 		Paste:        paste.Board{Read: wiring.clipboard, Dir: live.pendingSessionDir, Recorded: live.recordAttachment},
 		Answers:      answers,
@@ -151,6 +154,71 @@ func appOptions(dir string, arms runOpts, wiring appWiring, launch appLaunch) tu
 	}
 }
 
+const (
+	reloadStampSuffix = ".reload"
+	reloadSucceeded   = "succeeded"
+	reloadFailed      = "failed"
+	reloadFound       = "models reload found "
+)
+
+func catalogStale(now time.Time) bool {
+	catalog, err := models.CatalogDir()
+	if err != nil {
+		return false
+	}
+	stamp := catalog + reloadStampSuffix
+	outcome, readErr := os.ReadFile(stamp)
+	info, statErr := os.Stat(stamp)
+	if readErr != nil || statErr != nil {
+		return true
+	}
+	age := now.Sub(info.ModTime())
+	switch string(outcome) {
+	case reloadSucceeded:
+		return age >= konst.CatalogStaleHours*time.Hour
+	case reloadFailed:
+		return age >= konst.CatalogRetryHours*time.Hour
+	}
+	return true
+}
+
+func stampReload(exit int) {
+	catalog, err := models.CatalogDir()
+	if err != nil || os.MkdirAll(filepath.Dir(catalog), 0o755) != nil {
+		return
+	}
+	outcome := reloadFailed
+	if exit == exitOK {
+		outcome = reloadSucceeded
+	}
+	_ = os.WriteFile(catalog+reloadStampSuffix, []byte(outcome), 0o644)
+}
+
+func modelsReload(dir string, reload func(context.Context, io.Writer) int) func() string {
+	if reload == nil {
+		return nil
+	}
+	return func() string {
+		before, unreadBefore := modelLibrary(dir)
+		stampReload(reload(context.Background(), io.Discard))
+		after, err := modelLibrary(dir)
+		if err != nil {
+			return models.ReloadVerb + ": " + err.Error()
+		}
+		var found []string
+		for _, model := range after.Models {
+			known := slices.ContainsFunc(before.Models, func(was models.Model) bool { return was.Slug() == model.Slug() })
+			if !known && model.Use != models.UseExcluded {
+				found = append(found, model.Slug())
+			}
+		}
+		if len(found) == 0 || unreadBefore != nil {
+			return ""
+		}
+		return reloadFound + strings.Join(found, ", ")
+	}
+}
+
 func appVerb(in io.Reader, out, errOut io.Writer, resumed sessionResume) int {
 	file, isFile := in.(*os.File)
 	if !isFile || !term.IsTerminal(file.Fd()) {
@@ -162,7 +230,7 @@ func appVerb(in io.Reader, out, errOut io.Writer, resumed sessionResume) int {
 		_, _ = fmt.Fprintf(errOut, "tofu: the working directory is unreadable: %v\n", err)
 		return exitVerdict
 	}
-	live := appWiring{open: openAppWire, wires: appWires, blockers: appRequirements, quota: appQuota}
+	live := appWiring{open: openAppWire, wires: appWires, blockers: appRequirements, quota: appQuota, reload: reloadAccounts}
 	launch := launchOf(dir, resumed, resumed.Session == "")
 	if err := tui.Run(appOptions(dir, runOpts{}, live, launch)); err != nil {
 		_, _ = fmt.Fprintf(errOut, "tofu: %v\n", err)

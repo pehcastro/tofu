@@ -43,13 +43,13 @@
    › all                     openrouter                                kind    classifier         
      openrouter · no key   › jev-latest                                pays    key                
      typesafe · no key       typesafe                                  window                     
-                                                                       key     not set            
+                                                                       layer   library            
+   f5 reloads models                                                   key     not set            
                                                                                                   
                                                                        ASSIGN TO                  
                                                                        Classifier model           
                                                                                                   
                                                                        enter asks for the key     
-                                                                                                  
                                                                                                   
                                                                                                   
                                                                                                   
@@ -73,13 +73,13 @@
    › all            A key pays for this model. It goes to the credential store    ssifier         
      openrouter ·   and is never shown.                                                           
      typesafe · no                                                                                
-                    › •••••••••••••••••••█                                         set            
+                    › •••••••••••••••••••█                                        rary            
+   f5 reloads mode                                                                 set            
                                                                                                   
-                                                                                                  
-                    type the key · enter stores it · esc cancels                  model           
+                    type the key · enter stores it · esc cancels                                  
+                                                                                  model           
                                                                                                   
                                                                        enter asks for the key     
-                                                                                                  
                                                                                                   
                                                                                                   
                                                                                                   

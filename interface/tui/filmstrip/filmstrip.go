@@ -15,6 +15,7 @@ import (
 	"tofu/interface/tui/session"
 	"tofu/interface/tui/subagent"
 	"tofu/internal/llm"
+	library "tofu/internal/llm/models"
 	isettings "tofu/internal/settings"
 	roster "tofu/internal/subagent"
 )
@@ -101,15 +102,31 @@ func newReel(width, height int, home string, tune func(*tui.Options)) *reel {
 		Wires: func() []tui.Wire {
 			return []tui.Wire{{Name: fixture.Wire, Model: fixture.Model, Provider: fixture.Provider, Efforts: []llm.Effort{llm.EffortLow, llm.EffortMedium, llm.EffortHigh}}}
 		},
-		Turn:    func(context.Context, tui.Pick, string, tui.CalledFromInsideTheTurnAndNeverAfterItReturns) {},
-		Answers: make(chan tui.Answer, 1),
-		Copy:    func(string) error { return nil },
+		Turn:         func(context.Context, tui.Pick, string, tui.CalledFromInsideTheTurnAndNeverAfterItReturns) {},
+		Answers:      make(chan tui.Answer, 1),
+		Copy:         func(string) error { return nil },
+		ReloadModels: servedInCatalog,
 	}
 	if tune != nil {
 		tune(&r.options)
 	}
 	r.open()
 	return r
+}
+
+func servedInCatalog() string {
+	catalog, err := library.CatalogDir()
+	path := filepath.Join(catalog, "models", "anthropic", "claude-sonnet-5-5.yaml")
+	if err == nil {
+		err = os.MkdirAll(filepath.Dir(path), 0o700)
+	}
+	if err == nil {
+		err = os.WriteFile(path, []byte("subscription: claude-sub\nuse: allowed\nfrom: listed by the claude-sub account\n"), 0o600)
+	}
+	if err != nil {
+		return err.Error()
+	}
+	return "models reload found claude-sub/claude-sonnet-5-5"
 }
 
 func (r *reel) open() {

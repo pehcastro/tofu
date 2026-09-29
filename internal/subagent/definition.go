@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"tofu/internal/konst"
 	"tofu/internal/llm"
@@ -23,6 +24,7 @@ const (
 	libraryOrigin  = "library"
 	inheritModel   = "inherit"
 	disabledModel  = "none"
+	dateInID       = "20060102"
 )
 
 type Runs string
@@ -421,17 +423,17 @@ func (s Scan) runsOn(definition *Definition, written string, tofuFile bool) erro
 			unresolved = fmt.Sprintf("the tier @%s is not set, so %s runs on the orchestrator's model: tofu settings set %s <slug>", tier, definition.Name, tier.Setting())
 		}
 	case aliasTier(written) != "":
-		var matches []string
+		var family []models.Model
 		for _, model := range s.Catalog.Models {
 			if model.Subscription == models.ClaudeSub && model.Use != models.UseExcluded && strings.HasPrefix(model.ID, "claude-"+written+"-") {
-				matches = append(matches, model.Slug())
+				family = append(family, model)
 			}
 		}
-		if len(matches) != 1 {
-			unresolved = fmt.Sprintf("the alias %s names %d allowed claude-sub models, not one, so %s runs on the orchestrator's model", written, len(matches), definition.Name)
+		if len(family) == 0 {
+			unresolved = fmt.Sprintf("the alias %s names no allowed claude-sub model, so %s runs on the orchestrator's model", written, definition.Name)
 			break
 		}
-		slug = matches[0]
+		slug = slices.MaxFunc(family, func(a, b models.Model) int { return slices.Compare(versionOf(a.ID), versionOf(b.ID)) }).Slug()
 	}
 	if unresolved != "" {
 		definition.Runs, definition.Notices = RunsInherit, append(definition.Notices, unresolved)
@@ -446,4 +448,17 @@ func (s Scan) runsOn(definition *Definition, written string, tofuFile bool) erro
 	}
 	definition.Runs, definition.Model = RunsModel, model.Slug()
 	return nil
+}
+
+func versionOf(id string) []int {
+	var version []int
+	for _, part := range strings.Split(id, "-") {
+		if _, err := time.Parse(dateInID, part); err == nil {
+			continue
+		}
+		if number, err := strconv.Atoi(part); err == nil {
+			version = append(version, number)
+		}
+	}
+	return version
 }

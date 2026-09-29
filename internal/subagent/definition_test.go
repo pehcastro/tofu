@@ -223,6 +223,31 @@ func TestModelTiers(t *testing.T) {
 		}
 	})
 
+	t.Run("an alias picks the newest allowed model of its family", func(t *testing.T) {
+		sonnet := func(id string, use models.Use) models.Model {
+			return models.Model{Provider: models.Anthropic, ID: id, Subscription: models.ClaudeSub, Use: use, Kind: models.KindLLM}
+		}
+		for _, c := range []struct {
+			name  string
+			first []models.Model
+			last  []models.Model
+			want  string
+		}{
+			{"a newer point release", nil, []models.Model{sonnet("claude-sonnet-5-5", models.UseAllowed)}, "claude-sub/claude-sonnet-5-5"},
+			{"the newer one listed first", []models.Model{sonnet("claude-sonnet-5-5", models.UseAllowed)}, nil, "claude-sub/claude-sonnet-5-5"},
+			{"ten after nine", nil, []models.Model{sonnet("claude-sonnet-5-10", models.UseAllowed), sonnet("claude-sonnet-5-9", models.UseAllowed)}, "claude-sub/claude-sonnet-5-10"},
+			{"a date is not a version", nil, []models.Model{sonnet("claude-sonnet-5-20990101", models.UseAllowed), sonnet("claude-sonnet-5-5", models.UseAllowed)}, "claude-sub/claude-sonnet-5-5"},
+			{"an excluded newer one", nil, []models.Model{sonnet("claude-sonnet-6", models.UseExcluded), sonnet("claude-sonnet-5-5", models.UseAllowed)}, "claude-sub/claude-sonnet-5-5"},
+		} {
+			s := scanOf(t, "", "claude")
+			s.Project = project
+			s.Catalog.Models = slices.Concat(c.first, s.Catalog.Models, c.last)
+			if writer := definitionNamed(t, Definitions(s), "writer"); writer.Runs != RunsModel || writer.Model != c.want || len(writer.Notices) != 0 {
+				t.Fatalf("%s: sonnet should run on %s, got %+v", c.name, c.want, writer)
+			}
+		}
+	})
+
 	t.Run("an alias that finds no model", func(t *testing.T) {
 		s := scanOf(t, "", "claude")
 		s.Project, s.Catalog = project, models.Library{}

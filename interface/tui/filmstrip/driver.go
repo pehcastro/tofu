@@ -34,6 +34,7 @@ var namedKeys = map[string]rune{
 	"end":       tea.KeyEnd,
 	"pgup":      tea.KeyPgUp,
 	"pgdown":    tea.KeyPgDown,
+	"f5":        tea.KeyF5,
 }
 
 var namedModifiers = map[string]tea.KeyMod{

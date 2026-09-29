@@ -41,6 +41,9 @@ const (
 	rolesHint       = "enter assign · tab"
 	selectionHead   = "Selection"
 	excludedHead    = "Excluded"
+	fromHead        = "From"
+	reloadHint      = "f5 reloads models"
+	reloadingHint   = "reloading models"
 	effortHead      = "Effort"
 	effortHint      = "  shift+←→"
 	assignHead      = "Assign to"
@@ -68,6 +71,7 @@ type renderKey struct {
 	assign           *Target
 	effort           llm.Effort
 	entry            keyEntry
+	reloading        bool
 }
 
 type drawn struct {
@@ -123,7 +127,7 @@ func (m Model) cached(width, height int) string {
 		bound = append(bound, target.Assigned)
 	}
 	key := renderKey{width: width, height: height, tab: m.tab, provider: m.provider, cursor: m.cursor,
-		filter: m.filter.Value(), bound: strings.Join(bound, "\n"), assign: m.assign, effort: m.effort, entry: m.entry}
+		filter: m.filter.Value(), bound: strings.Join(bound, "\n"), assign: m.assign, effort: m.effort, entry: m.entry, reloading: m.reloading}
 	if m.drawn.modal == "" || m.drawn.key != key {
 		*m.drawn = drawn{key: key, modal: m.modal(width, height)}
 	}
@@ -167,7 +171,11 @@ func (m Model) sidePane(width int) string {
 	for i, source := range m.providers() {
 		view += look.CatalogRow(width-sideInset, i == m.provider && m.tab == tabModels, source) + "\n"
 	}
-	return view
+	hint := reloadHint
+	if m.reloading {
+		hint = reloadingHint
+	}
+	return view + "\n" + look.Faint(hint)
 }
 
 func (m Model) listPane(width, modalHeight int) string {
@@ -232,7 +240,7 @@ func (m Model) detailPane() string {
 		view += look.Title(model) + "\n" + look.Muted(source) + "\n"
 	} else {
 		view += look.Title(model) + "\n" + look.Muted(row.Slug) + "\n\n" +
-			field("source", source) + field("kind", string(row.Kind)) + field("pays", string(row.Pays)) + field("window", row.Window)
+			field("source", source) + field("kind", string(row.Kind)) + field("pays", string(row.Pays)) + field("window", row.Window) + field("layer", row.Layer)
 	}
 	switch group := m.groupOf(row); {
 	case group.Key == "":
@@ -240,6 +248,9 @@ func (m Model) detailPane() string {
 		view += field("key", "set")
 	default:
 		view += field("key", "not set")
+	}
+	if row.From != "" {
+		view += "\n" + look.SectionLabel(fromHead) + "\n" + look.Muted(row.From) + "\n"
 	}
 	hint := pickHint
 	if m.effort != "" && m.assign == nil {

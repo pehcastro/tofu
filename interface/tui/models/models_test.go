@@ -64,13 +64,14 @@ func testLibrary() library.Library {
 				use, reason = library.UseExcluded, "retired by the vendor, and the subscription no longer serves it"
 			}
 			loaded.Models = append(loaded.Models, library.Model{Provider: provider, ID: id, Subscription: source,
-				Windows: windows, Use: use, Kind: library.KindLLM, Reason: reason})
+				Windows: windows, Use: use, Kind: library.KindLLM, Reason: reason, Layer: "library"})
 		}
 	}
 	add(library.Anthropic, claudeSub, []string{"claude-opus-5", "claude-sonnet-5", "claude-haiku-4-5", "claude-opus-4-8",
 		"claude-opus-4-7", "claude-opus-4-6", "claude-sonnet-4-6", "claude-sonnet-4-5", "claude-opus-4-5", "claude-haiku-3"})
 	add(library.OpenAI, codexSub, []string{"gpt-5.6-sol", "gpt-5.6-luna", "gpt-5.6-terra", "gpt-5.5", "gpt-5.4",
 		"gpt-5.3", "gpt-5.2", "gpt-5.1", "gpt-5", "gpt-reserve"})
+	loaded.Models[1].Layer, loaded.Models[1].From = "catalog", "listed by the claude-sub account under claude-cli 2.1.257"
 	loaded.Roles = []library.Role{{ID: library.RoleOrchestrator, Model: loaded.Models[0]}}
 	return loaded
 }
@@ -308,10 +309,13 @@ func TestAPastedKeyIsStoredWithoutItsNewline(t *testing.T) {
 func TestPickerGoldens(t *testing.T) {
 	roles := testPicker(120, 36)
 	roles.Key("tab")
+	catalog := testPicker(120, 36)
+	catalog.Key("down")
 	for name, view := range map[string]string{
-		"picker-120x36.golden":       testPicker(120, 36).View(),
-		"picker-roles-120x36.golden": roles.View(),
-		"picker-60x20.golden":        testPicker(60, 20).View(),
+		"picker-120x36.golden":         testPicker(120, 36).View(),
+		"picker-roles-120x36.golden":   roles.View(),
+		"picker-catalog-120x36.golden": catalog.View(),
+		"picker-60x20.golden":          testPicker(60, 20).View(),
 		"picker-empty-120x36.golden": func() string {
 			empty := Build(library.Library{}, nil, noKeys(), nil)
 			empty.SetSize(120, 36)
