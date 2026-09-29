@@ -3,7 +3,6 @@ package tui
 import (
 	"cmp"
 	"context"
-	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -29,12 +28,14 @@ const (
 	notSet        = "not set"
 )
 
-func shippedModels() (library.Library, error) {
-	layers, err := library.Layers(shipped.Files(), "")
-	if err != nil {
-		return library.Library{}, err
+func layeredModels(root string) func() (library.Library, error) {
+	return func() (library.Library, error) {
+		layers, err := library.Layers(shipped.Files(), root)
+		if err != nil {
+			return library.Library{}, err
+		}
+		return library.Load(layers)
 	}
-	return library.Load(layers)
 }
 
 func (a *App) openPicker(assign string) {
@@ -86,18 +87,6 @@ func (a *App) pickedSetting(key string) (isettings.Spec, bool) {
 		return isettings.Spec{}, false
 	}
 	return a.spec(key)
-}
-
-func (a *App) assignSubAgent(name, slug string) (string, error) {
-	parent := a.options.Root
-	if isettings.Scope(a.settings.Scope) == isettings.Global {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return "", err
-		}
-		parent = home
-	}
-	return isubagent.Assign(parent, name, slug)
 }
 
 func (a *App) nowRuns(name string) string {

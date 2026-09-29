@@ -1,5 +1,5 @@
                                                                                                     
-  tofu settings         Context                                                     global scope    
+  tofu settings         Context                                         global scope (shift+tab)    
   Global preferences    Choose a row to inspect and change its value.                               
                                                                                                     
   CATEGORIES            › Compaction                                                adaptive  ▾     
@@ -26,5 +26,5 @@
                           Instruction files                                     agents-first  ▾     
                           a folder with both AGENTS.md and CLAUDE.md sends one: agents-first se…    
                                                                                                     
-                        enter change  ·  ctrl+k search  ·  esc chat                                 
+                        enter change  ·  shift+tab scope  ·  esc chat                               
                                                                                                     

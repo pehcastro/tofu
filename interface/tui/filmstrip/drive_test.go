@@ -111,7 +111,7 @@ func launch(t *testing.T, path string) (*reel, *transcript) {
 	t.Setenv("TERM", "xterm-256color")
 	t.Setenv("NO_COLOR", "")
 	if planted, err := os.ReadFile(strings.TrimSuffix(path, scriptSuffix) + settingsSuffix); err == nil {
-		if err := os.WriteFile(filepath.Join(home, globalSettings), planted, 0o600); err != nil {
+		if err := sys.WriteFile(filepath.Join(home, sys.StateDirName, isettings.FileName), planted, 0o600); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -253,5 +253,90 @@ func TestEveryDriveScriptPrintsItsGolden(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			golden.Assert(t, filepath.Join(driveDir, name+goldenSuffix), drive(t, path))
 		})
+	}
+}
+
+func TestEveryWriteLandsInTheScopeItNamesAndNowhereElse(t *testing.T) {
+	root := t.TempDir()
+	dirs := [2]string{filepath.Join(root, "home", sys.StateDirName), filepath.Join(root, "project", sys.StateDirName)}
+	store, err := isettings.Open(filepath.Join(dirs[isettings.Global], isettings.FileName), filepath.Join(dirs[isettings.Project], isettings.FileName))
+	if err != nil {
+		t.Fatal(err)
+	}
+	writes := []struct {
+		write isettings.Write
+		file  string
+		holds string
+	}{
+		{isettings.Write{Kind: isettings.WriteValue, Key: isettings.ChatShowsTools, Value: "1"}, isettings.FileName, `"chatShowsTools": 1`},
+		{isettings.Write{Kind: isettings.WriteValue, Key: isettings.DecisionCap, Value: "7"}, isettings.FileName, `"decisionCap": 7`},
+		{isettings.Write{Kind: isettings.WriteValue, Key: isettings.Theme, Value: "Nord"}, isettings.FileName, `"theme": "Nord"`},
+		{isettings.Write{Kind: isettings.WriteValue, Key: isettings.BrowserModel, Value: "claude-sub/claude-sonnet-5"}, isettings.FileName, `"browserModel": "claude-sub/claude-sonnet-5"`},
+		{isettings.Write{Kind: isettings.WriteRole, Key: "orchestrator", Value: "claude-sub/claude-sonnet-5"}, filepath.Join("roles", "orchestrator.yaml"), "model: claude-sub/claude-sonnet-5"},
+		{isettings.Write{Kind: isettings.WriteRole, Key: "classifier", Value: "typesafe/jev-latest"}, filepath.Join("roles", "classifier.yaml"), "model: typesafe/jev-latest"},
+		{isettings.Write{Kind: isettings.WriteSubAgent, Key: "go-dev", Value: "claude-sub/claude-sonnet-5"}, roster.AssignmentFile, "go-dev: claude-sub/claude-sonnet-5"},
+	}
+	for _, scope := range []isettings.Scope{isettings.Global, isettings.Project} {
+		for _, each := range writes {
+			if err := store.Save(scope, each.write); err != nil {
+				t.Fatalf("%s %v: %v", scope, each.write, err)
+			}
+			if written, _ := os.ReadFile(filepath.Join(dirs[scope], each.file)); !strings.Contains(string(written), each.holds) {
+				t.Errorf("%s %v: %s holds %q, want %s", scope, each.write, each.file, written, each.holds)
+			}
+			if leaked, _ := os.ReadFile(filepath.Join(dirs[isettings.Project], each.file)); scope == isettings.Global && len(leaked) > 0 {
+				t.Errorf("a global %v also wrote the project %s: %q", each.write, each.file, leaked)
+			}
+		}
+	}
+	refused := []isettings.Write{
+		{Kind: isettings.WriteRole, Key: "genius", Value: "claude-sub/claude-sonnet-5"},
+		{Kind: isettings.WriteValue, Key: isettings.DecisionCap, Value: "seven"},
+		{Kind: isettings.WriteValue, Key: "noSuchSetting", Value: "1"},
+	}
+	for _, write := range refused {
+		if err := store.Save(isettings.Global, write); err == nil {
+			t.Errorf("%v was saved", write)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(dirs[isettings.Global], "roles", "genius.yaml")); err == nil {
+		t.Error("a refused role still wrote a file")
+	}
+	homeless, err := isettings.Open(filepath.Join(dirs[isettings.Global], isettings.FileName), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := homeless.Save(isettings.Project, isettings.Write{Kind: isettings.WriteRole, Key: "orchestrator", Value: "claude-sub/claude-sonnet-5"}); err == nil {
+		t.Error("a role was saved into a scope with no path")
+	}
+}
+
+func TestAPickAndASettingLandInTheScopeTheHeaderNames(t *testing.T) {
+	r, out := launch(t, "scope-writes"+scriptSuffix)
+	home, err := sys.HomeConfigDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	project := filepath.Join(r.options.Root, sys.StateDirName)
+	bound := func(dir string) bool {
+		_, err := os.Stat(filepath.Join(dir, "roles", "orchestrator.yaml"))
+		return err == nil
+	}
+	pick := "key enter\nwait Select model\ntype claude-sonnet-5\nkey enter\nwait orchestrator now runs claude-sub/claude-sonnet-5\n"
+	toggle := "key ctrl+k\ntype Read before edit\nkey enter\nkey enter\nkey down\nkey enter\n"
+	playAll(t, r, "type /settings\nkey enter\nwait global scope (shift+tab)\nkey right\nwait Orchestrator model\n"+pick, true, out)
+	if !bound(home) || bound(project) {
+		t.Fatalf("global scope: home bound %v, project bound %v", bound(home), bound(project))
+	}
+	playAll(t, r, "key shift+tab\nwait project scope (shift+tab)\n"+pick, true, out)
+	if !bound(project) {
+		t.Fatal("project scope wrote no project role file")
+	}
+	playAll(t, r, "key shift+tab\nwait global scope (shift+tab)\n"+toggle+"key shift+tab\nwait project scope (shift+tab)\n"+toggle, true, out)
+	for scope, want := range map[isettings.Scope]string{isettings.Global: `"readBeforeEdit": 0`, isettings.Project: `"readBeforeEdit": 1`} {
+		body, err := os.ReadFile(r.options.Settings.Path(scope))
+		if err != nil || !strings.Contains(string(body), want) {
+			t.Errorf("the %s settings.json holds %q, want %s: %v", scope, body, want, err)
+		}
 	}
 }

@@ -1,8 +1,8 @@
                                                                                                     
-  tofu settings         Shell                                                       global scope    
+  tofu settings         Shell                                           global scope (shift+tab)    
   Global preferences    Choose a row to inspect and change its value.                               
                                                                                                     
-  CATEGORIES            › Persistent registry                                               ● on    
+  CATEGORIES            › Persistent registry                                              ○ off    
     Appearance    05      a running shell outlives tofu and the next launch lists it; off stops…    
     Models & rol… 02                                                                                
     Interaction   05      Log tail                                                       500  ▾     
@@ -17,7 +17,7 @@
   ↑↓ setting · ←→         Fold hides shell                                                 ○ off    
   section                 the running line drops the shell count                                    
   ctrl+k search ·                                                                                   
-  esc chat              enter change  ·  ctrl+k search  ·  esc chat                                 
+  esc chat              enter change  ·  shift+tab scope  ·  esc chat                               
                                                                                                     
                                                                                                     
                                                                                                     

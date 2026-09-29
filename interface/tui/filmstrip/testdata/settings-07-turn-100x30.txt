@@ -1,5 +1,5 @@
                                                                                                     
-  tofu settings         Turn                                                        global scope    
+  tofu settings         Turn                                            global scope (shift+tab)    
   Global preferences    Choose a row to inspect and change its value.                               
                                                                                                     
   CATEGORIES            › Decision cap                                                     0  ▾     
@@ -26,5 +26,5 @@
                           Worker tier                                                default  ▾     
                           the model @worker names, and haiku in a shared agent file; empty runs…    
                                                                                                     
-                        enter change  ·  ctrl+k search  ·  esc chat                                 
+                        enter change  ·  shift+tab scope  ·  esc chat                               
                                                                                                     

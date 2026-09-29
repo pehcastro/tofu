@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"path/filepath"
 	"slices"
 	"strconv"
 
@@ -31,6 +32,7 @@ const (
 	toolEventKind     = "tool"
 	defaultSource     = "default"
 	appearanceGroup   = "Appearance"
+	noSettingsStore   = "the settings file could not be opened, so nothing was saved"
 )
 
 type preview struct{ key, value string }
@@ -112,49 +114,42 @@ func (a *App) setNumber(key string, by int) {
 	if a.store == nil {
 		return
 	}
-	spec, known := a.spec(key)
-	if !known {
-		return
+	if spec, known := a.spec(key); known {
+		a.commit(key, strconv.Itoa(min(max(a.store.Int(key)+by, spec.Least), spec.Most)))
 	}
-	if err := a.store.Set(isettings.Scope(a.settings.Scope), key, min(max(a.store.Int(key)+by, spec.Least), spec.Most)); err != nil {
+}
+
+func (a *App) save(write isettings.Write) bool {
+	if a.store == nil {
+		a.notify(noSettingsStore)
+		return false
+	}
+	if err := a.store.Save(isettings.Scope(a.settings.Scope), write); err != nil {
 		a.notify(err.Error())
+		return false
 	}
+	return true
 }
 
 func (a *App) commit(key, value string) {
 	if a.store == nil {
 		return
 	}
-	scope := isettings.Scope(a.settings.Scope)
 	spec, known := a.spec(key)
 	if !known {
 		return
 	}
-	var err error
-	switch spec.Kind {
-	case isettings.Bool:
-		wasOn, on := a.store.Bool(key), value == switchOn
-		number := 0
-		if on {
-			number = 1
-		}
-		err = a.store.Set(scope, key, number)
-		if key == isettings.ChatShowsTools && err == nil && wasOn != on {
-			a.recordKindMove(wasOn)
-		}
-	case isettings.Text:
-		err = a.store.SetText(scope, key, value)
-	case isettings.Int:
-		number, parsed := strconv.Atoi(value)
-		if parsed != nil {
-			return
-		}
-		err = a.store.Set(scope, key, number)
-	default:
-		panic("tui: unknown setting kind")
+	if spec.Kind != isettings.Bool {
+		a.save(isettings.Write{Kind: isettings.WriteValue, Key: key, Value: value})
+		return
 	}
-	if err != nil {
-		a.notify(err.Error())
+	wasOn, on := a.store.Bool(key), value == switchOn
+	number := "0"
+	if on {
+		number = "1"
+	}
+	if a.save(isettings.Write{Kind: isettings.WriteValue, Key: key, Value: number}) && key == isettings.ChatShowsTools && wasOn != on {
+		a.recordKindMove(wasOn)
 	}
 }
 
@@ -237,14 +232,14 @@ func (a *App) readRoles() {
 	if a.roles != nil {
 		return
 	}
-	a.roles = map[library.RoleID]string{}
+	a.roles = map[library.RoleID]library.Role{}
 	if loaded, err := a.options.Models(); err == nil {
 		for _, role := range loaded.Roles {
-			a.roles[role.ID] = role.Model.Slug()
+			a.roles[role.ID] = role
 		}
 		stored, _ := sys.StoredKeys()
-		if classifier, err := loaded.Classifier(stored); err == nil {
-			a.roles[library.RoleClassifier] = classifier.Slug()
+		if classifier, err := loaded.Classifier(stored); err == nil && a.roles[library.RoleClassifier].File == "" {
+			a.roles[library.RoleClassifier] = library.Role{ID: library.RoleClassifier, Model: classifier}
 		}
 	}
 	a.defined = nil
@@ -260,8 +255,21 @@ func runsOn(definition isubagent.Definition) string {
 	return string(definition.Runs)
 }
 
-func (a *App) roleRow(role library.RoleID, label string) settings.Row {
-	return settings.Row{Key: roleKeyPrefix + string(role), Category: rolesCategory, Label: label, Description: role.What(), Value: a.roles[role], Action: settings.RowRole}
+func (a *App) roleRow(id library.RoleID, label string) settings.Row {
+	row := settings.Row{Key: roleKeyPrefix + string(id), Category: rolesCategory, Label: label, Description: id.What(), Source: defaultSource, Action: settings.RowRole}
+	role, known := a.roles[id]
+	if !known {
+		return row
+	}
+	row.Value = role.Model.Slug()
+	if role.File != "" {
+		scope := isettings.Global
+		if filepath.Dir(filepath.Dir(role.File)) == sys.StateDir(a.options.Root) {
+			scope = isettings.Project
+		}
+		row.Source = scope.String() + " " + role.File
+	}
+	return row
 }
 
 func (a *App) roleRows() []settings.Row {

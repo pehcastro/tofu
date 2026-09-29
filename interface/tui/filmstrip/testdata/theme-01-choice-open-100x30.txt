@@ -1,5 +1,5 @@
                                                                                                     
-  tofu settings         Appearance                                                  global scope    
+  tofu settings         Appearance                                      global scope (shift+tab)    
   Global preferences    Choose a row to inspect and change its value.                               
                                                                                                     
   CATEGORIES                                                                            tofu  ▾     
@@ -25,6 +25,6 @@
                          1-8/8 · ↑↓ preview · enter apply · esc cancel                              
                                                                                                     
                                                                                                     
-                        enter change  ·  ctrl+k search  ·  esc chat                                 
+                        enter change  ·  shift+tab scope  ·  esc chat                               
                                                                                                     
                                                                                                     

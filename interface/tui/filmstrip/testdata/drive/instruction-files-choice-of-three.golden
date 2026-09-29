@@ -1,5 +1,5 @@
                                                                                                     
-  tofu settings         Context                                                     global scope    
+  tofu settings         Context                                         global scope (shift+tab)    
   Global preferences    Choose a row to inspect and change its value.                               
                                                                                                     
   CATEGORIES              Tool detail                                                      ○ off    
@@ -26,10 +26,10 @@
                           Skills                                                            ● on    
                           on lists the skills in .tofu, .agents and .claude skill folders to th…    
                                                                                                     
-                        enter change  ·  ctrl+k search  ·  esc chat                                 
+                        enter change  ·  shift+tab scope  ·  esc chat                               
                                                                                                     
                                                                                                     
-  tofu settings         Context                                                     global scope    
+  tofu settings         Context                                         global scope (shift+tab)    
   Global preferences    Choose a row to inspect and change its value.                               
                                                                                                     
   CATEGORIES              Tool detail                                                      ○ off    
@@ -56,10 +56,10 @@
                           Skills                                                            ● on    
                           on lists the skills in .tofu, .agents and .claude skill folders to th…    
                                                                                                     
-                        enter change  ·  ctrl+k search  ·  esc chat                                 
+                        enter change  ·  shift+tab scope  ·  esc chat                               
                                                                                                     
                                                                                                     
-  tofu settings         Context                                                     global scope    
+  tofu settings         Context                                         global scope (shift+tab)    
   Global preferences    Choose a row to inspect and change its value.                               
                                                                                                     
   CATEGORIES              Tool detail                                                      ○ off    
@@ -86,5 +86,5 @@
                           Skills                                                            ● on    
                           on lists the skills in .tofu, .agents and .claude skill folders to th…    
                                                                                                     
-                        enter change  ·  ctrl+k search  ·  esc chat                                 
+                        enter change  ·  shift+tab scope  ·  esc chat                               
                                                                                                     

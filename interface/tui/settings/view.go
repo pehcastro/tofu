@@ -47,6 +47,7 @@ const (
 	densitySpacious    = "spacious"
 	disabledValue      = "disabled"
 	assignmentFile     = "agent-models.yaml"
+	scopeKey           = "shift+tab"
 	ellipsis           = "…"
 )
 
@@ -157,7 +158,7 @@ func (m *Model) body() string {
 		title = names[m.category]
 	}
 	width := geo.main - 2*panePad
-	main := look.Sides(look.Title(title), look.Faint(scope+" scope"), width) + "\n" + look.Muted("Choose a row to inspect and change its value.") + "\n\n"
+	main := look.Sides(look.Title(title), look.Faint(scope+" scope ("+scopeKey+")"), width) + "\n" + look.Muted("Choose a row to inspect and change its value.") + "\n\n"
 	indices := m.inCategory()
 	start, end := m.visibleRows(len(indices))
 	for i := start; i < end; i++ {
@@ -166,7 +167,7 @@ func (m *Model) body() string {
 	if title == appearanceCategory && end-start == len(indices) && m.height >= previewMinHeight && geo.main >= previewMinWidth {
 		main += look.SectionLabel("Live preview") + "\n" + m.preview(geo.main-previewInset) + "\n\n"
 	}
-	main += look.Faint("enter change  ·  " + m.searchHint("  ·  ") + "esc chat")
+	main += look.Faint("enter change  ·  " + scopeKey + " scope  ·  esc chat")
 	view := look.JoinFixedPanes(look.Surface(geo.rail, m.height, look.Panel, panePad, "\n"+rail), look.Surface(geo.main, m.height, "", panePad, "\n"+main))
 	if geo.inspector > 0 {
 		view = look.JoinFixedPanes(view, look.Surface(geo.inspector, m.height, look.Panel, panePad, "\n"+m.inspectorPane()))

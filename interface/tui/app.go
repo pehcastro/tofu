@@ -208,7 +208,7 @@ type App struct {
 	store          *isettings.Store
 	defaults       []isettings.Spec
 	preview        preview
-	roles          map[library.RoleID]string
+	roles          map[library.RoleID]library.Role
 	defined        []isubagent.Definition
 	shortcuts      map[string]string
 	dialogs        []dialog
@@ -284,7 +284,7 @@ func New(options Options) *App {
 		options.Copy = sys.WriteClipboardText
 	}
 	if options.Models == nil {
-		options.Models = shippedModels
+		options.Models = layeredModels(options.Root)
 	}
 	if state, err := sys.ProjectStateDirAt(options.Root); err == nil && options.Promotions == "" && options.Root != "" {
 		options.Promotions = isession.NewPromotionLog(state)

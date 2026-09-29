@@ -1,5 +1,5 @@
                       
-  tofu settings         Browser                                                     global scope
+  tofu settings         Browser                                         global scope (shift+tab)
   Global preferences    Choose a row to inspect and change its value.
                       
   CATEGORIES              Browser                                                      drive  ▾ 
@@ -29,7 +29,7 @@
                       
                       
                       
-  tofu settings         Browser                                                     global scope
+  tofu settings         Browser                                         global scope (shift+tab)
   Global preferences    Choose a row to inspect and change its value.
                       
   CATEGORIES              Browser                                                      drive  ▾ 
@@ -59,7 +59,7 @@
                       
                       
                                                                                                     
-  tofu settings         Browser                                                     global scope    
+  tofu settings         Browser                                         global scope (shift+tab)    
   Global preferences    Choose a row to inspect and change its value.                               
                                                                                                     
   CATEGORIES              Browser                                                      drive  ▾     
@@ -74,7 +74,7 @@
     Startup       01    › Browser model                                  meta/muse-spark-1.3  ▾     
                           the subscription model a browser task asks for the text to type and f…    
   NAVIGATE                                                                                          
-  ↑↓ setting · ←→       enter change  ·  ctrl+k search  ·  esc chat                                 
+  ↑↓ setting · ←→       enter change  ·  shift+tab scope  ·  esc chat                               
   section                                                                                           
   ctrl+k search ·                                                                                   
   esc chat                                                                                          

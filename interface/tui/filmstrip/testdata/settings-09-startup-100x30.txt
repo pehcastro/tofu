@@ -1,11 +1,11 @@
                                                                                                     
-  tofu settings         Startup                                                     global scope    
+  tofu settings         Startup                                         global scope (shift+tab)    
   Global preferences    Choose a row to inspect and change its value.                               
                                                                                                     
   CATEGORIES            › Hide welcome art                                                 ○ off    
     Appearance    05      Leave a new session's empty chat without the tofu cat and wordmark        
     Models & rol… 02                                                                                
-    Interaction   05    enter change  ·  ctrl+k search  ·  esc chat                                 
+    Interaction   05    enter change  ·  shift+tab scope  ·  esc chat                               
     Context       09                                                                                
     Files         03                                                                                
     Shell         05                                                                                

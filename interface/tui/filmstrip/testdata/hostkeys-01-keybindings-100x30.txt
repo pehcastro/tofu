@@ -1,5 +1,5 @@
                       
-  tofu settings         Interaction                                                 global scope
+  tofu settings         Interaction                                     global scope (shift+tab)
   Global preferences    Choose a row to inspect and change its value.
                       
   CATEGORIES              Composer                                                  standard  ▾ 

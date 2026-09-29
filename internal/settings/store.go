@@ -4,9 +4,13 @@ import (
 	"cmp"
 	"encoding/json"
 	"fmt"
+	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 
+	"tofu/internal/llm/models"
+	"tofu/internal/subagent"
 	"tofu/internal/sys"
 )
 
@@ -206,6 +210,45 @@ func (s *Store) SetText(scope Scope, key, value string) error {
 	}
 	s.texts[scope][key] = value
 	return s.write(scope)
+}
+
+type WriteKind int
+
+const (
+	WriteValue WriteKind = iota
+	WriteRole
+	WriteSubAgent
+)
+
+type Write struct {
+	Kind       WriteKind
+	Key, Value string
+}
+
+func (s *Store) Save(scope Scope, write Write) error {
+	path := s.paths[scope]
+	if path == "" {
+		return fmt.Errorf("settings: no path is set for the %s scope", scope)
+	}
+	stateDir := filepath.Dir(path)
+	switch write.Kind {
+	case WriteValue:
+		spec, known := s.specFor(write.Key)
+		if !known || spec.Kind == Text {
+			return s.SetText(scope, write.Key, write.Value)
+		}
+		number, err := strconv.Atoi(write.Value)
+		if err != nil {
+			return fmt.Errorf("settings: %s takes a number, got %q", write.Key, write.Value)
+		}
+		return s.Set(scope, write.Key, number)
+	case WriteRole:
+		return models.BindRole(stateDir, models.RoleID(write.Key), write.Value)
+	case WriteSubAgent:
+		_, err := subagent.Assign(filepath.Dir(stateDir), write.Key, write.Value)
+		return err
+	}
+	panic("settings: unknown write kind")
 }
 
 func (s *Store) write(scope Scope) error {

@@ -18,22 +18,22 @@ import (
 	library "tofu/internal/llm/models"
 	isettings "tofu/internal/settings"
 	roster "tofu/internal/subagent"
+	"tofu/internal/sys"
 )
 
 const (
-	nameSeparator  = "/"
-	numberDigits   = 2
-	beatGap        = 900 * time.Millisecond
-	toolGap        = 1400 * time.Millisecond
-	typingGap      = 3 * time.Second
-	subAgentGap    = 26 * time.Second
-	subAgentID     = "qa-1"
-	homePrefix     = "tofu-filmstrip"
-	workspaceDir   = "tofu"
-	globalSettings = "settings.json"
-	keymapFile     = "keybindings.json"
-	hyperlinksOff  = "off"
-	pushFailure    = "git push origin develop: exit 128\nfatal: could not read from remote repository, make sure you have the right access\ntransport: ssh: connect to host git.silo port 22: connection refused"
+	nameSeparator = "/"
+	numberDigits  = 2
+	beatGap       = 900 * time.Millisecond
+	toolGap       = 1400 * time.Millisecond
+	typingGap     = 3 * time.Second
+	subAgentGap   = 26 * time.Second
+	subAgentID    = "qa-1"
+	homePrefix    = "tofu-filmstrip"
+	workspaceDir  = "tofu"
+	keymapFile    = "keybindings.json"
+	hyperlinksOff = "off"
+	pushFailure   = "git push origin develop: exit 128\nfatal: could not read from remote repository, make sure you have the right access\ntransport: ssh: connect to host git.silo port 22: connection refused"
 )
 
 type Frame struct {
@@ -82,7 +82,7 @@ func workspace(home string) string {
 
 func newReel(width, height int, home string, tune func(*tui.Options)) *reel {
 	root := workspace(home)
-	store, err := isettings.Open(filepath.Join(home, globalSettings), filepath.Join(root, ".tofu", globalSettings))
+	store, err := isettings.Open(filepath.Join(home, sys.StateDirName, isettings.FileName), filepath.Join(root, sys.StateDirName, isettings.FileName))
 	if err == nil {
 		err = store.SetText(isettings.Global, isettings.Hyperlinks, hyperlinksOff)
 	}

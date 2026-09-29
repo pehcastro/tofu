@@ -1,5 +1,5 @@
                       
-  tofu se                                                                                  scope
+  tofu se                                                                                  +tab)
   Global   Host integration                                                           esc  
            Detected shortcuts and safe actions                                             
   CATEGOR                                                                                  d  ▾ 

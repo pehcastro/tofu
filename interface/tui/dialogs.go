@@ -17,9 +17,8 @@ import (
 	"tofu/interface/tui/quota"
 	"tofu/interface/tui/settings"
 	"tofu/interface/tui/shells"
-	library "tofu/internal/llm/models"
 	isettings "tofu/internal/settings"
-	"tofu/internal/sys"
+	isubagent "tofu/internal/subagent"
 )
 
 const (
@@ -271,8 +270,7 @@ func (a *App) choseModel(intent models.Intent) tea.Cmd {
 		a.runNextTurnOn(intent.Slug, intent.Effort)
 		return a.pop()
 	case models.Bind:
-		if err := library.BindRole(sys.StateDir(a.options.Root), intent.Role, intent.Slug); err != nil {
-			a.notify(err.Error())
+		if !a.save(isettings.Write{Kind: isettings.WriteRole, Key: string(intent.Role), Value: intent.Slug}) {
 			return nil
 		}
 		a.roles = nil
@@ -280,14 +278,12 @@ func (a *App) choseModel(intent models.Intent) tea.Cmd {
 		a.notify(string(intent.Role) + " now runs " + intent.Slug)
 		return a.pop()
 	case models.Assign:
-		path, err := a.assignSubAgent(intent.Agent, intent.Slug)
-		if err != nil {
-			a.notify(err.Error())
+		if !a.save(isettings.Write{Kind: isettings.WriteSubAgent, Key: intent.Agent, Value: intent.Slug}) {
 			return nil
 		}
 		a.roles = nil
 		a.refreshSettingsRows()
-		a.notify(a.nowRuns(intent.Agent) + ", in " + path)
+		a.notify(a.nowRuns(intent.Agent) + ", in the " + isettings.Scope(a.settings.Scope).String() + " " + isubagent.AssignmentFile)
 		return a.pop()
 	case models.Set:
 		a.commit(intent.Setting, intent.Slug)

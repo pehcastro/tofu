@@ -1,5 +1,5 @@
                                                                                                                         
-  tofu settings           Appearance                                     global scope    SELECTED SETTING               
+  tofu settings           Appearance                         global scope (shift+tab)    SELECTED SETTING               
   Global preferences      Choose a row to inspect and change its value.                                                 
                                                                                          Theme                          
   CATEGORIES              › Theme                                       tofu dusk  ▾     tofu uses Zed Nu Disco;        
@@ -25,7 +25,7 @@
                                                                                                                         
                                                                                                                         
                                                                                                                         
-                          enter change  ·  ctrl+k search  ·  esc chat                                                   
+                          enter change  ·  shift+tab scope  ·  esc chat                                                 
                                                                                                                         
                                                                                                                         
                                                                                                                         
