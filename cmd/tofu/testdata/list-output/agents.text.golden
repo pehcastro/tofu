@@ -1,0 +1,30 @@
+exit 1
+--- stdout
+Sub-agents · 6 defined                                                ✗ 1 broken
+
+  ○ idle      inherit                   project  runs on the orchestrator's mod…
+  ● planner   claude-sub/claude-opus-5  project  plans the work
+    tools      read, search
+  ● reviewer  codex-sub/gpt-5.6-sol     global   reviews a diff
+  ○ ts-dev    inherit                   library  Writes and fixes TypeScript in…
+    tools      read, glob, search, symbols, edit, write, bash
+    reference  ts-strict-config  2.8 KB
+    reference  ts-type-design  3.0 KB
+    reference  ts-boundaries  2.4 KB
+    reference  verify-a-running-service  2.4 KB
+  ○ research  inherit                   library  Answers numbered questions abo…
+    tools      read, glob, search, symbols, bash, fetch, write
+    from       tier worker
+    reference  research-report  1.5 KB
+    notice     the tier @worker is not set, so research runs on the orchestrato…
+  ○ qa        inherit                   library  Verifies that a change does wh…
+    tools      read, glob, search, symbols, bash, write
+    reference  flakiness  4.2 KB
+    reference  failure-triage  2.6 KB
+    reference  metrics  3.5 KB
+    reference  test-planning  2.9 KB
+    reference  verify-a-running-service  2.4 KB
+
+broken
+  ✗ ~/project/.tofu/agents/broken.md  the file opens with no front matter
+--- stderr

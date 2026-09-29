@@ -1,0 +1,322 @@
+exit 0
+--- stdout
+{
+  "tofu": "VERSION",
+  "verb": "docs",
+  "ok": true,
+  "at": "AT",
+  "data": {
+    "topic": "settings",
+    "title": "Settings",
+    "summary": "every setting, its default, what it takes, and how to change it",
+    "markdown": "## What it is\n\nA setting is a named switch, like `theme` or `gatePrompt`. Each one has a\ndefault, and you only write the ones you want different.\n\nThe settings come in groups:\n\n- Appearance: theme, density, animations, statusBar, colorMode\n- Interaction: composer, gatePrompt, readBeforeEdit\n- Context: compaction, chatShowsTools, agentFeeds, showThinking, thinkingSummary, images, projectInstructionsCap, instructionSources, skills\n- Files: diffContext, hyperlinks, groupByAgent\n- Shell: persistentRegistry, logTail, killConfirm, shell, foldHidesShell\n- Turn: decisionCap, turnMaySpawn, subAgentsPerTurn, subAgentDepth, agentSources, modelTier.genius, modelTier.smart, modelTier.worker, modelTier.dumb\n- Browser: browser, browserChooser, browserSteps\n\n## Where it lives\n\n- `~/.tofu/settings.json`: yours, in every project\n- `.tofu/settings.json` in a project: that project only\n\nThe project file wins over yours, and yours wins over the default.\n\n## Change it\n\n    tofu settings set \u003ckey\u003e \u003cvalue\u003e\n\nwrites your file. Add `--scope project` to write the project's instead:\n\n    tofu settings set --scope project gatePrompt ask\n\nA true or false setting takes `true` or `false`. A list takes commas and no\nspaces, like `tofu,claude`. A value the setting does not take is refused and\nnothing is written. An older value a setting used to take, like\n`AGENTS.md,CLAUDE.md` for `instructionSources`, is read and written as the\nchoice it became. In the app, type `/settings` for the same list\nwith a search.\n\nA setting marked (on the next start) is read once when tofu opens, so quit\nand open it again.\n\n## Check it\n\n    tofu settings\n\nprints every setting, its value, and the file it came from, or `default`.\n\n    tofu settings get \u003ckey\u003e\n\nprints one value.\n\n## Undo it\n\nSet it back to the default shown below, or delete its line from the\nsettings file. With the line gone, the next file down wins.\n\n## Every setting\n",
+    "settings": [
+      {
+        "key": "theme",
+        "category": "Appearance",
+        "default": "tofu",
+        "takes": "one of tofu, tofu light, tofu dusk, Solarized Light, Dracula, Nord, Gruvbox, terminal",
+        "restart": false,
+        "description": "tofu uses Zed Nu Disco; choose a palette"
+      },
+      {
+        "key": "density",
+        "category": "Appearance",
+        "default": "comfortable",
+        "takes": "one of compact, comfortable, spacious",
+        "restart": false,
+        "description": "Spacing across lists and panels"
+      },
+      {
+        "key": "animations",
+        "category": "Appearance",
+        "default": "subtle",
+        "takes": "one of off, subtle, full",
+        "restart": false,
+        "description": "Motion for conversational states"
+      },
+      {
+        "key": "statusBar",
+        "category": "Appearance",
+        "default": "compact",
+        "takes": "one of compact, detailed, hidden",
+        "restart": false,
+        "description": "Context, quotas, and runtime counters"
+      },
+      {
+        "key": "colorMode",
+        "category": "Appearance",
+        "default": "auto",
+        "takes": "one of auto, truecolor, 256 colors, ANSI 16",
+        "restart": false,
+        "description": "Terminal color capability"
+      },
+      {
+        "key": "composer",
+        "category": "Interaction",
+        "default": "standard",
+        "takes": "one of standard, compact, expanded",
+        "restart": false,
+        "description": "Enter sends; Shift+Enter inserts a line break"
+      },
+      {
+        "key": "gatePrompt",
+        "category": "Interaction",
+        "default": "run",
+        "takes": "one of run, ask",
+        "restart": false,
+        "description": "run lets a gated call go, ask waits for you; a rule's shadow or enforced is a different switch"
+      },
+      {
+        "key": "readBeforeEdit",
+        "category": "Interaction",
+        "default": "true",
+        "takes": "true or false",
+        "restart": false,
+        "description": "an edit or a write to a file this session has not read, or that changed since it was read, is refused"
+      },
+      {
+        "key": "compaction",
+        "category": "Context",
+        "default": "adaptive",
+        "takes": "one of adaptive, manual, off",
+        "restart": false,
+        "description": "Automatic transcript compaction; not built yet, so no choice changes a turn"
+      },
+      {
+        "key": "chatShowsTools",
+        "category": "Context",
+        "default": "false",
+        "takes": "true or false",
+        "restart": false,
+        "description": "chat shows every tool call"
+      },
+      {
+        "key": "agentFeeds",
+        "category": "Context",
+        "default": "full",
+        "takes": "one of full, summary, off",
+        "restart": false,
+        "description": "full keeps every sub-agents event, summary the latest 200, off shows only the list of agents"
+      },
+      {
+        "key": "showThinking",
+        "category": "Context",
+        "default": "true",
+        "takes": "true or false",
+        "restart": false,
+        "description": "thinking shows in each agent's sub-agents feed; t there toggles it"
+      },
+      {
+        "key": "thinkingSummary",
+        "category": "Context",
+        "default": "summarized",
+        "takes": "one of summarized, omitted",
+        "restart": false,
+        "description": "summarized asks Claude for a summary of its thinking; omitted asks for none, so no thinking reaches the sub-agents feed"
+      },
+      {
+        "key": "images",
+        "category": "Context",
+        "default": "auto",
+        "takes": "one of auto, inline, off",
+        "restart": false,
+        "description": "auto sends a pasted image only to a model that can see, inline always sends, off never attaches"
+      },
+      {
+        "key": "projectInstructionsCap",
+        "category": "Context",
+        "default": "32768",
+        "takes": "1 to 262144 bytes of AGENTS.md and CLAUDE.md sent each turn",
+        "restart": false,
+        "description": "bytes of your instruction files sent each turn"
+      },
+      {
+        "key": "instructionSources",
+        "category": "Context",
+        "default": "agents-first",
+        "takes": "one of agents-first, claude-first, both",
+        "restart": false,
+        "description": "a folder with both AGENTS.md and CLAUDE.md sends one: agents-first sends AGENTS.md, claude-first sends CLAUDE.md, both sends both and costs more tokens. Read from the working directory up to its git root; the home directory gives only ~/.tofu/AGENTS.md"
+      },
+      {
+        "key": "skills",
+        "category": "Context",
+        "default": "on",
+        "takes": "one of on, off",
+        "restart": false,
+        "description": "on lists the skills in .tofu, .agents and .claude skill folders to the model and offers the skill tool; off sends neither. The project gives all three, the home directory only ~/.tofu/skills"
+      },
+      {
+        "key": "diffContext",
+        "category": "Files",
+        "default": "3",
+        "takes": "one of 2, 3, 5, 8",
+        "restart": false,
+        "description": "Lines around changed hunks, at most the 3 each diff carries"
+      },
+      {
+        "key": "hyperlinks",
+        "category": "Files",
+        "default": "auto",
+        "takes": "one of auto, on, off",
+        "restart": false,
+        "description": "OSC 8 terminal file links; off prints the bare path"
+      },
+      {
+        "key": "groupByAgent",
+        "category": "Files",
+        "default": "true",
+        "takes": "true or false",
+        "restart": false,
+        "description": "Author filters in edit feeds"
+      },
+      {
+        "key": "persistentRegistry",
+        "category": "Shell",
+        "default": "false",
+        "takes": "true or false",
+        "restart": true,
+        "description": "a running shell outlives tofu and the next launch lists it; off stops every shell on exit, even when tofu is killed"
+      },
+      {
+        "key": "logTail",
+        "category": "Shell",
+        "default": "500",
+        "takes": "one of 100, 500, 1000",
+        "restart": false,
+        "description": "Lines retained per shell"
+      },
+      {
+        "key": "killConfirm",
+        "category": "Shell",
+        "default": "true",
+        "takes": "true or false",
+        "restart": false,
+        "description": "Confirm process termination"
+      },
+      {
+        "key": "shell",
+        "category": "Shell",
+        "default": "empty",
+        "takes": "any text",
+        "restart": false,
+        "description": "a path, or the word wsl; empty resolves the person's own shell automatically"
+      },
+      {
+        "key": "foldHidesShell",
+        "category": "Shell",
+        "default": "false",
+        "takes": "true or false",
+        "restart": false,
+        "description": "the running line drops the shell count"
+      },
+      {
+        "key": "decisionCap",
+        "category": "Turn",
+        "default": "0",
+        "takes": "0 to 1000 decisions a turn, where 0 means no cap",
+        "restart": false,
+        "description": "decision cap per turn, zero means no cap"
+      },
+      {
+        "key": "turnMaySpawn",
+        "category": "Turn",
+        "default": "true",
+        "takes": "true or false",
+        "restart": false,
+        "description": "a turn may spawn a sub-agent"
+      },
+      {
+        "key": "subAgentsPerTurn",
+        "category": "Turn",
+        "default": "10",
+        "takes": "at least 1 sub-agents a turn",
+        "restart": false,
+        "description": "how many sub-agents one turn may spawn; the next spawn reads the new value"
+      },
+      {
+        "key": "subAgentDepth",
+        "category": "Turn",
+        "default": "2",
+        "takes": "at least 1 levels of sub-agents",
+        "restart": false,
+        "description": "how deep a sub-agent may spawn its own sub-agents; the next spawn reads the new value"
+      },
+      {
+        "key": "agentSources",
+        "category": "Turn",
+        "default": "tofu,agents,claude",
+        "takes": "a comma list of tofu, agents, claude",
+        "restart": false,
+        "description": "the folders sub-agents are read from, in order, as a comma list of tofu, agents and claude, inside the project; the home directory gives only ~/.tofu/agents, and the library is always read"
+      },
+      {
+        "key": "modelTier.genius",
+        "category": "Turn",
+        "default": "empty",
+        "takes": "any text",
+        "restart": false,
+        "description": "the model @genius names, and opus in a shared agent file; empty runs the orchestrator's model"
+      },
+      {
+        "key": "modelTier.smart",
+        "category": "Turn",
+        "default": "empty",
+        "takes": "any text",
+        "restart": false,
+        "description": "the model @smart names, and sonnet in a shared agent file; empty runs the orchestrator's model"
+      },
+      {
+        "key": "modelTier.worker",
+        "category": "Turn",
+        "default": "empty",
+        "takes": "any text",
+        "restart": false,
+        "description": "the model @worker names, and haiku in a shared agent file; empty runs the orchestrator's model"
+      },
+      {
+        "key": "modelTier.dumb",
+        "category": "Turn",
+        "default": "empty",
+        "takes": "any text",
+        "restart": false,
+        "description": "the model @dumb names; empty runs the orchestrator's model"
+      },
+      {
+        "key": "browser",
+        "category": "Browser",
+        "default": "drive",
+        "takes": "one of off, read, drive",
+        "restart": false,
+        "description": "drive lets the model read your Chrome tabs and click and type in them; read lets it only read them; off offers no browser tool"
+      },
+      {
+        "key": "browserChooser",
+        "category": "Browser",
+        "default": "jev",
+        "takes": "one of jev, model",
+        "restart": false,
+        "description": "jev picks each step of a browser task; model leaves every step to the turn's own model"
+      },
+      {
+        "key": "browserSteps",
+        "category": "Browser",
+        "default": "30",
+        "takes": "1 to 60 actions a browser task",
+        "restart": false,
+        "description": "how many actions one browser task may take"
+      },
+      {
+        "key": "browserModel",
+        "category": "Browser",
+        "default": "empty",
+        "takes": "any text",
+        "restart": false,
+        "description": "the subscription model a browser task asks for the text to type and for its answer, as source/model; empty takes the dumb tier, then the worker tier, then the turn's own model"
+      }
+    ]
+  },
+  "problems": []
+}
+--- stderr

@@ -1,16 +1,40 @@
 package main
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
+	"strings"
+	"time"
 
+	"tofu/interface/cli"
 	settingspkg "tofu/internal/settings"
 	"tofu/internal/sys"
 )
+
+const (
+	settingsUsage    = "tofu settings [get <key> | set [--scope global|project] <key> <value>] [--json]"
+	settingsGetUsage = "tofu settings get <key> [--json]"
+	settingsSetUsage = "tofu settings set [--scope global|project] <key> <value> [--json]"
+)
+
+type settingValue struct {
+	Key      string `json:"key"`
+	Category string `json:"category"`
+	Value    any    `json:"value"`
+	Source   string `json:"source"`
+}
+
+type settingsReport struct {
+	Global   string         `json:"global_file"`
+	Project  string         `json:"project_file"`
+	Settings []settingValue `json:"settings"`
+}
 
 func settingsPaths(dir string) (global, project string) {
 	home, _ := sys.HomeConfigDir()
@@ -57,31 +81,33 @@ func settingText(dir, key string, say func(string)) string {
 }
 
 func settingsVerb(args []string, out, errOut io.Writer) int {
+	o := verbOutput{verb: "settings", usageLine: settingsUsage, asJSON: slices.Contains(args, jsonFlag), out: out, errOut: errOut}
+	args = slices.DeleteFunc(slices.Clone(args), func(arg string) bool { return arg == jsonFlag })
 	dir, err := os.Getwd()
-	if err != nil {
-		return settingsFail(errOut, err)
+	var store *settingspkg.Store
+	if err == nil {
+		store, err = openSettings(dir)
 	}
-	store, err := openSettings(dir)
 	if err != nil {
-		return settingsFail(errOut, err)
+		return o.fail(err)
 	}
 	if len(args) == 0 {
-		printSettingsList(out, store)
-		return exitOK
+		report := settingsReport{Global: store.Path(settingspkg.Global), Project: store.Path(settingspkg.Project)}
+		for _, spec := range store.Table() {
+			report.Settings = append(report.Settings, resolvedSetting(store, spec))
+		}
+		return show(out, o.asJSON, cli.Envelope{Verb: o.verb, OK: true, At: time.Now(), Data: report},
+			func(page cli.Page) []string { return settingsPage(page, report) })
 	}
 	switch args[0] {
 	case "get":
-		return settingsGetVerb(args[1:], store, out, errOut)
+		o.verb, o.usageLine = "settings get", settingsGetUsage
+		return settingsGetVerb(o, args[1:], store)
 	case "set":
-		return settingsSetVerb(args[1:], store, out, errOut)
-	default:
-		return settingsFail(errOut, fmt.Errorf("unknown subcommand %q, want get or set", args[0]))
+		o.verb, o.usageLine = "settings set", settingsSetUsage
+		return settingsSetVerb(o, args[1:], store)
 	}
-}
-
-func settingsFail(errOut io.Writer, err error) int {
-	_, _ = fmt.Fprintf(errOut, "tofu settings: %v\n", err)
-	return exitUsage
+	return o.usage(fmt.Errorf("unknown subcommand %q", args[0]))
 }
 
 func printSettingsList(out io.Writer, store *settingspkg.Store) {
@@ -95,59 +121,97 @@ func printSettingsList(out io.Writer, store *settingspkg.Store) {
 		if fromFile {
 			source = scope.String() + " " + store.Path(scope)
 		}
-		_, _ = fmt.Fprintf(out, "%-*s %-*s %-6s %s\n", category, spec.Category, widest, spec.Key, settingsDisplay(store, spec), source)
+		_, _ = fmt.Fprintf(out, "%-*s %-*s %-6v %s\n", category, spec.Category, widest, spec.Key, settingOf(store, spec), source)
 	}
 }
 
-func settingsDisplay(store *settingspkg.Store, spec settingspkg.Spec) string {
+func settingOf(store *settingspkg.Store, spec settingspkg.Spec) any {
 	switch spec.Kind {
 	case settingspkg.Bool:
-		return strconv.FormatBool(store.Bool(spec.Key))
+		return store.Bool(spec.Key)
 	case settingspkg.Text:
 		return store.Text(spec.Key)
 	default:
-		return strconv.Itoa(store.Int(spec.Key))
+		return store.Int(spec.Key)
 	}
 }
 
-func settingsGetVerb(args []string, store *settingspkg.Store, out, errOut io.Writer) int {
+func resolvedSetting(store *settingspkg.Store, spec settingspkg.Spec) settingValue {
+	source := "default"
+	if scope, fromFile := store.Source(spec.Key); fromFile {
+		source = scope.String()
+	}
+	return settingValue{Key: spec.Key, Category: spec.Category, Value: settingOf(store, spec), Source: source}
+}
+
+func settingsPage(page cli.Page, report settingsReport) []string {
+	rows := make([]cli.Row, len(report.Settings))
+	set := 0
+	for i, setting := range report.Settings {
+		rows[i] = cli.Row{Cells: []string{setting.Key, cmp.Or(fmt.Sprint(setting.Value), "empty"), setting.Source}}
+		if setting.Source != "default" {
+			rows[i].Mark = cli.Active
+			set++
+		}
+	}
+	lines := page.Title("Settings", []string{strconv.Itoa(set) + " set"}, cli.Verdict{Text: strconv.Itoa(len(rows)) + " declared"})
+	category := ""
+	for i, line := range page.Rows(rows) {
+		if report.Settings[i].Category != category {
+			category = report.Settings[i].Category
+			lines = append(lines, "", page.Section(category, cli.Verdict{}))
+		}
+		lines = append(lines, cli.Indent(line)...)
+	}
+	lines = append(lines, "", page.Section("stored in", cli.Verdict{}))
+	lines = append(lines, cli.Indent(page.Facts([]cli.Fact{{Label: "global", Text: page.Path(report.Global)}, {Label: "project", Text: page.Path(report.Project)}})...)...)
+	return append(append(lines, ""), cli.Indent(page.Hint("tofu docs settings"))...)
+}
+
+func settingsGetVerb(o verbOutput, args []string, store *settingspkg.Store) int {
 	if len(args) != 1 {
-		return settingsFail(errOut, errors.New("usage: tofu settings get <key>"))
+		return o.usage(errors.New("wants one key"))
 	}
 	spec, known := specByKey(store, args[0])
 	if !known {
-		return settingsFail(errOut, fmt.Errorf("%q is not a declared setting", args[0]))
+		return o.usage(fmt.Errorf("%q is not a declared setting", args[0]))
 	}
-	_, _ = fmt.Fprintln(out, settingsDisplay(store, spec))
-	return exitOK
+	setting := resolvedSetting(store, spec)
+	return show(o.out, o.asJSON, cli.Envelope{Verb: o.verb, OK: true, At: time.Now(), Data: setting},
+		func(cli.Page) []string { return []string{fmt.Sprint(setting.Value)} })
 }
 
-func settingsSetVerb(args []string, store *settingspkg.Store, out, errOut io.Writer) int {
+func settingsSetVerb(o verbOutput, args []string, store *settingspkg.Store) int {
 	scope := settingspkg.Global
 	rest := args
 	if len(args) >= 2 && args[0] == "--scope" {
 		switch args[1] {
 		case "global":
-			scope = settingspkg.Global
 		case "project":
 			scope = settingspkg.Project
 		default:
-			return settingsFail(errOut, fmt.Errorf("--scope wants global or project, got %q", args[1]))
+			return o.usage(fmt.Errorf("--scope wants global or project, got %q", args[1]))
 		}
 		rest = args[2:]
 	}
 	if len(rest) != 2 {
-		return settingsFail(errOut, errors.New("usage: tofu settings set [--scope global|project] <key> <value>"))
+		return o.usage(errors.New("wants a key and a value"))
 	}
 	spec, known := specByKey(store, rest[0])
 	if !known {
-		return settingsFail(errOut, fmt.Errorf("%q is not a declared setting", rest[0]))
+		return o.usage(fmt.Errorf("%q is not a declared setting", rest[0]))
+	}
+	before := fmt.Sprint(settingOf(store, spec))
+	if before == "" || strings.ContainsAny(before, " \t") {
+		before = strconv.Quote(before)
 	}
 	if err := writeSetting(store, scope, spec, rest[1]); err != nil {
-		return settingsFail(errOut, err)
+		return o.usage(err)
 	}
-	_, _ = fmt.Fprintf(out, "%s set to %s in the %s file\n", spec.Key, rest[1], scope)
-	return exitOK
+	return o.receipt(writeReceipt{
+		Changes: []fileChange{{Change: changeChanged, What: spec.Key + " = " + rest[1], File: store.Path(scope)}},
+		Undo:    "tofu settings set --scope " + scope.String() + " " + spec.Key + " " + before,
+	})
 }
 
 func writeSetting(store *settingspkg.Store, scope settingspkg.Scope, spec settingspkg.Spec, raw string) error {

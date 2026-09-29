@@ -1,0 +1,244 @@
+exit 0
+--- stdout
+{
+  "tofu": "VERSION",
+  "verb": "settings",
+  "ok": true,
+  "at": "AT",
+  "data": {
+    "global_file": "HOME/.tofu/settings.json",
+    "project_file": "HOME/project/.tofu/settings.json",
+    "settings": [
+      {
+        "key": "theme",
+        "category": "Appearance",
+        "value": "Nord",
+        "source": "project"
+      },
+      {
+        "key": "density",
+        "category": "Appearance",
+        "value": "comfortable",
+        "source": "default"
+      },
+      {
+        "key": "animations",
+        "category": "Appearance",
+        "value": "subtle",
+        "source": "default"
+      },
+      {
+        "key": "statusBar",
+        "category": "Appearance",
+        "value": "compact",
+        "source": "default"
+      },
+      {
+        "key": "colorMode",
+        "category": "Appearance",
+        "value": "auto",
+        "source": "default"
+      },
+      {
+        "key": "composer",
+        "category": "Interaction",
+        "value": "standard",
+        "source": "default"
+      },
+      {
+        "key": "gatePrompt",
+        "category": "Interaction",
+        "value": "run",
+        "source": "default"
+      },
+      {
+        "key": "readBeforeEdit",
+        "category": "Interaction",
+        "value": false,
+        "source": "global"
+      },
+      {
+        "key": "compaction",
+        "category": "Context",
+        "value": "adaptive",
+        "source": "default"
+      },
+      {
+        "key": "chatShowsTools",
+        "category": "Context",
+        "value": false,
+        "source": "default"
+      },
+      {
+        "key": "agentFeeds",
+        "category": "Context",
+        "value": "full",
+        "source": "default"
+      },
+      {
+        "key": "showThinking",
+        "category": "Context",
+        "value": true,
+        "source": "default"
+      },
+      {
+        "key": "thinkingSummary",
+        "category": "Context",
+        "value": "summarized",
+        "source": "default"
+      },
+      {
+        "key": "images",
+        "category": "Context",
+        "value": "auto",
+        "source": "default"
+      },
+      {
+        "key": "projectInstructionsCap",
+        "category": "Context",
+        "value": 32768,
+        "source": "default"
+      },
+      {
+        "key": "instructionSources",
+        "category": "Context",
+        "value": "agents-first",
+        "source": "default"
+      },
+      {
+        "key": "skills",
+        "category": "Context",
+        "value": "on",
+        "source": "default"
+      },
+      {
+        "key": "diffContext",
+        "category": "Files",
+        "value": "3",
+        "source": "default"
+      },
+      {
+        "key": "hyperlinks",
+        "category": "Files",
+        "value": "auto",
+        "source": "default"
+      },
+      {
+        "key": "groupByAgent",
+        "category": "Files",
+        "value": true,
+        "source": "default"
+      },
+      {
+        "key": "persistentRegistry",
+        "category": "Shell",
+        "value": false,
+        "source": "default"
+      },
+      {
+        "key": "logTail",
+        "category": "Shell",
+        "value": "500",
+        "source": "default"
+      },
+      {
+        "key": "killConfirm",
+        "category": "Shell",
+        "value": true,
+        "source": "default"
+      },
+      {
+        "key": "shell",
+        "category": "Shell",
+        "value": "",
+        "source": "default"
+      },
+      {
+        "key": "foldHidesShell",
+        "category": "Shell",
+        "value": false,
+        "source": "default"
+      },
+      {
+        "key": "decisionCap",
+        "category": "Turn",
+        "value": 0,
+        "source": "default"
+      },
+      {
+        "key": "turnMaySpawn",
+        "category": "Turn",
+        "value": true,
+        "source": "default"
+      },
+      {
+        "key": "subAgentsPerTurn",
+        "category": "Turn",
+        "value": 10,
+        "source": "default"
+      },
+      {
+        "key": "subAgentDepth",
+        "category": "Turn",
+        "value": 2,
+        "source": "default"
+      },
+      {
+        "key": "agentSources",
+        "category": "Turn",
+        "value": "tofu,agents,claude",
+        "source": "default"
+      },
+      {
+        "key": "modelTier.genius",
+        "category": "Turn",
+        "value": "",
+        "source": "default"
+      },
+      {
+        "key": "modelTier.smart",
+        "category": "Turn",
+        "value": "",
+        "source": "default"
+      },
+      {
+        "key": "modelTier.worker",
+        "category": "Turn",
+        "value": "",
+        "source": "default"
+      },
+      {
+        "key": "modelTier.dumb",
+        "category": "Turn",
+        "value": "",
+        "source": "default"
+      },
+      {
+        "key": "browser",
+        "category": "Browser",
+        "value": "drive",
+        "source": "default"
+      },
+      {
+        "key": "browserChooser",
+        "category": "Browser",
+        "value": "jev",
+        "source": "default"
+      },
+      {
+        "key": "browserSteps",
+        "category": "Browser",
+        "value": 30,
+        "source": "default"
+      },
+      {
+        "key": "browserModel",
+        "category": "Browser",
+        "value": "",
+        "source": "default"
+      }
+    ]
+  },
+  "problems": []
+}
+--- stderr

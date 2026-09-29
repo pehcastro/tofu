@@ -1,0 +1,5 @@
+exit 0
+--- stdout
+~ theme = Nord  ~/project/.tofu/settings.json
+  → undo: tofu settings set --scope project theme tofu
+--- stderr

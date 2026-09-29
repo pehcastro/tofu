@@ -1,0 +1,217 @@
+exit 0
+--- stdout
+Settings
+  every setting, its default, what it takes, and how to change it
+
+What it is
+
+  A setting is a named switch, like `theme` or `gatePrompt`. Each one has a
+  default, and you only write the ones you want different.
+
+  The settings come in groups:
+
+  - Appearance: theme, density, animations, statusBar, colorMode
+  - Interaction: composer, gatePrompt, readBeforeEdit
+  - Context: compaction, chatShowsTools, agentFeeds, showThinking,
+    thinkingSummary, images, projectInstructionsCap, instructionSources, skills
+  - Files: diffContext, hyperlinks, groupByAgent
+  - Shell: persistentRegistry, logTail, killConfirm, shell, foldHidesShell
+  - Turn: decisionCap, turnMaySpawn, subAgentsPerTurn, subAgentDepth,
+    agentSources, modelTier.genius, modelTier.smart, modelTier.worker,
+    modelTier.dumb
+  - Browser: browser, browserChooser, browserSteps
+
+Where it lives
+
+  - `~/.tofu/settings.json`: yours, in every project
+  - `.tofu/settings.json` in a project: that project only
+
+  The project file wins over yours, and yours wins over the default.
+
+Change it
+
+      tofu settings set <key> <value>
+
+  writes your file. Add `--scope project` to write the project's instead:
+
+      tofu settings set --scope project gatePrompt ask
+
+  A true or false setting takes `true` or `false`. A list takes commas and no
+  spaces, like `tofu,claude`. A value the setting does not take is refused and
+  nothing is written. An older value a setting used to take, like
+  `AGENTS.md,CLAUDE.md` for `instructionSources`, is read and written as the
+  choice it became. In the app, type `/settings` for the same list with a
+  search.
+
+  A setting marked (on the next start) is read once when tofu opens, so quit and
+  open it again.
+
+Check it
+
+      tofu settings
+
+  prints every setting, its value, and the file it came from, or `default`.
+
+      tofu settings get <key>
+
+  prints one value.
+
+Undo it
+
+  Set it back to the default shown below, or delete its line from the settings
+  file. With the line gone, the next file down wins.
+
+Every setting
+
+Appearance
+    theme                   tofu
+      one of tofu, tofu light, tofu dusk, Solarized Light, Dracula, Nord,
+      Gruvbox, terminal
+      tofu uses Zed Nu Disco; choose a palette
+    density                 comfortable
+      one of compact, comfortable, spacious
+      Spacing across lists and panels
+    animations              subtle
+      one of off, subtle, full
+      Motion for conversational states
+    statusBar               compact
+      one of compact, detailed, hidden
+      Context, quotas, and runtime counters
+    colorMode               auto
+      one of auto, truecolor, 256 colors, ANSI 16
+      Terminal color capability
+
+Interaction
+    composer                standard
+      one of standard, compact, expanded
+      Enter sends; Shift+Enter inserts a line break
+    gatePrompt              run
+      one of run, ask
+      run lets a gated call go, ask waits for you; a rule's shadow or enforced
+      is a different switch
+    readBeforeEdit          true
+      true or false
+      an edit or a write to a file this session has not read, or that changed
+      since it was read, is refused
+
+Context
+    compaction              adaptive
+      one of adaptive, manual, off
+      Automatic transcript compaction; not built yet, so no choice changes a
+      turn
+    chatShowsTools          false
+      true or false
+      chat shows every tool call
+    agentFeeds              full
+      one of full, summary, off
+      full keeps every sub-agents event, summary the latest 200, off shows only
+      the list of agents
+    showThinking            true
+      true or false
+      thinking shows in each agent's sub-agents feed; t there toggles it
+    thinkingSummary         summarized
+      one of summarized, omitted
+      summarized asks Claude for a summary of its thinking; omitted asks for
+      none, so no thinking reaches the sub-agents feed
+    images                  auto
+      one of auto, inline, off
+      auto sends a pasted image only to a model that can see, inline always
+      sends, off never attaches
+    projectInstructionsCap  32768
+      1 to 262144 bytes of AGENTS.md and CLAUDE.md sent each turn
+      bytes of your instruction files sent each turn
+    instructionSources      agents-first
+      one of agents-first, claude-first, both
+      a folder with both AGENTS.md and CLAUDE.md sends one: agents-first sends
+      AGENTS.md, claude-first sends CLAUDE.md, both sends both and costs more
+      tokens. Read from the working directory up to its git root; the home
+      directory gives only ~/.tofu/AGENTS.md
+    skills                  on
+      one of on, off
+      on lists the skills in .tofu, .agents and .claude skill folders to the
+      model and offers the skill tool; off sends neither. The project gives all
+      three, the home directory only ~/.tofu/skills
+
+Files
+    diffContext             3
+      one of 2, 3, 5, 8
+      Lines around changed hunks, at most the 3 each diff carries
+    hyperlinks              auto
+      one of auto, on, off
+      OSC 8 terminal file links; off prints the bare path
+    groupByAgent            true
+      true or false
+      Author filters in edit feeds
+
+Shell
+    persistentRegistry      false               on the next start
+      true or false
+      a running shell outlives tofu and the next launch lists it; off stops
+      every shell on exit, even when tofu is killed
+    logTail                 500
+      one of 100, 500, 1000
+      Lines retained per shell
+    killConfirm             true
+      true or false
+      Confirm process termination
+    shell                   empty
+      any text
+      a path, or the word wsl; empty resolves the person's own shell
+      automatically
+    foldHidesShell          false
+      true or false
+      the running line drops the shell count
+
+Turn
+    decisionCap             0
+      0 to 1000 decisions a turn, where 0 means no cap
+      decision cap per turn, zero means no cap
+    turnMaySpawn            true
+      true or false
+      a turn may spawn a sub-agent
+    subAgentsPerTurn        10
+      at least 1 sub-agents a turn
+      how many sub-agents one turn may spawn; the next spawn reads the new value
+    subAgentDepth           2
+      at least 1 levels of sub-agents
+      how deep a sub-agent may spawn its own sub-agents; the next spawn reads
+      the new value
+    agentSources            tofu,agents,claude
+      a comma list of tofu, agents, claude
+      the folders sub-agents are read from, in order, as a comma list of tofu,
+      agents and claude, inside the project; the home directory gives only
+      ~/.tofu/agents, and the library is always read
+    modelTier.genius        empty
+      any text
+      the model @genius names, and opus in a shared agent file; empty runs the
+      orchestrator's model
+    modelTier.smart         empty
+      any text
+      the model @smart names, and sonnet in a shared agent file; empty runs the
+      orchestrator's model
+    modelTier.worker        empty
+      any text
+      the model @worker names, and haiku in a shared agent file; empty runs the
+      orchestrator's model
+    modelTier.dumb          empty
+      any text
+      the model @dumb names; empty runs the orchestrator's model
+
+Browser
+    browser                 drive
+      one of off, read, drive
+      drive lets the model read your Chrome tabs and click and type in them;
+      read lets it only read them; off offers no browser tool
+    browserChooser          jev
+      one of jev, model
+      jev picks each step of a browser task; model leaves every step to the
+      turn's own model
+    browserSteps            30
+      1 to 60 actions a browser task
+      how many actions one browser task may take
+    browserModel            empty
+      any text
+      the subscription model a browser task asks for the text to type and for
+      its answer, as source/model; empty takes the dumb tier, then the worker
+      tier, then the turn's own model
+--- stderr

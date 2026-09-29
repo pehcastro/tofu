@@ -1,0 +1,139 @@
+exit 0
+--- stdout
+{
+  "tofu": "VERSION",
+  "verb": "docs",
+  "ok": true,
+  "at": "AT",
+  "data": {
+    "query": "change the colours",
+    "matches": [
+      {
+        "text": "change the colours",
+        "do": "tofu settings set theme Nord"
+      },
+      {
+        "text": "Sub-agents",
+        "do": "tofu docs agents"
+      },
+      {
+        "text": "Browser",
+        "do": "tofu docs browser"
+      },
+      {
+        "text": "The doctor",
+        "do": "tofu docs doctor"
+      },
+      {
+        "text": "The gate",
+        "do": "tofu docs gate"
+      },
+      {
+        "text": "Models",
+        "do": "tofu docs models"
+      },
+      {
+        "text": "Start here",
+        "do": "tofu docs start"
+      },
+      {
+        "text": "stop the animations",
+        "do": "tofu settings set animations off"
+      },
+      {
+        "text": "show every tool call in the chat",
+        "do": "tofu settings set chatShowsTools true"
+      },
+      {
+        "text": "hide the model's thinking",
+        "do": "tofu settings set showThinking false"
+      },
+      {
+        "text": "pick the model a sub-agent tier runs",
+        "do": "tofu settings set modelTier.smart claude-sub/claude-sonnet-5"
+      },
+      {
+        "text": "change a setting for one project only",
+        "do": "tofu settings set --scope project \u003ckey\u003e \u003cvalue\u003e"
+      },
+      {
+        "text": "move old sessions out of the project",
+        "do": "tofu migrate"
+      },
+      {
+        "text": "run the next task on another model",
+        "do": "/models in the app, then pick a model"
+      },
+      {
+        "text": "always run the orchestrator on one model",
+        "do": "write model: \u003csource/model\u003e in ~/.tofu/roles/orchestrator.yaml"
+      },
+      {
+        "text": "see which skills the model is offered",
+        "do": "tofu run --dir . --show-prompt \"anything\""
+      },
+      {
+        "text": "store the openrouter key the gate needs",
+        "do": "tofu login openrouter"
+      },
+      {
+        "text": "work one task with the gate off",
+        "do": "tofu run --dir . --no-gate \"\u003ctask\u003e\""
+      },
+      {
+        "text": "see how full the context window got",
+        "do": "tofu context"
+      },
+      {
+        "text": "read the output of a running shell",
+        "do": "tofu shells log \u003cname\u003e"
+      },
+      {
+        "text": "check the library files and these pages",
+        "do": "tofu library"
+      },
+      {
+        "text": "let the model read the Chrome tabs I share",
+        "do": "tofu settings set browser read"
+      },
+      {
+        "text": "let the model click and type in a tab I share to drive",
+        "do": "tofu settings set browser drive"
+      },
+      {
+        "text": "take the browser tools away from the model",
+        "do": "tofu settings set browser off"
+      },
+      {
+        "text": "let the model pick each browser step instead of jev",
+        "do": "tofu settings set browserChooser model"
+      },
+      {
+        "text": "Files tofu reads and writes",
+        "do": "tofu docs files"
+      },
+      {
+        "text": "Instruction files",
+        "do": "tofu docs instructions"
+      },
+      {
+        "text": "Rules",
+        "do": "tofu docs rules"
+      },
+      {
+        "text": "Sessions",
+        "do": "tofu docs sessions"
+      },
+      {
+        "text": "Settings",
+        "do": "tofu docs settings"
+      },
+      {
+        "text": "Skills",
+        "do": "tofu docs skills"
+      }
+    ]
+  },
+  "problems": []
+}
+--- stderr

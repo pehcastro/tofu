@@ -1,0 +1,67 @@
+exit 0
+--- stdout
+Docs · "change the colours"                                           31 matches
+
+  change the colours
+    → tofu settings set theme Nord
+  Sub-agents
+    → tofu docs agents
+  Browser
+    → tofu docs browser
+  The doctor
+    → tofu docs doctor
+  The gate
+    → tofu docs gate
+  Models
+    → tofu docs models
+  Start here
+    → tofu docs start
+  stop the animations
+    → tofu settings set animations off
+  show every tool call in the chat
+    → tofu settings set chatShowsTools true
+  hide the model's thinking
+    → tofu settings set showThinking false
+  pick the model a sub-agent tier runs
+    → tofu settings set modelTier.smart claude-sub/claude-sonnet-5
+  change a setting for one project only
+    → tofu settings set --scope project <key> <value>
+  move old sessions out of the project
+    → tofu migrate
+  run the next task on another model
+    → /models in the app, then pick a model
+  always run the orchestrator on one model
+    → write model: <source/model> in ~/.tofu/roles/orchestrator.yaml
+  see which skills the model is offered
+    → tofu run --dir . --show-prompt "anything"
+  store the openrouter key the gate needs
+    → tofu login openrouter
+  work one task with the gate off
+    → tofu run --dir . --no-gate "<task>"
+  see how full the context window got
+    → tofu context
+  read the output of a running shell
+    → tofu shells log <name>
+  check the library files and these pages
+    → tofu library
+  let the model read the Chrome tabs I share
+    → tofu settings set browser read
+  let the model click and type in a tab I share to drive
+    → tofu settings set browser drive
+  take the browser tools away from the model
+    → tofu settings set browser off
+  let the model pick each browser step instead of jev
+    → tofu settings set browserChooser model
+  Files tofu reads and writes
+    → tofu docs files
+  Instruction files
+    → tofu docs instructions
+  Rules
+    → tofu docs rules
+  Sessions
+    → tofu docs sessions
+  Settings
+    → tofu docs settings
+  Skills
+    → tofu docs skills
+--- stderr

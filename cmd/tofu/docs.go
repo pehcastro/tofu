@@ -10,58 +10,97 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 	"unicode"
 
+	"tofu/interface/cli"
 	settingspkg "tofu/internal/settings"
+	"tofu/internal/widget"
 	"tofu/library/docs"
 )
 
-const docsIndexFile = "index.yaml"
+const (
+	docsIndexFile = "index.yaml"
+	docsUsage     = `tofu docs [topic | "a few words"] [--json]`
+)
 
-type docsEntry struct{ ask, do, check, topic string }
+type docsEntry struct {
+	Ask   string `json:"ask"`
+	Do    string `json:"do"`
+	Check string `json:"check"`
+	Topic string `json:"topic"`
+}
 
-type docsPage struct{ topic, title, summary, body string }
+type docsPage struct {
+	Topic   string `json:"topic"`
+	Title   string `json:"title"`
+	Summary string `json:"summary"`
+	Body    string `json:"markdown,omitempty"`
+}
 
 type docsCorpus struct {
-	pages   []docsPage
-	entries []docsEntry
+	Pages   []docsPage  `json:"topics"`
+	Entries []docsEntry `json:"entries"`
+}
+
+type docsMatch struct {
+	Text string `json:"text"`
+	Do   string `json:"do"`
+}
+
+type settingDoc struct {
+	Key         string `json:"key"`
+	Category    string `json:"category"`
+	Default     string `json:"default"`
+	Takes       string `json:"takes"`
+	Restart     bool   `json:"restart"`
+	Description string `json:"description"`
 }
 
 func (c docsCorpus) topics() []string {
-	topics := make([]string, len(c.pages))
-	for i, page := range c.pages {
-		topics[i] = page.topic
+	topics := make([]string, len(c.Pages))
+	for i, page := range c.Pages {
+		topics[i] = page.Topic
 	}
 	return topics
 }
 
 func docsVerb(args []string, out, errOut io.Writer) int {
+	o := verbOutput{verb: "docs", usageLine: docsUsage, asJSON: slices.Contains(args, jsonFlag), out: out, errOut: errOut}
+	query := strings.Join(slices.DeleteFunc(slices.Clone(args), func(arg string) bool { return arg == jsonFlag }), " ")
 	corpus, err := loadDocs()
 	if err != nil {
-		_, _ = fmt.Fprintf(errOut, "tofu docs: %v\n", err)
-		return exitUsage
+		return o.fail(err)
 	}
-	query := strings.Join(args, " ")
 	switch {
 	case query == "":
-		printDocsIndex(out, corpus)
-		return exitOK
+		index := corpus
+		index.Pages = slices.Clone(corpus.Pages)
+		for i := range index.Pages {
+			index.Pages[i].Body = ""
+		}
+		return show(out, o.asJSON, cli.Envelope{Verb: o.verb, OK: true, At: time.Now(), Data: index},
+			func(page cli.Page) []string { return docsIndexPage(page, corpus) })
 	case strings.ContainsAny(query, " \t"):
-		return searchDocs(query, corpus, out, errOut)
+		return searchDocs(o, query, corpus)
 	}
-	at := slices.IndexFunc(corpus.pages, func(page docsPage) bool { return page.topic == query })
+	at := slices.IndexFunc(corpus.Pages, func(page docsPage) bool { return page.Topic == query })
 	if at < 0 {
 		closest := corpus.topics()
 		slices.SortStableFunc(closest, func(a, b string) int { return cmp.Compare(editDistance(query, a), editDistance(query, b)) })
-		_, _ = fmt.Fprintf(errOut, "tofu docs: no topic %q. closest first: %s\n", query, strings.Join(closest, ", "))
-		return exitVerdict
+		return o.fail(problemError{What: fmt.Sprintf("no topic %q", query), Hint: "tofu docs " + closest[0]})
 	}
-	page := corpus.pages[at]
-	_, _ = fmt.Fprintf(out, "# %s\n\n%s", page.title, page.body)
-	if page.topic == "settings" {
-		printSettingsTable(out)
+	topic := struct {
+		docsPage
+		Settings []settingDoc `json:"settings,omitempty"`
+	}{docsPage: corpus.Pages[at]}
+	if topic.Topic == "settings" {
+		topic.Settings = settingDocs()
 	}
-	return exitOK
+	return show(out, o.asJSON, cli.Envelope{Verb: o.verb, OK: true, At: time.Now(), Data: topic}, func(page cli.Page) []string {
+		lines := append([]string{page.Subject(topic.Title)}, cli.Indent(page.Label(topic.Summary))...)
+		return append(append(lines, ""), append(docsBody(page, topic.Body), settingsTable(page, topic.Settings)...)...)
+	})
 }
 
 func loadDocs() (docsCorpus, error) {
@@ -80,18 +119,18 @@ func loadDocs() (docsCorpus, error) {
 		if err != nil {
 			return corpus, fmt.Errorf("%s: %w", name, err)
 		}
-		corpus.pages = append(corpus.pages, page)
+		corpus.Pages = append(corpus.Pages, page)
 	}
 	data, err := fs.ReadFile(files, docsIndexFile)
 	if err != nil {
 		return corpus, err
 	}
-	if corpus.entries, err = parseDocsIndex(string(data)); err != nil {
+	if corpus.Entries, err = parseDocsIndex(string(data)); err != nil {
 		return corpus, err
 	}
-	for _, entry := range corpus.entries {
-		if !slices.ContainsFunc(corpus.pages, func(page docsPage) bool { return page.topic == entry.topic }) {
-			return corpus, fmt.Errorf("%s: %q names the topic %q, which has no page", docsIndexFile, entry.ask, entry.topic)
+	for _, entry := range corpus.Entries {
+		if !slices.ContainsFunc(corpus.Pages, func(page docsPage) bool { return page.Topic == entry.Topic }) {
+			return corpus, fmt.Errorf("%s: %q names the topic %q, which has no page", docsIndexFile, entry.Ask, entry.Topic)
 		}
 	}
 	return corpus, nil
@@ -109,8 +148,8 @@ func parseDocsPage(text string) (docsPage, error) {
 		key, value, _ := strings.Cut(line, ":")
 		fields[strings.TrimSpace(key)] = strings.TrimSpace(value)
 	}
-	page := docsPage{topic: fields["topic"], title: fields["title"], summary: fields["summary"], body: strings.TrimLeft(body, "\n")}
-	if page.topic == "" || page.title == "" || page.summary == "" {
+	page := docsPage{Topic: fields["topic"], Title: fields["title"], Summary: fields["summary"], Body: strings.TrimLeft(body, "\n")}
+	if page.Topic == "" || page.Title == "" || page.Summary == "" {
 		return docsPage{}, errors.New("the front matter names a topic, a title and a summary")
 	}
 	return page, nil
@@ -132,52 +171,50 @@ func parseDocsIndex(text string) ([]docsEntry, error) {
 		entry := &entries[len(entries)-1]
 		switch key {
 		case "ask":
-			entry.ask = value
+			entry.Ask = value
 		case "do":
-			entry.do = value
+			entry.Do = value
 		case "check":
-			entry.check = value
+			entry.Check = value
 		case "topic":
-			entry.topic = value
+			entry.Topic = value
 		default:
 			return nil, fmt.Errorf("%s:%d: %q is not ask, do, check or topic", docsIndexFile, n+1, key)
 		}
 	}
 	for _, entry := range entries {
-		if entry.ask == "" || entry.do == "" || entry.check == "" || entry.topic == "" {
-			return nil, fmt.Errorf("%s: %q lacks one of ask, do, check and topic", docsIndexFile, entry.ask)
+		if entry.Ask == "" || entry.Do == "" || entry.Check == "" || entry.Topic == "" {
+			return nil, fmt.Errorf("%s: %q lacks one of ask, do, check and topic", docsIndexFile, entry.Ask)
 		}
 	}
 	return entries, nil
 }
 
-func printDocsIndex(out io.Writer, corpus docsCorpus) {
-	rows := make([][2]string, len(corpus.entries))
-	for i, entry := range corpus.entries {
-		rows[i] = [2]string{entry.ask, entry.do}
+func docsIndexPage(page cli.Page, corpus docsCorpus) []string {
+	lines := page.Title("Docs", []string{strconv.Itoa(len(corpus.Entries)) + " asks"}, cli.Verdict{Text: strconv.Itoa(len(corpus.Pages)) + " topics"})
+	for _, topic := range corpus.Pages {
+		lines = append(lines, "", page.Subject(topic.Topic)+cli.Gap+page.Label(topic.Summary))
+		for _, entry := range corpus.Entries {
+			if entry.Topic == topic.Topic {
+				lines = append(lines, docsMatchLines(page, docsMatch{entry.Ask, entry.Do})...)
+			}
+		}
 	}
-	printDocsRows(out, rows)
-	_, _ = fmt.Fprintf(out, "\ntopics: %s. tofu docs <topic> prints one, tofu docs \"a few words\" finds the closest.\n", strings.Join(corpus.topics(), ", "))
+	return append(append(lines, ""), cli.Indent(page.Hint("tofu docs <topic>"), page.Hint(`tofu docs "a few words"`))...)
 }
 
-func printDocsRows(out io.Writer, rows [][2]string) {
-	widest := 0
-	for _, row := range rows {
-		widest = max(widest, len(row[0]))
-	}
-	for _, row := range rows {
-		_, _ = fmt.Fprintf(out, "%-*s  %s\n", widest, row[0], row[1])
-	}
+func docsMatchLines(page cli.Page, match docsMatch) []string {
+	return cli.Indent(match.Text, cli.Gap+page.Hint(match.Do))
 }
 
-func searchDocs(query string, corpus docsCorpus, out, errOut io.Writer) int {
+func searchDocs(o verbOutput, query string, corpus docsCorpus) int {
 	asked := slices.Compact(slices.Sorted(slices.Values(docsWords(strings.ToLower(query)))))
 	type hit struct {
 		score int
-		row   [2]string
+		match docsMatch
 	}
 	var hits []hit
-	score := func(text string, row [2]string) {
+	score := func(text string, match docsMatch) {
 		words := docsWords(strings.ToLower(text))
 		overlap := 0
 		for _, word := range asked {
@@ -186,26 +223,79 @@ func searchDocs(query string, corpus docsCorpus, out, errOut io.Writer) int {
 			}
 		}
 		if overlap > 0 {
-			hits = append(hits, hit{overlap, row})
+			hits = append(hits, hit{overlap, match})
 		}
 	}
-	for _, entry := range corpus.entries {
-		score(entry.ask+" "+entry.do+" "+entry.topic, [2]string{entry.ask, entry.do})
+	for _, entry := range corpus.Entries {
+		score(entry.Ask+" "+entry.Do+" "+entry.Topic, docsMatch{entry.Ask, entry.Do})
 	}
-	for _, page := range corpus.pages {
-		score(page.topic+" "+page.title+" "+page.summary+" "+docsHeadings(page.body), [2]string{page.title, "tofu docs " + page.topic})
+	for _, page := range corpus.Pages {
+		score(page.Topic+" "+page.Title+" "+page.Summary+" "+docsHeadings(page.Body), docsMatch{page.Title, "tofu docs " + page.Topic})
 	}
 	if len(hits) == 0 {
-		_, _ = fmt.Fprintf(errOut, "tofu docs: nothing matches %q. tofu docs prints every question it answers\n", query)
-		return exitVerdict
+		return o.fail(problemError{What: fmt.Sprintf("nothing matches %q", query), Hint: "tofu docs"})
 	}
 	slices.SortStableFunc(hits, func(a, b hit) int { return cmp.Compare(b.score, a.score) })
-	rows := make([][2]string, len(hits))
+	matches := make([]docsMatch, len(hits))
 	for i, one := range hits {
-		rows[i] = one.row
+		matches[i] = one.match
 	}
-	printDocsRows(out, rows)
-	return exitOK
+	data := struct {
+		Query   string      `json:"query"`
+		Matches []docsMatch `json:"matches"`
+	}{query, matches}
+	return show(o.out, o.asJSON, cli.Envelope{Verb: o.verb, OK: true, At: time.Now(), Data: data}, func(page cli.Page) []string {
+		lines := append(page.Title("Docs", []string{strconv.Quote(query)}, cli.Verdict{Text: strconv.Itoa(len(matches)) + " matches"}), "")
+		for _, match := range matches {
+			lines = append(lines, docsMatchLines(page, match)...)
+		}
+		return lines
+	})
+}
+
+func docsBody(page cli.Page, body string) []string {
+	width := page.Width - len(cli.Gap)
+	var lines []string
+	lead, text := "", ""
+	flush := func() {
+		if text == "" {
+			return
+		}
+		for i, line := range widget.Wrap(text, width-len(lead)) {
+			if i > 0 {
+				lead = strings.Repeat(" ", len(lead))
+			}
+			lines = append(lines, cli.Gap+lead+line)
+		}
+		lead, text = "", ""
+	}
+	blank := func() {
+		if len(lines) > 0 && lines[len(lines)-1] != "" {
+			lines = append(lines, "")
+		}
+	}
+	for _, line := range strings.Split(strings.TrimRight(body, "\n"), "\n") {
+		heading := strings.TrimLeft(line, "#")
+		switch {
+		case heading != line && strings.HasPrefix(heading, " "):
+			flush()
+			blank()
+			lines = append(lines, page.Section(strings.TrimSpace(heading), cli.Verdict{}))
+		case strings.TrimSpace(line) == "":
+			flush()
+			blank()
+		case strings.HasPrefix(line, "    "):
+			flush()
+			lines = append(lines, cli.Gap+line)
+		case strings.HasPrefix(line, "- "):
+			flush()
+			lead, text = "- ", line[len("- "):]
+		default:
+			text = strings.TrimSpace(text + " " + strings.TrimSpace(line))
+		}
+	}
+	flush()
+	return lines
 }
 
 func docsHeadings(body string) string {
@@ -246,19 +336,37 @@ func editDistance(a, b string) int {
 	return previous[len(b)]
 }
 
-func printSettingsTable(out io.Writer) {
-	category := ""
+func settingDocs() []settingDoc {
+	var table []settingDoc
 	for _, spec := range settingspkg.Default() {
-		if spec.Category != category {
-			category = spec.Category
-			_, _ = fmt.Fprintf(out, "\n%s\n", category)
-		}
-		restart := ""
-		if spec.Restart {
-			restart = "   (on the next start)"
-		}
-		_, _ = fmt.Fprintf(out, "  %s = %s   %s%s\n      %s\n", spec.Key, settingDefault(spec), settingTakes(spec), restart, spec.Description)
+		table = append(table, settingDoc{spec.Key, spec.Category, settingDefault(spec), settingTakes(spec), spec.Restart, spec.Description})
 	}
+	return table
+}
+
+func settingsTable(page cli.Page, table []settingDoc) []string {
+	rows := make([]cli.Row, len(table))
+	for i, setting := range table {
+		rows[i] = cli.Row{Cells: []string{setting.Key, setting.Default}}
+		if setting.Restart {
+			rows[i].Detail = "on the next start"
+		}
+	}
+	var lines []string
+	for i, line := range page.Rows(rows) {
+		if i == 0 || table[i].Category != table[i-1].Category {
+			lines = append(lines, "", page.Section(table[i].Category, cli.Verdict{}))
+		}
+		lines = append(lines, cli.Indent(line)...)
+		under := strings.Repeat(cli.Gap, 3)
+		for _, wrapped := range widget.Wrap(table[i].Takes, page.Width-len(under)) {
+			lines = append(lines, under+wrapped)
+		}
+		for _, wrapped := range widget.Wrap(table[i].Description, page.Width-len(under)) {
+			lines = append(lines, under+page.Label(wrapped))
+		}
+	}
+	return lines
 }
 
 func settingDefault(spec settingspkg.Spec) string {
@@ -307,12 +415,12 @@ func docsCoverage(out io.Writer, verbs []string) []error {
 	if err != nil {
 		return []error{fmt.Errorf("docs: %w", err)}
 	}
-	texts := make([]string, 0, len(corpus.pages)+len(corpus.entries))
-	for _, page := range corpus.pages {
-		texts = append(texts, page.body)
+	texts := make([]string, 0, len(corpus.Pages)+len(corpus.Entries))
+	for _, page := range corpus.Pages {
+		texts = append(texts, page.Body)
 	}
-	for _, entry := range corpus.entries {
-		texts = append(texts, entry.ask+" "+entry.do+" "+entry.check)
+	for _, entry := range corpus.Entries {
+		texts = append(texts, entry.Ask+" "+entry.Do+" "+entry.Check)
 	}
 	named := map[string]bool{}
 	for _, text := range texts {
@@ -336,6 +444,6 @@ func docsCoverage(out io.Writer, verbs []string) []error {
 		}
 	}
 	_, _ = fmt.Fprintf(out, "%-14s %3d pages   %d index entries   %d settings missing   %d verbs missing\n",
-		"docs", len(corpus.pages), len(corpus.entries), len(settingsMissing), len(verbsMissing))
+		"docs", len(corpus.Pages), len(corpus.Entries), len(settingsMissing), len(verbsMissing))
 	return append(settingsMissing, verbsMissing...)
 }

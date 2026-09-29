@@ -1,0 +1,478 @@
+exit 0
+--- stdout
+{
+  "tofu": "VERSION",
+  "verb": "docs",
+  "ok": true,
+  "at": "AT",
+  "data": {
+    "topics": [
+      {
+        "topic": "agents",
+        "title": "Sub-agents",
+        "summary": "add a sub-agent for every project or for one, choose the model it runs, and remove it"
+      },
+      {
+        "topic": "browser",
+        "title": "Browser",
+        "summary": "how tofu reads and drives your Chrome tabs, the tofu tab group, the badge, and what tofu never does there"
+      },
+      {
+        "topic": "doctor",
+        "title": "The doctor",
+        "summary": "what tofu doctor checks, what each line it prints means, and what to do about it"
+      },
+      {
+        "topic": "files",
+        "title": "Files tofu reads and writes",
+        "summary": "every path tofu uses in your home and in a project, and which one wins"
+      },
+      {
+        "topic": "gate",
+        "title": "The gate",
+        "summary": "what jev judges before a tool call runs, when tofu asks you first, and where the OpenRouter key lives"
+      },
+      {
+        "topic": "instructions",
+        "title": "Instruction files",
+        "summary": "which AGENTS.md and CLAUDE.md files tofu sends with every task, in what order, and how to change that"
+      },
+      {
+        "topic": "models",
+        "title": "Models",
+        "summary": "sign in to a subscription, name a model as source/model, choose the model a task runs, and set the tiers"
+      },
+      {
+        "topic": "rules",
+        "title": "Rules",
+        "summary": "add your own rules for every project or for one, switch a rule off, and see which rules run"
+      },
+      {
+        "topic": "sessions",
+        "title": "Sessions",
+        "summary": "continue where you left off, find an old session, and where sessions and running shells are kept"
+      },
+      {
+        "topic": "settings",
+        "title": "Settings",
+        "summary": "every setting, its default, what it takes, and how to change it"
+      },
+      {
+        "topic": "skills",
+        "title": "Skills",
+        "summary": "where tofu finds skills, how to add one for every project or for one, and how to turn skills off"
+      },
+      {
+        "topic": "start",
+        "title": "Start here",
+        "summary": "what tofu is, the first commands to type, and where to read more"
+      }
+    ],
+    "entries": [
+      {
+        "ask": "run commands without asking me first",
+        "do": "tofu settings set gatePrompt run",
+        "check": "tofu settings get gatePrompt",
+        "topic": "settings"
+      },
+      {
+        "ask": "ask me before a gated command runs",
+        "do": "tofu settings set gatePrompt ask",
+        "check": "tofu settings get gatePrompt",
+        "topic": "settings"
+      },
+      {
+        "ask": "change the colours",
+        "do": "tofu settings set theme Nord",
+        "check": "tofu settings get theme",
+        "topic": "settings"
+      },
+      {
+        "ask": "stop the animations",
+        "do": "tofu settings set animations off",
+        "check": "tofu settings get animations",
+        "topic": "settings"
+      },
+      {
+        "ask": "show every tool call in the chat",
+        "do": "tofu settings set chatShowsTools true",
+        "check": "tofu settings get chatShowsTools",
+        "topic": "settings"
+      },
+      {
+        "ask": "hide the model's thinking",
+        "do": "tofu settings set showThinking false",
+        "check": "tofu settings get showThinking",
+        "topic": "settings"
+      },
+      {
+        "ask": "let tofu edit a file it has not read",
+        "do": "tofu settings set readBeforeEdit false",
+        "check": "tofu settings get readBeforeEdit",
+        "topic": "settings"
+      },
+      {
+        "ask": "use another shell, or wsl",
+        "do": "tofu settings set shell wsl",
+        "check": "tofu settings get shell",
+        "topic": "settings"
+      },
+      {
+        "ask": "keep shells running after tofu exits",
+        "do": "tofu settings set persistentRegistry true",
+        "check": "tofu settings get persistentRegistry",
+        "topic": "settings"
+      },
+      {
+        "ask": "stop sub-agents from being spawned",
+        "do": "tofu settings set turnMaySpawn false",
+        "check": "tofu settings get turnMaySpawn",
+        "topic": "settings"
+      },
+      {
+        "ask": "allow more sub-agents in one task",
+        "do": "tofu settings set subAgentsPerTurn 20",
+        "check": "tofu settings get subAgentsPerTurn",
+        "topic": "settings"
+      },
+      {
+        "ask": "pick the model a sub-agent tier runs",
+        "do": "tofu settings set modelTier.smart claude-sub/claude-sonnet-5",
+        "check": "tofu agents",
+        "topic": "settings"
+      },
+      {
+        "ask": "read only CLAUDE.md, not AGENTS.md",
+        "do": "tofu settings set instructionSources CLAUDE.md",
+        "check": "tofu settings get instructionSources",
+        "topic": "settings"
+      },
+      {
+        "ask": "send more of my instruction files each turn",
+        "do": "tofu settings set projectInstructionsCap 65536",
+        "check": "tofu settings get projectInstructionsCap",
+        "topic": "settings"
+      },
+      {
+        "ask": "read sub-agents only from .tofu",
+        "do": "tofu settings set agentSources tofu",
+        "check": "tofu agents",
+        "topic": "settings"
+      },
+      {
+        "ask": "turn skills off",
+        "do": "tofu settings set skills off",
+        "check": "tofu settings get skills",
+        "topic": "settings"
+      },
+      {
+        "ask": "never attach pasted images",
+        "do": "tofu settings set images off",
+        "check": "tofu settings get images",
+        "topic": "settings"
+      },
+      {
+        "ask": "change a setting for one project only",
+        "do": "tofu settings set --scope project \u003ckey\u003e \u003cvalue\u003e",
+        "check": "tofu settings",
+        "topic": "settings"
+      },
+      {
+        "ask": "see every setting and where it came from",
+        "do": "tofu settings",
+        "check": "tofu settings get \u003ckey\u003e",
+        "topic": "settings"
+      },
+      {
+        "ask": "where does tofu keep its files",
+        "do": "tofu docs files",
+        "check": "tofu settings",
+        "topic": "files"
+      },
+      {
+        "ask": "move old sessions out of the project",
+        "do": "tofu migrate",
+        "check": "tofu migrate --dry-run",
+        "topic": "sessions"
+      },
+      {
+        "ask": "see which sub-agents exist and their models",
+        "do": "tofu agents",
+        "check": "tofu agents --json",
+        "topic": "files"
+      },
+      {
+        "ask": "sign in with a subscription",
+        "do": "tofu login claude-sub",
+        "check": "tofu login --status",
+        "topic": "models"
+      },
+      {
+        "ask": "find out why tofu will not start",
+        "do": "tofu doctor",
+        "check": "tofu doctor",
+        "topic": "doctor"
+      },
+      {
+        "ask": "see what changed in this version",
+        "do": "tofu changelog",
+        "check": "tofu version",
+        "topic": "start"
+      },
+      {
+        "ask": "add a rule for every project",
+        "do": "tofu rules add --global \u003cid\u003e \"\u003ctext\u003e\"",
+        "check": "tofu rules list",
+        "topic": "rules"
+      },
+      {
+        "ask": "add a rule to this project only",
+        "do": "tofu rules add \u003cid\u003e \"\u003ctext\u003e\"",
+        "check": "tofu rules list",
+        "topic": "rules"
+      },
+      {
+        "ask": "switch off a rule tofu ships",
+        "do": "tofu rules off \u003cid\u003e",
+        "check": "tofu rules list",
+        "topic": "rules"
+      },
+      {
+        "ask": "remove a rule I added, or bring back one I switched off",
+        "do": "tofu rules remove \u003cid\u003e",
+        "check": "tofu rules list",
+        "topic": "rules"
+      },
+      {
+        "ask": "see which rules run and where each one comes from",
+        "do": "tofu rules list",
+        "check": "tofu rules list --json",
+        "topic": "rules"
+      },
+      {
+        "ask": "add a sub-agent to this project",
+        "do": "tofu agents add \u003cname\u003e --description \"\u003cwhat it does\u003e\" --model \u003csource/model\u003e",
+        "check": "tofu agents",
+        "topic": "agents"
+      },
+      {
+        "ask": "add a sub-agent to every project",
+        "do": "tofu agents add --global \u003cname\u003e --description \"\u003cwhat it does\u003e\" --model \u003csource/model\u003e",
+        "check": "tofu agents",
+        "topic": "agents"
+      },
+      {
+        "ask": "run a sub-agent on another model",
+        "do": "tofu agents set \u003cname\u003e \u003csource/model\u003e",
+        "check": "tofu agents",
+        "topic": "agents"
+      },
+      {
+        "ask": "remove a sub-agent I added",
+        "do": "tofu agents remove \u003cname\u003e",
+        "check": "tofu agents",
+        "topic": "agents"
+      },
+      {
+        "ask": "set up three sub-agents at once, each on its own model",
+        "do": "tofu agents add \u003cname\u003e --description \"\u003cwhat it does\u003e\" --model \u003csource/model\u003e, once per sub-agent",
+        "check": "tofu agents",
+        "topic": "agents"
+      },
+      {
+        "ask": "see which models I can use",
+        "do": "tofu models",
+        "check": "tofu models --json",
+        "topic": "models"
+      },
+      {
+        "ask": "use a model my subscription just started serving",
+        "do": "tofu models reload",
+        "check": "tofu models --json",
+        "topic": "models"
+      },
+      {
+        "ask": "run the next task on another model",
+        "do": "/models in the app, then pick a model",
+        "check": "tofu models",
+        "topic": "models"
+      },
+      {
+        "ask": "always run the orchestrator on one model",
+        "do": "write model: \u003csource/model\u003e in ~/.tofu/roles/orchestrator.yaml",
+        "check": "tofu models",
+        "topic": "models"
+      },
+      {
+        "ask": "stop tofu from using a model",
+        "do": "write use: excluded and a reason in ~/.tofu/models/\u003cprovider\u003e/\u003cmodel\u003e.yaml",
+        "check": "tofu models",
+        "topic": "models"
+      },
+      {
+        "ask": "how much subscription quota is left",
+        "do": "tofu usage",
+        "check": "tofu usage --history",
+        "topic": "models"
+      },
+      {
+        "ask": "add a skill for every project",
+        "do": "write ~/.tofu/skills/\u003cname\u003e/SKILL.md with a name and a description",
+        "check": "tofu run --dir . --show-prompt \"anything\"",
+        "topic": "skills"
+      },
+      {
+        "ask": "add a skill to this project only",
+        "do": "write .tofu/skills/\u003cname\u003e/SKILL.md with a name and a description",
+        "check": "tofu run --dir . --show-prompt \"anything\"",
+        "topic": "skills"
+      },
+      {
+        "ask": "see which skills the model is offered",
+        "do": "tofu run --dir . --show-prompt \"anything\"",
+        "check": "tofu settings get skills",
+        "topic": "skills"
+      },
+      {
+        "ask": "give tofu house rules for every project",
+        "do": "write them in ~/.tofu/AGENTS.md",
+        "check": "tofu run --dir . --show-prompt \"anything\"",
+        "topic": "instructions"
+      },
+      {
+        "ask": "see which instruction files tofu sends",
+        "do": "tofu run --dir . --show-prompt \"anything\"",
+        "check": "tofu settings get instructionSources",
+        "topic": "instructions"
+      },
+      {
+        "ask": "work one task without my instruction files",
+        "do": "tofu run --dir . --no-instructions \"\u003ctask\u003e\"",
+        "check": "tofu run --dir . --no-instructions --show-prompt \"\u003ctask\u003e\"",
+        "topic": "instructions"
+      },
+      {
+        "ask": "store the openrouter key the gate needs",
+        "do": "tofu login openrouter",
+        "check": "tofu doctor",
+        "topic": "gate"
+      },
+      {
+        "ask": "why was a tool call refused or asked about",
+        "do": "tofu why --last",
+        "check": "tofu why --last 5",
+        "topic": "gate"
+      },
+      {
+        "ask": "tell tofu a verdict was wrong",
+        "do": "tofu label --last allow",
+        "check": "tofu why --last",
+        "topic": "gate"
+      },
+      {
+        "ask": "judge a command without running it",
+        "do": "tofu check \"\u003ccommand\u003e\"",
+        "check": "tofu why --last",
+        "topic": "gate"
+      },
+      {
+        "ask": "see how other thresholds would have decided",
+        "do": "tofu replay --point tool_gate --set risk_ask_at=1.5",
+        "check": "tofu why --last",
+        "topic": "gate"
+      },
+      {
+        "ask": "work one task with the gate off",
+        "do": "tofu run --dir . --no-gate \"\u003ctask\u003e\"",
+        "check": "tofu doctor",
+        "topic": "gate"
+      },
+      {
+        "ask": "continue where I left off",
+        "do": "tofu --continue",
+        "check": "tofu session list",
+        "topic": "sessions"
+      },
+      {
+        "ask": "open an older session",
+        "do": "tofu session resume \u003cname|id\u003e",
+        "check": "tofu session list",
+        "topic": "sessions"
+      },
+      {
+        "ask": "give a session a name",
+        "do": "tofu session rename \u003cname|id\u003e \"\u003cnew name\u003e\"",
+        "check": "tofu session info \u003cname|id\u003e",
+        "topic": "sessions"
+      },
+      {
+        "ask": "see how full the context window got",
+        "do": "tofu context",
+        "check": "tofu context --json",
+        "topic": "sessions"
+      },
+      {
+        "ask": "stop a server an agent left running",
+        "do": "tofu shells stop \u003cname\u003e",
+        "check": "tofu shells list",
+        "topic": "sessions"
+      },
+      {
+        "ask": "read the output of a running shell",
+        "do": "tofu shells log \u003cname\u003e",
+        "check": "tofu shells list",
+        "topic": "sessions"
+      },
+      {
+        "ask": "check that tofu can run here",
+        "do": "tofu doctor",
+        "check": "tofu doctor --json",
+        "topic": "doctor"
+      },
+      {
+        "ask": "check the library files and these pages",
+        "do": "tofu library",
+        "check": "tofu library",
+        "topic": "doctor"
+      },
+      {
+        "ask": "share a Chrome tab with tofu",
+        "do": "tofu browser install",
+        "check": "tofu browser",
+        "topic": "browser"
+      },
+      {
+        "ask": "let the model read the Chrome tabs I share",
+        "do": "tofu settings set browser read",
+        "check": "tofu settings get browser",
+        "topic": "browser"
+      },
+      {
+        "ask": "let the model click and type in a tab I share to drive",
+        "do": "tofu settings set browser drive",
+        "check": "tofu settings get browser",
+        "topic": "browser"
+      },
+      {
+        "ask": "take the browser tools away from the model",
+        "do": "tofu settings set browser off",
+        "check": "tofu settings get browser",
+        "topic": "browser"
+      },
+      {
+        "ask": "let the model pick each browser step instead of jev",
+        "do": "tofu settings set browserChooser model",
+        "check": "tofu settings get browserChooser",
+        "topic": "browser"
+      },
+      {
+        "ask": "allow fewer actions in one browser task",
+        "do": "tofu settings set browserSteps 10",
+        "check": "tofu settings get browserSteps",
+        "topic": "browser"
+      }
+    ]
+  },
+  "problems": []
+}
+--- stderr

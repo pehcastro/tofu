@@ -1,0 +1,16 @@
+exit 1
+--- stdout
+{
+  "tofu": "VERSION",
+  "verb": "docs",
+  "ok": false,
+  "at": "AT",
+  "data": null,
+  "problems": [
+    {
+      "what": "no topic \"modles\"",
+      "hint": "tofu docs models"
+    }
+  ]
+}
+--- stderr

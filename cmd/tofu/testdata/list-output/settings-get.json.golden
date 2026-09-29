@@ -1,0 +1,16 @@
+exit 0
+--- stdout
+{
+  "tofu": "VERSION",
+  "verb": "settings get",
+  "ok": true,
+  "at": "AT",
+  "data": {
+    "key": "theme",
+    "category": "Appearance",
+    "value": "Nord",
+    "source": "project"
+  },
+  "problems": []
+}
+--- stderr

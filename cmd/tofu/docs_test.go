@@ -12,13 +12,20 @@ import (
 )
 
 func TestDocsSettingsNamesEveryDeclaredKey(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
 	var out, errOut bytes.Buffer
 	if code := run([]string{"docs", "settings"}, strings.NewReader(""), &out, &errOut); code != exitOK {
 		t.Fatalf("tofu docs settings exited %d: %s", code, errOut.String())
 	}
+	rows := map[string]bool{}
+	for _, line := range strings.Split(out.String(), "\n") {
+		if fields := strings.Fields(line); len(fields) > 1 {
+			rows[fields[0]] = true
+		}
+	}
 	for _, spec := range settings.Default() {
-		if !strings.Contains(out.String(), "\n  "+spec.Key+" = ") {
-			t.Errorf("tofu docs settings has no table line for %s", spec.Key)
+		if !rows[spec.Key] {
+			t.Errorf("tofu docs settings has no table row for %s", spec.Key)
 		}
 	}
 }
@@ -43,7 +50,8 @@ func TestDocsReportsARoutedVerbNoPageNames(t *testing.T) {
 }
 
 func TestDocsEveryPageKeepsTheContract(t *testing.T) {
-	sections := []string{"## What it is", "## Where it lives", "## Change it", "## Check it", "## Undo it"}
+	t.Setenv("NO_COLOR", "1")
+	sections := []string{"What it is", "Where it lives", "Change it", "Check it", "Undo it"}
 	corpus, err := loadDocs()
 	if err != nil {
 		t.Fatal(err)
@@ -53,36 +61,39 @@ func TestDocsEveryPageKeepsTheContract(t *testing.T) {
 			t.Errorf("no page has the topic %s", wanted)
 		}
 	}
-	for _, page := range corpus.pages {
+	for _, page := range corpus.Pages {
 		var out, errOut bytes.Buffer
-		if code := run([]string{"docs", page.topic}, strings.NewReader(""), &out, &errOut); code != exitOK {
-			t.Errorf("tofu docs %s exited %d: %s", page.topic, code, errOut.String())
+		if code := run([]string{"docs", page.Topic}, strings.NewReader(""), &out, &errOut); code != exitOK {
+			t.Errorf("tofu docs %s exited %d: %s", page.Topic, code, errOut.String())
 			continue
 		}
 		printed := out.String()
-		if !strings.HasPrefix(printed, "# "+page.title+"\n") {
-			t.Errorf("tofu docs %s does not open with its title %q", page.topic, page.title)
+		if !strings.HasPrefix(printed, page.Title+"\n") {
+			t.Errorf("tofu docs %s does not open with its title %q", page.Topic, page.Title)
+		}
+		if strings.Contains(printed, "\n## ") {
+			t.Errorf("tofu docs %s prints a raw markdown heading", page.Topic)
 		}
 		at := 0
 		for _, section := range sections {
 			found := strings.Index(printed[at:], "\n"+section+"\n")
 			if found < 0 {
-				t.Errorf("tofu docs %s has no %q after the sections before it", page.topic, section)
+				t.Errorf("tofu docs %s has no %q after the sections before it", page.Topic, section)
 				break
 			}
 			at += found + 1
 		}
-		source, err := fs.ReadFile(docs.Files(), page.topic+".md")
+		source, err := fs.ReadFile(docs.Files(), page.Topic+".md")
 		if err != nil {
-			t.Errorf("the page for %s is not %s.md: %v", page.topic, page.topic, err)
+			t.Errorf("the page for %s is not %s.md: %v", page.Topic, page.Topic, err)
 			continue
 		}
 		if lines := strings.Count(string(source), "\n"); lines < 60 || lines > 120 {
-			t.Errorf("%s.md runs %d lines, and a page runs 60 to 120", page.topic, lines)
+			t.Errorf("%s.md runs %d lines, and a page runs 60 to 120", page.Topic, lines)
 		}
 		if strings.Contains(printed, "TOFU-") {
-			t.Errorf("tofu docs %s names a ticket", page.topic)
+			t.Errorf("tofu docs %s names a ticket", page.Topic)
 		}
-		t.Logf("tofu docs %s: %d bytes, %s", page.topic, len(printed), strings.SplitN(printed, "\n", 2)[0])
+		t.Logf("tofu docs %s: %d bytes, %s", page.Topic, len(printed), strings.SplitN(printed, "\n", 2)[0])
 	}
 }

@@ -1,0 +1,62 @@
+exit 0
+--- stdout
+Settings · 2 set                                                     38 declared
+
+Appearance
+  ● theme                   Nord                project
+    density                 comfortable         default
+    animations              subtle              default
+    statusBar               compact             default
+    colorMode               auto                default
+
+Interaction
+    composer                standard            default
+    gatePrompt              run                 default
+  ● readBeforeEdit          false               global
+
+Context
+    compaction              adaptive            default
+    chatShowsTools          false               default
+    agentFeeds              full                default
+    showThinking            true                default
+    thinkingSummary         summarized          default
+    images                  auto                default
+    projectInstructionsCap  32768               default
+    instructionSources      agents-first        default
+    skills                  on                  default
+
+Files
+    diffContext             3                   default
+    hyperlinks              auto                default
+    groupByAgent            true                default
+
+Shell
+    persistentRegistry      false               default
+    logTail                 500                 default
+    killConfirm             true                default
+    shell                   empty               default
+    foldHidesShell          false               default
+
+Turn
+    decisionCap             0                   default
+    turnMaySpawn            true                default
+    subAgentsPerTurn        10                  default
+    subAgentDepth           2                   default
+    agentSources            tofu,agents,claude  default
+    modelTier.genius        empty               default
+    modelTier.smart         empty               default
+    modelTier.worker        empty               default
+    modelTier.dumb          empty               default
+
+Browser
+    browser                 drive               default
+    browserChooser          jev                 default
+    browserSteps            30                  default
+    browserModel            empty               default
+
+stored in
+  global    ~/.tofu/settings.json
+  project   ~/project/.tofu/settings.json
+
+  → tofu docs settings
+--- stderr

@@ -1,0 +1,165 @@
+exit 0
+--- stdout
+Docs · 67 asks                                                         12 topics
+
+agents  add a sub-agent for every project or for one, choose the model it runs,…
+  add a sub-agent to this project
+    → tofu agents add <name> --description "<what it does>" --model <source/mod…
+  add a sub-agent to every project
+    → tofu agents add --global <name> --description "<what it does>" --model <s…
+  run a sub-agent on another model
+    → tofu agents set <name> <source/model>
+  remove a sub-agent I added
+    → tofu agents remove <name>
+  set up three sub-agents at once, each on its own model
+    → tofu agents add <name> --description "<what it does>" --model <source/mod…
+
+browser  how tofu reads and drives your Chrome tabs, the tofu tab group, the ba…
+  share a Chrome tab with tofu
+    → tofu browser install
+  let the model read the Chrome tabs I share
+    → tofu settings set browser read
+  let the model click and type in a tab I share to drive
+    → tofu settings set browser drive
+  take the browser tools away from the model
+    → tofu settings set browser off
+  let the model pick each browser step instead of jev
+    → tofu settings set browserChooser model
+  allow fewer actions in one browser task
+    → tofu settings set browserSteps 10
+
+doctor  what tofu doctor checks, what each line it prints means, and what to do…
+  find out why tofu will not start
+    → tofu doctor
+  check that tofu can run here
+    → tofu doctor
+  check the library files and these pages
+    → tofu library
+
+files  every path tofu uses in your home and in a project, and which one wins
+  where does tofu keep its files
+    → tofu docs files
+  see which sub-agents exist and their models
+    → tofu agents
+
+gate  what jev judges before a tool call runs, when tofu asks you first, and wh…
+  store the openrouter key the gate needs
+    → tofu login openrouter
+  why was a tool call refused or asked about
+    → tofu why --last
+  tell tofu a verdict was wrong
+    → tofu label --last allow
+  judge a command without running it
+    → tofu check "<command>"
+  see how other thresholds would have decided
+    → tofu replay --point tool_gate --set risk_ask_at=1.5
+  work one task with the gate off
+    → tofu run --dir . --no-gate "<task>"
+
+instructions  which AGENTS.md and CLAUDE.md files tofu sends with every task, i…
+  give tofu house rules for every project
+    → write them in ~/.tofu/AGENTS.md
+  see which instruction files tofu sends
+    → tofu run --dir . --show-prompt "anything"
+  work one task without my instruction files
+    → tofu run --dir . --no-instructions "<task>"
+
+models  sign in to a subscription, name a model as source/model, choose the mod…
+  sign in with a subscription
+    → tofu login claude-sub
+  see which models I can use
+    → tofu models
+  use a model my subscription just started serving
+    → tofu models reload
+  run the next task on another model
+    → /models in the app, then pick a model
+  always run the orchestrator on one model
+    → write model: <source/model> in ~/.tofu/roles/orchestrator.yaml
+  stop tofu from using a model
+    → write use: excluded and a reason in ~/.tofu/models/<provider>/<model>.yaml
+  how much subscription quota is left
+    → tofu usage
+
+rules  add your own rules for every project or for one, switch a rule off, and …
+  add a rule for every project
+    → tofu rules add --global <id> "<text>"
+  add a rule to this project only
+    → tofu rules add <id> "<text>"
+  switch off a rule tofu ships
+    → tofu rules off <id>
+  remove a rule I added, or bring back one I switched off
+    → tofu rules remove <id>
+  see which rules run and where each one comes from
+    → tofu rules list
+
+sessions  continue where you left off, find an old session, and where sessions …
+  move old sessions out of the project
+    → tofu migrate
+  continue where I left off
+    → tofu --continue
+  open an older session
+    → tofu session resume <name|id>
+  give a session a name
+    → tofu session rename <name|id> "<new name>"
+  see how full the context window got
+    → tofu context
+  stop a server an agent left running
+    → tofu shells stop <name>
+  read the output of a running shell
+    → tofu shells log <name>
+
+settings  every setting, its default, what it takes, and how to change it
+  run commands without asking me first
+    → tofu settings set gatePrompt run
+  ask me before a gated command runs
+    → tofu settings set gatePrompt ask
+  change the colours
+    → tofu settings set theme Nord
+  stop the animations
+    → tofu settings set animations off
+  show every tool call in the chat
+    → tofu settings set chatShowsTools true
+  hide the model's thinking
+    → tofu settings set showThinking false
+  let tofu edit a file it has not read
+    → tofu settings set readBeforeEdit false
+  use another shell, or wsl
+    → tofu settings set shell wsl
+  keep shells running after tofu exits
+    → tofu settings set persistentRegistry true
+  stop sub-agents from being spawned
+    → tofu settings set turnMaySpawn false
+  allow more sub-agents in one task
+    → tofu settings set subAgentsPerTurn 20
+  pick the model a sub-agent tier runs
+    → tofu settings set modelTier.smart claude-sub/claude-sonnet-5
+  read only CLAUDE.md, not AGENTS.md
+    → tofu settings set instructionSources CLAUDE.md
+  send more of my instruction files each turn
+    → tofu settings set projectInstructionsCap 65536
+  read sub-agents only from .tofu
+    → tofu settings set agentSources tofu
+  turn skills off
+    → tofu settings set skills off
+  never attach pasted images
+    → tofu settings set images off
+  change a setting for one project only
+    → tofu settings set --scope project <key> <value>
+  see every setting and where it came from
+    → tofu settings
+
+skills  where tofu finds skills, how to add one for every project or for one, a…
+  add a skill for every project
+    → write ~/.tofu/skills/<name>/SKILL.md with a name and a description
+  add a skill to this project only
+    → write .tofu/skills/<name>/SKILL.md with a name and a description
+  see which skills the model is offered
+    → tofu run --dir . --show-prompt "anything"
+
+start  what tofu is, the first commands to type, and where to read more
+  see what changed in this version
+    → tofu changelog
+
+  → tofu docs <topic>
+  → tofu docs "a few words"
+--- stderr

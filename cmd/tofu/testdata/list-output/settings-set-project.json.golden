@@ -1,0 +1,20 @@
+exit 0
+--- stdout
+{
+  "tofu": "VERSION",
+  "verb": "settings set",
+  "ok": true,
+  "at": "AT",
+  "data": {
+    "changes": [
+      {
+        "change": "changed",
+        "what": "theme = Nord",
+        "file": "HOME/project/.tofu/settings.json"
+      }
+    ],
+    "undo": "tofu settings set --scope project theme tofu"
+  },
+  "problems": []
+}
+--- stderr

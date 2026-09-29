@@ -1,0 +1,5 @@
+exit 0
+--- stdout
+~ readBeforeEdit = false  ~/.tofu/settings.json
+  → undo: tofu settings set --scope global readBeforeEdit true
+--- stderr

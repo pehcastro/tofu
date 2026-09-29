@@ -1,0 +1,5 @@
+exit 2
+--- stdout
+--- stderr
+✗ tofu agents: unknown argument "--nope"
+  → tofu agents [--json] | add | set | remove
