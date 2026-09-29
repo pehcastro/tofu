@@ -1,6 +1,6 @@
 exit 0
 --- stdout
-Settings · 2 set                                                     38 declared
+Settings · 2 set                                                     39 declared
 
 Appearance
   ● theme                   Nord                project
@@ -53,6 +53,7 @@ Browser
     browserDriver           subagent            default
     browserSteps            30                  default
     browserModel            empty               default
+    browserEffort           empty               default
 
 stored in
   global    ~/.tofu/settings.json

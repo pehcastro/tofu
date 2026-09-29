@@ -236,6 +236,12 @@ exit 0
         "category": "Browser",
         "value": "",
         "source": "default"
+      },
+      {
+        "key": "browserEffort",
+        "category": "Browser",
+        "value": "",
+        "source": "default"
       }
     ]
   },

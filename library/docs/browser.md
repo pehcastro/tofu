@@ -16,9 +16,8 @@ The extension does nothing to a tab until tofu first uses it. Then it
 attaches Chrome's debugger, and Chrome shows its bar saying so.
 
 Under `browserDriver` `subagent`, the default, the model hands a browsing
-task and its tab to the `browser` sub-agent with `spawn`, and reads its
-report. The sub-agent runs on `browserModel` and holds these tools; under
-`steps` the model holds them itself:
+task to the `browser` sub-agent with `spawn`. It works only in a tab tofu
+opened, never yours, and holds these tools; under `steps` the model does:
 
 - `browser_tabs` lists your open tabs, with their title and address.
 - `browser_observe` shows one tab as an accessibility snapshot, a line a
@@ -83,11 +82,10 @@ The settings:
   `browser` sub-agent on `browserModel`. `steps` gives them to the model,
   and `goal` gives it `browser_do`, where Jev picks each step.
 - `browserSteps`: how many actions one `browser_do` task may take, 1 to 60.
-  The default is 30.
 - `browserModel`: the model the `browser` sub-agent and `browser_do` run
-  on, as `source/model`, any model you have. No model is the default:
-  empty takes `modelTier.dumb`, then `modelTier.worker`, then the turn's
-  own model.
+  on, as `source/model`, any model you have. Empty takes `modelTier.dumb`,
+  then `modelTier.worker`, then the turn's own model. `browserEffort` sets
+  its effort when the model lists it; empty is the model's default.
 
     tofu settings set browserModel claude-sub/claude-sonnet-5
 

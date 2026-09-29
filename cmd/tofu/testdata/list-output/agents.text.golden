@@ -16,9 +16,10 @@ Sub-agents · 7 defined                                                ✗ 1 bro
     reference  ts-boundaries  2.4 KB
     reference  verify-a-running-service  2.4 KB
   ○ browser   inherit                   library  Does one browsing task in the
-    person's Chrome, step by step on the browser model, and reports what it did,
-    what it found and the tab it left open. Give it the task and the tab id, and
-    any path in owns, since it writes nothing.
+    person's Chrome, in a tab of tofu's own, step by step on the browser model,
+    and reports what it did, what it found and the tab it left open. Give it the
+    task, a start url, a tofu tab id only when you have one, and any path in
+    owns, since it writes nothing.
     tools      browser_tabs, browser_observe, browser_act
   ○ research  inherit                   library  Answers numbered questions
     about a repository, a folder or the web, and hands back a verdict with a

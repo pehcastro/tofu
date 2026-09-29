@@ -74,6 +74,7 @@ const (
 	BrowserDriver          = "browserDriver"
 	BrowserSteps           = "browserSteps"
 	BrowserModel           = "browserModel"
+	BrowserEffort          = "browserEffort"
 )
 
 const (
@@ -258,6 +259,8 @@ func Default() []Spec {
 		{Key: BrowserSteps, Label: "Browser steps", Description: "how many actions one browser task may take", Category: "Browser", Kind: Int, Default: konst.BrowserStepsDefault,
 			Least: 1, Most: konst.BrowserActionCeiling, Unit: "actions a browser task"},
 		{Key: BrowserModel, Label: "Browser model", Description: "the subscription model a browser task asks for the text to type and for its answer, as source/model; empty takes the dumb tier, then the worker tier, then the turn's own model", Category: "Browser", Kind: Text},
+		{Key: BrowserEffort, Label: "Browser effort", Description: "the effort the browser sub-agent runs at, when its model lists it; empty runs it at the model's own default, the lowest it lists at or above low", Category: "Browser", Kind: Text,
+			Choices: []string{"", "low", "medium", "high", "xhigh", "max"}},
 	}
 	for i := range specs {
 		specs[i].Group = specs[i].Category

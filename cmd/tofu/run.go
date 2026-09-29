@@ -966,18 +966,29 @@ func offeredToSpawn(dir string, found subagent.Found) subagent.Found {
 func onBrowserModel(dir string, found subagent.Found, catalog models.Library) subagent.Found {
 	at := slices.IndexFunc(found.Definitions, isBrowserAgent)
 	slug, key := browserSlug(dir)
-	if slug == "" || at < 0 || found.Definitions[at].Runs == subagent.RunsRefused {
+	wanted := llm.Effort(settingText(dir, settingspkg.BrowserEffort, nil))
+	if at < 0 || found.Definitions[at].Runs == subagent.RunsRefused {
 		return found
 	}
 	agent := &found.Definitions[at]
+	if slug == "" {
+		agent.Effort = wanted
+		return found
+	}
 	model, err := catalog.Select(slug)
 	if err != nil {
 		agent.Runs, agent.Refused = subagent.RunsRefused, append(agent.Refused, fmt.Sprintf("%s is %s: %v", key, slug, err))
 		return found
 	}
-	agent.Runs, agent.Model, agent.From = subagent.RunsModel, model.Slug(), key
-	if len(model.Efforts) > 0 && !slices.Contains(model.Efforts, agent.Effort) {
+	written := agent.Effort
+	agent.Runs, agent.Model, agent.From, agent.Effort = subagent.RunsModel, model.Slug(), key, ""
+	if len(model.Efforts) > 0 {
 		agent.Effort = defaultEffort(model.Efforts)
+	}
+	for _, effort := range []llm.Effort{written, wanted} {
+		if slices.Contains(model.Efforts, effort) {
+			agent.Effort = effort
+		}
 	}
 	return found
 }

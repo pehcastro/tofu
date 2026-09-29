@@ -311,6 +311,7 @@ type cdpPage struct {
 	renamed  string
 	rerender bool
 	renders  int
+	tabs     []int
 }
 
 func (p *cdpPage) answer(method string, params map[string]any) any {
@@ -407,6 +408,9 @@ func (p *cdpPage) serve(fromHost io.Reader, toHost io.Writer) {
 			}
 			continue
 		}
+		p.mu.Lock()
+		p.tabs = append(p.tabs, call.Tab)
+		p.mu.Unlock()
 		answers := []any{}
 		for _, command := range call.Args.Calls {
 			answers = append(answers, map[string]any{"result": p.answer(command.Method, command.Params)})
@@ -425,6 +429,19 @@ func (p *cdpPage) releases() int {
 }
 
 func stepsOn(t *testing.T, page *cdpPage) func(name, args string) string {
+	t.Helper()
+	try := browserOn(t, page, settings.DriverSteps)
+	return func(name, args string) string {
+		t.Helper()
+		content, err := try(name, args)
+		if err != nil {
+			t.Fatalf("%s %s: %v", name, args, err)
+		}
+		return content
+	}
+}
+
+func browserOn(t *testing.T, page *cdpPage, driver string) func(name, args string) (string, error) {
 	t.Helper()
 	home := shortHome(t)
 	manifest := filepath.Join(filepath.Dir(browser.ExtensionDir(home)), browser.HostName+".json")
@@ -448,18 +465,42 @@ func stepsOn(t *testing.T, page *cdpPage) func(name, args string) string {
 		t.Fatal(err)
 	}
 	go page.serve(fromHostR, toHostW)
-	offered, err := tools.NewBrowser(drive(home, settings.DriverSteps))
+	offered, err := tools.NewBrowser(drive(home, driver))
 	if err != nil {
 		t.Fatal(err)
 	}
-	return func(name, args string) string {
+	return func(name, args string) (string, error) {
 		t.Helper()
 		result, err := browserTool(t, offered, name).Run(context.Background(), json.RawMessage(args))
-		if err != nil {
-			t.Fatalf("%s %s: %v", name, args, err)
-		}
-		t.Logf("%s %s:\n%s", name, args, result.Content)
-		return result.Content
+		t.Logf("%s %s:\n%s%v", name, args, result.Content, err)
+		return result.Content, err
+	}
+}
+
+func TestTheBrowserSubAgentWorksInItsOwnTabAndNeverTouchesThePersons(t *testing.T) {
+	page := &cdpPage{url: "https://mobalytics.test/"}
+	try := browserOn(t, page, settings.DriverSubagent)
+	listed, err := try("browser_tabs", `{}`)
+	if err != nil || strings.Contains(listed, "7 ") {
+		t.Fatalf("the sub-agent's tab list shows the person's tab 7: %q, %v", listed, err)
+	}
+	if _, err := try("browser_observe", `{}`); err == nil || !strings.Contains(err.Error(), "navigate") {
+		t.Fatalf("an observe with no tab yet answered %v; want it told to navigate, which opens tofu's own tab", err)
+	}
+	if _, err := try("browser_observe", `{"tab":7}`); err == nil || !strings.Contains(err.Error(), "person's") {
+		t.Fatalf("an observe on the person's tab 7 answered %v; want it refused", err)
+	}
+	acted, err := try("browser_act", `{"actions":[{"action":"navigate","value":"https://www.airbnb.test/"}]}`)
+	if err != nil || !strings.Contains(acted, "tab 30") {
+		t.Fatalf("a navigate with no tab answered %q, %v; want tofu's own tab 30", acted, err)
+	}
+	if observed, err := try("browser_observe", `{}`); err != nil || !strings.Contains(observed, "tab 30 ") {
+		t.Fatalf("the next observe answered %q, %v; want tab 30", observed, err)
+	}
+	page.mu.Lock()
+	defer page.mu.Unlock()
+	if slices.Contains(page.tabs, 7) {
+		t.Fatalf("a CDP call reached the person's tab 7: %v", page.tabs)
 	}
 }
 
@@ -518,7 +559,7 @@ func TestTheBrowserSubAgentObservesActsObservesAndReportsItsTab(t *testing.T) {
 		_ = toHostW.Close()
 		_ = fromHostR.Close()
 	})
-	if err := browser.WriteMessage(toHostW, []byte(`{"t":"hello","version":2,"tabs":[{"id":7,"url":"https://stays.test/","title":"Stays"}]}`)); err != nil {
+	if err := browser.WriteMessage(toHostW, []byte(`{"t":"hello","version":2,"tabs":[{"id":7,"url":"https://stays.test/","title":"Stays","opened":true}]}`)); err != nil {
 		t.Fatal(err)
 	}
 	go page.serve(fromHostR, toHostW)

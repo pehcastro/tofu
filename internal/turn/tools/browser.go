@@ -23,13 +23,16 @@ import (
 )
 
 type browserSession struct {
-	home   string
-	mu     sync.Mutex
-	client *browser.Client
-	driver *browser.Driver
-	recent []string
-	hosts  map[string]int
+	home    string
+	mu      sync.Mutex
+	client  *browser.Client
+	driver  *browser.Driver
+	recent  []string
+	hosts   map[string]int
+	ownOnly bool
 }
+
+const noTabYet = "tofu has no tab of its own for this task yet: act with navigate to a url, which opens one"
 
 type BrowserSettings struct {
 	Home   string
@@ -44,7 +47,7 @@ func NewBrowser(config BrowserSettings) ([]turn.Tool, error) {
 	if config.Mode == settings.BrowserOff {
 		return nil, nil
 	}
-	session := &browserSession{home: config.Home, hosts: map[string]int{}}
+	session := &browserSession{home: config.Home, hosts: map[string]int{}, ownOnly: config.Driver == settings.DriverSubagent}
 	var reads, acts turn.Tool
 	switch config.Driver {
 	case settings.DriverSteps, settings.DriverSubagent:
@@ -68,14 +71,43 @@ func (s *browserSession) drive(tab int, use func(*browser.Driver) error) error {
 		if s.driver == nil || s.driver.Client != client {
 			s.driver = &browser.Driver{Client: client}
 		}
+		if tab != 0 && s.ownOnly {
+			found, err := driveTab(client, tab)
+			if err != nil {
+				return err
+			}
+			if !found.Opened {
+				return fmt.Errorf("tab %d is the person's, and the browser sub-agent works only in a tab tofu opened: %s", tab, noTabYet)
+			}
+		}
 		if tab != 0 {
 			s.driver.Use(tab)
 		}
-		if s.driver.Tab == 0 {
+		switch {
+		case s.driver.Tab == 0 && s.ownOnly:
+			return errors.New(noTabYet)
+		case s.driver.Tab == 0:
 			return errors.New("name the tab: browser_tabs lists the tabs tofu can reach")
 		}
 		return use(s.driver)
 	})
+}
+
+func (s *browserSession) start(url string) (int, error) {
+	opened := 0
+	err := s.with(func(client *browser.Client) (err error) {
+		if s.driver == nil || s.driver.Client != client {
+			s.driver = &browser.Driver{Client: client}
+		}
+		if s.driver.Tab != 0 {
+			return nil
+		}
+		if opened, err = client.Open(url); err == nil {
+			s.driver.Use(opened)
+		}
+		return err
+	})
+	return opened, err
 }
 
 func (s *browserSession) with(use func(*browser.Client) error) error {
@@ -118,6 +150,12 @@ func (t browserTabs) Run(context.Context, json.RawMessage) (turn.Result, error) 
 	})
 	if err != nil {
 		return turn.Result{}, fmt.Errorf("browser_tabs: %w", err)
+	}
+	if t.session.ownOnly {
+		tabs = slices.DeleteFunc(tabs, func(tab browser.Tab) bool { return !tab.Opened })
+		if len(tabs) == 0 {
+			return turn.Result{Content: noTabYet + "; the person's own tabs are not listed, and the browser sub-agent never uses them", Command: "open tabs"}, nil
+		}
 	}
 	if len(tabs) == 0 {
 		return turn.Result{Content: "Chrome has no tab tofu can reach: every open tab is a chrome:// page, DevTools, an extension or the web store", Command: "open tabs"}, nil
@@ -348,8 +386,19 @@ func (t browserAct) Run(_ context.Context, raw json.RawMessage) (turn.Result, er
 	var snapshot string
 	ran := 0
 	loads, changed := false, false
+	actions := args.Actions
+	if first := actions[0]; args.Tab == 0 && first.Action == "navigate" {
+		opened, err := t.session.start(first.Value)
+		if err != nil {
+			return turn.Result{}, fmt.Errorf("browser_act: %w", err)
+		}
+		if opened != 0 {
+			fmt.Fprintf(&report, "1. %s: opened tofu's own tab %d on it, the tab this task works in\n", first, opened)
+			ran, loads, actions = 1, true, actions[1:]
+		}
+	}
 	err := t.session.drive(args.Tab, func(driver *browser.Driver) error {
-		for _, step := range args.Actions {
+		for _, step := range actions {
 			if changed && step.Action != "wait" {
 				break
 			}

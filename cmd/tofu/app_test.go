@@ -2594,6 +2594,43 @@ func TestOnlyTheSubAgentDriverOffersTheBrowserSubAgentToSpawn(t *testing.T) {
 	}
 }
 
+func TestTheBrowserEffortSettingRunsTheSubAgentAtItOrAtTheModelsDefault(t *testing.T) {
+	emptyHome(t)
+	const slug = "claude-sub/claude-sonnet-5"
+	for effort, want := range map[string]func(offered []llm.Effort) llm.Effort{
+		"high": func([]llm.Effort) llm.Effort { return llm.EffortHigh },
+		"":     defaultEffort,
+	} {
+		opts := armOpts(t)
+		store, err := openSettings(opts.dir)
+		for key, value := range map[string]string{settingspkg.BrowserDriver: settingspkg.DriverSubagent, settingspkg.BrowserModel: slug, "browserEffort": effort} {
+			if err == nil && value != "" {
+				err = store.SetText(settingspkg.Project, key, value)
+			}
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		model, err := mustLibrary(t, opts.dir).Select(slug)
+		if err != nil || !slices.Contains(model.Efforts, llm.EffortHigh) {
+			t.Fatalf("%s lists the efforts %v, %v; the test needs one that lists high", slug, model.Efforts, err)
+		}
+		built, err := buildTestRunTools(opts.dir, opts.toolSet)
+		if err != nil {
+			t.Fatal(err)
+		}
+		found := scanSubAgents(opts.dir, built)
+		at := slices.IndexFunc(found.Definitions, func(d roster.Definition) bool { return d.Name == "browser" })
+		if at < 0 {
+			t.Fatal("no browser sub-agent")
+		}
+		t.Logf("browserEffort %q runs the browser sub-agent at %q on %s, which lists %v", effort, found.Definitions[at].Effort, slug, model.Efforts)
+		if got := found.Definitions[at].Effort; got != want(model.Efforts) {
+			t.Fatalf("browserEffort %q runs the browser sub-agent at %q, want %q", effort, got, want(model.Efforts))
+		}
+	}
+}
+
 func mustLibrary(t *testing.T, dir string) models.Library {
 	t.Helper()
 	library, err := modelLibrary(dir)
@@ -2765,7 +2802,7 @@ func TestASubAgentAskingForAnEffortOnTheOpenrouterKeySpawnsWithoutItAndSaysSoOnc
 	}
 }
 
-func TestABrowserSubAgentWhoseDefinitionSetsMediumRunsAtMedium(t *testing.T) {
+func TestABrowserDefinitionsOwnEffortWinsWhenTheModelListsIt(t *testing.T) {
 	emptyHome(t)
 	dir := t.TempDir()
 	store, err := openSettings(dir)
