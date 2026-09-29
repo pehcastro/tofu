@@ -1,0 +1,1 @@
+Written by hand, not recorded. Every book title, price, stock count, username, year and nationality is made up, and none is read from the real sites. The events follow the shape of a session's events.jsonl, and each snapshot starts with the header `browser_observe` prints, `tab <id> <url> "<title>"`.

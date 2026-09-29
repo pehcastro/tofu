@@ -1,0 +1,123 @@
+package tasks
+
+import (
+	"encoding/json"
+	"fmt"
+	"net/url"
+	"os"
+	"regexp"
+	"slices"
+	"strings"
+
+	"tofu/bench/browser/airbnb"
+	"tofu/internal/session"
+)
+
+type Page struct {
+	URL  *url.URL
+	Text string
+}
+
+type Evidence struct {
+	Run   airbnb.Run
+	Pages []Page
+}
+
+type Step struct {
+	Says   string
+	Passes func(Evidence) bool
+}
+
+type Task struct {
+	Name   string
+	Prompt string
+	Steps  []Step
+}
+
+var snapshotHeader = regexp.MustCompile(`(?m)^tab \d+ (\S+) "`)
+
+func Named(name string) (Task, error) {
+	for _, task := range []Task{books, herokuapp, wikipedia} {
+		if task.Name == name {
+			return task, nil
+		}
+	}
+	return Task{}, fmt.Errorf("unknown task %q: airbnb, books, herokuapp or wikipedia", name)
+}
+
+func Read(arm airbnb.Arm, paths ...string) (Evidence, error) {
+	run, err := airbnb.RunFromEvents(arm, paths...)
+	if err != nil {
+		return Evidence{}, err
+	}
+	evidence := Evidence{Run: run}
+	for _, path := range paths {
+		raw, err := os.ReadFile(path)
+		if err != nil {
+			return Evidence{}, err
+		}
+		for line := range strings.Lines(string(raw)) {
+			var event session.Event
+			var result session.ResultBody
+			if json.Unmarshal([]byte(line), &event) != nil || event.Kind != session.EventToolResult || json.Unmarshal(event.Body, &result) != nil {
+				continue
+			}
+			header := snapshotHeader.FindStringSubmatchIndex(result.Content)
+			if header == nil {
+				continue
+			}
+			address, err := url.Parse(result.Content[header[2]:header[3]])
+			if err != nil {
+				continue
+			}
+			text, _, _ := strings.Cut(result.Content[header[0]:], "\n<<<")
+			evidence.Pages = append(evidence.Pages, Page{URL: address, Text: text})
+		}
+	}
+	return evidence, nil
+}
+
+func Score(task Task, evidence Evidence) airbnb.Row {
+	row := airbnb.Score(airbnb.Task{}, evidence.Run)
+	for at, step := range task.Steps {
+		passed := step.Passes(evidence)
+		if passed {
+			row.Passed++
+		}
+		row.Steps = append(row.Steps, airbnb.Result{Step: at + 1, Passed: passed})
+	}
+	return row
+}
+
+func (e Evidence) visited(match func(*url.URL) bool) int {
+	return slices.IndexFunc(e.Run.Visits, func(visited string) bool {
+		parsed, err := url.Parse(visited)
+		return err == nil && match(parsed)
+	})
+}
+
+func (e Evidence) lastPage(match func(*url.URL) bool) (Page, bool) {
+	for _, page := range slices.Backward(e.Pages) {
+		if match(page.URL) {
+			return page, true
+		}
+	}
+	return Page{}, false
+}
+
+func (e Evidence) final() (Page, bool) {
+	if len(e.Pages) == 0 {
+		return Page{}, false
+	}
+	return e.Pages[len(e.Pages)-1], true
+}
+
+func oneTab(e Evidence) bool { return len(e.Run.Tabs) == 1 }
+
+func pathIs(host, path string) func(*url.URL) bool {
+	return func(address *url.URL) bool { return strings.HasSuffix(address.Host, host) && address.Path == path }
+}
+
+func reportSays(e Evidence, text string) bool {
+	return text != "" && strings.Contains(strings.ToLower(e.Run.Report), strings.ToLower(text))
+}
