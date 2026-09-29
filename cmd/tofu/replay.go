@@ -1,21 +1,25 @@
 package main
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
 	"io"
 	"maps"
 	"slices"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
 
+	"tofu/interface/cli"
 	"tofu/internal/judge/gate"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/judge/state"
 	"tofu/internal/sys"
+	"tofu/internal/widget"
 )
+
+const replayUsage = "tofu replay --point name [--set threshold=value]... [--since 7d] [--verbose] [--json]"
 
 var replayThresholdFields = []string{
 	"risk_ask_at",
@@ -30,129 +34,123 @@ type replayOpts struct {
 	sets    map[string]float64
 	since   time.Duration
 	verbose bool
+	json    bool
 }
 
-type replayTransition struct {
-	before, after ledger.Verdict
-}
-
-type replayChange struct {
-	row   ledger.Row
-	after ledger.Verdict
-}
-
-type replayRuleSource struct {
-	ref    string
-	origin gate.Origin
+type replayRule struct {
+	Ref    string      `json:"rule"`
+	Origin gate.Origin `json:"origin,omitempty"`
+	File   string      `json:"file,omitempty"`
+	Schema string      `json:"schema,omitempty"`
+	Rows   int         `json:"rows"`
 	pol    gate.Rule
 	err    error
 }
 
-type replayNoDecider struct {
-	ref    string
-	schema string
+type replayChange struct {
+	ID      string          `json:"id"`
+	Before  ledger.Verdict  `json:"before"`
+	After   ledger.Verdict  `json:"after"`
+	Outcome *ledger.Outcome `json:"outcome,omitempty"`
 }
 
-func (n replayNoDecider) Error() string {
-	return fmt.Sprintf("the rule %s declares the schema %q and replay has no decider for it", n.ref, n.schema)
+type replayMove struct {
+	Before   ledger.Verdict `json:"before"`
+	After    ledger.Verdict `json:"after"`
+	Rows     int            `json:"rows"`
+	Labeled  int            `json:"labeled"`
+	Agree    int            `json:"agree"`
+	Disagree int            `json:"disagree"`
 }
 
-type replayResult struct {
-	read        int
-	rescored    int
-	skipped     int
-	unavailable int
-	noDecider   map[replayNoDecider]int
-	changes     []replayChange
-	rules       replayRules
+type replayReport struct {
+	Point       string             `json:"point"`
+	Sets        map[string]float64 `json:"sets"`
+	Read        int                `json:"read"`
+	Rescored    int                `json:"rescored"`
+	NoRule      int                `json:"no_rule"`
+	Unavailable int                `json:"unavailable"`
+	Rules       []replayRule       `json:"rules"`
+	Moves       []replayMove       `json:"moves"`
+	Changes     []replayChange     `json:"changes"`
+	verbose     bool
 }
 
 func replayVerb(args []string, out, errOut io.Writer, now func() time.Time) int {
+	o := verbOutput{verb: "replay", usageLine: replayUsage, out: out, errOut: errOut}
 	opts, err := parseReplayArgs(args)
 	if err != nil {
-		return replayFail(errOut, err)
+		return o.usage(err)
 	}
+	o.asJSON = opts.json
 	dir, err := sys.LogDir()
 	if err != nil {
-		return replayFail(errOut, err)
+		return o.fail(err)
 	}
 	filter := ledger.Filter{Point: opts.point}
 	if opts.since > 0 {
 		filter.Since = now().Add(-opts.since)
 	}
-
-	start := time.Now()
-	result, err := runReplay(ledger.NewReader(dir), filter, opts.sets)
-	elapsed := time.Since(start)
+	report, err := runReplay(ledger.NewReader(dir), filter, opts.sets)
 	if err != nil {
-		return replayFail(errOut, err)
+		return o.fail(err)
 	}
-	printReplay(out, result, elapsed, opts.verbose)
-	return exitOK
-}
-
-func replayFail(errOut io.Writer, err error) int {
-	_, _ = fmt.Fprintf(errOut, "tofu replay: %v\n", err)
-	return exitUsage
+	report.verbose = opts.verbose
+	return o.done(true, report, report.lines)
 }
 
 func parseReplayArgs(args []string) (replayOpts, error) {
 	opts := replayOpts{sets: map[string]float64{}}
 	for i := 0; i < len(args); i++ {
-		switch args[i] {
-		case "--point":
-			i++
-			if i >= len(args) {
-				return replayOpts{}, errors.New("--point needs a name")
-			}
-			opts.point = args[i]
-		case "--set":
-			i++
-			if i >= len(args) {
-				return replayOpts{}, errors.New("--set needs key=value")
-			}
-			key, value, err := parseSetArg(args[i])
-			if err != nil {
-				return replayOpts{}, err
-			}
-			opts.sets[key] = value
-		case "--since":
-			i++
-			if i >= len(args) {
-				return replayOpts{}, errors.New("--since needs a duration")
-			}
-			d, err := parseSince(args[i])
-			if err != nil {
-				return replayOpts{}, err
-			}
-			opts.since = d
+		flag := args[i]
+		switch flag {
 		case "--verbose":
 			opts.verbose = true
+			continue
+		case jsonFlag:
+			opts.json = true
+			continue
+		case "--point", "--set", "--since":
 		default:
-			return replayOpts{}, fmt.Errorf("unknown argument %q", args[i])
+			return replayOpts{}, fmt.Errorf("unknown argument %q", flag)
+		}
+		i++
+		if i >= len(args) {
+			return replayOpts{}, errors.New(flag + " needs a value")
+		}
+		var err error
+		switch flag {
+		case "--point":
+			opts.point = args[i]
+		case "--set":
+			err = parseSetArg(args[i], opts.sets)
+		case "--since":
+			opts.since, err = parseSince(args[i])
+		}
+		if err != nil {
+			return replayOpts{}, err
 		}
 	}
 	if opts.point == "" {
-		return replayOpts{}, errors.New("tofu replay needs --point")
-	}
-	for key := range opts.sets {
-		if !knownThreshold(key) {
-			return replayOpts{}, fmt.Errorf("%q is not a threshold this rule declares, want one of %s", key, strings.Join(replayThresholdFields, ", "))
-		}
+		return replayOpts{}, errors.New("--point is needed")
 	}
 	return opts, nil
 }
 
-func parseSetArg(arg string) (string, float64, error) {
+func parseSetArg(arg string, sets map[string]float64) error {
 	key, raw, ok := strings.Cut(arg, "=")
 	if !ok {
-		return "", 0, fmt.Errorf("--set wants key=value, got %q", arg)
+		return fmt.Errorf("--set wants key=value, got %q", arg)
+	}
+	if !slices.Contains(replayThresholdFields, key) {
+		return fmt.Errorf("%q is not a threshold, want one of %s", key, strings.Join(replayThresholdFields, ", "))
 	}
 	value, err := strconv.ParseFloat(raw, 64)
 	if err != nil {
-		return "", 0, fmt.Errorf("--set %s: %q is not a number", key, raw)
+		return fmt.Errorf("--set %s: %q is not a number", key, raw)
 	}
-	return key, value, nil
+	sets[key] = value
+	return nil
 }
 
 func parseSince(s string) (time.Duration, error) {
@@ -170,76 +168,76 @@ func parseSince(s string) (time.Duration, error) {
 	return d, nil
 }
 
-func knownThreshold(key string) bool {
-	for _, name := range replayThresholdFields {
-		if name == key {
-			return true
-		}
-	}
-	return false
-}
-
-func runReplay(reader *ledger.Reader, filter ledger.Filter, sets map[string]float64) (replayResult, error) {
-	result := replayResult{noDecider: map[replayNoDecider]int{}}
-	var rules replayRules
+func runReplay(reader *ledger.Reader, filter ledger.Filter, sets map[string]float64) (replayReport, error) {
+	report := replayReport{Point: filter.Point, Sets: sets, Rules: []replayRule{}, Moves: []replayMove{}, Changes: []replayChange{}}
 	_, err := reader.Each(filter, func(row ledger.Row) error {
-		result.read++
+		report.Read++
 		if row.Reason != nil && gate.IsUnavailable(row.Reason.Comparison) {
-			result.unavailable++
+			report.Unavailable++
 			return nil
 		}
 		if row.Policy == "" {
-			result.skipped++
+			report.NoRule++
 			return nil
 		}
-		pol, err := rules.load(row.Policy, row.PolicyVersion)
-		var missing replayNoDecider
-		if errors.As(err, &missing) {
-			result.noDecider[missing]++
-			return nil
+		rule := report.rule(fmt.Sprintf("%s@%d", row.Policy, row.PolicyVersion))
+		rule.Rows++
+		if rule.err != nil || rule.Schema != "" {
+			return rule.err
 		}
-		if err != nil {
-			return err
-		}
+		pol := rule.pol
 		pol.Thresholds = withOverrides(pol.Thresholds, sets)
 		verdict, _, err := gate.Decide(ledgerAnswersToJev(row.Answers), pol)
 		if err != nil {
 			return err
 		}
-		result.rescored++
-		after := verdict.Ledger()
-		if after != row.Verdict {
-			result.changes = append(result.changes, replayChange{row: row, after: after})
+		report.Rescored++
+		if after := verdict.Ledger(); after != row.Verdict {
+			report.Changes = append(report.Changes, replayChange{ID: row.ID, Before: row.Verdict, After: after, Outcome: row.Outcome})
 		}
 		return nil
 	})
-	result.rules = rules
-	return result, err
-}
-
-type replayRules []replayRuleSource
-
-func (p *replayRules) load(name string, version int) (gate.Rule, error) {
-	ref := fmt.Sprintf("%s@%d", name, version)
-	for _, source := range *p {
-		if source.ref == ref {
-			return source.pol, source.err
+	for _, change := range report.Changes {
+		at := slices.IndexFunc(report.Moves, func(m replayMove) bool { return m.Before == change.Before && m.After == change.After })
+		if at < 0 {
+			at = len(report.Moves)
+			report.Moves = append(report.Moves, replayMove{Before: change.Before, After: change.After})
+		}
+		move := &report.Moves[at]
+		move.Rows++
+		if change.Outcome == nil {
+			continue
+		}
+		move.Labeled++
+		if string(change.After) == change.Outcome.Detail {
+			move.Agree++
+		} else {
+			move.Disagree++
 		}
 	}
-	pol, origin, err := replayDecide(ref)
-	*p = append(*p, replayRuleSource{ref: ref, origin: origin, pol: pol, err: err})
-	return pol, err
+	slices.SortFunc(report.Moves, func(a, b replayMove) int {
+		return cmp.Or(cmp.Compare(a.After, b.After), cmp.Compare(a.Before, b.Before))
+	})
+	return report, err
 }
 
-func replayDecide(ref string) (gate.Rule, gate.Origin, error) {
+func (r *replayReport) rule(ref string) *replayRule {
+	at := slices.IndexFunc(r.Rules, func(rule replayRule) bool { return rule.Ref == ref })
+	if at >= 0 {
+		return &r.Rules[at]
+	}
+	rule := replayRule{Ref: ref}
 	if ref == state.StopCheckRuleRef {
-		return state.StopCheckRule()
+		rule.pol, rule.Origin, rule.err = state.StopCheckRule()
+	} else {
+		rule.pol, rule.Origin, rule.err = loadRulePoint(ref, "")
+		if rule.err == nil && rule.pol.Schema != gate.SchemaGate {
+			rule.Schema = rule.pol.Schema
+		}
 	}
-	pol, origin, err := loadRulePoint(ref, "")
-	if err != nil || pol.Schema == gate.SchemaGate {
-		return pol, origin, err
-	}
-	return gate.Rule{}, origin, replayNoDecider{ref: ref, schema: pol.Schema}
+	rule.File = rule.pol.File
+	r.Rules = append(r.Rules, rule)
+	return &r.Rules[len(r.Rules)-1]
 }
 
 func withOverrides(t gate.Thresholds, sets map[string]float64) gate.Thresholds {
@@ -260,75 +258,68 @@ func withOverrides(t gate.Thresholds, sets map[string]float64) gate.Thresholds {
 	return t
 }
 
-func printReplay(out io.Writer, result replayResult, elapsed time.Duration, verbose bool) {
-	_, _ = fmt.Fprintf(out, "  %d rows read, %d rescored, %d skipped for naming no rule, %d unavailable: the typed decision was never made    0 API calls, %s\n",
-		result.read, result.rescored, result.skipped, result.unavailable, elapsed.Round(time.Millisecond))
-	for _, source := range result.rules {
-		if source.err != nil {
-			continue
+func (r replayReport) lines(page cli.Page) []string {
+	count := func(n int, one, many string) string {
+		if n == 1 {
+			return "1 " + one
 		}
-		_, _ = fmt.Fprintf(out, "  rule %s from %s: %s\n", source.ref, source.origin, source.pol.File)
+		return strconv.Itoa(n) + " " + many
 	}
-	for _, missing := range slices.SortedFunc(maps.Keys(result.noDecider), func(a, b replayNoDecider) int { return strings.Compare(a.ref, b.ref) }) {
-		_, _ = fmt.Fprintf(out, "  %d skipped: %v\n", result.noDecider[missing], missing)
+	verdict := cli.Verdict{Mark: cli.Done, Text: "no verdict changes"}
+	if len(r.Changes) > 0 {
+		verdict = cli.Verdict{Mark: cli.Changed, Text: count(len(r.Changes), "verdict changes", "verdicts change")}
 	}
-	_, _ = fmt.Fprintf(out, "  verdict changes: %d\n\n", len(result.changes))
-
-	for _, t := range replayTransitions(result.changes) {
-		count, agree, disagree, labeled := replayTransitionCounts(result.changes, t)
-		line := fmt.Sprintf("  would now %s (was %s)   %d", strings.ToUpper(string(t.after)), t.before, count)
-		if labeled > 0 {
-			line += fmt.Sprintf("   of which %d carry an outcome: %d now agree, %d now disagree", labeled, agree, disagree)
+	nonzero := func(n int) string {
+		if n == 0 {
+			return ""
 		}
-		_, _ = fmt.Fprintln(out, line)
+		return strconv.Itoa(n)
 	}
-
-	if verbose {
-		_, _ = fmt.Fprintln(out)
-		for _, c := range result.changes {
-			outcome := "no outcome"
-			if c.row.Outcome != nil {
-				outcome = "outcome " + c.row.Outcome.Detail
-			}
-			_, _ = fmt.Fprintf(out, "  %s  %s -> %s  %s\n", c.row.ID, c.row.Verdict, c.after, outcome)
-		}
+	var sets []string
+	for _, key := range slices.Sorted(maps.Keys(r.Sets)) {
+		sets = append(sets, key+"="+strconv.FormatFloat(r.Sets[key], 'g', -1, 64))
 	}
-}
-
-func replayTransitions(changes []replayChange) []replayTransition {
-	seen := map[replayTransition]bool{}
-	var out []replayTransition
-	for _, c := range changes {
-		t := replayTransition{before: c.row.Verdict, after: c.after}
-		if !seen[t] {
-			seen[t] = true
-			out = append(out, t)
-		}
+	facts := []cli.Fact{
+		{Label: "set", Text: strings.Join(sets, " · ")},
+		{Label: "rescored", Text: nonzero(r.Rescored)},
+		{Label: "no rule", Text: nonzero(r.NoRule)},
+		{Label: "unavailable", Text: nonzero(r.Unavailable)},
 	}
-	sort.Slice(out, func(i, j int) bool {
-		if out[i].after != out[j].after {
-			return out[i].after < out[j].after
+	for _, rule := range r.Rules {
+		text := rule.Ref + " · " + string(rule.Origin) + " · " + page.Path(rule.File)
+		if rule.Schema != "" {
+			text = page.Glyph(cli.Warn) + " " + rule.Ref + " · schema " + rule.Schema + " has no decider · " + count(rule.Rows, "row", "rows") + " skipped"
 		}
-		return out[i].before < out[j].before
-	})
-	return out
-}
-
-func replayTransitionCounts(changes []replayChange, t replayTransition) (count, agree, disagree, labeled int) {
-	for _, c := range changes {
-		if c.row.Verdict != t.before || c.after != t.after {
-			continue
-		}
-		count++
-		if c.row.Outcome == nil {
-			continue
-		}
-		labeled++
-		if string(c.after) == c.row.Outcome.Detail {
-			agree++
-		} else {
-			disagree++
-		}
+		facts = append(facts, cli.Fact{Label: "rule", Text: text})
 	}
-	return count, agree, disagree, labeled
+	lines := append(page.Title("Replay", []string{r.Point, count(r.Read, "row", "rows")}, verdict), "")
+	lines = append(lines, cli.Indent(page.Facts(facts)...)...)
+	if len(r.Moves) == 0 {
+		return lines
+	}
+	header := []string{"change", "rows", "labeled", "agree", "disagree"}
+	rows := []cli.Row{{Cells: make([]string, len(header))}}
+	for i, name := range header {
+		rows[0].Cells[i] = page.Label(name)
+	}
+	for _, move := range r.Moves {
+		cells := []string{verdictLook(move.Before).Text + " → " + verdictLook(move.After).Text}
+		for _, n := range []int{move.Rows, move.Labeled, move.Agree, move.Disagree} {
+			cells = append(cells, widget.Lead(strconv.Itoa(n), len(header[len(cells)])))
+		}
+		rows = append(rows, cli.Row{Mark: cli.Changed, Cells: cells})
+	}
+	lines = append(append(lines, ""), cli.Indent(page.Rows(rows)...)...)
+	if !r.verbose {
+		return lines
+	}
+	var changes []cli.Row
+	for _, change := range r.Changes {
+		outcome := "no outcome"
+		if change.Outcome != nil {
+			outcome = "outcome " + change.Outcome.Detail
+		}
+		changes = append(changes, cli.Row{Mark: cli.Changed, Cells: []string{change.ID, verdictLook(change.Before).Text + " → " + verdictLook(change.After).Text}, Detail: outcome})
+	}
+	return append(append(lines, ""), cli.Indent(page.Rows(changes)...)...)
 }

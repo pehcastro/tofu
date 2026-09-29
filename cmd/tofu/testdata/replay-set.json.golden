@@ -1,0 +1,50 @@
+exit 0
+--- stdout
+{
+  "tofu": "VERSION",
+  "verb": "replay",
+  "ok": true,
+  "at": "AT",
+  "data": {
+    "point": "tool_gate",
+    "sets": {
+      "risk_ask_at": -1
+    },
+    "read": 4,
+    "rescored": 3,
+    "no_rule": 0,
+    "unavailable": 1,
+    "rules": [
+      {
+        "rule": "tool_gate@1",
+        "origin": "binary",
+        "file": "library/general/rules/tool_gate@1.yaml",
+        "rows": 3
+      }
+    ],
+    "moves": [
+      {
+        "before": "allow",
+        "after": "ask",
+        "rows": 2,
+        "labeled": 0,
+        "agree": 0,
+        "disagree": 0
+      }
+    ],
+    "changes": [
+      {
+        "id": "2026-09-28-allowed",
+        "before": "allow",
+        "after": "ask"
+      },
+      {
+        "id": "2026-09-28-replayed",
+        "before": "allow",
+        "after": "ask"
+      }
+    ]
+  },
+  "problems": []
+}
+--- stderr

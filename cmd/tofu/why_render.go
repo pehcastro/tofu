@@ -1,45 +1,106 @@
 package main
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"io/fs"
 	"strconv"
 	"strings"
 	"time"
 
+	"tofu/interface/cli"
 	"tofu/internal/judge/gate"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/konst"
+	"tofu/internal/widget"
 )
 
-func printWhy(out io.Writer, wr whyRow, now time.Time, color bool, precedents []ledger.Precedent) {
-	if wr.isReplay {
-		_, _ = fmt.Fprintf(out, "%s is a replay of %s, recorded %s ago\n\n", wr.queried.ID, wr.chain.ID, agoString(now.Sub(wr.queried.At)))
+func whyPage(page cli.Page, report whyReport, now time.Time) []string {
+	var lines []string
+	if report.Call != nil {
+		lines = callLines(page, *report.Call)
 	}
-	row := wr.chain
-	builder := row.StateBuilder
-	if builder == "" {
-		builder = "absent, writer has not adopted the state builder"
-		if row.Schema < ledger.StateBuilderSchema {
-			builder = fmt.Sprintf("absent, schema %d predates the state builder", row.Schema)
+	for _, listing := range report.Rows {
+		if len(lines) > 0 {
+			lines = append(lines, "")
+		}
+		lines = append(lines, decisionLines(page, listing, now)...)
+	}
+	return lines
+}
+
+func decisionLines(page cli.Page, listing whyListing, now time.Time) []string {
+	row := listing.decision()
+	ago := func(at time.Time) string { return widget.Until(now.Sub(at)) + " ago" }
+	lines := append(page.Title(row.Point, []string{row.ID, ago(row.At)}, verdictLook(row.Verdict)), "")
+	var answers []cli.Fact
+	for _, answer := range row.Answers {
+		if answer.Kind == ledger.AnswerNoul {
+			answers = append(answers, cli.Fact{Label: answer.Question, Text: page.Bar(answer.Noul)})
+			continue
+		}
+		chosen := answer.Choice
+		if answer.Kind == ledger.AnswerScore {
+			chosen = strconv.FormatFloat(answer.Score, 'g', -1, 64)
+		}
+		answers = append(answers, cli.Fact{Label: answer.Question, Text: "chose " + chosen})
+		for _, slice := range answer.Dist {
+			answers = append(answers, cli.Fact{Label: cli.Gap + slice.Option, Text: page.Bar(slice.P)})
 		}
 	}
-	_, _ = fmt.Fprintf(out, "%s  %s  %s@v%d  builder %s  %s ago\n", row.Point, row.Build, row.Questions, row.Version, builder, agoString(now.Sub(row.At)))
-	for _, answer := range row.Answers {
-		printAnswer(out, answer)
+	if len(answers) > 0 {
+		lines = append(append(lines, cli.Indent(page.Facts(answers)...)...), "")
 	}
-	_, _ = fmt.Fprintln(out)
-	if row.Verdict != ledger.VerdictUnset {
-		_, _ = fmt.Fprintf(out, "  verdict  %s\n", colorVerdict(row.Verdict, color))
+	replay := ""
+	if listing.Chain != nil {
+		replay = listing.ID + " · " + ago(listing.At)
 	}
-	printThreshold(out, row)
-	printAuthority(out, row, wr.blockedBy)
-	printMode(out, row)
-	printState(out, wr)
-	printPrecedents(out, precedents, now, color)
+	state, body, hint := stateFacts(page, listing)
+	facts := append([]cli.Fact{
+		{Label: "replayed as", Text: replay},
+		{Label: "threshold", Text: thresholdText(row)},
+		{Label: "ambiguous", Text: ambiguousText(row)},
+		{Label: "authority", Text: authorityText(row, listing.BlockedBy)},
+		{Label: "mode", Text: modeText(row)},
+		{Label: "outcome", Text: outcomeText(row.Outcome)},
+		{Label: "questions", Text: row.Questions + "@" + strconv.Itoa(row.Version)},
+		{Label: "builder", Text: builderText(row)},
+		{Label: "build", Text: row.Build},
+	}, state...)
+	lines = append(lines, cli.Indent(page.Facts(facts)...)...)
+	if body != "" {
+		lines = append(lines, cli.Indent(cli.Indent(body)...)...)
+	}
+	if hint != "" {
+		lines = append(lines, cli.Indent(page.Hint(hint))...)
+	}
+	if len(listing.Precedents) == 0 {
+		return lines
+	}
+	rows := make([]cli.Row, len(listing.Precedents))
+	for i, precedent := range listing.Precedents {
+		look := verdictLook(precedent.Verdict)
+		rows[i] = cli.Row{Mark: look.Mark, Cells: []string{precedent.ID, look.Text, precedent.Why}, Detail: ago(precedent.At)}
+		if precedent.Outcome != nil {
+			rows[i].Detail += " · " + outcomeText(precedent.Outcome)
+		}
+	}
+	lines = append(lines, "", page.Subject("precedents")+page.Label(" · "+strconv.Itoa(len(rows))+" at this point, nearest first"))
+	return append(lines, cli.Indent(page.Rows(rows)...)...)
+}
+
+func verdictLook(v ledger.Verdict) cli.Verdict {
+	switch v {
+	case ledger.VerdictAllow:
+		return cli.Verdict{Mark: cli.Done, Text: "ALLOW"}
+	case ledger.VerdictAsk:
+		return cli.Verdict{Mark: cli.Warn, Text: "ASK"}
+	case ledger.VerdictDeny:
+		return cli.Verdict{Mark: cli.Fail, Text: "DENY"}
+	case ledger.VerdictUnset:
+		return cli.Verdict{Mark: cli.Idle, Text: "no verdict"}
+	}
+	panic("tofu why: unknown verdict " + string(v))
 }
 
 func precedentWhy(found ledger.Precedent) string {
@@ -52,92 +113,44 @@ func precedentWhy(found ledger.Precedent) string {
 	return fmt.Sprintf("answers %.3f away", found.Distance)
 }
 
-func printPrecedents(out io.Writer, found []ledger.Precedent, now time.Time, color bool) {
-	if len(found) == 0 {
-		return
+func outcomeText(outcome *ledger.Outcome) string {
+	if outcome == nil {
+		return ""
 	}
-	_, _ = fmt.Fprintf(out, "  precedent  %d at this point, nearest first\n", len(found))
-	for _, precedent := range found {
-		line := fmt.Sprintf("    %s  %s  %s  %s ago", precedent.Row.ID, colorVerdict(precedent.Row.Verdict, color),
-			precedentWhy(precedent), agoString(now.Sub(precedent.Row.At)))
-		if outcome := precedent.Row.Outcome; outcome != nil {
-			line += "  outcome " + outcome.Kind
-		}
-		_, _ = fmt.Fprintln(out, line)
-	}
+	return strings.TrimSpace(outcome.Kind + " " + outcome.Detail)
 }
 
-func printState(out io.Writer, wr whyRow) {
-	row := wr.chain
-	if wr.stateErr != nil {
-		printUnreadableState(out, row, wr.stateErr, wr.statePath)
-		return
-	}
-	if len(wr.state) == 0 {
-		absence := "absent: this row is schema " + strconv.Itoa(row.Schema) + " and carries no state body"
-		if row.Schema < ledger.StateBodySchema {
-			absence = fmt.Sprintf("absent: this row is schema %d and predates the state body, which rows carry from schema %d onward", row.Schema, ledger.StateBodySchema)
-		}
-		_, _ = fmt.Fprintf(out, "  state      %s\n", absence)
-		return
-	}
-	body := string(wr.state)
-	if len(body) <= konst.WhyStateBytes {
-		_, _ = fmt.Fprintf(out, "  state      %d bytes\n    %s\n", len(body), body)
-		return
-	}
-	where := ""
-	if wr.statePath != "" {
-		where = ", whole body in " + wr.statePath
-	}
-	_, _ = fmt.Fprintf(out, "  state      %d bytes, first %d shown%s\n    %s\n    rest     tofu why %s --state\n",
-		len(body), konst.WhyStateBytes, where, strings.ToValidUTF8(body[:konst.WhyStateBytes], ""), row.ID)
-}
-
-func printUnreadableState(out io.Writer, row ledger.Row, err error, statePath string) {
-	e := row.StateElision
-	reason := fmt.Sprintf("unreadable: %v", err)
-	var escaping ledger.EscapingStateError
+func thresholdText(row ledger.Row) string {
+	r := row.Reason
 	switch {
-	case errors.As(err, &escaping):
-		reason = fmt.Sprintf("refused: the row names %s, which is outside the ledger at %s, so it was not read", escaping.File, escaping.Dir)
-	case errors.Is(err, fs.ErrNotExist):
-		reason = fmt.Sprintf("missing: %s is not on disk, so only the excerpt the row carries survives", statePath)
+	case r == nil:
+		return "none recorded"
+	case gate.IsUnavailable(r.Comparison):
+		return "not compared · " + r.Comparison
 	}
-	_, _ = fmt.Fprintf(out, "  state      %d bytes recorded, %s\n    head     %s\n    tail     %s\n", e.Bytes, reason, e.Head, e.Tail)
+	return fmt.Sprintf("%s %.2f vs %s %.2f · %s@%d", r.Question, r.Value, r.Comparison, r.Threshold, row.Policy, row.PolicyVersion)
 }
 
-func printThreshold(out io.Writer, row ledger.Row) {
-	r := row.Reason
-	if r == nil {
-		_, _ = fmt.Fprintln(out, "  threshold  absent: no rule or calibration lock yet, waiting on E3")
-		return
+func ambiguousText(row ledger.Row) string {
+	if row.Reason == nil || row.Reason.Ambiguous == "" {
+		return ""
 	}
-	if gate.IsUnavailable(r.Comparison) {
-		_, _ = fmt.Fprintf(out, "  threshold  not compared: the typed decision was not made (%s)\n", r.Comparison)
-		return
-	}
-	_, _ = fmt.Fprintf(out, "  threshold  %s %.2f vs %s %.2f  (%s@v%d)\n", r.Question, r.Value, r.Comparison, r.Threshold, row.Policy, row.PolicyVersion)
-	if r.Ambiguous != "" {
-		_, _ = fmt.Fprintf(out, "  ambiguous  %s sat inside the dead band of its threshold\n", r.Ambiguous)
-	}
+	return row.Reason.Ambiguous + " in the dead band"
 }
 
-func printAuthority(out io.Writer, row ledger.Row, blockedBy string) {
+func authorityText(row ledger.Row, blockedBy string) string {
 	r := row.Reason
-	if r == nil {
-		return
+	switch {
+	case r == nil:
+		return ""
+	case r.Blocked && blockedBy == "":
+		return fmt.Sprintf("blocked by the from-untrusted question of %s@%d", row.Policy, row.PolicyVersion)
+	case r.Blocked:
+		return "blocked by " + questionWithValue(row, blockedBy)
+	case r.RelaxedBy != "":
+		return "relaxed by " + questionWithValue(row, r.RelaxedBy)
 	}
-	if r.Blocked {
-		if blockedBy == "" {
-			blockedBy = fmt.Sprintf("the from-untrusted question of %s@%d, which this library cannot name", row.Policy, row.PolicyVersion)
-		}
-		_, _ = fmt.Fprintf(out, "  authority  %s is at or inside its block threshold, so nothing could relax this %s\n", questionWithValue(row, blockedBy), verdictNoun(row.Verdict))
-		return
-	}
-	if r.RelaxedBy != "" {
-		_, _ = fmt.Fprintf(out, "  authority  %s relaxed the verdict to %s\n", questionWithValue(row, r.RelaxedBy), verdictNoun(row.Verdict))
-	}
+	return ""
 }
 
 func questionWithValue(row ledger.Row, question string) string {
@@ -149,56 +162,52 @@ func questionWithValue(row ledger.Row, question string) string {
 	return question
 }
 
-func verdictNoun(v ledger.Verdict) string {
-	if v == ledger.VerdictUnset {
-		return "verdict"
-	}
-	return strings.ToUpper(string(v))
-}
-
-func printMode(out io.Writer, row ledger.Row) {
+func modeText(row ledger.Row) string {
 	r := row.Reason
 	if r == nil || r.Mode == ledger.ModeUnknown {
-		return
+		return ""
 	}
-	sentence := fmt.Sprintf("%s@%d: %s", row.Policy, row.PolicyVersion, r.Mode)
 	if r.ModeReason != nil && *r.ModeReason != "" {
-		sentence += ", " + *r.ModeReason
+		return string(r.Mode) + " · " + *r.ModeReason
 	}
-	_, _ = fmt.Fprintf(out, "  mode       %s\n", sentence)
+	return string(r.Mode)
 }
 
-func printAnswer(out io.Writer, answer ledger.Answer) {
-	if answer.Kind == ledger.AnswerNoul {
-		p := answer.Noul
-		_, _ = fmt.Fprintf(out, "  %-16s %.2f\n", answer.Question, p)
-		printBar(out, "yes", p)
-		printBar(out, "no", 1-p)
-		return
+func builderText(row ledger.Row) string {
+	switch {
+	case row.StateBuilder != "":
+		return row.StateBuilder
+	case row.Schema < ledger.StateBuilderSchema:
+		return "absent, schema " + strconv.Itoa(row.Schema) + " predates it"
 	}
-	chosen := answer.Choice
-	if answer.Kind == ledger.AnswerScore {
-		chosen = strconv.FormatFloat(answer.Score, 'g', -1, 64)
-	}
-	_, _ = fmt.Fprintf(out, "  %-16s chose %s\n", answer.Question, chosen)
-	for _, slice := range answer.Dist {
-		printBar(out, slice.Option, slice.P)
-	}
+	return "absent"
 }
 
-func printBar(out io.Writer, label string, p float64) {
-	_, _ = fmt.Fprintf(out, "    %-8s %.2f  %s\n", label, p, bar(p))
-}
-
-func bar(p float64) string {
-	if p < 0 {
-		p = 0
+func stateFacts(page cli.Page, listing whyListing) ([]cli.Fact, string, string) {
+	row := listing.decision()
+	if err := listing.stateErr; err != nil {
+		reason := "unreadable: " + err.Error()
+		var escaping ledger.EscapingStateError
+		switch {
+		case errors.As(err, &escaping):
+			reason = "refused: " + escaping.File + " is outside the ledger"
+		case errors.Is(err, fs.ErrNotExist):
+			reason = "missing: " + page.Path(listing.statePath)
+		}
+		e := row.StateElision
+		return []cli.Fact{{Label: "state", Text: widget.Size(e.Bytes) + " · " + reason}, {Label: "head", Text: e.Head}, {Label: "tail", Text: e.Tail}}, "", ""
 	}
-	if p > 1 {
-		p = 1
+	if len(listing.state) == 0 && row.Schema < ledger.StateBodySchema {
+		return []cli.Fact{{Label: "state", Text: "none, schema " + strconv.Itoa(row.Schema) + " predates it"}}, "", ""
 	}
-	filled := int(p*konst.WhyBarWidthChars + 0.5)
-	return strings.Repeat("█", filled) + strings.Repeat("░", konst.WhyBarWidthChars-filled)
+	if len(listing.state) == 0 {
+		return []cli.Fact{{Label: "state", Text: "none recorded"}}, "", ""
+	}
+	body, hint := string(listing.state), ""
+	if len(body) > konst.WhyStateBytes || widget.Cells(body)+2*len(cli.Gap) > page.Width {
+		body, hint = strings.ToValidUTF8(body[:min(len(body), konst.WhyStateBytes)], ""), "tofu why "+row.ID+" --state"
+	}
+	return []cli.Fact{{Label: "state", Text: widget.Size(len(listing.state))}}, body, hint
 }
 
 func colorVerdict(v ledger.Verdict, color bool) string {
@@ -233,83 +242,4 @@ func agoString(d time.Duration) string {
 	default:
 		return fmt.Sprintf("%.0f d", d.Hours()/24)
 	}
-}
-
-func thresholdJSON(row ledger.Row) map[string]any {
-	r := row.Reason
-	if r == nil {
-		return map[string]any{"present": false, "note": "no rule or calibration lock yet, waiting on E3"}
-	}
-	if gate.IsUnavailable(r.Comparison) {
-		return map[string]any{"present": false, "note": "the typed decision was not made", "unavailable": r.Comparison}
-	}
-	out := map[string]any{
-		"present":        true,
-		"question":       r.Question,
-		"comparison":     r.Comparison,
-		"threshold":      r.Threshold,
-		"value":          r.Value,
-		"policy":         row.Policy,
-		"policy_version": row.PolicyVersion,
-	}
-	if r.Ambiguous != "" {
-		out["ambiguous"] = r.Ambiguous
-	}
-	return out
-}
-
-func rowFields(row ledger.Row) (map[string]any, error) {
-	raw, err := json.Marshal(row)
-	if err != nil {
-		return nil, err
-	}
-	var fields map[string]any
-	if err := json.Unmarshal(raw, &fields); err != nil {
-		return nil, err
-	}
-	return fields, nil
-}
-
-func precedentsJSON(found []ledger.Precedent, now time.Time) []map[string]any {
-	listed := make([]map[string]any, len(found))
-	for i, precedent := range found {
-		listed[i] = map[string]any{
-			"row_id":           precedent.Row.ID,
-			"verdict":          precedent.Row.Verdict,
-			"distance":         precedent.Distance,
-			"same_fingerprint": precedent.SameFingerprint,
-			"comparable":       precedent.Comparable,
-			"why":              precedentWhy(precedent),
-			"ago":              agoString(now.Sub(precedent.Row.At)),
-		}
-		if outcome := precedent.Row.Outcome; outcome != nil {
-			listed[i]["outcome"] = outcome.Kind
-		}
-	}
-	return listed
-}
-
-func printWhyJSON(out io.Writer, wr whyRow, now time.Time, precedents []ledger.Precedent) error {
-	fields, err := rowFields(wr.queried)
-	if err != nil {
-		return err
-	}
-	fields["ago"] = agoString(now.Sub(wr.chain.At))
-	fields["threshold"] = thresholdJSON(wr.chain)
-	if len(precedents) > 0 {
-		fields["precedents"] = precedentsJSON(precedents, now)
-	}
-	if wr.isReplay {
-		chain, err := rowFields(wr.chain)
-		if err != nil {
-			return err
-		}
-		fields["chain"] = chain
-	}
-	body, err := json.Marshal(fields)
-	if err != nil {
-		return err
-	}
-	_, err = fmt.Fprintln(out, string(body))
-	return err
 }

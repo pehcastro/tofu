@@ -1,0 +1,5 @@
+exit 2
+--- stdout
+--- stderr
+✗ tofu label: an id and an outcome, or --last and an outcome
+  → tofu label <id> allow|ask|deny | tofu label --last allow|ask|deny [--json]

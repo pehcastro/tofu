@@ -1,0 +1,15 @@
+exit 0
+--- stdout
+Replay · tool_gate · 4 rows                                  ~ 2 verdicts change
+
+  set          risk_ask_at=-1
+  rescored     3
+  unavailable  1
+  rule         tool_gate@1 · binary · library/general/rules/tool_gate@1.yaml
+
+    change       rows  labeled  agree  disagree
+  ~ ALLOW → ASK     2        0      0         0
+
+  ~ 2026-09-28-allowed   ALLOW → ASK  no outcome
+  ~ 2026-09-28-replayed  ALLOW → ASK  no outcome
+--- stderr

@@ -1,0 +1,102 @@
+exit 0
+--- stdout
+{
+  "tofu": "VERSION",
+  "verb": "why",
+  "ok": true,
+  "at": "AT",
+  "data": {
+    "rows": [
+      {
+        "id": "2026-09-28-allowed",
+        "schema": 8,
+        "at": "2026-09-28T10:00:00Z",
+        "point": "tool_gate",
+        "questions": "tool_gate",
+        "version": 1,
+        "build": "jev-2026-09-01",
+        "model": "~typesafe/jev-latest",
+        "state_hash": "h-2026-09-28-allowed",
+        "fingerprint": "bash.5ee1f0a0",
+        "state_builder": "tool_state@1",
+        "state": {
+          "command": "ls"
+        },
+        "answers": [
+          {
+            "question": "risk",
+            "wording": 1,
+            "kind": "score",
+            "dist": [
+              {
+                "option": "0",
+                "p": 1
+              },
+              {
+                "option": "1",
+                "p": 0
+              },
+              {
+                "option": "2",
+                "p": 0
+              },
+              {
+                "option": "3",
+                "p": 0
+              }
+            ]
+          },
+          {
+            "question": "approval",
+            "wording": 1,
+            "kind": "noul",
+            "noul": 0.9
+          },
+          {
+            "question": "user_requested",
+            "wording": 1,
+            "kind": "noul",
+            "noul": 0.05
+          },
+          {
+            "question": "from_untrusted",
+            "wording": 1,
+            "kind": "noul",
+            "noul": 0.02
+          }
+        ],
+        "verdict": "allow",
+        "policy": "tool_gate",
+        "policy_version": 1,
+        "reason": {
+          "question": "risk",
+          "comparison": "risk_ask_at",
+          "threshold": 1.5,
+          "value": 0,
+          "mode": "enforced"
+        },
+        "latency_ms": 0,
+        "cost": 0,
+        "request_id": "",
+        "precedents": [
+          {
+            "row_id": "2026-09-28-held",
+            "verdict": "ask",
+            "at": "2026-09-28T09:00:00Z",
+            "distance": 0.7566666666666667,
+            "same_fingerprint": true,
+            "comparable": true,
+            "why": "the same call",
+            "outcome": {
+              "at": "2026-09-28T12:00:00Z",
+              "kind": "hand-labeled",
+              "detail": "deny"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "problems": []
+}
+--- stderr

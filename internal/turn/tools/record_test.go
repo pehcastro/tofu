@@ -6,6 +6,7 @@ import (
 	"go/parser"
 	"go/token"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"testing"
@@ -103,14 +104,11 @@ func TestTheReplayToolReturnsTheChangedVerdictCountForAMovedThreshold(t *testing
 	if result.Command != "tofu replay --point tool_gate --set risk_ask_at=-1" {
 		t.Fatalf("the set argument did not reach the verb as its own flag: %q", result.Command)
 	}
-	if !strings.Contains(result.Content, "1 rows read, 1 rescored") {
-		t.Fatalf("the recorded row was not rescored: %q", result.Content)
+	if !regexp.MustCompile(`· 1 row\b[\s\S]*\n  rescored +1\n`).MatchString(result.Content) {
+		t.Fatalf("the recorded row was not read and rescored: %q", result.Content)
 	}
-	if !strings.Contains(result.Content, "verdict changes: 1") {
+	if !strings.Contains(result.Content, "1 verdict changes") || !strings.Contains(result.Content, "ALLOW → ASK") {
 		t.Fatalf("the moved threshold changed no verdict, so the tool answers nothing: %q", result.Content)
-	}
-	if !strings.Contains(result.Content, "0 API calls") {
-		t.Fatalf("the result does not state that nothing was spent: %q", result.Content)
 	}
 }
 

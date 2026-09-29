@@ -4,115 +4,77 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"slices"
+	"strconv"
 	"time"
 
+	"tofu/interface/cli"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/sys"
 )
 
-type outcome string
-
-const (
-	outcomeAllow outcome = "allow"
-	outcomeAsk   outcome = "ask"
-	outcomeDeny  outcome = "deny"
-)
+const labelUsage = "tofu label <id> allow|ask|deny | tofu label --last allow|ask|deny [--json]"
 
 const outcomeKindHandLabeled = "hand-labeled"
 
-func parseOutcome(s string) (outcome, error) {
-	switch outcome(s) {
-	case outcomeAllow, outcomeAsk, outcomeDeny:
-		return outcome(s), nil
-	}
-	return "", fmt.Errorf("%q is not an outcome, want allow, ask or deny", s)
-}
-
-type labelOpts struct {
-	id      string
-	last    bool
-	outcome outcome
+type labelReceipt struct {
+	ID      string         `json:"id"`
+	Outcome ledger.Verdict `json:"outcome"`
+	Kind    string         `json:"kind"`
+	Verdict ledger.Verdict `json:"verdict"`
 }
 
 func labelVerb(args []string, out, errOut io.Writer, now func() time.Time) int {
-	opts, err := parseLabelArgs(args)
-	if err != nil {
-		return labelFail(errOut, err)
+	o := verbOutput{verb: "label", usageLine: labelUsage, asJSON: slices.Contains(args, jsonFlag), out: out, errOut: errOut}
+	args = slices.DeleteFunc(slices.Clone(args), func(arg string) bool { return arg == jsonFlag })
+	last := slices.Contains(args, "--last")
+	args = slices.DeleteFunc(args, func(arg string) bool { return arg == "--last" })
+	operands := 2
+	if last {
+		operands = 1
+	}
+	if len(args) != operands {
+		return o.usage(errors.New("an id and an outcome, or --last and an outcome"))
+	}
+	outcome := ledger.Verdict(args[len(args)-1])
+	if outcome != ledger.VerdictAllow && outcome != ledger.VerdictAsk && outcome != ledger.VerdictDeny {
+		return o.usage(fmt.Errorf("%q is not an outcome, want allow, ask or deny", string(outcome)))
 	}
 	dir, err := sys.LogDir()
 	if err != nil {
-		return labelFail(errOut, err)
+		return o.fail(err)
 	}
 	reader := ledger.NewReader(dir)
-
-	id := opts.id
-	if opts.last {
-		var found ledger.Row
-		var ok bool
+	id := args[0]
+	if last {
+		id = ""
+		var newest time.Time
 		if _, err := reader.Each(ledger.Filter{}, func(row ledger.Row) error {
-			if !ok || row.At.After(found.At) {
-				found, ok = row, true
+			if id == "" || row.At.After(newest) {
+				id, newest = row.ID, row.At
 			}
 			return nil
 		}); err != nil {
-			return labelFail(errOut, err)
+			return o.fail(err)
 		}
-		if !ok {
-			return labelFail(errOut, errors.New("the ledger has no rows"))
+		if id == "" {
+			return o.fail(errors.New("the ledger has no rows"))
 		}
-		id = found.ID
 	}
-
 	row, ok, err := reader.ByID(id)
-	if err != nil {
-		return labelFail(errOut, err)
+	switch {
+	case err != nil:
+		return o.fail(err)
+	case !ok:
+		return o.fail(problemError{What: "no row " + strconv.Quote(id) + " in the ledger", Hint: "tofu why --last 5"})
+	case row.Outcome != nil:
+		return o.fail(problemError{What: id + " already carries the outcome " + row.Outcome.Detail})
 	}
-	if !ok {
-		return labelFail(errOut, fmt.Errorf("no row %q in the ledger at %s", id, dir))
+	receipt := labelReceipt{ID: id, Outcome: outcome, Kind: outcomeKindHandLabeled, Verdict: row.Verdict}
+	if err := ledger.NewWriterWithClock(dir, now).Backfill(id, ledger.Outcome{Kind: receipt.Kind, Detail: string(outcome)}); err != nil {
+		return o.fail(err)
 	}
-	if row.Outcome != nil {
-		return labelFail(errOut, fmt.Errorf("row %q already carries the outcome %q", id, row.Outcome.Detail))
-	}
-
-	writer := ledger.NewWriterWithClock(dir, now)
-	if err := writer.Backfill(id, ledger.Outcome{Kind: outcomeKindHandLabeled, Detail: string(opts.outcome)}); err != nil {
-		return labelFail(errOut, err)
-	}
-	_, _ = fmt.Fprintf(out, "%s  %s\n", id, opts.outcome)
-	return exitOK
-}
-
-func labelFail(errOut io.Writer, err error) int {
-	_, _ = fmt.Fprintf(errOut, "tofu label: %v\n", err)
-	return exitUsage
-}
-
-func parseLabelArgs(args []string) (labelOpts, error) {
-	var positional []string
-	last := false
-	for _, arg := range args {
-		if arg == "--last" {
-			last = true
-			continue
-		}
-		positional = append(positional, arg)
-	}
-	if last {
-		if len(positional) != 1 {
-			return labelOpts{}, errors.New("tofu label --last needs one outcome")
-		}
-		out, err := parseOutcome(positional[0])
-		if err != nil {
-			return labelOpts{}, err
-		}
-		return labelOpts{last: true, outcome: out}, nil
-	}
-	if len(positional) != 2 {
-		return labelOpts{}, errors.New("tofu label needs an id and an outcome")
-	}
-	out, err := parseOutcome(positional[1])
-	if err != nil {
-		return labelOpts{}, err
-	}
-	return labelOpts{id: positional[0], outcome: out}, nil
+	return o.done(true, receipt, func(page cli.Page) []string {
+		return []string{page.Glyph(cli.Done) + " " + id + " labeled " + verdictLook(outcome).Text + cli.Gap + page.Label("verdict was "+verdictLook(row.Verdict).Text)}
+	})
 }

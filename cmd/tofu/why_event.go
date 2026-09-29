@@ -2,20 +2,20 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
-	"io"
 	"strconv"
 	"strings"
 
+	"tofu/interface/cli"
 	sessionstore "tofu/internal/session"
 	"tofu/internal/turn"
+	"tofu/internal/widget"
 )
 
 type recordedCall struct {
-	session string
-	step    int
-	attempt int
-	call    turn.ToolCallRow
+	Session string           `json:"session"`
+	Step    int              `json:"step"`
+	Attempt int              `json:"attempt"`
+	Call    turn.ToolCallRow `json:"call"`
 }
 
 func recordedCallByHash(hash string) (recordedCall, bool, error) {
@@ -45,7 +45,7 @@ func recordedCallByHash(hash string) (recordedCall, bool, error) {
 			}
 			for _, call := range step.ToolCalls {
 				if sessionstore.DrawnAs(call.ID, hash) {
-					return recordedCall{session: header.ID, step: step.Index, attempt: event.Attempt, call: call}, true, nil
+					return recordedCall{Session: header.ID, Step: step.Index, Attempt: event.Attempt, Call: call}, true, nil
 				}
 			}
 		}
@@ -53,24 +53,29 @@ func recordedCallByHash(hash string) (recordedCall, bool, error) {
 	return recordedCall{}, false, nil
 }
 
-func printRecordedCall(out io.Writer, found recordedCall) {
-	call, attempt := found.call, "attempt "+strconv.Itoa(found.attempt)
-	if found.attempt < sessionstore.FirstAttempt {
-		attempt = "recorded before an attempt was written down"
-	}
-	_, _ = fmt.Fprintf(out, "%s  %s  in %s, step %d, %s\n", call.ID, call.Tool, found.session, found.step, attempt)
-	line, _, _ := strings.Cut(call.Command, "\n")
-	if line = strings.TrimSpace(line); line != "" {
-		_, _ = fmt.Fprintf(out, "  %s\n", line)
-	}
-	_, _ = fmt.Fprintf(out, "  %d bytes back in %d ms\n", call.ResultBytes, call.DurationMS)
+func callLines(page cli.Page, found recordedCall) []string {
+	call := found.Call
+	verdict := cli.Verdict{Mark: cli.Done, Text: widget.Size(call.ResultBytes) + " in " + strconv.FormatInt(call.DurationMS, 10) + " ms"}
 	if call.Error != "" {
-		_, _ = fmt.Fprintf(out, "  failed: %s\n", call.Error)
+		verdict = cli.Verdict{Mark: cli.Fail, Text: "failed"}
 	}
-	if call.GateVerdict != "" {
-		_, _ = fmt.Fprintf(out, "  the gate said %s\n", call.GateVerdict)
+	attempt := strconv.Itoa(found.Attempt)
+	if found.Attempt < sessionstore.FirstAttempt {
+		attempt = "not recorded"
 	}
-	if call.GateDecisionID == "" {
-		_, _ = fmt.Fprintln(out, "  no gate decision was recorded for this call")
+	command, _, _ := strings.Cut(call.Command, "\n")
+	decision := call.GateDecisionID
+	if decision == "" {
+		decision = "none recorded"
 	}
+	facts := []cli.Fact{
+		{Label: "session", Text: found.Session},
+		{Label: "step", Text: strconv.Itoa(found.Step)},
+		{Label: "attempt", Text: attempt},
+		{Label: "command", Text: strings.TrimSpace(command)},
+		{Label: "error", Text: call.Error},
+		{Label: "gate", Text: call.GateVerdict},
+		{Label: "decision", Text: decision},
+	}
+	return append(append(page.Title(call.Tool, []string{call.ID}, verdict), ""), cli.Indent(page.Facts(facts)...)...)
 }

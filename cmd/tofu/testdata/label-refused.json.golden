@@ -1,0 +1,15 @@
+exit 1
+--- stdout
+{
+  "tofu": "VERSION",
+  "verb": "label",
+  "ok": false,
+  "at": "AT",
+  "data": null,
+  "problems": [
+    {
+      "what": "2026-09-28-held already carries the outcome deny"
+    }
+  ]
+}
+--- stderr

@@ -1,0 +1,29 @@
+exit 0
+--- stdout
+{
+  "tofu": "VERSION",
+  "verb": "replay",
+  "ok": true,
+  "at": "AT",
+  "data": {
+    "point": "ask",
+    "sets": {},
+    "read": 1,
+    "rescored": 0,
+    "no_rule": 0,
+    "unavailable": 0,
+    "rules": [
+      {
+        "rule": "ask@1",
+        "origin": "binary",
+        "file": "library/general/rules/ask@1.yaml",
+        "schema": "ask",
+        "rows": 1
+      }
+    ],
+    "moves": [],
+    "changes": []
+  },
+  "problems": []
+}
+--- stderr

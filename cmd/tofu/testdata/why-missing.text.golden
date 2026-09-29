@@ -1,0 +1,5 @@
+exit 1
+--- stdout
+--- stderr
+✗ tofu why: no row "2026-09-28-nothing" in the ledger
+  → tofu why --last 5

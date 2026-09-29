@@ -1,0 +1,6 @@
+exit 0
+--- stdout
+Replay · ask · 1 row                                        ✓ no verdict changes
+
+  rule         ⚠ ask@1 · schema ask has no decider · 1 row skipped
+--- stderr

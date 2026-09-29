@@ -11,10 +11,12 @@ import (
 	"strings"
 	"time"
 
-	"tofu/internal/judge/gate"
+	"tofu/interface/cli"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/sys"
 )
+
+const whyUsage = "tofu why <id> | --last [n] [--point name] [--state | --json]"
 
 type whyOpts struct {
 	id    string
@@ -25,114 +27,115 @@ type whyOpts struct {
 	state bool
 }
 
-type notFoundError struct {
-	id  string
-	dir string
+type whyReport struct {
+	Call *recordedCall `json:"call,omitempty"`
+	Rows []whyListing  `json:"rows"`
 }
 
-func (e notFoundError) Error() string {
-	return fmt.Sprintf("no row %q in the ledger at %s", e.id, e.dir)
+type whyListing struct {
+	ledger.Row
+	Chain      *ledger.Row    `json:"chain,omitempty"`
+	BlockedBy  string         `json:"blocked_by,omitempty"`
+	Precedents []whyPrecedent `json:"precedents"`
+	state      json.RawMessage
+	stateErr   error
+	statePath  string
 }
 
-type whyRow struct {
-	queried   ledger.Row
-	chain     ledger.Row
-	isReplay  bool
-	blockedBy string
-	statePath string
-	state     json.RawMessage
-	stateErr  error
+type whyPrecedent struct {
+	ID              string          `json:"row_id"`
+	Verdict         ledger.Verdict  `json:"verdict"`
+	At              time.Time       `json:"at"`
+	Distance        float64         `json:"distance"`
+	SameFingerprint bool            `json:"same_fingerprint"`
+	Comparable      bool            `json:"comparable"`
+	Why             string          `json:"why"`
+	Outcome         *ledger.Outcome `json:"outcome,omitempty"`
+}
+
+func (l whyListing) decision() ledger.Row {
+	if l.Chain != nil {
+		return *l.Chain
+	}
+	return l.Row
 }
 
 func whyVerb(args []string, out, errOut io.Writer, now func() time.Time) int {
+	o := verbOutput{verb: "why", usageLine: whyUsage, out: out, errOut: errOut}
 	opts, err := parseWhyArgs(args)
 	if err != nil {
-		return whyFail(errOut, err)
+		return o.usage(err)
 	}
+	o.asJSON = opts.json
 	dir, err := sys.LogDir()
 	if err != nil {
-		return whyFail(errOut, err)
+		return o.fail(err)
 	}
 	reader := ledger.NewReader(dir)
-
-	rows, err := whyRows(reader, dir, opts)
+	report := whyReport{Rows: []whyListing{}}
+	rows, err := whyRows(reader, opts)
 	if err != nil {
 		found, lookedUp, lookupErr := recordedCallByHash(opts.id)
 		if lookupErr != nil || !lookedUp {
-			return whyFail(errOut, err)
+			return o.fail(err)
 		}
-		printRecordedCall(out, found)
-		if found.call.GateDecisionID == "" {
-			return exitOK
-		}
-		_, _ = fmt.Fprintln(out)
-		opts.id = found.call.GateDecisionID
-		if rows, err = whyRows(reader, dir, opts); err != nil {
-			return whyFail(errOut, err)
+		report.Call, rows = &found, nil
+		if opts.id = found.Call.GateDecisionID; opts.id != "" {
+			if rows, err = whyRows(reader, opts); err != nil {
+				return o.fail(err)
+			}
 		}
 	}
-
 	if opts.state {
 		for _, row := range rows {
 			body, err := reader.State(row)
-			if err != nil {
-				return whyFail(errOut, err)
+			if err == nil && len(body) == 0 {
+				err = fmt.Errorf("row %s carries no state body", row.ID)
 			}
-			if len(body) == 0 {
-				return whyFail(errOut, fmt.Errorf("row %s carries no state body", row.ID))
+			if err != nil {
+				return o.fail(err)
 			}
 			_, _ = fmt.Fprintln(out, string(body))
 		}
 		return exitOK
 	}
-
-	color := isTerminalWriter(out)
-	moment := now()
-	for i, row := range rows {
-		wr, err := loadChain(reader, row, dir)
+	for _, row := range rows {
+		listing, err := whyListingOf(reader, dir, row)
 		if err != nil {
-			return whyFail(errOut, err)
+			return o.fail(err)
 		}
-		wr.blockedBy = blockingQuestion(wr.chain)
-		if e := wr.chain.StateElision; e != nil {
-			wr.statePath = filepath.Join(dir, e.File)
-		}
-		precedents, err := reader.Precedents(wr.chain)
-		if err != nil {
-			return whyFail(errOut, err)
-		}
-		if i > 0 {
-			_, _ = fmt.Fprintln(out)
-		}
-		if opts.json {
-			if err := printWhyJSON(out, wr, moment, precedents); err != nil {
-				return whyFail(errOut, err)
-			}
-			continue
-		}
-		wr.state, wr.stateErr = reader.State(wr.chain)
-		printWhy(out, wr, moment, color, precedents)
+		report.Rows = append(report.Rows, listing)
 	}
-	return exitOK
+	return o.done(true, report, func(page cli.Page) []string { return whyPage(page, report, now()) })
 }
 
-func whyFail(errOut io.Writer, err error) int {
-	_, _ = fmt.Fprintf(errOut, "tofu why: %v\n", err)
-	return exitUsage
-}
-
-func peekCount(args []string, i int) (n int, consumed bool, err error) {
-	if i+1 >= len(args) {
-		return 0, false, nil
+func whyListingOf(reader *ledger.Reader, dir string, row ledger.Row) (whyListing, error) {
+	listing := whyListing{Row: row, Precedents: []whyPrecedent{}}
+	if row.ReplayOf != "" {
+		original, ok, err := reader.ByID(row.ReplayOf)
+		if err != nil {
+			return whyListing{}, err
+		}
+		if !ok {
+			return whyListing{}, problemError{What: "no row " + strconv.Quote(row.ReplayOf) + " in the ledger, which " + row.ID + " replays"}
+		}
+		listing.Chain = &original
 	}
-	n, convErr := strconv.Atoi(args[i+1])
-	if convErr != nil {
-		return 0, false, nil
+	decision := listing.decision()
+	listing.BlockedBy = blockingQuestion(decision)
+	if e := decision.StateElision; e != nil {
+		listing.statePath = filepath.Join(dir, e.File)
 	}
-	if n < 1 {
-		return 0, false, fmt.Errorf("--last needs a positive count, got %d", n)
+	listing.state, listing.stateErr = reader.State(decision)
+	found, err := reader.Precedents(decision)
+	if err != nil {
+		return whyListing{}, err
 	}
-	return n, true, nil
+	for _, precedent := range found {
+		listing.Precedents = append(listing.Precedents, whyPrecedent{ID: precedent.Row.ID, Verdict: precedent.Row.Verdict, At: precedent.Row.At,
+			Distance: precedent.Distance, SameFingerprint: precedent.SameFingerprint, Comparable: precedent.Comparable, Why: precedentWhy(precedent), Outcome: precedent.Row.Outcome})
+	}
+	return listing, nil
 }
 
 func parseWhyArgs(args []string) (whyOpts, error) {
@@ -141,18 +144,16 @@ func parseWhyArgs(args []string) (whyOpts, error) {
 		arg := args[i]
 		switch {
 		case arg == "--last":
-			opts.last = true
-			n, consumed, countErr := peekCount(args, i)
-			if countErr != nil {
-				return whyOpts{}, countErr
-			}
-			if consumed {
-				opts.count = n
-				i++
+			opts.last, opts.count = true, max(opts.count, 1)
+			if i+1 == len(args) {
 				continue
 			}
-			if opts.count == 0 {
-				opts.count = 1
+			if n, err := strconv.Atoi(args[i+1]); err == nil {
+				if n < 1 {
+					return whyOpts{}, fmt.Errorf("--last needs a positive count, got %d", n)
+				}
+				opts.count = n
+				i++
 			}
 		case arg == "--point":
 			i++
@@ -160,7 +161,7 @@ func parseWhyArgs(args []string) (whyOpts, error) {
 				return whyOpts{}, errors.New("--point needs a name")
 			}
 			opts.point = args[i]
-		case arg == "--json":
+		case arg == jsonFlag:
 			opts.json = true
 		case arg == "--state":
 			opts.state = true
@@ -168,22 +169,20 @@ func parseWhyArgs(args []string) (whyOpts, error) {
 			return whyOpts{}, fmt.Errorf("unknown argument %q", arg)
 		default:
 			if opts.id != "" {
-				return whyOpts{}, fmt.Errorf("tofu why takes one id, got %q and %q", opts.id, arg)
+				return whyOpts{}, fmt.Errorf("one id at a time, got %q and %q", opts.id, arg)
 			}
 			opts.id = arg
 		}
 	}
-	if opts.id == "" && !opts.last {
-		return whyOpts{}, errors.New("tofu why needs an id or --last")
-	}
-	if opts.id != "" && opts.last {
-		return whyOpts{}, errors.New("tofu why takes an id or --last, not both")
-	}
-	if opts.point != "" && !opts.last {
-		return whyOpts{}, errors.New("--point only makes sense with --last")
-	}
-	if opts.state && opts.json {
-		return whyOpts{}, errors.New("--state prints the state body alone, --json prints the row, not both")
+	switch {
+	case opts.id == "" && !opts.last:
+		return whyOpts{}, errors.New("an id or --last is needed")
+	case opts.id != "" && opts.last:
+		return whyOpts{}, errors.New("an id or --last, not both")
+	case opts.point != "" && !opts.last:
+		return whyOpts{}, errors.New("--point goes with --last")
+	case opts.state && opts.json:
+		return whyOpts{}, errors.New("--state or --json, not both")
 	}
 	return opts, nil
 }
@@ -192,35 +191,26 @@ func blockingQuestion(row ledger.Row) string {
 	if row.Reason == nil || !row.Reason.Blocked || row.Policy == "" {
 		return ""
 	}
-	library, err := sys.LibraryDir()
-	if err != nil {
-		return ""
-	}
-	found, err := gate.FindRule(os.DirFS(library), fmt.Sprintf("%s@%d", row.Policy, row.PolicyVersion))
-	if err != nil || found == "" {
-		return ""
-	}
-	pol, err := gate.Load(filepath.Join(library, filepath.FromSlash(found)))
+	pol, _, err := loadRulePoint(fmt.Sprintf("%s@%d", row.Policy, row.PolicyVersion), "")
 	if err != nil {
 		return ""
 	}
 	return pol.FromUntrustedQuestion
 }
 
-func whyRows(reader *ledger.Reader, dir string, opts whyOpts) ([]ledger.Row, error) {
+func whyRows(reader *ledger.Reader, opts whyOpts) ([]ledger.Row, error) {
 	if opts.id != "" {
 		row, ok, err := reader.ByID(opts.id)
 		if err != nil {
 			return nil, err
 		}
 		if !ok {
-			return nil, notFoundError{id: opts.id, dir: dir}
+			return nil, problemError{What: "no row " + strconv.Quote(opts.id) + " in the ledger", Hint: "tofu why --last 5"}
 		}
 		return []ledger.Row{row}, nil
 	}
-	filter := ledger.Filter{Point: opts.point}
 	var window []ledger.Row
-	if _, err := reader.Each(filter, func(row ledger.Row) error {
+	if _, err := reader.Each(ledger.Filter{Point: opts.point}, func(row ledger.Row) error {
 		window = append(window, row)
 		if len(window) > opts.count {
 			window = window[1:]
@@ -229,28 +219,13 @@ func whyRows(reader *ledger.Reader, dir string, opts whyOpts) ([]ledger.Row, err
 	}); err != nil {
 		return nil, err
 	}
+	if len(window) == 0 && opts.point != "" {
+		return nil, errors.New("the ledger has no rows at " + opts.point)
+	}
 	if len(window) == 0 {
-		what := "--last"
-		if opts.point != "" {
-			what = fmt.Sprintf("--point %s --last", opts.point)
-		}
-		return nil, notFoundError{id: what, dir: dir}
+		return nil, errors.New("the ledger has no rows")
 	}
 	return window, nil
-}
-
-func loadChain(reader *ledger.Reader, row ledger.Row, dir string) (whyRow, error) {
-	if row.ReplayOf == "" {
-		return whyRow{queried: row, chain: row}, nil
-	}
-	original, ok, err := reader.ByID(row.ReplayOf)
-	if err != nil {
-		return whyRow{}, err
-	}
-	if !ok {
-		return whyRow{}, notFoundError{id: row.ReplayOf, dir: dir}
-	}
-	return whyRow{queried: row, chain: original, isReplay: true}, nil
 }
 
 func isTerminalWriter(w io.Writer) bool {

@@ -1,0 +1,16 @@
+exit 1
+--- stdout
+{
+  "tofu": "VERSION",
+  "verb": "why",
+  "ok": false,
+  "at": "AT",
+  "data": null,
+  "problems": [
+    {
+      "what": "no row \"2026-09-28-nothing\" in the ledger",
+      "hint": "tofu why --last 5"
+    }
+  ]
+}
+--- stderr

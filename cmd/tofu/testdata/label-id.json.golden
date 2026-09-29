@@ -1,0 +1,16 @@
+exit 0
+--- stdout
+{
+  "tofu": "VERSION",
+  "verb": "label",
+  "ok": true,
+  "at": "AT",
+  "data": {
+    "id": "2026-09-28-allowed",
+    "outcome": "deny",
+    "kind": "hand-labeled",
+    "verdict": "allow"
+  },
+  "problems": []
+}
+--- stderr

@@ -1,0 +1,24 @@
+exit 0
+--- stdout
+tool_gate · 2026-09-28-held · 3h ago                                       ⚠ ASK
+
+  risk            chose 2
+    0             ░░░░░░░░░░░░   0%
+    1             ░░░░░░░░░░░░   0%
+    2             ▓▓▓▓▓▓▓▓▓▓▓▓ 100%
+    3             ░░░░░░░░░░░░   0%
+  approval        ▓░░░░░░░░░░░  10%
+  user_requested  ▓▓▓▓▓▓▓▓▓▓▓░  92%
+  from_untrusted  ▓▓▓▓▓▓▓▓▓░░░  71%
+
+  threshold    risk 2.00 vs risk_ask_at 1.50 · tool_gate@1
+  authority    blocked by from_untrusted 0.71
+  mode         shadow · no calibration lock
+  outcome      hand-labeled deny
+  questions    tool_gate@1
+  builder      tool_state@1
+  build        jev-2026-09-01
+  state        4.9 KB
+    {"command":"git push --force","log":"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…
+  → tofu why 2026-09-28-held --state
+--- stderr

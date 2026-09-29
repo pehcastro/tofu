@@ -1,0 +1,8 @@
+exit 0
+--- stdout
+Replay · tool_gate · 4 rows                                 ✓ no verdict changes
+
+  rescored     3
+  unavailable  1
+  rule         tool_gate@1 · binary · library/general/rules/tool_gate@1.yaml
+--- stderr

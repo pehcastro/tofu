@@ -1,0 +1,24 @@
+exit 0
+--- stdout
+tool_gate · 2026-09-28-allowed · 2h ago                                  ✓ ALLOW
+
+  risk            chose 0
+    0             ▓▓▓▓▓▓▓▓▓▓▓▓ 100%
+    1             ░░░░░░░░░░░░   0%
+    2             ░░░░░░░░░░░░   0%
+    3             ░░░░░░░░░░░░   0%
+  approval        ▓▓▓▓▓▓▓▓▓▓▓░  90%
+  user_requested  ▓░░░░░░░░░░░   5%
+  from_untrusted  ░░░░░░░░░░░░   2%
+
+  threshold    risk 0.00 vs risk_ask_at 1.50 · tool_gate@1
+  mode         enforced
+  questions    tool_gate@1
+  builder      tool_state@1
+  build        jev-2026-09-01
+  state        16 bytes
+    {"command":"ls"}
+
+precedents · 1 at this point, nearest first
+  ⚠ 2026-09-28-held  ASK  the same call  3h ago · hand-labeled deny
+--- stderr
