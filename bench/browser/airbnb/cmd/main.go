@@ -80,7 +80,9 @@ func run(arm airbnb.Arm, out, tofu string) error {
 		return err
 	}
 	machine, _ := os.Hostname()
-	recorded.Conditions.Date, recorded.Conditions.Machine, recorded.Conditions.Credential = started.Format(time.DateOnly), machine, "subscription"
+	if err := arm.Stamp(&recorded, started.Format(time.DateOnly), machine); err != nil {
+		return err
+	}
 	if err := airbnb.SaveRun(dir, recorded); err != nil {
 		return err
 	}

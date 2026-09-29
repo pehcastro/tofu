@@ -1,6 +1,6 @@
 {
   "arm": "C",
-  "conditions": {"date": "2026-09-29", "machine": "fixture-machine", "credential": "subscription", "wire": "claude-sub", "main_build": "claude-sub/claude-opus-5-20260901", "browser_build": "claude-sub/claude-haiku-5-20260901"},
+  "conditions": {"date": "2026-09-29", "machine": "fixture-machine", "credential": "subscription", "browser_credential": "subscription","wire": "claude-sub", "main_build": "claude-sub/claude-opus-5-20260901", "browser_build": "claude-sub/claude-haiku-5-20260901"},
   "wall_ms": 212000,
   "main_tokens": 38000,
   "browser_tokens": null,
