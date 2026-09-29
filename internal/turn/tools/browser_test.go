@@ -304,6 +304,8 @@ type cdpPage struct {
 	url      string
 	next     string
 	released int
+	loaded   time.Time
+	price    time.Duration
 }
 
 func (p *cdpPage) answer(method string, params map[string]any) any {
@@ -319,7 +321,11 @@ func (p *cdpPage) answer(method string, params map[string]any) any {
 			return map[string]any{"nodeId": fmt.Sprint(id), "backendDOMNodeId": id, "childIds": children,
 				"role": map[string]any{"value": role}, "name": map[string]any{"value": name}}
 		}
-		return map[string]any{"nodes": []any{node(1, "RootWebArea", "Stays", "2", "3"), node(2, "button", "Next"), node(3, "button", "Buy")}}
+		nodes := []any{node(1, "RootWebArea", "Stays", "2", "3", "4"), node(2, "button", "Next"), node(3, "button", "Buy")}
+		if p.price > 0 && time.Since(p.loaded) >= p.price {
+			nodes = append(nodes, node(4, "StaticText", "Total R$ 4.667"))
+		}
+		return map[string]any{"nodes": nodes}
 	case "Runtime.evaluate":
 		switch {
 		case strings.Contains(script, "querySelectorAll('*')"):
@@ -354,7 +360,10 @@ func (p *cdpPage) serve(fromHost io.Reader, toHost io.Writer) {
 		var call struct {
 			T    string `json:"t"`
 			ID   int64  `json:"id"`
+			Op   string `json:"op"`
+			Tab  int    `json:"tabId"`
 			Args struct {
+				URL   string `json:"url"`
 				Calls []struct {
 					Method string         `json:"method"`
 					Params map[string]any `json:"params"`
@@ -362,6 +371,18 @@ func (p *cdpPage) serve(fromHost io.Reader, toHost io.Writer) {
 			} `json:"args"`
 		}
 		if json.Unmarshal(raw, &call) != nil || call.T != "call" {
+			continue
+		}
+		if call.Op == "open" || call.Op == "navigate" {
+			p.mu.Lock()
+			p.url, p.loaded = call.Args.URL, time.Now()
+			p.mu.Unlock()
+			tab := cmp.Or(call.Tab, 30)
+			opened, _ := json.Marshal(map[string]any{"t": "tabUpdated", "tab": map[string]any{"id": tab, "url": call.Args.URL, "title": "Stays", "opened": true}})
+			answer := fmt.Appendf(nil, `{"t":"result","id":%d,"ok":true,"value":%d}`, call.ID, tab)
+			if browser.WriteMessage(toHost, opened) != nil || browser.WriteMessage(toHost, answer) != nil {
+				return
+			}
 			continue
 		}
 		answers := []any{}
@@ -539,6 +560,19 @@ func TestTheBrowserSubAgentObservesActsObservesAndReportsItsTab(t *testing.T) {
 	}
 	if !strings.Contains(spawnResult, "tab 7 is left open on https://stays.test/page-2") {
 		t.Fatalf("the orchestrator never read a report naming the tab:\n%s", spawnResult)
+	}
+}
+
+func TestANavigateThenAWaitReturnsTheTextThePageRendersLate(t *testing.T) {
+	page := &cdpPage{url: "https://stays.test/", price: 1500 * time.Millisecond}
+	run := stepsOn(t, page)
+	run("browser_observe", `{"tab":7}`)
+	acted := run("browser_act", `{"tab":7,"actions":[{"action":"navigate","value":"https://stays.test/rooms/3"},{"action":"wait","value":"2000"}]}`)
+	if !strings.Contains(acted, "2. wait \"2000\"") || !strings.Contains(acted, "ran 2 of 2") {
+		t.Fatal("the wait after the navigate did not run")
+	}
+	if !strings.Contains(acted, "Total R$ 4.667") {
+		t.Fatal("the act result holds no page text, so the price the page rendered after 1.5 s is missing")
 	}
 }
 

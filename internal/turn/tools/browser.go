@@ -344,8 +344,12 @@ func (t browserAct) Run(_ context.Context, raw json.RawMessage) (turn.Result, er
 	var report strings.Builder
 	var snapshot string
 	ran := 0
+	loads, changed := false, false
 	err := t.session.drive(args.Tab, func(driver *browser.Driver) error {
 		for _, step := range args.Actions {
+			if changed && step.Action != "wait" {
+				break
+			}
 			fingerprint, err := driver.Fingerprint()
 			if err != nil {
 				return err
@@ -371,13 +375,15 @@ func (t browserAct) Run(_ context.Context, raw json.RawMessage) (turn.Result, er
 			}
 			fmt.Fprintf(&report, "%d. %s: %s\n", ran+1, step, line)
 			ran++
-			if err != nil || moved.Covered != "" || moved.URLChanged || moved.Opened != 0 {
+			loads = loads || step.Action == "navigate" || step.Action == "back" || step.Action == "wait"
+			if err != nil || moved.Covered != "" {
 				break
 			}
+			changed = changed || moved.URLChanged || moved.Opened != 0
 		}
 		var err error
 		args.Tab = driver.Tab
-		snapshot, err = driver.Observe(true)
+		snapshot, err = driver.Observe(!loads)
 		return err
 	})
 	if err != nil {

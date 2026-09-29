@@ -202,6 +202,9 @@ func (d *Driver) do(deadline time.Time, move Move) (Moved, error) {
 		return moved, err
 	}
 	d.settle(deadline)
+	if move.Kind == MoveNavigate || move.Kind == MoveBack {
+		d.quiet(deadline)
+	}
 	after, tabsAfter, err := d.state(deadline)
 	if err != nil {
 		return moved, err
@@ -548,6 +551,20 @@ func (d *Driver) wait(deadline time.Time, value string) error {
 			return fmt.Errorf("%q did not appear on tab %d within %d ms", value, d.Tab, konst.BrowserWaitMaxMillis)
 		}
 	}
+}
+
+const domQuiet = `new Promise(resolve => {
+  let quiet = null, cap = null;
+  const done = settled => { observer.disconnect(); clearTimeout(quiet); clearTimeout(cap); resolve(settled); };
+  const observer = new MutationObserver(() => { clearTimeout(quiet); quiet = setTimeout(() => done(true), %[1]d); });
+  observer.observe(document, {subtree: true, childList: true, characterData: true, attributes: true});
+  quiet = setTimeout(() => done(true), %[1]d);
+  cap = setTimeout(() => done(false), %[2]d);
+})`
+
+func (d *Driver) quiet(deadline time.Time) {
+	var settled bool
+	_ = d.value(deadline, false, evaluate(fmt.Sprintf(domQuiet, konst.BrowserDOMQuietMillis, konst.BrowserDOMQuietMaxMillis)), &settled)
 }
 
 func (d *Driver) settle(deadline time.Time) {

@@ -22,6 +22,7 @@ Before every browser_act, write four short lines, then act:
 
 - Start with browser_observe on the tab you were given.
 - Act only on refs from the latest snapshot. browser_act returns a fresh snapshot, so read it before the next step and never reuse an older ref.
+- Read prices and text from the full tree, not the interactive snapshot, which holds no text. An act with navigate, back or wait returns the full tree once the page has loaded; otherwise call browser_observe with interactive false. When a price is not there yet, wait for it by its text or a few seconds, then read it.
 - Close a popup, a cookie banner or a dialog in the way before anything else.
 - Apply the site's filters before reading its results.
 - A dialog marked scrollable scrolls by its ref. When a click says it is covered, scroll the container or close what covers it.

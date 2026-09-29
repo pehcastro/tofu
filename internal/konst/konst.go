@@ -202,6 +202,8 @@ const (
 	BrowserScrollPixels         = 300
 	BrowserCursorTextRunes      = 100
 	BrowserURLQueryRunes        = 80
+	BrowserDOMQuietMillis       = 500
+	BrowserDOMQuietMaxMillis    = 4000
 	BrowserActBatchMax          = 5
 	BrowserLoopWindow           = 20
 	BrowserRepeatNotice         = 3
