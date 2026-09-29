@@ -3,6 +3,7 @@ package models
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"testing/fstest"
 )
@@ -46,14 +47,14 @@ func TestAModelWithNoCostHasNoPrice(t *testing.T) {
 
 func TestAShippedOverrideWinsOverModelsDev(t *testing.T) {
 	overrides := fstest.MapFS{"models/prices/meta.yaml": {Data: []byte(
-		"muse-spark-1.3-contributor: input 0.11, output 0.22, cache_read 0.003, taken 2026-09-29\r\n\n" +
-			"muse-spark-1.1: input 1.25, output 4.25\n")}}
+		"muse-spark-1.3-contributor: input 0.11, output 0.22, cache_read 0.003, source the vendor page\r\n\n" +
+			"muse-spark-1.1: input 1.25, output 4.25, source the vendor page\n")}}
 	registry, err := withPriceOverrides(registryOf(t, pricedTable), overrides)
 	if err != nil {
 		t.Fatalf("applying the override: %v", err)
 	}
 	won := registry.Prices["meta/muse-spark-1.3-contributor"]
-	if won.Input != 0.11 || won.Output != 0.22 || won.CacheRead != 0.003 || won.From != "library/models/prices/meta.yaml" || won.Taken != "2026-09-29" {
+	if won.Input != 0.11 || won.Output != 0.22 || won.CacheRead != 0.003 || won.From != "library/models/prices/meta.yaml, the vendor page" {
 		t.Fatalf("the override lost to models.dev: %+v", won)
 	}
 	if filled, priced := registry.Prices["meta/muse-spark-1.1"]; !priced || filled.Output != 4.25 {
@@ -62,7 +63,7 @@ func TestAShippedOverrideWinsOverModelsDev(t *testing.T) {
 	if kept := registry.Prices["meta/muse-spark-1.3"]; kept.Input != 1.25 {
 		t.Fatalf("a model the override does not name lost its models.dev price: %+v", kept)
 	}
-	for _, broken := range []string{"muse-spark-1.3: input 1, output 2, cached 3\n", "muse-spark-1.3: input 1\n", "muse-spark-1.3: input one, output 2\n"} {
+	for _, broken := range []string{"muse-spark-1.3: input 1, output 2, cached 3, source s\n", "muse-spark-1.3: input 1, source s\n", "muse-spark-1.3: input one, output 2, source s\n", "muse-spark-1.3: input 1, output 2\n"} {
 		if _, err := withPriceOverrides(registryOf(t, pricedTable), fstest.MapFS{"models/prices/meta.yaml": {Data: []byte(broken)}}); err == nil {
 			t.Fatalf("the override %q was read as a price card", broken)
 		}
@@ -82,7 +83,7 @@ func TestAReloadedRegistryKeepsItsPricesAndTheDayItWasTaken(t *testing.T) {
 	if !priced || price.From != "models.dev under test" || len(price.Taken) != len("2026-09-29") {
 		t.Fatalf("the stored price read %+v", price)
 	}
-	if overridden := stored.Prices["meta/muse-spark-1.3-contributor"]; overridden.From != "library/models/prices/meta.yaml" {
+	if overridden := stored.Prices["meta/muse-spark-1.3-contributor"]; !strings.HasPrefix(overridden.From, "library/models/prices/meta.yaml, ") {
 		t.Fatalf("the shipped override did not win over a stored registry: %+v", overridden)
 	}
 	older := filepath.Join(t.TempDir(), "older.json")

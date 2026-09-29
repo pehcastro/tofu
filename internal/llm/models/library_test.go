@@ -81,7 +81,7 @@ func TestEveryFileUnderModelsIsAModel(t *testing.T) {
 		filed[model.VendorSlug()+".yaml"] = true
 	}
 	for _, provider := range providers {
-		if provider.Name() == windowsDir {
+		if provider.Name() == windowsDir || provider.Name() == pricesDir {
 			continue
 		}
 		if !provider.IsDir() {

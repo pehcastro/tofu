@@ -206,8 +206,9 @@ func priceCard(card, from string) (Price, error) {
 	price, named := Price{From: from}, map[string]bool{}
 	for _, field := range strings.Split(card, ",") {
 		name, value, _ := strings.Cut(strings.TrimSpace(field), " ")
-		if name == "taken" {
-			price.Taken = value
+		if name == "source" {
+			price.From += ", " + value
+			named[name] = true
 			continue
 		}
 		rate, err := strconv.ParseFloat(value, 64)
@@ -224,12 +225,12 @@ func priceCard(card, from string) (Price, error) {
 		case "cache_write":
 			price.CacheWrite = rate
 		default:
-			return Price{}, fmt.Errorf("unknown field %q, a card names input, output, cache_read, cache_write and taken", name)
+			return Price{}, fmt.Errorf("unknown field %q, a card names input, output, cache_read, cache_write and source", name)
 		}
 		named[name] = true
 	}
-	if !named["input"] || !named["output"] {
-		return Price{}, errors.New("a card names input and output at least")
+	if !named["input"] || !named["output"] || !named["source"] {
+		return Price{}, errors.New("a card names input, output and source at least")
 	}
 	return price, nil
 }
