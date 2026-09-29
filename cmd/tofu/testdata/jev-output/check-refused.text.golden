@@ -1,0 +1,5 @@
+exit 2
+--- stdout
+--- stderr
+✗ tofu check: jev refused the key (401)
+  → tofu login openrouter

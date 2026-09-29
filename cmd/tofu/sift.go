@@ -6,9 +6,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"sync"
 	"time"
 
+	"tofu/interface/cli"
 	"tofu/internal/judge/jev"
 	"tofu/internal/konst"
 	"tofu/internal/sift"
@@ -44,13 +46,28 @@ Flags:
   --task TEXT   the reader's request, read by the jev arm only
   --restore     undo a previous sift, reading the fence back to the original
   --no-log      with --arm jev, skip the decision ledger
+  --json        one envelope on stdout carrying the text and the counts
 `, konst.SiftReadWorthWordFloor)
+
+const siftUsageLine = "tofu sift [--arm length|signpost|brevity|jev] [--task text] [--restore] [--no-log] [--json] < text"
 
 type siftOpts struct {
 	task    string
 	arm     string
 	restore bool
 	noLog   bool
+	asJSON  bool
+}
+
+type siftReport struct {
+	Arm        string  `json:"arm"`
+	Paragraphs int     `json:"paragraphs"`
+	Kept       int     `json:"kept"`
+	Words      int     `json:"words"`
+	KeptWords  int     `json:"kept_words"`
+	ElapsedMS  int64   `json:"elapsed_ms"`
+	Cost       float64 `json:"cost_usd"`
+	Text       string  `json:"text"`
 }
 
 func siftVerb(args []string, in io.Reader, out, errOut io.Writer) int {
@@ -58,51 +75,55 @@ func siftVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 		_, _ = io.WriteString(out, siftUsage)
 		return exitOK
 	}
+	o := verbOutput{verb: "sift", usageLine: siftUsageLine, out: out, errOut: errOut}
 	opts, err := parseSiftArgs(args)
 	if err != nil {
-		return siftFail(errOut, err)
+		return o.usage(err)
 	}
+	o.asJSON = opts.asJSON
 	raw, err := io.ReadAll(in)
 	if err != nil {
-		return siftFail(errOut, fmt.Errorf("reading standard input: %w", err))
+		return failed(o, fmt.Errorf("reading standard input: %w", err))
 	}
 	text := string(raw)
 
 	if opts.restore {
 		original, err := sift.Restore(text)
 		if err != nil {
-			return siftFail(errOut, err)
+			return failed(o, err)
 		}
-		_, _ = io.WriteString(out, original)
-		return exitOK
+		return protocol(o, exitOK, struct {
+			Text string `json:"text"`
+		}{original}, original)
 	}
 
 	parts, err := sift.Split(text)
 	if err != nil {
-		return siftFail(errOut, err)
+		return failed(o, err)
 	}
 	if len(parts) == 0 {
-		return siftFail(errOut, errors.New("standard input carries no text"))
+		return failed(o, errors.New("standard input carries no text"))
 	}
 
 	started := time.Now()
 	marks, cost, err := siftMarks(parts, opts)
 	if err != nil {
-		return siftFail(errOut, err)
+		return failed(o, err)
 	}
-	_, _ = io.WriteString(out, sift.Render(parts, marks))
-
-	kept, keptWords, words := 0, 0, 0
+	report := siftReport{Arm: opts.arm, Paragraphs: len(parts), ElapsedMS: time.Since(started).Milliseconds(), Cost: cost, Text: sift.Render(parts, marks)}
 	for i, p := range parts {
-		words += p.Words()
+		report.Words += p.Words()
 		if marks[i].Keep {
-			kept++
-			keptWords += p.Words()
+			report.Kept++
+			report.KeptWords += p.Words()
 		}
 	}
-	_, _ = fmt.Fprintf(errOut, "%s: kept %d/%d paragraphs, %d/%d words, %s, $%.6f\n",
-		opts.arm, kept, len(parts), keptWords, words, time.Since(started).Round(time.Millisecond), cost)
-	return exitOK
+	if !opts.asJSON {
+		page := cli.Detect(errOut, os.Environ())
+		_ = printUncut(page, errOut, []string{page.Label(report.Arm) + cli.Gap + fmt.Sprintf("%d/%d paragraphs kept · %d/%d words · %dms · $%.6f",
+			report.Kept, report.Paragraphs, report.KeptWords, report.Words, report.ElapsedMS, report.Cost)})
+	}
+	return protocol(o, exitOK, report, report.Text)
 }
 
 func siftMarks(parts []sift.Part, opts siftOpts) ([]sift.Mark, float64, error) {
@@ -192,11 +213,6 @@ func siftOne(client *jev.Client, set battery, parts []sift.Part, index int, opts
 	return mark, decision.Usage.Cost, nil
 }
 
-func siftFail(errOut io.Writer, err error) int {
-	_, _ = fmt.Fprintf(errOut, "tofu sift: %v\n", err)
-	return exitUsage
-}
-
 func parseSiftArgs(args []string) (siftOpts, error) {
 	opts := siftOpts{arm: armLength}
 	for i := 0; i < len(args); i++ {
@@ -214,6 +230,8 @@ func parseSiftArgs(args []string) (siftOpts, error) {
 			opts.restore = true
 		case "--no-log":
 			opts.noLog = true
+		case jsonFlag:
+			opts.asJSON = true
 		case "--task":
 			i++
 			if i >= len(args) {

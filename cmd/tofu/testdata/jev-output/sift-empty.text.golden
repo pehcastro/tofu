@@ -1,0 +1,4 @@
+exit 2
+--- stdout
+--- stderr
+✗ tofu sift: standard input carries no text

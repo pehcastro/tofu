@@ -1,0 +1,15 @@
+exit 2
+--- stdout
+{
+  "tofu": "VERSION",
+  "verb": "judge",
+  "ok": false,
+  "at": "AT",
+  "data": null,
+  "problems": [
+    {
+      "what": "the request body is not valid JSON: invalid character 'o' in literal null (expecting 'u')"
+    }
+  ]
+}
+--- stderr

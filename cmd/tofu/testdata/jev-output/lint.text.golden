@@ -1,0 +1,4 @@
+exit 1
+--- stdout
+dirty/a.go:3:1: // a comment the lint refuses
+--- stderr

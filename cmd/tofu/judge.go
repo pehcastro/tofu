@@ -6,13 +6,19 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strconv"
+	"time"
 
+	"tofu/interface/cli"
 	"tofu/internal/judge/gate"
 	"tofu/internal/judge/jev"
 	"tofu/internal/judge/jev/wire/openrouter"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/judge/question"
+	"tofu/internal/transport"
 )
+
+const judgeUsage = "tofu judge [--dry-run] [--no-cache] [--no-rule] [--json] < request.json, or tofu judge --lint file [--json]"
 
 type judgeInput struct {
 	State     any                       `json:"state"`
@@ -22,44 +28,64 @@ type judgeInput struct {
 }
 
 type judgeOpts struct {
-	dryRun  bool
-	noCache bool
-	noRule  bool
+	dryRun   bool
+	noCache  bool
+	noRule   bool
+	asJSON   bool
+	lintPath string
+}
+
+type judgeReport struct {
+	Answers map[string]any `json:"answers"`
+	Verdict ledger.Verdict `json:"verdict,omitempty"`
+	Mode    gate.Mode      `json:"mode,omitempty"`
+}
+
+type questionFinding struct {
+	File     string        `json:"file"`
+	Line     int           `json:"line"`
+	Set      string        `json:"set"`
+	Question string        `json:"question,omitempty"`
+	Rule     question.Rule `json:"rule"`
+	Detail   string        `json:"detail"`
 }
 
 func judgeVerb(args []string, in io.Reader, out, errOut io.Writer) int {
-	opts, lintPath, err := parseJudgeArgs(args)
+	o := verbOutput{verb: "judge", usageLine: judgeUsage, out: out, errOut: errOut}
+	opts, err := parseJudgeArgs(args)
 	if err != nil {
-		return judgeFail(errOut, err)
+		return o.usage(err)
 	}
-	if lintPath != "" {
-		return judgeLint(lintPath, out, errOut)
+	o.asJSON = opts.asJSON
+	if opts.lintPath != "" {
+		o.verb = "judge --lint"
+		return judgeLint(o, opts.lintPath)
 	}
 
 	raw, err := io.ReadAll(in)
 	if err != nil {
-		return judgeFail(errOut, fmt.Errorf("reading standard input: %w", err))
+		return failed(o, fmt.Errorf("reading standard input: %w", err))
 	}
 	var input judgeInput
 	if err := json.Unmarshal(raw, &input); err != nil {
-		return judgeFail(errOut, fmt.Errorf("the request body is not valid JSON: %w", err))
+		return failed(o, fmt.Errorf("the request body is not valid JSON: %w", err))
 	}
 	if input.State == nil {
-		return judgeFail(errOut, errors.New("the request carries no state"))
+		return failed(o, errors.New("the request carries no state"))
 	}
 
 	set, err := resolveQuestions(input)
 	if err != nil {
-		return judgeFail(errOut, err)
+		return failed(o, err)
 	}
 	if !opts.noRule && input.Rule != "" {
 		pol, err := resolveRule(input.Rule, set)
 		if err != nil {
-			return judgeFail(errOut, err)
+			return failed(o, err)
 		}
 		res, err := resolveRuleMode(pol)
 		if err != nil {
-			return judgeFail(errOut, err)
+			return failed(o, err)
 		}
 		set.Rule = &res.Rule
 		set.Mode = res.Mode
@@ -70,32 +96,29 @@ func judgeVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 	if opts.dryRun {
 		body, err := jevRequest.Encode(openrouter.Alias)
 		if err != nil {
-			return judgeFail(errOut, err)
+			return failed(o, err)
 		}
-		_, _ = fmt.Fprintln(out, string(body))
-		return exitOK
+		return protocol(o, exitOK, json.RawMessage(body), string(body)+"\n")
 	}
 
 	key, err := gateKey()
 	if err != nil {
-		return judgeFail(errOut, err)
+		return failed(o, err)
 	}
 	client, err := jevClientOn(key, oneCallAtATime)
 	if err != nil {
-		return judgeFail(errOut, err)
+		return failed(o, err)
 	}
-
 	outcome, err := runJudge(context.Background(), client, jevRequest, set, opts.noCache)
 	if err != nil {
-		return judgeFail(errOut, err)
+		return failed(o, err)
 	}
-
-	body, err := json.Marshal(outcome.output(set.Kinds))
+	answers := outcome.output(set.Kinds)
+	body, err := json.Marshal(answers)
 	if err != nil {
-		return judgeFail(errOut, err)
+		return failed(o, err)
 	}
-	_, _ = fmt.Fprintln(out, string(body))
-	return judgeExitCode(outcome)
+	return protocol(o, judgeExitCode(outcome), judgeReport{answers, outcome.verdict, outcome.mode}, string(body)+"\n")
 }
 
 func judgeExitCode(outcome judgeOutcome) int {
@@ -108,14 +131,8 @@ func judgeExitCode(outcome judgeOutcome) int {
 	return exitOK
 }
 
-func judgeFail(errOut io.Writer, err error) int {
-	_, _ = fmt.Fprintf(errOut, "tofu judge: %v\n", err)
-	return exitUsage
-}
-
-func parseJudgeArgs(args []string) (judgeOpts, string, error) {
+func parseJudgeArgs(args []string) (judgeOpts, error) {
 	var opts judgeOpts
-	lintPath := ""
 	for i := 0; i < len(args); i++ {
 		switch args[i] {
 		case "--dry-run":
@@ -124,29 +141,66 @@ func parseJudgeArgs(args []string) (judgeOpts, string, error) {
 			opts.noCache = true
 		case "--no-rule":
 			opts.noRule = true
+		case jsonFlag:
+			opts.asJSON = true
 		case "--lint":
 			i++
 			if i >= len(args) {
-				return judgeOpts{}, "", errors.New("--lint needs a path")
+				return judgeOpts{}, errors.New("--lint needs a path")
 			}
-			lintPath = args[i]
+			opts.lintPath = args[i]
 		default:
-			return judgeOpts{}, "", fmt.Errorf("unknown argument %q", args[i])
+			return judgeOpts{}, fmt.Errorf("unknown argument %q", args[i])
 		}
 	}
-	return opts, lintPath, nil
+	return opts, nil
 }
 
-func judgeLint(path string, out, errOut io.Writer) int {
+func judgeLint(o verbOutput, path string) int {
 	findings, err := question.LintFile(path, question.DefaultCaps())
 	if err != nil {
-		return judgeFail(errOut, err)
+		return failed(o, err)
 	}
-	for _, finding := range findings {
-		_, _ = fmt.Fprintln(out, finding.String())
+	text := ""
+	listed := make([]questionFinding, len(findings))
+	for i, f := range findings {
+		text += f.String() + "\n"
+		listed[i] = questionFinding{File: f.File, Line: f.Line, Set: f.Set, Question: f.Question, Rule: f.Rule, Detail: f.Detail}
 	}
+	code := exitOK
 	if len(findings) > 0 {
+		code = exitVerdict
+	}
+	return protocol(o, code, struct {
+		Findings []questionFinding `json:"findings"`
+	}{listed}, text)
+}
+
+func protocol(o verbOutput, code int, data any, text string) int {
+	var err error
+	if o.asJSON {
+		err = writeJSON(o.out, cli.Envelope{Verb: o.verb, OK: code == exitOK, At: time.Now(), Data: data})
+	} else {
+		_, err = io.WriteString(o.out, text)
+	}
+	if err != nil {
 		return exitVerdict
 	}
-	return exitOK
+	return code
+}
+
+func failed(o verbOutput, err error) int {
+	var refused *transport.Error
+	switch {
+	case !errors.As(err, &refused):
+	case refused.Kind == transport.KindMissingCredential:
+		err = problemError{What: refused.Detail, Hint: "tofu login " + openRouterName}
+	case refused.Status == 0:
+	case refused.Kind == transport.KindAuth:
+		err = problemError{What: "jev refused the key (" + strconv.Itoa(refused.Status) + ")", Hint: "tofu login " + openRouterName}
+	default:
+		err = problemError{What: "jev refused the call (" + strconv.Itoa(refused.Status) + " " + refused.Kind.String() + ")"}
+	}
+	_ = o.fail(err)
+	return exitUsage
 }

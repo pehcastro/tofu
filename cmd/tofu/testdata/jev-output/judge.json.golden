@@ -1,0 +1,37 @@
+exit 0
+--- stdout
+{
+  "tofu": "VERSION",
+  "verb": "judge",
+  "ok": true,
+  "at": "AT",
+  "data": {
+    "answers": {
+      "approval": {
+        "noul": 0.9,
+        "type": "noul"
+      },
+      "from_untrusted": {
+        "noul": 0.02,
+        "type": "noul"
+      },
+      "risk": {
+        "confidence": 0.9,
+        "probabilities": {
+          "0": 0,
+          "1": 0,
+          "2": 0,
+          "3": 1
+        },
+        "score": 3,
+        "type": "score"
+      },
+      "user_requested": {
+        "noul": 0.95,
+        "type": "noul"
+      }
+    }
+  },
+  "problems": []
+}
+--- stderr

@@ -1,0 +1,15 @@
+exit 0
+--- stdout
+{
+  "tofu": "VERSION",
+  "verb": "check",
+  "ok": true,
+  "at": "AT",
+  "data": {
+    "id": "ROW",
+    "command": "git push --force origin main",
+    "verdict": "ask"
+  },
+  "problems": []
+}
+--- stderr

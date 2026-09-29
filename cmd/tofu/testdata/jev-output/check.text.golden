@@ -1,0 +1,4 @@
+exit 0
+--- stdout
+⚠ ask  git push --force origin main  ROW
+--- stderr

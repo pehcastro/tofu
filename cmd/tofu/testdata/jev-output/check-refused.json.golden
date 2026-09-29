@@ -1,0 +1,16 @@
+exit 2
+--- stdout
+{
+  "tofu": "VERSION",
+  "verb": "check",
+  "ok": false,
+  "at": "AT",
+  "data": null,
+  "problems": [
+    {
+      "what": "jev refused the key (401)",
+      "hint": "tofu login openrouter"
+    }
+  ]
+}
+--- stderr

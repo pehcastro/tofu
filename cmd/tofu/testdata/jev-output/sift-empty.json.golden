@@ -1,0 +1,15 @@
+exit 2
+--- stdout
+{
+  "tofu": "VERSION",
+  "verb": "sift",
+  "ok": false,
+  "at": "AT",
+  "data": null,
+  "problems": [
+    {
+      "what": "standard input carries no text"
+    }
+  ]
+}
+--- stderr

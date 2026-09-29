@@ -1,0 +1,16 @@
+exit 2
+--- stdout
+{
+  "tofu": "VERSION",
+  "verb": "check",
+  "ok": false,
+  "at": "AT",
+  "data": null,
+  "problems": [
+    {
+      "what": "OPENROUTER_KEY is not set and .env does not exist",
+      "hint": "tofu login openrouter"
+    }
+  ]
+}
+--- stderr

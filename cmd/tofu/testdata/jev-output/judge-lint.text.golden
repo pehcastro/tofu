@@ -1,0 +1,5 @@
+exit 1
+--- stdout
+probe@1.yaml:1: probe: no-declared-state-shape: the set declares no state shape, and state shape is part of the question
+probe@1.yaml:7: probe.vague: no-instructions: the question has no instructions
+--- stderr

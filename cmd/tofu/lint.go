@@ -1,12 +1,15 @@
 package main
 
 import (
-	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"path/filepath"
 
 	"tofu/internal/sys"
 )
+
+const lintUsage = "tofu lint comments [path] [--json]"
 
 var lintRoots = []string{"bench", "cmd/tofu", "interface", "library", "internal"}
 
@@ -18,40 +21,32 @@ type lintFinding struct {
 }
 
 func lintVerb(args []string, out, errOut io.Writer) int {
+	o := verbOutput{verb: "lint", usageLine: lintUsage, out: out, errOut: errOut}
 	if len(args) == 0 || args[0] != "comments" {
-		_, _ = fmt.Fprintln(errOut, "tofu lint: usage: tofu lint comments [path] [--json]")
-		return exitUsage
+		return o.usage(errors.New("usage: comments is the one check"))
 	}
 	path, asJSON, err := parseLintArgs(args[1:])
 	if err != nil {
-		return lintFail(errOut, err)
+		return o.usage(err)
 	}
-
+	o.asJSON = asJSON
 	violations, err := commentViolations(path)
 	if err != nil {
-		return lintFail(errOut, err)
+		return failed(o, err)
 	}
-
-	if asJSON {
-		findings := make([]lintFinding, len(violations))
-		for i, c := range violations {
-			findings[i] = lintFinding{File: c.File, Line: c.Line, Column: c.Column, Text: c.Text}
-		}
-		body, err := json.Marshal(findings)
-		if err != nil {
-			return lintFail(errOut, err)
-		}
-		_, _ = fmt.Fprintln(out, string(body))
-	} else {
-		for _, c := range violations {
-			_, _ = fmt.Fprintf(out, "%s:%d:%d: %s\n", c.File, c.Line, c.Column, c.Text)
-		}
+	text := ""
+	findings := make([]lintFinding, len(violations))
+	for i, c := range violations {
+		findings[i] = lintFinding{File: filepath.ToSlash(c.File), Line: c.Line, Column: c.Column, Text: c.Text}
+		text += fmt.Sprintf("%s:%d:%d: %s\n", findings[i].File, c.Line, c.Column, c.Text)
 	}
-
+	code := exitOK
 	if len(violations) > 0 {
-		return exitVerdict
+		code = exitVerdict
 	}
-	return exitOK
+	return protocol(o, code, struct {
+		Findings []lintFinding `json:"findings"`
+	}{findings}, text)
 }
 
 func commentViolations(path string) ([]sys.Comment, error) {
@@ -82,7 +77,7 @@ func parseLintArgs(args []string) (string, bool, error) {
 	asJSON := false
 	for _, arg := range args {
 		switch {
-		case arg == "--json":
+		case arg == jsonFlag:
 			asJSON = true
 		case path == "":
 			path = arg
@@ -91,9 +86,4 @@ func parseLintArgs(args []string) (string, bool, error) {
 		}
 	}
 	return path, asJSON, nil
-}
-
-func lintFail(errOut io.Writer, err error) int {
-	_, _ = fmt.Fprintf(errOut, "tofu lint: %v\n", err)
-	return exitUsage
 }

@@ -1,0 +1,5 @@
+exit 2
+--- stdout
+--- stderr
+✗ tofu check: needs a command
+  → tofu check "<command>" [--quiet] [--json]

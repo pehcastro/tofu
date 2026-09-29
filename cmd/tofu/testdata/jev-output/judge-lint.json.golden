@@ -1,0 +1,29 @@
+exit 1
+--- stdout
+{
+  "tofu": "VERSION",
+  "verb": "judge --lint",
+  "ok": false,
+  "at": "AT",
+  "data": {
+    "findings": [
+      {
+        "file": "probe@1.yaml",
+        "line": 1,
+        "set": "probe",
+        "rule": "no-declared-state-shape",
+        "detail": "the set declares no state shape, and state shape is part of the question"
+      },
+      {
+        "file": "probe@1.yaml",
+        "line": 7,
+        "set": "probe",
+        "question": "vague",
+        "rule": "no-instructions",
+        "detail": "the question has no instructions"
+      }
+    ]
+  },
+  "problems": []
+}
+--- stderr

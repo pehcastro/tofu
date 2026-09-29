@@ -1,0 +1,9 @@
+exit 0
+--- stdout
+[sift:0 under the word floor]
+This paragraph carries enough words to clear the floor that the length arm keeps, so it stays in the output.
+--- sift ---
+kept 1/2 ends 1
+0	"Short line.\n\n"
+--- stderr
+length  1/2 paragraphs kept · 20/22 words · ELAPSED · $0.000000

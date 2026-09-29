@@ -1,0 +1,20 @@
+exit 1
+--- stdout
+{
+  "tofu": "VERSION",
+  "verb": "lint",
+  "ok": false,
+  "at": "AT",
+  "data": {
+    "findings": [
+      {
+        "file": "dirty/a.go",
+        "line": 3,
+        "column": 1,
+        "text": "// a comment the lint refuses"
+      }
+    ]
+  },
+  "problems": []
+}
+--- stderr

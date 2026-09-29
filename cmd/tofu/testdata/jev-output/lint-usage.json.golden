@@ -1,0 +1,5 @@
+exit 2
+--- stdout
+--- stderr
+✗ tofu lint: usage: comments is the one check
+  → tofu lint comments [path] [--json]

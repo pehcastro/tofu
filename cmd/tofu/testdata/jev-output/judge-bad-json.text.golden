@@ -1,0 +1,4 @@
+exit 2
+--- stdout
+--- stderr
+✗ tofu judge: the request body is not valid JSON: invalid character 'o' in literal null (expecting 'u')

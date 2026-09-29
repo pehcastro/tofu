@@ -1,0 +1,20 @@
+exit 0
+--- stdout
+{
+  "tofu": "VERSION",
+  "verb": "sift",
+  "ok": true,
+  "at": "AT",
+  "data": {
+    "arm": "length",
+    "paragraphs": 2,
+    "kept": 1,
+    "words": 22,
+    "kept_words": 20,
+    ELAPSED,
+    "cost_usd": 0,
+    "text": "[sift:0 under the word floor]\nThis paragraph carries enough words to clear the floor that the length arm keeps, so it stays in the output.\n--- sift ---\nkept 1/2 ends 1\n0\t\"Short line.\\n\\n\"\n"
+  },
+  "problems": []
+}
+--- stderr
