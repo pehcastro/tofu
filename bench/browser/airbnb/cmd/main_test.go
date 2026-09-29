@@ -2,17 +2,72 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"tofu/bench/browser/airbnb"
 )
 
-const fakeTofuLog = "AIRBNB_BENCH_FAKE_TOFU_LOG"
+func TestARunPastItsCapIsEndedWithItsChildAndTheRowReadsCapped(t *testing.T) {
+	pidFile := filepath.Join(t.TempDir(), "child.pid")
+	t.Setenv(fakeTofuSleeper, pidFile)
+	self, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	started := time.Now()
+	capped, err := tofuCapped(self, t.TempDir(), io.Discard, time.Second, "run")
+	took := time.Since(started)
+	t.Logf("capped %v, err %v, after %s", capped, err, took.Round(time.Millisecond))
+	if !capped || took > 15*time.Second {
+		t.Fatalf("a fake tofu sleeping %s under a 1 s cap ended capped=%v after %s", fakeTofuNap, capped, took)
+	}
+	raw, err := os.ReadFile(pidFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pid, _ := strconv.Atoi(string(raw))
+	for deadline := time.Now().Add(10 * time.Second); processAlive(pid); time.Sleep(100 * time.Millisecond) {
+		if time.Now().After(deadline) {
+			t.Fatalf("the fake tofu's child %d outlived the cap", pid)
+		}
+	}
+	table, err := airbnb.Render([]airbnb.Row{airbnb.Score(airbnb.Task{}, airbnb.Run{Arm: airbnb.ArmB1, Capped: capped})})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(table, "| B1 | as set, capped |") {
+		t.Errorf("the row does not read capped:\n%s", table)
+	}
+}
+
+const (
+	fakeTofuLog     = "AIRBNB_BENCH_FAKE_TOFU_LOG"
+	fakeTofuSleeper = "AIRBNB_BENCH_FAKE_TOFU_SLEEPS_AND_WRITES_ITS_CHILD_PID_TO"
+	fakeTofuChild   = "AIRBNB_BENCH_FAKE_TOFU_CHILD"
+	fakeTofuNap     = time.Minute
+)
 
 func TestMain(m *testing.M) {
+	if os.Getenv(fakeTofuChild) != "" {
+		time.Sleep(fakeTofuNap)
+		os.Exit(0)
+	}
+	if pidFile := os.Getenv(fakeTofuSleeper); pidFile != "" {
+		child := exec.Command(os.Args[0])
+		child.Env = append(os.Environ(), fakeTofuChild+"=1", fakeTofuSleeper+"=")
+		if child.Start() != nil || os.WriteFile(pidFile, []byte(strconv.Itoa(child.Process.Pid)), 0o644) != nil {
+			os.Exit(2)
+		}
+		time.Sleep(fakeTofuNap)
+		os.Exit(0)
+	}
 	if log := os.Getenv(fakeTofuLog); log != "" {
 		file, err := os.OpenFile(log, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
 		if err == nil {

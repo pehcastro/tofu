@@ -105,6 +105,7 @@ type Run struct {
 	Repeated      int        `json:"repeated"`
 	Refused       int        `json:"refused"`
 	Mixed         bool       `json:"mixed"`
+	Capped        bool       `json:"capped"`
 	TabsClosed    int        `json:"tabs_closed_before"`
 	Tabs          []Tab      `json:"tabs"`
 	Visits        []string   `json:"visits"`

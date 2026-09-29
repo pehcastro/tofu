@@ -28,11 +28,12 @@ type Row struct {
 	Repeated      int
 	Refused       int
 	Mixed         bool
+	Capped        bool
 	TabsClosed    int
 }
 
 func Score(task Task, run Run) Row {
-	row := Row{Arm: run.Arm, Conditions: run.Conditions, Wall: time.Duration(run.WallMS) * time.Millisecond, Forks: run.Forks, SubForks: run.SubForks, MainTokens: run.MainTokens, BrowserTokens: run.BrowserTokens, TabsOpened: len(run.Tabs), Repeated: run.Repeated, Refused: run.Refused, Mixed: run.Mixed, TabsClosed: run.TabsClosed}
+	row := Row{Arm: run.Arm, Conditions: run.Conditions, Wall: time.Duration(run.WallMS) * time.Millisecond, Forks: run.Forks, SubForks: run.SubForks, MainTokens: run.MainTokens, BrowserTokens: run.BrowserTokens, TabsOpened: len(run.Tabs), Repeated: run.Repeated, Refused: run.Refused, Mixed: run.Mixed, Capped: run.Capped, TabsClosed: run.TabsClosed}
 	for _, step := range task.Steps {
 		passed := passes(step.Check, run)
 		if passed {
@@ -81,6 +82,9 @@ func Render(rows []Row) (string, error) {
 		conditions, mode := row.Conditions, "as set"
 		if row.Mixed {
 			mode = "mixed"
+		}
+		if row.Capped {
+			mode += ", capped"
 		}
 		fmt.Fprintf(&table, "| %s | %s | %d of %d | %.0f s | %s | - | %d+%d | %d | %s | %d | %d | %d | %d | %s | %s | %s | %s | %s | %s | %s | %s |\n",
 			row.Arm, mode, row.Passed, len(row.Steps), row.Wall.Seconds(), totalTokens, row.Forks, row.SubForks, row.MainTokens, browserTokens, row.TabsClosed, row.TabsOpened, row.Repeated, row.Refused,

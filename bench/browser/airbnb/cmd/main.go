@@ -1,6 +1,8 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -8,11 +10,13 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"tofu/bench/browser/airbnb"
 	"tofu/internal/browser"
 	"tofu/internal/session"
+	"tofu/internal/shell"
 	"tofu/internal/sys"
 )
 
@@ -22,6 +26,7 @@ func main() {
 	out := flag.String("out", "", "the folder each run writes into")
 	tofu := flag.String("tofu", "tofu", "the installed tofu binary")
 	again := flag.String("rescore", "", "a run folder to score again from its sessions, running nothing")
+	maxWall := flag.Duration("max-wall", 20*time.Minute, "end the tofu run process tree at this wall time and score what it reached")
 	flag.Parse()
 	var err error
 	switch {
@@ -30,9 +35,9 @@ func main() {
 	case *browserModel != "" && *arm != "":
 		err = fmt.Errorf("-arm %s and -browser-model %s both name the arm: give one", *arm, *browserModel)
 	case *browserModel != "":
-		err = run(airbnb.BrowserArm(*browserModel), *out, *tofu)
+		err = run(airbnb.BrowserArm(*browserModel), *out, *tofu, *maxWall)
 	default:
-		err = run(airbnb.Arm(*arm), *out, *tofu)
+		err = run(airbnb.Arm(*arm), *out, *tofu, *maxWall)
 	}
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "airbnb bench:", err)
@@ -68,6 +73,29 @@ func tofuAt(tofu, project string, log io.Writer, args ...string) error {
 	return command.Run()
 }
 
+const pipesDrainAfterTheTreeEnds = 5 * time.Second
+
+func tofuCapped(tofu, project string, log io.Writer, maxWall time.Duration, args ...string) (bool, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), maxWall)
+	defer cancel()
+	command := exec.CommandContext(ctx, tofu, args...)
+	command.Dir, command.Stdout, command.Stderr = project, io.MultiWriter(os.Stdout, log), io.MultiWriter(os.Stderr, log)
+	command.WaitDelay = pipesDrainAfterTheTreeEnds
+	var tree shell.Tree
+	endTree := sync.OnceFunc(func() { tree.Release() })
+	command.Cancel = func() error {
+		endTree()
+		return nil
+	}
+	tree, err := shell.StartTracked(command)
+	if err != nil {
+		return false, err
+	}
+	defer endTree()
+	err = command.Wait()
+	return errors.Is(ctx.Err(), context.DeadlineExceeded), err
+}
+
 func configure(arm airbnb.Arm, tofuIn func(args ...string) error) error {
 	settings, err := arm.Settings()
 	if err != nil {
@@ -85,7 +113,7 @@ func configure(arm airbnb.Arm, tofuIn func(args ...string) error) error {
 	return nil
 }
 
-func run(arm airbnb.Arm, out, tofu string) error {
+func run(arm airbnb.Arm, out, tofu string, maxWall time.Duration) error {
 	if _, err := arm.Settings(); err != nil {
 		return err
 	}
@@ -118,12 +146,12 @@ func run(arm airbnb.Arm, out, tofu string) error {
 	if err != nil {
 		return fmt.Errorf("closing the tabs an earlier arm opened, before arm %s: %w", arm, err)
 	}
-	ranErr := tofuIn("run", "--dir", project, "--model", airbnb.MainModel, task.Prompt)
+	capped, ranErr := tofuCapped(tofu, project, log, maxWall, "run", "--dir", project, "--model", airbnb.MainModel, task.Prompt)
 	machine, _ := os.Hostname()
-	if err := score(dir, airbnb.Run{Arm: arm, TabsClosed: closed, Conditions: airbnb.Conditions{Date: started.Format(time.DateOnly), Machine: machine}}); err != nil {
+	if err := score(dir, airbnb.Run{Arm: arm, TabsClosed: closed, Capped: capped, Conditions: airbnb.Conditions{Date: started.Format(time.DateOnly), Machine: machine}}); err != nil {
 		return fmt.Errorf("tofu run: %v, then %w", ranErr, err)
 	}
-	fmt.Printf("tofu run exit: %v\n", ranErr)
+	fmt.Printf("tofu run exit: %v, capped at %s: %v\n", ranErr, maxWall, capped)
 	return nil
 }
 
@@ -152,7 +180,7 @@ func score(dir string, before airbnb.Run) error {
 	if err != nil {
 		return err
 	}
-	recorded.TabsClosed = before.TabsClosed
+	recorded.TabsClosed, recorded.Capped = before.TabsClosed, before.Capped
 	if err := before.Arm.Stamp(&recorded, before.Conditions.Date, before.Conditions.Machine); err != nil {
 		return err
 	}
