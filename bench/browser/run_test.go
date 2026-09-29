@@ -192,7 +192,7 @@ func TestTheReportRebuildsFromRecordedAnswersWithEveryField(t *testing.T) {
 		"against 178 ms", "against 5300", "| off: the turn's model calls `browser_act` | not measured",
 		"| drafts | CLICK 1 | CLICK 2 | false |", "| contact | SELECT 3 \"Damaged item\" | SELECT 3 \"Damaged item\" | true |",
 		"Adoption check", "within one task", "at most 0.5x", "at most 0.3x",
-		"tofu settings set browserChooser $arm", "flights-search",
+		"tofu settings set browserDriver $arm", "foreach ($arm in \"goal\", \"steps\")", "flights-search",
 	}
 	for _, field := range fields {
 		if !strings.Contains(report, field) {

@@ -103,12 +103,12 @@ func Write(w io.Writer, recording Recording, readings []Reading, answersFile str
 	}
 
 	b.WriteString("\n## The live A/B, not run\n\n")
-	b.WriteString("Turn against turn: 13 tasks, 3 passes per arm, on a subscription model. On: `browserChooser` jev, and the turn calls `browser_do`. Off: `browserChooser` model, and the turn's model calls `browser_act` step by step. The snapshot and the executor are the same in both arms. Per run, record success by the task's own check, actions, turn tokens and Jev tokens apart, wall time, and Jev dollars.\n\n")
+	b.WriteString("Turn against turn: 13 tasks, 3 passes per arm, on a subscription model. On: `browserDriver` goal, and the turn calls `browser_do`. Off: `browserDriver` steps, and the turn's model calls `browser_observe` and `browser_act` step by step. Per run, record success by the task's own check, actions, turn tokens and Jev tokens apart, wall time, and Jev dollars.\n\n")
 	b.WriteString("Adoption check: Jev keeps the default if its success is within one task of the model arm, its median wall time is at most 0.5x the model arm's, and its turn tokens are at most 0.3x. Otherwise it is written up for him. Verdict: not evaluated, the A/B has not run.\n\n")
 	b.WriteString("`$hotel` is jev-ultrafast's hotel fixture server and `$fixtures` is fastbrowse's fixture server (`src/fastbrowse/evals/local.py`), which records the POSTs the local tasks are graded on.\n\n")
 	b.WriteString("```powershell\n$model = \"claude-sub/claude-opus-5\"\n$hotel = \"http://127.0.0.1:8000\"\n$fixtures = \"http://127.0.0.1:8001\"\n")
 	b.WriteString("tofu settings set browser drive\ntofu settings set browserOpensTabs 1\n")
-	b.WriteString("foreach ($pass in 1..3) {\n  foreach ($arm in \"jev\", \"model\") {\n    tofu settings set browserChooser $arm\n")
+	b.WriteString("foreach ($pass in 1..3) {\n  foreach ($arm in \"goal\", \"steps\") {\n    tofu settings set browserDriver $arm\n")
 	for _, task := range abTasks {
 		fmt.Fprintf(&b, "    tofu run --model $model --dir (New-Item -ItemType Directory -Force \"$env:TEMP\\tofu-browser-ab\\$arm-$pass-%s\").FullName \"Open %s in a new tab, then: %s\"\n",
 			task.id, task.start, strings.ReplaceAll(task.goal, "\"", "'"))
