@@ -1,10 +1,12 @@
 package browser
 
 import (
+	"cmp"
 	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"os"
 	"regexp"
 	"slices"
@@ -43,6 +45,7 @@ type Moved struct {
 	Value       string `json:"value,omitempty"`
 	Field       string `json:"field,omitempty"`
 	ErrorPage   string `json:"error_page,omitempty"`
+	Title       string `json:"title,omitempty"`
 	Opened      int    `json:"opened,omitempty"`
 	URLChanged  bool   `json:"url_changed"`
 	PageChanged bool   `json:"page_changed"`
@@ -61,11 +64,11 @@ const blockerAt = `function(x, y) {
   if (!hit || hit === this) return null;
   const up = n => n.parentNode || n.host || null;
   for (let n = hit; n; n = up(n)) if (n === this) return null;
-  for (let n = this; n; n = up(n)) if (n === hit) return null;
   const hitLabel = hit.closest ? hit.closest('label') : null;
   if (hitLabel && (hitLabel.control === this || hitLabel.contains(this))) return null;
   const ownLabel = this.closest ? this.closest('label') : null;
   if (ownLabel && ownLabel.contains(hit)) return null;
+  for (let n = this; n; n = up(n)) if (n === hit) return 'parent';
   return hit;
 }`
 
@@ -103,9 +106,11 @@ const pendingRequests = `(() => {
   return {pending: pending.length, loading: document.readyState !== 'complete'};
 })()`
 
+const headingScript = `document.title + '\n' + ((document.querySelector('h1') || {}).innerText || '')`
+
 const pageStateScript = `({url: location.href, count: document.querySelectorAll('*:not([data-tofu-cursor])').length, text: document.body ? document.body.innerText : '',
   status: (performance.getEntries().find(entry => entry.entryType === 'navigation') || {}).responseStatus || 0,
-  heading: document.title + '\n' + ((document.querySelector('h1') || {}).innerText || ''),
+  heading: ` + headingScript + `,
   controls: Array.from(document.querySelectorAll('input, select, textarea, [aria-checked], [aria-expanded], [aria-pressed], [aria-selected]'),
     e => [e.checked, e.value, e.getAttribute('aria-checked'), e.getAttribute('aria-expanded'), e.getAttribute('aria-pressed'), e.getAttribute('aria-selected')].join(',')).join('|')})`
 
@@ -150,7 +155,7 @@ const Unchanged = "the page did not change"
 func (m Moved) String() string {
 	said := m.said()
 	if m.Via != "" {
-		said += ", through " + m.Via + " after the mouse and keys did nothing"
+		said += ", through " + m.Via + " because the mouse and keys missed"
 	}
 	if m.Covered == "" {
 		said += fmt.Sprintf(" (settled in %d ms)", m.SettledMS)
@@ -174,6 +179,8 @@ func (m Moved) said() string {
 		return fmt.Sprintf("opened tab %d, which the next actions use", m.Opened)
 	case m.Field != "":
 		return m.Field
+	case m.URLChanged && m.Title != "":
+		return "the url changed to a page titled " + strconv.Quote(m.Title)
 	case m.URLChanged:
 		return "the url changed"
 	case m.PageChanged:
@@ -226,6 +233,7 @@ func (d *Driver) do(deadline time.Time, move Move) (Moved, error) {
 	if err != nil {
 		return Moved{}, err
 	}
+	started := time.Now()
 	var moved Moved
 	var toggleStuck bool
 	switch move.Kind {
@@ -261,10 +269,10 @@ func (d *Driver) do(deadline time.Time, move Move) (Moved, error) {
 	if d.navigates(deadline, move) {
 		d.awaitNavigation(deadline, before, tabsBefore)
 	}
-	moved, err = d.measure(deadline, move, before, tabsBefore, moved)
-	if err == nil && (!moved.PageChanged || toggleStuck) && moved.Opened == 0 {
+	moved, err = d.measure(deadline, move, before, tabsBefore, moved, started)
+	if err == nil && moved.Via == "" && (!moved.PageChanged || toggleStuck) && moved.Opened == 0 {
 		if via := d.fallback(deadline, move); via != "" {
-			moved, err = d.measure(deadline, move, before, tabsBefore, moved)
+			moved, err = d.measure(deadline, move, before, tabsBefore, moved, started)
 			if moved.PageChanged || moved.Opened != 0 {
 				moved.Via = via
 			}
@@ -305,6 +313,28 @@ func (d *Driver) awaitNavigation(deadline time.Time, before pageState, tabsBefor
 	}
 }
 
+func withoutQuery(address string) string {
+	address, _, _ = strings.Cut(address, "#")
+	address, _, _ = strings.Cut(address, "?")
+	return address
+}
+
+func (d *Driver) awaitRender(deadline time.Time, before, after pageState, started time.Time) bool {
+	heading := after.Heading
+	for withoutQuery(after.URL) != withoutQuery(before.URL) && heading == before.Heading {
+		if time.Since(started) >= konst.BrowserRenderWaitMaxMillis*time.Millisecond {
+			return false
+		}
+		time.Sleep(konst.BrowserSettleTickMillis * time.Millisecond)
+		if d.value(deadline, false, evaluate(headingScript), &heading) != nil {
+			return false
+		}
+	}
+	return true
+}
+
+const clickElement = "function() { this.click(); }"
+
 const submitFocused = `(() => {
   const form = document.activeElement && document.activeElement.form;
   if (!form) return false;
@@ -316,7 +346,7 @@ func (d *Driver) fallback(deadline time.Time, move Move) string {
 	switch {
 	case move.Kind == MoveClick:
 		object, err := d.resolve(deadline, move.Ref)
-		if err == nil && d.act(deadline, callOn(object, "function() { this.click(); }", true)) == nil {
+		if err == nil && d.act(deadline, callOn(object, clickElement, true)) == nil {
 			return "click()"
 		}
 	case move.Kind == MovePress && strings.EqualFold(move.Value, "enter"):
@@ -328,19 +358,24 @@ func (d *Driver) fallback(deadline time.Time, move Move) string {
 	return ""
 }
 
-func (d *Driver) measure(deadline time.Time, move Move, before pageState, tabsBefore []Tab, moved Moved) (Moved, error) {
-	quiet := 0
-	if move.Kind == MoveNavigate || move.Kind == MoveBack {
-		quiet = konst.BrowserDOMQuietMillis
-	}
-	moved.SettledMS = d.settle(deadline, quiet)
+func (d *Driver) measure(deadline time.Time, move Move, before pageState, tabsBefore []Tab, moved Moved, started time.Time) (Moved, error) {
+	d.settle(deadline, 0)
 	after, tabsAfter, err := d.state(deadline)
+	arrived := err == nil && (after.URL != before.URL || move.Kind == MoveNavigate || move.Kind == MoveBack)
+	if arrived {
+		if d.awaitRender(deadline, before, after, started) {
+			d.settle(deadline, konst.BrowserDOMQuietMillis)
+		}
+		after, tabsAfter, err = d.state(deadline)
+	}
 	if err != nil {
 		return moved, err
 	}
+	moved.SettledMS = int(time.Since(started).Milliseconds())
 	moved.URLChanged, moved.PageChanged = after.URL != before.URL, after != before
-	if moved.URLChanged || move.Kind == MoveNavigate || move.Kind == MoveBack {
+	if arrived {
 		moved.ErrorPage = after.errorPage()
+		moved.Title, _, _ = strings.Cut(after.Heading, "\n")
 	}
 	if move.Kind != MoveNavigate {
 		for _, tab := range tabsAfter {
@@ -380,11 +415,23 @@ func (d *Driver) center(deadline time.Time, ref string) (int, float64, float64, 
 			Content []float64 `json:"content"`
 		} `json:"model"`
 	}
+	var content struct {
+		Quads [][]float64 `json:"quads"`
+	}
+	var metrics struct {
+		Viewport struct {
+			Width  float64 `json:"clientWidth"`
+			Height float64 `json:"clientHeight"`
+		} `json:"cssVisualViewport"`
+	}
 	backend, err := d.onNode(deadline, ref, func(backend int) error {
-		answers, err := d.cdp(deadline, false, byBackend("DOM.scrollIntoViewIfNeeded", backend), byBackend("DOM.getBoxModel", backend))
+		answers, err := d.cdp(deadline, false, byBackend("DOM.scrollIntoViewIfNeeded", backend), byBackend("DOM.getBoxModel", backend),
+			byBackend("DOM.getContentQuads", backend), cdpCall{Method: "Page.getLayoutMetrics"})
 		if err != nil {
 			return err
 		}
+		_ = answers[2].into(&content)
+		_ = answers[3].into(&metrics)
 		return answers[1].into(&box)
 	})
 	quad := box.Model.Content
@@ -394,7 +441,20 @@ func (d *Driver) center(deadline time.Time, ref string) (int, float64, float64, 
 	if err != nil {
 		return 0, 0, 0, err
 	}
-	return backend, (quad[0] + quad[2] + quad[4] + quad[6]) / 4, (quad[1] + quad[3] + quad[5] + quad[7]) / 4, nil
+	x, y := (quad[0]+quad[2]+quad[4]+quad[6])/4, (quad[1]+quad[3]+quad[5]+quad[7])/4
+	width, height := cmp.Or(metrics.Viewport.Width, math.Inf(1)), cmp.Or(metrics.Viewport.Height, math.Inf(1))
+	largest := 0.0
+	for _, q := range content.Quads {
+		if len(q) < 8 {
+			continue
+		}
+		left, top := max(min(q[0], q[2], q[4], q[6]), 0), max(min(q[1], q[3], q[5], q[7]), 0)
+		right, bottom := min(max(q[0], q[2], q[4], q[6]), width), min(max(q[1], q[3], q[5], q[7]), height)
+		if area := (right - left) * (bottom - top); right > left && bottom > top && area > largest {
+			largest, x, y = area, (left+right)/2, (top+bottom)/2
+		}
+	}
+	return backend, x, y, nil
 }
 
 func (d *Driver) resolve(deadline time.Time, ref string) (string, error) {
@@ -436,6 +496,9 @@ func (d *Driver) click(deadline time.Time, ref string) (moved Moved, toggleStuck
 	if err != nil || moved.Covered != "" {
 		return moved, false, err
 	}
+	if moved.Via != "" {
+		return moved, false, d.act(deadline, callOn(object, clickElement, true))
+	}
 	var before, after *string
 	_ = d.value(deadline, false, callOn(object, checkedState, true), &before)
 	if err = d.act(deadline, mouse("mouseMoved", "none", x, y), mouse("mousePressed", "left", x, y), mouse("mouseReleased", "left", x, y)); err != nil || before == nil {
@@ -458,6 +521,9 @@ func (d *Driver) blocker(deadline time.Time, object string, x, y float64) (Moved
 		return Moved{}, err
 	}
 	hit, err := answer.object()
+	if err == nil && string(hit.Value) == `"parent"` {
+		return Moved{Via: "click()"}, nil
+	}
 	if err != nil || hit.ObjectID == "" {
 		return Moved{}, nil
 	}
@@ -774,8 +840,6 @@ func settleExpression(quietMS int) string {
 	return fmt.Sprintf(settleScript, quietMS, konst.BrowserDOMQuietMaxMillis, konst.BrowserSettleTickMillis, pendingRequests)
 }
 
-func (d *Driver) settle(deadline time.Time, quietMS int) int {
-	var settled int
-	_ = d.value(deadline, false, evaluate(settleExpression(quietMS)), &settled)
-	return settled
+func (d *Driver) settle(deadline time.Time, quietMS int) {
+	_ = d.value(deadline, false, evaluate(settleExpression(quietMS)), new(int))
 }

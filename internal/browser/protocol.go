@@ -188,7 +188,8 @@ func cdpStatus(raw json.RawMessage) (status, error) {
 	for _, call := range args.Calls {
 		switch call.Method {
 		case "Accessibility.getFullAXTree", "Accessibility.getPartialAXTree", "Page.getFrameTree",
-			"DOM.getDocument", "DOM.querySelectorAll", "DOM.describeNode", "DOM.resolveNode", "DOM.getBoxModel", "DOM.scrollIntoViewIfNeeded",
+			"DOM.getDocument", "DOM.querySelectorAll", "DOM.describeNode", "DOM.resolveNode", "DOM.getBoxModel", "DOM.getContentQuads", "DOM.scrollIntoViewIfNeeded",
+			"Page.getLayoutMetrics",
 			"Runtime.evaluate", "Runtime.callFunctionOn", "Emulation.setFocusEmulationEnabled", "Page.setWebLifecycleState",
 			"Page.startScreencast", "Page.stopScreencast", "Page.screencastFrameAck",
 			"Emulation.setDeviceMetricsOverride", "Emulation.clearDeviceMetricsOverride", "Emulation.setEmulatedMedia":
