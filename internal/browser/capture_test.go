@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"tofu/internal/browser/motion"
+	"tofu/internal/konst"
 )
 
 const (
@@ -223,14 +224,14 @@ func TestAHoverTakeRecordsItsTriggerFromPointerover(t *testing.T) {
 
 const onePaintPage = `
 const vm = require('node:vm');
-const VSYNC_MS = 1000 / 144, CAPTURE_MS = 10, SPIN_MS = 0.01, OPEN_FRAMES = 10;
-const take = closing => {
-  let clock = 0, main = 0, rafs = [], pending = null, shown = {main: 0, seen: ''}, lastCapture = -Infinity;
-  const reopen = OPEN_FRAMES + closing + 1, frames = [];
+const VSYNC_MS = 1000 / 144, WORK_MS = 0.5, SPIN_MS = 0.01, CAPTURE_MS = 10, BUCKET_MS = 15, STAMP_MS = 3, TRIGGER_MS = 100;
+const take = (withSampler, closeMs) => {
+  let clock = 0, now = 0, main = 0, rafs = [], hidden = false, reopen = null, tokens = 0, lastDamage = 0, shown = {seen: ''};
+  const commits = [], frames = [];
   const look = () => {
-    const i = main - OPEN_FRAMES;
-    if (i < 1 || i === closing + 1) return {height: 76.78, display: 'block'};
-    return i <= closing ? {height: 0.59 + (closing - i) * 3, display: 'block'} : {height: 0, display: 'none'};
+    if (hidden) return {height: 0, display: 'none'};
+    const left = 1 - (now - TRIGGER_MS) / closeMs;
+    return {height: left > 1 || left <= 0 ? 76.78 : 76.78 * left ** 3, display: 'block'};
   };
   const el = {getBoundingClientRect: () => ({x: 0, y: 0, width: 100, height: look().height}), getAttribute: () => '', hidden: false};
   const page = {
@@ -238,30 +239,44 @@ const take = closing => {
     getComputedStyle: () => ({opacity: '1', display: look().display, visibility: 'visible', getPropertyValue: () => ''}),
     document: {querySelector: () => el, addEventListener() {}},
   };
-  vm.runInContext('(' + sampler + ')(' + JSON.stringify({watch: [{name: 'answer', selector: '.content'}], events: ['pointerdown']}) + ')', vm.createContext(page));
-  for (let v = 0; v < 300; v++) {
+  if (withSampler) vm.runInContext('(' + sampler + ')(' + JSON.stringify({watch: [{name: 'answer', selector: '.content'}], events: ['pointerdown']}) + ')', vm.createContext(page));
+  for (let v = 0; v * VSYNC_MS < TRIGGER_MS + 600; v++) {
     const t = v * VSYNC_MS;
-    if (pending && pending.at <= t) {
-      if (pending.seen !== shown.seen && t - lastCapture >= CAPTURE_MS) {
-        lastCapture = t;
-        frames.push(pending.main);
+    let drawn = null;
+    while (commits.length && commits[0].drawAt <= t + 1e-6) drawn = commits.shift();
+    if (drawn && drawn.seen !== shown.seen) {
+      tokens = Math.min(BUCKET_MS, tokens + t - lastDamage);
+      lastDamage = t;
+      if (tokens >= CAPTURE_MS) {
+        tokens -= CAPTURE_MS;
+        frames.push({stamp: t + STAMP_MS, main: drawn.main});
       }
-      shown = pending;
-      pending = null;
     }
+    shown = drawn || shown;
     if (clock > t) continue;
-    clock = t;
+    now = t;
+    clock = t + WORK_MS;
     main++;
     const due = rafs;
     rafs = [];
     for (const tick of due) tick(t);
-    pending = {main, seen: JSON.stringify(look()), at: clock};
+    commits.push({main, seen: JSON.stringify(look()), drawAt: Math.ceil((clock + VSYNC_MS) / VSYNC_MS) * VSYNC_MS});
+    if (!hidden && now - TRIGGER_MS >= closeMs) {
+      reopen = {main, row: t};
+      hidden = true;
+    }
   }
-  const heights = page.window.__tofuMotion.samples.map(sample => sample.elements.answer.height).join(' ');
-  const onePaint = Array.from({length: closing + 1}, (_, n) => OPEN_FRAMES + 1 + n);
-  return {closing, missed: onePaint.filter(paint => !frames.includes(paint)), reopen, sampled: heights.includes(' 0.59 76.78 0 ')};
+  const after = frames.find(frame => frame.stamp >= reopen.row);
+  return {
+    row: reopen.row - TRIGGER_MS, frames: frames.length, lateMs: after.stamp - reopen.row, lateShowsOlder: after.main < reopen.main,
+    framedMs: frames.filter(frame => frame.main === reopen.main).map(frame => frame.stamp - reopen.row),
+    sampled: withSampler && page.window.__tofuMotion.samples.some(sample => sample.ts === reopen.row && sample.elements.answer.height === 76.78),
+  };
 };
-console.log(JSON.stringify(Array.from({length: 8}, (_, n) => take(20 + n))));
+console.log(JSON.stringify(Array.from({length: 9}, (_, phase) => {
+  const closeMs = 250 + phase * VSYNC_MS / 3;
+  return {phase, page: take(false, closeMs), sampled: take(true, closeMs)};
+})));
 `
 
 func TestAOnePaintStateBetweenTwoScreencastFramesGetsAFrame(t *testing.T) {
@@ -273,19 +288,29 @@ func TestAOnePaintStateBetweenTwoScreencastFramesGetsAFrame(t *testing.T) {
 	if err != nil {
 		t.Fatalf("the fake page under node: %v\n%s", err, out)
 	}
-	var takes []struct {
-		Closing int
-		Missed  []int
-		Reopen  int
-		Sampled bool
+	type run struct {
+		Row, LateMs    float64
+		Frames         int
+		LateShowsOlder bool
+		FramedMs       []float64
+		Sampled        bool
 	}
-	if err := json.Unmarshal(out, &takes); err != nil {
+	var phases []struct {
+		Phase         int
+		Page, Sampled run
+	}
+	if err := json.Unmarshal(out, &phases); err != nil {
 		t.Fatalf("%v\n%s", err, out)
 	}
-	t.Logf("%s", out)
-	for _, take := range takes {
-		if len(take.Missed) > 0 || !take.Sampled {
-			t.Errorf("after %d closing paints the sampler saw the one-paint reopen at paint %d: %v; paints seen for one paint with no frame: %v", take.Closing, take.Reopen, take.Sampled, take.Missed)
+	for _, p := range phases {
+		t.Logf("phase %d: page alone %+v; sampled %+v", p.Phase, p.Page, p.Sampled)
+		framed := slices.ContainsFunc(p.Sampled.FramedMs, func(ms float64) bool { return ms >= 0 && ms <= konst.MotionFrameLagMillis })
+		if !p.Page.LateShowsOlder || p.Page.LateMs > 10 {
+			t.Errorf("phase %d: the fake's first frame after the reopen row is +%.1f ms and shows the old paint %v; the real takes have one 2 to 10 ms after that does", p.Phase, p.Page.LateMs, p.Page.LateShowsOlder)
+		}
+		if !p.Sampled.Sampled || !framed || p.Sampled.Row != p.Page.Row || p.Sampled.Frames < p.Page.Frames {
+			t.Errorf("phase %d: sampler read the reopen %v, framed at %v ms after the row (want one within %d), row +%.1f against +%.1f without the sampler, %d frames against %d",
+				p.Phase, p.Sampled.Sampled, p.Sampled.FramedMs, konst.MotionFrameLagMillis, p.Sampled.Row, p.Page.Row, p.Sampled.Frames, p.Page.Frames)
 		}
 	}
 }

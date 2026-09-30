@@ -1,5 +1,5 @@
 ({watch, events}) => {
-  const HOLD_MS = 20;
+  const SCREENCAST_PERIOD_MS = 10, HOLD_PAINTS = 1.5;
   const motion = window.__tofuMotion = {samples: [], trigger: null, running: true};
   const stamp = event => {
     motion.trigger = motion.trigger || {event: event.type, timeStamp: event.timeStamp, wallMs: performance.timeOrigin + event.timeStamp};
@@ -16,13 +16,27 @@
     return seen;
   };
   const readAll = () => Object.fromEntries(watch.map(w => [w.name, read(w)]));
-  let shown = JSON.stringify(readAll()), fresh = false;
+  const flat = (value, key = '', into = {}) => {
+    if (value && typeof value === 'object') for (const [name, inner] of Object.entries(value)) flat(inner, `${key}.${name}`, into);
+    else into[key] = value;
+    return into;
+  };
+  const direction = (from, to) => typeof from === 'number' && typeof to === 'number' ? Math.sign(to - from) : Number(from !== to);
+  let last = flat(readAll()), lastMoves = {}, lastTs = 0, paintMs = Infinity;
   const tick = ts => {
     if (!motion.running) return;
-    const elements = readAll(), now = JSON.stringify(elements);
-    if (fresh && now !== shown) for (const until = performance.now() + HOLD_MS; performance.now() < until;);
-    fresh = now !== shown;
-    shown = now;
+    const elements = readAll(), now = flat(elements), moves = {};
+    let moving = false, turned = false;
+    for (const key of new Set([...Object.keys(last), ...Object.keys(now)])) {
+      moves[key] = direction(last[key], now[key]);
+      moving ||= Boolean(lastMoves[key]);
+      turned ||= moves[key] !== 0 && moves[key] !== (lastMoves[key] ?? 0);
+    }
+    if (lastTs) paintMs = Math.min(paintMs, ts - lastTs);
+    if (moving && turned && paintMs < SCREENCAST_PERIOD_MS) for (const until = performance.now() + HOLD_PAINTS * paintMs; performance.now() < until;);
+    last = now;
+    lastMoves = moves;
+    lastTs = ts;
     motion.samples.push({ts, elements});
     requestAnimationFrame(tick);
   };

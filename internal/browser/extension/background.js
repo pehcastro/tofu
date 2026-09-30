@@ -21,7 +21,6 @@ const THINK_MS = 30000;
 const ORPHAN_MS = 2000;
 const SCREENCAST_QUALITY = 80;
 const SCREENCAST_CHUNK_BYTES = 1000000;
-const SCREENCAST_SPARE_ACKS = 8;
 const NO_GROUP = -1;
 const GROUP_COLOR = 'orange';
 const BADGES = {
@@ -288,9 +287,7 @@ async function screencast(tabId, action, id) {
     const listener = (source, method, params) => {
       if (source.tabId !== tabId || method !== 'Page.screencastFrame') return;
       frames.push({data: params.data, timestamp: params.metadata.timestamp});
-      for (let acks = frames.length === 1 ? 1 + SCREENCAST_SPARE_ACKS : 1; acks > 0; acks--) {
-        send(tabId, 'Page.screencastFrameAck', {sessionId: params.sessionId}).catch(() => {});
-      }
+      send(tabId, 'Page.screencastFrameAck', {sessionId: params.sessionId}).catch(() => {});
     };
     chrome.debugger.onEvent.addListener(listener);
     screencasts.set(tabId, {frames, listener});
