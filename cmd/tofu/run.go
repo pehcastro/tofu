@@ -984,15 +984,20 @@ func learnBrowserRecipe(notify func(string)) func(subagent.Definition, string, [
 			return
 		}
 		worked := finished && !strings.Contains(report.Prose, "Failed:")
-		var visited []string
+		var visited, typed []string
 		for _, round := range rounds {
+			for _, step := range round.Steps {
+				for _, call := range step.ToolCalls {
+					typed = append(typed, recipe.Typed(call.Args)...)
+				}
+			}
 			for _, message := range round.Conversation {
 				visited = append(visited, recipe.Visited(message.Content)...)
 			}
 		}
 		dir, err := recipe.Dir()
 		if err == nil {
-			err = recipe.Settle(dir, task, visited, worked)
+			err = recipe.Settle(dir, task, visited, typed, worked)
 		}
 		if err != nil && notify != nil {
 			notify("the browser recipe for this run was not kept: " + err.Error())

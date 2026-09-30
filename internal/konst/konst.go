@@ -7,6 +7,16 @@ const RecipeFailuresAside = 2
 const RecipesPerTask = 2
 
 const (
+	RecipeShortestWord    = 3
+	RecipeShortestEncoded = 16
+	RecipeShortestDigitID = 9
+	RecipeHoursPerDay     = 24
+	RecipePlaceIDPrefix   = "ChIJ"
+	RecipeCodeJoiners     = "_:"
+	RecipeEncodedAlphabet = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz+/=-_"
+)
+
+const (
 	ContextCeilingTokens = 250000
 
 	BandShareWhole      = 10000

@@ -2802,12 +2802,12 @@ func TestABrowserRunTeachesItsHostARecipeTheNextRunIsGivenUntilItFailsTwice(t *t
 	}
 	recipe := string(learned)
 	t.Logf("the learned recipe:\n%s", recipe)
-	for _, want := range []string{"/s/Atibaia/homes?adults={adults}&checkin={checkin}", "adults=4", "checkin=2026-10-10"} {
+	for _, want := range []string{"/s/{place}/homes?adults={adults}\n", "adults=4"} {
 		if !strings.Contains(recipe, want) {
 			t.Errorf("the recipe does not hold %q", want)
 		}
 	}
-	for _, leaked := range []string{"ref_fsid", "ignore your rules"} {
+	for _, leaked := range []string{"ref_fsid", "ignore your rules", "checkin", "/s/Atibaia/"} {
 		if strings.Contains(recipe, leaked) {
 			t.Errorf("the recipe holds %q", leaked)
 		}

@@ -508,7 +508,7 @@ func Run(ctx context.Context, config Config) (Row, error) {
 					stepRow.Fork = fork
 					keep(stepRow)
 					ended := row
-					ended.Outcome, ended.ForkedInto = OutcomeForked, fork.Into
+					ended.Outcome, ended.ForkedInto, ended.Conversation = OutcomeForked, fork.Into, messages[afterSystem:]
 					ended.WallClockMS = now().Sub(start).Milliseconds()
 					if config.EndedSession != nil {
 						written.Add(1)
