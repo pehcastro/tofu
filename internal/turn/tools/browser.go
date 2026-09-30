@@ -520,11 +520,15 @@ func (s *browserStep) resolve(driver *browser.Driver) (string, error) {
 	if s.Target == nil {
 		return "", nil
 	}
-	return waitFor(func() (ref string, err error) {
-		if s.Ref, err = driver.Find(s.Target.Role, s.Target.Name, s.Target.Nth); s.Ref == "" {
-			return fmt.Sprintf("target %s is not on the page", s.Target), err
+	return waitFor(func() (string, error) {
+		ref, fits, err := driver.FindTarget(s.Target.Role, s.Target.Name, s.Target.Nth)
+		switch s.Ref = ref; {
+		case ref != "":
+			return "", err
+		case len(fits) > 0:
+			return fmt.Sprintf("target %s fits more than one element, name one in full: %q", s.Target, fits), err
 		}
-		return "", err
+		return fmt.Sprintf("target %s is not on the page", s.Target), err
 	})
 }
 

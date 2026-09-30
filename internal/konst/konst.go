@@ -262,6 +262,7 @@ const BrowserDeltaWholePercent = 70
 const BrowserSettleTickMillis = 50
 
 const (
-	BrowserGuardWaitMillis = 1500
-	BrowserGuardPollMillis = 100
+	BrowserGuardWaitMillis  = 1500
+	BrowserTargetNamesShown = 3
+	BrowserGuardPollMillis  = 100
 )

@@ -970,6 +970,44 @@ func TestATargetByRoleAndNameResolvesAfterARerenderRenumbersTheRefs(t *testing.T
 	}
 }
 
+func TestAShortenedTargetThatFitsSeveralButtonsIsRefusedNamingUpToThreeAndTheBatchReports(t *testing.T) {
+	long := []string{"Concluido. Pesquisar voos de ida e volta", "Concluido. Pesquisar voos so de ida", "Concluido. Pesquisar voos multidestino", "Concluido. Pesquisar voos baratos"}
+	for _, fits := range [][]string{long[:2], long} {
+		page := &cdpPage{url: "https://flights.test/", buttons: append(slices.Clone(fits), "Mapa")}
+		run := stepsOn(t, page)
+		run("browser_observe", `{"note":"n","tab":7}`)
+		acted := run("browser_act", `{"note":"n","tab":7,"actions":[{"action":"click","target":{"role":"button","name":"Concluido. Pesquisar voos"}},{"action":"click","target":{"role":"button","name":"Mapa"}}]}`)
+		if clicked := page.clicks(); len(clicked) != 0 || !strings.Contains(acted, "ran 0 of 2") {
+			t.Fatalf("a target fitting %d buttons clicked %q", len(fits), clicked)
+		}
+		for i, name := range fits {
+			if named := strings.Contains(acted, fmt.Sprintf("%q", name)); named != (i < 3) {
+				t.Errorf("with %d buttons fitting, the refusal names %q: %v", len(fits), name, named)
+			}
+		}
+	}
+}
+
+func TestAGoneCheckIgnoresALongerNameThatRemains(t *testing.T) {
+	page := &cdpPage{url: "https://stays.test/", buttons: []string{"Filtros", "Mapa"}, screens: map[string][]string{"Filtros": {"Filtros aplicados", "Mapa"}}}
+	run := stepsOn(t, page)
+	run("browser_observe", `{"note":"n","tab":7}`)
+	acted := run("browser_act", `{"note":"n","tab":7,"actions":[{"action":"click","target":{"role":"button","name":"Filtros"},"expect_after":{"gone":{"role":"button","name":"Filtros"}}}]}`)
+	if strings.Contains(acted, "failed") || !strings.Contains(acted, "ran 1 of 1") {
+		t.Fatal("expect_after gone counted a longer name that remains as the gone button")
+	}
+}
+
+func TestATargetWithAnEmptyNameMatchesOnlyAnUnnamedElement(t *testing.T) {
+	page := &cdpPage{url: "https://stays.test/", buttons: []string{"Buscar"}}
+	run := stepsOn(t, page)
+	run("browser_observe", `{"note":"n","tab":7}`)
+	acted := run("browser_act", `{"note":"n","tab":7,"actions":[{"action":"click","target":{"role":"button","name":""}}]}`)
+	if clicked := page.clicks(); len(clicked) != 0 || !strings.Contains(acted, "not on the page") {
+		t.Fatalf("a target with an empty name clicked %q", clicked)
+	}
+}
+
 func TestTheSameClickUnderAFreshRefEachTimeIsStillARepeat(t *testing.T) {
 	page := &cdpPage{url: "https://www.google.test/", buttons: []string{"Buscar", "Estou com sorte"}, rerender: true}
 	run := stepsOn(t, page)

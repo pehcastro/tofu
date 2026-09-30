@@ -85,23 +85,59 @@ func (d *Driver) Observe(interactive bool) (string, error) {
 }
 
 func (d *Driver) Find(role, name string, nth int) (string, error) {
-	snapshot, err := d.observe(time.Now().Add(konst.BrowserObserveTimeoutMillis*time.Millisecond), true)
-	if err != nil {
+	exact, _, err := d.matches(role, name)
+	if nth = max(nth, 1); nth > len(exact) {
 		return "", err
 	}
+	return exact[nth-1], nil
+}
+
+func (d *Driver) FindTarget(role, name string, nth int) (ref string, fits []string, err error) {
+	exact, loose, err := d.matches(role, name)
+	switch nth = max(nth, 1); {
+	case nth <= len(exact):
+		return exact[nth-1], nil, nil
+	case err != nil || name == "" || len(exact) > 0:
+		return "", nil, err
+	case len(loose) == 1:
+		return loose[0], nil, nil
+	}
+	for _, ref := range loose[:min(len(loose), konst.BrowserTargetNamesShown)] {
+		fits = append(fits, d.refs.entries[ref].name)
+	}
+	return "", fits, nil
+}
+
+func (d *Driver) matches(role, name string) (exact, loose []string, err error) {
+	snapshot, err := d.observe(time.Now().Add(konst.BrowserObserveTimeoutMillis*time.Millisecond), true)
+	if err != nil {
+		return nil, nil, err
+	}
 	refLine := regexp.MustCompile(`ref=(e\d+)[,\]]`)
+	wanted := strings.ToLower(name)
+	var starting, containing []string
 	for line := range strings.Lines(snapshot) {
 		found := refLine.FindStringSubmatch(line)
 		if found == nil {
 			continue
 		}
-		if entry := d.refs.entries[found[1]]; (role == "" || entry.role == role) && strings.EqualFold(entry.name, name) {
-			if nth--; nth <= 0 {
-				return found[1], nil
-			}
+		entry := d.refs.entries[found[1]]
+		if role != "" && entry.role != role {
+			continue
+		}
+		switch named := strings.ToLower(entry.name); {
+		case named == wanted:
+			exact = append(exact, found[1])
+		case strings.HasPrefix(named, wanted):
+			starting = append(starting, found[1])
+		case strings.Contains(named, wanted):
+			containing = append(containing, found[1])
 		}
 	}
-	return "", nil
+	if len(starting) == 0 {
+		return exact, containing, nil
+	}
+	return exact, starting, nil
 }
 
 func (d *Driver) ObserveChanges() (string, error) {
