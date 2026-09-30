@@ -1,5 +1,5 @@
 ({watch, events}) => {
-  const SCREENCAST_PERIOD_MS = 10, HOLD_PAINTS = 1.5;
+  const SCREENCAST_PERIOD_MS = 10, HOLD_PAINTS = 1.5, REPAINT_PAINTS = 4;
   const motion = window.__tofuMotion = {samples: [], trigger: null, running: true};
   const stamp = event => {
     motion.trigger = motion.trigger || {event: event.type, timeStamp: event.timeStamp, wallMs: performance.timeOrigin + event.timeStamp};
@@ -22,18 +22,25 @@
     return into;
   };
   const direction = (from, to) => typeof from === 'number' && typeof to === 'number' ? Math.sign(to - from) : Number(from !== to);
-  let last = flat(readAll()), lastMoves = {}, lastTs = 0, paintMs = Infinity;
+  const repaint = document.createElement('div');
+  repaint.style.cssText = 'position: fixed; left: 0; top: 0; width: 1px; height: 1px; background: #000; opacity: 0; pointer-events: none;';
+  document.documentElement.append(repaint);
+  let last = flat(readAll()), lastMoves = {}, lastTs = 0, paintMs = Infinity, turnedLast = false;
   const tick = ts => {
-    if (!motion.running) return;
+    if (!motion.running) return repaint.remove();
     const elements = readAll(), now = flat(elements), moves = {};
-    let moving = false, turned = false;
+    let moving = false, turned = false, changed = false;
     for (const key of new Set([...Object.keys(last), ...Object.keys(now)])) {
       moves[key] = direction(last[key], now[key]);
       moving ||= Boolean(lastMoves[key]);
+      changed ||= moves[key] !== 0;
       turned ||= moves[key] !== 0 && moves[key] !== (lastMoves[key] ?? 0);
     }
     if (lastTs) paintMs = Math.min(paintMs, ts - lastTs);
-    if (moving && turned && paintMs < SCREENCAST_PERIOD_MS) for (const until = performance.now() + HOLD_PAINTS * paintMs; performance.now() < until;);
+    const fast = paintMs < SCREENCAST_PERIOD_MS;
+    if (fast && turnedLast && changed) for (const until = performance.now() + HOLD_PAINTS * paintMs; performance.now() < until;);
+    turnedLast = fast && moving && turned;
+    if (turnedLast) repaint.animate([{opacity: 0.001}, {opacity: 0.002}], {duration: REPAINT_PAINTS * paintMs});
     last = now;
     lastMoves = moves;
     lastTs = ts;

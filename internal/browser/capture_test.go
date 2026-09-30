@@ -28,6 +28,7 @@ type motionPage struct {
 	armed []string
 	fired string
 	steps []string
+	taped []string
 }
 
 func (p *motionPage) did(step string) {
@@ -39,6 +40,9 @@ func (p *motionPage) did(step string) {
 func (p *motionPage) answer(method string, params map[string]any) any {
 	script, _ := params["functionDeclaration"].(string)
 	expression, _ := params["expression"].(string)
+	if p.steps[len(p.steps)-1] == "start" || p.steps[len(p.steps)-1] == "click" {
+		p.taped = append(p.taped, method)
+	}
 	switch {
 	case method == "Emulation.clearDeviceMetricsOverride", method == "Emulation.setEmulatedMedia" && len(params["features"].([]any)) == 0:
 		p.did("clear")
@@ -212,6 +216,16 @@ func TestCaptureWithNoTriggerEventFailsNamingTheSelector(t *testing.T) {
 	t.Log(err)
 }
 
+func TestWhileRecordingTheTriggerSendsOnlyItsInput(t *testing.T) {
+	page := &motionPage{}
+	if _, err := Capture(page.relay(t), fieldNotes(t), 1, "quiet", t.TempDir()); err != nil {
+		t.Fatal(err)
+	}
+	if len(page.taped) == 0 || slices.ContainsFunc(page.taped, func(method string) bool { return method != "Input.dispatchMouseEvent" }) {
+		t.Fatalf("between the screencast start and stop the page got %v; want only the trigger's mouse events", page.taped)
+	}
+}
+
 func TestAHoverTakeRecordsItsTriggerFromPointerover(t *testing.T) {
 	page := &motionPage{}
 	sc := fieldNotes(t)
@@ -225,9 +239,10 @@ func TestAHoverTakeRecordsItsTriggerFromPointerover(t *testing.T) {
 const onePaintPage = `
 const vm = require('node:vm');
 const VSYNC_MS = 1000 / 144, WORK_MS = 0.5, SPIN_MS = 0.01, CAPTURE_MS = 10, BUCKET_MS = 15, STAMP_MS = 3, TRIGGER_MS = 100;
-const take = (withSampler, closeMs) => {
+const take = (withSampler, closeMs, symbolMs) => {
   let clock = 0, now = 0, main = 0, rafs = [], hidden = false, reopen = null, tokens = 0, lastDamage = 0, shown = {seen: ''};
-  const commits = [], frames = [];
+  let keeperMs = 0, keeperUntil = 0;
+  const commits = [], frames = [], symbolFrom = TRIGGER_MS + 2 * VSYNC_MS;
   const look = () => {
     if (hidden) return {height: 0, display: 'none'};
     const left = 1 - (now - TRIGGER_MS) / closeMs;
@@ -237,19 +252,26 @@ const take = (withSampler, closeMs) => {
   const page = {
     window: {}, performance: {now: () => (clock += SPIN_MS), timeOrigin: 0}, requestAnimationFrame: tick => rafs.push(tick),
     getComputedStyle: () => ({opacity: '1', display: look().display, visibility: 'visible', getPropertyValue: () => ''}),
-    document: {querySelector: () => el, addEventListener() {}},
+    document: {
+      querySelector: () => el, addEventListener() {}, documentElement: {append() {}},
+      createElement: () => ({style: {}, remove() {}, animate: (keyframes, timing) => { keeperMs = timing.duration; }}),
+    },
   };
   if (withSampler) vm.runInContext('(' + sampler + ')(' + JSON.stringify({watch: [{name: 'answer', selector: '.content'}], events: ['pointerdown']}) + ')', vm.createContext(page));
   for (let v = 0; v * VSYNC_MS < TRIGGER_MS + 600; v++) {
     const t = v * VSYNC_MS;
     let drawn = null;
-    while (commits.length && commits[0].drawAt <= t + 1e-6) drawn = commits.shift();
-    if (drawn && drawn.seen !== shown.seen) {
+    while (commits.length && commits[0].drawAt <= t + 1e-6) {
+      drawn = commits.shift();
+      if (drawn.keeperMs) keeperUntil = t + drawn.keeperMs;
+    }
+    const symbolTurning = t >= symbolFrom && t < symbolFrom + symbolMs;
+    if ((drawn && drawn.seen !== shown.seen) || symbolTurning || t < keeperUntil) {
       tokens = Math.min(BUCKET_MS, tokens + t - lastDamage);
       lastDamage = t;
       if (tokens >= CAPTURE_MS) {
         tokens -= CAPTURE_MS;
-        frames.push({stamp: t + STAMP_MS, main: drawn.main});
+        frames.push({stamp: t + STAMP_MS, main: (drawn || shown).main});
       }
     }
     shown = drawn || shown;
@@ -260,7 +282,8 @@ const take = (withSampler, closeMs) => {
     const due = rafs;
     rafs = [];
     for (const tick of due) tick(t);
-    commits.push({main, seen: JSON.stringify(look()), drawAt: Math.ceil((clock + VSYNC_MS) / VSYNC_MS) * VSYNC_MS});
+    commits.push({main, keeperMs, seen: JSON.stringify(look()), drawAt: Math.ceil((clock + VSYNC_MS) / VSYNC_MS) * VSYNC_MS});
+    keeperMs = 0;
     if (!hidden && now - TRIGGER_MS >= closeMs) {
       reopen = {main, row: t};
       hidden = true;
@@ -273,9 +296,9 @@ const take = (withSampler, closeMs) => {
     sampled: withSampler && page.window.__tofuMotion.samples.some(sample => sample.ts === reopen.row && sample.elements.answer.height === 76.78),
   };
 };
-console.log(JSON.stringify(Array.from({length: 9}, (_, phase) => {
-  const closeMs = 250 + phase * VSYNC_MS / 3;
-  return {phase, page: take(false, closeMs), sampled: take(true, closeMs)};
+console.log(JSON.stringify(Array.from({length: 54}, (_, phase) => {
+  const closeMs = 250 + (phase % 9) * VSYNC_MS / 3, symbolMs = Math.floor(phase / 9) && closeMs + (Math.floor(phase / 9) - 3) * VSYNC_MS / 2;
+  return {phase, closeMs, symbolMs, page: take(false, closeMs, symbolMs), sampled: take(true, closeMs, symbolMs)};
 })));
 `
 
@@ -296,14 +319,15 @@ func TestAOnePaintStateBetweenTwoScreencastFramesGetsAFrame(t *testing.T) {
 		Sampled        bool
 	}
 	var phases []struct {
-		Phase         int
-		Page, Sampled run
+		Phase             int
+		CloseMs, SymbolMs float64
+		Page, Sampled     run
 	}
 	if err := json.Unmarshal(out, &phases); err != nil {
 		t.Fatalf("%v\n%s", err, out)
 	}
 	for _, p := range phases {
-		t.Logf("phase %d: page alone %+v; sampled %+v", p.Phase, p.Page, p.Sampled)
+		t.Logf("phase %d, close %.1f ms, symbol turning %.1f ms: page alone %+v; sampled %+v", p.Phase, p.CloseMs, p.SymbolMs, p.Page, p.Sampled)
 		framed := slices.ContainsFunc(p.Sampled.FramedMs, func(ms float64) bool { return ms >= 0 && ms <= konst.MotionFrameLagMillis })
 		if !p.Page.LateShowsOlder || p.Page.LateMs > 10 {
 			t.Errorf("phase %d: the fake's first frame after the reopen row is +%.1f ms and shows the old paint %v; the real takes have one 2 to 10 ms after that does", p.Phase, p.Page.LateMs, p.Page.LateShowsOlder)

@@ -100,6 +100,10 @@ func (d *Driver) take(sc motion.Scenario, id string) (motion.Take, [][]byte, err
 		}
 		time.Sleep(konst.MotionSettleMillisDefault * time.Millisecond)
 	}
+	fire, err := d.aim(sc.Trigger)
+	if err != nil {
+		return motion.Take{}, nil, err
+	}
 	events := []string{"pointerdown", "click"}
 	switch sc.Trigger.Action {
 	case "press":
@@ -116,7 +120,7 @@ func (d *Driver) take(sc motion.Scenario, id string) (motion.Take, [][]byte, err
 	}
 	time.Sleep(time.Duration(sc.RecordBeforeMs) * time.Millisecond)
 	clicked := time.Now()
-	err = d.perform(sc.Trigger, "trigger")
+	err = fire()
 	time.Sleep(time.Until(clicked.Add(time.Duration(sc.RecordAfterMs) * time.Millisecond)))
 	frames, stopped := d.Client.StopScreencast(d.Tab)
 	var page pageTake
@@ -172,6 +176,26 @@ func (d *Driver) perform(action motion.Action, field string) error {
 		return fmt.Errorf("%s %s on %s: %w", field, action.Action, target(action), err)
 	}
 	return nil
+}
+
+func (d *Driver) aim(action motion.Action) (func() error, error) {
+	deadline := func() time.Time { return time.Now().Add(konst.BrowserActTimeoutMillis * time.Millisecond) }
+	if action.Action == "press" {
+		return func() error { return d.press(deadline(), action.Key) }, nil
+	}
+	ref, err := d.refOf(action)
+	var x, y float64
+	if err == nil {
+		_, x, y, err = d.center(deadline(), ref)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("trigger %s on %s: %w", action.Action, target(action), err)
+	}
+	calls := []cdpCall{mouse("mouseMoved", "none", x, y)}
+	if action.Action == "click" {
+		calls = append(calls, mouse("mousePressed", "left", x, y), mouse("mouseReleased", "left", x, y))
+	}
+	return func() error { return d.act(deadline(), calls...) }, nil
 }
 
 func (d *Driver) refOf(action motion.Action) (string, error) {
