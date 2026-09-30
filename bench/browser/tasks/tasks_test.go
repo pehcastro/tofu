@@ -42,6 +42,7 @@ func TestEachTaskScoresItsPassingFixtureFullAndItsFailingOneLower(t *testing.T) 
 		{"youtube", "youtube-fail", fixtureSeed, []int{2, 5}},
 		{"youtube", "youtube-portuguese", fixtureSeed, nil},
 		{"youtube", "youtube-portuguese-auto", fixtureSeed, []int{5}},
+		{"youtube", "youtube-artifact", fixtureSeed, nil},
 	} {
 		task, err := Named(recorded.task, recorded.seed, drawnOn)
 		if err != nil {

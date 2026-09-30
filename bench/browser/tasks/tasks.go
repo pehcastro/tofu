@@ -57,6 +57,7 @@ func Read(arm airbnb.Arm, paths ...string) (Evidence, error) {
 		return Evidence{}, err
 	}
 	evidence := Evidence{Run: run}
+	tools := map[string]string{}
 	for _, path := range paths {
 		raw, err := os.ReadFile(path)
 		if err != nil {
@@ -64,8 +65,16 @@ func Read(arm airbnb.Arm, paths ...string) (Evidence, error) {
 		}
 		for line := range strings.Lines(string(raw)) {
 			var event session.Event
+			var call session.CallBody
 			var result session.ResultBody
-			if json.Unmarshal([]byte(line), &event) != nil || event.Kind != session.EventToolResult || json.Unmarshal(event.Body, &result) != nil {
+			if json.Unmarshal([]byte(line), &event) != nil {
+				continue
+			}
+			if event.Kind == session.EventToolCall && json.Unmarshal(event.Body, &call) == nil {
+				tools[event.Agent+"/"+event.Call] = call.Tool
+			}
+			tool := tools[event.Agent+"/"+event.Call]
+			if event.Kind != session.EventToolResult || tool != "browser_observe" && tool != "browser_act" || json.Unmarshal(event.Body, &result) != nil {
 				continue
 			}
 			header := snapshotHeader.FindStringSubmatchIndex(result.Content)
