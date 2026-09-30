@@ -979,11 +979,10 @@ func browserRecipeBrief(notify func(string)) func(subagent.Definition, string) s
 }
 
 func learnBrowserRecipe(notify func(string)) func(subagent.Definition, string, []turn.Row, turn.SubAgentReport, bool) {
-	return func(definition subagent.Definition, task string, rounds []turn.Row, report turn.SubAgentReport, finished bool) {
+	return func(definition subagent.Definition, task string, rounds []turn.Row, _ turn.SubAgentReport, finished bool) {
 		if !isBrowserAgent(definition) {
 			return
 		}
-		worked := finished && !strings.Contains(report.Prose, "Failed:")
 		var visited, typed []string
 		for _, round := range rounds {
 			for _, step := range round.Steps {
@@ -997,7 +996,7 @@ func learnBrowserRecipe(notify func(string)) func(subagent.Definition, string, [
 		}
 		dir, err := recipe.Dir()
 		if err == nil {
-			err = recipe.Settle(dir, task, visited, typed, worked)
+			err = recipe.Settle(dir, task, visited, typed, finished && len(visited) > 0)
 		}
 		if err != nil && notify != nil {
 			notify("the browser recipe for this run was not kept: " + err.Error())
