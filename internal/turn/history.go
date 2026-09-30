@@ -62,30 +62,43 @@ func historyOf(messages []llm.Message) recall.Conversation {
 }
 
 const (
-	shrunkPageBytes  = 400
+	shrunkPageBytes  = 600
 	shrunkTitleBytes = 40
 	shrunkNoteBytes  = 200
 	shrunkPageMark   = " holds this page whole"
+	wholePagesHeld   = 4
+	wholePagesKept   = 2
 )
 
 func shrinkPages(store *recall.Store, messages []llm.Message) error {
 	calls := make(map[string]llm.ToolCall)
 	var pages []int
+	whole := 0
 	for i, message := range messages {
 		for _, call := range message.ToolCalls {
 			calls[call.ID] = call
 		}
 		if name := calls[message.ToolCallID].Name; message.Role == llm.RoleTool && (name == "browser_observe" || name == "browser_act") && !strings.HasPrefix(message.Content, "error: ") {
 			pages = append(pages, i)
+			if shrunkHandle(message.Content) == "" {
+				whole++
+			}
 		}
 	}
+	if whole <= wholePagesHeld {
+		return nil
+	}
 	header := ""
-	for n, i := range pages {
+	for _, i := range pages {
 		text, call := messages[i].Content, calls[messages[i].ToolCallID]
 		header = cmp.Or(pageHeader(text), header)
-		if n == len(pages)-1 || shrunkHandle(text) != "" {
+		if shrunkHandle(text) != "" {
 			continue
 		}
+		if whole == wholePagesKept {
+			return nil
+		}
+		whole--
 		handle, rendered := strings.CutPrefix(text, "artifact ")
 		handle, _, _ = strings.Cut(handle, " ")
 		if !rendered {
@@ -95,22 +108,44 @@ func shrinkPages(store *recall.Store, messages []llm.Message) error {
 			}
 			handle = elided.Reference.ID
 		}
-		var said struct {
-			Note string `json:"note"`
-		}
-		_ = json.Unmarshal(call.Arguments, &said)
-		messages[i].Content = shrunkPage(text, header, said.Note, handle)
+		messages[i].Content = shrunkPage(text, header, noteOf(call), noteAfter(messages[i+1:]), handle)
 	}
 	return nil
 }
 
-func shrunkPage(text, header, note, handle string) string {
+func noteOf(call llm.ToolCall) string {
+	var said struct {
+		Note string `json:"note"`
+	}
+	_ = json.Unmarshal(call.Arguments, &said)
+	return said.Note
+}
+
+func noteAfter(messages []llm.Message) string {
+	for _, message := range messages {
+		if len(message.ToolCalls) == 0 {
+			continue
+		}
+		for _, call := range message.ToolCalls {
+			if note := noteOf(call); note != "" {
+				return note
+			}
+		}
+		return ""
+	}
+	return ""
+}
+
+func shrunkPage(text, header, note, after, handle string) string {
 	var kept []string
 	if tab, rest, found := strings.Cut(strings.TrimPrefix(header, "tab "), " "); found {
 		url, title, _ := strings.Cut(rest, " ")
 		kept = append(kept, "tab "+tab+" "+url+" "+runeSafeHead(title, shrunkTitleBytes))
 	}
 	kept = append(kept, "note: "+runeSafeHead(note, shrunkNoteBytes))
+	if after != "" {
+		kept = append(kept, "after reading: "+runeSafeHead(after, shrunkNoteBytes))
+	}
 	held := "artifact " + handle + shrunkPageMark
 	lead, _, _ := strings.Cut(text, "<<<")
 	var acts []string
