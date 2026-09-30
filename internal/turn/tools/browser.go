@@ -327,6 +327,7 @@ func (browserAct) Definition() llm.Tool {
 			"click takes a ref. fill takes a ref and the text as value, and answers the value it reads back. select takes a ref and the option as value. " +
 			"press takes a key as value, Enter or Escape or a letter. scroll takes up or down as value, and a ref to scroll that container instead of the page. " +
 			"navigate loads the url in value in the task's one tab: on the person's own tab it opens that one tab of tofu's first, and every later navigate loads there, whatever the site. back goes back in it. a popup the page opens is loaded into that tab and closed. " +
+			"after a navigate, plan the next stretch as one batch rather than one action a call: a login or a search form is every fill and the submit together. an empty actions list is refused. " +
 			"wait takes a number of milliseconds, or text to wait for, as value. " +
 			"an action with no target and no expect does not run after one that changed the url, and the result says which it skipped. " +
 			"a click that another element covers does not run, and says what covers it. " +
@@ -493,7 +494,20 @@ func (t browserAct) Run(_ context.Context, raw json.RawMessage) (turn.Result, er
 	if err := json.Unmarshal(raw, &args); err != nil {
 		return turn.Result{}, fmt.Errorf("browser_act: arguments are not the expected shape: %w", err)
 	}
-	if len(args.Actions) == 0 || len(args.Actions) > konst.BrowserBatchMax {
+	if len(args.Actions) == 0 {
+		var snapshot string
+		err := t.session.drive(args.Tab, func(driver *browser.Driver) (err error) {
+			args.Tab = driver.Tab
+			snapshot, err = driver.Observe(true)
+			return err
+		})
+		if err != nil {
+			return turn.Result{}, fmt.Errorf("browser_act: refused, it carried no action, and %w", err)
+		}
+		content := fmt.Sprintf("refused: browser_act carried no action, and nothing ran. give 1 to %d actions on the page below\n\n", konst.BrowserBatchMax)
+		return turn.Result{Content: content + web.Untrusted(fmt.Sprintf("Chrome tab %d", args.Tab), window(snapshot, 1)), Command: fmt.Sprintf("tab %d act refused empty", args.Tab)}, nil
+	}
+	if len(args.Actions) > konst.BrowserBatchMax {
 		return turn.Result{}, fmt.Errorf("browser_act: give 1 to %d actions, not %d", konst.BrowserBatchMax, len(args.Actions))
 	}
 	var report strings.Builder
@@ -572,6 +586,7 @@ func (t browserAct) Run(_ context.Context, raw json.RawMessage) (turn.Result, er
 		} else {
 			snapshot, err = driver.ObserveChanges()
 		}
+		driver.Thinking()
 		return err
 	})
 	if err != nil {
@@ -580,6 +595,9 @@ func (t browserAct) Run(_ context.Context, raw json.RawMessage) (turn.Result, er
 	fmt.Fprintf(&report, "ran %d of %d", ran, len(args.Actions))
 	if skipped := len(args.Actions) - ran; skipped > 0 {
 		fmt.Fprintf(&report, ", %d skipped: observe the page as it is now and act again", skipped)
+	}
+	if loads && (strings.Contains(snapshot, `textbox "`) || strings.Contains(snapshot, `combobox "`)) && strings.Contains(snapshot, `button "`) {
+		report.WriteString("\nnext: this page shows a form. fill every field and submit it in one guarded batch, by role and name, with an expect_after on the result")
 	}
 	report.WriteString("\n\n")
 	return turn.Result{Content: report.String() + web.Untrusted(fmt.Sprintf("Chrome tab %d", args.Tab), window(snapshot, 1)), Command: fmt.Sprintf("tab %d act %d", args.Tab, ran)}, nil

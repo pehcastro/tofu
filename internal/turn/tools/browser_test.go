@@ -318,6 +318,7 @@ type cdpPage struct {
 	clicked  []string
 	commit   time.Duration
 	commits  time.Time
+	thinking int
 }
 
 func (p *cdpPage) answer(method string, params map[string]any) any {
@@ -415,6 +416,7 @@ func (p *cdpPage) serve(fromHost io.Reader, toHost io.Writer) {
 					Method string         `json:"method"`
 					Params map[string]any `json:"params"`
 				} `json:"calls"`
+				Thinking bool `json:"thinking"`
 			} `json:"args"`
 		}
 		if json.Unmarshal(raw, &call) != nil || call.T != "call" {
@@ -434,6 +436,9 @@ func (p *cdpPage) serve(fromHost io.Reader, toHost io.Writer) {
 		}
 		p.mu.Lock()
 		p.tabs = append(p.tabs, call.Tab)
+		if call.Args.Thinking {
+			p.thinking++
+		}
 		p.mu.Unlock()
 		answers := []any{}
 		for _, command := range call.Args.Calls {
@@ -758,6 +763,31 @@ func TestAFormSubmittedByEnterReturnsTheNextPagesSnapshot(t *testing.T) {
 	acted := run("browser_act", `{"tab":7,"actions":[{"action":"press","value":"Enter"}]}`)
 	if !strings.Contains(acted, "tab 7 https://www.google.test/search?q=airbnb") || !strings.Contains(acted, `button "Próxima"`) || strings.Contains(acted, `"Estou com sorte"`) {
 		t.Fatal("the act after Enter returned the old page, not the results the form submitted to")
+	}
+}
+
+func TestAnEmptyActIsRefusedWithTheSnapshotAndTouchesNothing(t *testing.T) {
+	page := &cdpPage{url: "https://stays.test/", buttons: []string{"Buscar", "Mapa"}}
+	try := browserOn(t, page, settings.DriverSteps)
+	if _, err := try("browser_observe", `{"tab":7}`); err != nil {
+		t.Fatal(err)
+	}
+	acted, err := try("browser_act", `{"tab":7,"actions":[]}`)
+	if err != nil || !strings.Contains(acted, "refused") || !strings.Contains(acted, `button "Mapa"`) || page.releases() != 0 {
+		t.Fatalf("an empty act returned %v and %d clicks; want the refusal with the snapshot and no click", err, page.releases())
+	}
+}
+
+func TestAnActEndsByTellingTheExtensionTofuIsThinking(t *testing.T) {
+	page := &cdpPage{url: "https://stays.test/", buttons: []string{"Buscar", "Mapa"}}
+	run := stepsOn(t, page)
+	run("browser_observe", `{"tab":7}`)
+	run("browser_act", `{"tab":7,"actions":[{"action":"click","target":{"role":"button","name":"Buscar"}}]}`)
+	page.mu.Lock()
+	thinking := page.thinking
+	page.mu.Unlock()
+	if thinking != 1 {
+		t.Fatalf("the extension was told tofu is thinking %d times after one act; want once, at its end", thinking)
 	}
 }
 

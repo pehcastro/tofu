@@ -552,6 +552,11 @@ func (d *Driver) show(deadline time.Time, ref, label string) (float64, float64, 
 	return x, y, err
 }
 
+func (d *Driver) Thinking() {
+	args, _ := json.Marshal(cdpArgs{Calls: []cdpCall{}, Thinking: true})
+	_, _ = d.Client.callBy(time.Now().Add(konst.BrowserActTimeoutMillis*time.Millisecond), d.Tab, opCDP, args)
+}
+
 func (d *Driver) fill(deadline time.Time, ref, text string) (value, path string, err error) {
 	object, err := d.resolve(deadline, ref)
 	if err != nil {

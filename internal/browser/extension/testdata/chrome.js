@@ -204,6 +204,19 @@ const scenarios = {groups: async () => {
   call(4, 9, 'snapshot');
   await quiet();
   return {};
+}, thinking: async () => {
+  call(1, 0, 'open', {url: 'https://stays.test/new'});
+  await quiet();
+  const point = label => ({t: 'call', tabId: 20, op: 'cdp', args: {calls: [], act: true, point: {x: 40, y: 60, label}}, cursor: true});
+  listeners.message({...point('tofu'), id: 2});
+  await quiet();
+  listeners.message({t: 'call', id: 3, tabId: 20, op: 'cdp', args: {calls: [], thinking: true}, cursor: true});
+  await quiet();
+  listeners.message({...point('tofu typing'), id: 4});
+  await quiet();
+  listeners.message({t: 'call', id: 5, tabId: 9, op: 'cdp', args: {calls: [], thinking: true}, cursor: true});
+  await quiet();
+  return {};
 }, cursor: async () => {
   const clicks = [['mouseMoved', 'none'], ['mousePressed', 'left'], ['mouseReleased', 'left']].map(([type, button]) => ({method: 'Input.dispatchMouseEvent', params: {type, x: 40, y: 60, button}}));
   listeners.message({t: 'call', id: 1, tabId: 9, op: 'cdp', args: {calls: clicks, act: true}, cursor: true});

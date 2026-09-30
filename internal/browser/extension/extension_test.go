@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"image/png"
 	"io/fs"
 	"os/exec"
@@ -301,6 +302,24 @@ func TestTheCursorMovesBeforeTheClickOnlyWhenTheRelaySaysSoAndLeavesWithTofu(t *
 	}
 	if strings.Contains(background, "await moveCursor") {
 		t.Error("the act waits for the cursor")
+	}
+}
+
+func TestThePillReadsThinkingBetweenActsAndTheNextActClearsIt(t *testing.T) {
+	run := inStubbedChrome(t, "thinking")
+	var painted []string
+	for _, entry := range run.Heard {
+		if entry[0] == "cursor" {
+			painted = append(painted, fmt.Sprint(entry[1], " ", entry[3]))
+		}
+	}
+	t.Logf("painted %q", painted)
+	if want := []string{"20 tofu", "20 tofu thinking", "20 tofu typing"}; !slices.Equal(painted, want) {
+		t.Fatalf("painted %q; want the act, thinking after it, the next act's label, and nothing on the person's tab 9", painted)
+	}
+	background := shipped(t, "background.js")
+	if !strings.Contains(background, "prefers-reduced-motion") || strings.Contains(background, "rotate") {
+		t.Error("the thinking pulse spins, or ignores reduced motion")
 	}
 }
 

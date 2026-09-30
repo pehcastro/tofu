@@ -17,6 +17,7 @@ const SELECT_ALL_MODIFIER = navigator.userAgent.includes('Mac') ? 4 : 2;
 const CURSOR_GLIDE_MS = 150;
 const CURSOR_RING_MS = 250;
 const CURSOR_IDLE_MS = 3000;
+const THINK_MS = 30000;
 const ORPHAN_MS = 2000;
 const NO_GROUP = -1;
 const GROUP_COLOR = 'orange';
@@ -250,12 +251,15 @@ function paintAt(tabId, x, y, label) {
   send(tabId, 'Runtime.evaluate', {expression: `(${paintCursor})(${x}, ${y}, ${JSON.stringify(label)}, ${CURSOR_GLIDE_MS}, ${CURSOR_RING_MS}, ${CURSOR_IDLE_MS})`}).catch(() => {});
 }
 
-async function relay(tabId, {calls, act, point}, cursor) {
+async function relay(tabId, {calls, act, point, thinking}, cursor) {
   await attach(tabId);
   if (act && !grouped.has(tabId)) serially(() => groupTab(tabId));
   const click = calls.find(({method}) => method === 'Input.dispatchMouseEvent');
   const at = point ?? (click && {...click.params, label: 'tofu'});
   if (cursor && at && opened.has(tabId)) paintAt(tabId, at.x, at.y, at.label);
+  if (cursor && thinking && opened.has(tabId)) {
+    send(tabId, 'Runtime.evaluate', {expression: `(${thinkCursor})(${JSON.stringify('tofu thinking')}, ${THINK_MS})`}).catch(() => {});
+  }
   return Promise.all(calls.map(({method, params}) => send(tabId, method, params).then(result => ({result}), error => ({error: error.message}))));
 }
 
@@ -274,17 +278,32 @@ function paintCursor(x, y, label, glideMs, ringMs, idleMs) {
       .r { position: fixed; left: -16px; top: -16px; width: 32px; height: 32px; box-sizing: border-box; border-radius: 50%; border: 2px solid rgba(217, 72, 15, 0.45); opacity: 0; pointer-events: none; }
       .r.on { animation: ring ${ringMs}ms ease-out ${glideMs}ms both; }
       @keyframes ring { from { opacity: 0.3; transform: scale(0.5); } to { opacity: 0; transform: scale(1); } }
+      .c.think span { animation: breathe 1600ms ease-in-out infinite; }
+      @keyframes breathe { 50% { opacity: 0.55; } }
+      @media (prefers-reduced-motion: reduce) { .c.think span { animation: none; } }
     </style><div class="c"><svg width="22" height="24" viewBox="0 0 11 12"><path d="M1 1v9l2.6-2.2 1.8 3.7 1.4-.7-1.8-3.6h3.4z" fill="#fff" stroke="#262626" stroke-width=".6" stroke-linejoin="round"/></svg><span>tofu</span></div><i class="r"></i>`;
     document.documentElement.append(host);
   }
   const cursor = host.tofu.querySelector('.c'), ring = host.tofu.querySelector('.r');
   host.tofu.querySelector('span').textContent = label;
+  cursor.classList.remove('think');
   cursor.style.opacity = '1';
   cursor.style.transform = `translate(${x}px, ${y}px)`;
   ring.style.translate = `${x}px ${y}px`;
   ring.classList.remove('on');
   void ring.offsetWidth;
   ring.classList.add('on');
+  clearTimeout(host.fade);
+  host.fade = setTimeout(() => { cursor.style.opacity = '0'; }, idleMs);
+}
+
+function thinkCursor(label, idleMs) {
+  const host = document.querySelector('[data-tofu-cursor]');
+  if (!host) return;
+  const cursor = host.tofu.querySelector('.c');
+  host.tofu.querySelector('span').textContent = label;
+  cursor.classList.add('think');
+  cursor.style.opacity = '1';
   clearTimeout(host.fade);
   host.fade = setTimeout(() => { cursor.style.opacity = '0'; }, idleMs);
 }
