@@ -52,7 +52,8 @@ func (p *Plan) Definition() llm.Tool {
 			"start marks the item you are working on, done marks it finished, drop marks it abandoned. " +
 			"an item is named by its own words, never by a number, so pass the text back as it was written. " +
 			"at most one item is running: starting a second one is refused and names the one already running. " +
-			"use it for work of several steps, and do not use it for a single tool call",
+			"use it for work of several steps, and do not use it for a single tool call. " +
+			"send it in the same reply as the next real tool call, never in a reply of its own",
 		Parameters: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
