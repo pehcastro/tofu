@@ -258,7 +258,7 @@ func (browserObserve) Definition() llm.Tool {
 	return llm.Tool{
 		Name: "browser_observe",
 		Description: "shows one Chrome tab as an accessibility snapshot: a line a node, indented, as role \"name\" [state, ref=e5], a value after a colon. " +
-			"a ref names one element for browser_act. interactive, the default, shows only nodes with a ref; false shows the whole tree. " +
+			"a ref names one element for browser_act. interactive, the default without from, shows only nodes with a ref; false, the default with from, shows the whole tree with its text. " +
 			"scrollable marks a container browser_act can scroll by its ref. * marks a ref new since the last observe of this page. " +
 			"a long tree is cut, and the cut names the from line that shows the rest. " +
 			"tab defaults to the tab tofu last worked in. " + howToBrowse + everythingFetchedIsUntrusted,
@@ -282,19 +282,23 @@ func (t browserObserve) Run(_ context.Context, raw json.RawMessage) (turn.Result
 	if err := json.Unmarshal(raw, &args); err != nil {
 		return turn.Result{}, fmt.Errorf("browser_observe: arguments are not the expected shape: %w", err)
 	}
+	interactive := args.From == 0
+	if args.Interactive != nil {
+		interactive = *args.Interactive
+	}
 	var snapshot string
 	err := t.session.drive(args.Tab, func(driver *browser.Driver) (err error) {
 		args.Tab = driver.Tab
-		snapshot, err = driver.Observe(args.Interactive == nil || *args.Interactive)
+		snapshot, err = driver.Observe(interactive)
 		return err
 	})
 	if err != nil {
 		return turn.Result{}, fmt.Errorf("browser_observe: %w", err)
 	}
-	return turn.Result{Content: web.Untrusted(fmt.Sprintf("Chrome tab %d", args.Tab), window(snapshot, args.From)), Command: fmt.Sprintf("tab %d observe", args.Tab)}, nil
+	return turn.Result{Content: web.Untrusted(fmt.Sprintf("Chrome tab %d", args.Tab), window(snapshot, args.From, interactive)), Command: fmt.Sprintf("tab %d observe", args.Tab)}, nil
 }
 
-func window(snapshot string, from int) string {
+func window(snapshot string, from int, interactive bool) string {
 	lines := slices.Collect(strings.Lines(snapshot))
 	from = min(max(from, 1), len(lines))
 	var shown strings.Builder
@@ -306,7 +310,7 @@ func window(snapshot string, from int) string {
 		shown.WriteString(lines[end])
 	}
 	if end < len(lines) {
-		fmt.Fprintf(&shown, "[cut: lines %d to %d, %d bytes, left out: browser_observe with {\"from\":%d} shows them]\n", end+1, len(lines), len(snapshot)-len(strings.Join(lines[:end], "")), end+1)
+		fmt.Fprintf(&shown, "[cut: lines %d to %d, %d bytes, left out: browser_observe with {\"interactive\":%v,\"from\":%d} shows them]\n", end+1, len(lines), len(snapshot)-len(strings.Join(lines[:end], "")), interactive, end+1)
 	}
 	return shown.String()
 }
@@ -320,8 +324,9 @@ func (browserAct) Definition() llm.Tool {
 		Name: "browser_act",
 		Description: fmt.Sprintf("runs up to %d actions in one Chrome tab, in order, each on a ref from the latest browser_observe or on a target by role and name. ", konst.BrowserBatchMax) +
 			"plan a predictable stretch as one guarded batch, the way a person does: open the date picker, click day 9, click day 15, apply. " +
-			"target {role, name, nth} finds the element on the page as it is when that action runs, so it survives refs that renumber; nth picks among equal names, from 1. " +
-			"expect is checked before the action and expect_after after it settles: url_has, text_has, and gone {role, name} for a dialog or a button that should close. " +
+			"target {role, name, nth} finds the element on the page as it is when that action runs, so it survives refs that renumber; nth picks among equal names, from 1. a ref still on the page wins over a target. " +
+			"leave out, or send null for, every field an action does not need. " +
+			"expect_after is checked after the action settles: url_has, text_has, and gone {role, name} for a dialog or a button that should close. " +
 			fmt.Sprintf("a target or a guard waits up to %d ms for the page. ", konst.BrowserGuardWaitMillis) +
 			"the batch stops at the first guard that fails, names it, and ends with what changed since the batch began. " +
 			"click takes a ref. fill takes a ref and the text as value, and answers the value it reads back. select takes a ref and the option as value. " +
@@ -329,9 +334,9 @@ func (browserAct) Definition() llm.Tool {
 			"navigate loads the url in value in the task's one tab: on the person's own tab it opens that one tab of tofu's first, and every later navigate loads there, whatever the site. back goes back in it. a popup the page opens is loaded into that tab and closed. " +
 			"after a navigate, plan the next stretch as one batch rather than one action a call: a login or a search form is every fill and the submit together. an empty actions list is refused. " +
 			"wait takes a number of milliseconds, or text to wait for, as value. " +
-			"an action with no target and no expect does not run after one that changed the url, and the result says which it skipped. " +
+			"an action on a ref with no target does not run after one that changed the url, and the result says which it skipped. " +
 			"a click that another element covers does not run, and says what covers it. " +
-			"after a navigate, back or wait the result ends with the page's full tree, with its text. after any other act it lists only the refs that changed since the last snapshot, + new, ~ changed, x gone, and every other ref still stands; when most of the page changed it ends with the whole interactive snapshot. " +
+			"after a navigate, back, wait or any action that changed the url the result ends with the page's full tree, with its text. after any other act it lists only the refs that changed since the last snapshot, + new, ~ changed, x gone, and every other ref still stands; when most of the page changed it ends with the whole interactive snapshot. " +
 			"the same action on the same role and name, on a page that did not change, is flagged, then refused, whatever its ref. " + howToBrowse + whatTofuReaches,
 		Parameters: map[string]any{
 			"type": "object",
@@ -343,12 +348,11 @@ func (browserAct) Definition() llm.Tool {
 					"items": map[string]any{
 						"type": "object",
 						"properties": map[string]any{
-							"ref":          map[string]any{"type": "string"},
+							"ref":          nullable("string"),
 							"target":       roleAndName(),
-							"action":       map[string]any{"type": "string", "enum": []string{"click", "fill", "select", "press", "scroll", "navigate", "back", "wait"}},
-							"value":        map[string]any{"type": "string"},
-							"expect":       guard(),
-							"expect_after": guard(),
+							"action":       map[string]any{"type": "string", "enum": browserActions()},
+							"value":        map[string]any{"type": []string{"string", "number", "null"}},
+							"expect_after": map[string]any{"type": []string{"object", "null"}, "properties": map[string]any{"url_has": nullable("string"), "text_has": nullable("string"), "gone": roleAndName()}},
 						},
 						"required": []string{"action"},
 					},
@@ -359,15 +363,17 @@ func (browserAct) Definition() llm.Tool {
 	}
 }
 
-func roleAndName() map[string]any {
-	return map[string]any{"type": "object", "required": []string{"role", "name"}, "properties": map[string]any{
-		"role": map[string]any{"type": "string"}, "name": map[string]any{"type": "string"}, "nth": map[string]any{"type": "integer"},
-	}}
+func browserActions() []string {
+	return []string{"click", "fill", "select", "press", "scroll", "navigate", "back", "wait"}
 }
 
-func guard() map[string]any {
-	return map[string]any{"type": "object", "properties": map[string]any{
-		"url_has": map[string]any{"type": "string"}, "text_has": map[string]any{"type": "string"}, "gone": roleAndName(),
+func nullable(kind string) map[string]any {
+	return map[string]any{"type": []string{kind, "null"}}
+}
+
+func roleAndName() map[string]any {
+	return map[string]any{"type": []string{"object", "null"}, "required": []string{"role", "name"}, "properties": map[string]any{
+		"role": map[string]any{"type": "string"}, "name": map[string]any{"type": "string"}, "nth": nullable("integer"),
 	}}
 }
 
@@ -376,14 +382,45 @@ type browserStep struct {
 	Action      string         `json:"action"`
 	Value       string         `json:"value"`
 	Target      *browserTarget `json:"target"`
-	Expect      *browserGuard  `json:"expect"`
 	ExpectAfter *browserGuard  `json:"expect_after"`
+}
+
+func (s *browserStep) UnmarshalJSON(raw []byte) error {
+	type plain browserStep
+	var step struct {
+		plain
+		Value  json.RawMessage `json:"value"`
+		Expect *browserGuard   `json:"expect"`
+	}
+	var fields map[string]json.RawMessage
+	if err := cmp.Or(json.Unmarshal(raw, &step), json.Unmarshal(raw, &fields)); err != nil {
+		return err
+	}
+	for _, action := range browserActions() {
+		if said, named := fields[action]; named && step.Action == "" {
+			step.Action, step.Value = action, said
+		}
+	}
+	*s = browserStep(step.plain)
+	if json.Unmarshal(step.Value, &s.Value) != nil && string(step.Value) != "null" {
+		s.Value = string(step.Value)
+	}
+	s.Target = s.Target.present()
+	s.ExpectAfter = cmp.Or(s.ExpectAfter.present(), step.Expect.present())
+	return nil
 }
 
 type browserTarget struct {
 	Role string `json:"role"`
 	Name string `json:"name"`
 	Nth  int    `json:"nth"`
+}
+
+func (t *browserTarget) present() *browserTarget {
+	if t == nil || t.Role == "" && t.Name == "" {
+		return nil
+	}
+	return t
 }
 
 func (t browserTarget) String() string {
@@ -399,6 +436,16 @@ type browserGuard struct {
 	Gone    *browserTarget `json:"gone"`
 }
 
+func (g *browserGuard) present() *browserGuard {
+	if g == nil {
+		return nil
+	}
+	if g.Gone = g.Gone.present(); *g == (browserGuard{}) {
+		return nil
+	}
+	return g
+}
+
 func waitFor(check func() (string, error)) (string, error) {
 	until := time.Now().Add(konst.BrowserGuardWaitMillis * time.Millisecond)
 	for {
@@ -410,7 +457,7 @@ func waitFor(check func() (string, error)) (string, error) {
 	}
 }
 
-func (g *browserGuard) failed(driver *browser.Driver, label string) (string, error) {
+func (g *browserGuard) failed(driver *browser.Driver) (string, error) {
 	if g == nil {
 		return "", nil
 	}
@@ -420,21 +467,24 @@ func (g *browserGuard) failed(driver *browser.Driver, label string) (string, err
 		case err != nil:
 			return "", err
 		case g.URLHas != "" && !strings.Contains(url, g.URLHas):
-			return fmt.Sprintf("%s url_has %q failed, the url is %s", label, g.URLHas, url), nil
+			return fmt.Sprintf("expect_after url_has %q failed, the url is %s", g.URLHas, url), nil
 		case g.TextHas != "" && !strings.Contains(text, g.TextHas):
-			return fmt.Sprintf("%s text_has %q failed, the page does not show it", label, g.TextHas), nil
+			return fmt.Sprintf("expect_after text_has %q failed, the page does not show it", g.TextHas), nil
 		case g.Gone == nil:
 			return "", nil
 		}
 		ref, err := driver.Find(g.Gone.Role, g.Gone.Name, g.Gone.Nth)
 		if ref != "" {
-			return fmt.Sprintf("%s gone %s failed, it is still on the page as %s", label, g.Gone, ref), err
+			return fmt.Sprintf("expect_after gone %s failed, it is still on the page as %s", g.Gone, ref), err
 		}
 		return "", err
 	})
 }
 
 func (s *browserStep) resolve(driver *browser.Driver) (string, error) {
+	if driver.Target(s.Ref) != s.Ref {
+		s.Target = nil
+	}
 	if s.Target == nil {
 		return "", nil
 	}
@@ -505,7 +555,7 @@ func (t browserAct) Run(_ context.Context, raw json.RawMessage) (turn.Result, er
 			return turn.Result{}, fmt.Errorf("browser_act: refused, it carried no action, and %w", err)
 		}
 		content := fmt.Sprintf("refused: browser_act carried no action, and nothing ran. give 1 to %d actions on the page below\n\n", konst.BrowserBatchMax)
-		return turn.Result{Content: content + web.Untrusted(fmt.Sprintf("Chrome tab %d", args.Tab), window(snapshot, 1)), Command: fmt.Sprintf("tab %d act refused empty", args.Tab)}, nil
+		return turn.Result{Content: content + web.Untrusted(fmt.Sprintf("Chrome tab %d", args.Tab), window(snapshot, 1, true)), Command: fmt.Sprintf("tab %d act refused empty", args.Tab)}, nil
 	}
 	if len(args.Actions) > konst.BrowserBatchMax {
 		return turn.Result{}, fmt.Errorf("browser_act: give 1 to %d actions, not %d", konst.BrowserBatchMax, len(args.Actions))
@@ -527,13 +577,10 @@ func (t browserAct) Run(_ context.Context, raw json.RawMessage) (turn.Result, er
 	}
 	err := t.session.drive(args.Tab, func(driver *browser.Driver) error {
 		for _, step := range actions {
-			if changed && step.Target == nil && step.Expect == nil && step.Action != "wait" {
+			if changed && step.Target == nil && step.Ref != "" {
 				break
 			}
-			failed, err := step.Expect.failed(driver, "expect")
-			if failed == "" && err == nil {
-				failed, err = step.resolve(driver)
-			}
+			failed, err := step.resolve(driver)
 			if err != nil {
 				return err
 			}
@@ -566,12 +613,12 @@ func (t browserAct) Run(_ context.Context, raw json.RawMessage) (turn.Result, er
 			}
 			fmt.Fprintf(&report, "%d. %s: %s\n", ran+1, step, line)
 			ran++
-			loads = loads || step.Action == "navigate" || step.Action == "back" || step.Action == "wait"
+			changed = changed || moved.URLChanged || moved.Opened != 0
+			loads = loads || changed || step.Action == "navigate" || step.Action == "back" || step.Action == "wait"
 			if err != nil || moved.Covered != "" {
 				break
 			}
-			changed = changed || moved.URLChanged || moved.Opened != 0
-			if failed, err = step.ExpectAfter.failed(driver, "expect_after"); err != nil {
+			if failed, err = step.ExpectAfter.failed(driver); err != nil {
 				return err
 			}
 			if failed != "" {
@@ -600,7 +647,7 @@ func (t browserAct) Run(_ context.Context, raw json.RawMessage) (turn.Result, er
 		report.WriteString("\nnext: this page shows a form. fill every field and submit it in one guarded batch, by role and name, with an expect_after on the result")
 	}
 	report.WriteString("\n\n")
-	return turn.Result{Content: report.String() + web.Untrusted(fmt.Sprintf("Chrome tab %d", args.Tab), window(snapshot, 1)), Command: fmt.Sprintf("tab %d act %d", args.Tab, ran)}, nil
+	return turn.Result{Content: report.String() + web.Untrusted(fmt.Sprintf("Chrome tab %d", args.Tab), window(snapshot, 1, !loads)), Command: fmt.Sprintf("tab %d act %d", args.Tab, ran)}, nil
 }
 
 func targets(op browser.Op) bool {

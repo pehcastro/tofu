@@ -697,11 +697,12 @@ func TestASixtyKilobytePageTreeFitsTheResultCapAndTheRestIsReachable(t *testing.
 		}
 	}
 	pages := 1
-	for from := regexp.MustCompile(`"from":(\d+)`).FindStringSubmatch(observed); from != nil; from = regexp.MustCompile(`"from":(\d+)`).FindStringSubmatch(observed) {
-		observed = run("browser_observe", `{"tab":7,"from":`+from[1]+`}`)
+	hint := regexp.MustCompile(`browser_observe with (\{[^}]*"from":(\d+)\})`)
+	for from := hint.FindStringSubmatch(observed); from != nil; from = hint.FindStringSubmatch(observed) {
+		observed = run("browser_observe", from[1])
 		pages++
 		if len(observed) >= konst.TurnResultBytesCap || strings.Contains(observed, "Listing 000") || pages > 4 {
-			t.Fatalf("page %d from line %s is %d bytes, repeats the first listing, or never ends", pages, from[1], len(observed))
+			t.Fatalf("page %d from line %s is %d bytes, repeats the first listing, or never ends", pages, from[2], len(observed))
 		}
 	}
 	if pages == 1 || !strings.Contains(observed, "Listing 599") {
@@ -809,10 +810,72 @@ func TestAURLCheckHoldsOnTheNewPageAfterANavigateMidBatch(t *testing.T) {
 	run("browser_observe", `{"tab":7}`)
 	acted := run("browser_act", `{"tab":7,"actions":[
 		{"action":"navigate","value":"https://stays.test/s?checkin=2026-10-09"},
-		{"action":"click","target":{"role":"button","name":"Buscar"},"expect":{"url_has":"checkin="}},
-		{"action":"click","target":{"role":"button","name":"Mapa"},"expect":{"url_has":"checkout="}}]}`)
-	if clicked := page.clicks(); !slices.Equal(clicked, []string{"Buscar"}) || !strings.Contains(acted, `expect url_has "checkout=" failed, the url is https://stays.test/s?checkin=2026-10-09`) || !strings.Contains(acted, "ran 2 of 3") {
-		t.Fatalf("across a navigate the batch clicked %q; want Buscar under checkin=, then a stop naming checkout=", clicked)
+		{"action":"click","target":{"role":"button","name":"Buscar"},"expect_after":{"url_has":"checkin="}},
+		{"action":"click","target":{"role":"button","name":"Mapa"},"expect_after":{"url_has":"checkout="}}]}`)
+	if clicked := page.clicks(); !slices.Equal(clicked, []string{"Buscar", "Mapa"}) || !strings.Contains(acted, `expect_after url_has "checkout=" failed, the url is https://stays.test/s?checkin=2026-10-09`) || !strings.Contains(acted, "ran 3 of 3") {
+		t.Fatalf("across a navigate the batch clicked %q; want Buscar under checkin=, then Mapa and a stop naming checkout=", clicked)
+	}
+}
+
+func TestZeroFilledOptionalFieldsReadAsAbsent(t *testing.T) {
+	page := &cdpPage{url: "https://stays.test/", buttons: []string{"Buscar", "Mapa"}}
+	run := stepsOn(t, page)
+	run("browser_observe", `{"tab":7}`)
+	empty := `"target":{"role":"","name":"","nth":0},"expect_after":{"url_has":"","text_has":"","gone":{"role":"","name":"","nth":0}}`
+	acted := run("browser_act", `{"tab":7,"actions":[{"action":"navigate","value":"https://stays.test/s",`+empty+`,"ref":""}]}`)
+	if !strings.Contains(acted, "ran 1 of 1") || strings.Contains(acted, "not on the page") {
+		t.Fatal("a navigate whose optional fields a model filled with zero values did not run")
+	}
+}
+
+func TestALiveRefWinsOverATargetWhoseNameMisses(t *testing.T) {
+	page := &cdpPage{url: "https://stays.test/", buttons: []string{"Buscar", "Mapa"}}
+	run := stepsOn(t, page)
+	mapa := regexp.MustCompile(`button "Mapa" \[ref=(e\d+)\]`).FindStringSubmatch(run("browser_observe", `{"tab":7}`))
+	acted := run("browser_act", `{"tab":7,"actions":[{"ref":"`+mapa[1]+`","action":"click","target":{"role":"button","name":"Mapa aberto"}}]}`)
+	if clicked := page.clicks(); !slices.Equal(clicked, []string{"Mapa"}) || !strings.Contains(acted, "ran 1 of 1") {
+		t.Fatalf("a click on live ref %s with a missing target clicked %q", mapa[1], clicked)
+	}
+}
+
+func TestAnExpectIsCheckedAfterItsAction(t *testing.T) {
+	page := &cdpPage{url: "https://stays.test/", next: "https://stays.test/page-2"}
+	run := stepsOn(t, page)
+	run("browser_observe", `{"tab":7}`)
+	acted := run("browser_act", `{"tab":7,"actions":[{"ref":"e1","action":"click","expect":{"url_has":"page-2"}}]}`)
+	if page.releases() != 1 || !strings.Contains(acted, "ran 1 of 1") || strings.Contains(acted, "failed") {
+		t.Fatalf("a click whose expect names its own result clicked %d times", page.releases())
+	}
+	acted = run("browser_act", `{"tab":7,"actions":[{"action":"navigate","value":"https://stays.test/","expect":{"url_has":"checkout="}}]}`)
+	if !strings.Contains(acted, `1. navigate "https://stays.test/": stopped, expect_after url_has "checkout=" failed`) {
+		t.Fatal("an expect that fails after its action is not named as a stop after it ran")
+	}
+}
+
+func TestAClickThatChangesTheURLReturnsThePageText(t *testing.T) {
+	page := &cdpPage{url: "https://stays.test/", next: "https://stays.test/page-2", price: time.Nanosecond}
+	run := stepsOn(t, page)
+	run("browser_observe", `{"tab":7}`)
+	if acted := run("browser_act", `{"tab":7,"actions":[{"ref":"e1","action":"click"}]}`); !strings.Contains(acted, "Total R$ 4.667") {
+		t.Fatal("the click that changed the url returned no page text")
+	}
+}
+
+func TestANumericWaitAndARefLessScrollRunAfterAURLChange(t *testing.T) {
+	page := &cdpPage{url: "https://stays.test/", next: "https://stays.test/page-2"}
+	run := stepsOn(t, page)
+	run("browser_observe", `{"tab":7}`)
+	acted := run("browser_act", `{"tab":7,"actions":[{"ref":"e1","action":"click"},{"action":"scroll","value":"down"},{"wait":300},{"action":"wait","value":200},{"ref":"e2","action":"click"}]}`)
+	if !strings.Contains(acted, `3. wait "300"`) || !strings.Contains(acted, `4. wait "200"`) || !strings.Contains(acted, "ran 4 of 5") || page.releases() != 1 {
+		t.Fatal("after a url change the scroll and the waits did not run, or the stale ref did")
+	}
+}
+
+func TestAnObserveFromALineReadsTheWholeTree(t *testing.T) {
+	page := &cdpPage{url: "https://stays.test/", price: time.Nanosecond}
+	run := stepsOn(t, page)
+	if observed := run("browser_observe", `{"tab":7,"from":1}`); !strings.Contains(observed, "Total R$ 4.667") {
+		t.Fatal("an observe with from showed only the interactive tree")
 	}
 }
 
