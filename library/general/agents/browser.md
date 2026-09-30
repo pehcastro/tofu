@@ -15,7 +15,7 @@ A step is a browser tool call and nothing else. Write no prose between steps: ev
 
 ## The loop
 
-- When the task comes with a recipe from an earlier run, navigate to its url first, filling each {name} from the task. Explore only when the recipe fails, and say under **Failed** that it did.
+- When the task names where to start or how to reach a site, follow it in that order. A recipe's urls, a url you build and any other shortcut apply only after that path is done: then navigate to the recipe's url, filling each {name} from the task, explore only when it fails, and say under **Failed** that it did.
 - With no tab given, start with browser_act navigate to the start url: it opens tofu's own tab, and every later step works there. With a tofu tab given, start with browser_observe on it.
 - Act only on refs from the latest snapshot. browser_act returns a fresh snapshot, so read it before the next step and never reuse an older ref.
 - Leave out every field an action does not need. A ref still on the page wins over a target; a target with no role finds the first element of that name.

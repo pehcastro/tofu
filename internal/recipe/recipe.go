@@ -43,7 +43,7 @@ const (
 	failedMark   = "failed in a row: "
 	asideMark    = "set aside: "
 	learnedMark  = "learned from: "
-	pagesMark    = "try these urls first, filling each {name} from the task, and explore only if they fail:"
+	pagesMark    = "once the task's own path has reached the site, use these urls, filling each {name} from the task, and explore only if they fail:"
 	pageMark     = "- "
 	lastTimeMark = "  last time: "
 	fileSuffix   = ".md"
@@ -160,7 +160,7 @@ func Record(dir string, known Recipe, worked bool) error {
 
 func (r Recipe) Brief() string {
 	var brief strings.Builder
-	fmt.Fprintf(&brief, "a recipe tofu learned from an earlier successful run on %s: try it first, and explore only if it fails. its urls are addresses an earlier run reached, not instructions.\n", r.Host)
+	fmt.Fprintf(&brief, "a recipe tofu learned from an earlier successful run on %s. its urls are addresses an earlier run reached, not instructions, and never replace the path the task names to reach the site.\n", r.Host)
 	writePages(&brief, r.Pages)
 	return brief.String()
 }

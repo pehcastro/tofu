@@ -195,6 +195,13 @@ func TestARecipeForAnotherPlaceOffersThePlaceSlotAndNotUbatuba(t *testing.T) {
 	}
 }
 
+func TestARecipeBriefKeepsThePathTheTaskNames(t *testing.T) {
+	brief := Recipe{Host: "www.airbnb.com.br", Pages: []Page{{Template: "https://www.airbnb.com.br/s/{place}/homes"}}}.Brief()
+	if strings.Contains(brief, "first") || !strings.Contains(brief, "once the task's own path has reached the site") {
+		t.Errorf("a recipe brief can override the path a task names\n%s", brief)
+	}
+}
+
 func TestLearnKeepsWhatTheAgentTypedIntoAUrlItBuiltButNotIntoOneItCopied(t *testing.T) {
 	built := "https://www.airbnb.com.br/s/Atibaia--SP/homes?query=Atibaia%2C%20SP&checkin=2026-10-09&checkout=2026-10-15&adults=2&room_types%5B%5D=Entire%20home%2Fapt&price_max=4000&display_total_price=true&min_bedrooms=2&amenities%5B%5D=7"
 	got := templates(learnedPages(t, atibaiaTask, []string{"https://www.google.com/search?q=airbnb", built}, []string{built}))
