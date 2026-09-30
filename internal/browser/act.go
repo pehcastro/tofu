@@ -103,7 +103,7 @@ const pendingRequests = `(() => {
   return {pending: pending.length, loading: document.readyState !== 'complete'};
 })()`
 
-const pageStateScript = `({url: location.href, count: document.getElementsByTagName('*').length, text: document.body ? document.body.innerText : '',
+const pageStateScript = `({url: location.href, count: document.querySelectorAll('*:not([data-tofu-cursor])').length, text: document.body ? document.body.innerText : '',
   status: (performance.getEntries().find(entry => entry.entryType === 'navigation') || {}).responseStatus || 0,
   heading: document.title + '\n' + ((document.querySelector('h1') || {}).innerText || ''),
   controls: Array.from(document.querySelectorAll('input, select, textarea, [aria-checked], [aria-expanded], [aria-pressed], [aria-selected]'),
@@ -227,9 +227,10 @@ func (d *Driver) do(deadline time.Time, move Move) (Moved, error) {
 		return Moved{}, err
 	}
 	var moved Moved
+	var toggleStuck bool
 	switch move.Kind {
 	case MoveClick:
-		moved, err = d.click(deadline, move.Ref)
+		moved, toggleStuck, err = d.click(deadline, move.Ref)
 	case MoveFill:
 		var path string
 		moved.Value, path, err = d.fill(deadline, move.Ref, move.Value)
@@ -261,7 +262,7 @@ func (d *Driver) do(deadline time.Time, move Move) (Moved, error) {
 		d.awaitNavigation(deadline, before, tabsBefore)
 	}
 	moved, err = d.measure(deadline, move, before, tabsBefore, moved)
-	if err == nil && !moved.PageChanged && moved.Opened == 0 {
+	if err == nil && (!moved.PageChanged || toggleStuck) && moved.Opened == 0 {
 		if via := d.fallback(deadline, move); via != "" {
 			moved, err = d.measure(deadline, move, before, tabsBefore, moved)
 			if moved.PageChanged || moved.Opened != 0 {
@@ -410,16 +411,38 @@ func (d *Driver) resolve(deadline time.Time, ref string) (string, error) {
 	return resolved.Object.ObjectID, err
 }
 
-func (d *Driver) click(deadline time.Time, ref string) (Moved, error) {
+const checkedState = `function() {
+  const box = this.control || this;
+  if (box.type === 'checkbox' || box.type === 'radio') return String(box.checked);
+  return box.getAttribute ? box.getAttribute('aria-checked') : null;
+}`
+
+func (d *Driver) click(deadline time.Time, ref string) (moved Moved, toggleStuck bool, err error) {
 	backend, x, y, err := d.center(deadline, ref)
-	if err != nil {
-		return Moved{}, err
+	var resolved struct {
+		Object remoteObject `json:"object"`
 	}
-	covered, err := d.blocker(deadline, backend, x, y)
-	if err != nil || covered.Covered != "" {
-		return covered, err
+	var answer cdpAnswer
+	if err == nil {
+		answer, err = d.one(deadline, false, byBackend("DOM.resolveNode", backend))
 	}
-	return Moved{}, d.act(deadline, mouse("mouseMoved", "none", x, y), mouse("mousePressed", "left", x, y), mouse("mouseReleased", "left", x, y))
+	if err == nil {
+		err = answer.into(&resolved)
+	}
+	object := resolved.Object.ObjectID
+	if err == nil {
+		moved, err = d.blocker(deadline, object, x, y)
+	}
+	if err != nil || moved.Covered != "" {
+		return moved, false, err
+	}
+	var before, after *string
+	_ = d.value(deadline, false, callOn(object, checkedState, true), &before)
+	if err = d.act(deadline, mouse("mouseMoved", "none", x, y), mouse("mousePressed", "left", x, y), mouse("mouseReleased", "left", x, y)); err != nil || before == nil {
+		return Moved{}, false, err
+	}
+	_ = d.value(deadline, false, callOn(object, checkedState, true), &after)
+	return Moved{}, after != nil && *after == *before, nil
 }
 
 const linkOf = "function() { const link = this.closest && this.closest('a[href]'); return link ? link.href : ''; }"
@@ -429,30 +452,24 @@ type axTreeNode struct {
 	ParentID string `json:"parentId"`
 }
 
-func (d *Driver) blocker(deadline time.Time, backend int, x, y float64) (Moved, error) {
-	answer, err := d.one(deadline, false, byBackend("DOM.resolveNode", backend))
-	var resolved struct {
-		Object remoteObject `json:"object"`
-	}
-	if err != nil || answer.into(&resolved) != nil {
-		return Moved{}, err
-	}
-	if answer, err = d.one(deadline, false, callOn(resolved.Object.ObjectID, blockerAt, false, x, y)); err != nil {
+func (d *Driver) blocker(deadline time.Time, object string, x, y float64) (Moved, error) {
+	answer, err := d.one(deadline, false, callOn(object, blockerAt, false, x, y))
+	if err != nil {
 		return Moved{}, err
 	}
 	hit, err := answer.object()
 	if err != nil || hit.ObjectID == "" {
 		return Moved{}, nil
 	}
-	answers, err := d.cdp(deadline, false, callOn(resolved.Object.ObjectID, linkOf, true), callOn(hit.ObjectID, linkOf, true),
+	answers, err := d.cdp(deadline, false, callOn(object, linkOf, true), callOn(hit.ObjectID, linkOf, true),
 		cdpCall{Method: "DOM.describeNode", Params: map[string]any{"objectId": hit.ObjectID}}, cdpCall{Method: "Accessibility.getFullAXTree"})
 	if err != nil {
 		return Moved{}, err
 	}
 	var links [2]string
 	for i := range links {
-		if object, err := answers[i].object(); err == nil {
-			_ = json.Unmarshal(object.Value, &links[i])
+		if link, err := answers[i].object(); err == nil {
+			_ = json.Unmarshal(link.Value, &links[i])
 		}
 	}
 	if links[0] != "" && links[0] == links[1] {
@@ -515,7 +532,7 @@ func (d *Driver) closeRef(nodes []axTreeNode, byID map[string]int, dialog int) s
 		node := nodes[at]
 		queue = append(queue, node.ChildIDs...)
 		name := strings.ToLower(strings.TrimSpace(node.Name.text()))
-		closes := name == "x" || name == "×" || name == "✕" || slices.ContainsFunc([]string{"close", "fechar", "cerrar", "fermer", "schließen", "chiudi", "sluiten"}, func(word string) bool { return strings.Contains(name, word) })
+		closes := name == "x" || name == "\u00d7" || name == "\u2715" || slices.ContainsFunc([]string{"close", "fechar", "cerrar", "fermer", "schlie\u00dfen", "chiudi", "sluiten"}, func(word string) bool { return strings.Contains(name, word) })
 		if node.Ignored || node.Role.text() != "button" || !closes || node.Backend == 0 {
 			continue
 		}
