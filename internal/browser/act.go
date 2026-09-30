@@ -231,12 +231,13 @@ func (d *Driver) do(deadline time.Time, move Move) (Moved, error) {
 	case MoveClick:
 		moved, err = d.click(deadline, move.Ref)
 	case MoveFill:
-		moved.Value, err = d.fill(deadline, move.Ref, move.Value)
-		switch moved.Field = "filled"; {
+		var path string
+		moved.Value, path, err = d.fill(deadline, move.Ref, move.Value)
+		switch moved.Field = "filled through " + path; {
 		case moved.Value == "":
-			moved.Field = "field still empty after typing"
+			moved.Field = "field still empty after insertText, typed keys and the native value setter"
 		case moved.Value != move.Value:
-			moved.Field = "the field reads " + strconv.Quote(moved.Value) + " after typing"
+			moved.Field = "the field reads " + strconv.Quote(moved.Value) + " after insertText, typed keys and the native value setter"
 		}
 	case MoveSelect:
 		err = d.pick(deadline, move.Ref, move.Value)
@@ -534,31 +535,48 @@ func (d *Driver) closeRef(nodes []axTreeNode, byID map[string]int, dialog int) s
 	return ""
 }
 
-func (d *Driver) fill(deadline time.Time, ref, text string) (string, error) {
+const nativeValue = `function(text) {
+  const proto = this instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : this instanceof HTMLInputElement ? HTMLInputElement.prototype : null;
+  const setter = proto && Object.getOwnPropertyDescriptor(proto, 'value').set;
+  if (setter) setter.call(this, text); else if (this.isContentEditable) this.textContent = text; else this.value = text;
+  for (const type of ['input', 'change']) this.dispatchEvent(new Event(type, {bubbles: true}));
+  this.dispatchEvent(new FocusEvent('blur'));
+}`
+
+func (d *Driver) fill(deadline time.Time, ref, text string) (value, path string, err error) {
 	object, err := d.resolve(deadline, ref)
+	if err != nil {
+		return "", "", err
+	}
 	emptied := []cdpCall{callOn(object, "function() { this.focus(); }", true), callOn(object, clearValue, true)}
-	if err == nil {
-		err = d.act(deadline, append(slices.Clone(emptied), cdpCall{Method: "Input.insertText", Params: map[string]any{"text": text}})...)
+	var typed []cdpCall
+	if _, x, y, err := d.center(deadline, ref); err == nil {
+		typed = append(typed, mouse("mousePressed", "left", x, y), mouse("mouseReleased", "left", x, y))
 	}
-	readBack := callOn(object, "function() { return this.value ?? this.textContent; }", true)
-	var value string
-	if err == nil {
-		err = d.value(deadline, false, readBack, &value)
-	}
-	if err != nil || value == text {
-		return value, err
-	}
-	typed := emptied
+	typed = append(typed, emptied...)
 	for _, char := range text {
 		key := string(char)
 		typed = append(typed,
 			cdpCall{Method: "Input.dispatchKeyEvent", Params: map[string]any{"type": "keyDown", "key": key, "text": key, "unmodifiedText": key}},
 			cdpCall{Method: "Input.dispatchKeyEvent", Params: map[string]any{"type": "keyUp", "key": key}})
 	}
-	if err = d.act(deadline, typed...); err == nil {
-		err = d.value(deadline, false, readBack, &value)
+	readBack := callOn(object, "function() { return this.value ?? this.textContent; }", true)
+	for _, try := range []struct {
+		path  string
+		calls []cdpCall
+	}{
+		{"insertText", append(slices.Clone(emptied), cdpCall{Method: "Input.insertText", Params: map[string]any{"text": text}})},
+		{"typed keys after a click", typed},
+		{"the native value setter", []cdpCall{callOn(object, nativeValue, true, text)}},
+	} {
+		if err = d.act(deadline, try.calls...); err == nil {
+			err = d.value(deadline, false, readBack, &value)
+		}
+		if err != nil || value == text {
+			return value, try.path, err
+		}
 	}
-	return value, err
+	return value, "", nil
 }
 
 func (d *Driver) pick(deadline time.Time, ref, option string) error {

@@ -308,6 +308,7 @@ type fakeNode struct {
 	Passive    bool      `json:"passive"`
 	Value      string    `json:"value"`
 	Stubborn   bool      `json:"ignoresInsert"`
+	KeyDeaf    bool      `json:"ignoresKeys"`
 }
 
 type fakePage struct {
@@ -535,6 +536,9 @@ func (p *fakePage) cdp(method string, params map[string]any, opened func(int, st
 		case strings.Contains(script, "this.value = ''"):
 			target.Value = ""
 			return value(nil), nil
+		case strings.Contains(script, "getOwnPropertyDescriptor"):
+			target.Value = fmt.Sprint(args[0].(map[string]any)["value"])
+			return value(nil), nil
 		case strings.Contains(script, "return this.value"):
 			return value(target.Value), nil
 		case strings.Contains(script, "this.click()"):
@@ -564,7 +568,7 @@ func (p *fakePage) cdp(method string, params map[string]any, opened func(int, st
 		}
 		return map[string]any{}, nil
 	case "Input.dispatchKeyEvent":
-		if text, typed := params["text"].(string); typed && params["type"] == "keyDown" && text != "\r" && p.node(p.focused) != nil {
+		if text, typed := params["text"].(string); typed && params["type"] == "keyDown" && text != "\r" && p.node(p.focused) != nil && !p.node(p.focused).KeyDeaf {
 			p.node(p.focused).Value += text
 		}
 		return map[string]any{}, nil
@@ -871,6 +875,18 @@ func TestALinkThatSwapsContentInPlaceReturnsWellUnderASecond(t *testing.T) {
 		t.Fatalf("a link that changes the page in place took %v and returned %+v, %v; want the page changed, no url change, well under a second", took, moved, err)
 	}
 	page.sawFired(t, "pool")
+}
+
+func TestAComboboxDeafToInsertAndKeysTakesTheNativeSetterAndSaysSo(t *testing.T) {
+	driver, page := drivenPage(t, "combobox")
+	moved, err := driver.Do(browser.Move{Ref: refOf(t, observe(t, driver, true), "combobox", "Onde"), Kind: browser.MoveFill, Value: "Atibaia"})
+	t.Logf("the fill says: %s", moved)
+	page.mu.Lock()
+	filled := page.node(2).Value
+	page.mu.Unlock()
+	if err != nil || filled != "Atibaia" || !strings.HasPrefix(moved.String(), "filled through the native value setter") {
+		t.Fatalf("a combobox deaf to insertText and keys holds %q after a fill that said %q, %v", filled, moved, err)
+	}
 }
 
 func TestANavigateToA500PageSaysItIsAnErrorPage(t *testing.T) {

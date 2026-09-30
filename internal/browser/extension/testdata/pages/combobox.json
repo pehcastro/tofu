@@ -1,0 +1,10 @@
+{
+  "url": "https://stays.test/",
+  "title": "Stays",
+  "loader": "L1",
+  "ours": true,
+  "nodes": [
+    {"id": 1, "role": "RootWebArea", "name": "Stays", "children": [2]},
+    {"id": 2, "role": "combobox", "name": "Onde", "box": [10, 10, 200, 20], "ignoresInsert": true, "ignoresKeys": true}
+  ]
+}
