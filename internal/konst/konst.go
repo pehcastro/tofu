@@ -209,7 +209,7 @@ const (
 	BrowserURLQueryRunes        = 80
 	BrowserDOMQuietMillis       = 300
 	BrowserDOMQuietMaxMillis    = 1500
-	BrowserActBatchMax          = 5
+	BrowserBatchMax             = 10
 	BrowserLoopWindow           = 20
 	BrowserRepeatNotice         = 3
 	BrowserRepeatRefuse         = 5
@@ -243,3 +243,8 @@ const (
 const BrowserDeltaWholePercent = 70
 
 const BrowserSettleTickMillis = 50
+
+const (
+	BrowserGuardWaitMillis = 1500
+	BrowserGuardPollMillis = 100
+)

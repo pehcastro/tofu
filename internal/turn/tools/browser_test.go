@@ -312,6 +312,10 @@ type cdpPage struct {
 	rerender bool
 	renders  int
 	tabs     []int
+	screens  map[string][]string
+	names    map[int]string
+	aimed    int
+	clicked  []string
 }
 
 func (p *cdpPage) answer(method string, params map[string]any) any {
@@ -319,6 +323,9 @@ func (p *cdpPage) answer(method string, params map[string]any) any {
 	defer p.mu.Unlock()
 	script := fmt.Sprint(params["expression"], params["functionDeclaration"])
 	value := func(v any) any { return map[string]any{"result": map[string]any{"type": "object", "value": v}} }
+	if backend, aimed := params["backendNodeId"].(float64); aimed {
+		p.aimed = int(backend)
+	}
 	switch method {
 	case "Page.getFrameTree":
 		return map[string]any{"frameTree": map[string]any{"frame": map[string]any{"id": "main", "loaderId": "L " + p.url, "url": p.url}}}
@@ -335,10 +342,11 @@ func (p *cdpPage) answer(method string, params map[string]any) any {
 				offset = 100 * p.renders
 			}
 			var children []string
-			nodes = nil
+			nodes, p.names = nil, map[int]string{}
 			for i, name := range p.buttons {
 				children = append(children, fmt.Sprint(offset+i+2))
 				nodes = append(nodes, node(offset+i+2, "button", name))
+				p.names[offset+i+2] = name
 			}
 			nodes = append([]any{node(1, "RootWebArea", "Stays", children...)}, nodes...)
 		}
@@ -353,7 +361,7 @@ func (p *cdpPage) answer(method string, params map[string]any) any {
 		case strings.Contains(script, "getEntriesByType"):
 			return value(map[string]any{"pending": 0, "loading": false})
 		case strings.Contains(script, "getElementsByTagName"):
-			return value(map[string]any{"url": p.url, "count": 3, "text": "Stays"})
+			return value(map[string]any{"url": p.url, "count": 3, "text": cmp.Or(strings.Join(p.buttons, " "), "Stays")})
 		}
 	case "DOM.scrollIntoViewIfNeeded", "Input.dispatchMouseEvent":
 		if params["type"] == "mouseReleased" {
@@ -361,6 +369,12 @@ func (p *cdpPage) answer(method string, params map[string]any) any {
 			p.url = cmp.Or(p.next, p.url)
 			if p.renamed != "" {
 				p.buttons[1] = p.renamed
+			}
+			if name, named := p.names[p.aimed]; named {
+				p.clicked = append(p.clicked, name)
+				if screen, shown := p.screens[name]; shown {
+					p.buttons = screen
+				}
 			}
 		}
 		return map[string]any{}
@@ -677,6 +691,67 @@ func TestASixtyKilobytePageTreeFitsTheResultCapAndTheRestIsReachable(t *testing.
 	}
 	if pages == 1 || !strings.Contains(observed, "Listing 599") {
 		t.Fatalf("following the cut for %d pages never reached the last listing", pages)
+	}
+}
+
+func datePicker() *cdpPage {
+	page := []string{"Hóspedes", "Mapa", "Favoritos", "Ajuda", "Buscar"}
+	return &cdpPage{url: "https://stays.test/", rerender: true, buttons: append([]string{"Datas"}, page...), screens: map[string][]string{
+		"Datas":   append(append([]string{"Datas"}, page...), "8", "9", "15", "Aplicar"),
+		"Aplicar": append([]string{"Datas 9 a 15"}, page...),
+	}}
+}
+
+func (p *cdpPage) clicks() []string {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return slices.Clone(p.clicked)
+}
+
+func TestOneGuardedBatchPicksTwoDatesInADatePickerWithNoModelRound(t *testing.T) {
+	page := datePicker()
+	run := stepsOn(t, page)
+	run("browser_observe", `{"tab":7}`)
+	acted := run("browser_act", `{"tab":7,"actions":[
+		{"action":"click","target":{"role":"button","name":"Datas"},"expect_after":{"text_has":"Aplicar"}},
+		{"action":"click","target":{"role":"button","name":"9"}},
+		{"action":"click","target":{"role":"button","name":"15"}},
+		{"action":"click","target":{"role":"button","name":"Aplicar"},"expect_after":{"gone":{"role":"button","name":"Aplicar"},"text_has":"9 a 15"}}]}`)
+	if clicked := page.clicks(); !slices.Equal(clicked, []string{"Datas", "9", "15", "Aplicar"}) || !strings.Contains(acted, "ran 4 of 4") {
+		t.Fatalf("one browser_act clicked %q; want Datas, 9, 15, Aplicar, all four run", clicked)
+	}
+}
+
+func TestABatchWhoseThirdGuardFailsReturnsAfterTheSecondWithTheGuardAndTheDelta(t *testing.T) {
+	page := datePicker()
+	page.rerender = false
+	run := stepsOn(t, page)
+	run("browser_observe", `{"tab":7}`)
+	acted := run("browser_act", `{"tab":7,"actions":[
+		{"action":"click","target":{"role":"button","name":"Datas"}},
+		{"action":"click","target":{"role":"button","name":"9"}},
+		{"action":"click","target":{"role":"button","name":"31"}},
+		{"action":"click","target":{"role":"button","name":"Aplicar"}}]}`)
+	if clicked := page.clicks(); !slices.Equal(clicked, []string{"Datas", "9"}) {
+		t.Fatalf("the batch clicked %q; want Datas and 9, then the stop", clicked)
+	}
+	if !strings.Contains(acted, `3. click button "31": target button "31" is not on the page`) || !strings.Contains(acted, "ran 2 of 4") || !regexp.MustCompile(`changed since the last snapshot(?s:.*)\+ \S+ button "Aplicar"`).MatchString(acted) {
+		t.Fatal("the stop does not name the failed guard, the count, or the delta since the batch began")
+	}
+}
+
+func TestATargetByRoleAndNameResolvesAfterARerenderRenumbersTheRefs(t *testing.T) {
+	page := &cdpPage{url: "https://www.google.test/", buttons: []string{"Buscar", "Estou com sorte"}, rerender: true}
+	run := stepsOn(t, page)
+	observed := run("browser_observe", `{"tab":7}`)
+	again := run("browser_observe", `{"tab":7}`)
+	ref := regexp.MustCompile(`button "Buscar" \[ref=(e\d+)\]`)
+	if ref.FindString(observed) == ref.FindString(again) {
+		t.Fatal("the fake did not renumber the refs between two snapshots")
+	}
+	run("browser_act", `{"tab":7,"actions":[{"action":"click","target":{"role":"button","name":"Estou com sorte"}}]}`)
+	if clicked := page.clicks(); !slices.Equal(clicked, []string{"Estou com sorte"}) {
+		t.Fatalf("the click by role and name landed on %q", clicked)
 	}
 }
 

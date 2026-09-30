@@ -177,6 +177,12 @@ func (d *Driver) Use(tab int) {
 	}
 }
 
+func (d *Driver) Page() (url, text string, err error) {
+	var page pageState
+	err = d.value(time.Now().Add(konst.BrowserActTimeoutMillis*time.Millisecond), false, evaluate(pageStateScript), &page)
+	return page.URL, page.Text, err
+}
+
 func (d *Driver) Fingerprint() (string, error) {
 	var page pageState
 	err := d.value(time.Now().Add(konst.BrowserActTimeoutMillis*time.Millisecond), false, evaluate(pageStateScript), &page)

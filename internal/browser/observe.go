@@ -84,6 +84,26 @@ func (d *Driver) Observe(interactive bool) (string, error) {
 	return snapshot, err
 }
 
+func (d *Driver) Find(role, name string, nth int) (string, error) {
+	snapshot, err := d.observe(time.Now().Add(konst.BrowserObserveTimeoutMillis*time.Millisecond), true)
+	if err != nil {
+		return "", err
+	}
+	refLine := regexp.MustCompile(`ref=(e\d+)[,\]]`)
+	for line := range strings.Lines(snapshot) {
+		found := refLine.FindStringSubmatch(line)
+		if found == nil {
+			continue
+		}
+		if entry := d.refs.entries[found[1]]; entry.role == role && strings.EqualFold(entry.name, name) {
+			if nth--; nth <= 0 {
+				return found[1], nil
+			}
+		}
+	}
+	return "", nil
+}
+
 func (d *Driver) ObserveChanges() (string, error) {
 	before := d.refs.shown
 	snapshot, err := d.Observe(true)
