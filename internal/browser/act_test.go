@@ -272,7 +272,7 @@ class MutationObserver {
   observe() {}
   disconnect() { this.off = true; }
 }
-const page = {url: 'https://www.airbnb.test/s/homes', h1: 'Search results', text: 'results'};
+const page = {url: 'https://www.airbnb.test/s/homes', h1: 'Search results', text: 'results', elements: 10};
 const render = changes => {
   Object.assign(page, changes);
   for (const observer of observers) if (!observer.off) observer.callback([]);
@@ -294,12 +294,13 @@ class XMLHttpRequest {
   }
 }
 const document = {readyState: 'complete', title: 'Airbnb', get body() { return {innerText: page.text}; },
-  querySelector: selector => selector === 'h1' ? {innerText: page.h1} : null, querySelectorAll: () => []};
+  querySelector: selector => selector === 'h1' ? {innerText: page.h1} : null, querySelectorAll: () => [], getElementsByTagName: () => ({length: page.elements})};
 const location = {get href() { return page.url; }};
 const context = vm.createContext({MutationObserver, performance, setTimeout, fetch, XMLHttpRequest, document, location});
 const shape = () => vm.runInContext('({keys: Object.keys(globalThis).sort().join(), names: Object.getOwnPropertyNames(globalThis).sort().join(), symbols: Object.getOwnPropertySymbols(globalThis).map(key => Object.getOwnPropertyDescriptor(globalThis, key).enumerable)})', context);
 context.open = () => {
   render({url: 'https://www.airbnb.test/rooms/1', h1: config.h1 || page.h1, text: 'skeleton'});
+  if (config.sections) return void config.sections.forEach((at, i) => context.setTimeout(() => render({elements: page.elements + 5, text: page.text + ' section' + i}), at));
   const show = text => setTimeout(() => render({text}), 30);
   if (config.via !== 'xhr') return void context.fetch('/api/listing').then(response => response.json()).then(body => show(body.text));
   const request = new context.XMLHttpRequest();
@@ -313,6 +314,7 @@ context.poll = () => {
   context.fetch('/poll');
   clock.now = now;
 };
+context.busy = () => void setInterval(() => { context.fetch('/api/listing'); render({text: 'ticker ' + Date.now()}); }, 100);
 let bare;
 context.audit = async () => {
   const now = shape(), answer = context.fetch('/api/listing');
@@ -421,5 +423,43 @@ func TestTheRequestCounterAddsNoEnumerableGlobalAndChangesNoAnswer(t *testing.T)
 	audit, _ := page.js.eval("audit()")
 	if want := map[string]any{"globals": true, "same": true, "rejected": true, "thrown": true}; !reflect.DeepEqual(audit, want) {
 		t.Fatalf("after the counter went in the page audit says %v; want %v", audit, want)
+	}
+}
+
+func TestATimedWaitOnABusyPageReturnsWhenItsSleepEnds(t *testing.T) {
+	page := listingPage(t, `{"contentAfter": 400}`)
+	driver := relayTo(t, page)
+	page.js.eval("busy()")
+	begun := time.Now()
+	if _, err := driver.Do(Move{Kind: MoveWait, Value: "1500"}); err != nil {
+		t.Fatal(err)
+	}
+	if took := time.Since(begun); took >= 1600*time.Millisecond {
+		t.Fatalf("wait 1500 on a page always fetching took %d ms; want under 1600", took.Milliseconds())
+	}
+}
+
+func TestAURLChangeWaitsForSectionsThatMountWithoutNetwork(t *testing.T) {
+	page := listingPage(t, `{"sections": [800, 1400]}`)
+	moved := moveOn(t, MoveClick, page)
+	if !strings.Contains(page.read, "section0") || !strings.Contains(page.read, "section1") || moved.SettledMS < 1400 {
+		t.Fatalf("sections mounting at 800 and 1400 ms read %q in %d ms; want both, after 1400", page.read, moved.SettledMS)
+	}
+}
+
+func TestAURLChangeThatStopsGrowingAt300MsReturnsUnderASecond(t *testing.T) {
+	page := listingPage(t, `{"sections": [100, 200, 300]}`)
+	moved := moveOn(t, MoveClick, page)
+	if !strings.Contains(page.read, "section2") || moved.SettledMS >= 1000 {
+		t.Fatalf("a page that stops growing at 300 ms read %q in %d ms; want every section under 1000", page.read, moved.SettledMS)
+	}
+}
+
+func TestAClickThatChangesNothingSettlesUnder50Ms(t *testing.T) {
+	page := &togglePage{js: startPage(t, `{}`)}
+	driver := relayTo(t, page)
+	moveWith(t, driver, MoveHover, page)
+	if moved := moveWith(t, driver, MoveClick, page); moved.SettledMS >= 50 {
+		t.Fatalf("a click that changed nothing settled in %d ms; want under 50", moved.SettledMS)
 	}
 }

@@ -109,12 +109,33 @@ const countRequests = `(() => {
     open.set(id, started);
     return () => { if (open.delete(id)) ended.set(id, [started, Date.now()]); };
   };
-  Object.defineProperty(globalThis, key, {value: since => {
-    let inFlight = 0, last = -Infinity;
+  const timers = new Map();
+  let inTimer = false;
+  Object.defineProperty(globalThis, key, {value: (since, longest) => {
+    let inFlight = 0, last = -Infinity, waiting = 0;
     for (const started of open.values()) if (started >= since) inFlight++;
     for (const [id, [started, end]] of ended) if (started < since) ended.delete(id); else last = Math.max(last, end);
-    return [inFlight, Date.now() - last];
+    for (const [started, delay] of timers.values()) if (started >= since && delay <= longest) waiting++;
+    return [inFlight, Date.now() - last, waiting];
   }});
+  const setTimer = globalThis.setTimeout, clearTimer = globalThis.clearTimeout;
+  if (setTimer) globalThis.setTimeout = {setTimeout(handler, delay) {
+    if (typeof handler !== 'function') return setTimer.apply(this, arguments);
+    const chained = inTimer, args = Array.from(arguments);
+    let id;
+    args[0] = function() {
+      timers.delete(id);
+      inTimer = true;
+      try { return handler.apply(this, arguments); } finally { inTimer = false; }
+    };
+    id = setTimer.apply(this, args);
+    if (!chained) timers.set(id, [Date.now(), Number(delay) || 0]);
+    return id;
+  }}.setTimeout;
+  if (clearTimer) globalThis.clearTimeout = {clearTimeout(id) {
+    timers.delete(id);
+    return clearTimer.apply(this, arguments);
+  }}.clearTimeout;
   const fetch = globalThis.fetch;
   if (fetch) globalThis.fetch = {fetch(target) {
     const answer = fetch.apply(this, arguments), end = begin(target);
@@ -393,10 +414,16 @@ func (d *Driver) measure(deadline time.Time, move Move, before pageState, tabsBe
 	if loads {
 		quiet = konst.BrowserDOMQuietMillis
 	}
-	settled, settleErr := d.settle(deadline, quiet, before.URL, started)
+	_, notMillis := strconv.Atoi(move.Value)
+	timed := move.Kind == MoveWait && notMillis == nil
+	var settled int
+	var settleErr error
+	if !timed {
+		settled, settleErr = d.settle(deadline, quiet, before.URL, started)
+	}
 	after, tabsAfter, err := d.state(deadline)
 	arrived := err == nil && (after.URL != before.URL || loads)
-	if arrived && (settleErr != nil || settled < konst.BrowserDOMQuietMillis) {
+	if arrived && !timed && (settleErr != nil || settled < konst.BrowserDOMQuietMillis) {
 		_, _ = d.settle(deadline, konst.BrowserDOMQuietMillis, before.URL, started)
 		after, tabsAfter, err = d.state(deadline)
 	}
@@ -849,20 +876,32 @@ func (d *Driver) wait(deadline time.Time, value string) error {
 
 const settleScript = `new Promise(resolve => {
   const started = performance.now();
-  const since = %[4]d, from = %[5]s, requests = globalThis[Symbol.for('tofu-requests')] || (() => [0, Infinity]);
-  let changed = started;
-  const observer = new MutationObserver(() => { changed = performance.now(); });
+  const since = %[4]d, from = %[5]s, requests = globalThis[Symbol.for('tofu-requests')] || (() => [0, Infinity, 0]);
+  const moved = () => from !== null && location.href !== from;
+  let changed = started, grown = started, count = -1;
+  const grew = now => {
+    const next = document.getElementsByTagName('*').length;
+    if (next > count) grown = now;
+    count = next;
+  };
+  const observer = new MutationObserver(() => {
+    changed = performance.now();
+    if (moved()) grew(changed);
+  });
   observer.observe(document, {subtree: true, childList: true, characterData: true, attributes: true});
   const tick = () => {
-    const now = performance.now(), [inFlight, sinceEnd] = requests(since), moved = from !== null && location.href !== from;
-    const quiet = moved || sinceEnd !== Infinity ? Math.max(%[1]d, %[6]d) : %[1]d;
-    const idle = inFlight === 0 && document.readyState === 'complete' && now - changed >= quiet && sinceEnd >= quiet;
-    if (idle || (moved ? Date.now() - since >= %[7]d : now - started >= %[2]d)) {
+    const now = performance.now(), [inFlight, sinceEnd, timers] = requests(since, %[9]d), away = moved();
+    if (away) grew(now);
+    const quiet = away || sinceEnd !== Infinity ? Math.max(%[1]d, %[6]d) : %[1]d;
+    const still = away ? timers === 0 && now - grown >= %[8]d : now - changed >= quiet;
+    const idle = inFlight === 0 && document.readyState === 'complete' && still && sinceEnd >= quiet;
+    if (idle || (away ? Date.now() - since >= %[7]d : now - started >= %[2]d)) {
       observer.disconnect();
       resolve(Math.round(now - started));
       return;
     }
-    setTimeout(tick, %[3]d);
+    const growthDue = grown + %[8]d - now;
+    setTimeout(tick, away && growthDue > 0 ? Math.min(%[3]d, growthDue) : %[3]d);
   };
   tick();
 })`
@@ -872,7 +911,7 @@ func settleExpression(quietMS int) string {
 }
 
 func settleFrom(quietMS int, from string, since int64) string {
-	return fmt.Sprintf(settleScript, quietMS, konst.BrowserDOMQuietMaxMillis, konst.BrowserSettleTickMillis, since, from, konst.BrowserDOMQuietMillis, konst.BrowserRenderWaitMaxMillis)
+	return fmt.Sprintf(settleScript, quietMS, konst.BrowserDOMQuietMaxMillis, konst.BrowserSettleTickMillis, since, from, konst.BrowserDOMQuietMillis, konst.BrowserRenderWaitMaxMillis, konst.BrowserGrowthQuietMillis, konst.BrowserTimerHoldMaxMillis)
 }
 
 func (d *Driver) settle(deadline time.Time, quietMS int, from string, started time.Time) (settled int, err error) {
