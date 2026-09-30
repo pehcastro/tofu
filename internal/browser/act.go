@@ -96,22 +96,54 @@ const selectOption = `function(values) {
   return {matched: wanted.size};
 }`
 
-const pendingRequests = `(() => {
-  const now = performance.now();
+const countRequests = `(() => {
+  const key = Symbol.for('tofu-requests');
+  if (globalThis[key]) return false;
   const noise = ['doubleclick.net', 'googlesyndication.com', 'googletagmanager.com', 'facebook.net', 'analytics', 'ads', 'tracking', 'pixel', 'hotjar.com', 'clarity.ms', 'mixpanel.com', 'segment.com', 'demdex.net', 'omtrdc.net', 'adobedtm.com', 'ensighten.com', 'newrelic.com', 'nr-data.net', 'google-analytics.com', 'connect.facebook.net', 'platform.twitter.com', 'platform.linkedin.com', '.cloudfront.net/image/', '.akamaized.net/image/', '/tracker/', '/collector/', '/beacon/', '/telemetry/', '/log/', '/events/', '/eventBatch', '/track.', '/metrics/'];
-  const pending = performance.getEntriesByType('resource').filter(entry => {
-    const url = entry.name, age = now - entry.startTime;
-    const minor = ['img', 'image', 'icon', 'font'].includes(entry.initiatorType) || /\.(jpg|jpeg|png|gif|webp|svg|ico)(\?|$)/i.test(url);
-    return entry.responseEnd === 0 && !noise.some(part => url.includes(part)) && !url.startsWith('data:') && url.length <= 500 && age <= 10000 && !(minor && age > 3000);
-  });
-  return {pending: pending.length, loading: document.readyState !== 'complete'};
+  const open = new Map(), ended = new Map();
+  let next = 0;
+  const begin = target => {
+    const url = String((target && target.url) || target), id = next++;
+    if (url.startsWith('data:') || noise.some(part => url.includes(part))) return () => {};
+    const started = Date.now();
+    open.set(id, started);
+    return () => { if (open.delete(id)) ended.set(id, [started, Date.now()]); };
+  };
+  Object.defineProperty(globalThis, key, {value: since => {
+    let inFlight = 0, last = -Infinity;
+    for (const started of open.values()) if (started >= since) inFlight++;
+    for (const [id, [started, end]] of ended) if (started < since) ended.delete(id); else last = Math.max(last, end);
+    return [inFlight, Date.now() - last];
+  }});
+  const fetch = globalThis.fetch;
+  if (fetch) globalThis.fetch = {fetch(target) {
+    const answer = fetch.apply(this, arguments), end = begin(target);
+    answer.then(end, end);
+    return answer;
+  }}.fetch;
+  const request = globalThis.XMLHttpRequest && XMLHttpRequest.prototype;
+  if (!request) return true;
+  const urls = new WeakMap(), opened = request.open, send = request.send;
+  request.open = {open(method, url) {
+    urls.set(this, url);
+    return opened.apply(this, arguments);
+  }}.open;
+  request.send = {send() {
+    const end = begin(urls.get(this));
+    this.addEventListener('loadend', end);
+    try {
+      return send.apply(this, arguments);
+    } catch (error) {
+      end();
+      throw error;
+    }
+  }}.send;
+  return true;
 })()`
-
-const headingScript = `document.title + '\n' + ((document.querySelector('h1') || {}).innerText || '')`
 
 const pageStateScript = `({url: location.href, count: document.querySelectorAll('*:not([data-tofu-cursor])').length, text: document.body ? document.body.innerText : '',
   status: (performance.getEntries().find(entry => entry.entryType === 'navigation') || {}).responseStatus || 0,
-  heading: ` + headingScript + `,
+  heading: document.title + '\n' + ((document.querySelector('h1') || {}).innerText || ''),
   controls: Array.from(document.querySelectorAll('input, select, textarea, [aria-checked], [aria-expanded], [aria-pressed], [aria-selected]'),
     e => [e.checked, e.value, e.getAttribute('aria-checked'), e.getAttribute('aria-expanded'), e.getAttribute('aria-pressed'), e.getAttribute('aria-selected')].join(',')).join('|')})`
 
@@ -145,8 +177,19 @@ func (d *Driver) state(deadline time.Time) (pageState, []Tab, error) {
 		err = json.Unmarshal(raw, &tabs)
 	}
 	var page pageState
+	var answers []cdpAnswer
 	if err == nil {
-		err = d.value(deadline, false, evaluate(pageStateScript), &page)
+		answers, err = d.cdp(deadline, false, evaluate(pageStateScript), evaluate(countRequests))
+	}
+	if err != nil {
+		return page, tabs, err
+	}
+	if counter, err := answers[1].object(); err == nil && string(counter.Value) == "true" {
+		_, _ = d.one(deadline, false, cdpCall{Method: "Page.addScriptToEvaluateOnNewDocument", Params: map[string]any{"source": countRequests}})
+	}
+	state, err := answers[0].object()
+	if err == nil {
+		err = json.Unmarshal(state.Value, &page)
 	}
 	return page, tabs, err
 }
@@ -273,7 +316,7 @@ func (d *Driver) do(deadline time.Time, move Move) (Moved, error) {
 		return moved, err
 	}
 	if d.navigates(deadline, move) {
-		d.awaitNavigation(deadline, before, tabsBefore)
+		d.awaitNavigation(deadline, before, tabsBefore, started)
 	}
 	moved, err = d.measure(deadline, move, before, tabsBefore, moved, started)
 	if err == nil && moved.Via == "" && (!moved.PageChanged || toggleStuck) && moved.Opened == 0 {
@@ -305,7 +348,7 @@ func (d *Driver) navigates(deadline time.Time, move Move) bool {
 	return false
 }
 
-func (d *Driver) awaitNavigation(deadline time.Time, before pageState, tabsBefore []Tab) {
+func (d *Driver) awaitNavigation(deadline time.Time, before pageState, tabsBefore []Tab, started time.Time) {
 	for until := time.Now().Add(konst.BrowserDOMQuietMaxMillis * time.Millisecond); time.Now().Before(until); time.Sleep(konst.BrowserSettleTickMillis * time.Millisecond) {
 		after, tabs, err := d.state(deadline)
 		switch {
@@ -313,30 +356,10 @@ func (d *Driver) awaitNavigation(deadline time.Time, before pageState, tabsBefor
 		case after.URL != before.URL || len(tabs) > len(tabsBefore):
 			return
 		case after != before:
-			d.settle(deadline, konst.BrowserDOMQuietMillis)
+			_, _ = d.settle(deadline, konst.BrowserDOMQuietMillis, before.URL, started)
 			return
 		}
 	}
-}
-
-func withoutQuery(address string) string {
-	address, _, _ = strings.Cut(address, "#")
-	address, _, _ = strings.Cut(address, "?")
-	return address
-}
-
-func (d *Driver) awaitRender(deadline time.Time, before, after pageState, started time.Time) bool {
-	heading := after.Heading
-	for withoutQuery(after.URL) != withoutQuery(before.URL) && heading == before.Heading {
-		if time.Since(started) >= konst.BrowserRenderWaitMaxMillis*time.Millisecond {
-			return false
-		}
-		time.Sleep(konst.BrowserSettleTickMillis * time.Millisecond)
-		if d.value(deadline, false, evaluate(headingScript), &heading) != nil {
-			return false
-		}
-	}
-	return true
 }
 
 const clickElement = "function() { this.click(); }"
@@ -365,13 +388,16 @@ func (d *Driver) fallback(deadline time.Time, move Move) string {
 }
 
 func (d *Driver) measure(deadline time.Time, move Move, before pageState, tabsBefore []Tab, moved Moved, started time.Time) (Moved, error) {
-	d.settle(deadline, 0)
+	loads := move.Kind == MoveNavigate || move.Kind == MoveBack
+	quiet := 0
+	if loads {
+		quiet = konst.BrowserDOMQuietMillis
+	}
+	settled, settleErr := d.settle(deadline, quiet, before.URL, started)
 	after, tabsAfter, err := d.state(deadline)
-	arrived := err == nil && (after.URL != before.URL || move.Kind == MoveNavigate || move.Kind == MoveBack)
-	if arrived {
-		if d.awaitRender(deadline, before, after, started) {
-			d.settle(deadline, konst.BrowserDOMQuietMillis)
-		}
+	arrived := err == nil && (after.URL != before.URL || loads)
+	if arrived && (settleErr != nil || settled < konst.BrowserDOMQuietMillis) {
+		_, _ = d.settle(deadline, konst.BrowserDOMQuietMillis, before.URL, started)
 		after, tabsAfter, err = d.state(deadline)
 	}
 	if err != nil {
@@ -823,16 +849,15 @@ func (d *Driver) wait(deadline time.Time, value string) error {
 
 const settleScript = `new Promise(resolve => {
   const started = performance.now();
+  const since = %[4]d, from = %[5]s, requests = globalThis[Symbol.for('tofu-requests')] || (() => [0, Infinity]);
   let changed = started;
   const observer = new MutationObserver(() => { changed = performance.now(); });
   observer.observe(document, {subtree: true, childList: true, characterData: true, attributes: true});
-  const pending = () => {
-    const entries = %[4]s;
-    return entries.pending > 0 || entries.loading;
-  };
   const tick = () => {
-    const now = performance.now();
-    if ((now - changed >= %[1]d && !pending()) || now - started >= %[2]d) {
+    const now = performance.now(), [inFlight, sinceEnd] = requests(since), moved = from !== null && location.href !== from;
+    const quiet = moved || sinceEnd !== Infinity ? Math.max(%[1]d, %[6]d) : %[1]d;
+    const idle = inFlight === 0 && document.readyState === 'complete' && now - changed >= quiet && sinceEnd >= quiet;
+    if (idle || (moved ? Date.now() - since >= %[7]d : now - started >= %[2]d)) {
       observer.disconnect();
       resolve(Math.round(now - started));
       return;
@@ -843,9 +868,15 @@ const settleScript = `new Promise(resolve => {
 })`
 
 func settleExpression(quietMS int) string {
-	return fmt.Sprintf(settleScript, quietMS, konst.BrowserDOMQuietMaxMillis, konst.BrowserSettleTickMillis, pendingRequests)
+	return settleFrom(quietMS, "null", 0)
 }
 
-func (d *Driver) settle(deadline time.Time, quietMS int) {
-	_ = d.value(deadline, false, evaluate(settleExpression(quietMS)), new(int))
+func settleFrom(quietMS int, from string, since int64) string {
+	return fmt.Sprintf(settleScript, quietMS, konst.BrowserDOMQuietMaxMillis, konst.BrowserSettleTickMillis, since, from, konst.BrowserDOMQuietMillis, konst.BrowserRenderWaitMaxMillis)
+}
+
+func (d *Driver) settle(deadline time.Time, quietMS int, from string, started time.Time) (settled int, err error) {
+	quoted, _ := json.Marshal(from)
+	err = d.value(deadline, false, evaluate(settleFrom(quietMS, string(quoted), started.UnixMilli())), &settled)
+	return settled, err
 }

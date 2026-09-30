@@ -1,10 +1,17 @@
 package browser
 
 import (
+	"bufio"
 	"encoding/json"
+	"io"
 	"net"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"reflect"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -25,7 +32,9 @@ type togglePage struct {
 	buttonDowns    int
 	onParent       int
 	navigated      time.Time
-	titleAfter     time.Duration
+	js             *jsPage
+	registered     []string
+	read           string
 }
 
 func googleResult() [][]float64 {
@@ -42,7 +51,7 @@ func (p *togglePage) inQuad(x, y float64) bool {
 }
 
 func (p *togglePage) heading() string {
-	if !p.navigated.IsZero() && time.Since(p.navigated) >= p.titleAfter {
+	if !p.navigated.IsZero() {
 		return "Listing\n"
 	}
 	return "Search results\n"
@@ -58,6 +67,18 @@ func (p *togglePage) answer(method string, params map[string]any) any {
 		y, _ = args[1].(map[string]any)["value"].(float64)
 	}
 	switch {
+	case method == "Page.addScriptToEvaluateOnNewDocument":
+		p.registered = append(p.registered, params["source"].(string))
+		return map[string]any{"identifier": "1"}
+	case p.js != nil && method == "Runtime.evaluate":
+		value, ok := p.js.eval(expression)
+		if state, isState := value.(map[string]any); isState && expression == pageStateScript {
+			p.read, _ = state["text"].(string)
+		}
+		if !ok {
+			return nil
+		}
+		return byValue(value)
 	case method == "DOM.scrollIntoViewIfNeeded":
 		return map[string]any{}
 	case method == "DOM.getBoxModel" && p.link:
@@ -76,9 +97,13 @@ func (p *togglePage) answer(method string, params map[string]any) any {
 			p.buttonDowns++
 		case "mouseReleased":
 			p.pressed = [2]float64{x, y}
-			if p.inQuad(x, y) {
+			switch {
+			case p.inQuad(x, y) && p.js != nil:
 				p.navigated = time.Now()
-			} else {
+				p.js.eval("open()")
+			case p.inQuad(x, y):
+				p.navigated = time.Now()
+			default:
 				p.onParent++
 			}
 		}
@@ -110,8 +135,6 @@ func (p *togglePage) answer(method string, params map[string]any) any {
 		return byValue(nil)
 	case strings.Contains(expression, "MutationObserver"):
 		return byValue(0)
-	case strings.HasPrefix(expression, "document.title"):
-		return byValue(p.heading())
 	case expression == pageStateScript && p.link:
 		url := "https://www.airbnb.test/s/homes"
 		if !p.navigated.IsZero() {
@@ -134,6 +157,11 @@ func byValue(v any) map[string]any {
 
 func moveOn(t *testing.T, kind MoveKind, page *togglePage) Moved {
 	t.Helper()
+	return moveWith(t, relayTo(t, page), kind, page)
+}
+
+func relayTo(t *testing.T, page *togglePage) *Driver {
+	t.Helper()
 	ours, relay := net.Pipe()
 	t.Cleanup(func() { _ = ours.Close() })
 	go func() {
@@ -144,7 +172,9 @@ func moveOn(t *testing.T, kind MoveKind, page *togglePage) Moved {
 				return
 			}
 			answer := result{ID: req.ID, OK: true, Value: json.RawMessage(`[{"id":7,"url":"https://the-internet.test/checkboxes","opened":true}]`)}
-			if req.Op == opCDP {
+			if _, refused := cdpStatus(req.Args); req.Op == opCDP && refused != nil {
+				answer = result{ID: req.ID, Error: refused.Error()}
+			} else if req.Op == opCDP {
 				var args cdpArgs
 				_ = json.Unmarshal(req.Args, &args)
 				answers := []cdpAnswer{}
@@ -169,13 +199,17 @@ func moveOn(t *testing.T, kind MoveKind, page *togglePage) Moved {
 	if page.link {
 		role = "link"
 	}
-	driver := &Driver{Client: &Client{conn: ours, out: json.NewEncoder(ours), in: json.NewDecoder(ours)}, Tab: 7,
+	return &Driver{Client: &Client{conn: ours, out: json.NewEncoder(ours), in: json.NewDecoder(ours)}, Tab: 7,
 		refs: refMap{entries: map[string]refEntry{"e25": {backend: 25, role: role}}}}
+}
+
+func moveWith(t *testing.T, driver *Driver, kind MoveKind, page *togglePage) Moved {
+	t.Helper()
 	moved, err := driver.Do(Move{Ref: "e25", Kind: kind})
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Logf("1. %s %s: %s", kind, role, moved)
+	t.Logf("%s: %s, reading %q", kind, moved, page.read)
 	return moved
 }
 
@@ -225,13 +259,167 @@ func TestAPressLandingOnAParentFallsBackToClickInOneAct(t *testing.T) {
 	}
 }
 
-func TestAURLChangeWaitsForTheNewTitleAndAStuckTitleReturnsAtTheCap(t *testing.T) {
-	moved := moveOn(t, MoveClick, &togglePage{link: true, quads: googleResult(), titleAfter: 800 * time.Millisecond})
-	if said := moved.String(); !strings.Contains(said, `"Listing"`) || moved.SettledMS < 800 {
-		t.Fatalf("a title that changes 800 ms after the url said %q; want the new title after at least 800 ms", said)
+const singlePageApp = `const vm = require('node:vm');
+const readline = require('node:readline');
+const config = JSON.parse(process.argv[2]);
+const failure = new Error('the page refused');
+const issued = [];
+const later = (ms, value) => new Promise(resolve => setTimeout(() => resolve(value), ms));
+const listing = 'Listing: a cabin by the lake';
+const observers = [];
+class MutationObserver {
+  constructor(callback) { this.callback = callback; observers.push(this); }
+  observe() {}
+  disconnect() { this.off = true; }
+}
+const page = {url: 'https://www.airbnb.test/s/homes', h1: 'Search results', text: 'results'};
+const render = changes => {
+  Object.assign(page, changes);
+  for (const observer of observers) if (!observer.off) observer.callback([]);
+};
+function fetch(url) {
+  const answer = url === '/fail' ? Promise.reject(failure) : url === '/poll' ? new Promise(() => {}) : later(config.contentAfter, {json: () => later(0, {text: listing})});
+  issued.push(answer);
+  return answer;
+}
+class XMLHttpRequest {
+  open(method, url) { this.url = url; this.listeners = []; }
+  addEventListener(type, listener) { this.listeners.push([type, listener]); }
+  send() {
+    if (this.url === '/throw') throw failure;
+    setTimeout(() => {
+      this.responseText = JSON.stringify({text: listing});
+      for (const type of ['load', 'loadend']) for (const [on, listener] of this.listeners) if (on === type) listener();
+    }, config.contentAfter);
+  }
+}
+const document = {readyState: 'complete', title: 'Airbnb', get body() { return {innerText: page.text}; },
+  querySelector: selector => selector === 'h1' ? {innerText: page.h1} : null, querySelectorAll: () => []};
+const location = {get href() { return page.url; }};
+const context = vm.createContext({MutationObserver, performance, setTimeout, fetch, XMLHttpRequest, document, location});
+const shape = () => vm.runInContext('({keys: Object.keys(globalThis).sort().join(), names: Object.getOwnPropertyNames(globalThis).sort().join(), symbols: Object.getOwnPropertySymbols(globalThis).map(key => Object.getOwnPropertyDescriptor(globalThis, key).enumerable)})', context);
+context.open = () => {
+  render({url: 'https://www.airbnb.test/rooms/1', h1: config.h1 || page.h1, text: 'skeleton'});
+  const show = text => setTimeout(() => render({text}), 30);
+  if (config.via !== 'xhr') return void context.fetch('/api/listing').then(response => response.json()).then(body => show(body.text));
+  const request = new context.XMLHttpRequest();
+  request.open('GET', '/api/listing');
+  request.addEventListener('load', () => show(JSON.parse(request.responseText).text));
+  request.send();
+};
+context.poll = () => {
+  const clock = vm.runInContext('Date', context), now = clock.now;
+  clock.now = () => now() - 6000;
+  context.fetch('/poll');
+  clock.now = now;
+};
+let bare;
+context.audit = async () => {
+  const now = shape(), answer = context.fetch('/api/listing');
+  let rejected, thrown;
+  await context.fetch('/fail').catch(error => { rejected = error === failure; });
+  const request = new context.XMLHttpRequest();
+  request.open('GET', '/throw');
+  try { request.send(); } catch (error) { thrown = error === failure; }
+  return {globals: now.keys === bare.keys && now.names === bare.names && now.symbols.length === bare.symbols.length + 1 && !now.symbols.includes(true),
+    same: answer === issued.at(-2), rejected, thrown};
+};
+bare = shape();
+readline.createInterface({input: process.stdin}).on('line', async line => {
+  let reply;
+  try { reply = {value: await vm.runInContext(JSON.parse(line), context)}; } catch (error) { reply = {error: String(error)}; }
+  process.stdout.write(JSON.stringify(reply) + '\n');
+});
+`
+
+type jsPage struct {
+	mu  sync.Mutex
+	in  io.Writer
+	out *bufio.Scanner
+}
+
+func startPage(t *testing.T, config string) *jsPage {
+	t.Helper()
+	node, err := exec.LookPath("node")
+	if err != nil {
+		t.Skip("no node on the PATH to run the page")
 	}
-	moved = moveOn(t, MoveClick, &togglePage{link: true, quads: googleResult(), titleAfter: time.Hour})
-	if moved.SettledMS < konst.BrowserRenderWaitMaxMillis || moved.SettledMS > konst.BrowserRenderWaitMaxMillis+500 {
-		t.Fatalf("a title that never changes settled in %d ms; want the %d ms cap", moved.SettledMS, konst.BrowserRenderWaitMaxMillis)
+	script := filepath.Join(t.TempDir(), "page.js")
+	if err := os.WriteFile(script, []byte(singlePageApp), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	command := exec.Command(node, script, config)
+	command.Stderr = os.Stderr
+	in, _ := command.StdinPipe()
+	out, _ := command.StdoutPipe()
+	if err := command.Start(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = command.Process.Kill(); _ = command.Wait() })
+	scanner := bufio.NewScanner(out)
+	scanner.Buffer(nil, 1<<20)
+	return &jsPage{in: in, out: scanner}
+}
+
+func (j *jsPage) eval(expression string) (any, bool) {
+	j.mu.Lock()
+	defer j.mu.Unlock()
+	line, _ := json.Marshal(expression)
+	var reply struct {
+		Value any    `json:"value"`
+		Error string `json:"error"`
+	}
+	if _, err := j.in.Write(append(line, '\n')); err != nil || !j.out.Scan() || json.Unmarshal(j.out.Bytes(), &reply) != nil {
+		return nil, false
+	}
+	return reply.Value, reply.Error == ""
+}
+
+func listingPage(t *testing.T, config string) *togglePage {
+	return &togglePage{link: true, quads: googleResult(), js: startPage(t, config)}
+}
+
+func TestAURLChangeReadsWhatItsRequestBringsNotTheSkeleton(t *testing.T) {
+	for _, via := range []string{"fetch", "xhr"} {
+		page := listingPage(t, `{"contentAfter": 900, "h1": "Listing", "via": "`+via+`"}`)
+		moved := moveOn(t, MoveClick, page)
+		if !strings.Contains(page.read, "cabin") || moved.SettledMS < 900 || !moved.URLChanged {
+			t.Fatalf("a url change whose content arrives by %s after 900 ms read %q in %d ms; want the listing after at least 900 ms", via, page.read, moved.SettledMS)
+		}
+	}
+}
+
+func TestAURLChangeWhoseTitleNeverChangesReturnsOnceItsFetchEnds(t *testing.T) {
+	page := listingPage(t, `{"contentAfter": 400}`)
+	moved := moveOn(t, MoveClick, page)
+	if !strings.Contains(page.read, "cabin") || moved.SettledMS >= 1000 {
+		t.Fatalf("a url change under a title that never changes, fetched in 400 ms, read %q in %d ms; want the listing under 1000", page.read, moved.SettledMS)
+	}
+}
+
+func TestAURLChangeWhoseFetchNeverEndsReturnsAtTheActCap(t *testing.T) {
+	moved := moveOn(t, MoveClick, listingPage(t, `{"contentAfter": 60000}`))
+	if moved.SettledMS < konst.BrowserRenderWaitMaxMillis || moved.SettledMS > konst.BrowserRenderWaitMaxMillis+300 {
+		t.Fatalf("a url change whose fetch never ends settled in %d ms; want the %d ms cap from the act start", moved.SettledMS, konst.BrowserRenderWaitMaxMillis)
+	}
+}
+
+func TestALongPollOpenOverFiveSecondsDoesNotHoldTheSettle(t *testing.T) {
+	page := listingPage(t, `{"contentAfter": 400, "h1": "Listing"}`)
+	driver := relayTo(t, page)
+	moveWith(t, driver, MoveHover, page)
+	page.js.eval("poll()")
+	moved := moveWith(t, driver, MoveClick, page)
+	if !strings.Contains(page.read, "cabin") || moved.SettledMS >= 1000 || len(page.registered) != 1 {
+		t.Fatalf("beside a long-poll open 6 s the click read %q in %d ms, the counter registered %d times; want the listing under 1000 ms, registered once", page.read, moved.SettledMS, len(page.registered))
+	}
+}
+
+func TestTheRequestCounterAddsNoEnumerableGlobalAndChangesNoAnswer(t *testing.T) {
+	page := listingPage(t, `{"contentAfter": 100}`)
+	moveOn(t, MoveHover, page)
+	audit, _ := page.js.eval("audit()")
+	if want := map[string]any{"globals": true, "same": true, "rejected": true, "thrown": true}; !reflect.DeepEqual(audit, want) {
+		t.Fatalf("after the counter went in the page audit says %v; want %v", audit, want)
 	}
 }
