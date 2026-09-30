@@ -95,7 +95,7 @@ func (d *Driver) Find(role, name string, nth int) (string, error) {
 		if found == nil {
 			continue
 		}
-		if entry := d.refs.entries[found[1]]; entry.role == role && strings.EqualFold(entry.name, name) {
+		if entry := d.refs.entries[found[1]]; (role == "" || entry.role == role) && strings.EqualFold(entry.name, name) {
 			if nth--; nth <= 0 {
 				return found[1], nil
 			}

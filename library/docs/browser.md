@@ -17,18 +17,8 @@ task to the `browser` sub-agent with `spawn`. It works only in a tab tofu
 opened, never yours, and holds these tools; under `steps` the model does:
 
 - `browser_tabs` lists your open tabs, with their title and address.
-- `browser_observe` shows one tab as an accessibility snapshot, a line a
-  node, such as `- button "Buscar" [ref=e5]`, where a ref names one element.
-  `scrollable` marks a container it can scroll, and `*` a ref new since the
-  last look at the same page. Observing never changes the page.
-- `browser_act` runs a guarded batch of up to 10 actions in one tab: click,
-  fill, select, press, scroll, navigate, back or wait. Each acts on a ref, or
-  on a `target` by role and name, found on the page as it is when that
-  action runs. `expect` is checked before an action and `expect_after` once
-  it settles: `url_has`, `text_has`, or `gone` for a dialog that should
-  close. The batch stops at the first guard that fails and names it. A
-  covered click does not run and says what covers it. The same action on an
-  unchanged page is flagged, then refused.
+- `browser_observe` shows one tab as an accessibility snapshot, a line a node, such as `- button "Buscar" [ref=e5]`, where a ref names one element. `scrollable` marks a container it can scroll, and `*` a ref new since the last look at the same page. `from` shows a long tree from that line on, whole and with its text. Observing never changes the page.
+- `browser_act` runs a guarded batch of up to 10 actions in one tab: click, fill, select, press, scroll, navigate, back or wait. Each acts on a ref, or on a `target` by role and name, found on the page as it is when that action runs. A target with no role finds the first element of that name. A ref still on the page wins over a target. A field left empty or null counts as left out. `expect_after` is checked once the action settles: `url_has`, `text_has`, or `gone` for a dialog that should close. The batch stops at the first guard that fails and names it. An action on a ref with no target does not run after one that changed the url. A covered click does not run and says what covers it. After a navigate, back, wait or any action that changed the url, the result ends with the page's full tree and its text. The same action on an unchanged page is flagged, then refused.
 
 Under `goal`, the model gets `browser_read` and `browser_do`; Jev picks each step until `browserSteps` runs out. Only `browser` `drive` gives `browser_act` or `browser_do`. Observing and reading never go through the gate.
 
