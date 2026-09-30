@@ -12,8 +12,8 @@ const (
 )
 
 var (
-	checkboxLine = regexp.MustCompile(`(?m)^\s*- checkbox\b.*\bchecked=(\w+)`)
-	comboboxLine = regexp.MustCompile(`(?m)^\s*- combobox\b.*: (.+)$`)
+	checkboxLine = regexp.MustCompile(`(?m)^\s*(?:\* )?[-*] checkbox\b.*\bchecked=(\w+)`)
+	comboboxLine = regexp.MustCompile(`(?m)^\s*(?:\* )?[-*] combobox\b.*: (.+)$`)
 )
 
 var herokuapp = Task{

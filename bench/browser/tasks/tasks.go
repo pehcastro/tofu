@@ -37,7 +37,10 @@ type Task struct {
 	Steps  []Step
 }
 
-var snapshotHeader = regexp.MustCompile(`(?m)^tab \d+ (\S+) ("(?:[^"\\]|\\.)*")`)
+var (
+	snapshotHeader = regexp.MustCompile(`(?m)^tab \d+ (\S+) ("(?:[^"\\]|\\.)*")`)
+	snapshotRef    = regexp.MustCompile(`ref=(e\d+)[,\]]`)
+)
 
 func Named(name string, seed int64, drawnOn time.Time) (Task, error) {
 	for _, task := range []Task{books, herokuapp, wikipedia, drawFlights(seed, drawnOn), drawYouTube(seed, drawnOn)} {
@@ -75,10 +78,45 @@ func Read(arm airbnb.Arm, paths ...string) (Evidence, error) {
 			}
 			title, _ := strconv.Unquote(result.Content[header[4]:header[5]])
 			text, _, _ := strings.Cut(result.Content[header[0]:], "\n<<<")
+			if before, seen := evidence.lastPage(func(page *url.URL) bool { return *page == *address }); seen {
+				text = patched(before.Text, text)
+			}
 			evidence.Pages = append(evidence.Pages, Page{URL: address, Title: title, Text: text})
 		}
 	}
 	return evidence, nil
+}
+
+func patched(before, delta string) string {
+	header, body, _ := strings.Cut(delta, "\n")
+	if strings.HasPrefix(body, "nothing changed since the last snapshot") {
+		return before
+	}
+	if !strings.HasPrefix(body, "changed since the last snapshot") {
+		return delta
+	}
+	page := strings.Split(before, "\n")
+	page[0] = header
+	_, changes, _ := strings.Cut(body, "\n")
+	for _, change := range strings.Split(changes, "\n") {
+		ref := snapshotRef.FindStringSubmatch(change)
+		if ref == nil {
+			continue
+		}
+		at := slices.IndexFunc(page, func(line string) bool {
+			found := snapshotRef.FindStringSubmatch(line)
+			return found != nil && found[1] == ref[1]
+		})
+		switch {
+		case strings.HasPrefix(change, "+ "):
+			page = append(page, change[2:])
+		case strings.HasPrefix(change, "~ ") && at >= 0:
+			page[at] = change[2:]
+		case strings.HasPrefix(change, "x gone: ") && at >= 0:
+			page = slices.Delete(page, at, at+1)
+		}
+	}
+	return strings.Join(page, "\n")
 }
 
 func Score(task Task, evidence Evidence) airbnb.Row {
