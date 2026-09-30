@@ -651,6 +651,14 @@ type heldSubAgent struct {
 	messages   int
 	nestedRows int
 	nestedRan  int
+	forking    sync.Mutex
+	forked     []Row
+}
+
+func (h *heldSubAgent) forkedSoFar() []Row {
+	h.forking.Lock()
+	defer h.forking.Unlock()
+	return slices.Clone(h.forked)
 }
 
 func (h *heldSubAgent) remember(round Row) {
@@ -683,7 +691,19 @@ func (t *SpawnTool) converse(ctx context.Context, held *heldSubAgent, subAgent C
 	subAgent.Tools = NewRegistry(append(slices.Clone(held.tools), askTool{orchestrator: t, asking: agent, conversation: site.conversation})...)
 	subAgentCtx, release := context.WithCancel(ctx)
 	defer release()
+	held.forked = nil
+	written := subAgent.EndedSession
+	subAgent.EndedSession = func(ended Row) error {
+		held.forking.Lock()
+		held.forked = append(held.forked, ended)
+		held.forking.Unlock()
+		if written == nil {
+			return nil
+		}
+		return written(ended)
+	}
 	claims, state, runErr := t.runRounds(ctx, subAgentCtx, held, subAgent, trace)
+	forked := held.forkedSoFar()
 	asked := subAgent.Boundary.Asked()
 	if len(asked) > 0 && state != subagent.Errored && state != subagent.Parked {
 		state = subagent.WaitingAnswer
@@ -692,20 +712,20 @@ func (t *SpawnTool) converse(ctx context.Context, held *heldSubAgent, subAgent C
 	if err := trace.settle(last.ID, state.String()); err != nil {
 		last.Warnings = append(last.Warnings, "the sub-agent's last state was not recorded: "+err.Error())
 	}
-	report := reportOf(agent, claims, state)
+	report := reportOf(agent, forked, claims, state)
 	report.Asked = asked
 	nestedRows, nestedRan := held.nested.SubAgentRows(), held.nested.Spawned()
 	t.mu.Lock()
 	t.retain(append(claims, nestedRows[held.nestedRows:]...))
 	t.ran = append(t.ran, nestedRan[held.nestedRan:]...)
 	held.nestedRows, held.nestedRan = len(nestedRows), len(nestedRan)
-	for _, claim := range claims {
+	for _, claim := range append(slices.Clone(forked), claims...) {
 		t.spend += claim.TotalCostUSD
 	}
 	t.reports = append(t.reports, report)
 	t.mu.Unlock()
 	if t.SubAgents.Ended != nil {
-		t.SubAgents.Ended(held.definition, agent.Brief, claims, report, runErr == nil && state != subagent.Errored && !stoppedEarly(state, last.Outcome))
+		t.SubAgents.Ended(held.definition, agent.Brief, append(forked, claims...), report, runErr == nil && state != subagent.Errored && !stoppedEarly(state, last.Outcome))
 	}
 	contract := subagent.BuildContract(agent.Brief, report.Prose, stoppedEarly(state, last.Outcome))
 	contract.Wrote = report.Wrote
@@ -894,7 +914,7 @@ func (t *SpawnTool) runRounds(outerCtx, subAgentCtx context.Context, held *heldS
 	state := roundState(outerCtx, firstErr)
 	held.remember(first)
 	for state == subagent.Finished && t.Review != nil {
-		t.roster.Reached(subAgentID, subagent.InReview, reportOf(agent, claims, subagent.InReview).Text())
+		t.roster.Reached(subAgentID, subagent.InReview, reportOf(agent, held.forkedSoFar(), claims, subagent.InReview).Text())
 		last := &claims[len(claims)-1]
 		reviewed := *last
 		reviewed.Task = agent.Brief

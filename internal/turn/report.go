@@ -26,6 +26,7 @@ type SubAgentReport struct {
 	Completion subagent.Completion `json:"completion"`
 	Outcome    Outcome             `json:"outcome"`
 	Steps      int                 `json:"steps"`
+	Forks      int                 `json:"forks,omitempty"`
 	Attempts   []subagent.Attempt  `json:"attempts"`
 	Findings   []subagent.Finding  `json:"findings"`
 	Learned    []string            `json:"learned"`
@@ -37,34 +38,36 @@ type SubAgentReport struct {
 	ProseStep  int                 `json:"prose_step,omitempty"`
 }
 
-func reportOf(agent subagent.SubAgent, attempts []Row, state subagent.State) SubAgentReport {
+func reportOf(agent subagent.SubAgent, forked, attempts []Row, state subagent.State) SubAgentReport {
 	row := attempts[len(attempts)-1]
 	ended := row.Outcome
 	if state == subagent.Parked {
 		ended = OutcomeStopped
 	}
 	report := SubAgentReport{
-		ID:       row.ID,
+		ID:       agent.ID,
 		Mission:  agent.Mission,
 		Owns:     agent.Owns,
 		State:    state.String(),
 		Outcome:  ended,
-		Steps:    len(row.Steps),
+		Forks:    len(forked),
 		Findings: findings(row, state),
 		Learned:  learned(row),
-		CostUSD:  row.TotalCostUSD,
 	}
 	for _, earlier := range attempts[:len(attempts)-1] {
 		report.Attempts = append(report.Attempts, attemptOf(earlier, earlier.Outcome))
 	}
 	report.Attempts = append(report.Attempts, attemptOf(row, ended))
-	for _, step := range row.Steps {
-		for _, call := range step.ToolCalls {
-			report.Ran = append(report.Ran, SubAgentCommand{
-				Tool: call.Tool, Command: call.Command, ExitCode: call.ExitCode, Error: call.Error,
-			})
-			if path := writtenPath(call); path != "" {
-				report.Wrote = append(report.Wrote, path)
+	for _, segment := range append(slices.Clone(forked), row) {
+		report.Steps, report.CostUSD = report.Steps+len(segment.Steps), report.CostUSD+segment.TotalCostUSD
+		for _, step := range segment.Steps {
+			for _, call := range step.ToolCalls {
+				report.Ran = append(report.Ran, SubAgentCommand{
+					Tool: call.Tool, Command: call.Command, ExitCode: call.ExitCode, Error: call.Error,
+				})
+				if path := writtenPath(call); path != "" {
+					report.Wrote = append(report.Wrote, path)
+				}
 			}
 		}
 	}
@@ -188,8 +191,12 @@ func writtenPath(call ToolCallRow) string {
 
 func (r SubAgentReport) Text() string {
 	body := &strings.Builder{}
-	fmt.Fprintf(body, "sub-agent %s is %s, %s, %s after %d steps and %d tool calls, costing $%.4f\n",
-		r.ID, r.State, r.Completion, r.Outcome, r.Steps, len(r.Ran), r.CostUSD)
+	forks := ""
+	if r.Forks > 0 {
+		forks = fmt.Sprintf(" across %d forks", r.Forks)
+	}
+	fmt.Fprintf(body, "sub-agent %s is %s, %s, %s after %d steps and %d tool calls%s, costing $%.4f\n",
+		r.ID, r.State, r.Completion, r.Outcome, r.Steps, len(r.Ran), forks, r.CostUSD)
 	if len(r.Attempts) > 1 {
 		fmt.Fprintf(body, "escalating after %d attempts:\n", len(r.Attempts))
 		for i, attempt := range r.Attempts {

@@ -140,6 +140,46 @@ func TestASubAgentThatForksForeverStopsAtTheForkCapAndEachCarrySaysWhatItTried(t
 	}
 }
 
+type forksTwiceThenAnswers struct{ asked int }
+
+func (m *forksTwiceThenAnswers) Ask(_ context.Context, request llm.Request) (llm.Decision, error) {
+	m.asked++
+	if m.asked > 2 || strings.HasSuffix(request.Messages[len(request.Messages)-1].Content, andThisIsItsLastStep) {
+		return claimDecision("found the house"), nil
+	}
+	args := json.RawMessage(`{"tab":1,"actions":[{"action":"fill","ref":"e5458","value":"Atibaia"}]}`)
+	return toolCallDecision(
+		llm.ToolCall{ID: "act-" + strconv.Itoa(m.asked) + "a", Name: "browser_act", Arguments: args},
+		llm.ToolCall{ID: "act-" + strconv.Itoa(m.asked) + "b", Name: "browser_act", Arguments: args}), nil
+}
+
+func TestAForkedSubAgentReportsEveryForkUnderTheNameMessageReaches(t *testing.T) {
+	acts := 0
+	model := &forksTwiceThenAnswers{}
+	base := Config{Model: model, Spend: SpendAPIKey, Tools: NewRegistry(actReporting{acts: &acts}), ResultBytesCap: 4096,
+		ArtifactDir: t.TempDir(), NewID: func() string { return "turn-orchestrator" }, Budget: recall.Budget{Bands: recall.Bands{Recent: 1}}}
+	spawn := NewSpawnTool("turn-orchestrator", base, &subagent.Roster{})
+	args, err := json.Marshal(spawnArgs{Task: "find a house in Atibaia", Owns: []string{"notes/**"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := spawn.Run(context.Background(), args)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("the hand-back:\n%s", result.Content)
+	if want := "sub-agent sub-1 is "; !strings.Contains(result.Content, want) || strings.Contains(result.Content, "sub-1-f") {
+		t.Errorf("the hand-back does not name the agent as sub-1, or names a fork:\n%s", result.Content)
+	}
+	if want := "after 3 steps and 4 tool calls across 2 forks"; !strings.Contains(result.Content, want) {
+		t.Errorf("the hand-back does not count every fork, want %q:\n%s", want, result.Content)
+	}
+	answered, err := messageTool{orchestrator: spawn}.Run(context.Background(), json.RawMessage(`{"to":"sub-1","text":"which listing?"}`))
+	if err != nil || !strings.Contains(answered.Content, "sub-agent sub-1 is ") || model.asked != 4 {
+		t.Errorf("a message to sub-1 did not reach the agent: %v\n%s", err, answered.Content)
+	}
+}
+
 func TestABrowserSpawnWithNoOwnsStartsAndAWriterWithNoOwnsIsStillRefused(t *testing.T) {
 	names := []string{"browser_tabs", "browser_observe", "browser_act", "read", "write", "edit", "glob", "search", "symbols", "bash", "fetch", "spawn"}
 	found := subagent.Definitions(subagent.Scan{Library: library.Files(), Tools: names})
