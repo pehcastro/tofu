@@ -8,6 +8,29 @@ Tofu is personal and not released, so the public interface that a version promis
 
 The minor number carries breaking changes, which is what 0.x means, and **there is never a 1.0.0**. The owner decided that on 2026-09-19: this stays 0.x forever, so the promise the version makes is the one 0.x already makes, that anything can break on a minor bump.
 
+## 0.5.0-rc-fix18 - 2026-09-30
+
+A browser that finishes the task on sites it was never tuned on, and a motion capture that says what blinks.
+
+### Added
+
+- **`tofu browser motion capture <scenario.json>`** records takes of an interaction, frames and a per-paint trace, into `~/.tofu/motion/<take id>/`. With no `watch` list it watches every visible element and prints **What blinked**: each element that changed and changed back, by selector, role and name, with its time, duration, values and frames. The same report reaches the agent through `browser_motion`.
+
+### Changed
+
+- **A page answers once it is useful** and later changes arrive with the next result, so a browsing turn waits far less.
+- **Each act step names where it went:** the url it reached, an `expect_after` check that held, and what a select, fill or checkbox now reads.
+- **A click lands on the largest visible part of its target**, and falls back to the element's own `click()` when the mouse misses.
+- **A site recipe is learned from the url** of a finished task and given to the browser sub-agent on the next visit.
+- **A start url appears in the brief only when the task names one.**
+
+### Fixed
+
+- **A password fill never shows or sends its value.** The act line gives its length only.
+- **An act that times out says which step and after how long**, reconnects, and the next act works. It no longer reports that the extension is not connected.
+- **The relay no longer freezes** when a client times out, and restarts itself when a new tofu is installed.
+- **An empty field from a GPT model is read as absent**, so its act calls are not refused.
+
 ## 0.5.0-rc-fix17 - 2026-09-29
 
 One look for every command, `--json` that always means one JSON document, and shells, settings and the browser that do what they say.

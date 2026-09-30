@@ -341,7 +341,7 @@
       "point": "stop_check",
       "on": true,
       "switched_on": "yes, through the judged method",
-      "costs": "a median $0.000074 a session over the 15 recorded sessions that ran it, worst $0.004574, $0.0087 over the whole recorded ledger, and the call is already made in shadow",
+      "costs": "a median $0.000067 a session over the 20 recorded sessions that ran it, worst $0.004574, $0.0089 over the whole recorded ledger, and the call is already made in shadow",
       "why": "jev agrees with 71 of 78 hand labels against the repeat check's 68, 1.04x, and makes a false stop a third as often",
       "called_by": "cmd/tofu/run_done.go"
     },
