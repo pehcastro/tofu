@@ -130,7 +130,7 @@ func (p *togglePage) answer(method string, params map[string]any) any {
 		p.checked = p.checked != p.checkbox
 		return byValue(nil)
 	case strings.Contains(script, "aria-checked") && p.checkbox:
-		return byValue(strconv.FormatBool(p.checked))
+		return byValue(map[bool]string{true: "checked", false: "unchecked"}[p.checked])
 	case strings.Contains(script, "aria-checked"):
 		return byValue(nil)
 	case strings.Contains(expression, "MutationObserver"):
@@ -218,6 +218,9 @@ func TestACheckboxDeafToTheMouseEndsCheckedThroughClickInOneAct(t *testing.T) {
 	moved := moveOn(t, MoveClick, page)
 	if !page.checked || moved.Via != "click()" {
 		t.Fatalf("after one click the box is checked=%v through %q; want checked through click()", page.checked, moved.Via)
+	}
+	if said := moved.String(); !strings.Contains(said, `, through click() because the mouse and keys missed, e25 now reads "checked" (`) {
+		t.Fatalf("the click said %q; want it to name what e25 reads after it", said)
 	}
 }
 

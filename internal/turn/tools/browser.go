@@ -502,13 +502,28 @@ func waitFor(check func() (string, error)) (string, error) {
 	}
 }
 
-func (g *browserGuard) failed(driver *browser.Driver) (string, error) {
-	if g == nil {
-		return "", nil
+func (g browserGuard) String() string {
+	var clauses []string
+	if g.URLHas != "" {
+		clauses = append(clauses, "url_has "+strconv.Quote(g.URLHas))
 	}
-	return waitFor(func() (string, error) {
+	if g.TextHas != "" {
+		clauses = append(clauses, "text_has "+strconv.Quote(g.TextHas))
+	}
+	if g.Gone != nil {
+		clauses = append(clauses, "gone "+g.Gone.String())
+	}
+	return strings.Join(clauses, " and ")
+}
+
+func (g *browserGuard) check(driver *browser.Driver) (held, failed string, err error) {
+	if g == nil {
+		return "", "", nil
+	}
+	var at string
+	failed, err = waitFor(func() (string, error) {
 		url, text, err := driver.Page()
-		switch {
+		switch at = url; {
 		case err != nil:
 			return "", err
 		case g.URLHas != "" && !strings.Contains(url, g.URLHas):
@@ -524,6 +539,10 @@ func (g *browserGuard) failed(driver *browser.Driver) (string, error) {
 		}
 		return "", err
 	})
+	if err != nil || failed != "" {
+		return "", failed, err
+	}
+	return "expect_after " + g.String() + " held at " + at, "", nil
 }
 
 func (s *browserStep) resolve(driver *browser.Driver) (string, error) {
@@ -674,8 +693,12 @@ func (t browserAct) Run(_ context.Context, raw json.RawMessage) (turn.Result, er
 			if err != nil || moved.Covered != "" {
 				break
 			}
-			if failed, err = step.ExpectAfter.failed(driver); err != nil {
+			held, failed, err := step.ExpectAfter.check(driver)
+			if err != nil {
 				return err
+			}
+			if held != "" {
+				fmt.Fprintf(&report, "%d. %s: %s\n", ran, step, held)
 			}
 			if failed != "" {
 				fmt.Fprintf(&report, "%d. %s: stopped, %s\n", ran, step, failed)

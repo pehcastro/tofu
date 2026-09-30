@@ -327,6 +327,7 @@ type cdpPage struct {
 	hovers   map[string][]string
 	pressed  int
 	changes  string
+	reads    string
 }
 
 const motionWallMs = 1.7e12 + 1000
@@ -422,6 +423,9 @@ func (p *cdpPage) answer(method string, params map[string]any) any {
 	case "DOM.resolveNode":
 		return map[string]any{"object": map[string]any{"objectId": fmt.Sprint("node-", params["backendNodeId"])}}
 	case "Runtime.callFunctionOn":
+		if strings.Contains(script, "selectedOptions") {
+			return value(p.reads)
+		}
 		return value(nil)
 	}
 	return value(nil)
@@ -575,6 +579,36 @@ func TestABatchStopsAtTheActThatChangesTheURLAndSaysWhatItSkipped(t *testing.T) 
 	acted := run("browser_act", `{"note":"n","tab":7,"actions":[{"ref":"e1","action":"click"},{"ref":"e2","action":"click"},{"ref":"e2","action":"click"}]}`)
 	if page.releases() != 1 || !strings.Contains(acted, "ran 1 of 3") || !strings.Contains(acted, "2 skipped") || !strings.Contains(acted, "https://stays.test/page-2") {
 		t.Fatalf("the batch clicked %d times and said the above; want 1 click, ran 1 of 3, 2 skipped, and the new page", page.releases())
+	}
+}
+
+func TestABatchedPressNamesTheURLItReachedThatItsCheckHeldAndWhereTheNavigateWent(t *testing.T) {
+	page := &cdpPage{url: "https://the-internet.test/login", next: "https://the-internet.test/secure"}
+	acted := stepsOn(t, page)("browser_act", `{"note":"n","tab":7,"actions":[{"action":"press","value":"Enter","expect_after":{"url_has":"/secure"}},{"action":"navigate","value":"https://the-internet.test/dropdown"}]}`)
+	at := 0
+	for _, line := range []string{
+		`1. press "Enter": the url changed to https://the-internet.test/secure`,
+		"\n1. press \"Enter\": expect_after url_has \"/secure\" held at https://the-internet.test/secure\n",
+		`2. navigate "https://the-internet.test/dropdown": the url changed to https://the-internet.test/dropdown`,
+	} {
+		found := strings.Index(acted[at:], line)
+		if found < 0 {
+			t.Fatalf("the act result does not carry %q after byte %d", line, at)
+		}
+		at += found + len(line)
+	}
+}
+
+func TestASelectAndAFillSayWhatTheControlReadsAfterwards(t *testing.T) {
+	page := &cdpPage{url: "https://the-internet.test/dropdown", buttons: []string{"Dropdown", "Phone"}, reads: "Option 2"}
+	run := stepsOn(t, page)
+	run("browser_observe", `{"note":"n","tab":7}`)
+	if acted := run("browser_act", `{"note":"n","tab":7,"actions":[{"ref":"e1","action":"select","value":"2"}]}`); !strings.Contains(acted, `1. select e1 "2": the page did not change, e1 now reads "Option 2" (settled in `) {
+		t.Fatal("the select does not say the option its control reads afterwards")
+	}
+	page.reads = "(11) 9999"
+	if acted := run("browser_act", `{"note":"n","tab":7,"actions":[{"ref":"e2","action":"fill","value":"119999"}]}`); !strings.Contains(acted, `, e2 now reads "(11) 9999" (settled in `) {
+		t.Fatal("the fill does not say the value its field reads afterwards")
 	}
 }
 

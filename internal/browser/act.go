@@ -52,6 +52,9 @@ type Moved struct {
 	Field       string `json:"field,omitempty"`
 	ErrorPage   string `json:"error_page,omitempty"`
 	Title       string `json:"title,omitempty"`
+	URL         string `json:"url,omitempty"`
+	Control     string `json:"control,omitempty"`
+	Reads       string `json:"reads,omitempty"`
 	Opened      int    `json:"opened,omitempty"`
 	URLChanged  bool   `json:"url_changed"`
 	PageChanged bool   `json:"page_changed"`
@@ -266,6 +269,9 @@ func (m Moved) String() string {
 	if m.Via != "" {
 		said += ", through " + m.Via + " because the mouse and keys missed"
 	}
+	if m.Control != "" {
+		said += ", " + m.Control + " now reads " + strconv.Quote(m.Reads)
+	}
 	if m.Covered != "" {
 		return said
 	}
@@ -300,9 +306,9 @@ func (m Moved) said() string {
 	case m.Field != "":
 		return m.Field
 	case m.URLChanged && m.Title != "":
-		return "the url changed to a page titled " + strconv.Quote(m.Title)
+		return "the url changed to " + m.URL + ", a page titled " + strconv.Quote(m.Title)
 	case m.URLChanged:
-		return "the url changed"
+		return "the url changed to " + m.URL
 	case m.PageChanged:
 		return "the page changed"
 	}
@@ -410,7 +416,29 @@ func (d *Driver) do(deadline time.Time, move Move) (Moved, error) {
 			}
 		}
 	}
+	if err == nil && !moved.URLChanged && moved.Opened == 0 {
+		moved.Control, moved.Reads = d.reads(deadline, move)
+	}
 	return moved, err
+}
+
+const valueState = "function() { return this.tagName === 'SELECT' ? Array.from(this.selectedOptions, option => option.label.trim()).join(', ') : this.value ?? this.textContent; }"
+
+func (d *Driver) reads(deadline time.Time, move Move) (control, reads string) {
+	script := valueState
+	switch move.Kind {
+	case MoveClick:
+		script = checkedState
+	case MoveFill, MoveSelect:
+	default:
+		return "", ""
+	}
+	object, err := d.resolve(deadline, move.Ref)
+	var read *string
+	if err != nil || d.value(deadline, false, callOn(object, script, true), &read) != nil || read == nil {
+		return "", ""
+	}
+	return move.Ref, *read
 }
 
 const submitsOrLinks = `function() { return !!(this.closest('a') || (this.form && (this.type === 'submit' || this.type === 'image'))); }`
@@ -502,7 +530,7 @@ func (d *Driver) measure(deadline time.Time, move Move, before pageState, tabsBe
 		return moved, err
 	}
 	moved.SettledMS = int(time.Since(started).Milliseconds())
-	moved.URLChanged, moved.PageChanged = after.URL != before.URL, after != before
+	moved.URL, moved.URLChanged, moved.PageChanged = after.URL, after.URL != before.URL, after != before
 	moved.Held, moved.Visibility = settled.Held, settled.Visibility
 	if arrived {
 		moved.Requests, moved.Timers = settled.Requests, settled.Timers
@@ -605,8 +633,8 @@ func (d *Driver) resolve(deadline time.Time, ref string) (string, error) {
 
 const checkedState = `function() {
   const box = this.control || this;
-  if (box.type === 'checkbox' || box.type === 'radio') return String(box.checked);
-  return box.getAttribute ? box.getAttribute('aria-checked') : null;
+  const state = box.type === 'checkbox' || box.type === 'radio' ? String(box.checked) : box.getAttribute ? box.getAttribute('aria-checked') : null;
+  return state === 'true' ? 'checked' : state === 'false' ? 'unchecked' : state;
 }`
 
 func (d *Driver) click(deadline time.Time, ref string) (moved Moved, toggleStuck bool, err error) {

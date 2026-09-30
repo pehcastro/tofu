@@ -154,7 +154,7 @@ func TestAnActThatListsOnlyChangesShrinksToThePageItActedOnAndErrorsStayWhole(t 
 		{tool: "browser_act", note: "opened the filters", lead: "1. click e5: the page changed\nran 1 of 1\n\n", rows: 200},
 		{tool: "browser_observe", note: "the tab closed on me"},
 		{tool: "browser_observe", note: "filters set, reading the results", url: "https://stays.test/s/Atibaia?price_max=500&" + strings.Repeat("amenities%5B%5D=7&", 30), title: "Atibaia under 500", rows: 20},
-		{tool: "browser_act", note: "open the first result", lead: "1. click e9: the url changed\nran 1 of 1\n\n", url: "https://stays.test/rooms/1", title: "Stay one", rows: 400},
+		{tool: "browser_act", note: "open the first result", lead: "1. click e9: the url changed to https://stays.test/rooms/1, a page titled \"Stay one\"\nran 1 of 1\n\n", url: "https://stays.test/rooms/1", title: "Stay one", rows: 400},
 		{tool: "browser_observe", note: "stay one sleeps 4 at R$ 480", url: "https://stays.test/rooms/1/photos", title: "Stay one photos", rows: 20},
 	}
 	requests, dir := browsePages(t, 16384, pages)
