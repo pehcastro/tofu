@@ -1,7 +1,11 @@
 package turn
 
 import (
+	"cmp"
+	"encoding/json"
+	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"tofu/internal/llm"
@@ -50,14 +54,102 @@ func historyOf(messages []llm.Message) recall.Conversation {
 			entry.Text += "\n" + call.Name + " " + string(call.Arguments)
 		}
 		if call, answered := calls[message.ToolCallID]; answered {
-			entry.Tool, entry.SupersedeKey = call.Name, call.Name+" "+string(call.Arguments)
+			entry.Tool, entry.SupersedeKey, entry.Handle = call.Name, call.Name+" "+string(call.Arguments), shrunkHandle(message.Content)
 		}
 		conversation.Entries = append(conversation.Entries, entry)
 	}
 	return conversation
 }
 
+const (
+	shrunkPageBytes  = 400
+	shrunkTitleBytes = 40
+	shrunkNoteBytes  = 200
+	shrunkPageMark   = " holds this page whole"
+)
+
+func shrinkPages(store *recall.Store, messages []llm.Message) error {
+	calls := make(map[string]llm.ToolCall)
+	var pages []int
+	for i, message := range messages {
+		for _, call := range message.ToolCalls {
+			calls[call.ID] = call
+		}
+		if name := calls[message.ToolCallID].Name; message.Role == llm.RoleTool && (name == "browser_observe" || name == "browser_act") && !strings.HasPrefix(message.Content, "error: ") {
+			pages = append(pages, i)
+		}
+	}
+	header := ""
+	for n, i := range pages {
+		text, call := messages[i].Content, calls[messages[i].ToolCallID]
+		header = cmp.Or(pageHeader(text), header)
+		if n == len(pages)-1 || shrunkHandle(text) != "" {
+			continue
+		}
+		handle, rendered := strings.CutPrefix(text, "artifact ")
+		handle, _, _ = strings.Cut(handle, " ")
+		if !rendered {
+			elided, err := recall.Elide(store, recall.Config{}, []byte(text), true)
+			if err != nil {
+				return fmt.Errorf("the %s result that a newer page replaced could not be held whole: %w", call.Name, err)
+			}
+			handle = elided.Reference.ID
+		}
+		var said struct {
+			Note string `json:"note"`
+		}
+		_ = json.Unmarshal(call.Arguments, &said)
+		messages[i].Content = shrunkPage(text, header, said.Note, handle)
+	}
+	return nil
+}
+
+func shrunkPage(text, header, note, handle string) string {
+	var kept []string
+	if tab, rest, found := strings.Cut(strings.TrimPrefix(header, "tab "), " "); found {
+		url, title, _ := strings.Cut(rest, " ")
+		kept = append(kept, "tab "+tab+" "+url+" "+runeSafeHead(title, shrunkTitleBytes))
+	}
+	kept = append(kept, "note: "+runeSafeHead(note, shrunkNoteBytes))
+	held := "artifact " + handle + shrunkPageMark
+	lead, _, _ := strings.Cut(text, "<<<")
+	var acts []string
+	for _, line := range strings.Split(lead, "\n") {
+		number, _, found := strings.Cut(line, ". ")
+		if _, err := strconv.Atoi(number); found && err == nil || strings.HasPrefix(line, "ran ") {
+			acts = append(acts, line)
+		}
+	}
+	room := shrunkPageBytes - len(strings.Join(kept, "\n")) - len(held) - 2
+	if did := runeSafeHead(strings.Join(acts, "\n"), max(room, 0)); did != "" {
+		kept = append(kept, did)
+	}
+	return strings.Join(append(kept, held), "\n")
+}
+
+func pageHeader(text string) string {
+	if _, body, found := strings.Cut(text, " begins>>>\n"); found {
+		text = body
+	}
+	line, _, _ := strings.Cut(text, "\n")
+	if !strings.HasPrefix(line, "tab ") {
+		return ""
+	}
+	return line
+}
+
+func shrunkHandle(text string) string {
+	handle, shrunk := strings.CutSuffix(text[strings.LastIndex(text, "\n")+1:], shrunkPageMark)
+	if handle, named := strings.CutPrefix(handle, "artifact "); named && shrunk {
+		return handle
+	}
+	return ""
+}
+
 func forkHistory(artifacts Artifacts, budget recall.Budget, task string, messages []llm.Message, forced ForkKind, number, most int) (*Fork, []llm.Message, error) {
+	if err := shrinkPages(artifacts.store, messages); err != nil {
+		return nil, nil, err
+	}
 	ended := historyOf(messages)
 	kind := forced
 	if kind == "" {

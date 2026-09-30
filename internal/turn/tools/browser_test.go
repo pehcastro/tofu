@@ -242,8 +242,8 @@ func TestTheBrowserSettingsDecideWhichBrowserToolsAreOffered(t *testing.T) {
 func TestEveryBrowserToolWithNoHostNamesTheInstall(t *testing.T) {
 	for _, call := range []struct{ driver, name, args string }{
 		{settings.DriverSteps, "browser_tabs", `{}`},
-		{settings.DriverSteps, "browser_observe", `{"tab":7}`},
-		{settings.DriverSteps, "browser_act", `{"tab":7,"actions":[{"ref":"e1","action":"click"}]}`},
+		{settings.DriverSteps, "browser_observe", `{"note":"n","tab":7}`},
+		{settings.DriverSteps, "browser_act", `{"note":"n","tab":7,"actions":[{"ref":"e1","action":"click"}]}`},
 		{settings.DriverGoal, "browser_read", `{"tab":7}`},
 		{settings.DriverGoal, "browser_do", `{"tab":7,"goal":"book a room"}`},
 	} {
@@ -540,17 +540,17 @@ func TestTheBrowserSubAgentWorksInItsOwnTabAndNeverTouchesThePersons(t *testing.
 	if err != nil || strings.Contains(listed, "7 ") {
 		t.Fatalf("the sub-agent's tab list shows the person's tab 7: %q, %v", listed, err)
 	}
-	if _, err := try("browser_observe", `{}`); err == nil || !strings.Contains(err.Error(), "navigate") {
+	if _, err := try("browser_observe", `{"note":"n"}`); err == nil || !strings.Contains(err.Error(), "navigate") {
 		t.Fatalf("an observe with no tab yet answered %v; want it told to navigate, which opens tofu's own tab", err)
 	}
-	if _, err := try("browser_observe", `{"tab":7}`); err == nil || !strings.Contains(err.Error(), "person's") {
+	if _, err := try("browser_observe", `{"note":"n","tab":7}`); err == nil || !strings.Contains(err.Error(), "person's") {
 		t.Fatalf("an observe on the person's tab 7 answered %v; want it refused", err)
 	}
-	acted, err := try("browser_act", `{"actions":[{"action":"navigate","value":"https://www.airbnb.test/"}]}`)
+	acted, err := try("browser_act", `{"note":"n","actions":[{"action":"navigate","value":"https://www.airbnb.test/"}]}`)
 	if err != nil || !strings.Contains(acted, "tab 30") {
 		t.Fatalf("a navigate with no tab answered %q, %v; want tofu's own tab 30", acted, err)
 	}
-	if observed, err := try("browser_observe", `{}`); err != nil || !strings.Contains(observed, "tab 30 ") {
+	if observed, err := try("browser_observe", `{"note":"n"}`); err != nil || !strings.Contains(observed, "tab 30 ") {
 		t.Fatalf("the next observe answered %q, %v; want tab 30", observed, err)
 	}
 	page.mu.Lock()
@@ -563,13 +563,47 @@ func TestTheBrowserSubAgentWorksInItsOwnTabAndNeverTouchesThePersons(t *testing.
 func TestABatchStopsAtTheActThatChangesTheURLAndSaysWhatItSkipped(t *testing.T) {
 	page := &cdpPage{url: "https://stays.test/", next: "https://stays.test/page-2"}
 	run := stepsOn(t, page)
-	observed := run("browser_observe", `{"tab":7}`)
+	observed := run("browser_observe", `{"note":"n","tab":7}`)
 	if !strings.Contains(observed, `button "Next" [ref=e1]`) || !strings.Contains(observed, `button "Buy" [ref=e2]`) {
 		t.Fatal("the observe does not carry the two refs")
 	}
-	acted := run("browser_act", `{"tab":7,"actions":[{"ref":"e1","action":"click"},{"ref":"e2","action":"click"},{"ref":"e2","action":"click"}]}`)
+	acted := run("browser_act", `{"note":"n","tab":7,"actions":[{"ref":"e1","action":"click"},{"ref":"e2","action":"click"},{"ref":"e2","action":"click"}]}`)
 	if page.releases() != 1 || !strings.Contains(acted, "ran 1 of 3") || !strings.Contains(acted, "2 skipped") || !strings.Contains(acted, "https://stays.test/page-2") {
 		t.Fatalf("the batch clicked %d times and said the above; want 1 click, ran 1 of 3, 2 skipped, and the new page", page.releases())
+	}
+}
+
+func TestABrowserCallWithoutANoteOrWithALongOneIsRefusedBeforeItTouchesThePage(t *testing.T) {
+	page := &cdpPage{url: "https://stays.test/", next: "https://stays.test/page-2"}
+	try := browserOn(t, page, settings.DriverSteps)
+	click := `"tab":7,"actions":[{"ref":"e1","action":"click"}]`
+	for _, name := range []string{"browser_observe", "browser_act"} {
+		for _, note := range []string{``, `"note":"   ",`, `"note":"` + strings.Repeat("a", 201) + `",`} {
+			args := `{` + note + click + `}`
+			if _, err := try(name, args); err == nil || !strings.Contains(err.Error(), "note") {
+				t.Errorf("%s %s answered %v; want it refused naming note", name, args, err)
+			}
+		}
+	}
+	if page.releases() != 0 {
+		t.Fatalf("a refused act clicked %d times", page.releases())
+	}
+	longest := `"note":"` + strings.Repeat(`ã`, 200) + `",`
+	if _, err := try("browser_observe", `{`+longest+`"tab":7}`); err != nil {
+		t.Fatalf("an observe with a 200 character note answered %v; want it run", err)
+	}
+	if _, err := try("browser_act", `{`+longest+click+`}`); err != nil || page.releases() != 1 {
+		t.Fatalf("an act with a 200 character note answered %v after %d clicks; want it run", err, page.releases())
+	}
+	offered, err := tools.NewBrowser(drive(shortHome(t), settings.DriverSteps))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"browser_observe", "browser_act"} {
+		required, _ := browserTool(t, offered, name).Definition().Parameters.(map[string]any)["required"].([]string)
+		if !slices.Contains(required, "note") {
+			t.Errorf("%s does not tell the model note is required: %v", name, required)
+		}
 	}
 }
 
@@ -635,9 +669,9 @@ func TestTheBrowserSubAgentObservesActsObservesAndReportsItsTab(t *testing.T) {
 	}
 	script := &spawnScript{decisions: []llm.Decision{
 		calls("spawn", `{"agent":"browser","task":"on tab 7, go to the next page of stays and say what it shows","owns":["notes/**"]}`),
-		calls("browser_observe", `{"tab":7}`),
-		calls("browser_act", `{"tab":7,"actions":[{"ref":"e1","action":"click"}]}`),
-		calls("browser_observe", `{"tab":7}`),
+		calls("browser_observe", `{"note":"n","tab":7}`),
+		calls("browser_act", `{"note":"n","tab":7,"actions":[{"ref":"e1","action":"click"}]}`),
+		calls("browser_observe", `{"note":"n","tab":7}`),
 		{Build: "cassette", Outcome: llm.OutcomeMessage, Content: "clicked Next on tab 7; it shows page 2 of the stays; tab 7 is left open on https://stays.test/page-2"},
 		{Build: "cassette", Outcome: llm.OutcomeMessage, Content: "the browser sub-agent reached page 2 on tab 7"},
 	}}
@@ -685,8 +719,8 @@ func TestTheBrowserSubAgentObservesActsObservesAndReportsItsTab(t *testing.T) {
 func TestANavigateThenAWaitReturnsTheTextThePageRendersLate(t *testing.T) {
 	page := &cdpPage{url: "https://stays.test/", price: 1500 * time.Millisecond}
 	run := stepsOn(t, page)
-	run("browser_observe", `{"tab":7}`)
-	acted := run("browser_act", `{"tab":7,"actions":[{"action":"navigate","value":"https://stays.test/rooms/3"},{"action":"wait","value":"2000"}]}`)
+	run("browser_observe", `{"note":"n","tab":7}`)
+	acted := run("browser_act", `{"note":"n","tab":7,"actions":[{"action":"navigate","value":"https://stays.test/rooms/3"},{"action":"wait","value":"2000"}]}`)
 	if !strings.Contains(acted, "2. wait \"2000\"") || !strings.Contains(acted, "ran 2 of 2") {
 		t.Fatal("the wait after the navigate did not run")
 	}
@@ -698,12 +732,12 @@ func TestANavigateThenAWaitReturnsTheTextThePageRendersLate(t *testing.T) {
 func TestAClickThatChangesOneButtonReturnsThatButtonNotTheTree(t *testing.T) {
 	page := &cdpPage{url: "https://stays.test/", buttons: []string{"Next", "Buy", "Filtros", "Mapa", "Favoritos", "Compartilhar", "Ajuda"}, renamed: "Buy, 1 no carrinho"}
 	run := stepsOn(t, page)
-	observed := run("browser_observe", `{"tab":7}`)
+	observed := run("browser_observe", `{"note":"n","tab":7}`)
 	buy := regexp.MustCompile(`button "Buy" \[ref=(e\d+)\]`).FindStringSubmatch(observed)
 	if buy == nil {
 		t.Fatal("no Buy ref")
 	}
-	acted := run("browser_act", `{"tab":7,"actions":[{"ref":"`+buy[1]+`","action":"click"}]}`)
+	acted := run("browser_act", `{"note":"n","tab":7,"actions":[{"ref":"`+buy[1]+`","action":"click"}]}`)
 	if !strings.Contains(acted, `button "Buy, 1 no carrinho" [ref=`+buy[1]+`]`) || strings.Contains(acted, `"Filtros"`) || !strings.Contains(acted, "changed since the last snapshot") {
 		t.Fatal("the act did not return a delta of the one button that changed")
 	}
@@ -712,10 +746,10 @@ func TestAClickThatChangesOneButtonReturnsThatButtonNotTheTree(t *testing.T) {
 func TestAHoverOverAPlayerListsTheSettingsButtonItRevealsAndPressesNothing(t *testing.T) {
 	page := &cdpPage{url: "https://video.test/watch", buttons: []string{"Next", "Buy", "Player"}, hovers: map[string][]string{"Player": {"Next", "Buy", "Player", "Settings"}}}
 	run := stepsOn(t, page)
-	if observed := run("browser_observe", `{"tab":7}`); !strings.Contains(observed, `button "Player" [ref=e3]`) {
+	if observed := run("browser_observe", `{"note":"n","tab":7}`); !strings.Contains(observed, `button "Player" [ref=e3]`) {
 		t.Fatal("the observe does not carry the player as e3")
 	}
-	acted := run("browser_act", `{"tab":7,"actions":[{"action":"hover","ref":"e3"}]}`)
+	acted := run("browser_act", `{"note":"n","tab":7,"actions":[{"action":"hover","ref":"e3"}]}`)
 	settings := regexp.MustCompile(`\+ .*button "Settings" \[ref=e\d+\]`)
 	page.mu.Lock()
 	defer page.mu.Unlock()
@@ -731,8 +765,8 @@ func TestASixtyKilobytePageTreeFitsTheResultCapAndTheRestIsReachable(t *testing.
 	}
 	page := &cdpPage{url: "https://stays.test/", buttons: buttons}
 	run := stepsOn(t, page)
-	acted := run("browser_act", `{"tab":7,"actions":[{"action":"navigate","value":"https://stays.test/s"}]}`)
-	observed := run("browser_observe", `{"tab":7}`)
+	acted := run("browser_act", `{"note":"n","tab":7,"actions":[{"action":"navigate","value":"https://stays.test/s"}]}`)
+	observed := run("browser_observe", `{"note":"n","tab":7}`)
 	for name, content := range map[string]string{"act": acted, "observe": observed} {
 		if len(content) >= konst.TurnResultBytesCap || !strings.Contains(content, "[cut: ") {
 			t.Fatalf("the %s result is %d bytes against the %d cap, cut named %v", name, len(content), konst.TurnResultBytesCap, strings.Contains(content, "[cut: "))
@@ -741,7 +775,7 @@ func TestASixtyKilobytePageTreeFitsTheResultCapAndTheRestIsReachable(t *testing.
 	pages := 1
 	hint := regexp.MustCompile(`browser_observe with (\{[^}]*"from":(\d+)\})`)
 	for from := hint.FindStringSubmatch(observed); from != nil; from = hint.FindStringSubmatch(observed) {
-		observed = run("browser_observe", from[1])
+		observed = run("browser_observe", `{"note":"n",`+from[1][1:])
 		pages++
 		if len(observed) >= konst.TurnResultBytesCap || strings.Contains(observed, "Listing 000") || pages > 4 {
 			t.Fatalf("page %d from line %s is %d bytes, repeats the first listing, or never ends", pages, from[2], len(observed))
@@ -769,8 +803,8 @@ func (p *cdpPage) clicks() []string {
 func TestOneGuardedBatchPicksTwoDatesInADatePickerWithNoModelRound(t *testing.T) {
 	page := datePicker()
 	run := stepsOn(t, page)
-	run("browser_observe", `{"tab":7}`)
-	acted := run("browser_act", `{"tab":7,"actions":[
+	run("browser_observe", `{"note":"n","tab":7}`)
+	acted := run("browser_act", `{"note":"n","tab":7,"actions":[
 		{"action":"click","target":{"role":"button","name":"Datas"},"expect_after":{"text_has":"Aplicar"}},
 		{"action":"click","target":{"role":"button","name":"9"}},
 		{"action":"click","target":{"role":"button","name":"15"}},
@@ -784,8 +818,8 @@ func TestABatchWhoseThirdGuardFailsReturnsAfterTheSecondWithTheGuardAndTheDelta(
 	page := datePicker()
 	page.rerender = false
 	run := stepsOn(t, page)
-	run("browser_observe", `{"tab":7}`)
-	acted := run("browser_act", `{"tab":7,"actions":[
+	run("browser_observe", `{"note":"n","tab":7}`)
+	acted := run("browser_act", `{"note":"n","tab":7,"actions":[
 		{"action":"click","target":{"role":"button","name":"Datas"}},
 		{"action":"click","target":{"role":"button","name":"9"}},
 		{"action":"click","target":{"role":"button","name":"31"}},
@@ -802,8 +836,8 @@ func TestAFormSubmittedByEnterReturnsTheNextPagesSnapshot(t *testing.T) {
 	page := &cdpPage{url: "https://www.google.test/", next: "https://www.google.test/search?q=airbnb", commit: 400 * time.Millisecond,
 		buttons: []string{"Pesquisar", "Estou com sorte"}, screens: map[string][]string{"https://www.google.test/search?q=airbnb": {"Airbnb: aluguéis", "Próxima"}}}
 	run := stepsOn(t, page)
-	run("browser_observe", `{"tab":7}`)
-	acted := run("browser_act", `{"tab":7,"actions":[{"action":"press","value":"Enter"}]}`)
+	run("browser_observe", `{"note":"n","tab":7}`)
+	acted := run("browser_act", `{"note":"n","tab":7,"actions":[{"action":"press","value":"Enter"}]}`)
 	if !strings.Contains(acted, "tab 7 https://www.google.test/search?q=airbnb") || !strings.Contains(acted, `button "Próxima"`) || strings.Contains(acted, `"Estou com sorte"`) {
 		t.Fatal("the act after Enter returned the old page, not the results the form submitted to")
 	}
@@ -812,10 +846,10 @@ func TestAFormSubmittedByEnterReturnsTheNextPagesSnapshot(t *testing.T) {
 func TestAnEmptyActIsRefusedWithTheSnapshotAndTouchesNothing(t *testing.T) {
 	page := &cdpPage{url: "https://stays.test/", buttons: []string{"Buscar", "Mapa"}}
 	try := browserOn(t, page, settings.DriverSteps)
-	if _, err := try("browser_observe", `{"tab":7}`); err != nil {
+	if _, err := try("browser_observe", `{"note":"n","tab":7}`); err != nil {
 		t.Fatal(err)
 	}
-	acted, err := try("browser_act", `{"tab":7,"actions":[]}`)
+	acted, err := try("browser_act", `{"note":"n","tab":7,"actions":[]}`)
 	if err != nil || !strings.Contains(acted, "refused") || !strings.Contains(acted, `button "Mapa"`) || page.releases() != 0 {
 		t.Fatalf("an empty act returned %v and %d clicks; want the refusal with the snapshot and no click", err, page.releases())
 	}
@@ -824,8 +858,8 @@ func TestAnEmptyActIsRefusedWithTheSnapshotAndTouchesNothing(t *testing.T) {
 func TestAnActEndsByTellingTheExtensionTofuIsThinking(t *testing.T) {
 	page := &cdpPage{url: "https://stays.test/", buttons: []string{"Buscar", "Mapa"}}
 	run := stepsOn(t, page)
-	run("browser_observe", `{"tab":7}`)
-	run("browser_act", `{"tab":7,"actions":[{"action":"click","target":{"role":"button","name":"Buscar"}}]}`)
+	run("browser_observe", `{"note":"n","tab":7}`)
+	run("browser_act", `{"note":"n","tab":7,"actions":[{"action":"click","target":{"role":"button","name":"Buscar"}}]}`)
 	page.mu.Lock()
 	thinking := page.thinking
 	page.mu.Unlock()
@@ -837,8 +871,8 @@ func TestAnActEndsByTellingTheExtensionTofuIsThinking(t *testing.T) {
 func TestAFailingAfterCheckStopsTheBatchAfterItsAction(t *testing.T) {
 	page := datePicker()
 	run := stepsOn(t, page)
-	run("browser_observe", `{"tab":7}`)
-	acted := run("browser_act", `{"tab":7,"actions":[
+	run("browser_observe", `{"note":"n","tab":7}`)
+	acted := run("browser_act", `{"note":"n","tab":7,"actions":[
 		{"action":"click","target":{"role":"button","name":"Datas"},"expect_after":{"text_has":"Março"}},
 		{"action":"click","target":{"role":"button","name":"9"}}]}`)
 	if clicked := page.clicks(); !slices.Equal(clicked, []string{"Datas"}) || !strings.Contains(acted, `1. click button "Datas": stopped, expect_after text_has "Março" failed`) || !strings.Contains(acted, "ran 1 of 2") {
@@ -849,8 +883,8 @@ func TestAFailingAfterCheckStopsTheBatchAfterItsAction(t *testing.T) {
 func TestAURLCheckHoldsOnTheNewPageAfterANavigateMidBatch(t *testing.T) {
 	page := &cdpPage{url: "https://stays.test/", buttons: []string{"Buscar", "Mapa"}}
 	run := stepsOn(t, page)
-	run("browser_observe", `{"tab":7}`)
-	acted := run("browser_act", `{"tab":7,"actions":[
+	run("browser_observe", `{"note":"n","tab":7}`)
+	acted := run("browser_act", `{"note":"n","tab":7,"actions":[
 		{"action":"navigate","value":"https://stays.test/s?checkin=2026-10-09"},
 		{"action":"click","target":{"role":"button","name":"Buscar"},"expect_after":{"url_has":"checkin="}},
 		{"action":"click","target":{"role":"button","name":"Mapa"},"expect_after":{"url_has":"checkout="}}]}`)
@@ -862,9 +896,9 @@ func TestAURLCheckHoldsOnTheNewPageAfterANavigateMidBatch(t *testing.T) {
 func TestZeroFilledOptionalFieldsReadAsAbsent(t *testing.T) {
 	page := &cdpPage{url: "https://stays.test/", buttons: []string{"Buscar", "Mapa"}}
 	run := stepsOn(t, page)
-	run("browser_observe", `{"tab":7}`)
+	run("browser_observe", `{"note":"n","tab":7}`)
 	empty := `"target":{"role":"","name":"","nth":0},"expect_after":{"url_has":"","text_has":"","gone":{"role":"","name":"","nth":0}}`
-	acted := run("browser_act", `{"tab":7,"actions":[{"action":"navigate","value":"https://stays.test/s",`+empty+`,"ref":""}]}`)
+	acted := run("browser_act", `{"note":"n","tab":7,"actions":[{"action":"navigate","value":"https://stays.test/s",`+empty+`,"ref":""}]}`)
 	if !strings.Contains(acted, "ran 1 of 1") || strings.Contains(acted, "not on the page") {
 		t.Fatal("a navigate whose optional fields a model filled with zero values did not run")
 	}
@@ -873,8 +907,8 @@ func TestZeroFilledOptionalFieldsReadAsAbsent(t *testing.T) {
 func TestALiveRefWinsOverATargetWhoseNameMisses(t *testing.T) {
 	page := &cdpPage{url: "https://stays.test/", buttons: []string{"Buscar", "Mapa"}}
 	run := stepsOn(t, page)
-	mapa := regexp.MustCompile(`button "Mapa" \[ref=(e\d+)\]`).FindStringSubmatch(run("browser_observe", `{"tab":7}`))
-	acted := run("browser_act", `{"tab":7,"actions":[{"ref":"`+mapa[1]+`","action":"click","target":{"role":"button","name":"Mapa aberto"}}]}`)
+	mapa := regexp.MustCompile(`button "Mapa" \[ref=(e\d+)\]`).FindStringSubmatch(run("browser_observe", `{"note":"n","tab":7}`))
+	acted := run("browser_act", `{"note":"n","tab":7,"actions":[{"ref":"`+mapa[1]+`","action":"click","target":{"role":"button","name":"Mapa aberto"}}]}`)
 	if clicked := page.clicks(); !slices.Equal(clicked, []string{"Mapa"}) || !strings.Contains(acted, "ran 1 of 1") {
 		t.Fatalf("a click on live ref %s with a missing target clicked %q", mapa[1], clicked)
 	}
@@ -883,12 +917,12 @@ func TestALiveRefWinsOverATargetWhoseNameMisses(t *testing.T) {
 func TestAnExpectIsCheckedAfterItsAction(t *testing.T) {
 	page := &cdpPage{url: "https://stays.test/", next: "https://stays.test/page-2"}
 	run := stepsOn(t, page)
-	run("browser_observe", `{"tab":7}`)
-	acted := run("browser_act", `{"tab":7,"actions":[{"ref":"e1","action":"click","expect":{"url_has":"page-2"}}]}`)
+	run("browser_observe", `{"note":"n","tab":7}`)
+	acted := run("browser_act", `{"note":"n","tab":7,"actions":[{"ref":"e1","action":"click","expect":{"url_has":"page-2"}}]}`)
 	if page.releases() != 1 || !strings.Contains(acted, "ran 1 of 1") || strings.Contains(acted, "failed") {
 		t.Fatalf("a click whose expect names its own result clicked %d times", page.releases())
 	}
-	acted = run("browser_act", `{"tab":7,"actions":[{"action":"navigate","value":"https://stays.test/","expect":{"url_has":"checkout="}}]}`)
+	acted = run("browser_act", `{"note":"n","tab":7,"actions":[{"action":"navigate","value":"https://stays.test/","expect":{"url_has":"checkout="}}]}`)
 	if !strings.Contains(acted, `1. navigate "https://stays.test/": stopped, expect_after url_has "checkout=" failed`) {
 		t.Fatal("an expect that fails after its action is not named as a stop after it ran")
 	}
@@ -897,8 +931,8 @@ func TestAnExpectIsCheckedAfterItsAction(t *testing.T) {
 func TestAClickThatChangesTheURLReturnsThePageText(t *testing.T) {
 	page := &cdpPage{url: "https://stays.test/", next: "https://stays.test/page-2", price: time.Nanosecond}
 	run := stepsOn(t, page)
-	run("browser_observe", `{"tab":7}`)
-	if acted := run("browser_act", `{"tab":7,"actions":[{"ref":"e1","action":"click"}]}`); !strings.Contains(acted, "Total R$ 4.667") {
+	run("browser_observe", `{"note":"n","tab":7}`)
+	if acted := run("browser_act", `{"note":"n","tab":7,"actions":[{"ref":"e1","action":"click"}]}`); !strings.Contains(acted, "Total R$ 4.667") {
 		t.Fatal("the click that changed the url returned no page text")
 	}
 }
@@ -906,8 +940,8 @@ func TestAClickThatChangesTheURLReturnsThePageText(t *testing.T) {
 func TestANumericWaitAndARefLessScrollRunAfterAURLChange(t *testing.T) {
 	page := &cdpPage{url: "https://stays.test/", next: "https://stays.test/page-2"}
 	run := stepsOn(t, page)
-	run("browser_observe", `{"tab":7}`)
-	acted := run("browser_act", `{"tab":7,"actions":[{"ref":"e1","action":"click"},{"action":"scroll","value":"down"},{"wait":300},{"action":"wait","value":200},{"ref":"e2","action":"click"}]}`)
+	run("browser_observe", `{"note":"n","tab":7}`)
+	acted := run("browser_act", `{"note":"n","tab":7,"actions":[{"ref":"e1","action":"click"},{"action":"scroll","value":"down"},{"wait":300},{"action":"wait","value":200},{"ref":"e2","action":"click"}]}`)
 	if !strings.Contains(acted, `3. wait "300"`) || !strings.Contains(acted, `4. wait "200"`) || !strings.Contains(acted, "ran 4 of 5") || page.releases() != 1 {
 		t.Fatal("after a url change the scroll and the waits did not run, or the stale ref did")
 	}
@@ -916,7 +950,7 @@ func TestANumericWaitAndARefLessScrollRunAfterAURLChange(t *testing.T) {
 func TestAnObserveFromALineReadsTheWholeTree(t *testing.T) {
 	page := &cdpPage{url: "https://stays.test/", price: time.Nanosecond}
 	run := stepsOn(t, page)
-	if observed := run("browser_observe", `{"tab":7,"from":1}`); !strings.Contains(observed, "Total R$ 4.667") {
+	if observed := run("browser_observe", `{"note":"n","tab":7,"from":1}`); !strings.Contains(observed, "Total R$ 4.667") {
 		t.Fatal("an observe with from showed only the interactive tree")
 	}
 }
@@ -924,13 +958,13 @@ func TestAnObserveFromALineReadsTheWholeTree(t *testing.T) {
 func TestATargetByRoleAndNameResolvesAfterARerenderRenumbersTheRefs(t *testing.T) {
 	page := &cdpPage{url: "https://www.google.test/", buttons: []string{"Buscar", "Estou com sorte"}, rerender: true}
 	run := stepsOn(t, page)
-	observed := run("browser_observe", `{"tab":7}`)
-	again := run("browser_observe", `{"tab":7}`)
+	observed := run("browser_observe", `{"note":"n","tab":7}`)
+	again := run("browser_observe", `{"note":"n","tab":7}`)
 	ref := regexp.MustCompile(`button "Buscar" \[ref=(e\d+)\]`)
 	if ref.FindString(observed) == ref.FindString(again) {
 		t.Fatal("the fake did not renumber the refs between two snapshots")
 	}
-	run("browser_act", `{"tab":7,"actions":[{"action":"click","target":{"role":"button","name":"Estou com sorte"}}]}`)
+	run("browser_act", `{"note":"n","tab":7,"actions":[{"action":"click","target":{"role":"button","name":"Estou com sorte"}}]}`)
 	if clicked := page.clicks(); !slices.Equal(clicked, []string{"Estou com sorte"}) {
 		t.Fatalf("the click by role and name landed on %q", clicked)
 	}
@@ -939,7 +973,7 @@ func TestATargetByRoleAndNameResolvesAfterARerenderRenumbersTheRefs(t *testing.T
 func TestTheSameClickUnderAFreshRefEachTimeIsStillARepeat(t *testing.T) {
 	page := &cdpPage{url: "https://www.google.test/", buttons: []string{"Buscar", "Estou com sorte"}, rerender: true}
 	run := stepsOn(t, page)
-	snapshot := run("browser_observe", `{"tab":7}`)
+	snapshot := run("browser_observe", `{"note":"n","tab":7}`)
 	var refs []string
 	for try := 1; try <= 3; try++ {
 		buscar := regexp.MustCompile(`button "Buscar" \[ref=(e\d+)\]`).FindStringSubmatch(snapshot)
@@ -947,7 +981,7 @@ func TestTheSameClickUnderAFreshRefEachTimeIsStillARepeat(t *testing.T) {
 			t.Fatalf("try %d: no fresh ref for Buscar in\n%s", try, snapshot)
 		}
 		refs = append(refs, buscar[1])
-		snapshot = run("browser_act", `{"tab":7,"actions":[{"ref":"`+buscar[1]+`","action":"click"}]}`)
+		snapshot = run("browser_act", `{"note":"n","tab":7,"actions":[{"ref":"`+buscar[1]+`","action":"click"}]}`)
 		if repeated := strings.Contains(snapshot, "repeated 3 times"); repeated != (try == 3) {
 			t.Fatalf("try %d on ref %s said repeated = %v", try, buscar[1], repeated)
 		}
@@ -957,9 +991,9 @@ func TestTheSameClickUnderAFreshRefEachTimeIsStillARepeat(t *testing.T) {
 func TestTheSameClickOnTheSamePageIsFlaggedThenRefused(t *testing.T) {
 	page := &cdpPage{url: "https://stays.test/"}
 	run := stepsOn(t, page)
-	run("browser_observe", `{"tab":7}`)
+	run("browser_observe", `{"note":"n","tab":7}`)
 	for try := 1; try <= konst.BrowserRepeatRefuse; try++ {
-		acted := run("browser_act", `{"tab":7,"actions":[{"ref":"e2","action":"click"}]}`)
+		acted := run("browser_act", `{"note":"n","tab":7,"actions":[{"ref":"e2","action":"click"}]}`)
 		repeated := strings.Contains(acted, fmt.Sprintf("repeated %d times, the page did not change", try))
 		refused := strings.Contains(acted, "refused")
 		if repeated != (try >= konst.BrowserRepeatNotice && try < konst.BrowserRepeatRefuse) || refused != (try == konst.BrowserRepeatRefuse) {

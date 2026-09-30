@@ -15,6 +15,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"tofu/internal/browser"
 	"tofu/internal/browser/jevloop"
@@ -254,7 +255,25 @@ const howToBrowse = "observe the tab first, act on the refs it shows, and observ
 	"before opening a result, check the results match the task, the place and whether a price cap is per night or for the whole stay, and report a mismatch rather than open a wrong result. " +
 	"after two ways to reach a state fail, build the url from the site's own parameters, navigate to it and say so; call a task blocked only after that fails too. " +
 	"a task works in one tab from start to end: open listings one after another in it with a link's url= or a click, and go back between them. " +
-	"when an act is covered by a dialog, close that dialog with the ref it names. a sponsored or ad result is not the organic one. "
+	"when an act is covered by a dialog, close that dialog with the ref it names. a sponsored or ad result is not the organic one. " +
+	"note is required, within its maxLength: every value the task needs read so far, and the next goal. " +
+	"once a newer page comes back, this result shrinks to its actions, url, title and note, and names the artifact that holds it whole. "
+
+const browserNoteRunes = 200
+
+func noted(tool, note string) error {
+	switch runes := utf8.RuneCountInString(note); {
+	case strings.TrimSpace(note) == "":
+		return fmt.Errorf("%s: refused, note is required: every value the task needs read so far and the next goal, in at most %d characters", tool, browserNoteRunes)
+	case runes > browserNoteRunes:
+		return fmt.Errorf("%s: refused, note is %d characters and takes at most %d: keep the values the task needs and the next goal", tool, runes, browserNoteRunes)
+	}
+	return nil
+}
+
+func browserNote() map[string]any {
+	return map[string]any{"type": "string", "maxLength": browserNoteRunes}
+}
 
 type browserObserve struct{ session *browserSession }
 
@@ -274,19 +293,25 @@ func (browserObserve) Definition() llm.Tool {
 				"tab":         map[string]any{"type": "integer"},
 				"interactive": map[string]any{"type": "boolean"},
 				"from":        map[string]any{"type": "integer"},
+				"note":        browserNote(),
 			},
+			"required": []string{"note"},
 		},
 	}
 }
 
 func (t browserObserve) Run(_ context.Context, raw json.RawMessage) (turn.Result, error) {
 	var args struct {
-		Tab         int   `json:"tab"`
-		Interactive *bool `json:"interactive"`
-		From        int   `json:"from"`
+		Tab         int    `json:"tab"`
+		Interactive *bool  `json:"interactive"`
+		From        int    `json:"from"`
+		Note        string `json:"note"`
 	}
 	if err := json.Unmarshal(raw, &args); err != nil {
 		return turn.Result{}, fmt.Errorf("browser_observe: arguments are not the expected shape: %w", err)
+	}
+	if err := noted("browser_observe", args.Note); err != nil {
+		return turn.Result{}, err
 	}
 	interactive := args.From == 0
 	if args.Interactive != nil {
@@ -363,8 +388,9 @@ func (browserAct) Definition() llm.Tool {
 						"required": []string{"action"},
 					},
 				},
+				"note": browserNote(),
 			},
-			"required": []string{"actions"},
+			"required": []string{"actions", "note"},
 		},
 	}
 }
@@ -546,9 +572,13 @@ func (t browserAct) Run(_ context.Context, raw json.RawMessage) (turn.Result, er
 	var args struct {
 		Tab     int           `json:"tab"`
 		Actions []browserStep `json:"actions"`
+		Note    string        `json:"note"`
 	}
 	if err := json.Unmarshal(raw, &args); err != nil {
 		return turn.Result{}, fmt.Errorf("browser_act: arguments are not the expected shape: %w", err)
+	}
+	if err := noted("browser_act", args.Note); err != nil {
+		return turn.Result{}, err
 	}
 	if len(args.Actions) == 0 {
 		var snapshot string

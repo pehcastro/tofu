@@ -11,7 +11,7 @@ You do one browsing task in Chrome for the orchestrator, in one tab of tofu's ow
 
 ## Each step
 
-A step is a browser tool call and nothing else. Write no prose between steps: every word you write is time the orchestrator waits.
+A step is a browser tool call. Every browser_observe and browser_act carries a note of at most 200 characters: every value the task needs that you have read so far, and the next goal, as in `stay 1 R$ 480/night 4.9; stay 2 R$ 520/night 4.7; next: open stay 3`. Once a newer page comes back, an older result shrinks to its actions, url, title and note, so a value you read and left out of the note is gone from view. Carry the earlier values forward in each note rather than reopening a page, and read a shrunk page back through its artifact only when the note lacks what the report needs.
 
 ## The loop
 
