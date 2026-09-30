@@ -28,7 +28,7 @@ func main() {
 	tofu := flag.String("tofu", "tofu", "the installed tofu binary")
 	again := flag.String("rescore", "", "a run folder to score again from its sessions, running nothing")
 	maxWall := flag.Duration("max-wall", 20*time.Minute, "end the tofu run process tree at this wall time and score what it reached")
-	taskName := flag.String("task", "airbnb", "airbnb, books, herokuapp, wikipedia, flights or youtube")
+	taskName := flag.String("task", "airbnb", "airbnb, books, herokuapp, wikipedia, flights, youtube, npm or imdb")
 	seed := flag.Int64("seed", 0, "draws the task's values; airbnb with seed 0 is the fixed task")
 	flag.Parse()
 	task, err := taskNamed(*taskName, *seed, time.Now())

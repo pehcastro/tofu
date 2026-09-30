@@ -43,12 +43,12 @@ var (
 )
 
 func Named(name string, seed int64, drawnOn time.Time) (Task, error) {
-	for _, task := range []Task{books, herokuapp, wikipedia, drawFlights(seed, drawnOn), drawYouTube(seed, drawnOn)} {
+	for _, task := range []Task{books, herokuapp, wikipedia, drawFlights(seed, drawnOn), drawYouTube(seed, drawnOn), drawNPM(seed), drawIMDb(seed)} {
 		if task.Name == name {
 			return task, nil
 		}
 	}
-	return Task{}, fmt.Errorf("unknown task %q: airbnb, books, herokuapp, wikipedia, flights or youtube", name)
+	return Task{}, fmt.Errorf("unknown task %q: airbnb, books, herokuapp, wikipedia, flights, youtube, npm or imdb", name)
 }
 
 func Read(arm airbnb.Arm, paths ...string) (Evidence, error) {

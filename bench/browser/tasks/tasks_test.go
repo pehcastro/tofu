@@ -44,6 +44,11 @@ func TestEachTaskScoresItsPassingFixtureFullAndItsFailingOneLower(t *testing.T) 
 		{"youtube", "youtube-portuguese", fixtureSeed, nil},
 		{"youtube", "youtube-portuguese-auto", fixtureSeed, []int{5}},
 		{"youtube", "youtube-artifact", fixtureSeed, nil},
+		{"npm", "npm-pass", fixtureSeed, nil},
+		{"npm", "npm-fail", fixtureSeed, []int{1, 2, 5}},
+		{"imdb", "imdb-pass", fixtureSeed, nil},
+		{"imdb", "imdb-fail", fixtureSeed, []int{3, 6}},
+		{"imdb", "imdb-portuguese", fixtureSeed, nil},
 	} {
 		task, err := Named(recorded.task, recorded.seed, drawnOn)
 		if err != nil {
@@ -84,6 +89,23 @@ func TestTheSameSeedDrawsTheSameFlightAndAnotherSeedAnotherOne(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Logf("youtube seed %d: %s", fixtureSeed, youtube.Prompt)
+}
+
+func TestSeedsSixAndSevenDrawAnotherPackageAndAnotherFilm(t *testing.T) {
+	for _, name := range []string{"npm", "imdb"} {
+		var prompts []string
+		for _, seed := range []int64{6, 7} {
+			task, err := Named(name, seed, drawnOn)
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Logf("%s seed %d: %s", name, seed, task.Prompt)
+			prompts = append(prompts, task.Prompt)
+		}
+		if prompts[0] == prompts[1] {
+			t.Errorf("%s: seeds 6 and 7 drew the same prompt", name)
+		}
+	}
 }
 
 func TestAnUnknownTaskIsRefused(t *testing.T) {
