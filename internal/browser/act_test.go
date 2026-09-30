@@ -3,7 +3,6 @@ package browser
 import (
 	"bufio"
 	"encoding/json"
-	"fmt"
 	"io"
 	"net"
 	"os"
@@ -491,11 +490,6 @@ func TestAClickThatChangesNothingSettlesUnder50Ms(t *testing.T) {
 	if moved := moveWith(t, driver, MoveClick, page); moved.SettledMS >= 50 {
 		t.Fatalf("a click that changed nothing settled in %d ms; want under 50", moved.SettledMS)
 	}
-}
-
-func settleExpression(quietMS int) string {
-	return fmt.Sprintf("new Promise(resolve => { const watch = %s, begun = performance.now(), quiet = %d; const tick = () => performance.now() - watch.changed >= quiet || performance.now() - begun >= %d ? resolve(Math.round(performance.now() - begun)) : setTimeout(tick, Math.max(1, Math.min(%d, watch.changed + quiet - performance.now()))); tick(); })",
-		fmt.Sprintf(watchScript, konst.BrowserChangeNodesMax), quietMS, konst.BrowserDOMQuietMaxMillis, konst.BrowserSettleTickMillis)
 }
 
 func timedWait(t *testing.T, driver *Driver, millis string) (Moved, time.Duration) {

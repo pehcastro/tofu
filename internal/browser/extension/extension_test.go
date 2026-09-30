@@ -133,6 +133,7 @@ type stubRun struct {
 	Grouped   map[string]any   `json:"grouped"`
 	Restored  map[string]any   `json:"restored"`
 	Listening []int            `json:"listening"`
+	Answered  map[string]int   `json:"answered"`
 }
 
 func inStubbedChrome(t *testing.T, scenario string) stubRun {
@@ -195,6 +196,24 @@ func TestBackgroundWaitsForTheLoadFollowsTabsItsTabOpensAndNavigatesOnlyItsOwn(t
 	refused, _ := results[4]["error"].(string)
 	if results[3]["ok"] != true || run.at("navigate", 20, "https://stays.test/other") < 0 || results[4]["ok"] != false || !strings.Contains(refused, "person's") || run.at("navigate", 9, "https://stays.test/other") >= 0 {
 		t.Errorf("navigate answered %v on tofu's tab and %v on the person's; want the first run and the second refused", results[3], results[4])
+	}
+}
+
+func TestANavigateAnswersAtTheInteractiveDocumentAndOneThatNeverCommitsAtTheLoadLimit(t *testing.T) {
+	limit := regexp.MustCompile(`(?m)^const LOAD_MS = (\d+);$`).FindStringSubmatch(shipped(t, "background.js"))
+	if limit == nil {
+		t.Fatal("background.js declares no LOAD_MS")
+	}
+	loadMS, _ := strconv.Atoi(limit[1])
+	run := inStubbedChrome(t, "commit")
+	results := run.results()
+	interactive, never := run.Answered["2"], run.Answered["3"]
+	t.Logf("interactive at 200 ms and complete at 3000 answered %v in %d ms; never committed answered %v in %d ms against a %d ms limit", results[2], interactive, results[3], never, loadMS)
+	if results[2]["ok"] != true || interactive < 200 || interactive >= 500 {
+		t.Errorf("a navigate interactive at 200 ms and complete at 3000 answered %v in %d ms; want ok, from 200 and under 500", results[2], interactive)
+	}
+	if never < loadMS || never > loadMS+500 {
+		t.Errorf("a navigate that never commits answered %v in %d ms; want the %d ms limit", results[3], never, loadMS)
 	}
 }
 

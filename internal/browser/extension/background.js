@@ -224,8 +224,14 @@ async function evaluate(tabId, request) {
 async function loaded(tabId) {
   for (const until = Date.now() + LOAD_MS; Date.now() < until; await sleep(COMMIT_POLL_MS)) {
     const tab = await chrome.tabs.get(tabId);
-    if (tab.status === 'complete' && !tab.pendingUrl && tab.url && tab.url !== 'about:blank') return;
+    if (tab.pendingUrl || !tab.url || tab.url === 'about:blank') continue;
+    if (tab.status === 'complete' || await interactive(tabId)) return;
   }
+}
+
+async function interactive(tabId) {
+  const ready = await attach(tabId).then(() => send(tabId, 'Runtime.evaluate', {expression: 'document.readyState', returnByValue: true})).catch(() => null);
+  return ['interactive', 'complete'].includes(ready?.result?.value);
 }
 
 async function openTab(url) {

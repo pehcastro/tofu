@@ -3,12 +3,15 @@ const path = require('node:path');
 const vm = require('node:vm');
 
 const [dir, scenario = 'groups'] = process.argv.slice(2);
-const LOAD_AFTER_MS = 100;
+let commitAfter = 100;
+let completeAfter = 100;
 let popupOpener = 20;
 let release = 'opens';
 let nextTab = 21;
 const heard = [];
 const posted = [];
+const calledAt = {};
+const answered = {};
 const storage = {};
 const listeners = {};
 const debuggerEvents = new Set();
@@ -25,10 +28,14 @@ const groups = new Map([[7, {id: 7, title: 'work', color: 'blue'}]]);
 let nextGroup = 100;
 const event = name => ({addListener: listener => { listeners[name] = listener; }});
 const note = (...entry) => heard.push(entry);
-const loadLater = (id, url) => setTimeout(() => {
-  Object.assign(tabs.get(id), {status: 'complete', url, pendingUrl: undefined});
-  note('complete', id);
-}, LOAD_AFTER_MS);
+const loadLater = (id, url) => {
+  if (commitAfter === null) return;
+  setTimeout(() => Object.assign(tabs.get(id), {url, pendingUrl: undefined, readyState: 'interactive'}), commitAfter);
+  setTimeout(() => {
+    Object.assign(tabs.get(id), {status: 'complete', readyState: 'complete'});
+    note('complete', id);
+  }, completeAfter);
+};
 const createTab = (url, openerTabId) => {
   const id = nextTab++;
   tabs.set(id, {id, windowId: 1, openerTabId, url: '', pendingUrl: url, status: 'loading', pinned: false, groupId: -1});
@@ -71,6 +78,7 @@ const chrome = {
   runtime: {
     connectNative: () => ({postMessage: message => {
       posted.push(message);
+      if (message.t === 'result' && message.id in calledAt) answered[message.id] = Math.round(performance.now() - calledAt[message.id]);
       note('post', message.t, message.id ?? message.tab?.id ?? null);
     }, onMessage: event('message'), onDisconnect: event('disconnect')}),
     getURL: name => name,
@@ -84,6 +92,7 @@ const chrome = {
         note('cursor', tabId, params.expression.includes('tofu-cursor-remove') ? 'remove' : 'move', params.expression.match(/"(tofu[^"]*)"/)?.[1] ?? '');
         return {};
       }
+      if (params.expression === 'document.readyState') return {result: {value: tabs.get(tabId).readyState}};
       if (method === 'Page.addScriptToEvaluateOnNewDocument' || params.expression?.includes('tofu-keep')) {
         note('keep', tabId, method);
         vm.runInContext(params.expression ?? '', documentOf(tabId));
@@ -157,7 +166,10 @@ vm.runInContext(fs.readFileSync(path.join(dir, 'background.js'), 'utf8'),
   vm.createContext({chrome, fetch, navigator: {userAgent: 'node'}, setTimeout, performance, URL, console}));
 
 const quiet = () => new Promise(resolve => setTimeout(resolve, 300));
-const call = (id, tabId, op, args = {}) => listeners.message({t: 'call', id, tabId, op, args});
+const call = (id, tabId, op, args = {}) => {
+  calledAt[id] = performance.now();
+  listeners.message({t: 'call', id, tabId, op, args});
+};
 const scenarios = {groups: async () => {
   listeners.message({t: 'status', state: 'acting'});
   call(1, 9, 'click', {element: 1, guard: 'g'});
@@ -274,10 +286,20 @@ const scenarios = {groups: async () => {
   call(4, 9, 'navigate', {url: 'https://stays.test/other'});
   await quiet();
   return {};
+}, commit: async () => {
+  call(1, 0, 'open', {url: 'https://stays.test/new'});
+  await quiet();
+  [commitAfter, completeAfter] = [200, 3000];
+  call(2, 20, 'navigate', {url: 'https://stays.test/slow'});
+  await new Promise(resolve => setTimeout(resolve, 3300));
+  commitAfter = null;
+  call(3, 20, 'navigate', {url: 'https://stays.test/never'});
+  await new Promise(resolve => setTimeout(resolve, 15500));
+  return {};
 }};
 (async () => {
   await quiet();
   const kept = await scenarios[scenario]();
-  console.log(JSON.stringify({heard, posted, ...kept}));
+  console.log(JSON.stringify({heard, posted, answered, ...kept}));
   process.exit(0);
 })();
