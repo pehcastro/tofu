@@ -326,6 +326,7 @@ type fakePage struct {
 	fired    []string
 	methods  []string
 	tabOps   []string
+	points   []string
 }
 
 func loadPage(t *testing.T, name string) *fakePage {
@@ -652,10 +653,20 @@ func drivenPage(t *testing.T, name string) (*browser.Driver, *fakePage) {
 						Method string         `json:"method"`
 						Params map[string]any `json:"params"`
 					} `json:"calls"`
+					Point *struct {
+						X     float64 `json:"x"`
+						Y     float64 `json:"y"`
+						Label string  `json:"label"`
+					} `json:"point"`
 				} `json:"args"`
 			}
 			if json.Unmarshal(raw, &call) != nil || call.T != "call" {
 				continue
+			}
+			if point := call.Args.Point; point != nil {
+				page.mu.Lock()
+				page.points = append(page.points, fmt.Sprintf("%g,%g %s", point.X, point.Y, point.Label))
+				page.mu.Unlock()
 			}
 			if call.Op != "cdp" {
 				page.mu.Lock()
@@ -875,6 +886,19 @@ func TestALinkThatSwapsContentInPlaceReturnsWellUnderASecond(t *testing.T) {
 		t.Fatalf("a link that changes the page in place took %v and returned %+v, %v; want the page changed, no url change, well under a second", took, moved, err)
 	}
 	page.sawFired(t, "pool")
+}
+
+func TestAFillMovesTheCursorToItsFieldReadingTyping(t *testing.T) {
+	driver, page := drivenPage(t, "login")
+	if _, err := driver.Do(browser.Move{Ref: refOf(t, observe(t, driver, true), "textbox", "Password"), Kind: browser.MoveFill, Value: "secret"}); err != nil {
+		t.Fatal(err)
+	}
+	page.mu.Lock()
+	points := slices.Clone(page.points)
+	page.mu.Unlock()
+	if !slices.Equal(points, []string{"110,50 tofu typing"}) {
+		t.Fatalf("a fill of the Password box sent the cursor points %q; want its centre 110,50 reading tofu typing", points)
+	}
 }
 
 func TestAComboboxDeafToInsertAndKeysTakesTheNativeSetterAndSaysSo(t *testing.T) {

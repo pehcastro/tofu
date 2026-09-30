@@ -77,7 +77,7 @@ const chrome = {
     detach: async ({tabId}) => note('detach', tabId),
     sendCommand: async ({tabId}, method, params) => {
       if (method === 'Runtime.evaluate' && params.expression.includes('data-tofu-cursor')) {
-        note('cursor', tabId, params.expression.includes('tofu-cursor-remove') ? 'remove' : 'move');
+        note('cursor', tabId, params.expression.includes('tofu-cursor-remove') ? 'remove' : 'move', params.expression.match(/"(tofu[^"]*)"/)?.[1] ?? '');
         return {};
       }
       if (method === 'Page.addScriptToEvaluateOnNewDocument' || params.expression?.includes('tofu-keep')) {
@@ -213,6 +213,10 @@ const scenarios = {groups: async () => {
   listeners.message({t: 'call', id: 3, tabId: 20, op: 'cdp', args: {calls: clicks, act: true}, cursor: true});
   await quiet();
   listeners.message({t: 'call', id: 4, tabId: 20, op: 'cdp', args: {calls: clicks, act: true}});
+  await quiet();
+  listeners.message({t: 'call', id: 5, tabId: 20, op: 'cdp', args: {calls: [], act: true, point: {x: 110, y: 50, label: 'tofu typing'}}, cursor: true});
+  await quiet();
+  listeners.message({t: 'call', id: 6, tabId: 20, op: 'navigate', args: {url: 'https://www.airbnb.test/rooms/1'}, cursor: true});
   await quiet();
   listeners.disconnect();
   await quiet();

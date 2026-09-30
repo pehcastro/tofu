@@ -156,8 +156,15 @@ type cdpCall struct {
 }
 
 type cdpArgs struct {
-	Calls []cdpCall `json:"calls"`
-	Act   bool      `json:"act,omitempty"`
+	Calls []cdpCall    `json:"calls"`
+	Act   bool         `json:"act,omitempty"`
+	Point *cursorPoint `json:"point,omitempty"`
+}
+
+type cursorPoint struct {
+	X     float64 `json:"x"`
+	Y     float64 `json:"y"`
+	Label string  `json:"label"`
 }
 
 type cdpAnswer struct {
@@ -167,7 +174,7 @@ type cdpAnswer struct {
 
 func cdpStatus(raw json.RawMessage) (status, error) {
 	var args cdpArgs
-	if err := json.Unmarshal(raw, &args); err != nil || len(args.Calls) == 0 {
+	if err := json.Unmarshal(raw, &args); err != nil || (len(args.Calls) == 0 && args.Point == nil) {
 		return "", fmt.Errorf("a cdp op carries no calls: %s", raw)
 	}
 	now := statusReading

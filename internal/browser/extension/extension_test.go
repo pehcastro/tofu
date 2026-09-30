@@ -282,15 +282,16 @@ func TestTheCursorMovesBeforeTheClickOnlyWhenTheRelaySaysSoAndLeavesWithTofu(t *
 	for _, entry := range run.Heard {
 		switch {
 		case entry[0] == "cursor":
-			order = append(order, "cursor "+entry[2].(string))
+			order = append(order, strings.TrimSpace("cursor "+entry[2].(string)+" "+entry[3].(string)))
 		case entry[0] == "input" && entry[2] == "Input.dispatchMouseEvent":
 			order = append(order, "mouse")
 		}
 	}
 	t.Logf("heard %v", order)
-	want := []string{"mouse", "mouse", "mouse", "cursor move", "mouse", "mouse", "mouse", "mouse", "mouse", "mouse", "cursor remove", "cursor remove"}
+	want := []string{"mouse", "mouse", "mouse", "cursor move tofu", "mouse", "mouse", "mouse", "mouse", "mouse", "mouse",
+		"cursor move tofu typing", "cursor move tofu → www.airbnb.test", "cursor remove", "cursor remove"}
 	if !slices.Equal(order, want) {
-		t.Fatalf("heard %v, want %v: no cursor in the person's tab 9, the cursor before the click in tofu's tab 20, none when the call carries no cursor, and removed from both when tofu leaves", order, want)
+		t.Fatalf("heard %v, want %v: no cursor in the person's tab 9, the cursor before the click in tofu's tab 20, none when the call carries no cursor, tofu typing at a fill's point, the host after a navigate, and removed from both when tofu leaves", order, want)
 	}
 	background := shipped(t, "background.js")
 	for _, must := range []string{"pointer-events: none", "aria-hidden", "mode: 'closed'", "2147483647"} {

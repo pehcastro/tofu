@@ -543,6 +543,15 @@ const nativeValue = `function(text) {
   this.dispatchEvent(new FocusEvent('blur'));
 }`
 
+func (d *Driver) show(deadline time.Time, ref, label string) (float64, float64, error) {
+	_, x, y, err := d.center(deadline, ref)
+	if err == nil {
+		args, _ := json.Marshal(cdpArgs{Calls: []cdpCall{}, Act: true, Point: &cursorPoint{X: x, Y: y, Label: label}})
+		_, err = d.Client.callBy(deadline, d.Tab, opCDP, args)
+	}
+	return x, y, err
+}
+
 func (d *Driver) fill(deadline time.Time, ref, text string) (value, path string, err error) {
 	object, err := d.resolve(deadline, ref)
 	if err != nil {
@@ -550,7 +559,7 @@ func (d *Driver) fill(deadline time.Time, ref, text string) (value, path string,
 	}
 	emptied := []cdpCall{callOn(object, "function() { this.focus(); }", true), callOn(object, clearValue, true)}
 	var typed []cdpCall
-	if _, x, y, err := d.center(deadline, ref); err == nil {
+	if x, y, err := d.show(deadline, ref, "tofu typing"); err == nil {
 		typed = append(typed, mouse("mousePressed", "left", x, y), mouse("mouseReleased", "left", x, y))
 	}
 	typed = append(typed, emptied...)
@@ -580,6 +589,7 @@ func (d *Driver) fill(deadline time.Time, ref, text string) (value, path string,
 }
 
 func (d *Driver) pick(deadline time.Time, ref, option string) error {
+	_, _, _ = d.show(deadline, ref, "tofu")
 	object, err := d.resolve(deadline, ref)
 	var picked struct {
 		Error string `json:"error"`
@@ -672,6 +682,7 @@ func (d *Driver) scroll(deadline time.Time, ref, direction string) error {
 	if ref == "" {
 		return d.act(deadline, evaluate(fmt.Sprintf("window.scrollBy(0, %d)", pixels)))
 	}
+	_, _, _ = d.show(deadline, ref, "tofu")
 	object, err := d.resolve(deadline, ref)
 	if err != nil {
 		return err

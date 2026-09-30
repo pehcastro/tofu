@@ -367,7 +367,7 @@ func (r *relay) forward(s *session, req request) error {
 	r.show(now)
 	r.lastID++
 	sent := time.Now()
-	if err := r.tell(toExtension{T: messageCall, ID: r.lastID, TabID: req.Tab, Op: req.Op, Args: req.Args, Cursor: r.cursor && req.Op == opCDP}); err != nil {
+	if err := r.tell(toExtension{T: messageCall, ID: r.lastID, TabID: req.Tab, Op: req.Op, Args: req.Args, Cursor: r.cursor && (req.Op == opCDP || req.Op == opNavigate)}); err != nil {
 		return err
 	}
 	r.pending[r.lastID] = route{s, req.ID, sent}

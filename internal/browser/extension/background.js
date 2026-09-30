@@ -125,7 +125,7 @@ async function perform(tabId, op, args, timing, cursor) {
     lastAct = {tabId, windowId: (await chrome.tabs.get(tabId)).windowId, at: Date.now()};
   }
   if (op === 'open') return openTab(url);
-  if (op === 'navigate') return navigateOpened(tabId, url);
+  if (op === 'navigate') return navigateOpened(tabId, url, cursor);
   if (op === 'close') return closeOpened(tabId);
   if (op === 'back') return goBack(tabId);
   if (op === 'cdp') return relay(tabId, args, cursor);
@@ -230,11 +230,12 @@ async function openTab(url) {
   return tab.id;
 }
 
-async function navigateOpened(tabId, url) {
+async function navigateOpened(tabId, url, cursor) {
   openable(url);
   ownOnly(tabId, 'navigates');
   await chrome.tabs.update(tabId, {url});
   await loaded(tabId);
+  if (cursor) attach(tabId).then(() => paintAt(tabId, 'innerWidth / 2', 16, `tofu → ${URL.parse(url).host}`), () => {});
   return tabId;
 }
 
@@ -245,18 +246,20 @@ async function goBack(tabId) {
   return tabId;
 }
 
-async function relay(tabId, {calls, act}, cursor) {
+function paintAt(tabId, x, y, label) {
+  send(tabId, 'Runtime.evaluate', {expression: `(${paintCursor})(${x}, ${y}, ${JSON.stringify(label)}, ${CURSOR_GLIDE_MS}, ${CURSOR_RING_MS}, ${CURSOR_IDLE_MS})`}).catch(() => {});
+}
+
+async function relay(tabId, {calls, act, point}, cursor) {
   await attach(tabId);
   if (act && !grouped.has(tabId)) serially(() => groupTab(tabId));
   const click = calls.find(({method}) => method === 'Input.dispatchMouseEvent');
-  if (cursor && click && opened.has(tabId)) {
-    const {x, y} = click.params;
-    send(tabId, 'Runtime.evaluate', {expression: `(${paintCursor})(${x}, ${y}, ${CURSOR_GLIDE_MS}, ${CURSOR_RING_MS}, ${CURSOR_IDLE_MS})`}).catch(() => {});
-  }
+  const at = point ?? (click && {...click.params, label: 'tofu'});
+  if (cursor && at && opened.has(tabId)) paintAt(tabId, at.x, at.y, at.label);
   return Promise.all(calls.map(({method, params}) => send(tabId, method, params).then(result => ({result}), error => ({error: error.message}))));
 }
 
-function paintCursor(x, y, glideMs, ringMs, idleMs) {
+function paintCursor(x, y, label, glideMs, ringMs, idleMs) {
   let host = document.querySelector('[data-tofu-cursor]');
   if (!host) {
     host = document.createElement('div');
@@ -265,15 +268,17 @@ function paintCursor(x, y, glideMs, ringMs, idleMs) {
     host.style.cssText = 'position: fixed; left: 0; top: 0; z-index: 2147483647; pointer-events: none;';
     host.tofu = host.attachShadow({mode: 'closed'});
     host.tofu.innerHTML = `<style>
-      .c { position: fixed; left: 0; top: 0; display: flex; gap: 2px; pointer-events: none; transition: transform ${glideMs}ms ease-out, opacity 400ms ease-out; }
-      .c span { margin-top: 10px; padding: 1px 5px; border-radius: 6px; background: rgba(38, 38, 38, 0.7); color: #fff; font: 500 10px/14px system-ui, sans-serif; }
-      .r { position: fixed; left: -8px; top: -8px; width: 16px; height: 16px; box-sizing: border-box; border-radius: 50%; border: 1px solid rgba(38, 38, 38, 0.3); opacity: 0; pointer-events: none; }
+      .c { position: fixed; left: 0; top: 0; display: flex; gap: 4px; pointer-events: none; transition: transform ${glideMs}ms ease-out, opacity 400ms ease-out; }
+      .c svg { filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.35)); }
+      .c span { margin-top: 20px; padding: 2px 10px; border-radius: 12px; background: #d9480f; color: #fff; font: 600 20px/28px system-ui, sans-serif; box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.7), 0 1px 3px rgba(0, 0, 0, 0.3); }
+      .r { position: fixed; left: -16px; top: -16px; width: 32px; height: 32px; box-sizing: border-box; border-radius: 50%; border: 2px solid rgba(217, 72, 15, 0.45); opacity: 0; pointer-events: none; }
       .r.on { animation: ring ${ringMs}ms ease-out ${glideMs}ms both; }
       @keyframes ring { from { opacity: 0.3; transform: scale(0.5); } to { opacity: 0; transform: scale(1); } }
-    </style><div class="c"><svg width="11" height="12" viewBox="0 0 11 12"><path d="M1 1v9l2.6-2.2 1.8 3.7 1.4-.7-1.8-3.6h3.4z" fill="#262626" stroke="#fff" stroke-width=".8"/></svg><span>tofu</span></div><i class="r"></i>`;
+    </style><div class="c"><svg width="22" height="24" viewBox="0 0 11 12"><path d="M1 1v9l2.6-2.2 1.8 3.7 1.4-.7-1.8-3.6h3.4z" fill="#fff" stroke="#262626" stroke-width=".6" stroke-linejoin="round"/></svg><span>tofu</span></div><i class="r"></i>`;
     document.documentElement.append(host);
   }
   const cursor = host.tofu.querySelector('.c'), ring = host.tofu.querySelector('.r');
+  host.tofu.querySelector('span').textContent = label;
   cursor.style.opacity = '1';
   cursor.style.transform = `translate(${x}px, ${y}px)`;
   ring.style.translate = `${x}px ${y}px`;
