@@ -1,0 +1,26 @@
+{
+  "arm": "B2",
+  "seed": 7,
+  "conditions": {"date": "2026-10-01", "machine": "fixture-machine", "credential": "subscription", "browser_credential": "subscription", "wire": "claude-sub", "main_build": "claude-opus-5", "browser_build": "claude-sonnet-5-5"},
+  "wall_ms": 190000,
+  "main_tokens": 30000,
+  "browser_tokens": 400000,
+  "repeated": 0,
+  "refused": 0,
+  "tabs": [
+    {"id": "t1", "url": "https://www.airbnb.com.br/rooms/40000013?adults=3"}
+  ],
+  "visits": [
+    "https://www.google.com/search?q=airbnb",
+    "https://www.airbnb.com.br/",
+    "https://www.airbnb.com.br/s/Paraty--RJ/homes?checkin=2026-10-27&checkout=2026-10-30&adults=3&room_types%5B%5D=Entire%20home%2Fapt&price_max=2000&display_total_price=true&min_bedrooms=1",
+    "https://www.airbnb.com.br/rooms/40000011?adults=3",
+    "https://www.airbnb.com.br/rooms/40000012?adults=3",
+    "https://www.airbnb.com.br/rooms/40000013?adults=3"
+  ],
+  "pages": [
+    {"url": "https://www.airbnb.com.br/rooms/40000011?adults=3", "title": "Apartamento Inventado - Apartamentos para Alugar em Angra dos Reis, Rio de Janeiro, Brasil - Airbnb"},
+    {"url": "https://www.airbnb.com.br/rooms/40000012?adults=3", "title": "Chalé de Mentira - Chalés para Alugar em Paraty, Rio de Janeiro, Brasil - Airbnb"},
+    {"url": "https://www.airbnb.com.br/rooms/40000013?adults=3", "title": "Sobrado Fictício - Casas para Alugar em Paraty, Rio de Janeiro, Brasil - Airbnb"}
+  ]
+}

@@ -3,9 +3,14 @@ package tasks
 import (
 	"slices"
 	"testing"
+	"time"
 
 	"tofu/bench/browser/airbnb"
 )
+
+var drawnOn = time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
+
+const fixtureSeed = 3
 
 func TestEachTaskScoresItsPassingFixtureFullAndItsFailingOneLower(t *testing.T) {
 	for _, recorded := range []struct {
@@ -20,8 +25,12 @@ func TestEachTaskScoresItsPassingFixtureFullAndItsFailingOneLower(t *testing.T) 
 		{"wikipedia", "wikipedia-fail", []int{1, 4, 5}},
 		{"wikipedia", "wikipedia-redirect", nil},
 		{"wikipedia", "wikipedia-lead", nil},
+		{"flights", "flights-pass", nil},
+		{"flights", "flights-fail", []int{1, 4, 6}},
+		{"youtube", "youtube-pass", nil},
+		{"youtube", "youtube-fail", []int{2, 5}},
 	} {
-		task, err := Named(recorded.task)
+		task, err := Named(recorded.task, fixtureSeed, drawnOn)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -43,8 +52,27 @@ func TestEachTaskScoresItsPassingFixtureFullAndItsFailingOneLower(t *testing.T) 
 	}
 }
 
+func TestTheSameSeedDrawsTheSameFlightAndAnotherSeedAnotherOne(t *testing.T) {
+	prompt := func(seed int64) string {
+		task, err := Named("flights", seed, drawnOn)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return task.Prompt
+	}
+	t.Logf("seed 1: %s\nseed 2: %s\nseed %d: %s", prompt(1), prompt(2), fixtureSeed, prompt(fixtureSeed))
+	if prompt(1) != prompt(1) || prompt(1) == prompt(2) {
+		t.Error("seed 1 did not draw one flight, or seeds 1 and 2 drew the same one")
+	}
+	youtube, err := Named("youtube", fixtureSeed, drawnOn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("youtube seed %d: %s", fixtureSeed, youtube.Prompt)
+}
+
 func TestAnUnknownTaskIsRefused(t *testing.T) {
-	if _, err := Named("airbnb-by-another-name"); err == nil {
+	if _, err := Named("airbnb-by-another-name", 0, drawnOn); err == nil {
 		t.Error("an unknown task name was accepted")
 	}
 }

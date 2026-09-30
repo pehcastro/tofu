@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"tofu/bench/browser/airbnb"
 	"tofu/internal/session"
@@ -38,13 +39,13 @@ type Task struct {
 
 var snapshotHeader = regexp.MustCompile(`(?m)^tab \d+ (\S+) ("(?:[^"\\]|\\.)*")`)
 
-func Named(name string) (Task, error) {
-	for _, task := range []Task{books, herokuapp, wikipedia} {
+func Named(name string, seed int64, drawnOn time.Time) (Task, error) {
+	for _, task := range []Task{books, herokuapp, wikipedia, drawFlights(seed, drawnOn), drawYouTube(seed, drawnOn)} {
 		if task.Name == name {
 			return task, nil
 		}
 	}
-	return Task{}, fmt.Errorf("unknown task %q: airbnb, books, herokuapp or wikipedia", name)
+	return Task{}, fmt.Errorf("unknown task %q: airbnb, books, herokuapp, wikipedia, flights or youtube", name)
 }
 
 func Read(arm airbnb.Arm, paths ...string) (Evidence, error) {

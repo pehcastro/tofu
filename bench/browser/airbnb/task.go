@@ -32,20 +32,31 @@ var linePatterns = map[Field]*regexp.Regexp{
 	"rating":   regexp.MustCompile(`(?i)(nota|avalia\S*|rating|★)\s*[1-5][.,]\d{1,2}|[1-5][.,]\d{1,2}\s*((de|out of) 5\s*)?(★|avalia|rating|stars|estrelas)` + noRating),
 	"bedrooms": regexp.MustCompile(`(?i)\d+\s*(quartos?|bedrooms?)`),
 	"pool":     regexp.MustCompile(`(?i)piscina|pool`),
+	"wifi":     regexp.MustCompile(`(?i)wi-?fi|internet`),
+	"pets":     regexp.MustCompile(`(?i)pets?\b|animais|animal`),
+	"kitchen":  regexp.MustCompile(`(?i)kitchen|cozinha`),
 }
+
+var yesOrNo = regexp.MustCompile(`(?i)^\W*(yes|no|sim|não|nao)\b`)
 
 var cellPatterns = map[Field]*regexp.Regexp{
 	"price":    linePatterns["price"],
 	"rating":   regexp.MustCompile(`^\W*[1-5][.,]\d{1,2}` + noRating),
 	"bedrooms": regexp.MustCompile(`\d`),
-	"pool":     regexp.MustCompile(`(?i)^\W*(yes|no|sim|não|nao)\b`),
+	"pool":     yesOrNo,
+	"wifi":     yesOrNo,
+	"pets":     yesOrNo,
+	"kitchen":  yesOrNo,
 }
 
 var columnOf = map[Field]*regexp.Regexp{
 	"price":    regexp.MustCompile(`(?i)price|preço|total`),
 	"rating":   regexp.MustCompile(`(?i)rating|avalia|nota`),
 	"bedrooms": regexp.MustCompile(`(?i)bedroom|quarto`),
-	"pool":     regexp.MustCompile(`(?i)pool|piscina`),
+	"pool":     linePatterns["pool"],
+	"wifi":     linePatterns["wifi"],
+	"pets":     linePatterns["pets"],
+	"kitchen":  linePatterns["kitchen"],
 }
 
 var (

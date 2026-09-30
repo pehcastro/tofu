@@ -28,13 +28,14 @@ func main() {
 	tofu := flag.String("tofu", "tofu", "the installed tofu binary")
 	again := flag.String("rescore", "", "a run folder to score again from its sessions, running nothing")
 	maxWall := flag.Duration("max-wall", 20*time.Minute, "end the tofu run process tree at this wall time and score what it reached")
-	taskName := flag.String("task", "airbnb", "airbnb, books, herokuapp or wikipedia")
+	taskName := flag.String("task", "airbnb", "airbnb, books, herokuapp, wikipedia, flights or youtube")
+	seed := flag.Int64("seed", 0, "draws the task's values; airbnb with seed 0 is the fixed task")
 	flag.Parse()
-	task, err := taskNamed(*taskName)
+	task, err := taskNamed(*taskName, *seed, time.Now())
 	switch {
-	case err != nil:
 	case *again != "":
-		err = rescore(task, *again)
+		err = rescore(*taskName, *again)
+	case err != nil:
 	case *browserModel != "" && *arm != "":
 		err = fmt.Errorf("-arm %s and -browser-model %s both name the arm: give one", *arm, *browserModel)
 	case *browserModel != "":
@@ -128,6 +129,9 @@ func run(task benchTask, arm airbnb.Arm, out, tofu string, maxWall time.Duration
 	if task.name != "airbnb" {
 		folder = task.name + "-" + folder
 	}
+	if task.seed != 0 {
+		folder += fmt.Sprintf("-seed%d", task.seed)
+	}
 	dir, err := filepath.Abs(filepath.Join(out, folder))
 	if err != nil {
 		return err
@@ -151,7 +155,7 @@ func run(task benchTask, arm airbnb.Arm, out, tofu string, maxWall time.Duration
 	}
 	capped, ranErr := tofuCapped(tofu, project, log, maxWall, "run", "--dir", project, "--model", airbnb.MainModel, task.prompt)
 	machine, _ := os.Hostname()
-	if err := score(task, dir, airbnb.Run{Arm: arm, TabsClosed: closed, Capped: capped, Conditions: airbnb.Conditions{Date: started.Format(time.DateOnly), Machine: machine}}); err != nil {
+	if err := score(task, dir, airbnb.Run{Arm: arm, Seed: task.seed, TabsClosed: closed, Capped: capped, Conditions: airbnb.Conditions{Date: started.Format(time.DateOnly), Machine: machine}}); err != nil {
 		return fmt.Errorf("tofu run: %v, then %w", ranErr, err)
 	}
 	fmt.Printf("tofu run exit: %v, capped at %s: %v\n", ranErr, maxWall, capped)
@@ -160,25 +164,37 @@ func run(task benchTask, arm airbnb.Arm, out, tofu string, maxWall time.Duration
 
 type benchTask struct {
 	name   string
+	seed   int64
 	prompt string
 	score  func(recorded airbnb.Run, lineage []string) (airbnb.Row, error)
 }
 
-func taskNamed(name string) (benchTask, error) {
+func taskNamed(name string, seed int64, drawnOn time.Time) (benchTask, error) {
 	if name == "airbnb" {
 		task, err := airbnb.Load()
-		return benchTask{name, task.Prompt, func(recorded airbnb.Run, _ []string) (airbnb.Row, error) { return airbnb.Score(task, recorded), nil }}, err
+		if seed != 0 {
+			task = airbnb.Draw(seed, drawnOn)
+		}
+		return benchTask{name, seed, task.Prompt, func(recorded airbnb.Run, _ []string) (airbnb.Row, error) { return airbnb.Score(task, recorded), nil }}, err
 	}
-	task, err := tasks.Named(name)
-	return benchTask{name, task.Prompt, func(recorded airbnb.Run, lineage []string) (airbnb.Row, error) {
+	task, err := tasks.Named(name, seed, drawnOn)
+	return benchTask{name, seed, task.Prompt, func(recorded airbnb.Run, lineage []string) (airbnb.Row, error) {
 		evidence, err := tasks.Read(recorded.Arm, lineage...)
 		evidence.Run = recorded
 		return tasks.Score(task, evidence), err
 	}}, err
 }
 
-func rescore(task benchTask, dir string) error {
+func rescore(name, dir string) error {
 	before, err := airbnb.LoadRun(dir)
+	if err != nil {
+		return err
+	}
+	drawnOn, err := time.Parse(time.DateOnly, before.Conditions.Date)
+	if err != nil {
+		return fmt.Errorf("%s: the run's date %q draws no task: %w", dir, before.Conditions.Date, err)
+	}
+	task, err := taskNamed(name, before.Seed, drawnOn)
 	if err != nil {
 		return err
 	}
@@ -198,7 +214,7 @@ func score(task benchTask, dir string, before airbnb.Run) error {
 	if err != nil {
 		return err
 	}
-	recorded.TabsClosed, recorded.Capped = before.TabsClosed, before.Capped
+	recorded.TabsClosed, recorded.Capped, recorded.Seed = before.TabsClosed, before.Capped, before.Seed
 	if err := before.Arm.Stamp(&recorded, before.Conditions.Date, before.Conditions.Machine); err != nil {
 		return err
 	}

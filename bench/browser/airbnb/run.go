@@ -112,6 +112,7 @@ type Page struct {
 
 type Run struct {
 	Arm           Arm        `json:"arm"`
+	Seed          int64      `json:"seed"`
 	Conditions    Conditions `json:"conditions"`
 	WallMS        int64      `json:"wall_ms"`
 	Forks         int        `json:"forks"`

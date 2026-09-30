@@ -31,12 +31,13 @@ type Row struct {
 	Capped        bool
 	TabsClosed    int
 	Phases        Phases
+	Seed          int64
 }
 
 func seconds(millis int64) float64 { return float64(millis) / 1000 }
 
 func Score(task Task, run Run) Row {
-	row := Row{Arm: run.Arm, Conditions: run.Conditions, Wall: time.Duration(run.WallMS) * time.Millisecond, Forks: run.Forks, SubForks: run.SubForks, MainTokens: run.MainTokens, BrowserTokens: run.BrowserTokens, TabsOpened: len(run.Tabs), Repeated: run.Repeated, Refused: run.Refused, Mixed: run.Mixed, Capped: run.Capped, TabsClosed: run.TabsClosed, Phases: run.Phases}
+	row := Row{Arm: run.Arm, Conditions: run.Conditions, Wall: time.Duration(run.WallMS) * time.Millisecond, Forks: run.Forks, SubForks: run.SubForks, MainTokens: run.MainTokens, BrowserTokens: run.BrowserTokens, TabsOpened: len(run.Tabs), Repeated: run.Repeated, Refused: run.Refused, Mixed: run.Mixed, Capped: run.Capped, TabsClosed: run.TabsClosed, Phases: run.Phases, Seed: run.Seed}
 	for _, step := range task.Steps {
 		passed := passes(step.Check, run)
 		if passed {
@@ -66,8 +67,8 @@ func Render(rows []Row) (string, error) {
 		return cmp.Or(cmp.Compare(b.Passed, a.Passed), cmp.Compare(unknownLast(a), unknownLast(b)))
 	})
 	var table strings.Builder
-	table.WriteString("| arm | mode | passed | wall | total tokens | usd | forks main+sub | main tokens | browser tokens | model s | browser s | other s | steps | tabs closed before | tabs opened | repeated | refused | failed steps | main build | browser build | main credential | browser credential | wire | machine | date |\n")
-	table.WriteString("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n")
+	table.WriteString("| arm | mode | passed | wall | total tokens | usd | forks main+sub | main tokens | browser tokens | model s | browser s | other s | steps | tabs closed before | tabs opened | repeated | refused | failed steps | main build | browser build | main credential | browser credential | wire | machine | date | seed |\n")
+	table.WriteString("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n")
 	for _, row := range sorted {
 		if row.Conditions.Credential != rows[0].Conditions.Credential {
 			return "", fmt.Errorf("the main model of arm %s ran on a %s credential and that of arm %s on %s, and the two are not compared", row.Arm, row.Conditions.Credential, rows[0].Arm, rows[0].Conditions.Credential)
@@ -90,10 +91,10 @@ func Render(rows []Row) (string, error) {
 			mode += ", capped"
 		}
 		phases := row.Phases
-		fmt.Fprintf(&table, "| %s | %s | %d of %d | %.0f s | %s | - | %d+%d | %d | %s | %.0f (%.1f) | %.0f (%.1f) | %.0f | %d | %d | %d | %d | %d | %s | %s | %s | %s | %s | %s | %s | %s |\n",
+		fmt.Fprintf(&table, "| %s | %s | %d of %d | %.0f s | %s | - | %d+%d | %d | %s | %.0f (%.1f) | %.0f (%.1f) | %.0f | %d | %d | %d | %d | %d | %s | %s | %s | %s | %s | %s | %s | %s | %d |\n",
 			row.Arm, mode, row.Passed, len(row.Steps), row.Wall.Seconds(), totalTokens, row.Forks, row.SubForks, row.MainTokens, browserTokens,
 			seconds(phases.ModelMS), seconds(phases.ModelMedianMS), seconds(phases.BrowserMS), seconds(phases.BrowserMedianMS), seconds(phases.OtherMS()), phases.Steps, row.TabsClosed, row.TabsOpened, row.Repeated, row.Refused,
-			strings.Join(failed, " "), conditions.MainBuild, conditions.BrowserBuild, conditions.Credential, conditions.BrowserCredential, conditions.Wire, conditions.Machine, conditions.Date)
+			strings.Join(failed, " "), conditions.MainBuild, conditions.BrowserBuild, conditions.Credential, conditions.BrowserCredential, conditions.Wire, conditions.Machine, conditions.Date, row.Seed)
 	}
 	return table.String(), nil
 }

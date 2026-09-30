@@ -1,0 +1,5 @@
+| # | Name | Total price | Bedrooms | Pets allowed | Rating |
+|---|---|---|---|---|---|
+| 1 | Apartamento Inventado | R$ 1.800 total | 1 quarto | Não | 4,60 (8 avaliações) |
+| 2 | Chalé de Mentira | R$ 1.910 total | 2 quartos | Sim | 4,90 (12 avaliações) |
+| 3 | Sobrado Fictício | R$ 1.650 total | 1 quarto | Yes | 4,70 (20 avaliações) |

@@ -14,6 +14,22 @@ import (
 	"tofu/bench/browser/airbnb"
 )
 
+func TestTheSeedFlagDrawsTheAirbnbAndFlightsPrompts(t *testing.T) {
+	drawnOn := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
+	for _, name := range []string{"airbnb", "flights"} {
+		prompt := func(seed int64) string {
+			task, err := taskNamed(name, seed, drawnOn)
+			if err != nil {
+				t.Fatal(err)
+			}
+			return task.prompt
+		}
+		if prompt(1) != prompt(1) || prompt(1) == prompt(2) || prompt(1) == prompt(0) {
+			t.Errorf("%s: seeds 1 and 1 must agree, and seeds 1, 2 and 0 must differ", name)
+		}
+	}
+}
+
 func TestARunPastItsCapIsEndedWithItsChildAndTheRowReadsCapped(t *testing.T) {
 	pidFile := filepath.Join(t.TempDir(), "child.pid")
 	t.Setenv(fakeTofuSleeper, pidFile)
