@@ -1,0 +1,11 @@
+{
+  "url": "https://stays.test/s/atibaia",
+  "title": "Stays",
+  "loader": "L1",
+  "ours": true,
+  "nodes": [
+    {"id": 1, "role": "RootWebArea", "name": "Stays", "children": [2, 3]},
+    {"id": 2, "role": "link", "name": "Piscina", "box": [10, 10, 100, 20], "fires": "pool", "toggles": 3},
+    {"id": 3, "role": "heading", "name": "12 lugares com piscina", "hidden": true}
+  ]
+}

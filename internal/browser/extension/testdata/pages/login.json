@@ -1,0 +1,11 @@
+{
+  "url": "https://the-internet.test/login",
+  "title": "The Internet",
+  "loader": "L1",
+  "ours": true,
+  "nodes": [
+    {"id": 1, "role": "RootWebArea", "name": "The Internet", "children": [2, 3]},
+    {"id": 2, "role": "textbox", "name": "Username", "box": [10, 10, 200, 20], "ignoresInsert": true},
+    {"id": 3, "role": "textbox", "name": "Password", "box": [10, 40, 200, 20]}
+  ]
+}

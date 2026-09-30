@@ -316,6 +316,8 @@ type cdpPage struct {
 	names    map[int]string
 	aimed    int
 	clicked  []string
+	commit   time.Duration
+	commits  time.Time
 }
 
 func (p *cdpPage) answer(method string, params map[string]any) any {
@@ -326,7 +328,15 @@ func (p *cdpPage) answer(method string, params map[string]any) any {
 	if backend, aimed := params["backendNodeId"].(float64); aimed {
 		p.aimed = int(backend)
 	}
+	if !p.commits.IsZero() && time.Now().After(p.commits) {
+		p.url, p.buttons, p.commits = p.next, p.screens[p.next], time.Time{}
+	}
 	switch method {
+	case "Input.dispatchKeyEvent":
+		if params["key"] == "Enter" && params["type"] == "keyDown" {
+			p.commits = time.Now().Add(p.commit)
+		}
+		return map[string]any{}
 	case "Page.getFrameTree":
 		return map[string]any{"frameTree": map[string]any{"frame": map[string]any{"id": "main", "loaderId": "L " + p.url, "url": p.url}}}
 	case "Accessibility.getFullAXTree":
@@ -737,6 +747,42 @@ func TestABatchWhoseThirdGuardFailsReturnsAfterTheSecondWithTheGuardAndTheDelta(
 	}
 	if !strings.Contains(acted, `3. click button "31": target button "31" is not on the page`) || !strings.Contains(acted, "ran 2 of 4") || !regexp.MustCompile(`changed since the last snapshot(?s:.*)\+ \S+ button "Aplicar"`).MatchString(acted) {
 		t.Fatal("the stop does not name the failed guard, the count, or the delta since the batch began")
+	}
+}
+
+func TestAFormSubmittedByEnterReturnsTheNextPagesSnapshot(t *testing.T) {
+	page := &cdpPage{url: "https://www.google.test/", next: "https://www.google.test/search?q=airbnb", commit: 400 * time.Millisecond,
+		buttons: []string{"Pesquisar", "Estou com sorte"}, screens: map[string][]string{"https://www.google.test/search?q=airbnb": {"Airbnb: aluguéis", "Próxima"}}}
+	run := stepsOn(t, page)
+	run("browser_observe", `{"tab":7}`)
+	acted := run("browser_act", `{"tab":7,"actions":[{"action":"press","value":"Enter"}]}`)
+	if !strings.Contains(acted, "tab 7 https://www.google.test/search?q=airbnb") || !strings.Contains(acted, `button "Próxima"`) || strings.Contains(acted, `"Estou com sorte"`) {
+		t.Fatal("the act after Enter returned the old page, not the results the form submitted to")
+	}
+}
+
+func TestAFailingAfterCheckStopsTheBatchAfterItsAction(t *testing.T) {
+	page := datePicker()
+	run := stepsOn(t, page)
+	run("browser_observe", `{"tab":7}`)
+	acted := run("browser_act", `{"tab":7,"actions":[
+		{"action":"click","target":{"role":"button","name":"Datas"},"expect_after":{"text_has":"Março"}},
+		{"action":"click","target":{"role":"button","name":"9"}}]}`)
+	if clicked := page.clicks(); !slices.Equal(clicked, []string{"Datas"}) || !strings.Contains(acted, `1. click button "Datas": stopped, expect_after text_has "Março" failed`) || !strings.Contains(acted, "ran 1 of 2") {
+		t.Fatalf("a failing expect_after clicked %q; want Datas only, the check named, and ran 1 of 2", clicked)
+	}
+}
+
+func TestAURLCheckHoldsOnTheNewPageAfterANavigateMidBatch(t *testing.T) {
+	page := &cdpPage{url: "https://stays.test/", buttons: []string{"Buscar", "Mapa"}}
+	run := stepsOn(t, page)
+	run("browser_observe", `{"tab":7}`)
+	acted := run("browser_act", `{"tab":7,"actions":[
+		{"action":"navigate","value":"https://stays.test/s?checkin=2026-10-09"},
+		{"action":"click","target":{"role":"button","name":"Buscar"},"expect":{"url_has":"checkin="}},
+		{"action":"click","target":{"role":"button","name":"Mapa"},"expect":{"url_has":"checkout="}}]}`)
+	if clicked := page.clicks(); !slices.Equal(clicked, []string{"Buscar"}) || !strings.Contains(acted, `expect url_has "checkout=" failed, the url is https://stays.test/s?checkin=2026-10-09`) || !strings.Contains(acted, "ran 2 of 3") {
+		t.Fatalf("across a navigate the batch clicked %q; want Buscar under checkin=, then a stop naming checkout=", clicked)
 	}
 }
 

@@ -306,6 +306,8 @@ type fakeNode struct {
 	OpensURL   string    `json:"opensURL"`
 	Ignored    bool      `json:"ignored"`
 	Passive    bool      `json:"passive"`
+	Value      string    `json:"value"`
+	Stubborn   bool      `json:"ignoresInsert"`
 }
 
 type fakePage struct {
@@ -316,6 +318,8 @@ type fakePage struct {
 	Nodes    []*fakeNode `json:"nodes"`
 	Ours     bool        `json:"ours"`
 	Deaf     bool        `json:"deaf"`
+	Status   int         `json:"status"`
+	focused  int
 	scrolled map[int]float64
 	tagged   []int
 	fired    []string
@@ -518,13 +522,21 @@ func (p *fakePage) cdp(method string, params map[string]any, opened func(int, st
 		case strings.Contains(script, "getEntriesByType"):
 			return value(map[string]any{"pending": 0, "loading": false}), nil
 		case strings.Contains(script, "innerText"):
-			return value(map[string]any{"url": p.URL, "count": len(p.Nodes), "text": strings.Join(p.fired, ",")}), nil
+			return value(map[string]any{"url": p.URL, "count": len(p.Nodes), "text": strings.Join(p.fired, ","), "status": p.Status, "heading": p.Title}), nil
 		}
 	case "Runtime.callFunctionOn":
 		target := p.byObject(params)
 		args, _ := params["arguments"].([]any)
 		number := func(i int) float64 { return args[i].(map[string]any)["value"].(float64) }
 		switch {
+		case strings.Contains(script, "this.focus()"):
+			p.focused = target.ID
+			return value(nil), nil
+		case strings.Contains(script, "this.value = ''"):
+			target.Value = ""
+			return value(nil), nil
+		case strings.Contains(script, "return this.value"):
+			return value(target.Value), nil
 		case strings.Contains(script, "this.click()"):
 			for n := target; n != nil; n = p.parent(n.ID) {
 				if n.Fires != "" {
@@ -546,7 +558,15 @@ func (p *fakePage) cdp(method string, params map[string]any, opened func(int, st
 			p.scrolled[target.ID] = min(max(p.scrolled[target.ID]+number(1), 0), target.Scrollable-target.Box[3])
 			return value(nil), nil
 		}
-	case "Input.dispatchKeyEvent", "Input.insertText":
+	case "Input.insertText":
+		if n := p.node(p.focused); n != nil && !n.Stubborn {
+			n.Value += fmt.Sprint(params["text"])
+		}
+		return map[string]any{}, nil
+	case "Input.dispatchKeyEvent":
+		if text, typed := params["text"].(string); typed && params["type"] == "keyDown" && text != "\r" && p.node(p.focused) != nil {
+			p.node(p.focused).Value += text
+		}
 		return map[string]any{}, nil
 	case "Input.dispatchMouseEvent":
 		if params["type"] != "mouseReleased" || p.Deaf {
@@ -824,6 +844,41 @@ func (p *fakePage) sawTabOps(t *testing.T, want ...string) {
 	defer p.mu.Unlock()
 	if !slices.Equal(p.tabOps, want) {
 		t.Fatalf("the tabs saw %q; want %q", p.tabOps, want)
+	}
+}
+
+func TestAFieldThatIgnoresInsertTextIsTypedAndSaysFilled(t *testing.T) {
+	driver, page := drivenPage(t, "login")
+	snapshot := observe(t, driver, true)
+	moved, err := driver.Do(browser.Move{Ref: refOf(t, snapshot, "textbox", "Username"), Kind: browser.MoveFill, Value: "tomsmith"})
+	t.Logf("the fill says: %s", moved)
+	page.mu.Lock()
+	typed := page.node(2).Value
+	page.mu.Unlock()
+	if err != nil || typed != "tomsmith" || !strings.HasPrefix(moved.String(), "filled") {
+		t.Fatalf("a fill into a field that ignores insertText left %q and said %q, %v; want tomsmith typed and filled", typed, moved, err)
+	}
+}
+
+func TestALinkThatSwapsContentInPlaceReturnsWellUnderASecond(t *testing.T) {
+	driver, page := drivenPage(t, "chips")
+	chip := refOf(t, observe(t, driver, true), "link", "Piscina")
+	started := time.Now()
+	moved, err := driver.Do(browser.Move{Ref: chip, Kind: browser.MoveClick})
+	took := time.Since(started)
+	t.Logf("the chip click took %v and says: %s", took, moved)
+	if err != nil || !moved.PageChanged || moved.URLChanged || took >= 700*time.Millisecond {
+		t.Fatalf("a link that changes the page in place took %v and returned %+v, %v; want the page changed, no url change, well under a second", took, moved, err)
+	}
+	page.sawFired(t, "pool")
+}
+
+func TestANavigateToA500PageSaysItIsAnErrorPage(t *testing.T) {
+	driver, _ := drivenPage(t, "error")
+	moved, err := driver.Do(browser.Move{Kind: browser.MoveNavigate, Value: "https://stays.test/rooms/9"})
+	t.Logf("the navigate says: %s", moved)
+	if err != nil || !strings.Contains(moved.String(), "error page") || !strings.Contains(moved.String(), "500") {
+		t.Fatalf("a navigate to a 500 page said %q, %v; want it named an error page with its status", moved, err)
 	}
 }
 

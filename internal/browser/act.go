@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -40,6 +41,8 @@ type Moved struct {
 	Via         string `json:"via,omitempty"`
 	SettledMS   int    `json:"settled_ms"`
 	Value       string `json:"value,omitempty"`
+	Field       string `json:"field,omitempty"`
+	ErrorPage   string `json:"error_page,omitempty"`
 	Opened      int    `json:"opened,omitempty"`
 	URLChanged  bool   `json:"url_changed"`
 	PageChanged bool   `json:"page_changed"`
@@ -101,6 +104,8 @@ const pendingRequests = `(() => {
 })()`
 
 const pageStateScript = `({url: location.href, count: document.getElementsByTagName('*').length, text: document.body ? document.body.innerText : '',
+  status: (performance.getEntries().find(entry => entry.entryType === 'navigation') || {}).responseStatus || 0,
+  heading: document.title + '\n' + ((document.querySelector('h1') || {}).innerText || ''),
   controls: Array.from(document.querySelectorAll('input, select, textarea, [aria-checked], [aria-expanded], [aria-pressed], [aria-selected]'),
     e => [e.checked, e.value, e.getAttribute('aria-checked'), e.getAttribute('aria-expanded'), e.getAttribute('aria-pressed'), e.getAttribute('aria-selected')].join(',')).join('|')})`
 
@@ -113,6 +118,18 @@ type pageState struct {
 	Count    int    `json:"count"`
 	Text     string `json:"text"`
 	Controls string `json:"controls"`
+	Status   int    `json:"status"`
+	Heading  string `json:"heading"`
+}
+
+func (p pageState) errorPage() string {
+	if p.Status >= 400 {
+		return fmt.Sprintf("HTTP %d", p.Status)
+	}
+	if regexp.MustCompile(`(?im)^\s*[45]\d\d\b|\b(error|not found|forbidden|unavailable|bad gateway)\b`).MatchString(p.Heading) {
+		return "titled " + strconv.Quote(strings.TrimSpace(strings.ReplaceAll(p.Heading, "\n", " ")))
+	}
+	return ""
 }
 
 func (d *Driver) state(deadline time.Time) (pageState, []Tab, error) {
@@ -149,14 +166,16 @@ func (m Moved) said() string {
 		return "did not run, covered by " + m.Covered + ": close it first"
 	case m.Covered != "":
 		return "did not run, covered by " + m.Covered
+	case m.ErrorPage != "":
+		return "landed on an error page, " + m.ErrorPage
 	case m.Folded != 0:
 		return fmt.Sprintf("the page opened a popup, so tofu loaded its url in this tab and closed popup tab %d", m.Folded)
 	case m.Opened != 0:
 		return fmt.Sprintf("opened tab %d, which the next actions use", m.Opened)
+	case m.Field != "":
+		return m.Field
 	case m.URLChanged:
 		return "the url changed"
-	case m.PageChanged && m.Value != "":
-		return "the page changed, the field reads " + strconv.Quote(m.Value)
 	case m.PageChanged:
 		return "the page changed"
 	}
@@ -213,6 +232,12 @@ func (d *Driver) do(deadline time.Time, move Move) (Moved, error) {
 		moved, err = d.click(deadline, move.Ref)
 	case MoveFill:
 		moved.Value, err = d.fill(deadline, move.Ref, move.Value)
+		switch moved.Field = "filled"; {
+		case moved.Value == "":
+			moved.Field = "field still empty after typing"
+		case moved.Value != move.Value:
+			moved.Field = "the field reads " + strconv.Quote(moved.Value) + " after typing"
+		}
 	case MoveSelect:
 		err = d.pick(deadline, move.Ref, move.Value)
 	case MovePress:
@@ -231,6 +256,9 @@ func (d *Driver) do(deadline time.Time, move Move) (Moved, error) {
 	if err != nil || moved.Covered != "" {
 		return moved, err
 	}
+	if d.navigates(deadline, move) {
+		d.awaitNavigation(deadline, before, tabsBefore)
+	}
 	moved, err = d.measure(deadline, move, before, tabsBefore, moved)
 	if err == nil && !moved.PageChanged && moved.Opened == 0 {
 		if via := d.fallback(deadline, move); via != "" {
@@ -241,6 +269,38 @@ func (d *Driver) do(deadline time.Time, move Move) (Moved, error) {
 		}
 	}
 	return moved, err
+}
+
+const submitsOrLinks = `function() { return !!(this.closest('a') || (this.form && (this.type === 'submit' || this.type === 'image'))); }`
+
+func (d *Driver) navigates(deadline time.Time, move Move) bool {
+	switch move.Kind {
+	case MovePress:
+		name, _, _ := keyInfo(move.Value)
+		return name == "Enter"
+	case MoveClick:
+		if d.refs.entries[move.Ref].role == "link" {
+			return true
+		}
+		object, err := d.resolve(deadline, move.Ref)
+		var navigates bool
+		return err == nil && d.value(deadline, false, callOn(object, submitsOrLinks, true), &navigates) == nil && navigates
+	}
+	return false
+}
+
+func (d *Driver) awaitNavigation(deadline time.Time, before pageState, tabsBefore []Tab) {
+	for until := time.Now().Add(konst.BrowserDOMQuietMaxMillis * time.Millisecond); time.Now().Before(until); time.Sleep(konst.BrowserSettleTickMillis * time.Millisecond) {
+		after, tabs, err := d.state(deadline)
+		switch {
+		case err != nil:
+		case after.URL != before.URL || len(tabs) > len(tabsBefore):
+			return
+		case after != before:
+			d.settle(deadline, konst.BrowserDOMQuietMillis)
+			return
+		}
+	}
 }
 
 const submitFocused = `(() => {
@@ -277,6 +337,9 @@ func (d *Driver) measure(deadline time.Time, move Move, before pageState, tabsBe
 		return moved, err
 	}
 	moved.URLChanged, moved.PageChanged = after.URL != before.URL, after != before
+	if moved.URLChanged || move.Kind == MoveNavigate || move.Kind == MoveBack {
+		moved.ErrorPage = after.errorPage()
+	}
 	if move.Kind != MoveNavigate {
 		for _, tab := range tabsAfter {
 			if !slices.ContainsFunc(tabsBefore, func(held Tab) bool { return held.ID == tab.ID }) {
@@ -473,12 +536,27 @@ func (d *Driver) closeRef(nodes []axTreeNode, byID map[string]int, dialog int) s
 
 func (d *Driver) fill(deadline time.Time, ref, text string) (string, error) {
 	object, err := d.resolve(deadline, ref)
+	emptied := []cdpCall{callOn(object, "function() { this.focus(); }", true), callOn(object, clearValue, true)}
 	if err == nil {
-		err = d.act(deadline, callOn(object, "function() { this.focus(); }", true), callOn(object, clearValue, true), cdpCall{Method: "Input.insertText", Params: map[string]any{"text": text}})
+		err = d.act(deadline, append(slices.Clone(emptied), cdpCall{Method: "Input.insertText", Params: map[string]any{"text": text}})...)
 	}
+	readBack := callOn(object, "function() { return this.value ?? this.textContent; }", true)
 	var value string
 	if err == nil {
-		err = d.value(deadline, false, callOn(object, "function() { return this.value ?? this.textContent; }", true), &value)
+		err = d.value(deadline, false, readBack, &value)
+	}
+	if err != nil || value == text {
+		return value, err
+	}
+	typed := emptied
+	for _, char := range text {
+		key := string(char)
+		typed = append(typed,
+			cdpCall{Method: "Input.dispatchKeyEvent", Params: map[string]any{"type": "keyDown", "key": key, "text": key, "unmodifiedText": key}},
+			cdpCall{Method: "Input.dispatchKeyEvent", Params: map[string]any{"type": "keyUp", "key": key}})
+	}
+	if err = d.act(deadline, typed...); err == nil {
+		err = d.value(deadline, false, readBack, &value)
 	}
 	return value, err
 }

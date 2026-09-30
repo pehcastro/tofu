@@ -1,0 +1,11 @@
+{
+  "url": "https://stays.test/",
+  "title": "Internal Server Error",
+  "loader": "L1",
+  "ours": true,
+  "status": 500,
+  "nodes": [
+    {"id": 1, "role": "RootWebArea", "name": "Internal Server Error", "children": [2]},
+    {"id": 2, "role": "heading", "name": "500 Internal Server Error"}
+  ]
+}
