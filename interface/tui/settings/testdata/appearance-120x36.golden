@@ -9,7 +9,7 @@
     Files           03      Spacing across lists and panels                               tofu dusk                     
     Shell           05                                                                                                  
     Turn            09      Animations                                     subtle  ▾     HOW IT WORKS                   
-    Browser         04      Motion for conversational states                             Enter opens a focused          
+    Browser         06      Motion for conversational states                             Enter opens a focused          
                                                                                          choice. Changes preview        
   NAVIGATE                  Status bar                                    compact  ▾     immediately; Esc keeps the     
   ↑↓ setting · ←→           Context, quotas, and runtime counters                        prior value.                   

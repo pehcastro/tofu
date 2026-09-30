@@ -10,7 +10,7 @@
     Files         03                                                                                
     Shell         05      Thinking                                                          ● on    
     Turn          09      thinking shows in each agent's sub-agents feed; t there toggles it        
-    Browser       04                                                                                
+    Browser       06                                                                                
                           Thinking summary                                        summarized  ▾     
   NAVIGATE                summarized asks Claude for a summary of its thinking; omitted asks fo…    
   ↑↓ setting · ←→                                                                                   
@@ -40,7 +40,7 @@
     Files         03     one: agents-first sends AGENTS.md, claude-first                            
     Shell         05     sends CLAUDE.md, both sends both and costs more                    ● on    
     Turn          09     tokens. Read from the working directory up to its   here toggles it        
-    Browser       04     git root; the home directory gives only                                    
+    Browser       06     git root; the home directory gives only                                    
                          ~/.tofu/AGENTS.md                                        summarized  ▾     
   NAVIGATE                                                                   g; omitted asks fo…    
   ↑↓ setting · ←→          agents-first                                                             
@@ -70,7 +70,7 @@
     Files         03     one: agents-first sends AGENTS.md, claude-first                            
     Shell         05     sends CLAUDE.md, both sends both and costs more                    ● on    
     Turn          09     tokens. Read from the working directory up to its   here toggles it        
-    Browser       04     git root; the home directory gives only                                    
+    Browser       06     git root; the home directory gives only                                    
                          ~/.tofu/AGENTS.md                                        summarized  ▾     
   NAVIGATE                                                                   g; omitted asks fo…    
   ↑↓ setting · ←→          agents-first                                                             

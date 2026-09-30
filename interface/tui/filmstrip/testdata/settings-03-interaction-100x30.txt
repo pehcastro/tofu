@@ -10,7 +10,7 @@
     Files         03                                                                                
     Shell         05      Host integration                                       inspect Zed  ▾     
     Turn          09      Detect host shortcut conflicts and available integrations                 
-    Browser       04                                                                                
+    Browser       06                                                                                
                           Confirmations                                                  run  ▾     
   NAVIGATE                run lets a gated call go, ask waits for you; a rule's shadow or enfor…    
   ↑↓ setting · ←→                                                                                   

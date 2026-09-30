@@ -5,20 +5,20 @@
   CATEGORIES            › Browser                                  drive  ▾     
     Appearance    05      drive lets the model read your Chrome tabs and cl…    
     Interaction   03                                                            
-    Context       09      Browser chooser                            jev  ▾     
-    Files         03      jev picks each step of a browser task; model leav…    
+    Context       09      Browser driver                        subagent  ▾     
+    Files         03      subagent gives the browser steps to a browser sub…    
     Shell         05                                                            
     Turn          09      Browser steps                               30  ▾     
-  › Browser       04      how many actions one browser task may take            
+  › Browser       06      how many actions one browser task may take            
                                                                                 
   NAVIGATE                Browser model                          default  ▾     
   ↑↓ setting · ←→         the subscription model a browser task asks for th…    
   section                                                                       
-  ctrl+k search ·       enter change  ·  shift+tab scope  ·  esc chat           
-  esc chat                                                                      
+  ctrl+k search ·         Browser effort                         default  ▾     
+  esc chat                the effort the browser sub-agent runs at, when it…    
                                                                                 
+                          Browser cursor                                ● on    
+                          a small cursor labelled tofu glides to each click…    
                                                                                 
-                                                                                
-                                                                                
-                                                                                
+                        enter change  ·  shift+tab scope  ·  esc chat           
                                                                                 

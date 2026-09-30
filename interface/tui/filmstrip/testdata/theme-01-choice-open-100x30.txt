@@ -10,7 +10,7 @@
     Files         03                                                                                
     Shell         05       tofu light                                                 subtle  ▾     
     Turn          09                                                                                
-    Browser       04       tofu dusk                                                                
+    Browser       06       tofu dusk                                                                
                                                                                      compact  ▾     
   NAVIGATE                 Solarized Light                                                          
   ↑↓ setting · ←→                                                                                   

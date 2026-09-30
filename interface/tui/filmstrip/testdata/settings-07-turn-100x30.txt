@@ -10,7 +10,7 @@
     Files         03                                                                                
     Shell         05      Sub-agents per turn                                             10  ▾     
   › Turn          09      how many sub-agents one turn may spawn; the next spawn reads the new …    
-    Browser       04                                                                                
+    Browser       06                                                                                
                           Sub-agent depth                                                  2  ▾     
   NAVIGATE                how deep a sub-agent may spawn its own sub-agents; the next spawn rea…    
   ↑↓ setting · ←→                                                                                   

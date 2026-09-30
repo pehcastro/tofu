@@ -10,7 +10,7 @@
     Files         03                                                                                
   › Shell         05      Kill confirm                                                      ● on    
     Turn          09      Confirm process termination                                               
-    Browser       04                                                                                
+    Browser       06                                                                                
                           Shell                                                      default  ▾     
   NAVIGATE                a path, or the word wsl; empty resolves the person's own shell automa…    
   ↑↓ setting · ←→                                                                                   

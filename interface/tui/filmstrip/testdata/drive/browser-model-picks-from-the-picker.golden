@@ -65,22 +65,22 @@
   CATEGORIES              Browser                                                      drive  ▾     
     Appearance    05      drive lets the model read your Chrome tabs and click and type in them…    
     Models & rol… 02                                                                                
-    Interaction   05      Browser chooser                                                jev  ▾     
-    Context       09      jev picks each step of a browser task; model leaves every step to the…    
+    Interaction   05      Browser driver                                            subagent  ▾     
+    Context       09      subagent gives the browser steps to a browser sub-agent on browserMod…    
     Files         03                                                                                
     Shell         05      Browser steps                                                   30  ▾     
     Turn          09      how many actions one browser task may take                                
-  › Browser       04                                                                                
+  › Browser       06                                                                                
                         › Browser model                                  meta/muse-spark-1.3  ▾     
   NAVIGATE                the subscription model a browser task asks for the text to type and f…    
   ↑↓ setting · ←→                                                                                   
-  section               enter change  ·  shift+tab scope  ·  esc chat                               
-  ctrl+k search ·                                                                                   
+  section                 Browser effort                                             default  ▾     
+  ctrl+k search ·         the effort the browser sub-agent runs at, when its model lists it; em…    
   esc chat                                                                                          
+                          Browser cursor                                                    ● on    
+                          a small cursor labelled tofu glides to each click in tofu's own tab, …    
                                                                                                     
-                                                                                                    
-                                                                                                    
-                                                                                                    
+                        enter change  ·  shift+tab scope  ·  esc chat                               
                                                                                                     
                                                                                                     
                                                                                                     

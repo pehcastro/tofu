@@ -10,7 +10,7 @@
     Files         03                                                                                
     Shell         05      Agent feeds                                                   full  ▾     
     Turn          09      full keeps every sub-agents event, summary the latest 200, off shows …    
-    Browser       04                                                                                
+    Browser       06                                                                                
                           Thinking                                                          ● on    
   NAVIGATE                thinking shows in each agent's sub-agents feed; t there toggles it        
   ↑↓ setting · ←→                                                                                   

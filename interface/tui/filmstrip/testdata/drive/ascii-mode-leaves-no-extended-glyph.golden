@@ -190,7 +190,7 @@
     Files         03                                                                                
     Shell         05      Animations                                                  subtle  v     
     Turn          09      Motion for conversational states                                          
-    Browser       04                                                                                
+    Browser       06                                                                                
                           Status bar                                                 compact  v     
   NAVIGATE                Context, quotas, and runtime counters                                     
   ^v setting . <>                                                                                   
@@ -220,7 +220,7 @@
     Files         03                                                                                
     Shell         05       tofu light                                                 subtle  v     
     Turn          09                                                                                
-    Browser       04       tofu dusk                                                                
+    Browser       06       tofu dusk                                                                
                                                                                      compact  v     
   NAVIGATE                 Solarized Light                                                          
   ^v setting . <>                                                                                   

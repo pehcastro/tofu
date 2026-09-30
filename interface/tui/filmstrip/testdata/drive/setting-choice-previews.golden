@@ -10,7 +10,7 @@
     Files         03                                                                                
     Shell         05     Status bar                                     esc           subtle  ▾     
     Turn          09     Context, quotas, and runtime counters                                      
-    Browser       04                                                                                
+    Browser       06                                                                                
                            compact                                                  detailed  ▾     
   NAVIGATE                                                                                          
   ↑↓ setting · ←→        >  detailed                                                                
@@ -40,7 +40,7 @@
     Files         03                                                                                
     Shell         05     Status bar                                     esc           subtle  ▾     
     Turn          09     Context, quotas, and runtime counters                                      
-    Browser       04                                                                                
+    Browser       06                                                                                
                            compact                                                    hidden  ▾     
   NAVIGATE                                                                                          
   ↑↓ setting · ←→          detailed                                                                 
@@ -70,7 +70,7 @@
     Files         03                                                                                
     Shell         05      Animations                                                  subtle  ▾     
     Turn          09      Motion for conversational states                                          
-    Browser       04                                                                                
+    Browser       06                                                                                
                         › Status bar                                                 compact  ▾     
   NAVIGATE                Context, quotas, and runtime counters                                     
   ↑↓ setting · ←→                                                                                   
