@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime/debug"
 	"slices"
 	"testing"
 
@@ -118,5 +119,30 @@ func TestInstallWritesTheHostManifestAndKeyAndUninstallRemovesBoth(t *testing.T)
 	}
 	if err := Uninstall(home, hosts); err != nil {
 		t.Fatalf("a second Uninstall failed: %v", err)
+	}
+}
+
+func TestTwoCommitsAtTheSameVersionAndExtensionAreTwoBuilds(t *testing.T) {
+	at := func(revision, modified string) *debug.BuildInfo {
+		return &debug.BuildInfo{Settings: []debug.BuildSetting{{Key: "vcs.revision", Value: revision}, {Key: "vcs.modified", Value: modified}}}
+	}
+	builds := map[string]string{}
+	for name, info := range map[string]*debug.BuildInfo{
+		"c2a0da0":       at("c2a0da0", "false"),
+		"f50b4ff":       at("f50b4ff", "false"),
+		"f50b4ff dirty": at("f50b4ff", "true"),
+		"no vcs":        nil,
+	} {
+		build, err := buildOf(info)
+		if err != nil || build == "" {
+			t.Fatalf("the build of %s is %q, %v", name, build, err)
+		}
+		builds[name] = build
+	}
+	if builds["c2a0da0"] == builds["f50b4ff"] || builds["f50b4ff"] == builds["f50b4ff dirty"] || builds["f50b4ff dirty"] != builds["no vcs"] {
+		t.Fatalf("builds %v; want each commit distinct, and a dirty tree hashed from the executable like a binary with no commit", builds)
+	}
+	if again, err := buildOf(at("c2a0da0", "false")); err != nil || again != builds["c2a0da0"] {
+		t.Fatalf("c2a0da0 built twice gives %q then %q, %v", builds["c2a0da0"], again, err)
 	}
 }

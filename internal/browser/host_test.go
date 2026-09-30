@@ -608,6 +608,57 @@ func TestANewerClientRestartsAStaleRelayAndTheReconnectRewrites(t *testing.T) {
 	_ = client.Close()
 }
 
+func TestARelayForANewerInstallAnswersItsCurrentCallsBeforeItExits(t *testing.T) {
+	home := shortHome(t)
+	installFor(t, home, testOrigin)
+	ext, done := startHostOn(t, home, "0ld")
+	helloFrom(ext, "0ld")
+	withoutHello := func() *Client {
+		conn, err := net.Dial("unix", socketOf(t, home))
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = conn.Close() })
+		return &Client{conn: conn, out: json.NewEncoder(conn), in: json.NewDecoder(conn)}
+	}
+	working, late := withoutHello(), withoutHello()
+	read := callAsync(working, 7, "snapshot", nil)
+	pending := ext.call()
+
+	if client, err := Dial(home); !errors.Is(err, ErrRelayRestarting) {
+		if client != nil {
+			_ = client.Close()
+		}
+		t.Fatalf("a client on the installed build dialled a relay on 0ld and got %v; want ErrRelayRestarting", err)
+	}
+	select {
+	case err := <-done:
+		t.Fatalf("the relay exited with %v while call %d was still out", err, pending.ID)
+	case <-time.After(200 * time.Millisecond):
+	}
+	if _, err := late.Call(7, "snapshot", nil); err == nil || !strings.HasPrefix(err.Error(), relayRestarting) {
+		t.Fatalf("a call arriving while the relay drains returned %v; want it refused as restarting", err)
+	}
+	ext.answer(pending.ID, `"ok":true,"value":"the page"`)
+	if a := <-read; a.err != nil || string(a.value) != `"the page"` {
+		t.Fatalf("the call out when the restart came back as %s, %v", a.value, a.err)
+	}
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("the draining relay exited with %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the relay kept running after its last call was answered")
+	}
+
+	fresh, _ := startHost(t, home)
+	helloFrom(fresh, "")
+	if tabs, err := dial(t, home).Tabs(); err != nil || len(tabs) != 1 {
+		t.Fatalf("the next relay serves %v, %v", tabs, err)
+	}
+}
+
 func staleInstall(t *testing.T, home string) string {
 	t.Helper()
 	extensionDir, _ := installPaths(home)

@@ -63,6 +63,7 @@ type relay struct {
 	extensionDir string
 	builds       Builds
 	restart      chan struct{}
+	draining     bool
 	installed    func() (string, error)
 	cursor       bool
 }
@@ -222,7 +223,7 @@ func (r *relay) receive(message extensionMessage) (*session, result) {
 			message.Value, _ = json.Marshal(append(to.frames, tail...))
 		}
 		message.ID, message.Host = to.id, time.Since(to.sent)
-		r.idleSoon()
+		r.settle()
 		return to.session, message.result
 	}
 	return nil, result{}
@@ -253,9 +254,16 @@ func (r *relay) adopt(running string) {
 	_ = r.tell(toExtension{T: messageReload})
 }
 
-func (r *relay) idleSoon() {
-	if len(r.pending) == 0 {
-		r.idle.Reset(idleAfter)
+func (r *relay) settle() {
+	if len(r.pending) > 0 {
+		return
+	}
+	r.idle.Reset(idleAfter)
+	if r.draining {
+		select {
+		case r.restart <- struct{}{}:
+		default:
+		}
 	}
 }
 
@@ -299,7 +307,7 @@ func (r *relay) serve(conn net.Conn) {
 	delete(r.sessions, s)
 	maps.DeleteFunc(r.claims, func(_ int, owner *session) bool { return owner == s })
 	maps.DeleteFunc(r.pending, func(_ int64, to route) bool { return to.session == s })
-	r.idleSoon()
+	r.settle()
 	_ = conn.Close()
 }
 
@@ -326,10 +334,8 @@ func (r *relay) handle(s *session, req request) {
 			return
 		}
 		s.send(result{ID: req.ID, Error: fmt.Sprintf("%s: this relay runs build %s, the installed tofu is %s, and the tofu that dialled it runs %s", relayRestarting, r.builds.Tofu, current, hello.Build)})
-		select {
-		case r.restart <- struct{}{}:
-		default:
-		}
+		r.draining = true
+		r.settle()
 		return
 	}
 	if req.Op == opBuilds {
@@ -386,6 +392,9 @@ func (r *relay) admit(s *session, req request) (status, error) {
 }
 
 func (r *relay) forward(s *session, req request) error {
+	if r.draining {
+		return fmt.Errorf("%s: this relay runs build %s and exits once its last call is answered", relayRestarting, r.builds.Tofu)
+	}
 	if r.builds.Problem != "" {
 		return errors.New(r.builds.Problem)
 	}

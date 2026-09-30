@@ -7,9 +7,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"unicode"
@@ -43,8 +45,29 @@ func ExtensionID(publicKeyDER []byte) string {
 }
 
 func Build() (string, error) {
+	info, _ := debug.ReadBuildInfo()
+	return buildOf(info)
+}
+
+func buildOf(info *debug.BuildInfo) (string, error) {
 	hash := sha256.New()
 	_, _ = fmt.Fprintln(hash, konst.Version)
+	revision, clean := "", false
+	if info != nil {
+		for _, setting := range info.Settings {
+			switch setting.Key {
+			case "vcs.revision":
+				revision = setting.Value
+			case "vcs.modified":
+				clean = setting.Value == "false"
+			}
+		}
+	}
+	if revision != "" && clean {
+		_, _ = fmt.Fprintln(hash, revision)
+	} else if err := hashExecutable(hash); err != nil {
+		return "", err
+	}
 	err := fs.WalkDir(extension.Files, ".", func(name string, entry fs.DirEntry, err error) error {
 		if err != nil || entry.IsDir() {
 			return err
@@ -54,6 +77,20 @@ func Build() (string, error) {
 		return err
 	})
 	return hex.EncodeToString(hash.Sum(nil)[:6]), err
+}
+
+func hashExecutable(to io.Writer) error {
+	exe, err := os.Executable()
+	var binary *os.File
+	if err == nil {
+		binary, err = os.Open(exe)
+	}
+	if err != nil {
+		return err
+	}
+	defer func() { _ = binary.Close() }()
+	_, err = io.Copy(to, binary)
+	return err
 }
 
 func chromeVersion(tofu string) string {
