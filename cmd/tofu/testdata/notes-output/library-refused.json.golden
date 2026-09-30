@@ -58,7 +58,7 @@ exit 1
         "rules": 20,
         "thresholds": 7,
         "skills": 0,
-        "agents": 1,
+        "agents": 2,
         "references": 4,
         "refused": 0
       },

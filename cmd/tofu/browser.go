@@ -21,6 +21,7 @@ import (
 	"tofu/internal/browser"
 	"tofu/internal/browser/jevloop"
 	"tofu/internal/konst"
+	"tofu/internal/recipe"
 	"tofu/internal/sys"
 	"tofu/internal/widget"
 )
@@ -81,12 +82,12 @@ func browserVerb(args []string, out, errOut io.Writer) int {
 		return o.bench(operands)
 	}
 	arity, known := map[string][2]int{"": {0, 0}, "tabs": {0, 0}, "build": {0, 0}, "install": {0, 0}, "uninstall": {0, 0}, "open": {1, 1}, "close": {1, 1},
-		"observe": {0, 0}, "click": {1, 1}, "fill": {2, 2}, "select": {2, 2}, "press": {1, 1}, "scroll": {0, 2}, "back": {0, 0}}[verb]
+		"recipes": {0, 0}, "observe": {0, 0}, "click": {1, 1}, "fill": {2, 2}, "select": {2, 2}, "press": {1, 1}, "scroll": {0, 2}, "back": {0, 0}}[verb]
 	stepVerb := slices.Contains([]string{"observe", "click", "fill", "select", "press", "scroll", "back"}, verb)
 	operand := strings.Join(operands, " ")
 	tabID, badID := strconv.Atoi(operand)
 	if err != nil || tabErr != nil || known && (len(operands) < arity[0] || len(operands) > arity[1]) || verb == "close" && badID != nil || stepVerb && tab == 0 {
-		_, _ = fmt.Fprintln(errOut, "usage: tofu browser [install | uninstall | tabs | build | open <url> | close <tab id> | bench [--jev] [--n 12] [--rows file]] [--json]\n"+
+		_, _ = fmt.Fprintln(errOut, "usage: tofu browser [install | uninstall | tabs | build | recipes | open <url> | close <tab id> | bench [--jev] [--n 12] [--rows file]] [--json]\n"+
 			"       tofu browser observe [--all] | click <ref> | fill <ref> <text> | select <ref> <option> | press <key> | scroll [<ref>] [up|down] | back   --tab <id> [--json]")
 		return exitUsage
 	}
@@ -98,6 +99,19 @@ func browserVerb(args []string, out, errOut io.Writer) int {
 		return o.step(home, tab, verb, operands, all)
 	}
 	switch verb {
+	case "recipes":
+		dir, err := recipe.Dir()
+		var recipes []recipe.Recipe
+		if err == nil {
+			recipes, err = recipe.List(dir)
+		}
+		if err != nil {
+			return o.fail(err)
+		}
+		return o.show(struct {
+			Folder  string          `json:"folder"`
+			Recipes []recipe.Recipe `json:"recipes"`
+		}{dir, recipes}, recipesPage(page, dir, recipes))
 	case "build":
 		build, err := browser.Build()
 		if err != nil {
@@ -156,7 +170,7 @@ func browserVerb(args []string, out, errOut io.Writer) int {
 		removed := removedExtension(home)
 		return o.show(removed, extensionPage(page, removed))
 	}
-	_, _ = fmt.Fprintf(errOut, "tofu browser: unknown argument %q: use install, uninstall, tabs, build, open, close, observe, click, fill, select, press, scroll, back, bench, or nothing\n", verb)
+	_, _ = fmt.Fprintf(errOut, "tofu browser: unknown argument %q: use install, uninstall, tabs, build, recipes, open, close, observe, click, fill, select, press, scroll, back, bench, or nothing\n", verb)
 	return exitUsage
 }
 
@@ -345,6 +359,27 @@ func tabsPage(page cli.Page, tabs []browser.Tab, builds *browser.Builds) []strin
 	}
 	if len(tabs) == 0 {
 		return append(lines, cli.Indent(page.Label("chrome:// pages, DevTools, extensions and the web store are never listed"))...)
+	}
+	return append(lines, cli.Indent(page.Rows(rows)...)...)
+}
+
+func recipesPage(page cli.Page, dir string, recipes []recipe.Recipe) []string {
+	rows := make([]cli.Row, len(recipes))
+	for i, known := range recipes {
+		mark, state := cli.Active, "in use"
+		if known.Aside {
+			mark, state = cli.Idle, "set aside"
+		}
+		templates := make([]string, len(known.Pages))
+		for j, learned := range known.Pages {
+			templates[j] = learned.Template
+		}
+		rows[i] = cli.Row{Mark: mark, Cells: []string{known.Host, state, strconv.Itoa(known.Uses) + " uses", strconv.Itoa(known.FailedInARow) + " failed in a row"},
+			Detail: strings.Join(templates, "\n")}
+	}
+	lines := append(page.Title("Browser recipes", []string{strconv.Itoa(len(recipes)) + " learned", dir}, cli.Verdict{Mark: cli.Done, Text: "listed"}), "")
+	if len(recipes) == 0 {
+		return append(lines, cli.Indent(page.Label("a successful browser sub-agent run teaches its site a recipe"))...)
 	}
 	return append(lines, cli.Indent(page.Rows(rows)...)...)
 }

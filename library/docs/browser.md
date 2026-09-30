@@ -7,10 +7,8 @@ verbs: browser
 
 ## What it is
 
-tofu reads and drives your own Chrome, with your logins, through a small
-extension. There is no share step: tofu can read and drive any ordinary tab.
-tofu never reaches a `chrome://` page, DevTools, an extension's page or the
-Chrome Web Store.
+tofu reads and drives your own Chrome, with your logins, through a small extension. There is no share step: tofu can read and drive any ordinary tab.
+tofu never reaches a `chrome://` page, DevTools, an extension's page or the Chrome Web Store.
 
 The extension does nothing to a tab until tofu first uses it. Then it attaches Chrome's debugger, and Chrome shows its bar saying so.
 
@@ -23,18 +21,16 @@ opened, never yours, and holds these tools; under `steps` the model does:
   node, such as `- button "Buscar" [ref=e5]`, where a ref names one element.
   `scrollable` marks a container it can scroll, and `*` a ref new since the
   last look at the same page. Observing never changes the page.
-- `browser_act` runs up to 5 actions in one tab, each on a ref: click, fill,
-  select, press, scroll, navigate, back or wait, all in one tab. A covered click does
-  not run and says what covers it. The batch stops at the first action that
-  changes the address or opens a tab, says what it skipped, and ends with a
-  fresh snapshot. The third same action on an unchanged page says
-  `repeated 3 times, the page did not change`; the fifth is refused.
+- `browser_act` runs a guarded batch of up to 10 actions in one tab: click,
+  fill, select, press, scroll, navigate, back or wait. Each acts on a ref, or
+  on a `target` by role and name, found on the page as it is when that
+  action runs. `expect` is checked before an action and `expect_after` once
+  it settles: `url_has`, `text_has`, or `gone` for a dialog that should
+  close. The batch stops at the first guard that fails and names it. A
+  covered click does not run and says what covers it. The same action on an
+  unchanged page is flagged, then refused.
 
-Under `goal`, the model gets `browser_read` and `browser_do`, which takes a
-whole goal and answers it; Jev picks each step until `browserSteps` runs out.
-
-Only `browser` `drive` gives `browser_act` or `browser_do`. Observing and
-reading never go through the gate.
+Under `goal`, the model gets `browser_read` and `browser_do`; Jev picks each step until `browserSteps` runs out. Only `browser` `drive` gives `browser_act` or `browser_do`. Observing and reading never go through the gate.
 
 What a page says is treated as text to read, never as an instruction. tofu
 never closes or navigates a tab it did not open, runs JavaScript, a selector or an address
@@ -55,7 +51,11 @@ its tabs stay open, and Chrome's debugging bar goes away.
 
 - `~/.tofu/browser/extension`: the unpacked extension Chrome loads
 - `~/.tofu/browser/relay.sock`: where a session reaches the extension
-- `~/.tofu/browser/recipes/<host>.md`: the urls a good run on that site reached, tried first next time; set aside after two failures in a row
+- `~/.tofu/browser/recipes/<host>.md`: a recipe, the urls a successful run
+  on that site reached with each value as `{name}`. The next run there tries
+  it first. After two failures in a row it is set aside until a later
+  success learns a new one. `tofu browser recipes` lists them; edit or delete
+  the file freely.
 
 ## Change it
 

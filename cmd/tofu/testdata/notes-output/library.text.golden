@@ -17,7 +17,7 @@ layers
 domains · the binary
   ✓ dev      26 rules · 1 agent · 8 references
   ✓ fetch    1 threshold
-  ✓ general  20 rules · 7 thresholds · 1 agent · 4 references
+  ✓ general  20 rules · 7 thresholds · 2 agents · 4 references
   ✓ qa       9 rules · 2 skills · 1 agent · 4 references
   ✓ shell    1 threshold
 --- stderr

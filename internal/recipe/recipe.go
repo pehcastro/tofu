@@ -15,17 +15,17 @@ import (
 )
 
 type Page struct {
-	Template string
-	LastTime string
+	Template string `json:"template"`
+	LastTime string `json:"last_time,omitempty"`
 }
 
 type Recipe struct {
-	Host         string
-	Uses         int
-	FailedInARow int
-	Aside        bool
-	LearnedFrom  string
-	Pages        []Page
+	Host         string `json:"host"`
+	Uses         int    `json:"uses"`
+	FailedInARow int    `json:"failed_in_a_row"`
+	Aside        bool   `json:"set_aside"`
+	LearnedFrom  string `json:"learned_from"`
+	Pages        []Page `json:"pages"`
 }
 
 const (
@@ -40,8 +40,6 @@ const (
 	fileSuffix   = ".md"
 )
 
-const failuresAside = 2
-
 func Dir() (string, error) {
 	home, err := sys.HomeConfigDir()
 	if err != nil {
@@ -50,27 +48,37 @@ func Dir() (string, error) {
 	return filepath.Join(home, "browser", "recipes"), nil
 }
 
-func Find(dir, task string) (Recipe, bool, error) {
+func List(dir string) ([]Recipe, error) {
 	entries, err := os.ReadDir(dir)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return Recipe{}, false, nil
-		}
-		return Recipe{}, false, err
+	if os.IsNotExist(err) {
+		return []Recipe{}, nil
 	}
-	task = strings.ToLower(task)
+	if err != nil {
+		return nil, err
+	}
+	recipes := []Recipe{}
 	for _, entry := range entries {
 		host, isRecipe := strings.CutSuffix(entry.Name(), fileSuffix)
-		if !isRecipe || !strings.Contains(task, strings.TrimPrefix(host, "www.")) {
+		if !isRecipe {
 			continue
 		}
 		body, err := sys.ReadFile(filepath.Join(dir, entry.Name()))
 		if err != nil {
-			return Recipe{}, false, err
+			return nil, err
 		}
-		return parse(host, string(body)), true, nil
+		recipes = append(recipes, parse(host, string(body)))
 	}
-	return Recipe{}, false, nil
+	return recipes, nil
+}
+
+func Find(dir, task string) (Recipe, bool, error) {
+	recipes, err := List(dir)
+	task = strings.ToLower(task)
+	at := slices.IndexFunc(recipes, func(known Recipe) bool { return strings.Contains(task, strings.TrimPrefix(known.Host, "www.")) })
+	if err != nil || at < 0 {
+		return Recipe{}, false, err
+	}
+	return recipes[at], true, nil
 }
 
 func Learn(dir, task string, visited []string) error {
@@ -99,7 +107,7 @@ func Record(dir string, known Recipe, worked bool) error {
 	} else {
 		known.FailedInARow++
 	}
-	known.Aside = known.FailedInARow >= failuresAside
+	known.Aside = known.FailedInARow >= konst.RecipeFailuresAside
 	return save(dir, known)
 }
 
