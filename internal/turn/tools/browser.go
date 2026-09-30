@@ -335,7 +335,7 @@ func (browserAct) Definition() llm.Tool {
 			"expect_after is checked after the action settles: url_has, text_has, and gone {role, name} for a dialog or a button that should close. " +
 			fmt.Sprintf("a target or a guard waits up to %d ms for the page. ", konst.BrowserGuardWaitMillis) +
 			"the batch stops at the first guard that fails, names it, and ends with what changed since the batch began. " +
-			"click takes a ref. fill takes a ref and the text as value, and answers the value it reads back. select takes a ref and the option as value. " +
+			"click takes a ref. hover takes a ref and moves the mouse onto it without pressing, to show the controls a player or a menu hides until then. fill takes a ref and the text as value, and answers the value it reads back. select takes a ref and the option as value. " +
 			"press takes a key as value, Enter or Escape or a letter. scroll takes up or down as value, and a ref to scroll that container instead of the page. " +
 			"navigate loads the url in value in the task's one tab: on the person's own tab it opens that one tab of tofu's first, and every later navigate loads there, whatever the site. back goes back in it. a popup the page opens is loaded into that tab and closed. " +
 			"after a navigate, plan the next stretch as one batch rather than one action a call: a login or a search form is every fill and the submit together. an empty actions list is refused. " +
@@ -370,7 +370,7 @@ func (browserAct) Definition() llm.Tool {
 }
 
 func browserActions() []string {
-	return []string{"click", "fill", "select", "press", "scroll", "navigate", "back", "wait"}
+	return []string{"click", "hover", "fill", "select", "press", "scroll", "navigate", "back", "wait"}
 }
 
 func nullable(kind string) map[string]any {

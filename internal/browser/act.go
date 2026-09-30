@@ -21,6 +21,7 @@ type MoveKind string
 
 const (
 	MoveClick    MoveKind = "click"
+	MoveHover    MoveKind = "hover"
 	MoveFill     MoveKind = "fill"
 	MoveSelect   MoveKind = "select"
 	MovePress    MoveKind = "press"
@@ -239,6 +240,11 @@ func (d *Driver) do(deadline time.Time, move Move) (Moved, error) {
 	switch move.Kind {
 	case MoveClick:
 		moved, toggleStuck, err = d.click(deadline, move.Ref)
+	case MoveHover:
+		var x, y float64
+		if _, x, y, err = d.center(deadline, move.Ref); err == nil {
+			err = d.act(deadline, mouse("mouseMoved", "none", x, y))
+		}
 	case MoveFill:
 		var path string
 		moved.Value, path, err = d.fill(deadline, move.Ref, move.Value)

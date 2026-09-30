@@ -324,6 +324,8 @@ type cdpPage struct {
 	thinking int
 	frame    []byte
 	reopen   float64
+	hovers   map[string][]string
+	pressed  int
 }
 
 const motionWallMs = 1.7e12 + 1000
@@ -390,6 +392,12 @@ func (p *cdpPage) answer(method string, params map[string]any) any {
 			return value(map[string]any{"url": p.url, "count": 3, "text": cmp.Or(strings.Join(p.buttons, " "), "Stays")})
 		}
 	case "DOM.scrollIntoViewIfNeeded", "Input.dispatchMouseEvent":
+		if screen, shown := p.hovers[p.names[p.aimed]]; shown && params["type"] == "mouseMoved" {
+			p.buttons = screen
+		}
+		if params["type"] == "mousePressed" {
+			p.pressed++
+		}
 		if params["type"] == "mouseReleased" {
 			p.released++
 			p.url = cmp.Or(p.next, p.url)
@@ -698,6 +706,21 @@ func TestAClickThatChangesOneButtonReturnsThatButtonNotTheTree(t *testing.T) {
 	acted := run("browser_act", `{"tab":7,"actions":[{"ref":"`+buy[1]+`","action":"click"}]}`)
 	if !strings.Contains(acted, `button "Buy, 1 no carrinho" [ref=`+buy[1]+`]`) || strings.Contains(acted, `"Filtros"`) || !strings.Contains(acted, "changed since the last snapshot") {
 		t.Fatal("the act did not return a delta of the one button that changed")
+	}
+}
+
+func TestAHoverOverAPlayerListsTheSettingsButtonItRevealsAndPressesNothing(t *testing.T) {
+	page := &cdpPage{url: "https://video.test/watch", buttons: []string{"Next", "Buy", "Player"}, hovers: map[string][]string{"Player": {"Next", "Buy", "Player", "Settings"}}}
+	run := stepsOn(t, page)
+	if observed := run("browser_observe", `{"tab":7}`); !strings.Contains(observed, `button "Player" [ref=e3]`) {
+		t.Fatal("the observe does not carry the player as e3")
+	}
+	acted := run("browser_act", `{"tab":7,"actions":[{"action":"hover","ref":"e3"}]}`)
+	settings := regexp.MustCompile(`\+ .*button "Settings" \[ref=e\d+\]`)
+	page.mu.Lock()
+	defer page.mu.Unlock()
+	if !settings.MatchString(acted) || page.pressed != 0 || page.released != 0 || !strings.Contains(acted, "ran 1 of 1") {
+		t.Fatalf("one hover listed Settings %v with %d presses and %d releases; want Settings new with a ref and no press", settings.MatchString(acted), page.pressed, page.released)
 	}
 }
 

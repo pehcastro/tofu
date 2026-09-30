@@ -21,6 +21,8 @@ type togglePage struct {
 	link           bool
 	quads          [][]float64
 	pressed        [2]float64
+	hovered        [2]float64
+	buttonDowns    int
 	onParent       int
 	navigated      time.Time
 	titleAfter     time.Duration
@@ -67,7 +69,12 @@ func (p *togglePage) answer(method string, params map[string]any) any {
 	case method == "DOM.resolveNode":
 		return map[string]any{"object": map[string]any{"objectId": "target"}}
 	case method == "Input.dispatchMouseEvent" && p.link:
-		if params["type"] == "mouseReleased" {
+		switch params["type"] {
+		case "mouseMoved":
+			p.hovered = [2]float64{x, y}
+		case "mousePressed":
+			p.buttonDowns++
+		case "mouseReleased":
 			p.pressed = [2]float64{x, y}
 			if p.inQuad(x, y) {
 				p.navigated = time.Now()
@@ -125,7 +132,7 @@ func byValue(v any) map[string]any {
 	return map[string]any{"result": map[string]any{"type": "object", "value": v}}
 }
 
-func clickOn(t *testing.T, page *togglePage) Moved {
+func moveOn(t *testing.T, kind MoveKind, page *togglePage) Moved {
 	t.Helper()
 	ours, relay := net.Pipe()
 	t.Cleanup(func() { _ = ours.Close() })
@@ -164,17 +171,17 @@ func clickOn(t *testing.T, page *togglePage) Moved {
 	}
 	driver := &Driver{Client: &Client{conn: ours, out: json.NewEncoder(ours), in: json.NewDecoder(ours)}, Tab: 7,
 		refs: refMap{entries: map[string]refEntry{"e25": {backend: 25, role: role}}}}
-	moved, err := driver.Do(Move{Ref: "e25", Kind: MoveClick})
+	moved, err := driver.Do(Move{Ref: "e25", Kind: kind})
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Logf("1. click %s: %s", role, moved)
+	t.Logf("1. %s %s: %s", kind, role, moved)
 	return moved
 }
 
 func TestACheckboxDeafToTheMouseEndsCheckedThroughClickInOneAct(t *testing.T) {
 	page := &togglePage{checkbox: true, mouseRerenders: true}
-	moved := clickOn(t, page)
+	moved := moveOn(t, MoveClick, page)
 	if !page.checked || moved.Via != "click()" {
 		t.Fatalf("after one click the box is checked=%v through %q; want checked through click()", page.checked, moved.Via)
 	}
@@ -182,40 +189,48 @@ func TestACheckboxDeafToTheMouseEndsCheckedThroughClickInOneAct(t *testing.T) {
 
 func TestACheckboxTheMouseChecksIsNotClickedAgain(t *testing.T) {
 	page := &togglePage{checkbox: true, mouseChecks: true}
-	moved := clickOn(t, page)
+	moved := moveOn(t, MoveClick, page)
 	if !page.checked || moved.Via != "" {
 		t.Fatalf("after one click the box is checked=%v through %q; want checked by the mouse alone", page.checked, moved.Via)
 	}
 }
 
 func TestAClickThatChangesNothingSaysThePageDidNotChange(t *testing.T) {
-	if said := clickOn(t, &togglePage{}).String(); !strings.HasPrefix(said, Unchanged) {
+	if said := moveOn(t, MoveClick, &togglePage{}).String(); !strings.HasPrefix(said, Unchanged) {
 		t.Fatalf("a click that changed nothing said %q; want it to start %q", said, Unchanged)
 	}
 }
 
 func TestALinkWhoseBoxCentreHitsAParentIsPressedInItsLargestQuad(t *testing.T) {
 	page := &togglePage{link: true, quads: googleResult()}
-	moved := clickOn(t, page)
+	moved := moveOn(t, MoveClick, page)
 	if page.pressed != [2]float64{60, 10} || page.onParent != 0 || !moved.URLChanged || moved.Via != "" {
 		t.Fatalf("the press landed at %v, %d on the parent, url changed %v through %q; want (60, 10) on the link by the mouse", page.pressed, page.onParent, moved.URLChanged, moved.Via)
 	}
 }
 
+func TestAHoverMovesToTheLargestQuadAndNeverPressesOrClicks(t *testing.T) {
+	page := &togglePage{link: true, quads: googleResult()}
+	moved := moveOn(t, MoveHover, page)
+	if page.hovered != [2]float64{60, 10} || page.buttonDowns != 0 || !page.navigated.IsZero() || moved.Via != "" {
+		t.Fatalf("the hover moved to %v with %d presses, opened the link %v, through %q; want (60, 10), no press, nothing opened", page.hovered, page.buttonDowns, !page.navigated.IsZero(), moved.Via)
+	}
+}
+
 func TestAPressLandingOnAParentFallsBackToClickInOneAct(t *testing.T) {
 	page := &togglePage{link: true}
-	moved := clickOn(t, page)
+	moved := moveOn(t, MoveClick, page)
 	if page.onParent != 0 || !moved.URLChanged || moved.Via != "click()" {
 		t.Fatalf("%d presses on the parent, url changed %v through %q; want none and the link opened through click()", page.onParent, moved.URLChanged, moved.Via)
 	}
 }
 
 func TestAURLChangeWaitsForTheNewTitleAndAStuckTitleReturnsAtTheCap(t *testing.T) {
-	moved := clickOn(t, &togglePage{link: true, quads: googleResult(), titleAfter: 800 * time.Millisecond})
+	moved := moveOn(t, MoveClick, &togglePage{link: true, quads: googleResult(), titleAfter: 800 * time.Millisecond})
 	if said := moved.String(); !strings.Contains(said, `"Listing"`) || moved.SettledMS < 800 {
 		t.Fatalf("a title that changes 800 ms after the url said %q; want the new title after at least 800 ms", said)
 	}
-	moved = clickOn(t, &togglePage{link: true, quads: googleResult(), titleAfter: time.Hour})
+	moved = moveOn(t, MoveClick, &togglePage{link: true, quads: googleResult(), titleAfter: time.Hour})
 	if moved.SettledMS < konst.BrowserRenderWaitMaxMillis || moved.SettledMS > konst.BrowserRenderWaitMaxMillis+500 {
 		t.Fatalf("a title that never changes settled in %d ms; want the %d ms cap", moved.SettledMS, konst.BrowserRenderWaitMaxMillis)
 	}

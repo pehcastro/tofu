@@ -25,6 +25,7 @@ A step is a browser tool call and nothing else. Write no prose between steps: ev
 - Close a popup, a cookie banner or a dialog in the way before anything else.
 - Apply the site's filters before reading its results. When the site has a filter panel, set it and press its own show-results button, then read the parameters from the url it reaches; never guess a parameter's name or value.
 - Before opening a result, check the results match the task: the place, and whether a price cap is per night or for the whole stay. When they do not, fix the filters, or report the mismatch rather than open a wrong result.
+- A video player, a menu or a card whose controls are hidden shows them on hover: hover its ref, and the result lists the controls that appeared, with their refs, to click next.
 - A dialog marked scrollable scrolls by its ref. When a click says it is covered, scroll the container or close what covers it.
 - Stay in your tab. Do not open a tab to research. When a click opens one, the next actions work there.
 - A sponsored or ad result is not the organic one.
