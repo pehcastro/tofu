@@ -24,6 +24,8 @@ var (
 	repeatedLine   = regexp.MustCompile(`(?m)^\d+\. .*: (repeated \d+ times, the page did not change|.*, after \d+ tries on the same page)$`)
 	refusedLine    = regexp.MustCompile(`(?m)^\d+\. .*: refused, it would be the`)
 	actionVerb     = regexp.MustCompile(`(?m)^\d+\. (\w+)`)
+	stepReached    = regexp.MustCompile(`^\d+\. .*?(?:: the url changed to (\S+), a page titled |: expect_after .* held at (\S+)$)`)
+	stepReads      = regexp.MustCompile(`^\d+\. .*?, (e\d+ now reads "(?:[^"\\]|\\.)*")`)
 	laterChanges   = regexp.MustCompile(`(?s)^page changed since your last read:\n.*? came from Chrome tab (\d+)\. .*?<<<\S+ begins>>>\n(.*?)\n<<<\S+ ends>>>`)
 )
 
@@ -156,11 +158,23 @@ func RunFromEvents(arm Arm, paths ...string) (Run, error) {
 				if header == nil {
 					continue
 				}
+				tab := result.Content[header[2]:header[3]]
+				steps, _, _ := strings.Cut(result.Content[:header[0]], "<<<")
+				for step := range strings.Lines(steps) {
+					step = strings.TrimSuffix(step, "\n")
+					if reached := stepReached.FindStringSubmatch(step); reached != nil {
+						see(tab, cmp.Or(reached[1], reached[2]), "", "", step)
+					}
+					reads := stepReads.FindStringSubmatch(step)
+					if at, seen := lastPageIn[tab]; seen && reads != nil {
+						run.Pages[at].Text += reads[1] + "\n"
+					}
+				}
 				snapshot, _, _ := strings.Cut(result.Content[header[0]:], "\n<<<")
 				run.Snapshot = snapshot + "\n"
 				title, _ := strconv.Unquote(result.Content[header[6]:header[7]])
 				_, body, _ := strings.Cut(run.Snapshot, "\n")
-				see(result.Content[header[2]:header[3]], result.Content[header[4]:header[5]], title, body, result.Content[:header[0]])
+				see(tab, result.Content[header[4]:header[5]], title, body, result.Content[:header[0]])
 			case "browser_do", "browser_read":
 				tab := goalTab.FindStringSubmatch(result.Content)
 				for _, page := range goalPage.FindAllStringSubmatch(result.Content, -1) {

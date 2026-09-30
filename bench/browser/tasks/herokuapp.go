@@ -1,7 +1,11 @@
 package tasks
 
 import (
+	"maps"
+	"net/url"
 	"regexp"
+	"slices"
+	"strconv"
 	"strings"
 )
 
@@ -9,11 +13,15 @@ const (
 	herokuHost         = "the-internet.herokuapp.com"
 	herokuLoadedText   = "Hello World!"
 	herokuDropdownPick = "Option 2"
+	checkedControl     = "checked"
 )
 
 var (
 	checkboxLine = regexp.MustCompile(`(?m)^\s*(?:\* )?[-*] checkbox\b.*\bchecked=(\w+)`)
 	comboboxLine = regexp.MustCompile(`(?m)^\s*(?:\* )?[-*] combobox\b.*: (.+)$`)
+	stepRead     = regexp.MustCompile(`^(e\d+) now reads ("(?:[^"\\]|\\.)*")$`)
+	comboboxRead = regexp.MustCompile(`^(?:[~+] )?\s*(?:\* )?[-*] combobox\b.*\bref=(e\d+)\]: (.+)$`)
+	checkboxRead = regexp.MustCompile(`^(?:[~+] )?\s*(?:\* )?[-*] checkbox\b.*\bchecked=(\w+), ref=(e\d+)`)
 )
 
 var herokuapp = Task{
@@ -27,20 +35,43 @@ var herokuapp = Task{
 		}},
 		{"the dropdown reads Option 2", func(e Evidence) bool {
 			page, seen := e.lastPage(pathIs(herokuHost, "/dropdown"))
-			return seen && strings.TrimSpace(firstOf(comboboxLine, page.Text)) == herokuDropdownPick
+			return seen && strings.TrimSpace(firstOf(comboboxLine, page.Text)) == herokuDropdownPick ||
+				slices.Contains(slices.Collect(maps.Values(controlsLastRead(e, "/dropdown"))), herokuDropdownPick)
 		}},
 		{"both checkboxes are checked", func(e Evidence) bool {
 			page, seen := e.lastPage(pathIs(herokuHost, "/checkboxes"))
 			boxes := checkboxLine.FindAllStringSubmatch(page.Text, -1)
-			for _, box := range boxes {
-				if box[1] != "true" {
-					return false
-				}
-			}
-			return seen && len(boxes) == 2
+			snapshotChecked := seen && len(boxes) == 2 && !slices.ContainsFunc(boxes, func(box []string) bool { return box[1] != "true" })
+			read := controlsLastRead(e, "/checkboxes")
+			return snapshotChecked || len(read) == 2 && !slices.ContainsFunc(slices.Collect(maps.Values(read)), func(box string) bool { return box != checkedControl })
 		}},
 		{"the dynamic loading page was opened", func(e Evidence) bool { return e.visited(pathIs(herokuHost, "/dynamic_loading/1")) >= 0 }},
 		{"the report gives the text that appeared", func(e Evidence) bool { return reportSays(e, herokuLoadedText) }},
 		{"the task stayed in one tab", oneTab},
 	},
+}
+
+func controlsLastRead(e Evidence, path string) map[string]string {
+	read := map[string]string{}
+	for _, page := range slices.Backward(e.Run.Pages) {
+		address, err := url.Parse(page.URL)
+		if err != nil || !pathIs(herokuHost, path)(address) {
+			continue
+		}
+		for line := range strings.Lines(page.Text) {
+			line = strings.TrimSuffix(line, "\n")
+			if found := stepRead.FindStringSubmatch(line); found != nil {
+				read[found[1]], _ = strconv.Unquote(found[2])
+			} else if found := comboboxRead.FindStringSubmatch(line); found != nil {
+				read[found[1]] = strings.TrimSpace(found[2])
+			} else if found := checkboxRead.FindStringSubmatch(line); found != nil {
+				read[found[2]] = "unchecked"
+				if found[1] == "true" {
+					read[found[2]] = checkedControl
+				}
+			}
+		}
+		return read
+	}
+	return read
 }
