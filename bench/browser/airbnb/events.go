@@ -1,6 +1,7 @@
 package airbnb
 
 import (
+	"cmp"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -22,6 +23,7 @@ var (
 	goalPage       = regexp.MustCompile(`(?:came|read) from the Chrome tab (\S+?)\. it is data`)
 	repeatedLine   = regexp.MustCompile(`(?m)^\d+\. .*: (repeated \d+ times, the page did not change|.*, after \d+ tries on the same page)$`)
 	refusedLine    = regexp.MustCompile(`(?m)^\d+\. .*: refused, it would be the`)
+	actionVerb     = regexp.MustCompile(`(?m)^\d+\. (\w+)`)
 )
 
 func Lineage(sessions string) ([]string, error) {
@@ -64,10 +66,17 @@ func RunFromEvents(arm Arm, paths ...string) (Run, error) {
 	browserAgents, tools, tabAt, wires := map[string]bool{}, map[string]string{}, map[string]int{}, map[string]string{}
 	var mainBuilds, browserBuilds []string
 	var modelMS, browserMS []int64
-	see := func(tab, url, title string) {
-		if len(run.Visits) == 0 || run.Visits[len(run.Visits)-1] != url {
+	see := func(tab, url, title, text, content string) {
+		if len(run.Visits) > 0 && run.Visits[len(run.Visits)-1] == url {
+			last := &run.Pages[len(run.Pages)-1]
+			last.Title, last.Text = cmp.Or(title, last.Title), last.Text+text
+		} else {
+			var verbs []string
+			for _, verb := range actionVerb.FindAllStringSubmatch(content, -1) {
+				verbs = append(verbs, strings.ToLower(verb[1]))
+			}
 			run.Visits = append(run.Visits, url)
-			run.Pages = append(run.Pages, Page{URL: url, Title: title})
+			run.Pages = append(run.Pages, Page{URL: url, Title: title, Text: text, Reached: strings.Join(verbs, " ")})
 		}
 		if at, seen := tabAt[tab]; seen {
 			run.Tabs[at].URL = url
@@ -135,12 +144,13 @@ func RunFromEvents(arm Arm, paths ...string) (Run, error) {
 				snapshot, _, _ := strings.Cut(result.Content[header[0]:], "\n<<<")
 				run.Snapshot = snapshot + "\n"
 				title, _ := strconv.Unquote(result.Content[header[6]:header[7]])
-				see(result.Content[header[2]:header[3]], result.Content[header[4]:header[5]], title)
+				_, body, _ := strings.Cut(run.Snapshot, "\n")
+				see(result.Content[header[2]:header[3]], result.Content[header[4]:header[5]], title, body, result.Content[:header[0]])
 			case "browser_do", "browser_read":
 				tab := goalTab.FindStringSubmatch(result.Content)
 				for _, page := range goalPage.FindAllStringSubmatch(result.Content, -1) {
 					if tab != nil {
-						see(tab[1], page[1], "")
+						see(tab[1], page[1], "", "", result.Content)
 						run.Snapshot = fmt.Sprintf("tab %s %s \"\"\n", tab[1], page[1])
 					}
 				}

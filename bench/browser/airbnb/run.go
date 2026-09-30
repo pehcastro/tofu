@@ -106,8 +106,10 @@ type Phases struct {
 func (p Phases) OtherMS() int64 { return p.WallMS - p.ModelMS - p.BrowserMS }
 
 type Page struct {
-	URL   string `json:"url"`
-	Title string `json:"title"`
+	URL     string `json:"url"`
+	Title   string `json:"title"`
+	Text    string `json:"text,omitempty"`
+	Reached string `json:"reached,omitempty"`
 }
 
 type Run struct {

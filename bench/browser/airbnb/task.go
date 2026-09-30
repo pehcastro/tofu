@@ -67,7 +67,7 @@ var (
 type Listing struct {
 	ID    string
 	Line  string
-	Title string
+	Page  string
 	Cells map[Field]string
 }
 
@@ -146,19 +146,19 @@ func passes(check Check, run Run) bool {
 	search := lastSearch(run.Visits)
 	switch check.Kind {
 	case SearchedFirst:
-		searched := slices.IndexFunc(run.Visits, func(visited string) bool {
-			parsed, err := url.Parse(visited)
-			return err == nil && strings.Contains(parsed.Host, check.From) && parsed.Path == "/search" && parsed.Query().Get("q") != ""
-		})
-		reached := slices.IndexFunc(run.Visits, func(visited string) bool {
-			parsed, err := url.Parse(visited)
+		reached := slices.IndexFunc(run.Pages, func(page Page) bool {
+			parsed, err := url.Parse(page.URL)
 			return err == nil && strings.Contains(parsed.Host, check.Value)
 		})
-		return searched >= 0 && searched < reached
+		if reached < 1 || !slices.Contains(strings.Fields(run.Pages[reached].Reached), "click") {
+			return false
+		}
+		before, err := url.Parse(run.Pages[reached-1].URL)
+		return err == nil && strings.Contains(before.Host, check.From) && before.Path == "/search" && before.Query().Get("q") != ""
 	case ListingsIn:
 		reported := listings(run)
 		for _, listing := range reported {
-			if !strings.Contains(strings.ToLower(cmp.Or(listing.Title, listing.Line)), strings.ToLower(check.Value)) {
+			if !strings.Contains(strings.ToLower(listing.Page), strings.ToLower(check.Value)) {
 				return false
 			}
 		}
@@ -232,12 +232,13 @@ func snapshotURL(snapshot string) string {
 	return ""
 }
 
-func openedInOrder(run Run) ([]string, map[string]string) {
+func openedInOrder(run Run) ([]string, map[string]string, map[string]string) {
 	var order []string
-	titles := map[string]string{}
+	titles, texts := map[string]string{}, map[string]string{}
 	for _, page := range run.Pages {
-		if match := roomID.FindStringSubmatch(page.URL); match != nil && titles[match[1]] == "" {
-			titles[match[1]] = page.Title
+		if match := roomID.FindStringSubmatch(page.URL); match != nil {
+			titles[match[1]] = cmp.Or(titles[match[1]], page.Title)
+			texts[match[1]] += page.Text
 		}
 	}
 	for _, visited := range allURLs(run) {
@@ -245,7 +246,7 @@ func openedInOrder(run Run) ([]string, map[string]string) {
 			order = append(order, match[1])
 		}
 	}
-	return order, titles
+	return order, titles, texts
 }
 
 func reportEntries(report string, opened map[string]bool) []Listing {
@@ -293,7 +294,7 @@ func reportEntries(report string, opened map[string]bool) []Listing {
 }
 
 func listings(run Run) []Listing {
-	order, titles := openedInOrder(run)
+	order, titles, texts := openedInOrder(run)
 	entries := reportEntries(run.Report, openedRooms(run))
 	bound := map[string]bool{}
 	for _, entry := range entries {
@@ -318,7 +319,7 @@ func listings(run Run) []Listing {
 	var reported []Listing
 	for _, entry := range entries {
 		if entry.ID != "" {
-			entry.Title = titles[entry.ID]
+			entry.Page = texts[entry.ID]
 			reported = append(reported, entry)
 		}
 	}

@@ -29,6 +29,29 @@ func TestAnArmThatSpawnedAgainstItsDriverReadsMixedAndTheCredentialComesFromTheS
 	}
 }
 
+func TestStepOneNeedsAClickFromGoogleAndStepTwoReadsTheRenderedListingNotItsTitle(t *testing.T) {
+	task := Task{Steps: []Step{
+		{Step: 1, Check: Check{Kind: SearchedFirst, From: "google.", Value: "airbnb."}},
+		{Step: 2, Check: Check{Kind: ListingsIn, Value: "Ubatuba"}},
+	}}
+	for fixture, want := range map[string][]int{"ubatuba-click": nil, "ubatuba-typed": {1, 2}} {
+		run, err := RunFromEvents(ArmA, "testdata/events/"+fixture+".jsonl")
+		if err != nil {
+			t.Fatal(err)
+		}
+		var failed []int
+		for _, result := range Score(task, run).Steps {
+			if !result.Passed {
+				failed = append(failed, result.Step)
+			}
+		}
+		t.Logf("%s: failing %v", fixture, failed)
+		if !slices.Equal(failed, want) {
+			t.Errorf("%s: failing %v, want %v", fixture, failed, want)
+		}
+	}
+}
+
 func TestAForkedSessionIsReadFromItsRootThroughEveryFork(t *testing.T) {
 	paths, err := Lineage("testdata/forked")
 	if err != nil {
@@ -121,8 +144,8 @@ func TestAGoalArmReadsEveryPageBrowserDoAnswered(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if row := Score(task, run); row.Passed != 12 {
-		t.Errorf("the goal session scores %d of 12: %+v", row.Passed, row.Steps)
+	if row := Score(task, run); row.Passed != 10 || row.Steps[0].Passed || row.Steps[1].Passed {
+		t.Errorf("the goal session, which captures no page and shows no click onto Airbnb, scores %d of 12, want 10 failing 1 and 2: %+v", row.Passed, row.Steps)
 	}
 }
 
@@ -165,7 +188,7 @@ func TestASubAgentSessionReadsBackAsARunThatScoresTwelve(t *testing.T) {
 	if snapshotURL(run.Snapshot) != "https://www.airbnb.com.br/rooms/10000003?adults=2" {
 		t.Errorf("the final snapshot is %q", run.Snapshot)
 	}
-	if len(run.Pages) != len(run.Visits) || run.Pages[len(run.Pages)-1] != (Page{URL: run.Visits[len(run.Visits)-1], Title: "Casa do Farol Inventado - Casas para Alugar em Atibaia, São Paulo, Brasil - Airbnb"}) {
+	if final := run.Pages[len(run.Pages)-1]; len(run.Pages) != len(run.Visits) || final.URL != run.Visits[len(run.Visits)-1] || final.Title != "Casa do Farol Inventado - Casas para Alugar em Atibaia, São Paulo, Brasil - Airbnb" {
 		t.Errorf("pages %+v, want one titled page a visit ending on Casa do Farol Inventado in Atibaia", run.Pages)
 	}
 	task, err := Load()

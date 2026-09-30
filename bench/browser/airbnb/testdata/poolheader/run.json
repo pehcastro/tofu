@@ -1,13 +1,24 @@
 {
   "arm": "A",
-  "conditions": {"date": "2026-09-29", "machine": "fixture-machine", "credential": "subscription", "browser_credential": "subscription", "wire": "claude-sub", "main_build": "claude-opus-5", "browser_build": "none"},
+  "conditions": {
+    "date": "2026-09-29",
+    "machine": "fixture-machine",
+    "credential": "subscription",
+    "browser_credential": "subscription",
+    "wire": "claude-sub",
+    "main_build": "claude-opus-5",
+    "browser_build": "none"
+  },
   "wall_ms": 150000,
   "main_tokens": 58000,
   "browser_tokens": 0,
   "repeated": 0,
   "refused": 0,
   "tabs": [
-    {"id": "t1", "url": "https://www.airbnb.com.br/rooms/10000003?adults=2"}
+    {
+      "id": "t1",
+      "url": "https://www.airbnb.com.br/rooms/10000003?adults=2"
+    }
   ],
   "visits": [
     "https://www.google.com/search?q=airbnb",
@@ -16,5 +27,29 @@
     "https://www.airbnb.com.br/rooms/10000001?adults=2",
     "https://www.airbnb.com.br/rooms/10000002?adults=2",
     "https://www.airbnb.com.br/rooms/10000003?adults=2"
+  ],
+  "pages": [
+    {
+      "url": "https://www.google.com/search?q=airbnb"
+    },
+    {
+      "url": "https://www.airbnb.com.br/",
+      "reached": "click"
+    },
+    {
+      "url": "https://www.airbnb.com.br/s/Atibaia--SP/homes?query=Atibaia%2C%20SP&checkin=2026-10-09&checkout=2026-10-15&adults=2&room_types%5B%5D=Entire%20home%2Fapt&price_max=4000&display_total_price=true&min_bedrooms=2&amenities%5B%5D=7"
+    },
+    {
+      "url": "https://www.airbnb.com.br/rooms/10000001?adults=2",
+      "text": "- heading \"Espaço inteiro: casa em Atibaia, Brasil\" [level=2]\n"
+    },
+    {
+      "url": "https://www.airbnb.com.br/rooms/10000002?adults=2",
+      "text": "- heading \"Espaço inteiro: casa em Atibaia, Brasil\" [level=2]\n"
+    },
+    {
+      "url": "https://www.airbnb.com.br/rooms/10000003?adults=2",
+      "text": "- heading \"Espaço inteiro: casa em Atibaia, Brasil\" [level=2]\n"
+    }
   ]
 }

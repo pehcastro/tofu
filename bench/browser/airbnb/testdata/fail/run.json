@@ -1,15 +1,32 @@
 {
   "arm": "C",
-  "conditions": {"date": "2026-09-29", "machine": "fixture-machine", "credential": "subscription", "browser_credential": "subscription","wire": "claude-sub", "main_build": "claude-sub/claude-opus-5-20260901", "browser_build": "claude-sub/claude-haiku-5-20260901"},
+  "conditions": {
+    "date": "2026-09-29",
+    "machine": "fixture-machine",
+    "credential": "subscription",
+    "browser_credential": "subscription",
+    "wire": "claude-sub",
+    "main_build": "claude-sub/claude-opus-5-20260901",
+    "browser_build": "claude-sub/claude-haiku-5-20260901"
+  },
   "wall_ms": 212000,
   "main_tokens": 38000,
   "browser_tokens": null,
   "repeated": 120,
   "refused": 0,
   "tabs": [
-    {"id": "t1", "url": "https://www.airbnb.com.br/s/Atibaia--SP/homes?checkin=2026-10-09&checkout=2026-10-12&adults=2&price_max=4000&display_total_price=true&min_bedrooms=2"},
-    {"id": "t2", "url": "https://www.airbnb.com.br/rooms/10000001?adults=2"},
-    {"id": "t3", "url": "https://www.airbnb.com.br/rooms/10000002?adults=2"}
+    {
+      "id": "t1",
+      "url": "https://www.airbnb.com.br/s/Atibaia--SP/homes?checkin=2026-10-09&checkout=2026-10-12&adults=2&price_max=4000&display_total_price=true&min_bedrooms=2"
+    },
+    {
+      "id": "t2",
+      "url": "https://www.airbnb.com.br/rooms/10000001?adults=2"
+    },
+    {
+      "id": "t3",
+      "url": "https://www.airbnb.com.br/rooms/10000002?adults=2"
+    }
   ],
   "visits": [
     "https://www.airbnb.com.br/",
@@ -18,5 +35,28 @@
     "https://www.airbnb.com.br/rooms/10000001?adults=2",
     "https://www.airbnb.com.br/rooms/10000002?adults=2",
     "https://www.airbnb.com.br/s/Atibaia--SP/homes?checkin=2026-10-09&checkout=2026-10-12&adults=2&price_max=4000&display_total_price=true&min_bedrooms=2"
+  ],
+  "pages": [
+    {
+      "url": "https://www.airbnb.com.br/",
+      "reached": "navigate"
+    },
+    {
+      "url": "https://www.google.com/search?q=airbnb"
+    },
+    {
+      "url": "https://www.airbnb.com.br/s/Atibaia--SP/homes?checkin=2026-10-09&checkout=2026-10-12&adults=2&price_max=4000&display_total_price=true&min_bedrooms=2"
+    },
+    {
+      "url": "https://www.airbnb.com.br/rooms/10000001?adults=2",
+      "text": "- heading \"Espaço inteiro: casa em Atibaia, Brasil\" [level=2]\n"
+    },
+    {
+      "url": "https://www.airbnb.com.br/rooms/10000002?adults=2",
+      "text": "- heading \"Espaço inteiro: casa em Atibaia, Brasil\" [level=2]\n"
+    },
+    {
+      "url": "https://www.airbnb.com.br/s/Atibaia--SP/homes?checkin=2026-10-09&checkout=2026-10-12&adults=2&price_max=4000&display_total_price=true&min_bedrooms=2"
+    }
   ]
 }
