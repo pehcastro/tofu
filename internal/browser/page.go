@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"unicode"
 
 	"tofu/internal/konst"
 )
@@ -309,7 +310,7 @@ func buildTree(nodes []axNode) ([]treeNode, []int) {
 			}
 			start = end
 		}
-		if len(kids) == 1 && tree[kids[0]].role == "StaticText" && tree[i].name == tree[kids[0]].name {
+		if len(kids) == 1 && (tree[kids[0]].role == "StaticText" || tree[kids[0]].role == "image" && len(tree[kids[0]].children) == 0) && tree[i].name == tree[kids[0]].name {
 			tree[kids[0]] = treeNode{}
 		}
 	}
@@ -413,10 +414,10 @@ func (r *refMap) allocate(doc *document, fresh bool, node *treeNode) string {
 
 func snapshotName(name string) string {
 	return strings.Map(func(r rune) rune {
-		switch r {
-		case 0xa0:
+		switch {
+		case r == 0xa0:
 			return ' '
-		case 0xfeff, 0x200b, 0x200c, 0x200d, 0x2060:
+		case unicode.Is(unicode.Co, r), r == 0xfeff, r == 0x200b, r == 0x200c, r == 0x200d, r == 0x2060:
 			return -1
 		}
 		return r
@@ -425,11 +426,12 @@ func snapshotName(name string) string {
 
 func render(out *strings.Builder, tree []treeNode, i, indent int, v view) {
 	node := tree[i]
-	if i == v.skip {
+	if i == v.skip || node.role == "ListMarker" {
 		return
 	}
+	wrapper := node.role == "generic" || node.role == "paragraph" || node.role == "form" || node.role == "article"
 	passThrough := node.role == "" || node.role == "RootWebArea" || node.role == "WebArea" ||
-		node.role == "generic" && node.ref == "" && len(node.children) <= 1 ||
+		wrapper && node.ref == "" && node.name == "" ||
 		node.role == "StaticText" && strings.TrimSpace(snapshotName(node.name)) == "" ||
 		v.interactive && node.ref == ""
 	if passThrough {
@@ -442,7 +444,7 @@ func render(out *strings.Builder, tree []treeNode, i, indent int, v view) {
 	if node.fresh && !v.behind {
 		bullet = "* "
 	}
-	out.WriteString(strings.Repeat("  ", indent) + bullet + node.role)
+	out.WriteString(strings.Repeat(" ", indent) + bullet + node.role)
 	name := node.name
 	if name == "" && v.interactive && node.cursor != nil {
 		name = node.cursor.Text
@@ -469,7 +471,7 @@ func render(out *strings.Builder, tree []treeNode, i, indent int, v view) {
 	out.WriteString("\n")
 	for _, line := range strings.SplitAfter(v.frames[i], "\n") {
 		if line != "" {
-			out.WriteString(strings.Repeat("  ", indent+1) + line)
+			out.WriteString(strings.Repeat(" ", indent+1) + line)
 		}
 	}
 	for _, child := range node.children {
