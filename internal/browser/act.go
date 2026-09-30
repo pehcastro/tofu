@@ -43,6 +43,11 @@ type Moved struct {
 	Folded      int    `json:"folded,omitempty"`
 	Via         string `json:"via,omitempty"`
 	SettledMS   int    `json:"settled_ms"`
+	Held        string `json:"held,omitempty"`
+	Requests    int    `json:"requests,omitempty"`
+	Timers      int    `json:"timers,omitempty"`
+	Visibility  string `json:"visibility,omitempty"`
+	Waited      string `json:"waited,omitempty"`
 	Value       string `json:"value,omitempty"`
 	Field       string `json:"field,omitempty"`
 	ErrorPage   string `json:"error_page,omitempty"`
@@ -96,8 +101,38 @@ const selectOption = `function(values) {
   return {matched: wanted.size};
 }`
 
-const countRequests = `(() => {
-  const key = Symbol.for('tofu-requests');
+const watchScript = `(() => {
+  const cursor = '[data-tofu-cursor]', nodes = new Set();
+  const ours = node => {
+    const element = node && (node.nodeType === 1 ? node : node.parentElement), host = element && element.getRootNode && element.getRootNode().host;
+    return !!(element && element.closest && element.closest(cursor) || host && host.closest(cursor));
+  };
+  const watch = {changed: performance.now(),
+    moving: () => !!document.getAnimations && document.getAnimations().some(a => a.playState === 'running' && a.effect && !ours(a.effect.target) && a.effect.getComputedTiming().endTime !== Infinity),
+    take(cap) {
+      const said = [];
+      let size = 0;
+      for (const node of nodes) {
+        let covered = !node.isConnected || ours(node);
+        for (let up = node.parentNode; up && !covered; up = up.parentNode) covered = nodes.has(up);
+        const text = covered ? '' : String((node.nodeType === 3 ? node.textContent : node.innerText) || '').replace(/\s+/g, ' ').trim();
+        if (!text || said.includes(text)) continue;
+        said.push(text);
+        if ((size += text.length + 1) >= cap) break;
+      }
+      nodes.clear();
+      return said.join('\n').slice(0, cap);
+    }};
+  new MutationObserver(records => {
+    if (records.length > 0 && records.every(record => ours(record.target))) return;
+    watch.changed = performance.now();
+    for (const record of records) for (const node of record.type === 'characterData' ? [record.target.parentNode] : record.addedNodes || []) if (node && nodes.size < %[1]d) nodes.add(node);
+  }).observe(document, {subtree: true, childList: true, characterData: true, attributes: true});
+  return watch;
+})()`
+
+const pageHooksScript = `(() => {
+  const key = Symbol.for('tofu');
   if (globalThis[key]) return false;
   const noise = ['doubleclick.net', 'googlesyndication.com', 'googletagmanager.com', 'facebook.net', 'analytics', 'ads', 'tracking', 'pixel', 'hotjar.com', 'clarity.ms', 'mixpanel.com', 'segment.com', 'demdex.net', 'omtrdc.net', 'adobedtm.com', 'ensighten.com', 'newrelic.com', 'nr-data.net', 'google-analytics.com', 'connect.facebook.net', 'platform.twitter.com', 'platform.linkedin.com', '.cloudfront.net/image/', '.akamaized.net/image/', '/tracker/', '/collector/', '/beacon/', '/telemetry/', '/log/', '/events/', '/eventBatch', '/track.', '/metrics/'];
   const open = new Map(), ended = new Map();
@@ -111,13 +146,13 @@ const countRequests = `(() => {
   };
   const timers = new Map();
   let inTimer = false;
-  Object.defineProperty(globalThis, key, {value: (since, longest) => {
+  Object.defineProperty(globalThis, key, {value: {watch: ` + watchScript + `, requests: (since, longest) => {
     let inFlight = 0, last = -Infinity, waiting = 0;
     for (const started of open.values()) if (started >= since) inFlight++;
     for (const [id, [started, end]] of ended) if (started < since) ended.delete(id); else last = Math.max(last, end);
     for (const [started, delay] of timers.values()) if (started >= since && delay <= longest) waiting++;
     return [inFlight, Date.now() - last, waiting];
-  }});
+  }}});
   const setTimer = globalThis.setTimeout, clearTimer = globalThis.clearTimeout;
   if (setTimer) globalThis.setTimeout = {setTimeout(handler, delay) {
     if (typeof handler !== 'function') return setTimer.apply(this, arguments);
@@ -162,6 +197,10 @@ const countRequests = `(() => {
   return true;
 })()`
 
+func pageHooks() string {
+	return fmt.Sprintf(pageHooksScript, konst.BrowserChangeNodesMax)
+}
+
 const pageStateScript = `({url: location.href, count: document.querySelectorAll('*:not([data-tofu-cursor])').length, text: document.body ? document.body.innerText : '',
   status: (performance.getEntries().find(entry => entry.entryType === 'navigation') || {}).responseStatus || 0,
   heading: document.title + '\n' + ((document.querySelector('h1') || {}).innerText || ''),
@@ -200,13 +239,13 @@ func (d *Driver) state(deadline time.Time) (pageState, []Tab, error) {
 	var page pageState
 	var answers []cdpAnswer
 	if err == nil {
-		answers, err = d.cdp(deadline, false, evaluate(pageStateScript), evaluate(countRequests))
+		answers, err = d.cdp(deadline, false, evaluate(pageStateScript), evaluate(pageHooks()))
 	}
 	if err != nil {
 		return page, tabs, err
 	}
-	if counter, err := answers[1].object(); err == nil && string(counter.Value) == "true" {
-		_, _ = d.one(deadline, false, cdpCall{Method: "Page.addScriptToEvaluateOnNewDocument", Params: map[string]any{"source": countRequests}})
+	if hooked, err := answers[1].object(); err == nil && string(hooked.Value) == "true" {
+		_, _ = d.one(deadline, false, cdpCall{Method: "Page.addScriptToEvaluateOnNewDocument", Params: map[string]any{"source": pageHooks()}})
 	}
 	state, err := answers[0].object()
 	if err == nil {
@@ -219,11 +258,25 @@ const Unchanged = "the page did not change"
 
 func (m Moved) String() string {
 	said := m.said()
+	if m.Waited != "" {
+		said += ", " + m.Waited
+	}
 	if m.Via != "" {
 		said += ", through " + m.Via + " because the mouse and keys missed"
 	}
-	if m.Covered == "" {
-		said += fmt.Sprintf(" (settled in %d ms)", m.SettledMS)
+	if m.Covered != "" {
+		return said
+	}
+	said += fmt.Sprintf(" (settled in %d ms", m.SettledMS)
+	if m.Held != "" {
+		said += ", cut at the cap, held by " + m.Held
+	}
+	if m.Visibility != "" {
+		said += ", visibilityState " + m.Visibility
+	}
+	said += ")"
+	if m.Requests+m.Timers > 0 {
+		said += fmt.Sprintf("; still loading, %d requests and %d timers pending: act on what is here, the next result carries the rest", m.Requests, m.Timers)
 	}
 	return said
 }
@@ -279,6 +332,13 @@ func (d *Driver) Fingerprint() (string, error) {
 	err := d.value(time.Now().Add(konst.BrowserActTimeoutMillis*time.Millisecond), false, evaluate(pageStateScript), &page)
 	text := sha256.Sum256([]byte(page.Text + "\x00" + page.Controls))
 	return fmt.Sprintf("%s %d %x", page.URL, page.Count, text[:8]), err
+}
+
+func (d *Driver) TakeChanges() (string, error) {
+	var text string
+	take := fmt.Sprintf("(%s, globalThis[Symbol.for('tofu')].watch.take(%d))", pageHooks(), konst.BrowserChangesMaxBytes)
+	err := d.value(time.Now().Add(konst.BrowserActTimeoutMillis*time.Millisecond), false, evaluate(take), &text)
+	return strings.ToValidUTF8(text[:min(len(text), konst.BrowserChangesMaxBytes)], ""), err
 }
 
 func (d *Driver) Do(move Move) (Moved, error) {
@@ -377,7 +437,7 @@ func (d *Driver) awaitNavigation(deadline time.Time, before pageState, tabsBefor
 		case after.URL != before.URL || len(tabs) > len(tabsBefore):
 			return
 		case after != before:
-			_, _ = d.settle(deadline, konst.BrowserDOMQuietMillis, before.URL, started)
+			_, _ = d.settle(deadline, konst.BrowserDOMQuietMillis*time.Millisecond, konst.BrowserDOMQuietMaxMillis*time.Millisecond, before.URL, started)
 			return
 		}
 	}
@@ -410,21 +470,30 @@ func (d *Driver) fallback(deadline time.Time, move Move) string {
 
 func (d *Driver) measure(deadline time.Time, move Move, before pageState, tabsBefore []Tab, moved Moved, started time.Time) (Moved, error) {
 	loads := move.Kind == MoveNavigate || move.Kind == MoveBack
-	quiet := 0
+	quiet, limit := time.Duration(0), konst.BrowserDOMQuietMaxMillis*time.Millisecond
 	if loads {
-		quiet = konst.BrowserDOMQuietMillis
+		quiet = konst.BrowserDOMQuietMillis * time.Millisecond
 	}
-	_, notMillis := strconv.Atoi(move.Value)
+	millis, notMillis := strconv.Atoi(move.Value)
 	timed := move.Kind == MoveWait && notMillis == nil
-	var settled int
-	var settleErr error
-	if !timed {
-		settled, settleErr = d.settle(deadline, quiet, before.URL, started)
+	if timed {
+		quiet, limit = konst.BrowserDOMQuietMillis*time.Millisecond, time.Duration(min(max(millis, 0), konst.BrowserWaitMaxMillis))*time.Millisecond
+	}
+	settled, settleErr := d.settle(deadline, quiet, limit, before.URL, started)
+	switch {
+	case timed && settleErr != nil:
+		time.Sleep(time.Until(started.Add(limit)))
+	case timed && settled.AtOnce:
+		moved.Waited = "the wait returned at once, the page was already quiet"
+	case timed && settled.Held == "":
+		moved.Waited = "the wait ended early, the page went quiet"
 	}
 	after, tabsAfter, err := d.state(deadline)
 	arrived := err == nil && (after.URL != before.URL || loads)
-	if arrived && !timed && (settleErr != nil || settled < konst.BrowserDOMQuietMillis) {
-		_, _ = d.settle(deadline, konst.BrowserDOMQuietMillis, before.URL, started)
+	if arrived && !timed && (settleErr != nil || settled.Took < konst.BrowserDOMQuietMillis*time.Millisecond) {
+		if again, err := d.settle(deadline, konst.BrowserDOMQuietMillis*time.Millisecond, limit, before.URL, started); err == nil {
+			settled = again
+		}
 		after, tabsAfter, err = d.state(deadline)
 	}
 	if err != nil {
@@ -432,7 +501,9 @@ func (d *Driver) measure(deadline time.Time, move Move, before pageState, tabsBe
 	}
 	moved.SettledMS = int(time.Since(started).Milliseconds())
 	moved.URLChanged, moved.PageChanged = after.URL != before.URL, after != before
+	moved.Held, moved.Visibility = settled.Held, settled.Visibility
 	if arrived {
+		moved.Requests, moved.Timers = settled.Requests, settled.Timers
 		moved.ErrorPage = after.errorPage()
 		moved.Title, _, _ = strings.Cut(after.Heading, "\n")
 	}
@@ -855,8 +926,7 @@ func (d *Driver) navigate(deadline time.Time, url string, tabs []Tab) error {
 }
 
 func (d *Driver) wait(deadline time.Time, value string) error {
-	if millis, err := strconv.Atoi(value); err == nil {
-		time.Sleep(time.Duration(min(millis, konst.BrowserWaitMaxMillis)) * time.Millisecond)
+	if _, err := strconv.Atoi(value); err == nil {
 		return nil
 	}
 	quoted, _ := json.Marshal(value)
@@ -874,48 +944,85 @@ func (d *Driver) wait(deadline time.Time, value string) error {
 	}
 }
 
-const settleScript = `new Promise(resolve => {
-  const started = performance.now();
-  const since = %[4]d, from = %[5]s, requests = globalThis[Symbol.for('tofu-requests')] || (() => [0, Infinity, 0]);
-  const moved = () => from !== null && location.href !== from;
-  let changed = started, grown = started, count = -1;
-  const grew = now => {
-    const next = document.getElementsByTagName('*').length;
-    if (next > count) grown = now;
-    count = next;
-  };
-  const observer = new MutationObserver(() => {
-    changed = performance.now();
-    if (moved()) grew(changed);
-  });
-  observer.observe(document, {subtree: true, childList: true, characterData: true, attributes: true});
-  const tick = () => {
-    const now = performance.now(), [inFlight, sinceEnd, timers] = requests(since, %[9]d), away = moved();
-    if (away) grew(now);
-    const quiet = away || sinceEnd !== Infinity ? Math.max(%[1]d, %[6]d) : %[1]d;
-    const still = away ? timers === 0 && now - grown >= %[8]d : now - changed >= quiet;
-    const idle = inFlight === 0 && document.readyState === 'complete' && still && sinceEnd >= quiet;
-    if (idle || (away ? Date.now() - since >= %[7]d : now - started >= %[2]d)) {
-      observer.disconnect();
-      resolve(Math.round(now - started));
-      return;
-    }
-    const growthDue = grown + %[8]d - now;
-    setTimeout(tick, away && growthDue > 0 ? Math.min(%[3]d, growthDue) : %[3]d);
-  };
-  tick();
-})`
+const probeScript = `(%s, (() => {
+  const hooks = globalThis[Symbol.for('tofu')], [inFlight, sinceEnd, timers] = hooks.requests(%d, %d), main = %t && (document.querySelector('main, [role=main]') || document.body);
+  return {href: location.href, ready: document.readyState, count: document.getElementsByTagName('*').length, text: !!main && /\S/.test(main.innerText || ''), inFlight,
+    sinceEnd: sinceEnd === Infinity ? null : Math.round(sinceEnd), timers, quietFor: Math.round(performance.now() - hooks.watch.changed), moving: %t && hooks.watch.moving(), visibility: document.visibilityState};
+})())`
 
-func settleExpression(quietMS int) string {
-	return settleFrom(quietMS, "null", 0)
+type probe struct {
+	Href       string `json:"href"`
+	Ready      string `json:"ready"`
+	Count      int    `json:"count"`
+	Text       bool   `json:"text"`
+	InFlight   int    `json:"inFlight"`
+	SinceEnd   *int   `json:"sinceEnd"`
+	Timers     int    `json:"timers"`
+	QuietFor   int    `json:"quietFor"`
+	Moving     bool   `json:"moving"`
+	Visibility string `json:"visibility"`
 }
 
-func settleFrom(quietMS int, from string, since int64) string {
-	return fmt.Sprintf(settleScript, quietMS, konst.BrowserDOMQuietMaxMillis, konst.BrowserSettleTickMillis, since, from, konst.BrowserDOMQuietMillis, konst.BrowserRenderWaitMaxMillis, konst.BrowserGrowthQuietMillis, konst.BrowserTimerHoldMaxMillis)
+type settled struct {
+	Held             string
+	Requests, Timers int
+	Visibility       string
+	AtOnce           bool
+	Took             time.Duration
 }
 
-func (d *Driver) settle(deadline time.Time, quietMS int, from string, started time.Time) (settled int, err error) {
-	quoted, _ := json.Marshal(from)
-	err = d.value(deadline, false, evaluate(settleFrom(quietMS, string(quoted), started.UnixMilli())), &settled)
-	return settled, err
+func (d *Driver) settle(deadline time.Time, quiet, limit time.Duration, from string, since time.Time) (settled, error) {
+	begun, hooks := time.Now(), pageHooks()
+	var committed, grown, moving time.Time
+	count, texted := 0, false
+	for first := true; ; first = false {
+		var page probe
+		err := d.value(deadline, false, evaluate(fmt.Sprintf(probeScript, hooks, since.UnixMilli(), konst.BrowserTimerCountMaxMillis, !texted, quiet > 0)), &page)
+		if err == nil && page.Ready == "" {
+			err = errors.New("the page answered the settle probe without a readyState")
+		}
+		if err != nil {
+			return settled{}, err
+		}
+		now, away := time.Now(), page.Href != from
+		hush := quiet
+		if away || page.SinceEnd != nil {
+			hush = max(quiet, konst.BrowserDOMQuietMillis*time.Millisecond)
+		}
+		if page.Moving {
+			moving = now
+		}
+		over := now.Sub(begun) >= limit
+		if away {
+			if committed.IsZero() {
+				committed, grown, count = now, now, page.Count
+			}
+			if page.Count > count {
+				grown = now
+			}
+			count, texted, over = page.Count, texted || page.Text, now.Sub(committed) >= konst.BrowserCommitReturnMillis*time.Millisecond
+		}
+		held := ""
+		switch {
+		case away && page.Ready == "loading":
+			held = "readyState"
+		case away && !texted:
+			held = "text"
+		case away && now.Sub(grown) < konst.BrowserDOMQuietMillis*time.Millisecond:
+			held = "growth"
+		case page.InFlight > 0 || page.SinceEnd != nil && time.Duration(*page.SinceEnd)*time.Millisecond < hush:
+			held = "requests"
+		case away:
+		case page.Ready != "complete":
+			held = "readyState"
+		case time.Duration(page.QuietFor)*time.Millisecond < hush:
+			held = "changes"
+		case now.Sub(moving) < hush:
+			held = "animation"
+		}
+		if held == "" || over {
+			return settled{Held: held, Requests: page.InFlight, Timers: page.Timers, Visibility: page.Visibility, AtOnce: first && held == "", Took: now.Sub(begun)}, nil
+		}
+		time.Sleep(konst.BrowserSettleTickMillis * time.Millisecond)
+	}
 }

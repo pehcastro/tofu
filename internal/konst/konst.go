@@ -223,9 +223,10 @@ const (
 	BrowserURLQueryRunes        = 80
 	BrowserDOMQuietMillis       = 300
 	BrowserDOMQuietMaxMillis    = 1500
-	BrowserGrowthQuietMillis    = 600
-	BrowserTimerHoldMaxMillis   = 1500
-	BrowserRenderWaitMaxMillis  = 4000
+	BrowserTimerCountMaxMillis  = 1500
+	BrowserCommitReturnMillis   = 1500
+	BrowserChangesMaxBytes      = 1536
+	BrowserChangeNodesMax       = 500
 	BrowserBatchMax             = 10
 	BrowserLoopWindow           = 20
 	BrowserRepeatNotice         = 3

@@ -317,16 +317,29 @@ func (t browserObserve) Run(_ context.Context, raw json.RawMessage) (turn.Result
 	if args.Interactive != nil {
 		interactive = *args.Interactive
 	}
-	var snapshot string
+	var snapshot, changes string
 	err := t.session.drive(args.Tab, func(driver *browser.Driver) (err error) {
 		args.Tab = driver.Tab
-		snapshot, err = driver.Observe(interactive)
+		if changes, err = sinceLastRead(driver); err == nil {
+			snapshot, err = driver.Observe(interactive)
+		}
+		if err == nil {
+			_, err = driver.TakeChanges()
+		}
 		return err
 	})
 	if err != nil {
 		return turn.Result{}, fmt.Errorf("browser_observe: %w", err)
 	}
-	return turn.Result{Content: web.Untrusted(fmt.Sprintf("Chrome tab %d", args.Tab), window(snapshot, args.From, interactive)), Command: fmt.Sprintf("tab %d observe", args.Tab)}, nil
+	return turn.Result{Content: changes + web.Untrusted(fmt.Sprintf("Chrome tab %d", args.Tab), window(snapshot, args.From, interactive)), Command: fmt.Sprintf("tab %d observe", args.Tab)}, nil
+}
+
+func sinceLastRead(driver *browser.Driver) (string, error) {
+	changes, err := driver.TakeChanges()
+	if err != nil || changes == "" {
+		return "", err
+	}
+	return "page changed since your last read:\n" + web.Untrusted(fmt.Sprintf("Chrome tab %d", driver.Tab), changes) + "\n\n", nil
 }
 
 func window(snapshot string, from int, interactive bool) string {
@@ -601,7 +614,7 @@ func (t browserAct) Run(_ context.Context, raw json.RawMessage) (turn.Result, er
 		return turn.Result{}, fmt.Errorf("browser_act: give 1 to %d actions, not %d", konst.BrowserBatchMax, len(args.Actions))
 	}
 	var report strings.Builder
-	var snapshot string
+	var snapshot, changes string
 	ran := 0
 	loads, changed := false, false
 	actions := args.Actions
@@ -615,7 +628,10 @@ func (t browserAct) Run(_ context.Context, raw json.RawMessage) (turn.Result, er
 			ran, loads, actions = 1, true, actions[1:]
 		}
 	}
-	err := t.session.drive(args.Tab, func(driver *browser.Driver) error {
+	err := t.session.drive(args.Tab, func(driver *browser.Driver) (err error) {
+		if changes, err = sinceLastRead(driver); err != nil {
+			return err
+		}
 		for _, step := range actions {
 			if changed && step.Target == nil && step.Ref != "" {
 				break
@@ -666,12 +682,14 @@ func (t browserAct) Run(_ context.Context, raw json.RawMessage) (turn.Result, er
 				break
 			}
 		}
-		var err error
 		args.Tab = driver.Tab
 		if loads {
 			snapshot, err = driver.Observe(false)
 		} else {
 			snapshot, err = driver.ObserveChanges()
+		}
+		if err == nil {
+			_, err = driver.TakeChanges()
 		}
 		driver.Thinking()
 		return err
@@ -687,7 +705,7 @@ func (t browserAct) Run(_ context.Context, raw json.RawMessage) (turn.Result, er
 		report.WriteString("\nnext: this page shows a form. fill every field and submit it in one guarded batch, by role and name, with an expect_after on the result")
 	}
 	report.WriteString("\n\n")
-	return turn.Result{Content: report.String() + web.Untrusted(fmt.Sprintf("Chrome tab %d", args.Tab), window(snapshot, 1, !loads)), Command: fmt.Sprintf("tab %d act %d", args.Tab, ran)}, nil
+	return turn.Result{Content: changes + report.String() + web.Untrusted(fmt.Sprintf("Chrome tab %d", args.Tab), window(snapshot, 1, !loads)), Command: fmt.Sprintf("tab %d act %d", args.Tab, ran)}, nil
 }
 
 type browserMotion struct{ session *browserSession }

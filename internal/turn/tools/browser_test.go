@@ -326,6 +326,7 @@ type cdpPage struct {
 	reopen   float64
 	hovers   map[string][]string
 	pressed  int
+	changes  string
 }
 
 const motionWallMs = 1.7e12 + 1000
@@ -388,6 +389,10 @@ func (p *cdpPage) answer(method string, params map[string]any) any {
 			return value([]any{})
 		case strings.Contains(script, "getEntriesByType"):
 			return value(map[string]any{"pending": 0, "loading": false})
+		case strings.Contains(script, ".take("):
+			taken := p.changes
+			p.changes = ""
+			return value(taken)
 		case strings.Contains(script, "url: location.href"):
 			return value(map[string]any{"url": p.url, "count": 3, "text": cmp.Or(strings.Join(p.buttons, " "), "Stays")})
 		}
@@ -944,6 +949,22 @@ func TestANumericWaitAndARefLessScrollRunAfterAURLChange(t *testing.T) {
 	acted := run("browser_act", `{"note":"n","tab":7,"actions":[{"ref":"e1","action":"click"},{"action":"scroll","value":"down"},{"wait":300},{"action":"wait","value":200},{"ref":"e2","action":"click"}]}`)
 	if !strings.Contains(acted, `3. wait "300"`) || !strings.Contains(acted, `4. wait "200"`) || !strings.Contains(acted, "ran 4 of 5") || page.releases() != 1 {
 		t.Fatal("after a url change the scroll and the waits did not run, or the stale ref did")
+	}
+}
+
+func TestAnActAfterThePageChangedStartsWithWhatChangedAndSaysItOnce(t *testing.T) {
+	page := &cdpPage{url: "https://stays.test/"}
+	run := stepsOn(t, page)
+	run("browser_observe", `{"note":"n","tab":7}`)
+	page.mu.Lock()
+	page.changes = "Reviews 4.9 from 212 guests"
+	page.mu.Unlock()
+	scroll := `{"note":"n","tab":7,"actions":[{"action":"scroll","value":"down"}]}`
+	if acted := run("browser_act", scroll); !strings.HasPrefix(acted, "page changed since your last read") || !strings.Contains(acted, "Reviews 4.9 from 212 guests") {
+		t.Fatal("the act after the page mounted a section does not start with what changed")
+	}
+	if again := run("browser_act", scroll); strings.Contains(again, "page changed since your last read") {
+		t.Fatal("the change was reported a second time")
 	}
 }
 

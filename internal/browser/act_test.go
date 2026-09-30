@@ -3,6 +3,7 @@ package browser
 import (
 	"bufio"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net"
 	"os"
@@ -273,10 +274,12 @@ class MutationObserver {
   disconnect() { this.off = true; }
 }
 const page = {url: 'https://www.airbnb.test/s/homes', h1: 'Search results', text: 'results', elements: 10};
-const render = changes => {
+const render = (changes, added) => {
   Object.assign(page, changes);
-  for (const observer of observers) if (!observer.off) observer.callback([]);
+  const records = added ? [{type: 'childList', target: {}, addedNodes: [{nodeType: 1, isConnected: true, innerText: added}]}] : [];
+  for (const observer of observers) if (!observer.off) observer.callback(records);
 };
+let animatedUntil = 0;
 function fetch(url) {
   const answer = url === '/fail' ? Promise.reject(failure) : url === '/poll' ? new Promise(() => {}) : later(config.contentAfter, {json: () => later(0, {text: listing})});
   issued.push(answer);
@@ -293,14 +296,16 @@ class XMLHttpRequest {
     }, config.contentAfter);
   }
 }
-const document = {readyState: 'complete', title: 'Airbnb', get body() { return {innerText: page.text}; },
+const document = {readyState: 'complete', title: 'Airbnb', visibilityState: 'hidden',
+  getAnimations: () => performance.now() < animatedUntil ? [{playState: 'running', effect: {target: null, getComputedTiming: () => ({endTime: 1000})}}] : [], get body() { return {innerText: page.text}; },
   querySelector: selector => selector === 'h1' ? {innerText: page.h1} : null, querySelectorAll: () => [], getElementsByTagName: () => ({length: page.elements})};
 const location = {get href() { return page.url; }};
 const context = vm.createContext({MutationObserver, performance, setTimeout, fetch, XMLHttpRequest, document, location});
 const shape = () => vm.runInContext('({keys: Object.keys(globalThis).sort().join(), names: Object.getOwnPropertyNames(globalThis).sort().join(), symbols: Object.getOwnPropertySymbols(globalThis).map(key => Object.getOwnPropertyDescriptor(globalThis, key).enumerable)})', context);
 context.open = () => {
   render({url: 'https://www.airbnb.test/rooms/1', h1: config.h1 || page.h1, text: 'skeleton'});
-  if (config.sections) return void config.sections.forEach((at, i) => context.setTimeout(() => render({elements: page.elements + 5, text: page.text + ' section' + i}), at));
+  if (config.ticking) setInterval(() => context.setTimeout(() => {}, 1000), 100);
+  if (config.sections) return void config.sections.forEach((at, i) => context.setTimeout(() => render({elements: page.elements + 5, text: page.text + ' section' + i}, 'section' + i), at));
   const show = text => setTimeout(() => render({text}), 30);
   if (config.via !== 'xhr') return void context.fetch('/api/listing').then(response => response.json()).then(body => show(body.text));
   const request = new context.XMLHttpRequest();
@@ -314,7 +319,8 @@ context.poll = () => {
   context.fetch('/poll');
   clock.now = now;
 };
-context.busy = () => void setInterval(() => { context.fetch('/api/listing'); render({text: 'ticker ' + Date.now()}); }, 100);
+context.animate = ms => { animatedUntil = performance.now() + ms; };
+context.busy =() => void setInterval(() => { context.fetch('/api/listing'); render({text: 'ticker ' + Date.now()}); }, 100);
 let bare;
 context.audit = async () => {
   const now = shape(), answer = context.fetch('/api/listing');
@@ -399,10 +405,25 @@ func TestAURLChangeWhoseTitleNeverChangesReturnsOnceItsFetchEnds(t *testing.T) {
 	}
 }
 
-func TestAURLChangeWhoseFetchNeverEndsReturnsAtTheActCap(t *testing.T) {
+func TestAURLChangeWhoseFetchNeverEndsReturnsAtTheCommitCapAndSaysRequestsHeldIt(t *testing.T) {
 	moved := moveOn(t, MoveClick, listingPage(t, `{"contentAfter": 60000}`))
-	if moved.SettledMS < konst.BrowserRenderWaitMaxMillis || moved.SettledMS > konst.BrowserRenderWaitMaxMillis+300 {
-		t.Fatalf("a url change whose fetch never ends settled in %d ms; want the %d ms cap from the act start", moved.SettledMS, konst.BrowserRenderWaitMaxMillis)
+	said := moved.String()
+	if moved.SettledMS < konst.BrowserCommitReturnMillis || moved.SettledMS > konst.BrowserCommitReturnMillis+300 || !strings.Contains(said, "held by requests") || !strings.Contains(said, "still loading") {
+		t.Fatalf("a url change whose fetch never ends said %q after %d ms; want the %d ms cap from the commit, held by requests, still loading", said, moved.SettledMS, konst.BrowserCommitReturnMillis)
+	}
+}
+
+func TestAURLChangeUnderTimersThatKeepFiringReturnsOnStableTextAndSaysItIsStillLoading(t *testing.T) {
+	moved := moveOn(t, MoveClick, listingPage(t, `{"sections": [], "ticking": true}`))
+	said := moved.String()
+	if moved.SettledMS >= 1500 || !strings.Contains(said, "still loading") || !strings.Contains(said, "timers") {
+		t.Fatalf("a url change whose text is up while timers keep firing said %q after %d ms; want under 1500, still loading, naming the timers", said, moved.SettledMS)
+	}
+}
+
+func TestTheActResultShowsThePagesVisibilityState(t *testing.T) {
+	if said := moveOn(t, MoveClick, listingPage(t, `{"contentAfter": 100}`)).String(); !strings.Contains(said, "visibilityState hidden") {
+		t.Fatalf("a click on a hidden page said %q; want it to carry visibilityState hidden", said)
 	}
 }
 
@@ -439,11 +460,19 @@ func TestATimedWaitOnABusyPageReturnsWhenItsSleepEnds(t *testing.T) {
 	}
 }
 
-func TestAURLChangeWaitsForSectionsThatMountWithoutNetwork(t *testing.T) {
-	page := listingPage(t, `{"sections": [800, 1400]}`)
-	moved := moveOn(t, MoveClick, page)
-	if !strings.Contains(page.read, "section0") || !strings.Contains(page.read, "section1") || moved.SettledMS < 1400 {
-		t.Fatalf("sections mounting at 800 and 1400 ms read %q in %d ms; want both, after 1400", page.read, moved.SettledMS)
+func TestASectionMountedTwoSecondsAfterTheReturnIsTheNextReadsChangeOnce(t *testing.T) {
+	page := listingPage(t, `{"sections": [2300]}`)
+	driver := relayTo(t, page)
+	begun := time.Now()
+	moved := moveWith(t, driver, MoveClick, page)
+	if closing, err := driver.TakeChanges(); err != nil || moved.SettledMS >= 1500 || strings.Contains(page.read+closing, "section0") {
+		t.Fatalf("the click read %q in %d ms and its closing read took %q, %v; want the return under 1500, before the section", page.read, moved.SettledMS, closing, err)
+	}
+	time.Sleep(time.Until(begun.Add(2600 * time.Millisecond)))
+	next, err := driver.TakeChanges()
+	again, _ := driver.TakeChanges()
+	if err != nil || !strings.Contains(next, "section0") || again != "" {
+		t.Fatalf("the next read after a section mounted took %q, %v, then %q; want section0 once", next, err, again)
 	}
 }
 
@@ -461,5 +490,44 @@ func TestAClickThatChangesNothingSettlesUnder50Ms(t *testing.T) {
 	moveWith(t, driver, MoveHover, page)
 	if moved := moveWith(t, driver, MoveClick, page); moved.SettledMS >= 50 {
 		t.Fatalf("a click that changed nothing settled in %d ms; want under 50", moved.SettledMS)
+	}
+}
+
+func settleExpression(quietMS int) string {
+	return fmt.Sprintf("new Promise(resolve => { const watch = %s, begun = performance.now(), quiet = %d; const tick = () => performance.now() - watch.changed >= quiet || performance.now() - begun >= %d ? resolve(Math.round(performance.now() - begun)) : setTimeout(tick, Math.max(1, Math.min(%d, watch.changed + quiet - performance.now()))); tick(); })",
+		fmt.Sprintf(watchScript, konst.BrowserChangeNodesMax), quietMS, konst.BrowserDOMQuietMaxMillis, konst.BrowserSettleTickMillis)
+}
+
+func timedWait(t *testing.T, driver *Driver, millis string) (Moved, time.Duration) {
+	t.Helper()
+	begun := time.Now()
+	moved, err := driver.Do(Move{Kind: MoveWait, Value: millis})
+	took := time.Since(begun)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("wait %s took %d ms: %s", millis, took.Milliseconds(), moved)
+	return moved, took
+}
+
+func TestAWaitAfterAnIdleClickReturnsUnder400Ms(t *testing.T) {
+	page := &togglePage{js: startPage(t, `{}`)}
+	driver := relayTo(t, page)
+	moveWith(t, driver, MoveClick, page)
+	if moved, took := timedWait(t, driver, "3000"); took >= 400*time.Millisecond {
+		t.Fatalf("wait 3000 after a click that went idle took %d ms and said %q; want under 400", took.Milliseconds(), moved)
+	}
+	if moved, took := timedWait(t, driver, "3000"); took >= 100*time.Millisecond || !strings.Contains(moved.String(), "at once") {
+		t.Fatalf("wait 3000 after a wait that ended quiet took %d ms and said %q; want it at once, saying so", took.Milliseconds(), moved)
+	}
+}
+
+func TestAWaitOnAPageAnimatingForASecondReturnsAfterAbout1300Ms(t *testing.T) {
+	page := &togglePage{js: startPage(t, `{}`)}
+	driver := relayTo(t, page)
+	moveWith(t, driver, MoveHover, page)
+	page.js.eval("animate(1000)")
+	if moved, took := timedWait(t, driver, "3000"); took < 1250*time.Millisecond || took > 1500*time.Millisecond {
+		t.Fatalf("wait 3000 on a page animating for 1 s took %d ms and said %q; want about 1300", took.Milliseconds(), moved)
 	}
 }
