@@ -223,7 +223,7 @@ func (d *Driver) Do(move Move) (Moved, error) {
 	}
 	moved, err := d.do(time.Now().Add(budget), move)
 	if errors.Is(err, os.ErrDeadlineExceeded) {
-		return Moved{}, fmt.Errorf("%s on tab %d did not finish within %d ms, and tofu did not retry it", move.Kind, d.Tab, budget.Milliseconds())
+		return Moved{}, fmt.Errorf("%s on tab %d did not finish within %d ms, and tofu did not retry it: %w", move.Kind, d.Tab, budget.Milliseconds(), err)
 	}
 	return moved, err
 }

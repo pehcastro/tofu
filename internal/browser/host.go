@@ -24,8 +24,21 @@ import (
 const idleAfter = konst.BrowserIdleAfterMillis * time.Millisecond
 
 type session struct {
+	mu   sync.Mutex
 	conn net.Conn
 	out  *json.Encoder
+}
+
+func (s *session) send(answer result) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	err := s.conn.SetWriteDeadline(time.Now().Add(konst.BrowserDialTimeoutMillis * time.Millisecond))
+	if err == nil {
+		err = s.out.Encode(answer)
+	}
+	if err != nil {
+		_ = s.conn.Close()
+	}
 }
 
 type route struct {
@@ -165,11 +178,13 @@ func (r *relay) readExtension(stdin io.Reader) error {
 		if err != nil {
 			return err
 		}
-		r.receive(message)
+		if to, answer := r.receive(message); to != nil {
+			to.send(answer)
+		}
 	}
 }
 
-func (r *relay) receive(message extensionMessage) {
+func (r *relay) receive(message extensionMessage) (*session, result) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	switch message.T {
@@ -196,7 +211,7 @@ func (r *relay) receive(message extensionMessage) {
 	case messageResult:
 		to, asked := r.pending[message.ID]
 		if !asked {
-			return
+			return nil, result{}
 		}
 		delete(r.pending, message.ID)
 		if to.frames != nil && message.OK {
@@ -207,9 +222,10 @@ func (r *relay) receive(message extensionMessage) {
 			message.Value, _ = json.Marshal(append(to.frames, tail...))
 		}
 		message.ID, message.Host = to.id, time.Since(to.sent)
-		_ = to.session.out.Encode(message.result)
 		r.idleSoon()
+		return to.session, message.result
 	}
+	return nil, result{}
 }
 
 func (r *relay) adopt(running string) {
@@ -293,7 +309,7 @@ func (r *relay) handle(s *session, req request) {
 	if req.Op == opTabs {
 		tabs := slices.SortedFunc(maps.Values(r.tabs), func(a, b Tab) int { return a.ID - b.ID })
 		listed, _ := json.Marshal(slices.DeleteFunc(tabs, func(tab Tab) bool { return !reachable(tab.URL) }))
-		_ = s.out.Encode(result{ID: req.ID, OK: true, Value: listed})
+		s.send(result{ID: req.ID, OK: true, Value: listed})
 		return
 	}
 	if req.Op == opHello {
@@ -301,15 +317,15 @@ func (r *relay) handle(s *session, req request) {
 			Build string `json:"build"`
 		}
 		if json.Unmarshal(req.Args, &hello) != nil || hello.Build == r.builds.Tofu {
-			_ = s.out.Encode(result{ID: req.ID, OK: true})
+			s.send(result{ID: req.ID, OK: true})
 			return
 		}
 		current, err := r.installed()
 		if err != nil || current == r.builds.Tofu {
-			_ = s.out.Encode(result{ID: req.ID, Error: fmt.Sprintf("this tofu is older than the relay: restart it (the relay runs build %s, the installed tofu, and this tofu runs %s)", r.builds.Tofu, hello.Build)})
+			s.send(result{ID: req.ID, Error: fmt.Sprintf("this tofu is older than the relay: restart it (the relay runs build %s, the installed tofu, and this tofu runs %s)", r.builds.Tofu, hello.Build)})
 			return
 		}
-		_ = s.out.Encode(result{ID: req.ID, Error: fmt.Sprintf("%s: this relay runs build %s, the installed tofu is %s, and the tofu that dialled it runs %s", relayRestarting, r.builds.Tofu, current, hello.Build)})
+		s.send(result{ID: req.ID, Error: fmt.Sprintf("%s: this relay runs build %s, the installed tofu is %s, and the tofu that dialled it runs %s", relayRestarting, r.builds.Tofu, current, hello.Build)})
 		select {
 		case r.restart <- struct{}{}:
 		default:
@@ -318,11 +334,11 @@ func (r *relay) handle(s *session, req request) {
 	}
 	if req.Op == opBuilds {
 		builds, _ := json.Marshal(r.builds)
-		_ = s.out.Encode(result{ID: req.ID, OK: true, Value: builds})
+		s.send(result{ID: req.ID, OK: true, Value: builds})
 		return
 	}
 	if err := r.forward(s, req); err != nil {
-		_ = s.out.Encode(result{ID: req.ID, Error: err.Error()})
+		s.send(result{ID: req.ID, Error: err.Error()})
 	}
 }
 

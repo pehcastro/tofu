@@ -76,7 +76,7 @@ func (f frameTree) loaders(into map[string]string) {
 func (d *Driver) Observe(interactive bool) (string, error) {
 	snapshot, err := d.observe(time.Now().Add(konst.BrowserObserveTimeoutMillis*time.Millisecond), interactive)
 	if errors.Is(err, os.ErrDeadlineExceeded) {
-		return "", fmt.Errorf("observe on tab %d did not finish within %d ms", d.Tab, konst.BrowserObserveTimeoutMillis)
+		return "", fmt.Errorf("observe on tab %d did not finish within %d ms: %w", d.Tab, konst.BrowserObserveTimeoutMillis, err)
 	}
 	if err == nil && interactive {
 		d.refs.shown = snapshot

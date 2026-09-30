@@ -374,7 +374,7 @@ func (o browserOutput) show(data any, lines []string) int {
 
 func (o browserOutput) fail(err error) int {
 	what, hint := err.Error(), ""
-	if errors.Is(err, browser.ErrNotConnected) {
+	if errors.Is(err, browser.ErrNotConnected) && !errors.Is(err, os.ErrDeadlineExceeded) {
 		what, hint = browser.NotConnected, browser.InstallHint
 	}
 	if o.asJSON {

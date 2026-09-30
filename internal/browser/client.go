@@ -23,6 +23,16 @@ var (
 	ErrRelayRestarting = errors.New("the tofu relay runs another build and restarts on this one")
 )
 
+type droppedAfterTimeout struct{ deadline error }
+
+func (droppedAfterTimeout) Error() string {
+	return "tofu dropped the browser connection and the next call reconnects"
+}
+
+func (droppedAfterTimeout) Is(target error) bool { return target == ErrNotConnected }
+
+func (d droppedAfterTimeout) Unwrap() error { return d.deadline }
+
 type CallTime struct {
 	Wall      time.Duration
 	Host      time.Duration
@@ -116,7 +126,7 @@ func (c *Client) StopScreencast(tab int) ([]ScreencastFrame, error) {
 func (c *Client) Call(tab int, op string, args json.RawMessage) (json.RawMessage, error) {
 	value, err := c.callBy(time.Now().Add(konst.BrowserCallTimeoutMillis*time.Millisecond), tab, op, args)
 	if errors.Is(err, os.ErrDeadlineExceeded) {
-		return nil, fmt.Errorf("the browser did not answer %s on tab %d within %d ms", op, tab, konst.BrowserCallTimeoutMillis)
+		return nil, fmt.Errorf("the browser did not answer %s on tab %d within %d ms: %w", op, tab, konst.BrowserCallTimeoutMillis, err)
 	}
 	return value, err
 }
@@ -140,7 +150,8 @@ func (c *Client) callBy(deadline time.Time, tab int, op string, args json.RawMes
 	}
 	switch {
 	case errors.Is(err, os.ErrDeadlineExceeded):
-		return nil, err
+		_ = c.conn.Close()
+		return nil, droppedAfterTimeout{err}
 	case err != nil:
 		return nil, fmt.Errorf("%w (%v)", ErrNotConnected, err)
 	case answer.ID != c.lastID:

@@ -856,3 +856,104 @@ func TestThreeChunksOfScreencastFramesReachTheClientAsOneOrderedList(t *testing.
 		t.Fatalf("the stop returned %v, %v; want %v", got.frames, got.err, want)
 	}
 }
+
+func TestATimedOutCallDropsTheConnectionSoTheCallerRedials(t *testing.T) {
+	home := shortHome(t)
+	installFor(t, home, testOrigin)
+	ext, _ := startHost(t, home)
+	helloFrom(ext, "")
+	client := dial(t, home)
+	_, err := client.callBy(time.Now().Add(200*time.Millisecond), 7, "snapshot", nil)
+	saysItTimedOut(t, err)
+	ext.call()
+	started := time.Now()
+	if _, err := client.Call(7, "snapshot", nil); !errors.Is(err, ErrNotConnected) || time.Since(started) > time.Second {
+		t.Fatalf("the next call on the timed-out client returned %v after %v; want ErrNotConnected at once", err, time.Since(started))
+	}
+	select {
+	case heard := <-ext.heard:
+		if heard.T == messageCall {
+			t.Fatalf("a timed-out client still sent %+v to the extension", heard)
+		}
+	case <-time.After(100 * time.Millisecond):
+	}
+	if tabs, err := dial(t, home).Tabs(); err != nil || len(tabs) != 1 {
+		t.Fatalf("the redial serves %v, %v", tabs, err)
+	}
+}
+
+func saysItTimedOut(t *testing.T, err error) {
+	t.Helper()
+	if !errors.Is(err, ErrNotConnected) || !errors.Is(err, os.ErrDeadlineExceeded) || strings.Contains(err.Error(), InstallHint) || !strings.Contains(err.Error(), "the next call reconnects") {
+		t.Fatalf("a call past its deadline returned %v; want it to match ErrNotConnected and the deadline, say the next call reconnects, and never say %q", err, InstallHint)
+	}
+}
+
+func TestADriverTimeoutMatchesNotConnectedWithoutTheInstallHint(t *testing.T) {
+	for name, overdue := range map[string]func(*Driver) error{
+		"Do":      func(d *Driver) error { _, err := d.Do(Move{Kind: MoveScroll, Value: "down"}); return err },
+		"Observe": func(d *Driver) error { _, err := d.Observe(true); return err },
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			home := shortHome(t)
+			installFor(t, home, testOrigin)
+			ext, _ := startHost(t, home)
+			helloFrom(ext, "")
+			saysItTimedOut(t, overdue(&Driver{Client: dial(t, home), Tab: 7}))
+		})
+	}
+}
+
+func TestAClientThatStopsReadingNeverHoldsTheRelay(t *testing.T) {
+	home := shortHome(t)
+	installFor(t, home, testOrigin)
+	ext, _ := startHost(t, home)
+	helloFrom(ext, "")
+	stuck, err := net.Dial("unix", socketOf(t, home))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = stuck.Close() })
+	asks := json.NewEncoder(stuck)
+	var ids []int64
+	for id := range int64(4) {
+		if err := asks.Encode(request{ID: id + 1, Op: "snapshot", Tab: 7}); err != nil {
+			t.Fatal(err)
+		}
+		ids = append(ids, ext.call().ID)
+	}
+	large := strings.Repeat("x", konst.BrowserHostMessageBytes-100)
+	answered := make(chan struct{})
+	go func() {
+		defer close(answered)
+		for _, id := range ids {
+			_ = WriteMessage(ext.toHost, []byte(`{"t":"result","id":`+strconv.FormatInt(id, 10)+`,"ok":true,"value":"`+large+`"}`))
+		}
+	}()
+	time.Sleep(200 * time.Millisecond)
+
+	served := make(chan error, 1)
+	started := time.Now()
+	go func() {
+		client, err := Dial(home)
+		if err == nil {
+			_, err = client.Tabs()
+			_ = client.Close()
+		}
+		served <- err
+	}()
+	select {
+	case err := <-served:
+		if err != nil || time.Since(started) > 2*time.Second {
+			t.Fatalf("a second client's hello and tabs returned %v after %v", err, time.Since(started))
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("a second client's hello and tabs waited over 2 s behind a client that stopped reading")
+	}
+	select {
+	case <-answered:
+	case <-time.After(3 * konst.BrowserDialTimeoutMillis * time.Millisecond):
+		t.Fatal("the relay stopped reading the extension while it wrote to a client that stopped reading")
+	}
+}
