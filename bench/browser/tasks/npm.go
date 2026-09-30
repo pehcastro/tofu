@@ -5,18 +5,19 @@ import (
 	"math/rand/v2"
 	"net/url"
 	"regexp"
-	"slices"
 	"strings"
 )
 
 var npmPackages = []string{"react", "lodash", "express", "axios", "chalk", "zod", "typescript", "vite", "dayjs", "commander", "rxjs", "semver"}
 
 var (
-	licenses        = []string{"MIT", "ISC", "Apache-2.0", "BSD-2-Clause", "BSD-3-Clause", "0BSD", "BlueOak-1.0.0", "MPL-2.0", "Unlicense"}
-	semverShown     = regexp.MustCompile(`\b\d+\.\d+\.\d+(?:-[0-9A-Za-z.]+)?\b`)
-	weeklyLabel     = regexp.MustCompile(`(?i)weekly downloads|downloads semanais`)
-	downloadCount   = regexp.MustCompile(`(?:^|[^\pL\pN=.,])(\d{1,3}(?:[.,]\d{3})+|\d{4,})`)
-	digitSeparators = strings.NewReplacer(".", "", ",", "")
+	downloadsHeading = regexp.MustCompile(`heading "Weekly Downloads"`)
+	versionHeading   = regexp.MustCompile(`heading "Version"`)
+	licenseHeading   = regexp.MustCompile(`heading "License"`)
+	semverShown      = regexp.MustCompile(`\b\d+\.\d+\.\d+(?:-[0-9A-Za-z.]+)?\b`)
+	downloadCount    = regexp.MustCompile(`(?:^|[^\pL\pN=.,])(\d{1,3}(?:[.,]\d{3})+|\d{4,})`)
+	licenseName      = regexp.MustCompile(`(?i)\b(?:MIT|ISC|Apache[- ]2\.0|BSD[- ][23][- ]Clause|0BSD|BlueOak[- ]1\.0\.0|MPL[- ]2\.0|Unlicense)\b`)
+	digitSeparators  = strings.NewReplacer(".", "", ",", "")
 )
 
 func onNPM(path string) func(*url.URL) bool {
@@ -33,28 +34,24 @@ func downloadCounts(text string) []string {
 	return found
 }
 
-func weeklyDownloads(page string) []string {
-	label := weeklyLabel.FindStringIndex(page)
-	if label == nil {
-		return nil
+func licensesIn(text string) []string {
+	var found []string
+	for _, name := range licenseName.FindAllString(text, -1) {
+		found = append(found, strings.ToUpper(strings.ReplaceAll(name, " ", "-")))
 	}
-	counts := downloadCounts(page[label[1]:])
-	return counts[:min(1, len(counts))]
+	return found
 }
 
-func licensesIn(text string) []string {
-	spaced := strings.ReplaceAll(text, "-", " ")
-	return slices.DeleteFunc(slices.Clone(licenses), func(license string) bool {
-		return !namedIn(strings.ReplaceAll(license, "-", " "), spaced)
-	})
-}
+func versions(text string) []string { return semverShown.FindAllString(text, -1) }
 
 func drawNPM(seed int64) Task {
 	name := npmPackages[rand.New(rand.NewPCG(uint64(seed), 3)).IntN(len(npmPackages))]
 	packagePage := onNPM("/package/" + name)
-	shown := func(e Evidence, values func(string) []string) bool {
-		page, found := e.lastPage(packagePage)
-		return found && sharesOne(values(e.Run.Report), values(page.Text))
+	shownUnder := func(heading *regexp.Regexp, values func(string) []string) func(Evidence) bool {
+		return func(e Evidence) bool {
+			page, found := e.lastPage(packagePage)
+			return found && sharesOne(values(e.Run.Report), firstAfter(heading, page.Text, values))
+		}
 	}
 	return Task{
 		Name: "npm",
@@ -69,20 +66,15 @@ func drawNPM(seed int64) Task {
 				searched := e.visited(func(address *url.URL) bool {
 					return onNPM("/search")(address) && strings.EqualFold(strings.TrimSpace(address.Query().Get("q")), name)
 				})
-				return searched >= 0 && e.visited(packagePage) > searched
+				return e.visitedAfter(searched, packagePage)
 			}},
 			{"the final tab is the drawn package's page", func(e Evidence) bool {
 				final, found := e.final()
 				return found && packagePage(final.URL)
 			}},
-			{"the report gives a version the package page shows", func(e Evidence) bool {
-				return shown(e, func(text string) []string { return semverShown.FindAllString(text, -1) })
-			}},
-			{"the report gives the weekly downloads the package page shows", func(e Evidence) bool {
-				page, found := e.lastPage(packagePage)
-				return found && sharesOne(downloadCounts(e.Run.Report), weeklyDownloads(page.Text))
-			}},
-			{"the report names a license the package page shows", func(e Evidence) bool { return shown(e, licensesIn) }},
+			{"the report gives the version under the page's Version heading", shownUnder(versionHeading, versions)},
+			{"the report gives the count under the page's Weekly Downloads heading", shownUnder(downloadsHeading, downloadCounts)},
+			{"the report names the license under the page's License heading", shownUnder(licenseHeading, licensesIn)},
 			{"the task stayed in one tab", oneTab},
 		},
 	}

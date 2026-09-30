@@ -32,10 +32,12 @@ var (
 	imdbTitle     = regexp.MustCompile(`^(?:/[a-z]{2}(?:-[a-z]{2})?)?/title/tt\d+/?$`)
 	titleYear     = regexp.MustCompile(`\((\d{4})\)`)
 	directorLabel = regexp.MustCompile(`(?i)"(?:directors?|direção|diretor(?:a|es)?)"`)
-	linkName      = regexp.MustCompile(`link "([^"]+)"`)
-	ratingShown   = regexp.MustCompile(`(\d[.,]\d)\s*/\s*10`)
-	ratingSaid    = regexp.MustCompile(`\b(\d[.,]\d)\b`)
+	linkName      = regexp.MustCompile(`^\s*- link "([^"]+)"`)
+	ratingLabel   = regexp.MustCompile(`(?i)"(?:imdb rating|avaliação do imdb|classificação do imdb)"`)
+	ratingValue   = regexp.MustCompile(`\b(\d[.,]\d)\b`)
 )
+
+func indent(line string) int { return len(line) - len(strings.TrimLeft(line, " ")) }
 
 func onIMDb(path *regexp.Regexp) func(*url.URL) bool {
 	return func(address *url.URL) bool {
@@ -55,17 +57,25 @@ func (f film) searched(query string) bool {
 
 func directorsIn(page string) []string {
 	var names []string
-	for _, label := range directorLabel.FindAllStringIndex(page, -1) {
-		if name := linkName.FindStringSubmatch(page[label[1]:]); name != nil {
-			names = append(names, name[1])
+	lines := strings.Split(page, "\n")
+	for at, label := range lines {
+		if !directorLabel.MatchString(label) {
+			continue
+		}
+		for _, line := range lines[at+1:] {
+			if name := linkName.FindStringSubmatch(line); name != nil && indent(line) == indent(label) {
+				names = append(names, name[1])
+			} else if indent(line) <= indent(label) {
+				break
+			}
 		}
 	}
 	return names
 }
 
-func ratings(rating *regexp.Regexp, text string) []string {
+func ratings(text string) []string {
 	var values []string
-	for _, match := range rating.FindAllStringSubmatch(text, -1) {
+	for _, match := range ratingValue.FindAllStringSubmatch(text, -1) {
 		values = append(values, strings.ReplaceAll(match[1], ",", "."))
 	}
 	return values
@@ -94,7 +104,7 @@ func drawIMDb(seed int64) Task {
 				searched := e.visited(func(address *url.URL) bool {
 					return onIMDb(imdbFind)(address) && drawn.searched(address.Query().Get("q"))
 				})
-				return searched >= 0 && e.visited(onIMDb(imdbTitle)) > searched
+				return e.visitedAfter(searched, onIMDb(imdbTitle))
 			}},
 			{"the final tab is the drawn film's title page", func(e Evidence) bool {
 				final, found := e.final()
@@ -111,7 +121,7 @@ func drawIMDb(seed int64) Task {
 			}},
 			{"the report gives the rating the title page shows", func(e Evidence) bool {
 				page, found := titlePage(e)
-				return found && sharesOne(ratings(ratingSaid, e.Run.Report), ratings(ratingShown, page.Text))
+				return found && sharesOne(ratings(e.Run.Report), firstAfter(ratingLabel, page.Text, ratings))
 			}},
 			{"the task stayed in one tab", oneTab},
 		},

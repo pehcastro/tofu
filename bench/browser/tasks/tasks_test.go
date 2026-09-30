@@ -13,6 +13,7 @@ var drawnOn = time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
 const (
 	fixtureSeed      = 3
 	sanFranciscoSeed = 4
+	cityOfGodSeed    = 6
 )
 
 func TestEachTaskScoresItsPassingFixtureFullAndItsFailingOneLower(t *testing.T) {
@@ -49,9 +50,12 @@ func TestEachTaskScoresItsPassingFixtureFullAndItsFailingOneLower(t *testing.T) 
 		{"youtube", "youtube-artifact", fixtureSeed, nil},
 		{"npm", "npm-pass", fixtureSeed, nil},
 		{"npm", "npm-fail", fixtureSeed, []int{1, 2, 5}},
+		{"npm", "npm-searchlate", fixtureSeed, nil},
 		{"imdb", "imdb-pass", fixtureSeed, nil},
 		{"imdb", "imdb-fail", fixtureSeed, []int{3, 6}},
 		{"imdb", "imdb-portuguese", fixtureSeed, nil},
+		{"imdb", "imdb-recorded", cityOfGodSeed, nil},
+		{"imdb", "imdb-recorded-wrongrating", cityOfGodSeed, []int{6}},
 	} {
 		task, err := Named(recorded.task, recorded.seed, drawnOn)
 		if err != nil {

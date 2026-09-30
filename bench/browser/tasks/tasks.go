@@ -154,11 +154,19 @@ func Score(task Task, evidence Evidence) airbnb.Row {
 	return row
 }
 
-func (e Evidence) visited(match func(*url.URL) bool) int {
-	return slices.IndexFunc(e.Run.Visits, func(visited string) bool {
+func parsedAs(match func(*url.URL) bool) func(string) bool {
+	return func(visited string) bool {
 		parsed, err := url.Parse(visited)
 		return err == nil && match(parsed)
-	})
+	}
+}
+
+func (e Evidence) visited(match func(*url.URL) bool) int {
+	return slices.IndexFunc(e.Run.Visits, parsedAs(match))
+}
+
+func (e Evidence) visitedAfter(at int, match func(*url.URL) bool) bool {
+	return at >= 0 && slices.ContainsFunc(e.Run.Visits[at+1:], parsedAs(match))
 }
 
 func (e Evidence) lastPage(match func(*url.URL) bool) (Page, bool) {
@@ -181,6 +189,15 @@ func oneTab(e Evidence) bool { return len(e.Run.Tabs) == 1 }
 
 func pathIs(host, path string) func(*url.URL) bool {
 	return func(address *url.URL) bool { return strings.HasSuffix(address.Host, host) && address.Path == path }
+}
+
+func firstAfter(label *regexp.Regexp, page string, values func(string) []string) []string {
+	at := label.FindStringIndex(page)
+	if at == nil {
+		return nil
+	}
+	found := values(page[at[1]:])
+	return found[:min(1, len(found))]
 }
 
 func reportSays(e Evidence, text string) bool {
