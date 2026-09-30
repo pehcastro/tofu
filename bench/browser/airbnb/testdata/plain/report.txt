@@ -1,0 +1,7 @@
+Left on the third listing, nothing booked.
+
+| # | Name | Total price | Bedrooms | Pool | Rating |
+|---|---|---|---|---|---|
+| 1 | Sítio de Mentira | R$ 3.320 total | 3 quartos | Sim | 4,70 (12 avaliações) |
+| 2 | Chácara Inventada | R$ 3.450 total | 2 quartos | Yes | 4,88 (40 reviews) |
+| 3 | Recanto com piscina | R$ 3.480 total | 2 quartos | Yes | 4,95 (9 reviews) |

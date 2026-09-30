@@ -7,6 +7,7 @@ import (
 	"os"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 
 	"tofu/bench/browser/airbnb"
@@ -14,8 +15,9 @@ import (
 )
 
 type Page struct {
-	URL  *url.URL
-	Text string
+	URL   *url.URL
+	Title string
+	Text  string
 }
 
 type Evidence struct {
@@ -34,7 +36,7 @@ type Task struct {
 	Steps  []Step
 }
 
-var snapshotHeader = regexp.MustCompile(`(?m)^tab \d+ (\S+) "`)
+var snapshotHeader = regexp.MustCompile(`(?m)^tab \d+ (\S+) ("(?:[^"\\]|\\.)*")`)
 
 func Named(name string) (Task, error) {
 	for _, task := range []Task{books, herokuapp, wikipedia} {
@@ -70,8 +72,9 @@ func Read(arm airbnb.Arm, paths ...string) (Evidence, error) {
 			if err != nil {
 				continue
 			}
+			title, _ := strconv.Unquote(result.Content[header[4]:header[5]])
 			text, _, _ := strings.Cut(result.Content[header[0]:], "\n<<<")
-			evidence.Pages = append(evidence.Pages, Page{URL: address, Text: text})
+			evidence.Pages = append(evidence.Pages, Page{URL: address, Title: title, Text: text})
 		}
 	}
 	return evidence, nil

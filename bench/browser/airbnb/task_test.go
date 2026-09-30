@@ -21,6 +21,7 @@ func TestTheRecordedRunsScoreTwelveAndTheRightLowerCount(t *testing.T) {
 		{"testdata/first", 11, []int{12}},
 		{"testdata/norating", 10, []int{6, 11}},
 		{"testdata/outside", 11, []int{2}},
+		{"testdata/plain", 12, nil},
 		{"testdata/table", 12, nil},
 		{"testdata/skipped", 12, nil},
 		{"testdata/wording", 12, nil},

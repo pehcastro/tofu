@@ -1,0 +1,3 @@
+tab 1 https://www.airbnb.com.br/rooms/30000003?adults=2 "Recanto Inventado com Piscina - Casas para Alugar em Atibaia, São Paulo, Brasil - Airbnb"
+- heading "Recanto Inventado com Piscina" [level=1]
+- button "Reservar" [ref=e7]

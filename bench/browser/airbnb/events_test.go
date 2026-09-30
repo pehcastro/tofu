@@ -165,6 +165,9 @@ func TestASubAgentSessionReadsBackAsARunThatScoresTwelve(t *testing.T) {
 	if snapshotURL(run.Snapshot) != "https://www.airbnb.com.br/rooms/10000003?adults=2" {
 		t.Errorf("the final snapshot is %q", run.Snapshot)
 	}
+	if len(run.Pages) != len(run.Visits) || run.Pages[len(run.Pages)-1] != (Page{URL: run.Visits[len(run.Visits)-1], Title: "Casa do Farol Inventado - Casas para Alugar em Atibaia, São Paulo, Brasil - Airbnb"}) {
+		t.Errorf("pages %+v, want one titled page a visit ending on Casa do Farol Inventado in Atibaia", run.Pages)
+	}
 	task, err := Load()
 	if err != nil {
 		t.Fatal(err)

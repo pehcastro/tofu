@@ -18,6 +18,8 @@ func TestEachTaskScoresItsPassingFixtureFullAndItsFailingOneLower(t *testing.T) 
 		{"herokuapp", "herokuapp-fail", []int{2, 3, 5}},
 		{"wikipedia", "wikipedia-pass", nil},
 		{"wikipedia", "wikipedia-fail", []int{1, 4, 5}},
+		{"wikipedia", "wikipedia-redirect", nil},
+		{"wikipedia", "wikipedia-lead", nil},
 	} {
 		task, err := Named(recorded.task)
 		if err != nil {

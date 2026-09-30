@@ -1,6 +1,7 @@
 package airbnb
 
 import (
+	"cmp"
 	_ "embed"
 	"encoding/json"
 	"fmt"
@@ -55,6 +56,7 @@ var (
 type Listing struct {
 	ID    string
 	Line  string
+	Title string
 	Cells map[Field]string
 }
 
@@ -145,7 +147,7 @@ func passes(check Check, run Run) bool {
 	case ListingsIn:
 		reported := listings(run)
 		for _, listing := range reported {
-			if !strings.Contains(strings.ToLower(listing.Line), strings.ToLower(check.Value)) {
+			if !strings.Contains(strings.ToLower(cmp.Or(listing.Title, listing.Line)), strings.ToLower(check.Value)) {
 				return false
 			}
 		}
@@ -219,39 +221,95 @@ func snapshotURL(snapshot string) string {
 	return ""
 }
 
-func listings(run Run) []Listing {
-	opened := openedRooms(run)
+func openedInOrder(run Run) ([]string, map[string]string) {
+	var order []string
+	titles := map[string]string{}
+	for _, page := range run.Pages {
+		if match := roomID.FindStringSubmatch(page.URL); match != nil && titles[match[1]] == "" {
+			titles[match[1]] = page.Title
+		}
+	}
+	for _, visited := range allURLs(run) {
+		if match := roomID.FindStringSubmatch(visited); match != nil && !slices.Contains(order, match[1]) {
+			order = append(order, match[1])
+		}
+	}
+	return order, titles
+}
+
+func reportEntries(report string, opened map[string]bool) []Listing {
 	var rows, lines []Listing
 	var header []string
-	report := slices.Collect(strings.Lines(run.Report))
-	for at, line := range report {
+	fields := 0
+	text := slices.Collect(strings.Lines(report))
+	for at, line := range text {
 		cells := tableCells(line)
-		if cells != nil && at+1 < len(report) && tableRule.MatchString(report[at+1]) {
-			header = cells
+		if cells != nil && at+1 < len(text) && tableRule.MatchString(text[at+1]) {
+			header, fields = cells, 0
+			for _, name := range header {
+				for _, pattern := range columnOf {
+					if pattern.MatchString(name) {
+						fields++
+					}
+				}
+			}
 			continue
 		}
 		match := roomID.FindStringSubmatch(line)
-		if match == nil || !opened[match[1]] {
-			continue
-		}
-		if cells == nil || len(cells) != len(header) {
-			if !slices.ContainsFunc(lines, func(listing Listing) bool { return listing.ID == match[1] }) {
-				lines = append(lines, Listing{ID: match[1], Line: line})
+		if cells != nil && len(cells) == len(header) && fields >= 2 && !tableRule.MatchString(line) {
+			row := Listing{Line: line, Cells: map[Field]string{}}
+			if match != nil && opened[match[1]] {
+				row.ID = match[1]
 			}
-			continue
-		}
-		row := Listing{ID: match[1], Line: line, Cells: map[Field]string{}}
-		for column, name := range header {
-			for field, pattern := range columnOf {
-				if pattern.MatchString(name) {
-					row.Cells[field] = cells[column]
+			for column, name := range header {
+				for field, pattern := range columnOf {
+					if pattern.MatchString(name) {
+						row.Cells[field] = cells[column]
+					}
 				}
 			}
+			rows = append(rows, row)
+			continue
 		}
-		rows = append(rows, row)
+		if match != nil && opened[match[1]] && !slices.ContainsFunc(lines, func(listing Listing) bool { return listing.ID == match[1] }) {
+			lines = append(lines, Listing{ID: match[1], Line: line})
+		}
 	}
 	if len(rows) > 0 {
 		return rows
 	}
 	return lines
+}
+
+func listings(run Run) []Listing {
+	order, titles := openedInOrder(run)
+	entries := reportEntries(run.Report, openedRooms(run))
+	bound := map[string]bool{}
+	for _, entry := range entries {
+		bound[entry.ID] = entry.ID != ""
+	}
+	free := func() []string {
+		return slices.DeleteFunc(slices.Clone(order), func(id string) bool { return bound[id] })
+	}
+	for at := range entries {
+		for _, id := range free() {
+			name, _, _ := strings.Cut(titles[id], " - ")
+			if entries[at].ID == "" && name != "" && strings.Contains(strings.ToLower(entries[at].Line), strings.ToLower(name)) {
+				entries[at].ID, bound[id] = id, true
+			}
+		}
+	}
+	for at := range entries {
+		if remaining := free(); entries[at].ID == "" && len(remaining) > 0 {
+			entries[at].ID, bound[remaining[0]] = remaining[0], true
+		}
+	}
+	var reported []Listing
+	for _, entry := range entries {
+		if entry.ID != "" {
+			entry.Title = titles[entry.ID]
+			reported = append(reported, entry)
+		}
+	}
+	return reported
 }
