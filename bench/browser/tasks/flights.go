@@ -44,7 +44,7 @@ var cityPairs = [][2]city{
 var (
 	portugueseMonths = []string{"jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"}
 	moneyAmount      = regexp.MustCompile(`(?:R\$|US\$|\$|€|£)\s?(\d[\d.,]*)|(\d[\d.,]*) (?i:reais|brazilian reals|dólares|us dollars|dollars|euros)`)
-	stopCount        = regexp.MustCompile(`(?i)\b(nonstop|non-stop|direct|direto|sem escalas?|sem paradas?)\b|\b(\d) (?:stops?|paradas?|escalas?)\b`)
+	stopCount        = regexp.MustCompile(`(?i)\b(nonstop|non-stop|direct|direto|sem escalas?|sem paradas?)\b|\b(\d) (?:stops?|paradas?|escalas?)\b|\b(?:stops?|paradas?|escalas?)\**:\**\s*(\d)\b`)
 	quotedText       = regexp.MustCompile(`"((?:[^"\\]|\\.)*)"`)
 	carrierPhrase    = regexp.MustCompile(`(?:flight with|Voo (?:direto )?d[aoe]s?) (.+?)(?: com \d|\.)`)
 	carrierJoin      = regexp.MustCompile(`,\s*| and | e `)
@@ -71,7 +71,7 @@ func amounts(text string) []string {
 func stops(text string) []string {
 	var found []string
 	for _, match := range stopCount.FindAllStringSubmatch(text, -1) {
-		found = append(found, cmp.Or(match[2], "0"))
+		found = append(found, cmp.Or(match[2], match[3], "0"))
 	}
 	return found
 }
