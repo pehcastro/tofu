@@ -78,13 +78,14 @@ type Found struct {
 }
 
 type Scan struct {
-	Project string
-	Home    string
-	Sources []string
-	Library fs.FS
-	Tools   []string
-	Catalog models.Library
-	Tiers   map[Tier]string
+	Project    string
+	Home       string
+	Sources    []string
+	Library    fs.FS
+	Tools      []string
+	KnownTools []string
+	Catalog    models.Library
+	Tiers      map[Tier]string
 }
 
 type assignment struct {
@@ -299,7 +300,7 @@ func unquote(value string) string {
 
 func (s Scan) resolve(definition *Definition, assigned assignment) {
 	tofuWrote := definition.Origin == ".tofu" || definition.Origin == "~/.tofu" || definition.Origin == libraryOrigin
-	var tools []string
+	var tools, unbuilt, missing []string
 	for _, written := range definition.Tools {
 		tool := written
 		if !tofuWrote {
@@ -309,11 +310,19 @@ func (s Scan) resolve(definition *Definition, assigned assignment) {
 		case slices.Contains(tools, tool):
 		case slices.Contains(s.Tools, tool):
 			tools = append(tools, tool)
+		case tofuWrote && slices.Contains(s.KnownTools, tool):
+			unbuilt = append(unbuilt, tool)
 		case tofuWrote:
-			definition.Refused = append(definition.Refused, fmt.Sprintf("names the tool %q, which tofu does not have", tool))
+			missing = append(missing, tool)
 		default:
 			definition.IgnoredTools = append(definition.IgnoredTools, written)
 		}
+	}
+	if len(tools) == 0 {
+		missing = append(unbuilt, missing...)
+	}
+	for _, tool := range missing {
+		definition.Refused = append(definition.Refused, fmt.Sprintf("names the tool %q, which tofu does not have", tool))
 	}
 	definition.Tools = tools
 	if definition.Effort != "" {

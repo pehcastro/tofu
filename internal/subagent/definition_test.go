@@ -326,3 +326,26 @@ func BenchmarkDefinitionsTwenty(b *testing.B) {
 		}
 	}
 }
+
+func TestToolsTheModeDoesNotBuild(t *testing.T) {
+	every := []string{"browser_tabs", "browser_observe", "browser_act", "browser_motion"}
+	for _, row := range []struct {
+		mode, tools, why string
+		built, known     []string
+	}{
+		{mode: "read", built: every[:2], known: every, tools: "browser_tabs browser_observe"},
+		{mode: "a tool nowhere", built: every[:2], known: every[:3], why: `names the tool "browser_motion", which tofu does not have`},
+		{mode: "off", known: every, why: `names the tool "browser_tabs", which tofu does not have`},
+	} {
+		scan := scanOf(t, t.TempDir())
+		scan.Tools, scan.KnownTools = append(slices.Clone(scan.Tools), row.built...), append(slices.Clone(scan.Tools), row.known...)
+		browser := definitionNamed(t, Definitions(scan), "browser")
+		refused := strings.Join(browser.Refused, "; ")
+		if row.why == "" && (browser.Runs == RunsRefused || strings.Join(browser.Tools, " ") != row.tools) {
+			t.Fatalf("%s: want the browser sub-agent to run with %s, got %v offering %v refused %q", row.mode, row.tools, browser.Runs, browser.Tools, refused)
+		}
+		if row.why != "" && (browser.Runs != RunsRefused || !strings.Contains(refused, row.why)) {
+			t.Fatalf("%s: want the browser sub-agent refused with %q, got %v offering %v refused %q", row.mode, row.why, browser.Runs, browser.Tools, refused)
+		}
+	}
+}

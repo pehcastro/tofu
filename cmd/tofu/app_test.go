@@ -2551,6 +2551,32 @@ func TestTheSubAgentDriverHandsTheBrowserToolsToASubAgentOnTheBrowserModel(t *te
 	}
 }
 
+func TestInReadModeTheBrowserSubAgentStartsWithTheReadTools(t *testing.T) {
+	emptyHome(t)
+	opts := armOpts(t)
+	store, err := openSettings(opts.dir)
+	if err == nil {
+		err = store.SetText(settingspkg.Project, settingspkg.Browser, settingspkg.BrowserRead)
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	built, err := buildTestRunTools(opts.dir, opts.toolSet)
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := scanSubAgents(opts.dir, built)
+	at := slices.IndexFunc(found.Definitions, func(d roster.Definition) bool { return d.Name == "browser" })
+	if at < 0 {
+		t.Fatalf("no browser sub-agent is defined: %+v", found.Broken)
+	}
+	agent := found.Definitions[at]
+	t.Logf("browser=read: the browser sub-agent runs %s offering %v, refused %v", agent.Runs, agent.Tools, agent.Refused)
+	if agent.Runs == roster.RunsRefused || !slices.Equal(agent.Tools, []string{"browser_tabs", "browser_observe"}) {
+		t.Fatalf("browser=read: want the browser sub-agent to start with browser_tabs and browser_observe, got %+v", agent)
+	}
+}
+
 func TestAFreshHomeHandsTheBrowserToTheSubAgent(t *testing.T) {
 	emptyHome(t)
 	opts := armOpts(t)

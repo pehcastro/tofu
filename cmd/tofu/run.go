@@ -684,6 +684,13 @@ func scanSubAgents(dir string, built []turn.Tool) subagent.Found {
 	for _, tool := range built {
 		names = append(names, tool.Name())
 	}
+	known := slices.Clone(names)
+	for _, driver := range []string{settingspkg.DriverSteps, settingspkg.DriverGoal} {
+		every, _ := tools.NewBrowser(tools.BrowserSettings{Mode: settingspkg.BrowserDrive, Driver: driver})
+		for _, tool := range every {
+			known = append(known, tool.Name())
+		}
+	}
 	dir = cmp.Or(dir, ".")
 	catalog, _ := modelLibrary(dir)
 	home, _ := os.UserHomeDir()
@@ -696,13 +703,14 @@ func scanSubAgents(dir string, built []turn.Tool) subagent.Found {
 		}
 	}
 	return onBrowserModel(dir, subagent.Definitions(subagent.Scan{
-		Project: dir,
-		Home:    home,
-		Sources: strings.Split(sources, ","),
-		Library: library,
-		Tools:   names,
-		Catalog: catalog,
-		Tiers:   tiers,
+		Project:    dir,
+		Home:       home,
+		Sources:    strings.Split(sources, ","),
+		Library:    library,
+		Tools:      names,
+		KnownTools: known,
+		Catalog:    catalog,
+		Tiers:      tiers,
 	}), catalog)
 }
 
