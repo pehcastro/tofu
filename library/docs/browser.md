@@ -12,8 +12,7 @@ extension. There is no share step: tofu can read and drive any ordinary tab.
 tofu never reaches a `chrome://` page, DevTools, an extension's page or the
 Chrome Web Store.
 
-The extension does nothing to a tab until tofu first uses it. Then it
-attaches Chrome's debugger, and Chrome shows its bar saying so.
+The extension does nothing to a tab until tofu first uses it. Then it attaches Chrome's debugger, and Chrome shows its bar saying so.
 
 Under `browserDriver` `subagent`, the default, the model hands a browsing
 task to the `browser` sub-agent with `spawn`. It works only in a tab tofu
@@ -56,6 +55,7 @@ its tabs stay open, and Chrome's debugging bar goes away.
 
 - `~/.tofu/browser/extension`: the unpacked extension Chrome loads
 - `~/.tofu/browser/relay.sock`: where a session reaches the extension
+- `~/.tofu/browser/recipes/<host>.md`: the urls a good run on that site reached, tried first next time; set aside after two failures in a row
 
 ## Change it
 

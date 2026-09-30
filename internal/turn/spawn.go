@@ -237,6 +237,8 @@ type SubAgents struct {
 	Defined []subagent.Definition
 	Open    func(subagent.Definition) (SubAgentModel, error)
 	Prompt  ComposeSpec
+	Brief   func(definition subagent.Definition, task string) string
+	Ended   func(definition subagent.Definition, task string, rounds []Row, report SubAgentReport, finished bool)
 }
 
 func (s SubAgents) prompt(inherited Config, definition subagent.Definition, task string, owns []string) (string, string, error) {
@@ -630,6 +632,9 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 	t.ran = append(t.ran, Spawned{ID: subAgentID, Call: site.call, Agent: definition.Name, Slug: opened.Slug, Windows: opened.Windows})
 	t.mu.Unlock()
 	subAgent.Task = args.Task
+	if t.SubAgents.Brief != nil {
+		subAgent.Task += t.SubAgents.Brief(definition, args.Task)
+	}
 	subAgent.NewID = func() string { return subAgentID }
 	started = true
 	return t.converse(ctx, held, warm.stagger(ctx, site.call, opened.onto(subAgent)), site)
@@ -699,6 +704,9 @@ func (t *SpawnTool) converse(ctx context.Context, held *heldSubAgent, subAgent C
 	}
 	t.reports = append(t.reports, report)
 	t.mu.Unlock()
+	if t.SubAgents.Ended != nil {
+		t.SubAgents.Ended(held.definition, agent.Brief, claims, report, runErr == nil && state != subagent.Errored && !stoppedEarly(state, last.Outcome))
+	}
 	contract := subagent.BuildContract(agent.Brief, report.Prose, stoppedEarly(state, last.Outcome))
 	contract.Wrote = report.Wrote
 	text := report.Text() + "\n\n" + contract.Block()

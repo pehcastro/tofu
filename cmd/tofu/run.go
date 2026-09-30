@@ -28,6 +28,7 @@ import (
 	"tofu/internal/llm/wire/openrouter"
 	"tofu/internal/prompt"
 	"tofu/internal/recall"
+	"tofu/internal/recipe"
 	"tofu/internal/rule"
 	"tofu/internal/session"
 	settingspkg "tofu/internal/settings"
@@ -661,6 +662,7 @@ func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn
 	spawner := turn.NewSpawnTool(orchestratorID, config, cmp.Or(run.roster, &subagent.Roster{}))
 	spawner.SubAgents = prompt.subAgents
 	spawner.SubAgents.Open = run.subAgentOpener(opts)
+	spawner.SubAgents.Brief, spawner.SubAgents.Ended = browserRecipeBrief(run.notify), learnBrowserRecipe(run.notify)
 	spawner.Limits = func() turn.SubAgentLimits {
 		return turn.SubAgentLimits{PerTurn: settingInt(dir, settingspkg.SubAgentsPerTurn, run.notify), Depth: settingInt(dir, settingspkg.SubAgentDepth, run.notify)}
 	}
@@ -950,6 +952,56 @@ func browserModel(dir string) (turn.Model, string, error) {
 		opts.effort = defaultEffort(model.Efforts)
 	}
 	return subscriptionModel{opts}, slug + " from " + key, nil
+}
+
+func browserRecipeBrief(notify func(string)) func(subagent.Definition, string) string {
+	return func(definition subagent.Definition, task string) string {
+		if !isBrowserAgent(definition) {
+			return ""
+		}
+		dir, err := recipe.Dir()
+		known, found := recipe.Recipe{}, false
+		if err == nil {
+			known, found, err = recipe.Find(dir, task)
+		}
+		if err != nil && notify != nil {
+			notify("the browser recipes could not be read, so this run explores from the start: " + err.Error())
+		}
+		if !found || known.Aside {
+			return ""
+		}
+		return "\n\n" + known.Brief()
+	}
+}
+
+func learnBrowserRecipe(notify func(string)) func(subagent.Definition, string, []turn.Row, turn.SubAgentReport, bool) {
+	return func(definition subagent.Definition, task string, rounds []turn.Row, report turn.SubAgentReport, finished bool) {
+		if !isBrowserAgent(definition) {
+			return
+		}
+		worked := finished && !strings.Contains(report.Prose, "Failed:")
+		dir, err := recipe.Dir()
+		known, found := recipe.Recipe{}, false
+		if err == nil {
+			known, found, err = recipe.Find(dir, task)
+		}
+		switch {
+		case err != nil:
+		case found && !known.Aside:
+			err = recipe.Record(dir, known, worked)
+		case worked:
+			var visited []string
+			for _, round := range rounds {
+				for _, message := range round.Conversation {
+					visited = append(visited, recipe.Visited(message.Content)...)
+				}
+			}
+			err = recipe.Learn(dir, task, visited)
+		}
+		if err != nil && notify != nil {
+			notify("the browser recipe for this run was not kept: " + err.Error())
+		}
+	}
 }
 
 func isBrowserAgent(definition subagent.Definition) bool {
