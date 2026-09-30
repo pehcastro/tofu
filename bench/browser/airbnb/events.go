@@ -24,7 +24,16 @@ var (
 	repeatedLine   = regexp.MustCompile(`(?m)^\d+\. .*: (repeated \d+ times, the page did not change|.*, after \d+ tries on the same page)$`)
 	refusedLine    = regexp.MustCompile(`(?m)^\d+\. .*: refused, it would be the`)
 	actionVerb     = regexp.MustCompile(`(?m)^\d+\. (\w+)`)
+	laterChanges   = regexp.MustCompile(`(?s)^page changed since your last read:\n.*? came from Chrome tab (\d+)\. .*?<<<\S+ begins>>>\n(.*?)\n<<<\S+ ends>>>`)
 )
+
+func LaterChanges(content string) (tab, text string, found bool) {
+	block := laterChanges.FindStringSubmatch(content)
+	if block == nil {
+		return "", "", false
+	}
+	return block[1], block[2], true
+}
 
 func Lineage(sessions string) ([]string, error) {
 	store := session.NewStore(sessions)
@@ -63,7 +72,7 @@ func RunFromEvents(arm Arm, paths ...string) (Run, error) {
 	}
 	run := Run{Arm: arm, Forks: len(paths) - 1, WallMS: events[len(events)-1].At.Sub(events[0].At).Milliseconds()}
 	browserTokens := 0
-	browserAgents, tools, tabAt, wires := map[string]bool{}, map[string]string{}, map[string]int{}, map[string]string{}
+	browserAgents, tools, tabAt, lastPageIn, wires := map[string]bool{}, map[string]string{}, map[string]int{}, map[string]int{}, map[string]string{}
 	var mainBuilds, browserBuilds []string
 	var modelMS, browserMS []int64
 	see := func(tab, url, title, text, content string) {
@@ -78,6 +87,7 @@ func RunFromEvents(arm Arm, paths ...string) (Run, error) {
 			run.Visits = append(run.Visits, url)
 			run.Pages = append(run.Pages, Page{URL: url, Title: title, Text: text, Reached: strings.Join(verbs, " ")})
 		}
+		lastPageIn[tab] = len(run.Pages) - 1
 		if at, seen := tabAt[tab]; seen {
 			run.Tabs[at].URL = url
 			return
@@ -137,6 +147,11 @@ func RunFromEvents(arm Arm, paths ...string) (Run, error) {
 			case "browser_observe", "browser_act":
 				run.Repeated += len(repeatedLine.FindAllString(result.Content, -1))
 				run.Refused += len(refusedLine.FindAllString(result.Content, -1))
+				if tab, changes, found := LaterChanges(result.Content); found {
+					if at, seen := lastPageIn[tab]; seen {
+						run.Pages[at].Text += changes + "\n"
+					}
+				}
 				header := snapshotHeader.FindStringSubmatchIndex(result.Content)
 				if header == nil {
 					continue

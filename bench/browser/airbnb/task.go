@@ -60,8 +60,9 @@ var columnOf = map[Field]*regexp.Regexp{
 }
 
 var (
-	roomID    = regexp.MustCompile(`/rooms/(\d+)`)
-	tableRule = regexp.MustCompile(`^\s*\|[\s:|-]+\|\s*$`)
+	roomID       = regexp.MustCompile(`/rooms/(\d+)`)
+	tableRule    = regexp.MustCompile(`^\s*\|[\s:|-]+\|\s*$`)
+	numberedItem = regexp.MustCompile(`^\s*\d+[.)]\s`)
 )
 
 type Listing struct {
@@ -283,8 +284,11 @@ func reportEntries(report string, opened map[string]bool) []Listing {
 			rows = append(rows, row)
 			continue
 		}
-		if match != nil && opened[match[1]] && !slices.ContainsFunc(lines, func(listing Listing) bool { return listing.ID == match[1] }) {
+		switch {
+		case match != nil && opened[match[1]] && !slices.ContainsFunc(lines, func(listing Listing) bool { return listing.ID == match[1] }):
 			lines = append(lines, Listing{ID: match[1], Line: line})
+		case match == nil && numberedItem.MatchString(line) && linePatterns["price"].MatchString(line):
+			lines = append(lines, Listing{Line: line})
 		}
 	}
 	if len(rows) > 0 {

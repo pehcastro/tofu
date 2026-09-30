@@ -38,7 +38,7 @@ type Task struct {
 }
 
 var (
-	snapshotHeader = regexp.MustCompile(`(?m)^tab \d+ (\S+) ("(?:[^"\\]|\\.)*")`)
+	snapshotHeader = regexp.MustCompile(`(?m)^tab (\d+) (\S+) ("(?:[^"\\]|\\.)*")`)
 	snapshotRef    = regexp.MustCompile(`ref=(e\d+)[,\]]`)
 )
 
@@ -57,7 +57,7 @@ func Read(arm airbnb.Arm, paths ...string) (Evidence, error) {
 		return Evidence{}, err
 	}
 	evidence := Evidence{Run: run}
-	tools := map[string]string{}
+	tools, windowed, lastPageIn := map[string]string{}, map[string]bool{}, map[string]int{}
 	for _, path := range paths {
 		raw, err := os.ReadFile(path)
 		if err != nil {
@@ -70,26 +70,40 @@ func Read(arm airbnb.Arm, paths ...string) (Evidence, error) {
 			if json.Unmarshal([]byte(line), &event) != nil {
 				continue
 			}
+			key := event.Agent + "/" + event.Call
 			if event.Kind == session.EventToolCall && json.Unmarshal(event.Body, &call) == nil {
-				tools[event.Agent+"/"+event.Call] = call.Tool
+				var args struct {
+					From int `json:"from"`
+				}
+				_ = json.Unmarshal(call.Args, &args)
+				tools[key], windowed[key] = call.Tool, args.From > 1
 			}
-			tool := tools[event.Agent+"/"+event.Call]
+			tool := tools[key]
 			if event.Kind != session.EventToolResult || tool != "browser_observe" && tool != "browser_act" || json.Unmarshal(event.Body, &result) != nil {
 				continue
+			}
+			if tab, changes, found := airbnb.LaterChanges(result.Content); found {
+				if at, seen := lastPageIn[tab]; seen {
+					evidence.Pages[at].Text += "\n" + changes
+				}
 			}
 			header := snapshotHeader.FindStringSubmatchIndex(result.Content)
 			if header == nil {
 				continue
 			}
-			address, err := url.Parse(result.Content[header[2]:header[3]])
+			address, err := url.Parse(result.Content[header[4]:header[5]])
 			if err != nil {
 				continue
 			}
-			title, _ := strconv.Unquote(result.Content[header[4]:header[5]])
+			title, _ := strconv.Unquote(result.Content[header[6]:header[7]])
 			text, _, _ := strings.Cut(result.Content[header[0]:], "\n<<<")
-			if before, seen := evidence.lastPage(func(page *url.URL) bool { return *page == *address }); seen {
+			if before, seen := evidence.lastPage(func(page *url.URL) bool { return *page == *address }); seen && windowed[key] {
+				_, window, _ := strings.Cut(text, "\n")
+				text = before.Text + "\n" + window
+			} else if seen {
 				text = patched(before.Text, text)
 			}
+			lastPageIn[result.Content[header[2]:header[3]]] = len(evidence.Pages)
 			evidence.Pages = append(evidence.Pages, Page{URL: address, Title: title, Text: text})
 		}
 	}

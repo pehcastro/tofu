@@ -26,6 +26,7 @@ func TestTheRecordedRunsScoreTwelveAndTheRightLowerCount(t *testing.T) {
 		{"testdata/skipped", 12, nil},
 		{"testdata/wording", 12, nil},
 		{"testdata/poolheader", 11, []int{11}},
+		{"testdata/numbered", 12, nil},
 	} {
 		run, err := LoadRun(recorded.dir)
 		if err != nil {

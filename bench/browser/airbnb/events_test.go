@@ -52,6 +52,19 @@ func TestStepOneNeedsAClickFromGoogleAndStepTwoReadsTheRenderedListingNotItsTitl
 	}
 }
 
+func TestALaterChangesBlockJoinsThePageReadBeforeItInThatTab(t *testing.T) {
+	run, err := RunFromEvents(ArmA, "testdata/events/ubatuba-later.jsonl")
+	if err != nil {
+		t.Fatal(err)
+	}
+	row := Score(Task{Steps: []Step{{Step: 1, Check: Check{Kind: ListingsIn, Value: "Ubatuba"}}}}, run)
+	morro, praia := run.Pages[len(run.Pages)-2], run.Pages[len(run.Pages)-1]
+	t.Logf("step 2 passed %v\n%s:\n%s\n%s:\n%s", row.Steps[0].Passed, morro.URL, morro.Text, praia.URL, praia.Text)
+	if !row.Steps[0].Passed || !strings.Contains(morro.Text, "enseada") || strings.Contains(praia.Text, "enseada") {
+		t.Error("the block read on the way to the second room belongs to the first room, and both rooms are in Ubatuba")
+	}
+}
+
 func TestAForkedSessionIsReadFromItsRootThroughEveryFork(t *testing.T) {
 	paths, err := Lineage("testdata/forked")
 	if err != nil {

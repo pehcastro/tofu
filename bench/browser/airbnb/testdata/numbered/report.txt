@@ -1,0 +1,9 @@
+**Listings (Atibaia, Oct 9-15 2026, 2 adults, entire home, up to R$4.000 total, 2+ bedrooms, pool):**
+
+1. Sítio de Mentira - R$ 3.320 total, 3 bedrooms, pool yes, rating 4,70
+2. Chácara Inventada - R$ 3.450 total, 2 bedrooms, pool yes, rating 4,88
+3. Recanto Inventado com Piscina - R$ 3.480 total (was R$ 3.900), 2 bedrooms, pool yes, rating 4,95 from 9 reviews
+
+**Verification.** The search URL carries price_max=4000, min_bedrooms=2 and amenities[]=7.
+
+Left on the third listing, nothing booked.

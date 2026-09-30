@@ -36,6 +36,7 @@ func TestEachTaskScoresItsPassingFixtureFullAndItsFailingOneLower(t *testing.T) 
 		{"flights", "flights-fail", fixtureSeed, []int{1, 4, 6}},
 		{"flights", "flights-china", fixtureSeed, nil},
 		{"flights", "flights-absent", fixtureSeed, []int{6}},
+		{"flights", "flights-window", fixtureSeed, nil},
 		{"flights", "flights-portuguese", sanFranciscoSeed, nil},
 		{"flights", "flights-portuguese-wrongprice", sanFranciscoSeed, []int{5, 6}},
 		{"youtube", "youtube-pass", fixtureSeed, nil},
