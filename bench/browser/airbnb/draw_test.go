@@ -28,6 +28,8 @@ func TestADrawnTaskScoresItsPassingRunFullAndItsFailingOneLower(t *testing.T) {
 	}{
 		{"testdata/drawn-pass", nil},
 		{"testdata/drawn-fail", []int{2, 4, 8}},
+		{"testdata/drawn-petsparam", nil},
+		{"testdata/drawn-nopets", []int{8, 11}},
 	} {
 		run, err := LoadRun(recorded.dir)
 		if err != nil {

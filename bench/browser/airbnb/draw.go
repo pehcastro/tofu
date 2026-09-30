@@ -29,16 +29,16 @@ var places = []place{
 }
 
 type amenity struct {
-	name  string
-	id    string
-	field Field
+	name     string
+	anyParam map[string]string
+	field    Field
 }
 
 var amenities = []amenity{
-	{"a swimming pool", "7", "pool"},
-	{"wifi", "4", "wifi"},
-	{"pets allowed", "12", "pets"},
-	{"a kitchen", "8", "kitchen"},
+	{"a swimming pool", map[string]string{"amenities[]": "7"}, "pool"},
+	{"wifi", map[string]string{"amenities[]": "4"}, "wifi"},
+	{"pets allowed", map[string]string{"amenities[]": "12", "pets": "1"}, "pets"},
+	{"a kitchen", map[string]string{"amenities[]": "8"}, "kitchen"},
 }
 
 const budgetStepBRL = 500
@@ -75,7 +75,7 @@ func Draw(seed int64, drawnOn time.Time) Task {
 			{Step: 6, Says: "a maximum of " + strconv.Itoa(budget) + " on the total price", Check: Check{Kind: SearchParams, Params: map[string]string{"price_max": strconv.Itoa(budget)},
 				AnyOf: map[string]string{"display_total_price": "true", "price_filter_input_type": "2"}}},
 			{Step: 7, Says: "at least " + strconv.Itoa(bedrooms) + " bedrooms", Check: Check{Kind: SearchParams, Params: map[string]string{"min_bedrooms": strconv.Itoa(bedrooms)}}},
-			{Step: 8, Says: "the " + string(needs.field) + " filter is on", Check: Check{Kind: SearchParams, Params: map[string]string{"amenities[]": needs.id}}},
+			{Step: 8, Says: "the " + string(needs.field) + " filter is on", Check: Check{Kind: SearchParams, AnyOf: needs.anyParam}},
 			{Step: 9, Says: "3 listings opened", Check: Check{Kind: RoomsOpened, Count: 3}},
 			{Step: 10, Says: "the report names 3 of the opened listings", Check: Check{Kind: ReportListings, Count: 3}},
 			{Step: 11, Says: "each named listing has a price, bedrooms, a " + string(needs.field) + " answer and a rating", Check: Check{Kind: ReportFields, Fields: []Field{"price", "bedrooms", needs.field, "rating"}}},

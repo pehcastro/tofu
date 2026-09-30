@@ -1,0 +1,5 @@
+| # | Listing | Total | Bedrooms | Pets | Rating |
+|---|---|---|---|---|---|
+| 1 | Casa Inventada do Cais | R$1,740 | 1 | "Permitido animais" (amenities) | 4.82 |
+| 2 | Chalé de Mentira | R$1,910 | 2 | Conflicting: amenities say "Permitido animais", description says "Não estamos aceitando pets no momento" | 4.90 |
+| 3 | Sobrado Fictício | R$1,650 | 1 | Filtered as pets-allowed, but the listing page states it is not currently accepting animals | 4.70 |

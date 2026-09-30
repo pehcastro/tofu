@@ -37,7 +37,9 @@ var linePatterns = map[Field]*regexp.Regexp{
 	"kitchen":  regexp.MustCompile(`(?i)kitchen|cozinha`),
 }
 
-var yesOrNo = regexp.MustCompile(`(?i)^\W*(yes|no|sim|não|nao)\b`)
+const startsYesOrNo = `(?i)^\W*(yes|no|sim|não|nao)\b`
+
+var yesOrNo = regexp.MustCompile(startsYesOrNo)
 
 var cellPatterns = map[Field]*regexp.Regexp{
 	"price":    linePatterns["price"],
@@ -45,7 +47,7 @@ var cellPatterns = map[Field]*regexp.Regexp{
 	"bedrooms": regexp.MustCompile(`\d`),
 	"pool":     yesOrNo,
 	"wifi":     yesOrNo,
-	"pets":     yesOrNo,
+	"pets":     regexp.MustCompile(startsYesOrNo + `|permitid|allowed|accept|aceit|conflict|welcome|bem-vind`),
 	"kitchen":  yesOrNo,
 }
 
@@ -127,7 +129,7 @@ func Load() (Task, error) {
 				return task, fmt.Errorf("task.json: step %d names no listing by its place in the visit order", step.Step)
 			}
 		case SearchParams:
-			if len(step.Check.Params) == 0 {
+			if len(step.Check.Params)+len(step.Check.AnyOf) == 0 {
 				return task, fmt.Errorf("task.json: step %d checks no params", step.Step)
 			}
 		case ReportFields:
