@@ -19,7 +19,8 @@ What it is
   - Turn: decisionCap, turnMaySpawn, subAgentsPerTurn, subAgentDepth,
     agentSources, modelTier.genius, modelTier.smart, modelTier.worker,
     modelTier.dumb
-  - Browser: browser, browserDriver, browserSteps, browserModel, browserEffort
+  - Browser: browser, browserDriver, browserSteps, browserModel, browserEffort,
+    browserCursor
 
 Where it lives
 

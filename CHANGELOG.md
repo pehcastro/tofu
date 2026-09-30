@@ -8,6 +8,13 @@ Tofu is personal and not released, so the public interface that a version promis
 
 The minor number carries breaking changes, which is what 0.x means, and **there is never a 1.0.0**. The owner decided that on 2026-09-19: this stays 0.x forever, so the promise the version makes is the one 0.x already makes, that anything can break on a minor bump.
 
+## 0.5.0-rc-fix19 - 2026-09-30
+
+### Fixed
+
+- **The browser sub-agent starts when `browser` is set to read.** It gets the tools read mode offers and leaves out the ones only drive mode has. A sub-agent that names a tool tofu has never heard of is still refused.
+- **`browserCursor` is listed in the settings docs.**
+
 ## 0.5.0-rc-fix18 - 2026-09-30
 
 A browser that finishes the task on sites it was never tuned on, and a motion capture that says what blinks.
