@@ -4,6 +4,8 @@ const Version = "0.5.0-rc-fix17"
 
 const RecipeFailuresAside = 2
 
+const RecipesPerTask = 2
+
 const (
 	ContextCeilingTokens = 250000
 

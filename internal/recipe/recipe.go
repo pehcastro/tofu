@@ -1,6 +1,7 @@
 package recipe
 
 import (
+	"errors"
 	"fmt"
 	"net/url"
 	"os"
@@ -9,6 +10,8 @@ import (
 	"strconv"
 	"strings"
 	"unicode"
+
+	"golang.org/x/net/publicsuffix"
 
 	"tofu/internal/konst"
 	"tofu/internal/sys"
@@ -71,33 +74,68 @@ func List(dir string) ([]Recipe, error) {
 	return recipes, nil
 }
 
-func Find(dir, task string) (Recipe, bool, error) {
+func Find(dir, task string) ([]Recipe, error) {
 	recipes, err := List(dir)
-	task = strings.ToLower(task)
-	at := slices.IndexFunc(recipes, func(known Recipe) bool { return strings.Contains(task, strings.TrimPrefix(known.Host, "www.")) })
-	if err != nil || at < 0 {
-		return Recipe{}, false, err
+	if err != nil {
+		return nil, err
 	}
-	return recipes[at], true, nil
+	var named []string
+	for _, word := range strings.FieldsFunc(strings.ToLower(task), func(r rune) bool { return r != '.' && r != '-' && !unicode.IsLetter(r) && !unicode.IsDigit(r) }) {
+		named = append(named, siteName(strings.Trim(word, ".-")))
+	}
+	var found []Recipe
+	for _, known := range recipes {
+		if !known.Aside && len(found) < konst.RecipesPerTask && slices.Contains(named, siteName(known.Host)) {
+			found = append(found, known)
+		}
+	}
+	return found, nil
 }
 
-func Learn(dir, task string, visited []string) error {
+func siteName(host string) string {
+	site, err := publicsuffix.EffectiveTLDPlusOne(host)
+	if err != nil {
+		return host
+	}
+	name, _, _ := strings.Cut(site, ".")
+	return name
+}
+
+func learn(dir, task string, visited []string) error {
+	recipes, err := List(dir)
+	if err != nil {
+		return err
+	}
 	var pages []Page
 	host := ""
 	for i := len(visited) - 1; i >= 0; i-- {
 		page, reached, ok := templateOf(visited[i])
-		if !ok || host != "" && reached != host || slices.ContainsFunc(pages, func(known Page) bool { return known.Template == page.Template }) {
+		if !ok || host != "" && reached != host || slices.ContainsFunc(pages, func(known Page) bool { return pathOf(known) == pathOf(page) }) {
 			continue
 		}
 		host = reached
 		pages = append(pages, page)
 	}
-	if host == "" {
+	if host == "" || slices.ContainsFunc(recipes, func(known Recipe) bool { return !known.Aside && siteName(known.Host) == siteName(host) }) {
 		return nil
 	}
 	slices.Reverse(pages)
 	first, _, _ := strings.Cut(strings.TrimSpace(task), "\n")
 	return save(dir, Recipe{Host: host, LearnedFrom: first, Pages: pages})
+}
+
+func Settle(dir, task string, visited []string, worked bool) error {
+	usable, err := Find(dir, task)
+	if err != nil {
+		return err
+	}
+	for _, known := range usable {
+		err = errors.Join(err, Record(dir, known, worked))
+	}
+	if !worked {
+		return err
+	}
+	return errors.Join(err, learn(dir, task, visited))
 }
 
 func Record(dir string, known Recipe, worked bool) error {
@@ -127,6 +165,11 @@ func Visited(text string) []string {
 		}
 	}
 	return pages
+}
+
+func pathOf(page Page) string {
+	path, _, _ := strings.Cut(page.Template, "?")
+	return path
 }
 
 func templateOf(raw string) (Page, string, bool) {

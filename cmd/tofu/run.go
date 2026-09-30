@@ -960,17 +960,21 @@ func browserRecipeBrief(notify func(string)) func(subagent.Definition, string) s
 			return ""
 		}
 		dir, err := recipe.Dir()
-		known, found := recipe.Recipe{}, false
+		var usable []recipe.Recipe
 		if err == nil {
-			known, found, err = recipe.Find(dir, task)
+			usable, err = recipe.Find(dir, task)
 		}
 		if err != nil && notify != nil {
 			notify("the browser recipes could not be read, so this run explores from the start: " + err.Error())
 		}
-		if !found || known.Aside {
-			return ""
+		var brief strings.Builder
+		for _, known := range usable {
+			brief.WriteString("\n\n" + known.Brief())
+			if notify != nil {
+				notify("the browser sub-agent is given the recipe for " + known.Host)
+			}
 		}
-		return "\n\n" + known.Brief()
+		return brief.String()
 	}
 }
 
@@ -980,23 +984,15 @@ func learnBrowserRecipe(notify func(string)) func(subagent.Definition, string, [
 			return
 		}
 		worked := finished && !strings.Contains(report.Prose, "Failed:")
-		dir, err := recipe.Dir()
-		known, found := recipe.Recipe{}, false
-		if err == nil {
-			known, found, err = recipe.Find(dir, task)
-		}
-		switch {
-		case err != nil:
-		case found && !known.Aside:
-			err = recipe.Record(dir, known, worked)
-		case worked:
-			var visited []string
-			for _, round := range rounds {
-				for _, message := range round.Conversation {
-					visited = append(visited, recipe.Visited(message.Content)...)
-				}
+		var visited []string
+		for _, round := range rounds {
+			for _, message := range round.Conversation {
+				visited = append(visited, recipe.Visited(message.Content)...)
 			}
-			err = recipe.Learn(dir, task, visited)
+		}
+		dir, err := recipe.Dir()
+		if err == nil {
+			err = recipe.Settle(dir, task, visited, worked)
 		}
 		if err != nil && notify != nil {
 			notify("the browser recipe for this run was not kept: " + err.Error())
