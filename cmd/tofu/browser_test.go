@@ -344,6 +344,32 @@ func TestBrowserInstallUninstallAndBenchPagesMatchTheirTextAndJSON(t *testing.T)
 	}
 }
 
+func TestBrowserMotionCaptureRefusesABadScenarioNamingTheFieldBeforeDialling(t *testing.T) {
+	home := browserHome(t)
+	for field, scenario := range map[string]string{
+		`"rady"`:              `{"url": "http://localhost:4173/", "rady": {}, "trigger": {"action": "press", "key": "Escape"}}`,
+		"viewport.width":      `{"url": "http://localhost:4173/", "viewport": {"width": "wide"}, "trigger": {"action": "press", "key": "Escape"}}`,
+		"trigger.action":      `{"url": "http://localhost:4173/", "trigger": {"action": "tap"}}`,
+		"url must start with": `{"url": "localhost:4173", "trigger": {"action": "press", "key": "Escape"}}`,
+		browser.NotConnected:  `{"url": "http://localhost:4173/", "trigger": {"action": "press", "key": "Escape"}}`,
+	} {
+		path := filepath.Join(home, "scenario.json")
+		if err := os.WriteFile(path, []byte(scenario), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		code, out, errOut := runBrowser(t, "motion", "capture", path, "--takes", "2", "--label", "before")
+		errOut = strings.Join(strings.Fields(errOut), " ")
+		if code != exitVerdict || out != "" || !strings.Contains(errOut, field) || field != browser.NotConnected && strings.Contains(errOut, browser.NotConnected) {
+			t.Errorf("scenario %s exited %d and printed %q and %q; want it refused naming %s", scenario, code, out, errOut, field)
+		}
+	}
+	for _, args := range [][]string{{"motion"}, {"motion", "capture"}, {"motion", "inspect", "x.json"}, {"motion", "capture", "x.json", "--takes", "0"}} {
+		if code, _, errOut := runBrowser(t, args...); code != exitUsage || !strings.Contains(errOut, "usage: tofu browser motion capture <scenario.json>") {
+			t.Errorf("tofu browser %v exited %d and printed %q", args, code, errOut)
+		}
+	}
+}
+
 func TestHostModeRefusesAWrongOriginBeforeStdin(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)

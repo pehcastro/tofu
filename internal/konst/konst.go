@@ -242,6 +242,8 @@ const (
 	MotionLabelShadeAlpha       = 178
 	MotionEmptyTileGrey         = 0xdd
 	MotionCompareTakesAdvised   = 3
+	MotionSettleMillisDefault   = 350
+	MotionReadyTimeoutMillis    = 10000
 )
 
 const BrowserDeltaWholePercent = 70

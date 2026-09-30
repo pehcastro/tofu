@@ -20,6 +20,7 @@ import (
 	"tofu/interface/cli"
 	"tofu/internal/browser"
 	"tofu/internal/browser/jevloop"
+	"tofu/internal/browser/motion"
 	"tofu/internal/konst"
 	"tofu/internal/recipe"
 	"tofu/internal/sys"
@@ -81,13 +82,16 @@ func browserVerb(args []string, out, errOut io.Writer) int {
 	if err == nil && verb == "bench" {
 		return o.bench(operands)
 	}
+	if err == nil && tabErr == nil && verb == "motion" {
+		return o.motion(tab, operands)
+	}
 	arity, known := map[string][2]int{"": {0, 0}, "tabs": {0, 0}, "build": {0, 0}, "install": {0, 0}, "uninstall": {0, 0}, "open": {1, 1}, "close": {1, 1},
 		"recipes": {0, 0}, "observe": {0, 0}, "click": {1, 1}, "fill": {2, 2}, "select": {2, 2}, "press": {1, 1}, "scroll": {0, 2}, "back": {0, 0}}[verb]
 	stepVerb := slices.Contains([]string{"observe", "click", "fill", "select", "press", "scroll", "back"}, verb)
 	operand := strings.Join(operands, " ")
 	tabID, badID := strconv.Atoi(operand)
 	if err != nil || tabErr != nil || known && (len(operands) < arity[0] || len(operands) > arity[1]) || verb == "close" && badID != nil || stepVerb && tab == 0 {
-		_, _ = fmt.Fprintln(errOut, "usage: tofu browser [install | uninstall | tabs | build | recipes | open <url> | close <tab id> | bench [--jev] [--n 12] [--rows file]] [--json]\n"+
+		_, _ = fmt.Fprintln(errOut, "usage: tofu browser [install | uninstall | tabs | build | recipes | open <url> | close <tab id> | bench [--jev] [--n 12] [--rows file] | motion capture <scenario.json>] [--json]\n"+
 			"       tofu browser observe [--all] | click <ref> | fill <ref> <text> | select <ref> <option> | press <key> | scroll [<ref>] [up|down] | back   --tab <id> [--json]")
 		return exitUsage
 	}
@@ -170,7 +174,7 @@ func browserVerb(args []string, out, errOut io.Writer) int {
 		removed := removedExtension(home)
 		return o.show(removed, extensionPage(page, removed))
 	}
-	_, _ = fmt.Fprintf(errOut, "tofu browser: unknown argument %q: use install, uninstall, tabs, build, recipes, open, close, observe, click, fill, select, press, scroll, back, bench, or nothing\n", verb)
+	_, _ = fmt.Fprintf(errOut, "tofu browser: unknown argument %q: use install, uninstall, tabs, build, recipes, open, close, observe, click, fill, select, press, scroll, back, bench, motion, or nothing\n", verb)
 	return exitUsage
 }
 
@@ -277,6 +281,65 @@ func (o browserOutput) bench(args []string) int {
 		return o.fail(err)
 	}
 	return o.show(report, benchPage(o.page, report))
+}
+
+type motionTake struct {
+	ID      string `json:"take_id"`
+	Dir     string `json:"dir"`
+	Frames  int    `json:"frames"`
+	Samples int    `json:"samples"`
+	Event   string `json:"trigger_event"`
+}
+
+func (o browserOutput) motion(tab int, args []string) int {
+	flags := flag.NewFlagSet("browser motion capture", flag.ContinueOnError)
+	flags.SetOutput(o.errOut)
+	takes := flags.Int("takes", konst.MotionTakesDefault, "")
+	label := flags.String("label", "take", "")
+	if len(args) < 2 || args[0] != "capture" || flags.Parse(args[2:]) != nil || flags.NArg() > 0 || *takes < 1 {
+		_, _ = fmt.Fprintln(o.errOut, "usage: tofu browser motion capture <scenario.json> [--takes 3] [--label take] [--tab <id>] [--json]")
+		return exitUsage
+	}
+	scenario, err := browser.ReadScenario(args[1])
+	home := ""
+	if err == nil {
+		home, err = os.UserHomeDir()
+	}
+	root := filepath.Join(home, sys.StateDirName, "motion")
+	var saved []motion.Take
+	if err == nil {
+		err = o.withBrowser(home, func(client *browser.Client) (err error) {
+			own := tab == 0
+			if own {
+				if tab, err = client.Open(scenario.URL); err != nil {
+					return err
+				}
+			}
+			saved, err = browser.Capture(&browser.Driver{Client: client, Tab: tab}, scenario, *takes, *label, root)
+			if own {
+				err = errors.Join(err, client.CloseTab(tab))
+			}
+			return err
+		})
+	}
+	if err != nil {
+		return o.fail(err)
+	}
+	summary := make([]motionTake, len(saved))
+	rows := make([]cli.Row, len(saved))
+	for i, take := range saved {
+		summary[i] = motionTake{take.Manifest.TakeID, take.Dir, take.Manifest.FrameCount, take.Manifest.TraceSampleCount, take.Manifest.Trigger.Event}
+		window := ""
+		if len(take.Frames) > 0 {
+			window = fmt.Sprintf("%+.1f to %+.1f ms", *take.Frames[0].MsFromTrigger, *take.Frames[len(take.Frames)-1].MsFromTrigger)
+		}
+		rows[i] = cli.Row{Mark: cli.Done, Cells: []string{take.Manifest.TakeID, strconv.Itoa(summary[i].Frames) + " frames", strconv.Itoa(summary[i].Samples) + " samples", window}}
+	}
+	lines := append(o.page.Title("Motion capture", []string{scenario.Name, strconv.Itoa(len(saved)) + " takes", o.page.Path(root)}, cli.Verdict{Mark: cli.Done, Text: "captured"}), "")
+	return o.show(struct {
+		Root  string       `json:"root"`
+		Takes []motionTake `json:"takes"`
+	}{root, summary}, append(lines, cli.Indent(o.page.Rows(rows)...)...))
 }
 
 func (o browserOutput) withBrowser(home string, use func(*browser.Client) error) error {
