@@ -2345,6 +2345,7 @@ func TestEveryToolInTheRunRegistryRecordsACommandThatDoesNotRepeatItsName(t *tes
 		"browser_observe":    {notRunHere: "it dials the browser host, which only Chrome starts"},
 		"browser_act":        {notRunHere: "it dials the browser host, which only Chrome starts"},
 		"browser_do":         {notRunHere: "it dials the browser host, which only Chrome starts"},
+		"browser_motion":     {notRunHere: "it dials the browser host, which only Chrome starts"},
 	}
 
 	built, err := buildTestRunTools(dir, toolSetFull)
@@ -2445,11 +2446,11 @@ func TestTheBrowserSettingsReachTheToolsARunIsGiven(t *testing.T) {
 		want         []string
 	}{
 		{"", "", nil},
-		{settingspkg.BrowserDrive, settingspkg.DriverSteps, []string{"browser_tabs", "browser_observe", "browser_act"}},
+		{settingspkg.BrowserDrive, settingspkg.DriverSteps, []string{"browser_tabs", "browser_observe", "browser_act", "browser_motion"}},
 		{settingspkg.BrowserRead, settingspkg.DriverSteps, []string{"browser_tabs", "browser_observe"}},
-		{settingspkg.BrowserDrive, settingspkg.DriverGoal, []string{"browser_tabs", "browser_read", "browser_do"}},
-		{settingspkg.BrowserDrive, "jev", []string{"browser_tabs", "browser_read", "browser_do"}},
-		{settingspkg.BrowserDrive, "model", []string{"browser_tabs", "browser_observe", "browser_act"}},
+		{settingspkg.BrowserDrive, settingspkg.DriverGoal, []string{"browser_tabs", "browser_read", "browser_do", "browser_motion"}},
+		{settingspkg.BrowserDrive, "jev", []string{"browser_tabs", "browser_read", "browser_do", "browser_motion"}},
+		{settingspkg.BrowserDrive, "model", []string{"browser_tabs", "browser_observe", "browser_act", "browser_motion"}},
 	} {
 		opts := armOpts(t)
 		store, err := openSettings(opts.dir)
@@ -2476,8 +2477,8 @@ func TestAnOldBrowserChooserIsReadAsItsDriverAndTheNextSaveWritesTheNewKey(t *te
 		driver string
 		want   []string
 	}{
-		"model": {settingspkg.DriverSteps, []string{"browser_tabs", "browser_observe", "browser_act"}},
-		"jev":   {settingspkg.DriverGoal, []string{"browser_tabs", "browser_read", "browser_do"}},
+		"model": {settingspkg.DriverSteps, []string{"browser_tabs", "browser_observe", "browser_act", "browser_motion"}},
+		"jev":   {settingspkg.DriverGoal, []string{"browser_tabs", "browser_read", "browser_do", "browser_motion"}},
 	} {
 		opts := armOpts(t)
 		store, err := openSettings(opts.dir)
@@ -2544,7 +2545,7 @@ func TestTheSubAgentDriverHandsTheBrowserToolsToASubAgentOnTheBrowserModel(t *te
 			}
 			continue
 		}
-		if agent.Runs != roster.RunsModel || agent.Model != slug || agent.From != settingspkg.BrowserModel || !slices.Equal(agent.Tools, []string{"browser_tabs", "browser_observe", "browser_act"}) {
+		if agent.Runs != roster.RunsModel || agent.Model != slug || agent.From != settingspkg.BrowserModel || !slices.Equal(agent.Tools, []string{"browser_tabs", "browser_observe", "browser_act", "browser_motion"}) {
 			t.Fatalf("browserModel %s: the browser sub-agent is %+v", slug, agent)
 		}
 	}
@@ -2767,7 +2768,7 @@ func TestABrowserRunTeachesItsHostARecipeTheNextRunIsGivenUntilItFailsTwice(t *t
 		t.Fatal(err)
 	}
 	built = append(slices.DeleteFunc(built, func(tool turn.Tool) bool { return strings.HasPrefix(tool.Name(), "browser_") }),
-		fakeBrowser{"browser_tabs", final}, fakeBrowser{"browser_observe", final}, fakeBrowser{"browser_act", final})
+		fakeBrowser{"browser_tabs", final}, fakeBrowser{"browser_observe", final}, fakeBrowser{"browser_act", final}, fakeBrowser{"browser_motion", final})
 	script := &scriptedBrowserRuns{}
 	noWire := func(runOpts) (appWire, error) {
 		return appWire{}, errors.New("the browser sub-agent inherits the scripted model")

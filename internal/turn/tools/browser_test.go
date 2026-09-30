@@ -1,11 +1,14 @@
 package tools_test
 
 import (
+	"bytes"
 	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"image"
+	"image/jpeg"
 	"io"
 	"os"
 	"path/filepath"
@@ -217,8 +220,8 @@ func TestTheBrowserSettingsDecideWhichBrowserToolsAreOffered(t *testing.T) {
 		{settings.BrowserOff, settings.DriverGoal, ""},
 		{settings.BrowserRead, settings.DriverGoal, "browser_tabs browser_read"},
 		{settings.BrowserRead, settings.DriverSteps, "browser_tabs browser_observe"},
-		{settings.BrowserDrive, settings.DriverGoal, "browser_tabs browser_read browser_do"},
-		{settings.BrowserDrive, settings.DriverSteps, "browser_tabs browser_observe browser_act"},
+		{settings.BrowserDrive, settings.DriverGoal, "browser_tabs browser_read browser_do browser_motion"},
+		{settings.BrowserDrive, settings.DriverSteps, "browser_tabs browser_observe browser_act browser_motion"},
 	} {
 		offered, err := tools.NewBrowser(tools.BrowserSettings{Home: shortHome(t), Mode: arm.mode, Driver: arm.driver, Steps: 30})
 		t.Logf("browser=%s browserDriver=%s offers %q", arm.mode, arm.driver, names(offered))
@@ -319,7 +322,11 @@ type cdpPage struct {
 	commit   time.Duration
 	commits  time.Time
 	thinking int
+	frame    []byte
+	reopen   float64
 }
+
+const motionWallMs = 1.7e12 + 1000
 
 func (p *cdpPage) answer(method string, params map[string]any) any {
 	p.mu.Lock()
@@ -367,11 +374,19 @@ func (p *cdpPage) answer(method string, params map[string]any) any {
 		return map[string]any{"nodes": nodes}
 	case "Runtime.evaluate":
 		switch {
+		case strings.Contains(script, "__tofuMotionReload"), strings.Contains(script, "requestAnimationFrame(tick)"):
+			return value(true)
+		case strings.Contains(script, "running = false"):
+			sample := func(ms, height float64) map[string]any {
+				return map[string]any{"ts": 1000 + ms, "elements": map[string]any{"answer": map[string]any{"height": height, "display": "block"}}}
+			}
+			return value(map[string]any{"trigger": map[string]any{"event": "pointerdown", "timeStamp": 1000, "wallMs": motionWallMs}, "browser": "Chrome/140",
+				"samples": []any{sample(-10, 120), sample(16.7, 0.5), sample(253.4, p.reopen)}})
 		case strings.Contains(script, "querySelectorAll('*')"):
 			return value([]any{})
 		case strings.Contains(script, "getEntriesByType"):
 			return value(map[string]any{"pending": 0, "loading": false})
-		case strings.Contains(script, "getElementsByTagName"):
+		case strings.Contains(script, "url: location.href"):
 			return value(map[string]any{"url": p.url, "count": 3, "text": cmp.Or(strings.Join(p.buttons, " "), "Stays")})
 		}
 	case "DOM.scrollIntoViewIfNeeded", "Input.dispatchMouseEvent":
@@ -416,7 +431,8 @@ func (p *cdpPage) serve(fromHost io.Reader, toHost io.Writer) {
 					Method string         `json:"method"`
 					Params map[string]any `json:"params"`
 				} `json:"calls"`
-				Thinking bool `json:"thinking"`
+				Thinking bool   `json:"thinking"`
+				Action   string `json:"action"`
 			} `json:"args"`
 		}
 		if json.Unmarshal(raw, &call) != nil || call.T != "call" {
@@ -443,6 +459,9 @@ func (p *cdpPage) serve(fromHost io.Reader, toHost io.Writer) {
 		answers := []any{}
 		for _, command := range call.Args.Calls {
 			answers = append(answers, map[string]any{"result": p.answer(command.Method, command.Params)})
+		}
+		if call.Op == "screencast" && call.Args.Action == "stop" {
+			answers = []any{browser.ScreencastFrame{Data: p.frame, ChromeSeconds: (motionWallMs + 253.4) / 1000}, browser.ScreencastFrame{Data: p.frame, ChromeSeconds: (motionWallMs - 10) / 1000}}
 		}
 		answer, _ := json.Marshal(map[string]any{"t": "result", "id": call.ID, "ok": true, "value": answers})
 		if browser.WriteMessage(toHost, answer) != nil {
@@ -1336,6 +1355,74 @@ func TestTheBrowserReadToolsMakeNoGateCall(t *testing.T) {
 		t.Logf("%s: the gate was asked about %v", driver, gate.asked)
 		if want := []string{calls[2].Name}; !slices.Equal(gate.asked, want) {
 			t.Fatalf("%s: the gate was asked about %v, want %v alone", driver, gate.asked, want)
+		}
+	}
+}
+
+const closeScenario = `{"name":"close","url":"https://stays.test/faq","viewport":{"width":96,"height":72},"ready":{"settleMs":1},
+"trigger":{"action":"click","role":"button","name":"Buy"},"watch":[{"name":"answer","selector":".answer"}],"recordBeforeMs":1,"recordAfterMs":1}`
+
+func scenarioAt(t *testing.T, body string) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "close.json")
+	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	quoted, _ := json.Marshal(path)
+	return string(quoted)
+}
+
+func TestBrowserMotionCapturesInTofusOwnTabThenInspectsAndCompares(t *testing.T) {
+	var frame bytes.Buffer
+	if err := jpeg.Encode(&frame, image.NewGray(image.Rect(0, 0, 96, 72)), nil); err != nil {
+		t.Fatal(err)
+	}
+	page := &cdpPage{url: "https://stays.test/faq", frame: frame.Bytes(), reopen: 76.78}
+	try := browserOn(t, page, settings.DriverSteps)
+	scenario := scenarioAt(t, closeScenario)
+	if _, err := try("browser_motion", `{"action":"capture","tab":7,"scenario":`+scenario+`}`); err == nil || !strings.Contains(err.Error(), "person's") {
+		t.Fatalf("a capture on the person's tab 7 answered %v; want it refused", err)
+	}
+	captured, err := try("browser_motion", `{"action":"capture","takes":2,"label":"before","scenario":`+scenario+`}`)
+	ids := regexp.MustCompile(`\S+-before-\d-[0-9a-f]{4}`).FindAllString(captured, -1)
+	if err != nil || len(ids) != 2 || strings.Count(captured, ": 2 frames, 3 samples") != 2 || !strings.Contains(captured, "tab 30") {
+		t.Fatalf("a capture of 2 takes answered %q, %v; want 2 take ids with 2 frames and 3 samples each, in tofu's tab 30", captured, err)
+	}
+	page.mu.Lock()
+	page.reopen = 0.5
+	page.mu.Unlock()
+	if _, err := try("browser_motion", `{"action":"capture","takes":1,"label":"after","scenario":`+scenario+`}`); err != nil {
+		t.Fatal(err)
+	}
+	inspected, err := try("browser_motion", `{"action":"inspect","take":"`+ids[0]+`"}`)
+	sheet := regexp.MustCompile(`\S+\.png`).FindString(inspected)
+	if _, statErr := os.Stat(sheet); err != nil || !strings.Contains(inspected, "answer height") || !strings.Contains(inspected, "+253.4  76.78") || statErr != nil {
+		t.Fatalf("inspect answered %q, %v; want the answer height table ending +253.4 76.78 and a sheet on disk (%v)", inspected, err, statErr)
+	}
+	compared, err := try("browser_motion", `{"action":"compare","before":"before","after":"after"}`)
+	before, after := strings.Index(compared, "before 1 "+ids[0]), strings.Index(compared, "after 1 ")
+	if err != nil || before < 0 || !strings.Contains(compared, "before 2 "+ids[1]) || after < before ||
+		!strings.Contains(compared[before:after], "+253.4  76.78") || !strings.Contains(compared[after:], "+253.4  0.50") || !strings.Contains(compared, ".png") {
+		t.Fatalf("compare answered %q, %v; want before rows reopening at 76.78, after rows at 0.50, and a sheet", compared, err)
+	}
+	page.mu.Lock()
+	defer page.mu.Unlock()
+	if slices.Contains(page.tabs, 7) {
+		t.Fatalf("a CDP call reached the person's tab 7: %v", page.tabs)
+	}
+}
+
+func TestBrowserMotionRefusesAnUnknownActionAndAScenarioThatDoesNotParse(t *testing.T) {
+	try := browserOn(t, &cdpPage{}, settings.DriverSteps)
+	for _, refused := range []struct{ args, field string }{
+		{`{"action":"record"}`, `action is "record"`},
+		{`{"action":"capture","scenario":` + scenarioAt(t, strings.Replace(closeScenario, `"trigger"`, `"triger"`, 1)) + `}`, `unknown field "triger"`},
+		{`{"action":"capture","scenario":` + scenarioAt(t, strings.Replace(closeScenario, `"click"`, `"tap"`, 1)) + `}`, "trigger.action"},
+		{`{"action":"capture","takes":-1,"scenario":` + scenarioAt(t, closeScenario) + `}`, "takes"},
+		{`{"action":"compare","before":"nothing","after":"after"}`, "before"},
+	} {
+		if _, err := try("browser_motion", refused.args); err == nil || !strings.Contains(err.Error(), refused.field) {
+			t.Fatalf("%s answered %v; want it refused naming %s", refused.args, err, refused.field)
 		}
 	}
 }

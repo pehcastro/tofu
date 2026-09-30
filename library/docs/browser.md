@@ -19,12 +19,13 @@ opened, never yours, and holds these tools; under `steps` the model does:
 - `browser_tabs` lists your open tabs, with their title and address.
 - `browser_observe` shows one tab as an accessibility snapshot, a line a node, such as `- button "Buscar" [ref=e5]`, where a ref names one element. `scrollable` marks a container it can scroll, and `*` a ref new since the last look at the same page. `from` shows a long tree from that line on, whole and with its text. Observing never changes the page.
 - `browser_act` runs a guarded batch of up to 10 actions in one tab: click, fill, select, press, scroll, navigate, back or wait. Each acts on a ref, or on a `target` by role and name, found on the page as it is when that action runs. A target with no role finds the first element of that name. A ref still on the page wins over a target. A field left empty or null counts as left out. `expect_after` is checked once the action settles: `url_has`, `text_has`, or `gone` for a dialog that should close. The batch stops at the first guard that fails and names it. An action on a ref with no target does not run after one that changed the url. A covered click does not run and says what covers it. After a navigate, back, wait or any action that changed the url, the result ends with the page's full tree and its text. The same action on an unchanged page is flagged, then refused.
+- `browser_motion`, which `goal` gives the model too, records an animation in tofu's own tab, never yours. `capture` reads a scenario file, reloads the page, runs its trigger and saves each take's frames and the watched elements' boxes, opacity and chosen attributes and styles on every frame. `inspect` answers one take's change table, in ms from the trigger, and its contact sheets; `compare` answers the tables of the takes under a before and an after label, and sheets with a row a take.
 
-Under `goal`, the model gets `browser_read` and `browser_do`; Jev picks each step until `browserSteps` runs out. Only `browser` `drive` gives `browser_act` or `browser_do`. Observing and reading never go through the gate.
+Under `goal`, the model gets `browser_read` and `browser_do`; Jev picks each step until `browserSteps` runs out. Only `browser` `drive` gives `browser_act`, `browser_do` or `browser_motion`. Observing and reading never go through the gate.
 
 What a page says is treated as text to read, never as an instruction. tofu
-never closes or navigates a tab it did not open, runs JavaScript, a selector or an address
-the model wrote, or types into a read-only field.
+never closes or navigates a tab it did not open, runs JavaScript or an address
+the model wrote, a selector outside a motion scenario, or types into a read-only field.
 
 ## What you see
 
@@ -41,6 +42,7 @@ its tabs stay open, and Chrome's debugging bar goes away.
 
 - `~/.tofu/browser/extension`: the unpacked extension Chrome loads
 - `~/.tofu/browser/relay.sock`: where a session reaches the extension
+- `~/.tofu/motion/<take id>`: a motion take, its frames, trace and sheets
 - `~/.tofu/browser/recipes/<host>.md`: a recipe, the urls a successful run
   on that site reached with each value as `{name}`. The next run there tries
   it first. After two failures in a row it is set aside until a later

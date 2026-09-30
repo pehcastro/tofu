@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"maps"
 	"net/url"
+	"os"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -16,9 +18,11 @@ import (
 
 	"tofu/internal/browser"
 	"tofu/internal/browser/jevloop"
+	"tofu/internal/browser/motion"
 	"tofu/internal/konst"
 	"tofu/internal/llm"
 	"tofu/internal/settings"
+	"tofu/internal/sys"
 	"tofu/internal/turn"
 	"tofu/internal/web"
 )
@@ -62,16 +66,21 @@ func NewBrowser(config BrowserSettings) ([]turn.Tool, error) {
 	case settings.BrowserRead:
 		return []turn.Tool{browserTabs{session}, reads}, nil
 	case settings.BrowserDrive:
-		return []turn.Tool{browserTabs{session}, reads, acts}, nil
+		return []turn.Tool{browserTabs{session}, reads, acts, browserMotion{session}}, nil
 	}
 	return nil, fmt.Errorf("the browser setting is %q, and it takes %s, %s or %s", config.Mode, settings.BrowserOff, settings.BrowserRead, settings.BrowserDrive)
 }
 
+func (s *browserSession) driverOn(client *browser.Client) *browser.Driver {
+	if s.driver == nil || s.driver.Client != client {
+		s.driver = &browser.Driver{Client: client}
+	}
+	return s.driver
+}
+
 func (s *browserSession) drive(tab int, use func(*browser.Driver) error) error {
 	return s.with(func(client *browser.Client) error {
-		if s.driver == nil || s.driver.Client != client {
-			s.driver = &browser.Driver{Client: client}
-		}
+		s.driverOn(client)
 		if tab != 0 && s.ownOnly {
 			found, err := driveTab(client, tab)
 			if err != nil {
@@ -97,10 +106,7 @@ func (s *browserSession) drive(tab int, use func(*browser.Driver) error) error {
 func (s *browserSession) start(url string) (int, error) {
 	opened := 0
 	err := s.with(func(client *browser.Client) (err error) {
-		if s.driver == nil || s.driver.Client != client {
-			s.driver = &browser.Driver{Client: client}
-		}
-		if s.driver.Tab != 0 {
+		if s.driverOn(client).Tab != 0 {
 			return nil
 		}
 		if opened, err = client.Open(url); err == nil {
@@ -648,6 +654,219 @@ func (t browserAct) Run(_ context.Context, raw json.RawMessage) (turn.Result, er
 	}
 	report.WriteString("\n\n")
 	return turn.Result{Content: report.String() + web.Untrusted(fmt.Sprintf("Chrome tab %d", args.Tab), window(snapshot, 1, !loads)), Command: fmt.Sprintf("tab %d act %d", args.Tab, ran)}, nil
+}
+
+type browserMotion struct{ session *browserSession }
+
+func (browserMotion) Name() string { return "browser_motion" }
+
+func (browserMotion) Definition() llm.Tool {
+	kind := func(name string) map[string]any { return map[string]any{"type": name} }
+	return llm.Tool{
+		Name: "browser_motion",
+		Description: "records an animation in tofu's own tab and reads it back frame by frame, to find when something opens, closes, moves or flickers. " +
+			"capture reads a scenario file with url, viewport, ready, setup, trigger, watch, recordBeforeMs and recordAfterMs. it reloads the page, runs the setup, " +
+			"records the screen and each watched element's box, opacity, display, visibility and named attributes and styles on every frame around the trigger, " +
+			fmt.Sprintf("and answers each take's id with its frame and sample counts. takes defaults to %d. label names the takes, as lowercase letters, digits and hyphens. ", konst.MotionTakesDefault) +
+			"a tab must be one tofu opened; without one, capture works in tofu's own tab or opens one on the scenario url. " +
+			"inspect takes a take id and answers the samples where a watched value changed, in ms from the trigger, then the png contact sheets holding every frame in the window. read the table first. " +
+			"compare takes a before and an after label and answers the table of every take under each, then sheets with one row a take. " +
+			"from_ms and to_ms narrow the window; crop {x, y, w, h}, in page pixels, narrows the sheets.",
+		Parameters: map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"action":   map[string]any{"type": "string", "enum": []string{"capture", "inspect", "compare"}},
+				"scenario": kind("string"), "takes": kind("integer"), "label": kind("string"), "tab": kind("integer"),
+				"take": kind("string"), "before": kind("string"), "after": kind("string"), "from_ms": kind("number"), "to_ms": kind("number"),
+				"crop": map[string]any{"type": "object", "required": []string{"x", "y", "w", "h"},
+					"properties": map[string]any{"x": kind("number"), "y": kind("number"), "w": kind("number"), "h": kind("number")}},
+			},
+			"required": []string{"action"},
+		},
+	}
+}
+
+func (t browserMotion) Run(_ context.Context, raw json.RawMessage) (turn.Result, error) {
+	var args struct {
+		Action   string       `json:"action"`
+		Scenario string       `json:"scenario"`
+		Takes    int          `json:"takes"`
+		Label    string       `json:"label"`
+		Tab      int          `json:"tab"`
+		Take     string       `json:"take"`
+		Before   string       `json:"before"`
+		After    string       `json:"after"`
+		From     *float64     `json:"from_ms"`
+		To       *float64     `json:"to_ms"`
+		Crop     *motion.Crop `json:"crop"`
+	}
+	if err := json.Unmarshal(raw, &args); err != nil {
+		return turn.Result{}, fmt.Errorf("browser_motion: arguments are not the expected shape: %w", err)
+	}
+	root := filepath.Join(t.session.home, sys.StateDirName, "motion")
+	var said []string
+	var err error
+	switch args.Action {
+	case "capture":
+		said, err = t.session.capture(root, args.Scenario, cmp.Or(args.Takes, konst.MotionTakesDefault), cmp.Or(args.Label, "take"), args.Tab)
+	case "inspect":
+		said, err = inspectTake(root, args.Take, args.From, args.To, args.Crop)
+	case "compare":
+		said, err = compareLabels(root, args.Before, args.After, args.From, args.To, args.Crop)
+	default:
+		err = fmt.Errorf("action is %q, and it takes capture, inspect or compare", args.Action)
+	}
+	if err != nil {
+		return turn.Result{}, fmt.Errorf("browser_motion: %w", err)
+	}
+	return turn.Result{Content: strings.Join(said, "\n"), Command: "motion " + args.Action}, nil
+}
+
+func (s *browserSession) capture(root, path string, takes int, label string, asked int) ([]string, error) {
+	scenario, err := browser.ReadScenario(path)
+	if err != nil {
+		return nil, err
+	}
+	if takes < 1 {
+		return nil, fmt.Errorf("takes is %d, and a capture needs 1 or more", takes)
+	}
+	var saved []motion.Take
+	tab := 0
+	err = s.with(func(client *browser.Client) error {
+		driver := s.driverOn(client)
+		found, err := driveTab(client, cmp.Or(asked, driver.Tab))
+		switch {
+		case asked != 0 && err != nil:
+			return err
+		case asked != 0 && !found.Opened:
+			return fmt.Errorf("tab %d is the person's, and a capture reloads and clicks only in a tab tofu opened: leave tab out to open one", asked)
+		case err == nil && found.Opened:
+			driver.Use(found.ID)
+		default:
+			opened, err := client.Open(scenario.URL)
+			if err != nil {
+				return err
+			}
+			driver.Use(opened)
+		}
+		tab = driver.Tab
+		saved, err = browser.Capture(driver, scenario, takes, label, root)
+		return err
+	})
+	if err != nil {
+		return nil, err
+	}
+	said := []string{fmt.Sprintf("captured %d takes of %s in tofu's tab %d, saved under %s", len(saved), scenario.Name, tab, root)}
+	for _, take := range saved {
+		line := fmt.Sprintf("%s: %d frames, %d samples, trigger %s", take.Manifest.TakeID, take.Manifest.FrameCount, take.Manifest.TraceSampleCount, take.Manifest.Trigger.Event)
+		if n := len(take.Frames); n > 0 {
+			line += fmt.Sprintf(", frames %+.1f to %+.1f ms", *take.Frames[0].MsFromTrigger, *take.Frames[n-1].MsFromTrigger)
+		}
+		said = append(said, line)
+	}
+	return said, nil
+}
+
+func inspectTake(root, id string, from, to *float64, crop *motion.Crop) ([]string, error) {
+	take, err := motion.Load(root, id)
+	if err != nil {
+		return nil, err
+	}
+	window, err := motion.WindowOf([]motion.Take{take}, from, to)
+	if err != nil {
+		return nil, err
+	}
+	got, err := motion.Inspect(take, window, crop)
+	if err != nil {
+		return nil, err
+	}
+	sheets, err := writeSheets(filepath.Join(take.Dir, "sheets"), fmt.Sprintf("inspect_%g_%g", window.FromMs, window.ToMs), got.Sheets)
+	if err != nil {
+		return nil, err
+	}
+	trace := "no watched value changed in the window, or the scenario watches nothing: read the sheets"
+	if len(got.Table) > 0 {
+		trace = web.Untrusted("the motion trace of take "+id, strings.Join(got.Table, "\n"))
+	}
+	said := []string{fmt.Sprintf("take %s from %+g to %+g ms, %d samples", id, window.FromMs, window.ToMs, got.Samples), trace}
+	return append(append(said, sheets...), got.Warnings...), nil
+}
+
+func compareLabels(root, before, after string, from, to *float64, crop *motion.Crop) ([]string, error) {
+	olds, err := takesLabelled(root, "before", before)
+	if err != nil {
+		return nil, err
+	}
+	news, err := takesLabelled(root, "after", after)
+	if err != nil {
+		return nil, err
+	}
+	got, err := motion.Compare(olds, news, from, to, crop)
+	if err != nil {
+		return nil, err
+	}
+	sheets, err := writeSheets(filepath.Join(news[0].Dir, "sheets"), "compare_"+olds[0].Manifest.TakeID, got.Sheets)
+	if err != nil {
+		return nil, err
+	}
+	var traces []string
+	for _, take := range got.Takes {
+		traces = append(append(traces, fmt.Sprintf("%s %s, %d frames in the window", take.Label, take.TakeID, take.Frames)), take.Table...)
+	}
+	said := []string{web.Untrusted("the motion traces of the takes labelled "+before+" and "+after, strings.Join(traces, "\n"))}
+	return append(append(said, sheets...), got.Warnings...), nil
+}
+
+func takesLabelled(root, field, label string) ([]motion.Take, error) {
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		return nil, fmt.Errorf("%s: no take is saved yet, capture first: %w", field, err)
+	}
+	var takes []motion.Take
+	var labels []string
+	for _, entry := range entries {
+		parts := strings.Split(entry.Name(), "-")
+		if len(parts) < 4 {
+			continue
+		}
+		named := strings.Join(parts[1:len(parts)-2], "-")
+		if !strings.EqualFold(named, label) {
+			if !slices.Contains(labels, named) {
+				labels = append(labels, named)
+			}
+			continue
+		}
+		take, err := motion.Load(root, entry.Name())
+		if err != nil {
+			return nil, err
+		}
+		takes = append(takes, take)
+	}
+	if len(takes) == 0 {
+		return nil, fmt.Errorf("%s: no take is labelled %q; the saved labels are %s", field, label, strings.Join(labels, ", "))
+	}
+	return takes, nil
+}
+
+func writeSheets(dir, name string, sheets []motion.Sheet) ([]string, error) {
+	if len(sheets) == 0 {
+		return []string{"no frame falls in the window: widen from_ms and to_ms"}, nil
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return nil, err
+	}
+	said := make([]string, len(sheets))
+	for i, sheet := range sheets {
+		path := filepath.Join(dir, fmt.Sprintf("%s_p%d.png", name, i+1))
+		if err := os.WriteFile(path, sheet.PNG, 0o644); err != nil {
+			return nil, err
+		}
+		said[i] = fmt.Sprintf("sheet %s: %d frames, %+.1f to %+.1f ms", path, sheet.Frames, sheet.FromMs, sheet.ToMs)
+		if len(sheet.Rows) > 0 {
+			said[i] += ", rows " + strings.Join(sheet.Rows, ", ")
+		}
+	}
+	return said, nil
 }
 
 func targets(op browser.Op) bool {
