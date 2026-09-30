@@ -1,4 +1,5 @@
 ({watch, events}) => {
+  const HOLD_MS = 20;
   const motion = window.__tofuMotion = {samples: [], trigger: null, running: true};
   const stamp = event => {
     motion.trigger = motion.trigger || {event: event.type, timeStamp: event.timeStamp, wallMs: performance.timeOrigin + event.timeStamp};
@@ -14,9 +15,15 @@
     if (w.styles) seen.styles = Object.fromEntries(w.styles.map(name => [name, style.getPropertyValue(name)]));
     return seen;
   };
+  const readAll = () => Object.fromEntries(watch.map(w => [w.name, read(w)]));
+  let shown = JSON.stringify(readAll()), fresh = false;
   const tick = ts => {
     if (!motion.running) return;
-    motion.samples.push({ts, elements: Object.fromEntries(watch.map(w => [w.name, read(w)]))});
+    const elements = readAll(), now = JSON.stringify(elements);
+    if (fresh && now !== shown) for (const until = performance.now() + HOLD_MS; performance.now() < until;);
+    fresh = now !== shown;
+    shown = now;
+    motion.samples.push({ts, elements});
     requestAnimationFrame(tick);
   };
   requestAnimationFrame(tick);

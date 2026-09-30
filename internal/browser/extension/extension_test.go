@@ -453,8 +453,8 @@ func TestAScreencastInTheStubAcksOnlyItsTabAndListensOnlyWhileRecording(t *testi
 			acks[entry[1].(float64)]++
 		}
 	}
-	if acks[9] != 2 || acks[3] != 0 || run.at("input", 9, "Page.startScreencast") < 0 || run.at("input", 9, "Page.stopScreencast") < 0 {
-		t.Errorf("acks by tab %v; want two on tab 9, none on tab 3, and the start and stop sent to tab 9", acks)
+	if acks[9] != 10 || acks[3] != 0 || run.at("input", 9, "Page.startScreencast") < 0 || run.at("input", 9, "Page.stopScreencast") < 0 {
+		t.Errorf("acks by tab %v; want ten on tab 9 (its two frames and eight spare on the first), none on tab 3, and the start and stop sent to tab 9", acks)
 	}
 	if !slices.Equal(run.Listening, []int{1, 0, 1, 0, 1, 0}) || results[5]["ok"] != true {
 		t.Errorf("listeners %v and a start after the detach answered %v; want the listener gone after a stop, a closed tab and a detach", run.Listening, results[5])

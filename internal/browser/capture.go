@@ -60,7 +60,11 @@ func ReadScenario(path string) (motion.Scenario, error) {
 func Capture(d *Driver, sc motion.Scenario, takes int, label, root string) ([]motion.Take, error) {
 	defer func() {
 		_ = d.send(cdpCall{Method: "Emulation.clearDeviceMetricsOverride"}, cdpCall{Method: "Emulation.setEmulatedMedia", Params: map[string]any{"features": []any{}}})
+		_, _ = d.Client.Call(d.Tab, opScreencast, json.RawMessage(`{"action":"show"}`))
 	}()
+	if _, err := d.Client.Call(d.Tab, opScreencast, json.RawMessage(`{"action":"hide"}`)); err != nil {
+		return nil, err
+	}
 	var saved []motion.Take
 	for n := 1; n <= takes; n++ {
 		take, jpegs, err := d.take(sc, motion.NewID(time.Now(), label, n))
@@ -97,8 +101,11 @@ func (d *Driver) take(sc motion.Scenario, id string) (motion.Take, [][]byte, err
 		time.Sleep(konst.MotionSettleMillisDefault * time.Millisecond)
 	}
 	events := []string{"pointerdown", "click"}
-	if sc.Trigger.Action == "press" {
+	switch sc.Trigger.Action {
+	case "press":
 		events = []string{"keydown"}
+	case "hover":
+		events = []string{"pointerover", "mouseover"}
 	}
 	config, _ := json.Marshal(map[string]any{"watch": sc.Watch, "events": events})
 	if err := d.run("("+sampler+")("+string(config)+")", &done); err != nil {
@@ -154,11 +161,8 @@ func (d *Driver) awaitReady(selector string) error {
 func (d *Driver) perform(action motion.Action, field string) error {
 	move := Move{Kind: MovePress, Value: action.Key}
 	var err error
-	switch action.Action {
-	case "hover":
-		return fmt.Errorf("%s: tofu cannot hover yet, use click or press", field)
-	case "click":
-		move = Move{Kind: MoveClick}
+	if action.Action == "click" || action.Action == "hover" {
+		move = Move{Kind: MoveKind(action.Action)}
 		move.Ref, err = d.refOf(action)
 	}
 	if err == nil {

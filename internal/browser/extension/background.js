@@ -21,6 +21,7 @@ const THINK_MS = 30000;
 const ORPHAN_MS = 2000;
 const SCREENCAST_QUALITY = 80;
 const SCREENCAST_CHUNK_BYTES = 1000000;
+const SCREENCAST_SPARE_ACKS = 8;
 const NO_GROUP = -1;
 const GROUP_COLOR = 'orange';
 const BADGES = {
@@ -38,6 +39,7 @@ const grouped = new Set();
 const optedOut = new Set();
 const children = new Map();
 const screencasts = new Map();
+const cursorless = new Set();
 let port = null;
 let hostError = '';
 let reconnectDelay = RECONNECT_MIN_MS;
@@ -78,6 +80,7 @@ async function connect() {
     hostError = chrome.runtime.lastError?.message ?? 'the tofu host exited';
     port = null;
     void show('off');
+    cursorless.clear();
     serially(restoreGroups);
     for (const [tabId, attaching] of attached) {
       dropScreencast(tabId);
@@ -109,7 +112,7 @@ async function show(state) {
 async function answer({id, tabId, op, args, cursor}) {
   const timing = {evaluate_ms: 0, settle_ms: 0, act_ms: 0};
   try {
-    const value = op === 'screencast' ? await screencast(tabId, args?.action, id) : await perform(tabId, op, args ?? {}, timing, cursor);
+    const value = op === 'screencast' ? await screencast(tabId, args?.action, id) : await perform(tabId, op, args ?? {}, timing, cursor && !cursorless.has(tabId));
     post({t: 'result', id, ok: true, value, timing});
   } catch (error) {
     post({t: 'result', id, ok: false, error: error.message, timing});
@@ -269,14 +272,25 @@ async function relay(tabId, {calls, act, point, thinking}, cursor) {
 }
 
 async function screencast(tabId, action, id) {
+  if (action === 'show') {
+    cursorless.delete(tabId);
+    return {};
+  }
   await attach(tabId);
+  if (action === 'hide') {
+    cursorless.add(tabId);
+    await send(tabId, 'Runtime.evaluate', {expression: `(${removeCursor})()`});
+    return {};
+  }
   if (action === 'start') {
     if (screencasts.has(tabId)) throw new Error(`tab ${tabId} is already recording a screencast`);
     const frames = [];
     const listener = (source, method, params) => {
       if (source.tabId !== tabId || method !== 'Page.screencastFrame') return;
       frames.push({data: params.data, timestamp: params.metadata.timestamp});
-      send(tabId, 'Page.screencastFrameAck', {sessionId: params.sessionId}).catch(() => {});
+      for (let acks = frames.length === 1 ? 1 + SCREENCAST_SPARE_ACKS : 1; acks > 0; acks--) {
+        send(tabId, 'Page.screencastFrameAck', {sessionId: params.sessionId}).catch(() => {});
+      }
     };
     chrome.debugger.onEvent.addListener(listener);
     screencasts.set(tabId, {frames, listener});
@@ -418,7 +432,7 @@ chrome.tabs.onCreated.addListener(tab => {
   post({t: 'tabUpdated', tab: tabInfo(tab)});
 });
 chrome.tabs.onRemoved.addListener(tabId => {
-  for (const set of [attached, opened, grouped, optedOut, children]) set.delete(tabId);
+  for (const set of [attached, opened, grouped, optedOut, children, cursorless]) set.delete(tabId);
   dropScreencast(tabId);
   post({t: 'tabRemoved', tabId});
 });
