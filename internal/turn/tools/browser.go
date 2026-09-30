@@ -73,10 +73,24 @@ func NewBrowser(config BrowserSettings) ([]turn.Tool, error) {
 }
 
 func (s *browserSession) driverOn(client *browser.Client) *browser.Driver {
-	if s.driver == nil || s.driver.Client != client {
+	switch {
+	case s.driver == nil:
 		s.driver = &browser.Driver{Client: client}
+	case s.driver.Client != client:
+		s.driver = &browser.Driver{Client: client, Tab: s.driver.Tab}
 	}
 	return s.driver
+}
+
+func (s *browserSession) redial() (*browser.Driver, error) {
+	_ = s.client.Close()
+	s.client = nil
+	client, err := browser.Dial(s.home)
+	if err != nil {
+		return nil, err
+	}
+	s.client = client
+	return s.driverOn(client), nil
 }
 
 func (s *browserSession) drive(tab int, use func(*browser.Driver) error) error {
@@ -635,7 +649,7 @@ func (t browserAct) Run(_ context.Context, raw json.RawMessage) (turn.Result, er
 	var report strings.Builder
 	var snapshot, changes string
 	ran := 0
-	loads, changed := false, false
+	loads, changed, dropped := false, false, false
 	actions := args.Actions
 	if first := actions[0]; args.Tab == 0 && first.Action == "navigate" {
 		opened, err := t.session.start(first.Value)
@@ -689,7 +703,8 @@ func (t browserAct) Run(_ context.Context, raw json.RawMessage) (turn.Result, er
 			fmt.Fprintf(&report, "%d. %s: %s\n", ran+1, step, line)
 			ran++
 			changed = changed || moved.URLChanged || moved.Opened != 0
-			loads = loads || changed || step.Action == "navigate" || step.Action == "back" || step.Action == "wait"
+			dropped = errors.Is(err, browser.ErrNotConnected)
+			loads = loads || changed || dropped || step.Action == "navigate" || step.Action == "back" || step.Action == "wait"
 			if err != nil || moved.Covered != "" {
 				break
 			}
@@ -706,6 +721,12 @@ func (t browserAct) Run(_ context.Context, raw json.RawMessage) (turn.Result, er
 			}
 		}
 		args.Tab = driver.Tab
+		if dropped {
+			if driver, err = t.session.redial(); err != nil {
+				fmt.Fprintf(&report, "the page was not read after it: %v\n", err)
+				return nil
+			}
+		}
 		if loads {
 			snapshot, err = driver.Observe(false)
 		} else {

@@ -328,6 +328,7 @@ type cdpPage struct {
 	pressed  int
 	changes  string
 	reads    string
+	stalls   string
 }
 
 const motionWallMs = 1.7e12 + 1000
@@ -472,7 +473,17 @@ func (p *cdpPage) serve(fromHost io.Reader, toHost io.Writer) {
 		if call.Args.Thinking {
 			p.thinking++
 		}
+		stalled := false
+		for _, command := range call.Args.Calls {
+			stalled = stalled || command.Method == p.stalls
+		}
+		if stalled {
+			p.stalls = ""
+		}
 		p.mu.Unlock()
+		if stalled {
+			continue
+		}
 		answers := []any{}
 		for _, command := range call.Args.Calls {
 			answers = append(answers, map[string]any{"result": p.answer(command.Method, command.Params)})
@@ -579,6 +590,24 @@ func TestABatchStopsAtTheActThatChangesTheURLAndSaysWhatItSkipped(t *testing.T) 
 	acted := run("browser_act", `{"note":"n","tab":7,"actions":[{"ref":"e1","action":"click"},{"ref":"e2","action":"click"},{"ref":"e2","action":"click"}]}`)
 	if page.releases() != 1 || !strings.Contains(acted, "ran 1 of 3") || !strings.Contains(acted, "2 skipped") || !strings.Contains(acted, "https://stays.test/page-2") {
 		t.Fatalf("the batch clicked %d times and said the above; want 1 click, ran 1 of 3, 2 skipped, and the new page", page.releases())
+	}
+}
+
+func TestAnActWhoseCallNeverAnswersNamesTheStepAndTheNextActRedials(t *testing.T) {
+	page := &cdpPage{url: "https://stays.test/", stalls: "Input.dispatchMouseEvent"}
+	try := browserOn(t, page, settings.DriverSteps)
+	if _, err := try("browser_observe", `{"note":"n","tab":7}`); err != nil {
+		t.Fatal(err)
+	}
+	acted, err := try("browser_act", `{"note":"n","tab":7,"actions":[{"ref":"e1","action":"click"}]}`)
+	timedOut := fmt.Sprintf("1. click e1: failed: click on tab 7 did not finish within %d ms", konst.BrowserActTimeoutMillis)
+	if err != nil || !strings.Contains(acted, timedOut) || strings.Contains(acted, "not connected") || !strings.Contains(acted, `button "Buy" [ref=`) {
+		t.Fatalf("a click whose call never answered returned %v; want %q, the page read again, and never not connected", err, timedOut)
+	}
+	buy := regexp.MustCompile(`button "Buy" \[ref=(e\d+)\]`).FindStringSubmatch(acted)
+	next, err := try("browser_act", `{"note":"n","actions":[{"ref":"`+buy[1]+`","action":"click"}]}`)
+	if err != nil || !strings.Contains(next, "ran 1 of 1") || page.releases() != 1 {
+		t.Fatalf("the next act with no tab answered %v after %d clicks; want it run on tab 7 over a fresh connection", err, page.releases())
 	}
 }
 
