@@ -9,6 +9,8 @@ import (
 	"slices"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 )
 
 type city []string
@@ -31,16 +33,11 @@ var cityPairs = [][2]city{
 	{{"Chicago"}, {"Mexico City", "Cidade do México"}},
 }
 
-var airlines = []string{
-	"LATAM", "GOL", "Azul", "TAP", "American", "United", "Delta", "Air France", "KLM", "Lufthansa", "Iberia", "British Airways", "Emirates", "Qatar",
-	"Aerolíneas Argentinas", "Copa", "Avianca", "JetBlue", "Alaska", "Southwest", "Air Canada", "ITA", "Turkish", "SWISS", "Aeroméxico", "Sky", "JetSMART",
-	"Ryanair", "easyJet", "Vueling", "Air Europa", "ANA", "JAL", "Singapore", "Ethiopian", "Spirit", "Frontier",
-}
-
 var (
 	portugueseMonths = []string{"jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"}
 	moneyAmount      = regexp.MustCompile(`(?:R\$|US\$|\$|€|£)\s?(\d[\d.,]*)`)
 	stopCount        = regexp.MustCompile(`(?i)\b(nonstop|non-stop|direct|direto|sem escalas?|sem paradas?)\b|\b(\d) (?:stops?|paradas?|escalas?)\b`)
+	quotedText       = regexp.MustCompile(`"((?:[^"\\]|\\.)*)"`)
 )
 
 func (c city) shownIn(text string) bool {
@@ -71,6 +68,52 @@ func stops(text string) []string {
 
 func sharesOne(report, page []string) bool {
 	return slices.ContainsFunc(report, func(value string) bool { return slices.Contains(page, value) })
+}
+
+func namedIn(name, text string) bool {
+	return regexp.MustCompile(`(?i)(^|[^\pL\pN])` + regexp.QuoteMeta(name) + `($|[^\pL\pN])`).MatchString(text)
+}
+
+func resultRows(page string) []string {
+	var rows []string
+	for line := range strings.Lines(page) {
+		if strings.Contains(line, "listitem") {
+			rows = append(rows, "")
+		} else if len(rows) > 0 {
+			rows[len(rows)-1] += line
+		}
+	}
+	return rows
+}
+
+func airlinesIn(row string) []string {
+	var parts []string
+	summary := ""
+	for _, found := range quotedText.FindAllStringSubmatch(row, -1) {
+		parts = append(parts, strings.Split(found[1], ",")...)
+		if len(found[1]) > len(summary) {
+			summary = found[1]
+		}
+	}
+	var names []string
+	for _, part := range parts {
+		name := strings.TrimSpace(part)
+		first, _ := utf8.DecodeRuneInString(name)
+		if unicode.IsUpper(first) && !strings.ContainsAny(name, "0123456789") && !stopCount.MatchString(name) && namedIn(name, summary) {
+			names = append(names, name)
+		}
+	}
+	return names
+}
+
+func reportedAirline(report, page string) bool {
+	rows := resultRows(page)
+	for _, price := range amounts(report) {
+		if at := slices.IndexFunc(rows, func(row string) bool { return slices.Contains(amounts(row), price) }); at >= 0 {
+			return slices.ContainsFunc(airlinesIn(rows[at]), func(airline string) bool { return namedIn(airline, report) })
+		}
+	}
+	return false
 }
 
 func onGoogle(address *url.URL) bool {
@@ -116,9 +159,7 @@ func drawFlights(seed int64, drawnOn time.Time) Task {
 			}},
 			{"the report names an airline the results page shows", func(e Evidence) bool {
 				final, found := finalFlights(e)
-				return found && slices.ContainsFunc(airlines, func(airline string) bool {
-					return strings.Contains(final.Text, airline) && strings.Contains(e.Run.Report, airline)
-				})
+				return found && reportedAirline(e.Run.Report, final.Text)
 			}},
 			{"the report gives a stop count the results page shows", func(e Evidence) bool {
 				final, found := finalFlights(e)

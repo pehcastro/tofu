@@ -30,6 +30,8 @@ func TestEachTaskScoresItsPassingFixtureFullAndItsFailingOneLower(t *testing.T) 
 		{"wikipedia", "wikipedia-lead", nil},
 		{"flights", "flights-pass", nil},
 		{"flights", "flights-fail", []int{1, 4, 6}},
+		{"flights", "flights-china", nil},
+		{"flights", "flights-absent", []int{6}},
 		{"youtube", "youtube-pass", nil},
 		{"youtube", "youtube-fail", []int{2, 5}},
 	} {
