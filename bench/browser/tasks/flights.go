@@ -15,33 +15,43 @@ import (
 
 type city []string
 
+var (
+	saoPaulo     = city{"São Paulo", "GRU", "CGH", "VCP"}
+	rioDeJaneiro = city{"Rio de Janeiro", "GIG", "SDU"}
+	newYork      = city{"New York", "Nova York", "JFK", "EWR", "LGA"}
+	london       = city{"London", "Londres", "LHR", "LGW", "STN", "LCY", "LTN"}
+	lisbon       = city{"Lisbon", "Lisboa", "LIS"}
+)
+
 var cityPairs = [][2]city{
-	{{"São Paulo"}, {"Lisbon", "Lisboa"}},
-	{{"São Paulo"}, {"Buenos Aires"}},
-	{{"Rio de Janeiro"}, {"Santiago"}},
-	{{"São Paulo"}, {"Miami"}},
-	{{"São Paulo"}, {"New York", "Nova York"}},
-	{{"Rio de Janeiro"}, {"Lisbon", "Lisboa"}},
-	{{"Brasília"}, {"Salvador"}},
-	{{"São Paulo"}, {"Recife"}},
-	{{"Porto Alegre"}, {"Montevideo", "Montevidéu"}},
-	{{"São Paulo"}, {"Madrid"}},
-	{{"New York", "Nova York"}, {"London", "Londres"}},
-	{{"San Francisco"}, {"Tokyo", "Tóquio"}},
-	{{"Paris"}, {"Rome", "Roma"}},
-	{{"London", "Londres"}, {"Barcelona"}},
-	{{"Chicago"}, {"Mexico City", "Cidade do México"}},
+	{saoPaulo, lisbon},
+	{saoPaulo, {"Buenos Aires", "EZE", "AEP"}},
+	{rioDeJaneiro, {"Santiago", "SCL"}},
+	{saoPaulo, {"Miami", "MIA"}},
+	{saoPaulo, newYork},
+	{rioDeJaneiro, lisbon},
+	{{"Brasília", "BSB"}, {"Salvador", "SSA"}},
+	{saoPaulo, {"Recife", "REC"}},
+	{{"Porto Alegre", "POA"}, {"Montevideo", "Montevidéu", "MVD"}},
+	{saoPaulo, {"Madrid", "MAD"}},
+	{newYork, london},
+	{{"San Francisco", "São Francisco", "SFO"}, {"Tokyo", "Tóquio", "HND", "NRT"}},
+	{{"Paris", "CDG", "ORY"}, {"Rome", "Roma", "FCO"}},
+	{london, {"Barcelona", "BCN"}},
+	{{"Chicago", "ORD", "MDW"}, {"Mexico City", "Cidade do México", "MEX"}},
 }
 
 var (
 	portugueseMonths = []string{"jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"}
-	moneyAmount      = regexp.MustCompile(`(?:R\$|US\$|\$|€|£)\s?(\d[\d.,]*)`)
+	moneyAmount      = regexp.MustCompile(`(?:R\$|US\$|\$|€|£)\s?(\d[\d.,]*)|(\d[\d.,]*) (?i:reais|brazilian reals|dólares|us dollars|dollars|euros)`)
 	stopCount        = regexp.MustCompile(`(?i)\b(nonstop|non-stop|direct|direto|sem escalas?|sem paradas?)\b|\b(\d) (?:stops?|paradas?|escalas?)\b`)
 	quotedText       = regexp.MustCompile(`"((?:[^"\\]|\\.)*)"`)
+	carrierPhrase    = regexp.MustCompile(`(?:flight with|Voo (?:direto )?d[aoe]s?) (.+?)(?: com \d|\.)`)
+	carrierJoin      = regexp.MustCompile(`,\s*| and | e `)
 )
 
 func (c city) shownIn(text string) bool {
-	return slices.ContainsFunc(c, func(name string) bool { return strings.Contains(text, name) })
+	return slices.ContainsFunc(c, func(name string) bool { return namedIn(name, text) })
 }
 
 func dateShown(date time.Time, text string) bool {
@@ -53,7 +63,7 @@ func dateShown(date time.Time, text string) bool {
 func amounts(text string) []string {
 	var found []string
 	for _, match := range moneyAmount.FindAllStringSubmatch(text, -1) {
-		found = append(found, strings.NewReplacer(".", "", ",", "").Replace(strings.TrimRight(match[1], ".,")))
+		found = append(found, strings.NewReplacer(".", "", ",", "").Replace(strings.TrimRight(match[1]+match[2], ".,")))
 	}
 	return found
 }
@@ -77,8 +87,8 @@ func namedIn(name, text string) bool {
 func resultRows(page string) []string {
 	var rows []string
 	for line := range strings.Lines(page) {
-		if strings.Contains(line, "listitem") {
-			rows = append(rows, "")
+		if strings.Contains(line, "listitem") || strings.HasPrefix(strings.TrimSpace(line), "- link ") && len(amounts(line)) > 0 {
+			rows = append(rows, line)
 		} else if len(rows) > 0 {
 			rows[len(rows)-1] += line
 		}
@@ -102,6 +112,9 @@ func airlinesIn(row string) []string {
 		if unicode.IsUpper(first) && !strings.ContainsAny(name, "0123456789") && !stopCount.MatchString(name) && namedIn(name, summary) {
 			names = append(names, name)
 		}
+	}
+	for _, found := range carrierPhrase.FindAllStringSubmatch(row, -1) {
+		names = append(names, carrierJoin.Split(found[1], -1)...)
 	}
 	return names
 }

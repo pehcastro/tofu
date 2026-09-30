@@ -10,32 +10,40 @@ import (
 
 var drawnOn = time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
 
-const fixtureSeed = 3
+const (
+	fixtureSeed      = 3
+	sanFranciscoSeed = 4
+)
 
 func TestEachTaskScoresItsPassingFixtureFullAndItsFailingOneLower(t *testing.T) {
 	for _, recorded := range []struct {
 		task, fixture string
+		seed          int64
 		failed        []int
 	}{
-		{"books", "books-pass", nil},
-		{"books", "books-fail", []int{3, 5, 9}},
-		{"herokuapp", "herokuapp-pass", nil},
-		{"herokuapp", "herokuapp-fail", []int{2, 3, 5}},
-		{"herokuapp", "herokuapp-delta", nil},
-		{"herokuapp", "herokuapp-noafter", []int{3}},
-		{"herokuapp", "herokuapp-star", nil},
-		{"wikipedia", "wikipedia-pass", nil},
-		{"wikipedia", "wikipedia-fail", []int{1, 4, 5}},
-		{"wikipedia", "wikipedia-redirect", nil},
-		{"wikipedia", "wikipedia-lead", nil},
-		{"flights", "flights-pass", nil},
-		{"flights", "flights-fail", []int{1, 4, 6}},
-		{"flights", "flights-china", nil},
-		{"flights", "flights-absent", []int{6}},
-		{"youtube", "youtube-pass", nil},
-		{"youtube", "youtube-fail", []int{2, 5}},
+		{"books", "books-pass", fixtureSeed, nil},
+		{"books", "books-fail", fixtureSeed, []int{3, 5, 9}},
+		{"herokuapp", "herokuapp-pass", fixtureSeed, nil},
+		{"herokuapp", "herokuapp-fail", fixtureSeed, []int{2, 3, 5}},
+		{"herokuapp", "herokuapp-delta", fixtureSeed, nil},
+		{"herokuapp", "herokuapp-noafter", fixtureSeed, []int{3}},
+		{"herokuapp", "herokuapp-star", fixtureSeed, nil},
+		{"wikipedia", "wikipedia-pass", fixtureSeed, nil},
+		{"wikipedia", "wikipedia-fail", fixtureSeed, []int{1, 4, 5}},
+		{"wikipedia", "wikipedia-redirect", fixtureSeed, nil},
+		{"wikipedia", "wikipedia-lead", fixtureSeed, nil},
+		{"flights", "flights-pass", fixtureSeed, nil},
+		{"flights", "flights-fail", fixtureSeed, []int{1, 4, 6}},
+		{"flights", "flights-china", fixtureSeed, nil},
+		{"flights", "flights-absent", fixtureSeed, []int{6}},
+		{"flights", "flights-portuguese", sanFranciscoSeed, nil},
+		{"flights", "flights-portuguese-wrongprice", sanFranciscoSeed, []int{5, 6}},
+		{"youtube", "youtube-pass", fixtureSeed, nil},
+		{"youtube", "youtube-fail", fixtureSeed, []int{2, 5}},
+		{"youtube", "youtube-portuguese", fixtureSeed, nil},
+		{"youtube", "youtube-portuguese-auto", fixtureSeed, []int{5}},
 	} {
-		task, err := Named(recorded.task, fixtureSeed, drawnOn)
+		task, err := Named(recorded.task, recorded.seed, drawnOn)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -65,7 +73,7 @@ func TestTheSameSeedDrawsTheSameFlightAndAnotherSeedAnotherOne(t *testing.T) {
 		}
 		return task.Prompt
 	}
-	t.Logf("seed 1: %s\nseed 2: %s\nseed %d: %s", prompt(1), prompt(2), fixtureSeed, prompt(fixtureSeed))
+	t.Logf("seed 1: %s\nseed 2: %s\nseed %d: %s\nseed %d: %s", prompt(1), prompt(2), fixtureSeed, prompt(fixtureSeed), sanFranciscoSeed, prompt(sanFranciscoSeed))
 	if prompt(1) != prompt(1) || prompt(1) == prompt(2) {
 		t.Error("seed 1 did not draw one flight, or seeds 1 and 2 drew the same one")
 	}

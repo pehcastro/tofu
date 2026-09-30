@@ -108,10 +108,10 @@ func patched(before, delta string) string {
 			return found != nil && found[1] == ref[1]
 		})
 		switch {
+		case (strings.HasPrefix(change, "+ ") || strings.HasPrefix(change, "~ ")) && at >= 0:
+			page[at] = change[2:]
 		case strings.HasPrefix(change, "+ "):
 			page = append(page, change[2:])
-		case strings.HasPrefix(change, "~ ") && at >= 0:
-			page[at] = change[2:]
 		case strings.HasPrefix(change, "x gone: ") && at >= 0:
 			page = slices.Delete(page, at, at+1)
 		}

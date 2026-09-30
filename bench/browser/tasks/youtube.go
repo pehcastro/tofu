@@ -17,7 +17,11 @@ var youtubeQueries = []string{
 
 const youtubeQuality = "1080p"
 
-var qualityChoice = regexp.MustCompile(`(?m)^\s*- menuitemradio "(\d{3,4}p[^"]*)" \[([^\]]*)\]`)
+var (
+	qualityChoice      = regexp.MustCompile(`(?m)^\s*[-*] menuitemradio "(\d{3,4}p[^"]*)" \[([^\]]*)\]`)
+	qualitySetting     = regexp.MustCompile(`(?m)^\s*[-*] menuitem "(?:Quality|Qualidade) ([^"]*)"`)
+	notificationsCount = regexp.MustCompile(`^\(\d+\) `)
+)
 
 func onYouTube(path string) func(*url.URL) bool {
 	return func(address *url.URL) bool {
@@ -32,6 +36,9 @@ func chosenQuality(page Page) (string, bool) {
 		if strings.Contains(choice[2], "checked=true") {
 			return choice[1], true
 		}
+	}
+	if setting := qualitySetting.FindStringSubmatch(page.Text); setting != nil {
+		return setting[1], true
 	}
 	return "", shown
 }
@@ -60,7 +67,7 @@ func drawYouTube(seed int64, _ time.Time) Task {
 			}},
 			{"the report names the video's title", func(e Evidence) bool {
 				final, found := e.final()
-				return found && reportSays(e, strings.TrimSuffix(final.Title, " - YouTube"))
+				return found && reportSays(e, notificationsCount.ReplaceAllString(strings.TrimSuffix(final.Title, " - YouTube"), ""))
 			}},
 			{"the report says 1080p, and the quality menu shows it chosen where a snapshot shows the menu", func(e Evidence) bool {
 				for _, page := range slices.Backward(e.Pages) {
