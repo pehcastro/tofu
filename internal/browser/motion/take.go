@@ -26,6 +26,7 @@ type Element struct {
 	Display    string            `json:"display"`
 	Visibility string            `json:"visibility"`
 	Hidden     bool              `json:"hidden"`
+	Text       string            `json:"text,omitempty"`
 	Attributes map[string]string `json:"attributes,omitempty"`
 	Styles     map[string]string `json:"styles,omitempty"`
 }
@@ -47,13 +48,15 @@ type App struct {
 }
 
 type Manifest struct {
-	TakeID           string   `json:"takeId"`
-	Scenario         Scenario `json:"scenario"`
-	Trigger          *Trigger `json:"trigger"`
-	Browser          string   `json:"browser"`
-	App              App      `json:"app"`
-	FrameCount       int      `json:"frameCount"`
-	TraceSampleCount int      `json:"traceSampleCount"`
+	TakeID           string     `json:"takeId"`
+	Scenario         Scenario   `json:"scenario"`
+	Trigger          *Trigger   `json:"trigger"`
+	Browser          string     `json:"browser"`
+	App              App        `json:"app"`
+	FrameCount       int        `json:"frameCount"`
+	TraceSampleCount int        `json:"traceSampleCount"`
+	Discovery        *Discovery `json:"discovery,omitempty"`
+	Report           []string   `json:"report,omitempty"`
 }
 
 type Take struct {

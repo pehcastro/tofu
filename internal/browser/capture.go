@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"math"
 	"os"
 	"slices"
@@ -28,7 +29,7 @@ const (
   const rect = el ? el.getBoundingClientRect() : {width: 0, height: 0};
   return rect.width > 0 && rect.height > 0 && getComputedStyle(el).visibility !== 'hidden';
 })(%s)`
-	motionRead = `(() => { window.__tofuMotion.running = false; return {trigger: window.__tofuMotion.trigger, samples: window.__tofuMotion.samples, browser: navigator.userAgent}; })()`
+	motionRead = `(m => { m.running = false; return {trigger: m.trigger, samples: m.samples, discovered: m.discovered, seen: m.seen, browser: navigator.userAgent}; })(window.__tofuMotion)`
 )
 
 type pageTake struct {
@@ -37,7 +38,9 @@ type pageTake struct {
 		TS       float64                    `json:"ts"`
 		Elements map[string]*motion.Element `json:"elements"`
 	} `json:"samples"`
-	Browser string `json:"browser"`
+	Discovered []motion.Discovered `json:"discovered"`
+	Seen       int                 `json:"seen"`
+	Browser    string              `json:"browser"`
 }
 
 func ReadScenario(path string) (motion.Scenario, error) {
@@ -111,7 +114,7 @@ func (d *Driver) take(sc motion.Scenario, id string) (motion.Take, [][]byte, err
 	case "hover":
 		events = []string{"pointerover", "mouseover"}
 	}
-	config, _ := json.Marshal(map[string]any{"watch": sc.Watch, "events": events})
+	config, _ := json.Marshal(map[string]any{"watch": append([]motion.Watch{}, sc.Watch...), "events": events, "cap": konst.MotionDiscoverCeiling, "nameChars": konst.MotionNameChars})
 	if err := d.run("("+sampler+")("+string(config)+")", &done); err != nil {
 		return motion.Take{}, nil, err
 	}
@@ -141,9 +144,15 @@ func (d *Driver) take(sc motion.Scenario, id string) (motion.Take, [][]byte, err
 		take.Frames = append(take.Frames, motion.Frame{ChromeTimestampS: frame.ChromeSeconds, MsFromTrigger: &ms})
 		jpegs[i] = frame.Data
 	}
+	held := map[string]*motion.Element{}
 	for _, sample := range page.Samples {
 		ms := math.Round((sample.TS-page.Trigger.TimeStamp)*10) / 10
-		take.Trace = append(take.Trace, motion.Sample{MsFromTrigger: &ms, Elements: sample.Elements})
+		maps.Copy(held, sample.Elements)
+		take.Trace = append(take.Trace, motion.Sample{MsFromTrigger: &ms, Elements: maps.Clone(held)})
+	}
+	if len(sc.Watch) == 0 {
+		take.Manifest.Discovery = &motion.Discovery{Seen: page.Seen, Cap: konst.MotionDiscoverCeiling, Elements: page.Discovered}
+		take.Manifest.Report = motion.Report(take)
 	}
 	return take, jpegs, nil
 }

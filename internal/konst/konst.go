@@ -258,6 +258,11 @@ const (
 	MotionCompareTakesAdvised   = 3
 	MotionSettleMillisDefault   = 350
 	MotionReadyTimeoutMillis    = 10000
+	MotionDiscoverCeiling       = 250
+	MotionNameChars             = 80
+	MotionTransientJump         = 0.5
+	MotionTransientReturn       = 0.25
+	MotionTransientMaxMillis    = 300
 )
 
 const BrowserDeltaWholePercent = 70

@@ -815,6 +815,9 @@ func (s *browserSession) capture(root, path string, takes int, label string, ask
 			line += fmt.Sprintf(", frames %+.1f to %+.1f ms", *take.Frames[0].MsFromTrigger, *take.Frames[n-1].MsFromTrigger)
 		}
 		said = append(said, line)
+		if len(take.Manifest.Report) > 0 {
+			said = append(said, web.Untrusted("what blinked in take "+take.Manifest.TakeID, strings.Join(take.Manifest.Report, "\n")))
+		}
 	}
 	return said, nil
 }
@@ -836,7 +839,7 @@ func inspectTake(root, id string, from, to *float64, crop *motion.Crop) ([]strin
 	if err != nil {
 		return nil, err
 	}
-	trace := "no watched value changed in the window, or the scenario watches nothing: read the sheets"
+	trace := "no watched value changed in the window: read the sheets"
 	if len(got.Table) > 0 {
 		trace = web.Untrusted("the motion trace of take "+id, strings.Join(got.Table, "\n"))
 	}

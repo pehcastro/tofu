@@ -284,11 +284,12 @@ func (o browserOutput) bench(args []string) int {
 }
 
 type motionTake struct {
-	ID      string `json:"take_id"`
-	Dir     string `json:"dir"`
-	Frames  int    `json:"frames"`
-	Samples int    `json:"samples"`
-	Event   string `json:"trigger_event"`
+	ID      string   `json:"take_id"`
+	Dir     string   `json:"dir"`
+	Frames  int      `json:"frames"`
+	Samples int      `json:"samples"`
+	Event   string   `json:"trigger_event"`
+	Report  []string `json:"report,omitempty"`
 }
 
 func (o browserOutput) motion(tab int, args []string) int {
@@ -328,7 +329,7 @@ func (o browserOutput) motion(tab int, args []string) int {
 	summary := make([]motionTake, len(saved))
 	rows := make([]cli.Row, len(saved))
 	for i, take := range saved {
-		summary[i] = motionTake{take.Manifest.TakeID, take.Dir, take.Manifest.FrameCount, take.Manifest.TraceSampleCount, take.Manifest.Trigger.Event}
+		summary[i] = motionTake{take.Manifest.TakeID, take.Dir, take.Manifest.FrameCount, take.Manifest.TraceSampleCount, take.Manifest.Trigger.Event, take.Manifest.Report}
 		window := ""
 		if len(take.Frames) > 0 {
 			window = fmt.Sprintf("%+.1f to %+.1f ms", *take.Frames[0].MsFromTrigger, *take.Frames[len(take.Frames)-1].MsFromTrigger)
@@ -336,10 +337,16 @@ func (o browserOutput) motion(tab int, args []string) int {
 		rows[i] = cli.Row{Mark: cli.Done, Cells: []string{take.Manifest.TakeID, strconv.Itoa(summary[i].Frames) + " frames", strconv.Itoa(summary[i].Samples) + " samples", window}}
 	}
 	lines := append(o.page.Title("Motion capture", []string{scenario.Name, strconv.Itoa(len(saved)) + " takes", o.page.Path(root)}, cli.Verdict{Mark: cli.Done, Text: "captured"}), "")
+	lines = append(lines, cli.Indent(o.page.Rows(rows)...)...)
+	for _, take := range summary {
+		if len(take.Report) > 0 {
+			lines = append(append(lines, "", o.page.Section("What blinked in "+take.ID, cli.Verdict{Mark: cli.None})), cli.Indent(take.Report...)...)
+		}
+	}
 	return o.show(struct {
 		Root  string       `json:"root"`
 		Takes []motionTake `json:"takes"`
-	}{root, summary}, append(lines, cli.Indent(o.page.Rows(rows)...)...))
+	}{root, summary}, lines)
 }
 
 func (o browserOutput) withBrowser(home string, use func(*browser.Client) error) error {

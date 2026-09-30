@@ -54,19 +54,24 @@ type column struct {
 	read     func(Element) any
 }
 
+func elementColumns() []column {
+	return []column{
+		{name: "x", geometry: true, read: func(e Element) any { return e.X }},
+		{name: "y", geometry: true, read: func(e Element) any { return e.Y }},
+		{name: "width", geometry: true, read: func(e Element) any { return e.Width }},
+		{name: "height", geometry: true, read: func(e Element) any { return e.Height }},
+		{name: "opacity", read: func(e Element) any { return e.Opacity }},
+		{name: "display", read: func(e Element) any { return e.Display }},
+		{name: "visibility", read: func(e Element) any { return e.Visibility }},
+		{name: "hidden", read: func(e Element) any { return e.Hidden }},
+		{name: "text", read: func(e Element) any { return e.Text }},
+	}
+}
+
 func columnsOf(watch []Watch) []column {
 	var cols []column
 	for _, w := range watch {
-		base := []column{
-			{name: "x", geometry: true, read: func(e Element) any { return e.X }},
-			{name: "y", geometry: true, read: func(e Element) any { return e.Y }},
-			{name: "width", geometry: true, read: func(e Element) any { return e.Width }},
-			{name: "height", geometry: true, read: func(e Element) any { return e.Height }},
-			{name: "opacity", read: func(e Element) any { return e.Opacity }},
-			{name: "display", read: func(e Element) any { return e.Display }},
-			{name: "visibility", read: func(e Element) any { return e.Visibility }},
-			{name: "hidden", read: func(e Element) any { return e.Hidden }},
-		}
+		base := elementColumns()
 		for _, attribute := range w.Attributes {
 			base = append(base, column{name: attribute, read: func(e Element) any { return mapped(e.Attributes, attribute) }})
 		}
@@ -88,16 +93,22 @@ func mapped(values map[string]string, key string) any {
 	return nil
 }
 
-func (c column) value(s Sample) any {
-	e := s.Elements[c.element]
+func (c column) of(e *Element) any {
 	if e == nil {
 		return nil
 	}
 	return c.read(*e)
 }
 
+func (c column) value(s Sample) any {
+	return c.of(s.Elements[c.element])
+}
+
 func (c column) differs(a, b Sample) bool {
-	va, vb := c.value(a), c.value(b)
+	return c.unlike(c.value(a), c.value(b))
+}
+
+func (c column) unlike(va, vb any) bool {
 	if c.geometry && va != nil && vb != nil {
 		return math.Abs(va.(float64)-vb.(float64)) >= konst.MotionGeometryThresholdPx
 	}

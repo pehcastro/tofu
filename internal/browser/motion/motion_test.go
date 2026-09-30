@@ -10,6 +10,7 @@ import (
 	"math/rand/v2"
 	"os"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -336,6 +337,89 @@ func TestAWatchedAttributeIsATableColumnAndSurvivesTheStore(t *testing.T) {
 	}
 	if strings.Join(rows, "\n") != strings.Join(want, "\n") {
 		t.Fatalf("table:\n%s\nwant:\n%s", strings.Join(rows, "\n"), strings.Join(want, "\n"))
+	}
+}
+
+func TestAReopenThatPushesTheRowsBelowIsLedByTheAnswer(t *testing.T) {
+	box := func(y, h float64) *Element {
+		return &Element{X: 140, Y: y, Width: 680, Height: h, Opacity: 1, Display: "block", Visibility: "visible"}
+	}
+	elements := []Discovered{
+		{Selector: "#root > main:nth-child(1)", Role: "main", Parent: -1},
+		{Selector: ".faq", Role: "div", Parent: 0},
+		{Selector: ".item1", Role: "div", Parent: 1},
+		{Selector: ".header1", Role: "h3", Parent: 2},
+		{Selector: ".content1", Role: "div", Name: "A quiet place", Parent: 2},
+		{Selector: ".answer1", Role: "div", Name: "A quiet place", Parent: 4},
+		{Selector: ".item2", Role: "div", Parent: 1},
+		{Selector: ".footer", Role: "p", Parent: 0},
+	}
+	var trace []Sample
+	for k, answer := range []float64{5, 2.5, 1.2, 0.59, 76.78, -1, -1, -1} {
+		open, content, inner := max(answer, 0), box(300, answer), box(300, 100)
+		if answer < 0 {
+			content = &Element{Opacity: 1, Display: "none", Visibility: "visible"}
+			inner = &Element{Opacity: 1, Display: "block", Visibility: "visible"}
+		}
+		trace = append(trace, Sample{MsFromTrigger: ms([]float64{200, 216, 232, 240, 258, 274, 290, 306}[k]), Elements: map[string]*Element{
+			"0": box(64, 600+open), "1": box(233, 134+open), "2": box(233, 67+open), "3": box(233, 67),
+			"4": content, "5": inner, "6": box(300+open, 67), "7": box(500+open, 20),
+		}})
+	}
+	var frames []Frame
+	for _, at := range []float64{230, 246, 262, 278, 294, 310} {
+		frames = append(frames, Frame{MsFromTrigger: ms(at)})
+	}
+	report := Report(Take{Manifest: Manifest{Discovery: &Discovery{Seen: 8, Cap: 250, Elements: elements}}, Frames: frames, Trace: trace})
+	want := `1. div "A quiet place" at .content1: +258.0 ms for 16.0 ms (1 paint), frames #3 #4 #5; `
+	if len(report) != 2 || report[0] != "watched 8 of 8 elements seen" || !strings.HasPrefix(report[1], want) ||
+		!strings.Contains(report[1], "display block -> block -> none") || !strings.HasSuffix(report[1], "; 3 more elements changed with it") {
+		t.Fatalf("report %q; want the answer first as %q, its display, and the item and two rows that moved folded into it", report, want)
+	}
+}
+
+func TestInspectAndCompareOfDiscoveredTakesTableWhatBlinkedBySelectorNotByIndex(t *testing.T) {
+	root := t.TempDir()
+	sc := scenario(96, 72)
+	sc.Watch = nil
+	discovered := func(flashing string, order ...string) Take {
+		var elements []Discovered
+		for _, selector := range order {
+			elements = append(elements, Discovered{Selector: selector, Role: "button", Name: selector, Parent: -1})
+		}
+		var trace []Sample
+		for k := range 8 {
+			sample := Sample{MsFromTrigger: ms(float64(k) * 16.7), Elements: map[string]*Element{}}
+			for i, selector := range order {
+				visibility := "visible"
+				if selector == flashing && k == 4 {
+					visibility = "hidden"
+				}
+				sample.Elements[strconv.Itoa(i)] = &Element{X: float64(40 * i), Width: 30, Height: 20, Opacity: 1, Display: "block", Visibility: visibility}
+			}
+			trace = append(trace, sample)
+		}
+		take := saveTake(t, root, sc, []image.Image{solid(96, 72, tileColour(0))}, func(int) float64 { return 60 }, trace)
+		take.Manifest.Discovery = &Discovery{Seen: 2, Cap: 250, Elements: elements}
+		return take
+	}
+	inspected := discovered("#save", "#other", "#save")
+	w, err := WindowOf([]Take{inspected}, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	seen, err := Inspect(inspected, w, nil)
+	if table := strings.Join(seen.Table, "\n"); err != nil || !strings.Contains(table, "#save visibility") || !strings.Contains(table, "hidden") || strings.Contains(table, "#other") {
+		t.Fatalf("inspect table:\n%s\n%v; want the #save column going hidden and nothing for #other", table, err)
+	}
+	got, err := Compare([]Take{discovered("#save", "#other", "#save")}, []Take{discovered("#other", "#save", "#other")}, nil, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tables := []string{strings.Join(got.Takes[0].Table, "\n"), strings.Join(got.Takes[1].Table, "\n")}
+	if !strings.Contains(tables[0], "#save visibility") || !strings.Contains(tables[0], "hidden") || !strings.Contains(tables[1], "#other visibility") ||
+		!strings.Contains(tables[1], "hidden") || strings.Contains(tables[0], "#other visibility") || strings.Contains(tables[1], "#save visibility") {
+		t.Fatalf("before table:\n%s\nafter table:\n%s\nwant #save hidden only before and #other hidden only after", tables[0], tables[1])
 	}
 }
 

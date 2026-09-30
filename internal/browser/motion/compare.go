@@ -66,12 +66,13 @@ func Compare(before, after []Take, from, to *float64, crop *Crop) (Comparison, e
 	}
 	ref := takes[0].Manifest
 	watchDiffers := false
+	blinked := blinking(append(slices.Clone(before), after...))
 	for _, t := range takes {
 		if err := mustMatch(ref, t.Manifest); err != nil {
 			return got, err
 		}
 		watchDiffers = watchDiffers || !reflect.DeepEqual(t.Manifest.Scenario.Watch, ref.Scenario.Watch)
-		table, _ := Table(t.Manifest.Scenario.Watch, t.Trace, w)
+		table, _ := t.table(blinked, w)
 		got.Takes = append(got.Takes, ComparedTake{Label: t.label, TakeID: t.Manifest.TakeID, Frames: len(t.tiles), Table: table})
 	}
 	if watchDiffers {

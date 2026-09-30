@@ -188,7 +188,7 @@ type Inspection struct {
 
 func Inspect(t Take, w Window, crop *Crop) (Inspection, error) {
 	var got Inspection
-	got.Table, got.Samples = Table(t.Manifest.Scenario.Watch, t.Trace, w)
+	got.Table, got.Samples = t.table(blinking([]Take{t}), w)
 	if len(t.Manifest.Scenario.Watch) > 0 && got.Samples == 0 {
 		return got, fmt.Errorf("no trace samples between %g and %g ms; widen from_ms and to_ms", w.FromMs, w.ToMs)
 	}
