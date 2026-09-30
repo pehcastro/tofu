@@ -35,6 +35,8 @@ type togglePage struct {
 	js             *jsPage
 	registered     []string
 	read           string
+	field          bool
+	relayed        []string
 }
 
 func googleResult() [][]float64 {
@@ -79,6 +81,24 @@ func (p *togglePage) answer(method string, params map[string]any) any {
 			return nil
 		}
 		return byValue(value)
+	case p.field && method == "Runtime.callFunctionOn":
+		values := []any{}
+		for _, arg := range params["arguments"].([]any) {
+			values = append(values, arg.(map[string]any)["value"])
+		}
+		args, _ := json.Marshal(values)
+		value, _ := p.js.eval("(" + script + ").apply(field, " + string(args) + ")")
+		relayed, _ := json.Marshal(value)
+		p.relayed = append(p.relayed, string(relayed))
+		return byValue(value)
+	case p.field && method == "Input.insertText":
+		p.js.eval("field.value = " + strconv.Quote(params["text"].(string)))
+		return map[string]any{}
+	case p.field && method == "Input.dispatchKeyEvent":
+		if text, typed := params["text"].(string); typed {
+			p.js.eval("field.value += " + strconv.Quote(text))
+		}
+		return map[string]any{}
 	case method == "DOM.scrollIntoViewIfNeeded":
 		return map[string]any{}
 	case method == "DOM.getBoxModel" && p.link:
@@ -543,5 +563,48 @@ func TestAWaitOnAPageAnimatingForASecondReturnsAfterAbout1300Ms(t *testing.T) {
 	page.js.eval("animate(1000)")
 	if moved, took := timedWait(t, driver, "3000"); took < 1250*time.Millisecond || took > 1500*time.Millisecond {
 		t.Fatalf("wait 3000 on a page animating for 1 s took %d ms and said %q; want about 1300", took.Milliseconds(), moved)
+	}
+}
+
+func fillField(t *testing.T, attributes, typed string) (Moved, []string) {
+	t.Helper()
+	page := &togglePage{js: startPage(t, `{}`), field: true}
+	page.js.eval("Event = FocusEvent = class { constructor(type) { this.type = type; } }; HTMLInputElement = HTMLTextAreaElement = class {}; " +
+		"field = Object.assign({tagName: 'INPUT', kept: '', get value() { return this.kept; }, set value(text) { this.kept = text.slice(0, this.maxLength); }, focus() {}, dispatchEvent() {}}, " + attributes + "); 0")
+	moved, err := relayTo(t, page).Do(Move{Ref: "e25", Kind: MoveFill, Value: typed})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return moved, page.relayed
+}
+
+func TestAFillOnAPasswordFieldNamesTheLengthAndNoPartOfTheValue(t *testing.T) {
+	const typed = "SuperSecretPassword!"
+	for attributes, want := range map[string]string{
+		`{type: 'password'}`: "filled through insertText, e25 now reads a value of 20 characters",
+		`{type: 'text', autocomplete: 'current-password'}`:           "filled through insertText, e25 now reads a value of 20 characters",
+		`{type: 'text', autocomplete: 'section-login new-password'}`: "filled through insertText, e25 now reads a value of 20 characters",
+		`{type: 'password', maxLength: 8}`:                           "the field reads a value of 8 characters, not the 20 typed",
+	} {
+		moved, relayed := fillField(t, attributes, typed)
+		carried, _ := json.Marshal(moved)
+		said := moved.String()
+		for _, seen := range append(relayed, said, string(carried)) {
+			for i := range len(typed) - 2 {
+				if strings.Contains(seen, typed[i:i+3]) {
+					t.Fatalf("a fill on %s carried %q, which holds %q of the typed value", attributes, seen, typed[i:i+3])
+				}
+			}
+		}
+		if !strings.Contains(said, want) {
+			t.Fatalf("a fill on %s said %q; want %q", attributes, said, want)
+		}
+	}
+}
+
+func TestAFillOnATextFieldPrintsWhatItReads(t *testing.T) {
+	moved, _ := fillField(t, `{type: 'text', autocomplete: 'username'}`, "tomsmith")
+	if said := moved.String(); !strings.Contains(said, `e25 now reads "tomsmith"`) {
+		t.Fatalf("a fill on a text field said %q; want it to print the value it reads", said)
 	}
 }

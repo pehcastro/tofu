@@ -38,26 +38,27 @@ type Move struct {
 }
 
 type Moved struct {
-	Covered     string `json:"covered,omitempty"`
-	Close       string `json:"close,omitempty"`
-	Folded      int    `json:"folded,omitempty"`
-	Via         string `json:"via,omitempty"`
-	SettledMS   int    `json:"settled_ms"`
-	Held        string `json:"held,omitempty"`
-	Requests    int    `json:"requests,omitempty"`
-	Timers      int    `json:"timers,omitempty"`
-	Visibility  string `json:"visibility,omitempty"`
-	Waited      string `json:"waited,omitempty"`
-	Value       string `json:"value,omitempty"`
-	Field       string `json:"field,omitempty"`
-	ErrorPage   string `json:"error_page,omitempty"`
-	Title       string `json:"title,omitempty"`
-	URL         string `json:"url,omitempty"`
-	Control     string `json:"control,omitempty"`
-	Reads       string `json:"reads,omitempty"`
-	Opened      int    `json:"opened,omitempty"`
-	URLChanged  bool   `json:"url_changed"`
-	PageChanged bool   `json:"page_changed"`
+	Covered      string `json:"covered,omitempty"`
+	Close        string `json:"close,omitempty"`
+	Folded       int    `json:"folded,omitempty"`
+	Via          string `json:"via,omitempty"`
+	SettledMS    int    `json:"settled_ms"`
+	Held         string `json:"held,omitempty"`
+	Requests     int    `json:"requests,omitempty"`
+	Timers       int    `json:"timers,omitempty"`
+	Visibility   string `json:"visibility,omitempty"`
+	Waited       string `json:"waited,omitempty"`
+	Value        string `json:"value,omitempty"`
+	Field        string `json:"field,omitempty"`
+	ErrorPage    string `json:"error_page,omitempty"`
+	Title        string `json:"title,omitempty"`
+	URL          string `json:"url,omitempty"`
+	Control      string `json:"control,omitempty"`
+	Reads        string `json:"reads,omitempty"`
+	HiddenLength int    `json:"hidden_length,omitempty"`
+	Opened       int    `json:"opened,omitempty"`
+	URLChanged   bool   `json:"url_changed"`
+	PageChanged  bool   `json:"page_changed"`
 }
 
 const blockerAt = `function(x, y) {
@@ -269,7 +270,10 @@ func (m Moved) String() string {
 	if m.Via != "" {
 		said += ", through " + m.Via + " because the mouse and keys missed"
 	}
-	if m.Control != "" {
+	switch {
+	case m.HiddenLength > 0:
+		said += fmt.Sprintf(", %s now reads a value of %d characters", m.Control, m.HiddenLength)
+	case m.Control != "":
 		said += ", " + m.Control + " now reads " + strconv.Quote(m.Reads)
 	}
 	if m.Covered != "" {
@@ -378,13 +382,18 @@ func (d *Driver) do(deadline time.Time, move Move) (Moved, error) {
 			err = d.act(deadline, mouse("mouseMoved", "none", x, y))
 		}
 	case MoveFill:
+		var read fieldRead
 		var path string
-		moved.Value, path, err = d.fill(deadline, move.Ref, move.Value)
+		read, path, err = d.fill(deadline, move.Ref, move.Value)
+		moved.Value = read.Value
 		switch moved.Field = "filled through " + path; {
-		case moved.Value == "":
+		case read.Length == 0:
 			moved.Field = "field still empty after insertText, typed keys and the native value setter"
-		case moved.Value != move.Value:
-			moved.Field = "the field reads " + strconv.Quote(moved.Value) + " after insertText, typed keys and the native value setter"
+		case read.Same:
+		case read.Hidden:
+			moved.Field = fmt.Sprintf("the field reads a value of %d characters, not the %d typed, after insertText, typed keys and the native value setter", read.Length, read.Typed)
+		default:
+			moved.Field = "the field reads " + strconv.Quote(read.Value) + " after insertText, typed keys and the native value setter"
 		}
 	case MoveSelect:
 		err = d.pick(deadline, move.Ref, move.Value)
@@ -417,28 +426,39 @@ func (d *Driver) do(deadline time.Time, move Move) (Moved, error) {
 		}
 	}
 	if err == nil && !moved.URLChanged && moved.Opened == 0 {
-		moved.Control, moved.Reads = d.reads(deadline, move)
+		moved.Control, moved.Reads, moved.HiddenLength = d.reads(deadline, move)
 	}
 	return moved, err
 }
 
-const valueState = "function() { return this.tagName === 'SELECT' ? Array.from(this.selectedOptions, option => option.label.trim()).join(', ') : this.value ?? this.textContent; }"
+const hiddenField = `(this.type === 'password' || /\b(current|new)-password\b/.test(this.autocomplete ?? ''))`
 
-func (d *Driver) reads(deadline time.Time, move Move) (control, reads string) {
+const valueState = `function() {
+  if ` + hiddenField + ` return this.value.length;
+  return this.tagName === 'SELECT' ? Array.from(this.selectedOptions, option => option.label.trim()).join(', ') : this.value ?? this.textContent;
+}`
+
+func (d *Driver) reads(deadline time.Time, move Move) (control, reads string, hiddenLength int) {
 	script := valueState
 	switch move.Kind {
 	case MoveClick:
 		script = checkedState
 	case MoveFill, MoveSelect:
 	default:
-		return "", ""
+		return "", "", 0
 	}
 	object, err := d.resolve(deadline, move.Ref)
-	var read *string
-	if err != nil || d.value(deadline, false, callOn(object, script, true), &read) != nil || read == nil {
-		return "", ""
+	var read any
+	if err != nil || d.value(deadline, false, callOn(object, script, true), &read) != nil {
+		return "", "", 0
 	}
-	return move.Ref, *read
+	switch read := read.(type) {
+	case string:
+		return move.Ref, read, 0
+	case float64:
+		return move.Ref, "", int(read)
+	}
+	return "", "", 0
 }
 
 const submitsOrLinks = `function() { return !!(this.closest('a') || (this.form && (this.type === 'submit' || this.type === 'image'))); }`
@@ -800,10 +820,23 @@ func (d *Driver) Thinking() {
 	_, _ = d.Client.callBy(time.Now().Add(konst.BrowserActTimeoutMillis*time.Millisecond), d.Tab, opCDP, args)
 }
 
-func (d *Driver) fill(deadline time.Time, ref, text string) (value, path string, err error) {
+type fieldRead struct {
+	Value  string `json:"value"`
+	Hidden bool   `json:"hidden"`
+	Length int    `json:"length"`
+	Typed  int    `json:"typed"`
+	Same   bool   `json:"same"`
+}
+
+const readBack = `function(text) {
+  const value = this.value ?? this.textContent ?? '', hidden = ` + hiddenField + `;
+  return {value: hidden ? '' : value, hidden, length: value.length, typed: text.length, same: value === text};
+}`
+
+func (d *Driver) fill(deadline time.Time, ref, text string) (read fieldRead, path string, err error) {
 	object, err := d.resolve(deadline, ref)
 	if err != nil {
-		return "", "", err
+		return read, "", err
 	}
 	emptied := []cdpCall{callOn(object, "function() { this.focus(); }", true), callOn(object, clearValue, true)}
 	var typed []cdpCall
@@ -817,7 +850,6 @@ func (d *Driver) fill(deadline time.Time, ref, text string) (value, path string,
 			cdpCall{Method: "Input.dispatchKeyEvent", Params: map[string]any{"type": "keyDown", "key": key, "text": key, "unmodifiedText": key}},
 			cdpCall{Method: "Input.dispatchKeyEvent", Params: map[string]any{"type": "keyUp", "key": key}})
 	}
-	readBack := callOn(object, "function() { return this.value ?? this.textContent; }", true)
 	for _, try := range []struct {
 		path  string
 		calls []cdpCall
@@ -827,13 +859,13 @@ func (d *Driver) fill(deadline time.Time, ref, text string) (value, path string,
 		{"the native value setter", []cdpCall{callOn(object, nativeValue, true, text)}},
 	} {
 		if err = d.act(deadline, try.calls...); err == nil {
-			err = d.value(deadline, false, readBack, &value)
+			err = d.value(deadline, false, callOn(object, readBack, true, text), &read)
 		}
-		if err != nil || value == text {
-			return value, try.path, err
+		if err != nil || read.Same {
+			return read, try.path, err
 		}
 	}
-	return value, "", nil
+	return read, "", nil
 }
 
 func (d *Driver) pick(deadline time.Time, ref, option string) error {
