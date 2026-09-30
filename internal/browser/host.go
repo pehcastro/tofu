@@ -32,6 +32,7 @@ type route struct {
 	session *session
 	id      int64
 	sent    time.Time
+	frames  []json.RawMessage
 }
 
 type relay struct {
@@ -187,12 +188,24 @@ func (r *relay) receive(message extensionMessage) {
 		delete(r.claims, message.TabID)
 	case messageTabUpdated:
 		r.tabs[message.Tab.ID] = message.Tab
+	case messageFrames:
+		if to, asked := r.pending[message.ID]; asked {
+			to.frames = append(to.frames, message.Frames...)
+			r.pending[message.ID] = to
+		}
 	case messageResult:
 		to, asked := r.pending[message.ID]
 		if !asked {
 			return
 		}
 		delete(r.pending, message.ID)
+		if to.frames != nil && message.OK {
+			var tail []json.RawMessage
+			if err := json.Unmarshal(message.Value, &tail); err != nil {
+				message.OK, message.Error = false, fmt.Sprintf("the extension ended a screencast with %s, not frames: %v", message.Value, err)
+			}
+			message.Value, _ = json.Marshal(append(to.frames, tail...))
+		}
 		message.ID, message.Host = to.id, time.Since(to.sent)
 		_ = to.session.out.Encode(message.result)
 		r.idleSoon()
@@ -370,6 +383,6 @@ func (r *relay) forward(s *session, req request) error {
 	if err := r.tell(toExtension{T: messageCall, ID: r.lastID, TabID: req.Tab, Op: req.Op, Args: req.Args, Cursor: r.cursor && (req.Op == opCDP || req.Op == opNavigate)}); err != nil {
 		return err
 	}
-	r.pending[r.lastID] = route{s, req.ID, sent}
+	r.pending[r.lastID] = route{session: s, id: req.ID, sent: sent}
 	return nil
 }

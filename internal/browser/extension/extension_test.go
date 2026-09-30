@@ -8,6 +8,7 @@ import (
 	"image/png"
 	"io/fs"
 	"os/exec"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -15,6 +16,7 @@ import (
 
 	"tofu/internal/browser"
 	"tofu/internal/browser/extension"
+	"tofu/internal/konst"
 )
 
 const (
@@ -126,10 +128,11 @@ func TestBackgroundAttachesGroupsAndNavigatesInOnePlaceEach(t *testing.T) {
 }
 
 type stubRun struct {
-	Heard    [][]any          `json:"heard"`
-	Posted   []map[string]any `json:"posted"`
-	Grouped  map[string]any   `json:"grouped"`
-	Restored map[string]any   `json:"restored"`
+	Heard     [][]any          `json:"heard"`
+	Posted    []map[string]any `json:"posted"`
+	Grouped   map[string]any   `json:"grouped"`
+	Restored  map[string]any   `json:"restored"`
+	Listening []int            `json:"listening"`
 }
 
 func inStubbedChrome(t *testing.T, scenario string) stubRun {
@@ -382,6 +385,79 @@ func TestSnapshotReturnsWebLinksBesideTheElementsAndOutOfTheFingerprint(t *testi
 	if !strings.Contains(snapshot, "if (/^https?:/.test(e.href)) links[element.index] = e.href;") ||
 		!strings.Contains(snapshot, "elements, guards, names, links,") || fingerprint < 0 {
 		t.Fatal("snapshot.js does not return http and https links in their own map, or hashes more than the elements into the fingerprint")
+	}
+}
+
+func TestTheScreencastNeverSendsAChunkOverOneMegabyte(t *testing.T) {
+	background := shipped(t, "background.js")
+	if !strings.Contains(handler(t, background, "screencast"), "post({t: 'frames', id, frames})") {
+		t.Error("the screencast handler does not post the chunks before the last as frames messages")
+	}
+	chunkLine := regexp.MustCompile(`(?m)^const SCREENCAST_CHUNK_BYTES = (\d+);$`).FindStringSubmatch(background)
+	if chunkLine == nil {
+		t.Fatal("background.js declares no SCREENCAST_CHUNK_BYTES")
+	}
+	chunkBytes, _ := strconv.Atoi(chunkLine[1])
+	start := strings.Index(background, "function screencastChunks(")
+	end := strings.Index(background[max(start, 0):], "\n}\n")
+	if chunkBytes <= 0 || chunkBytes > konst.BrowserHostMessageBytes || start < 0 || end < 0 {
+		t.Fatalf("the chunk size is %d bytes and screencastChunks is at %d; want at most %d bytes and the function present", chunkBytes, start, konst.BrowserHostMessageBytes)
+	}
+	node, err := exec.LookPath("node")
+	if err != nil {
+		t.Skip("no node on the PATH to run screencastChunks")
+	}
+	driver := `
+const frames = Array.from({length: 9}, (_, i) => ({data: 'x'.repeat(i === 4 ? SCREENCAST_CHUNK_BYTES - 64 : 300000), timestamp: 1000 + i / 60}));
+const chunks = screencastChunks(frames);
+const widest = frames => Math.max(JSON.stringify({t: 'frames', id: Number.MAX_SAFE_INTEGER, frames}).length,
+  JSON.stringify({t: 'result', id: Number.MAX_SAFE_INTEGER, ok: true, value: frames, timing: {evaluate_ms: 1e300, settle_ms: 1e300, act_ms: 1e300}}).length);
+let oversize = '';
+try { screencastChunks([{data: 'x'.repeat(SCREENCAST_CHUNK_BYTES), timestamp: 1}]); } catch (error) { oversize = error.message; }
+console.log(JSON.stringify({sizes: chunks.map(widest), sent: chunks.flat().map(frame => frame.timestamp), wanted: frames.map(frame => frame.timestamp), empty: screencastChunks([]), oversize}));
+`
+	out, err := exec.Command(node, "-e", chunkLine[0]+"\n"+background[start:start+end+2]+driver).Output()
+	if err != nil {
+		t.Fatalf("screencastChunks under node: %v", err)
+	}
+	var run struct {
+		Sizes    []int
+		Sent     []float64
+		Wanted   []float64
+		Empty    [][]any
+		Oversize string
+	}
+	if err := json.Unmarshal(out, &run); err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	t.Logf("chunk size %d bytes, messages of %v bytes", chunkBytes, run.Sizes)
+	if len(run.Sizes) < 3 || slices.Max(run.Sizes) > konst.BrowserHostMessageBytes {
+		t.Errorf("nine frames went out as messages of %v bytes; want at least three, none over %d", run.Sizes, konst.BrowserHostMessageBytes)
+	}
+	if !slices.Equal(run.Sent, run.Wanted) || len(run.Empty) != 1 || len(run.Empty[0]) != 0 || run.Oversize == "" {
+		t.Errorf("sent %v for %v, no frames chunked as %v, and one frame over the cap said %q", run.Sent, run.Wanted, run.Empty, run.Oversize)
+	}
+}
+
+func TestAScreencastInTheStubAcksOnlyItsTabAndListensOnlyWhileRecording(t *testing.T) {
+	run := inStubbedChrome(t, "screencast")
+	results := run.results()
+	stopped, _ := json.Marshal(results[2]["value"])
+	t.Logf("stop answered %s; listeners after start, stop, start, close, start, detach: %v", stopped, run.Listening)
+	if results[1]["ok"] != true || string(stopped) != `[{"data":"AAE=","timestamp":1000.5},{"data":"AAE=","timestamp":1000.6}]` {
+		t.Errorf("start answered %v and stop %s; want tab 9's two frames in order and nothing from tab 3", results[1], stopped)
+	}
+	acks := map[float64]int{}
+	for _, entry := range run.Heard {
+		if entry[0] == "input" && entry[2] == "Page.screencastFrameAck" {
+			acks[entry[1].(float64)]++
+		}
+	}
+	if acks[9] != 2 || acks[3] != 0 || run.at("input", 9, "Page.startScreencast") < 0 || run.at("input", 9, "Page.stopScreencast") < 0 {
+		t.Errorf("acks by tab %v; want two on tab 9, none on tab 3, and the start and stop sent to tab 9", acks)
+	}
+	if !slices.Equal(run.Listening, []int{1, 0, 1, 0, 1, 0}) || results[5]["ok"] != true {
+		t.Errorf("listeners %v and a start after the detach answered %v; want the listener gone after a stop, a closed tab and a detach", run.Listening, results[5])
 	}
 }
 

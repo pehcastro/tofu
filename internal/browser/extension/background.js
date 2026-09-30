@@ -19,6 +19,8 @@ const CURSOR_RING_MS = 250;
 const CURSOR_IDLE_MS = 3000;
 const THINK_MS = 30000;
 const ORPHAN_MS = 2000;
+const SCREENCAST_QUALITY = 80;
+const SCREENCAST_CHUNK_BYTES = 1000000;
 const NO_GROUP = -1;
 const GROUP_COLOR = 'orange';
 const BADGES = {
@@ -35,6 +37,7 @@ const opened = new Set();
 const grouped = new Set();
 const optedOut = new Set();
 const children = new Map();
+const screencasts = new Map();
 let port = null;
 let hostError = '';
 let reconnectDelay = RECONNECT_MIN_MS;
@@ -77,6 +80,7 @@ async function connect() {
     void show('off');
     serially(restoreGroups);
     for (const [tabId, attaching] of attached) {
+      dropScreencast(tabId);
       attaching.then(() => send(tabId, 'Runtime.evaluate', {expression: `(${removeCursor})()`}).catch(() => {}))
         .then(() => chrome.debugger.detach({tabId})).catch(() => {});
     }
@@ -105,7 +109,8 @@ async function show(state) {
 async function answer({id, tabId, op, args, cursor}) {
   const timing = {evaluate_ms: 0, settle_ms: 0, act_ms: 0};
   try {
-    post({t: 'result', id, ok: true, value: await perform(tabId, op, args ?? {}, timing, cursor), timing});
+    const value = op === 'screencast' ? await screencast(tabId, args?.action, id) : await perform(tabId, op, args ?? {}, timing, cursor);
+    post({t: 'result', id, ok: true, value, timing});
   } catch (error) {
     post({t: 'result', id, ok: false, error: error.message, timing});
   }
@@ -263,6 +268,55 @@ async function relay(tabId, {calls, act, point, thinking}, cursor) {
   return Promise.all(calls.map(({method, params}) => send(tabId, method, params).then(result => ({result}), error => ({error: error.message}))));
 }
 
+async function screencast(tabId, action, id) {
+  await attach(tabId);
+  if (action === 'start') {
+    if (screencasts.has(tabId)) throw new Error(`tab ${tabId} is already recording a screencast`);
+    const frames = [];
+    const listener = (source, method, params) => {
+      if (source.tabId !== tabId || method !== 'Page.screencastFrame') return;
+      frames.push({data: params.data, timestamp: params.metadata.timestamp});
+      send(tabId, 'Page.screencastFrameAck', {sessionId: params.sessionId}).catch(() => {});
+    };
+    chrome.debugger.onEvent.addListener(listener);
+    screencasts.set(tabId, {frames, listener});
+    await send(tabId, 'Page.startScreencast', {format: 'jpeg', quality: SCREENCAST_QUALITY, everyNthFrame: 1}).catch(error => {
+      dropScreencast(tabId);
+      throw error;
+    });
+    return {};
+  }
+  if (action !== 'stop') throw new Error(`no screencast action ${action}`);
+  const recording = screencasts.get(tabId);
+  if (!recording) throw new Error(`tab ${tabId} is not recording a screencast`);
+  await send(tabId, 'Page.stopScreencast', {}).finally(() => dropScreencast(tabId));
+  const chunks = screencastChunks(recording.frames);
+  for (const frames of chunks.slice(0, -1)) post({t: 'frames', id, frames});
+  return chunks.at(-1);
+}
+
+function dropScreencast(tabId) {
+  const recording = screencasts.get(tabId);
+  if (recording) chrome.debugger.onEvent.removeListener(recording.listener);
+  screencasts.delete(tabId);
+}
+
+function screencastChunks(frames) {
+  const chunks = [[]];
+  let size = 0;
+  for (const frame of frames) {
+    const bytes = JSON.stringify(frame).length + 1;
+    if (bytes > SCREENCAST_CHUNK_BYTES) throw new Error(`a screencast frame of ${bytes} bytes is over the ${SCREENCAST_CHUNK_BYTES} byte message cap`);
+    if (size + bytes > SCREENCAST_CHUNK_BYTES) {
+      chunks.push([]);
+      size = 0;
+    }
+    chunks.at(-1).push(frame);
+    size += bytes;
+  }
+  return chunks;
+}
+
 function paintCursor(x, y, label, glideMs, ringMs, idleMs) {
   let host = document.querySelector('[data-tofu-cursor]');
   if (!host) {
@@ -365,9 +419,13 @@ chrome.tabs.onCreated.addListener(tab => {
 });
 chrome.tabs.onRemoved.addListener(tabId => {
   for (const set of [attached, opened, grouped, optedOut, children]) set.delete(tabId);
+  dropScreencast(tabId);
   post({t: 'tabRemoved', tabId});
 });
-chrome.debugger.onDetach.addListener(({tabId}) => attached.delete(tabId));
+chrome.debugger.onDetach.addListener(({tabId}) => {
+  attached.delete(tabId);
+  dropScreencast(tabId);
+});
 chrome.tabs.onUpdated.addListener((tabId, change, tab) => {
   if (change.groupId !== undefined && grouped.has(tabId) && change.groupId !== groups?.[tab.windowId]) {
     grouped.delete(tabId);

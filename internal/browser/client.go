@@ -94,6 +94,25 @@ func (c *Client) CloseTab(tab int) error {
 	return err
 }
 
+type ScreencastFrame struct {
+	Data          []byte  `json:"data"`
+	ChromeSeconds float64 `json:"timestamp"`
+}
+
+func (c *Client) StartScreencast(tab int) error {
+	_, err := c.Call(tab, opScreencast, json.RawMessage(`{"action":"start"}`))
+	return err
+}
+
+func (c *Client) StopScreencast(tab int) ([]ScreencastFrame, error) {
+	raw, err := c.Call(tab, opScreencast, json.RawMessage(`{"action":"stop"}`))
+	if err != nil {
+		return nil, err
+	}
+	var frames []ScreencastFrame
+	return frames, json.Unmarshal(raw, &frames)
+}
+
 func (c *Client) Call(tab int, op string, args json.RawMessage) (json.RawMessage, error) {
 	value, err := c.callBy(time.Now().Add(konst.BrowserCallTimeoutMillis*time.Millisecond), tab, op, args)
 	if errors.Is(err, os.ErrDeadlineExceeded) {

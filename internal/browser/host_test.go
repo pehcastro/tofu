@@ -791,3 +791,68 @@ func TestHostWithAnUnwritableInstallSaysSoAndNeverReloads(t *testing.T) {
 	default:
 	}
 }
+
+func TestTheScreencastAndEmulationMethodsPassAsReadingAndOthersStillStop(t *testing.T) {
+	for _, method := range []string{"Page.startScreencast", "Page.stopScreencast", "Page.screencastFrameAck", "Emulation.setDeviceMetricsOverride", "Emulation.clearDeviceMetricsOverride", "Emulation.setEmulatedMedia"} {
+		if now, err := cdpStatus(json.RawMessage(`{"calls":[{"method":"` + method + `"}]}`)); err != nil || now != statusReading {
+			t.Errorf("%s is %q, %v; want reading", method, now, err)
+		}
+	}
+	for _, method := range []string{"Page.navigate", "Emulation.setUserAgentOverride", "Page.captureScreenshot"} {
+		if now, err := cdpStatus(json.RawMessage(`{"calls":[{"method":"` + method + `"}]}`)); err == nil {
+			t.Errorf("%s passed as %q", method, now)
+		}
+	}
+}
+
+func TestThreeChunksOfScreencastFramesReachTheClientAsOneOrderedList(t *testing.T) {
+	home := shortHome(t)
+	installFor(t, home, testOrigin)
+	ext, done := startHost(t, home)
+	ext.send(`{"t":"hello","version":2,"tabs":[{"id":7,"url":"https://a.test/","title":"A"}]}`)
+	client := dial(t, home)
+
+	started := make(chan error, 1)
+	go func() { started <- client.StartScreencast(7) }()
+	call := ext.call()
+	if call.Op != opScreencast || call.TabID != 7 || string(call.Args) != `{"action":"start"}` {
+		t.Fatalf("the start reached the extension as %+v", call)
+	}
+	ext.answer(call.ID, `"ok":true`)
+	if err := <-started; err != nil {
+		t.Fatalf("the start answered %v", err)
+	}
+
+	type stop struct {
+		frames []ScreencastFrame
+		err    error
+	}
+	stopped := make(chan stop, 1)
+	go func() {
+		frames, err := client.StopScreencast(7)
+		stopped <- stop{frames, err}
+	}()
+	call = ext.call()
+	if call.Op != opScreencast || string(call.Args) != `{"action":"stop"}` {
+		t.Fatalf("the stop reached the extension as %+v", call)
+	}
+	id := strconv.FormatInt(call.ID, 10)
+	ext.send(`{"t":"frames","id":` + id + `,"frames":[{"data":"AAE=","timestamp":1000.001},{"data":"AgM=","timestamp":1000.017}]}`)
+	ext.send(`{"t":"frames","id":999,"frames":[{"data":"/w==","timestamp":5}]}`)
+	ext.send(`{"t":"frames","id":` + id + `,"frames":[{"data":"BA==","timestamp":1000.034}]}`)
+	ext.answer(call.ID, `"ok":true,"value":[{"data":"BQY=","timestamp":1000.05}]`)
+	var got stop
+	select {
+	case got = <-stopped:
+	case err := <-done:
+		t.Fatalf("the host ended on a frames message: %v", err)
+	case <-time.After(5 * time.Second):
+		t.Fatal("the stop never answered")
+	}
+	want := []ScreencastFrame{{[]byte{0, 1}, 1000.001}, {[]byte{2, 3}, 1000.017}, {[]byte{4}, 1000.034}, {[]byte{5, 6}, 1000.05}}
+	if got.err != nil || !slices.EqualFunc(got.frames, want, func(a, b ScreencastFrame) bool {
+		return string(a.Data) == string(b.Data) && a.ChromeSeconds == b.ChromeSeconds
+	}) {
+		t.Fatalf("the stop returned %v, %v; want %v", got.frames, got.err, want)
+	}
+}

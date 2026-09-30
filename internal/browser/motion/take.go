@@ -26,6 +26,7 @@ type Element struct {
 	Display    string            `json:"display"`
 	Visibility string            `json:"visibility"`
 	Hidden     bool              `json:"hidden"`
+	Attributes map[string]string `json:"attributes,omitempty"`
 	Styles     map[string]string `json:"styles,omitempty"`
 }
 
@@ -35,8 +36,9 @@ type Sample struct {
 }
 
 type Trigger struct {
-	Event  string  `json:"event"`
-	WallMs float64 `json:"wallMs"`
+	Event     string  `json:"event"`
+	WallMs    float64 `json:"wallMs"`
+	TimeStamp float64 `json:"timeStamp"`
 }
 
 type App struct {

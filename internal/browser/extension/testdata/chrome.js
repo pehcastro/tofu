@@ -11,6 +11,10 @@ const heard = [];
 const posted = [];
 const storage = {};
 const listeners = {};
+const debuggerEvents = new Set();
+const frame = (tabId, timestamp) => {
+  for (const listener of debuggerEvents) listener({tabId}, 'Page.screencastFrame', {data: 'AAE=', metadata: {timestamp}, sessionId: timestamp});
+};
 const tabs = new Map([
   [9, {id: 9, windowId: 1, url: 'https://stays.test/', title: 'Stays', pinned: false, groupId: -1}],
   [3, {id: 3, windowId: 1, url: 'https://pinned.test/', title: 'Pinned', pinned: true, groupId: -1}],
@@ -95,6 +99,7 @@ const chrome = {
       return {result: {value: page[request.op]}};
     },
     onDetach: event('detached'),
+    onEvent: {addListener: listener => debuggerEvents.add(listener), removeListener: listener => debuggerEvents.delete(listener)},
   },
   tabs: {
     get: async id => ({...tabs.get(id)}),
@@ -234,6 +239,32 @@ const scenarios = {groups: async () => {
   listeners.disconnect();
   await quiet();
   return {};
+}, screencast: async () => {
+  const listening = [];
+  const screencast = (id, tabId, action) => listeners.message({t: 'call', id, tabId, op: 'screencast', args: {action}});
+  screencast(1, 9, 'start');
+  await quiet();
+  listening.push(debuggerEvents.size);
+  frame(9, 1000.5);
+  frame(3, 2000);
+  frame(9, 1000.6);
+  await quiet();
+  screencast(2, 9, 'stop');
+  await quiet();
+  listening.push(debuggerEvents.size);
+  screencast(3, 9, 'start');
+  await quiet();
+  listening.push(debuggerEvents.size);
+  listeners.removed(9);
+  listening.push(debuggerEvents.size);
+  screencast(4, 5, 'start');
+  await quiet();
+  listening.push(debuggerEvents.size);
+  listeners.detached({tabId: 5});
+  listening.push(debuggerEvents.size);
+  screencast(5, 5, 'start');
+  await quiet();
+  return {listening};
 }, open: async () => {
   call(1, 0, 'open', {url: 'https://stays.test/new'});
   await quiet();

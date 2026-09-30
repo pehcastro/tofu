@@ -67,13 +67,11 @@ func columnsOf(watch []Watch) []column {
 			{name: "visibility", read: func(e Element) any { return e.Visibility }},
 			{name: "hidden", read: func(e Element) any { return e.Hidden }},
 		}
+		for _, attribute := range w.Attributes {
+			base = append(base, column{name: attribute, read: func(e Element) any { return mapped(e.Attributes, attribute) }})
+		}
 		for _, style := range w.Styles {
-			base = append(base, column{name: style, read: func(e Element) any {
-				if v, ok := e.Styles[style]; ok {
-					return v
-				}
-				return nil
-			}})
+			base = append(base, column{name: style, read: func(e Element) any { return mapped(e.Styles, style) }})
 		}
 		for _, c := range base {
 			c.element, c.name = w.Name, w.Name+" "+c.name
@@ -81,6 +79,13 @@ func columnsOf(watch []Watch) []column {
 		}
 	}
 	return cols
+}
+
+func mapped(values map[string]string, key string) any {
+	if v, ok := values[key]; ok {
+		return v
+	}
+	return nil
 }
 
 func (c column) value(s Sample) any {

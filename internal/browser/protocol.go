@@ -34,6 +34,7 @@ const (
 	messageTabRemoved messageType = "tabRemoved"
 	messageResult     messageType = "result"
 	messageReload     messageType = "reload"
+	messageFrames     messageType = "frames"
 )
 
 type Builds struct {
@@ -86,12 +87,13 @@ type result struct {
 }
 
 type extensionMessage struct {
-	T       messageType `json:"t"`
-	Version int         `json:"version"`
-	Build   string      `json:"build"`
-	Tabs    []Tab       `json:"tabs"`
-	Tab     Tab         `json:"tab"`
-	TabID   int         `json:"tabId"`
+	T       messageType       `json:"t"`
+	Version int               `json:"version"`
+	Build   string            `json:"build"`
+	Tabs    []Tab             `json:"tabs"`
+	Tab     Tab               `json:"tab"`
+	TabID   int               `json:"tabId"`
+	Frames  []json.RawMessage `json:"frames"`
 	result
 }
 
@@ -105,7 +107,7 @@ func parseExtensionMessage(raw []byte) (extensionMessage, error) {
 		if message.Version != ProtocolVersion {
 			return extensionMessage{}, fmt.Errorf("the extension speaks protocol %d and this tofu speaks %d: run tofu browser install and reload the extension", message.Version, ProtocolVersion)
 		}
-	case messageTabUpdated, messageTabRemoved, messageResult:
+	case messageTabUpdated, messageTabRemoved, messageResult, messageFrames:
 	default:
 		return extensionMessage{}, fmt.Errorf("the extension sent the unknown message type %q", message.T)
 	}
@@ -125,13 +127,14 @@ func reachable(address string) bool {
 }
 
 const (
-	opTabs   = "tabs"
-	opBuilds = "builds"
-	opOpen   = "open"
-	opClose  = "close"
-	opBack   = "back"
-	opHello  = "hello"
-	opCDP    = "cdp"
+	opTabs       = "tabs"
+	opBuilds     = "builds"
+	opOpen       = "open"
+	opClose      = "close"
+	opBack       = "back"
+	opHello      = "hello"
+	opCDP        = "cdp"
+	opScreencast = "screencast"
 )
 
 type openArgs struct {
@@ -140,7 +143,7 @@ type openArgs struct {
 
 func opStatus(req request) (status, error) {
 	switch req.Op {
-	case "snapshot":
+	case "snapshot", opScreencast:
 		return statusReading, nil
 	case "click", "fill", "select", "scroll", "wait":
 		return statusActing, nil
@@ -186,7 +189,9 @@ func cdpStatus(raw json.RawMessage) (status, error) {
 		switch call.Method {
 		case "Accessibility.getFullAXTree", "Accessibility.getPartialAXTree", "Page.getFrameTree",
 			"DOM.getDocument", "DOM.querySelectorAll", "DOM.describeNode", "DOM.resolveNode", "DOM.getBoxModel", "DOM.scrollIntoViewIfNeeded",
-			"Runtime.evaluate", "Runtime.callFunctionOn", "Emulation.setFocusEmulationEnabled", "Page.setWebLifecycleState":
+			"Runtime.evaluate", "Runtime.callFunctionOn", "Emulation.setFocusEmulationEnabled", "Page.setWebLifecycleState",
+			"Page.startScreencast", "Page.stopScreencast", "Page.screencastFrameAck",
+			"Emulation.setDeviceMetricsOverride", "Emulation.clearDeviceMetricsOverride", "Emulation.setEmulatedMedia":
 		case "Input.dispatchMouseEvent", "Input.dispatchKeyEvent", "Input.insertText":
 			now = statusActing
 		default:

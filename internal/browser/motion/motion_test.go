@@ -2,11 +2,14 @@ package motion
 
 import (
 	"bytes"
+	"encoding/json"
 	"image"
 	"image/color"
 	"image/jpeg"
 	"image/png"
 	"math/rand/v2"
+	"os"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -41,8 +44,8 @@ func scenario(width, height int) Scenario {
 	return Scenario{
 		URL:      "http://localhost:4173/",
 		Viewport: Viewport{Width: width, Height: height},
-		Trigger:  Action{Action: "click", Ref: "e12"},
-		Watch:    []Watch{{Name: "panel", Ref: "e4"}, {Name: "badge", Ref: "e5"}},
+		Trigger:  Action{Action: "click", Selector: ".menu button"},
+		Watch:    []Watch{{Name: "panel", Selector: ".menu .panel"}, {Name: "badge", Selector: ".menu .badge"}},
 	}
 }
 
@@ -238,6 +241,101 @@ func TestCompareRefusesDifferentViewports(t *testing.T) {
 	_, err := Compare([]Take{before}, []Take{wider}, nil, nil, nil)
 	if err == nil || !strings.Contains(err.Error(), "viewport differs") {
 		t.Fatalf("got %v", err)
+	}
+}
+
+func TestTheFieldNotesScenarioParsesWithReadyAttributesAndScale(t *testing.T) {
+	raw, err := os.ReadFile("testdata/field-notes-close.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	var parsed Scenario
+	if err := decoder.Decode(&parsed); err != nil {
+		t.Fatal(err)
+	}
+	sc, err := parsed.Checked()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sc.Ready != (Ready{Selector: ".faq .item:nth-child(1) .content[data-state='open']", SettleMs: 350}) ||
+		!slices.Equal(sc.Watch[0].Attributes, []string{"data-state"}) || sc.Watch[1].Selector != ".faq .item:nth-child(2) .header" ||
+		sc.Viewport != (Viewport{Width: 960, Height: 720, DeviceScaleFactor: 1}) || sc.ReducedMotion != "no-preference" ||
+		sc.Trigger != (Action{Action: "click", Role: "button", Name: "What comes with a Field Notes membership?", Exact: true}) ||
+		sc.Name != "field-notes-close" || sc.RecordBeforeMs != 300 || sc.RecordAfterMs != 800 {
+		t.Fatalf("Field Notes parsed as %+v", sc)
+	}
+	for given, want := range map[Viewport]Viewport{{}: {960, 720, 1}, {DeviceScaleFactor: 2}: {960, 720, 2}, {Width: 400, Height: 300}: {400, 300, 1}} {
+		base := scenario(0, 0)
+		base.Viewport = given
+		if got, err := base.Checked(); err != nil || got.Viewport != want {
+			t.Errorf("viewport %+v checked as %+v, %v; want %+v", given, got.Viewport, err, want)
+		}
+	}
+	for name, broken := range map[string]func(*Scenario){
+		"a negative scale":         func(s *Scenario) { s.Viewport.DeviceScaleFactor = -1 },
+		"a negative settle":        func(s *Scenario) { s.Ready.SettleMs = -1 },
+		"an unnamed attribute":     func(s *Scenario) { s.Watch[0].Attributes = []string{""} },
+		"an attribute twice":       func(s *Scenario) { s.Watch[0].Attributes = []string{"data-state", "data-state"} },
+		"a watch with no selector": func(s *Scenario) { s.Watch[0].Selector = "" },
+		"a role and a selector": func(s *Scenario) {
+			s.Trigger = Action{Action: "click", Role: "button", Name: "Close", Selector: ".close"}
+		},
+		"a role with no name":      func(s *Scenario) { s.Trigger = Action{Action: "click", Role: "button"} },
+		"a name with no role":      func(s *Scenario) { s.Trigger = Action{Action: "click", Name: "Close"} },
+		"a click on nothing":       func(s *Scenario) { s.Trigger = Action{Action: "click"} },
+		"exact with no name":       func(s *Scenario) { s.Trigger = Action{Action: "click", Selector: ".close", Exact: true} },
+		"a setup hover on nothing": func(s *Scenario) { s.Setup = []Action{{Action: "hover"}} },
+		"an unknown motion":        func(s *Scenario) { s.ReducedMotion = "sometimes" },
+	} {
+		s := scenario(320, 240)
+		s.Watch = []Watch{{Name: "panel", Selector: ".menu .panel"}}
+		broken(&s)
+		if _, err := s.Checked(); err == nil {
+			t.Errorf("%s was accepted", name)
+		}
+	}
+}
+
+func TestAWatchedAttributeIsATableColumnAndSurvivesTheStore(t *testing.T) {
+	sc := scenario(320, 240)
+	sc.Watch = []Watch{{Name: "first-answer", Selector: ".faq .item:nth-child(1) .content", Attributes: []string{"data-state"}}}
+	at := func(ms float64, state ...string) Sample {
+		e := &Element{Width: 200, Height: 80, Opacity: 1, Display: "block", Visibility: "visible", Attributes: map[string]string{}}
+		for _, s := range state {
+			e.Attributes["data-state"] = s
+		}
+		return Sample{MsFromTrigger: &ms, Elements: map[string]*Element{"first-answer": e}}
+	}
+	id := NewID(time.Date(2026, 9, 29, 10, 0, 0, 0, time.UTC), "field notes", 1)
+	root := t.TempDir()
+	if _, err := Save(root, Take{
+		Manifest: Manifest{TakeID: id, Scenario: sc, Trigger: &Trigger{Event: "pointerdown", WallMs: 1_000_000, TimeStamp: 1234.5}},
+		Trace:    []Sample{at(0, "open"), at(16, "open"), at(33, "closed"), at(50)},
+	}, nil); err != nil {
+		t.Fatal(err)
+	}
+	take, err := Load(root, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if take.Manifest.Trigger.TimeStamp != 1234.5 || !slices.Equal(take.Manifest.Scenario.Watch[0].Attributes, []string{"data-state"}) {
+		t.Fatalf("the store returned trigger %+v and watch %+v", take.Manifest.Trigger, take.Manifest.Scenario.Watch)
+	}
+	w, err := WindowOf([]Take{take}, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rows, _ := Table(take.Manifest.Scenario.Watch, take.Trace, w)
+	want := []string{
+		"ms     first-answer data-state",
+		"+0.0   open",
+		"+33.0  closed",
+		"+50.0  null",
+	}
+	if strings.Join(rows, "\n") != strings.Join(want, "\n") {
+		t.Fatalf("table:\n%s\nwant:\n%s", strings.Join(rows, "\n"), strings.Join(want, "\n"))
 	}
 }
 
