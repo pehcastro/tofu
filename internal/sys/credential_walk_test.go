@@ -14,6 +14,8 @@ import (
 
 const credentialMark = ".env"
 
+const nodeEnvironmentObject = "process.env"
+
 var credentialRoots = []string{"bench", "library", "cmd", "interface", "internal"}
 
 const credentialOpener = "sys.readCredentialFile"
@@ -140,7 +142,7 @@ func mentionsCredential(tainted map[string]bool, exprs []ast.Expr) bool {
 		ast.Inspect(expr, func(node ast.Node) bool {
 			switch typed := node.(type) {
 			case *ast.BasicLit:
-				if typed.Kind == token.STRING && strings.Contains(typed.Value, credentialMark) {
+				if typed.Kind == token.STRING && strings.Contains(strings.ReplaceAll(typed.Value, nodeEnvironmentObject, ""), credentialMark) {
 					seen = true
 				}
 			case *ast.Ident:

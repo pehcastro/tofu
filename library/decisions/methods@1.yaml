@@ -14,7 +14,7 @@ methods:
   stop_check:
     method: judged
     why: jev agrees with 71 of 78 hand labels against the repeat check's 68, 1.04x, and makes a false stop a third as often
-    cost: a median $0.000074 a session over the 15 recorded sessions that ran it, worst $0.004574, $0.0087 over the whole recorded ledger, and the call is already made in shadow
+    cost: a median $0.000067 a session over the 20 recorded sessions that ran it, worst $0.004574, $0.0089 over the whole recorded ledger, and the call is already made in shadow
   page_sift:
     method: unwired
     why: web.Reduce strips the same link-only rows at fetch time, so the link stripper elides 0 further bytes on all 24 recorded pages, 0.00 percent, where Reduce itself takes 11.69 percent of the extracted bytes. a second pass of one rule is not a decision point

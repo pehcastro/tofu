@@ -35,17 +35,17 @@ func TestASubAgentIsOfferedWriteAndEditOnlyWhenItsDefinitionNamesThem(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
-	base := []Tool{read, write, namedTool("edit"), namedTool("browser_tabs"), namedTool("browser_observe"), namedTool("browser_act"), namedTool("fetch"), namedTool("glob"), namedTool("search"), namedTool("symbols"), namedTool("bash")}
+	base := []Tool{read, write, namedTool("edit"), namedTool("browser_tabs"), namedTool("browser_observe"), namedTool("browser_act"), namedTool("browser_motion"), namedTool("fetch"), namedTool("glob"), namedTool("search"), namedTool("symbols"), namedTool("bash")}
 	var names []string
 	for _, tool := range base {
 		names = append(names, tool.Name())
 	}
 	found := subagent.Definitions(subagent.Scan{Library: library.Files(), Tools: append(names, "spawn")})
 	for agent, want := range map[string]string{
-		"browser":  "browser_tabs browser_observe browser_act",
+		"browser":  "browser_tabs browser_observe browser_act browser_motion",
 		"research": "read write fetch glob search symbols bash",
 		"ts-dev":   "read write edit glob search symbols bash",
-		"":         "read write edit browser_tabs browser_observe browser_act fetch glob search symbols bash spawn message",
+		"":         "read write edit browser_tabs browser_observe browser_act browser_motion fetch glob search symbols bash spawn message",
 	} {
 		model := &stubModel{decisions: []llm.Decision{spawnCall("call-spawn", "do the piece", "piece/**"), claimDecision("did the piece"), claimDecision("done")}}
 		config := Config{Model: model, Spend: SpendAPIKey, Tools: NewRegistry(base...), Caps: Caps{MaxSteps: 5}, ResultBytesCap: 4096,
@@ -181,7 +181,7 @@ func TestAForkedSubAgentReportsEveryForkUnderTheNameMessageReaches(t *testing.T)
 }
 
 func TestABrowserSpawnWithNoOwnsStartsAndAWriterWithNoOwnsIsStillRefused(t *testing.T) {
-	names := []string{"browser_tabs", "browser_observe", "browser_act", "read", "write", "edit", "glob", "search", "symbols", "bash", "fetch", "spawn"}
+	names := []string{"browser_tabs", "browser_observe", "browser_act", "browser_motion", "read", "write", "edit", "glob", "search", "symbols", "bash", "fetch", "spawn"}
 	found := subagent.Definitions(subagent.Scan{Library: library.Files(), Tools: names})
 	for agent, starts := range map[string]bool{"browser": true, "ts-dev": false} {
 		model := &stubModel{decisions: []llm.Decision{claimDecision("done")}}

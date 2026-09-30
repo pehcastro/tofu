@@ -540,6 +540,9 @@ func (p *fakePage) cdp(method string, params map[string]any, opened func(int, st
 		case strings.Contains(script, "getOwnPropertyDescriptor"):
 			target.Value = fmt.Sprint(args[0].(map[string]any)["value"])
 			return value(nil), nil
+		case strings.Contains(script, "same: value === text"):
+			typed := fmt.Sprint(args[0].(map[string]any)["value"])
+			return value(map[string]any{"value": target.Value, "length": len(target.Value), "typed": len(typed), "same": target.Value == typed}), nil
 		case strings.Contains(script, "return this.value"):
 			return value(target.Value), nil
 		case strings.Contains(script, "this.click()"):
