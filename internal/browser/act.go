@@ -103,17 +103,19 @@ const selectOption = `function(values) {
 
 const watchScript = `(() => {
   const cursor = '[data-tofu-cursor]', nodes = new Set();
+  const elementOf = node => node && (node.nodeType === 1 ? node : node.parentElement);
   const ours = node => {
-    const element = node && (node.nodeType === 1 ? node : node.parentElement), host = element && element.getRootNode && element.getRootNode().host;
+    const element = elementOf(node), host = element && element.getRootNode && element.getRootNode().host;
     return !!(element && element.closest && element.closest(cursor) || host && host.closest(cursor));
   };
+  const unshown = element => !element || /^(STYLE|SCRIPT|NOSCRIPT|TEMPLATE)$/.test(element.tagName) || !!element.checkVisibility && !element.checkVisibility();
   const watch = {changed: performance.now(),
     moving: () => !!document.getAnimations && document.getAnimations().some(a => a.playState === 'running' && a.effect && !ours(a.effect.target) && a.effect.getComputedTiming().endTime !== Infinity),
     take(cap) {
       const said = [];
       let size = 0;
       for (const node of nodes) {
-        let covered = !node.isConnected || ours(node);
+        let covered = !node.isConnected || ours(node) || unshown(elementOf(node));
         for (let up = node.parentNode; up && !covered; up = up.parentNode) covered = nodes.has(up);
         const text = covered ? '' : String((node.nodeType === 3 ? node.textContent : node.innerText) || '').replace(/\s+/g, ' ').trim();
         if (!text || said.includes(text)) continue;

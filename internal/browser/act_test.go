@@ -318,7 +318,8 @@ context.poll = () => {
   context.fetch('/poll');
   clock.now = now;
 };
-context.animate = ms => { animatedUntil = performance.now() + ms; };
+context.mount = addedNodes => { for (const observer of observers) if (!observer.off) observer.callback([{type: 'childList', target: {}, addedNodes}]); };
+context.animate = ms =>{ animatedUntil = performance.now() + ms; };
 context.busy =() => void setInterval(() => { context.fetch('/api/listing'); render({text: 'ticker ' + Date.now()}); }, 100);
 let bare;
 context.audit = async () => {
@@ -472,6 +473,22 @@ func TestASectionMountedTwoSecondsAfterTheReturnIsTheNextReadsChangeOnce(t *test
 	again, _ := driver.TakeChanges()
 	if err != nil || !strings.Contains(next, "section0") || again != "" {
 		t.Fatalf("the next read after a section mounted took %q, %v, then %q; want section0 once", next, err, again)
+	}
+}
+
+func TestTheChangeFeedCarriesOnlyTextThePageShows(t *testing.T) {
+	page := listingPage(t, `{}`)
+	driver := relayTo(t, page)
+	if _, err := driver.TakeChanges(); err != nil {
+		t.Fatal(err)
+	}
+	page.js.eval(`mount([
+		{nodeType: 1, tagName: 'STYLE', isConnected: true, innerText: '.DpgmK{--Yi4Nb:var(--mXZkqc)}'},
+		{nodeType: 3, isConnected: true, textContent: 'window.flights = 1', parentElement: {tagName: 'SCRIPT'}},
+		{nodeType: 1, tagName: 'DIV', isConnected: true, innerText: 'a closed menu', checkVisibility: () => false},
+		{nodeType: 1, tagName: 'P', isConnected: true, innerText: 'Nonstop 2h 10m'}])`)
+	if changed, err := driver.TakeChanges(); err != nil || changed != "Nonstop 2h 10m" {
+		t.Fatalf("a page that added a style, a script, a hidden menu and a p changed by %q, %v; want only the p text", changed, err)
 	}
 }
 

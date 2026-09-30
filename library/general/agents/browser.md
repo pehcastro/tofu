@@ -1,7 +1,7 @@
 ---
 name: browser
 domain: general
-description: Does one browsing task in the person's Chrome, in a tab of tofu's own, step by step on the browser model, and reports what it did, what it found and the tab it left open. Give it the person's task as written, where to start included, and a tofu tab id only when you have one. It needs no owns, since it writes nothing.
+description: Does one browsing task in the person's Chrome, in a tab of tofu's own, step by step on the browser model, and reports what it did, what it found and the tab it left open. Give it the person's task as written and a start url, the one the task names, and a tofu tab id only when you have one. It needs no owns, since it writes nothing.
 tools: browser_tabs, browser_observe, browser_act, browser_motion
 ---
 
