@@ -1,38 +1,159 @@
-package turn_test
+package turn
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
-	"tofu/internal/turn"
+	"tofu/internal/konst"
 )
+
+const brokenLine = "broken.ts(1,7): error TS2322"
+
+func tsProject(t *testing.T, runner, lockfile string, files map[string]string) string {
+	if _, err := exec.LookPath(runner); err != nil {
+		t.Skip(runner + " is not on PATH")
+	}
+	dir := t.TempDir()
+	for name, body := range map[string]string{"tsconfig.json": `{"compilerOptions":{"strict":true}}`, "package.json": `{"name":"fallback"}`, lockfile: "{}"} {
+		if _, given := files[name]; !given {
+			files[name] = body
+		}
+	}
+	for name, body := range files {
+		if err := os.MkdirAll(filepath.Dir(filepath.Join(dir, name)), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return dir
+}
+
+func warmWriter(t *testing.T, dir string) (*Typecheckers, func(name, body string) string) {
+	checkers := NewTypecheckers()
+	t.Cleanup(checkers.Close)
+	tool, err := NewWriteTool(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tool.Checking(checkers)
+	return checkers, func(name, body string) string {
+		raw, _ := json.Marshal(writeArgs{Path: name, Content: body})
+		result, err := tool.Run(context.Background(), raw)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return result.Content
+	}
+}
+
+func onlyWatch(t *testing.T, checkers *Typecheckers) *tscWatch {
+	checkers.mutex.Lock()
+	defer checkers.mutex.Unlock()
+	if len(checkers.watching) != 1 {
+		t.Fatalf("%d watchers are running, want one", len(checkers.watching))
+	}
+	for _, watch := range checkers.watching {
+		return watch
+	}
+	return nil
+}
 
 func TestTypecheckedFallsBackWhenTheProjectHasNoTypeScript(t *testing.T) {
 	for _, toolchain := range []struct{ runner, lockfile string }{{"bun", "bun.lock"}, {"npx", "package-lock.json"}} {
 		t.Run(toolchain.runner, func(t *testing.T) {
-			if _, err := exec.LookPath(toolchain.runner); err != nil {
-				t.Skip(toolchain.runner + " is not on PATH")
-			}
-			dir := t.TempDir()
-			files := map[string]string{
-				"tsconfig.json":    `{"compilerOptions":{"strict":true}}`,
-				"package.json":     `{"name":"fallback"}`,
-				toolchain.lockfile: "{}",
-				"broken.ts":        "const count: number = \"many\";\n",
-			}
-			for name, body := range files {
-				if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o600); err != nil {
-					t.Fatal(err)
-				}
-			}
-			got := turn.Typechecked(context.Background(), filepath.Join(dir, "broken.ts"), "wrote broken.ts")
-			if !strings.Contains(got, "broken.ts(1,7): error TS2322") {
+			dir := tsProject(t, toolchain.runner, toolchain.lockfile, map[string]string{"broken.ts": "const count: number = \"many\";\n"})
+			var cold *Typecheckers
+			got := cold.Typechecked(context.Background(), filepath.Join(dir, "broken.ts"), "wrote broken.ts")
+			if !strings.Contains(got, brokenLine) {
 				t.Fatalf("the write result carries no tsc error:\n%s", got)
 			}
 		})
+	}
+}
+
+func TestAWarmCheckerReportsAnErrorAndItsFixFromOneProcess(t *testing.T) {
+	checkers, write := warmWriter(t, tsProject(t, "bun", "bun.lock", map[string]string{}))
+	first := write("broken.ts", "const count: number = \"many\";\n")
+	if !strings.Contains(first, brokenLine) || !strings.Contains(first, "--watch") {
+		t.Fatalf("the first write was not reported by a watching tsc:\n%s", first)
+	}
+	watch := onlyWatch(t, checkers)
+
+	second := write("broken.ts", "const count: number = 3;\n")
+	if !strings.Contains(second, "errors in broken.ts: 0") || !strings.Contains(second, "--watch") {
+		t.Fatalf("the fixing write was not reported clean by the watching tsc:\n%s", second)
+	}
+	t.Logf("first:\n%s\nsecond:\n%s", first, second)
+	if onlyWatch(t, checkers) != watch {
+		t.Fatal("the fixing write started a second tsc")
+	}
+}
+
+func TestTwoWritesInOneBatchShareOneWatcher(t *testing.T) {
+	checkers, write := warmWriter(t, tsProject(t, "bun", "bun.lock", map[string]string{}))
+	results := map[string]string{}
+	var mutex sync.Mutex
+	var batch sync.WaitGroup
+	for name, body := range map[string]string{"a.ts": "export const a: number = \"a\";\n", "b.ts": "export const b: string = 2;\n"} {
+		batch.Go(func() {
+			got := write(name, body)
+			mutex.Lock()
+			results[name] = got
+			mutex.Unlock()
+		})
+	}
+	batch.Wait()
+	for name, want := range map[string]string{"a.ts": "a.ts(1,14): error TS2322", "b.ts": "b.ts(1,14): error TS2322"} {
+		if !strings.Contains(results[name], want) || !strings.Contains(results[name], "--watch") {
+			t.Errorf("%s was not reported by the watching tsc:\n%s", name, results[name])
+		}
+	}
+	onlyWatch(t, checkers)
+}
+
+func TestAKilledWatcherFallsBackColdAndIsReplaced(t *testing.T) {
+	checkers, write := warmWriter(t, tsProject(t, "bun", "bun.lock", map[string]string{}))
+	if first := write("broken.ts", "const count: number = \"many\";\n"); !strings.Contains(first, "--watch") {
+		t.Fatalf("no watcher answered the first write:\n%s", first)
+	}
+	killed := onlyWatch(t, checkers)
+	if err := killed.process.Kill(); err != nil {
+		t.Fatal(err)
+	}
+
+	fallback := write("broken.ts", "const count: number = \"more\";\n")
+	if !strings.Contains(fallback, brokenLine) || strings.Contains(fallback, "--watch") {
+		t.Fatalf("the write after the kill was not a cold run reporting the error:\n%s", fallback)
+	}
+
+	third := write("broken.ts", "const count: number = \"most\";\n")
+	if !strings.Contains(third, brokenLine) || !strings.Contains(third, "--watch") || onlyWatch(t, checkers) == killed {
+		t.Fatalf("the write after the fallback did not start a fresh watcher:\n%s", third)
+	}
+}
+
+func TestAFileOutsideTheProgramFallsBackQuicklyAndKeepsTheWatcher(t *testing.T) {
+	checkers, write := warmWriter(t, tsProject(t, "bun", "bun.lock", map[string]string{"tsconfig.json": `{"compilerOptions":{"strict":true},"include":["src"]}`}))
+	if first := write("src/broken.ts", "const count: number = \"many\";\n"); !strings.Contains(first, "--watch") {
+		t.Fatalf("no watcher answered the first write:\n%s", first)
+	}
+	watch := onlyWatch(t, checkers)
+
+	started := time.Now()
+	outside := write("scripts/loose.ts", "const loose: number = 1;\n")
+	if took := time.Since(started); took >= konst.TypecheckDeadlineMillis*time.Millisecond || strings.Contains(outside, "--watch") {
+		t.Fatalf("a file tsc does not watch took %s and read:\n%s", took, outside)
+	}
+	if onlyWatch(t, checkers) != watch {
+		t.Fatal("a file tsc does not watch cost the warm watcher")
 	}
 }

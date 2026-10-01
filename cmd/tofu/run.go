@@ -365,7 +365,9 @@ func runVerb(args []string, out, errOut io.Writer) int {
 	}
 	opts.shell = shell
 
-	built, _, err := buildRunToolsForRun(opts.dir, opts.toolSet, readsWhen(opts.readBeforeEdit, turn.NewReadLedger()), shell)
+	checkers := turn.NewTypecheckers()
+	defer checkers.Close()
+	built, _, err := buildRunToolsForRun(opts.dir, opts.toolSet, readsWhen(opts.readBeforeEdit, turn.NewReadLedger()), checkers, shell)
 	if err != nil {
 		return runFail(errOut, err)
 	}
@@ -863,22 +865,22 @@ func readsWhen(readBeforeEdit bool, reads *turn.ReadLedger) *turn.ReadLedger {
 	return reads
 }
 
-func buildRunToolsForRun(dir, set string, ledger *turn.ReadLedger, shell turn.RunShell) ([]turn.Tool, *tools.Plan, error) {
+func buildRunToolsForRun(dir, set string, ledger *turn.ReadLedger, checkers *turn.Typecheckers, shell turn.RunShell) ([]turn.Tool, *tools.Plan, error) {
 	bashTool, bashErr := turn.NewBashToolFromShell(dir, shell)
 	if bashErr != nil {
 		return nil, nil, bashErr
 	}
-	return assembleRunTools(dir, set, ledger, bashTool)
+	return assembleRunTools(dir, set, ledger, checkers, bashTool)
 }
 
-func assembleRunTools(dir, set string, ledger *turn.ReadLedger, bashTool *turn.BashTool) ([]turn.Tool, *tools.Plan, error) {
+func assembleRunTools(dir, set string, ledger *turn.ReadLedger, checkers *turn.Typecheckers, bashTool *turn.BashTool) ([]turn.Tool, *tools.Plan, error) {
 	readTool, readErr := turn.NewReadTool(dir)
 	writeTool, writeErr := turn.NewWriteTool(dir)
 	if err := cmp.Or(readErr, writeErr); err != nil {
 		return nil, nil, err
 	}
 	read := readTool.Reading(ledger)
-	write := writeTool.Reading(ledger)
+	write := writeTool.Reading(ledger).Checking(checkers)
 	checked, checkErr := tools.Checked(dir, []turn.Tool{bashTool})
 	if checkErr != nil {
 		return nil, nil, checkErr
@@ -912,7 +914,7 @@ func assembleRunTools(dir, set string, ledger *turn.ReadLedger, bashTool *turn.B
 		return nil, nil, err
 	}
 	plan := tools.NewPlan()
-	full := append([]turn.Tool{read, write, shell, plan, tools.Shells{}, projectTool, globTool, searchTool, symbolsTool, editTool.Reading(ledger), githubTool}, verbTools...)
+	full := append([]turn.Tool{read, write, shell, plan, tools.Shells{}, projectTool, globTool, searchTool, symbolsTool, editTool.Reading(ledger).Checking(checkers), githubTool}, verbTools...)
 	return tools.NewMemo().Wrap(append(append(full, webTools...), browserTools...)), plan, nil
 }
 
