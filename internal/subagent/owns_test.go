@@ -110,6 +110,26 @@ func TestShellRefusesARealWriteAndNothingElse(t *testing.T) {
 	}
 }
 
+func TestAnOwnedDirectoryWithATrailingSlashOwnsWhatIsInsideIt(t *testing.T) {
+	for path, want := range map[string]bool{
+		"src/routes/health.ts": true,
+		"src/routes/a/b.ts":    true,
+		"src/routesx/a.ts":     false,
+		"src/index.ts":         false,
+	} {
+		got, err := Matches(path, []string{"src/routes/"})
+		if err != nil || got != want {
+			t.Errorf("src/routes/ owns %q: want %v, got %v %v", path, want, got, err)
+		}
+	}
+	if !overlap("src/routes/", "src/routes/**") {
+		t.Error("src/routes/ and src/routes/** must overlap")
+	}
+	if overlap("src/routes/", "src/other/**") {
+		t.Error("src/routes/ and src/other/** must not overlap")
+	}
+}
+
 func TestBoundaryWriteStillRefusesAFileItDoesNotOwn(t *testing.T) {
 	boundary := &Boundary{Ticket: "TOFU-690-driven", Owns: []string{"internal/subagent/command.go"}}
 	err := boundary.Write("internal/subagent/owns.go")

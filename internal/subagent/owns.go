@@ -171,6 +171,9 @@ func sharesAPath(a, b string) bool {
 }
 
 func globForms(glob string) []string {
+	if directory, ok := strings.CutSuffix(glob, "/"); ok {
+		return []string{directory + "/**", directory}
+	}
 	if directory := strings.TrimSuffix(glob, "/**"); directory != glob {
 		return []string{glob, directory}
 	}
