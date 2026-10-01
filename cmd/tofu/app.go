@@ -678,9 +678,15 @@ func newAppSession(dir string, open func(runOpts) (appWire, error), answers <-ch
 	return live
 }
 
-func (s *appSession) carry(messages []llm.Message) {
+func (s *appSession) renewChecks() {
 	s.checks.Close()
-	s.carried, s.reads, s.checks = messages, turn.NewReadLedger(), turn.NewTypecheckers()
+	s.checks = turn.NewTypecheckers()
+	s.checks.Warm(s.dir)
+}
+
+func (s *appSession) carry(messages []llm.Message) {
+	s.renewChecks()
+	s.carried, s.reads = messages, turn.NewReadLedger()
 	for _, message := range messages {
 		if message.ToolCallID != "" {
 			s.shown[message.ToolCallID] = true
@@ -689,8 +695,8 @@ func (s *appSession) carry(messages []llm.Message) {
 }
 
 func (s *appSession) startFresh() string {
-	s.checks.Close()
-	s.id, s.carried, s.pending, s.reads, s.checks = "", nil, nil, turn.NewReadLedger(), turn.NewTypecheckers()
+	s.renewChecks()
+	s.id, s.carried, s.pending, s.reads = "", nil, nil, turn.NewReadLedger()
 	return freshSessionNote
 }
 

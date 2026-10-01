@@ -9,7 +9,7 @@ references:
   - verify-a-running-service
 language: typescript
 model: inherit
-tools: read, glob, search, symbols, edit, write, bash
+tools: read, glob, search, symbols, edit, typecheck, write, bash
 ---
 
 # ts-dev
@@ -23,9 +23,9 @@ The compiler proves what it can. You own what it cannot, and you are done when t
 
 ## The done-gate
 
-Run the project's own `typecheck`, `lint` and `test` scripts, found from package.json, AGENTS.md or CLAUDE.md, one shot each, never in watch mode.
+Typecheck with the `typecheck` tool, never with tsc or a typecheck script through the shell. A tsc already watches the project, so it answers in seconds where a shell run takes minutes. A tool answer that says it is still warming is called again, not replaced by a shell run.
 
-If the project has no script, run `<pm> exec tsc --noEmit` (or `tsc -b` with project references), then the project's own linter, then the affected tests.
+Then run the project's own `lint` and `test` scripts, found from package.json, AGENTS.md or CLAUDE.md, one shot each, never in watch mode. If the project has no lint script, run its linter, then the affected tests.
 
 Detect the package manager from the lockfile: `bun.lock` or `bun.lockb` is bun, `pnpm-lock.yaml` is pnpm, `yarn.lock` is yarn, `package-lock.json` is npm, checked in that order. With no lockfile, read the `packageManager` field in package.json.
 

@@ -57,6 +57,7 @@ type watchOutcome int
 const (
 	watchAnswered watchOutcome = iota
 	watchQuiet
+	watchBusy
 	watchLost
 	watchCancelled
 )
@@ -77,53 +78,94 @@ func (c *Typecheckers) Close() {
 	}
 }
 
+func (c *Typecheckers) Warm(dir string) {
+	if _, err := os.Stat(filepath.Join(dir, tsconfigName)); err != nil {
+		return
+	}
+	if project, argv, skipped := tscCommand(dir); skipped == "" {
+		c.watchFor(project, argv)
+	}
+}
+
+func (c *Typecheckers) Typecheck(ctx context.Context, resolved string) (string, error) {
+	since := time.Now()
+	info, err := os.Stat(resolved)
+	if err != nil {
+		return "", err
+	}
+	from := resolved
+	if !info.IsDir() {
+		from = filepath.Dir(resolved)
+	}
+	dir, argv, skipped := tscCommand(from)
+	if skipped != "" {
+		return "typecheck skipped: " + skipped, nil
+	}
+	scope, _ := filepath.Rel(dir, resolved)
+	report, _ := c.check(ctx, dir, argv, filepath.ToSlash(scope), since)
+	return report, nil
+}
+
 func (c *Typecheckers) Typechecked(ctx context.Context, resolved, result string) string {
 	if ext := filepath.Ext(resolved); ext != ".ts" && ext != ".tsx" {
 		return result
 	}
 	since := time.Now()
-	dir, argv, skipped := tscCommand(resolved)
+	dir, argv, skipped := tscCommand(filepath.Dir(resolved))
 	if skipped != "" {
 		return result + "\n\ntypecheck skipped: " + skipped
 	}
 	relative, _ := filepath.Rel(dir, resolved)
 	relative = filepath.ToSlash(relative)
-	if report, answered := c.watched(ctx, dir, argv, relative, since); answered {
-		return result + "\n\n" + report
+	report, outcome := c.check(ctx, dir, argv, relative, since)
+	if outcome == watchQuiet {
+		report = coldTypecheck(ctx, dir, argv, relative)
 	}
-	return result + "\n\n" + coldTypecheck(ctx, dir, argv, relative)
+	return result + "\n\n" + report
 }
 
-func (c *Typecheckers) watched(ctx context.Context, dir string, argv []string, relative string, since time.Time) (string, bool) {
+func (c *Typecheckers) watchFor(dir string, argv []string) *tscWatch {
 	if c == nil {
-		return "", false
+		return nil
 	}
 	c.mutex.Lock()
-	watch := c.watching[dir]
-	if watch == nil {
-		if watch = startWatch(dir, argv); watch != nil {
+	defer c.mutex.Unlock()
+	if c.watching[dir] == nil {
+		if watch := startWatch(dir, argv); watch != nil {
 			c.watching[dir] = watch
 		}
 	}
-	c.mutex.Unlock()
+	return c.watching[dir]
+}
+
+func (c *Typecheckers) check(ctx context.Context, dir string, argv []string, scope string, since time.Time) (string, watchOutcome) {
+	watch := c.watchFor(dir, argv)
 	if watch == nil {
-		return "", false
+		return coldTypecheck(ctx, dir, argv, scope), watchLost
 	}
-	cycle, outcome := watch.next(ctx, since)
+	waiting, cancel := context.WithTimeout(ctx, konst.TypecheckDeadlineMillis*time.Millisecond)
+	defer cancel()
+	cycle, outcome := watch.next(waiting, since)
+	took := time.Since(since).Milliseconds()
 	switch outcome {
-	case watchAnswered:
-		return tscReport(cycle.output, relative, fmt.Sprintf("typecheck: %s, %d ms", watch.command, time.Since(since).Milliseconds()), cycle.failed), true
-	case watchCancelled:
-		return "typecheck skipped: the turn was cancelled while " + watch.command + " ran", true
-	case watchLost:
-		c.mutex.Lock()
-		if c.watching[dir] == watch {
-			delete(c.watching, dir)
+	case watchAnswered, watchQuiet:
+		return tscReport(cycle.output, scope, fmt.Sprintf("typecheck: %s, %d ms", watch.command, took), cycle.failed), outcome
+	case watchBusy:
+		state := "rechecking a change"
+		if cycle.started.IsZero() {
+			state = "warming, on its first check of this project"
 		}
-		c.mutex.Unlock()
-		watch.stop()
+		return fmt.Sprintf("typecheck: %s is still %s after %d ms. it keeps running: call typecheck again for its answer rather than running tsc through the shell", watch.command, state, took), outcome
+	case watchCancelled:
+		return "typecheck skipped: the turn was cancelled while " + watch.command + " ran", outcome
 	}
-	return "", false
+	c.mutex.Lock()
+	if c.watching[dir] == watch {
+		delete(c.watching, dir)
+	}
+	c.mutex.Unlock()
+	watch.stop()
+	return coldTypecheck(ctx, dir, argv, scope), outcome
 }
 
 func startWatch(dir string, argv []string) *tscWatch {
@@ -184,36 +226,40 @@ func (w *tscWatch) settle(update func()) {
 
 func (w *tscWatch) next(ctx context.Context, since time.Time) (tscCycle, watchOutcome) {
 	notice := time.After(konst.TypecheckWatchNoticeMillis * time.Millisecond)
-	deadline := time.After(konst.TypecheckDeadlineMillis * time.Millisecond)
 	noticed := false
 	for {
 		w.mutex.Lock()
 		running, last, ended, changed := w.running, w.last, w.ended, w.changed
 		w.mutex.Unlock()
+		idle := !running.started.IsZero() && running.started.Equal(last.started)
 		switch {
 		case last.started.After(since):
 			return last, watchAnswered
 		case ended:
 			return tscCycle{}, watchLost
-		case noticed && !running.started.IsZero() && running.started.Equal(last.started):
-			return tscCycle{}, watchQuiet
+		case noticed && idle:
+			return last, watchQuiet
 		}
 		select {
 		case <-changed:
 		case <-notice:
 			noticed = true
-		case <-deadline:
-			return tscCycle{}, watchLost
 		case <-ctx.Done():
-			return tscCycle{}, watchCancelled
+			switch {
+			case !errors.Is(ctx.Err(), context.DeadlineExceeded):
+				return tscCycle{}, watchCancelled
+			case idle:
+				return last, watchQuiet
+			}
+			return last, watchBusy
 		}
 	}
 }
 
-func tscCommand(resolved string) (string, []string, string) {
-	tsconfig, found := findUp(filepath.Dir(resolved), tsconfigName)
+func tscCommand(from string) (string, []string, string) {
+	tsconfig, found := findUp(from, tsconfigName)
 	if !found {
-		return "", nil, "no tsconfig.json in " + filepath.Dir(resolved) + " or above it"
+		return "", nil, "no tsconfig.json in " + from + " or above it"
 	}
 	dir := filepath.Dir(tsconfig)
 	var manifest packageManifest
@@ -320,31 +366,34 @@ func runsTypeScript(manifest packageManifest) bool {
 	return false
 }
 
-func tscReport(output, file, head string, failed bool) string {
+func tscReport(output, scope, head string, failed bool) string {
 	var mine, global, unread []string
 	errorsHere, elsewhere, inMine := 0, 0, false
 	for _, line := range strings.Split(strings.ReplaceAll(output, "\r\n", "\n"), "\n") {
 		continued := strings.HasPrefix(line, " ")
+		located, _, isError := strings.Cut(line, "): error TS")
+		path := located[:max(strings.LastIndex(located, "("), 0)]
+		here := isError && (scope == "." || path == scope || strings.HasPrefix(path, scope+"/"))
 		switch {
 		case strings.TrimSpace(line) == "":
 		case continued && inMine:
 			mine = append(mine, line)
-		case strings.HasPrefix(line, file+"("):
+		case here:
 			if strings.Contains(line, erasableSyntaxError) {
 				line += typeStrippingNote
 			}
 			mine, errorsHere = append(mine, line), errorsHere+1
 		case strings.HasPrefix(line, "error TS"):
 			global = append(global, line)
-		case strings.Contains(line, "): error TS"):
+		case isError:
 			elsewhere++
 		case !continued:
 			unread = append(unread, line)
 		}
-		inMine = strings.HasPrefix(line, file+"(") || continued && inMine
+		inMine = here || continued && inMine
 	}
 	lines := slices.Concat(global, mine)
-	summary := fmt.Sprintf("%s, errors in %s: %d, in other files: %d", head, file, errorsHere, elsewhere)
+	summary := fmt.Sprintf("%s, errors in %s: %d, in other files: %d", head, scope, errorsHere, elsewhere)
 	if failed && len(lines) == 0 && elsewhere == 0 {
 		lines, summary = unread, head+", tsc failed and named no file"
 	}

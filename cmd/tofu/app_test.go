@@ -2330,6 +2330,7 @@ func TestEveryToolInTheRunRegistryRecordsACommandThatDoesNotRepeatItsName(t *tes
 		"search":             {arguments: `{"pattern":"Greet"}`},
 		"symbols":            {arguments: `{"name":"Greet"}`},
 		"edit":               {arguments: `{"path":"note.txt","old_string":"two","new_string":"four"}`},
+		"typecheck":          {arguments: `{}`},
 		"fetch":              {arguments: `{"url":` + strconv.Quote(page.URL) + `}`},
 		"tofu_lint_comments": {arguments: `{}`},
 		"tofu_rules_check":   {arguments: `{}`},

@@ -870,6 +870,7 @@ func buildRunToolsForRun(dir, set string, ledger *turn.ReadLedger, checkers *tur
 	if bashErr != nil {
 		return nil, nil, bashErr
 	}
+	checkers.Warm(dir)
 	return assembleRunTools(dir, set, ledger, checkers, bashTool)
 }
 
@@ -896,7 +897,8 @@ func assembleRunTools(dir, set string, ledger *turn.ReadLedger, checkers *turn.T
 	projectTool, projectErr := tools.NewProject(dir)
 	verbTools, verbErr := tools.NewVerbs(dir)
 	githubTool, githubErr := tools.NewGitHubPRDiff(dir)
-	if err := cmp.Or(globErr, searchErr, symbolsErr, editErr, projectErr, verbErr, githubErr); err != nil {
+	typecheckTool, typecheckErr := tools.NewTypecheck(dir, checkers)
+	if err := cmp.Or(globErr, searchErr, symbolsErr, editErr, projectErr, verbErr, githubErr, typecheckErr); err != nil {
 		return nil, nil, err
 	}
 	webTools, webErr := buildWebTools(dir)
@@ -914,7 +916,7 @@ func assembleRunTools(dir, set string, ledger *turn.ReadLedger, checkers *turn.T
 		return nil, nil, err
 	}
 	plan := tools.NewPlan()
-	full := append([]turn.Tool{read, write, shell, plan, tools.Shells{}, projectTool, globTool, searchTool, symbolsTool, editTool.Reading(ledger).Checking(checkers), githubTool}, verbTools...)
+	full := append([]turn.Tool{read, write, shell, plan, tools.Shells{}, projectTool, globTool, searchTool, symbolsTool, editTool.Reading(ledger).Checking(checkers), typecheckTool, githubTool}, verbTools...)
 	return tools.NewMemo().Wrap(append(append(full, webTools...), browserTools...)), plan, nil
 }
 

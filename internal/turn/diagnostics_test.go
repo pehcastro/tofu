@@ -153,6 +153,30 @@ func TestAKilledWatcherFallsBackColdAndIsReplaced(t *testing.T) {
 	}
 }
 
+func TestATypecheckPastItsDeadlineSaysWarmingAndKeepsTheWatcher(t *testing.T) {
+	dir := tsProject(t, "bun", "bun.lock", map[string]string{"broken.ts": "const count: number = \"many\";\n"})
+	checkers := NewTypecheckers()
+	t.Cleanup(checkers.Close)
+	hurried, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	started := time.Now()
+	warming, err := checkers.Typecheck(hurried, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if took := time.Since(started); took > time.Second || !strings.Contains(warming, "still warming") {
+		t.Fatalf("a check past its deadline took %s and read:\n%s", took, warming)
+	}
+	watch := onlyWatch(t, checkers)
+	answered, err := checkers.Typecheck(context.Background(), dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(answered, brokenLine) || !strings.Contains(answered, "--watch") || onlyWatch(t, checkers) != watch {
+		t.Fatalf("the watcher that was warming did not answer the next check:\n%s", answered)
+	}
+}
+
 func TestAFileOutsideTheProgramFallsBackQuicklyAndKeepsTheWatcher(t *testing.T) {
 	checkers, write := warmWriter(t, tsProject(t, "bun", "bun.lock", map[string]string{"tsconfig.json": `{"compilerOptions":{"strict":true},"include":["src"]}`}))
 	if first := write("src/broken.ts", "const count: number = \"many\";\n"); !strings.Contains(first, "--watch") {

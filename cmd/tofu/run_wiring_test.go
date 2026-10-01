@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"tofu/internal/konst"
 	"tofu/internal/llm"
@@ -172,6 +173,71 @@ func TestTheWriteAndEditARunBuildsAreCheckedByTheWarmTscItIsGiven(t *testing.T) 
 		if !strings.Contains(result.Content, step.want) || !strings.Contains(result.Content, "--watch") {
 			t.Fatalf("%s was not typechecked by the watching tsc it was given:\n%s", step.tool, result.Content)
 		}
+	}
+}
+
+func TestASessionInATsconfigDirectoryStartsItsWatcherBeforeAnyToolCall(t *testing.T) {
+	if _, err := exec.LookPath("bun"); err != nil {
+		t.Skip("bun is not on PATH")
+	}
+	shell, err := turn.ResolveRunShell("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, start := range map[string]func(t *testing.T, dir string){
+		"run": func(t *testing.T, dir string) {
+			checkers := turn.NewTypecheckers()
+			t.Cleanup(checkers.Close)
+			if _, _, err := buildRunToolsForRun(dir, toolSetFull, nil, checkers, shell); err != nil {
+				t.Fatal(err)
+			}
+		},
+		"app": func(t *testing.T, dir string) {
+			t.Cleanup(newAppSession(dir, nil, nil, time.Now, sessionResume{}).checks.Close)
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			dir := t.TempDir()
+			for file, body := range map[string]string{
+				"tsconfig.json": `{"compilerOptions":{"strict":true,"incremental":true,"tsBuildInfoFile":"warm.tsbuildinfo"}}`,
+				"package.json":  `{"name":"warm"}`, "bun.lock": "{}", "count.ts": "export const count = 1;\n",
+			} {
+				if err := os.WriteFile(filepath.Join(dir, file), []byte(body), 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			start(t, dir)
+			for waited := time.Duration(0); waited < konst.TypecheckDeadlineMillis*time.Millisecond; waited += 100 * time.Millisecond {
+				if _, err := os.Stat(filepath.Join(dir, "warm.tsbuildinfo")); err == nil {
+					return
+				}
+				time.Sleep(100 * time.Millisecond)
+			}
+			t.Fatal("no tsc checked the project before any tool was called")
+		})
+	}
+}
+
+func TestATsDevSpawnIsOfferedTypecheck(t *testing.T) {
+	reply := func(text string) llm.Decision {
+		return llm.Decision{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: text}
+	}
+	model := &sendModel{queued: []llm.Decision{
+		{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{
+			{ID: "call-1", Name: "spawn", Arguments: json.RawMessage(`{"agent":"ts-dev","task":"check the project","owns":["src/**"]}`)}}},
+		reply("checked"), reply("done"),
+	}}
+	stubbedTurn(scratchProject(t), model)(t.Context(), onTheSubscription, "have ts-dev check the project", driveAppOn(t, nil).emit)
+	if len(model.requests) < 2 {
+		t.Fatalf("the ts-dev sub-agent never asked its model: %d requests", len(model.requests))
+	}
+	var offered []string
+	for _, tool := range model.requests[1].Tools {
+		offered = append(offered, tool.Name)
+	}
+	t.Logf("ts-dev is offered %v", offered)
+	if !slices.Contains(offered, "typecheck") {
+		t.Fatal("the ts-dev sub-agent was not offered typecheck")
 	}
 }
 
