@@ -221,14 +221,12 @@ func (c *Typecheckers) check(ctx context.Context, dir string, argv []string, sco
 	watch.mutex.Lock()
 	warm, born := !watch.last.started.IsZero(), watch.born
 	watch.mutex.Unlock()
-	limit := konst.TypecheckDeadlineMillis * time.Millisecond
+	limit := konst.TypecheckFirstCheckMillis * time.Millisecond
 	switch {
 	case wait == waitInline && warm:
 		limit = konst.TypecheckInlineMillis * time.Millisecond
 	case wait == waitInline:
 		limit = time.Until(born.Add(konst.TypecheckInlineFirstMillis * time.Millisecond))
-	case !warm:
-		limit = konst.TypecheckFirstCheckMillis * time.Millisecond
 	}
 	waiting, cancel := context.WithTimeout(ctx, limit)
 	defer cancel()

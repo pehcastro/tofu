@@ -206,6 +206,32 @@ func TestATypecheckWaitsForAFirstCheckLongerThanTheWriteDeadline(t *testing.T) {
 	}
 }
 
+func TestATypecheckDuringALongRecheckWaitsForItsAnswer(t *testing.T) {
+	dir := tsProject(t, "bun", "bun.lock", map[string]string{})
+	output, input, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = input.Close() })
+	checkers := NewTypecheckers()
+	t.Cleanup(checkers.Close)
+	rechecking := &tscWatch{command: "tsc --watch", stop: func() {}, changed: make(chan struct{}), born: time.Now()}
+	checkers.watching[dir] = rechecking
+	go rechecking.read(output)
+	_, _ = input.WriteString("Starting compilation in watch mode...\nFound 0 errors. Watching for file changes.\n")
+	time.Sleep(250 * time.Millisecond)
+	_, _ = input.WriteString("File change detected. Starting incremental compilation...\n")
+	time.Sleep(250 * time.Millisecond)
+	go func() {
+		time.Sleep(konst.TypecheckDeadlineMillis*time.Millisecond + time.Second)
+		_, _ = input.WriteString("broken.ts(1,7): error TS2322: Type 'string' is not assignable to type 'number'.\nFound 1 error. Watching for file changes.\n")
+	}()
+	got, err := checkers.Typecheck(context.Background(), dir)
+	if err != nil || !strings.Contains(got, brokenLine) || strings.Contains(got, "still rechecking") {
+		t.Fatalf("a recheck past %d ms was not waited for: %v\n%s", konst.TypecheckDeadlineMillis, err, got)
+	}
+}
+
 func TestAWriteWhileALargeProjectWarmsReturnsAtOnce(t *testing.T) {
 	dir := tsProject(t, "bun", "bun.lock", map[string]string{})
 	output, input, err := os.Pipe()
