@@ -177,6 +177,32 @@ func TestATypecheckPastItsDeadlineSaysWarmingAndKeepsTheWatcher(t *testing.T) {
 	}
 }
 
+func TestATypecheckWaitsForAFirstCheckLongerThanTheWriteDeadline(t *testing.T) {
+	dir := tsProject(t, "bun", "bun.lock", map[string]string{})
+	output, input, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = input.Close() })
+	checkers := NewTypecheckers()
+	t.Cleanup(checkers.Close)
+	slow := &tscWatch{command: "tsc --watch", stop: func() {}, changed: make(chan struct{})}
+	checkers.watching[dir] = slow
+	go slow.read(output)
+	_, _ = input.WriteString("Starting compilation in watch mode...\n")
+	go func() {
+		time.Sleep(konst.TypecheckDeadlineMillis*time.Millisecond + time.Second)
+		_, _ = input.WriteString("broken.ts(1,7): error TS2322: Type 'string' is not assignable to type 'number'.\nFound 1 error. Watching for file changes.\n")
+	}()
+	got, err := checkers.Typecheck(context.Background(), dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(got, brokenLine) || strings.Contains(got, "still warming") {
+		t.Fatalf("a first check past %d ms was not waited for:\n%s", konst.TypecheckDeadlineMillis, got)
+	}
+}
+
 func TestAFileOutsideTheProgramFallsBackQuicklyAndKeepsTheWatcher(t *testing.T) {
 	checkers, write := warmWriter(t, tsProject(t, "bun", "bun.lock", map[string]string{"tsconfig.json": `{"compilerOptions":{"strict":true},"include":["src"]}`}))
 	if first := write("src/broken.ts", "const count: number = \"many\";\n"); !strings.Contains(first, "--watch") {

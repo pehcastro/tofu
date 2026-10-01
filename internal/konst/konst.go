@@ -116,8 +116,10 @@ const (
 	BackgroundYieldMillis = 10000
 
 	TypecheckDeadlineMillis    = 15000
+	TypecheckFirstCheckMillis  = 240000
 	TypecheckWatchNoticeMillis = 2000
 	TypecheckLinesCap          = 20
+	TypecheckWarmPackages      = 2
 
 	ShellProbeTimeoutMillis     = 2000
 	ToolchainProbeTimeoutMillis = 2000

@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -28,6 +29,19 @@ const (
 type packageManifest struct {
 	Scripts        map[string]string `json:"scripts"`
 	PackageManager string            `json:"packageManager"`
+	Workspaces     json.RawMessage   `json:"workspaces"`
+}
+
+func (m packageManifest) workspaces() []string {
+	var listed []string
+	if json.Unmarshal(m.Workspaces, &listed) == nil {
+		return listed
+	}
+	var nested struct {
+		Packages []string `json:"packages"`
+	}
+	_ = json.Unmarshal(m.Workspaces, &nested)
+	return nested.Packages
 }
 
 type Typecheckers struct {
@@ -79,12 +93,55 @@ func (c *Typecheckers) Close() {
 }
 
 func (c *Typecheckers) Warm(dir string) {
-	if _, err := os.Stat(filepath.Join(dir, tsconfigName)); err != nil {
-		return
+	projects := largestWorkspaces(dir)
+	if _, err := os.Stat(filepath.Join(dir, tsconfigName)); err == nil {
+		projects = append(projects, dir)
 	}
-	if project, argv, skipped := tscCommand(dir); skipped == "" {
-		c.watchFor(project, argv)
+	for _, project := range projects {
+		if project, argv, skipped := tscCommand(project); skipped == "" {
+			c.watchFor(project, argv)
+		}
 	}
+}
+
+func largestWorkspaces(dir string) []string {
+	var packages []string
+	var manifest packageManifest
+	if body, err := os.ReadFile(filepath.Join(dir, "package.json")); err == nil {
+		_ = json.Unmarshal(body, &manifest)
+	}
+	for _, pattern := range manifest.workspaces() {
+		found, _ := filepath.Glob(filepath.Join(dir, filepath.FromSlash(pattern), tsconfigName))
+		for _, tsconfig := range found {
+			packages = append(packages, filepath.Dir(tsconfig))
+		}
+	}
+	slices.Sort(packages)
+	packages = slices.Compact(packages)
+	sizes := map[string]int{}
+	for _, project := range packages {
+		sizes[project] = typescriptFiles(project)
+	}
+	slices.SortStableFunc(packages, func(a, b string) int { return sizes[b] - sizes[a] })
+	return packages[:min(len(packages), konst.TypecheckWarmPackages)]
+}
+
+func typescriptFiles(dir string) int {
+	count := 0
+	_ = filepath.WalkDir(dir, func(path string, entry fs.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		name := entry.Name()
+		switch {
+		case entry.IsDir() && path != dir && (name == "node_modules" || name == "dist" || strings.HasPrefix(name, ".")):
+			return filepath.SkipDir
+		case strings.HasSuffix(name, ".ts") || strings.HasSuffix(name, ".tsx"):
+			count++
+		}
+		return nil
+	})
+	return count
 }
 
 func (c *Typecheckers) Typecheck(ctx context.Context, resolved string) (string, error) {
@@ -102,7 +159,7 @@ func (c *Typecheckers) Typecheck(ctx context.Context, resolved string) (string, 
 		return "typecheck skipped: " + skipped, nil
 	}
 	scope, _ := filepath.Rel(dir, resolved)
-	report, _ := c.check(ctx, dir, argv, filepath.ToSlash(scope), since)
+	report, _ := c.check(ctx, dir, argv, filepath.ToSlash(scope), since, konst.TypecheckFirstCheckMillis*time.Millisecond)
 	return report, nil
 }
 
@@ -117,7 +174,7 @@ func (c *Typecheckers) Typechecked(ctx context.Context, resolved, result string)
 	}
 	relative, _ := filepath.Rel(dir, resolved)
 	relative = filepath.ToSlash(relative)
-	report, outcome := c.check(ctx, dir, argv, relative, since)
+	report, outcome := c.check(ctx, dir, argv, relative, since, konst.TypecheckDeadlineMillis*time.Millisecond)
 	if outcome == watchQuiet {
 		report = coldTypecheck(ctx, dir, argv, relative)
 	}
@@ -138,12 +195,18 @@ func (c *Typecheckers) watchFor(dir string, argv []string) *tscWatch {
 	return c.watching[dir]
 }
 
-func (c *Typecheckers) check(ctx context.Context, dir string, argv []string, scope string, since time.Time) (string, watchOutcome) {
+func (c *Typecheckers) check(ctx context.Context, dir string, argv []string, scope string, since time.Time, firstCheck time.Duration) (string, watchOutcome) {
 	watch := c.watchFor(dir, argv)
 	if watch == nil {
 		return coldTypecheck(ctx, dir, argv, scope), watchLost
 	}
-	waiting, cancel := context.WithTimeout(ctx, konst.TypecheckDeadlineMillis*time.Millisecond)
+	limit := konst.TypecheckDeadlineMillis * time.Millisecond
+	watch.mutex.Lock()
+	if watch.last.started.IsZero() {
+		limit = firstCheck
+	}
+	watch.mutex.Unlock()
+	waiting, cancel := context.WithTimeout(ctx, limit)
 	defer cancel()
 	cycle, outcome := watch.next(waiting, since)
 	took := time.Since(since).Milliseconds()

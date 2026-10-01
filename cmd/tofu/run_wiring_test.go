@@ -207,14 +207,67 @@ func TestASessionInATsconfigDirectoryStartsItsWatcherBeforeAnyToolCall(t *testin
 				}
 			}
 			start(t, dir)
-			for waited := time.Duration(0); waited < konst.TypecheckDeadlineMillis*time.Millisecond; waited += 100 * time.Millisecond {
-				if _, err := os.Stat(filepath.Join(dir, "warm.tsbuildinfo")); err == nil {
-					return
-				}
-				time.Sleep(100 * time.Millisecond)
+			if !checkedWithin(filepath.Join(dir, "warm.tsbuildinfo"), konst.TypecheckDeadlineMillis*time.Millisecond) {
+				t.Fatal("no tsc checked the project before any tool was called")
 			}
-			t.Fatal("no tsc checked the project before any tool was called")
 		})
+	}
+}
+
+func checkedWithin(buildInfo string, limit time.Duration) bool {
+	for waited := time.Duration(0); waited < limit; waited += 100 * time.Millisecond {
+		if _, err := os.Stat(buildInfo); err == nil {
+			return true
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	return false
+}
+
+func TestASessionInAWorkspaceRootWarmsItsLargestPackagesUpToTheCap(t *testing.T) {
+	if _, err := exec.LookPath("bun"); err != nil {
+		t.Skip("bun is not on PATH")
+	}
+	warmed := `{"compilerOptions":{"strict":true,"incremental":true,"tsBuildInfoFile":"warm.tsbuildinfo"}}`
+	dir := t.TempDir()
+	files := map[string]string{
+		"tsconfig.json": `{"compilerOptions":{"strict":true,"incremental":true,"tsBuildInfoFile":"warm.tsbuildinfo"},"include":["*.ts"]}`,
+		"package.json":  `{"name":"root","workspaces":["packages/*","tools/none/*"]}`, "bun.lock": "{}", "root.ts": "export const root = 1;\n",
+	}
+	var packages []string
+	for rank := range konst.TypecheckWarmPackages + 1 {
+		name := "packages/p" + strconv.Itoa(rank)
+		packages = append(packages, name)
+		files[name+"/tsconfig.json"] = warmed
+		for file := range konst.TypecheckWarmPackages + 1 - rank {
+			files[name+"/src/f"+strconv.Itoa(file)+".ts"] = "export const f" + strconv.Itoa(file) + " = 1;\n"
+		}
+	}
+	for name, body := range files {
+		if err := os.MkdirAll(filepath.Dir(filepath.Join(dir, name)), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	shell, err := turn.ResolveRunShell("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	checkers := turn.NewTypecheckers()
+	t.Cleanup(checkers.Close)
+	if _, _, err := buildRunToolsForRun(dir, toolSetFull, nil, checkers, shell); err != nil {
+		t.Fatal(err)
+	}
+	for _, project := range append([]string{"."}, packages[:konst.TypecheckWarmPackages]...) {
+		if !checkedWithin(filepath.Join(dir, project, "warm.tsbuildinfo"), konst.TypecheckDeadlineMillis*time.Millisecond) {
+			t.Fatalf("%s was not checked before any tool was called", project)
+		}
+	}
+	smallest := packages[konst.TypecheckWarmPackages]
+	if checkedWithin(filepath.Join(dir, smallest, "warm.tsbuildinfo"), 3*time.Second) {
+		t.Fatalf("%s, the smallest package past the cap of %d, was warmed too", smallest, konst.TypecheckWarmPackages)
 	}
 }
 
