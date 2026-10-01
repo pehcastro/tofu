@@ -6,6 +6,9 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
+	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -200,6 +203,88 @@ func TestATypecheckWaitsForAFirstCheckLongerThanTheWriteDeadline(t *testing.T) {
 	}
 	if !strings.Contains(got, brokenLine) || strings.Contains(got, "still warming") {
 		t.Fatalf("a first check past %d ms was not waited for:\n%s", konst.TypecheckDeadlineMillis, got)
+	}
+}
+
+func watchedDirs(checkers *Typecheckers, root string) []string {
+	checkers.mutex.Lock()
+	defer checkers.mutex.Unlock()
+	var dirs []string
+	for dir := range checkers.watching {
+		relative, _ := filepath.Rel(root, dir)
+		dirs = append(dirs, filepath.ToSlash(relative))
+	}
+	slices.Sort(dirs)
+	return dirs
+}
+
+func TestAWorkspaceRootThatOnlyBasesItsPackagesIsNeverWatched(t *testing.T) {
+	for _, root := range []struct {
+		tsconfig string
+		want     []string
+	}{
+		{`{"compilerOptions":{"strict":true}}`, []string{"packages/a", "packages/b"}},
+		{`{"compilerOptions":{"strict":true},"include":["*.ts"]}`, []string{".", "packages/a", "packages/b"}},
+	} {
+		dir := tsProject(t, "bun", "bun.lock", map[string]string{
+			"tsconfig.json":            root.tsconfig,
+			"package.json":             `{"name":"root","workspaces":["packages/*"]}`,
+			"root.ts":                  "export const root = 1;\n",
+			"packages/a/tsconfig.json": `{"extends":"../../tsconfig.json"}`,
+			"packages/a/a.ts":          "export const a = 1;\n",
+			"packages/b/tsconfig.json": `{"extends":"../../tsconfig.json"}`,
+			"packages/b/b.ts":          "export const b = 1;\n",
+		})
+		checkers := NewTypecheckers()
+		t.Cleanup(checkers.Close)
+		checkers.Warm(dir)
+		if got := watchedDirs(checkers, dir); !slices.Equal(got, root.want) {
+			t.Fatalf("root tsconfig %s: watching %v, want %v", root.tsconfig, got, root.want)
+		}
+		if len(root.want) == 3 {
+			continue
+		}
+		asked, err := checkers.Typecheck(context.Background(), dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(asked, "packages/a") || !strings.Contains(asked, "packages/b") || len(watchedDirs(checkers, dir)) != 2 {
+			t.Fatalf("a typecheck on the base config did not name the packages, or started a watcher:\n%s", asked)
+		}
+		t.Log(asked)
+	}
+}
+
+func TestAWatcherOnInstalledTypeScriptIsOneProcess(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("the child process count is read from Win32_Process")
+	}
+	if _, err := exec.LookPath("node"); err != nil {
+		t.Skip("node is not on PATH")
+	}
+	dir := tsProject(t, "bun", "bun.lock", map[string]string{
+		"node_modules/typescript/package.json": `{"name":"typescript","version":"5.9.0"}`,
+		"node_modules/typescript/bin/tsc": "console.log('Starting compilation in watch mode...');\n" +
+			"console.log('Found 0 errors. Watching for file changes.');\nsetInterval(() => {}, 1000);\n",
+	})
+	checkers := NewTypecheckers()
+	t.Cleanup(checkers.Close)
+	checkers.Warm(dir)
+	watch := onlyWatch(t, checkers)
+	if want := "node " + filepath.Join("node_modules", "typescript", "bin", "tsc") + " "; !strings.HasPrefix(watch.command, want) {
+		t.Fatalf("the watcher runs %q, want it to start with %q", watch.command, want)
+	}
+	answered, err := checkers.Typecheck(context.Background(), dir)
+	if err != nil || !strings.Contains(answered, "errors in .: 0") {
+		t.Fatalf("the direct watcher did not answer: %v\n%s", err, answered)
+	}
+	children, err := exec.Command("powershell", "-NoProfile", "-Command",
+		"@(Get-CimInstance Win32_Process -Filter 'ParentProcessId="+strconv.Itoa(watch.process.Pid)+"').Count").Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if count := strings.TrimSpace(string(children)); count != "0" {
+		t.Fatalf("the watcher %s has %s child processes, want none", watch.command, count)
 	}
 }
 

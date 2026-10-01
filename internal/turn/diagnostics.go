@@ -104,7 +104,7 @@ func (c *Typecheckers) Warm(dir string) {
 	}
 }
 
-func largestWorkspaces(dir string) []string {
+func workspacePackages(dir string) []string {
 	var packages []string
 	var manifest packageManifest
 	if body, err := os.ReadFile(filepath.Join(dir, "package.json")); err == nil {
@@ -117,7 +117,23 @@ func largestWorkspaces(dir string) []string {
 		}
 	}
 	slices.Sort(packages)
-	packages = slices.Compact(packages)
+	return slices.Compact(packages)
+}
+
+func baseOnly(dir string) []string {
+	var config struct {
+		Files   []string `json:"files"`
+		Include []string `json:"include"`
+	}
+	body, err := os.ReadFile(filepath.Join(dir, tsconfigName))
+	if err != nil || json.Unmarshal(body, &config) != nil || len(config.Files)+len(config.Include) > 0 {
+		return nil
+	}
+	return workspacePackages(dir)
+}
+
+func largestWorkspaces(dir string) []string {
+	packages := workspacePackages(dir)
 	sizes := map[string]int{}
 	for _, project := range packages {
 		sizes[project] = typescriptFiles(project)
@@ -325,17 +341,20 @@ func tscCommand(from string) (string, []string, string) {
 		return "", nil, "no tsconfig.json in " + from + " or above it"
 	}
 	dir := filepath.Dir(tsconfig)
+	if packages := baseOnly(dir); len(packages) > 0 {
+		for i, project := range packages {
+			relative, _ := filepath.Rel(dir, project)
+			packages[i] = filepath.ToSlash(relative)
+		}
+		return "", nil, "tsconfig.json in " + dir + " only holds the settings its workspace packages extend and names no files of its own, so typecheck a package instead: " + strings.Join(packages, ", ")
+	}
 	var manifest packageManifest
 	if at, found := findUp(dir, "package.json"); found {
 		if body, err := os.ReadFile(at); err == nil {
 			_ = json.Unmarshal(body, &manifest)
 		}
 	}
-	manager := lockfileManager(dir, manifest)
-	argv, skipped := projectChecker(manager)
-	if _, installed := findUp(dir, "node_modules", "typescript", "package.json"); !installed {
-		argv, skipped = machineChecker(manager)
-	}
+	argv, skipped := checkerFor(dir, lockfileManager(dir, manifest))
 	if skipped != "" {
 		return "", nil, skipped
 	}
@@ -370,6 +389,18 @@ func coldTypecheck(ctx context.Context, dir string, argv []string, relative stri
 		return "typecheck skipped: the turn was cancelled while " + command + " ran"
 	}
 	return tscReport(output.String(), relative, fmt.Sprintf("typecheck: %s, %d ms", command, took), failed)
+}
+
+func checkerFor(dir, manager string) ([]string, string) {
+	installed, found := findUp(dir, "node_modules", "typescript", "package.json")
+	if !found {
+		return machineChecker(manager)
+	}
+	if _, err := exec.LookPath("node"); err != nil {
+		return projectChecker(manager)
+	}
+	tsc, _ := filepath.Rel(dir, filepath.Join(filepath.Dir(installed), "bin", "tsc"))
+	return []string{"node", tsc}, ""
 }
 
 func projectChecker(manager string) ([]string, string) {
