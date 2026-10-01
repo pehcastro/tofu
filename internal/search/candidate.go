@@ -53,13 +53,7 @@ type sweep struct {
 	spent     time.Duration
 }
 
-func (s *sweep) scan(rel, source string) {
-	started := time.Now()
-	hits := hitLines(source, s.pattern)
-	s.spent += time.Since(started)
-	if len(hits) == 0 {
-		return
-	}
+func (s *sweep) record(rel string, hits []hit) {
 	s.hits[rel] = hits
 	s.lines += len(hits)
 	s.files++
@@ -100,12 +94,9 @@ func wordBoundarySweep(source string, literal *sweep, matched map[string]string)
 			}
 		}
 		boundary.spent += time.Since(started)
-		if len(kept) == 0 {
-			continue
+		if len(kept) > 0 {
+			boundary.record(rel, kept)
 		}
-		boundary.hits[rel] = kept
-		boundary.lines += len(kept)
-		boundary.files++
 	}
 	return boundary
 }

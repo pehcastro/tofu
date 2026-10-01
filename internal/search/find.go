@@ -8,8 +8,10 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"tofu/internal/konst"
@@ -166,30 +168,72 @@ func Find(req Request) (Result, error) {
 	return result, nil
 }
 
+type scannedFile struct {
+	source string
+	hits   []hit
+	binary bool
+	read   time.Duration
+	match  time.Duration
+	err    error
+}
+
 func scanTree(req Request, into *sweep, matched map[string]string, stats *Stats) error {
-	for _, rel := range req.Files {
+	scanned := make([]chan scannedFile, len(req.Files))
+	for index := range scanned {
+		scanned[index] = make(chan scannedFile, 1)
+	}
+	var next atomic.Int64
+	var stop atomic.Bool
+	defer stop.Store(true)
+	for range min(runtime.GOMAXPROCS(0), len(req.Files)) {
+		go func() {
+			for !stop.Load() {
+				index := int(next.Add(1)) - 1
+				if index >= len(req.Files) {
+					return
+				}
+				scanned[index] <- scanFile(filepath.Join(req.Root, filepath.FromSlash(req.Files[index])), into.pattern)
+			}
+		}()
+	}
+	for index, rel := range req.Files {
 		if into.lines >= konst.SearchCandidateScanCap {
 			stats.ScanStopped = true
 			return nil
 		}
-		started := time.Now()
-		body, err := os.ReadFile(filepath.Join(req.Root, filepath.FromSlash(rel)))
-		stats.Read += time.Since(started)
-		if err != nil {
-			return fmt.Errorf("search: %w", err)
+		file := <-scanned[index]
+		stats.Read += file.read
+		into.spent += file.match
+		if file.err != nil {
+			return fmt.Errorf("search: %w", file.err)
 		}
 		stats.Scanned++
-		if bytes.IndexByte(body, 0) >= 0 {
+		if file.binary {
 			stats.Skipped++
 			continue
 		}
-		source := string(body)
-		into.scan(rel, source)
-		if _, ok := into.hits[rel]; ok {
-			matched[rel] = source
+		if len(file.hits) > 0 {
+			into.record(rel, file.hits)
+			matched[rel] = file.source
 		}
 	}
 	return nil
+}
+
+func scanFile(full string, pattern *regexp.Regexp) scannedFile {
+	started := time.Now()
+	body, err := os.ReadFile(full)
+	file := scannedFile{read: time.Since(started), err: err, binary: bytes.IndexByte(body, 0) >= 0}
+	if err != nil || file.binary {
+		return file
+	}
+	started = time.Now()
+	if prefix, _ := pattern.LiteralPrefix(); bytes.Contains(body, []byte(prefix)) {
+		file.source = string(body)
+		file.hits = hitLines(file.source, pattern)
+	}
+	file.match = time.Since(started)
+	return file
 }
 
 func sourceLines(body string) []string {
