@@ -57,6 +57,7 @@ type tscCycle struct {
 
 type tscWatch struct {
 	command string
+	born    time.Time
 	process *os.Process
 	stop    context.CancelFunc
 	mutex   sync.Mutex
@@ -74,6 +75,13 @@ const (
 	watchBusy
 	watchLost
 	watchCancelled
+)
+
+type checkWait int
+
+const (
+	waitForAnswer checkWait = iota
+	waitInline
 )
 
 func NewTypecheckers() *Typecheckers {
@@ -175,8 +183,7 @@ func (c *Typecheckers) Typecheck(ctx context.Context, resolved string) (string, 
 		return "typecheck skipped: " + skipped, nil
 	}
 	scope, _ := filepath.Rel(dir, resolved)
-	report, _ := c.check(ctx, dir, argv, filepath.ToSlash(scope), since, konst.TypecheckFirstCheckMillis*time.Millisecond)
-	return report, nil
+	return c.check(ctx, dir, argv, filepath.ToSlash(scope), since, waitForAnswer), nil
 }
 
 func (c *Typecheckers) Typechecked(ctx context.Context, resolved, result string) string {
@@ -189,12 +196,7 @@ func (c *Typecheckers) Typechecked(ctx context.Context, resolved, result string)
 		return result + "\n\ntypecheck skipped: " + skipped
 	}
 	relative, _ := filepath.Rel(dir, resolved)
-	relative = filepath.ToSlash(relative)
-	report, outcome := c.check(ctx, dir, argv, relative, since, konst.TypecheckDeadlineMillis*time.Millisecond)
-	if outcome == watchQuiet {
-		report = coldTypecheck(ctx, dir, argv, relative)
-	}
-	return result + "\n\n" + report
+	return result + "\n\n" + c.check(ctx, dir, argv, filepath.ToSlash(relative), since, waitInline)
 }
 
 func (c *Typecheckers) watchFor(dir string, argv []string) *tscWatch {
@@ -211,32 +213,44 @@ func (c *Typecheckers) watchFor(dir string, argv []string) *tscWatch {
 	return c.watching[dir]
 }
 
-func (c *Typecheckers) check(ctx context.Context, dir string, argv []string, scope string, since time.Time, firstCheck time.Duration) (string, watchOutcome) {
+func (c *Typecheckers) check(ctx context.Context, dir string, argv []string, scope string, since time.Time, wait checkWait) string {
 	watch := c.watchFor(dir, argv)
 	if watch == nil {
-		return coldTypecheck(ctx, dir, argv, scope), watchLost
+		return coldTypecheck(ctx, dir, argv, scope)
 	}
-	limit := konst.TypecheckDeadlineMillis * time.Millisecond
 	watch.mutex.Lock()
-	if watch.last.started.IsZero() {
-		limit = firstCheck
-	}
+	warm, born := !watch.last.started.IsZero(), watch.born
 	watch.mutex.Unlock()
+	limit := konst.TypecheckDeadlineMillis * time.Millisecond
+	switch {
+	case wait == waitInline && warm:
+		limit = konst.TypecheckInlineMillis * time.Millisecond
+	case wait == waitInline:
+		limit = time.Until(born.Add(konst.TypecheckInlineFirstMillis * time.Millisecond))
+	case !warm:
+		limit = konst.TypecheckFirstCheckMillis * time.Millisecond
+	}
 	waiting, cancel := context.WithTimeout(ctx, limit)
 	defer cancel()
 	cycle, outcome := watch.next(waiting, since)
 	took := time.Since(since).Milliseconds()
-	switch outcome {
-	case watchAnswered, watchQuiet:
-		return tscReport(cycle.output, scope, fmt.Sprintf("typecheck: %s, %d ms", watch.command, took), cycle.failed), outcome
-	case watchBusy:
+	switch {
+	case outcome == watchAnswered || outcome == watchQuiet && wait == waitForAnswer:
+		return tscReport(cycle.output, scope, fmt.Sprintf("typecheck: %s, %d ms", watch.command, took), cycle.failed)
+	case outcome == watchCancelled:
+		return "typecheck skipped: the turn was cancelled while " + watch.command + " ran"
+	case outcome != watchLost && wait == waitInline:
+		background := "typecheck: " + watch.command + " checks this change in the background, and the typecheck tool reports it"
+		if cycle.started.IsZero() {
+			return background
+		}
+		return tscReport(cycle.output, scope, background+". its last finished check, from before this change", cycle.failed)
+	case outcome == watchBusy:
 		state := "rechecking a change"
 		if cycle.started.IsZero() {
 			state = "warming, on its first check of this project"
 		}
-		return fmt.Sprintf("typecheck: %s is still %s after %d ms. it keeps running: call typecheck again for its answer rather than running tsc through the shell", watch.command, state, took), outcome
-	case watchCancelled:
-		return "typecheck skipped: the turn was cancelled while " + watch.command + " ran", outcome
+		return fmt.Sprintf("typecheck: %s is still %s after %d ms. it keeps running: call typecheck again for its answer rather than running tsc through the shell", watch.command, state, took)
 	}
 	c.mutex.Lock()
 	if c.watching[dir] == watch {
@@ -244,7 +258,7 @@ func (c *Typecheckers) check(ctx context.Context, dir string, argv []string, sco
 	}
 	c.mutex.Unlock()
 	watch.stop()
-	return coldTypecheck(ctx, dir, argv, scope), outcome
+	return coldTypecheck(ctx, dir, argv, scope)
 }
 
 func startWatch(dir string, argv []string) *tscWatch {
@@ -263,7 +277,7 @@ func startWatch(dir string, argv []string) *tscWatch {
 		stop()
 		return nil
 	}
-	watch := &tscWatch{command: strings.Join(argv, " "), process: cmd.Process, stop: stop, changed: make(chan struct{})}
+	watch := &tscWatch{command: strings.Join(argv, " "), born: time.Now(), process: cmd.Process, stop: stop, changed: make(chan struct{})}
 	go watch.read(output)
 	go func() {
 		_ = cmd.Wait()

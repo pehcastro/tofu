@@ -117,6 +117,8 @@ const (
 
 	TypecheckDeadlineMillis    = 15000
 	TypecheckFirstCheckMillis  = 240000
+	TypecheckInlineMillis      = 400
+	TypecheckInlineFirstMillis = 3000
 	TypecheckWatchNoticeMillis = 2000
 	TypecheckLinesCap          = 20
 	TypecheckWarmPackages      = 2

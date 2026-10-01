@@ -95,7 +95,8 @@ func (t *WriteTool) Definition() llm.Tool {
 		Description: "writes a file inside the turn's working directory, replacing it whole. " +
 			"the result says the file was created when it was not there before, " +
 			"and is a unified diff of what changed when it was. " +
-			"a .ts or .tsx file is then typechecked with the project's own tsc, and its errors end the result: fix them before moving on",
+			"a .ts or .tsx file is then typechecked with the project's own tsc, and its errors end the result: fix them before moving on. " +
+			"on a project too large to recheck at once, the result says the check runs in the background and shows the errors its last check found",
 		Parameters: map[string]any{
 			"type": "object",
 			"properties": map[string]any{

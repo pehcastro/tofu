@@ -2,5 +2,5 @@ id: verify_scoped
 domain: dev
 kind: human
 concern: process_discipline
-text: check a change in seconds, not with a whole build. typecheck with the typecheck tool, never a build or a workspace-wide typecheck command. a typecheck still warming waits for its first check, so never sleep and poll through the shell: call typecheck again. run only the tests that cover the files you changed: vitest related <files>, go test -run, pytest <path>. run a whole suite only when asked.
+text: check a change in seconds, not with a whole build. typecheck with the typecheck tool, never a build or a workspace-wide typecheck command. a typecheck still warming waits for its first check, so never sleep and poll through the shell: call typecheck again. on a large project an edit or a write returns before its check finishes, so make the whole batch of edits, then call typecheck once for the batch. run only the tests that cover the files you changed: vitest related <files>, go test -run, pytest <path>. run a whole suite only when asked.
 notes: sources: tofu's own. no harness states this as a rule; opencode's lsp tool text only lists operations.

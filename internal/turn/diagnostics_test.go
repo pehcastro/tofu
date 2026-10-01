@@ -206,6 +206,31 @@ func TestATypecheckWaitsForAFirstCheckLongerThanTheWriteDeadline(t *testing.T) {
 	}
 }
 
+func TestAWriteWhileALargeProjectWarmsReturnsAtOnce(t *testing.T) {
+	dir := tsProject(t, "bun", "bun.lock", map[string]string{})
+	output, input, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = input.Close() })
+	checkers := NewTypecheckers()
+	t.Cleanup(checkers.Close)
+	warming := &tscWatch{command: "tsc --watch", stop: func() {}, changed: make(chan struct{}), born: time.Now().Add(-time.Minute)}
+	checkers.watching[dir] = warming
+	go warming.read(output)
+	_, _ = input.WriteString("Starting compilation in watch mode...\n")
+	tool, err := NewWriteTool(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tool.Checking(checkers)
+	started := time.Now()
+	result, err := tool.Run(context.Background(), json.RawMessage(`{"path":"broken.ts","content":"const count: number = 1;\n"}`))
+	if took := time.Since(started); err != nil || took >= time.Second || !strings.Contains(result.Content, "in the background") {
+		t.Fatalf("a write during a minute-old first check took %s: %v\n%s", took, err, result.Content)
+	}
+}
+
 func watchedDirs(checkers *Typecheckers, root string) []string {
 	checkers.mutex.Lock()
 	defer checkers.mutex.Unlock()
