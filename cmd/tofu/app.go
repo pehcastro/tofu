@@ -652,6 +652,7 @@ type appSession struct {
 	id      string
 	carried []llm.Message
 	reads   *turn.ReadLedger
+	checks  *turn.Typecheckers
 	shown   map[string]bool
 	granted map[string]bool
 	pending []pendingImage
@@ -678,7 +679,8 @@ func newAppSession(dir string, open func(runOpts) (appWire, error), answers <-ch
 }
 
 func (s *appSession) carry(messages []llm.Message) {
-	s.carried, s.reads = messages, turn.NewReadLedger()
+	s.checks.Close()
+	s.carried, s.reads, s.checks = messages, turn.NewReadLedger(), turn.NewTypecheckers()
 	for _, message := range messages {
 		if message.ToolCallID != "" {
 			s.shown[message.ToolCallID] = true
@@ -687,7 +689,8 @@ func (s *appSession) carry(messages []llm.Message) {
 }
 
 func (s *appSession) startFresh() string {
-	s.id, s.carried, s.pending, s.reads = "", nil, nil, turn.NewReadLedger()
+	s.checks.Close()
+	s.id, s.carried, s.pending, s.reads, s.checks = "", nil, nil, turn.NewReadLedger(), turn.NewTypecheckers()
 	return freshSessionNote
 }
 
@@ -861,7 +864,7 @@ func (s *appSession) run(ctx context.Context, pick tui.Pick, task string, emit t
 			images = nil
 		}
 	}
-	built, plan, builtErr := buildRunToolsForRun(s.dir, opts.toolSet, readsWhen(opts.readBeforeEdit, s.reads), shell)
+	built, plan, builtErr := buildRunToolsForRun(s.dir, opts.toolSet, readsWhen(opts.readBeforeEdit, s.reads), s.checks, shell)
 	sessions, sessionsErr := sessionstore.Open()
 	if err := cmp.Or(builtErr, sessionsErr); err != nil {
 		fail(err)

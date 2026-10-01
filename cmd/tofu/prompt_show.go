@@ -10,7 +10,7 @@ import (
 )
 
 func showPrompt(opts runOpts, out, errOut io.Writer) int {
-	named, _, err := assembleRunTools(opts.dir, opts.toolSet, readsWhen(opts.readBeforeEdit, turn.NewReadLedger()), &turn.BashTool{})
+	named, _, err := assembleRunTools(opts.dir, opts.toolSet, readsWhen(opts.readBeforeEdit, turn.NewReadLedger()), nil, &turn.BashTool{})
 	if err != nil {
 		return runFail(errOut, err)
 	}

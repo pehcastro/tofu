@@ -1,6 +1,7 @@
 package turn
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -11,6 +12,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"tofu/internal/konst"
@@ -28,17 +30,190 @@ type packageManifest struct {
 	PackageManager string            `json:"packageManager"`
 }
 
-func Typechecked(ctx context.Context, resolved, result string) string {
+type Typecheckers struct {
+	mutex    sync.Mutex
+	watching map[string]*tscWatch
+}
+
+type tscCycle struct {
+	started time.Time
+	output  string
+	failed  bool
+}
+
+type tscWatch struct {
+	command string
+	process *os.Process
+	stop    context.CancelFunc
+	mutex   sync.Mutex
+	running tscCycle
+	last    tscCycle
+	ended   bool
+	changed chan struct{}
+}
+
+type watchOutcome int
+
+const (
+	watchAnswered watchOutcome = iota
+	watchQuiet
+	watchLost
+	watchCancelled
+)
+
+func NewTypecheckers() *Typecheckers {
+	return &Typecheckers{watching: map[string]*tscWatch{}}
+}
+
+func (c *Typecheckers) Close() {
+	if c == nil {
+		return
+	}
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+	for dir, watch := range c.watching {
+		watch.stop()
+		delete(c.watching, dir)
+	}
+}
+
+func (c *Typecheckers) Typechecked(ctx context.Context, resolved, result string) string {
 	if ext := filepath.Ext(resolved); ext != ".ts" && ext != ".tsx" {
 		return result
 	}
-	return result + "\n\n" + typecheck(ctx, resolved)
+	since := time.Now()
+	dir, argv, skipped := tscCommand(resolved)
+	if skipped != "" {
+		return result + "\n\ntypecheck skipped: " + skipped
+	}
+	relative, _ := filepath.Rel(dir, resolved)
+	relative = filepath.ToSlash(relative)
+	if report, answered := c.watched(ctx, dir, argv, relative, since); answered {
+		return result + "\n\n" + report
+	}
+	return result + "\n\n" + coldTypecheck(ctx, dir, argv, relative)
 }
 
-func typecheck(ctx context.Context, resolved string) string {
+func (c *Typecheckers) watched(ctx context.Context, dir string, argv []string, relative string, since time.Time) (string, bool) {
+	if c == nil {
+		return "", false
+	}
+	c.mutex.Lock()
+	watch := c.watching[dir]
+	if watch == nil {
+		if watch = startWatch(dir, argv); watch != nil {
+			c.watching[dir] = watch
+		}
+	}
+	c.mutex.Unlock()
+	if watch == nil {
+		return "", false
+	}
+	cycle, outcome := watch.next(ctx, since)
+	switch outcome {
+	case watchAnswered:
+		return tscReport(cycle.output, relative, fmt.Sprintf("typecheck: %s, %d ms", watch.command, time.Since(since).Milliseconds()), cycle.failed), true
+	case watchCancelled:
+		return "typecheck skipped: the turn was cancelled while " + watch.command + " ran", true
+	case watchLost:
+		c.mutex.Lock()
+		if c.watching[dir] == watch {
+			delete(c.watching, dir)
+		}
+		c.mutex.Unlock()
+		watch.stop()
+	}
+	return "", false
+}
+
+func startWatch(dir string, argv []string) *tscWatch {
+	output, input, err := os.Pipe()
+	if err != nil {
+		return nil
+	}
+	argv = append(slices.Clone(argv), "--watch", "--preserveWatchOutput")
+	lifetime, stop := context.WithCancel(context.Background())
+	cmd := exec.CommandContext(lifetime, argv[0], argv[1:]...)
+	cmd.Dir, cmd.Stdout, cmd.Stderr = dir, input, input
+	tracked, err := shell.StartTracked(cmd)
+	_ = input.Close()
+	if err != nil {
+		_ = output.Close()
+		stop()
+		return nil
+	}
+	watch := &tscWatch{command: strings.Join(argv, " "), process: cmd.Process, stop: stop, changed: make(chan struct{})}
+	go watch.read(output)
+	go func() {
+		_ = cmd.Wait()
+		tracked.Release()
+		watch.settle(func() { watch.ended = true })
+	}()
+	return watch
+}
+
+func (w *tscWatch) read(output *os.File) {
+	defer func() { _ = output.Close() }()
+	var lines []string
+	for scanner := bufio.NewScanner(output); scanner.Scan(); {
+		line := scanner.Text()
+		switch {
+		case strings.Contains(line, "Starting compilation in watch mode") || strings.Contains(line, "File change detected"):
+			lines = nil
+			w.settle(func() { w.running = tscCycle{started: time.Now()} })
+		case strings.Contains(line, "Watching for file changes"):
+			printed := strings.Join(lines, "\n")
+			lines = nil
+			w.settle(func() {
+				w.last = w.running
+				w.last.output, w.last.failed = printed, !strings.Contains(line, "Found 0 errors")
+			})
+		default:
+			lines = append(lines, line)
+		}
+	}
+}
+
+func (w *tscWatch) settle(update func()) {
+	w.mutex.Lock()
+	defer w.mutex.Unlock()
+	update()
+	close(w.changed)
+	w.changed = make(chan struct{})
+}
+
+func (w *tscWatch) next(ctx context.Context, since time.Time) (tscCycle, watchOutcome) {
+	notice := time.After(konst.TypecheckWatchNoticeMillis * time.Millisecond)
+	deadline := time.After(konst.TypecheckDeadlineMillis * time.Millisecond)
+	noticed := false
+	for {
+		w.mutex.Lock()
+		running, last, ended, changed := w.running, w.last, w.ended, w.changed
+		w.mutex.Unlock()
+		switch {
+		case last.started.After(since):
+			return last, watchAnswered
+		case ended:
+			return tscCycle{}, watchLost
+		case noticed && !running.started.IsZero() && running.started.Equal(last.started):
+			return tscCycle{}, watchQuiet
+		}
+		select {
+		case <-changed:
+		case <-notice:
+			noticed = true
+		case <-deadline:
+			return tscCycle{}, watchLost
+		case <-ctx.Done():
+			return tscCycle{}, watchCancelled
+		}
+	}
+}
+
+func tscCommand(resolved string) (string, []string, string) {
 	tsconfig, found := findUp(filepath.Dir(resolved), tsconfigName)
 	if !found {
-		return "typecheck skipped: no tsconfig.json in " + filepath.Dir(resolved) + " or above it"
+		return "", nil, "no tsconfig.json in " + filepath.Dir(resolved) + " or above it"
 	}
 	dir := filepath.Dir(tsconfig)
 	var manifest packageManifest
@@ -53,12 +228,16 @@ func typecheck(ctx context.Context, resolved string) string {
 		argv, skipped = machineChecker(manager)
 	}
 	if skipped != "" {
-		return "typecheck skipped: " + skipped
+		return "", nil, skipped
 	}
 	argv = append(argv, "--noEmit", "--pretty", "false", "-p", tsconfigName)
 	if runsTypeScript(manifest) {
 		argv = append(argv, "--erasableSyntaxOnly")
 	}
+	return dir, argv, ""
+}
+
+func coldTypecheck(ctx context.Context, dir string, argv []string, relative string) string {
 	command := strings.Join(argv, " ")
 
 	ctx, cancel := context.WithTimeout(ctx, konst.TypecheckDeadlineMillis*time.Millisecond)
@@ -81,8 +260,7 @@ func typecheck(ctx context.Context, resolved string) string {
 	case ctx.Err() != nil:
 		return "typecheck skipped: the turn was cancelled while " + command + " ran"
 	}
-	relative, _ := filepath.Rel(dir, resolved)
-	return tscReport(output.String(), filepath.ToSlash(relative), fmt.Sprintf("typecheck: %s, %d ms", command, took), failed)
+	return tscReport(output.String(), relative, fmt.Sprintf("typecheck: %s, %d ms", command, took), failed)
 }
 
 func projectChecker(manager string) ([]string, string) {
