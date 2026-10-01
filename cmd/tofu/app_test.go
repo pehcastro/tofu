@@ -2966,7 +2966,7 @@ func TestASubAgentAskingForAnEffortOnTheOpenrouterKeySpawnsWithoutItAndSaysSoOnc
 	run := runtime{orchestrator: orchestrator, notify: func(notice string) { said = append(said, notice) }, open: refuse}
 	open := run.subAgentOpener(runOpts{dir: t.TempDir(), wire: wireKey, model: orchestrator.Slug()})
 	for _, name := range []string{browserAgent, browserAgent, "research"} {
-		opened, err := open(roster.Definition{Name: name, Origin: "library", Runs: roster.RunsInherit, Effort: llm.EffortMedium})
+		opened, err := open(roster.Definition{Name: name, Origin: "library", Runs: roster.RunsInherit, Effort: llm.EffortMedium}, "")
 		if err != nil {
 			t.Fatalf("%s did not spawn on the openrouter key: %v", name, err)
 		}

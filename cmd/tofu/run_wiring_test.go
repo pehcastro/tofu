@@ -2,23 +2,32 @@ package main
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"tofu/internal/konst"
 	"tofu/internal/llm"
 	"tofu/internal/llm/models"
+	"tofu/internal/llm/wire/anthropic"
 	"tofu/internal/recall"
 	"tofu/internal/session"
+	"tofu/internal/subagent"
 	"tofu/internal/sys"
 	"tofu/internal/turn"
 )
@@ -268,6 +277,85 @@ func TestASessionInAWorkspaceRootWarmsItsLargestPackagesUpToTheCap(t *testing.T)
 	smallest := packages[konst.TypecheckWarmPackages]
 	if checkedWithin(filepath.Join(dir, smallest, "warm.tsbuildinfo"), 3*time.Second) {
 		t.Fatalf("%s, the smallest package past the cap of %d, was warmed too", smallest, konst.TypecheckWarmPackages)
+	}
+}
+
+type effortServer struct {
+	mutex   sync.Mutex
+	bodies  []string
+	replies []string
+}
+
+func (s *effortServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	body, _ := io.ReadAll(r.Body)
+	s.mutex.Lock()
+	s.bodies = append(s.bodies, string(body))
+	reply := `{"type":"content_block_start","index":0,"content_block":{"type":"text"}}` + "\n" +
+		`{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"done"}}` + "\n" +
+		`{"type":"content_block_stop","index":0}` + "\n" + `{"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":2}}`
+	if len(s.replies) > 0 {
+		reply, s.replies = s.replies[0], s.replies[1:]
+	}
+	s.mutex.Unlock()
+	w.Header().Set("Content-Type", "text/event-stream")
+	events := append([]string{`{"type":"message_start","message":{"id":"msg_1","model":"claude-test","usage":{"input_tokens":3}}}`}, strings.Split(reply, "\n")...)
+	for _, event := range append(events, `{"type":"message_stop"}`) {
+		_, _ = fmt.Fprintf(w, "data: %s\n\n", event)
+	}
+}
+
+func TestASpawnedSubAgentsRequestsCarryTheEffortTheSpawnNames(t *testing.T) {
+	for _, spawned := range []struct{ effort, child string }{
+		{"low", `"output_config":{"effort":"low"}`},
+		{"", `"output_config":{"effort":"medium"}`},
+		{"minimal", ""},
+	} {
+		t.Run(cmp.Or(spawned.effort, "inherited"), func(t *testing.T) {
+			emptyHome(t)
+			args, _ := json.Marshal(map[string]any{"task": "add the users route", "owns": []string{"src/**"}, "effort": spawned.effort})
+			spawnCall := `{"type":"content_block_start","index":0,"content_block":{"type":"tool_use","id":"toolu_1","name":"` + anthropic.EncodeToolName("spawn", true) + `","input":{}}}` + "\n" +
+				`{"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":` + strconv.Quote(string(args)) + `}}` + "\n" +
+				`{"type":"content_block_stop","index":0}` + "\n" + `{"type":"message_delta","delta":{"stop_reason":"tool_use"},"usage":{"output_tokens":2}}`
+			server := &effortServer{replies: []string{spawnCall}}
+			listening := httptest.NewServer(server)
+			t.Cleanup(listening.Close)
+			orchestrator := models.Model{Subscription: "claude-sub", ID: "claude-test", Efforts: anthropic.ReasoningEfforts()}
+			subscription := func(effort llm.Effort) turn.Subscription {
+				wire, err := anthropic.New(anthropic.Config{BaseURL: listening.URL, Model: "claude-test", Proxy: true,
+					Token: func(context.Context) (string, error) { return "sk-ant-oat01-test", nil }})
+				if err != nil {
+					t.Fatal(err)
+				}
+				return turn.Subscription{Wire: wire, Effort: effort}
+			}
+			open := func(opts runOpts) (appWire, error) {
+				return appWire{held: &accounts{fixed: subscription(opts.effort), now: time.Now}, spend: turn.SpendSubscription, selected: orchestrator}, nil
+			}
+			dir := t.TempDir()
+			opener := runtime{orchestrator: orchestrator, open: open}.subAgentOpener(runOpts{dir: dir, wire: wireSubscription, model: orchestrator.Slug(), effort: llm.EffortMedium})
+			base := turn.Config{Model: subscription(llm.EffortMedium), Spend: turn.SpendSubscription, Caps: turn.Caps{MaxSteps: 5}, ResultBytesCap: 4096,
+				ArtifactDir: t.TempDir(), NewID: func() string { return "turn-lead" }, Task: "hand the users route to a sub-agent"}
+			spawner := turn.NewSpawnTool("turn-lead", base, &subagent.Roster{})
+			spawner.SubAgents.Open = opener
+			lead := base
+			lead.Tools = turn.NewRegistry(spawner)
+			if _, err := turn.Run(context.Background(), lead); err != nil {
+				t.Fatal(err)
+			}
+			t.Logf("%d requests reached the wire", len(server.bodies))
+			for index, body := range server.bodies {
+				t.Logf("request %d effort: %s", index, regexp.MustCompile(`"output_config":\{[^}]*\}`).FindString(body))
+			}
+			if spawned.child == "" {
+				if len(server.bodies) != 2 || !strings.Contains(server.bodies[1], "it takes low, medium, high, xhigh, max") {
+					t.Fatalf("a level the model does not take was not refused at the spawn, before any sub-agent request: %d requests", len(server.bodies))
+				}
+				return
+			}
+			if len(server.bodies) != 3 || !strings.Contains(server.bodies[0], `"output_config":{"effort":"medium"}`) || !strings.Contains(server.bodies[1], spawned.child) {
+				t.Fatalf("the sub-agent's request did not carry %s", spawned.child)
+			}
+		})
 	}
 }
 

@@ -218,12 +218,12 @@ func boundSubAgent(opts runOpts) (string, error) {
 	return bound[models.RoleSubAgent].Model.Slug(), nil
 }
 
-func (r runtime) subAgentOpener(opts runOpts) func(subagent.Definition) (turn.SubAgentModel, error) {
+func (r runtime) subAgentOpener(opts runOpts) func(subagent.Definition, llm.Effort) (turn.SubAgentModel, error) {
 	if r.open == nil {
 		return nil
 	}
 	var told sync.Map
-	return func(definition subagent.Definition) (turn.SubAgentModel, error) {
+	return func(definition subagent.Definition, wanted llm.Effort) (turn.SubAgentModel, error) {
 		subAgent := opts
 		named := definition.Model
 		if definition.Name == "" {
@@ -249,8 +249,14 @@ func (r runtime) subAgentOpener(opts runOpts) func(subagent.Definition) (turn.Su
 		if subAgent.wire == wireKey {
 			offered = nil
 		}
-		subAgent.effort = cmp.Or(definition.Effort, opts.effort)
-		if definition.Effort != "" && !slices.Contains(offered, definition.Effort) {
+		switch {
+		case wanted != "" && len(offered) == 0:
+			return turn.SubAgentModel{}, fmt.Errorf("effort %s for %s: it sends no reasoning effort, so the level would be dropped without a word", wanted, asked)
+		case wanted != "" && !slices.Contains(offered, wanted):
+			return turn.SubAgentModel{}, fmt.Errorf("effort %s for %s: it takes %s, so the level would be changed without a word", wanted, asked, llm.EffortList(offered))
+		}
+		subAgent.effort = cmp.Or(wanted, definition.Effort, opts.effort)
+		if wanted == "" && definition.Effort != "" && !slices.Contains(offered, definition.Effort) {
 			subAgent.effort = ""
 			if len(offered) > 0 {
 				subAgent.effort = defaultEffort(offered)
@@ -260,7 +266,7 @@ func (r runtime) subAgentOpener(opts runOpts) func(subagent.Definition) (turn.Su
 			}
 		}
 		if named == "" && subAgent.effort == opts.effort {
-			return turn.SubAgentModel{Slug: asked, Windows: r.orchestrator.WindowText()}, nil
+			return turn.SubAgentModel{Slug: asked, Windows: r.orchestrator.WindowText(), Effort: subAgent.effort}, nil
 		}
 		opened, err := r.open(subAgent)
 		if err != nil {
@@ -270,7 +276,7 @@ func (r runtime) subAgentOpener(opts runOpts) func(subagent.Definition) (turn.Su
 			return turn.SubAgentModel{}, err
 		}
 		opened.held.wrap = r.wrapSubAgent
-		return turn.SubAgentModel{Slug: asked, Windows: opened.selected.WindowText(), Wire: subAgent.wire, Spend: opened.spend, Accounts: r.applyThinkingSummary(opened.held.forTurn()), Close: opened.held.close}, nil
+		return turn.SubAgentModel{Slug: asked, Windows: opened.selected.WindowText(), Wire: subAgent.wire, Effort: subAgent.effort, Spend: opened.spend, Accounts: r.applyThinkingSummary(opened.held.forTurn()), Close: opened.held.close}, nil
 	}
 }
 

@@ -151,6 +151,7 @@ type SubAgentModel struct {
 	Slug     string
 	Windows  string
 	Wire     string
+	Effort   llm.Effort
 	Spend    Spend
 	Accounts Accounts
 	Close    func()
@@ -235,7 +236,7 @@ func (s spawnTrace) settle(id, status string) error {
 
 type SubAgents struct {
 	Defined []subagent.Definition
-	Open    func(subagent.Definition) (SubAgentModel, error)
+	Open    func(subagent.Definition, llm.Effort) (SubAgentModel, error)
 	Prompt  ComposeSpec
 	Brief   func(definition subagent.Definition, task string) string
 	Ended   func(definition subagent.Definition, task string, rounds []Row, report SubAgentReport, finished bool)
@@ -465,6 +466,12 @@ func (t *SpawnTool) Definition() llm.Tool {
 		"mission": map[string]any{"type": "string", "description": "the work in a handful of words, as a board entry reads: work on BOJI-395. the task is the brief and is kept whole"},
 		"owns":    map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
 	}
+	var levels []string
+	for _, level := range llm.Efforts() {
+		levels = append(levels, string(level))
+	}
+	properties["effort"] = map[string]any{"type": "string", "enum": levels,
+		"description": "how hard the sub-agent thinks. left out, it thinks as hard as you do"}
 	if names := t.SubAgents.enabledNames(); len(names) > 0 {
 		properties["agent"] = map[string]any{"type": "string", "enum": names,
 			"description": "the sub-agent that does the work, on its own model with its own instructions. left out, the sub-agent runs on the orchestrator's model"}
@@ -489,6 +496,7 @@ type spawnArgs struct {
 	Mission string   `json:"mission,omitempty"`
 	Owns    []string `json:"owns"`
 	Agent   string   `json:"agent,omitempty"`
+	Effort  string   `json:"effort,omitempty"`
 }
 
 func (a spawnArgs) mission() string {
@@ -543,7 +551,13 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 	if err != nil {
 		return Result{}, fmt.Errorf("spawn: the sub-agent's prompt did not compose: %w", err)
 	}
-	opened, err := t.open(definition)
+	var effort llm.Effort
+	if args.Effort != "" {
+		if effort, err = llm.ParseEffort(args.Effort); err != nil {
+			return Result{}, fmt.Errorf("spawn: %w", err)
+		}
+	}
+	opened, err := t.open(definition, effort)
 	if err != nil {
 		return Result{}, fmt.Errorf("spawn: %w", err)
 	}
@@ -622,7 +636,7 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 			t.tree.Unlock()
 		}
 	}
-	held := &heldSubAgent{agent: agent, definition: definition, config: subAgent, tools: owned, nested: nested,
+	held := &heldSubAgent{agent: agent, definition: definition, effort: opened.Effort, config: subAgent, tools: owned, nested: nested,
 		trace: spawnTrace{definition: agent.Agent, model: agent.Model, mission: agent.Mission, owns: args.Owns, depth: t.depth + 1}}
 	t.mu.Lock()
 	if t.held == nil {
@@ -643,6 +657,7 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 type heldSubAgent struct {
 	agent      subagent.SubAgent
 	definition subagent.Definition
+	effort     llm.Effort
 	config     Config
 	tools      []Tool
 	nested     *SpawnTool
@@ -667,11 +682,14 @@ func (h *heldSubAgent) remember(round Row) {
 	}
 }
 
-func (t *SpawnTool) open(definition subagent.Definition) (SubAgentModel, error) {
-	if t.SubAgents.Open == nil {
+func (t *SpawnTool) open(definition subagent.Definition, effort llm.Effort) (SubAgentModel, error) {
+	switch {
+	case t.SubAgents.Open == nil && effort != "":
+		return SubAgentModel{}, fmt.Errorf("effort %s: this run opens no model of its own for a sub-agent, so the level would be dropped without a word", effort)
+	case t.SubAgents.Open == nil:
 		return SubAgentModel{}, nil
 	}
-	opened, err := t.SubAgents.Open(definition)
+	opened, err := t.SubAgents.Open(definition, effort)
 	if err != nil {
 		return SubAgentModel{}, fmt.Errorf("the model for %s did not open: %w", cmp.Or(definition.Name, "the sub-agent"), err)
 	}
@@ -731,7 +749,11 @@ func (t *SpawnTool) converse(ctx context.Context, held *heldSubAgent, subAgent C
 	contract.Wrote = report.Wrote
 	text := report.Text() + "\n\n" + contract.Block()
 	if agent.Model != "" {
-		text = agent.ID + " ran as " + cmp.Or(agent.Agent, "the unnamed sub-agent") + " on " + agent.Model + "\n\n" + text
+		ran := agent.ID + " ran as " + cmp.Or(agent.Agent, "the unnamed sub-agent") + " on " + agent.Model
+		if held.effort != "" {
+			ran += " at effort " + string(held.effort)
+		}
+		text = ran + "\n\n" + text
 	}
 	t.roster.Reached(agent.ID, state, text)
 	if runErr != nil && state != subagent.Parked {
@@ -781,7 +803,7 @@ func (m messageTool) Run(ctx context.Context, raw json.RawMessage) (Result, erro
 	if held == nil {
 		return Result{}, t.unknown(args.To)
 	}
-	opened, err := t.open(held.definition)
+	opened, err := t.open(held.definition, held.effort)
 	if err != nil {
 		return Result{}, fmt.Errorf("message: %w", err)
 	}
