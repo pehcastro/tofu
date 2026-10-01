@@ -130,6 +130,33 @@ func TestAnOwnedDirectoryWithATrailingSlashOwnsWhatIsInsideIt(t *testing.T) {
 	}
 }
 
+func TestAnOwnedDirectoryWithoutASlashOwnsWhatIsInsideIt(t *testing.T) {
+	for _, row := range []struct {
+		owns, path string
+		want       bool
+	}{
+		{"packages/core", "packages/core/src/utils/errors.ts", true},
+		{"packages/core", "packages/core2/a.ts", false},
+		{"packages/core", "packages/cli/a.ts", false},
+		{"src/index.ts", "src/index.ts", true},
+		{"src/index.ts", "src/index.tsx", false},
+		{"src/index.ts", "src/index.ts/a.ts", false},
+		{"src/index.ts", "src/other.ts", false},
+		{"src/index.ts", "src", false},
+	} {
+		got, err := Matches(row.path, []string{row.owns})
+		if err != nil || got != row.want {
+			t.Errorf("%s owns %q: want %v, got %v %v", row.owns, row.path, row.want, got, err)
+		}
+	}
+	if !overlap("packages/core", "packages/core/**") {
+		t.Error("packages/core and packages/core/** must overlap")
+	}
+	if overlap("packages/core", "packages/cli/**") {
+		t.Error("packages/core and packages/cli/** must not overlap")
+	}
+}
+
 func TestBoundaryWriteStillRefusesAFileItDoesNotOwn(t *testing.T) {
 	boundary := &Boundary{Ticket: "TOFU-690-driven", Owns: []string{"internal/subagent/command.go"}}
 	err := boundary.Write("internal/subagent/owns.go")

@@ -170,10 +170,17 @@ func sharesAPath(a, b string) bool {
 	return reaches(0, 0)
 }
 
-func globForms(glob string) []string {
+func ownedTree(glob string) string {
 	if directory, ok := strings.CutSuffix(glob, "/"); ok {
-		return []string{directory + "/**", directory}
+		return directory + "/**"
 	}
+	if !strings.Contains(glob, "*") && gopath.Ext(glob) == "" {
+		return glob + "/**"
+	}
+	return glob
+}
+
+func globForms(glob string) []string {
 	if directory := strings.TrimSuffix(glob, "/**"); directory != glob {
 		return []string{glob, directory}
 	}
@@ -200,6 +207,10 @@ func withinPackageDirectory(glob, target string) bool {
 }
 
 func overlap(a, b string) bool {
+	return globsMeet(ownedTree(a), ownedTree(b))
+}
+
+func globsMeet(a, b string) bool {
 	left, right := normalizePath(a), normalizePath(b)
 	for _, l := range globForms(left) {
 		for _, r := range globForms(right) {
@@ -220,7 +231,7 @@ func Matches(path string, owns []string) (bool, error) {
 		if err := validGlob(glob); err != nil {
 			return false, err
 		}
-		if overlap(glob, target) {
+		if globsMeet(ownedTree(glob), target) {
 			return true, nil
 		}
 	}
