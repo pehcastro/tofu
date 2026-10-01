@@ -90,7 +90,7 @@ func NewRegistry(tools ...Tool) Registry {
 
 func readOnly(name string) bool {
 	switch name {
-	case "read", "glob", "search", "symbols", "project_report", "artifact_fetch", "fetch", "web_search", "github_pr_diff", "typecheck":
+	case "read", "glob", "search", "symbols", "project_report", "artifact_fetch", "fetch", "web_search", "github_pr_diff", "typecheck", "test":
 		return true
 	}
 	return false

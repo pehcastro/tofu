@@ -148,13 +148,13 @@ func TestTheWriteAndEditARunBuildsAreCheckedByTheWarmTscItIsGiven(t *testing.T) 
 			t.Fatal(err)
 		}
 	}
-	checkers := turn.NewTypecheckers()
-	t.Cleanup(checkers.Close)
+	warm := newWarmProcesses()
+	t.Cleanup(warm.Close)
 	shell, err := turn.ResolveRunShell("")
 	if err != nil {
 		t.Fatal(err)
 	}
-	built, _, err := buildRunToolsForRun(dir, toolSetFull, nil, checkers, shell)
+	built, _, err := buildRunToolsForRun(dir, toolSetFull, nil, warm, shell)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -186,14 +186,14 @@ func TestASessionInATsconfigDirectoryStartsItsWatcherBeforeAnyToolCall(t *testin
 	}
 	for name, start := range map[string]func(t *testing.T, dir string){
 		"run": func(t *testing.T, dir string) {
-			checkers := turn.NewTypecheckers()
-			t.Cleanup(checkers.Close)
-			if _, _, err := buildRunToolsForRun(dir, toolSetFull, nil, checkers, shell); err != nil {
+			warm := newWarmProcesses()
+			t.Cleanup(warm.Close)
+			if _, _, err := buildRunToolsForRun(dir, toolSetFull, nil, warm, shell); err != nil {
 				t.Fatal(err)
 			}
 		},
 		"app": func(t *testing.T, dir string) {
-			t.Cleanup(newAppSession(dir, nil, nil, time.Now, sessionResume{}).checks.Close)
+			t.Cleanup(newAppSession(dir, nil, nil, time.Now, sessionResume{}).warm.Close)
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -255,9 +255,9 @@ func TestASessionInAWorkspaceRootWarmsItsLargestPackagesUpToTheCap(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	checkers := turn.NewTypecheckers()
-	t.Cleanup(checkers.Close)
-	if _, _, err := buildRunToolsForRun(dir, toolSetFull, nil, checkers, shell); err != nil {
+	warm := newWarmProcesses()
+	t.Cleanup(warm.Close)
+	if _, _, err := buildRunToolsForRun(dir, toolSetFull, nil, warm, shell); err != nil {
 		t.Fatal(err)
 	}
 	for _, project := range append([]string{"."}, packages[:konst.TypecheckWarmPackages]...) {

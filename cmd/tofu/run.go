@@ -365,9 +365,9 @@ func runVerb(args []string, out, errOut io.Writer) int {
 	}
 	opts.shell = shell
 
-	checkers := turn.NewTypecheckers()
-	defer checkers.Close()
-	built, _, err := buildRunToolsForRun(opts.dir, opts.toolSet, readsWhen(opts.readBeforeEdit, turn.NewReadLedger()), checkers, shell)
+	warm := newWarmProcesses()
+	defer warm.Close()
+	built, _, err := buildRunToolsForRun(opts.dir, opts.toolSet, readsWhen(opts.readBeforeEdit, turn.NewReadLedger()), warm, shell)
 	if err != nil {
 		return runFail(errOut, err)
 	}
@@ -865,16 +865,38 @@ func readsWhen(readBeforeEdit bool, reads *turn.ReadLedger) *turn.ReadLedger {
 	return reads
 }
 
-func buildRunToolsForRun(dir, set string, ledger *turn.ReadLedger, checkers *turn.Typecheckers, shell turn.RunShell) ([]turn.Tool, *tools.Plan, error) {
+type warmProcesses struct {
+	checkers *turn.Typecheckers
+	tests    *turn.TestRunners
+}
+
+func newWarmProcesses() *warmProcesses {
+	return &warmProcesses{checkers: turn.NewTypecheckers(), tests: turn.NewTestRunners()}
+}
+
+func (w *warmProcesses) Close() {
+	if w != nil {
+		w.checkers.Close()
+		w.tests.Close()
+	}
+}
+
+func buildRunToolsForRun(dir, set string, ledger *turn.ReadLedger, warm *warmProcesses, shell turn.RunShell) ([]turn.Tool, *tools.Plan, error) {
 	bashTool, bashErr := turn.NewBashToolFromShell(dir, shell)
 	if bashErr != nil {
 		return nil, nil, bashErr
 	}
-	checkers.Warm(dir)
-	return assembleRunTools(dir, set, ledger, checkers, bashTool)
+	if warm != nil {
+		warm.checkers.Warm(dir)
+	}
+	return assembleRunTools(dir, set, ledger, warm, bashTool)
 }
 
-func assembleRunTools(dir, set string, ledger *turn.ReadLedger, checkers *turn.Typecheckers, bashTool *turn.BashTool) ([]turn.Tool, *tools.Plan, error) {
+func assembleRunTools(dir, set string, ledger *turn.ReadLedger, warm *warmProcesses, bashTool *turn.BashTool) ([]turn.Tool, *tools.Plan, error) {
+	if warm == nil {
+		warm = &warmProcesses{}
+	}
+	checkers := warm.checkers
 	readTool, readErr := turn.NewReadTool(dir)
 	writeTool, writeErr := turn.NewWriteTool(dir)
 	if err := cmp.Or(readErr, writeErr); err != nil {
@@ -898,7 +920,8 @@ func assembleRunTools(dir, set string, ledger *turn.ReadLedger, checkers *turn.T
 	verbTools, verbErr := tools.NewVerbs(dir)
 	githubTool, githubErr := tools.NewGitHubPRDiff(dir)
 	typecheckTool, typecheckErr := tools.NewTypecheck(dir, checkers)
-	if err := cmp.Or(globErr, searchErr, symbolsErr, editErr, projectErr, verbErr, githubErr, typecheckErr); err != nil {
+	testTool, testErr := tools.NewTest(dir, warm.tests)
+	if err := cmp.Or(globErr, searchErr, symbolsErr, editErr, projectErr, verbErr, githubErr, typecheckErr, testErr); err != nil {
 		return nil, nil, err
 	}
 	webTools, webErr := buildWebTools(dir)
@@ -916,7 +939,7 @@ func assembleRunTools(dir, set string, ledger *turn.ReadLedger, checkers *turn.T
 		return nil, nil, err
 	}
 	plan := tools.NewPlan()
-	full := append([]turn.Tool{read, write, shell, plan, tools.Shells{}, projectTool, globTool, searchTool, symbolsTool, editTool.Reading(ledger).Checking(checkers), typecheckTool, githubTool}, verbTools...)
+	full := append([]turn.Tool{read, write, shell, plan, tools.Shells{}, projectTool, globTool, searchTool, symbolsTool, editTool.Reading(ledger).Checking(checkers), typecheckTool, testTool, githubTool}, verbTools...)
 	return tools.NewMemo().Wrap(append(append(full, webTools...), browserTools...)), plan, nil
 }
 

@@ -123,6 +123,12 @@ const (
 	TypecheckLinesCap          = 20
 	TypecheckWarmPackages      = 2
 
+	TestRunDeadlineMillis = 180000
+	TestRunnerWorkers     = 2
+	TestLinesCap          = 20
+	TestErrorLines        = 3
+	TestReplyBytesCap     = 16777216
+
 	ShellProbeTimeoutMillis     = 2000
 	ToolchainProbeTimeoutMillis = 2000
 	PortCheckTimeoutMillis      = 300

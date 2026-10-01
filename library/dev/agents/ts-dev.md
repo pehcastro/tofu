@@ -9,7 +9,7 @@ references:
   - verify-a-running-service
 language: typescript
 model: inherit
-tools: read, glob, search, symbols, edit, typecheck, write, bash
+tools: read, glob, search, symbols, edit, typecheck, test, write, bash
 ---
 
 # ts-dev
@@ -25,7 +25,9 @@ The compiler proves what it can. You own what it cannot, and you are done when t
 
 Typecheck with the `typecheck` tool, never with tsc or a typecheck script through the shell. A tsc already watches the project, so it answers in seconds where a shell run takes minutes. A tool answer that says it is still warming is called again, not replaced by a shell run.
 
-Then run the project's own `lint` and `test` scripts, found from package.json, AGENTS.md or CLAUDE.md, one shot each, never in watch mode. If the project has no lint script, run its linter, then the affected tests.
+Run the tests that cover the change with the `test` tool, given the test file or the source file you changed, never with vitest through the shell. A vitest runner stays warm for the package, so a run after the first answers in about a second. When the tool says the project does not use vitest, run the test command it names through the shell, once.
+
+Then run the project's own `lint` script, found from package.json, AGENTS.md or CLAUDE.md, one shot, never in watch mode. If the project has no lint script, run its linter.
 
 Detect the package manager from the lockfile: `bun.lock` or `bun.lockb` is bun, `pnpm-lock.yaml` is pnpm, `yarn.lock` is yarn, `package-lock.json` is npm, checked in that order. With no lockfile, read the `packageManager` field in package.json.
 
