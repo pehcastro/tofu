@@ -64,9 +64,8 @@ func (l *ReadLedger) Refuse(path string, body []byte) string {
 }
 
 type WriteTool struct {
-	root     Root
-	ledger   *ReadLedger
-	checkers *Typecheckers
+	root   Root
+	ledger *ReadLedger
 }
 
 func NewWriteTool(root string) (*WriteTool, error) {
@@ -79,11 +78,6 @@ func NewWriteTool(root string) (*WriteTool, error) {
 
 func (t *WriteTool) Reading(ledger *ReadLedger) *WriteTool {
 	t.ledger = ledger
-	return t
-}
-
-func (t *WriteTool) Checking(checkers *Typecheckers) *WriteTool {
-	t.checkers = checkers
 	return t
 }
 
@@ -141,5 +135,5 @@ func (t *WriteTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 		After:   args.Content,
 		Diff:    transform.Unified(args.Path, before, args.Content),
 	}
-	return Result{Content: t.checkers.Typechecked(ctx, resolved, preview.Result()), Command: args.Path}, nil
+	return Result{Content: Typechecked(ctx, resolved, preview.Result()), Command: args.Path}, nil
 }

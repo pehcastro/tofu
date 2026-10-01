@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -36,7 +35,7 @@ func buildTestRunTools(dir, set string) ([]turn.Tool, error) {
 	if err != nil {
 		return nil, err
 	}
-	built, _, err := buildRunToolsForRun(dir, set, nil, nil, shell)
+	built, _, err := buildRunToolsForRun(dir, set, nil, shell)
 	return built, err
 }
 
@@ -135,44 +134,6 @@ func ranTool(t *testing.T, dir, name, args string) turn.Result {
 	}
 	t.Fatalf("no tool named %s was built", name)
 	return turn.Result{}
-}
-
-func TestTheWriteAndEditARunBuildsAreCheckedByTheWarmTscItIsGiven(t *testing.T) {
-	if _, err := exec.LookPath("bun"); err != nil {
-		t.Skip("bun is not on PATH")
-	}
-	dir := t.TempDir()
-	for name, body := range map[string]string{"tsconfig.json": `{"compilerOptions":{"strict":true}}`, "package.json": `{"name":"warm"}`, "bun.lock": "{}"} {
-		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o600); err != nil {
-			t.Fatal(err)
-		}
-	}
-	checkers := turn.NewTypecheckers()
-	t.Cleanup(checkers.Close)
-	shell, err := turn.ResolveRunShell("")
-	if err != nil {
-		t.Fatal(err)
-	}
-	built, _, err := buildRunToolsForRun(dir, toolSetFull, nil, checkers, shell)
-	if err != nil {
-		t.Fatal(err)
-	}
-	named := map[string]turn.Tool{}
-	for _, tool := range built {
-		named[tool.Name()] = tool
-	}
-	for _, step := range []struct{ tool, args, want string }{
-		{"write", `{"path":"count.ts","content":"const count: number = \"many\";\n"}`, "count.ts(1,7): error TS2322"},
-		{"edit", `{"path":"count.ts","old_string":"\"many\"","new_string":"3"}`, "errors in count.ts: 0"},
-	} {
-		result, err := named[step.tool].Run(context.Background(), json.RawMessage(step.args))
-		if err != nil {
-			t.Fatal(err)
-		}
-		if !strings.Contains(result.Content, step.want) || !strings.Contains(result.Content, "--watch") {
-			t.Fatalf("%s was not typechecked by the watching tsc it was given:\n%s", step.tool, result.Content)
-		}
-	}
 }
 
 func TestABashResultCarryingAFabricatedCitationReachesTheModelRefused(t *testing.T) {

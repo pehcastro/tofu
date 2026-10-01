@@ -18,9 +18,8 @@ import (
 )
 
 type Edit struct {
-	root     turn.Root
-	ledger   *turn.ReadLedger
-	checkers *turn.Typecheckers
+	root   turn.Root
+	ledger *turn.ReadLedger
 }
 
 func NewEdit(dir string) (Edit, error) {
@@ -30,11 +29,6 @@ func NewEdit(dir string) (Edit, error) {
 
 func (e Edit) Reading(ledger *turn.ReadLedger) Edit {
 	e.ledger = ledger
-	return e
-}
-
-func (e Edit) Checking(checkers *turn.Typecheckers) Edit {
-	e.checkers = checkers
 	return e
 }
 
@@ -155,7 +149,7 @@ func (e Edit) Run(ctx context.Context, raw json.RawMessage) (turn.Result, error)
 	}
 	e.ledger.Mark(target, []byte(preview.After))
 	return turn.Result{
-		Content: e.checkers.Typechecked(ctx, resolved, strings.Join(append(repairs, preview.Diff), "\n")),
+		Content: turn.Typechecked(ctx, resolved, strings.Join(append(repairs, preview.Diff), "\n")),
 		Command: target,
 	}, nil
 }
