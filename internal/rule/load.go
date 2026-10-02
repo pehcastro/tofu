@@ -61,6 +61,8 @@ func parseRule(data []byte, path string) (Rule, error) {
 			declares.scope = value
 		case "language":
 			declares.language = value
+		case "framework":
+			declares.framework = value
 		case "task":
 			declares.task = value
 		case "role":

@@ -247,6 +247,7 @@ type SubAgents struct {
 	Defined []subagent.Definition
 	Open    func(subagent.Definition, llm.Effort) (SubAgentModel, error)
 	Prompt  ComposeSpec
+	Root    string
 	Brief   func(definition subagent.Definition, task string) string
 	Ended   func(definition subagent.Definition, task string, rounds []Row, report SubAgentReport, finished bool)
 }
@@ -257,6 +258,13 @@ func (s SubAgents) prompt(inherited Config, definition subagent.Definition, task
 	case s.Prompt.Environment != "":
 		spec := s.Prompt
 		spec.Task, spec.Paths, spec.Agent, spec.Role = task, owns, definition, rule.RoleSubAgent
+		owned, err := rule.Frameworks(s.Root, owns)
+		if err != nil {
+			return "", "", err
+		}
+		spec.Frameworks = append(slices.Clone(spec.Frameworks), owned...)
+		slices.Sort(spec.Frameworks)
+		spec.Frameworks = slices.Compact(spec.Frameworks)
 		composed, err := Compose(spec)
 		if err != nil {
 			return "", "", err

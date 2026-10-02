@@ -2,6 +2,7 @@ package rule
 
 import (
 	"cmp"
+	"errors"
 	"fmt"
 	"maps"
 	"path"
@@ -36,7 +37,9 @@ func languageExtensions() map[string][]string {
 		"ruby":       {".rb"},
 		"rust":       {".rs"},
 		"shell":      {".sh", ".bash", ".ps1"},
+		"svelte":     {".svelte"},
 		"typescript": {".ts", ".tsx"},
+		"vue":        {".vue"},
 		"yaml":       {".yaml", ".yml"},
 	}
 }
@@ -50,11 +53,12 @@ const (
 )
 
 type Task struct {
-	Text     string
-	Paths    []string
-	Verb     Verb
-	Language string
-	Role     Role
+	Text       string
+	Paths      []string
+	Verb       Verb
+	Language   string
+	Role       Role
+	Frameworks []string
 }
 
 func (t Task) touchesTests() bool {
@@ -94,24 +98,26 @@ type Trigger struct {
 	condition *regexp.Regexp
 	scope     string
 	language  string
+	framework string
 	verb      Verb
 	role      Role
 }
 
 func (t Trigger) AlwaysOn() bool {
-	return t.condition == nil && t.scope == "" && t.language == "" && t.verb == VerbNone && t.role == RoleAny
+	return t.condition == nil && t.scope == "" && t.language == "" && t.framework == "" && t.verb == VerbNone && t.role == RoleAny
 }
 
 type declaredTrigger struct {
 	condition string
 	scope     string
 	language  string
+	framework string
 	task      string
 	role      string
 }
 
 func newTrigger(d declaredTrigger, file, id string) (Trigger, error) {
-	t := Trigger{scope: d.scope, language: d.language, verb: Verb(d.task), role: Role(d.role)}
+	t := Trigger{scope: d.scope, language: d.language, framework: d.framework, verb: Verb(d.task), role: Role(d.role)}
 	switch t.role {
 	case RoleAny, RoleOrchestrator, RoleSubAgent:
 	default:
@@ -131,6 +137,9 @@ func newTrigger(d declaredTrigger, file, id string) (Trigger, error) {
 	}
 	if known := languageExtensions(); d.language != "" && known[d.language] == nil {
 		return Trigger{}, fmt.Errorf("%s: rule %q declares the language %q, and a language is one of %s", file, id, d.language, strings.Join(slices.Sorted(maps.Keys(known)), ", "))
+	}
+	if d.framework != "" && !slices.Contains(knownFrameworks(), d.framework) {
+		return Trigger{}, fmt.Errorf("%s: rule %q declares the framework %q, and a framework is one of %s", file, id, d.framework, strings.Join(knownFrameworks(), ", "))
 	}
 	switch t.verb {
 	case VerbNone, VerbDebug, VerbExplore, VerbReview, VerbWrite:
@@ -161,7 +170,7 @@ func (t Trigger) firesFor(task Task) (bool, string) {
 	if t.scope != "" {
 		reached := ""
 		for _, p := range task.Paths {
-			if matched, err := subagent.Matches(p, []string{t.scope}); err == nil && matched {
+			if scopeReaches(t.scope, p) {
 				reached = p
 				break
 			}
@@ -188,6 +197,12 @@ func (t Trigger) firesFor(task Task) (bool, string) {
 		}
 		why = append(why, fmt.Sprintf("the language %s reached %s", t.language, reached))
 	}
+	if t.framework != "" {
+		if !slices.Contains(task.Frameworks, t.framework) {
+			return false, fmt.Sprintf("no package.json the task reaches lists %s", t.framework)
+		}
+		why = append(why, fmt.Sprintf("a package.json lists %s", t.framework))
+	}
 	if t.verb != VerbNone {
 		if task.Verb != t.verb {
 			return false, fmt.Sprintf("the task is %s rather than %s", cmp.Or(string(task.Verb), "unnamed"), t.verb)
@@ -195,6 +210,17 @@ func (t Trigger) firesFor(task Task) (bool, string) {
 		why = append(why, fmt.Sprintf("the task is %s", t.verb))
 	}
 	return true, strings.Join(why, " and ")
+}
+
+func scopeReaches(scope, held string) bool {
+	if !strings.Contains(held, "*") {
+		matched, err := subagent.Matches(held, []string{scope})
+		return err == nil && matched
+	}
+	var roster subagent.Roster
+	var collision subagent.CollisionError
+	return roster.Hold(subagent.SubAgent{ID: "scope", Owns: []string{scope}}) == nil &&
+		errors.As(roster.Hold(subagent.SubAgent{ID: "owner", Owns: []string{held}}), &collision)
 }
 
 type Match struct {

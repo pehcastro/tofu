@@ -54,6 +54,7 @@ type ComposeSpec struct {
 	Skills       []skill.Skill
 	WindowTokens int
 	Role         rule.Role
+	Frameworks   []string
 }
 
 const concernSkills rule.Concern = "skills"
@@ -110,7 +111,7 @@ func composedOrder() []rule.Concern {
 
 func Compose(spec ComposeSpec) (Composed, error) {
 	composed := Composed{Task: TaskNamed(spec.Task)}
-	composed.Task.Role = spec.Role
+	composed.Task.Role, composed.Task.Frameworks = spec.Role, spec.Frameworks
 	for _, owned := range spec.Paths {
 		composed.Task.Paths = append(composed.Task.Paths, filepath.ToSlash(owned))
 	}
@@ -143,7 +144,7 @@ func Compose(spec ComposeSpec) (Composed, error) {
 	reaching := slices.DeleteFunc(slices.Clone(spec.Rules), func(loaded rule.Rule) bool {
 		return outsideAgentDomain(loaded) && !loaded.ReachesDevFor(composed.Task)
 	})
-	withoutTask := rule.Index(reaching, rule.Task{Role: composed.Task.Role, Language: composed.Task.Language})
+	withoutTask := rule.Index(reaching, rule.Task{Role: composed.Task.Role, Language: composed.Task.Language, Frameworks: composed.Task.Frameworks})
 	for i, match := range rule.Index(reaching, composed.Task) {
 		if !match.Fires {
 			composed.HeldBack = append(composed.HeldBack, match)

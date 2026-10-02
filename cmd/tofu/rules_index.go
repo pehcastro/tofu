@@ -22,12 +22,13 @@ type ruleIndexListing struct {
 }
 
 type ruleIndexReport struct {
-	Origin   string             `json:"origin"`
-	Task     string             `json:"task"`
-	TaskKind string             `json:"task_kind"`
-	Paths    []string           `json:"paths"`
-	Firing   int                `json:"firing"`
-	Rules    []ruleIndexListing `json:"rules"`
+	Origin     string             `json:"origin"`
+	Task       string             `json:"task"`
+	TaskKind   string             `json:"task_kind"`
+	Paths      []string           `json:"paths"`
+	Frameworks []string           `json:"frameworks,omitempty"`
+	Firing     int                `json:"firing"`
+	Rules      []ruleIndexListing `json:"rules"`
 }
 
 func rulesIndexVerb(args []string, out, errOut io.Writer) int {
@@ -62,7 +63,10 @@ func rulesIndexVerb(args []string, out, errOut io.Writer) int {
 		return o.fail(err)
 	}
 	report := ruleIndexReport{Origin: origin, Task: opts.rest[0], TaskKind: string(verb), Paths: opts.rest[1:], Rules: make([]ruleIndexListing, 0, len(rules))}
-	for i, m := range rule.Index(rules, rule.Task{Text: report.Task, Paths: report.Paths, Verb: verb}) {
+	if report.Frameworks, err = rule.Frameworks(opts.dir, report.Paths); err != nil {
+		return o.fail(err)
+	}
+	for i, m := range rule.Index(rules, rule.Task{Text: report.Task, Paths: report.Paths, Verb: verb, Frameworks: report.Frameworks}) {
 		if m.Fires {
 			report.Firing++
 		}
@@ -88,11 +92,15 @@ func (report ruleIndexReport) lines(page cli.Page) []string {
 		}
 	}
 	lines := append(page.Title("Rules index", []string{"from " + page.Path(report.Origin)}, verdict), "")
-	lines = append(lines, cli.Indent(page.Facts([]cli.Fact{
+	facts := []cli.Fact{
 		{Label: "task", Text: report.Task},
 		{Label: "kind", Text: report.TaskKind},
 		{Label: "paths", Text: strings.Join(report.Paths, ", ")},
 		{Label: "concerns", Text: strings.Join(concerns, ", ")},
-	})...)...)
+	}
+	if len(report.Frameworks) > 0 {
+		facts = append(facts, cli.Fact{Label: "frameworks", Text: strings.Join(report.Frameworks, ", ")})
+	}
+	lines = append(lines, cli.Indent(page.Facts(facts)...)...)
 	return append(append(lines, ""), page.Rows(rows)...)
 }

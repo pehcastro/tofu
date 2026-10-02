@@ -609,7 +609,11 @@ func composeRun(opts runOpts, built []turn.Tool, run runtime) (composedRun, erro
 		}
 		skills = offered.Skills
 	}
-	subAgents := turn.SubAgents{Defined: discovered.Definitions, Prompt: turn.ComposeSpec{Environment: environment, ToolGuidance: runSystem(opts), Rules: rules, Skills: skills, WindowTokens: run.budget.WindowTokens}}
+	frameworks, err := rule.Frameworks(cmp.Or(opts.dir, "."), turn.TaskNamed(opts.task).Paths)
+	if err != nil {
+		say("no framework rule fires this run: " + err.Error())
+	}
+	subAgents := turn.SubAgents{Defined: discovered.Definitions, Root: cmp.Or(opts.dir, "."), Prompt: turn.ComposeSpec{Environment: environment, ToolGuidance: runSystem(opts), Rules: rules, Skills: skills, WindowTokens: run.budget.WindowTokens, Frameworks: frameworks}}
 	spec := subAgents.Prompt
 	spec.Task = opts.task
 	if opts.agent != "" {

@@ -51,6 +51,15 @@ func TestADeclaredLanguageReachesItsOwnRulesAndNoOther(t *testing.T) {
 	}
 }
 
+func TestAScopeFiresForAnOwnedGlobInsideItAndNotForOneOutside(t *testing.T) {
+	scoped := Trigger{scope: "src/**"}
+	for owned, wants := range map[string]bool{"src/**": true, "src/ui/*.tsx": true, "docs/**": false} {
+		if fires, why := scoped.firesFor(Task{Paths: []string{owned}}); fires != wants {
+			t.Errorf("owning %s: fires = %v, want %v: %s", owned, fires, wants, why)
+		}
+	}
+}
+
 func TestKnownLanguage(t *testing.T) {
 	if !KnownLanguage("typescript") || KnownLanguage("typscript") || KnownLanguage("") {
 		t.Fatal("KnownLanguage should name typescript and nothing misspelt or empty")

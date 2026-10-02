@@ -1,9 +1,11 @@
 package turn
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"testing/fstest"
 
 	"tofu/internal/rule"
 	"tofu/internal/subagent"
@@ -182,6 +184,79 @@ func TestToolPickReachesTheLeadAndASubAgentInTheCachedHeadUnderToolGuidance(t *t
 		}
 		if head := composed.Head(); strings.Contains(head, layered.absent) || !strings.Contains(head, layered.present) {
 			t.Fatalf("a project tool_pick %s did not change the head:\n%s", layered.name, head)
+		}
+	}
+}
+
+func TestAScopedRuleReachesTheSubAgentOwningItsTreeAndAFrameworkRuleSitsInTheHead(t *testing.T) {
+	rules, err := rule.LoadFS(fstest.MapFS{
+		"src_only@1.yaml":    {Data: []byte("id: src_only\ndomain: dev\nkind: human\nconcern: code_rules\nscope: src/**\ntext: src rule\n")},
+		"react_tests@1.yaml": {Data: []byte("id: react_tests\ndomain: dev\nkind: human\nconcern: code_rules\nframework: react\ntext: react rule\n")},
+	}, "library")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []struct {
+		owns, frameworks []string
+		src, react       bool
+	}{
+		{[]string{"src/**"}, []string{"react"}, true, true},
+		{[]string{"docs/**"}, []string{"svelte"}, false, false},
+	} {
+		composed, err := Compose(ComposeSpec{Task: "write the page", Paths: c.owns, Frameworks: c.frameworks, Environment: "e", ToolGuidance: "g", Rules: rules, Role: rule.RoleSubAgent})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := strings.Contains(composed.System(), "src rule"); got != c.src {
+			t.Errorf("owning %v: the scoped rule fires = %v, want %v", c.owns, got, c.src)
+		}
+		if got := strings.Contains(composed.Head(), "react rule"); got != c.react {
+			t.Errorf("frameworks %v: the react rule in the head = %v, want %v", c.frameworks, got, c.react)
+		}
+	}
+}
+
+func TestASubAgentOwningAMonorepoAppGetsThatAppsFrameworkRules(t *testing.T) {
+	root := t.TempDir()
+	for name, body := range map[string]string{
+		"package.json":           `{"workspaces": ["apps/*"]}`,
+		"apps/web/package.json":  `{"dependencies": {"react": "19"}}`,
+		"apps/docs/package.json": `{"dependencies": {"svelte": "5"}}`,
+	} {
+		at := filepath.Join(root, filepath.FromSlash(name))
+		if err := os.MkdirAll(filepath.Dir(at), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(at, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	rules, err := rule.LoadFS(fstest.MapFS{
+		"react_tests@1.yaml": {Data: []byte("id: react_tests\ndomain: dev\nkind: human\nconcern: code_rules\nframework: react\ntext: react rule\n")},
+		"vue_tests@1.yaml":   {Data: []byte("id: vue_tests\ndomain: dev\nkind: human\nconcern: code_rules\nframework: vue\ntext: vue rule\n")},
+	}, "library")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []struct {
+		owns           []string
+		lead           []string
+		react, vueRule bool
+	}{
+		{[]string{"apps/web/**"}, nil, true, false},
+		{[]string{"apps/docs/**"}, nil, false, false},
+		{[]string{"apps/docs/**"}, []string{"vue"}, false, true},
+	} {
+		agents := SubAgents{Root: root, Prompt: ComposeSpec{Environment: "e", ToolGuidance: "g", Rules: rules, Frameworks: c.lead}}
+		system, _, err := agents.prompt(Config{}, subagent.Definition{}, "write the page", c.owns)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := strings.Contains(system, "react rule"); got != c.react {
+			t.Errorf("owning %v: react rule = %v, want %v", c.owns, got, c.react)
+		}
+		if got := strings.Contains(system, "vue rule"); got != c.vueRule {
+			t.Errorf("owning %v with the lead's %v: vue rule = %v, want %v", c.owns, c.lead, got, c.vueRule)
 		}
 	}
 }
