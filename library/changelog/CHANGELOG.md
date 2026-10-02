@@ -8,6 +8,22 @@ Tofu is personal and not released, so the public interface that a version promis
 
 The minor number carries breaking changes, which is what 0.x means, and **there is never a 1.0.0**. The owner decided that on 2026-09-19: this stays 0.x forever, so the promise the version makes is the one 0.x already makes, that anything can break on a minor bump.
 
+## 0.5.0-rc-fix21 - 2026-10-02
+
+The lead knows what its sub-agents are doing, and the screen stops dropping text.
+
+### Added
+
+- **The lead lists its sub-agents.** A `subagents` tool beside `spawn` and `message` gives each sub-agent's state, how long it has run, its steps, its effort and the last tool it called, without waiting for any of them. Asked whether a sub-agent still runs, the lead checks instead of guessing.
+
+### Changed
+
+- **The qa agent runs `test` and `typecheck`** on the warm runners instead of vitest and tsc through bash.
+
+### Fixed
+
+- **A line under the chat no longer loses its middle** in cmd.exe and PowerShell. With no TERM set, tofu now draws for xterm-256color and keeps the colour profile it detected. A TERM you set is left alone.
+
 ## 0.5.0-rc-fix20 - 2026-10-02
 
 Sub-agents work in the background and the lead stays with you, and a large TypeScript project answers in seconds.
