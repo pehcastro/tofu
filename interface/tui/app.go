@@ -5,10 +5,13 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"runtime"
+	"slices"
 	"strings"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/colorprofile"
 	"github.com/charmbracelet/x/ansi"
 
 	"tofu/interface/tui/edits"
@@ -197,6 +200,7 @@ const (
 	shellPoll     = 250 * time.Millisecond
 	shellPulses   = int(shellPoll / pulseInterval)
 	exitReset     = "\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?1016l\x1b[0m" + ansi.ResetBackgroundColor
+	consoleTerm   = "TERM=xterm-256color"
 )
 
 type App struct {
@@ -346,8 +350,18 @@ func (a *App) readWires() {
 	a.wire, a.model, a.provider = signed[0].Name, signed[0].Model, signed[0].Provider
 }
 
+func consoleEnviron(environ []string, goos string) []string {
+	if goos != "windows" || slices.ContainsFunc(environ, func(entry string) bool { return strings.HasPrefix(entry, "TERM=") }) {
+		return environ
+	}
+	return append(slices.Clip(environ), consoleTerm)
+}
+
 func Run(options Options) error {
-	_, err := tea.NewProgram(New(options)).Run()
+	environ := os.Environ()
+	profile := colorprofile.Detect(os.Stdout, environ)
+	program := tea.NewProgram(New(options), tea.WithEnvironment(consoleEnviron(environ, runtime.GOOS)), tea.WithColorProfile(profile))
+	_, err := program.Run()
 	_, _ = io.WriteString(os.Stdout, exitReset)
 	return err
 }
