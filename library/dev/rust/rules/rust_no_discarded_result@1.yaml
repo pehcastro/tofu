@@ -1,0 +1,7 @@
+id: rust_no_discarded_result
+domain: dev
+kind: human
+concern: code_rules
+language: rust
+text: never write `let _ = f();` when `f` returns a `Result` or another `#[must_use]` value. rustc's `unused_must_use` warns when the call stands alone as a statement and stays silent once it is bound to `_`, so the binding removes the only warning there was. handle the error with `?`, `match` or `if let Err(e)`. dropping it is right only for a write nobody depends on, such as a progress line to stderr, never for a write to a file, a socket, a lock or a check. clippy's `let_underscore_must_use`, a restriction lint, checks the binding form.
+notes: sources: Trail of Bits rust-review, the result-discarded finder, which records that unused_must_use does not fire on a let underscore binding.

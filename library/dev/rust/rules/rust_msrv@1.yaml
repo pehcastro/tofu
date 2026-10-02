@@ -1,0 +1,7 @@
+id: rust_msrv
+domain: dev
+kind: human
+concern: code_rules
+language: rust
+text: write to the `edition` and `rust-version` in Cargo.toml and the toolchain in `rust-toolchain.toml`, not to the newest compiler on the machine. an item stabilised after `rust-version` builds for you and breaks for every user on the declared one: `LazyLock` needs 1.80, `#[expect]` 1.81, `&raw const` 1.82, async closures 1.85, and let chains 1.88 on edition 2024 only. never raise `edition` or `rust-version` to make a change compile; report that the change needs it. clippy's `incompatible_msrv` checks std items against `rust-version` but not syntax, so look up when a syntax became stable before using it.
+notes: sources: Trail of Bits rust-review, the msrv-mismatch finder; clippy's description of incompatible_msrv; the Rust release notes for each stabilised version.

@@ -21,3 +21,4 @@ CLAUDE.md
 bench/harness/testdata/gates/
 
 rtk/
+.zed/

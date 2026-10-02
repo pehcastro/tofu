@@ -1,12 +1,21 @@
 exit 1
 --- stdout
-Sub-agents · 7 defined                                                ✗ 1 broken
+Sub-agents · 8 defined                                                ✗ 1 broken
 
   ○ idle      inherit                   project  runs on the orchestrator's
     model
   ● planner   claude-sub/claude-opus-5  project  plans the work
     tools      read, search
   ● reviewer  codex-sub/gpt-5.6-sol     global   reviews a diff
+  ○ rust-dev  inherit                   library  Writes and fixes Rust in the
+    project it is given. Reads the manifest and the toolchain before it edits,
+    changes the least it can, and is done only when cargo check, clippy, the
+    covering tests and fmt pass the way the project runs them.
+    tools      read, glob, search, symbols, edit, write, bash
+    reference  rust-verify  3.8 KB
+    reference  rust-errors-and-ownership  3.7 KB
+    reference  rust-async  3.0 KB
+    reference  rust-unsafe  4.0 KB
   ○ ts-dev    inherit                   library  Writes and fixes TypeScript
     in the project it is given. Reads before it edits, changes the least it can,
     and is done only when the project's own typecheck, lint and tests pass.

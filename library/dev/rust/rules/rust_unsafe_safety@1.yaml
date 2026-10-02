@@ -1,0 +1,7 @@
+id: rust_unsafe_safety
+domain: dev
+kind: human
+concern: code_rules
+language: rust
+text: every `unsafe` block has a `// SAFETY:` line directly above it naming the precondition and why it holds here, such as `// SAFETY: i was checked against len above`, never `this is safe`. every `pub unsafe fn` has a `# Safety` section in its documentation listing what the caller must guarantee. keep the block to the one operation that needs it. a precondition the soundness depends on is checked with `assert!` or made the caller's documented duty, never guarded by `debug_assert!` alone, which a release build removes. clippy's restriction lint `undocumented_unsafe_blocks` and its `missing_safety_doc` check the two comments. a change to `unsafe` runs under `cargo +nightly miri test` before it is done.
+notes: sources: rust-skills unsafe-checker, the before-unsafe and review-unsafe checklists; Trail of Bits rust-review, the unsafe-boundary cluster on a safety invariant guarded only by debug_assert.

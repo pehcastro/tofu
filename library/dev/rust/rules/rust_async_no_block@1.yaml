@@ -1,0 +1,7 @@
+id: rust_async_no_block
+domain: dev
+kind: human
+concern: code_rules
+language: rust
+text: inside an `async fn` or an `async` block, call nothing that blocks the thread: no `std::fs`, no `std::thread::sleep`, no blocking `std::net` socket and no blocking channel `recv`. use the runtime's own, such as `tokio::fs` and `tokio::time::sleep`, and move blocking or heavy work to `tokio::task::spawn_blocking`. never hold a `std::sync::Mutex` or `RwLock` guard across an `.await`: take it in a block that ends before the await, or use the runtime's async mutex when the lock must span one. `spawn_blocking` does not fix a guard held across an await. clippy's `await_holding_lock` checks the guard.
+notes: sources: Trail of Bits rust-review, the async-blocking finder and its caveats; clippy's description of await_holding_lock.
