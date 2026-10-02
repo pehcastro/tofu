@@ -187,10 +187,6 @@ func (e Evidence) final() (Page, bool) {
 
 func oneTab(e Evidence) bool { return len(e.Run.Tabs) == 1 }
 
-func pathIs(host, path string) func(*url.URL) bool {
-	return func(address *url.URL) bool { return strings.HasSuffix(address.Host, host) && address.Path == path }
-}
-
 func firstAfter(label *regexp.Regexp, page string, values func(string) []string) []string {
 	at := label.FindStringIndex(page)
 	if at == nil {

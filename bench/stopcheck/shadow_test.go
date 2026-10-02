@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"strconv"
+	"sync"
 	"testing"
 
 	"tofu/internal/judge/gate"
@@ -44,14 +45,17 @@ func (t *echoTool) Run(context.Context, json.RawMessage) (turn.Result, error) {
 }
 
 type shadowGate struct {
-	writer  *ledger.Writer
-	pol     gate.Rule
-	mode    gate.Mode
-	reason  string
-	written []ledger.Row
+	deciding sync.Mutex
+	writer   *ledger.Writer
+	pol      gate.Rule
+	mode     gate.Mode
+	reason   string
+	written  []ledger.Row
 }
 
 func (g *shadowGate) Decide(_ context.Context, request turn.GateRequest) (turn.GateDecision, error) {
+	g.deciding.Lock()
+	defer g.deciding.Unlock()
 	built, builder, err := state.BuildStopCheck(state.StopCheckState{
 		Task:        request.Task,
 		RecentSteps: []state.StopCheckStep{{Index: len(g.written) + 1, ToolCalls: []state.StopCheckCall{{Tool: request.Tool}}}},

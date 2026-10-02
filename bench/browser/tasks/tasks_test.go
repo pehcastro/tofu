@@ -96,7 +96,8 @@ func TestTheSameSeedDrawsTheSameFlightAndAnotherSeedAnotherOne(t *testing.T) {
 		return task.Prompt
 	}
 	t.Logf("seed 1: %s\nseed 2: %s\nseed %d: %s\nseed %d: %s", prompt(1), prompt(2), fixtureSeed, prompt(fixtureSeed), sanFranciscoSeed, prompt(sanFranciscoSeed))
-	if prompt(1) != prompt(1) || prompt(1) == prompt(2) {
+	first, again := prompt(1), prompt(1)
+	if first != again || first == prompt(2) {
 		t.Error("seed 1 did not draw one flight, or seeds 1 and 2 drew the same one")
 	}
 	youtube, err := Named("youtube", fixtureSeed, drawnOn)

@@ -58,7 +58,7 @@ func TestTheTableAddsMainAndBrowserTokensAndSortsByStepsThenTotal(t *testing.T) 
 	}
 	t.Log("\n" + table)
 	b3, b2, c := strings.Index(table, "| B3 |"), strings.Index(table, "| B2 |"), strings.Index(table, "| C |")
-	if !strings.Contains(table, "| B3 | as set | 12 of 12 | 0 s | 1000 | - |") || !(b3 < b2 && b2 < c) {
+	if !strings.Contains(table, "| B3 | as set | 12 of 12 | 0 s | 1000 | - |") || b3 >= b2 || b2 >= c {
 		t.Errorf("want B3 with total 1000 first, then B2, then C")
 	}
 	if !strings.Contains(table, "| C | as set | 9 of 12 | 0 s | not recorded | - |") {

@@ -24,7 +24,8 @@ func TestTheSeedFlagDrawsTheAirbnbAndFlightsPrompts(t *testing.T) {
 			}
 			return task.prompt
 		}
-		if prompt(1) != prompt(1) || prompt(1) == prompt(2) || prompt(1) == prompt(0) {
+		first, again := prompt(1), prompt(1)
+		if first != again || first == prompt(2) || first == prompt(0) {
 			t.Errorf("%s: seeds 1 and 1 must agree, and seeds 1, 2 and 0 must differ", name)
 		}
 	}
