@@ -1,0 +1,7 @@
+id: go_defer_in_loop
+domain: dev
+kind: human
+concern: code_rules
+language: go
+text: `defer` runs when the function returns, not at the end of a loop iteration, so `defer f.Close()` inside a `for` keeps every file open until the function is done. move the part of the body that opens the resource into its own function, which closes it on return, and hand its error back to the loop. the arguments of a deferred call are evaluated when the `defer` statement runs, not when the deferred call does. gocritic's `deferInLoop` reports a defer inside a loop; it is tagged experimental, so it runs only when the project's gocritic settings enable it.
+notes: sources: cc-skills-golang golang-safety, resource safety; the common-go-bugs reference, defer gotchas; the go-critic source of deferInLoop and its experimental tag.

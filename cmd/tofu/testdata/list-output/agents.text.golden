@@ -1,12 +1,22 @@
 exit 1
 --- stdout
-Sub-agents · 8 defined                                                ✗ 1 broken
+Sub-agents · 9 defined                                                ✗ 1 broken
 
   ○ idle      inherit                   project  runs on the orchestrator's
     model
   ● planner   claude-sub/claude-opus-5  project  plans the work
     tools      read, search
   ● reviewer  codex-sub/gpt-5.6-sol     global   reviews a diff
+  ○ go-dev    inherit                   library  Writes and fixes Go in the
+    project it is given. Reads go.mod, the lint config and the project's own
+    gate before it edits, changes the least it can, and is done only when go
+    vet, the covering tests and the project's linter pass the way the project
+    runs them.
+    tools      read, glob, search, symbols, edit, write, bash
+    reference  go-verify  3.1 KB
+    reference  go-errors-and-context  3.9 KB
+    reference  go-concurrency  3.8 KB
+    reference  go-traps  4.0 KB
   ○ rust-dev  inherit                   library  Writes and fixes Rust in the
     project it is given. Reads the manifest and the toolchain before it edits,
     changes the least it can, and is done only when cargo check, clippy, the

@@ -1,0 +1,7 @@
+id: go_consumer_interface
+domain: dev
+kind: human
+concern: code_rules
+language: go
+text: define an interface in the package that calls it, holding only the methods that caller uses, and have the providing package return its concrete type. an interface declared beside its only implementation, or one copying every method of the type, adds a layer no second implementation fills and forces every change through two declarations. add one when a second implementation exists or a test must swap the dependency. a function takes the narrowest interface it needs, such as `io.Reader` over `*os.File`. golangci-lint's `ireturn` reports a function that returns an interface; nothing checks where an interface is declared.
+notes: sources: golang-skills go-code-review and go-interfaces, interfaces belong to the consumer; the golangci-lint description of ireturn.

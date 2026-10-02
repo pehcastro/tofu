@@ -1,0 +1,7 @@
+id: go_untrusted_path
+domain: dev
+kind: human
+concern: code_rules
+language: go
+text: `filepath.Join(base, p)` with `p` from input cleans `..` and still escapes `base`: `../../etc/passwd` walks out of it. when the go.mod `go` line is 1.24 or later, open the base with `os.OpenRoot(base)` and open, create and stat through the returned `*os.Root`, which refuses any path that leaves it, through a symlink included. below 1.24, refuse `p` unless `filepath.IsLocal(p)` holds, which needs 1.20, before joining. golangci-lint's `gosec` reports a file opened from a variable path as `G304`, and it cannot tell a checked path from an unchecked one.
+notes: sources: cc-skills-golang common-go-bugs, filepath.Join does not prevent path traversal; os.OpenRoot in api/go1.24.txt and filepath.IsLocal in api/go1.20.txt of the installed Go; G304 in the gosec rule list golangci-lint builds against.

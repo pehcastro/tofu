@@ -193,10 +193,19 @@ func TestTheShippedGoRulesReachGoFilesAndNothingElse(t *testing.T) {
 		on, _ := r.Trigger.firesFor(task)
 		return on
 	}
-	if !fires("comments", source) || !fires("comments", test) || fires("comments", prose) {
-		t.Fatal("the comments rule does not reach exactly the go files")
+	goRules := map[string]bool{}
+	for id, r := range scoped {
+		if r.Trigger.language != "go" {
+			continue
+		}
+		if !fires(id, source) || !fires(id, test) || fires(id, prose) {
+			t.Fatalf("the go rule %q does not reach exactly the go files", id)
+		}
+		goRules[id] = true
 	}
-	goRules := map[string]bool{"comments": true}
+	if !goRules["comments"] {
+		t.Fatal("the comments rule does not ship as a go rule")
+	}
 	for _, id := range []string{"test_assertion", "test_mock_boundary", "test_boundary_cases", "skipped_test_budget", "flake_disagreement"} {
 		if fires(id, source) || !fires(id, test) || fires(id, prose) {
 			t.Fatalf("rule %q does not reach exactly the go test files", id)

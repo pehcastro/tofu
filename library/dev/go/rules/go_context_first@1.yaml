@@ -1,0 +1,7 @@
+id: go_context_first
+domain: dev
+kind: human
+concern: code_rules
+language: go
+text: a function that does I/O, waits or starts work takes `ctx context.Context` as its first parameter and passes that same `ctx` to everything it calls. never replace it with `context.Background()` or `context.TODO()` in the middle of a call chain: the work then outlives the caller's deadline and cancellation. a context is a parameter, never a struct field. every `context.WithCancel`, `WithTimeout` and `WithDeadline` is followed on the next line by `defer cancel()`, unless the cancel func is returned to the caller. use `http.NewRequestWithContext` and the `Context` variants of database calls. for work that must outlive a request, derive its context with `context.WithoutCancel(ctx)`, which needs Go 1.21. vet's `lostcancel` checks the cancel; golangci-lint's `contextcheck` reports a context that is not passed down, `noctx` a request or call made without one, and `containedctx` a context stored in a struct.
+notes: sources: golang-skills go-context; cc-skills-golang golang-context and the common-go-bugs context misuse section; go tool vet help lostcancel; the golangci-lint descriptions of contextcheck, noctx and containedctx.

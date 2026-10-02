@@ -1,0 +1,7 @@
+id: go_checked_narrowing
+domain: dev
+kind: human
+concern: code_rules
+language: go
+text: a conversion to a smaller or unsigned integer type on a value derived from input is bounds-checked first. `int32(n)` with `n` past `math.MaxInt32` wraps silently, and `uint(n)` of a negative `n` becomes huge, which then sizes an allocation or an index. compare against `math.MaxInt32`, `math.MinInt32` and their siblings and return an error, or parse at the width you need with `strconv.ParseInt(s, 10, 32)`. integer division by an input that can be zero panics, so check the divisor. golangci-lint's `gosec` reports a narrowing conversion as `G115`.
+notes: sources: cc-skills-golang golang-safety, numeric safety; the common-go-bugs reference, integer conversion; G115 in the gosec analyzer list golangci-lint builds against.

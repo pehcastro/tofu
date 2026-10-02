@@ -1,0 +1,7 @@
+id: go_wrap_errors
+domain: dev
+kind: human
+concern: code_rules
+language: go
+text: when an error is returned with context, wrap it with `%w` at the end of the format, `fmt.Errorf("reading %s: %w", path, err)`, so a caller can still find the cause. `%v` cuts the chain: use it only at a boundary where the cause must not leak, such as a response to a client. test for a cause with `errors.Is(err, ErrX)` and for a type with `errors.As(err, &target)`, where `target` is a pointer to the error type; `err == ErrX` and a type assertion on `err` both fail once anything wraps it. when the context would add nothing the caller does not have, return `err` as it is. handle an error once: log it or return it, never both. golangci-lint's `errorlint` checks `==`, type assertions and `%v` on errors, and vet's `errorsas` checks the second argument of `errors.As`.
+notes: sources: golang-skills go-error-handling, its wrapping and error flow sections; cc-skills-golang common-go-bugs, error handling pitfalls; go tool vet help errorsas; the golangci-lint description of errorlint.

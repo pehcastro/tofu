@@ -1,0 +1,7 @@
+id: go_nolint_reason
+domain: dev
+kind: human
+concern: code_rules
+language: go
+text: fix what a linter found. when it is wrong for one line, suppress that linter on that line alone and give the reason in the same directive, `//nolint:gosec // the path is fixed at build time`, never a bare `//nolint` or a list that silences linters the line does not trip. that directive is the one comment the comments rule allows, and it stays on one line. never disable a linter in the project's config or loosen its settings to make the gate pass. golangci-lint's `nolintlint` reports an unused or ill-formed directive, and with its `require-specific` and `require-explanation` settings one that names no linter or gives no reason.
+notes: sources: the golangci-lint description of nolintlint and its require-specific and require-explanation settings; internal/sys.CommentAllowed accepts any comment that begins with //nolint, so the reason after it passes the comments rule.

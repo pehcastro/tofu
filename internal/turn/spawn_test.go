@@ -41,11 +41,17 @@ func TestASubAgentIsOfferedWriteAndEditOnlyWhenItsDefinitionNamesThem(t *testing
 		names = append(names, tool.Name())
 	}
 	found := subagent.Definitions(subagent.Scan{Library: library.Files(), Tools: append(names, "spawn")})
+	for _, definition := range found.Definitions {
+		if definition.Name == "go-dev" && (len(definition.References) != 4 || len(definition.Cut) > 0 || strings.Join(definition.Gate, ", ") != "go vet, go test") {
+			t.Errorf("go-dev loads %d references, cuts %q, gates on %q; want four references, none cut, and the gate go vet, go test", len(definition.References), definition.Cut, definition.Gate)
+		}
+	}
 	for agent, want := range map[string]string{
 		"browser":  "browser_tabs browser_observe browser_act browser_motion",
 		"research": "read write fetch glob search symbols bash",
 		"ts-dev":   "read write edit typecheck test glob search symbols bash",
 		"rust-dev": "read write edit glob search symbols bash",
+		"go-dev":   "read write edit glob search symbols bash",
 		"qa":       "read write typecheck test glob search symbols bash",
 		"":         "read write edit typecheck test browser_tabs browser_observe browser_act browser_motion fetch glob search symbols bash spawn message subagents",
 	} {

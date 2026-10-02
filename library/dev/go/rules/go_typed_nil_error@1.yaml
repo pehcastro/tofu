@@ -1,0 +1,7 @@
+id: go_typed_nil_error
+domain: dev
+kind: human
+concern: code_rules
+language: go
+text: a function whose result is `error`, or any interface, returns a literal `nil` on success, never a variable of a concrete pointer type that happens to be nil. `var e *MyErr; return e` hands back an interface holding a type and a nil value, which is not `== nil`, so every caller's `if err != nil` takes the failure branch and calling `Error()` on it may panic. declare the variable as `error`, or return `nil` directly on the success path. an exported function returns `error`, not `*MyErr`, for the same reason. no linter proves the return form: a test that calls the success path and checks `err == nil` does. staticcheck's `SA4023` reports a comparison with nil that can never be true once one exists.
+notes: sources: cc-skills-golang golang-safety and its common-go-bugs reference, the nil interface trap; golang-skills go-error-handling, never return a concrete error type; staticcheck's description of SA4023.

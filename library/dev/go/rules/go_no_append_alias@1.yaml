@@ -1,0 +1,7 @@
+id: go_no_append_alias
+domain: dev
+kind: human
+concern: code_rules
+language: go
+text: never `append` to a slice you were given, or to a sub-slice of one, and keep the result beside the original. when the backing array has room, `append` writes into it, so `b := a[:2]; b = append(b, x)` overwrites `a[2]` in the caller. copy first with `slices.Clone`, cap the sub-slice with a full slice expression, `a[:2:2]`, so the append must allocate, or build a new slice. the same holds for returning an internal slice or map from a method: return `slices.Clone` or `maps.Clone` of it, so the caller cannot change your state. no linter finds this: a test that keeps the original and checks it after the call does.
+notes: sources: cc-skills-golang golang-safety, slice aliasing and defensive copies; the common-go-bugs reference, slice and map gotchas.

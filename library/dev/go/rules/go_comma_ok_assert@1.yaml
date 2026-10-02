@@ -1,0 +1,7 @@
+id: go_comma_ok_assert
+domain: dev
+kind: human
+concern: code_rules
+language: go
+text: a type assertion on a value whose type is not already known uses the comma-ok form, `v, ok := x.(T)`, and handles `!ok`. the bare `x.(T)` panics on a mismatch, which turns a value from a decoder, a context or a plugin into a crash. a number decoded by `encoding/json` into `any` is `float64`, never `int`, so assert that or decode into a typed struct. a lookup in a map of pointers or funcs returns nil for a missing key: check `ok` before using the value. golangci-lint's `forcetypeassert` reports the bare form, and `errcheck` does too with its `check-type-assertions` setting.
+notes: sources: cc-skills-golang golang-safety, safe type assertions; the common-go-bugs reference, nil pointer dereference and json numbers; check-type-assertions in golangci-lint's settings for errcheck.
