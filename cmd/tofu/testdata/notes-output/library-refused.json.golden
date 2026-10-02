@@ -55,7 +55,7 @@ exit 1
       },
       {
         "name": "general",
-        "rules": 21,
+        "rules": 22,
         "thresholds": 7,
         "skills": 0,
         "agents": 2,

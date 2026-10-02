@@ -26,7 +26,6 @@ import (
 	"tofu/internal/llm/wire/anthropic"
 	"tofu/internal/llm/wire/codex"
 	"tofu/internal/llm/wire/openrouter"
-	"tofu/internal/prompt"
 	"tofu/internal/recall"
 	"tofu/internal/recipe"
 	"tofu/internal/rule"
@@ -51,6 +50,7 @@ const (
 
 	toolSetFull  = "full"
 	toolSetThree = "three"
+	toolPickRule = "tool_pick"
 
 	gateFollowsTheRule = ""
 	gateOff            = "off"
@@ -597,6 +597,9 @@ func composeRun(opts runOpts, built []turn.Tool, run runtime) (composedRun, erro
 	if err != nil {
 		return composedRun{}, err
 	}
+	if opts.toolSet == toolSetThree {
+		rules = slices.DeleteFunc(rules, func(loaded rule.Rule) bool { return loaded.ID == toolPickRule })
+	}
 	var skills []skill.Skill
 	if opts.toolSet != toolSetThree && settingText(cmp.Or(opts.dir, "."), settingspkg.Skills, run.notify) != settingspkg.SkillsOff {
 		home, _ := os.UserHomeDir()
@@ -855,7 +858,7 @@ func runSystem(opts runOpts) string {
 			"read reads a whole file, write creates one or replaces it whole, and bash runs anything else, " +
 			"including finding a file, searching text and changing part of a file."
 	}
-	system := turn.EveryToolIsRelativeToTheWorkingDirectory + prompt.PreferTheToolOverTheShell
+	system := strings.TrimSpace(turn.EveryToolIsRelativeToTheWorkingDirectory)
 	if !opts.noDocs {
 		system += " " + docsSentence
 	}

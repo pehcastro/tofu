@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	"tofu/internal/rule"
+	"tofu/internal/subagent"
+	shipped "tofu/library"
 )
 
 func spec(rules ...rule.Rule) ComposeSpec {
@@ -141,6 +143,46 @@ func TestTheComposedSystemPromptOverTheRealLibraryCarriesNoHostPath(t *testing.T
 	}
 	if fired == 0 {
 		t.Fatalf("no rule in the real library at %s fired, so the prompt was never at risk of carrying a path", library)
+	}
+}
+
+func TestToolPickReachesTheLeadAndASubAgentInTheCachedHeadUnderToolGuidance(t *testing.T) {
+	rules, err := rule.LoadFS(shipped.Files(), "library")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, one := range map[string]ComposeSpec{
+		"lead":      {Role: rule.RoleOrchestrator},
+		"sub-agent": {Agent: subagent.Definition{Name: "go-dev", Origin: "library", Domain: rule.DomainDev, Language: "go", Instructions: "write go"}},
+	} {
+		one.Task, one.Environment, one.ToolGuidance, one.Rules = "fix the failing test", "<env/>", "every path is relative", rules
+		composed, err := Compose(one)
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		head := composed.Head()
+		at := strings.Index(head, "[tool_guidance, from the rule tool_pick]\n")
+		if at < 0 || !strings.Contains(head[at:], "sed -i") {
+			t.Fatalf("the %s head does not carry tool_pick under tool_guidance:\n%s", name, head)
+		}
+		if builtin, safety := strings.Index(head, "[tool_guidance, from tofu itself]"), strings.Index(head, "[safety,"); builtin > at || (safety >= 0 && safety < at) {
+			t.Fatalf("the %s head moved tool_pick out of the tool_guidance place:\n%s", name, head)
+		}
+	}
+	for _, layered := range []struct {
+		name, absent, present string
+		over                  rule.Rule
+	}{
+		{"replaced", "sed -i", "use the project's own tools", rule.Rule{ID: "tool_pick", Kind: rule.KindHuman, Concern: rule.ConcernToolGuidance, Text: "use the project's own tools"}},
+		{"off", "from the rule tool_pick", "from tofu itself", rule.Rule{ID: "tool_pick", Mode: rule.ModeOff}},
+	} {
+		composed, err := Compose(ComposeSpec{Task: "t", Environment: "e", ToolGuidance: "g", Rules: rule.Layer(rules, []rule.Rule{layered.over})})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if head := composed.Head(); strings.Contains(head, layered.absent) || !strings.Contains(head, layered.present) {
+			t.Fatalf("a project tool_pick %s did not change the head:\n%s", layered.name, head)
+		}
 	}
 }
 
