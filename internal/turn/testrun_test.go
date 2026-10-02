@@ -120,3 +120,76 @@ func TestClosingTheRunnersLeavesNoVitestProcess(t *testing.T) {
 	}
 	t.Logf("the runner and its workers were %s processes, none left after Close", before)
 }
+
+func TestASourceFileRunsOnlyTheTestBesideIt(t *testing.T) {
+	dir := vitestProject(t)
+	for name, body := range map[string]string{
+		"uses.test.ts":  "import { expect, it } from 'vitest';\nimport { sum } from './sum';\n\nit('uses', () => {\n  expect(sum(2, 2)).toBe(4);\n});\n",
+		"sumx.test.ts":  "import { it } from 'vitest';\n\nit('collides', () => {});\n",
+		"sum-a.test.ts": "import { it } from 'vitest';\n\nit('collides', () => {});\n",
+	} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	runners := NewTestRunners()
+	t.Cleanup(runners.Close)
+	got, err := runners.Test(context.Background(), filepath.Join(dir, "sum.ts"))
+	first, _, _ := strings.Cut(got, "\n")
+	if err != nil || !strings.Contains(first, "the tests beside sum.ts, sum.test.ts") || !strings.Contains(got, "sum.test.ts: 1 passed, 0 failed") {
+		t.Fatalf("the first line does not name the colocated test it ran: %v\n%s", err, got)
+	}
+	for _, other := range []string{"uses.test.ts", "sumx.test.ts", "sum-a.test.ts"} {
+		if strings.Contains(got, other+":") {
+			t.Fatalf("%s ran for sum.ts:\n%s", other, got)
+		}
+	}
+	t.Log(got)
+}
+
+func TestASourceFileWithNoTestBesideItAnswersWithoutVitest(t *testing.T) {
+	dir := t.TempDir()
+	for name, body := range map[string]string{
+		"package.json":                     `{"name":"tested","devDependencies":{"vitest":"3.2.4"}}`,
+		"node_modules/vitest/package.json": `{"name":"vitest"}`,
+		"lonely.ts":                        "export const lonely = 1;\n",
+		"lonelier.test.ts":                 "export {};\n",
+	} {
+		path := filepath.Join(dir, filepath.FromSlash(name))
+		if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	runners := NewTestRunners()
+	t.Cleanup(runners.Close)
+	got, err := runners.Test(context.Background(), filepath.Join(dir, "lonely.ts"))
+	if err != nil || !strings.Contains(got, "lonely.test.ts") || len(runners.running) != 0 {
+		t.Fatalf("want an answer naming lonely.test.ts and no runner, got %d runners, %v\n%s", len(runners.running), err, got)
+	}
+	t.Log(got)
+}
+
+func TestAMissedDeadlineLeavesTheNextCallANewRunner(t *testing.T) {
+	dir := vitestProject(t)
+	hang := "import { it } from 'vitest';\n\nit('hangs', () => new Promise(() => {}), 3600000);\n"
+	if err := os.WriteFile(filepath.Join(dir, "hang.test.ts"), []byte(hang), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	runners := NewTestRunners()
+	t.Cleanup(runners.Close)
+	waiting, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	missed, err := runners.Test(waiting, filepath.Join(dir, "hang.test.ts"))
+	if err != nil || !strings.Contains(missed, "stopped") || strings.Contains(missed, "call test again") || len(runners.running) != 0 {
+		t.Fatalf("the miss did not stop and drop its runner, %d runners left, %v\n%s", len(runners.running), err, missed)
+	}
+	started := time.Now()
+	next, err := runners.Test(context.Background(), filepath.Join(dir, "sum.test.ts"))
+	if err != nil || !strings.Contains(next, "sum.test.ts: 1 passed, 0 failed") || onlyRunner(t, runners) == nil {
+		t.Fatalf("the next call did not get an answer from a new runner: %v\n%s", err, next)
+	}
+	t.Logf("miss:\n%s\nnext, %s:\n%s", missed, time.Since(started), next)
+}

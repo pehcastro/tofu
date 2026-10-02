@@ -25,7 +25,7 @@ func (Test) Definition() llm.Tool {
 	return llm.Tool{
 		Name: "test",
 		Description: "runs the vitest tests for one file and returns each test file's pass and fail counts and its failures. " +
-			"path is a test file, or a source file whose tests then run: every test file that imports it, directly or through what it imports. " +
+			"path is a test file, or a source file whose tests then run: the files beside it named <stem>.test.* or <stem>.spec.*, and none if it has none. " +
 			"a vitest runner stays warm for the package, so a run after the first answers in about a second where npx vitest run through the shell takes many: " +
 			"run tests with this instead of through the shell. a project that does not use vitest says how it runs its tests, and those run through the shell",
 		Parameters: map[string]any{

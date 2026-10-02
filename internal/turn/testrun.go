@@ -29,9 +29,9 @@ vitest.scheduleRerun = async () => {};
 await vitest.init();
 const message = (error) => String((error && (error.stack || error.message)) || error);
 const run = async (request) => {
-  let specs = vitest.getModuleSpecifications(request.file);
+  let specs = request.files.flatMap((file) => vitest.getModuleSpecifications(file));
   if (specs.length === 0) {
-    vitest.config.related = [request.file];
+    vitest.config.related = request.files;
     specs = await vitest.getRelevantTestSpecifications();
     vitest.config.related = undefined;
   }
@@ -130,13 +130,23 @@ func (r *TestRunners) Test(ctx context.Context, resolved string) (string, error)
 	if err != nil {
 		return "", err
 	}
-	from := resolved
+	from, files, beside := resolved, []string{resolved}, ""
 	if !info.IsDir() {
 		from = filepath.Dir(resolved)
 	}
 	dir, skipped := vitestPackage(from)
 	if skipped != "" {
 		return "test skipped: " + skipped, nil
+	}
+	if name := filepath.Base(resolved); !info.IsDir() && !strings.Contains(name, ".test.") && !strings.Contains(name, ".spec.") {
+		stem := strings.TrimSuffix(name, filepath.Ext(name))
+		if files, err = colocatedTests(from, stem); err != nil {
+			return "", err
+		}
+		if len(files) == 0 {
+			return fmt.Sprintf("test: no test for %s: looked for %s.test%s or %s.spec%s beside it", name, stem, filepath.Ext(name), stem, filepath.Ext(name)), nil
+		}
+		beside = ", the tests beside " + name
 	}
 	runner, err := r.runnerFor(dir)
 	if err != nil {
@@ -147,18 +157,33 @@ func (r *TestRunners) Test(ctx context.Context, resolved string) (string, error)
 	}
 	waiting, cancel := context.WithTimeout(ctx, konst.TestRunDeadlineMillis*time.Millisecond)
 	defer cancel()
-	reply, err := runner.ask(waiting, resolved)
-	head := fmt.Sprintf("test: vitest in %s, %d ms", dir, time.Since(since).Milliseconds())
-	switch {
-	case err == nil:
-		return testReport(reply, dir, head), nil
-	case errors.Is(err, context.DeadlineExceeded):
-		return fmt.Sprintf("test: vitest in %s is still running %s after %d ms. it keeps running: call test again for its answer rather than running vitest through the shell", dir, resolved, time.Since(since).Milliseconds()), nil
-	case ctx.Err() != nil:
-		return "test skipped: the turn was cancelled while vitest ran", nil
+	reply, err := runner.ask(waiting, files)
+	took := time.Since(since).Milliseconds()
+	if err == nil {
+		return testReport(reply, dir, fmt.Sprintf("test: vitest in %s, %d ms%s", dir, took, beside)), nil
 	}
 	r.drop(dir, runner)
-	return head + ", vitest stopped before it answered. its last lines:\n" + strings.Join(runner.lastSaid(), "\n"), nil
+	switch {
+	case errors.Is(ctx.Err(), context.Canceled):
+		return "test skipped: the turn was cancelled while vitest ran, so its runner was stopped", nil
+	case errors.Is(err, context.DeadlineExceeded):
+		return fmt.Sprintf("test: vitest in %s did not answer %s in %d ms, so its runner was stopped and the next test call starts a new one", dir, resolved, took), nil
+	}
+	return fmt.Sprintf("test: vitest in %s, %d ms, vitest stopped before it answered. its last lines:\n%s", dir, took, strings.Join(runner.lastSaid(), "\n")), nil
+}
+
+func colocatedTests(dir, stem string) ([]string, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, err
+	}
+	var tests []string
+	for _, entry := range entries {
+		if name := entry.Name(); !entry.IsDir() && (strings.HasPrefix(name, stem+".test.") || strings.HasPrefix(name, stem+".spec.")) {
+			tests = append(tests, filepath.Join(dir, name))
+		}
+	}
+	return tests, nil
 }
 
 func vitestPackage(from string) (string, string) {
@@ -283,11 +308,15 @@ func (t *testRunner) lastSaid() []string {
 	return t.said
 }
 
-func (t *testRunner) ask(ctx context.Context, file string) (testReply, error) {
+func (t *testRunner) ask(ctx context.Context, files []string) (testReply, error) {
+	slashed := make([]string, len(files))
+	for i, file := range files {
+		slashed[i] = filepath.ToSlash(file)
+	}
 	t.asking.Lock()
 	t.asked++
 	id := t.asked
-	request, _ := json.Marshal(map[string]any{"id": id, "file": filepath.ToSlash(file)})
+	request, _ := json.Marshal(map[string]any{"id": id, "files": slashed})
 	_, err := t.input.Write(append(request, '\n'))
 	t.asking.Unlock()
 	if err != nil {
