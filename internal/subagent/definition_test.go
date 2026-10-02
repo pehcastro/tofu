@@ -349,3 +349,13 @@ func TestToolsTheModeDoesNotBuild(t *testing.T) {
 		}
 	}
 }
+
+func TestTheShippedLanguageAgentsNameTheirGate(t *testing.T) {
+	found := Definitions(scanOf(t, ""))
+	for name, want := range map[string][]string{"rust-dev": {"cargo clippy", "cargo test"}, "ts-dev": {"typecheck", "test"}, "qa": nil} {
+		definition := definitionNamed(t, found, name)
+		if !slices.Equal(definition.Gate, want) || slices.Contains(definition.Ignored, "gate") {
+			t.Errorf("%s: gate %q, ignored %q; want gate %q and gate not ignored", name, definition.Gate, definition.Ignored, want)
+		}
+	}
+}

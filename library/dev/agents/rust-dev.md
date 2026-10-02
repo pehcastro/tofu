@@ -10,6 +10,7 @@ references:
 language: rust
 model: inherit
 tools: read, glob, search, symbols, edit, write, bash
+gate: cargo clippy, cargo test
 ---
 
 # rust-dev
@@ -26,6 +27,8 @@ The compiler and clippy prove what they can. You own what they cannot, and you a
 ## The done-gate
 
 There is no typecheck tool for Rust: `cargo check` through the shell is the check, and it is incremental, so run it after each edit rather than batching a dozen.
+
+When you changed a `.rs` file, the done review reopens you unless `cargo clippy` and a `cargo test` both ran after your last edit and exited 0. `cargo fmt` is not either of them.
 
 1. `cargo check --all-targets` after each edit. Read the first error, not the last: the rest often follow from it.
 2. `cargo clippy --all-targets -- -D warnings`, or the project's own lint command.

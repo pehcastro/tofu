@@ -1053,15 +1053,23 @@ func (t *SpawnTool) runRounds(outerCtx, subAgentCtx context.Context, held *heldS
 	claims := []Row{first}
 	state := roundState(outerCtx, firstErr)
 	held.remember(first)
-	for state == subagent.Finished && t.Review != nil {
+	for state == subagent.Finished {
+		missed := gateMissed(held.definition, claims)
+		if len(missed) == 0 && t.Review == nil {
+			break
+		}
 		t.roster.Reached(subAgentID, subagent.InReview, reportOf(agent, held.forkedSoFar(), claims, subagent.InReview).Text())
 		last := &claims[len(claims)-1]
-		reviewed := *last
-		reviewed.Task = agent.Brief
-		decision, err := t.decided(subAgentCtx, reviewed)
-		if err != nil {
-			last.Warnings = append(last.Warnings, "the done review did not run, so the sub-agent's own claim stands: "+err.Error())
-			break
+		decision := DoneDecision{Verdict: DoneReopen, Reason: fmt.Sprintf("you changed a %s file, and your gate is %s, each run after your last edit and passing: %s",
+			held.definition.Language, strings.Join(held.definition.Gate, " and "), strings.Join(missed, "; "))}
+		if len(missed) == 0 {
+			reviewed := *last
+			reviewed.Task = agent.Brief
+			var err error
+			if decision, err = t.decided(subAgentCtx, reviewed); err != nil {
+				last.Warnings = append(last.Warnings, "the done review did not run, so the sub-agent's own claim stands: "+err.Error())
+				break
+			}
 		}
 		if decision.ID != "" {
 			last.DecisionIDs = append(last.DecisionIDs, decision.ID)
@@ -1093,6 +1101,61 @@ func (t *SpawnTool) runRounds(outerCtx, subAgentCtx context.Context, held *heldS
 		}
 	}
 	return claims, state, firstErr
+}
+
+func gateMissed(definition subagent.Definition, rounds []Row) []string {
+	if definition.Language == "" {
+		return nil
+	}
+	var sinceEdit []ToolCallRow
+	edited := false
+	for _, round := range rounds {
+		for _, step := range round.Steps {
+			for _, call := range step.ToolCalls {
+				sinceEdit = append(sinceEdit, call)
+				if path := writtenPath(call); path != "" && rule.LanguageOf(path) == definition.Language {
+					sinceEdit, edited = nil, true
+				}
+			}
+		}
+	}
+	if !edited {
+		return nil
+	}
+	var missed []string
+	for _, check := range definition.Gate {
+		said := check + " did not run"
+		for _, call := range sinceEdit {
+			switch {
+			case !gateRan(check, call):
+			case call.ExitCode != nil && *call.ExitCode != 0:
+				said = fmt.Sprintf("%s exited %d", check, *call.ExitCode)
+			case call.Error != "":
+				said = check + " failed"
+			default:
+				said = ""
+			}
+		}
+		if said != "" {
+			missed = append(missed, said)
+		}
+	}
+	return missed
+}
+
+func gateRan(check string, call ToolCallRow) bool {
+	if !strings.Contains(check, " ") {
+		return call.Tool == check
+	}
+	if call.Tool != "bash" {
+		return false
+	}
+	for _, part := range strings.FieldsFunc(call.Command, func(r rune) bool { return r == '&' || r == '|' || r == ';' }) {
+		if strings.HasPrefix(strings.Join(strings.Fields(part), " ")+" ", check+" ") {
+			return true
+		}
+	}
+	return false
 }
 
 type ownedTool struct {
@@ -1130,8 +1193,8 @@ func (t ownedShell) Name() string { return t.tool.Name() }
 
 func (t ownedShell) Definition() llm.Tool {
 	definition := t.tool.Definition()
-	definition.Description += ", and every file the command writes, through a redirect, tee, cp, mv or sed -i, has to be inside the paths your first message says you hold. " +
-		"Reading anything is fine. A command writing outside them is refused before it runs, and that work goes back to the orchestrator."
+	definition.Description += ", and every file the command writes, through a redirect, tee, cp or mv, has to be inside the paths your first message says you hold. " +
+		"A command writing outside them is refused before it runs, and that work goes back to the orchestrator. A source file changes with edit or write, never through the shell. Reading anything is fine."
 	return definition
 }
 

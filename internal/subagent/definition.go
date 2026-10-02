@@ -49,6 +49,7 @@ type Definition struct {
 	Language     string       `json:"language,omitempty"`
 	Domain       string       `json:"domain,omitempty"`
 	Tools        []string     `json:"tools,omitempty"`
+	Gate         []string     `json:"gate,omitempty"`
 	Instructions string       `json:"instructions"`
 	Refused      []string     `json:"refused,omitempty"`
 	Ignored      []string     `json:"ignored,omitempty"`
@@ -220,21 +221,16 @@ func read(fsys fs.FS, name string) (Definition, error) {
 		Effort:       llm.Effort(strings.Join(effort, " ")),
 		Language:     strings.Join(fields["language"], " "),
 		Domain:       strings.Join(fields["domain"], " "),
+		Tools:        commaList(fields["tools"]),
+		Gate:         commaList(fields["gate"]),
 		Instructions: body,
 	}
 	for _, named := range fields["references"] {
 		definition.References = append(definition.References, Reference{Name: named})
 	}
-	for _, item := range fields["tools"] {
-		for tool := range strings.SplitSeq(item, ",") {
-			if tool = strings.TrimSpace(tool); tool != "" {
-				definition.Tools = append(definition.Tools, tool)
-			}
-		}
-	}
 	for key := range fields {
 		switch key {
-		case "name", "description", "model", "tools", "effort", "thinking", "references", "language", "domain", "skills", "autoloadSkills":
+		case "name", "description", "model", "tools", "gate", "effort", "thinking", "references", "language", "domain", "skills", "autoloadSkills":
 		default:
 			definition.Ignored = append(definition.Ignored, key)
 		}
@@ -247,6 +243,18 @@ func read(fsys fs.FS, name string) (Definition, error) {
 		return Definition{}, errors.New("the front matter has no description")
 	}
 	return definition, nil
+}
+
+func commaList(items []string) []string {
+	var listed []string
+	for _, item := range items {
+		for one := range strings.SplitSeq(item, ",") {
+			if one = strings.TrimSpace(one); one != "" {
+				listed = append(listed, one)
+			}
+		}
+	}
+	return listed
 }
 
 func fieldsOf(text string) (map[string][]string, error) {

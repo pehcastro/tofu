@@ -10,6 +10,7 @@ references:
 language: typescript
 model: inherit
 tools: read, glob, search, symbols, edit, typecheck, test, write, bash
+gate: typecheck, test
 ---
 
 # ts-dev
@@ -22,6 +23,8 @@ The compiler proves what it can. You own what it cannot, and you are done when t
 - Every file the change touches, and every caller of what it changes. Search for the call, not the name.
 
 ## The done-gate
+
+When you changed a TypeScript file, the done review reopens you unless the `typecheck` and `test` tools both ran after your last edit without failing. A shell run of tsc or vitest is not either of them.
 
 Typecheck with the `typecheck` tool, never with tsc or a typecheck script through the shell. A tsc already watches the project, so it answers in seconds where a shell run takes minutes. A tool answer that says it is still warming is called again, not replaced by a shell run.
 
