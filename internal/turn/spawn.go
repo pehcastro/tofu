@@ -163,6 +163,7 @@ type Spawned struct {
 	Agent   string
 	Slug    string
 	Windows string
+	Effort  llm.Effort
 }
 
 type spawnSiteKey struct{}
@@ -608,7 +609,7 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 	runCtx, cancel := context.WithCancel(ctx)
 	t.Inbox.keep(held, cancel)
 	t.tree.mu.Lock()
-	t.tree.ran = append(t.tree.ran, Spawned{ID: subAgentID, Call: site.call, Agent: definition.Name, Slug: opened.Slug, Windows: opened.Windows})
+	t.tree.ran = append(t.tree.ran, Spawned{ID: subAgentID, Call: site.call, Agent: definition.Name, Slug: opened.Slug, Windows: opened.Windows, Effort: opened.Effort})
 	t.tree.mu.Unlock()
 	task := args.Task
 	if t.SubAgents.Brief != nil {
@@ -898,6 +899,56 @@ func (m messageTool) Run(ctx context.Context, raw json.RawMessage) (Result, erro
 	t.Inbox.hold(site.log)
 	go t.background(runCtx, cancel, held, opened, site, args.Text, held.agent.ID+"-m"+strconv.Itoa(held.messages), nil)
 	return Result{Content: args.To + " resumes in the background with its conversation. its report comes to you as a message when it ends.", Command: "message " + args.To, SubAgent: args.To}, nil
+}
+
+type subAgentsTool struct {
+	orchestrator *SpawnTool
+}
+
+func (subAgentsTool) Name() string { return "subagents" }
+
+func (subAgentsTool) Definition() llm.Tool {
+	return llm.Tool{
+		Name: "subagents",
+		Description: "lists every sub-agent of this session and what it is doing now, and returns at once without waiting for any of them: " +
+			"its name, definition, state, effort, how long it has run or ran, its step and tool call counts, and the last tool it called. " +
+			"use it rather than guessing whether a sub-agent still runs",
+		Parameters: map[string]any{"type": "object", "properties": map[string]any{}},
+	}
+}
+
+func (l subAgentsTool) Run(context.Context, json.RawMessage) (Result, error) {
+	t := l.orchestrator
+	effort := map[string]llm.Effort{}
+	for _, ran := range t.Spawned() {
+		effort[ran.ID] = ran.Effort
+	}
+	now, listed := t.clock(), "no sub-agent has been spawned in this session"
+	var lines []string
+	for _, agent := range t.roster.SubAgents() {
+		state, ran, until := agent.State.String(), "ran", agent.Active
+		switch agent.State {
+		case subagent.Working, subagent.InReview, subagent.Reopened:
+			state, ran, until = "running", "has run", now
+			if agent.State != subagent.Working {
+				state += " " + agent.State.String()
+			}
+		case subagent.WaitingAnswer, subagent.Parked, subagent.Errored, subagent.Finished:
+		}
+		line := fmt.Sprintf("%s: %s, %s, %s %s, %d steps, %d tool calls", agent.ID, cmp.Or(agent.Agent, "no definition"), state, ran,
+			until.Sub(agent.Started).Round(time.Second), agent.Steps, len(agent.Calling)+agent.CallsDropped)
+		if level := effort[agent.ID]; level != "" {
+			line += ", effort " + string(level)
+		}
+		if len(agent.Calling) > 0 {
+			line += ", last tool " + agent.Calling[len(agent.Calling)-1]
+		}
+		lines = append(lines, line+": "+agent.Mission)
+	}
+	if len(lines) > 0 {
+		listed = strings.Join(lines, "\n")
+	}
+	return Result{Content: listed, Command: "subagents"}, nil
 }
 
 func (t *SpawnTool) unknown(name string) error {

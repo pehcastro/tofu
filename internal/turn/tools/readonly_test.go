@@ -53,7 +53,7 @@ func caseNames(t *testing.T, file, function string) []string {
 func TestTheTwoListsOfReadOnlyToolsSayTheSameThing(t *testing.T) {
 	batched := caseNames(t, filepath.Join("..", "tool.go"), "readOnly")
 	cached := caseNames(t, "memo.go", "SideEffectFree")
-	batchedAndRerunBecauseTheAnswerMovesWithoutAWrite := []string{"test", "typecheck"}
+	batchedAndRerunBecauseTheAnswerMovesWithoutAWrite := []string{"test", "typecheck", "subagents"}
 	t.Logf("turn.readOnly batches %v", batched)
 	t.Logf("tools.SideEffectFree caches %v", cached)
 

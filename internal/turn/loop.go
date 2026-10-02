@@ -164,7 +164,7 @@ func Run(ctx context.Context, config Config) (Row, error) {
 		added := slices.Clone(tools)
 		for _, tool := range tools {
 			if spawner, spawning := tool.(*SpawnTool); spawning {
-				added = append(added, messageTool{orchestrator: spawner})
+				added = append(added, messageTool{orchestrator: spawner}, subAgentsTool{orchestrator: spawner})
 			}
 		}
 		if handles {

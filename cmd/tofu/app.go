@@ -82,6 +82,7 @@ const (
 	cancelledAt         = "cancelled at"
 	askTool             = "ask"
 	messageTool         = "message"
+	subAgentsTool       = "subagents"
 	askAnswered         = "the orchestrator answers: "
 	askAssumed          = "the orchestrator did not answer, so your default stands, assumed and not confirmed: "
 	answeredReply       = "orchestrator: "
@@ -1549,6 +1550,8 @@ func callIntent(call llm.ToolCall) (string, string) {
 		return text("question"), ""
 	case messageTool:
 		return text("to") + ": " + text("text"), ""
+	case subAgentsTool:
+		return "what each sub-agent is doing", ""
 	}
 	command, pattern, path, task := text("command"), text("pattern"), text("path"), text("task")
 	switch {

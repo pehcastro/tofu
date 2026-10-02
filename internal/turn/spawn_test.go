@@ -45,7 +45,8 @@ func TestASubAgentIsOfferedWriteAndEditOnlyWhenItsDefinitionNamesThem(t *testing
 		"browser":  "browser_tabs browser_observe browser_act browser_motion",
 		"research": "read write fetch glob search symbols bash",
 		"ts-dev":   "read write edit typecheck test glob search symbols bash",
-		"":         "read write edit typecheck test browser_tabs browser_observe browser_act browser_motion fetch glob search symbols bash spawn message",
+		"qa":       "read write typecheck test glob search symbols bash",
+		"":         "read write edit typecheck test browser_tabs browser_observe browser_act browser_motion fetch glob search symbols bash spawn message subagents",
 	} {
 		model := &stubModel{decisions: []llm.Decision{claimDecision("did the piece")}}
 		config := Config{Model: model, Spend: SpendAPIKey, Tools: NewRegistry(base...), Caps: Caps{MaxSteps: 5}, ResultBytesCap: 4096,
