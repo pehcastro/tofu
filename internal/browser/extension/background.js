@@ -39,6 +39,7 @@ const optedOut = new Set();
 const children = new Map();
 const screencasts = new Map();
 const cursorless = new Set();
+const activeByWindow = new Map();
 let port = null;
 let hostError = '';
 let reconnectDelay = RECONNECT_MIN_MS;
@@ -91,7 +92,9 @@ async function connect() {
     reconnectDelay = Math.min(reconnectDelay * 2, RECONNECT_MAX_MS);
   });
   void show('idle');
-  post({t: 'hello', version: PROTOCOL_VERSION, build: await BUILD, tabs: (await chrome.tabs.query({})).map(tabInfo)});
+  const tabs = await chrome.tabs.query({});
+  for (const tab of tabs) if (tab.active) activeByWindow.set(tab.windowId, [tab.id]);
+  post({t: 'hello', version: PROTOCOL_VERSION, build: await BUILD, tabs: tabs.map(tabInfo)});
 }
 
 async function show(state) {
@@ -191,6 +194,13 @@ async function groupTab(tabId) {
   grouped.add(tabId);
   if (!live) await chrome.tabGroups.update(groupId, {title: groupTitle, color: GROUP_COLOR});
   await chrome.storage.session.set({groups});
+}
+
+async function leaveWithPersonsTab(tabId, windowId, before) {
+  const mine = (await ourGroups())[windowId];
+  if (before === undefined || mine === undefined) return;
+  const [tab, from] = await Promise.all([chrome.tabs.get(tabId), chrome.tabs.get(before)]);
+  if (tab.groupId === mine && from.groupId !== mine) await chrome.tabs.ungroup([tabId]);
 }
 
 async function restoreGroups() {
@@ -431,8 +441,16 @@ chrome.tabs.onCreated.addListener(tab => {
     opened.add(tab.id);
     children.set(orphan ? lastAct.tabId : tab.openerTabId, tab.id);
     serially(() => groupTab(tab.id));
+  } else {
+    const [current, previous] = activeByWindow.get(tab.windowId) ?? [];
+    const before = current === tab.id ? previous : current;
+    serially(() => leaveWithPersonsTab(tab.id, tab.windowId, before));
   }
   post({t: 'tabUpdated', tab: tabInfo(tab)});
+});
+chrome.tabs.onActivated.addListener(({tabId, windowId}) => {
+  const [current] = activeByWindow.get(windowId) ?? [];
+  if (current !== tabId) activeByWindow.set(windowId, [tabId, current]);
 });
 chrome.tabs.onRemoved.addListener(tabId => {
   for (const set of [attached, opened, grouped, optedOut, children, cursorless]) set.delete(tabId);

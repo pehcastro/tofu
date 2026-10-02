@@ -97,7 +97,9 @@ func TestBackgroundAttachesGroupsAndNavigatesInOnePlaceEach(t *testing.T) {
 	background := shipped(t, "background.js")
 	onlyIn(t, background, "chrome.debugger.attach(", "attach")
 	onlyIn(t, background, "chrome.tabs.group(", "groupTab")
-	onlyIn(t, background, "chrome.tabs.ungroup(", "restoreGroups")
+	if total := strings.Count(background, "chrome.tabs.ungroup("); total != 2 || !strings.Contains(handler(t, background, "restoreGroups"), "chrome.tabs.ungroup(") || !strings.Contains(handler(t, background, "leaveWithPersonsTab"), "chrome.tabs.ungroup(") {
+		t.Errorf("background.js calls chrome.tabs.ungroup( %d times; want twice, once in restoreGroups and once in leaveWithPersonsTab", total)
+	}
 	onlyIn(t, background, "chrome.tabs.create({url, active: false})", "openTab")
 	onlyIn(t, background, "chrome.tabs.update(tabId, {url})", "navigateOpened")
 	onlyIn(t, background, "args.url", "perform")
@@ -134,6 +136,7 @@ type stubRun struct {
 	Restored  map[string]any   `json:"restored"`
 	Listening []int            `json:"listening"`
 	Answered  map[string]int   `json:"answered"`
+	GroupOf   map[string]int   `json:"groupOf"`
 }
 
 func inStubbedChrome(t *testing.T, scenario string) stubRun {
@@ -277,6 +280,20 @@ func TestATabTheSiteOpensWithNoOpenerDuringTofusClickIsTofus(t *testing.T) {
 	t.Logf("tabs posted as tofu's: %v", ours)
 	if !ours[21] || !ours[22] || ours[40] {
 		t.Fatalf("tab 21 from tofu's relayed click is tofu's = %v; tab 22 from tofu's click op = %v; tab 40, opened later by the person, = %v", ours[21], ours[22], ours[40])
+	}
+}
+
+func TestAPlusTabJoinsTofusGroupOnlyFromATabInsideItAndTofusTabsStillJoin(t *testing.T) {
+	run := inStubbedChrome(t, "plus")
+	t.Logf("groups after the run: %v", run.GroupOf)
+	if run.GroupOf["21"] != -1 {
+		t.Errorf("a + tab opened from the person's tab 6, outside tofu's group, is in group %d; want ungrouped", run.GroupOf["21"])
+	}
+	if run.GroupOf["22"] != 100 {
+		t.Errorf("a + tab opened from tab 9, inside tofu's group 100, is in group %d; want 100", run.GroupOf["22"])
+	}
+	if run.GroupOf["20"] != 100 || run.GroupOf["23"] != 100 {
+		t.Errorf("tofu's tab 20 is in group %d and tab 23 it opened in %d, with the person on tab 6 outside; want both in 100", run.GroupOf["20"], run.GroupOf["23"])
 	}
 }
 

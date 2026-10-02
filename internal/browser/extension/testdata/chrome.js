@@ -22,7 +22,7 @@ const tabs = new Map([
   [9, {id: 9, windowId: 1, url: 'https://stays.test/', title: 'Stays', pinned: false, groupId: -1}],
   [3, {id: 3, windowId: 1, url: 'https://pinned.test/', title: 'Pinned', pinned: true, groupId: -1}],
   [5, {id: 5, windowId: 1, url: 'https://mine.test/', title: 'Mine', pinned: false, groupId: 7}],
-  [6, {id: 6, windowId: 1, url: 'https://dragged.test/', title: 'Dragged', pinned: false, groupId: -1}],
+  [6, {id: 6, windowId: 1, url: 'https://dragged.test/', title: 'Dragged', pinned: false, groupId: -1, active: true}],
 ]);
 const groups = new Map([[7, {id: 7, title: 'work', color: 'blue'}]]);
 let nextGroup = 100;
@@ -38,10 +38,20 @@ const loadLater = (id, url) => {
 };
 const createTab = (url, openerTabId) => {
   const id = nextTab++;
-  tabs.set(id, {id, windowId: 1, openerTabId, url: '', pendingUrl: url, status: 'loading', pinned: false, groupId: -1});
+  tabs.set(id, {id, windowId: 1, openerTabId, url: '', pendingUrl: url, status: 'loading', pinned: false, groupId: tabs.get(openerTabId)?.groupId ?? -1});
   note('created', id);
   listeners.created({...tabs.get(id)});
   loadLater(id, url);
+};
+const activate = id => {
+  for (const tab of tabs.values()) tab.active = tab.id === id;
+  listeners.activated?.({tabId: id, windowId: 1});
+};
+const plus = () => {
+  const id = nextTab++;
+  tabs.set(id, {id, windowId: 1, url: 'chrome://newtab/', title: 'New Tab', pinned: false, groupId: storage.groups?.[1] ?? -1});
+  listeners.created({...tabs.get(id)});
+  activate(id);
 };
 const documents = new Map();
 const documentOf = tabId => {
@@ -124,7 +134,7 @@ const chrome = {
       loadLater(id, url);
       return {...tabs.get(id)};
     },
-    query: async ({groupId} = {}) => [...tabs.values()].filter(tab => groupId === undefined || tab.groupId === groupId).map(tab => ({...tab})),
+    query: async (filter = {}) => [...tabs.values()].filter(tab => Object.entries(filter).every(([key, value]) => tab[key] === value)).map(tab => ({...tab})),
     group: async ({tabIds, groupId, createProperties}) => {
       const id = groupId ?? nextGroup++;
       if (!groups.has(id)) groups.set(id, {id, windowId: createProperties.windowId});
@@ -139,6 +149,7 @@ const chrome = {
     onCreated: event('created'),
     onRemoved: event('removed'),
     onUpdated: event('updated'),
+    onActivated: event('activated'),
   },
   tabGroups: {
     get: async id => {
@@ -286,6 +297,21 @@ const scenarios = {groups: async () => {
   call(4, 9, 'navigate', {url: 'https://stays.test/other'});
   await quiet();
   return {};
+}, plus: async () => {
+  call(1, 9, 'click', {element: 1, guard: 'g'});
+  await quiet();
+  plus();
+  await quiet();
+  activate(9);
+  plus();
+  await quiet();
+  activate(6);
+  call(2, 0, 'open', {url: 'https://stays.test/new'});
+  await quiet();
+  const release = {method: 'Input.dispatchMouseEvent', params: {type: 'mouseReleased', x: 40, y: 60, button: 'left'}};
+  listeners.message({t: 'call', id: 3, tabId: 20, op: 'cdp', args: {calls: [release], act: true}});
+  await quiet();
+  return {groupOf: Object.fromEntries([21, 22, 20, 23].map(id => [id, tabs.get(id).groupId]))};
 }, commit: async () => {
   call(1, 0, 'open', {url: 'https://stays.test/new'});
   await quiet();
