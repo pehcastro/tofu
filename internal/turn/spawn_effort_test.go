@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"tofu/internal/llm"
+	"tofu/internal/rule"
 	"tofu/internal/subagent"
 )
 
@@ -68,5 +69,23 @@ func TestASpawnRunsItsSubAgentAtTheEffortItNames(t *testing.T) {
 				t.Fatalf("effort %q: the opener was asked %q, want %q, and the spawn should say %q", spawned.effort, opener.asked, spawned.wantAsked, spawned.wantSaid)
 			}
 		})
+	}
+}
+
+func TestTheLeadIsToldToSpawnAtLowAndSettleTheBrief(t *testing.T) {
+	const wantRule = "choose each sub-agent's effort when you spawn it. low is the default and is enough for almost every piece: on large repositories low matched medium and high on every hidden check and was faster. before you spawn, settle every open choice in the brief yourself: the exact behaviour, the edge cases the spec leaves open, which files change. a brief that settles them is followed at low. choose medium only when the sub-agent must make design decisions you cannot settle from what you have read, and name those decisions in the brief. touching shared code, a schema or many files is not a reason for more effort; it is a reason for a more exact brief."
+	const wantEffort = "how hard the sub-agent thinks. low unless it must make design decisions the brief does not settle. left out, it thinks as hard as you do"
+	rules, err := rule.LoadDir("../../library")
+	if err != nil {
+		t.Fatal(err)
+	}
+	shipped := slices.IndexFunc(rules, func(r rule.Rule) bool { return r.ID == "spawn_effort" })
+	if shipped < 0 || rules[shipped].Text != wantRule {
+		t.Fatalf("spawn_effort at index %d does not read as the ticket says", shipped)
+	}
+	_, spawn := orchestratorTurn(t, t.TempDir(), nil)
+	properties := spawn.Definition().Parameters.(map[string]any)["properties"].(map[string]any)
+	if said := properties["effort"].(map[string]any)["description"]; said != wantEffort {
+		t.Fatalf("the effort argument is described as %q", said)
 	}
 }

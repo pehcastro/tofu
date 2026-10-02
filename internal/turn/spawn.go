@@ -471,7 +471,7 @@ func (t *SpawnTool) Definition() llm.Tool {
 		levels = append(levels, string(level))
 	}
 	properties["effort"] = map[string]any{"type": "string", "enum": levels,
-		"description": "how hard the sub-agent thinks. left out, it thinks as hard as you do"}
+		"description": "how hard the sub-agent thinks. low unless it must make design decisions the brief does not settle. left out, it thinks as hard as you do"}
 	if names := t.SubAgents.enabledNames(); len(names) > 0 {
 		properties["agent"] = map[string]any{"type": "string", "enum": names,
 			"description": "the sub-agent that does the work, on its own model with its own instructions. left out, the sub-agent runs on the orchestrator's model"}
