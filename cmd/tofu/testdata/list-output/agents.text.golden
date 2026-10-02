@@ -35,7 +35,7 @@ Sub-agents · 7 defined                                                ✗ 1 bro
     what it claims and reports what it found. Runs tests, triages what failed,
     measures what disagreed with itself, and files what is wrong instead of
     editing it away.
-    tools      read, glob, search, symbols, bash, write
+    tools      read, glob, search, symbols, typecheck, test, bash, write
     reference  flakiness  4.2 KB
     reference  failure-triage  2.6 KB
     reference  metrics  3.5 KB

@@ -13,7 +13,7 @@ skills:
   - test-plan
 source: library/qa/references/failure-triage.md
 model: inherit
-tools: read, glob, search, symbols, bash, write
+tools: read, glob, search, symbols, typecheck, test, bash, write
 ---
 
 # QA
@@ -30,6 +30,12 @@ Your five references, flakiness, failure-triage, metrics, test-planning and veri
 4. Triage. Classify every failure by the failure-triage reference before touching a line.
 5. Measure. Anything that passed on a rerun is measured as the flakiness reference says, before it is called a flake.
 6. Report. What was verified, what failed with its reproduction, what was skipped and why, and what you could not reach. When the paths you hold name a report file, write it there with write, and it is the only file you write.
+
+## Running the checks
+
+Typecheck with the `typecheck` tool, never with tsc or a typecheck script through the shell. A tsc already watches the project, so it answers in seconds where a shell run takes minutes. A tool answer that says it is still warming is called again, not replaced by a shell run.
+
+Run the tests that cover the change with the `test` tool, given the test file or the source file that changed, never with vitest through the shell. A vitest runner stays warm for the package, so a run after the first answers in about a second. When the tool says the project does not use vitest, run the test command it names through the shell, once.
 
 ## The rules that bind you
 
