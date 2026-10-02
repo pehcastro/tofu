@@ -74,6 +74,12 @@ func TestTypecheckedFallsBackWhenTheProjectHasNoTypeScript(t *testing.T) {
 	for _, toolchain := range []struct{ runner, lockfile string }{{"bun", "bun.lock"}, {"npx", "package-lock.json"}} {
 		t.Run(toolchain.runner, func(t *testing.T) {
 			dir := tsProject(t, toolchain.runner, toolchain.lockfile, map[string]string{"broken.ts": "const count: number = \"many\";\n"})
+			argv, _ := machineChecker(lockfileManager(dir, packageManifest{}))
+			fetch := exec.Command(argv[0], append(argv[1:], "--version")...)
+			fetch.Dir = dir
+			if out, err := fetch.CombinedOutput(); err != nil {
+				t.Fatalf("%s could not fetch typescript before the timed check: %v\n%s", strings.Join(argv, " "), err, out)
+			}
 			var cold *Typecheckers
 			got := cold.Typechecked(context.Background(), filepath.Join(dir, "broken.ts"), "wrote broken.ts")
 			if !strings.Contains(got, brokenLine) {

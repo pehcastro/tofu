@@ -53,12 +53,18 @@ func caseNames(t *testing.T, file, function string) []string {
 func TestTheTwoListsOfReadOnlyToolsSayTheSameThing(t *testing.T) {
 	batched := caseNames(t, filepath.Join("..", "tool.go"), "readOnly")
 	cached := caseNames(t, "memo.go", "SideEffectFree")
+	batchedAndRerunBecauseTheAnswerMovesWithoutAWrite := []string{"test", "typecheck"}
 	t.Logf("turn.readOnly batches %v", batched)
 	t.Logf("tools.SideEffectFree caches %v", cached)
 
-	if !slices.Equal(batched, cached) {
+	for _, name := range batchedAndRerunBecauseTheAnswerMovesWithoutAWrite {
+		if slices.Contains(cached, name) {
+			t.Fatalf("%s is cached, so a typecheck that answered still warming, or a test rerun for a flake, returns its earlier answer", name)
+		}
+	}
+	if accounted := slices.Sorted(slices.Values(slices.Concat(cached, batchedAndRerunBecauseTheAnswerMovesWithoutAWrite))); !slices.Equal(batched, accounted) {
 		t.Fatalf("a tool in one list and not the other is batched and not cached, or cached and not batched, and nothing else catches it.\n"+
-			"turn/tool.go readOnly: %v\ntools/memo.go SideEffectFree: %v", batched, cached)
+			"turn/tool.go readOnly: %v\ntools/memo.go SideEffectFree plus the rerun list: %v", batched, accounted)
 	}
 	for _, name := range cached {
 		if !tools.SideEffectFree(name) {
