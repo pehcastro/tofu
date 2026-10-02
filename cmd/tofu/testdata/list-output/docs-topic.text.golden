@@ -174,8 +174,9 @@ Turn
       true or false
       a turn may spawn a sub-agent
     subAgentsPerTurn        10
-      at least 1 sub-agents a turn
-      how many sub-agents one turn may spawn; the next spawn reads the new value
+      at least 1 sub-agents running at once
+      how many sub-agents may run at once; a spawn past it is refused until one
+      ends, and the next spawn reads the new value
     subAgentDepth           2
       at least 1 levels of sub-agents
       how deep a sub-agent may spawn its own sub-agents; the next spawn reads

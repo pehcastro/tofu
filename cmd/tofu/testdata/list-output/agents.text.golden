@@ -10,7 +10,7 @@ Sub-agents · 7 defined                                                ✗ 1 bro
   ○ ts-dev    inherit                   library  Writes and fixes TypeScript
     in the project it is given. Reads before it edits, changes the least it can,
     and is done only when the project's own typecheck, lint and tests pass.
-    tools      read, glob, search, symbols, edit, write, bash
+    tools      read, glob, search, symbols, edit, typecheck, test, write, bash
     reference  ts-strict-config  2.8 KB
     reference  ts-type-design  3.0 KB
     reference  ts-boundaries  2.4 KB

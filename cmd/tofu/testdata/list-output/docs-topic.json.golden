@@ -231,9 +231,9 @@ exit 0
         "key": "subAgentsPerTurn",
         "category": "Turn",
         "default": "10",
-        "takes": "at least 1 sub-agents a turn",
+        "takes": "at least 1 sub-agents running at once",
         "restart": false,
-        "description": "how many sub-agents one turn may spawn; the next spawn reads the new value"
+        "description": "how many sub-agents may run at once; a spawn past it is refused until one ends, and the next spawn reads the new value"
       },
       {
         "key": "subAgentDepth",

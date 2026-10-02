@@ -657,6 +657,8 @@ type appSession struct {
 	granted map[string]bool
 	pending []pendingImage
 	shells  *shell.Registry
+	inbox   *turn.Inbox
+	roster  *roster.Roster
 }
 
 type pendingImage struct {
@@ -678,15 +680,16 @@ func newAppSession(dir string, open func(runOpts) (appWire, error), answers <-ch
 	return live
 }
 
-func (s *appSession) renewWarm() {
+func (s *appSession) renew() {
 	s.warm.Close()
 	s.warm = newWarmProcesses()
 	s.warm.checkers.Warm(s.dir)
+	s.reads, s.inbox, s.roster = turn.NewReadLedger(), turn.NewInbox(), &roster.Roster{}
 }
 
 func (s *appSession) carry(messages []llm.Message) {
-	s.renewWarm()
-	s.carried, s.reads = messages, turn.NewReadLedger()
+	s.renew()
+	s.carried = messages
 	for _, message := range messages {
 		if message.ToolCallID != "" {
 			s.shown[message.ToolCallID] = true
@@ -695,8 +698,8 @@ func (s *appSession) carry(messages []llm.Message) {
 }
 
 func (s *appSession) startFresh() string {
-	s.renewWarm()
-	s.id, s.carried, s.pending, s.reads = "", nil, nil, turn.NewReadLedger()
+	s.renew()
+	s.id, s.carried, s.pending = "", nil, nil
 	return freshSessionNote
 }
 
@@ -901,8 +904,7 @@ func (s *appSession) run(ctx context.Context, pick tui.Pick, task string, emit t
 		fail(budgetErr)
 		return
 	}
-	held := &roster.Roster{}
-	watch := &appWatcher{gate: gate, held: held, emit: emit, now: s.now, turnID: opts.turnID, seen: s.shown, maxSteps: opts.maxSteps}
+	watch := &appWatcher{gate: gate, held: s.roster, emit: emit, now: s.now, turnID: opts.turnID, seen: s.shown, maxSteps: opts.maxSteps}
 	opened.held.wrap = func(model turn.Model) (turn.Model, error) {
 		asked, guardErr := guarded(model, budget)
 		if guardErr != nil {
@@ -916,7 +918,7 @@ func (s *appSession) run(ctx context.Context, pick tui.Pick, task string, emit t
 		return watchedSubAgent{watch: watch, inner: asked}, guardErr
 	}
 	notify := func(notice string) { emit(tui.Event{Kind: tui.EventNote, Text: notice}) }
-	config, spawner, configErr := runConfig(opts, built, runtime{accounts: opened.held.forTurn(), spend: opened.spend, budget: budget, gate: gate, sift: sifter, scorer: scorer, sessions: sessions, notify: notify, roster: held, now: s.now,
+	config, spawner, configErr := runConfig(opts, built, runtime{accounts: opened.held.forTurn(), spend: opened.spend, budget: budget, gate: gate, sift: sifter, scorer: scorer, sessions: sessions, notify: notify, roster: s.roster, inbox: s.inbox, now: s.now,
 		open: s.open, wrapSubAgent: wrapSubAgent, orchestrator: opened.selected})
 	if configErr != nil {
 		fail(configErr)
@@ -964,24 +966,27 @@ func (s *appSession) run(ctx context.Context, pick tui.Pick, task string, emit t
 		return nil
 	}
 	stopClocks := watch.clockRunningSubAgents()
-	row, runErr := turn.Run(turn.WithShellRegistry(ctx, s.shells), config)
+	var last turn.Row
+	heard := func(typed string) { emit(tui.Event{Kind: tui.EventSteered, Text: typed}) }
+	runErr := turn.Lead(turn.WithShellRegistry(ctx, s.shells), config, s.steer, heard, func(row turn.Row, err error) {
+		last = row
+		if err != nil && !errors.Is(err, context.Canceled) {
+			fail(err)
+		}
+		if row.Conversation != nil {
+			s.carried = turn.Sendable(row.Conversation)
+		}
+		if row.Session != "" {
+			s.id = row.Session
+			if headErr := sessions.SetHead(row.Session); headErr != nil {
+				fail(headErr)
+			}
+		}
+	})
 	stopClocks()
 	watch.readCalls()
-	stopped := errors.Is(runErr, context.Canceled)
-	if runErr != nil && !stopped {
-		fail(runErr)
-	}
-	if row.Conversation != nil {
-		s.carried = turn.Sendable(row.Conversation)
-	}
-	if row.Session != "" {
-		s.id = row.Session
-		if headErr := sessions.SetHead(row.Session); headErr != nil {
-			fail(headErr)
-		}
-	}
-	words := doneWords(row.Outcome, row.Guard)
-	if stopped {
+	words := doneWords(last.Outcome, last.Guard)
+	if errors.Is(runErr, context.Canceled) {
 		words = cancelledAt
 	}
 	emit(tui.Event{Kind: tui.EventDone, Text: words, SubAgents: watch.subAgents()})
@@ -1123,6 +1128,7 @@ type appWatcher struct {
 	in        int
 	out       int
 	cacheRead int
+	marks     sync.Mutex
 	shows     sync.Mutex
 	spent     map[string]int
 	asked     map[string][]subagent.Call
@@ -1145,7 +1151,7 @@ func (a *appWatcher) Ask(ctx context.Context, request llm.Request) (llm.Decision
 }
 
 func (a *appWatcher) askThrough(ctx context.Context, inner turn.Model, request llm.Request) (llm.Decision, error) {
-	asker := a.asker()
+	asker := turn.SubAgentAsking(ctx)
 	for _, message := range request.Messages {
 		if message.Role == llm.RoleTool {
 			a.result(message, asker)
@@ -1173,11 +1179,13 @@ func (a *appWatcher) askThrough(ctx context.Context, inner turn.Model, request l
 		return decision, err
 	}
 	fresh := decision.PromptAccounting.FreshTokens(decision.Usage.InputTokens, decision.CacheReadTokens)
+	a.marks.Lock()
 	a.in += fresh
 	a.out += decision.Usage.OutputTokens
 	a.cacheRead += decision.CacheReadTokens
-	a.noteSubAgentsAsk(asker, fresh+decision.Usage.OutputTokens, decision.ToolCalls)
 	stats := tui.Event{Kind: tui.EventStats, Model: decision.Build, TokensIn: a.in, TokensOut: a.out, CacheRead: a.cacheRead}
+	a.marks.Unlock()
+	a.noteSubAgentsAsk(asker, fresh+decision.Usage.OutputTokens, decision.ToolCalls)
 	if a.gate != nil {
 		stats.Decisions = a.gate.decisions
 	}
@@ -1202,11 +1210,13 @@ func (a *appWatcher) eventID(asker, call string) string {
 func (a *appWatcher) called(call llm.ToolCall, asker string) {
 	intent, detail := callIntent(call)
 	id, promotes := a.eventID(asker, call.ID), a.spawning(call.Name)
+	a.marks.Lock()
 	if promotes {
 		a.spawns = append(a.spawns, id)
 	}
-	a.emit(tui.Event{Kind: tui.EventToolCall, ID: id, Tool: call.Name, Text: intent, Detail: detail, Promote: promotes, Agent: asker})
 	a.noteWholeFile(call)
+	a.marks.Unlock()
+	a.emit(tui.Event{Kind: tui.EventToolCall, ID: id, Tool: call.Name, Text: intent, Detail: detail, Promote: promotes, Agent: asker})
 }
 
 func resumedChat(carry sessionResume) []tui.Event {
@@ -1237,7 +1247,9 @@ func resumedChat(carry sessionResume) []tui.Event {
 
 func (a *appWatcher) result(message llm.Message, asker string) {
 	killedWithNothingToShow := message.ToolOutcome == llm.ToolOutcomeAborted && message.ToolResultBytes == 0
+	a.marks.Lock()
 	if a.seen[message.ToolCallID] || killedWithNothingToShow {
+		a.marks.Unlock()
 		return
 	}
 	a.seen[message.ToolCallID] = true
@@ -1265,6 +1277,7 @@ func (a *appWatcher) result(message llm.Message, asker string) {
 		}
 	}
 	delete(a.wrote, message.ToolCallID)
+	a.marks.Unlock()
 	a.emit(result)
 }
 

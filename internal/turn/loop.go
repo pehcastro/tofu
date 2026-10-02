@@ -100,6 +100,7 @@ type Config struct {
 	Turn            string
 	SpawnedBy       string
 	Steering        func() []string
+	Inbox           *Inbox
 	Step            CalledAsTheStepIsRecordedAndBeforeTheNextOneIsAsked
 	ToolResult      CalledAsEachToolCallAnswersAndBeforeTheNextRequest
 	EndedSession    func(Row) error
@@ -260,13 +261,10 @@ func Run(ctx context.Context, config Config) (Row, error) {
 			row.Warnings = append(row.Warnings, "the session this one forked from was not written: "+failed)
 		}
 		for _, tool := range currentTools().tools {
-			if spawner, spawning := tool.(*SpawnTool); spawning {
-				for _, subAgent := range spawner.SubAgentRows() {
-					row.SubAgentIDs = append(row.SubAgentIDs, subAgent.ID)
-				}
-				spawner.mu.Lock()
-				row.TotalCostUSD += spawner.spend
-				spawner.mu.Unlock()
+			if spawner, spawning := tool.(*SpawnTool); spawning && spawner.depth == 0 {
+				ended, spent := spawner.tree.bill()
+				row.SubAgentIDs = append(row.SubAgentIDs, ended...)
+				row.TotalCostUSD += spent
 			}
 		}
 		row.WallClockMS = now().Sub(start).Milliseconds()
@@ -316,6 +314,11 @@ func Run(ctx context.Context, config Config) (Row, error) {
 		if config.Steering != nil {
 			for _, steered := range config.Steering() {
 				messages = append(messages, llm.Message{Role: llm.RoleUser, Content: steered})
+			}
+		}
+		if config.Inbox != nil {
+			for _, item := range config.Inbox.Take() {
+				messages = append(messages, llm.Message{Role: llm.RoleUser, Content: item})
 			}
 		}
 		if config.Caps.MaxSteps > 0 && step > config.Caps.MaxSteps {

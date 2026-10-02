@@ -19,7 +19,7 @@ type spawnScript struct {
 	working sync.Mutex
 	running int
 	widest  int
-	final   []llm.Message
+	led     [][]llm.Message
 }
 
 func (s *spawnScript) Ask(ctx context.Context, request llm.Request) (llm.Decision, error) {
@@ -38,14 +38,26 @@ func (s *spawnScript) Ask(ctx context.Context, request llm.Request) (llm.Decisio
 		s.working.Unlock()
 		return claimDecision("finished brief-" + brief), nil
 	}
-	if request.Messages[len(request.Messages)-1].Role == llm.RoleTool {
-		s.final = request.Messages
+	s.working.Lock()
+	defer s.working.Unlock()
+	s.led = append(s.led, request.Messages)
+	if len(s.led) > 1 {
 		return messageDecision(), nil
 	}
 	return toolCallDecision(s.spawns...), nil
 }
 
-func spawnsIn(t *testing.T, owns ...string) (*spawnScript, Config) {
+func (s *spawnScript) heard() string {
+	s.working.Lock()
+	defer s.working.Unlock()
+	var said []string
+	for _, message := range s.led[len(s.led)-1] {
+		said = append(said, message.Content)
+	}
+	return strings.Join(said, "\n")
+}
+
+func spawnsIn(t *testing.T, owns ...string) *spawnScript {
 	t.Helper()
 	script := &spawnScript{}
 	for i, held := range owns {
@@ -65,48 +77,39 @@ func spawnsIn(t *testing.T, owns ...string) (*spawnScript, Config) {
 		ArtifactDir:    filepath.Join(root, "artifacts"),
 		NewID:          func() string { return "turn-orchestrator" },
 	}
+	spawn := NewSpawnTool("turn-orchestrator", base, &subagent.Roster{})
 	orchestrator := base
-	orchestrator.Task = "hand the work to sub-agents"
-	orchestrator.Tools = NewRegistry(NewSpawnTool("turn-orchestrator", base, &subagent.Roster{}))
-	return script, orchestrator
+	orchestrator.Task, orchestrator.Tools, orchestrator.Inbox = "hand the work to sub-agents", NewRegistry(spawn), spawn.Inbox
+	started := time.Now()
+	startLead(context.Background(), orchestrator, nil).wait(t)
+	if took := time.Since(started); took >= 600*time.Millisecond {
+		t.Fatalf("%d spawns of 300ms each took %v, want them running together", len(owns), took)
+	}
+	return script
 }
 
-func TestSpawnsWithDisjointOwnsRunTogetherAndAnswerInCallOrder(t *testing.T) {
-	script, orchestrator := spawnsIn(t, "a/**", "b/**", "c/**")
+func TestSpawnsWithDisjointOwnsRunTogetherAndEveryReportReachesTheLead(t *testing.T) {
+	script := spawnsIn(t, "a/**", "b/**", "c/**")
 
-	started := time.Now()
-	if _, err := Run(context.Background(), orchestrator); err != nil {
-		t.Fatalf("Run: %v", err)
+	if script.widest != 3 {
+		t.Fatalf("three spawns ran at most %d at once, want 3", script.widest)
 	}
-	took := time.Since(started)
-
-	if took >= 600*time.Millisecond || script.widest != 3 {
-		t.Fatalf("three 300ms spawns took %v with at most %d running at once, want under 600ms with 3", took, script.widest)
-	}
-	answers := script.final[len(script.final)-3:]
-	for i, answer := range answers {
-		n := strconv.Itoa(i + 1)
-		if answer.ToolCallID != "call-"+n || !strings.Contains(answer.Content, "finished brief-"+n) {
-			t.Fatalf("answer %d is %s carrying %q, want call-%s carrying brief-%s", i, answer.ToolCallID, answer.Content, n, n)
+	heard := script.heard()
+	for n := 1; n <= 3; n++ {
+		running, report := "sub-"+strconv.Itoa(n)+" is running", "finished brief-"+strconv.Itoa(n)
+		if !strings.Contains(heard, running) || !strings.Contains(heard, report) {
+			t.Errorf("the lead never heard %q and then %q:\n%s", running, report, heard)
 		}
 	}
 }
 
-func TestSpawnsWithOverlappingOwnsRunInOrder(t *testing.T) {
-	script, orchestrator := spawnsIn(t, "a/**", "a/b.go")
-
-	if _, err := Run(context.Background(), orchestrator); err != nil {
-		t.Fatalf("Run: %v", err)
-	}
+func TestASpawnOverlappingARunningSubAgentIsRefusedNamingIt(t *testing.T) {
+	script := spawnsIn(t, "a/**", "a/b.go")
 
 	if script.widest != 1 {
 		t.Fatalf("two spawns holding overlapping paths ran %d at once, want 1", script.widest)
 	}
-	answers := script.final[len(script.final)-2:]
-	if !strings.Contains(answers[0].Content, "finished brief-1") {
-		t.Fatalf("the first spawn did not run: %q", answers[0].Content)
-	}
-	if second := answers[1].Content; !strings.Contains(second, "finished brief-2") {
-		t.Fatalf("the second spawn did not run once the first had finished and released its paths: %q", second)
+	if heard := script.heard(); !strings.Contains(heard, "finished brief-1") || !strings.Contains(heard, "sub-1 already holds") {
+		t.Fatalf("the second spawn was not refused naming sub-1, or the first did not report:\n%s", heard)
 	}
 }

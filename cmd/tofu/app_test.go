@@ -1052,13 +1052,7 @@ func TestTheBarShowsTheRequestAsSentAndTheForkDecidedOnWhatCameBackAfterIt(t *te
 
 func TestASpawnedSubAgentShowsInTheSubAgentViewWithTheGlobsItHolds(t *testing.T) {
 	dir := scratchProject(t)
-	spawnCall := llm.ToolCall{ID: "call-1", Name: "spawn", Arguments: json.RawMessage(`{"task":"write note.txt","owns":["note.txt"]}`)}
-	model := &queuedModel{decisions: []llm.Decision{
-		{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{spawnCall}},
-		{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{writeNote("call-2")}},
-		{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "the sub-agent wrote it"},
-		{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "the sub-agent did it"},
-	}}
+	model := noteSubAgent(writeNote("call-2"))
 	driver := driveApp(t)
 	stubbedTurn(dir, model)(t.Context(), onTheSubscription, "hand the note to a sub-agent", driver.emit)
 
@@ -1102,17 +1096,18 @@ type thinkingStep struct {
 
 type thinkingModel struct {
 	mutex sync.Mutex
-	steps []thinkingStep
+	steps map[string][]thinkingStep
 }
 
-func (m *thinkingModel) Ask(_ context.Context, request llm.Request) (llm.Decision, error) {
+func (m *thinkingModel) Ask(ctx context.Context, request llm.Request) (llm.Decision, error) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
-	if len(m.steps) == 0 {
-		return llm.Decision{}, errors.New("thinkingModel: no more steps queued")
+	asker := turn.SubAgentAsking(ctx)
+	if len(m.steps[asker]) == 0 {
+		return llm.Decision{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "noted"}, nil
 	}
-	next := m.steps[0]
-	m.steps = m.steps[1:]
+	next := m.steps[asker][0]
+	m.steps[asker] = m.steps[asker][1:]
 	if next.retried {
 		request.OnThinking(abandonedThought)
 		request.OnRetry()
@@ -1142,12 +1137,14 @@ func thinkingTurn(t *testing.T, dir string, store *settingspkg.Store) *appDriver
 	reply := func(text string) llm.Decision {
 		return llm.Decision{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: text}
 	}
-	model := &thinkingModel{steps: []thinkingStep{
-		{"the lead sends the first reader", spawn("call-1", "note.txt"), false},
-		{firstThought, reply("read it once"), false},
-		{"the lead sends a second reader", spawn("call-2", "other.txt"), false},
-		{secondThought + "\n```go\n" + fencedCode + "\n```\nthen it answers", reply("read it twice"), true},
-		{leadThought, reply("both read it"), true},
+	model := &thinkingModel{steps: map[string][]thinkingStep{
+		"": {
+			{"the lead sends the first reader", spawn("call-1", "note.txt"), false},
+			{"the lead sends a second reader", spawn("call-2", "other.txt"), false},
+			{leadThought, reply("both read it"), true},
+		},
+		"ts-dev-1": {{firstThought, reply("read it once"), false}},
+		"ts-dev-2": {{secondThought + "\n```go\n" + fencedCode + "\n```\nthen it answers", reply("read it twice"), true}},
 	}}
 	driver := driveAppOn(t, store)
 	stubbedTurn(dir, model)(t.Context(), onTheSubscription, "have two readers read the note", driver.emit)
@@ -1290,24 +1287,33 @@ type clockedStep struct {
 }
 
 type clockedModel struct {
-	at    atomic.Int64
-	steps []clockedStep
+	at       atomic.Int64
+	mu       sync.Mutex
+	steps    []clockedStep
+	subAgent []clockedStep
 }
 
-func clockedFrom(at time.Time, steps ...clockedStep) *clockedModel {
-	model := &clockedModel{steps: steps}
+func clockedFrom(at time.Time, subAgent []clockedStep, steps ...clockedStep) *clockedModel {
+	model := &clockedModel{steps: steps, subAgent: subAgent}
 	model.at.Store(at.UnixNano())
 	return model
 }
 
 func (m *clockedModel) clock() time.Time { return time.Unix(0, m.at.Load()) }
 
-func (m *clockedModel) Ask(_ context.Context, _ llm.Request) (llm.Decision, error) {
-	if len(m.steps) == 0 {
+func (m *clockedModel) Ask(ctx context.Context, _ llm.Request) (llm.Decision, error) {
+	m.mu.Lock()
+	queue := &m.steps
+	if turn.SubAgentAsking(ctx) != "" {
+		queue = &m.subAgent
+	}
+	if len(*queue) == 0 {
+		m.mu.Unlock()
 		return llm.Decision{}, errors.New("clockedModel: no more decisions queued")
 	}
-	next := m.steps[0]
-	m.steps = m.steps[1:]
+	next := (*queue)[0]
+	*queue = (*queue)[1:]
+	m.mu.Unlock()
 	if next.holds == 0 {
 		m.at.Add(int64(next.waited))
 		return next.decision, nil
@@ -1319,13 +1325,16 @@ func (m *clockedModel) Ask(_ context.Context, _ llm.Request) (llm.Decision, erro
 	return next.decision, nil
 }
 
-func TestASubAgentRunningForTenSecondsReadsTenSecondsOnItsSpawnLine(t *testing.T) {
+func TestASubAgentRunningForTenSecondsIsHandedToTheViewAsTenSeconds(t *testing.T) {
 	dir := scratchProject(t)
 	spawnCall := llm.ToolCall{ID: "call-1", Name: "spawn", Arguments: json.RawMessage(`{"task":"write note.txt","owns":["note.txt"]}`)}
 	model := clockedFrom(time.Date(2026, 9, 20, 9, 0, 0, 0, time.UTC),
+		[]clockedStep{
+			{waited: 10 * time.Second, decision: llm.Decision{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{writeNote("call-2")}}},
+			{decision: llm.Decision{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "the sub-agent wrote it"}},
+		},
 		clockedStep{decision: llm.Decision{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{spawnCall}}},
-		clockedStep{waited: 10 * time.Second, decision: llm.Decision{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{writeNote("call-2")}}},
-		clockedStep{decision: llm.Decision{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "the sub-agent wrote it"}},
+		clockedStep{decision: llm.Decision{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "the sub-agent is on it"}},
 		clockedStep{decision: llm.Decision{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "the sub-agent did it"}},
 	)
 	driver := driveApp(t)
@@ -1333,21 +1342,9 @@ func TestASubAgentRunningForTenSecondsReadsTenSecondsOnItsSpawnLine(t *testing.T
 		return wireOn(model), nil
 	}, nil, model.clock, sessionResume{}).run(t.Context(), onTheSubscription, "hand the note to a sub-agent", driver.emit)
 
-	running := ""
-	for _, framed := range driver.frames {
-		for _, row := range strings.Split(ansi.Strip(framed), "\n") {
-			line := strings.TrimSpace(row)
-			if strings.Contains(line, "[&sub-1]") && !strings.HasPrefix(line, "✓") {
-				running = line
-			}
-		}
-	}
-	if running == "" {
-		t.Fatal("no frame carried the running sub-agent on its spawn line")
-	}
-	t.Logf("the spawn line read %q", running)
-	if !strings.HasSuffix(running, " 10s") {
-		t.Errorf("the sub-agent ran for ten seconds and its spawn line reads %q", running)
+	ended := slices.Sorted(maps.Keys(driver.subAgentClocks(roster.Finished)))
+	if !slices.Equal(ended, []time.Duration{10 * time.Second}) {
+		t.Errorf("the sub-agent ran for ten seconds and was handed to the view as ended at %v", ended)
 	}
 }
 
@@ -1366,9 +1363,12 @@ func subAgentHeldInsideOneCall(t *testing.T) *appDriver {
 		return llm.Decision{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: text}
 	}
 	model := clockedFrom(time.Date(2026, 9, 24, 9, 0, 0, 0, time.UTC),
+		[]clockedStep{
+			{decision: llm.Decision{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{writeNote("call-2")}}},
+			{waited: subAgentHeldFor, holds: heldInsideOneCall, decision: reply("the sub-agent wrote it")},
+		},
 		clockedStep{decision: llm.Decision{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{spawnCall}}},
-		clockedStep{decision: llm.Decision{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{writeNote("call-2")}}},
-		clockedStep{waited: subAgentHeldFor, holds: heldInsideOneCall, decision: reply("the sub-agent wrote it")},
+		clockedStep{decision: reply("the sub-agent is on it")},
 		clockedStep{waited: orchestratorHeldFor, holds: heldInsideOneCall, decision: reply("the sub-agent did it")},
 	)
 	driver := driveApp(t)
@@ -1410,11 +1410,6 @@ func TestARunningSubAgentsClockAdvancesWhileItIsHeldInsideOneCall(t *testing.T) 
 			widget.Until(subAgentHeldFor), slices.Sorted(maps.Keys(drawn)))
 	}
 	t.Logf("the running sub-agent was drawn at %v", slices.Sorted(maps.Keys(drawn)))
-	for _, clock := range moved {
-		if reads := widget.Until(clock); !strings.Contains(drawn[clock], reads) {
-			t.Errorf("the sub-agent was drawn at %s and no screen of that frame reads it:\n%s", reads, drawn[clock])
-		}
-	}
 }
 
 func TestASubAgentThatHasHandedBackKeepsTheClockItStoppedAt(t *testing.T) {
@@ -2815,6 +2810,7 @@ func TestABrowserRunTeachesItsHostARecipeTheNextRunIsGivenUntilItFailsTwice(t *t
 		if _, err := spawner.Run(context.Background(), json.RawMessage(`{"agent":"browser","task":"find a house for 4 in Atibaia on www.fake.test under 900 a night"}`)); err != nil {
 			t.Fatal(err)
 		}
+		awaitReport(t, spawner)
 		for _, message := range script.requests[0].Messages {
 			if message.Role == llm.RoleUser {
 				return message.Content
@@ -2858,6 +2854,18 @@ func TestABrowserRunTeachesItsHostARecipeTheNextRunIsGivenUntilItFailsTwice(t *t
 	spawnOn(answer("**Failed:** the search never loaded"))
 	if first := spawnOn(answer("**Found:** nothing")); strings.Contains(first, "adults={adults}") {
 		t.Errorf("a recipe that failed twice in a row is still handed out:\n%s", first)
+	}
+}
+
+func awaitReport(t *testing.T, spawner *turn.SpawnTool) string {
+	t.Helper()
+	for deadline := time.Now().Add(5 * time.Second); ; time.Sleep(10 * time.Millisecond) {
+		if reports := spawner.Inbox.Take(); len(reports) > 0 {
+			return strings.Join(reports, "\n")
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the sub-agent sent no report within 5s")
+		}
 	}
 }
 

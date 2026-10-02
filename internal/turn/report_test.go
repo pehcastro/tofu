@@ -30,11 +30,9 @@ func (t *failsOnceTool) Run(context.Context, json.RawMessage) (Result, error) {
 
 func TestASubAgentThatRetriedAFailureAndLearnedNothingReportsNeitherAndEndsDone(t *testing.T) {
 	model := &stubModel{decisions: []llm.Decision{
-		spawnCall("call-1", "run the check under mine/", "mine/**"),
 		toolCallDecision(llm.ToolCall{ID: "check-1", Name: "check", Arguments: json.RawMessage(`{}`)}),
 		toolCallDecision(llm.ToolCall{ID: "check-2", Name: "check", Arguments: json.RawMessage(`{}`)}),
 		claimDecision("the check passes"),
-		messageDecision(),
 	}}
 	root := t.TempDir()
 	base := Config{
@@ -47,16 +45,11 @@ func TestASubAgentThatRetriedAFailureAndLearnedNothingReportsNeitherAndEndsDone(
 		NewID:          func() string { return "turn-orchestrator" },
 	}
 	spawn := NewSpawnTool("turn-orchestrator", base, &subagent.Roster{})
-	orchestrator := base
-	orchestrator.Task = "hand the check to a sub-agent"
-	orchestrator.Tools = NewRegistry(spawn)
-
-	if _, err := Run(context.Background(), orchestrator); err != nil {
-		t.Fatalf("Run: %v", err)
+	if _, err := spawn.Run(context.Background(), spawnCall("call-1", "run the check under mine/", "mine/**").ToolCalls[0].Arguments); err != nil {
+		t.Fatalf("spawn: %v", err)
 	}
 
-	last := model.requests[len(model.requests)-1].Messages
-	report := last[len(last)-1].Content
+	report := reported(t, spawn)
 	if strings.Contains(report, "learned nothing") || strings.Contains(report, "dismissed") {
 		t.Fatalf("the report carries a line about nothing:\n%s", report)
 	}

@@ -206,7 +206,6 @@ func TestAJevErrorLeavesTheSubAgentsClaimStandingAndSaysSoOnTheRow(t *testing.T)
 	}
 	spawned := spawnOneSubAgent(t, review, []llm.Decision{
 		{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "I finished the task."},
-		{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "the sub-agent reported back"},
 	})
 
 	if len(spawned) != 1 {
@@ -247,12 +246,11 @@ func TestTheTypedDoneReviewReopensTheSubAgentInsideARunAndWhyPrintsTheChain(t *t
 		t.Fatalf("newTypedDoneReview: %v", err)
 	}
 	rounds := konst.SubAgentMaxRounds
-	queued := make([]llm.Decision, 0, rounds+1)
+	queued := make([]llm.Decision, 0, rounds)
 	for round := 1; round <= rounds; round++ {
 		queued = append(queued, llm.Decision{Build: "stub-model", Outcome: llm.OutcomeMessage,
 			Content: fmt.Sprintf("attempt %d, I finished the task.", round)})
 	}
-	queued = append(queued, llm.Decision{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "the sub-agent reported back"})
 	spawned := spawnOneSubAgent(t, review, queued)
 
 	if len(spawned) != rounds {
@@ -289,7 +287,7 @@ func TestTheTypedDoneReviewReopensTheSubAgentInsideARunAndWhyPrintsTheChain(t *t
 	t.Logf("tofu why %s\n%s", first.DecisionIDs[0], printed)
 }
 
-func spawnOneSubAgent(t *testing.T, review turn.DoneReview, decisions []llm.Decision) []turn.Row {
+func spawnOneSubAgent(t *testing.T, review turn.DoneReview, subAgent []llm.Decision) []turn.Row {
 	t.Helper()
 	dir := t.TempDir()
 	opts := armOpts(t)
@@ -299,13 +297,12 @@ func spawnOneSubAgent(t *testing.T, review turn.DoneReview, decisions []llm.Deci
 		t.Fatalf("buildTestRunTools: %v", err)
 	}
 	spawnCall := llm.ToolCall{ID: "call-1", Name: "spawn", Arguments: json.RawMessage(`{"task":"write note.txt","owns":["note.txt"]}`)}
-	queued := append([]llm.Decision{{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{spawnCall}}}, decisions...)
+	reported := llm.Decision{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "the sub-agent reported back"}
+	lead := []llm.Decision{{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{spawnCall}}, reported, reported}
 
-	config, spawner := mustConfig(t, opts, built, runtime{model: &queuedModel{decisions: queued}, spend: turn.SpendSubscription})
+	config, spawner := mustConfig(t, opts, built, runtime{model: &queuedModel{decisions: lead, subAgents: subAgent}, spend: turn.SpendSubscription})
 	spawner.Review = review
-	if _, err := turn.Run(context.Background(), config); err != nil {
-		t.Fatalf("turn.Run: %v", err)
-	}
+	leadRows(t, config)
 	return spawner.SubAgentRows()
 }
 

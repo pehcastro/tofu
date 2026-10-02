@@ -47,22 +47,17 @@ func TestASubAgentIsOfferedWriteAndEditOnlyWhenItsDefinitionNamesThem(t *testing
 		"ts-dev":   "read write edit typecheck test glob search symbols bash",
 		"":         "read write edit typecheck test browser_tabs browser_observe browser_act browser_motion fetch glob search symbols bash spawn message",
 	} {
-		model := &stubModel{decisions: []llm.Decision{spawnCall("call-spawn", "do the piece", "piece/**"), claimDecision("did the piece"), claimDecision("done")}}
+		model := &stubModel{decisions: []llm.Decision{claimDecision("did the piece")}}
 		config := Config{Model: model, Spend: SpendAPIKey, Tools: NewRegistry(base...), Caps: Caps{MaxSteps: 5}, ResultBytesCap: 4096,
 			ArtifactDir: t.TempDir(), NewID: func() string { return "turn-orchestrator" }}
 		spawn := NewSpawnTool("turn-orchestrator", config, &subagent.Roster{})
 		spawn.SubAgents = SubAgents{Defined: found.Definitions}
-		orchestrator := config
-		orchestrator.Task = "hand the piece to " + agent
-		orchestrator.Tools = NewRegistry(spawn)
-		if agent != "" {
-			model.decisions[0].ToolCalls[0].Arguments = json.RawMessage(`{"agent":"` + agent + `","task":"do the piece","owns":["piece/**"]}`)
-		}
-		if _, err := Run(context.Background(), orchestrator); err != nil {
+		if _, err := spawn.Run(context.Background(), json.RawMessage(`{"agent":"`+agent+`","task":"do the piece","owns":["piece/**"]}`)); err != nil {
 			t.Fatal(err)
 		}
+		reported(t, spawn)
 		var offered []string
-		for _, tool := range model.requests[1].Tools {
+		for _, tool := range model.requests[0].Tools {
 			if tool.Name != "ask" && tool.Name != "artifact_fetch" {
 				offered = append(offered, tool.Name)
 			}
@@ -119,6 +114,7 @@ func TestASubAgentThatForksForeverStopsAtTheForkCapAndEachCarrySaysWhatItTried(t
 	if _, err := spawn.Run(context.Background(), args); err != nil {
 		t.Fatal(err)
 	}
+	reported(t, spawn)
 	rows := spawn.SubAgentRows()
 	last := rows[len(rows)-1]
 	if last.Outcome != OutcomeStepCap || !strings.HasSuffix(last.ID, "-f11") {
@@ -163,21 +159,51 @@ func TestAForkedSubAgentReportsEveryForkUnderTheNameMessageReaches(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	result, err := spawn.Run(context.Background(), args)
-	if err != nil {
+	if _, err := spawn.Run(context.Background(), args); err != nil {
 		t.Fatal(err)
 	}
-	t.Logf("the hand-back:\n%s", result.Content)
-	if want := "sub-agent sub-1 is "; !strings.Contains(result.Content, want) || strings.Contains(result.Content, "sub-1-f") {
-		t.Errorf("the hand-back does not name the agent as sub-1, or names a fork:\n%s", result.Content)
+	report := reported(t, spawn)
+	t.Logf("the hand-back:\n%s", report)
+	if want := "sub-agent sub-1 is "; !strings.Contains(report, want) || strings.Contains(report, "sub-1-f") {
+		t.Errorf("the hand-back does not name the agent as sub-1, or names a fork:\n%s", report)
 	}
-	if want := "after 3 steps and 4 tool calls across 2 forks"; !strings.Contains(result.Content, want) {
-		t.Errorf("the hand-back does not count every fork, want %q:\n%s", want, result.Content)
+	if want := "after 3 steps and 4 tool calls across 2 forks"; !strings.Contains(report, want) {
+		t.Errorf("the hand-back does not count every fork, want %q:\n%s", want, report)
 	}
-	answered, err := messageTool{orchestrator: spawn}.Run(context.Background(), json.RawMessage(`{"to":"sub-1","text":"which listing?"}`))
-	if err != nil || !strings.Contains(answered.Content, "sub-agent sub-1 is ") || model.asked != 4 {
-		t.Errorf("a message to sub-1 did not reach the agent: %v\n%s", err, answered.Content)
+	if _, err := (messageTool{orchestrator: spawn}).Run(context.Background(), json.RawMessage(`{"to":"sub-1","text":"which listing?"}`)); err != nil {
+		t.Fatal(err)
 	}
+	if answered := reported(t, spawn); !strings.Contains(answered, "sub-agent sub-1 is ") || model.asked != 4 {
+		t.Errorf("a message to sub-1 did not reach the agent:\n%s", answered)
+	}
+}
+
+func reported(t *testing.T, spawn *SpawnTool) string {
+	t.Helper()
+	reports, _ := spawn.Inbox.next(context.Background(), nil)
+	if len(reports) != 1 {
+		t.Fatalf("the spawn's inbox holds %d reports, want 1", len(reports))
+	}
+	return reports[0]
+}
+
+func TestTheLeadHasTheSpawnResultBeforeTheSubAgentsFirstRequestIsAnswered(t *testing.T) {
+	model := newCrew(map[string][]llm.Decision{
+		leadKey:    {spawnCall("call-spawn", usersRoute, "src/users.ts"), claimDecision("sub-1 is on it"), claimDecision("sub-1 is done")},
+		usersRoute: {claimDecision("the users route is added")},
+	})
+	release := model.hold(usersRoute, 1)
+	defer release()
+	lead := crewLead(t, model)
+	led := startLead(context.Background(), lead, nil)
+	waitFor(t, "the lead's request after its spawn", func() bool { return len(model.requests(leadKey)) >= 2 })
+	asked := model.requests(leadKey)[1].Messages
+	if result := asked[len(asked)-1]; result.ToolCallID != "call-spawn" || !strings.HasPrefix(result.Content, "sub-1 is running") || model.answered(usersRoute) != 0 {
+		t.Fatalf("the lead's request after its spawn ends on %q with the sub-agent answered %d times, want the spawn result while it runs",
+			result.Content, model.answered(usersRoute))
+	}
+	release()
+	led.wait(t)
 }
 
 func TestABrowserSpawnWithNoOwnsStartsAndAWriterWithNoOwnsIsStillRefused(t *testing.T) {
@@ -194,18 +220,30 @@ func TestABrowserSpawnWithNoOwnsStartsAndAWriterWithNoOwnsIsStillRefused(t *test
 		if started := err == nil; started != starts {
 			t.Errorf("%s spawned with no owns: started %v, want %v: %v", agent, started, starts, err)
 		}
+		if err == nil {
+			reported(t, spawn)
+		}
 	}
 }
 
-func TestTheSpawnAtTheSettingRunsAndTheOnePastItIsRefusedNamingIt(t *testing.T) {
-	const perTurn = 15
-	decisions := make([]llm.Decision, perTurn)
-	for i := range decisions {
-		decisions[i] = claimDecision("done")
+type heldModel struct{ release chan struct{} }
+
+func (m heldModel) Ask(ctx context.Context, _ llm.Request) (llm.Decision, error) {
+	select {
+	case <-m.release:
+		return claimDecision("done"), nil
+	case <-ctx.Done():
+		return llm.Decision{}, ctx.Err()
 	}
-	_, spawn := orchestratorTurn(t, t.TempDir(), decisions)
-	spawn.Limits = func() SubAgentLimits { return SubAgentLimits{PerTurn: perTurn, Depth: 2} }
-	if described := spawn.Definition().Description; !strings.Contains(described, "At most 15 sub-agents per turn") || !strings.Contains(described, settings.SubAgentsPerTurn) {
+}
+
+func TestTheSpawnPastTheSettingIsRefusedWhileTheOthersRunAndStartsOnceTheyEnd(t *testing.T) {
+	const running = 15
+	_, spawn := orchestratorTurn(t, t.TempDir(), nil)
+	model := heldModel{release: make(chan struct{})}
+	spawn.base.Model = model
+	spawn.Limits = func() SubAgentLimits { return SubAgentLimits{Running: running, Depth: 2} }
+	if described := spawn.Definition().Description; !strings.Contains(described, "At most 15 sub-agents running at once") || !strings.Contains(described, settings.SubAgentsPerTurn) {
 		t.Errorf("the model is not told the setting's number and name: %q", described)
 	}
 	spawnNumber := func(n int) error {
@@ -216,13 +254,25 @@ func TestTheSpawnAtTheSettingRunsAndTheOnePastItIsRefusedNamingIt(t *testing.T) 
 		_, err = spawn.Run(context.Background(), args)
 		return err
 	}
-	for n := 1; n <= perTurn; n++ {
+	for n := 1; n <= running; n++ {
 		if err := spawnNumber(n); err != nil {
-			t.Fatalf("spawn %d of %d was refused: %v", n, perTurn, err)
+			t.Fatalf("spawn %d of %d was refused: %v", n, running, err)
 		}
 	}
-	refused := spawnNumber(perTurn + 1)
+	refused := spawnNumber(running + 1)
 	if refused == nil || !strings.Contains(refused.Error(), settings.SubAgentsPerTurn) || !strings.Contains(refused.Error(), "15") {
-		t.Fatalf("spawn 16 with the setting at 15 was not refused naming the setting: %v", refused)
+		t.Fatalf("spawn 16 with 15 running and the setting at 15 was not refused naming the setting: %v", refused)
 	}
+	close(model.release)
+	for ended := 0; ended < running; {
+		reports, _ := spawn.Inbox.next(context.Background(), nil)
+		if len(reports) == 0 {
+			t.Fatalf("nothing runs and %d of %d reports came", ended, running)
+		}
+		ended += len(reports)
+	}
+	if err := spawnNumber(running + 2); err != nil {
+		t.Fatalf("a spawn after the 15 ended was refused: %v", err)
+	}
+	reported(t, spawn)
 }

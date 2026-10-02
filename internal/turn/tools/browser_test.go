@@ -736,36 +736,33 @@ func TestTheBrowserSubAgentObservesActsObservesAndReportsItsTab(t *testing.T) {
 		t.Fatalf("the library defines no browser sub-agent that runs: %+v", found)
 	}
 	script := &spawnScript{decisions: []llm.Decision{
-		calls("spawn", `{"agent":"browser","task":"on tab 7, go to the next page of stays and say what it shows","owns":["notes/**"]}`),
 		calls("browser_observe", `{"note":"n","tab":7}`),
 		calls("browser_act", `{"note":"n","tab":7,"actions":[{"ref":"e1","action":"click"}]}`),
 		calls("browser_observe", `{"note":"n","tab":7}`),
 		{Build: "cassette", Outcome: llm.OutcomeMessage, Content: "clicked Next on tab 7; it shows page 2 of the stays; tab 7 is left open on https://stays.test/page-2"},
-		{Build: "cassette", Outcome: llm.OutcomeMessage, Content: "the browser sub-agent reached page 2 on tab 7"},
 	}}
 	base := turn.Config{Model: script, Spend: turn.SpendSubscription, Tools: turn.NewRegistry(offered...), Caps: turn.Caps{MaxSteps: 8},
 		ResultBytesCap: 8192, ArtifactDir: t.TempDir(), NewID: func() string { return "turn-orchestrator" }}
 	spawner := turn.NewSpawnTool("turn-orchestrator", base, &subagent.Roster{})
 	spawner.SubAgents = turn.SubAgents{Defined: found.Definitions}
-	orchestrator := base
-	orchestrator.Task = "find what the next page of stays shows"
-	orchestrator.Tools = turn.NewRegistry(spawner)
-	if _, err := turn.Run(context.Background(), orchestrator); err != nil {
+	if _, err := spawner.Run(context.Background(), json.RawMessage(`{"agent":"browser","task":"on tab 7, go to the next page of stays and say what it shows","owns":["notes/**"]}`)); err != nil {
 		t.Fatal(err)
 	}
+	var spawnResult string
+	for deadline := time.Now().Add(5 * time.Second); spawnResult == ""; time.Sleep(10 * time.Millisecond) {
+		if time.Now().After(deadline) {
+			t.Fatal("the browser sub-agent sent no report within 5s")
+		}
+		spawnResult = strings.Join(spawner.Inbox.Take(), "\n")
+	}
 
-	var subAgentTools, spawnResult string
+	var subAgentTools string
 	for _, asked := range script.asked {
 		var offeredNames []string
 		for _, tool := range asked.Tools {
 			offeredNames = append(offeredNames, tool.Name)
 		}
-		if !slices.Contains(offeredNames, "spawn") {
-			subAgentTools = strings.Join(offeredNames, " ")
-		}
-		if last := asked.Messages[len(asked.Messages)-1]; last.Role == llm.RoleTool && last.ToolCallID == "call-spawn" {
-			spawnResult = last.Content
-		}
+		subAgentTools = strings.Join(offeredNames, " ")
 	}
 	t.Logf("the sub-agent was offered %s, and the orchestrator read:\n%s", subAgentTools, spawnResult)
 	if page.releases() != 1 {

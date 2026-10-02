@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"strconv"
-	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -22,7 +21,7 @@ type warmScript struct {
 	mu       sync.Mutex
 	began    map[string]time.Time
 	answered map[string]time.Time
-	final    []llm.Message
+	spawned  bool
 }
 
 func (s *warmScript) Ask(ctx context.Context, request llm.Request) (llm.Decision, error) {
@@ -33,10 +32,12 @@ func (s *warmScript) Ask(ctx context.Context, request llm.Request) (llm.Decision
 		}
 	}
 	if brief == "" {
-		if request.Messages[len(request.Messages)-1].Role == llm.RoleTool {
-			s.final = request.Messages
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		if s.spawned {
 			return messageDecision(), nil
 		}
+		s.spawned = true
 		return toolCallDecision(s.spawns...), nil
 	}
 	s.mu.Lock()
@@ -78,17 +79,10 @@ func warmSpawns(t *testing.T, agents ...string) *warmScript {
 	spawner := NewSpawnTool("turn-orchestrator", base, &subagent.Roster{})
 	spawner.SubAgents.Defined = []subagent.Definition{{Name: "ts-dev", Runs: subagent.RunsModel}, {Name: "go-dev", Runs: subagent.RunsModel}}
 	orchestrator := base
-	orchestrator.Task = "hand the work to sub-agents"
-	orchestrator.Tools = NewRegistry(spawner)
-	if _, err := Run(context.Background(), orchestrator); err != nil {
-		t.Fatalf("Run: %v", err)
-	}
-	answers := script.final[len(script.final)-len(agents):]
-	for i, answer := range answers {
-		n := strconv.Itoa(i + 1)
-		if answer.ToolCallID != "call-"+n || !strings.Contains(answer.Content, "finished brief-"+n) {
-			t.Fatalf("answer %d is %s carrying %q, want call-%s carrying brief-%s", i, answer.ToolCallID, answer.Content, n, n)
-		}
+	orchestrator.Task, orchestrator.Tools, orchestrator.Inbox = "hand the work to sub-agents", NewRegistry(spawner), spawner.Inbox
+	startLead(context.Background(), orchestrator, nil).wait(t)
+	if len(script.answered) != len(agents) {
+		t.Fatalf("%d of %d sub-agents were answered", len(script.answered), len(agents))
 	}
 	return script
 }

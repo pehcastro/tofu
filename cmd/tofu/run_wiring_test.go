@@ -338,21 +338,23 @@ func TestASpawnedSubAgentsRequestsCarryTheEffortTheSpawnNames(t *testing.T) {
 			spawner := turn.NewSpawnTool("turn-lead", base, &subagent.Roster{})
 			spawner.SubAgents.Open = opener
 			lead := base
-			lead.Tools = turn.NewRegistry(spawner)
-			if _, err := turn.Run(context.Background(), lead); err != nil {
-				t.Fatal(err)
-			}
+			lead.Tools, lead.Inbox = turn.NewRegistry(spawner), spawner.Inbox
+			leadRows(t, lead)
 			t.Logf("%d requests reached the wire", len(server.bodies))
+			subAgentAsked := ""
 			for index, body := range server.bodies {
 				t.Logf("request %d effort: %s", index, regexp.MustCompile(`"output_config":\{[^}]*\}`).FindString(body))
+				if strings.Contains(body, "the paths you hold") {
+					subAgentAsked = body
+				}
 			}
 			if spawned.child == "" {
-				if len(server.bodies) != 2 || !strings.Contains(server.bodies[1], "it takes low, medium, high, xhigh, max") {
+				if len(server.bodies) != 2 || subAgentAsked != "" || !strings.Contains(server.bodies[1], "it takes low, medium, high, xhigh, max") {
 					t.Fatalf("a level the model does not take was not refused at the spawn, before any sub-agent request: %d requests", len(server.bodies))
 				}
 				return
 			}
-			if len(server.bodies) != 3 || !strings.Contains(server.bodies[0], `"output_config":{"effort":"medium"}`) || !strings.Contains(server.bodies[1], spawned.child) {
+			if !strings.Contains(server.bodies[0], `"output_config":{"effort":"medium"}`) || !strings.Contains(subAgentAsked, spawned.child) {
 				t.Fatalf("the sub-agent's request did not carry %s", spawned.child)
 			}
 		})
@@ -363,17 +365,17 @@ func TestATsDevSpawnIsOfferedTypecheck(t *testing.T) {
 	reply := func(text string) llm.Decision {
 		return llm.Decision{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: text}
 	}
-	model := &sendModel{queued: []llm.Decision{
+	model := &queuedModel{decisions: []llm.Decision{
 		{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{
 			{ID: "call-1", Name: "spawn", Arguments: json.RawMessage(`{"agent":"ts-dev","task":"check the project","owns":["src/**"]}`)}}},
-		reply("checked"), reply("done"),
-	}}
+		reply("ts-dev is on it"), reply("done"),
+	}, subAgents: []llm.Decision{reply("checked")}}
 	stubbedTurn(scratchProject(t), model)(t.Context(), onTheSubscription, "have ts-dev check the project", driveAppOn(t, nil).emit)
-	if len(model.requests) < 2 {
-		t.Fatalf("the ts-dev sub-agent never asked its model: %d requests", len(model.requests))
+	if len(model.subAgentAsked) == 0 {
+		t.Fatal("the ts-dev sub-agent never asked its model")
 	}
 	var offered []string
-	for _, tool := range model.requests[1].Tools {
+	for _, tool := range model.subAgentAsked[0].Tools {
 		offered = append(offered, tool.Name)
 	}
 	t.Logf("ts-dev is offered %v", offered)
@@ -624,26 +626,18 @@ func TestTheSpawnToolIsGivenTheSessionStoreBeforeTheTurnStarts(t *testing.T) {
 		t.Fatalf("buildTestRunTools: %v", err)
 	}
 	store := projectSessions(t, dir)
-	model := &queuedModel{decisions: []llm.Decision{
-		{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{
-			{ID: "call-1", Name: "spawn", Arguments: json.RawMessage(`{"task":"write note.txt","owns":["note.txt"]}`)},
-		}},
-		{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{
-			{ID: "call-2", Name: "write", Arguments: json.RawMessage(`{"path":"note.txt","content":"a note"}`)},
-		}},
-		{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "the sub-agent wrote it"},
-		{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "the sub-agent reported"},
-	}}
+	model := oneNoteSubAgent()
 
 	config, _ := mustConfig(t, opts, built, runtime{model: model, spend: turn.SpendSubscription, sessions: store})
-	row, err := turn.Run(context.Background(), config)
-	if err != nil {
-		t.Fatalf("turn.Run: %v", err)
+	rows := leadRows(t, config)
+	var named []string
+	for _, row := range rows {
+		named = append(named, row.SubAgentIDs...)
 	}
-	if len(row.SubAgentIDs) != 1 {
-		t.Fatalf("the orchestrator names %v, want the one sub-agent", row.SubAgentIDs)
+	if len(named) != 1 {
+		t.Fatalf("the orchestrator's turns name %v, want the one sub-agent", named)
 	}
-	subAgentID := row.SubAgentIDs[0]
+	subAgentID, row := named[0], rows[0]
 	header, err := store.Header(row.Session)
 	if err != nil {
 		t.Fatalf("the orchestrator session was not recorded: %v", err)
@@ -704,16 +698,44 @@ func TestAProjectCarryingNoWebLibraryGetsFetchFromTheShippedOne(t *testing.T) {
 	}
 }
 
+func oneNoteSubAgent() *queuedModel {
+	return &queuedModel{
+		decisions: []llm.Decision{
+			{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{
+				{ID: "call-1", Name: "spawn", Arguments: json.RawMessage(`{"task":"write note.txt","owns":["note.txt"]}`)},
+			}},
+			{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "the sub-agent is on it"},
+			{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "the sub-agent reported"},
+		},
+		subAgents: []llm.Decision{
+			{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{
+				{ID: "call-2", Name: "write", Arguments: json.RawMessage(`{"path":"note.txt","content":"a note"}`)},
+			}},
+			{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "the sub-agent wrote it"},
+		},
+	}
+}
+
 type watchingModel struct {
-	inner    turn.Model
-	store    *session.Store
-	subAgent string
-	found    []bool
+	inner     turn.Model
+	store     *session.Store
+	subAgent  string
+	mu        sync.Mutex
+	leadFirst *bool
+	found     []bool
 }
 
 func (m *watchingModel) Ask(ctx context.Context, request llm.Request) (llm.Decision, error) {
 	_, err := m.store.Header(m.subAgent)
-	m.found = append(m.found, err == nil)
+	m.mu.Lock()
+	switch {
+	case turn.SubAgentAsking(ctx) != "":
+		m.found = append(m.found, err == nil)
+	case m.leadFirst == nil:
+		onDisk := err == nil
+		m.leadFirst = &onDisk
+	}
+	m.mu.Unlock()
 	return m.inner.Ask(ctx, request)
 }
 
@@ -727,35 +749,17 @@ func TestASubAgentLeavesItsRecordWhileTheOrchestratorsTurnIsStillRunning(t *test
 		t.Fatalf("buildTestRunTools: %v", err)
 	}
 	store := projectSessions(t, dir)
-	model := &watchingModel{store: store, subAgent: "sub-1", inner: &queuedModel{decisions: []llm.Decision{
-		{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{
-			{ID: "call-1", Name: "spawn", Arguments: json.RawMessage(`{"task":"write note.txt","owns":["note.txt"]}`)},
-		}},
-		{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{
-			{ID: "call-2", Name: "write", Arguments: json.RawMessage(`{"path":"note.txt","content":"a note"}`)},
-		}},
-		{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "the sub-agent wrote it"},
-		{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "the sub-agent reported"},
-	}}}
+	model := &watchingModel{store: store, subAgent: "sub-1", inner: oneNoteSubAgent()}
 
 	config, _ := mustConfig(t, opts, built, runtime{model: model, spend: turn.SpendSubscription, sessions: store})
-	row, err := turn.Run(context.Background(), config)
-	if err != nil {
-		t.Fatalf("turn.Run: %v", err)
-	}
-	if len(model.found) != 4 {
-		t.Fatalf("the turn asked %d times, want the orchestrator twice and the sub-agent twice", len(model.found))
-	}
-	if model.found[0] {
+	leadRows(t, config)
+	if model.leadFirst == nil || *model.leadFirst {
 		t.Errorf("the sub-agent's record was on disk before the orchestrator spawned it")
 	}
-	if !model.found[1] || !model.found[2] {
-		t.Errorf("the sub-agent asked twice and its record was on disk %v, want it there for both", model.found)
+	if !slices.Equal(model.found, []bool{true, true}) {
+		t.Errorf("the sub-agent's record was on disk %v at its asks, want it there for both of its two", model.found)
 	}
-	if len(row.SubAgentIDs) != 1 || row.SubAgentIDs[0] != model.subAgent {
-		t.Fatalf("the orchestrator names %v, want the sub-agent %q", row.SubAgentIDs, model.subAgent)
-	}
-	t.Logf("the sub-agent's record was on disk at asks %v, and the orchestrator only returned after that", model.found)
+	t.Logf("the sub-agent's record was on disk at its asks %v", model.found)
 }
 
 func TestTheWebLibraryComesFromTheDirectoryTheRunNamesNotTheOneItWasStartedIn(t *testing.T) {
@@ -825,15 +829,34 @@ func chosenFor(t *testing.T) models.Model {
 	return selected
 }
 
-type queuedModel struct {
-	decisions []llm.Decision
+func leadRows(t *testing.T, config turn.Config) []turn.Row {
+	t.Helper()
+	var rows []turn.Row
+	if err := turn.Lead(context.Background(), config, nil, nil, func(row turn.Row, _ error) { rows = append(rows, row) }); err != nil {
+		t.Fatalf("turn.Lead: %v", err)
+	}
+	return rows
 }
 
-func (m *queuedModel) Ask(_ context.Context, _ llm.Request) (llm.Decision, error) {
-	if len(m.decisions) == 0 {
+type queuedModel struct {
+	mu            sync.Mutex
+	decisions     []llm.Decision
+	subAgents     []llm.Decision
+	subAgentAsked []llm.Request
+}
+
+func (m *queuedModel) Ask(ctx context.Context, request llm.Request) (llm.Decision, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	queue := &m.decisions
+	if turn.SubAgentAsking(ctx) != "" {
+		queue = &m.subAgents
+		m.subAgentAsked = append(m.subAgentAsked, request)
+	}
+	if len(*queue) == 0 {
 		return llm.Decision{}, errors.New("queuedModel: no more decisions queued")
 	}
-	next := m.decisions[0]
-	m.decisions = m.decisions[1:]
+	next := (*queue)[0]
+	*queue = (*queue)[1:]
 	return next, nil
 }

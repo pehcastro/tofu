@@ -20,13 +20,7 @@ import (
 
 func TestTheSubAgentViewShowsTheStepsASubAgentHasTakenWhileItIsStillRunning(t *testing.T) {
 	dir := scratchProject(t)
-	spawnCall := llm.ToolCall{ID: "call-1", Name: "spawn", Arguments: json.RawMessage(`{"task":"write note.txt","owns":["note.txt"]}`)}
-	model := &queuedModel{decisions: []llm.Decision{
-		{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{spawnCall}},
-		{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{writeNote("call-2")}},
-		{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "the sub-agent wrote it"},
-		{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "the sub-agent did it"},
-	}}
+	model := noteSubAgent(writeNote("call-2"))
 	driver := driveApp(t)
 	stubbedTurn(dir, model)(t.Context(), onTheSubscription, "hand the note to a sub-agent", driver.emit)
 
@@ -42,6 +36,21 @@ func TestTheSubAgentViewShowsTheStepsASubAgentHasTakenWhileItIsStillRunning(t *t
 		t.Fatal("no sub-agent event carried a running sub-agent with a step behind it, so nothing can tell a sub-agent two steps in from one that has done nothing")
 	}
 	t.Logf("the running sub-agent was drawn %d times with the steps it had taken, first %+v", len(stepping), stepping[0])
+}
+
+func noteSubAgent(write llm.ToolCall) *queuedModel {
+	spawnCall := llm.ToolCall{ID: "call-1", Name: "spawn", Arguments: json.RawMessage(`{"task":"write note.txt","owns":["note.txt"]}`)}
+	return &queuedModel{
+		decisions: []llm.Decision{
+			{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{spawnCall}},
+			{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "the sub-agent is on it"},
+			{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "the sub-agent did it"},
+		},
+		subAgents: []llm.Decision{
+			{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{write}},
+			{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "the sub-agent wrote it"},
+		},
+	}
 }
 
 func rosterHolding(t *testing.T, agents ...roster.SubAgent) *roster.Roster {
@@ -135,14 +144,7 @@ func TestTheSpawnersRecordedCallsWinOverTheRostersNamesWheneverItHasAny(t *testi
 func subAgentCallsWhileRunningAndOnceFinished(t *testing.T, dir, planted string) (running, finished []subagent.Call) {
 	t.Helper()
 	_ = os.Remove(filepath.Join(dir, "note.txt"))
-	spawnCall := llm.ToolCall{ID: "call-1", Name: "spawn", Arguments: json.RawMessage(`{"task":"write note.txt","owns":["note.txt"]}`)}
-	secret := llm.ToolCall{ID: "call-2", Name: "write", Arguments: json.RawMessage(`{"path":"note.txt","content":"` + planted + `"}`)}
-	model := &queuedModel{decisions: []llm.Decision{
-		{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{spawnCall}},
-		{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{secret}},
-		{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "the sub-agent wrote it"},
-		{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "the sub-agent did it"},
-	}}
+	model := noteSubAgent(llm.ToolCall{ID: "call-2", Name: "write", Arguments: json.RawMessage(`{"path":"note.txt","content":"` + planted + `"}`)})
 	driver := driveApp(t)
 	stubbedTurn(dir, model)(t.Context(), onTheSubscription, "hand the note to a sub-agent", driver.emit)
 

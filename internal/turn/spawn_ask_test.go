@@ -14,7 +14,7 @@ import (
 )
 
 type sideCallModel struct {
-	script   *stubModel
+	script   *crew
 	spawn    *SpawnTool
 	fails    bool
 	sideSaw  []llm.Message
@@ -36,7 +36,7 @@ func (m *sideCallModel) Ask(ctx context.Context, request llm.Request) (llm.Decis
 	return m.script.Ask(ctx, request)
 }
 
-func askTurn(t *testing.T, fails bool, decisions ...llm.Decision) *sideCallModel {
+func askTurn(t *testing.T, fails bool, side []llm.Decision, subAgent ...llm.Decision) *sideCallModel {
 	t.Helper()
 	root := t.TempDir()
 	if err := os.WriteFile(filepath.Join(root, "plan.md"), []byte("bash-2 already serves the app, so the users route goes first\n"), 0o644); err != nil {
@@ -47,23 +47,26 @@ func askTurn(t *testing.T, fails bool, decisions ...llm.Decision) *sideCallModel
 	if err != nil {
 		t.Fatal(err)
 	}
-	script := &stubModel{decisions: append([]llm.Decision{
-		toolCallDecision(llm.ToolCall{ID: "call-plan", Name: "read", Arguments: json.RawMessage(`{"path":"plan.md"}`)}),
-		spawnCall("call-spawn", "add the users route", "src/users.ts"),
-		toolCallDecision(llm.ToolCall{ID: "call-ask", Name: "ask", Arguments: args})}, decisions...)}
+	script := newCrew(map[string][]llm.Decision{
+		leadKey: {toolCallDecision(llm.ToolCall{ID: "call-plan", Name: "read", Arguments: json.RawMessage(`{"path":"plan.md"}`)}),
+			spawnCall("call-spawn", usersRoute, "src/users.ts"), claimDecision("sub-1 is on it"), claimDecision("sub-1 is done")},
+		usersRoute: append([]llm.Decision{toolCallDecision(llm.ToolCall{ID: "call-ask", Name: "ask", Arguments: args})}, subAgent...),
+		sideKey:    side,
+	})
+	release := script.hold(usersRoute, 1)
 	model := &sideCallModel{script: script, spawn: spawn, fails: fails}
 	orchestrator.Model, spawn.base.Model = model, model
-	if _, err := Run(context.Background(), orchestrator); err != nil {
-		t.Fatalf("the orchestrator's turn failed: %v", err)
-	}
+	led := startLead(context.Background(), orchestrator, nil)
+	waitFor(t, "the lead's first turn to end", func() bool { return len(led.turns()) == 1 })
+	release()
+	led.wait(t)
 	return model
 }
 
 func subAgentSaw(t *testing.T, model *sideCallModel) string {
 	t.Helper()
-	for _, request := range model.script.requests {
-		last := request.Messages[len(request.Messages)-1]
-		if len(request.Tools) > 0 && last.Role == llm.RoleTool && last.ToolCallID == "call-ask" {
+	for _, request := range model.script.requests(usersRoute) {
+		if last := request.Messages[len(request.Messages)-1]; last.Role == llm.RoleTool && last.ToolCallID == "call-ask" {
 			return last.Content
 		}
 	}
@@ -73,7 +76,7 @@ func subAgentSaw(t *testing.T, model *sideCallModel) string {
 
 func TestASubAgentAsksAndItsNextStepSeesTheOrchestratorsAnswer(t *testing.T) {
 	const answer = "no, bash-2 serves it on 3003"
-	model := askTurn(t, false, claimDecision(answer), claimDecision("the route is added and checked on 3003"), messageDecision())
+	model := askTurn(t, false, []llm.Decision{claimDecision(answer)}, claimDecision("the route is added and checked on 3003"))
 	if model.sideRuns != 1 {
 		t.Fatalf("the side call ran %d times, want 1", model.sideRuns)
 	}
@@ -102,7 +105,7 @@ func TestASubAgentAsksAndItsNextStepSeesTheOrchestratorsAnswer(t *testing.T) {
 }
 
 func TestAFailedSideCallAnswersWithTheDefaultMarkedAssumed(t *testing.T) {
-	model := askTurn(t, true, claimDecision("started on 3000"), messageDecision())
+	model := askTurn(t, true, nil, claimDecision("started on 3000"))
 	saw := subAgentSaw(t, model)
 	if !strings.Contains(saw, "I start it on 3000") || !strings.Contains(saw, "assumed") {
 		t.Errorf("after a failed side call the sub-agent saw %q, want its default marked assumed", saw)

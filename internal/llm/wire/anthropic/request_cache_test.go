@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"tofu/internal/konst"
 	"tofu/internal/llm/wire/anthropic"
@@ -205,6 +206,11 @@ func TestSiblingSubAgentsFromOneDefinitionShareTheCachedPrefix(t *testing.T) {
 		args, _ := json.Marshal(map[string]any{"task": brief.task, "owns": []string{brief.owns}, "agent": definition.Name})
 		if _, err := spawn.Run(context.Background(), args); err != nil {
 			t.Fatalf("spawning for %s: %v", brief.owns, err)
+		}
+		for deadline := time.Now().Add(5 * time.Second); len(spawn.Inbox.Take()) == 0; time.Sleep(10 * time.Millisecond) {
+			if time.Now().After(deadline) {
+				t.Fatalf("the sub-agent for %s sent no report within 5s", brief.owns)
+			}
 		}
 	}
 	if len(server.bodies) != 2 {

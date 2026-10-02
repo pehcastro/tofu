@@ -18,20 +18,23 @@ func reviewedSubAgent(t *testing.T, named string) (*stubReview, []Row) {
 	t.Helper()
 	root := t.TempDir()
 	review := &stubReview{writer: ledger.NewWriter(filepath.Join(root, "ledger")), verdict: DoneReopen}
-	orchestrator, spawn := orchestratorTurn(t, root, []llm.Decision{
-		spawnCall("call-1", "write the greeting under mine/", "mine/**"),
+	_, spawn := orchestratorTurn(t, root, []llm.Decision{
 		claimDecision("all done"),
 		claimDecision("done again"),
 		claimDecision("done a third time"),
-		messageDecision(),
 	})
 	spawn.Review = review
 	spawn.Methods = methodTable(t, named)
-
-	if _, err := Run(context.Background(), orchestrator); err != nil {
-		t.Fatalf("Run returned an error: %v", err)
-	}
+	spawnGreeting(t, spawn)
 	return review, spawn.SubAgentRows()
+}
+
+func spawnGreeting(t *testing.T, spawn *SpawnTool) {
+	t.Helper()
+	if _, err := spawn.Run(context.Background(), spawnCall("call-1", "write the greeting under mine/", "mine/**").ToolCalls[0].Arguments); err != nil {
+		t.Fatalf("spawn returned an error: %v", err)
+	}
+	reported(t, spawn)
 }
 
 func TestTheTableSendingStopCheckToTheJudgedMethodActsOnTheAnswer(t *testing.T) {
@@ -71,16 +74,9 @@ func TestAnUnwiredStopCheckLeavesTheSubAgentsOwnClaimStanding(t *testing.T) {
 func TestTheStopCheckMethodComesFromTheShippedTableWhenNobodyPassesOne(t *testing.T) {
 	root := t.TempDir()
 	review := &stubReview{writer: ledger.NewWriter(filepath.Join(root, "ledger")), verdict: DoneAccepted}
-	orchestrator, spawn := orchestratorTurn(t, root, []llm.Decision{
-		spawnCall("call-1", "write the greeting under mine/", "mine/**"),
-		claimDecision("all done"),
-		messageDecision(),
-	})
+	_, spawn := orchestratorTurn(t, root, []llm.Decision{claimDecision("all done")})
 	spawn.Review = review
-
-	if _, err := Run(context.Background(), orchestrator); err != nil {
-		t.Fatalf("Run returned an error: %v", err)
-	}
+	spawnGreeting(t, spawn)
 
 	table, err := method.Load(shipped.Files())
 	if err != nil {
@@ -152,7 +148,7 @@ func orchestratorTurn(t *testing.T, root string, decisions []llm.Decision) (Conf
 	spawn := NewSpawnTool(orchestratorID, base, &subagent.Roster{})
 	orchestrator := base
 	orchestrator.Task = "hand the work to a sub-agent"
-	orchestrator.Tools = NewRegistry(read, write, spawn)
+	orchestrator.Tools, orchestrator.Inbox = NewRegistry(read, write, spawn), spawn.Inbox
 	return orchestrator, spawn
 }
 

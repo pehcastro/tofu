@@ -37,13 +37,13 @@ func (e DepthLimitError) Error() string {
 }
 
 type BreadthLimitError struct {
-	Spawned int
+	Running int
 	Limit   int
 }
 
 func (e BreadthLimitError) Error() string {
-	return fmt.Sprintf("spawn refused: this turn has already spawned %d sub-agents and the %s setting is %d, which the person can raise in the settings menu",
-		e.Spawned, settings.SubAgentsPerTurn, e.Limit)
+	return fmt.Sprintf("refused: %d sub-agents are running and the %s setting is %d, which the person can raise in the settings menu; wait for a report, or send the work to a running sub-agent with message",
+		e.Running, settings.SubAgentsPerTurn, e.Limit)
 }
 
 const (
@@ -192,6 +192,13 @@ type spawnTrace struct {
 	depth      int
 }
 
+type subAgentKey struct{}
+
+func SubAgentAsking(ctx context.Context) string {
+	id, _ := ctx.Value(subAgentKey{}).(string)
+	return id
+}
+
 func (s spawnTrace) run(outer, ctx context.Context, subAgent Config) (Row, error) {
 	id, log, site := subAgent.NewID(), s.site.log, s.site
 	if log == nil {
@@ -316,7 +323,7 @@ func (s SubAgents) Named(name string) (subagent.Definition, error) {
 }
 
 type SubAgentLimits struct {
-	PerTurn int
+	Running int
 	Depth   int
 }
 
@@ -326,19 +333,35 @@ type SpawnTool struct {
 	SubAgents      SubAgents
 	Limits         func() SubAgentLimits
 	SettingsTool   bool
+	Inbox          *Inbox
 	orchestratorID string
 	depth          int
 	mu             sync.Mutex
-	tree           *sync.Mutex
-	spawned        int
-	spend          float64
+	tree           *spawnTree
 	base           Config
 	roster         *subagent.Roster
-	subAgentRows   []Row
-	reports        []SubAgentReport
-	ran            []Spawned
 	warmups        map[string]*warmup
-	held           map[string]*heldSubAgent
+}
+
+type spawnTree struct {
+	mu     sync.Mutex
+	rows   []Row
+	ran    []Spawned
+	spend  float64
+	billed int
+	paid   float64
+}
+
+func (t *spawnTree) bill() ([]string, float64) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	var ended []string
+	for _, row := range t.rows[t.billed:] {
+		ended = append(ended, row.ID)
+	}
+	spent := t.spend - t.paid
+	t.billed, t.paid = len(t.rows), t.spend
+	return ended, spent
 }
 
 type warmup struct {
@@ -348,6 +371,12 @@ type warmup struct {
 }
 
 func (w *warmup) warmed() { w.once.Do(func() { close(w.ready) }) }
+
+func (w *warmup) leaderDone(call string) {
+	if w != nil && w.leader == call {
+		w.warmed()
+	}
+}
 
 type warmingModel struct {
 	model  Model
@@ -387,41 +416,25 @@ func (w *warmup) stagger(ctx context.Context, call string, subAgent Config) Conf
 }
 
 func NewSpawnTool(orchestratorID string, base Config, roster *subagent.Roster) *SpawnTool {
-	return &SpawnTool{orchestratorID: orchestratorID, base: base, roster: roster, tree: &sync.Mutex{}}
+	return &SpawnTool{Inbox: NewInbox(), orchestratorID: orchestratorID, base: base, roster: roster, tree: &spawnTree{}}
 }
 
 func (t *SpawnTool) Name() string { return "spawn" }
 
 func (t *SpawnTool) SubAgentRows() []Row {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	return slices.Clone(t.subAgentRows)
-}
-
-func (t *SpawnTool) Reports() []SubAgentReport {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	return slices.Clone(t.reports)
+	t.tree.mu.Lock()
+	defer t.tree.mu.Unlock()
+	return slices.Clone(t.tree.rows)
 }
 
 func (t *SpawnTool) Spawned() []Spawned {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	return slices.Clone(t.ran)
-}
-
-func (t *SpawnTool) reserve(limit int) error {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	if t.spawned >= limit {
-		return BreadthLimitError{Spawned: t.spawned, Limit: limit}
-	}
-	t.spawned++
-	return nil
+	t.tree.mu.Lock()
+	defer t.tree.mu.Unlock()
+	return slices.Clone(t.tree.ran)
 }
 
 func (t *SpawnTool) disjointPrefix(calls []llm.ToolCall) int {
-	limit := t.limits().PerTurn
+	limit := t.limits().Running
 	var wave subagent.Roster
 	width, firsts, warmups := len(calls), map[string]*warmup{}, map[string]*warmup{}
 	for i, call := range calls {
@@ -450,7 +463,7 @@ func writesPaths(tool string) bool { return tool == "write" || tool == "edit" ||
 
 func (t *SpawnTool) limits() SubAgentLimits {
 	if t.Limits == nil {
-		return SubAgentLimits{PerTurn: konst.SubAgentsPerTurnDefault, Depth: konst.SubAgentDepthDefault}
+		return SubAgentLimits{Running: konst.SubAgentsPerTurnDefault, Depth: konst.SubAgentDepthDefault}
 	}
 	return t.Limits()
 }
@@ -479,10 +492,11 @@ func (t *SpawnTool) Definition() llm.Tool {
 	return llm.Tool{
 		Name: "spawn",
 		Description: "you plan, spawn and verify, and implementation goes to a sub-agent: spawn one per separable piece of work as soon as the piece is known, rather than writing the code yourself first. " +
-			"hands one piece of work to a sub-agent with its own context and its own conversation, and returns the sub-agent's report rather than its transcript. " +
+			"hands one piece of work to a sub-agent with its own context and its own conversation, and returns at once with its name while it works in the background. " +
+			"its report, rather than its transcript, comes to you later as a message naming it, and your turn may end before it does. " +
 			"owns lists the paths the sub-agent may write, every other path is refused at the write, and no two sub-agents may hold overlapping paths; a sub-agent offered no write, edit or bash needs none. " +
-			fmt.Sprintf("At most %d sub-agents per turn, nested at most %d deep. These are the person's settings %s and %s: %s",
-				limits.PerTurn, limits.Depth, settings.SubAgentsPerTurn, settings.SubAgentDepth, raise),
+			fmt.Sprintf("At most %d sub-agents running at once, nested at most %d deep. These are the person's settings %s and %s: %s",
+				limits.Running, limits.Depth, settings.SubAgentsPerTurn, settings.SubAgentDepth, raise),
 		Parameters: map[string]any{
 			"type":       "object",
 			"properties": properties,
@@ -519,9 +533,6 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 	t.mu.Lock()
 	warm := t.warmups[site.call]
 	t.mu.Unlock()
-	if warm != nil && warm.leader == site.call {
-		defer warm.warmed()
-	}
 	if strings.TrimSpace(args.Task) == "" {
 		return Result{}, errors.New("spawn: task is required")
 	}
@@ -529,15 +540,18 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 	if t.depth+1 > limits.Depth {
 		return Result{}, DepthLimitError{Depth: t.depth + 1, Limit: limits.Depth}
 	}
-	if err := t.reserve(limits.PerTurn); err != nil {
-		return Result{}, err
+	if err := t.Inbox.reserve(limits.Running); err != nil {
+		return Result{}, fmt.Errorf("spawn %w", err)
 	}
-	started := false
+	opened, started := SubAgentModel{}, false
 	defer func() {
-		if !started {
-			t.mu.Lock()
-			t.spawned--
-			t.mu.Unlock()
+		if started {
+			return
+		}
+		t.Inbox.unreserve()
+		warm.leaderDone(site.call)
+		if opened.Close != nil {
+			opened.Close()
 		}
 	}()
 	definition, err := t.SubAgents.Named(args.Agent)
@@ -557,17 +571,8 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 			return Result{}, fmt.Errorf("spawn: %w", err)
 		}
 	}
-	opened, err := t.open(definition, effort)
-	if err != nil {
+	if opened, err = t.open(definition, effort); err != nil {
 		return Result{}, fmt.Errorf("spawn: %w", err)
-	}
-	if opened.Close != nil {
-		defer opened.Close()
-	}
-
-	clock := t.base.Now
-	if clock == nil {
-		clock = time.Now
 	}
 	var recorded []string
 	if site.log != nil {
@@ -575,7 +580,7 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 			recorded = append(recorded, run.Agent)
 		}
 	}
-	t.tree.Lock()
+	t.tree.mu.Lock()
 	agent := subagent.SubAgent{
 		ID:      t.roster.NextID(definition.Name, recorded),
 		Agent:   definition.Name,
@@ -583,10 +588,10 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 		Mission: args.mission(),
 		Brief:   args.Task,
 		Owns:    args.Owns,
-		Started: clock(),
+		Started: t.clock(),
 	}
 	subAgentID, holding := agent.ID, t.roster.Hold(agent)
-	t.tree.Unlock()
+	t.tree.mu.Unlock()
 	if err := holding; err != nil {
 		var collision subagent.CollisionError
 		if errors.As(err, &collision) && collision.HolderReport != "" {
@@ -597,77 +602,137 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 		return Result{}, fmt.Errorf("spawn: %w", err)
 	}
 
-	boundary := &subagent.Boundary{Ticket: subAgentID, Owns: args.Owns}
-	offered := func(name string) bool { return len(definition.Tools) == 0 || slices.Contains(definition.Tools, name) }
+	held := &heldSubAgent{agent: agent, definition: definition, effort: opened.Effort, system: system, environment: environment + t.briefFiles(ctx, args.Task),
+		boundary: &subagent.Boundary{Ticket: subAgentID, Owns: args.Owns}, inbox: NewInbox(),
+		trace: spawnTrace{definition: agent.Agent, model: agent.Model, mission: agent.Mission, owns: args.Owns, depth: t.depth + 1}}
+	runCtx, cancel := context.WithCancel(ctx)
+	t.Inbox.keep(held, cancel)
+	t.tree.mu.Lock()
+	t.tree.ran = append(t.tree.ran, Spawned{ID: subAgentID, Call: site.call, Agent: definition.Name, Slug: opened.Slug, Windows: opened.Windows})
+	t.tree.mu.Unlock()
+	task := args.Task
+	if t.SubAgents.Brief != nil {
+		task += t.SubAgents.Brief(definition, args.Task)
+	}
+	started = true
+	t.Inbox.hold(site.log)
+	go t.background(runCtx, cancel, held, opened, site, task, subAgentID, warm)
+	return Result{Content: held.runningWords(), Command: subAgentID + " running: " + agent.Mission, SubAgent: subAgentID}, nil
+}
+
+func (t *SpawnTool) clock() time.Time {
+	if t.base.Now == nil {
+		return time.Now()
+	}
+	return t.base.Now()
+}
+
+func (t *SpawnTool) background(ctx context.Context, cancel context.CancelFunc, held *heldSubAgent, opened SubAgentModel, site spawnSite, task, id string, warm *warmup) {
+	defer cancel()
+	defer warm.leaderDone(site.call)
+	if opened.Close != nil {
+		defer opened.Close()
+	}
+	ctx = context.WithValue(ctx, subAgentKey{}, held.agent.ID)
+	for {
+		subAgent := opened.onto(t.subAgentConfig(held, site))
+		subAgent.Task, subAgent.NewID = task, func() string { return id }
+		report := t.converse(ctx, held, warm.stagger(ctx, site.call, subAgent), site)
+		next, _ := held.inbox.next(ctx, nil)
+		stopping := ctx.Err() != nil
+		if stopping {
+			_ = held.inbox.settle()
+		}
+		if stopping || len(next) == 0 {
+			next = t.Inbox.ended(held, report, stopping, site.log)
+		}
+		if len(next) == 0 {
+			return
+		}
+		held.messages++
+		task, id, warm = strings.Join(next, "\n\n"), held.agent.ID+"-m"+strconv.Itoa(held.messages), nil
+		t.roster.Reached(held.agent.ID, subagent.Working, "")
+	}
+}
+
+func (t *SpawnTool) subAgentConfig(held *heldSubAgent, site spawnSite) Config {
+	offered := func(name string) bool {
+		return len(held.definition.Tools) == 0 || slices.Contains(held.definition.Tools, name)
+	}
 	var owned []Tool
 	for _, tool := range t.base.Tools.tools {
 		switch {
 		case !offered(tool.Name()):
 			continue
 		case tool.Name() == "write" || tool.Name() == "edit":
-			tool = ownedTool{tool: tool, boundary: boundary}
+			tool = ownedTool{tool: tool, boundary: held.boundary}
 		case tool.Name() == "bash":
-			tool = ownedShell{tool: tool, boundary: boundary}
+			tool = ownedShell{tool: tool, boundary: held.boundary}
 		}
 		owned = append(owned, tool)
 	}
-	nested := &SpawnTool{Review: t.Review, Methods: t.Methods, SubAgents: t.SubAgents, Limits: t.Limits, orchestratorID: subAgentID, depth: t.depth + 1, base: t.base, roster: t.roster, tree: t.tree}
 	if offered(t.Name()) {
-		owned = append(owned, nested)
+		owned = append(owned, &SpawnTool{Review: t.Review, Methods: t.Methods, SubAgents: t.SubAgents, Limits: t.Limits, Inbox: held.inbox,
+			orchestratorID: held.agent.ID, depth: t.depth + 1, base: t.base, roster: t.roster, tree: t.tree})
 	}
 	subAgent := t.base
+	subAgent.Tools = NewRegistry(append(owned, askTool{orchestrator: t, asking: held.agent, conversation: site.conversation})...)
 	subAgent.Caps.MaxSteps, subAgent.Caps.MaxForks = cmp.Or(subAgent.Caps.MaxSteps, konst.SubAgentMaxSteps), konst.SubAgentMaxForks
-	subAgent.System, subAgent.Environment = system, environment+t.briefFiles(ctx, args.Task)
-	subAgent.SpawnedFrom = t.orchestratorID
+	subAgent.System, subAgent.Environment, subAgent.History = held.system, held.environment, held.history
+	subAgent.SpawnedFrom, subAgent.Boundary, subAgent.Inbox, subAgent.Steering = t.orchestratorID, held.boundary, held.inbox, nil
 	subAgent.Session, subAgent.Log, subAgent.Turn, subAgent.SpawnedBy = "", site.log, site.turn, site.call
 	if site.log == nil {
 		subAgent.Sessions = nil
 	}
-	subAgent.Boundary = boundary
 	subAgent.Step = func(step StepRow) {
 		called := make([]string, len(step.ToolCalls))
 		for i, call := range step.ToolCalls {
 			called[i] = call.Tool
 		}
-		t.roster.Stepped(subAgentID, step.Index, clock(), called...)
+		t.roster.Stepped(held.agent.ID, step.Index, t.clock(), called...)
 		if t.base.Step != nil {
-			t.tree.Lock()
+			t.tree.mu.Lock()
 			t.base.Step(step)
-			t.tree.Unlock()
+			t.tree.mu.Unlock()
 		}
 	}
-	held := &heldSubAgent{agent: agent, definition: definition, effort: opened.Effort, config: subAgent, tools: owned, nested: nested,
-		trace: spawnTrace{definition: agent.Agent, model: agent.Model, mission: agent.Mission, owns: args.Owns, depth: t.depth + 1}}
-	t.mu.Lock()
-	if t.held == nil {
-		t.held = map[string]*heldSubAgent{}
-	}
-	t.held[subAgentID] = held
-	t.ran = append(t.ran, Spawned{ID: subAgentID, Call: site.call, Agent: definition.Name, Slug: opened.Slug, Windows: opened.Windows})
-	t.mu.Unlock()
-	subAgent.Task = args.Task
-	if t.SubAgents.Brief != nil {
-		subAgent.Task += t.SubAgents.Brief(definition, args.Task)
-	}
-	subAgent.NewID = func() string { return subAgentID }
-	started = true
-	return t.converse(ctx, held, warm.stagger(ctx, site.call, opened.onto(subAgent)), site)
+	return subAgent
 }
 
 type heldSubAgent struct {
-	agent      subagent.SubAgent
-	definition subagent.Definition
-	effort     llm.Effort
-	config     Config
-	tools      []Tool
-	nested     *SpawnTool
-	trace      spawnTrace
-	history    []llm.Message
-	messages   int
-	nestedRows int
-	nestedRan  int
-	forking    sync.Mutex
-	forked     []Row
+	agent       subagent.SubAgent
+	definition  subagent.Definition
+	effort      llm.Effort
+	system      string
+	environment string
+	boundary    *subagent.Boundary
+	inbox       *Inbox
+	trace       spawnTrace
+	history     []llm.Message
+	messages    int
+	running     bool
+	cancel      context.CancelFunc
+	forking     sync.Mutex
+	forked      []Row
+}
+
+func (h *heldSubAgent) runsAs() string {
+	if h.agent.Model == "" {
+		return ""
+	}
+	runs := " as " + cmp.Or(h.agent.Agent, "the unnamed sub-agent") + " on " + h.agent.Model
+	if h.effort != "" {
+		runs += " at effort " + string(h.effort)
+	}
+	return runs
+}
+
+func (h *heldSubAgent) runningWords() string {
+	said := h.agent.ID + " is running in the background" + h.runsAs()
+	if len(h.agent.Owns) > 0 {
+		said += ", holding " + strings.Join(h.agent.Owns, ", ")
+	}
+	return said + ". its report comes to you as a message naming it when it ends, and message reaches it at its next step while it runs."
 }
 
 func (h *heldSubAgent) forkedSoFar() []Row {
@@ -703,10 +768,9 @@ func (m SubAgentModel) onto(subAgent Config) Config {
 	return subAgent
 }
 
-func (t *SpawnTool) converse(ctx context.Context, held *heldSubAgent, subAgent Config, site spawnSite) (Result, error) {
+func (t *SpawnTool) converse(ctx context.Context, held *heldSubAgent, subAgent Config, site spawnSite) string {
 	agent, trace := held.agent, held.trace
 	trace.site = site
-	subAgent.Tools = NewRegistry(append(slices.Clone(held.tools), askTool{orchestrator: t, asking: agent, conversation: site.conversation})...)
 	subAgentCtx, release := context.WithCancel(ctx)
 	defer release()
 	held.forked = nil
@@ -732,34 +796,26 @@ func (t *SpawnTool) converse(ctx context.Context, held *heldSubAgent, subAgent C
 	}
 	report := reportOf(agent, forked, claims, state)
 	report.Asked = asked
-	nestedRows, nestedRan := held.nested.SubAgentRows(), held.nested.Spawned()
-	t.mu.Lock()
-	t.retain(append(claims, nestedRows[held.nestedRows:]...))
-	t.ran = append(t.ran, nestedRan[held.nestedRan:]...)
-	held.nestedRows, held.nestedRan = len(nestedRows), len(nestedRan)
+	t.tree.mu.Lock()
+	t.tree.retain(claims)
 	for _, claim := range append(slices.Clone(forked), claims...) {
-		t.spend += claim.TotalCostUSD
+		t.tree.spend += claim.TotalCostUSD
 	}
-	t.reports = append(t.reports, report)
-	t.mu.Unlock()
+	t.tree.mu.Unlock()
 	if t.SubAgents.Ended != nil {
 		t.SubAgents.Ended(held.definition, agent.Brief, append(forked, claims...), report, runErr == nil && state != subagent.Errored && !stoppedEarly(state, last.Outcome))
 	}
 	contract := subagent.BuildContract(agent.Brief, report.Prose, stoppedEarly(state, last.Outcome))
 	contract.Wrote = report.Wrote
 	text := report.Text() + "\n\n" + contract.Block()
-	if agent.Model != "" {
-		ran := agent.ID + " ran as " + cmp.Or(agent.Agent, "the unnamed sub-agent") + " on " + agent.Model
-		if held.effort != "" {
-			ran += " at effort " + string(held.effort)
-		}
-		text = ran + "\n\n" + text
+	if runs := held.runsAs(); runs != "" {
+		text = agent.ID + " ran" + runs + "\n\n" + text
 	}
 	t.roster.Reached(agent.ID, state, text)
 	if runErr != nil && state != subagent.Parked {
-		return Result{}, fmt.Errorf("sub-agent %s is %s: %w", agent.ID, state, runErr)
+		return fmt.Sprintf("sub-agent %s is %s: %v\n\n%s", agent.ID, state, runErr, text)
 	}
-	return Result{Content: text, Command: agent.ID + " " + state.String() + ": " + agent.Mission, SubAgent: agent.ID}, nil
+	return text
 }
 
 type messageTool struct {
@@ -769,6 +825,7 @@ type messageTool struct {
 type messageArgs struct {
 	To   string `json:"to"`
 	Text string `json:"text"`
+	Stop bool   `json:"stop,omitempty"`
 }
 
 func (messageTool) Name() string { return "message" }
@@ -777,13 +834,15 @@ func (messageTool) Definition() llm.Tool {
 	text := map[string]any{"type": "string"}
 	return llm.Tool{
 		Name: "message",
-		Description: "sends a sub-agent that has stopped more work or a correction, and returns its answer as spawn returns a report. " +
-			"it resumes with its whole conversation and the paths it held, so use it rather than spawning a new sub-agent for those paths. " +
-			"to is the sub-agent's name as its report gives it, such as ts-dev-1",
+		Description: "sends a sub-agent more work or a correction, from this turn or any earlier one, and returns at once. " +
+			"a running sub-agent reads it at its next step; one that has ended resumes in the background with its whole conversation and the paths it held, " +
+			"so use it rather than spawning a new sub-agent for those paths. either way its answer comes to you later as a report, as spawn's does. " +
+			"to is the sub-agent's name as its report gives it, such as ts-dev-1. " +
+			"stop true, with no text, stops a running sub-agent instead: it reports where it stopped and keeps its conversation, so a later message resumes it",
 		Parameters: map[string]any{
 			"type":       "object",
-			"properties": map[string]any{"to": text, "text": text},
-			"required":   []string{"to", "text"},
+			"properties": map[string]any{"to": text, "text": text, "stop": map[string]any{"type": "boolean"}},
+			"required":   []string{"to"},
 		},
 	}
 }
@@ -793,44 +852,57 @@ func (m messageTool) Run(ctx context.Context, raw json.RawMessage) (Result, erro
 	if err := json.Unmarshal(raw, &args); err != nil {
 		return Result{}, fmt.Errorf("message: arguments are not the expected shape: %w", err)
 	}
-	if strings.TrimSpace(args.Text) == "" {
-		return Result{}, errors.New("message: text is required")
-	}
 	t := m.orchestrator
-	t.mu.Lock()
-	held := t.held[args.To]
-	t.mu.Unlock()
-	if held == nil {
+	if args.Stop {
+		held, stopped := t.Inbox.stop(args.To)
+		switch {
+		case held == nil:
+			return Result{}, t.unknown(args.To)
+		case !stopped:
+			return Result{}, fmt.Errorf("message refused: %s is not running, so there is nothing to stop", args.To)
+		}
+		return Result{Content: args.To + " is stopping. its report, saying where it stopped, comes to you as a message.", Command: "stop " + args.To, SubAgent: args.To}, nil
+	}
+	if strings.TrimSpace(args.Text) == "" {
+		return Result{}, errors.New("message: text is required unless stop is true")
+	}
+	runCtx, cancel := context.WithCancel(ctx)
+	held, posted, err := t.Inbox.resume(args.To, args.Text, t.limits().Running, cancel)
+	if held == nil || err != nil || posted {
+		cancel()
+	}
+	switch {
+	case held == nil:
 		return Result{}, t.unknown(args.To)
+	case err != nil:
+		return Result{}, fmt.Errorf("message %w", err)
+	case posted:
+		return Result{Content: args.To + " is running and reads this at its next step. its report comes to you as a message when it ends.", Command: "message " + args.To, SubAgent: args.To}, nil
 	}
 	opened, err := t.open(held.definition, held.effort)
-	if err != nil {
-		return Result{}, fmt.Errorf("message: %w", err)
+	if err == nil {
+		t.tree.mu.Lock()
+		err = t.rehold(held.agent)
+		t.tree.mu.Unlock()
 	}
-	if opened.Close != nil {
-		defer opened.Close()
-	}
-	t.tree.Lock()
-	err = t.rehold(held.agent)
-	t.tree.Unlock()
 	if err != nil {
+		if opened.Close != nil {
+			opened.Close()
+		}
+		t.Inbox.ended(held, "", true, nil)
+		cancel()
 		return Result{}, fmt.Errorf("message refused: %w", err)
 	}
 	held.messages++
-	round := held.agent.ID + "-m" + strconv.Itoa(held.messages)
 	site, _ := ctx.Value(spawnSiteKey{}).(spawnSite)
-	subAgent := opened.onto(held.config)
-	subAgent.History, subAgent.Task, subAgent.SpawnedBy = held.history, args.Text, site.call
-	subAgent.NewID = func() string { return round }
-	return t.converse(ctx, held, subAgent, site)
+	t.Inbox.hold(site.log)
+	go t.background(runCtx, cancel, held, opened, site, args.Text, held.agent.ID+"-m"+strconv.Itoa(held.messages), nil)
+	return Result{Content: args.To + " resumes in the background with its conversation. its report comes to you as a message when it ends.", Command: "message " + args.To, SubAgent: args.To}, nil
 }
 
 func (t *SpawnTool) unknown(name string) error {
 	var names []string
 	for _, known := range t.roster.SubAgents() {
-		if known.ID == name {
-			return fmt.Errorf("message refused: %s was spawned in an earlier turn, and this turn does not hold its conversation to resume", name)
-		}
 		names = append(names, known.ID)
 	}
 	if len(names) == 0 {
@@ -842,13 +914,8 @@ func (t *SpawnTool) unknown(name string) error {
 func (t *SpawnTool) rehold(agent subagent.SubAgent) error {
 	var others subagent.Roster
 	for _, other := range t.roster.SubAgents() {
-		switch {
-		case other.ID != agent.ID:
-			if other.State != subagent.Finished && other.State != subagent.Errored {
-				_ = others.Hold(other)
-			}
-		case other.State == subagent.Working || other.State == subagent.InReview || other.State == subagent.Reopened:
-			return fmt.Errorf("%s is %s, and a running sub-agent cannot take a message until spawns run in the background", agent.ID, other.State)
+		if other.ID != agent.ID && other.State != subagent.Finished && other.State != subagent.Errored {
+			_ = others.Hold(other)
 		}
 	}
 	if err := others.Hold(agent); err != nil {
@@ -901,12 +968,12 @@ func outcomeStoppedEarly(outcome Outcome) bool {
 	return false
 }
 
-func (t *SpawnTool) retain(rows []Row) {
-	t.subAgentRows = append(t.subAgentRows, rows...)
-	for i := range len(t.subAgentRows) - konst.SubAgentRetainedRows {
-		released := t.subAgentRows[i].Summary()
+func (t *spawnTree) retain(rows []Row) {
+	t.rows = append(t.rows, rows...)
+	for i := range len(t.rows) - konst.SubAgentRetainedRows {
+		released := t.rows[i].Summary()
 		released.Conversation = nil
-		t.subAgentRows[i] = released
+		t.rows[i] = released
 	}
 }
 

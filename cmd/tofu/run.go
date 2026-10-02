@@ -117,6 +117,7 @@ type runtime struct {
 	sessions     *session.Store
 	notify       func(string)
 	roster       *subagent.Roster
+	inbox        *turn.Inbox
 	now          func() time.Time
 	open         func(runOpts) (appWire, error)
 	wrapSubAgent func(turn.Model) (turn.Model, error)
@@ -499,16 +500,19 @@ func runTurn(opts runOpts, selected models.Model, built []turn.Tool, budget reca
 	if registryErr == nil {
 		_ = registry.Prune()
 	}
-	row, runErr := turn.Run(turn.WithShellRegistry(context.Background(), registry), config)
+	head := ""
+	runErr := turn.Lead(turn.WithShellRegistry(context.Background(), registry), config, nil, nil, func(row turn.Row, _ error) {
+		printRunRow(out, row, selected.Slug(), selected.WindowText())
+		head = cmp.Or(row.Session, head)
+	})
 	leaveShells(registry)
-	printRunRow(out, row, selected.Slug(), selected.WindowText())
 	for _, subAgent := range subAgentRows(spawner) {
 		askedAs, windows := askedAsOf(subAgent, spawner.Spawned(), selected.Slug(), selected.WindowText())
 		printRunRow(out, subAgent, askedAs, windows)
 	}
-	if row.Session != "" {
-		if headErr := sessions.SetHead(row.Session); headErr != nil {
-			_, _ = fmt.Fprintf(errOut, "tofu run: pointing the head at %s: %v\n", row.Session, headErr)
+	if head != "" {
+		if headErr := sessions.SetHead(head); headErr != nil {
+			_, _ = fmt.Fprintf(errOut, "tofu run: pointing the head at %s: %v\n", head, headErr)
 		}
 	}
 	if gate != nil {
@@ -655,6 +659,7 @@ func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn
 		Session:        sessionID,
 		Sift:           run.sift,
 		Proxy:          loadProxySetting(opts.dir).proxy,
+		Inbox:          cmp.Or(run.inbox, turn.NewInbox()),
 	}
 	if run.gate != nil {
 		config.Gate = run.gate
@@ -668,11 +673,11 @@ func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn
 		return config, nil, nil
 	}
 	spawner := turn.NewSpawnTool(orchestratorID, config, cmp.Or(run.roster, &subagent.Roster{}))
-	spawner.SubAgents = prompt.subAgents
+	spawner.Inbox, spawner.SubAgents = config.Inbox, prompt.subAgents
 	spawner.SubAgents.Open = run.subAgentOpener(opts)
 	spawner.SubAgents.Brief, spawner.SubAgents.Ended = browserRecipeBrief(run.notify), learnBrowserRecipe(run.notify)
 	spawner.Limits = func() turn.SubAgentLimits {
-		return turn.SubAgentLimits{PerTurn: settingInt(dir, settingspkg.SubAgentsPerTurn, run.notify), Depth: settingInt(dir, settingspkg.SubAgentDepth, run.notify)}
+		return turn.SubAgentLimits{Running: settingInt(dir, settingspkg.SubAgentsPerTurn, run.notify), Depth: settingInt(dir, settingspkg.SubAgentDepth, run.notify)}
 	}
 	own := built
 	if settingText(dir, settingspkg.BrowserDriver, run.notify) == settingspkg.DriverSubagent {

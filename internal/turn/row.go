@@ -338,6 +338,7 @@ func (r Row) Record() (session.Header, []session.Event, error) {
 
 type record struct {
 	store     *session.Store
+	inbox     *Inbox
 	log       *session.Log
 	own       bool
 	scope     string
@@ -360,12 +361,12 @@ type compactionRow struct {
 }
 
 func openRecord(config Config, row Row) (*record, error) {
-	opened := &record{store: config.Sessions, log: config.Log, scope: row.ID, turn: row.ID, said: map[string]string{}}
+	opened := &record{store: config.Sessions, inbox: config.Inbox, log: config.Log, scope: row.ID, turn: row.ID, said: map[string]string{}}
 	switch {
 	case config.Log != nil:
 		opened.turn, opened.agent, opened.spawnedBy = config.Turn, row.ID, config.SpawnedBy
 	case config.Sessions != nil:
-		log, err := config.Sessions.Open(session.Header{ID: config.Session, At: row.At})
+		log, err := config.Inbox.open(config.Sessions, session.Header{ID: config.Session, At: row.At})
 		if err != nil {
 			return nil, err
 		}
@@ -477,7 +478,7 @@ func (r *record) end(row Row) {
 	r.note(r.log.Edit(func(header *session.Header) {
 		header.Outcome, header.Model = row.Outcome.String(), cmp.Or(row.Model, header.Model)
 	}))
-	r.note(r.log.Close())
+	r.note(r.inbox.release(r.log))
 }
 
 func (r *record) fork(ended, next Row, fork *Fork, at time.Time) {
@@ -491,8 +492,8 @@ func (r *record) fork(ended, next Row, fork *Fork, at time.Time) {
 		header.EndedAt, header.EndReason = &at, session.EndedByFork
 		header.ForkTokensBefore, header.ForkTokensAfter = fork.TokensBefore, fork.TokensAfter
 	}))
-	r.note(r.log.Close())
-	log, err := r.store.Open(session.Header{ID: into, At: at, ForkKind: string(fork.Kind), Root: cmp.Or(from.Root, from.ID),
+	r.note(r.inbox.release(r.log))
+	log, err := r.inbox.open(r.store, session.Header{ID: into, At: at, ForkKind: string(fork.Kind), Root: cmp.Or(from.Root, from.ID),
 		CarriedFrom: &session.Carried{Session: from.ID, Event: r.log.Header().Head}})
 	if err != nil {
 		r.note(err)

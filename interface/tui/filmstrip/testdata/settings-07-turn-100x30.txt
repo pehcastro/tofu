@@ -8,8 +8,8 @@
     Interaction   05      Sub-agents                                                        ● on    
     Context       09      a turn may spawn a sub-agent                                              
     Files         03                                                                                
-    Shell         05      Sub-agents per turn                                             10  ▾     
-  › Turn          09      how many sub-agents one turn may spawn; the next spawn reads the new …    
+    Shell         05      Sub-agents running at once                                      10  ▾     
+  › Turn          09      how many sub-agents may run at once; a spawn past it is refused until…    
     Browser       06                                                                                
                           Sub-agent depth                                                  2  ▾     
   NAVIGATE                how deep a sub-agent may spawn its own sub-agents; the next spawn rea…    
