@@ -73,7 +73,7 @@ func TestASpawnRunsItsSubAgentAtTheEffortItNames(t *testing.T) {
 }
 
 func TestTheLeadIsToldToSpawnAtLowAndSettleTheBrief(t *testing.T) {
-	const wantRule = "choose each sub-agent's effort when you spawn it. low is the default and is enough for almost every piece: on large repositories low matched medium and high on every hidden check and was faster. before you spawn, settle every open choice in the brief yourself: the exact behaviour, the edge cases the spec leaves open, which files change. a brief that settles them is followed at low. choose medium only when the sub-agent must make design decisions you cannot settle from what you have read, and name those decisions in the brief. touching shared code, a schema or many files is not a reason for more effort; it is a reason for a more exact brief."
+	const wantRule = "start each sub-agent at low effort, and settle every open choice in the brief yourself: the exact behaviour, the edge cases the spec leaves open, which files change. raise the effort, low to medium and medium to high, when a sub-agent at its level fails the same check twice, returns work that does not do what the brief asked or that you would not accept, or breaks the rules it was given, such as writing outside the files it owns or skipping the checks the brief named. raise it by spawning the piece again at the higher level, with what went wrong named in the brief, rather than sending more messages at the same level. the next piece starts at low again."
 	const wantEffort = "how hard the sub-agent thinks. low unless it must make design decisions the brief does not settle. left out, it thinks as hard as you do"
 	rules, err := rule.LoadDir("../../library")
 	if err != nil {
