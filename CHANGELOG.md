@@ -8,6 +8,33 @@ Tofu is personal and not released, so the public interface that a version promis
 
 The minor number carries breaking changes, which is what 0.x means, and **there is never a 1.0.0**. The owner decided that on 2026-09-19: this stays 0.x forever, so the promise the version makes is the one 0.x already makes, that anything can break on a minor bump.
 
+## 0.5.0-rc-fix20 - 2026-10-02
+
+Sub-agents work in the background and the lead stays with you, and a large TypeScript project answers in seconds.
+
+### Changed
+
+- **A sub-agent runs in the background.** `spawn` returns at once, the lead's turn ends on its own terms, and the sub-agent keeps working. When it finishes, its report starts a new lead turn, drawn in the chat as `⟩ report [&name] finished`.
+- **You can talk to the lead while sub-agents work.** A message typed while only sub-agents run starts a lead turn at once. One typed mid-turn reaches the lead at its next step.
+- **The lead can message or stop a sub-agent from an earlier turn.** `message` reaches a running sub-agent at its next step, and resumes one that has ended with its conversation. `message` with `stop` parks one sub-agent and leaves the others running.
+- **Esc and the first ctrl+c stop only the lead's turn.** Sub-agents keep running until they finish, the lead stops them, or tofu quits.
+- **The header clock counts the whole session line** and no longer restarts when a session continues into a fork.
+- **`subAgentsPerTurn` now limits sub-agents running at once.** The key is unchanged.
+- **The lead starts each sub-agent at low effort** and settles the open choices in the brief. It raises the effort when a sub-agent fails the same check twice, returns work it would not accept, or breaks its rules.
+
+### Added
+
+- **A `typecheck` tool on a warm TypeScript checker,** started with the session. An edit on a large project returns before its check.
+- **A `test` tool on a warm vitest runner** per package. Given a source file, it runs the test beside it (`ls.ts` runs `ls.test.ts`). A runner that misses its deadline is replaced and does not hold the next call.
+
+### Fixed
+
+- **The shells screen and `tofu shells log` show a log whose first line is blank,** such as `pnpm dev`.
+- **Owns accept a TanStack route name** like `routes/components/$slug.tsx`, and a path with `..` that stays inside the project.
+- **A sub-agent's shell writes to `/tmp` reach the real temp directory.** A write or edit tool call on `/tmp/x` is refused rather than creating `tmp/x` inside the project, for the lead too.
+- **A first search in a large repository answers in under a second.**
+- **An owned directory named without a trailing slash owns the files inside it.**
+
 ## 0.5.0-rc-fix19 - 2026-09-30
 
 ### Fixed

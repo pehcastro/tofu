@@ -37,7 +37,7 @@ exit 1
     "domains": [
       {
         "name": "dev",
-        "rules": 26,
+        "rules": 27,
         "thresholds": 0,
         "skills": 0,
         "agents": 1,
@@ -55,7 +55,7 @@ exit 1
       },
       {
         "name": "general",
-        "rules": 20,
+        "rules": 21,
         "thresholds": 7,
         "skills": 0,
         "agents": 2,
