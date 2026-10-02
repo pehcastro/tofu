@@ -8,6 +8,24 @@ Tofu is personal and not released, so the public interface that a version promis
 
 The minor number carries breaking changes, which is what 0.x means, and **there is never a 1.0.0**. The owner decided that on 2026-09-19: this stays 0.x forever, so the promise the version makes is the one 0.x already makes, that anything can break on a minor bump.
 
+## 0.5.0-rc-fix22 - 2026-10-02
+
+A Rust sub-agent, and sub-agents that are held to their own checks.
+
+### Added
+
+- **rust-dev**, a sub-agent for Rust. It reads Cargo.toml, the toolchain and the project's own gate first, and finishes on `cargo clippy` and a scoped `cargo test`. Thirteen Rust rules come with it, each naming the clippy lint that checks it, and four references: verification, unsafe, errors and ownership, async.
+- **An agent definition can name its gate**, `gate:` in its front matter. ts-dev's is `typecheck, test` and rust-dev's is `cargo clippy, cargo test`. A sub-agent that changed a file in its language is sent back until every check in its gate ran after its last edit and passed.
+- **`tool_pick`**, the tool guidance every call carries, is now a shipped rule. `tofu rules list` shows it, and a project can switch it off or replace it. It names the pairs explicitly: edit over `sed -i`, glob over find, search over grep, read over cat, and the right checks for TypeScript and Rust.
+
+### Changed
+
+- **A sub-agent changes source with edit or write.** A shell command that writes a source file, such as `sed -i`, `perl -pi`, a redirect or `cp`, is refused with the file named. Formatters, temp files and lockfiles are unchanged.
+
+### Fixed
+
+- **A tab opened with `+` joins tofu's group only when you were in it.** From a tab outside the group it opens outside, as Chrome would without tofu.
+
 ## 0.5.0-rc-fix21 - 2026-10-02
 
 The lead knows what its sub-agents are doing, and the screen stops dropping text.
