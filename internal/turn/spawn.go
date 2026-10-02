@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"regexp"
 	"slices"
 	"strconv"
@@ -200,43 +201,43 @@ func SubAgentAsking(ctx context.Context) string {
 	return id
 }
 
-func (s spawnTrace) run(outer, ctx context.Context, subAgent Config) (Row, error) {
-	id, log, site := subAgent.NewID(), s.site.log, s.site
+func (s spawnTrace) begin(id string) error {
+	log, site := s.site.log, s.site
 	if log == nil {
-		return Run(ctx, subAgent)
+		return nil
 	}
-	var failed []error
+	if slices.ContainsFunc(log.Header().Agents, func(run session.AgentRun) bool { return run.Agent == id }) {
+		return markRun(log, id, subagent.Working, nil)
+	}
 	_, err := log.Append(session.Event{Turn: site.turn, Agent: site.agent, Call: site.call, Kind: session.EventSpawn},
 		session.SpawnBody{Agent: id, Definition: s.definition, Model: s.model, Mission: s.mission, Owns: s.owns, Depth: s.depth})
-	failed = append(failed, err, log.Edit(func(header *session.Header) {
+	return errors.Join(err, log.Edit(func(header *session.Header) {
 		header.Agents = append(header.Agents, session.AgentRun{Agent: id, Definition: s.definition, Model: s.model, ParentAgent: site.agent,
 			SpawnCall: site.call, SpawnTurn: site.turn, Depth: s.depth, Status: subagent.Working.String(), StartedAt: time.Now()})
 	}))
-	row, runErr := Run(ctx, subAgent)
-	status := roundState(outer, runErr).String()
-	ended := session.AgentEndBody{Status: status}
+}
+
+func (s spawnTrace) end(id string, state subagent.State) error {
+	log := s.site.log
+	if log == nil {
+		return nil
+	}
+	ended := session.AgentEndBody{Status: state.String()}
 	for _, run := range log.Header().Agents {
 		if run.Agent == id {
 			ended.Usage, ended.CostUSD = run.Usage, run.CostUSD
 		}
 	}
-	_, err = log.Append(session.Event{Turn: site.turn, Agent: id, Kind: session.EventAgentEnd}, ended)
-	failed = append(failed, err, s.settle(id, status))
-	if err := errors.Join(failed...); err != nil {
-		row.Warnings = append(row.Warnings, "this sub-agent run was not wholly recorded: "+err.Error())
-	}
-	return row, runErr
+	_, err := log.Append(session.Event{Turn: s.site.turn, Agent: id, Kind: session.EventAgentEnd}, ended)
+	at := time.Now()
+	return errors.Join(err, markRun(log, id, state, &at))
 }
 
-func (s spawnTrace) settle(id, status string) error {
-	if s.site.log == nil {
-		return nil
-	}
-	at := time.Now()
-	return s.site.log.Edit(func(header *session.Header) {
+func markRun(log *session.Log, id string, state subagent.State, ended *time.Time) error {
+	return log.Edit(func(header *session.Header) {
 		for i := range header.Agents {
 			if header.Agents[i].Agent == id {
-				header.Agents[i].Status, header.Agents[i].EndedAt = status, &at
+				header.Agents[i].Status, header.Agents[i].EndedAt = state.String(), ended
 			}
 		}
 	})
@@ -334,6 +335,7 @@ type SpawnTool struct {
 	SubAgents      SubAgents
 	Limits         func() SubAgentLimits
 	SettingsTool   bool
+	Project        string
 	Inbox          *Inbox
 	orchestratorID string
 	depth          int
@@ -358,7 +360,9 @@ func (t *spawnTree) bill() ([]string, float64) {
 	defer t.mu.Unlock()
 	var ended []string
 	for _, row := range t.rows[t.billed:] {
-		ended = append(ended, row.ID)
+		if !slices.Contains(ended, row.ID) {
+			ended = append(ended, row.ID)
+		}
 	}
 	spent := t.spend - t.paid
 	t.billed, t.paid = len(t.rows), t.spend
@@ -617,7 +621,7 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 	}
 	started = true
 	t.Inbox.hold(site.log)
-	go t.background(runCtx, cancel, held, opened, site, task, subAgentID, warm)
+	go t.background(runCtx, cancel, held, opened, site, task, warm)
 	return Result{Content: held.runningWords(), Command: subAgentID + " running: " + agent.Mission, SubAgent: subAgentID}, nil
 }
 
@@ -628,7 +632,9 @@ func (t *SpawnTool) clock() time.Time {
 	return t.base.Now()
 }
 
-func (t *SpawnTool) background(ctx context.Context, cancel context.CancelFunc, held *heldSubAgent, opened SubAgentModel, site spawnSite, task, id string, warm *warmup) {
+const resumedWords = "resumed by a message"
+
+func (t *SpawnTool) background(ctx context.Context, cancel context.CancelFunc, held *heldSubAgent, opened SubAgentModel, site spawnSite, task string, warm *warmup) {
 	defer cancel()
 	defer warm.leaderDone(site.call)
 	if opened.Close != nil {
@@ -637,7 +643,7 @@ func (t *SpawnTool) background(ctx context.Context, cancel context.CancelFunc, h
 	ctx = context.WithValue(ctx, subAgentKey{}, held.agent.ID)
 	for {
 		subAgent := opened.onto(t.subAgentConfig(held, site))
-		subAgent.Task, subAgent.NewID = task, func() string { return id }
+		subAgent.Task, subAgent.NewID = task, func() string { return held.agent.ID }
 		report := t.converse(ctx, held, warm.stagger(ctx, site.call, subAgent), site)
 		next, _ := held.inbox.next(ctx, nil)
 		stopping := ctx.Err() != nil
@@ -650,9 +656,8 @@ func (t *SpawnTool) background(ctx context.Context, cancel context.CancelFunc, h
 		if len(next) == 0 {
 			return
 		}
-		held.messages++
-		task, id, warm = strings.Join(next, "\n\n"), held.agent.ID+"-m"+strconv.Itoa(held.messages), nil
-		t.roster.Reached(held.agent.ID, subagent.Working, "")
+		task, warm = strings.Join(next, "\n\n"), nil
+		t.roster.Reached(held.agent.ID, subagent.Working, resumedWords)
 	}
 }
 
@@ -673,7 +678,7 @@ func (t *SpawnTool) subAgentConfig(held *heldSubAgent, site spawnSite) Config {
 		owned = append(owned, tool)
 	}
 	if offered(t.Name()) {
-		owned = append(owned, &SpawnTool{Review: t.Review, Methods: t.Methods, SubAgents: t.SubAgents, Limits: t.Limits, Inbox: held.inbox,
+		owned = append(owned, &SpawnTool{Review: t.Review, Methods: t.Methods, SubAgents: t.SubAgents, Limits: t.Limits, Project: t.Project, Inbox: held.inbox,
 			orchestratorID: held.agent.ID, depth: t.depth + 1, base: t.base, roster: t.roster, tree: t.tree})
 	}
 	subAgent := t.base
@@ -710,7 +715,6 @@ type heldSubAgent struct {
 	inbox       *Inbox
 	trace       spawnTrace
 	history     []llm.Message
-	messages    int
 	running     bool
 	cancel      context.CancelFunc
 	forking     sync.Mutex
@@ -785,18 +789,27 @@ func (t *SpawnTool) converse(ctx context.Context, held *heldSubAgent, subAgent C
 		}
 		return written(ended)
 	}
-	claims, state, runErr := t.runRounds(ctx, subAgentCtx, held, subAgent, trace)
+	id := subAgent.NewID()
+	began := trace.begin(id)
+	claims, sentBack, state, runErr := t.runRounds(ctx, subAgentCtx, held, subAgent)
 	forked := held.forkedSoFar()
 	asked := subAgent.Boundary.Asked()
 	if len(asked) > 0 && state != subagent.Errored && state != subagent.Parked {
 		state = subagent.WaitingAnswer
 	}
 	last := &claims[len(claims)-1]
-	if err := trace.settle(last.ID, state.String()); err != nil {
-		last.Warnings = append(last.Warnings, "the sub-agent's last state was not recorded: "+err.Error())
+	if err := errors.Join(began, trace.end(id, state)); err != nil {
+		last.Warnings = append(last.Warnings, "this sub-agent run was not wholly recorded: "+err.Error())
 	}
-	report := reportOf(agent, forked, claims, state)
+	report := reportOf(agent, forked, []Row{wholeRun(claims)}, state)
 	report.Asked = asked
+	if len(sentBack) > 0 {
+		times := "once"
+		if len(sentBack) > 1 {
+			times = strconv.Itoa(len(sentBack)) + " times"
+		}
+		report.Findings = append(report.Findings, subagent.Finding{Bucket: subagent.Noted, Reason: "sent back " + times + ": " + strings.Join(sentBack, "; then ")})
+	}
 	t.tree.mu.Lock()
 	t.tree.retain(claims)
 	for _, claim := range append(slices.Clone(forked), claims...) {
@@ -894,10 +907,9 @@ func (m messageTool) Run(ctx context.Context, raw json.RawMessage) (Result, erro
 		cancel()
 		return Result{}, fmt.Errorf("message refused: %w", err)
 	}
-	held.messages++
 	site, _ := ctx.Value(spawnSiteKey{}).(spawnSite)
 	t.Inbox.hold(site.log)
-	go t.background(runCtx, cancel, held, opened, site, args.Text, held.agent.ID+"-m"+strconv.Itoa(held.messages), nil)
+	go t.background(runCtx, cancel, held, opened, site, args.Text, nil)
 	return Result{Content: args.To + " resumes in the background with its conversation. its report comes to you as a message when it ends.", Command: "message " + args.To, SubAgent: args.To}, nil
 }
 
@@ -972,7 +984,7 @@ func (t *SpawnTool) rehold(agent subagent.SubAgent) error {
 	if err := others.Hold(agent); err != nil {
 		return err
 	}
-	t.roster.Reached(agent.ID, subagent.Working, "")
+	t.roster.Reached(agent.ID, subagent.Working, resumedWords)
 	return nil
 }
 
@@ -1047,22 +1059,33 @@ func resumable(messages []llm.Message) []llm.Message {
 	return Sendable(stripped)
 }
 
-func (t *SpawnTool) runRounds(outerCtx, subAgentCtx context.Context, held *heldSubAgent, subAgent Config, trace spawnTrace) ([]Row, subagent.State, error) {
-	agent, subAgentID := held.agent, held.agent.ID
-	first, firstErr := trace.run(outerCtx, subAgentCtx, subAgent)
-	claims := []Row{first}
-	state := roundState(outerCtx, firstErr)
+func wholeRun(rounds []Row) Row {
+	whole := rounds[len(rounds)-1]
+	whole.Steps, whole.Warnings, whole.TotalCostUSD = nil, nil, 0
+	for _, round := range rounds {
+		whole.Steps, whole.Warnings = append(whole.Steps, round.Steps...), append(whole.Warnings, round.Warnings...)
+		whole.TotalCostUSD += round.TotalCostUSD
+	}
+	return whole
+}
+
+func (t *SpawnTool) runRounds(outerCtx, subAgentCtx context.Context, held *heldSubAgent, subAgent Config) ([]Row, []string, subagent.State, error) {
+	agent := held.agent
+	first, firstErr := Run(subAgentCtx, subAgent)
+	claims, state := []Row{first}, roundState(outerCtx, firstErr)
 	held.remember(first)
+	var sentBack []string
 	for state == subagent.Finished {
-		missed := gateMissed(held.definition, claims)
+		missed := gateMissed(t.Project, held.definition, claims)
 		if len(missed) == 0 && t.Review == nil {
 			break
 		}
-		t.roster.Reached(subAgentID, subagent.InReview, reportOf(agent, held.forkedSoFar(), claims, subagent.InReview).Text())
 		last := &claims[len(claims)-1]
+		why := strings.Join(missed, "; ")
 		decision := DoneDecision{Verdict: DoneReopen, Reason: fmt.Sprintf("you changed a %s file, and your gate is %s, each run after your last edit and passing: %s",
-			held.definition.Language, strings.Join(held.definition.Gate, " and "), strings.Join(missed, "; "))}
+			held.definition.Language, strings.Join(held.definition.Gate, " and "), why)}
 		if len(missed) == 0 {
+			t.roster.Reached(agent.ID, subagent.InReview, reportOf(agent, held.forkedSoFar(), []Row{wholeRun(claims)}, subagent.InReview).Text())
 			reviewed := *last
 			reviewed.Task = agent.Brief
 			var err error
@@ -1070,6 +1093,7 @@ func (t *SpawnTool) runRounds(outerCtx, subAgentCtx context.Context, held *heldS
 				last.Warnings = append(last.Warnings, "the done review did not run, so the sub-agent's own claim stands: "+err.Error())
 				break
 			}
+			why = decision.Reason
 		}
 		if decision.ID != "" {
 			last.DecisionIDs = append(last.DecisionIDs, decision.ID)
@@ -1080,16 +1104,15 @@ func (t *SpawnTool) runRounds(outerCtx, subAgentCtx context.Context, held *heldS
 		if decision.Verdict != DoneReopen {
 			panic("turn: unknown done verdict " + string(decision.Verdict))
 		}
-		next, reopenErr := t.roster.Reopen(subAgentID, decision.Reason)
-		if reopenErr != nil {
-			last.Warnings = append(last.Warnings, reopenErr.Error())
+		if _, err := t.roster.Reopen(agent.ID, why); err != nil {
+			last.Warnings = append(last.Warnings, err.Error())
 			break
 		}
-		t.roster.Reached(subAgentID, subagent.Working, "")
+		t.roster.Reached(agent.ID, subagent.Working, "sent back: "+why)
+		sentBack = append(sentBack, why)
 		subAgent.History = held.history
 		subAgent.Task = "You reported this finished and the done review did not believe you: " + decision.Reason
-		subAgent.NewID = func() string { return subAgentID + "-r" + strconv.Itoa(next) }
-		reRow, reErr := trace.run(outerCtx, subAgentCtx, subAgent)
+		reRow, reErr := Run(subAgentCtx, subAgent)
 		claims = append(claims, reRow)
 		held.remember(reRow)
 		if reErr != nil {
@@ -1100,37 +1123,48 @@ func (t *SpawnTool) runRounds(outerCtx, subAgentCtx context.Context, held *heldS
 			state = roundState(outerCtx, nil)
 		}
 	}
-	return claims, state, firstErr
+	return claims, sentBack, state, firstErr
 }
 
-func gateMissed(definition subagent.Definition, rounds []Row) []string {
+func gateMissed(project string, definition subagent.Definition, rounds []Row) []string {
 	if definition.Language == "" {
 		return nil
 	}
 	var sinceEdit []ToolCallRow
-	edited := false
+	lastEdit := ""
 	for _, round := range rounds {
 		for _, step := range round.Steps {
 			for _, call := range step.ToolCalls {
 				sinceEdit = append(sinceEdit, call)
 				if path := writtenPath(call); path != "" && rule.LanguageOf(path) == definition.Language {
-					sinceEdit, edited = nil, true
+					sinceEdit, lastEdit = nil, path
 				}
 			}
 		}
 	}
-	if !edited {
+	if lastEdit == "" {
 		return nil
+	}
+	if !filepath.IsAbs(lastEdit) {
+		lastEdit = filepath.Join(project, lastEdit)
+	}
+	noTests := false
+	if project != "" && slices.Contains(definition.Gate, "test") {
+		_, refused := vitestPackage(filepath.Dir(lastEdit))
+		noTests = strings.HasPrefix(refused.FailureText, testNoTests)
 	}
 	var missed []string
 	for _, check := range definition.Gate {
 		said := check + " did not run"
+		if check == "test" && noTests {
+			said = ""
+		}
 		for _, call := range sinceEdit {
 			switch {
-			case !gateRan(check, call):
+			case !gateRan(check, call), call.Error == typecheckUnanswered:
 			case call.ExitCode != nil && *call.ExitCode != 0:
 				said = fmt.Sprintf("%s exited %d", check, *call.ExitCode)
-			case call.Error != "":
+			case call.Error != "" && !strings.HasPrefix(call.Error, testNoTests):
 				said = check + " failed"
 			default:
 				said = ""

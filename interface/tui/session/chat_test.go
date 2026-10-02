@@ -136,6 +136,35 @@ func TestThreeRunningSubAgentsShareOneBatchLineAndLeaveTheStatusLineToTheLead(t 
 	}
 }
 
+func TestASubAgentSentBackByItsGateKeepsItsOneChatLineAndSaysWhy(t *testing.T) {
+	at := time.Date(2026, 10, 2, 17, 5, 43, 0, time.UTC)
+	model := New(func() time.Time { return at }, counted(new(int)))
+	model.SetSize(100, 30)
+	model.Append(Entry{Kind: User, Body: "move the lab link"})
+	model.Start()
+	model.Returned()
+	model.Spawned("ts-dev-1")
+	held := roster.SubAgent{ID: "ts-dev-1", Agent: "ts-dev", State: roster.Working, Round: 1, Started: at, Calling: []string{"edit"}}
+	named := func() []string {
+		model.SubAgents = subagent.Rows([]roster.SubAgent{held}, at, 0, nil, nil)
+		var lines []string
+		for _, row := range strings.Split(ansi.Strip(model.View()), "\n") {
+			if strings.Contains(row, "ts-dev-1") {
+				lines = append(lines, strings.TrimSpace(row))
+			}
+		}
+		return lines
+	}
+	first := named()
+	held.Round, held.Report = 2, "sent back: test did not run"
+	at = at.Add(31 * time.Second)
+	second := named()
+	if len(first) != 1 || len(second) != 1 || !strings.Contains(second[0], "[&ts-dev-1] sent back: test did not run") || strings.Contains(second[0], "-r2") {
+		t.Fatalf("round one draws %q and round two %q, want one line for ts-dev-1 each, the second saying it was sent back and why", first, second)
+	}
+	t.Logf("round one: %s\nround two: %s", first[0], second[0])
+}
+
 func TestSettledSubAgentNameIsDrawnInADifferentColourFromARunningOne(t *testing.T) {
 	model := New(fixed(), counted(new(int)))
 	model.SetSize(100, 30)

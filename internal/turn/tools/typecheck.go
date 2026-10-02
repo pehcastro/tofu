@@ -52,9 +52,10 @@ func (t Typecheck) Run(ctx context.Context, raw json.RawMessage) (turn.Result, e
 	if err != nil {
 		return turn.Result{}, fmt.Errorf("typecheck: %w", err)
 	}
-	report, err := t.checkers.Typecheck(ctx, resolved)
+	result, err := t.checkers.Check(ctx, resolved)
 	if err != nil {
 		return turn.Result{}, fmt.Errorf("typecheck: %w", err)
 	}
-	return turn.Result{Content: report, Command: path}, nil
+	result.Command = path
+	return result, nil
 }

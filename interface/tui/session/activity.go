@@ -162,6 +162,9 @@ func (m *Model) batchLines(batch spawnBatch) []string {
 			}
 			since = max(since, row.Since)
 			names = append(names, look.AgentRef(row.Name))
+			if row.State == roster.Working && row.Report != "" {
+				names = append(names, look.Muted(row.Report))
+			}
 		}
 		head := look.Style(look.Violet).Render(progress.Work(m.frame) + " " + word)
 		lines = m.wordRows(slices.Concat([]string{head}, names, []string{" " + look.Muted(widget.Until(since))}))

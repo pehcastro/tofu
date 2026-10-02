@@ -20,6 +20,8 @@ import (
 )
 
 const (
+	testNoTests      = "test: this project has no tests"
+	testThroughShell = "test runs through the shell: "
 	testReplyMarker  = "TOFU-TEST-REPLY "
 	testRunnerScript = `const { createVitest } = await import('vitest/node');
 const { createInterface } = await import('node:readline');
@@ -37,10 +39,11 @@ const run = async (request) => {
   }
   if (specs.length === 0) return { id: request.id, none: true };
   const result = await vitest.runTestSpecifications(specs);
+  const asked = new Set(specs.map((spec) => spec.moduleId));
   return {
     id: request.id,
     errors: result.unhandledErrors.map(message),
-    modules: result.testModules.map((module) => ({
+    modules: result.testModules.filter((module) => asked.has(module.moduleId)).map((module) => ({
       file: module.moduleId,
       errors: module.errors().map((error) => error.message),
       tests: [...module.children.allTests()].map((test) => ({
@@ -102,12 +105,6 @@ type testModule struct {
 	} `json:"tests"`
 }
 
-type testManifest struct {
-	Scripts         map[string]string `json:"scripts"`
-	Dependencies    map[string]string `json:"dependencies"`
-	DevDependencies map[string]string `json:"devDependencies"`
-}
-
 func NewTestRunners() *TestRunners {
 	return &TestRunners{running: map[string]*testRunner{}}
 }
@@ -124,33 +121,33 @@ func (r *TestRunners) Close() {
 	}
 }
 
-func (r *TestRunners) Test(ctx context.Context, resolved string) (string, error) {
+func (r *TestRunners) Test(ctx context.Context, resolved string) (Result, error) {
 	since := time.Now()
 	info, err := os.Stat(resolved)
 	if err != nil {
-		return "", err
+		return Result{}, err
 	}
 	from, files, beside := resolved, []string{resolved}, ""
 	if !info.IsDir() {
 		from = filepath.Dir(resolved)
 	}
-	dir, skipped := vitestPackage(from)
-	if skipped != "" {
-		return "test skipped: " + skipped, nil
+	dir, refused := vitestPackage(from)
+	if dir == "" {
+		return refused, nil
 	}
 	if name := filepath.Base(resolved); !info.IsDir() && !strings.Contains(name, ".test.") && !strings.Contains(name, ".spec.") {
 		stem := strings.TrimSuffix(name, filepath.Ext(name))
 		if files, err = colocatedTests(from, stem); err != nil {
-			return "", err
+			return Result{}, err
 		}
 		if len(files) == 0 {
-			return fmt.Sprintf("test: no test for %s: looked for %s.test%s or %s.spec%s beside it", name, stem, filepath.Ext(name), stem, filepath.Ext(name)), nil
+			return Result{Content: fmt.Sprintf("test: no test for %s: looked for %s.test%s or %s.spec%s beside it", name, stem, filepath.Ext(name), stem, filepath.Ext(name))}, nil
 		}
 		beside = ", the tests beside " + name
 	}
 	runner, err := r.runnerFor(dir)
 	if err != nil {
-		return "", fmt.Errorf("vitest did not start in %s: %w", dir, err)
+		return Result{}, fmt.Errorf("vitest did not start in %s: %w", dir, err)
 	}
 	if r == nil {
 		defer runner.stop()
@@ -165,11 +162,16 @@ func (r *TestRunners) Test(ctx context.Context, resolved string) (string, error)
 	r.drop(dir, runner)
 	switch {
 	case errors.Is(ctx.Err(), context.Canceled):
-		return "test skipped: the turn was cancelled while vitest ran, so its runner was stopped", nil
+		return failure("test skipped: the turn was cancelled while vitest ran, so its runner was stopped"), nil
 	case errors.Is(err, context.DeadlineExceeded):
-		return fmt.Sprintf("test: vitest in %s did not answer %s in %d ms, so its runner was stopped and the next test call starts a new one", dir, resolved, took), nil
+		return failure(fmt.Sprintf("test: vitest in %s did not answer %s in %d ms, so its runner was stopped and the next test call starts a new one", dir, resolved, took)), nil
 	}
-	return fmt.Sprintf("test: vitest in %s, %d ms, vitest stopped before it answered. its last lines:\n%s", dir, took, strings.Join(runner.lastSaid(), "\n")), nil
+	return failure(fmt.Sprintf("test: vitest in %s, %d ms, vitest stopped before it answered. its last lines:\n%s", dir, took, strings.Join(runner.lastSaid(), "\n"))), nil
+}
+
+func failure(content string) Result {
+	first, _, _ := strings.Cut(content, "\n")
+	return Result{Content: content, FailureText: first}
 }
 
 func colocatedTests(dir, stem string) ([]string, error) {
@@ -186,13 +188,13 @@ func colocatedTests(dir, stem string) ([]string, error) {
 	return tests, nil
 }
 
-func vitestPackage(from string) (string, string) {
+func vitestPackage(from string) (string, Result) {
 	manifestPath, found := findUp(from, "package.json")
 	if !found {
-		return "", "no package.json in " + from + " or above it, so run this project's tests through the shell"
+		return "", failure("test skipped: no package.json in " + from + " or above it, so run this project's tests through the shell")
 	}
 	dir := filepath.Dir(manifestPath)
-	var manifest testManifest
+	var manifest packageManifest
 	if body, err := os.ReadFile(manifestPath); err == nil {
 		_ = json.Unmarshal(body, &manifest)
 	}
@@ -202,14 +204,25 @@ func vitestPackage(from string) (string, string) {
 	usesVitest := declared || depended || strings.Contains(command, "vitest")
 	_, installed := findUp(dir, "node_modules", "vitest", "package.json")
 	switch {
+	case !usesVitest && command == "" && !holdsTests(dir):
+		return "", failure(testNoTests + "\n" + manifestPath + " names no test runner and no test script, and no .test. or .spec. file is under " + dir + ", so there is nothing to run")
 	case !usesVitest && command == "":
-		return "", manifestPath + " does not use vitest and has no test script, so find how this project runs its tests and run that through the shell"
+		return "", failure("test skipped: " + manifestPath + " does not use vitest and has no test script, so find how this project runs its tests and run that through the shell")
 	case !usesVitest:
-		return "", "the test tool runs vitest, and " + manifestPath + " tests with " + command + ": run that through the shell"
+		return "", failure(testThroughShell + lockfileManager(dir, manifest) + " run test\nthe test tool runs vitest, and " + manifestPath + " tests with " + command + ": run that through the shell")
 	case !installed:
-		return "", "vitest is not installed under node_modules in " + dir + " or above it: install the project's dependencies first"
+		return "", failure("test skipped: vitest is not installed under node_modules in " + dir + " or above it: install the project's dependencies first")
 	}
-	return dir, ""
+	return dir, Result{}
+}
+
+func holdsTests(dir string) bool {
+	found := false
+	eachSourceFile(dir, func(name string) bool {
+		found = strings.Contains(name, ".test.") || strings.Contains(name, ".spec.")
+		return !found
+	})
+	return found
 }
 
 func (r *TestRunners) runnerFor(dir string) (*testRunner, error) {
@@ -342,12 +355,12 @@ func (t *testRunner) ask(ctx context.Context, files []string) (testReply, error)
 	}
 }
 
-func testReport(reply testReply, dir, head string) string {
+func testReport(reply testReply, dir, head string) Result {
 	if reply.Failure != "" {
-		return head + ", vitest could not run it:\n" + firstLines(reply.Failure)
+		return failure(head + ", vitest could not run it:\n" + firstLines(reply.Failure))
 	}
 	if reply.None {
-		return head + ": no test file in this package runs it, directly or through what it imports"
+		return Result{Content: head + ": no test file in this package runs it, directly or through what it imports"}
 	}
 	var summaries, lines []string
 	for _, module := range reply.Modules {
@@ -375,7 +388,11 @@ func testReport(reply testReply, dir, head string) string {
 	if cut := len(lines) - len(shown); cut > 0 {
 		shown = append(shown, fmt.Sprintf("(%d more lines not shown)", cut))
 	}
-	return strings.Join(append([]string{head + ", " + strings.Join(summaries, "; ")}, shown...), "\n")
+	report := strings.Join(append([]string{head + ", " + strings.Join(summaries, "; ")}, shown...), "\n")
+	if len(lines) == 0 {
+		return Result{Content: report}
+	}
+	return failure(report)
 }
 
 func firstLines(text string) string {

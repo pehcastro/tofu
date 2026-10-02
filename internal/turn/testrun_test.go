@@ -54,8 +54,8 @@ func TestASecondTestRunAfterAnEditIsAnsweredFasterByTheSameRunner(t *testing.T) 
 	runners := NewTestRunners()
 	t.Cleanup(runners.Close)
 	started := time.Now()
-	first, err := runners.Test(context.Background(), filepath.Join(dir, "sum.test.ts"))
-	firstTook := time.Since(started)
+	tested, err := runners.Test(context.Background(), filepath.Join(dir, "sum.test.ts"))
+	first, firstTook := tested.Content, time.Since(started)
 	if err != nil || !strings.Contains(first, "sum.test.ts: 1 passed, 0 failed") {
 		t.Fatalf("the first run did not report the file passing: %v\n%s", err, first)
 	}
@@ -64,8 +64,8 @@ func TestASecondTestRunAfterAnEditIsAnsweredFasterByTheSameRunner(t *testing.T) 
 		t.Fatal(err)
 	}
 	started = time.Now()
-	second, err := runners.Test(context.Background(), filepath.Join(dir, "sum.ts"))
-	secondTook := time.Since(started)
+	tested, err = runners.Test(context.Background(), filepath.Join(dir, "sum.ts"))
+	second, secondTook := tested.Content, time.Since(started)
 	if err != nil || !strings.Contains(second, "sum.test.ts: 0 passed, 1 failed") || !strings.Contains(second, "expected -1 to be 3") {
 		t.Fatalf("the run after the edit did not report the failure:  %v\n%s", err, second)
 	}
@@ -88,8 +88,8 @@ func TestAProjectWithoutVitestNamesItsOwnTestCommand(t *testing.T) {
 			}
 		}
 		got, err := NewTestRunners().Test(context.Background(), filepath.Join(dir, "a.test.ts"))
-		if err != nil || !strings.Contains(got, project.want) {
-			t.Fatalf("%s: want the fallback naming %q, got %v\n%s", project.manifest, project.want, err, got)
+		if err != nil || !strings.Contains(got.Content, project.want) {
+			t.Fatalf("%s: want the fallback naming %q, got %v\n%s", project.manifest, project.want, err, got.Content)
 		}
 	}
 }
@@ -134,7 +134,8 @@ func TestASourceFileRunsOnlyTheTestBesideIt(t *testing.T) {
 	}
 	runners := NewTestRunners()
 	t.Cleanup(runners.Close)
-	got, err := runners.Test(context.Background(), filepath.Join(dir, "sum.ts"))
+	tested, err := runners.Test(context.Background(), filepath.Join(dir, "sum.ts"))
+	got := tested.Content
 	first, _, _ := strings.Cut(got, "\n")
 	if err != nil || !strings.Contains(first, "the tests beside sum.ts, sum.test.ts") || !strings.Contains(got, "sum.test.ts: 1 passed, 0 failed") {
 		t.Fatalf("the first line does not name the colocated test it ran: %v\n%s", err, got)
@@ -166,10 +167,10 @@ func TestASourceFileWithNoTestBesideItAnswersWithoutVitest(t *testing.T) {
 	runners := NewTestRunners()
 	t.Cleanup(runners.Close)
 	got, err := runners.Test(context.Background(), filepath.Join(dir, "lonely.ts"))
-	if err != nil || !strings.Contains(got, "lonely.test.ts") || len(runners.running) != 0 {
-		t.Fatalf("want an answer naming lonely.test.ts and no runner, got %d runners, %v\n%s", len(runners.running), err, got)
+	if err != nil || !strings.Contains(got.Content, "lonely.test.ts") || len(runners.running) != 0 {
+		t.Fatalf("want an answer naming lonely.test.ts and no runner, got %d runners, %v\n%s", len(runners.running), err, got.Content)
 	}
-	t.Log(got)
+	t.Log(got.Content)
 }
 
 func TestAMissedDeadlineLeavesTheNextCallANewRunner(t *testing.T) {
@@ -183,13 +184,13 @@ func TestAMissedDeadlineLeavesTheNextCallANewRunner(t *testing.T) {
 	waiting, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 	missed, err := runners.Test(waiting, filepath.Join(dir, "hang.test.ts"))
-	if err != nil || !strings.Contains(missed, "stopped") || strings.Contains(missed, "call test again") || len(runners.running) != 0 {
-		t.Fatalf("the miss did not stop and drop its runner, %d runners left, %v\n%s", len(runners.running), err, missed)
+	if err != nil || !strings.Contains(missed.Content, "stopped") || strings.Contains(missed.Content, "call test again") || len(runners.running) != 0 {
+		t.Fatalf("the miss did not stop and drop its runner, %d runners left, %v\n%s", len(runners.running), err, missed.Content)
 	}
 	started := time.Now()
 	next, err := runners.Test(context.Background(), filepath.Join(dir, "sum.test.ts"))
-	if err != nil || !strings.Contains(next, "sum.test.ts: 1 passed, 0 failed") || onlyRunner(t, runners) == nil {
-		t.Fatalf("the next call did not get an answer from a new runner: %v\n%s", err, next)
+	if err != nil || !strings.Contains(next.Content, "sum.test.ts: 1 passed, 0 failed") || onlyRunner(t, runners) == nil {
+		t.Fatalf("the next call did not get an answer from a new runner: %v\n%s", err, next.Content)
 	}
-	t.Logf("miss:\n%s\nnext, %s:\n%s", missed, time.Since(started), next)
+	t.Logf("miss:\n%s\nnext, %s:\n%s", missed.Content, time.Since(started), next.Content)
 }

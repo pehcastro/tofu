@@ -262,8 +262,8 @@ func TestTheTypedDoneReviewReopensTheSubAgentInsideARunAndWhyPrintsTheChain(t *t
 		}
 	}
 	first, second, third := spawned[0], spawned[1], spawned[2]
-	if second.ID != first.ID+"-r2" || third.ID != first.ID+"-r3" {
-		t.Fatalf("the re-opened rounds are %q and %q, want %q and %q", second.ID, third.ID, first.ID+"-r2", first.ID+"-r3")
+	if second.ID != first.ID || third.ID != first.ID {
+		t.Fatalf("the re-opened rounds are %q and %q, want both under %q", second.ID, third.ID, first.ID)
 	}
 	if !strings.Contains(second.Task, "did not believe you") || !strings.Contains(second.Task, doneReviewPoint) {
 		t.Fatalf("the re-opened sub-agent was not told why: %q", second.Task)
@@ -382,5 +382,17 @@ func TestDoneVerdictNamesEveryLedgerVerdict(t *testing.T) {
 		if got := doneVerdict(v); got != expected {
 			t.Errorf("doneVerdict(%s) = %s, want %s", v, got, expected)
 		}
+	}
+}
+
+func TestTheSpawnerTofuBuildsKnowsTheProjectItsGateLooksIn(t *testing.T) {
+	opts := armOpts(t)
+	built, err := buildTestRunTools(opts.dir, opts.toolSet)
+	if err != nil {
+		t.Fatalf("buildTestRunTools: %v", err)
+	}
+	_, spawner := mustConfig(t, opts, built, runtime{spend: turn.SpendSubscription})
+	if spawner == nil || spawner.Project != opts.dir {
+		t.Fatalf("the spawner runConfig builds, for tofu run and the interface alike, looks for tests in %q, want the run directory %q", spawner.Project, opts.dir)
 	}
 }

@@ -47,9 +47,10 @@ func (t Test) Run(ctx context.Context, raw json.RawMessage) (turn.Result, error)
 	if err != nil {
 		return turn.Result{}, fmt.Errorf("test: %w", err)
 	}
-	report, err := t.runners.Test(ctx, resolved)
+	result, err := t.runners.Test(ctx, resolved)
 	if err != nil {
 		return turn.Result{}, fmt.Errorf("test: %w", err)
 	}
-	return turn.Result{Content: report, Command: args.Path}, nil
+	result.Command = args.Path
+	return result, nil
 }

@@ -676,7 +676,7 @@ func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn
 		return config, nil, nil
 	}
 	spawner := turn.NewSpawnTool(orchestratorID, config, cmp.Or(run.roster, &subagent.Roster{}))
-	spawner.Inbox, spawner.SubAgents = config.Inbox, prompt.subAgents
+	spawner.Inbox, spawner.SubAgents, spawner.Project = config.Inbox, prompt.subAgents, dir
 	spawner.SubAgents.Open = run.subAgentOpener(opts)
 	spawner.SubAgents.Brief, spawner.SubAgents.Ended = browserRecipeBrief(run.notify), learnBrowserRecipe(run.notify)
 	spawner.Limits = func() turn.SubAgentLimits {

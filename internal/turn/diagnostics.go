@@ -24,12 +24,15 @@ const (
 	tsconfigName        = "tsconfig.json"
 	erasableSyntaxError = "error TS1294:"
 	typeStrippingNote   = " node runs this project's .ts files with type stripping, which refuses enum, parameter properties and namespaces that hold values"
+	typecheckUnanswered = "typecheck has not answered yet"
 )
 
 type packageManifest struct {
-	Scripts        map[string]string `json:"scripts"`
-	PackageManager string            `json:"packageManager"`
-	Workspaces     json.RawMessage   `json:"workspaces"`
+	Scripts         map[string]string `json:"scripts"`
+	PackageManager  string            `json:"packageManager"`
+	Workspaces      json.RawMessage   `json:"workspaces"`
+	Dependencies    map[string]string `json:"dependencies"`
+	DevDependencies map[string]string `json:"devDependencies"`
 }
 
 func (m packageManifest) workspaces() []string {
@@ -152,6 +155,16 @@ func largestWorkspaces(dir string) []string {
 
 func typescriptFiles(dir string) int {
 	count := 0
+	eachSourceFile(dir, func(name string) bool {
+		if strings.HasSuffix(name, ".ts") || strings.HasSuffix(name, ".tsx") {
+			count++
+		}
+		return true
+	})
+	return count
+}
+
+func eachSourceFile(dir string, visit func(name string) bool) {
 	_ = filepath.WalkDir(dir, func(path string, entry fs.DirEntry, err error) error {
 		if err != nil {
 			return nil
@@ -160,19 +173,23 @@ func typescriptFiles(dir string) int {
 		switch {
 		case entry.IsDir() && path != dir && (name == "node_modules" || name == "dist" || strings.HasPrefix(name, ".")):
 			return filepath.SkipDir
-		case strings.HasSuffix(name, ".ts") || strings.HasSuffix(name, ".tsx"):
-			count++
+		case !entry.IsDir() && !visit(name):
+			return filepath.SkipAll
 		}
 		return nil
 	})
-	return count
 }
 
 func (c *Typecheckers) Typecheck(ctx context.Context, resolved string) (string, error) {
+	result, err := c.Check(ctx, resolved)
+	return result.Content, err
+}
+
+func (c *Typecheckers) Check(ctx context.Context, resolved string) (Result, error) {
 	since := time.Now()
 	info, err := os.Stat(resolved)
 	if err != nil {
-		return "", err
+		return Result{}, err
 	}
 	from := resolved
 	if !info.IsDir() {
@@ -180,7 +197,7 @@ func (c *Typecheckers) Typecheck(ctx context.Context, resolved string) (string, 
 	}
 	dir, argv, skipped := tscCommand(from)
 	if skipped != "" {
-		return "typecheck skipped: " + skipped, nil
+		return failure("typecheck skipped: " + skipped), nil
 	}
 	scope, _ := filepath.Rel(dir, resolved)
 	return c.check(ctx, dir, argv, filepath.ToSlash(scope), since, waitForAnswer), nil
@@ -196,7 +213,7 @@ func (c *Typecheckers) Typechecked(ctx context.Context, resolved, result string)
 		return result + "\n\ntypecheck skipped: " + skipped
 	}
 	relative, _ := filepath.Rel(dir, resolved)
-	return result + "\n\n" + c.check(ctx, dir, argv, filepath.ToSlash(relative), since, waitInline)
+	return result + "\n\n" + c.check(ctx, dir, argv, filepath.ToSlash(relative), since, waitInline).Content
 }
 
 func (c *Typecheckers) watchFor(dir string, argv []string) *tscWatch {
@@ -213,7 +230,7 @@ func (c *Typecheckers) watchFor(dir string, argv []string) *tscWatch {
 	return c.watching[dir]
 }
 
-func (c *Typecheckers) check(ctx context.Context, dir string, argv []string, scope string, since time.Time, wait checkWait) string {
+func (c *Typecheckers) check(ctx context.Context, dir string, argv []string, scope string, since time.Time, wait checkWait) Result {
 	watch := c.watchFor(dir, argv)
 	if watch == nil {
 		return coldTypecheck(ctx, dir, argv, scope)
@@ -236,11 +253,11 @@ func (c *Typecheckers) check(ctx context.Context, dir string, argv []string, sco
 	case outcome == watchAnswered || outcome == watchQuiet && wait == waitForAnswer:
 		return tscReport(cycle.output, scope, fmt.Sprintf("typecheck: %s, %d ms", watch.command, took), cycle.failed)
 	case outcome == watchCancelled:
-		return "typecheck skipped: the turn was cancelled while " + watch.command + " ran"
+		return failure("typecheck skipped: the turn was cancelled while " + watch.command + " ran")
 	case outcome != watchLost && wait == waitInline:
 		background := "typecheck: " + watch.command + " checks this change in the background, and the typecheck tool reports it"
 		if cycle.started.IsZero() {
-			return background
+			return Result{Content: background}
 		}
 		return tscReport(cycle.output, scope, background+". its last finished check, from before this change", cycle.failed)
 	case outcome == watchBusy:
@@ -248,7 +265,8 @@ func (c *Typecheckers) check(ctx context.Context, dir string, argv []string, sco
 		if cycle.started.IsZero() {
 			state = "warming, on its first check of this project"
 		}
-		return fmt.Sprintf("typecheck: %s is still %s after %d ms. it keeps running: call typecheck again for its answer rather than running tsc through the shell", watch.command, state, took)
+		return Result{FailureText: typecheckUnanswered, Content: fmt.Sprintf(
+			"typecheck: %s is still %s after %d ms. it keeps running: call typecheck again for its answer rather than running tsc through the shell", watch.command, state, took)}
 	}
 	c.mutex.Lock()
 	if c.watching[dir] == watch {
@@ -377,9 +395,8 @@ func tscCommand(from string) (string, []string, string) {
 	return dir, argv, ""
 }
 
-func coldTypecheck(ctx context.Context, dir string, argv []string, relative string) string {
+func coldTypecheck(ctx context.Context, dir string, argv []string, relative string) Result {
 	command := strings.Join(argv, " ")
-
 	ctx, cancel := context.WithTimeout(ctx, konst.TypecheckDeadlineMillis*time.Millisecond)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...)
@@ -389,16 +406,16 @@ func coldTypecheck(ctx context.Context, dir string, argv []string, relative stri
 	started := time.Now()
 	tracked, err := shell.StartTracked(cmd)
 	if err != nil {
-		return fmt.Sprintf("typecheck skipped: %s did not start: %v", command, err)
+		return failure(fmt.Sprintf("typecheck skipped: %s did not start: %v", command, err))
 	}
 	defer tracked.Release()
 	failed := cmd.Wait() != nil
 	took := time.Since(started).Milliseconds()
 	switch {
 	case errors.Is(ctx.Err(), context.DeadlineExceeded):
-		return fmt.Sprintf("typecheck skipped: %s ran past its %d ms limit", command, konst.TypecheckDeadlineMillis)
+		return failure(fmt.Sprintf("typecheck skipped: %s ran past its %d ms limit", command, konst.TypecheckDeadlineMillis))
 	case ctx.Err() != nil:
-		return "typecheck skipped: the turn was cancelled while " + command + " ran"
+		return failure("typecheck skipped: the turn was cancelled while " + command + " ran")
 	}
 	return tscReport(output.String(), relative, fmt.Sprintf("typecheck: %s, %d ms", command, took), failed)
 }
@@ -472,7 +489,7 @@ func runsTypeScript(manifest packageManifest) bool {
 	return false
 }
 
-func tscReport(output, scope, head string, failed bool) string {
+func tscReport(output, scope, head string, failed bool) Result {
 	var mine, global, unread []string
 	errorsHere, elsewhere, inMine := 0, 0, false
 	for _, line := range strings.Split(strings.ReplaceAll(output, "\r\n", "\n"), "\n") {
@@ -500,15 +517,20 @@ func tscReport(output, scope, head string, failed bool) string {
 	}
 	lines := slices.Concat(global, mine)
 	summary := fmt.Sprintf("%s, errors in %s: %d, in other files: %d", head, scope, errorsHere, elsewhere)
-	if failed && len(lines) == 0 && elsewhere == 0 {
+	namedNoFile := failed && len(lines) == 0 && elsewhere == 0
+	if namedNoFile {
 		lines, summary = unread, head+", tsc failed and named no file"
 	}
-	if len(lines) == 0 {
-		return summary
+	report := Result{Content: summary}
+	if len(lines) > 0 {
+		shown := lines[:min(len(lines), konst.TypecheckLinesCap)]
+		if cut := len(lines) - len(shown); cut > 0 {
+			shown = append(shown, fmt.Sprintf("(%d more lines not shown)", cut))
+		}
+		report.Content += ":\n" + strings.Join(shown, "\n")
 	}
-	shown := lines[:min(len(lines), konst.TypecheckLinesCap)]
-	if cut := len(lines) - len(shown); cut > 0 {
-		shown = append(shown, fmt.Sprintf("(%d more lines not shown)", cut))
+	if namedNoFile || len(lines) > 0 {
+		report.FailureText = summary
 	}
-	return summary + ":\n" + strings.Join(shown, "\n")
+	return report
 }
