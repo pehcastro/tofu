@@ -100,7 +100,7 @@ func TestChatComposerStartsCompactAndGrowsForMultiline(t *testing.T) {
 	}
 }
 
-func TestWaitingOnThreeSubAgentsCountsThemAboveTheComposerAndNamesThemOnOneBatchLine(t *testing.T) {
+func TestThreeRunningSubAgentsShareOneBatchLineAndLeaveTheStatusLineToTheLead(t *testing.T) {
 	at := time.Date(2026, 9, 27, 14, 32, 0, 0, time.UTC)
 	model := New(func() time.Time { return at }, counted(new(int)))
 	model.SetSize(100, 30)
@@ -125,11 +125,11 @@ func TestWaitingOnThreeSubAgentsCountsThemAboveTheComposerAndNamesThemOnOneBatch
 			above = append(above, strings.TrimSpace(row))
 		}
 	}
-	if len(above) != 1 || !strings.Contains(above[0], "waiting on (3) sub-agents") || strings.Contains(above[0], "[&") {
-		t.Fatalf("the rows above the composer are %q, want exactly one status line counting three sub-agents without names\n%s", above, strings.Join(rows, "\n"))
+	if len(above) != 1 || !strings.Contains(above[0], "thinking") || strings.Contains(above[0], "sub-agent") || strings.Contains(above[0], "[&") {
+		t.Fatalf("the rows above the composer are %q, want one status line saying what the lead does and nothing of its sub-agents\n%s", above, strings.Join(rows, "\n"))
 	}
 	spawn := slices.IndexFunc(rows[:model.transcriptRows()], func(row string) bool {
-		return strings.Contains(row, "waiting on [&ts-dev-1] [&ts-dev-2] [&ts-dev-3]")
+		return strings.Contains(row, "running [&ts-dev-1] [&ts-dev-2] [&ts-dev-3]")
 	})
 	if spawn < 0 || !strings.HasPrefix(strings.TrimSpace(rows[spawn]), "⠁ ") || !strings.HasSuffix(strings.TrimSpace(rows[spawn]), "3m") || strings.Contains(rows[spawn], "products.ts") {
 		t.Errorf("the chat does not spin one Dots8 line naming all three sub-agents under the longest clock\n%s", strings.Join(rows, "\n"))

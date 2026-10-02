@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -245,7 +246,9 @@ func TestASettingsCallJevAllowsStillReachesThePersonAsAnAsk(t *testing.T) {
 		t.Fatalf("newToolGate: %v", err)
 	}
 	watched := map[string]ledger.Verdict{}
-	gate.watch = func(tool string, decision turn.GateDecision, _ error) { watched[tool] = decision.Verdict }
+	gate.watch = func(_ context.Context, tool string, decision turn.GateDecision, _ error) {
+		watched[tool] = decision.Verdict
+	}
 	for tool, want := range map[string]ledger.Verdict{"read": ledger.VerdictAllow, "settings": ledger.VerdictAsk} {
 		decision, err := gate.Decide(t.Context(), turn.GateRequest{
 			TurnID: "turn-settings",

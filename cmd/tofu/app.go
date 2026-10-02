@@ -126,9 +126,9 @@ func appOptions(dir string, arms runOpts, wiring appWiring, launch appLaunch) tu
 	}
 	note := strings.Join(slices.DeleteFunc(notes, func(one string) bool { return one == "" }), noteSeparator)
 	answers := make(chan tui.Answer, 1)
-	steering := make(chan string, queuedMessages)
+	steering, stopLead := make(chan string, queuedMessages), make(chan struct{}, 1)
 	live := newAppSession(dir, wiring.open, answers, time.Now, launch.resumed)
-	live.steer = steering
+	live.steer, live.stopLead = steering, stopLead
 	live.arms = arms
 	live.shells = launch.registry
 	settingsStore, _ := openSettings(dir)
@@ -153,6 +153,7 @@ func appOptions(dir string, arms runOpts, wiring appWiring, launch appLaunch) tu
 		Paste:        paste.Board{Read: wiring.clipboard, Dir: live.pendingSessionDir, Recorded: live.recordAttachment},
 		Answers:      answers,
 		Steering:     steering,
+		StopLead:     stopLead,
 		Paths:        appPaths(dir),
 		ResumeHead:   live.resumeHead,
 		NewSession:   live.startFresh,
@@ -643,22 +644,23 @@ func commandPlace(command string) string {
 }
 
 type appSession struct {
-	dir     string
-	arms    runOpts
-	open    func(runOpts) (appWire, error)
-	answers <-chan tui.Answer
-	steer   <-chan string
-	now     func() time.Time
-	id      string
-	carried []llm.Message
-	reads   *turn.ReadLedger
-	warm    *warmProcesses
-	shown   map[string]bool
-	granted map[string]bool
-	pending []pendingImage
-	shells  *shell.Registry
-	inbox   *turn.Inbox
-	roster  *roster.Roster
+	dir      string
+	arms     runOpts
+	open     func(runOpts) (appWire, error)
+	answers  <-chan tui.Answer
+	steer    <-chan string
+	stopLead <-chan struct{}
+	now      func() time.Time
+	id       string
+	carried  []llm.Message
+	reads    *turn.ReadLedger
+	warm     *warmProcesses
+	shown    map[string]bool
+	granted  map[string]bool
+	pending  []pendingImage
+	shells   *shell.Registry
+	inbox    *turn.Inbox
+	roster   *roster.Roster
 }
 
 type pendingImage struct {
@@ -783,25 +785,27 @@ func imageMediaType(name string) string {
 	return "image/" + strings.TrimPrefix(ext, ".")
 }
 
-func (s *appSession) label(store *sessionstore.Store) (string, string) {
+func (s *appSession) label(store *sessionstore.Store) (tui.Event, bool) {
 	id := s.id
 	if id == "" {
-		return "", ""
+		return tui.Event{}, false
 	}
+	labelled := tui.Event{Kind: tui.EventSession, ID: id, Root: id}
 	header, err := store.Header(id)
 	if err != nil {
 		if writeErr := store.Write(sessionstore.Header{ID: id, Root: id, At: s.now()}, nil); writeErr != nil {
-			return "", id
+			return labelled, true
 		}
 		header, err = store.Header(id)
 		if err != nil {
-			return "", id
+			return labelled, true
 		}
 	}
-	if header.Name == nil {
-		return "", id
+	labelled.Root = cmp.Or(header.Root, id)
+	if header.Name != nil {
+		labelled.Text = *header.Name
 	}
-	return *header.Name, id
+	return labelled, true
 }
 
 func (s *appSession) resumeHead() string {
@@ -879,8 +883,8 @@ func (s *appSession) run(ctx context.Context, pick tui.Pick, task string, emit t
 		fail(err)
 		return
 	}
-	if name, id := s.label(sessions); id != "" {
-		emit(tui.Event{Kind: tui.EventSession, Text: name, ID: id})
+	if labelled, named := s.label(sessions); named {
+		emit(labelled)
 	}
 	var gate *toolGate
 	var gateErr error
@@ -904,7 +908,7 @@ func (s *appSession) run(ctx context.Context, pick tui.Pick, task string, emit t
 		fail(budgetErr)
 		return
 	}
-	watch := &appWatcher{gate: gate, held: s.roster, emit: emit, now: s.now, turnID: opts.turnID, seen: s.shown, maxSteps: opts.maxSteps}
+	watch := &appWatcher{gate: gate, held: s.roster, emit: emit, now: s.now, turnID: opts.turnID, seen: s.shown, maxSteps: opts.maxSteps, stop: &leadStop{}}
 	opened.held.wrap = func(model turn.Model) (turn.Model, error) {
 		asked, guardErr := guarded(model, budget)
 		if guardErr != nil {
@@ -925,7 +929,7 @@ func (s *appSession) run(ctx context.Context, pick tui.Pick, task string, emit t
 		return
 	}
 	if gate != nil {
-		gate.watch = func(tool string, gated turn.GateDecision, err error) {
+		gate.watch = func(ctx context.Context, tool string, gated turn.GateDecision, err error) {
 			decided := session.Decision{Tool: tool, Verdict: session.Ask}
 			switch {
 			case err != nil:
@@ -936,7 +940,7 @@ func (s *appSession) run(ctx context.Context, pick tui.Pick, task string, emit t
 			default:
 				return
 			}
-			emit(tui.Event{Kind: tui.EventDecision, Decision: &decided, Agent: watch.asker(), Promote: watch.spawning(tool)})
+			emit(tui.Event{Kind: tui.EventDecision, Decision: &decided, Agent: turn.SubAgentAsking(ctx), Promote: watch.spawning(tool)})
 		}
 	}
 	config.History = s.carried
@@ -966,30 +970,54 @@ func (s *appSession) run(ctx context.Context, pick tui.Pick, task string, emit t
 		return nil
 	}
 	stopClocks := watch.clockRunningSubAgents()
-	var last turn.Row
+	stopListening := watch.stop.listen(s.stopLead)
 	heard := func(typed string) { emit(tui.Event{Kind: tui.EventSteered, Text: typed}) }
-	runErr := turn.Lead(turn.WithShellRegistry(ctx, s.shells), config, s.steer, heard, func(row turn.Row, err error) {
-		last = row
-		if err != nil && !errors.Is(err, context.Canceled) {
+	var reported []error
+	leadErr := turn.Lead(turn.WithShellRegistry(ctx, s.shells), config, s.steer, heard, func(row turn.Row, err error) {
+		watch.stop.reset()
+		if err != nil {
+			reported = append(reported, err)
+		}
+		words := doneWords(row.Outcome, row.Guard)
+		switch {
+		case errors.Is(err, context.Canceled):
+			words = cancelledAt
+		case err != nil:
 			fail(err)
 		}
 		if row.Conversation != nil {
 			s.carried = turn.Sendable(row.Conversation)
 		}
 		if row.Session != "" {
+			forked := row.Session != s.id
 			s.id = row.Session
 			if headErr := sessions.SetHead(row.Session); headErr != nil {
 				fail(headErr)
 			}
+			if labelled, named := s.label(sessions); named && forked {
+				emit(labelled)
+			}
 		}
+		watch.readCalls()
+		emit(tui.Event{Kind: tui.EventDone, Text: words, SubAgents: watch.subAgents()})
 	})
 	stopClocks()
-	watch.readCalls()
-	words := doneWords(last.Outcome, last.Guard)
-	if errors.Is(runErr, context.Canceled) {
-		words = cancelledAt
+	stopListening()
+	watch.sendSubAgents()
+	if unseen := unreported(leadErr, reported); unseen != nil {
+		fail(unseen)
 	}
-	emit(tui.Event{Kind: tui.EventDone, Text: words, SubAgents: watch.subAgents()})
+}
+
+func unreported(err error, reported []error) error {
+	parts := []error{err}
+	if joined, many := err.(interface{ Unwrap() []error }); many {
+		parts = joined.Unwrap()
+	}
+	unseen := slices.DeleteFunc(slices.Clone(parts), func(part error) bool {
+		return slices.ContainsFunc(reported, func(seen error) bool { return errors.Is(part, seen) })
+	})
+	return errors.Join(unseen...)
 }
 
 func endedForkWords(ended turn.Row) string {
@@ -1135,6 +1163,7 @@ type appWatcher struct {
 	calls     map[string][]subagent.Call
 	spawns    []string
 	thoughts  atomic.Int64
+	stop      *leadStop
 }
 
 type watchedSubAgent struct {
@@ -1147,7 +1176,62 @@ func (c watchedSubAgent) Ask(ctx context.Context, request llm.Request) (llm.Deci
 }
 
 func (a *appWatcher) Ask(ctx context.Context, request llm.Request) (llm.Decision, error) {
+	if a.stop != nil && turn.SubAgentAsking(ctx) == "" {
+		var release context.CancelFunc
+		ctx, release = a.stop.during(ctx)
+		defer release()
+		if err := ctx.Err(); err != nil {
+			return llm.Decision{}, err
+		}
+	}
 	return a.askThrough(ctx, a.inner, request)
+}
+
+type leadStop struct {
+	mu      sync.Mutex
+	stopped bool
+	cancel  context.CancelFunc
+}
+
+func (l *leadStop) during(ctx context.Context) (context.Context, context.CancelFunc) {
+	ctx, cancel := context.WithCancel(ctx)
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.stopped {
+		cancel()
+	}
+	l.cancel = cancel
+	return ctx, cancel
+}
+
+func (l *leadStop) stop() {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.stopped = true
+	if l.cancel != nil {
+		l.cancel()
+	}
+}
+
+func (l *leadStop) reset() {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.stopped, l.cancel = false, nil
+}
+
+func (l *leadStop) listen(stops <-chan struct{}) (quiet func()) {
+	done := make(chan struct{})
+	go func() {
+		for {
+			select {
+			case <-stops:
+				l.stop()
+			case <-done:
+				return
+			}
+		}
+	}()
+	return func() { close(done) }
 }
 
 func (a *appWatcher) askThrough(ctx context.Context, inner turn.Model, request llm.Request) (llm.Decision, error) {
@@ -1166,6 +1250,7 @@ func (a *appWatcher) askThrough(ctx context.Context, inner turn.Model, request l
 		streamed = false
 		a.emit(tui.Event{Kind: tui.EventStreamReset, ID: thinking, Agent: asker})
 	}
+	a.sendSubAgents()
 	if asker == "" {
 		a.emit(tui.Event{Kind: tui.EventRequesting})
 		request.OnDelta = func(text string) {
@@ -1173,7 +1258,6 @@ func (a *appWatcher) askThrough(ctx context.Context, inner turn.Model, request l
 			a.emit(tui.Event{Kind: tui.EventTextDelta, Text: text})
 		}
 	}
-	a.sendSubAgents()
 	decision, err := inner.Ask(ctx, request)
 	if err != nil {
 		return decision, err
@@ -1225,7 +1309,13 @@ func resumedChat(carry sessionResume) []tui.Event {
 	}
 	var chat []tui.Event
 	watch := &appWatcher{emit: func(event tui.Event) { chat = append(chat, event) }, turnID: carry.Session, seen: map[string]bool{}, spawner: &turn.SpawnTool{}}
-	watch.emit(tui.Event{Kind: tui.EventSession, Text: carry.Name, ID: carry.Session})
+	root := carry.Session
+	if store, err := sessionstore.Open(); err == nil {
+		if header, err := store.Header(carry.Session); err == nil {
+			root = cmp.Or(header.Root, root)
+		}
+	}
+	watch.emit(tui.Event{Kind: tui.EventSession, Text: carry.Name, ID: carry.Session, Root: root})
 	for _, message := range carry.messages {
 		switch message.Role {
 		case llm.RoleUser:
@@ -1294,17 +1384,8 @@ func (a *appWatcher) noteWholeFile(call llm.ToolCall) {
 	a.wrote[call.ID] = args.Content
 }
 
-func (a *appWatcher) asker() string {
-	if a.held == nil {
-		return ""
-	}
-	agents := a.held.SubAgents()
-	for index := len(agents) - 1; index >= 0; index-- {
-		if agents[index].State == roster.Working {
-			return agents[index].ID
-		}
-	}
-	return ""
+func (a *appWatcher) anyWorking() bool {
+	return a.held != nil && slices.ContainsFunc(a.held.SubAgents(), func(agent roster.SubAgent) bool { return agent.State == roster.Working })
 }
 
 func (a *appWatcher) noteSubAgentsAsk(subAgent string, tokens int, calls []llm.ToolCall) {
@@ -1387,7 +1468,7 @@ func (a *appWatcher) clockRunningSubAgents() (stop func()) {
 			case <-ticking:
 				return
 			case <-every.C:
-				if a.asker() != "" {
+				if a.anyWorking() {
 					a.draw()
 				}
 			}

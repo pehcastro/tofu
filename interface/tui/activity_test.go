@@ -204,7 +204,7 @@ func TestFiveSubAgentsShareOneChatLineAndTheFinishedMoveToOneSettledLine(t *test
 		app.Update(Event{Kind: EventSubAgent, SubAgents: slices.Clone(batch)})
 	}
 	running := chatRowsNaming(t, app, "[&ts-dev-")
-	if len(running) != 1 || !strings.Contains(running[0], "waiting on [&ts-dev-1] [&ts-dev-2] [&ts-dev-3] [&ts-dev-4] [&ts-dev-5]") {
+	if len(running) != 1 || !strings.Contains(running[0], "running [&ts-dev-1] [&ts-dev-2] [&ts-dev-3] [&ts-dev-4] [&ts-dev-5]") {
 		t.Fatalf("five running sub-agents draw %q in the chat, want one line naming all five", running)
 	}
 	if strings.Contains(running[0], "the routes of") || strings.Contains(running[0], "index.ts") {
@@ -213,7 +213,7 @@ func TestFiveSubAgentsShareOneChatLineAndTheFinishedMoveToOneSettledLine(t *test
 	batch[0].State, batch[3].State = roster.Finished, roster.Finished
 	app.Update(Event{Kind: EventSubAgent, SubAgents: slices.Clone(batch)})
 	lines := chatRowsNaming(t, app, "[&ts-dev-")
-	if len(lines) != 2 || !strings.Contains(lines[0], "waiting on [&ts-dev-2] [&ts-dev-3] [&ts-dev-5]") || strings.Contains(lines[0], "[&ts-dev-1]") || strings.Contains(lines[0], "[&ts-dev-4]") {
+	if len(lines) != 2 || !strings.Contains(lines[0], "running [&ts-dev-2] [&ts-dev-3] [&ts-dev-5]") || strings.Contains(lines[0], "[&ts-dev-1]") || strings.Contains(lines[0], "[&ts-dev-4]") {
 		t.Fatalf("after two finish the chat draws %q, want one running line with three names", lines)
 	}
 	if lines[1] != "✓ [&ts-dev-1] [&ts-dev-4]" {

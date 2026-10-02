@@ -76,7 +76,12 @@ func (a *App) send() tea.Cmd {
 	whole := session.Expand(task, chips)
 	a.view.Reset()
 	if a.busy {
-		a.view.Queue(task, whole, chips)
+		if a.leading {
+			a.view.Queue(task, whole, chips)
+		} else {
+			a.view.Append(session.Entry{Kind: session.User, Body: task, Chips: chips})
+			a.handed = append(a.handed, whole)
+		}
 		a.steer(whole)
 		return nil
 	}
@@ -154,20 +159,19 @@ func (a *App) turnEventID() string {
 }
 
 func (a *App) interrupt() tea.Cmd {
-	if a.view.Stopping {
+	subAgentsRun := a.status.Agents > 0
+	if a.view.Stopping && !subAgentsRun {
 		return nil
 	}
 	withinQuitWindow := a.options.Now().Sub(a.pressedAt) <= konst.QuitAgainMillis*time.Millisecond
 	a.pressedAt = a.options.Now()
 	switch {
-	case !a.busy:
+	case !a.busy, subAgentsRun && (!a.leading || a.view.Stopping):
 		if withinQuitWindow {
 			return tea.Quit
 		}
 		a.view.Append(session.Entry{Kind: session.Note, Body: quitAgainNote})
-	case a.view.LettingToolsFinish:
-		a.stopTurn()
-	case a.running == 0 || len(a.subAgentCalls) > 0 || a.view.TakesAnswerDigits():
+	case subAgentsRun, a.view.LettingToolsFinish, a.running == 0 || len(a.subAgentCalls) > 0 || a.view.TakesAnswerDigits():
 		a.stopTurn()
 	default:
 		a.view.LettingToolsFinish = true
@@ -192,9 +196,26 @@ func (a *App) stopTurn() {
 	if a.view.Stopping {
 		return
 	}
+	if a.status.Agents > 0 {
+		a.stopLead()
+		return
+	}
 	a.view.LettingToolsFinish, a.view.Stopping = false, true
 	a.cancel()
 	a.dropSteering()
+	a.handed = nil
+	a.noteStop(stoppingNote + a.queueTail())
+}
+
+func (a *App) stopLead() {
+	if !a.leading {
+		return
+	}
+	a.view.LettingToolsFinish, a.view.Stopping = false, true
+	select {
+	case a.options.StopLead <- struct{}{}:
+	default:
+	}
 	a.noteStop(stoppingNote + a.queueTail())
 }
 
@@ -217,11 +238,26 @@ func (a *App) keptPartial() string {
 	return strconv.Itoa(len([]rune(partial))) + charactersKept + "[note#" + a.keptAnswer + "]"
 }
 
-func (a *App) start(task string) tea.Cmd {
+func (a *App) leadTurnBegins() {
 	a.view.Follow()
 	a.status.Fresh = false
 	a.intro.shown = false
 	a.happenedAtTurn, a.keptAnswer, a.subAgentCalls = len(a.happened), "", nil
+	a.leading, a.running = true, 0
+	a.view.Start()
+}
+
+func (a *App) leadTurnEnds(words string) {
+	labelled := a.turnEventID()
+	if a.view.Stopping && a.keptAnswer == "" {
+		labelled = ""
+	}
+	a.view.Close(words, labelled)
+	a.view.Stop()
+	a.leading, a.running = false, 0
+}
+
+func (a *App) start(task string) tea.Cmd {
 	if a.options.Turn == nil {
 		a.view.Append(session.Entry{Kind: session.Failure, Body: noEngine})
 		return nil
@@ -229,8 +265,7 @@ func (a *App) start(task string) tea.Cmd {
 	ctx, cancel := context.WithCancel(context.Background())
 	events := make(chan Event, eventBuffer)
 	a.busy, a.cancel, a.events, a.edits.Busy = true, cancel, events, true
-	a.running = 0
-	a.view.Start()
+	a.leadTurnBegins()
 	turn, pick := a.options.Turn, Pick{Wire: a.wire, Model: a.picked, Effort: a.effort}
 	deliver := func(event Event) {
 		if !event.snapshot() {
@@ -276,6 +311,9 @@ func (a *App) absorb(event Event) {
 	}
 	switch event.Kind {
 	case EventRequesting:
+		if !a.leading {
+			a.leadTurnBegins()
+		}
 		a.view.Requesting()
 	case EventTask:
 		a.view.Append(session.Entry{Kind: session.User, Body: event.Text})
@@ -303,11 +341,7 @@ func (a *App) absorb(event Event) {
 		if event.SubAgents != nil {
 			a.showSubAgents(event.SubAgents)
 		}
-		labelled := a.turnEventID()
-		if a.view.Stopping && a.keptAnswer == "" {
-			labelled = ""
-		}
-		a.view.Close(event.Text, labelled)
+		a.leadTurnEnds(event.Text)
 	case EventFailure:
 		id := cmp.Or(event.ID, a.mintID())
 		a.record(feed.Event{ID: short(id), Actor: orchestrator, Kind: feed.KindFailure, State: feed.StateFailed, Title: strings.TrimSpace(failureHead + " " + event.Tool), Body: event.Text, At: at})
@@ -321,8 +355,8 @@ func (a *App) absorb(event Event) {
 		}
 		a.judged(*event.Decision, cmp.Or(event.Agent, orchestrator))
 	case EventSession:
-		if event.ID != a.sessionID {
-			a.started = at
+		if root := cmp.Or(event.Root, event.ID); root != a.sessionRoot {
+			a.started, a.sessionRoot = at, root
 		}
 		a.sessionName, a.sessionID = event.Text, event.ID
 	case EventGateOff:
@@ -345,6 +379,9 @@ func (a *App) absorb(event Event) {
 		a.view.Resume()
 	case EventSteered:
 		a.view.Delivered(event.Text)
+		if taken := slices.Index(a.handed, event.Text); taken >= 0 {
+			a.handed = slices.Delete(a.handed, taken, taken+1)
+		}
 	case EventForkStart:
 		a.forking = true
 	case EventForkEnd:
@@ -501,9 +538,21 @@ func (a *App) showSubAgents(subAgents []subagent.Row) {
 			a.status.Agents++
 		}
 		a.linkSpawn(subAgent)
+		a.drawReport(subAgent)
 		for _, call := range subAgent.Calls {
 			a.rosterCall(subAgent.Name, call)
 		}
+	}
+}
+
+func (a *App) drawReport(subAgent subagent.Row) {
+	seen, spawnedByTheLead := a.reports[subAgent.Name]
+	if !spawnedByTheLead || subAgent.State == roster.Working || subAgent.Report == "" || subAgent.Report == seen {
+		return
+	}
+	a.reports[subAgent.Name] = subAgent.Report
+	if !a.leading {
+		a.view.Reported(a.mintID(), subAgent)
 	}
 }
 
@@ -528,7 +577,7 @@ func (a *App) linkSpawn(subAgent subagent.Row) {
 		return
 	}
 	at := slices.IndexFunc(turn, func(held feed.Event) bool {
-		return held.Kind == feed.KindSpawn && held.State == feed.StateRunning && held.Target == ""
+		return held.Kind == feed.KindSpawn && held.State != feed.StateFailed && held.Target == ""
 	})
 	if at < 0 {
 		return
@@ -538,6 +587,7 @@ func (a *App) linkSpawn(subAgent subagent.Row) {
 	a.record(spawn)
 	if spawn.Actor == orchestrator {
 		a.view.Spawned(subAgent.Name)
+		a.reports[subAgent.Name] = ""
 	}
 }
 

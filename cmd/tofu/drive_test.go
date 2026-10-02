@@ -412,7 +412,7 @@ func TestASpawnDrivenTwiceProducesTheSameConversationBothTimes(t *testing.T) {
 		"wait " + session.Placeholder,
 		"type ask a sub-agent to read the note",
 		"key enter",
-		"wait cooked for",
+		"wait the sub-agent read it",
 		"screen",
 	}, "\n"))
 	first := drivenConversation(t, deck, script)
@@ -590,7 +590,7 @@ func TestADrivenFooterShowsASubAgentsSubscriptionOnlyWhileTheSubAgentRuns(t *tes
 		"type ask go-dev to wait",
 		"key enter",
 		"wait claude 62%  |  codex 40%",
-		"wait cooked for",
+		"wait go-dev is done",
 		"absent codex 40%",
 		"wait claude-sub 5h 62%",
 	}, "\n"))

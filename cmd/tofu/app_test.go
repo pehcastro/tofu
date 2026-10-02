@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -3003,5 +3004,193 @@ func TestABrowserDefinitionsOwnEffortWinsWhenTheModelListsIt(t *testing.T) {
 	found := onBrowserModel(dir, roster.Found{Definitions: []roster.Definition{definition}}, catalog)
 	if got := found.Definitions[0].Effort; got != llm.EffortMedium {
 		t.Errorf("the browser sub-agent runs at %q, want the %q its definition sets: %+v", got, llm.EffortMedium, found.Definitions[0])
+	}
+}
+
+type subAgentAfterTheLead struct {
+	*queuedModel
+	leadEnded chan struct{}
+}
+
+func (m subAgentAfterTheLead) Ask(ctx context.Context, request llm.Request) (llm.Decision, error) {
+	if turn.SubAgentAsking(ctx) != "" {
+		select {
+		case <-m.leadEnded:
+		case <-time.After(3 * time.Second):
+		case <-ctx.Done():
+			return llm.Decision{}, ctx.Err()
+		}
+	}
+	return m.queuedModel.Ask(ctx, request)
+}
+
+func TestASubAgentsReportTurnDrawsOneLineNamingItAndTheNextLeadTurnIsANewBlock(t *testing.T) {
+	dir := scratchProject(t)
+	driver := driveApp(t)
+	leadEnded := make(chan struct{})
+	var once sync.Once
+	emit := func(event tui.Event) {
+		driver.emit(event)
+		if event.Kind == tui.EventDone {
+			once.Do(func() { close(leadEnded) })
+		}
+	}
+	stubbedTurn(dir, subAgentAfterTheLead{noteSubAgent(writeNote("call-2")), leadEnded})(t.Context(), onTheSubscription, "hand the note to a sub-agent", emit)
+
+	if done := len(driver.of(tui.EventDone)); done != 2 {
+		t.Fatalf("two lead turns closed %d times, want once each", done)
+	}
+	rows := strings.Split(ansi.Strip(driver.view(tea.WindowSizeMsg{Width: 120, Height: 60})), "\n")
+	at := func(text string) []int {
+		var found []int
+		for index, row := range rows {
+			if strings.Contains(row, text) {
+				found = append(found, index)
+			}
+		}
+		return found
+	}
+	reports, onIt, didIt := at("report [&sub-1]"), at("the sub-agent is on it"), at("the sub-agent did it")
+	if len(reports) != 1 || !strings.Contains(rows[reports[0]], "finished") || !strings.Contains(rows[reports[0]], "[expand]") {
+		t.Fatalf("the report draws %d lines naming sub-1, want one carrying its state and an expand mark\n%s", len(reports), strings.Join(rows, "\n"))
+	}
+	if len(onIt) != 1 || len(didIt) != 1 || onIt[0] > reports[0] || didIt[0] < reports[0] {
+		t.Fatalf("the report line does not sit between the two lead answers\n%s", strings.Join(rows, "\n"))
+	}
+	if headers := at("[&orchestrator]"); !slices.ContainsFunc(headers, func(row int) bool { return row > reports[0] && row < didIt[0] }) {
+		t.Errorf("the report turn's answer streams into the block before it rather than one of its own\n%s", strings.Join(rows, "\n"))
+	}
+	t.Log("\n" + strings.Join(rows, "\n"))
+}
+
+func TestAGateDecisionNamesTheAgentThatAskedAndNotTheRostersGuess(t *testing.T) {
+	dir, _, _ := gateScratch(t, gateFixtureBuild)
+	stubJev(t, 200, lowRiskAllowReply)
+	if err := os.WriteFile(filepath.Join(dir, "brief.txt"), []byte("the brief"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	model := noteSubAgent(writeNote("call-2"))
+	model.decisions = slices.Insert(model.decisions, 1, llm.Decision{Build: "stub-model", Outcome: llm.OutcomeToolCalls,
+		ToolCalls: []llm.ToolCall{callTo("call-3", "read", `{"path":"brief.txt"}`)}})
+	driver := driveApp(t)
+	leadEnded := make(chan struct{})
+	var once sync.Once
+	emit := func(event tui.Event) {
+		driver.emit(event)
+		if event.Kind == tui.EventDone {
+			once.Do(func() { close(leadEnded) })
+		}
+	}
+	stubbedTurn(dir, subAgentAfterTheLead{model, leadEnded})(t.Context(), onTheSubscription, "hand the note to a sub-agent", emit)
+
+	named := map[string]string{}
+	for _, event := range driver.of(tui.EventDecision) {
+		named[event.Decision.Tool] = event.Agent
+	}
+	if asker, decided := named["read"]; !decided || asker != "" {
+		t.Errorf("the lead's read, judged while sub-1 ran, was named %q (decided %v), want the lead", asker, decided)
+	}
+	if asker, decided := named["write"]; !decided || asker != "sub-1" {
+		t.Errorf("sub-1's write was named %q (decided %v), want sub-1", asker, decided)
+	}
+}
+
+type leadStoppedWhileItsSubAgentWaits struct {
+	*queuedModel
+	leadAsks   atomic.Int32
+	asking     chan struct{}
+	subAgentGo chan struct{}
+}
+
+func (m *leadStoppedWhileItsSubAgentWaits) Ask(ctx context.Context, request llm.Request) (llm.Decision, error) {
+	waiting := m.subAgentGo
+	if turn.SubAgentAsking(ctx) == "" {
+		if m.leadAsks.Add(1) != 2 {
+			return m.queuedModel.Ask(ctx, request)
+		}
+		close(m.asking)
+		waiting = nil
+	}
+	select {
+	case <-waiting:
+	case <-time.After(3 * time.Second):
+	case <-ctx.Done():
+		return llm.Decision{}, ctx.Err()
+	}
+	return m.queuedModel.Ask(ctx, request)
+}
+
+func TestStoppingTheLeadMidTurnLeavesItsSubAgentRunningToItsReport(t *testing.T) {
+	dir := scratchProject(t)
+	driver := driveApp(t)
+	model := &leadStoppedWhileItsSubAgentWaits{queuedModel: noteSubAgent(writeNote("call-2")), asking: make(chan struct{}), subAgentGo: make(chan struct{})}
+	stops, firstClose := make(chan struct{}, 1), make(chan struct{})
+	var once sync.Once
+	live := newAppSession(dir, func(runOpts) (appWire, error) { return wireOn(model), nil }, nil, time.Now, sessionResume{})
+	live.stopLead = stops
+	ran := make(chan struct{})
+	go func() {
+		defer close(ran)
+		live.run(t.Context(), onTheSubscription, "hand the note to a sub-agent", func(event tui.Event) {
+			driver.emit(event)
+			if event.Kind == tui.EventDone {
+				once.Do(func() { close(firstClose) })
+			}
+		})
+	}()
+	select {
+	case <-model.asking:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the lead never asked a second time")
+	}
+	stops <- struct{}{}
+	<-firstClose
+	close(model.subAgentGo)
+	<-ran
+
+	done := driver.of(tui.EventDone)
+	if len(done) != 2 || done[0].Text != cancelledAt {
+		t.Fatalf("the lead's turns closed as %+v, want the stopped turn and then the report turn", done)
+	}
+	last := done[1].SubAgents
+	if len(last) != 1 || last[0].State != roster.Finished || last[0].Report == "" {
+		t.Fatalf("the sub-agent ended as %+v, want it finished with its report after the lead's turn was stopped", last)
+	}
+}
+
+func TestTheLeadsLogCloseErrorReachesTheChatOnceAndATurnsErrorIsNotRepeated(t *testing.T) {
+	turnErr := fmt.Errorf("turn: %w", context.Canceled)
+	closeErr := errors.New("session: closing the log of sub-1: the disk is full")
+	if shown := unreported(errors.Join(turnErr, nil, errors.Join(closeErr)), []error{turnErr}); shown == nil || shown.Error() != closeErr.Error() {
+		t.Errorf("the lead loop's error was shown as %v, want the log close error alone", shown)
+	}
+	if shown := unreported(errors.Join(turnErr), []error{turnErr}); shown != nil {
+		t.Errorf("a turn's own error, already in the chat, was shown again as %v", shown)
+	}
+	if shown := unreported(nil, nil); shown != nil {
+		t.Errorf("a loop that ended clean showed %v", shown)
+	}
+}
+
+func TestEverySessionEventOfAContinuationForkCarriesTheRootOfItsLine(t *testing.T) {
+	dir := scratchProject(t)
+	store, err := sessionstore.Open()
+	if err != nil {
+		t.Fatal(err)
+	}
+	root, fork := sessionstore.NewEventID(), sessionstore.NewEventID()
+	for _, id := range []string{root, fork} {
+		if err := store.Write(sessionstore.Header{ID: id, Root: root, At: time.Now()}, nil); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if resumed := resumedChat(sessionResume{Session: fork}); len(resumed) == 0 || resumed[0].Root != root {
+		t.Fatalf("the resumed chat names the line %+v, want the root %s", resumed, root)
+	}
+	driver := driveApp(t)
+	resumedTurn(dir, noteThenStop(), nil, sessionResume{Session: fork})(t.Context(), onTheSubscription, "write a note", driver.emit)
+	sessions := driver.of(tui.EventSession)
+	if len(sessions) == 0 || slices.ContainsFunc(sessions, func(event tui.Event) bool { return event.Root != root }) {
+		t.Errorf("a turn on the fork sent %+v, want every session event carrying the root %s", sessions, root)
 	}
 }

@@ -2,7 +2,6 @@ package session
 
 import (
 	"slices"
-	"strconv"
 	"time"
 
 	"charm.land/lipgloss/v2"
@@ -16,13 +15,14 @@ import (
 )
 
 const (
-	stoppingWord           = "stopping"
-	spawningWord           = "spawning"
-	waitingWordOnSubAgents = "waiting on"
-	doneMark               = "✓ "
-	failedMark             = "✗ "
-	stoppedMark            = "○ "
-	wrapIndent             = "  "
+	stoppingWord = "stopping"
+	spawningWord = "spawning"
+	runningWord  = "running"
+	reportHead   = "report"
+	doneMark     = "✓ "
+	failedMark   = "✗ "
+	stoppedMark  = "○ "
+	wrapIndent   = "  "
 )
 
 type phase int
@@ -32,7 +32,6 @@ const (
 	thinking
 	working
 	waitingOnYou
-	waitingOnSubAgent
 )
 
 func (p phase) drawn() (string, lipgloss.Style) {
@@ -45,8 +44,6 @@ func (p phase) drawn() (string, lipgloss.Style) {
 		return "working", look.Style(look.Mint)
 	case waitingOnYou:
 		return "waiting", look.Style(look.Amber)
-	case waitingOnSubAgent:
-		return waitingWordOnSubAgents, look.Style(look.Mint)
 	}
 	panic("session: unknown phase")
 }
@@ -60,9 +57,6 @@ func (m *Model) reached() phase {
 	}
 	if slices.ContainsFunc(m.entries, Entry.running) {
 		return working
-	}
-	if !m.inFlight() && m.workingSubAgents() > 0 {
-		return waitingOnSubAgent
 	}
 	return thinking
 }
@@ -78,16 +72,6 @@ func (m *Model) settle() {
 	m.phase, m.shown = at, m.now()
 }
 
-func (m *Model) workingSubAgents() int {
-	working := 0
-	for _, subAgent := range m.SubAgents {
-		if subAgent.State == roster.Working {
-			working++
-		}
-	}
-	return working
-}
-
 func (m *Model) phaseSince() time.Duration {
 	now := m.now()
 	if !m.waiting.IsZero() {
@@ -101,13 +85,6 @@ func (m *Model) requestLine() string {
 	switch {
 	case m.Busy:
 		word, style := m.phase.drawn()
-		if m.phase == waitingOnSubAgent {
-			working := m.workingSubAgents()
-			word += " (" + strconv.Itoa(working) + ") sub-agent"
-			if working != 1 {
-				word += "s"
-			}
-		}
 		if m.Stopping || m.LettingToolsFinish {
 			word, style = stoppingWord, look.Style(look.Amber)
 		}
@@ -133,6 +110,13 @@ func (m *Model) Spawned(name string) {
 		}
 	}
 	m.Append(Entry{Kind: Note, SubAgents: []string{name}})
+}
+
+func (m *Model) Reported(id string, row subagent.Row) {
+	m.Append(Entry{
+		Kind: Tool, ID: id, Head: reportHead, Body: "[&" + row.Name + "]", Status: row.State.String(), Detail: row.Report,
+		Failed: row.State == roster.Errored, Promoted: true,
+	})
 }
 
 type spawnBatch struct {
@@ -171,7 +155,7 @@ func settledMark(state roster.State) string {
 func (m *Model) batchLines(batch spawnBatch) []string {
 	var lines []string
 	if len(batch.running) > 0 {
-		word, since, names := waitingWordOnSubAgents, time.Duration(0), []string(nil)
+		word, since, names := runningWord, time.Duration(0), []string(nil)
 		for _, row := range batch.running {
 			if len(row.Calls) == 0 {
 				word = spawningWord

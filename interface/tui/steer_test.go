@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -9,6 +10,8 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
+	"tofu/interface/tui/subagent"
+	roster "tofu/internal/subagent"
 	"tofu/internal/widget"
 )
 
@@ -149,4 +152,134 @@ func TestALongQueuedMessageIsCutOnScreenAndReachesTheModelWhole(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("the long message never reached the model")
 	}
+}
+
+func pumpUntil(t *testing.T, app *App, kind EventKind) {
+	t.Helper()
+	for {
+		msg := app.waitForEvent()()
+		app.Update(msg)
+		if _, done := msg.(Closed); done {
+			t.Fatalf("the turn closed before an event of kind %d arrived", kind)
+		}
+		if event, sent := msg.(Event); sent && event.Kind == kind {
+			return
+		}
+	}
+}
+
+func subAgentLoopApp(t *testing.T, steering chan string, stops chan struct{}, turn Turn) *App {
+	t.Helper()
+	app := newTestApp(Options{Repo: testRepo, Branch: "develop", Now: fixedClock(), Wires: anthropicAlone, Turn: turn, Steering: steering, StopLead: stops})
+	app.Init()
+	app.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	return app
+}
+
+func runningSubAgent() []subagent.Row {
+	return []subagent.Row{{Name: "ts-dev-1", State: roster.Working}}
+}
+
+func TestEscAndCtrlCWhileOnlyASubAgentRunsLeaveItRunning(t *testing.T) {
+	stops, alive, release := make(chan struct{}, 1), make(chan bool, 1), make(chan struct{})
+	app := subAgentLoopApp(t, make(chan string, steerBuffer), stops, func(ctx context.Context, _ Pick, _ string, emit CalledFromInsideTheTurnAndNeverAfterItReturns) {
+		emit(Event{Kind: EventRequesting})
+		emit(Event{Kind: EventText, Text: "ts-dev-1 is on the routes"})
+		emit(Event{Kind: EventDone, Text: "finished in", SubAgents: runningSubAgent()})
+		<-release
+		alive <- ctx.Err() == nil
+	})
+	typeAndSend(app, firstTask)
+	pumpUntil(t, app, EventDone)
+	app.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
+	app.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
+	close(release)
+
+	if !<-alive {
+		t.Error("esc and one ctrl+c with the lead idle cancelled the loop, and the sub-agent with it")
+	}
+	if len(stops) != 0 {
+		t.Error("a stop was sent to a lead that runs no turn")
+	}
+	endTurn(t, app)
+}
+
+func TestEscMidLeadTurnStopsTheLeadAndTheSubAgentKeepsRunning(t *testing.T) {
+	steering := make(chan string, steerBuffer)
+	stops, alive, told, release := make(chan struct{}, 1), make(chan bool, 1), make(chan bool, 1), make(chan struct{})
+	app := subAgentLoopApp(t, steering, stops, func(ctx context.Context, _ Pick, _ string, emit CalledFromInsideTheTurnAndNeverAfterItReturns) {
+		emit(Event{Kind: EventRequesting})
+		emit(Event{Kind: EventDone, Text: "finished in", SubAgents: runningSubAgent()})
+		emit(Event{Kind: EventRequesting})
+		emit(Event{Kind: EventText, Text: "the lead keeps going"})
+		select {
+		case <-stops:
+			told <- true
+		case <-time.After(2 * time.Second):
+			told <- false
+		}
+		emit(Event{Kind: EventDone, Text: "cancelled at", SubAgents: runningSubAgent()})
+		select {
+		case <-release:
+		case <-time.After(2 * time.Second):
+		}
+		alive <- ctx.Err() == nil
+	})
+	typeAndSend(app, firstTask)
+	pumpUntil(t, app, EventText)
+	typeAndSend(app, secondTask)
+	app.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
+	pumpUntil(t, app, EventDone)
+
+	if !<-told {
+		t.Error("esc mid lead turn never told the lead to stop")
+	}
+	if len(steering) != 1 || len(app.view.Queued()) != 1 {
+		t.Errorf("the stop dropped the message typed before it: %d steered, queue %q", len(steering), app.view.Queued())
+	}
+	close(release)
+	if !<-alive {
+		t.Error("esc mid lead turn cancelled the loop, and the sub-agent with it")
+	}
+	endTurn(t, app)
+}
+
+func TestAMessageTypedWhileOnlySubAgentsRunStartsALeadTurnAndIsNeverDrawnWaiting(t *testing.T) {
+	steering := make(chan string, steerBuffer)
+	release := make(chan struct{})
+	app := steerApp(t, steering, func(_ context.Context, _ Pick, _ string, emit CalledFromInsideTheTurnAndNeverAfterItReturns) {
+		emit(Event{Kind: EventRequesting})
+		emit(Event{Kind: EventText, Text: "ts-dev-1 is on the routes"})
+		emit(Event{Kind: EventDone, Text: "finished in", SubAgents: []subagent.Row{{Name: "ts-dev-1", State: roster.Working}}})
+		typed := <-steering
+		emit(Event{Kind: EventSteered, Text: typed})
+		emit(Event{Kind: EventRequesting})
+		emit(Event{Kind: EventText, Text: "the lead answers while ts-dev-1 works"})
+		<-release
+	})
+	typeAndSend(app, firstTask)
+	pumpUntil(t, app, EventDone)
+	typeAndSend(app, secondTask)
+
+	if row := headerOf(t, app, secondTask); strings.Contains(row, "waiting") {
+		t.Fatalf("a message typed while only a sub-agent runs is drawn waiting: %q", row)
+	}
+	if queued := app.view.Queued(); len(queued) != 0 {
+		t.Fatalf("a message typed while the lead is idle sits in the queue: %q", queued)
+	}
+	pumpUntil(t, app, EventText)
+	if row := headerOf(t, app, secondTask); strings.Contains(row, "waiting") {
+		t.Errorf("the message is drawn waiting after the lead took it: %q", row)
+	}
+	if row := turnRow(t, app); !strings.Contains(row, "thinking") && !strings.Contains(row, "requesting") {
+		t.Errorf("the lead turn the message started does not run on the status line: %q", row)
+	}
+	rows := plainRows(app.View())
+	answer := slices.IndexFunc(rows, func(row string) bool { return strings.Contains(row, "the lead answers") })
+	asked := slices.IndexFunc(rows, func(row string) bool { return strings.Contains(row, secondTask) })
+	if answer < 0 || asked < 0 || answer < asked {
+		t.Errorf("the lead's answer is not drawn under the message it answers\n%s", strings.Join(rows, "\n"))
+	}
+	close(release)
+	endTurn(t, app)
 }

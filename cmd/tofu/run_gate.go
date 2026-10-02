@@ -34,7 +34,7 @@ type toolGate struct {
 	client    *jev.Client
 	set       battery
 	cwd       string
-	watch     func(tool string, decision turn.GateDecision, err error)
+	watch     func(ctx context.Context, tool string, decision turn.GateDecision, err error)
 	decisions int
 	costUSD   float64
 }
@@ -187,7 +187,7 @@ func (g *toolGate) Decide(ctx context.Context, request turn.GateRequest) (turn.G
 		decision.Verdict = ledger.VerdictAsk
 	}
 	if g.watch != nil {
-		g.watch(request.Tool, decision, err)
+		g.watch(ctx, request.Tool, decision, err)
 	}
 	return decision, err
 }

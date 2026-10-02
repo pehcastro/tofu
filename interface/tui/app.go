@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"strings"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
@@ -79,6 +80,7 @@ type Event struct {
 	Plan      []session.PlanItem
 	Created   string
 	Agent     string
+	Root      string
 	Promote   bool
 	GateWhy   jev.Why
 }
@@ -156,6 +158,7 @@ type Options struct {
 	Turn         Turn
 	Answers      chan<- Answer
 	Steering     chan string
+	StopLead     chan struct{}
 	Paste        paste.Board
 	Copy         func(text string) error
 	Paths        func() []string
@@ -226,11 +229,15 @@ type App struct {
 	effort         llm.Effort
 	sessionName    string
 	sessionID      string
+	sessionRoot    string
 	wires          []Wire
 	width          int
 	height         int
 	started        time.Time
 	busy           bool
+	leading        bool
+	handed         []string
+	reports        map[string]string
 	forking        bool
 	gateOff        bool
 	running        int
@@ -306,6 +313,7 @@ func New(options Options) *App {
 		width:        defaultWidth,
 		height:       defaultHeight,
 		started:      options.Now(),
+		reports:      map[string]string{},
 		board:        paste.Default(options.Paste),
 	}
 	app.status.Note = options.Note
@@ -550,14 +558,19 @@ func (a *App) clearDialogs() tea.Cmd {
 }
 
 func (a *App) closed() tea.Cmd {
-	a.busy, a.cancel, a.events, a.edits.Busy = false, nil, nil, false
+	a.busy, a.leading, a.cancel, a.events, a.edits.Busy = false, false, nil, nil, false
 	a.running, a.pressedAt = 0, time.Time{}
 	a.parkSubAgentsTheTurnLeftBehind()
 	a.stopWhatStillRuns()
 	a.view.Stop()
 	a.dropSteering()
 	next := tea.Batch(a.pollQuota(), a.readPaths(), a.pollShells())
-	if task, queued := a.view.Release(); queued {
+	task, queued := a.view.Release()
+	if !queued && len(a.handed) > 0 {
+		task, queued = strings.Join(a.handed, "\n\n"), true
+	}
+	a.handed = nil
+	if queued {
 		return tea.Batch(a.start(task), next)
 	}
 	return next
