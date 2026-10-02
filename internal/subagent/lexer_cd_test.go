@@ -14,26 +14,26 @@ func TestShellResolvesAWriteAgainstTheDirectoryALeadingCdEntered(t *testing.T) {
 	for _, driven := range []struct {
 		cmd, refusal string
 	}{
-		{"cd src/api && sed -i s/a/b/ suppliers.ts", ""},
-		{"cd src && sed -i s/a/b/ other.ts", refusedAs("src/other.ts")},
-		{"cd src/api; sed -i s/a/b/ suppliers.ts", ""},
-		{"cd src/api\nsed -i s/a/b/ suppliers.ts", ""},
-		{"cd src && cd api && sed -i s/a/b/ suppliers.ts", ""},
-		{"cd -P src/api && echo x > suppliers.ts", ""},
-		{"cd src/api &&\nsed -i s/a/b/ suppliers.ts", ""},
-		{"(cd src/api && true) && sed -i s/a/b/ suppliers.ts", refusedAs("suppliers.ts")},
-		{"cd src/api | sed -i s/a/b/ suppliers.ts", refusedAs("suppliers.ts")},
-		{"cd src/api & sed -i s/a/b/ suppliers.ts", refusedAs("suppliers.ts")},
-		{"false || cd src/api && sed -i s/a/b/ suppliers.ts", refusedAs("suppliers.ts")},
-		{"false && cd src/api; sed -i s/a/b/ suppliers.ts", refusedAs("suppliers.ts")},
-		{"false &&\ncd src/api\nsed -i s/a/b/ suppliers.ts", refusedAs("suppliers.ts")},
-		{"cd src/missing; sed -i s/a/b/ suppliers.ts", refusedAs("src/missing/suppliers.ts")},
-		{"cd $DIR && sed -i s/a/b/ suppliers.ts", refusedAs("suppliers.ts")},
-		{"cd src/api && sed -i s/a/b/ ../other.ts", refusedAs("src/api/../other.ts")},
-		{"cd .. && sed -i s/a/b/ suppliers.ts", escaping},
-		{"sed -i s/a/b/ /tmp/suppliers.ts", ""},
+		{"cd src/api && sed -i s/a/b/ suppliers.json", ""},
+		{"cd src && sed -i s/a/b/ other.json", refusedAs("src/other.json")},
+		{"cd src/api; sed -i s/a/b/ suppliers.json", ""},
+		{"cd src/api\nsed -i s/a/b/ suppliers.json", ""},
+		{"cd src && cd api && sed -i s/a/b/ suppliers.json", ""},
+		{"cd -P src/api && echo x > suppliers.json", ""},
+		{"cd src/api &&\nsed -i s/a/b/ suppliers.json", ""},
+		{"(cd src/api && true) && sed -i s/a/b/ suppliers.json", refusedAs("suppliers.json")},
+		{"cd src/api | sed -i s/a/b/ suppliers.json", refusedAs("suppliers.json")},
+		{"cd src/api & sed -i s/a/b/ suppliers.json", refusedAs("suppliers.json")},
+		{"false || cd src/api && sed -i s/a/b/ suppliers.json", refusedAs("suppliers.json")},
+		{"false && cd src/api; sed -i s/a/b/ suppliers.json", refusedAs("suppliers.json")},
+		{"false &&\ncd src/api\nsed -i s/a/b/ suppliers.json", refusedAs("suppliers.json")},
+		{"cd src/missing; sed -i s/a/b/ suppliers.json", refusedAs("src/missing/suppliers.json")},
+		{"cd $DIR && sed -i s/a/b/ suppliers.json", refusedAs("suppliers.json")},
+		{"cd src/api && sed -i s/a/b/ ../other.json", refusedAs("src/api/../other.json")},
+		{"cd .. && sed -i s/a/b/ suppliers.json", escaping},
+		{"sed -i s/a/b/ /tmp/suppliers.json", ""},
 	} {
-		boundary := &Boundary{Ticket: "ts-dev-3", Owns: []string{"src/api/suppliers.ts"}}
+		boundary := &Boundary{Ticket: "ts-dev-3", Owns: []string{"src/api/suppliers.json"}}
 		err := boundary.Shell(driven.cmd)
 		t.Logf("%q -> %v", driven.cmd, err)
 		if !refusedAsWanted(err, driven.refusal) {

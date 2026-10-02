@@ -273,13 +273,13 @@ func operands(args []shellWord) []shellWord {
 	return found
 }
 
-func sedFiles(args []shellWord) []shellWord {
+func inPlaceFiles(args []shellWord, scriptFlags ...string) []shellWord {
 	inPlace, scripted := false, false
 	var files []shellWord
 	for i := 0; i < len(args); i++ {
 		text := args[i].text
 		switch {
-		case text == "-e" || text == "-f" || text == "--expression" || text == "--file":
+		case slices.Contains(scriptFlags, text):
 			scripted = true
 			i++
 		case strings.HasPrefix(text, "--expression=") || strings.HasPrefix(text, "--file="):
@@ -320,7 +320,9 @@ func (c simpleCommand) targets() []shellWord {
 			return append(targets, files[len(files)-1])
 		}
 	case "sed":
-		return append(targets, sedFiles(args)...)
+		return append(targets, inPlaceFiles(args, "-e", "-f", "--expression", "--file")...)
+	case "perl":
+		return append(targets, inPlaceFiles(args, "-e", "-E")...)
 	}
 	return targets
 }
@@ -419,12 +421,16 @@ func (b *Boundary) Shell(command string) error {
 	if err != nil {
 		return err
 	}
+	paths = slices.DeleteFunc(paths, inTempDirectory)
 	for _, written := range paths {
-		if inTempDirectory(written) {
-			continue
-		}
 		if err := b.Write(written); err != nil {
 			return err
+		}
+	}
+	for _, written := range paths {
+		switch strings.ToLower(path.Ext(written)) {
+		case ".c", ".h", ".cc", ".cpp", ".hpp", ".cs", ".go", ".java", ".js", ".jsx", ".py", ".pyi", ".rb", ".rs", ".sh", ".bash", ".ps1", ".ts", ".tsx":
+			return ShellSourceWriteError{Path: written}
 		}
 	}
 	return nil

@@ -110,6 +110,38 @@ func TestShellRefusesARealWriteAndNothingElse(t *testing.T) {
 	}
 }
 
+func TestASubAgentChangesOwnedSourceWithEditNotTheShell(t *testing.T) {
+	const throughShell = "is source: change it with edit or write, never through the shell"
+	for _, driven := range []struct {
+		cmd, refusal string
+	}{
+		{"sed -i s/a/b/ src/x.rs", `"src/x.rs" ` + throughShell},
+		{"perl -pi -e 's/a/b/' src/x.ts", `"src/x.ts" ` + throughShell},
+		{"perl -0pi -e s/a/b/ src/x.ts", `"src/x.ts" ` + throughShell},
+		{"perl -i.bak -pe s/a/b/ src/x.ts", `"src/x.ts" ` + throughShell},
+		{"echo x > src/x.go", `"src/x.go" ` + throughShell},
+		{"echo x > src/X.RS", `"src/X.RS" ` + throughShell},
+		{"cp /tmp/l.bak src/x.rs", `"src/x.rs" ` + throughShell},
+		{"perl -pe s/a/b/ src/x.ts", ""},
+		{"cargo fmt", ""},
+		{"gofmt -w src/x.go", ""},
+		{"echo x > /tmp/x.log", ""},
+		{"sed -i s/a/b/ /tmp/x.rs", ""},
+		{"echo x > src/notes.md", ""},
+		{"echo x > src/config.yaml", ""},
+		{"echo x > Cargo.lock", ""},
+		{"echo x > package-lock.json", ""},
+		{"echo x > other/x.rs", notOwned},
+	} {
+		boundary := &Boundary{Ticket: "rust-dev-1", Owns: []string{"src/", "Cargo.lock", "package-lock.json"}}
+		err := boundary.Shell(driven.cmd)
+		t.Logf("%q -> %v", driven.cmd, err)
+		if !refusedAsWanted(err, driven.refusal) {
+			t.Errorf("%q: want %q, got %v", driven.cmd, driven.refusal, err)
+		}
+	}
+}
+
 func TestAnOwnedDirectoryWithATrailingSlashOwnsWhatIsInsideIt(t *testing.T) {
 	for path, want := range map[string]bool{
 		"src/routes/health.ts": true,

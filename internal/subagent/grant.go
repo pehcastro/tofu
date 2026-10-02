@@ -32,6 +32,14 @@ func (b *Boundary) Write(path string) error {
 	return err
 }
 
+type ShellSourceWriteError struct {
+	Path string
+}
+
+func (e ShellSourceWriteError) Error() string {
+	return fmt.Sprintf("%q is source: change it with edit or write, never through the shell, so the read check, the diagnostics and the diff all see the change", e.Path)
+}
+
 func (b *Boundary) Ask(question Question) {
 	question.Ticket = b.Ticket
 	b.asked = append(b.asked, question)
