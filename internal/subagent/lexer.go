@@ -419,10 +419,23 @@ func (b *Boundary) Shell(command string) error {
 	if err != nil {
 		return err
 	}
-	for _, path := range paths {
-		if err := b.Write(path); err != nil {
+	for _, written := range paths {
+		if inTempDirectory(written) {
+			continue
+		}
+		if err := b.Write(written); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+func inTempDirectory(written string) bool {
+	target := path.Clean(normalizePath(written))
+	for _, root := range []string{"/tmp", path.Clean(normalizePath(os.TempDir()))} {
+		if target == root || strings.HasPrefix(target, root+"/") {
+			return true
+		}
+	}
+	return false
 }

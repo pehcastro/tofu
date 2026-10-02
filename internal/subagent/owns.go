@@ -5,7 +5,6 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"slices"
 	"strings"
 
 	gopath "path"
@@ -33,7 +32,7 @@ type EscapingPathError struct {
 }
 
 func (e EscapingPathError) Error() string {
-	return fmt.Sprintf("%q is a link to %q, outside the tree this agent works in: refuse it, do not follow it", e.Path, e.Resolved)
+	return fmt.Sprintf("%q resolves to %q, outside the tree this agent works in: refuse it, do not follow it", e.Path, e.Resolved)
 }
 
 type DeniedError struct {
@@ -45,7 +44,7 @@ func (e DeniedError) Error() string {
 	return fmt.Sprintf("%q is outside the paths this agent holds (%s): report it, do not edit it", e.Path, strings.Join(e.Owns, ", "))
 }
 
-var globCharset = regexp.MustCompile(`^[A-Za-z0-9_./*-]+$`)
+var globCharset = regexp.MustCompile(`^[A-Za-z0-9_./*$@+()-]+$`)
 
 func normalizePath(path string) string {
 	return strings.ToLower(strings.ReplaceAll(path, `\`, "/"))
@@ -64,11 +63,11 @@ func targetPath(path string) (string, error) {
 	}
 	link, statErr := os.Lstat(path)
 	if statErr != nil || link.Mode()&os.ModeSymlink == 0 {
-		named := normalizePath(path)
-		if slices.Contains(strings.Split(named, "/"), "..") {
-			return "", UnparseablePathError{Path: path}
+		named := gopath.Clean(normalizePath(path))
+		if named == ".." || strings.HasPrefix(named, "../") {
+			return "", EscapingPathError{Path: path, Resolved: named}
 		}
-		return gopath.Clean(named), nil
+		return named, nil
 	}
 	tree, treeErr := os.Getwd()
 	if treeErr == nil {

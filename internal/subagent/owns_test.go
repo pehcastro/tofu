@@ -2,6 +2,8 @@ package subagent
 
 import (
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -10,6 +12,7 @@ const (
 	notOwned   = "is outside the paths this agent holds"
 	unreadable = "is not a path this check can read"
 	treeWide   = "is a tree-wide command"
+	escaping   = "outside the tree this agent works in"
 )
 
 func qaBoundary() *Boundary {
@@ -101,11 +104,8 @@ func TestShellRefusesARealWriteAndNothingElse(t *testing.T) {
 	} {
 		err := qaBoundary().Shell(driven.cmd)
 		t.Logf("%q -> %v", driven.cmd, err)
-		switch {
-		case driven.refusal == "" && err != nil:
-			t.Errorf("%q: want allowed, got %v", driven.cmd, err)
-		case driven.refusal != "" && (err == nil || !strings.Contains(err.Error(), driven.refusal)):
-			t.Errorf("%q: want refused as %q, got %v", driven.cmd, driven.refusal, err)
+		if !refusedAsWanted(err, driven.refusal) {
+			t.Errorf("%q: want %q, got %v", driven.cmd, driven.refusal, err)
 		}
 	}
 }
@@ -164,5 +164,81 @@ func TestBoundaryWriteStillRefusesAFileItDoesNotOwn(t *testing.T) {
 	var denied DeniedError
 	if !errors.As(err, &denied) {
 		t.Fatalf("write of an unowned file: want DeniedError, got %v", err)
+	}
+}
+
+func refusedAsWanted(err error, refusal string) bool {
+	if refusal == "" {
+		return err == nil
+	}
+	return err != nil && strings.Contains(err.Error(), refusal)
+}
+
+func TestARouteFileNamedWithAParameterIsOwnedLiterally(t *testing.T) {
+	route := "apps/web/src/routes/components/$slug.tsx"
+	if err := new(Roster).Hold(SubAgent{ID: "ts-dev-1", Owns: []string{route, "src/routes/(app)/+page.svelte", "app/@modal/page.tsx"}}); err != nil {
+		t.Fatalf("hold %q: %v", route, err)
+	}
+	for path, want := range map[string]bool{
+		route: true,
+		"apps/web/src/routes/components/$other.tsx":    false,
+		"apps/web/src/routes/components/slug.tsx":      false,
+		"apps/web/src/routes/components/$slug.tsx.bak": false,
+		"apps/web/src/routes/components/$slug.tsx/x":   false,
+	} {
+		got, err := Matches(path, []string{route})
+		t.Logf("%q -> %v %v", path, got, err)
+		if err != nil || got != want {
+			t.Errorf("%s owns %q: want %v, got %v %v", route, path, want, got, err)
+		}
+	}
+	for _, wildcard := range []string{"src/a?.ts", "src/[slug].ts"} {
+		if _, err := Matches("src/a.ts", []string{wildcard}); err == nil {
+			t.Errorf("%q: want refused as unparseable, got accepted", wildcard)
+		}
+	}
+}
+
+func TestASubAgentWritesTheTempDirectoryWithoutOwningIt(t *testing.T) {
+	temp := os.TempDir()
+	for path, refusal := range map[string]string{
+		"/tmp/x.test.ts":                    "",
+		"/tmp":                              "",
+		temp:                                "",
+		filepath.Join(temp, "prev.log"):     "",
+		"/tmp/../etc/x":                     notOwned,
+		"/tmpx/a.ts":                        notOwned,
+		"tmp/a.ts":                          notOwned,
+		filepath.Join(temp+"x", "prev.log"): notOwned,
+	} {
+		err := qaBoundary().Shell("echo x > '" + path + "'")
+		t.Logf("echo x > %q -> %v", path, err)
+		if !refusedAsWanted(err, refusal) {
+			t.Errorf("echo x > %q: want %q, got %v", path, refusal, err)
+		}
+	}
+	if err := qaBoundary().Shell("echo x > /tmp/a.log && echo y > src/a.ts"); !refusedAsWanted(err, notOwned) {
+		t.Errorf("a temp write beside an unowned one: want %q, got %v", notOwned, err)
+	}
+	if matched, err := Matches("/tmp/x.test.ts", []string{"src/**"}); matched || err != nil {
+		t.Errorf("Matches /tmp/x.test.ts against src/**: want false, got %v %v", matched, err)
+	}
+}
+
+func TestAPathWithDotDotIsResolvedBeforeItIsChecked(t *testing.T) {
+	for path, refusal := range map[string]string{
+		"apps/web/src/routes/../../vitest.config.ts": "",
+		`apps\web\src\..\vitest.config.ts`:           "",
+		"apps/web/src/../other.ts":                   notOwned,
+		"../outside.ts":                              escaping,
+		"apps/../../outside.ts":                      escaping,
+		`apps\..\..\outside.ts`:                      escaping,
+		"..":                                         escaping,
+	} {
+		err := Allow(path, []string{"apps/web/vitest.config.ts"})
+		t.Logf("%q -> %v", path, err)
+		if !refusedAsWanted(err, refusal) {
+			t.Errorf("%q: want %q, got %v", path, refusal, err)
+		}
 	}
 }

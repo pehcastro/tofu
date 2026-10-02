@@ -141,7 +141,7 @@ func (r Root) Resolve(requested string) (string, error) {
 	if strings.TrimSpace(requested) == "" {
 		return "", errors.New("path is required")
 	}
-	if filepath.IsAbs(requested) {
+	if filepath.IsAbs(requested) || strings.HasPrefix(filepath.ToSlash(requested), "/") {
 		return "", fmt.Errorf("path %q must be relative to the turn's working directory", requested)
 	}
 	cleaned := filepath.Clean(filepath.Join(string(r), requested))
