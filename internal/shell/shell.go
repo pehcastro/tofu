@@ -370,10 +370,10 @@ func (r *Registry) Tail(name string, lines int) (string, error) {
 		}
 		return "", err
 	}
-	all := strings.Split(strings.TrimRight(string(raw), "\n"), "\n")
-	if all[0] == "" {
+	if strings.TrimSpace(string(raw)) == "" {
 		return "", nil
 	}
+	all := strings.Split(strings.TrimRight(string(raw), "\n"), "\n")
 	if len(all) > lines {
 		all = all[len(all)-lines:]
 	}
