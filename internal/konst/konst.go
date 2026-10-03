@@ -1,6 +1,6 @@
 package konst
 
-const Version = "0.5.0-rc-fix22"
+const Version = "0.5.0-rc-fix23"
 
 const RecipeFailuresAside = 2
 

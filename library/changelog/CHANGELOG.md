@@ -8,6 +8,29 @@ Tofu is personal and not released, so the public interface that a version promis
 
 The minor number carries breaking changes, which is what 0.x means, and **there is never a 1.0.0**. The owner decided that on 2026-09-19: this stays 0.x forever, so the promise the version makes is the one 0.x already makes, that anything can break on a minor bump.
 
+## 0.5.0-rc-fix23 - 2026-10-03
+
+A library per language and per frontend framework, each rule tied to the check that catches it.
+
+### Added
+
+- **go-dev and py-dev**, sub-agents for Go and Python beside ts-dev and rust-dev. go-dev reads go.mod and the project's lint config and finishes on `go vet` and `go test`. py-dev reads pyproject.toml and finishes on `ruff check` and `pytest`, through the project's own runner. Each comes with rules naming the vet analyzer, linter or ruff code that checks them, and four references.
+- **Frontend rules for every framework**: motion, interaction, forms, accessibility, performance and layout, each naming the stylelint, axe, a11y lint or browser check that catches it. A project that has its own components never ships the browser's own widgets: no `alert`, `confirm` or `prompt`, no native date, time or colour pickers, no `title` tooltips, and no native `<select>` when it ships its own.
+- **React, Svelte and Vue rules** that reach only their own projects: React effects and purity checked by eslint-plugin-react-hooks, Svelte 5 runes and SvelteKit checked by the Svelte compiler and svelte-check, Vue's Composition API checked by eslint-plugin-vue and vue-tsc.
+- **A `framework:` key for rules**, read from package.json, including per app in a monorepo. `framework:` and `language:` take a list. `tofu rules index` names the framework that made a rule fire.
+- **A Rust rule for input-depth recursion**: a loop over an explicit stack, or a depth limit.
+
+### Changed
+
+- **A gate check counts through a runner or a project script**: `uv run pytest`, `python -m pytest`, `make test` whose recipe runs `go test`.
+- **A gate failure is a real failure**: a typecheck that finds an error and a test run with a failure send the sub-agent back. A project with no tests is not held to a test check.
+- **A sub-agent sent back stays one sub-agent**: one line in the chat saying "sent back: test did not run", and a report that says "sent back once" instead of "escalating".
+- **`scope:` on a rule matches the paths a sub-agent owns.**
+
+### Fixed
+
+- **The browser relay hands over to a newly installed tofu**, so the extension updates without `tofu browser install`.
+
 ## 0.5.0-rc-fix22 - 2026-10-02
 
 A Rust sub-agent, and sub-agents that are held to their own checks.
