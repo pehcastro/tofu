@@ -1,0 +1,7 @@
+id: fe_input_response
+domain: dev
+kind: human
+concern: code_rules
+framework: react, svelte, vue, solid, angular, astro, preact
+text: every press, key and drag shows a visible change within 100 ms, before any request returns. delay a loading indicator for content by about 200 ms so a fast load shows no flash, and never delay the response itself. a long task yields to the browser between chunks so the next input is handled, and loading one part of the page never blocks a control unrelated to it. past a few seconds, show determinate progress: a bar, a step count, or the item being worked on. the number is INP at or under 200 ms at the 75th percentile, read with `onINP` from the web-vitals library, and a Playwright test holds the request open with `page.route` and asserts the visible change before releasing it.
+notes: sources: nkz-taste interactions.md rules 5 to 12 and 23, craft.md C6 and C13; web.dev on the Core Web Vitals thresholds and on optimizing INP.

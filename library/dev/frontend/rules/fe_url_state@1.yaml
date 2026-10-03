@@ -1,0 +1,7 @@
+id: fe_url_state
+domain: dev
+kind: human
+concern: code_rules
+framework: react, svelte, vue, solid, angular, astro, preact
+text: filters, tabs, sort order, pagination and an expanded panel live in the URL, so a reload, a shared link and Back return the same view, and Back restores the scroll position. changing them keeps focus where it was and does not replay an entrance or reopen a dialog. a Playwright test sets a filter, calls `page.reload()`, and asserts the filter and its results held; another goes back with `page.goBack()` and asserts the earlier view.
+notes: sources: nkz-taste craft.md C60 and the recess recipe on query changes that keep focus; the Vercel web interface guidelines, state and navigation.

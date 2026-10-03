@@ -1,0 +1,7 @@
+id: fe_reduced_motion
+domain: dev
+kind: human
+concern: code_rules
+framework: react, svelte, vue, solid, angular, astro, preact
+text: under `prefers-reduced-motion: reduce`, remove movement and keep feedback: a slide, a scale, parallax or a spring becomes an instant change or a short opacity fade, and a colour or opacity change that says something happened stays. in script, read `matchMedia("(prefers-reduced-motion: reduce)")` and set the distance to zero rather than deleting the animation. motion that plays by itself for more than five seconds beside other content has a pause control. a Playwright test calls `page.emulateMedia({ reducedMotion: "reduce" })`, opens each animated surface, and asserts no running animation from `document.getAnimations()` has a keyframe naming `transform`.
+notes: sources: nkz-taste animations.md section 10 and craft.md C40; MDN on prefers-reduced-motion; the Vercel web interface guidelines, animation, on autoplaying motion past five seconds.

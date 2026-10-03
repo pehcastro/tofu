@@ -1,0 +1,7 @@
+id: fe_form_validation
+domain: dev
+kind: human
+concern: code_rules
+framework: react, svelte, vue, solid, angular, astro, preact
+text: check a field when it loses focus and clear its error as soon as the value is valid; never mark a field the person has not touched, which `:user-invalid` already respects in CSS. show the error beside its field, tie it with `aria-describedby`, set `aria-invalid`, and on submit move focus to the first invalid field. keep submit enabled until the request starts, or say next to it what is missing; a disabled button with no reason is a dead end. a failed submit and Back keep what was typed, and leaving a form with unsaved changes asks first. a Playwright test submits the empty form and asserts `toBeFocused()` and `toHaveAccessibleErrorMessage` on the first field.
+notes: sources: nkz-taste craft.md C18, C19, C21 and C22; ibelick fixing-accessibility, forms and errors; MDN on client-side form validation and :user-invalid; the Vercel web interface guidelines, forms.

@@ -1,0 +1,7 @@
+id: fe_motion_when
+domain: dev
+kind: human
+concern: code_rules
+framework: react, svelte, vue, solid, angular, astro, preact
+text: before you animate, ask how often the person sees it. an action reached by keyboard or repeated many times a session, such as a command palette, a tab switch, list navigation, a counter, live data or a validation error, gets no entrance or exit animation: it appears at once, and only the immediate response to the press stays. animate an occasional surface, a modal, a drawer, a toast, a page change, only for a reason you can say in one sentence: continuity, feedback, or preventing a jump. looking nice is a reason only for something seen once. a Playwright test opens the surface by its shortcut and asserts `await page.evaluate(() => document.getAnimations().length)` is 0.
+notes: sources: nkz-taste animations.md, sections 1 and 12 on whether to animate at all; the Vercel web interface guidelines, animation, on animating only to explain cause and effect.

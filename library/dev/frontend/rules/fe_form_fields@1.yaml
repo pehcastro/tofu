@@ -1,0 +1,7 @@
+id: fe_form_fields
+domain: dev
+kind: human
+concern: code_rules
+framework: react, svelte, vue, solid, angular, astro, preact
+text: every field has a visible `<label>` tied to it, never a placeholder standing in for one. give it the right `type`, `inputmode`, `name` and `autocomplete`, such as `email`, `current-password`, `new-password` or `one-time-code`, and constrain what it accepts with `min`, `max`, `step` or a select rather than reporting the mistake later. never block paste. autofocus only the first field of a form that is the page's single purpose. the checks are axe's `label` and `autocomplete-valid`, jsx-a11y's `label-has-associated-control`, `autocomplete-valid` and `no-autofocus`, the Svelte compiler's `a11y_label_has_associated_control`, `a11y_autocomplete_valid` and `a11y_autofocus`, and eslint-plugin-vuejs-accessibility's `form-control-has-label` and `no-autofocus`.
+notes: sources: nkz-taste craft.md C15 to C17, C20, C27 and C28; the Vercel web interface guidelines, forms; web.dev on sign-in and on payment and address form best practices.

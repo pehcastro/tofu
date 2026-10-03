@@ -1,0 +1,7 @@
+id: fe_motion_properties
+domain: dev
+kind: human
+concern: code_rules
+framework: react, svelte, vue, solid, angular, astro, preact
+text: animate `transform` and `opacity`, never `width`, `height`, `top`, `left`, `margin` or `padding`, which redo layout on every frame. name the properties a transition covers: `transition: all` and Tailwind's `transition-all` animate whatever changes next, layout included. never start from `scale(0)`: start at 0.95 or above and let opacity carry the rest. an anchored popover or menu scales out of its trigger, `transform-origin: var(--transform-origin)` with Base UI or `var(--radix-popover-content-transform-origin)` with Radix, and a modal scales from its centre. stylelint's `declaration-property-value-disallowed-list` refuses `/\ball\b/` and `/\b(width|height|top|left|margin|padding)\b/` in `transition` and `transition-property`.
+notes: sources: nkz-taste animations.md, sections 5 and 9 on what to animate and on transform-origin; the Vercel web interface guidelines, animation; ibelick fixing-motion-performance, the never patterns; the positioner CSS variables as published in the Base UI and Radix packages.

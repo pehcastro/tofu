@@ -169,7 +169,7 @@ func TestTheShippedIndexSaysWhatFiresForATaskAndWhy(t *testing.T) {
 	for i, m := range index {
 		why[m.RuleID] = m.Why
 		trigger := rules[i].Trigger
-		reachesAnUnnamedGoTask := trigger.condition == nil && trigger.verb == VerbNone && (trigger.languages == nil || slices.Contains(trigger.languages, "go")) && trigger.role == RoleAny
+		reachesAnUnnamedGoTask := trigger.condition == nil && trigger.verb == VerbNone && (trigger.languages == nil || slices.Contains(trigger.languages, "go")) && trigger.frameworks == nil && trigger.role == RoleAny
 		if m.Fires != reachesAnUnnamedGoTask {
 			t.Fatalf("rule %q fires = %v for an unnamed task naming a go file and a test file, and its condition, task and language reach that task = %v: %s", m.RuleID, m.Fires, reachesAnUnnamedGoTask, m.Why)
 		}

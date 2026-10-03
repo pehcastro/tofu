@@ -1,0 +1,7 @@
+id: fe_layout_resilience
+domain: dev
+kind: human
+concern: code_rules
+framework: react, svelte, vue, solid, angular, astro, preact
+text: a layout holds at 320 px wide without page-level horizontal scroll, at 200 percent text, and with the longest, the empty and the missing value. a grid or flex child that holds text gets `min-width: 0`, truncated text has a way to read the full value, and a missing value reads differently from zero. pointer targets are at least 24 by 24 px and touch targets 44 by 44, padding the hit area when the visible control is smaller, and the viewport meta never disables zoom. the checks are axe's `target-size`, which axe ships turned off so the run must enable it, and `meta-viewport`, and a Playwright test that calls `page.setViewportSize({ width: 320, height: 640 })` and asserts `document.documentElement.scrollWidth` is at most 320.
+notes: sources: nkz-taste craft.md C37 to C39, C54 and C55 and web-design.md on structure, tables and narrow widths; the Vercel web interface guidelines, targets and input, layout and content handling.

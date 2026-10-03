@@ -1,0 +1,7 @@
+id: fe_focus_visible
+domain: dev
+kind: human
+concern: code_rules
+framework: react, svelte, vue, solid, angular, astro, preact
+text: never remove the focus outline, `outline: none` or Tailwind's `outline-none` and `outline-hidden`, without a `:focus-visible` ring at least 2 px thick and 3:1 against what surrounds it. the ring appears at once and is never animated. a sticky header or footer never covers the focused element: set `scroll-padding-top` and `scroll-padding-bottom` to their heights. a container of focusable children does not clip their rings with `overflow: hidden`. focus order is DOM order: fix the markup, never a positive `tabindex`. the checks are axe's `tabindex`, jsx-a11y's `tabindex-no-positive`, the Svelte compiler's `a11y_positive_tabindex`, eslint-plugin-vuejs-accessibility's `tabindex-no-positive`, and a Playwright test that presses Tab through the page and compares each focused element with `toHaveScreenshot`.
+notes: sources: nkz-taste craft.md C34 to C36, animations.md section 6 on the focus ring, and the recess style note on overflow that clips focus rings; the Vercel web interface guidelines, keyboard; the Tailwind v4 upgrade guide on outline-none and outline-hidden.

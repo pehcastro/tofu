@@ -1,0 +1,7 @@
+id: fe_layout_shift
+domain: dev
+kind: human
+concern: code_rules
+framework: react, svelte, vue, solid, angular, astro, preact
+text: reserve the space content will take before it arrives: `width` and `height`, or an `aspect-ratio`, on every `img`, `video` and `iframe`; a skeleton the size and shape of what it stands for; a minimum height for text that loads late. keep the page frame mounted through a refresh and show the previous data until the new data lands, rather than blanking it for a skeleton, and never run a skeleton and a content entrance animation for the same load. the number is CLS at or under 0.1 at the 75th percentile, read with `onCLS` from the web-vitals library, and a Playwright test asserts every `img` on the page has a width and a height.
+notes: sources: nkz-taste craft.md C4 and C5 and web-design.md on stable loading; web.dev on the Core Web Vitals thresholds and on optimizing CLS; the Vercel web interface guidelines, content and accessibility, on skeletons that mirror the content.

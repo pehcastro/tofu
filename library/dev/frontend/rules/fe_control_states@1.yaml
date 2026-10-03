@@ -1,0 +1,7 @@
+id: fe_control_states
+domain: dev
+kind: human
+concern: code_rules
+framework: react, svelte, vue, solid, angular, astro, preact
+text: every interactive element has a default, a hover, a `:focus-visible`, an active and a disabled state, and a loading state when it starts async work; a loading button keeps its width and its label. put hover inside `@media (hover: hover) and (pointer: fine)` so a tap does not leave it stuck on; Tailwind v4's `hover:` variant already sits inside `(hover: hover)`. a disabled control has no hover effect. the first tooltip waits before it opens, and while one is open its neighbours open at once with no animation. what looks clickable is clickable. a Playwright test hovers, tabs to, presses and disables each control and compares each with `toHaveScreenshot`.
+notes: sources: nkz-taste animations.md section 6, interactions.md rules 1 to 6, and SKILL.md on interactive states; the Vercel web interface guidelines, touch and drag, on tooltip delay; the Tailwind v4 upgrade guide on hover styles on mobile.

@@ -1,0 +1,7 @@
+id: fe_keyboard
+domain: dev
+kind: human
+concern: code_rules
+framework: react, svelte, vue, solid, angular, astro, preact
+text: everything a pointer does, the keyboard does. Tab moves between widgets and the arrow keys move inside a composite one, a tab list, a menu, a listbox, a grid, a radio group, as its WAI-ARIA Authoring Practices pattern describes, with one tab stop per widget through a roving `tabindex` or `aria-activedescendant`. a drag, a swipe or a hover reveal has a button or a menu item that does the same, and nothing appears on hover alone. the checks are axe's `scrollable-region-focusable`, jsx-a11y's `aria-activedescendant-has-tabindex` and `mouse-events-have-key-events`, the Svelte compiler's `a11y_aria_activedescendant_has_tabindex` and `a11y_mouse_events_have_key_events`, eslint-plugin-vuejs-accessibility's `mouse-events-have-key-events`, and a Playwright test that completes the flow with `page.keyboard.press` alone.
+notes: sources: nkz-taste craft.md C33, C41 and C42; the WAI-ARIA Authoring Practices, developing a keyboard interface; MDN on keyboard-navigable JavaScript widgets; the Vercel web interface guidelines, touch and drag.

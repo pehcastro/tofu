@@ -1,0 +1,7 @@
+id: fe_four_states
+domain: dev
+kind: human
+concern: code_rules
+framework: react, svelte, vue, solid, angular, astro, preact
+text: every view that loads data has an empty, a loading, an error and a success state, each built and each reachable. empty says what belongs here and the next step; filtered to nothing names the filters and offers to clear them; an error says what failed, why, and how to recover, where it failed: a field error at the field, a page error on the page, never a toast for a field. announce an async result in a polite live region such as `role="status"`, because a screen reader never sees a toast. a Playwright test answers the request through `page.route` with an empty list, then a 500, then a delay, and asserts the text of each state.
+notes: sources: nkz-taste craft.md C1 to C3, C9 to C11 and C45; ibelick fixing-accessibility, announcements; the Vercel web interface guidelines, feedback, on polite live regions.

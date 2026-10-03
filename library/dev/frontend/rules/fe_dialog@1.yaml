@@ -1,0 +1,7 @@
+id: fe_dialog
+domain: dev
+kind: human
+concern: code_rules
+framework: react, svelte, vue, solid, angular, astro, preact
+text: build a dialog from the project's accessible primitive or a native `<dialog>` opened with `showModal()`, never from a positioned `div`. it is named by its title and has a visible close control; opening it moves focus inside, Tab and Shift+Tab stay inside, Escape closes it, and closing returns focus to the control that opened it. opening it never shifts the page behind: keep the scrollbar's space with `scrollbar-gutter: stable`, and give its scrolling body `overscroll-behavior: contain`. the checks are axe's `aria-dialog-name` and a Playwright test that opens it from the keyboard, presses Escape, and asserts `toBeFocused()` on the trigger.
+notes: sources: nkz-taste craft.md C33 and web-design.md on dialogs; ibelick fixing-accessibility, focus and dialogs; the WAI-ARIA Authoring Practices on the dialog pattern and the keyboard interface; the Vercel web interface guidelines, keyboard and touch.
