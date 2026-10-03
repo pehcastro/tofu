@@ -1,0 +1,7 @@
+id: svelte_props
+domain: dev
+kind: human
+concern: code_rules
+framework: svelte
+text: props are read-only inputs. a child that must change its parent's value calls a callback prop, `onchange(next)`, or declares that one prop `$bindable()` for a parent that writes `bind:` on purpose: one-way is the default and `$bindable` the exception. never mutate a prop object the parent did not bind. destructure with defaults and a type, `let { size = "md", ...rest }: Props = $props()`, and spread `rest` onto the element. take an element id from `$props.id()`, never a counter or `Math.random()`, which differ between server and client. a development build warns `ownership_invalid_mutation` for a mutated prop that was not bound and `ownership_invalid_binding` for a `bind:` passed through a parent that never bound it, and throws `bind_not_bindable` for `bind:` on a prop that is not `$bindable` and `props_rest_readonly` for a write to `rest`.
+notes: sources: the Svelte llms-small docs on $props, $props.id and $bindable; sveltejs ai-tools svelte-core-bestpractices, on $props; the client warnings and errors as svelte 5.45 ships them.

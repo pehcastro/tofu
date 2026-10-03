@@ -37,11 +37,11 @@ exit 1
     "domains": [
       {
         "name": "dev",
-        "rules": 91,
+        "rules": 113,
         "thresholds": 0,
         "skills": 0,
         "agents": 3,
-        "references": 23,
+        "references": 27,
         "refused": 0
       },
       {

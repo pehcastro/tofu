@@ -1,0 +1,7 @@
+id: vue_ssr_state
+domain: dev
+kind: human
+concern: code_rules
+framework: vue
+text: in a server-rendered Vue or Nuxt app, one module instance serves every request, so a `ref` or `reactive` at module level is shared by every visitor: in Nuxt keep it in `useState("key", () => initial)`, and in plain Vue create it per request inside the app factory. a page's first data comes from `useFetch` or `useAsyncData` with an explicit key, which fetch on the server and hand the result to the client; a bare `await $fetch()` in setup fetches twice, and `$fetch` belongs in handlers. call Nuxt composables only in setup, a plugin, a middleware or a Nuxt hook. the first client render matches the server's HTML: no `localStorage`, `window` or locale formatting during setup; read the client value in `onMounted`, or a cookie through `useCookie`. Nuxt throws `A composable that requires access to the Nuxt instance was called outside of a plugin` and Vue warns `Hydration completed but contains mismatches.`, so a Playwright test fails on any console error or warning during the first load.
+notes: sources: antfu skills nuxt, best-practices-data-fetching and best-practices-ssr; the useState, useFetch, useAsyncData and useCookie exports and the instance error as nuxt 4.4 ships them; the hydration warning as @vue/runtime-core 3.5 ships it.

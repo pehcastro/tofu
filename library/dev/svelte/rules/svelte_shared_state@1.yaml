@@ -1,0 +1,7 @@
+id: svelte_shared_state
+domain: dev
+kind: human
+concern: code_rules
+framework: svelte
+text: state shared by a subtree lives in context, made with `createContext` and set by the component that owns it, never in a module-level `$state` or store: on the server one module instance serves every request, so a module variable written while rendering or in a `load` shows one person's data to the next. only what is the same for everyone, configuration or a constant, lives in a module. per-person state is kept in a cookie or the database and read in a server `load`. new shared reactive logic is a class with `$state` fields rather than a `writable` store. a Playwright test signs two people in from two browser contexts against one server and asserts neither page shows the other's data.
+notes: sources: sveltejs ai-tools svelte-core-bestpractices, on context and on avoiding legacy features; the Svelte llms-small docs, SvelteKit state management; the createContext export as svelte 5.45 ships it.

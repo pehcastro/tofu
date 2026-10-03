@@ -1,0 +1,7 @@
+id: svelte_state
+domain: dev
+kind: human
+concern: code_rules
+framework: svelte
+text: `$state` holds only a value that changes and that the template, a `$derived` or an `$effect` reads; anything else is a plain variable. an object or array in `$state` becomes a deep proxy that tracks every mutation, so data replaced whole, such as an API response, goes in `$state.raw` and is reassigned, never mutated. never destructure a proxy, `let { done } = todo`, which copies the value once: read `todo.done` where it is used. hand `$state.snapshot(value)` to a library or `structuredClone` that cannot take a proxy, and never compare a proxy with `===` against the object it was made from. share reactive state from a `.svelte.js` module as a class with `$state` fields or through a getter, never by exporting a `$state` variable that is reassigned. the compiler warns `non_reactive_update` for a plain `let` the template reads after it changes and refuses `state_invalid_export`, and a development build warns `state_proxy_equality_mismatch`.
+notes: sources: sveltejs ai-tools svelte-core-bestpractices, on $state and $state.raw; the Svelte llms-small docs on $state, $state.raw, $state.snapshot and passing state into functions; the codes as svelte 5.45 ships them in its compiler and client warnings.js and errors.js.

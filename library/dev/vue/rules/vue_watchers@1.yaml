@@ -1,0 +1,7 @@
+id: vue_watchers
+domain: dev
+kind: human
+concern: code_rules
+framework: vue
+text: a `watch` exists for a side effect, a request, storage, a call into a library, never to keep one piece of state in step with another. watch a property through a getter, `watch(() => props.userId, load)`, since `watch(state.count, ...)` receives a number and never fires. pass `{ immediate: true }` rather than calling the same function from `onMounted` as well. a watcher that starts a request aborts it on the next change, with `onCleanup(() => controller.abort())` or `onWatcherCleanup` from Vue 3.5. register every watcher, lifecycle hook and `defineExpose` synchronously in setup, before the first `await`, or it never attaches to the component. a route component reused from `/users/1` to `/users/2` does not remount, so data keyed by `route.params.id` comes from a watcher on that param, not from `onMounted`. eslint-plugin-vue's essential `no-watch-after-await`, `no-lifecycle-after-await` and `no-expose-after-await` check the registration, and a test changes the param twice before the first response resolves and asserts the last result is the one shown.
+notes: sources: vuejs-ai vue-best-practices, the reactivity reference on watchers; vuejs-ai vue-router-best-practices, router-param-change-no-lifecycle; the onWatcherCleanup export of @vue/runtime-core 3.5; the rule categories as eslint-plugin-vue 10.11 ships them.

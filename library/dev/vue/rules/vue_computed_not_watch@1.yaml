@@ -1,0 +1,7 @@
+id: vue_computed_not_watch
+domain: dev
+kind: human
+concern: code_rules
+framework: vue
+text: state derived from other state is a `computed`, never a `ref` a `watch` or `watchEffect` assigns: `const total = computed(() => items.value.reduce((sum, item) => sum + item.price, 0))`. a filtered or sorted list the template shows is a `computed` the `v-for` reads, not an inline `.filter()` or a method call in the template, which runs on every render. a getter only computes and always returns: no request, no `emit`, no `await`, no write to state, and nothing mutates the value it returns. a `computed` is read as a value, never called like a method. eslint-plugin-vue's essential `no-side-effects-in-computed-properties`, `no-async-in-computed-properties`, `return-in-computed-property` and `no-use-computed-property-like-method` check this.
+notes: sources: vuejs-ai vue-best-practices, the reactivity reference on computed; vuejs-ai vue-debug-guides on computed side effects and mutation; the rule categories as eslint-plugin-vue 10.11 ships them.

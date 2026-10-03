@@ -1,0 +1,7 @@
+id: svelte_effects
+domain: dev
+kind: human
+concern: code_rules
+framework: svelte
+text: `$effect` keeps something outside Svelte in step while the component is mounted, a canvas, a chart library, a socket, and nothing else. work caused by an interaction goes in its handler; setup on one element goes in `{@attach}`; a listener on `window` or `document` goes on `<svelte:window>` or `<svelte:document>`; an outside source read reactively goes through `createSubscriber` from `svelte/reactivity`; logging state goes through `$inspect`. none of those is an `$effect` or an `onMount`. an effect that starts something returns a function that stops it. effects never run on the server, so an `if (browser)` inside one is dead code. an effect tracks only what it reads synchronously: a value read after an `await` or inside a `setTimeout` never re-runs it. a test mounts the component, changes its input, unmounts it, and asserts the listener, the interval or the connection is gone.
+notes: sources: sveltejs ai-tools svelte-core-bestpractices, on $effect and events, and its attach, inspect and svelte-reactivity references; the Svelte llms-small docs on $effect and its lifecycle; the createSubscriber export of svelte/reactivity and the attachments module as svelte 5.45 ships them.

@@ -1,0 +1,7 @@
+id: rust_bounded_recursion
+domain: dev
+kind: human
+concern: code_rules
+language: rust
+text: a function whose recursion depth comes from input, nested data, a chain of references, a tree read from a file or a request, overflows the stack on deep enough input, and a stack overflow aborts the whole process rather than panicking. write it as a loop over an explicit stack, `let mut pending = vec![root]; while let Some(node) = pending.pop() { ... }`, keeping a visited set when the input can point back at itself, or carry a depth and return an error past a stated limit. a recursive type such as `Box<Node>` also recurses when it is dropped, so a deep one needs a `Drop` that moves its children into a `Vec` and drains it. never raise the thread's stack size as the fix. serde_json already stops at depth 128 with `recursion limit exceeded`, so never call `disable_recursion_limit` on input you do not control. no clippy lint finds this, and clippy's `unconditional_recursion` covers only recursion that can never stop: the check is a test that builds input 100,000 levels deep and asserts a result or an error, not a crash.
+notes: sources: a rule of this library, written after deep-input tests overflowed the stack in hand-written recursion; clippy's descriptions of unconditional_recursion and only_used_in_recursion, neither of which bounds depth; the recursion limit and its error as serde_json 1.0 ships them.

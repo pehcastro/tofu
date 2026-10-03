@@ -1,0 +1,7 @@
+id: vue_keep_reactivity
+domain: dev
+kind: human
+concern: code_rules
+framework: vue
+text: reactivity survives every handoff or the screen goes stale without an error. never destructure a `reactive()` object or `props` into plain variables: read `state.count`, or take refs with `toRefs(state)`. pass a getter or a ref, `() => props.id` or `toRef(props, "id")`, to a composable that must follow a value, and inside the composable read it with `toValue()` in a `computed` or a watcher. in script a ref is read through `.value`: `count + 1` on the ref itself is a bug. hold a value that is replaced whole or must not be proxied, a large API response, a class instance, a library handle, in `shallowRef`. eslint-plugin-vue's essential `no-ref-as-operand`, and `no-ref-object-reactivity-loss` and `no-setup-props-reactivity-loss` turned on by hand, check this.
+notes: sources: vuejs-ai vue-best-practices, the reactivity and composables references; vuejs-ai vue-debug-guides on toValue inside watchEffect; antfu skills vue, core-new-apis; the rule categories as eslint-plugin-vue 10.11 ships them.

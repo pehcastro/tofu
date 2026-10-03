@@ -1,0 +1,7 @@
+id: sveltekit_form_actions
+domain: dev
+kind: human
+concern: code_rules
+framework: svelte
+text: a mutation a form makes is a form action: `export const actions` in `+page.server.js`, the only file that may export it, and a `<form method="POST">` that works before JavaScript loads, enhanced with `use:enhance` from `$app/forms`. once there is more than one action, name each and post to `action="?/create"`, with no `default` beside them. validate `await request.formData()` on the server and return `fail(400, { email, missing: true })` for a bad field, so the page re-renders with `form` and keeps what was typed; never throw for it, which shows the error page. call `redirect(303, ...)` after a success that moves on. a hand-written submit handler reads the response with `deserialize` and `applyAction`, never `JSON.parse`. SvelteKit refuses `Invalid export 'actions'` outside `+page.server.js`, `When using named actions, the default action cannot be used`, and `Cannot prerender pages with actions`. a Playwright test with `javaScriptEnabled: false` submits the form, and another submits an invalid value and asserts the message by its field and the value kept.
+notes: sources: the Svelte llms-small docs, SvelteKit form actions, validation errors, redirects and progressive enhancement; the export validator, the action runner and the page renderer as @sveltejs/kit 2.49 ships them; the enhance, deserialize and applyAction exports of $app/forms.

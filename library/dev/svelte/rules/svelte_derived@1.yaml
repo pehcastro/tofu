@@ -1,0 +1,7 @@
+id: svelte_derived
+domain: dev
+kind: human
+concern: code_rules
+framework: svelte
+text: a value computed from state or props is `$derived`, or `$derived.by(() => ...)` when it takes more than one expression, never a variable an `$effect` assigns. a prop read in plain script is read once: `let color = type === "danger" ? "red" : "green"` never follows `type`, so write `let color = $derived(...)`; `$state(initial)` seeded from a prop is a copy that stops following it, and is written only when a copy is the intent. a `$derived` may be assigned for an optimistic update and returns to its expression when an input changes, so that needs no effect either. a derived expression and a template expression change no state. the compiler warns `state_referenced_locally` on the one-time read, and Svelte throws `state_unsafe_mutation` for state written inside a `$derived` or the template and `effect_update_depth_exceeded` for an effect that writes what it reads.
+notes: sources: sveltejs ai-tools svelte-core-bestpractices, on $derived and $props; the Svelte llms-small docs on $derived, $derived.by and overriding derived values; the state_referenced_locally check in the svelte 5.45 analyser, which covers props; the runtime errors as svelte 5.45 ships them.

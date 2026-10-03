@@ -1,0 +1,7 @@
+id: vue_pinia_stores
+domain: dev
+kind: human
+concern: code_rules
+framework: vue
+text: state several features share lives in a Pinia store, changed through its actions. take state and getters out of a store with `storeToRefs(store)` and actions straight from the store: a plain destructure copies the values once and the screen stops updating. a setup store returns every `ref` it declares, since state left out of the return is not serialised for server rendering and is invisible to DevTools and plugins. call `useCartStore()` inside setup, a composable, an action or a guard, never at module level, where it runs before `app.use(pinia)`. Pinia throws `"getActivePinia()" was called but there was no active Pinia` for a store used too early, and a component test mounts with `createTestingPinia` from `@pinia/testing`, sets `initialState`, and asserts the rendered text after the store changes.
+notes: sources: vuejs-ai vue-pinia-best-practices, on store destructuring, setup stores returning all state and the no active Pinia error; vuejs-ai vue-testing-best-practices, testing-pinia-store-setup; the storeToRefs export and the error as pinia 4.0 ships them.
