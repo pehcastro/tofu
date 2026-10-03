@@ -47,13 +47,13 @@ func TestDiscoveryFailures(t *testing.T) {
 	all := Definitions(scanOf(t, home, "tofu", "agents", "claude"))
 
 	t.Run("two folders with the same name", func(t *testing.T) {
-		goDev := definitionNamed(t, all, "go-dev")
-		if goDev.Origin != ".tofu" || goDev.Model != "claude-sub/claude-opus-5" || goDev.Effort != "high" {
-			t.Fatalf("the .tofu go-dev should win with its own model and effort, got %+v", goDev)
+		fixtureDev := definitionNamed(t, all, "fixture-dev")
+		if fixtureDev.Origin != ".tofu" || fixtureDev.Model != "claude-sub/claude-opus-5" || fixtureDev.Effort != "high" {
+			t.Fatalf("the .tofu fixture-dev should win with its own model and effort, got %+v", fixtureDev)
 		}
-		want := filepath.Join("testdata", "definition", "project", ".claude", "agents", "go-dev.md")
-		if len(goDev.Shadowed) != 1 || goDev.Shadowed[0].Path != want || goDev.Shadowed[0].Written != "sonnet" {
-			t.Fatalf("the .claude go-dev should be shadowed, got %+v", goDev.Shadowed)
+		want := filepath.Join("testdata", "definition", "project", ".claude", "agents", "fixture-dev.md")
+		if len(fixtureDev.Shadowed) != 1 || fixtureDev.Shadowed[0].Path != want || fixtureDev.Shadowed[0].Written != "sonnet" {
+			t.Fatalf("the .claude fixture-dev should be shadowed, got %+v", fixtureDev.Shadowed)
 		}
 	})
 
@@ -89,15 +89,15 @@ func TestDiscoveryFailures(t *testing.T) {
 		if scout.Runs != RunsRefused || len(scout.Refused) != 1 || !strings.Contains(scout.Refused[0], `"teleport"`) {
 			t.Fatalf("scout should be refused for naming teleport, got %+v", scout)
 		}
-		if goDev := definitionNamed(t, all, "go-dev"); goDev.Runs != RunsModel || len(goDev.Refused) != 0 {
-			t.Fatalf("one refused definition should not touch another, got %+v", goDev)
+		if fixtureDev := definitionNamed(t, all, "fixture-dev"); fixtureDev.Runs != RunsModel || len(fixtureDev.Refused) != 0 {
+			t.Fatalf("one refused definition should not touch another, got %+v", fixtureDev)
 		}
 	})
 
 	t.Run("a missing home", func(t *testing.T) {
 		for _, home := range []string{"", filepath.Join(t.TempDir(), "absent")} {
 			found := Definitions(scanOf(t, home, "tofu", "agents", "claude"))
-			definitionNamed(t, found, "go-dev")
+			definitionNamed(t, found, "fixture-dev")
 			definitionNamed(t, found, "qa")
 			if slices.ContainsFunc(found.Definitions, func(d Definition) bool { return d.Name == "helper" }) {
 				t.Fatalf("home %q should not yield the home helper", home)
@@ -138,8 +138,8 @@ func TestDiscoveryFailures(t *testing.T) {
 		if slices.ContainsFunc(found.Definitions, func(d Definition) bool { return d.Name == "reviewer" }) {
 			t.Fatal("reviewer lives only in .claude and should not be read")
 		}
-		if goDev := definitionNamed(t, found, "go-dev"); len(goDev.Shadowed) != 0 {
-			t.Fatalf("with claude left out nothing shadows go-dev, got %q", goDev.Shadowed)
+		if fixtureDev := definitionNamed(t, found, "fixture-dev"); len(fixtureDev.Shadowed) != 0 {
+			t.Fatalf("with claude left out nothing shadows fixture-dev, got %q", fixtureDev.Shadowed)
 		}
 		if qa := definitionNamed(t, found, "qa"); qa.Origin != "library" {
 			t.Fatalf("the library is always read, got %+v", qa)
