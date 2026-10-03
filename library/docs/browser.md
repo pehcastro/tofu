@@ -36,8 +36,10 @@ when not connected. Hover the icon to read why.
 
 A tab tofu acts in or opens joins an orange group titled `tofu`, which
 reads `tofu •` while tofu acts. Pinned tabs, tabs in your own groups and
-tabs you drag out are left alone. When tofu disconnects the group dissolves,
-its tabs stay open, and Chrome's debugging bar goes away.
+tabs you drag out are left alone. A tab tofu opened closes when the run
+ends, or when the sub-agent that opened it finishes, and in the app when
+you quit. When tofu disconnects the group dissolves and Chrome's debugging
+bar goes away.
 
 ## Where it lives
 

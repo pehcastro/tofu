@@ -7,8 +7,9 @@ verbs: rules, reload
 
 ## What it is
 
-A rule is one line of instruction the model reads with every task, like
-"never write yaml by hand". tofu ships its own set, and you can add yours,
+A rule is one line of instruction the model reads, like "never write yaml
+by hand". A rule may declare a `language`, `framework`, `scope`, `condition`,
+`task` or `role`, and then reaches only the tasks that match. tofu ships its own set, and you can add yours,
 switch one of tofu's off, or replace one with your own text.
 
 A rule has an id, a short name in lower case letters, digits and
@@ -83,7 +84,8 @@ switched off is not in the list.
 
 prints one JSON document, whose `data` carries every field.
 `tofu rules check` and `tofu rules fired` print a `✗` row per blocked
-finding and a `⚠` row per shadow one.
+finding and a `⚠` row per shadow one. `tofu rules index "<task>" [path...]`
+says which rules fire for a task and why.
 
     tofu reload
 

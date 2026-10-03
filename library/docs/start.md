@@ -8,7 +8,7 @@ verbs: docs, doctor, login, models, settings
 ## What it is
 
 tofu is a coding agent that runs in your terminal. You type a task, a model
-plans and writes, and tofu runs the tools and asks you before anything risky.
+plans and writes, and tofu runs the tools, with jev judging each call first.
 
 These pages answer one question each. Type `tofu docs` to see every question
 with the command that answers it, `tofu docs <topic>` for a page, or

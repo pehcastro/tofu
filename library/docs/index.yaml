@@ -46,8 +46,8 @@
   do: tofu settings set modelTier.smart claude-sub/claude-sonnet-5
   check: tofu agents
   topic: settings
-- ask: read only CLAUDE.md, not AGENTS.md
-  do: tofu settings set instructionSources CLAUDE.md
+- ask: read CLAUDE.md, not AGENTS.md, where a folder has both
+  do: tofu settings set instructionSources claude-first
   check: tofu settings get instructionSources
   topic: settings
 - ask: send more of my instruction files each turn
@@ -85,7 +85,7 @@
 - ask: see which sub-agents exist and their models
   do: tofu agents
   check: tofu agents --json
-  topic: files
+  topic: agents
 - ask: sign in with a subscription
   do: tofu login claude-sub
   check: tofu login --status
