@@ -1,0 +1,7 @@
+id: py_safe_deserialize
+domain: dev
+kind: human
+concern: code_rules
+language: python
+text: data from outside the process, a file a user gave, a request body, a message from a queue, is parsed as data and never as code. `yaml.load` with any loader but `SafeLoader`, `yaml.unsafe_load`, and `pickle` or `dill` on that data can run arbitrary code, and so can `eval` and `exec` on any string built from it. use `yaml.safe_load`, `json.loads`, `ast.literal_eval` for a Python literal, or a schema such as a pydantic model, then check the shape before using it: `safe_load` of a manifest can still return a list or a string where a dict was expected. ruff reports an unsafe `yaml.load` as `S506`, pickle as `S301`, `eval` as `S307` and `exec` as `S102`; bandit reports them as `B506`, `B301`, `B307` and `B102`.
+notes: sources: trail of bits sharp-edges lang-python, eval, exec and deserialization;S506, S301, S307 and S102 confirmed with ruff rule on ruff 0.16.10; B301 and B307 in bandit's blacklist calls, B102 and B506 in its plugin list.

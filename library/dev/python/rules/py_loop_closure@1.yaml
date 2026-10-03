@@ -1,0 +1,7 @@
+id: py_loop_closure
+domain: dev
+kind: human
+concern: code_rules
+language: python
+text: a function or lambda made inside a loop reads the loop variable when it runs, not when it was made, so `for job in jobs: handlers.append(lambda: run(job))` gives every handler the last job. bind the value when the function is made: `functools.partial(run, job)`, or a default argument, `lambda job=job: run(job)`. a closure called within the same iteration is safe; one stored as a callback, handed to a scheduler or used as a thread target is the one that goes wrong. a comprehension has the same trap, `[lambda: i for i in range(3)]`. a test that builds several and calls each after the loop catches it. ruff reports it as `B023`.
+notes: sources: trail of bits sharp-edges lang-python, late binding closures; the flake8-bugbear rule list; B023 confirmed with ruff rule on ruff 0.16.10.

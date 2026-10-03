@@ -1,0 +1,7 @@
+id: py_specific_except
+domain: dev
+kind: human
+concern: code_rules
+language: python
+text: catch the exception type you can act on, where you can act on it, and let the rest rise. a bare `except:` also catches `KeyboardInterrupt` and `SystemExit`, and `except Exception:` catches every bug along with the failure you meant; followed by `pass`, `continue` or `return None`, either turns a crash into wrong output nobody sees. when you translate an exception into your own, chain it, `raise ConfigError(path) from err`, so the cause and its traceback survive, and write `from None` only when the cause must not leak. a handler that logs and re-raises uses a bare `raise`, which keeps the original traceback. a broad catch belongs only at a boundary that must keep running, a request handler or a worker loop, and there it logs with `logger.exception` and says what it skipped. ruff reports a bare `except` as `E722`, a broad one as `BLE001`, an `except` ending in `pass` or `continue` as `S110` and `S112`, and a translated exception without `from` as `B904`; bandit reports the swallowing forms as `B110` and `B112`.
+notes: sources: agents-knowledge python-error-handling and python-anti-patterns; trail of bits sharp-edges lang-python, exception handling pitfalls; E722, BLE001, S110, S112 and B904 confirmed with ruff rule on ruff 0.16.10; B110 and B112 in bandit's plugin list.

@@ -1,0 +1,7 @@
+id: py_async_no_block
+domain: dev
+kind: human
+concern: code_rules
+language: python
+text: inside `async def`, a call that blocks stops every other task on the loop until it returns: `time.sleep`, `requests`, a blocking `open` and read, `subprocess.run`, a synchronous database driver, or a long CPU loop. await the async form instead, `asyncio.sleep`, `httpx.AsyncClient`, `asyncio.create_subprocess_exec`, the driver's async API, and move what has no async form to a thread with `await asyncio.to_thread(f, *args)`. a call that is async still needs its `await`: without it the coroutine never runs. a test that checks another task makes progress while the call is in flight catches a blocking call; a test that awaits one call at a time never does. ruff reports the common forms when the project selects its `ASYNC` rules: `ASYNC251` for `time.sleep`, `ASYNC210` and `ASYNC212` for blocking HTTP, `ASYNC230` for `open`, and `ASYNC220`, `ASYNC221` and `ASYNC222` for subprocesses. nothing reports a sync driver or a CPU loop.
+notes: sources: agents-knowledge async-python-patterns and python-anti-patterns, blocking in async; ASYNC210, ASYNC212, ASYNC220, ASYNC221, ASYNC222, ASYNC230 and ASYNC251 confirmed with ruff rule on ruff 0.16.10.

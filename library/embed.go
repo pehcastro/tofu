@@ -9,6 +9,7 @@ import (
 //go:embed general/rules/*.yaml dev/rules/*.yaml dev/go/rules/*.yaml dev/go/references/*.md
 //go:embed dev/agents/*.md dev/references/*.md dev/typescript/rules/*.yaml dev/typescript/references/*.md
 //go:embed dev/rust/rules/*.yaml dev/rust/references/*.md
+//go:embed dev/python/rules/*.yaml dev/python/references/*.md
 //go:embed dev/frontend/rules/*.yaml dev/frontend/references/*.md
 //go:embed dev/react/rules/*.yaml dev/react/references/*.md
 //go:embed dev/svelte/rules/*.yaml dev/svelte/references/*.md

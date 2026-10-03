@@ -1,0 +1,7 @@
+id: py_mutable_default
+domain: dev
+kind: human
+concern: code_rules
+language: python
+text: a default argument is evaluated once, when `def` runs, so `def add(item, into=[])` hands every call the same list and each call sees what the last one left in it. default to `None` and build the value in the body, `if into is None: into = []`, or use an immutable default such as a tuple or a `frozenset`. the same holds for a call in a default, `def f(at=time.time())`, which is fixed at import, and for a list or dict assigned in a class body, which every instance shares: build those in `__init__` or with `dataclasses.field(default_factory=list)`. a test that calls the function twice and checks the second result catches it. ruff reports a mutable default as `B006`, a call in a default as `B008` and a mutable class attribute as `RUF012`, each when the project's config selects it.
+notes: sources: trail of bits sharp-edges lang-python, mutable default arguments and class attributes; the flake8-bugbear rule list; B006, B008 and RUF012 confirmed with ruff rule on ruff 0.16.10.

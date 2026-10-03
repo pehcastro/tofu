@@ -1,0 +1,7 @@
+id: py_retry_transient
+domain: dev
+kind: human
+concern: code_rules
+language: python
+text: retry only a failure that may pass on its own: a refused or reset connection, a timeout, HTTP 429, 502, 503 or 504. a `ValueError`, a `TypeError`, a failed login or any other 4xx fails the same way every time, so it is raised at once and unchanged. bound every retry by attempts and by total time, wait longer each time with jitter, honour a `Retry-After` header when the server sends one, and after the last attempt raise the last error, not a new one that hides it. retry at one layer only: a client that already retries, such as a `urllib3` `Retry` on the session, multiplies with yours. every network call carries a timeout, because `requests` without one can wait forever. no linter checks what a retry catches: a test that raises a permanent error and counts the calls does. ruff reports a `requests` call without `timeout` as `S113`, and bandit as `B113`.
+notes: sources: agents-knowledge python-resilience, transient against permanent failures and bounded retries, and python-anti-patterns, double retry; S113 confirmed with ruff rule on ruff 0.16.10; B113 in bandit's plugin list.

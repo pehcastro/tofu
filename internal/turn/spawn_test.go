@@ -10,6 +10,7 @@ import (
 
 	"tofu/internal/llm"
 	"tofu/internal/recall"
+	"tofu/internal/rule"
 	"tofu/internal/settings"
 	"tofu/internal/subagent"
 	"tofu/library"
@@ -41,9 +42,10 @@ func TestASubAgentIsOfferedWriteAndEditOnlyWhenItsDefinitionNamesThem(t *testing
 		names = append(names, tool.Name())
 	}
 	found := subagent.Definitions(subagent.Scan{Library: library.Files(), Tools: append(names, "spawn")})
+	gates := map[string]string{"go-dev": "go vet, go test", "py-dev": "ruff check, pytest"}
 	for _, definition := range found.Definitions {
-		if definition.Name == "go-dev" && (len(definition.References) != 4 || len(definition.Cut) > 0 || strings.Join(definition.Gate, ", ") != "go vet, go test") {
-			t.Errorf("go-dev loads %d references, cuts %q, gates on %q; want four references, none cut, and the gate go vet, go test", len(definition.References), definition.Cut, definition.Gate)
+		if gate, isLanguageAgent := gates[definition.Name]; isLanguageAgent && (len(definition.References) != 4 || len(definition.Cut) > 0 || strings.Join(definition.Gate, ", ") != gate) {
+			t.Errorf("%s loads %d references, cuts %q, gates on %q; want four references, none cut, and the gate %s", definition.Name, len(definition.References), definition.Cut, definition.Gate, gate)
 		}
 	}
 	for agent, want := range map[string]string{
@@ -52,6 +54,7 @@ func TestASubAgentIsOfferedWriteAndEditOnlyWhenItsDefinitionNamesThem(t *testing
 		"ts-dev":   "read write edit typecheck test glob search symbols bash",
 		"rust-dev": "read write edit glob search symbols bash",
 		"go-dev":   "read write edit glob search symbols bash",
+		"py-dev":   "read write edit glob search symbols bash",
 		"qa":       "read write typecheck test glob search symbols bash",
 		"":         "read write edit typecheck test browser_tabs browser_observe browser_act browser_motion fetch glob search symbols bash spawn message subagents",
 	} {
@@ -75,6 +78,30 @@ func TestASubAgentIsOfferedWriteAndEditOnlyWhenItsDefinitionNamesThem(t *testing
 			t.Errorf("agent %q is offered %q, want %q", agent, got, want)
 		}
 	}
+}
+
+func TestEveryShippedPythonRuleReachesAPythonSubAgentAndNoOther(t *testing.T) {
+	rules, err := rule.LoadFS(library.Files(), "library")
+	if err != nil {
+		t.Fatal(err)
+	}
+	python := 0
+	for _, one := range rules {
+		if !strings.HasPrefix(one.File, "library/dev/python/rules/") {
+			continue
+		}
+		python++
+		if matched := rule.Index([]rule.Rule{one}, rule.Task{Language: "python"}); !matched[0].Fires {
+			t.Errorf("the python rule %s does not reach a python sub-agent: %s", one.ID, matched[0].Why)
+		}
+		if matched := rule.Index([]rule.Rule{one}, rule.Task{Language: "go"}); matched[0].Fires {
+			t.Errorf("the python rule %s reaches a go sub-agent: %s", one.ID, matched[0].Why)
+		}
+	}
+	if python == 0 {
+		t.Fatal("the shipped library carries no rule under dev/python/rules, so this test proves nothing")
+	}
+	t.Logf("%d shipped python rules checked", python)
 }
 
 type actReporting struct{ acts *int }

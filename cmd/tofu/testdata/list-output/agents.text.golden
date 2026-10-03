@@ -1,6 +1,6 @@
 exit 1
 --- stdout
-Sub-agents · 9 defined                                                ✗ 1 broken
+Sub-agents · 10 defined                                               ✗ 1 broken
 
   ○ idle      inherit                   project  runs on the orchestrator's
     model
@@ -17,6 +17,16 @@ Sub-agents · 9 defined                                                ✗ 1 bro
     reference  go-errors-and-context  3.9 KB
     reference  go-concurrency  3.8 KB
     reference  go-traps  4.0 KB
+  ○ py-dev    inherit                   library  Writes and fixes Python in
+    the project it is given. Reads pyproject.toml, the lockfile and the
+    project's own gate before it edits, runs every tool through the project's
+    own environment, and is done only when ruff, the type checker and the
+    covering tests pass the way the project runs them.
+    tools      read, glob, search, symbols, edit, write, bash
+    reference  py-verify  3.5 KB
+    reference  py-errors-and-resources  3.5 KB
+    reference  py-async  3.2 KB
+    reference  py-typing  3.2 KB
   ○ rust-dev  inherit                   library  Writes and fixes Rust in the
     project it is given. Reads the manifest and the toolchain before it edits,
     changes the least it can, and is done only when cargo check, clippy, the

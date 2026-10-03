@@ -15,7 +15,7 @@ layers
   project   ~/project/.tofu
 
 domains · the binary
-  ✓ dev      113 rules · 3 agents · 27 references
+  ✓ dev      126 rules · 4 agents · 31 references
   ✓ fetch    1 threshold
   ✓ general  22 rules · 7 thresholds · 2 agents · 4 references
   ✓ qa       9 rules · 2 skills · 1 agent · 4 references

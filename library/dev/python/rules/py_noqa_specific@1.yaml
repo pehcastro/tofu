@@ -1,0 +1,7 @@
+id: py_noqa_specific
+domain: dev
+kind: human
+concern: code_rules
+language: python
+text: fix what ruff or the type checker found. when it is wrong for one line, suppress that one code on that line, `# noqa: S603` or `# type: ignore[arg-type]`, and give the reason after it on the same line. never a bare `# noqa` or `# type: ignore`, which also hides every later finding on that line. never add a code to the ruff `ignore` list, a path to `per-file-ignores` or `exclude`, or loosen the type checker's settings to make the gate pass. ruff reports a bare `noqa` as `PGH004`, a bare `type: ignore` as `PGH003` and a `noqa` that suppresses nothing as `RUF100`.
+notes: sources: the ruff explanations of PGH004 and PGH003; PGH004, PGH003 and RUF100 confirmed with ruff rule on ruff 0.16.10, and a trailing reason after the codes checked to leave the suppression working.
