@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/signal"
 	"slices"
 	"strconv"
 	"strings"
@@ -122,6 +123,7 @@ type runtime struct {
 	open         func(runOpts) (appWire, error)
 	wrapSubAgent func(turn.Model) (turn.Model, error)
 	orchestrator models.Model
+	tabs         *tools.BrowserTabs
 
 	omitThinkingSummary bool
 }
@@ -372,7 +374,8 @@ func runVerb(args []string, out, errOut io.Writer) int {
 	}
 	opts.shell = shell
 
-	warm := newWarmProcesses()
+	home, _ := os.UserHomeDir()
+	warm := newWarmProcesses(tools.NewBrowserTabs(home))
 	defer warm.Close()
 	built, _, err := buildRunToolsForRun(opts.dir, opts.toolSet, readsWhen(opts.readBeforeEdit, turn.NewReadLedger()), warm, shell)
 	if err != nil {
@@ -397,7 +400,7 @@ func runVerb(args []string, out, errOut io.Writer) int {
 		_, _ = fmt.Fprintln(out, string(body))
 		return exitOK
 	}
-	return runTurn(opts, selected, built, budget, out, errOut)
+	return runTurn(opts, selected, built, budget, warm.tabs, out, errOut)
 }
 
 func contextBudget(opts runOpts, model models.Model) (recall.Budget, error) {
@@ -443,7 +446,7 @@ func guarded(model turn.Model, budget recall.Budget) (turn.Model, error) {
 	return windowGuard{inner: model, budget: budget, cfg: cfg}, nil
 }
 
-func runTurn(opts runOpts, selected models.Model, built []turn.Tool, budget recall.Budget, out, errOut io.Writer) int {
+func runTurn(opts runOpts, selected models.Model, built []turn.Tool, budget recall.Budget, tabs *tools.BrowserTabs, out, errOut io.Writer) int {
 	open := openAppWire
 	deck, err := readCassette(os.Getenv(cassetteVariable))
 	if err != nil {
@@ -484,7 +487,7 @@ func runTurn(opts runOpts, selected models.Model, built []turn.Tool, budget reca
 	}
 
 	config, spawner, err := runConfig(opts, built, runtime{accounts: opened.held.forTurn(), spend: opened.spend, budget: budget, gate: gate, sift: sifter, scorer: scorer, sessions: sessions, notify: writeNotice(errOut),
-		open: open, wrapSubAgent: wrap, orchestrator: selected})
+		open: open, wrapSubAgent: wrap, orchestrator: selected, tabs: tabs})
 	if err != nil {
 		return runFail(errOut, err)
 	}
@@ -501,7 +504,10 @@ func runTurn(opts runOpts, selected models.Model, built []turn.Tool, budget reca
 		_ = registry.Prune()
 	}
 	head := ""
-	runErr := turn.Lead(turn.WithShellRegistry(context.Background(), registry), config, nil, nil, func(row turn.Row, _ error) {
+	interrupted, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer stop()
+	context.AfterFunc(interrupted, stop)
+	runErr := turn.Lead(turn.WithShellRegistry(interrupted, registry), config, nil, nil, func(row turn.Row, _ error) {
 		printRunRow(out, row, selected.Slug(), selected.WindowText())
 		head = cmp.Or(row.Session, head)
 	})
@@ -682,7 +688,12 @@ func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn
 	spawner := turn.NewSpawnTool(orchestratorID, config, cmp.Or(run.roster, &subagent.Roster{}))
 	spawner.Inbox, spawner.SubAgents, spawner.Project = config.Inbox, prompt.subAgents, dir
 	spawner.SubAgents.Open = run.subAgentOpener(opts)
-	spawner.SubAgents.Brief, spawner.SubAgents.Ended = browserRecipeBrief(run.notify), learnBrowserRecipe(run.notify)
+	learn := learnBrowserRecipe(run.notify)
+	spawner.SubAgents.Brief = browserRecipeBrief(run.notify)
+	spawner.SubAgents.Ended = func(definition subagent.Definition, task string, rounds []turn.Row, report turn.SubAgentReport, finished bool) {
+		learn(definition, task, rounds, report, finished)
+		run.tabs.CloseOpenedBy(report.ID)
+	}
 	spawner.Limits = func() turn.SubAgentLimits {
 		return turn.SubAgentLimits{Running: settingInt(dir, settingspkg.SubAgentsPerTurn, run.notify), Depth: settingInt(dir, settingspkg.SubAgentDepth, run.notify)}
 	}
@@ -886,16 +897,18 @@ func readsWhen(readBeforeEdit bool, reads *turn.ReadLedger) *turn.ReadLedger {
 type warmProcesses struct {
 	checkers *turn.Typecheckers
 	tests    *turn.TestRunners
+	tabs     *tools.BrowserTabs
 }
 
-func newWarmProcesses() *warmProcesses {
-	return &warmProcesses{checkers: turn.NewTypecheckers(), tests: turn.NewTestRunners()}
+func newWarmProcesses(tabs *tools.BrowserTabs) *warmProcesses {
+	return &warmProcesses{checkers: turn.NewTypecheckers(), tests: turn.NewTestRunners(), tabs: tabs}
 }
 
 func (w *warmProcesses) Close() {
 	if w != nil {
 		w.checkers.Close()
 		w.tests.Close()
+		w.tabs.Close()
 	}
 }
 
@@ -952,6 +965,7 @@ func assembleRunTools(dir, set string, ledger *turn.ReadLedger, warm *warmProces
 		Steps:  settingInt(settingsDir, settingspkg.BrowserSteps, nil),
 		Judge:  func() (jevloop.Jev, error) { return browserJudge(dir) },
 		Model:  func() (turn.Model, string, error) { return browserModel(settingsDir) },
+		Tabs:   warm.tabs,
 	})
 	if err := cmp.Or(webErr, browserErr); err != nil {
 		return nil, nil, err

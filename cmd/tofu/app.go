@@ -104,11 +104,13 @@ type appLaunch struct {
 	registry    *shell.Registry
 	registryErr error
 	note        string
+	tabs        *tools.BrowserTabs
 }
 
 func launchOf(dir string, resumed sessionResume, fresh bool) appLaunch {
 	registry, registryErr := launchShellRegistry(dir)
-	launch := appLaunch{resumed: resumed, fresh: fresh, registry: registry, registryErr: registryErr}
+	home, _ := os.UserHomeDir()
+	launch := appLaunch{resumed: resumed, fresh: fresh, registry: registry, registryErr: registryErr, tabs: tools.NewBrowserTabs(home)}
 	if registryErr != nil {
 		return launch
 	}
@@ -132,6 +134,7 @@ func appOptions(dir string, arms runOpts, wiring appWiring, launch appLaunch) tu
 	live.steer, live.stopLead = steering, stopLead
 	live.arms = arms
 	live.shells = launch.registry
+	live.tabs, live.warm.tabs = launch.tabs, launch.tabs
 	settingsStore, _ := openSettings(dir)
 	shortcuts, _ := keymap.ShortcutsPath()
 	return tui.Options{
@@ -251,6 +254,7 @@ func appVerb(in io.Reader, out, errOut io.Writer, resumed sessionResume) int {
 	}
 	_, _ = fmt.Fprintln(out, sessionEndLine(launch.registry, launch.registryErr))
 	leaveShells(launch.registry)
+	launch.tabs.Close()
 	return exitOK
 }
 
@@ -656,6 +660,7 @@ type appSession struct {
 	carried  []llm.Message
 	reads    *turn.ReadLedger
 	warm     *warmProcesses
+	tabs     *tools.BrowserTabs
 	shown    map[string]bool
 	granted  map[string]bool
 	pending  []pendingImage
@@ -685,7 +690,7 @@ func newAppSession(dir string, open func(runOpts) (appWire, error), answers <-ch
 
 func (s *appSession) renew() {
 	s.warm.Close()
-	s.warm = newWarmProcesses()
+	s.warm = newWarmProcesses(s.tabs)
 	s.warm.checkers.Warm(s.dir)
 	s.reads, s.inbox, s.roster = turn.NewReadLedger(), turn.NewInbox(), &roster.Roster{}
 }
@@ -924,7 +929,7 @@ func (s *appSession) run(ctx context.Context, pick tui.Pick, task string, emit t
 	}
 	notify := func(notice string) { emit(tui.Event{Kind: tui.EventNote, Text: notice}) }
 	config, spawner, configErr := runConfig(opts, built, runtime{accounts: opened.held.forTurn(), spend: opened.spend, budget: budget, gate: gate, sift: sifter, scorer: scorer, sessions: sessions, notify: notify, roster: s.roster, inbox: s.inbox, now: s.now,
-		open: s.open, wrapSubAgent: wrapSubAgent, orchestrator: opened.selected})
+		open: s.open, wrapSubAgent: wrapSubAgent, orchestrator: opened.selected, tabs: s.tabs})
 	if configErr != nil {
 		fail(configErr)
 		return

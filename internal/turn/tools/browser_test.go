@@ -303,6 +303,29 @@ func TestTheBrowserToolsAgainstAFakeHost(t *testing.T) {
 	}
 }
 
+func TestTheTabTofuOpenedClosesAtTheEndAndThePersonsStays(t *testing.T) {
+	chrome := &fakeChrome{}
+	home := hostWithTwoTabs(t, chrome)
+	tabs := tools.NewBrowserTabs(home)
+	config := drive(home, settings.DriverSteps)
+	config.Tabs = tabs
+	offered, err := tools.NewBrowser(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = browserTool(t, offered, "browser_act").Run(context.Background(), json.RawMessage(`{"note":"n","actions":[{"action":"navigate","value":"http://127.0.0.1:8000/form.html"}]}`))
+	if !strings.Contains(err.Error(), "CDP") {
+		t.Fatalf("the act after the navigate answered %v; want the fake's missing CDP, after tab 9 opened", err)
+	}
+	tabs.CloseOpenedBy("browser-1")
+	tabs.Close()
+	tabs.Close()
+	closed := slices.DeleteFunc(chrome.saw(), func(call string) bool { return !strings.Contains(call, " close") })
+	if len(closed) != 1 || !strings.HasPrefix(closed[0], "tab 9 close") {
+		t.Fatalf("the closes were %q; want tab 9, which tofu opened, closed once, and the person's tab 7 untouched", closed)
+	}
+}
+
 type cdpPage struct {
 	mu       sync.Mutex
 	url      string

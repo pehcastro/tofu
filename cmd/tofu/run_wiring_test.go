@@ -157,7 +157,7 @@ func TestTheWriteAndEditARunBuildsAreCheckedByTheWarmTscItIsGiven(t *testing.T) 
 			t.Fatal(err)
 		}
 	}
-	warm := newWarmProcesses()
+	warm := newWarmProcesses(nil)
 	t.Cleanup(warm.Close)
 	shell, err := turn.ResolveRunShell("")
 	if err != nil {
@@ -195,7 +195,7 @@ func TestASessionInATsconfigDirectoryStartsItsWatcherBeforeAnyToolCall(t *testin
 	}
 	for name, start := range map[string]func(t *testing.T, dir string){
 		"run": func(t *testing.T, dir string) {
-			warm := newWarmProcesses()
+			warm := newWarmProcesses(nil)
 			t.Cleanup(warm.Close)
 			if _, _, err := buildRunToolsForRun(dir, toolSetFull, nil, warm, shell); err != nil {
 				t.Fatal(err)
@@ -264,7 +264,7 @@ func TestASessionInAWorkspaceRootWarmsItsLargestPackagesUpToTheCap(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	warm := newWarmProcesses()
+	warm := newWarmProcesses(nil)
 	t.Cleanup(warm.Close)
 	if _, _, err := buildRunToolsForRun(dir, toolSetFull, nil, warm, shell); err != nil {
 		t.Fatal(err)

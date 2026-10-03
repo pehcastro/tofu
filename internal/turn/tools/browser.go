@@ -36,6 +36,7 @@ type browserSession struct {
 	recent  []string
 	hosts   map[string]int
 	ownOnly bool
+	tabs    *BrowserTabs
 }
 
 const noTabYet = "tofu has no tab of its own for this task yet: act with navigate to a url, which opens one"
@@ -47,13 +48,64 @@ type BrowserSettings struct {
 	Steps  int
 	Judge  func() (jevloop.Jev, error)
 	Model  func() (turn.Model, string, error)
+	Tabs   *BrowserTabs
+}
+
+type BrowserTabs struct {
+	home   string
+	mu     sync.Mutex
+	opened map[int]string
+}
+
+func NewBrowserTabs(home string) *BrowserTabs {
+	return &BrowserTabs{home: home, opened: map[int]string{}}
+}
+
+func (t *BrowserTabs) opens(ctx context.Context, tab int) {
+	if t == nil || tab == 0 {
+		return
+	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.opened[tab] = turn.SubAgentAsking(ctx)
+}
+
+func (t *BrowserTabs) Close() {
+	t.closeWhere(func(string) bool { return true })
+}
+
+func (t *BrowserTabs) CloseOpenedBy(agent string) {
+	t.closeWhere(func(opener string) bool { return opener == agent })
+}
+
+func (t *BrowserTabs) closeWhere(openedBy func(string) bool) {
+	if t == nil {
+		return
+	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if !slices.ContainsFunc(slices.Collect(maps.Values(t.opened)), openedBy) {
+		return
+	}
+	client, err := browser.Dial(t.home)
+	if err != nil {
+		return
+	}
+	defer func() { _ = client.Close() }()
+	maps.DeleteFunc(t.opened, func(tab int, opener string) bool {
+		closing := openedBy(opener)
+		if closing {
+			_ = client.CloseTab(tab)
+		}
+		return closing
+	})
 }
 
 func NewBrowser(config BrowserSettings) ([]turn.Tool, error) {
 	if config.Mode == settings.BrowserOff {
 		return nil, nil
 	}
-	session := &browserSession{home: config.Home, hosts: map[string]int{}, ownOnly: config.Driver == settings.DriverSubagent}
+	session := &browserSession{home: config.Home, hosts: map[string]int{}, ownOnly: config.Driver == settings.DriverSubagent, tabs: config.Tabs}
 	var reads, acts turn.Tool
 	switch config.Driver {
 	case settings.DriverSteps, settings.DriverSubagent:
@@ -118,14 +170,15 @@ func (s *browserSession) drive(tab int, use func(*browser.Driver) error) error {
 	})
 }
 
-func (s *browserSession) start(url string) (int, error) {
+func (s *browserSession) start(ctx context.Context, url string) (int, error) {
 	opened := 0
 	err := s.with(func(client *browser.Client) (err error) {
-		if s.driverOn(client).Tab != 0 {
+		if _, err := driveTab(client, s.driverOn(client).Tab); err == nil {
 			return nil
 		}
 		if opened, err = client.Open(url); err == nil {
 			s.driver.Use(opened)
+			s.tabs.opens(ctx, opened)
 		}
 		return err
 	})
@@ -618,7 +671,7 @@ func (s browserStep) String() string {
 	return said
 }
 
-func (t browserAct) Run(_ context.Context, raw json.RawMessage) (turn.Result, error) {
+func (t browserAct) Run(ctx context.Context, raw json.RawMessage) (turn.Result, error) {
 	var args struct {
 		Tab     int           `json:"tab"`
 		Actions []browserStep `json:"actions"`
@@ -652,7 +705,7 @@ func (t browserAct) Run(_ context.Context, raw json.RawMessage) (turn.Result, er
 	loads, changed, dropped := false, false, false
 	actions := args.Actions
 	if first := actions[0]; args.Tab == 0 && first.Action == "navigate" {
-		opened, err := t.session.start(first.Value)
+		opened, err := t.session.start(ctx, first.Value)
 		if err != nil {
 			return turn.Result{}, fmt.Errorf("browser_act: %w", err)
 		}
@@ -690,6 +743,7 @@ func (t browserAct) Run(_ context.Context, raw json.RawMessage) (turn.Result, er
 			t.session.recent = append(t.session.recent, key)
 			t.session.recent = t.session.recent[max(0, len(t.session.recent)-konst.BrowserLoopWindow):]
 			moved, err := driver.Do(step.move())
+			t.session.tabs.opens(ctx, moved.Opened)
 			line := moved.String()
 			switch {
 			case err != nil:
@@ -782,7 +836,7 @@ func (browserMotion) Definition() llm.Tool {
 	}
 }
 
-func (t browserMotion) Run(_ context.Context, raw json.RawMessage) (turn.Result, error) {
+func (t browserMotion) Run(ctx context.Context, raw json.RawMessage) (turn.Result, error) {
 	var args struct {
 		Action   string       `json:"action"`
 		Scenario string       `json:"scenario"`
@@ -804,7 +858,7 @@ func (t browserMotion) Run(_ context.Context, raw json.RawMessage) (turn.Result,
 	var err error
 	switch args.Action {
 	case "capture":
-		said, err = t.session.capture(root, args.Scenario, cmp.Or(args.Takes, konst.MotionTakesDefault), cmp.Or(args.Label, "take"), args.Tab)
+		said, err = t.session.capture(ctx, root, args.Scenario, cmp.Or(args.Takes, konst.MotionTakesDefault), cmp.Or(args.Label, "take"), args.Tab)
 	case "inspect":
 		said, err = inspectTake(root, args.Take, args.From, args.To, args.Crop)
 	case "compare":
@@ -818,7 +872,7 @@ func (t browserMotion) Run(_ context.Context, raw json.RawMessage) (turn.Result,
 	return turn.Result{Content: strings.Join(said, "\n"), Command: "motion " + args.Action}, nil
 }
 
-func (s *browserSession) capture(root, path string, takes int, label string, asked int) ([]string, error) {
+func (s *browserSession) capture(ctx context.Context, root, path string, takes int, label string, asked int) ([]string, error) {
 	scenario, err := browser.ReadScenario(path)
 	if err != nil {
 		return nil, err
@@ -844,6 +898,7 @@ func (s *browserSession) capture(root, path string, takes int, label string, ask
 				return err
 			}
 			driver.Use(opened)
+			s.tabs.opens(ctx, opened)
 		}
 		tab = driver.Tab
 		saved, err = browser.Capture(driver, scenario, takes, label, root)
@@ -1028,7 +1083,7 @@ func (t browserDo) Run(ctx context.Context, raw json.RawMessage) (turn.Result, e
 		if err != nil {
 			return fmt.Errorf("no action ran, jev is not reachable: %w", err)
 		}
-		id, ours, err := t.session.aim(client, args.Tab, args.URL)
+		id, ours, err := t.session.aim(ctx, client, args.Tab, args.URL)
 		if err != nil {
 			return err
 		}
@@ -1043,6 +1098,7 @@ func (t browserDo) Run(ctx context.Context, raw json.RawMessage) (turn.Result, e
 					acted, err := browser.SharedTab{Client: client, ID: at}.Drive(page, action)
 					if acted.Opened != 0 {
 						at = acted.Opened
+						t.session.tabs.opens(ctx, at)
 					}
 					return acted.Stale, err
 				},
@@ -1116,7 +1172,7 @@ func (t browserDo) Run(ctx context.Context, raw json.RawMessage) (turn.Result, e
 	}, nil
 }
 
-func (s *browserSession) aim(client *browser.Client, tab int, address string) (int, bool, error) {
+func (s *browserSession) aim(ctx context.Context, client *browser.Client, tab int, address string) (int, bool, error) {
 	if address == "" {
 		found, err := driveTab(client, tab)
 		return tab, found.Opened, err
@@ -1135,6 +1191,7 @@ func (s *browserSession) aim(client *browser.Client, tab int, address string) (i
 	var err error
 	if tab == 0 {
 		tab, err = client.Open(address)
+		s.tabs.opens(ctx, tab)
 	} else {
 		err = browser.SharedTab{Client: client, ID: tab}.Navigate(address)
 	}
