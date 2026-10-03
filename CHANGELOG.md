@@ -8,6 +8,15 @@ Tofu is personal and not released, so the public interface that a version promis
 
 The minor number carries breaking changes, which is what 0.x means, and **there is never a 1.0.0**. The owner decided that on 2026-09-19: this stays 0.x forever, so the promise the version makes is the one 0.x already makes, that anything can break on a minor bump.
 
+## 0.5.0-rc-fix24 - 2026-10-03
+
+Tabs tofu opens close when it is done with them, and a frontend rule that measurably changes what the agent writes.
+
+### Changed
+
+- **Tabs tofu opened in Chrome close when the run ends**, and a browser sub-agent's tabs close when it finishes. In the interface they close when the app quits. A person's own tab is never closed. `tofu run` now cancels its turn on the first Ctrl+C so this still happens; a second Ctrl+C ends it at once.
+- **`fe_url_state` puts history first**: a filter, tab, sort or page change pushes a history entry and a search replaces it, so Back returns the view before.
+
 ## 0.5.0-rc-fix23 - 2026-10-03
 
 A library per language and per frontend framework, each rule tied to the check that catches it.
