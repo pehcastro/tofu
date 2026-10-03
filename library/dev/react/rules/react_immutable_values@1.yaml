@@ -1,0 +1,7 @@
+id: react_immutable_values
+domain: dev
+kind: human
+concern: code_rules
+framework: react
+text: props, state, a hook's arguments and return value, and anything already passed to JSX are snapshots, never changed in place. build the next value and hand it to the setter: `[...items, item]`, `items.toSorted(compare)`, `items.filter(keep)`, `{ ...user, name }`, spreading at every nested level that changes. a mutated array set back into state is the same reference, so React skips the render and the screen goes stale. an object created during this render may be changed before it is returned. eslint-plugin-react-hooks reports a mutation as `immutability`.
+notes: sources: react.dev, Components and Hooks must be pure, on props, state, hook arguments and JSX values being immutable and on local mutation; the immutability lint page; Vercel react-best-practices js-tosorted-immutable.

@@ -15,7 +15,7 @@ layers
   project   refused\.tofu
 
 domains · the binary
-  ✓ dev      76 rules · 3 agents · 20 references
+  ✓ dev      91 rules · 3 agents · 23 references
   ✓ fetch    1 threshold
   ✓ general  22 rules · 7 thresholds · 2 agents · 4 references
   ✓ qa       9 rules · 2 skills · 1 agent · 4 references

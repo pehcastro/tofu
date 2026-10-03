@@ -1,0 +1,7 @@
+id: react_effect_dependencies
+domain: dev
+kind: human
+concern: code_rules
+framework: react
+text: an effect's dependency list names every reactive value it reads, and a lint error on it is fixed in the code, never with `eslint-disable-next-line react-hooks/exhaustive-deps`. to drop a dependency, change the code so it is not one: move a function or an object the effect uses inside the effect or out of the component, compute the next state with an updater such as `setItems(current => [...current, item])`, depend on `user.id` rather than `user`, and read a value the effect must see but not react to through `useEffectEvent`, declared beside the effect, called only inside it, never listed and never passed on. the check is eslint-plugin-react-hooks `exhaustive-deps` set to error, and a search of the source for a disable directive naming it finds none.
+notes: sources: react.dev, Removing Effect Dependencies, on dependencies matching the code and why suppressing the linter is dangerous; Separating Events from Effects, on declaring an effect event and its limitations; the exhaustive-deps lint page; Vercel react-best-practices rerender-functional-setstate, rerender-dependencies and advanced-effect-event-deps.

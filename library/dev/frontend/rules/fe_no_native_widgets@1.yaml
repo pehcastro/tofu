@@ -1,0 +1,7 @@
+id: fe_no_native_widgets
+domain: dev
+kind: human
+concern: code_rules
+framework: react, svelte, vue, solid, angular, astro, preact
+text: when the project has a component library, a primitives package, Tailwind or its own CSS system, never ship the browser's own UI for something the product draws: no `alert`, `confirm` or `prompt`, no `<input type="date">`, `time`, `datetime-local`, `month`, `week` or `color` with its native picker, and no `title` attribute as a tooltip. use the project's component, or build one from its primitives, and keep what the native one gave for free: a real label, the keyboard, focus that returns where it was. the checks are eslint's core `no-alert`, which runs on the script of a `.vue` or `.svelte` file through that file's parser, a search for `type="(date|time|datetime-local|month|week|color)"` across the source, and a search for `title=` on a button, a link or an input.
+notes: sources: a rule of this library with no outside source; eslint's core rules for `no-alert`.

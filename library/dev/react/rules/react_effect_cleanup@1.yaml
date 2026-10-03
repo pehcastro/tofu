@@ -1,0 +1,7 @@
+id: react_effect_cleanup
+domain: dev
+kind: human
+concern: code_rules
+framework: react
+text: an effect that starts something stops it in its cleanup: a subscription unsubscribes, an interval clears, a listener is removed, and a fetch drops a response that arrives after its inputs changed, through an `ignore` flag or an `AbortController`. read a browser API or an outside store with `useSyncExternalStore`, which also takes a server snapshot, rather than copying it into state from an effect. one effect does one job: two unrelated syncs are two effects, each with its own list. a test rendered in `<StrictMode>` asserts exactly one live connection or listener after mount, and another changes the input twice before the first response resolves and asserts the last result is the one shown.
+notes: sources: react.dev, You Might Not Need an Effect, on subscribing to an external store and fetching data; Removing Effect Dependencies, on an effect doing several unrelated things; Vercel react-best-practices rerender-split-combined-hooks.

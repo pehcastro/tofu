@@ -1,0 +1,7 @@
+id: react_continuous_values
+domain: dev
+kind: human
+concern: code_rules
+framework: react
+text: a value that changes every frame, a pointer position, a scroll offset, a drag distance, a size while resizing, never goes through React state, which renders the tree on each change. keep it in a ref and write `element.style.transform` from the handler, or in Motion use `useMotionValue`, `useTransform`, `useScroll` and `useSpring`, which move the element without a render. when the screen needs only a threshold, subscribe to the threshold, `matchMedia("(max-width: 767px)")` through `useSyncExternalStore`, not to the width. Motion's `x`, `y` and `scale` are not hardware accelerated; animate the whole `transform` when the motion must stay smooth while the page is busy. the check is a React DevTools Profiler or React Scan recording of the gesture showing no component committing frame by frame.
+notes: sources: nkz-taste animations.md section 9 on continuous values and on Motion shorthands; Vercel react-best-practices rerender-use-ref-transient-values and rerender-derived-state; the accelerated value list and the hook exports as they ship in motion 13.

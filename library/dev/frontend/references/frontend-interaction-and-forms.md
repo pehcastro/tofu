@@ -39,6 +39,10 @@ In Playwright, `page.route` answers a request however a test needs: an empty lis
 - A long code or number is shown in groups as it is typed.
 - Ask for the least: each field needs a reason to be asked now. Mark the optional ones, not the required ones.
 
+## The project's components, not the browser's
+
+Where the project has a component library or its own styling, the browser's own UI never ships: no `alert`, `confirm` or `prompt`, no native date, time or colour picker, no `title` tooltip. They ignore the theme and look like another program. Use the project's dialog, picker and tooltip, keeping the label, the keyboard and the focus the native one had. eslint's core `no-alert` catches the first three.
+
 ## Validation in the platform
 
 The browser already validates `required`, `type`, `min`, `max`, `step` and `pattern`. `:invalid` matches from the first render, so it paints an untouched form red; `:user-invalid` matches only after the person has interacted, and is the one to style. `setCustomValidity(message)` adds a check of your own; an empty string clears it. With `novalidate` on the form, script owns every message, and must then set `aria-invalid` and `aria-describedby` itself.

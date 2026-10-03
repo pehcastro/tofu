@@ -1,0 +1,7 @@
+id: react_components_and_hooks
+domain: dev
+kind: human
+concern: code_rules
+framework: react
+text: React calls components and hooks; the code never does. declare every component at module level and pass what it needs as props: a component declared inside another is a new type on every render, so it remounts and loses its state, its focus and its scroll. render a component as JSX, never call it as a function. call hooks at the top level of a component or a custom hook, before any early return, never in a condition, a loop, a handler, a `try` block or a callback, and never pass a hook around as a value or build one in a factory. eslint-plugin-react-hooks reports these as `rules-of-hooks`, `static-components` and `component-hook-factories`.
+notes: sources: react.dev, Rules of Hooks and React calls Components and Hooks; the static-components lint page and the plugin's rule list; Vercel react-best-practices rerender-no-inline-components.
