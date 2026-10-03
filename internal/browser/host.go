@@ -66,6 +66,7 @@ type relay struct {
 	draining     bool
 	installed    func() (string, error)
 	cursor       bool
+	replaced     error
 }
 
 func Host(origin string, stdin io.Reader, stdout io.Writer, home string) error {
@@ -150,11 +151,16 @@ func host(origin string, stdin io.Reader, stdout io.Writer, home, tofu string, i
 		}
 	}()
 
+	stopWatching := make(chan struct{})
+	defer close(stopWatching)
+	go r.watchInstall(installedHost.Path, stopWatching)
+
 	read := make(chan error, 1)
 	go func() { read <- r.readExtension(stdin) }()
 	select {
 	case err = <-read:
 	case <-r.restart:
+		err = r.replaced
 	}
 	_ = listener.Close()
 	r.mu.Lock()
@@ -164,6 +170,34 @@ func host(origin string, stdin io.Reader, stdout io.Writer, home, tofu string, i
 	}
 	r.mu.Unlock()
 	return err
+}
+
+func (r *relay) watchInstall(exe string, stop <-chan struct{}) {
+	seen, _ := os.Stat(exe)
+	tick := time.NewTicker(idleAfter)
+	defer tick.Stop()
+	for {
+		select {
+		case <-stop:
+			return
+		case <-tick.C:
+		}
+		now, err := os.Stat(exe)
+		if err != nil || seen != nil && os.SameFile(seen, now) && now.ModTime().Equal(seen.ModTime()) {
+			continue
+		}
+		seen = now
+		current, err := r.installed()
+		if err != nil || current == r.builds.Tofu {
+			continue
+		}
+		r.mu.Lock()
+		r.replaced = fmt.Errorf("this relay runs build %s and %s is now build %s: the relay stops so Chrome starts the installed tofu, which updates the extension", r.builds.Tofu, exe, current)
+		r.draining = true
+		r.settle()
+		r.mu.Unlock()
+		return
+	}
 }
 
 func (r *relay) readExtension(stdin io.Reader) error {

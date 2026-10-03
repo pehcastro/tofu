@@ -72,7 +72,7 @@ func shortHome(t *testing.T) string {
 func installFor(t *testing.T, home, origin string) {
 	t.Helper()
 	_, manifestPath := installPaths(home)
-	raw, err := json.Marshal(hostManifest{Name: HostName, Type: "stdio", AllowedOrigins: []string{origin}})
+	raw, err := json.Marshal(hostManifest{Name: HostName, Type: "stdio", Path: filepath.Join(home, "tofu.exe"), AllowedOrigins: []string{origin}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -104,11 +104,16 @@ func startHost(t *testing.T, home string) (fakeExtension, <-chan error) {
 
 func startHostOn(t *testing.T, home, build string) (fakeExtension, <-chan error) {
 	t.Helper()
+	return startHostWith(t, home, build, func(string) (string, error) { return Build() })
+}
+
+func startHostWith(t *testing.T, home, build string, installed func(exe string) (string, error)) (fakeExtension, <-chan error) {
+	t.Helper()
 	stdinR, stdinW := io.Pipe()
 	stdoutR, stdoutW := io.Pipe()
 	done := make(chan error, 1)
 	go func() {
-		err := host(testOrigin, stdinR, stdoutW, home, build, func(string) (string, error) { return Build() })
+		err := host(testOrigin, stdinR, stdoutW, home, build, installed)
 		_ = stdinR.CloseWithError(errors.New("the host returned"))
 		_ = stdoutW.Close()
 		done <- err
@@ -613,15 +618,7 @@ func TestARelayForANewerInstallAnswersItsCurrentCallsBeforeItExits(t *testing.T)
 	installFor(t, home, testOrigin)
 	ext, done := startHostOn(t, home, "0ld")
 	helloFrom(ext, "0ld")
-	withoutHello := func() *Client {
-		conn, err := net.Dial("unix", socketOf(t, home))
-		if err != nil {
-			t.Fatal(err)
-		}
-		t.Cleanup(func() { _ = conn.Close() })
-		return &Client{conn: conn, out: json.NewEncoder(conn), in: json.NewDecoder(conn)}
-	}
-	working, late := withoutHello(), withoutHello()
+	working, late := withoutHello(t, home), withoutHello(t, home)
 	read := callAsync(working, 7, "snapshot", nil)
 	pending := ext.call()
 
@@ -656,6 +653,82 @@ func TestARelayForANewerInstallAnswersItsCurrentCallsBeforeItExits(t *testing.T)
 	helloFrom(fresh, "")
 	if tabs, err := dial(t, home).Tabs(); err != nil || len(tabs) != 1 {
 		t.Fatalf("the next relay serves %v, %v", tabs, err)
+	}
+}
+
+func withoutHello(t *testing.T, home string) *Client {
+	t.Helper()
+	conn, err := net.Dial("unix", socketOf(t, home))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = conn.Close() })
+	return &Client{conn: conn, out: json.NewEncoder(conn), in: json.NewDecoder(conn)}
+}
+
+func buildInExe(exe string) (string, error) {
+	raw, err := os.ReadFile(exe)
+	if err == nil && len(raw) == 0 {
+		err = errors.New(exe + " browser build printed no build")
+	}
+	return string(raw), err
+}
+
+func reinstall(t *testing.T, home, build string) {
+	t.Helper()
+	if err := os.WriteFile(filepath.Join(home, "tofu.exe"), []byte(build), 0o755); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestARelayStopsForANewerInstalledTofuOnceItsCallIsAnswered(t *testing.T) {
+	home := shortHome(t)
+	installFor(t, home, testOrigin)
+	reinstall(t, home, "0ld")
+	ext, done := startHostWith(t, home, "0ld", buildInExe)
+	helloFrom(ext, "0ld")
+	read := callAsync(withoutHello(t, home), 7, "snapshot", nil)
+	pending := ext.call()
+
+	reinstall(t, home, "n3w")
+	select {
+	case err := <-done:
+		t.Fatalf("the relay stopped with %v while call %d was still out", err, pending.ID)
+	case <-time.After(3 * idleAfter):
+	}
+	ext.answer(pending.ID, `"ok":true,"value":"the page"`)
+	if a := <-read; a.err != nil || string(a.value) != `"the page"` {
+		t.Fatalf("the call out when the new tofu was installed came back as %s, %v", a.value, a.err)
+	}
+	select {
+	case err := <-done:
+		if err == nil || !strings.Contains(err.Error(), "n3w") || !strings.Contains(err.Error(), "0ld") {
+			t.Fatalf("the relay stopped with %v; want a line naming build 0ld and the installed n3w", err)
+		}
+	case <-time.After(3 * idleAfter):
+		t.Fatal("a relay on build 0ld kept running under an installed tofu on n3w")
+	}
+}
+
+func TestARelayKeepsRunningWhenTheInstalledTofuIsItsBuildOrCannotSay(t *testing.T) {
+	for name, build := range map[string]string{"the same build": "0ld", "no build": ""} {
+		t.Run(name, func(t *testing.T) {
+			home := shortHome(t)
+			installFor(t, home, testOrigin)
+			reinstall(t, home, "0ld")
+			ext, done := startHostWith(t, home, "0ld", buildInExe)
+			helloFrom(ext, "0ld")
+			client := withoutHello(t, home)
+			reinstall(t, home, build)
+			select {
+			case err := <-done:
+				t.Fatalf("the relay stopped with %v when the installed tofu said %q", err, build)
+			case <-time.After(3 * idleAfter):
+			}
+			if tabs, err := client.Tabs(); err != nil || len(tabs) != 1 {
+				t.Fatalf("after the reinstall the relay serves %v, %v", tabs, err)
+			}
+		})
 	}
 }
 
