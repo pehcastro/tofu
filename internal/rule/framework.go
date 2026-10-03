@@ -5,13 +5,32 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"maps"
 	"os"
 	"path"
 	"path/filepath"
+	"slices"
 	"strings"
 )
 
-func knownFrameworks() []string { return []string{"react", "svelte", "vue"} }
+func frameworkOfDependency() map[string]string {
+	return map[string]string{
+		"@angular/core": "angular",
+		"@sveltejs/kit": "svelte",
+		"astro":         "astro",
+		"next":          "react",
+		"nuxt":          "vue",
+		"preact":        "preact",
+		"react":         "react",
+		"solid-js":      "solid",
+		"svelte":        "svelte",
+		"vue":           "vue",
+	}
+}
+
+func knownFrameworks() []string {
+	return slices.Compact(slices.Sorted(maps.Values(frameworkOfDependency())))
+}
 
 type packageJSON struct {
 	Dependencies     map[string]json.RawMessage `json:"dependencies"`
@@ -44,8 +63,8 @@ func Frameworks(root string, paths []string) ([]string, error) {
 		if err != nil {
 			return nil, fmt.Errorf("%s names the project's frameworks and cannot be read: %w", at, err)
 		}
-		for _, framework := range knownFrameworks() {
-			listed[framework] = listed[framework] || declared.Dependencies[framework] != nil || declared.DevDependencies[framework] != nil || declared.PeerDependencies[framework] != nil
+		for dependency, framework := range frameworkOfDependency() {
+			listed[framework] = listed[framework] || declared.Dependencies[dependency] != nil || declared.DevDependencies[dependency] != nil || declared.PeerDependencies[dependency] != nil
 		}
 	}
 	var frameworks []string

@@ -2,6 +2,7 @@ package rule
 
 import (
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"testing/fstest"
@@ -29,9 +30,9 @@ func TestParseRuleReadsAConditionAndAScopeAndBothAreOptional(t *testing.T) {
 }
 
 func TestADeclaredLanguageReachesItsOwnRulesAndNoOther(t *testing.T) {
-	typescript := Trigger{language: "typescript"}
-	scoped := Trigger{language: "typescript", scope: "src/**"}
-	golang := Trigger{language: "go"}
+	typescript := Trigger{languages: []string{"typescript"}}
+	scoped := Trigger{languages: []string{"typescript"}, scope: "src/**"}
+	golang := Trigger{languages: []string{"go"}}
 	cases := []struct {
 		name    string
 		trigger Trigger
@@ -48,6 +49,29 @@ func TestADeclaredLanguageReachesItsOwnRulesAndNoOther(t *testing.T) {
 		if fires, why := c.trigger.firesFor(c.task); fires != c.fires {
 			t.Errorf("%s: fires = %v, want %v: %s", c.name, fires, c.fires, why)
 		}
+	}
+}
+
+func TestALanguageListFiresForAnyListedLanguageAndNamesTheOneThatMatched(t *testing.T) {
+	r, err := parseRule([]byte("id: frontend\ndomain: dev\nkind: human\nconcern: code_rules\nlanguage: typescript, svelte\ntext: x\n"), "frontend@1.yaml")
+	if err != nil {
+		t.Fatalf("parseRule: %v", err)
+	}
+	for file, want := range map[string]string{
+		"src/App.svelte": "the language svelte reached src/App.svelte",
+		"src/x.ts":       "the language typescript reached src/x.ts",
+		"main.go":        "",
+	} {
+		fires, why := r.Trigger.firesFor(Task{Paths: []string{file}})
+		if fires != (want != "") || (fires && why != want) {
+			t.Errorf("%s: fires = %v, why %q, want %q", file, fires, why, want)
+		}
+	}
+	if fires, why := r.Trigger.firesFor(Task{Language: "svelte"}); !fires || why != "the language svelte reached the language the sub-agent declares" {
+		t.Errorf("a sub-agent declaring svelte: fires = %v, why %q", fires, why)
+	}
+	if _, err := parseRule([]byte("id: frontend\ndomain: dev\nkind: human\nconcern: code_rules\nlanguage: typescript, sveltee\ntext: x\n"), "frontend@1.yaml"); err == nil || !strings.Contains(err.Error(), "sveltee") {
+		t.Errorf("a misspelt language in a list: err = %v, want a refusal naming it", err)
 	}
 }
 
@@ -145,7 +169,7 @@ func TestTheShippedIndexSaysWhatFiresForATaskAndWhy(t *testing.T) {
 	for i, m := range index {
 		why[m.RuleID] = m.Why
 		trigger := rules[i].Trigger
-		reachesAnUnnamedGoTask := trigger.condition == nil && trigger.verb == VerbNone && (trigger.language == "" || trigger.language == "go") && trigger.role == RoleAny
+		reachesAnUnnamedGoTask := trigger.condition == nil && trigger.verb == VerbNone && (trigger.languages == nil || slices.Contains(trigger.languages, "go")) && trigger.role == RoleAny
 		if m.Fires != reachesAnUnnamedGoTask {
 			t.Fatalf("rule %q fires = %v for an unnamed task naming a go file and a test file, and its condition, task and language reach that task = %v: %s", m.RuleID, m.Fires, reachesAnUnnamedGoTask, m.Why)
 		}
@@ -195,7 +219,7 @@ func TestTheShippedGoRulesReachGoFilesAndNothingElse(t *testing.T) {
 	}
 	goRules := map[string]bool{}
 	for id, r := range scoped {
-		if r.Trigger.language != "go" {
+		if !slices.Equal(r.Trigger.languages, []string{"go"}) {
 			continue
 		}
 		if !fires(id, source) || !fires(id, test) || fires(id, prose) {

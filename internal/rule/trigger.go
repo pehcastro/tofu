@@ -95,16 +95,30 @@ func LanguageOf(file string) string {
 }
 
 type Trigger struct {
-	condition *regexp.Regexp
-	scope     string
-	language  string
-	framework string
-	verb      Verb
-	role      Role
+	condition  *regexp.Regexp
+	scope      string
+	languages  []string
+	frameworks []string
+	verb       Verb
+	role       Role
 }
 
 func (t Trigger) AlwaysOn() bool {
-	return t.condition == nil && t.scope == "" && t.language == "" && t.framework == "" && t.verb == VerbNone && t.role == RoleAny
+	return t.condition == nil && t.scope == "" && t.languages == nil && t.frameworks == nil && t.verb == VerbNone && t.role == RoleAny
+}
+
+func anyOf(declared string, known []string, field, file, id string) ([]string, error) {
+	if declared == "" {
+		return nil, nil
+	}
+	values := strings.Split(declared, ",")
+	for i, value := range values {
+		values[i] = strings.TrimSpace(value)
+		if !slices.Contains(known, values[i]) {
+			return nil, fmt.Errorf("%s: rule %q declares the %s %q, and a %s is one of %s", file, id, field, values[i], field, strings.Join(known, ", "))
+		}
+	}
+	return values, nil
 }
 
 type declaredTrigger struct {
@@ -117,7 +131,7 @@ type declaredTrigger struct {
 }
 
 func newTrigger(d declaredTrigger, file, id string) (Trigger, error) {
-	t := Trigger{scope: d.scope, language: d.language, framework: d.framework, verb: Verb(d.task), role: Role(d.role)}
+	t := Trigger{scope: d.scope, verb: Verb(d.task), role: Role(d.role)}
 	switch t.role {
 	case RoleAny, RoleOrchestrator, RoleSubAgent:
 	default:
@@ -135,11 +149,12 @@ func newTrigger(d declaredTrigger, file, id string) (Trigger, error) {
 			return Trigger{}, fmt.Errorf("%s: rule %q declares the scope %q and it is not a path glob: %v", file, id, d.scope, err)
 		}
 	}
-	if known := languageExtensions(); d.language != "" && known[d.language] == nil {
-		return Trigger{}, fmt.Errorf("%s: rule %q declares the language %q, and a language is one of %s", file, id, d.language, strings.Join(slices.Sorted(maps.Keys(known)), ", "))
+	var err error
+	if t.languages, err = anyOf(d.language, slices.Sorted(maps.Keys(languageExtensions())), "language", file, id); err != nil {
+		return Trigger{}, err
 	}
-	if d.framework != "" && !slices.Contains(knownFrameworks(), d.framework) {
-		return Trigger{}, fmt.Errorf("%s: rule %q declares the framework %q, and a framework is one of %s", file, id, d.framework, strings.Join(knownFrameworks(), ", "))
+	if t.frameworks, err = anyOf(d.framework, knownFrameworks(), "framework", file, id); err != nil {
+		return Trigger{}, err
 	}
 	switch t.verb {
 	case VerbNone, VerbDebug, VerbExplore, VerbReview, VerbWrite:
@@ -180,28 +195,28 @@ func (t Trigger) firesFor(task Task) (bool, string) {
 		}
 		why = append(why, fmt.Sprintf("the scope %s reached %s", t.scope, reached))
 	}
-	if t.language != "" {
-		extensions := languageExtensions()[t.language]
-		reached := ""
+	if t.languages != nil {
+		language, reached := "", ""
 		for _, p := range task.Paths {
-			if slices.Contains(extensions, strings.ToLower(path.Ext(p))) {
+			if language = LanguageOf(p); slices.Contains(t.languages, language) {
 				reached = p
 				break
 			}
 		}
-		if reached == "" && task.Language == t.language {
-			reached = "the language the sub-agent declares"
+		if reached == "" && slices.Contains(t.languages, task.Language) {
+			language, reached = task.Language, "the language the sub-agent declares"
 		}
 		if reached == "" {
-			return false, fmt.Sprintf("no path the task names is %s", t.language)
+			return false, fmt.Sprintf("no path the task names is %s", strings.Join(t.languages, " or "))
 		}
-		why = append(why, fmt.Sprintf("the language %s reached %s", t.language, reached))
+		why = append(why, fmt.Sprintf("the language %s reached %s", language, reached))
 	}
-	if t.framework != "" {
-		if !slices.Contains(task.Frameworks, t.framework) {
-			return false, fmt.Sprintf("no package.json the task reaches lists %s", t.framework)
+	if t.frameworks != nil {
+		listed := slices.IndexFunc(t.frameworks, func(framework string) bool { return slices.Contains(task.Frameworks, framework) })
+		if listed < 0 {
+			return false, fmt.Sprintf("no package.json the task reaches lists %s", strings.Join(t.frameworks, " or "))
 		}
-		why = append(why, fmt.Sprintf("a package.json lists %s", t.framework))
+		why = append(why, fmt.Sprintf("a package.json lists %s", t.frameworks[listed]))
 	}
 	if t.verb != VerbNone {
 		if task.Verb != t.verb {
