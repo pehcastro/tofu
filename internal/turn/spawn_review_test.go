@@ -231,6 +231,30 @@ func TestASubAgentSentBackOnceByItsGateIsOneSubAgentInTheLogTheRosterAndTheRepor
 	}
 }
 
+var pyDev = subagent.Definition{Name: "py-dev", Language: "python", Gate: []string{"ruff check", "pytest"}}
+
+func TestAPyDevGateIsMetThroughARunnerAndNotByRuffFormat(t *testing.T) {
+	for name, command := range map[string]string{
+		"uv run, chained": "uv run ruff check src && uv run pytest tests/test_x.py::test_y",
+		"python -m":       "CI=1 ruff check . ; uv run --frozen python -m pytest -q",
+	} {
+		t.Log(name)
+		reopenedFor(t, gatedRun(t, "", pyDev, bashed("pytest", 0), edited("src/x.py"), bashed(command, 0), claimDecision("done")).rows, 1)
+	}
+	reopenedFor(t, gatedRun(t, "", pyDev,
+		edited("src/x.py"), bashed("uv run ruff format src", 0), bashed("uv run pytest", 1), claimDecision("done"),
+		bashed("python -m pytest", 0), bashed("ruff check", 0), claimDecision("done")).rows, 2, "ruff check did not run", "pytest exited 1")
+}
+
+func TestAGoDevGateIsMetByMakeTargetsWhoseRecipesRunIt(t *testing.T) {
+	project := tsProjectHolding(t, map[string]string{"Makefile": "testall:\n\t@echo all\ntest:\n\t@go test ./...\nvet:\n\t-go vet ./...\n"})
+	goDev := subagent.Definition{Name: "go-dev", Language: "go", Gate: []string{"go vet", "go test"}}
+	reopenedFor(t, gatedRun(t, project, goDev, edited("src/x.go"), bashed("make vet && make test", 0), claimDecision("done")).rows, 1)
+	reopenedFor(t, gatedRun(t, project, goDev,
+		edited("src/x.go"), bashed("make testall", 0), bashed("make vet", 2), claimDecision("done"),
+		bashed("make test vet", 0), claimDecision("done")).rows, 2, "go test did not run", "go vet exited 2")
+}
+
 var tsDev = subagent.Definition{Name: "ts-dev", Language: "typescript", Gate: []string{"typecheck", "test"}}
 
 func tsProjectHolding(t *testing.T, files map[string]string) string {

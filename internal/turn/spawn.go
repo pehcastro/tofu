@@ -1083,8 +1083,9 @@ func (t *SpawnTool) runRounds(outerCtx, subAgentCtx context.Context, held *heldS
 	claims, state := []Row{first}, roundState(outerCtx, firstErr)
 	held.remember(first)
 	var sentBack []string
+	recipes := projectRecipes(t.Project)
 	for state == subagent.Finished {
-		missed := gateMissed(t.Project, held.definition, claims)
+		missed := gateMissed(t.Project, recipes, held.definition, claims)
 		if len(missed) == 0 && t.Review == nil {
 			break
 		}
@@ -1134,7 +1135,7 @@ func (t *SpawnTool) runRounds(outerCtx, subAgentCtx context.Context, held *heldS
 	return claims, sentBack, state, firstErr
 }
 
-func gateMissed(project string, definition subagent.Definition, rounds []Row) []string {
+func gateMissed(project string, recipes map[string]string, definition subagent.Definition, rounds []Row) []string {
 	if definition.Language == "" {
 		return nil
 	}
@@ -1169,7 +1170,7 @@ func gateMissed(project string, definition subagent.Definition, rounds []Row) []
 		}
 		for _, call := range sinceEdit {
 			switch {
-			case !gateRan(check, call), call.Error == typecheckUnanswered:
+			case !gateRan(check, call, recipes), call.Error == typecheckUnanswered:
 			case call.ExitCode != nil && *call.ExitCode != 0:
 				said = fmt.Sprintf("%s exited %d", check, *call.ExitCode)
 			case call.Error != "" && !strings.HasPrefix(call.Error, testNoTests):
@@ -1185,19 +1186,108 @@ func gateMissed(project string, definition subagent.Definition, rounds []Row) []
 	return missed
 }
 
-func gateRan(check string, call ToolCallRow) bool {
-	if !strings.Contains(check, " ") {
-		return call.Tool == check
-	}
-	if call.Tool != "bash" {
+func gateRan(check string, call ToolCallRow, recipes map[string]string) bool {
+	switch {
+	case call.Tool == check:
+		return true
+	case call.Tool != "bash", check == "test", check == "typecheck":
 		return false
 	}
-	for _, part := range strings.FieldsFunc(call.Command, func(r rune) bool { return r == '&' || r == '|' || r == ';' }) {
-		if strings.HasPrefix(strings.Join(strings.Fields(part), " ")+" ", check+" ") {
+	if commandRuns(call.Command, check) {
+		return true
+	}
+	for invocation, recipe := range recipes {
+		if commandRuns(call.Command, invocation) && commandRuns(recipe, check) {
 			return true
 		}
 	}
 	return false
+}
+
+func commandRuns(command, check string) bool {
+	want := strings.Fields(check)
+	for _, segment := range strings.FieldsFunc(command, func(r rune) bool { return r == '&' || r == '|' || r == ';' }) {
+		words := strings.Fields(segment)
+		for len(words) > 0 && strings.Contains(words[0], "=") {
+			words = words[1:]
+		}
+		for stripped := true; stripped; words, stripped = withoutRunner(words) {
+			prefixed := len(words) >= len(want) && slices.Equal(words[:len(want)], want)
+			made := len(want) == 2 && want[0] == "make" && len(words) > 1 && words[0] == "make" && slices.Contains(words[1:], want[1])
+			if prefixed || made {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func withoutRunner(words []string) ([]string, bool) {
+	if len(words) > 1 && words[0] == "cargo" && strings.HasPrefix(words[1], "+") {
+		return append([]string{"cargo"}, words[2:]...), true
+	}
+	for _, runner := range []string{"uv run", "poetry run", "pdm run", "hatch run", "rye run", "pipenv run", "python -m", "python3 -m", "py -m", "npx", "pnpm exec", "pnpm dlx", "bunx", "yarn"} {
+		prefix := strings.Fields(runner)
+		if len(words) <= len(prefix) || !slices.Equal(words[:len(prefix)], prefix) {
+			continue
+		}
+		rest := words[len(prefix):]
+		for len(rest) > 1 && strings.HasPrefix(rest[0], "-") {
+			rest = rest[1:]
+		}
+		return rest, true
+	}
+	return nil, false
+}
+
+func projectRecipes(project string) map[string]string {
+	if project == "" {
+		return nil
+	}
+	recipes := map[string]string{}
+	add := func(invokers []string, name, command string) {
+		for _, invoker := range invokers {
+			recipes[invoker+" "+name] += command + " ; "
+		}
+	}
+	read := func(file string) string {
+		raw, _ := os.ReadFile(filepath.Join(project, file))
+		return strings.ReplaceAll(string(raw), "\r", "")
+	}
+	var targets []string
+	for _, line := range strings.Split(read("Makefile"), "\n") {
+		names, _, isRule := strings.Cut(line, ":")
+		switch {
+		case strings.HasPrefix(line, "\t"):
+			for _, target := range targets {
+				add([]string{"make"}, target, strings.TrimLeft(strings.TrimSpace(line), "@-+"))
+			}
+		case isRule && !strings.Contains(names, "=") && !strings.HasPrefix(line[len(names)+1:], "="):
+			targets = strings.Fields(names)
+		default:
+			targets = nil
+		}
+	}
+	var pkg struct {
+		Scripts map[string]string `json:"scripts"`
+	}
+	if json.Unmarshal([]byte(read("package.json")), &pkg) == nil {
+		for name, command := range pkg.Scripts {
+			add([]string{"npm run", "npm", "pnpm run", "pnpm", "yarn", "bun run"}, name, command)
+		}
+	}
+	scripts := false
+	for _, line := range strings.Split(read("pyproject.toml"), "\n") {
+		line = strings.TrimSpace(line)
+		name, command, entry := strings.Cut(line, "=")
+		switch {
+		case strings.HasPrefix(line, "["):
+			scripts = line == "[project.scripts]" || strings.HasPrefix(line, "[tool.") && strings.HasSuffix(line, ".scripts]")
+		case scripts && entry:
+			add([]string{"uv run", "poetry run", "pdm run", "hatch run", "rye run", "pipenv run"}, strings.TrimSpace(name), strings.Trim(strings.TrimSpace(command), `"'[]`))
+		}
+	}
+	return recipes
 }
 
 type ownedTool struct {
