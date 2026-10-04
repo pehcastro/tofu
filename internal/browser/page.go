@@ -328,7 +328,7 @@ func refRole(role string, named bool) bool {
 	case "button", "link", "textbox", "checkbox", "radio", "combobox", "listbox", "menuitem", "menuitemcheckbox", "menuitemradio",
 		"option", "searchbox", "slider", "spinbutton", "switch", "tab", "treeitem", "Iframe":
 		return true
-	case "heading", "cell", "gridcell", "columnheader", "rowheader", "listitem", "article", "region", "main", "navigation":
+	case "heading", "cell", "gridcell", "columnheader", "rowheader", "listitem", "article", "region", "main", "navigation", "dialog", "alertdialog":
 		return named
 	}
 	return false

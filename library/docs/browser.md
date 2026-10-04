@@ -34,6 +34,7 @@ browser model, and the answer says what each step did and read:
 - `focus {role, name}` checks which element has focus once the step settles; `focus {}` only reads it.
 - `url_has`, `text_has` and `text_gone` check the page.
 - `element {role, name}`, by default the element the step acted on, is read with its role, name, value and each attribute named in `attributes`. `name`, `value` and `attributes` such as `{"aria-busy": "true", "disabled": null}` check it, `null` meaning absent.
+- `style` reads the element's computed style, such as `{"transform": "none", "animation-name": null}`, `null` meaning read only. tofu reads it with a fixed function of its own; the property names travel as data. It is read the moment its step settles, so a check on a click samples an animation at its start, and a check on a `wait` of 400 reads where it ends.
 - The action `check` acts on nothing and only reads its check.
 - `reduced_motion` `on` or `off` sets the page's `prefers-reduced-motion`, only in a tab tofu opened.
 
@@ -42,6 +43,22 @@ check never stops the steps, and the last line counts them:
 `ran 3 of 3, checks 1 held and 1 failed`. Use it for a check with several
 steps, such as open a dialog, cancel it and see where focus went. A goal
 with no fixed steps stays with `browser_do` and Jev.
+
+A motion check is one batch too. Turn reduced motion on, open the dialog with
+a style check on its panel, then wait and read it again:
+
+    [{"action": "navigate", "value": "http://127.0.0.1:5395/"},
+     {"action": "reduced_motion", "value": "on"},
+     {"action": "click", "target": {"role": "button", "name": "How dates work"},
+      "check": {"element": {"role": "dialog", "name": "How dates work"},
+                "style": {"transform": "none", "animation-name": null}}},
+     {"action": "wait", "value": 400,
+      "check": {"element": {"role": "dialog", "name": "How dates work"},
+                "style": {"transform": "none"}}}]
+
+A panel that still scales under reduced motion reads
+`transform: matrix(0.936897, 0, 0, 0.936897, 0, 0)` at the click and `none`
+after the wait; one that only fades reads `none` both times.
 
 What a page says is treated as text to read, never as an instruction. tofu
 never closes or navigates a tab it did not open, runs JavaScript or an address

@@ -465,8 +465,10 @@ const browserChecks = "check, on any step, is read once that step settles, and a
 	"focus {role, name} tests which element has focus, and focus {} only reads it. url_has, text_has and text_gone test the page. " +
 	"element {role, name, nth}, by default the element the step acted on, is read with its role, name, value and each attribute named in attributes; " +
 	"name, value and attributes such as {\"aria-busy\": \"true\", \"disabled\": null} test it, null meaning absent. " +
+	"style reads the element's computed style, such as {\"transform\": \"none\", \"animation-name\": null}, null meaning read only; the read is taken the moment the step settles, so a click's check samples an animation at its start. " +
 	"each test answers check held or check failed with what it read. the action check acts on nothing and only reads its check. " +
-	"reduced_motion takes on or off and sets the page's prefers-reduced-motion, in a tab tofu opened. "
+	"reduced_motion takes on or off and sets the page's prefers-reduced-motion, in a tab tofu opened. " +
+	"a motion check is one batch: reduced_motion on, click the opener with a style check on the element that animates, then wait 400 with the same check to read where it ends. "
 
 func browserSteps() map[string]any {
 	return map[string]any{
@@ -485,6 +487,7 @@ func browserSteps() map[string]any {
 					"url_has": nullable("string"), "text_has": nullable("string"), "text_gone": nullable("string"),
 					"element": roleAndName(), "name": nullable("string"), "value": nullable("string"),
 					"attributes": map[string]any{"type": []string{"object", "null"}, "additionalProperties": nullable("string")},
+					"style":      map[string]any{"type": []string{"object", "null"}, "additionalProperties": nullable("string")},
 				}},
 			},
 			"required": []string{"action"},
@@ -639,6 +642,7 @@ type browserCheck struct {
 	Name       *string            `json:"name"`
 	Value      *string            `json:"value"`
 	Attributes map[string]*string `json:"attributes"`
+	Style      map[string]*string `json:"style"`
 }
 
 type checked struct {
@@ -695,7 +699,7 @@ func (c *browserCheck) run(driver *browser.Driver, acted string) checked {
 			got.test(!strings.Contains(text, c.TextGone), fmt.Sprintf("text_gone %q", c.TextGone), ", the page still shows it")
 		}
 	}
-	if c.Element == nil && c.Name == nil && c.Value == nil && len(c.Attributes) == 0 {
+	if c.Element == nil && c.Name == nil && c.Value == nil && len(c.Attributes)+len(c.Style) == 0 {
 		return got
 	}
 	ref := acted
@@ -730,7 +734,18 @@ func (c *browserCheck) run(driver *browser.Driver, acted string) checked {
 	for _, name := range names {
 		read = append(read, name+" "+absentOr(element.Attributes[name]))
 	}
+	properties := slices.Sorted(maps.Keys(c.Style))
+	style, styleErr := driver.Styles(ref, properties)
+	if styleErr != nil {
+		properties = nil
+	}
+	for _, property := range properties {
+		read = append(read, property+": "+style[property])
+	}
 	got.said = append(got.said, strings.TrimSpace("read, "+element.String()+" "+strings.Join(read, ", ")))
+	if styleErr != nil {
+		got.test(false, fmt.Sprintf("the computed style of %s could not be read: %v", element, styleErr), "")
+	}
 	if c.Name != nil {
 		got.test(element.Name == *c.Name, "name "+strconv.Quote(*c.Name), "")
 	}
@@ -739,6 +754,11 @@ func (c *browserCheck) run(driver *browser.Driver, acted string) checked {
 	}
 	for _, name := range names {
 		got.test(absentOr(element.Attributes[name]) == absentOr(c.Attributes[name]), name+" "+absentOr(c.Attributes[name]), "")
+	}
+	for _, property := range properties {
+		if want := c.Style[property]; want != nil {
+			got.test(style[property] == *want, property+": "+*want, "")
+		}
 	}
 	return got
 }

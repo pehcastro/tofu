@@ -47,6 +47,21 @@ func (n axNode) property(name string) string {
 	return ""
 }
 
+const computedStyle = "function(names) { const style = getComputedStyle(this); return Object.fromEntries(names.map(name => [name, style.getPropertyValue(name)])); }"
+
+func (d *Driver) Styles(ref string, names []string) (map[string]string, error) {
+	if len(names) == 0 {
+		return nil, nil
+	}
+	deadline := time.Now().Add(konst.BrowserActTimeoutMillis * time.Millisecond)
+	object, err := d.resolve(deadline, ref)
+	read := map[string]string{}
+	if err == nil {
+		err = d.value(deadline, false, callOn(object, computedStyle, true, names), &read)
+	}
+	return read, err
+}
+
 func (d *Driver) Read(ref string, attributes []string) (Accessible, error) {
 	deadline := time.Now().Add(konst.BrowserActTimeoutMillis * time.Millisecond)
 	var described struct {

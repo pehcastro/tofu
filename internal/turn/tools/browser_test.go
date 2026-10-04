@@ -356,6 +356,9 @@ type cdpPage struct {
 	focusOn  map[string]string
 	attrs    map[string][]string
 	media    []any
+	styles   []map[string]string
+	styled   []string
+	dialog   string
 }
 
 const motionWallMs = 1.7e12 + 1000
@@ -401,6 +404,9 @@ func (p *cdpPage) answer(method string, params map[string]any) any {
 				p.names[offset+i+2] = name
 			}
 			nodes = append([]any{node(1, "RootWebArea", "Stays", children...)}, nodes...)
+		}
+		if p.dialog != "" {
+			nodes = append(nodes, node(90, "dialog", p.dialog))
 		}
 		if p.price > 0 && time.Since(p.loaded) >= p.price {
 			nodes = append(nodes, node(4, "StaticText", "Total R$ 4.667"))
@@ -454,6 +460,9 @@ func (p *cdpPage) answer(method string, params map[string]any) any {
 	case "DOM.getBoxModel":
 		return map[string]any{"model": map[string]any{"content": []float64{0, 0, 10, 0, 10, 10, 0, 10}}}
 	case "Accessibility.getPartialAXTree":
+		if p.aimed == 90 {
+			return map[string]any{"nodes": []any{map[string]any{"nodeId": "x", "backendDOMNodeId": 90, "role": map[string]any{"value": "dialog"}, "name": map[string]any{"value": p.dialog}}}}
+		}
 		return map[string]any{"nodes": []any{map[string]any{"nodeId": "x", "backendDOMNodeId": p.aimed, "role": map[string]any{"value": "button"}, "name": map[string]any{"value": p.buttons[p.aimed-2]}}}}
 	case "DOM.describeNode":
 		if at := p.aimed - 2; at >= 0 && at < len(p.buttons) {
@@ -465,6 +474,15 @@ func (p *cdpPage) answer(method string, params map[string]any) any {
 	case "DOM.resolveNode":
 		return map[string]any{"object": map[string]any{"objectId": fmt.Sprint("node-", params["backendNodeId"])}}
 	case "Runtime.callFunctionOn":
+		if strings.Contains(script, "getComputedStyle") {
+			p.styled = append(p.styled, script)
+			read := p.styles[0]
+			p.styles = p.styles[1:]
+			if read == nil {
+				return map[string]any{"result": map[string]any{"type": "undefined"}, "exceptionDetails": map[string]any{"text": "not an Element"}}
+			}
+			return value(read)
+		}
 		if strings.Contains(script, "selectedOptions") {
 			return value(p.reads)
 		}
@@ -1696,5 +1714,29 @@ func TestReducedMotionTurnsOnOnlyInATabTofuOpened(t *testing.T) {
 	run("browser_act", `{"note":"n","actions":[{"action":"navigate","value":"https://stays.test/"},{"action":"reduced_motion","value":"on"},{"action":"reduced_motion","value":"off"}]}`)
 	if got := fmt.Sprint(page.media); got != "[[map[name:prefers-reduced-motion value:reduce]] [map[name:prefers-reduced-motion value:]]]" {
 		t.Fatalf("reduced motion in tofu's tab sent %s; want reduce, then the page's own preference", got)
+	}
+}
+
+func TestAStyleCheckReadsAtTheStepAndAfterAWaitAndNeverSendsANameAsScript(t *testing.T) {
+	page := &cdpPage{url: "http://127.0.0.1:5395/", buttons: []string{"How dates work", "Close"}, dialog: "How dates work", styles: []map[string]string{
+		{"animation-name": "dialog-in", "transform": "matrix(0.9, 0, 0, 0.9, 0, 0)"}, nil, {"transform": "none"}}}
+	acted := stepsOn(t, page)("browser_act", `{"note":"n","tab":7,"actions":[
+		{"action":"click","target":{"role":"button","name":"How dates work"},"check":{"element":{"role":"dialog","name":"How dates work"},"style":{"transform":"none","animation-name":null}}},
+		{"action":"check","check":{"element":{"role":"button","name":"Close"},"style":{"x');alert(1);('":"none"}}},
+		{"action":"wait","value":300,"check":{"element":{"role":"dialog","name":"How dates work"},"style":{"transform":"none"}}}]}`)
+	for _, want := range []string{
+		`1. click button "How dates work": read, dialog "How dates work" animation-name: dialog-in, transform: matrix(0.9, 0, 0, 0.9, 0, 0)`,
+		`1. click button "How dates work": check failed, transform: none`,
+		`2. check: check failed, the computed style of button "Close" could not be read: the page threw: not an Element`,
+		`3. wait "300": read, dialog "How dates work" transform: none`,
+		`3. wait "300": check held, transform: none`,
+		"ran 3 of 3, checks 1 held and 2 failed",
+	} {
+		if !strings.Contains(acted, want) {
+			t.Fatalf("the batch does not carry %q:\n%s", want, acted)
+		}
+	}
+	if len(page.styled) != 3 || page.styled[0] != page.styled[1] || page.styled[1] != page.styled[2] || strings.Contains(page.styled[1], "alert") {
+		t.Fatalf("the style reads sent %q; want 3 reads of one fixed function, with the names as arguments", page.styled)
 	}
 }
