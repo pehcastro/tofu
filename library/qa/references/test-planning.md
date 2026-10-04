@@ -1,9 +1,7 @@
 ---
 id: test-planning
 domain: qa
-document: Test Plan Creator, a skill that produces a test plan template and the rules for filling it in
-found: published on qaskills.sh under a contributor account, copied into a local archive and not committed here
-related: a second skill, qa-testing-strategy, published on skills.sh, which orders the layers by where a defect originates
+document: a test plan and the rules for filling it in
 ---
 
 # Planning a test before writing one
@@ -46,20 +44,6 @@ Whoever verifies the change checks an agreed API contract as a black box: paths,
 
 Before testing starts, list the capabilities and flows that must keep working, so the regression pass has a target.
 
-## The passage this was drawn from
+## Concrete, never vague
 
-Quoted from *Test Plan Creator*, its exit criteria and four of its eight style rules.
-
-> ## 9. Exit Criteria
->
-> - All high-priority test cases executed.
-> - No open blocker or critical defects.
-> - Known issues are documented and accepted.
-> - Test summary is shared with stakeholders.
-
-> - Prioritize risk-based testing.
-> - Do not overpromise automation coverage.
-> - Mention assumptions instead of pretending missing details are known.
-> - Avoid vague phrases like "test everything."
-
-The rest of that document is an inputs list, entry criteria and a twelve section plan template with a sign-off table, written for a team with a release owner and stakeholders. The layer table in `library/qa/general/skills/test-plan.md` is ours: the original ships a list of testing types. The four sections from a layer per risk to what must not regress come from testany-eng's test-strategy-writer skill and its strategy template.
+A line such as test everything plans nothing. Name the case, the layer and the data.

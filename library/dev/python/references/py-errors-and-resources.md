@@ -1,8 +1,7 @@
 ---
 id: py-errors-and-resources
 domain: dev
-document: agents-knowledge python-error-handling, python-resource-management, python-resilience and python-anti-patterns; trail of bits sharp-edges lang-python; each ruff code checked against ruff rule on ruff 0.16.10
-found: local clones of the two collections, kept outside this repository
+document: exceptions, resources, retries and the Python traps that hide failures, with the ruff codes for each
 ---
 
 # Exceptions and resources

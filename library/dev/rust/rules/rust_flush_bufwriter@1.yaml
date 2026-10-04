@@ -4,4 +4,4 @@ kind: human
 concern: code_rules
 language: rust
 text: call `writer.flush()?` before a `BufWriter` goes out of scope, or take it apart with `writer.into_inner()?`. the flush that runs on drop ignores its error, so a full disk or a closed pipe loses the tail of the output while the function still returns `Ok`. the same holds for any writer that finishes on drop, such as a compression encoder, which has its own `finish()` to call and check.
-notes: sources: Trail of Bits rust-review, the bufwriter-unflushed finder; the std documentation for BufWriter, which says an error from the flush on drop is ignored.
+notes: the flush a BufWriter runs on drop ignores its error, so lost output still reports success. it guards against truncated files on a full disk or a closed pipe.

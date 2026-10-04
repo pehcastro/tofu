@@ -1,8 +1,7 @@
 ---
 id: react-effects
 domain: dev
-document: react.dev, You Might Not Need an Effect, Separating Events from Effects and Removing Effect Dependencies; the set-state-in-effect and exhaustive-deps lint pages of eslint-plugin-react-hooks; Vercel react-best-practices, its rerender and advanced sections on effects
-found: local copies of the react.dev pages and a local clone of the Vercel skills, kept outside this repository
+document: when an effect is needed, its dependencies, its cleanup and what to do instead
 ---
 
 # Effects, and when not to write one

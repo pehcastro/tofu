@@ -2,7 +2,6 @@
 id: research-report
 domain: general
 document: the final message of the research sub-agent
-found: this repository; this file is a format, not a quotation
 ---
 
 # The research report

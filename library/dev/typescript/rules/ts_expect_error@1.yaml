@@ -4,4 +4,4 @@ kind: human
 concern: code_rules
 language: typescript
 text: to silence one compiler error, write `// @ts-expect-error` with the reason after it on the same line, never `@ts-ignore`, and never `@ts-nocheck` over a file. an expect-error fails the build once the error beneath it goes away, so it cannot outlive its cause; an ignore stays after the fix and hides any new error on the line below it.
-notes: sources: Effective TypeScript, 2nd edition, item 43, which scopes an escape hatch as narrowly as it can and shows @ts-expect-error beside @ts-ignore.
+notes: an ignore outlives the error it hid and hides new ones on the same line. it guards against suppressions that never go away.

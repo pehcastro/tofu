@@ -4,4 +4,4 @@ kind: human
 concern: code_rules
 framework: react
 text: a value computed from props or state is computed during render, never held in its own state and copied in by an effect: write `const fullName = first + " " + last` and filter the list in the component body. to reset all of a subtree's state when the thing it shows changes, render it with `key={userId}` instead of clearing state in an effect; to adjust one value when a prop changes, keep the previous prop in state and compare during render, and first try to need neither. eslint-plugin-react-hooks reports `set-state-in-effect` on a synchronous set in an effect body and `set-state-in-render` on an unconditional set during render.
-notes: sources: react.dev, You Might Not Need an Effect, on updating state from props, resetting all state and adjusting some state when a prop changes; the set-state-in-effect and set-state-in-render lint pages; Vercel react-best-practices rerender-derived-state-no-effect.
+notes: state copied in by an effect is one render behind and can drift out of step with its inputs. it guards against redundant state, extra renders and effects that exist only to mirror props.

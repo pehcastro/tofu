@@ -1,8 +1,7 @@
 ---
 id: design-layers
 domain: dev
-document: testany-eng, a 21 skill plugin that runs one lifecycle from requirement to runbook; its prd-writer, hld-writer and lld-writer skills and references/review-boundaries.md
-found: kept in a local archive of Chinese engineering plugins, read in Chinese and not committed here
+document: what a PRD, an HLD and an LLD each decide, and what each leaves to the others
 related: prd-template, hld-template, lld-template
 ---
 

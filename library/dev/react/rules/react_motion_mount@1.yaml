@@ -4,4 +4,4 @@ kind: human
 concern: code_rules
 framework: react
 text: never start an entrance with a `mounted` state set in an effect, which costs a second render and can paint the end state first; the CSS start state goes in `@starting-style`. in Motion, read the preference with `useReducedMotion()` and set the distance to zero rather than removing the animation, or wrap the app in `<MotionConfig reducedMotion="user">`, which makes position, size and transform values jump while opacity still fades. eslint-plugin-react-hooks reports the mount flag as `set-state-in-effect`.
-notes: sources: nkz-taste animations.md, @starting-style for entry and section 10 on reduced motion; the reduced motion handling as it ships in motion 13, its MotionConfig type and positional value list; the set-state-in-effect lint page.
+notes: starting an entrance with a mounted flag costs a render and can paint the end state first, and ignoring reduced motion moves things for people who asked it not to. it guards against a flash on mount and motion that ignores the preference.

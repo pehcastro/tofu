@@ -4,4 +4,4 @@ kind: human
 concern: code_rules
 language: python
 text: `is` compares identity, so use it only for `None`, `True`, `False`, enum members and a sentinel made with `object()`. `x is 1` or `name is "admin"` can hold in one place and fail in another, because the interpreter caches some small ints and strings and not others. compare values with `==`, and `None` with `is None`, since `== None` calls whatever `__eq__` the object defines. test truth with `if items:` rather than `== True`, unless `True` must differ from other true values. ruff reports `is` against a literal as `F632`, `== None` as `E711` and `== True` as `E712`.
-notes: sources: trail of bits sharp-edges lang-python, identity against equality; F632, E711 and E712 confirmed with ruff rule on ruff 0.16.10.
+notes: identity comparison on values works by an accident of caching and breaks elsewhere or on another interpreter. it guards against is on literals and == None calling a custom __eq__.

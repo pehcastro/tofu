@@ -1,8 +1,7 @@
 ---
 id: go-verify
 domain: dev
-document: golang-skills go-linting and go-testing; cc-skills-golang golang-lint and golang-testing; each command, flag and analyzer checked against go tool vet help and golangci-lint help linters as they ship
-found: local clones of the two collections, kept outside this repository
+document: checking Go code: go vet, golangci-lint and go test, their commands, flags and analyzers
 ---
 
 # The Go gate and where it bends

@@ -1,8 +1,7 @@
 ---
 id: py-async
 domain: dev
-document: agents-knowledge async-python-patterns, its details reference, and python-anti-patterns; the ruff explanations of the ASYNC rules and RUF006 on ruff 0.16.10
-found: local clones of the two collections, kept outside this repository
+document: asyncio: blocking calls, task references, cancellation and the ruff ASYNC rules
 ---
 
 # asyncio

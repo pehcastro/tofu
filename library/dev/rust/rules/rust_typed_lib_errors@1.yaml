@@ -4,4 +4,4 @@ kind: human
 concern: code_rules
 language: rust
 text: a library crate returns its own error type: an enum with one variant per failure a caller can act on, usually derived with `thiserror`, wrapping a lower error with `#[from]`. `anyhow::Result` and `Box<dyn Error>` belong in a binary, where the error is only reported; in a library they erase what the caller needs to match on. follow the error type the crate already has first: add a variant to it rather than a second type, and do not add `thiserror` or `anyhow` to a crate that does without them. an error that crosses a spawned task or a thread is `Send + Sync + 'static`.
-notes: sources: Apollo's Rust handbook, chapter 4, thiserror for a crate's errors, anyhow for binaries, and its section on async errors.
+notes: an opaque error type in a library takes away the caller's means to react to a specific failure. it guards against anyhow and boxed errors in library APIs and a second error type beside the first.

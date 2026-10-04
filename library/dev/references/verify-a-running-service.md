@@ -1,8 +1,7 @@
 ---
 id: verify-a-running-service
 domain: dev
-document: oh-my-pi's hub tool prompt, its Processes section, and its system prompt, section 5, Verify
-found: oh-my-pi, packages/coding-agent/src/prompts/tools/hub.md and src/prompts/system/system-prompt.md
+document: checking a service that runs: starting it, reaching it and reading its output
 ---
 
 # Verify a running service by calling it

@@ -1,8 +1,7 @@
 ---
 id: react-rendering
 domain: dev
-document: Vercel react-best-practices, its rerender, rendering and client sections; nkz-taste animations.md sections 8 to 10 on React-specific motion; the Vercel web interface guidelines, hydration; react.dev, You Might Not Need an Effect, on keys and external stores; the motion 13 and react-dom 19 packages as they ship
-found: local clones of the Vercel skills and guidelines, nkz-taste in the nkz-harness skills, and the packages in a local React project, all outside this repository
+document: rendering cost, keys, transitions, hydration and motion in React
 ---
 
 # Rendering performance in React
@@ -66,4 +65,4 @@ In a server-rendered app the first client render must produce the server's HTML.
 - `suppressHydrationWarning` goes on the single element whose text is expected to differ, such as a relative timestamp, and nowhere else.
 - An input typed into before hydration keeps its focus and its value.
 
-React reports a mismatch in the console as `Hydration failed because the server rendered` or `A tree hydrated but some attributes of the server rendered HTML didn't match`. A Playwright context with a `timezoneId` and `locale` different from the server's, failing on any console error, catches both.
+React reports a mismatch in the console as `Hydration failed because the server rendered` or `A tree hydrated but some attributes of the server rendered HTML didn't match`. Opening the page on the dev server with a timezone and locale different from the server's and reading the console catches both.

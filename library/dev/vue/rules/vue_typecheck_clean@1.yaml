@@ -4,4 +4,4 @@ kind: human
 concern: code_rules
 framework: vue
 text: the gate runs `vue-tsc --noEmit`, because `tsc` alone never reads a `.vue` file, and eslint with eslint-plugin-vue's `flat/recommended` config. an error is fixed in the code, never hidden with `@ts-ignore` or an `eslint-disable` directive, and a rule turned off in the config says why beside it. a `ref` that will hold anything but its initial type is typed, `ref<User | null>(null)`, and a template ref comes from `useTemplateRef` in Vue 3.5. eslint-plugin-vue's `require-typed-ref` and `prefer-use-template-ref` check those two.
-notes: sources: vuejs-ai vue-best-practices, on TypeScript and vue-tsc, and its sfc reference on useTemplateRef; the vue-tsc 3.3 bin; the configs and rules as eslint-plugin-vue 10.11 ships them.
+notes: tsc alone never reads a .vue file, so type errors in components pass unnoticed. it guards against a gate that checks less than it seems and errors hidden with ignores.

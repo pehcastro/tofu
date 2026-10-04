@@ -4,4 +4,4 @@ kind: human
 concern: code_rules
 language: rust
 text: before `base.join(p)` or `buf.push(p)` with a path from input, refuse `p` unless every one of its `components()` is `Component::Normal`. an absolute `p` replaces `base` entirely, a `..` walks out of it, and on windows a prefix such as `C:` replaces it as well. that check is the only one that works for a file about to be created. for a path that already exists, `canonicalize` the result and the base and require `result.starts_with(&base)`; `canonicalize` fails on a path that does not exist yet. clippy's `join_absolute_paths` catches only a literal that starts with a separator, never a path from input.
-notes: sources: Trail of Bits rust-review, the path-traversal-join finder and its note that canonicalize cannot check a create target; clippy's description of join_absolute_paths.
+notes: joining an absolute or dot dot path replaces or escapes the base, so input can reach any file the process can. it guards against path traversal, Windows drive prefixes included.

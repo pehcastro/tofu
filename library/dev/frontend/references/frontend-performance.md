@@ -1,8 +1,7 @@
 ---
 id: frontend-performance
 domain: dev
-document: web.dev on Web Vitals and on optimizing LCP, INP and CLS; Addy Osmani's web-quality-skills, core-web-vitals and performance; ibelick fixing-motion-performance; nkz-taste animations.md section 9 and craft.md C4 to C6 and C58; the Vercel web interface guidelines, performance
-found: local clones kept outside this repository; nkz-taste in the nkz-harness skills
+document: Core Web Vitals, LCP, INP and CLS, and keeping animation and layout off the main thread
 ---
 
 # Frontend performance: the three numbers and the main thread
@@ -43,5 +42,5 @@ Changing `transform` or `opacity` can stay on the compositor. Colour, border, sh
 ## Measuring it
 
 - Chrome DevTools: the Performance panel with CPU throttling at 4x and a slow network. A frame past 50 ms is a long task.
-- The same slowdown in Playwright: `const cdp = await page.context().newCDPSession(page)`, then `cdp.send("Emulation.setCPUThrottlingRate", { rate: 4 })`.
+- Tofu's browser tools record the motion on the dev server frame by frame; a frame past 50 ms there is the same long task.
 - Measure with browser extensions off; they add work of their own.

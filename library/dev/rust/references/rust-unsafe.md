@@ -1,8 +1,7 @@
 ---
 id: rust-unsafe
 domain: dev
-document: the before-unsafe, review-unsafe and common-pitfalls checklists in rust-skills' unsafe-checker; Trail of Bits rust-review, its unsafe-boundary cluster and its cstring-dangling and vec-set-len-uninit finders; the edition 2024 forms checked against the Rust edition guide
-found: local clones of both collections, kept outside this repository
+document: writing and reviewing unsafe Rust: invariants, safety comments and the common pitfalls
 ---
 
 # Unsafe code, before and after

@@ -1,8 +1,7 @@
 ---
 id: go-concurrency
 domain: dev
-document: cc-skills-golang golang-concurrency and its channel, sync and pipeline references; golang-skills go-concurrency; the sync, sync/atomic and errgroup package documentation; go tool vet help for copylocks, lostcancel, testinggoroutine and waitgroup
-found: local clones of the two collections, kept outside this repository
+document: goroutine lifetimes, channels, locks, atomics and errgroup, with the vet analyzers that check them
 ---
 
 # Goroutines, channels and locks

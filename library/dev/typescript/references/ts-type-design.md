@@ -1,8 +1,7 @@
 ---
 id: ts-type-design
 domain: dev
-document: Effective TypeScript, 2nd edition, by Dan Vanderkam, items 29, 32 to 34, 37, 59 and 64; pstack's typescript-best-practices skill and its patterns reference
-found: the book's published code samples, kept in a local clone; pstack in the cursor-plugins collection
+document: designing TypeScript types: unions over optional fields, exhaustiveness and narrow types
 ---
 
 # Types that only admit valid states

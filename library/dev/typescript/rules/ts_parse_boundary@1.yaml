@@ -4,4 +4,4 @@ kind: human
 concern: code_rules
 language: typescript
 text: parse what comes from outside the program, JSON.parse, fetch, a file, an environment variable, argv, a message, with the schema library the project already uses, and take the type from the schema, such as `z.infer<typeof User>`. do not keep a hand-written interface beside a schema for the same shape, and do not add a schema library for one check. inside the program, trust the parsed type.
-notes: sources: Effective TypeScript, 2nd edition, item 74; pstack typescript-best-practices references/patterns.md, schemas before hand-rolled guards and boundary validation.
+notes: a hand-written type for outside data is a guess the data never agreed to. it guards against unparsed input and a schema and an interface drifting apart.

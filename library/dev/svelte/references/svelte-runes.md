@@ -1,8 +1,7 @@
 ---
 id: svelte-runes
 domain: dev
-document: sveltejs ai-tools, svelte-core-bestpractices and its references on attach, each, inspect and svelte/reactivity, and svelte-code-writer; the Svelte llms-small docs, runes, snippets and the template; the compiler and client warning and error codes as svelte 5.45 ships them; the svelte-check 4.2 readme
-found: a local clone of sveltejs/ai-tools, a local copy of the Svelte docs, and the svelte and svelte-check packages in a local Svelte 5 project, all outside this repository
+document: Svelte 5 runes, snippets and templates, with the compiler and runtime codes for each mistake
 ---
 
 # Svelte 5 and runes
@@ -87,4 +86,4 @@ Props are read-only. A child changes its parent's value by calling a callback pr
 
 - `svelte-check --fail-on-warnings` in the gate. Every compiler code above is a warning or an error there, with the TypeScript errors.
 - `<!-- svelte-ignore code -->` silences one code on the next element. Use it only where the warning is wrong for that line.
-- Runtime warnings, `ownership_invalid_mutation`, `state_proxy_equality_mismatch` and the rest, go to `console.warn` in development. A Playwright test that fails on a console warning catches them.
+- Runtime warnings, `ownership_invalid_mutation`, `state_proxy_equality_mismatch` and the rest, go to `console.warn` in development. Running the flow on the dev server and reading the browser console catches them.

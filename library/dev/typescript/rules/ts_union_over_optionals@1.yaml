@@ -4,4 +4,4 @@ kind: human
 concern: code_rules
 language: typescript
 text: model a value with several states as a union tagged by one literal field, `{ kind: "loading" } | { kind: "ready"; data: T } | { kind: "failed"; error: E }`, not as one object with a flag and optional fields that admits combinations that cannot happen. before you add an optional property, ask whether it only makes sense together with another one: then the two belong to one variant.
-notes: sources: Effective TypeScript, 2nd edition, items 29, 34 and 37; pstack typescript-best-practices, discriminated unions.
+notes: an object of optional fields admits combinations that cannot happen, and every reader must guess which are valid. it guards against impossible states and checks for fields that are never set together.

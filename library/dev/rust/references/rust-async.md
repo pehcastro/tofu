@@ -1,8 +1,7 @@
 ---
 id: rust-async
 domain: dev
-document: Trail of Bits rust-review, its async-runtime and concurrency-locking clusters and the async-blocking, cancel-safety and select-bias finders; the tokio documentation for select!, its channels and its Mutex
-found: a local clone of the Trail of Bits skills, kept outside this repository
+document: async Rust: blocking, cancel safety, select! and locks across an await
 ---
 
 # Async Rust: cancellation, ordering and backpressure

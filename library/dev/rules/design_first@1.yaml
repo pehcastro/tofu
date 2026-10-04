@@ -3,4 +3,4 @@ domain: dev
 kind: human
 concern: process_discipline
 text: on work bigger than a small fix, sketch the shape of the files you own before the code: the types, the function signatures and the module boundaries. prefer the design that hides more behind a smaller surface. then fill in the code against that sketch, and when the code keeps fighting it, redesign the sketch rather than bolting on workarounds.
-notes: source: pstack architect, phases b, d and e. the multi-model arena and the phase c checkpoint are left out.
+notes: code written without a shape grows workarounds where the design should have been. it guards against wide interfaces and patching around a design that no longer fits.

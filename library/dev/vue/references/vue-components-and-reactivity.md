@@ -1,8 +1,7 @@
 ---
 id: vue-components-and-reactivity
 domain: dev
-document: vuejs-ai vue-best-practices, its workflow and its reactivity, sfc, component-data-flow and composables references; vuejs-ai vue-debug-guides on computed and watchers; antfu skills vue, its preferences, script-setup-macros and core-new-apis; the rules, categories and configs as eslint-plugin-vue 10.11 ships them; the development warnings as @vue/runtime-core 3.5 ships them; the vue-tsc 3.3 package
-found: local clones of vuejs-ai/skills and antfu/skills, and the eslint-plugin-vue, @vue/runtime-core and vue-tsc packages unpacked from the registry, all outside this repository
+document: Vue 3 components, reactivity, computed values, watchers and type checking
 ---
 
 # Vue components and reactivity

@@ -1,8 +1,7 @@
 ---
 id: frontend-motion
 domain: dev
-document: nkz-taste animations.md, its sections on whether to animate, duration, easing, springs, what to animate, interaction states, orchestration, techniques, performance and accessibility, with its native and visual style sections left out; ibelick fixing-motion-performance; the Vercel web interface guidelines, animation; MDN on prefers-reduced-motion and on the View Transition API
-found: nkz-taste in the nkz-harness skills; the other three in local clones kept outside this repository
+document: whether to animate, duration, easing, springs, what to animate, interaction states, orchestration, performance and reduced motion
 ---
 
 # Motion in an interface
@@ -64,5 +63,5 @@ Infinite loops, parallax and gesture physics become static or instant. Opacity a
 ## Checking it
 
 - `document.getAnimations()` lists every running CSS animation, transition and Web Animation; `effect.getComputedTiming().duration` is the real duration and `effect.getKeyframes()` names what moves.
-- `page.emulateMedia({ reducedMotion: "reduce" })` in Playwright, or the Rendering panel in DevTools, turns on reduced motion.
+- The Rendering panel in DevTools turns on reduced motion; in the project's own tests, a stubbed `matchMedia` reports it.
 - The DevTools Animations panel plays motion at a quarter of the speed, where an overlapping crossfade, a wrong origin or two properties drifting apart become visible.

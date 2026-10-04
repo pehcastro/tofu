@@ -4,4 +4,4 @@ kind: human
 concern: process_discipline
 role: orchestrator
 text: before you spawn sub-agents on one piece of work, write the design they share yourself, as a markdown contract every brief names: the types, the function signatures, the module boundaries and which sub-agent owns each shared module. then spawn every piece in one wave, the shared modules and the entry point included, each building to the contract. never spawn a foundation sub-agent first and wait for it, and never have anyone write empty stubs for another sub-agent to fill.
-notes: source: pstack architect, the sketch as the contract, held by the orchestrator.
+notes: sub-agents building to no shared design wait on each other or build pieces that do not fit. it guards against spawning one at a time, empty stubs and mismatched interfaces.

@@ -4,4 +4,4 @@ kind: human
 concern: code_rules
 language: rust
 text: a function that only reads its argument borrows it: `&str` rather than `&String` or `String`, `&[T]` rather than `&Vec<T>` or `Vec<T>`, `&Path` rather than `&PathBuf`, `&T` rather than `T`. take ownership when the function keeps the value, returns it or sends it to another thread, so the caller moves it once instead of cloning it to make the call. clippy's `ptr_arg` flags `&String`, `&Vec<T>` and `&PathBuf`, and the pedantic `needless_pass_by_value` flags an owned parameter the body only reads.
-notes: sources: Apollo's Rust handbook, chapter 1 on borrowing and chapter 3 on when to pass ownership; clippy's descriptions of ptr_arg and needless_pass_by_value.
+notes: a function that takes ownership of what it only reads forces its callers to clone. it guards against needless allocation and parameter types narrower than they need to be.

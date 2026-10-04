@@ -4,4 +4,4 @@ kind: human
 concern: code_rules
 language: typescript
 text: to check a literal against a type, write `satisfies Type`, not `as Type` and not an annotation that widens it. `satisfies` reports a missing or wrong property and keeps the literal's own type, so `theme: "dark"` stays `"dark"` and a key the literal lacks is an error rather than an undefined read.
-notes: sources: Effective TypeScript, 2nd edition, item 20 on widening, where satisfies is taught, and item 9; pstack typescript-best-practices, satisfies over as.
+notes: an annotation widens a literal and a cast skips checking, and both lose what the compiler knew. it guards against missed property errors and literals widened to string.

@@ -4,4 +4,4 @@ kind: human
 concern: code_rules
 language: typescript
 text: a value whose type you do not know is `unknown`, never `any`: narrow it with typeof, in, instanceof or a schema before you use it. `any` switches checking off for everything it touches and spreads through every value derived from it. where a library forces `any` on you, keep it inside one small function with a precise signature, and never return it.
-notes: sources: Effective TypeScript, 2nd edition, items 5, 43, 44, 45 and 46; pstack typescript-best-practices, unknown over any.
+notes: any turns off checking for everything it touches and spreads to every value derived from it. it guards against unchecked data flowing through the program.

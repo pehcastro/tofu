@@ -1,8 +1,7 @@
 ---
 id: react-rules-and-compiler
 domain: dev
-document: react.dev, the Rules of React, Components and Hooks must be pure, React calls Components and Hooks, Rules of Hooks, and the React Compiler introduction; the eslint-plugin-react-hooks rule list and its lint pages; Vercel composition-patterns
-found: local copies of the react.dev pages and a local clone of the Vercel skills, kept outside this repository
+document: the rules React relies on, purity, hooks and immutability, and the React Compiler with its lint rules
 ---
 
 # The rules of React, and the compiler that relies on them

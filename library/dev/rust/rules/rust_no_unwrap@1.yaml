@@ -4,4 +4,4 @@ kind: human
 concern: code_rules
 language: rust
 text: no `.unwrap()` or `.expect()` outside tests, and never on a value that came from outside the program: a request, a file, an argument, an environment variable, a decoded message. a panic there lets bad input stop the process. return the error with `?`, convert it with `.ok_or(...)?` or `.map_err(...)?`, or write `let Ok(value) = parsed else { return Err(...) };`. an `expect` is fine only where failure is a bug the code has already ruled out, and its message says why it cannot happen. clippy's `unwrap_used` and `expect_used` check this; both are restriction lints, off unless the project turns them on.
-notes: sources: Apollo's Rust handbook, chapter 4, on keeping unwrap and expect out of production code; Trail of Bits rust-review, the unwrap-on-untrusted finder and its false positives.
+notes: an unwrap on outside data lets bad input stop the whole process. it guards against panics on malformed requests, files and arguments.

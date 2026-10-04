@@ -1,8 +1,7 @@
 ---
 id: frontend-interaction-and-forms
 domain: dev
-document: nkz-taste craft.md C1 to C28, C46 to C60 and interactions.md; the Vercel web interface guidelines, forms, feedback, state and navigation; MDN on client-side form validation; web.dev on sign-in forms and on payment and address forms
-found: nkz-taste in the nkz-harness skills; the rest in local clones kept outside this repository
+document: loading, empty and error states, feedback after an action, form fields and validation, URL state and real content
 ---
 
 # Interaction, states and forms
@@ -18,7 +17,7 @@ A person should never have to wonder whether a press worked, whether something c
 - A spinner suits an action; a skeleton suits content whose shape is known.
 - Success shows what happened and the obvious next step, not only a toast.
 
-In Playwright, `page.route` answers a request however a test needs: an empty list, a 500, a delay that holds the loading state open. One test per state.
+The project's own tests answer a request however a state needs: an empty list, a 500, a delay that holds the loading state open. One test per state, then a look at each on the dev server through tofu's browser tools.
 
 ## Words on controls
 
@@ -47,7 +46,7 @@ Where the project has a component library or its own styling, the browser's own 
 
 The browser already validates `required`, `type`, `min`, `max`, `step` and `pattern`. `:invalid` matches from the first render, so it paints an untouched form red; `:user-invalid` matches only after the person has interacted, and is the one to style. `setCustomValidity(message)` adds a check of your own; an empty string clears it. With `novalidate` on the form, script owns every message, and must then set `aria-invalid` and `aria-describedby` itself.
 
-Playwright reads the result as a person would: `await expect(field).toBeFocused()` and `await expect(field).toHaveAccessibleErrorMessage("Enter an email address")`.
+Read the result as a person would: on the dev server, tofu's browser tools submit the form and show which field holds focus and the error message tied to it.
 
 ## Real content
 

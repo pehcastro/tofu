@@ -4,4 +4,4 @@ kind: human
 concern: code_rules
 framework: svelte
 text: an `{#each}` over a list that is reordered, filtered or inserted into is keyed by a stable id from the data, `{#each items as item (item.id)}`, never by the index, which hands one row's state, focus and transition to another. data that arrives without ids gets them where it is created, not in the template. to bind or assign a row's field, keep the item whole and write `bind:value={item.count}`; a destructured item, `{#each items as { count }}`, cannot be bound or reassigned in runes mode. the compiler refuses that as `each_item_invalid_assignment`, Svelte throws `each_key_duplicate` when two items share a key, and a test types into the second row, reorders the list, and asserts the text moved with its row.
-notes: sources: sveltejs ai-tools svelte-core-bestpractices, on each blocks, and its each reference; the compiler and client errors as svelte 5.45 ships them.
+notes: an unkeyed or index-keyed list hands one row's state, focus and transition to another when the list changes. it guards against rows that swap state on reorder and bindings that cannot work on a destructured item.

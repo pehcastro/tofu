@@ -1,8 +1,7 @@
 ---
 id: prd-template
 domain: dev
-document: testany-eng prd-writer, SKILL.md and its five templates, new-feature-backend, new-feature-ui, integration, refactoring and optimization, each in Chinese with an English sibling
-found: kept in a local archive of Chinese engineering plugins and not committed here
+document: the sections of a product requirements document and what goes in each
 related: design-layers, hld-template
 ---
 

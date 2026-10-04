@@ -4,4 +4,4 @@ kind: human
 concern: process_discipline
 role: orchestrator
 text: your context is for decisions. send work with bulky output, such as a long log, a wide search or a large file read, to a sub-agent and take back its summary, not the raw payload. read only what the current decision needs.
-notes: source: pstack principle-guard-the-context-window.
+notes: an orchestrator context filled with raw logs and searches leaves less room for the decisions it exists to make. it guards against context spent on payloads a sub-agent could summarise.

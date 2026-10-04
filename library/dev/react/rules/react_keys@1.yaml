@@ -4,4 +4,4 @@ kind: human
 concern: code_rules
 framework: react
 text: a list item's `key` is a stable identity from the data, a database id or a slug, unique among its siblings. never the array index for a list that is reordered, filtered or inserted into, which hands one item's state and focus to another, and never a value made during render such as `Math.random()`, which remounts every item on every render. data that arrives without ids gets them where it is created, not inside the `map`. change a `key` on purpose to reset a subtree that now shows a different thing. React logs `Each child in a list should have a unique "key" prop.` in development, so a test fails on any `console.error`; another types into the second row, reorders the list, and asserts the text moved with its row. `purity` reports the random key.
-notes: sources: react.dev, You Might Not Need an Effect, on resetting state with a key; the purity lint page; the key warning as react-dom 19 prints it.
+notes: an unstable or positional key hands one item's state and focus to another when the list changes. it guards against index keys on lists that change and random keys that remount everything.

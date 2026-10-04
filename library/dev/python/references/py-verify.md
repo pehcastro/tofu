@@ -1,8 +1,7 @@
 ---
 id: py-verify
 domain: dev
-document: trail of bits modern-python, its ruff, testing and uv references; agents-knowledge python-testing-patterns; each ruff code and flag checked against ruff rule and ruff check --help on ruff 0.16.10, each uv flag against uv --help on uv 0.10
-found: local clones of the two collections, kept outside this repository
+document: checking Python code: ruff, the type checker, pytest and uv
 ---
 
 # The Python gate and where it bends

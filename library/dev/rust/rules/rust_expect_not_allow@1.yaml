@@ -4,4 +4,4 @@ kind: human
 concern: code_rules
 language: rust
 text: never write `#[allow(...)]` to quiet a lint: fix what it found. when the lint is wrong for one item, put `#[expect(clippy::lint_name, reason = "why it is wrong here")]` on that item alone. an expect warns once the lint stops firing, so it cannot outlive its cause, and the reason travels with it. never lower a level in the `[lints]` table or add a crate-wide `#![allow]` to make the gate pass. `#[expect]` and `reason` need Rust 1.81; below that `rust-version`, report the lint instead. clippy's `allow_attributes` and `allow_attributes_without_reason` check this.
-notes: sources: Apollo's Rust handbook, chapter 2, fix warnings rather than silence them, and expect over allow; clippy's own description of allow_attributes.
+notes: an allow outlives the problem it hid and gives no reason, while an expect warns once it is no longer needed. it guards against silenced lints that pile up and lint levels lowered to pass.

@@ -4,4 +4,4 @@ kind: human
 concern: code_rules
 language: python
 text: open a file, a lock, a socket, a database connection or a temporary directory with `with`, or `async with` in async code, so it is released when the block ends, an exception included. `f = open(p)` closed on a later line leaks when anything between raises. when the number of resources is known only at run time, enter each on a `contextlib.ExitStack`; when a function must hand an open resource to its caller, make it a context manager with `contextlib.contextmanager` and put the release in a `finally` around the `yield`. a buffered write reaches the file only when it is flushed or closed, so read it back after the `with` ends. ruff reports `open` and its relatives outside `with` as `SIM115`.
-notes: sources: agents-knowledge python-resource-management and python-anti-patterns, unclosed resources; SIM115 confirmed with ruff rule on ruff 0.16.10.
+notes: a resource opened without with leaks when anything raises before it is closed. it guards against leaked files, sockets and locks, and reading a file before its buffered write is flushed.

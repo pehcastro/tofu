@@ -1,8 +1,7 @@
 ---
 id: frontend-accessibility
 domain: dev
-document: nkz-taste craft.md C29 to C45 and web-design.md on components and dialogs; ibelick fixing-accessibility; Addy Osmani's web-quality-skills, accessibility; the WAI-ARIA Authoring Practices, read me first, the patterns index and developing a keyboard interface; MDN on keyboard-navigable widgets; the rule lists of axe-core 4.10, eslint-plugin-jsx-a11y 6.10, the Svelte 5 compiler's warnings and eslint-plugin-vuejs-accessibility 2.6, read from their packages
-found: local clones and installed packages kept outside this repository; nkz-taste in the nkz-harness skills
+document: accessible names, contrast, focus, dialogs, keyboard patterns and form semantics, with the axe, jsx-a11y, Svelte compiler and vuejs-accessibility checks that catch each
 ---
 
 # Accessibility that a check can see
@@ -33,7 +32,7 @@ A live region exists in the page before its text changes; one inserted together 
 
 ## The checks, by framework
 
-axe-core runs on the rendered page in every framework. With Playwright, `new AxeBuilder({ page }).analyze()` from `@axe-core/playwright`, asserting `violations` is empty. axe ships `target-size` turned off; `.options({ rules: { "target-size": { enabled: true } } })` runs it. axe cannot see focus visibility, focus order, a keyboard trap or whether a name makes sense, so a keyboard test stays.
+axe-core runs on the rendered page in every framework. Run it through the project's existing test setup, or the axe DevTools extension on the dev server, and expect no violations. axe ships `target-size` turned off; `.options({ rules: { "target-size": { enabled: true } } })` runs it. axe cannot see focus visibility, focus order, a keyboard trap or whether a name makes sense, so a keyboard test stays.
 
 The static checks run on the source:
 

@@ -1,8 +1,7 @@
 ---
 id: sveltekit-data-and-forms
 domain: dev
-document: the Svelte llms-small docs, SvelteKit routing, loading data, headers and cookies, errors and redirects, form actions, state management, hooks and server-only modules; the messages as @sveltejs/kit 2.49 ships them in its export validator, its action runner, its page renderer, its serialisation check and its vite plugin
-found: a local copy of the Svelte docs and the @sveltejs/kit package in a local Svelte 5 project, both outside this repository
+document: SvelteKit routing, load functions, cookies, errors, form actions, state and server-only modules
 ---
 
 # SvelteKit data and forms
@@ -82,5 +81,5 @@ export const actions: Actions = {
 ## Checking it
 
 - `svelte-check` types `load`, `actions`, `data` and `form` from the generated `./$types`.
-- A Playwright test with `javaScriptEnabled: false` submits each form.
+- Each form submits on the dev server with JavaScript turned off.
 - A test signs two people in from two browser contexts and asserts neither page shows the other's data.

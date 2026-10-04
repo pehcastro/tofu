@@ -4,4 +4,4 @@ kind: human
 concern: code_rules
 language: rust
 text: a lock guard taken in a `match` scrutinee, `match m.lock().unwrap().get(k) { ... }`, lives until the whole match ends, so locking the same mutex again in an arm deadlocks. an `if let` or `while let` scrutinee holds it through the body the same way, and before edition 2024 an `if let` holds it through its `else` too. bind what you need first, `let found = m.lock().unwrap().get(k).cloned();`, so the guard drops at the end of that statement. a plain `if m.lock().unwrap().is_empty()` differs: that guard drops when the condition ends. clippy's `significant_drop_in_scrutinee`, a nursery lint, checks the match form.
-notes: sources: Trail of Bits rust-review, the concurrency-locking cluster on a guard's scope in a scrutinee; clippy's description of significant_drop_in_scrutinee; the Rust reference on temporary scopes and the edition 2024 if let rescope.
+notes: a guard in a match or if let scrutinee lives for the whole block, so locking again inside it deadlocks. it guards against deadlocks hidden in ordinary-looking code.

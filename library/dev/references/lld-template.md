@@ -1,8 +1,7 @@
 ---
 id: lld-template
 domain: dev
-document: testany-eng lld-writer, SKILL.md, references/lld-core-template.en.md with its 14 sections, and references/modules.md with its add-on modules
-found: kept in a local archive of Chinese engineering plugins and not committed here
+document: the sections of a low-level design and its optional add-on modules
 related: design-layers, hld-template
 ---
 

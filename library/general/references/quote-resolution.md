@@ -2,7 +2,6 @@
 id: quote-resolution
 domain: general
 document: interface/tui/quote, internal/turn/tools and internal/session, read in this repository
-found: this repository; this file is a description of what the code does, not a quotation
 also: library/general/references/what-reaches-a-screen.md
 ---
 

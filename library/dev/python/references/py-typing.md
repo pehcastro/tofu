@@ -1,8 +1,7 @@
 ---
 id: py-typing
 domain: dev
-document: the typing best practices page of the Python typing documentation; agents-knowledge python-type-safety; trail of bits modern-python on type checkers; each ruff code checked against ruff rule on ruff 0.16.10
-found: local clones of the collections and a saved copy of the typing page, kept outside this repository
+document: Python annotations, the type checkers and the ruff upgrade rules for typing
 ---
 
 # Types

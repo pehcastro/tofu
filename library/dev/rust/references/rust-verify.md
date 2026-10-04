@@ -1,8 +1,7 @@
 ---
 id: rust-verify
 domain: dev
-document: Apollo's Rust handbook, chapter 2 on clippy and lint configuration; the cargo-workflows and rust-sanitizers-miri skills in low-level-dev-skills; the ECC rust-build-resolver agent; each command and flag checked against cargo, clippy and miri as they ship
-found: local clones of the three collections, kept outside this repository
+document: checking Rust code: cargo, clippy, lint configuration, sanitizers and miri
 ---
 
 # The cargo gate and where it bends

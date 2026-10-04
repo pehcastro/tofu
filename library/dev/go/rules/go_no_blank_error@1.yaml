@@ -4,4 +4,4 @@ kind: human
 concern: code_rules
 language: go
 text: never assign an error to `_` and never call a function that returns one as a bare statement: `v, _ := strconv.Atoi(s)`, `json.Unmarshal(data, &cfg)` and `f.Close()` on a file you wrote all lose a failure the program depended on. return it or handle it, and on a file you wrote check the error from `Close`, because a failed flush shows up there. dropping it is right only for a call whose failure changes nothing, such as a progress line written to stderr. go vet does not report an ignored error. golangci-lint's `errcheck` reports a bare call, and with its `check-blank` setting the `_` assignment too.
-notes: sources: golang-skills go-error-handling, a deliberate choice over discarding with a blank; cc-skills-golang common-go-bugs, silent error swallowing, whose claim that vet finds ignored errors is wrong and was left out; check-blank in golangci-lint's settings for errcheck.
+notes: a discarded error lets the program carry on with data it never got, and the failure shows up later as something else. it guards against swallowed parse, decode and close errors.

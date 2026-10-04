@@ -4,4 +4,4 @@ kind: human
 concern: code_rules
 framework: react
 text: an update that is slow to render and not urgent, filtering a long list, switching a heavy tab, redrawing a chart from input, runs inside `startTransition` from `useTransition`, while the input that caused it updates outside, so typing stays immediate. use `isPending` for its loading state rather than a hand-set flag that a thrown error can leave on. when the slow part reads what someone types, render it from `useDeferredValue(query)` and show it as stale while `query !== deferredQuery`. the check is a React DevTools Profiler recording of fast typing: each keystroke commits quickly and the slow tree renders in a separate commit that the next keystroke interrupts.
-notes: sources: Vercel react-best-practices rendering-usetransition-loading, rerender-transitions and rerender-use-deferred-value; nkz-taste interactions.md on input response.
+notes: a slow update run as urgent blocks typing, so the input lags behind the keys. it guards against heavy renders on every keystroke and hand-set loading flags that stay on.

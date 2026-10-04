@@ -1,8 +1,7 @@
 ---
 id: metrics
 domain: qa
-document: qa-metrics, a QA skill about what to count and what to do when a number goes red
-found: published on skills.sh under a contributor account, copied into a local archive and not committed here
+document: what to count about a test suite and what to do when a number goes red
 ---
 
 # What is worth counting
@@ -23,7 +22,7 @@ Code can be executed by a test that asserts nothing. Coverage paired with a muta
 
 ## Counting what is not there
 
-Skipped, disabled and pending tests are invisible coverage gaps. Their count trends toward zero or it is a gap that no dashboard shows. In this project a skip is already a result that must be named, which is the same rule reached from the other side.
+Skipped, disabled and pending tests are invisible coverage gaps. Their count trends toward zero or it is a gap that no dashboard shows. In this project a skip is already a result that must be named, which is the same rule reached from the other side. A skip older than two sprints is fixed or deleted, and a check that fails when skips pass 5 percent of the suite keeps the count honest.
 
 ## Vanity
 
@@ -34,25 +33,3 @@ Test count, lines of test code, number of dashboards. None of them connect to wh
 - comparing two components by the same target, when one is a payment path and the other an admin screen
 - gaming a number with trivial tests, which coverage alone cannot detect and a mutation score can
 - tracking twenty five metrics and acting on none
-
-## The passage this was drawn from
-
-Quoted from *qa-metrics*, three of its five core principles and the section on skipped tests. An em dash in the original heading of the second is written here as a colon, which is the only change.
-
-> ### 1. Metrics Should Drive Action, Not Just Dashboards
-> A metric without an action plan is decoration. For every metric, define: what threshold triggers action, what the action is, and who takes it. If flakiness crosses 5%, the on-call engineer investigates the top 3 flaky tests that week. No ambiguity.
-
-> ### 2. Leading vs Lagging: Track Both, Act on Leading
-> Defect escape rate and MTTR are **lagging**: you learn after users were hurt. Flakiness, coverage delta, and skipped-test count are **leading**: they predict escapes before they happen. Lagging metrics tell leadership whether quality is moving; leading metrics are where engineers spend their daily attention because they can still change the outcome.
-
-> ### 3. Trend Over Snapshot
-> A single number is nearly useless. Coverage at 72% means nothing; coverage trending 68% to 72% over three sprints tells a story. Display metrics as time series and evaluate direction, not absolute position.
-
-> #### Disabled and Skipped Test Count
-> Total tests marked `skip`, `disabled`, `pending`, `xit`, `xdescribe` or equivalent.
->
-> **Target:** Trend toward zero. Skipped tests older than 2 sprints: fix or delete. Add a CI step that fails if skipped count exceeds 5% of total tests.
->
-> **Why it matters:** Skipped tests are invisible coverage gaps. A suite with 500 passing and 150 skipped tests has a `150 / (500 + 150) = 23%` gap that dashboards hide.
-
-The original's front matter carries an author handle and an MIT licence line. Neither is copied here.

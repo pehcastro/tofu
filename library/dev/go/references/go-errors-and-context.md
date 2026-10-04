@@ -1,8 +1,7 @@
 ---
 id: go-errors-and-context
 domain: dev
-document: golang-skills go-error-handling and go-context, a distillation of the Google and Uber Go guides and Go Code Review Comments; cc-skills-golang golang-error-handling and golang-context; the errors and context package documentation
-found: local clones of the two collections, kept outside this repository
+document: wrapping, comparing and handling errors, and passing a context through a call chain
 ---
 
 # Errors and context

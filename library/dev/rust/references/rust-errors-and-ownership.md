@@ -1,8 +1,7 @@
 ---
 id: rust-errors-and-ownership
 domain: dev
-document: rust-skills' m01-ownership skill and its table of borrow errors; Apollo's Rust handbook, chapters 1 and 4 on borrowing and error handling; the ECC rust-build-resolver agent; each error code checked with rustc --explain
-found: local clones of the three collections, kept outside this repository
+document: borrow errors read as ownership questions, and error types for libraries and binaries
 ---
 
 # Borrow errors and error types

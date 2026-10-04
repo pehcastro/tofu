@@ -1,8 +1,7 @@
 ---
 id: go-traps
 domain: dev
-document: cc-skills-golang golang-safety and the common-go-bugs reference of golang-troubleshooting; golang-skills go-defensive and go-code-review; each check named here confirmed against go tool vet help, golangci-lint help linters and staticcheck's check list
-found: local clones of the two collections, kept outside this repository
+document: the Go mistakes that compile cleanly: nil interfaces, aliasing, narrowing, defer and type assertions, with the vet, golangci-lint and staticcheck checks for each
 ---
 
 # Traps the compiler accepts

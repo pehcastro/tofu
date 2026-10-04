@@ -1,8 +1,7 @@
 ---
 id: vue-stores-routing-and-ssr
 domain: dev
-document: vuejs-ai vue-pinia-best-practices, vue-router-best-practices and vue-testing-best-practices; antfu skills nuxt, best-practices-data-fetching and best-practices-ssr, and pinia; the exports and messages as pinia 4.0, vue-router 5.3, nuxt 4.4 and @vue/runtime-core 3.5 ship them
-found: local clones of vuejs-ai/skills and antfu/skills, and the pinia, vue-router, nuxt and @vue/runtime-core packages unpacked from the registry, all outside this repository
+document: Pinia stores, Vue Router guards, Nuxt data fetching and server rendering
 ---
 
 # Pinia, Vue Router and server rendering
@@ -64,6 +63,6 @@ The first client render must match the server's HTML. Locale formatting, the tim
 
 ## Checking it
 
-- A Playwright test fails on any console error or warning during the first load, which catches a hydration mismatch and an early store.
+- The browser console on the dev server shows no error or warning during the first load, which catches a hydration mismatch and an early store.
 - A test opens a guarded route signed out and asserts it reaches the sign-in page in one redirect.
 - A test signs two people in from two browser contexts against one server and asserts neither sees the other's data.

@@ -2,7 +2,6 @@
 id: what-reaches-a-screen
 domain: general
 document: internal/turn, cmd/tofu and internal/secret, read in this repository
-found: this repository; this file is a description of what the code does, not a quotation
 ---
 
 # What reaches a screen

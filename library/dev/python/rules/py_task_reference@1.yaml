@@ -4,4 +4,4 @@ kind: human
 concern: code_rules
 language: python
 text: the event loop keeps only a weak reference to a task, so `asyncio.create_task(send(msg))` with its result dropped can be collected before it finishes, and its exception is never seen. keep every task: await it, gather it, or add it to a set the task removes itself from, `tasks.add(t)` then `t.add_done_callback(tasks.discard)`, and await or cancel what is left at shutdown, touching only the tasks you made. when `requires-python` is 3.11 or later and the tasks belong to one operation, `async with asyncio.TaskGroup() as tg:` holds them, waits for them and cancels the rest on the first failure. a task that fails unawaited reports only `Task exception was never retrieved`, late, and to the log. ruff reports a dropped task as `RUF006`.
-notes: sources: agents-knowledge async-python-patterns; the ruff explanation of RUF006, which cites the asyncio documentation on weak task references; RUF006 confirmed with ruff rule on ruff 0.16.10.
+notes: a task whose reference is dropped can be collected mid-run, and its exception is never seen. it guards against fire and forget tasks that vanish or fail in silence.
