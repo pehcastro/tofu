@@ -258,15 +258,7 @@ func (d *Driver) observe(deadline time.Time, interactive bool) (string, error) {
 
 func (n axNode) isModal() bool {
 	role := n.Role.text()
-	if role != "dialog" && role != "alertdialog" {
-		return false
-	}
-	for _, property := range n.Properties {
-		if property.Name == "modal" && property.Value.text() == "true" {
-			return true
-		}
-	}
-	return false
+	return (role == "dialog" || role == "alertdialog") && n.property("modal") == "true"
 }
 
 func (d *Driver) linkURLs(deadline time.Time, top []treeNode, page string) error {

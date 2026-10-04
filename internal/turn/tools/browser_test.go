@@ -352,6 +352,10 @@ type cdpPage struct {
 	changes  string
 	reads    string
 	stalls   string
+	focused  string
+	focusOn  map[string]string
+	attrs    map[string][]string
+	media    []any
 }
 
 const motionWallMs = 1.7e12 + 1000
@@ -377,8 +381,10 @@ func (p *cdpPage) answer(method string, params map[string]any) any {
 		return map[string]any{"frameTree": map[string]any{"frame": map[string]any{"id": "main", "loaderId": "L " + p.url, "url": p.url}}}
 	case "Accessibility.getFullAXTree":
 		node := func(id int, role, name string, children ...string) map[string]any {
+			focused := name == p.focused || role == "RootWebArea" && p.focused == ""
 			return map[string]any{"nodeId": fmt.Sprint(id), "backendDOMNodeId": id, "childIds": children,
-				"role": map[string]any{"value": role}, "name": map[string]any{"value": name}}
+				"role": map[string]any{"value": role}, "name": map[string]any{"value": name},
+				"properties": []any{map[string]any{"name": "focused", "value": map[string]any{"value": focused}}}}
 		}
 		nodes := []any{node(1, "RootWebArea", "Stays", "2", "3", "4"), node(2, "button", "Next"), node(3, "button", "Buy")}
 		if len(p.buttons) > 0 {
@@ -436,6 +442,9 @@ func (p *cdpPage) answer(method string, params map[string]any) any {
 			}
 			if name, named := p.names[p.aimed]; named {
 				p.clicked = append(p.clicked, name)
+				if focused, moves := p.focusOn[name]; moves {
+					p.focused = focused
+				}
 				if screen, shown := p.screens[name]; shown {
 					p.buttons = screen
 				}
@@ -444,6 +453,15 @@ func (p *cdpPage) answer(method string, params map[string]any) any {
 		return map[string]any{}
 	case "DOM.getBoxModel":
 		return map[string]any{"model": map[string]any{"content": []float64{0, 0, 10, 0, 10, 10, 0, 10}}}
+	case "Accessibility.getPartialAXTree":
+		return map[string]any{"nodes": []any{map[string]any{"nodeId": "x", "backendDOMNodeId": p.aimed, "role": map[string]any{"value": "button"}, "name": map[string]any{"value": p.buttons[p.aimed-2]}}}}
+	case "DOM.describeNode":
+		if at := p.aimed - 2; at >= 0 && at < len(p.buttons) {
+			return map[string]any{"node": map[string]any{"backendNodeId": p.aimed, "attributes": p.attrs[p.buttons[at]]}}
+		}
+	case "Emulation.setEmulatedMedia":
+		p.media = append(p.media, params["features"])
+		return map[string]any{}
 	case "DOM.resolveNode":
 		return map[string]any{"object": map[string]any{"objectId": fmt.Sprint("node-", params["backendNodeId"])}}
 	case "Runtime.callFunctionOn":
@@ -1623,5 +1641,60 @@ func TestBrowserMotionRefusesAnUnknownActionAndAScenarioThatDoesNotParse(t *test
 		if _, err := try("browser_motion", refused.args); err == nil || !strings.Contains(err.Error(), refused.field) {
 			t.Fatalf("%s answered %v; want it refused naming %s", refused.args, err, refused.field)
 		}
+	}
+}
+
+func TestABrowserDoStepListChecksFocusAndKeepsGoingPastAFailedCheck(t *testing.T) {
+	page := &cdpPage{url: "http://127.0.0.1:5311/", buttons: []string{"Delete Rice", "Keep it"}, focusOn: map[string]string{"Delete Rice": "Keep it", "Keep it": ""}}
+	done, err := browserOn(t, page, settings.DriverGoal)("browser_do", `{"tab":7,"goal":"check focus returns","steps":[
+		{"action":"click","target":{"role":"button","name":"Delete Rice"},"check":{"focus":{}}},
+		{"action":"click","target":{"role":"button","name":"Keep it"},"check":{"focus":{"role":"button","name":"Delete Rice"},"text_gone":"Keep it"}},
+		{"action":"check","check":{"element":{"role":"button","name":"Delete Rice"},"url_has":"5311"}}]}`)
+	for _, want := range []string{
+		`1. click button "Delete Rice": read, focus is on button "Keep it"`,
+		`2. click button "Keep it": check failed, focus is on the page itself, not button "Delete Rice"`,
+		`2. click button "Keep it": check failed, text_gone "Keep it", the page still shows it`,
+		`3. check: read, button "Delete Rice"`,
+		`3. check: check held, url_has "5311"`,
+		"ran 3 of 3, checks 1 held and 2 failed",
+	} {
+		if err != nil || !strings.Contains(done, want) {
+			t.Fatalf("the step list answered %v and does not carry %q", err, want)
+		}
+	}
+	if strings.Contains(done, "browser model") || page.releases() != 2 {
+		t.Fatalf("the step list clicked %d times or asked the browser model; want 2 clicks and no model", page.releases())
+	}
+}
+
+func TestACheckReadsTheElementItsStepActedOnAfterItIsRenamed(t *testing.T) {
+	page := &cdpPage{url: "http://127.0.0.1:5319/", buttons: []string{"Add", "Save"}, renamed: "Saving...", attrs: map[string][]string{"Saving...": {"disabled", ""}}}
+	acted := stepsOn(t, page)("browser_act", `{"note":"n","tab":7,"actions":[
+		{"action":"check","check":{"element":{"role":"button","name":"Gone"},"name":"Gone"}},
+		{"action":"click","target":{"role":"button","name":"Save"},"check":{"name":"Save","attributes":{"aria-busy":"true","disabled":null}}}]}`)
+	for _, want := range []string{
+		`1. check: check failed, button "Gone" is not on the page`,
+		`2. click button "Save": read, button "Saving..." aria-busy absent, disabled ""`,
+		`2. click button "Save": check failed, name "Save"`,
+		`2. click button "Save": check failed, aria-busy "true"`,
+		`2. click button "Save": check failed, disabled absent`,
+		"ran 2 of 2, checks 0 held and 4 failed",
+	} {
+		if !strings.Contains(acted, want) {
+			t.Fatalf("the batch does not carry %q", want)
+		}
+	}
+}
+
+func TestReducedMotionTurnsOnOnlyInATabTofuOpened(t *testing.T) {
+	page := &cdpPage{url: "https://stays.test/"}
+	run := stepsOn(t, page)
+	refused := run("browser_act", `{"note":"n","tab":7,"actions":[{"action":"reduced_motion","value":"on"}]}`)
+	if !strings.Contains(refused, `1. reduced_motion "on": failed: `) || len(page.media) != 0 {
+		t.Fatalf("reduced motion on the person's tab 7 sent %v; want it refused and nothing sent", page.media)
+	}
+	run("browser_act", `{"note":"n","actions":[{"action":"navigate","value":"https://stays.test/"},{"action":"reduced_motion","value":"on"},{"action":"reduced_motion","value":"off"}]}`)
+	if got := fmt.Sprint(page.media); got != "[[map[name:prefers-reduced-motion value:reduce]] [map[name:prefers-reduced-motion value:]]]" {
+		t.Fatalf("reduced motion in tofu's tab sent %s; want reduce, then the page's own preference", got)
 	}
 }

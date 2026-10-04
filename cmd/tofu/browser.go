@@ -24,6 +24,7 @@ import (
 	"tofu/internal/konst"
 	"tofu/internal/recipe"
 	"tofu/internal/sys"
+	"tofu/internal/turn/tools"
 	"tofu/internal/widget"
 )
 
@@ -86,13 +87,14 @@ func browserVerb(args []string, out, errOut io.Writer) int {
 		return o.motion(tab, operands)
 	}
 	arity, known := map[string][2]int{"": {0, 0}, "tabs": {0, 0}, "build": {0, 0}, "install": {0, 0}, "uninstall": {0, 0}, "open": {1, 1}, "close": {1, 1},
-		"recipes": {0, 0}, "observe": {0, 0}, "click": {1, 1}, "fill": {2, 2}, "select": {2, 2}, "press": {1, 1}, "scroll": {0, 2}, "back": {0, 0}}[verb]
+		"recipes": {0, 0}, "observe": {0, 0}, "click": {1, 1}, "fill": {2, 2}, "select": {2, 2}, "press": {1, 1}, "scroll": {0, 2}, "back": {0, 0}, "batch": {0, 1}}[verb]
 	stepVerb := slices.Contains([]string{"observe", "click", "fill", "select", "press", "scroll", "back"}, verb)
 	operand := strings.Join(operands, " ")
 	tabID, badID := strconv.Atoi(operand)
 	if err != nil || tabErr != nil || known && (len(operands) < arity[0] || len(operands) > arity[1]) || verb == "close" && badID != nil || stepVerb && tab == 0 {
 		_, _ = fmt.Fprintln(errOut, "usage: tofu browser [install | uninstall | tabs | build | recipes | open <url> | close <tab id> | bench [--jev] [--n 12] [--rows file] | motion capture <scenario.json>] [--json]\n"+
-			"       tofu browser observe [--all] | click <ref> | fill <ref> <text> | select <ref> <option> | press <key> | scroll [<ref>] [up|down] | back   --tab <id> [--json]")
+			"       tofu browser observe [--all] | click <ref> | fill <ref> <text> | select <ref> <option> | press <key> | scroll [<ref>] [up|down] | back   --tab <id> [--json]\n"+
+			"       tofu browser batch [<steps.json> | -] [--tab <id>] [--json]")
 		return exitUsage
 	}
 	home, err := os.UserHomeDir()
@@ -103,6 +105,8 @@ func browserVerb(args []string, out, errOut io.Writer) int {
 		return o.step(home, tab, verb, operands, all)
 	}
 	switch verb {
+	case "batch":
+		return o.batch(home, tab, operand)
 	case "recipes":
 		dir, err := recipe.Dir()
 		var recipes []recipe.Recipe
@@ -174,8 +178,37 @@ func browserVerb(args []string, out, errOut io.Writer) int {
 		removed := removedExtension(home)
 		return o.show(removed, extensionPage(page, removed))
 	}
-	_, _ = fmt.Fprintf(errOut, "tofu browser: unknown argument %q: use install, uninstall, tabs, build, recipes, open, close, observe, click, fill, select, press, scroll, back, bench, motion, or nothing\n", verb)
+	_, _ = fmt.Fprintf(errOut, "tofu browser: unknown argument %q: use install, uninstall, tabs, build, recipes, open, close, observe, click, fill, select, press, scroll, back, batch, bench, motion, or nothing\n", verb)
 	return exitUsage
+}
+
+func (o browserOutput) batch(home string, tab int, from string) int {
+	var steps []byte
+	var err error
+	if from == "" || from == "-" {
+		steps, err = io.ReadAll(os.Stdin)
+	} else {
+		steps, err = os.ReadFile(from)
+	}
+	tabs := tools.NewBrowserTabs(home)
+	report, failed := "", 0
+	if err == nil {
+		report, failed, err = tools.BrowserBatch(context.Background(), home, tabs, tab, steps)
+	}
+	if tab == 0 {
+		tabs.Close()
+	}
+	if err != nil {
+		return o.fail(err)
+	}
+	code := o.show(struct {
+		Report       string `json:"report"`
+		ChecksFailed int    `json:"checks_failed"`
+	}{report, failed}, strings.Split(strings.TrimSuffix(report, "\n"), "\n"))
+	if failed > 0 {
+		return exitVerdict
+	}
+	return code
 }
 
 func (o browserOutput) step(home string, tab int, verb string, operands []string, all bool) int {

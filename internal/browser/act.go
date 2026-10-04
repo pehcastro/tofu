@@ -29,6 +29,7 @@ const (
 	MoveNavigate MoveKind = "navigate"
 	MoveBack     MoveKind = "back"
 	MoveWait     MoveKind = "wait"
+	MoveMotion   MoveKind = "reduced_motion"
 )
 
 type Move struct {
@@ -407,6 +408,8 @@ func (d *Driver) do(deadline time.Time, move Move) (Moved, error) {
 		_, err = d.Client.callBy(deadline, d.Tab, opBack, nil)
 	case MoveWait:
 		err = d.wait(deadline, move.Value)
+	case MoveMotion:
+		moved.Field, err = d.reduceMotion(deadline, move.Value, tabsBefore)
 	default:
 		return Moved{}, fmt.Errorf("there is no browser move %q", move.Kind)
 	}
@@ -972,7 +975,7 @@ func (d *Driver) scroll(deadline time.Time, ref, direction string) error {
 
 func (d *Driver) navigate(deadline time.Time, url string, tabs []Tab) error {
 	args, _ := json.Marshal(openArgs{URL: url})
-	if slices.ContainsFunc(tabs, func(tab Tab) bool { return tab.ID == d.Tab && tab.Opened }) {
+	if d.opened(tabs) {
 		_, err := d.Client.callBy(deadline, d.Tab, opNavigate, args)
 		return err
 	}
@@ -985,6 +988,22 @@ func (d *Driver) navigate(deadline time.Time, url string, tabs []Tab) error {
 		d.Use(tab)
 	}
 	return err
+}
+
+func (d *Driver) opened(tabs []Tab) bool {
+	return slices.ContainsFunc(tabs, func(tab Tab) bool { return tab.ID == d.Tab && tab.Opened })
+}
+
+func (d *Driver) reduceMotion(deadline time.Time, value string, tabs []Tab) (string, error) {
+	preference, known := map[string]string{"on": "reduce", "off": ""}[value]
+	switch {
+	case !known:
+		return "", fmt.Errorf("reduced_motion takes on or off, not %q", value)
+	case !d.opened(tabs):
+		return "", fmt.Errorf("tab %d is the person's, and tofu sets reduced motion only in a tab it opened", d.Tab)
+	}
+	features := []map[string]string{{"name": "prefers-reduced-motion", "value": preference}}
+	return "the tab now prefers reduced motion " + value, d.act(deadline, cdpCall{Method: "Emulation.setEmulatedMedia", Params: map[string]any{"features": features}})
 }
 
 func (d *Driver) wait(deadline time.Time, value string) error {

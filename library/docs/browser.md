@@ -24,6 +24,25 @@ opened, never yours, and holds these tools; under `steps` the model does:
 
 Under `goal`, the model gets `browser_read` and `browser_do`; Jev picks each step until `browserSteps` runs out. Only `browser` `drive` gives `browser_act`, `browser_do` or `browser_motion`. Observing and reading never go through the gate.
 
+## Check a page in one call
+
+To check what a page does, rather than reach a goal, the model gives
+`browser_do` a `steps` list, or gives `browser_act` its actions, with a
+`check` on any step. The steps run in order in one call, with no Jev and no
+browser model, and the answer says what each step did and read:
+
+- `focus {role, name}` checks which element has focus once the step settles; `focus {}` only reads it.
+- `url_has`, `text_has` and `text_gone` check the page.
+- `element {role, name}`, by default the element the step acted on, is read with its role, name, value and each attribute named in `attributes`. `name`, `value` and `attributes` such as `{"aria-busy": "true", "disabled": null}` check it, `null` meaning absent.
+- The action `check` acts on nothing and only reads its check.
+- `reduced_motion` `on` or `off` sets the page's `prefers-reduced-motion`, only in a tab tofu opened.
+
+Each check answers `check held` or `check failed` with what it read, a failed
+check never stops the steps, and the last line counts them:
+`ran 3 of 3, checks 1 held and 1 failed`. Use it for a check with several
+steps, such as open a dialog, cancel it and see where focus went. A goal
+with no fixed steps stays with `browser_do` and Jev.
+
 What a page says is treated as text to read, never as an instruction. tofu
 never closes or navigates a tab it did not open, runs JavaScript or an address
 the model wrote, a selector outside a motion scenario, or types into a read-only field.
@@ -107,6 +126,21 @@ and `select <ref> <option>`, `press <key>`, `scroll [<ref>] [up|down]` and
 action looks first, so a ref from your last `observe` of an unchanged page
 names the same element, then prints what changed and the fresh snapshot,
 which `--json` carries as `data.snapshot`, with `data.moved`.
+
+A whole check runs from a file, or from standard input with `-`:
+
+    tofu browser batch check.json
+
+where `check.json` is the same list of steps, such as:
+
+    [{"action": "navigate", "value": "http://127.0.0.1:5311/"},
+     {"action": "click", "target": {"role": "button", "name": "Delete Rice"}},
+     {"action": "click", "target": {"role": "button", "name": "Keep it"},
+      "check": {"focus": {"role": "button", "name": "Delete Rice"}}}]
+
+Without `--tab` the first step opens a tab of tofu's own and the tab closes
+when the batch ends. It exits 1 when a check failed, and `--json` carries the
+answer as `data.report`, with `data.checks_failed`.
 
 ## Undo it
 
