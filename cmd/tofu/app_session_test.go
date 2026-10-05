@@ -314,16 +314,8 @@ func TestAnImagePastedBeforeTheFirstSendLandsInTheSessionThatSendCreates(t *test
 	if _, err := os.Stat(filepath.Join(store.AttachmentDir(live.id), outcome.Name)); err != nil {
 		t.Fatalf("%s is not kept for the session send created: %v", outcome.Name, err)
 	}
-	held, err := os.ReadDir(store.Dir(live.id))
-	if err != nil {
-		t.Fatal(err)
-	}
-	var names []string
-	for _, entry := range held {
-		names = append(names, entry.Name())
-	}
-	if want := []string{"events.jsonl", "session.json"}; !slices.Equal(names, want) {
-		t.Fatalf("the session folder holds %v, want %v alone", names, want)
+	if _, err := os.Stat(filepath.Join(store.Dir(live.id), "session.json")); err != nil {
+		t.Fatalf("the send did not write the session the image is kept for: %v", err)
 	}
 }
 

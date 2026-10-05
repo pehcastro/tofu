@@ -502,5 +502,13 @@
     "from": "prose",
     "sample": "every edit, read and glob call a model issued in 74 recorded runs, 2,330 tool calls read, of which 40 edits, 40 ranged reads and 20 glob patterns valid at the seed commit 09e048f were run on every arm, one run on DESKTOP-AHUN9RO",
     "skips": "2 recorded lines unparsed; a call whose file is absent at the seed, or an edit whose old_string does not occur there, is not kept; symbol reads are not a separate row because every recorded read addressed a range and the seed is TypeScript"
+  },
+  {
+    "report": "bench/planspawn/report-2026-10-05.md",
+    "figure": "16.9%",
+    "says": "The new plan_before_spawn wording spent 16.9% more lead tokens than the old over the same four requests, 831150 against 710834, on the same 21 lead requests and the same sub-agent count per request. Sub-agent tokens rose 15.9%. Every check passed under both wordings, and hard-ls wrote one plan file outside packages/ under each.",
+    "from": "prose",
+    "sample": "four requests, feature-small, medium-glob, hard-duration and hard-ls, one app session per wording on claude-sub, one run each",
+    "skips": "one run per wording, so no rate and no spread; the 16.9% is a single pair of sums"
   }
 ]
