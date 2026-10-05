@@ -45,10 +45,18 @@ func (r Result) render() (string, error) {
 	if stats.TooLarge > 0 {
 		fmt.Fprintf(&out, "%s\n", Note(Truncated, fmt.Sprintf("%s over the %d MB cap went unread", plural(stats.TooLarge, "file"), konst.SearchFileByteCap>>20)))
 	}
+	if stats.Unreadable > 0 {
+		fmt.Fprintf(&out, "%s\n", Note(Partial, fmt.Sprintf("%s could not be read, the first %s", plural(stats.Unreadable, "file"), stats.FirstFailed)))
+	}
 	if len(units) == 0 {
 		read := "the files were read"
-		if stats.TooLarge > 0 {
+		switch {
+		case stats.TooLarge > 0 && stats.Unreadable > 0:
+			read = "every readable file under the size cap was read, and the unreadable ones and the ones over the cap may hold a match"
+		case stats.TooLarge > 0:
 			read = "every file under the size cap was read, and the ones over it may hold a match"
+		case stats.Unreadable > 0:
+			read = "every readable file was read, and the unreadable ones may hold a match"
 		}
 		out.WriteString("no code unit holds that pattern")
 		if r.Answered != NoCandidate {

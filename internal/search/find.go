@@ -62,6 +62,8 @@ type Stats struct {
 	Fallbacks   int
 	Skipped     int
 	TooLarge    int
+	Unreadable  int
+	FirstFailed string
 	Budget      int
 	Tokens      int
 	Scanned     int
@@ -105,19 +107,14 @@ func Find(req Request) (Result, error) {
 	stats.TotalFiles = len(req.Files)
 
 	literal := &sweep{candidate: Literal, pattern: req.Pattern, hits: map[string][]hit{}}
-	if err := scanTree(req, literal, matched, &stats); err != nil {
-		return Result{}, err
-	}
+	scanTree(req, literal, matched, &stats)
 	insensitive := caseInsensitiveSweep(source)
 	answering := literal
 	switch {
 	case literal.lines > 0:
 		insensitive.notRun = "the literal answered, and a case insensitive form can only add lines that differ from it in case"
 	case insensitive.pattern != nil:
-		stats.Scanned, stats.Skipped, stats.TooLarge, stats.ScanStopped = 0, 0, 0, false
-		if err := scanTree(req, insensitive, matched, &stats); err != nil {
-			return Result{}, err
-		}
+		scanTree(req, insensitive, matched, &stats)
 		answering = insensitive
 	}
 
@@ -180,7 +177,8 @@ type scannedFile struct {
 	err      error
 }
 
-func scanTree(req Request, into *sweep, matched map[string]string, stats *Stats) error {
+func scanTree(req Request, into *sweep, matched map[string]string, stats *Stats) {
+	stats.Scanned, stats.Skipped, stats.TooLarge, stats.Unreadable, stats.FirstFailed, stats.ScanStopped = 0, 0, 0, 0, "", false
 	scanned := make([]chan scannedFile, len(req.Files))
 	for index := range scanned {
 		scanned[index] = make(chan scannedFile, 1)
@@ -202,16 +200,19 @@ func scanTree(req Request, into *sweep, matched map[string]string, stats *Stats)
 	for index, rel := range req.Files {
 		if into.lines >= konst.SearchCandidateScanCap {
 			stats.ScanStopped = true
-			return nil
+			return
 		}
 		file := <-scanned[index]
 		stats.Read += file.read
 		into.spent += file.match
-		if file.err != nil {
-			return fmt.Errorf("search: %w", file.err)
-		}
 		stats.Scanned++
 		switch {
+		case file.err != nil:
+			if stats.Unreadable == 0 {
+				stats.FirstFailed = rel + ": " + strings.TrimSuffix(cmp.Or(errors.Unwrap(file.err), file.err).Error(), ".")
+			}
+			stats.Unreadable++
+			continue
 		case file.tooLarge:
 			stats.TooLarge++
 			continue
@@ -224,7 +225,6 @@ func scanTree(req Request, into *sweep, matched map[string]string, stats *Stats)
 			matched[rel] = file.source
 		}
 	}
-	return nil
 }
 
 func scanFile(full string, pattern *regexp.Regexp) scannedFile {
