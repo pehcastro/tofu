@@ -345,6 +345,90 @@ func TestAWatcherOnInstalledTypeScriptIsOneProcess(t *testing.T) {
 	}
 }
 
+func fakeTscChecker(errorLine string) string {
+	found, exit := "Found 0 errors", "0"
+	if errorLine != "" {
+		found, exit = "Found 1 error", "1"
+	}
+	return "const watching = process.argv.includes('--watch');\n" +
+		"if (watching) console.log('Starting compilation in watch mode...');\n" +
+		"console.log(" + strconv.Quote(errorLine) + ");\n" +
+		"if (!watching) process.exit(" + exit + ");\n" +
+		"console.log('" + found + ". Watching for file changes.');\nsetInterval(() => {}, 1000);\n"
+}
+
+const fakeSvelteKit = "const fs = require('node:fs');\nfs.mkdirSync('.svelte-kit', { recursive: true });\n" +
+	"fs.writeFileSync('.svelte-kit/tsconfig.json', JSON.stringify({ argv: process.argv.slice(2) }));\n"
+
+const fakeSvelteCheck = "const fs = require('node:fs');\nconst path = require('node:path');\n" +
+	"const synced = fs.existsSync('.svelte-kit/tsconfig.json');\n" +
+	"const asked = process.argv.slice(2).join(' ');\n" +
+	"console.log('1 START ' + JSON.stringify(process.cwd()));\n" +
+	"if (!synced) console.log('2 ERROR \"tsconfig.json\" 2:13 \"File \\'$app/tsconfig\\' not found.\"');\n" +
+	"else if (!asked.includes('--tsconfig ./tsconfig.json --fail-on-warnings')) console.log('2 ERROR \"tsconfig.json\" 1:1 ' + JSON.stringify('the check script was not followed: ' + asked));\n" +
+	"else console.log('2 ERROR ' + JSON.stringify(['src', 'lib', 'Chip.svelte'].join(path.sep)) + ' 3:9 \"Type \\'string\\' is not assignable to type \\'number\\'.\"');\n" +
+	"console.log('3 COMPLETED 4 FILES 1 ERRORS 0 WARNINGS 1 FILES_WITH_PROBLEMS');\n" +
+	"if (!process.argv.includes('--watch')) process.exit(1);\nsetInterval(() => {}, 1000);\n"
+
+func TestTypecheckRunsTheCheckerTheProjectDeclares(t *testing.T) {
+	cannotReadVue := "src/main.ts(1,17): error TS2307: Cannot find module './App.vue' or its corresponding type declarations."
+	vueError := "src/App.vue(2,7): error TS2322: Type 'string' is not assignable to type 'number'."
+	vued := func(vueTsc string) map[string]string {
+		return map[string]string{
+			"package.json":                         `{"name":"vued","devDependencies":{"typescript":"6.0.3","vue-tsc":"3.3.12"}}`,
+			"node_modules/typescript/package.json": `{"name":"typescript"}`,
+			"node_modules/typescript/bin/tsc":      fakeTscChecker(cannotReadVue),
+			"node_modules/vue-tsc/package.json":    `{"name":"vue-tsc"}`,
+			"node_modules/vue-tsc/bin/vue-tsc.js":  fakeTscChecker(vueTsc),
+		}
+	}
+	uninstalled := vued("")
+	delete(uninstalled, "node_modules/vue-tsc/package.json")
+	for _, project := range []struct {
+		name     string
+		files    map[string]string
+		checked  string
+		want     []string
+		refusing bool
+	}{
+		{"vue file through vue-tsc", vued(vueError), "src/App.vue", []string{"vue-tsc", "errors in src/App.vue: 1", vueError}, true},
+		{"ts file importing a vue file", vued(""), "src/main.ts", []string{"vue-tsc", "errors in src/main.ts: 0"}, false},
+		{"vue-tsc declared and not installed", uninstalled, "src/main.ts", []string{"vue-tsc", "not installed"}, true},
+		{"svelte file through the check script", map[string]string{
+			"package.json": `{"name":"svelted","scripts":{"check":"svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --fail-on-warnings"},` +
+				`"devDependencies":{"@sveltejs/kit":"3.0.0","svelte-check":"4.7.6","typescript":"6.0.3"}}`,
+			"node_modules/typescript/package.json":       `{"name":"typescript"}`,
+			"node_modules/typescript/bin/tsc":            fakeTscChecker(""),
+			"node_modules/@sveltejs/kit/package.json":    `{"name":"@sveltejs/kit"}`,
+			"node_modules/@sveltejs/kit/svelte-kit.js":   fakeSvelteKit,
+			"node_modules/svelte-check/package.json":     `{"name":"svelte-check"}`,
+			"node_modules/svelte-check/bin/svelte-check": fakeSvelteCheck,
+		}, "src/lib/Chip.svelte", []string{"svelte-check", "errors in src/lib/Chip.svelte: 1", "src/lib/Chip.svelte:3:9: Type 'string' is not assignable to type 'number'."}, true},
+	} {
+		t.Run(project.name, func(t *testing.T) {
+			project.files["src/App.vue"] = "<script setup lang=\"ts\">\nconst count: number = \"many\";\n</script>\n"
+			project.files["src/main.ts"] = "import App from './App.vue';\nexport default App;\n"
+			project.files["src/lib/Chip.svelte"] = "<script lang=\"ts\">\nlet { label } = $props();\nconst count: number = \"many\";\n</script>\n"
+			dir := tsProject(t, "node", "package-lock.json", project.files)
+			checkers := NewTypecheckers()
+			t.Cleanup(checkers.Close)
+			got, err := checkers.Check(context.Background(), filepath.Join(dir, filepath.FromSlash(project.checked)))
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, want := range project.want {
+				if !strings.Contains(got.Content, want) {
+					t.Errorf("the typecheck of %s does not carry %q:\n%s", project.checked, want, got.Content)
+				}
+			}
+			if refused := got.FailureText != ""; refused != project.refusing {
+				t.Errorf("the typecheck of %s refused: %v, want %v:\n%s", project.checked, refused, project.refusing, got.Content)
+			}
+			t.Log(got.Content)
+		})
+	}
+}
+
 func TestAFileOutsideTheProgramFallsBackQuicklyAndKeepsTheWatcher(t *testing.T) {
 	checkers, write := warmWriter(t, tsProject(t, "bun", "bun.lock", map[string]string{"tsconfig.json": `{"compilerOptions":{"strict":true},"include":["src"]}`}))
 	if first := write("src/broken.ts", "const count: number = \"many\";\n"); !strings.Contains(first, "--watch") {

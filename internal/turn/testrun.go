@@ -23,7 +23,10 @@ const (
 	testNoTests      = "test: this project has no tests"
 	testThroughShell = "test runs through the shell: "
 	testReplyMarker  = "TOFU-TEST-REPLY "
-	testRunnerScript = `const { createVitest } = await import('vitest/node');
+	testRunnerScript = `process.env.TEST = 'true';
+process.env.VITEST = 'true';
+process.env.NODE_ENV ??= 'test';
+const { createVitest } = await import('vitest/node');
 const { createInterface } = await import('node:readline');
 const workers = Number(process.env.TOFU_TEST_WORKERS);
 const vitest = await createVitest('test', { watch: true, reporters: [], coverage: { enabled: false }, maxWorkers: workers, minWorkers: 1 });

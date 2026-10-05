@@ -173,6 +173,28 @@ func TestASourceFileWithNoTestBesideItAnswersWithoutVitest(t *testing.T) {
 	t.Log(got.Content)
 }
 
+func TestTheRunnerLoadsTheConfigUnderTheEnvironmentVitestsCommandSets(t *testing.T) {
+	dir := vitestProject(t)
+	for name, body := range map[string]string{
+		"vitest.config.ts": "import { defineConfig } from 'vitest/config';\n\nexport default defineConfig({\n" +
+			"  define: { CONFIG_SAW: JSON.stringify([process.env.VITEST, process.env.TEST, process.env.NODE_ENV].join(' ')) },\n" +
+			"  test: { projects: [{ extends: true, test: { name: 'client', include: ['**/*.client.test.ts'] } }, { extends: true, test: { name: 'server', include: ['**/sum.test.ts'] } }] },\n});\n",
+		"env.client.test.ts": "import { expect, it } from 'vitest';\n\ndeclare const CONFIG_SAW: string;\n\n" +
+			"it('the config saw what the vitest command sets', () => {\n  expect(CONFIG_SAW).toBe('true true test');\n});\n",
+	} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	runners := NewTestRunners()
+	t.Cleanup(runners.Close)
+	got, err := runners.Test(context.Background(), filepath.Join(dir, "env.client.test.ts"))
+	if err != nil || got.FailureText != "" || !strings.Contains(got.Content, "env.client.test.ts: 1 passed, 0 failed") || strings.Contains(got.Content, "sum.test.ts") {
+		t.Fatalf("the client test did not run alone under the config the vitest command loads: %v\n%s", err, got.Content)
+	}
+	t.Log(got.Content)
+}
+
 func TestAMissedDeadlineLeavesTheNextCallANewRunner(t *testing.T) {
 	dir := vitestProject(t)
 	hang := "import { it } from 'vitest';\n\nit('hangs', () => new Promise(() => {}), 3600000);\n"
