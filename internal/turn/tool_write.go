@@ -172,23 +172,18 @@ func (t *WriteTool) appendTo(ctx context.Context, resolved string, args writeArg
 		return Result{}, fmt.Errorf("write: %s has not been read in this session or has changed since, so appending to it is refused: read it first. "+
 			"its current content follows, so append again knowing where it ends.\n%s", args.Path, t.ledger.Refuse(args.Path, held))
 	}
-	lead := string(held)
+	lead, endings := EndingsOf(string(held))
+	if len(held) > 0 && !strings.HasSuffix(lead, "\n") {
+		lead += "\n"
+	}
 	added := strings.ReplaceAll(args.Content, "\r\n", "\n")
-	lines := strings.Split(strings.TrimSuffix(added, "\n"), "\n")
-	newline := "\n"
-	if strings.Contains(lead, "\r\n") && strings.Count(lead, "\r\n") == strings.Count(lead, "\n") {
-		newline = "\r\n"
-		added = strings.ReplaceAll(added, "\n", newline)
-	}
-	if lead != "" && !strings.HasSuffix(lead, "\n") {
-		lead += newline
-	}
-	after := lead + added
+	after := endings.Restore(lead + added)
 	if err := overwrite(resolved, held, []byte(after)); err != nil {
 		return Result{}, fmt.Errorf("write: %w", err)
 	}
 	t.ledger.Mark(args.Path, []byte(after))
 	first := strings.Count(lead, "\n") + 1
+	lines := strings.Split(strings.TrimSuffix(added, "\n"), "\n")
 	shown := fmt.Sprintf("appended %d lines to %s, lines %d-%d:", len(lines), args.Path, first, first+len(lines)-1)
 	for i, line := range lines {
 		shown += fmt.Sprintf("\n%d\t%s", first+i, line)
