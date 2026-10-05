@@ -608,3 +608,53 @@ func TestDriveForcesTheFreeSiftArmAndTheAppCutsTheResult(t *testing.T) {
 		t.Fatalf("--sift free showed %d lines and no arm at all showed %d: the arm never reached the app", cut, whole)
 	}
 }
+
+const cappedCassette = `{"text":"reading 1","tools":[{"name":"read","args":{"path":"n1.txt"}}]}
+{"text":"reading 2","tools":[{"name":"read","args":{"path":"n2.txt"}}]}
+{"text":"reading 3","tools":[{"name":"read","args":{"path":"n3.txt"}}]}
+{"text":"reading 4","tools":[{"name":"read","args":{"path":"n4.txt"}}]}
+{"text":"the notes say note 1 to 4"}
+`
+
+var requestLine = regexp.MustCompile(`^the orchestrator request (\d+): \d+ bytes, (\d+) tools ([0-9a-f]+)(, tool_choice none)?$`)
+
+func TestDrivenRequestsCarryTheSameToolsEachStepAndNoToolChoiceOnlyAtTheCap(t *testing.T) {
+	dir := drivenProject(t)
+	for number := 1; number <= 4; number++ {
+		written(t, dir, "n"+strconv.Itoa(number)+".txt", "note "+strconv.Itoa(number))
+	}
+	deck := written(t, dir, "cap.cassette", cappedCassette)
+	script := written(t, dir, "cap.drive", strings.Join([]string{
+		"wait " + session.Placeholder,
+		"type read the four notes",
+		"key enter",
+		"wait stopped at the step cap",
+		"requests",
+	}, "\n"))
+	var out, errOut bytes.Buffer
+	if code := driveVerb([]string{script, "--cassette", deck, "--plain", "--timeout", "60s", "--max-steps", "5"}, strings.NewReader(""), &out, &errOut); code != exitOK {
+		t.Fatalf("tofu drive exited %d: %s", code, errOut.String())
+	}
+	var found [][]string
+	for _, line := range strings.Split(out.String(), "\n") {
+		if !strings.HasPrefix(line, "the orchestrator request ") {
+			continue
+		}
+		parts := requestLine.FindStringSubmatch(line)
+		if parts == nil {
+			t.Fatalf("a requests line lost its tool count, hash or tool choice: %q", line)
+		}
+		found = append(found, parts)
+	}
+	if len(found) != 5 {
+		t.Fatalf("requests printed %d lines for a turn capped at 5 steps:\n%s", len(found), out.String())
+	}
+	for index, line := range found {
+		if line[1] != strconv.Itoa(index+1) || line[2] == "0" || line[2] != found[0][2] || line[3] != found[0][3] {
+			t.Errorf("request %s says %s tools hashed %s, and request 1 said %s hashed %s", line[1], line[2], line[3], found[0][2], found[0][3])
+		}
+		if capped := line[4] != ""; capped != (index == 4) {
+			t.Errorf("request %s printed tool_choice none %v, and only the fifth, at the cap, asks for no tool", line[1], capped)
+		}
+	}
+}

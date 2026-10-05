@@ -89,7 +89,9 @@ Steps:
   screen       print the screen as it stands
   environment  print the environment block the last turn sent to the model
   images       print how many images the last request's user message carried
-  requests     print the bytes of every request sent so far, messages and tools as json
+  requests     print every request sent so far: its bytes, messages and tools as
+               json, its tool count, a hash of its tools, and its tool_choice
+               when that is not auto
   # NOTE       a note, skipped
 
 X and Y are zero-based cells: X counts columns and Y counts rows of the printed
@@ -275,7 +277,15 @@ func (c *cassette) take(request llm.Request) (recordedReply, error) {
 	if err != nil {
 		return recordedReply{}, err
 	}
-	c.sent = append(c.sent, fmt.Sprintf("%s request %d: %d bytes", callerName(name), c.taken[name], len(body)))
+	tools, err := json.Marshal(request.Tools)
+	if err != nil {
+		return recordedReply{}, err
+	}
+	line := fmt.Sprintf("%s request %d: %d bytes, %d tools %s", callerName(name), c.taken[name], len(body), len(request.Tools), digest(string(tools)))
+	if choice := request.ToolChoice.OpenAIValue(); choice != "" {
+		line += ", tool_choice " + choice
+	}
+	c.sent = append(c.sent, line)
 	return c.decks[name][c.taken[name]-1], nil
 }
 
