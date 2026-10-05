@@ -1085,7 +1085,7 @@ func (t *SpawnTool) runRounds(outerCtx, subAgentCtx context.Context, held *heldS
 	var sentBack []string
 	recipes := projectRecipes(t.Project)
 	for state == subagent.Finished {
-		missed := gateMissed(t.Project, recipes, held.definition, claims)
+		missed := gateMissed(t.Project, recipes, held.definition, held.boundary.Owns, claims)
 		if len(missed) == 0 && t.Review == nil {
 			break
 		}
@@ -1135,7 +1135,7 @@ func (t *SpawnTool) runRounds(outerCtx, subAgentCtx context.Context, held *heldS
 	return claims, sentBack, state, firstErr
 }
 
-func gateMissed(project string, recipes map[string]string, definition subagent.Definition, rounds []Row) []string {
+func gateMissed(project string, recipes map[string]string, definition subagent.Definition, owns []string, rounds []Row) []string {
 	if definition.Language == "" {
 		return nil
 	}
@@ -1173,6 +1173,8 @@ func gateMissed(project string, recipes map[string]string, definition subagent.D
 			case !gateRan(check, call, recipes), call.Error == typecheckUnanswered:
 			case call.ExitCode != nil && *call.ExitCode != 0:
 				said = fmt.Sprintf("%s exited %d", check, *call.ExitCode)
+			case call.Tool == "typecheck" && call.Error != "" && !typecheckNamesOwnFile(project, owns, call, rounds):
+				said = ""
 			case call.Error != "" && !strings.HasPrefix(call.Error, testNoTests):
 				said = check + " failed"
 			default:
@@ -1186,18 +1188,59 @@ func gateMissed(project string, recipes map[string]string, definition subagent.D
 	return missed
 }
 
+func typecheckNamesOwnFile(project string, owns []string, call ToolCallRow, rounds []Row) bool {
+	printed := ""
+	for _, round := range rounds {
+		for _, message := range round.Conversation {
+			if message.Role == llm.RoleTool && message.ToolCallID == call.Call {
+				printed = message.Content
+			}
+		}
+	}
+	_, listed, hasList := strings.Cut(printed, ":\n")
+	scope := call.Command
+	if !filepath.IsAbs(scope) {
+		scope = filepath.Join(project, scope)
+	}
+	tsconfig, found := findUp(scope, tsconfigName)
+	if len(owns) == 0 || !hasList || !found {
+		return true
+	}
+	for _, line := range strings.Split(listed, "\n") {
+		if strings.TrimSpace(line) == "" || strings.HasPrefix(line, " ") {
+			continue
+		}
+		path, position, _ := strings.Cut(line, ":")
+		if located, _, tsc := strings.Cut(line, "): error TS"); tsc {
+			path = located[:max(strings.LastIndex(located, "("), 0)]
+		} else if position == "" || position[0] < '0' || position[0] > '9' {
+			return true
+		}
+		relative, err := filepath.Rel(project, filepath.Join(filepath.Dir(tsconfig), path))
+		if mine, _ := subagent.Matches(filepath.ToSlash(relative), owns); path == "" || err != nil || mine {
+			return true
+		}
+	}
+	return false
+}
+
 func gateRan(check string, call ToolCallRow, recipes map[string]string) bool {
 	switch {
 	case call.Tool == check:
 		return true
-	case call.Tool != "bash", check == "test", check == "typecheck":
+	case call.Tool != "bash":
 		return false
 	}
-	if commandRuns(call.Command, check) {
+	toolCheck := check == "test" || check == "typecheck"
+	if !toolCheck && commandRuns(call.Command, check) {
 		return true
 	}
 	for invocation, recipe := range recipes {
-		if commandRuns(call.Command, invocation) && commandRuns(recipe, check) {
+		meetsCheck := commandRuns(recipe, check)
+		if toolCheck {
+			meetsCheck = strings.HasSuffix(invocation, " "+check)
+		}
+		if meetsCheck && commandRuns(call.Command, invocation) {
 			return true
 		}
 	}
@@ -1226,7 +1269,7 @@ func withoutRunner(words []string) ([]string, bool) {
 	if len(words) > 1 && words[0] == "cargo" && strings.HasPrefix(words[1], "+") {
 		return append([]string{"cargo"}, words[2:]...), true
 	}
-	for _, runner := range []string{"uv run", "poetry run", "pdm run", "hatch run", "rye run", "pipenv run", "python -m", "python3 -m", "py -m", "npx", "pnpm exec", "pnpm dlx", "bunx", "yarn"} {
+	for _, runner := range []string{"uv run", "poetry run", "pdm run", "hatch run", "rye run", "pipenv run", "python -m", "python3 -m", "py -m", "npx", "pnpm exec", "pnpm dlx", "bunx", "yarn", "rtk proxy", "rtk"} {
 		prefix := strings.Fields(runner)
 		if len(words) <= len(prefix) || !slices.Equal(words[:len(prefix)], prefix) {
 			continue

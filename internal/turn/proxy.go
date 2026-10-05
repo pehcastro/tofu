@@ -80,6 +80,9 @@ func (p *CommandProxy) rewrite(ctx context.Context, call llm.ToolCall) (json.Raw
 		return call.Arguments, nil
 	}
 	row := &ProxyRow{Proxy: proxyUseRTK, Asked: args.Command}
+	if args.Background || strings.Contains(strings.ReplaceAll(args.Command, "||", ""), "|") || strings.Contains(args.Command, ">") {
+		return call.Arguments, row
+	}
 	if p.binary == "" {
 		row.Note = proxyUseRTK + " is not on PATH, so the command ran as it was asked for"
 		return call.Arguments, row
@@ -101,11 +104,10 @@ func (p *CommandProxy) rewrite(ctx context.Context, call llm.ToolCall) (json.Raw
 		row.Note = proxyUseRTK + " " + verb + " downloads a compiler when the project has none, which is the one network fetch in it, so the command ran as it was asked for"
 		return call.Arguments, row
 	}
-	proxied, err := json.Marshal(bashArgs{Command: rewritten, TimeoutMS: args.TimeoutMS})
-	if err != nil {
-		row.Note = proxyUseRTK + " rewrote the command and the rewrite could not be spelled back as arguments: " + err.Error()
-		return call.Arguments, row
-	}
+	var fields map[string]json.RawMessage
+	_ = json.Unmarshal(call.Arguments, &fields)
+	fields["command"], _ = json.Marshal(rewritten)
+	proxied, _ := json.Marshal(fields)
 	row.Ran = rewritten
 	return proxied, row
 }

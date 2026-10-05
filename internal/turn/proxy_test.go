@@ -446,3 +446,23 @@ func (g *stubGate) Decide(_ context.Context, request GateRequest) (GateDecision,
 	verdict := g.verdicts[min(len(g.requests), len(g.verdicts))-1]
 	return GateDecision{ID: "row-" + strconv.Itoa(len(g.requests)), Verdict: verdict, Reason: g.reason}, nil
 }
+
+func TestTheRewriteKeepsEveryFieldAndLeavesBackgroundPipedAndRedirectedCommandsAlone(t *testing.T) {
+	fakeProxyOnPath(t)
+	proxy := proxyFrom(t, t.TempDir(), proxyOn)
+	for asked, want := range map[string]string{
+		`{"command":"go test ./pkg/","timeout_ms":5000,"check_port":0,"later":"kept"}`: `{"check_port":0,"command":"rtk go test ./pkg/","later":"kept","timeout_ms":5000}`,
+		`{"command":"go test ./pkg/ || true"}`:                                         `{"command":"rtk go test ./pkg/ || true"}`,
+		`{"command":"npm run dev","background":true}`:                                  `{"command":"npm run dev","background":true}`,
+		`{"command":"go test ./pkg/ | grep FAIL"}`:                                     `{"command":"go test ./pkg/ | grep FAIL"}`,
+		`{"command":"go test ./pkg/ > out.txt"}`:                                       `{"command":"go test ./pkg/ > out.txt"}`,
+		`{"command":"go test ./pkg/ >> out.txt"}`:                                      `{"command":"go test ./pkg/ >> out.txt"}`,
+		`{"command":"cargo test 2>&1"}`:                                                `{"command":"cargo test 2>&1"}`,
+	} {
+		ran, row := proxy.rewrite(context.Background(), llm.ToolCall{Name: bashToolName, Arguments: json.RawMessage(asked)})
+		if string(ran) != want {
+			t.Errorf("%s ran as %s, want %s", asked, ran, want)
+		}
+		t.Logf("asked %s, ran %s, row %+v", asked, ran, *row)
+	}
+}
