@@ -57,8 +57,8 @@ func TestInstallWritesTheHostManifestAndKeyAndUninstallRemovesBoth(t *testing.T)
 	})
 	exe := filepath.Join(home, "bin", "tofu.exe")
 	for range 2 {
-		if id, err := Install(home, exe, hosts); err != nil || id != shippedExtensionID {
-			t.Fatalf("Install returned %q, %v; want %q", id, err, shippedExtensionID)
+		if id, browsers, err := Install(home, exe, hosts); err != nil || id != shippedExtensionID || browsers != nil {
+			t.Fatalf("Install returned %q, %q, %v; want %q and no browser folder, since the registry key is the registration", id, browsers, err, shippedExtensionID)
 		}
 	}
 
@@ -106,7 +106,7 @@ func TestInstallWritesTheHostManifestAndKeyAndUninstallRemovesBoth(t *testing.T)
 		t.Fatalf("the unpacked extension manifest is %s; want the shipped one with version %s and version_name %s", copied, want["version"], want["version_name"])
 	}
 
-	if err := Uninstall(home, hosts); err != nil {
+	if _, err := Uninstall(home, hosts); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := registry.OpenKey(registry.CURRENT_USER, hosts+`\com.ephem.tofu`, registry.QUERY_VALUE); !errors.Is(err, registry.ErrNotExist) {
@@ -117,7 +117,7 @@ func TestInstallWritesTheHostManifestAndKeyAndUninstallRemovesBoth(t *testing.T)
 			t.Fatalf("%s survived Uninstall: %v", path, err)
 		}
 	}
-	if err := Uninstall(home, hosts); err != nil {
+	if _, err := Uninstall(home, hosts); err != nil {
 		t.Fatalf("a second Uninstall failed: %v", err)
 	}
 }

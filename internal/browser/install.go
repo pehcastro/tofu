@@ -105,26 +105,26 @@ func chromeVersion(tofu string) string {
 	return tofu[:end]
 }
 
-func Install(home, exe, hostsKey string) (string, error) {
+func Install(home, exe, hostsKey string) (id string, browserManifestsWritten []string, err error) {
 	raw, err := extension.Files.ReadFile("manifest.json")
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 	var shipped struct {
 		Key string `json:"key"`
 	}
 	if err := json.Unmarshal(raw, &shipped); err != nil {
-		return "", err
+		return "", nil, err
 	}
 	der, err := base64.StdEncoding.DecodeString(shipped.Key)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
-	id := ExtensionID(der)
+	id = ExtensionID(der)
 
 	extensionDir, manifestPath := installPaths(home)
 	if err := writeExtension(extensionDir); err != nil {
-		return "", err
+		return "", nil, err
 	}
 	manifest, err := json.MarshalIndent(hostManifest{
 		Name:           HostName,
@@ -134,12 +134,15 @@ func Install(home, exe, hostsKey string) (string, error) {
 		AllowedOrigins: []string{"chrome-extension://" + id + "/"},
 	}, "", "  ")
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
-	if err := sys.WriteFile(manifestPath, manifest, 0o644); err != nil {
-		return "", err
+	browsers := browserManifests(home)
+	for _, path := range append([]string{manifestPath}, browsers...) {
+		if err := sys.WriteFile(path, manifest, 0o644); err != nil {
+			return "", nil, err
+		}
 	}
-	return id, register(hostsKey+`\`+HostName, manifestPath)
+	return id, browsers, register(hostsKey+`\`+HostName, manifestPath)
 }
 
 func writeExtension(extensionDir string) error {
@@ -189,15 +192,18 @@ func writeExtension(extensionDir string) error {
 	return nil
 }
 
-func Uninstall(home, hostsKey string) error {
+func Uninstall(home, hostsKey string) (browserManifestsRemoved []string, err error) {
 	extensionDir, manifestPath := installPaths(home)
 	if err := unregister(hostsKey + `\` + HostName); err != nil {
-		return err
+		return nil, err
 	}
-	if err := os.Remove(manifestPath); err != nil && !errors.Is(err, os.ErrNotExist) {
-		return err
+	browsers := browserManifests(home)
+	for _, path := range append([]string{manifestPath}, browsers...) {
+		if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return nil, err
+		}
 	}
-	return os.RemoveAll(extensionDir)
+	return browsers, os.RemoveAll(extensionDir)
 }
 
 func installPaths(home string) (extensionDir, manifestPath string) {

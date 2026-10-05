@@ -14,6 +14,8 @@ func register(hostKey, manifestPath string) error {
 	return errors.Join(key.SetStringValue("", manifestPath), key.Close())
 }
 
+func browserManifests(string) []string { return nil }
+
 func unregister(hostKey string) error {
 	err := registry.DeleteKey(registry.CURRENT_USER, hostKey)
 	if errors.Is(err, registry.ErrNotExist) {

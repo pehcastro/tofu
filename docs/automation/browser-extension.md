@@ -2,7 +2,7 @@
 title: Browser extension
 description: A Chrome extension and a native host that let tofu read and drive your own browser, with your logins.
 order: 1
-updated: 2026-10-04
+updated: 2026-10-05
 ---
 
 A small Chrome extension, shipped inside the tofu binary, and a relay. When
@@ -33,17 +33,36 @@ model wrote, and never navigates or closes one of your tabs.
 
 ## Install and turn off
 
+Run `tofu browser install`. It writes the extension to
+`~/.tofu/browser/extension` on every system, and registers the host where
+your browser looks for it:
+
 ```tabs
 # Windows
-1. Run `tofu browser install`. It writes the extension to
-   `~/.tofu/browser/extension` and registers the host.
-2. In `chrome://extensions`, turn on **Developer mode**, click **Load
-   unpacked**, and pick that folder.
-3. Pin the tofu icon. Its badge reads `on`, `read`, `act` or `off`.
+In the registry, under
+`HKEY_CURRENT_USER\Software\Google\Chrome\NativeMessagingHosts`, for Chrome.
 
-# macOS and Linux
-Not supported yet: the install stops and says so.
+# Linux
+A file, `com.ephem.tofu.json`, in `~/.config/google-chrome/NativeMessagingHosts`
+and `~/.config/chromium/NativeMessagingHosts`, and in Brave's and Edge's
+when `~/.config/BraveSoftware/Brave-Browser` or `~/.config/microsoft-edge`
+exists.
+
+# macOS
+A file, `com.ephem.tofu.json`, in `NativeMessagingHosts` under
+`~/Library/Application Support/Google/Chrome` and
+`~/Library/Application Support/Chromium`, and under
+`BraveSoftware/Brave-Browser` or `Microsoft Edge` there when it exists.
 ```
+
+The install prints each place it wrote. Then, in the browser:
+
+1. In `chrome://extensions`, turn on **Developer mode**, click **Load
+   unpacked**, and pick `~/.tofu/browser/extension`.
+2. Pin the tofu icon. Its badge reads `on`, `read`, `act` or `off`.
+
+Install a browser after tofu and `tofu browser install` again, so its
+folder gets the file.
 
 A new tofu rewrites the extension folder and Chrome reloads it. To turn the
 browser off, press **ctrl+k**, type `browser`, and set **Browser** to `off`.
@@ -62,4 +81,5 @@ Chrome tabs                                          ✓ updated from 6bd3adb862
 
 The verdict is `connected` when nothing changed. A row per tab follows, `●`
 on tofu's and `○` on yours, and `--json` prints them in `data.tabs`.
-`tofu browser uninstall` removes the host and the folder.
+`tofu browser uninstall` removes the host, every `com.ephem.tofu.json` it
+wrote, and the folder.

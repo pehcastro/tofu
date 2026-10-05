@@ -862,6 +862,9 @@ func TestHostOnTheSameBuildNeitherRewritesNorReloads(t *testing.T) {
 }
 
 func TestHostWithAnUnwritableInstallSaysSoAndNeverReloads(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root writes through a read-only folder, so the rewrite this test makes fail succeeds")
+	}
 	home := shortHome(t)
 	installFor(t, home, testOrigin)
 	stale := staleInstall(t, home)
@@ -875,6 +878,7 @@ func TestHostWithAnUnwritableInstallSaysSoAndNeverReloads(t *testing.T) {
 		t.Fatal(err)
 	}
 	ext, done := startHost(t, home)
+	ext.send(`{"t":"tabRemoved","tabId":7}`)
 	browserDir := filepath.Dir(extensionDir)
 	if err := os.Chmod(browserDir, 0o500); err != nil {
 		t.Fatal(err)

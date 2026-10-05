@@ -33,6 +33,7 @@ type extension struct {
 	Folder    string   `json:"folder"`
 	ID        string   `json:"id,omitempty"`
 	Host      string   `json:"host,omitempty"`
+	Manifests []string `json:"manifests,omitempty"`
 	Next      []string `json:"next,omitempty"`
 	Hint      string   `json:"hint"`
 }
@@ -162,20 +163,23 @@ func browserVerb(args []string, out, errOut io.Writer) int {
 		}{tabID}, []string{page.Glyph(cli.Removed) + " closed tab " + strconv.Itoa(tabID)})
 	case "install":
 		exe, err := os.Executable()
-		id := ""
+		id, manifests := "", []string(nil)
 		if err == nil {
-			id, err = browser.Install(home, exe, *hostsKey)
+			id, manifests, err = browser.Install(home, exe, *hostsKey)
 		}
 		if err != nil {
 			return o.fail(err)
 		}
 		installed := installedExtension(home, exe, id)
+		installed.Manifests = manifests
 		return o.show(installed, extensionPage(page, installed))
 	case "uninstall":
-		if err := browser.Uninstall(home, *hostsKey); err != nil {
+		manifests, err := browser.Uninstall(home, *hostsKey)
+		if err != nil {
 			return o.fail(err)
 		}
 		removed := removedExtension(home)
+		removed.Manifests = manifests
 		return o.show(removed, extensionPage(page, removed))
 	}
 	_, _ = fmt.Fprintf(errOut, "tofu browser: unknown argument %q: use install, uninstall, tabs, build, recipes, open, close, observe, click, fill, select, press, scroll, back, batch, bench, motion, or nothing\n", verb)
@@ -512,7 +516,11 @@ func extensionPage(page cli.Page, data extension) []string {
 		verdict = cli.Verdict{Mark: cli.Done, Text: "installed"}
 	}
 	lines := append(page.Title("Chrome extension", nil, verdict), "")
-	lines = append(lines, cli.Indent(page.Facts([]cli.Fact{{Label: "folder", Text: page.Path(data.Folder)}, {Label: "id", Text: data.ID}, {Label: "host", Text: page.Path(data.Host)}})...)...)
+	facts := []cli.Fact{{Label: "folder", Text: page.Path(data.Folder)}, {Label: "id", Text: data.ID}, {Label: "host", Text: page.Path(data.Host)}}
+	for _, manifest := range data.Manifests {
+		facts = append(facts, cli.Fact{Label: "manifest", Text: page.Path(manifest)})
+	}
+	lines = append(lines, cli.Indent(page.Facts(facts)...)...)
 	if len(data.Next) > 0 {
 		lines = append(lines, "", page.Section("next, once in Chrome", cli.Verdict{}))
 		lines = append(lines, page.Steps(data.Next)...)

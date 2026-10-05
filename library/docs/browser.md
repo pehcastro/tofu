@@ -65,11 +65,12 @@ A tab tofu acts in or opens joins an orange group titled `tofu`, which reads `to
 
 ## Change it
 
-Install it once with `tofu browser install`. It writes the extension, registers tofu with Chrome, and prints the rest:
+Install it once with `tofu browser install`. It writes the extension, registers tofu with the browser, and prints the rest. On Windows it registers Chrome in the registry. On Linux it writes `com.ephem.tofu.json` in `NativeMessagingHosts` under `~/.config/google-chrome` and `~/.config/chromium`, and under `BraveSoftware/Brave-Browser` and `microsoft-edge` there when they exist; on macOS the same under `~/Library/Application Support`, in `Google/Chrome`, `Chromium`, `BraveSoftware/Brave-Browser` and `Microsoft Edge`. Each file prints as a `manifest` line, and a browser installed later needs the install again.
 
     Chrome extension                        ✓ installed
-      folder   ~/.tofu/browser/extension
-      id       jednanpboiikklhkkkimnmdmjmgjgphh
+      folder    ~/.tofu/browser/extension
+      id        jednanpboiikklhkkkimnmdmjmgjgphh
+      manifest  ~/.config/chromium/NativeMessagingHosts/com.ephem.tofu.json
     next, once in Chrome
       1  open chrome://extensions and turn on Developer mode
       2  Load unpacked, pick the folder above, check the id matches
@@ -115,4 +116,4 @@ Without `--tab` the first step opens a tab of tofu's own and the tab closes when
 
 ## Undo it
 
-`tofu settings set browser off` takes the tools away from the model. `tofu browser uninstall` removes the host and the folder, prints `○ removed`, and ends `→ remove the tofu card in chrome://extensions`.
+`tofu settings set browser off` takes the tools away from the model. `tofu browser uninstall` removes the host, each `com.ephem.tofu.json` it wrote, and the folder, prints `○ removed`, and ends `→ remove the tofu card in chrome://extensions`.
