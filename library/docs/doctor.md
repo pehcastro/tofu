@@ -45,8 +45,7 @@ Under `access`, what tofu can reach:
   without a quota reading, so tofu cannot say how much is left.
 - `⚠ ... not polled, ...`: the credential cannot be used, and the rest of
   the line says why and what to run.
-- `✓ jev  key · credential store`: where the key was found. The key is
-  never printed.
+- `✓ jev  key · credential store`: where the key was found, never the key.
 - one line per wire, ending `subscription` or `money`: what a model call
   that way spends.
 
@@ -63,10 +62,9 @@ To turn it off, put one line, `use: off`, in `tools/shell/proxy.yaml`
 under `~/.tofu/` for every project, or under `.tofu/` in a project for
 that project only. Delete the file to turn it back on.
 
-Under `browser`, one line for each browser tofu can share tabs from: Chrome
-on Windows, and on Linux and macOS Chrome, Chromium, and Brave or Edge when
-their profile folder is there. The line is about the native host, the file
-the browser reads to start tofu.
+Under `browser`, one line per browser about its native host, the file the
+browser reads to start tofu: Chrome on Windows, and on Linux and macOS
+Chrome, Chromium, and Brave or Edge when their profile folder is there.
 
 - `✓ <browser>  native host installed`: the browser can reach tofu.
 - `⚠ <browser>  no native host, ...`: the browser cannot start tofu, so its
@@ -118,6 +116,5 @@ Other verbs that each check one thing:
 
 ## Undo it
 
-The doctor changes nothing of yours, so there is nothing to undo. It
-does keep each quota reading it takes, for `tofu usage --history`; delete
-`~/.tofu/quota/` to forget them.
+The doctor changes nothing of yours. It keeps each quota reading it takes,
+for `tofu usage --history`; delete `~/.tofu/quota/` to forget them.

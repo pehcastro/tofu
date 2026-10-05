@@ -603,6 +603,25 @@
   ],
   "reports": [
     {
+      "package": "nativetools",
+      "date": "2026-10-04",
+      "source": "bench/nativetools/report-2026-10-04.md",
+      "figure": "tofu edit 40",
+      "built_from": "prose",
+      "sample": "every edit, read and glob call a model issued in 74 recorded runs, 2,330 tool calls read, of which 40 edits, 40 ranged reads and 20 glob patterns valid at the seed commit 09e048f were run on every arm, one run on DESKTOP-AHUN9RO",
+      "skips": "2 recorded lines unparsed; a call whose file is absent at the seed, or an edit whose old_string does not occur there, is not kept; symbol reads are not a separate row because every recorded read addressed a range and the seed is TypeScript",
+      "conclusion": [
+        {
+          "text": "Hand read from bench/report/handread.json: Tool against tool with no model in the loop, tofu edit is right or refuses with a reason on 40 of 40 recorded edits, and changes no file wrongly without saying so. sed on the changed line gets 24 right and changes 16 files wrongly in silence, sed -z with the whole old_string 36 and 4, and a here-doc rewrite 36 and 0 while sending 587,287 bytes against tofu edit's 19,001. tofu read returns 57,522 bytes on 40 reads and never needs a second call, against 54,997 for sed -n and head and tail and 785,105 for cat, which needs a second call on 11. On 20 listings find returns 19,631 bytes, glob 20,989 and ls -R 125,828, and glob and find return different paths on 3 of 20.",
+          "withdrawn": false
+        }
+      ],
+      "conclusion_unparsed": false,
+      "state": "stands",
+      "state_source": "",
+      "state_note": ""
+    },
+    {
       "package": "browser",
       "date": "2026-09-28",
       "source": "bench/browser/report-2026-09-28.md",
@@ -1822,8 +1841,8 @@
     }
   ],
   "counts": {
-    "reports": 62,
-    "packages_with_a_dated_report": 37,
+    "reports": 63,
+    "packages_with_a_dated_report": 38,
     "packages_with_no_dated_report": 6,
     "withdrawn_whole_or_in_part": 20,
     "stale": 1,

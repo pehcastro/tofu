@@ -1540,20 +1540,28 @@ func TestBrowserDoWithAURLOpensATabAsksTheBrowserModelAndAnswersFirst(t *testing
 	}
 }
 
-func TestTheBrowseRuleComposesForTheOrchestratorOnly(t *testing.T) {
+func TestTheBrowseRuleComposesForABrowsingTaskOnTheOrchestratorOnly(t *testing.T) {
 	rules, err := rule.LoadFS(library.Files(), "library")
 	if err != nil {
 		t.Fatal(err)
 	}
-	for role, wants := range map[rule.Role]bool{rule.RoleOrchestrator: true, rule.RoleSubAgent: false} {
-		composed, err := turn.Compose(turn.ComposeSpec{Task: "find hotels in Atibaia", Environment: "a project", ToolGuidance: "read before you edit", Rules: rules, Role: role})
+	for _, c := range []struct {
+		role  rule.Role
+		task  string
+		wants bool
+	}{
+		{rule.RoleOrchestrator, "find hotels in Atibaia on airbnb", true},
+		{rule.RoleSubAgent, "find hotels in Atibaia on airbnb", false},
+		{rule.RoleOrchestrator, "find the parser that drops the last line", false},
+	} {
+		composed, err := turn.Compose(turn.ComposeSpec{Task: c.task, Environment: "a project", ToolGuidance: "read before you edit", Rules: rules, Role: c.role})
 		if err != nil {
 			t.Fatal(err)
 		}
-		carries := strings.Contains(composed.Head(), "browse in steps. browser_observe the tab")
-		t.Logf("the %s prompt carries the browse rule: %v", role, carries)
-		if carries != wants {
-			t.Fatalf("the %s prompt carries the browse rule = %v, want %v", role, carries, wants)
+		carries := strings.Contains(composed.WithTaskRules(""), "browse in steps. browser_observe the tab")
+		t.Logf("the %s prompt for %q carries the browse rule: %v", c.role, c.task, carries)
+		if carries != c.wants {
+			t.Fatalf("the %s prompt for %q carries the browse rule = %v, want %v", c.role, c.task, carries, c.wants)
 		}
 	}
 }
