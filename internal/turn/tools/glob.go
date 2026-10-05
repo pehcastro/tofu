@@ -13,6 +13,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"tofu/internal/konst"
 	"tofu/internal/llm"
@@ -43,6 +45,7 @@ func (g Glob) Definition() llm.Tool {
 		Description: "lists the files under the turn's working directory whose path matches a shell pattern. " +
 			"the pattern is matched against the whole path relative to the working directory and against the file name alone, " +
 			"so *.ts finds every typescript file at any depth and src/*.ts finds only the ones directly under src. " +
+			"** matches any number of directories, so src/**/*.ts finds every typescript file under src, and {ts,tsx} matches either. " +
 			ignoredWalkDescription + ". " +
 			"it does not read a file and it does not search file contents: search does that",
 		Parameters: map[string]any{
@@ -71,7 +74,8 @@ func (g Glob) Run(_ context.Context, raw json.RawMessage) (turn.Result, error) {
 	if strings.TrimSpace(args.Pattern) == "" {
 		return turn.Result{}, errors.New("glob: pattern is required")
 	}
-	if _, err := path.Match(args.Pattern, "probe"); err != nil {
+	glob, err := globExpression(args.Pattern)
+	if err != nil {
 		return turn.Result{}, fmt.Errorf("glob: %q is not a shell pattern: %w", args.Pattern, err)
 	}
 	under := cmp.Or(args.Path, ".")
@@ -83,7 +87,7 @@ func (g Glob) Run(_ context.Context, raw json.RawMessage) (turn.Result, error) {
 
 	var found []string
 	for _, rel := range listed.files {
-		if matchesPattern(args.Pattern, rel) {
+		if glob.MatchString(rel) || glob.MatchString(path.Base(rel)) {
 			found = append(found, rel)
 		}
 	}
@@ -121,12 +125,115 @@ func ListPaths(dir string) ([]string, error) {
 	return listed.files, err
 }
 
-func matchesPattern(pattern, rel string) bool {
-	if ok, _ := path.Match(pattern, rel); ok {
-		return true
+func globExpression(pattern string) (*regexp.Regexp, error) {
+	if !strings.Contains(pattern, "/") {
+		pattern = strings.ReplaceAll(pattern, `\`, "/")
 	}
-	ok, _ := path.Match(pattern, path.Base(rel))
-	return ok
+	for strings.HasPrefix(pattern, "./") {
+		pattern = pattern[2:]
+	}
+	var built strings.Builder
+	built.WriteString("(?s)^")
+	var braces []int
+	for i := 0; i < len(pattern); i++ {
+		switch c := pattern[i]; {
+		case c == '\\':
+			if i+1 == len(pattern) {
+				return nil, fmt.Errorf("the backslash at byte %d escapes nothing", i)
+			}
+			i++
+			built.WriteString(regexp.QuoteMeta(pattern[i : i+1]))
+		case c == '*' && globstar(pattern, i, len(braces) > 0):
+			i++
+			if i+1 < len(pattern) && pattern[i+1] == '/' {
+				built.WriteString("(?:[^/]+/)*")
+				i++
+			} else {
+				built.WriteString(".*")
+			}
+		case c == '*':
+			built.WriteString("[^/]*")
+		case c == '?':
+			built.WriteString("[^/]")
+		case c == '[':
+			end, err := globClass(&built, pattern, i)
+			if err != nil {
+				return nil, err
+			}
+			i = end
+		case c == '{':
+			braces = append(braces, i)
+			built.WriteString("(?:")
+		case c == '}' && len(braces) > 0:
+			braces = braces[:len(braces)-1]
+			built.WriteString(")")
+		case c == ',' && len(braces) > 0:
+			built.WriteString("|")
+		default:
+			built.WriteString(regexp.QuoteMeta(pattern[i : i+1]))
+		}
+	}
+	if len(braces) > 0 {
+		return nil, fmt.Errorf("the brace at byte %d is never closed", braces[0])
+	}
+	return regexp.Compile(built.String() + "$")
+}
+
+func globstar(pattern string, at int, inGroup bool) bool {
+	if at+1 >= len(pattern) || pattern[at+1] != '*' {
+		return false
+	}
+	opens := at == 0 || pattern[at-1] == '/' || inGroup && strings.IndexByte("{,", pattern[at-1]) >= 0
+	closes := at+2 == len(pattern) || pattern[at+2] == '/' || inGroup && strings.IndexByte("},", pattern[at+2]) >= 0
+	return opens && closes
+}
+
+func globClass(built *strings.Builder, pattern string, start int) (int, error) {
+	i := start + 1
+	built.WriteString("[")
+	if i < len(pattern) && pattern[i] == '^' {
+		built.WriteString("^")
+		i++
+	}
+	for first := i; ; {
+		if i < len(pattern) && pattern[i] == ']' {
+			if i == first {
+				return 0, fmt.Errorf("the class at byte %d is empty", start)
+			}
+			built.WriteString("]")
+			return i, nil
+		}
+		low, next, err := classRune(pattern, i, start)
+		if err != nil {
+			return 0, err
+		}
+		built.WriteString(low)
+		i = next
+		if i < len(pattern) && pattern[i] == '-' {
+			high, next, err := classRune(pattern, i+1, start)
+			if err != nil {
+				return 0, err
+			}
+			built.WriteString("-" + high)
+			i = next
+		}
+	}
+}
+
+func classRune(pattern string, i, class int) (string, int, error) {
+	if i < len(pattern) && pattern[i] == '\\' {
+		i++
+	} else if i < len(pattern) && (pattern[i] == '-' || pattern[i] == ']') {
+		return "", 0, fmt.Errorf("the class at byte %d has a bare %c where a character belongs", class, pattern[i])
+	}
+	if i >= len(pattern) {
+		return "", 0, fmt.Errorf("the class at byte %d is never closed", class)
+	}
+	r, size := utf8.DecodeRuneInString(pattern[i:])
+	if r < utf8.RuneSelf && !unicode.IsLetter(r) && !unicode.IsDigit(r) {
+		return `\` + string(r), i + size, nil
+	}
+	return string(r), i + size, nil
 }
 
 func withNote(content, note string) string {
