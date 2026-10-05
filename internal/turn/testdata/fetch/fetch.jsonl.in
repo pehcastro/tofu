@@ -1,0 +1,3 @@
+{"text":"fetching the page","tools":[{"name":"fetch","args":{"url":"http://127.0.0.1:PORT/page.txt"}}]}
+{"text":"reading lines 1500 to 1549","tools":[{"name":"fetch","args":{"url":"http://127.0.0.1:PORT/page.txt","offset":1500,"limit":50}}]}
+{"text":"the fetch is done"}

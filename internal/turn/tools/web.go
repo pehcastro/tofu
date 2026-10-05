@@ -1,10 +1,14 @@
 package tools
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
+	"strings"
 
+	"tofu/internal/konst"
 	"tofu/internal/llm"
 	"tofu/internal/turn"
 	"tofu/internal/web"
@@ -38,21 +42,32 @@ func (webFetch) Definition() llm.Tool {
 			"navigation, sidebars, headers, footers, forms and scripts are dropped. " +
 			"a page that is not text, an image, an archive or anything the server sends as a download, is refused and says why rather than coming back as markup. " +
 			"the same address asked for twice in one turn is fetched once. " +
+			"a page longer than " + strconv.Itoa(konst.FetchLineWindow) + " lines comes back as its first " + strconv.Itoa(konst.FetchLineWindow) +
+			" with its line count: offset, the first line from 1, and limit, how many lines, read any other part. " +
 			everythingFetchedIsUntrusted,
 		Parameters: map[string]any{
-			"type":       "object",
-			"properties": map[string]any{"url": map[string]any{"type": "string"}},
-			"required":   []string{"url"},
+			"type": "object",
+			"properties": map[string]any{
+				"url":    map[string]any{"type": "string"},
+				"offset": map[string]any{"type": "integer"},
+				"limit":  map[string]any{"type": "integer"},
+			},
+			"required": []string{"url"},
 		},
 	}
 }
 
 func (t webFetch) Run(ctx context.Context, raw json.RawMessage) (turn.Result, error) {
 	var args struct {
-		URL string `json:"url"`
+		URL    string `json:"url"`
+		Offset int    `json:"offset"`
+		Limit  int    `json:"limit"`
 	}
 	if err := json.Unmarshal(raw, &args); err != nil {
 		return turn.Result{}, fmt.Errorf("fetch: arguments are not the expected shape: %w", err)
+	}
+	if args.Offset < 0 || args.Limit < 0 {
+		return turn.Result{}, fmt.Errorf("fetch: offset %d and limit %d are not a window, both count lines from 1", args.Offset, args.Limit)
 	}
 	page, err := t.client.Get(ctx, args.URL)
 	if err != nil {
@@ -65,8 +80,23 @@ func (t webFetch) Run(ctx context.Context, raw json.RawMessage) (turn.Result, er
 	if cut.Units > 0 {
 		message += fmt.Sprintf(", dropped %d units of navigation, %d bytes", cut.Units, cut.Bytes)
 	}
+	lines := strings.Split(body, "\n")
+	first := max(args.Offset, 1)
+	if first > len(lines) {
+		return turn.Result{}, fmt.Errorf("fetch: offset %d is past the end of %s, which is %d lines", args.Offset, page.URL, len(lines))
+	}
+	last := min(first-1+cmp.Or(args.Limit, konst.FetchLineWindow), len(lines))
+	switch {
+	case first == 1 && last == len(lines):
+		message += fmt.Sprintf(". all %d lines follow", len(lines))
+	case last == len(lines):
+		message += fmt.Sprintf(". lines %d to %d of %d follow, the end of the page", first, last, len(lines))
+	default:
+		message += fmt.Sprintf(". lines %d to %d of %d follow: call fetch with this url and offset %d to read on, "+
+			"and the page is read from what was already fetched rather than fetched again", first, last, len(lines), last+1)
+	}
 	return turn.Result{
-		Content: message + "\n" + web.Untrusted("the web page "+page.URL, body),
+		Content: message + "\n" + web.Untrusted("the web page "+page.URL, strings.Join(lines[first-1:last], "\n")),
 		Command: page.URL,
 	}, nil
 }

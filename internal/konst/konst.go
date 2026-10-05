@@ -104,6 +104,7 @@ const (
 	TurnOverflowKeepPercent         = 75
 	IgnoreFileBytesCap              = 65536
 	GlobPathsResultCap              = 300
+	FetchLineWindow                 = 300
 	ProjectInstructionsBytesDefault = 32768
 	ProjectInstructionsBytesMost    = 262144
 	DecisionCapMost                 = 1000
