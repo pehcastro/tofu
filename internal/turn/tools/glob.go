@@ -264,12 +264,13 @@ type ignoreScope struct {
 }
 
 type walk struct {
-	root    turn.Root
-	scopes  []ignoreScope
-	notes   []string
-	files   []string
-	bytes   int64
-	unsized int
+	root        turn.Root
+	scopes      []ignoreScope
+	notes       []string
+	files       []string
+	bytes       int64
+	unsized     int
+	notFollowed int
 }
 
 func filesUnder(root turn.Root, under string, includeIgnored bool) (listing, error) {
@@ -294,6 +295,10 @@ func filesUnder(root turn.Root, under string, includeIgnored bool) (listing, err
 	} else {
 		walked.loadAncestors(from)
 	}
+	const enter = string(filepath.Separator)
+	if info, err := os.Stat(from); err == nil && info.IsDir() {
+		from = strings.TrimSuffix(from, enter) + enter
+	}
 	walkErr := filepath.WalkDir(from, func(full string, entry fs.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -303,6 +308,9 @@ func filesUnder(root turn.Root, under string, includeIgnored bool) (listing, err
 			case "node_modules", ".git", sys.StateDirName, sys.LegacyStateDirName:
 				return fs.SkipDir
 			}
+			if full == from {
+				return nil
+			}
 		}
 		rel, err := filepath.Rel(string(root), full)
 		if err != nil {
@@ -310,29 +318,40 @@ func filesUnder(root turn.Root, under string, includeIgnored bool) (listing, err
 		}
 		slash := filepath.ToSlash(rel)
 		walked.prune(slash)
-		if !entry.IsDir() {
-			if projectInstructions(entry.Name()) || !walked.ignored(slash, false) {
-				walked.files = append(walked.files, slash)
-				info, infoErr := entry.Info()
-				if infoErr != nil {
-					walked.unsized++
-				} else {
-					walked.bytes += info.Size()
-				}
+		if entry.IsDir() {
+			if walked.ignored(slash, true) {
+				return fs.SkipDir
+			}
+			if !includeIgnored {
+				walked.load(full, slash+"/")
 			}
 			return nil
 		}
-		if full == from {
+		if !projectInstructions(entry.Name()) && walked.ignored(slash, false) {
 			return nil
 		}
-		if walked.ignored(slash, true) {
-			return fs.SkipDir
+		info, infoErr := entry.Info()
+		if entry.Type()&(fs.ModeSymlink|fs.ModeIrregular) != 0 {
+			info, infoErr = os.Stat(full)
+			if infoErr == nil && info.IsDir() {
+				return nil
+			}
+			if _, refused := root.Resolve(rel); infoErr != nil || refused != nil {
+				walked.notFollowed++
+				return nil
+			}
 		}
-		if !includeIgnored {
-			walked.load(full, slash+"/")
+		walked.files = append(walked.files, slash)
+		if infoErr != nil {
+			walked.unsized++
+		} else {
+			walked.bytes += info.Size()
 		}
 		return nil
 	})
+	if walked.notFollowed > 0 {
+		walked.notes = append(walked.notes, fmt.Sprintf("links not followed: %d, because each leads outside the working directory or nowhere.", walked.notFollowed))
+	}
 	if walked.unsized > 0 {
 		walked.notes = append(walked.notes, search.Note(search.Partial,
 			fmt.Sprintf("%d of the %d files listed could not be measured, so the total size is lower than the real one", walked.unsized, len(walked.files))))
