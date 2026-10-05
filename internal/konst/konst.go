@@ -58,6 +58,9 @@ const (
 	StreamLineBytes  = 16 << 20
 	StreamIdleMillis = 60000
 
+	CredLeaseTTLMillis       = 45000
+	CredRefreshTimeoutMillis = 40000
+
 	WhyStateBytes      = 2048
 	MeterBarWidthChars = 12
 )

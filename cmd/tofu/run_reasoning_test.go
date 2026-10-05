@@ -61,7 +61,7 @@ func TestAReasoningItemFromStepOneReachesTheStepTwoCodexRequestAndTheStoredRow(t
 	wire, err := codex.New(codex.Config{
 		Model:   "gpt-5.6-sol",
 		BaseURL: server.URL,
-		Token:   func(context.Context) (string, error) { return "stub-token-not-a-real-credential", nil },
+		Token:   func(context.Context, string) (string, error) { return "stub-token-not-a-real-credential", nil },
 	})
 	if err != nil {
 		t.Fatalf("building the codex wire: %v", err)

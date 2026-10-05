@@ -15,12 +15,10 @@ import (
 
 const Name = llm.WireCodex
 
-type TokenSource func(ctx context.Context) (string, error)
-
 type Config struct {
 	BaseURL        string
 	Model          string
-	Token          TokenSource
+	Token          llm.TokenSource
 	HTTP           *http.Client
 	Transport      transport.Config
 	StreamIdle     time.Duration
@@ -57,8 +55,13 @@ func (w *Wire) Ask(ctx context.Context, request Request) (Result, Dump, error) {
 	request.Model = cmp.Or(request.Model, w.config.Model)
 	request.Identity.InstallationID = cmp.Or(request.Identity.InstallationID, w.config.InstallationID)
 	request.Identity.SessionID = cmp.Or(request.Identity.SessionID, w.config.SessionID)
+	identity, err := request.Identity.filled()
+	if err != nil {
+		return Result{}, Dump{}, err
+	}
+	request.Identity = identity
 
-	token, err := w.config.Token(ctx)
+	token, err := w.config.Token(ctx, "")
 	if err != nil {
 		return Result{}, Dump{}, err
 	}
@@ -66,13 +69,23 @@ func (w *Wire) Ask(ctx context.Context, request Request) (Result, Dump, error) {
 		return Result{}, Dump{}, transport.Fail("codex.Ask", transport.KindMissingCredential, nil,
 			"the token source returned nothing")
 	}
+	result, dump, err := w.send(ctx, request, token)
+	renewed, err := llm.Renewed(ctx, err, token, w.config.Token)
+	if renewed != "" {
+		result, dump, err = w.send(ctx, request, renewed)
+	}
+	if refused := request.RefusedControls(); len(refused) > 0 {
+		result.Warnings = append([]string{
+			"the codex backend refuses these and they were dropped: " + strings.Join(refused, ", "),
+		}, result.Warnings...)
+	}
+	return result, dump, err
+}
+
+func (w *Wire) send(ctx context.Context, request Request, token string) (Result, Dump, error) {
 	claims := ReadClaims(token)
 	subscription := claims.Subscription()
-
-	identity, err := request.Identity.filled()
-	if err != nil {
-		return Result{}, Dump{}, err
-	}
+	identity := request.Identity
 	metadataHeader, clientMetadata, err := identity.TurnMetadata()
 	if err != nil {
 		return Result{}, Dump{}, err
@@ -80,8 +93,6 @@ func (w *Wire) Ask(ctx context.Context, request Request) (Result, Dump, error) {
 	if !subscription {
 		clientMetadata = nil
 	}
-
-	request.Identity = identity
 	body, err := request.Encode(clientMetadata)
 	if err != nil {
 		return Result{}, Dump{}, err
@@ -121,11 +132,6 @@ func (w *Wire) Ask(ctx context.Context, request Request) (Result, Dump, error) {
 		return w.post(ctx, dump, request.OnThinking)
 	})
 	result.FirstTokenMS = llm.MillisSince(sent, result.firstDelta)
-	if refused := request.RefusedControls(); len(refused) > 0 {
-		result.Warnings = append([]string{
-			"the codex backend refuses these and they were dropped: " + strings.Join(refused, ", "),
-		}, result.Warnings...)
-	}
 	return result, dump, err
 }
 

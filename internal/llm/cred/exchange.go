@@ -40,6 +40,10 @@ type Credential struct {
 	Authorized time.Time `json:"authorized"`
 }
 
+type tokenRefusal string
+
+func (r tokenRefusal) Error() string { return string(r) }
+
 func randomURLSafe(n int) (string, error) {
 	raw := make([]byte, n)
 	if _, err := rand.Read(raw); err != nil {
@@ -137,8 +141,8 @@ func postToken(ctx context.Context, client *http.Client, spec Spec, params, head
 		return nil, err
 	}
 	if response.StatusCode >= http.StatusBadRequest {
-		return nil, fmt.Errorf("token endpoint answered %d: %s",
-			response.StatusCode, raw[:min(len(raw), errorExcerptBytes)])
+		return nil, tokenRefusal(fmt.Sprintf("token endpoint answered %d: %s",
+			response.StatusCode, raw[:min(len(raw), errorExcerptBytes)]))
 	}
 	var body map[string]any
 	if err := json.Unmarshal(raw, &body); err != nil {

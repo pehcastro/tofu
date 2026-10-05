@@ -141,7 +141,7 @@ func (a *accounts) account(choice quota.Choice, rows map[int64]cred.Row) (turn.A
 }
 
 func (a *accounts) modelOn(row cred.Row) (turn.Model, error) {
-	token := cred.NewAccountManager(a.store, a.spec, row.ID).Access
+	token := cred.NewAccountManager(a.store, a.spec, row.ID).Token
 	session, err := sessionID()
 	if err != nil {
 		return nil, err
@@ -202,7 +202,7 @@ func metaModel(modelID string, effort llm.Effort) (turn.Model, error) {
 	wire, err := codex.New(codex.Config{
 		BaseURL:   models.MetaBaseURL() + codex.KeyPath,
 		Model:     modelID,
-		Token:     func(context.Context) (string, error) { return key, nil },
+		Token:     func(context.Context, string) (string, error) { return key, nil },
 		Transport: turnTransportConfig(),
 	})
 	return codexTurn{wire: wire, effort: effort}, err

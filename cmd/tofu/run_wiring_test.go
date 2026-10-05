@@ -328,7 +328,7 @@ func TestASpawnedSubAgentsRequestsCarryTheEffortTheSpawnNames(t *testing.T) {
 			orchestrator := models.Model{Subscription: "claude-sub", ID: "claude-test", Efforts: anthropic.ReasoningEfforts()}
 			subscription := func(effort llm.Effort) turn.Subscription {
 				wire, err := anthropic.New(anthropic.Config{BaseURL: listening.URL, Model: "claude-test", Proxy: true,
-					Token: func(context.Context) (string, error) { return "sk-ant-oat01-test", nil }})
+					Token: func(context.Context, string) (string, error) { return "sk-ant-oat01-test", nil }})
 				if err != nil {
 					t.Fatal(err)
 				}

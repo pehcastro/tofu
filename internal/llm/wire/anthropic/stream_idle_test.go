@@ -53,7 +53,7 @@ func quietWire(t *testing.T, url string, retries int) *Wire {
 		Model:      "claude-test",
 		Proxy:      true,
 		StreamIdle: quietTestIdle,
-		Token:      func(context.Context) (string, error) { return "sk-ant-api-test", nil },
+		Token:      func(context.Context, string) (string, error) { return "sk-ant-api-test", nil },
 		Transport:  transport.Config{Retries: retries},
 	})
 	if err != nil {

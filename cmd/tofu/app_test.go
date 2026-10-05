@@ -2930,7 +2930,7 @@ data: {"type":"response.completed","response":{"id":"resp_1","model":"gpt-5.6-so
 	}))
 	t.Cleanup(server.Close)
 	wire, err := codex.New(codex.Config{Model: "gpt-5.6-sol", BaseURL: server.URL,
-		Token: func(context.Context) (string, error) { return "stub-token-not-a-real-credential", nil }})
+		Token: func(context.Context, string) (string, error) { return "stub-token-not-a-real-credential", nil }})
 	if err != nil {
 		t.Fatal(err)
 	}

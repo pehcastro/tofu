@@ -82,6 +82,23 @@ func RetryQuiet[T any](ctx context.Context, plan transport.Config, onRetry func(
 	}
 }
 
+type TokenSource func(ctx context.Context, rejected string) (string, error)
+
+func Renewed(ctx context.Context, failed error, token string, source TokenSource) (string, error) {
+	var refusal *transport.Error
+	if !errors.As(failed, &refusal) || refusal.Status != http.StatusUnauthorized {
+		return "", failed
+	}
+	renewed, err := source(ctx, token)
+	if err != nil {
+		return "", errors.Join(failed, err)
+	}
+	if renewed == token {
+		return "", failed
+	}
+	return renewed, nil
+}
+
 func worthRepeating(response *http.Response, err error) (time.Duration, bool) {
 	if err != nil {
 		return 0, !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded)

@@ -2,19 +2,24 @@ package cred
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"regexp"
 	"sync"
 	"time"
+
+	"tofu/internal/konst"
 )
 
 const (
-	refreshSkew  = 60 * time.Second
-	leaseTTL     = 45 * time.Second
-	leasePollMin = 50 * time.Millisecond
-	leasePollMax = 250 * time.Millisecond
-	ownerBytes   = 16
+	refreshSkew          = 60 * time.Second
+	leaseTTL             = konst.CredLeaseTTLMillis * time.Millisecond
+	leasePollMin         = 50 * time.Millisecond
+	leasePollMax         = 250 * time.Millisecond
+	refreshTimeout       = konst.CredRefreshTimeoutMillis * time.Millisecond
+	leaseOutlivesRefresh = uint(leaseTTL - refreshTimeout - 1)
+	ownerBytes           = 16
 )
 
 const (
@@ -65,6 +70,10 @@ func newManager(store *Store, spec Spec, find func(time.Time) (Row, bool, error)
 }
 
 func (m *Manager) Access(ctx context.Context) (string, error) {
+	return m.Token(ctx, "")
+}
+
+func (m *Manager) Token(ctx context.Context, rejected string) (string, error) {
 	row, found, err := m.find(m.now())
 	if err != nil {
 		return "", err
@@ -75,37 +84,46 @@ func (m *Manager) Access(ctx context.Context) (string, error) {
 	if cause := row.Unusable(m.now()); cause != "" {
 		return "", fmt.Errorf("cred: the %s credential is %s", m.spec.Provider, cause)
 	}
-	if m.fresh(row.Credential) {
+	if m.usable(row.Credential, rejected) {
 		return row.Credential.Access, nil
 	}
-	return m.refreshOnce(ctx, row)
+	return m.refreshOnce(ctx, row, rejected)
+}
+
+func (m *Manager) usable(credential Credential, rejected string) bool {
+	return m.fresh(credential) && credential.Access != rejected
 }
 
 func (m *Manager) fresh(credential Credential) bool {
 	return m.now().Add(refreshSkew).Before(credential.Expires)
 }
 
-func (m *Manager) refreshOnce(ctx context.Context, row Row) (string, error) {
+func (m *Manager) refreshOnce(ctx context.Context, row Row, rejected string) (string, error) {
 	m.mu.Lock()
-	if running, ok := m.inflight[row.ID]; ok {
-		m.mu.Unlock()
-		<-running.done
+	running, joined := m.inflight[row.ID]
+	if !joined {
+		running = &flight{done: make(chan struct{})}
+		m.inflight[row.ID] = running
+		go func() {
+			detached, cancel := context.WithTimeout(context.WithoutCancel(ctx), refreshTimeout)
+			defer cancel()
+			running.access, running.err = m.refreshLeased(detached, row, rejected)
+			m.mu.Lock()
+			delete(m.inflight, row.ID)
+			m.mu.Unlock()
+			close(running.done)
+		}()
+	}
+	m.mu.Unlock()
+	select {
+	case <-ctx.Done():
+		return "", ctx.Err()
+	case <-running.done:
 		return running.access, running.err
 	}
-	mine := &flight{done: make(chan struct{})}
-	m.inflight[row.ID] = mine
-	m.mu.Unlock()
-
-	mine.access, mine.err = m.refreshLeased(ctx, row)
-
-	m.mu.Lock()
-	delete(m.inflight, row.ID)
-	m.mu.Unlock()
-	close(mine.done)
-	return mine.access, mine.err
 }
 
-func (m *Manager) refreshLeased(ctx context.Context, row Row) (string, error) {
+func (m *Manager) refreshLeased(ctx context.Context, row Row, rejected string) (string, error) {
 	owner, err := randomURLSafe(ownerBytes)
 	if err != nil {
 		return "", err
@@ -132,7 +150,7 @@ func (m *Manager) refreshLeased(ctx context.Context, row Row) (string, error) {
 	if !found {
 		return "", fmt.Errorf("cred: the %s credential vanished while refreshing it", m.spec.Provider)
 	}
-	if m.fresh(current.Credential) {
+	if m.usable(current.Credential, rejected) {
 		return current.Credential.Access, nil
 	}
 	return m.mint(ctx, current)
@@ -156,7 +174,8 @@ func (m *Manager) waitForLease(ctx context.Context, id int64) error {
 func (m *Manager) mint(ctx context.Context, row Row) (string, error) {
 	minted, err := refreshGrant(ctx, m.client, m.spec, row.Credential, m.now())
 	if err != nil {
-		if definitiveFailure(err.Error()) {
+		var refusal tokenRefusal
+		if errors.As(err, &refusal) && definitiveFailure(string(refusal)) {
 			if disableErr := m.store.Disable(row.ID, "oauth refresh failed: "+err.Error(), m.now()); disableErr != nil {
 				return "", disableErr
 			}

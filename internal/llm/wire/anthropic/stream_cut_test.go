@@ -58,7 +58,7 @@ func TestAStreamCutAfterTwoHundredIsPostedAgainOnlyWhenTheCauseIsTransient(t *te
 				BaseURL:   server.URL,
 				Model:     "claude-test",
 				Proxy:     true,
-				Token:     func(context.Context) (string, error) { return "sk-ant-api-test", nil },
+				Token:     func(context.Context, string) (string, error) { return "sk-ant-api-test", nil },
 				Transport: transport.Config{Retries: 3},
 			})
 			if err != nil {

@@ -39,7 +39,7 @@ func TestThinkingDeltasReachOnThinkingInOrderAndTheDecision(t *testing.T) {
 		BaseURL: server.URL,
 		Model:   "claude-opus-5",
 		Proxy:   true,
-		Token:   func(context.Context) (string, error) { return "sk-ant-api-test", nil },
+		Token:   func(context.Context, string) (string, error) { return "sk-ant-api-test", nil },
 	})
 	if err != nil {
 		t.Fatalf("new wire: %v", err)
@@ -108,7 +108,7 @@ func TestThinkingSummarySettingDecidesTheDisplayField(t *testing.T) {
 			BaseURL: server.URL,
 			Model:   "claude-opus-5",
 			Proxy:   true,
-			Token:   func(context.Context) (string, error) { return "sk-ant-api-test", nil },
+			Token:   func(context.Context, string) (string, error) { return "sk-ant-api-test", nil },
 		})
 		if err != nil {
 			t.Fatalf("new wire: %v", err)

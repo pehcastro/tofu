@@ -27,12 +27,10 @@ const (
 	unattestedRequestNotice = "the billing placeholder is present but not patched; sending an unattested request"
 )
 
-type TokenSource func(ctx context.Context) (string, error)
-
 type Config struct {
 	BaseURL    string
 	Model      string
-	Token      TokenSource
+	Token      llm.TokenSource
 	HTTP       *http.Client
 	Transport  transport.Config
 	StreamIdle time.Duration
@@ -83,7 +81,7 @@ func (w *Wire) Ask(ctx context.Context, request Request) (Result, Dump, error) {
 	request.AccountID = cmp.Or(request.AccountID, w.config.AccountID)
 	request.InstallID = cmp.Or(request.InstallID, w.config.InstallID)
 
-	token, err := w.config.Token(ctx)
+	token, err := w.config.Token(ctx, "")
 	if err != nil {
 		return Result{}, Dump{}, err
 	}
@@ -102,6 +100,11 @@ func (w *Wire) Ask(ctx context.Context, request Request) (Result, Dump, error) {
 	request.ClaudeCodeVersion = w.version
 	w.mu.Unlock()
 	result, dump, err := w.send(ctx, request, token, oauth)
+	renewed, err := llm.Renewed(ctx, err, token, w.config.Token)
+	if renewed != "" {
+		token = renewed
+		result, dump, err = w.send(ctx, request, token, oauth)
+	}
 	required := requiredVersion(err)
 	if NewerVersion(request.ClaudeCodeVersion, required) == request.ClaudeCodeVersion {
 		return result, dump, err

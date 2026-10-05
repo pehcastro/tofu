@@ -110,7 +110,7 @@ func askThrough(t *testing.T, store *settings.Store, accepts string) (*versionSe
 		BaseURL:           listening.URL,
 		Model:             "claude-test",
 		Proxy:             true,
-		Token:             func(context.Context) (string, error) { return "sk-ant-oat01-made-up", nil },
+		Token:             func(context.Context, string) (string, error) { return "sk-ant-oat01-made-up", nil },
 		ClaudeCodeVersion: store.Fingerprint().ClaudeCode,
 		AdoptVersion: func(version string) error {
 			return store.Save(settings.Global, settings.Write{Kind: settings.WriteFingerprint, Key: settings.FingerprintClaudeCode, Value: version})
