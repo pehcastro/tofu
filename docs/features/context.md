@@ -69,6 +69,10 @@ first request read 9,457 and 6,105 tokens from the cache and wrote none.
   `TOFU_CONTEXT_CEILING=20000 tofu`. The bands scale with it.
 - **Read back a stored result**: the model calls `artifact_fetch` with the
   handle, an offset and a length. You don't need to.
+- **Free room before the next turn**: type `/compact` in the app. Every old
+  tool result in the history is shrunk to its handle, with no model call,
+  and the chat says how many and the tokens before and after. The shrunk
+  history is a new session, so `tofu --continue` carries it after a restart.
 - **Watch a fork**: the chat shows **⟳ forking**, and `tofu session list`
   lists the new session.
 
