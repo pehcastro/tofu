@@ -1,4 +1,4 @@
-# the picker offers the meta models under a no key mark, says the contributor tier trains on what you send, and asks for the key in a dialog of its own that checks it, says a refusal, and never shows it
+# the picker offers the meta models under a no key mark, says the contributor tier trains on what you send, and asks for the key in a dialog of its own that checks it, says a refusal, and shows nothing of it beyond its prefix and last four
 type /models
 key enter
 wait Select model
@@ -10,10 +10,13 @@ key enter
 wait Meta key
 wait for meta/muse-spark-1.2-contributor
 type meta-made-up-silent-0a9f
-absent 0a9f
+wait meta…0a9f  24 chars
+absent made-up
+absent silent
 key enter
 wait checking with Meta
-absent 0a9f
+absent made-up
+absent silent
 screen
 key esc
 absent Meta key
@@ -21,14 +24,17 @@ key enter
 type meta-made-up-refused-7c1d
 key enter
 wait Meta refused the key (401)
-absent 7c1d
+absent made-up
+absent refused-
 screen
 key esc
 absent Meta key
 key enter
 paste meta-made-up-accepted-5e2b
-wait ••••••••••••••••••••••••••█
+wait meta…5e2b  26 chars
+absent made-up
 key enter
 wait the next turn runs meta/muse-spark-1.2-contributor
+absent made-up
 absent 5e2b
 screen

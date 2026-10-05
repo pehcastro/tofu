@@ -1,4 +1,4 @@
-# settings name the classifier under the orchestrator, and a key model with no key asks for the key without showing it
+# settings name the classifier under the orchestrator, and a key model with no key asks for the key and shows nothing of it beyond its prefix and last four
 type /settings
 key enter
 key right
@@ -12,14 +12,19 @@ screen
 key enter
 wait TypeSafe key
 type ts-made-up-4d1e9a7c
+wait ts-m…9a7c  19 chars
+absent made-up
 absent 4d1e
 screen
 key esc
 absent TypeSafe key
 key enter
 paste ts-made-up-4d1e9a7c
-wait •••••••••••••••••••█
+wait ts-m…9a7c  19 chars
+absent made-up
 key enter
 wait classifier now runs typesafe/jev-latest
+absent made-up
 absent 4d1e
+absent 9a7c
 screen

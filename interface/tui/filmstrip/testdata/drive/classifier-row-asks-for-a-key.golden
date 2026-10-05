@@ -9,7 +9,7 @@
     Context       08      the typed model that judges the model's calls, shell results, browser…    
     Files         03                                                                                
     Shell         05    enter change  ·  shift+tab scope  ·  esc chat                               
-    Turn          09                                                                                
+    Turn          11                                                                                
     Browser       06                                                                                
                                                                                                     
   NAVIGATE                                                                                          
@@ -71,7 +71,7 @@
                              for typesafe/jev-latest                                              
    PROVIDERS                                                           source  typesafe           
    › all                     ╭────────────────────────────────────╮    kind    classifier         
-     OpenRouter · no key     │ › •••••••••••••••••••█             │    pays    key                
+     OpenRouter · no key     │ › ts-m…9a7c  19 chars  prefix no…█ │    pays    key                
      TypeSafe · no key       ╰────────────────────────────────────╯    window                     
                                                                        layer   library            
    f5 reloads models         stored in the credential store, never     key     not set            
@@ -99,7 +99,7 @@
     Context       08      the typed model that judges the model's calls, shell results, browser…    
     Files         03                                                                                
     Shell         05    enter change  ·  shift+tab scope  ·  esc chat                               
-    Turn          09                                                                                
+    Turn          11                                                                                
     Browser       06                                                                                
                                                                                                     
   NAVIGATE                                                                                          

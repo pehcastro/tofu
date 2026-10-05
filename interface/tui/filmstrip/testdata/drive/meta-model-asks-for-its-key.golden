@@ -71,7 +71,7 @@
                              for meta/muse-spark-1.2-contributor       contributor                
    PROVIDERS                                                                                      
    › all                     ╭────────────────────────────────────╮    source  meta               
-     claude-sub              │ › •••••••••••••••••••••••••█       │    kind    llm                
+     claude-sub              │ › meta…7c1d  25 chars  prefix no…█ │    kind    llm                
      Meta · no key           ╰────────────────────────────────────╯    pays    key                
                              Meta refused the key (401)                window                     
    f5 reloads models                                                   layer   library            
