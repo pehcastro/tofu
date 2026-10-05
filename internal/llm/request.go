@@ -2,6 +2,7 @@ package llm
 
 import (
 	"encoding/json"
+	"strings"
 
 	"tofu/internal/transport"
 )
@@ -71,6 +72,10 @@ func (t Thinking) Empty() bool {
 	return t == Thinking{}
 }
 
+func BlankText(text string) bool {
+	return strings.TrimSpace(text) == ""
+}
+
 type Message struct {
 	Role            Role
 	Content         string
@@ -106,13 +111,16 @@ func (r Request) Encode(model string) ([]byte, error) {
 		return nil, transport.Fail("llm.Encode", transport.KindBadRequest, nil, "the request carries no messages")
 	}
 
-	messages := make([]wireMessage, len(r.Messages))
+	messages := make([]wireMessage, 0, len(r.Messages))
 	for index, message := range r.Messages {
+		if message.Role == RoleAssistant && BlankText(message.Content) && len(message.ToolCalls) == 0 {
+			continue
+		}
 		wire, err := encodeMessage(index, message)
 		if err != nil {
 			return nil, err
 		}
-		messages[index] = wire
+		messages = append(messages, wire)
 	}
 
 	tools, err := encodeTools(r.Tools)
@@ -139,7 +147,7 @@ func encodeMessage(index int, message Message) (wireMessage, error) {
 	}
 	switch message.Role {
 	case RoleSystem, RoleUser:
-		if message.Content == "" {
+		if BlankText(message.Content) {
 			return wireMessage{}, transport.Fail("llm.Encode", transport.KindBadRequest, nil,
 				"message %d is a %s with no content", index, message.Role)
 		}
@@ -149,9 +157,8 @@ func encodeMessage(index int, message Message) (wireMessage, error) {
 				"message %d is a tool result with no tool call id", index)
 		}
 	case RoleAssistant:
-		if message.Content == "" && len(message.ToolCalls) == 0 {
-			return wireMessage{}, transport.Fail("llm.Encode", transport.KindBadRequest, nil,
-				"message %d is an assistant message with no content and no tool calls", index)
+		if BlankText(message.Content) {
+			message.Content = ""
 		}
 	default:
 		return wireMessage{}, transport.Fail("llm.Encode", transport.KindBadRequest, nil,

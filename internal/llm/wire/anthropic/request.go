@@ -309,12 +309,12 @@ func encodeMessages(messages []llm.Message, oauth bool) ([]wireMessage, error) {
 				"message %d is a system message; anthropic carries those in the system field", index)
 
 		case llm.RoleUser:
-			if message.Content == "" && len(message.Images) == 0 {
+			if llm.BlankText(message.Content) && len(message.Images) == 0 {
 				return nil, transport.Fail("anthropic.Encode", transport.KindBadRequest, nil,
 					"message %d is a user message with no content", index)
 			}
 			blocks := make([]contentBlock, 0, len(message.Images)+1)
-			if message.Content != "" {
+			if !llm.BlankText(message.Content) {
 				blocks = append(blocks, contentBlock{Type: "text", Text: message.Content})
 			}
 			for imageIndex, image := range message.Images {
@@ -342,16 +342,15 @@ func encodeMessages(messages []llm.Message, oauth bool) ([]wireMessage, error) {
 			encoded = append(encoded, wireMessage{Role: "user", Content: []contentBlock{result}})
 
 		case llm.RoleAssistant:
-			if message.Content == "" && len(message.ToolCalls) == 0 {
-				return nil, transport.Fail("anthropic.Encode", transport.KindBadRequest, nil,
-					"message %d is an assistant message with no content and no tool calls", index)
+			if llm.BlankText(message.Content) && len(message.ToolCalls) == 0 {
+				continue
 			}
 			blocks := make([]contentBlock, 0, len(message.ToolCalls)+2)
 			if len(message.ToolCalls) > 0 && message.Thinking.Text != "" {
 				blocks = append(blocks, contentBlock{Type: "thinking",
 					Thinking: message.Thinking.Text, Signature: message.Thinking.Signature})
 			}
-			if message.Content != "" {
+			if !llm.BlankText(message.Content) {
 				blocks = append(blocks, contentBlock{Type: "text", Text: message.Content})
 			}
 			for callIndex, call := range message.ToolCalls {

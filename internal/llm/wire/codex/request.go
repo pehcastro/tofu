@@ -210,12 +210,12 @@ func encodeInput(messages []llm.Message) ([]inputItem, error) {
 				"message %d is a system message; codex carries those in instructions", index)
 
 		case llm.RoleUser:
-			if message.Content == "" && len(message.Images) == 0 {
+			if llm.BlankText(message.Content) && len(message.Images) == 0 {
 				return nil, transport.Fail("codex.Encode", transport.KindBadRequest, nil,
 					"message %d is a user message with no content", index)
 			}
 			parts := make([]inputPart, 0, len(message.Images)+1)
-			if message.Content != "" {
+			if !llm.BlankText(message.Content) {
 				parts = append(parts, inputPart{Type: "input_text", Text: message.Content})
 			}
 			for _, image := range message.Images {
@@ -233,11 +233,7 @@ func encodeInput(messages []llm.Message) ([]inputItem, error) {
 				CallID: message.ToolCallID, Output: message.Content})
 
 		case llm.RoleAssistant:
-			if message.Content == "" && len(message.ToolCalls) == 0 {
-				return nil, transport.Fail("codex.Encode", transport.KindBadRequest, nil,
-					"message %d is an assistant message with no content and no tool calls", index)
-			}
-			if message.Content != "" {
+			if !llm.BlankText(message.Content) {
 				items = append(items, inputItem{Type: "message", Role: "assistant",
 					Content: []inputPart{{Type: "output_text", Text: message.Content}}})
 			}

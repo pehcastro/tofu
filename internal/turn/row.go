@@ -248,7 +248,7 @@ func Sendable(messages []llm.Message) []llm.Message {
 			}
 		}
 		message.ToolCalls = kept
-		if message.Role == llm.RoleAssistant && kept == nil && message.Content == "" {
+		if message.Role == llm.RoleAssistant && kept == nil && llm.BlankText(message.Content) {
 			continue
 		}
 		sendable = append(sendable, message)
