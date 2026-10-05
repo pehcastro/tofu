@@ -8,6 +8,8 @@ import (
 	"strings"
 )
 
+const switchedOn = "on"
+
 type Overriding struct {
 	Rule  Rule
 	Base  Rule
@@ -43,8 +45,11 @@ func (one Rule) over(base Rule) Rule {
 	if one.Override.Of == "" {
 		return one
 	}
-	if one.Mode == ModeOff {
-		base.Mode = ModeOff
+	switch {
+	case one.Mode != "":
+		base.Mode = one.Mode
+	case base.Mode == ModeOff:
+		base.Mode = ModeShadow
 	}
 	base.ID, base.Text, base.File, base.Override = one.ID, cmp.Or(one.Text, base.Text), one.File, one.Override
 	return base
@@ -64,10 +69,14 @@ func parseOverride(data []byte, path string) (Rule, error) {
 			}
 			r.Override.Of, r.Override.Version = of, n
 		case "mode":
-			if Mode(value) != ModeOff {
-				return fmt.Errorf("%s:%d: an override's mode is %q, and a text: replaces what the rule says instead, found %q", path, line, ModeOff, value)
+			switch value {
+			case string(ModeOff):
+				r.Mode = ModeOff
+			case switchedOn:
+				r.Mode = ModeShadow
+			default:
+				return fmt.Errorf("%s:%d: an override's mode is %q or %q, and a text: replaces what the rule says instead, found %q", path, line, ModeOff, switchedOn, value)
 			}
-			r.Mode = ModeOff
 		case "text":
 			r.Text = value
 		case "reason":
@@ -80,7 +89,7 @@ func parseOverride(data []byte, path string) (Rule, error) {
 		case "at":
 			r.Override.At = value
 		default:
-			return fmt.Errorf("%s:%d: %q does not belong in an override, which carries id, overrides, mode: off or text, reason, by and at, and takes everything else from the rule it overrides", path, line, key)
+			return fmt.Errorf("%s:%d: %q does not belong in an override, which carries id, overrides, mode: off, mode: on or text, reason, by and at, and takes everything else from the rule it overrides", path, line, key)
 		}
 		return nil
 	})
@@ -91,22 +100,29 @@ func parseOverride(data []byte, path string) (Rule, error) {
 		return Rule{}, fmt.Errorf("%s: the override declares no id", path)
 	case strings.TrimSpace(r.Override.Reason) == "":
 		return Rule{}, fmt.Errorf("%s: the override of %s carries no reason, and the reason is how a person reading the project later knows why", path, r.Override.Of)
-	case (r.Mode == ModeOff) == (r.Text != ""):
-		return Rule{}, fmt.Errorf("%s: an override carries mode: off or a text:, exactly one of them", path)
+	case (r.Mode != "") == (r.Text != ""):
+		return Rule{}, fmt.Errorf("%s: an override carries mode: off, mode: on or a text:, exactly one of them", path)
 	}
 	return r, nil
 }
 
 func OverrideFile(id, text string, o Override) ([]byte, error) {
+	if text == "" {
+		return overrideFile(id, "mode: "+string(ModeOff), o)
+	}
+	return overrideFile(id, "text: "+text, o)
+}
+
+func SwitchOnFile(id string, o Override) ([]byte, error) {
+	return overrideFile(id, "mode: "+switchedOn, o)
+}
+
+func overrideFile(id, change string, o Override) ([]byte, error) {
 	if err := validID(id); err != nil {
 		return nil, err
 	}
-	if strings.ContainsAny(text+o.Reason, "\r\n") {
+	if strings.ContainsAny(change+o.Reason, "\r\n") {
 		return nil, fmt.Errorf("the override of %q needs its text and its reason on one line each", id)
-	}
-	change := "text: " + text
-	if text == "" {
-		change = "mode: " + string(ModeOff)
 	}
 	data := fmt.Appendf(nil, "id: %s\noverrides: %s@%d\n%s\nreason: %s\nby: %s\nat: %s\n", id, o.Of, o.Version, change, o.Reason, o.By, o.At)
 	_, err := parseOverride(data, id+"@1.yaml")

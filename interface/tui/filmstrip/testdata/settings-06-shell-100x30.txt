@@ -9,7 +9,7 @@
     Context       08      Lines retained per shell                                                  
     Files         03                                                                                
   › Shell         05      Kill confirm                                                      ● on    
-    Turn          10      Confirm process termination                                               
+    Turn          11      Confirm process termination                                               
     Browser       06                                                                                
                           Shell                                                      default  ▾     
   NAVIGATE                a path, or the word wsl; empty resolves the person's own shell automa…    

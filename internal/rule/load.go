@@ -190,11 +190,12 @@ func Layer(below, layer []Rule) []Rule {
 	}
 	kept := make([]Rule, 0, len(below)+len(added))
 	for i, one := range below {
-		if over, found := placed[i]; found {
-			one = over
-		}
-		if one.Mode != ModeOff {
+		over, found := placed[i]
+		switch {
+		case !found:
 			kept = append(kept, one)
+		case over.Mode != ModeOff:
+			kept = append(kept, over)
 		}
 	}
 	for _, one := range added {

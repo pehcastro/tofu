@@ -70,6 +70,8 @@ func (l ruleLayer) again(r rule.Rule) string {
 	switch {
 	case r.Override.Of != "" && r.Mode == rule.ModeOff:
 		return fmt.Sprintf("tofu rules off%s %s --reason %q", l.flag, r.Override.Of, r.Override.Reason)
+	case r.Override.Of != "" && r.Mode == rule.ModeShadow:
+		return "tofu rules restore" + l.flag + " " + r.Override.Of
 	case r.Override.Of != "":
 		return fmt.Sprintf("tofu rules add%s %s %q --reason %q", l.flag, r.ID, r.Text, r.Override.Reason)
 	case r.Mode == rule.ModeOff:
@@ -226,6 +228,13 @@ func rulesOffVerb(args []string, out, errOut io.Writer) int {
 	if !runs {
 		return o.fail(problemError{What: "no rule " + id + " runs", Hint: "tofu rules list"})
 	}
+	if base.Mode == rule.ModeOff {
+		hint := "tofu rules list"
+		if key := ruleSetting(id); key != "" {
+			hint = "tofu settings set " + key + " false"
+		}
+		return o.fail(problemError{What: id + " ships off, and nothing in the " + opts.layer.name + " rules turns it on", Hint: hint})
+	}
 	data, err := opts.override(base, "")
 	if err != nil {
 		return o.fail(err)
@@ -278,7 +287,7 @@ func rulesRestoreVerb(args []string, out, errOut io.Writer) int {
 		return o.fail(err)
 	}
 	if !found {
-		return o.fail(problemError{What: "the " + opts.layer.name + " rules carry no override of " + id, Hint: "tofu rules overrides"})
+		return rulesSwitchOn(o, opts, id)
 	}
 	_, overrides, err := opts.under(cmp.Or(existing.Override.Of, id))
 	if err != nil {
@@ -291,4 +300,23 @@ func rulesRestoreVerb(args []string, out, errOut io.Writer) int {
 		return o.fail(err)
 	}
 	return o.receipt(writeReceipt{Changes: []fileChange{{Change: changeRemoved, What: "override of " + id, File: existing.File}}, Undo: opts.layer.again(existing)})
+}
+
+func rulesSwitchOn(o verbOutput, opts ruleWriteOpts, id string) int {
+	base, found, err := opts.under(id)
+	if err != nil {
+		return o.fail(err)
+	}
+	if !found || base.Mode != rule.ModeOff {
+		return o.fail(problemError{What: "the " + opts.layer.name + " rules carry no override of " + id, Hint: "tofu rules overrides"})
+	}
+	data, err := rule.SwitchOnFile(id, rule.Override{Of: id, Version: base.Version, Reason: cmp.Or(opts.reason, "switched on with tofu rules restore"), By: rule.ByPerson, At: time.Now().Format(time.DateOnly)})
+	if err != nil {
+		return o.usage(err)
+	}
+	file := filepath.Join(opts.layer.dir, id+"@1.yaml")
+	if err := sys.WriteFile(file, data, 0o644); err != nil {
+		return o.fail(err)
+	}
+	return o.receipt(writeReceipt{Changes: []fileChange{{Change: changeAdded, What: "rule " + id + " on", File: file}}, Undo: "tofu rules remove" + opts.layer.flag + " " + id})
 }

@@ -101,8 +101,7 @@ and window, `●` default, `✓` allowed, `○` excluded, `⚠` a notice, then
 the roles and where the windows came from. `--json` prints one document
 whose `data` carries every field, the reason a model is excluded among
 them: `layer` is `library`, `catalog`, `global` or `project`, and `from`
-says what listed a catalog model.
-`--refresh` and `--discover` still run it for one release.
+says what listed a catalog model. `--refresh` and `--discover` still run it for one release.
 
     tofu login --status
 
@@ -117,7 +116,5 @@ wins. A reload writes a deleted catalog file again while the account
 serves it, so exclude the model in `~/.tofu/models` to keep it out.
 Delete a `modelTier` line from `settings.json` to empty the tier.
 `tofu login --disable <number>` sets a credential aside without deleting it,
-and `tofu login --enable <number>` brings it back. `tofu logout llm claude-sub`
-deletes the account; with two accounts signed in it names both and wants
-the number, `tofu logout llm claude-sub 2`. `tofu logout llm meta` removes
-the Meta key.
+and `tofu login --enable <number>` brings it back. `tofu logout llm
+claude-sub 2` deletes account 2; `tofu logout llm meta` the Meta key.

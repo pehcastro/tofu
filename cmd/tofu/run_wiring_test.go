@@ -916,10 +916,11 @@ func TestOnAReactProjectTheLeadCarriesTheDesignRulesAndNoWritingRuleAndItsTsDevC
 			t.Errorf("the lead lost %q, which says what to build and so what to brief", design)
 		}
 	}
-	for _, process := range []string{"from the rule verify_sub_agents]", "from the rule verify_scoped]"} {
-		if !strings.Contains(lead, process) {
-			t.Errorf("the lead lost the process rule %q along with the code rules", process)
-		}
+	if !strings.Contains(lead, "from the rule verify_scoped]") {
+		t.Error("the lead lost the process rule verify_scoped along with the code rules")
+	}
+	if strings.Contains(lead, "from the rule verify_sub_agents]") {
+		t.Error("the lead carries verify_sub_agents, which ships off and no setting turned on")
 	}
 	for _, unused := range leadNeverCalls() {
 		if slices.Contains(leadTools, unused) {
@@ -957,7 +958,7 @@ func TestOnAReactProjectTheLeadCarriesTheDesignRulesAndNoWritingRuleAndItsTsDevC
 	}
 }
 
-func TestTheLeadEndsOnACleanSingleReportAndChecksAfterAReportWithConcerns(t *testing.T) {
+func TestTheLeadEndsOnACleanSingleReportWhetherOrNotItChecksSubAgents(t *testing.T) {
 	spawn := `{"text":"spawning go-dev to add Extra","tools":[{"name":"spawn","args":{"agent":"go-dev","task":"add func Extra to package stats in stats/extra.go","owns":["stats/**"]}}]}`
 	gated := []string{
 		`{"agent":"c1","tools":[{"name":"write","args":{"path":"stats/extra.go","content":"package stats\n\nfunc Extra() int { return 1 }\n"}}]}`,
@@ -966,19 +967,25 @@ func TestTheLeadEndsOnACleanSingleReportAndChecksAfterAReportWithConcerns(t *tes
 		`{"agent":"c1","text":"VERIFIED. go vet and go test passed after the edit."}`,
 	}
 	leadChecks := []string{`{"tools":[{"name":"bash","args":{"command":"go vet ./stats/"}}]}`, `{"text":"go-dev added stats.Extra."}`}
+	ran := `step 1: tool_call tool=bash command="[^"]*go vet \./stats/" sub_agent="" exit_code=0`
+	refused := `step 1: tool_call tool=bash command="" .*was not executed: this turn ends on a clean sub-agent report`
+	concerns := append([]string{`{"agent":"c1","tools":[{"name":"read","args":{"path":"stats/missing.go"}}]}`}, gated...)
 	for _, run := range []struct {
-		name    string
-		agent   []string
-		checked string
+		name     string
+		settings string
+		agent    []string
+		checked  string
 	}{
-		{"clean", gated, `step 1: tool_call tool=bash command="" .*was not executed: this turn ends on a clean sub-agent report`},
-		{"done_with_concerns", append([]string{`{"agent":"c1","tools":[{"name":"read","args":{"path":"stats/missing.go"}}]}`}, gated...), `step 1: tool_call tool=bash command="[^"]*go vet \./stats/" sub_agent="" exit_code=0`},
+		{"clean", `{"verifySubAgents": 1}`, gated, refused},
+		{"done_with_concerns", `{"verifySubAgents": 1}`, concerns, ran},
+		{"clean_with_the_check_off", `{}`, gated, refused},
+		{"done_with_concerns_with_the_check_off", `{}`, concerns, ran},
 	} {
 		t.Run(run.name, func(t *testing.T) {
 			home, dir := t.TempDir(), t.TempDir()
 			t.Setenv("HOME", home)
 			t.Setenv("USERPROFILE", home)
-			for name, body := range map[string]string{"go.mod": "module example.com/m\n\ngo 1.22\n", "stats/stats.go": "package stats\n\nfunc Count() int { return 0 }\n"} {
+			for name, body := range map[string]string{"go.mod": "module example.com/m\n\ngo 1.22\n", "stats/stats.go": "package stats\n\nfunc Count() int { return 0 }\n", ".tofu/settings.json": run.settings} {
 				if err := os.MkdirAll(filepath.Join(dir, filepath.Dir(name)), 0o755); err != nil {
 					t.Fatal(err)
 				}

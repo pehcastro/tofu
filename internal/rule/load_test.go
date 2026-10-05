@@ -277,8 +277,8 @@ func TestLoadDirWalksEveryDomainAndSkipsTheRulesADecisionPointReads(t *testing.T
 	}
 	domains := map[string]int{}
 	for _, r := range rules {
-		if r.Mode != ModeShadow {
-			t.Fatalf("rule %q ships in mode %s, want %s, this ticket promotes nothing", r.ID, r.Mode, ModeShadow)
+		if r.Mode != ModeShadow && r.Mode != ModeOff {
+			t.Fatalf("rule %q ships in mode %s, want %s or %s, this ticket promotes nothing", r.ID, r.Mode, ModeShadow, ModeOff)
 		}
 		if r.Domain == "" {
 			t.Fatalf("rule %q ships with no domain: %+v", r.ID, r)

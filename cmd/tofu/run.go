@@ -51,9 +51,10 @@ const (
 	wireKey          = openrouter.Name
 	wireMeta         = string(models.Meta)
 
-	toolSetFull  = "full"
-	toolSetThree = "three"
-	toolPickRule = "tool_pick"
+	toolSetFull         = "full"
+	toolSetThree        = "three"
+	toolPickRule        = "tool_pick"
+	verifySubAgentsRule = "verify_sub_agents"
 
 	gateFollowsTheRule = ""
 	gateOff            = "off"
@@ -589,6 +590,7 @@ type composedRun struct {
 	composed     turn.Composed
 	subAgents    turn.SubAgents
 	skills       []skill.Skill
+	checksWork   bool
 }
 
 func composeRun(opts runOpts, built []turn.Tool, run runtime) (composedRun, error) {
@@ -650,7 +652,8 @@ func composeRun(opts runOpts, built []turn.Tool, run runtime) (composedRun, erro
 		spec.Role = rule.RoleOrchestrator
 	}
 	composed, err := turn.Compose(spec)
-	return composedRun{opts: opts, environment: environment, instructions: instructions, composed: composed, subAgents: subAgents, skills: skills}, err
+	return composedRun{opts: opts, environment: environment, instructions: instructions, composed: composed, subAgents: subAgents, skills: skills,
+		checksWork: slices.ContainsFunc(rules, func(loaded rule.Rule) bool { return loaded.ID == verifySubAgentsRule })}, err
 }
 
 func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn.SpawnTool, error) {
@@ -728,7 +731,7 @@ func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn
 		return config, nil, nil
 	}
 	spawner := turn.NewSpawnTool(orchestratorID, config, cmp.Or(run.roster, &subagent.Roster{}))
-	spawner.Inbox, spawner.SubAgents, spawner.Project = config.Inbox, prompt.subAgents, dir
+	spawner.Inbox, spawner.SubAgents, spawner.Project, spawner.ChecksWork = config.Inbox, prompt.subAgents, dir, prompt.checksWork
 	spawner.SubAgents.Open = run.subAgentOpener(opts)
 	learn := learnBrowserRecipe(run.notify)
 	spawner.SubAgents.Brief = browserRecipeBrief(run.notify)

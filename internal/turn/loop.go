@@ -242,14 +242,17 @@ func Run(ctx context.Context, config Config) (Row, error) {
 	}
 	afterSystem := len(messages)
 	messages = append(messages, config.History...)
-	first, concluding := config.FirstUserMessage(), ""
+	first, concluding, taken := config.FirstUserMessage(), "", ""
 	for _, tool := range config.Tools.tools {
 		if spawner, spawning := tool.(*SpawnTool); spawning {
 			concluding = spawner.cleanReport(config.Task)
+			if concluding == "" && !spawner.ChecksWork {
+				taken = spawner.reportTaken(config.Task)
+			}
 		}
 	}
-	if concluding != "" {
-		first += "\n\n" + concluding
+	if note := concluding + taken; note != "" {
+		first += "\n\n" + note
 	}
 	messages = append(messages, llm.Message{Role: llm.RoleUser, Content: first, Images: config.Images})
 
@@ -669,6 +672,16 @@ func Run(ctx context.Context, config Config) (Row, error) {
 			panic("turn: unknown model outcome")
 		}
 	}
+}
+
+func (t *SpawnTool) reportTaken(task string) string {
+	agents := t.roster.SubAgents()
+	at := slices.IndexFunc(agents, func(agent subagent.SubAgent) bool { return agent.State == subagent.Finished && agent.Report == task })
+	if at < 0 {
+		return ""
+	}
+	return "the person has not asked tofu to check a sub-agent's work, so take " + agents[at].ID + "'s report as the result: " +
+		"do not read its files again or rerun its build, tests or type check, unless the report says something failed."
 }
 
 func (t *SpawnTool) cleanReport(task string) string {

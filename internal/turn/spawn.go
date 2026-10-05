@@ -347,6 +347,7 @@ type SpawnTool struct {
 	SubAgents      SubAgents
 	Limits         func() SubAgentLimits
 	SettingsTool   bool
+	ChecksWork     bool
 	Project        string
 	Inbox          *Inbox
 	orchestratorID string
@@ -487,7 +488,10 @@ func (t *SpawnTool) limits() SubAgentLimits {
 
 func (t *SpawnTool) Definition() llm.Tool {
 	limits := t.limits()
-	raise := "the person can raise either in the settings menu."
+	raise, duties := "the person can raise either in the settings menu.", "you plan and spawn"
+	if t.ChecksWork {
+		duties = "you plan, spawn and verify"
+	}
 	if t.SettingsTool {
 		raise = "the person can raise either in the settings menu, and you can ask to with the settings tool, which the person answers."
 	}
@@ -508,7 +512,7 @@ func (t *SpawnTool) Definition() llm.Tool {
 	}
 	return llm.Tool{
 		Name: "spawn",
-		Description: "you plan, spawn and verify, and implementation goes to a sub-agent: spawn one per separable piece of work as soon as the piece is known, rather than writing the code yourself first. " +
+		Description: duties + ", and implementation goes to a sub-agent: spawn one per separable piece of work as soon as the piece is known, rather than writing the code yourself first. " +
 			"hands one piece of work to a sub-agent with its own context and its own conversation, and returns at once with its name while it works in the background. " +
 			"its report, rather than its transcript, comes to you later as a message naming it, and your turn may end before it does. " +
 			"owns lists the paths the sub-agent may write, every other path is refused at the write, and no two sub-agents may hold overlapping paths; a sub-agent offered no write, edit or bash needs none. " +
@@ -708,7 +712,7 @@ func (t *SpawnTool) subAgentConfig(held *heldSubAgent, site spawnSite, check *ch
 		owned = append(owned, tool)
 	}
 	if offered(t.Name()) {
-		owned = append(owned, &SpawnTool{Review: t.Review, Methods: t.Methods, SubAgents: t.SubAgents, Limits: t.Limits, Project: t.Project, Inbox: held.inbox,
+		owned = append(owned, &SpawnTool{Review: t.Review, Methods: t.Methods, SubAgents: t.SubAgents, Limits: t.Limits, ChecksWork: t.ChecksWork, Project: t.Project, Inbox: held.inbox,
 			orchestratorID: held.agent.ID, depth: t.depth + 1, base: t.base, roster: t.roster, tree: t.tree})
 	}
 	subAgent := t.base

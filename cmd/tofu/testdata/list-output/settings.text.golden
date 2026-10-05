@@ -1,6 +1,6 @@
 exit 0
 --- stdout
-Settings · 2 set                                                     40 declared
+Settings · 2 set                                                     41 declared
 
 Appearance
   ● theme                   Nord                project
@@ -42,6 +42,7 @@ Turn
     subAgentsPerTurn        10                  default
     subAgentDepth           2                   default
     subAgentCheckSeconds    1800                default
+    verifySubAgents         false               default
     agentSources            tofu,agents,claude  default
     modelTier.genius        empty               default
     modelTier.smart         empty               default

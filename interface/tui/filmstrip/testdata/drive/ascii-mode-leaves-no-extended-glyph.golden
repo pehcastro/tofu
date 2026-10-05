@@ -189,7 +189,7 @@
     Context       08      Spacing across lists and panels                                           
     Files         03                                                                                
     Shell         05      Animations                                                  subtle  v     
-    Turn          09      Motion for conversational states                                          
+    Turn          11      Motion for conversational states                                          
     Browser       06                                                                                
                           Status bar                                                 compact  v     
   NAVIGATE                Context, quotas, and runtime counters                                     
@@ -219,7 +219,7 @@
     Context       08     >  tofu                                                                    
     Files         03                                                                                
     Shell         05       tofu light                                                 subtle  v     
-    Turn          09                                                                                
+    Turn          11                                                                                
     Browser       06       tofu dusk                                                                
                                                                                      compact  v     
   NAVIGATE                 Solarized Light                                                          

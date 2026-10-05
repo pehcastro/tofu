@@ -17,8 +17,8 @@ What it is
   - Files: diffContext, hyperlinks, groupByAgent
   - Shell: persistentRegistry, logTail, killConfirm, shell, foldHidesShell
   - Turn: decisionCap, turnMaySpawn, subAgentsPerTurn, subAgentDepth,
-    agentSources, modelTier.genius, modelTier.smart, modelTier.worker,
-    modelTier.dumb
+    subAgentCheckSeconds, verifySubAgents, agentSources, modelTier.genius,
+    modelTier.smart, modelTier.worker, modelTier.dumb
   - Browser: browser, browserDriver, browserSteps, browserModel, browserEffort,
     browserCursor
 
@@ -184,6 +184,12 @@ Turn
       sub-agent, built from what tofu records with no model call: its steps, the
       files it changed, its gate and its last tool. 0 sends none; the next spawn
       reads the new value
+    verifySubAgents         false
+      true or false
+      the lead checks each sub-agent's work itself before it reports, reading
+      the files and running the build or the tests again; off takes the report
+      as the result unless you ask for a check. A text override of the rule
+      verify_sub_agents in tofu rules turns it on too
     agentSources            tofu,agents,claude
       a comma list of tofu, agents, claude
       the folders sub-agents are read from, in order, as a comma list of tofu,

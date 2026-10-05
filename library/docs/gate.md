@@ -60,14 +60,10 @@ nothing if it does not:
 
     tofu login classifier openrouter
 
-While you type or paste, the field shows the key's shape and never the
-key: `sk-or-v1-…3f9a  73 chars  prefix ok`. A key that does not start
-with `sk-or-v1-` is named as such, and enter must be pressed twice to
-keep it. The key is never an argument, so it never lands in your shell
-history. It can come from a pipe too,
-`tofu login classifier openrouter < key.txt`. Run it again to replace the
-key, and `tofu login --status` to see which one is set, by its last four
-characters.
+The field shows the key's shape, never the key: `sk-or-v1-…3f9a  73 chars
+prefix ok`. A wrong prefix needs a second enter. The key is never an
+argument, so it stays out of your shell history; a pipe works too. Run it
+again to replace the key; `tofu login --status` shows its last four.
 
 Wait for you before a risky call, everywhere or in one project:
 

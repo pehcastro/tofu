@@ -15,6 +15,7 @@ import (
 
 	"tofu/interface/cli"
 	"tofu/internal/rule"
+	settingspkg "tofu/internal/settings"
 	"tofu/internal/sys"
 	shipped "tofu/library"
 )
@@ -24,6 +25,7 @@ const (
 	rulesFireSuffix     = ".rules.jsonl"
 	rulesFromTheBinary  = "the binary"
 	rulesFromTheProject = "the project"
+	ruleOn              = "on"
 	rulesSubcommands    = "tofu rules list|check|fired|index|overrides|add|off|restore|remove"
 	rulesListUsage      = "tofu rules list [--library dir] [--dir project] [--json]"
 	rulesOverridesUsage = "tofu rules overrides [--library dir] [--dir project] [--json]"
@@ -42,6 +44,7 @@ type ruleListing struct {
 	Origin   string           `json:"origin"`
 	Mode     string           `json:"mode,omitempty"`
 	File     string           `json:"file,omitempty"`
+	Switch   string           `json:"switch,omitempty"`
 	Override *overrideListing `json:"override,omitempty"`
 }
 
@@ -70,18 +73,30 @@ type layerOverride struct {
 }
 
 type ruleStack struct {
-	rules     []rule.Rule
-	origin    string
-	under     map[string][]rule.Rule
-	overrides []layerOverride
+	rules      []rule.Rule
+	shippedOff []rule.Rule
+	bySetting  []string
+	origin     string
+	under      map[string][]rule.Rule
+	overrides  []layerOverride
+}
+
+func ruleSetting(id string) string {
+	if id == verifySubAgentsRule {
+		return settingspkg.VerifySubAgents
+	}
+	return ""
 }
 
 func (o layerOverride) listing() *overrideListing {
 	r := o.Rule
 	listed := &overrideListing{RuleID: cmp.Or(r.Override.Of, r.ID), Version: r.Override.Version, Current: o.Base.Version, Layer: o.layer, Change: "text", Text: r.Text,
 		Reason: r.Override.Reason, By: string(r.Override.By), At: r.Override.At, Stale: o.Stale, File: r.File}
-	if r.Mode == rule.ModeOff {
+	switch r.Mode {
+	case rule.ModeOff:
 		listed.Change, listed.Text = string(rule.ModeOff), ""
+	case rule.ModeShadow:
+		listed.Change, listed.Text = ruleOn, ""
 	}
 	return listed
 }
@@ -107,7 +122,13 @@ func stackRules(library, project string) (ruleStack, error) {
 		}
 		rules = rule.Layer(rules, over)
 	}
-	stack.rules = rules
+	for i, one := range rules {
+		if key := ruleSetting(one.ID); key != "" && one.Mode == rule.ModeOff && settingInt(project, key, nil) != 0 {
+			rules[i].Mode, stack.bySetting = rule.ModeShadow, append(stack.bySetting, one.ID)
+		}
+	}
+	stack.rules = slices.DeleteFunc(slices.Clone(rules), func(r rule.Rule) bool { return r.Mode == rule.ModeOff })
+	stack.shippedOff = slices.DeleteFunc(rules, func(r rule.Rule) bool { return r.Mode != rule.ModeOff })
 	return stack, nil
 }
 
@@ -237,11 +258,15 @@ func rulesListVerb(args []string, out, errOut io.Writer) int {
 	if err != nil {
 		return o.fail(err)
 	}
+	shippedFrom := "shipped"
+	if stack.origin != rulesFromTheBinary {
+		shippedFrom = "library"
+	}
 	listing := make([]ruleListing, len(stack.rules))
 	for i, r := range stack.rules {
-		listing[i] = ruleListing{ID: r.ID, Kind: string(r.Kind), Origin: "shipped", Override: stack.applied(r)}
-		if stack.origin != rulesFromTheBinary {
-			listing[i].Origin = "library"
+		listing[i] = ruleListing{ID: r.ID, Kind: string(r.Kind), Origin: shippedFrom, Override: stack.applied(r)}
+		if slices.Contains(stack.bySetting, r.ID) {
+			listing[i].Switch = "on by the setting " + ruleSetting(r.ID)
 		}
 		if r.Checker != "" {
 			listing[i].Mode = r.Mode.String()
@@ -252,6 +277,13 @@ func rulesListVerb(args []string, out, errOut io.Writer) int {
 	}
 	for _, off := range stack.switchedOff() {
 		listing = append(listing, ruleListing{ID: off.Base.ID, Kind: string(off.Base.Kind), Origin: off.layer, Mode: string(rule.ModeOff), File: off.Rule.File, Override: off.listing()})
+	}
+	for _, off := range stack.shippedOff {
+		switchOn := "ships off: tofu rules restore " + off.ID
+		if key := ruleSetting(off.ID); key != "" {
+			switchOn += ", or tofu settings set " + key + " true"
+		}
+		listing = append(listing, ruleListing{ID: off.ID, Kind: string(off.Kind), Origin: shippedFrom, Mode: string(rule.ModeOff), Switch: switchOn})
 	}
 	report := ruleListReport{Origin: stack.origin, Rules: listing}
 	return o.done(true, report, report.lines)
@@ -288,7 +320,7 @@ func (report ruleListReport) lines(page cli.Page) []string {
 			if r.Origin != name {
 				continue
 			}
-			row := cli.Row{Mark: listingMark(rule.Mode(r.Mode)), Cells: []string{r.ID, r.Kind, r.Mode}, Detail: page.Path(r.File)}
+			row := cli.Row{Mark: listingMark(rule.Mode(r.Mode)), Cells: []string{r.ID, r.Kind, r.Mode}, Detail: cmp.Or(r.Switch, page.Path(r.File))}
 			if r.Override != nil {
 				row.Detail = r.Override.why()
 			}

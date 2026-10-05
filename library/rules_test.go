@@ -62,7 +62,7 @@ func TestNoRuleWithoutACheckerCarriesAModeLine(t *testing.T) {
 			continue
 		}
 		checkerless++
-		if strings.Contains(body, "mode:") {
+		if strings.Contains(body, "mode:") && !strings.Contains(body, "mode: off") {
 			t.Fatalf("%s names no checker and declares a mode, and shadow against enforced decides nothing for a rule nothing checks", name)
 		}
 	}

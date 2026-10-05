@@ -113,4 +113,5 @@ To run the lead alone: `tofu settings set turnMaySpawn false`.
 | `subAgentsPerTurn` (10) | Sub-agents running at once |
 | `subAgentDepth` (2) | How deep sub-agents may spawn their own |
 | `subAgentCheckSeconds` (1800) | Seconds between checks on a running sub-agent; 0 sends none |
+| `verifySubAgents` (false) | Off: the lead takes a finished sub-agent's report as the result, unless the report says something failed. On: the lead reads what the sub-agent changed and runs the build or tests again. `tofu rules restore verify_sub_agents` also turns it on |
 | `turnMaySpawn` (`true`) | Whether the lead may spawn at all |

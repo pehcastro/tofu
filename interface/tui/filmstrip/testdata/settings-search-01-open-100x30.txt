@@ -19,7 +19,7 @@
   esc chat          Models & roles / Orchestrator model                                             
                     Models & roles / Classifier model                                               
                                                                                                     
-                  1 of 44 results                                                                   
+                  1 of 45 results                                                                   
                                                                                                     
                           Readable text, quiet surfaces, and bounded focus.                         
                           ● active    ● attention    ● failed                                       

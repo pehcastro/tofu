@@ -29,7 +29,7 @@ exit 0
     "roles": 0,
     "questions": 14,
     "doc_pages": 15,
-    "doc_entries": 78,
+    "doc_entries": 79,
     "proxy": "rtk",
     "proxy_from": "library",
     "domains_from": "the binary",

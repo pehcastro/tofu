@@ -184,6 +184,12 @@ exit 0
         "source": "default"
       },
       {
+        "key": "verifySubAgents",
+        "category": "Turn",
+        "value": false,
+        "source": "default"
+      },
+      {
         "key": "agentSources",
         "category": "Turn",
         "value": "tofu,agents,claude",
