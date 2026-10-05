@@ -99,8 +99,8 @@ func (b Board) copyFile(index int, files []string) (Outcome, error) {
 	if len(files) == 0 {
 		return Outcome{}, errors.New("the clipboard names no file")
 	}
-	suffix := strings.ToLower(filepath.Ext(files[0]))
-	if !slices.Contains([]string{pngSuffix, ".jpg", ".jpeg", ".gif", ".webp", ".bmp"}, suffix) {
+	suffix, image := imageSuffix(files[0])
+	if !image {
 		return Outcome{}, errors.New(filepath.Base(files[0]) + " is not an image tofu can attach")
 	}
 	body, err := os.ReadFile(files[0])
@@ -111,6 +111,11 @@ func (b Board) copyFile(index int, files []string) (Outcome, error) {
 		return Outcome{}, errors.New(filepath.Base(files[0]) + " is " + widget.Size(len(body)) + ", past the paste ceiling")
 	}
 	return b.store(index, body, suffix)
+}
+
+func imageSuffix(name string) (string, bool) {
+	suffix := strings.ToLower(filepath.Ext(name))
+	return suffix, slices.Contains([]string{pngSuffix, ".jpg", ".jpeg", ".gif", ".webp", ".bmp"}, suffix)
 }
 
 func (b Board) store(index int, body []byte, suffix string) (Outcome, error) {

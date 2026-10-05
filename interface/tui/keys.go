@@ -192,9 +192,13 @@ func tabDigit(key string) (int, bool) {
 func (a *App) pasted(msg tea.PasteMsg) tea.Cmd {
 	switch top := a.top().(type) {
 	case nil:
-		if a.current == screenChat {
-			return a.view.InsertPaste(msg.Content)
+		if a.current != screenChat {
+			return nil
 		}
+		if board, dropped := a.board.Dropped(msg.Content); dropped {
+			return a.view.Paste(board)
+		}
+		return a.view.InsertPaste(msg.Content)
 	case *commandsDialog:
 		return top.Paste(msg)
 	case *searchDialog:

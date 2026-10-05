@@ -44,6 +44,8 @@ inside the 16.7 ms of a 60 Hz frame.
 - **Paste an image or a file**: `Ctrl+V` attaches what the clipboard holds.
   On Linux it reads through `wl-paste` on Wayland, or `xclip` or `xsel` on
   X11, so install `wl-clipboard` or `xclip` first.
+- **Drop a screenshot on the terminal**: a dragged or pasted path to a png,
+  jpg, gif or webp file attaches the image. Any other path stays text.
 - **Answer the gate** when `gatePrompt` is `ask`: `1` allows once, `2`
   refuses, `3` always allows that tool on that file this session.
 - **Open on the last session**: `tofu --continue`.

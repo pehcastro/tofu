@@ -254,6 +254,38 @@ func TestDeletingAPastedImagesTokenDropsItFromTheSentTree(t *testing.T) {
 	}
 }
 
+func TestADroppedImagePathAttachesAndAnyOtherPathStaysText(t *testing.T) {
+	board, dir := pasteBoard(t)
+	shots := filepath.Join(t.TempDir(), "My Shots")
+	if err := os.MkdirAll(shots, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	shot, notes, gone := filepath.Join(shots, "shot.png"), filepath.Join(shots, "notes.txt"), filepath.Join(shots, "gone.png")
+	for _, path := range []string{shot, notes} {
+		if err := os.WriteFile(path, []byte(screenshot), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	app := pasteApp(t, board)
+	paste := func(text string) {
+		if _, cmd := app.Update(tea.PasteMsg{Content: text}); cmd != nil {
+			app.Update(cmd())
+		}
+	}
+	paste(`"` + shot + `"`)
+	typeText(app, " then ")
+	paste(notes)
+	typeText(app, " and ")
+	paste(gone)
+	if want := "[Image #1] then " + notes + " and " + gone; app.view.Value() != want {
+		t.Fatalf("the composer holds %q, want %q", app.view.Value(), want)
+	}
+	copied, err := os.ReadFile(filepath.Join(dir, pasteSessionID+"-image-01.png"))
+	if err != nil || string(copied) != screenshot {
+		t.Fatalf("the dropped image was not copied beside the record: %q, %v", copied, err)
+	}
+}
+
 func TestThePastedComposerIsWhatHeSees(t *testing.T) {
 	board, _ := pasteBoard(t)
 	app := pasteApp(t, board)
