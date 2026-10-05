@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"tofu/internal/konst"
 	"tofu/internal/llm"
 	"tofu/internal/recall"
 )
@@ -99,18 +100,90 @@ func shrinkPages(store *recall.Store, messages []llm.Message) error {
 			return nil
 		}
 		whole--
-		handle, rendered := strings.CutPrefix(text, "artifact ")
-		handle, _, _ = strings.Cut(handle, " ")
-		if !rendered {
-			elided, err := recall.Elide(store, recall.Config{}, []byte(text), true)
-			if err != nil {
-				return fmt.Errorf("the %s result that a newer page replaced could not be held whole: %w", call.Name, err)
-			}
-			handle = elided.Reference.ID
+		handle, err := heldHandle(store, text)
+		if err != nil {
+			return fmt.Errorf("the %s result that a newer page replaced could not be held whole: %w", call.Name, err)
 		}
 		messages[i].Content = shrunkPage(text, header, noteOf(call), noteAfter(messages[i+1:]), handle)
 	}
 	return nil
+}
+
+func heldHandle(store *recall.Store, text string) (string, error) {
+	if held, rendered := strings.CutPrefix(text, "artifact "); rendered {
+		handle, _, _ := strings.Cut(held, " ")
+		return handle, nil
+	}
+	elided, err := recall.Elide(store, recall.Config{}, []byte(text), true)
+	return elided.Reference.ID, err
+}
+
+type overflowShrink struct {
+	results     int
+	bytesBefore int
+	bytesAfter  int
+}
+
+func (s overflowShrink) String() string {
+	return fmt.Sprintf("shrank %d old tool result(s) to an artifact handle each, %d bytes of messages to %d", s.results, s.bytesBefore, s.bytesAfter)
+}
+
+func shrinkOverflow(artifacts Artifacts, messages []llm.Message, sentTokens, windowTokens int) (overflowShrink, error) {
+	target := sentTokens
+	if windowTokens > 0 {
+		target = min(target, windowTokens)
+	}
+	target = target * konst.TurnOverflowKeepPercent / 100
+	lastStep := len(messages) - 1
+	for lastStep >= 0 && messages[lastStep].Role != llm.RoleAssistant {
+		lastStep--
+	}
+	shrink, estimate := overflowShrink{bytesBefore: messagesBytes(messages)}, sentTokens
+	names := make(map[string]string)
+	for i, message := range messages[:max(lastStep, 0)] {
+		for _, call := range message.ToolCalls {
+			names[call.ID] = call.Name
+		}
+		if estimate <= target {
+			break
+		}
+		if message.Role != llm.RoleTool || len(message.Content) < artifacts.preview.CompactFloorBytes ||
+			recall.AlreadyDropped(message.Content) || shrunkHandle(message.Content) != "" {
+			continue
+		}
+		note, err := overflowNote(artifacts, names[message.ToolCallID], message.Content)
+		if err != nil {
+			return overflowShrink{}, err
+		}
+		estimate -= artifacts.preview.MessageTokens(message.Content) - artifacts.preview.MessageTokens(note)
+		messages[i].Content = note
+		shrink.results++
+	}
+	shrink.bytesAfter = messagesBytes(messages)
+	return shrink, nil
+}
+
+func overflowNote(artifacts Artifacts, tool, result string) (string, error) {
+	if !artifacts.handles {
+		return "the " + tool + " result that stood here was dropped when the context window overflowed, and nothing holds it: run the call again if it is still needed.", nil
+	}
+	handle, err := heldHandle(artifacts.store, result)
+	if err != nil {
+		return "", fmt.Errorf("the %s result to shrink after the context window overflowed could not be held whole: %w", tool, err)
+	}
+	return "the " + tool + " result that stood here is held whole in artifact " + handle +
+		": it was shrunk when the context window overflowed. call artifact_fetch with that handle, an offset and a length to read any range of it.", nil
+}
+
+func messagesBytes(messages []llm.Message) int {
+	total := 0
+	for _, message := range messages {
+		total += len(message.Content)
+		for _, call := range message.ToolCalls {
+			total += len(call.Arguments)
+		}
+	}
+	return total
 }
 
 func noteOf(call llm.ToolCall) string {

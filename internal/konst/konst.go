@@ -96,6 +96,7 @@ const (
 	TurnBackoffJitterFraction       = 0.2
 	TurnTotalBackoffCeilingMillis   = 15000
 	TurnResultBytesCap              = 32768
+	TurnOverflowKeepPercent         = 75
 	IgnoreFileBytesCap              = 65536
 	GlobPathsResultCap              = 300
 	ProjectInstructionsBytesDefault = 32768

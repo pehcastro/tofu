@@ -204,6 +204,10 @@ func ReadStream(body io.Reader, oauth bool, onDelta, onThinking func(string)) (R
 				result.Warnings = append(result.Warnings, "a stop reason arrived after the terminal envelope")
 				continue
 			}
+			if event.Delta.StopReason == llm.FinishContextWindowExceeded {
+				return result, transport.Fail("anthropic.ReadStream", transport.KindRequestTooLarge, transport.ErrContextOverflow,
+					"the stop reason is %s", llm.FinishContextWindowExceeded)
+			}
 			sawTerminal = true
 			result.StopReason = event.Delta.StopReason
 			stop, handled := llm.MapFinishReason(event.Delta.StopReason)

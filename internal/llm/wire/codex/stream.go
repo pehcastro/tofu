@@ -160,11 +160,14 @@ func (s *streamState) handle(event streamEvent) error {
 		if event.Response.Error != nil {
 			failed = *event.Response.Error
 		}
-		var broke error
-		if failed.Code == "server_is_overloaded" || failed.Code == "server_error" || failed.Type == "server_error" {
-			broke = llm.ErrStreamBroke
+		kind, cause := transport.KindProvider, error(nil)
+		switch {
+		case failed.Code == "context_length_exceeded":
+			kind, cause = transport.KindRequestTooLarge, transport.ErrContextOverflow
+		case failed.Code == "server_is_overloaded" || failed.Code == "server_error" || failed.Type == "server_error":
+			cause = llm.ErrStreamBroke
 		}
-		return transport.Fail("codex.ReadStream", transport.KindProvider, broke,
+		return transport.Fail("codex.ReadStream", kind, cause,
 			"the stream carried an error: %s %s: %s", failed.Type, failed.Code, failed.Message)
 
 	case "response.output_item.added":

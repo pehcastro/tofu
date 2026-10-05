@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -110,6 +111,7 @@ type Config struct {
 	Step            CalledAsTheStepIsRecordedAndBeforeTheNextOneIsAsked
 	ToolResult      CalledAsEachToolCallAnswersAndBeforeTheNextRequest
 	EndedSession    func(Row) error
+	Notify          func(string)
 	Now             func() time.Time
 	NewID           func() string
 }
@@ -356,6 +358,26 @@ func Run(ctx context.Context, config Config) (Row, error) {
 		stepTools := currentTools()
 		asSent := recall.Measure(artifacts.preview, budget.Bands, historyOf(messages))
 		decision, timing, err := askCountingAttempts(ctx, model, llm.Request{Messages: messages, Tools: stepTools.Definitions()})
+		if overflowed(err) {
+			shrink, shrinkErr := shrinkOverflow(artifacts, messages, asSent.Total(), budget.WindowTokens)
+			switch {
+			case shrinkErr != nil:
+				err = shrinkErr
+			case shrink.results == 0:
+				err = fmt.Errorf("the context window overflowed and no old tool result was left to shrink, so the turn ends: %w", err)
+			default:
+				told := "the context window overflowed, so tofu " + shrink.String() + ", and asked once more"
+				row.Warnings = append(row.Warnings, told)
+				if config.Notify != nil {
+					config.Notify(told)
+				}
+				asSent = recall.Measure(artifacts.preview, budget.Bands, historyOf(messages))
+				decision, timing, err = askCountingAttempts(ctx, model, llm.Request{Messages: messages, Tools: stepTools.Definitions()})
+				if overflowed(err) {
+					err = fmt.Errorf("the context window overflowed again after tofu %s, so the turn ends: %w", shrink, err)
+				}
+			}
+		}
 		if err != nil {
 			return finish(OutcomeError), err
 		}
@@ -690,6 +712,11 @@ func backgroundSurvivors(registry *shell.Registry, before map[string]bool) strin
 	}
 	return "this turn started a background process still running now that it has ended: " + strings.Join(named, ", ") +
 		"; see it in the shells tab, or stop it with the " + ShellToolName + " tool's stop, naming it"
+}
+
+func overflowed(err error) bool {
+	var refused *recall.OverWindow
+	return transport.ContextOverflow(err) || errors.As(err, &refused)
 }
 
 func NewID(at time.Time) string {

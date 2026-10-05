@@ -25,6 +25,7 @@ import (
 	"tofu/internal/llm/models"
 	sessionstore "tofu/internal/session"
 	"tofu/internal/sys"
+	"tofu/internal/transport"
 	"tofu/internal/turn"
 )
 
@@ -88,6 +89,7 @@ Steps:
   screen       print the screen as it stands
   environment  print the environment block the last turn sent to the model
   images       print how many images the last request's user message carried
+  requests     print the bytes of every request sent so far, messages and tools as json
   # NOTE       a note, skipped
 
 X and Y are zero-based cells: X counts columns and Y counts rows of the printed
@@ -104,6 +106,10 @@ A reply's thinking streams before its text and shows only on the sub-agents scre
 
 An unfinished reply streams its text and keeps writing until the turn is stopped,
 which is how a driven run reaches an answer interrupted in the middle of itself.
+
+A refused reply is the error a wire returns for that HTTP status and body, so a
+driven run reaches a context overflow or any other refusal without a network:
+  {"refused":{"status":400,"detail":"prompt is too long: 213462 tokens > 200000 maximum"}}
 
 A reply with no agent is the orchestrator's. A spawned sub-agent takes only the
 replies addressed to it, so the two conversations never take each other's:
@@ -141,7 +147,11 @@ type cassetteReply struct {
 	Thinking   string `json:"thinking"`
 	Agent      string `json:"agent"`
 	Unfinished bool   `json:"unfinished"`
-	Tools      []struct {
+	Refused    *struct {
+		Status int    `json:"status"`
+		Detail string `json:"detail"`
+	} `json:"refused"`
+	Tools []struct {
 		Name string          `json:"name"`
 		Args json.RawMessage `json:"args"`
 	} `json:"tools"`
@@ -151,6 +161,7 @@ type recordedReply struct {
 	decision   llm.Decision
 	thinking   string
 	unfinished bool
+	refused    error
 }
 
 type cassette struct {
@@ -160,6 +171,7 @@ type cassette struct {
 	taken   map[string]int
 	callers map[string]string
 	last    llm.Request
+	sent    []string
 }
 
 func callerName(name string) string {
@@ -209,7 +221,11 @@ func readCassette(path string) (*cassette, error) {
 				Arguments: one.Args,
 			})
 		}
-		deck.decks[reply.Agent] = append(deck.decks[reply.Agent], recordedReply{decision: decision, thinking: reply.Thinking, unfinished: reply.Unfinished})
+		recorded := recordedReply{decision: decision, thinking: reply.Thinking, unfinished: reply.Unfinished}
+		if refused := reply.Refused; refused != nil {
+			recorded.refused = &transport.Error{Kind: transport.StatusKind(refused.Status), Op: "cassette.Ask", Status: refused.Status, Detail: refused.Detail}
+		}
+		deck.decks[reply.Agent] = append(deck.decks[reply.Agent], recorded)
 	}
 	if len(deck.decks) == 0 {
 		return nil, fmt.Errorf("%s holds no reply", path)
@@ -240,7 +256,24 @@ func (c *cassette) take(request llm.Request) (recordedReply, error) {
 		return recordedReply{}, fmt.Errorf("%s holds %d replies for %s and %s asked for one more", c.name, len(c.decks[name]), callerName(name), callerName(name))
 	}
 	c.taken[name]++
+	body, err := json.Marshal(struct {
+		Messages []llm.Message
+		Tools    []llm.Tool
+	}{request.Messages, request.Tools})
+	if err != nil {
+		return recordedReply{}, err
+	}
+	c.sent = append(c.sent, fmt.Sprintf("%s request %d: %d bytes", callerName(name), c.taken[name], len(body)))
 	return c.decks[name][c.taken[name]-1], nil
+}
+
+func (c *cassette) requests() string {
+	if c == nil {
+		return noRequest
+	}
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+	return cmp.Or(strings.Join(c.sent, "\n"), noRequest)
 }
 
 func (c *cassette) Ask(ctx context.Context, request llm.Request) (llm.Decision, error) {
@@ -252,6 +285,9 @@ func (c *cassette) Ask(ctx context.Context, request llm.Request) (llm.Decision, 
 	reply, err := c.take(request)
 	if err != nil {
 		return llm.Decision{}, err
+	}
+	if reply.refused != nil {
+		return llm.Decision{}, reply.refused
 	}
 	if request.OnThinking != nil && reply.thinking != "" {
 		request.OnThinking(reply.thinking)
@@ -612,6 +648,8 @@ func playStep(driver *filmstrip.Driver, deck *cassette, step filmstrip.Step, pla
 	case "environment":
 	case "images":
 		said = deck.images
+	case "requests":
+		said = deck.requests
 	default:
 		return driver.Play(step, plan.timeout, plan.plain, out)
 	}

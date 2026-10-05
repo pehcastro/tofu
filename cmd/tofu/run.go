@@ -700,6 +700,7 @@ func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn
 		Sift:           run.sift,
 		Proxy:          loadProxySetting(opts.dir).proxy,
 		Inbox:          cmp.Or(run.inbox, turn.NewInbox()),
+		Notify:         run.notify,
 	}
 	if run.gate != nil {
 		config.Gate = run.gate

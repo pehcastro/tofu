@@ -4,7 +4,9 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 	"strconv"
+	"strings"
 )
 
 type Kind int
@@ -120,6 +122,27 @@ func KindOf(err error) Kind {
 		return failure.Kind
 	}
 	return KindUnknown
+}
+
+var ErrContextOverflow = errors.New("the request does not fit the model's context window")
+
+func ContextOverflow(err error) bool {
+	if errors.Is(err, ErrContextOverflow) {
+		return true
+	}
+	var failure *Error
+	if !errors.As(err, &failure) || failure.Kind != KindBadRequest && failure.Kind != KindRequestTooLarge {
+		return false
+	}
+	said := strings.ToLower(failure.Detail)
+	mentions := func(phrases ...string) bool {
+		return slices.ContainsFunc(phrases, func(phrase string) bool { return strings.Contains(said, phrase) })
+	}
+	if mentions("rate limit", "rate_limit", "too many requests") {
+		return false
+	}
+	return failure.Status == http.StatusRequestEntityTooLarge || mentions("prompt is too long", "request_too_large", "exceeds the context window",
+		"maximum context length", "context_length_exceeded", "context length exceeded", "model_context_window_exceeded", "too many tokens", "token limit exceeded")
 }
 
 func Fail(op string, kind Kind, cause error, format string, args ...any) *Error {
