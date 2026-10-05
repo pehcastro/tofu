@@ -1020,7 +1020,9 @@ func (s *appSession) run(ctx context.Context, pick tui.Pick, task string, emit t
 	watch.spawner = spawner
 	config.ToolResult = func(answered llm.Message) { watch.result(answered, "") }
 	config.Step = func(step turn.StepRow) {
-		emit(tui.Event{Kind: tui.EventPlan, Plan: statedPlan(plan.Items())})
+		if plan != nil {
+			emit(tui.Event{Kind: tui.EventPlan, Plan: statedPlan(plan.Items())})
+		}
 		if step.Occupancy == nil {
 			return
 		}
