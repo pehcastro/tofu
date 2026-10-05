@@ -33,7 +33,7 @@ func stem(frame Frame) string {
 		"-" + strconv.Itoa(fixture.Width) + "x" + strconv.Itoa(fixture.Height)
 }
 
-func shot() []Frame { return All(fixture.Width, fixture.Height) }
+func shot() []Frame { return play(scenarios(), fixture.Width, fixture.Height) }
 
 func TestEveryFrameOfEverySequenceMatchesItsGolden(t *testing.T) {
 	for _, frame := range shot() {

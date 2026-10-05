@@ -6,8 +6,21 @@ import (
 )
 
 func TestProfilesAndConflicts(t *testing.T) {
-	if err := validateProfiles(); err != nil {
+	entries, err := catalog.ReadDir("profiles")
+	if err != nil {
 		t.Fatal(err)
+	}
+	for _, entry := range entries {
+		id := strings.TrimSuffix(entry.Name(), ".json")
+		p, ok := Lookup(id)
+		if !ok || p.Layer == "" || p.Inspection == "" {
+			t.Fatalf("invalid profile: %s", id)
+		}
+		for _, binding := range p.Bindings {
+			if binding.Key == "" || binding.Owner == "" || binding.Status == "" {
+				t.Fatalf("invalid binding: %s", id)
+			}
+		}
 	}
 	for _, id := range []string{"zed", "vscode", "jetbrains", "ghostty", "alacritty", "windows_terminal"} {
 		if _, ok := Lookup(id); !ok {

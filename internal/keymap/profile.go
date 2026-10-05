@@ -3,7 +3,6 @@ package keymap
 import (
 	"embed"
 	"encoding/json"
-	"fmt"
 	"strings"
 )
 
@@ -56,24 +55,4 @@ func Conflicts(profile Profile, shortcuts map[string]string) []Conflict {
 		}
 	}
 	return found
-}
-
-func validateProfiles() error {
-	entries, err := catalog.ReadDir("profiles")
-	if err != nil {
-		return err
-	}
-	for _, entry := range entries {
-		id := strings.TrimSuffix(entry.Name(), ".json")
-		p, ok := Lookup(id)
-		if !ok || p.Layer == "" || p.Inspection == "" {
-			return fmt.Errorf("invalid profile: %s", id)
-		}
-		for _, binding := range p.Bindings {
-			if binding.Key == "" || binding.Owner == "" || binding.Status == "" {
-				return fmt.Errorf("invalid binding: %s", id)
-			}
-		}
-	}
-	return nil
 }

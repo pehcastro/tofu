@@ -6,6 +6,14 @@ import (
 	"tofu/internal/judge/ledger"
 )
 
+func AllVerdicts() []Verdict {
+	return []Verdict{VerdictAllow, VerdictAsk, VerdictDeny}
+}
+
+func AllModes() []Mode {
+	return []Mode{ModeShadow, ModeEnforced}
+}
+
 func TestUnknownVerdictIsFatal(t *testing.T) {
 	defer func() {
 		if recover() == nil {

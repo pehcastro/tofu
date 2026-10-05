@@ -14,10 +14,6 @@ const (
 	VerdictDeny  Verdict = "deny"
 )
 
-func AllVerdicts() []Verdict {
-	return []Verdict{VerdictAllow, VerdictAsk, VerdictDeny}
-}
-
 func (v Verdict) String() string {
 	switch v {
 	case VerdictAllow:
@@ -72,10 +68,6 @@ const (
 	ModeShadow   Mode = "shadow"
 	ModeEnforced Mode = "enforced"
 )
-
-func AllModes() []Mode {
-	return []Mode{ModeShadow, ModeEnforced}
-}
 
 func (m Mode) Ledger() ledger.Mode {
 	switch m {

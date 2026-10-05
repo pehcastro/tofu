@@ -509,8 +509,6 @@ func play(chosen []scenario, width, height int) []Frame {
 	return frames
 }
 
-func All(width, height int) []Frame { return play(scenarios(), width, height) }
-
 func Find(name string, width, height int) (Frame, bool) {
 	scenarioName, _, _ := strings.Cut(name, nameSeparator)
 	for _, one := range scenarios() {
