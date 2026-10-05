@@ -33,9 +33,9 @@ func (s Search) Definition() llm.Tool {
 		Description: "finds text anywhere under the turn's working directory and is the only tool that reads file contents to find something: there is no grep tool. " +
 			"the pattern is go regexp syntax, which is the same as perl for everything short of backreferences, and it is matched against every line of every text file. " +
 			"it returns the whole declaration each match sits inside, " +
-			"so a match in a go file comes back as the entire function, method, type or constant rather than the line. " +
+			"so a match in a .go, .ts, .tsx, .js, .jsx, .py or .rs file comes back as the entire function, method, class or type rather than the line. " +
 			"it says whether each match is in code, in a comment or in a string literal, which the parser knows and a line does not. " +
-			"a file it cannot parse, which is every file that is not go and any go file with a syntax error, " +
+			"a file it cannot parse, which is every file in any other language and any of those files with unbalanced brackets or a syntax error, " +
 			"comes back as the lines around the match and is counted as a fallback, " +
 			"and a fallback line longer than " + strconv.Itoa(konst.SearchLineWidth) + " bytes, such as a minified file, is cut to that width around the match " +
 			"with how many characters were cut on each side. " +

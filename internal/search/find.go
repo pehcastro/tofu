@@ -280,10 +280,8 @@ func hitLines(body string, pattern *regexp.Regexp) []hit {
 
 func unitsIn(rel, body string, hits []hit) []Unit {
 	lines := sourceLines(body)
-	if strings.HasSuffix(rel, ".go") {
-		if units, parsed := goUnits(rel, body, lines, hits); parsed {
-			return units
-		}
+	if units, parsed := declaredUnits(rel, body, lines, hits); parsed {
+		return units
 	}
 	columns := make(map[int]int)
 	for _, where := range hits {
