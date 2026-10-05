@@ -15,6 +15,8 @@ command never reaches the model.
 - `/models`: choose the model the next turn runs
 - `/status`: each subscription's quota windows and when they reset
 - `/attach`: reference a file in this workspace
+- `/keys`: every key the app answers to, grouped, with what it does; the
+  rebindable ones show the key bound now. Type to filter, esc closes
 - `/links`: every link this conversation carried, newest first
 - `/quote`: cite a past turn by id
 - `/copy`, `/copy-call`: put the last answer, or the last tool call and

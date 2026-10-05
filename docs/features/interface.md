@@ -56,6 +56,9 @@ inside the 16.7 ms of a 60 Hz frame.
 
 ## Keys
 
+`/keys` lists every key the app answers to, grouped by where it works, with
+the key each rebindable action is bound to now. Type to filter it.
+
 | Key | Does |
 |---|---|
 | `Tab`, `Alt+1` to `Alt+4` | Next tab, or jump to one |

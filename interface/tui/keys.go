@@ -129,46 +129,10 @@ func (a *App) composerKey(msg tea.KeyPressMsg) (tea.Cmd, bool) {
 	if handled, cmd := a.menuKey(key); handled {
 		return cmd, true
 	}
-	switch key {
-	case "shift+tab":
-		a.cycleEffort()
-		return nil, true
-	case "ctrl+v", "alt+v":
-		return a.view.Paste(a.board), true
-	case "@":
-		if a.view.AtWordStart() {
-			return a.push(a.filesDialog()), true
-		}
-	case "enter":
-		return a.submit(), true
-	case "esc":
-		if a.busy && a.view.Value() == "" {
-			a.stopTurn()
-			return nil, true
-		}
-	case "ctrl+x":
-		a.view.Unqueue()
-		return nil, true
-	case "alt+up":
-		a.view.PickQueued(-1)
-		return nil, true
-	case "alt+down":
-		a.view.PickQueued(1)
-		return nil, true
-	case "ctrl+o":
-		return a.expand(a.view.CallBeside("", -1)), true
-	case "ctrl+y":
-		return a.copyAnswer(), true
-	case "alt+y":
-		call, found := a.view.LastCall()
-		return a.copy(callUnit, call, found), true
-	case "up":
-		if a.view.HistoryUp() {
-			return nil, true
-		}
-	case "down":
-		if a.view.HistoryDown() {
-			return nil, true
+	rows := composerRows()
+	if at := slices.IndexFunc(rows, func(row keyRow) bool { return slices.Contains(row.keys, key) }); at >= 0 {
+		if cmd, taken := rows[at].run(a); taken {
+			return cmd, true
 		}
 	}
 	if _, scrolled := a.view.Scroll(key); scrolled {
@@ -182,6 +146,44 @@ func (a *App) composerKey(msg tea.KeyPressMsg) (tea.Cmd, bool) {
 		return nil, true
 	}
 	return a.view.Update(msg), true
+}
+
+func composerRows() []keyRow {
+	done := func(act func(a *App)) func(a *App) (tea.Cmd, bool) {
+		return func(a *App) (tea.Cmd, bool) {
+			act(a)
+			return nil, true
+		}
+	}
+	return []keyRow{
+		{composerGroup, []string{"enter"}, "send, queued mid-turn", func(a *App) (tea.Cmd, bool) { return a.submit(), true }},
+		{composerGroup, []string{"shift+tab"}, "cycle the effort", done((*App).cycleEffort)},
+		{composerGroup, []string{"ctrl+v", "alt+v"}, "paste text or an image", func(a *App) (tea.Cmd, bool) { return a.view.Paste(a.board), true }},
+		{composerGroup, []string{"@"}, "attach a file", func(a *App) (tea.Cmd, bool) {
+			if !a.view.AtWordStart() {
+				return nil, false
+			}
+			return a.push(a.filesDialog()), true
+		}},
+		{composerGroup, []string{"up"}, "previous prompt", func(a *App) (tea.Cmd, bool) { return nil, a.view.HistoryUp() }},
+		{composerGroup, []string{"down"}, "next prompt", func(a *App) (tea.Cmd, bool) { return nil, a.view.HistoryDown() }},
+		{composerGroup, []string{"ctrl+o"}, "open the last tool call", func(a *App) (tea.Cmd, bool) { return a.expand(a.view.CallBeside("", -1)), true }},
+		{composerGroup, []string{"ctrl+y"}, "copy the last answer", func(a *App) (tea.Cmd, bool) { return a.copyAnswer(), true }},
+		{composerGroup, []string{"alt+y"}, "copy the last tool call", func(a *App) (tea.Cmd, bool) {
+			call, found := a.view.LastCall()
+			return a.copy(callUnit, call, found), true
+		}},
+		{turnGroup, []string{"esc"}, "stop, if composer empty", func(a *App) (tea.Cmd, bool) {
+			if !a.busy || a.view.Value() != "" {
+				return nil, false
+			}
+			a.stopTurn()
+			return nil, true
+		}},
+		{turnGroup, []string{"ctrl+x"}, "drop the queued prompt", done(func(a *App) { a.view.Unqueue() })},
+		{turnGroup, []string{"alt+up"}, "pick an earlier queued", done(func(a *App) { a.view.PickQueued(-1) })},
+		{turnGroup, []string{"alt+down"}, "pick a later queued", done(func(a *App) { a.view.PickQueued(1) })},
+	}
 }
 
 func tabDigit(key string) (int, bool) {

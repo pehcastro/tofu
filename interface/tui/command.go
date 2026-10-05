@@ -30,6 +30,7 @@ func commands(options Options) []session.Command {
 		{Name: "status", What: "each subscription's quota windows and when they reset"},
 		{Name: "attach", What: "reference a file in this workspace"},
 		{Name: "settings", What: "appearance, keys, roles, and the file each value came from"},
+		{Name: "keys", What: "every key the app answers to, and what it does"},
 		{Name: "links", What: "every link this conversation carried, newest first"},
 		{Name: "quote", What: "cite a past turn by id, newest first"},
 		{Name: "copy", What: "put the last answer on the clipboard"},
@@ -101,6 +102,8 @@ func (a *App) runCommand(name string) tea.Cmd {
 		return a.push(a.filesDialog())
 	case "settings":
 		return a.show(screenSettings)
+	case "keys":
+		a.push(a.keysDialog())
 	case "links":
 		a.push(a.linksDialog())
 	case "quote":
