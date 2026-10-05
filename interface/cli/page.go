@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -15,6 +16,7 @@ import (
 
 	"tofu/interface/tui/look"
 	"tofu/internal/konst"
+	"tofu/internal/sys"
 	"tofu/internal/widget"
 )
 
@@ -48,6 +50,10 @@ func Detect(out io.Writer, environ []string) Page {
 		page.Profile = colorprofile.NoTTY
 	}
 	if file, ok := out.(*os.File); ok {
+		forced, _ := strconv.ParseBool(env("CLICOLOR_FORCE"))
+		if page.Profile > colorprofile.NoTTY && sys.EnableVT(file.Fd()) != nil && !forced {
+			page.Profile = colorprofile.NoTTY
+		}
 		if columns, _, err := term.GetSize(file.Fd()); err == nil && columns > 0 {
 			page.Width = min(columns, pageMaxCells)
 		}
