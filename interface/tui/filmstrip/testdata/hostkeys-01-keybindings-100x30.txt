@@ -16,12 +16,12 @@
   ↑↓ setting · ←    Models         ctrl+l                                           
   section           Quote selection  ctrl+r                                                 ● on
   ctrl+k search     Edit in editor  ctrl+g                                           that chang…
-  esc chat                                                                          
+  esc chat          Prompt history  ctrl+p                                          
+                                                                                    
                   Host editors may still intercept a chosen key.                    
                                                                                     
                   ↑↓ choose · enter edit · bksp clear · esc                         
                                                                                     
-                      
                       
                       
                       

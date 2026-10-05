@@ -314,3 +314,7 @@
   do: /cron delete c1
   check: /cron list
   topic: cron
+- ask: find a prompt I sent in another session
+  do: ctrl+p in the app, type part of it, then enter
+  check: /keys
+  topic: keys

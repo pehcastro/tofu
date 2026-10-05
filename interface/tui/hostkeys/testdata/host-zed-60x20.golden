@@ -1,5 +1,4 @@
 
-
                                                         
       Host integration                             esc  
       Terminal shortcut ownership                       
@@ -8,7 +7,8 @@
       Zed · terminal environment                        
       WILL FORWARD IN TERMINAL                          
       ctrl+k Search · alt+k Commands · ctrl+l Models ·  
-      ctrl+r Quote selection · ctrl+g Edit in editor    
+      ctrl+r Quote selection · ctrl+g Edit in editor ·  
+      ctrl+p Prompt history                             
       Status: not configured                            
       >  Apply tofu keybindings                         
         Undo tofu keybindings                           

@@ -12,11 +12,12 @@
     Turn   CTRL+L  Models · ensure tofu receives this shortcut                             
     Brows  CTRL+R  Quote selection · ensure tofu receives this shortcut                    
            CTRL+G  Edit in editor · ensure tofu receives this shortcut                     n  ▾ 
-  NAVIGAT  Change: forward these keys only while the terminal is focused.                  nfor…
-  ↑↓ sett                                                                                  
-  section  SHORTCUT CONFLICTS                                                               ● on
-  ctrl+k   CTRL+K  tofu Search · Zed keybinding / chord prefix                             hang…
-  esc cha                                                                                  
+  NAVIGAT  CTRL+P  Prompt history · ensure tofu receives this shortcut                     nfor…
+  ↑↓ sett  Change: forward these keys only while the terminal is focused.                  
+  section                                                                                   ● on
+  ctrl+k   SHORTCUT CONFLICTS                                                              hang…
+  esc cha  CTRL+K  tofu Search · Zed keybinding / chord prefix                             
+                                                                                           
            ZED USER KEYMAP                                                                 
            Status: keymap missing                                                          
            Apply adds terminal-only rules after existing rules; Undo removes tofu's        
@@ -27,4 +28,3 @@
                                                                                            
            ↑↓ choose · enter select · esc close                                            
                                                                                            
-                      

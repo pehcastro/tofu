@@ -164,45 +164,46 @@ type Wire struct {
 }
 
 type Options struct {
-	Repo         string
-	Root         string
-	Branch       string
-	Note         string
-	Release      string
-	Requirements []Requirement
-	Recheck      func() []Requirement
-	SaveKey      func(ctx context.Context, variable, value string) (string, error)
-	Login        func() *exec.Cmd
-	Wires        func() []Wire
-	Models       func() (library.Library, error)
-	Agents       func() isubagent.Found
-	Providers    []settings.Provider
-	Quota        func() []frame.Quota
-	Settings     *isettings.Store
-	Promotions   isession.PromotionLog
-	Reload       func() string
-	ReloadModels func() string
-	ModelsStale  bool
-	Turn         Turn
-	Answers      chan<- Answer
-	Steering     chan string
-	StopLead     chan struct{}
-	Paste        paste.Board
-	Copy         func(text string) error
-	Paths        func() []string
-	Sessions     func() ([]SessionRow, error)
-	Resume       func(id string) (string, []Event)
-	NewSession   func() string
-	Compact      func() string
-	Undo         func(count string) string
-	Now          func() time.Time
-	Shells       func() []shells.Entry
-	KillShell    func(name string) error
-	Fresh        bool
-	Resumed      []Event
-	Pose         string
-	Keymap       string
-	Cron         *cron.Book
+	Repo          string
+	Root          string
+	Branch        string
+	Note          string
+	Release       string
+	Requirements  []Requirement
+	Recheck       func() []Requirement
+	SaveKey       func(ctx context.Context, variable, value string) (string, error)
+	Login         func() *exec.Cmd
+	Wires         func() []Wire
+	Models        func() (library.Library, error)
+	Agents        func() isubagent.Found
+	Providers     []settings.Provider
+	Quota         func() []frame.Quota
+	Settings      *isettings.Store
+	Promotions    isession.PromotionLog
+	Reload        func() string
+	ReloadModels  func() string
+	ModelsStale   bool
+	Turn          Turn
+	Answers       chan<- Answer
+	Steering      chan string
+	StopLead      chan struct{}
+	Paste         paste.Board
+	Copy          func(text string) error
+	Paths         func() []string
+	Sessions      func() ([]SessionRow, error)
+	Resume        func(id string) (string, []Event)
+	NewSession    func() string
+	Compact       func() string
+	Undo          func(count string) string
+	Now           func() time.Time
+	Shells        func() []shells.Entry
+	KillShell     func(name string) error
+	Fresh         bool
+	Resumed       []Event
+	Pose          string
+	Keymap        string
+	PromptHistory string
+	Cron          *cron.Book
 }
 
 type screen int
@@ -251,6 +252,7 @@ type App struct {
 	roles          map[library.RoleID]library.Role
 	defined        []isubagent.Definition
 	shortcuts      map[string]string
+	prompts        *isession.PromptHistory
 	dialogs        []dialog
 	intro          intro
 	status         frame.Status
@@ -339,6 +341,9 @@ func New(options Options) *App {
 	if options.Keymap == "" {
 		options.Keymap, _ = keymap.ShortcutsPath()
 	}
+	if options.PromptHistory == "" {
+		options.PromptHistory, _ = sys.HomeConfigDir()
+	}
 	app := &App{
 		options:      options,
 		requirements: options.Requirements,
@@ -355,6 +360,9 @@ func New(options Options) *App {
 		started:      options.Now(),
 		reports:      map[string]string{},
 		board:        paste.Default(options.Paste),
+	}
+	if options.PromptHistory != "" {
+		app.prompts = isession.OpenPromptHistory(options.PromptHistory)
 	}
 	app.status.Note = options.Note
 	app.status.Fresh = options.Fresh

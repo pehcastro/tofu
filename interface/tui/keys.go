@@ -98,6 +98,8 @@ func (a *App) shortcut(pressed string) (tea.Cmd, bool) {
 		return a.quoteSelection(), true
 	case action == keymap.EditorAction:
 		return tea.Batch(a.show(screenChat), a.openEditor()), true
+	case action == keymap.HistoryAction:
+		return tea.Batch(a.show(screenChat), a.push(a.historyDialog())), true
 	}
 	return cleared, true
 }

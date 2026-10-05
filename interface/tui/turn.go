@@ -74,6 +74,7 @@ func (a *App) send() tea.Cmd {
 	}
 	chips := a.view.Remember(task)
 	whole := session.Expand(task, chips)
+	a.rememberPrompt(whole)
 	a.view.Reset()
 	if a.busy {
 		if a.leading {

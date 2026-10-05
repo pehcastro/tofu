@@ -115,6 +115,10 @@ const (
 	TurnStepCapNoticeShare          = 0.1
 	SubscriptionCacheTTL            = "1h"
 	HistoryCacheTTL                 = "1h"
+	PromptHistoryEntries            = 1000
+	PromptHistoryEntryBytes         = 16384
+	PromptHistoryFileBytes          = 2097152
+	PromptHistoryKeptBytes          = 1048576
 
 	VerbMaxDepth      = 2
 	VerbTimeoutMillis = 120000

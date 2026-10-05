@@ -186,18 +186,18 @@ func TestShortcutEditorCapturesPersistsAndRoutes(t *testing.T) {
 	if s.capture != "Search" {
 		t.Fatal("search row did not enter capture mode")
 	}
-	if changed, closed := s.Key(ctrl('p')); !changed || closed || s.Bindings()["Search"] != "ctrl+p" {
+	if changed, closed := s.Key(ctrl('n')); !changed || closed || s.Bindings()["Search"] != "ctrl+n" {
 		t.Fatalf("captured shortcut: %q", s.Bindings()["Search"])
 	}
 	if !strings.Contains(s.feedback, "; check Host integration") {
 		t.Fatal("shortcut change did not signal host reapply")
 	}
-	if got := keymap.LoadShortcuts(path)["Search"]; got != "ctrl+p" {
+	if got := keymap.LoadShortcuts(path)["Search"]; got != "ctrl+n" {
 		t.Fatalf("persisted shortcut: %q", got)
 	}
 	s.Key(down)
 	s.Key(enter)
-	if changed, _ := s.Key(ctrl('p')); changed || !strings.Contains(s.feedback, "already assigned to Search") || s.Bindings()["Commands"] != "alt+k" {
+	if changed, _ := s.Key(ctrl('n')); changed || !strings.Contains(s.feedback, "already assigned to Search") || s.Bindings()["Commands"] != "alt+k" {
 		t.Fatal("collision was not rejected")
 	}
 	s.Key(enter)

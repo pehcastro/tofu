@@ -1,5 +1,4 @@
 
-
                                                                           
         Keybindings                                                  esc  
         Tofu shortcuts                                                    
@@ -12,6 +11,7 @@
           Models         ctrl+l                                           
           Quote selection  ctrl+r                                         
           Edit in editor  ctrl+g                                          
+          Prompt history  ctrl+p                                          
                                                                           
         Press a shortcut for Commands                                     
         Press a shortcut, Esc to cancel, Backspace to clear.              

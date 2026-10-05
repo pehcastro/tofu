@@ -10,11 +10,11 @@ import (
 func TestShortcutsPersistAndRejectReservedKeys(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "keybindings.json")
 	shortcuts := DefaultShortcuts()
-	shortcuts["Search"] = "ctrl+p"
+	shortcuts["Search"] = "ctrl+n"
 	if err := SaveShortcuts(path, shortcuts); err != nil {
 		t.Fatal(err)
 	}
-	if got := LoadShortcuts(path)["Search"]; got != "ctrl+p" {
+	if got := LoadShortcuts(path)["Search"]; got != "ctrl+n" {
 		t.Fatalf("persisted shortcut: %q", got)
 	}
 	if err := ValidShortcut("ctrl+c"); err == nil || !strings.Contains(err.Error(), "reserved") {
@@ -47,7 +47,7 @@ func TestTheEditorDefaultYieldsToAKeyTheFileAlreadyUses(t *testing.T) {
 		t.Fatal(err)
 	}
 	bindings := LoadShortcuts(path)
-	if bindings["Search"] != "ctrl+g" || bindings["Models"] != "ctrl+p" || bindings[EditorAction] != "" {
+	if bindings["Search"] != "ctrl+g" || bindings["Models"] != "ctrl+p" || bindings[EditorAction] != "" || bindings[HistoryAction] != "" {
 		t.Fatalf("a file that already used ctrl+g came back as %v", bindings)
 	}
 	if fresh := LoadShortcuts(filepath.Join(t.TempDir(), "none.json")); fresh[EditorAction] != "ctrl+g" {

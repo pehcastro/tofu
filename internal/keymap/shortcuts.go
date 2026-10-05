@@ -15,6 +15,7 @@ import (
 const (
 	shortcutsVersion = 1
 	EditorAction     = "Edit in editor"
+	HistoryAction    = "Prompt history"
 )
 
 type shortcutFile struct {
@@ -23,7 +24,7 @@ type shortcutFile struct {
 }
 
 func Actions() []string {
-	return []string{"Search", "Commands", "Settings", "Models", "Quote selection", EditorAction}
+	return []string{"Search", "Commands", "Settings", "Models", "Quote selection", EditorAction, HistoryAction}
 }
 
 func DefaultShortcuts() map[string]string {
@@ -34,6 +35,7 @@ func DefaultShortcuts() map[string]string {
 		"Models":          "ctrl+l",
 		"Quote selection": "ctrl+r",
 		EditorAction:      "ctrl+g",
+		HistoryAction:     "ctrl+p",
 	}
 }
 
@@ -77,8 +79,10 @@ func LoadShortcuts(path string) map[string]string {
 			claimed[key] = true
 		}
 	}
-	if _, named := file.Bindings[EditorAction]; !named && claimed[bindings[EditorAction]] {
-		bindings[EditorAction] = ""
+	for _, action := range []string{EditorAction, HistoryAction} {
+		if _, named := file.Bindings[action]; !named && claimed[bindings[action]] {
+			bindings[action] = ""
+		}
 	}
 	seen := map[string]bool{}
 	for _, key := range bindings {

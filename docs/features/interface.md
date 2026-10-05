@@ -37,8 +37,12 @@ inside the 16.7 ms of a 60 Hz frame.
   typed in `$VISUAL`, else `$EDITOR`, else notepad on Windows and vi
   elsewhere. Save and quit, and the text comes back to the composer.
   `code --wait` and other commands with arguments work.
+- **Find a prompt you sent before**: `Ctrl+P` searches every prompt you
+  sent from the app, in every session and project, newest first. Type part
+  of it, press `Enter`, and it lands in the composer without being sent.
+  The history lives in `~/.tofu/prompts.jsonl`, with known keys redacted.
 - **Change a shortcut**: Search, Commands, Models, Quote selection, Edit in
-  editor and Settings can be rebound; they're saved in
+  editor, Prompt history and Settings can be rebound; they're saved in
   `~/.tofu/keybindings.json`.
   `Ctrl+C`, `Ctrl+V`, `Ctrl+J` and `Alt+I` belong to the composer.
 - **Paste an image or a file**: `Ctrl+V` attaches what the clipboard holds.
@@ -68,6 +72,7 @@ the key each rebindable action is bound to now. Type to filter it.
 | `Shift+Tab` | Cycle the effort level |
 | `@` | Attach a file |
 | `Ctrl+G` | Edit the prompt in your editor |
+| `Ctrl+P` | Search the prompts you sent, in every session |
 | `Ctrl+O` | Expand the last tool call |
 | `Ctrl+Y`, `Alt+Y` | Copy the last answer, or the last tool call |
 | `Ctrl+X`, `Alt+Up`, `Alt+Down` | Remove or pick a queued message |
