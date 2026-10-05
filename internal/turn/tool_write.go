@@ -7,8 +7,10 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"regexp"
 	"strings"
 
+	"tofu/internal/konst"
 	"tofu/internal/llm"
 	"tofu/internal/sys"
 	"tofu/internal/transform"
@@ -96,6 +98,9 @@ func (t *WriteTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 		if err := t.ledger.Unshown(args.Path, held, change); err != nil {
 			return Result{}, fmt.Errorf("write: %w", err)
 		}
+		if err := refuseOmission(string(held), args.Content); err != nil {
+			return Result{}, fmt.Errorf("write: %s: %w", args.Path, err)
+		}
 		err = overwrite(resolved, held, []byte(args.Content))
 	}
 	if err != nil {
@@ -149,6 +154,37 @@ func (t *WriteTool) appendTo(ctx context.Context, resolved string, args writeArg
 		shown += fmt.Sprintf("\n%d\t%s", first+i, line)
 	}
 	return Result{Content: t.checkers.Typechecked(ctx, resolved, shown), Command: args.Path}, nil
+}
+
+var (
+	ellipsisComment   = regexp.MustCompile(`^(?://+|#+|/\*+|<!--|--|;+|\{/\*).*(?:\.\.\.|…)`)
+	omittedCodePhrase = regexp.MustCompile(`(?i)\b(?:rest of|remaining|unchanged|existing|same as (?:before|above)|previous|omitted|as before|other (?:methods|functions|code))\b`)
+)
+
+func refuseOmission(held, content string) error {
+	old := map[string]int{}
+	for _, line := range strings.Split(held, "\n") {
+		old[strings.TrimSpace(line)]++
+	}
+	var placed []string
+	for i, line := range strings.Split(content, "\n") {
+		line = strings.TrimSpace(line)
+		if old[line] == 0 && ellipsisComment.MatchString(line) && omittedCodePhrase.MatchString(line) {
+			placed = append(placed, fmt.Sprintf("line %d: %q", i+1, line))
+		}
+		old[line]--
+	}
+	lost := 0
+	for line, count := range old {
+		if line != "" && count > 0 {
+			lost += count
+		}
+	}
+	if len(placed) == 0 || lost <= konst.OmissionRefusedOverLostLines {
+		return nil
+	}
+	return fmt.Errorf("a placeholder stands in for code at %s, and this content drops %d lines the file holds now, so writing it would delete them: write those lines out in full, or use edit to change only the lines that change",
+		strings.Join(placed, ", "), lost)
 }
 
 func overwrite(path string, held, content []byte) error {

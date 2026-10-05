@@ -3,6 +3,7 @@ package turn
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -187,5 +188,56 @@ func TestWriteCreatesNewFileInNewDirectory(t *testing.T) {
 	}
 	if got, _ := os.ReadFile(filepath.Join(dir, "a", "b", "new.txt")); string(got) != "fresh\n" {
 		t.Fatalf("new.txt holds %q, want %q", got, "fresh\n")
+	}
+}
+
+func numbered(prefix string, count int) string {
+	var lines strings.Builder
+	for i := 1; i <= count; i++ {
+		fmt.Fprintf(&lines, "%s%d()\n", prefix, i)
+	}
+	return lines.String()
+}
+
+func TestWriteOmissionPlaceholder(t *testing.T) {
+	sixty, kept := numbered("call", 60), numbered("call", 10)
+	for _, row := range []struct {
+		name, old, content, says string
+		missing                  bool
+	}{
+		{name: "ellipsis first", old: sixty, content: kept + "// ... rest unchanged\n", says: "line 11"},
+		{name: "python existing code", old: sixty, content: kept + "    # ... existing code ...\n", says: "line 11"},
+		{name: "unicode ellipsis", old: sixty, content: "// rest of the file …\n" + kept, says: "line 1:"},
+		{name: "crlf", old: sixty, content: strings.ReplaceAll(kept, "\n", "\r\n") + "/* ... unchanged ... */\r\n", says: "line 11"},
+		{name: "two placeholders", old: sixty, content: "// ... previous code ...\n" + kept + "// ... remaining calls\n", says: `line 1: "// ... previous code ...", line 12: "// ... remaining calls"`},
+		{name: "already in the old file", old: "// ... rest unchanged\n" + sixty, content: "// ... rest unchanged\n" + kept},
+		{name: "new file", missing: true, content: kept + "// ... rest unchanged\n"},
+		{name: "loses only a few lines", old: numbered("call", 3), content: "call1()\n// ... other methods\n"},
+		{name: "spread syntax", old: sixty, content: kept + "return { ...previous, notice }\n"},
+		{name: "placeholder after code", old: sixty, content: kept + "x() " + "// ... rest unchanged\n"},
+	} {
+		t.Run(row.name, func(t *testing.T) {
+			dir := t.TempDir()
+			target := filepath.Join(dir, "a.go")
+			if !row.missing {
+				if err := os.WriteFile(target, []byte(row.old), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			err := writeThrough(t, dir, "a.go", row.content)
+			got, _ := os.ReadFile(target)
+			if row.says == "" {
+				if err != nil || string(got) != row.content {
+					t.Fatalf("write refused with %v, file holds %q, want it written", err, got)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), row.says) || !strings.Contains(err.Error(), "edit") {
+				t.Fatalf("write error %v, want one naming %q and pointing at edit", err, row.says)
+			}
+			if string(got) != row.old {
+				t.Fatalf("a.go holds %d bytes after the refusal, want the old %d unchanged", len(got), len(row.old))
+			}
+		})
 	}
 }

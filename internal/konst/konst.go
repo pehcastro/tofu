@@ -314,3 +314,8 @@ const (
 	CronCheckTailBytes     = 600
 	CronSearchDays         = 366
 )
+
+const (
+	RefusalCarriesWholeUpToBytes = 4096
+	OmissionRefusedOverLostLines = 3
+)

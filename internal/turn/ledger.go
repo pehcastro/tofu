@@ -7,6 +7,8 @@ import (
 	"slices"
 	"strings"
 	"sync"
+
+	"tofu/internal/konst"
 )
 
 type lineSpan struct{ first, last int }
@@ -140,10 +142,8 @@ func merged(spans []lineSpan) []lineSpan {
 	return joined
 }
 
-const refusalCarriesWholeUpTo = 4096
-
 func (l *ReadLedger) Refuse(path string, body []byte, change LineChange) string {
-	if len(body) <= refusalCarriesWholeUpTo {
+	if len(body) <= konst.RefusalCarriesWholeUpToBytes {
 		l.Mark(path, body)
 		return "its current content follows, so try again against the text that is there.\n" + string(body)
 	}
