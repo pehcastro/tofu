@@ -2,7 +2,7 @@
 title: The interface
 description: "The tofu app in the terminal: four tabs, a command palette, and a composer that keeps working while the model does."
 order: 10
-updated: 2026-10-04
+updated: 2026-10-05
 ---
 
 Run `tofu` in a project to open the app. Four tabs hold the work:
@@ -36,6 +36,9 @@ inside the 16.7 ms of a 60 Hz frame.
 - **Change a shortcut**: Search, Commands, Models, Quote selection and
   Settings can be rebound; they're saved in `~/.tofu/keybindings.json`.
   `Ctrl+C`, `Ctrl+V`, `Ctrl+J` and `Alt+I` belong to the composer.
+- **Paste an image or a file**: `Ctrl+V` attaches what the clipboard holds.
+  On Linux it reads through `wl-paste` on Wayland, or `xclip` or `xsel` on
+  X11, so install `wl-clipboard` or `xclip` first.
 - **Answer the gate** when `gatePrompt` is `ask`: `1` allows once, `2`
   refuses, `3` always allows that tool on that file this session.
 - **Open on the last session**: `tofu --continue`.
