@@ -106,12 +106,13 @@ type appLaunch struct {
 	registryErr error
 	note        string
 	tabs        *tools.BrowserTabs
+	stopWarm    *func()
 }
 
 func launchOf(dir string, resumed sessionResume, fresh bool) appLaunch {
 	registry, registryErr := launchShellRegistry(dir)
 	home, _ := os.UserHomeDir()
-	launch := appLaunch{resumed: resumed, fresh: fresh, registry: registry, registryErr: registryErr, tabs: tools.NewBrowserTabs(home)}
+	launch := appLaunch{resumed: resumed, fresh: fresh, registry: registry, registryErr: registryErr, tabs: tools.NewBrowserTabs(home), stopWarm: new(func())}
 	if registryErr != nil {
 		return launch
 	}
@@ -139,6 +140,7 @@ func appOptions(dir string, arms runOpts, wiring appWiring, launch appLaunch) tu
 	live.arms = arms
 	live.shells = launch.registry
 	live.tabs, live.warm.tabs = launch.tabs, launch.tabs
+	*launch.stopWarm = func() { live.warm.Close() }
 	settingsStore, _ := openSettings(dir)
 	shortcuts, _ := keymap.ShortcutsPath()
 	return tui.Options{
@@ -255,13 +257,14 @@ func appVerb(in io.Reader, out, errOut io.Writer, resumed sessionResume) int {
 	}
 	live := appWiring{open: openAppWire, wires: appWires, blockers: appRequirements, quota: appQuota, reload: reloadAccounts}
 	launch := launchOf(dir, resumed, resumed.Session == "")
-	if err := tui.Run(appOptions(dir, runOpts{}, live, launch)); err != nil {
+	err = tui.Run(appOptions(dir, runOpts{}, live, launch))
+	(*launch.stopWarm)()
+	if err != nil {
 		_, _ = fmt.Fprintf(errOut, "tofu: %v\n", err)
 		return exitVerdict
 	}
 	_, _ = fmt.Fprintln(out, sessionEndLine(launch.registry, launch.registryErr))
 	leaveShells(launch.registry)
-	launch.tabs.Close()
 	return exitOK
 }
 

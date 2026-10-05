@@ -77,7 +77,10 @@ func main() {
 		moveProjectState(os.Stderr, wd)
 	}
 	moveHomeKeys(os.Stderr)
-	os.Exit(run(os.Args[1:], os.Stdin, os.Stdout, os.Stderr))
+	pages := sys.ReadConsolePages()
+	code := run(os.Args[1:], os.Stdin, os.Stdout, os.Stderr)
+	pages.Restore()
+	os.Exit(code)
 }
 
 func moveHomeKeys(errOut io.Writer) {

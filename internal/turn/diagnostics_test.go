@@ -430,6 +430,20 @@ func TestClosingDuringTheSvelteKitSyncStopsIt(t *testing.T) {
 	}
 }
 
+func TestCloseReturnsOnlyAfterTheWatcherProcessExited(t *testing.T) {
+	checkers := NewTypecheckers()
+	if _, err := checkers.Typecheck(context.Background(), tsProject(t, "bun", "bun.lock", map[string]string{})); err != nil {
+		t.Fatal(err)
+	}
+	watch := onlyWatch(t, checkers)
+	checkers.Close()
+	watch.mutex.Lock()
+	defer watch.mutex.Unlock()
+	if !watch.ended {
+		t.Fatalf("Close returned while %s was still running, so a bun it killed can set the console code page after tofu restores it", watch.command)
+	}
+}
+
 func TestTypecheckRunsTheCheckerTheProjectDeclares(t *testing.T) {
 	cannotReadVue := "src/main.ts(1,17): error TS2307: Cannot find module './App.vue' or its corresponding type declarations."
 	vueError := "src/App.vue(2,7): error TS2322: Type 'string' is not assignable to type 'number'."

@@ -87,7 +87,7 @@ type tscWatch struct {
 	command string
 	born    time.Time
 	process *os.Process
-	stop    context.CancelFunc
+	stop    func()
 	mutex   sync.Mutex
 	running tscCycle
 	last    tscCycle
@@ -249,9 +249,13 @@ func (c *Typecheckers) watchFor(checker typechecker) *tscWatch {
 	defer c.mutex.Unlock()
 	if c.watching[checker.dir] == nil {
 		argv := append(slices.Clone(checker.argv), "--watch", "--preserveWatchOutput")
-		lifetime, stop := context.WithCancel(context.Background())
-		watch := &tscWatch{command: strings.Join(argv, " "), born: time.Now(), stop: stop, changed: make(chan struct{})}
-		go watch.run(lifetime, checker, argv)
+		lifetime, cancel := context.WithCancel(context.Background())
+		exited := make(chan struct{})
+		watch := &tscWatch{command: strings.Join(argv, " "), born: time.Now(), stop: func() { cancel(); <-exited }, changed: make(chan struct{})}
+		go func() {
+			defer close(exited)
+			watch.run(lifetime, checker, argv)
+		}()
 		c.watching[checker.dir] = watch
 	}
 	return c.watching[checker.dir]
