@@ -47,6 +47,8 @@ reuse: rules that don't change with the task stay in the cached prefix.
 ## Checking, adding and turning off
 
 - **See why a rule fired or didn't**: `tofu rules index "<task>" <path>`.
+  Add `--role orchestrator` or `--role sub-agent` for the rules the lead or a
+  sub-agent gets.
 - **Add one**: `tofu rules add no_yaml "never write yaml by hand"`, then add
   triggers to the file.
 - **Turn one off**: `tofu rules off em_dash`; `tofu rules remove` undoes it.

@@ -41,6 +41,16 @@ func (d Domain) Unreachable() []string {
 	return missing
 }
 
+func (r Rule) ReachesDomain(agentDomain string, task Task) (bool, string) {
+	if r.Domain != DomainQA && r.Domain != DomainDev || r.Domain == agentDomain || r.ReachesDevFor(task) {
+		return true, ""
+	}
+	if r.AlsoReaches == ReachWorkOnTests {
+		return false, fmt.Sprintf("a %s rule reaches a %s agent only when the task works on tests", r.Domain, agentDomain)
+	}
+	return false, fmt.Sprintf("a %s rule reaches only %s agents, and the prompt is a %s agent's", r.Domain, r.Domain, agentDomain)
+}
+
 func LoadDomains(library fs.FS, root string) ([]Domain, error) {
 	byName := map[string]*Domain{}
 	err := fs.WalkDir(library, ".", func(name string, entry fs.DirEntry, err error) error {

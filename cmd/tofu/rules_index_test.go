@@ -2,10 +2,15 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
+
+	"tofu/internal/rule"
+	"tofu/internal/turn"
 )
 
 func TestRulesIndexFiresAFrameworkRuleOnlyInItsOwnProject(t *testing.T) {
@@ -54,5 +59,99 @@ func TestRulesIndexFiresAFrameworkRuleOnlyInItsOwnProject(t *testing.T) {
 	code, out, errOut := runOutput([]string{"rules", "index", "write the page", "--library", library, "--dir", filepath.Join(root, "broken")})
 	if code == exitOK || !strings.Contains(out+errOut, "package.json") {
 		t.Fatalf("a broken package.json exited %d, want a failure naming it:\n%s%s", code, out, errOut)
+	}
+}
+
+func TestRulesIndexRoleFiresTheRulesOfThatRole(t *testing.T) {
+	library := writeFixtureModule(t, map[string]string{
+		"dev/go/rules/go_ctx@1.yaml":       "id: go_ctx\ndomain: dev\nkind: human\nconcern: code_rules\nlanguage: go\ntext: pass ctx\n",
+		"general/rules/lead_only@1.yaml":   "id: lead_only\ndomain: general\nkind: human\nconcern: process_discipline\nrole: orchestrator\ntext: spawn\n",
+		"general/rules/sub_only@1.yaml":    "id: sub_only\ndomain: general\nkind: human\nconcern: process_discipline\nrole: sub-agent\ntext: stay in your paths\n",
+		"general/rules/everyone@1.yaml":    "id: everyone\ndomain: general\nkind: human\nconcern: output_shape\ntext: be short\n",
+		"qa/general/rules/qa_only@1.yaml":  "id: qa_only\ndomain: qa\nkind: human\nconcern: code_rules\ntext: split coverage\n",
+		"qa/general/rules/qa_tests@1.yaml": "id: qa_tests\ndomain: qa\nalso_reaches: work_on_tests\nkind: human\nconcern: code_rules\ntext: end to end first\n",
+	})
+	project := t.TempDir()
+	for _, c := range []struct {
+		role  string
+		fires map[string]bool
+	}{
+		{"", map[string]bool{"go_ctx": true, "everyone": true}},
+		{"orchestrator", map[string]bool{"lead_only": true, "everyone": true}},
+		{"sub-agent", map[string]bool{"go_ctx": true, "sub_only": true, "everyone": true}},
+	} {
+		args := []string{"rules", "index", "fix the parser", "parser.go", "--library", library, "--dir", project}
+		if c.role != "" {
+			args = append(args, "--role", c.role)
+		}
+		code, out, errOut := runOutput(append(args, jsonFlag))
+		var keys struct{ Data map[string]json.RawMessage }
+		var printed struct{ Data ruleIndexReport }
+		if err := errors.Join(json.Unmarshal([]byte(out), &keys), json.Unmarshal([]byte(out), &printed)); code != exitOK || err != nil {
+			t.Fatalf("%v exited %d (%v):\n%s%s", c.role, code, err, out, errOut)
+		}
+		if _, carried := keys.Data["role"]; carried != (c.role != "") || printed.Data.Role != c.role {
+			t.Errorf("%q: the JSON carries role %q (present %v)", c.role, printed.Data.Role, carried)
+		}
+		for _, listed := range printed.Data.Rules {
+			if listed.Fires != c.fires[listed.RuleID] || strings.HasPrefix(listed.RuleID, "qa_") && !strings.Contains(listed.Why, "qa") {
+				t.Errorf("%v: %s fires = %v, want %v: %s", c.role, listed.RuleID, listed.Fires, c.fires[listed.RuleID], listed.Why)
+			}
+		}
+		code, out, errOut = runOutput(args)
+		if code != exitOK || strings.Contains(out, "role") != (c.role != "") || !strings.Contains(out, c.role) {
+			t.Errorf("%q: the text output exited %d and does not say the role:\n%s%s", c.role, code, out, errOut)
+		}
+	}
+	for _, bad := range [][]string{{"--role", "nobody"}, {"--role", ""}, {"--role", "Orchestrator"}, {"--role"}} {
+		code, out, errOut := runOutput(append([]string{"rules", "index", "fix the parser", "parser.go", "--library", library, "--dir", project}, bad...))
+		if code != exitUsage || !strings.Contains(errOut, "orchestrator") || !strings.Contains(errOut, "sub-agent") {
+			t.Errorf("%q exited %d, want %d naming orchestrator and sub-agent:\n%s%s", bad, code, exitUsage, out, errOut)
+		}
+	}
+}
+
+func TestRulesIndexFiresWhatTheComposerSendsForEveryRole(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	library := filepath.Join("..", "..", "library")
+	rules, err := rule.LoadDir(library)
+	if err != nil {
+		t.Fatal(err)
+	}
+	project := t.TempDir()
+	for _, task := range []string{"fix the parser", "add tests for the parser"} {
+		for _, role := range []rule.Role{rule.RoleAny, rule.RoleOrchestrator, rule.RoleSubAgent} {
+			composed, err := turn.Compose(turn.ComposeSpec{Task: task, Paths: []string{"parser.go"}, Environment: "e", ToolGuidance: "g", Rules: rules, Role: role})
+			if err != nil {
+				t.Fatal(err)
+			}
+			var sent, listed []string
+			for _, part := range composed.Parts {
+				if part.RuleID != "" {
+					sent = append(sent, part.RuleID)
+				}
+			}
+			args := []string{"rules", "index", task, "parser.go", "--library", library, "--dir", project, "--task", string(composed.Task.Verb), jsonFlag}
+			if role != rule.RoleAny {
+				args = append(args, "--role", string(role))
+			}
+			code, out, errOut := runOutput(args)
+			var printed struct{ Data ruleIndexReport }
+			if err := json.Unmarshal([]byte(out), &printed); code != exitOK || err != nil {
+				t.Fatalf("%q %q exited %d (%v):\n%s%s", task, role, code, err, out, errOut)
+			}
+			for _, r := range printed.Data.Rules {
+				if r.Fires {
+					listed = append(listed, r.RuleID)
+				}
+			}
+			slices.Sort(sent)
+			slices.Sort(listed)
+			if !slices.Equal(sent, listed) {
+				t.Errorf("%q as %q: the composer sends %v\nand the index fires %v", task, role, sent, listed)
+			}
+		}
 	}
 }

@@ -59,7 +59,7 @@ tofu agents remove [--global] [--dir project] <name>
 
 ```
 tofu rules list|check|fired|index|add|off|remove
-tofu rules index "<task>" [path...] [--task kind] [--library dir] [--dir project] [--json]
+tofu rules index "<task>" [path...] [--task kind] [--role orchestrator|sub-agent] [--library dir] [--dir project] [--json]
 tofu rules add [--global] [--dir project] [--replace] [--concern c] [--json] <id> "<text>"
 tofu rules off|remove [--global] [--dir project] [--json] <id>
 tofu library [resolve <name>] [--dir <path>] [--json]

@@ -26,6 +26,7 @@ type ruleIndexReport struct {
 	Origin     string             `json:"origin"`
 	Task       string             `json:"task"`
 	TaskKind   string             `json:"task_kind"`
+	Role       string             `json:"role,omitempty"`
 	Paths      []string           `json:"paths"`
 	Frameworks []string           `json:"frameworks,omitempty"`
 	Firing     int                `json:"firing"`
@@ -33,23 +34,31 @@ type ruleIndexReport struct {
 }
 
 func rulesIndexVerb(args []string, out, errOut io.Writer) int {
-	o := verbOutput{verb: "rules index", usageLine: `tofu rules index "<task>" [path...] [--task kind] [--library dir] [--dir project] [--json]`, out: out, errOut: errOut}
+	o := verbOutput{verb: "rules index", usageLine: `tofu rules index "<task>" [path...] [--task kind] [--role orchestrator|sub-agent] [--library dir] [--dir project] [--json]`, out: out, errOut: errOut}
 	kept := make([]string, 0, len(args))
-	verb := rule.VerbNone
+	verb, role, roleAsked := rule.VerbNone, rule.RoleAny, false
 	for i := 0; i < len(args); i++ {
-		if args[i] != "--task" {
-			kept = append(kept, args[i])
+		flag := args[i]
+		if flag != "--task" && flag != "--role" {
+			kept = append(kept, flag)
 			continue
 		}
 		if i++; i >= len(args) {
-			return o.usage(errors.New("--task needs a value"))
+			return o.usage(fmt.Errorf("%s needs a value", flag))
 		}
-		verb = rule.Verb(args[i])
+		if flag == "--task" {
+			verb = rule.Verb(args[i])
+			continue
+		}
+		role, roleAsked = rule.Role(args[i]), true
 	}
 	switch verb {
 	case rule.VerbNone, rule.VerbDebug, rule.VerbExplore, rule.VerbReview, rule.VerbWrite:
 	default:
 		return o.usage(fmt.Errorf("--task is %s, %s, %s or %s, found %q", rule.VerbDebug, rule.VerbExplore, rule.VerbReview, rule.VerbWrite, verb))
+	}
+	if roleAsked && role != rule.RoleOrchestrator && role != rule.RoleSubAgent {
+		return o.usage(fmt.Errorf("--role is %s or %s, found %q", rule.RoleOrchestrator, rule.RoleSubAgent, role))
 	}
 	opts, err := parseRulesFlags(kept)
 	if err == nil && len(opts.rest) == 0 {
@@ -64,11 +73,15 @@ func rulesIndexVerb(args []string, out, errOut io.Writer) int {
 		return o.fail(err)
 	}
 	rules := stack.rules
-	report := ruleIndexReport{Origin: stack.origin, Task: opts.rest[0], TaskKind: string(verb), Paths: opts.rest[1:], Rules: make([]ruleIndexListing, 0, len(rules))}
+	report := ruleIndexReport{Origin: stack.origin, Task: opts.rest[0], TaskKind: string(verb), Role: string(role), Paths: opts.rest[1:], Rules: make([]ruleIndexListing, 0, len(rules))}
 	if report.Frameworks, err = rule.Frameworks(opts.dir, report.Paths); err != nil {
 		return o.fail(err)
 	}
-	for i, m := range rule.Index(rules, rule.Task{Text: report.Task, Paths: report.Paths, Verb: verb, Frameworks: report.Frameworks}) {
+	task := rule.Task{Text: report.Task, Paths: report.Paths, Verb: verb, Role: role, Frameworks: report.Frameworks}
+	for i, m := range rule.Index(rules, task) {
+		if reaches, why := rules[i].ReachesDomain(rule.DomainDev, task); !reaches {
+			m.Fires, m.Why = false, why
+		}
 		if m.Fires {
 			report.Firing++
 		}
@@ -110,6 +123,9 @@ func (report ruleIndexReport) lines(page cli.Page) []string {
 		{Label: "kind", Text: report.TaskKind},
 		{Label: "paths", Text: strings.Join(report.Paths, ", ")},
 		{Label: "concerns", Text: strings.Join(concerns, ", ")},
+	}
+	if report.Role != "" {
+		facts = append(facts, cli.Fact{Label: "role", Text: report.Role})
 	}
 	if len(report.Frameworks) > 0 {
 		facts = append(facts, cli.Fact{Label: "frameworks", Text: strings.Join(report.Frameworks, ", ")})
