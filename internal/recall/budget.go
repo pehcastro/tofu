@@ -17,12 +17,17 @@ type Bands struct {
 const bandShareOfWindow = konst.BandIdentityShare + konst.BandFactsShare + konst.BandWorkingSetShare + konst.BandRecentShare
 
 func BandsOf(ceiling int) Bands {
-	return Bands{
-		Identity:   ceiling * konst.BandIdentityShare / konst.BandShareWhole,
-		Facts:      ceiling * konst.BandFactsShare / konst.BandShareWhole,
-		WorkingSet: ceiling * konst.BandWorkingSetShare / konst.BandShareWhole,
-		Recent:     ceiling * konst.BandRecentShare / konst.BandShareWhole,
+	return bandsOf(ceiling, konst.BandShareWhole)
+}
+
+func bandsOf(tokens, whole int) Bands {
+	bands := Bands{
+		Identity:   tokens * konst.BandIdentityShare / whole,
+		Facts:      tokens * konst.BandFactsShare / whole,
+		WorkingSet: tokens * konst.BandWorkingSetShare / whole,
 	}
+	bands.Recent = tokens*bandShareOfWindow/whole - bands.Identity - bands.Facts - bands.WorkingSet
+	return bands
 }
 
 func ShippedBands() Bands {

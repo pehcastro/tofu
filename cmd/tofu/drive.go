@@ -104,6 +104,11 @@ the way a model's does, in deltas, so a reply is half written until it returns:
 
 A reply's thinking streams before its text and shows only on the sub-agents screen.
 
+A reply can report the usage a provider would, in tokens, the way anthropic
+counts it: input excludes the cache. The fork decides on the larger of that
+report, plus what came after it, and tofu's own estimate:
+  {"text":"reading it","usage":{"input":2,"cache_read":150000,"cache_write":900}}
+
 An unfinished reply streams its text and keeps writing until the turn is stopped,
 which is how a driven run reaches an answer interrupted in the middle of itself.
 
@@ -155,6 +160,11 @@ type cassetteReply struct {
 		Name string          `json:"name"`
 		Args json.RawMessage `json:"args"`
 	} `json:"tools"`
+	Usage struct {
+		Input      int `json:"input"`
+		CacheRead  int `json:"cache_read"`
+		CacheWrite int `json:"cache_write"`
+	} `json:"usage"`
 }
 
 type recordedReply struct {
@@ -212,7 +222,9 @@ func readCassette(path string) (*cassette, error) {
 		if reply.Agent != orchestratorCaller && !subAgentNumber(reply.Agent) {
 			return nil, fmt.Errorf("%s line %d: agent %q is none of c1, c2 and so on, counting the callers after the orchestrator in the order they first ask", path, number+1, reply.Agent)
 		}
-		decision := llm.Decision{Build: cassetteBuild, Outcome: llm.OutcomeMessage, Content: reply.Text, FirstTokenMS: recordedFlight.Milliseconds()}
+		decision := llm.Decision{Build: cassetteBuild, Outcome: llm.OutcomeMessage, Content: reply.Text, FirstTokenMS: recordedFlight.Milliseconds(),
+			Usage: llm.Usage{InputTokens: reply.Usage.Input}, PromptAccounting: llm.PromptExcludesCacheReads,
+			CacheReadTokens: reply.Usage.CacheRead, CacheWriteTokens: reply.Usage.CacheWrite}
 		for index, one := range reply.Tools {
 			decision.Outcome = llm.OutcomeToolCalls
 			decision.ToolCalls = append(decision.ToolCalls, llm.ToolCall{

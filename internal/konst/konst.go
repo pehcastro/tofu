@@ -17,7 +17,9 @@ const (
 )
 
 const (
-	ContextCeilingTokens = 250000
+	ContextCeilingTokens       = 250000
+	ContextOutputReserveTokens = 20000
+	ContextForkPercentOfUsable = 80
 
 	BandShareWhole      = 10000
 	BandIdentityShare   = 480

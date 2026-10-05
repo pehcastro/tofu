@@ -356,8 +356,14 @@ func Run(ctx context.Context, config Config) (Row, error) {
 		}
 
 		stepTools := currentTools()
+		definitions := stepTools.Definitions()
+		schemas, err := json.Marshal(definitions)
+		if err != nil {
+			return finish(OutcomeError), err
+		}
+		budget = budget.Sending(artifacts.preview, string(schemas))
 		asSent := recall.Measure(artifacts.preview, budget.Bands, historyOf(messages))
-		decision, timing, err := askCountingAttempts(ctx, model, llm.Request{Messages: messages, Tools: stepTools.Definitions()})
+		decision, timing, err := askCountingAttempts(ctx, model, llm.Request{Messages: messages, Tools: definitions})
 		if overflowed(err) {
 			shrink, shrinkErr := shrinkOverflow(artifacts, messages, asSent.Total(), budget.WindowTokens)
 			switch {
@@ -372,7 +378,7 @@ func Run(ctx context.Context, config Config) (Row, error) {
 					config.Notify(told)
 				}
 				asSent = recall.Measure(artifacts.preview, budget.Bands, historyOf(messages))
-				decision, timing, err = askCountingAttempts(ctx, model, llm.Request{Messages: messages, Tools: stepTools.Definitions()})
+				decision, timing, err = askCountingAttempts(ctx, model, llm.Request{Messages: messages, Tools: definitions})
 				if overflowed(err) {
 					err = fmt.Errorf("the context window overflowed again after tofu %s, so the turn ends: %w", shrink, err)
 				}
@@ -383,6 +389,8 @@ func Run(ctx context.Context, config Config) (Row, error) {
 		}
 		row.Model = decision.Build
 		row.TotalCostUSD += decision.Usage.Cost
+		reported := decision.PromptAccounting.BilledTokens(decision.Usage.InputTokens, decision.CacheReadTokens) + decision.CacheWriteTokens
+		budget = budget.Reported(reported, asSent)
 
 		stepRow := stepFrom(step, timing, decision)
 		answering = stepRow.id

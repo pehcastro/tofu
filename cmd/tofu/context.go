@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cmp"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -126,7 +127,7 @@ func contextOf(store *session.Store, handle string, build recall.Bands) (context
 		Task:                   header.Task,
 		Steps:                  len(steps),
 		Unmeasured:             contextNeverMeasured,
-		Ceiling:                konst.ContextCeilingTokens,
+		Ceiling:                cmp.Or(header.ContextCeiling, konst.ContextCeilingTokens),
 		BytesPerThousandTokens: cfg.BytesPerThousandTokens,
 		Skipped:                skipped,
 	}

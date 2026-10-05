@@ -19,19 +19,28 @@ type Budget struct {
 	WindowSource  string
 	Automatic     bool
 	Source        string
+	toolTokens    int
+	reported      int
+	reportedAt    int
 }
 
 func BudgetFor(model string, windowTokens int) (Budget, error) {
 	budget := Budget{Model: model, WindowTokens: windowTokens, Automatic: true}
-	text := strings.TrimSpace(os.Getenv(CeilingVariable))
-	if text == "" {
+	if text := strings.TrimSpace(os.Getenv(CeilingVariable)); text != "" {
+		set, err := strconv.Atoi(text)
+		if err != nil || set <= 0 {
+			return Budget{}, fmt.Errorf("recall: %s is %q, and it takes a count of tokens above zero, as in %s=20000", CeilingVariable, text, CeilingVariable)
+		}
+		return budget.At(set, fmt.Sprintf("%s=%d in the environment of this run", CeilingVariable, set)), nil
+	}
+	if windowTokens <= konst.ContextOutputReserveTokens {
 		return budget.At(konst.ContextCeilingTokens, "the ceiling tofu operates under, which is ours and the same on every model"), nil
 	}
-	set, err := strconv.Atoi(text)
-	if err != nil || set <= 0 {
-		return Budget{}, fmt.Errorf("recall: %s is %q, and it takes a count of tokens above zero, as in %s=20000", CeilingVariable, text, CeilingVariable)
-	}
-	return budget.At(set, fmt.Sprintf("%s=%d in the environment of this run", CeilingVariable, set)), nil
+	usable := min(windowTokens-konst.ContextOutputReserveTokens, konst.ContextCeilingTokens)
+	budget.CeilingTokens, budget.Bands = usable, bandsOf(usable*konst.ContextForkPercentOfUsable/100, bandShareOfWindow)
+	budget.Source = fmt.Sprintf("the model's window less %d tokens held for the answer, and never over tofu's own %d",
+		konst.ContextOutputReserveTokens, konst.ContextCeilingTokens)
+	return budget, nil
 }
 
 func (b Budget) At(ceilingTokens int, source string) Budget {
@@ -40,8 +49,8 @@ func (b Budget) At(ceilingTokens int, source string) Budget {
 }
 
 func (b Budget) Record() string {
-	return fmt.Sprintf("on, %s: a %d token ceiling gives a %d token target, %d parts of %d. %s",
-		b.Source, b.CeilingTokens, b.Bands.Target(), bandShareOfWindow, konst.BandShareWhole, b.wall())
+	return fmt.Sprintf("on, %s: a %d token ceiling gives a %d token target, %d%% of it. %s",
+		b.Source, b.CeilingTokens, b.Bands.Target(), FillPercent(b.Bands.Target(), b.CeilingTokens), b.wall())
 }
 
 func (b Budget) wall() string {
@@ -56,8 +65,23 @@ func (b Budget) wall() string {
 	return wall + ", " + b.WindowSource
 }
 
+func (b Budget) Sending(cfg Config, toolSchemas string) Budget {
+	b.toolTokens = cfg.Tokens(toolSchemas)
+	return b
+}
+
+func (b Budget) Reported(tokens int, asSent Occupancy) Budget {
+	b.reported, b.reportedAt = tokens, asSent.Total()+b.toolTokens
+	return b
+}
+
+func (b Budget) Tokens(cfg Config, c Conversation) int {
+	estimated := Measure(cfg, b.Bands, c).Total() + b.toolTokens
+	return max(estimated, b.reported+estimated-b.reportedAt)
+}
+
 func (b Budget) Crossed(cfg Config, c Conversation) bool {
-	return Crossed(cfg, b.Bands, c)
+	return b.Tokens(cfg, c) > b.Bands.Target()
 }
 
 type OverWindow struct {
