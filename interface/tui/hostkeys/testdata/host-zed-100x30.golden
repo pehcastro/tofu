@@ -11,6 +11,7 @@
            ALT+K  Commands · ensure tofu receives this shortcut                            
            CTRL+L  Models · ensure tofu receives this shortcut                             
            CTRL+R  Quote selection · ensure tofu receives this shortcut                    
+           CTRL+G  Edit in editor · ensure tofu receives this shortcut                     
            Change: forward these keys only while the terminal is focused.                  
                                                                                            
            SHORTCUT CONFLICTS                                                              
@@ -26,4 +27,3 @@
                                                                                            
            ↑↓ choose · enter select · esc close                                            
                                                                                            
-

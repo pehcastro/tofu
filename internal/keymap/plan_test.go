@@ -11,7 +11,7 @@ func TestConfiguredShortcutsDriveHostPlan(t *testing.T) {
 	shortcuts := DefaultShortcuts()
 	shortcuts["Search"] = "ctrl+n"
 	plan, skipped := Plan(VSCode, shortcuts, nil)
-	if len(skipped) != 0 || len(plan) != 4 || plan[0].Key != "ctrl+n" {
+	if len(skipped) != 0 || len(plan) != 5 || plan[0].Key != "ctrl+n" {
 		t.Fatalf("plan did not follow tofu settings: %+v, %v", plan, skipped)
 	}
 	for _, element := range elements(VSCode, shortcuts) {

@@ -11,6 +11,7 @@ import (
 
 	"tofu/interface/tui/feed"
 	"tofu/interface/tui/shells"
+	"tofu/internal/keymap"
 	"tofu/internal/llm"
 	library "tofu/internal/llm/models"
 	isettings "tofu/internal/settings"
@@ -92,6 +93,8 @@ func (a *App) shortcut(pressed string) (tea.Cmd, bool) {
 		a.openPicker("")
 	case action == quoteAction:
 		return a.quoteSelection(), true
+	case action == keymap.EditorAction:
+		return tea.Batch(a.show(screenChat), a.openEditor()), true
 	}
 	return cleared, true
 }

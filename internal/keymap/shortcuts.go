@@ -12,7 +12,10 @@ import (
 	"tofu/internal/sys"
 )
 
-const shortcutsVersion = 1
+const (
+	shortcutsVersion = 1
+	EditorAction     = "Edit in editor"
+)
 
 type shortcutFile struct {
 	Version  int               `json:"version"`
@@ -20,7 +23,7 @@ type shortcutFile struct {
 }
 
 func Actions() []string {
-	return []string{"Search", "Commands", "Settings", "Models", "Quote selection"}
+	return []string{"Search", "Commands", "Settings", "Models", "Quote selection", EditorAction}
 }
 
 func DefaultShortcuts() map[string]string {
@@ -30,6 +33,7 @@ func DefaultShortcuts() map[string]string {
 		"Settings":        "",
 		"Models":          "ctrl+l",
 		"Quote selection": "ctrl+r",
+		EditorAction:      "ctrl+g",
 	}
 }
 
@@ -66,10 +70,15 @@ func LoadShortcuts(path string) map[string]string {
 	if err != nil || json.Unmarshal(data, &file) != nil || file.Version != shortcutsVersion {
 		return bindings
 	}
+	claimed := map[string]bool{}
 	for _, action := range Actions() {
 		if key, ok := file.Bindings[action]; ok && ValidShortcut(key) == nil {
 			bindings[action] = key
+			claimed[key] = true
 		}
+	}
+	if _, named := file.Bindings[EditorAction]; !named && claimed[bindings[EditorAction]] {
+		bindings[EditorAction] = ""
 	}
 	seen := map[string]bool{}
 	for _, key := range bindings {

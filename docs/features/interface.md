@@ -33,8 +33,13 @@ inside the 16.7 ms of a 60 Hz frame.
 
 ## Shortcuts and the gate
 
-- **Change a shortcut**: Search, Commands, Models, Quote selection and
-  Settings can be rebound; they're saved in `~/.tofu/keybindings.json`.
+- **Write the prompt in your own editor**: `Ctrl+G` opens what you have
+  typed in `$VISUAL`, else `$EDITOR`, else notepad on Windows and vi
+  elsewhere. Save and quit, and the text comes back to the composer.
+  `code --wait` and other commands with arguments work.
+- **Change a shortcut**: Search, Commands, Models, Quote selection, Edit in
+  editor and Settings can be rebound; they're saved in
+  `~/.tofu/keybindings.json`.
   `Ctrl+C`, `Ctrl+V`, `Ctrl+J` and `Alt+I` belong to the composer.
 - **Paste an image or a file**: `Ctrl+V` attaches what the clipboard holds.
   On Linux it reads through `wl-paste` on Wayland, or `xclip` or `xsel` on
@@ -53,6 +58,7 @@ inside the 16.7 ms of a 60 Hz frame.
 | `Ctrl+L` | Pick the model |
 | `Shift+Tab` | Cycle the effort level |
 | `@` | Attach a file |
+| `Ctrl+G` | Edit the prompt in your editor |
 | `Ctrl+O` | Expand the last tool call |
 | `Ctrl+Y`, `Alt+Y` | Copy the last answer, or the last tool call |
 | `Ctrl+X`, `Alt+Up`, `Alt+Down` | Remove or pick a queued message |

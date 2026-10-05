@@ -309,3 +309,22 @@ func TestABlankLineSitsAboveTheActivityBlock(t *testing.T) {
 		t.Fatalf("the activity block does not follow the blank line: %q", lines[rows+1])
 	}
 }
+
+func TestRedraftKeepsTheChipsWhoseTokensSurvive(t *testing.T) {
+	model := New(fixed(), counted(new(int)))
+	model.Focus()
+	model.InsertPaste(strings.Repeat("a", textChipThreshold))
+	model.InsertPaste(strings.Repeat("b", textChipThreshold+1))
+	kept := textToken(textChipThreshold)
+	model.Insert(` \/escaped`)
+	if draft := model.Draft(); !strings.Contains(draft, kept) || !strings.Contains(draft, `\/escaped`) {
+		t.Fatalf("the draft is not the raw composer text: %q", draft)
+	}
+	model.Redraft("edited " + kept + "\nsecond line")
+	if model.Draft() != "edited "+kept+"\nsecond line" || len(model.chips) != 1 || model.chips[0].Token != kept {
+		t.Fatalf("after a redraft the composer is %q and the chips %v, want only %s", model.Draft(), model.chips, kept)
+	}
+	if Expand(model.Value(), model.chips) != "edited "+strings.Repeat("a", textChipThreshold)+"\nsecond line" {
+		t.Fatalf("the surviving chip no longer expands: %q", model.Value())
+	}
+}

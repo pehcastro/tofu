@@ -245,10 +245,11 @@ func (h Host) compact(width int) string {
 	body := look.SectionLabel("CURRENT HOST") + "\n" + look.Title(string(h.host.Name)) + look.Muted(" · "+h.host.Source)
 	if supported(h.host.Name) {
 		plan, skipped := keymap.Plan(h.host.Name, h.bindings, h.collisions)
-		body += "\n" + look.SectionLabel("WILL FORWARD IN TERMINAL")
+		forwarded := make([]string, 0, len(plan))
 		for _, item := range plan {
-			body += "\n" + look.Title(item.Key) + look.Muted("  "+item.Action)
+			forwarded = append(forwarded, look.Title(item.Key)+look.Muted(" "+item.Action))
 		}
+		body += "\n" + look.SectionLabel("WILL FORWARD IN TERMINAL") + "\n" + strings.Join(forwarded, look.Muted(" · "))
 		if len(skipped) > 0 {
 			body += "\n" + look.Faint("Unsupported: "+strings.Join(skipped, ", "))
 		}

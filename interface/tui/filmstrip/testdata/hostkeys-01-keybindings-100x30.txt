@@ -4,18 +4,18 @@
                       
   CATEGORIES              Composer                                                  standard  ▾ 
     Appearance    05      Enter sends; Shift+Enter inserts a line break
-    Models & rol… 02  
-  › Interaction                                                                         edit  ▾ 
-    Context       Keybindings                                                  esc  
-    Files         Tofu shortcuts                                                    
-    Shell                                                                           pect Zed  ▾ 
-    Turn          TOFU ACTIONS                                                      
-    Browser       These work after the terminal sends the key to tofu.              
-                  >  Search         ctrl+k                                               run  ▾ 
-  NAVIGATE          Commands       alt+k                                            ow or enfor…
-  ↑↓ setting · ←    Settings       not set                                          
-  section           Models         ctrl+l                                                   ● on
-  ctrl+k search     Quote selection  ctrl+r                                          that chang…
+    Models & rol                                                                    
+  › Interaction   Keybindings                                                  esc      edit  ▾ 
+    Context       Tofu shortcuts                                                    
+    Files                                                                           
+    Shell         TOFU ACTIONS                                                      pect Zed  ▾ 
+    Turn          These work after the terminal sends the key to tofu.              
+    Browser       >  Search         ctrl+k                                          
+                    Commands       alt+k                                                 run  ▾ 
+  NAVIGATE          Settings       not set                                          ow or enfor…
+  ↑↓ setting · ←    Models         ctrl+l                                           
+  section           Quote selection  ctrl+r                                                 ● on
+  ctrl+k search     Edit in editor  ctrl+g                                           that chang…
   esc chat                                                                          
                   Host editors may still intercept a chosen key.                    
                                                                                     

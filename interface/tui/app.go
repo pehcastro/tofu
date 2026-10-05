@@ -479,6 +479,9 @@ func (a *App) update(msg tea.Msg) tea.Cmd {
 	case paste.Outcome:
 		a.view.Attached(msg)
 		return nil
+	case editedMsg:
+		a.edited(msg)
+		return nil
 	case copiedMsg:
 		a.notify(msg.note())
 		if msg.state == copyToTerminal {

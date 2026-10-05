@@ -1,6 +1,7 @@
 package hostkeys
 
 import (
+	"maps"
 	"os"
 	"path/filepath"
 	"strings"
@@ -221,6 +222,18 @@ func TestShortcutFileRejectsDuplicateBindings(t *testing.T) {
 	bindings := NewShortcuts(path, keymap.LoadShortcuts(path)).Bindings()
 	if bindings["Search"] != "ctrl+k" || bindings["Commands"] != "alt+k" {
 		t.Fatal("duplicate saved binding was accepted")
+	}
+}
+
+func TestASavedCtrlGLeavesTheEditorUnbound(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "keybindings.json")
+	if err := os.WriteFile(path, []byte(`{"version":1,"bindings":{"Search":"ctrl+g"}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	want := keymap.DefaultShortcuts()
+	want["Search"], want[keymap.EditorAction] = "ctrl+g", ""
+	if got := NewShortcuts(path, keymap.LoadShortcuts(path)).Bindings(); !maps.Equal(got, want) {
+		t.Fatalf("a file binding Search to ctrl+g loaded as %v, want %v", got, want)
 	}
 }
 
