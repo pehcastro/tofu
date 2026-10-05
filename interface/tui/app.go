@@ -17,6 +17,7 @@ import (
 	"tofu/interface/tui/edits"
 	"tofu/interface/tui/feed"
 	"tofu/interface/tui/frame"
+	"tofu/interface/tui/keyfield"
 	"tofu/interface/tui/markdown"
 	"tofu/interface/tui/paste"
 	"tofu/interface/tui/pointer"
@@ -129,9 +130,30 @@ const (
 )
 
 type Requirement struct {
-	What string
-	Fix  string
-	Run  func() *exec.Cmd
+	Step    string
+	What    string
+	Fix     string
+	Run     func() *exec.Cmd
+	Done    string
+	Choices []Choice
+}
+
+type Choice struct {
+	Label string
+	Run   func() *exec.Cmd
+	Key   string
+}
+
+type setupEntry struct {
+	label, variable, refusal string
+	field                    keyfield.Field
+	checking                 int
+}
+
+type keySavedMsg struct {
+	check int
+	text  string
+	err   error
 }
 
 type Wire struct {
@@ -149,6 +171,7 @@ type Options struct {
 	Release      string
 	Requirements []Requirement
 	Recheck      func() []Requirement
+	SaveKey      func(ctx context.Context, variable, value string) (string, error)
 	Login        func() *exec.Cmd
 	Wires        func() []Wire
 	Models       func() (library.Library, error)
@@ -213,6 +236,9 @@ const termWithoutHardTabs = "TERM=linux"
 type App struct {
 	options        Options
 	requirements   []Requirement
+	entry          setupEntry
+	keyChecks      int
+	setupNote      string
 	current        screen
 	view           session.Model
 	feed           feed.Model
@@ -397,10 +423,14 @@ func (a *App) pollShells() tea.Cmd {
 }
 
 func (a *App) watchSetup() tea.Cmd {
-	if len(a.requirements) == 0 || a.options.Recheck == nil {
+	if !a.settingUp() || a.options.Recheck == nil {
 		return nil
 	}
 	return tea.Tick(setupPoll, func(time.Time) tea.Msg { return recheckMsg{} })
+}
+
+func (a *App) settingUp() bool {
+	return slices.ContainsFunc(a.requirements, func(step Requirement) bool { return step.Done == "" })
 }
 
 func (a *App) readPaths() tea.Cmd {
@@ -505,14 +535,20 @@ func (a *App) update(msg tea.Msg) tea.Cmd {
 			return nil
 		}
 		return func() tea.Msg { return requirementsMsg(recheck()) }
+	case keySavedMsg:
+		return a.keySaved(msg)
 	case requirementsMsg:
-		cleared := len(a.requirements) > 0 && len(msg) == 0
+		was, before := a.settingUp(), a.currentStep()
 		a.requirements = msg
+		cleared := was && !a.settingUp()
 		a.readWires()
-		if !cleared {
-			return a.watchSetup()
+		switch {
+		case cleared:
+			return tea.Batch(a.view.Focus(), tea.ClearScreen)
+		case a.currentStep().Step != before.Step || a.currentStep().What != before.What:
+			return tea.Batch(a.watchSetup(), tea.ClearScreen)
 		}
-		return a.view.Focus()
+		return a.watchSetup()
 	case shellsMsg:
 		a.showShells(msg)
 		return nil

@@ -135,24 +135,27 @@ func setupScreen(t *testing.T, required []tui.Requirement) string {
 func TestSetupAsksForBothLoginsAndTheSecondOneStoresTheKey(t *testing.T) {
 	emptyHome(t)
 	required := appRequirements()
-	if len(required) != 2 {
-		t.Fatalf("requirements %+v, want the credential and the key", required)
+	if len(required) != 2 || required[0].Done != "" || required[1].Done != "" {
+		t.Fatalf("requirements %+v, want two steps, neither done", required)
 	}
-	if required[0].What != noCredential || required[0].Fix != loginFix {
-		t.Fatalf("requirement %+v", required[0])
+	if required[0].Step != modelStep || required[0].Fix != "tofu login llm claude-sub" || len(required[0].Choices) != 3 {
+		t.Fatalf("step 1 is %+v", required[0])
 	}
-	if required[1].What != noGateKey || required[1].Fix != gateKeyFix {
-		t.Fatalf("requirement %+v", required[1])
+	if args := strings.Join(required[0].Choices[0].Run().Args[1:], " "); args != "login llm claude-sub" {
+		t.Fatalf("the claude choice runs %v, want login llm claude-sub", args)
 	}
-	if args := strings.Join(required[1].Run().Args[1:], " "); args != "login classifier openrouter" {
-		t.Fatalf("the second fix runs %v, want login classifier openrouter", args)
+	if required[0].Choices[2].Key != sys.MetaMuseKeyName || required[1].Choices[0].Key != sys.OpenRouterKeyName || required[1].Choices[1].Key != sys.TypeSafeKeyName {
+		t.Fatalf("the key choices are %+v and %+v", required[0].Choices, required[1].Choices)
 	}
 	t.Log("\n" + setupScreen(t, required))
 
 	storeGateKey(t, gateKeyForTests)
 	left := appRequirements()
-	if len(left) != 1 || left[0].What != noCredential {
-		t.Fatalf("requirements %+v after the key was stored, want only the credential", left)
+	if left[0].Done != "" || !strings.HasSuffix(left[1].Done, "····Q9W4") {
+		t.Fatalf("after the key was stored the steps are %+v, want step 2 done by the key's last four", left)
+	}
+	if blockers := startBlockers(); len(blockers) != 1 || blockers[0].label != string(cred.ClaudeSub) {
+		t.Fatalf("doctor's blockers are %+v, want the language model step alone", blockers)
 	}
 	t.Log("\n" + setupScreen(t, left))
 }

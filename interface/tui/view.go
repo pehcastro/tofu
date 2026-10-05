@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"cmp"
 	"os"
 	"slices"
 	"strconv"
@@ -20,12 +21,17 @@ import (
 )
 
 const (
-	setupTitle  = "tofu cannot start a turn yet"
-	setupKeys   = "[1-9] run the fix   [r] check again   [q] quit"
-	setupIndent = "   "
-	setupWatch  = "or run the command in another terminal: tofu picks it up here"
-	asciiEnv    = "TOFU_ASCII"
-	dumbTerm    = "dumb"
+	setupTitle     = "set up tofu: two steps before the first turn"
+	setupKeys      = "[1-9] pick   [r] check again   [esc] quit"
+	setupEntryKeys = "[enter] check and store   [esc] back"
+	setupChecking  = "checking the key with its provider, esc goes back"
+	setupIndent    = "   "
+	setupDone      = "✓ "
+	setupNow       = "› "
+	setupLater     = "○ "
+	setupGap       = "   "
+	asciiEnv       = "TOFU_ASCII"
+	dumbTerm       = "dumb"
 )
 
 func tabNames() []string { return []string{"chat", "sub-agents", "file edits", "shells"} }
@@ -52,7 +58,7 @@ func (a *App) View() tea.View {
 		content = a.frame()
 	}
 	var caret *tea.Cursor
-	if a.current == screenChat && len(a.dialogs) == 0 && len(a.requirements) == 0 {
+	if a.current == screenChat && len(a.dialogs) == 0 && !a.settingUp() {
 		caret = a.view.Cursor()
 		if caret != nil {
 			caret.Y += bodyTop
@@ -80,7 +86,7 @@ func (a *App) frame() string {
 }
 
 func (a *App) base() string {
-	if a.current == screenSettings && len(a.requirements) == 0 {
+	if a.current == screenSettings && !a.settingUp() {
 		view := a.settings.View()
 		if a.status.Note == "" {
 			return view
@@ -112,7 +118,7 @@ func (a *App) base() string {
 	a.hits = hits
 	status := a.status
 	status.At, status.Mode, status.InUse = head.At, frame.StatusMode(a.text(isettings.StatusBar)), a.sourcesInUse()
-	if len(a.requirements) > 0 {
+	if a.settingUp() {
 		status.Mode = frame.StatusHidden
 	}
 	right := ""
@@ -148,7 +154,7 @@ func (a *App) sourcesInUse() []string {
 
 func (a *App) body() string {
 	rows := a.height - chromeRows
-	if len(a.requirements) > 0 {
+	if a.settingUp() {
 		return a.setupView(rows)
 	}
 	switch a.current {
@@ -217,23 +223,69 @@ func (a *App) syncFeed() {
 }
 
 func (a *App) setupView(rows int) string {
-	lines := []string{look.Style(look.Amber).Render(widget.Fit(setupTitle, a.width)), ""}
-	for index, requirement := range a.requirements {
-		number := strconv.Itoa(index + 1)
-		for _, line := range widget.Wrap(number+". "+requirement.What, a.width) {
-			lines = append(lines, look.Style(look.Text).Render(line))
-		}
-		for _, line := range widget.Wrap("press "+number+" to run   "+requirement.Fix, a.width-widget.Cells(setupIndent)) {
-			lines = append(lines, look.Muted(setupIndent+line))
-		}
-		lines = append(lines, "")
+	var lines []string
+	add := func(colour look.Color, text string) {
+		lines = append(lines, look.Style(colour).Render(widget.Fit(text, a.width)))
 	}
-	if a.options.Recheck != nil {
-		lines = append(lines, look.Muted(widget.Fit(setupWatch, a.width)), "")
+	indented := func(colour look.Color, text string) {
+		for _, line := range widget.Wrap(text, a.width-widget.Cells(setupIndent)) {
+			add(colour, setupIndent+line)
+		}
 	}
-	lines = append(lines, look.Faint(widget.Fit(setupKeys, a.width)))
+	add(look.Amber, setupTitle)
+	add(look.Text, "")
+	if a.setupNote != "" {
+		add(look.Mint, a.setupNote)
+		add(look.Text, "")
+	}
+	current, keys := -1, setupKeys
+	for index, step := range a.requirements {
+		title := strconv.Itoa(index+1) + ". " + cmp.Or(step.Step, step.What)
+		switch {
+		case step.Done != "":
+			add(look.Mint, setupDone+title+setupGap+step.Done)
+			add(look.Text, "")
+			continue
+		case current >= 0:
+			add(look.FaintColor, setupLater+title)
+			add(look.Text, "")
+			continue
+		}
+		current = index
+		add(look.Text, setupNow+title)
+		if step.Step != "" {
+			indented(look.MutedColor, step.What)
+		}
+		add(look.Text, "")
+		switch {
+		case a.entry.variable != "":
+			keys = setupEntryKeys
+			add(look.Text, setupIndent+a.entry.label)
+			add(look.Text, widget.Pad(setupIndent+a.entry.field.Line(), a.width))
+			switch {
+			case a.entry.checking != 0:
+				indented(look.MutedColor, setupChecking)
+			case a.entry.refusal != "":
+				indented(look.Red, a.entry.refusal)
+			case a.entry.field.Warning() != "":
+				indented(look.Amber, a.entry.field.Warning())
+			}
+		case len(step.Choices) > 0:
+			for number, choice := range step.Choices {
+				add(look.Text, setupIndent+strconv.Itoa(number+1)+"  "+choice.Label)
+			}
+		default:
+			indented(look.MutedColor, "press "+strconv.Itoa(index+1)+" to run   "+step.Fix)
+		}
+		if step.Fix != "" && a.options.Recheck != nil && a.entry.variable == "" {
+			add(look.Text, "")
+			indented(look.MutedColor, "or run "+step.Fix+" in another terminal: tofu picks it up here")
+		}
+		add(look.Text, "")
+	}
+	add(look.FaintColor, keys)
 	for len(lines) < rows {
-		lines = append(lines, "")
+		add(look.Text, "")
 	}
 	return strings.Join(lines[:rows], "\n")
 }

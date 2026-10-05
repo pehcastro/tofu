@@ -64,6 +64,10 @@ func (a *App) openPicker(assign string) {
 	keys := models.Keys{
 		Set: func(name string) bool { _, err := jev.KeyFor(envFile, name); return err == nil },
 		Save: func(ctx context.Context, name, value string) error {
+			if save := a.options.SaveKey; save != nil {
+				_, err := save(ctx, name, value)
+				return err
+			}
 			if name == library.Meta.KeyName() {
 				return library.StoreMetaKey(ctx, value)
 			}

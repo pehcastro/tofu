@@ -46,10 +46,24 @@ Continue the session you last worked in:
 
     tofu --continue
 
-Sign in with a subscription the first time, so tofu has a model to use:
+The first time, the app opens on a setup screen with two steps, and the
+chat opens once both are done:
+
+1. language model: press 1 for the Claude subscription or 2 for the Codex
+   one, which sign in through the browser, or 3 to paste a Meta API key.
+2. classifier, jev, required: press 1 for an OpenRouter key or 2 for a
+   TypeSafe key. jev judges every tool call, so a model alone is not
+   enough.
+
+A key field shows the key's shape while you paste it, such as
+`sk-or-v1-…3f9a  73 chars  prefix ok`, never the key. Enter checks it
+with its provider and stores it; a refused key stays in the field with
+the reason, and esc goes back. A step already set, by a login, the
+environment or the project's `.env`, shows as done. Esc or q leaves.
+The same two steps from a terminal:
 
     tofu login llm claude-sub
-    tofu login llm codex-sub
+    tofu login classifier openrouter
 
 Work a task without the app, printing as it goes:
 

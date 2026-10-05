@@ -425,23 +425,44 @@ func loginKey(name string, in io.Reader, prompts io.Writer) (loginReceipt, *logi
 	if err != nil {
 		return loginReceipt{}, failure(err.Error(), loginHint(name))
 	}
+	return storeKey(context.Background(), stored, key)
+}
+
+func storeKey(ctx context.Context, stored keyStatus, key string) (loginReceipt, *loginRefusal) {
 	stored.Key = widget.Mask(key)
 	done := " checked and stored"
-	switch name {
+	var err error
+	switch stored.Provider {
 	case braveName:
 		done = " stored"
 	case metaName:
-		err = models.StoreMetaKey(context.Background(), key)
+		err = models.StoreMetaKey(ctx, key)
 	default:
-		err = reachesJev(context.Background(), models.Provider(name), key)
+		err = reachesJev(ctx, models.Provider(stored.Provider), key)
 	}
 	if err != nil {
-		return loginReceipt{}, refusedBy(stored.name, name, err)
+		return loginReceipt{}, refusedBy(stored.name, stored.Provider, err)
 	}
 	if err := sys.SaveKey(stored.Variable, key); err != nil {
-		return loginReceipt{}, failure(err.Error(), loginHint(name))
+		return loginReceipt{}, failure(err.Error(), loginHint(stored.Provider))
+	}
+	if classifier, err := boundClassifier(); err == nil && stored.Role == roleClassifier && string(classifier.Provider) != stored.Provider {
+		done += ", but " + classifier.Provider.Display() + " stays the classifier while its key is stored"
 	}
 	return loginReceipt{text: stored.name + " key " + stored.Key + done, data: stored}, nil
+}
+
+func storeKeyFor(ctx context.Context, variable, key string) (string, error) {
+	keys := keyStatuses(func(string) string { return "" })
+	at := slices.IndexFunc(keys, func(status keyStatus) bool { return status.Variable == variable })
+	if at < 0 {
+		return "", errors.New("tofu stores no key named " + variable)
+	}
+	receipt, refusal := storeKey(ctx, keys[at], key)
+	if refusal != nil {
+		return "", errors.New(refusal.problem.What)
+	}
+	return receipt.text, nil
 }
 
 func promptKey(in io.Reader, prompts io.Writer, name, variable string) (string, error) {

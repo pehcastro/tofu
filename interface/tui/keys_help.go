@@ -54,9 +54,9 @@ func (a *App) keyRows() []keyRow {
 		{dialogsGroup, []string{"tab"}, "complete a / command", nil},
 		{dialogsGroup, []string{"enter"}, "pick", nil},
 		{dialogsGroup, []string{"esc"}, "close", nil},
-		{setupGroup, []string{"1-9"}, "fix that requirement", nil},
+		{setupGroup, []string{"1-9"}, "pick", nil},
 		{setupGroup, []string{"r"}, "check again", nil},
-		{setupGroup, []string{"q", "ctrl+c"}, "quit", nil},
+		{setupGroup, []string{"esc", "q", "ctrl+c"}, "esc or q quits", nil},
 	}...)
 }
 

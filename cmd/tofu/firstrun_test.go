@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -41,12 +42,12 @@ func plainFrame(app *tui.App) string { return ansi.Strip(app.View().Content) }
 func TestAFirstRunWithNothingStoredDrawsTheSetupAndNotAnError(t *testing.T) {
 	scratchProject(t)
 	narrow, wide := plainFrame(firstRunApp(t, 80, 24)), plainFrame(firstRunApp(t, 120, 36))
-	for _, want := range []string{noCredential, noGateKey, "tofu login llm " + string(cred.ClaudeSub), "tofu login classifier openrouter"} {
+	for _, want := range []string{noCredential, "1. " + modelStep, "2. " + classifierStep, "tofu login llm " + string(cred.ClaudeSub)} {
 		if !strings.Contains(narrow, want) {
 			t.Errorf("the first frame at 80 columns does not say %q\n%s", want, narrow)
 		}
 	}
-	for _, want := range []string{loginFix, gateKeyFix} {
+	for _, want := range []string{"1. " + modelStep, "Meta API key", "2. " + classifierStep} {
 		if !strings.Contains(wide, want) {
 			t.Errorf("the first frame at 120 columns does not say %q\n%s", want, wide)
 		}
@@ -67,14 +68,11 @@ func TestACredentialWithoutAKeyLeavesOnlyTheKeyStep(t *testing.T) {
 	scratchProject(t)
 	storeCredential(t, cred.ClaudeSub)
 	frame := plainFrame(firstRunApp(t, 80, 24))
-	if !strings.Contains(frame, noGateKey) {
-		t.Errorf("the key step is not drawn\n%s", frame)
+	if !strings.Contains(frame, noGateKey) || !strings.Contains(frame, "TypeSafe key") {
+		t.Errorf("the key step is not drawn with its choices\n%s", frame)
 	}
-	if strings.Contains(frame, noCredential) {
-		t.Errorf("the credential step is drawn with a credential stored\n%s", frame)
-	}
-	if strings.Contains(frame, "2. ") {
-		t.Errorf("the setup numbers a second step with only one thing missing\n%s", frame)
+	if strings.Contains(frame, noCredential) || !strings.Contains(frame, "✓ 1. "+modelStep+"   claude-sub") {
+		t.Errorf("the language model step is not drawn as done by claude-sub\n%s", frame)
 	}
 	t.Log("\n" + frame)
 }
@@ -154,7 +152,7 @@ func TestTheAppAndDoctorCallTheSameStateReady(t *testing.T) {
 		{"the credential too", func() { storeCredential(t, cred.ClaudeSub) }},
 	} {
 		step.store()
-		required := appRequirements()
+		required := slices.DeleteFunc(appRequirements(), func(step tui.Requirement) bool { return step.Done != "" })
 		report := doctorState(time.Now())
 		appReady, doctorSaysReady := len(required) == 0, report.Verdict == doctorReady
 		t.Logf("%s: the app lists %d blockers, doctor says %s", step.what, len(required), report.Verdict)
@@ -165,8 +163,8 @@ func TestTheAppAndDoctorCallTheSameStateReady(t *testing.T) {
 			t.Fatalf("with %s the app lists %d blockers and doctor lists %d", step.what, len(required), len(report.Blockers))
 		}
 		for index, blocker := range report.Blockers {
-			if blocker.What != required[index].What {
-				t.Errorf("with %s the app says %q and doctor says %q", step.what, required[index].What, blocker.What)
+			if blocker.What != required[index].What || blocker.Command != required[index].Fix {
+				t.Errorf("with %s the app says %q, %q and doctor says %q, %q", step.what, required[index].What, required[index].Fix, blocker.What, blocker.Command)
 			}
 		}
 	}

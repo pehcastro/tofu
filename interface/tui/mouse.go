@@ -36,7 +36,7 @@ func (a *App) track() (pointer.Track, bool) {
 	if a.current != screenChat {
 		track.Height = a.height - pageTrackInset
 	}
-	return track, len(a.requirements) == 0
+	return track, !a.settingUp()
 }
 
 func (a *App) pane() pointer.Pane {
@@ -146,7 +146,7 @@ func unframed(text string) string {
 }
 
 func (a *App) click(x, y int, mods pointer.Mods) tea.Cmd {
-	if len(a.requirements) > 0 {
+	if a.settingUp() {
 		return nil
 	}
 	ref := pointer.ReferenceAt(a.drawn, x, y)
@@ -232,7 +232,7 @@ func (a *App) wheel(msg tea.MouseWheelMsg) tea.Cmd {
 		}
 		return top.key(a, tea.KeyPressMsg{Code: code})
 	}
-	if len(a.requirements) > 0 || a.intro.shown {
+	if a.settingUp() || a.intro.shown {
 		return nil
 	}
 	switch a.current {

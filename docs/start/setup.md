@@ -29,9 +29,47 @@ tofu shows its shape, `sk-or-v1-…3f9a  73 chars  prefix ok`, never the key,
 so you can see the paste worked. A classifier or Meta key is checked
 against its provider before it is written. `tofu doctor` reads exactly what a run reads, so what it reports is what a turn will meet.
 
+## The setup screen
+
+The first time you open `tofu` in a project, it opens on a setup screen
+instead of the chat. It has two steps, and the chat opens once both are
+done:
+
+1. **Language model**: the Claude subscription or the Codex one, which sign
+   in through your browser, or a Meta API key.
+2. **Classifier, jev, required**: an OpenRouter key or a TypeSafe key. jev
+   judges every tool call and shapes how tofu works, so a model alone is
+   not enough to start.
+
+```
+set up tofu: two steps before the first turn
+
+✓ 1. language model   meta · muse-spark-1.3
+
+› 2. classifier · jev, required
+   there is no openrouter key, so jev judges no tool call
+
+   OpenRouter key
+   › sk-or-v1-…3f9a  50 chars  prefix ok
+
+[enter] check and store   [esc] back
+```
+
+- Press the number of a choice. A subscription opens the browser sign-in
+  and comes back to the screen; a key opens a field that shows the key's
+  shape, never the key.
+- Enter checks the key with its provider and stores it, the same check
+  `tofu login` runs. A refused key stays in the field with the reason, and
+  esc goes back to the choices.
+- A step already set, by a login, the environment or the project's `.env`,
+  shows as done and is skipped.
+- A login run in another terminal moves the screen on within a second.
+- Esc or q leaves.
+
 ## Sign in and add keys
 
-Sign in to the subscriptions you have, add the keys you want, then check:
+The same steps from a terminal. Sign in to the subscriptions you have, add
+the keys you want, then check:
 
 ```
 tofu login llm claude-sub
@@ -43,7 +81,6 @@ tofu doctor
 
 - Add `--paste` to a sign-in when the browser cannot reach this machine.
 - `tofu logout <role> <provider>` removes what a login stored.
-- Without a classifier key the app still opens, and no tool call is judged.
 - `tofu login --disable <n>` sets a credential aside and `--enable <n>`
   brings it back, by the number `tofu login --status` shows.
 

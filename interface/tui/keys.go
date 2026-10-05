@@ -2,6 +2,8 @@ package tui
 
 import (
 	"cmp"
+	"context"
+	"os/exec"
 	"slices"
 	"strconv"
 	"strings"
@@ -10,6 +12,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"tofu/interface/tui/feed"
+	"tofu/interface/tui/keyfield"
 	"tofu/interface/tui/shells"
 	"tofu/internal/keymap"
 	"tofu/internal/llm"
@@ -30,7 +33,7 @@ const (
 
 func (a *App) key(msg tea.KeyPressMsg) tea.Cmd {
 	key := msg.String()
-	if len(a.requirements) > 0 {
+	if a.settingUp() {
 		return a.setupKey(key)
 	}
 	if key == "ctrl+c" {
@@ -192,6 +195,13 @@ func tabDigit(key string) (int, bool) {
 }
 
 func (a *App) pasted(msg tea.PasteMsg) tea.Cmd {
+	if a.settingUp() {
+		if a.entry.variable != "" && a.entry.checking == 0 {
+			a.entry.field.Paste(msg.Content)
+			a.entry.refusal = ""
+		}
+		return nil
+	}
 	switch top := a.top().(type) {
 	case nil:
 		if a.current != screenChat {
@@ -319,24 +329,87 @@ func (a *App) kill(name string) {
 }
 
 func (a *App) setupKey(key string) tea.Cmd {
+	if a.entry.variable != "" {
+		return a.entryKey(key)
+	}
 	switch key {
-	case "q", "ctrl+c":
+	case "q", "esc", "ctrl+c":
 		return tea.Quit
 	case "r":
 		return func() tea.Msg { return a.checkedRequirements() }
 	}
 	index, err := strconv.Atoi(key)
-	if err != nil || index < 1 || index > len(a.requirements) {
+	step := a.currentStep()
+	var run func() *exec.Cmd
+	switch {
+	case err != nil || index < 1:
 		return nil
-	}
-	run := a.requirements[index-1].Run
-	if run == nil {
-		run = a.options.Login
+	case len(step.Choices) == 0 && index <= len(a.requirements):
+		run = a.requirements[index-1].Run
+		if run == nil {
+			run = a.options.Login
+		}
+	case index > len(step.Choices):
+		return nil
+	case step.Choices[index-1].Key != "":
+		choice := step.Choices[index-1]
+		a.entry = setupEntry{label: choice.Label, variable: choice.Key, field: keyfield.New(choice.Key)}
+		a.setupNote = ""
+		return tea.ClearScreen
+	default:
+		run = step.Choices[index-1].Run
 	}
 	if run == nil {
 		return nil
 	}
 	return tea.ExecProcess(run(), func(error) tea.Msg { return a.checkedRequirements() })
+}
+
+func (a *App) currentStep() Requirement {
+	for _, step := range a.requirements {
+		if step.Done == "" {
+			return step
+		}
+	}
+	return Requirement{}
+}
+
+func (a *App) entryKey(key string) tea.Cmd {
+	switch {
+	case key == "ctrl+c":
+		return tea.Quit
+	case key == "esc":
+		a.entry = setupEntry{}
+		return tea.ClearScreen
+	case a.entry.checking != 0:
+	case key == "enter":
+		if !a.entry.field.Enter() || a.options.SaveKey == nil {
+			return nil
+		}
+		a.keyChecks++
+		a.entry.checking, a.entry.refusal = a.keyChecks, ""
+		check, save, variable, value := a.keyChecks, a.options.SaveKey, a.entry.variable, a.entry.field.Value()
+		return func() tea.Msg {
+			text, err := save(context.Background(), variable, value)
+			return keySavedMsg{check: check, text: text, err: err}
+		}
+	default:
+		a.entry.field.Type(key)
+		a.entry.refusal = ""
+	}
+	return nil
+}
+
+func (a *App) keySaved(msg keySavedMsg) tea.Cmd {
+	if msg.check == 0 || msg.check != a.entry.checking {
+		return nil
+	}
+	if msg.err != nil {
+		a.entry.checking, a.entry.refusal = 0, msg.err.Error()
+		return nil
+	}
+	a.entry, a.setupNote = setupEntry{}, msg.text
+	return tea.Batch(tea.ClearScreen, func() tea.Msg { return a.checkedRequirements() })
 }
 
 func (a *App) checkedRequirements() requirementsMsg {

@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -1025,18 +1026,27 @@ func TestClickingATabSelectsIt(t *testing.T) {
 func setupRequirements() []Requirement {
 	return []Requirement{
 		{
-			What: "there is no claude-sub subscription credential, so no model can answer",
-			Fix:  "tofu login claude-sub",
+			Step: "language model",
+			What: "no subscription is signed in, so no model can answer",
+			Fix:  "tofu login llm claude-sub",
+			Choices: []Choice{
+				{Label: "Claude subscription, signs in through the browser", Run: func() *exec.Cmd { return exec.Command("tofu", "login", "llm", "claude-sub") }},
+				{Label: "Codex subscription, signs in through the browser", Run: func() *exec.Cmd { return exec.Command("tofu", "login", "llm", "codex-sub") }},
+				{Label: "Meta API key", Key: "META_MUSE_API_KEY"},
+			},
 		},
 		{
-			What: "there is no openrouter key, so no tool call is judged",
-			Fix:  "tofu login openrouter",
+			Step:    "classifier · jev, required",
+			What:    "there is no openrouter key, so jev judges no tool call",
+			Fix:     "tofu login classifier openrouter",
+			Choices: []Choice{{Label: "OpenRouter key", Key: "OPENROUTER_KEY"}, {Label: "TypeSafe key", Key: "TYPESAFE_API_KEY"}},
 		},
 	}
 }
 
 func TestSetupViewGolden(t *testing.T) {
-	remaining := setupRequirements()[1:]
+	remaining := setupRequirements()
+	remaining[0].Done = "meta · muse-spark-1.3"
 	app := newTestApp(Options{
 		Repo:         testRepo,
 		Now:          fixedClock(),
@@ -1051,30 +1061,83 @@ func TestSetupViewGolden(t *testing.T) {
 		t.Fatal("r did not ask for a re-check")
 	}
 	app.Update(cmd())
-	if len(app.requirements) != 1 {
-		t.Fatalf("the re-check left %d requirements, want 1", len(app.requirements))
+	if !app.settingUp() || app.currentStep().Step != "classifier · jev, required" {
+		t.Fatalf("the re-check left the screen on %+v, want the classifier step", app.currentStep())
 	}
 	golden.Assert(t, "setup-one-left-80x24.golden", app.View().Content)
 }
 
-func TestARequirementRunsItsOwnFix(t *testing.T) {
+func TestAChoiceRunsItsOwnSignInAndADigitPastTheListRunsNothing(t *testing.T) {
 	ran := make([]string, 0, 2)
 	requirements := setupRequirements()
-	requirements[0].Run = func() *exec.Cmd { ran = append(ran, "anthropic"); return exec.Command("tofu", "login", "anthropic") }
-	requirements[1].Run = func() *exec.Cmd { ran = append(ran, "openrouter"); return exec.Command("tofu", "login", "openrouter") }
+	requirements[0].Choices[1].Run = func() *exec.Cmd {
+		ran = append(ran, "codex-sub")
+		return exec.Command("tofu", "login", "llm", "codex-sub")
+	}
 	app := newTestApp(Options{Repo: testRepo, Now: fixedClock(), Requirements: requirements})
 	app.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 
 	if _, cmd := app.Update(tea.KeyPressMsg{Code: '2', Text: "2"}); cmd == nil {
-		t.Fatal("2 did not run the second fix")
+		t.Fatal("2 did not run the codex sign-in")
 	}
-	if len(ran) != 1 || ran[0] != "openrouter" {
-		t.Fatalf("the keys ran %v, want the openrouter fix alone", ran)
+	if len(ran) != 1 || ran[0] != "codex-sub" {
+		t.Fatalf("the keys ran %v, want the codex sign-in alone", ran)
 	}
 	ran = ran[:0]
+	app.Update(tea.KeyPressMsg{Code: '9', Text: "9"})
+	if len(ran) != 0 || app.entry.variable != "" {
+		t.Fatalf("a digit past the list ran %v or opened %q", ran, app.entry.variable)
+	}
+}
+
+func TestAKeyChoiceTypesEveryKeyIntoTheFieldAndARefusalNeverLoops(t *testing.T) {
+	saves := 0
+	refuse := true
+	app := newTestApp(Options{
+		Repo:         testRepo,
+		Now:          fixedClock(),
+		Requirements: setupRequirements(),
+		Recheck:      setupRequirements,
+		SaveKey: func(_ context.Context, variable, value string) (string, error) {
+			saves++
+			if refuse {
+				return "", errors.New("Meta refused the key (401)")
+			}
+			return "Meta key ····c0de checked and stored", nil
+		},
+	})
+	app.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 	app.Update(tea.KeyPressMsg{Code: '3', Text: "3"})
-	if len(ran) != 0 {
-		t.Fatalf("a digit past the list ran %v", ran)
+	typeText(app, "q1")
+	app.Update(tea.PasteMsg{Content: "made-up-meta-key-000000000c0de\r\n"})
+	if app.entry.field.Value() != "q1made-up-meta-key-000000000c0de" {
+		t.Fatalf("the field holds %q, want the typed q1 and the paste without its line break", app.entry.field.Value())
+	}
+	app.Update(tea.WindowSizeMsg{Width: 60, Height: 20})
+	app.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	golden.Assert(t, "setup-key-80x24.golden", app.View().Content)
+
+	_, check := app.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	if !strings.Contains(ansi.Strip(app.View().Content), "checking the key") {
+		t.Fatalf("enter did not say the key is being checked\n%s", ansi.Strip(app.View().Content))
+	}
+	_, after := app.Update(check())
+	if after != nil || saves != 1 || app.entry.variable == "" || !strings.Contains(ansi.Strip(app.View().Content), "refused the key (401)") {
+		t.Fatalf("a refusal ran %d saves, closed the field or asked for more work", saves)
+	}
+	app.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	app.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
+	app.Update(keySavedMsg{check: app.keyChecks, text: "late"})
+	if app.setupNote != "" || app.entry.variable != "" {
+		t.Fatalf("a check answered after esc still landed: note %q, field %q", app.setupNote, app.entry.variable)
+	}
+
+	refuse = false
+	app.Update(tea.KeyPressMsg{Code: '3', Text: "3"})
+	app.Update(tea.PasteMsg{Content: "made-up-meta-key-000000000c0de"})
+	_, check = app.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	if _, recheck := app.Update(check()); recheck == nil || app.setupNote == "" || app.entry.variable != "" {
+		t.Fatalf("a stored key did not close the field, show the receipt and re-check")
 	}
 }
 
@@ -1083,7 +1146,7 @@ func TestARequirementWithoutItsOwnFixFallsBackToLogin(t *testing.T) {
 	app := newTestApp(Options{
 		Repo:         testRepo,
 		Now:          fixedClock(),
-		Requirements: setupRequirements()[:1],
+		Requirements: []Requirement{{What: "no subscription is signed in", Fix: "tofu login llm claude-sub"}},
 		Login:        func() *exec.Cmd { ran++; return exec.Command("tofu", "login", "anthropic") },
 	})
 	app.Update(tea.WindowSizeMsg{Width: 80, Height: 24})

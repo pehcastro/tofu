@@ -48,9 +48,9 @@ const (
 	noTerminal       = "tofu: the app needs a terminal. with input redirected, use tofu run --dir <dir> <task>"
 	gateOffNote      = "gate off: no tool call is judged until tofu login classifier openrouter stores the key"
 	noCredential     = "no subscription is signed in, so no model can answer"
-	loginFix         = "tofu login llm claude-sub, which opens the browser, or tofu login llm codex-sub"
 	noGateKey        = "there is no openrouter key, so jev judges no tool call"
-	gateKeyFix       = "tofu login classifier openrouter, which asks for the key and checks it reaches jev"
+	modelStep        = "language model"
+	classifierStep   = "classifier · jev, required"
 	unreadableSource = "unreadable: "
 	jevName          = "jev"
 	freshSessionNote = "the next task starts a new session and carries nothing from the last one"
@@ -151,6 +151,7 @@ func appOptions(dir string, arms runOpts, wiring appWiring, launch appLaunch) tu
 		Requirements: wiring.blockers(),
 		Recheck:      wiring.blockers,
 		Login:        loginCommand(string(cred.ClaudeSub)),
+		SaveKey:      storeKeyFor,
 		Wires:        wiring.wires,
 		Models:       func() (models.Library, error) { return modelLibrary(dir) },
 		Providers:    appProviders(),
@@ -361,42 +362,56 @@ func keyWires() []tui.Wire {
 	return []tui.Wire{{Name: wireMeta, Model: chosen.ID, Provider: string(models.Meta), Efforts: chosen.Efforts}}
 }
 
-type startBlocker struct {
+type startStep struct {
 	label   string
+	step    string
 	what    string
-	fix     string
 	command string
-	run     func() *exec.Cmd
+	done    string
+	choices []tui.Choice
 }
 
-func startBlockers() []startBlocker {
-	var blocking []startBlocker
-	if len(appWires()) == 0 {
-		blocking = append(blocking, startBlocker{
-			label:   string(cred.ClaudeSub),
-			what:    noCredential,
-			fix:     loginFix,
-			command: loginHint(string(cred.ClaudeSub)),
-			run:     loginCommand(string(cred.ClaudeSub)),
-		})
+func startSteps() []startStep {
+	model := startStep{
+		label:   string(cred.ClaudeSub),
+		step:    modelStep,
+		what:    noCredential,
+		command: loginHint(string(cred.ClaudeSub)),
+		choices: []tui.Choice{
+			{Label: "Claude subscription, signs in through the browser", Run: loginCommand(string(cred.ClaudeSub))},
+			{Label: "Codex subscription, signs in through the browser", Run: loginCommand(string(cred.CodexSub))},
+			{Label: "Meta API key", Key: sys.MetaMuseKeyName},
+		},
 	}
-	if _, err := gateKey(); err != nil {
-		blocking = append(blocking, startBlocker{
-			label:   jevName,
-			what:    noGateKey,
-			fix:     gateKeyFix,
-			command: loginHint(openRouterName),
-			run:     loginCommand(openRouterName),
-		})
+	if wires := appWires(); len(wires) > 0 {
+		model.done = wires[0].Provider + " · " + wires[0].Model
 	}
-	return blocking
+	classifier := startStep{
+		label:   jevName,
+		step:    classifierStep,
+		what:    noGateKey,
+		command: loginHint(openRouterName),
+		choices: []tui.Choice{
+			{Label: "OpenRouter key", Key: sys.OpenRouterKeyName},
+			{Label: "TypeSafe key", Key: sys.TypeSafeKeyName},
+		},
+	}
+	if key, err := gateKey(); err == nil {
+		bound, _ := boundClassifier()
+		classifier.done = bound.Provider.Display() + " key " + widget.Mask(key)
+	}
+	return []startStep{model, classifier}
+}
+
+func startBlockers() []startStep {
+	return slices.DeleteFunc(startSteps(), func(step startStep) bool { return step.done != "" })
 }
 
 func appRequirements() []tui.Requirement {
-	blocking := startBlockers()
-	needed := make([]tui.Requirement, 0, len(blocking))
-	for _, blocker := range blocking {
-		needed = append(needed, tui.Requirement{What: blocker.what, Fix: blocker.fix, Run: blocker.run})
+	steps := startSteps()
+	needed := make([]tui.Requirement, 0, len(steps))
+	for _, step := range steps {
+		needed = append(needed, tui.Requirement{Step: step.step, What: step.what, Fix: step.command, Done: step.done, Choices: step.choices})
 	}
 	return needed
 }
