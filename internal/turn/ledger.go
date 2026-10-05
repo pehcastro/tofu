@@ -7,8 +7,6 @@ import (
 	"slices"
 	"strings"
 	"sync"
-
-	"tofu/internal/konst"
 )
 
 type lineSpan struct{ first, last int }
@@ -78,15 +76,18 @@ func ChangeOf(before, after string) LineChange {
 	return LineChange{first: same + 1, oldLast: len(old) - tail, newLast: len(becomes) - tail}
 }
 
+func (c LineChange) reach(lines int) (int, int) {
+	first := min(c.first, lines)
+	return first, min(max(c.oldLast, first), lines)
+}
+
 func (l *ReadLedger) Unshown(path string, body []byte, change LineChange) error {
 	if l == nil {
 		return nil
 	}
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
-	lines := lineCount(body)
-	first := min(change.first, lines)
-	last := min(max(change.oldLast, first), lines)
+	first, last := change.reach(lineCount(body))
 	above, inserted := change.first-1, change.oldLast < change.first
 	spans := l.seen[ledgerKey(path)].spans
 	shown := make([]string, len(spans))
@@ -139,14 +140,18 @@ func merged(spans []lineSpan) []lineSpan {
 	return joined
 }
 
-func (l *ReadLedger) Refuse(path string, body []byte) string {
-	if len(body) <= konst.TurnResultBytesCap {
+const refusalCarriesWholeUpTo = 4096
+
+func (l *ReadLedger) Refuse(path string, body []byte, change LineChange) string {
+	if len(body) <= refusalCarriesWholeUpTo {
 		l.Mark(path, body)
-		return string(body)
+		return "its current content follows, so try again against the text that is there.\n" + string(body)
 	}
-	head := konst.TurnResultBytesCap / 2
-	tailFrom := len(body) - (konst.TurnResultBytesCap - head)
-	return string(body[:head]) +
-		fmt.Sprintf("\n...(%d bytes cut from the middle, too large for a refusal to carry whole)...\n", tailFrom-head) +
-		string(body[tailFrom:])
+	lines := lineCount(body)
+	if change == (LineChange{}) {
+		return fmt.Sprintf("it has %d lines, too many to carry here: read it whole, or the lines the change is meant for with start_line and end_line, then try again", lines)
+	}
+	first, last := change.reach(lines)
+	return fmt.Sprintf("it has %d lines, and this change reaches lines %d-%d: read them with read {\"path\": %q, \"start_line\": %d, \"end_line\": %d}, or read the whole file, then try again",
+		lines, first, last, path, first, last)
 }

@@ -111,9 +111,9 @@ type rangeStep struct {
 	refused string
 }
 
-func fiftyLines(ending string) string {
+func goFile(last int, ending string) string {
 	lines := []string{"package a", ""}
-	for n := 3; n <= 50; n++ {
+	for n := 3; n <= last; n++ {
 		lines = append(lines, fmt.Sprintf("func f%d() int { return %d }", n, n))
 	}
 	return strings.Join(lines, ending) + ending
@@ -170,7 +170,7 @@ func TestAnEditOrWriteReachingLinesNoReadShowedIsRefused(t *testing.T) {
 		t.Run(row.name, func(t *testing.T) {
 			dir := t.TempDir()
 			target := filepath.Join(dir, "a.go")
-			if err := os.WriteFile(target, []byte(fiftyLines(row.ending)), 0o644); err != nil {
+			if err := os.WriteFile(target, []byte(goFile(50, row.ending)), 0o644); err != nil {
 				t.Fatal(err)
 			}
 			read, write, edit := turnTools(t, dir, turn.NewReadLedger())
@@ -197,11 +197,90 @@ func TestAnEditOrWriteReachingLinesNoReadShowedIsRefused(t *testing.T) {
 
 func TestWithoutALedgerAnEditAnywhereIsAccepted(t *testing.T) {
 	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "a.go"), []byte(fiftyLines("\n")), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "a.go"), []byte(goFile(50, "\n")), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	_, _, edit := turnTools(t, dir, nil)
 	if err := call(t, edit, map[string]string{"path": "a.go", "old_string": "return 40 }", "new_string": "return 400 }"}); err != nil {
 		t.Fatalf("an edit with read-before-edit off was refused: %v", err)
+	}
+}
+
+func TestARefusalOfALargeFileNamesTheReadThatLetsTheRetryThrough(t *testing.T) {
+	rows := []struct {
+		name    string
+		ending  string
+		earlier map[string]any
+		tool    string
+		args    map[string]any
+		lines   string
+	}{
+		{"an edit at line 400", "\n", nil, "edit", map[string]any{"path": "a.go", "old_string": "return 400 }", "new_string": "return 4000 }"}, "lines 400-400"},
+		{"an edit whose whitespace was repaired onto line 400", "\n", nil, "edit", map[string]any{"path": "a.go", "old_string": "\tfunc f400() int { return 400 }", "new_string": "func f400() int { return 4000 }"}, "lines 400-400"},
+		{"a symbol edit", "\n", nil, "edit", map[string]any{"path": "a.go", "symbol": "f400", "new_string": "func f400() int { return 4000 }"}, "lines 400-400"},
+		{"an insertion below line 400", "\n", nil, "edit", map[string]any{"path": "a.go", "old_string": "return 400 }", "new_string": "return 400 }\nfunc g() {}"}, "lines 401-401"},
+		{"a crlf file", "\r\n", nil, "edit", map[string]any{"path": "a.go", "old_string": "return 400 }", "new_string": "return 4000 }"}, "lines 400-400"},
+		{"a file changed since a range read", "\n", map[string]any{"path": "a.go", "start_line": 1, "end_line": 5}, "edit", map[string]any{"path": "a.go", "old_string": "return 400 }", "new_string": "return 4000 }"}, "lines 400-400"},
+		{"an append", "\n", nil, "write", map[string]any{"path": "a.go", "content": "func g() {}\n", "append": true}, "lines 1500-1500"},
+		{"a whole write", "\n", nil, "write", map[string]any{"path": "a.go", "content": "package a\n"}, "lines 3-1500"},
+	}
+	for _, row := range rows {
+		t.Run(row.name, func(t *testing.T) {
+			dir := t.TempDir()
+			target := filepath.Join(dir, "a.go")
+			body := goFile(1500, row.ending)
+			if err := os.WriteFile(target, []byte(body), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			read, write, edit := turnTools(t, dir, turn.NewReadLedger())
+			tool := map[string]turn.Tool{"write": write, "edit": edit}[row.tool]
+			run := func(using turn.Tool, args map[string]any) error {
+				raw, _ := json.Marshal(args)
+				_, err := using.Run(context.Background(), raw)
+				return err
+			}
+			if row.earlier != nil {
+				if err := run(read, row.earlier); err != nil {
+					t.Fatal(err)
+				}
+				body += "func late() {}" + row.ending
+				if err := os.WriteFile(target, []byte(body), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			refusal := run(tool, row.args)
+			if refusal == nil {
+				t.Fatalf("a %s to a %d-byte file never read was accepted", row.tool, len(body))
+			}
+			if size := len(refusal.Error()); size > 1024 || !strings.Contains(refusal.Error(), row.lines) {
+				t.Fatalf("the refusal is %d bytes, want under 1024 naming %q: %.600s", size, row.lines, refusal)
+			}
+			if after, _ := os.ReadFile(target); string(after) != body {
+				t.Fatalf("a refused %s changed a.go", row.tool)
+			}
+			var hint map[string]any
+			named := refusal.Error()[max(strings.Index(refusal.Error(), "{"), 0):]
+			if err := json.NewDecoder(strings.NewReader(named)).Decode(&hint); err != nil {
+				t.Fatalf("the refusal names no read call to copy: %v: %.600s", err, refusal)
+			}
+			if err := run(read, hint); err != nil {
+				t.Fatalf("the read the refusal named failed: %v", err)
+			}
+			if err := run(tool, row.args); err != nil {
+				t.Fatalf("the retry after the named read %v was refused: %v", hint, err)
+			}
+		})
+	}
+}
+
+func TestARefusalOfAnEditThatMatchesNothingStillSaysWhatToRead(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "a.go"), []byte(goFile(1500, "\n")), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, _, edit := turnTools(t, dir, turn.NewReadLedger())
+	err := call(t, edit, map[string]string{"path": "a.go", "old_string": "return -1 }", "new_string": "return 1 }"})
+	if err == nil || len(err.Error()) > 1024 || !strings.Contains(err.Error(), "has 1500 lines") || !strings.Contains(err.Error(), "has not been read") {
+		t.Fatalf("want a refusal under 1024 bytes saying the file has 1500 lines, got %d bytes: %.600v", len(fmt.Sprint(err)), err)
 	}
 }

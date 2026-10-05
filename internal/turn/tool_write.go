@@ -85,19 +85,18 @@ func (t *WriteTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 	if readErr != nil && !errors.Is(readErr, fs.ErrNotExist) {
 		return Result{}, fmt.Errorf("write: reading %s before replacing it: %w", args.Path, readErr)
 	}
-	if readErr == nil && !t.ledger.Saw(args.Path, held) {
-		return Result{}, fmt.Errorf("write: %s exists and has not been read in this session or has changed since, so replacing it whole is refused rather than trusted against a guess: "+
-			"its current content follows, so write it again with that content folded in.\n%s", args.Path, t.ledger.Refuse(args.Path, held))
-	}
-	if readErr == nil {
-		if err := t.ledger.Unshown(args.Path, held, ChangeOf(string(held), args.Content)); err != nil {
+	if readErr != nil {
+		err = sys.WriteFile(resolved, []byte(args.Content), writePerm)
+	} else {
+		change := ChangeOf(string(held), args.Content)
+		if !t.ledger.Saw(args.Path, held) {
+			return Result{}, fmt.Errorf("write: %s exists and has not been read in this session or has changed since, so replacing it whole is refused rather than trusted against a guess: %s",
+				args.Path, t.ledger.Refuse(args.Path, held, change))
+		}
+		if err := t.ledger.Unshown(args.Path, held, change); err != nil {
 			return Result{}, fmt.Errorf("write: %w", err)
 		}
-	}
-	if readErr == nil {
 		err = overwrite(resolved, held, []byte(args.Content))
-	} else {
-		err = sys.WriteFile(resolved, []byte(args.Content), writePerm)
 	}
 	if err != nil {
 		return Result{}, fmt.Errorf("write: %w", err)
@@ -125,10 +124,6 @@ func (t *WriteTool) appendTo(ctx context.Context, resolved string, args writeArg
 	if err != nil {
 		return Result{}, fmt.Errorf("write: reading %s before appending to it: %w", args.Path, err)
 	}
-	if !t.ledger.Saw(args.Path, held) {
-		return Result{}, fmt.Errorf("write: %s has not been read in this session or has changed since, so appending to it is refused: read it first. "+
-			"its current content follows, so append again knowing where it ends.\n%s", args.Path, t.ledger.Refuse(args.Path, held))
-	}
 	lead, endings := EndingsOf(string(held))
 	if len(held) > 0 && !strings.HasSuffix(lead, "\n") {
 		lead += "\n"
@@ -136,6 +131,10 @@ func (t *WriteTool) appendTo(ctx context.Context, resolved string, args writeArg
 	added := strings.ReplaceAll(args.Content, "\r\n", "\n")
 	after := endings.Restore(lead + added)
 	change := ChangeOf(string(held), after)
+	if !t.ledger.Saw(args.Path, held) {
+		return Result{}, fmt.Errorf("write: %s has not been read in this session or has changed since, so appending to it is refused: %s",
+			args.Path, t.ledger.Refuse(args.Path, held, change))
+	}
 	if err := t.ledger.Unshown(args.Path, held, change); err != nil {
 		return Result{}, fmt.Errorf("write: %w", err)
 	}

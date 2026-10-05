@@ -117,11 +117,6 @@ func (e Edit) Run(ctx context.Context, raw json.RawMessage) (turn.Result, error)
 		return turn.Result{}, errors.New("edit: " + search.Note(search.BinarySkipped,
 			target+" holds a null byte, so it is not text and replacing a stretch of it would corrupt it"))
 	}
-	if !e.ledger.Saw(target, body) {
-		return turn.Result{}, fmt.Errorf("edit: %s has not been read in this session or has changed since, so the edit is refused rather than trusted against a guess: "+
-			"its current content follows, so edit the text that is actually there.\n%s", target, e.ledger.Refuse(target, body))
-	}
-
 	before := string(body)
 	text, endings := turn.EndingsOf(before)
 	var after, note string
@@ -130,10 +125,17 @@ func (e Edit) Run(ctx context.Context, raw json.RawMessage) (turn.Result, error)
 	} else {
 		after, note, err = replaceOnce(text, target, args.Old, args.New)
 	}
+	var change turn.LineChange
+	if err == nil {
+		change = turn.ChangeOf(text, after)
+	}
+	if !e.ledger.Saw(target, body) {
+		return turn.Result{}, fmt.Errorf("edit: %s has not been read in this session or has changed since, so the edit is refused rather than trusted against a guess: %s",
+			target, e.ledger.Refuse(target, body, change))
+	}
 	if err != nil {
 		return turn.Result{}, err
 	}
-	change := turn.ChangeOf(text, after)
 	if err := e.ledger.Unshown(target, body, change); err != nil {
 		return turn.Result{}, fmt.Errorf("edit: %w", err)
 	}
