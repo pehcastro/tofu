@@ -1,0 +1,128 @@
+name: release
+
+on:
+  push:
+    branches: [release]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.read.outputs.version }}
+      publish: ${{ steps.read.outputs.publish }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+          fetch-tags: true
+      - id: read
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(sed -n 's/^const Version = "\(.*\)"$/\1/p' internal/konst/konst.go)"
+          if [ -z "$version" ]; then
+            echo "::error::no Version in internal/konst/konst.go"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if git rev-parse -q --verify "refs/tags/v$version" > /dev/null; then
+            echo "::notice::v$version already exists, nothing to release"
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  build:
+    needs: version
+    if: needs.version.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - { goos: windows, goarch: amd64 }
+          - { goos: windows, goarch: arm64 }
+          - { goos: linux, goarch: amd64 }
+          - { goos: linux, goarch: arm64 }
+          - { goos: darwin, goarch: amd64 }
+          - { goos: darwin, goarch: arm64 }
+    env:
+      CGO_ENABLED: "0"
+      GOOS: ${{ matrix.goos }}
+      GOARCH: ${{ matrix.goarch }}
+      VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: build and pack
+        shell: bash
+        run: |
+          set -euo pipefail
+          name="tofu_${VERSION}_${GOOS}_${GOARCH}"
+          mkdir -p "stage/$name" dist
+          exe=tofu
+          if [ "$GOOS" = windows ]; then exe=tofu.exe; fi
+          go build -trimpath -ldflags "-s -w" -o "stage/$name/$exe" ./cmd/tofu
+          if [ "$GOOS" = windows ]; then
+            (cd "stage/$name" && zip -q "../../dist/$name.zip" "$exe")
+          else
+            tar -C "stage/$name" -czf "dist/$name.tar.gz" "$exe"
+          fi
+          ls -l dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tofu_${{ matrix.goos }}_${{ matrix.goarch }}
+          path: dist/*
+          if-no-files-found: error
+
+  publish:
+    needs: [version, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: checksums and notes
+        shell: bash
+        run: |
+          set -euo pipefail
+          (cd dist && sha256sum tofu_* > checksums.txt && cat checksums.txt)
+          awk -v head="## $VERSION " '
+            index($0, "## ") == 1 && found { exit }
+            index($0, head) == 1 { found = 1; next }
+            found { print }
+          ' CHANGELOG.md > notes.md
+          if [ ! -s notes.md ]; then
+            echo "::error::no CHANGELOG.md entry for $VERSION"
+            exit 1
+          fi
+      - name: create release
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release create "v$VERSION" dist/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "v$VERSION" \
+            --notes-file notes.md
