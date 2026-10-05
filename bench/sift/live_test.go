@@ -16,6 +16,7 @@ import (
 	"tofu/internal/judge/ledger"
 	"tofu/internal/konst"
 	"tofu/internal/sift"
+	"tofu/internal/sys"
 )
 
 func liveClient(t *testing.T) Asker {
@@ -23,7 +24,7 @@ func liveClient(t *testing.T) Asker {
 	if os.Getenv("TOFU_LIVE") != "1" {
 		t.Skip("set TOFU_LIVE=1 to put the question to the real jev route")
 	}
-	jev.AllowLiveCredential(t)
+	sys.AllowLiveCredential(t)
 	key, err := jev.Key(filepath.Join(repoRoot, ".env"))
 	if err != nil {
 		t.Fatalf("no credential: %v", err)

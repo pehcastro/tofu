@@ -16,6 +16,7 @@ import (
 	"tofu/bench/api"
 	"tofu/internal/browser"
 	"tofu/internal/judge/jev"
+	"tofu/internal/sys"
 )
 
 var replayAnswers = flag.String("replay", "", "rebuild the report from this recorded answers file, with no network")
@@ -71,7 +72,7 @@ func TestTheChooserOverTheCorpus(t *testing.T) {
 		if os.Getenv("TOFU_LIVE") != "1" {
 			t.Skip("set TOFU_LIVE=1 for the live pass through OpenRouter, or pass -args -replay <answers file> to rebuild its report with no network")
 		}
-		jev.AllowLiveCredential(t)
+		sys.AllowLiveCredential(t)
 		key, err := jev.Key(filepath.Join("..", "..", ".env"))
 		if err != nil {
 			t.Fatalf("no credential: %v", err)

@@ -11,6 +11,7 @@ import (
 	"tofu/bench/report"
 	"tofu/internal/judge/jev"
 	"tofu/internal/judge/jev/wire/openrouter"
+	"tofu/internal/sys"
 )
 
 const repoRoot = "../.."
@@ -20,7 +21,7 @@ func liveKey(t *testing.T, gate string) string {
 	if os.Getenv(gate) != "1" {
 		t.Skipf("set %s=1 to spend money on the jev, opus and fable arms", gate)
 	}
-	jev.AllowLiveCredential(t)
+	sys.AllowLiveCredential(t)
 	key, err := jev.Key(filepath.Join(repoRoot, ".env"))
 	if err != nil {
 		t.Fatalf("no credential: %v", err)

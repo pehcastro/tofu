@@ -11,11 +11,12 @@ import (
 	"tofu/internal/judge/jev"
 	"tofu/internal/judge/jev/wire/typesafe"
 	"tofu/internal/llm/cred"
+	"tofu/internal/sys"
 )
 
 func jevSecret(t *testing.T, vendor cred.Vendor, variable string) string {
 	t.Helper()
-	jev.AllowLiveCredential(t)
+	sys.AllowLiveCredential(t)
 	secret, err := jev.KeyFor(filepath.Join("..", "..", ".env"), variable)
 	if err != nil {
 		t.Fatalf("no %s credential: %v", vendor, err)

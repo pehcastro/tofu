@@ -15,6 +15,7 @@ import (
 	"tofu/bench/tools/candidates"
 	toolscorpus "tofu/bench/tools/corpus"
 	"tofu/internal/judge/jev"
+	"tofu/internal/sys"
 )
 
 const (
@@ -27,7 +28,7 @@ func liveClient(t *testing.T) *jev.Client {
 	if os.Getenv("TOFU_LIVE") != "1" {
 		t.Skip("set TOFU_LIVE=1 to put the pattern writing versions to the real jev route")
 	}
-	jev.AllowLiveCredential(t)
+	sys.AllowLiveCredential(t)
 	key, err := jev.Key(tofuRoot + "/.env")
 	if err != nil {
 		t.Fatalf("no credential: %v", err)

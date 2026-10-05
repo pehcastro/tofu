@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"tofu/bench/harness"
-	"tofu/internal/judge/jev"
+	"tofu/internal/sys"
 )
 
 func TestOfflineSkipsWithoutNetwork(t *testing.T) {
@@ -159,7 +159,7 @@ func TestAPILive(t *testing.T) {
 	if os.Getenv("TOFU_LIVE") != "1" {
 		t.Skip("set TOFU_LIVE=1 to call the real route")
 	}
-	jev.AllowLiveCredential(t)
+	sys.AllowLiveCredential(t)
 	atRepositoryRoot(t)
 
 	out := &bytes.Buffer{}

@@ -13,6 +13,7 @@ import (
 	"tofu/bench/api"
 	"tofu/internal/judge/jev"
 	"tofu/internal/judge/question"
+	"tofu/internal/sys"
 	libraryquestions "tofu/library/questions"
 )
 
@@ -30,7 +31,7 @@ func liveClient(t *testing.T) (*jev.Client, question.Set) {
 	if os.Getenv("TOFU_LIVE") != "1" {
 		t.Skip("set TOFU_LIVE=1 to put the question to the real jev route")
 	}
-	jev.AllowLiveCredential(t)
+	sys.AllowLiveCredential(t)
 	key, err := jev.Key(filepath.Join(repoRoot, ".env"))
 	if err != nil {
 		t.Fatalf("no credential: %v", err)

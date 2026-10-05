@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"tofu/bench/harness/task"
+	sessionstore "tofu/internal/session"
 	"tofu/internal/turn"
 )
 
@@ -358,7 +359,7 @@ func TestEndReasonOfNamesEveryTurnOutcome(t *testing.T) {
 		turn.OutcomeTruncated:           EndReasonTruncated,
 		turn.OutcomeLoopGuard:           EndReasonTurnCap,
 	}
-	outcomes := turn.AllOutcomes()
+	outcomes := sessionstore.AllOutcomes()
 	if len(outcomes) < len(readBefore) {
 		t.Fatalf("the walk found %d outcomes and this table holds %d, so the walk stops short of the enum", len(outcomes), len(readBefore))
 	}

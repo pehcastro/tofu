@@ -61,7 +61,11 @@ func sessionTheLoopWrites(t *testing.T, dir string, at time.Time) turn.Row {
 		},
 		WallClockMS: 3999,
 	}
-	if err := turn.WriteSession(session.NewStore(dir), row); err != nil {
+	header, events, err := row.Record()
+	if err != nil {
+		t.Fatalf("record the row the way the loop records one: %v", err)
+	}
+	if err = session.NewStore(dir).Write(header, events); err != nil {
 		t.Fatalf("write a session the way the loop writes one: %v", err)
 	}
 	return row

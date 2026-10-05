@@ -8,8 +8,8 @@ import (
 
 	"tofu/bench/corpus"
 	"tofu/bench/report"
-	"tofu/internal/judge/jev"
 	"tofu/internal/judge/ledger"
+	"tofu/internal/sys"
 )
 
 const overCapLiveCallCap = 250
@@ -20,7 +20,7 @@ func TestTheNineOverCapArtifactsJudgedAgainstFixedTruncation(t *testing.T) {
 	if os.Getenv("TOFU_LIVE") != "1" {
 		t.Skip("set TOFU_LIVE=1 to put the question to the real jev route and write today's over-cap report")
 	}
-	jev.AllowLiveCredential(t)
+	sys.AllowLiveCredential(t)
 	client, err := NewJevClient(filepath.Join("..", "..", ".env"))
 	if err != nil {
 		t.Fatalf("no credential: %v", err)
