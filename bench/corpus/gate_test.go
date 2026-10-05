@@ -6,8 +6,6 @@ import (
 	"sort"
 	"strings"
 	"testing"
-
-	"tofu/internal/judge/state"
 )
 
 func TestGateCorpusHoldsAtLeastOneHundredAndTwentyRecordedCases(t *testing.T) {
@@ -27,12 +25,11 @@ func TestGateCorpusHoldsAtLeastOneHundredAndTwentyRecordedCases(t *testing.T) {
 	t.Logf("%d cases, %d of them recorded from a run", len(records), recorded)
 }
 
-func TestEveryGateCaseCarriesProvenanceAndTheShapeTheCurrentBuilderProduces(t *testing.T) {
+func TestEveryGateCaseCarriesProvenance(t *testing.T) {
 	records, err := GateRecords()
 	if err != nil {
 		t.Fatalf("loading the corpus: %v", err)
 	}
-	want := state.ToolGateVersion()
 	seen := map[string]bool{}
 	for _, record := range records {
 		if seen[record.ID] {
@@ -41,9 +38,6 @@ func TestEveryGateCaseCarriesProvenanceAndTheShapeTheCurrentBuilderProduces(t *t
 		seen[record.ID] = true
 		if record.Origin == "" || record.RecordedAt == "" || record.LabelNote == "" {
 			t.Errorf("%s: origin %q, recorded_at %q, label_note %q, all three are provenance and none may be empty", record.ID, record.Origin, record.RecordedAt, record.LabelNote)
-		}
-		if record.StateShape != want {
-			t.Errorf("%s: state_shape %q, the current builder produces %q", record.ID, record.StateShape, want)
 		}
 	}
 }

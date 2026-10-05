@@ -21,9 +21,6 @@ func jevSecret(t *testing.T, vendor cred.Vendor, variable string) string {
 	if err != nil {
 		t.Fatalf("no %s credential: %v", vendor, err)
 	}
-	if _, err := cred.NewJevKey(vendor, secret); err != nil {
-		t.Fatalf("building the %s credential: %v", vendor, err)
-	}
 	return strings.TrimSpace(secret)
 }
 

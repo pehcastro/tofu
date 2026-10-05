@@ -64,15 +64,3 @@ func BuildToolGateV3(in ToolGateInput) ([]byte, string, error) {
 	}
 	return canon, ToolGateV3Version(), nil
 }
-
-type toolGateEnvelope struct {
-	Agent   string          `json:"agent"`
-	Tool    string          `json:"tool"`
-	Input   map[string]any  `json:"input"`
-	Cwd     string          `json:"cwd"`
-	Context ToolGateContext `json:"context"`
-}
-
-func ToolGateVersion() string {
-	return deriveVersion(ToolGatePoint, toolGateEnvelope{})
-}

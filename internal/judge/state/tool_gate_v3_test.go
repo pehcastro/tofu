@@ -74,8 +74,8 @@ func contextTargets(t *testing.T, built []byte) WriteTargets {
 	return decoded.Context.Targets
 }
 
-func TestBuildToolGateV3CarriesTheTargetsAndItsOwnShape(t *testing.T) {
-	built, version, err := BuildToolGateV3(ToolGateInput{
+func TestBuildToolGateV3CarriesTheTargets(t *testing.T) {
+	built, _, err := BuildToolGateV3(ToolGateInput{
 		Agent: "tofu", Tool: "bash",
 		Input:      map[string]any{"command": "cat > .local/boji/tickets/doing/BOJI-070.md <<'TICKET'\nid: BOJI-070\nTICKET\n"},
 		Cwd:        "/repo",
@@ -83,9 +83,6 @@ func TestBuildToolGateV3CarriesTheTargetsAndItsOwnShape(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf("BuildToolGateV3: %v", err)
-	}
-	if version == ToolGateVersion() {
-		t.Fatalf("the v3 state shape %q is the same as the old one, a new shape needs a new version", version)
 	}
 
 	var decoded struct {
