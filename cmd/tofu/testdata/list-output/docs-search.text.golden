@@ -1,6 +1,6 @@
 exit 0
 --- stdout
-Docs · "change the colours"                                           31 matches
+Docs · "change the colours"                                           33 matches
 
   change the colours
     → tofu settings set theme Nord
@@ -16,6 +16,8 @@ Docs · "change the colours"                                           31 matche
     → tofu docs models
   Start here
     → tofu docs start
+  Updating tofu
+    → tofu docs update
   stop the animations
     → tofu settings set animations off
   show every tool call in the chat
@@ -28,6 +30,8 @@ Docs · "change the colours"                                           31 matche
     → tofu settings set --scope project <key> <value>
   move old sessions out of the project
     → tofu migrate
+  update tofu to the latest release
+    → tofu update
   run the next task on another model
     → /models in the app, then pick a model
   always run the orchestrator on one model

@@ -66,6 +66,11 @@ exit 0
         "topic": "start",
         "title": "Start here",
         "summary": "what tofu is, the first commands to type, and where to read more"
+      },
+      {
+        "topic": "update",
+        "title": "Updating tofu",
+        "summary": "how tofu update finds the latest release, checks it and replaces the tofu you run"
       }
     ],
     "entries": [
@@ -212,6 +217,18 @@ exit 0
         "do": "tofu doctor",
         "check": "tofu doctor",
         "topic": "doctor"
+      },
+      {
+        "ask": "update tofu to the latest release",
+        "do": "tofu update",
+        "check": "tofu version",
+        "topic": "update"
+      },
+      {
+        "ask": "is there a newer tofu",
+        "do": "tofu update --check",
+        "check": "tofu update --check",
+        "topic": "update"
       },
       {
         "ask": "see what changed in this version",

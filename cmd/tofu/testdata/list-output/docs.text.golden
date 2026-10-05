@@ -1,6 +1,6 @@
 exit 0
 --- stdout
-Docs · 68 asks                                                         12 topics
+Docs · 70 asks                                                         13 topics
 
 agents  add a sub-agent for every project or for one, choose the model it
   runs, and remove it
@@ -170,6 +170,13 @@ skills  where tofu finds skills, how to add one for every project or for one,
 start  what tofu is, the first commands to type, and where to read more
   see what changed in this version
     → tofu changelog
+
+update  how tofu update finds the latest release, checks it and replaces the
+  tofu you run
+  update tofu to the latest release
+    → tofu update
+  is there a newer tofu
+    → tofu update --check
 
   → tofu docs <topic>
   → tofu docs "a few words"

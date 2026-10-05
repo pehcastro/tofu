@@ -37,6 +37,10 @@ exit 0
         "do": "tofu docs start"
       },
       {
+        "text": "Updating tofu",
+        "do": "tofu docs update"
+      },
+      {
         "text": "stop the animations",
         "do": "tofu settings set animations off"
       },
@@ -59,6 +63,10 @@ exit 0
       {
         "text": "move old sessions out of the project",
         "do": "tofu migrate"
+      },
+      {
+        "text": "update tofu to the latest release",
+        "do": "tofu update"
       },
       {
         "text": "run the next task on another model",
