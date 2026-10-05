@@ -109,6 +109,7 @@ const (
 	TurnLoopGuardRepeats            = 3
 	TurnLoopGuardWindow             = 6
 	SubscriptionCacheTTL            = "1h"
+	HistoryCacheTTL                 = "1h"
 
 	VerbMaxDepth      = 2
 	VerbTimeoutMillis = 120000

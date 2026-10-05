@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 
+	"tofu/internal/konst"
 	"tofu/internal/llm"
 	"tofu/internal/transport"
 )
@@ -143,7 +144,7 @@ func (r Request) Encode(oauth bool) ([]byte, error) {
 	system := systemBlocks(r.System, oauth, BillingSystemBlock(firstUserText(r.Messages), cmp.Or(r.ClaudeCodeVersion, PinnedClaudeCodeVersion)), r.CacheTTL)
 	head := applyHeadCaching(system, tools, r.CacheTTL)
 	if !r.HistoryCacheOff {
-		applyHistoryCaching(messages, r.CacheTTL, cacheBreakpointsPerRequest-head)
+		applyHistoryCaching(messages, konst.HistoryCacheTTL, cacheBreakpointsPerRequest-head)
 	}
 
 	userID, err := metadataUserID(r, oauth)

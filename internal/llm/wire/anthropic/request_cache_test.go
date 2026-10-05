@@ -122,6 +122,8 @@ type cachedPiece struct {
 	where      string
 	text       string
 	breakpoint bool
+	ttl        any
+	history    bool
 }
 
 func inCacheOrder(t *testing.T, body []byte) []cachedPiece {
@@ -137,33 +139,49 @@ func inCacheOrder(t *testing.T, body []byte) []cachedPiece {
 		t.Fatalf("decoding the request: %v", err)
 	}
 	var pieces []cachedPiece
-	add := func(where string, block map[string]any) {
+	add := func(where string, block map[string]any, history bool) {
 		marked, breakpoint := block["cache_control"].(map[string]any)
-		if breakpoint && marked["ttl"] != konst.SubscriptionCacheTTL {
-			t.Fatalf("the breakpoint on %s carries ttl %v, not %s", where, marked["ttl"], konst.SubscriptionCacheTTL)
-		}
 		delete(block, "cache_control")
 		text, err := json.Marshal(block)
 		if err != nil {
 			t.Fatalf("encoding %s: %v", where, err)
 		}
-		pieces = append(pieces, cachedPiece{where: where, text: string(text), breakpoint: breakpoint})
+		pieces = append(pieces, cachedPiece{where: where, text: string(text), breakpoint: breakpoint, ttl: marked["ttl"], history: history})
 	}
 	for _, tool := range decoded.Tools {
-		add(fmt.Sprintf("the tool %v", tool["name"]), tool)
+		add(fmt.Sprintf("the tool %v", tool["name"]), tool, false)
 	}
 	for index, block := range decoded.System {
 		if text, _ := block["text"].(string); strings.HasPrefix(text, anthropic.BillingHeaderPrefix) {
 			block["text"] = regexp.MustCompile(`cch=[0-9a-f]+`).ReplaceAllString(text, anthropic.BillingCheckPlaceholder)
 		}
-		add(fmt.Sprintf("system block %d", index), block)
+		add(fmt.Sprintf("system block %d", index), block, false)
 	}
 	for index, message := range decoded.Messages {
 		for part, block := range message.Content {
-			add(fmt.Sprintf("message %d block %d", index, part), block)
+			add(fmt.Sprintf("message %d block %d", index, part), block, true)
 		}
 	}
 	return pieces
+}
+
+func assertHeadLivesAnHourAndHistoryFiveMinutes(t *testing.T, body []byte) {
+	t.Helper()
+	marks := map[bool][]string{}
+	for _, piece := range inCacheOrder(t, body) {
+		if !piece.breakpoint {
+			continue
+		}
+		want := map[bool]string{false: konst.SubscriptionCacheTTL, true: konst.HistoryCacheTTL}[piece.history]
+		if piece.ttl != want {
+			t.Fatalf("the breakpoint on %s carries ttl %v, want %s", piece.where, piece.ttl, want)
+		}
+		marks[piece.history] = append(marks[piece.history], piece.where)
+	}
+	if len(marks[false]) == 0 || len(marks[true]) == 0 {
+		t.Fatalf("the request marks head %v and history %v; both need a breakpoint", marks[false], marks[true])
+	}
+	t.Logf("%s on %v, then %s on %v", konst.SubscriptionCacheTTL, marks[false], konst.HistoryCacheTTL, marks[true])
 }
 
 func assertCachedPrefixCarriesOver(t *testing.T, earlier, later []byte) {
@@ -241,6 +259,7 @@ func TestTheNextTurnsFirstRequestReadsTheLastTurnsCachedPrefix(t *testing.T) {
 		t.Fatalf("three turns sent %d requests, want 2, 1 and 1", len(server.bodies))
 	}
 	assertCachedPrefixCarriesOver(t, server.bodies[1], server.bodies[2])
+	assertHeadLivesAnHourAndHistoryFiveMinutes(t, server.bodies[2])
 	assertFirstMessageCarries(t, server.bodies[0], "[code_rules, from the rule e2e_first]")
 	assertFirstMessageCarries(t, server.bodies[2], "[process_discipline, from the rule debug_loop]\nbefore you form a theory")
 	assertCachedPrefixCarriesOver(t, server.bodies[2], server.bodies[3])
