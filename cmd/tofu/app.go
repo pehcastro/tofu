@@ -165,6 +165,7 @@ func appOptions(dir string, arms runOpts, wiring appWiring, launch appLaunch) tu
 		Paths:        appPaths(dir),
 		ResumeHead:   live.resumeHead,
 		NewSession:   live.startFresh,
+		Compact:      live.compact,
 		Shells:       appShells(dir, launch.registry, launch.registryErr),
 		KillShell:    appKillShell(launch.registry, launch.registryErr),
 		Fresh:        launch.fresh,

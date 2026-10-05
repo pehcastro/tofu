@@ -8,9 +8,11 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"tofu/internal/llm"
 	"tofu/internal/recall"
+	"tofu/internal/session"
 	"tofu/internal/web"
 )
 
@@ -220,5 +222,83 @@ func TestAnActThatListsOnlyChangesShrinksToThePageItActedOnAndErrorsStayWhole(t 
 	}
 	if !carried || shrunkHandle(forked[at].Content) != rendered {
 		t.Errorf("the rendered page shrank or forked without the handle it was rendered under, %s:\n%s\n%+v", rendered, forked[at].Content, fork.Carry.Results)
+	}
+}
+
+func TestCompactCarriedShrinksEveryOldResultAndTheNewSessionReadsBackShrunk(t *testing.T) {
+	big := strings.Repeat("a numbered line of a large file\n", 400)
+	read := func(id string) []llm.ToolCall {
+		return []llm.ToolCall{{ID: id, Name: "read", Arguments: json.RawMessage(`{"path":"` + id + `.txt"}`)}}
+	}
+	carried := []llm.Message{
+		{Role: llm.RoleUser, Content: "read a"},
+		{Role: llm.RoleAssistant, Content: "reading a", ToolCalls: read("a")},
+		{Role: llm.RoleTool, ToolCallID: "a", Content: big},
+		{Role: llm.RoleAssistant, Content: "a is numbered lines"},
+		{Role: llm.RoleUser, Content: "read b and c"},
+		{Role: llm.RoleAssistant, Content: "reading b", ToolCalls: read("b")},
+		{Role: llm.RoleTool, ToolCallID: "b", Content: big},
+		{Role: llm.RoleAssistant, Content: "reading c", ToolCalls: read("c")},
+		{Role: llm.RoleTool, ToolCallID: "c", Content: big},
+	}
+	artifacts := t.TempDir()
+	compacted, err := CompactCarried(artifacts, "", carried)
+	if err != nil {
+		t.Fatal(err)
+	}
+	shrunk := compacted.Messages
+	if compacted.Results != 2 || compacted.TokensAfter >= compacted.TokensBefore {
+		t.Fatalf("compacted %+v, want the two results before the last step shrunk and fewer tokens after", compacted)
+	}
+	if !strings.Contains(shrunk[2].Content, "artifact ") || !strings.Contains(shrunk[6].Content, "/compact") || shrunk[8].Content != big {
+		t.Fatalf("a and b should hold a handle naming /compact and the last step's c stay whole:\n%s\n%s\n%.80s", shrunk[2].Content, shrunk[6].Content, shrunk[8].Content)
+	}
+	if carried[2].Content != big {
+		t.Fatal("the history handed in was shrunk in place, so a failed write would leave it shrunk")
+	}
+	if again, err := CompactCarried(artifacts, "", shrunk); err != nil || again.Results != 0 {
+		t.Fatalf("a second compact shrank %d result(s) again, err %v", again.Results, err)
+	}
+
+	store := session.OpenAt(t.TempDir())
+	old, err := store.Open(session.Header{ID: session.NewEventID(), Wire: "anthropic"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := old.Close(); err != nil {
+		t.Fatal(err)
+	}
+	into, err := RecordCarried(store, old.ID(), compacted, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	events, err := store.Body(into)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reread, err := ConversationFrom(events)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(reread) != len(shrunk) {
+		t.Fatalf("the new session reads back %d messages, want %d", len(reread), len(shrunk))
+	}
+	for i, message := range reread {
+		if message.Role != shrunk[i].Role || message.Content != shrunk[i].Content || message.ToolCallID != shrunk[i].ToolCallID || len(message.ToolCalls) != len(shrunk[i].ToolCalls) {
+			t.Errorf("message %d reads back as %+v, want %+v", i, message, shrunk[i])
+		}
+	}
+	ended, err := store.Header(old.ID())
+	if err != nil {
+		t.Fatal(err)
+	}
+	begun, err := store.Header(into)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ended.ForkedInto != into || ended.EndReason != session.EndedByFork || ended.ForkTokensBefore != compacted.TokensBefore ||
+		ended.ForkTokensAfter != compacted.TokensAfter || begun.ForkKind != string(ForkCompact) ||
+		begun.CarriedFrom == nil || begun.CarriedFrom.Session != old.ID() || begun.Wire != "anthropic" {
+		t.Errorf("the old session reads %+v and the new one %+v", ended, begun)
 	}
 }

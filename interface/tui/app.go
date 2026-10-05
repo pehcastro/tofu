@@ -169,6 +169,7 @@ type Options struct {
 	Paths        func() []string
 	ResumeHead   func() string
 	NewSession   func() string
+	Compact      func() string
 	Now          func() time.Time
 	Shells       func() []shells.Entry
 	KillShell    func(name string) error

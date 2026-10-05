@@ -24,6 +24,7 @@ func commandApp(t *testing.T, entered chan<- string) *App {
 		Paths:      repoPaths,
 		ResumeHead: func() string { return "continuing turn-19a2b3c4d5, 12 messages from 3 steps" },
 		NewSession: func() string { return "the next task starts a new session" },
+		Compact:    func() string { return "compacted 2 old tool result(s)" },
 		Turn: func(_ context.Context, _ Pick, task string, _ CalledFromInsideTheTurnAndNeverAfterItReturns) {
 			entered <- task
 		},
@@ -181,6 +182,30 @@ func TestSlashResumeSaysWhatItTookAndSlashNewIsRefusedWhileATurnRuns(t *testing.
 	}
 }
 
+func TestSlashCompactSaysWhatItShrankAndIsRefusedWhileATurnRuns(t *testing.T) {
+	entered := make(chan string, 1)
+	app := commandApp(t, entered)
+	compacted := 0
+	app.options.Compact = func() string { compacted++; return "compacted 2 old tool result(s)" }
+	typeText(app, "/compact")
+	app.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	if content := ansi.Strip(app.View().Content); compacted != 1 || !strings.Contains(content, "compacted 2 old tool result(s)") {
+		t.Fatalf("/compact ran %d time(s) and the chat does not say what it shrank\n%s", compacted, content)
+	}
+	nothingEntered(t, entered)
+
+	typeText(app, "write a note")
+	app.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	if task := <-entered; task != "write a note" {
+		t.Fatalf("the turn never started, the model was sent %q", task)
+	}
+	typeText(app, "/compact")
+	app.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	if content := ansi.Strip(app.View().Content); compacted != 1 || !strings.Contains(content, turnRunningNote) {
+		t.Errorf("/compact during a turn ran %d time(s), want once and the note to stop the turn first\n%s", compacted, content)
+	}
+}
+
 func TestTheOpenMenuGolden(t *testing.T) {
 	app := commandApp(t, make(chan string, 1))
 	typeText(app, "/se")
@@ -190,7 +215,7 @@ func TestTheOpenMenuGolden(t *testing.T) {
 func TestTheMenuMovesCompletesAndCloses(t *testing.T) {
 	entered := make(chan string, 1)
 	app := commandApp(t, entered)
-	typeText(app, "/co")
+	typeText(app, "/cop")
 	app.Update(tea.KeyPressMsg{Code: tea.KeyDown})
 	picked, open := app.view.Picked()
 	if !open || picked != "copy-call" {

@@ -44,6 +44,9 @@ func commands(options Options) []session.Command {
 	if options.NewSession != nil {
 		listed = append(listed, session.Command{Name: "new", What: "start fresh, carrying nothing from the last session"})
 	}
+	if options.Compact != nil {
+		listed = append(listed, session.Command{Name: "compact", What: "shrink the old tool results the next turn carries to an artifact handle each"})
+	}
 	if options.Cron != nil {
 		listed = append(listed,
 			session.Command{Name: "cron", What: "the scheduled jobs: list, history, edit, pause, resume, delete"},
@@ -113,6 +116,8 @@ func (a *App) runCommand(name string) tea.Cmd {
 		a.carry(a.options.ResumeHead)
 	case "new":
 		a.carry(a.options.NewSession)
+	case "compact":
+		a.carry(a.options.Compact)
 	case "cron", "loop", "goal":
 		return a.cronLine("/" + name)
 	case "quit":

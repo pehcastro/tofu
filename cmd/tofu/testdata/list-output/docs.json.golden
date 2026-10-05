@@ -18,6 +18,11 @@ exit 0
         "summary": "how tofu reads and drives your Chrome tabs, the tofu tab group, the badge, and what tofu never does there"
       },
       {
+        "topic": "commands",
+        "title": "Commands in the app",
+        "summary": "every slash command the app's composer takes, and how /compact shrinks the history the next turn carries"
+      },
+      {
         "topic": "cron",
         "title": "Cron, loops and goals",
         "summary": "jobs that post a prompt into the session on a timer or after each turn, how to change one, and the history of every change"
@@ -450,6 +455,12 @@ exit 0
         "do": "tofu context",
         "check": "tofu context --json",
         "topic": "sessions"
+      },
+      {
+        "ask": "free room in the context before the next turn",
+        "do": "/compact in the app, between turns",
+        "check": "tofu session info <name|id>",
+        "topic": "commands"
       },
       {
         "ask": "stop a server an agent left running",

@@ -26,6 +26,7 @@ Topics:
 - instructions: which AGENTS.md and CLAUDE.md files are sent with every task
 - gate: what jev judges before a tool call, and the OpenRouter key
 - sessions: continue a session, find an old one, and running shells
+- commands: every slash command in the app, and /compact
 - browser: share a Chrome tab so tofu can read it or act in it
 - doctor: what tofu doctor prints, and what to do about each line
 

@@ -25,6 +25,10 @@ exit 0
         "do": "tofu docs browser"
       },
       {
+        "text": "Commands in the app",
+        "do": "tofu docs commands"
+      },
+      {
         "text": "Cron, loops and goals",
         "do": "tofu docs cron"
       },
@@ -103,6 +107,10 @@ exit 0
       {
         "text": "see how full the context window got",
         "do": "tofu context"
+      },
+      {
+        "text": "free room in the context before the next turn",
+        "do": "/compact in the app, between turns"
       },
       {
         "text": "read the output of a running shell",

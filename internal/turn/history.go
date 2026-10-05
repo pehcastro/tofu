@@ -3,7 +3,9 @@ package turn
 import (
 	"cmp"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -11,6 +13,7 @@ import (
 	"tofu/internal/konst"
 	"tofu/internal/llm"
 	"tofu/internal/recall"
+	"tofu/internal/session"
 )
 
 type ForkKind string
@@ -18,6 +21,7 @@ type ForkKind string
 const (
 	ForkContinuation ForkKind = "continuation"
 	ForkAccountSpent ForkKind = "account-spent"
+	ForkCompact      ForkKind = "compact"
 )
 
 type Fork struct {
@@ -164,17 +168,81 @@ func (s overflowShrink) String() string {
 	return fmt.Sprintf("shrank %d old tool result(s) to an artifact handle each, %d bytes of messages to %d", s.results, s.bytesBefore, s.bytesAfter)
 }
 
+type shrinkCause string
+
+const (
+	causeOverflow shrinkCause = "the context window overflowed"
+	causeCompact  shrinkCause = "/compact ran"
+)
+
 func shrinkOverflow(artifacts Artifacts, messages []llm.Message, sentTokens, windowTokens int) (overflowShrink, error) {
 	target := sentTokens
 	if windowTokens > 0 {
 		target = min(target, windowTokens)
 	}
-	target = target * konst.TurnOverflowKeepPercent / 100
+	return shrinkTo(artifacts, messages, sentTokens, target*konst.TurnOverflowKeepPercent/100, causeOverflow)
+}
+
+type Compacted struct {
+	Results      int
+	TokensBefore int
+	TokensAfter  int
+	Messages     []llm.Message
+}
+
+func CompactCarried(artifactDir, wire string, carried []llm.Message) (Compacted, error) {
+	artifacts, err := NewArtifacts(artifactDir, true)
+	if err != nil {
+		return Compacted{}, err
+	}
+	artifacts.preview = artifacts.preview.OnWire(wire)
+	shrunk := slices.Clone(carried)
+	before := HistoryTokens(artifacts.preview, shrunk)
+	shrink, err := shrinkTo(artifacts, shrunk, before, 0, causeCompact)
+	if err != nil {
+		return Compacted{}, err
+	}
+	return Compacted{Results: shrink.results, TokensBefore: before, TokensAfter: HistoryTokens(artifacts.preview, shrunk), Messages: shrunk}, nil
+}
+
+func RecordCarried(store *session.Store, from string, compacted Compacted, at time.Time) (string, error) {
+	if _, err := store.Header(from); err != nil {
+		return "", err
+	}
+	ended, err := store.Open(session.Header{ID: from})
+	if err != nil {
+		return "", err
+	}
+	was, into := ended.Header(), session.NewEventID()
+	log, err := store.Open(session.Header{ID: into, At: at, ForkKind: string(ForkCompact), Root: cmp.Or(was.Root, was.ID), Task: was.Task,
+		Wire: was.Wire, Model: was.Model, CarriedFrom: &session.Carried{Session: was.ID, Event: was.Head}})
+	if err != nil {
+		return "", errors.Join(err, ended.Close())
+	}
+	written := &record{store: store, log: log, scope: into, turn: into, said: map[string]string{}}
+	request := ""
+	for _, message := range compacted.Messages {
+		if message.Role == llm.RoleAssistant {
+			request = session.NewEventID()
+		}
+		written.message(message, request, nil)
+	}
+	if len(written.failed) > 0 {
+		return "", errors.Join(errors.New(strings.Join(written.failed, "; ")), log.Close(), ended.Close())
+	}
+	edited := ended.Edit(func(header *session.Header) {
+		header.ForkedInto, header.EndedAt, header.EndReason = into, &at, session.EndedByFork
+		header.ForkTokensBefore, header.ForkTokensAfter = compacted.TokensBefore, compacted.TokensAfter
+	})
+	return into, errors.Join(edited, log.Close(), ended.Close())
+}
+
+func shrinkTo(artifacts Artifacts, messages []llm.Message, estimate, target int, cause shrinkCause) (overflowShrink, error) {
 	lastStep := len(messages) - 1
 	for lastStep >= 0 && messages[lastStep].Role != llm.RoleAssistant {
 		lastStep--
 	}
-	shrink, estimate := overflowShrink{bytesBefore: messagesBytes(messages)}, sentTokens
+	shrink := overflowShrink{bytesBefore: messagesBytes(messages)}
 	names := make(map[string]string)
 	for i, message := range messages[:max(lastStep, 0)] {
 		for _, call := range message.ToolCalls {
@@ -187,7 +255,7 @@ func shrinkOverflow(artifacts Artifacts, messages []llm.Message, sentTokens, win
 			recall.AlreadyDropped(message.Content) || shrunkHandle(message.Content) != "" {
 			continue
 		}
-		note, err := overflowNote(artifacts, names[message.ToolCallID], message.Content)
+		note, err := shrunkNote(artifacts, names[message.ToolCallID], message.Content, cause)
 		if err != nil {
 			return overflowShrink{}, err
 		}
@@ -199,16 +267,16 @@ func shrinkOverflow(artifacts Artifacts, messages []llm.Message, sentTokens, win
 	return shrink, nil
 }
 
-func overflowNote(artifacts Artifacts, tool, result string) (string, error) {
+func shrunkNote(artifacts Artifacts, tool, result string, cause shrinkCause) (string, error) {
 	if !artifacts.handles {
-		return "the " + tool + " result that stood here was dropped when the context window overflowed, and nothing holds it: run the call again if it is still needed.", nil
+		return "the " + tool + " result that stood here was dropped when " + string(cause) + ", and nothing holds it: run the call again if it is still needed.", nil
 	}
 	handle, err := heldHandle(artifacts.store, result)
 	if err != nil {
-		return "", fmt.Errorf("the %s result to shrink after the context window overflowed could not be held whole: %w", tool, err)
+		return "", fmt.Errorf("the %s result to shrink after %s could not be held whole: %w", tool, cause, err)
 	}
 	return "the " + tool + " result that stood here is held whole in artifact " + handle +
-		": it was shrunk when the context window overflowed. call artifact_fetch with that handle, an offset and a length to read any range of it.", nil
+		": it was shrunk when " + string(cause) + ". call artifact_fetch with that handle, an offset and a length to read any range of it.", nil
 }
 
 func HistoryTokens(preview recall.Config, messages []llm.Message) int {

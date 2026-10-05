@@ -364,6 +364,9 @@ func sessionDetail(store *session.Store, handle string) (sessionRow, []llm.Messa
 		row.Name = *header.Name
 	}
 	if header.ForkedInto != "" {
+		if into, err := store.Header(header.ForkedInto); err == nil {
+			row.ForkIntoKind = into.ForkKind
+		}
 		steps, err := contextSteps(events)
 		if err != nil {
 			return sessionRow{}, nil, err

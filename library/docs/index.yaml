@@ -246,6 +246,10 @@
   do: tofu context
   check: tofu context --json
   topic: sessions
+- ask: free room in the context before the next turn
+  do: /compact in the app, between turns
+  check: tofu session info <name|id>
+  topic: commands
 - ask: stop a server an agent left running
   do: tofu shells stop <name>
   check: tofu shells list

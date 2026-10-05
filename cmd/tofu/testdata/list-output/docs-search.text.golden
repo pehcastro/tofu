@@ -1,6 +1,6 @@
 exit 0
 --- stdout
-Docs · "change the colours"                                           38 matches
+Docs · "change the colours"                                           40 matches
 
   change the colours
     → tofu settings set theme Nord
@@ -10,6 +10,8 @@ Docs · "change the colours"                                           38 matche
     → tofu docs agents
   Browser
     → tofu docs browser
+  Commands in the app
+    → tofu docs commands
   Cron, loops and goals
     → tofu docs cron
   The doctor
@@ -50,6 +52,8 @@ Docs · "change the colours"                                           38 matche
     → tofu run --dir . --no-gate "<task>"
   see how full the context window got
     → tofu context
+  free room in the context before the next turn
+    → /compact in the app, between turns
   read the output of a running shell
     → tofu shells log <name>
   check the library files and these pages
