@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/url"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -210,9 +211,12 @@ type request struct {
 }
 
 func socketPath(home string) (string, error) {
-	path := filepath.Join(home, sys.StateDirName, "browser", "relay.sock")
-	if len(path) > konst.BrowserSocketPathMaxBytes {
-		return "", fmt.Errorf("the browser socket %s is %d bytes, over the %d byte limit of an AF_UNIX path: use a shorter home", path, len(path), konst.BrowserSocketPathMaxBytes)
+	path, limit := filepath.Join(home, sys.StateDirName, "browser", "relay.sock"), konst.BrowserSocketPathMaxBytes
+	if runtime.GOOS == "darwin" {
+		limit = konst.BrowserSocketPathMaxBytesDarwin
+	}
+	if len(path) > limit {
+		return "", fmt.Errorf("the browser socket %s is %d bytes, over the %d byte limit of an AF_UNIX path on %s: use a shorter home", path, len(path), limit, runtime.GOOS)
 	}
 	return path, nil
 }

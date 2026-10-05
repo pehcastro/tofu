@@ -206,6 +206,40 @@ func Uninstall(home, hostsKey string) (browserManifestsRemoved []string, err err
 	return browsers, os.RemoveAll(extensionDir)
 }
 
+type HostState string
+
+const (
+	HostInstalled HostState = "installed"
+	HostStale     HostState = "stale"
+	HostMissing   HostState = "missing"
+)
+
+type NativeHost struct {
+	Browser  string    `json:"browser"`
+	Manifest string    `json:"manifest"`
+	State    HostState `json:"state"`
+}
+
+func Hosts(home, hostsKey string) []NativeHost {
+	hosts := nativeHosts(home, hostsKey)
+	for i, host := range hosts {
+		var manifest hostManifest
+		raw, err := os.ReadFile(host.Manifest)
+		if err == nil {
+			err = json.Unmarshal(raw, &manifest)
+		}
+		switch _, gone := os.Stat(manifest.Path); {
+		case err != nil || manifest.Name != HostName:
+			hosts[i].State = HostMissing
+		case gone != nil:
+			hosts[i].State = HostStale
+		default:
+			hosts[i].State = HostInstalled
+		}
+	}
+	return hosts
+}
+
 func installPaths(home string) (extensionDir, manifestPath string) {
 	dir := filepath.Join(home, sys.StateDirName, "browser")
 	return filepath.Join(dir, "extension"), filepath.Join(dir, HostName+".json")

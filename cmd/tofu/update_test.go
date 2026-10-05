@@ -23,6 +23,7 @@ type fakeRelease struct {
 	asset     string
 	checksums string
 	sums      bool
+	missing   bool
 }
 
 func fakeArchive(t *testing.T, binary []byte) ([]byte, string) {
@@ -67,6 +68,10 @@ func serveRelease(t *testing.T, release fakeRelease, binary []byte) {
 		assets = append(assets, map[string]string{"name": "checksums.txt", "browser_download_url": server.URL + "/download/sums"})
 	}
 	mux.HandleFunc("/repos/pehcastro/tofu/releases/latest", func(w http.ResponseWriter, r *http.Request) {
+		if release.missing {
+			http.Error(w, `{"message":"Not Found","status":"404"}`, http.StatusNotFound)
+			return
+		}
 		_ = json.NewEncoder(w).Encode(map[string]any{"tag_name": release.tag, "assets": assets})
 	})
 	mux.HandleFunc("/download/asset", func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write(archive) })
@@ -100,6 +105,7 @@ func TestUpdateAgainstAFakeRelease(t *testing.T) {
 		{"a tag that is not a version installs nothing", fakeRelease{tag: "nightly", sums: true}, "0.5.0", true, nil, exitVerdict, oldBinary, "not a version"},
 		{"a dev build is left alone", fakeRelease{tag: "v0.5.1", sums: true}, "0.5.0+dev", false, nil, exitVerdict, oldBinary, "not a release build"},
 		{"a dev build check says it is not a release", fakeRelease{tag: "v0.5.1", sums: true}, "0.5.0+dev", false, []string{"--check"}, exitUpdateAvailable, oldBinary, "tofu update --force replaces it"},
+		{"no release published yet says so in plain words", fakeRelease{missing: true}, "0.5.0", true, []string{"--check"}, exitVerdict, oldBinary, "no release published yet at github.com/pehcastro/tofu"},
 		{"force replaces a dev build", fakeRelease{tag: "v0.5.0", sums: true}, "0.5.0+dev", false, []string{"--force"}, exitOK, newBinary, "tofu 0.5.0+dev → 0.5.0"},
 	}
 	for _, c := range cases {
@@ -118,8 +124,8 @@ func TestUpdateAgainstAFakeRelease(t *testing.T) {
 			if code != c.code {
 				t.Errorf("exit %d, want %d", code, c.code)
 			}
-			if !strings.Contains(printed, c.says) {
-				t.Errorf("printed nothing saying %q", c.says)
+			if !strings.Contains(printed, c.says) || strings.Contains(printed, "transport.") {
+				t.Errorf("printed nothing saying %q, or named the transport", c.says)
 			}
 			if got, _ := os.ReadFile(target); string(got) != c.installed {
 				t.Errorf("the target holds %q, want %q", got, c.installed)

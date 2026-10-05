@@ -20,19 +20,17 @@ import (
 	"tofu/internal/turn"
 )
 
-const ruleOverrideName = "rule_override"
-
 type RuleOverride struct {
 	Ask             turn.Person
 	Running         func() ([]rule.Rule, error)
 	Project, Global string
 }
 
-func (RuleOverride) Name() string { return ruleOverrideName }
+func (RuleOverride) Name() string { return turn.RuleOverrideToolName }
 
 func (RuleOverride) Definition() llm.Tool {
 	return llm.Tool{
-		Name: ruleOverrideName,
+		Name: turn.RuleOverrideToolName,
 		Description: "asks the person to override one rule that stops you from doing what they asked. the person answers yes for this project, yes everywhere, or no, and nothing is written before a yes. " +
 			"on a yes the override is a file in their rules, marked by: asked, and the rule changes from the next turn. on a no, work within the rule",
 		Parameters: map[string]any{
@@ -82,12 +80,12 @@ func (o RuleOverride) Run(ctx context.Context, raw json.RawMessage) (turn.Result
 	if o.Ask == nil {
 		return turn.Result{Content: "no person is here to answer, so nothing was written. " + within}, nil
 	}
-	question := "A rule stops me: " + base.ID + ".\nIts reason: " + cmp.Or(base.Notes, args.ReasonFromRule, base.Text) + "\nYou asked: " + args.WhyNow + ". Override it?"
+	question := "A rule stops me: " + base.ID + ".\nIts reason: " + cmp.Or(base.Notes, args.ReasonFromRule, base.Text) + "\nWhy now: " + args.WhyNow + "\nOverride it?"
 	shown, err := json.Marshal(map[string]string{"rule": base.ID, "change": args.Change, "question": question})
 	if err != nil {
 		return turn.Result{}, err
 	}
-	answer, err := o.Ask(ctx, turn.GateRequest{Tool: ruleOverrideName, Args: shown}, turn.GateDecision{Verdict: ledger.VerdictAsk})
+	answer, err := o.Ask(ctx, turn.GateRequest{Tool: turn.RuleOverrideToolName, Args: shown}, turn.GateDecision{Verdict: ledger.VerdictAsk})
 	if err != nil {
 		return turn.Result{Content: "the person could not be asked, so nothing was written: " + err.Error() + ". " + within}, nil
 	}

@@ -11,6 +11,7 @@ import (
 
 	"tofu/interface/cli"
 	"tofu/interface/tui/frame"
+	"tofu/internal/browser"
 	"tofu/internal/judge/jev"
 	"tofu/internal/llm/cred"
 	"tofu/internal/llm/quota"
@@ -118,24 +119,25 @@ type doctorProxy struct {
 }
 
 type doctorReport struct {
-	Version     string             `json:"version"`
-	Verdict     doctorVerdict      `json:"verdict"`
-	Blockers    []doctorBlocker    `json:"blockers,omitempty"`
-	Credentials []credentialReport `json:"credentials"`
-	Store       string             `json:"credential_store"`
-	Gate        doctorGate         `json:"gate"`
-	Library     doctorLibrary      `json:"library"`
-	Rules       []doctorRule       `json:"rules"`
-	Overrides   []overrideListing  `json:"overrides,omitempty"`
-	Unreadable  string             `json:"overrides_unreadable,omitempty"`
-	Calibration string             `json:"calibration"`
-	Ledger      string             `json:"ledger"`
-	SpendLimit  string             `json:"spend_limit"`
-	Wires       []doctorWire       `json:"wires"`
-	Proxy       doctorProxy        `json:"proxy"`
-	Root        string             `json:"root"`
-	Go          string             `json:"go"`
-	OS          string             `json:"os"`
+	Version     string               `json:"version"`
+	Verdict     doctorVerdict        `json:"verdict"`
+	Blockers    []doctorBlocker      `json:"blockers,omitempty"`
+	Credentials []credentialReport   `json:"credentials"`
+	Store       string               `json:"credential_store"`
+	Gate        doctorGate           `json:"gate"`
+	Library     doctorLibrary        `json:"library"`
+	Rules       []doctorRule         `json:"rules"`
+	Overrides   []overrideListing    `json:"overrides,omitempty"`
+	Unreadable  string               `json:"overrides_unreadable,omitempty"`
+	Calibration string               `json:"calibration"`
+	Ledger      string               `json:"ledger"`
+	SpendLimit  string               `json:"spend_limit"`
+	Wires       []doctorWire         `json:"wires"`
+	Proxy       doctorProxy          `json:"proxy"`
+	Browser     []browser.NativeHost `json:"browser"`
+	Root        string               `json:"root"`
+	Go          string               `json:"go"`
+	OS          string               `json:"os"`
 }
 
 func doctor(args []string, out, errOut io.Writer) int {
@@ -193,6 +195,7 @@ func doctorState(now time.Time) doctorReport {
 	}
 	located, _ := locateGateKey()
 	library, rules := readLibrary()
+	home, _ := os.UserHomeDir()
 	report := doctorReport{
 		Version:     frame.Release(sys.Version(), sys.BuildRevision()),
 		Blockers:    doctorBlockers(),
@@ -206,6 +209,7 @@ func doctorState(now time.Time) doctorReport {
 		SpendLimit:  quota.SpendLimitLine(),
 		Wires:       doctorWires(located.Name),
 		Proxy:       doctorProxyState(root),
+		Browser:     browser.Hosts(home, browser.ChromeHostsKey),
 		Root:        root,
 		Go:          sys.GoVersion(),
 		OS:          sys.OS() + "/" + sys.Arch(),

@@ -12,6 +12,14 @@ func register(string, string) error { return nil }
 
 func unregister(string) error { return nil }
 
+func nativeHosts(home, _ string) []NativeHost {
+	var hosts []NativeHost
+	for _, manifest := range browserManifests(home) {
+		hosts = append(hosts, NativeHost{Browser: filepath.Base(filepath.Dir(filepath.Dir(manifest))), Manifest: manifest})
+	}
+	return hosts
+}
+
 func browserManifests(home string) []string {
 	config, always, whenPresent := filepath.Join(home, ".config"), []string{"google-chrome", "chromium"}, []string{"BraveSoftware/Brave-Browser", "microsoft-edge"}
 	if runtime.GOOS == "darwin" {

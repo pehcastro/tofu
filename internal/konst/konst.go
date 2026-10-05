@@ -206,12 +206,13 @@ const (
 )
 
 const (
-	BrowserHostMessageBytes      = 1024 * 1024
-	BrowserExtensionMessageBytes = 64 * 1024 * 1024
-	BrowserDialTimeoutMillis     = 2000
-	BrowserCallTimeoutMillis     = 30000
-	BrowserSocketPathMaxBytes    = 107
-	BrowserIdleAfterMillis       = 1500
+	BrowserHostMessageBytes         = 1024 * 1024
+	BrowserExtensionMessageBytes    = 64 * 1024 * 1024
+	BrowserDialTimeoutMillis        = 2000
+	BrowserCallTimeoutMillis        = 30000
+	BrowserSocketPathMaxBytes       = 107
+	BrowserSocketPathMaxBytesDarwin = 104
+	BrowserIdleAfterMillis          = 1500
 
 	BrowserPageTextRunes      = 6000
 	BrowserElementCeiling     = 250

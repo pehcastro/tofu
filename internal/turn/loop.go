@@ -39,8 +39,10 @@ func (RunningModel) Ask(ctx context.Context, request llm.Request) (llm.Decision,
 	return model.Ask(ctx, request)
 }
 
+const RuleOverrideToolName = "rule_override"
+
 func gateExempt(tool string) bool {
-	return tool == "browser_tabs" || tool == "browser_read" || tool == "browser_observe" || tool == "artifact_fetch" || tool == referenceToolName
+	return tool == "browser_tabs" || tool == "browser_read" || tool == "browser_observe" || tool == "artifact_fetch" || tool == referenceToolName || tool == RuleOverrideToolName
 }
 
 type Caps struct {

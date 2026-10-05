@@ -47,14 +47,18 @@ func TestExtensionIDOfTheShippedKeyIsStable(t *testing.T) {
 	}
 }
 
-func TestInstallWritesTheHostManifestAndKeyAndUninstallRemovesBoth(t *testing.T) {
-	home := t.TempDir()
+func scratchHostsKey(t *testing.T) string {
 	hosts := `Software\tofu-test\` + t.Name()
 	t.Cleanup(func() {
 		for _, scratch := range []string{hosts + `\com.ephem.tofu`, hosts, `Software\tofu-test`} {
 			_ = registry.DeleteKey(registry.CURRENT_USER, scratch)
 		}
 	})
+	return hosts
+}
+
+func TestInstallWritesTheHostManifestAndKeyAndUninstallRemovesBoth(t *testing.T) {
+	home, hosts := t.TempDir(), scratchHostsKey(t)
 	exe := filepath.Join(home, "bin", "tofu.exe")
 	for range 2 {
 		if id, browsers, err := Install(home, exe, hosts); err != nil || id != shippedExtensionID || browsers != nil {

@@ -36,7 +36,8 @@ const (
 	updateAPIVariable    = "TOFU_UPDATE_API"
 	updateTargetVariable = "TOFU_UPDATE_TARGET"
 	updateAPI            = "https://api.github.com"
-	updateLatestPath     = "/repos/pehcastro/tofu/releases/latest"
+	updateRepository     = "pehcastro/tofu"
+	updateLatestPath     = "/repos/" + updateRepository + "/releases/latest"
 	updateChecksums      = "checksums.txt"
 	updateAsideSuffix    = ".old"
 	updateExecutableMode = 0o755
@@ -87,6 +88,10 @@ func updateFrom(current string, release bool, args []string, out, errOut io.Writ
 	ctx := context.Background()
 	report := updateReport{Current: current, Release: release, Source: cmp.Or(strings.TrimSpace(os.Getenv(updateAPIVariable)), updateAPI)}
 	body, err := fetch(ctx, client, report.Source+updateLatestPath, "application/vnd.github+json")
+	var failed *transport.Error
+	if errors.As(err, &failed) && failed.Status == http.StatusNotFound {
+		return o.refuse(exitVerdict, cli.Problem{What: "no release published yet at github.com/" + updateRepository})
+	}
 	if err != nil {
 		return o.fail(fmt.Errorf("reading the latest release from %s: %w", report.Source, err))
 	}

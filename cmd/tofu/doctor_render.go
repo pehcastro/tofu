@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"tofu/interface/cli"
+	"tofu/internal/browser"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/turn"
 )
@@ -28,6 +29,8 @@ func doctorPage(page cli.Page, report doctorReport) []string {
 	lines = append(lines, cli.Indent(page.Rows(accessRows(report))...)...)
 	lines = append(lines, "", page.Section("shell", cli.Verdict{}))
 	lines = append(lines, cli.Indent(page.Rows([]cli.Row{proxyRow(report.Proxy)})...)...)
+	lines = append(lines, "", page.Section("browser", cli.Verdict{}))
+	lines = append(lines, cli.Indent(page.Rows(hostRows(report.Browser))...)...)
 	lines = append(lines, "", page.Section("rules", cli.Verdict{}))
 	lines = append(lines, cli.Indent(page.Rows(append(ruleRows(report.Library, report.Rules), overrideRows(report)...))...)...)
 	calibration, _, _ := strings.Cut(report.Calibration, ",")
@@ -93,6 +96,23 @@ func proxyRow(proxy doctorProxy) cli.Row {
 		return cli.Row{Mark: cli.Warn, Cells: []string{"rtk", "not on PATH, so bash commands run as asked"}, Hint: proxy.Install}
 	}
 	return cli.Row{Mark: cli.Done, Cells: []string{"rtk", proxy.Version + factSeparator + "rewrites every bash command"}, Detail: from}
+}
+
+func hostRows(hosts []browser.NativeHost) []cli.Row {
+	rows := make([]cli.Row, len(hosts))
+	for i, host := range hosts {
+		switch host.State {
+		case browser.HostInstalled:
+			rows[i] = cli.Row{Mark: cli.Done, Cells: []string{host.Browser, "native host installed"}}
+		case browser.HostStale:
+			rows[i] = cli.Row{Mark: cli.Warn, Cells: []string{host.Browser, "the native host names a tofu that is gone"}, Hint: "tofu browser install"}
+		case browser.HostMissing:
+			rows[i] = cli.Row{Mark: cli.Warn, Cells: []string{host.Browser, "no native host, so tofu cannot reach its tabs"}, Hint: "tofu browser install"}
+		default:
+			panic("tofu doctor: unknown native host state " + string(host.State))
+		}
+	}
+	return rows
 }
 
 func overrideRows(report doctorReport) []cli.Row {

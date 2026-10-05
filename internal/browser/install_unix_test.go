@@ -12,6 +12,8 @@ import (
 	"testing"
 )
 
+func scratchHostsKey(*testing.T) string { return ChromeHostsKey }
+
 func TestInstallWritesTheHostManifestForEachBrowserAndUninstallRemovesOnlyIt(t *testing.T) {
 	home := t.TempDir()
 	config, chrome, chromium, brave, edge := filepath.Join(home, ".config"), "google-chrome", "chromium", "BraveSoftware/Brave-Browser", "microsoft-edge"

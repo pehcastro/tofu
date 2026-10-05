@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"tofu/internal/llm"
 	"tofu/internal/rule"
 	"tofu/internal/turn"
 	"tofu/internal/turn/tools"
@@ -105,6 +106,36 @@ func TestRuleOverrideNeverAsksAboutARuleThatDoesNotRunOrAnArgumentItCannotUse(t 
 		run := newOverrideRun(t, turn.PersonAllowedOnce, nil)
 		if _, err := run.tool.Run(context.Background(), json.RawMessage(args)); err == nil || run.asked != 0 || len(run.written(t)) != 0 {
 			t.Errorf("%s: err %v, asked %d times, wrote %v", args, err, run.asked, run.written(t))
+		}
+	}
+}
+
+func TestRuleOverrideAsksThePersonOnceUnderAnEnforcedGate(t *testing.T) {
+	run := newOverrideRun(t, turn.PersonAllowedOnce, nil)
+	_, err := turn.Run(context.Background(), turn.Config{
+		Model:    &scriptedModel{calls: []llm.ToolCall{{ID: "c1", Name: "rule_override", Arguments: json.RawMessage(overrideArgs)}}},
+		Spend:    turn.SpendSubscription,
+		Tools:    turn.NewRegistry(run.tool),
+		Gate:     askingGate{},
+		GateMode: turn.GateEnforce,
+		Person:   run.tool.Ask,
+		Task:     "write unit tests for the parser", ResultBytesCap: 4096, ArtifactDir: t.TempDir(),
+	})
+	if err != nil || run.asked != 1 || len(run.written(t)) != 1 {
+		t.Errorf("the person was asked %d times and the tool wrote %v (err %v), want one ask and one file", run.asked, run.written(t), err)
+	}
+}
+
+func TestRuleOverrideQuestionReadsWhateverWordsTheModelPassesAsWhyNow(t *testing.T) {
+	for _, why := range []string{"you asked for unit tests on the parser.", "the person asked for unit tests on the parser", "unit tests on the parser"} {
+		run := newOverrideRun(t, turn.PersonDenied, nil)
+		args, _ := json.Marshal(map[string]string{"rule": "no_unit_test_after_code", "why_now": why, "change": "off"})
+		if _, err := run.tool.Run(context.Background(), args); err != nil {
+			t.Fatal(err)
+		}
+		want := "A rule stops me: no_unit_test_after_code.\nIts reason: written after, it agrees with every bug\nWhy now: " + why + "\nOverride it?"
+		if run.question != want {
+			t.Errorf("why_now %q asked\n%s\nwant\n%s", why, run.question, want)
 		}
 	}
 }

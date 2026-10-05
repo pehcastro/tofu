@@ -63,6 +63,17 @@ To turn it off, put one line, `use: off`, in `tools/shell/proxy.yaml`
 under `~/.tofu/` for every project, or under `.tofu/` in a project for
 that project only. Delete the file to turn it back on.
 
+Under `browser`, one line for each browser tofu can share tabs from: Chrome
+on Windows, and on Linux and macOS Chrome, Chromium, and Brave or Edge when
+their profile folder is there. The line is about the native host, the file
+the browser reads to start tofu.
+
+- `✓ <browser>  native host installed`: the browser can reach tofu.
+- `⚠ <browser>  no native host, ...`: the browser cannot start tofu, so its
+  tabs stay out of reach. The `→` names `tofu browser install`.
+- `⚠ <browser>  the native host names a tofu that is gone`: tofu moved or
+  was deleted since the install. Run `tofu browser install` again.
+
 Under `rules`, what tofu decides with:
 
 - `library  binary · <n> points` is normal. `project · <n> of <m> points`

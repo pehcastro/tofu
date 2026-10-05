@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"regexp"
+	goruntime "runtime"
 	"strings"
 	"testing"
 
@@ -96,6 +97,8 @@ thresholds:
 `
 )
 
+var browserRow = regexp.MustCompile(`^  (⚠ .+? +no native host, so tofu cannot reach its tabs +→ tofu browser install|⚠ .+? +the native host names a tofu that is gone +→ tofu browser install|✓ .+? +native host installed)$`)
+
 var envelopeMoment = regexp.MustCompile(`(?m)^  "at": "\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ"`)
 
 func normalEnvelope(printed string, values map[string]string) string {
@@ -127,6 +130,15 @@ func TestE2EDoctorReadsTheKeyAndTheRuleOfTheProjectItRunsIn(t *testing.T) {
 		if !titleOf.MatchString(title) {
 			t.Fatalf("%s: the title is %q", step.name, title)
 		}
+		before, rest, found := strings.Cut(body, "\nbrowser\n")
+		section, after, _ := strings.Cut(rest, "\n\n")
+		for _, row := range strings.Split(section, "\n") {
+			fresh := goruntime.GOOS == "windows" || strings.Contains(row, "no native host")
+			if !found || !browserRow.MatchString(row) || !fresh {
+				t.Fatalf("%s: the browser section is\n%s\nwant one row per browser, and in a fresh home on %s no native host", step.name, section, goruntime.GOOS)
+			}
+		}
+		body = before + "\n" + after
 		sameText(t, step.name, body, strings.ReplaceAll(step.body, "RTK_INSTALL", rtkInstall()))
 	}
 }
