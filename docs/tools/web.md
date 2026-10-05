@@ -17,6 +17,11 @@ character for character, and drops navigation, forms, scripts and link-only
 rows, which are 11.7% of the extracted bytes over 24 recorded pages. A body
 over 5 MB is refused.
 
+A long page comes back 300 lines at a time, with its line count and the
+`offset` to read on, and the next window is read from the page already
+fetched. On a page the size of the recorded average, the model reads 3,590
+bytes where it read 21,430.
+
 `web_search` is registered only when its provider is set up, so the model
 never sees a tool that would fail. `github_pr_diff` goes through `gh`, which
 already holds your login, so tofu never holds a GitHub token.
@@ -34,7 +39,7 @@ already holds your login, so tofu never holds a GitHub token.
 | Tool | Parameter | What it does |
 |---|---|---|
 | `web_search` | `query`, `count` | ranked results, 10 at most |
-| `fetch` | `url` | one page as text units |
+| `fetch` | `url`, `offset`, `limit` | one page as text units, 300 lines at a time by default |
 | `github_pr_diff` | `pr` | a number or URL, or the current branch's pull request |
 
 `tofu library` lists the layers a web file is read from:
