@@ -2,12 +2,21 @@
 title: Shell
 description: bash wraps your shell for one command at a time, and shell is tofu's own registry of the servers bash kept running.
 order: 3
-updated: 2026-10-04
+updated: 2026-10-05
 ---
 
 `bash` is a wrapper: it runs `<your shell> -c <command>` in the working
 directory with your environment, and returns stdout and stderr merged. `shell`
 is tofu's own Go registry of the processes `bash` started in the background.
+
+The environment keeps your variables, with three changes:
+- tofu's own keys are taken out, so `OPENROUTER_KEY` never reaches a command the model runs.
+- `AI_AGENT=tofu` is set, so tools such as vitest print their short agent report. One passing run went from 737 bytes to 240.
+- git never waits on a prompt. `GIT_EDITOR` is `true`, and `GIT_TERMINAL_PROMPT=0` and `GCM_INTERACTIVE=never` are set, so a `git commit` with no message returns at once with git's own error.
+
+On Windows, output a native tool prints in the console's code page, such as
+437 or 850, is turned into UTF-8 before the model reads it, so `Página` stays
+`Página`. PowerShell runs with `-NoProfile` and UTF-8 output.
 
 On Windows the shell is Git Bash, then a `bash` on `PATH` that isn't WSL, then
 PowerShell. Elsewhere it's `$SHELL`, or `/bin/sh`. The `shell` setting or
@@ -16,7 +25,9 @@ PowerShell. Elsewhere it's `$SHELL`, or `/bin/sh`. The `shell` setting or
 ## Limits, guards and background servers
 
 A command is killed after 120 s by default and 600 s at most, so a hung
-command can't hold the turn. tofu probes the project's interpreters once, in
+command can't hold the turn, and the model still gets what it printed before
+the limit. A command that prints a lot keeps its first and last 32 KiB while
+it runs, and says how many bytes it dropped from the middle. tofu probes the project's interpreters once, in
 the background, and refuses a command that names one missing from `PATH`
 rather than letting it fail as `not found`. The probe used to block: building
 the tool in a Node project took 780.7 ms, and now 0.5 ms.
