@@ -48,8 +48,9 @@ without copying the list.
 
 ## Picking and binding models
 
-- **Pick the model for the next task**: **Ctrl+L**, type to filter,
-  **Shift+←/→** for the effort, **Enter**. It lasts until tofu restarts.
+- **Pick the model for the next task**: **Ctrl+L** opens on the model in use,
+  then type to filter, **Shift+←/→** for the effort, **Enter**. It lasts
+  until tofu restarts.
 - **Keep it**: the picker's **Roles** tab binds the lead, which writes
   `.tofu/roles/orchestrator.yaml`. For every project, write
   `model: <source/model>` in `~/.tofu/roles/orchestrator.yaml`.
