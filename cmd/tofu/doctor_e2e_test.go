@@ -10,6 +10,7 @@ import (
 
 	"tofu/interface/cli"
 	"tofu/internal/konst"
+	sessionstore "tofu/internal/session"
 )
 
 const (
@@ -177,11 +178,14 @@ func TestE2EDoctorAndARunInTheSameHomeAgreeOnWhetherTheShellSiftCuts(t *testing.
 		events, _ := filepath.Glob(filepath.Join(p.home, ".tofu", "projects", "*", "sessions", "*", "events.jsonl"))
 		session := ""
 		for _, path := range events {
-			raw, err := os.ReadFile(path)
+			dir := filepath.Dir(path)
+			recorded, err := sessionstore.NewStore(filepath.Dir(dir)).Events(filepath.Base(dir))
 			if err != nil {
 				t.Fatal(err)
 			}
-			session += string(raw)
+			for _, event := range recorded {
+				session += string(event.Body)
+			}
 		}
 		cut := strings.Contains(session, "bytes of output removed, the judged method")
 		refused := strings.TrimPrefix(strings.TrimSpace(ran), "tofu run: ")
