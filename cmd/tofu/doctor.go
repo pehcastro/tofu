@@ -126,6 +126,8 @@ type doctorReport struct {
 	Gate        doctorGate         `json:"gate"`
 	Library     doctorLibrary      `json:"library"`
 	Rules       []doctorRule       `json:"rules"`
+	Overrides   []overrideListing  `json:"overrides,omitempty"`
+	Unreadable  string             `json:"overrides_unreadable,omitempty"`
 	Calibration string             `json:"calibration"`
 	Ledger      string             `json:"ledger"`
 	SpendLimit  string             `json:"spend_limit"`
@@ -207,6 +209,13 @@ func doctorState(now time.Time) doctorReport {
 		Root:        root,
 		Go:          sys.GoVersion(),
 		OS:          sys.OS() + "/" + sys.Arch(),
+	}
+	stack, err := stackRules("", root)
+	if err != nil {
+		report.Unreadable = err.Error()
+	}
+	for _, found := range stack.overrides {
+		report.Overrides = append(report.Overrides, *found.listing())
 	}
 	if len(report.Blockers) > 0 {
 		report.Verdict = doctorNotReady

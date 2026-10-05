@@ -69,6 +69,10 @@ exit 0
         "do": "tofu update"
       },
       {
+        "text": "change what a rule tofu ships says, for this project",
+        "do": "tofu rules add <id> \"<text>\" --reason \"<why>\""
+      },
+      {
         "text": "run the next task on another model",
         "do": "/models in the app, then pick a model"
       },

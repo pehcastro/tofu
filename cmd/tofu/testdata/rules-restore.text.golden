@@ -1,0 +1,5 @@
+exit 0
+--- stdout
+- override of em_dash  ~/project/.tofu/rules/em_dash@1.yaml
+  → undo: tofu rules off em_dash --reason "quoted prose"
+--- stderr

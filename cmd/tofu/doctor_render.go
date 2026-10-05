@@ -29,7 +29,7 @@ func doctorPage(page cli.Page, report doctorReport) []string {
 	lines = append(lines, "", page.Section("shell", cli.Verdict{}))
 	lines = append(lines, cli.Indent(page.Rows([]cli.Row{proxyRow(report.Proxy)})...)...)
 	lines = append(lines, "", page.Section("rules", cli.Verdict{}))
-	lines = append(lines, cli.Indent(page.Rows(ruleRows(report.Library, report.Rules))...)...)
+	lines = append(lines, cli.Indent(page.Rows(append(ruleRows(report.Library, report.Rules), overrideRows(report)...))...)...)
 	calibration, _, _ := strings.Cut(report.Calibration, ",")
 	lines = append(lines, "", page.Section("state", cli.Verdict{}))
 	return append(lines, cli.Indent(page.Facts([]cli.Fact{{Label: "calibration", Text: calibration}, {Label: "ledger", Text: report.Ledger}})...)...)
@@ -93,6 +93,23 @@ func proxyRow(proxy doctorProxy) cli.Row {
 		return cli.Row{Mark: cli.Warn, Cells: []string{"rtk", "not on PATH, so bash commands run as asked"}, Hint: proxy.Install}
 	}
 	return cli.Row{Mark: cli.Done, Cells: []string{"rtk", proxy.Version + factSeparator + "rewrites every bash command"}, Detail: from}
+}
+
+func overrideRows(report doctorReport) []cli.Row {
+	if report.Unreadable != "" {
+		return []cli.Row{{Mark: cli.Fail, Cells: []string{"overrides", "unreadable"}, Detail: report.Unreadable}}
+	}
+	if len(report.Overrides) == 0 {
+		return nil
+	}
+	var stale []cli.Row
+	for _, o := range report.Overrides {
+		if o.Stale {
+			stale = append(stale, cli.Row{Mark: cli.Warn, Cells: []string{o.ref(), o.Layer + factSeparator + o.staleWhy()}})
+		}
+	}
+	summary := cli.Row{Mark: cli.Changed, Cells: []string{"overrides", plural(len(report.Overrides), "rule") + " changed by you"}, Hint: "tofu rules overrides"}
+	return append([]cli.Row{summary}, stale...)
 }
 
 func ruleRows(library doctorLibrary, rules []doctorRule) []cli.Row {

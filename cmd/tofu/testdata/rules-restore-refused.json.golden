@@ -1,0 +1,16 @@
+exit 1
+--- stdout
+{
+  "tofu": "VERSION",
+  "verb": "rules restore",
+  "ok": false,
+  "at": "AT",
+  "data": null,
+  "problems": [
+    {
+      "what": "the project rules carry no override of em_dash",
+      "hint": "tofu rules overrides"
+    }
+  ]
+}
+--- stderr

@@ -13,7 +13,7 @@ exit 0
         "file": "HOME/project/.tofu/rules/em_dash@1.yaml"
       }
     ],
-    "undo": "tofu rules off em_dash"
+    "undo": "tofu rules off em_dash --reason \"quoted prose\""
   },
   "problems": []
 }

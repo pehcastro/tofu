@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cmp"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -23,8 +24,9 @@ const (
 	rulesFireSuffix     = ".rules.jsonl"
 	rulesFromTheBinary  = "the binary"
 	rulesFromTheProject = "the project"
-	rulesSubcommands    = "tofu rules list|check|fired|index|add|off|remove"
+	rulesSubcommands    = "tofu rules list|check|fired|index|overrides|add|off|restore|remove"
 	rulesListUsage      = "tofu rules list [--library dir] [--dir project] [--json]"
+	rulesOverridesUsage = "tofu rules overrides [--library dir] [--dir project] [--json]"
 	rulesCheckUsage     = "tofu rules check [path] [--library dir] [--dir project] [--json]"
 )
 
@@ -35,11 +37,90 @@ type rulesFlags struct {
 }
 
 type ruleListing struct {
-	ID     string `json:"id"`
-	Kind   string `json:"kind"`
-	Origin string `json:"origin"`
-	Mode   string `json:"mode,omitempty"`
-	File   string `json:"file,omitempty"`
+	ID       string           `json:"id"`
+	Kind     string           `json:"kind"`
+	Origin   string           `json:"origin"`
+	Mode     string           `json:"mode,omitempty"`
+	File     string           `json:"file,omitempty"`
+	Override *overrideListing `json:"override,omitempty"`
+}
+
+type overrideListing struct {
+	RuleID  string `json:"rule_id"`
+	Version int    `json:"version,omitempty"`
+	Current int    `json:"current,omitempty"`
+	Layer   string `json:"layer"`
+	Change  string `json:"change"`
+	Text    string `json:"text,omitempty"`
+	Reason  string `json:"reason,omitempty"`
+	By      string `json:"by,omitempty"`
+	At      string `json:"at,omitempty"`
+	Stale   bool   `json:"stale"`
+	File    string `json:"file"`
+}
+
+type overridesReport struct {
+	Origin    string            `json:"origin"`
+	Overrides []overrideListing `json:"overrides"`
+}
+
+type layerOverride struct {
+	layer string
+	rule.Overriding
+}
+
+type ruleStack struct {
+	rules     []rule.Rule
+	origin    string
+	under     map[string][]rule.Rule
+	overrides []layerOverride
+}
+
+func (o layerOverride) listing() *overrideListing {
+	r := o.Rule
+	listed := &overrideListing{RuleID: cmp.Or(r.Override.Of, r.ID), Version: r.Override.Version, Current: o.Base.Version, Layer: o.layer, Change: "text", Text: r.Text,
+		Reason: r.Override.Reason, By: string(r.Override.By), At: r.Override.At, Stale: o.Stale, File: r.File}
+	if r.Mode == rule.ModeOff {
+		listed.Change, listed.Text = string(rule.ModeOff), ""
+	}
+	return listed
+}
+
+func stackRules(library, project string) (ruleStack, error) {
+	rules, origin, err := baseRules(library)
+	if err != nil {
+		return ruleStack{}, err
+	}
+	layers, err := userRuleLayers(project)
+	if err != nil {
+		return ruleStack{}, err
+	}
+	stack := ruleStack{origin: origin, under: map[string][]rule.Rule{}}
+	for _, layer := range layers {
+		over, err := layer.load()
+		if err != nil {
+			return ruleStack{}, err
+		}
+		stack.under[layer.name] = rules
+		for _, found := range rule.Overrides(rules, over) {
+			stack.overrides = append(stack.overrides, layerOverride{layer.name, found})
+		}
+		rules = rule.Layer(rules, over)
+	}
+	stack.rules = rules
+	return stack, nil
+}
+
+func (s ruleStack) applied(r rule.Rule) *overrideListing {
+	at := slices.IndexFunc(s.overrides, func(o layerOverride) bool { return o.Rule.File == r.File })
+	if at < 0 {
+		return nil
+	}
+	return s.overrides[at].listing()
+}
+
+func (s ruleStack) switchedOff() []layerOverride {
+	return slices.DeleteFunc(slices.Clone(s.overrides), func(o layerOverride) bool { return o.Stale || o.Rule.Mode != rule.ModeOff })
 }
 
 type ruleFireListing struct {
@@ -90,28 +171,18 @@ func rulesVerb(args []string, out, errOut io.Writer) int {
 		return rulesFiredVerb(args[1:], out, errOut)
 	case "index":
 		return rulesIndexVerb(args[1:], out, errOut)
+	case "overrides":
+		return rulesOverridesVerb(args[1:], out, errOut)
+	case "restore":
+		return rulesRestoreVerb(args[1:], out, errOut)
 	default:
 		return bare.usage(fmt.Errorf("unknown subcommand %q", args[0]))
 	}
 }
 
-func loadRules(override, project string) ([]rule.Rule, string, error) {
-	rules, origin, err := baseRules(override)
-	if err != nil {
-		return nil, "", err
-	}
-	layers, err := userRuleLayers(project)
-	if err != nil {
-		return nil, "", err
-	}
-	for _, layer := range layers {
-		over, err := layer.load()
-		if err != nil {
-			return nil, "", err
-		}
-		rules = rule.Layer(rules, over)
-	}
-	return rules, origin, nil
+func loadRules(library, project string) ([]rule.Rule, string, error) {
+	stack, err := stackRules(library, project)
+	return stack.rules, stack.origin, err
 }
 
 func baseRules(override string) ([]rule.Rule, string, error) {
@@ -158,7 +229,7 @@ func rulesListVerb(args []string, out, errOut io.Writer) int {
 	if err != nil {
 		return o.usage(err)
 	}
-	rules, origin, err := loadRules(opts.library, opts.dir)
+	stack, err := stackRules(opts.library, opts.dir)
 	if err != nil {
 		return o.fail(err)
 	}
@@ -166,10 +237,10 @@ func rulesListVerb(args []string, out, errOut io.Writer) int {
 	if err != nil {
 		return o.fail(err)
 	}
-	listing := make([]ruleListing, len(rules))
-	for i, r := range rules {
-		listing[i] = ruleListing{ID: r.ID, Kind: string(r.Kind), Origin: "shipped"}
-		if origin != rulesFromTheBinary {
+	listing := make([]ruleListing, len(stack.rules))
+	for i, r := range stack.rules {
+		listing[i] = ruleListing{ID: r.ID, Kind: string(r.Kind), Origin: "shipped", Override: stack.applied(r)}
+		if stack.origin != rulesFromTheBinary {
 			listing[i].Origin = "library"
 		}
 		if r.Checker != "" {
@@ -179,18 +250,25 @@ func rulesListVerb(args []string, out, errOut io.Writer) int {
 			listing[i].Origin, listing[i].File = layers[at].name, r.File
 		}
 	}
-	report := ruleListReport{Origin: origin, Rules: listing}
+	for _, off := range stack.switchedOff() {
+		listing = append(listing, ruleListing{ID: off.Base.ID, Kind: string(off.Base.Kind), Origin: off.layer, Mode: string(rule.ModeOff), File: off.Rule.File, Override: off.listing()})
+	}
+	report := ruleListReport{Origin: stack.origin, Rules: listing}
 	return o.done(true, report, report.lines)
 }
 
 func (report ruleListReport) lines(page cli.Page) []string {
 	var origins []string
 	checks := map[string]int{}
+	running := 0
 	for _, r := range report.Rules {
 		if !slices.Contains(origins, r.Origin) {
 			origins = append(origins, r.Origin)
 		}
 		checks[r.Mode]++
+		if r.Mode != string(rule.ModeOff) {
+			running++
+		}
 	}
 	verdict := cli.Verdict{Mark: cli.Done, Text: "no checks"}
 	var counts []string
@@ -203,16 +281,83 @@ func (report ruleListReport) lines(page cli.Page) []string {
 	if len(counts) > 0 {
 		verdict.Text = strings.Join(counts, " · ")
 	}
-	lines := page.Title("Rules", []string{strconv.Itoa(len(report.Rules)) + " run", "from " + page.Path(report.Origin)}, verdict)
+	lines := page.Title("Rules", []string{strconv.Itoa(running) + " run", "from " + page.Path(report.Origin)}, verdict)
 	for _, name := range origins {
 		var rows []cli.Row
 		for _, r := range report.Rules {
-			if r.Origin == name {
-				rows = append(rows, cli.Row{Mark: listingMark(rule.Mode(r.Mode)), Cells: []string{r.ID, r.Kind, r.Mode}, Detail: page.Path(r.File)})
+			if r.Origin != name {
+				continue
 			}
+			row := cli.Row{Mark: listingMark(rule.Mode(r.Mode)), Cells: []string{r.ID, r.Kind, r.Mode}, Detail: page.Path(r.File)}
+			if r.Override != nil {
+				row.Detail = r.Override.why()
+			}
+			rows = append(rows, row)
 		}
 		lines = append(lines, "", page.Section(name, cli.Verdict{}))
 		lines = append(lines, cli.Indent(page.Rows(rows)...)...)
+	}
+	return lines
+}
+
+func (o overrideListing) why() string {
+	return "overridden in " + o.Layer + ": " + cmp.Or(o.Reason, "no reason given")
+}
+
+func (o overrideListing) ref() string {
+	if o.Version == 0 {
+		return o.RuleID
+	}
+	return o.RuleID + "@" + strconv.Itoa(o.Version)
+}
+
+func (o overrideListing) staleWhy() string {
+	if o.Current == 0 {
+		return "stale: no rule " + o.RuleID + " runs below it"
+	}
+	return "stale: the rule is at @" + strconv.Itoa(o.Current) + " and runs unchanged"
+}
+
+func rulesOverridesVerb(args []string, out, errOut io.Writer) int {
+	o := verbOutput{verb: "rules overrides", usageLine: rulesOverridesUsage, asJSON: jsonAsked(args), out: out, errOut: errOut}
+	opts, err := parseRulesFlags(args)
+	if err == nil && len(opts.rest) > 0 {
+		err = fmt.Errorf("unknown argument %q", opts.rest[0])
+	}
+	if err != nil {
+		return o.usage(err)
+	}
+	stack, err := stackRules(opts.library, opts.dir)
+	if err != nil {
+		return o.fail(err)
+	}
+	report := overridesReport{Origin: stack.origin, Overrides: make([]overrideListing, len(stack.overrides))}
+	for i, found := range stack.overrides {
+		report.Overrides[i] = *found.listing()
+	}
+	return o.done(true, report, report.lines)
+}
+
+func (report overridesReport) lines(page cli.Page) []string {
+	verdict := cli.Verdict{Mark: cli.Done, Text: "no overrides"}
+	rows := make([]cli.Row, len(report.Overrides))
+	stale := 0
+	for i, o := range report.Overrides {
+		rows[i] = cli.Row{Mark: cli.Changed, Cells: []string{o.ref(), o.Layer, o.Change, cmp.Or(o.Reason, "no reason given")}, Detail: strings.TrimSpace("by " + cmp.Or(o.By, "person") + " " + o.At + " " + page.Path(o.File))}
+		if o.Stale {
+			stale++
+			rows[i].Mark, rows[i].Detail = cli.Warn, o.staleWhy()
+		}
+	}
+	switch {
+	case stale > 0:
+		verdict = cli.Verdict{Mark: cli.Warn, Text: strconv.Itoa(stale) + " stale of " + strconv.Itoa(len(rows))}
+	case len(rows) > 0:
+		verdict = cli.Verdict{Mark: cli.Changed, Text: plural(len(rows), "override")}
+	}
+	lines := page.Title("Rule overrides", []string{"from " + page.Path(report.Origin)}, verdict)
+	if len(rows) > 0 {
+		lines = append(append(lines, ""), page.Rows(rows)...)
 	}
 	return lines
 }

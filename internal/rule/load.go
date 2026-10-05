@@ -6,6 +6,8 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"slices"
+	"strconv"
 	"strings"
 )
 
@@ -23,7 +25,7 @@ func LoadFS(shipped fs.FS, root string) ([]Rule, error) {
 		if declared(data, "kind") == ThresholdKind {
 			return nil
 		}
-		one, err := parseRule(data, path.Join(root, name))
+		one, err := parseFile(data, path.Join(root, name))
 		if err != nil {
 			if dir != "." {
 				return fmt.Errorf("%w (%s was read as a rule because its directory is named %q)", err, path.Join(root, dir), "rules")
@@ -48,6 +50,24 @@ func declared(data []byte, want string) string {
 		return nil
 	})
 	return found
+}
+
+func parseFile(data []byte, file string) (Rule, error) {
+	parse := parseRule
+	if declared(data, "overrides") != "" {
+		parse = parseOverride
+	}
+	r, err := parse(data, file)
+	if err != nil {
+		return Rule{}, err
+	}
+	r.Version = 1
+	if _, version, named := strings.Cut(strings.TrimSuffix(path.Base(file), ".yaml"), "@"); named {
+		if r.Version, err = strconv.Atoi(version); err != nil || r.Version < 1 {
+			return Rule{}, fmt.Errorf("%s: a rule file is named <id>@<version>.yaml, and %q is not a version", file, version)
+		}
+	}
+	return r, nil
 }
 
 func parseRule(data []byte, path string) (Rule, error) {
@@ -133,8 +153,8 @@ func parseRule(data []byte, path string) (Rule, error) {
 }
 
 func HumanRuleFile(id string, concern Concern, mode Mode, text string) ([]byte, error) {
-	if id == "" || strings.ContainsFunc(id, func(r rune) bool { return (r < 'a' || r > 'z') && (r < '0' || r > '9') && r != '_' }) {
-		return nil, fmt.Errorf("a rule id is lower case letters, digits and underscores, found %q", id)
+	if err := validID(id); err != nil {
+		return nil, err
 	}
 	if strings.TrimSpace(text) == "" || strings.ContainsAny(text, "\r\n") {
 		return nil, fmt.Errorf("rule %q needs its text on one line", id)
@@ -155,29 +175,31 @@ func LoadDir(dir string) ([]Rule, error) {
 	return loaded, nil
 }
 
-func Layer(shipped, project []Rule) []Rule {
-	pending := make(map[string]Rule, len(project))
-	for _, one := range project {
-		pending[one.ID] = one
+func Layer(below, layer []Rule) []Rule {
+	placed := make(map[int]Rule, len(layer))
+	var added []Rule
+	for _, one := range layer {
+		at, overrides, stale := target(below, one)
+		switch {
+		case stale:
+		case overrides:
+			placed[at] = one.over(below[at])
+		default:
+			added = append(slices.DeleteFunc(added, func(r Rule) bool { return r.ID == one.ID }), one)
+		}
 	}
-	kept := make([]Rule, 0, len(shipped)+len(project))
-	keep := func(one Rule) {
+	kept := make([]Rule, 0, len(below)+len(added))
+	for i, one := range below {
+		if over, found := placed[i]; found {
+			one = over
+		}
 		if one.Mode != ModeOff {
 			kept = append(kept, one)
 		}
 	}
-	for _, one := range shipped {
-		if override, replaced := pending[one.ID]; replaced {
-			delete(pending, one.ID)
-			keep(override)
-			continue
-		}
-		keep(one)
-	}
-	for _, one := range project {
-		if _, unused := pending[one.ID]; unused {
-			delete(pending, one.ID)
-			keep(one)
+	for _, one := range added {
+		if one.Mode != ModeOff {
+			kept = append(kept, one)
 		}
 	}
 	return kept
@@ -228,6 +250,8 @@ func (r *Rule) setField(key, value, path string, line int) error {
 		r.Text = value
 	case "notes":
 		r.Notes = value
+	case "reason", "by", "at":
+		return fmt.Errorf("%s:%d: %s belongs to an override, whose overrides: field names the rule it changes", path, line, key)
 	default:
 		return fmt.Errorf("%s:%d: unknown field %q", path, line, key)
 	}

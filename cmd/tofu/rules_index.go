@@ -13,12 +13,13 @@ import (
 )
 
 type ruleIndexListing struct {
-	RuleID  string `json:"rule_id"`
-	Fires   bool   `json:"fires"`
-	Why     string `json:"why"`
-	Concern string `json:"concern"`
-	Kind    string `json:"kind"`
-	Mode    string `json:"mode"`
+	RuleID   string           `json:"rule_id"`
+	Fires    bool             `json:"fires"`
+	Why      string           `json:"why"`
+	Concern  string           `json:"concern"`
+	Kind     string           `json:"kind"`
+	Mode     string           `json:"mode"`
+	Override *overrideListing `json:"override,omitempty"`
 }
 
 type ruleIndexReport struct {
@@ -58,11 +59,12 @@ func rulesIndexVerb(args []string, out, errOut io.Writer) int {
 		return o.usage(err)
 	}
 	o.asJSON = opts.json
-	rules, origin, err := loadRules(opts.library, opts.dir)
+	stack, err := stackRules(opts.library, opts.dir)
 	if err != nil {
 		return o.fail(err)
 	}
-	report := ruleIndexReport{Origin: origin, Task: opts.rest[0], TaskKind: string(verb), Paths: opts.rest[1:], Rules: make([]ruleIndexListing, 0, len(rules))}
+	rules := stack.rules
+	report := ruleIndexReport{Origin: stack.origin, Task: opts.rest[0], TaskKind: string(verb), Paths: opts.rest[1:], Rules: make([]ruleIndexListing, 0, len(rules))}
 	if report.Frameworks, err = rule.Frameworks(opts.dir, report.Paths); err != nil {
 		return o.fail(err)
 	}
@@ -70,26 +72,37 @@ func rulesIndexVerb(args []string, out, errOut io.Writer) int {
 		if m.Fires {
 			report.Firing++
 		}
-		report.Rules = append(report.Rules, ruleIndexListing{RuleID: m.RuleID, Fires: m.Fires, Why: m.Why, Concern: string(rules[i].Concern), Kind: string(rules[i].Kind), Mode: rules[i].Mode.String()})
+		report.Rules = append(report.Rules, ruleIndexListing{RuleID: m.RuleID, Fires: m.Fires, Why: m.Why, Concern: string(rules[i].Concern), Kind: string(rules[i].Kind), Mode: rules[i].Mode.String(), Override: stack.applied(rules[i])})
+	}
+	for _, off := range stack.switchedOff() {
+		report.Rules = append(report.Rules, ruleIndexListing{RuleID: off.Base.ID, Why: "never fires while it is switched off", Concern: string(off.Base.Concern), Kind: string(off.Base.Kind), Mode: string(rule.ModeOff), Override: off.listing()})
 	}
 	return o.done(true, report, report.lines)
 }
 
 func (report ruleIndexReport) lines(page cli.Page) []string {
-	verdict := cli.Verdict{Mark: cli.Idle, Text: "none of " + strconv.Itoa(len(report.Rules)) + " fire"}
-	if report.Firing > 0 {
-		verdict = cli.Verdict{Mark: cli.Active, Text: strconv.Itoa(report.Firing) + " of " + strconv.Itoa(len(report.Rules)) + " fire"}
-	}
 	var concerns []string
 	rows := make([]cli.Row, len(report.Rules))
+	running := len(report.Rules)
 	for i, r := range report.Rules {
 		rows[i] = cli.Row{Mark: cli.Idle, Cells: []string{r.RuleID}, Detail: r.Why}
+		if r.Override != nil {
+			rows[i].Detail = r.Override.why() + factSeparator + r.Why
+		}
+		if r.Mode == string(rule.ModeOff) {
+			rows[i].Mark = cli.Removed
+			running--
+		}
 		if r.Fires {
 			rows[i].Mark = cli.Active
 			if !slices.Contains(concerns, r.Concern) {
 				concerns = append(concerns, r.Concern)
 			}
 		}
+	}
+	verdict := cli.Verdict{Mark: cli.Idle, Text: "none of " + strconv.Itoa(running) + " fire"}
+	if report.Firing > 0 {
+		verdict = cli.Verdict{Mark: cli.Active, Text: strconv.Itoa(report.Firing) + " of " + strconv.Itoa(running) + " fire"}
 	}
 	lines := append(page.Title("Rules index", []string{"from " + page.Path(report.Origin)}, verdict), "")
 	facts := []cli.Fact{

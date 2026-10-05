@@ -1,0 +1,5 @@
+exit 1
+--- stdout
+--- stderr
+✗ tofu rules restore: the project rules carry no override of em_dash
+  → tofu rules overrides

@@ -1,0 +1,6 @@
+id: rule_override
+domain: general
+kind: human
+concern: process_discipline
+text: when one of these rules stops you from doing what the person asked, never work around it silently. name the rule, quote its reason, and ask whether to override it for this project, for every project, or not at all, with rule_override when you have it. a sub-agent has no rule_override and says so in its report instead, so the lead asks. after a no, work within the rule.
+notes: the rules are written for every user, and one project can have a good reason to want the opposite, like unit tests in a public SDK. a rule broken quietly teaches nothing and a rule obeyed against the person's words fails them, so the agent asks and the person's answer becomes an override file with a reason that tofu rules overrides lists.

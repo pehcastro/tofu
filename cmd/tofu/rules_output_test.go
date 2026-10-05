@@ -32,7 +32,11 @@ func outputCases() []outputCase {
 		{"add", []string{"rules", "add", "--global", "g1", "never write yaml by hand"}, exitOK},
 		{"add-refused", []string{"rules", "add", "--global", "g1", "again"}, exitVerdict},
 		{"add-replace", []string{"rules", "add", "--global", "--replace", "g1", "write yaml through tofu"}, exitOK},
-		{"off", []string{"rules", "off", "em_dash"}, exitOK},
+		{"off", []string{"rules", "off", "em_dash", "--reason", "quoted prose"}, exitOK},
+		{"overrides", []string{"rules", "overrides", "--library", "lib"}, exitOK},
+		{"restore", []string{"rules", "restore", "em_dash"}, exitOK},
+		{"restore-refused", []string{"rules", "restore", "em_dash"}, exitVerdict},
+		{"off-again", []string{"rules", "off", "em_dash", "--reason", "quoted prose"}, exitOK},
 		{"remove", []string{"rules", "remove", "em_dash"}, exitOK},
 		{"remove-refused", []string{"rules", "remove", "em_dash"}, exitVerdict},
 		{"agents-add", []string{"agents", "add", "planner", "--description", "plans the work", "--model", "claude-sub/claude-opus-5", "--tools", "read,search"}, exitOK},
@@ -107,6 +111,7 @@ func TestRulesAndAgentsVerbsMatchTheirTextAndJSONGoldens(t *testing.T) {
 					out = homeValue.ReplaceAllStringFunc(out, func(path string) string { return strings.ReplaceAll(path, `\\`, "/") })
 					out = strings.ReplaceAll(stamp.ReplaceAllString(out, `"at": "AT"`), konst.Version, "VERSION")
 				}
+				out = strings.ReplaceAll(out, time.Now().Format(time.DateOnly), "TODAY")
 				printed["rules-"+c.name+"."+mode+".golden"] = "exit " + strconv.Itoa(code) + "\n--- stdout\n" + out + "--- stderr\n" + errOut
 			}
 		})

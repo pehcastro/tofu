@@ -1,6 +1,6 @@
 exit 0
 --- stdout
-Docs · "change the colours"                                           33 matches
+Docs · "change the colours"                                           34 matches
 
   change the colours
     → tofu settings set theme Nord
@@ -32,6 +32,8 @@ Docs · "change the colours"                                           33 matche
     → tofu migrate
   update tofu to the latest release
     → tofu update
+  change what a rule tofu ships says, for this project
+    → tofu rules add <id> "<text>" --reason "<why>"
   run the next task on another model
     → /models in the app, then pick a model
   always run the orchestrator on one model

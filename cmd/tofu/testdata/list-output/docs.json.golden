@@ -250,12 +250,30 @@ exit 0
       },
       {
         "ask": "switch off a rule tofu ships",
-        "do": "tofu rules off <id>",
+        "do": "tofu rules off <id> --reason \"<why>\"",
+        "check": "tofu rules overrides",
+        "topic": "rules"
+      },
+      {
+        "ask": "change what a rule tofu ships says, for this project",
+        "do": "tofu rules add <id> \"<text>\" --reason \"<why>\"",
+        "check": "tofu rules overrides",
+        "topic": "rules"
+      },
+      {
+        "ask": "see which rules I overrode and why",
+        "do": "tofu rules overrides",
+        "check": "tofu doctor",
+        "topic": "rules"
+      },
+      {
+        "ask": "bring back a rule I switched off or overrode",
+        "do": "tofu rules restore <id>",
         "check": "tofu rules list",
         "topic": "rules"
       },
       {
-        "ask": "remove a rule I added, or bring back one I switched off",
+        "ask": "remove a rule I added",
         "do": "tofu rules remove <id>",
         "check": "tofu rules list",
         "topic": "rules"

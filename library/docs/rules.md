@@ -52,10 +52,16 @@ so nothing is overwritten by accident. Add `--replace` to write over it:
 
     tofu rules add --replace no_yaml "write yaml only through the generator"
 
-Switch a rule off, for this project or with `--global` everywhere:
+Override a rule tofu ships, for this project or with `--global`
+everywhere. An override says why, so `--reason` is required, and either
+switches the rule off or replaces what it says:
 
-    tofu rules off em_dash
-    tofu rules off --global em_dash
+    tofu rules off no_unit_test_after_code --project --reason "public SDK"
+    tofu rules add no_unit_test_after_code "<new text>" --reason "public SDK"
+
+The file names the rule and its version, `overrides: em_dash@1`, with
+`reason:`, `by:` and `at:`. When tofu ships a newer version, the override
+goes stale and the rule runs unchanged until you look again.
 
 Every write prints what changed, `+` added, `~` switched off or `-`
 removed, the file it wrote, and the command that undoes it:
@@ -77,8 +83,13 @@ task_shaping and identity.
 opens with `Rules · <n> run` and a count of `shadow` and `enforced`, then
 a row per rule that runs, grouped by where it came from, `shipped`,
 `library`, `global` or `project`, with its kind, its mode and the file for
-your own: `●` enforced, `○` shadow, `✓` a rule with no checker. A rule
-switched off is not in the list.
+your own: `●` enforced, `○` shadow, `✓` a rule with no checker, `-` a
+rule an override switched off. An overridden rule shows its reason.
+
+    tofu rules overrides
+
+lists every override with its layer, reason and date, and marks a stale
+one `⚠`. `tofu doctor` counts them and names the stale ones.
 
     tofu rules list --json
 
@@ -97,10 +108,12 @@ same in the app, after you edit a file by hand.
     tofu rules remove no_yaml
     tofu rules remove --global no_yaml
 
-deletes a rule you added, or the file that switched a rule off, which
-brings the shipped rule back. Without `--global` it only looks in the
+deletes a rule you added. Without `--global` it only looks in the
 project, and with it only in your home.
 
+    tofu rules restore no_unit_test_after_code
+
+deletes an override, which brings the shipped rule back.
+
 A rule tofu ships cannot be removed, since it is not a file of yours.
-`tofu rules remove em_dash` refuses and names `tofu rules off em_dash`
-instead.
+`tofu rules remove em_dash` refuses and names `tofu rules off` instead.

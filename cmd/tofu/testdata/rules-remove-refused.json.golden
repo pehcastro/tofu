@@ -9,7 +9,7 @@ exit 1
   "problems": [
     {
       "what": "em_dash has no file in the project rules",
-      "hint": "tofu rules off em_dash"
+      "hint": "tofu rules off em_dash --reason \"<why>\""
     }
   ]
 }

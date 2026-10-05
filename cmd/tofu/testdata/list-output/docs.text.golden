@@ -1,6 +1,6 @@
 exit 0
 --- stdout
-Docs · 70 asks                                                         13 topics
+Docs · 73 asks                                                         13 topics
 
 agents  add a sub-agent for every project or for one, choose the model it
   runs, and remove it
@@ -95,8 +95,14 @@ rules  add your own rules for every project or for one, switch a rule off, and
   add a rule to this project only
     → tofu rules add <id> "<text>"
   switch off a rule tofu ships
-    → tofu rules off <id>
-  remove a rule I added, or bring back one I switched off
+    → tofu rules off <id> --reason "<why>"
+  change what a rule tofu ships says, for this project
+    → tofu rules add <id> "<text>" --reason "<why>"
+  see which rules I overrode and why
+    → tofu rules overrides
+  bring back a rule I switched off or overrode
+    → tofu rules restore <id>
+  remove a rule I added
     → tofu rules remove <id>
   see which rules run and where each one comes from
     → tofu rules list

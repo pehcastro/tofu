@@ -1,0 +1,7 @@
+exit 0
+--- stdout
+Rule overrides · from lib                                           ~ 1 override
+
+~ em_dash@1  project  off  quoted prose  by person TODAY
+  ~/project/.tofu/rules/em_dash@1.yaml
+--- stderr

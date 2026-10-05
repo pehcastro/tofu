@@ -1,0 +1,27 @@
+exit 0
+--- stdout
+{
+  "tofu": "VERSION",
+  "verb": "rules overrides",
+  "ok": true,
+  "at": "AT",
+  "data": {
+    "origin": "lib",
+    "overrides": [
+      {
+        "rule_id": "em_dash",
+        "version": 1,
+        "current": 1,
+        "layer": "project",
+        "change": "off",
+        "reason": "quoted prose",
+        "by": "person",
+        "at": "AT",
+        "stale": false,
+        "file": "HOME/project/.tofu/rules/em_dash@1.yaml"
+      }
+    ]
+  },
+  "problems": []
+}
+--- stderr

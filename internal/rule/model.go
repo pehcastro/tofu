@@ -129,8 +129,25 @@ const (
 	ShapeDesign  Shape = "design"
 )
 
+type By string
+
+const (
+	ByPerson By = "person"
+	ByAsked  By = "asked"
+)
+
+type Override struct {
+	Of      string
+	Version int
+	Reason  string
+	By      By
+	At      string
+}
+
 type Rule struct {
 	ID           string
+	Version      int
+	Override     Override
 	Kind         Kind
 	Concern      Concern
 	Domain       string

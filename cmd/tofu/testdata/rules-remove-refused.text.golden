@@ -2,4 +2,4 @@ exit 1
 --- stdout
 --- stderr
 ✗ tofu rules remove: em_dash has no file in the project rules
-  → tofu rules off em_dash
+  → tofu rules off em_dash --reason "<why>"
