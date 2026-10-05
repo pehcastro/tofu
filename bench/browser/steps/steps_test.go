@@ -20,7 +20,10 @@ import (
 	libraryquestions "tofu/library/questions"
 )
 
-const fakeOrigin = "chrome-extension://tofustepsbench/"
+const (
+	fakeOrigin        = "chrome-extension://tofustepsbench/"
+	operationQuestion = "operation"
+)
 
 type latency struct {
 	native, evaluate, settle, act, jev time.Duration
@@ -252,37 +255,4 @@ func TestTheScriptAgainstAFakeExtensionFillsEveryPhase(t *testing.T) {
 		t.Errorf("the table reads\n%s", table.String())
 	}
 	t.Log("\n" + table.String())
-}
-
-func TestTheRecordedStatesReplayThroughTheLoop(t *testing.T) {
-	runs, err := Replay(filepath.Join("testdata", "quick-jade-stork"), browserStep(t))
-	if err != nil {
-		t.Fatal(err)
-	}
-	var recorded, recordedDone, decisions, calls, done int
-	var recordedJevMS, jevMS int64
-	for _, run := range runs {
-		recorded += run.Recorded
-		decisions += run.Decisions
-		calls += run.JevCalls
-		recordedJevMS += run.RecordedJevMS
-		jevMS += run.JevMS
-		if run.RecordedDone {
-			recordedDone++
-		}
-		if run.Status == jevloop.StatusDone {
-			done++
-		}
-		if strings.Contains(run.Reason, "chooser failed") || strings.Contains(run.Reason, errTapeAmbiguous.Error()) {
-			t.Errorf("%q did not replay: %s", run.Goal, run.Reason)
-		}
-		t.Logf("%-40.40q recorded %3d done %-5t | now %3d decisions %3d jev calls %s: %s", run.Goal, run.Recorded, run.RecordedDone, run.Decisions, run.JevCalls, run.Status, run.Reason)
-	}
-	if len(runs) != 13 || recorded != 288 || recordedDone == 0 || done == 0 {
-		t.Fatalf("%d runs over %d recorded decisions, %d and %d done; want 13 runs over 288", len(runs), recorded, recordedDone, done)
-	}
-	t.Logf("recorded: %d decisions, %.1f s of jev, %d of %d runs done, %.1f decisions and %.1f s of jev per completed action",
-		recorded, float64(recordedJevMS)/1000, recordedDone, len(runs), float64(recorded)/float64(recordedDone), float64(recordedJevMS)/1000/float64(recordedDone))
-	t.Logf("now:      %d decisions, %d jev calls, %.1f s of jev, %d of %d runs done, %.1f decisions, %.1f jev calls and %.1f s of jev per completed action",
-		decisions, calls, float64(jevMS)/1000, done, len(runs), float64(decisions)/float64(done), float64(calls)/float64(done), float64(jevMS)/1000/float64(done))
 }

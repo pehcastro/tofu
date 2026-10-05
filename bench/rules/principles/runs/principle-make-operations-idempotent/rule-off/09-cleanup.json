@@ -135,5 +135,5 @@
     "queued_turn_count": 0,
     "result_index": 0
   },
-  "test_output": "--- FAIL: TestCheckCleanupRepeatedAndPartial (0.01s)\n    zz_check_test.go:34: Cleanup when the work directory does not exist = open C:\\Users\\Luiz\\AppData\\Local\\Temp\\TestCheckCleanupRepeatedAndPartial846851684\\001\\work: The system cannot find the file specified.\nFAIL\nFAIL\ttask\t0.391s\nFAIL\n"
+  "test_output": "--- FAIL: TestCheckCleanupRepeatedAndPartial (0.01s)\n    zz_check_test.go:34: Cleanup when the work directory does not exist = open <home>\\AppData\\Local\\Temp\\TestCheckCleanupRepeatedAndPartial846851684\\001\\work: The system cannot find the file specified.\nFAIL\nFAIL\ttask\t0.391s\nFAIL\n"
 }

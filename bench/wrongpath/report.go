@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strings"
 
+	"tofu/bench/corpus"
 	"tofu/bench/report"
 )
 
@@ -12,7 +13,7 @@ const worstSessionsShown = 5
 
 func Render(result Result) string {
 	b := &strings.Builder{}
-	fmt.Fprintf(b, "corpus: %s, read at %s\n", result.SessionsDir, result.ReadAt.Format("2006-01-02 15:04 -07:00"))
+	fmt.Fprintf(b, "corpus: %s, read at %s\n", corpus.Scrub(result.SessionsDir), result.ReadAt.Format("2006-01-02 15:04 -07:00"))
 	fmt.Fprintf(b, "%d entries, %d read as sessions, %d skipped, %d carrying no wall clock\n",
 		result.Entries, result.Sessions, len(result.Skips), result.NoWallClock)
 	fmt.Fprintf(b, "%d tool calls, of which %d write or edit a file, and %d sessions carry no shape at all\n",

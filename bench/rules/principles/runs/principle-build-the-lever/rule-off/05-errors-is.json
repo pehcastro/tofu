@@ -72,7 +72,7 @@
         "tool_name": "Bash",
         "tool_use_id": "toolu_01QmZwB8243rjL3FxXzuDp89",
         "tool_input": {
-          "command": "cd \"C:/Users/Luiz/AppData/Local/Temp/tofu-principle-2371562296\" \u0026\u0026 git ls-files \u0026\u0026 rtk read errors.go \u0026\u0026 rtk grep -rn \"Error()\\|err.Error\\|strings.Contains\\|\\.Error() ==\" --include=*.go .",
+          "command": "cd \"<home>/AppData/Local/Temp/tofu-principle-2371562296\" \u0026\u0026 git ls-files \u0026\u0026 rtk read errors.go \u0026\u0026 rtk grep -rn \"Error()\\|err.Error\\|strings.Contains\\|\\.Error() ==\" --include=*.go .",
           "description": "List files, show errors.go, find error text comparisons"
         }
       },

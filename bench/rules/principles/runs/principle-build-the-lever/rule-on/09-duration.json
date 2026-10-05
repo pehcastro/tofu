@@ -88,7 +88,7 @@
         "tool_name": "Bash",
         "tool_use_id": "toolu_01H5noSauyttL6v4vf1XWMUr",
         "tool_input": {
-          "command": "git checkout -b ms-to-duration \u0026\u0026 mkdir -p /tmp/hand \u0026\u0026 cat \u003e /tmp/hand/config.go \u003c\u003c'EOF'\npackage task\n\nimport \"time\"\n\ntype Config struct {\n\tTimeout  time.Duration\n\tRetry    time.Duration\n\tIdle     time.Duration\n\tAttempts int\n}\n\nfunc Defaults() Config {\n\treturn Config{Timeout: 1500 * time.Millisecond, Retry: 200 * time.Millisecond, Idle: 60000 * time.Millisecond, Attempts: 3}\n}\n\nfunc (c Config) Budget() time.Duration {\n\treturn c.Timeout + time.Duration(c.Attempts)*c.Retry\n}\nEOF\ncat \u003e /tmp/hand/backoff.go \u003c\u003c'EOF'\npackage task\n\nimport \"time\"\n\nfunc Backoff(attempt int, base time.Duration) time.Duration {\n\td := base\n\tfor i := 0; i \u003c attempt; i++ {\n\t\td *= 2\n\t}\n\tif d \u003e 10000*time.Millisecond {\n\t\treturn 10000 * time.Millisecond\n\t}\n\treturn d\n}\n\nfunc Schedule(c Config) []time.Duration {\n\tout := make([]time.Duration, c.Attempts)\n\tfor i := range out {\n\t\tout[i] = Backoff(i, c.Retry)\n\t}\n\treturn out\n}\nEOF\ncat \u003e /tmp/hand/deadline.go \u003c\u003c'EOF'\npackage task\n\nimport \"time\"\n\nfunc Deadline(start time.Time, timeout time.Duration) time.Time {\n\treturn start.Add(timeout)\n}\n\nfunc Expired(start, now time.Time, idle time.Duration) bool {\n\treturn now.Sub(start) \u003e idle\n}\n\nfunc Remaining(start, now time.Time, c Config) time.Duration {\n\tleft := Deadline(start, c.Timeout).Sub(now)\n\tif left \u003c 0 {\n\t\treturn 0\n\t}\n\treturn left.Truncate(time.Millisecond)\n}\nEOF\ncd /tmp/hand \u0026\u0026 cp /c/Users/Luiz/AppData/Local/Temp/tofu-principle-38043965/go.mod . \u0026\u0026 gofmt -l . ; go vet ./...",
+          "command": "git checkout -b ms-to-duration \u0026\u0026 mkdir -p /tmp/hand \u0026\u0026 cat \u003e /tmp/hand/config.go \u003c\u003c'EOF'\npackage task\n\nimport \"time\"\n\ntype Config struct {\n\tTimeout  time.Duration\n\tRetry    time.Duration\n\tIdle     time.Duration\n\tAttempts int\n}\n\nfunc Defaults() Config {\n\treturn Config{Timeout: 1500 * time.Millisecond, Retry: 200 * time.Millisecond, Idle: 60000 * time.Millisecond, Attempts: 3}\n}\n\nfunc (c Config) Budget() time.Duration {\n\treturn c.Timeout + time.Duration(c.Attempts)*c.Retry\n}\nEOF\ncat \u003e /tmp/hand/backoff.go \u003c\u003c'EOF'\npackage task\n\nimport \"time\"\n\nfunc Backoff(attempt int, base time.Duration) time.Duration {\n\td := base\n\tfor i := 0; i \u003c attempt; i++ {\n\t\td *= 2\n\t}\n\tif d \u003e 10000*time.Millisecond {\n\t\treturn 10000 * time.Millisecond\n\t}\n\treturn d\n}\n\nfunc Schedule(c Config) []time.Duration {\n\tout := make([]time.Duration, c.Attempts)\n\tfor i := range out {\n\t\tout[i] = Backoff(i, c.Retry)\n\t}\n\treturn out\n}\nEOF\ncat \u003e /tmp/hand/deadline.go \u003c\u003c'EOF'\npackage task\n\nimport \"time\"\n\nfunc Deadline(start time.Time, timeout time.Duration) time.Time {\n\treturn start.Add(timeout)\n}\n\nfunc Expired(start, now time.Time, idle time.Duration) bool {\n\treturn now.Sub(start) \u003e idle\n}\n\nfunc Remaining(start, now time.Time, c Config) time.Duration {\n\tleft := Deadline(start, c.Timeout).Sub(now)\n\tif left \u003c 0 {\n\t\treturn 0\n\t}\n\treturn left.Truncate(time.Millisecond)\n}\nEOF\ncd /tmp/hand \u0026\u0026 cp <home>/AppData/Local/Temp/tofu-principle-38043965/go.mod . \u0026\u0026 gofmt -l . ; go vet ./...",
           "description": "Branch and write the hand-edited reference copy"
         }
       },
@@ -112,7 +112,7 @@
         "tool_name": "Bash",
         "tool_use_id": "toolu_01YSLFvxW7hDrEK6MZNg35JU",
         "tool_input": {
-          "command": "rtk ls /c/Users/Luiz/go/pkg/mod/golang.org/x/ 2\u003e\u00261; rtk ls /c/Users/Luiz/go/pkg/mod/cache/download/golang.org/x/tools/@v/ 2\u003e\u00261 | tail -5",
+          "command": "rtk ls <home>/go/pkg/mod/golang.org/x/ 2\u003e\u00261; rtk ls <home>/go/pkg/mod/cache/download/golang.org/x/tools/@v/ 2\u003e\u00261 | tail -5",
           "description": "Check for cached x/tools module"
         }
       },
@@ -128,7 +128,7 @@
         "tool_name": "Bash",
         "tool_use_id": "toolu_0111BqWveP6ayBFEkMJoXiEo",
         "tool_input": {
-          "command": "cd /c/Users/Luiz/AppData/Local/Temp/tofu-principle-38043965/tools/msdur \u0026\u0026 GOPROXY=off GOFLAGS=-mod=mod go mod tidy \u0026\u0026 rtk go vet . \u0026\u0026 go run . ../..",
+          "command": "cd <home>/AppData/Local/Temp/tofu-principle-38043965/tools/msdur \u0026\u0026 GOPROXY=off GOFLAGS=-mod=mod go mod tidy \u0026\u0026 rtk go vet . \u0026\u0026 go run . ../..",
           "description": "Tidy, vet and dry-run the codemod"
         }
       },
@@ -136,7 +136,7 @@
         "tool_name": "Bash",
         "tool_use_id": "toolu_01HDFHn919yC7U4y5pusfECE",
         "tool_input": {
-          "command": "GOPROXY=off GOFLAGS=-mod=mod go -C /c/Users/Luiz/AppData/Local/Temp/tofu-principle-38043965/tools/msdur mod tidy",
+          "command": "GOPROXY=off GOFLAGS=-mod=mod go -C <home>/AppData/Local/Temp/tofu-principle-38043965/tools/msdur mod tidy",
           "description": "Resolve codemod dependencies from local cache"
         }
       },
@@ -168,7 +168,7 @@
         "tool_name": "Bash",
         "tool_use_id": "toolu_01NUT7xF5uuYqg9B1H1SiJ9u",
         "tool_input": {
-          "command": "rtk git -C /c/Users/Luiz/AppData/Local/Temp/tofu-principle-38043965 diff --no-index --exit-code .hand/backoff.go backoff.go",
+          "command": "rtk git -C <home>/AppData/Local/Temp/tofu-principle-38043965 diff --no-index --exit-code .hand/backoff.go backoff.go",
           "description": "Diff codemod output against hand edit (backoff)"
         }
       },
@@ -176,7 +176,7 @@
         "tool_name": "Bash",
         "tool_use_id": "toolu_01EDPvhhS1sDcSs936p528km",
         "tool_input": {
-          "command": "rtk git -C /c/Users/Luiz/AppData/Local/Temp/tofu-principle-38043965 diff --no-index --exit-code .hand/config.go config.go",
+          "command": "rtk git -C <home>/AppData/Local/Temp/tofu-principle-38043965 diff --no-index --exit-code .hand/config.go config.go",
           "description": "Diff codemod output against hand edit (config)"
         }
       },
@@ -184,7 +184,7 @@
         "tool_name": "Bash",
         "tool_use_id": "toolu_01E7ExTsLXKBZ86V3T4gUaZ1",
         "tool_input": {
-          "command": "rtk git -C /c/Users/Luiz/AppData/Local/Temp/tofu-principle-38043965 diff --no-index --exit-code .hand/deadline.go deadline.go",
+          "command": "rtk git -C <home>/AppData/Local/Temp/tofu-principle-38043965 diff --no-index --exit-code .hand/deadline.go deadline.go",
           "description": "Diff codemod output against hand edit (deadline)"
         }
       },
@@ -216,7 +216,7 @@
         "tool_name": "Bash",
         "tool_use_id": "toolu_01UJ2VNZBJAkKFtfvqBVPMRV",
         "tool_input": {
-          "command": "rtk git -C /c/Users/Luiz/AppData/Local/Temp/tofu-principle-38043965 status --short",
+          "command": "rtk git -C <home>/AppData/Local/Temp/tofu-principle-38043965 status --short",
           "description": "Show working tree status"
         }
       }

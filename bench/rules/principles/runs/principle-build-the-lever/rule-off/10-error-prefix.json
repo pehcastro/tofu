@@ -72,7 +72,7 @@
         "tool_name": "Bash",
         "tool_use_id": "toolu_01He9xJsDsW6k69RYhGdjUQ6",
         "tool_input": {
-          "command": "cd \"C:/Users/Luiz/AppData/Local/Temp/tofu-principle-3371486213\" \u0026\u0026 rtk ls \u0026\u0026 sed -i 's/\"store: /\"kv: /' kv.go backup.go \u0026\u0026 rtk git diff --stat \u0026\u0026 rtk go vet ./... 2\u003e\u00261; rtk go test ./... 2\u003e\u00261 | tail -5",
+          "command": "cd \"<home>/AppData/Local/Temp/tofu-principle-3371486213\" \u0026\u0026 rtk ls \u0026\u0026 sed -i 's/\"store: /\"kv: /' kv.go backup.go \u0026\u0026 rtk git diff --stat \u0026\u0026 rtk go vet ./... 2\u003e\u00261; rtk go test ./... 2\u003e\u00261 | tail -5",
           "description": "Replace prefix, check build and tests"
         }
       },

@@ -72,7 +72,7 @@
         "tool_name": "Bash",
         "tool_use_id": "toolu_01GJ3sckxMfi1graJWNuhHKV",
         "tool_input": {
-          "command": "cd \"C:/Users/Luiz/AppData/Local/Temp/tofu-principle-1260946417\" \u0026\u0026 gofmt -l .; rtk go vet ./... \u0026\u0026 rtk go test ./..."
+          "command": "cd \"<home>/AppData/Local/Temp/tofu-principle-1260946417\" \u0026\u0026 gofmt -l .; rtk go vet ./... \u0026\u0026 rtk go test ./..."
         }
       },
       {

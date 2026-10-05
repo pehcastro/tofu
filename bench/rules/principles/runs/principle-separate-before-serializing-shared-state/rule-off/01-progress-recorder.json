@@ -72,14 +72,14 @@
         "tool_name": "Bash",
         "tool_use_id": "toolu_01PKW6JGiHpjBCBw9K2AeFLX",
         "tool_input": {
-          "command": "cd \"C:/Users/Luiz/AppData/Local/Temp/tofu-principle-2608489261\" \u0026\u0026 rtk ls -la \u0026\u0026 rtk read *.go go.mod 2\u003e/dev/null"
+          "command": "cd \"<home>/AppData/Local/Temp/tofu-principle-2608489261\" \u0026\u0026 rtk ls -la \u0026\u0026 rtk read *.go go.mod 2\u003e/dev/null"
         }
       },
       {
         "tool_name": "Bash",
         "tool_use_id": "toolu_01KYABY86f6zfivTU6AvzR2T",
         "tool_input": {
-          "command": "cd \"C:/Users/Luiz/AppData/Local/Temp/tofu-principle-2608489261\" \u0026\u0026 cat \u003e zz_test.go \u003c\u003c'EOF'\npackage task\nimport (\"fmt\";\"sync\";\"testing\")\nfunc TestConc(t *testing.T){\n d:=t.TempDir(); var wg sync.WaitGroup\n for _,a:=range []string{\"indexer\",\"metrics\"}{ a:=a; wg.Add(1); go func(){defer wg.Done(); r:=NewRecorder(d,a)\n  for i:=0;i\u003c300;i++{ if err:=r.Set(fmt.Sprintf(\"%s.k%d\",a,i%20),fmt.Sprint(i));err!=nil{t.Error(err)} }}()}\n stop:=make(chan bool); go func(){for{select{case\u003c-stop:return;default:}; if _,err:=Read(d);err!=nil{t.Error(err)}}}()\n wg.Wait(); close(stop)\n m,_:=Read(d); if len(m)!=40||m[\"indexer.k19\"]!=\"299\"||m[\"metrics.k0\"]!=\"280\"{t.Fatal(m)}\n}\nEOF\ngo vet ./... \u0026\u0026 go test -race -count=3 ./... ; rm zz_test.go"
+          "command": "cd \"<home>/AppData/Local/Temp/tofu-principle-2608489261\" \u0026\u0026 cat \u003e zz_test.go \u003c\u003c'EOF'\npackage task\nimport (\"fmt\";\"sync\";\"testing\")\nfunc TestConc(t *testing.T){\n d:=t.TempDir(); var wg sync.WaitGroup\n for _,a:=range []string{\"indexer\",\"metrics\"}{ a:=a; wg.Add(1); go func(){defer wg.Done(); r:=NewRecorder(d,a)\n  for i:=0;i\u003c300;i++{ if err:=r.Set(fmt.Sprintf(\"%s.k%d\",a,i%20),fmt.Sprint(i));err!=nil{t.Error(err)} }}()}\n stop:=make(chan bool); go func(){for{select{case\u003c-stop:return;default:}; if _,err:=Read(d);err!=nil{t.Error(err)}}}()\n wg.Wait(); close(stop)\n m,_:=Read(d); if len(m)!=40||m[\"indexer.k19\"]!=\"299\"||m[\"metrics.k0\"]!=\"280\"{t.Fatal(m)}\n}\nEOF\ngo vet ./... \u0026\u0026 go test -race -count=3 ./... ; rm zz_test.go"
         }
       },
       {

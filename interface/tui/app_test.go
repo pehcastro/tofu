@@ -332,7 +332,7 @@ func TestAKeyInAToolCallIsRedactedInTheChatAndTheFeed(t *testing.T) {
 }
 
 func keyEnvPath() string {
-	return `C:\Users\Luiz\AppData\Local\Temp\orch-drive\project\.env`
+	return `C:\Users\Ada\AppData\Local\Temp\orch-drive\project\.env`
 }
 
 func noKeyAtAll() string {

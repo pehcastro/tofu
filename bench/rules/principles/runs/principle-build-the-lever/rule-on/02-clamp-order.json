@@ -104,7 +104,7 @@
         "tool_name": "PowerShell",
         "tool_use_id": "toolu_01X28SDi1Y8mmdwVGQCfReQw",
         "tool_input": {
-          "command": "$env:SNAP = \"C:\\Users\\Luiz\\AppData\\Local\\Temp\\clamp_before.txt\"; go test -count=1 -run TestSnapshot .",
+          "command": "$env:SNAP = \"<home>\\AppData\\Local\\Temp\\clamp_before.txt\"; go test -count=1 -run TestSnapshot .",
           "description": "Record baseline outputs"
         }
       },
@@ -112,7 +112,7 @@
         "tool_name": "PowerShell",
         "tool_use_id": "toolu_01LLjh4u1Ag2LcZSUTrPFTXo",
         "tool_input": {
-          "command": "go test -count=1 -run TestSnapshot . -args C:\\Users\\Luiz\\AppData\\Local\\Temp\\clamp_before.txt",
+          "command": "go test -count=1 -run TestSnapshot . -args <home>\\AppData\\Local\\Temp\\clamp_before.txt",
           "description": "Record baseline outputs"
         }
       },
@@ -120,7 +120,7 @@
         "tool_name": "Bash",
         "tool_use_id": "toolu_01XSbrMhn7nDSkeoYX98d3vk",
         "tool_input": {
-          "command": "rtk go test -count=1 -run TestSnapshot C:/Users/Luiz/AppData/Local/Temp/tofu-principle-3127963167 -args C:/Users/Luiz/AppData/Local/Temp/clamp_before.txt",
+          "command": "rtk go test -count=1 -run TestSnapshot <home>/AppData/Local/Temp/tofu-principle-3127963167 -args <home>/AppData/Local/Temp/clamp_before.txt",
           "description": "Record baseline outputs"
         }
       },
@@ -144,7 +144,7 @@
         "tool_name": "Bash",
         "tool_use_id": "toolu_01F55mfY5spyPx43myZ6YYkV",
         "tool_input": {
-          "command": "python C:/Users/Luiz/AppData/Local/Temp/tofu-principle-3127963167/tools/clamp_swap.py --help",
+          "command": "python <home>/AppData/Local/Temp/tofu-principle-3127963167/tools/clamp_swap.py --help",
           "description": "Test if running the script is allowed"
         }
       }

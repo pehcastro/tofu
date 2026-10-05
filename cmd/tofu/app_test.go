@@ -634,7 +634,7 @@ func TestTheSessionFormatsTheNumbersItWasHanded(t *testing.T) {
 }
 
 func TestACallReadsAsIntentAndKeepsTheWholeCommandBehindIt(t *testing.T) {
-	long := `cd /mnt/f/localhost/ephem-sh/bob; for d in internal/* interface/* cmd/*; ` +
+	long := `cd /mnt/q/code/ephem-sh/bob; for d in internal/* interface/* cmd/*; ` +
 		`do n=$(find "$d" -name '*.go' | wc -l); echo "$d $n"; done`
 	for _, want := range []struct {
 		arguments string

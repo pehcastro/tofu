@@ -14,8 +14,12 @@ func TestReadCorpusRefusesARowThatCameOffTheRecordingMachine(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Fatal(err)
+	}
 	cases := map[string]string{
-		"a home path off the recording machine": "C:\\Users\\Luiz\\.local\\bin",
+		"a home path off the recording machine": filepath.Join(home, ".local", "bin"),
 		"something shaped like a credential":    "sk-ant-oat" + "-not-a-real-token",
 	}
 	for name, planted := range cases {

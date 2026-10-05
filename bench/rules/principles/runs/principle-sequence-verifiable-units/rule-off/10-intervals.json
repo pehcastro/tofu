@@ -72,7 +72,7 @@
         "tool_name": "Bash",
         "tool_use_id": "toolu_01VEKUtrc6LXMeAfwZSqr93s",
         "tool_input": {
-          "command": "cd \"C:/Users/Luiz/AppData/Local/Temp/tofu-principle-1376014990\" \u0026\u0026 rtk ls -la \u0026\u0026 rtk read *.go go.mod 2\u003e/dev/null",
+          "command": "cd \"<home>/AppData/Local/Temp/tofu-principle-1376014990\" \u0026\u0026 rtk ls -la \u0026\u0026 rtk read *.go go.mod 2\u003e/dev/null",
           "description": "List files and show Go sources"
         }
       },
@@ -96,7 +96,7 @@
         "tool_name": "Bash",
         "tool_use_id": "toolu_01Ui8f6N3B2oZNFUR78QvjY8",
         "tool_input": {
-          "command": "rtk go test -C \"C:/Users/Luiz/AppData/Local/Temp/tofu-principle-1376014990\" ./...",
+          "command": "rtk go test -C \"<home>/AppData/Local/Temp/tofu-principle-1376014990\" ./...",
           "description": "Run Go tests"
         }
       }

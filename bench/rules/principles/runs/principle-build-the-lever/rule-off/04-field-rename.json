@@ -72,7 +72,7 @@
         "tool_name": "Bash",
         "tool_use_id": "toolu_01RXXCtXs5UTHNFfWbDpD1yt",
         "tool_input": {
-          "command": "cd \"C:/Users/Luiz/AppData/Local/Temp/tofu-principle-784110088\" \u0026\u0026 git ls-files \u0026\u0026 cat $(git ls-files | grep -v '^\\.')",
+          "command": "cd \"<home>/AppData/Local/Temp/tofu-principle-784110088\" \u0026\u0026 git ls-files \u0026\u0026 cat $(git ls-files | grep -v '^\\.')",
           "description": "List and show repo files"
         }
       },
@@ -80,7 +80,7 @@
         "tool_name": "Bash",
         "tool_use_id": "toolu_018RZhTXHavdgubBfjv25vky",
         "tool_input": {
-          "command": "cd \"C:/Users/Luiz/AppData/Local/Temp/tofu-principle-784110088\" \u0026\u0026 rtk go build ./... \u0026\u0026 rtk go vet ./... \u0026\u0026 rtk grep -rnE '\\b(Nm|Em|Bal)\\b' *.go; echo done",
+          "command": "cd \"<home>/AppData/Local/Temp/tofu-principle-784110088\" \u0026\u0026 rtk go build ./... \u0026\u0026 rtk go vet ./... \u0026\u0026 rtk grep -rnE '\\b(Nm|Em|Bal)\\b' *.go; echo done",
           "description": "Build, vet, check for leftover names"
         }
       },

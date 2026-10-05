@@ -72,7 +72,7 @@
         "tool_name": "Bash",
         "tool_use_id": "toolu_01UFRURiD5wRGu9LnFY4UTAu",
         "tool_input": {
-          "command": "cd \"C:/Users/Luiz/AppData/Local/Temp/tofu-principle-2956653648\" \u0026\u0026 rtk ls -la \u0026\u0026 rtk read shipping.go \u0026\u0026 rtk ls *_test.go 2\u003e/dev/null",
+          "command": "cd \"<home>/AppData/Local/Temp/tofu-principle-2956653648\" \u0026\u0026 rtk ls -la \u0026\u0026 rtk read shipping.go \u0026\u0026 rtk ls *_test.go 2\u003e/dev/null",
           "description": "List files and show shipping.go"
         }
       },

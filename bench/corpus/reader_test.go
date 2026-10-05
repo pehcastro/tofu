@@ -103,7 +103,14 @@ func TestTheReaderParsesBothSchemas(t *testing.T) {
 	})
 }
 
-const plantedHomePath = "F:/localhost/ephem-sh/bob owned by pehcastro@gmail.com"
+func plantedHomePath(t *testing.T) string {
+	t.Helper()
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return filepath.ToSlash(filepath.Join(home, "src", "bob"))
+}
 
 func serializedLeaks(t *testing.T, recorded RecordedTurn) []string {
 	t.Helper()
@@ -132,7 +139,7 @@ func TestAPlantedHomePathDoesNotSurviveTheRead(t *testing.T) {
 	if _, ok := fields["task"]; ok {
 		taskKey = "task"
 	}
-	fields[taskKey] = plantedHomePath
+	fields[taskKey] = plantedHomePath(t)
 	planted, err := json.Marshal(fields)
 	if err != nil {
 		t.Fatal(err)
@@ -163,7 +170,7 @@ func TestAPlantedHomePathDoesNotSurviveTheDirRead(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	planted := strings.Replace(string(body), `"task":"`, `"task":"`+plantedHomePath+" ", 1)
+	planted := strings.Replace(string(body), `"task":"`, `"task":"`+plantedHomePath(t)+" ", 1)
 	if planted == string(body) {
 		t.Fatal("the outcome line carries no \"task\" key to plant into, so this test proves nothing")
 	}
@@ -255,8 +262,8 @@ func TestAPlantedHomePathInReplyTextDoesNotSurviveTheRead(t *testing.T) {
 	if !ok {
 		t.Skip("this turn's step is not the expected shape")
 	}
-	step["AssistantText"] = plantedHomePath
-	step["assistant_text"] = plantedHomePath
+	step["AssistantText"] = plantedHomePath(t)
+	step["assistant_text"] = plantedHomePath(t)
 	steps[0] = step
 	fields[stepsKey] = steps
 	planted, err := json.Marshal(fields)
@@ -331,7 +338,7 @@ func TestAPlantedHomePathInOutcomeDoesNotSurviveTheRead(t *testing.T) {
 	if _, ok := fields["outcome"]; ok {
 		outcomeKey = "outcome"
 	}
-	fields[outcomeKey] = plantedHomePath
+	fields[outcomeKey] = plantedHomePath(t)
 	planted, err := json.Marshal(fields)
 	if err != nil {
 		t.Fatal(err)
@@ -385,7 +392,7 @@ func TestAPlantedHomePathInAutoCompactionDoesNotSurviveTheDirRead(t *testing.T) 
 	if err := json.Unmarshal(header, &fields); err != nil {
 		t.Fatal(err)
 	}
-	fields["auto_compaction"] = fields["auto_compaction"].(string) + " " + plantedHomePath
+	fields["auto_compaction"] = fields["auto_compaction"].(string) + " " + plantedHomePath(t)
 	planted, err := json.Marshal(fields)
 	if err != nil {
 		t.Fatal(err)
@@ -415,7 +422,7 @@ func TestAPlantedHomePathInBudgetSourceDoesNotSurviveTheDirRead(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	planted := strings.Replace(string(body), `"Source":"`, `"Source":"`+plantedHomePath+" ", 1)
+	planted := strings.Replace(string(body), `"Source":"`, `"Source":"`+plantedHomePath(t)+" ", 1)
 	if planted == string(body) {
 		t.Fatal("the outcome line carries no budget \"Source\" key to plant into, so this test proves nothing")
 	}
@@ -648,7 +655,7 @@ func TestTheCorpusCallDurationsHaveAMedianAndAWorst(t *testing.T) {
 }
 
 func TestARestartedSessionReadsAsTwoSeparateTurns(t *testing.T) {
-	const restartedDir = "F:/localhost/admin-template/.tofu/sessions/turn-18d7f94ce7a62138"
+	restartedDir := filepath.Join(filepath.Dir(filepath.Dir(sys.SourceRoot())), "admin-template", ".tofu", "sessions", "turn-18d7f94ce7a62138")
 	if _, err := os.Stat(restartedDir); err != nil {
 		t.Skipf("no %s on this machine: %v", restartedDir, err)
 	}

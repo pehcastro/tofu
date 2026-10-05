@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"tofu/internal/recall"
+	"tofu/internal/secret"
 	"tofu/internal/session"
 )
 
@@ -254,33 +255,33 @@ type Walked struct {
 	WalkElapsed time.Duration
 }
 
-func scrubTurn(recorded RecordedTurn) RecordedTurn {
-	recorded.Task = Scrub(recorded.Task)
-	recorded.Outcome = Scrub(recorded.Outcome)
-	recorded.AutoCompaction = Scrub(recorded.AutoCompaction)
-	recorded.Budget.Source = Scrub(recorded.Budget.Source)
-	recorded.Budget.WindowSource = Scrub(recorded.Budget.WindowSource)
+func scrubTurn(identities secret.Identities, recorded RecordedTurn) RecordedTurn {
+	recorded.Task = identities.Scrub(recorded.Task)
+	recorded.Outcome = identities.Scrub(recorded.Outcome)
+	recorded.AutoCompaction = identities.Scrub(recorded.AutoCompaction)
+	recorded.Budget.Source = identities.Scrub(recorded.Budget.Source)
+	recorded.Budget.WindowSource = identities.Scrub(recorded.Budget.WindowSource)
 	for i, step := range recorded.Steps {
-		recorded.Steps[i].AssistantText = Scrub(step.AssistantText)
-		recorded.Steps[i].StopReason = Scrub(step.StopReason)
+		recorded.Steps[i].AssistantText = identities.Scrub(step.AssistantText)
+		recorded.Steps[i].StopReason = identities.Scrub(step.StopReason)
 		for j, call := range step.ToolCalls {
 			if len(call.Args) > 0 {
-				call.Args = json.RawMessage(Scrub(string(call.Args)))
+				call.Args = json.RawMessage(identities.Scrub(string(call.Args)))
 			}
-			call.Command = Scrub(call.Command)
-			call.Error = Scrub(call.Error)
-			call.GateDecisionID = Scrub(call.GateDecisionID)
+			call.Command = identities.Scrub(call.Command)
+			call.Error = identities.Scrub(call.Error)
+			call.GateDecisionID = identities.Scrub(call.GateDecisionID)
 			recorded.Steps[i].ToolCalls[j] = call
 		}
 	}
 	for i, message := range recorded.Messages {
-		recorded.Messages[i].Content = Scrub(message.Content)
+		recorded.Messages[i].Content = identities.Scrub(message.Content)
 	}
 	return recorded
 }
 
-func finishedTurn(recorded RecordedTurn, place string) (RecordedTurn, error) {
-	scrubbed := scrubTurn(recorded)
+func finishedTurn(identities secret.Identities, recorded RecordedTurn, place string) (RecordedTurn, error) {
+	scrubbed := scrubTurn(identities, recorded)
 	if len(scrubbed.Steps) == 0 || scrubbed.WallClockMS == 0 {
 		return scrubbed, fmt.Errorf("bench/corpus: %s carries no step and no wall clock: %w", place, ErrNoWallClock)
 	}
@@ -288,6 +289,10 @@ func finishedTurn(recorded RecordedTurn, place string) (RecordedTurn, error) {
 }
 
 func ReadTurn(path string) (RecordedTurn, error) {
+	return readTurn(secret.Machine(), path)
+}
+
+func readTurn(identities secret.Identities, path string) (RecordedTurn, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return RecordedTurn{}, err
@@ -296,7 +301,7 @@ func ReadTurn(path string) (RecordedTurn, error) {
 	if err := json.Unmarshal(data, &recorded); err != nil {
 		return RecordedTurn{}, fmt.Errorf("bench/corpus: %s is not a recorded turn: %w", path, err)
 	}
-	return finishedTurn(recorded, path)
+	return finishedTurn(identities, recorded, path)
 }
 
 func ReadTurnDirSegments(dir string) ([]RecordedTurn, error) {
@@ -356,7 +361,7 @@ func ReadTurnDir(dir string) (RecordedTurn, error) {
 	if err != nil {
 		return RecordedTurn{}, err
 	}
-	return finishedTurn(segments[len(segments)-1], dir)
+	return finishedTurn(secret.Machine(), segments[len(segments)-1], dir)
 }
 
 func WalkSessions(dir string) (Walked, error) {
@@ -365,7 +370,7 @@ func WalkSessions(dir string) (Walked, error) {
 	if err != nil {
 		return Walked{}, err
 	}
-	walked := Walked{Dir: dir, EntryCount: len(entries)}
+	walked, identities := Walked{Dir: dir, EntryCount: len(entries)}, secret.Machine()
 	for _, entry := range entries {
 		name := entry.Name()
 		if !entry.IsDir() && filepath.Ext(name) != ".json" {
@@ -373,7 +378,7 @@ func WalkSessions(dir string) (Walked, error) {
 			continue
 		}
 		if !entry.IsDir() {
-			recorded, err := ReadTurn(filepath.Join(dir, name))
+			recorded, err := readTurn(identities, filepath.Join(dir, name))
 			if err != nil && !errors.Is(err, ErrNoWallClock) {
 				walked.Skipped = append(walked.Skipped, SkippedTurn{Path: name, Reason: err.Error()})
 				continue
@@ -391,7 +396,7 @@ func WalkSessions(dir string) (Walked, error) {
 			schema = SchemaSession
 		}
 		for _, segment := range segments {
-			recorded, err := finishedTurn(segment, filepath.Join(dir, name))
+			recorded, err := finishedTurn(identities, segment, filepath.Join(dir, name))
 			if err != nil && !errors.Is(err, ErrNoWallClock) {
 				walked.Skipped = append(walked.Skipped, SkippedTurn{Path: name, Reason: err.Error()})
 				continue

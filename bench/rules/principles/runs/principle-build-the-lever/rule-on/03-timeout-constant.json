@@ -112,7 +112,7 @@
         "tool_name": "Bash",
         "tool_use_id": "toolu_016p5TbppkdvPoRHdUovvtYB",
         "tool_input": {
-          "command": "cp /c/Users/Luiz/AppData/Local/Temp/tofu-principle-2480239749/client.go /c/Users/Luiz/AppData/Local/Temp/client.hand.go",
+          "command": "cp <home>/AppData/Local/Temp/tofu-principle-2480239749/client.go <home>/AppData/Local/Temp/client.hand.go",
           "description": "Save hand-edited client.go"
         }
       },
@@ -120,7 +120,7 @@
         "tool_name": "Bash",
         "tool_use_id": "toolu_01CZ4EFeNvs7Hy7q1jMhj6Sb",
         "tool_input": {
-          "command": "git -C /c/Users/Luiz/AppData/Local/Temp/tofu-principle-2480239749 checkout -- client.go",
+          "command": "git -C <home>/AppData/Local/Temp/tofu-principle-2480239749 checkout -- client.go",
           "description": "Restore original client.go"
         }
       },

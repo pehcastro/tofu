@@ -80,7 +80,7 @@
         "tool_name": "Bash",
         "tool_use_id": "toolu_01XTx7B4k2nZR4qwFTJS8mFm",
         "tool_input": {
-          "command": "cd \"C:/Users/Luiz/AppData/Local/Temp/tofu-principle-4015289271\" \u0026\u0026 rtk go vet ./...",
+          "command": "cd \"<home>/AppData/Local/Temp/tofu-principle-4015289271\" \u0026\u0026 rtk go vet ./...",
           "description": "Vet the package"
         }
       }

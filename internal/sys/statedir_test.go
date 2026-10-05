@@ -81,12 +81,12 @@ func TestAProjectsStateLivesUnderTheHomeAndNotInTheProject(t *testing.T) {
 
 func TestAProjectKeyIsThePathWithEveryOtherCharacterADash(t *testing.T) {
 	cases := map[string]string{
-		`F:\localhost\ephem-sh\bob`:                  "F--localhost-ephem-sh-bob",
-		`F:\localhost\ephem-sh\bob\.local\sources\x`: "F--localhost-ephem-sh-bob--local-sources-x",
-		"/home/luiz/my_project.v2":                   "-home-luiz-my-project-v2",
+		`Q:\code\ephem-sh\bob`:                  "Q--code-ephem-sh-bob",
+		`Q:\code\ephem-sh\bob\.local\sources\x`: "Q--code-ephem-sh-bob--local-sources-x",
+		"/home/ada/my_project.v2":               "-home-ada-my-project-v2",
 	}
 	if OS() == "windows" {
-		cases[`f:\localhost\bob`] = "F--localhost-bob"
+		cases[`q:\code\bob`] = "Q--code-bob"
 	}
 	for path, want := range cases {
 		if got := ProjectKey(path); got != want {

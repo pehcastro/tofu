@@ -52,7 +52,7 @@ func sent(t *testing.T, entered <-chan string) string {
 func TestAnAtInsideAWordOpensNothing(t *testing.T) {
 	entered := make(chan string, 1)
 	app := pathApp(t, entered)
-	typeText(app, "mail pehcastro@internal")
+	typeText(app, "mail ada@internal")
 	if picked, open := app.view.Picked(); open {
 		t.Fatalf("an email address opened a picker on %q", picked)
 	}
@@ -60,7 +60,7 @@ func TestAnAtInsideAWordOpensNothing(t *testing.T) {
 		t.Errorf("an email address listed a path it could have matched\n%s", listed)
 	}
 	app.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
-	if task := sent(t, entered); task != "mail pehcastro@internal" {
+	if task := sent(t, entered); task != "mail ada@internal" {
 		t.Errorf("the model was sent %q", task)
 	}
 }

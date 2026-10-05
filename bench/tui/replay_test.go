@@ -25,7 +25,6 @@ import (
 )
 
 const (
-	shellsDir     = "F:/localhost/admin-template/.tofu/shells"
 	recentTurns   = 30
 	everyTurn     = 0
 	spawnTool     = "spawn"
@@ -258,7 +257,7 @@ func summary(content string, bytes int) string {
 }
 
 func recordedShells() []shells.Entry {
-	registry := shell.OpenAt(shellsDir)
+	registry := shell.OpenAt(filepath.Join(filepath.Dir(filepath.Dir(sys.SourceRoot())), "admin-template", ".tofu", "shells"))
 	found, err := registry.List()
 	if err != nil {
 		return nil

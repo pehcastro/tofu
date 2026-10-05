@@ -7,15 +7,15 @@ import (
 )
 
 func Render(machine, date, bobDir string) (string, error) {
-	first, err := Load(Session1Dir, "dev")
+	first, err := Load(SessionDir(Session1), "dev")
 	if err != nil {
 		return "", err
 	}
-	second, err := Load(Session2Dir, "dev")
+	second, err := Load(SessionDir(Session2), "dev")
 	if err != nil {
 		return "", err
 	}
-	share, err := Scan(bobDir, filepath.Dir(Session1Dir))
+	share, err := Scan(bobDir, filepath.Dir(SessionDir(Session1)))
 	if err != nil {
 		return "", err
 	}
@@ -24,7 +24,7 @@ func Render(machine, date, bobDir string) (string, error) {
 	fmt.Fprintf(b, "# bench ask/server: the declared-commands arm, %s\n\n", date)
 	fmt.Fprintf(b, "Machine: %s. Credential kind: none. Wire: none. No model call runs in this package and nothing leaves the machine.\n\n", machine)
 	b.WriteString("Cost unit: none. There is no spend to report, because no call is made.\n\n")
-	b.WriteString("TOFU-556, first round: measures only, wires nothing. The two sessions are read through `bench/corpus`, the shared reader, from `.tofu/sessions`, read only, in both this repository and `F:\\localhost\\admin-template`.\n\n")
+	b.WriteString("TOFU-556, first round: measures only, wires nothing. The two sessions are read through `bench/corpus`, the shared reader, from `.tofu/sessions`, read only, in both this repository and the sibling project `admin-template`.\n\n")
 
 	b.WriteString("## The free arm, in one sentence\n\n")
 	b.WriteString("Read the project's declared commands, act when one candidate fits, ask when two fit or none does.\n\n")

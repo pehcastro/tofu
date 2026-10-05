@@ -3,16 +3,22 @@ package server
 import (
 	"encoding/json"
 	"fmt"
+	"path/filepath"
 	"regexp"
 	"sort"
 
 	"tofu/bench/corpus"
+	"tofu/internal/sys"
 )
 
 const (
-	Session1Dir = `F:\localhost\admin-template\.tofu\sessions\turn-18d7f94ce7a62138`
-	Session2Dir = `F:\localhost\admin-template\.tofu\sessions\turn-18d81f3d00193028`
+	Session1 = "turn-18d7f94ce7a62138"
+	Session2 = "turn-18d81f3d00193028"
 )
+
+func SessionDir(turn string) string {
+	return filepath.Join(filepath.Dir(filepath.Dir(sys.SourceRoot())), "admin-template", ".tofu", "sessions", turn)
+}
 
 type Moment struct {
 	TurnID     string

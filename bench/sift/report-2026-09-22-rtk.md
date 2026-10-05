@@ -1,6 +1,6 @@
 # bench sift: 2026-09-22, rtk as a method, alone and in front of jev
 
-Machine: DESKTOP-AHUN9RO, go1.27.1 windows/amd64, 2026-09-22. Credential kind: key. Wire: openrouter. Build the response reported: `typesafe/jev-1.13-20260917`. Proxy: `rtk 0.43.0`, at `C:\Users\Luiz\.local\bin\rtk`.
+Machine: DESKTOP-AHUN9RO, go1.27.1 windows/amd64, 2026-09-22. Credential kind: key. Wire: openrouter. Build the response reported: `typesafe/jev-1.13-20260917`. Proxy: `rtk 0.43.0`, at `C:\Users\owner\.local\bin\rtk`.
 
 Cost unit: money. A money figure is dollars that left the account behind the credential named above, read from the response of the call it names and never from a rate card. A millisecond figure is wall clock on the machine named above.
 

@@ -72,7 +72,7 @@
         "tool_name": "Bash",
         "tool_use_id": "toolu_01M7Q6sUku2BsBmZNDVmR7Zw",
         "tool_input": {
-          "command": "cd \"C:/Users/Luiz/AppData/Local/Temp/tofu-principle-2973678223\" \u0026\u0026 rtk ls -la \u0026\u0026 rtk read cleanup.go \u0026\u0026 rtk read go.mod 2\u003e/dev/null; rtk ls *_test.go 2\u003e/dev/null",
+          "command": "cd \"<home>/AppData/Local/Temp/tofu-principle-2973678223\" \u0026\u0026 rtk ls -la \u0026\u0026 rtk read cleanup.go \u0026\u0026 rtk read go.mod 2\u003e/dev/null; rtk ls *_test.go 2\u003e/dev/null",
           "description": "List files and show cleanup.go"
         }
       },
@@ -127,5 +127,5 @@
     "queued_turn_count": 0,
     "result_index": 0
   },
-  "test_output": "--- FAIL: TestCheckCleanupRepeatedAndPartial (0.02s)\n    zz_check_test.go:34: Cleanup when the work directory does not exist = open C:\\Users\\Luiz\\AppData\\Local\\Temp\\TestCheckCleanupRepeatedAndPartial1681100701\\001\\work: The system cannot find the file specified.\nFAIL\nFAIL\ttask\t0.357s\nFAIL\n"
+  "test_output": "--- FAIL: TestCheckCleanupRepeatedAndPartial (0.02s)\n    zz_check_test.go:34: Cleanup when the work directory does not exist = open <home>\\AppData\\Local\\Temp\\TestCheckCleanupRepeatedAndPartial1681100701\\001\\work: The system cannot find the file specified.\nFAIL\nFAIL\ttask\t0.357s\nFAIL\n"
 }

@@ -72,7 +72,7 @@
         "tool_name": "Bash",
         "tool_use_id": "toolu_01BzBGtp2nMrwdRYreihaAi4",
         "tool_input": {
-          "command": "cd \"C:/Users/Luiz/AppData/Local/Temp/tofu-principle-3987133799\" \u0026\u0026 git ls-files \u0026\u0026 cat go.mod \u0026\u0026 for f in $(git ls-files '*.go'); do echo \"== $f\"; cat \"$f\"; done",
+          "command": "cd \"<home>/AppData/Local/Temp/tofu-principle-3987133799\" \u0026\u0026 git ls-files \u0026\u0026 cat go.mod \u0026\u0026 for f in $(git ls-files '*.go'); do echo \"== $f\"; cat \"$f\"; done",
           "description": "List files and show Go sources"
         }
       },

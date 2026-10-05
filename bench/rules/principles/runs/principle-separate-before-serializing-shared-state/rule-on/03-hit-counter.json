@@ -72,7 +72,7 @@
         "tool_name": "Bash",
         "tool_use_id": "toolu_01QfLh2i4WoF7yVRYDTnCm2X",
         "tool_input": {
-          "command": "cd \"C:/Users/Luiz/AppData/Local/Temp/tofu-principle-4234596716\" \u0026\u0026 rtk ls -la \u0026\u0026 rtk read hits.go \u0026\u0026 rtk read go.mod 2\u003e/dev/null; rtk ls *_test.go 2\u003e/dev/null"
+          "command": "cd \"<home>/AppData/Local/Temp/tofu-principle-4234596716\" \u0026\u0026 rtk ls -la \u0026\u0026 rtk read hits.go \u0026\u0026 rtk read go.mod 2\u003e/dev/null; rtk ls *_test.go 2\u003e/dev/null"
         }
       },
       {

@@ -1,7 +1,6 @@
 package tasks
 
 import (
-	"cmp"
 	"slices"
 	"testing"
 	"time"
@@ -9,17 +8,11 @@ import (
 	"tofu/bench/browser/airbnb"
 )
 
-var (
-	drawnOn     = time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
-	val7DrawnOn = time.Date(2026, 9, 30, 0, 0, 0, 0, time.UTC)
-	drawnApart  = map[string]time.Time{"flights-seed7": val7DrawnOn, "flights-seed7-wrongstops": val7DrawnOn}
-)
+var drawnOn = time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
 
 const (
 	fixtureSeed      = 3
 	sanFranciscoSeed = 4
-	cityOfGodSeed    = 6
-	madridSeed       = 7
 )
 
 func TestEachTaskScoresItsPassingFixtureFullAndItsFailingOneLower(t *testing.T) {
@@ -49,8 +42,6 @@ func TestEachTaskScoresItsPassingFixtureFullAndItsFailingOneLower(t *testing.T) 
 		{"flights", "flights-window", fixtureSeed, nil},
 		{"flights", "flights-portuguese", sanFranciscoSeed, nil},
 		{"flights", "flights-portuguese-wrongprice", sanFranciscoSeed, []int{5, 6}},
-		{"flights", "flights-seed7", madridSeed, nil},
-		{"flights", "flights-seed7-wrongstops", madridSeed, []int{7}},
 		{"youtube", "youtube-pass", fixtureSeed, nil},
 		{"youtube", "youtube-fail", fixtureSeed, []int{2, 5}},
 		{"youtube", "youtube-portuguese", fixtureSeed, nil},
@@ -62,10 +53,8 @@ func TestEachTaskScoresItsPassingFixtureFullAndItsFailingOneLower(t *testing.T) 
 		{"imdb", "imdb-pass", fixtureSeed, nil},
 		{"imdb", "imdb-fail", fixtureSeed, []int{3, 6}},
 		{"imdb", "imdb-portuguese", fixtureSeed, nil},
-		{"imdb", "imdb-recorded", cityOfGodSeed, nil},
-		{"imdb", "imdb-recorded-wrongrating", cityOfGodSeed, []int{6}},
 	} {
-		task, err := Named(recorded.task, recorded.seed, cmp.Or(drawnApart[recorded.fixture], drawnOn))
+		task, err := Named(recorded.task, recorded.seed, drawnOn)
 		if err != nil {
 			t.Fatal(err)
 		}

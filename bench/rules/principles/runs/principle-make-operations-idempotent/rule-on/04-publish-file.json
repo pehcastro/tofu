@@ -72,7 +72,7 @@
         "tool_name": "Bash",
         "tool_use_id": "toolu_013ZTWCDw4c22gvBxepXDUBW",
         "tool_input": {
-          "command": "cd \"C:/Users/Luiz/AppData/Local/Temp/tofu-principle-3646836348\" \u0026\u0026 rtk ls -la \u0026\u0026 rtk read *.go go.mod 2\u003e/dev/null"
+          "command": "cd \"<home>/AppData/Local/Temp/tofu-principle-3646836348\" \u0026\u0026 rtk ls -la \u0026\u0026 rtk read *.go go.mod 2\u003e/dev/null"
         }
       },
       {
@@ -136,5 +136,5 @@
     "queued_turn_count": 0,
     "result_index": 0
   },
-  "test_output": "--- FAIL: TestPublishWhileReading (8.05s)\n    publish_test.go:116: publish C:\\Users\\Luiz\\AppData\\Local\\Temp\\TestPublishWhileReading2899184165\\001\\f.txt: rename: rename C:\\Users\\Luiz\\AppData\\Local\\Temp\\TestPublishWhileReading2899184165\\001\\.f.txt.publish-3697055098 C:\\Users\\Luiz\\AppData\\Local\\Temp\\TestPublishWhileReading2899184165\\001\\f.txt: Access is denied.\nFAIL\nFAIL\ttask\t8.439s\nFAIL\n"
+  "test_output": "--- FAIL: TestPublishWhileReading (8.05s)\n    publish_test.go:116: publish <home>\\AppData\\Local\\Temp\\TestPublishWhileReading2899184165\\001\\f.txt: rename: rename <home>\\AppData\\Local\\Temp\\TestPublishWhileReading2899184165\\001\\.f.txt.publish-3697055098 <home>\\AppData\\Local\\Temp\\TestPublishWhileReading2899184165\\001\\f.txt: Access is denied.\nFAIL\nFAIL\ttask\t8.439s\nFAIL\n"
 }

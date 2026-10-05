@@ -104,7 +104,7 @@
         "tool_name": "Bash",
         "tool_use_id": "toolu_01XscQpoiKL2tzJ1rAt31xip",
         "tool_input": {
-          "command": "rtk go test -count=1 C:/Users/Luiz/AppData/Local/Temp/tofu-principle-126578495",
+          "command": "rtk go test -count=1 <home>/AppData/Local/Temp/tofu-principle-126578495",
           "description": "Run baseline tests"
         }
       }

@@ -88,7 +88,7 @@
         "tool_name": "PowerShell",
         "tool_use_id": "toolu_01MQdAsrVgCH6FDPcNEDW22G",
         "tool_input": {
-          "command": "Get-Content go.mod; go version; Copy-Item kv.go C:\\Users\\Luiz\\AppData\\Local\\Temp\\kv.hand.go; git checkout kv.go",
+          "command": "Get-Content go.mod; go version; Copy-Item kv.go <home>\\AppData\\Local\\Temp\\kv.hand.go; git checkout kv.go",
           "description": "Show module, save hand edit, restore file"
         }
       },

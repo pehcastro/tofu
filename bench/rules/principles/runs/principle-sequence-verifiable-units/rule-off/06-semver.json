@@ -72,7 +72,7 @@
         "tool_name": "Bash",
         "tool_use_id": "toolu_01Nh9etPPCoR163fiJHNpnhF",
         "tool_input": {
-          "command": "cd \"C:/Users/Luiz/AppData/Local/Temp/tofu-principle-1485991900\" \u0026\u0026 git ls-files \u0026\u0026 cat go.mod 2\u003e/dev/null; for f in $(git ls-files | grep version); do echo \"== $f\"; cat \"$f\"; done",
+          "command": "cd \"<home>/AppData/Local/Temp/tofu-principle-1485991900\" \u0026\u0026 git ls-files \u0026\u0026 cat go.mod 2\u003e/dev/null; for f in $(git ls-files | grep version); do echo \"== $f\"; cat \"$f\"; done",
           "description": "List files and show version package"
         }
       },
@@ -96,7 +96,7 @@
         "tool_name": "Bash",
         "tool_use_id": "toolu_01RWC1udK5RCxU4W8p7SbNwQ",
         "tool_input": {
-          "command": "cd \"C:/Users/Luiz/AppData/Local/Temp/tofu-principle-1485991900\" \u0026\u0026 rtk go test -v ./...",
+          "command": "cd \"<home>/AppData/Local/Temp/tofu-principle-1485991900\" \u0026\u0026 rtk go test -v ./...",
           "description": "Run tests"
         }
       }

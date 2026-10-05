@@ -23,7 +23,7 @@ import (
 )
 
 const (
-	sessionEnvironment = "<env>\nworking directory: F:\\localhost\\hono-app-2\nplatform: windows/amd64\n</env>"
+	sessionEnvironment = "<env>\nworking directory: Q:\\code\\hono-app-2\nplatform: windows/amd64\n</env>"
 	firstTurnTask      = "this is a hono app with bun, i need you to check the nw.sqlite and extract its schema, then build a hono api using sub agents in parallel, start the dev server for me so i can test too"
 	secondTurnTask     = "debug why bun is running a very wrong project and not this one, its pointing to my portfolio project"
 	thirdTurnTask      = "can you explain what was done to me? can be with lld"

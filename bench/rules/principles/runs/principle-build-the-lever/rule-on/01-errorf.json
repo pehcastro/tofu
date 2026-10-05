@@ -104,7 +104,7 @@
         "tool_name": "Bash",
         "tool_use_id": "toolu_01CDZg6sQzfwyPmDjZfC47uu",
         "tool_input": {
-          "command": "cd /c/Users/Luiz/AppData/Local/Temp/tofu-principle-3979019689\ncp user.go /tmp/user.hand.go\ngit checkout -- user.go\ngo run ./tools/errorf user.go store.go order.go\necho \"--- diff tool vs hand:\"; rtk diff /tmp/user.hand.go user.go \u0026\u0026 echo identical\necho \"--- rerun (idempotence):\"; go run ./tools/errorf user.go store.go order.go; rtk git diff --stat\ngo build ./... \u0026\u0026 rtk go vet ./... \u0026\u0026 echo build+vet ok\ngrep -n \"errors\" *.go",
+          "command": "cd <home>/AppData/Local/Temp/tofu-principle-3979019689\ncp user.go /tmp/user.hand.go\ngit checkout -- user.go\ngo run ./tools/errorf user.go store.go order.go\necho \"--- diff tool vs hand:\"; rtk diff /tmp/user.hand.go user.go \u0026\u0026 echo identical\necho \"--- rerun (idempotence):\"; go run ./tools/errorf user.go store.go order.go; rtk git diff --stat\ngo build ./... \u0026\u0026 rtk go vet ./... \u0026\u0026 echo build+vet ok\ngrep -n \"errors\" *.go",
           "description": "Run codemod, diff against hand edit, build and vet"
         }
       },
@@ -112,7 +112,7 @@
         "tool_name": "Bash",
         "tool_use_id": "toolu_01MqebkdCmuXVfm1wpxyJmft",
         "tool_input": {
-          "command": "cp /c/Users/Luiz/AppData/Local/Temp/tofu-principle-3979019689/user.go /tmp/user.hand.go",
+          "command": "cp <home>/AppData/Local/Temp/tofu-principle-3979019689/user.go /tmp/user.hand.go",
           "description": "Save hand-edited user.go"
         }
       },
@@ -120,7 +120,7 @@
         "tool_name": "Bash",
         "tool_use_id": "toolu_01FgkATjpXSvUF7kNXVbyHxQ",
         "tool_input": {
-          "command": "git -C /c/Users/Luiz/AppData/Local/Temp/tofu-principle-3979019689 checkout -- user.go",
+          "command": "git -C <home>/AppData/Local/Temp/tofu-principle-3979019689 checkout -- user.go",
           "description": "Restore original user.go"
         }
       },
@@ -128,7 +128,7 @@
         "tool_name": "Bash",
         "tool_use_id": "toolu_0151z1rjU3jD5MtgCguy4nYt",
         "tool_input": {
-          "command": "rtk git -C /c/Users/Luiz/AppData/Local/Temp/tofu-principle-3979019689 show HEAD:user.go",
+          "command": "rtk git -C <home>/AppData/Local/Temp/tofu-principle-3979019689 show HEAD:user.go",
           "description": "Show original user.go from last commit"
         }
       },

@@ -72,7 +72,7 @@
         "tool_name": "Bash",
         "tool_use_id": "toolu_01GtD6sW5nT6d9Ln3Q1t4rPa",
         "tool_input": {
-          "command": "cd \"C:/Users/Luiz/AppData/Local/Temp/tofu-principle-757677817\" \u0026\u0026 git ls-files \u0026\u0026 cat $(git ls-files | grep -v '^go.sum$')",
+          "command": "cd \"<home>/AppData/Local/Temp/tofu-principle-757677817\" \u0026\u0026 git ls-files \u0026\u0026 cat $(git ls-files | grep -v '^go.sum$')",
           "description": "List and show repo files"
         }
       },
@@ -80,7 +80,7 @@
         "tool_name": "Bash",
         "tool_use_id": "toolu_018z7XNvZUPm2aHsKL5YMTM7",
         "tool_input": {
-          "command": "cd \"C:/Users/Luiz/AppData/Local/Temp/tofu-principle-757677817\" \u0026\u0026 cat \u003e zz_test.go \u003c\u003c'EOF'\npackage task\nimport \"testing\"\nfunc TestZ(t *testing.T) {\n\tc, err := Card(\"4242 4242 4242 4242\"); if err != nil || c.Label() != \"card ending 4242\" || Fee(c, 1000) != 59 { t.Fatal(\"card\") }\n\ts, err := SEPA(\"de89 3704 0044 0532 0130 00\"); if err != nil || s.Label() != \"SEPA ending 3000\" || Fee(s, 1) != 35 { t.Fatal(\"sepa\") }\n\tp, err := PayPal(\"a@b.co\"); if err != nil || p.Label() != \"PayPal a@b.co\" || Fee(p, 1000) != 69 { t.Fatal(\"paypal\") }\n\tx, err := Pix(\"12345678901\"); if err != nil || x.Label() != \"Pix 12345678901\" || Fee(x, 1000) != 0 { t.Fatal(\"pix\") }\n\tif _, err := Pix(\"a@b.co\"); err != nil { t.Fatal(\"pix email\") }\n\tfor _, k := range []string{\"1234567890\", \"123456789012\", \"1234567890a\", \"\", \"a@b\"} { if _, err := Pix(k); err != ErrInvalid { t.Fatal(k) } }\n\tif _, err := Card(\"123\"); err != ErrInvalid { t.Fatal() }\n\tif _, err := SEPA(\"1234\"); err != ErrInvalid { t.Fatal() }\n\tif _, err := PayPal(\"x\"); err != ErrInvalid { t.Fatal() }\n}\nEOF\ngo vet ./... \u0026\u0026 go test ./...; rm zz_test.go",
+          "command": "cd \"<home>/AppData/Local/Temp/tofu-principle-757677817\" \u0026\u0026 cat \u003e zz_test.go \u003c\u003c'EOF'\npackage task\nimport \"testing\"\nfunc TestZ(t *testing.T) {\n\tc, err := Card(\"4242 4242 4242 4242\"); if err != nil || c.Label() != \"card ending 4242\" || Fee(c, 1000) != 59 { t.Fatal(\"card\") }\n\ts, err := SEPA(\"de89 3704 0044 0532 0130 00\"); if err != nil || s.Label() != \"SEPA ending 3000\" || Fee(s, 1) != 35 { t.Fatal(\"sepa\") }\n\tp, err := PayPal(\"a@b.co\"); if err != nil || p.Label() != \"PayPal a@b.co\" || Fee(p, 1000) != 69 { t.Fatal(\"paypal\") }\n\tx, err := Pix(\"12345678901\"); if err != nil || x.Label() != \"Pix 12345678901\" || Fee(x, 1000) != 0 { t.Fatal(\"pix\") }\n\tif _, err := Pix(\"a@b.co\"); err != nil { t.Fatal(\"pix email\") }\n\tfor _, k := range []string{\"1234567890\", \"123456789012\", \"1234567890a\", \"\", \"a@b\"} { if _, err := Pix(k); err != ErrInvalid { t.Fatal(k) } }\n\tif _, err := Card(\"123\"); err != ErrInvalid { t.Fatal() }\n\tif _, err := SEPA(\"1234\"); err != ErrInvalid { t.Fatal() }\n\tif _, err := PayPal(\"x\"); err != ErrInvalid { t.Fatal() }\n}\nEOF\ngo vet ./... \u0026\u0026 go test ./...; rm zz_test.go",
           "description": "Vet and run a temporary test"
         }
       },
@@ -88,7 +88,7 @@
         "tool_name": "Bash",
         "tool_use_id": "toolu_013YeRD7fUpxMr5MQrLmR7qu",
         "tool_input": {
-          "command": "cd \"C:/Users/Luiz/AppData/Local/Temp/tofu-principle-757677817\" \u0026\u0026 rtk go vet ./... \u0026\u0026 rtk go test ./...; rm zz_test.go",
+          "command": "cd \"<home>/AppData/Local/Temp/tofu-principle-757677817\" \u0026\u0026 rtk go vet ./... \u0026\u0026 rtk go test ./...; rm zz_test.go",
           "description": "Vet, run temporary test, remove it"
         }
       },

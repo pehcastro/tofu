@@ -72,7 +72,7 @@
         "tool_name": "Bash",
         "tool_use_id": "toolu_013Qqz5EJMngikiLX7uWBrvx",
         "tool_input": {
-          "command": "cd \"C:/Users/Luiz/AppData/Local/Temp/tofu-principle-3631293310\" \u0026\u0026 rtk ls -la \u0026\u0026 rtk read *.go go.mod 2\u003e/dev/null",
+          "command": "cd \"<home>/AppData/Local/Temp/tofu-principle-3631293310\" \u0026\u0026 rtk ls -la \u0026\u0026 rtk read *.go go.mod 2\u003e/dev/null",
           "description": "List files and show Go sources"
         }
       },
@@ -80,7 +80,7 @@
         "tool_name": "Bash",
         "tool_use_id": "toolu_01Bg9p7z7e3NHMHCgnaD94E6",
         "tool_input": {
-          "command": "cd \"C:/Users/Luiz/AppData/Local/Temp/tofu-principle-3631293310\" \u0026\u0026 mkdir -p /tmp/et \u0026\u0026 cat \u003e ensure_tmp_test.go \u003c\u003c'EOF'\npackage task\nimport \"testing\"\nfunc TestEnsure(t *testing.T){\n db:=NewDB()\n if err:=EnsureIndex(db,\"a\",[]string{\"x\",\"y\"});err!=nil{t.Fatal(err)}\n if err:=EnsureIndex(db,\"a\",[]string{\"x\",\"y\"});err!=nil{t.Fatal(err)}\n if err:=EnsureIndex(db,\"a\",[]string{\"y\",\"x\"});err!=ErrConflict{t.Fatal(err)}\n if f,_:=db.IndexFields(\"a\");f[0]!=\"x\"{t.Fatal(f)}\n}\nEOF\ngo test ./... ; rm ensure_tmp_test.go",
+          "command": "cd \"<home>/AppData/Local/Temp/tofu-principle-3631293310\" \u0026\u0026 mkdir -p /tmp/et \u0026\u0026 cat \u003e ensure_tmp_test.go \u003c\u003c'EOF'\npackage task\nimport \"testing\"\nfunc TestEnsure(t *testing.T){\n db:=NewDB()\n if err:=EnsureIndex(db,\"a\",[]string{\"x\",\"y\"});err!=nil{t.Fatal(err)}\n if err:=EnsureIndex(db,\"a\",[]string{\"x\",\"y\"});err!=nil{t.Fatal(err)}\n if err:=EnsureIndex(db,\"a\",[]string{\"y\",\"x\"});err!=ErrConflict{t.Fatal(err)}\n if f,_:=db.IndexFields(\"a\");f[0]!=\"x\"{t.Fatal(f)}\n}\nEOF\ngo test ./... ; rm ensure_tmp_test.go",
           "description": "Run a throwaway test, then remove it"
         }
       },

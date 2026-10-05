@@ -9,11 +9,11 @@ import (
 
 func loadBoth(t *testing.T) (Moment, Moment) {
 	t.Helper()
-	first, err := Load(Session1Dir, "dev")
+	first, err := Load(SessionDir(Session1), "dev")
 	if err != nil {
 		t.Fatalf("Load session 1: %v", err)
 	}
-	second, err := Load(Session2Dir, "dev")
+	second, err := Load(SessionDir(Session2), "dev")
 	if err != nil {
 		t.Fatalf("Load session 2: %v", err)
 	}
@@ -65,7 +65,7 @@ func TestShapeMatchAsksAndDoesNotPickWrong(t *testing.T) {
 }
 
 func TestFireShareAcrossTheWholeCorpus(t *testing.T) {
-	share, err := Scan(sys.RecordedStateDir("sessions"), filepath.Dir(Session1Dir))
+	share, err := Scan(sys.RecordedStateDir("sessions"), filepath.Dir(SessionDir(Session1)))
 	if err != nil {
 		t.Fatalf("Scan: %v", err)
 	}

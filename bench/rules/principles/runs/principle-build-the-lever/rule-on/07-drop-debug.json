@@ -80,7 +80,7 @@
         "tool_name": "Bash",
         "tool_use_id": "toolu_015Zpc2V3cg17pyGbcH8tyyr",
         "tool_input": {
-          "command": "mkdir -p /c/Users/Luiz/AppData/Local/Temp/tofu-hand \u0026\u0026 cp /c/Users/Luiz/AppData/Local/Temp/tofu-principle-3990924135/parse.go /c/Users/Luiz/AppData/Local/Temp/tofu-hand/parse.go",
+          "command": "mkdir -p <home>/AppData/Local/Temp/tofu-hand \u0026\u0026 cp <home>/AppData/Local/Temp/tofu-principle-3990924135/parse.go <home>/AppData/Local/Temp/tofu-hand/parse.go",
           "description": "Save hand-edited parse.go outside repo"
         }
       },

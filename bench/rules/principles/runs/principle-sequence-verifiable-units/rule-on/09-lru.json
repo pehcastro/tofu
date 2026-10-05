@@ -72,7 +72,7 @@
         "tool_name": "Bash",
         "tool_use_id": "toolu_01MFfff26wuPZhUUFJ3BAJS3",
         "tool_input": {
-          "command": "cd \"C:/Users/Luiz/AppData/Local/Temp/tofu-principle-355177047\" \u0026\u0026 rtk ls -la \u0026\u0026 rtk read *.go go.mod 2\u003e/dev/null; rtk go test ./... 2\u003e\u00261 | tail -20",
+          "command": "cd \"<home>/AppData/Local/Temp/tofu-principle-355177047\" \u0026\u0026 rtk ls -la \u0026\u0026 rtk read *.go go.mod 2\u003e/dev/null; rtk go test ./... 2\u003e\u00261 | tail -20",
           "description": "List files, show Go sources, run tests"
         }
       },

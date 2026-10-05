@@ -72,14 +72,14 @@
         "tool_name": "Bash",
         "tool_use_id": "toolu_01UrfndkqprLNi6EYu89w3L8",
         "tool_input": {
-          "command": "cd \"C:/Users/Luiz/AppData/Local/Temp/tofu-principle-1386085804\" \u0026\u0026 git ls-files \u0026\u0026 rtk read errors.go \u0026\u0026 rtk grep -rn \"Error()\\|err.Error\\|strings.Contains\" --include=*.go ."
+          "command": "cd \"<home>/AppData/Local/Temp/tofu-principle-1386085804\" \u0026\u0026 git ls-files \u0026\u0026 rtk read errors.go \u0026\u0026 rtk grep -rn \"Error()\\|err.Error\\|strings.Contains\" --include=*.go ."
         }
       },
       {
         "tool_name": "Bash",
         "tool_use_id": "toolu_01K3hw9aRte3XN2v9MPyEm95",
         "tool_input": {
-          "command": "cd \"C:/Users/Luiz/AppData/Local/Temp/tofu-principle-1386085804\" \u0026\u0026 go version \u0026\u0026 rtk read go.mod"
+          "command": "cd \"<home>/AppData/Local/Temp/tofu-principle-1386085804\" \u0026\u0026 go version \u0026\u0026 rtk read go.mod"
         }
       },
       {
@@ -94,7 +94,7 @@
         "tool_name": "Bash",
         "tool_use_id": "toolu_01FMeZLsBkJ4g47kBFYEH5xy",
         "tool_input": {
-          "command": "cd /c/Users/Luiz/AppData/Local/Temp/tofu-principle-1386085804; cp cache.go /tmp/cache.hand.go; git checkout -- cache.go; go run ./tools/errtextfix -w .; echo exit=$?; rtk git diff --no-index /tmp/cache.hand.go cache.go; echo diff=$?",
+          "command": "cd <home>/AppData/Local/Temp/tofu-principle-1386085804; cp cache.go /tmp/cache.hand.go; git checkout -- cache.go; go run ./tools/errtextfix -w .; echo exit=$?; rtk git diff --no-index /tmp/cache.hand.go cache.go; echo diff=$?",
           "description": "Run codemod, diff against hand edit"
         }
       },
@@ -102,7 +102,7 @@
         "tool_name": "Bash",
         "tool_use_id": "toolu_01YEnxQanPLmC13D9BSMAtAs",
         "tool_input": {
-          "command": "cp /c/Users/Luiz/AppData/Local/Temp/tofu-principle-1386085804/cache.go /tmp/cache.hand.go",
+          "command": "cp <home>/AppData/Local/Temp/tofu-principle-1386085804/cache.go /tmp/cache.hand.go",
           "description": "Save hand-edited cache.go"
         }
       },
@@ -110,7 +110,7 @@
         "tool_name": "Bash",
         "tool_use_id": "toolu_01GGGs4546h3QzUn17Eg659y",
         "tool_input": {
-          "command": "git -C /c/Users/Luiz/AppData/Local/Temp/tofu-principle-1386085804 checkout -- cache.go",
+          "command": "git -C <home>/AppData/Local/Temp/tofu-principle-1386085804 checkout -- cache.go",
           "description": "Restore original cache.go"
         }
       },
@@ -118,7 +118,7 @@
         "tool_name": "Bash",
         "tool_use_id": "toolu_01F9su6b9DhSAFvAG97Sy6gM",
         "tool_input": {
-          "command": "rtk git -C /c/Users/Luiz/AppData/Local/Temp/tofu-principle-1386085804 status --short",
+          "command": "rtk git -C <home>/AppData/Local/Temp/tofu-principle-1386085804 status --short",
           "description": "Confirm cache.go matches original"
         }
       },
