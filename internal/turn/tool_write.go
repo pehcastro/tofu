@@ -9,6 +9,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"tofu/internal/konst"
@@ -96,12 +97,14 @@ func (t *WriteTool) Definition() llm.Tool {
 			"the result says the file was created when it was not there before, " +
 			"and is a unified diff of what changed when it was. " +
 			"a .ts or .tsx file is then typechecked with the project's own tsc, and its errors end the result: fix them before moving on. " +
-			"on a project too large to recheck at once, the result says the check runs in the background and shows the errors its last check found",
+			"on a project too large to recheck at once, the result says the check runs in the background and shows the errors its last check found. " +
+			"with append true the content goes after the end of a file read in this session, with a newline between when the file has none at its end, and the result shows the appended lines numbered",
 		Parameters: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
 				"path":    map[string]any{"type": "string"},
 				"content": map[string]any{"type": "string"},
+				"append":  map[string]any{"type": "boolean"},
 			},
 			"required": []string{"path", "content"},
 		},
@@ -111,6 +114,7 @@ func (t *WriteTool) Definition() llm.Tool {
 type writeArgs struct {
 	Path    string `json:"path"`
 	Content string `json:"content"`
+	Append  bool   `json:"append"`
 }
 
 func (t *WriteTool) Run(ctx context.Context, raw json.RawMessage) (Result, error) {
@@ -121,6 +125,9 @@ func (t *WriteTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 	resolved, err := t.root.Resolve(args.Path)
 	if err != nil {
 		return Result{}, fmt.Errorf("write: %w", err)
+	}
+	if args.Append {
+		return t.appendTo(ctx, resolved, args)
 	}
 	held, readErr := os.ReadFile(resolved)
 	if readErr != nil && !errors.Is(readErr, fs.ErrNotExist) {
@@ -148,6 +155,45 @@ func (t *WriteTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 		Diff:    transform.Unified(args.Path, before, args.Content),
 	}
 	return Result{Content: t.checkers.Typechecked(ctx, resolved, preview.Result()), Command: args.Path}, nil
+}
+
+func (t *WriteTool) appendTo(ctx context.Context, resolved string, args writeArgs) (Result, error) {
+	if args.Content == "" {
+		return Result{}, fmt.Errorf("write: append with empty content would change nothing in %s, so it is refused", args.Path)
+	}
+	held, err := os.ReadFile(resolved)
+	if errors.Is(err, fs.ErrNotExist) {
+		return Result{}, fmt.Errorf("write: %s does not exist, so there is no end to append to: write it without append to create it", args.Path)
+	}
+	if err != nil {
+		return Result{}, fmt.Errorf("write: reading %s before appending to it: %w", args.Path, err)
+	}
+	if !t.ledger.Saw(args.Path, held) {
+		return Result{}, fmt.Errorf("write: %s has not been read in this session or has changed since, so appending to it is refused: read it first. "+
+			"its current content follows, so append again knowing where it ends.\n%s", args.Path, t.ledger.Refuse(args.Path, held))
+	}
+	lead := string(held)
+	added := strings.ReplaceAll(args.Content, "\r\n", "\n")
+	lines := strings.Split(strings.TrimSuffix(added, "\n"), "\n")
+	newline := "\n"
+	if strings.Contains(lead, "\r\n") && strings.Count(lead, "\r\n") == strings.Count(lead, "\n") {
+		newline = "\r\n"
+		added = strings.ReplaceAll(added, "\n", newline)
+	}
+	if lead != "" && !strings.HasSuffix(lead, "\n") {
+		lead += newline
+	}
+	after := lead + added
+	if err := overwrite(resolved, held, []byte(after)); err != nil {
+		return Result{}, fmt.Errorf("write: %w", err)
+	}
+	t.ledger.Mark(args.Path, []byte(after))
+	first := strings.Count(lead, "\n") + 1
+	shown := fmt.Sprintf("appended %d lines to %s, lines %d-%d:", len(lines), args.Path, first, first+len(lines)-1)
+	for i, line := range lines {
+		shown += fmt.Sprintf("\n%d\t%s", first+i, line)
+	}
+	return Result{Content: t.checkers.Typechecked(ctx, resolved, shown), Command: args.Path}, nil
 }
 
 func overwrite(path string, held, content []byte) error {

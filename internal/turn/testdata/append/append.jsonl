@@ -1,0 +1,3 @@
+{"text":"reading a.test.ts","tools":[{"name":"read","args":{"path":"a.test.ts"}}]}
+{"text":"appending a second test","tools":[{"name":"write","args":{"path":"a.test.ts","append":true,"content":"\ntest(\"subtracts\", () => {\n  expect(2 - 1).toBe(1);\n});\n"}}]}
+{"text":"the append is done"}
