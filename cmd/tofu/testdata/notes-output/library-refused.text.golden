@@ -2,10 +2,10 @@ exit 1
 --- stdout
 Library · 4 layers                                                   ✗ 1 refused
 
-  models         24
+  models         21
   subscriptions  2
   questions      14
-  docs           13 pages · 73 index entries
+  docs           14 pages · 77 index entries
   proxy          rtk · library
 
 layers
@@ -17,7 +17,7 @@ layers
 domains · the binary
   ✓ dev      126 rules · 4 agents · 31 references
   ✓ fetch    1 threshold
-  ✓ general  23 rules · 7 thresholds · 2 agents · 4 references
+  ✓ general  24 rules · 7 thresholds · 2 agents · 4 references
   ✓ qa       9 rules · 2 skills · 1 agent · 4 references
   ✓ shell    1 threshold
 

@@ -81,9 +81,23 @@ func runNote(args []string) (int, string, string) {
 	return code, out.String(), errOut.String()
 }
 
-func TestChangelogLibraryAndMigrateMatchTheirTextAndJSONGoldens(t *testing.T) {
+func TestTheNotesVerbsMatchTheirTextAndJSONGoldensWhateverTheVersionLength(t *testing.T) {
+	const versionStandIn = "VERSION"
 	stamp := regexp.MustCompile(`"at": "[^"]*"`)
 	homeValue := regexp.MustCompile(`HOME[^"]*`)
+	padding := regexp.MustCompile(`\S( {2,})\S`)
+	versionless := func(text string) string {
+		lines := strings.Split(text, "\n")
+		for i, line := range lines {
+			grow := strings.Count(line, konst.Version) * (len(konst.Version) - len(versionStandIn))
+			line = strings.ReplaceAll(line, konst.Version, versionStandIn)
+			if at := padding.FindStringSubmatchIndex(line); at != nil {
+				line = line[:at[2]] + strings.Repeat(" ", at[3]-at[2]+grow) + line[at[3]:]
+			}
+			lines[i] = line
+		}
+		return strings.Join(lines, "\n")
+	}
 	printed := map[string]string{}
 	for _, mode := range []string{"text", "json"} {
 		t.Run(mode, func(t *testing.T) {
@@ -106,8 +120,7 @@ func TestChangelogLibraryAndMigrateMatchTheirTextAndJSONGoldens(t *testing.T) {
 				}
 				out = strings.ReplaceAll(out, strings.Trim(string(escapedHome), `"`), "HOME")
 				out = homeValue.ReplaceAllStringFunc(out, func(path string) string { return strings.ReplaceAll(path, `\\`, "/") })
-				out = strings.ReplaceAll(stamp.ReplaceAllString(out, `"at": "AT"`), konst.Version, "VERSION")
-				errOut = strings.ReplaceAll(errOut, konst.Version, "VERSION")
+				out, errOut = versionless(stamp.ReplaceAllString(out, `"at": "AT"`)), versionless(errOut)
 				printed["notes-output/"+c.name+"."+mode+".golden"] = "exit " + strconv.Itoa(code) + "\n--- stdout\n" + out + "--- stderr\n" + errOut
 			}
 		})

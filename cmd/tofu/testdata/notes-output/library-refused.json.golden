@@ -24,12 +24,12 @@ exit 1
         "origin": "refused\\.tofu"
       }
     ],
-    "models": 24,
+    "models": 21,
     "subscriptions": 2,
     "roles": 0,
     "questions": 14,
-    "doc_pages": 13,
-    "doc_entries": 73,
+    "doc_pages": 14,
+    "doc_entries": 77,
     "proxy": "rtk",
     "proxy_from": "library",
     "domains_from": "the binary",
@@ -55,7 +55,7 @@ exit 1
       },
       {
         "name": "general",
-        "rules": 23,
+        "rules": 24,
         "thresholds": 7,
         "skills": 0,
         "agents": 2,
