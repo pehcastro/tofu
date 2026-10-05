@@ -370,6 +370,66 @@ const fakeSvelteCheck = "const fs = require('node:fs');\nconst path = require('n
 	"console.log('3 COMPLETED 4 FILES 1 ERRORS 0 WARNINGS 1 FILES_WITH_PROBLEMS');\n" +
 	"if (!process.argv.includes('--watch')) process.exit(1);\nsetInterval(() => {}, 1000);\n"
 
+const chipError = "src/lib/Chip.svelte:3:9: Type 'string' is not assignable to type 'number'."
+
+func svelteKitFiles(kit string) map[string]string {
+	return map[string]string{
+		"package.json": `{"name":"svelted","scripts":{"check":"svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --fail-on-warnings"},` +
+			`"devDependencies":{"@sveltejs/kit":"3.0.0","svelte-check":"4.7.6","typescript":"6.0.3"}}`,
+		"node_modules/typescript/package.json":       `{"name":"typescript"}`,
+		"node_modules/typescript/bin/tsc":            fakeTscChecker(""),
+		"node_modules/@sveltejs/kit/package.json":    `{"name":"@sveltejs/kit"}`,
+		"node_modules/@sveltejs/kit/svelte-kit.js":   kit,
+		"node_modules/svelte-check/package.json":     `{"name":"svelte-check"}`,
+		"node_modules/svelte-check/bin/svelte-check": fakeSvelteCheck,
+		"src/lib/Chip.svelte":                        "<script lang=\"ts\">\nlet { label } = $props();\nconst count: number = \"many\";\n</script>\n",
+	}
+}
+
+func slowSvelteKit(millis int) string {
+	return "setTimeout(() => {\n" + fakeSvelteKit + "}, " + strconv.Itoa(millis) + ");\n"
+}
+
+func TestWarmReturnsBeforeTheSvelteKitSyncAndTheFirstCheckWaitsForIt(t *testing.T) {
+	dir := tsProject(t, "node", "package-lock.json", svelteKitFiles(slowSvelteKit(2000)))
+	checkers := NewTypecheckers()
+	t.Cleanup(checkers.Close)
+	started := time.Now()
+	checkers.Warm(dir)
+	if took := time.Since(started); took > 500*time.Millisecond {
+		t.Errorf("Warm blocked its caller for %s on a 2000 ms svelte-kit sync", took)
+	}
+	got, err := checkers.Check(context.Background(), filepath.Join(dir, "src", "lib", "Chip.svelte"))
+	if err != nil || !strings.Contains(got.Content, "--watch") || !strings.Contains(got.Content, chipError) {
+		t.Fatalf("the first check did not wait for the sync and answer from the watching svelte-check: %v\n%s", err, got.Content)
+	}
+	t.Logf("Warm and the first check took %s:\n%s", time.Since(started), got.Content)
+}
+
+func TestClosingDuringTheSvelteKitSyncStopsIt(t *testing.T) {
+	dir := tsProject(t, "node", "package-lock.json", svelteKitFiles(slowSvelteKit(3000)))
+	checkers := NewTypecheckers()
+	started := time.Now()
+	checkers.Warm(dir)
+	watch := onlyWatch(t, checkers)
+	checkers.Close()
+	ended := func() bool {
+		watch.mutex.Lock()
+		defer watch.mutex.Unlock()
+		return watch.ended
+	}
+	for !ended() {
+		if time.Since(started) > 2*time.Second {
+			t.Fatal("the watch did not end within 2 s of Close during a 3000 ms sync")
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	time.Sleep(3500*time.Millisecond - time.Since(started))
+	if _, err := os.Stat(filepath.Join(dir, ".svelte-kit", "tsconfig.json")); err == nil {
+		t.Fatal("svelte-kit sync kept running after Close and wrote .svelte-kit")
+	}
+}
+
 func TestTypecheckRunsTheCheckerTheProjectDeclares(t *testing.T) {
 	cannotReadVue := "src/main.ts(1,17): error TS2307: Cannot find module './App.vue' or its corresponding type declarations."
 	vueError := "src/App.vue(2,7): error TS2322: Type 'string' is not assignable to type 'number'."
@@ -394,16 +454,7 @@ func TestTypecheckRunsTheCheckerTheProjectDeclares(t *testing.T) {
 		{"vue file through vue-tsc", vued(vueError), "src/App.vue", []string{"vue-tsc", "errors in src/App.vue: 1", vueError}, true},
 		{"ts file importing a vue file", vued(""), "src/main.ts", []string{"vue-tsc", "errors in src/main.ts: 0"}, false},
 		{"vue-tsc declared and not installed", uninstalled, "src/main.ts", []string{"vue-tsc", "not installed"}, true},
-		{"svelte file through the check script", map[string]string{
-			"package.json": `{"name":"svelted","scripts":{"check":"svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --fail-on-warnings"},` +
-				`"devDependencies":{"@sveltejs/kit":"3.0.0","svelte-check":"4.7.6","typescript":"6.0.3"}}`,
-			"node_modules/typescript/package.json":       `{"name":"typescript"}`,
-			"node_modules/typescript/bin/tsc":            fakeTscChecker(""),
-			"node_modules/@sveltejs/kit/package.json":    `{"name":"@sveltejs/kit"}`,
-			"node_modules/@sveltejs/kit/svelte-kit.js":   fakeSvelteKit,
-			"node_modules/svelte-check/package.json":     `{"name":"svelte-check"}`,
-			"node_modules/svelte-check/bin/svelte-check": fakeSvelteCheck,
-		}, "src/lib/Chip.svelte", []string{"svelte-check", "errors in src/lib/Chip.svelte: 1", "src/lib/Chip.svelte:3:9: Type 'string' is not assignable to type 'number'."}, true},
+		{"svelte file through the check script", svelteKitFiles(fakeSvelteKit), "src/lib/Chip.svelte", []string{"svelte-check", "errors in src/lib/Chip.svelte: 1", chipError}, true},
 	} {
 		t.Run(project.name, func(t *testing.T) {
 			project.files["src/App.vue"] = "<script setup lang=\"ts\">\nconst count: number = \"many\";\n</script>\n"

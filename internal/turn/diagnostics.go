@@ -248,9 +248,11 @@ func (c *Typecheckers) watchFor(checker typechecker) *tscWatch {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 	if c.watching[checker.dir] == nil {
-		if watch := startWatch(checker); watch != nil {
-			c.watching[checker.dir] = watch
-		}
+		argv := append(slices.Clone(checker.argv), "--watch", "--preserveWatchOutput")
+		lifetime, stop := context.WithCancel(context.Background())
+		watch := &tscWatch{command: strings.Join(argv, " "), born: time.Now(), stop: stop, changed: make(chan struct{})}
+		go watch.run(lifetime, checker, argv)
+		c.watching[checker.dir] = watch
 	}
 	return c.watching[checker.dir]
 }
@@ -302,35 +304,29 @@ func (c *Typecheckers) check(ctx context.Context, checker typechecker, scope str
 	return coldTypecheck(ctx, checker, scope)
 }
 
-func startWatch(checker typechecker) *tscWatch {
-	preparing, cancel := context.WithTimeout(context.Background(), konst.TypecheckDeadlineMillis*time.Millisecond)
+func (w *tscWatch) run(lifetime context.Context, checker typechecker, argv []string) {
+	defer w.settle(func() { w.ended = true })
+	preparing, cancel := context.WithTimeout(lifetime, konst.TypecheckDeadlineMillis*time.Millisecond)
 	defer cancel()
 	if checker.prepared(preparing) != nil {
-		return nil
+		return
 	}
 	output, input, err := os.Pipe()
 	if err != nil {
-		return nil
+		return
 	}
-	argv := append(slices.Clone(checker.argv), "--watch", "--preserveWatchOutput")
-	lifetime, stop := context.WithCancel(context.Background())
 	cmd := exec.CommandContext(lifetime, argv[0], argv[1:]...)
 	cmd.Dir, cmd.Stdout, cmd.Stderr = checker.dir, input, input
 	tracked, err := shell.StartTracked(cmd)
 	_ = input.Close()
 	if err != nil {
 		_ = output.Close()
-		stop()
-		return nil
+		return
 	}
-	watch := &tscWatch{command: strings.Join(argv, " "), born: time.Now(), process: cmd.Process, stop: stop, changed: make(chan struct{})}
-	go watch.read(output)
-	go func() {
-		_ = cmd.Wait()
-		tracked.Release()
-		watch.settle(func() { watch.ended = true })
-	}()
-	return watch
+	defer tracked.Release()
+	w.process = cmd.Process
+	go w.read(output)
+	_ = cmd.Wait()
 }
 
 func (w *tscWatch) read(output *os.File) {

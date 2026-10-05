@@ -25,12 +25,12 @@ func (Typecheck) Name() string { return "typecheck" }
 func (Typecheck) Definition() llm.Tool {
 	return llm.Tool{
 		Name: "typecheck",
-		Description: "typechecks a typescript project with the tsc that keeps watching it, and returns the error count and the errors. " +
+		Description: "typechecks a typescript project with the project's own checker, tsc, vue-tsc or svelte-check as its package.json declares, kept watching it, and returns the error count and the errors. " +
 			"path is a file or a directory, the working directory when left out: the nearest tsconfig.json at or above it names the project, " +
 			"and the errors shown are the ones under path, with the rest counted as other files. " +
-			"a watching tsc rechecks only what changed, including changes made through the shell, so this answers in seconds where tsc --noEmit, " +
-			"npm run typecheck or a build run through the shell take minutes on a large project: use this to check your work instead of them. " +
-			"a project still on its first check says so, and the next call answers from the same tsc",
+			"the watching checker rechecks only what changed, including changes made through the shell, so this answers in seconds where tsc --noEmit, " +
+			"npx svelte-check, npm run check or a build run through the shell take minutes on a large project: use this to check your work instead of them. " +
+			"a project still on its first check says so, and the next call answers from the same checker",
 		Parameters: map[string]any{
 			"type":       "object",
 			"properties": map[string]any{"path": map[string]any{"type": "string"}},
