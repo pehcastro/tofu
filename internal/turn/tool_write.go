@@ -130,7 +130,12 @@ func (t *WriteTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 		return Result{}, fmt.Errorf("write: %s exists and has not been read in this session or has changed since, so replacing it whole is refused rather than trusted against a guess: "+
 			"its current content follows, so write it again with that content folded in.\n%s", args.Path, t.ledger.Refuse(args.Path, held))
 	}
-	if err := sys.WriteFile(resolved, []byte(args.Content), writePerm); err != nil {
+	if readErr == nil {
+		err = overwrite(resolved, held, []byte(args.Content))
+	} else {
+		err = sys.WriteFile(resolved, []byte(args.Content), writePerm)
+	}
+	if err != nil {
 		return Result{}, fmt.Errorf("write: %w", err)
 	}
 	t.ledger.Mark(args.Path, []byte(args.Content))
@@ -143,4 +148,27 @@ func (t *WriteTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 		Diff:    transform.Unified(args.Path, before, args.Content),
 	}
 	return Result{Content: t.checkers.Typechecked(ctx, resolved, preview.Result()), Command: args.Path}, nil
+}
+
+func overwrite(path string, held, content []byte) error {
+	file, err := os.OpenFile(path, os.O_WRONLY, 0)
+	if err != nil {
+		return fmt.Errorf("opening it to write in place, so nothing changed: %w", err)
+	}
+	_, err = file.WriteAt(content, 0)
+	if err == nil {
+		err = file.Truncate(int64(len(content)))
+	}
+	if err == nil {
+		return file.Close()
+	}
+	_, restoreErr := file.WriteAt(held, 0)
+	if restoreErr == nil {
+		restoreErr = file.Truncate(int64(len(held)))
+	}
+	_ = file.Close()
+	if restoreErr != nil {
+		return fmt.Errorf("%w, and putting the old content back failed too, so the file may hold part of each: %w", err, restoreErr)
+	}
+	return fmt.Errorf("%w, and the old content was put back", err)
 }
