@@ -184,6 +184,8 @@ const (
 	SearchFrameLines       = 3
 	SearchMatchLinesListed = 5
 	SearchCandidateScanCap = 1200
+	SearchLineWidth        = 512
+	SearchFileByteCap      = 16 << 20
 )
 
 const (

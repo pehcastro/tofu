@@ -7,8 +7,10 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 
+	"tofu/internal/konst"
 	"tofu/internal/llm"
 	"tofu/internal/search"
 	"tofu/internal/turn"
@@ -34,8 +36,11 @@ func (s Search) Definition() llm.Tool {
 			"so a match in a go file comes back as the entire function, method, type or constant rather than the line. " +
 			"it says whether each match is in code, in a comment or in a string literal, which the parser knows and a line does not. " +
 			"a file it cannot parse, which is every file that is not go and any go file with a syntax error, " +
-			"comes back as the lines around the match and is counted as a fallback. " +
-			"it spends a token budget rather than a line count: over the budget it returns fewer whole units and never a cut one, " +
+			"comes back as the lines around the match and is counted as a fallback, " +
+			"and a fallback line longer than " + strconv.Itoa(konst.SearchLineWidth) + " bytes, such as a minified file, is cut to that width around the match " +
+			"with how many characters were cut on each side. " +
+			"a file over " + strconv.Itoa(konst.SearchFileByteCap>>20) + " MB is not read, and the result counts it. " +
+			"it spends a token budget rather than a line count: over the budget it returns fewer units and never cuts a declaration short, " +
 			"and it says how many matched and how many came back so a short answer is never mistaken for the whole. " +
 			ignoredWalkDescription + ". " +
 			"when it returned less than you needed, narrow path or raise max_tokens rather than running a shell search, " +

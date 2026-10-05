@@ -13,6 +13,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"time"
+	"unicode/utf8"
 
 	"tofu/internal/konst"
 )
@@ -60,6 +61,7 @@ type Stats struct {
 	Returned    int
 	Fallbacks   int
 	Skipped     int
+	TooLarge    int
 	Budget      int
 	Tokens      int
 	Scanned     int
@@ -112,7 +114,7 @@ func Find(req Request) (Result, error) {
 	case literal.lines > 0:
 		insensitive.notRun = "the literal answered, and a case insensitive form can only add lines that differ from it in case"
 	case insensitive.pattern != nil:
-		stats.Scanned, stats.Skipped, stats.ScanStopped = 0, 0, false
+		stats.Scanned, stats.Skipped, stats.TooLarge, stats.ScanStopped = 0, 0, 0, false
 		if err := scanTree(req, insensitive, matched, &stats); err != nil {
 			return Result{}, err
 		}
@@ -169,12 +171,13 @@ func Find(req Request) (Result, error) {
 }
 
 type scannedFile struct {
-	source string
-	hits   []hit
-	binary bool
-	read   time.Duration
-	match  time.Duration
-	err    error
+	source   string
+	hits     []hit
+	binary   bool
+	tooLarge bool
+	read     time.Duration
+	match    time.Duration
+	err      error
 }
 
 func scanTree(req Request, into *sweep, matched map[string]string, stats *Stats) error {
@@ -208,7 +211,11 @@ func scanTree(req Request, into *sweep, matched map[string]string, stats *Stats)
 			return fmt.Errorf("search: %w", file.err)
 		}
 		stats.Scanned++
-		if file.binary {
+		switch {
+		case file.tooLarge:
+			stats.TooLarge++
+			continue
+		case file.binary:
 			stats.Skipped++
 			continue
 		}
@@ -222,14 +229,28 @@ func scanTree(req Request, into *sweep, matched map[string]string, stats *Stats)
 
 func scanFile(full string, pattern *regexp.Regexp) scannedFile {
 	started := time.Now()
-	body, err := os.ReadFile(full)
-	file := scannedFile{read: time.Since(started), err: err, binary: bytes.IndexByte(body, 0) >= 0}
+	opened, err := os.Open(full)
+	if err != nil {
+		return scannedFile{err: err}
+	}
+	defer func() { _ = opened.Close() }()
+	info, err := opened.Stat()
+	if err != nil {
+		return scannedFile{err: err}
+	}
+	if info.Size() > konst.SearchFileByteCap {
+		return scannedFile{tooLarge: true}
+	}
+	var body bytes.Buffer
+	body.Grow(int(info.Size()) + bytes.MinRead)
+	_, err = body.ReadFrom(opened)
+	file := scannedFile{read: time.Since(started), err: err, binary: bytes.IndexByte(body.Bytes(), 0) >= 0}
 	if err != nil || file.binary {
 		return file
 	}
 	started = time.Now()
-	if prefix, _ := pattern.LiteralPrefix(); bytes.Contains(body, []byte(prefix)) {
-		file.source = string(body)
+	if prefix, _ := pattern.LiteralPrefix(); bytes.Contains(body.Bytes(), []byte(prefix)) {
+		file.source = body.String()
 		file.hits = hitLines(file.source, pattern)
 	}
 	file.match = time.Since(started)
@@ -263,11 +284,46 @@ func unitsIn(rel, body string, hits []hit) []Unit {
 			return units
 		}
 	}
+	columns := make(map[int]int)
+	for _, where := range hits {
+		for number := max(1, where.line-konst.SearchFrameLines); number <= min(len(lines), where.line+konst.SearchFrameLines); number++ {
+			columns[number] = 0
+		}
+	}
+	for _, where := range hits {
+		columns[where.line] = where.column
+	}
+	for number, column := range columns {
+		lines[number-1] = cutAround(lines[number-1], column)
+	}
 	var units []Unit
 	for _, where := range hits {
 		units = merge(units, frameUnit(rel, lines, where, NotParsed, true), lines)
 	}
 	return units
+}
+
+func cutAround(line string, column int) string {
+	if len(line) <= konst.SearchLineWidth {
+		return line
+	}
+	line = strings.TrimSuffix(line, "\r")
+	start := max(0, min(column-konst.SearchLineWidth/2, len(line)-konst.SearchLineWidth))
+	end := min(len(line), start+konst.SearchLineWidth)
+	for start > 0 && !utf8.RuneStart(line[start]) {
+		start--
+	}
+	for end < len(line) && !utf8.RuneStart(line[end]) {
+		end++
+	}
+	kept := line[start:end]
+	if start > 0 {
+		kept = fmt.Sprintf("[%d characters cut] %s", utf8.RuneCountInString(line[:start]), kept)
+	}
+	if end < len(line) {
+		kept = fmt.Sprintf("%s [%d characters cut]", kept, utf8.RuneCountInString(line[end:]))
+	}
+	return kept
 }
 
 func frameUnit(rel string, lines []string, where hit, placement Placement, fallback bool) Unit {

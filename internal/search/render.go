@@ -42,13 +42,20 @@ func (r Result) render() (string, error) {
 	if stats.Skipped > 0 {
 		fmt.Fprintf(&out, "%s\n", Note(BinarySkipped, fmt.Sprintf("%d files hold a null byte and were not read", stats.Skipped)))
 	}
+	if stats.TooLarge > 0 {
+		fmt.Fprintf(&out, "%s\n", Note(Truncated, fmt.Sprintf("%s over the %d MB cap went unread", plural(stats.TooLarge, "file"), konst.SearchFileByteCap>>20)))
+	}
 	if len(units) == 0 {
+		read := "the files were read"
+		if stats.TooLarge > 0 {
+			read = "every file under the size cap was read, and the ones over it may hold a match"
+		}
 		out.WriteString("no code unit holds that pattern")
 		if r.Answered != NoCandidate {
-			out.WriteString(". the files were read: this is an answer, not a failure\n")
+			fmt.Fprintf(&out, ". %s: this is an answer, not a failure\n", read)
 			return out.String(), nil
 		}
-		out.WriteString(", and no candidate form finds one either. the files were read: this is an absence, not a failure\n")
+		fmt.Fprintf(&out, ", and no candidate form finds one either. %s: this is an absence, not a failure\n", read)
 		for _, attempt := range r.Tried {
 			fmt.Fprintf(&out, "  %s\n", attempt)
 		}
