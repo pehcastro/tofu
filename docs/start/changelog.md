@@ -1,0 +1,93 @@
+---
+title: Changelog
+description: What changed for you in each minor version of tofu, from 0.1 to 0.5, grouped by area.
+order: 7
+updated: 2026-10-04
+---
+
+What changed for you in each minor version, grouped by area. Every change is
+in [CHANGELOG.md](https://github.com/pehcastro/tofu/blob/develop/CHANGELOG.md),
+which the binary also carries.
+
+tofu is 0.x and stays 0.x, so a minor version can change a verb, a flag or a
+file format. This page says which.
+
+## Reading it from tofu
+
+```
+tofu changelog [--all] [--json]
+```
+
+`tofu changelog` prints what changed since the version you last read and
+records the version; `--all` prints every version and records nothing.
+
+## 0.5
+
+The interface you use today, sub-agents that work like a team, and a library
+per language.
+
+- **Interface**: one top row and four screens, chat, sub-agents, file edits
+  and shells; a settings screen with search; `tofu --continue` opens on the
+  conversation it continues.
+- **Sub-agents**: named sub-agents, each with its own model, rules and
+  references. They run at the same time and in the background while the lead
+  stays with you, and report back with what they ran.
+- **Language agents**: `ts-dev`, `go-dev`, `py-dev` and `rust-dev`, each sent
+  back until its language's checks ran after its last edit.
+- **Library**: rules per language and per frontend framework, each tied to
+  the check that catches it, and `tofu rules add` and `off` for your own.
+- **Large repositories**: warm typecheck and test runners. A 33-file
+  TypeScript rename went from 675 s to 94 s, and a first search from 42.8 s
+  to 187 ms.
+- **Browser**: tofu reads and drives your own Chrome from its own binary. The
+  classifier loop went from 48 decisions per action to 7, and tabs tofu
+  opened close when the run ends.
+- **Setup**: keys live in the credential store, new models arrive with
+  `tofu models reload`, `tofu docs` answers how-to questions, and tofu reads
+  its own `.tofu` setup, not another harness's.
+
+## 0.4
+
+The name tofu, the money rule, and the first measured wins.
+
+- **Name**: boji became tofu, the binary and the `.tofu` folder, with history
+  copied across.
+- **Models**: a model is named by what pays for it, `claude-sub/...` or
+  `anthropic/...`; effort is a choice beside the model, `medium` by default.
+- **Accounts**: several accounts per subscription, and tofu picks the one with
+  room and moves when it runs out.
+- **Output the model reads**: a shell result arrives cut, `grep` gave way to
+  `search` at 17 KB where it returned 133 MB, and `fetch` turned a 67,692 byte
+  page into 37,274.
+- **Rules**: the prompt carries only the rules that fire for the task;
+  `tofu run --show-prompt` and `tofu rules index` show which and why.
+- **Safety**: an edit to a file the turn has not read is refused, and
+  `turnMaySpawn` decides whether a turn may spawn sub-agents.
+- **Interface**: the mouse, a progress line, ids you can type to jump, and
+  `tofu frame` and `tofu drive` to read the screen without a terminal.
+
+## 0.3
+
+The app, and the gate that can refuse.
+
+- **The app**: `tofu` with no arguments opens it in your directory, with tabs,
+  a settings view, a file edits tab and a slash command menu.
+- **Gate**: `--gate off|shadow|enforce` per run; under `enforce` a deny
+  refuses the call and the turn takes another path.
+- **Sub-agents**: a turn can hand work to a child that owns its own paths.
+- **Context**: a session that outgrows its budget forks instead of being
+  rewritten, and the first request caches the whole instruction prefix.
+- **Daily use**: paste a screenshot with `ctrl+v`, copy the last answer with
+  `ctrl+y`, and type while a turn runs to queue the next message.
+
+## 0.2
+
+The record, under the name boji: `why` explains any decision, `replay` scores past
+decisions against new thresholds with no network, and `check` and
+`label` judge and correct a real command.
+
+## 0.1
+
+The instrument, under the name boji: `judge` asks the classifier a typed question set and
+records every answer in an append-only ledger, with `doctor` and
+`version`.

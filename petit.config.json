@@ -1,0 +1,22 @@
+{
+  "title": "tofu",
+  "deploy": "cloudflare",
+  "mediaDir": "./docs/media",
+  "siteUrl": "https://tofu.nkz.md",
+  "defaultScheme": "system",
+  "schemeSwitcher": true,
+  "theme": "supra",
+  "sidebar": [
+    { "label": "Getting started", "path": "./docs/start" },
+    { "label": "LLMs", "path": "./docs/llms" },
+    { "label": "Classifiers", "path": "./docs/classifiers" },
+    { "label": "Tools", "path": "./docs/tools" },
+    { "label": "Automation", "path": "./docs/automation" },
+    { "label": "Features", "path": "./docs/features" },
+    { "label": "Library", "path": "./docs/library" },
+    { "label": "CLI", "path": "./docs/cli" }
+  ],
+  "toc": true,
+  "repository": "https://github.com/pehcastro/tofu",
+  "branch": "develop"
+}
