@@ -2,6 +2,7 @@ package main
 
 import (
 	"os"
+	"path/filepath"
 	"regexp"
 	goruntime "runtime"
 	"strings"
@@ -28,8 +29,10 @@ shell
 
 rules
   ✓ library       binary · 9 points
-  ○ 8 points      shadow · thresholds from the rule       gate tool_gate@3
-  ⚠ shell_sift@1  shadow · no lock file for shell_sift@1
+  ○ 8 points      shadow · thresholds from the rule
+    gate tool_gate@3
+  ✗ shell_sift@1  unusable · jev.Key: missing_credential: OPENROUTER_KEY is
+    not set and .env does not exist
 
 state
   calibration  none
@@ -52,7 +55,7 @@ shell
 rules
   ✓ library       project · 1 of 9 points
   ○ 7 points      shadow · thresholds from the rule
-  ⚠ shell_sift@1  shadow · no lock file for shell_sift@1
+  ● shell_sift@1  enforced · thresholds from the rule
   ⚠ tool_gate@3   shadow · no lock file for tool_gate@3
 
 state
@@ -140,6 +143,54 @@ func TestE2EDoctorReadsTheKeyAndTheRuleOfTheProjectItRunsIn(t *testing.T) {
 		}
 		body = before + "\n" + after
 		sameText(t, step.name, body, strings.ReplaceAll(step.body, "RTK_INSTALL", rtkInstall()))
+	}
+}
+
+func TestE2EDoctorAndARunInTheSameHomeAgreeOnWhetherTheShellSiftCuts(t *testing.T) {
+	stubRecordedJudgedReplies(t)
+	for _, step := range []struct {
+		name string
+		env  []string
+		row  string
+		code int
+	}{
+		{"a fresh home with no key", nil, "  ✗ shell_sift@1  unusable · jev.Key: missing_credential: OPENROUTER_KEY is", exitUsage},
+		{"a fresh home with a key and a recorded jev", []string{"OPENROUTER_KEY=stub-key-not-a-real-credential", judgeEndpointEnvar + "=" + os.Getenv(judgeEndpointEnvar)},
+			"  ● shell_sift@1  enforced · thresholds from the rule\n", exitOK},
+	} {
+		p := newProject(t, "sift")
+		writeFile(t, p.dir, ".tofu/tools/shell/proxy.yaml", "use: off\n")
+		writeFile(t, p.dir, "long.txt", siftableOutput())
+		writeFile(t, p.home, "deck.jsonl", `{"text":"reading it","tools":[{"name":"bash","args":{"command":"cat long.txt"}}]}`+"\n"+`{"text":"done"}`+"\n")
+		env := append([]string{"USERPROFILE=" + p.home, "HOME=" + p.home, "TEMP=" + p.home, "TMP=" + p.home, "SystemRoot=" + os.Getenv("SystemRoot"), "PATH=" + os.Getenv("PATH")}, step.env...)
+		page, _ := runBinary(t, p.dir, env, "doctor")
+		var envelope struct{ Data doctorReport }
+		printed, _ := runBinary(t, p.dir, env, "doctor", "--json")
+		oneEnvelope(t, printed, &envelope)
+		var said doctorRule
+		for _, rule := range envelope.Data.Rules {
+			if rule.Point == shellSiftPoint {
+				said = rule
+			}
+		}
+		ran, code := runBinary(t, p.dir, append(env, cassetteVariable+"="+filepath.Join(p.home, "deck.jsonl")), "run", "--dir", ".", "--no-gate", "read long.txt")
+		events, _ := filepath.Glob(filepath.Join(p.home, ".tofu", "projects", "*", "sessions", "*", "events.jsonl"))
+		session := ""
+		for _, path := range events {
+			raw, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			session += string(raw)
+		}
+		cut := strings.Contains(session, "bytes of output removed, the judged method")
+		refused := strings.TrimPrefix(strings.TrimSpace(ran), "tofu run: ")
+		agree := (said.Mode == "enforced") == cut && (said.Unusable == "" || said.Unusable == refused)
+		if !strings.Contains(page, "\n"+step.row) || code != step.code || !agree {
+			t.Fatalf("%s: doctor says\n%s\nwant a row starting %q, and in JSON mode %q unusable %q; the run exited %d, want %d, and cut %v\n%s",
+				step.name, page, step.row, said.Mode, said.Unusable, code, step.code, cut, ran)
+		}
+		t.Logf("%s: doctor mode %q unusable %q; the run exited %d, cut %v, and said %q", step.name, said.Mode, said.Unusable, code, cut, lastLine(ran))
 	}
 }
 

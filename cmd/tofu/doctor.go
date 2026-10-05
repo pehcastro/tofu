@@ -12,9 +12,12 @@ import (
 	"tofu/interface/cli"
 	"tofu/interface/tui/frame"
 	"tofu/internal/browser"
+	"tofu/internal/judge/gate"
 	"tofu/internal/judge/jev"
+	"tofu/internal/judge/method"
 	"tofu/internal/llm/cred"
 	"tofu/internal/llm/quota"
+	"tofu/internal/sift"
 	"tofu/internal/sys"
 	"tofu/internal/turn"
 )
@@ -195,6 +198,11 @@ func doctorState(now time.Time) doctorReport {
 	}
 	located, _ := locateGateKey()
 	library, rules := readLibrary()
+	for i, point := range rules {
+		if point.Point == shellSiftPoint {
+			rules[i] = shellSiftRule(point)
+		}
+	}
 	home, _ := os.UserHomeDir()
 	report := doctorReport{
 		Version:     frame.Release(sys.Version(), sys.BuildRevision()),
@@ -225,6 +233,27 @@ func doctorState(now time.Time) doctorReport {
 		report.Verdict = doctorNotReady
 	}
 	return report
+}
+
+func shellSiftRule(point doctorRule) doctorRule {
+	point.Fallback, point.Unusable, point.ThresholdsFrom = "", "", "the rule"
+	sifter, _, err := buildShellSift(siftFollowsTheTable)
+	if err == nil {
+		if chosen, _ := sifter.Methods.Of(sift.ShellSchema); chosen.Method == method.Unwired {
+			err = method.UnwiredError{Choice: chosen, File: sifter.Methods.File}
+		}
+	}
+	var contradiction turn.RuleContradictsTheTableError
+	var unwired method.UnwiredError
+	switch {
+	case errors.As(err, &contradiction) || errors.As(err, &unwired):
+		point.Mode, point.Fallback = "off", "no shell result is cut: "+err.Error()
+	case err != nil:
+		point.Mode, point.Unusable = "", err.Error()
+	default:
+		point.Mode = gate.ModeEnforced.String()
+	}
+	return point
 }
 
 func doctorBlockers() []doctorBlocker {
