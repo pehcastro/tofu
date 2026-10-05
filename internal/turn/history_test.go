@@ -148,6 +148,26 @@ func TestSixPagesShrinkInOneBatchKeepingTheNoteWrittenAfterEachAndTheCachedPrefi
 	}
 }
 
+func TestSmallOldPagesBehindTwoLargeOnesStayWholeBecauseTheRewriteCostsMoreThanItSaves(t *testing.T) {
+	var pages []shownPage
+	for i, rows := range []int{20, 20, 20, 300, 300} {
+		n := strconv.Itoa(i + 1)
+		pages = append(pages, shownPage{tool: "browser_observe", note: "reading listing " + n, url: "https://stays.test/rooms/" + n, title: "Stay number " + n, rows: rows})
+	}
+	requests, _ := browsePages(t, 32768, pages)
+	for r := 1; r < len(requests); r++ {
+		before := requests[r-1]
+		if len(requests[r]) < len(before) || !slices.EqualFunc(before, requests[r][:len(before)], func(a, b llm.Message) bool { return a.Content == b.Content }) {
+			t.Errorf("the prefix changed before request %d, want it never to change when no shrink pays for its rewrite", r)
+		}
+	}
+	for i, result := range toolResults(requests[len(requests)-1]) {
+		if len(result) != len(pages[i].result()) || !strings.Contains(result, pages[i].title) {
+			t.Errorf("page %d is %d bytes in the last request, want it whole and unchanged at %d", i+1, len(result), len(pages[i].result()))
+		}
+	}
+}
+
 func TestAnActThatListsOnlyChangesShrinksToThePageItActedOnAndErrorsStayWhole(t *testing.T) {
 	pages := []shownPage{
 		{tool: "browser_observe", note: "on the search page", url: "https://stays.test/s/Atibaia", title: "Atibaia stays", rows: 300},
@@ -176,9 +196,10 @@ func TestAnActThatListsOnlyChangesShrinksToThePageItActedOnAndErrorsStayWhole(t 
 	}
 	rendered := strings.Fields(results[4])[1]
 	forked := slices.Clone(requests[len(requests)-1])
-	for _, id := range []string{"call-9", "call-10", "call-11"} {
+	for i, page := range []shownPage{{url: "https://stays.test/rooms/2", title: "Stay two", rows: 400}, pages[3], pages[3]} {
+		id := "call-" + strconv.Itoa(9+i)
 		forked = append(forked, llm.Message{Role: llm.RoleAssistant, ToolCalls: []llm.ToolCall{{ID: id, Name: "browser_observe", Arguments: json.RawMessage(`{"tab":1,"note":"back on the results"}`)}}},
-			llm.Message{Role: llm.RoleTool, ToolCallID: id, Content: pages[3].result()})
+			llm.Message{Role: llm.RoleTool, ToolCallID: id, Content: page.result()})
 	}
 	at := slices.IndexFunc(forked, func(message llm.Message) bool { return message.ToolCallID == "call-4" })
 	artifacts, err := NewArtifacts(dir, true)

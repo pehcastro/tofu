@@ -71,7 +71,38 @@ const (
 	wholePagesKept   = 2
 )
 
-func shrinkPages(store *recall.Store, messages []llm.Message) error {
+type ShrinkGate string
+
+const (
+	ShrinkWhenFull ShrinkGate = "when-full"
+	ShrinkWhenPaid ShrinkGate = "when-paid"
+)
+
+type duePage struct {
+	at                        int
+	tool, header, note, after string
+}
+
+func (g ShrinkGate) admit(preview recall.Config, messages []llm.Message, due []duePage) []duePage {
+	switch g {
+	case ShrinkWhenFull:
+		return due
+	case ShrinkWhenPaid:
+		savedBytes := 0
+		for _, page := range due {
+			text := messages[page.at].Content
+			savedBytes += len(text) - len(shrunkPage(text, page.header, page.note, page.after, ""))
+		}
+		saved := savedBytes * 1000 / preview.BytesPerThousandTokens
+		if saved >= HistoryTokens(preview, messages[due[0].at:])-saved {
+			return due
+		}
+		return nil
+	}
+	panic("turn: unknown shrink gate " + string(g))
+}
+
+func ShrinkPages(store *recall.Store, preview recall.Config, messages []llm.Message, gate ShrinkGate) error {
 	calls := make(map[string]llm.ToolCall)
 	var pages []int
 	whole := 0
@@ -90,6 +121,7 @@ func shrinkPages(store *recall.Store, messages []llm.Message) error {
 		return nil
 	}
 	header := ""
+	var due []duePage
 	for _, i := range pages {
 		text, call := messages[i].Content, calls[messages[i].ToolCallID]
 		header = cmp.Or(pageHeader(text), header)
@@ -97,14 +129,18 @@ func shrinkPages(store *recall.Store, messages []llm.Message) error {
 			continue
 		}
 		if whole == wholePagesKept {
-			return nil
+			break
 		}
 		whole--
+		due = append(due, duePage{at: i, tool: call.Name, header: header, note: noteOf(call), after: noteAfter(messages[i+1:])})
+	}
+	for _, page := range gate.admit(preview, messages, due) {
+		text := messages[page.at].Content
 		handle, err := heldHandle(store, text)
 		if err != nil {
-			return fmt.Errorf("the %s result that a newer page replaced could not be held whole: %w", call.Name, err)
+			return fmt.Errorf("the %s result that a newer page replaced could not be held whole: %w", page.tool, err)
 		}
-		messages[i].Content = shrunkPage(text, header, noteOf(call), noteAfter(messages[i+1:]), handle)
+		messages[page.at].Content = shrunkPage(text, page.header, page.note, page.after, handle)
 	}
 	return nil
 }
@@ -173,6 +209,10 @@ func overflowNote(artifacts Artifacts, tool, result string) (string, error) {
 	}
 	return "the " + tool + " result that stood here is held whole in artifact " + handle +
 		": it was shrunk when the context window overflowed. call artifact_fetch with that handle, an offset and a length to read any range of it.", nil
+}
+
+func HistoryTokens(preview recall.Config, messages []llm.Message) int {
+	return len(messages)*konst.MessageFramingTokens + messagesBytes(messages)*1000/preview.BytesPerThousandTokens
 }
 
 func messagesBytes(messages []llm.Message) int {
@@ -255,7 +295,7 @@ func shrunkHandle(text string) string {
 }
 
 func forkHistory(artifacts Artifacts, budget recall.Budget, task string, messages []llm.Message, forced ForkKind, number, most int) (*Fork, []llm.Message, error) {
-	if err := shrinkPages(artifacts.store, messages); err != nil {
+	if err := ShrinkPages(artifacts.store, artifacts.preview, messages, ShrinkWhenPaid); err != nil {
 		return nil, nil, err
 	}
 	ended := historyOf(messages)
