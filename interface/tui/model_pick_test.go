@@ -255,6 +255,32 @@ func TestThePickSurvivesThePickerClosing(t *testing.T) {
 	}
 }
 
+func TestThePickerNeitherOffersNorSelectsFableOrAstra(t *testing.T) {
+	app := pickerApp(t, make(chan Pick, 1), bothWires)
+	picker := openPicker(t, app)
+	selected, picked := picker.Picked()
+	if !picked {
+		t.Fatal("the picker opened with no row selected")
+	}
+	var offered []string
+	for _, group := range picker.Groups {
+		for _, row := range group.Rows {
+			offered = append(offered, row.Slug)
+		}
+	}
+	shown := strings.ToLower(ansi.Strip(app.View().Content))
+	for _, banned := range []string{"fable", "astra"} {
+		if strings.Contains(shown, banned) {
+			t.Errorf("the picker draws %s\n%s", banned, shown)
+		}
+		for _, slug := range offered {
+			if strings.Contains(slug, banned) {
+				t.Errorf("the picker offers %s, selected %s", slug, selected.Slug)
+			}
+		}
+	}
+}
+
 func TestTheShippedLibraryIsWhatThePickerReadsWhenNobodyPassesOne(t *testing.T) {
 	loaded, err := New(Options{Repo: testRepo, Now: fixedClock()}).options.Models()
 	if err != nil {

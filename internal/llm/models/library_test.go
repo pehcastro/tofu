@@ -208,8 +208,6 @@ func TestTheShippedWiresResolveTheModelsTheyResolvedBefore(t *testing.T) {
 		}
 	}
 	frozen := map[string]string{
-		"claude-sub/claude-fable-5":             "claude-fable-5 allowed 5h and 7d and 7d:fable",
-		"claude-sub/claude-fable-5-1":           "claude-fable-5-1 allowed 5h and 7d and 7d:fable",
 		"claude-sub/claude-haiku-4-5-20251001":  "claude-haiku-4-5-20251001 allowed 5h and 7d",
 		"claude-sub/claude-opus-4-5-20251101":   "claude-opus-4-5-20251101 excluded 5h and 7d",
 		"claude-sub/claude-opus-4-6":            "claude-opus-4-6 excluded 5h and 7d",
@@ -223,7 +221,6 @@ func TestTheShippedWiresResolveTheModelsTheyResolvedBefore(t *testing.T) {
 		"codex-sub/gpt-5.6-luna":                "gpt-5.6-luna allowed 5h and 7d",
 		"codex-sub/gpt-5.6-sol":                 "gpt-5.6-sol default 5h and 7d",
 		"codex-sub/gpt-5.6-terra":               "gpt-5.6-terra allowed 5h and 7d",
-		"codex-sub/gpt-6-astra":                 "gpt-6-astra allowed 5h and 7d",
 		"codex-sub/gpt-reserve":                 "gpt-reserve excluded 5h and 7d",
 		"meta/muse-spark-1.1":                   "muse-spark-1.1 allowed ",
 		"meta/muse-spark-1.2":                   "muse-spark-1.2 allowed ",

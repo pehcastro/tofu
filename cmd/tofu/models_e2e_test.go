@@ -21,11 +21,9 @@ import (
 )
 
 const (
-	modelsFromTheBinaryAlone = `Models · 24 known                                                    ✓ 16 usable
+	modelsFromTheBinaryAlone = `Models · 21 known                                                    ✓ 13 usable
 
 claude-sub
-  ✓ claude-sub/claude-fable-5              allowed   1M
-  ✓ claude-sub/claude-fable-5-1            allowed   1M
   ✓ claude-sub/claude-haiku-4-5-20251001   allowed   200k
   ○ claude-sub/claude-opus-4-5-20251101    excluded  200k
   ○ claude-sub/claude-opus-4-6             excluded  1M
@@ -41,7 +39,6 @@ codex-sub
   ✓ codex-sub/gpt-5.6-luna   allowed   1.05M
   ● codex-sub/gpt-5.6-sol    default   1.05M
   ✓ codex-sub/gpt-5.6-terra  allowed   1.05M
-  ✓ codex-sub/gpt-6-astra    allowed   1.05M
   ○ codex-sub/gpt-reserve    excluded
 
 api key
@@ -61,16 +58,14 @@ roles
 
 windows
   table      the snapshot of models.dev taken on 2026-09-21
-  listed     16
+  listed     13
   published  5
   → tofu models reload
 `
 
-	modelsWithAProjectLayerAndAHomeRegistry = `Models · 24 known                                                    ✓ 17 usable
+	modelsWithAProjectLayerAndAHomeRegistry = `Models · 21 known                                                    ✓ 14 usable
 
 claude-sub
-  ✓ claude-sub/claude-fable-5              allowed
-  ✓ claude-sub/claude-fable-5-1            allowed
   ✓ claude-sub/claude-haiku-4-5-20251001   allowed
   ✓ claude-sub/claude-opus-4-5-20251101    allowed         project layer
   ○ claude-sub/claude-opus-4-6             excluded
@@ -86,7 +81,6 @@ codex-sub
   ✓ codex-sub/gpt-5.6-luna   allowed
   ● codex-sub/gpt-5.6-sol    default
   ✓ codex-sub/gpt-5.6-terra  allowed
-  ✓ codex-sub/gpt-6-astra    allowed
   ○ codex-sub/gpt-reserve    excluded
 
 api key
@@ -112,8 +106,6 @@ windows
 `
 
 	modelsJSONWithAProjectLayer = `models ok true problems 0
-claude-sub/claude-fable-5 allowed 0 library
-claude-sub/claude-fable-5-1 allowed 0 library
 claude-sub/claude-haiku-4-5-20251001 allowed 0 library
 claude-sub/claude-opus-4-5-20251101 allowed 0 project
 claude-sub/claude-opus-4-6 excluded 0 library
@@ -127,7 +119,6 @@ codex-sub/gpt-5.5 excluded 0 library
 codex-sub/gpt-5.6-luna allowed 0 library
 codex-sub/gpt-5.6-sol default 0 library
 codex-sub/gpt-5.6-terra allowed 0 library
-codex-sub/gpt-6-astra allowed 0 library
 codex-sub/gpt-reserve excluded 0 library
 meta/muse-spark-1.1 allowed 1048576 library
 meta/muse-spark-1.2 allowed 1048576 library

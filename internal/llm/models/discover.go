@@ -184,7 +184,7 @@ func (c Library) Reconcile(served Served, registry Registry) Reconciliation {
 	result := Reconciliation{Served: served}
 	for _, id := range served.IDs {
 		isServed[id] = true
-		if !accounted[id] {
+		if !accounted[id] && !neverOffered(id) {
 			result.Unknown = append(result.Unknown, id)
 		}
 	}

@@ -194,7 +194,7 @@ func TestEveryChatModelTheAccountCanSendTakesAWindowFromTheTable(t *testing.T) {
 func TestReconcileNamesAWindowThePublishedTableDoesNotMatch(t *testing.T) {
 	lines := shippedLibrary(t).Reconcile(servedFrom(t, CodexSub, "codex-models.json"), shippedTable(t)).Lines()
 	last := lines[len(lines)-1]
-	for _, want := range []string{"codex-sub/gpt-5.6-sol 272000", "codex-sub/gpt-6-astra 272000", "codex-sub/gpt-5.5 272000"} {
+	for _, want := range []string{"codex-sub/gpt-5.6-sol 272000", "codex-sub/gpt-5.5 272000"} {
 		if !strings.Contains(last, want) {
 			t.Fatalf("the reconciliation does not name %q, so a window the account reports stays invisible:\n%s", want, last)
 		}

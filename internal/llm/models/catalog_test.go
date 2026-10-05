@@ -75,11 +75,68 @@ func TestANewIdLandsAllowedWithTheEffortsOfItsNewestAllowedSibling(t *testing.T)
 
 func TestANewIdInAFamilyTheLibraryExcludesLandsAllowed(t *testing.T) {
 	library, registry := shippedLibrary(t), shippedTable(t)
-	fable := entryIn(t, planOf(library, ClaudeSub, registry, "claude-fable-5-2"), "claude-sub/claude-fable-5-2")
-	astra := entryIn(t, planOf(library, CodexSub, registry, "gpt-6.1-astra"), "codex-sub/gpt-6.1-astra")
-	for _, entry := range []Model{fable, astra} {
-		if entry.Use != UseAllowed {
-			t.Fatalf("%s landed %q %q, and no fact excludes it", entry.Slug(), entry.Use, entry.Reason)
+	entry := entryIn(t, planOf(library, CodexSub, registry, "gpt-reserve-2"), "codex-sub/gpt-reserve-2")
+	if entry.Use != UseAllowed {
+		t.Fatalf("%s landed %q %q, and no fact excludes it", entry.Slug(), entry.Use, entry.Reason)
+	}
+}
+
+func TestFableAndAstraLoadFromNoLayerAndAnAccountServingThemAddsNothing(t *testing.T) {
+	catalog := layerOf(catalogLayer, fstest.MapFS{
+		"models/anthropic/claude-fable-5-2.yaml": &fstest.MapFile{Data: []byte("subscription: claude-sub\nuse: allowed\n")},
+		"models/openai/gpt-6.1-astra.yaml":       &fstest.MapFile{Data: []byte("subscription: codex-sub\nuse: allowed\n")},
+	})
+	project := layerOf("project", fstest.MapFS{
+		"models/anthropic/claude-fable-6.yaml":  &fstest.MapFile{Data: []byte("subscription: claude-sub\nuse: default\n")},
+		"models/openai/GPT-6-ASTRA-mini.yaml":   &fstest.MapFile{Data: []byte("subscription: codex-sub\nuse: allowed\n")},
+		"models/openai/gpt-6-astral.yaml":       &fstest.MapFile{Data: []byte("subscription: codex-sub\nuse: allowed\n")},
+		"models/anthropic/claude-fabled-1.yaml": &fstest.MapFile{Data: []byte("subscription: claude-sub\nuse: allowed\n")},
+	})
+	library, err := Load([]Layer{shippedLayer(), catalog, project})
+	if err != nil {
+		t.Fatalf("a fable or astra entry broke the whole library: %v", err)
+	}
+	var kept []string
+	for _, model := range library.Models {
+		kept = append(kept, model.Slug())
+	}
+	for _, refused := range []string{
+		"claude-sub/claude-fable-5", "claude-sub/claude-fable-5-1", "claude-sub/claude-fable-5-2", "claude-sub/claude-fable-6",
+		"codex-sub/gpt-6-astra", "codex-sub/gpt-6.1-astra", "codex-sub/GPT-6-ASTRA-mini",
+	} {
+		if slices.Contains(kept, refused) {
+			t.Errorf("%s loaded", refused)
+		}
+	}
+	for _, unrelated := range []string{"codex-sub/gpt-6-astral", "claude-sub/claude-fabled-1"} {
+		if !slices.Contains(kept, unrelated) {
+			t.Errorf("%s shares a few letters with a refused name and was dropped too", unrelated)
+		}
+	}
+	if chosen, err := library.Default(ClaudeSub); err != nil || chosen.ID != "claude-opus-5" {
+		t.Errorf("the claude-sub default is %s (%v), want the shipped claude-opus-5", chosen.Slug(), err)
+	}
+	served := []string{"claude-fable-5", "claude-fable-5-2", "claude-opus-5"}
+	if unknown := library.Reconcile(Served{Subscription: ClaudeSub, IDs: served}, shippedTable(t)).Unknown; len(unknown) != 0 {
+		t.Errorf("a reload reports %v as served and missing from the library", unknown)
+	}
+	if plan := planOf(library, ClaudeSub, shippedTable(t), served...); len(plan) != 0 {
+		t.Errorf("a reload would write %v into the catalog", plan)
+	}
+}
+
+func TestARoleBoundToFableIsRefused(t *testing.T) {
+	roles := layerOf("project", oneFile("roles/orchestrator.yaml", "model: claude-sub/claude-fable-5\n"))
+	library, err := Load([]Layer{shippedLayer(), roles})
+	var broken *BrokenLibrary
+	if !errors.As(err, &broken) || len(library.Roles) != 0 {
+		t.Fatalf("an orchestrator bound to fable loaded as %v, err %v", library.Roles, err)
+	}
+	for _, slug := range []string{"claude-sub/claude-fable-5", "codex-sub/gpt-6-astra"} {
+		_, err := library.Select(slug)
+		var refusal *Refusal
+		if !errors.As(err, &refusal) || refusal.Kind != RefusedNeverOffered || strings.Contains(err.Error(), ReloadVerb) || !strings.Contains(err.Error(), "never offers "+slug) {
+			t.Errorf("selecting %s says %v", slug, err)
 		}
 	}
 }

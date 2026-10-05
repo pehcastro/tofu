@@ -203,8 +203,9 @@ const (
 	shellPoll     = 250 * time.Millisecond
 	shellPulses   = int(shellPoll / pulseInterval)
 	exitReset     = "\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?1016l\x1b[0m" + ansi.ResetBackgroundColor
-	consoleTerm   = "TERM=xterm-256color"
 )
+
+const termWithoutHardTabs = "TERM=linux"
 
 type App struct {
 	options        Options
@@ -360,7 +361,7 @@ func consoleEnviron(environ []string, goos string) []string {
 	if goos != "windows" || slices.ContainsFunc(environ, func(entry string) bool { return strings.HasPrefix(entry, "TERM=") }) {
 		return environ
 	}
-	return append(slices.Clip(environ), consoleTerm)
+	return append(slices.Clip(environ), termWithoutHardTabs)
 }
 
 func Run(options Options) error {
