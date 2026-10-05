@@ -94,6 +94,14 @@
   do: tofu doctor
   check: tofu doctor
   topic: doctor
+- ask: update tofu to the latest release
+  do: tofu update
+  check: tofu version
+  topic: update
+- ask: is there a newer tofu
+  do: tofu update --check
+  check: tofu update --check
+  topic: update
 - ask: see what changed in this version
   do: tofu changelog
   check: tofu version

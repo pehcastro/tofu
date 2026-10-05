@@ -29,6 +29,8 @@ Usage:
 Verbs:
   version   print the version, the commit and the Go version
   changelog print what changed since the version you last read
+  update    install the latest release over this tofu,
+            or --check to only say whether one is newer
   docs      print what you can ask tofu and the command that does it,
             a page with docs <topic>, or the closest answers with docs "a few words"
   doctor    say whether tofu can run here, and what is wrong if it cannot
@@ -111,6 +113,8 @@ func run(args []string, in io.Reader, out io.Writer, errOut io.Writer) int {
 		return shellsVerb(args[1:], out, errOut)
 	case "version":
 		return version(args[1:], out, errOut)
+	case "update":
+		return updateVerb(args[1:], out, errOut)
 	case "changelog":
 		return changelogVerb(args[1:], changelog.Markdown, out, errOut)
 	case "docs":
