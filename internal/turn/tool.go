@@ -1,10 +1,12 @@
 package turn
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -130,9 +132,70 @@ func (r Root) Resolve(requested string) (string, error) {
 		return "", fmt.Errorf("path %q must be relative to the turn's working directory", requested)
 	}
 	cleaned := filepath.Clean(filepath.Join(string(r), requested))
-	rel, err := filepath.Rel(string(r), cleaned)
-	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+	rel, inside := within(string(r), cleaned)
+	if !inside {
 		return "", fmt.Errorf("path %q escapes the turn's working directory", requested)
 	}
+	realRoot, _, err := followLinks(filepath.VolumeName(string(r))+string(filepath.Separator), string(r))
+	if err != nil {
+		return "", fmt.Errorf("turn: working directory %q: %w", string(r), err)
+	}
+	resolved, firstLink, err := followLinks(realRoot, rel)
+	if err != nil {
+		return "", fmt.Errorf("path %q: %w", requested, err)
+	}
+	if _, inside := within(realRoot, resolved); !inside {
+		return "", fmt.Errorf("path %q goes through the link %q to %q, outside the turn's working directory", requested, firstLink, resolved)
+	}
 	return cleaned, nil
+}
+
+func within(base, path string) (string, bool) {
+	rel, err := filepath.Rel(base, path)
+	return rel, err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+}
+
+func followLinks(from, path string) (resolved, firstLink string, err error) {
+	current := from
+	pending := splitPath(path[len(filepath.VolumeName(path)):])
+	followed := map[string]bool{}
+	for len(pending) > 0 {
+		next := filepath.Join(current, pending[0])
+		pending = pending[1:]
+		info, err := os.Lstat(next)
+		if errors.Is(err, fs.ErrNotExist) {
+			return filepath.Join(append([]string{next}, pending...)...), firstLink, nil
+		}
+		if err != nil {
+			return "", firstLink, err
+		}
+		if info.Mode()&(os.ModeSymlink|os.ModeIrregular) == 0 {
+			current = next
+			continue
+		}
+		target, err := os.Readlink(next)
+		if err != nil && info.Mode()&os.ModeSymlink == 0 {
+			current = next
+			continue
+		}
+		if err != nil {
+			return "", firstLink, err
+		}
+		name, _ := filepath.Rel(from, next)
+		if followed[next] {
+			return "", firstLink, fmt.Errorf("the link %q is a loop", name)
+		}
+		followed[next] = true
+		firstLink = cmp.Or(firstLink, name)
+		volume := filepath.VolumeName(target)
+		if volume != "" || strings.HasPrefix(target, "/") || strings.HasPrefix(target, string(filepath.Separator)) {
+			current = cmp.Or(volume, filepath.VolumeName(current)) + string(filepath.Separator)
+		}
+		pending = append(splitPath(target[len(volume):]), pending...)
+	}
+	return current, firstLink, nil
+}
+
+func splitPath(path string) []string {
+	return strings.FieldsFunc(path, func(c rune) bool { return c == filepath.Separator || c == '/' })
 }
