@@ -17,7 +17,16 @@ func Decode(output []byte) string {
 	if utf8.Valid(output) {
 		return string(output)
 	}
-	page := consoleCodePage()
+	console, _ := windows.GetConsoleOutputCP()
+	oem, _, _ := windows.NewLazySystemDLL("kernel32.dll").NewProc("GetOEMCP").Call()
+	return decodeIn(output, console, uint32(oem))
+}
+
+func decodeIn(output []byte, console, oem uint32) string {
+	page := console
+	if page == 0 || page == codePageUTF8 {
+		page = oem
+	}
 	if page == codePageUTF8 {
 		return string(output)
 	}
@@ -36,12 +45,4 @@ func Decode(output []byte) string {
 		decoded.WriteString(string(utf16.Decode(wide[:n])))
 	}
 	return decoded.String()
-}
-
-func consoleCodePage() uint32 {
-	if page, err := windows.GetConsoleOutputCP(); err == nil && page != 0 {
-		return page
-	}
-	oem, _, _ := windows.NewLazySystemDLL("kernel32.dll").NewProc("GetOEMCP").Call()
-	return uint32(oem)
 }
