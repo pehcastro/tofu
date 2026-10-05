@@ -158,8 +158,7 @@ func (r *Registry) Start(root, name, command, owner string) (Shell, error) {
 	if err != nil {
 		return Shell{}, err
 	}
-	cmd := exec.Command(choice.Path, choice.Args(command)...)
-	cmd.Dir = root
+	cmd := choice.Command(context.Background(), root, command)
 	spawned, waited, err := r.spawn(cmd, logFile)
 	if err != nil {
 		return Shell{}, err

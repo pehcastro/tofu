@@ -9,10 +9,12 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"time"
 
 	"tofu/internal/konst"
+	"tofu/internal/sys"
 )
 
 type Choice struct {
@@ -23,12 +25,26 @@ type Choice struct {
 
 const powerShellUTF8Output = "try { [Console]::OutputEncoding=[System.Text.Encoding]::UTF8 } catch {}\n"
 
-func (c Choice) Args(command string) []string {
+func (c Choice) Command(ctx context.Context, dir, command string, extraEnv ...string) *exec.Cmd {
+	args := []string{"-c", command}
 	switch strings.TrimSuffix(strings.ToLower(filepath.Base(c.Path)), ".exe") {
 	case "pwsh", "powershell":
-		return []string{"-NoProfile", "-NonInteractive", "-Command", powerShellUTF8Output + command}
+		args = []string{"-NoProfile", "-NonInteractive", "-Command", powerShellUTF8Output + command}
 	}
-	return []string{"-c", command}
+	cmd := exec.CommandContext(ctx, c.Path, args...)
+	cmd.Dir = dir
+	cmd.Env = slices.DeleteFunc(os.Environ(), func(entry string) bool {
+		name, _, _ := strings.Cut(entry, "=")
+		return slices.ContainsFunc(sys.KeyNames(), func(key string) bool { return strings.EqualFold(name, key) })
+	})
+	for _, entry := range []string{"AI_AGENT=tofu", "GIT_TERMINAL_PROMPT=0", "GCM_INTERACTIVE=never", "EDITOR=false"} {
+		if name, _, _ := strings.Cut(entry, "="); os.Getenv(name) == "" {
+			cmd.Env = append(cmd.Env, entry)
+		}
+	}
+	cmd.Env = append(cmd.Env, "GIT_EDITOR=true", "GIT_SEQUENCE_EDITOR=true")
+	cmd.Env = append(cmd.Env, extraEnv...)
+	return cmd
 }
 
 const posixSyntaxDoesNotApply = "this project's tools assume a posix shell: heredocs, $VAR, forward slashes and /dev/null do not work here, " +

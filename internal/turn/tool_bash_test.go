@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os/exec"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -45,6 +46,27 @@ func TestBashHoldsNoKeyTofuReads(t *testing.T) {
 	result := runBash(t, newBash(t), map[string]any{"command": "env | grep -ci 'openrouter_key\\|brave_search_key'"})
 	if !strings.HasPrefix(result.Content, "0\n") {
 		t.Fatalf("the child sees a key: %q", result.Content)
+	}
+}
+
+func TestBashTellsEveryChildItIsAnAgentForegroundAndBackground(t *testing.T) {
+	for _, name := range []string{"AI_AGENT", "GIT_TERMINAL_PROMPT", "GCM_INTERACTIVE", "GIT_EDITOR", "EDITOR", subAgentDepthVar} {
+		t.Setenv(name, "")
+	}
+	tool := newBash(t)
+	ctx := WithShellRegistry(context.Background(), shell.OpenAt(t.TempDir()))
+	for _, background := range []bool{false, true} {
+		raw, _ := json.Marshal(map[string]any{"command": "env", "background": background})
+		result, err := tool.Run(ctx, raw)
+		if err != nil {
+			t.Fatal(err)
+		}
+		lines := strings.Split(strings.ReplaceAll(result.Content, "\r", ""), "\n")
+		for _, want := range []string{"AI_AGENT=tofu", "GIT_TERMINAL_PROMPT=0", "GCM_INTERACTIVE=never", "GIT_EDITOR=true", "GIT_SEQUENCE_EDITOR=true", "EDITOR=false", subAgentDepthVar + "=1"} {
+			if !slices.Contains(lines, want) {
+				t.Errorf("background %v: %s is missing", background, want)
+			}
+		}
 	}
 }
 

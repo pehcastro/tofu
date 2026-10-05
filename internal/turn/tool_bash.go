@@ -22,7 +22,6 @@ import (
 	"tofu/internal/search"
 	"tofu/internal/session"
 	"tofu/internal/shell"
-	"tofu/internal/sys"
 )
 
 type BashTool struct {
@@ -359,12 +358,7 @@ func (t *BashTool) checkPort(ctx context.Context, port int) Result {
 }
 
 func (t *BashTool) command(ctx context.Context, command string) *exec.Cmd {
-	cmd := exec.CommandContext(ctx, t.choice.Path, t.choice.Args(command)...)
-	cmd.Dir = string(t.root)
-	cmd.Env = append(slices.DeleteFunc(os.Environ(), func(entry string) bool {
-		name, _, _ := strings.Cut(entry, "=")
-		return slices.ContainsFunc(sys.KeyNames(), func(key string) bool { return strings.EqualFold(name, key) })
-	}), subAgentDepthVar+"="+strconv.Itoa(processDepth()+1))
+	cmd := t.choice.Command(ctx, string(t.root), command, subAgentDepthVar+"="+strconv.Itoa(processDepth()+1))
 	cmd.WaitDelay = konst.BashWaitDelayMillis * time.Millisecond
 	return cmd
 }
