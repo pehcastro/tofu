@@ -23,6 +23,8 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 - **`write` takes `append: true`.**
 - **`tofu rules index --role orchestrator|sub-agent`** shows the rules each one gets.
 - **The drive's `requests` step** prints each request's tool count, tools hash and tool choice.
+- **`search` returns the whole function, method, class or type in TypeScript, JavaScript, Python and Rust**, as it does in Go, so the model does not read the file again.
+- **The lead gets a check on each running sub-agent** every `subAgentCheckSeconds`, 30 minutes by default: its steps, the files it changed, its gate, its last tool and its cost. tofu writes it with no model call.
 
 ### Changed
 
@@ -38,7 +40,7 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 - **`glob`** takes `**` and `{a,b}`. **`search`** shows a match on a very long line, skips files over 16 MB, and goes on past a file it cannot read.
 - **A long tool result is stored whole**, so `artifact_fetch` can read its middle.
 - **The model picker** never offers Fable, opens on the model in use, and keeps its header in cmd and Git Bash.
-- **A plain cmd window** shows colour instead of raw escape codes.
+- **A plain cmd window** shows colour instead of raw escape codes, and tofu leaves the console's code page as it found it.
 - **A library sub-agent** gets the skills its definition names.
 - **`tofu doctor`** reports the shell sift the way a run uses it.
 
