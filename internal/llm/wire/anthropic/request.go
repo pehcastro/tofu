@@ -144,7 +144,7 @@ func (r Request) Encode(oauth bool) ([]byte, error) {
 	system := systemBlocks(r.System, oauth, BillingSystemBlock(firstUserText(r.Messages), cmp.Or(r.ClaudeCodeVersion, PinnedClaudeCodeVersion)), r.CacheTTL)
 	head := applyHeadCaching(system, tools, r.CacheTTL)
 	if !r.HistoryCacheOff {
-		applyHistoryCaching(messages, konst.HistoryCacheTTL, cacheBreakpointsPerRequest-head)
+		applyHistoryCaching(messages, map[bool]string{true: konst.HistoryCacheTTL}[r.CacheTTL != ""], cacheBreakpointsPerRequest-head)
 	}
 
 	userID, err := metadataUserID(r, oauth)
