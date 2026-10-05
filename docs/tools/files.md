@@ -70,7 +70,10 @@ written.
 ## glob
 
 `glob` is a `filepath.WalkDir` with tofu's own `.gitignore` parser,
-returning at most 300 paths.
+returning at most 300 paths. Patterns are written the way other tools take
+them: `src/**/*.ts` reaches any depth, `*.{ts,tsx}` matches either
+extension, and a pattern with an unclosed brace is refused with where it
+broke.
 
 `find` and `ls -R` enter every ignored directory. On 20 listings,
 `glob` returned 21 KB where `ls -R` returned 126 KB.
