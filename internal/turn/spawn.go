@@ -615,7 +615,7 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 		return Result{}, fmt.Errorf("spawn: %w", err)
 	}
 
-	held := &heldSubAgent{agent: agent, definition: definition, effort: opened.Effort, system: system, environment: environment + t.briefFiles(ctx, args.Task),
+	held := &heldSubAgent{agent: agent, definition: definition, effort: opened.Effort, system: system, environment: environment + t.briefFiles(ctx, args, site.conversation),
 		boundary: &subagent.Boundary{Ticket: subAgentID, Owns: args.Owns}, inbox: NewInbox(),
 		trace: spawnTrace{definition: agent.Agent, model: agent.Model, mission: agent.Mission, owns: args.Owns, depth: t.depth + 1}}
 	runCtx, cancel := context.WithCancel(ctx)
@@ -998,31 +998,60 @@ func (t *SpawnTool) rehold(agent subagent.SubAgent) error {
 
 var briefPath = regexp.MustCompile(`[\w./-]*\w\.[A-Za-z0-9]+`)
 
-func (t *SpawnTool) briefFiles(ctx context.Context, brief string) string {
+type briefCandidate struct {
+	path   string
+	byLead bool
+}
+
+func (t *SpawnTool) briefFiles(ctx context.Context, args spawnArgs, lead []llm.Message) string {
 	read, readable := t.base.Tools.byName["read"]
 	if !readable {
 		return ""
 	}
-	var text strings.Builder
-	var skipped, named []string
-	for _, path := range briefPath.FindAllString(brief, -1) {
-		if slices.Contains(named, path) {
-			continue
+	if memoised, cached := read.(interface{ Uncached() Tool }); cached {
+		read = memoised.Uncached()
+	}
+	var candidates []briefCandidate
+	for _, path := range briefPath.FindAllString(args.Task, -1) {
+		candidates = append(candidates, briefCandidate{path: path})
+	}
+	for _, message := range lead {
+		for _, call := range message.ToolCalls {
+			var leadRead readArgs
+			if call.Name == "read" && json.Unmarshal(call.Arguments, &leadRead) == nil {
+				candidates = append(candidates, briefCandidate{path: leadRead.Path, byLead: true})
+			}
 		}
-		named = append(named, path)
-		raw, _ := json.Marshal(readArgs{Path: path})
+	}
+	var text strings.Builder
+	var placed, skipped []string
+	for _, candidate := range candidates {
+		raw, _ := json.Marshal(readArgs{Path: candidate.path})
 		result, err := read.Run(ctx, raw)
 		if err != nil {
 			continue
 		}
-		if len(skipped) > 0 || text.Len()+len(result.Content) > konst.SubAgentReferenceBytes {
-			skipped = append(skipped, path)
+		file := ledgerKey(result.Command)
+		if owned, _ := subagent.Matches(file, args.Owns); slices.Contains(placed, file) || candidate.byLead && !owned {
 			continue
 		}
-		text.WriteString("\n\nthe brief names " + path + ", so it is read for you, as a read call shows it:\n" + result.Content)
+		placed = append(placed, file)
+		body := result.Content
+		if repaired := ledgerKey(candidate.path) != file; repaired {
+			_, body, _ = strings.Cut(body, "\n")
+		}
+		if len(skipped) > 0 || text.Len()+len(body) > konst.SubAgentReferenceBytes {
+			skipped = append(skipped, file)
+			continue
+		}
+		heading := "the brief names " + file + ", so it is read for you:\n"
+		if candidate.byLead {
+			heading = "the lead read " + file + ", inside the paths you hold, so it is read for you as it is now:\n"
+		}
+		text.WriteString("\n\n" + heading + body)
 	}
 	if len(skipped) > 0 {
-		fmt.Fprintf(&text, "\n\nthe brief also names these files, not read for you to stay within %d bytes, so read them before you change them: %s", konst.SubAgentReferenceBytes, strings.Join(skipped, ", "))
+		fmt.Fprintf(&text, "\n\nthese files, named in the brief or read by the lead inside the paths you hold, are not read for you to stay within %d bytes, so read them before you change them: %s", konst.SubAgentReferenceBytes, strings.Join(skipped, ", "))
 	}
 	return text.String()
 }

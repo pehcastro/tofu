@@ -113,6 +113,8 @@ func (t memoTool) Name() string { return t.tool.Name() }
 
 func (t memoTool) Definition() llm.Tool { return t.tool.Definition() }
 
+func (t memoTool) Uncached() turn.Tool { return t.tool }
+
 func (t memoTool) Run(ctx context.Context, raw json.RawMessage) (turn.Result, error) {
 	if !SideEffectFree(t.tool.Name()) {
 		result, err := t.tool.Run(ctx, raw)
