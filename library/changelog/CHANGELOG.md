@@ -8,6 +8,29 @@ Tofu is personal and not released, so the public interface that a version promis
 
 The minor number carries breaking changes, which is what 0.x means, and **there is never a 1.0.0**. The owner decided that on 2026-09-19: this stays 0.x forever, so the promise the version makes is the one 0.x already makes, that anything can break on a minor bump.
 
+## 0.5.0 - 2026-10-05
+
+The first public release: install with one command on Windows, Linux or macOS, and a lead that spends far fewer tokens for the same work.
+
+### Added
+
+- **Install scripts and `tofu update`.** `install.sh` for Linux and macOS and `install.ps1` for Windows install the latest release into `~/.local/bin` after checking its checksum. `tofu update` replaces the binary with the latest release, and `tofu update --check` only says whether one exists.
+- **Releases from the `release` branch**, built for Windows, Linux and macOS on amd64 and arm64.
+- **The browser relay on Linux and macOS.** `tofu browser install` registers tofu with Chrome, Chromium, Brave and Edge. `tofu doctor` gains a browser section that says, per browser, whether tofu can reach it.
+- **Rule overrides.** `tofu rules off` and `tofu rules add` take `--reason`. `tofu rules overrides` lists every override, and `tofu rules restore` removes one. When a rule blocks what you asked for, tofu names the rule, gives its reason, and asks: 1 this project, 2 everywhere, 3 no.
+- **A page check in one call.** `browser_do` takes a list of steps. Each step can check focus, an attribute, a name, the url, text, or computed style, and can turn reduced motion on. `tofu browser batch` runs the same list from a file.
+
+### Changed
+
+- **Shell output through rtk by default**, when rtk is installed. Background, piped and redirected commands run as written, and `use: off` in a `tools/shell/proxy.yaml` turns it off. `tofu doctor` says whether rtk was found.
+- **The lead carries less.** It gets the design rules that shape its brief, not the rules for how code is written. Tools a project cannot use are dropped, and a sub-agent loads its references when it needs them. The lead skips its own check pass after a single sub-agent's clean report whose checks passed.
+- **The gate reads the project's own checks**: a check run through rtk, or the project's `typecheck` or `test` script, counts. A sub-agent is judged only on errors in the files it owns. In a Vue or Svelte project, the typecheck tool runs `vue-tsc` or `svelte-check`.
+- **Tabs tofu opened close** when the run, the sub-agent or the app that opened them ends.
+
+### Removed
+
+- The old unused update check in `internal/update`.
+
 ## 0.5.0-rc-fix24 - 2026-10-03
 
 Tabs tofu opens close when it is done with them, and a frontend rule that measurably changes what the agent writes.
