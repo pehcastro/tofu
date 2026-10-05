@@ -50,6 +50,19 @@ Under `access`, what tofu can reach:
 - one line per wire, ending `subscription` or `money`: what a model call
   that way spends.
 
+Under `shell`, one line about rtk. tofu asks rtk to rewrite every bash
+command before it runs, so `git diff` runs as `rtk git diff` and prints
+less. The bash row keeps the command asked for and the one that ran.
+
+- `✓ rtk  <version> · rewrites every bash command`: rtk is on PATH.
+- `⚠ rtk  not on PATH, ...`: every command runs as asked and nothing
+  fails. The `→` names the install command for this system.
+- `○ rtk  off`: a layer turned it off, and the line names which.
+
+To turn it off, put one line, `use: off`, in `tools/shell/proxy.yaml`
+under `~/.tofu/` for every project, or under `.tofu/` in a project for
+that project only. Delete the file to turn it back on.
+
 Under `rules`, what tofu decides with:
 
 - `library  binary · <n> points` is normal. `project · <n> of <m> points`

@@ -127,6 +127,19 @@ func (p *CommandProxy) ask(ctx context.Context, command string) (string, error) 
 	return "", nil
 }
 
+func (p *CommandProxy) InstalledVersion(ctx context.Context) (string, error) {
+	if p.binary == "" {
+		return "", nil
+	}
+	ctx, cancel := context.WithTimeout(ctx, p.timeout)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, p.binary, "--version").Output()
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimPrefix(strings.TrimSpace(string(out)), proxyUseRTK+" "), nil
+}
+
 func fetchingVerb(rewritten string) string {
 	fields := strings.Fields(rewritten)
 	for index, field := range fields {

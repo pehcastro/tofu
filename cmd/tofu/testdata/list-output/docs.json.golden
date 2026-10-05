@@ -142,8 +142,8 @@ exit 0
         "topic": "settings"
       },
       {
-        "ask": "read only CLAUDE.md, not AGENTS.md",
-        "do": "tofu settings set instructionSources CLAUDE.md",
+        "ask": "read CLAUDE.md, not AGENTS.md, where a folder has both",
+        "do": "tofu settings set instructionSources claude-first",
         "check": "tofu settings get instructionSources",
         "topic": "settings"
       },
@@ -199,7 +199,7 @@ exit 0
         "ask": "see which sub-agents exist and their models",
         "do": "tofu agents",
         "check": "tofu agents --json",
-        "topic": "files"
+        "topic": "agents"
       },
       {
         "ask": "sign in with a subscription",
@@ -427,6 +427,12 @@ exit 0
         "ask": "check that tofu can run here",
         "do": "tofu doctor",
         "check": "tofu doctor --json",
+        "topic": "doctor"
+      },
+      {
+        "ask": "stop rewriting shell commands through rtk",
+        "do": "write use off in .tofu/tools/shell/proxy.yaml",
+        "check": "tofu doctor",
         "topic": "doctor"
       },
       {

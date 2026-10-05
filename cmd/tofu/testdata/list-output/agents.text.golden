@@ -65,10 +65,10 @@ Sub-agents · 10 defined                                               ✗ 1 bro
     measures what disagreed with itself, and files what is wrong instead of
     editing it away.
     tools      read, glob, search, symbols, typecheck, test, bash, write
-    reference  flakiness  4.2 KB
-    reference  failure-triage  2.6 KB
-    reference  metrics  3.5 KB
-    reference  test-planning  2.9 KB
+    reference  flakiness  2.3 KB
+    reference  failure-triage  1.6 KB
+    reference  metrics  1.9 KB
+    reference  test-planning  2.1 KB
     reference  verify-a-running-service  2.4 KB
 
 broken

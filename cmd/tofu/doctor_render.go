@@ -26,6 +26,8 @@ func doctorPage(page cli.Page, report doctorReport) []string {
 	}
 	lines = append(lines, "", page.Section("access", cli.Verdict{}))
 	lines = append(lines, cli.Indent(page.Rows(accessRows(report))...)...)
+	lines = append(lines, "", page.Section("shell", cli.Verdict{}))
+	lines = append(lines, cli.Indent(page.Rows([]cli.Row{proxyRow(report.Proxy)})...)...)
 	lines = append(lines, "", page.Section("rules", cli.Verdict{}))
 	lines = append(lines, cli.Indent(page.Rows(ruleRows(report.Library, report.Rules))...)...)
 	calibration, _, _ := strings.Cut(report.Calibration, ",")
@@ -78,6 +80,19 @@ func accessRows(report doctorReport) []cli.Row {
 		rows = append(rows, cli.Row{Mark: cli.Done, Cells: []string{wire.Name, spend}})
 	}
 	return rows
+}
+
+func proxyRow(proxy doctorProxy) cli.Row {
+	from := "from " + proxy.From
+	switch {
+	case proxy.Use == "off":
+		return cli.Row{Mark: cli.Idle, Cells: []string{"rtk", "off"}, Detail: from}
+	case proxy.Unreadable != "":
+		return cli.Row{Mark: cli.Warn, Cells: []string{"rtk", "did not answer --version"}, Detail: proxy.Unreadable}
+	case proxy.Install != "":
+		return cli.Row{Mark: cli.Warn, Cells: []string{"rtk", "not on PATH, so bash commands run as asked"}, Hint: proxy.Install}
+	}
+	return cli.Row{Mark: cli.Done, Cells: []string{"rtk", proxy.Version + factSeparator + "rewrites every bash command"}, Detail: from}
 }
 
 func ruleRows(library doctorLibrary, rules []doctorRule) []cli.Row {

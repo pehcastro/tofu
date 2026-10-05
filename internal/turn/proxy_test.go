@@ -408,13 +408,13 @@ func TestAVerbThatDownloadsACompilerIsRefused(t *testing.T) {
 	}
 }
 
-func TestTheShippedLibraryLeavesTheProxyOff(t *testing.T) {
+func TestTheShippedLibraryTurnsTheProxyOn(t *testing.T) {
 	proxy, err := LoadCommandProxy(shipped.Files(), "library", t.TempDir())
 	if err != nil {
 		t.Fatalf("loading the shipped setting: %v", err)
 	}
-	if proxy != nil {
-		t.Fatalf("the shipped library turns the proxy on: %+v", proxy)
+	if proxy == nil {
+		t.Fatal("the shipped library leaves the proxy off")
 	}
 }
 

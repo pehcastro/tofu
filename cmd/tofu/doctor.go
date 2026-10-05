@@ -109,6 +109,14 @@ type doctorWire struct {
 	Spend string `json:"spend"`
 }
 
+type doctorProxy struct {
+	Use        string `json:"use"`
+	From       string `json:"from"`
+	Version    string `json:"version,omitempty"`
+	Install    string `json:"install,omitempty"`
+	Unreadable string `json:"unreadable,omitempty"`
+}
+
 type doctorReport struct {
 	Version     string             `json:"version"`
 	Verdict     doctorVerdict      `json:"verdict"`
@@ -122,6 +130,7 @@ type doctorReport struct {
 	Ledger      string             `json:"ledger"`
 	SpendLimit  string             `json:"spend_limit"`
 	Wires       []doctorWire       `json:"wires"`
+	Proxy       doctorProxy        `json:"proxy"`
 	Root        string             `json:"root"`
 	Go          string             `json:"go"`
 	OS          string             `json:"os"`
@@ -194,6 +203,7 @@ func doctorState(now time.Time) doctorReport {
 		Ledger:      ledgerState(),
 		SpendLimit:  quota.SpendLimitLine(),
 		Wires:       doctorWires(located.Name),
+		Proxy:       doctorProxyState(root),
 		Root:        root,
 		Go:          sys.GoVersion(),
 		OS:          sys.OS() + "/" + sys.Arch(),
@@ -223,6 +233,33 @@ func doctorWires(keyName string) []doctorWire {
 		wires = append(wires, doctorWire{Name: name, Spend: spend})
 	}
 	return wires
+}
+
+func doctorProxyState(root string) doctorProxy {
+	setting := loadProxySetting(root)
+	state := doctorProxy{Use: setting.use, From: setting.layer}
+	if setting.proxy == nil {
+		return state
+	}
+	version, err := setting.proxy.InstalledVersion(context.Background())
+	switch {
+	case err != nil:
+		state.Unreadable = err.Error()
+	case version == "":
+		state.Install = rtkInstall()
+	}
+	state.Version = version
+	return state
+}
+
+func rtkInstall() string {
+	switch sys.OS() {
+	case "windows":
+		return "winget install rtk-ai.rtk"
+	case "darwin":
+		return "brew install rtk"
+	}
+	return "cargo install --git https://github.com/rtk-ai/rtk"
 }
 
 func gateSource(located jev.Located) string {

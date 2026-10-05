@@ -34,6 +34,9 @@ func loadProxySetting(root string) proxySetting {
 			continue
 		}
 		setting.proxy, setting.use, setting.layer = proxy, "off", layer.Name+" "+layer.Origin
+		if layer.Origin == layer.Name {
+			setting.layer = layer.Name
+		}
 		if proxy != nil {
 			setting.use = "rtk"
 		}

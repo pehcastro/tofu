@@ -1,9 +1,11 @@
 exit 0
 --- stdout
-Docs · 67 asks                                                         12 topics
+Docs · 68 asks                                                         12 topics
 
 agents  add a sub-agent for every project or for one, choose the model it
   runs, and remove it
+  see which sub-agents exist and their models
+    → tofu agents
   add a sub-agent to this project
     → tofu agents add <name> --description "<what it does>" --model <source/model>
   add a sub-agent to every project
@@ -36,14 +38,14 @@ doctor  what tofu doctor checks, what each line it prints means, and what to
     → tofu doctor
   check that tofu can run here
     → tofu doctor
+  stop rewriting shell commands through rtk
+    → write use off in .tofu/tools/shell/proxy.yaml
   check the library files and these pages
     → tofu library
 
 files  every path tofu uses in your home and in a project, and which one wins
   where does tofu keep its files
     → tofu docs files
-  see which sub-agents exist and their models
-    → tofu agents
 
 gate  what jev judges before a tool call runs, when tofu asks you first, and
   where the OpenRouter key lives
@@ -141,8 +143,8 @@ settings  every setting, its default, what it takes, and how to change it
     → tofu settings set subAgentsPerTurn 20
   pick the model a sub-agent tier runs
     → tofu settings set modelTier.smart claude-sub/claude-sonnet-5
-  read only CLAUDE.md, not AGENTS.md
-    → tofu settings set instructionSources CLAUDE.md
+  read CLAUDE.md, not AGENTS.md, where a folder has both
+    → tofu settings set instructionSources claude-first
   send more of my instruction files each turn
     → tofu settings set projectInstructionsCap 65536
   read sub-agents only from .tofu

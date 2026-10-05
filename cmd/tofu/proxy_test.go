@@ -39,6 +39,10 @@ func main() {
 		fmt.Print("rtk " + strings.Join(os.Args[2:], " "))
 		os.Exit(3)
 	}
+	if len(os.Args) > 1 && os.Args[1] == "--version" {
+		fmt.Println("rtk 9.9.9")
+		return
+	}
 	fmt.Println("filtered: ok")
 }
 `
@@ -191,17 +195,48 @@ func TestAProjectTurningTheProxyOnRewritesTheCommandARunActuallyExecutes(t *test
 	t.Logf("proxy row %+v\nthe stand-in rtk was called with:\n%s", called.Proxy, spawned)
 }
 
-func TestTheShippedDefaultRecordsNoProxyAndSpawnsNothing(t *testing.T) {
+func TestTheShippedDefaultRewritesTheCommandThroughRtk(t *testing.T) {
+	isolateHome(t)
 	log := standInProxyOnPath(t)
 	project := projectWithProxySheet(t, "")
 
 	called := runOneBashCall(t, project)
-	if called.Proxy != nil {
-		t.Fatalf("the shipped default recorded a proxy: %+v", called.Proxy)
+	if called.Proxy == nil || called.Proxy.Asked != "echo hi" || called.Proxy.Ran != "rtk echo hi" {
+		t.Fatalf("the shipped default did not send the command through rtk: %+v", called.Proxy)
+	}
+	if _, err := os.Stat(log); err != nil {
+		t.Fatalf("the shipped default never spawned rtk: %v", err)
+	}
+	t.Logf("shipped default: %+v", called.Proxy)
+}
+
+func TestWithRtkMissingTheShippedDefaultRunsTheCommandAsAskedAndSaysWhy(t *testing.T) {
+	isolateHome(t)
+	project := projectWithProxySheet(t, "")
+	t.Setenv("PATH", t.TempDir())
+
+	called := runOneBashCall(t, project)
+	if called.Error != "" || called.Command != "echo hi" || called.ExitCode == nil || *called.ExitCode != 0 || called.ResultBytes == 0 {
+		t.Fatalf("with rtk missing the command did not run as asked: %+v", called)
+	}
+	if called.Proxy == nil || called.Proxy.Ran != "" || !strings.Contains(called.Proxy.Note, "not on PATH") {
+		t.Fatalf("the row does not say why nothing was rewritten: %+v", called.Proxy)
+	}
+	t.Logf("rtk missing: ran %q, note %q", called.Command, called.Proxy.Note)
+}
+
+func TestOneLineInAProjectTurnsTheShippedProxyOff(t *testing.T) {
+	isolateHome(t)
+	log := standInProxyOnPath(t)
+	project := projectWithProxySheet(t, "use: off\n")
+
+	called := runOneBashCall(t, project)
+	if called.Proxy != nil || called.Command != "echo hi" {
+		t.Fatalf("use: off in the project left the proxy on: %+v", called)
 	}
 	if _, err := os.Stat(log); !os.IsNotExist(err) {
 		spawned, _ := os.ReadFile(log)
-		t.Fatalf("the shipped default spawned the proxy anyway: %s", spawned)
+		t.Fatalf("use: off in the project spawned rtk anyway: %s", spawned)
 	}
 }
 
@@ -234,8 +269,8 @@ func TestLibraryNamesARefusedProxyFileAndTheFieldThatFailed(t *testing.T) {
 	if !named {
 		t.Fatalf("tofu library does not name the refused file and the field:\n%s", text)
 	}
-	if report.Data.Proxy != "off" {
-		t.Fatalf("a refused file did not leave the setting off:\n%s", text)
+	if report.Data.Proxy != "rtk" || !strings.HasPrefix(report.Data.ProxyFrom, "library") {
+		t.Fatalf("a refused project file did not leave the shipped setting in force:\n%s", text)
 	}
 	t.Logf("tofu library --json\n%s", text)
 }

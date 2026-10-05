@@ -12,9 +12,7 @@ tofu never reaches a `chrome://` page, DevTools, an extension's page or the Chro
 
 The extension does nothing to a tab until tofu first uses it. Then it attaches Chrome's debugger, and Chrome shows its bar saying so.
 
-Under `browserDriver` `subagent`, the default, the model hands a browsing
-task to the `browser` sub-agent with `spawn`. It works only in a tab tofu
-opened, never yours, and holds these tools; under `steps` the model does:
+Under `browserDriver` `subagent`, the default, the model hands a browsing task to the `browser` sub-agent with `spawn`. It works only in a tab tofu opened, never yours, and holds these tools; under `steps` the model does:
 
 - `browser_tabs` lists your open tabs, with their title and address.
 - `browser_observe` shows one tab as an accessibility snapshot, a line a node, such as `- button "Buscar" [ref=e5]`, where a ref names one element. `scrollable` marks a container it can scroll, and `*` a ref new since the last look at the same page. `from` shows a long tree from that line on, whole and with its text. Observing never changes the page.
@@ -26,10 +24,7 @@ Under `goal`, the model gets `browser_read` and `browser_do`; Jev picks each ste
 
 ## Check a page in one call
 
-To check what a page does, rather than reach a goal, the model gives
-`browser_do` a `steps` list, or gives `browser_act` its actions, with a
-`check` on any step. The steps run in order in one call, with no Jev and no
-browser model, and the answer says what each step did and read:
+To check what a page does, rather than reach a goal, the model gives `browser_do` a `steps` list, or gives `browser_act` its actions, with a `check` on any step. The steps run in order in one call, with no Jev and no browser model, and the answer says what each step did and read:
 
 - `focus {role, name}` checks which element has focus once the step settles; `focus {}` only reads it.
 - `url_has`, `text_has` and `text_gone` check the page.
@@ -38,14 +33,9 @@ browser model, and the answer says what each step did and read:
 - The action `check` acts on nothing and only reads its check.
 - `reduced_motion` `on` or `off` sets the page's `prefers-reduced-motion`, only in a tab tofu opened.
 
-Each check answers `check held` or `check failed` with what it read, a failed
-check never stops the steps, and the last line counts them:
-`ran 3 of 3, checks 1 held and 1 failed`. Use it for a check with several
-steps, such as open a dialog, cancel it and see where focus went. A goal
-with no fixed steps stays with `browser_do` and Jev.
+Each check answers `check held` or `check failed` with what it read, a failed check never stops the steps, and the last line counts them: `ran 3 of 3, checks 1 held and 1 failed`. Use it for a check with several steps, such as open a dialog, cancel it and see where focus went. A goal with no fixed steps stays with `browser_do` and Jev.
 
-A motion check is one batch too. Turn reduced motion on, open the dialog with
-a style check on its panel, then wait and read it again:
+A motion check is one batch too. Turn reduced motion on, open the dialog with a style check on its panel, then wait and read it again:
 
     [{"action": "navigate", "value": "http://127.0.0.1:5395/"},
      {"action": "reduced_motion", "value": "on"},
@@ -56,45 +46,26 @@ a style check on its panel, then wait and read it again:
       "check": {"element": {"role": "dialog", "name": "How dates work"},
                 "style": {"transform": "none"}}}]
 
-A panel that still scales under reduced motion reads
-`transform: matrix(0.936897, 0, 0, 0.936897, 0, 0)` at the click and `none`
-after the wait; one that only fades reads `none` both times.
+A panel that still scales under reduced motion reads `transform: matrix(0.936897, 0, 0, 0.936897, 0, 0)` at the click and `none` after the wait; one that only fades reads `none` both times.
 
-What a page says is treated as text to read, never as an instruction. tofu
-never closes or navigates a tab it did not open, runs JavaScript or an address
-the model wrote, a selector outside a motion scenario, or types into a read-only field.
+What a page says is treated as text to read, never as an instruction. tofu never closes or navigates a tab it did not open, runs JavaScript or an address the model wrote, a selector outside a motion scenario, or types into a read-only field.
 
 ## What you see
 
-The tofu icon, a cat, carries a badge: `on` when connected and idle, `read`
-while tofu reads a tab, `act` while it clicks, types or scrolls, and `off`
-when not connected. Hover the icon to read why.
+The tofu icon, a cat, carries a badge: `on` when connected and idle, `read` while tofu reads a tab, `act` while it clicks, types or scrolls, and `off` when not connected. Hover the icon to read why.
 
-A tab tofu acts in or opens joins an orange group titled `tofu`, which
-reads `tofu •` while tofu acts. Pinned tabs, tabs in your own groups and
-tabs you drag out are left alone. A tab tofu opened closes when the run
-ends, or when the sub-agent that opened it finishes, and in the app when
-you quit. When tofu disconnects the group dissolves and Chrome's debugging
-bar goes away.
+A tab tofu acts in or opens joins an orange group titled `tofu`, which reads `tofu •` while tofu acts. Pinned tabs, tabs in your own groups and tabs you drag out are left alone. A tab tofu opened closes when the run ends, or when the sub-agent that opened it finishes, and in the app when you quit. When tofu disconnects the group dissolves and Chrome's debugging bar goes away.
 
 ## Where it lives
 
 - `~/.tofu/browser/extension`: the unpacked extension Chrome loads
 - `~/.tofu/browser/relay.sock`: where a session reaches the extension
 - `~/.tofu/motion/<take id>`: a motion take, its frames, trace and sheets
-- `~/.tofu/browser/recipes/<host>.md`: a recipe, the urls a successful run
-  on that site reached with each value as `{name}`. The next run there tries
-  it first. After two failures in a row it is set aside until a later
-  success learns a new one. `tofu browser recipes` lists them; edit or delete
-  the file freely.
+- `~/.tofu/browser/recipes/<host>.md`: a recipe, the urls a successful run on that site reached with each value as `{name}`. The next run there tries it first. After two failures in a row it is set aside until a later success learns a new one. `tofu browser recipes` lists them; edit or delete the file freely.
 
 ## Change it
 
-Install it once:
-
-    tofu browser install
-
-It writes the extension, registers tofu with Chrome, and prints the rest:
+Install it once with `tofu browser install`. It writes the extension, registers tofu with Chrome, and prints the rest:
 
     Chrome extension                        ✓ installed
       folder   ~/.tofu/browser/extension
@@ -107,18 +78,11 @@ It writes the extension, registers tofu with Chrome, and prints the rest:
 
 The settings:
 
-- `browser`: `off`, `read` or `drive`, default `drive`. `read` gives only
-  `browser_tabs` and the reading tool. It is read when tofu opens.
-- `browserDriver`: `subagent`, the default, gives the step tools to the
-  `browser` sub-agent on `browserModel`. `steps` gives them to the model,
-  and `goal` gives it `browser_do`, where Jev picks each step.
+- `browser`: `off`, `read` or `drive`, default `drive`. `read` gives only `browser_tabs` and the reading tool. It is read when tofu opens.
+- `browserDriver`: `subagent`, the default, gives the step tools to the `browser` sub-agent on `browserModel`. `steps` gives them to the model, and `goal` gives it `browser_do`, where Jev picks each step.
 - `browserSteps`: how many actions one `browser_do` task may take, 1 to 60.
-- `browserModel`: the model the `browser` sub-agent and `browser_do` run
-  on, as `source/model`, any model you have. Empty takes `modelTier.dumb`,
-  then `modelTier.worker`, then the turn's own model. `browserEffort` sets
-  its effort when the model lists it; empty is the model's default.
-- `browserCursor`, on by default: a small cursor labelled `tofu` glides to
-  each click in tofu's own tab. It is drawn only, and never read or hit.
+- `browserModel`: the model the `browser` sub-agent and `browser_do` run on, as `source/model`, any model you have. Empty takes `modelTier.dumb`, then `modelTier.worker`, then the turn's own model. `browserEffort` sets its effort when the model lists it; empty is the model's default.
+- `browserCursor`, on by default: a small cursor labelled `tofu` glides to each click in tofu's own tab. It is drawn only, and never read or hit.
 
     tofu settings set browserModel claude-sub/claude-sonnet-5
 
@@ -126,11 +90,7 @@ The settings:
 
     tofu browser
 
-opens with `Chrome tabs · <n> reachable` and `✓ connected`, then a row
-per tab with its id, site and title, `●` on the tabs tofu opened and `○`
-on yours. `--json` prints one document with the tabs in `data.tabs`. With
-no extension running, it prints one `✗` line and `→ tofu browser install`,
-and exits 1. `tofu settings get browser` prints `off`, `read` or `drive`.
+opens with `Chrome tabs · <n> reachable` and `✓ connected`, then a row per tab with its id, site and title, `●` on the tabs tofu opened and `○` on yours. `--json` prints one document with the tabs in `data.tabs`. With no extension running, it prints one `✗` line and `→ tofu browser install`, and exits 1. `tofu settings get browser` prints `off`, `read` or `drive`.
 
 The same steps the model takes are verbs, each on one tab:
 
@@ -138,11 +98,7 @@ The same steps the model takes are verbs, each on one tab:
     tofu browser click e5 --tab 123
     tofu browser fill e3 "Lisboa" --tab 123
 
-and `select <ref> <option>`, `press <key>`, `scroll [<ref>] [up|down]` and
-`back` the same way. `--all` makes `observe` print the whole tree. An
-action looks first, so a ref from your last `observe` of an unchanged page
-names the same element, then prints what changed and the fresh snapshot,
-which `--json` carries as `data.snapshot`, with `data.moved`.
+and `select <ref> <option>`, `press <key>`, `scroll [<ref>] [up|down]` and `back` the same way. `--all` makes `observe` print the whole tree. An action looks first, so a ref from your last `observe` of an unchanged page names the same element, then prints what changed and the fresh snapshot, which `--json` carries as `data.snapshot`, with `data.moved`.
 
 A whole check runs from a file, or from standard input with `-`:
 
@@ -155,12 +111,8 @@ where `check.json` is the same list of steps, such as:
      {"action": "click", "target": {"role": "button", "name": "Keep it"},
       "check": {"focus": {"role": "button", "name": "Delete Rice"}}}]
 
-Without `--tab` the first step opens a tab of tofu's own and the tab closes
-when the batch ends. It exits 1 when a check failed, and `--json` carries the
-answer as `data.report`, with `data.checks_failed`.
+Without `--tab` the first step opens a tab of tofu's own and the tab closes when the batch ends. It exits 1 when a check failed, and `--json` carries the answer as `data.report`, with `data.checks_failed`.
 
 ## Undo it
 
-`tofu settings set browser off` takes the tools away from the model.
-`tofu browser uninstall` removes the host and the folder, prints
-`○ removed`, and ends `→ remove the tofu card in chrome://extensions`.
+`tofu settings set browser off` takes the tools away from the model. `tofu browser uninstall` removes the host and the folder, prints `○ removed`, and ends `→ remove the tofu card in chrome://extensions`.

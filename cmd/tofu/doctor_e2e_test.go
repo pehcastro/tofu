@@ -22,6 +22,9 @@ access
   ✓ codex       subscription
   ✓ openrouter  money
 
+shell
+  ⚠ rtk  not on PATH, so bash commands run as asked  → RTK_INSTALL
+
 rules
   ✓ library       binary · 9 points
   ○ 8 points      shadow · thresholds from the rule       gate tool_gate@3
@@ -41,6 +44,9 @@ access
   ✓ anthropic   subscription
   ✓ codex       subscription
   ✓ openrouter  money
+
+shell
+  ⚠ rtk  not on PATH, so bash commands run as asked  → RTK_INSTALL
 
 rules
   ✓ library       project · 1 of 9 points
@@ -121,7 +127,37 @@ func TestE2EDoctorReadsTheKeyAndTheRuleOfTheProjectItRunsIn(t *testing.T) {
 		if !titleOf.MatchString(title) {
 			t.Fatalf("%s: the title is %q", step.name, title)
 		}
-		sameText(t, step.name, body, step.body)
+		sameText(t, step.name, body, strings.ReplaceAll(step.body, "RTK_INSTALL", rtkInstall()))
+	}
+}
+
+func TestE2EDoctorNamesTheRtkVersionOrThatAProjectTurnedItOff(t *testing.T) {
+	standInProxyOnPath(t)
+	for _, step := range []struct {
+		name  string
+		sheet string
+		line  string
+		use   string
+	}{
+		{"the shipped default with rtk on PATH", "", "  ✓ rtk  9.9.9 · rewrites every bash command  from library", "rtk"},
+		{"a project saying use: off", "use: off\n", "  ○ rtk  off  from project", "off"},
+	} {
+		p := newProject(t, "doctor")
+		if step.sheet != "" {
+			writeFile(t, p.dir, ".tofu/tools/shell/proxy.yaml", step.sheet)
+		}
+		env := []string{"USERPROFILE=" + p.home, "HOME=" + p.home, "TEMP=" + p.home, "TMP=" + p.home, "SystemRoot=" + os.Getenv("SystemRoot"), "PATH=" + os.Getenv("PATH")}
+		said, code := runBinary(t, p.dir, env, "doctor")
+		if code != exitVerdict || !strings.Contains(said, "\nshell\n"+step.line) {
+			t.Fatalf("%s: exit %d, want %d and a shell section starting %q\n%s", step.name, code, exitVerdict, step.line, said)
+		}
+		var envelope struct{ Data doctorReport }
+		printed, _ := runBinary(t, p.dir, env, "doctor", "--json")
+		oneEnvelope(t, printed, &envelope)
+		if envelope.Data.Proxy.Use != step.use {
+			t.Fatalf("%s: the JSON says use %q, want %q\n%s", step.name, envelope.Data.Proxy.Use, step.use, printed)
+		}
+		t.Logf("%s:\n%s", step.name, said)
 	}
 }
 

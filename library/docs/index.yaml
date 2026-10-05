@@ -238,6 +238,10 @@
   do: tofu doctor
   check: tofu doctor --json
   topic: doctor
+- ask: stop rewriting shell commands through rtk
+  do: write use off in .tofu/tools/shell/proxy.yaml
+  check: tofu doctor
+  topic: doctor
 - ask: check the library files and these pages
   do: tofu library
   check: tofu library

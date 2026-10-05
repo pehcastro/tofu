@@ -29,9 +29,9 @@ exit 0
     "roles": 0,
     "questions": 14,
     "doc_pages": 12,
-    "doc_entries": 67,
-    "proxy": "off",
-    "proxy_from": "library library",
+    "doc_entries": 68,
+    "proxy": "rtk",
+    "proxy_from": "library",
     "domains_from": "the binary",
     "domains_dir": "library",
     "domains": [
